@@ -130,26 +130,60 @@ pub fn Mods.from_gg_modifier(m gg.Modifier) Mods {
 	}
 }
 
-// MouseButton represents mouse button types.
+// ButtonState represents the state of a mouse button.
+pub enum MouseButtonState {
+	release
+	press
+}
+
+// Button represents possible mouse buttons. We track up to 11 because
+// that's the maximum button input that terminal mouse tracking handles
+// without becoming ambiguous.
 pub enum MouseButton {
+	unknown
 	left
 	right
 	middle
-	button_4
-	button_5
+	four
+	five
+	six
+	seven
+	eight
+	nine
+	ten
+	eleven
 }
 
-pub const mouse_button_max = 10
+// mouse_button_max is the maximum value of the MouseButton enum.
+pub const mouse_button_max = 11
 
-pub enum MouseButtonState {
-	press
-	release
-}
-
-pub enum MousePressureStage {
+// Momentum represents the "momentum" of a mouse scroll event.
+// Used to handle "inertial scrolling" (i.e. flicking).
+// https://developer.apple.com/documentation/appkit/nseventphase
+pub enum Momentum {
 	none_
-	light
-	deep
+	began
+	stationary
+	changed
+	ended
+	cancelled
+	may_begin
+}
+
+// PressureStage represents the pressure stage of a pressure-sensitive input device.
+pub enum PressureStage {
+	none_   // The input device is unpressed.
+	normal  // Normal press amount (after a "click" on macOS trackpads).
+	deep    // Deep press amount (after a "force click" on macOS trackpads).
+}
+
+// ScrollMods contains additional information about a scroll event.
+pub struct ScrollMods {
+pub mut:
+	// Whether this is a precision scroll (e.g. trackpad).
+	precision bool
+	// The momentum phase of the scroll event.
+	momentum Momentum = .none_
 }
 
 // OptionAsAlt determines whether the "option" key on macOS is treated
@@ -181,28 +215,36 @@ pub enum LinkHighlight {
 	hover_mods
 }
 
-// Paste encoding.
-pub fn paste_encode(data string, bracketed bool) string {
-	if bracketed {
-		return '\x1b[200~${data}\x1b[201~'
-	}
-	return data
+// PasteOptions contains options that affect paste encoding.
+pub struct PasteOptions {
+pub:
+	// True if bracketed paste mode is on.
+	bracketed bool
 }
 
-pub fn paste_is_unsafe(data string, bracketed bool) bool {
-	if data.contains('\n') && !bracketed {
-		return true
+// paste_encode encodes data for pasting into the terminal.
+// Returns an array of 3 string slices that, when concatenated, form the
+// complete paste sequence.
+pub fn paste_encode(data string, opts PasteOptions) [3]string {
+	// Bracketed paste mode wraps pasted data in fenceposts
+	if opts.bracketed {
+		return ['\x1b[200~', data, '\x1b[201~']!
 	}
-	return false
+	// Non-bracketed: replace newlines with carriage returns
+	return ['', data.replace('\n', '\r'), '']!
 }
 
-// ScrollMods contains additional information about a scroll event
-// from the operating system, such as whether it was a precision
-// scroll (trackpad) or a discrete scroll (mouse wheel).
-pub struct ScrollMods {
-pub mut:
-	// Whether this is a precision scroll (e.g. trackpad).
-	precision bool
+// paste_is_safe returns true if data is safe to paste.
+// Data is considered unsafe if it contains newlines or the
+// bracketed paste end sequence.
+pub fn paste_is_safe(data string) bool {
+	if data.contains('\n') {
+		return false
+	}
+	if data.contains('\x1b[201~') {
+		return false
+	}
+	return true
 }
 
 // Keymap handles mapping between physical keycodes and logical keys.
@@ -292,9 +334,7 @@ pub:
 	key Key
 }
 
-// keycodes_entries is the table of native keycode to logical key mappings.
-// This is platform-specific; stub returns empty for now.
-pub const keycodes_entries = []KeycodeEntry{}
+// keycodes_entries is defined in keycodes.v with the full macOS keycode table.
 
 // BindingFlags represents flags associated with a keybinding action.
 pub struct BindingFlags {

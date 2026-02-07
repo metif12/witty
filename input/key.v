@@ -499,6 +499,178 @@ pub fn (k Key) is_modifier() bool {
 		.shift_right, .control_right, .alt_right, .meta_right]
 }
 
+// is_printable returns true if this key represents a printable character
+// (i.e. it has a codepoint).
+pub fn (k Key) is_printable() bool {
+	return k.codepoint() != none
+}
+
+// is_keypad returns true if this is a keypad (numpad) key.
+pub fn (k Key) is_keypad() bool {
+	return k in [
+		.numpad_0, .numpad_1, .numpad_2, .numpad_3, .numpad_4,
+		.numpad_5, .numpad_6, .numpad_7, .numpad_8, .numpad_9,
+		.numpad_add, .numpad_backspace, .numpad_clear, .numpad_clear_entry,
+		.numpad_comma, .numpad_decimal, .numpad_divide, .numpad_enter,
+		.numpad_equal, .numpad_memory_add, .numpad_memory_clear,
+		.numpad_memory_recall, .numpad_memory_store, .numpad_memory_subtract,
+		.numpad_multiply, .numpad_paren_left, .numpad_paren_right,
+		.numpad_subtract, .numpad_separator, .numpad_up, .numpad_down,
+		.numpad_right, .numpad_left, .numpad_begin, .numpad_home,
+		.numpad_end, .numpad_insert, .numpad_delete, .numpad_page_up,
+		.numpad_page_down,
+	]
+}
+
+// should_be_remappable returns whether this key should be remappable by the OS.
+// Writing system keys (section 3.1.1) are NOT remappable because XKB can remap them
+// in ways that destroy physical key info (e.g. XKB_KEY_c to XKB_KEY_Cyrillic_tse).
+pub fn (k Key) should_be_remappable() bool {
+	return match k {
+		.backquote, .backslash, .bracket_left, .bracket_right, .comma,
+		.digit_0, .digit_1, .digit_2, .digit_3, .digit_4,
+		.digit_5, .digit_6, .digit_7, .digit_8, .digit_9,
+		.equal, .intl_backslash, .intl_ro, .intl_yen,
+		.key_a, .key_b, .key_c, .key_d, .key_e, .key_f, .key_g, .key_h,
+		.key_i, .key_j, .key_k, .key_l, .key_m, .key_n, .key_o, .key_p,
+		.key_q, .key_r, .key_s, .key_t, .key_u, .key_v, .key_w, .key_x,
+		.key_y, .key_z, .minus, .period, .quote, .semicolon, .slash {
+			false
+		}
+		else { true }
+	}
+}
+
+// ctrl_or_super returns true if this key is one of the left or right
+// versions of super (macOS) or ctrl.
+pub fn (k Key) ctrl_or_super() bool {
+	// On macOS, use super (command) key
+	return k == .meta_left || k == .meta_right
+}
+
+// left_or_right_shift returns true if this key is left or right shift.
+pub fn (k Key) left_or_right_shift() bool {
+	return k == .shift_left || k == .shift_right
+}
+
+// left_or_right_alt returns true if this key is left or right alt.
+pub fn (k Key) left_or_right_alt() bool {
+	return k == .alt_left || k == .alt_right
+}
+
+// from_ascii converts an ASCII character to a Key, if possible.
+// Returns none if the character is unknown.
+// Note: this can't distinguish between physical keys, i.e. '0'
+// may be from the number row or the keypad, but it always maps to digit_0.
+// This is what we want for keybindings that are layout-independent.
+pub fn Key.from_ascii(ch u8) ?Key {
+	for entry in codepoint_map {
+		// No ASCII characters should map to a keypad key
+		if entry.key.is_keypad() {
+			continue
+		}
+		if entry.cp == u32(ch) {
+			return entry.key
+		}
+	}
+	return none
+}
+
+// w3c converts a Key to its W3C key code string (e.g. .arrow_up -> "ArrowUp").
+pub fn (k Key) w3c() string {
+	name := k.key_name()
+	mut result := []u8{cap: name.len}
+	mut i := 0
+	for i < name.len {
+		if i == 0 {
+			result << name[i] - 32 // toUpper
+		} else if name[i] == `_` {
+			i++
+			if i < name.len {
+				result << name[i] - 32 // toUpper
+			}
+		} else {
+			result << name[i]
+		}
+		i++
+	}
+	return result.bytestr()
+}
+
+struct CodepointEntry {
+	cp  u32
+	key Key
+}
+
+const codepoint_map = [
+	CodepointEntry{ cp: u32(`a`), key: .key_a },
+	CodepointEntry{ cp: u32(`b`), key: .key_b },
+	CodepointEntry{ cp: u32(`c`), key: .key_c },
+	CodepointEntry{ cp: u32(`d`), key: .key_d },
+	CodepointEntry{ cp: u32(`e`), key: .key_e },
+	CodepointEntry{ cp: u32(`f`), key: .key_f },
+	CodepointEntry{ cp: u32(`g`), key: .key_g },
+	CodepointEntry{ cp: u32(`h`), key: .key_h },
+	CodepointEntry{ cp: u32(`i`), key: .key_i },
+	CodepointEntry{ cp: u32(`j`), key: .key_j },
+	CodepointEntry{ cp: u32(`k`), key: .key_k },
+	CodepointEntry{ cp: u32(`l`), key: .key_l },
+	CodepointEntry{ cp: u32(`m`), key: .key_m },
+	CodepointEntry{ cp: u32(`n`), key: .key_n },
+	CodepointEntry{ cp: u32(`o`), key: .key_o },
+	CodepointEntry{ cp: u32(`p`), key: .key_p },
+	CodepointEntry{ cp: u32(`q`), key: .key_q },
+	CodepointEntry{ cp: u32(`r`), key: .key_r },
+	CodepointEntry{ cp: u32(`s`), key: .key_s },
+	CodepointEntry{ cp: u32(`t`), key: .key_t },
+	CodepointEntry{ cp: u32(`u`), key: .key_u },
+	CodepointEntry{ cp: u32(`v`), key: .key_v },
+	CodepointEntry{ cp: u32(`w`), key: .key_w },
+	CodepointEntry{ cp: u32(`x`), key: .key_x },
+	CodepointEntry{ cp: u32(`y`), key: .key_y },
+	CodepointEntry{ cp: u32(`z`), key: .key_z },
+	CodepointEntry{ cp: u32(`0`), key: .digit_0 },
+	CodepointEntry{ cp: u32(`1`), key: .digit_1 },
+	CodepointEntry{ cp: u32(`2`), key: .digit_2 },
+	CodepointEntry{ cp: u32(`3`), key: .digit_3 },
+	CodepointEntry{ cp: u32(`4`), key: .digit_4 },
+	CodepointEntry{ cp: u32(`5`), key: .digit_5 },
+	CodepointEntry{ cp: u32(`6`), key: .digit_6 },
+	CodepointEntry{ cp: u32(`7`), key: .digit_7 },
+	CodepointEntry{ cp: u32(`8`), key: .digit_8 },
+	CodepointEntry{ cp: u32(`9`), key: .digit_9 },
+	CodepointEntry{ cp: u32(`;`), key: .semicolon },
+	CodepointEntry{ cp: u32(` `), key: .space },
+	CodepointEntry{ cp: u32(`'`), key: .quote },
+	CodepointEntry{ cp: u32(`,`), key: .comma },
+	CodepointEntry{ cp: u32(`\``), key: .backquote },
+	CodepointEntry{ cp: u32(`.`), key: .period },
+	CodepointEntry{ cp: u32(`/`), key: .slash },
+	CodepointEntry{ cp: u32(`-`), key: .minus },
+	CodepointEntry{ cp: u32(`=`), key: .equal },
+	CodepointEntry{ cp: u32(`[`), key: .bracket_left },
+	CodepointEntry{ cp: u32(`]`), key: .bracket_right },
+	CodepointEntry{ cp: u32(`\\`), key: .backslash },
+	CodepointEntry{ cp: u32(`\t`), key: .tab },
+	// Numpad entries (skipped by from_ascii)
+	CodepointEntry{ cp: u32(`0`), key: .numpad_0 },
+	CodepointEntry{ cp: u32(`1`), key: .numpad_1 },
+	CodepointEntry{ cp: u32(`2`), key: .numpad_2 },
+	CodepointEntry{ cp: u32(`3`), key: .numpad_3 },
+	CodepointEntry{ cp: u32(`4`), key: .numpad_4 },
+	CodepointEntry{ cp: u32(`5`), key: .numpad_5 },
+	CodepointEntry{ cp: u32(`6`), key: .numpad_6 },
+	CodepointEntry{ cp: u32(`7`), key: .numpad_7 },
+	CodepointEntry{ cp: u32(`8`), key: .numpad_8 },
+	CodepointEntry{ cp: u32(`9`), key: .numpad_9 },
+	CodepointEntry{ cp: u32(`.`), key: .numpad_decimal },
+	CodepointEntry{ cp: u32(`/`), key: .numpad_divide },
+	CodepointEntry{ cp: u32(`=`), key: .numpad_equal },
+	CodepointEntry{ cp: u32(`*`), key: .numpad_multiply },
+	CodepointEntry{ cp: u32(`-`), key: .numpad_subtract },
+	CodepointEntry{ cp: u32(`+`), key: .numpad_add },
+]
+
 // key_name_map maps key name strings to Key enum values.
 const key_name_map = {
 	'unidentified':           Key.unidentified

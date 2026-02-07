@@ -701,7 +701,7 @@ pub fn (mut self Surface) mouse_button_callback(action input.MouseButtonState, b
 }
 
 // mouse_pressure_callback handles a mouse pressure event (Force Touch).
-pub fn (mut self Surface) mouse_pressure_callback(stage input.MousePressureStage, pressure f64) {
+pub fn (mut self Surface) mouse_pressure_callback(stage input.PressureStage, pressure f64) {
 	self.core_surface.mouse_pressure_callback(stage, pressure) or {
 		log_err('error in mouse pressure callback err=${err}')
 		return
@@ -1406,7 +1406,7 @@ pub fn ghostty_surface_mouse_scroll(mut surface Surface, x f64, y f64, scroll_mo
 
 // ghostty_surface_mouse_pressure handles a mouse pressure event.
 pub fn ghostty_surface_mouse_pressure(mut surface Surface, stage_raw u32, pressure f64) {
-	stage := unsafe { input.MousePressureStage(int(stage_raw)) }
+	stage := unsafe { input.PressureStage(int(stage_raw)) }
 	surface.mouse_pressure_callback(stage, pressure)
 }
 
