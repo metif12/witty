@@ -6,11 +6,23 @@ import os
 // and by ghostty_init() for lib artifacts. This should ONLY be used by
 // the C API. The Zig API should NOT use any global state and should
 // rely on allocators being passed in as parameters.
-__global state = GlobalState{}
+// Global state singleton. Using a struct wrapper and const pointer
+// to avoid requiring -enable-globals for test compilation.
+struct GlobalStateSingleton {
+mut:
+	gs GlobalState
+}
 
-// get_state returns a reference to the global state.
+const global_state_instance = &GlobalStateSingleton{}
+
+// get_state returns a mutable reference to the global state singleton.
 pub fn get_state() &GlobalState {
-	return unsafe { &state }
+	return unsafe { &global_state_instance.gs }
+}
+
+// get_state_mut returns a mutable reference for initialization.
+pub fn get_state_mut() &GlobalState {
+	return unsafe { &global_state_instance.gs }
 }
 
 // This represents the global process state. There should only

@@ -129,7 +129,7 @@ fn test_dcs_decrqss_command() {
 	_ = h.put(`m`)
 	mut cmd := h.unhook() or { assert false; return }
 	defer { cmd.deinit() }
-	match cmd {
+	match mut cmd {
 		DcsCommandDecrqss {
 			assert cmd.decrqss == DcsDecrqss.sgr
 		}
@@ -146,10 +146,13 @@ fn test_dcs_decrqss_invalid_command() {
 	_ = h.put(`z`)
 	mut cmd := h.unhook() or { assert false; return }
 	defer { cmd.deinit() }
-	if cmd is DcsCommandDecrqss {
-		assert cmd.decrqss == DcsDecrqss.none_val
-	} else {
-		assert false
+	match mut cmd {
+		DcsCommandDecrqss {
+			assert cmd.decrqss == DcsDecrqss.none_val
+		}
+		else {
+			assert false
+		}
 	}
 
 	h.discard()

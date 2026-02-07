@@ -19,7 +19,7 @@ import time
 #include <fcntl.h>
 #include <sys/wait.h>
 
-fn C.pipe(mut fds &int) int
+fn C.pipe(fds voidptr) int
 fn C.fork() int
 fn C.setsid() int
 fn C.dup2(oldfd int, newfd int) int
@@ -130,7 +130,7 @@ pub fn (mut self Exec) thread_enter() ! {
 	// Create pipe for quit signaling.
 	// pipe_fds[0] is the read end, pipe_fds[1] is the write end.
 	mut pipe_fds := [2]int{}
-	if C.pipe(mut &pipe_fds) != 0 {
+	if C.pipe(&pipe_fds) != 0 {
 		return error('failed to create quit pipe')
 	}
 
@@ -216,7 +216,7 @@ pub fn (mut self Exec) queue_write(data []u8, linefeed bool) ! {
 		// Fast path: write data directly, chunking as needed.
 		mut offset := 0
 		for offset < data.len {
-			n := C.write(fd, unsafe { data.data + offset }, usize(data.len - offset))
+			n := C.write(fd, unsafe { voidptr(usize(data.data) + usize(offset)) }, usize(data.len - offset))
 			if n < 0 {
 				return error('write to pty failed')
 			}
@@ -238,7 +238,7 @@ pub fn (mut self Exec) queue_write(data []u8, linefeed bool) ! {
 			if buf.len >= 126 || i == data.len - 1 {
 				mut written := 0
 				for written < buf.len {
-					n := C.write(fd, unsafe { buf.data + written }, usize(buf.len - written))
+					n := C.write(fd, unsafe { voidptr(usize(buf.data) + usize(written)) }, usize(buf.len - written))
 					if n < 0 {
 						return error('write to pty failed')
 					}
