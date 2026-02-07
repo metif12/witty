@@ -6,6 +6,7 @@ module search
 // metadata entries. Both support efficient O(1) append-at-end and
 // delete-from-front operations.
 
+import terminal
 import highlight
 
 // ============================================================

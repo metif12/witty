@@ -370,12 +370,6 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 
 	// If we went beyond our initial meta node we can prune.
 	if prune_meta_count > 0 {
-		// Deinit/sum all our memory in the meta blocks prior to our match.
-		mut pruned := 0
-		for k in 0 .. prune_meta_count {
-			meta := self.meta.get(k)
-			pruned += meta.cell_map.len
-		}
 		self.meta.delete_oldest(prune_meta_count)
 
 		// Delete all the data up to our current index.
