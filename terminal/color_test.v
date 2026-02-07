@@ -4,6 +4,17 @@ module terminal
 //
 // Translated from the tests in Ghostty's terminal/color.zig.
 
+// Helper to compare two [256]RGB palettes element-by-element,
+// since V's `==` on large fixed arrays of structs is unreliable.
+fn palettes_equal(a [256]RGB, b [256]RGB) bool {
+	for i in 0 .. 256 {
+		if !a[i].eql(b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // ============================================================
 // Palette: default
 // ============================================================
@@ -207,8 +218,8 @@ fn test_dynamic_next() {
 
 fn test_dynamic_palette_init() {
 	p := DynamicPalette.init(default_palette)
-	assert p.entries == default_palette
-	assert p.original == default_palette
+	assert palettes_equal(p.entries, default_palette)
+	assert palettes_equal(p.original, default_palette)
 	assert p.mask_count() == 0
 }
 
@@ -248,8 +259,8 @@ fn test_dynamic_palette_reset_all() {
 	assert p.mask_count() == 3
 
 	p.reset_all()
-	assert p.entries == default_palette
-	assert p.original == default_palette
+	assert palettes_equal(p.entries, default_palette)
+	assert palettes_equal(p.original, default_palette)
 	assert p.mask_count() == 0
 }
 
@@ -259,8 +270,8 @@ fn test_dynamic_palette_change_default_no_changes() {
 	new_palette[0] = RGB{ r: 100, g: 100, b: 100 }
 
 	p.change_default(new_palette)
-	assert p.original == new_palette
-	assert p.entries == new_palette
+	assert palettes_equal(p.original, new_palette)
+	assert palettes_equal(p.entries, new_palette)
 	assert p.mask_count() == 0
 }
 
@@ -277,7 +288,7 @@ fn test_dynamic_palette_change_default_preserves_changes() {
 
 	p.change_default(new_palette)
 
-	assert p.original == new_palette
+	assert palettes_equal(p.original, new_palette)
 	// Index 0 should use the new default (wasn't changed by user)
 	assert p.entries[0].eql(new_palette[0])
 	// Index 5 should keep the custom color (was changed by user)

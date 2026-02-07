@@ -8,6 +8,11 @@ import os
 // rely on allocators being passed in as parameters.
 __global state = GlobalState{}
 
+// get_state returns a reference to the global state.
+pub fn get_state() &GlobalState {
+	return unsafe { &state }
+}
+
 // This represents the global process state. There should only
 // be one of these at any given moment. This is extracted into a dedicated
 // struct because it is reused by main and the static C lib.

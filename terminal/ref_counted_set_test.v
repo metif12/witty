@@ -165,7 +165,7 @@ fn test_rcs_get() {
 	style := CellStyle{
 		flags: StyleFlags{
 			bold: true
-			underline: true
+			underline: .single
 		}
 	}
 	id := s.add(style) or {
@@ -175,7 +175,7 @@ fn test_rcs_get() {
 
 	got := s.get(id)
 	assert got.flags.bold == true
-	assert got.flags.underline == true
+	assert got.flags.underline == .single
 }
 
 // Test capacity_for_count calculation.

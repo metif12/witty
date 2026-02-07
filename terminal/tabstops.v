@@ -164,8 +164,8 @@ pub fn (mut self Tabstops) reset(interval int) {
 	}
 
 	if interval > 0 {
-		mut i := 0
-		for i < self.cols {
+		mut i := interval
+		for i < self.cols - 1 {
 			self.set(u32(i))
 			i += interval
 		}

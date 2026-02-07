@@ -1386,7 +1386,7 @@ fn test_page_hyperlink_basic() {
 	// Insert a hyperlink.
 	hl_id := page.insert_hyperlink(Hyperlink{
 		uri: 'https://example.com'
-		id_: ''
+		id: HyperlinkExplicitId{ value: '' }
 	})
 
 	// Set it on a cell.

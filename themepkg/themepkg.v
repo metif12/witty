@@ -24,7 +24,7 @@ pub fn (l Location) dir() string {
 		.resources {
 			// Use the global_state resources_dir to find the themes
 			// directory within the application resources.
-			resources_path := global_state.state.resources_dir.app()
+			resources_path := global_state.get_state().resources_dir.app()
 			if resources_path.len == 0 {
 				return ''
 			}

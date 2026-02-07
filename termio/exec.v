@@ -19,7 +19,7 @@ import time
 #include <fcntl.h>
 #include <sys/wait.h>
 
-fn C.pipe(mut fds &[2]int) int
+fn C.pipe(mut fds &int) int
 fn C.fork() int
 fn C.setsid() int
 fn C.dup2(oldfd int, newfd int) int
@@ -482,9 +482,9 @@ pub fn (mut self Subprocess) start() !PtyFds {
 	// because our cwd can be set by the shell (OSC 7) and we don't
 	// want to break new windows.
 	cwd := if c := self.cwd {
-		if os.is_dir(c) { c } else { ?string(none) }
+		if os.is_dir(c) { c } else { '' }
 	} else {
-		?string(none)
+		''
 	}
 
 	// Build the argv for execvp. We need null-terminated C strings.
@@ -497,7 +497,7 @@ pub fn (mut self Subprocess) start() !PtyFds {
 	for arg in self.args {
 		c_argv << arg.str
 	}
-	c_argv << unsafe { nil }
+	c_argv << &char(unsafe { nil })
 
 	// Build null-terminated envp array if env is set. We build this before
 	// fork so we have stable pointers. We also track whether env was set
@@ -510,7 +510,7 @@ pub fn (mut self Subprocess) start() !PtyFds {
 			c_envp << entry.str
 		}
 	}
-	c_envp << unsafe { nil }
+	c_envp << &char(unsafe { nil })
 
 	// Fork the process.
 	pid := C.fork()
@@ -532,8 +532,8 @@ pub fn (mut self Subprocess) start() !PtyFds {
 		}
 
 		// Change to the requested working directory if specified.
-		if c := cwd {
-			os.chdir(c) or {}
+		if cwd.len > 0 {
+			os.chdir(cwd) or {}
 		}
 
 		// Set environment variables if we had an env map.

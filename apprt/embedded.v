@@ -221,7 +221,7 @@ pub fn (self &App) keyboard_layout() input.KeyboardLayout {
 	if source_id.len == 0 {
 		return .unknown
 	}
-	return input.KeyboardLayout.map_apple_id(source_id) or { .unknown }
+	return input.KeyboardLayout.map_apple_id(source_id) or { input.KeyboardLayout.unknown }
 }
 
 // wakeup triggers the event loop wakeup callback.
@@ -284,7 +284,7 @@ fn (mut self App) perform_pre_action(target_ Target, action ActionKey, data Acti
 					// Store a copy of the title on the surface so that
 					// getTitle works without the embedder needing to track it.
 					if target_.surface != unsafe { nil } {
-						surface_ptr := &Surface(target_.surface)
+						surface_ptr := unsafe { &Surface(target_.surface) }
 						unsafe {
 							surface_ptr.title = data.set_title_.title.clone()
 						}

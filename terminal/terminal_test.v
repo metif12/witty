@@ -1463,7 +1463,7 @@ fn test_mode_state_reset() {
 
 fn test_tabstops_init() {
 	ts := Tabstops.init(80, 8) or { assert false; return }
-	assert ts.get(0)
+	assert !ts.get(0)
 	assert !ts.get(1)
 	assert !ts.get(7)
 	assert ts.get(8)
@@ -1473,6 +1473,8 @@ fn test_tabstops_init() {
 
 fn test_tabstops_set_unset() {
 	mut ts := Tabstops.init(80, 8) or { assert false; return }
+	assert !ts.get(0)
+	ts.set(0)
 	assert ts.get(0)
 	ts.unset(0)
 	assert !ts.get(0)
@@ -1482,11 +1484,12 @@ fn test_tabstops_set_unset() {
 
 fn test_tabstops_reset() {
 	mut ts := Tabstops.init(80, 8) or { assert false; return }
-	ts.unset(0)
 	ts.unset(8)
+	ts.unset(16)
 	ts.reset(8)
-	assert ts.get(0)
+	assert !ts.get(0)
 	assert ts.get(8)
+	assert ts.get(16)
 }
 
 // ============================================================
