@@ -2880,6 +2880,3 @@ fn mouse_selection(click_pin Pin, drag_pin Pin, click_x u32, drag_x u32, mods gg
 	}
 }
 
-fn main() {
-	// Entry point placeholder — the real application creates surfaces via the runtime.
-}
