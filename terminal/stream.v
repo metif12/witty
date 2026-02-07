@@ -1499,16 +1499,31 @@ pub fn mode_from_int(mode_int u16, ansi_mode bool) ?Mode {
 	// DEC private modes
 	return match mode_int {
 		3 { Mode.column_132 }
+		5 { Mode.reverse_colors }
 		6 { Mode.origin }
 		7 { Mode.wraparound }
+		8 { Mode.autorepeat }
+		9 { Mode.mouse_event_x10 }
 		25 { Mode.cursor_visible }
 		40 { Mode.enable_mode_3 }
 		45 { Mode.reverse_wrap }
+		47 { Mode.alt_screen_legacy }
 		69 { Mode.enable_left_and_right_margin }
 		95 { Mode.reverse_wrap_extended }
+		1000 { Mode.mouse_event_normal }
+		1002 { Mode.mouse_event_button }
+		1003 { Mode.mouse_event_any }
 		1004 { Mode.focus_event }
+		1005 { Mode.mouse_format_utf8 }
+		1006 { Mode.mouse_format_sgr }
+		1015 { Mode.mouse_format_urxvt }
+		1047 { Mode.alt_screen }
+		1048 { Mode.save_cursor }
+		1049 { Mode.alt_screen_save_cursor_clear_enter }
 		2004 { Mode.bracketed_paste }
+		2026 { Mode.synchronized_output }
 		2027 { Mode.grapheme_cluster }
+		2048 { Mode.in_band_size_reports }
 		else { none }
 	}
 }

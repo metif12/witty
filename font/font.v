@@ -1,5 +1,7 @@
 module font
 
+import math
+
 // Default DPI used as the base for scaling calculations.
 pub const default_dpi = f32(72.0)
 
@@ -10,12 +12,96 @@ pub const sprite_index = u32(0)
 // Metrics
 // ============================================================
 
-// Metrics holds font measurement data.
+// Metrics holds font measurement data for the grid.
 pub struct Metrics {
 pub mut:
-	cell_width    u32
-	cell_height   u32
-	cell_baseline u32
+	cell_width             u32
+	cell_height            u32
+	cell_baseline          u32
+	// Position of the underline from the top of the cell.
+	underline_position     u32
+	// Thickness of the underline in pixels.
+	underline_thickness    u32
+	// Position of the strikethrough from the top of the cell.
+	strikethrough_position u32
+	// Thickness of the strikethrough in pixels.
+	strikethrough_thickness u32
+	// Position of the overline from the top of the cell.
+	overline_position      u32
+	// Thickness of the overline in pixels.
+	overline_thickness     u32
+	// Thickness for box-drawing characters.
+	box_thickness          u32
+	// Height of the cursor in pixels.
+	cursor_height          u32
+	// Icon height for multi-cell glyphs (f64 for precision).
+	icon_height            f64
+	// Icon height for single-cell glyphs.
+	icon_height_single     f64
+	// Width of the primary face (may differ from cell_width).
+	face_width             f64
+	// Height of the primary face.
+	face_height            f64
+	// Vertical offset of the face within the cell.
+	face_y                 f64
+}
+
+// calc computes grid Metrics from face-level FaceMetrics.
+// XTODO: implement full metrics calculation with proper rounding,
+// underline/strikethrough position calculation, icon height, etc.
+pub fn Metrics.calc(fm FaceMetrics) Metrics {
+	line_height := fm.ascent - fm.descent + fm.line_gap
+	cell_height := u32(math.round(line_height))
+	cell_width := u32(math.round(fm.cell_width))
+	// Cell baseline is the distance from the bottom of the cell
+	// to the baseline, i.e., ceil(-descent).
+	cell_baseline := u32(math.ceil(-fm.descent))
+
+	// Underline: positioned at cell_height (bottom of cell).
+	// XTODO: proper underline position from face metrics.
+	ul_thickness := u32(math.max(1.0, math.round(fm.underline_thickness or { 1.0 })))
+	ul_position := cell_height
+
+	// Strikethrough: roughly at the center of the ascent.
+	st_thickness := u32(math.max(1.0, math.round(fm.strikethrough_thickness or { f64(ul_thickness) })))
+	st_position := u32(math.round(fm.ascent * 0.6))
+
+	// Overline: at top of cell.
+	ol_thickness := ul_thickness
+
+	// Box drawing thickness.
+	box_thickness := ul_thickness
+
+	// Cap and ex heights for icon height calculation.
+	cap_h := fm.cap_height_val()
+	// Icon height = (2 * cap_height + face_height) / 3
+	icon_h := (2.0 * cap_h + line_height) / 3.0
+
+	return Metrics{
+		cell_width: cell_width
+		cell_height: cell_height
+		cell_baseline: cell_baseline
+		underline_position: ul_position
+		underline_thickness: ul_thickness
+		strikethrough_position: st_position
+		strikethrough_thickness: st_thickness
+		overline_position: 0
+		overline_thickness: ol_thickness
+		box_thickness: box_thickness
+		cursor_height: cell_height
+		icon_height: line_height
+		icon_height_single: icon_h
+		face_width: fm.cell_width
+		face_height: line_height
+		face_y: fm.descent + f64(cell_baseline)
+	}
+}
+
+// apply applies metric modifiers to adjust the computed metrics.
+pub fn (mut m Metrics) apply(modifiers MetricsModifierSet) {
+	// XTODO: implement metric modifier application
+	// (cell padding, custom underline position, etc.)
+	_ = modifiers
 }
 
 // ============================================================
@@ -28,6 +114,12 @@ pub mut:
 	points f32
 	xdpi   u32
 	ydpi   u32
+}
+
+// pixels returns the pixel size derived from points and DPI.
+pub fn (d DesiredSize) pixels() f64 {
+	dpi := if d.ydpi > 0 { f64(d.ydpi) } else { f64(default_dpi) }
+	return f64(d.points) * dpi / f64(default_dpi)
 }
 
 // ============================================================

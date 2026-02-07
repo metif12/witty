@@ -200,7 +200,8 @@ pub:
 
 	// The default mode state. When the terminal gets a reset, it
 	// will revert back to this state.
-	default_modes ModePacked
+	// The default mode state includes wraparound mode enabled (bit 0).
+	default_modes ModePacked = ModePacked{ data: 1 }
 }
 
 pub struct ModePacked {
@@ -534,23 +535,16 @@ pub fn (mut self Terminal) deinit() {
 // terminal state. The streams will only process read-only data that
 // modifies terminal state. Sequences that query or otherwise require
 // output will be ignored.
+// vt_stream creates a ReadonlyStream that wraps this terminal.
+// The stream parses VT sequences and applies them to the terminal.
 pub fn (mut self Terminal) vt_stream() ReadonlyStream {
-	// XTODO
-	// Requires ReadonlyStream/ReadonlyHandler from stream_readonly.zig.
-	// Those types parse VT sequences and call back into the terminal.
-	return ReadonlyStream{}
+	return ReadonlyStream.init(mut self)
 }
 
-// This is the handler-side only for vt_stream.
+// vt_handler creates just the handler portion (without stream parser).
 pub fn (mut self Terminal) vt_handler() ReadonlyHandler {
-	// XTODO
-	// Requires ReadonlyHandler from stream_readonly.zig.
-	return ReadonlyHandler{}
+	return ReadonlyHandler.init(mut self)
 }
-
-pub struct ReadonlyStream {}
-
-pub struct ReadonlyHandler {}
 
 // ============================================================
 // Print functions

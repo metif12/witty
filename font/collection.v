@@ -1,0 +1,877 @@
+module font
+
+// A font collection is a list of faces of different styles. The list is
+// ordered by priority (per style). All fonts in a collection share the same
+// size so they can be used interchangeably in cases a glyph is missing in one
+// and present in another.
+//
+// The purpose of a collection is to store a list of fonts by style
+// and priority order. A collection does not handle searching for font
+// callbacks, rasterization, etc. For this, see CodepointResolver.
+//
+// The collection can contain both loaded and deferred faces. Deferred faces
+// typically use less memory while still providing some necessary information
+// such as codepoint support, presentation, etc. This is useful for looking
+// for fallback fonts as efficiently as possible.
+//
+// Translated from ghostty/src/font/Collection.zig
+
+import math
+
+// ============================================================
+// SizeAdjustment
+// ============================================================
+
+// SizeAdjustment specifies how to adjust the size of a face relative
+// to the primary face. This functions like the CSS font-size-adjust property.
+pub enum SizeAdjustment {
+	// Don't adjust the size for this face, use the original point size.
+	none_
+	// Match ideograph character width with the primary face.
+	ic_width
+	// Match ex height with the primary face.
+	ex_height
+	// Match cap height with the primary face.
+	cap_height
+	// Match line height with the primary face.
+	line_height
+}
+
+// ============================================================
+// PresentationMode
+// ============================================================
+
+// PresentationModeKind identifies the type of presentation matching.
+pub enum PresentationModeKind {
+	// The codepoint has an explicit presentation (VS15/VS16).
+	explicit_
+	// The codepoint has no explicit presentation; use UCD default.
+	default_
+	// The codepoint can be any presentation.
+	any
+}
+
+// PresentationMode describes the requested presentation for a codepoint.
+pub struct PresentationMode {
+pub:
+	kind         PresentationModeKind
+	presentation Presentation = .text
+}
+
+// explicit creates a PresentationMode requiring an explicit presentation.
+pub fn PresentationMode.explicit(p Presentation) PresentationMode {
+	return PresentationMode{
+		kind:         .explicit_
+		presentation: p
+	}
+}
+
+// default_ creates a PresentationMode using the UCD default presentation.
+pub fn PresentationMode.default_(p Presentation) PresentationMode {
+	return PresentationMode{
+		kind:         .default_
+		presentation: p
+	}
+}
+
+// any creates a PresentationMode accepting any presentation.
+pub fn PresentationMode.any() PresentationMode {
+	return PresentationMode{
+		kind: .any
+	}
+}
+
+// ============================================================
+// Index
+// ============================================================
+
+// Index represents a specific font in the collection.
+//
+// The combination of style + idx uniquely identifies a font. The idx
+// represents the priority within a style (lower = higher priority).
+//
+// Special indices (>= index_special_start) represent built-in fonts
+// that don't have an associated face (e.g., sprite drawing).
+pub struct Index {
+pub:
+	// What style this index refers to.
+	style FontStyle = .regular
+	// The index within the style's face list.
+	idx   u16 = 0
+}
+
+// The starting index for special (built-in) fonts.
+pub const index_special_start = u16(8191)
+
+// Special enumerates special built-in font indices.
+pub enum Special {
+	// Sprite drawing, rendered JIT using 2D graphics APIs.
+	sprite = 8191
+}
+
+// init_special creates an Index for a special built-in font.
+pub fn Index.init_special(v Special) Index {
+	return Index{
+		style: .regular
+		idx:   u16(v)
+	}
+}
+
+// int_val returns the index as a packed integer.
+pub fn (i Index) int_val() u16 {
+	return (u16(i.style) << 13) | i.idx
+}
+
+// special returns the Special value if this is a special index,
+// or none for normal font indices.
+pub fn (i Index) special() ?Special {
+	if i.idx < index_special_start {
+		return none
+	}
+	if i.idx == u16(Special.sprite) {
+		return .sprite
+	}
+	return none
+}
+
+// ============================================================
+// Entry
+// ============================================================
+
+// Entry represents a font face in the collection, which can be
+// either deferred (not yet loaded) or fully loaded.
+//
+// A face can also be a "fallback" variant. For explicit faces,
+// when an explicit emoji presentation is not requested, we use
+// any glyph found even if the presentation doesn't match the UCD.
+// Fallback fonts require exact presentation matching.
+@[heap]
+pub struct Entry {
+pub mut:
+	// Whether the face is loaded (true) or deferred (false).
+	is_loaded     bool
+	// The deferred face (valid when !is_loaded).
+	deferred_face DeferredFace
+	// The loaded face (valid when is_loaded).
+	loaded_face   Face
+	// Whether this face is a fallback face.
+	fallback      bool
+	// Whether to use the scale value or the adjustment enum.
+	use_scale     bool = true
+	// Size adjustment to compute once the face is loaded.
+	adjustment    SizeAdjustment = .none_
+	// Computed scale factor for this face.
+	scale         f64 = 1.0
+}
+
+// deinit releases the face resources.
+pub fn (mut self Entry) deinit() {
+	if self.is_loaded {
+		self.loaded_face.deinit()
+	} else {
+		self.deferred_face.deinit()
+	}
+}
+
+// get_loaded returns the loaded Face if available, or none if deferred.
+pub fn (mut self Entry) get_loaded() ?&Face {
+	if !self.is_loaded {
+		return none
+	}
+	return unsafe { &self.loaded_face }
+}
+
+// is_deferred returns true if this entry is not yet loaded.
+pub fn (self Entry) is_deferred() bool {
+	return !self.is_loaded
+}
+
+// has_codepoint returns true if this face contains the given codepoint
+// with the specified presentation mode.
+pub fn (self Entry) has_codepoint(cp u32, p_mode PresentationMode) bool {
+	match p_mode.kind {
+		.default_ {
+			if self.fallback {
+				// Fallback fonts require explicit presentation matching.
+				return self.has_codepoint_explicit(cp, p_mode.presentation)
+			}
+			// Non-fallback fonts accept any presentation.
+			return self.has_codepoint_any(cp)
+		}
+		.explicit_ {
+			return self.has_codepoint_explicit(cp, p_mode.presentation)
+		}
+		.any {
+			return self.has_codepoint_any(cp)
+		}
+	}
+}
+
+// has_codepoint_explicit checks for a codepoint with a specific presentation.
+fn (self Entry) has_codepoint_explicit(cp u32, p Presentation) bool {
+	if self.is_loaded {
+		index := self.loaded_face.glyph_index(cp) or { return false }
+		return match p {
+			.text { !self.loaded_face.is_color_glyph(index) }
+			.emoji { self.loaded_face.is_color_glyph(index) }
+		}
+	}
+	return self.deferred_face.has_codepoint(cp, p)
+}
+
+// has_codepoint_any checks for a codepoint with any presentation.
+fn (self Entry) has_codepoint_any(cp u32) bool {
+	if self.is_loaded {
+		return self.loaded_face.glyph_index(cp) != none
+	}
+	return self.deferred_face.has_codepoint(cp, none)
+}
+
+// ============================================================
+// EntryOrAlias
+// ============================================================
+
+// EntryOrAlias wraps either a real Entry or an alias pointer to
+// another Entry. Aliases are used to share the same face across
+// styles (e.g., using the regular face for italic when no italic
+// face is available), avoiding memory duplication.
+pub struct EntryOrAlias {
+pub mut:
+	// Whether this is an alias (true) or a real entry (false).
+	is_alias    bool
+	// The actual entry data (valid when !is_alias).
+	entry       Entry
+	// Pointer to the aliased entry (valid when is_alias).
+	alias_entry &Entry = unsafe { nil }
+}
+
+// new_entry creates a heap-allocated EntryOrAlias containing an entry.
+pub fn EntryOrAlias.new_entry(e Entry) &EntryOrAlias {
+	return &EntryOrAlias{
+		entry: e
+	}
+}
+
+// new_alias creates a heap-allocated EntryOrAlias as an alias.
+// The alias must point to a non-alias entry.
+pub fn EntryOrAlias.new_alias(target &Entry) &EntryOrAlias {
+	return &EntryOrAlias{
+		is_alias:    true
+		alias_entry: target
+	}
+}
+
+// get_entry returns a pointer to the underlying Entry,
+// resolving aliases transparently.
+pub fn (eoa &EntryOrAlias) get_entry() &Entry {
+	if eoa.is_alias {
+		return eoa.alias_entry
+	}
+	return unsafe { &eoa.entry }
+}
+
+// ============================================================
+// LoadOptions
+// ============================================================
+
+// LoadOptions configures how deferred faces are loaded.
+pub struct LoadOptions {
+pub mut:
+	// The library to use for loading faces. Not owned by the collection.
+	library             Library
+	// The desired font size for all loaded faces.
+	size                DesiredSize = DesiredSize{
+		points: 12
+	}
+	// Freetype load flags to use when loading glyphs.
+	freetype_load_flags FreetypeLoadFlags = freetype_load_flags_default
+}
+
+// deinit releases load options resources.
+pub fn (mut self LoadOptions) deinit() {
+	// no-op in V (no allocator to free)
+}
+
+// face_options returns the FaceOptions derived from these load options.
+pub fn (self &LoadOptions) face_options() FaceOptions {
+	return FaceOptions{
+		size:                self.size
+		freetype_load_flags: self.freetype_load_flags
+	}
+}
+
+// ============================================================
+// MetricsModifierSet
+// ============================================================
+
+// MetricsModifierSet holds modifiers to adjust computed metrics.
+// XTODO: implement full modifier support (cell padding, etc.)
+pub struct MetricsModifierSet {
+}
+
+// ============================================================
+// AddOptions
+// ============================================================
+
+// AddOptions configures how a face is added to the collection.
+pub struct AddOptions {
+pub:
+	// What style this face is.
+	style           FontStyle
+	// What size adjustment to use.
+	size_adjustment SizeAdjustment
+	// Whether this is a fallback face.
+	fallback        bool
+}
+
+// ============================================================
+// FontSyntheticStyle (from config)
+// ============================================================
+
+// FontSyntheticStyle controls which synthetic styles are enabled.
+pub struct FontSyntheticStyle {
+pub:
+	italic      bool = true
+	bold        bool = true
+	bold_italic bool = true
+}
+
+// ============================================================
+// Collection
+// ============================================================
+
+// Collection is a list of faces of different styles, ordered by priority.
+pub struct Collection {
+pub mut:
+	// Face lists per style.
+	regular_faces     []&EntryOrAlias
+	bold_faces        []&EntryOrAlias
+	italic_faces      []&EntryOrAlias
+	bold_italic_faces []&EntryOrAlias
+	// The metric modifiers to use for this collection.
+	// Call update_metrics() to recompute after making changes.
+	metric_modifiers  MetricsModifierSet
+	// Metrics for this collection.
+	// Call update_metrics() to (re)compute these.
+	metrics           ?Metrics
+	// The face metrics for the primary face in the collection.
+	// Kept around to avoid re-computing when calculating scale factors.
+	primary_face_metrics ?FaceMetrics
+	// Load options for deferred faces.
+	// If not set, deferred faces will not be loaded.
+	load_options      ?LoadOptions
+}
+
+// init creates an empty collection.
+pub fn Collection.init() Collection {
+	return Collection{}
+}
+
+// deinit releases all faces and resources in the collection.
+pub fn (mut self Collection) deinit() {
+	// Deinit all entries. Aliases can be ignored.
+	for list in [self.regular_faces, self.bold_faces, self.italic_faces,
+		self.bold_italic_faces] {
+		for item in list {
+			if !item.is_alias {
+				unsafe {
+					mut e := &item.entry
+					e.deinit()
+				}
+			}
+		}
+	}
+	self.regular_faces = []
+	self.bold_faces = []
+	self.italic_faces = []
+	self.bold_italic_faces = []
+
+	if mut lo := self.load_options {
+		lo.deinit()
+	}
+}
+
+// faces_for returns the face list for the given style.
+fn (self &Collection) faces_for(style FontStyle) []&EntryOrAlias {
+	return match style {
+		.regular { self.regular_faces }
+		.bold { self.bold_faces }
+		.italic { self.italic_faces }
+		.bold_italic { self.bold_italic_faces }
+	}
+}
+
+// face_count returns the number of faces for a given style.
+fn (self &Collection) face_count(style FontStyle) int {
+	return self.faces_for(style).len
+}
+
+// face_at returns the EntryOrAlias at the given index for the given style.
+fn (self &Collection) face_at(style FontStyle, idx int) &EntryOrAlias {
+	return self.faces_for(style)[idx]
+}
+
+// append_face appends a face to the given style's list.
+fn (mut self Collection) append_face(style FontStyle, item &EntryOrAlias) {
+	match style {
+		.regular { self.regular_faces << item }
+		.bold { self.bold_faces << item }
+		.italic { self.italic_faces << item }
+		.bold_italic { self.bold_italic_faces << item }
+	}
+}
+
+// add adds a loaded face to the collection. This face will be added next
+// in priority if others exist already, i.e. it'll be the _last_ to be
+// searched for a glyph in that list.
+//
+// If no error is encountered then the collection takes ownership of the face.
+// When added, the size of the face will be adjusted to match load_options.
+//
+// Returns the index for the added face.
+pub fn (mut self Collection) add(face Face, opts AddOptions) !Index {
+	count := self.face_count(opts.style)
+
+	// We have some special indexes so we must never pass those.
+	if count >= int(index_special_start) - 1 {
+		return error('collection full')
+	}
+
+	mut owned_face := face
+
+	// Scale factor to adjust the size of the added face.
+	scale_factor := self.scale_factor(owned_face.get_metrics(), opts.size_adjustment)
+
+	// If we have load options, we update the size to ensure
+	// it matches and is normalized to the primary if possible.
+	if lo := self.load_options {
+		mut new_opts := lo
+		new_opts.size.points *= f32(scale_factor)
+		owned_face.set_face_size(new_opts.face_options()) or {
+			return error('set size failed')
+		}
+	}
+
+	self.append_face(opts.style, EntryOrAlias.new_entry(Entry{
+		is_loaded:   true
+		loaded_face: owned_face
+		fallback:    opts.fallback
+		use_scale:   true
+		scale:       scale_factor
+	}))
+
+	return Index{
+		style: opts.style
+		idx:   u16(count)
+	}
+}
+
+// add_deferred adds a deferred face to the collection.
+// Returns the index for the added face.
+pub fn (mut self Collection) add_deferred(face DeferredFace, opts AddOptions) !Index {
+	if self.load_options == none {
+		return error('deferred loading unavailable')
+	}
+
+	count := self.face_count(opts.style)
+
+	// We have some special indexes so we must never pass those.
+	if count >= int(index_special_start) - 1 {
+		return error('collection full')
+	}
+
+	self.append_face(opts.style, EntryOrAlias.new_entry(Entry{
+		deferred_face: face
+		fallback:      opts.fallback
+		use_scale:     false
+		adjustment:    opts.size_adjustment
+	}))
+
+	return Index{
+		style: opts.style
+		idx:   u16(count)
+	}
+}
+
+// get_face returns the Face for the given Index. The returned pointer
+// is only valid as long as this collection is not modified.
+//
+// This will load the face if it is deferred and not yet loaded.
+pub fn (mut self Collection) get_face(index Index) !&Face {
+	mut entry := self.get_entry(index)!
+	return self.get_face_from_entry(mut entry)
+}
+
+// get_entry returns the unaliased entry for the given index.
+pub fn (mut self Collection) get_entry(index Index) !&Entry {
+	if _ := index.special() {
+		return error('special has no face')
+	}
+	list := self.faces_for(index.style)
+	if int(index.idx) >= list.len {
+		return error('index out of bounds')
+	}
+	return list[int(index.idx)].get_entry()
+}
+
+// get_face_from_entry loads a face from an entry if needed and returns it.
+fn (mut self Collection) get_face_from_entry(mut entry Entry) !&Face {
+	if entry.is_loaded {
+		return unsafe { &entry.loaded_face }
+	}
+
+	// Entry is deferred — load it.
+	lo := self.load_options or {
+		return error('deferred loading unavailable')
+	}
+
+	// Load the face.
+	mut face := entry.deferred_face.load(lo.library, lo.face_options())!
+
+	// Calculate the scale factor for this entry now that we have a loaded face.
+	if !entry.use_scale {
+		factor := self.scale_factor(face.get_metrics(), entry.adjustment)
+		entry.use_scale = true
+		entry.scale = factor
+	}
+
+	// If our scale factor is something other than 1.0
+	// then we need to resize the face.
+	if entry.scale != 1.0 {
+		mut scaled_opts := lo
+		scaled_opts.size.points *= f32(entry.scale)
+		face.set_face_size(scaled_opts.face_options())!
+	}
+
+	// Deinit the deferred face now that we have loaded it.
+	entry.deferred_face.deinit()
+
+	// Set the loaded face on the entry.
+	entry.is_loaded = true
+	entry.loaded_face = face
+
+	return unsafe { &entry.loaded_face }
+}
+
+// get_index returns the index of the font in this collection that contains
+// the given codepoint, style, and presentation. If no font is found,
+// none is returned.
+//
+// This does not trigger font loading; deferred fonts can be
+// searched for codepoints.
+pub fn (self &Collection) get_index(cp u32, style FontStyle, p_mode PresentationMode) ?Index {
+	list := self.faces_for(style)
+	for i, item in list {
+		if item.get_entry().has_codepoint(cp, p_mode) {
+			return Index{
+				style: style
+				idx:   u16(i)
+			}
+		}
+	}
+	// Not found.
+	return none
+}
+
+// has_codepoint checks if a specific font index has a specific codepoint.
+// This does not necessarily force the font to load.
+pub fn (self &Collection) has_codepoint(index Index, cp u32, p_mode PresentationMode) bool {
+	list := self.faces_for(index.style)
+	if int(index.idx) >= list.len {
+		return false
+	}
+	return list[int(index.idx)].get_entry().has_codepoint(cp, p_mode)
+}
+
+// complete_styles ensures we have an option for all styles in the collection,
+// such as italic and bold by synthesizing them if necessary from the
+// first regular face that has text glyphs.
+//
+// If there is no regular face that has text glyphs, then this
+// does nothing.
+pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle) ! {
+	// If every style has at least one entry then we're done!
+	// This is the most common case.
+	if self.regular_faces.len > 0 && self.bold_faces.len > 0
+		&& self.italic_faces.len > 0 && self.bold_italic_faces.len > 0 {
+		return
+	}
+
+	// Find the first regular face that has non-colorized text glyphs.
+	if self.regular_faces.len == 0 {
+		return
+	}
+
+	mut regular_entry := &Entry(unsafe { nil })
+	for item in self.regular_faces {
+		mut entry := item.get_entry()
+		face := self.get_face_from_entry(mut entry) or { continue }
+
+		// We want a normal text font (not color-only).
+		// For mixed color/non-color fonts, accept if it has basic ASCII.
+		if !face.has_color() || face.glyph_index(u32(`A`)) != none {
+			regular_entry = entry
+			break
+		}
+	}
+
+	if regular_entry == unsafe { nil } {
+		// No regular text face found.
+		return error('default unavailable')
+	}
+
+	// --- Italic ---
+	have_italic := self.italic_faces.len > 0
+	if !have_italic {
+		if !synthetic_config.italic {
+			self.italic_faces << EntryOrAlias.new_alias(regular_entry)
+		} else {
+			// Try to create synthetic italic.
+			synthetic := self.create_synthetic_italic(regular_entry) or {
+				self.italic_faces << EntryOrAlias.new_alias(regular_entry)
+				Face{} // dummy, not used
+			}
+			if synthetic.face.handle != unsafe { nil } || true {
+				// Only add if we actually created a synthetic face (not the error path).
+				if self.italic_faces.len == 0 {
+					// The error path already appended an alias above.
+				}
+			}
+			// XTODO: properly handle synthetic face creation
+			if self.italic_faces.len == 0 {
+				self.italic_faces << EntryOrAlias.new_alias(regular_entry)
+			}
+		}
+	}
+
+	// --- Bold ---
+	have_bold := self.bold_faces.len > 0
+	if !have_bold {
+		if !synthetic_config.bold {
+			self.bold_faces << EntryOrAlias.new_alias(regular_entry)
+		} else {
+			// XTODO: create synthetic bold face
+			self.bold_faces << EntryOrAlias.new_alias(regular_entry)
+		}
+	}
+
+	// --- Bold Italic ---
+	if self.bold_italic_faces.len == 0 {
+		if !synthetic_config.bold_italic {
+			self.bold_italic_faces << EntryOrAlias.new_alias(regular_entry)
+		} else {
+			// Prefer to synthesize on top of the face we already had.
+			// If we have bold, try to synthesize italic on top of bold.
+			// If that fails, try synthesizing bold on top of italic.
+			// XTODO: implement synthetic bold italic creation
+			if self.italic_faces.len > 0 {
+				base_entry := self.italic_faces[0].get_entry()
+				self.bold_italic_faces << EntryOrAlias.new_alias(base_entry)
+			} else {
+				self.bold_italic_faces << EntryOrAlias.new_alias(regular_entry)
+			}
+		}
+	}
+}
+
+// create_synthetic_bold creates a synthetic bold font face from the given entry.
+fn (mut self Collection) create_synthetic_bold(entry &Entry) !Face {
+	// We require loading options to create a synthetic bold face.
+	lo := self.load_options or {
+		return error('deferred loading unavailable')
+	}
+
+	// Try to bold it.
+	mut e := unsafe { entry }
+	regular := self.get_face_from_entry(mut e)!
+
+	// Inherit size from regular; it may be different than opts.size
+	// due to scaling adjustments.
+	mut face_opts := lo.face_options()
+	face_opts.size = regular.size
+	face := regular.synthetic_bold_face(face_opts)!
+
+	return face
+}
+
+// create_synthetic_italic creates a synthetic italic font face from the given entry.
+fn (mut self Collection) create_synthetic_italic(entry &Entry) !Face {
+	// We require loading options to create a synthetic italic face.
+	lo := self.load_options or {
+		return error('deferred loading unavailable')
+	}
+
+	// Try to italicize it.
+	mut e := unsafe { entry }
+	regular := self.get_face_from_entry(mut e)!
+
+	// Inherit size from regular; it may be different than opts.size
+	// due to scaling adjustments.
+	mut face_opts := lo.face_options()
+	face_opts.size = regular.size
+	face := regular.synthetic_italic_face(face_opts)!
+
+	return face
+}
+
+// set_collection_size updates the size of all faces in the collection.
+// This will also update the size in the load options for future
+// deferred face loading.
+//
+// This requires load options to be set.
+pub fn (mut self Collection) set_collection_size(size DesiredSize) ! {
+	// Get a pointer to our options so we can modify the size.
+	mut lo := self.load_options or {
+		return error('deferred loading unavailable')
+	}
+	lo.size = size
+	self.load_options = lo
+
+	// Get the primary entry (index 0) for scale comparisons.
+	primary_entry_ptr := self.get_entry(Index{}) or { &Entry(unsafe { nil }) }
+
+	// Resize all our faces that are loaded.
+	// We skip entries that are aliases, since the underlying face
+	// will have a non-alias entry somewhere.
+	for list in [self.regular_faces, self.bold_faces, self.italic_faces,
+		self.bold_italic_faces] {
+		for item in list {
+			if item.is_alias {
+				continue
+			}
+			mut entry := item.get_entry()
+			if mut face := entry.get_loaded() {
+				// If this isn't our primary face, we scale
+				// the size appropriately before setting it.
+				mut new_opts := lo
+				if primary_entry_ptr != unsafe { nil }
+					&& entry != primary_entry_ptr {
+					new_opts.size.points *= f32(entry.scale)
+				}
+				face.set_face_size(new_opts.face_options()) or {
+					return error('set size failed')
+				}
+			}
+		}
+	}
+
+	self.update_metrics()!
+}
+
+// scale_factor calculates a factor by which to scale the provided face
+// to match it with the primary face, depending on the specified adjustment.
+//
+// If this encounters any problems loading the primary face or its
+// metrics then it just returns 1.0.
+//
+// This functions very much like the font-size-adjust CSS property.
+// ref: https://developer.mozilla.org/en-US/docs/Web/CSS/font-size-adjust
+fn (mut self Collection) scale_factor(face_metrics FaceMetrics, adjustment SizeAdjustment) f64 {
+	// If there's no adjustment, the scale is 1.0.
+	if adjustment == .none_ {
+		return 1.0
+	}
+
+	// If we haven't calculated our primary face metrics yet, do so now.
+	if self.primary_face_metrics == none {
+		// If we can't load the primary face, just use 1.0.
+		mut primary_face := self.get_face(Index{}) or { return 1.0 }
+		self.primary_face_metrics = primary_face.get_metrics()
+	}
+
+	primary_metrics := self.primary_face_metrics or { return 1.0 }
+
+	// We normalize the metrics values which are expressed in px to instead
+	// be in ems, so that it doesn't matter what size the faces actually are.
+	primary_scale := 1.0 / primary_metrics.px_per_em
+	face_scale := 1.0 / face_metrics.px_per_em
+
+	// We get the target metrics from the primary face and this face
+	// depending on the specified adjustment.
+	//
+	// If this face doesn't explicitly define a metric, or if the value
+	// it defines is invalid, we fall through to other options.
+	primary_metric, face_metric := match adjustment {
+		.ic_width {
+			// Check if face has a valid ic_width (differs from estimate).
+			if face_metrics.ic_width != none
+				&& face_metrics.ic_width_val() != face_metrics.ic_width_val() {
+				// Invalid, fall through to ex_height.
+				self.scale_factor_for(.ex_height, primary_metrics, face_metrics,
+					primary_scale, face_scale)
+			} else {
+				primary_metrics.ic_width_val() * primary_scale, face_metrics.ic_width_val() * face_scale
+			}
+		}
+		.ex_height {
+			self.scale_factor_for(.ex_height, primary_metrics, face_metrics,
+				primary_scale, face_scale)
+		}
+		.cap_height {
+			self.scale_factor_for(.cap_height, primary_metrics, face_metrics,
+				primary_scale, face_scale)
+		}
+		.line_height {
+			primary_metrics.line_height() * primary_scale, face_metrics.line_height() * face_scale
+		}
+		.none_ {
+			// unreachable
+			1.0, 1.0
+		}
+	}
+
+	if face_metric == 0.0 {
+		return 1.0
+	}
+	return primary_metric / face_metric
+}
+
+// scale_factor_for is a helper that returns primary_metric and face_metric
+// for the given adjustment level, falling through to the next level if needed.
+fn (self &Collection) scale_factor_for(adjustment SizeAdjustment, primary_metrics FaceMetrics, face_metrics FaceMetrics, primary_scale f64, face_scale f64) (f64, f64) {
+	match adjustment {
+		.ex_height {
+			// Check if face explicitly defines ex_height.
+			if face_metrics.ex_height != none {
+				return primary_metrics.ex_height_val() * primary_scale, face_metrics.ex_height_val() * face_scale
+			}
+			// Fall through to cap_height.
+			return self.scale_factor_for(.cap_height, primary_metrics, face_metrics,
+				primary_scale, face_scale)
+		}
+		.cap_height {
+			if face_metrics.cap_height != none {
+				return primary_metrics.cap_height_val() * primary_scale, face_metrics.cap_height_val() * face_scale
+			}
+			// Fall through to line_height.
+			return primary_metrics.line_height() * primary_scale, face_metrics.line_height() * face_scale
+		}
+		.line_height {
+			return primary_metrics.line_height() * primary_scale, face_metrics.line_height() * face_scale
+		}
+		else {
+			return 1.0, 1.0
+		}
+	}
+}
+
+// update_metrics recomputes the cell metrics for this collection,
+// based on the primary font and the modifiers in metric_modifiers.
+//
+// This requires a primary font (index 0) to be present.
+pub fn (mut self Collection) update_metrics() ! {
+	mut primary_face := self.get_face(Index{}) or {
+		return error('cannot load primary font')
+	}
+
+	self.primary_face_metrics = primary_face.get_metrics()
+
+	face_metrics := self.primary_face_metrics or {
+		return error('cannot load primary font')
+	}
+
+	mut metrics := Metrics.calc(face_metrics)
+	metrics.apply(self.metric_modifiers)
+
+	self.metrics = metrics
+}
