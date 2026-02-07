@@ -104,7 +104,7 @@ pub fn LoadingImage.init_from_cmd(cmd &Command) !LoadingImage {
 			width: t.width
 			height: t.height
 			compression: t.compression
-			format: t.format
+			format: t.format_
 		}
 		display: cmd.display()
 		quiet: cmd.quiet

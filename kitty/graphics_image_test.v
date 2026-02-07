@@ -8,7 +8,7 @@ fn test_image_load_with_invalid_rgb_data() {
 	// <ESC>_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA<ESC>\
 	cmd := Command{
 		control: Control(Transmission{
-			format: .rgb
+			format_: .rgb
 			width: 1
 			height: 1
 			image_id: 31
@@ -25,7 +25,7 @@ fn test_image_load_with_invalid_rgb_data() {
 fn test_image_load_with_image_too_wide() {
 	cmd := Command{
 		control: Control(Transmission{
-			format: .rgb
+			format_: .rgb
 			width: u32(max_dimension + 1)
 			height: 1
 			image_id: 31
@@ -49,7 +49,7 @@ fn test_image_load_with_image_too_wide() {
 fn test_image_load_with_image_too_tall() {
 	cmd := Command{
 		control: Control(Transmission{
-			format: .rgb
+			format_: .rgb
 			height: u32(max_dimension + 1)
 			width: 1
 			image_id: 31

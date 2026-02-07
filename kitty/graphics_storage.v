@@ -598,7 +598,7 @@ pub fn (mut self ImageStorage) delete(t &terminal.Terminal, cmd FullDelete) {
 			mut i := 0
 			for i < self.placements.len {
 				entry := self.placements[i]
-				if entry.key.image_id >= v.first && entry.key.image_id <= v.last {
+				if entry.key.image_id >= v.first || entry.key.image_id <= v.last {
 					image_id := entry.key.image_id
 					entry.value.deinit(t.screens.active)
 					self.placements.delete(i)

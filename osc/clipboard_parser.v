@@ -1,0 +1,53 @@
+module osc
+
+// Parse OSC 52 - clipboard operations.
+//
+// Set or get clipboard contents. If data is "?", then the current
+// clipboard contents are sent to the pty. If data is set, this
+// contents is set on the clipboard.
+//
+// Format: OSC 52 ; Pc ; Pd ST
+// Pc is a single character clipboard selection (s, c, p, etc.) or empty (defaults to 'c')
+// Pd is the base64-encoded data, "?" for query, or empty to clear.
+fn parse_clipboard_operation(mut parser Parser, terminator_ch u8) ?Command {
+	data := parser.buffered()
+	data_str := data.bytestr()
+
+	if data_str.len == 0 {
+		parser.state = .invalid
+		return none
+	}
+
+	// Check for the clipboard kind separator
+	if data_str[0] == `;` {
+		// No explicit kind, default to 'c'
+		parser.command = Command{
+			cmd_type:   .clipboard_contents
+			terminator: init_terminator(terminator_ch)
+			str_value:  data_str[1..] // the data after ';'
+			str_value2: 'c' // clipboard kind
+		}
+		return parser.command
+	}
+
+	// Explicit kind character
+	if data_str.len < 2 {
+		parser.state = .invalid
+		return none
+	}
+	if data_str[1] != `;` {
+		parser.state = .invalid
+		return none
+	}
+
+	kind := data_str[0]
+	clipboard_data := data_str[2..]
+
+	parser.command = Command{
+		cmd_type:   .clipboard_contents
+		terminator: init_terminator(terminator_ch)
+		str_value:  clipboard_data
+		str_value2: [kind].bytestr() // clipboard kind as string
+	}
+	return parser.command
+}

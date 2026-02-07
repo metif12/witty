@@ -287,17 +287,6 @@ pub fn (self &Selection) end() Pin {
 }
 
 // ============================================================
-// PointTag - identifies which region of the screen to reference
-// ============================================================
-
-pub enum PointTag {
-	screen
-	active
-	viewport
-	history
-}
-
-// ============================================================
 // PinOpts - options for pin-based operations
 // ============================================================
 
@@ -312,6 +301,7 @@ pub:
 // Pages - simplified page storage for the terminal grid
 // ============================================================
 
+@[heap]
 pub struct Pages {
 pub mut:
 	screen_rows    []RowData

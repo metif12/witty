@@ -61,11 +61,6 @@ pub mut:
 // Nested types
 // ============================================================
 
-pub enum StatusDisplay {
-	main
-	status_line
-}
-
 // The various color configurations a terminal maintains and that can
 // be set dynamically via OSC, with defaults usually coming from a
 // configuration.
@@ -361,54 +356,6 @@ pub fn (mut self ScreenSet) remove(key ScreenKey) {
 	match key {
 		.alternate { self.alternate = none }
 		.primary {} // never remove primary
-	}
-}
-
-// ============================================================
-// Tabstops
-// ============================================================
-
-pub struct Tabstops {
-mut:
-	stops []bool
-}
-
-pub fn Tabstops.init(cols int, interval int) !Tabstops {
-	mut stops := []bool{len: cols}
-	for i in 0 .. cols {
-		stops[i] = interval > 0 && (i % interval) == 0
-	}
-	return Tabstops{
-		stops: stops
-	}
-}
-
-pub fn (mut self Tabstops) deinit() {
-	self.stops = []
-}
-
-pub fn (self Tabstops) get(x u32) bool {
-	if int(x) < self.stops.len {
-		return self.stops[int(x)]
-	}
-	return false
-}
-
-pub fn (mut self Tabstops) set(x u32) {
-	if int(x) < self.stops.len {
-		self.stops[int(x)] = true
-	}
-}
-
-pub fn (mut self Tabstops) unset(x u32) {
-	if int(x) < self.stops.len {
-		self.stops[int(x)] = false
-	}
-}
-
-pub fn (mut self Tabstops) reset(interval int) {
-	for i in 0 .. self.stops.len {
-		self.stops[i] = interval > 0 && (i % interval) == 0
 	}
 }
 
@@ -1231,11 +1178,6 @@ pub fn (mut self Terminal) tab_clear(cmd TabClear) {
 		.current { self.tabstops.unset(self.screens.active.cursor.x) }
 		.all { self.tabstops.reset(0) }
 	}
-}
-
-pub enum TabClear {
-	current
-	all
 }
 
 // Set a tab stop on the current cursor.

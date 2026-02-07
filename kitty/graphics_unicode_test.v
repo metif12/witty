@@ -4,6 +4,8 @@ module kitty
 //
 // Source: graphics_unicode.zig tests
 
+import terminal
+
 fn test_unicode_diacritic_sorted() {
 	// diacritics must be sorted since we use a binary search.
 	for i in 1 .. diacritics.len {
