@@ -18,18 +18,10 @@ fn C.write(fd int, buf voidptr, count usize) isize
 fn C._exit(status int)
 fn C.setenv(name &char, value &char, overwrite int) int
 
-// CoreGraphics / CoreText C functions for drawing.
+// CoreGraphics C functions for drawing.
 fn C.CGContextSetRGBFillColor(ctx voidptr, r f64, g f64, b f64, a f64)
 fn C.CGContextFillRect(ctx voidptr, rect C.CGRect)
 fn C.CGContextSetTextMatrix(ctx voidptr, t C.CGAffineTransform)
-fn C.CGContextSetTextPosition(ctx voidptr, x f64, y f64)
-fn C.CTFontCreateWithName(name voidptr, size f64, matrix voidptr) voidptr
-fn C.CTLineCreateWithAttributedString(attr_str voidptr) voidptr
-fn C.CTLineDraw(line voidptr, ctx voidptr)
-fn C.CFRelease(obj voidptr)
-fn C.CFStringCreateWithCString(alloc voidptr, cstr &char, encoding u32) voidptr
-fn C.CFAttributedStringCreate(alloc voidptr, str voidptr, attrs voidptr) voidptr
-fn C.CFDictionaryCreate(alloc voidptr, keys &voidptr, values &voidptr, count isize, key_cbs voidptr, val_cbs voidptr) voidptr
 
 // CGRect and CGAffineTransform for CoreGraphics calls.
 struct C.CGRect {
@@ -137,9 +129,7 @@ fn main() {
 	p.close_slave()
 
 	// 5. Create CTFont for Menlo
-	menlo_name := C.CFStringCreateWithCString(unsafe { nil }, c'Menlo', u32(0x08000100))
-	ct_font := C.CTFontCreateWithName(menlo_name, 13.0, unsafe { nil })
-	C.CFRelease(menlo_name)
+	ct_font := macos.create_font('Menlo', 13.0)
 
 	// 6. Set up global state
 	mut stream := terminal.ReadonlyStream.init(mut term)
@@ -201,8 +191,6 @@ fn on_draw(ctx voidptr, width f64, height f64) {
 	num_rows := if int(pages.rows) < state.rows { int(pages.rows) } else { state.rows }
 	num_cols := if int(pages.cols) < state.cols { int(pages.cols) } else { state.cols }
 
-	font_key := macos.ct_font_attribute_name()
-
 	for row_idx in 0 .. num_rows {
 		row := pages.get_active_row(u32(row_idx))
 
@@ -232,35 +220,9 @@ fn on_draw(ctx voidptr, width f64, height f64) {
 			continue
 		}
 
-		// Null-terminate for CFStringCreateWithCString
-		mut trimmed := row_str[..end].clone()
-		trimmed << u8(0)
-
-		cf_str := C.CFStringCreateWithCString(unsafe { nil }, trimmed.data, u32(0x08000100))
-		if cf_str == unsafe { nil } {
-			continue
-		}
-
-		// Create attributed string with our font
-		keys := [font_key]
-		vals := [state.font]
-		attrs := C.CFDictionaryCreate(unsafe { nil }, keys.data, vals.data,
-			isize(1), unsafe { nil }, unsafe { nil })
-
-		attr_str := C.CFAttributedStringCreate(unsafe { nil }, cf_str, attrs)
-		if attr_str != unsafe { nil } {
-			line := C.CTLineCreateWithAttributedString(attr_str)
-			if line != unsafe { nil } {
-				y_pos := f64(row_idx) * cell_h + cell_h * 0.8
-				C.CGContextSetTextPosition(ctx, 0.0, y_pos)
-				C.CTLineDraw(line, ctx)
-				C.CFRelease(line)
-			}
-			C.CFRelease(attr_str)
-		}
-
-		C.CFRelease(attrs)
-		C.CFRelease(cf_str)
+		y_pos := f64(row_idx) * cell_h + cell_h * 0.8
+		macos.draw_text(ctx, row_str.data, end, state.font, 0.0, y_pos,
+			1.0, 1.0, 1.0)
 	}
 
 	// Draw cursor

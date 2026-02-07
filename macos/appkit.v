@@ -30,6 +30,8 @@ fn C.vt_view_height() f64
 fn C.vt_ct_font_attribute_name() voidptr
 fn C.vt_set_userdata(ptr voidptr)
 fn C.vt_get_userdata() voidptr
+fn C.vt_create_font(name &char, size f64) voidptr
+fn C.vt_draw_text(ctx voidptr, text &u8, text_len int, font voidptr, x f64, y f64, fg_r f64, fg_g f64, fg_b f64)
 
 // V-friendly wrappers.
 pub fn app_init() {
@@ -82,4 +84,12 @@ pub fn set_userdata(ptr voidptr) {
 
 pub fn get_userdata() voidptr {
 	return C.vt_get_userdata()
+}
+
+pub fn create_font(name string, size f64) voidptr {
+	return C.vt_create_font(name.str, size)
+}
+
+pub fn draw_text(ctx voidptr, text &u8, text_len int, font voidptr, x f64, y f64, fg_r f64, fg_g f64, fg_b f64) {
+	C.vt_draw_text(ctx, text, text_len, font, x, y, fg_r, fg_g, fg_b)
 }
