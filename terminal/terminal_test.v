@@ -1504,7 +1504,8 @@ fn test_screen_set_init_and_switch() {
 	ss.primary.test_write_string('Hello') or { assert false }
 
 	// Create alternate and switch
-	ss.alternate = Screen.init(10, 10, 0)
+	mut init_alt := Screen.init(10, 10, 0)
+	ss.alternate_ptr = unsafe { &Screen(memdup(&init_alt, int(sizeof(Screen)))) }
 	ss.switch_to(.alternate)
 	assert ss.active_key == .alternate
 

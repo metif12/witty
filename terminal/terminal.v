@@ -259,10 +259,10 @@ pub enum SwitchScreenMode {
 
 pub struct ScreenSet {
 pub mut:
-	primary   Screen
-	alternate ?Screen
-	active    &Screen = unsafe { nil }
-	active_key ScreenKey = .primary
+	primary       Screen
+	alternate_ptr &Screen = unsafe { nil }
+	active        &Screen = unsafe { nil }
+	active_key    ScreenKey = .primary
 }
 
 pub enum ScreenKey {
@@ -280,8 +280,8 @@ pub fn ScreenSet.init(cols u16, rows u16, max_scrollback int) !ScreenSet {
 
 pub fn (mut self ScreenSet) deinit() {
 	self.primary.deinit()
-	if mut alt := self.alternate {
-		alt.deinit()
+	if self.alternate_ptr != unsafe { nil } {
+		self.alternate_ptr.deinit()
 	}
 }
 
@@ -289,8 +289,8 @@ pub fn (mut self ScreenSet) get(key ScreenKey) ?&Screen {
 	match key {
 		.primary { return &self.primary }
 		.alternate {
-			if mut alt := self.alternate {
-				return &alt
+			if self.alternate_ptr != unsafe { nil } {
+				return self.alternate_ptr
 			}
 			return none
 		}
@@ -304,8 +304,8 @@ pub fn (mut self ScreenSet) switch_to(key ScreenKey) {
 			self.active_key = .primary
 		}
 		.alternate {
-			if mut alt := self.alternate {
-				self.active = &alt
+			if self.alternate_ptr != unsafe { nil } {
+				self.active = self.alternate_ptr
 				self.active_key = .alternate
 			}
 		}
@@ -314,7 +314,7 @@ pub fn (mut self ScreenSet) switch_to(key ScreenKey) {
 
 pub fn (mut self ScreenSet) remove(key ScreenKey) {
 	match key {
-		.alternate { self.alternate = none }
+		.alternate { self.alternate_ptr = unsafe { nil } }
 		.primary {} // never remove primary
 	}
 }
@@ -2026,9 +2026,8 @@ pub fn (mut self Terminal) resize(cols u16, rows u16) ! {
 	})!
 
 	// Alternate screen, if it exists, doesn't reflow
-	if _ := self.screens.alternate {
-		mut alt := self.screens.alternate or { return }
-		alt.resize(ScreenResize{
+	if self.screens.alternate_ptr != unsafe { nil } {
+		self.screens.alternate_ptr.resize(ScreenResize{
 			cols: u32(cols)
 			rows: u32(rows)
 			reflow: false
@@ -2089,11 +2088,10 @@ pub fn (mut self Terminal) switch_screen(key ScreenKey) !&Screen {
 	// Switch the screens
 	match key {
 		.alternate {
-			if _ := self.screens.alternate {
-				// Already exists
-			} else {
-				// Create alternate screen (no scrollback)
-				self.screens.alternate = Screen.init(u32(self.cols), u32(self.rows), 0)
+			if self.screens.alternate_ptr == unsafe { nil } {
+				// Create alternate screen on heap (no scrollback)
+				mut init_screen := Screen.init(u32(self.cols), u32(self.rows), 0)
+				self.screens.alternate_ptr = unsafe { &Screen(memdup(&init_screen, int(sizeof(Screen)))) }
 			}
 		}
 		.primary {}

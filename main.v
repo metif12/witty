@@ -95,24 +95,17 @@ fn get_app_config() AppConfig {
 // ============================================================
 
 fn spawn_terminal(cfg AppConfig) !&TermState {
-	// Heap-allocate the Terminal so internal self-referential pointers
-	// (ScreenSet.active -> primary) survive. We init locally then
-	// copy to the heap and fix up the active pointer.
-	init_term := terminal.Terminal.init(terminal.Options{
+	// Heap-allocate the Terminal via raw memdup so every byte is preserved.
+	// Terminal contains ScreenSet which has a self-referential `active`
+	// pointer into its own `primary` field. A V struct literal copy can
+	// lose internal state, so we memdup the exact bytes then fix up
+	// the one known self-referential pointer.
+	mut init_term := terminal.Terminal.init(terminal.Options{
 		cols: cfg.cols
 		rows: cfg.rows
 	})!
-	mut term := &terminal.Terminal{
-		screens: init_term.screens
-		status_display: init_term.status_display
-		tabstops: init_term.tabstops
-		rows: init_term.rows
-		cols: init_term.cols
-		scrolling_region: init_term.scrolling_region
-		colors: init_term.colors
-		modes: init_term.modes
-	}
-	// Fix up the self-referential active pointer after the heap copy.
+	mut term := unsafe { &terminal.Terminal(memdup(&init_term, int(sizeof(terminal.Terminal)))) }
+	// Fix up the self-referential active pointer to point into the heap copy.
 	term.screens.active = &term.screens.primary
 
 	mut p := pty.Pty.open(pty.Winsize{

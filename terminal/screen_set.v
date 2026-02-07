@@ -35,11 +35,9 @@ pub fn (mut self ScreenSet) get_or_init(key ScreenKey, cols u32, rows u32, max_s
 	// lazily initialized; the primary is always present.
 	match key {
 		.alternate {
-			self.alternate = Screen.init(cols, rows, max_scrollback)
-			if mut alt := self.alternate {
-				return &alt
-			}
-			return error('failed to initialize alternate screen')
+			mut init_screen := Screen.init(cols, rows, max_scrollback)
+			self.alternate_ptr = unsafe { &Screen(memdup(&init_screen, int(sizeof(Screen)))) }
+			return self.alternate_ptr
 		}
 		.primary {
 			// Primary is always initialized; this should not happen.
