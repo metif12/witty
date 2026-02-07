@@ -72,55 +72,15 @@ pub mut:
 	palette    DynamicPalette
 }
 
-pub const colors_default = Colors{
-	background: DynamicRGB(Unset{})
-	foreground: DynamicRGB(Unset{})
-	cursor: DynamicRGB(Unset{})
-	palette: dynamic_palette_default
-}
-
-// DynamicRGB can be either unset or an RGB value.
-pub struct Unset {}
-
-pub type DynamicRGB = Unset | RGB
+// colors_default provides the default Colors value.
+// DynamicRGB and DynamicPalette are defined in color.v.
+pub const colors_default = Colors{}
 
 pub struct RGB {
 pub:
 	r u8
 	g u8
 	b u8
-}
-
-pub struct DynamicPalette {
-pub mut:
-	entries [256]RGB
-}
-
-pub const dynamic_palette_default = DynamicPalette{}
-
-// DynamicRGB methods for the color system.
-pub fn (mut self DynamicRGB) set(color RGB) {
-	self = DynamicRGB(color)
-}
-
-pub fn (self DynamicRGB) get() ?RGB {
-	return match self {
-		Unset { none }
-		RGB { self }
-	}
-}
-
-pub fn (mut self DynamicRGB) reset() {
-	self = DynamicRGB(Unset{})
-}
-
-// DynamicPalette methods.
-pub fn (mut self DynamicPalette) set(idx u8, color RGB) {
-	self.entries[int(idx)] = color
-}
-
-pub fn (mut self DynamicPalette) reset(idx u8) {
-	self.entries[int(idx)] = RGB{}
 }
 
 // This is a set of dirty flags the renderer can use to determine
@@ -419,6 +379,16 @@ pub enum Mode {
 	mouse_format_sgr      // = 27 (mode 1006)
 	mouse_format_urxvt    // = 28 (mode 1015)
 	mouse_format_sgr_pixels // = 29 (mode 1016)
+	disable_keyboard      // = 30 (KAM, ANSI mode 2)
+	send_receive_mode     // = 31 (SRM, ANSI mode 12)
+	cursor_keys           // = 32 (DECCKM, DEC mode 1)
+	slow_scroll            // = 33 (DEC mode 4)
+	keypad_keys           // = 34 (DEC mode 66)
+	mouse_alternate_scroll // = 35 (DEC mode 1007)
+	ignore_keypad_with_numlock // = 36 (DEC mode 1035)
+	alt_esc_prefix        // = 37 (DEC mode 1036)
+	alt_sends_escape      // = 38 (DEC mode 1039)
+	report_color_scheme   // = 39 (DEC mode 2031)
 }
 
 // ============================================================

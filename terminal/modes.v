@@ -38,15 +38,15 @@ struct ModeEntry {
 // Modes not yet present in the Mode enum are commented out with XTODO.
 const mode_entries = [
 	// ANSI modes
-	// XTODO: disable_keyboard (KAM, ANSI mode 2) not yet in Mode enum
+	ModeEntry{ mode: .disable_keyboard, value: 2, ansi: true, default_val: false },
 	ModeEntry{ mode: .insert, value: 4, ansi: true, default_val: false },
-	// XTODO: send_receive_mode (SRM, ANSI mode 12) not yet in Mode enum
+	ModeEntry{ mode: .send_receive_mode, value: 12, ansi: true, default_val: false },
 	ModeEntry{ mode: .linefeed, value: 20, ansi: true, default_val: false },
 
 	// DEC modes
-	// XTODO: cursor_keys (DECCKM, DEC mode 1) not yet in Mode enum
+	ModeEntry{ mode: .cursor_keys, value: 1, ansi: false, default_val: false },
 	ModeEntry{ mode: .column_132, value: 3, ansi: false, default_val: false },
-	// XTODO: slow_scroll (DEC mode 4) not yet in Mode enum
+	ModeEntry{ mode: .slow_scroll, value: 4, ansi: false, default_val: false },
 	ModeEntry{ mode: .reverse_colors, value: 5, ansi: false, default_val: false },
 	ModeEntry{ mode: .origin, value: 6, ansi: false, default_val: false },
 	ModeEntry{ mode: .wraparound, value: 7, ansi: false, default_val: true },
@@ -57,7 +57,7 @@ const mode_entries = [
 	ModeEntry{ mode: .enable_mode_3, value: 40, ansi: false, default_val: false },
 	ModeEntry{ mode: .reverse_wrap, value: 45, ansi: false, default_val: false },
 	ModeEntry{ mode: .alt_screen_legacy, value: 47, ansi: false, default_val: false },
-	// XTODO: keypad_keys (DEC mode 66) not yet in Mode enum
+	ModeEntry{ mode: .keypad_keys, value: 66, ansi: false, default_val: false },
 	ModeEntry{ mode: .enable_left_and_right_margin, value: 69, ansi: false, default_val: false },
 	ModeEntry{ mode: .mouse_event_normal, value: 1000, ansi: false, default_val: false },
 	ModeEntry{ mode: .mouse_event_button, value: 1002, ansi: false, default_val: false },
@@ -65,12 +65,12 @@ const mode_entries = [
 	ModeEntry{ mode: .focus_event, value: 1004, ansi: false, default_val: false },
 	ModeEntry{ mode: .mouse_format_utf8, value: 1005, ansi: false, default_val: false },
 	ModeEntry{ mode: .mouse_format_sgr, value: 1006, ansi: false, default_val: false },
-	// XTODO: mouse_alternate_scroll (DEC mode 1007) not yet in Mode enum
+	ModeEntry{ mode: .mouse_alternate_scroll, value: 1007, ansi: false, default_val: false },
 	ModeEntry{ mode: .mouse_format_urxvt, value: 1015, ansi: false, default_val: false },
 	ModeEntry{ mode: .mouse_format_sgr_pixels, value: 1016, ansi: false, default_val: false },
-	// XTODO: ignore_keypad_with_numlock (DEC mode 1035) not yet in Mode enum
-	// XTODO: alt_esc_prefix (DEC mode 1036) not yet in Mode enum
-	// XTODO: alt_sends_escape (DEC mode 1039) not yet in Mode enum
+	ModeEntry{ mode: .ignore_keypad_with_numlock, value: 1035, ansi: false, default_val: false },
+	ModeEntry{ mode: .alt_esc_prefix, value: 1036, ansi: false, default_val: false },
+	ModeEntry{ mode: .alt_sends_escape, value: 1039, ansi: false, default_val: false },
 	ModeEntry{ mode: .reverse_wrap_extended, value: 1045, ansi: false, default_val: false },
 	ModeEntry{ mode: .alt_screen, value: 1047, ansi: false, default_val: false },
 	ModeEntry{ mode: .save_cursor, value: 1048, ansi: false, default_val: false },
@@ -78,7 +78,7 @@ const mode_entries = [
 	ModeEntry{ mode: .bracketed_paste, value: 2004, ansi: false, default_val: false },
 	ModeEntry{ mode: .synchronized_output, value: 2026, ansi: false, default_val: false },
 	ModeEntry{ mode: .grapheme_cluster, value: 2027, ansi: false, default_val: false },
-	// XTODO: report_color_scheme (DEC mode 2031) not yet in Mode enum
+	ModeEntry{ mode: .report_color_scheme, value: 2031, ansi: false, default_val: false },
 	ModeEntry{ mode: .in_band_size_reports, value: 2048, ansi: false, default_val: false },
 ]
 

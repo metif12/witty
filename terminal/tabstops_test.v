@@ -44,12 +44,12 @@ fn test_tabstops_dynamic_allocations() {
 	t.resize(cap * 2) or { assert false; return }
 
 	// Set something that was out of range of the first
-	t.set(cap + 5)
-	assert t.get(cap + 5)
-	assert !t.get(cap + 4)
+	t.set(u32(cap + 5))
+	assert t.get(u32(cap + 5))
+	assert !t.get(u32(cap + 4))
 
 	// Prealloc still works
-	assert !t.get(5)
+	assert !t.get(u32(5))
 }
 
 fn test_tabstops_interval() {

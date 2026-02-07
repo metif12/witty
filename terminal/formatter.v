@@ -422,10 +422,13 @@ pub fn (self ScreenFormatter) format() string {
 	if self.extra.hyperlink {
 		if link := self.screen.cursor.hyperlink_state {
 			// Start hyperlink with uri (and explicit id if present)
-			if link.id_.len > 0 {
-				sb.write_string('\x1b]8;id=${link.id_};${link.uri}\x1b\\')
-			} else {
-				sb.write_string('\x1b]8;;${link.uri}\x1b\\')
+			match link.id {
+				HyperlinkExplicitId {
+					sb.write_string('\x1b]8;id=${link.id.value};${link.uri}\x1b\\')
+				}
+				HyperlinkImplicitId {
+					sb.write_string('\x1b]8;;${link.uri}\x1b\\')
+				}
 			}
 		}
 	}

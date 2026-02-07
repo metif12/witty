@@ -92,7 +92,8 @@ pub:
 	// ConEmu tab title
 	tab_title ConEmuTabTitle
 	// Semantic prompt data (OSC 133)
-	semantic_prompt_action  SemanticAction = .fresh_line
+	semantic_prompt_action SemanticAction = .fresh_line
+pub mut:
 	semantic_prompt_options string
 }
 
@@ -336,31 +337,55 @@ pub fn (mut self Parser) end(terminator_ch u8) ?Command {
 		.start, .invalid {
 			return none
 		}
+		.s_0, .s_2 {
+			return parse_change_window_title(mut self, terminator_ch)
+		}
+		.s_1 {
+			return parse_change_window_icon(mut self, terminator_ch)
+		}
+		.s_4, .s_5, .s_10, .s_11, .s_12, .s_13, .s_14, .s_15,
+		.s_16, .s_17, .s_18, .s_19, .s_104, .s_110, .s_111,
+		.s_112, .s_113, .s_114, .s_115, .s_116, .s_117, .s_118,
+		.s_119 {
+			return parse_color_operation(mut self, terminator_ch)
+		}
+		.s_7 {
+			return parse_report_pwd(mut self, terminator_ch)
+		}
+		.s_8 {
+			return parse_hyperlink(mut self, terminator_ch)
+		}
 		.s_9 {
 			return parse_osc9(mut self, terminator_ch)
 		}
-		.s_0, .s_2 {
-			// XTODO: change_window_title parser
+		.s_21 {
+			return parse_kitty_color_protocol(mut self, terminator_ch)
+		}
+		.s_22 {
+			return parse_mouse_shape(mut self, terminator_ch)
+		}
+		.s_52 {
+			return parse_clipboard_operation(mut self, terminator_ch)
+		}
+		.s_6 {
+			// OSC 6 is not a valid OSC by itself (bridge state to 66)
 			return none
 		}
-		.s_1 {
-			// XTODO: change_window_icon parser
-			return none
+		.s_66 {
+			return parse_kitty_text_sizing(mut self, terminator_ch)
 		}
-		.s_7 {
-			// XTODO: report_pwd parser
-			return none
-		}
-		.s_8 {
-			// XTODO: hyperlink parser
+		.s_77 {
+			// OSC 77 is not a valid OSC by itself (bridge state to 777)
 			return none
 		}
 		.s_133 {
 			return parse_osc133(mut self, terminator_ch)
 		}
-		else {
-			// XTODO: other OSC parsers
-			return none
+		.s_777 {
+			return parse_rxvt_extension(mut self, terminator_ch)
+		}
+		.s_1337 {
+			return parse_iterm2(mut self, terminator_ch)
 		}
 	}
 }

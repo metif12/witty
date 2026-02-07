@@ -232,8 +232,7 @@ pub fn HyperlinkStorage.init() HyperlinkStorage {
 pub fn (mut self HyperlinkStorage) add(link Hyperlink) u32 {
 	// Check if link already exists.
 	for i := 1; i < self.entries.len; i++ {
-		if self.entries[i].in_use && self.entries[i].link.uri == link.uri
-			&& self.entries[i].link.id_ == link.id_ {
+		if self.entries[i].in_use && self.entries[i].link.uri == link.uri {
 			self.entries[i].ref_count++
 			return u32(i)
 		}

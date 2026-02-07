@@ -76,5 +76,9 @@ pub fn (mut self StringMatch) deinit() {
 pub fn (self StringMatch) selection() Selection {
 	start_pt := self.smap.map_pin[self.offset + self.start_byte]
 	end_pt := self.smap.map_pin[self.offset + self.end_byte]
-	return Selection.init(start_pt, end_pt, false)
+	return Selection.init(
+		Pin{ x: u32(start_pt.x), y: u32(start_pt.y) },
+		Pin{ x: u32(end_pt.x), y: u32(end_pt.y) },
+		false,
+	)
 }

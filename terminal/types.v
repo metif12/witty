@@ -697,15 +697,7 @@ pub enum CharsetSlot {
 	g3
 }
 
-// ============================================================
-// Hyperlink
-// ============================================================
-
-pub struct Hyperlink {
-pub mut:
-	uri string
-	id_ string
-}
+// Hyperlink is defined in hyperlink.v.
 
 // ============================================================
 // KeyFlagStack (Kitty keyboard protocol)

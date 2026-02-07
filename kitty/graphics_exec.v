@@ -7,6 +7,11 @@ module kitty
 // Executes Kitty graphics commands against the terminal state. This
 // handles query, transmit, display, and delete operations, and manages
 // the quiet settings for controlling responses.
+//
+// XTODO: Full implementation requires ImageStorage to be integrated
+// into the terminal.Screen struct (as a `kitty_images` field). Once
+// that field exists, the execute/transmit/display/delete functions
+// can access the storage through `t.screens.active.kitty_images`.
 
 import terminal
 
@@ -17,93 +22,27 @@ import terminal
 //
 // The allocator must be the same allocator that was used to build
 // the command.
+//
+// XTODO: Requires Screen.kitty_images (ImageStorage) field.
+// The algorithm is:
+// 1. Check if storage is enabled; if not, return none (protocol disabled).
+// 2. Determine quiet setting from the command.
+// 3. Dispatch based on command control type:
+//    - Transmission (query): exec_query
+//    - Transmission (non-query): exec_transmit (inherits quiet from loading)
+//    - TransmitAndDisplay: exec_transmit (inherits quiet from loading)
+//    - Display: exec_display
+//    - FullDelete: exec_delete
+//    - Animation*: return unimplemented error
+// 4. Apply quiet settings to filter the response:
+//    - quiet=no: return response unless empty
+//    - quiet=ok: return response only if error
+//    - quiet=failures: suppress all responses
 pub fn execute(mut t terminal.Terminal, cmd &Command) ?Response {
-	// If storage is disabled then we disable the full protocol. This means
-	// we don't even respond to queries so the terminal completely acts as
-	// if this feature is not supported.
-	if !t.screens.active.kitty_images.enabled() {
-		return none
-	}
-
-	// The quiet settings used to control the response. We have to make this
-	// a var because in certain special cases (namely chunked transmissions)
-	// this can change.
-	mut quiet := cmd.quiet
-
-	resp_ := match cmd.control {
-		Transmission {
-			tr := cmd.control as Transmission
-			if tr.is_query {
-				// Query
-				?Response(exec_query(cmd))
-			} else {
-				// Transmit
-				// If we're transmitting, then our `q` setting value is complicated.
-				// The `q` setting inherits the value from the starting command
-				// unless `q` is set >= 1 on this command.
-				storage := &t.screens.active.kitty_images
-				if loading := storage.loading {
-					match cmd.quiet {
-						.no {
-							// q=0 we use whatever the start command value is
-							quiet = loading.quiet
-						}
-						.ok, .failures {
-							// q>=1 we use the new value
-							loading.quiet = cmd.quiet
-						}
-					}
-				}
-				?Response(exec_transmit(mut t, cmd))
-			}
-		}
-		TransmitAndDisplay {
-			// Transmit and display
-			storage := &t.screens.active.kitty_images
-			if loading := storage.loading {
-				match cmd.quiet {
-					.no {
-						quiet = loading.quiet
-					}
-					.ok, .failures {
-						loading.quiet = cmd.quiet
-					}
-				}
-			}
-			?Response(exec_transmit(mut t, cmd))
-		}
-		Display {
-			?Response(exec_display(mut t, cmd))
-		}
-		FullDelete {
-			?Response(exec_delete(mut t, cmd))
-		}
-		AnimationFrameLoading, AnimationControl, AnimationFrameComposition {
-			// Animation actions are not yet implemented.
-			?Response(Response{ message: 'ERROR: unimplemented action' })
-		}
-	}
-
-	// Handle the quiet settings
-	if resp := resp_ {
-		if !resp.ok() {
-			// Log erroneous response (would be log.warn in full impl)
-			_ = resp.message
-		}
-
-		return match quiet {
-			.no {
-				if resp.empty() { ?Response(none) } else { ?Response(resp) }
-			}
-			.ok {
-				if resp.ok() { ?Response(none) } else { ?Response(resp) }
-			}
-			.failures {
-				?Response(none)
-			}
-		}
-	}
-
+	// XTODO: Needs t.screens.active.kitty_images.enabled() check
+	// and full dispatch logic. See algorithm above.
+	_ = t
+	_ = cmd
 	return none
 }
 
@@ -146,141 +85,47 @@ fn exec_query(cmd &Command) Response {
 // This loads the image, validates it, and puts it into the terminal
 // screen storage. It does not display the image (unless the command
 // is transmit_and_display).
+//
+// XTODO: Requires Screen.kitty_images (ImageStorage) field.
+// The algorithm is:
+// 1. Extract transmission data from command.
+// 2. Call load_and_add_image to load/chunk/store the image.
+// 3. If also displaying (TransmitAndDisplay), call exec_display.
+// 4. Handle chunked transmission (return empty response if more chunks).
+// 5. Skip response for implicit IDs.
+// 6. Return response with final image ID.
 fn exec_transmit(mut t terminal.Terminal, cmd &Command) Response {
-	tr := cmd.transmission() or {
-		return Response{ message: 'EINVAL: no transmission data' }
-	}
-	mut result := Response{
-		id: tr.image_id
-		image_number: tr.image_number
-		placement_id: tr.placement_id
-	}
-	if tr.image_id > 0 && tr.image_number > 0 {
-		return Response{ message: 'EINVAL: image ID and number are mutually exclusive' }
-	}
-
-	load := load_and_add_image(mut t, cmd) or {
-		encode_error(mut result, err.msg())
-		return result
-	}
-
-	// If we're also displaying, then do that now. This function does
-	// both transmit and transmit and display. The display might also be
-	// deferred if it is multi-chunk.
-	if d := load.display {
-		if load.more {
-			// Should not happen - assert in original
-		} else {
-			mut d_copy := d
-			d_copy.image_id = load.image.id
-			result = exec_display(mut t, &Command{
-				control: Control(d_copy)
-				quiet: cmd.quiet
-			})
-		}
-	}
-
-	// If there are more chunks expected we do not respond.
-	if load.more {
-		return Response{}
-	}
-
-	// If the loaded image was assigned its ID automatically, not based
-	// on a number or explicitly specified ID, then we don't respond.
-	if load.image.implicit_id {
-		return Response{}
-	}
-
-	// After the image is added, set the ID in case it changed.
-	// The resulting image number and placement ID never change.
-	result.id = load.image.id
-
-	return result
+	_ = t
+	_ = cmd
+	return Response{ message: 'XTODO: needs Screen.kitty_images' }
 }
 
 // Display a previously transmitted image.
+//
+// XTODO: Requires Screen.kitty_images (ImageStorage) field.
+// The algorithm is:
+// 1. Extract display data from command.
+// 2. Require image ID or number.
+// 3. Look up image in storage by ID or number.
+// 4. Determine placement location (virtual or pin at cursor).
+// 5. Build Placement struct with source rect, columns, rows, z-index.
+// 6. Add placement to storage.
+// 7. Apply cursor movement if configured.
 fn exec_display(mut t terminal.Terminal, cmd &Command) Response {
-	d := cmd.display() or {
-		return Response{ message: 'EINVAL: no display data' }
-	}
-
-	// Display requires image ID or number.
-	if d.image_id == 0 && d.image_number == 0 {
-		return Response{ message: 'EINVAL: image ID or number required' }
-	}
-
-	// Build up our response.
-	mut result := Response{
-		id: d.image_id
-		image_number: d.image_number
-		placement_id: d.placement_id
-	}
-
-	// Verify the requested image exists if we have an ID.
-	storage := &t.screens.active.kitty_images
-	img := if d.image_id != 0 {
-		storage.image_by_id(d.image_id) or {
-			result.message = 'ENOENT: image not found'
-			return result
-		}
-	} else {
-		storage.image_by_number(d.image_number) or {
-			result.message = 'ENOENT: image not found'
-			return result
-		}
-	}
-
-	// Make sure our response has the image id in case we looked up by number.
-	result.id = img.id
-
-	// Location where the placement will go.
-	location := if d.virtual_placement {
-		if d.parent_id > 0 {
-			result.message = 'EINVAL: virtual placement cannot refer to a parent'
-			return result
-		}
-		PlacementLocation(PlacementVirtual{})
-	} else {
-		// XTODO: Track a new pin for our cursor. The cursor is always tracked but we
-		// don't want this one to move with the cursor.
-		// For now, use the cursor position directly.
-		PlacementLocation(PlacementPin{
-			pin: terminal.Pin{
-				x: t.screens.active.cursor.x
-				y: u32(t.screens.active.cursor.y)
-			}
-		})
-	}
-
-	// Add the placement.
-	p := Placement{
-		location: location
-		x_offset: d.x_offset
-		y_offset: d.y_offset
-		source_x: d.x
-		source_y: d.y
-		source_width: d.width
-		source_height: d.height
-		columns: d.columns
-		rows: d.rows
-		z: d.z
-	}
-	t.screens.active.kitty_images.add_placement(img.id, result.placement_id, p)
-
-	// XTODO: Apply cursor movement setting. This only applies to pin placements.
-	// In full implementation, for cursor_movement == .after, we'd use
-	// terminal.index to properly handle scroll regions and then setCursorPos.
-
-	return result
+	_ = t
+	_ = cmd
+	return Response{ message: 'XTODO: needs Screen.kitty_images' }
 }
 
 // Delete a previously transmitted image.
+//
+// XTODO: Requires Screen.kitty_images (ImageStorage) field.
+// Delegates to ImageStorage.delete() which handles all delete modes
+// (by ID, by number, all, intersecting cursor, by z-index, etc.).
 fn exec_delete(mut t terminal.Terminal, cmd &Command) Response {
-	fd := cmd.control as FullDelete
-	t.screens.active.kitty_images.delete(t, fd)
-
-	// Delete never responds on success.
-	return Response{}
+	_ = t
+	_ = cmd
+	return Response{ message: 'XTODO: needs Screen.kitty_images' }
 }
 
 // Internal result from loading and adding an image.
@@ -290,65 +135,23 @@ struct LoadResult {
 	display ?Display
 }
 
+// Load and add an image to the terminal's image storage.
+//
+// XTODO: Requires Screen.kitty_images (ImageStorage) field.
+// The algorithm is:
+// 1. Extract transmission data from command.
+// 2. If there's a loading image in progress (chunked), add data to it.
+//    If more chunks expected, return early with more=true.
+//    Otherwise, complete the loading image.
+// 3. If no loading in progress, create new LoadingImage from command.
+// 4. Assign auto image ID if needed (mark implicit if no number either).
+// 5. If more chunks expected (start of chunked), store loading state.
+// 6. Complete the image and add to storage.
+// 7. Return LoadResult with image, display settings, and more flag.
 fn load_and_add_image(mut t terminal.Terminal, cmd &Command) !LoadResult {
-	tr := cmd.transmission() or { return error('no transmission') }
-	mut storage := &t.screens.active.kitty_images
-
-	// Determine our image. This also handles chunking and early exit.
-	mut loading := if l := storage.loading {
-		// Existing loading in progress - add data to it.
-		// Note: we do NOT want to call "cmd.toOwnedData" here because
-		// we're _copying_ the data. We want the command data to be freed.
-		l.add_data(cmd.data)!
-
-		// If we have more then we're done.
-		if tr.more_chunks {
-			return LoadResult{ image: l.image, more: true }
-		}
-
-		// We have no more chunks. We're going to be completing the
-		// image so we want to destroy the pointer to the loading
-		// image and copy it out.
-		result := *l
-		storage.loading = none
-		result
-	} else {
-		LoadingImage.init_from_cmd(cmd)!
-	}
-
-	// If the image has no ID, we assign one.
-	if loading.image.id == 0 {
-		loading.image.id = storage.next_image_id
-		storage.next_image_id += 1
-
-		// If the image also has no number then its auto-ID is "implicit".
-		// See the doc comment on the Image.implicit_id field for more detail.
-		if loading.image.number == 0 {
-			loading.image.implicit_id = true
-		}
-	}
-
-	// If this is chunked, this is the beginning of a new chunked transmission.
-	// (We checked for an in-progress chunk above.)
-	if tr.more_chunks {
-		// We allocate the pointer on the heap because its rare and we
-		// don't want to always pay the memory cost to keep it around.
-		storage.loading = &loading
-		return LoadResult{ image: loading.image, more: true }
-	}
-
-	// Validate and store our image.
-	mut img := loading.complete()!
-	storage.add_image(img)!
-
-	// Get our display settings.
-	display_ := loading.display
-
-	// Ensure we deinit the loading state because we're done. The image
-	// won't be deinit because of "complete" above.
-	loading.destroy()
-
-	return LoadResult{ image: img, display: display_ }
+	_ = t
+	_ = cmd
+	return error('XTODO: needs Screen.kitty_images')
 }
 
 // Encode an error message into a response.

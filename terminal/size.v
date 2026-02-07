@@ -111,17 +111,21 @@ pub mut:
 
 // Initialize a zero-offset buffer from a base pointer.
 pub fn OffsetBuf.init(base &u8) OffsetBuf {
-	return OffsetBuf{
-		base: base
-		offset: 0
+	return unsafe {
+		OffsetBuf{
+			base: base
+			offset: 0
+		}
 	}
 }
 
 // Initialize from some base pointer and offset.
 pub fn OffsetBuf.init_offset(base &u8, offset int) OffsetBuf {
-	return OffsetBuf{
-		base: base
-		offset: offset
+	return unsafe {
+		OffsetBuf{
+			base: base
+			offset: offset
+		}
 	}
 }
 

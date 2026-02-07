@@ -296,17 +296,18 @@ fn (self DcsHandler) try_hook(dcs DcsParams) !DcsHook {
 // put processes a single byte of the DCS sequence data. May return a
 // command if one needs to be executed immediately (e.g. tmux notifications).
 pub fn (mut self DcsHandler) put(byte u8) ?DcsCommand {
-	return self.try_put(byte) or {
+	self.try_put(byte) or {
 		// On error we just discard our state and ignore the rest
 		self.discard()
 		self.state = DcsStateIgnore{}
-		return none
 	}
+	return none
 }
 
 // try_put attempts to process a byte, potentially returning an error
-// if limits are exceeded.
-fn (mut self DcsHandler) try_put(byte u8) !?DcsCommand {
+// if limits are exceeded. Returns nothing on success; the caller
+// catches errors and discards state.
+fn (mut self DcsHandler) try_put(byte u8) ! {
 	match mut self.state {
 		DcsStateInactive, DcsStateIgnore {
 			// Nothing to do
@@ -316,27 +317,25 @@ fn (mut self DcsHandler) try_put(byte u8) !?DcsCommand {
 			// return DcsCommand(DcsCommandTmux{
 			//     notification: tmux.put(byte) orelse return none
 			// })
-			if self.buffer.len >= self.max_bytes {
+			if self.state.buffer.len >= self.state.max_bytes {
 				return error('DCS tmux buffer exceeded max_bytes')
 			}
-			self.buffer << byte
+			self.state.buffer << byte
 		}
 		DcsStateXtgettcap {
-			if self.data.len >= self.max_bytes {
+			if self.state.data.len >= self.max_bytes {
 				return error('DCS xtgettcap buffer exceeded max_bytes')
 			}
-			self.data << byte
+			self.state.data << byte
 		}
 		DcsStateDecrqss {
-			if self.len >= self.data.len {
+			if self.state.len >= self.state.data.len {
 				return error('DCS decrqss buffer overflow')
 			}
-			self.data[self.len] = byte
-			self.len += 1
+			self.state.data[self.state.len] = byte
+			self.state.len += 1
 		}
 	}
-
-	return none
 }
 
 // unhook finishes the DCS sequence and returns a command if one was
@@ -365,7 +364,7 @@ pub fn (mut self DcsHandler) unhook() ?DcsCommand {
 			// Note: purposely do not deinit our state here because
 			// we copy it into the resulting command.
 			// Convert to uppercase
-			mut items := self.data.clone()
+			mut items := self.state.data.clone()
 			for i in 0 .. items.len {
 				b := items[i]
 				if b >= u8(`a`) && b <= u8(`z`) {
@@ -379,12 +378,12 @@ pub fn (mut self DcsHandler) unhook() ?DcsCommand {
 			})
 		}
 		DcsStateDecrqss {
-			decrqss_val := match self.len {
+			decrqss_val := match self.state.len {
 				0 {
 					DcsDecrqss.none_val
 				}
 				1 {
-					match self.data[0] {
+					match self.state.data[0] {
 						`m` { DcsDecrqss.sgr }
 						`r` { DcsDecrqss.decstbm }
 						`s` { DcsDecrqss.decslrm }
@@ -392,9 +391,9 @@ pub fn (mut self DcsHandler) unhook() ?DcsCommand {
 					}
 				}
 				2 {
-					match self.data[0] {
+					match self.state.data[0] {
 						` ` {
-							match self.data[1] {
+							match self.state.data[1] {
 								`q` { DcsDecrqss.decscusr }
 								else { DcsDecrqss.none_val }
 							}

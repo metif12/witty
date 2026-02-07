@@ -202,7 +202,23 @@ pub fn read_exit_code(raw string) ?i32 {
 	// The exit code is the first value, up to the first semicolon.
 	sep := raw.index_u8(`;`)
 	code_str := if sep >= 0 { raw[..sep] } else { raw }
-	return code_str.int_opt()
+	// Validate that the string is a valid integer
+	if code_str.len == 0 {
+		return none
+	}
+	mut start := 0
+	if code_str[0] == `-` {
+		start = 1
+	}
+	if start >= code_str.len {
+		return none
+	}
+	for i in start .. code_str.len {
+		if code_str[i] < `0` || code_str[i] > `9` {
+			return none
+		}
+	}
+	return i32(code_str.int())
 }
 
 // ============================================================

@@ -6,7 +6,6 @@ module terminal
 //
 // Contains:
 // - RGB struct methods (parse, luminance, contrast, etc.)
-// - Palette type alias ([256]RGB)
 // - DynamicPalette with current/original palettes and mask bitset
 // - DynamicRGB with override/default optional RGBs
 // - Name enum for the 16 named colors
@@ -22,9 +21,6 @@ import strconv
 // Palette - the 256 color palette.
 // ============================================================
 
-// Palette is the 256 color palette.
-pub type Palette = [256]RGB
-
 // The default palette, computed at init time.
 // Contains: 16 named colors + 216 color cube + 24 grayscale ramp.
 pub const default_palette = init_default_palette()
@@ -32,8 +28,8 @@ pub const default_palette = init_default_palette()
 // init_default_palette computes the default 256-color palette.
 // The first 16 entries are the named colors, the next 216 are a
 // 6x6x6 color cube, and the last 24 are a grayscale ramp.
-fn init_default_palette() Palette {
-	mut result := Palette{}
+fn init_default_palette() [256]RGB {
+	mut result := [256]RGB{}
 
 	// Named values (0..15)
 	for i in 0 .. 16 {
@@ -79,10 +75,12 @@ fn init_default_palette() Palette {
 pub struct DynamicPalette {
 pub mut:
 	// The current palette including any user modifications.
-	current Palette
+	// Named "entries" for backward compatibility with existing code
+	// that accesses palette.entries[i].
+	entries [256]RGB
 
 	// The original/default palette values.
-	original Palette
+	original [256]RGB
 
 	// A bitmask where each bit represents whether the corresponding
 	// palette index has been modified from its default value.
@@ -95,9 +93,9 @@ pub mut:
 pub const dynamic_palette_default_val = DynamicPalette.init(default_palette)
 
 // init initializes a dynamic palette with a default palette.
-pub fn DynamicPalette.init(def Palette) DynamicPalette {
+pub fn DynamicPalette.init(def [256]RGB) DynamicPalette {
 	return DynamicPalette{
-		current: def
+		entries: def
 		original: def
 		mask: [4]u64{}
 	}
@@ -105,43 +103,43 @@ pub fn DynamicPalette.init(def Palette) DynamicPalette {
 
 // set sets a custom color at the given palette index.
 pub fn (mut self DynamicPalette) set(idx u8, color RGB) {
-	self.current[int(idx)] = color
+	self.entries[int(idx)] = color
 	self.mask_set(idx)
 }
 
 // reset resets the color at the given palette index to its original value.
 pub fn (mut self DynamicPalette) reset(idx u8) {
-	self.current[int(idx)] = self.original[int(idx)]
+	self.entries[int(idx)] = self.original[int(idx)]
 	self.mask_unset(idx)
 }
 
 // reset_all resets all colors to their original values.
 pub fn (mut self DynamicPalette) reset_all() {
 	new := DynamicPalette.init(self.original)
-	self.current = new.current
+	self.entries = new.entries
 	self.original = new.original
 	self.mask = new.mask
 }
 
 // change_default changes the default palette, but preserves the changed values.
-pub fn (mut self DynamicPalette) change_default(def Palette) {
+pub fn (mut self DynamicPalette) change_default(def [256]RGB) {
 	self.original = def
 
 	// Fast path: the palette is usually not changed.
 	if self.mask_count() == 0 {
-		self.current = self.original
+		self.entries = self.original
 		return
 	}
 
 	// There are usually less set than unset, so iterate over the changed
 	// values and override them.
-	mut current := def
+	mut current := self.original
 	for i in 0 .. 256 {
 		if self.mask_is_set(u8(i)) {
-			current[i] = self.current[i]
+			current[i] = self.entries[i]
 		}
 	}
-	self.current = current
+	self.entries = current
 }
 
 // mask_set sets the bit for the given index in the bitmask.
@@ -496,11 +494,10 @@ pub fn RGB.parse(value string) ?RGB {
 
 	mut i := 3
 
-	use_intensity := if value[i] == `i` {
+	mut use_intensity := false
+	if value[i] == `i` {
+		use_intensity = true
 		i += 1
-		true
-	} else {
-		false
 	}
 
 	if value[i] != `:` {
@@ -509,10 +506,7 @@ pub fn RGB.parse(value string) ?RGB {
 	i += 1
 
 	// Parse red component
-	r_end := value.index_after('/', i)
-	if r_end < 0 {
-		return none
-	}
+	r_end := value.index_after('/', i) or { return none }
 	r_slice := value[i..r_end]
 	i = r_end + 1
 
@@ -523,10 +517,7 @@ pub fn RGB.parse(value string) ?RGB {
 	}
 
 	// Parse green component
-	g_end := value.index_after('/', i)
-	if g_end < 0 {
-		return none
-	}
+	g_end := value.index_after('/', i) or { return none }
 	g_slice := value[i..g_end]
 	i = g_end + 1
 

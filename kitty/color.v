@@ -49,19 +49,29 @@ pub const kind_max = 256 + 8 // u8 max + Special enum count
 // parsed as either a special name or a palette index.
 pub fn Kind.parse(key string) ?Kind {
 	// Try to match as a special name first.
-	special := match key {
-		'foreground' { ?Special(.foreground) }
-		'background' { ?Special(.background) }
-		'selection_foreground' { ?Special(.selection_foreground) }
-		'selection_background' { ?Special(.selection_background) }
-		'cursor' { ?Special(.cursor) }
-		'cursor_text' { ?Special(.cursor_text) }
-		'visual_bell' { ?Special(.visual_bell) }
-		'second_transparent_background' { ?Special(.second_transparent_background) }
-		else { ?Special(none) }
+	if key == 'foreground' {
+		return Kind(KindSpecial{ special: .foreground })
 	}
-	if s := special {
-		return Kind(KindSpecial{ special: s })
+	if key == 'background' {
+		return Kind(KindSpecial{ special: .background })
+	}
+	if key == 'selection_foreground' {
+		return Kind(KindSpecial{ special: .selection_foreground })
+	}
+	if key == 'selection_background' {
+		return Kind(KindSpecial{ special: .selection_background })
+	}
+	if key == 'cursor' {
+		return Kind(KindSpecial{ special: .cursor })
+	}
+	if key == 'cursor_text' {
+		return Kind(KindSpecial{ special: .cursor_text })
+	}
+	if key == 'visual_bell' {
+		return Kind(KindSpecial{ special: .visual_bell })
+	}
+	if key == 'second_transparent_background' {
+		return Kind(KindSpecial{ special: .second_transparent_background })
 	}
 
 	// Try to parse as a palette index.

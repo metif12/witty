@@ -1511,19 +1511,19 @@ fn test_screen_set_init_and_switch() {
 }
 
 // ============================================================
-// DynamicRGB sumtype
+// DynamicRGB struct (defined in color.v)
 // ============================================================
 
 fn test_dynamic_rgb() {
-	a := DynamicRGB(Unset{})
-	b := DynamicRGB(RGB{ r: 255, g: 0, b: 0 })
+	a := DynamicRGB{}
+	b := DynamicRGB{
+		override_color: RGB{ r: 255, g: 0, b: 0 }
+	}
 
-	match a {
-		Unset { assert true }
-		RGB { assert false }
+	assert a.get() == none
+	rgb := b.get() or {
+		assert false, 'expected color'
+		return
 	}
-	match b {
-		Unset { assert false }
-		RGB { assert b.r == 255 }
-	}
+	assert rgb.r == 255
 }

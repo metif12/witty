@@ -59,10 +59,13 @@ const table_byte_count = 256
 // The number of parser states.
 const table_state_count = 14
 
-// Table is the type of the state transition table.
-// Indexed as table[input_byte][state] -> Transition.
-// table[c][s] gives the transition for input byte c in state s.
-pub type Table = [table_byte_count][table_state_count]Transition
+// TransitionRow wraps [14]Transition to work around a V compiler bug
+// where nested fixed-size arrays of structs ([256][14]Transition) don't
+// get proper C type declarations.
+struct TransitionRow {
+mut:
+	cols [14]Transition
+}
 
 // ============================================================
 // Table generation
@@ -70,17 +73,17 @@ pub type Table = [table_byte_count][table_state_count]Transition
 
 // gen_table generates the full state transition table for VT emulation.
 // This is the V equivalent of the Zig comptime genTable() function.
-fn gen_table() Table {
+fn gen_table() [256]TransitionRow {
 	// We accumulate using an "optional" table so we can detect duplicates.
 	// In V we use a sentinel value (ta_none with ground) as "unset" and
 	// track which entries have been explicitly set via a separate bool table.
-	mut set := [table_byte_count][table_state_count]bool{}
-	mut result := Table{}
+	mut set := [256][14]bool{}
+	mut result := [256]TransitionRow{}
 
 	// Initialize everything to default (none/ground).
 	for i in 0 .. table_byte_count {
 		for j in 0 .. table_state_count {
-			result[i][j] = Transition{
+			result[i].cols[j] = Transition{
 				state: .ground
 				action: .ta_none
 			}
@@ -382,7 +385,7 @@ fn gen_table() Table {
 	for i in 0 .. table_byte_count {
 		for j in 0 .. table_state_count {
 			if !set[i][j] {
-				result[i][j] = Transition{
+				result[i].cols[j] = Transition{
 					state: unsafe { ParserState(j) }
 					action: .ta_none
 				}
@@ -395,9 +398,9 @@ fn gen_table() Table {
 
 // table_single sets a single transition in the table for a given
 // input byte and source state.
-fn table_single(mut t Table, mut s [table_byte_count][table_state_count]bool, c u8, s0 ParserState, s1 ParserState, a TransitionAction) {
+fn table_single(mut t [256]TransitionRow, mut s [256][14]bool, c u8, s0 ParserState, s1 ParserState, a TransitionAction) {
 	si := int(s0)
-	t[c][si] = Transition{
+	t[c].cols[si] = Transition{
 		state: s1
 		action: a
 	}
@@ -406,7 +409,7 @@ fn table_single(mut t Table, mut s [table_byte_count][table_state_count]bool, c 
 
 // table_range sets transitions for a range of input bytes [from, to]
 // inclusive for a given source state.
-fn table_range(mut t Table, mut s [table_byte_count][table_state_count]bool, from int, to int, s0 ParserState, s1 ParserState, a TransitionAction) {
+fn table_range(mut t [256]TransitionRow, mut s [256][14]bool, from int, to int, s0 ParserState, s1 ParserState, a TransitionAction) {
 	for i in from .. to + 1 {
 		table_single(mut t, mut s, u8(i), s0, s1, a)
 	}
@@ -417,7 +420,7 @@ fn table_range(mut t Table, mut s [table_byte_count][table_state_count]bool, fro
 // ============================================================
 
 // The state transition table. Indexed as:
-//   transition_table[input_byte][state] -> Transition
+//   transition_table[input_byte].cols[state] -> Transition
 //
 // The table maps (state, input_byte) -> (action, new_state).
 // This is the V equivalent of the Zig comptime-generated `table` constant.
@@ -429,5 +432,5 @@ pub const transition_table = gen_table()
 
 // lookup retrieves the transition for a given input byte and current state.
 pub fn table_lookup(c u8, state ParserState) Transition {
-	return transition_table[c][int(state)]
+	return transition_table[c].cols[int(state)]
 }

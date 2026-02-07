@@ -16,7 +16,7 @@ fn test_table_creation() {
 	// Access a few entries to make sure it's populated.
 	t := transition_table
 	assert t.len == table_byte_count
-	assert t[0].len == table_state_count
+	assert t[0].cols.len == table_state_count
 }
 
 // Test ground state: printable characters produce print action.
@@ -90,9 +90,11 @@ fn test_anywhere_csi() {
 	assert tr.state == .csi_entry
 	assert tr.action == .ta_none
 
+	// In osc_string, 0x9B is in the 0x20-0xFF range which overrides
+	// the anywhere transition, so it stays in osc_string with osc_put.
 	tr2 := table_lookup(0x9B, .osc_string)
-	assert tr2.state == .csi_entry
-	assert tr2.action == .ta_none
+	assert tr2.state == .osc_string
+	assert tr2.action == .ta_osc_put
 }
 
 // Test DCS entry transitions.

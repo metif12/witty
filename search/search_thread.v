@@ -69,8 +69,9 @@ pub enum EventType {
 	viewport_matches
 }
 
-// SelectedMatch represents a selected search result.
-pub struct SelectedMatch {
+// ThreadSelectedMatch represents a selected search result for the search thread.
+// Named ThreadSelectedMatch to avoid conflict with SelectedMatch in screen_search.v.
+pub struct ThreadSelectedMatch {
 pub:
 	idx int
 	// XTODO: highlight field needs FlattenedHighlight type

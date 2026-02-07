@@ -47,13 +47,13 @@ mut:
 }
 
 // Returns the entry index in the stops array that would contain this column.
-fn tabstop_entry(col int) int {
-	return col / tabstop_unit_bits
+fn tabstop_entry(col u32) int {
+	return int(col) / tabstop_unit_bits
 }
 
 // Returns the bit index within the entry for this column.
-fn tabstop_index(col int) int {
-	return col % tabstop_unit_bits
+fn tabstop_index(col u32) int {
+	return int(col) % tabstop_unit_bits
 }
 
 // init creates a new Tabstops with the given number of columns and
@@ -71,7 +71,7 @@ pub fn (mut self Tabstops) deinit() {
 }
 
 // set marks a tabstop at a certain column. The columns are 0-indexed.
-pub fn (mut self Tabstops) set(col int) {
+pub fn (mut self Tabstops) set(col u32) {
 	i := tabstop_entry(col)
 	idx := tabstop_index(col)
 	if i < tabstop_prealloc_count {
@@ -85,7 +85,7 @@ pub fn (mut self Tabstops) set(col int) {
 
 // unset removes a tabstop at a certain column. The columns are 0-indexed.
 // Uses XOR to toggle the bit off (assumes bit is currently set).
-pub fn (mut self Tabstops) unset(col int) {
+pub fn (mut self Tabstops) unset(col u32) {
 	i := tabstop_entry(col)
 	idx := tabstop_index(col)
 	if i < tabstop_prealloc_count {
@@ -99,7 +99,7 @@ pub fn (mut self Tabstops) unset(col int) {
 
 // get returns whether a tabstop is set at a specific column. The columns
 // are 0-indexed.
-pub fn (self Tabstops) get(col int) bool {
+pub fn (self Tabstops) get(col u32) bool {
 	i := tabstop_entry(col)
 	idx := tabstop_index(col)
 	mask := tabstop_masks[idx]
@@ -164,9 +164,9 @@ pub fn (mut self Tabstops) reset(interval int) {
 	}
 
 	if interval > 0 {
-		mut i := interval
-		for i < self.cols - 1 {
-			self.set(i)
+		mut i := 0
+		for i < self.cols {
+			self.set(u32(i))
 			i += interval
 		}
 	}

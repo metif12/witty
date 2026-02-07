@@ -70,12 +70,10 @@ pub type ApcCommand = ApcCommandKitty
 
 // deinit cleans up command-specific resources.
 pub fn (mut self ApcCommand) deinit() {
-	match mut self {
-		ApcCommandKitty {
-			// XTODO: When kitty graphics are implemented, call command.deinit()
-			self.data = []
-		}
-	}
+	// ApcCommand is currently only ApcCommandKitty.
+	// XTODO: When kitty graphics are implemented, call command.deinit()
+	mut cmd := &ApcCommandKitty(self)
+	cmd.data = []
 }
 
 // ============================================================
@@ -131,11 +129,7 @@ pub fn (mut self ApcHandler) feed(byte u8) {
 		ApcStateKitty {
 			// XTODO: When kitty graphics are implemented, feed the byte
 			// to the parser. On error, transition to ignore state.
-			// p.feed(byte) catch |err| {
-			//     log.warn("kitty graphics protocol error: {}", .{err})
-			//     self.state = ApcStateIgnore{}
-			// }
-			self.data << byte
+			self.state.data << byte
 		}
 	}
 }
