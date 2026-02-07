@@ -12,7 +12,7 @@ module macos
 
 // Callback types matching the C typedefs in appkit.m.
 pub type DrawCallback = fn (ctx voidptr, width f64, height f64)
-pub type KeyCallback = fn (chars &u8, len int)
+pub type KeyCallback = fn (keycode u16, modflags u64, chars &u8, len int, uchars &u8, ulen int, is_repeat bool)
 pub type ResizeCallback = fn (width f64, height f64)
 pub type ReadyCallback = fn ()
 
