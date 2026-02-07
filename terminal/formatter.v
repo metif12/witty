@@ -386,10 +386,13 @@ pub fn (self ScreenFormatter) format() string {
 			// Emit our page content according to our selection.
 			mut page_fmt := PageFormatter.init(&self.screen.pages, self.opts)
 			if sel := self.content.sel {
-				page_fmt.start_x = sel.start().x
-				page_fmt.start_y = sel.start().y
-				page_fmt.end_x = sel.end().x
-				page_fmt.end_y = sel.end().y
+				// Order the selection for formatting (start before end)
+				s := if sel.start_pin.before(sel.end_pin) { sel.start_pin } else { sel.end_pin }
+				e := if sel.start_pin.before(sel.end_pin) { sel.end_pin } else { sel.start_pin }
+				page_fmt.start_x = s.x
+				page_fmt.start_y = s.y
+				page_fmt.end_x = e.x
+				page_fmt.end_y = e.y
 				page_fmt.rectangle = sel.rectangle
 			}
 			result := page_fmt.format_with_state()

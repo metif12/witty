@@ -825,8 +825,9 @@ pub fn (mut self Screen) selection_string(opts SelectionString) !string {
 	// with unwrap support, soft-wrap handling, and StringMap building.
 	// This is a simplified version that reads cells directly.
 	sel := opts.sel
-	start := sel.start()
-	end := sel.end()
+	// Order the selection for iteration (start before end)
+	start := if sel.start_pin.before(sel.end_pin) { sel.start_pin } else { sel.end_pin }
+	end := if sel.start_pin.before(sel.end_pin) { sel.end_pin } else { sel.start_pin }
 
 	mut result := strings.new_builder(256)
 	mut first_row := true

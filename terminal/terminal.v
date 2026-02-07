@@ -103,6 +103,31 @@ pub mut:
 
 pub const dynamic_palette_default = DynamicPalette{}
 
+// DynamicRGB methods for the color system.
+pub fn (mut self DynamicRGB) set(color RGB) {
+	self = DynamicRGB(color)
+}
+
+pub fn (self DynamicRGB) get() ?RGB {
+	return match self {
+		Unset { none }
+		RGB { self }
+	}
+}
+
+pub fn (mut self DynamicRGB) reset() {
+	self = DynamicRGB(Unset{})
+}
+
+// DynamicPalette methods.
+pub fn (mut self DynamicPalette) set(idx u8, color RGB) {
+	self.entries[int(idx)] = color
+}
+
+pub fn (mut self DynamicPalette) reset(idx u8) {
+	self.entries[int(idx)] = RGB{}
+}
+
 // This is a set of dirty flags the renderer can use to determine
 // what parts of the screen need to be redrawn. It is up to the renderer
 // to clear these flags.
@@ -393,6 +418,7 @@ pub fn (mut self Tabstops) reset(interval int) {
 pub struct ModeState {
 pub mut:
 	values  ModePacked
+	saved   ModePacked
 	default ModePacked
 }
 
@@ -428,6 +454,23 @@ pub enum Mode {
 	column_132             // = 10
 	bracketed_paste        // = 11
 	focus_event            // = 12
+	cursor_blinking        // = 13
+	autorepeat             // = 14
+	reverse_colors         // = 15
+	alt_screen_legacy      // = 16 (mode 47)
+	alt_screen             // = 17 (mode 1047)
+	alt_screen_save_cursor_clear_enter // = 18 (mode 1049)
+	save_cursor            // = 19 (mode 1048)
+	synchronized_output    // = 20
+	in_band_size_reports   // = 21 (mode 2048)
+	mouse_event_x10       // = 22 (mode 9)
+	mouse_event_normal    // = 23 (mode 1000)
+	mouse_event_button    // = 24 (mode 1002)
+	mouse_event_any       // = 25 (mode 1003)
+	mouse_format_utf8     // = 26 (mode 1005)
+	mouse_format_sgr      // = 27 (mode 1006)
+	mouse_format_urxvt    // = 28 (mode 1015)
+	mouse_format_sgr_pixels // = 29 (mode 1016)
 }
 
 // ============================================================
@@ -1775,6 +1818,14 @@ pub fn (mut self Terminal) erase_line(mode EraseLine, protected_req bool) {
 			self.screens.active.cursor_reset_wrap()
 			cursor_x, int(self.cols)
 		}
+		.right_unless_pending_wrap {
+			// Like .right, but only if there's no pending wrap.
+			if self.screens.active.cursor.pending_wrap {
+				return
+			}
+			self.screens.active.cursor_reset_wrap()
+			cursor_x, int(self.cols)
+		}
 		.left {
 			0, cursor_x + 1
 		}
@@ -1816,6 +1867,7 @@ pub enum EraseLine {
 	right
 	left
 	complete
+	right_unless_pending_wrap
 }
 
 // Erase the display.
@@ -2242,6 +2294,57 @@ pub fn (mut self Terminal) full_reset() {
 
 	// Always mark dirty so we redraw everything
 	self.flags.dirty.clear = true
+}
+
+// Process a semantic prompt command (OSC 133).
+pub fn (mut self Terminal) semantic_prompt(action SemanticPromptAction, exit_code ?i32) {
+	// XTODO: Full semantic prompt processing. This is a simplified stub
+	// that just marks the current row.
+	match action {
+		.prompt_start {
+			self.screens.active.cursor_set_semantic_content_prompt(.initial)
+		}
+		.input_start {
+			idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
+			if idx < self.screens.active.pages.screen_rows.len {
+				unsafe {
+					mut row := &self.screens.active.pages.screen_rows[idx]
+					row.semantic_prompt = .input
+				}
+			}
+		}
+		.command_start {
+			idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
+			if idx < self.screens.active.pages.screen_rows.len {
+				unsafe {
+					mut row := &self.screens.active.pages.screen_rows[idx]
+					row.semantic_prompt = .command
+				}
+			}
+		}
+		.command_end {}
+	}
+}
+
+// ModeState save/restore
+pub fn (mut self ModeState) save(mode Mode) {
+	bit := u32(1) << (int(mode) & 31)
+	if (self.values.data & bit) != 0 {
+		self.saved.data |= bit
+	} else {
+		self.saved.data &= ~bit
+	}
+}
+
+pub fn (mut self ModeState) restore(mode Mode) bool {
+	bit := u32(1) << (int(mode) & 31)
+	val := (self.saved.data & bit) != 0
+	if val {
+		self.values.data |= bit
+	} else {
+		self.values.data &= ~bit
+	}
+	return val
 }
 
 // ============================================================

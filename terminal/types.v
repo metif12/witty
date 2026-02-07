@@ -276,20 +276,14 @@ pub fn Selection.init(start Pin, end Pin, rectangle bool) Selection {
 	}
 }
 
-// Returns the topmost/leftmost pin.
+// The starting pin of the selection. This is NOT ordered.
 pub fn (self &Selection) start() Pin {
-	if self.start_pin.before(self.end_pin) {
-		return self.start_pin
-	}
-	return self.end_pin
+	return self.start_pin
 }
 
-// Returns the bottommost/rightmost pin.
+// The ending pin of the selection. This is NOT ordered.
 pub fn (self &Selection) end() Pin {
-	if self.start_pin.before(self.end_pin) {
-		return self.end_pin
-	}
-	return self.start_pin
+	return self.end_pin
 }
 
 // ============================================================
@@ -511,6 +505,26 @@ pub fn (mut self Pages) resize(opts ResizeOpts) ! {
 	}
 }
 
+// Convert a point tag + coordinates to a Pin.
+pub fn (self &Pages) pin(opts PinOpts) ?Pin {
+	y := match opts.tag {
+		.screen { opts.y }
+		.active { u32(self.active_start) + opts.y }
+		.viewport { u32(self.active_start) + opts.y }
+		.history { opts.y }
+	}
+	if y >= u32(self.screen_rows.len) {
+		return none
+	}
+	if opts.x >= self.cols {
+		return none
+	}
+	return Pin{
+		x: opts.x
+		y: y
+	}
+}
+
 // ============================================================
 // ResizeOpts
 // ============================================================
@@ -711,6 +725,44 @@ pub struct KeyFlagStack {
 pub mut:
 	flags [8]u32
 	idx   u8
+}
+
+// Push a new set of flags onto the stack.
+pub fn (mut self KeyFlagStack) push(new_flags u32) {
+	if self.idx < 7 {
+		self.idx += 1
+	}
+	self.flags[self.idx] = new_flags
+}
+
+// Pop n sets of flags from the stack (minimum 1 entry always remains).
+pub fn (mut self KeyFlagStack) pop(n u8) {
+	count := if n == 0 { u8(1) } else { n }
+	for _ in 0 .. int(count) {
+		if self.idx > 0 {
+			self.idx -= 1
+		}
+	}
+}
+
+// Get the current (top) flags value.
+pub fn (self &KeyFlagStack) current() u32 {
+	return self.flags[self.idx]
+}
+
+// Set flags using a merge operation.
+pub enum KeyFlagSetOp {
+	set_
+	or_
+	not_
+}
+
+pub fn (mut self KeyFlagStack) set(op KeyFlagSetOp, new_flags u32) {
+	match op {
+		.set_ { self.flags[self.idx] = new_flags }
+		.or_ { self.flags[self.idx] |= new_flags }
+		.not_ { self.flags[self.idx] &= ~new_flags }
+	}
 }
 
 // ============================================================

@@ -218,7 +218,7 @@ pub enum SizeReportStyle {
 pub enum DeviceStatusRequest {
 	operating_status
 	cursor_position
-	// XTODO: more DSR types
+	color_scheme
 }
 
 // SemanticPromptAction identifies a semantic prompt action (OSC 133).

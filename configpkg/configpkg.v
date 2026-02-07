@@ -68,6 +68,11 @@ pub mut:
 	search_selected_background TerminalColor
 	search_selected_foreground TerminalColor
 	link                       LinkConfig
+	// Theme color fields used by list-themes preview
+	foreground  ColorRGB = ColorRGB{ r: 0xff, g: 0xff, b: 0xff }
+	background  ColorRGB = ColorRGB{ r: 0x00, g: 0x00, b: 0x00 }
+	palette     Palette  = Palette.default_palette()
+	diagnostics []Diagnostic
 }
 
 pub fn (c Config) change_conditional_state(state ConditionalState) !Config {
@@ -331,3 +336,82 @@ pub:
 pub struct NotifyOnCommandFinish {}
 
 pub struct NotifyOnCommandFinishAction {}
+
+// ============================================================
+// Color types for theme preview
+// ============================================================
+
+// ColorRGB holds an 8-bit-per-channel color.
+pub struct ColorRGB {
+pub:
+	r u8
+	g u8
+	b u8
+}
+
+// Palette holds the 256-color terminal palette.
+pub struct Palette {
+pub mut:
+	value [256]ColorRGB
+}
+
+// default_palette returns a standard 256-color palette.
+pub fn Palette.default_palette() Palette {
+	mut p := Palette{}
+	// Standard 16 colors (approximate)
+	colors_16 := [
+		ColorRGB{0x00, 0x00, 0x00}, ColorRGB{0xaa, 0x00, 0x00},
+		ColorRGB{0x00, 0xaa, 0x00}, ColorRGB{0xaa, 0x55, 0x00},
+		ColorRGB{0x00, 0x00, 0xaa}, ColorRGB{0xaa, 0x00, 0xaa},
+		ColorRGB{0x00, 0xaa, 0xaa}, ColorRGB{0xaa, 0xaa, 0xaa},
+		ColorRGB{0x55, 0x55, 0x55}, ColorRGB{0xff, 0x55, 0x55},
+		ColorRGB{0x55, 0xff, 0x55}, ColorRGB{0xff, 0xff, 0x55},
+		ColorRGB{0x55, 0x55, 0xff}, ColorRGB{0xff, 0x55, 0xff},
+		ColorRGB{0x55, 0xff, 0xff}, ColorRGB{0xff, 0xff, 0xff},
+	]
+	for i, c in colors_16 {
+		p.value[i] = c
+	}
+	// 216-color cube (indices 16..231)
+	for i in 16 .. 232 {
+		idx := i - 16
+		r := u8((idx / 36) * 51)
+		g := u8(((idx / 6) % 6) * 51)
+		b := u8((idx % 6) * 51)
+		p.value[i] = ColorRGB{r, g, b}
+	}
+	// Grayscale ramp (indices 232..255)
+	for i in 232 .. 256 {
+		v := u8(8 + (i - 232) * 10)
+		p.value[i] = ColorRGB{v, v, v}
+	}
+	return p
+}
+
+// Diagnostic represents a configuration loading problem.
+pub struct Diagnostic {
+pub:
+	message string
+}
+
+pub fn (d Diagnostic) str() string {
+	return d.message
+}
+
+// load_file loads a theme configuration file and merges it into this config.
+// XTODO: needs real config file parser to load theme key=value pairs.
+pub fn (mut c Config) load_file(path string) {
+	// Stub: in the real implementation this would parse the file
+	// and apply theme colors to foreground, background, palette, etc.
+}
+
+// default_config creates a Config with default values.
+pub fn Config.default_config() Config {
+	return Config{}
+}
+
+// preferred_default_file_path returns the preferred default config file path.
+pub fn preferred_default_file_path() string {
+	// XTODO: implement XDG config path resolution
+	return ''
+}

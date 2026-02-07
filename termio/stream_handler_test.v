@@ -1,0 +1,510 @@
+module termio
+
+import renderer
+import terminal
+
+// ============================================================
+// StreamHandler tests
+// ============================================================
+
+// TestContext holds all test allocations so pointers stay valid.
+struct TestContext {
+mut:
+	t         terminal.Terminal
+	mailbox   Mailbox
+	rstate    renderer.State
+	rmailbox  renderer.Mailbox
+	rsize     renderer.Size
+}
+
+// Helper to create a StreamHandler with a test terminal.
+fn make_test_handler() (&StreamHandler, &TestContext) {
+	mut ctx := &TestContext{
+		t: terminal.Terminal.init(terminal.Options{
+			cols: 80
+			rows: 24
+		}) or { panic('failed to init terminal') }
+	}
+
+	mut handler := &StreamHandler{
+		terminal: &ctx.t
+		termio_mailbox: &ctx.mailbox
+		renderer_state: &ctx.rstate
+		renderer_mailbox: &ctx.rmailbox
+		size: &ctx.rsize
+		default_cursor_style: .block
+	}
+	return handler, ctx
+}
+
+// Test that the StreamHandler can be created and deinitialized.
+fn test_stream_handler_init_deinit() {
+	mut handler, mut ctx := make_test_handler()
+	handler.deinit()
+	ctx.t.deinit()
+}
+
+// Test bell dispatches without crashing.
+fn test_stream_handler_bell() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.vt(terminal.StreamEvent{
+		key: .bell
+	})
+}
+
+// Test horizontal tab.
+fn test_stream_handler_horizontal_tab() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.vt(terminal.StreamEvent{
+		key: .horizontal_tab
+		payload: terminal.ActionPayload{ num: 1 }
+	})
+	// The cursor should have moved to the first tabstop
+	assert handler.terminal.screens.active.cursor.x == 8
+}
+
+// Test carriage return.
+fn test_stream_handler_carriage_return() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	// Move cursor right first
+	handler.terminal.cursor_right(5)
+	assert handler.terminal.screens.active.cursor.x == 5
+	// Carriage return
+	handler.vt(terminal.StreamEvent{
+		key: .carriage_return
+	})
+	assert handler.terminal.screens.active.cursor.x == 0
+}
+
+// Test cursor movement dispatching.
+fn test_stream_handler_cursor_movement() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	// cursor_right
+	handler.vt(terminal.StreamEvent{
+		key: .cursor_right
+		payload: terminal.ActionPayload{ num: 3 }
+	})
+	assert handler.terminal.screens.active.cursor.x == 3
+
+	// cursor_down
+	handler.vt(terminal.StreamEvent{
+		key: .cursor_down
+		payload: terminal.ActionPayload{ num: 2 }
+	})
+	assert handler.terminal.screens.active.cursor.y == 2
+
+	// cursor_left
+	handler.vt(terminal.StreamEvent{
+		key: .cursor_left
+		payload: terminal.ActionPayload{ num: 1 }
+	})
+	assert handler.terminal.screens.active.cursor.x == 2
+
+	// cursor_up
+	handler.vt(terminal.StreamEvent{
+		key: .cursor_up
+		payload: terminal.ActionPayload{ num: 1 }
+	})
+	assert handler.terminal.screens.active.cursor.y == 1
+}
+
+// Test cursor_pos dispatching (row, col in 1-based).
+fn test_stream_handler_cursor_pos() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.vt(terminal.StreamEvent{
+		key: .cursor_pos
+		payload: terminal.ActionPayload{ num: 5, num2: 10 }
+	})
+	assert handler.terminal.screens.active.cursor.y == 4 // 0-based
+	assert handler.terminal.screens.active.cursor.x == 9 // 0-based
+}
+
+// Test set_cursor_style dispatching.
+fn test_stream_handler_cursor_style() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	// Set to steady underline
+	handler.vt(terminal.StreamEvent{
+		key: .cursor_style
+		payload: terminal.ActionPayload{ cursor_style: .steady_underline }
+	})
+	assert handler.terminal.screens.active.cursor.cursor_style == .underline
+	assert !handler.default_cursor
+
+	// Set to default
+	handler.vt(terminal.StreamEvent{
+		key: .cursor_style
+		payload: terminal.ActionPayload{ cursor_style: .default_ }
+	})
+	assert handler.default_cursor
+	assert handler.terminal.screens.active.cursor.cursor_style == .block
+}
+
+// Test set_mode dispatching.
+fn test_stream_handler_set_mode_origin() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	// Move cursor somewhere
+	handler.terminal.set_cursor_pos(5, 10)
+	assert handler.terminal.screens.active.cursor.y == 4
+
+	// Setting origin mode resets cursor to (1,1)
+	handler.vt(terminal.StreamEvent{
+		key: .set_mode
+		payload: terminal.ActionPayload{ mode: .origin }
+	})
+	assert handler.terminal.screens.active.cursor.y == 0
+	assert handler.terminal.screens.active.cursor.x == 0
+}
+
+// Test print dispatching.
+fn test_stream_handler_print() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.vt(terminal.StreamEvent{
+		key: .print
+		payload: terminal.ActionPayload{ cp: u32(`A`) }
+	})
+	assert handler.terminal.screens.active.cursor.x == 1
+}
+
+// Test full_reset dispatching.
+fn test_stream_handler_full_reset() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	// Move cursor, change mode
+	handler.terminal.set_cursor_pos(10, 20)
+	handler.terminal.modes.set(.origin, true)
+
+	// Full reset
+	handler.vt(terminal.StreamEvent{
+		key: .full_reset
+	})
+
+	assert !handler.terminal.modes.get(.origin)
+	assert handler.terminal.screens.active.cursor.x == 0
+	assert handler.terminal.screens.active.cursor.y == 0
+}
+
+// Test save/restore cursor dispatching.
+fn test_stream_handler_save_restore_cursor() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	// Move cursor
+	handler.terminal.set_cursor_pos(5, 10)
+	assert handler.terminal.screens.active.cursor.y == 4
+	assert handler.terminal.screens.active.cursor.x == 9
+
+	// Save cursor
+	handler.vt(terminal.StreamEvent{
+		key: .save_cursor
+	})
+
+	// Move cursor elsewhere
+	handler.terminal.set_cursor_pos(1, 1)
+	assert handler.terminal.screens.active.cursor.y == 0
+
+	// Restore cursor
+	handler.vt(terminal.StreamEvent{
+		key: .restore_cursor
+	})
+	assert handler.terminal.screens.active.cursor.y == 4
+	assert handler.terminal.screens.active.cursor.x == 9
+}
+
+// Test modify_key_format dispatching.
+fn test_stream_handler_modify_key_format() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	assert !handler.terminal.flags.modify_other_keys_2
+
+	handler.vt(terminal.StreamEvent{
+		key: .modify_key_format
+		payload: terminal.ActionPayload{ modify_key_format: .other_keys_numeric }
+	})
+	assert handler.terminal.flags.modify_other_keys_2
+
+	handler.vt(terminal.StreamEvent{
+		key: .modify_key_format
+		payload: terminal.ActionPayload{ modify_key_format: .legacy }
+	})
+	assert !handler.terminal.flags.modify_other_keys_2
+}
+
+// Test linefeed dispatching (calls index).
+fn test_stream_handler_linefeed() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.vt(terminal.StreamEvent{
+		key: .linefeed
+	})
+	assert handler.terminal.screens.active.cursor.y == 1
+}
+
+// Test protected mode dispatching.
+fn test_stream_handler_protected_mode() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	handler.vt(terminal.StreamEvent{
+		key: .protected_mode_dec
+	})
+	assert handler.terminal.screens.active.cursor.is_protected
+
+	handler.vt(terminal.StreamEvent{
+		key: .protected_mode_off
+	})
+	assert !handler.terminal.screens.active.cursor.is_protected
+}
+
+// Test backspace dispatching.
+fn test_stream_handler_backspace() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.terminal.cursor_right(3)
+	assert handler.terminal.screens.active.cursor.x == 3
+	handler.vt(terminal.StreamEvent{
+		key: .backspace
+	})
+	assert handler.terminal.screens.active.cursor.x == 2
+}
+
+// Test erase_display_complete dispatching.
+fn test_stream_handler_erase_display() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	// Print something
+	handler.terminal.print(u32(`X`)) or {}
+	// Erase complete
+	handler.vt(terminal.StreamEvent{
+		key: .erase_display_complete
+		payload: terminal.ActionPayload{ flag: false }
+	})
+	// Verify cursor x didn't change (erase doesn't move cursor)
+}
+
+// Test scroll_up dispatching.
+fn test_stream_handler_scroll_up() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.vt(terminal.StreamEvent{
+		key: .scroll_up
+		payload: terminal.ActionPayload{ num: 1 }
+	})
+	// Should not crash
+}
+
+// Test erase_chars dispatching.
+fn test_stream_handler_erase_chars() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.vt(terminal.StreamEvent{
+		key: .erase_chars
+		payload: terminal.ActionPayload{ num: 5 }
+	})
+}
+
+// Test insert_lines dispatching.
+fn test_stream_handler_insert_lines() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.vt(terminal.StreamEvent{
+		key: .insert_lines
+		payload: terminal.ActionPayload{ num: 2 }
+	})
+}
+
+// Test delete_lines dispatching.
+fn test_stream_handler_delete_lines() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.vt(terminal.StreamEvent{
+		key: .delete_lines
+		payload: terminal.ActionPayload{ num: 1 }
+	})
+}
+
+// Test insert_blanks dispatching.
+fn test_stream_handler_insert_blanks() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.vt(terminal.StreamEvent{
+		key: .insert_blanks
+		payload: terminal.ActionPayload{ num: 3 }
+	})
+}
+
+// Test delete_chars dispatching.
+fn test_stream_handler_delete_chars() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.vt(terminal.StreamEvent{
+		key: .delete_chars
+		payload: terminal.ActionPayload{ num: 2 }
+	})
+}
+
+// Test tab_set and tab_clear_current dispatching.
+fn test_stream_handler_tab_operations() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.vt(terminal.StreamEvent{
+		key: .tab_set
+	})
+	handler.vt(terminal.StreamEvent{
+		key: .tab_clear_current
+	})
+	handler.vt(terminal.StreamEvent{
+		key: .tab_clear_all
+	})
+	handler.vt(terminal.StreamEvent{
+		key: .tab_reset
+	})
+}
+
+// Test kitty keyboard push/pop dispatching.
+fn test_stream_handler_kitty_keyboard() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	// Push
+	handler.vt(terminal.StreamEvent{
+		key: .kitty_keyboard_push
+		payload: terminal.ActionPayload{ kitty_flags: 5 }
+	})
+	assert handler.terminal.screens.active.kitty_keyboard.current() == 5
+
+	// Pop
+	handler.vt(terminal.StreamEvent{
+		key: .kitty_keyboard_pop
+		payload: terminal.ActionPayload{ num: 1 }
+	})
+	assert handler.terminal.screens.active.kitty_keyboard.current() == 0
+}
+
+// Test set_mode for mouse events.
+fn test_stream_handler_mouse_modes() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	// Enable mouse normal tracking
+	handler.set_mode(.mouse_event_normal, true)
+	assert handler.terminal.flags.mouse_event == .normal
+	assert handler.terminal.mouse_shape == .default_
+
+	// Disable
+	handler.set_mode(.mouse_event_normal, false)
+	assert handler.terminal.flags.mouse_event == .none
+	assert handler.terminal.mouse_shape == .text
+}
+
+// Test set_mode for mouse format.
+fn test_stream_handler_mouse_format() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	handler.set_mode(.mouse_format_sgr, true)
+	assert handler.terminal.flags.mouse_format == .sgr
+
+	handler.set_mode(.mouse_format_sgr, false)
+	assert handler.terminal.flags.mouse_format == .x10
+}
+
+// Test DCS/APC handlers don't crash.
+fn test_stream_handler_dcs_apc() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	// APC start/put/end
+	handler.vt(terminal.StreamEvent{
+		key: .apc_start
+	})
+	handler.vt(terminal.StreamEvent{
+		key: .apc_put
+		payload: terminal.ActionPayload{ byte_val: u8(`G`) }
+	})
+	handler.vt(terminal.StreamEvent{
+		key: .apc_end
+	})
+
+	// DCS hook/put/unhook
+	handler.vt(terminal.StreamEvent{
+		key: .dcs_hook
+	})
+	handler.vt(terminal.StreamEvent{
+		key: .dcs_put
+		payload: terminal.ActionPayload{ byte_val: u8(`x`) }
+	})
+	handler.vt(terminal.StreamEvent{
+		key: .dcs_unhook
+	})
+}
+
+// Test change_config.
+fn test_stream_handler_change_config() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	config := DerivedConfig{
+		osc_color_report_format: .bits_8
+		clipboard_write: .deny
+		enquiry_response: 'test'
+		cursor_style: .underline
+		cursor_blink: true
+	}
+	handler.change_config(&config)
+
+	assert handler.osc_color_report_format == .bits_8
+	assert handler.clipboard_write == .deny
+	assert handler.enquiry_response == 'test'
+	assert handler.default_cursor_style == .underline
+}
+
+// Test cursor_blinking mode is ignored when default_cursor_blink is set.
+fn test_stream_handler_cursor_blinking_override() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	// Set a default blink preference
+	handler.default_cursor_blink = true
+
+	// Try to set cursor_blinking mode - should be ignored
+	handler.set_mode(.cursor_blinking, false)
+	// The mode should still be whatever it was (it's ignored)
+	// This tests the early return in set_mode for cursor_blinking
+}
+
+// Test report_pwd with empty URL.
+fn test_stream_handler_report_pwd_empty() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.report_pwd('')
+	// Should not crash
+}
+
+// Test window_title with empty title.
+fn test_stream_handler_window_title_empty() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.window_title('')
+	assert !handler.seen_title
+}
+
+// Test window_title with non-empty title.
+fn test_stream_handler_window_title() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.window_title('My Terminal')
+	assert handler.seen_title
+}

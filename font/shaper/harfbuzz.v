@@ -48,69 +48,9 @@ mut:
 	x       i32
 }
 
-// Default features for HarfBuzz shaping.
+// Default feature strings for HarfBuzz shaping.
 // The HarfBuzz shaper enables standard ligatures by default.
-const hb_default_features = [
-	HbFeatureTag{
-		tag: [u8(`l`), `i`, `g`, `a`]!
-		value: 1
-	},
-]
-
-// HbFeatureTag holds a font feature as a 4-byte tag and value,
-// before conversion to the HarfBuzz wire format.
-struct HbFeatureTag {
-	tag   [4]u8
-	value u32
-}
-
-// tag_to_u32 converts a 4-byte OpenType tag to a big-endian u32.
-// HarfBuzz uses big-endian tag encoding: HB_TAG('l','i','g','a') =
-// (l << 24) | (i << 16) | (g << 8) | a.
-fn tag_to_u32(tag [4]u8) u32 {
-	return (u32(tag[0]) << 24) | (u32(tag[1]) << 16) | (u32(tag[2]) << 8) | u32(tag[3])
-}
-
-// parse_hb_feature_string parses a feature string like "dlig", "+dlig", "-liga"
-// into a harfbuzz.Feature. Returns none if the string is invalid.
-//
-// Supported formats:
-//   "liga"  or "+liga" -> enable feature (value=1)
-//   "-liga"            -> disable feature (value=0)
-fn parse_hb_feature_string(s string) ?harfbuzz.Feature {
-	mut str := s
-	mut value := u32(1)
-
-	if str.len == 0 {
-		return none
-	}
-
-	// Handle +/- prefix
-	if str[0] == `+` {
-		str = str[1..]
-		value = 1
-	} else if str[0] == `-` {
-		str = str[1..]
-		value = 0
-	}
-
-	if str.len == 0 || str.len > 4 {
-		return none
-	}
-
-	// Build the 4-byte tag, padding with spaces (HarfBuzz convention).
-	mut tag := [u8(` `), ` `, ` `, ` `]!
-	for i in 0 .. str.len {
-		tag[i] = str[i]
-	}
-
-	return harfbuzz.Feature{
-		tag: tag_to_u32(tag)
-		value: value
-		start: harfbuzz.feature_global_start
-		end_: harfbuzz.feature_global_end
-	}
-}
+const hb_default_feature_strings = ['liga']
 
 // is_special_font checks if the font index refers to a built-in sprite font.
 // Special fonts (sprites for cursors, underlines, etc.) don't need shaping
@@ -126,19 +66,17 @@ fn is_special_font(font_index u32) bool {
 pub fn HbShaper.init(opts font.ShaperOptions) !HbShaper {
 	// Parse all the features we want to use.
 	// Start with the hardcoded default features, then append user features.
-	mut feat_list := []harfbuzz.Feature{cap: hb_default_features.len + opts.features.len}
+	// Uses HarfBuzz's built-in feature string parser (hb_feature_from_string).
+	mut feat_list := []harfbuzz.Feature{cap: hb_default_feature_strings.len + opts.features.len}
 
-	for df in hb_default_features {
-		feat_list << harfbuzz.Feature{
-			tag: tag_to_u32(df.tag)
-			value: df.value
-			start: harfbuzz.feature_global_start
-			end_: harfbuzz.feature_global_end
+	for s in hb_default_feature_strings {
+		if feat := harfbuzz.feature_from_string(s) {
+			feat_list << feat
 		}
 	}
 
 	for feature_str in opts.features {
-		if feat := parse_hb_feature_string(feature_str) {
+		if feat := harfbuzz.feature_from_string(feature_str) {
 			feat_list << feat
 		}
 	}
@@ -197,12 +135,12 @@ pub fn (mut self HbShaper) shape(run font.TextRun) ![]font.ShapeCell {
 		//   defer { run.grid.lock.unlock() }
 		//   face := run.grid.resolver.collection.get_face(run.font_index)
 		//   i := if !face.quirks_disable_default_font_features { 0 } else {
-		//       hb_default_features.len
+		//       hb_default_feature_strings.len
 		//   }
-		//   harfbuzz.shape(face.hb_font, mut self.hb_buf, self.hb_feats[i..])
+		//   harfbuzz.shape(face.hb_font, self.hb_buf, self.hb_feats[i..])
 
-		// Stub: shape with all features using an empty font handle.
-		harfbuzz.shape(&harfbuzz.Font{}, mut self.hb_buf, self.hb_feats)
+		// Stub: shape with an empty font handle (no-op since font ptr is nil).
+		harfbuzz.shape(harfbuzz.Font{}, self.hb_buf, self.hb_feats)
 	}
 
 	// If our buffer is empty, we short-circuit the rest of the work
@@ -210,6 +148,21 @@ pub fn (mut self HbShaper) shape(run font.TextRun) ![]font.ShapeCell {
 	if self.hb_buf.get_length() == 0 {
 		return []font.ShapeCell{}
 	}
+
+	// If the buffer hasn't been shaped (no positions available),
+	// fall back to returning codepoints directly as glyphs.
+	// This happens when we don't have a real font handle yet (XTODO above).
+	if !self.hb_buf.has_positions() {
+		self.cell_buf.clear()
+		for cp in self.codepoints {
+			self.cell_buf << font.ShapeCell{
+				x: cp.cluster
+				glyph_index: cp.codepoint
+			}
+		}
+		return self.cell_buf
+	}
+
 	info := self.hb_buf.get_glyph_infos()
 	pos := self.hb_buf.get_glyph_positions() or { return error('HarfbuzzFailed') }
 

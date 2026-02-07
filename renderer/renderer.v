@@ -1,6 +1,7 @@
 module renderer
 
 import gg
+import sync
 import terminal
 import font
 import time
@@ -331,7 +332,7 @@ pub fn (mut self Renderer) update_frame(state &terminal.Terminal, cursor_blink_v
 //
 // If `sync` is true, this will synchronously block until
 // the frame is finished drawing and has been presented.
-pub fn (mut self Renderer) draw_frame(sync bool) ! {
+pub fn (mut self Renderer) draw_frame(sync_ bool) ! {
 	// XTODO: Full frame drawing requires gg integration.
 	// This method should:
 	// 1. Check if redraw is needed
@@ -356,7 +357,7 @@ pub fn (mut self Renderer) draw_frame(sync bool) ! {
 
 	// Conditions under which we need to draw the frame, otherwise we
 	// don't need to since the previous frame should be identical.
-	needs_redraw := self.cells_rebuilt || self.has_animations() || sync
+	needs_redraw := self.cells_rebuilt || self.has_animations() || sync_
 
 	if !needs_redraw {
 		return
@@ -396,7 +397,7 @@ pub fn (mut self Renderer) draw_frame(sync bool) ! {
 	// End the gg frame
 	ctx.end(gg.EndOptions{})
 
-	_ = sync
+	_ = sync_
 }
 
 // Draw the background image.
@@ -1045,6 +1046,7 @@ pub mut:
 	preedit   ?Preedit
 	mouse     MouseState
 	inspector ?voidptr
+	mutex     sync.Mutex
 }
 
 pub struct MouseState {
@@ -1099,15 +1101,10 @@ pub fn (w Wakeup) notify() ! {
 
 pub struct Mailbox {}
 
-pub fn (m Mailbox) push(msg Message, opts PushOpts) bool {
+// push attempts to push a message. Returns number of items pushed (0 or 1).
+pub fn (m Mailbox) push(msg Message) int {
 	_ = msg
-	_ = opts
-	return true
-}
-
-pub struct PushOpts {
-pub:
-	forever bool
+	return 1
 }
 
 pub struct Message {

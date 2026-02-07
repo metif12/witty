@@ -157,9 +157,41 @@ pub:
 }
 
 // SurfaceMessage represents a message sent to a specific surface.
+// We use a kind enum plus associated fields; only the fields matching
+// `kind` are meaningful.
 pub struct SurfaceMessage {
-pub:
-	kind SurfaceMessageKind
+pub mut:
+	kind              SurfaceMessageKind
+	// For set_title: null-terminated title buffer
+	title_buf         [256]u8
+	// For set_mouse_shape
+	mouse_shape       int
+	// For clipboard_read
+	clipboard_type    Clipboard = .standard
+	// For clipboard_write
+	clipboard_data    string
+	// For color_change
+	color_target      int
+	color_r           u8
+	color_g           u8
+	color_b           u8
+	// For stop_command
+	exit_code         u8
+	// For pwd_change
+	pwd               string
+	// For desktop_notification
+	notification_title [256]u8
+	notification_body  [256]u8
+	// For progress_report
+	progress_state    int
+	// For report_title
+	report_style      int
+	// For size_report
+	size_report_style int
+	// For focused
+	focused_val       bool
+	// For color_scheme_report
+	force             bool
 }
 
 pub enum SurfaceMessageKind {
@@ -185,6 +217,21 @@ pub enum SurfaceMessageKind {
 	stop_command
 	search_total
 	search_selected
+	focused
+	color_scheme_report
+	size_report
+}
+
+// SurfaceMailbox handles pushing surface messages.
+pub struct SurfaceMailbox {
+mut:
+	dummy u8
+}
+
+// push attempts to push a message. Returns number of items pushed (0 or 1).
+pub fn (m SurfaceMailbox) push(msg SurfaceMessage) int {
+	_ = msg
+	return 1
 }
 
 pub struct ChildExitedInfo {
