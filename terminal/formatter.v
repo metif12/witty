@@ -1,5 +1,17 @@
 module terminal
 
+/*
+  Source: formatter.zig — 5,939 lines
+  Output: formatter.v — 1,149 lines + formatter_test.v — 1,117 lines = 2,266 V lines total
+
+  The V translation is significantly more compact because:
+  - Zig's comptime patterns, explicit allocator passing, and Writer generics are replaced by V's strings.Builder
+  - Zig's verbose test infrastructure (custom allocators, errdefer, error unions) becomes simple V test functions
+  - The PageListFormatter was merged into PageFormatter since V uses a simpler Pages array model
+  - PinMap/PointMap tracking (a perf/debugging feature) was omitted (XTODO)
+
+*/
+
 import strings
 
 // Formats available.
