@@ -11,6 +11,19 @@ fn make_test_size() Size {
 	}
 }
 
+// Test helper: creates a Surface with an initialized terminal (avoids nil deref).
+fn make_test_surface() Surface {
+	mut t := Terminal{
+		cols: 80
+		rows: 24
+	}
+	return Surface{
+		renderer_state: RendererState{
+			terminal: &t
+		}
+	}
+}
+
 fn test_grid_size_basic() {
 	s := make_test_size()
 	g := s.grid()
@@ -239,7 +252,7 @@ fn test_hide_show_mouse() {
 }
 
 fn test_mouse_pressure_callback_no_change() ! {
-	mut surf := Surface{}
+	mut surf := make_test_surface()
 	surf.mouse.pressure_stage = .light
 	// Same stage should be a no-op
 	surf.mouse_pressure_callback(.light, 0.5)!
@@ -247,63 +260,57 @@ fn test_mouse_pressure_callback_no_change() ! {
 }
 
 fn test_mouse_pressure_callback_change() ! {
-	mut surf := Surface{}
+	mut surf := make_test_surface()
 	surf.mouse.pressure_stage = .none_
 	surf.mouse_pressure_callback(.deep, 0.9)!
 	assert surf.mouse.pressure_stage == .deep
 }
 
 fn test_focus_callback_same_state() ! {
-	mut surf := Surface{
-		focused: true
-	}
+	mut surf := make_test_surface()
+	surf.focused = true
 	// Same focus state should be a no-op
 	surf.focus_callback(true)!
 	assert surf.focused == true
 }
 
 fn test_focus_callback_change() ! {
-	mut surf := Surface{
-		focused: true
-	}
+	mut surf := make_test_surface()
+	surf.focused = true
 	surf.focus_callback(false)!
 	assert surf.focused == false
 }
 
 fn test_size_callback_no_change() ! {
-	mut surf := Surface{
-		size: Size{
-			screen: ScreenSize{ width: 800, height: 600 }
-			cell: CellSize{ width: 10, height: 20 }
-		}
+	mut surf := make_test_surface()
+	surf.size = Size{
+		screen: ScreenSize{ width: 800, height: 600 }
+		cell: CellSize{ width: 10, height: 20 }
 	}
 	// Same size should be a no-op (no error)
 	surf.size_callback(800, 600)!
 }
 
 fn test_color_scheme_callback_no_change() ! {
-	mut surf := Surface{
-		config_conditional_state: ConditionalState{ theme: .dark }
-	}
+	mut surf := make_test_surface()
+	surf.config_conditional_state = ConditionalState{ theme: .dark }
 	// Same scheme should be a no-op
 	surf.color_scheme_callback(.dark)!
 	assert surf.config_conditional_state.theme == .dark
 }
 
 fn test_color_scheme_callback_change() ! {
-	mut surf := Surface{
-		config_conditional_state: ConditionalState{ theme: .dark }
-	}
+	mut surf := make_test_surface()
+	surf.config_conditional_state = ConditionalState{ theme: .dark }
 	surf.color_scheme_callback(.light)!
 	assert surf.config_conditional_state.theme == .light
 }
 
 fn test_child_exited_no_wait() {
-	mut surf := Surface{
-		config: DerivedConfig{
-			wait_after_command: false
-			abnormal_command_exit_runtime_ms: 500
-		}
+	mut surf := make_test_surface()
+	surf.config = DerivedConfig{
+		wait_after_command: false
+		abnormal_command_exit_runtime_ms: 500
 	}
 	assert surf.child_exited == false
 	surf.child_exited_handler(1000, 0)
@@ -358,4 +365,121 @@ fn test_balance_padding_if_needed_disabled() {
 	original_padding := surf.size.padding
 	surf.balance_padding_if_needed()
 	assert surf.size.padding.top == original_padding.top
+}
+
+fn test_balance_padding_basic() {
+	mut s := Size{
+		screen: ScreenSize{ width: 120, height: 120 }
+		cell: CellSize{ width: 10, height: 20 }
+		padding: Padding{}
+	}
+	// 120/10 = 12 cols, 12*10 = 120, extra_w = 0
+	// 120/20 = 6 rows, 6*20 = 120, extra_h = 0
+	explicit := Padding{ left: 5, top: 5, right: 5, bottom: 5 }
+	s.balance_padding(explicit)
+	// usable: 120 - 10 = 110, 110/10 = 11 cols, 11*10=110, extra=0
+	assert s.padding.left >= 5
+	assert s.padding.top >= 5
+}
+
+fn test_pin_eql() {
+	a := Pin{ x: 3, y: 7 }
+	b := Pin{ x: 3, y: 7 }
+	c := Pin{ x: 4, y: 7 }
+	assert a.eql(b) == true
+	assert a.eql(c) == false
+}
+
+fn test_pin_before() {
+	a := Pin{ x: 0, y: 0 }
+	b := Pin{ x: 1, y: 0 }
+	c := Pin{ x: 0, y: 1 }
+	assert a.before(b) == true
+	assert b.before(a) == false
+	assert a.before(c) == true
+	assert c.before(a) == false
+}
+
+fn test_terminal_selection_eql() {
+	s1 := TermSelection{
+		start_pin: Pin{ x: 0, y: 0 }
+		end_pin: Pin{ x: 5, y: 2 }
+	}
+	s2 := TermSelection{
+		start_pin: Pin{ x: 0, y: 0 }
+		end_pin: Pin{ x: 5, y: 2 }
+	}
+	s3 := TermSelection{
+		start_pin: Pin{ x: 0, y: 0 }
+		end_pin: Pin{ x: 5, y: 3 }
+	}
+	assert s1.eql(s2) == true
+	assert s1.eql(s3) == false
+}
+
+fn test_closing_action() {
+	assert closing_action(BindingAction{ kind: .close_surface }) == true
+	assert closing_action(BindingAction{ kind: .close_window }) == true
+	assert closing_action(BindingAction{ kind: .close_tab }) == true
+	assert closing_action(BindingAction{ kind: .ignore }) == false
+	assert closing_action(BindingAction{ kind: .none_ }) == false
+}
+
+fn test_has_selection() {
+	mut surf := make_test_surface()
+	assert surf.has_selection() == false
+
+	surf.renderer_state.terminal.selection = TermSelection{
+		start_pin: Pin{ x: 0, y: 0 }
+		end_pin: Pin{ x: 5, y: 0 }
+	}
+	assert surf.has_selection() == true
+}
+
+fn test_mouse_selection_same_point() {
+	pin := Pin{ x: 5, y: 3 }
+	size := make_test_size()
+	sel := mouse_selection(pin, pin, 55, 55, unsafe { gg.Modifier(0) }, size)
+	assert sel == none
+}
+
+fn test_encode_key_text() {
+	mut surf := make_test_surface()
+	ev := KeyEvent{
+		key: .a
+		action: .press
+		utf8: 'a'
+	}
+	req := surf.encode_key(ev) or {
+		assert false, 'expected write req'
+		return
+	}
+	assert req.data.len > 0
+	assert req.data[0] == u8(`a`)
+}
+
+fn test_encode_key_escape() {
+	mut surf := make_test_surface()
+	ev := KeyEvent{
+		key: .escape
+		action: .press
+		utf8: ''
+	}
+	req := surf.encode_key(ev) or {
+		assert false, 'expected write req'
+		return
+	}
+	assert req.data.len == 1
+	assert req.data[0] == 0x1b
+}
+
+fn test_encode_key_no_output() {
+	mut surf := make_test_surface()
+	ev := KeyEvent{
+		key: .left_shift
+		action: .press
+		utf8: ''
+	}
+	req := surf.encode_key(ev)
+	assert req == none
 }
