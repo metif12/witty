@@ -1,0 +1,1638 @@
+module apprt
+
+// Application runtime for the embedded version of Ghostty. The embedded
+// version is when Ghostty is embedded within a parent host application,
+// rather than owning the application lifecycle itself. This is used for
+// example for the macOS build of Ghostty so that we can use a native
+// Swift+XCode-based application.
+
+import input
+import configpkg
+import math
+
+// log_warn logs a warning message.
+fn log_warn(msg string) {
+	eprintln('[warn] embedded: ${msg}')
+}
+
+// log_err logs an error message.
+fn log_err(msg string) {
+	eprintln('[error] embedded: ${msg}')
+}
+
+// log_debug logs a debug message.
+fn log_debug(msg string) {
+	// In release builds this would be a no-op.
+	$if debug {
+		eprintln('[debug] embedded: ${msg}')
+	}
+}
+
+// log_info logs an info message.
+fn log_info(msg string) {
+	eprintln('[info] embedded: ${msg}')
+}
+
+// -----------------------------------------------------------------------
+// App
+// -----------------------------------------------------------------------
+
+// App is the embedded application runtime. Because we only expect the
+// embedding API to be used in embedded environments, the options are
+// designed so that we can expose it directly to a C callconv and not pay
+// for any translation costs.
+pub struct App {
+pub mut:
+	core_app &CoreApp = unsafe { nil }
+	opts     AppOptions
+	keymap   input.Keymap
+
+	// The configuration for the app. This is owned by this structure.
+	config configpkg.Config
+}
+
+// AppOptions contains the callbacks and configuration for the embedded
+// runtime. C type: ghostty_runtime_config_s
+pub struct AppOptions {
+pub mut:
+	// Userdata that is passed to all the callbacks.
+	userdata voidptr
+
+	// True if the selection clipboard is supported.
+	supports_selection_clipboard bool
+
+	// Callback called to wakeup the event loop. This should trigger
+	// a full tick of the app loop.
+	wakeup_cb fn (voidptr) = unsafe { nil }
+
+	// Callback called to handle an action.
+	action_cb fn (&App, voidptr, voidptr) bool = unsafe { nil }
+
+	// Read the clipboard value. The return value must be preserved
+	// by the host until the next call. If there is no valid clipboard
+	// value then this should return null.
+	read_clipboard_cb fn (voidptr, int, &ClipboardRequest) = unsafe { nil }
+
+	// This may be called after a read clipboard call to request
+	// confirmation that the clipboard value is safe to read. The embedder
+	// must call complete_clipboard_request with the given request.
+	confirm_read_clipboard_cb fn (voidptr, string, &ClipboardRequest, ClipboardRequestKind) = unsafe { nil }
+
+	// Write the clipboard value.
+	write_clipboard_cb fn (voidptr, int, []ClipboardContent, bool) = unsafe { nil }
+
+	// Close the current surface given by this function.
+	close_surface_cb fn (voidptr, bool) = unsafe { nil }
+}
+
+// KeyTarget is the target of a key event. This is used to determine some
+// subtly different behavior between app and surface key events.
+pub type KeyTarget = AppKeyTarget | SurfaceKeyTarget
+
+pub struct AppKeyTarget {}
+
+pub struct SurfaceKeyTarget {
+pub mut:
+	surface &Surface
+}
+
+// EmbeddedKeyEvent is the key event sent for ghostty_surface_key and
+// ghostty_app_key.
+pub struct EmbeddedKeyEvent {
+pub:
+	action              input.KeyAction
+	mods                input.Mods
+	consumed_mods       input.Mods
+	keycode             u32
+	text                ?string
+	unshifted_codepoint u32
+	composing           bool
+}
+
+// core converts a libghostty key event into a core key event.
+pub fn (self EmbeddedKeyEvent) core() ?input.KeyEvent {
+	text := self.text or { '' }
+	unshifted_codepoint := if self.unshifted_codepoint <= 0x10FFFF {
+		self.unshifted_codepoint
+	} else {
+		u32(0)
+	}
+
+	// We want to get the physical unmapped key to process keybinds.
+	mut physical_key := input.Key.unidentified
+	for entry in input.keycodes_entries {
+		if entry.native == self.keycode {
+			physical_key = entry.key
+			break
+		}
+	}
+
+	// Build our final key event
+	return input.KeyEvent{
+		action: self.action
+		key: physical_key
+		mods: self.mods
+		consumed_mods: self.consumed_mods
+		composing: self.composing
+		utf8: text
+		unshifted_codepoint: unshifted_codepoint
+	}
+}
+
+// App.init initializes the embedded app.
+pub fn (mut self App) init(core_app &CoreApp, config &configpkg.Config, opts AppOptions) ! {
+	// We have to clone the config.
+	config_clone := config.clone()
+
+	keymap := input.Keymap.init()!
+
+	self.core_app = unsafe { core_app }
+	self.config = config_clone
+	self.opts = opts
+	self.keymap = keymap
+}
+
+// terminate shuts down the embedded app.
+pub fn (mut self App) terminate() {
+	self.keymap.deinit()
+	self.config.deinit()
+}
+
+// has_global_keybinds returns true if there are any global keybinds
+// in the configuration.
+pub fn (self &App) has_global_keybinds() bool {
+	// XTODO: iterate over keybind set and check for global flag.
+	// Requires full keybind iterator implementation.
+	return false
+}
+
+// focus_event forwards focus state to CoreApp.
+pub fn (mut self App) focus_event(focused bool) {
+	self.core_app.focus_event(focused)
+}
+
+// key_event processes a key event from the embedded runtime.
+// See CoreApp.keyEvent.
+pub fn (mut self App) key_event(mut target_ KeyTarget, event EmbeddedKeyEvent) !bool {
+	// Convert our C key event into a Zig one.
+	input_event := event.core() or { return false }
+
+	// Invoke the core Ghostty logic to handle this input.
+	effect := match mut target_ {
+		AppKeyTarget {
+			if self.core_app.key_event(self, &input_event) {
+				InputEffect.consumed
+			} else {
+				InputEffect.ignored
+			}
+		}
+		SurfaceKeyTarget {
+			target_.surface.core_surface.key_callback(&input_event) or {
+				return err
+			}
+		}
+	}
+
+	return match effect {
+		.closed { true }
+		.ignored { false }
+		.consumed { true }
+	}
+}
+
+// reload_keymap should be called whenever the keyboard layout was changed.
+pub fn (mut self App) reload_keymap() ! {
+	// Reload the keymap
+	self.keymap.reload()!
+}
+
+// keyboard_layout loads the keyboard layout.
+//
+// Kind of expensive so this should be avoided if possible. When I say
+// "kind of expensive" I mean that its not something you probably want
+// to run on every keypress.
+pub fn (self &App) keyboard_layout() input.KeyboardLayout {
+	// XTODO: We only support keyboard layout detection on macOS.
+	// This requires platform detection and calling keymap.source_id.
+	// For now, return unknown.
+	return .unknown
+}
+
+// wakeup triggers the event loop wakeup callback.
+pub fn (self &App) wakeup() {
+	if self.opts.wakeup_cb != unsafe { nil } {
+		self.opts.wakeup_cb(self.opts.userdata)
+	}
+}
+
+// wait waits for the next event. No-op for embedded runtime.
+pub fn (self &App) wait() ! {
+	// No-op for embedded runtime.
+}
+
+// new_surface creates a new surface for the app.
+fn (mut self App) new_surface(opts SurfaceOptions) !&Surface {
+	// Grab a surface allocation because we're going to need it.
+	mut surface := &Surface{}
+
+	// Create the surface
+	surface.init(mut self, opts)!
+
+	return surface
+}
+
+// close_surface closes the given surface.
+pub fn (mut self App) close_surface(mut surface Surface) {
+	surface.deinit()
+}
+
+// redraw_inspector queues a render for the inspector.
+pub fn (mut self App) redraw_inspector(mut surface Surface) {
+	surface.queue_inspector_render()
+}
+
+// perform_action performs a given action. Returns true if the action was
+// able to be performed, false otherwise.
+pub fn (mut self App) perform_action(target_ Target, action ActionKind, data ActionData) !bool {
+	// Special case certain actions before they are sent to the
+	// embedded apprt.
+	self.perform_pre_action(target_, action, data)
+
+	log_debug('dispatching action target=${target_} action=${action} data=${data}')
+
+	if self.opts.action_cb != unsafe { nil } {
+		return self.opts.action_cb(self, unsafe { nil }, unsafe { nil })
+	}
+	return false
+}
+
+// perform_pre_action handles actions that need pre-processing before
+// being sent to the embedder.
+fn (mut self App) perform_pre_action(target_ Target, action ActionKind, data ActionData) {
+	// Special case certain actions before they are sent to the embedder
+	match action {
+		.set_title {
+			match target_ {
+				AppTarget {}
+				SurfaceTarget {
+					// XTODO: Dupe the title so that we can store it.
+					// Requires access to the Surface rt_surface.title field.
+				}
+			}
+		}
+		.config_change {
+			match target_ {
+				SurfaceTarget {}
+				// For app updates, we update our core config. We need to
+				// clone it because the caller owns the param.
+				AppTarget {
+					self.config.deinit()
+					self.config = configpkg.Config{}
+				}
+			}
+		}
+		else {}
+	}
+}
+
+// perform_ipc sends the given IPC to a running Ghostty. Returns true if
+// the action was able to be performed, false otherwise.
+//
+// Note that this is a static function. Since this is called from a CLI app
+// (or some other process that is not Ghostty) there is no full-featured
+// apprt App to use.
+pub fn perform_ipc(action string) !bool {
+	// XTODO: IPC support not yet implemented for embedded runtime.
+	_ = action
+	return false
+}
+
+// -----------------------------------------------------------------------
+// Platform
+// -----------------------------------------------------------------------
+
+// Platform is platform-specific configuration for libghostty.
+pub type Platform = MacOSPlatform | IOSPlatform
+
+// MacOSPlatform holds the macOS-specific platform config.
+pub struct MacOSPlatform {
+pub:
+	// The view to render the surface on.
+	nsview voidptr
+}
+
+// IOSPlatform holds the iOS-specific platform config.
+pub struct IOSPlatform {
+pub:
+	// The view to render the surface on.
+	uiview voidptr
+}
+
+// PlatformTag identifies the platform.
+pub enum PlatformTag {
+	// "0" is reserved for invalid so we can detect unset values
+	// from the C API.
+	macos  = 1
+	ios    = 2
+}
+
+// PlatformC is the C ABI compatible version of Platform. The tag is
+// expected to be stored elsewhere.
+pub struct PlatformC {
+pub mut:
+	// For macOS.
+	nsview voidptr
+	// For iOS.
+	uiview voidptr
+}
+
+// platform_init initializes a Platform from a tag and configuration
+// from the C ABI.
+pub fn platform_init(tag_int int, c_platform PlatformC) !Platform {
+	tag := unsafe { PlatformTag(tag_int) }
+	return match tag {
+		.macos {
+			if c_platform.nsview == unsafe { nil } {
+				return error('NSView must be set')
+			}
+			Platform(MacOSPlatform{ nsview: c_platform.nsview })
+		}
+		.ios {
+			if c_platform.uiview == unsafe { nil } {
+				return error('UIView must be set')
+			}
+			Platform(IOSPlatform{ uiview: c_platform.uiview })
+		}
+	}
+}
+
+// -----------------------------------------------------------------------
+// EnvVar
+// -----------------------------------------------------------------------
+
+// EnvVar represents an environment variable key-value pair.
+pub struct EnvVar {
+pub:
+	// The name of the environment variable.
+	key string
+	// The value of the environment variable.
+	value string
+}
+
+// -----------------------------------------------------------------------
+// Surface
+// -----------------------------------------------------------------------
+
+// Surface represents a single terminal surface in the embedded runtime.
+pub struct Surface {
+pub mut:
+	app           &App = unsafe { nil }
+	platform      Platform = MacOSPlatform{}
+	userdata      voidptr
+	core_surface  CoreSurface
+	content_scale ContentScale
+	size          SurfaceSize
+	cursor_pos    CursorPos
+	inspector_    ?&Inspector
+
+	// The current title of the surface. The embedded apprt saves this so
+	// that getTitle works without the implementer needing to save it.
+	title ?string
+}
+
+// SurfaceOptions contains initialization options for a Surface.
+pub struct SurfaceOptions {
+pub:
+	// The platform that this surface is being initialized for and
+	// the associated platform-specific configuration.
+	platform_tag int
+	platform     PlatformC
+
+	// Userdata passed to some of the callbacks.
+	userdata voidptr
+
+	// The scale factor of the screen.
+	scale_factor f64 = 1.0
+
+	// The font size to inherit. If 0, default font size will be used.
+	font_size f32
+
+	// The working directory to load into.
+	working_directory ?string
+
+	// The command to run in the new surface. If this is set then
+	// the "wait-after-command" option is also automatically set to true,
+	// since this is used for scripting.
+	//
+	// This command always run in a shell (e.g. via `/bin/sh -c`),
+	// despite Ghostty allowing directly executed commands via config.
+	// This is a legacy thing and we should probably change it in the
+	// future once we have a concrete use case.
+	command ?string
+
+	// Extra environment variables to set for the surface.
+	env_vars []EnvVar
+
+	// Input to send to the command after it is started.
+	initial_input ?string
+
+	// Wait after the command exits.
+	wait_after_command bool
+
+	// Context for the new surface.
+	context NewSurfaceContext = .window
+}
+
+// Surface.init initializes a new embedded surface.
+pub fn (mut self Surface) init(mut app App, opts SurfaceOptions) ! {
+	self.app = unsafe { app }
+	self.platform = platform_init(opts.platform_tag, opts.platform)!
+	self.userdata = opts.userdata
+	self.core_surface = CoreSurface{}
+	scale := if opts.scale_factor > 0 { f32(opts.scale_factor) } else { f32(1.0) }
+	self.content_scale = ContentScale{
+		x: scale
+		y: scale
+	}
+	self.size = SurfaceSize{ width: 800, height: 600 }
+	self.cursor_pos = CursorPos{ x: -1, y: -1 }
+
+	// Add ourselves to the list of surfaces on the app.
+	app.core_app.add_surface(self)!
+
+	// Shallow copy the config so that we can modify it.
+	mut config := app.config
+
+	// If we have a working directory from the options then we set it.
+	if wd := opts.working_directory {
+		if wd.len > 0 {
+			config.working_directory = wd
+		}
+	}
+
+	// If we have a command from the options then we set it.
+	if cmd := opts.command {
+		if cmd.len > 0 {
+			config.command = configpkg.Command{ args: [cmd] }
+			config.wait_after_command = true
+		}
+	}
+
+	// Wait after command
+	if opts.wait_after_command {
+		config.wait_after_command = true
+	}
+
+	// Initialize our surface right away. We're given a view that is
+	// ready to use.
+	self.core_surface.init(&config, app.core_app, app, self)!
+
+	// If our options requested a specific font-size, set that.
+	if opts.font_size != 0 {
+		mut font_size := self.core_surface.font_size
+		font_size.points = opts.font_size
+		self.core_surface.set_font_size(font_size)!
+	}
+}
+
+// deinit shuts down the surface.
+pub fn (mut self Surface) deinit() {
+	// Shut down our inspector
+	self.free_inspector()
+
+	// Remove ourselves from the list of known surfaces in the app.
+	unsafe {
+		self.app.core_app.delete_surface(self)
+	}
+
+	// Clean up our core surface so that all the rendering and IO stop.
+	self.core_surface.deinit()
+}
+
+// init_inspector initializes the inspector instance. A surface can only
+// have one inspector at any given time, so this will return the previous
+// inspector if it was already initialized.
+pub fn (mut self Surface) init_inspector() !&Inspector {
+	if v := self.inspector_ {
+		return v
+	}
+
+	mut insp := &Inspector{}
+	insp.init(mut self)!
+	self.inspector_ = insp
+	return insp
+}
+
+// free_inspector frees the inspector if one is active.
+pub fn (mut self Surface) free_inspector() {
+	if mut v := self.inspector_ {
+		v.deinit()
+		self.inspector_ = none
+	}
+}
+
+// core returns a pointer to the core surface.
+pub fn (mut self Surface) core() &CoreSurface {
+	return &self.core_surface
+}
+
+// rt_app returns the parent app.
+pub fn (self &Surface) rt_app() &App {
+	return self.app
+}
+
+// close requests that the surface be closed.
+pub fn (self &Surface) close(process_alive bool) {
+	if self.app.opts.close_surface_cb == unsafe { nil } {
+		log_info('runtime embedder does not support closing a surface')
+		return
+	}
+	self.app.opts.close_surface_cb(self.userdata, process_alive)
+}
+
+// get_content_scale returns the content scale of the surface.
+pub fn (self &Surface) get_content_scale() !ContentScale {
+	return self.content_scale
+}
+
+// get_size returns the size of the surface.
+pub fn (self &Surface) get_size() !SurfaceSize {
+	return self.size
+}
+
+// get_title returns the current title of the surface.
+pub fn (self &Surface) get_title() ?string {
+	return self.title
+}
+
+// supports_clipboard returns true if the given clipboard type is supported.
+pub fn (self &Surface) supports_clipboard(clipboard_type Clipboard) bool {
+	return match clipboard_type {
+		.standard { true }
+		.selection, .primary { self.app.opts.supports_selection_clipboard }
+	}
+}
+
+// clipboard_request initiates a clipboard read request.
+pub fn (mut self Surface) clipboard_request(clipboard_type Clipboard, state ClipboardRequest) !bool {
+	// We need to allocate to get a pointer to store our clipboard request
+	// so that it is stable until the read_clipboard callback and call
+	// complete_clipboard_request. This sucks but clipboard requests aren't
+	// high throughput so it's probably fine.
+	if self.app.opts.read_clipboard_cb != unsafe { nil } {
+		self.app.opts.read_clipboard_cb(
+			self.userdata,
+			int(clipboard_type),
+			&state,
+		)
+	}
+
+	// Embedded apprt can't synchronously check clipboard content types,
+	// so we always return true to indicate the request was started.
+	return true
+}
+
+// complete_clipboard_request completes a clipboard read request.
+fn (mut self Surface) complete_clipboard_request(str string, state ClipboardRequest, confirmed bool) {
+	// Attempt to complete the request, but we may request
+	// confirmation.
+	self.core_surface.complete_clipboard_request(state, str, confirmed) or {
+		// If the paste is unsafe or unauthorized, ask for confirmation.
+		if self.app.opts.confirm_read_clipboard_cb != unsafe { nil } {
+			self.app.opts.confirm_read_clipboard_cb(
+				self.userdata,
+				str,
+				&state,
+				state.kind,
+			)
+		}
+		return
+	}
+}
+
+// set_clipboard sets the clipboard content.
+pub fn (self &Surface) set_clipboard(clipboard_type Clipboard, contents []ClipboardContent, confirm bool) ! {
+	if self.app.opts.write_clipboard_cb != unsafe { nil } {
+		self.app.opts.write_clipboard_cb(
+			self.userdata,
+			int(clipboard_type),
+			contents,
+			confirm,
+		)
+	}
+}
+
+// get_cursor_pos returns the current cursor position.
+pub fn (self &Surface) get_cursor_pos() !CursorPos {
+	return self.cursor_pos
+}
+
+// refresh tells the surface it needs to schedule a render.
+pub fn (mut self Surface) refresh() {
+	self.core_surface.refresh_callback() or {
+		log_err('error in refresh callback err=${err}')
+		return
+	}
+}
+
+// draw tells the surface it needs to draw NOW if possible.
+pub fn (mut self Surface) draw() {
+	self.core_surface.draw() or {
+		log_err('error in draw err=${err}')
+		return
+	}
+}
+
+// update_content_scale updates the DPI content scale of the surface.
+pub fn (mut self Surface) update_content_scale(x f64, y f64) {
+	// We are an embedded API so the caller can send us all sorts of
+	// garbage. We want to make sure that the float values are valid
+	// and we don't want to support fractional scaling below 1.
+	x_scaled := math.max(1.0, if math.is_nan(x) { 1.0 } else { x })
+	y_scaled := math.max(1.0, if math.is_nan(y) { 1.0 } else { y })
+
+	self.content_scale = ContentScale{
+		x: f32(x_scaled)
+		y: f32(y_scaled)
+	}
+
+	self.core_surface.content_scale_callback(self.content_scale) or {
+		log_err('error in content scale callback err=${err}')
+		return
+	}
+}
+
+// update_size updates the pixel size of the surface.
+pub fn (mut self Surface) update_size(width u32, height u32) {
+	// Runtimes sometimes generate superfluous resize events even
+	// if the size did not actually change (SwiftUI). We check
+	// that the size actually changed from what we last recorded
+	// since resizes are expensive.
+	if self.size.width == width && self.size.height == height {
+		return
+	}
+
+	self.size = SurfaceSize{
+		width: width
+		height: height
+	}
+
+	// Call the primary callback.
+	self.core_surface.size_callback(self.size) or {
+		log_err('error in size callback err=${err}')
+		return
+	}
+}
+
+// color_scheme_callback notifies the surface of a color scheme change.
+pub fn (mut self Surface) color_scheme_callback(scheme ColorScheme) {
+	self.core_surface.color_scheme_callback(scheme) or {
+		log_err('error setting color scheme err=${err}')
+		return
+	}
+}
+
+// mouse_button_callback handles a mouse button event.
+pub fn (mut self Surface) mouse_button_callback(action input.MouseButtonState, button input.MouseButton, mods input.Mods) bool {
+	return self.core_surface.mouse_button_callback(action, button, mods) or {
+		log_err('error in mouse button callback err=${err}')
+		return false
+	}
+}
+
+// mouse_pressure_callback handles a mouse pressure event (Force Touch).
+pub fn (mut self Surface) mouse_pressure_callback(stage input.MousePressureStage, pressure f64) {
+	self.core_surface.mouse_pressure_callback(stage, pressure) or {
+		log_err('error in mouse pressure callback err=${err}')
+		return
+	}
+}
+
+// scroll_callback handles a scroll event.
+pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, mods input.ScrollMods) {
+	self.core_surface.scroll_callback(xoff, yoff, mods) or {
+		log_err('error in scroll callback err=${err}')
+		return
+	}
+}
+
+// cursor_pos_callback handles a cursor position update.
+pub fn (mut self Surface) cursor_pos_callback(x f64, y f64, mods input.Mods) {
+	// Convert our unscaled x/y to scaled.
+	self.cursor_pos = self.cursor_pos_to_pixels(CursorPos{
+		x: x
+		y: y
+	}) or {
+		log_err('error converting cursor pos to scaled pixels in cursor pos callback err=${err}')
+		return
+	}
+
+	self.core_surface.cursor_pos_callback(self.cursor_pos, mods) or {
+		log_err('error in cursor pos callback err=${err}')
+		return
+	}
+}
+
+// preedit_callback handles IME preedit text.
+pub fn (mut self Surface) preedit_callback(preedit ?string) {
+	self.core_surface.preedit_callback(preedit) or {
+		log_err('error in preedit callback err=${err}')
+		return
+	}
+}
+
+// text_callback handles committed text input.
+pub fn (mut self Surface) text_callback(text string) {
+	self.core_surface.text_callback(text) or {
+		log_err('error in key callback err=${err}')
+		return
+	}
+}
+
+// focus_callback handles focus state changes.
+pub fn (mut self Surface) focus_callback(focused bool) {
+	self.core_surface.focus_callback(focused) or {
+		log_err('error in focus callback err=${err}')
+		return
+	}
+}
+
+// occlusion_callback handles occlusion state changes.
+pub fn (mut self Surface) occlusion_callback(visible bool) {
+	self.core_surface.occlusion_callback(visible) or {
+		log_err('error in occlusion callback err=${err}')
+		return
+	}
+}
+
+// queue_inspector_render queues an inspector render.
+fn (mut self Surface) queue_inspector_render() {
+	self.app.perform_action(
+		Target(AppTarget{}),
+		.renderer_health,
+		ActionData{},
+	) or {
+		log_err('error rendering the inspector err=${err}')
+		return
+	}
+}
+
+// new_surface_options returns the options to use for a surface that
+// inherits from this one.
+pub fn (self &Surface) new_surface_options(context NewSurfaceContext) SurfaceOptions {
+	font_size := if self.app.config.font_size != 0 {
+		self.core_surface.font_size.points
+	} else {
+		f32(0)
+	}
+
+	working_directory := self.core_surface.pwd() or { '' }
+
+	return SurfaceOptions{
+		font_size: font_size
+		working_directory: if working_directory.len > 0 {
+			working_directory
+		} else {
+			none
+		}
+		context: context
+	}
+}
+
+// default_termio_env returns the default environment variables for the
+// terminal IO process.
+pub fn (self &Surface) default_termio_env() !map[string]string {
+	// XTODO: Full implementation requires internal_os.get_env_map()
+	// and platform-specific env var filtering (removing Xcode vars,
+	// GHOSTTY_MAC_LAUNCH_SOURCE, LANGUAGE on desktop launch, etc.)
+	mut env := map[string]string{}
+	return env
+}
+
+// cursor_pos_to_pixels converts screen coordinates to pixel coordinates.
+// The cursor position from the host directly is in screen coordinates but
+// all our interface works in pixels.
+fn (self &Surface) cursor_pos_to_pixels(pos CursorPos) !CursorPos {
+	scale := self.get_content_scale()!
+	return CursorPos{ x: pos.x * f64(scale.x), y: pos.y * f64(scale.y) }
+}
+
+// -----------------------------------------------------------------------
+// Inspector
+// -----------------------------------------------------------------------
+
+// Inspector is the state required for the terminal inspector. A terminal
+// inspector is 1:1 with a Surface.
+pub struct Inspector {
+pub mut:
+	surface       &Surface = unsafe { nil }
+	content_scale f64 = 1.0
+
+	// Our previous instant used to calculate delta time for animations.
+	prev_time_ns ?i64
+}
+
+// Inspector.init initializes the inspector.
+pub fn (mut self Inspector) init(mut surface Surface) ! {
+	// XTODO: Full implementation requires cimgui (ImGui) bindings.
+	// ImGui context creation, backend platform name setup,
+	// core inspector setup, and inspector activation would go here.
+	self.surface = unsafe { surface }
+
+	surface.core_surface.activate_inspector() or {
+		log_err('failed to activate inspector err=${err}')
+	}
+}
+
+// deinit destroys the inspector.
+pub fn (mut self Inspector) deinit() {
+	// XTODO: Full implementation requires cimgui bindings.
+	// Deactivates the core inspector, destroys ImGui context.
+	self.surface.core_surface.deactivate_inspector()
+}
+
+// queue_render queues a render for the next frame.
+pub fn (mut self Inspector) queue_render() {
+	self.surface.queue_inspector_render()
+}
+
+// init_metal initializes the inspector for a metal backend.
+pub fn (mut self Inspector) init_metal(device voidptr) bool {
+	// XTODO: Requires cimgui Metal backend bindings.
+	// Would call ImGui_ImplMetal_Init and set backend to .metal.
+	_ = device
+	log_debug('init_metal: not implemented (requires cimgui)')
+	return false
+}
+
+// render_metal renders the inspector using the Metal backend.
+pub fn (mut self Inspector) render_metal(command_buffer voidptr, desc voidptr) ! {
+	// XTODO: Requires cimgui Metal backend bindings.
+	// Would set up ImGui frames, build UI, and render draw data.
+	_ = command_buffer
+	_ = desc
+}
+
+// update_content_scale updates the inspector's content scale.
+pub fn (mut self Inspector) update_content_scale(x f64, y f64) {
+	// XTODO: Requires cimgui bindings for ImGuiStyle scaling.
+	// Would create a new ImGuiStyle, scale it, and apply.
+	_ = y
+
+	// Cache our scale because we use it for cursor position calculations.
+	self.content_scale = x
+}
+
+// update_size updates the inspector's display size.
+pub fn (mut self Inspector) update_size(width u32, height u32) {
+	// XTODO: Requires cimgui bindings.
+	// Would set io.DisplaySize to the given dimensions.
+	_ = width
+	_ = height
+}
+
+// mouse_button_callback handles a mouse button event for the inspector.
+pub fn (mut self Inspector) mouse_button_callback(action input.MouseButtonState, button input.MouseButton, mods input.Mods) {
+	// XTODO: Requires cimgui bindings.
+	// Would translate button to ImGui button and add mouse button event.
+	_ = mods
+	self.queue_render()
+
+	_ = action
+	_ = button
+}
+
+// scroll_callback handles a scroll event for the inspector.
+pub fn (mut self Inspector) scroll_callback(xoff f64, yoff f64, mods input.ScrollMods) {
+	// XTODO: Requires cimgui bindings.
+	// For precision scrolling (trackpads), the values are in pixels which
+	// scroll way too fast. Scale them down to approximate discrete wheel
+	// notches. imgui expects 1.0 to scroll ~5 lines of text.
+	self.queue_render()
+
+	scale := if mods.precision { 0.1 } else { 1.0 }
+	_ = xoff * scale
+	_ = yoff * scale
+}
+
+// cursor_pos_callback handles a cursor position update for the inspector.
+pub fn (mut self Inspector) cursor_pos_callback(x f64, y f64) {
+	// XTODO: Requires cimgui bindings.
+	// Would add mouse pos event scaled by content_scale.
+	self.queue_render()
+
+	_ = x * self.content_scale
+	_ = y * self.content_scale
+}
+
+// focus_callback handles focus state changes for the inspector.
+pub fn (mut self Inspector) focus_callback(focused bool) {
+	// XTODO: Requires cimgui bindings.
+	// Would add focus event to ImGui IO.
+	self.queue_render()
+	_ = focused
+}
+
+// text_callback handles text input for the inspector.
+pub fn (mut self Inspector) text_callback(text string) {
+	// XTODO: Requires cimgui bindings.
+	// Would add input characters to ImGui IO.
+	self.queue_render()
+	_ = text
+}
+
+// key_callback handles key input for the inspector.
+pub fn (mut self Inspector) key_callback(action input.KeyAction, key input.Key, mods input.Mods) ! {
+	// XTODO: Requires cimgui bindings.
+	// Would update modifier keys and send key event to ImGui IO.
+	self.queue_render()
+	_ = action
+	_ = key
+	_ = mods
+}
+
+// new_frame sets up a new ImGui frame with delta time calculation.
+fn (mut self Inspector) new_frame() ! {
+	// XTODO: Requires cimgui bindings and time.Instant.
+	// Would calculate delta time and set io.DeltaTime.
+}
+
+// -----------------------------------------------------------------------
+// CAPI types
+// -----------------------------------------------------------------------
+
+// CAPIKeyEvent is the raw C API version of the key event.
+// This is the same as EmbeddedKeyEvent but with C-compatible int types
+// for mods.
+pub struct CAPIKeyEvent {
+pub:
+	action              input.KeyAction
+	mods                int
+	consumed_mods       int
+	keycode             u32
+	text                ?string
+	unshifted_codepoint u32
+	composing           bool
+}
+
+// key_event converts from the C API key event to an EmbeddedKeyEvent.
+pub fn (self CAPIKeyEvent) key_event() EmbeddedKeyEvent {
+	return EmbeddedKeyEvent{
+		action: self.action
+		mods: mods_from_int(self.mods)
+		consumed_mods: mods_from_int(self.consumed_mods)
+		keycode: self.keycode
+		text: self.text
+		unshifted_codepoint: self.unshifted_codepoint
+		composing: self.composing
+	}
+}
+
+// mods_from_int converts an integer bitmask to input.Mods.
+fn mods_from_int(v int) input.Mods {
+	return input.Mods{
+		shift: (v & 1) != 0
+		ctrl: (v & 2) != 0
+		alt: (v & 4) != 0
+		super_: (v & 8) != 0
+	}
+}
+
+// mods_to_int converts input.Mods to an integer bitmask.
+fn mods_to_int(m input.Mods) int {
+	mut v := 0
+	if m.shift { v |= 1 }
+	if m.ctrl { v |= 2 }
+	if m.alt { v |= 4 }
+	if m.super_ { v |= 8 }
+	return v
+}
+
+// CAPISurfaceSize represents the C API surface size with grid and pixel info.
+pub struct CAPISurfaceSize {
+pub:
+	columns       u16
+	rows          u16
+	width_px      u32
+	height_px     u32
+	cell_width_px  u32
+	cell_height_px u32
+}
+
+// CAPIClipboardContent represents a clipboard content entry (C ABI).
+// ghostty_clipboard_content_s
+pub struct CAPIClipboardContent {
+pub:
+	mime string
+	data string
+}
+
+// CAPIText represents text read from the terminal with viewport metadata.
+// ghostty_text_s
+pub struct CAPIText {
+pub mut:
+	tl_px_x      f64
+	tl_px_y      f64
+	offset_start u32
+	offset_len   u32
+	text         ?string
+	text_len     int
+}
+
+// deinit frees the text buffer.
+pub fn (mut self CAPIText) deinit() {
+	self.text = none
+	self.text_len = 0
+}
+
+// CAPIPoint represents a point in the terminal grid.
+// ghostty_point_s
+pub struct CAPIPoint {
+pub:
+	tag       CAPIPointTag
+	coord_tag CAPICoordTag
+	x         u32
+	y         u32
+}
+
+// CAPIPointTag identifies the coordinate space.
+pub enum CAPIPointTag {
+	active   = 0
+	viewport = 1
+	screen   = 2
+	history  = 3
+}
+
+// CAPICoordTag identifies how coordinates should be interpreted.
+pub enum CAPICoordTag {
+	exact        = 0
+	top_left     = 1
+	bottom_right = 2
+}
+
+// CAPISelection represents a selection in the terminal.
+// ghostty_selection_s
+pub struct CAPISelection {
+pub:
+	tl        CAPIPoint
+	br        CAPIPoint
+	rectangle bool
+}
+
+// -----------------------------------------------------------------------
+// CAPI functions (public API)
+// -----------------------------------------------------------------------
+
+// ghostty_app_new creates a new app.
+pub fn ghostty_app_new(opts &AppOptions, config &configpkg.Config) ?&App {
+	return app_new_(opts, config) or {
+		log_err('error initializing app err=${err}')
+		return none
+	}
+}
+
+fn app_new_(opts &AppOptions, config &configpkg.Config) !&App {
+	core_app := CoreApp.create()!
+
+	// Create our runtime app
+	mut app := &App{}
+	app.init(core_app, config, *opts)!
+
+	return app
+}
+
+// ghostty_app_tick ticks the event loop. This should be called whenever
+// the "wakeup" callback is invoked for the runtime.
+pub fn ghostty_app_tick(mut v App) {
+	v.core_app.tick(v) or {
+		log_err('error app tick err=${err}')
+	}
+}
+
+// ghostty_app_userdata returns the userdata associated with the app.
+pub fn ghostty_app_userdata(v &App) voidptr {
+	return v.opts.userdata
+}
+
+// ghostty_app_free frees the app and its resources.
+pub fn ghostty_app_free(mut v App) {
+	v.terminate()
+}
+
+// ghostty_app_set_focus updates the focused state of the app.
+pub fn ghostty_app_set_focus(mut app App, focused bool) {
+	app.focus_event(focused)
+}
+
+// ghostty_app_key notifies the app of a global keypress capture. This will
+// return true if the key was captured by the app, in which case the caller
+// should not process the key.
+pub fn ghostty_app_key(mut app App, event CAPIKeyEvent) bool {
+	mut target := KeyTarget(AppKeyTarget{})
+	return app.key_event(mut target, event.key_event()) or {
+		log_warn('error processing key event err=${err}')
+		return false
+	}
+}
+
+// ghostty_app_key_is_binding returns true if the given key event would
+// trigger a binding if it were sent to the surface right now. The
+// "right now" is important because things like trigger sequences are only
+// valid until the next key event.
+pub fn ghostty_app_key_is_binding(app &App, event CAPIKeyEvent) bool {
+	core_event := event.key_event().core() or {
+		log_warn('error processing key event')
+		return false
+	}
+
+	return app.core_app.key_event_is_binding(app, &core_event)
+}
+
+// ghostty_app_keyboard_changed notifies the app that the keyboard was
+// changed. This causes the keyboard layout to be reloaded from the OS.
+pub fn ghostty_app_keyboard_changed(mut v App) {
+	v.reload_keymap() or {
+		log_err('error reloading keyboard map err=${err}')
+		return
+	}
+}
+
+// ghostty_app_open_config opens the configuration.
+pub fn ghostty_app_open_config(mut v App) {
+	v.perform_action(Target(AppTarget{}), .reload_config, ActionData{}) or {
+		log_err('error reloading config err=${err}')
+		return
+	}
+}
+
+// ghostty_app_update_config updates the configuration to the provided
+// config. This will propagate to all surfaces as well.
+pub fn ghostty_app_update_config(mut v App, config &configpkg.Config) {
+	v.core_app.update_config(v, config) or {
+		log_err('error updating config err=${err}')
+		return
+	}
+}
+
+// ghostty_app_needs_confirm_quit returns true if the app needs to confirm
+// quitting.
+pub fn ghostty_app_needs_confirm_quit(v &App) bool {
+	return v.core_app.needs_confirm_quit()
+}
+
+// ghostty_app_has_global_keybinds returns true if the app has global
+// keybinds.
+pub fn ghostty_app_has_global_keybinds(v &App) bool {
+	return v.has_global_keybinds()
+}
+
+// ghostty_app_set_color_scheme updates the color scheme of the app.
+pub fn ghostty_app_set_color_scheme(mut v App, scheme_raw int) {
+	scheme := unsafe { ColorScheme(scheme_raw) }
+
+	v.core_app.color_scheme_event(v, scheme) or {
+		log_err('error setting color scheme err=${err}')
+		return
+	}
+}
+
+// ghostty_surface_config_new returns initial surface options.
+pub fn ghostty_surface_config_new() SurfaceOptions {
+	return SurfaceOptions{}
+}
+
+// ghostty_surface_new creates a new surface as part of an app.
+pub fn ghostty_surface_new(mut app App, opts &SurfaceOptions) ?&Surface {
+	return surface_new_(mut app, opts) or {
+		log_err('error initializing surface err=${err}')
+		return none
+	}
+}
+
+fn surface_new_(mut app App, opts &SurfaceOptions) !&Surface {
+	return app.new_surface(*opts)!
+}
+
+// ghostty_surface_free frees a surface.
+pub fn ghostty_surface_free(mut surface Surface) {
+	unsafe {
+		surface.app.close_surface(mut surface)
+	}
+}
+
+// ghostty_surface_userdata returns the userdata associated with the surface.
+pub fn ghostty_surface_userdata(surface &Surface) voidptr {
+	return surface.userdata
+}
+
+// ghostty_surface_app returns the app associated with a surface.
+pub fn ghostty_surface_app(surface &Surface) &App {
+	return surface.app
+}
+
+// ghostty_surface_inherited_config returns the config to use for surfaces
+// that inherit from this one.
+pub fn ghostty_surface_inherited_config(surface &Surface, source NewSurfaceContext) SurfaceOptions {
+	return surface.new_surface_options(source)
+}
+
+// ghostty_surface_update_config updates the configuration for only this
+// surface.
+pub fn ghostty_surface_update_config(mut surface Surface, config &configpkg.Config) {
+	surface.core_surface.update_config(config) or {
+		log_err('error updating config err=${err}')
+		return
+	}
+}
+
+// ghostty_surface_needs_confirm_quit returns true if the surface needs
+// to confirm quitting.
+pub fn ghostty_surface_needs_confirm_quit(surface &Surface) bool {
+	return surface.core_surface.needs_confirm_quit()
+}
+
+// ghostty_surface_process_exited returns true if the surface process has
+// exited.
+pub fn ghostty_surface_process_exited(surface &Surface) bool {
+	return surface.core_surface.child_exited
+}
+
+// ghostty_surface_has_selection returns true if the surface has a selection.
+pub fn ghostty_surface_has_selection(surface &Surface) bool {
+	return surface.core_surface.has_selection()
+}
+
+// ghostty_surface_free_text frees a text result.
+pub fn ghostty_surface_free_text(mut text CAPIText) {
+	text.deinit()
+}
+
+// ghostty_surface_refresh tells the surface that it needs to schedule a
+// render.
+pub fn ghostty_surface_refresh(mut surface Surface) {
+	surface.refresh()
+}
+
+// ghostty_surface_draw tells the surface that it needs to draw NOW.
+pub fn ghostty_surface_draw(mut surface Surface) {
+	surface.draw()
+}
+
+// ghostty_surface_set_size updates the size of a surface. This will trigger
+// resize notifications to the pty and the renderer.
+pub fn ghostty_surface_set_size(mut surface Surface, w u32, h u32) {
+	surface.update_size(w, h)
+}
+
+// ghostty_surface_size returns the size information a surface has.
+pub fn ghostty_surface_size(surface &Surface) CAPISurfaceSize {
+	grid_size := surface.core_surface.size.grid()
+	return CAPISurfaceSize{
+		columns: grid_size.columns
+		rows: grid_size.rows
+		width_px: surface.core_surface.size.screen.width
+		height_px: surface.core_surface.size.screen.height
+		cell_width_px: surface.core_surface.size.cell.width
+		cell_height_px: surface.core_surface.size.cell.height
+	}
+}
+
+// ghostty_surface_set_color_scheme updates the color scheme of the surface.
+pub fn ghostty_surface_set_color_scheme(mut surface Surface, scheme_raw int) {
+	scheme := unsafe { ColorScheme(scheme_raw) }
+	surface.color_scheme_callback(scheme)
+}
+
+// ghostty_surface_set_content_scale updates the content scale of the surface.
+pub fn ghostty_surface_set_content_scale(mut surface Surface, x f64, y f64) {
+	surface.update_content_scale(x, y)
+}
+
+// ghostty_surface_set_focus updates the focused state of a surface.
+pub fn ghostty_surface_set_focus(mut surface Surface, focused bool) {
+	surface.focus_callback(focused)
+}
+
+// ghostty_surface_set_occlusion updates the occlusion state of a surface.
+pub fn ghostty_surface_set_occlusion(mut surface Surface, visible bool) {
+	surface.occlusion_callback(visible)
+}
+
+// ghostty_surface_key_translation_mods filters the mods if necessary.
+// This handles settings such as `macos-option-as-alt`. The filtered mods
+// should be used for key translation but should NOT be sent back via the
+// `_key` function -- the original mods should be used for that.
+pub fn ghostty_surface_key_translation_mods(surface &Surface, mods_raw int) int {
+	mods := mods_from_int(mods_raw)
+	// XTODO: needs surface.core_surface.config.macos_option_as_alt
+	// and keyboard layout detection to apply option-as-alt translation.
+	// For now, return the mods as-is.
+	result := mods.translation(
+		surface.app.keyboard_layout().detect_option_as_alt(),
+	)
+	return mods_to_int(result)
+}
+
+// ghostty_surface_key sends a raw keypress to the surface.
+pub fn ghostty_surface_key(mut surface Surface, event CAPIKeyEvent) bool {
+	mut target := KeyTarget(SurfaceKeyTarget{ surface: surface })
+	return surface.app.key_event(
+		mut target,
+		event.key_event(),
+	) or {
+		log_warn('error processing key event err=${err}')
+		return false
+	}
+}
+
+// ghostty_surface_key_is_binding returns true if the given key event would
+// trigger a binding if it were sent to the surface right now.
+pub fn ghostty_surface_key_is_binding(mut surface Surface, event CAPIKeyEvent) bool {
+	core_event := event.key_event().core() or {
+		log_warn('error processing key event')
+		return false
+	}
+
+	_ = surface.core_surface.key_event_is_binding(&core_event)
+	return false
+}
+
+// ghostty_surface_text sends raw text to the terminal. This is treated
+// like a paste so this isn't useful for sending escape sequences.
+pub fn ghostty_surface_text(mut surface Surface, text string) {
+	surface.text_callback(text)
+}
+
+// ghostty_surface_preedit sets the preedit text for the surface. This is
+// used for IME composition.
+pub fn ghostty_surface_preedit(mut surface Surface, text ?string) {
+	surface.preedit_callback(text)
+}
+
+// ghostty_surface_mouse_captured returns true if the surface currently
+// has mouse capturing enabled.
+pub fn ghostty_surface_mouse_captured(surface &Surface) bool {
+	return surface.core_surface.mouse_captured()
+}
+
+// ghostty_surface_mouse_button handles a mouse button event on the surface.
+pub fn ghostty_surface_mouse_button(mut surface Surface, action input.MouseButtonState, button input.MouseButton, mods int) bool {
+	return surface.mouse_button_callback(
+		action,
+		button,
+		mods_from_int(mods),
+	)
+}
+
+// ghostty_surface_mouse_pos updates the mouse position within the view.
+pub fn ghostty_surface_mouse_pos(mut surface Surface, x f64, y f64, mods int) {
+	surface.cursor_pos_callback(
+		x,
+		y,
+		mods_from_int(mods),
+	)
+}
+
+// ghostty_surface_mouse_scroll handles a mouse scroll event.
+pub fn ghostty_surface_mouse_scroll(mut surface Surface, x f64, y f64, scroll_mods int) {
+	surface.scroll_callback(
+		x,
+		y,
+		input.ScrollMods{
+			precision: (scroll_mods & 1) != 0
+		},
+	)
+}
+
+// ghostty_surface_mouse_pressure handles a mouse pressure event.
+pub fn ghostty_surface_mouse_pressure(mut surface Surface, stage_raw u32, pressure f64) {
+	stage := unsafe { input.MousePressureStage(int(stage_raw)) }
+	surface.mouse_pressure_callback(stage, pressure)
+}
+
+// ghostty_surface_ime_point returns the position for the IME overlay.
+pub fn ghostty_surface_ime_point(surface &Surface, x &f64, y &f64, width &f64, height &f64) {
+	pos := surface.core_surface.ime_point()
+	unsafe {
+		*x = pos.x
+		*y = pos.y
+		*width = pos.width
+		*height = pos.height
+	}
+}
+
+// ghostty_surface_request_close requests that the surface become closed.
+pub fn ghostty_surface_request_close(mut surface Surface) {
+	surface.core_surface.close()
+}
+
+// ghostty_surface_split requests that the surface split in the given
+// direction.
+pub fn ghostty_surface_split(mut surface Surface, direction SplitDirection) {
+	surface.app.perform_action(
+		Target(AppTarget{}),
+		.present_terminal,
+		ActionData{},
+	) or {
+		log_err('error creating new split err=${err}')
+		return
+	}
+	_ = direction
+}
+
+// ghostty_surface_split_focus focuses on the next split (if any).
+pub fn ghostty_surface_split_focus(mut surface Surface, direction GotoSplit) {
+	surface.app.perform_action(
+		Target(AppTarget{}),
+		.present_terminal,
+		ActionData{},
+	) or {
+		log_err('error focusing split err=${err}')
+		return
+	}
+	_ = direction
+}
+
+// ghostty_surface_split_resize resizes the current split by moving the
+// split divider in the given direction. `amount` is a fractional value
+// between 0 and 1 that specifies by how much the divider will move.
+pub fn ghostty_surface_split_resize(mut surface Surface, direction ResizeSplitDirection, amount u16) {
+	surface.app.perform_action(
+		Target(AppTarget{}),
+		.present_terminal,
+		ActionData{},
+	) or {
+		log_err('error resizing split err=${err}')
+		return
+	}
+	_ = direction
+	_ = amount
+}
+
+// ghostty_surface_split_equalize equalizes the size of all splits in the
+// current window.
+pub fn ghostty_surface_split_equalize(mut surface Surface) {
+	surface.app.perform_action(
+		Target(AppTarget{}),
+		.present_terminal,
+		ActionData{},
+	) or {
+		log_err('error equalizing splits err=${err}')
+		return
+	}
+}
+
+// ghostty_surface_binding_action invokes a binding action on the surface.
+pub fn ghostty_surface_binding_action(mut surface Surface, action_str string) bool {
+	// XTODO: Requires Binding.Action.parse implementation.
+	// Would parse the action string and perform it.
+	_ = surface
+	_ = action_str
+	return false
+}
+
+// ghostty_surface_complete_clipboard_request completes a clipboard read
+// request started via the read callback. This can only be called once
+// for a given request.
+pub fn ghostty_surface_complete_clipboard_request(mut surface Surface, str string, state ClipboardRequest, confirmed bool) {
+	surface.complete_clipboard_request(str, state, confirmed)
+}
+
+// ghostty_surface_inspector returns or creates the inspector for a surface.
+pub fn ghostty_surface_inspector(mut surface Surface) ?&Inspector {
+	return surface.init_inspector() or {
+		log_err('error initializing inspector err=${err}')
+		return none
+	}
+}
+
+// ghostty_inspector_free frees the inspector for a surface.
+pub fn ghostty_inspector_free(mut surface Surface) {
+	surface.free_inspector()
+}
+
+// ghostty_inspector_set_size updates the inspector display size.
+pub fn ghostty_inspector_set_size(mut insp Inspector, w u32, h u32) {
+	insp.update_size(w, h)
+}
+
+// ghostty_inspector_set_content_scale updates the inspector content scale.
+pub fn ghostty_inspector_set_content_scale(mut insp Inspector, x f64, y f64) {
+	insp.update_content_scale(x, y)
+}
+
+// ghostty_inspector_mouse_button handles a mouse button event in the inspector.
+pub fn ghostty_inspector_mouse_button(mut insp Inspector, action input.MouseButtonState, button input.MouseButton, mods int) {
+	insp.mouse_button_callback(
+		action,
+		button,
+		mods_from_int(mods),
+	)
+}
+
+// ghostty_inspector_mouse_pos updates the mouse position in the inspector.
+pub fn ghostty_inspector_mouse_pos(mut insp Inspector, x f64, y f64) {
+	insp.cursor_pos_callback(x, y)
+}
+
+// ghostty_inspector_mouse_scroll handles a scroll event in the inspector.
+pub fn ghostty_inspector_mouse_scroll(mut insp Inspector, x f64, y f64, scroll_mods int) {
+	insp.scroll_callback(
+		x,
+		y,
+		input.ScrollMods{
+			precision: (scroll_mods & 1) != 0
+		},
+	)
+}
+
+// ghostty_inspector_key handles a key event in the inspector.
+pub fn ghostty_inspector_key(mut insp Inspector, action input.KeyAction, key input.Key, c_mods int) {
+	insp.key_callback(
+		action,
+		key,
+		mods_from_int(c_mods),
+	) or {
+		log_err('error processing key event err=${err}')
+		return
+	}
+}
+
+// ghostty_inspector_text sends text to the inspector.
+pub fn ghostty_inspector_text(mut insp Inspector, text string) {
+	insp.text_callback(text)
+}
+
+// ghostty_inspector_set_focus updates the inspector focus state.
+pub fn ghostty_inspector_set_focus(mut insp Inspector, focused bool) {
+	insp.focus_callback(focused)
+}
+
+// ghostty_set_window_background_blur sets the window background blur on
+// macOS to the desired value. This uses an undocumented, non-public API
+// because this is what every terminal appears to use, including
+// Terminal.app.
+pub fn ghostty_set_window_background_blur(app &App, window voidptr) {
+	// XTODO: This is only supported on macOS and requires calling
+	// CGSSetWindowBackgroundBlurRadius via the CoreGraphics private API.
+	// Also requires checking config background-opacity < 1.0.
+	_ = app
+	_ = window
+}
+
+// -----------------------------------------------------------------------
+// Darwin-specific CAPI functions
+// -----------------------------------------------------------------------
+
+// ghostty_surface_set_display_id sets the display ID for macOS rendering.
+pub fn ghostty_surface_set_display_id(mut surface Surface, display_id u32) {
+	// XTODO: Requires renderer_thread mailbox for macos_display_id message.
+	_ = surface
+	_ = display_id
+}
+
+// ghostty_surface_quicklook_font returns a CTFontRef that should be used
+// for quicklook highlighted text. This is always the primary font in use
+// regardless of the selected text.
+pub fn ghostty_surface_quicklook_font(surface &Surface) voidptr {
+	// XTODO: Requires CoreText font backend and font grid access.
+	// Would get the shared font grid, acquire a read lock, get the
+	// primary face, unscale the content scale, and return a copy.
+	_ = surface
+	return unsafe { nil }
+}
+
+// ghostty_surface_quicklook_word returns the selected word for quicklook.
+// This will populate the buffer with the word under the cursor and the
+// selection info so that quicklook can be rendered.
+//
+// This does not modify the selection active on the surface (if any).
+pub fn ghostty_surface_quicklook_word(mut surface Surface, result &CAPIText) bool {
+	// XTODO: Requires terminal screen access, word selection, and
+	// text dumping. Would lock renderer state, get word selection at
+	// cursor position, and read the text.
+	_ = surface
+	_ = result
+	return false
+}
+
+// ghostty_inspector_metal_init initializes the inspector Metal backend.
+pub fn ghostty_inspector_metal_init(mut insp Inspector, device voidptr) bool {
+	return insp.init_metal(device)
+}
+
+// ghostty_inspector_metal_render renders the inspector using Metal.
+pub fn ghostty_inspector_metal_render(mut insp Inspector, command_buffer voidptr, descriptor voidptr) {
+	insp.render_metal(command_buffer, descriptor) or {
+		log_err('error rendering inspector err=${err}')
+		return
+	}
+}
+
+// ghostty_inspector_metal_shutdown shuts down the inspector Metal backend.
+pub fn ghostty_inspector_metal_shutdown(mut insp Inspector) {
+	// XTODO: Requires cimgui Metal backend bindings.
+	// Would call ImGui_ImplMetal_Shutdown.
+	_ = insp
+}
+

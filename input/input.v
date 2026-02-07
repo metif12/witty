@@ -195,3 +195,123 @@ pub fn paste_is_unsafe(data string, bracketed bool) bool {
 	}
 	return false
 }
+
+// ScrollMods contains additional information about a scroll event
+// from the operating system, such as whether it was a precision
+// scroll (trackpad) or a discrete scroll (mouse wheel).
+pub struct ScrollMods {
+pub mut:
+	// Whether this is a precision scroll (e.g. trackpad).
+	precision bool
+}
+
+// Keymap handles mapping between physical keycodes and logical keys.
+// On macOS this wraps the keyboard layout system.
+pub struct Keymap {
+pub mut:
+	// Internal state for the keymap.
+	state voidptr
+}
+
+pub fn Keymap.init() !Keymap {
+	return Keymap{}
+}
+
+pub fn (mut k Keymap) deinit() {
+	k.state = unsafe { nil }
+}
+
+pub fn (mut k Keymap) reload() ! {
+	// stub: reload the keymap from the OS
+}
+
+// source_id returns the keyboard layout source identifier.
+pub fn (k Keymap) source_id(buf []u8) !string {
+	_ = buf
+	return ''
+}
+
+// KeyboardLayout represents a detected keyboard layout.
+pub enum KeyboardLayout {
+	unknown
+	us_standard
+	us_international
+	abc
+	dvorak
+	colemak
+}
+
+// map_apple_id maps an Apple keyboard layout source ID to a KeyboardLayout.
+pub fn KeyboardLayout.map_apple_id(id string) ?KeyboardLayout {
+	_ = id
+	return none
+}
+
+// detect_option_as_alt returns the recommended OptionAsAlt setting
+// for this keyboard layout.
+pub fn (l KeyboardLayout) detect_option_as_alt() OptionAsAlt {
+	return match l {
+		.us_standard, .dvorak, .colemak { .true_ }
+		else { .false_ }
+	}
+}
+
+// translation returns the mods with macos-option-as-alt applied.
+pub fn (m Mods) translation(option_as_alt OptionAsAlt) Mods {
+	mut result := m
+	match option_as_alt {
+		.true_ {
+			// Both option keys treated as alt - no translation needed
+		}
+		.left {
+			// Only left option is alt; right option remains as-is
+			if m.sides.alt == .right {
+				result.alt = false
+			}
+		}
+		.right {
+			// Only right option is alt; left option remains as-is
+			if m.sides.alt == .left {
+				result.alt = false
+			}
+		}
+		.false_ {
+			// Option is not alt
+			result.alt = false
+		}
+	}
+	return result
+}
+
+// KeycodeEntry maps a native keycode to a logical Key.
+pub struct KeycodeEntry {
+pub:
+	// The native (OS-level) keycode.
+	native u32
+	// The logical key this maps to.
+	key Key
+}
+
+// keycodes_entries is the table of native keycode to logical key mappings.
+// This is platform-specific; stub returns empty for now.
+pub const keycodes_entries = []KeycodeEntry{}
+
+// BindingFlags represents flags associated with a keybinding action.
+pub struct BindingFlags {
+pub:
+	// Whether this binding is a global keybind.
+	global bool
+}
+
+// BindingFlagsC is the C-compatible version of BindingFlags.
+pub struct BindingFlagsC {
+pub:
+	global bool
+}
+
+// cval converts BindingFlags to its C-compatible form.
+pub fn (f BindingFlags) cval() BindingFlagsC {
+	return BindingFlagsC{
+		global: f.global
+	}
+}

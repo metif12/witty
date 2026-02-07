@@ -79,6 +79,11 @@ pub fn (mut c Config) deinit() {
 	// stub
 }
 
+// clone creates a shallow copy of the config.
+pub fn (c Config) clone() Config {
+	return c
+}
+
 // ============================================================
 // Types used by renderer DerivedConfig
 // ============================================================
