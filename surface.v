@@ -16,6 +16,8 @@ import math
 import time
 import os
 
+import terminal as _
+
 // Minimum window size in cells.
 const min_window_width_cells = u32(10)
 const min_window_height_cells = u32(4)
