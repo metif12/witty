@@ -130,18 +130,18 @@ pub:
 	grid_metrics     Metrics
 	thicken          bool
 	thicken_strength u8
-	constraint       GlyphConstraint = GlyphConstraint.none
+	constraint       GlyphConstraint
 	constraint_width u32
 }
 
 // GlyphConstraint controls how a glyph is constrained to fit its cell.
 pub struct GlyphConstraint {
 pub:
-	size GlyphConstraintSize = .none
+	size GlyphConstraintSize = .none_
 }
 
 pub enum GlyphConstraintSize {
-	none
+	none_
 	fit
 	cell
 }

@@ -1104,19 +1104,11 @@ fn write_utf8(mut sb strings.Builder, codepoint u32) {
 	}
 }
 
-// Check if any cell in the slice has text.
-fn has_text_any(cells []CellData) bool {
-	for cell in cells {
-		if cell.has_text() {
-			return true
-		}
-	}
-	return false
-}
+// has_text_any is defined in types.v
 
 // Check if a cell is empty (no codepoint, no styling).
 fn cell_is_empty(cell CellData) bool {
-	return cell.content_tag == .bg_color_only && cell.codepoint == 0 && cell.style_id == 0
+	return cell.content_tag == .codepoint && cell.codepoint == 0 && cell.style_id == 0
 }
 
 // Check if a cell has non-default styling.

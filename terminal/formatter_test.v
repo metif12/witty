@@ -702,8 +702,11 @@ fn test_cell_is_empty() {
 	// Default cell is empty
 	assert cell_is_empty(CellData{}) == true
 
-	// Cell with a codepoint tag but 0 codepoint and no style
-	assert cell_is_empty(CellData{ content_tag: .codepoint, codepoint: 0, style_id: 0 }) == false
+	// Cell with codepoint tag, 0 codepoint, no style is also empty (default state)
+	assert cell_is_empty(CellData{ content_tag: .codepoint, codepoint: 0, style_id: 0 }) == true
+
+	// Cell with a non-zero codepoint is not empty
+	assert cell_is_empty(CellData{ content_tag: .codepoint, codepoint: u32(0x41), style_id: 0 }) == false
 
 	// Cell with style
 	assert cell_is_empty(CellData{ style_id: 1 }) == false

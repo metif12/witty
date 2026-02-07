@@ -1,7 +1,5 @@
 module renderer
 
-import terminal
-
 // ============================================================
 // Cell content types for GPU rendering
 // ============================================================
@@ -41,8 +39,14 @@ pub mut:
 	bearings [2]i32
 }
 
-// CellBg represents a background color for a cell [r, g, b, a].
-pub type CellBg = [4]u8
+// CellBg represents a background color for a cell.
+pub struct CellBg {
+pub mut:
+	r u8
+	g u8
+	b u8
+	a u8
+}
 
 // CellLayer identifies which layer a cell belongs to.
 pub enum CellLayer {
@@ -75,7 +79,7 @@ pub mut:
 // Resize the cell contents to the given grid size.
 pub fn (mut c CellContents) resize(size GridSize) ! {
 	total := int(size.columns) * int(size.rows)
-	c.bg_cells = []CellBg{len: total, init: [u8(0), 0, 0, 0]!}
+	c.bg_cells = []CellBg{len: total}
 	c.fg_rows = [][]CellText{len: int(size.rows)}
 	c.size = size
 }
@@ -84,7 +88,7 @@ pub fn (mut c CellContents) resize(size GridSize) ! {
 pub fn (mut c CellContents) reset() {
 	// Clear all background cells to transparent
 	for i in 0 .. c.bg_cells.len {
-		c.bg_cells[i] = [u8(0), 0, 0, 0]!
+		c.bg_cells[i] = CellBg{}
 	}
 	// Clear all foreground rows
 	for i in 0 .. c.fg_rows.len {
@@ -104,19 +108,26 @@ pub fn (mut c CellContents) clear(row u16) {
 	end := start + int(c.size.columns)
 	for i in start .. end {
 		if i < c.bg_cells.len {
-			c.bg_cells[i] = [u8(0), 0, 0, 0]!
+			c.bg_cells[i] = CellBg{}
 		}
 	}
 }
 
-// Get a pointer to the background cell at [row, col].
-pub fn (mut c CellContents) bg_cell(row u16, col u16) &CellBg {
+// Set the background cell color at [row, col].
+pub fn (mut c CellContents) set_bg(row u16, col u16, bg CellBg) {
 	idx := int(row) * int(c.size.columns) + int(col)
 	if idx < c.bg_cells.len {
-		return unsafe { &c.bg_cells[idx] }
+		c.bg_cells[idx] = bg
 	}
-	// Return a reference to a default (should not happen in practice)
-	return unsafe { &c.bg_cells[0] }
+}
+
+// Get the background cell color at [row, col].
+pub fn (c &CellContents) get_bg(row u16, col u16) CellBg {
+	idx := int(row) * int(c.size.columns) + int(col)
+	if idx < c.bg_cells.len {
+		return c.bg_cells[idx]
+	}
+	return CellBg{}
 }
 
 // Add a foreground cell to the given layer.

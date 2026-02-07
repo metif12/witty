@@ -366,18 +366,19 @@ pub fn (self PageCapacity) max_cols() ?u16 {
 
 // Adjust the capacity parameters while retaining approximately the same
 // total size. Adjustments happen by limiting the rows in the page.
-pub fn (self PageCapacity) adjust(cols u16) !PageCapacity {
+// Everything else can grow. If it is impossible to achieve the desired
+// adjustment, returns capacity with 1 row.
+pub fn (self PageCapacity) adjust(cols u16) PageCapacity {
+	if cols == 0 {
+		return self
+	}
 	// The total "budget" is cols * rows from the original capacity.
 	total_cells := u32(self.cols) * u32(self.rows)
-	if cols == 0 {
-		return error('cannot adjust to 0 cols')
-	}
 	new_rows := total_cells / u32(cols)
-	if new_rows == 0 {
-		return error('cannot fit any rows for the desired number of columns')
-	}
 	mut capped_rows := u16(0)
-	if new_rows > u32(max_u16) {
+	if new_rows == 0 {
+		capped_rows = 1
+	} else if new_rows > u32(max_u16) {
 		capped_rows = max_u16
 	} else {
 		capped_rows = u16(new_rows)
@@ -453,7 +454,7 @@ pub fn Page.init(cap PageCapacity) Page {
 		capacity: cap
 		size: PageSize{
 			cols: cap.cols
-			rows: cap.rows
+			rows: 0
 		}
 		dirty: false
 		styles: StyleSet.init()
@@ -475,7 +476,7 @@ pub fn (mut self Page) reinit(cap PageCapacity) {
 	self.capacity = cap
 	self.size = PageSize{
 		cols: cap.cols
-		rows: cap.rows
+		rows: 0
 	}
 	self.rows = []RowData{cap: int(cap.rows)}
 	for _ in 0 .. int(cap.rows) {
@@ -491,7 +492,7 @@ pub fn (mut self Page) reinit(cap PageCapacity) {
 // but it is useful for assertions, deserialization, etc.
 //
 // Integrity errors are also logged as warnings.
-pub fn (self &Page) verify_integrity() !IntegrityError {
+pub fn (self &Page) verify_integrity() ?IntegrityError {
 	// Some things that seem like we should check but do not:
 	//
 	// - We do not check that the style ref count is exact, only that
@@ -624,7 +625,7 @@ pub fn (self &Page) verify_integrity() !IntegrityError {
 		}
 	}
 
-	return IntegrityError.zero_row_count // V requires a return; unreachable
+	return none
 }
 
 // A helper that verifies integrity and panics on violation.

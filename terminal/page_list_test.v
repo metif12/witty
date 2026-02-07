@@ -203,7 +203,7 @@ fn test_page_list_active_after_grow() {
 		assert false, 'get_cell failed'
 		return
 	}
-	assert cell.cell.codepoint == 0 || cell.cell.content_tag == .bg_color_only
+	assert cell.cell.codepoint == 0 || cell.cell.content_tag == .bg_color_palette
 }
 
 fn test_page_list_grow_prune_scrollback() {
@@ -741,7 +741,7 @@ fn test_page_list_erase_one_row_active() {
 		assert false, 'get_cell failed after erase'
 		return
 	}
-	assert cell2.cell.codepoint == 0 || cell2.cell.content_tag == .bg_color_only
+	assert cell2.cell.codepoint == 0 || cell2.cell.content_tag == .bg_color_palette
 }
 
 fn test_page_list_erase_row() {
@@ -1376,7 +1376,7 @@ fn test_page_list_resize_no_reflow_empty_screen() {
 		assert false, 'get_cell failed'
 		return
 	}
-	assert cell.cell.codepoint == 0 || cell.cell.content_tag == .bg_color_only
+	assert cell.cell.codepoint == 0 || cell.cell.content_tag == .bg_color_palette
 }
 
 fn test_page_list_resize_more_rows_and_cols_large() {
@@ -2122,149 +2122,3 @@ fn test_page_node_list_pop() {
 	assert list.last == none
 }
 
-// ============================================================
-// Page tests
-// ============================================================
-
-fn test_page_init() {
-	cap := PageCapacity{
-		cols: 80
-		rows: 24
-	}
-	p := Page.init(cap)
-
-	assert p.capacity.cols == 80
-	assert p.capacity.rows == 24
-	assert p.rows.len == 24
-	assert p.size.rows == 0
-	assert p.size.cols == 80
-}
-
-fn test_page_clear_cells() {
-	cap := PageCapacity{
-		cols: 10
-		rows: 5
-	}
-	mut p := Page.init(cap)
-	p.size.rows = 5
-
-	// Write to some cells
-	p.rows[0].cells[0] = CellData{
-		content_tag: .codepoint
-		codepoint: u32(0x41)
-	}
-	p.rows[0].cells[1] = CellData{
-		content_tag: .codepoint
-		codepoint: u32(0x42)
-	}
-
-	// Clear cells 0-5 in row 0
-	p.clear_cells(0, 0, 5)
-
-	assert p.rows[0].cells[0].codepoint == 0
-	assert p.rows[0].cells[1].codepoint == 0
-}
-
-fn test_page_clear_row() {
-	cap := PageCapacity{
-		cols: 10
-		rows: 5
-	}
-	mut p := Page.init(cap)
-	p.size.rows = 5
-
-	p.rows[2].wrap = true
-	p.rows[2].semantic_prompt = .prompt
-
-	p.clear_row(2)
-
-	assert p.rows[2].wrap == false
-	assert p.rows[2].semantic_prompt == .unknown
-}
-
-fn test_page_clone_from() {
-	cap := PageCapacity{
-		cols: 10
-		rows: 5
-	}
-	mut src := Page.init(cap)
-	src.size.rows = 5
-
-	// Write content
-	src.rows[0].cells[0] = CellData{
-		content_tag: .codepoint
-		codepoint: u32(0x58)
-	}
-	src.rows[1].wrap = true
-	src.rows[2].semantic_prompt = .command
-
-	mut dst := Page.init(cap)
-	dst.size.rows = 3
-	dst.clone_from(&src, 0, 3)
-
-	assert dst.rows[0].cells[0].codepoint == u32(0x58)
-	assert dst.rows[1].wrap == true
-	assert dst.rows[2].semantic_prompt == .command
-}
-
-fn test_page_row_is_blank() {
-	cap := PageCapacity{
-		cols: 10
-		rows: 5
-	}
-	mut p := Page.init(cap)
-	p.size.rows = 5
-
-	assert p.row_is_blank(0) == true
-
-	p.rows[0].cells[0] = CellData{
-		content_tag: .codepoint
-		codepoint: u32(0x41)
-	}
-
-	assert p.row_is_blank(0) == false
-	assert p.row_is_blank(1) == true
-}
-
-fn test_page_capacity_adjust() {
-	cap := PageCapacity{
-		cols: 80
-		rows: 128
-	}
-
-	// Normal cols - no adjustment
-	adj := cap.adjust(80)
-	assert adj.cols == 80
-	assert adj.rows == 128
-
-	// Very large cols - rows should reduce
-	adj2 := cap.adjust(512)
-	assert adj2.cols == 512
-	assert adj2.rows < 128
-}
-
-fn test_page_reinit() {
-	cap := PageCapacity{
-		cols: 10
-		rows: 5
-	}
-	mut p := Page.init(cap)
-	p.size.rows = 5
-	p.dirty = true
-	p.rows[0].cells[0] = CellData{
-		content_tag: .codepoint
-		codepoint: u32(0x5a)
-	}
-
-	new_cap := PageCapacity{
-		cols: 20
-		rows: 10
-	}
-	p.reinit(new_cap)
-
-	assert p.capacity.cols == 20
-	assert p.capacity.rows == 10
-	assert p.size.rows == 0
-	assert p.dirty == false
-	assert p.rows.len == 10
-}

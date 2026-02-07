@@ -13,7 +13,7 @@ fn test_page_init() {
 		page.deinit()
 	}
 	assert page.size.cols == 120
-	assert page.size.rows == 80
+	assert page.size.rows == 0
 	assert page.rows.len == 80
 }
 
@@ -1220,10 +1220,7 @@ fn test_page_capacity_adjust_cols_down() {
 		cols: 80
 		rows: 128
 	}
-	adjusted := original.adjust(original.cols / 2) or {
-		assert false, 'adjust failed'
-		return
-	}
+	adjusted := original.adjust(original.cols / 2)
 	// Adjusted should have more rows (same total budget).
 	assert adjusted.cols == original.cols / 2
 	assert adjusted.rows > original.rows
@@ -1240,10 +1237,7 @@ fn test_page_capacity_adjust_cols_down_to_1() {
 		cols: 80
 		rows: 128
 	}
-	adjusted := original.adjust(1) or {
-		assert false, 'adjust failed'
-		return
-	}
+	adjusted := original.adjust(1)
 	assert adjusted.cols == 1
 	// With 1 column, we should have many more rows.
 	assert adjusted.rows > original.rows
@@ -1255,10 +1249,7 @@ fn test_page_capacity_adjust_cols_up() {
 		cols: 80
 		rows: 128
 	}
-	adjusted := original.adjust(original.cols * 2) or {
-		assert false, 'adjust failed'
-		return
-	}
+	adjusted := original.adjust(original.cols * 2)
 	assert adjusted.cols == original.cols * 2
 	// With double columns, we should have fewer rows.
 	assert adjusted.rows < original.rows
@@ -1270,15 +1261,12 @@ fn test_page_capacity_adjust_cols_too_high() {
 		cols: 80
 		rows: 128
 	}
-	// Very large cols should still work (V doesn't have hard memory limits like Zig).
-	// But if total_cells / cols == 0, it should fail.
+	// When cols is very large and total_cells / cols == 0, adjust
+	// clamps rows to 1 (always succeeds).
 	total := u32(original.cols) * u32(original.rows)
-	// Find a cols value that would make rows = 0.
-	huge_cols := u16(total + 1) // This would make rows = 0 with integer division.
-	_ := original.adjust(huge_cols) or {
-		// Expected to fail.
-		return
-	}
+	huge_cols := u16(total + 1)
+	adjusted := original.adjust(huge_cols)
+	assert adjusted.rows >= 1
 }
 
 // Test capacity maxCols basic.
@@ -1296,10 +1284,7 @@ fn test_capacity_max_cols_basic() {
 	assert max >= cap.cols
 
 	// Adjusting to maxCols should succeed with at least 1 row.
-	adjusted := cap.adjust(max) or {
-		assert false, 'adjust to maxCols failed'
-		return
-	}
+	adjusted := cap.adjust(max)
 	assert adjusted.rows >= 1
 }
 
@@ -1500,4 +1485,39 @@ fn test_page_reinit() {
 		rac := page.get_row_and_cell(0, 0)
 		assert rac.cell.codepoint == 0
 	}
+}
+
+// Test clear_row resets row metadata.
+fn test_page_clear_row() {
+	mut p := Page.init(PageCapacity{
+		cols: 10
+		rows: 5
+	})
+	p.size.rows = 5
+
+	p.rows[2].wrap = true
+	p.rows[2].semantic_prompt = .prompt
+
+	p.clear_row(2)
+
+	assert p.rows[2].wrap == false
+	assert p.rows[2].semantic_prompt == .unknown
+}
+
+// Test capacity adjust with same cols and larger cols.
+fn test_page_capacity_adjust() {
+	cap := PageCapacity{
+		cols: 80
+		rows: 128
+	}
+
+	// Normal cols - no adjustment
+	adj := cap.adjust(80)
+	assert adj.cols == 80
+	assert adj.rows == 128
+
+	// Very large cols - rows should reduce
+	adj2 := cap.adjust(512)
+	assert adj2.cols == 512
+	assert adj2.rows < 128
 }

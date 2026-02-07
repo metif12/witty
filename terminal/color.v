@@ -1,23 +1,6 @@
 module terminal
 
 // ============================================================
-// Color types
-// ============================================================
-
-// RGB represents an 8-bit-per-channel color.
-pub struct RGB {
-pub mut:
-	r u8
-	g u8
-	b u8
-}
-
-// Convert to a TerminalColor with the .color variant.
-pub fn (c RGB) to_terminal_rgb() RGB {
-	return c
-}
-
-// ============================================================
 // TerminalColor - a color that can be an explicit color or
 // derived from cell foreground/background.
 // ============================================================
@@ -48,27 +31,6 @@ pub:
 }
 
 // ============================================================
-// Scrollbar - scrollbar position state
-// ============================================================
-
-pub struct Scrollbar {
-pub mut:
-	// The visible portion as a fraction [0, 1].
-	visible f64
-	// The offset from the top as a fraction [0, 1].
-	offset f64
-}
-
-pub const zero_scrollbar = Scrollbar{
-	visible: 0.0
-	offset: 0.0
-}
-
-pub fn (a Scrollbar) eql(b Scrollbar) bool {
-	return a.visible == b.visible && a.offset == b.offset
-}
-
-// ============================================================
 // RenderState - snapshot of terminal state for rendering
 // ============================================================
 
@@ -89,13 +51,11 @@ pub mut:
 	colors RenderColors
 	// Cursor state for rendering.
 	cursor RenderCursor
-	// Row data for the viewport.
+	// Row count.
 	rows u16
 	// Column count.
 	cols u16
 }
-
-pub const empty_render_state = RenderState{}
 
 // Update render state from terminal state.
 pub fn (mut s RenderState) update(t &Terminal) ! {
