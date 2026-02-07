@@ -1,0 +1,162 @@
+module renderer
+
+import terminal
+import configpkg
+
+// The configuration for this renderer that is derived from the main
+// configuration. This must be exported so that we don't need to
+// pass around Config pointers which makes memory management a pain.
+pub struct DerivedConfig {
+pub mut:
+	// Whether to thicken font rendering.
+	font_thicken bool
+	// Strength of font thickening (0-255).
+	font_thicken_strength u8
+	// Font features to enable (e.g. "liga", "calt").
+	font_features []string
+	// Which font styles are enabled.
+	font_styles FontStyleStatus
+	// How to break font shaping runs.
+	font_shaping_break configpkg.FontShapingBreak
+	// Cursor color, if set.
+	cursor_color ?configpkg.TerminalColor
+	// Cursor opacity (0.0 to 1.0).
+	cursor_opacity f64 = 1.0
+	// Cursor text color, if set.
+	cursor_text ?configpkg.TerminalColor
+	// Default background color.
+	background terminal.RGB = terminal.RGB{
+		r: 0
+		g: 0
+		b: 0
+	}
+	// Background opacity (0.0 to 1.0).
+	background_opacity f64 = 1.0
+	// Whether to apply background opacity to cells with explicit bg colors.
+	background_opacity_cells bool
+	// Default foreground color.
+	foreground terminal.RGB = terminal.RGB{
+		r: 255
+		g: 255
+		b: 255
+	}
+	// Selection background color override.
+	selection_background ?configpkg.TerminalColor
+	// Selection foreground color override.
+	selection_foreground ?configpkg.TerminalColor
+	// Search match background color.
+	search_background configpkg.TerminalColor = .color
+	// Search match foreground color.
+	search_foreground configpkg.TerminalColor = .color
+	// Selected search match background color.
+	search_selected_background configpkg.TerminalColor = .color
+	// Selected search match foreground color.
+	search_selected_foreground configpkg.TerminalColor = .color
+	// Bold color override.
+	bold_color ?configpkg.BoldColor
+	// Opacity for faint text (SGR 2), as a u8 (0-255).
+	faint_opacity u8 = 128
+	// Minimum contrast ratio for text against background.
+	min_contrast f32
+	// How to color the padding area.
+	padding_color configpkg.WindowPaddingColor = .background
+	// Custom shader paths.
+	custom_shaders configpkg.RepeatablePath
+	// Background image path.
+	bg_image ?configpkg.Path
+	// Background image opacity (0.0 to 1.0).
+	bg_image_opacity f32 = 1.0
+	// Background image position.
+	bg_image_position configpkg.BackgroundImagePosition = .center
+	// Background image fit mode.
+	bg_image_fit configpkg.BackgroundImageFit = .contain
+	// Whether the background image should repeat.
+	bg_image_repeat bool
+	// Whether to enable vsync.
+	vsync bool = true
+	// Which color space to use.
+	colorspace configpkg.WindowColorspace = .srgb
+	// Alpha blending mode.
+	blending configpkg.AlphaBlending = .none_
+	// Background blur mode.
+	background_blur configpkg.BackgroundBlur = .none_
+}
+
+// FontStyleStatus tracks which font styles are enabled.
+pub struct FontStyleStatus {
+pub mut:
+	bold        bool = true
+	italic      bool = true
+	bold_italic bool = true
+}
+
+// Initialize a DerivedConfig from a full configpkg.Config.
+pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
+	// Get our font styles
+	font_styles := FontStyleStatus{
+		bold: true
+		italic: true
+		bold_italic: true
+	}
+
+	bg := terminal.RGB{
+		r: 0
+		g: 0
+		b: 0
+	}
+	fg := terminal.RGB{
+		r: 255
+		g: 255
+		b: 255
+	}
+
+	return DerivedConfig{
+		background_opacity: clamp_f64(config.background_opacity, 0.0, 1.0)
+		background_opacity_cells: config.background_opacity_cells
+		font_thicken: config.font_thicken
+		font_thicken_strength: config.font_thicken_strength
+		font_features: []string{}
+		font_styles: font_styles
+		font_shaping_break: config.font_shaping_break
+		cursor_color: config.cursor_color
+		cursor_text: config.cursor_text
+		cursor_opacity: clamp_f64(config.cursor_opacity, 0.0, 1.0)
+		background: bg
+		foreground: fg
+		bold_color: config.bold_color
+		faint_opacity: u8(config.faint_opacity * 255)
+		min_contrast: f32(config.minimum_contrast)
+		padding_color: config.window_padding_color
+		selection_background: config.selection_background
+		selection_foreground: config.selection_foreground
+		search_background: config.search_background
+		search_foreground: config.search_foreground
+		search_selected_background: config.search_selected_background
+		search_selected_foreground: config.search_selected_foreground
+		custom_shaders: config.custom_shader
+		bg_image: config.background_image
+		bg_image_opacity: config.background_image_opacity
+		bg_image_position: config.background_image_position
+		bg_image_fit: config.background_image_fit
+		bg_image_repeat: config.background_image_repeat
+		vsync: config.window_vsync
+		colorspace: config.window_colorspace
+		blending: config.alpha_blending
+		background_blur: config.background_blur
+	}
+}
+
+pub fn (mut c DerivedConfig) deinit() {
+	c.font_features = []
+}
+
+// Clamp a float64 between min and max.
+fn clamp_f64(val f64, min_val f64, max_val f64) f64 {
+	if val < min_val {
+		return min_val
+	}
+	if val > max_val {
+		return max_val
+	}
+	return val
+}

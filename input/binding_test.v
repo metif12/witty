@@ -36,32 +36,32 @@ fn test_flags_cval_all_set() {
 
 fn test_parse_single_character() {
 	b := parse_single('a=ignore') or { panic(err.msg()) }
-	assert b.trigger.key == TriggerKey.new_unicode(`a`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 	assert b.action.tag == .ignore
 }
 
 fn test_parse_single_modifier() {
 	b := parse_single('shift+a=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
-	assert b.trigger.key == TriggerKey.new_unicode(`a`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 	assert b.action.tag == .ignore
 
 	b2 := parse_single('ctrl+a=ignore') or { panic(err.msg()) }
 	assert b2.trigger.mods.ctrl == true
-	assert b2.trigger.key == TriggerKey.new_unicode(`a`)
+	assert b2.trigger.key == TriggerKey.new_unicode(u32(`a`))
 }
 
 fn test_parse_multiple_modifiers() {
 	b := parse_single('shift+ctrl+a=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
 	assert b.trigger.mods.ctrl == true
-	assert b.trigger.key == TriggerKey.new_unicode(`a`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 }
 
 fn test_parse_key_before_modifier() {
 	b := parse_single('a+shift=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
-	assert b.trigger.key == TriggerKey.new_unicode(`a`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 }
 
 fn test_parse_physical_keys() {
@@ -81,7 +81,7 @@ fn test_parse_unicode_keys() {
 fn test_parse_unconsumed_keys() {
 	b := parse_single('unconsumed:shift+a=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
-	assert b.trigger.key == TriggerKey.new_unicode(`a`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 	assert b.flags.consumed == false
 }
 
@@ -95,7 +95,7 @@ fn test_parse_unconsumed_physical_keys() {
 fn test_parse_performable_keys() {
 	b := parse_single('performable:shift+a=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
-	assert b.trigger.key == TriggerKey.new_unicode(`a`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 	assert b.flags.performable == true
 }
 
@@ -155,12 +155,12 @@ fn test_parse_catch_all_with_modifiers() {
 
 fn test_parse_plus_sign() {
 	b := parse_single('+=ignore') or { panic(err.msg()) }
-	assert b.trigger.key == TriggerKey.new_unicode(`+`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`+`))
 }
 
 fn test_parse_plus_with_modifier() {
 	b := parse_single('ctrl++=ignore') or { panic(err.msg()) }
-	assert b.trigger.key == TriggerKey.new_unicode(`+`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`+`))
 	assert b.trigger.mods.ctrl == true
 }
 
@@ -176,13 +176,13 @@ fn test_parse_double_plus_invalid() {
 
 fn test_parse_equals_sign() {
 	b := parse_single('==ignore') or { panic(err.msg()) }
-	assert b.trigger.key == TriggerKey.new_unicode(`=`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`=`))
 	assert b.action.tag == .ignore
 }
 
 fn test_parse_equals_with_modifier() {
 	b := parse_single('ctrl+==ignore') or { panic(err.msg()) }
-	assert b.trigger.key == TriggerKey.new_unicode(`=`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`=`))
 	assert b.trigger.mods.ctrl == true
 }
 
@@ -198,27 +198,27 @@ fn test_parse_bare_equals_invalid() {
 
 fn test_parse_text_action_equals_1() {
 	b := parse_single('==text:=') or { panic(err.msg()) }
-	assert b.trigger.key == TriggerKey.new_unicode(`=`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`=`))
 	assert b.action.tag == .text
 	assert b.action.str_param == '='
 }
 
 fn test_parse_text_action_equals_2() {
 	b := parse_single('==text:=hello') or { panic(err.msg()) }
-	assert b.trigger.key == TriggerKey.new_unicode(`=`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`=`))
 	assert b.action.str_param == '=hello'
 }
 
 fn test_parse_text_action_equals_ctrl() {
 	b := parse_single('ctrl+==text:=hello') or { panic(err.msg()) }
-	assert b.trigger.key == TriggerKey.new_unicode(`=`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`=`))
 	assert b.trigger.mods.ctrl == true
 	assert b.action.str_param == '=hello'
 }
 
 fn test_parse_text_action_equals_after() {
 	b := parse_single('=+ctrl=text:=hello') or { panic(err.msg()) }
-	assert b.trigger.key == TriggerKey.new_unicode(`=`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`=`))
 	assert b.trigger.mods.ctrl == true
 	assert b.action.str_param == '=hello'
 }
@@ -228,7 +228,7 @@ fn test_parse_text_action_equals_after() {
 fn test_parse_global() {
 	b := parse_single('global:shift+a=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
-	assert b.trigger.key == TriggerKey.new_unicode(`a`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 	assert b.flags.global == true
 }
 
@@ -242,7 +242,7 @@ fn test_parse_global_physical() {
 fn test_parse_global_unconsumed() {
 	b := parse_single('unconsumed:global:a+shift=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
-	assert b.trigger.key == TriggerKey.new_unicode(`a`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 	assert b.flags.global == true
 	assert b.flags.consumed == false
 }
@@ -261,7 +261,7 @@ fn test_parse_global_sequence_not_allowed() {
 fn test_parse_all() {
 	b := parse_single('all:shift+a=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
-	assert b.trigger.key == TriggerKey.new_unicode(`a`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 	assert b.flags.all == true
 }
 
@@ -275,7 +275,7 @@ fn test_parse_all_physical() {
 fn test_parse_all_unconsumed() {
 	b := parse_single('unconsumed:all:a+shift=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
-	assert b.trigger.key == TriggerKey.new_unicode(`a`)
+	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 	assert b.flags.all == true
 	assert b.flags.consumed == false
 }
@@ -412,11 +412,14 @@ fn test_parse_action_tuple_invalid_type() {
 
 fn test_parse_chain() {
 	mut p := Parser.init('chain=new_tab') or { panic(err.msg()) }
-	elem := (p.next() or { panic(err.msg()) }) or { panic('unexpected none') }
+	elem := p.next() or { panic(err.msg()) }
 	assert elem.typ == .chain
 	assert elem.action.tag == .new_tab
-	next := p.next() or { panic(err.msg()) }
-	assert next == none
+	p.next() or {
+		assert err.msg() == 'done'
+		return
+	}
+	assert false
 }
 
 fn test_parse_chain_no_flags() {
@@ -431,20 +434,26 @@ fn test_parse_chain_no_flags() {
 
 fn test_sequence_iterator_single() {
 	mut it := SequenceIterator{ input: 'a' }
-	t := (it.next() or { panic(err.msg()) }) or { panic('unexpected none') }
-	assert t.key == TriggerKey.new_unicode(`a`)
-	next := it.next() or { panic(err.msg()) }
-	assert next == none
+	t := it.next() or { panic(err.msg()) }
+	assert t.key == TriggerKey.new_unicode(u32(`a`))
+	it.next() or {
+		assert err.msg() == 'done'
+		return
+	}
+	assert false
 }
 
 fn test_sequence_iterator_multi() {
 	mut it := SequenceIterator{ input: 'a>b' }
-	t1 := (it.next() or { panic(err.msg()) }) or { panic('unexpected none') }
-	assert t1.key == TriggerKey.new_unicode(`a`)
-	t2 := (it.next() or { panic(err.msg()) }) or { panic('unexpected none') }
-	assert t2.key == TriggerKey.new_unicode(`b`)
-	next := it.next() or { panic(err.msg()) }
-	assert next == none
+	t1 := it.next() or { panic(err.msg()) }
+	assert t1.key == TriggerKey.new_unicode(u32(`a`))
+	t2 := it.next() or { panic(err.msg()) }
+	assert t2.key == TriggerKey.new_unicode(u32(`b`))
+	it.next() or {
+		assert err.msg() == 'done'
+		return
+	}
+	assert false
 }
 
 fn test_sequence_iterator_empty() {
@@ -467,8 +476,8 @@ fn test_sequence_iterator_empty_start() {
 
 fn test_sequence_iterator_empty_end() {
 	mut it := SequenceIterator{ input: 'a>' }
-	t := (it.next() or { panic(err.msg()) }) or { panic('unexpected none') }
-	assert t.key == TriggerKey.new_unicode(`a`)
+	t := it.next() or { panic(err.msg()) }
+	assert t.key == TriggerKey.new_unicode(u32(`a`))
 	it.next() or {
 		assert err.msg() == 'InvalidFormat'
 		return
@@ -480,26 +489,32 @@ fn test_sequence_iterator_empty_end() {
 
 fn test_parse_sequence_single() {
 	mut p := Parser.init('ctrl+a=ignore') or { panic(err.msg()) }
-	elem := (p.next() or { panic(err.msg()) }) or { panic('unexpected none') }
+	elem := p.next() or { panic(err.msg()) }
 	assert elem.typ == .binding
 	assert elem.binding.trigger.mods.ctrl == true
-	assert elem.binding.trigger.key == TriggerKey.new_unicode(`a`)
+	assert elem.binding.trigger.key == TriggerKey.new_unicode(u32(`a`))
 	assert elem.binding.action.tag == .ignore
-	next := p.next() or { panic(err.msg()) }
-	assert next == none
+	p.next() or {
+		assert err.msg() == 'done'
+		return
+	}
+	assert false
 }
 
 fn test_parse_sequence_two() {
 	mut p := Parser.init('a>b=ignore') or { panic(err.msg()) }
-	e1 := (p.next() or { panic(err.msg()) }) or { panic('unexpected none') }
+	e1 := p.next() or { panic(err.msg()) }
 	assert e1.typ == .leader
-	assert e1.trigger.key == TriggerKey.new_unicode(`a`)
-	e2 := (p.next() or { panic(err.msg()) }) or { panic('unexpected none') }
+	assert e1.trigger.key == TriggerKey.new_unicode(u32(`a`))
+	e2 := p.next() or { panic(err.msg()) }
 	assert e2.typ == .binding
-	assert e2.binding.trigger.key == TriggerKey.new_unicode(`b`)
+	assert e2.binding.trigger.key == TriggerKey.new_unicode(u32(`b`))
 	assert e2.binding.action.tag == .ignore
-	next := p.next() or { panic(err.msg()) }
-	assert next == none
+	p.next() or {
+		assert err.msg() == 'done'
+		return
+	}
+	assert false
 }
 
 // --- Trigger equal tests ---
@@ -523,19 +538,19 @@ fn test_trigger_different_mods() {
 }
 
 fn test_trigger_equal_unicode() {
-	t1 := Trigger{ key: TriggerKey.new_unicode(`a`) }
-	t2 := Trigger{ key: TriggerKey.new_unicode(`a`) }
+	t1 := Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }
+	t2 := Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }
 	assert t1.equal(t2)
 }
 
 fn test_trigger_different_unicode() {
-	t1 := Trigger{ key: TriggerKey.new_unicode(`a`) }
-	t2 := Trigger{ key: TriggerKey.new_unicode(`b`) }
+	t1 := Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }
+	t2 := Trigger{ key: TriggerKey.new_unicode(u32(`b`)) }
 	assert !t1.equal(t2)
 }
 
 fn test_trigger_different_key_types() {
-	t1 := Trigger{ key: TriggerKey.new_unicode(`a`) }
+	t1 := Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }
 	t2 := Trigger{ key: TriggerKey.new_physical(.key_a) }
 	assert !t1.equal(t2)
 }
@@ -559,27 +574,27 @@ fn test_set_parse_and_put_typical() {
 	s.parse_and_put('a=new_window') or { panic(err.msg()) }
 
 	// Forward mapping
-	entry := s.get(Trigger{ key: TriggerKey.new_unicode(`a`) }) or { panic('not found') }
+	entry := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
 	assert entry.value.typ == .leaf
 	assert entry.value.leaf_action.tag == .new_window
 	assert entry.value.leaf_flags == Flags{}
 
 	// Reverse mapping
 	trigger := s.get_trigger(Action.new(.new_window)) or { panic('not found') }
-	assert trigger.key == TriggerKey.new_unicode(`a`)
+	assert trigger.key == TriggerKey.new_unicode(u32(`a`))
 }
 
 fn test_set_parse_and_put_unconsumed() {
 	mut s := Set{}
 	s.parse_and_put('unconsumed:a=new_window') or { panic(err.msg()) }
 
-	entry := s.get(Trigger{ key: TriggerKey.new_unicode(`a`) }) or { panic('not found') }
+	entry := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
 	assert entry.value.typ == .leaf
 	assert entry.value.leaf_action.tag == .new_window
 	assert entry.value.leaf_flags.consumed == false
 
 	trigger := s.get_trigger(Action.new(.new_window)) or { panic('not found') }
-	assert trigger.key == TriggerKey.new_unicode(`a`)
+	assert trigger.key == TriggerKey.new_unicode(u32(`a`))
 }
 
 fn test_set_parse_and_put_removed() {
@@ -587,7 +602,7 @@ fn test_set_parse_and_put_removed() {
 	s.parse_and_put('a=new_window') or { panic(err.msg()) }
 	s.parse_and_put('a=unbind') or { panic(err.msg()) }
 
-	r := s.get(Trigger{ key: TriggerKey.new_unicode(`a`) })
+	r := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) })
 	assert r == none
 
 	t := s.get_trigger(Action.new(.new_window))
@@ -598,11 +613,11 @@ fn test_set_parse_and_put_sequence() {
 	mut s := Set{}
 	s.parse_and_put('a>b=new_window') or { panic(err.msg()) }
 
-	a_entry := s.get(Trigger{ key: TriggerKey.new_unicode(`a`) }) or { panic('not found') }
+	a_entry := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
 	assert a_entry.value.typ == .leader
 	inner := a_entry.value.leader
 
-	b_entry := inner.get(Trigger{ key: TriggerKey.new_unicode(`b`) }) or { panic('not found') }
+	b_entry := inner.get(Trigger{ key: TriggerKey.new_unicode(u32(`b`)) }) or { panic('not found') }
 	assert b_entry.value.typ == .leaf
 	assert b_entry.value.leaf_action.tag == .new_window
 }
@@ -612,14 +627,14 @@ fn test_set_parse_and_put_sequence_two_actions() {
 	s.parse_and_put('a>b=new_window') or { panic(err.msg()) }
 	s.parse_and_put('a>c=new_tab') or { panic(err.msg()) }
 
-	a_entry := s.get(Trigger{ key: TriggerKey.new_unicode(`a`) }) or { panic('not found') }
+	a_entry := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
 	assert a_entry.value.typ == .leader
 	inner := a_entry.value.leader
 
-	b_entry := inner.get(Trigger{ key: TriggerKey.new_unicode(`b`) }) or { panic('not found') }
+	b_entry := inner.get(Trigger{ key: TriggerKey.new_unicode(u32(`b`)) }) or { panic('not found') }
 	assert b_entry.value.leaf_action.tag == .new_window
 
-	c_entry := inner.get(Trigger{ key: TriggerKey.new_unicode(`c`) }) or { panic('not found') }
+	c_entry := inner.get(Trigger{ key: TriggerKey.new_unicode(u32(`c`)) }) or { panic('not found') }
 	assert c_entry.value.leaf_action.tag == .new_tab
 }
 
@@ -628,10 +643,10 @@ fn test_set_parse_and_put_overwrite_sequence() {
 	s.parse_and_put('a>b=new_tab') or { panic(err.msg()) }
 	s.parse_and_put('a>b=new_window') or { panic(err.msg()) }
 
-	a_entry := s.get(Trigger{ key: TriggerKey.new_unicode(`a`) }) or { panic('not found') }
+	a_entry := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
 	inner := a_entry.value.leader
 
-	b_entry := inner.get(Trigger{ key: TriggerKey.new_unicode(`b`) }) or { panic('not found') }
+	b_entry := inner.get(Trigger{ key: TriggerKey.new_unicode(u32(`b`)) }) or { panic('not found') }
 	assert b_entry.value.leaf_action.tag == .new_window
 }
 
@@ -640,11 +655,11 @@ fn test_set_parse_and_put_overwrite_leader() {
 	s.parse_and_put('a=new_tab') or { panic(err.msg()) }
 	s.parse_and_put('a>b=new_window') or { panic(err.msg()) }
 
-	a_entry := s.get(Trigger{ key: TriggerKey.new_unicode(`a`) }) or { panic('not found') }
+	a_entry := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
 	assert a_entry.value.typ == .leader
 	inner := a_entry.value.leader
 
-	b_entry := inner.get(Trigger{ key: TriggerKey.new_unicode(`b`) }) or { panic('not found') }
+	b_entry := inner.get(Trigger{ key: TriggerKey.new_unicode(u32(`b`)) }) or { panic('not found') }
 	assert b_entry.value.leaf_action.tag == .new_window
 }
 
@@ -653,7 +668,7 @@ fn test_set_parse_and_put_unbind_leader() {
 	s.parse_and_put('a>b=new_window') or { panic(err.msg()) }
 	s.parse_and_put('a>b=unbind') or { panic(err.msg()) }
 
-	r := s.get(Trigger{ key: TriggerKey.new_unicode(`a`) })
+	r := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) })
 	assert r == none
 }
 
@@ -661,69 +676,69 @@ fn test_set_parse_and_put_unbind_not_set() {
 	mut s := Set{}
 	s.parse_and_put('a>b=unbind') or { panic(err.msg()) }
 
-	r := s.get(Trigger{ key: TriggerKey.new_unicode(`a`) })
+	r := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) })
 	assert r == none
 }
 
 fn test_set_maintains_reverse_mapping() {
 	mut s := Set{}
-	s.put(Trigger{ key: TriggerKey.new_unicode(`a`) }, Action.new(.new_window))
+	s.put(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }, Action.new(.new_window))
 	trigger := s.get_trigger(Action.new(.new_window)) or { panic('not found') }
-	assert trigger.key == TriggerKey.new_unicode(`a`)
+	assert trigger.key == TriggerKey.new_unicode(u32(`a`))
 
 	// Should be most recent
-	s.put(Trigger{ key: TriggerKey.new_unicode(`b`) }, Action.new(.new_window))
+	s.put(Trigger{ key: TriggerKey.new_unicode(u32(`b`)) }, Action.new(.new_window))
 	trigger2 := s.get_trigger(Action.new(.new_window)) or { panic('not found') }
-	assert trigger2.key == TriggerKey.new_unicode(`b`)
+	assert trigger2.key == TriggerKey.new_unicode(u32(`b`))
 
 	// Removal should find another
-	s.remove(Trigger{ key: TriggerKey.new_unicode(`b`) })
+	s.remove(Trigger{ key: TriggerKey.new_unicode(u32(`b`)) })
 	trigger3 := s.get_trigger(Action.new(.new_window)) or { panic('not found') }
-	assert trigger3.key == TriggerKey.new_unicode(`a`)
+	assert trigger3.key == TriggerKey.new_unicode(u32(`a`))
 }
 
 fn test_set_performable_not_in_reverse() {
 	mut s := Set{}
-	s.put(Trigger{ key: TriggerKey.new_unicode(`a`) }, Action.new(.new_window))
+	s.put(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }, Action.new(.new_window))
 	trigger := s.get_trigger(Action.new(.new_window)) or { panic('not found') }
-	assert trigger.key == TriggerKey.new_unicode(`a`)
+	assert trigger.key == TriggerKey.new_unicode(u32(`a`))
 
 	// Performable trigger should not replace reverse mapping
-	s.put_flags(Trigger{ key: TriggerKey.new_unicode(`b`) }, Action.new(.new_window), Flags{ performable: true })
+	s.put_flags(Trigger{ key: TriggerKey.new_unicode(u32(`b`)) }, Action.new(.new_window), Flags{ performable: true })
 	trigger2 := s.get_trigger(Action.new(.new_window)) or { panic('not found') }
-	assert trigger2.key == TriggerKey.new_unicode(`a`)
+	assert trigger2.key == TriggerKey.new_unicode(u32(`a`))
 
 	// Removal of performable should do nothing to reverse
-	s.remove(Trigger{ key: TriggerKey.new_unicode(`b`) })
+	s.remove(Trigger{ key: TriggerKey.new_unicode(u32(`b`)) })
 	trigger3 := s.get_trigger(Action.new(.new_window)) or { panic('not found') }
-	assert trigger3.key == TriggerKey.new_unicode(`a`)
+	assert trigger3.key == TriggerKey.new_unicode(u32(`a`))
 }
 
 fn test_set_overriding_updates_reverse() {
 	mut s := Set{}
-	s.put(Trigger{ key: TriggerKey.new_unicode(`a`) }, Action.new(.new_window))
+	s.put(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }, Action.new(.new_window))
 	trigger := s.get_trigger(Action.new(.new_window)) or { panic('not found') }
-	assert trigger.key == TriggerKey.new_unicode(`a`)
+	assert trigger.key == TriggerKey.new_unicode(u32(`a`))
 
 	// Override with different action should remove old reverse
-	s.put(Trigger{ key: TriggerKey.new_unicode(`a`) }, Action.new(.new_tab))
+	s.put(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }, Action.new(.new_tab))
 	t := s.get_trigger(Action.new(.new_window))
 	assert t == none
 }
 
 fn test_set_consumed_state() {
 	mut s := Set{}
-	s.put(Trigger{ key: TriggerKey.new_unicode(`a`) }, Action.new(.new_window))
-	entry1 := s.get(Trigger{ key: TriggerKey.new_unicode(`a`) }) or { panic('not found') }
+	s.put(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }, Action.new(.new_window))
+	entry1 := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
 	assert entry1.value.typ == .leaf
 	assert entry1.value.leaf_flags.consumed
 
-	s.put_flags(Trigger{ key: TriggerKey.new_unicode(`a`) }, Action.new(.new_window), Flags{ consumed: false })
-	entry2 := s.get(Trigger{ key: TriggerKey.new_unicode(`a`) }) or { panic('not found') }
+	s.put_flags(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }, Action.new(.new_window), Flags{ consumed: false })
+	entry2 := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
 	assert !entry2.value.leaf_flags.consumed
 
-	s.put(Trigger{ key: TriggerKey.new_unicode(`a`) }, Action.new(.new_window))
-	entry3 := s.get(Trigger{ key: TriggerKey.new_unicode(`a`) }) or { panic('not found') }
+	s.put(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }, Action.new(.new_window))
+	entry3 := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
 	assert entry3.value.leaf_flags.consumed
 }
 
@@ -985,9 +1000,9 @@ fn test_set_put_overwrites_sequence() {
 	s.parse_and_put('ctrl+a>b=new_window') or { panic(err.msg()) }
 	s.put(Trigger{
 		mods: Mods{ ctrl: true }
-		key: TriggerKey.new_unicode(`a`)
+		key: TriggerKey.new_unicode(u32(`a`))
 	}, Action.new(.new_window))
 
 	trigger := s.get_trigger(Action.new(.new_window)) or { panic('not found') }
-	assert trigger.key == TriggerKey.new_unicode(`a`)
+	assert trigger.key == TriggerKey.new_unicode(u32(`a`))
 }

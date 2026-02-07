@@ -23,9 +23,20 @@ pub enum CellWide {
 }
 
 // ContentTag describes what kind of content a cell holds.
+// The content tag dictates the active field in CellData and possibly
+// some other behaviors.
 pub enum ContentTag {
-	bg_color_only // No codepoint, just background color
-	codepoint     // A single codepoint
+	// A single codepoint, could be zero to be empty cell.
+	codepoint
+	// A codepoint that is part of a multi-codepoint grapheme cluster.
+	// The codepoint field is active, but also expect more
+	// codepoints in the graphemes data.
+	codepoint_grapheme
+	// The cell has no text but only a background color. This is an
+	// optimization so that cells with only backgrounds don't take up
+	// style map space and also don't require a style map lookup.
+	bg_color_palette
+	bg_color_rgb
 }
 
 // SemanticContent describes what the cell content semantically represents.
@@ -36,22 +47,112 @@ pub enum SemanticContent {
 }
 
 // CellData is the data for a single cell in the terminal grid.
+//
+// The zero value of this struct must be a valid cell representing empty,
+// since we zero initialize cells by default.
 pub struct CellData {
 pub mut:
-	codepoint        u32
-	content_tag      ContentTag = .bg_color_only
-	style_id         u32
-	wide             CellWide         = .narrow
-	is_protected     bool
-	has_grapheme     bool
-	has_hyperlink    bool
-	semantic_content SemanticContent   = .output
-	graphemes        []u32
+	// The codepoint that this cell contains. If has_grapheme is false,
+	// then this is the only codepoint in the cell. If has_grapheme is
+	// true, then this is the first codepoint in the grapheme cluster.
+	codepoint u32
+	// The content tag dictates what kind of content this cell holds.
+	content_tag ContentTag = .codepoint
+	// The style ID to use for this cell within the style map. Zero
+	// is always the default style so no lookup is required.
+	style_id u32
+	// The wide property of this cell, for wide characters.
+	wide CellWide = .narrow
+	// Whether this was written with the protection flag set.
+	is_protected bool
+	// Whether this cell has grapheme cluster data.
+	has_grapheme bool
+	// Whether this cell is a hyperlink.
+	has_hyperlink bool
+	// The semantic type of the content of this cell.
+	semantic_content SemanticContent = .output
+	// Additional codepoints for grapheme clusters. These are the
+	// codepoints in addition to the first codepoint. The first
+	// codepoint is NOT included since it is on the cell itself.
+	graphemes []u32
+	// For bg_color content variants.
+	color_palette u8
+	color_rgb_r   u8
+	color_rgb_g   u8
+	color_rgb_b   u8
+}
+
+// Helper to make a cell that just has a codepoint.
+pub fn CellData.init(cp u32) CellData {
+	return CellData{
+		content_tag: .codepoint
+		codepoint: cp
+	}
+}
+
+// Returns true if this cell represents all zeroes.
+pub fn (self &CellData) is_zero() bool {
+	return self.codepoint == 0 && self.content_tag == .codepoint && self.style_id == 0
+		&& self.wide == .narrow && !self.is_protected && !self.has_grapheme
+		&& !self.has_hyperlink && self.semantic_content == .output
+		&& self.graphemes.len == 0
 }
 
 // Returns true if the cell has displayable text.
+//
+// Cases this returns false:
+//   - Cell text is blank
+//   - Cell is styled but only with a background color and no text
 pub fn (self &CellData) has_text() bool {
-	return self.content_tag == .codepoint && self.codepoint != 0
+	return match self.content_tag {
+		.codepoint, .codepoint_grapheme { self.codepoint != 0 }
+		.bg_color_palette, .bg_color_rgb { false }
+	}
+}
+
+// Returns the codepoint for this cell, or 0 for bg-only cells.
+pub fn (self &CellData) codepoint_val() u32 {
+	return match self.content_tag {
+		.codepoint, .codepoint_grapheme { self.codepoint }
+		.bg_color_palette, .bg_color_rgb { 0 }
+	}
+}
+
+// The width in grid cells that this cell takes up.
+pub fn (self &CellData) grid_width() int {
+	return match self.wide {
+		.narrow, .spacer_head, .spacer_tail { 1 }
+		.wide { 2 }
+	}
+}
+
+// Returns true if the cell has a non-default style.
+pub fn (self &CellData) has_styling() bool {
+	return self.style_id != default_style_id
+}
+
+// Returns true if the cell has no text or styling.
+pub fn (self &CellData) is_empty() bool {
+	return match self.content_tag {
+		// Textual cells are empty if they have no text and are narrow.
+		// The "narrow" requirement is because wide spacers are meaningful.
+		.codepoint, .codepoint_grapheme {
+			!self.has_text() && self.wide == .narrow
+		}
+		.bg_color_palette, .bg_color_rgb {
+			false
+		}
+	}
+}
+
+// Returns true if the set of cells has text in any cell.
+pub fn has_text_any(cells []CellData) bool {
+	for cell in cells {
+		if cell.has_text() {
+			return true
+		}
+	}
+	return false
 }
 
 // ============================================================
@@ -70,14 +171,31 @@ pub enum SemanticPromptType {
 // RowData is the data for a single row in the terminal grid.
 pub struct RowData {
 pub mut:
-	cells             []CellData
-	wrap              bool
+	cells []CellData
+	// True if this row is soft-wrapped. The first cell of the next
+	// row is a continuation of this row.
+	wrap bool
+	// True if the previous row to this one is soft-wrapped and
+	// this row is a continuation of that row.
 	wrap_continuation bool
-	dirty             bool
-	styled            bool
-	grapheme          bool
-	hyperlink         bool
-	semantic_prompt   SemanticPromptType = .unknown
+	// True if any of the cells in this row have multi-codepoint
+	// grapheme clusters. If this is true, some fast paths are not
+	// possible because erasing for example may need to clear existing
+	// grapheme data.
+	grapheme bool
+	// True if any of the cells in this row have a ref-counted style.
+	// This can have false positives but never a false negative.
+	styled bool
+	// True if any of the cells in this row are part of a hyperlink.
+	// Similar to styled: can have false positives but never false negatives.
+	hyperlink bool
+	// The semantic prompt state for this row.
+	semantic_prompt SemanticPromptType = .unknown
+	// True if this row contains a virtual placeholder for the Kitty
+	// graphics protocol. (U+10EEEE)
+	kitty_virtual_placeholder bool
+	// True if this row is dirty and requires a redraw.
+	dirty bool
 }
 
 // Initialize a new row with the given number of columns.
@@ -85,6 +203,13 @@ pub fn RowData.init(cols u32) RowData {
 	return RowData{
 		cells: []CellData{len: int(cols)}
 	}
+}
+
+// Returns true if this row has any managed memory outside of the
+// row structure (graphemes, styles, hyperlinks).
+pub fn (self &RowData) managed_memory() bool {
+	// Ordered on purpose for likelihood.
+	return self.styled || self.hyperlink || self.grapheme
 }
 
 // ============================================================

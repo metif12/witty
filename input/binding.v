@@ -345,7 +345,7 @@ pub fn Trigger.parse(input_str string) !Trigger {
 		if part.len == 0 {
 			result = Trigger{
 				...result
-				key: TriggerKey.new_unicode(`+`)
+				key: TriggerKey.new_unicode(u32(`+`))
 			}
 			continue
 		}
@@ -1425,10 +1425,11 @@ pub mut:
 	i     int
 }
 
-// next returns the next trigger in the sequence if there is no parsing error.
-pub fn (mut self SequenceIterator) next() !?Trigger {
+// next returns the next trigger in the sequence.
+// Returns none when done, or error on parse failure.
+pub fn (mut self SequenceIterator) next() !Trigger {
 	if self.done() {
-		return none
+		return error('done')
 	}
 	rem := self.input[self.i..]
 	idx := rem.index_u8(`>`)
@@ -1446,20 +1447,20 @@ pub fn (self &SequenceIterator) done() bool {
 // Parser.init creates a new parser from a raw binding string like "ctrl+a=ignore".
 pub fn Parser.init(raw_input string) !Parser {
 	flags, start_idx := parse_flags(raw_input)!
-	input := raw_input[start_idx..]
+	inp := raw_input[start_idx..]
 
 	// Find the equal sign. Need to ignore equal signs that are part of the trigger.
 	mut eql_idx := -1
 	mut offset := 0
 	for {
-		rest := input[offset..]
+		rest := inp[offset..]
 		oi := rest.index_u8(`=`)
 		if oi < 0 {
 			break
 		}
 		idx := offset + oi
 		// Check for '=+' or '==' patterns (trigger contains =)
-		if idx < input.len - 1 && (input[idx + 1] == `+` || input[idx + 1] == `=`) {
+		if idx < inp.len - 1 && (inp[idx + 1] == `+` || inp[idx + 1] == `=`) {
 			offset = idx + 1
 			continue
 		}
@@ -1473,13 +1474,13 @@ pub fn Parser.init(raw_input string) !Parser {
 	}
 
 	// Detect chains. Chains must not have flags.
-	is_chain := input[..eql_idx] == 'chain'
+	is_chain := inp[..eql_idx] == 'chain'
 	if is_chain && start_idx > 0 {
 		return error('InvalidFormat')
 	}
 
-	trigger_input := if is_chain { 'a' } else { input[..eql_idx] }
-	action := Action.parse(input[eql_idx + 1..])!
+	trigger_input := if is_chain { 'a' } else { inp[..eql_idx] }
+	action := Action.parse(inp[eql_idx + 1..])!
 
 	return Parser{
 		trigger_it: SequenceIterator{
@@ -1495,14 +1496,14 @@ pub fn Parser.init(raw_input string) !Parser {
 fn parse_flags(raw_input string) !(Flags, int) {
 	mut flags := Flags{}
 	mut start_idx := 0
-	mut input := raw_input
+	mut inp := raw_input
 
 	for {
-		idx := input.index_u8(`:`)
+		idx := inp.index_u8(`:`)
 		if idx < 0 {
 			break
 		}
-		prefix := input[..idx]
+		prefix := inp[..idx]
 
 		if prefix == 'all' {
 			if flags.all {
@@ -1542,15 +1543,21 @@ fn parse_flags(raw_input string) !(Flags, int) {
 		}
 
 		start_idx += idx + 1
-		input = input[idx + 1..]
+		inp = inp[idx + 1..]
 	}
 
 	return flags, start_idx
 }
 
 // next yields the next parser element.
-pub fn (mut self Parser) next() !?ParserElem {
-	trigger := (self.trigger_it.next()!) or { return none }
+// Returns error('done') when no more elements.
+pub fn (mut self Parser) next() !ParserElem {
+	trigger := self.trigger_it.next() or {
+		if err.msg() == 'done' {
+			return error('done')
+		}
+		return err
+	}
 
 	if !self.trigger_it.done() {
 		// Global/all bindings can't be sequences
@@ -1592,7 +1599,12 @@ pub fn (mut self Parser) reset() {
 // Convenience function primarily for tests.
 pub fn parse_single(raw_input string) !Binding {
 	mut p := Parser.init(raw_input)!
-	elem := (p.next()!) or { return error('InvalidFormat') }
+	elem := p.next() or {
+		if err.msg() == 'done' {
+			return error('InvalidFormat')
+		}
+		return err
+	}
 	return match elem.typ {
 		.leader { error('UnexpectedSequence') }
 		.binding { elem.binding }
@@ -1834,16 +1846,31 @@ pub fn (mut s Set) parse_and_put(input_str string) ! {
 	// Validate the full sequence first
 	mut it := Parser.init(input_str)!
 	for {
-		_ = (it.next()!) or { break }
+		_ = it.next() or {
+			if err.msg() == 'done' {
+				break
+			}
+			return err
+		}
 	}
 	it.reset()
 
 	// Now actually process
-	s.parse_and_put_recurse(mut it)!
+	s.parse_and_put_recurse(mut it) or {
+		if err.msg() == 'SequenceUnbind' {
+			return
+		}
+		return err
+	}
 }
 
 fn (mut s Set) parse_and_put_recurse(mut it Parser) ! {
-	elem := (it.next()!) or { return error('UnexpectedEndOfInput') }
+	elem := it.next() or {
+		if err.msg() == 'done' {
+			return error('UnexpectedEndOfInput')
+		}
+		return err
+	}
 
 	match elem.typ {
 		.leader {

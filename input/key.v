@@ -392,7 +392,10 @@ pub fn (k Key) key_name() string {
 // key_from_name parses a key name string into a Key value.
 // Returns none if the string doesn't match any known key.
 pub fn key_from_name(name string) ?Key {
-	return key_name_map[name]
+	if name in key_name_map {
+		return key_name_map[name]
+	}
+	return none
 }
 
 // key_from_w3c converts a W3C key code (e.g. "KeyA", "ArrowUp") to a Key.
@@ -400,8 +403,8 @@ pub fn key_from_name(name string) ?Key {
 pub fn key_from_w3c(code string) ?Key {
 	// First try exact lowercase match
 	lower := code.to_lower()
-	if k := key_name_map[lower] {
-		return k
+	if lower in key_name_map {
+		return key_name_map[lower]
 	}
 
 	// Convert CamelCase to snake_case: "ArrowUp" -> "arrow_up"
@@ -424,7 +427,10 @@ pub fn key_from_w3c(code string) ?Key {
 		}
 	}
 	snake := result.bytestr()
-	return key_name_map[snake]
+	if snake in key_name_map {
+		return key_name_map[snake]
+	}
+	return none
 }
 
 // True if this key is a modifier.
@@ -617,18 +623,18 @@ const key_name_map = {
 // Unicode variants map to TriggerKey.unicode, physical variants to TriggerKey.physical.
 fn backwards_compatible_key(part string) ?TriggerKey {
 	return match part {
-		'zero' { TriggerKey{ typ: .unicode, unicode: `0` } }
-		'one' { TriggerKey{ typ: .unicode, unicode: `1` } }
-		'two' { TriggerKey{ typ: .unicode, unicode: `2` } }
-		'three' { TriggerKey{ typ: .unicode, unicode: `3` } }
-		'four' { TriggerKey{ typ: .unicode, unicode: `4` } }
-		'five' { TriggerKey{ typ: .unicode, unicode: `5` } }
-		'six' { TriggerKey{ typ: .unicode, unicode: `6` } }
-		'seven' { TriggerKey{ typ: .unicode, unicode: `7` } }
-		'eight' { TriggerKey{ typ: .unicode, unicode: `8` } }
-		'nine' { TriggerKey{ typ: .unicode, unicode: `9` } }
-		'plus' { TriggerKey{ typ: .unicode, unicode: `+` } }
-		'apostrophe' { TriggerKey{ typ: .unicode, unicode: `'` } }
+		'zero' { TriggerKey{ typ: .unicode, unicode: u32(`0`) } }
+		'one' { TriggerKey{ typ: .unicode, unicode: u32(`1`) } }
+		'two' { TriggerKey{ typ: .unicode, unicode: u32(`2`) } }
+		'three' { TriggerKey{ typ: .unicode, unicode: u32(`3`) } }
+		'four' { TriggerKey{ typ: .unicode, unicode: u32(`4`) } }
+		'five' { TriggerKey{ typ: .unicode, unicode: u32(`5`) } }
+		'six' { TriggerKey{ typ: .unicode, unicode: u32(`6`) } }
+		'seven' { TriggerKey{ typ: .unicode, unicode: u32(`7`) } }
+		'eight' { TriggerKey{ typ: .unicode, unicode: u32(`8`) } }
+		'nine' { TriggerKey{ typ: .unicode, unicode: u32(`9`) } }
+		'plus' { TriggerKey{ typ: .unicode, unicode: u32(`+`) } }
+		'apostrophe' { TriggerKey{ typ: .unicode, unicode: u32(`'`) } }
 		'grave_accent' { TriggerKey{ typ: .physical, physical: .backquote } }
 		'left_bracket' { TriggerKey{ typ: .physical, physical: .bracket_left } }
 		'right_bracket' { TriggerKey{ typ: .physical, physical: .bracket_right } }
