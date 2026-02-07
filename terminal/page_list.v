@@ -1835,9 +1835,9 @@ pub fn (mut self PageList) erase_rows(tl PointTag, bl ?PointTag) {
 
 	// Regrow if needed to maintain active area
 	for self.total_rows < usize(self.rows) {
-		self.grow() or { break }
+		self.grow() or {}
 		// Clear the new row
-		if last := self.pages.last {
+		if mut last := self.pages.last {
 			last.data.clear_row(u16(last.data.size.rows - 1))
 		}
 	}
@@ -1849,7 +1849,7 @@ pub fn (mut self PageList) erase_rows(tl PointTag, bl ?PointTag) {
 
 // Split a page at the given pin, creating a new page for rows from pin.y onwards.
 pub fn (mut self PageList) split(p PagePin) ! {
-	page := &p.node.data
+	mut page := unsafe { &p.node.data }
 	if page.size.rows <= 1 {
 		return error('cannot split page with <= 1 row')
 	}
@@ -1933,8 +1933,8 @@ pub fn (self &PageList) clone(opts PageCloneOpts) PageList {
 
 	// Ensure we have enough rows for active area
 	for result.total_rows < usize(self.rows) {
-		result.grow() or { break }
-		if last := result.pages.last {
+		result.grow() or {}
+		if mut last := result.pages.last {
 			last.data.clear_row(u16(last.data.size.rows - 1))
 		}
 	}
@@ -2029,9 +2029,9 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) {
 
 		if rows > old_rows {
 			// Need more rows
-			diff := usize(rows) - usize(old_rows)
+			diff := int(rows) - int(old_rows)
 			for _ in 0 .. diff {
-				self.grow() or { break }
+				self.grow() or {}
 			}
 		} else {
 			// Fewer rows - trim from scrollback if possible
@@ -2084,7 +2084,7 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) {
 pub fn (mut self PageList) clear_dirty() {
 	mut node := self.pages.first
 	for {
-		n := node or { break }
+		mut n := node or { break }
 		n.data.dirty = false
 		for mut row in n.data.rows {
 			row.dirty = false
