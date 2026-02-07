@@ -90,15 +90,11 @@ mut:
 	x       f64
 }
 
-// Feature represents a single OpenType font feature (4-byte tag + value).
-pub struct Feature {
-pub:
-	tag   [4]u8
-	value u32
-}
+// Feature is defined in feature.v (shared across all shaper backends).
 
-// Default features applied to all fonts.
-pub const default_features = [
+// Default features applied to all fonts by the CoreText shaper.
+// These are in addition to the features from feature.v's default_features.
+pub const ct_default_features = [
 	Feature{
 		tag: [u8(`c`), u8(`a`), u8(`l`), u8(`t`)]!
 		value: 1
@@ -160,8 +156,8 @@ pub fn Shaper.init(opts font.ShaperOptions) !Shaper {
 	_ = feats
 
 	// Combine default features with user features.
-	mut feats_df := []Feature{cap: feats.len + default_features.len}
-	for df in default_features {
+	mut feats_df := []Feature{cap: feats.len + ct_default_features.len}
+	for df in ct_default_features {
 		feats_df << df
 	}
 	for f in feats {

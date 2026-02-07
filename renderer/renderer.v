@@ -1185,7 +1185,7 @@ pub fn (a Padding) add(b Padding) Padding {
 	}
 }
 
-pub fn (mut s Size) grid() GridSize {
+pub fn (s Size) grid() GridSize {
 	usable_w := if s.screen.width > s.padding.left + s.padding.right {
 		s.screen.width - s.padding.left - s.padding.right
 	} else {

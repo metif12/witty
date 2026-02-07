@@ -111,6 +111,15 @@ pub fn (mut c Canvas) invert() {
 	// XTODO: invert pixel data (255 - value for each pixel)
 }
 
+// pixel sets a single pixel at the given coordinates.
+pub fn (mut c Canvas) pixel(x i32, y i32, color Color) {
+	// XTODO: implement single pixel write.
+	// Should check bounds (including padding) and set the pixel value.
+	_ = x
+	_ = y
+	_ = color
+}
+
 // static_path creates a StaticPath for vector path operations.
 pub fn (mut c Canvas) static_path(max_nodes int) StaticPath {
 	return StaticPath{

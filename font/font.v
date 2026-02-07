@@ -441,6 +441,10 @@ pub fn (c &ShaperCache) count() int {
 // TextRun represents a run of text to be shaped.
 pub struct TextRun {
 pub:
+	// A unique hash for this run. This can be used to cache the shaping
+	// results. The hash is position-independent within the row by using
+	// relative cluster positions.
+	hash       u64
 	font_index u32
 	offset     u32
 	cells      u32
@@ -485,31 +489,6 @@ pub fn (mut it RunIterator) next() ?TextRun {
 	}
 	it.done = true
 	return none
-}
-
-// ============================================================
-// CodepointResolver
-// ============================================================
-
-pub struct CodepointResolver {
-pub:
-	style_status StyleStatus
-}
-
-// StyleStatus tracks which font styles are enabled.
-pub struct StyleStatus {
-pub mut:
-	bold        bool = true
-	italic      bool = true
-	bold_italic bool = true
-}
-
-pub fn StyleStatus.init_fill(val bool) StyleStatus {
-	return StyleStatus{
-		bold: val
-		italic: val
-		bold_italic: val
-	}
 }
 
 // ============================================================

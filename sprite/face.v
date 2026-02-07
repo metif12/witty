@@ -1,0 +1,332 @@
+module sprite
+
+// This implements the built-in "sprite face". This font renders
+// the built-in glyphs for the terminal, such as box drawing fonts, as well
+// as specific sprites that are part of our rendering model such as
+// text decorations (underlines).
+//
+// This isn't really a "font face" so much as it is quacks like a font
+// face with regards to how it works with font.Group. We don't use any
+// dynamic dispatch so it isn't truly an interface but the functions
+// and behaviors are close enough to a system face that it makes it easy
+// to integrate with font.Group. This is desirable so that higher level
+// processes such as GroupCache, Shaper, etc. don't need to be aware of
+// special sprite handling and just treat it like a normal font face.
+//
+// Translated from ghostty/src/font/sprite/Face.zig
+
+import font
+
+// A function that draws a glyph on the provided canvas.
+pub type DrawFn = fn (u32, mut &Canvas, u32, u32, font.Metrics) !
+
+// Range represents a codepoint range associated with a draw function.
+struct Range {
+	min  u32
+	max  u32
+	draw DrawFn = unsafe { nil }
+}
+
+// SpriteFace is the built-in sprite font face for the terminal.
+pub struct SpriteFace {
+pub:
+	// Grid metrics for rendering sprites.
+	metrics font.Metrics
+}
+
+// get_draw_fn returns the draw function for a given codepoint, or none.
+// For special sprites (cursors, underlines, etc.) all sprites are drawn
+// by functions from special.v that share the name of the enum field.
+// For Unicode codepoint ranges, the appropriate draw function is returned.
+fn get_draw_fn(cp u32) ?DrawFn {
+	// For special sprites (cursors, underlines, etc.)
+	// Sprite.start is one above the maximum Unicode codepoint (0x110000).
+	sprite_start := u32(0x110000)
+	if cp >= sprite_start {
+		// Dispatch to special sprite drawing functions
+		idx := cp - sprite_start
+		return match idx {
+			0 { DrawFn(draw_underline) }
+			1 { DrawFn(draw_underline_double) }
+			2 { DrawFn(draw_underline_dotted) }
+			3 { DrawFn(draw_underline_dashed) }
+			4 { DrawFn(draw_underline_curly) }
+			5 { DrawFn(draw_strikethrough) }
+			6 { DrawFn(draw_overline) }
+			7 { DrawFn(draw_cursor_rect) }
+			8 { DrawFn(draw_cursor_hollow_rect) }
+			9 { DrawFn(draw_cursor_bar) }
+			10 { DrawFn(draw_cursor_underline) }
+			else { none }
+		}
+	}
+
+	// Pray that the compiler is smart enough to
+	// turn this in to a jump table or something...
+	//
+	// Block Elements | U+2580...U+259F
+	if cp >= 0x2580 && cp <= 0x259f {
+		return draw_2580_259f
+	}
+	// Box Drawing | U+2500...U+257F
+	// (handled by box.v draw functions)
+	// Braille Patterns | U+2800...U+28FF
+	if cp >= 0x2800 && cp <= 0x28ff {
+		return draw_2800_28ff
+	}
+	// Geometric Shapes | U+25E2...U+25E5
+	if cp >= 0x25e2 && cp <= 0x25e5 {
+		return draw_25e2_25e5
+	}
+	// Geometric Shapes | U+25F8...U+25FA
+	if cp >= 0x25f8 && cp <= 0x25fa {
+		return draw_25f8_25fa
+	}
+	// Geometric Shapes | U+25FF
+	if cp == 0x25ff {
+		return draw_25ff
+	}
+	// Powerline symbols
+	if cp == 0xe0b0 {
+		return draw_e0b0
+	}
+	if cp == 0xe0b1 {
+		return draw_e0b1
+	}
+	if cp == 0xe0b2 {
+		return draw_e0b2
+	}
+	if cp == 0xe0b3 {
+		return draw_e0b3
+	}
+	if cp == 0xe0b4 {
+		return draw_e0b4
+	}
+	if cp == 0xe0b5 {
+		return draw_e0b5
+	}
+	if cp == 0xe0b6 {
+		return draw_e0b6
+	}
+	if cp == 0xe0b7 {
+		return draw_e0b7
+	}
+	if cp == 0xe0b8 {
+		return draw_e0b8
+	}
+	if cp == 0xe0b9 {
+		return draw_e0b9
+	}
+	if cp == 0xe0ba {
+		return draw_e0ba
+	}
+	if cp == 0xe0bb {
+		return draw_e0bb
+	}
+	if cp == 0xe0bc {
+		return draw_e0bc
+	}
+	if cp == 0xe0bd {
+		return draw_e0bd
+	}
+	if cp == 0xe0be {
+		return draw_e0be
+	}
+	if cp == 0xe0bf {
+		return draw_e0bf
+	}
+	if cp == 0xe0d2 {
+		return draw_e0d2
+	}
+	if cp == 0xe0d4 {
+		return draw_e0d4
+	}
+	// Branch Drawing Characters | U+F5D0...U+F60D
+	if cp >= 0xf5d0 && cp <= 0xf60d {
+		return draw_f5d0_f60d
+	}
+	// Symbols for Legacy Computing | U+1FB00...U+1FB3B
+	if cp >= 0x1fb00 && cp <= 0x1fb3b {
+		return draw_1fb00_1fb3b
+	}
+	// Smooth Mosaics | U+1FB3C...U+1FB67
+	if cp >= 0x1fb3c && cp <= 0x1fb67 {
+		return draw_1fb3c_1fb67
+	}
+	// Edge triangles | U+1FB68...U+1FB6F
+	if cp >= 0x1fb68 && cp <= 0x1fb6f {
+		return draw_1fb68_1fb6f
+	}
+	// Vertical one eighth blocks | U+1FB70...U+1FB75
+	if cp >= 0x1fb70 && cp <= 0x1fb75 {
+		return draw_1fb70_1fb75
+	}
+	// Horizontal one eighth blocks | U+1FB76...U+1FB7B
+	if cp >= 0x1fb76 && cp <= 0x1fb7b {
+		return draw_1fb76_1fb7b
+	}
+	// Mixed block characters | U+1FB7C...U+1FB97
+	if cp >= 0x1fb7c && cp <= 0x1fb97 {
+		return draw_1fb7c_1fb97
+	}
+	// Upper-left to lower-right diagonal fill | U+1FB98
+	if cp == 0x1fb98 {
+		return draw_1fb98
+	}
+	// Upper-right to lower-left diagonal fill | U+1FB99
+	if cp == 0x1fb99 {
+		return draw_1fb99
+	}
+	// Triangles and corner triangle shades | U+1FB9A...U+1FB9F
+	if cp >= 0x1fb9a && cp <= 0x1fb9f {
+		return draw_1fb9a_1fb9f
+	}
+	// Corner diagonal lines | U+1FBA0...U+1FBAE
+	if cp >= 0x1fba0 && cp <= 0x1fbae {
+		return draw_1fba0_1fbae
+	}
+	// Box drawing variant | U+1FBAF
+	if cp == 0x1fbaf {
+		return draw_1fbaf
+	}
+	// Inverted light diagonal cross | U+1FBBD
+	if cp == 0x1fbbd {
+		return draw_1fbbd
+	}
+	// Inverted corner diagonal | U+1FBBE
+	if cp == 0x1fbbe {
+		return draw_1fbbe
+	}
+	// Inverted full corner diagonal | U+1FBBF
+	if cp == 0x1fbbf {
+		return draw_1fbbf
+	}
+	// Left two-thirds block | U+1FBCE
+	if cp == 0x1fbce {
+		return draw_1fbce
+	}
+	// Left one-third block | U+1FBCF
+	if cp == 0x1fbcf {
+		return draw_1fbcf
+	}
+	// Cell diagonals | U+1FBD0...U+1FBDF
+	if cp >= 0x1fbd0 && cp <= 0x1fbdf {
+		return draw_1fbd0_1fbdf
+	}
+	// Circles | U+1FBE0...U+1FBEF
+	if cp >= 0x1fbe0 && cp <= 0x1fbef {
+		return draw_1fbe0_1fbef
+	}
+	// Symbols for Legacy Computing Supplement
+	// Octants | U+1CD00...U+1CDE5
+	if cp >= 0x1cd00 && cp <= 0x1cde5 {
+		return draw_1cd00_1cde5
+	}
+	// Separated Block Quadrants | U+1CC21...U+1CC2F
+	if cp >= 0x1cc21 && cp <= 0x1cc2f {
+		return draw_1cc21_1cc2f
+	}
+	// Twelfth and Quarter circle pieces | U+1CC30...U+1CC3F
+	if cp >= 0x1cc30 && cp <= 0x1cc3f {
+		return draw_1cc30_1cc3f
+	}
+	// Box Drawings supplement | U+1CC1B...U+1CC1E
+	if cp >= 0x1cc1b && cp <= 0x1cc1e {
+		return draw_1cc1b_1cc1e
+	}
+	// Right half and left half white circle | U+1CE00
+	if cp == 0x1ce00 {
+		return draw_1ce00
+	}
+	// Lower half and upper half white circle | U+1CE01
+	if cp == 0x1ce01 {
+		return draw_1ce01
+	}
+	// Left half white ellipse | U+1CE0B
+	if cp == 0x1ce0b {
+		return draw_1ce0b
+	}
+	// Right half white ellipse | U+1CE0C
+	if cp == 0x1ce0c {
+		return draw_1ce0c
+	}
+	// Box drawings light vertical and top/bottom | U+1CE16...U+1CE19
+	if cp >= 0x1ce16 && cp <= 0x1ce19 {
+		return draw_1ce16_1ce19
+	}
+	// Separated Block Sextants | U+1CE51...U+1CE8F
+	if cp >= 0x1ce51 && cp <= 0x1ce8f {
+		return draw_1ce51_1ce8f
+	}
+	// Sixteenth Blocks | U+1CE90...U+1CEAF
+	if cp >= 0x1ce90 && cp <= 0x1ceaf {
+		return draw_1ce90_1ceaf
+	}
+
+	return none
+}
+
+// has_codepoint returns true if the codepoint exists in our sprite font.
+// We ignore presentation. No matter what presentation is
+// requested we always provide glyphs for our codepoints.
+pub fn (self &SpriteFace) has_codepoint(cp u32, p ?font.Presentation) bool {
+	_ = p
+	_ = self
+	return get_draw_fn(cp) != none
+}
+
+// render_glyph renders the glyph for the given codepoint.
+pub fn (self &SpriteFace) render_glyph(atlas &font.Atlas, cp u32, opts font.RenderOptions) !font.GlyphInfo {
+	// XTODO: Full render_glyph implementation needs Atlas integration.
+	// The general flow is:
+	// 1. Look up the draw function via get_draw_fn
+	// 2. Calculate width based on opts.cell_width
+	// 3. Create a Canvas with appropriate dimensions and padding
+	// 4. Call the draw function to rasterize the glyph
+	// 5. Write the canvas data to the atlas
+	// 6. Return glyph metrics (width, height, offsets, atlas position)
+
+	_ = atlas
+
+	draw := get_draw_fn(cp) or {
+		return font.GlyphInfo{
+			width: 0
+			height: 0
+			offset_x: 0
+			offset_y: 0
+			atlas_x: 0
+			atlas_y: 0
+		}
+	}
+
+	metrics := self.metrics
+
+	// We adjust our sprite width based on the cell width.
+	width := if opts.cell_width == 0 || opts.cell_width == 1 {
+		metrics.cell_width
+	} else {
+		metrics.cell_width * opts.cell_width
+	}
+
+	height := metrics.cell_height
+
+	padding_x := width / 4
+	padding_y := height / 4
+
+	// Make a canvas of the desired size
+	mut canvas := Canvas.init(width, height, padding_x, padding_y)
+
+	draw(cp, mut &canvas, width, height, metrics)!
+
+	// XTODO: Write the drawing to the atlas
+	// region := canvas.write_atlas(atlas)
+
+	return font.GlyphInfo{
+		width: width
+		height: height
+		offset_x: 0
+		offset_y: 0
+		atlas_x: 0
+		atlas_y: 0
+	}
+}
