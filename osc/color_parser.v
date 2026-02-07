@@ -300,6 +300,13 @@ pub struct ColorRequestResetPalette {}
 
 pub struct ColorRequestResetSpecial {}
 
+// ColoredTarget pairs a color target with an RGB color value.
+pub struct ColoredTarget {
+pub:
+	target ColorTarget
+	color  RGB
+}
+
 // parse_color_operation parses OSC color commands (4, 5, 10-19, 104, 105, 110-119).
 fn parse_color_operation(mut parser Parser, terminator_ch u8) ?Command {
 	data := parser.buffered()

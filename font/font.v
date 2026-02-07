@@ -122,65 +122,18 @@ pub fn (d DesiredSize) pixels() f64 {
 	return f64(d.points) * dpi / f64(default_dpi)
 }
 
-// ============================================================
-// SharedGridSet
-// ============================================================
-
-// SharedGridSet manages shared font grids across surfaces.
-pub struct SharedGridSet {}
-
-pub fn (s SharedGridSet) ref(config &DerivedConfig, size DesiredSize) !(GridKey, &SharedGrid) {
-	return GridKey{}, &SharedGrid{
-		metrics: Metrics{
-			cell_width: 10
-			cell_height: 20
-			cell_baseline: 16
-		}
-	}
-}
-
-pub fn (s SharedGridSet) deref(key GridKey) {
-	// stub: decrements reference count
-	_ = key
-}
-
-pub struct GridKey {}
-
-// ============================================================
-// SharedGrid
-// ============================================================
-
-// SharedGrid is a font grid shared across surfaces. It contains
-// the font atlas textures and metrics, protected by a lock.
-pub struct SharedGrid {
-pub mut:
-	// The font metrics for this grid.
-	metrics Metrics
-	// The grayscale atlas for text glyphs.
-	atlas_grayscale Atlas
-	// The color atlas for emoji and color glyphs.
-	atlas_color Atlas
-}
-
-// Render a glyph from the grid. Returns the rendered glyph info.
-pub fn (mut g SharedGrid) render_glyph(font_idx u32, glyph_index u32, opts RenderOptions) !RenderResult {
-	return RenderResult{
-		glyph: GlyphInfo{}
-		presentation: .text
-	}
-}
-
-// Render a codepoint from the grid. Returns the rendered glyph info, or none.
-pub fn (mut g SharedGrid) render_codepoint(cp u32, style FontStyle, presentation Presentation, opts RenderOptions) ?RenderResult {
-	return RenderResult{
-		glyph: GlyphInfo{}
-		presentation: .text
-	}
-}
+// Note: SharedGridSet is in shared_grid_set.v
+// Note: SharedGrid is in shared_grid.v
 
 // ============================================================
 // Atlas
 // ============================================================
+
+// AtlasFormat specifies the pixel format for an atlas.
+pub enum AtlasFormat {
+	grayscale
+	bgra
+}
 
 // Atlas holds a texture atlas for font glyphs.
 pub struct Atlas {
@@ -189,8 +142,39 @@ pub mut:
 	modified u64
 	// The size of the atlas texture (width and height are equal).
 	size u32
+	// The pixel format of this atlas.
+	format AtlasFormat
 	// The raw pixel data.
 	data []u8
+}
+
+// init creates a new Atlas with the given initial size and format.
+pub fn Atlas.init(size u32, format AtlasFormat) Atlas {
+	bpp := match format {
+		.grayscale { u32(1) }
+		.bgra { u32(4) }
+	}
+	return Atlas{
+		size:   size
+		format: format
+		data:   []u8{len: int(size * size * bpp)}
+	}
+}
+
+// deinit releases atlas resources.
+pub fn (mut a Atlas) deinit() {
+	a.data = []
+}
+
+// grow doubles the atlas texture, preserving existing data.
+pub fn (mut a Atlas) grow(new_size u32) {
+	bpp := match a.format {
+		.grayscale { u32(1) }
+		.bgra { u32(4) }
+	}
+	a.data = []u8{len: int(new_size * new_size * bpp)}
+	a.size = new_size
+	a.modified += 1
 }
 
 // ============================================================
@@ -217,7 +201,7 @@ pub:
 
 // RenderOptions for glyph rendering.
 pub struct RenderOptions {
-pub:
+pub mut:
 	cell_width       u32 = 1
 	grid_metrics     Metrics
 	thicken          bool
@@ -501,10 +485,4 @@ pub struct CellSize {
 pub:
 	width  u32
 	height u32
-}
-
-pub struct DerivedConfig {}
-
-pub fn DerivedConfig.init(config voidptr) !DerivedConfig {
-	return DerivedConfig{}
 }

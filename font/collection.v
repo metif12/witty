@@ -300,14 +300,7 @@ pub fn (self &LoadOptions) face_options() FaceOptions {
 	}
 }
 
-// ============================================================
-// MetricsModifierSet
-// ============================================================
-
-// MetricsModifierSet holds modifiers to adjust computed metrics.
-// XTODO: implement full modifier support (cell padding, etc.)
-pub struct MetricsModifierSet {
-}
+// Note: MetricsModifierSet is defined in shared_grid_set.v
 
 // ============================================================
 // AddOptions

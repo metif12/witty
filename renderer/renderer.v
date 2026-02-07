@@ -859,7 +859,7 @@ fn (mut self Renderer) add_underline(x u16, y u16, style terminal.UnderlineStyle
 		.curly { font.Sprite.underline_curly }
 	}
 
-	render := self.font_grid.render_glyph(font.sprite_index, u32(sprite), font.RenderOptions{
+	render := self.font_grid.render_glyph(font.Index.init_special(.sprite), u32(sprite), font.RenderOptions{
 		cell_width: 1
 		grid_metrics: self.grid_metrics
 	})!
@@ -876,7 +876,7 @@ fn (mut self Renderer) add_underline(x u16, y u16, style terminal.UnderlineStyle
 
 // Add an overline decoration to the specified cell.
 fn (mut self Renderer) add_overline(x u16, y u16, color terminal.RGB, alpha u8) ! {
-	render := self.font_grid.render_glyph(font.sprite_index, u32(font.Sprite.overline),
+	render := self.font_grid.render_glyph(font.Index.init_special(.sprite), u32(font.Sprite.overline),
 		font.RenderOptions{
 		cell_width: 1
 		grid_metrics: self.grid_metrics
@@ -894,7 +894,7 @@ fn (mut self Renderer) add_overline(x u16, y u16, color terminal.RGB, alpha u8) 
 
 // Add a strikethrough decoration to the specified cell.
 fn (mut self Renderer) add_strikethrough(x u16, y u16, color terminal.RGB, alpha u8) ! {
-	render := self.font_grid.render_glyph(font.sprite_index, u32(font.Sprite.strikethrough),
+	render := self.font_grid.render_glyph(font.Index.init_special(.sprite), u32(font.Sprite.strikethrough),
 		font.RenderOptions{
 		cell_width: 1
 		grid_metrics: self.grid_metrics
@@ -914,7 +914,11 @@ fn (mut self Renderer) add_strikethrough(x u16, y u16, color terminal.RGB, alpha
 fn (mut self Renderer) add_glyph(x u16, y u16, color terminal.RGB, alpha u8, glyph_index u32, font_index u32, x_offset i32, y_offset i32, cell_width u32) ! {
 	// XTODO: Full glyph rendering requires font grid render_glyph
 	// with constraint handling and Nerd Font attributes.
-	render := self.font_grid.render_glyph(font_index, glyph_index, font.RenderOptions{
+	fidx := font.Index{
+		style: unsafe { font.FontStyle(font_index >> 13) }
+		idx:   u16(font_index & 0x1FFF)
+	}
+	render := self.font_grid.render_glyph(fidx, glyph_index, font.RenderOptions{
 		grid_metrics: self.grid_metrics
 		thicken: self.config.font_thicken
 		thicken_strength: self.config.font_thicken_strength
@@ -973,7 +977,7 @@ fn (mut self Renderer) add_cursor(cursor_state &terminal.RenderCursor, cursor_st
 	}
 
 	render := self.font_grid.render_glyph(
-		font.sprite_index,
+		font.Index.init_special(.sprite),
 		u32(sprite),
 		font.RenderOptions{
 			cell_width: if wide { u32(2) } else { u32(1) }

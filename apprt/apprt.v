@@ -1,9 +1,30 @@
 module apprt
 
+// "apprt" is the "application runtime" package. This abstracts the
+// application runtime and lifecycle management such as creating windows,
+// getting user input (mouse/keyboard), etc.
+//
+// This enables compile-time interfaces to be built to swap out the underlying
+// application runtime. For example: pure macOS Cocoa, GTK+, browser, etc.
+//
+// The goal is to have different implementations share as much of the core
+// logic as possible, and to only reach out to platform-specific implementation
+// code when absolutely necessary.
+//
+// Types are organized across multiple files in this module:
+//   action.v   - Action types, enums, and associated value structs
+//   structs.v  - Basic structs: ContentScale, SurfaceSize, Clipboard, etc.
+//   surface.v  - Surface message types
+//   ipc.v      - Inter-process communication types
+//   runtime.v  - Runtime enum
+//   none.v     - "none" runtime stubs
+//   browser.v  - Browser (WASM) runtime stubs
+//   embedded.v - Embedded runtime (macOS / libghostty)
+
 // RuntimeApp represents the application runtime.
 pub struct RuntimeApp {}
 
-pub fn (r RuntimeApp) perform_action(target ActionTarget, action ActionKind, data ActionData) !bool {
+pub fn (r RuntimeApp) perform_action(target Target, action ActionKey, data ActionValue) !bool {
 	// stub: performs an apprt action, returns true if handled
 	_ = target
 	_ = action
@@ -54,248 +75,6 @@ pub fn (r RuntimeSurface) clipboard_request(loc Clipboard, req ClipboardRequest)
 
 pub fn (r RuntimeSurface) default_termio_env() !map[string]string {
 	return map[string]string{}
-}
-
-pub struct ContentScale {
-pub:
-	x f32
-	y f32
-}
-
-pub struct SurfaceSize {
-pub:
-	width  u32
-	height u32
-}
-
-pub struct CursorPos {
-pub:
-	x f64
-	y f64
-}
-
-pub struct IMEPos {
-pub:
-	x      f64
-	y      f64
-	width  f64
-	height f64
-}
-
-pub enum Clipboard {
-	standard
-	selection
-	primary
-}
-
-pub struct ClipboardContent {
-pub:
-	mime string
-	data string
-}
-
-pub struct ClipboardRequest {
-pub:
-	kind ClipboardRequestKind
-}
-
-pub enum ClipboardRequestKind {
-	osc_52_read
-	paste
-	render
-}
-
-pub enum ActionKind {
-	set_title
-	cell_size
-	size_limit
-	initial_size
-	mouse_shape
-	mouse_visibility
-	mouse_over_link
-	color_change
-	renderer_health
-	scrollbar
-	present_terminal
-	secure_input
-	ring_bell
-	progress_report
-	command_finished
-	desktop_notification
-	reload_config
-	config_change
-	pwd
-	open_url
-	show_child_exited
-	key_sequence
-	key_table
-	search_total
-	search_selected
-}
-
-pub struct ActionTarget {
-pub:
-	surface voidptr
-}
-
-pub struct ActionData {
-pub:
-	title       string
-	width       u32
-	height      u32
-	min_width   u32
-	min_height  u32
-	max_width   u32
-	max_height  u32
-	url         string
-	exit_code   u32
-	soft        bool
-	config      voidptr
-	focused     bool
-	total       ?u32
-	selected    ?u32
-}
-
-// SurfaceMessage represents a message sent to a specific surface.
-// We use a kind enum plus associated fields; only the fields matching
-// `kind` are meaningful.
-pub struct SurfaceMessage {
-pub mut:
-	kind              SurfaceMessageKind
-	// For set_title: null-terminated title buffer
-	title_buf         [256]u8
-	// For set_mouse_shape
-	mouse_shape       int
-	// For clipboard_read
-	clipboard_type    Clipboard = .standard
-	// For clipboard_write
-	clipboard_data    string
-	// For color_change
-	color_target      int
-	color_r           u8
-	color_g           u8
-	color_b           u8
-	// For stop_command
-	exit_code         u8
-	// For pwd_change
-	pwd               string
-	// For desktop_notification
-	notification_title [256]u8
-	notification_body  [256]u8
-	// For progress_report
-	progress_state    int
-	// For report_title
-	report_style      int
-	// For size_report
-	size_report_style int
-	// For focused
-	focused_val       bool
-	// For color_scheme_report
-	force             bool
-}
-
-pub enum SurfaceMessageKind {
-	change_config
-	set_title
-	report_title
-	color_change
-	set_mouse_shape
-	clipboard_read
-	clipboard_write
-	pwd_change
-	close
-	child_exited
-	desktop_notification
-	renderer_health
-	scrollbar
-	present_surface
-	password_input
-	ring_bell
-	progress_report
-	selection_scroll_tick
-	start_command
-	stop_command
-	search_total
-	search_selected
-	focused
-	color_scheme_report
-	size_report
-}
-
-// SurfaceMailbox handles pushing surface messages.
-pub struct SurfaceMailbox {
-mut:
-	dummy u8
-}
-
-// push attempts to push a message. Returns number of items pushed (0 or 1).
-pub fn (m SurfaceMailbox) push(msg SurfaceMessage) int {
-	_ = msg
-	return 1
-}
-
-pub struct ChildExitedInfo {
-pub:
-	runtime_ms u32
-	exit_code  u32
-}
-
-// ColorScheme represents the system color scheme preference.
-pub enum ColorScheme {
-	light
-	dark
-}
-
-// NewSurfaceContext describes where a new surface should be created.
-pub enum NewSurfaceContext {
-	window
-	tab
-	split
-}
-
-// SplitDirection values for new_split.
-pub enum SplitDirection {
-	right
-	down
-	left
-	up
-	auto_
-}
-
-// GotoSplit values for goto_split focus direction.
-pub enum GotoSplit {
-	previous
-	next
-	up
-	left
-	down
-	right
-}
-
-// ResizeSplitDirection values for resize_split.
-pub enum ResizeSplitDirection {
-	up
-	down
-	left
-	right
-}
-
-// ResizeSplit holds direction and amount for split resize.
-pub struct ResizeSplit {
-pub:
-	direction ResizeSplitDirection
-	amount    u16
-}
-
-// Target represents the target of an apprt action, either the app
-// or a specific surface.
-pub type Target = AppTarget | SurfaceTarget
-
-pub struct AppTarget {}
-
-pub struct SurfaceTarget {
-pub:
-	surface voidptr
 }
 
 // CoreApp represents the core application logic.
@@ -418,8 +197,8 @@ pub fn (mut s CoreSurface) color_scheme_callback(scheme ColorScheme) ! {
 	_ = scheme
 }
 
-pub fn (mut s CoreSurface) mouse_button_callback(action voidptr, button voidptr, mods voidptr) !bool {
-	_ = action
+pub fn (mut s CoreSurface) mouse_button_callback(action_ voidptr, button voidptr, mods voidptr) !bool {
+	_ = action_
 	_ = button
 	_ = mods
 	return false
@@ -471,8 +250,8 @@ pub fn (s CoreSurface) mouse_captured() bool {
 	return false
 }
 
-pub fn (mut s CoreSurface) perform_binding_action(action voidptr) !bool {
-	_ = action
+pub fn (mut s CoreSurface) perform_binding_action(action_ voidptr) !bool {
+	_ = action_
 	return false
 }
 
@@ -550,8 +329,8 @@ pub mut:
 // SurfaceSizeInfo holds the surface's screen and cell size info.
 pub struct SurfaceSizeInfo {
 pub mut:
-	screen  ScreenSizeInfo
-	cell    CellSizeInfo
+	screen ScreenSizeInfo
+	cell   CellSizeInfo
 }
 
 pub struct ScreenSizeInfo {

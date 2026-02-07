@@ -34,6 +34,14 @@ pub enum ProgressState {
 	pause
 }
 
+// ProgressReport represents a ConEmu-style progress report.
+// Sync with: ghostty_action_progress_report_s
+pub struct ProgressReport {
+pub:
+	state    ProgressState
+	progress ?u8
+}
+
 // ConEmuTabTitle represents a ConEmu tab title value (reset or set to a string).
 pub enum ConEmuTabTitleKind {
 	reset

@@ -1,0 +1,346 @@
+module font
+
+// This structure represents the state required to render a terminal
+// grid using the font subsystem. It is "shared" because it is able to
+// be shared across multiple surfaces.
+//
+// It is desirable for the grid state to be shared because the font
+// configuration for a set of surfaces is almost always the same and
+// font data is relatively memory intensive. Further, the font subsystem
+// should be read-heavy compared to write-heavy, so it handles concurrent
+// reads well. Going even further, the font subsystem should be very rarely
+// read at all since it should only be necessary when the grid actively
+// changes.
+//
+// SharedGrid does NOT support resizing, font-family changes, font removals
+// in collections, etc. Because the Grid is shared this would cause a
+// major disruption in the rendering of multiple surfaces (i.e. increasing
+// the font size in one would increase it in all). In many cases this isn't
+// desirable so to implement configuration changes the grid should be
+// reinitialized and all surfaces should switch over to using that one.
+//
+// Translated from ghostty/src/font/SharedGrid.zig
+
+// ============================================================
+// SharedGrid
+// ============================================================
+
+// SharedGrid is a font grid shared across surfaces. It contains
+// the font atlas textures, glyph caches, and metrics, protected by a lock.
+@[heap]
+pub struct SharedGrid {
+pub mut:
+	// Cache for codepoints to font indexes in a group.
+	// Key is CodepointKey.hash(), value is CodepointValue.
+	codepoints map[u64]CodepointValue
+
+	// Cache for glyph renders into the atlas.
+	// Key is GlyphKey.hash(), value is RenderResult.
+	glyphs map[u64]RenderResult
+
+	// The texture atlas to store renders in. The Glyph data in the glyphs
+	// cache is dependent on the atlas matching.
+	atlas_grayscale Atlas
+	atlas_color     Atlas
+
+	// The underlying resolver for font data, fallbacks, etc. The shared
+	// grid takes ownership of the resolver and will free it.
+	resolver CodepointResolver
+
+	// The currently active grid metrics dictating the layout of the grid.
+	// This is calculated based on the resolver and current fonts.
+	metrics Metrics
+
+	// The RwLock used to protect the shared grid. Callers are expected to use
+	// this directly if they need to i.e. access the atlas directly. Because
+	// callers can use this lock directly, maintainers need to be extra careful
+	// to review call sites to ensure they are using the lock correctly.
+	// XTODO: use sync.RwMutex when V has one; for now single-threaded.
+}
+
+// Initialize the grid.
+//
+// The resolver must have a collection that supports deferred loading
+// (collection.load_options != null). This is because we need the load
+// options data to determine grid metrics and setup our sprite font.
+//
+// SharedGrid always configures the sprite font. This struct is expected to be
+// used with a terminal grid and therefore the sprite font is always
+// necessary for correct rendering.
+pub fn SharedGrid.init(resolver CodepointResolver) !SharedGrid {
+	// We need to support loading options since we use the size data
+	assert(resolver.collection.load_options != none)
+
+	atlas_grayscale := Atlas.init(512, .grayscale)
+	atlas_color := Atlas.init(512, .bgra)
+
+	mut result := SharedGrid{
+		resolver:        resolver
+		atlas_grayscale: atlas_grayscale
+		atlas_color:     atlas_color
+		metrics:         Metrics{} // Loaded below
+	}
+
+	// Initialize our metrics.
+	result.reload_metrics()!
+
+	return result
+}
+
+// Deinit. Assumes no concurrent access so no lock is taken.
+pub fn (mut self SharedGrid) deinit() {
+	self.codepoints = map[u64]CodepointValue{}
+	self.glyphs = map[u64]RenderResult{}
+	self.atlas_grayscale.deinit()
+	self.atlas_color.deinit()
+	self.resolver.deinit()
+}
+
+fn (mut self SharedGrid) reload_metrics() ! {
+	self.resolver.collection.update_metrics()!
+
+	self.metrics = self.resolver.collection.metrics or {
+		return error('no metrics available')
+	}
+
+	// Setup our sprite font.
+	self.resolver.sprite = SpriteFace{
+		metrics: self.metrics
+	}
+}
+
+// Returns the grid cell size.
+//
+// This is not thread safe.
+pub fn (self &SharedGrid) cell_size() CellSize {
+	return CellSize{
+		width:  self.metrics.cell_width
+		height: self.metrics.cell_height
+	}
+}
+
+// Get the font index for a given codepoint. This is cached.
+//
+// This always forces loading any deferred fonts since we assume that if
+// you're looking up an index that the caller plans to use the font. By
+// loading the font in this function we can ensure thread-safety on the
+// load without complicating future calls.
+//
+// Returns a CodepointValue where has_value indicates whether a font was found.
+// On error (e.g. face loading failure), returns an error.
+pub fn (mut self SharedGrid) get_index(cp u32, style FontStyle, p ?Presentation) !CodepointValue {
+	key := CodepointKey{
+		style:        style
+		codepoint:    cp
+		presentation: p
+	}
+	h := key.hash_key()
+
+	// Fast path: the cache has the value. This is almost always true and
+	// only requires a read lock.
+	// XTODO: use shared lock for concurrent reads
+	if h in self.codepoints {
+		return self.codepoints[h]
+	}
+
+	// Slow path: we need to search this codepoint
+	// XTODO: use exclusive lock for writes
+
+	// Load a value and cache it. This even caches negative matches.
+	value := self.resolver.get_index(cp, style, p)
+
+	if idx := value {
+		self.codepoints[h] = CodepointValue{
+			has_value: true
+			index:     idx
+		}
+
+		// If the font is a sprite font then we don't need to preload
+		// because getFace doesn't work with special fonts.
+		if idx.special() == none {
+			// Load the face in case its deferred. If this fails then we would've
+			// failed to load it in the future anyways so we want to undo all
+			// the caching we did.
+			self.resolver.collection.get_face(idx) or {
+				self.codepoints.delete(h)
+				return err
+			}
+		}
+
+		return CodepointValue{
+			has_value: true
+			index:     idx
+		}
+	}
+
+	// Cache negative result
+	result := CodepointValue{
+		has_value: false
+	}
+	self.codepoints[h] = result
+	return result
+}
+
+// Returns true if the given font index has the codepoint and presentation.
+pub fn (self &SharedGrid) has_codepoint(idx Index, cp u32, p ?Presentation) bool {
+	// XTODO: use shared lock for concurrent reads
+	return self.resolver.collection.has_codepoint(idx, cp, if pr := p {
+		PresentationMode.explicit(pr)
+	} else {
+		PresentationMode.any()
+	})
+}
+
+// Render a codepoint. This uses the first font index that has the codepoint
+// and matches the presentation requested. If the codepoint cannot be found
+// in any font, none is returned.
+pub fn (mut self SharedGrid) render_codepoint(cp u32, style FontStyle, p ?Presentation, opts RenderOptions) ?RenderResult {
+	// Note: we could optimize the below to use way less locking, but
+	// at the time of writing this codepath is only called for preedit
+	// text which is relatively rare and almost non-existent in multiple
+	// surfaces at the same time.
+
+	// Get the font that has the codepoint
+	cv := self.get_index(cp, style, p) or { return none }
+	if !cv.has_value {
+		return none
+	}
+	index := cv.index
+
+	// Get the glyph for the font
+	// XTODO: use shared lock for concurrent reads
+	face := self.resolver.collection.get_face(index) or { return none }
+	glyph_index := face.glyph_index(cp) or { return none }
+
+	// Render
+	return self.render_glyph(index, glyph_index, opts) or { return none }
+}
+
+// Render a glyph index. This automatically determines the correct texture
+// atlas to use and caches the result.
+pub fn (mut self SharedGrid) render_glyph(index Index, glyph_index u32, opts RenderOptions) !RenderResult {
+	key := GlyphKey{
+		index: index
+		glyph: glyph_index
+		opts:  opts
+	}
+	h := key.hash_key()
+
+	// Fast path: the cache has the value. This is almost always true and
+	// only requires a read lock.
+	// XTODO: use shared lock for concurrent reads
+	if h in self.glyphs {
+		return self.glyphs[h]
+	}
+
+	// Slow path: we need to render this glyph
+	// XTODO: use exclusive lock for writes
+
+	// Check again in case another thread beat us to it.
+	if h in self.glyphs {
+		return self.glyphs[h]
+	}
+
+	// Get the presentation to determine what atlas to use
+	p := self.resolver.get_presentation(index, glyph_index)!
+	mut atlas := match p {
+		.text { &self.atlas_grayscale }
+		.emoji { &self.atlas_color }
+	}
+
+	mut render_opts := opts
+
+	// Always use these constraints for emoji.
+	if p == .emoji {
+		render_opts.constraint = Constraint{
+			// Scale emoji to be as large as possible
+			// while preserving their aspect ratio.
+			size: .cover
+			// Center the emoji in its cells.
+			align_horizontal: .center
+			align_vertical: .center
+			// Add a small bit of padding so the emoji
+			// doesn't quite touch the edges of the cells.
+			pad_left: 0.025
+			pad_right: 0.025
+		}
+	}
+
+	// Render into the atlas
+	glyph := self.resolver.render_glyph(mut atlas, index, glyph_index, render_opts) or {
+		if err.msg() == 'atlas full' {
+			// If the atlas is full, we resize it
+			atlas.grow(atlas.size * 2)
+			self.resolver.render_glyph(mut atlas, index, glyph_index, render_opts)!
+		} else {
+			return err
+		}
+	}
+
+	// Cache and return
+	result := RenderResult{
+		glyph:        glyph
+		presentation: p
+	}
+	self.glyphs[h] = result
+
+	return result
+}
+
+// ============================================================
+// CodepointKey
+// ============================================================
+
+// CodepointKey is the cache key for codepoint-to-index lookups.
+struct CodepointKey {
+	style        FontStyle
+	codepoint    u32
+	presentation ?Presentation
+}
+
+// hash_key returns a u64 hash for use as a map key.
+fn (k CodepointKey) hash_key() u64 {
+	mut state := u64(int(k.style))
+	state = state * 31 + u64(k.codepoint)
+	if p := k.presentation {
+		state = state * 31 + u64(int(p)) + 1
+	}
+	return state
+}
+
+// ============================================================
+// CodepointValue
+// ============================================================
+
+// CodepointValue wraps an optional Index for caching.
+// V maps return zero values for missing keys, so we use a wrapper
+// with a has_value flag to distinguish "not cached" from "cached as none".
+struct CodepointValue {
+	has_value bool
+	index     Index
+}
+
+// ============================================================
+// GlyphKey
+// ============================================================
+
+// GlyphKey is the cache key for glyph render lookups.
+struct GlyphKey {
+	index Index
+	glyph u32
+	opts  RenderOptions
+}
+
+// hash_key returns a u64 hash for use as a map key.
+// This packs the index, glyph, and key render option fields.
+fn (k GlyphKey) hash_key() u64 {
+	// Pack index style + idx into 16 bits, glyph into 32 bits,
+	// and render option fields into remaining bits.
+	mut state := u64(k.index.int_val())
+	state = state * 2654435761 + u64(k.glyph)
+	state = state * 31 + u64(k.opts.cell_width)
+	state = state * 31 + u64(if k.opts.thicken { 1 } else { 0 })
+	state = state * 31 + u64(k.opts.thicken_strength)
+	state = state * 31 + u64(k.opts.constraint_width)
+	return state
+}

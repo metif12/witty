@@ -76,7 +76,7 @@ pub mut:
 	// This may be called after a read clipboard call to request
 	// confirmation that the clipboard value is safe to read. The embedder
 	// must call complete_clipboard_request with the given request.
-	confirm_read_clipboard_cb fn (voidptr, string, &ClipboardRequest, ClipboardRequestKind) = unsafe { nil }
+	confirm_read_clipboard_cb fn (voidptr, string, &ClipboardRequest, ClipboardRequestType) = unsafe { nil }
 
 	// Write the clipboard value.
 	write_clipboard_cb fn (voidptr, int, []ClipboardContent, bool) = unsafe { nil }
@@ -253,7 +253,7 @@ pub fn (mut self App) redraw_inspector(mut surface Surface) {
 
 // perform_action performs a given action. Returns true if the action was
 // able to be performed, false otherwise.
-pub fn (mut self App) perform_action(target_ Target, action ActionKind, data ActionData) !bool {
+pub fn (mut self App) perform_action(target_ Target, action ActionKey, data ActionValue) !bool {
 	// Special case certain actions before they are sent to the
 	// embedded apprt.
 	self.perform_pre_action(target_, action, data)
@@ -268,7 +268,7 @@ pub fn (mut self App) perform_action(target_ Target, action ActionKind, data Act
 
 // perform_pre_action handles actions that need pre-processing before
 // being sent to the embedder.
-fn (mut self App) perform_pre_action(target_ Target, action ActionKind, data ActionData) {
+fn (mut self App) perform_pre_action(target_ Target, action ActionKey, data ActionValue) {
 	// Special case certain actions before they are sent to the embedder
 	match action {
 		.set_title {
@@ -393,7 +393,7 @@ pub mut:
 	content_scale ContentScale
 	size          SurfaceSize
 	cursor_pos    CursorPos
-	inspector_    ?&Inspector
+	inspector_    ?&TerminalInspector
 
 	// The current title of the surface. The embedded apprt saves this so
 	// that getTitle works without the implementer needing to save it.
@@ -512,12 +512,12 @@ pub fn (mut self Surface) deinit() {
 // init_inspector initializes the inspector instance. A surface can only
 // have one inspector at any given time, so this will return the previous
 // inspector if it was already initialized.
-pub fn (mut self Surface) init_inspector() !&Inspector {
+pub fn (mut self Surface) init_inspector() !&TerminalInspector {
 	if v := self.inspector_ {
 		return v
 	}
 
-	mut insp := &Inspector{}
+	mut insp := &TerminalInspector{}
 	insp.init(mut self)!
 	self.inspector_ = insp
 	return insp
@@ -720,8 +720,8 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, mods input.ScrollM
 pub fn (mut self Surface) cursor_pos_callback(x f64, y f64, mods input.Mods) {
 	// Convert our unscaled x/y to scaled.
 	self.cursor_pos = self.cursor_pos_to_pixels(CursorPos{
-		x: x
-		y: y
+		x: f32(x)
+		y: f32(y)
 	}) or {
 		log_err('error converting cursor pos to scaled pixels in cursor pos callback err=${err}')
 		return
@@ -770,7 +770,7 @@ fn (mut self Surface) queue_inspector_render() {
 	self.app.perform_action(
 		Target(AppTarget{}),
 		.renderer_health,
-		ActionData{},
+		ActionValue{},
 	) or {
 		log_err('error rendering the inspector err=${err}')
 		return
@@ -814,16 +814,16 @@ pub fn (self &Surface) default_termio_env() !map[string]string {
 // all our interface works in pixels.
 fn (self &Surface) cursor_pos_to_pixels(pos CursorPos) !CursorPos {
 	scale := self.get_content_scale()!
-	return CursorPos{ x: pos.x * f64(scale.x), y: pos.y * f64(scale.y) }
+	return CursorPos{ x: pos.x * scale.x, y: pos.y * scale.y }
 }
 
 // -----------------------------------------------------------------------
-// Inspector
+// TerminalInspector
 // -----------------------------------------------------------------------
 
-// Inspector is the state required for the terminal inspector. A terminal
+// TerminalInspector is the state required for the terminal inspector. A terminal
 // inspector is 1:1 with a Surface.
-pub struct Inspector {
+pub struct TerminalInspector {
 pub mut:
 	surface       &Surface = unsafe { nil }
 	content_scale f64 = 1.0
@@ -832,8 +832,8 @@ pub mut:
 	prev_time_ns ?i64
 }
 
-// Inspector.init initializes the inspector.
-pub fn (mut self Inspector) init(mut surface Surface) ! {
+// TerminalInspector.init initializes the inspector.
+pub fn (mut self TerminalInspector) init(mut surface Surface) ! {
 	// XTODO: Full implementation requires cimgui (ImGui) bindings.
 	// ImGui context creation, backend platform name setup,
 	// core inspector setup, and inspector activation would go here.
@@ -845,19 +845,19 @@ pub fn (mut self Inspector) init(mut surface Surface) ! {
 }
 
 // deinit destroys the inspector.
-pub fn (mut self Inspector) deinit() {
+pub fn (mut self TerminalInspector) deinit() {
 	// XTODO: Full implementation requires cimgui bindings.
 	// Deactivates the core inspector, destroys ImGui context.
 	self.surface.core_surface.deactivate_inspector()
 }
 
 // queue_render queues a render for the next frame.
-pub fn (mut self Inspector) queue_render() {
+pub fn (mut self TerminalInspector) queue_render() {
 	self.surface.queue_inspector_render()
 }
 
 // init_metal initializes the inspector for a metal backend.
-pub fn (mut self Inspector) init_metal(device voidptr) bool {
+pub fn (mut self TerminalInspector) init_metal(device voidptr) bool {
 	// XTODO: Requires cimgui Metal backend bindings.
 	// Would call ImGui_ImplMetal_Init and set backend to .metal.
 	_ = device
@@ -866,7 +866,7 @@ pub fn (mut self Inspector) init_metal(device voidptr) bool {
 }
 
 // render_metal renders the inspector using the Metal backend.
-pub fn (mut self Inspector) render_metal(command_buffer voidptr, desc voidptr) ! {
+pub fn (mut self TerminalInspector) render_metal(command_buffer voidptr, desc voidptr) ! {
 	// XTODO: Requires cimgui Metal backend bindings.
 	// Would set up ImGui frames, build UI, and render draw data.
 	_ = command_buffer
@@ -874,7 +874,7 @@ pub fn (mut self Inspector) render_metal(command_buffer voidptr, desc voidptr) !
 }
 
 // update_content_scale updates the inspector's content scale.
-pub fn (mut self Inspector) update_content_scale(x f64, y f64) {
+pub fn (mut self TerminalInspector) update_content_scale(x f64, y f64) {
 	// XTODO: Requires cimgui bindings for ImGuiStyle scaling.
 	// Would create a new ImGuiStyle, scale it, and apply.
 	_ = y
@@ -884,7 +884,7 @@ pub fn (mut self Inspector) update_content_scale(x f64, y f64) {
 }
 
 // update_size updates the inspector's display size.
-pub fn (mut self Inspector) update_size(width u32, height u32) {
+pub fn (mut self TerminalInspector) update_size(width u32, height u32) {
 	// XTODO: Requires cimgui bindings.
 	// Would set io.DisplaySize to the given dimensions.
 	_ = width
@@ -892,7 +892,7 @@ pub fn (mut self Inspector) update_size(width u32, height u32) {
 }
 
 // mouse_button_callback handles a mouse button event for the inspector.
-pub fn (mut self Inspector) mouse_button_callback(action input.MouseButtonState, button input.MouseButton, mods input.Mods) {
+pub fn (mut self TerminalInspector) mouse_button_callback(action input.MouseButtonState, button input.MouseButton, mods input.Mods) {
 	// XTODO: Requires cimgui bindings.
 	// Would translate button to ImGui button and add mouse button event.
 	_ = mods
@@ -903,7 +903,7 @@ pub fn (mut self Inspector) mouse_button_callback(action input.MouseButtonState,
 }
 
 // scroll_callback handles a scroll event for the inspector.
-pub fn (mut self Inspector) scroll_callback(xoff f64, yoff f64, mods input.ScrollMods) {
+pub fn (mut self TerminalInspector) scroll_callback(xoff f64, yoff f64, mods input.ScrollMods) {
 	// XTODO: Requires cimgui bindings.
 	// For precision scrolling (trackpads), the values are in pixels which
 	// scroll way too fast. Scale them down to approximate discrete wheel
@@ -916,7 +916,7 @@ pub fn (mut self Inspector) scroll_callback(xoff f64, yoff f64, mods input.Scrol
 }
 
 // cursor_pos_callback handles a cursor position update for the inspector.
-pub fn (mut self Inspector) cursor_pos_callback(x f64, y f64) {
+pub fn (mut self TerminalInspector) cursor_pos_callback(x f64, y f64) {
 	// XTODO: Requires cimgui bindings.
 	// Would add mouse pos event scaled by content_scale.
 	self.queue_render()
@@ -926,7 +926,7 @@ pub fn (mut self Inspector) cursor_pos_callback(x f64, y f64) {
 }
 
 // focus_callback handles focus state changes for the inspector.
-pub fn (mut self Inspector) focus_callback(focused bool) {
+pub fn (mut self TerminalInspector) focus_callback(focused bool) {
 	// XTODO: Requires cimgui bindings.
 	// Would add focus event to ImGui IO.
 	self.queue_render()
@@ -934,7 +934,7 @@ pub fn (mut self Inspector) focus_callback(focused bool) {
 }
 
 // text_callback handles text input for the inspector.
-pub fn (mut self Inspector) text_callback(text string) {
+pub fn (mut self TerminalInspector) text_callback(text string) {
 	// XTODO: Requires cimgui bindings.
 	// Would add input characters to ImGui IO.
 	self.queue_render()
@@ -942,7 +942,7 @@ pub fn (mut self Inspector) text_callback(text string) {
 }
 
 // key_callback handles key input for the inspector.
-pub fn (mut self Inspector) key_callback(action input.KeyAction, key input.Key, mods input.Mods) ! {
+pub fn (mut self TerminalInspector) key_callback(action input.KeyAction, key input.Key, mods input.Mods) ! {
 	// XTODO: Requires cimgui bindings.
 	// Would update modifier keys and send key event to ImGui IO.
 	self.queue_render()
@@ -952,7 +952,7 @@ pub fn (mut self Inspector) key_callback(action input.KeyAction, key input.Key, 
 }
 
 // new_frame sets up a new ImGui frame with delta time calculation.
-fn (mut self Inspector) new_frame() ! {
+fn (mut self TerminalInspector) new_frame() ! {
 	// XTODO: Requires cimgui bindings and time.Instant.
 	// Would calculate delta time and set io.DeltaTime.
 }
@@ -1159,7 +1159,7 @@ pub fn ghostty_app_keyboard_changed(mut v App) {
 
 // ghostty_app_open_config opens the configuration.
 pub fn ghostty_app_open_config(mut v App) {
-	v.perform_action(Target(AppTarget{}), .reload_config, ActionData{}) or {
+	v.perform_action(Target(AppTarget{}), .reload_config, ActionValue{}) or {
 		log_err('error reloading config err=${err}')
 		return
 	}
@@ -1432,7 +1432,7 @@ pub fn ghostty_surface_split(mut surface Surface, direction SplitDirection) {
 	surface.app.perform_action(
 		Target(AppTarget{}),
 		.present_terminal,
-		ActionData{},
+		ActionValue{},
 	) or {
 		log_err('error creating new split err=${err}')
 		return
@@ -1445,7 +1445,7 @@ pub fn ghostty_surface_split_focus(mut surface Surface, direction GotoSplit) {
 	surface.app.perform_action(
 		Target(AppTarget{}),
 		.present_terminal,
-		ActionData{},
+		ActionValue{},
 	) or {
 		log_err('error focusing split err=${err}')
 		return
@@ -1460,7 +1460,7 @@ pub fn ghostty_surface_split_resize(mut surface Surface, direction ResizeSplitDi
 	surface.app.perform_action(
 		Target(AppTarget{}),
 		.present_terminal,
-		ActionData{},
+		ActionValue{},
 	) or {
 		log_err('error resizing split err=${err}')
 		return
@@ -1475,7 +1475,7 @@ pub fn ghostty_surface_split_equalize(mut surface Surface) {
 	surface.app.perform_action(
 		Target(AppTarget{}),
 		.present_terminal,
-		ActionData{},
+		ActionValue{},
 	) or {
 		log_err('error equalizing splits err=${err}')
 		return
@@ -1499,7 +1499,7 @@ pub fn ghostty_surface_complete_clipboard_request(mut surface Surface, str strin
 }
 
 // ghostty_surface_inspector returns or creates the inspector for a surface.
-pub fn ghostty_surface_inspector(mut surface Surface) ?&Inspector {
+pub fn ghostty_surface_inspector(mut surface Surface) ?&TerminalInspector {
 	return surface.init_inspector() or {
 		log_err('error initializing inspector err=${err}')
 		return none
@@ -1512,17 +1512,17 @@ pub fn ghostty_inspector_free(mut surface Surface) {
 }
 
 // ghostty_inspector_set_size updates the inspector display size.
-pub fn ghostty_inspector_set_size(mut insp Inspector, w u32, h u32) {
+pub fn ghostty_inspector_set_size(mut insp TerminalInspector, w u32, h u32) {
 	insp.update_size(w, h)
 }
 
 // ghostty_inspector_set_content_scale updates the inspector content scale.
-pub fn ghostty_inspector_set_content_scale(mut insp Inspector, x f64, y f64) {
+pub fn ghostty_inspector_set_content_scale(mut insp TerminalInspector, x f64, y f64) {
 	insp.update_content_scale(x, y)
 }
 
 // ghostty_inspector_mouse_button handles a mouse button event in the inspector.
-pub fn ghostty_inspector_mouse_button(mut insp Inspector, action input.MouseButtonState, button input.MouseButton, mods int) {
+pub fn ghostty_inspector_mouse_button(mut insp TerminalInspector, action input.MouseButtonState, button input.MouseButton, mods int) {
 	insp.mouse_button_callback(
 		action,
 		button,
@@ -1531,12 +1531,12 @@ pub fn ghostty_inspector_mouse_button(mut insp Inspector, action input.MouseButt
 }
 
 // ghostty_inspector_mouse_pos updates the mouse position in the inspector.
-pub fn ghostty_inspector_mouse_pos(mut insp Inspector, x f64, y f64) {
+pub fn ghostty_inspector_mouse_pos(mut insp TerminalInspector, x f64, y f64) {
 	insp.cursor_pos_callback(x, y)
 }
 
 // ghostty_inspector_mouse_scroll handles a scroll event in the inspector.
-pub fn ghostty_inspector_mouse_scroll(mut insp Inspector, x f64, y f64, scroll_mods int) {
+pub fn ghostty_inspector_mouse_scroll(mut insp TerminalInspector, x f64, y f64, scroll_mods int) {
 	insp.scroll_callback(
 		x,
 		y,
@@ -1547,7 +1547,7 @@ pub fn ghostty_inspector_mouse_scroll(mut insp Inspector, x f64, y f64, scroll_m
 }
 
 // ghostty_inspector_key handles a key event in the inspector.
-pub fn ghostty_inspector_key(mut insp Inspector, action input.KeyAction, key input.Key, c_mods int) {
+pub fn ghostty_inspector_key(mut insp TerminalInspector, action input.KeyAction, key input.Key, c_mods int) {
 	insp.key_callback(
 		action,
 		key,
@@ -1559,12 +1559,12 @@ pub fn ghostty_inspector_key(mut insp Inspector, action input.KeyAction, key inp
 }
 
 // ghostty_inspector_text sends text to the inspector.
-pub fn ghostty_inspector_text(mut insp Inspector, text string) {
+pub fn ghostty_inspector_text(mut insp TerminalInspector, text string) {
 	insp.text_callback(text)
 }
 
 // ghostty_inspector_set_focus updates the inspector focus state.
-pub fn ghostty_inspector_set_focus(mut insp Inspector, focused bool) {
+pub fn ghostty_inspector_set_focus(mut insp TerminalInspector, focused bool) {
 	insp.focus_callback(focused)
 }
 
@@ -1617,12 +1617,12 @@ pub fn ghostty_surface_quicklook_word(mut surface Surface, result &CAPIText) boo
 }
 
 // ghostty_inspector_metal_init initializes the inspector Metal backend.
-pub fn ghostty_inspector_metal_init(mut insp Inspector, device voidptr) bool {
+pub fn ghostty_inspector_metal_init(mut insp TerminalInspector, device voidptr) bool {
 	return insp.init_metal(device)
 }
 
 // ghostty_inspector_metal_render renders the inspector using Metal.
-pub fn ghostty_inspector_metal_render(mut insp Inspector, command_buffer voidptr, descriptor voidptr) {
+pub fn ghostty_inspector_metal_render(mut insp TerminalInspector, command_buffer voidptr, descriptor voidptr) {
 	insp.render_metal(command_buffer, descriptor) or {
 		log_err('error rendering inspector err=${err}')
 		return
@@ -1630,7 +1630,7 @@ pub fn ghostty_inspector_metal_render(mut insp Inspector, command_buffer voidptr
 }
 
 // ghostty_inspector_metal_shutdown shuts down the inspector Metal backend.
-pub fn ghostty_inspector_metal_shutdown(mut insp Inspector) {
+pub fn ghostty_inspector_metal_shutdown(mut insp TerminalInspector) {
 	// XTODO: Requires cimgui Metal backend bindings.
 	// Would call ImGui_ImplMetal_Shutdown.
 	_ = insp
