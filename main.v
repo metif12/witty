@@ -50,7 +50,7 @@ struct C.CGAffineTransform {
 }
 
 // ============================================================
-// Global state — stored as C-side voidptr to avoid __global
+// Per-tab state
 // ============================================================
 
 @[heap]
@@ -62,111 +62,158 @@ mut:
 	child_pid int = -1
 	cell_w    f64 = 8.0
 	cell_h    f64 = 16.0
-	font      voidptr // CTFontRef
+	font      voidptr // CTFontRef (shared)
 	cols      int = 80
 	rows      int = 24
+	view      voidptr // the VTTerminalView* for this tab
 }
 
-fn get_state() &TermState {
-	ptr := macos.get_userdata()
-	if ptr == unsafe { nil } {
-		return unsafe { nil }
-	}
-	return unsafe { &TermState(ptr) }
+// ============================================================
+// Shared app config
+// ============================================================
+
+struct AppConfig {
+	pixel_w int = 640
+	pixel_h int = 384
+	cols    u16 = 80
+	rows    u16 = 24
+	shell   string
+	font    voidptr // shared CTFontRef
 }
 
-fn main() {
-	cols := u16(80)
-	rows := u16(24)
-	pixel_w := 640
-	pixel_h := 384
-
-	// 1. Init macOS app
-	macos.app_init()
-
-	// 2. Create terminal
-	mut term := terminal.Terminal.init(terminal.Options{
-		cols: cols
-		rows: rows
-	}) or {
-		eprintln('terminal init failed: ${err}')
-		return
-	}
-
-	// 3. Open PTY
-	mut p := pty.Pty.open(pty.Winsize{
-		ws_row: rows
-		ws_col: cols
-		ws_xpixel: u16(pixel_w)
-		ws_ypixel: u16(pixel_h)
-	}) or {
-		eprintln('pty open failed: ${err}')
-		return
-	}
-
-	// 4. Fork and exec the shell
+fn get_app_config() AppConfig {
 	shell := os.getenv_opt('SHELL') or { '/bin/zsh' }
+	ct_font := macos.create_font('Menlo', 13.0)
+	return AppConfig{
+		shell: shell
+		font: ct_font
+	}
+}
+
+// ============================================================
+// spawn_terminal — creates a new terminal + PTY + child process
+// ============================================================
+
+fn spawn_terminal(cfg AppConfig) !&TermState {
+	mut term := terminal.Terminal.init(terminal.Options{
+		cols: cfg.cols
+		rows: cfg.rows
+	})!
+
+	mut p := pty.Pty.open(pty.Winsize{
+		ws_row: cfg.rows
+		ws_col: cfg.cols
+		ws_xpixel: u16(cfg.pixel_w)
+		ws_ypixel: u16(cfg.pixel_h)
+	})!
+
 	pid := C.fork()
 	if pid < 0 {
-		eprintln('fork failed')
-		return
+		return error('fork failed')
 	}
 	if pid == 0 {
 		// ---- Child process ----
 		C.dup2(p.slave, 0)
 		C.dup2(p.slave, 1)
 		C.dup2(p.slave, 2)
-		// Pre-exec pty setup (setsid, TIOCSCTTY, close master+slave)
 		p.child_pre_exec() or {
 			C._exit(1)
 		}
 		C.setenv(c'TERM', c'xterm-256color', 1)
-		argv := [shell.str, unsafe { nil }]
-		C.execvp(shell.str, argv.data)
+		argv := [cfg.shell.str, unsafe { nil }]
+		C.execvp(cfg.shell.str, argv.data)
 		C._exit(1)
 	}
 
 	// ---- Parent process ----
 	p.close_slave()
 
-	// 5. Create CTFont for Menlo
-	ct_font := macos.create_font('Menlo', 13.0)
-
-	// 6. Set up global state
 	mut stream := terminal.ReadonlyStream.init(mut term)
 	mut state := &TermState{
 		term: term
 		stream: stream
 		pty_fd: p.master
 		child_pid: pid
-		font: ct_font
-		cols: int(cols)
-		rows: int(rows)
+		font: cfg.font
+		cols: int(cfg.cols)
+		rows: int(cfg.rows)
 	}
-	macos.set_userdata(voidptr(state))
+	return state
+}
 
-	// 7. Set callbacks
+// ============================================================
+// main
+// ============================================================
+
+fn main() {
+	cfg := get_app_config()
+
+	// 1. Init macOS app
+	macos.app_init()
+
+	// 2. Set callbacks (once — they dispatch via per-view userdata)
 	macos.set_draw_callback(on_draw)
 	macos.set_key_callback(on_key)
 	macos.set_resize_callback(on_resize)
 
-	// 8. Spawn read thread
-	spawn read_pty_thread(p.master)
+	// 3. Create window (first tab)
+	view := macos.create_window(cfg.pixel_w, cfg.pixel_h, 'vterminal')
 
-	// 9. Create window and run
-	macos.create_window(pixel_w, pixel_h, 'vterminal')
+	// 4. Spawn terminal for this tab
+	mut state := spawn_terminal(cfg) or {
+		eprintln('terminal init failed: ${err}')
+		return
+	}
+	state.view = view
+	macos.view_set_userdata(view, voidptr(state))
+
+	// 5. Spawn read thread for this tab
+	spawn read_pty_thread(state.pty_fd, state.view)
+
+	// 6. Run the app
 	macos.app_run()
+}
+
+// ============================================================
+// Tab actions
+// ============================================================
+
+fn do_new_tab() {
+	cfg := get_app_config()
+	view := macos.new_tab(cfg.pixel_w, cfg.pixel_h, 'vterminal')
+	if view == unsafe { nil } {
+		return
+	}
+	mut state := spawn_terminal(cfg) or {
+		eprintln('new tab failed: ${err}')
+		macos.close_tab(view)
+		return
+	}
+	state.view = view
+	macos.view_set_userdata(view, voidptr(state))
+	spawn read_pty_thread(state.pty_fd, state.view)
+}
+
+fn do_close_tab(userdata voidptr) {
+	if userdata == unsafe { nil } {
+		return
+	}
+	state := unsafe { &TermState(userdata) }
+	if state.pty_fd >= 0 {
+		C.close(state.pty_fd)
+	}
+	macos.close_tab(state.view)
 }
 
 // ============================================================
 // Draw callback — renders terminal grid via CoreGraphics
 // ============================================================
 
-fn on_draw(ctx voidptr, width f64, height f64) {
-	mut state := get_state()
-	if state == unsafe { nil } {
+fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
+	if userdata == unsafe { nil } {
 		return
 	}
+	mut state := unsafe { &TermState(userdata) }
 
 	cell_w := state.cell_w
 	cell_h := state.cell_h
@@ -246,9 +293,12 @@ const ns_ctrl_mask = u64(1 << 18)
 const ns_alt_mask = u64(1 << 19)
 const ns_cmd_mask = u64(1 << 20)
 
-fn on_key(keycode u16, modflags u64, chars &u8, len int, uchars &u8, ulen int, is_repeat bool) {
-	state := get_state()
-	if state == unsafe { nil } || state.pty_fd < 0 {
+fn on_key(userdata voidptr, keycode u16, modflags u64, chars &u8, len int, uchars &u8, ulen int, is_repeat bool) {
+	if userdata == unsafe { nil } {
+		return
+	}
+	state := unsafe { &TermState(userdata) }
+	if state.pty_fd < 0 {
 		return
 	}
 
@@ -261,6 +311,36 @@ fn on_key(keycode u16, modflags u64, chars &u8, len int, uchars &u8, ulen int, i
 		ctrl: (modflags & ns_ctrl_mask) != 0
 		alt: (modflags & ns_alt_mask) != 0
 		super_: (modflags & ns_cmd_mask) != 0
+	}
+
+	// --- App-level bindings (Cmd+key) ---
+	if mods.super_ && !mods.ctrl && !mods.alt {
+		if !mods.shift {
+			match key {
+				.key_t {
+					do_new_tab()
+					return
+				}
+				.key_w {
+					do_close_tab(userdata)
+					return
+				}
+				else {}
+			}
+		}
+		if mods.shift {
+			match key {
+				.bracket_left {
+					macos.select_tab(-1)
+					return
+				}
+				.bracket_right {
+					macos.select_tab(1)
+					return
+				}
+				else {}
+			}
+		}
 	}
 
 	// Get the UTF-8 text generated by this key
@@ -316,11 +396,11 @@ fn on_key(keycode u16, modflags u64, chars &u8, len int, uchars &u8, ulen int, i
 // Resize callback — update terminal and PTY size
 // ============================================================
 
-fn on_resize(width f64, height f64) {
-	mut state := get_state()
-	if state == unsafe { nil } {
+fn on_resize(userdata voidptr, width f64, height f64) {
+	if userdata == unsafe { nil } {
 		return
 	}
+	mut state := unsafe { &TermState(userdata) }
 	new_cols := int(width / state.cell_w)
 	new_rows := int(height / state.cell_h)
 	if new_cols <= 0 || new_rows <= 0 {
@@ -347,7 +427,7 @@ fn on_resize(width f64, height f64) {
 // PTY read thread — reads shell output, feeds terminal
 // ============================================================
 
-fn read_pty_thread(fd int) {
+fn read_pty_thread(fd int, view voidptr) {
 	mut buf := [4096]u8{}
 	for {
 		n := C.read(fd, &buf[0], usize(4096))
@@ -355,10 +435,11 @@ fn read_pty_thread(fd int) {
 			break
 		}
 		data := unsafe { tos(&buf[0], int(n)) }
-		mut state := get_state()
-		if state != unsafe { nil } {
+		userdata := macos.view_get_userdata(view)
+		if userdata != unsafe { nil } {
+			mut state := unsafe { &TermState(userdata) }
 			state.stream.next_slice(data) or {}
 		}
-		macos.request_display()
+		macos.request_display(view)
 	}
 }
