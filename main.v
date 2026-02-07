@@ -128,16 +128,19 @@ fn spawn_terminal(cfg AppConfig) !&TermState {
 	// ---- Parent process ----
 	p.close_slave()
 
-	mut stream := terminal.ReadonlyStream.init(mut term)
+	// Allocate TermState on the heap first, so that the terminal lives at
+	// its final address before we hand a pointer to ReadonlyStream.
 	mut state := &TermState{
 		term: term
-		stream: stream
 		pty_fd: p.master
 		child_pid: pid
 		font: cfg.font
 		cols: int(cfg.cols)
 		rows: int(cfg.rows)
 	}
+	// Now init the stream with a pointer to the heap-resident terminal.
+	// ReadonlyHandler stores &term internally, so term must not move after this.
+	state.stream = terminal.ReadonlyStream.init(mut state.term)
 	return state
 }
 
