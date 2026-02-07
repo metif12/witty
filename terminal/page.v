@@ -503,11 +503,11 @@ pub fn (self &Page) verify_integrity() ?IntegrityError {
 	// - We only check that we saw less graphemes than the total memory
 	//   used for the same reason as styles above.
 	//
-	if self.size.rows == 0 {
-		return IntegrityError.zero_row_count
-	}
 	if self.size.cols == 0 {
 		return IntegrityError.zero_col_count
+	}
+	if self.size.rows == 0 {
+		return IntegrityError.zero_row_count
 	}
 
 	mut graphemes_seen := 0

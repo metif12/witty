@@ -215,9 +215,7 @@ pub fn (mut s Shaper) shape(run TextRun) ![]ShapeCell {
 
 // Create a run iterator for the given options.
 pub fn (mut s Shaper) run_iterator(opts RunOptions) RunIterator {
-	return RunIterator{
-		shaper: unsafe { &s }
-	}
+	return RunIterator.new(unsafe { &s })
 }
 
 pub struct ShaperOptions {
@@ -290,9 +288,16 @@ pub:
 
 // RunIterator iterates over text runs for shaping.
 pub struct RunIterator {
-mut:
-	shaper &Shaper = unsafe { nil }
-	done   bool
+pub mut:
+	shaper_ptr voidptr = unsafe { nil }
+	done       bool
+}
+
+// Create a new RunIterator with an opaque pointer to the shaper.
+pub fn RunIterator.new(shaper_ptr voidptr) RunIterator {
+	return RunIterator{
+		shaper_ptr: shaper_ptr
+	}
 }
 
 // Get the next text run, or none if done.
