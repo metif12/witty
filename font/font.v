@@ -130,23 +130,109 @@ pub:
 	grid_metrics     Metrics
 	thicken          bool
 	thicken_strength u8
-	constraint       GlyphConstraint
+	constraint       Constraint
 	constraint_width u32
 }
 
-// GlyphConstraint controls how a glyph is constrained to fit its cell.
-pub struct GlyphConstraint {
+// Constraint controls how a glyph is constrained to fit its cell.
+// Specifies scaling/positioning attributes for glyphs.
+pub struct Constraint {
 pub:
-	size GlyphConstraintSize = .none_
+	// Sizing rule.
+	size ConstraintSize = .none_
+	// Vertical alignment rule.
+	align_vertical ConstraintAlign = .none_
+	// Horizontal alignment rule.
+	align_horizontal ConstraintAlign = .none_
+	// Top padding when resizing.
+	pad_top f64
+	// Left padding when resizing.
+	pad_left f64
+	// Right padding when resizing.
+	pad_right f64
+	// Bottom padding when resizing.
+	pad_bottom f64
+	// Size and bearings of the glyph relative
+	// to the bounding box of its scale group.
+	relative_width f64 = 1.0
+	relative_height f64 = 1.0
+	relative_x f64
+	relative_y f64
+	// Maximum aspect ratio (width/height) to allow when stretching.
+	// 0 means no limit.
+	max_xy_ratio f64
+	// Maximum number of cells horizontally to use.
+	max_constraint_width u8 = 2
+	// What to use as the height metric when constraining the glyph
+	// and the constraint width is 1.
+	height ConstraintHeight = .cell
 }
 
-pub enum GlyphConstraintSize {
+// Don't constrain the glyph in any way.
+pub const constraint_none = Constraint{}
+
+// Returns true if the constraint does anything. If it doesn't,
+// because it neither sizes nor positions the glyph, then this
+// returns false.
+pub fn (c Constraint) does_anything() bool {
+	return c.size != .none_ || c.align_horizontal != .none_ || c.align_vertical != .none_
+}
+
+// ConstraintSize specifies how a glyph should be sized.
+pub enum ConstraintSize {
+	// Don't change the size of this glyph.
 	none_
+	// Scale the glyph down if needed to fit within the bounds,
+	// preserving aspect ratio.
 	fit
-	cell
+	// Scale the glyph up or down to exactly match the bounds,
+	// preserving aspect ratio.
+	cover
+	// Scale the glyph down if needed to fit within the bounds,
+	// preserving aspect ratio. If the glyph doesn't cover a
+	// single cell, scale up. If the glyph exceeds a single
+	// cell but is within the bounds, do nothing.
+	// (Nerd Font specific rule.)
+	fit_cover1
+	// Stretch the glyph to exactly fit the bounds in both
+	// directions, disregarding aspect ratio.
+	stretch
 }
 
-pub const none_constraint = GlyphConstraint{}
+// ConstraintAlign specifies how a glyph should be aligned.
+pub enum ConstraintAlign {
+	// Don't move the glyph on this axis.
+	none_
+	// Move the glyph so that its leading (bottom/left)
+	// edge aligns with the leading edge of the axis.
+	start
+	// Move the glyph so that its trailing (top/right)
+	// edge aligns with the trailing edge of the axis.
+	end_
+	// Move the glyph so that it is centered on this axis.
+	center
+	// Move the glyph so that it is centered on this axis,
+	// but always with respect to the first cell even for
+	// multi-cell constraints. (Nerd Font specific rule.)
+	center1
+}
+
+// ConstraintHeight specifies what height metric to use.
+pub enum ConstraintHeight {
+	// Use the full line height of the primary face for
+	// constraining this glyph.
+	cell
+	// Use the icon height from the grid metrics for
+	// constraining this glyph. Unlike cell, the value of
+	// this height depends on both the constraint width and the
+	// adjust-icon-height config option.
+	icon
+}
+
+// Backward compatibility aliases.
+pub type GlyphConstraint = Constraint
+pub type GlyphConstraintSize = ConstraintSize
+pub const none_constraint = constraint_none
 
 // Presentation for a glyph (text or emoji).
 pub enum Presentation {

@@ -214,12 +214,6 @@ pub enum SizeReportStyle {
 	csi_21_t
 }
 
-// ActiveSlot identifies which character bank (GL or GR) to map a charset to.
-pub enum ActiveSlot {
-	gl
-	gr
-}
-
 // DeviceStatusRequest identifies a device status report request.
 pub enum DeviceStatusRequest {
 	operating_status
@@ -1577,23 +1571,7 @@ pub fn (mut self SgrParser) next() ?SgrAttribute {
 		3 { SgrAttribute{ kind: .italic } }
 		4 {
 			// Underline - check for colon subparam
-			style := if self.idx < self.params.len
-				&& self.params_sep.is_set(self.idx - 1) {
-				s := self.params[self.idx]
-				self.idx += 1
-				match s {
-					0 { UnderlineStyle.none }
-					1 { UnderlineStyle.single }
-					2 { UnderlineStyle.double }
-					3 { UnderlineStyle.curly }
-					4 { UnderlineStyle.dotted }
-					5 { UnderlineStyle.dashed }
-					else { UnderlineStyle.single }
-				}
-			} else {
-				UnderlineStyle.single
-			}
-			SgrAttribute{ kind: .underline_set, underline: style }
+			self.parse_underline()
 		}
 		5 { SgrAttribute{ kind: .blink } }
 		7 { SgrAttribute{ kind: .inverse } }
@@ -1637,6 +1615,25 @@ pub fn (mut self SgrParser) next() ?SgrAttribute {
 			SgrAttribute{ kind: .unknown }
 		}
 	}
+}
+
+// parse_underline handles SGR code 4 with optional colon subparam for underline style.
+fn (mut self SgrParser) parse_underline() SgrAttribute {
+	mut style := UnderlineStyle.single
+	if self.idx < self.params.len && self.params_sep.is_set(self.idx - 1) {
+		sub := self.params[self.idx]
+		self.idx += 1
+		style = match sub {
+			0 { UnderlineStyle.none }
+			1 { UnderlineStyle.single }
+			2 { UnderlineStyle.double }
+			3 { UnderlineStyle.curly }
+			4 { UnderlineStyle.dotted }
+			5 { UnderlineStyle.dashed }
+			else { UnderlineStyle.single }
+		}
+	}
+	return SgrAttribute{ kind: .underline_set, underline: style }
 }
 
 // parse_extended_color parses 38;2;r;g;b (direct) or 38;5;n (256-color).
