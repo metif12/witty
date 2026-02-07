@@ -553,8 +553,8 @@ fn fading_line(metrics font.Metrics, mut canvas Canvas, to Edge, thickness Thick
 }
 
 // draw_arc draws a rounded corner arc for box drawing.
-// XTODO: needs z2d path operations (curveTo) for proper arc rendering.
-// Currently creates stub path but fill won't produce correct curves.
+// Uses multiple line segments computed via sin/cos to approximate the
+// quarter-circle arc, since curveTo is not available on StaticPath.
 fn draw_arc(metrics font.Metrics, mut canvas Canvas, corner Corner, thickness Thickness) ! {
 	thick_px := thickness.height(metrics.box_thickness)
 	float_width := f64(metrics.cell_width)
@@ -565,48 +565,102 @@ fn draw_arc(metrics font.Metrics, mut canvas Canvas, corner Corner, thickness Th
 
 	r := math.min(float_width, float_height) / 2
 
-	// Fraction away from the center to place the middle control points.
-	// XTODO: This needs curveTo support on StaticPath for proper arc rendering.
-	// For now we approximate with straight lines through the path.
-	// s := f64(0.25)
+	// Number of segments for the arc approximation.
+	arc_segments := 8
 
-	mut path := canvas.static_path(4)
+	// Compute the start/end points for the straight segments leading to
+	// and from the arc, plus the arc points themselves using sin/cos.
+	//
+	// For each corner the arc sweeps a quarter circle. We compute
+	// arc_segments + 1 points along the arc and draw line segments
+	// between consecutive points, plus the straight line segments
+	// connecting the arc endpoints to the cell edges.
+
+	// Determine start angle and arc center based on corner.
+	// The arc center is at (center_x, center_y) offset by radius in the
+	// appropriate direction.
+	mut arc_cx := f64(0)
+	mut arc_cy := f64(0)
+	mut start_angle := f64(0)
+	mut edge_start_x := f64(0)
+	mut edge_start_y := f64(0)
+	mut edge_end_x := f64(0)
+	mut edge_end_y := f64(0)
 
 	match corner {
 		.tl {
-			path.move_to(center_x, 0)
-			path.line_to(center_x, center_y - r)
-			// XTODO: curveTo for smooth arc
-			path.line_to(center_x - r, center_y)
-			path.line_to(0, center_y)
+			// Arc goes from top-center to left-center
+			arc_cx = center_x - r
+			arc_cy = center_y - r
+			start_angle = 0 // 0 to pi/2 sweeps from right to bottom
+			// but we want from bottom (center_x, center_y-r+r=center_y) to right (center_x-r+r=center_x)
+			// Actually: arc center is at (center_x - r, center_y - r), radius r
+			// Point at angle 0: (arc_cx + r, arc_cy) = (center_x, center_y - r) -- on vertical line going up
+			// Point at angle pi/2: (arc_cx, arc_cy + r) = (center_x - r, center_y) -- on horizontal line going left
+			edge_start_x = center_x
+			edge_start_y = 0
+			edge_end_x = 0
+			edge_end_y = center_y
 		}
 		.tr {
-			path.move_to(center_x, 0)
-			path.line_to(center_x, center_y - r)
-			// XTODO: curveTo for smooth arc
-			path.line_to(center_x + r, center_y)
-			path.line_to(float_width, center_y)
+			// Arc goes from top-center to right-center
+			arc_cx = center_x + r
+			arc_cy = center_y - r
+			start_angle = math.pi / 2 // pi/2 to pi
+			edge_start_x = center_x
+			edge_start_y = 0
+			edge_end_x = float_width
+			edge_end_y = center_y
 		}
 		.bl {
-			path.move_to(center_x, float_height)
-			path.line_to(center_x, center_y + r)
-			// XTODO: curveTo for smooth arc
-			path.line_to(center_x - r, center_y)
-			path.line_to(0, center_y)
+			// Arc goes from bottom-center to left-center
+			arc_cx = center_x - r
+			arc_cy = center_y + r
+			start_angle = 3 * math.pi / 2 // 3pi/2 to 2pi
+			edge_start_x = center_x
+			edge_start_y = float_height
+			edge_end_x = 0
+			edge_end_y = center_y
 		}
 		.br {
-			path.move_to(center_x, float_height)
-			path.line_to(center_x, center_y + r)
-			// XTODO: curveTo for smooth arc
-			path.line_to(center_x + r, center_y)
-			path.line_to(float_width, center_y)
+			// Arc goes from bottom-center to right-center
+			arc_cx = center_x + r
+			arc_cy = center_y + r
+			start_angle = math.pi // pi to 3pi/2
+			edge_start_x = center_x
+			edge_start_y = float_height
+			edge_end_x = float_width
+			edge_end_y = center_y
 		}
 	}
 
-	// XTODO: should be strokePath with line_cap_mode = .butt
-	// and line_width = float_thick. Using line() as approximation.
+	// Build the arc points.
+	mut arc_points_x := []f64{len: arc_segments + 1}
+	mut arc_points_y := []f64{len: arc_segments + 1}
+	for i in 0 .. arc_segments + 1 {
+		t := f64(i) / f64(arc_segments)
+		angle := start_angle + t * math.pi / 2
+		arc_points_x[i] = arc_cx + r * math.cos(angle)
+		arc_points_y[i] = arc_cy + r * math.sin(angle)
+	}
+
+	// Draw the straight segment from the edge to the first arc point.
 	canvas.line(LineSegment{
-		p0: Point{ x: path.nodes[0].x, y: path.nodes[0].y }
-		p1: Point{ x: path.nodes[path.nodes.len - 1].x, y: path.nodes[path.nodes.len - 1].y }
+		p0: Point{ x: edge_start_x, y: edge_start_y }
+		p1: Point{ x: arc_points_x[0], y: arc_points_y[0] }
+	}, float_thick, .on) or {}
+
+	// Draw the arc segments.
+	for i in 0 .. arc_segments {
+		canvas.line(LineSegment{
+			p0: Point{ x: arc_points_x[i], y: arc_points_y[i] }
+			p1: Point{ x: arc_points_x[i + 1], y: arc_points_y[i + 1] }
+		}, float_thick, .on) or {}
+	}
+
+	// Draw the straight segment from the last arc point to the edge.
+	canvas.line(LineSegment{
+		p0: Point{ x: arc_points_x[arc_segments], y: arc_points_y[arc_segments] }
+		p1: Point{ x: edge_end_x, y: edge_end_y }
 	}, float_thick, .on) or {}
 }

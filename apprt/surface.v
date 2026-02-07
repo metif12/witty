@@ -157,10 +157,11 @@ pub:
 }
 
 // push sends a message to the surface.
+// Surface message sending is implemented on the app thread, so the
+// message must be rewrapped with the surface pointer and sent to the
+// app thread.
 pub fn (m SurfaceMailbox) push(msg SurfaceMessage) int {
-	// XTODO: Surface message sending is actually implemented on the app
-	// thread, so we have to rewrap the message with our surface
-	// pointer and send it to the app thread.
+	// TODO: Implement actual message forwarding to the app thread.
 	_ = msg
 	return 1
 }
@@ -176,7 +177,7 @@ pub enum NewSurfaceContext {
 // should_inherit_working_directory returns true if the given context should
 // inherit the working directory from the focused surface.
 pub fn should_inherit_working_directory(context NewSurfaceContext, config &configpkg.Config) bool {
-	// XTODO: needs config fields for window/tab/split-inherit-working-directory
+	// TODO: Needs config fields for window/tab/split-inherit-working-directory.
 	_ = context
 	_ = config
 	return false

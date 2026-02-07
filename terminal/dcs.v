@@ -1,5 +1,7 @@
 module terminal
 
+import tmux
+
 // DCS command handler. This should be hooked into a terminal.Stream handler.
 // The hook/put/unhook functions are meant to be called from the
 // terminal.stream dcs_hook, dcs_put, and dcs_unhook functions, respectively.
@@ -48,12 +50,9 @@ pub mut:
 }
 
 // DcsStateTmux holds the tmux control mode parser state.
-// XTODO: When tmux control mode is implemented, this will hold the
-// actual tmux.ControlParser.
 pub struct DcsStateTmux {
 pub mut:
-	max_bytes int
-	buffer    []u8
+	parser tmux.ControlParser
 }
 
 // DcsState is a sumtype representing the current state of DCS parsing.
@@ -71,8 +70,7 @@ fn dcs_state_deinit(mut state DcsState) {
 			state.data = []
 		}
 		DcsStateTmux {
-			// XTODO: When tmux control mode is implemented, call parser.deinit()
-			state.buffer = []
+			state.parser.deinit()
 		}
 	}
 }
@@ -136,17 +134,9 @@ pub:
 }
 
 // DcsCommandTmux represents a tmux control mode notification.
-// XTODO: When tmux control mode is implemented, this will hold the
-// actual tmux.ControlNotification.
-pub enum DcsTmuxNotification {
-	enter
-	exit
-	// XTODO: Add other tmux notifications as needed
-}
-
 pub struct DcsCommandTmux {
 pub:
-	notification DcsTmuxNotification
+	notification tmux.Notification
 }
 
 // DcsCommand is a sumtype representing possible DCS commands.
@@ -179,6 +169,11 @@ pub mut:
 	// malicious input from causing us to allocate too much memory.
 	// This is arbitrarily set to 1MB today, increase if needed.
 	max_bytes int = 1024 * 1024
+
+	// Pending tmux notification produced by the last put() call.
+	// This is needed because try_put returns `!` (not `?DcsCommand`)
+	// and V cannot combine `!` and `?` return types.
+	tmux_pending ?DcsCommand
 }
 
 // deinit cleans up the handler.
@@ -221,7 +216,6 @@ fn (self DcsHandler) try_hook(dcs DcsParams) !DcsHook {
 		match dcs.final_byte {
 			// Tmux control mode
 			`p` {
-				// XTODO: tmux control mode not fully implemented
 				// Tmux control mode must start with ESC P 1000 p
 				if dcs.params.len != 1 || dcs.params[0] != 1000 {
 					return DcsHook{
@@ -231,11 +225,12 @@ fn (self DcsHandler) try_hook(dcs DcsParams) !DcsHook {
 
 				return DcsHook{
 					state: DcsStateTmux{
-						max_bytes: self.max_bytes
-						buffer: []u8{cap: 128} // Arbitrary choice to limit initial reallocs
+						parser: tmux.ControlParser{
+							max_bytes: self.max_bytes
+						}
 					}
 					command: DcsCommand(DcsCommandTmux{
-						notification: .enter
+						notification: tmux.Notification(tmux.NotifEnter{})
 					})
 				}
 			}
@@ -296,10 +291,16 @@ fn (self DcsHandler) try_hook(dcs DcsParams) !DcsHook {
 // put processes a single byte of the DCS sequence data. May return a
 // command if one needs to be executed immediately (e.g. tmux notifications).
 pub fn (mut self DcsHandler) put(byte u8) ?DcsCommand {
+	self.tmux_pending = none
 	self.try_put(byte) or {
 		// On error we just discard our state and ignore the rest
 		self.discard()
 		self.state = DcsStateIgnore{}
+		return none
+	}
+	if cmd := self.tmux_pending {
+		self.tmux_pending = none
+		return cmd
 	}
 	return none
 }
@@ -313,14 +314,14 @@ fn (mut self DcsHandler) try_put(byte u8) ! {
 			// Nothing to do
 		}
 		DcsStateTmux {
-			// XTODO: When tmux control mode is implemented:
-			// return DcsCommand(DcsCommandTmux{
-			//     notification: tmux.put(byte) orelse return none
-			// })
-			if self.state.buffer.len >= self.state.max_bytes {
-				return error('DCS tmux buffer exceeded max_bytes')
+			// Feed the byte to the tmux control parser. If it
+			// produces a notification, store it for the caller to
+			// retrieve via the tmux_pending field.
+			if notif := self.state.parser.put(byte) {
+				self.tmux_pending = DcsCommand(DcsCommandTmux{
+					notification: notif
+				})
 			}
-			self.state.buffer << byte
 		}
 		DcsStateXtgettcap {
 			if self.state.data.len >= self.max_bytes {
@@ -354,10 +355,9 @@ pub fn (mut self DcsHandler) unhook() ?DcsCommand {
 			return none
 		}
 		DcsStateTmux {
-			// XTODO: When tmux control mode is implemented, clean up state
 			dcs_state_deinit(mut self.state)
 			return DcsCommand(DcsCommandTmux{
-				notification: .exit
+				notification: tmux.Notification(tmux.NotifExit{})
 			})
 		}
 		DcsStateXtgettcap {

@@ -89,10 +89,10 @@ pub fn corner_triangle_shade_geo(metrics font.Metrics, mut canvas Canvas, corner
 }
 
 // corner_triangle_outline draws a corner triangle as an outline (stroke only).
+// Uses individual line segments as an approximation since innerStrokePath
+// is not available. The ideal approach would use a stroke with
+// line_cap_mode = .butt and line_width = float_thick.
 pub fn corner_triangle_outline(metrics font.Metrics, mut canvas Canvas, corner Corner) ! {
-	// XTODO: needs innerStrokePath for proper outline rendering.
-	// For now we use fill_path as an approximation - the stroke
-	// should use line_cap_mode = .butt with line_width = float_thick.
 	float_thick := f64(Thickness.light.height(metrics.box_thickness))
 	float_width := f64(metrics.cell_width)
 	float_height := f64(metrics.cell_height)
@@ -118,9 +118,7 @@ pub fn corner_triangle_outline(metrics font.Metrics, mut canvas Canvas, corner C
 	path.line_to(x2, y2)
 	path.close()
 
-	// XTODO: Should use canvas.innerStrokePath(path.wrapped_path, .{
-	//   .line_cap_mode = .butt, .line_width = float_thick }, .on)
-	// For now draw the outline edges as lines.
+	// Draw the outline edges as individual line segments.
 	canvas.line(LineSegment{ p0: Point{ x: x0, y: y0 }, p1: Point{ x: x1, y: y1 } }, float_thick, .on) or {}
 	canvas.line(LineSegment{ p0: Point{ x: x1, y: y1 }, p1: Point{ x: x2, y: y2 } }, float_thick, .on) or {}
 	canvas.line(LineSegment{ p0: Point{ x: x2, y: y2 }, p1: Point{ x: x0, y: y0 } }, float_thick, .on) or {}

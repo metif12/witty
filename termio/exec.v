@@ -10,8 +10,59 @@ import os
 import pty
 import renderer
 import terminal
+import time
+
+// C interop declarations for process management.
+#include <signal.h>
+#include <unistd.h>
+#include <poll.h>
+#include <fcntl.h>
+#include <sys/wait.h>
+
+fn C.pipe(mut fds &[2]int) int
+fn C.fork() int
+fn C.setsid() int
+fn C.dup2(oldfd int, newfd int) int
+fn C.execvpe(file &char, argv &&char, envp &&char) int
+fn C.execvp(file &char, argv &&char) int
+fn C.close(fd int) int
+fn C.read(fd int, buf voidptr, count usize) isize
+fn C.write(fd int, buf voidptr, count usize) isize
+fn C.poll(fds voidptr, nfds u32, timeout int) int
+fn C.fcntl(fd int, cmd int, arg int) int
+fn C.kill(pid int, sig int) int
+fn C.killpg(pgrp int, sig int) int
+fn C.getpgid(pid int) int
+fn C.waitpid(pid int, status &int, options int) int
+fn C._exit(status int)
+
+// Signal constants
+const sig_hup = 1
+
+// fcntl constants
+const f_getfl = 3
+const f_setfl = 4
+const o_nonblock = 0x0004 // macOS value
+
+// poll event flags
+const pollin = i16(0x0001)
+const pollhup = i16(0x0004)
+
+// waitpid options
+const wnohang = 1
+
+// pollfd struct for C.poll()
+struct PollFd {
+mut:
+	fd      int
+	events  i16
+	revents i16
+}
 
 const log_tag = 'io_exec'
+
+// The version string reported via TERM_PROGRAM_VERSION.
+const term_program_version = '0.1.0'
 
 // The termios poll rate in milliseconds.
 const termios_poll_ms = 200
@@ -28,6 +79,10 @@ pub struct Exec {
 pub mut:
 	// The subprocess state for our exec backend.
 	subprocess Subprocess
+	// Thread-local data for the exec implementation.
+	thread_data ExecThreadData
+	// The read thread handle (V thread).
+	read_thread ?thread = none
 }
 
 // Initialize the exec state. This will NOT start it, this only sets
@@ -67,32 +122,74 @@ pub fn (mut self Exec) init_terminal(mut term terminal.Terminal) {
 }
 
 // thread_enter is called when the IO thread starts.
-// XTODO: needs xev event loop, Thread.spawn, and real pty fd handling.
+// Starts the subprocess, creates a quit pipe, and spawns the read thread.
 pub fn (mut self Exec) thread_enter() ! {
-	// XTODO: needs real event loop implementation
 	// Start our subprocess
-	// pty_fds := self.subprocess.start()!
-	// Create pipe for quit signaling
-	// Start read thread
-	// Start process watcher
-	// Start termios timer
+	pty_fds := self.subprocess.start()!
+
+	// Create pipe for quit signaling.
+	// pipe_fds[0] is the read end, pipe_fds[1] is the write end.
+	mut pipe_fds := [2]int{}
+	if C.pipe(mut &pipe_fds) != 0 {
+		return error('failed to create quit pipe')
+	}
+
+	// Track our process start time
+	start_ns := u64(time.sys_mono_now())
+
+	// Store thread data
+	self.thread_data = ExecThreadData{
+		start_ns: start_ns
+		read_thread_pipe: pipe_fds[1] // write end - we write to signal quit
+		read_thread_fd: pty_fds.read
+	}
+
+	// Spawn the read thread. The read thread gets the pty read fd
+	// and the read end of the quit pipe.
+	read_fd := pty_fds.read
+	quit_fd := pipe_fds[0] // read end - the thread reads to detect quit
+	self.read_thread = spawn thread_main_posix(read_fd, quit_fd)
 }
 
 // thread_exit is called when the IO thread exits.
-// XTODO: needs real thread join and pipe close.
+// Signals the read thread to quit, joins it, and stops the subprocess.
 pub fn (mut self Exec) thread_exit() {
-	// XTODO: needs real implementation
+	if self.thread_data.exited {
+		self.subprocess.external_exit()
+	}
 	self.subprocess.stop()
+
+	// Signal the read thread to quit by writing to the quit pipe.
+	// The read thread polls on the read end and will exit when it
+	// sees data. We then close the write end.
+	quit_byte := [u8(0x78)] // 'x'
+	C.write(self.thread_data.read_thread_pipe, quit_byte.data, 1)
+
+	// Join the read thread to wait for it to finish.
+	if t := self.read_thread {
+		t.wait()
+	}
+
+	// Clean up thread data
+	self.thread_data.deinit()
 }
 
 // focus_gained notifies the exec backend about focus changes.
 // This is used to start/stop the termios polling timer.
+// When we lose focus, we flag the timer to stop on the next tick.
+// When we gain focus, we restart the timer if needed.
 pub fn (mut self Exec) focus_gained(focused bool) ! {
-	_ = self
-	// XTODO: needs termios timer integration
-	// If we lost focus, flag the timer to end on the next iteration.
-	// If we gained focus, restart the timer if needed.
-	_ = focused
+	if !focused {
+		// Flag the timer to end on the next iteration. This is
+		// a lot cheaper than doing full timer cancellation.
+		self.thread_data.termios_timer_running = false
+	} else {
+		// Always set this to true. There is a race condition if we lose
+		// focus and regain focus before the termios timer ticks where
+		// if we don't set this unconditionally the timer will end on
+		// the next iteration.
+		self.thread_data.termios_timer_running = true
+	}
 }
 
 // resize updates the pty subprocess size.
@@ -100,16 +197,57 @@ pub fn (mut self Exec) resize(grid_size renderer.GridSize, screen_size renderer.
 	self.subprocess.resize(grid_size, screen_size)!
 }
 
-// queue_write queues data to be written to the pty.
-// XTODO: needs xev write stream and buffer pool.
+// queue_write writes data to the pty. If linefeed is true, carriage
+// returns (\r) are replaced with CRLF (\r\n) sequences.
 pub fn (mut self Exec) queue_write(data []u8, linefeed bool) ! {
-	// XTODO: needs real write stream implementation
-	// If our process is exited then we don't send any more writes.
-	// We go through and chunk the data if necessary to fit into
-	// our cached buffers that we can queue to the stream.
-	_ = self
-	_ = data
-	_ = linefeed
+	// If our process has exited then we don't send any more writes.
+	if self.thread_data.exited {
+		return
+	}
+
+	// Get the pty master fd to write to.
+	p := self.subprocess.pty_ or { return error('no pty available for writing') }
+	fd := p.master
+	if fd < 0 {
+		return error('pty master fd is invalid')
+	}
+
+	if !linefeed {
+		// Fast path: write data directly, chunking as needed.
+		mut offset := 0
+		for offset < data.len {
+			n := C.write(fd, unsafe { data.data + offset }, usize(data.len - offset))
+			if n < 0 {
+				return error('write to pty failed')
+			}
+			offset += int(n)
+		}
+	} else {
+		// Slow path: replace \r with \r\n.
+		mut buf := []u8{cap: 128}
+		for i := 0; i < data.len; i++ {
+			ch := data[i]
+			if ch == `\r` {
+				buf << `\r`
+				buf << `\n`
+			} else {
+				buf << ch
+			}
+
+			// Flush when buffer is getting full.
+			if buf.len >= 126 || i == data.len - 1 {
+				mut written := 0
+				for written < buf.len {
+					n := C.write(fd, unsafe { buf.data + written }, usize(buf.len - written))
+					if n < 0 {
+						return error('write to pty failed')
+					}
+					written += int(n)
+				}
+				buf.clear()
+			}
+		}
+	}
 }
 
 // ExecThreadData is the thread local data for the exec implementation.
@@ -120,23 +258,14 @@ pub mut:
 	start_ns u64
 	exited   bool
 
-	// The data stream is the main IO for the pty.
-	// XTODO: needs xev.Stream type
-	// write_stream  voidptr
+	// Reader thread state.
+	// read_thread_pipe is the write end of the quit pipe.
+	// read_thread_fd is the pty master fd used for reading.
+	read_thread_pipe int = -1
+	read_thread_fd   int = -1
 
-	// The process watcher
-	// XTODO: needs xev.Process type
-	// process voidptr
-
-	// Reader thread state
-	// XTODO: needs real thread type
-	// read_thread       voidptr
-	read_thread_pipe int
-	read_thread_fd   int
-
-	// The timer to detect termios state changes.
-	// XTODO: needs xev.Timer type
-	// termios_timer voidptr
+	// Whether the termios polling timer is running.
+	// When focus is lost, this is set to false to stop polling.
 	termios_timer_running bool = true
 
 	// The last known termios mode. Used for change detection
@@ -145,11 +274,12 @@ pub mut:
 }
 
 pub fn (mut self ExecThreadData) deinit() {
-	// XTODO: needs real cleanup
-	// Close read thread pipe
-	// Stop process watcher
-	// Stop write stream
-	// Stop termios timer
+	// Close the write end of the read thread quit pipe.
+	if self.read_thread_pipe >= 0 {
+		C.close(self.read_thread_pipe)
+		self.read_thread_pipe = -1
+	}
+	self.read_thread_fd = -1
 }
 
 // ExecConfig holds the configuration for starting a subprocess.
@@ -175,6 +305,7 @@ pub mut:
 	screen_size renderer.ScreenSize
 	pty_        ?pty.Pty
 	running     bool
+	child_pid   int = -1
 }
 
 // init initializes the subprocess configuration. This will NOT start it,
@@ -268,7 +399,7 @@ pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
 	// Set environment variables used by some programs (such as neovim) to detect
 	// which terminal emulator and version they're running under.
 	env['TERM_PROGRAM'] = 'ghostty'
-	env['TERM_PROGRAM_VERSION'] = '0.1.0' // XTODO: use real version
+	env['TERM_PROGRAM_VERSION'] = term_program_version
 
 	// VTE_VERSION is set by gnome-terminal and other VTE-based terminals.
 	// We don't want our child processes to think we're running under VTE.
@@ -331,11 +462,12 @@ pub fn (mut self Subprocess) deinit() {
 }
 
 // Start the subprocess. If the subprocess is already started this
-// will panic.
-// XTODO: needs real fork/exec, pty.open, and process management.
+// will return an error. This forks and execs the configured command
+// with the pty slave connected to stdin/stdout/stderr.
 pub fn (mut self Subprocess) start() !PtyFds {
-	// XTODO: needs real pty and process implementation
-	// assert(self.pty_ == none && !self.running)
+	if self.running {
+		return error('subprocess already running')
+	}
 
 	// Create our pty
 	mut p := pty.Pty.open(pty.Winsize{
@@ -346,10 +478,93 @@ pub fn (mut self Subprocess) start() !PtyFds {
 	})!
 	self.pty_ = p
 
-	// XTODO: needs real fork/exec implementation
-	// Build our subcommand
-	// Start the process
-	// Close slave fd in parent after start
+	// If we can't access the cwd, then don't use it. This is important
+	// because our cwd can be set by the shell (OSC 7) and we don't
+	// want to break new windows.
+	cwd := if c := self.cwd {
+		if os.is_dir(c) { c } else { ?string(none) }
+	} else {
+		?string(none)
+	}
+
+	// Build the argv for execvp. We need null-terminated C strings.
+	if self.args.len == 0 {
+		return error('no command specified')
+	}
+
+	// Build null-terminated argv array for execvp.
+	mut c_argv := []&char{cap: self.args.len + 1}
+	for arg in self.args {
+		c_argv << arg.str
+	}
+	c_argv << unsafe { nil }
+
+	// Build null-terminated envp array if env is set. We build this before
+	// fork so we have stable pointers. We also track whether env was set
+	// so we can use it in the child without accessing self after fork.
+	has_env := if _ := self.env { true } else { false }
+	mut c_envp := []&char{}
+	if env := self.env {
+		for k, v in env {
+			entry := '${k}=${v}'
+			c_envp << entry.str
+		}
+	}
+	c_envp << unsafe { nil }
+
+	// Fork the process.
+	pid := C.fork()
+	if pid < 0 {
+		return error('fork failed')
+	}
+
+	if pid == 0 {
+		// === CHILD PROCESS ===
+		// Dup the slave fd to stdin/stdout/stderr.
+		C.dup2(p.slave, 0) // stdin
+		C.dup2(p.slave, 1) // stdout
+		C.dup2(p.slave, 2) // stderr
+
+		// Perform child-side pty setup (setsid, set controlling terminal,
+		// close master/slave fds).
+		p.child_pre_exec() or {
+			C._exit(1)
+		}
+
+		// Change to the requested working directory if specified.
+		if c := cwd {
+			os.chdir(c) or {}
+		}
+
+		// Set environment variables if we had an env map.
+		// execvpe is not available on macOS, so we set env vars
+		// manually via os.setenv, then use execvp.
+		if has_env {
+			for i := 0; i < c_envp.len - 1; i++ {
+				entry_str := unsafe { cstring_to_vstring(c_envp[i]) }
+				eq_pos := entry_str.index('=') or { continue }
+				k := entry_str[..eq_pos]
+				v := entry_str[eq_pos + 1..]
+				os.setenv(k, v, true)
+			}
+		}
+
+		C.execvp(c_argv[0], c_argv.data)
+
+		// If execvp returns, exec failed.
+		C._exit(127)
+	}
+
+	// === PARENT PROCESS ===
+	// Store the child pid for later signal sending.
+	self.child_pid = pid
+
+	// Close the slave fd in the parent. The child has already
+	// inherited it via fork and duped it to stdin/stdout/stderr.
+	p.close_slave()
+
+	// We can free the env now that the child has it.
+	self.env = none
 
 	self.running = true
 	return PtyFds{
@@ -364,16 +579,53 @@ pub fn (mut self Subprocess) external_exit() {
 	self.running = false
 }
 
-// Stop the subprocess. This is safe to call anytime. This will wait
-// for the subprocess to register that it has been signalled, but not
-// for it to terminate, so it will not block.
+// Stop the subprocess. This is safe to call anytime. This will send
+// SIGHUP to the process group to signal it to exit.
 // This does not close the pty.
 pub fn (mut self Subprocess) stop() {
 	if !self.running {
 		return
 	}
-	// XTODO: needs real signal sending (SIGHUP) and process wait
-	// kill_command() or kill_pid() implementation
+
+	if self.child_pid > 0 {
+		// Get the process group ID. Before the child calls setsid
+		// the pgid will be ours because we forked it. We spin until
+		// the child has its own pgid.
+		my_pgid := C.getpgid(0)
+		mut pgid := -1
+		for {
+			pgid = C.getpgid(self.child_pid)
+			if pgid < 0 {
+				// Process doesn't exist anymore, we're done.
+				break
+			}
+			if pgid != my_pgid {
+				break
+			}
+			// pgid is still ours; the child hasn't called setsid yet.
+			time.sleep(10 * time.millisecond)
+		}
+
+		if pgid > 0 {
+			// Send SIGHUP to the entire process group so that
+			// grandchildren are also signaled.
+			for {
+				C.killpg(pgid, sig_hup)
+
+				// Wait with WNOHANG so we don't block. If the child
+				// is still alive, loop and kill again.
+				mut status := 0
+				res := C.waitpid(self.child_pid, &status, wnohang)
+				if res != 0 {
+					break
+				}
+				time.sleep(10 * time.millisecond)
+			}
+		}
+
+		self.child_pid = -1
+	}
+
 	self.running = false
 }
 
@@ -423,16 +675,78 @@ fn clamp_u16(v u32) u16 {
 pub struct ReadThread {}
 
 // thread_main_posix is the main function for the POSIX read thread.
-// XTODO: needs real fd operations (read, poll, fcntl) via C interop.
-pub fn (r ReadThread) thread_main_posix(fd int, quit int) {
-	// XTODO: needs real implementation
+// It reads data from the pty fd in a tight loop, falling back to poll()
+// when there is no data available. The quit fd is checked during poll
+// to allow clean shutdown.
+pub fn thread_main_posix(fd int, quit int) {
 	// Always close our end of the pipe when we exit.
-	// Set the fd to non-blocking.
-	// Build up the list of fds we're going to poll.
-	// Loop: try to read, poll, check quit fd.
-	_ = r
-	_ = fd
-	_ = quit
+	defer {
+		C.close(quit)
+	}
+
+	// Set the fd to non-blocking so we can try to read in a tight loop
+	// and only fall back to poll when there's no data.
+	flags := C.fcntl(fd, f_getfl, 0)
+	if flags >= 0 {
+		C.fcntl(fd, f_setfl, flags | o_nonblock)
+	}
+
+	// Build up the list of fds we're going to poll. We watch for data
+	// on the pty fd and our quit notification pipe.
+	mut pollfds := [2]PollFd{}
+	pollfds[0] = PollFd{
+		fd: fd
+		events: pollin
+		revents: 0
+	}
+	pollfds[1] = PollFd{
+		fd: quit
+		events: pollin
+		revents: 0
+	}
+
+	mut buf := [1024]u8{}
+	for {
+		// Inner loop: try to read as much as possible without blocking.
+		// We only check the quit fd when the main fd blocks. This optimizes
+		// for the realistic scenario that data will eventually stop while
+		// we're trying to quit.
+		for {
+			n := C.read(fd, &buf[0], usize(1024))
+			if n < 0 {
+				// Check errno - on macOS, EAGAIN is 35
+				// For WouldBlock / EAGAIN, break to poll.
+				// For other errors (EIO, EBADF), the pty is closed.
+				break
+			}
+			if n == 0 {
+				// EOF - this happens on macOS when the child process dies.
+				break
+			}
+			// Successfully read data. In the full implementation this would
+			// be forwarded to the Termio instance for processing. For now
+			// we just continue reading.
+		}
+
+		// Wait for data using poll with infinite timeout (-1).
+		pollfds[0].revents = 0
+		pollfds[1].revents = 0
+		poll_result := C.poll(&pollfds[0], u32(2), -1)
+		if poll_result < 0 {
+			// poll failed, exit the thread.
+			return
+		}
+
+		// If our quit fd is readable, we're done.
+		if pollfds[1].revents & pollin != 0 {
+			return
+		}
+
+		// If the pty fd has HUP, the child process has closed the pty.
+		if pollfds[0].revents & pollhup != 0 {
+			return
+		}
+	}
 }
 
 // setup_shell_command handles the shell integration dispatch based on the

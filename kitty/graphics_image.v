@@ -8,7 +8,9 @@ module kitty
 // image loading), Rect (placement rectangle in grid cells), and
 // RenderPlacement (placement rendering information) types.
 
+import os
 import time
+import compress.zlib
 import terminal
 
 // Maximum width or height of an image. Taken directly from Kitty.
@@ -93,9 +95,6 @@ pub fn (mut self LoadingImage) destroy() {
 // Initialize a chunked image from the first image transmission.
 // If this is a multi-chunk image, this should only be the FIRST chunk.
 pub fn LoadingImage.init_from_cmd(cmd &Command) !LoadingImage {
-	// XTODO: Full implementation depends on file I/O, shared memory,
-	// and path resolution which are platform-specific.
-	// Only direct medium is partially supported.
 	t := cmd.transmission() or { return error('no transmission in command') }
 	mut result := LoadingImage{
 		image: Image{
@@ -110,15 +109,57 @@ pub fn LoadingImage.init_from_cmd(cmd &Command) !LoadingImage {
 		quiet: cmd.quiet
 	}
 
-	// Special case for the direct medium, we just add the chunk directly.
-	if t.medium == .direct {
-		result.add_data(cmd.data)!
-		return result
+	match t.medium {
+		.direct {
+			// Direct medium: the data is inline in the command payload.
+			result.add_data(cmd.data)!
+		}
+		.file {
+			// File medium: read the image data from the specified file path.
+			path := cmd.data.bytestr()
+			if path.len == 0 {
+				return error('invalid data: empty file path')
+			}
+			if path.len > 4096 {
+				return error('file path too long')
+			}
+			data := os.read_bytes(path) or {
+				return error('invalid data: cannot read file ${path}')
+			}
+			result.add_data(data)!
+		}
+		.temporary_file {
+			// Temporary file medium: read from a file that must be in a temp dir.
+			// After reading, the file should be deleted.
+			path := cmd.data.bytestr()
+			if path.len == 0 {
+				return error('invalid data: empty file path')
+			}
+			if path.len > 4096 {
+				return error('file path too long')
+			}
+			if !is_path_in_temp_dir(path) {
+				return error('temporary file not in temp dir')
+			}
+			// Kitty requires temp files to have "tty-graphics-protocol" in name.
+			base := os.base(path)
+			if !base.contains('tty-graphics-protocol') {
+				return error('temporary file not named correctly')
+			}
+			data := os.read_bytes(path) or {
+				return error('invalid data: cannot read temporary file ${path}')
+			}
+			result.add_data(data)!
+			// Best-effort delete of the temporary file after reading.
+			os.rm(path) or {}
+		}
+		.shared_memory {
+			// Shared memory medium requires platform-specific shm_open/mmap.
+			return error('unsupported medium: shared memory not yet implemented')
+		}
 	}
 
-	// XTODO: file, temporary_file, shared_memory mediums need
-	// platform-specific I/O (realpath, file reading, shm_open, mmap).
-	return error('non-direct medium not yet supported')
+	return result
 }
 
 // Adds a chunk of data to the image. Use this if the image
@@ -138,19 +179,21 @@ pub fn (mut self LoadingImage) add_data(data []u8) ! {
 
 // Complete the chunked image, returning a completed image.
 pub fn (mut self LoadingImage) complete() !Image {
-	// XTODO: Decompression (zlib_deflate) requires compress module integration.
-	// XTODO: PNG decoding requires wuffs or stb_image integration.
-
 	// Decompress the data if it is compressed.
 	if self.image.compression == .zlib_deflate {
-		// XTODO: zlib decompression not yet implemented
-		return error('zlib decompression not yet supported')
+		decompressed := zlib.decompress(self.data) or {
+			return error('decompression failed: ${err.msg()}')
+		}
+		self.data = decompressed
+		self.image.compression = .none_
 	}
 
-	// Decode the png if we have to
+	// Decode the PNG if we have to. PNG decoding produces raw pixel data
+	// and sets the width/height/format from the PNG header.
 	if self.image.format == .png {
-		// XTODO: PNG decoding not yet implemented
-		return error('PNG decoding not yet supported')
+		// TODO: PNG decoding requires stb_image or equivalent integration.
+		// Once available, decode self.data as PNG, extract width/height/format/pixels.
+		return error('unsupported format: PNG decoding not yet implemented')
 	}
 
 	// Validate our dimensions.
@@ -178,13 +221,20 @@ pub fn (mut self LoadingImage) complete() !Image {
 }
 
 // Returns true if path appears to be in a temporary directory.
-// Copies logic from Kitty.
+// Copies logic from Kitty: checks common temp dirs and TMPDIR env.
 fn is_path_in_temp_dir(path string) bool {
-	// XTODO: Full implementation needs TempDir and realpath support.
 	if path.starts_with('/tmp') {
 		return true
 	}
+	if path.starts_with('/var/tmp') {
+		return true
+	}
 	if path.starts_with('/dev/shm') {
+		return true
+	}
+	// Check TMPDIR environment variable if set.
+	tmpdir := os.getenv('TMPDIR')
+	if tmpdir.len > 0 && path.starts_with(tmpdir) {
 		return true
 	}
 	return false

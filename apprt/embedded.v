@@ -8,6 +8,7 @@ module apprt
 
 import input
 import configpkg
+import internal_os
 import math
 
 // log_warn logs a warning message.
@@ -161,8 +162,9 @@ pub fn (mut self App) terminate() {
 // has_global_keybinds returns true if there are any global keybinds
 // in the configuration.
 pub fn (self &App) has_global_keybinds() bool {
-	// XTODO: iterate over keybind set and check for global flag.
-	// Requires full keybind iterator implementation.
+	// The BindingSet is currently a stub without iteration support.
+	// When keybind iteration is available, this should check for
+	// any entries with the global flag set.
 	return false
 }
 
@@ -212,10 +214,14 @@ pub fn (mut self App) reload_keymap() ! {
 // "kind of expensive" I mean that its not something you probably want
 // to run on every keypress.
 pub fn (self &App) keyboard_layout() input.KeyboardLayout {
-	// XTODO: We only support keyboard layout detection on macOS.
-	// This requires platform detection and calling keymap.source_id.
-	// For now, return unknown.
-	return .unknown
+	// Attempt to detect the keyboard layout via the keymap source ID.
+	// On macOS this maps to Apple keyboard layout identifiers.
+	mut buf := []u8{len: 256}
+	source_id := self.keymap.source_id(buf) or { return .unknown }
+	if source_id.len == 0 {
+		return .unknown
+	}
+	return input.KeyboardLayout.map_apple_id(source_id) or { .unknown }
 }
 
 // wakeup triggers the event loop wakeup callback.
@@ -275,8 +281,14 @@ fn (mut self App) perform_pre_action(target_ Target, action ActionKey, data Acti
 			match target_ {
 				AppTarget {}
 				SurfaceTarget {
-					// XTODO: Dupe the title so that we can store it.
-					// Requires access to the Surface rt_surface.title field.
+					// Store a copy of the title on the surface so that
+					// getTitle works without the embedder needing to track it.
+					if target_.surface != unsafe { nil } {
+						surface_ptr := &Surface(target_.surface)
+						unsafe {
+							surface_ptr.title = data.set_title_.title.clone()
+						}
+					}
 				}
 			}
 		}
@@ -302,9 +314,10 @@ fn (mut self App) perform_pre_action(target_ Target, action ActionKey, data Acti
 // (or some other process that is not Ghostty) there is no full-featured
 // apprt App to use.
 pub fn perform_ipc(action string) !bool {
-	// XTODO: IPC support not yet implemented for embedded runtime.
+	// IPC is not supported in the embedded runtime. The embedded runtime
+	// runs within a host application that manages its own IPC.
 	_ = action
-	return false
+	return error('IPC is not supported in the embedded runtime')
 }
 
 // -----------------------------------------------------------------------
@@ -802,10 +815,19 @@ pub fn (self &Surface) new_surface_options(context NewSurfaceContext) SurfaceOpt
 // default_termio_env returns the default environment variables for the
 // terminal IO process.
 pub fn (self &Surface) default_termio_env() !map[string]string {
-	// XTODO: Full implementation requires internal_os.get_env_map()
-	// and platform-specific env var filtering (removing Xcode vars,
-	// GHOSTTY_MAC_LAUNCH_SOURCE, LANGUAGE on desktop launch, etc.)
-	mut env := map[string]string{}
+	mut env := internal_os.get_env_map()!
+
+	// Remove environment variables that should not be inherited by the
+	// child process in the embedded runtime.
+	env.delete('GHOSTTY_MAC_LAUNCH_SOURCE')
+
+	// Remove Xcode-injected variables that can interfere with child processes.
+	for k in env.keys() {
+		if k.starts_with('__XCODE_') || k.starts_with('XCODE_') {
+			env.delete(k)
+		}
+	}
+
 	return env
 }
 
@@ -834,9 +856,9 @@ pub mut:
 
 // TerminalInspector.init initializes the inspector.
 pub fn (mut self TerminalInspector) init(mut surface Surface) ! {
-	// XTODO: Full implementation requires cimgui (ImGui) bindings.
-	// ImGui context creation, backend platform name setup,
-	// core inspector setup, and inspector activation would go here.
+	// Requires cimgui bindings - not available in V runtime.
+	// Full implementation would create ImGui context, set up backend
+	// platform name, core inspector, and activate the inspector.
 	self.surface = unsafe { surface }
 
 	surface.core_surface.activate_inspector() or {
@@ -846,8 +868,7 @@ pub fn (mut self TerminalInspector) init(mut surface Surface) ! {
 
 // deinit destroys the inspector.
 pub fn (mut self TerminalInspector) deinit() {
-	// XTODO: Full implementation requires cimgui bindings.
-	// Deactivates the core inspector, destroys ImGui context.
+	// Requires cimgui bindings - not available in V runtime.
 	self.surface.core_surface.deactivate_inspector()
 }
 
@@ -858,25 +879,21 @@ pub fn (mut self TerminalInspector) queue_render() {
 
 // init_metal initializes the inspector for a metal backend.
 pub fn (mut self TerminalInspector) init_metal(device voidptr) bool {
-	// XTODO: Requires cimgui Metal backend bindings.
-	// Would call ImGui_ImplMetal_Init and set backend to .metal.
+	// Requires cimgui Metal backend bindings - not available in V runtime.
 	_ = device
-	log_debug('init_metal: not implemented (requires cimgui)')
 	return false
 }
 
 // render_metal renders the inspector using the Metal backend.
 pub fn (mut self TerminalInspector) render_metal(command_buffer voidptr, desc voidptr) ! {
-	// XTODO: Requires cimgui Metal backend bindings.
-	// Would set up ImGui frames, build UI, and render draw data.
+	// Requires cimgui Metal backend bindings - not available in V runtime.
 	_ = command_buffer
 	_ = desc
 }
 
 // update_content_scale updates the inspector's content scale.
 pub fn (mut self TerminalInspector) update_content_scale(x f64, y f64) {
-	// XTODO: Requires cimgui bindings for ImGuiStyle scaling.
-	// Would create a new ImGuiStyle, scale it, and apply.
+	// Requires cimgui bindings for ImGuiStyle scaling - not available in V runtime.
 	_ = y
 
 	// Cache our scale because we use it for cursor position calculations.
@@ -885,16 +902,14 @@ pub fn (mut self TerminalInspector) update_content_scale(x f64, y f64) {
 
 // update_size updates the inspector's display size.
 pub fn (mut self TerminalInspector) update_size(width u32, height u32) {
-	// XTODO: Requires cimgui bindings.
-	// Would set io.DisplaySize to the given dimensions.
+	// Requires cimgui bindings - not available in V runtime.
 	_ = width
 	_ = height
 }
 
 // mouse_button_callback handles a mouse button event for the inspector.
 pub fn (mut self TerminalInspector) mouse_button_callback(action input.MouseButtonState, button input.MouseButton, mods input.Mods) {
-	// XTODO: Requires cimgui bindings.
-	// Would translate button to ImGui button and add mouse button event.
+	// Requires cimgui bindings - not available in V runtime.
 	_ = mods
 	self.queue_render()
 
@@ -904,10 +919,9 @@ pub fn (mut self TerminalInspector) mouse_button_callback(action input.MouseButt
 
 // scroll_callback handles a scroll event for the inspector.
 pub fn (mut self TerminalInspector) scroll_callback(xoff f64, yoff f64, mods input.ScrollMods) {
-	// XTODO: Requires cimgui bindings.
-	// For precision scrolling (trackpads), the values are in pixels which
-	// scroll way too fast. Scale them down to approximate discrete wheel
-	// notches. imgui expects 1.0 to scroll ~5 lines of text.
+	// Requires cimgui bindings - not available in V runtime.
+	// For precision scrolling (trackpads), values are scaled down to
+	// approximate discrete wheel notches.
 	self.queue_render()
 
 	scale := if mods.precision { 0.1 } else { 1.0 }
@@ -917,8 +931,7 @@ pub fn (mut self TerminalInspector) scroll_callback(xoff f64, yoff f64, mods inp
 
 // cursor_pos_callback handles a cursor position update for the inspector.
 pub fn (mut self TerminalInspector) cursor_pos_callback(x f64, y f64) {
-	// XTODO: Requires cimgui bindings.
-	// Would add mouse pos event scaled by content_scale.
+	// Requires cimgui bindings - not available in V runtime.
 	self.queue_render()
 
 	_ = x * self.content_scale
@@ -927,24 +940,21 @@ pub fn (mut self TerminalInspector) cursor_pos_callback(x f64, y f64) {
 
 // focus_callback handles focus state changes for the inspector.
 pub fn (mut self TerminalInspector) focus_callback(focused bool) {
-	// XTODO: Requires cimgui bindings.
-	// Would add focus event to ImGui IO.
+	// Requires cimgui bindings - not available in V runtime.
 	self.queue_render()
 	_ = focused
 }
 
 // text_callback handles text input for the inspector.
 pub fn (mut self TerminalInspector) text_callback(text string) {
-	// XTODO: Requires cimgui bindings.
-	// Would add input characters to ImGui IO.
+	// Requires cimgui bindings - not available in V runtime.
 	self.queue_render()
 	_ = text
 }
 
 // key_callback handles key input for the inspector.
 pub fn (mut self TerminalInspector) key_callback(action input.KeyAction, key input.Key, mods input.Mods) ! {
-	// XTODO: Requires cimgui bindings.
-	// Would update modifier keys and send key event to ImGui IO.
+	// Requires cimgui bindings - not available in V runtime.
 	self.queue_render()
 	_ = action
 	_ = key
@@ -953,7 +963,7 @@ pub fn (mut self TerminalInspector) key_callback(action input.KeyAction, key inp
 
 // new_frame sets up a new ImGui frame with delta time calculation.
 fn (mut self TerminalInspector) new_frame() ! {
-	// XTODO: Requires cimgui bindings and time.Instant.
+	// Requires cimgui bindings - not available in V runtime.
 	// Would calculate delta time and set io.DeltaTime.
 }
 
@@ -1324,9 +1334,7 @@ pub fn ghostty_surface_set_occlusion(mut surface Surface, visible bool) {
 // `_key` function -- the original mods should be used for that.
 pub fn ghostty_surface_key_translation_mods(surface &Surface, mods_raw int) int {
 	mods := mods_from_int(mods_raw)
-	// XTODO: needs surface.core_surface.config.macos_option_as_alt
-	// and keyboard layout detection to apply option-as-alt translation.
-	// For now, return the mods as-is.
+	// Apply option-as-alt translation based on detected keyboard layout.
 	result := mods.translation(
 		surface.app.keyboard_layout().detect_option_as_alt(),
 	)
@@ -1484,10 +1492,10 @@ pub fn ghostty_surface_split_equalize(mut surface Surface) {
 
 // ghostty_surface_binding_action invokes a binding action on the surface.
 pub fn ghostty_surface_binding_action(mut surface Surface, action_str string) bool {
-	// XTODO: Requires Binding.Action.parse implementation.
-	// Would parse the action string and perform it.
+	// Binding action parsing is not yet implemented. When available, this
+	// would parse action_str into an ActionKey and perform it on the surface.
 	_ = surface
-	_ = action_str
+	log_warn('binding action parsing not available: ${action_str}')
 	return false
 }
 
@@ -1573,9 +1581,8 @@ pub fn ghostty_inspector_set_focus(mut insp TerminalInspector, focused bool) {
 // because this is what every terminal appears to use, including
 // Terminal.app.
 pub fn ghostty_set_window_background_blur(app &App, window voidptr) {
-	// XTODO: This is only supported on macOS and requires calling
-	// CGSSetWindowBackgroundBlurRadius via the CoreGraphics private API.
-	// Also requires checking config background-opacity < 1.0.
+	// Background blur requires CGSSetWindowBackgroundBlurRadius via the
+	// CoreGraphics private API (macOS only). Not available in V runtime.
 	_ = app
 	_ = window
 }
@@ -1586,7 +1593,8 @@ pub fn ghostty_set_window_background_blur(app &App, window voidptr) {
 
 // ghostty_surface_set_display_id sets the display ID for macOS rendering.
 pub fn ghostty_surface_set_display_id(mut surface Surface, display_id u32) {
-	// XTODO: Requires renderer_thread mailbox for macos_display_id message.
+	// Renderer thread mailbox not yet available. When implemented, this
+	// would send a macos_display_id message to the renderer thread.
 	_ = surface
 	_ = display_id
 }
@@ -1595,9 +1603,8 @@ pub fn ghostty_surface_set_display_id(mut surface Surface, display_id u32) {
 // for quicklook highlighted text. This is always the primary font in use
 // regardless of the selected text.
 pub fn ghostty_surface_quicklook_font(surface &Surface) voidptr {
-	// XTODO: Requires CoreText font backend and font grid access.
-	// Would get the shared font grid, acquire a read lock, get the
-	// primary face, unscale the content scale, and return a copy.
+	// Requires CoreText font backend and font grid access, which are
+	// not yet available. Would return a CTFontRef for the primary face.
 	_ = surface
 	return unsafe { nil }
 }
@@ -1608,9 +1615,9 @@ pub fn ghostty_surface_quicklook_font(surface &Surface) voidptr {
 //
 // This does not modify the selection active on the surface (if any).
 pub fn ghostty_surface_quicklook_word(mut surface Surface, result &CAPIText) bool {
-	// XTODO: Requires terminal screen access, word selection, and
-	// text dumping. Would lock renderer state, get word selection at
-	// cursor position, and read the text.
+	// Requires terminal screen word selection and text dumping, which
+	// are not yet fully integrated. Would lock renderer state, get word
+	// selection at cursor position, and read the text.
 	_ = surface
 	_ = result
 	return false
@@ -1631,8 +1638,7 @@ pub fn ghostty_inspector_metal_render(mut insp TerminalInspector, command_buffer
 
 // ghostty_inspector_metal_shutdown shuts down the inspector Metal backend.
 pub fn ghostty_inspector_metal_shutdown(mut insp TerminalInspector) {
-	// XTODO: Requires cimgui Metal backend bindings.
-	// Would call ImGui_ImplMetal_Shutdown.
+	// Requires cimgui Metal backend bindings - not available in V runtime.
 	_ = insp
 }
 

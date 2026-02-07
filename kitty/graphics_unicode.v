@@ -453,8 +453,9 @@ pub fn (mut self PlacementIterator) next() ?VirtualPlacement {
 			}
 
 			// Get the style for this cell to extract colors.
-			// XTODO: In a full implementation, we'd look up the style
-			// from the style map. For now, construct from CellData fields.
+			// TODO: In a full implementation, we'd look up the style from the
+			// style map using cell.style_id. For now, construct a default style
+			// since the style map lookup requires page-level style ref tracking.
 			style := terminal.CellStyle{}
 
 			curr := IncompletePlacement.init(pin, &cell, style)

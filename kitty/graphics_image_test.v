@@ -70,15 +70,14 @@ fn test_image_load_with_image_too_tall() {
 	assert false, 'expected error for too tall image'
 }
 
-// XTODO: The following tests from the Zig source require embedded test data files
-// and platform-specific functionality (file I/O, temp dirs, shared memory, zlib,
-// PNG decoding) that are not yet available:
+// The following tests from the Zig source require embedded test data files
+// or platform-specific functionality not yet available in the V port:
 //
-// - image load: rgb, zlib compressed, direct
-// - image load: rgb, not compressed, direct
-// - image load: rgb, zlib compressed, direct, chunked
+// - image load: rgb, zlib compressed, direct (needs test fixture data)
+// - image load: rgb, not compressed, direct (needs test fixture data with correct dimensions)
+// - image load: rgb, zlib compressed, direct, chunked (needs multi-chunk test harness)
 // - image load: rgb, zlib compressed, direct, chunked with zero initial chunk
-// - image load: temporary file without correct path
-// - image load: rgb, not compressed, temporary file
-// - image load: rgb, not compressed, regular file
-// - image load: png, not compressed, regular file
+// - image load: temporary file without correct path (needs temp file setup)
+// - image load: rgb, not compressed, temporary file (needs temp file with tty-graphics-protocol name)
+// - image load: rgb, not compressed, regular file (needs test image file on disk)
+// - image load: png, not compressed, regular file (needs PNG decoding support)

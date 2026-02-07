@@ -1130,29 +1130,29 @@ fn test_svg_has_glyph_binary_search_edge() {
 // ============================================================
 
 fn test_sfnt_parse_real_font() {
-	// XTODO: needs embedded font data
+	// TODO: needs embedded font data
 }
 
 fn test_sfnt_get_table_real_font() {
-	// XTODO: needs embedded font data
+	// TODO: needs embedded font data
 }
 
 fn test_head_real_font() {
-	// XTODO: needs embedded font data
+	// TODO: needs embedded font data
 }
 
 fn test_hhea_real_font() {
-	// XTODO: needs embedded font data
+	// TODO: needs embedded font data
 }
 
 fn test_os2_real_font() {
-	// XTODO: needs embedded font data
+	// TODO: needs embedded font data
 }
 
 fn test_post_real_font() {
-	// XTODO: needs embedded font data
+	// TODO: needs embedded font data
 }
 
 fn test_svg_real_font() {
-	// XTODO: needs embedded font data
+	// TODO: needs embedded font data
 }

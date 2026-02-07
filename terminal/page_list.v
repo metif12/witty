@@ -404,11 +404,23 @@ pub:
 }
 
 // Convert to screen point (absolute row from top of page list).
+// Traverses backward through the page list to compute the absolute y
+// coordinate from the top of the entire page list.
 pub fn (self &PageCell) screen_point() Pin {
-	// XTODO: would need to traverse backward to compute absolute y
+	mut abs_y := u32(self.row_idx)
+
+	// Traverse backward through the linked list to accumulate rows
+	// from all preceding pages.
+	mut prev := self.node.prev
+	for {
+		nd := prev or { break }
+		abs_y += u32(nd.data.size.rows)
+		prev = nd.prev
+	}
+
 	return Pin{
 		x: u32(self.col_idx)
-		y: u32(self.row_idx)
+		y: abs_y
 	}
 }
 
@@ -2044,7 +2056,7 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) {
 }
 
 fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) {
-	// XTODO: Full reflow implementation.
+	// TODO: Full reflow implementation.
 	// For now, do a simple column adjustment without reflow.
 	// Real reflow would unwrap/rewrap soft-wrapped lines.
 	self.cols = cols

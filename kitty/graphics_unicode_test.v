@@ -28,66 +28,66 @@ fn test_unicode_diacritic() {
 	assert idx2 == 294
 }
 
-// XTODO: The unicode placement iterator tests require a full terminal
+// The following unicode placement iterator tests require a full terminal
 // with printString/setAttribute support and the grapheme_cluster mode.
-// These tests are stubs that will be enabled once those features are
-// available in the V terminal module.
+// They are commented out stubs that will be enabled once the terminal
+// module supports printing strings with attributes for testing.
 
 // fn test_unicode_placement_none() {
-//     // XTODO: requires t.printString("hello\nworld\n1\n2") and
+//     // Requires t.printString("hello\nworld\n1\n2") and
 //     // placementIterator scanning rows
 // }
 
 // fn test_unicode_placement_single_row_col() {
-//     // XTODO: requires t.printString with placeholder char + diacritics
+//     // Requires t.printString with placeholder char + diacritics
 // }
 
 // fn test_unicode_placement_continuation_break() {
-//     // XTODO: requires t.printString with two placeholder runs
+//     // Requires t.printString with two placeholder runs
 // }
 
 // fn test_unicode_placement_continuation_with_diacritics_set() {
-//     // XTODO: requires t.printString with three continuing cells
+//     // Requires t.printString with three continuing cells
 // }
 
 // fn test_unicode_placement_continuation_with_no_col() {
-//     // XTODO: requires t.printString with continuation cells
+//     // Requires t.printString with continuation cells
 // }
 
 // fn test_unicode_placement_continuation_with_no_diacritics() {
-//     // XTODO: requires t.printString with bare placeholder chars
+//     // Requires t.printString with bare placeholder chars
 // }
 
 // fn test_unicode_placement_run_ending() {
-//     // XTODO: requires t.printString with placeholder followed by normal text
+//     // Requires t.printString with placeholder followed by normal text
 // }
 
 // fn test_unicode_placement_run_starting_in_the_middle() {
-//     // XTODO: requires t.printString with normal text followed by placeholder
+//     // Requires t.printString with normal text followed by placeholder
 // }
 
 // fn test_unicode_placement_specifying_image_id_as_palette() {
-//     // XTODO: requires t.setAttribute(.{ .@"256_fg" = 42 })
+//     // Requires t.setAttribute(.{ .@"256_fg" = 42 })
 // }
 
 // fn test_unicode_placement_specifying_image_id_with_high_bits() {
-//     // XTODO: requires t.setAttribute and 3rd diacritic
+//     // Requires t.setAttribute and 3rd diacritic
 // }
 
 // fn test_unicode_placement_specifying_placement_id_as_palette() {
-//     // XTODO: requires t.setAttribute with underline color
+//     // Requires t.setAttribute with underline color
 // }
 
 // fn test_unicode_render_placement_dog_4x2() {
-//     // XTODO: requires full VirtualPlacement.render_placement test
+//     // Requires full terminal with VirtualPlacement.render_placement test
 // }
 
 // fn test_unicode_render_placement_dog_2x2_with_blank_cells() {
-//     // XTODO: requires full VirtualPlacement.render_placement test
+//     // Requires full terminal with VirtualPlacement.render_placement test
 // }
 
 // fn test_unicode_render_placement_dog_1x1() {
-//     // XTODO: requires full VirtualPlacement.render_placement test
+//     // Requires full terminal with VirtualPlacement.render_placement test
 // }
 
 fn test_unicode_render_placement_dog_4x2_direct() ! {

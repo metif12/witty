@@ -341,8 +341,11 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.device_attributes(event.payload.device_attr)
 		}
 		.device_status {
-			// XTODO: DeviceStatusRequest uses a different enum in stream.v
-			// Map it to the handler's request_mode types
+			// The stream dispatches with num=param and flag=question.
+			// Convert back to a DeviceStatusRequest and call device_status_report().
+			if req := terminal.DeviceStatusRequest.from_int(event.payload.num, event.payload.flag) {
+				self.device_status_report(req)
+			}
 		}
 		.kitty_keyboard_query {
 			self.query_kitty_keyboard()
@@ -363,12 +366,17 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.terminal.screens.active.kitty_keyboard.set(.not_, u32(event.payload.kitty_flags))
 		}
 		.kitty_color_report {
-			// XTODO: kitty color report protocol requires complex color
-			// query/set/reset logic and response encoding
+			// Kitty color protocol: query/set/reset colors.
+			// Currently the stream parser does not dispatch this event
+			// (kitty_color_protocol parsing in stream.v is not yet implemented).
+			// When it does, the payload would carry parsed ColorOSC data.
 		}
 		.color_operation {
-			// XTODO: color operations (set/query/reset palette and dynamic
-			// colors) require OSC color parsing and response encoding
+			// OSC color operations: set/query/reset palette colors (OSC 4)
+			// and dynamic colors (OSC 10/11/12 for fg/bg/cursor).
+			// Currently the stream parser does not dispatch this event
+			// (color_operation parsing in stream.v is not yet implemented).
+			// When it does, the payload would carry the parsed color spec.
 		}
 		.end_hyperlink {
 			self.terminal.screens.active.end_hyperlink()
@@ -443,48 +451,248 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 // ============================================================
 
 pub fn (mut self StreamHandler) dcs_hook(payload terminal.ActionPayload) {
-	// XTODO: DCS hook requires full DCS command parsing (XTGETTCAP,
-	// DECRQSS, tmux control mode). The DCS handler would parse the
-	// intermediates and params to determine the DCS command type.
-	mut cmd := self.dcs.hook(payload) or { return }
+	mut cmd := self.dcs.hook(terminal.DcsParams{
+		intermediates: payload.dcs_intermediates.bytestr()
+		params: payload.dcs_params.clone()
+		final_byte: payload.dcs_final
+	}) or { return }
 	defer { cmd.deinit() }
 	self.dcs_command(mut cmd)
 }
 
 pub fn (mut self StreamHandler) dcs_put(byte_val u8) {
-	// XTODO: DCS put feeds bytes into the active DCS command handler.
 	mut cmd := self.dcs.put(byte_val) or { return }
 	defer { cmd.deinit() }
 	self.dcs_command(mut cmd)
 }
 
 pub fn (mut self StreamHandler) dcs_unhook() {
-	// XTODO: DCS unhook completes the DCS sequence.
 	mut cmd := self.dcs.unhook() or { return }
 	defer { cmd.deinit() }
 	self.dcs_command(mut cmd)
 }
 
-fn (mut self StreamHandler) dcs_command(mut cmd DcsCommand) {
-	// XTODO: Full DCS command dispatch requires:
-	// - tmux control mode enter/exit/commands
-	// - XTGETTCAP terminfo capability reporting
-	// - DECRQSS (Request Status String) for SGR, DECSCUSR, DECSTBM, DECSLRM
-	// Each of these needs their own response encoding and state management.
-	match cmd.kind {
-		.xtgettcap {
-			// XTODO: Would iterate over requested terminfo capabilities
-			// and send responses from a precomputed map.
+fn (mut self StreamHandler) dcs_command(mut cmd terminal.DcsCommand) {
+	match mut cmd {
+		terminal.DcsCommandXtgettcap {
+			self.dcs_xtgettcap(mut cmd.xtgettcap)
 		}
-		.decrqss {
-			// XTODO: Would query terminal state (SGR attributes, cursor style,
-			// scroll margins) and format a DECRPSS response.
+		terminal.DcsCommandDecrqss {
+			self.dcs_decrqss(cmd.decrqss)
 		}
-		.tmux {
-			// XTODO: tmux control mode requires a full tmux viewer state
-			// machine with enter/exit/command handling.
+		terminal.DcsCommandTmux {
+			// Tmux control mode notifications. A full implementation would
+			// maintain a tmux viewer state machine that processes each
+			// notification type (enter, exit, output, layout changes, etc.).
+			// Currently a no-op until tmux control mode viewer is implemented.
 		}
 	}
+}
+
+// dcs_xtgettcap handles XTGETTCAP requests by iterating over requested
+// terminfo capability names and sending responses. Each response is a
+// DCS sequence: DCS 1 + r <hex-name> = <hex-value> ST for found caps,
+// or DCS 0 + r <hex-name> ST for unfound caps.
+fn (mut self StreamHandler) dcs_xtgettcap(mut xtgettcap terminal.DcsXtgettcap) {
+	for {
+		key := xtgettcap.next() or { break }
+		if val := xtgettcap_lookup(key) {
+			// Valid response: DCS 1 + r <key> = <hex-value> ST
+			resp := '\x1bP1+r${key}=${val}\x1b\\'
+			self.message_writer(Message.write_req(resp))
+		} else {
+			// Invalid/unknown: DCS 0 + r <key> ST
+			resp := '\x1bP0+r${key}\x1b\\'
+			self.message_writer(Message.write_req(resp))
+		}
+	}
+}
+
+// dcs_decrqss handles DECRQSS (Request Status String) by querying
+// terminal state and sending a DECRPSS response.
+// Format: DCS <valid> $ r <response> ST
+// where <valid> is 1 for valid or 0 for invalid.
+fn (mut self StreamHandler) dcs_decrqss(setting terminal.DcsDecrqss) {
+	resp := match setting {
+		.sgr {
+			// Report current SGR attributes.
+			sgr_str := self.format_sgr()
+			'\x1bP1\$r${sgr_str}m\x1b\\'
+		}
+		.decscusr {
+			// Report current cursor style.
+			style_val := self.format_decscusr()
+			'\x1bP1\$r${style_val} q\x1b\\'
+		}
+		.decstbm {
+			// Report top and bottom margins.
+			top := int(self.terminal.scrolling_region.top) + 1
+			bottom := int(self.terminal.scrolling_region.bottom) + 1
+			'\x1bP1\$r${top};${bottom}r\x1b\\'
+		}
+		.decslrm {
+			// Report left and right margins.
+			left := int(self.terminal.scrolling_region.left) + 1
+			right := int(self.terminal.scrolling_region.right) + 1
+			'\x1bP1\$r${left};${right}s\x1b\\'
+		}
+		.none_val {
+			// Unknown setting, report invalid.
+			'\x1bP0\$r\x1b\\'
+		}
+	}
+	self.message_writer(Message.write_req(resp))
+}
+
+// format_sgr builds the SGR parameter string from the current cursor style.
+fn (self &StreamHandler) format_sgr() string {
+	style := self.terminal.screens.active.cursor.style
+	mut parts := []string{}
+
+	if style.flags.bold {
+		parts << '1'
+	}
+	if style.flags.faint {
+		parts << '2'
+	}
+	if style.flags.italic {
+		parts << '3'
+	}
+	match style.flags.underline {
+		.single { parts << '4' }
+		.double { parts << '4:2' }
+		.curly { parts << '4:3' }
+		.dotted { parts << '4:4' }
+		.dashed { parts << '4:5' }
+		.none {}
+	}
+	if style.flags.blink {
+		parts << '5'
+	}
+	if style.flags.inverse {
+		parts << '7'
+	}
+	if style.flags.invisible {
+		parts << '8'
+	}
+	if style.flags.strikethrough {
+		parts << '9'
+	}
+	if style.flags.overline {
+		parts << '53'
+	}
+
+	// Foreground color
+	match style.fg_color {
+		.palette {
+			if style.fg_palette < 8 {
+				parts << '${30 + int(style.fg_palette)}'
+			} else if style.fg_palette < 16 {
+				parts << '${90 + int(style.fg_palette) - 8}'
+			} else {
+				parts << '38:5:${style.fg_palette}'
+			}
+		}
+		.rgb {
+			parts << '38:2::${style.fg_r}:${style.fg_g}:${style.fg_b}'
+		}
+		.none {}
+	}
+
+	// Background color
+	match style.bg_color {
+		.palette {
+			if style.bg_palette < 8 {
+				parts << '${40 + int(style.bg_palette)}'
+			} else if style.bg_palette < 16 {
+				parts << '${100 + int(style.bg_palette) - 8}'
+			} else {
+				parts << '48:5:${style.bg_palette}'
+			}
+		}
+		.rgb {
+			parts << '48:2::${style.bg_r}:${style.bg_g}:${style.bg_b}'
+		}
+		.none {}
+	}
+
+	if parts.len == 0 {
+		return '0'
+	}
+	return parts.join(';')
+}
+
+// format_decscusr returns the DECSCUSR value for the current cursor state.
+fn (self &StreamHandler) format_decscusr() int {
+	blinking := self.terminal.modes.get(.cursor_blinking)
+	return match self.terminal.screens.active.cursor.cursor_style {
+		.block { if blinking { 1 } else { 2 } }
+		.underline { if blinking { 3 } else { 4 } }
+		.bar { if blinking { 5 } else { 6 } }
+		.block_hollow { 2 } // No standard DECSCUSR for hollow, report as steady block
+	}
+}
+
+// xtgettcap_lookup looks up a hex-encoded terminfo capability name
+// and returns the hex-encoded value, or none if not found.
+// The key is the hex-encoded capability name (e.g., "536D756C78" for "Smulx").
+fn xtgettcap_lookup(hex_key string) ?string {
+	// Decode the hex key to get the capability name.
+	name := hex_decode(hex_key) or { return none }
+
+	// Look up common terminfo capabilities.
+	// This is a subset of what Ghostty supports.
+	val := match name {
+		'TN' { 'xterm-ghostty' }
+		'Co', 'colors' { '256' }
+		'RGB' { '8/8/8' }
+		'Smulx' { '\x1b[4:%p1%dm' }
+		'Setulc' { '\x1b[58:2::%p1%{65536}%/%d:%p1%{256}%/%{255}%&%d:%p1%{255}%&%dm' }
+		'Smol' { '\x1b[53m' }
+		'Rmol' { '\x1b[55m' }
+		'Ms' { '\x1b]52;%p1%s;%p2%s\x07' }
+		else { return none }
+	}
+	return hex_encode(val)
+}
+
+// hex_decode decodes a hex string to a regular string.
+fn hex_decode(s string) ?string {
+	if s.len % 2 != 0 {
+		return none
+	}
+	mut result := []u8{cap: s.len / 2}
+	for i := 0; i < s.len; i += 2 {
+		hi := hex_nibble(s[i]) or { return none }
+		lo := hex_nibble(s[i + 1]) or { return none }
+		result << (hi << 4) | lo
+	}
+	return result.bytestr()
+}
+
+// hex_encode encodes a string as uppercase hex.
+fn hex_encode(s string) string {
+	hex_chars := '0123456789ABCDEF'
+	mut result := []u8{cap: s.len * 2}
+	for b in s.bytes() {
+		result << hex_chars[int(b >> 4)]
+		result << hex_chars[int(b & 0x0F)]
+	}
+	return result.bytestr()
+}
+
+// hex_nibble converts a hex character to its 4-bit value.
+fn hex_nibble(c u8) ?u8 {
+	if c >= u8(`0`) && c <= u8(`9`) {
+		return c - u8(`0`)
+	}
+	if c >= u8(`A`) && c <= u8(`F`) {
+		return c - u8(`A`) + 10
+	}
+	if c >= u8(`a`) && c <= u8(`f`) {
+		return c - u8(`a`) + 10
+	}
+	return none
 }
 
 // ============================================================
@@ -492,16 +700,19 @@ fn (mut self StreamHandler) dcs_command(mut cmd DcsCommand) {
 // ============================================================
 
 pub fn (mut self StreamHandler) apc_end() {
-	// XTODO: APC end completes the APC sequence. The primary use is
-	// the Kitty graphics protocol which requires image encoding/decoding,
-	// shared memory management, and response generation.
 	mut cmd := self.apc.end() or { return }
 	defer { cmd.deinit() }
 
 	match cmd.kind {
 		.kitty {
-			// XTODO: Kitty graphics protocol command processing.
-			// Would call self.terminal.kitty_graphics() and encode response.
+			// Kitty graphics protocol command processing.
+			// A full implementation would parse the APC data as a kitty
+			// graphics command, execute it against the terminal's image
+			// storage, and send back a response. This requires:
+			// - kitty.graphics_command.parse(cmd.data)
+			// - terminal.screen.kitty_images storage
+			// - Response encoding back to the pty
+			// Currently a no-op until kitty graphics exec is implemented.
 		}
 	}
 }
@@ -1048,23 +1259,58 @@ fn (mut self StreamHandler) clipboard_contents(kind u8, data string) {
 }
 
 fn (mut self StreamHandler) semantic_prompt(payload terminal.ActionPayload) {
-	// XTODO: Full semantic prompt processing. Currently only handles
-	// the basic prompt/input/command lifecycle. The Zig code has more
-	// complex handling including readOption for exit codes, and the
-	// SemanticPromptAction enum has many more variants (end_input_start_output,
-	// end_command, end_prompt_start_input, fresh_line, new_command, etc.).
-	// The stream would dispatch with the proper action + options.
-	//
-	// For now, just call the terminal's semantic_prompt stub.
-	self.terminal.semantic_prompt(.prompt_start, none)
+	// OSC 133 semantic prompt. The payload.str1 carries the raw OSC data
+	// which begins with a single character identifying the action:
+	//   A = prompt start
+	//   B = input start (end of prompt, start of user input)
+	//   C = command start (end of input, start of command execution)
+	//   D = command end (may include exit code after ;)
+	data := payload.str1
+	if data.len == 0 {
+		return
+	}
+
+	action_char := data[0]
+	// Parse optional exit code for command_end (D;exitcode)
+	mut exit_code := ?i32(none)
+	if action_char == u8(`D`) && data.len > 1 {
+		// Look for ;exitcode
+		if data[1] == u8(`;`) && data.len > 2 {
+			code_str := data[2..]
+			// Parse the exit code string
+			mut val := 0
+			mut neg := false
+			mut start := 0
+			if code_str.len > 0 && code_str[0] == u8(`-`) {
+				neg = true
+				start = 1
+			}
+			mut valid := start < code_str.len
+			for i in start .. code_str.len {
+				if code_str[i] >= u8(`0`) && code_str[i] <= u8(`9`) {
+					val = val * 10 + int(code_str[i] - u8(`0`))
+				} else {
+					valid = false
+					break
+				}
+			}
+			if valid {
+				exit_code = if neg { i32(-val) } else { i32(val) }
+			}
+		}
+	}
+
+	action := match action_char {
+		u8(`A`) { terminal.SemanticPromptAction.prompt_start }
+		u8(`B`) { terminal.SemanticPromptAction.input_start }
+		u8(`C`) { terminal.SemanticPromptAction.command_start }
+		u8(`D`) { terminal.SemanticPromptAction.command_end }
+		else { return }
+	}
+	self.terminal.semantic_prompt(action, exit_code)
 }
 
 fn (mut self StreamHandler) report_pwd(url string) {
-	// XTODO: Full reportPwd requires URI parsing (file:// and kitty-shell-cwd://
-	// schemes), hostname validation for security (OSC 7 can come from SSH),
-	// URL percent-decoding, and platform-specific handling (Windows is different).
-	// For now we do a simplified version that handles the empty and simple cases.
-
 	// Special handling for the empty URL. We treat the empty URL
 	// as resetting the pwd as if we never saw a pwd.
 	if url.len == 0 {
@@ -1225,63 +1471,25 @@ pub fn (mut self ApcCommand) deinit() {
 	self.data = []u8{}
 }
 
-// DcsHandler maintains DCS (Device Control String) state.
-// DCS is used by XTGETTCAP, DECRQSS, and tmux control mode.
+// DcsHandler wraps terminal.DcsHandler, delegating all DCS state
+// management to the terminal module's implementation.
 pub struct DcsHandler {
 mut:
-	active        bool
-	intermediates []u8
-	params        []u16
-	final_byte    u8
-	data          []u8
+	handler terminal.DcsHandler = terminal.DcsHandler{}
 }
 
 pub fn (mut self DcsHandler) deinit() {
-	self.data = []u8{}
-	self.intermediates = []u8{}
-	self.params = []u16{}
+	self.handler.deinit()
 }
 
-pub fn (mut self DcsHandler) hook(payload terminal.ActionPayload) ?DcsCommand {
-	self.active = true
-	self.intermediates = payload.dcs_intermediates.clone()
-	self.params = payload.dcs_params.clone()
-	self.final_byte = payload.dcs_final
-	self.data = []u8{}
-	// XTODO: Would parse the DCS intro to determine command type
-	return none
+pub fn (mut self DcsHandler) hook(dcs terminal.DcsParams) ?terminal.DcsCommand {
+	return self.handler.hook(dcs)
 }
 
-pub fn (mut self DcsHandler) put(byte_val u8) ?DcsCommand {
-	if self.active {
-		self.data << byte_val
-	}
-	return none
+pub fn (mut self DcsHandler) put(byte_val u8) ?terminal.DcsCommand {
+	return self.handler.put(byte_val)
 }
 
-pub fn (mut self DcsHandler) unhook() ?DcsCommand {
-	if !self.active {
-		return none
-	}
-	self.active = false
-	// XTODO: Would determine command type from intermediates/params/final
-	return DcsCommand{
-		kind: .xtgettcap
-	}
-}
-
-pub struct DcsCommand {
-pub mut:
-	kind DcsCommandKind
-	data []u8
-}
-
-pub enum DcsCommandKind {
-	xtgettcap
-	decrqss
-	tmux
-}
-
-pub fn (mut self DcsCommand) deinit() {
-	self.data = []u8{}
+pub fn (mut self DcsHandler) unhook() ?terminal.DcsCommand {
+	return self.handler.unhook()
 }

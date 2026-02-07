@@ -5,9 +5,6 @@ module search
 // one at a time from the page list into the sliding window.
 //
 // Source: terminal/search/pagelist.zig
-//
-// XTODO: This is a stub. Full implementation requires PageList
-// integration with tracked pins for the search position.
 
 import terminal
 import highlight
@@ -23,24 +20,36 @@ pub mut:
 	// Tracked pin to the current search position in the page list.
 	// This is tracked so it auto-updates if pages are modified.
 	pin &terminal.PagePin = unsafe { nil }
+
+	// Whether we have exhausted the page list.
+	exhausted bool
 }
 
 // Initialize a new page list search starting from the given node.
 // The search proceeds in reverse order (towards older content).
 pub fn PageListSearch.init(needle []u8, list &terminal.PageList, start &terminal.PageNode) PageListSearch {
-	// XTODO: Should create a tracked pin at the start node and
-	// initialize a reverse sliding window.
-	_ = start
+	// Create a tracked pin at the start node pointing to the last row.
+	mut mutable_list := unsafe { &terminal.PageList(list) }
+	pin := mutable_list.track_pin(terminal.PagePin{
+		node: unsafe { &terminal.PageNode(start) }
+		y: u16(start.data.size.rows - 1)
+		x: 0
+	})
 	return PageListSearch{
 		list: list
 		window: SlidingWindow.init(.reverse, needle)
-		pin: unsafe { &terminal.PagePin(nil) }
+		pin: pin
+		exhausted: false
 	}
 }
 
 // Free resources.
 pub fn (mut self PageListSearch) deinit() {
-	// XTODO: Should untrack the pin from the page list.
+	// Untrack the pin from the page list.
+	if self.pin != unsafe { nil } {
+		mut mutable_list := unsafe { &terminal.PageList(self.list) }
+		mutable_list.untrack_pin(self.pin)
+	}
 	self.window.deinit()
 }
 
@@ -55,10 +64,29 @@ pub fn (mut self PageListSearch) next() ?highlight.FlattenedHighlight {
 //
 // The caller must hold the necessary locks to access the page list.
 pub fn (mut self PageListSearch) feed() bool {
-	// XTODO: Should:
-	// 1. Get the previous node from the current pin position
-	// 2. Append it to the sliding window
-	// 3. Update the pin to point to the new position
-	// 4. Return true if a node was appended, false if at the beginning
-	return false
+	if self.exhausted {
+		return false
+	}
+
+	// Get the current node from the pin.
+	node := self.pin.node
+	if node == unsafe { nil } {
+		self.exhausted = true
+		return false
+	}
+
+	// Append the current node to the sliding window.
+	self.window.append(node)
+
+	// Move the pin to the previous node in the list.
+	if prev := node.prev {
+		self.pin.node = prev
+		self.pin.y = u16(prev.data.size.rows - 1)
+		self.pin.x = 0
+	} else {
+		// No more previous nodes -- we have reached the beginning.
+		self.exhausted = true
+	}
+
+	return true
 }

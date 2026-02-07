@@ -161,6 +161,14 @@ pub:
 	byte_val u8
 	// Clipboard kind (for .clipboard_contents)
 	clipboard_kind u8
+	// Semantic prompt action (for .semantic_prompt)
+	semantic_prompt_action SemanticPromptAction
+	// Semantic prompt options string (for .semantic_prompt, raw ;k=v pairs)
+	semantic_prompt_opts string
+	// Progress state (for .progress_report)
+	progress_state ProgressState
+	// Progress percentage 0-100, -1 if not set (for .progress_report)
+	progress_percent i8 = -1
 	// DCS data (for .dcs_hook)
 	dcs_intermediates []u8
 	dcs_params        []u16
@@ -1200,9 +1208,20 @@ fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 			// Ignored (icon not supported)
 		}
 		.clipboard_contents {
-			// XTODO: parse clipboard kind from data
+			// OSC 52 format: kind;base64data
+			// kind is a single character (c=clipboard, s=selection, p=primary, etc.)
+			mut clip_kind := u8(`c`) // default to clipboard
+			mut clip_data := cmd.data
+			sep := cmd.data.index_u8(u8(`;`))
+			if sep >= 0 {
+				if sep > 0 {
+					clip_kind = cmd.data[0]
+				}
+				clip_data = cmd.data[sep + 1..]
+			}
 			self.dispatch(.clipboard_contents, ActionPayload{
-				str1: cmd.data
+				clipboard_kind: clip_kind
+				str1: clip_data
 			})
 		}
 		.report_pwd {
@@ -1225,22 +1244,96 @@ fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 			self.dispatch(.end_hyperlink, ActionPayload{})
 		}
 		.show_desktop_notification {
-			// XTODO: parse title/body from data
+			// OSC 777 iterm-style: title;body
+			// OSC 9: just the body (no title)
+			// cmd.data may contain title;body or just body
+			mut title := ''
+			mut body := cmd.data
+			sep := cmd.data.index_u8(u8(`;`))
+			if sep >= 0 {
+				title = cmd.data[..sep]
+				body = cmd.data[sep + 1..]
+			}
 			self.dispatch(.show_desktop_notification, ActionPayload{
-				str1: cmd.data
+				str1: title
+				str2: body
 			})
 		}
 		.semantic_prompt {
-			// XTODO: parse semantic prompt action from data
+			// OSC 133 format: action[;options]
+			// action is a single character: A=prompt_start, B=input_start, C=command_start, D=command_end
+			if cmd.data.len == 0 {
+				return
+			}
+			action_char := cmd.data[0]
+			action := match action_char {
+				u8(`A`) { SemanticPromptAction.prompt_start }
+				u8(`B`) { SemanticPromptAction.input_start }
+				u8(`C`) { SemanticPromptAction.command_start }
+				u8(`D`) { SemanticPromptAction.command_end }
+				else { return }
+			}
+			// Parse any ;k=v options after the action letter
+			mut opts := ''
+			if cmd.data.len > 1 && cmd.data[1] == u8(`;`) {
+				opts = cmd.data[2..]
+			}
+			self.dispatch(.semantic_prompt, ActionPayload{
+				semantic_prompt_action: action
+				semantic_prompt_opts: opts
+			})
 		}
 		.color_operation {
-			// XTODO: color operations
+			self.dispatch(.color_operation, ActionPayload{ str1: cmd.data })
 		}
 		.kitty_color_protocol {
-			// XTODO: kitty color protocol
+			self.dispatch(.kitty_color_report, ActionPayload{ str1: cmd.data })
 		}
 		.conemu_progress_report {
-			// XTODO: progress reports
+			// ConEmu progress format: state;progress
+			// state: 0=remove, 1=set, 2=error, 3=indeterminate, 4=pause
+			// progress: 0-100
+			if cmd.data.len == 0 {
+				return
+			}
+			mut state_val := 0
+			mut progress_val := i8(-1)
+			sep := cmd.data.index_u8(u8(`;`))
+			state_str := if sep >= 0 { cmd.data[..sep] } else { cmd.data }
+			// Parse state digit
+			if state_str.len == 1 && state_str[0] >= u8(`0`) && state_str[0] <= u8(`4`) {
+				state_val = int(state_str[0] - u8(`0`))
+			} else {
+				return
+			}
+			// Parse progress if present
+			if sep >= 0 && sep + 1 < cmd.data.len {
+				prog_str := cmd.data[sep + 1..]
+				mut pval := 0
+				mut valid := prog_str.len > 0
+				for b in prog_str {
+					if b < u8(`0`) || b > u8(`9`) {
+						valid = false
+						break
+					}
+					pval = pval * 10 + int(b - u8(`0`))
+				}
+				if valid && pval <= 100 {
+					progress_val = i8(pval)
+				}
+			}
+			state := match state_val {
+				0 { ProgressState.remove }
+				1 { ProgressState.set }
+				2 { ProgressState.error_state }
+				3 { ProgressState.indeterminate }
+				4 { ProgressState.pause }
+				else { return }
+			}
+			self.dispatch(.progress_report, ActionPayload{
+				progress_state: state
+				progress_percent: progress_val
+			})
 		}
 		.conemu_ignored, .kitty_text_sizing {
 			// Ignored

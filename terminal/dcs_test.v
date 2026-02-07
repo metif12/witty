@@ -1,5 +1,7 @@
 module terminal
 
+import tmux
+
 // Tests for DCS command handler.
 // Translated from Ghostty's dcs.zig tests.
 
@@ -164,9 +166,6 @@ fn test_dcs_decrqss_invalid_command() {
 }
 
 fn test_dcs_tmux_enter_and_implicit_exit() {
-	// XTODO: tmux control mode is not fully implemented, but we can
-	// test the basic enter/exit flow.
-
 	mut h := DcsHandler{}
 	defer { h.deinit() }
 
@@ -175,13 +174,12 @@ fn test_dcs_tmux_enter_and_implicit_exit() {
 		params:     [u16(1000)]
 		final_byte: `p`
 	}) or {
-		// tmux enter command
 		assert false
 		return
 	}
 	match cmd1 {
 		DcsCommandTmux {
-			assert cmd1.notification == .enter
+			assert cmd1.notification is tmux.NotifEnter
 		}
 		else {
 			assert false
@@ -192,7 +190,7 @@ fn test_dcs_tmux_enter_and_implicit_exit() {
 	cmd2 := h.unhook() or { assert false; return }
 	match cmd2 {
 		DcsCommandTmux {
-			assert cmd2.notification == .exit
+			assert cmd2.notification is tmux.NotifExit
 		}
 		else {
 			assert false

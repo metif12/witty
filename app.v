@@ -15,12 +15,12 @@ import font
 import time
 
 // SurfaceList is a list of active surfaces managed by the app.
-// XTODO: When full apprt.Surface type is available, change to []&apprt.Surface.
+// TODO: When full apprt.Surface type is available, change to []&apprt.Surface.
 type SurfaceList = []&SurfaceRef
 
 // SurfaceRef is a reference to a surface. This is a placeholder type
 // until the full Surface infrastructure is connected.
-// XTODO: Replace with the actual Surface type from the surface module.
+// TODO: Replace with the actual Surface type from the surface module.
 @[heap]
 pub struct SurfaceRef {
 pub mut:
@@ -36,18 +36,18 @@ pub fn (s &SurfaceRef) core() &SurfaceRef {
 
 // needs_confirm_quit returns whether this surface needs confirmation
 // before quitting (e.g. because it has a running process).
-// XTODO: Implement when process tracking is available.
+// TODO: Implement when process tracking is available.
 pub fn (s &SurfaceRef) needs_confirm_quit() bool {
 	return false
 }
 
 // close requests the surface to close.
-// XTODO: Implement when full surface lifecycle is available.
+// TODO: Implement when full surface lifecycle is available.
 pub fn (s &SurfaceRef) close() {
 }
 
 // handle_message handles a message sent to this surface.
-// XTODO: Implement when surface message handling is available.
+// TODO: Implement when surface message handling is available.
 pub fn (s &SurfaceRef) handle_message(msg SurfaceMessage) ! {
 	_ = msg
 }
@@ -55,7 +55,7 @@ pub fn (s &SurfaceRef) handle_message(msg SurfaceMessage) ! {
 // ChangeConfigMsg is a placeholder for config-change messages sent to a surface.
 pub struct ChangeConfigMsg {
 pub:
-	// XTODO: Should hold a reference to the new config.
+	// TODO: Should hold a reference to the new config.
 	placeholder int
 }
 
@@ -141,7 +141,7 @@ pub fn (mut self App) init() ! {
 // deinit cleans up the app, destroying all surfaces and freeing resources.
 pub fn (mut self App) deinit() {
 	// Clean up all our surfaces.
-	// XTODO: Call deinit on each surface when surface lifecycle is implemented.
+	// TODO: Call deinit on each surface when surface lifecycle is implemented.
 	self.surfaces = SurfaceList([]&SurfaceRef{})
 
 	// Clean up our font group cache.
@@ -170,17 +170,17 @@ pub fn (mut self App) tick(mut rt_app apprt.RuntimeApp) ! {
 // can only be called from the main thread. The caller owns the config
 // memory. The memory can be freed immediately when this returns.
 //
-// XTODO: Full implementation requires surface config update propagation.
+// TODO: Full implementation requires surface config update propagation.
 pub fn (mut self App) update_config(mut rt_app apprt.RuntimeApp, config &configpkg.Config) ! {
 	// Go through and update all of the surface configurations.
-	// XTODO: Send change_config message to each surface when surface
+	// TODO: Send change_config message to each surface when surface
 	// message handling is fully implemented.
 
 	// Apply our conditional state. If we fail to apply the conditional state
 	// then we log and attempt to move forward with the old config.
 	// We only apply this to the app-level config because the surface
 	// config applies its own conditional state.
-	// XTODO: Implement conditional config application.
+	// TODO: Implement conditional config application.
 	_ = config
 
 	// Notify the apprt that the app has changed configuration.
@@ -196,7 +196,7 @@ pub fn (mut self App) add_surface(surface &SurfaceRef) {
 	// Since we have non-zero surfaces, we can cancel the quit timer.
 	// It is up to the apprt if there is a quit timer at all and if it
 	// should be canceled.
-	// XTODO: Notify apprt to stop quit timer.
+	// TODO: Notify apprt to stop quit timer.
 }
 
 // delete_surface removes a surface from the known surface list.
@@ -224,7 +224,7 @@ pub fn (mut self App) delete_surface(surface &SurfaceRef) {
 
 	// If we have no surfaces, we can start the quit timer. It is up to the
 	// apprt to determine if this is necessary.
-	// XTODO: Notify apprt to start quit timer when surfaces.len == 0.
+	// TODO: Notify apprt to start quit timer when surfaces.len == 0.
 }
 
 // focused_surface_valid returns the last focused surface if it is still
@@ -255,7 +255,7 @@ fn (mut self App) drain_mailbox(mut rt_app apprt.RuntimeApp) ! {
 		msg := self.mailbox.pop() or { break }
 		match msg {
 			OpenConfigMsg {
-				// XTODO: Perform open_config action via rt_app.
+				// TODO: Perform open_config action via rt_app.
 				_ = rt_app
 			}
 			NewWindowMsg {
@@ -273,7 +273,7 @@ fn (mut self App) drain_mailbox(mut rt_app apprt.RuntimeApp) ! {
 				return
 			}
 			RedrawSurfaceMsg {
-				// XTODO: Perform redraw action via rt_app.
+				// TODO: Perform redraw action via rt_app.
 			}
 		}
 	}
@@ -297,9 +297,9 @@ pub fn (mut self App) focus_surface(surface &SurfaceRef) {
 }
 
 // new_window creates a new terminal window.
-// XTODO: Full implementation requires apprt.performAction for new_window.
+// TODO: Full implementation requires apprt.performAction for new_window.
 pub fn (mut self App) new_window(mut rt_app apprt.RuntimeApp, msg NewWindowMsg) ! {
-	// XTODO: Validate parent surface, determine target, call rt_app.perform_action.
+	// TODO: Validate parent surface, determine target, call rt_app.perform_action.
 	_ = msg
 	rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .new_window, apprt.ActionValue{}) or {}
 }
@@ -387,7 +387,7 @@ pub:
 pub struct Mailbox {
 mut:
 	// Internal message queue. This is a simple bounded buffer.
-	// XTODO: Replace with a proper BlockingQueue/channel when available.
+	// TODO: Replace with a proper BlockingQueue/channel when available.
 	queue []Message
 }
 

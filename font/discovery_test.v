@@ -20,7 +20,7 @@ fn test_descriptor_hash_family_names() {
 
 // test_fontconfig tests basic fontconfig discovery.
 fn test_fontconfig() {
-	// XTODO: requires real fontconfig backend
+	// TODO: requires real fontconfig backend
 	// Uncomment when fontconfig bindings are available:
 	//
 	// mut fc := FontconfigDiscovery.init()
@@ -31,7 +31,7 @@ fn test_fontconfig() {
 
 // test_fontconfig_codepoint tests fontconfig discovery for a specific codepoint.
 fn test_fontconfig_codepoint() {
-	// XTODO: requires real fontconfig backend
+	// TODO: requires real fontconfig backend
 	// Uncomment when fontconfig bindings are available:
 	//
 	// mut fc := FontconfigDiscovery.init()
@@ -51,7 +51,7 @@ fn test_fontconfig_codepoint() {
 
 // test_coretext tests basic CoreText discovery.
 fn test_coretext() {
-	// XTODO: requires real CoreText backend
+	// TODO: requires real CoreText backend
 	// Uncomment when CoreText bindings are available:
 	//
 	// mut ct := CoreTextDiscovery.init()
@@ -68,7 +68,7 @@ fn test_coretext() {
 
 // test_coretext_codepoint tests CoreText discovery for a specific codepoint.
 fn test_coretext_codepoint() {
-	// XTODO: requires real CoreText backend
+	// TODO: requires real CoreText backend
 	// Uncomment when CoreText bindings are available:
 	//
 	// mut ct := CoreTextDiscovery.init()
@@ -86,7 +86,7 @@ fn test_coretext_codepoint() {
 
 // test_coretext_sorting tests that CoreText sorts results correctly.
 fn test_coretext_sorting() {
-	// XTODO: requires real CoreText backend and SF Pro font
+	// TODO: requires real CoreText backend and SF Pro font
 	// This test is also disabled in the Zig source because SF Pro
 	// is not available in CI.
 	//

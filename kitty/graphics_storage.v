@@ -86,8 +86,9 @@ pub struct PlacementVirtual {}
 
 // Deinitialize the placement, untracking the pin if necessary.
 pub fn (self &Placement) deinit(s &terminal.Screen) {
-	// XTODO: untrack pin from page list when PageList tracking is fully implemented.
+	// TODO: Untrack pin from page list when PageList tracking is fully implemented.
 	// In the Zig version this calls s.pages.untrackPin(p) for pin-based placements.
+	// For now this is a no-op since PageList pin tracking is not yet available.
 	_ = s
 }
 

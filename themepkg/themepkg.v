@@ -1,6 +1,7 @@
 module themepkg
 
 import os
+import global_state
 
 // Location of possible themes. The order of this enum matters because it
 // defines the priority of theme search (from top to bottom).
@@ -21,8 +22,13 @@ pub fn (l Location) dir() string {
 			return os.join_path(config_dir, 'ghostty', 'themes')
 		}
 		.resources {
-			// XTODO: use global_state resources_dir
-			return ''
+			// Use the global_state resources_dir to find the themes
+			// directory within the application resources.
+			resources_path := global_state.state.resources_dir.app()
+			if resources_path.len == 0 {
+				return ''
+			}
+			return os.join_path(resources_path, 'themes')
 		}
 	}
 }

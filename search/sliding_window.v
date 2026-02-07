@@ -433,22 +433,143 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 // The total bytes will be larger since this omits metadata, but it is
 // an accurate measure of the text content size added.
 pub fn (mut self SlidingWindow) append(node &terminal.PageNode) int {
-	// XTODO: Requires PageFormatter with point_map support.
-	// The V PageFormatter doesn't currently support the point_map feature
-	// needed to build the cell_map that maps encoded bytes back to cell
-	// coordinates. This is needed for highlight() to translate byte
-	// positions into screen positions.
-	//
-	// When PageFormatter gains point_map support, this method should:
-	// 1. Create a Meta entry for the node
-	// 2. Use PageFormatter with point_map to encode the page text
-	// 3. If the last row isn't soft-wrapped, append a trailing newline
-	// 4. Reverse the encoded data and cell_map for reverse searches
-	// 5. Append the encoded bytes to self.data
-	// 6. Append the Meta entry to self.meta
-	// 7. Ensure chunk_buf has enough capacity
-	_ = node
-	return 0
+	// Format page text and build the cell_map that maps encoded bytes
+	// back to cell coordinates (row, column). This is a basic implementation
+	// that iterates over page rows and encodes cell codepoints as UTF-8.
+
+	page := &node.data
+	mut encoded := []u8{}
+	mut cell_map := []highlight.Coordinate{}
+
+	for row_idx in 0 .. int(page.size.rows) {
+		if row_idx >= page.rows.len {
+			break
+		}
+		row := page.rows[row_idx]
+
+		for col_idx in 0 .. int(page.size.cols) {
+			if col_idx >= row.cells.len {
+				break
+			}
+			cell := row.cells[col_idx]
+
+			// Skip spacer cells for wide characters.
+			if cell.wide == .spacer_tail || cell.wide == .spacer_head {
+				continue
+			}
+
+			cp := cell.codepoint
+			if cp == 0 {
+				// Empty cell: encode as space.
+				encoded << u8(` `)
+				cell_map << highlight.Coordinate{
+					x: u16(col_idx)
+					y: u32(row_idx)
+				}
+			} else if cp < 0x80 {
+				encoded << u8(cp)
+				cell_map << highlight.Coordinate{
+					x: u16(col_idx)
+					y: u32(row_idx)
+				}
+			} else if cp < 0x800 {
+				encoded << u8(0xC0 | (cp >> 6))
+				cell_map << highlight.Coordinate{
+					x: u16(col_idx)
+					y: u32(row_idx)
+				}
+				encoded << u8(0x80 | (cp & 0x3F))
+				cell_map << highlight.Coordinate{
+					x: u16(col_idx)
+					y: u32(row_idx)
+				}
+			} else if cp < 0x10000 {
+				encoded << u8(0xE0 | (cp >> 12))
+				cell_map << highlight.Coordinate{
+					x: u16(col_idx)
+					y: u32(row_idx)
+				}
+				encoded << u8(0x80 | ((cp >> 6) & 0x3F))
+				cell_map << highlight.Coordinate{
+					x: u16(col_idx)
+					y: u32(row_idx)
+				}
+				encoded << u8(0x80 | (cp & 0x3F))
+				cell_map << highlight.Coordinate{
+					x: u16(col_idx)
+					y: u32(row_idx)
+				}
+			} else {
+				encoded << u8(0xF0 | (cp >> 18))
+				cell_map << highlight.Coordinate{
+					x: u16(col_idx)
+					y: u32(row_idx)
+				}
+				encoded << u8(0x80 | ((cp >> 12) & 0x3F))
+				cell_map << highlight.Coordinate{
+					x: u16(col_idx)
+					y: u32(row_idx)
+				}
+				encoded << u8(0x80 | ((cp >> 6) & 0x3F))
+				cell_map << highlight.Coordinate{
+					x: u16(col_idx)
+					y: u32(row_idx)
+				}
+				encoded << u8(0x80 | (cp & 0x3F))
+				cell_map << highlight.Coordinate{
+					x: u16(col_idx)
+					y: u32(row_idx)
+				}
+			}
+		}
+
+		// If the row is not soft-wrapped, append a newline.
+		if !row.wrap {
+			encoded << u8(`\n`)
+			cell_map << highlight.Coordinate{
+				x: u16(page.size.cols - 1)
+				y: u32(row_idx)
+			}
+		}
+	}
+
+	if encoded.len == 0 {
+		return 0
+	}
+
+	// For reverse searches, reverse the encoded data and cell_map.
+	if self.direction == .reverse {
+		reverse_bytes(mut encoded)
+		// Reverse cell_map
+		mut i := 0
+		mut j := cell_map.len - 1
+		for i < j {
+			cell_map[i], cell_map[j] = cell_map[j], cell_map[i]
+			i += 1
+			j -= 1
+		}
+	}
+
+	content_len := encoded.len
+
+	// Append encoded bytes to the data buffer.
+	self.data.ensure_unused_capacity(encoded.len)
+	self.data.append_slice_assume_capacity(encoded)
+
+	// Append meta entry.
+	self.meta.ensure_unused_capacity(1)
+	self.meta.append_assume_capacity(Meta{
+		node: unsafe { &terminal.PageNode(node) }
+		serial: node.serial
+		cell_map: cell_map
+	})
+
+	// Ensure chunk_buf has enough capacity for the new meta entry count.
+	if self.chunk_buf.cap < self.meta.len() {
+		self.chunk_buf = []highlight.Chunk{cap: self.meta.len()}
+	}
+
+	return content_len
 }
 
 // Only for tests! Change the needle (must be same length).
