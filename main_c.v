@@ -9,9 +9,8 @@
 // This is currently used only to embed ghostty within a macOS app. However,
 // it could be expanded to be general purpose in the future.
 
-module main_c
+module main
 
-import build_config
 
 // BuildMode mirrors the C enum ghostty_build_mode_e.
 pub enum BuildMode {
@@ -82,9 +81,9 @@ pub fn GhosttyString.from_bytes(b []u8) GhosttyString {
 // ghostty_info: Return metadata about Ghostty, such as version, build mode, etc.
 pub fn ghostty_info() Info {
 	return Info{
-		mode:        if build_config.is_debug { .debug } else { .release_fast }
-		version:     build_config.version_string
-		version_len: build_config.version_string.len
+		mode:        if is_debug { .debug } else { .release_fast }
+		version:     version_string
+		version_len: version_string.len
 	}
 }
 

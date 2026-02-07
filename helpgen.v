@@ -18,7 +18,7 @@
 // - Use V's built-in doc generation with custom post-processing
 // - Parse V source files at runtime to extract comments
 
-module helpgen
+module main
 
 // HelpEntry represents a single help text entry for a configuration field
 // or action.

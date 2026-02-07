@@ -3,7 +3,7 @@
 // It's currently small in scope; its purpose is to isolate mouse logic that
 // has gotten a bit complex (e.g. pointer shape handling for key events), but
 // the intention is to grow it later so that we can better test said logic).
-module surface_mouse
+module main
 
 // MouseShape cursor types
 pub enum MouseShape {

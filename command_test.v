@@ -1,4 +1,4 @@
-module command
+module main
 
 // Tests for Command and Exit types.
 

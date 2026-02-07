@@ -1,4 +1,4 @@
-module app
+module main
 
 // App is the primary GUI application for ghostty. This builds the window,
 // sets up the renderer, etc. The primary run loop is started by calling
@@ -12,6 +12,7 @@ module app
 import apprt
 import configpkg
 import font
+import time
 
 // SurfaceList is a list of active surfaces managed by the app.
 // XTODO: When full apprt.Surface type is available, change to []&apprt.Surface.
@@ -51,16 +52,14 @@ pub fn (s &SurfaceRef) handle_message(msg SurfaceMessage) ! {
 	_ = msg
 }
 
-// SurfaceMessage is a placeholder for messages that can be sent to a surface.
-// XTODO: Replace with the actual surface message type.
-pub type SurfaceMessage = ChangeConfigMsg | RedrawMsg
-
+// ChangeConfigMsg is a placeholder for config-change messages sent to a surface.
 pub struct ChangeConfigMsg {
 pub:
 	// XTODO: Should hold a reference to the new config.
 	placeholder int
 }
 
+// RedrawMsg is a placeholder for redraw messages sent to a surface.
 pub struct RedrawMsg {}
 
 // App is the primary application struct. It manages the list of surfaces,
@@ -102,6 +101,7 @@ pub mut:
 	// will run out of resources if desktop notifications are sent too fast
 	// and the OS will kill Ghostty.
 	last_notification_digest u64
+	last_notification_time   ?time.Time
 
 	// The conditional state of the configuration. See the equivalent field
 	// in the Surface struct for more information. In this case, this applies

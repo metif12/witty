@@ -64,7 +64,7 @@
 //
 // Either works, its situationally dependent which is better.
 
-module tripwire
+module main
 
 // Future ideas:
 //

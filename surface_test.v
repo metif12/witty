@@ -13,7 +13,7 @@ fn make_test_size() Size {
 
 // Test helper: creates a Surface with an initialized terminal (avoids nil deref).
 fn make_test_surface() Surface {
-	mut t := Terminal{
+	mut t := SurfaceTerminal{
 		cols: 80
 		rows: 24
 	}

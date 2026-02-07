@@ -2,10 +2,13 @@
 //
 // Matrix math utilities for terminal rendering.
 
-module math_util
+module main
 
 // Mat is a 4x4 matrix of f32 values, stored as row-major.
-pub type Mat = [4][4]f32
+pub struct Mat {
+pub mut:
+	data [16]f32
+}
 
 // 2D orthographic projection matrix.
 //
@@ -14,10 +17,12 @@ pub type Mat = [4][4]f32
 pub fn ortho2d(left f32, right f32, bottom f32, top f32) Mat {
 	w := right - left
 	h := top - bottom
-	return [
-		[f32(2.0 / w), 0, 0, 0]!,
-		[f32(0), 2.0 / h, 0, 0]!,
-		[f32(0.0), 0.0, -1.0, 0.0]!,
-		[f32(-(right + left) / w), -(top + bottom) / h, 0.0, 1.0]!,
-	]!
+	return Mat{
+		data: [
+			f32(2.0 / w), 0, 0, 0,
+			0, 2.0 / h, 0, 0,
+			0, 0, -1.0, 0,
+			-(right + left) / w, -(top + bottom) / h, 0, 1.0,
+		]!
+	}
 }

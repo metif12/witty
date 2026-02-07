@@ -1,4 +1,4 @@
-module command
+module main
 
 // Command launches sub-processes. This is an alternate implementation to
 // manage subprocess spawning with PTY support.

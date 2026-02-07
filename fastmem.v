@@ -4,14 +4,14 @@
 // when available for performance. In V we use array copy operations and
 // unsafe C.memmove where needed for overlapping copies.
 
-module fastmem
+module main
 
 // Moves bytes from source into dest, handling overlapping regions correctly.
 // Same as memmove - source and dest may overlap.
 //
 // In Zig this prefers libc memmove if it is available because it is
 // generally much faster.
-pub fn move(mut dest []u8, source []u8) {
+pub fn fastmem_move(mut dest []u8, source []u8) {
 	if dest.len == 0 || source.len == 0 {
 		return
 	}
@@ -25,7 +25,7 @@ pub fn move(mut dest []u8, source []u8) {
 //
 // In Zig this prefers libc memcpy if it is available because it is
 // generally much faster.
-pub fn copy(mut dest []u8, source []u8) {
+pub fn fastmem_copy(mut dest []u8, source []u8) {
 	if dest.len == 0 || source.len == 0 {
 		return
 	}
@@ -48,7 +48,7 @@ pub fn rotate_once(mut items []u8) {
 	tmp := items[0]
 	mut dest := unsafe { items[0..items.len - 1] }
 	source := unsafe { items[1..items.len] }
-	move(mut dest, source)
+	fastmem_move(mut dest, source)
 	items[items.len - 1] = tmp
 }
 
@@ -67,7 +67,7 @@ pub fn rotate_once_r(mut items []u8) {
 	tmp := items[items.len - 1]
 	mut dest := unsafe { items[1..items.len] }
 	source := unsafe { items[0..items.len - 1] }
-	move(mut dest, source)
+	fastmem_move(mut dest, source)
 	items[0] = tmp
 }
 
@@ -81,7 +81,7 @@ pub fn rotate_in(mut items []u8, item u8) u8 {
 	removed := items[0]
 	mut dest := unsafe { items[0..items.len - 1] }
 	source := unsafe { items[1..items.len] }
-	move(mut dest, source)
+	fastmem_move(mut dest, source)
 	items[items.len - 1] = item
 	return removed
 }
@@ -96,7 +96,7 @@ pub fn rotate_in_r(mut items []u8, item u8) u8 {
 	removed := items[items.len - 1]
 	mut dest := unsafe { items[1..items.len] }
 	source := unsafe { items[0..items.len - 1] }
-	move(mut dest, source)
+	fastmem_move(mut dest, source)
 	items[0] = item
 	return removed
 }

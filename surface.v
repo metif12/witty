@@ -11,6 +11,8 @@
 // (i.e. with focus, without focus, and so on).
 module main
 
+import configpkg
+import font
 import gg
 import math
 import time
@@ -118,11 +120,7 @@ fn (a ScreenSize) equals(b ScreenSize) bool {
 }
 
 // CellSize represents the pixel dimensions of a single cell.
-pub struct CellSize {
-pub mut:
-	width  u32
-	height u32
-}
+pub type CellSize = font.CellSize
 
 // Padding represents the padding around the terminal grid.
 pub struct Padding {
@@ -197,20 +195,10 @@ fn (mut s Size) balance_padding(explicit Padding) {
 }
 
 // FontMetrics holds font measurement data.
-pub struct FontMetrics {
-pub mut:
-	cell_width    u32
-	cell_height   u32
-	cell_baseline u32
-}
+pub type FontMetrics = font.Metrics
 
 // DesiredSize represents the desired font size with DPI info.
-pub struct DesiredSize {
-pub mut:
-	points f32
-	xdpi   u32
-	ydpi   u32
-}
+pub type DesiredSize = font.DesiredSize
 
 // Mouse state for the surface.
 pub struct Mouse {
@@ -288,43 +276,11 @@ struct KeyTableEntry {
 // These provide the interface surface.v needs. Full implementations
 // would live in separate modules (terminal/, renderer/, termio/, etc.).
 
-pub struct App {
-pub mut:
-	font_grid_set          FontGridSet
-	config_conditional_state ConditionalState
-	first                  bool = true
-	last_notification_time   ?time.Time
-	last_notification_digest u64
-}
 
-pub struct FontGridSet {}
-
-fn (f FontGridSet) ref(config &DerivedFontConfig, size DesiredSize) !(FontGridKey, &FontGrid) {
-	return FontGridKey{}, &FontGrid{
-		metrics: FontMetrics{
-			cell_width: if size.xdpi > 0 { u32(size.points) } else { u32(10) }
-			cell_height: if size.ydpi > 0 { u32(size.points * 2) } else { u32(20) }
-			cell_baseline: if size.ydpi > 0 { u32(size.points * 1.6) } else { u32(16) }
-		}
-	}
-}
-
-fn (f FontGridSet) deref(key FontGridKey) {
-}
-
-pub struct FontGridKey {}
-
-pub struct FontGrid {
-pub:
-	metrics FontMetrics
-}
-
-fn (g FontGrid) cell_size() CellSize {
-	return CellSize{
-		width: g.metrics.cell_width
-		height: g.metrics.cell_height
-	}
-}
+// FontGridSet, FontGridKey, FontGrid are aliases to the real font module types.
+pub type FontGridSet = font.SharedGridSet
+pub type FontGridKey = font.GridSetKey
+pub type FontGrid = font.SharedGrid
 
 pub struct RuntimeApp {}
 
@@ -424,7 +380,7 @@ fn (r Renderer) thread_enter() ! {
 
 pub struct RendererState {
 pub mut:
-	terminal  &Terminal = unsafe { nil }
+	terminal  &SurfaceTerminal = unsafe { nil }
 	preedit   ?Preedit
 	mouse     RendererMouseState
 	inspector ?&Inspector
@@ -468,8 +424,9 @@ pub struct RendererWakeup {}
 fn (w RendererWakeup) notify() ! {
 }
 
-// Terminal state.
-pub struct Terminal {
+// SurfaceTerminal is a stub representing the terminal state as seen by
+// the surface. XTODO: Replace with terminal.Terminal when fully integrated.
+pub struct SurfaceTerminal {
 pub mut:
 	cols         u32
 	rows         u32
@@ -569,64 +526,64 @@ fn (s TermSelection) bottom_right() Pin {
 	return s.start_pin
 }
 
-fn (mut t Terminal) scroll_viewport_delta(delta i32) ! {
+fn (mut t SurfaceTerminal) scroll_viewport_delta(delta i32) ! {
 	// Stub: adjusts viewport scroll position by delta lines.
 }
 
-fn (mut t Terminal) scroll_viewport_bottom() ! {
+fn (mut t SurfaceTerminal) scroll_viewport_bottom() ! {
 	// Stub: scrolls viewport to the bottom.
 }
 
-fn (t Terminal) cursor_is_at_prompt() bool {
+fn (t SurfaceTerminal) cursor_is_at_prompt() bool {
 	// Stub: checks shell-integration prompt markers.
 	return true
 }
 
-fn (t Terminal) get_pwd() ?string {
+fn (t SurfaceTerminal) get_pwd() ?string {
 	return t.pwd
 }
 
-fn (mut t Terminal) carriage_return() {
+fn (mut t SurfaceTerminal) carriage_return() {
 	t.cursor.x = 0
 }
 
-fn (mut t Terminal) linefeed() ! {
+fn (mut t SurfaceTerminal) linefeed() ! {
 	t.cursor.y += 1
 }
 
-fn (mut t Terminal) print_string(s string) ! {
+fn (mut t SurfaceTerminal) print_string(s string) ! {
 	// Stub: writes string at cursor position.
 	t.cursor.x += u32(s.len)
 }
 
-fn (mut t Terminal) select_at(sel ?TermSelection) ! {
+fn (mut t SurfaceTerminal) select_at(sel ?TermSelection) ! {
 	t.selection = sel
 }
 
-fn (t Terminal) selection_string() string {
+fn (t SurfaceTerminal) selection_string() string {
 	// Stub: returns text covered by current selection.
 	return ''
 }
 
-fn (t Terminal) select_word(pin Pin) ?TermSelection {
+fn (t SurfaceTerminal) select_word(pin Pin) ?TermSelection {
 	return TermSelection{
 		start_pin: pin
 		end_pin: pin
 	}
 }
 
-fn (t Terminal) select_word_between(a Pin, b Pin) ?TermSelection {
+fn (t SurfaceTerminal) select_word_between(a Pin, b Pin) ?TermSelection {
 	return TermSelection{ start_pin: a, end_pin: b }
 }
 
-fn (t Terminal) select_line(pin Pin) ?TermSelection {
+fn (t SurfaceTerminal) select_line(pin Pin) ?TermSelection {
 	return TermSelection{
 		start_pin: Pin{ x: 0, y: pin.y }
 		end_pin: Pin{ x: t.cols, y: pin.y }
 	}
 }
 
-fn (t Terminal) viewport_pin(x u32, y u32) ?Pin {
+fn (t SurfaceTerminal) viewport_pin(x u32, y u32) ?Pin {
 	if x >= t.cols || y >= t.rows {
 		return none
 	}
@@ -652,7 +609,7 @@ fn (a Pin) before(b Pin) bool {
 
 pub struct TermIO {
 pub mut:
-	terminal Terminal
+	terminal SurfaceTerminal
 }
 
 fn (t TermIO) queue_message(msg IOMessage) {
@@ -707,15 +664,9 @@ fn (w WriteReq) deinit() {
 
 pub struct Config {}
 
-pub struct ConditionalState {
-pub mut:
-	theme Theme
-}
+pub type ConditionalState = configpkg.ConditionalState
 
-pub enum Theme {
-	light
-	dark
-}
+pub type Theme = configpkg.Theme
 
 pub enum ColorScheme {
 	light
@@ -807,7 +758,7 @@ pub enum LinkPreviews {
 	false_
 }
 
-pub struct DerivedFontConfig {}
+pub type DerivedFontConfig = font.GridSetDerivedConfig
 
 pub struct DerivedConfigLink {
 pub:
@@ -1056,7 +1007,7 @@ fn (self &Surface) has_terminal() bool {
 // ---- Surface methods ----
 
 // init creates a new surface. This must be called from the main thread.
-pub fn (mut self Surface) init(config &Config, app &App, rt_app &RuntimeApp, rt_surface &RuntimeSurface) ! {
+pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, rt_surface &RuntimeSurface) ! {
 	unsafe {
 		self.app = app
 		self.rt_app = rt_app

@@ -8,7 +8,7 @@
 //
 // [1]: https://github.com/WebKit/WebKit/blob/main/Source/WebCore/page/Quirks.cpp
 
-module quirks
+module main
 
 import font
 

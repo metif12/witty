@@ -10,7 +10,7 @@
 // types, etc.) may change without warning. We're working on stabilizing
 // this in the future.
 
-module lib_vt
+module main
 
 // The public API below reproduces a lot of terminal/main.v but
 // is separate because (1) we need our root file to be in `src/`

@@ -1,4 +1,4 @@
-module tripwire
+module main
 
 fn test_basic() {
 	mut io := new()

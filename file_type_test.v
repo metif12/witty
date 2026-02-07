@@ -1,6 +1,6 @@
 // Tests for file_type module
 
-module file_type
+module main
 
 // Test detecting PNG header bytes
 fn test_detect_png() {

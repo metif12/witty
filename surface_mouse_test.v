@@ -1,4 +1,4 @@
-module surface_mouse
+module main
 
 fn test_key_to_mouse_shape_no_specific_key() {
 	// No specific key pressed

@@ -5,7 +5,7 @@
 // so we can limit the amount of imports we need AND give us the ability
 // to shim logic and values into them later.
 
-module build_config
+module main
 
 // The semantic version of this build as a string.
 pub const version_string = '0.1.0-dev'

@@ -4,7 +4,7 @@
 //
 // Ref: https://en.wikipedia.org/wiki/List_of_file_signatures
 
-module file_type
+module main
 
 // FileType represents detected image file formats.
 pub enum FileType {
