@@ -35,7 +35,7 @@ pub mut:
 	working_directory              ?string
 	term                           string = 'xterm-256color'
 	shell_integration              ShellIntegration        = .detect
-	shell_integration_features     u32
+	shell_integration_features     ShellIntegrationFeatures
 	link_previews                  LinkPreviews            = .false_
 	scroll_to_bottom               ScrollToBottom
 	// Renderer-related fields
@@ -226,21 +226,191 @@ pub:
 // Existing types
 // ============================================================
 
-pub struct Command {
+// Command represents a command to execute. It can be either a shell
+// command string (parsed by /bin/sh) or a direct argument list.
+pub type Command = ShellCmd | DirectCmd
+
+// ShellCmd is a shell command string like "bash --norc".
+pub struct ShellCmd {
 pub:
-	args []string
+	shell string
 }
 
-pub fn (c Command) string_val() !string {
-	return c.args.join(' ')
+// DirectCmd is a direct command with pre-parsed arguments.
+pub struct DirectCmd {
+pub:
+	direct []string
+}
+
+// arg_iterator returns an iterator over the command's arguments.
+// For shell commands, this splits on whitespace with basic quoting support.
+// For direct commands, this iterates the args directly.
+pub fn (c Command) arg_iterator() ArgIterator {
+	match c {
+		ShellCmd {
+			return ArgIterator{
+				kind: .shell
+				shell_str: c.shell
+				pos: 0
+			}
+		}
+		DirectCmd {
+			return ArgIterator{
+				kind: .direct
+				direct_args: c.direct
+				direct_idx: 0
+			}
+		}
+	}
+}
+
+// clone creates a copy of the command.
+pub fn (c Command) clone() Command {
+	match c {
+		ShellCmd {
+			return Command(ShellCmd{ shell: c.shell.clone() })
+		}
+		DirectCmd {
+			return Command(DirectCmd{ direct: c.direct.clone() })
+		}
+	}
+}
+
+// string_val returns the command as a string.
+pub fn (c Command) string_val() string {
+	match c {
+		ShellCmd { return c.shell }
+		DirectCmd { return c.direct.join(' ') }
+	}
+}
+
+// ArgIterator iterates over the arguments of a command.
+pub struct ArgIterator {
+mut:
+	kind     ArgIterKind
+	// For shell commands
+	shell_str string
+	pos       int
+	// For direct commands
+	direct_args []string
+	direct_idx  int
+}
+
+enum ArgIterKind {
+	shell
+	direct
+}
+
+// next returns the next argument, or none if exhausted.
+pub fn (mut it ArgIterator) next() ?string {
+	match it.kind {
+		.shell {
+			return it.next_shell_arg()
+		}
+		.direct {
+			if it.direct_idx >= it.direct_args.len {
+				return none
+			}
+			arg := it.direct_args[it.direct_idx]
+			it.direct_idx++
+			return arg
+		}
+	}
+}
+
+// next_shell_arg parses the next argument from a shell command string,
+// handling basic quoting (single and double quotes).
+fn (mut it ArgIterator) next_shell_arg() ?string {
+	s := it.shell_str
+	// Skip whitespace
+	for it.pos < s.len && s[it.pos] == ` ` {
+		it.pos++
+	}
+	if it.pos >= s.len {
+		return none
+	}
+	mut result := []u8{}
+	for it.pos < s.len {
+		ch := s[it.pos]
+		if ch == ` ` {
+			break
+		}
+		if ch == `"` || ch == `'` {
+			// Quoted string
+			quote := ch
+			it.pos++
+			for it.pos < s.len && s[it.pos] != quote {
+				result << s[it.pos]
+				it.pos++
+			}
+			if it.pos < s.len {
+				it.pos++ // skip closing quote
+			}
+		} else {
+			result << ch
+			it.pos++
+		}
+	}
+	if result.len == 0 {
+		return none
+	}
+	return result.bytestr()
+}
+
+// RepeatableStringMap holds key-value string pairs for environment overrides.
+pub struct RepeatableStringMap {
+pub mut:
+	entries []StringMapEntry
+}
+
+pub struct StringMapEntry {
+pub:
+	key   string
+	value string
+}
+
+// iterator returns an iterator over the string map entries.
+pub fn (m RepeatableStringMap) iterator() RepeatableStringMapIterator {
+	return RepeatableStringMapIterator{
+		entries: m.entries
+		idx: 0
+	}
+}
+
+pub struct RepeatableStringMapIterator {
+	entries []StringMapEntry
+mut:
+	idx int
+}
+
+pub fn (mut it RepeatableStringMapIterator) next() ?StringMapEntry {
+	if it.idx >= it.entries.len {
+		return none
+	}
+	entry := it.entries[it.idx]
+	it.idx++
+	return entry
+}
+
+// ShellIntegrationFeatures controls which shell integration features are enabled.
+pub struct ShellIntegrationFeatures {
+pub:
+	cursor        bool = true
+	sudo          bool = true
+	title         bool = true
+	ssh_env       bool = true
+	ssh_terminfo  bool = true
+	path          bool = true
 }
 
 pub enum ShellIntegration {
 	detect
 	none_
 	bash
-	zsh
+	elvish
 	fish
+	nushell
+	zsh
 }
 
 pub enum LinkPreviews {

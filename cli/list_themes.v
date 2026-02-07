@@ -569,7 +569,7 @@ pub fn run_list_themes(args []string) int {
 		}
 	}
 
-	resources_dir := global_state.resources_dir.app()
+	resources_dir := global_state.state.resources_dir.app()
 	if resources_dir.len == 0 {
 		eprintln('Could not find the Ghostty resources directory. Please ensure that Ghostty is installed correctly.')
 	}

@@ -473,7 +473,7 @@ pub fn (mut self Surface) init(mut app App, opts SurfaceOptions) ! {
 	// If we have a command from the options then we set it.
 	if cmd := opts.command {
 		if cmd.len > 0 {
-			config.command = configpkg.Command{ args: [cmd] }
+			config.command = configpkg.ShellCmd{ shell: cmd }
 			config.wait_after_command = true
 		}
 	}

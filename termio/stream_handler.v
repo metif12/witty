@@ -935,7 +935,6 @@ pub fn (mut self StreamHandler) full_reset() {
 	// Clear the progress bar
 	self.surface_message_writer(apprt.SurfaceMessage{
 		kind: .progress_report
-		progress_state: 0 // remove
 	})
 }
 
@@ -1016,7 +1015,7 @@ fn (mut self StreamHandler) set_mouse_shape(shape terminal.MouseShape) {
 	self.terminal.mouse_shape = shape
 	self.surface_message_writer(apprt.SurfaceMessage{
 		kind: .set_mouse_shape
-		mouse_shape: int(shape)
+		mouse_shape: shape
 	})
 }
 
@@ -1044,8 +1043,7 @@ fn (mut self StreamHandler) clipboard_contents(kind u8, data string) {
 	// Write clipboard contents
 	self.surface_message_writer(apprt.SurfaceMessage{
 		kind: .clipboard_write
-		clipboard_data: data
-		clipboard_type: clipboard_type
+		clipboard_write_type: clipboard_type
 	})
 }
 
@@ -1082,7 +1080,6 @@ fn (mut self StreamHandler) report_pwd(url string) {
 		// Report the change.
 		self.surface_message_writer(apprt.SurfaceMessage{
 			kind: .pwd_change
-			pwd: ''
 		})
 		return
 	}
@@ -1110,7 +1107,6 @@ fn (mut self StreamHandler) report_pwd(url string) {
 	// Report it to the surface.
 	self.surface_message_writer(apprt.SurfaceMessage{
 		kind: .pwd_change
-		pwd: path
 	})
 
 	// If we haven't seen a title, use our pwd as the title.
@@ -1164,7 +1160,7 @@ pub fn (mut self StreamHandler) send_size_report(style terminal.SizeReportStyle)
 		.csi_21_t {
 			self.surface_message_writer(apprt.SurfaceMessage{
 				kind: .report_title
-				report_style: 21
+				report_style: .csi_21_t
 			})
 		}
 	}
@@ -1174,7 +1170,6 @@ pub fn (mut self StreamHandler) send_size_report(style terminal.SizeReportStyle)
 fn (mut self StreamHandler) progress_report(state u16) {
 	self.surface_message_writer(apprt.SurfaceMessage{
 		kind: .progress_report
-		progress_state: int(state)
 	})
 }
 

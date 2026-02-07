@@ -1,0 +1,223 @@
+module termio
+
+import configpkg
+import renderer
+
+// ============================================================
+// exec_command tests
+// ============================================================
+
+// On macOS, exec_command uses login(1) with passwd-based username
+// to create a login shell. On other platforms it wraps with /bin/sh.
+
+fn test_exec_command_shell_posix() {
+	// exec_command_posix for shell commands wraps with /bin/sh -c
+	result := exec_command_posix(configpkg.ShellCmd{ shell: 'foo bar baz' })
+	// Should be ["/bin/sh", "-c", "foo bar baz"] (possibly with -l for flatpak)
+	assert result.len >= 3
+	assert result[0] == '/bin/sh'
+	// The last two should be "-c" and the command
+	assert result[result.len - 2] == '-c'
+	assert result[result.len - 1] == 'foo bar baz'
+}
+
+fn test_exec_command_direct_posix() {
+	// exec_command_posix for direct commands returns the args directly
+	result := exec_command_posix(configpkg.DirectCmd{ direct: ['foo', 'bar baz'] })
+	assert result.len == 2
+	assert result[0] == 'foo'
+	assert result[1] == 'bar baz'
+}
+
+fn test_exec_command_darwin_shell() {
+	$if macos {
+		// On Darwin, exec_command should use login(1)
+		result := exec_command(configpkg.ShellCmd{ shell: 'foo bar baz' })
+		// Result should start with /usr/bin/login
+		assert result.len >= 1
+		assert result[0] == '/usr/bin/login'
+		// Should contain -flp and username
+		mut has_flp := false
+		for arg in result {
+			if arg == '-flp' {
+				has_flp = true
+			}
+		}
+		assert has_flp
+	} $else {
+		// On non-macOS, exec_command wraps with /bin/sh
+		result := exec_command(configpkg.ShellCmd{ shell: 'foo bar baz' })
+		assert result.len >= 3
+		assert result[0] == '/bin/sh'
+	}
+}
+
+fn test_exec_command_darwin_direct() {
+	$if macos {
+		// Direct commands on Darwin also use login(1) but pass args directly
+		result := exec_command(configpkg.DirectCmd{
+			direct: ['foo', 'bar baz']
+		})
+		assert result.len >= 1
+		assert result[0] == '/usr/bin/login'
+		// Should contain the direct args at the end
+		assert result[result.len - 2] == 'foo'
+		assert result[result.len - 1] == 'bar baz'
+	} $else {
+		// On non-macOS, direct commands are returned as-is
+		result := exec_command(configpkg.DirectCmd{
+			direct: ['foo', 'bar baz']
+		})
+		assert result.len == 2
+		assert result[0] == 'foo'
+		assert result[1] == 'bar baz'
+	}
+}
+
+// ============================================================
+// Subprocess tests
+// ============================================================
+
+fn test_subprocess_init_basic() {
+	sub := Subprocess.init(ExecConfig{
+		term: 'xterm-256color'
+	}) or {
+		assert false, 'should succeed'
+		return
+	}
+
+	// Check that env was set up
+	if env := sub.env {
+		assert env['TERM'] == 'xterm-256color'
+		assert env['COLORTERM'] == 'truecolor'
+		assert env['TERM_PROGRAM'] == 'ghostty'
+	}
+}
+
+fn test_subprocess_init_with_resources() {
+	sub := Subprocess.init(ExecConfig{
+		term: 'xterm-ghostty'
+		resources_dir: '/tmp/ghostty-resources'
+	}) or {
+		assert false, 'should succeed'
+		return
+	}
+
+	if env := sub.env {
+		assert env['TERM'] == 'xterm-ghostty'
+		assert env['GHOSTTY_RESOURCES_DIR'] == '/tmp/ghostty-resources'
+	}
+}
+
+fn test_subprocess_init_with_cwd() {
+	sub := Subprocess.init(ExecConfig{
+		working_directory: '/tmp'
+	}) or {
+		assert false, 'should succeed'
+		return
+	}
+
+	assert sub.cwd or { '' } == '/tmp'
+	if env := sub.env {
+		assert env['PWD'] == '/tmp'
+	}
+}
+
+fn test_subprocess_init_with_env_override() {
+	sub := Subprocess.init(ExecConfig{
+		env_override: configpkg.RepeatableStringMap{
+			entries: [
+				configpkg.StringMapEntry{ key: 'MY_VAR', value: 'my_value' },
+			]
+		}
+	}) or {
+		assert false, 'should succeed'
+		return
+	}
+
+	if env := sub.env {
+		assert env['MY_VAR'] == 'my_value'
+	}
+}
+
+fn test_subprocess_resize() {
+	mut sub := Subprocess.init(ExecConfig{}) or { return }
+
+	sub.resize(renderer.GridSize{
+		columns: 80
+		rows: 24
+	}, renderer.ScreenSize{
+		width: 800
+		height: 480
+	}) or {
+		assert false, 'resize should succeed'
+	}
+
+	assert sub.grid_size.columns == 80
+	assert sub.grid_size.rows == 24
+	assert sub.screen_size.width == 800
+	assert sub.screen_size.height == 480
+}
+
+fn test_clamp_u16() {
+	assert clamp_u16(0) == u16(0)
+	assert clamp_u16(100) == u16(100)
+	assert clamp_u16(65535) == u16(65535)
+	assert clamp_u16(65536) == u16(65535)
+	assert clamp_u16(100000) == u16(65535)
+}
+
+// ============================================================
+// ArgIterator tests (from configpkg.Command)
+// ============================================================
+
+fn test_arg_iterator_shell_basic() {
+	cmd := configpkg.Command(configpkg.ShellCmd{ shell: 'bash --norc --noprofile' })
+	mut iter := cmd.arg_iterator()
+
+	assert iter.next() or { '' } == 'bash'
+	assert iter.next() or { '' } == '--norc'
+	assert iter.next() or { '' } == '--noprofile'
+	if _ := iter.next() {
+		assert false, 'expected no more args'
+	}
+}
+
+fn test_arg_iterator_shell_quoted() {
+	cmd := configpkg.Command(configpkg.ShellCmd{ shell: '"/path/to/my bash" --flag' })
+	mut iter := cmd.arg_iterator()
+
+	assert iter.next() or { '' } == '/path/to/my bash'
+	assert iter.next() or { '' } == '--flag'
+	if _ := iter.next() {
+		assert false, 'expected no more args'
+	}
+}
+
+fn test_arg_iterator_direct() {
+	cmd := configpkg.Command(configpkg.DirectCmd{ direct: ['foo', 'bar baz', 'qux'] })
+	mut iter := cmd.arg_iterator()
+
+	arg1 := iter.next() or {
+		assert false, 'expected foo'
+		return
+	}
+	assert arg1 == 'foo'
+
+	arg2 := iter.next() or {
+		assert false, 'expected bar baz'
+		return
+	}
+	assert arg2 == 'bar baz'
+
+	arg3 := iter.next() or {
+		assert false, 'expected qux'
+		return
+	}
+	assert arg3 == 'qux'
+
+	// Should be exhausted
+	if _ := iter.next() {
+		assert false, 'expected none'
+	}
+}
