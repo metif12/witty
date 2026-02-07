@@ -1,0 +1,1018 @@
+module input
+
+// Tests for key encoding logic.
+// Translated from ghostty/src/input/key_encode.zig
+
+// === CsiUMods tests ===
+
+fn test_csiu_modifier_sequence_values() {
+	// This is all sort of trivially seen by looking at the code but
+	// we want to make sure we never regress this.
+	mut mods := CsiUMods{}
+	assert mods.seq_int() == 1
+
+	mods = CsiUMods{ shift: true }
+	assert mods.seq_int() == 2
+
+	mods = CsiUMods{ alt: true }
+	assert mods.seq_int() == 3
+
+	mods = CsiUMods{ ctrl: true }
+	assert mods.seq_int() == 5
+
+	mods = CsiUMods{ alt: true, shift: true }
+	assert mods.seq_int() == 4
+
+	mods = CsiUMods{ ctrl: true, shift: true }
+	assert mods.seq_int() == 6
+
+	mods = CsiUMods{ alt: true, ctrl: true }
+	assert mods.seq_int() == 7
+
+	mods = CsiUMods{ alt: true, ctrl: true, shift: true }
+	assert mods.seq_int() == 8
+}
+
+// === KittyMods tests ===
+
+fn test_kitty_modifier_sequence_values() {
+	// This is all sort of trivially seen by looking at the code but
+	// we want to make sure we never regress this.
+	mut mods := KittyMods{}
+	assert mods.seq_int() == 1
+
+	mods = KittyMods{ shift: true }
+	assert mods.seq_int() == 2
+
+	mods = KittyMods{ alt: true }
+	assert mods.seq_int() == 3
+
+	mods = KittyMods{ ctrl: true }
+	assert mods.seq_int() == 5
+
+	mods = KittyMods{ alt: true, shift: true }
+	assert mods.seq_int() == 4
+
+	mods = KittyMods{ ctrl: true, shift: true }
+	assert mods.seq_int() == 6
+
+	mods = KittyMods{ alt: true, ctrl: true }
+	assert mods.seq_int() == 7
+
+	mods = KittyMods{ alt: true, ctrl: true, shift: true }
+	assert mods.seq_int() == 8
+}
+
+// === KittySequence tests ===
+
+fn test_kitty_sequence_backspace() {
+	// Plain
+	seq1 := KittySequence{ key_code: 127, final_byte: `u` }
+	assert seq1.encode_seq() == '\x1b[127u'
+
+	// Release event
+	seq2 := KittySequence{ key_code: 127, final_byte: `u`, event: .release }
+	assert seq2.encode_seq() == '\x1b[127;1:3u'
+
+	// Shift
+	seq3 := KittySequence{
+		key_code: 127
+		final_byte: `u`
+		mods: KittyMods{ shift: true }
+	}
+	assert seq3.encode_seq() == '\x1b[127;2u'
+}
+
+fn test_kitty_sequence_text() {
+	// Plain
+	seq1 := KittySequence{
+		key_code: 127
+		final_byte: `u`
+		text: 'A'
+	}
+	assert seq1.encode_seq() == '\x1b[127;;65u'
+
+	// Release
+	seq2 := KittySequence{
+		key_code: 127
+		final_byte: `u`
+		event: .release
+		text: 'A'
+	}
+	assert seq2.encode_seq() == '\x1b[127;1:3;65u'
+
+	// Shift
+	seq3 := KittySequence{
+		key_code: 127
+		final_byte: `u`
+		mods: KittyMods{ shift: true }
+		text: 'A'
+	}
+	assert seq3.encode_seq() == '\x1b[127;2;65u'
+}
+
+fn test_kitty_sequence_text_with_control_characters() {
+	// By itself
+	seq1 := KittySequence{
+		key_code: 127
+		final_byte: `u`
+		text: '\n'
+	}
+	assert seq1.encode_seq() == '\x1b[127u'
+
+	// With other printables
+	seq2 := KittySequence{
+		key_code: 127
+		final_byte: `u`
+		text: 'A\n'
+	}
+	assert seq2.encode_seq() == '\x1b[127;;65u'
+}
+
+fn test_kitty_sequence_special_no_mods() {
+	seq := KittySequence{ key_code: 1, final_byte: `A` }
+	assert seq.encode_seq() == '\x1b[A'
+}
+
+fn test_kitty_sequence_special_mods_only() {
+	seq := KittySequence{ key_code: 1, final_byte: `A`, mods: KittyMods{ shift: true } }
+	assert seq.encode_seq() == '\x1b[1;2A'
+}
+
+fn test_kitty_sequence_special_mods_and_event() {
+	seq := KittySequence{
+		key_code: 1
+		final_byte: `A`
+		event: .release
+		mods: KittyMods{ shift: true }
+	}
+	assert seq.encode_seq() == '\x1b[1;2:3A'
+}
+
+// === Kitty encoding tests ===
+
+fn test_kitty_plain_text() {
+	result := kitty_encode(KeyEvent{
+		key: .key_a
+		utf8: 'abcd'
+	}, Options{
+		kitty_flags: KittyFlags{ disambiguate: true }
+	})
+	assert result == 'abcd'
+}
+
+fn test_kitty_repeat_with_just_disambiguate() {
+	result := kitty_encode(KeyEvent{
+		key: .key_a
+		action: .repeat
+		utf8: 'a'
+	}, Options{
+		kitty_flags: KittyFlags{ disambiguate: true }
+	})
+	assert result == 'a'
+}
+
+fn test_kitty_enter_backspace_tab() {
+	// Enter
+	r1 := kitty_encode(KeyEvent{ key: .enter, utf8: '' }, Options{
+		kitty_flags: KittyFlags{ disambiguate: true }
+	})
+	assert r1 == '\r'
+
+	// Backspace
+	r2 := kitty_encode(KeyEvent{ key: .backspace, utf8: '' }, Options{
+		kitty_flags: KittyFlags{ disambiguate: true }
+	})
+	assert r2 == '\x7f'
+
+	// Tab
+	r3 := kitty_encode(KeyEvent{ key: .tab, utf8: '' }, Options{
+		kitty_flags: KittyFlags{ disambiguate: true }
+	})
+	assert r3 == '\t'
+
+	// No release events if "report_all" is not set
+	r4 := kitty_encode(KeyEvent{ action: .release, key: .enter, utf8: '' }, Options{
+		kitty_flags: KittyFlags{ disambiguate: true, report_events: true }
+	})
+	assert r4 == ''
+
+	r5 := kitty_encode(KeyEvent{ action: .release, key: .backspace, utf8: '' }, Options{
+		kitty_flags: KittyFlags{ disambiguate: true, report_events: true }
+	})
+	assert r5 == ''
+
+	r6 := kitty_encode(KeyEvent{ action: .release, key: .tab, utf8: '' }, Options{
+		kitty_flags: KittyFlags{ disambiguate: true, report_events: true }
+	})
+	assert r6 == ''
+
+	// Release events if "report_all" is set
+	r7 := kitty_encode(KeyEvent{ action: .release, key: .enter, utf8: '' }, Options{
+		kitty_flags: KittyFlags{ disambiguate: true, report_events: true, report_all: true }
+	})
+	assert r7 == '\x1b[13;1:3u'
+
+	r8 := kitty_encode(KeyEvent{ action: .release, key: .backspace, utf8: '' }, Options{
+		kitty_flags: KittyFlags{ disambiguate: true, report_events: true, report_all: true }
+	})
+	assert r8 == '\x1b[127;1:3u'
+
+	r9 := kitty_encode(KeyEvent{ action: .release, key: .tab, utf8: '' }, Options{
+		kitty_flags: KittyFlags{ disambiguate: true, report_events: true, report_all: true }
+	})
+	assert r9 == '\x1b[9;1:3u'
+}
+
+fn test_kitty_shift_backspace_emits_csi_u() {
+	// Backspace with shift modifier should emit CSI u sequence, not raw 0x7F.
+	// This is important for programs that want to distinguish shift+backspace.
+	result := kitty_encode(KeyEvent{
+		key: .backspace
+		mods: Mods{ shift: true }
+		utf8: ''
+	}, Options{
+		kitty_flags: KittyFlags{ disambiguate: true }
+	})
+	assert result == '\x1b[127;2u'
+}
+
+fn test_kitty_shift_enter_emits_csi_u() {
+	result := kitty_encode(KeyEvent{
+		key: .enter
+		mods: Mods{ shift: true }
+		utf8: ''
+	}, Options{
+		kitty_flags: KittyFlags{ disambiguate: true }
+	})
+	assert result == '\x1b[13;2u'
+}
+
+fn test_kitty_shift_tab_emits_csi_u() {
+	result := kitty_encode(KeyEvent{
+		key: .tab
+		mods: Mods{ shift: true }
+		utf8: ''
+	}, Options{
+		kitty_flags: KittyFlags{ disambiguate: true }
+	})
+	assert result == '\x1b[9;2u'
+}
+
+fn test_kitty_enter_with_all_flags() {
+	result := kitty_encode(KeyEvent{ key: .enter, utf8: '' }, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_events: true
+			report_alternates: true
+			report_all: true
+			report_associated: true
+		}
+	})
+	assert result[1..] == '[13u'
+}
+
+fn test_kitty_ctrl_with_all_flags() {
+	result := kitty_encode(KeyEvent{
+		key: .control_left
+		mods: Mods{ ctrl: true }
+		utf8: ''
+	}, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_events: true
+			report_alternates: true
+			report_all: true
+			report_associated: true
+		}
+	})
+	assert result[1..] == '[57442;5u'
+}
+
+fn test_kitty_ctrl_release_with_ctrl_mod_set() {
+	result := kitty_encode(KeyEvent{
+		action: .release
+		key: .control_left
+		mods: Mods{ ctrl: true }
+		utf8: ''
+	}, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_events: true
+			report_alternates: true
+			report_all: true
+			report_associated: true
+		}
+	})
+	assert result[1..] == '[57442;5:3u'
+}
+
+fn test_kitty_delete() {
+	result := kitty_encode(KeyEvent{
+		key: .delete
+		utf8: '\x7f'
+	}, Options{
+		kitty_flags: KittyFlags{ disambiguate: true }
+	})
+	assert result == '\x1b[3~'
+}
+
+fn test_kitty_composing_with_no_modifier() {
+	result := kitty_encode(KeyEvent{
+		key: .key_a
+		mods: Mods{ shift: true }
+		composing: true
+	}, Options{
+		kitty_flags: KittyFlags{ disambiguate: true }
+	})
+	assert result == ''
+}
+
+fn test_kitty_composing_with_modifier() {
+	result := kitty_encode(KeyEvent{
+		key: .shift_left
+		mods: Mods{ shift: true }
+		composing: true
+	}, Options{
+		kitty_flags: KittyFlags{ disambiguate: true, report_all: true }
+	})
+	assert result == '\x1b[57441;2u'
+}
+
+fn test_kitty_shift_a_on_us_keyboard() {
+	result := kitty_encode(KeyEvent{
+		key: .key_a
+		mods: Mods{ shift: true }
+		utf8: 'A'
+		unshifted_codepoint: 97 // lowercase A
+	}, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_alternates: true
+		}
+	})
+	assert result == '\x1b[97:65;2u'
+}
+
+fn test_kitty_matching_unshifted_codepoint() {
+	result := kitty_encode(KeyEvent{
+		key: .key_a
+		mods: Mods{ shift: true }
+		utf8: 'A'
+		unshifted_codepoint: 65
+	}, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_alternates: true
+		}
+	})
+	// WARNING: This is not a valid encoding. This is a hypothetical encoding
+	// just to test that our logic is correct around matching unshifted
+	// codepoints. We get an alternate here because the unshifted_codepoint does
+	// not match the base key
+	assert result == '\x1b[65::97;2u'
+}
+
+fn test_kitty_report_alternates_with_caps() {
+	result := kitty_encode(KeyEvent{
+		key: .key_j
+		mods: Mods{ caps_lock: true }
+		utf8: 'J'
+		unshifted_codepoint: 106
+	}, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_all: true
+			report_alternates: true
+			report_associated: true
+		}
+	})
+	assert result == '\x1b[106;65;74u'
+}
+
+fn test_kitty_report_alternates_colon() {
+	// shift+';' produces ':'
+	result := kitty_encode(KeyEvent{
+		key: .semicolon
+		mods: Mods{ shift: true }
+		utf8: ':'
+		unshifted_codepoint: u32(`;`)
+	}, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_all: true
+			report_alternates: true
+			report_associated: true
+		}
+	})
+	assert result == '\x1b[59:58;2;58u'
+}
+
+fn test_kitty_report_alternates_with_ru_layout() {
+	result := kitty_encode(KeyEvent{
+		key: .semicolon
+		utf8: '\u0447' // ч
+		unshifted_codepoint: 1095
+	}, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_all: true
+			report_alternates: true
+			report_associated: true
+		}
+	})
+	assert result == '\x1b[1095::59;;1095u'
+}
+
+fn test_kitty_report_alternates_with_ru_layout_shifted() {
+	result := kitty_encode(KeyEvent{
+		key: .semicolon
+		mods: Mods{ shift: true }
+		utf8: '\u0427' // Ч
+		unshifted_codepoint: 1095
+	}, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_all: true
+			report_alternates: true
+			report_associated: true
+		}
+	})
+	assert result == '\x1b[1095:1063:59;2;1063u'
+}
+
+fn test_kitty_report_alternates_with_ru_layout_caps_lock() {
+	result := kitty_encode(KeyEvent{
+		key: .semicolon
+		mods: Mods{ caps_lock: true }
+		utf8: '\u0427' // Ч
+		unshifted_codepoint: 1095
+	}, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_all: true
+			report_alternates: true
+			report_associated: true
+		}
+	})
+	assert result == '\x1b[1095::59;65;1063u'
+}
+
+fn test_kitty_report_alternates_with_hu_layout_release() {
+	result := kitty_encode(KeyEvent{
+		action: .release
+		key: .bracket_left
+		mods: Mods{ ctrl: true }
+		utf8: ''
+		unshifted_codepoint: 337
+	}, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_all: true
+			report_alternates: true
+			report_associated: true
+			report_events: true
+		}
+	})
+	assert result[1..] == '[337::91;5:3u'
+}
+
+fn test_kitty_up_arrow_with_utf8() {
+	// macOS generates utf8 text for arrow keys.
+	result := kitty_encode(KeyEvent{
+		key: .arrow_up
+		utf8: [u8(30)].bytestr()
+	}, Options{
+		kitty_flags: KittyFlags{ disambiguate: true }
+	})
+	assert result == '\x1b[A'
+}
+
+fn test_kitty_shift_tab() {
+	result := kitty_encode(KeyEvent{
+		key: .tab
+		mods: Mods{ shift: true }
+		utf8: ''
+	}, Options{
+		kitty_flags: KittyFlags{ disambiguate: true, report_alternates: true }
+	})
+	assert result == '\x1b[9;2u'
+}
+
+fn test_kitty_left_shift() {
+	result := kitty_encode(KeyEvent{
+		key: .shift_left
+		utf8: ''
+	}, Options{
+		kitty_flags: KittyFlags{ disambiguate: true, report_alternates: true }
+	})
+	assert result == ''
+}
+
+fn test_kitty_left_shift_with_report_all() {
+	result := kitty_encode(KeyEvent{
+		key: .shift_left
+		utf8: ''
+	}, Options{
+		kitty_flags: KittyFlags{ disambiguate: true, report_all: true }
+	})
+	assert result == '\x1b[57441u'
+}
+
+fn test_kitty_report_associated_with_modifiers() {
+	result := kitty_encode(KeyEvent{
+		key: .key_j
+		mods: Mods{ ctrl: true }
+		utf8: 'j'
+		unshifted_codepoint: 106
+	}, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_all: true
+			report_alternates: true
+			report_associated: true
+		}
+	})
+	assert result == '\x1b[106;5u'
+}
+
+fn test_kitty_report_associated() {
+	result := kitty_encode(KeyEvent{
+		key: .key_j
+		mods: Mods{ shift: true }
+		utf8: 'J'
+		unshifted_codepoint: 106
+	}, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_all: true
+			report_alternates: true
+			report_associated: true
+		}
+	})
+	assert result == '\x1b[106:74;2;74u'
+}
+
+fn test_kitty_report_associated_on_release() {
+	result := kitty_encode(KeyEvent{
+		action: .release
+		key: .key_j
+		mods: Mods{ shift: true }
+		utf8: 'J'
+		unshifted_codepoint: 106
+	}, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_all: true
+			report_alternates: true
+			report_associated: true
+			report_events: true
+		}
+	})
+	assert result[1..] == '[106:74;2:3u'
+}
+
+fn test_kitty_alternates_omit_control_characters() {
+	result := kitty_encode(KeyEvent{
+		key: .delete
+		utf8: '\x7f'
+	}, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_alternates: true
+			report_all: true
+		}
+	})
+	assert result == '\x1b[3~'
+}
+
+fn test_kitty_enter_with_utf8_dead_key_state() {
+	result := kitty_encode(KeyEvent{
+		key: .enter
+		utf8: 'A'
+		unshifted_codepoint: 0x0D
+	}, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_alternates: true
+			report_all: true
+		}
+	})
+	assert result == 'A'
+}
+
+fn test_kitty_keypad_number() {
+	result := kitty_encode(KeyEvent{
+		key: .numpad_1
+		utf8: '1'
+	}, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_events: true
+			report_alternates: true
+			report_all: true
+			report_associated: true
+		}
+	})
+	assert result[1..] == '[57400;;49u'
+}
+
+fn test_kitty_backspace_with_utf8_dead_key_state() {
+	result := kitty_encode(KeyEvent{
+		key: .backspace
+		utf8: 'A'
+		unshifted_codepoint: 0x0D
+	}, Options{
+		kitty_flags: KittyFlags{
+			disambiguate: true
+			report_events: true
+			report_alternates: true
+			report_all: true
+			report_associated: true
+		}
+	})
+	assert result == ''
+}
+
+// === Legacy encoding tests ===
+
+fn test_legacy_backspace_with_utf8_dead_key_state() {
+	result := legacy_encode(KeyEvent{
+		key: .backspace
+		utf8: 'A'
+		unshifted_codepoint: 0x0D
+	}, Options{})
+	assert result == ''
+}
+
+fn test_legacy_enter_with_utf8_dead_key_state() {
+	result := legacy_encode(KeyEvent{
+		key: .enter
+		utf8: 'A'
+		unshifted_codepoint: 0x0D
+	}, Options{})
+	assert result == 'A'
+}
+
+fn test_legacy_esc_with_utf8_dead_key_state() {
+	result := legacy_encode(KeyEvent{
+		key: .escape
+		utf8: 'A'
+		unshifted_codepoint: 0x0D
+	}, Options{})
+	assert result == 'A'
+}
+
+fn test_legacy_ctrl_shift_minus() {
+	result := legacy_encode(KeyEvent{
+		key: .minus
+		mods: Mods{ ctrl: true, shift: true }
+		utf8: '_'
+	}, Options{})
+	assert result == '\x1f'
+}
+
+fn test_legacy_ctrl_alt_c() {
+	result := legacy_encode(KeyEvent{
+		key: .key_c
+		mods: Mods{ ctrl: true, alt: true }
+		utf8: 'c'
+	}, Options{})
+	assert result == '\x1b\x03'
+}
+
+fn test_legacy_alt_c() {
+	result := legacy_encode(KeyEvent{
+		key: .key_c
+		utf8: 'c'
+		mods: Mods{ alt: true }
+	}, Options{
+		alt_esc_prefix: true
+		macos_option_as_alt: .true_
+	})
+	assert result == '\x1bc'
+}
+
+fn test_legacy_alt_e_only_unshifted() {
+	result := legacy_encode(KeyEvent{
+		key: .key_e
+		unshifted_codepoint: u32(`e`)
+		mods: Mods{ alt: true }
+	}, Options{
+		alt_esc_prefix: true
+		macos_option_as_alt: .true_
+	})
+	assert result == '\x1be'
+}
+
+fn test_legacy_ctrl_c() {
+	result := legacy_encode(KeyEvent{
+		key: .key_c
+		mods: Mods{ ctrl: true }
+		utf8: 'c'
+	}, Options{})
+	assert result == '\x03'
+}
+
+fn test_legacy_ctrl_space() {
+	result := legacy_encode(KeyEvent{
+		key: .space
+		mods: Mods{ ctrl: true }
+		utf8: ' '
+	}, Options{})
+	assert result == '\x00'
+}
+
+fn test_legacy_ctrl_shift_backspace() {
+	result := legacy_encode(KeyEvent{
+		key: .backspace
+		mods: Mods{ ctrl: true, shift: true }
+	}, Options{})
+	assert result == '\x08'
+}
+
+fn test_legacy_ctrl_shift_char_with_modify_other_state_2() {
+	result := legacy_encode(KeyEvent{
+		key: .key_h
+		mods: Mods{ ctrl: true, shift: true }
+		utf8: 'H'
+	}, Options{
+		modify_other_keys_state_2: true
+	})
+	assert result == '\x1b[27;6;72~'
+}
+
+fn test_legacy_ctrl_shift_char_with_modify_other_state_2_and_consumed_mods() {
+	result := legacy_encode(KeyEvent{
+		key: .key_h
+		mods: Mods{ ctrl: true, shift: true }
+		consumed_mods: Mods{ shift: true }
+		utf8: 'H'
+	}, Options{
+		modify_other_keys_state_2: true
+	})
+	assert result == '\x1b[27;6;72~'
+}
+
+fn test_legacy_alt_digit_with_modify_other_state_2() {
+	result := legacy_encode(KeyEvent{
+		key: .digit_8
+		mods: Mods{ alt: true }
+		utf8: '8'
+	}, Options{
+		modify_other_keys_state_2: true
+		macos_option_as_alt: .true_
+	})
+	assert result == '\x1b[27;3;56~'
+}
+
+fn test_legacy_fixterm_awkward_letters() {
+	// ctrl+i
+	r1 := legacy_encode(KeyEvent{
+		key: .key_i
+		mods: Mods{ ctrl: true }
+		utf8: 'i'
+	}, Options{})
+	assert r1 == '\x1b[105;5u'
+
+	// ctrl+m
+	r2 := legacy_encode(KeyEvent{
+		key: .key_m
+		mods: Mods{ ctrl: true }
+		utf8: 'm'
+	}, Options{})
+	assert r2 == '\x1b[109;5u'
+
+	// ctrl+[
+	r3 := legacy_encode(KeyEvent{
+		key: .bracket_left
+		mods: Mods{ ctrl: true }
+		utf8: '['
+	}, Options{})
+	assert r3 == '\x1b[91;5u'
+
+	// ctrl+shift+2 -> '@'
+	r4 := legacy_encode(KeyEvent{
+		key: .digit_2
+		mods: Mods{ ctrl: true, shift: true }
+		utf8: '@'
+		unshifted_codepoint: u32(`2`)
+	}, Options{})
+	assert r4 == '\x1b[64;5u'
+}
+
+fn test_legacy_ctrl_shift_letter_ascii() {
+	// These tests apply Kitty's behavior to CSIu where ctrl+shift+letter
+	// is sent as the unshifted letter with the shift modifier present.
+	result := legacy_encode(KeyEvent{
+		key: .key_m
+		mods: Mods{ ctrl: true, shift: true }
+		utf8: 'M'
+		unshifted_codepoint: u32(`m`)
+	}, Options{})
+	assert result == '\x1b[109;6u'
+}
+
+fn test_legacy_shift_function_key_should_use_all_mods() {
+	result := legacy_encode(KeyEvent{
+		key: .arrow_up
+		mods: Mods{ shift: true }
+		consumed_mods: Mods{ shift: true }
+	}, Options{})
+	assert result == '\x1b[1;2A'
+}
+
+fn test_legacy_keypad_enter() {
+	result := legacy_encode(KeyEvent{
+		key: .numpad_enter
+	}, Options{})
+	assert result == '\r'
+}
+
+fn test_legacy_keypad_1() {
+	result := legacy_encode(KeyEvent{
+		key: .numpad_1
+		utf8: '1'
+	}, Options{})
+	assert result == '1'
+}
+
+fn test_legacy_keypad_1_with_application_keypad() {
+	result := legacy_encode(KeyEvent{
+		key: .numpad_1
+		utf8: '1'
+	}, Options{
+		keypad_key_application: true
+	})
+	assert result == '\x1bOq'
+}
+
+fn test_legacy_keypad_1_with_application_keypad_and_numlock() {
+	result := legacy_encode(KeyEvent{
+		key: .numpad_1
+		mods: Mods{ num_lock: true }
+		utf8: '1'
+	}, Options{
+		keypad_key_application: true
+	})
+	assert result == '\x1bOq'
+}
+
+fn test_legacy_keypad_1_with_application_keypad_and_numlock_ignore() {
+	result := legacy_encode(KeyEvent{
+		key: .numpad_1
+		utf8: '1'
+	}, Options{
+		keypad_key_application: true
+		ignore_keypad_with_numlock: true
+	})
+	assert result == '1'
+}
+
+fn test_legacy_f1() {
+	// F1 with ctrl
+	r1 := legacy_encode(KeyEvent{
+		key: .f1
+		mods: Mods{ ctrl: true }
+	}, Options{})
+	assert r1 == '\x1b[1;5P'
+
+	// F2 with ctrl
+	r2 := legacy_encode(KeyEvent{
+		key: .f2
+		mods: Mods{ ctrl: true }
+	}, Options{})
+	assert r2 == '\x1b[1;5Q'
+
+	// F3 with ctrl
+	r3 := legacy_encode(KeyEvent{
+		key: .f3
+		mods: Mods{ ctrl: true }
+	}, Options{})
+	assert r3 == '\x1b[13;5~'
+
+	// F4 with ctrl
+	r4 := legacy_encode(KeyEvent{
+		key: .f4
+		mods: Mods{ ctrl: true }
+	}, Options{})
+	assert r4 == '\x1b[1;5S'
+
+	// F5 with ctrl uses new encoding
+	r5 := legacy_encode(KeyEvent{
+		key: .f5
+		mods: Mods{ ctrl: true }
+	}, Options{})
+	assert r5 == '\x1b[15;5~'
+}
+
+fn test_legacy_left_shift_tab() {
+	result := legacy_encode(KeyEvent{
+		key: .tab
+		mods: Mods{
+			shift: true
+			sides: SideInfo{ shift: .left }
+		}
+	}, Options{})
+	assert result == '\x1b[Z'
+}
+
+fn test_legacy_right_shift_tab() {
+	result := legacy_encode(KeyEvent{
+		key: .tab
+		mods: Mods{
+			shift: true
+			sides: SideInfo{ shift: .right }
+		}
+	}, Options{})
+	assert result == '\x1b[Z'
+}
+
+fn test_legacy_hu_layout_ctrl_o_sends_proper_codepoint() {
+	result := legacy_encode(KeyEvent{
+		key: .bracket_left
+		mods: Mods{ ctrl: true }
+		utf8: '\u0151' // ő
+		unshifted_codepoint: 337
+	}, Options{})
+	assert result[1..] == '[337;5u'
+}
+
+fn test_legacy_backspace_with_del_utf8() {
+	result := legacy_encode(KeyEvent{
+		key: .backspace
+		utf8: '\x7f'
+		unshifted_codepoint: 0x08
+	}, Options{})
+	assert result == '\x7f'
+}
+
+// === ctrlSeq tests ===
+
+fn test_ctrlseq_normal_ctrl_c() {
+	seq := ctrl_seq(.unidentified, 'c', u32(`c`), Mods{ ctrl: true })
+	assert seq != none
+	assert seq or { 0 } == u8(0x03)
+}
+
+fn test_ctrlseq_normal_ctrl_c_right_control() {
+	seq := ctrl_seq(.unidentified, 'c', u32(`c`), Mods{
+		ctrl: true
+		sides: SideInfo{ ctrl: .right }
+	})
+	assert seq != none
+	assert seq or { 0 } == u8(0x03)
+}
+
+fn test_ctrlseq_alt_should_be_allowed() {
+	seq := ctrl_seq(.unidentified, 'c', u32(`c`), Mods{ alt: true, ctrl: true })
+	assert seq != none
+	assert seq or { 0 } == u8(0x03)
+}
+
+fn test_ctrlseq_no_ctrl_does_nothing() {
+	assert ctrl_seq(.unidentified, 'c', u32(`c`), Mods{}) == none
+}
+
+fn test_ctrlseq_shifted_non_character() {
+	seq := ctrl_seq(.unidentified, '_', u32(`-`), Mods{ ctrl: true, shift: true })
+	assert seq != none
+	assert seq or { 0 } == u8(0x1F)
+}
+
+fn test_ctrlseq_caps_ascii_letter() {
+	seq := ctrl_seq(.unidentified, 'C', u32(`c`), Mods{ ctrl: true, caps_lock: true })
+	assert seq != none
+	assert seq or { 0 } == u8(0x03)
+}
+
+fn test_ctrlseq_shift_does_not_generate_ctrl_seq() {
+	assert ctrl_seq(.unidentified, 'C', u32(`c`), Mods{ shift: true }) == none
+	assert ctrl_seq(.unidentified, 'C', u32(`c`), Mods{ shift: true, ctrl: true }) == none
+}
+
+fn test_ctrlseq_russian_ctrl_c() {
+	seq := ctrl_seq(.key_c, '\u0441', 0x0441, Mods{ ctrl: true })
+	assert seq != none
+	assert seq or { 0 } == u8(0x03)
+}
+
+fn test_ctrlseq_russian_shifted_ctrl_c() {
+	seq := ctrl_seq(.key_c, '\u0441', 0x0441, Mods{ ctrl: true, shift: true })
+	assert seq == none
+}
+
+fn test_ctrlseq_russian_alt_ctrl_c() {
+	seq := ctrl_seq(.key_c, '\u0441', 0x0441, Mods{ ctrl: true, alt: true })
+	assert seq != none
+	assert seq or { 0 } == u8(0x03)
+}
+
+fn test_ctrlseq_right_ctrl_c() {
+	seq := ctrl_seq(.key_c, '\u0441', u32(`c`), Mods{
+		ctrl: true
+		sides: SideInfo{ ctrl: .right }
+	})
+	assert seq != none
+	assert seq or { 0 } == u8(0x03)
+}

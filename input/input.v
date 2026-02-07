@@ -53,13 +53,31 @@ pub enum KeyAction {
 	repeat
 }
 
+// Side represents which side (left or right) a modifier key is on.
+pub enum Side {
+	none_
+	left
+	right
+}
+
+// SideInfo tracks which side modifier keys are pressed on.
+pub struct SideInfo {
+pub mut:
+	shift Side
+	ctrl  Side
+	alt   Side
+}
+
 // Mods is a bitmask for all key modifiers.
 pub struct Mods {
 pub mut:
-	shift    bool
-	ctrl     bool
-	alt      bool
-	super_   bool
+	shift     bool
+	ctrl      bool
+	alt       bool
+	super_    bool
+	caps_lock bool
+	num_lock  bool
+	sides     SideInfo
 }
 
 // int returns the integer value of the modifier bitmask.
@@ -134,10 +152,14 @@ pub enum MousePressureStage {
 	deep
 }
 
+// OptionAsAlt determines whether the "option" key on macOS is treated
+// as "alt" or not. See the Ghostty `macos_option-as-alt` config
+// docs for a more detailed description of why this is needed.
 pub enum OptionAsAlt {
-	left
-	right
-	both
+	false_ // don't treat option as alt (macOS default)
+	true_  // treat both options as alt
+	left   // treat left option as alt
+	right  // treat right option as alt
 }
 
 // Link matching.
@@ -157,24 +179,6 @@ pub enum LinkHighlight {
 	hover
 	always_mods
 	hover_mods
-}
-
-// Key encoding functions.
-
-// encode takes a key event and terminal mode state and returns
-// the byte sequence to send to the pty.
-pub fn encode(event KeyEvent, opts EncodeOpts) ?[]u8 {
-	if event.utf8.len > 0 {
-		return event.utf8.bytes()
-	}
-	return none
-}
-
-pub struct EncodeOpts {
-pub:
-	bracketed_paste bool
-	kitty_keyboard  bool
-	modify_other    bool
 }
 
 // Paste encoding.

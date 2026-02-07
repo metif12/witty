@@ -433,6 +433,66 @@ pub fn key_from_w3c(code string) ?Key {
 	return none
 }
 
+// codepoint returns the base Unicode codepoint for this physical key.
+// Returns none for keys that don't map to a codepoint (function keys, etc).
+pub fn (k Key) codepoint() ?u32 {
+	return match k {
+		.key_a { u32(`a`) }
+		.key_b { u32(`b`) }
+		.key_c { u32(`c`) }
+		.key_d { u32(`d`) }
+		.key_e { u32(`e`) }
+		.key_f { u32(`f`) }
+		.key_g { u32(`g`) }
+		.key_h { u32(`h`) }
+		.key_i { u32(`i`) }
+		.key_j { u32(`j`) }
+		.key_k { u32(`k`) }
+		.key_l { u32(`l`) }
+		.key_m { u32(`m`) }
+		.key_n { u32(`n`) }
+		.key_o { u32(`o`) }
+		.key_p { u32(`p`) }
+		.key_q { u32(`q`) }
+		.key_r { u32(`r`) }
+		.key_s { u32(`s`) }
+		.key_t { u32(`t`) }
+		.key_u { u32(`u`) }
+		.key_v { u32(`v`) }
+		.key_w { u32(`w`) }
+		.key_x { u32(`x`) }
+		.key_y { u32(`y`) }
+		.key_z { u32(`z`) }
+		.digit_0, .numpad_0 { u32(`0`) }
+		.digit_1, .numpad_1 { u32(`1`) }
+		.digit_2, .numpad_2 { u32(`2`) }
+		.digit_3, .numpad_3 { u32(`3`) }
+		.digit_4, .numpad_4 { u32(`4`) }
+		.digit_5, .numpad_5 { u32(`5`) }
+		.digit_6, .numpad_6 { u32(`6`) }
+		.digit_7, .numpad_7 { u32(`7`) }
+		.digit_8, .numpad_8 { u32(`8`) }
+		.digit_9, .numpad_9 { u32(`9`) }
+		.semicolon { u32(`;`) }
+		.space { u32(` `) }
+		.quote { u32(`'`) }
+		.comma { u32(`,`) }
+		.backquote { u32(`\``) }
+		.period, .numpad_decimal { u32(`.`) }
+		.slash, .numpad_divide { u32(`/`) }
+		.minus { u32(`-`) }
+		.equal, .numpad_equal { u32(`=`) }
+		.bracket_left { u32(`[`) }
+		.bracket_right { u32(`]`) }
+		.backslash { u32(`\\`) }
+		.numpad_multiply { u32(`*`) }
+		.numpad_subtract { u32(`-`) }
+		.numpad_add { u32(`+`) }
+		.tab { u32(`\t`) }
+		else { none }
+	}
+}
+
 // True if this key is a modifier.
 pub fn (k Key) is_modifier() bool {
 	return k in [.shift_left, .control_left, .alt_left, .meta_left,
