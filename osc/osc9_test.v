@@ -1,7 +1,7 @@
 module osc
 
 // Helper to feed input string to parser and return the command
-fn parse_osc_input(input string) &Command {
+fn parse_osc_input(input string) Command {
 	mut p := Parser.init(unsafe { nil })
 	for ch in input {
 		p.next(ch)

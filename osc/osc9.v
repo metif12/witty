@@ -1,7 +1,7 @@
 module osc
 
 // Parse OSC 9, which could be an iTerm2 notification or a ConEmu extension.
-fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?&Command {
+fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?Command {
 	mut data := parser.buffered()
 
 	if data.len == 0 {
@@ -32,7 +32,7 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?&Command {
 						cmd_type:    .conemu_sleep
 						duration_ms: duration
 					}
-					return &parser.command
+					return parser.command
 				}
 				// OSC 9;10 xterm keyboard and output emulation
 				`0` {
@@ -42,7 +42,7 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?&Command {
 							xterm_keyboard: true
 							xterm_output:   true
 						}
-						return &parser.command
+						return parser.command
 					}
 					if data.len < 4 {
 						return make_desktop_notification(mut parser, data)
@@ -57,7 +57,7 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?&Command {
 								xterm_keyboard: false
 								xterm_output:   false
 							}
-							return &parser.command
+							return parser.command
 						}
 						`1` {
 							parser.command = Command{
@@ -65,7 +65,7 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?&Command {
 								xterm_keyboard: true
 								xterm_output:   true
 							}
-							return &parser.command
+							return parser.command
 						}
 						`2` {
 							parser.command = Command{
@@ -73,7 +73,7 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?&Command {
 								xterm_keyboard: none
 								xterm_output:   false
 							}
-							return &parser.command
+							return parser.command
 						}
 						`3` {
 							parser.command = Command{
@@ -81,7 +81,7 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?&Command {
 								xterm_keyboard: none
 								xterm_output:   true
 							}
-							return &parser.command
+							return parser.command
 						}
 						else {
 							return make_desktop_notification(mut parser, data)
@@ -105,14 +105,14 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?&Command {
 						cmd_type:  .conemu_comment
 						str_value: comment_data
 					}
-					return &parser.command
+					return parser.command
 				}
 				// OSC 9;12 mark prompt start
 				`2` {
 					parser.command = Command{
 						cmd_type: .semantic_prompt
 					}
-					return &parser.command
+					return parser.command
 				}
 				else {
 					return make_desktop_notification(mut parser, data)
@@ -132,7 +132,7 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?&Command {
 				cmd_type:  .conemu_show_message_box
 				str_value: msg
 			}
-			return &parser.command
+			return parser.command
 		}
 		// OSC 9;3 change tab title
 		`3` {
@@ -149,7 +149,7 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?&Command {
 						kind: .reset
 					}
 				}
-				return &parser.command
+				return parser.command
 			}
 			val := data[2..].bytestr()
 			parser.command = Command{
@@ -159,7 +159,7 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?&Command {
 					value: val
 				}
 			}
-			return &parser.command
+			return parser.command
 		}
 		// OSC 9;4 progress report
 		`4` {
@@ -221,14 +221,14 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?&Command {
 				progress_state: pstate
 				progress:       progress
 			}
-			return &parser.command
+			return parser.command
 		}
 		// OSC 9;5 wait for input
 		`5` {
 			parser.command = Command{
 				cmd_type: .conemu_wait_input
 			}
-			return &parser.command
+			return parser.command
 		}
 		// OSC 9;6 guimacro
 		`6` {
@@ -243,7 +243,7 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?&Command {
 				cmd_type:  .conemu_guimacro
 				str_value: val
 			}
-			return &parser.command
+			return parser.command
 		}
 		// OSC 9;7 run process
 		`7` {
@@ -258,7 +258,7 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?&Command {
 				cmd_type:  .conemu_run_process
 				str_value: val
 			}
-			return &parser.command
+			return parser.command
 		}
 		// OSC 9;8 output environment variable
 		`8` {
@@ -273,7 +273,7 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?&Command {
 				cmd_type:  .conemu_output_environment_variable
 				str_value: val
 			}
-			return &parser.command
+			return parser.command
 		}
 		// OSC 9;9 current working directory
 		`9` {
@@ -288,7 +288,7 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?&Command {
 				cmd_type:  .report_pwd
 				str_value: val
 			}
-			return &parser.command
+			return parser.command
 		}
 		else {
 			return make_desktop_notification(mut parser, data)
@@ -300,13 +300,13 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?&Command {
 
 // make_desktop_notification creates a show_desktop_notification command
 // from the given data. This is the iTerm2 notification fallback.
-fn make_desktop_notification(mut parser Parser, data []u8) &Command {
+fn make_desktop_notification(mut parser Parser, data []u8) Command {
 	body := data.bytestr()
 	parser.command = Command{
 		cmd_type:  .show_desktop_notification
 		str_value: body
 	}
-	return &parser.command
+	return parser.command
 }
 
 // parse_unsigned_u16 parses a string as an unsigned integer.

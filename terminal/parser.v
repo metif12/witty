@@ -45,19 +45,19 @@ pub enum ParserState {
 // param N. A set bit means colon, unset means semicolon.
 pub struct SepList {
 pub mut:
-	bits u32
+	bits u64
 }
 
 pub fn (self SepList) is_set(idx int) bool {
-	if idx < 0 || idx >= 32 {
+	if idx < 0 || idx >= 64 {
 		return false
 	}
-	return (self.bits & (u32(1) << idx)) != 0
+	return (self.bits & (u64(1) << u32(idx))) != 0
 }
 
 pub fn (mut self SepList) set(idx int) {
-	if idx >= 0 && idx < 32 {
-		self.bits |= u32(1) << idx
+	if idx >= 0 && idx < 64 {
+		self.bits |= u64(1) << u32(idx)
 	}
 }
 

@@ -1,0 +1,861 @@
+module kitty
+
+// Kitty graphics protocol image storage.
+//
+// Source: kitty/graphics_storage.zig
+//
+// An image storage is associated with a terminal screen (i.e. main
+// screen, alt screen) and contains all the transmitted images and
+// placements.
+
+import math
+import time
+import terminal
+
+// ============================================================
+// PlacementTag - distinguishes internal vs external placement IDs
+// ============================================================
+
+pub enum PlacementTag {
+	internal
+	external
+}
+
+// ============================================================
+// PlacementId - the placement portion of a PlacementKey
+// ============================================================
+
+pub struct PlacementId {
+pub:
+	tag PlacementTag
+	id  u32
+}
+
+// ============================================================
+// PlacementKey - uniquely identifies a placement
+// ============================================================
+
+// Every placement is uniquely identified by the image ID and the
+// placement ID. If an image ID isn't specified it is assumed to be 0.
+// Likewise, if a placement ID isn't specified it is assumed to be 0.
+pub struct PlacementKey {
+pub:
+	image_id     u32
+	placement_id PlacementId
+}
+
+fn (a PlacementKey) == (b PlacementKey) bool {
+	return a.image_id == b.image_id && a.placement_id.tag == b.placement_id.tag
+		&& a.placement_id.id == b.placement_id.id
+}
+
+// ============================================================
+// Placement - describes where and how an image is drawn
+// ============================================================
+
+pub struct Placement {
+pub mut:
+	// The location where this placement should be drawn.
+	location PlacementLocation
+	// Offset of the x/y from the top-left of the cell.
+	x_offset u32
+	y_offset u32
+	// Source rectangle for the image to pull from.
+	source_x      u32
+	source_y      u32
+	source_width  u32
+	source_height u32
+	// The columns/rows this image occupies.
+	columns u32
+	rows    u32
+	// The z-index for this placement.
+	z i32
+}
+
+// PlacementLocation describes where a placement is anchored.
+pub type PlacementLocation = PlacementPin | PlacementVirtual
+
+// Exactly placed on a screen pin.
+pub struct PlacementPin {
+pub:
+	pin terminal.Pin
+}
+
+// Virtual placement (U=1) for unicode placeholders.
+pub struct PlacementVirtual {}
+
+// Deinitialize the placement, untracking the pin if necessary.
+pub fn (self &Placement) deinit(s &terminal.Screen) {
+	// XTODO: untrack pin from page list when PageList tracking is fully implemented.
+	// In the Zig version this calls s.pages.untrackPin(p) for pin-based placements.
+	_ = s
+}
+
+// Calculates the size of this placement's image in pixels,
+// taking in to account the specified rows and columns.
+pub fn (self &Placement) calculated_size(image Image, t &terminal.Terminal) (u32, u32) {
+	// Height / width of the image in px.
+	width := if self.source_width > 0 { self.source_width } else { image.width }
+	height := if self.source_height > 0 { self.source_height } else { image.height }
+
+	// If we don't have any specified cols or rows then the placement
+	// should be the native size of the image, and doesn't need to be
+	// re-scaled.
+	if self.columns == 0 && self.rows == 0 {
+		return width, height
+	}
+
+	// We calculate the size of a cell so that we can multiply
+	// it by the specified cols/rows to get the correct px size.
+	//
+	// We assume that the width is divided evenly by the column
+	// count and the height by the row count, because it should be.
+	cell_width := t.width_px / u32(t.cols)
+	cell_height := t.height_px / u32(t.rows)
+
+	width_f64 := f64(width)
+	height_f64 := f64(height)
+
+	// If we have a specified cols AND rows then we calculate
+	// the width and height from them directly, we don't need
+	// to adjust for aspect ratio.
+	if self.columns > 0 && self.rows > 0 {
+		calc_width := cell_width * self.columns
+		calc_height := cell_height * self.rows
+		return calc_width, calc_height
+	}
+
+	// Either the columns or the rows were specified, but not both,
+	// so we need to calculate the other one based on the aspect ratio.
+
+	// If only the columns were specified, we determine
+	// the height of the image based on the aspect ratio.
+	if self.columns > 0 {
+		aspect := height_f64 / width_f64
+		calc_width := cell_width * self.columns
+		calc_height := u32(math.round(f64(calc_width) * aspect))
+		return calc_width, calc_height
+	}
+
+	// Otherwise, only the rows were specified, so we
+	// determine the width based on the aspect ratio.
+	aspect := width_f64 / height_f64
+	calc_height := cell_height * self.rows
+	calc_width := u32(math.round(f64(calc_height) * aspect))
+	return calc_width, calc_height
+}
+
+// Returns the size in grid cells that this placement takes up.
+pub fn (self &Placement) grid_size(image Image, t &terminal.Terminal) (u32, u32) {
+	// If we have a specified columns and rows then this is trivial.
+	if self.columns > 0 && self.rows > 0 {
+		return self.columns, self.rows
+	}
+
+	// Otherwise we calculate the pixel size, divide by
+	// cell size, and round up to the nearest integer.
+	calc_width, calc_height := self.calculated_size(image, t)
+	cell_width := t.width_px / u32(t.cols)
+	cell_height := t.height_px / u32(t.rows)
+
+	// divCeil: (a + b - 1) / b, returns 0 if divisor is 0
+	cols := if cell_width > 0 {
+		(calc_width + self.x_offset + cell_width - 1) / cell_width
+	} else {
+		u32(0)
+	}
+	rows := if cell_height > 0 {
+		(calc_height + self.y_offset + cell_height - 1) / cell_height
+	} else {
+		u32(0)
+	}
+	return cols, rows
+}
+
+// Returns a rect of the entire rectangle this placement
+// occupies within the screen. Returns none if the placement
+// doesn't have an associated rect (i.e. a virtual placement).
+pub fn (self &Placement) rect(image Image, t &terminal.Terminal) ?Rect {
+	grid_cols, grid_rows := self.grid_size(image, t)
+
+	pin := match self.location {
+		PlacementPin {
+			self.location.pin
+		}
+		PlacementVirtual {
+			return none
+		}
+	}
+
+	// Calculate bottom-right by moving down and clamping to screen bounds.
+	mut br_y := pin.y + grid_rows - 1
+	br_x := math.min(pin.x + grid_cols - 1, u32(t.cols) - 1)
+
+	return Rect{
+		top_left: pin
+		bottom_right: terminal.Pin{
+			x: br_x
+			y: br_y
+		}
+	}
+}
+
+// ============================================================
+// PlacementEntry - a key-value pair for the placement map
+// ============================================================
+
+struct PlacementEntry {
+mut:
+	key   PlacementKey
+	value Placement
+}
+
+// ============================================================
+// ImageStorage
+// ============================================================
+
+pub struct ImageStorage {
+pub mut:
+	// Dirty is set to true if placements or images change. This is
+	// purely informational for the renderer and doesn't affect the
+	// correctness of the program. The renderer must set this to false
+	// if it cares about this value.
+	dirty bool
+
+	// This is the next automatically assigned image ID. We start mid-way
+	// through the u32 range to avoid collisions with buggy programs.
+	// TODO: This isn't good enough, it's perfectly legal for programs
+	//       to use IDs in the latter half of the range and collisions
+	//       are not gracefully handled.
+	next_image_id u32 = 2147483647
+
+	// This is the next automatically assigned placement ID. This is never
+	// user-facing so we can start at 0. This is 32-bits because we use
+	// the same space for external placement IDs. We can start at zero
+	// because any number is valid.
+	next_internal_placement_id u32
+
+	// The set of images that are currently known.
+	images map[u32]Image
+
+	// The set of placements for loaded images.
+	placements []PlacementEntry
+
+	// Non-null if there is an in-progress loading image.
+	loading ?&LoadingImage
+
+	// The total bytes of image data that have been loaded and the limit.
+	// If the limit is reached, the oldest images will be evicted to make
+	// space. Unused images take priority.
+	total_bytes usize
+	total_limit usize = 320 * 1000 * 1000 // 320MB
+}
+
+// Deinitialize the storage, freeing all images and placements.
+pub fn (mut self ImageStorage) deinit(s &terminal.Screen) {
+	if mut loading := self.loading {
+		loading.destroy()
+	}
+
+	for _, mut img in self.images {
+		img.deinit()
+	}
+	self.images = map[u32]Image{}
+
+	self.clear_placements(s)
+	self.placements = []
+}
+
+// Kitty image protocol is enabled if we have a non-zero limit.
+pub fn (self &ImageStorage) enabled() bool {
+	return self.total_limit != 0
+}
+
+// Sets the limit in bytes for the total amount of image data that
+// can be loaded. If this limit is lower, this will do an eviction
+// if necessary. If the value is zero, then Kitty image protocol will
+// be disabled.
+pub fn (mut self ImageStorage) set_limit(s &terminal.Screen, limit usize) {
+	// Special case disabling by quickly deleting all
+	if limit == 0 {
+		self.deinit(s)
+		self.images = map[u32]Image{}
+		self.placements = []
+		self.total_bytes = 0
+		self.total_limit = 0
+		self.dirty = false
+		self.next_image_id = 2147483647
+		self.next_internal_placement_id = 0
+		return
+	}
+
+	// If we're lowering our limit, check if we need to evict.
+	if limit < self.total_bytes {
+		req_bytes := self.total_bytes - limit
+		self.evict_image(req_bytes)
+	}
+
+	self.total_limit = limit
+}
+
+// Add an already-loaded image to the storage. This will automatically
+// free any existing image with the same ID.
+pub fn (mut self ImageStorage) add_image(img Image) ! {
+	// If the image itself is over the limit, then error immediately
+	if usize(img.data.len) > self.total_limit {
+		return error('OutOfMemory: image exceeds total limit')
+	}
+
+	// If this would put us over the limit, then evict.
+	total_bytes := self.total_bytes + usize(img.data.len)
+	if total_bytes > self.total_limit {
+		req_bytes := total_bytes - self.total_limit
+		if !self.evict_image(req_bytes) {
+			return error('OutOfMemory: failed to evict enough images')
+		}
+	}
+
+	// Check if image with this ID already exists
+	if img.id in self.images {
+		old := self.images[img.id]
+		self.total_bytes -= usize(old.data.len)
+		mut old_mut := self.images[img.id]
+		old_mut.deinit()
+	}
+
+	self.images[img.id] = img
+	self.total_bytes += usize(img.data.len)
+	self.dirty = true
+}
+
+// Add a placement for a given image. The caller must verify in advance
+// the image exists to prevent incorrect state.
+pub fn (mut self ImageStorage) add_placement(image_id u32, placement_id u32, p Placement) {
+	// The important piece here is that the placement ID needs to
+	// be marked internal if it is zero. This allows multiple placements
+	// to be added for the same image. If it is non-zero, then it is
+	// an external placement ID and we can only have one placement
+	// per (image id, placement id) pair.
+	key := PlacementKey{
+		image_id: image_id
+		placement_id: if placement_id == 0 {
+			pid := self.next_internal_placement_id
+			self.next_internal_placement_id += 1
+			PlacementId{
+				tag: .internal
+				id: pid
+			}
+		} else {
+			PlacementId{
+				tag: .external
+				id: placement_id
+			}
+		}
+	}
+
+	// Check if entry already exists; if so, overwrite
+	for mut entry in self.placements {
+		if entry.key == key {
+			entry.value = p
+			self.dirty = true
+			return
+		}
+	}
+
+	self.placements << PlacementEntry{
+		key: key
+		value: p
+	}
+	self.dirty = true
+}
+
+fn (mut self ImageStorage) clear_placements(s &terminal.Screen) {
+	for entry in self.placements {
+		entry.value.deinit(s)
+	}
+	self.placements.clear()
+}
+
+// Get an image by its ID. If the image doesn't exist, return none.
+pub fn (self &ImageStorage) image_by_id(image_id u32) ?Image {
+	if image_id in self.images {
+		return self.images[image_id]
+	}
+	return none
+}
+
+// Get an image by its number. If the image doesn't exist, return none.
+pub fn (self &ImageStorage) image_by_number(image_number u32) ?Image {
+	mut newest := ?Image(none)
+
+	for _, img in self.images {
+		if img.number == image_number {
+			if n := newest {
+				// Compare transmit times; keep the newer one
+				if img.transmit_time > n.transmit_time {
+					newest = img
+				}
+			} else {
+				newest = img
+			}
+		}
+	}
+
+	return newest
+}
+
+// Delete placements, images.
+pub fn (mut self ImageStorage) delete(t &terminal.Terminal, cmd FullDelete) {
+	match cmd.kind {
+		.all {
+			delete_images := match cmd.data {
+				DeleteAll {
+					(cmd.data as DeleteAll).delete
+				}
+				else {
+					false
+				}
+			}
+
+			// Iterate placements, removing non-virtual ones
+			mut i := 0
+			for i < self.placements.len {
+				entry := self.placements[i]
+				// Skip virtual placements
+				if entry.value.location is PlacementVirtual {
+					i++
+					continue
+				}
+
+				image_id := entry.key.image_id
+				entry.value.deinit(t.screens.active)
+				self.placements.delete(i)
+				if delete_images {
+					self.delete_if_unused(image_id)
+				}
+				// Don't increment i since we deleted at i
+			}
+
+			if delete_images {
+				// Collect image IDs to check
+				ids := self.images.keys()
+				for id in ids {
+					self.delete_if_unused(id)
+				}
+			}
+
+			self.dirty = true
+		}
+		.id {
+			v := cmd.data as DeleteById
+			self.delete_by_id(t.screens.active, v.image_id, v.placement_id, v.delete)
+		}
+		.newest {
+			v := cmd.data as DeleteByNewest
+			img := self.image_by_number(v.image_number) or { return }
+			self.delete_by_id(t.screens.active, img.id, v.placement_id, v.delete)
+		}
+		.intersect_cursor {
+			delete_images_flag := match cmd.data {
+				bool {
+					cmd.data as bool
+				}
+				else {
+					false
+				}
+			}
+			self.delete_intersecting(
+				t,
+				terminal.Pin{
+					x: t.screens.active.cursor.x
+					y: u32(t.screens.active.pages.active_start) + t.screens.active.cursor.y
+				},
+				delete_images_flag
+			)
+		}
+		.intersect_cell {
+			v := cmd.data as DeleteIntersectCell
+			if v.x <= 0 || v.y <= 0 {
+				return
+			}
+			pin := t.screens.active.pages.pin(terminal.PinOpts{
+				tag: .active
+				x: v.x - 1
+				y: v.y - 1
+			}) or { return }
+			self.delete_intersecting(t, pin, v.delete)
+		}
+		.intersect_cell_z {
+			v := cmd.data as DeleteIntersectCellZ
+			if v.x <= 0 || v.y <= 0 {
+				return
+			}
+			pin := t.screens.active.pages.pin(terminal.PinOpts{
+				tag: .active
+				x: v.x - 1
+				y: v.y - 1
+			}) or { return }
+			self.delete_intersecting_z(t, pin, v.delete, v.z)
+		}
+		.column {
+			v := cmd.data as DeleteColumn
+			if v.x <= 0 {
+				return
+			}
+			x := v.x - 1
+			mut i := 0
+			for i < self.placements.len {
+				entry := self.placements[i]
+				img := self.image_by_id(entry.key.image_id) or {
+					i++
+					continue
+				}
+				r := entry.value.rect(img, t) or {
+					i++
+					continue
+				}
+				if r.top_left.x <= x && r.bottom_right.x >= x {
+					entry.value.deinit(t.screens.active)
+					self.placements.delete(i)
+					if v.delete {
+						self.delete_if_unused(img.id)
+					}
+				} else {
+					i++
+				}
+			}
+			self.dirty = true
+		}
+		.row {
+			v := cmd.data as DeleteRow
+			if v.y <= 0 {
+				return
+			}
+			target_pin := t.screens.active.pages.pin(terminal.PinOpts{
+				tag: .active
+				y: v.y - 1
+			}) or { return }
+
+			mut i := 0
+			for i < self.placements.len {
+				entry := self.placements[i]
+				img := self.image_by_id(entry.key.image_id) or {
+					i++
+					continue
+				}
+				r := entry.value.rect(img, t) or {
+					i++
+					continue
+				}
+				// Check if the target row falls within the placement rect
+				check_pin := terminal.Pin{
+					x: r.top_left.x
+					y: target_pin.y
+				}
+				if is_pin_between(check_pin, r.top_left, r.bottom_right) {
+					entry.value.deinit(t.screens.active)
+					self.placements.delete(i)
+					if v.delete {
+						self.delete_if_unused(img.id)
+					}
+				} else {
+					i++
+				}
+			}
+			self.dirty = true
+		}
+		.z {
+			v := cmd.data as DeleteZ
+			mut i := 0
+			for i < self.placements.len {
+				entry := self.placements[i]
+				// Virtual placeholders cannot delete by z according to the spec.
+				if entry.value.location is PlacementVirtual {
+					i++
+					continue
+				}
+				if entry.value.z == v.z {
+					image_id := entry.key.image_id
+					entry.value.deinit(t.screens.active)
+					self.placements.delete(i)
+					if v.delete {
+						self.delete_if_unused(image_id)
+					}
+				} else {
+					i++
+				}
+			}
+			self.dirty = true
+		}
+		.range {
+			v := cmd.data as DeleteRange
+			if v.first <= 0 || v.last <= 0 {
+				return
+			}
+			if v.first > v.last {
+				return
+			}
+			mut i := 0
+			for i < self.placements.len {
+				entry := self.placements[i]
+				if entry.key.image_id >= v.first && entry.key.image_id <= v.last {
+					image_id := entry.key.image_id
+					entry.value.deinit(t.screens.active)
+					self.placements.delete(i)
+					if v.delete {
+						self.delete_if_unused(image_id)
+					}
+				} else {
+					i++
+				}
+			}
+			self.dirty = true
+		}
+		// We don't support animation frames yet so they are successfully deleted!
+		.animation_frames {}
+	}
+}
+
+fn (mut self ImageStorage) delete_by_id(s &terminal.Screen, image_id u32, placement_id u32, delete_unused bool) {
+	// If no placement, we delete all placements with the ID
+	if placement_id == 0 {
+		mut i := 0
+		for i < self.placements.len {
+			entry := self.placements[i]
+			if entry.key.image_id == image_id {
+				entry.value.deinit(s)
+				self.placements.delete(i)
+			} else {
+				i++
+			}
+		}
+	} else {
+		target_key := PlacementKey{
+			image_id: image_id
+			placement_id: PlacementId{ tag: .external, id: placement_id }
+		}
+		mut i := 0
+		for i < self.placements.len {
+			if self.placements[i].key == target_key {
+				self.placements[i].value.deinit(s)
+				self.placements.delete(i)
+			} else {
+				i++
+			}
+		}
+	}
+
+	// If this is specified, then we also delete the image
+	// if it is no longer in use.
+	if delete_unused {
+		self.delete_if_unused(image_id)
+	}
+
+	// Mark dirty to force redraw
+	self.dirty = true
+}
+
+// Delete an image if it is unused.
+fn (mut self ImageStorage) delete_if_unused(image_id u32) {
+	for entry in self.placements {
+		if entry.key.image_id == image_id {
+			return
+		}
+	}
+
+	// If we get here, we can delete the image.
+	if image_id in self.images {
+		img := self.images[image_id]
+		self.total_bytes -= usize(img.data.len)
+		mut img_mut := self.images[image_id]
+		img_mut.deinit()
+		self.images.delete(image_id)
+	}
+}
+
+// Deletes all placements intersecting a screen point.
+fn (mut self ImageStorage) delete_intersecting(t &terminal.Terminal, target_pin terminal.Pin, delete_unused bool) {
+	mut i := 0
+	for i < self.placements.len {
+		entry := self.placements[i]
+		img := self.image_by_id(entry.key.image_id) or {
+			i++
+			continue
+		}
+		r := entry.value.rect(img, t) or {
+			i++
+			continue
+		}
+		if is_pin_between(target_pin, r.top_left, r.bottom_right) {
+			entry.value.deinit(t.screens.active)
+			self.placements.delete(i)
+			if delete_unused {
+				self.delete_if_unused(img.id)
+			}
+		} else {
+			i++
+		}
+	}
+	self.dirty = true
+}
+
+// Deletes all placements intersecting a screen point with a specific z-index.
+fn (mut self ImageStorage) delete_intersecting_z(t &terminal.Terminal, target_pin terminal.Pin, delete_unused bool, z i32) {
+	mut i := 0
+	for i < self.placements.len {
+		entry := self.placements[i]
+		img := self.image_by_id(entry.key.image_id) or {
+			i++
+			continue
+		}
+		r := entry.value.rect(img, t) or {
+			i++
+			continue
+		}
+		if is_pin_between(target_pin, r.top_left, r.bottom_right) {
+			if entry.value.z == z {
+				entry.value.deinit(t.screens.active)
+				self.placements.delete(i)
+				if delete_unused {
+					self.delete_if_unused(img.id)
+				}
+			} else {
+				i++
+			}
+		} else {
+			i++
+		}
+	}
+	self.dirty = true
+}
+
+// Evict images to make space. This will evict the oldest image,
+// prioritizing unused images first, as recommended by the published
+// Kitty spec.
+//
+// This will evict as many images as necessary to make space for
+// req bytes.
+fn (mut self ImageStorage) evict_image(req usize) bool {
+	// Build candidate list
+	mut candidates := []EvictCandidate{cap: self.images.len}
+
+	for _, img in self.images {
+		// Check if image is in use
+		mut used := false
+		for entry in self.placements {
+			if entry.key.image_id == img.id {
+				used = true
+				break
+			}
+		}
+		candidates << EvictCandidate{
+			id: img.id
+			time: img.transmit_time
+			used: used
+		}
+	}
+
+	// Sort candidates: unused first, then by time (oldest first)
+	candidates.sort_with_compare(fn (a &EvictCandidate, b &EvictCandidate) int {
+		// If usage matches, sort by time
+		if a.used == b.used {
+			if a.time < b.time {
+				return -1
+			}
+			if a.time > b.time {
+				return 1
+			}
+			if a.id < b.id {
+				return -1
+			}
+			if a.id > b.id {
+				return 1
+			}
+			return 0
+		}
+		// Unused is a better candidate (comes first)
+		if !a.used {
+			return -1
+		}
+		return 1
+	})
+
+	// They're in order of best to evict.
+	mut evicted := usize(0)
+	for c in candidates {
+		// Delete all the placements for this image and the image.
+		mut i := 0
+		for i < self.placements.len {
+			if self.placements[i].key.image_id == c.id {
+				self.placements.delete(i)
+			} else {
+				i++
+			}
+		}
+
+		if c.id in self.images {
+			img := self.images[c.id]
+			evicted += usize(img.data.len)
+			self.total_bytes -= usize(img.data.len)
+			mut img_mut := self.images[c.id]
+			img_mut.deinit()
+			self.images.delete(c.id)
+
+			if evicted > req {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// Get a placement by key.
+pub fn (self &ImageStorage) get_placement(key PlacementKey) ?Placement {
+	for entry in self.placements {
+		if entry.key == key {
+			return entry.value
+		}
+	}
+	return none
+}
+
+// Count the number of placements.
+pub fn (self &ImageStorage) placement_count() int {
+	return self.placements.len
+}
+
+// Count the number of images.
+pub fn (self &ImageStorage) image_count() int {
+	return self.images.len
+}
+
+// ============================================================
+// EvictCandidate - internal helper for eviction sorting
+// ============================================================
+
+struct EvictCandidate {
+	id   u32
+	time time.Time
+	used bool
+}
+
+// ============================================================
+// Helpers
+// ============================================================
+
+// Check if a pin is between two other pins (inclusive).
+// For the simplified Pin model (y-based ordering).
+fn is_pin_between(p terminal.Pin, top terminal.Pin, bottom terminal.Pin) bool {
+	// p must be >= top and <= bottom
+	if p.y < top.y || p.y > bottom.y {
+		return false
+	}
+	if p.y == top.y && p.x < top.x {
+		return false
+	}
+	if p.y == bottom.y && p.x > bottom.x {
+		return false
+	}
+	return true
+}

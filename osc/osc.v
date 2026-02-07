@@ -91,6 +91,9 @@ pub:
 	xterm_output   ?bool
 	// ConEmu tab title
 	tab_title ConEmuTabTitle
+	// Semantic prompt data (OSC 133)
+	semantic_prompt_action  SemanticAction = .fresh_line
+	semantic_prompt_options string
 }
 
 // OscParserState tracks where we are in parsing the OSC number prefix.
@@ -328,37 +331,36 @@ pub fn (mut self Parser) write_byte(b u8) {
 
 // end finalizes parsing and returns the command, if any.
 // The optional terminator_ch is the final character in the OSC sequence.
-pub fn (mut self Parser) end(terminator_ch u8) ?&Command {
-	mut result := ?&Command(none)
-
+pub fn (mut self Parser) end(terminator_ch u8) ?Command {
 	match self.state {
 		.start, .invalid {
 			return none
 		}
+		.s_9 {
+			return parse_osc9(mut self, terminator_ch)
+		}
 		.s_0, .s_2 {
 			// XTODO: change_window_title parser
-			result = none
+			return none
 		}
 		.s_1 {
 			// XTODO: change_window_icon parser
-			result = none
-		}
-		.s_9 {
-			result = parse_osc9(mut self, terminator_ch)
+			return none
 		}
 		.s_7 {
 			// XTODO: report_pwd parser
-			result = none
+			return none
 		}
 		.s_8 {
 			// XTODO: hyperlink parser
-			result = none
+			return none
+		}
+		.s_133 {
+			return parse_osc133(mut self, terminator_ch)
 		}
 		else {
 			// XTODO: other OSC parsers
-			result = none
+			return none
 		}
 	}
-
-	return result
 }
