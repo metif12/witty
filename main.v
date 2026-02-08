@@ -259,38 +259,105 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 	num_rows := if int(pages.rows) < state.rows { int(pages.rows) } else { state.rows }
 	num_cols := if int(pages.cols) < state.cols { int(pages.cols) } else { state.cols }
 
+	palette := state.term.colors.palette.entries
+
 	for row_idx in 0 .. num_rows {
 		row := pages.get_active_row(u32(row_idx))
 
-		// Build a string for this row
-		mut row_str := []u8{cap: num_cols}
+		// Draw background colors for cells that have non-default bg
 		for col_idx in 0 .. num_cols {
-			if col_idx < row.cells.len {
-				cp := row.cells[col_idx].codepoint
-				if cp >= 32 && cp < 127 {
-					row_str << u8(cp)
-				} else if cp == 0 {
-					row_str << u8(` `)
-				} else {
-					row_str << u8(`?`)
-				}
-			} else {
-				row_str << u8(` `)
+			if col_idx >= row.cells.len {
+				break
 			}
+			cell := row.cells[col_idx]
+			bg := cell.style.bg_rgb(&cell, palette) or { continue }
+			C.CGContextSetRGBFillColor(ctx, f64(bg.r) / 255.0, f64(bg.g) / 255.0,
+				f64(bg.b) / 255.0, 1.0)
+			C.CGContextFillRect(ctx, C.CGRect{
+				origin: C.CGPoint{
+					x: f64(col_idx) * cell_w
+					y: f64(row_idx) * cell_h
+				}
+				size: C.CGSize{
+					width: cell_w
+					height: cell_h
+				}
+			})
 		}
 
-		// Trim trailing spaces
-		mut end := row_str.len
-		for end > 0 && row_str[end - 1] == u8(` `) {
-			end--
-		}
-		if end == 0 {
-			continue
-		}
+		// Draw text in colored runs: group consecutive cells with same fg color
+		mut run_start := 0
+		for run_start < num_cols {
+			// Skip empty leading cells
+			if run_start >= row.cells.len || row.cells[run_start].codepoint == 0 {
+				run_start++
+				continue
+			}
 
-		y_pos := f64(row_idx) * cell_h + cell_h * 0.8
-		macos.draw_text(ctx, row_str.data, end, state.font, 0.0, y_pos,
-			1.0, 1.0, 1.0)
+			// Determine foreground color for this cell
+			first_cell := row.cells[run_start]
+			mut fg_r := f64(1.0)
+			mut fg_g := f64(1.0)
+			mut fg_b := f64(1.0)
+			if first_cell.style.fg_color == .rgb {
+				fg_r = f64(first_cell.style.fg_r) / 255.0
+				fg_g = f64(first_cell.style.fg_g) / 255.0
+				fg_b = f64(first_cell.style.fg_b) / 255.0
+			} else if first_cell.style.fg_color == .palette {
+				c := palette[int(first_cell.style.fg_palette)]
+				fg_r = f64(c.r) / 255.0
+				fg_g = f64(c.g) / 255.0
+				fg_b = f64(c.b) / 255.0
+			}
+
+			// Collect consecutive cells with the same fg color
+			mut run_buf := []u8{cap: num_cols}
+			cp := first_cell.codepoint
+			if cp >= 32 && cp < 127 {
+				run_buf << u8(cp)
+			} else {
+				run_buf << u8(`?`)
+			}
+
+			mut run_end := run_start + 1
+			for run_end < num_cols && run_end < row.cells.len {
+				cell := row.cells[run_end]
+				if cell.codepoint == 0 {
+					break
+				}
+				// Check if fg color matches the run
+				if cell.style.fg_color != first_cell.style.fg_color {
+					break
+				}
+				if cell.style.fg_color == .rgb
+					&& (cell.style.fg_r != first_cell.style.fg_r
+					|| cell.style.fg_g != first_cell.style.fg_g
+					|| cell.style.fg_b != first_cell.style.fg_b) {
+					break
+				}
+				if cell.style.fg_color == .palette
+					&& cell.style.fg_palette != first_cell.style.fg_palette {
+					break
+				}
+				c2 := cell.codepoint
+				if c2 >= 32 && c2 < 127 {
+					run_buf << u8(c2)
+				} else {
+					run_buf << u8(`?`)
+				}
+				run_end++
+			}
+
+			// Draw this run
+			if run_buf.len > 0 {
+				y_pos := f64(row_idx) * cell_h + cell_h * 0.8
+				x_pos := f64(run_start) * cell_w
+				macos.draw_text(ctx, run_buf.data, run_buf.len, state.font,
+					x_pos, y_pos, fg_r, fg_g, fg_b)
+			}
+
+			run_start = run_end
+		}
 	}
 
 	// Draw cursor

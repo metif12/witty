@@ -74,7 +74,9 @@ pub mut:
 
 // colors_default provides the default Colors value.
 // DynamicRGB and DynamicPalette are defined in color.v.
-pub const colors_default = Colors{}
+pub const colors_default = Colors{
+	palette: dynamic_palette_default_val
+}
 
 pub struct RGB {
 pub:
@@ -662,6 +664,7 @@ fn (mut self Terminal) print_cell(unmapped_c u32, wide CellWide) {
 			wide: wide
 			is_protected: self.screens.active.cursor.is_protected
 			semantic_content: self.screens.active.cursor.semantic_content
+			style: self.screens.active.cursor.style
 		}
 
 		// Update row flags

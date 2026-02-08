@@ -682,15 +682,31 @@ pub fn (mut self Screen) set_attribute(attr SgrAttribute) ! {
 		}
 		.direct_color_fg {
 			self.cursor.style.fg_color = .rgb
+			self.cursor.style.fg_r = attr.r
+			self.cursor.style.fg_g = attr.g
+			self.cursor.style.fg_b = attr.b
 		}
 		.direct_color_bg {
 			self.cursor.style.bg_color = .rgb
+			self.cursor.style.bg_r = attr.r
+			self.cursor.style.bg_g = attr.g
+			self.cursor.style.bg_b = attr.b
 		}
-		.fg_8, .bright_fg_8, .fg_256 {
+		.fg_8, .fg_256 {
 			self.cursor.style.fg_color = .palette
+			self.cursor.style.fg_palette = attr.index
 		}
-		.bg_8, .bright_bg_8, .bg_256 {
+		.bright_fg_8 {
+			self.cursor.style.fg_color = .palette
+			self.cursor.style.fg_palette = attr.index + 8
+		}
+		.bg_8, .bg_256 {
 			self.cursor.style.bg_color = .palette
+			self.cursor.style.bg_palette = attr.index
+		}
+		.bright_bg_8 {
+			self.cursor.style.bg_color = .palette
+			self.cursor.style.bg_palette = attr.index + 8
 		}
 		.reset_fg {
 			self.cursor.style.fg_color = .none
@@ -700,9 +716,13 @@ pub fn (mut self Screen) set_attribute(attr SgrAttribute) ! {
 		}
 		.underline_color {
 			self.cursor.style.underline_color = .rgb
+			self.cursor.style.fg_r = attr.r
+			self.cursor.style.fg_g = attr.g
+			self.cursor.style.fg_b = attr.b
 		}
 		.underline_color_256 {
 			self.cursor.style.underline_color = .palette
+			self.cursor.style.fg_palette = attr.index
 		}
 		.reset_underline_color {
 			self.cursor.style.underline_color = .none

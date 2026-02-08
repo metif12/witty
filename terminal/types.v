@@ -80,6 +80,9 @@ pub mut:
 	color_rgb_r   u8
 	color_rgb_g   u8
 	color_rgb_b   u8
+	// The actual style for this cell. Stored directly to avoid needing
+	// a ref-counted style map for lookups.
+	style CellStyle
 }
 
 // Helper to make a cell that just has a codepoint.
