@@ -312,12 +312,7 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 
 			// Collect consecutive cells with the same fg color
 			mut run_buf := []u8{cap: num_cols}
-			cp := first_cell.codepoint
-			if cp >= 32 && cp < 127 {
-				run_buf << u8(cp)
-			} else {
-				run_buf << u8(`?`)
-			}
+			write_utf8(mut run_buf, first_cell.codepoint)
 
 			mut run_end := run_start + 1
 			for run_end < num_cols && run_end < row.cells.len {
@@ -339,12 +334,7 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 					&& cell.style.fg_palette != first_cell.style.fg_palette {
 					break
 				}
-				c2 := cell.codepoint
-				if c2 >= 32 && c2 < 127 {
-					run_buf << u8(c2)
-				} else {
-					run_buf << u8(`?`)
-				}
+				write_utf8(mut run_buf, cell.codepoint)
 				run_end++
 			}
 
@@ -528,5 +518,23 @@ fn read_pty_thread(fd int, view voidptr) {
 			state.stream.next_slice(data) or {}
 		}
 		macos.request_display(view)
+	}
+}
+
+fn write_utf8(mut buf []u8, cp u32) {
+	if cp < 0x80 {
+		buf << u8(cp)
+	} else if cp < 0x800 {
+		buf << u8(0xc0 | (cp >> 6))
+		buf << u8(0x80 | (cp & 0x3f))
+	} else if cp < 0x10000 {
+		buf << u8(0xe0 | (cp >> 12))
+		buf << u8(0x80 | ((cp >> 6) & 0x3f))
+		buf << u8(0x80 | (cp & 0x3f))
+	} else {
+		buf << u8(0xf0 | (cp >> 18))
+		buf << u8(0x80 | ((cp >> 12) & 0x3f))
+		buf << u8(0x80 | ((cp >> 6) & 0x3f))
+		buf << u8(0x80 | (cp & 0x3f))
 	}
 }

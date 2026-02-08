@@ -1,5 +1,7 @@
 module terminal
 
+import strings
+
 // Developer note: this is in src/terminal and not src/renderer because
 // the goal is that this remains generic to multiple renderers. This can
 // aid specifically with libghostty-vt with converting terminal state to
@@ -437,23 +439,20 @@ pub fn (self &RenderState) to_string() string {
 	// - Wrapped line joining
 	// - StringMap building for byte-to-cell coordinate mapping
 	// Simplified implementation: basic codepoint to string conversion.
-	mut result := []u8{cap: int(self.rows) * int(self.cols)}
+	mut sb := strings.new_builder(int(self.rows) * int(self.cols))
 	for y, row in self.row_data {
 		for cell in row.cells {
 			cp := cell.raw.codepoint_val()
 			if cp == 0 {
-				result << 0 // null byte for empty cells
-			} else if cp < 0x80 {
-				result << u8(cp)
+				sb.write_u8(0) // null byte for empty cells
 			} else {
-				// Simplified: just write '?' for non-ASCII
-				result << u8(`?`)
+				write_utf8(mut sb, cp)
 			}
 		}
 		_ = y
 		if !row.raw.wrap {
-			result << u8(`\n`)
+			sb.write_u8(u8(`\n`))
 		}
 	}
-	return result.bytestr()
+	return sb.str()
 }
