@@ -270,7 +270,9 @@ pub fn (self &PagePin) down_overflow(n u32) DownOverflowResult {
 			}
 		}
 		rem -= u32(nd.data.size.rows)
-		last_node = nd
+		unsafe {
+			last_node = nd
+		}
 		next = nd.next
 	}
 	// unreachable
@@ -339,7 +341,9 @@ pub fn (self &PagePin) up_overflow(n u32) UpOverflowResult {
 			}
 		}
 		rem -= u32(nd.data.size.rows)
-		first_node = nd
+		unsafe {
+			first_node = nd
+		}
 		prev = nd.prev
 	}
 	return UpOverflowOverflow{
@@ -1746,7 +1750,9 @@ pub fn (mut self PageList) erase_row(p PagePin) {
 			cp.clear_row(u16(li))
 		}
 
-		prev_node = cn
+		unsafe {
+			prev_node = cn
+		}
 		cur_node = cn.next
 	}
 

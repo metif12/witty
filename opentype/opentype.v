@@ -41,7 +41,7 @@ fn read_i32_be(data []u8, offset int) i32 {
 
 // read_i64_be reads a big-endian i64 from data at offset.
 fn read_i64_be(data []u8, offset int) i64 {
-	return i64(read_u32_be(data, offset)) << 32 | i64(read_u32_be(data, offset + 4))
+	return i64(u64(read_u32_be(data, offset)) << 32 | u64(read_u32_be(data, offset + 4)))
 }
 
 // ============================================================

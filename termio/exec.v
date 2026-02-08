@@ -26,8 +26,8 @@ fn C.dup2(oldfd int, newfd int) int
 fn C.execvpe(file &char, argv &&char, envp &&char) int
 fn C.execvp(file &char, argv &&char) int
 fn C.close(fd int) int
-fn C.read(fd int, buf voidptr, count usize) isize
-fn C.write(fd int, buf voidptr, count usize) isize
+fn C.read(fd int, buf voidptr, count usize) int
+fn C.write(fd int, buf voidptr, count usize) int
 fn C.poll(fds voidptr, nfds u32, timeout int) int
 fn C.fcntl(fd int, cmd int, arg int) int
 fn C.kill(pid int, sig int) int

@@ -2729,7 +2729,7 @@ fn is_nerd_font_icon(cp u32) bool {
 	if (cp >= 0xf4c4 && cp <= 0xf4ee) || (cp >= 0xf4f3 && cp <= 0xf51c) || (cp >= 0xf51e && cp <= 0xf533) {
 		return true
 	}
-	if (cp >= 0xf0001 && cp <= 0xf1af0) {
+	if cp >= 0xf0001 && cp <= 0xf1af0 {
 		return true
 	}
 	return false

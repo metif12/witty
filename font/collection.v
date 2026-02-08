@@ -16,8 +16,6 @@ module font
 //
 // Translated from ghostty/src/font/Collection.zig
 
-import math
-
 // ============================================================
 // SizeAdjustment
 // ============================================================
@@ -97,7 +95,7 @@ pub:
 	// What style this index refers to.
 	style FontStyle = .regular
 	// The index within the style's face list.
-	idx   u16 = 0
+	idx   u16
 }
 
 // The starting index for special (built-in) fonts.

@@ -14,8 +14,8 @@ fn C.fork() int
 fn C.execvp(file &char, argv &&char) int
 fn C.dup2(oldfd int, newfd int) int
 fn C.close(fd int) int
-fn C.read(fd int, buf voidptr, count usize) isize
-fn C.write(fd int, buf voidptr, count usize) isize
+fn C.read(fd int, buf voidptr, count usize) int
+fn C.write(fd int, buf voidptr, count usize) int
 fn C._exit(status int)
 fn C.setenv(name &char, value &char, overwrite int) int
 
