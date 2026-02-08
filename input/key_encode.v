@@ -651,6 +651,21 @@ fn ctrl_seq(logical_key Key, utf8 string, unshifted_codepoint u32, mods Mods) ?u
 		return none
 	}
 
+	// If the character is already a control character (C0), and we have
+	// only control pressed, we generally want to pass it through, UNLESS
+	// it is one of the keys that fixterms specifies should be CSI u encoded
+	// (Tab/Ctrl+i, Enter/Ctrl+m, Escape/Ctrl+[).
+	if is_control(u32(ch)) {
+		match ch {
+			9, 13, 27 {
+				// Fall through to allow CSI u encoding or other handling
+			}
+			else {
+				return ch
+			}
+		}
+	}
+
 	// From Kitty's key encoding logic.
 	return match ch {
 		` ` { u8(0) }
