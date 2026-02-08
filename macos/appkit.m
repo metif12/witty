@@ -18,11 +18,22 @@ typedef void (*vt_key_fn)(void *userdata, unsigned short keycode, unsigned long 
                           bool is_repeat);
 typedef void (*vt_resize_fn)(void *userdata, double width, double height);
 typedef void (*vt_app_ready_fn)(void);
+typedef void (*vt_paste_fn)(void *userdata, const char *text, int len);
+typedef void (*vt_action_fn)(void *userdata, int action_id);
 
 static vt_draw_fn   g_draw_cb   = NULL;
 static vt_key_fn    g_key_cb    = NULL;
 static vt_resize_fn g_resize_cb = NULL;
 static vt_app_ready_fn g_ready_cb = NULL;
+static vt_paste_fn  g_paste_cb  = NULL;
+static vt_action_fn g_action_cb = NULL;
+
+enum {
+    VT_ACTION_COPY       = 1,
+    VT_ACTION_SELECT_ALL = 2,
+    VT_ACTION_NEW_TAB    = 3,
+    VT_ACTION_CLOSE_TAB  = 4,
+};
 
 // ============================================================
 // VTTerminalView — custom NSView with per-view userdata
@@ -73,7 +84,7 @@ static vt_app_ready_fn g_ready_cb = NULL;
 - (BOOL)canBecomeKeyView { return YES; }
 
 - (void)drawRect:(NSRect)dirtyRect {
-    if (!g_draw_cb) {
+    if (!g_draw_cb || !vtUserdata) {
         [[NSColor blackColor] setFill];
         NSRectFill(dirtyRect);
         return;
@@ -84,7 +95,7 @@ static vt_app_ready_fn g_ready_cb = NULL;
 }
 
 - (void)keyDown:(NSEvent *)event {
-    if (!g_key_cb) return;
+    if (!g_key_cb || !vtUserdata) return;
 
     NSString *chars = [event characters] ?: @"";
     const char *utf8 = [chars UTF8String];
@@ -105,6 +116,7 @@ static vt_app_ready_fn g_ready_cb = NULL;
 
 - (void)setFrameSize:(NSSize)newSize {
     [super setFrameSize:newSize];
+    if (!vtUserdata) return;  // view is being torn down
     if (metalLayer) {
         CGFloat scale = metalLayer.contentsScale;
         metalLayer.drawableSize = CGSizeMake(newSize.width * scale, newSize.height * scale);
@@ -122,6 +134,38 @@ static vt_app_ready_fn g_ready_cb = NULL;
         NSSize size = [self bounds].size;
         metalLayer.drawableSize = CGSizeMake(size.width * scale, size.height * scale);
     }
+}
+
+// ---- Menu action handlers ----
+
+- (void)copy:(id)sender {
+    (void)sender;
+    if (g_action_cb && vtUserdata) g_action_cb(vtUserdata, VT_ACTION_COPY);
+}
+
+- (void)paste:(id)sender {
+    (void)sender;
+    if (!g_paste_cb || !vtUserdata) return;
+    NSString *text = [[NSPasteboard generalPasteboard] stringForType:NSPasteboardTypeString];
+    if (text) {
+        const char *utf8 = [text UTF8String];
+        g_paste_cb(vtUserdata, utf8, (int)strlen(utf8));
+    }
+}
+
+- (void)selectAll:(id)sender {
+    (void)sender;
+    if (g_action_cb && vtUserdata) g_action_cb(vtUserdata, VT_ACTION_SELECT_ALL);
+}
+
+- (void)vtNewTab:(id)sender {
+    (void)sender;
+    if (g_action_cb && vtUserdata) g_action_cb(vtUserdata, VT_ACTION_NEW_TAB);
+}
+
+- (void)vtCloseTab:(id)sender {
+    (void)sender;
+    if (g_action_cb && vtUserdata) g_action_cb(vtUserdata, VT_ACTION_CLOSE_TAB);
 }
 
 @end
@@ -177,6 +221,24 @@ void vt_set_ready_callback(vt_app_ready_fn cb) {
     g_ready_cb = cb;
 }
 
+void vt_set_paste_callback(vt_paste_fn cb) {
+    g_paste_cb = cb;
+}
+
+void vt_set_action_callback(vt_action_fn cb) {
+    g_action_cb = cb;
+}
+
+void vt_clipboard_set_text(const char *text, int len) {
+    if (!text || len <= 0) return;
+    NSString *str = [[NSString alloc] initWithBytes:text length:len encoding:NSUTF8StringEncoding];
+    if (str) {
+        NSPasteboard *pb = [NSPasteboard generalPasteboard];
+        [pb clearContents];
+        [pb setString:str forType:NSPasteboardTypeString];
+    }
+}
+
 // ============================================================
 // Per-view userdata accessors
 // ============================================================
@@ -197,17 +259,96 @@ void vt_app_init(void) {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 
-    // Create a basic menu bar so Cmd+Q works
     NSMenu *menuBar = [[NSMenu alloc] init];
+
+    // ---- App menu (vterminal) ----
     NSMenuItem *appMenuItem = [[NSMenuItem alloc] init];
     [menuBar addItem:appMenuItem];
-    [NSApp setMainMenu:menuBar];
-
-    NSMenu *appMenu = [[NSMenu alloc] init];
+    NSMenu *appMenu = [[NSMenu alloc] initWithTitle:@"vterminal"];
+    [appMenu addItemWithTitle:@"About vterminal"
+                       action:@selector(orderFrontStandardAboutPanel:)
+                keyEquivalent:@""];
+    [appMenu addItem:[NSMenuItem separatorItem]];
+    [appMenu addItemWithTitle:@"Hide vterminal"
+                       action:@selector(hide:)
+                keyEquivalent:@"h"];
+    NSMenuItem *hideOthers = [appMenu addItemWithTitle:@"Hide Others"
+                                                action:@selector(hideOtherApplications:)
+                                         keyEquivalent:@"h"];
+    [hideOthers setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagOption];
+    [appMenu addItemWithTitle:@"Show All"
+                       action:@selector(unhideAllApplications:)
+                keyEquivalent:@""];
+    [appMenu addItem:[NSMenuItem separatorItem]];
     [appMenu addItemWithTitle:@"Quit vterminal"
                        action:@selector(terminate:)
                 keyEquivalent:@"q"];
     [appMenuItem setSubmenu:appMenu];
+
+    // ---- File menu ----
+    NSMenuItem *fileMenuItem = [[NSMenuItem alloc] init];
+    [menuBar addItem:fileMenuItem];
+    NSMenu *fileMenu = [[NSMenu alloc] initWithTitle:@"File"];
+    [fileMenu addItemWithTitle:@"New Tab"
+                        action:@selector(vtNewTab:)
+                 keyEquivalent:@"t"];
+    [fileMenu addItemWithTitle:@"Close Tab"
+                        action:@selector(vtCloseTab:)
+                 keyEquivalent:@"w"];
+    [fileMenuItem setSubmenu:fileMenu];
+
+    // ---- Edit menu ----
+    NSMenuItem *editMenuItem = [[NSMenuItem alloc] init];
+    [menuBar addItem:editMenuItem];
+    NSMenu *editMenu = [[NSMenu alloc] initWithTitle:@"Edit"];
+    [editMenu addItemWithTitle:@"Copy"
+                        action:@selector(copy:)
+                 keyEquivalent:@"c"];
+    [editMenu addItemWithTitle:@"Paste"
+                        action:@selector(paste:)
+                 keyEquivalent:@"v"];
+    [editMenu addItemWithTitle:@"Select All"
+                        action:@selector(selectAll:)
+                 keyEquivalent:@"a"];
+    [editMenuItem setSubmenu:editMenu];
+
+    // ---- View menu ----
+    NSMenuItem *viewMenuItem = [[NSMenuItem alloc] init];
+    [menuBar addItem:viewMenuItem];
+    NSMenu *viewMenu = [[NSMenu alloc] initWithTitle:@"View"];
+    NSMenuItem *fullscreen = [viewMenu addItemWithTitle:@"Toggle Full Screen"
+                                                action:@selector(toggleFullScreen:)
+                                         keyEquivalent:@"f"];
+    [fullscreen setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagControl];
+    [viewMenuItem setSubmenu:viewMenu];
+
+    // ---- Window menu ----
+    NSMenuItem *windowMenuItem = [[NSMenuItem alloc] init];
+    [menuBar addItem:windowMenuItem];
+    NSMenu *windowMenu = [[NSMenu alloc] initWithTitle:@"Window"];
+    [windowMenu addItemWithTitle:@"Minimize"
+                          action:@selector(performMiniaturize:)
+                   keyEquivalent:@"m"];
+    [windowMenu addItemWithTitle:@"Zoom"
+                          action:@selector(performZoom:)
+                   keyEquivalent:@""];
+    [windowMenu addItem:[NSMenuItem separatorItem]];
+    NSMenuItem *prevTab = [windowMenu addItemWithTitle:@"Show Previous Tab"
+                                               action:@selector(selectPreviousTab:)
+                                        keyEquivalent:@"["];
+    [prevTab setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
+    NSMenuItem *nextTab = [windowMenu addItemWithTitle:@"Show Next Tab"
+                                               action:@selector(selectNextTab:)
+                                        keyEquivalent:@"]"];
+    [nextTab setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagShift];
+    [windowMenu addItem:[NSMenuItem separatorItem]];
+    [windowMenu addItemWithTitle:@"Bring All to Front"
+                          action:@selector(arrangeInFront:)
+                   keyEquivalent:@""];
+    [windowMenuItem setSubmenu:windowMenu];
+    [NSApp setWindowsMenu:windowMenu];
+
+    [NSApp setMainMenu:menuBar];
 
     vt_g_delegate = [[VTAppDelegate alloc] init];
     [NSApp setDelegate:vt_g_delegate];
@@ -278,7 +419,12 @@ void vt_close_tab(void *view_ptr) {
     VTTerminalView *view = (__bridge VTTerminalView *)view_ptr;
     NSWindow *window = [view window];
     if (window) {
-        [window close];
+        // Defer close to avoid reentrancy: this is often called from
+        // within keyDown: event processing, and closing a tabbed window
+        // synchronously from an event handler can deadlock AppKit.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [window close];
+        });
     }
 }
 
