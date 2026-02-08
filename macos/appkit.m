@@ -20,6 +20,8 @@ typedef void (*vt_resize_fn)(void *userdata, double width, double height);
 typedef void (*vt_app_ready_fn)(void);
 typedef void (*vt_paste_fn)(void *userdata, const char *text, int len);
 typedef void (*vt_action_fn)(void *userdata, int action_id);
+typedef void (*vt_mouse_fn)(void *userdata, int event_type, double x, double y,
+                            unsigned long modflags);
 
 static vt_draw_fn   g_draw_cb   = NULL;
 static vt_key_fn    g_key_cb    = NULL;
@@ -27,6 +29,7 @@ static vt_resize_fn g_resize_cb = NULL;
 static vt_app_ready_fn g_ready_cb = NULL;
 static vt_paste_fn  g_paste_cb  = NULL;
 static vt_action_fn g_action_cb = NULL;
+static vt_mouse_fn  g_mouse_cb  = NULL;
 
 enum {
     VT_ACTION_COPY       = 1,
@@ -112,6 +115,39 @@ enum {
 
 - (void)flagsChanged:(NSEvent *)event {
     (void)event;
+}
+
+// ---- Mouse event handlers ----
+// event_type: 0=left_down, 1=left_up, 2=left_dragged, 3=right_down, 4=right_up, 5=moved
+
+- (void)mouseDown:(NSEvent *)event {
+    if (!g_mouse_cb || !vtUserdata) return;
+    NSPoint loc = [self convertPoint:[event locationInWindow] fromView:nil];
+    g_mouse_cb(vtUserdata, 0, loc.x, loc.y, [event modifierFlags]);
+}
+
+- (void)mouseUp:(NSEvent *)event {
+    if (!g_mouse_cb || !vtUserdata) return;
+    NSPoint loc = [self convertPoint:[event locationInWindow] fromView:nil];
+    g_mouse_cb(vtUserdata, 1, loc.x, loc.y, [event modifierFlags]);
+}
+
+- (void)mouseDragged:(NSEvent *)event {
+    if (!g_mouse_cb || !vtUserdata) return;
+    NSPoint loc = [self convertPoint:[event locationInWindow] fromView:nil];
+    g_mouse_cb(vtUserdata, 2, loc.x, loc.y, [event modifierFlags]);
+}
+
+- (void)rightMouseDown:(NSEvent *)event {
+    if (!g_mouse_cb || !vtUserdata) return;
+    NSPoint loc = [self convertPoint:[event locationInWindow] fromView:nil];
+    g_mouse_cb(vtUserdata, 3, loc.x, loc.y, [event modifierFlags]);
+}
+
+- (void)rightMouseUp:(NSEvent *)event {
+    if (!g_mouse_cb || !vtUserdata) return;
+    NSPoint loc = [self convertPoint:[event locationInWindow] fromView:nil];
+    g_mouse_cb(vtUserdata, 4, loc.x, loc.y, [event modifierFlags]);
 }
 
 - (void)setFrameSize:(NSSize)newSize {
@@ -227,6 +263,10 @@ void vt_set_paste_callback(vt_paste_fn cb) {
 
 void vt_set_action_callback(vt_action_fn cb) {
     g_action_cb = cb;
+}
+
+void vt_set_mouse_callback(vt_mouse_fn cb) {
+    g_mouse_cb = cb;
 }
 
 void vt_clipboard_set_text(const char *text, int len) {

@@ -5,6 +5,7 @@ import macos
 import os
 import pty
 import terminal
+import time
 
 // C interop declarations needed in this module.
 #include <unistd.h>
@@ -85,6 +86,12 @@ mut:
 	cols      int = 80
 	rows      int = 24
 	view      voidptr // the VTTerminalView* for this tab
+	// Mouse/selection state
+	left_click_pin ?terminal.Pin
+	left_click_x   f64
+	left_click_y   f64
+	left_click_count u8
+	left_click_time  time.Time
 }
 
 // ============================================================
@@ -192,6 +199,7 @@ fn main() {
 	macos.set_resize_callback(on_resize)
 	macos.set_paste_callback(on_paste)
 	macos.set_action_callback(on_action)
+	macos.set_mouse_callback(on_mouse)
 
 	// 3. Create window (first tab)
 	view := macos.create_window(cfg.pixel_w, cfg.pixel_h, 'vterminal')
@@ -381,6 +389,32 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 		}
 	}
 
+	// Draw selection highlight
+	if sel := state.term.screens.active.selection {
+		sel_start := if sel.start_pin.before(sel.end_pin) { sel.start_pin } else { sel.end_pin }
+		sel_end := if sel.start_pin.before(sel.end_pin) { sel.end_pin } else { sel.start_pin }
+
+		for sy in int(sel_start.y) .. int(sel_end.y) + 1 {
+			if sy >= num_rows {
+				break
+			}
+			sx_start := if sy == int(sel_start.y) { int(sel_start.x) } else { 0 }
+			sx_end := if sy == int(sel_end.y) { int(sel_end.x) + 1 } else { num_cols }
+
+			C.CGContextSetRGBFillColor(ctx, 0.3, 0.4, 0.7, 0.5)
+			C.CGContextFillRect(ctx, C.CGRect{
+				origin: C.CGPoint{
+					x: f64(sx_start) * cell_w
+					y: f64(sy) * cell_h
+				}
+				size: C.CGSize{
+					width: f64(sx_end - sx_start) * cell_w
+					height: cell_h
+				}
+			})
+		}
+	}
+
 	// Draw cursor
 	cx := state.term.screens.active.cursor.x
 	cy := state.term.screens.active.cursor.y
@@ -500,13 +534,28 @@ fn on_paste(userdata voidptr, text &u8, len int) {
 // ============================================================
 
 fn on_action(userdata voidptr, action_id int) {
+	if userdata == unsafe { nil } {
+		return
+	}
+	mut state := unsafe { &TermState(userdata) }
+	mut screen := unsafe { state.term.screens.active }
 	match action_id {
 		vt_action_copy {
-			// TODO: extract selected text from terminal, put on clipboard
-			// macos.clipboard_set_text(selected_text)
+			if sel := screen.selection {
+				text := screen.selection_string(terminal.SelectionString{
+					sel: sel
+					trim: true
+				}) or { return }
+				if text.len > 0 {
+					macos.clipboard_set_text(text)
+				}
+			}
 		}
 		vt_action_select_all {
-			// TODO: select all text in terminal
+			if sel := screen.select_all() {
+				screen.select(sel) or {}
+				macos.request_display(state.view)
+			}
 		}
 		vt_action_new_tab {
 			do_new_tab()
@@ -546,6 +595,126 @@ fn on_resize(userdata voidptr, width f64, height f64) {
 			ws_xpixel: u16(width)
 			ws_ypixel: u16(height)
 		}) or {}
+	}
+}
+
+// ============================================================
+// Mouse callback — handle mouse events for selection
+// ============================================================
+
+// Mouse event types (must match appkit.m)
+const mouse_left_down = 0
+const mouse_left_up = 1
+const mouse_left_dragged = 2
+const mouse_right_down = 3
+const mouse_right_up = 4
+
+// Double-click timing threshold in milliseconds
+const double_click_interval_ms = 500
+
+fn on_mouse(userdata voidptr, event_type int, x f64, y f64, modflags u64) {
+	if userdata == unsafe { nil } {
+		return
+	}
+	mut state := unsafe { &TermState(userdata) }
+
+	// Convert pixel coordinates to cell coordinates
+	col := int(x / state.cell_w)
+	row := int(y / state.cell_h)
+	if col < 0 || row < 0 || col >= state.cols || row >= state.rows {
+		// Allow dragging outside bounds for edge selection
+		if event_type != mouse_left_dragged {
+			return
+		}
+	}
+	clamped_col := if col < 0 { 0 } else if col >= state.cols { state.cols - 1 } else { col }
+	clamped_row := if row < 0 { 0 } else if row >= state.rows { state.rows - 1 } else { row }
+	pin := terminal.Pin{ x: u32(clamped_col), y: u32(clamped_row) }
+
+	match event_type {
+		mouse_left_down {
+			now := time.now()
+			elapsed := now - state.left_click_time
+
+			// Check for multi-click (within timing threshold and same approximate position)
+			if elapsed.milliseconds() < double_click_interval_ms {
+				state.left_click_count += 1
+			} else {
+				state.left_click_count = 1
+			}
+			state.left_click_time = now
+			state.left_click_pin = pin
+			state.left_click_x = x
+			state.left_click_y = y
+
+			mut screen := unsafe { state.term.screens.active }
+
+			if state.left_click_count == 2 {
+				// Double-click: select word
+				boundary := [u32(` `), u32(`\t`), u32(`"`), u32(`'`), u32(`(`), u32(`)`),
+					u32(`[`), u32(`]`), u32(`{`), u32(`}`), u32(`<`), u32(`>`),
+					u32(`,`), u32(`;`), u32(`:`)]
+				if sel := screen.select_word(pin, boundary) {
+					screen.select(sel) or {}
+				}
+			} else if state.left_click_count >= 3 {
+				// Triple-click: select line
+				if sel := screen.select_line(terminal.SelectLine{ pin: pin }) {
+					screen.select(sel) or {}
+				}
+			} else {
+				// Single-click: clear existing selection
+				screen.clear_selection()
+			}
+
+			macos.request_display(state.view)
+		}
+		mouse_left_dragged {
+			if state.left_click_count == 0 {
+				return
+			}
+			click_pin := state.left_click_pin or { return }
+			mut screen := unsafe { state.term.screens.active }
+
+			if state.left_click_count == 1 {
+				// Single-click drag: character-level selection
+				if !click_pin.eql(pin) {
+					start := if pin.before(click_pin) { pin } else { click_pin }
+					end := if pin.before(click_pin) { click_pin } else { pin }
+					sel := terminal.Selection.init(start, end, false)
+					screen.select(sel) or {}
+				}
+			} else if state.left_click_count == 2 {
+				// Double-click drag: word-level selection
+				boundary := [u32(` `), u32(`\t`), u32(`"`), u32(`'`), u32(`(`), u32(`)`),
+					u32(`[`), u32(`]`), u32(`{`), u32(`}`), u32(`<`), u32(`>`),
+					u32(`,`), u32(`;`), u32(`:`)]
+				if sel := screen.select_word_between(click_pin, pin, boundary) {
+					screen.select(sel) or {}
+				}
+			} else if state.left_click_count >= 3 {
+				// Triple-click drag: line-level selection
+				if sel := screen.select_line(terminal.SelectLine{ pin: pin }) {
+					screen.select(sel) or {}
+				}
+			}
+
+			macos.request_display(state.view)
+		}
+		mouse_left_up {
+			// Copy selection to clipboard on mouse up (copy-on-select)
+			mut screen := unsafe { state.term.screens.active }
+			if sel := screen.selection {
+				text := screen.selection_string(terminal.SelectionString{
+					sel: sel
+					trim: true
+				}) or { return }
+				if text.len > 0 {
+					macos.clipboard_set_text(text)
+				}
+			}
+		}
+		else {}
 	}
 }
 

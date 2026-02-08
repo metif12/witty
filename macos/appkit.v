@@ -20,6 +20,7 @@ pub type ResizeCallback = fn (userdata voidptr, width f64, height f64)
 pub type ReadyCallback = fn ()
 pub type PasteCallback = fn (userdata voidptr, text &u8, len int)
 pub type ActionCallback = fn (userdata voidptr, action_id int)
+pub type MouseCallback = fn (userdata voidptr, event_type int, x f64, y f64, modflags u64)
 
 // C function declarations.
 fn C.vt_app_init()
@@ -31,6 +32,7 @@ fn C.vt_set_resize_callback(cb ResizeCallback)
 fn C.vt_set_ready_callback(cb ReadyCallback)
 fn C.vt_set_paste_callback(cb PasteCallback)
 fn C.vt_set_action_callback(cb ActionCallback)
+fn C.vt_set_mouse_callback(cb MouseCallback)
 fn C.vt_clipboard_set_text(text &u8, len int)
 fn C.vt_request_display(view voidptr)
 fn C.vt_view_width(view voidptr) f64
@@ -96,6 +98,10 @@ pub fn set_paste_callback(cb PasteCallback) {
 
 pub fn set_action_callback(cb ActionCallback) {
 	C.vt_set_action_callback(cb)
+}
+
+pub fn set_mouse_callback(cb MouseCallback) {
+	C.vt_set_mouse_callback(cb)
 }
 
 pub fn clipboard_set_text(text string) {
