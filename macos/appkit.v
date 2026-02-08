@@ -8,6 +8,8 @@ module macos
 #flag darwin -framework CoreText
 #flag darwin -framework CoreFoundation
 #flag darwin -framework CoreGraphics
+#flag darwin -framework Metal
+#flag darwin -framework QuartzCore
 #include "@VMODROOT/macos/appkit.m"
 
 // Callback types matching the C typedefs in appkit.m.
@@ -37,6 +39,22 @@ fn C.vt_new_tab(w int, h int, title &char) voidptr
 fn C.vt_close_tab(view voidptr)
 fn C.vt_select_tab(offset int)
 fn C.vt_tab_count() int
+
+// Metal C function declarations.
+fn C.vt_metal_activate_layer(view voidptr)
+fn C.vt_metal_device(view voidptr) voidptr
+fn C.vt_metal_queue(view voidptr) voidptr
+fn C.vt_metal_layer(view voidptr) voidptr
+fn C.vt_metal_next_drawable(layer voidptr) voidptr
+fn C.vt_metal_drawable_texture(drawable voidptr) voidptr
+fn C.vt_metal_create_command_buffer(queue voidptr) voidptr
+fn C.vt_metal_create_render_pass(texture voidptr, r f64, g f64, b f64, a f64) voidptr
+fn C.vt_metal_create_encoder(cmd_buf voidptr, pass voidptr) voidptr
+fn C.vt_metal_end_encoding(encoder voidptr)
+fn C.vt_metal_present_and_commit(cmd_buf voidptr, drawable voidptr)
+fn C.vt_metal_release(ptr voidptr)
+fn C.vt_metal_max_texture_size(device voidptr) u32
+fn C.vt_metal_has_unified_memory(device voidptr) bool
 
 // V-friendly wrappers.
 pub fn app_init() {
@@ -113,4 +131,61 @@ pub fn select_tab(offset int) {
 
 pub fn tab_count() int {
 	return C.vt_tab_count()
+}
+
+// Metal wrappers.
+pub fn metal_activate_layer(view voidptr) {
+	C.vt_metal_activate_layer(view)
+}
+
+pub fn metal_device(view voidptr) voidptr {
+	return C.vt_metal_device(view)
+}
+
+pub fn metal_queue(view voidptr) voidptr {
+	return C.vt_metal_queue(view)
+}
+
+pub fn metal_layer(view voidptr) voidptr {
+	return C.vt_metal_layer(view)
+}
+
+pub fn metal_next_drawable(layer voidptr) voidptr {
+	return C.vt_metal_next_drawable(layer)
+}
+
+pub fn metal_drawable_texture(drawable voidptr) voidptr {
+	return C.vt_metal_drawable_texture(drawable)
+}
+
+pub fn metal_create_command_buffer(queue voidptr) voidptr {
+	return C.vt_metal_create_command_buffer(queue)
+}
+
+pub fn metal_create_render_pass(texture voidptr, r f64, g f64, b f64, a f64) voidptr {
+	return C.vt_metal_create_render_pass(texture, r, g, b, a)
+}
+
+pub fn metal_create_encoder(cmd_buf voidptr, pass voidptr) voidptr {
+	return C.vt_metal_create_encoder(cmd_buf, pass)
+}
+
+pub fn metal_end_encoding(encoder voidptr) {
+	C.vt_metal_end_encoding(encoder)
+}
+
+pub fn metal_present_and_commit(cmd_buf voidptr, drawable voidptr) {
+	C.vt_metal_present_and_commit(cmd_buf, drawable)
+}
+
+pub fn metal_release(ptr voidptr) {
+	C.vt_metal_release(ptr)
+}
+
+pub fn metal_max_texture_size(device voidptr) u32 {
+	return C.vt_metal_max_texture_size(device)
+}
+
+pub fn metal_has_unified_memory(device voidptr) bool {
+	return C.vt_metal_has_unified_memory(device)
 }

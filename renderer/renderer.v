@@ -1,6 +1,6 @@
 module renderer
 
-import gg
+import input
 import sync
 import terminal
 import font
@@ -12,8 +12,8 @@ import time
 // Specific details for the interfaces are documented on the existing
 // implementations (Metal and OpenGL).
 //
-// In this V translation, we use gg.Context as our graphics backend,
-// which handles Metal/OpenGL/Vulkan selection internally.
+// In this V translation, we use Metal as our graphics backend
+// on macOS, with stubs for OpenGL and WebGL.
 //
 // Hierarchy of graphics abstractions:
 //
@@ -44,11 +44,11 @@ import time
 //
 // [ Texture ] - An abstraction over a GPU texture.
 
-// Renderer handles drawing the terminal surface using gg.
+// Renderer handles drawing the terminal surface using Metal.
 pub struct Renderer {
 pub mut:
-	// The gg context for rendering.
-	ctx &gg.Context = unsafe { nil }
+	// The Metal graphics API for rendering.
+	metal &MetalAPI = unsafe { nil }
 
 	// The configuration we need derived from the main config.
 	config DerivedConfig
@@ -130,7 +130,7 @@ pub mut:
 	terminal_state_frame_count u64
 
 	// Background image data, if we have one.
-	bg_image ?gg.Image
+	bg_image ?MetalTexture
 
 	// Set whenever the background image changes, signalling
 	// that the new background image needs to be uploaded to
@@ -333,22 +333,6 @@ pub fn (mut self Renderer) update_frame(state &terminal.Terminal, cursor_blink_v
 // If `sync` is true, this will synchronously block until
 // the frame is finished drawing and has been presented.
 pub fn (mut self Renderer) draw_frame(sync_ bool) ! {
-	// XTODO: Full frame drawing requires gg integration.
-	// This method should:
-	// 1. Check if redraw is needed
-	// 2. Begin gg frame
-	// 3. Draw background color/image
-	// 4. Draw cell backgrounds
-	// 5. Draw text glyphs
-	// 6. Draw images (kitty)
-	// 7. Draw custom shaders
-	// 8. End gg frame
-
-	ctx := self.ctx
-	if ctx == unsafe { nil } {
-		return
-	}
-
 	// If either of our surface dimensions is zero
 	// then drawing is absurd, so we just return.
 	if self.size.screen.width == 0 || self.size.screen.height == 0 {
@@ -364,168 +348,41 @@ pub fn (mut self Renderer) draw_frame(sync_ bool) ! {
 	}
 	self.cells_rebuilt = false
 
-	// Begin the gg frame
-	ctx.begin()
-
-	// Draw the background color
-	bg_r := self.uniforms.bg_color[0]
-	bg_g := self.uniforms.bg_color[1]
-	bg_b := self.uniforms.bg_color[2]
-	bg_a := self.uniforms.bg_color[3]
-	ctx.draw_rect_filled(0, 0, f32(self.size.screen.width), f32(self.size.screen.height),
-		gg.Color{
-		r: bg_r
-		g: bg_g
-		b: bg_b
-		a: bg_a
-	})
-
-	// Draw background image if we have one
-	if bg := self.bg_image {
-		self.draw_background_image(ctx, bg)
-	}
-
-	// Draw cell backgrounds
-	self.draw_cell_backgrounds(ctx)
-
-	// Draw foreground glyphs (text, underlines, etc)
-	self.draw_cell_foregrounds(ctx)
-
-	// Draw cursor
-	self.draw_cursor(ctx)
-
-	// End the gg frame
-	ctx.end(gg.EndOptions{})
+	// XTODO: Metal rendering pipeline:
+	// 1. metal.begin_frame() -> command buffer
+	// 2. Render pass 1: background color (full-screen quad)
+	// 3. Render pass 2: cell backgrounds (instanced, bg_cells buffer)
+	// 4. Render pass 3: text glyphs (instanced, fg_rows buffer + font atlas texture)
+	// 5. metal.complete_frame() -> present drawable, commit
 
 	_ = sync_
 }
 
-// Draw the background image.
-fn (self &Renderer) draw_background_image(ctx &gg.Context, img gg.Image) {
-	// XTODO: Background image rendering with position/fit/repeat
-	// requires computing the correct source/dest rectangles based
-	// on bg_image_buffer settings.
-	opacity := self.bg_image_buffer.opacity
-	ctx.draw_image_with_config(gg.DrawImageConfig{
-		img: unsafe { &img }
-		img_rect: gg.Rect{
-			x: 0
-			y: 0
-			width: f32(self.size.screen.width)
-			height: f32(self.size.screen.height)
-		}
-		color: gg.Color{
-			r: 255
-			g: 255
-			b: 255
-			a: u8(opacity * 255)
-		}
-	})
+// Draw the background image via Metal.
+fn (self &Renderer) draw_background_image(img MetalTexture) {
+	// XTODO: Background image rendering via Metal render pass.
+	// Requires bg_image pipeline, texture binding, and instanced quad draw.
+	_ = img
 }
 
-// Draw all cell background colors.
-fn (self &Renderer) draw_cell_backgrounds(ctx &gg.Context) {
-	cell_w := f32(self.grid_metrics.cell_width)
-	cell_h := f32(self.grid_metrics.cell_height)
-	pad_left := f32(self.size.padding.left)
-	pad_top := f32(self.size.padding.top)
-
-	for row in 0 .. int(self.cells.size.rows) {
-		for col in 0 .. int(self.cells.size.columns) {
-			idx := row * int(self.cells.size.columns) + col
-			if idx >= self.cells.bg_cells.len {
-				continue
-			}
-			bg := self.cells.bg_cells[idx]
-			// Skip fully transparent backgrounds
-			if bg.a == 0 {
-				continue
-			}
-			x := pad_left + f32(col) * cell_w
-			y := pad_top + f32(row) * cell_h
-			ctx.draw_rect_filled(x, y, cell_w, cell_h, gg.Color{
-				r: bg.r
-				g: bg.g
-				b: bg.b
-				a: bg.a
-			})
-		}
-	}
+// Draw all cell background colors via Metal.
+fn (self &Renderer) draw_cell_backgrounds() {
+	// XTODO: Cell background rendering via Metal instanced draw.
+	// Sync bg_cells buffer to GPU, bind cell_bg pipeline, draw instanced quads.
 }
 
-// Draw all foreground cells (text glyphs, underlines, etc).
-fn (self &Renderer) draw_cell_foregrounds(ctx &gg.Context) {
-	// XTODO: Proper glyph rendering requires font atlas texture
-	// integration with gg. For now we use gg's text rendering
-	// as a placeholder for text cells.
-	cell_w := f32(self.grid_metrics.cell_width)
-	cell_h := f32(self.grid_metrics.cell_height)
-	pad_left := f32(self.size.padding.left)
-	pad_top := f32(self.size.padding.top)
-
-	for row_cells in self.cells.fg_rows {
-		for cell in row_cells {
-			x := pad_left + f32(cell.grid_pos[0]) * cell_w
-			y := pad_top + f32(cell.grid_pos[1]) * cell_h
-
-			// Draw a colored rectangle as placeholder for the glyph
-			if cell.glyph_size[0] > 0 && cell.glyph_size[1] > 0 {
-				gx := x + f32(cell.bearings[0])
-				gy := y + f32(cell.bearings[1])
-				gw := f32(cell.glyph_size[0])
-				gh := f32(cell.glyph_size[1])
-				ctx.draw_rect_filled(gx, gy, gw, gh, gg.Color{
-					r: cell.color[0]
-					g: cell.color[1]
-					b: cell.color[2]
-					a: cell.color[3]
-				})
-			}
-		}
-	}
+// Draw all foreground cells (text glyphs, underlines, etc) via Metal.
+fn (self &Renderer) draw_cell_foregrounds() {
+	// XTODO: Glyph rendering via Metal instanced draw.
+	// Sync fg cell buffer + font atlas texture, bind cell_text pipeline, draw.
 }
 
-// Draw the cursor.
-fn (self &Renderer) draw_cursor(ctx &gg.Context) {
-	cursor_cell := self.cells.cursor or { return }
-	style := self.cells.cursor_style or { return }
-
-	cell_w := f32(self.grid_metrics.cell_width)
-	cell_h := f32(self.grid_metrics.cell_height)
-	pad_left := f32(self.size.padding.left)
-	pad_top := f32(self.size.padding.top)
-
-	x := pad_left + f32(cursor_cell.grid_pos[0]) * cell_w
-	y := pad_top + f32(cursor_cell.grid_pos[1]) * cell_h
-	w := if self.uniforms.bools.cursor_wide { cell_w * 2 } else { cell_w }
-
-	color := gg.Color{
-		r: cursor_cell.color[0]
-		g: cursor_cell.color[1]
-		b: cursor_cell.color[2]
-		a: cursor_cell.color[3]
-	}
-
-	match style {
-		.block {
-			ctx.draw_rect_filled(x, y, w, cell_h, color)
-		}
-		.block_hollow {
-			ctx.draw_rect_empty(x, y, w, cell_h, color)
-		}
-		.bar {
-			bar_w := f32(2)
-			ctx.draw_rect_filled(x, y, bar_w, cell_h, color)
-		}
-		.underline {
-			ul_h := f32(2)
-			ctx.draw_rect_filled(x, y + cell_h - ul_h, w, ul_h, color)
-		}
-		.lock {
-			// Draw a filled block as fallback for the lock cursor
-			ctx.draw_rect_filled(x, y, w, cell_h, color)
-		}
-	}
+// Draw the cursor via Metal.
+fn (self &Renderer) draw_cursor() {
+	// XTODO: Cursor rendering via Metal.
+	// Uses cursor sprite from font atlas, drawn as instanced quad.
+	_ = self.cells.cursor or { return }
+	_ = self.cells.cursor_style or { return }
 }
 
 // Callback from the graphics API when a frame is completed.
@@ -539,7 +396,7 @@ pub fn (mut self Renderer) frame_completed(health Health) {
 // Call this any time the background image path changes.
 fn (mut self Renderer) prep_background_image() ! {
 	// XTODO: Background image loading requires file I/O and image
-	// decoding (PNG/JPEG). With gg, we would use ctx.create_image().
+	// decoding (PNG/JPEG), then creating a MetalTexture.
 	if self.config.bg_image != none {
 		// Would load and decode the image here
 		self.bg_image_changed = true
@@ -1056,7 +913,7 @@ pub mut:
 pub struct MouseState {
 pub mut:
 	point ?Coordinate
-	mods  gg.Modifier
+	mods  input.Mods
 }
 
 pub struct Coordinate {

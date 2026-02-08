@@ -13,7 +13,7 @@ module main
 
 import configpkg
 import font
-import gg
+import input
 import math
 import time
 import os
@@ -207,7 +207,7 @@ pub mut:
 	click_state [10]MouseButtonState
 
 	// Last mods state when the last mouse button was pressed/released.
-	mods gg.Modifier
+	mods input.Mods
 
 	// Pin at which the left mouse click happened.
 	left_click_pin ?Pin
@@ -389,7 +389,7 @@ pub mut:
 pub struct RendererMouseState {
 pub mut:
 	point ?Coordinate
-	mods  gg.Modifier
+	mods  input.Mods
 }
 
 pub struct Preedit {
@@ -921,16 +921,16 @@ pub:
 
 pub struct KeyEvent {
 pub mut:
-	key    gg.KeyCode
+	key    input.Key
 	action KeyAction
-	mods   gg.Modifier
+	mods   input.Mods
 	utf8   string
 }
 
 pub fn (e KeyEvent) binding_hash() u64 {
 	mut h := u64(17)
 	h = h * 31 + u64(e.key)
-	h = h * 31 + u64(e.mods)
+	h = h * 31 + u64(e.mods.int())
 	return h
 }
 
@@ -940,12 +940,12 @@ pub enum KeyAction {
 	release
 }
 
-fn key_is_modifier(k gg.KeyCode) bool {
+fn key_is_modifier(k input.Key) bool {
 	return k in [
-		.left_shift, .right_shift,
-		.left_control, .right_control,
-		.left_alt, .right_alt,
-		.left_super, .right_super,
+		.shift_left, .shift_right,
+		.control_left, .control_right,
+		.alt_left, .alt_right,
+		.meta_left, .meta_right,
 	]
 }
 
@@ -957,9 +957,6 @@ fn closing_action(action BindingAction) bool {
 
 pub struct Surface {
 pub mut:
-	// The gg rendering context for drawing.
-	gg_ctx &gg.Context = unsafe { nil }
-
 	app        &App            = unsafe { nil }
 	rt_app     &RuntimeApp     = unsafe { nil }
 	rt_surface &RuntimeSurface = unsafe { nil }
@@ -1273,7 +1270,7 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 	}
 }
 
-// draw forces the surface to render a frame using gg.
+// draw forces the surface to render a frame.
 pub fn (mut self Surface) draw() ! {
 	self.renderer.draw_frame(true)!
 }
@@ -1572,7 +1569,7 @@ pub fn (mut self Surface) key_callback(event KeyEvent) !InputEffect {
 	}
 
 	// Update modifiers if changed
-	if self.mouse.mods != event.mods {
+	if !self.mouse.mods.equal(event.mods) {
 		self.mods_changed(event.mods)
 	}
 
@@ -1733,7 +1730,7 @@ pub fn (mut self Surface) content_scale_callback(content_scale ContentScale) ! {
 }
 
 // mouse_button_callback handles mouse button press/release events.
-pub fn (mut self Surface) mouse_button_callback(action gg.MouseButton, button gg.MouseButton, mods gg.Modifier) !bool {
+pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonState, button input.MouseButton, mods input.Mods) !bool {
 	// Update mods
 	self.mouse.mods = mods
 
@@ -1743,14 +1740,14 @@ pub fn (mut self Surface) mouse_button_callback(action gg.MouseButton, button gg
 	}
 
 	btn_idx := int(button) % 10
-	is_press := action == button // press when action matches button
+	is_press := button_action == .press
 
 	if is_press {
 		self.mouse.click_state[btn_idx] = .press
 
 		// Check for mouse reporting
 		if self.is_mouse_reporting() && !self.mouse_shift_capture(true) {
-			self.mouse_report(?gg.MouseButton(button), .press, mods, CursorPos{})!
+			self.mouse_report(?input.MouseButton(button), .press, mods, CursorPos{})!
 			return true
 		}
 
@@ -1789,7 +1786,7 @@ pub fn (mut self Surface) mouse_button_callback(action gg.MouseButton, button gg
 
 		// Check for mouse reporting
 		if self.is_mouse_reporting() && !self.mouse_shift_capture(true) {
-			self.mouse_report(?gg.MouseButton(button), .release, mods, CursorPos{})!
+			self.mouse_report(?input.MouseButton(button), .release, mods, CursorPos{})!
 			return true
 		}
 
@@ -1812,7 +1809,7 @@ pub fn (mut self Surface) mouse_button_callback(action gg.MouseButton, button gg
 }
 
 // cursor_pos_callback handles cursor position / mouse move events.
-pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?gg.Modifier) ! {
+pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) ! {
 	// Update mods if provided
 	if m := mods {
 		self.mouse.mods = m
@@ -2050,8 +2047,8 @@ pub fn (mut self Surface) perform_binding_action(action BindingAction) !bool {
 
 // ---- Private helper methods ----
 
-fn (mut self Surface) mods_changed(mods gg.Modifier) {
-	if self.mouse.mods == mods {
+fn (mut self Surface) mods_changed(mods input.Mods) {
+	if self.mouse.mods.equal(mods) {
 		return
 	}
 	self.mouse.mods = mods
@@ -2117,7 +2114,7 @@ fn (self &Surface) is_mouse_reporting() bool {
 		&& self.renderer_state.terminal.flags.mouse_event != .none_
 }
 
-fn (mut self Surface) mouse_report(button ?gg.MouseButton, action MouseReportAction, mods gg.Modifier, pos CursorPos) ! {
+fn (mut self Surface) mouse_report(button ?input.MouseButton, action MouseReportAction, mods input.Mods, pos CursorPos) ! {
 	// Convert cursor position to viewport coordinates
 	vp := self.pos_to_viewport(pos.x, pos.y)
 
@@ -2168,12 +2165,16 @@ pub fn (mut self Surface) mouse_captured() bool {
 	return self.renderer_state.terminal.flags.mouse_event != .none_
 }
 
-fn (self &Surface) mouse_mods_with_capture(mods gg.Modifier) gg.Modifier {
+fn (self &Surface) mouse_mods_with_capture(mods input.Mods) input.Mods {
 	// If the terminal is reporting mouse events and shift is pressed,
 	// strip shift from mods if we're not capturing shift
 	if self.renderer_state.terminal.flags.mouse_event != .none_ {
-		if (int(mods) & int(gg.Modifier.shift)) != 0 && !self.mouse_shift_capture(false) {
-			return unsafe { gg.Modifier(int(mods) & ~int(gg.Modifier.shift)) }
+		if mods.shift && !self.mouse_shift_capture(false) {
+			return input.Mods{
+				ctrl: mods.ctrl
+				alt: mods.alt
+				super_: mods.super_
+			}
 		}
 	}
 	return mods
@@ -2483,10 +2484,10 @@ fn (mut self Surface) encode_key(event KeyEvent) ?WriteReq {
 		.enter { '\r' }
 		.backspace { '\x7f' }
 		.tab { '\t' }
-		.up { '\x1b[A' }
-		.down { '\x1b[B' }
-		.right { '\x1b[C' }
-		.left { '\x1b[D' }
+		.arrow_up { '\x1b[A' }
+		.arrow_down { '\x1b[B' }
+		.arrow_right { '\x1b[C' }
+		.arrow_left { '\x1b[D' }
 		.home { '\x1b[H' }
 		.end { '\x1b[F' }
 		.page_up { '\x1b[5~' }
@@ -2701,7 +2702,7 @@ fn (self &Surface) link_at_pos(pos CursorPos) ?Link {
 	return self.link_at_pin(Pin{ x: pos_vp.x, y: pos_vp.y }, mouse_mods)
 }
 
-fn (self &Surface) link_at_pin(pin Pin, mouse_mods gg.Modifier) ?Link {
+fn (self &Surface) link_at_pin(pin Pin, mouse_mods input.Mods) ?Link {
 	// Check configured link patterns
 	for link_cfg in self.config.links {
 		// In a full implementation, this would:
@@ -2803,7 +2804,7 @@ fn (mut self Surface) dump_text_locked(sel TermSelection) !Text {
 }
 
 // mouse_selection calculates the selection given click/drag pins and pixel positions.
-fn mouse_selection(click_pin Pin, drag_pin Pin, click_x u32, drag_x u32, mods gg.Modifier, size Size) ?TermSelection {
+fn mouse_selection(click_pin Pin, drag_pin Pin, click_x u32, drag_x u32, mods input.Mods, size Size) ?TermSelection {
 	if click_pin.eql(drag_pin) && click_x == drag_x {
 		return none
 	}
@@ -2827,7 +2828,7 @@ fn mouse_selection(click_pin Pin, drag_pin Pin, click_x u32, drag_x u32, mods gg
 	return TermSelection{
 		start_pin: start
 		end_pin: end
-		rectangle: (int(mods) & int(gg.Modifier.alt)) != 0
+		rectangle: mods.alt
 	}
 }
 

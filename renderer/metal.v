@@ -1,14 +1,21 @@
 module renderer
 
+import macos
+
 // Graphics API wrapper for Metal.
 //
-// In this V translation, Metal-specific functionality is abstracted
-// behind the gg graphics backend. These types and stubs are provided
-// for parity with the Zig source and to document the Metal API surface.
+// In this V translation, Metal is used directly via Objective-C
+// helpers in macos/appkit.m. The MetalAPI struct holds opaque
+// pointers to MTLDevice, MTLCommandQueue, and CAMetalLayer.
 
 // MetalAPI wraps the Metal graphics API implementation.
 pub struct MetalAPI {
 pub mut:
+	// Opaque handles to Metal objects.
+	device voidptr = unsafe { nil }
+	queue  voidptr = unsafe { nil }
+	layer  voidptr = unsafe { nil }
+
 	// Alpha blending mode
 	blending AlphaBlendingMode
 
@@ -44,14 +51,33 @@ pub const metal_swap_chain_count = 3
 // The fragCoord for Metal shaders is +Y = down.
 pub const metal_custom_shader_y_is_down = true
 
+// init_from_view initializes the Metal API using a view that already
+// has a CAMetalLayer set up (done in appkit.m's initWithFrame).
+pub fn MetalAPI.init_from_view(view voidptr) !MetalAPI {
+	device := macos.metal_device(view)
+	queue := macos.metal_queue(view)
+	layer := macos.metal_layer(view)
+
+	if device == unsafe { nil } || queue == unsafe { nil } || layer == unsafe { nil } {
+		return error('Metal not available')
+	}
+
+	unified := macos.metal_has_unified_memory(device)
+	storage := if unified { MetalStorageMode.shared } else { MetalStorageMode.managed }
+	max_tex := macos.metal_max_texture_size(device)
+
+	return MetalAPI{
+		device: device
+		queue: queue
+		layer: layer
+		blending: .none_
+		default_storage_mode: storage
+		max_texture_size: max_tex
+	}
+}
+
+// init creates a MetalAPI with default/stub values (no device).
 pub fn MetalAPI.init() !MetalAPI {
-	// XTODO: Metal initialization requires Objective-C runtime
-	// (objc module) to:
-	// 1. Choose a Metal device (MTLDevice) via MTLCopyAllDevices()
-	// 2. Create a command queue (MTLCommandQueue)
-	// 3. Determine storage mode based on hasUnifiedMemory
-	// 4. Query max texture size via supportsFamily
-	// 5. Create IOSurfaceLayer and attach to view
 	return MetalAPI{
 		blending: .none_
 		default_storage_mode: .shared
@@ -60,12 +86,30 @@ pub fn MetalAPI.init() !MetalAPI {
 }
 
 pub fn (mut self MetalAPI) deinit() {
-	// Release device, queue, and layer
+	// Handles are owned by the view; nothing to release here.
+	self.device = unsafe { nil }
+	self.queue = unsafe { nil }
+	self.layer = unsafe { nil }
+}
+
+// next_drawable gets the next drawable from the Metal layer.
+pub fn (self &MetalAPI) next_drawable() voidptr {
+	return macos.metal_next_drawable(self.layer)
+}
+
+// create_command_buffer creates a new command buffer from the queue.
+pub fn (self &MetalAPI) create_command_buffer() voidptr {
+	return macos.metal_create_command_buffer(self.queue)
+}
+
+// present_and_commit presents the drawable and commits the command buffer.
+pub fn (self &MetalAPI) present_and_commit(cmd_buf voidptr, drawable voidptr) {
+	macos.metal_present_and_commit(cmd_buf, drawable)
 }
 
 // Get the current size of the runtime surface.
 pub fn (self &MetalAPI) surface_size() (u32, u32) {
-	// XTODO: Requires reading bounds and contentsScale from CALayer
+	// XTODO: Requires reading drawableSize from CAMetalLayer
 	return 0, 0
 }
 

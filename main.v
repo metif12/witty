@@ -223,6 +223,10 @@ fn do_close_tab(userdata voidptr) {
 
 // ============================================================
 // Draw callback — renders terminal grid via CoreGraphics
+// Metal infrastructure is initialized on each view but not yet
+// activated. When the Metal rendering pipeline is complete,
+// call macos.metal_activate_layer(view) to switch from CGContext
+// to Metal command buffers.
 // ============================================================
 
 fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {

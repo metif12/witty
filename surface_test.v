@@ -1,6 +1,6 @@
 module main
 
-import gg
+import input
 
 // Test helper: sets up a 10x5 cell grid with 10x20px cells and 5px padding on all sides.
 fn make_test_size() Size {
@@ -219,15 +219,15 @@ fn test_preedit_width_empty() {
 }
 
 fn test_key_is_modifier() {
-	assert key_is_modifier(.left_shift) == true
-	assert key_is_modifier(.right_shift) == true
-	assert key_is_modifier(.left_control) == true
-	assert key_is_modifier(.right_control) == true
-	assert key_is_modifier(.left_alt) == true
-	assert key_is_modifier(.right_alt) == true
-	assert key_is_modifier(.left_super) == true
-	assert key_is_modifier(.right_super) == true
-	assert key_is_modifier(.a) == false
+	assert key_is_modifier(.shift_left) == true
+	assert key_is_modifier(.shift_right) == true
+	assert key_is_modifier(.control_left) == true
+	assert key_is_modifier(.control_right) == true
+	assert key_is_modifier(.alt_left) == true
+	assert key_is_modifier(.alt_right) == true
+	assert key_is_modifier(.meta_left) == true
+	assert key_is_modifier(.meta_right) == true
+	assert key_is_modifier(.key_a) == false
 	assert key_is_modifier(.escape) == false
 	assert key_is_modifier(.space) == false
 }
@@ -439,14 +439,14 @@ fn test_has_selection() {
 fn test_mouse_selection_same_point() {
 	pin := Pin{ x: 5, y: 3 }
 	size := make_test_size()
-	sel := mouse_selection(pin, pin, 55, 55, unsafe { gg.Modifier(0) }, size)
+	sel := mouse_selection(pin, pin, 55, 55, input.Mods{}, size)
 	assert sel == none
 }
 
 fn test_encode_key_text() {
 	mut surf := make_test_surface()
 	ev := KeyEvent{
-		key: .a
+		key: .key_a
 		action: .press
 		utf8: 'a'
 	}
@@ -476,7 +476,7 @@ fn test_encode_key_escape() {
 fn test_encode_key_no_output() {
 	mut surf := make_test_surface()
 	ev := KeyEvent{
-		key: .left_shift
+		key: .shift_left
 		action: .press
 		utf8: ''
 	}

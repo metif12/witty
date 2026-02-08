@@ -1,7 +1,5 @@
 module input
 
-import gg
-
 // KeyEvent represents a keyboard event.
 // This is a generic key input event that provides the information needed
 // regardless of apprt to generate proper terminal control sequences.
@@ -117,16 +115,6 @@ pub fn (self Mods) unset(other Mods) Mods {
 		ctrl: self.ctrl && !other.ctrl
 		alt: self.alt && !other.alt
 		super_: self.super_ && !other.super_
-	}
-}
-
-// from_gg_modifier converts a gg.Modifier to Mods.
-pub fn Mods.from_gg_modifier(m gg.Modifier) Mods {
-	return Mods{
-		shift: (int(m) & int(gg.Modifier.shift)) != 0
-		ctrl: (int(m) & int(gg.Modifier.ctrl)) != 0
-		alt: (int(m) & int(gg.Modifier.alt)) != 0
-		super_: (int(m) & int(gg.Modifier.super)) != 0
 	}
 }
 
