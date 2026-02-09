@@ -104,6 +104,15 @@ enum {
 }
 
 - (void)keyDown:(NSEvent *)event {
+    // Ghostty parity: Cmd+Enter toggles fullscreen.
+    NSUInteger flags = [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
+    BOOL cmd_only = (flags & NSEventModifierFlagCommand) && !(flags & (NSEventModifierFlagControl | NSEventModifierFlagOption));
+    unsigned short keycode = [event keyCode];
+    if (cmd_only && (keycode == 36 || keycode == 76)) { // return or keypad-enter
+        [[self window] toggleFullScreen:nil];
+        return;
+    }
+
     if (!g_key_cb || !vtUserdata) return;
 
     NSString *chars = [event characters] ?: @"";
