@@ -10,6 +10,7 @@ import time
 // C interop declarations needed in this module.
 #include <unistd.h>
 #include <signal.h>
+#include <sys/wait.h>
 
 fn C.fork() int
 fn C.execvp(file &char, argv &&char) int
@@ -18,6 +19,8 @@ fn C.close(fd int) int
 fn C.read(fd int, buf voidptr, count usize) int
 fn C.write(fd int, buf voidptr, count usize) int
 fn C.gethostname(name &u8, len usize) int
+fn C.kill(pid int, sig int) int
+fn C.waitpid(pid int, status &int, options int) int
 fn C._exit(status int)
 fn C.setenv(name &char, value &char, overwrite int) int
 
@@ -482,6 +485,14 @@ fn do_close_tab(userdata voidptr) {
 	// Clear userdata first so the read thread and draw callback
 	// see nil and bail out before we tear anything down.
 	macos.view_set_userdata(state.view, unsafe { nil })
+	if state.child_pid > 0 {
+		// Ensure the child shell exits so any blocked PTY read wakes up.
+		C.kill(state.child_pid, C.SIGHUP)
+		C.kill(state.child_pid, C.SIGTERM)
+		mut status := 0
+		C.waitpid(state.child_pid, &status, C.WNOHANG)
+		state.child_pid = -1
+	}
 	if state.pty_fd >= 0 {
 		C.close(state.pty_fd)
 		state.pty_fd = -1
