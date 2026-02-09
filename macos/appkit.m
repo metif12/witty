@@ -592,9 +592,19 @@ void* vt_create_window(int w, int h, const char *title) {
 // ============================================================
 
 void* vt_new_tab(int w, int h, const char *title) {
-    if (!vt_g_window) return NULL;
+    NSWindow *anchor = [NSApp keyWindow];
+    if (!anchor) anchor = [NSApp mainWindow];
+    if (!anchor) anchor = vt_g_window;
+    if (!anchor) return NULL;
 
     NSRect frame = NSMakeRect(100, 100, w, h);
+    NSView *anchor_content = [anchor contentView];
+    if (anchor_content) {
+        NSSize s = [anchor_content bounds].size;
+        if (s.width > 0 && s.height > 0) {
+            frame.size = s;
+        }
+    }
     NSUInteger style = NSWindowStyleMaskTitled
                      | NSWindowStyleMaskClosable
                      | NSWindowStyleMaskMiniaturizable
@@ -613,10 +623,12 @@ void* vt_new_tab(int w, int h, const char *title) {
     [newWindow setContentView:view];
     [newWindow setInitialFirstResponder:view];
 
-    // Add as a tabbed window to the first window
-    [vt_g_window addTabbedWindow:newWindow ordered:NSWindowAbove];
+    // Add as a tabbed window to the currently active window so AppKit
+    // keeps the current tab group's live frame, not the startup frame.
+    [anchor addTabbedWindow:newWindow ordered:NSWindowAbove];
     [newWindow makeKeyAndOrderFront:nil];
     [newWindow makeFirstResponder:view];
+    vt_g_window = anchor;
     vt_refresh_tab_labels(newWindow);
 
     return (__bridge void*)view;
