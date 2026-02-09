@@ -275,8 +275,9 @@ static void vt_apply_window_theme(NSWindow *window) {
     if ([window respondsToSelector:@selector(setToolbarStyle:)]) {
         window.toolbarStyle = NSWindowToolbarStyleUnifiedCompact;
     }
-    window.titlebarAppearsTransparent = YES;
-    window.movableByWindowBackground = YES;
+    // Keep content below title/tab bars; full-size content causes glyph overlap.
+    window.titlebarAppearsTransparent = NO;
+    window.movableByWindowBackground = NO;
     window.backgroundColor = [NSColor colorWithCalibratedRed:0.17 green:0.19 blue:0.24 alpha:1.0];
 }
 
@@ -519,8 +520,7 @@ void* vt_create_window(int w, int h, const char *title) {
     NSUInteger style = NSWindowStyleMaskTitled
                      | NSWindowStyleMaskClosable
                      | NSWindowStyleMaskMiniaturizable
-                     | NSWindowStyleMaskResizable
-                     | NSWindowStyleMaskFullSizeContentView;
+                     | NSWindowStyleMaskResizable;
 
     NSString *base_title = vt_display_title_for_input(title);
     vt_g_base_title = base_title;
@@ -552,8 +552,7 @@ void* vt_new_tab(int w, int h, const char *title) {
     NSUInteger style = NSWindowStyleMaskTitled
                      | NSWindowStyleMaskClosable
                      | NSWindowStyleMaskMiniaturizable
-                     | NSWindowStyleMaskResizable
-                     | NSWindowStyleMaskFullSizeContentView;
+                     | NSWindowStyleMaskResizable;
 
     NSString *base_title = vt_display_title_for_input(title);
     vt_g_base_title = base_title;
