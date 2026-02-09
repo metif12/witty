@@ -8,9 +8,15 @@ module macos
 // - ghostty/pkg/macos/foundation/dictionary.zig
 // - ghostty/pkg/macos/foundation/array.zig
 // - ghostty/pkg/macos/foundation/attributed_string.zig
+// - ghostty/pkg/macos/foundation/data.zig
+// - ghostty/pkg/macos/foundation/url.zig
+// - ghostty/pkg/macos/foundation/character_set.zig
 // - ghostty/pkg/macos/text/typesetter.zig
 // - ghostty/pkg/macos/text/line.zig
 // - ghostty/pkg/macos/text/run.zig
+// - ghostty/pkg/macos/text/stylized_strings.zig
+// - ghostty/pkg/macos/text/font_collection.zig
+// - ghostty/pkg/macos/text/font_manager.zig
 // - ghostty/pkg/macos/text/font_descriptor.zig
 // - ghostty/pkg/macos/text/font.zig
 
@@ -28,16 +34,31 @@ fn C.CFStringCreateWithCharactersNoCopy(alloc voidptr, chars voidptr, chars_len 
 fn C.CFStringGetSurrogatePairForLongCharacter(cp u32, surrogates voidptr) int
 fn C.CFNumberCreate(alloc voidptr, number_type int, value_ptr voidptr) voidptr
 fn C.CFDictionaryCreate(alloc voidptr, keys voidptr, values voidptr, count isize, key_cb voidptr, value_cb voidptr) voidptr
+fn C.CFArrayCreate(alloc voidptr, values voidptr, count isize, callbacks voidptr) voidptr
 fn C.CFArrayCreateMutable(alloc voidptr, cap isize, callbacks voidptr) voidptr
 fn C.CFArrayAppendValue(arr voidptr, value voidptr)
 fn C.CFArrayGetCount(arr voidptr) isize
 fn C.CFArrayGetValueAtIndex(arr voidptr, idx isize) voidptr
 fn C.CFAttributedStringCreate(alloc voidptr, str voidptr, attrs voidptr) voidptr
+fn C.CFDataCreateWithBytesNoCopy(alloc voidptr, bytes voidptr, bytes_len isize, deallocator voidptr) voidptr
+fn C.CFDataGetBytePtr(data voidptr) voidptr
+fn C.CFDataGetLength(data voidptr) isize
+fn C.CFURLCreateWithString(alloc voidptr, url_string voidptr, base_url voidptr) voidptr
+fn C.CFURLCreateWithFileSystemPath(alloc voidptr, path voidptr, style int, dir int) voidptr
+fn C.CFURLCreateStringByReplacingPercentEscapes(alloc voidptr, original voidptr, escape voidptr) voidptr
+fn C.CFURLCopyPath(url voidptr) voidptr
+fn C.CFCharacterSetCreateWithCharactersInString(alloc voidptr, str voidptr) voidptr
 fn C.CTTypesetterCreateWithAttributedStringAndOptions(str voidptr, opts voidptr) voidptr
 fn C.CTLineGetGlyphCount(line voidptr) isize
 fn C.CTLineGetGlyphRuns(line voidptr) voidptr
 fn C.CTRunGetStatus(run voidptr) u32
 fn C.CTRunGetGlyphCount(run voidptr) isize
+fn C.CTFontCollectionCreateFromAvailableFonts(opts voidptr) voidptr
+fn C.CTFontCollectionCreateWithFontDescriptors(descs voidptr, opts voidptr) voidptr
+fn C.CTFontCollectionCreateMatchingFontDescriptors(collection voidptr) voidptr
+fn C.CTFontManagerCreateFontDescriptorsFromURL(url voidptr) voidptr
+fn C.CTFontManagerCreateFontDescriptorsFromData(data voidptr) voidptr
+fn C.CTFontManagerCreateFontDescriptorFromData(data voidptr) voidptr
 fn C.CTFontDescriptorCreateWithAttributes(attrs voidptr) voidptr
 fn C.CTFontDescriptorCreateWithNameAndSize(name voidptr, size f64) voidptr
 fn C.CTFontDescriptorCreateCopyWithAttributes(original voidptr, attrs voidptr) voidptr
@@ -55,10 +76,13 @@ fn C.vt_cf_allocator_null() voidptr
 fn C.vt_cf_type_dictionary_key_callbacks() voidptr
 fn C.vt_cf_type_dictionary_value_callbacks() voidptr
 fn C.vt_cf_type_array_callbacks() voidptr
+fn C.vt_cf_character_set_create_with_range(location isize, length isize) voidptr
 fn C.vt_k_ct_font_open_type_feature_tag() voidptr
 fn C.vt_k_ct_font_open_type_feature_value() voidptr
 fn C.vt_k_ct_font_feature_settings_attribute() voidptr
 fn C.vt_k_ct_typesetter_option_forced_embedding_level() voidptr
+fn C.vt_k_ct_paragraph_style_attribute_name() voidptr
+fn C.vt_k_ct_writing_direction_attribute_name() voidptr
 
 @[inline]
 fn cast_cf_ref[T](ptr voidptr) &T {
@@ -205,6 +229,93 @@ pub fn CFDictionary.create(keys []voidptr, values []voidptr) !&CFDictionary {
 
 pub fn (d &CFDictionary) release() {
 	cf_release(voidptr(d))
+}
+
+// ============================================================
+// foundation.Data
+// ============================================================
+
+pub struct CFData {}
+
+pub fn CFData.create_with_bytes_no_copy(data []u8) !&CFData {
+	mut bytes_ptr := voidptr(unsafe { nil })
+	if data.len > 0 {
+		bytes_ptr = voidptr(data.data)
+	}
+	ptr := C.CFDataCreateWithBytesNoCopy(unsafe { nil }, bytes_ptr, isize(data.len), C.vt_cf_allocator_null())
+	return require_cf_ref[CFData](ptr, 'CFDataCreateWithBytesNoCopy')
+}
+
+pub fn (d &CFData) release() {
+	cf_release(voidptr(d))
+}
+
+pub fn (d &CFData) get_pointer() &u8 {
+	return unsafe { &u8(C.CFDataGetBytePtr(voidptr(d))) }
+}
+
+pub fn (d &CFData) get_length() int {
+	return int(C.CFDataGetLength(voidptr(d)))
+}
+
+// ============================================================
+// foundation.URL
+// ============================================================
+
+pub struct CFURL {}
+
+pub enum URLPathStyle {
+	posix   = 0
+	windows = 2
+}
+
+pub fn CFURL.create_with_string(str &CFString, base &CFURL) !&CFURL {
+	ptr := C.CFURLCreateWithString(unsafe { nil }, voidptr(str), voidptr(base))
+	return require_cf_ref[CFURL](ptr, 'CFURLCreateWithString')
+}
+
+pub fn CFURL.create_with_file_system_path(path &CFString, style URLPathStyle, dir bool) !&CFURL {
+	ptr := C.CFURLCreateWithFileSystemPath(unsafe { nil }, voidptr(path), int(style),
+		if dir { 1 } else { 0 })
+	return require_cf_ref[CFURL](ptr, 'CFURLCreateWithFileSystemPath')
+}
+
+pub fn CFURL.create_string_by_replacing_percent_escapes(str &CFString, escape &CFString) !&CFString {
+	ptr := C.CFURLCreateStringByReplacingPercentEscapes(unsafe { nil }, voidptr(str),
+		voidptr(escape))
+	return require_cf_ref[CFString](ptr, 'CFURLCreateStringByReplacingPercentEscapes')
+}
+
+pub fn (u &CFURL) release() {
+	cf_release(voidptr(u))
+}
+
+pub fn (u &CFURL) copy_path() ?&CFString {
+	ptr := C.CFURLCopyPath(voidptr(u))
+	if isnil(ptr) {
+		return none
+	}
+	return cast_cf_ref[CFString](ptr)
+}
+
+// ============================================================
+// foundation.CharacterSet
+// ============================================================
+
+pub struct CFCharacterSet {}
+
+pub fn CFCharacterSet.create_with_characters_in_string(str &CFString) !&CFCharacterSet {
+	ptr := C.CFCharacterSetCreateWithCharactersInString(unsafe { nil }, voidptr(str))
+	return require_cf_ref[CFCharacterSet](ptr, 'CFCharacterSetCreateWithCharactersInString')
+}
+
+pub fn CFCharacterSet.create_with_characters_in_range(range CFRange) !&CFCharacterSet {
+	ptr := C.vt_cf_character_set_create_with_range(range.location, range.length)
+	return require_cf_ref[CFCharacterSet](ptr, 'CFCharacterSetCreateWithCharactersInRange')
+}
+
+pub fn (cset &CFCharacterSet) release() {
+	cf_release(voidptr(cset))
 }
 
 // ============================================================
@@ -424,12 +535,20 @@ pub fn (f &CTFont) release() {
 
 pub enum StringAttribute {
 	font
+	paragraph_style
+	writing_direction
 }
 
 pub fn (a StringAttribute) key() voidptr {
 	match a {
 		.font {
 			return ct_font_attribute_name()
+		}
+		.paragraph_style {
+			return k_ct_paragraph_style_attribute_name()
+		}
+		.writing_direction {
+			return k_ct_writing_direction_attribute_name()
 		}
 	}
 }
@@ -481,6 +600,15 @@ pub:
 pub struct CFArray {
 }
 
+pub fn CFArray.create(values []voidptr) !&CFArray {
+	mut values_ptr := voidptr(unsafe { nil })
+	if values.len > 0 {
+		values_ptr = voidptr(&values[0])
+	}
+	ptr := C.CFArrayCreate(unsafe { nil }, values_ptr, isize(values.len), C.vt_cf_type_array_callbacks())
+	return require_cf_ref[CFArray](ptr, 'CFArrayCreate')
+}
+
 pub fn (a &CFArray) get_count() int {
 	return int(C.CFArrayGetCount(voidptr(a)))
 }
@@ -490,6 +618,10 @@ pub fn (a &CFArray) get_value_at_index(idx int) voidptr {
 		return unsafe { nil }
 	}
 	return C.CFArrayGetValueAtIndex(voidptr(a), isize(idx))
+}
+
+pub fn (a &CFArray) release() {
+	cf_release(voidptr(a))
 }
 
 // ============================================================
@@ -523,4 +655,72 @@ pub fn (mut t CFReleaseThread) push(refs []voidptr) bool {
 // Notify the release thread to wake up and process.
 pub fn (mut t CFReleaseThread) notify_wakeup() {
 	_ = t
+}
+
+// ============================================================
+// text.stylized_strings
+// ============================================================
+
+pub fn k_ct_paragraph_style_attribute_name() voidptr {
+	return C.vt_k_ct_paragraph_style_attribute_name()
+}
+
+pub fn k_ct_writing_direction_attribute_name() voidptr {
+	return C.vt_k_ct_writing_direction_attribute_name()
+}
+
+// ============================================================
+// text.font_collection
+// ============================================================
+
+pub struct CTFontCollection {}
+
+pub fn CTFontCollection.create_from_available_fonts() !&CTFontCollection {
+	ptr := C.CTFontCollectionCreateFromAvailableFonts(unsafe { nil })
+	return require_cf_ref[CTFontCollection](ptr, 'CTFontCollectionCreateFromAvailableFonts')
+}
+
+pub fn CTFontCollection.create_with_font_descriptors(descs &CFArray) !&CTFontCollection {
+	ptr := C.CTFontCollectionCreateWithFontDescriptors(voidptr(descs), unsafe { nil })
+	return require_cf_ref[CTFontCollection](ptr, 'CTFontCollectionCreateWithFontDescriptors')
+}
+
+pub fn (fc &CTFontCollection) release() {
+	cf_release(voidptr(fc))
+}
+
+pub fn (fc &CTFontCollection) create_matching_font_descriptors() !&CFArray {
+	ptr := C.CTFontCollectionCreateMatchingFontDescriptors(voidptr(fc))
+	if !isnil(ptr) {
+		return cast_cf_ref[CFArray](ptr)
+	}
+	return CFArray.create([])!
+}
+
+// ============================================================
+// text.font_manager
+// ============================================================
+
+pub fn create_font_descriptors_from_url(url &CFURL) ?&CFArray {
+	ptr := C.CTFontManagerCreateFontDescriptorsFromURL(voidptr(url))
+	if isnil(ptr) {
+		return none
+	}
+	return cast_cf_ref[CFArray](ptr)
+}
+
+pub fn create_font_descriptors_from_data(data &CFData) ?&CFArray {
+	ptr := C.CTFontManagerCreateFontDescriptorsFromData(voidptr(data))
+	if isnil(ptr) {
+		return none
+	}
+	return cast_cf_ref[CFArray](ptr)
+}
+
+pub fn create_font_descriptor_from_data(data &CFData) ?&CTFontDescriptor {
+	ptr := C.CTFontManagerCreateFontDescriptorFromData(voidptr(data))
+	if isnil(ptr) {
+		return none
+	}
+	return cast_cf_ref[CTFontDescriptor](ptr)
 }

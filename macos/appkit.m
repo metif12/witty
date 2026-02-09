@@ -535,6 +535,11 @@ const void* vt_cf_type_array_callbacks(void) {
     return &kCFTypeArrayCallBacks;
 }
 
+void* vt_cf_character_set_create_with_range(long location, long length) {
+    CFRange range = CFRangeMake(location, length);
+    return (void*)CFCharacterSetCreateWithCharactersInRange(NULL, range);
+}
+
 const void* vt_k_ct_font_open_type_feature_tag(void) {
     return kCTFontOpenTypeFeatureTag;
 }
@@ -549,6 +554,14 @@ const void* vt_k_ct_font_feature_settings_attribute(void) {
 
 const void* vt_k_ct_typesetter_option_forced_embedding_level(void) {
     return kCTTypesetterOptionForcedEmbeddingLevel;
+}
+
+const void* vt_k_ct_paragraph_style_attribute_name(void) {
+    return kCTParagraphStyleAttributeName;
+}
+
+const void* vt_k_ct_writing_direction_attribute_name(void) {
+    return kCTWritingDirectionAttributeName;
 }
 
 void* vt_create_font(const char *name, double size) {
