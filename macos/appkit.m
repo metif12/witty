@@ -36,6 +36,7 @@ static vt_app_ready_fn g_ready_cb = NULL;
 static vt_paste_fn  g_paste_cb  = NULL;
 static vt_action_fn g_action_cb = NULL;
 static vt_mouse_fn  g_mouse_cb  = NULL;
+static volatile bool vt_g_app_terminating = false;
 
 enum {
     VT_ACTION_COPY       = 1,
@@ -53,6 +54,7 @@ enum {
     CAMetalLayer *metalLayer;
     id<MTLDevice> metalDevice;
     id<MTLCommandQueue> metalQueue;
+    BOOL vtIgnoreResizeCallbacks;
 }
 - (void)setVtUserdata:(void *)ptr;
 - (void *)vtUserdata;
@@ -91,6 +93,11 @@ enum {
 - (BOOL)isFlipped { return YES; }
 - (BOOL)acceptsFirstResponder { return YES; }
 - (BOOL)canBecomeKeyView { return YES; }
+
+- (void)viewWillMoveToWindow:(NSWindow *)newWindow {
+    [super viewWillMoveToWindow:newWindow];
+    vtIgnoreResizeCallbacks = (newWindow == nil);
+}
 
 - (void)drawRect:(NSRect)dirtyRect {
     if (!g_draw_cb || !vtUserdata) {
@@ -167,13 +174,16 @@ enum {
 
 - (void)setFrameSize:(NSSize)newSize {
     [super setFrameSize:newSize];
-    if (!vtUserdata) return;  // view is being torn down
+    if (vtIgnoreResizeCallbacks) return;
+    if (vt_g_app_terminating) return;
+    void *userdata = vtUserdata;
+    if (!userdata) return;  // view is being torn down
     if (metalLayer) {
         CGFloat scale = metalLayer.contentsScale;
         metalLayer.drawableSize = CGSizeMake(newSize.width * scale, newSize.height * scale);
     }
     if (g_resize_cb) {
-        g_resize_cb(vtUserdata, newSize.width, newSize.height);
+        g_resize_cb(userdata, newSize.width, newSize.height);
     }
 }
 
@@ -241,6 +251,17 @@ enum {
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
     (void)sender;
     return YES;
+}
+
+- (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender {
+    (void)sender;
+    vt_g_app_terminating = true;
+    return NSTerminateNow;
+}
+
+- (void)applicationWillTerminate:(NSNotification *)notification {
+    (void)notification;
+    vt_g_app_terminating = true;
 }
 
 @end
