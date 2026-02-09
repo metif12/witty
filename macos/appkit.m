@@ -2,6 +2,7 @@
 // Compiled automatically by V via #include in appkit.v.
 
 #import <AppKit/AppKit.h>
+#import <CoreFoundation/CoreFoundation.h>
 #import <CoreText/CoreText.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <Metal/Metal.h>
@@ -518,6 +519,38 @@ const void* vt_ct_font_attribute_name(void) {
     return kCTFontAttributeName;
 }
 
+const void* vt_cf_allocator_null(void) {
+    return kCFAllocatorNull;
+}
+
+const void* vt_cf_type_dictionary_key_callbacks(void) {
+    return &kCFTypeDictionaryKeyCallBacks;
+}
+
+const void* vt_cf_type_dictionary_value_callbacks(void) {
+    return &kCFTypeDictionaryValueCallBacks;
+}
+
+const void* vt_cf_type_array_callbacks(void) {
+    return &kCFTypeArrayCallBacks;
+}
+
+const void* vt_k_ct_font_open_type_feature_tag(void) {
+    return kCTFontOpenTypeFeatureTag;
+}
+
+const void* vt_k_ct_font_open_type_feature_value(void) {
+    return kCTFontOpenTypeFeatureValue;
+}
+
+const void* vt_k_ct_font_feature_settings_attribute(void) {
+    return kCTFontFeatureSettingsAttribute;
+}
+
+const void* vt_k_ct_typesetter_option_forced_embedding_level(void) {
+    return kCTTypesetterOptionForcedEmbeddingLevel;
+}
+
 void* vt_create_font(const char *name, double size) {
     NSString *fontName = [NSString stringWithUTF8String:name];
     CTFontRef font = CTFontCreateWithName((__bridge CFStringRef)fontName, size, NULL);
@@ -553,6 +586,36 @@ void vt_draw_text(CGContextRef ctx, const char *text, int text_len,
     CFRelease(attrs);
     CGColorRelease(color);
     CFRelease(cfstr);
+}
+
+// ============================================================
+// CoreText helpers for V wrappers
+// ============================================================
+
+void* vt_ct_typesetter_create_line(void *typesetter_ptr, long location, long length) {
+    if (!typesetter_ptr) return NULL;
+    CFRange range = CFRangeMake(location, length);
+    return (void*)CTTypesetterCreateLine((CTTypesetterRef)typesetter_ptr, range);
+}
+
+void vt_ctrun_get_glyphs_all(void *run_ptr, void *out_glyphs) {
+    if (!run_ptr || !out_glyphs) return;
+    CTRunGetGlyphs((CTRunRef)run_ptr, CFRangeMake(0, 0), (CGGlyph *)out_glyphs);
+}
+
+void vt_ctrun_get_advances_all(void *run_ptr, void *out_advances) {
+    if (!run_ptr || !out_advances) return;
+    CTRunGetAdvances((CTRunRef)run_ptr, CFRangeMake(0, 0), (CGSize *)out_advances);
+}
+
+void vt_ctrun_get_positions_all(void *run_ptr, void *out_positions) {
+    if (!run_ptr || !out_positions) return;
+    CTRunGetPositions((CTRunRef)run_ptr, CFRangeMake(0, 0), (CGPoint *)out_positions);
+}
+
+void vt_ctrun_get_string_indices_all(void *run_ptr, void *out_indices) {
+    if (!run_ptr || !out_indices) return;
+    CTRunGetStringIndices((CTRunRef)run_ptr, CFRangeMake(0, 0), (CFIndex *)out_indices);
 }
 
 // ============================================================
