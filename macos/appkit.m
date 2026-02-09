@@ -242,6 +242,112 @@ enum {
 
 static NSWindow        *vt_g_window   = nil;  // first window (tab group anchor)
 static VTAppDelegate   *vt_g_delegate = nil;
+static NSString        *vt_g_base_title = nil;
+
+// ============================================================
+// Window/tab styling helpers
+// ============================================================
+
+static NSString* vt_cwd_display_title(void) {
+    NSString *cwd = [[NSFileManager defaultManager] currentDirectoryPath];
+    if (!cwd || cwd.length == 0) return @"vterminal";
+    return [cwd stringByAbbreviatingWithTildeInPath];
+}
+
+static NSString* vt_display_title_for_input(const char *title) {
+    if (!title || title[0] == '\0') {
+        return vt_cwd_display_title();
+    }
+    NSString *t = [NSString stringWithUTF8String:title];
+    if (!t || t.length == 0) {
+        return vt_cwd_display_title();
+    }
+    return t;
+}
+
+static void vt_apply_window_theme(NSWindow *window) {
+    if (!window) return;
+
+    // Match Ghostty-like dark titlebar + tab strip.
+    if (@available(macOS 10.14, *)) {
+        window.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+    }
+    if ([window respondsToSelector:@selector(setToolbarStyle:)]) {
+        window.toolbarStyle = NSWindowToolbarStyleUnifiedCompact;
+    }
+    window.titlebarAppearsTransparent = YES;
+    window.movableByWindowBackground = YES;
+    window.backgroundColor = [NSColor colorWithCalibratedRed:0.17 green:0.19 blue:0.24 alpha:1.0];
+}
+
+static void vt_add_new_tab_button(NSWindow *window) {
+    if (!window) return;
+    for (NSTitlebarAccessoryViewController *existing in [window titlebarAccessoryViewControllers]) {
+        if ([existing.identifier isEqualToString:@"vt.newtab"]) {
+            return;
+        }
+    }
+
+    NSButton *button = [NSButton buttonWithTitle:@"+" target:nil action:@selector(vtNewTab:)];
+    button.bezelStyle = NSBezelStyleCircular;
+    button.font = [NSFont systemFontOfSize:14.0 weight:NSFontWeightSemibold];
+    button.frame = NSMakeRect(0, 0, 28, 24);
+
+    NSView *container = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 32, 24)];
+    [container addSubview:button];
+
+    NSTitlebarAccessoryViewController *vc = [[NSTitlebarAccessoryViewController alloc] init];
+    vc.identifier = @"vt.newtab";
+    vc.layoutAttribute = NSLayoutAttributeRight;
+    vc.view = container;
+    [window addTitlebarAccessoryViewController:vc];
+}
+
+static NSURL* vt_url_for_title(NSString *title) {
+    if (!title || title.length == 0) return nil;
+    NSString *expanded = [title stringByExpandingTildeInPath];
+    BOOL is_dir = NO;
+    if ([[NSFileManager defaultManager] fileExistsAtPath:expanded isDirectory:&is_dir] && is_dir) {
+        return [NSURL fileURLWithPath:expanded];
+    }
+    return nil;
+}
+
+static void vt_refresh_tab_labels(NSWindow *anchor_window) {
+    if (!anchor_window) return;
+    NSArray<NSWindow *> *tabs = [anchor_window tabbedWindows];
+    if (!tabs || tabs.count == 0) {
+        tabs = @[anchor_window];
+    }
+
+    for (NSUInteger i = 0; i < tabs.count; i++) {
+        NSWindow *tab = tabs[i];
+        NSString *base = vt_g_base_title ?: @"vterminal";
+        if (tab.representedURL) {
+            base = [[tab.representedURL path] stringByAbbreviatingWithTildeInPath];
+        }
+
+        NSString *label = base;
+        if (tabs.count > 1) {
+            label = [NSString stringWithFormat:@"%@    \u2318%lu", base, (unsigned long)(i + 1)];
+        }
+        [tab setTitle:label];
+    }
+}
+
+static void vt_configure_window_common(NSWindow *window, NSString *base_title) {
+    if (!window) return;
+    [window setMinSize:NSMakeSize(200, 100)];
+    [window setTabbingMode:NSWindowTabbingModeAutomatic];
+    [window setTabbingIdentifier:@"vterminal.tabs"];
+    [window setCollectionBehavior:NSWindowCollectionBehaviorFullScreenPrimary];
+
+    vt_apply_window_theme(window);
+    vt_add_new_tab_button(window);
+
+    NSURL *url = vt_url_for_title(base_title);
+    [window setRepresentedURL:url];
+}
 
 // ============================================================
 // Callback setters
@@ -304,6 +410,10 @@ void* vt_view_get_userdata(void *view) {
 void vt_app_init(void) {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+    [NSWindow setAllowsAutomaticWindowTabbing:YES];
+    if (@available(macOS 10.14, *)) {
+        [NSApp setAppearance:[NSAppearance appearanceNamed:NSAppearanceNameDarkAqua]];
+    }
 
     NSMenu *menuBar = [[NSMenu alloc] init];
 
@@ -409,21 +519,24 @@ void* vt_create_window(int w, int h, const char *title) {
     NSUInteger style = NSWindowStyleMaskTitled
                      | NSWindowStyleMaskClosable
                      | NSWindowStyleMaskMiniaturizable
-                     | NSWindowStyleMaskResizable;
+                     | NSWindowStyleMaskResizable
+                     | NSWindowStyleMaskFullSizeContentView;
+
+    NSString *base_title = vt_display_title_for_input(title);
+    vt_g_base_title = base_title;
 
     vt_g_window = [[NSWindow alloc] initWithContentRect:frame
                                            styleMask:style
                                              backing:NSBackingStoreBuffered
                                                defer:NO];
-    [vt_g_window setTitle:[NSString stringWithUTF8String:title]];
-    [vt_g_window setMinSize:NSMakeSize(200, 100)];
-    // Allow automatic tabbing so macOS groups tabs together
-    [vt_g_window setTabbingMode:NSWindowTabbingModePreferred];
+    vt_configure_window_common(vt_g_window, base_title);
 
     VTTerminalView *view = [[VTTerminalView alloc] initWithFrame:frame];
     [vt_g_window setContentView:view];
+    [vt_g_window setInitialFirstResponder:view];
     [vt_g_window makeFirstResponder:view];
     [vt_g_window makeKeyAndOrderFront:nil];
+    vt_refresh_tab_labels(vt_g_window);
 
     return (__bridge void*)view;
 }
@@ -439,23 +552,27 @@ void* vt_new_tab(int w, int h, const char *title) {
     NSUInteger style = NSWindowStyleMaskTitled
                      | NSWindowStyleMaskClosable
                      | NSWindowStyleMaskMiniaturizable
-                     | NSWindowStyleMaskResizable;
+                     | NSWindowStyleMaskResizable
+                     | NSWindowStyleMaskFullSizeContentView;
+
+    NSString *base_title = vt_display_title_for_input(title);
+    vt_g_base_title = base_title;
 
     NSWindow *newWindow = [[NSWindow alloc] initWithContentRect:frame
                                                       styleMask:style
                                                         backing:NSBackingStoreBuffered
                                                           defer:NO];
-    [newWindow setTitle:[NSString stringWithUTF8String:title]];
-    [newWindow setMinSize:NSMakeSize(200, 100)];
-    [newWindow setTabbingMode:NSWindowTabbingModePreferred];
+    vt_configure_window_common(newWindow, base_title);
 
     VTTerminalView *view = [[VTTerminalView alloc] initWithFrame:frame];
     [newWindow setContentView:view];
+    [newWindow setInitialFirstResponder:view];
 
     // Add as a tabbed window to the first window
     [vt_g_window addTabbedWindow:newWindow ordered:NSWindowAbove];
     [newWindow makeKeyAndOrderFront:nil];
     [newWindow makeFirstResponder:view];
+    vt_refresh_tab_labels(newWindow);
 
     return (__bridge void*)view;
 }
@@ -470,6 +587,12 @@ void vt_close_tab(void *view_ptr) {
         // synchronously from an event handler can deadlock AppKit.
         dispatch_async(dispatch_get_main_queue(), ^{
             [window close];
+            NSWindow *key = [NSApp keyWindow];
+            if (key) {
+                vt_refresh_tab_labels(key);
+            } else if (vt_g_window) {
+                vt_refresh_tab_labels(vt_g_window);
+            }
         });
     }
 }
@@ -482,6 +605,7 @@ void vt_select_tab(int offset) {
     } else if (offset < 0) {
         [keyWindow selectPreviousTab:nil];
     }
+    vt_refresh_tab_labels(keyWindow);
 }
 
 // ============================================================

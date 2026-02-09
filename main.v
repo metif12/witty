@@ -24,6 +24,9 @@ fn C.setenv(name &char, value &char, overwrite int) int
 fn C.CGContextSetRGBFillColor(ctx voidptr, r f64, g f64, b f64, a f64)
 fn C.CGContextFillRect(ctx voidptr, rect C.CGRect)
 fn C.CGContextSetTextMatrix(ctx voidptr, t C.CGAffineTransform)
+fn C.CGContextSetRGBStrokeColor(ctx voidptr, r f64, g f64, b f64, a f64)
+fn C.CGContextSetLineWidth(ctx voidptr, width f64)
+fn C.CGContextStrokeRect(ctx voidptr, rect C.CGRect)
 
 // CGRect and CGAffineTransform for CoreGraphics calls.
 struct C.CGRect {
@@ -69,6 +72,16 @@ fn encode_utf8(cp u32, mut buf []u8) {
 	}
 }
 
+fn clamp01(v f64) f64 {
+	if v < 0.0 {
+		return 0.0
+	}
+	if v > 1.0 {
+		return 1.0
+	}
+	return v
+}
+
 // ============================================================
 // Per-tab state
 // ============================================================
@@ -87,9 +100,9 @@ mut:
 	rows      int = 24
 	view      voidptr // the VTTerminalView* for this tab
 	// Mouse/selection state
-	left_click_pin ?terminal.Pin
-	left_click_x   f64
-	left_click_y   f64
+	left_click_pin   ?terminal.Pin
+	left_click_x     f64
+	left_click_y     f64
 	left_click_count u8
 	left_click_time  time.Time
 }
@@ -112,8 +125,16 @@ fn get_app_config() AppConfig {
 	ct_font := macos.create_font('Menlo', 13.0)
 	return AppConfig{
 		shell: shell
-		font: ct_font
+		font:  ct_font
 	}
+}
+
+fn default_tab_title() string {
+	cwd := os.getwd()
+	if cwd.len > 0 {
+		return cwd
+	}
+	return 'vterminal'
 }
 
 // ============================================================
@@ -135,8 +156,8 @@ fn spawn_terminal(cfg AppConfig) !&TermState {
 	term.screens.active = &term.screens.primary
 
 	mut p := pty.Pty.open(pty.Winsize{
-		ws_row: cfg.rows
-		ws_col: cfg.cols
+		ws_row:    cfg.rows
+		ws_col:    cfg.cols
 		ws_xpixel: u16(cfg.pixel_w)
 		ws_ypixel: u16(cfg.pixel_h)
 	})!
@@ -150,9 +171,7 @@ fn spawn_terminal(cfg AppConfig) !&TermState {
 		C.dup2(p.slave, 0)
 		C.dup2(p.slave, 1)
 		C.dup2(p.slave, 2)
-		p.child_pre_exec() or {
-			C._exit(1)
-		}
+		p.child_pre_exec() or { C._exit(1) }
 		C.setenv(c'TERM', c'xterm-256color', 1)
 		argv := [cfg.shell.str, unsafe { nil }]
 		C.execvp(cfg.shell.str, argv.data)
@@ -163,12 +182,12 @@ fn spawn_terminal(cfg AppConfig) !&TermState {
 	p.close_slave()
 
 	mut state := &TermState{
-		term: term
-		pty_fd: p.master
+		term:      term
+		pty_fd:    p.master
 		child_pid: pid
-		font: cfg.font
-		cols: int(cfg.cols)
-		rows: int(cfg.rows)
+		font:      cfg.font
+		cols:      int(cfg.cols)
+		rows:      int(cfg.rows)
 	}
 	// Construct ReadonlyStream manually. We cannot use ReadonlyStream.init()
 	// because it takes Terminal by value, copies it, then stores &copy —
@@ -178,7 +197,7 @@ fn spawn_terminal(cfg AppConfig) !&TermState {
 		handler: terminal.ReadonlyHandler{
 			terminal: state.term
 		}
-		stream: terminal.Stream.init()
+		stream:  terminal.Stream.init()
 	}
 	return state
 }
@@ -202,7 +221,7 @@ fn main() {
 	macos.set_mouse_callback(on_mouse)
 
 	// 3. Create window (first tab)
-	view := macos.create_window(cfg.pixel_w, cfg.pixel_h, 'vterminal')
+	view := macos.create_window(cfg.pixel_w, cfg.pixel_h, default_tab_title())
 
 	// 4. Spawn terminal for this tab
 	mut state := spawn_terminal(cfg) or {
@@ -225,7 +244,7 @@ fn main() {
 
 fn do_new_tab() {
 	cfg := get_app_config()
-	view := macos.new_tab(cfg.pixel_w, cfg.pixel_h, 'vterminal')
+	view := macos.new_tab(cfg.pixel_w, cfg.pixel_h, default_tab_title())
 	if view == unsafe { nil } {
 		return
 	}
@@ -271,19 +290,49 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 	cell_w := state.cell_w
 	cell_h := state.cell_h
 
-	// Fill background black
-	C.CGContextSetRGBFillColor(ctx, 0.0, 0.0, 0.0, 1.0)
+	mut default_bg := terminal.RGB{
+		r: 0x2b
+		g: 0x31
+		b: 0x3c
+	}
+	if bg := state.term.colors.background.get() {
+		default_bg = bg
+	}
+
+	mut default_fg := terminal.RGB{
+		r: 0xe6
+		g: 0xe8
+		b: 0xee
+	}
+	if fg := state.term.colors.foreground.get() {
+		default_fg = fg
+	}
+
+	mut cursor_rgb := default_fg
+	if cc := state.term.colors.cursor.get() {
+		cursor_rgb = cc
+	}
+
+	// Fill background using terminal default background color.
+	C.CGContextSetRGBFillColor(ctx, f64(default_bg.r) / 255.0, f64(default_bg.g) / 255.0,
+		f64(default_bg.b) / 255.0, 1.0)
 	C.CGContextFillRect(ctx, C.CGRect{
-		origin: C.CGPoint{ x: 0, y: 0 }
-		size: C.CGSize{ width: width, height: height }
+		origin: C.CGPoint{
+			x: 0
+			y: 0
+		}
+		size:   C.CGSize{
+			width:  width
+			height: height
+		}
 	})
 
 	// Set text matrix for flipped view (CoreText draws upward by default).
 	C.CGContextSetTextMatrix(ctx, C.CGAffineTransform{
-		a: 1
-		b: 0
-		c: 0
-		d: -1
+		a:  1
+		b:  0
+		c:  0
+		d:  -1
 		tx: 0
 		ty: 0
 	})
@@ -304,15 +353,15 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 			}
 			cell := row.cells[col_idx]
 			bg := cell.style.bg_rgb(&cell, palette) or { continue }
-			C.CGContextSetRGBFillColor(ctx, f64(bg.r) / 255.0, f64(bg.g) / 255.0,
-				f64(bg.b) / 255.0, 1.0)
+			C.CGContextSetRGBFillColor(ctx, f64(bg.r) / 255.0, f64(bg.g) / 255.0, f64(bg.b) / 255.0,
+				1.0)
 			C.CGContextFillRect(ctx, C.CGRect{
 				origin: C.CGPoint{
 					x: f64(col_idx) * cell_w
 					y: f64(row_idx) * cell_h
 				}
-				size: C.CGSize{
-					width: cell_w
+				size:   C.CGSize{
+					width:  cell_w
 					height: cell_h
 				}
 			})
@@ -329,9 +378,9 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 
 			// Determine foreground color for this cell
 			first_cell := row.cells[run_start]
-			mut fg_r := f64(1.0)
-			mut fg_g := f64(1.0)
-			mut fg_b := f64(1.0)
+			mut fg_r := f64(default_fg.r) / 255.0
+			mut fg_g := f64(default_fg.g) / 255.0
+			mut fg_b := f64(default_fg.b) / 255.0
 			if first_cell.style.fg_color == .rgb {
 				fg_r = f64(first_cell.style.fg_r) / 255.0
 				fg_g = f64(first_cell.style.fg_g) / 255.0
@@ -360,8 +409,7 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 				if cell.style.fg_color != first_cell.style.fg_color {
 					break
 				}
-				if cell.style.fg_color == .rgb
-					&& (cell.style.fg_r != first_cell.style.fg_r
+				if cell.style.fg_color == .rgb && (cell.style.fg_r != first_cell.style.fg_r
 					|| cell.style.fg_g != first_cell.style.fg_g
 					|| cell.style.fg_b != first_cell.style.fg_b) {
 					break
@@ -381,8 +429,8 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 			if run_buf.len > 0 {
 				y_pos := f64(row_idx) * cell_h + cell_h * 0.8
 				x_pos := f64(run_start) * cell_w
-				macos.draw_text(ctx, run_buf.data, run_buf.len, state.font,
-					x_pos, y_pos, fg_r, fg_g, fg_b)
+				macos.draw_text(ctx, run_buf.data, run_buf.len, state.font, x_pos, y_pos,
+					fg_r, fg_g, fg_b)
 			}
 
 			run_start = run_end
@@ -401,28 +449,93 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 			sx_start := if sy == int(sel_start.y) { int(sel_start.x) } else { 0 }
 			sx_end := if sy == int(sel_end.y) { int(sel_end.x) + 1 } else { num_cols }
 
-			C.CGContextSetRGBFillColor(ctx, 0.3, 0.4, 0.7, 0.5)
+			base_r := f64(default_bg.r) / 255.0
+			base_g := f64(default_bg.g) / 255.0
+			base_b := f64(default_bg.b) / 255.0
+			C.CGContextSetRGBFillColor(ctx, clamp01(base_r + 0.20), clamp01(base_g + 0.20),
+				clamp01(base_b + 0.30), 0.55)
 			C.CGContextFillRect(ctx, C.CGRect{
 				origin: C.CGPoint{
 					x: f64(sx_start) * cell_w
 					y: f64(sy) * cell_h
 				}
-				size: C.CGSize{
-					width: f64(sx_end - sx_start) * cell_w
+				size:   C.CGSize{
+					width:  f64(sx_end - sx_start) * cell_w
 					height: cell_h
 				}
 			})
 		}
 	}
 
-	// Draw cursor
-	cx := state.term.screens.active.cursor.x
-	cy := state.term.screens.active.cursor.y
-	C.CGContextSetRGBFillColor(ctx, 0.8, 0.8, 0.8, 0.7)
-	C.CGContextFillRect(ctx, C.CGRect{
-		origin: C.CGPoint{ x: f64(cx) * cell_w, y: f64(cy) * cell_h }
-		size: C.CGSize{ width: cell_w, height: cell_h }
-	})
+	// Draw cursor using terminal cursor style and color.
+	if state.term.modes.get(.cursor_visible) {
+		cx := state.term.screens.active.cursor.x
+		cy := state.term.screens.active.cursor.y
+		x := f64(cx) * cell_w
+		y := f64(cy) * cell_h
+		cursor_style := state.term.screens.active.cursor.cursor_style
+		cr := f64(cursor_rgb.r) / 255.0
+		cg := f64(cursor_rgb.g) / 255.0
+		cb := f64(cursor_rgb.b) / 255.0
+
+		match cursor_style {
+			.block {
+				C.CGContextSetRGBFillColor(ctx, cr, cg, cb, 0.90)
+				C.CGContextFillRect(ctx, C.CGRect{
+					origin: C.CGPoint{
+						x: x
+						y: y
+					}
+					size:   C.CGSize{
+						width:  cell_w
+						height: cell_h
+					}
+				})
+			}
+			.block_hollow {
+				C.CGContextSetRGBStrokeColor(ctx, cr, cg, cb, 0.95)
+				C.CGContextSetLineWidth(ctx, 1.5)
+				C.CGContextStrokeRect(ctx, C.CGRect{
+					origin: C.CGPoint{
+						x: x + 0.5
+						y: y + 0.5
+					}
+					size:   C.CGSize{
+						width:  cell_w - 1.0
+						height: cell_h - 1.0
+					}
+				})
+			}
+			.bar {
+				bar_w := if cell_w * 0.12 < 1.5 { 1.5 } else { cell_w * 0.12 }
+				C.CGContextSetRGBFillColor(ctx, cr, cg, cb, 0.95)
+				C.CGContextFillRect(ctx, C.CGRect{
+					origin: C.CGPoint{
+						x: x
+						y: y
+					}
+					size:   C.CGSize{
+						width:  bar_w
+						height: cell_h
+					}
+				})
+			}
+			.underline {
+				line_h := if cell_h * 0.10 < 1.5 { 1.5 } else { cell_h * 0.10 }
+				C.CGContextSetRGBFillColor(ctx, cr, cg, cb, 0.95)
+				C.CGContextFillRect(ctx, C.CGRect{
+					origin: C.CGPoint{
+						x: x
+						y: y + cell_h - line_h
+					}
+					size:   C.CGSize{
+						width:  cell_w
+						height: line_h
+					}
+				})
+			}
+		}
+	}
 }
 
 // ============================================================
@@ -449,9 +562,9 @@ fn on_key(userdata voidptr, keycode u16, modflags u64, chars &u8, len int, uchar
 
 	// Build modifier state from NSEvent modifier flags
 	mods := input.Mods{
-		shift: (modflags & ns_shift_mask) != 0
-		ctrl: (modflags & ns_ctrl_mask) != 0
-		alt: (modflags & ns_alt_mask) != 0
+		shift:  (modflags & ns_shift_mask) != 0
+		ctrl:   (modflags & ns_ctrl_mask) != 0
+		alt:    (modflags & ns_alt_mask) != 0
 		super_: (modflags & ns_cmd_mask) != 0
 	}
 
@@ -470,7 +583,11 @@ fn on_key(userdata voidptr, keycode u16, modflags u64, chars &u8, len int, uchar
 	}
 	unshifted_cp := if unshifted_text.len > 0 {
 		runes := unshifted_text.runes()
-		if runes.len > 0 { u32(runes[0]) } else { u32(0) }
+		if runes.len > 0 {
+			u32(runes[0])
+		} else {
+			u32(0)
+		}
 	} else {
 		u32(0)
 	}
@@ -483,11 +600,11 @@ fn on_key(userdata voidptr, keycode u16, modflags u64, chars &u8, len int, uchar
 	action := if is_repeat { input.KeyAction.repeat } else { input.KeyAction.press }
 
 	event := input.KeyEvent{
-		action: action
-		key: key
-		mods: mods
-		consumed_mods: consumed
-		utf8: utf8_text
+		action:              action
+		key:                 key
+		mods:                mods
+		consumed_mods:       consumed
+		utf8:                utf8_text
 		unshifted_codepoint: unshifted_cp
 	}
 
@@ -495,7 +612,7 @@ fn on_key(userdata voidptr, keycode u16, modflags u64, chars &u8, len int, uchar
 	opts := input.Options{
 		cursor_key_application: state.term.modes.get(.cursor_keys)
 		keypad_key_application: state.term.modes.get(.keypad_keys)
-		alt_esc_prefix: state.term.modes.get(.alt_esc_prefix)
+		alt_esc_prefix:         state.term.modes.get(.alt_esc_prefix)
 	}
 
 	encoded := input.encode(event, opts)
@@ -543,7 +660,7 @@ fn on_action(userdata voidptr, action_id int) {
 		vt_action_copy {
 			if sel := screen.selection {
 				text := screen.selection_string(terminal.SelectionString{
-					sel: sel
+					sel:  sel
 					trim: true
 				}) or { return }
 				if text.len > 0 {
@@ -588,10 +705,12 @@ fn on_resize(userdata voidptr, width f64, height f64) {
 	state.rows = new_rows
 	state.term.resize(u16(new_cols), u16(new_rows)) or {}
 	if state.pty_fd >= 0 {
-		mut p := pty.Pty{ master: state.pty_fd }
+		mut p := pty.Pty{
+			master: state.pty_fd
+		}
 		p.set_size(pty.Winsize{
-			ws_row: u16(new_rows)
-			ws_col: u16(new_cols)
+			ws_row:    u16(new_rows)
+			ws_col:    u16(new_cols)
 			ws_xpixel: u16(width)
 			ws_ypixel: u16(height)
 		}) or {}
@@ -627,9 +746,24 @@ fn on_mouse(userdata voidptr, event_type int, x f64, y f64, modflags u64) {
 			return
 		}
 	}
-	clamped_col := if col < 0 { 0 } else if col >= state.cols { state.cols - 1 } else { col }
-	clamped_row := if row < 0 { 0 } else if row >= state.rows { state.rows - 1 } else { row }
-	pin := terminal.Pin{ x: u32(clamped_col), y: u32(clamped_row) }
+	clamped_col := if col < 0 {
+		0
+	} else if col >= state.cols {
+		state.cols - 1
+	} else {
+		col
+	}
+	clamped_row := if row < 0 {
+		0
+	} else if row >= state.rows {
+		state.rows - 1
+	} else {
+		row
+	}
+	pin := terminal.Pin{
+		x: u32(clamped_col)
+		y: u32(clamped_row)
+	}
 
 	match event_type {
 		mouse_left_down {
@@ -651,9 +785,8 @@ fn on_mouse(userdata voidptr, event_type int, x f64, y f64, modflags u64) {
 
 			if state.left_click_count == 2 {
 				// Double-click: select word
-				boundary := [u32(` `), u32(`\t`), u32(`"`), u32(`'`), u32(`(`), u32(`)`),
-					u32(`[`), u32(`]`), u32(`{`), u32(`}`), u32(`<`), u32(`>`),
-					u32(`,`), u32(`;`), u32(`:`)]
+				boundary := [u32(` `), u32(`\t`), u32(`"`), u32(`'`), u32(`(`), u32(`)`), u32(`[`),
+					u32(`]`), u32(`{`), u32(`}`), u32(`<`), u32(`>`), u32(`,`), u32(`;`), u32(`:`)]
 				if sel := screen.select_word(pin, boundary) {
 					screen.select(sel) or {}
 				}
@@ -686,9 +819,8 @@ fn on_mouse(userdata voidptr, event_type int, x f64, y f64, modflags u64) {
 				}
 			} else if state.left_click_count == 2 {
 				// Double-click drag: word-level selection
-				boundary := [u32(` `), u32(`\t`), u32(`"`), u32(`'`), u32(`(`), u32(`)`),
-					u32(`[`), u32(`]`), u32(`{`), u32(`}`), u32(`<`), u32(`>`),
-					u32(`,`), u32(`;`), u32(`:`)]
+				boundary := [u32(` `), u32(`\t`), u32(`"`), u32(`'`), u32(`(`), u32(`)`), u32(`[`),
+					u32(`]`), u32(`{`), u32(`}`), u32(`<`), u32(`>`), u32(`,`), u32(`;`), u32(`:`)]
 				if sel := screen.select_word_between(click_pin, pin, boundary) {
 					screen.select(sel) or {}
 				}
@@ -706,7 +838,7 @@ fn on_mouse(userdata voidptr, event_type int, x f64, y f64, modflags u64) {
 			mut screen := unsafe { state.term.screens.active }
 			if sel := screen.selection {
 				text := screen.selection_string(terminal.SelectionString{
-					sel: sel
+					sel:  sel
 					trim: true
 				}) or { return }
 				if text.len > 0 {
