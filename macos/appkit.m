@@ -79,8 +79,9 @@ enum {
         // CGContext. Call vt_metal_activate_layer() to switch to Metal.)
         metalDevice = MTLCreateSystemDefaultDevice();
         if (metalDevice) {
+            [metalDevice retain];
             metalQueue = [metalDevice newCommandQueue];
-            metalLayer = [CAMetalLayer layer];
+            metalLayer = [CAMetalLayer new];
             metalLayer.device = metalDevice;
             metalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm;
             metalLayer.framebufferOnly = YES;
@@ -88,6 +89,13 @@ enum {
         }
     }
     return self;
+}
+
+- (void)dealloc {
+    if (metalLayer) [metalLayer release];
+    if (metalQueue) [metalQueue release];
+    if (metalDevice) [metalDevice release];
+    [super dealloc];
 }
 
 - (BOOL)isFlipped { return YES; }
@@ -178,7 +186,7 @@ enum {
     if (vt_g_app_terminating) return;
     void *userdata = vtUserdata;
     if (!userdata) return;  // view is being torn down
-    if (metalLayer) {
+    if (metalLayer && [self layer] == metalLayer) {
         CGFloat scale = metalLayer.contentsScale;
         metalLayer.drawableSize = CGSizeMake(newSize.width * scale, newSize.height * scale);
     }
@@ -189,7 +197,7 @@ enum {
 
 - (void)viewDidChangeBackingProperties {
     [super viewDidChangeBackingProperties];
-    if (metalLayer) {
+    if (metalLayer && [self layer] == metalLayer) {
         CGFloat scale = [[self window] backingScaleFactor];
         metalLayer.contentsScale = scale;
         NSSize size = [self bounds].size;

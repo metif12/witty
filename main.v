@@ -107,6 +107,26 @@ mut:
 	left_click_time  time.Time
 }
 
+// Keep tab states alive for the process lifetime.
+// AppKit stores userdata pointers in Objective-C objects; without a V-side
+// strong reference, GC can reclaim TermState for non-primary tabs.
+struct TabStateRegistry {
+mut:
+	states []&TermState
+}
+
+struct TabStateRegistrySingleton {
+mut:
+	reg TabStateRegistry
+}
+
+const tab_state_registry_instance = &TabStateRegistrySingleton{}
+
+fn retain_tab_state(state &TermState) {
+	mut reg := unsafe { &tab_state_registry_instance.reg }
+	reg.states << state
+}
+
 // ============================================================
 // Shared app config
 // ============================================================
@@ -230,6 +250,7 @@ fn main() {
 	}
 	state.view = view
 	macos.view_set_userdata(view, voidptr(state))
+	retain_tab_state(state)
 
 	// 5. Spawn read thread for this tab
 	spawn read_pty_thread(state.pty_fd, state.view)
@@ -255,6 +276,7 @@ fn do_new_tab() {
 	}
 	state.view = view
 	macos.view_set_userdata(view, voidptr(state))
+	retain_tab_state(state)
 	spawn read_pty_thread(state.pty_fd, state.view)
 }
 
