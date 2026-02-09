@@ -11,35 +11,91 @@ module macos
 // - ghostty/pkg/macos/foundation/data.zig
 // - ghostty/pkg/macos/foundation/url.zig
 // - ghostty/pkg/macos/foundation/character_set.zig
+// - ghostty/pkg/macos/text.zig
+// - ghostty/pkg/macos/text/c.zig
 // - ghostty/pkg/macos/text/typesetter.zig
+// - ghostty/pkg/macos/text/paragraph_style.zig
 // - ghostty/pkg/macos/text/line.zig
 // - ghostty/pkg/macos/text/run.zig
+// - ghostty/pkg/macos/text/frame.zig
+// - ghostty/pkg/macos/text/framesetter.zig
 // - ghostty/pkg/macos/text/stylized_strings.zig
 // - ghostty/pkg/macos/text/font_collection.zig
 // - ghostty/pkg/macos/text/font_manager.zig
 // - ghostty/pkg/macos/text/font_descriptor.zig
 // - ghostty/pkg/macos/text/font.zig
+// - ghostty/pkg/macos/graphics/affine_transform.zig
+// - ghostty/pkg/macos/graphics/geometry.zig
+// - ghostty/pkg/macos/graphics/font.zig
+// - ghostty/pkg/macos/graphics/color_space.zig
+// - ghostty/pkg/macos/graphics/path.zig
+// - ghostty/pkg/macos/graphics/bitmap_context.zig
+// - ghostty/pkg/macos/graphics/context.zig
+// - ghostty/pkg/macos/graphics/image.zig
+// - ghostty/pkg/macos/iosurface/iosurface.zig
+// - ghostty/pkg/macos/iosurface.zig
+// - ghostty/pkg/macos/iosurface/c.zig
+// - ghostty/pkg/macos/video/pixel_format.zig
+// - ghostty/pkg/macos/foundation/c.zig
+// - ghostty/pkg/macos/foundation.zig
+// - ghostty/pkg/macos/os/log.zig
+// - ghostty/pkg/macos/os/signpost.zig
+// - ghostty/pkg/macos/os/c.zig
+// - ghostty/pkg/macos/os.zig
+// - ghostty/pkg/macos/main.zig
+// - ghostty/pkg/macos/carbon/c.zig
+// - ghostty/pkg/macos/carbon.zig
+// - ghostty/pkg/macos/build.zig
 
 #flag darwin -framework CoreFoundation
 #flag darwin -framework CoreText
 #flag darwin -framework CoreGraphics
+#flag darwin -framework CoreVideo
+#flag darwin -framework QuartzCore
+#flag darwin -framework IOSurface
+#flag darwin -framework Carbon
+#include <TargetConditionals.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreText/CoreText.h>
 #include <CoreGraphics/CoreGraphics.h>
+#include <CoreVideo/CoreVideo.h>
+#include <CoreVideo/CVPixelBuffer.h>
+#include <QuartzCore/CALayer.h>
+#include <IOSurface/IOSurfaceRef.h>
+#include <dispatch/dispatch.h>
+#include <os/log.h>
+#include <os/signpost.h>
+#include <Carbon/Carbon.h>
 
 fn C.CFRelease(obj voidptr)
 fn C.CFRetain(obj voidptr) voidptr
 fn C.CFStringCreateWithBytes(alloc voidptr, bytes voidptr, bytes_len isize, encoding u32, external bool) voidptr
 fn C.CFStringCreateWithCharactersNoCopy(alloc voidptr, chars voidptr, chars_len isize, deallocator voidptr) voidptr
+fn C.CFStringCreateMutable(alloc voidptr, max_len isize) voidptr
+fn C.CFStringAppendCharacters(str voidptr, chars voidptr, chars_len isize)
+fn C.CFStringGetLength(str voidptr) isize
+fn C.CFStringHasPrefix(str voidptr, prefix voidptr) int
+fn C.CFStringCompare(str voidptr, other voidptr, opts u32) int
+fn C.CFStringGetCString(str voidptr, buffer &char, buffer_size isize, encoding u32) int
+fn C.CFStringGetCStringPtr(str voidptr, encoding u32) &char
 fn C.CFStringGetSurrogatePairForLongCharacter(cp u32, surrogates voidptr) int
 fn C.CFNumberCreate(alloc voidptr, number_type int, value_ptr voidptr) voidptr
 fn C.CFDictionaryCreate(alloc voidptr, keys voidptr, values voidptr, count isize, key_cb voidptr, value_cb voidptr) voidptr
+fn C.CFDictionaryCreateMutable(alloc voidptr, cap isize, key_cb voidptr, value_cb voidptr) voidptr
+fn C.CFDictionaryCreateMutableCopy(alloc voidptr, cap isize, src voidptr) voidptr
+fn C.CFDictionarySetValue(dict voidptr, key voidptr, value voidptr)
+fn C.CFDictionaryGetCount(dict voidptr) isize
+fn C.CFDictionaryGetValue(dict voidptr, key voidptr) voidptr
+fn C.CFDictionaryGetKeysAndValues(dict voidptr, keys voidptr, values voidptr)
 fn C.CFArrayCreate(alloc voidptr, values voidptr, count isize, callbacks voidptr) voidptr
 fn C.CFArrayCreateMutable(alloc voidptr, cap isize, callbacks voidptr) voidptr
 fn C.CFArrayAppendValue(arr voidptr, value voidptr)
 fn C.CFArrayGetCount(arr voidptr) isize
 fn C.CFArrayGetValueAtIndex(arr voidptr, idx isize) voidptr
 fn C.CFAttributedStringCreate(alloc voidptr, str voidptr, attrs voidptr) voidptr
+fn C.CFAttributedStringCreateMutable(alloc voidptr, max_len isize) voidptr
+fn C.CFAttributedStringGetLength(str voidptr) isize
+fn C.CFAttributedStringGetString(str voidptr) voidptr
 fn C.CFDataCreateWithBytesNoCopy(alloc voidptr, bytes voidptr, bytes_len isize, deallocator voidptr) voidptr
 fn C.CFDataGetBytePtr(data voidptr) voidptr
 fn C.CFDataGetLength(data voidptr) isize
@@ -49,10 +105,30 @@ fn C.CFURLCreateStringByReplacingPercentEscapes(alloc voidptr, original voidptr,
 fn C.CFURLCopyPath(url voidptr) voidptr
 fn C.CFCharacterSetCreateWithCharactersInString(alloc voidptr, str voidptr) voidptr
 fn C.CTTypesetterCreateWithAttributedStringAndOptions(str voidptr, opts voidptr) voidptr
+fn C.CTFrameGetLines(frame voidptr) voidptr
+fn C.CTFramesetterCreateWithAttributedString(str voidptr) voidptr
 fn C.CTLineGetGlyphCount(line voidptr) isize
 fn C.CTLineGetGlyphRuns(line voidptr) voidptr
 fn C.CTRunGetStatus(run voidptr) u32
 fn C.CTRunGetGlyphCount(run voidptr) isize
+fn C.CGContextRelease(ctx voidptr)
+fn C.CGContextSetLineWidth(ctx voidptr, width f64)
+fn C.CGContextSetAllowsAntialiasing(ctx voidptr, v bool)
+fn C.CGContextSetAllowsFontSmoothing(ctx voidptr, v bool)
+fn C.CGContextSetAllowsFontSubpixelPositioning(ctx voidptr, v bool)
+fn C.CGContextSetAllowsFontSubpixelQuantization(ctx voidptr, v bool)
+fn C.CGContextSetShouldAntialias(ctx voidptr, v bool)
+fn C.CGContextSetShouldSmoothFonts(ctx voidptr, v bool)
+fn C.CGContextSetShouldSubpixelPositionFonts(ctx voidptr, v bool)
+fn C.CGContextSetShouldSubpixelQuantizeFonts(ctx voidptr, v bool)
+fn C.CGContextSetGrayFillColor(ctx voidptr, gray f64, alpha f64)
+fn C.CGContextSetGrayStrokeColor(ctx voidptr, gray f64, alpha f64)
+fn C.CGContextSetRGBFillColor(ctx voidptr, r f64, g f64, b f64, alpha f64)
+fn C.CGContextSetRGBStrokeColor(ctx voidptr, r f64, g f64, b f64, alpha f64)
+fn C.CGContextSetTextDrawingMode(ctx voidptr, mode int)
+fn C.CGContextSetTextPosition(ctx voidptr, x f64, y f64)
+fn C.CGContextScaleCTM(ctx voidptr, sx f64, sy f64)
+fn C.CGContextTranslateCTM(ctx voidptr, tx f64, ty f64)
 fn C.CTFontCollectionCreateFromAvailableFonts(opts voidptr) voidptr
 fn C.CTFontCollectionCreateWithFontDescriptors(descs voidptr, opts voidptr) voidptr
 fn C.CTFontCollectionCreateMatchingFontDescriptors(collection voidptr) voidptr
@@ -70,6 +146,59 @@ fn C.vt_ctrun_get_glyphs_all(run voidptr, out_glyphs voidptr)
 fn C.vt_ctrun_get_advances_all(run voidptr, out_advances voidptr)
 fn C.vt_ctrun_get_positions_all(run voidptr, out_positions voidptr)
 fn C.vt_ctrun_get_string_indices_all(run voidptr, out_indices voidptr)
+fn C.vt_ctparagraphstyle_create(settings_ptr voidptr, count usize) voidptr
+fn C.vt_ctframesetter_create_frame(framesetter_ptr voidptr, location isize, length isize, path_ptr voidptr, attrs_ptr voidptr) voidptr
+fn C.vt_ctframe_get_line_origins(frame_ptr voidptr, location isize, length isize, points_ptr voidptr)
+fn C.vt_cgrect_is_null(x f64, y f64, w f64, h f64) bool
+fn C.vt_cgpath_create_with_rect(x f64, y f64, w f64, h f64) voidptr
+fn C.vt_cgpath_create_mutable() voidptr
+fn C.vt_cgpath_add_rect(path voidptr, x f64, y f64, w f64, h f64)
+fn C.vt_cgpath_get_bounding_box(path voidptr, x &f64, y &f64, w &f64, h &f64)
+fn C.vt_cgcolorspace_create_device_gray() voidptr
+fn C.vt_cgcolorspace_create_device_rgb() voidptr
+fn C.vt_cgcolorspace_create_named(name_id int) voidptr
+fn C.vt_cgcolorspace_release(space voidptr)
+fn C.vt_cgbitmap_context_create(data voidptr, width usize, height usize, bits_per_component usize, bytes_per_row usize, space voidptr, opts u32) voidptr
+fn C.vt_cgcontext_set_text_matrix(ctx voidptr, a f64, b f64, c f64, d f64, tx f64, ty f64)
+fn C.vt_cgcontext_fill_rect(ctx voidptr, x f64, y f64, w f64, h f64)
+fn C.vt_dispatch_get_main_queue() voidptr
+fn C.vt_dispatch_data_create(data voidptr, len usize, queue voidptr) voidptr
+fn C.vt_dispatch_release(obj voidptr)
+fn C.vt_kca_gravity_top_left() voidptr
+fn C.vt_kca_gravity_bottom_left() voidptr
+fn C.vt_kca_gravity_center() voidptr
+fn C.vt_display_link_create_with_active_displays() voidptr
+fn C.vt_display_link_release(link voidptr)
+fn C.vt_display_link_start(link voidptr) bool
+fn C.vt_display_link_stop(link voidptr) bool
+fn C.vt_display_link_is_running(link voidptr) bool
+fn C.vt_display_link_set_current_display(link voidptr, display_id u32) bool
+fn C.vt_os_log_create(subsystem &char, category &char) voidptr
+fn C.vt_os_release(obj voidptr)
+fn C.vt_os_log_type_enabled(log voidptr, typ u8) bool
+fn C.vt_os_log_with_type_str(log voidptr, typ u8, msg &char)
+fn C.vt_os_signpost_enabled(log voidptr) bool
+fn C.vt_os_signpost_id_generate(log voidptr) u64
+fn C.vt_os_signpost_id_for_pointer(log voidptr, ptr voidptr) u64
+fn C.vt_os_signpost_event_emit(log voidptr, id u64, name &char)
+fn C.vt_os_signpost_interval_begin(log voidptr, id u64, name &char)
+fn C.vt_os_signpost_interval_end(log voidptr, id u64, name &char)
+fn C.vt_iosurface_create(width int, height int, pixel_format u32, bytes_per_element int, colorspace voidptr) voidptr
+fn C.vt_iosurface_deinit(surface voidptr)
+fn C.vt_iosurface_retain(surface voidptr)
+fn C.vt_iosurface_release(surface voidptr)
+fn C.vt_iosurface_set_color_space(surface voidptr, colorspace voidptr)
+fn C.vt_iosurface_lock(surface voidptr)
+fn C.vt_iosurface_unlock(surface voidptr)
+fn C.vt_iosurface_get_alloc_size(surface voidptr) usize
+fn C.vt_iosurface_get_width(surface voidptr) usize
+fn C.vt_iosurface_get_height(surface voidptr) usize
+fn C.vt_iosurface_get_bytes_per_element(surface voidptr) usize
+fn C.vt_iosurface_get_bytes_per_row(surface voidptr) usize
+fn C.vt_iosurface_get_base_address(surface voidptr) voidptr
+fn C.vt_iosurface_get_element_width(surface voidptr) usize
+fn C.vt_iosurface_get_element_height(surface voidptr) usize
+fn C.vt_iosurface_get_pixel_format(surface voidptr) u32
 
 // Exposed by appkit.m for CF callback structs and CF/CoreText constants.
 fn C.vt_cf_allocator_null() voidptr
@@ -83,6 +212,8 @@ fn C.vt_k_ct_font_feature_settings_attribute() voidptr
 fn C.vt_k_ct_typesetter_option_forced_embedding_level() voidptr
 fn C.vt_k_ct_paragraph_style_attribute_name() voidptr
 fn C.vt_k_ct_writing_direction_attribute_name() voidptr
+fn C.vt_cfattributedstring_replace_string(str voidptr, location isize, length isize, replacement voidptr)
+fn C.vt_cfattributedstring_set_attribute(str voidptr, location isize, length isize, key voidptr, value voidptr)
 
 @[inline]
 fn cast_cf_ref[T](ptr voidptr) &T {
@@ -115,6 +246,26 @@ pub fn cf_retain(obj voidptr) voidptr {
 	}
 	return C.CFRetain(obj)
 }
+
+pub enum ComparisonResult {
+	less    = -1
+	equal   = 0
+	greater = 1
+}
+
+pub type FourCharCode = u32
+
+pub type StringComparison = u32
+
+pub const string_compare_case_insensitive = StringComparison(1 << 0)
+pub const string_compare_backwards = StringComparison(1 << 2)
+pub const string_compare_anchored = StringComparison(1 << 3)
+pub const string_compare_nonliteral = StringComparison(1 << 4)
+pub const string_compare_localized = StringComparison(1 << 5)
+pub const string_compare_numerically = StringComparison(1 << 6)
+pub const string_compare_diacritic_insensitive = StringComparison(1 << 7)
+pub const string_compare_width_insensitive = StringComparison(1 << 8)
+pub const string_compare_forced_ordering = StringComparison(1 << 9)
 
 // ============================================================
 // foundation.String
@@ -152,11 +303,78 @@ pub fn (s &CFString) release() {
 	cf_release(voidptr(s))
 }
 
+pub fn (s &CFString) get_length() int {
+	return int(C.CFStringGetLength(voidptr(s)))
+}
+
+pub fn (s &CFString) has_prefix(prefix &CFString) bool {
+	return C.CFStringHasPrefix(voidptr(s), voidptr(prefix)) != 0
+}
+
+pub fn (s &CFString) compare(other &CFString, options StringComparison) ComparisonResult {
+	return unsafe { ComparisonResult(C.CFStringCompare(voidptr(s), voidptr(other), options)) }
+}
+
+pub fn (s &CFString) cstring(mut buf []u8, encoding Encoding) ?&char {
+	if buf.len == 0 {
+		return none
+	}
+	mut ptr := unsafe { &char(nil) }
+	ptr = unsafe { &char(buf.data) }
+	if C.CFStringGetCString(voidptr(s), ptr, isize(buf.len), u32(encoding)) == 0 {
+		return none
+	}
+	return ptr
+}
+
+pub fn (s &CFString) cstring_ptr(encoding Encoding) ?&char {
+	ptr := C.CFStringGetCStringPtr(voidptr(s), u32(encoding))
+	if isnil(ptr) {
+		return none
+	}
+	return ptr
+}
+
+@[_allow_multiple_values]
 pub enum Encoding {
-	invalid = 0xffffffff
-	ascii   = 0x0600
-	utf16   = 0x0100
-	utf8    = 0x08000100
+	invalid         = 0xffffffff
+	mac_roman       = 0
+	windows_latin_1 = 0x0500
+	iso_latin_1     = 0x0201
+	nextstep_latin  = 0x0b01
+	ascii           = 0x0600
+	unicode         = 0x0100
+	utf16           = 0x0100
+	utf8            = 0x08000100
+	non_lossy_ascii = 0x0bff
+	utf16_be        = 0x10000100
+	utf16_le        = 0x14000100
+	utf32           = 0x0c000100
+	utf32_be        = 0x18000100
+	utf32_le        = 0x1c000100
+}
+
+pub struct CFMutableString {}
+
+pub fn CFMutableString.create(cap usize) !&CFMutableString {
+	ptr := C.CFStringCreateMutable(unsafe { nil }, isize(cap))
+	return require_cf_ref[CFMutableString](ptr, 'CFStringCreateMutable')
+}
+
+pub fn (s &CFMutableString) release() {
+	cf_release(voidptr(s))
+}
+
+pub fn (s &CFMutableString) as_string() &CFString {
+	return cast_cf_ref[CFString](voidptr(s))
+}
+
+pub fn (s &CFMutableString) append_characters(chars []u16) {
+	mut chars_ptr := voidptr(unsafe { nil })
+	if chars.len > 0 {
+		chars_ptr = voidptr(chars.data)
+	}
+	C.CFStringAppendCharacters(voidptr(s), chars_ptr, isize(chars.len))
 }
 
 // SurrogatePair holds the result of UTF-16 surrogate pair encoding.
@@ -183,6 +401,13 @@ pub fn get_surrogate_pair(cp u32) SurrogatePair {
 		lo:      0
 		is_pair: false
 	}
+}
+
+pub fn string_get_surrogate_pair_for_long_character(ch u32, mut surrogates []u16) bool {
+	if surrogates.len < 2 {
+		return false
+	}
+	return C.CFStringGetSurrogatePairForLongCharacter(ch, voidptr(surrogates.data)) != 0
 }
 
 // ============================================================
@@ -227,8 +452,58 @@ pub fn CFDictionary.create(keys []voidptr, values []voidptr) !&CFDictionary {
 	return require_cf_ref[CFDictionary](ptr, 'CFDictionaryCreate')
 }
 
+pub fn (d &CFDictionary) get_count() int {
+	return int(C.CFDictionaryGetCount(voidptr(d)))
+}
+
+pub fn (d &CFDictionary) get_value(key voidptr) voidptr {
+	return C.CFDictionaryGetValue(voidptr(d), key)
+}
+
+pub fn (d &CFDictionary) get_keys_and_values(mut keys []voidptr, mut values []voidptr) bool {
+	count := d.get_count()
+	if keys.len < count || values.len < count {
+		return false
+	}
+	mut keys_ptr := voidptr(unsafe { nil })
+	if keys.len > 0 {
+		keys_ptr = voidptr(keys.data)
+	}
+	mut values_ptr := voidptr(unsafe { nil })
+	if values.len > 0 {
+		values_ptr = voidptr(values.data)
+	}
+	C.CFDictionaryGetKeysAndValues(voidptr(d), keys_ptr, values_ptr)
+	return true
+}
+
 pub fn (d &CFDictionary) release() {
 	cf_release(voidptr(d))
+}
+
+pub struct CFMutableDictionary {}
+
+pub fn CFMutableDictionary.create(cap usize) !&CFMutableDictionary {
+	ptr := C.CFDictionaryCreateMutable(unsafe { nil }, isize(cap), C.vt_cf_type_dictionary_key_callbacks(),
+		C.vt_cf_type_dictionary_value_callbacks())
+	return require_cf_ref[CFMutableDictionary](ptr, 'CFDictionaryCreateMutable')
+}
+
+pub fn CFMutableDictionary.create_mutable_copy(cap usize, src &CFDictionary) !&CFMutableDictionary {
+	ptr := C.CFDictionaryCreateMutableCopy(unsafe { nil }, isize(cap), voidptr(src))
+	return require_cf_ref[CFMutableDictionary](ptr, 'CFDictionaryCreateMutableCopy')
+}
+
+pub fn (d &CFMutableDictionary) release() {
+	cf_release(voidptr(d))
+}
+
+pub fn (d &CFMutableDictionary) set_value(key voidptr, value voidptr) {
+	C.CFDictionarySetValue(voidptr(d), key, value)
+}
+
+pub fn (d &CFMutableDictionary) as_dictionary() &CFDictionary {
+	return cast_cf_ref[CFDictionary](voidptr(d))
 }
 
 // ============================================================
@@ -348,8 +623,40 @@ pub fn CFAttributedString.create(str &CFString, attrs &CFDictionary) !&CFAttribu
 	return require_cf_ref[CFAttributedString](ptr, 'CFAttributedStringCreate')
 }
 
+pub fn (s &CFAttributedString) get_length() int {
+	return int(C.CFAttributedStringGetLength(voidptr(s)))
+}
+
+pub fn (s &CFAttributedString) get_string() &CFString {
+	return cast_cf_ref[CFString](C.CFAttributedStringGetString(voidptr(s)))
+}
+
 pub fn (s &CFAttributedString) release() {
 	cf_release(voidptr(s))
+}
+
+pub struct CFMutableAttributedString {}
+
+pub fn CFMutableAttributedString.create(cap usize) !&CFMutableAttributedString {
+	ptr := C.CFAttributedStringCreateMutable(unsafe { nil }, isize(cap))
+	return require_cf_ref[CFMutableAttributedString](ptr, 'CFAttributedStringCreateMutable')
+}
+
+pub fn (s &CFMutableAttributedString) release() {
+	cf_release(voidptr(s))
+}
+
+pub fn (s &CFMutableAttributedString) replace_string(range CFRange, replacement &CFString) {
+	C.vt_cfattributedstring_replace_string(voidptr(s), range.location, range.length, voidptr(replacement))
+}
+
+pub fn (s &CFMutableAttributedString) set_attribute(range CFRange, key voidptr, value voidptr) {
+	C.vt_cfattributedstring_set_attribute(voidptr(s), range.location, range.length, key,
+		value)
+}
+
+pub fn (s &CFMutableAttributedString) get_length() int {
+	return int(C.CFAttributedStringGetLength(voidptr(s)))
 }
 
 // ============================================================
@@ -381,6 +688,51 @@ pub:
 	length   isize
 }
 
+pub fn CFRange.init(location int, length int) CFRange {
+	return CFRange{
+		location: isize(location)
+		length:   isize(length)
+	}
+}
+
+// ============================================================
+// text.ParagraphStyle
+// ============================================================
+
+pub struct CTParagraphStyle {}
+
+pub struct CTParagraphStyleSetting {
+pub:
+	spec       CTParagraphStyleSpecifier
+	value_size usize
+	value      voidptr
+}
+
+pub enum CTParagraphStyleSpecifier {
+	base_writing_direction = 13
+}
+
+pub enum WritingDirection {
+	natural = -1
+	ltr     = 0
+	rtl     = 1
+	lro     = 2
+	rlo     = 3
+}
+
+pub fn CTParagraphStyle.create(settings []CTParagraphStyleSetting) !&CTParagraphStyle {
+	mut settings_ptr := voidptr(unsafe { nil })
+	if settings.len > 0 {
+		settings_ptr = voidptr(settings.data)
+	}
+	ptr := C.vt_ctparagraphstyle_create(settings_ptr, settings.len)
+	return require_cf_ref[CTParagraphStyle](ptr, 'CTParagraphStyleCreate')
+}
+
+pub fn (p &CTParagraphStyle) release() {
+	cf_release(voidptr(p))
+}
+
 // ============================================================
 // text.Line
 // ============================================================
@@ -402,6 +754,56 @@ pub fn (l &CTLine) get_glyph_runs() &CFArray {
 
 pub fn (l &CTLine) release() {
 	cf_release(voidptr(l))
+}
+
+// ============================================================
+// text.Frame
+// ============================================================
+
+pub struct CTFrame {}
+
+pub fn (f &CTFrame) release() {
+	cf_release(voidptr(f))
+}
+
+pub fn (f &CTFrame) get_line_origins(range CFRange, points []CGPoint) {
+	if points.len == 0 {
+		return
+	}
+	C.vt_ctframe_get_line_origins(voidptr(f), range.location, range.length, voidptr(points.data))
+}
+
+pub fn (f &CTFrame) get_lines() &CFArray {
+	ptr := C.CTFrameGetLines(voidptr(f))
+	if isnil(ptr) {
+		return unsafe { &CFArray(nil) }
+	}
+	return cast_cf_ref[CFArray](ptr)
+}
+
+// ============================================================
+// text.Framesetter
+// ============================================================
+
+pub struct CTFramesetter {}
+
+pub fn CTFramesetter.create_with_attributed_string(str &CFAttributedString) !&CTFramesetter {
+	ptr := C.CTFramesetterCreateWithAttributedString(voidptr(str))
+	return require_cf_ref[CTFramesetter](ptr, 'CTFramesetterCreateWithAttributedString')
+}
+
+pub fn (f &CTFramesetter) release() {
+	cf_release(voidptr(f))
+}
+
+pub fn (f &CTFramesetter) create_frame(range CFRange, path &CGPath, attrs ?&CFDictionary) !&CTFrame {
+	mut attrs_ptr := voidptr(unsafe { nil })
+	if attrs_ := attrs {
+		attrs_ptr = voidptr(attrs_)
+	}
+	ptr := C.vt_ctframesetter_create_frame(voidptr(f), range.location, range.length, voidptr(path),
+		attrs_ptr)
+	return require_cf_ref[CTFrame](ptr, 'CTFramesetterCreateFrame')
 }
 
 // ============================================================
@@ -578,8 +980,29 @@ pub fn k_ct_typesetter_option_forced_embedding_level() voidptr {
 }
 
 // ============================================================
-// graphics.Point / Size
+// graphics
 // ============================================================
+
+pub struct CGAffineTransform {
+pub:
+	a  f64
+	b  f64
+	c  f64
+	d  f64
+	tx f64
+	ty f64
+}
+
+pub fn CGAffineTransform.identity() CGAffineTransform {
+	return CGAffineTransform{
+		a:  1
+		b:  0
+		c:  0
+		d:  1
+		tx: 0
+		ty: 0
+	}
+}
 
 pub struct CGPoint {
 pub:
@@ -592,6 +1015,282 @@ pub:
 	width  f64
 	height f64
 }
+
+pub struct CGRect {
+pub:
+	origin CGPoint
+	size   CGSize
+}
+
+pub fn CGRect.init(x f64, y f64, width f64, height f64) CGRect {
+	return CGRect{
+		origin: CGPoint{
+			x: x
+			y: y
+		}
+		size:   CGSize{
+			width:  width
+			height: height
+		}
+	}
+}
+
+pub fn (r CGRect) is_null() bool {
+	return C.vt_cgrect_is_null(r.origin.x, r.origin.y, r.size.width, r.size.height)
+}
+
+pub fn (r CGRect) get_height() f64 {
+	return r.size.height
+}
+
+pub fn (r CGRect) get_width() f64 {
+	return r.size.width
+}
+
+pub type CGGlyph = u16
+
+pub enum CGImageAlphaInfo {
+	none                = 0
+	premultiplied_last  = 1
+	premultiplied_first = 2
+	last                = 3
+	first               = 4
+	none_skip_last      = 5
+	none_skip_first     = 6
+	only                = 7
+}
+
+pub enum CGBitmapInfo {
+	alpha_mask           = 0x1F
+	float_mask           = 0xF00
+	float_components     = 0x100
+	byte_order_mask      = 0x7000
+	byte_order_default   = 0x0000
+	byte_order_16_little = 0x1000
+	byte_order_32_little = 0x2000
+	byte_order_16_big    = 0x3000
+	byte_order_32_big    = 0x4000
+}
+
+pub struct CGColorSpace {}
+
+pub enum CGColorSpaceName {
+	display_p3
+	extended_linear_display_p3
+	srgb
+	linear_srgb
+	extended_srgb
+	extended_linear_srgb
+	generic_gray_gamma2_2
+	linear_gray
+	extended_gray
+	extended_linear_gray
+}
+
+pub fn CGColorSpace.create_device_gray() !&CGColorSpace {
+	ptr := C.vt_cgcolorspace_create_device_gray()
+	return require_cf_ref[CGColorSpace](ptr, 'CGColorSpaceCreateDeviceGray')
+}
+
+pub fn CGColorSpace.create_device_rgb() !&CGColorSpace {
+	ptr := C.vt_cgcolorspace_create_device_rgb()
+	return require_cf_ref[CGColorSpace](ptr, 'CGColorSpaceCreateDeviceRGB')
+}
+
+pub fn CGColorSpace.create_named(name CGColorSpaceName) !&CGColorSpace {
+	ptr := C.vt_cgcolorspace_create_named(int(name))
+	return require_cf_ref[CGColorSpace](ptr, 'CGColorSpaceCreateWithName')
+}
+
+pub fn (s &CGColorSpace) release() {
+	C.vt_cgcolorspace_release(voidptr(s))
+}
+
+pub struct CGPath {}
+
+pub fn CGPath.create_with_rect(rect CGRect) !&CGPath {
+	ptr := C.vt_cgpath_create_with_rect(rect.origin.x, rect.origin.y, rect.size.width,
+		rect.size.height)
+	return require_cf_ref[CGPath](ptr, 'CGPathCreateWithRect')
+}
+
+pub fn (p &CGPath) release() {
+	cf_release(voidptr(p))
+}
+
+pub struct CGMutablePath {}
+
+pub fn CGMutablePath.create() !&CGMutablePath {
+	ptr := C.vt_cgpath_create_mutable()
+	return require_cf_ref[CGMutablePath](ptr, 'CGPathCreateMutable')
+}
+
+pub fn (p &CGMutablePath) release() {
+	cf_release(voidptr(p))
+}
+
+pub fn (p &CGMutablePath) add_rect(rect CGRect) {
+	C.vt_cgpath_add_rect(voidptr(p), rect.origin.x, rect.origin.y, rect.size.width, rect.size.height)
+}
+
+pub fn (p &CGMutablePath) get_bounding_box() CGRect {
+	mut x := f64(0)
+	mut y := f64(0)
+	mut w := f64(0)
+	mut h := f64(0)
+	C.vt_cgpath_get_bounding_box(voidptr(p), &x, &y, &w, &h)
+	return CGRect.init(x, y, w, h)
+}
+
+pub enum CGContextTextDrawingMode {
+	fill             = 0
+	stroke           = 1
+	fill_stroke      = 2
+	invisible        = 3
+	fill_clip        = 4
+	stroke_clip      = 5
+	fill_stroke_clip = 6
+	clip             = 7
+}
+
+pub struct CGContext {}
+
+pub fn (ctx &CGContext) release() {
+	C.CGContextRelease(voidptr(ctx))
+}
+
+pub fn (ctx &CGContext) set_line_width(width f64) {
+	C.CGContextSetLineWidth(voidptr(ctx), width)
+}
+
+pub fn (ctx &CGContext) set_allows_antialiasing(v bool) {
+	C.CGContextSetAllowsAntialiasing(voidptr(ctx), v)
+}
+
+pub fn (ctx &CGContext) set_allows_font_smoothing(v bool) {
+	C.CGContextSetAllowsFontSmoothing(voidptr(ctx), v)
+}
+
+pub fn (ctx &CGContext) set_allows_font_subpixel_positioning(v bool) {
+	C.CGContextSetAllowsFontSubpixelPositioning(voidptr(ctx), v)
+}
+
+pub fn (ctx &CGContext) set_allows_font_subpixel_quantization(v bool) {
+	C.CGContextSetAllowsFontSubpixelQuantization(voidptr(ctx), v)
+}
+
+pub fn (ctx &CGContext) set_should_antialias(v bool) {
+	C.CGContextSetShouldAntialias(voidptr(ctx), v)
+}
+
+pub fn (ctx &CGContext) set_should_smooth_fonts(v bool) {
+	C.CGContextSetShouldSmoothFonts(voidptr(ctx), v)
+}
+
+pub fn (ctx &CGContext) set_should_subpixel_position_fonts(v bool) {
+	C.CGContextSetShouldSubpixelPositionFonts(voidptr(ctx), v)
+}
+
+pub fn (ctx &CGContext) set_should_subpixel_quantize_fonts(v bool) {
+	C.CGContextSetShouldSubpixelQuantizeFonts(voidptr(ctx), v)
+}
+
+pub fn (ctx &CGContext) set_gray_fill_color(gray f64, alpha f64) {
+	C.CGContextSetGrayFillColor(voidptr(ctx), gray, alpha)
+}
+
+pub fn (ctx &CGContext) set_gray_stroke_color(gray f64, alpha f64) {
+	C.CGContextSetGrayStrokeColor(voidptr(ctx), gray, alpha)
+}
+
+pub fn (ctx &CGContext) set_rgb_fill_color(r f64, g f64, b f64, alpha f64) {
+	C.CGContextSetRGBFillColor(voidptr(ctx), r, g, b, alpha)
+}
+
+pub fn (ctx &CGContext) set_rgb_stroke_color(r f64, g f64, b f64, alpha f64) {
+	C.CGContextSetRGBStrokeColor(voidptr(ctx), r, g, b, alpha)
+}
+
+pub fn (ctx &CGContext) set_text_drawing_mode(mode CGContextTextDrawingMode) {
+	C.CGContextSetTextDrawingMode(voidptr(ctx), int(mode))
+}
+
+pub fn (ctx &CGContext) set_text_matrix(matrix CGAffineTransform) {
+	C.vt_cgcontext_set_text_matrix(voidptr(ctx), matrix.a, matrix.b, matrix.c, matrix.d,
+		matrix.tx, matrix.ty)
+}
+
+pub fn (ctx &CGContext) set_text_position(x f64, y f64) {
+	C.CGContextSetTextPosition(voidptr(ctx), x, y)
+}
+
+pub fn (ctx &CGContext) fill_rect(rect CGRect) {
+	C.vt_cgcontext_fill_rect(voidptr(ctx), rect.origin.x, rect.origin.y, rect.size.width,
+		rect.size.height)
+}
+
+pub fn (ctx &CGContext) scale_ctm(sx f64, sy f64) {
+	C.CGContextScaleCTM(voidptr(ctx), sx, sy)
+}
+
+pub fn (ctx &CGContext) translate_ctm(tx f64, ty f64) {
+	C.CGContextTranslateCTM(voidptr(ctx), tx, ty)
+}
+
+pub struct CGBitmapContext {}
+
+pub fn CGBitmapContext.create(data []u8, width usize, height usize, bits_per_component usize, bytes_per_row usize, space &CGColorSpace, opts u32) !&CGBitmapContext {
+	mut data_ptr := voidptr(unsafe { nil })
+	if data.len > 0 {
+		data_ptr = voidptr(data.data)
+	}
+	ptr := C.vt_cgbitmap_context_create(data_ptr, width, height, bits_per_component, bytes_per_row,
+		voidptr(space), opts)
+	return require_cf_ref[CGBitmapContext](ptr, 'CGBitmapContextCreate')
+}
+
+pub fn (ctx &CGBitmapContext) as_context() &CGContext {
+	return cast_cf_ref[CGContext](voidptr(ctx))
+}
+
+// Upstream-style aliases from pkg/macos/graphics.zig.
+pub type AffineTransform = CGAffineTransform
+pub type Point = CGPoint
+pub type Size = CGSize
+pub type Rect = CGRect
+pub type Glyph = u16
+pub type ImageAlphaInfo = CGImageAlphaInfo
+pub type BitmapInfo = CGBitmapInfo
+pub type ColorSpace = CGColorSpace
+pub type Path = CGPath
+pub type MutablePath = CGMutablePath
+pub type TextDrawingMode = CGContextTextDrawingMode
+pub type BitmapContext = CGBitmapContext
+pub type Font = CTFont
+pub type FontDescriptor = CTFontDescriptor
+pub type FontCollection = CTFontCollection
+pub type Typesetter = CTTypesetter
+pub type Line = CTLine
+pub type Run = CTRun
+pub type DisplayLink = CVDisplayLink
+pub type Log = OSLog
+pub type AttributedString = CFAttributedString
+pub type MutableAttributedString = CFMutableAttributedString
+pub type Range = CFRange
+pub type CharacterSet = CFCharacterSet
+pub type Data = CFData
+pub type Dictionary = CFDictionary
+pub type MutableDictionary = CFMutableDictionary
+pub type Number = CFNumber
+pub type String = CFString
+pub type MutableString = CFMutableString
+pub type StringEncoding = Encoding
+pub type URL = CFURL
+pub type ParagraphStyle = CTParagraphStyle
+pub type ParagraphStyleSetting = CTParagraphStyleSetting
+pub type ParagraphStyleSpecifier = CTParagraphStyleSpecifier
+pub type Frame = CTFrame
+pub type Framesetter = CTFramesetter
 
 // ============================================================
 // CFArray (generic array wrapper)
@@ -623,6 +1322,9 @@ pub fn (a &CFArray) get_value_at_index(idx int) voidptr {
 pub fn (a &CFArray) release() {
 	cf_release(voidptr(a))
 }
+
+pub type Array = CFArray
+pub type MutableArray = CFMutableArray
 
 // ============================================================
 // CFReleaseThread — dedicated thread for releasing CF objects
@@ -723,4 +1425,342 @@ pub fn create_font_descriptor_from_data(data &CFData) ?&CTFontDescriptor {
 		return none
 	}
 	return cast_cf_ref[CTFontDescriptor](ptr)
+}
+
+// ============================================================
+// dispatch
+// ============================================================
+
+pub type DispatchQueue = voidptr
+
+pub fn dispatch_get_main_queue() DispatchQueue {
+	return C.vt_dispatch_get_main_queue()
+}
+
+pub struct DispatchData {}
+
+pub fn DispatchData.create(data []u8, queue DispatchQueue) !&DispatchData {
+	mut data_ptr := voidptr(unsafe { nil })
+	if data.len > 0 {
+		data_ptr = voidptr(data.data)
+	}
+	ptr := C.vt_dispatch_data_create(data_ptr, data.len, queue)
+	return require_cf_ref[DispatchData](ptr, 'dispatch_data_create')
+}
+
+pub fn (d &DispatchData) release() {
+	C.vt_dispatch_release(voidptr(d))
+}
+
+// ============================================================
+// animation
+// ============================================================
+
+pub fn k_ca_gravity_top_left() voidptr {
+	return C.vt_kca_gravity_top_left()
+}
+
+pub fn k_ca_gravity_bottom_left() voidptr {
+	return C.vt_kca_gravity_bottom_left()
+}
+
+pub fn k_ca_gravity_center() voidptr {
+	return C.vt_kca_gravity_center()
+}
+
+// ============================================================
+// video.display_link
+// ============================================================
+
+pub struct CVDisplayLink {}
+
+pub fn CVDisplayLink.create_with_active_cg_displays() !&CVDisplayLink {
+	ptr := C.vt_display_link_create_with_active_displays()
+	return require_cf_ref[CVDisplayLink](ptr, 'CVDisplayLinkCreateWithActiveCGDisplays')
+}
+
+pub fn (d &CVDisplayLink) release() {
+	C.vt_display_link_release(voidptr(d))
+}
+
+pub fn (d &CVDisplayLink) start() ! {
+	if !C.vt_display_link_start(voidptr(d)) {
+		return error('CVDisplayLinkStart failed')
+	}
+}
+
+pub fn (d &CVDisplayLink) stop() ! {
+	if !C.vt_display_link_stop(voidptr(d)) {
+		return error('CVDisplayLinkStop failed')
+	}
+}
+
+pub fn (d &CVDisplayLink) is_running() bool {
+	return C.vt_display_link_is_running(voidptr(d))
+}
+
+pub fn (d &CVDisplayLink) set_current_cg_display(display_id u32) ! {
+	if !C.vt_display_link_set_current_display(voidptr(d), display_id) {
+		return error('CVDisplayLinkSetCurrentCGDisplay failed')
+	}
+}
+
+// ============================================================
+// os.log
+// ============================================================
+
+pub enum LogType {
+	default_ = 0x00
+	debug    = 0x02
+	info     = 0x01
+	err      = 0x10
+	fault    = 0x11
+}
+
+pub struct OSLog {}
+
+pub fn OSLog.create(subsystem string, category string) &OSLog {
+	ptr := C.vt_os_log_create(subsystem.str, category.str)
+	if isnil(ptr) {
+		return unsafe { &OSLog(nil) }
+	}
+	return cast_cf_ref[OSLog](ptr)
+}
+
+pub fn (l &OSLog) release() {
+	C.vt_os_release(voidptr(l))
+}
+
+pub fn (l &OSLog) type_enabled(typ LogType) bool {
+	return C.vt_os_log_type_enabled(voidptr(l), u8(typ))
+}
+
+pub fn (l &OSLog) log(typ LogType, msg string) {
+	C.vt_os_log_with_type_str(voidptr(l), u8(typ), msg.str)
+}
+
+// ============================================================
+// os.signpost
+// ============================================================
+
+pub fn signpost_init() {
+	// Zig-specific dso handle workaround is not needed in this V translation.
+}
+
+pub enum SignpostType {
+	event          = 0
+	interval_begin = 1
+	interval_end   = 2
+}
+
+pub const signpost_type_mask = u8(0x03)
+
+pub fn signpost_enabled(log &OSLog) bool {
+	return C.vt_os_signpost_enabled(voidptr(log))
+}
+
+pub type SignpostId = u64
+
+pub const signpost_id_null = u64(0)
+pub const signpost_id_invalid = u64(0xFFFFFFFFFFFFFFFF)
+pub const signpost_id_exclusive = u64(0xEEEEB0B5B2B2EEEE)
+
+pub fn signpost_id_generate(log &OSLog) SignpostId {
+	return C.vt_os_signpost_id_generate(voidptr(log))
+}
+
+pub fn signpost_id_for_pointer(log &OSLog, ptr voidptr) SignpostId {
+	return C.vt_os_signpost_id_for_pointer(voidptr(log), ptr)
+}
+
+pub fn signpost_emit_event(log &OSLog, id SignpostId, name string) {
+	C.vt_os_signpost_event_emit(voidptr(log), id, name.str)
+}
+
+pub fn signpost_interval_begin(log &OSLog, id SignpostId, name string) {
+	C.vt_os_signpost_interval_begin(voidptr(log), id, name.str)
+}
+
+pub fn signpost_interval_end(log &OSLog, id SignpostId, name string) {
+	C.vt_os_signpost_interval_end(voidptr(log), id, name.str)
+}
+
+pub const signpost_category_points_of_interest = 'PointsOfInterest'
+pub const signpost_category_dynamic_tracing = 'DynamicTracing'
+pub const signpost_category_dynamic_stack_tracing = 'DynamicStackTracing'
+
+// ============================================================
+// iosurface
+// ============================================================
+
+pub enum PixelFormat {
+	p1_monochrome                                = C.kCVPixelFormatType_1Monochrome
+	p2_indexed                                   = C.kCVPixelFormatType_2Indexed
+	p4_indexed                                   = C.kCVPixelFormatType_4Indexed
+	p8_indexed                                   = C.kCVPixelFormatType_8Indexed
+	p1_indexed_gray_white_is_zero                = C.kCVPixelFormatType_1IndexedGray_WhiteIsZero
+	p2_indexed_gray_white_is_zero                = C.kCVPixelFormatType_2IndexedGray_WhiteIsZero
+	p4_indexed_gray_white_is_zero                = C.kCVPixelFormatType_4IndexedGray_WhiteIsZero
+	p8_indexed_gray_white_is_zero                = C.kCVPixelFormatType_8IndexedGray_WhiteIsZero
+	p16_be_555                                   = C.kCVPixelFormatType_16BE555
+	p16_le_555                                   = C.kCVPixelFormatType_16LE555
+	p16_le_5551                                  = C.kCVPixelFormatType_16LE5551
+	p16_be_565                                   = C.kCVPixelFormatType_16BE565
+	p16_le_565                                   = C.kCVPixelFormatType_16LE565
+	p24_rgb                                      = C.kCVPixelFormatType_24RGB
+	p24_bgr                                      = C.kCVPixelFormatType_24BGR
+	p32_argb                                     = C.kCVPixelFormatType_32ARGB
+	p32_bgra                                     = C.kCVPixelFormatType_32BGRA
+	p32_abgr                                     = C.kCVPixelFormatType_32ABGR
+	p32_rgba                                     = C.kCVPixelFormatType_32RGBA
+	p64_argb                                     = C.kCVPixelFormatType_64ARGB
+	p64_rgbale                                   = C.kCVPixelFormatType_64RGBALE
+	p48_rgb                                      = C.kCVPixelFormatType_48RGB
+	p32_alpha_gray                               = C.kCVPixelFormatType_32AlphaGray
+	p16_gray                                     = C.kCVPixelFormatType_16Gray
+	p30_rgb                                      = C.kCVPixelFormatType_30RGB
+	p30_rgb_r_210                                = C.kCVPixelFormatType_30RGB_r210
+	p422_yp_cb_cr_8                              = C.kCVPixelFormatType_422YpCbCr8
+	p4444_yp_cb_cr_a_8                           = C.kCVPixelFormatType_4444YpCbCrA8
+	p4444_yp_cb_cr_a_8_r                         = C.kCVPixelFormatType_4444YpCbCrA8R
+	p4444_ayp_cb_cr_8                            = C.kCVPixelFormatType_4444AYpCbCr8
+	p4444_ayp_cb_cr_16                           = C.kCVPixelFormatType_4444AYpCbCr16
+	p4444_ayp_cb_cr_float                        = C.kCVPixelFormatType_4444AYpCbCrFloat
+	p444_yp_cb_cr_8                              = C.kCVPixelFormatType_444YpCbCr8
+	p422_yp_cb_cr_16                             = C.kCVPixelFormatType_422YpCbCr16
+	p422_yp_cb_cr_10                             = C.kCVPixelFormatType_422YpCbCr10
+	p444_yp_cb_cr_10                             = C.kCVPixelFormatType_444YpCbCr10
+	p420_yp_cb_cr_8_planar                       = C.kCVPixelFormatType_420YpCbCr8Planar
+	p420_yp_cb_cr_8_planar_full_range            = C.kCVPixelFormatType_420YpCbCr8PlanarFullRange
+	p422_yp_cb_cr_4_a_8_bi_planar                = C.kCVPixelFormatType_422YpCbCr_4A_8BiPlanar
+	p420_yp_cb_cr_8_bi_planar_video_range        = C.kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+	p420_yp_cb_cr_8_bi_planar_full_range         = C.kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+	p422_yp_cb_cr_8_bi_planar_video_range        = C.kCVPixelFormatType_422YpCbCr8BiPlanarVideoRange
+	p422_yp_cb_cr_8_bi_planar_full_range         = C.kCVPixelFormatType_422YpCbCr8BiPlanarFullRange
+	p444_yp_cb_cr_8_bi_planar_video_range        = C.kCVPixelFormatType_444YpCbCr8BiPlanarVideoRange
+	p444_yp_cb_cr_8_bi_planar_full_range         = C.kCVPixelFormatType_444YpCbCr8BiPlanarFullRange
+	p422_yp_cb_cr_8_yuvs                         = C.kCVPixelFormatType_422YpCbCr8_yuvs
+	p422_yp_cb_cr_8_full_range                   = C.kCVPixelFormatType_422YpCbCr8FullRange
+	one_component_8                              = C.kCVPixelFormatType_OneComponent8
+	two_component_8                              = C.kCVPixelFormatType_TwoComponent8
+	p30_rgblepacked_wide_gamut                   = C.kCVPixelFormatType_30RGBLEPackedWideGamut
+	argb_2101010_lepacked                        = C.kCVPixelFormatType_ARGB2101010LEPacked
+	p40_argblewide_gamut                         = C.kCVPixelFormatType_40ARGBLEWideGamut
+	p40_argblewide_gamut_premultiplied           = C.kCVPixelFormatType_40ARGBLEWideGamutPremultiplied
+	one_component_10                             = C.kCVPixelFormatType_OneComponent10
+	one_component_12                             = C.kCVPixelFormatType_OneComponent12
+	one_component_16                             = C.kCVPixelFormatType_OneComponent16
+	two_component_16                             = C.kCVPixelFormatType_TwoComponent16
+	one_component_16_half                        = C.kCVPixelFormatType_OneComponent16Half
+	one_component_32_float                       = C.kCVPixelFormatType_OneComponent32Float
+	two_component_16_half                        = C.kCVPixelFormatType_TwoComponent16Half
+	two_component_32_float                       = C.kCVPixelFormatType_TwoComponent32Float
+	p64_rgbahalf                                 = C.kCVPixelFormatType_64RGBAHalf
+	p128_rgbafloat                               = C.kCVPixelFormatType_128RGBAFloat
+	p14_bayer_grbg                               = C.kCVPixelFormatType_14Bayer_GRBG
+	p14_bayer_rggb                               = C.kCVPixelFormatType_14Bayer_RGGB
+	p14_bayer_bggr                               = C.kCVPixelFormatType_14Bayer_BGGR
+	p14_bayer_gbrg                               = C.kCVPixelFormatType_14Bayer_GBRG
+	disparity_float_16                           = C.kCVPixelFormatType_DisparityFloat16
+	disparity_float_32                           = C.kCVPixelFormatType_DisparityFloat32
+	depth_float_16                               = C.kCVPixelFormatType_DepthFloat16
+	depth_float_32                               = C.kCVPixelFormatType_DepthFloat32
+	p420_yp_cb_cr_10_bi_planar_video_range       = C.kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
+	p422_yp_cb_cr_10_bi_planar_video_range       = C.kCVPixelFormatType_422YpCbCr10BiPlanarVideoRange
+	p444_yp_cb_cr_10_bi_planar_video_range       = C.kCVPixelFormatType_444YpCbCr10BiPlanarVideoRange
+	p420_yp_cb_cr_10_bi_planar_full_range        = C.kCVPixelFormatType_420YpCbCr10BiPlanarFullRange
+	p422_yp_cb_cr_10_bi_planar_full_range        = C.kCVPixelFormatType_422YpCbCr10BiPlanarFullRange
+	p444_yp_cb_cr_10_bi_planar_full_range        = C.kCVPixelFormatType_444YpCbCr10BiPlanarFullRange
+	p420_yp_cb_cr_8_video_range_8_a_tri_planar   = C.kCVPixelFormatType_420YpCbCr8VideoRange_8A_TriPlanar
+	p16_versatile_bayer                          = C.kCVPixelFormatType_16VersatileBayer
+	p64_rgba_downscaled_pro_res_raw              = C.kCVPixelFormatType_64RGBA_DownscaledProResRAW
+	p422_yp_cb_cr_16_bi_planar_video_range       = C.kCVPixelFormatType_422YpCbCr16BiPlanarVideoRange
+	p444_yp_cb_cr_16_bi_planar_video_range       = C.kCVPixelFormatType_444YpCbCr16BiPlanarVideoRange
+	p444_yp_cb_cr_16_video_range_16_a_tri_planar = C.kCVPixelFormatType_444YpCbCr16VideoRange_16A_TriPlanar
+	_
+}
+
+pub struct IOSurfaceProperties {
+pub:
+	width             int
+	height            int
+	pixel_format      PixelFormat = .p32_bgra
+	bytes_per_element int         = 4
+	colorspace        ?&CGColorSpace
+}
+
+pub struct IOSurface {}
+
+pub fn IOSurface.init(properties IOSurfaceProperties) !&IOSurface {
+	mut colorspace_ptr := voidptr(unsafe { nil })
+	if colorspace := properties.colorspace {
+		colorspace_ptr = voidptr(colorspace)
+	}
+	ptr := C.vt_iosurface_create(properties.width, properties.height, u32(properties.pixel_format),
+		properties.bytes_per_element, colorspace_ptr)
+	return require_cf_ref[IOSurface](ptr, 'IOSurfaceCreate')
+}
+
+pub fn (s &IOSurface) deinit() {
+	C.vt_iosurface_deinit(voidptr(s))
+}
+
+pub fn (s &IOSurface) retain() {
+	C.vt_iosurface_retain(voidptr(s))
+}
+
+pub fn (s &IOSurface) release() {
+	C.vt_iosurface_release(voidptr(s))
+}
+
+pub fn (s &IOSurface) set_color_space(colorspace &CGColorSpace) {
+	C.vt_iosurface_set_color_space(voidptr(s), voidptr(colorspace))
+}
+
+pub fn (s &IOSurface) lock() {
+	C.vt_iosurface_lock(voidptr(s))
+}
+
+pub fn (s &IOSurface) unlock() {
+	C.vt_iosurface_unlock(voidptr(s))
+}
+
+pub fn (s &IOSurface) get_alloc_size() usize {
+	return C.vt_iosurface_get_alloc_size(voidptr(s))
+}
+
+pub fn (s &IOSurface) get_width() usize {
+	return C.vt_iosurface_get_width(voidptr(s))
+}
+
+pub fn (s &IOSurface) get_height() usize {
+	return C.vt_iosurface_get_height(voidptr(s))
+}
+
+pub fn (s &IOSurface) get_bytes_per_element() usize {
+	return C.vt_iosurface_get_bytes_per_element(voidptr(s))
+}
+
+pub fn (s &IOSurface) get_bytes_per_row() usize {
+	return C.vt_iosurface_get_bytes_per_row(voidptr(s))
+}
+
+pub fn (s &IOSurface) get_base_address() ?&u8 {
+	ptr := C.vt_iosurface_get_base_address(voidptr(s))
+	if isnil(ptr) {
+		return none
+	}
+	return unsafe { &u8(ptr) }
+}
+
+pub fn (s &IOSurface) get_element_width() usize {
+	return C.vt_iosurface_get_element_width(voidptr(s))
+}
+
+pub fn (s &IOSurface) get_element_height() usize {
+	return C.vt_iosurface_get_element_height(voidptr(s))
+}
+
+pub fn (s &IOSurface) get_pixel_format() PixelFormat {
+	return unsafe { PixelFormat(C.vt_iosurface_get_pixel_format(voidptr(s))) }
 }
