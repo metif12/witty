@@ -154,7 +154,7 @@ fn default_tab_title() string {
 	if cwd.len > 0 {
 		return cwd
 	}
-	return 'vterminal'
+	return 'Witty'
 }
 
 // ============================================================

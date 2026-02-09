@@ -14,7 +14,7 @@ pub:
 }
 
 pub fn TempDir.init() !TempDir {
-	p := os.join_path(os.temp_dir(), 'vterminal')
+	p := os.join_path(os.temp_dir(), 'Witty')
 	os.mkdir_all(p) or {}
 	return TempDir{ path: p }
 }

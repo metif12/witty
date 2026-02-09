@@ -2573,7 +2573,7 @@ fn (self &Surface) osc8_uri(pin Pin) ?string {
 fn (mut self Surface) write_screen_file(loc WriteScreenLoc, emit int) ! {
 	// Create temp file for screen content dump
 	tmp_dir := os.temp_dir()
-	tmp_path := os.join_path(tmp_dir, 'vterminal_dump.txt')
+	tmp_path := os.join_path(tmp_dir, 'Witty_dump.txt')
 
 	content := self.renderer_state.terminal.selection_string()
 	os.write_file(tmp_path, content)!

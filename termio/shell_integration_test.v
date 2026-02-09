@@ -12,7 +12,7 @@ struct TmpResourcesDir {
 }
 
 fn TmpResourcesDir.init(shell Shell) !TmpResourcesDir {
-	tmp_path := os.join_path(os.temp_dir(), 'vterminal_test_${os.getpid()}_${shell}')
+	tmp_path := os.join_path(os.temp_dir(), 'Witty_test_${os.getpid()}_${shell}')
 	os.rmdir_all(tmp_path) or {}
 
 	shell_name := match shell {
@@ -381,7 +381,7 @@ fn test_bash_additional_args_double_dash() {
 }
 
 fn test_bash_missing_resources() {
-	tmp_path := os.join_path(os.temp_dir(), 'vterminal_test_missing_${os.getpid()}')
+	tmp_path := os.join_path(os.temp_dir(), 'Witty_test_missing_${os.getpid()}')
 	os.mkdir_all(tmp_path) or { return }
 	defer {
 		os.rmdir_all(tmp_path) or {}
@@ -424,7 +424,7 @@ fn test_xdg_existing() {
 }
 
 fn test_xdg_missing_resources() {
-	tmp_path := os.join_path(os.temp_dir(), 'vterminal_test_xdg_missing_${os.getpid()}')
+	tmp_path := os.join_path(os.temp_dir(), 'Witty_test_xdg_missing_${os.getpid()}')
 	os.mkdir_all(tmp_path) or { return }
 	defer {
 		os.rmdir_all(tmp_path) or {}
@@ -494,7 +494,7 @@ fn test_nushell_unsupported_c_flag() {
 }
 
 fn test_nushell_missing_resources() {
-	tmp_path := os.join_path(os.temp_dir(), 'vterminal_test_nu_missing_${os.getpid()}')
+	tmp_path := os.join_path(os.temp_dir(), 'Witty_test_nu_missing_${os.getpid()}')
 	os.mkdir_all(tmp_path) or { return }
 	defer {
 		os.rmdir_all(tmp_path) or {}
@@ -548,7 +548,7 @@ fn test_zsh_zdotdir_preserved() {
 }
 
 fn test_zsh_missing_resources() {
-	tmp_path := os.join_path(os.temp_dir(), 'vterminal_test_zsh_missing_${os.getpid()}')
+	tmp_path := os.join_path(os.temp_dir(), 'Witty_test_zsh_missing_${os.getpid()}')
 	os.mkdir_all(tmp_path) or { return }
 	defer {
 		os.rmdir_all(tmp_path) or {}

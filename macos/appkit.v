@@ -1,6 +1,6 @@
 module macos
 
-// AppKit/CoreText bindings for vterminal.
+// AppKit/CoreText bindings for Witty.
 // V on macOS compiles with -x objective-c automatically,
 // so the .m file is compiled as part of the V build.
 

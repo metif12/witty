@@ -1,4 +1,4 @@
-// appkit.m — Objective-C helpers for vterminal's macOS window.
+// appkit.m — Objective-C helpers for Witty's macOS window.
 // Compiled automatically by V via #include in appkit.v.
 
 #import <AppKit/AppKit.h>
@@ -288,7 +288,7 @@ static NSString        *vt_g_base_title = nil;
 
 static NSString* vt_cwd_display_title(void) {
     NSString *cwd = [[NSFileManager defaultManager] currentDirectoryPath];
-    if (!cwd || cwd.length == 0) return @"vterminal";
+    if (!cwd || cwd.length == 0) return @"Witty";
     return [cwd stringByAbbreviatingWithTildeInPath];
 }
 
@@ -360,6 +360,13 @@ static NSURL* vt_url_for_title(NSString *title) {
     return nil;
 }
 
+static NSString* vt_window_title_for_base(NSString *base) {
+    if (!base || base.length == 0 || [base isEqualToString:@"Witty"]) {
+        return @"Witty";
+    }
+    return [NSString stringWithFormat:@"Witty - %@", base];
+}
+
 static void vt_refresh_tab_labels(NSWindow *anchor_window) {
     if (!anchor_window) return;
     NSArray<NSWindow *> *tabs = [anchor_window tabbedWindows];
@@ -369,14 +376,14 @@ static void vt_refresh_tab_labels(NSWindow *anchor_window) {
 
     for (NSUInteger i = 0; i < tabs.count; i++) {
         NSWindow *tab = tabs[i];
-        NSString *base = vt_g_base_title ?: @"vterminal";
+        NSString *base = vt_g_base_title ?: @"Witty";
         if (tab.representedURL) {
             base = [[tab.representedURL path] stringByAbbreviatingWithTildeInPath];
         }
 
-        NSString *label = base;
+        NSString *label = vt_window_title_for_base(base);
         if (tabs.count > 1) {
-            label = [NSString stringWithFormat:@"%@  \u2318%lu", base, (unsigned long)(i + 1)];
+            label = [NSString stringWithFormat:@"%@  \u2318%lu", label, (unsigned long)(i + 1)];
         }
         [tab setTitle:label];
     }
@@ -386,7 +393,7 @@ static void vt_configure_window_common(NSWindow *window, NSString *base_title) {
     if (!window) return;
     [window setMinSize:NSMakeSize(200, 100)];
     [window setTabbingMode:NSWindowTabbingModeAutomatic];
-    [window setTabbingIdentifier:@"vterminal.tabs"];
+    [window setTabbingIdentifier:@"Witty.tabs"];
     [window setCollectionBehavior:NSWindowCollectionBehaviorFullScreenPrimary];
 
     vt_apply_window_theme(window);
@@ -464,15 +471,15 @@ void vt_app_init(void) {
 
     NSMenu *menuBar = [[NSMenu alloc] init];
 
-    // ---- App menu (vterminal) ----
+    // ---- App menu (Witty) ----
     NSMenuItem *appMenuItem = [[NSMenuItem alloc] init];
     [menuBar addItem:appMenuItem];
-    NSMenu *appMenu = [[NSMenu alloc] initWithTitle:@"vterminal"];
-    [appMenu addItemWithTitle:@"About vterminal"
+    NSMenu *appMenu = [[NSMenu alloc] initWithTitle:@"Witty"];
+    [appMenu addItemWithTitle:@"About Witty"
                        action:@selector(orderFrontStandardAboutPanel:)
                 keyEquivalent:@""];
     [appMenu addItem:[NSMenuItem separatorItem]];
-    [appMenu addItemWithTitle:@"Hide vterminal"
+    [appMenu addItemWithTitle:@"Hide Witty"
                        action:@selector(hide:)
                 keyEquivalent:@"h"];
     NSMenuItem *hideOthers = [appMenu addItemWithTitle:@"Hide Others"
@@ -483,7 +490,7 @@ void vt_app_init(void) {
                        action:@selector(unhideAllApplications:)
                 keyEquivalent:@""];
     [appMenu addItem:[NSMenuItem separatorItem]];
-    [appMenu addItemWithTitle:@"Quit vterminal"
+    [appMenu addItemWithTitle:@"Quit Witty"
                        action:@selector(terminate:)
                 keyEquivalent:@"q"];
     [appMenuItem setSubmenu:appMenu];
