@@ -387,7 +387,10 @@ static NSString* vt_window_title_for_base(NSString *base) {
     if (!base || base.length == 0) {
         return @"Witty";
     }
-    return base;
+    if ([base isEqualToString:@"Witty"] || [base hasPrefix:@"Witty - "]) {
+        return base;
+    }
+    return [NSString stringWithFormat:@"Witty - %@", base];
 }
 
 static void vt_refresh_tab_labels(NSWindow *anchor_window) {
