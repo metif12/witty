@@ -273,11 +273,12 @@ static void vt_apply_window_theme(NSWindow *window) {
         window.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
     }
     if ([window respondsToSelector:@selector(setToolbarStyle:)]) {
-        window.toolbarStyle = NSWindowToolbarStyleUnifiedCompact;
+        window.toolbarStyle = NSWindowToolbarStyleUnified;
     }
     // Keep content below title/tab bars; full-size content causes glyph overlap.
     window.titlebarAppearsTransparent = NO;
     window.movableByWindowBackground = NO;
+    window.titleVisibility = NSWindowTitleVisible;
     window.backgroundColor = [NSColor colorWithCalibratedRed:0.17 green:0.19 blue:0.24 alpha:1.0];
 }
 
@@ -290,11 +291,18 @@ static void vt_add_new_tab_button(NSWindow *window) {
     }
 
     NSButton *button = [NSButton buttonWithTitle:@"+" target:nil action:@selector(vtNewTab:)];
-    button.bezelStyle = NSBezelStyleCircular;
-    button.font = [NSFont systemFontOfSize:14.0 weight:NSFontWeightSemibold];
-    button.frame = NSMakeRect(0, 0, 28, 24);
+    button.bezelStyle = NSBezelStyleRegularSquare;
+    button.bordered = NO;
+    button.font = [NSFont systemFontOfSize:22.0 weight:NSFontWeightSemibold];
+    button.contentTintColor = [NSColor colorWithCalibratedWhite:0.92 alpha:1.0];
+    button.frame = NSMakeRect(0, 0, 26, 26);
+    button.wantsLayer = YES;
+    button.layer.cornerRadius = 13.0;
+    button.layer.masksToBounds = YES;
+    button.layer.backgroundColor = [NSColor colorWithCalibratedWhite:0.14 alpha:0.92].CGColor;
 
-    NSView *container = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 32, 24)];
+    NSView *container = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 36, 28)];
+    button.frame = NSMakeRect(5, 1, 26, 26);
     [container addSubview:button];
 
     NSTitlebarAccessoryViewController *vc = [[NSTitlebarAccessoryViewController alloc] init];
@@ -330,7 +338,7 @@ static void vt_refresh_tab_labels(NSWindow *anchor_window) {
 
         NSString *label = base;
         if (tabs.count > 1) {
-            label = [NSString stringWithFormat:@"%@    \u2318%lu", base, (unsigned long)(i + 1)];
+            label = [NSString stringWithFormat:@"%@  \u2318%lu", base, (unsigned long)(i + 1)];
         }
         [tab setTitle:label];
     }
