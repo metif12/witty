@@ -9,6 +9,7 @@
 #import <CoreVideo/CoreVideo.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/QuartzCore.h>
+#import <objc/runtime.h>
 #import <dispatch/dispatch.h>
 #import <os/log.h>
 #import <os/signpost.h>
@@ -280,7 +281,7 @@ enum {
 
 static NSWindow        *vt_g_window   = nil;  // first window (tab group anchor)
 static VTAppDelegate   *vt_g_delegate = nil;
-static NSString        *vt_g_base_title = nil;
+static const void      *vt_base_title_key = &vt_base_title_key;
 
 // ============================================================
 // Window/tab styling helpers
@@ -300,6 +301,13 @@ static NSString* vt_display_title_for_input(const char *title) {
     if (!t || t.length == 0) {
         return vt_cwd_display_title();
     }
+    return t;
+}
+
+static NSString* vt_runtime_title_for_input(const char *title) {
+    if (!title) return @"";
+    NSString *t = [NSString stringWithUTF8String:title];
+    if (!t) return @"";
     return t;
 }
 
@@ -360,11 +368,26 @@ static NSURL* vt_url_for_title(NSString *title) {
     return nil;
 }
 
+static void vt_set_base_title(NSWindow *window, NSString *base) {
+    if (!window) return;
+    NSString *title = base ?: @"";
+    objc_setAssociatedObject(window, vt_base_title_key, title, OBJC_ASSOCIATION_COPY_NONATOMIC);
+}
+
+static NSString* vt_get_base_title(NSWindow *window) {
+    if (!window) return nil;
+    id value = objc_getAssociatedObject(window, vt_base_title_key);
+    if ([value isKindOfClass:[NSString class]]) {
+        return (NSString *)value;
+    }
+    return nil;
+}
+
 static NSString* vt_window_title_for_base(NSString *base) {
-    if (!base || base.length == 0 || [base isEqualToString:@"Witty"]) {
+    if (!base || base.length == 0) {
         return @"Witty";
     }
-    return [NSString stringWithFormat:@"Witty - %@", base];
+    return base;
 }
 
 static void vt_refresh_tab_labels(NSWindow *anchor_window) {
@@ -376,9 +399,12 @@ static void vt_refresh_tab_labels(NSWindow *anchor_window) {
 
     for (NSUInteger i = 0; i < tabs.count; i++) {
         NSWindow *tab = tabs[i];
-        NSString *base = vt_g_base_title ?: @"Witty";
+        NSString *base = vt_get_base_title(tab);
         if (tab.representedURL) {
             base = [[tab.representedURL path] stringByAbbreviatingWithTildeInPath];
+        }
+        if (!base || base.length == 0) {
+            base = @"Witty";
         }
 
         NSString *label = vt_window_title_for_base(base);
@@ -399,6 +425,7 @@ static void vt_configure_window_common(NSWindow *window, NSString *base_title) {
     vt_apply_window_theme(window);
     vt_add_new_tab_button(window);
 
+    vt_set_base_title(window, base_title);
     NSURL *url = vt_url_for_title(base_title);
     [window setRepresentedURL:url];
 }
@@ -576,7 +603,6 @@ void* vt_create_window(int w, int h, const char *title) {
                      | NSWindowStyleMaskResizable;
 
     NSString *base_title = vt_display_title_for_input(title);
-    vt_g_base_title = base_title;
 
     vt_g_window = [[NSWindow alloc] initWithContentRect:frame
                                            styleMask:style
@@ -618,7 +644,6 @@ void* vt_new_tab(int w, int h, const char *title) {
                      | NSWindowStyleMaskResizable;
 
     NSString *base_title = vt_display_title_for_input(title);
-    vt_g_base_title = base_title;
 
     NSWindow *newWindow = [[NSWindow alloc] initWithContentRect:frame
                                                       styleMask:style
@@ -702,6 +727,21 @@ int vt_tab_count(void) {
     NSArray *tabs = [keyWindow tabbedWindows];
     if (!tabs) return 1;
     return (int)[tabs count];
+}
+
+void vt_set_view_title(void *view_ptr, const char *title) {
+    if (!view_ptr) return;
+    VTTerminalView *view = (__bridge VTTerminalView *)view_ptr;
+    NSString *base_title = [[vt_runtime_title_for_input(title) copy] autorelease];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSWindow *window = [view window];
+        if (!window) return;
+
+        vt_set_base_title(window, base_title);
+        [window setRepresentedURL:vt_url_for_title(base_title)];
+        vt_refresh_tab_labels(window);
+    });
 }
 
 // ============================================================

@@ -157,8 +157,9 @@ pub:
 
 	// The default mode state. When the terminal gets a reset, it
 	// will revert back to this state.
-	// The default mode state includes wraparound mode enabled (bit 0).
-	default_modes ModePacked = ModePacked{ data: 1 }
+	// The default mode state includes wraparound (bit 0) and
+	// cursor visible (bit 2), matching DEC mode defaults.
+	default_modes ModePacked = ModePacked{ data: 5 }
 }
 
 pub struct ModePacked {

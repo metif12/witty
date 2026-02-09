@@ -17,6 +17,7 @@ fn C.dup2(oldfd int, newfd int) int
 fn C.close(fd int) int
 fn C.read(fd int, buf voidptr, count usize) int
 fn C.write(fd int, buf voidptr, count usize) int
+fn C.gethostname(name &u8, len usize) int
 fn C._exit(status int)
 fn C.setenv(name &char, value &char, overwrite int) int
 
@@ -105,6 +106,15 @@ mut:
 	left_click_y     f64
 	left_click_count u8
 	left_click_time  time.Time
+	// Title state: explicit OSC title wins; OSC 7 pwd is fallback when unset.
+	tab_title   string
+	seen_title  bool
+	title_stack []TitleStackEntry
+}
+
+struct TitleStackEntry {
+	title      string
+	seen_title bool
 }
 
 // Keep tab states alive for the process lifetime.
@@ -155,6 +165,186 @@ fn default_tab_title() string {
 		return cwd
 	}
 	return 'Witty'
+}
+
+fn local_hostname_lower() string {
+	mut buf := [256]u8{}
+	if C.gethostname(&buf[0], usize(buf.len - 1)) != 0 {
+		return ''
+	}
+	mut n := 0
+	for n < buf.len && buf[n] != 0 {
+		n++
+	}
+	if n == 0 {
+		return ''
+	}
+	return unsafe { tos(&buf[0], n) }.to_lower()
+}
+
+fn is_local_osc7_host(host string) bool {
+	host_l := host.to_lower()
+	if host_l.len == 0 || host_l == 'localhost' || host_l == '127.0.0.1' || host_l == '::1' {
+		return true
+	}
+	local := local_hostname_lower()
+	if local.len == 0 {
+		// If hostname lookup fails, prefer not to drop the update.
+		return true
+	}
+	if host_l == local {
+		return true
+	}
+	dot_host := host_l.index_u8(`.`)
+	if dot_host > 0 && host_l[..dot_host] == local {
+		return true
+	}
+	dot_local := local.index_u8(`.`)
+	if dot_local > 0 && host_l == local[..dot_local] {
+		return true
+	}
+	return false
+}
+
+fn hex_nibble(ch u8) int {
+	if ch >= `0` && ch <= `9` {
+		return int(ch - `0`)
+	}
+	if ch >= `a` && ch <= `f` {
+		return int(ch - `a`) + 10
+	}
+	if ch >= `A` && ch <= `F` {
+		return int(ch - `A`) + 10
+	}
+	return -1
+}
+
+fn percent_decode_uri_path(path string) string {
+	mut out := []u8{cap: path.len}
+	mut i := 0
+	for i < path.len {
+		if path[i] == `%` && i + 2 < path.len {
+			hi := hex_nibble(path[i + 1])
+			lo := hex_nibble(path[i + 2])
+			if hi >= 0 && lo >= 0 {
+				out << u8((u8(hi) << 4) | u8(lo))
+				i += 3
+				continue
+			}
+		}
+		out << path[i]
+		i++
+	}
+	return out.bytestr()
+}
+
+fn parse_osc7_pwd(url string) ?string {
+	mut rest := ''
+	mut decode_percent := false
+
+	if url.starts_with('file://') {
+		rest = url[7..]
+		decode_percent = true
+	} else if url.starts_with('kitty-shell-cwd://') {
+		rest = url['kitty-shell-cwd://'.len..]
+	} else {
+		return none
+	}
+
+	mut host := ''
+	mut path := rest
+	if !rest.starts_with('/') {
+		slash := rest.index_u8(`/`)
+		if slash <= 0 {
+			return none
+		}
+		host = rest[..slash]
+		path = rest[slash..]
+	}
+	if host.len > 0 && !is_local_osc7_host(host) {
+		return none
+	}
+	if path.len == 0 {
+		return none
+	}
+	return if decode_percent {
+		percent_decode_uri_path(path)
+	} else {
+		path
+	}
+}
+
+fn set_tab_title(mut state TermState, title string) {
+	if state.tab_title == title {
+		return
+	}
+	state.tab_title = title
+	if state.view != unsafe { nil } {
+		macos.set_view_title(state.view, title)
+	}
+}
+
+fn apply_window_title(mut state TermState, title string) {
+	// Empty title resets to pwd fallback (or blank if pwd is unknown).
+	if title.len == 0 {
+		state.seen_title = false
+		pwd := state.term.get_pwd() or { '' }
+		set_tab_title(mut state, pwd)
+		return
+	}
+	state.seen_title = true
+	set_tab_title(mut state, title)
+}
+
+fn apply_report_pwd(mut state TermState, url string) {
+	if url.len == 0 {
+		state.term.set_pwd('') or {}
+		if !state.seen_title {
+			apply_window_title(mut state, '')
+		}
+		return
+	}
+
+	pwd := parse_osc7_pwd(url) or { return }
+	state.term.set_pwd(pwd) or {}
+	if !state.seen_title {
+		set_tab_title(mut state, pwd)
+	}
+}
+
+fn push_title_state(mut state TermState) {
+	state.title_stack << TitleStackEntry{
+		title: state.tab_title
+		seen_title: state.seen_title
+	}
+}
+
+fn pop_title_state(mut state TermState) {
+	if state.title_stack.len == 0 {
+		return
+	}
+	entry := state.title_stack[state.title_stack.len - 1]
+	state.title_stack.delete_last()
+	state.seen_title = entry.seen_title
+	set_tab_title(mut state, entry.title)
+}
+
+fn handle_stream_side_effects(mut state TermState, event terminal.StreamEvent) {
+	match event.key {
+		.window_title {
+			apply_window_title(mut state, event.payload.str1)
+		}
+		.report_pwd {
+			apply_report_pwd(mut state, event.payload.str1)
+		}
+		.title_push {
+			push_title_state(mut state)
+		}
+		.title_pop {
+			pop_title_state(mut state)
+		}
+		else {}
+	}
 }
 
 // ============================================================
@@ -249,6 +439,8 @@ fn main() {
 		return
 	}
 	state.view = view
+	state.tab_title = default_tab_title()
+	state.seen_title = false
 	macos.view_set_userdata(view, voidptr(state))
 	retain_tab_state(state)
 
@@ -275,6 +467,8 @@ fn do_new_tab() {
 		return
 	}
 	state.view = view
+	state.tab_title = default_tab_title()
+	state.seen_title = false
 	macos.view_set_userdata(view, voidptr(state))
 	retain_tab_state(state)
 	spawn read_pty_thread(state.pty_fd, state.view)
@@ -889,7 +1083,12 @@ fn read_pty_thread(fd int, view voidptr) {
 			break
 		}
 		mut state := unsafe { &TermState(userdata) }
-		state.stream.next_slice(data) or {}
+		state.stream.stream.next_slice(data.bytes())
+		for event in state.stream.stream.events {
+			state.stream.handler.vt(event) or {}
+			handle_stream_side_effects(mut state, event)
+		}
+		state.stream.stream.clear_events()
 		macos.request_display(view)
 	}
 }

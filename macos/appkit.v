@@ -46,6 +46,7 @@ fn C.vt_new_tab(w int, h int, title &char) voidptr
 fn C.vt_close_tab(view voidptr)
 fn C.vt_select_tab(offset int)
 fn C.vt_tab_count() int
+fn C.vt_set_view_title(view voidptr, title &char)
 
 // Metal C function declarations.
 fn C.vt_metal_activate_layer(view voidptr)
@@ -154,6 +155,10 @@ pub fn select_tab(offset int) {
 
 pub fn tab_count() int {
 	return C.vt_tab_count()
+}
+
+pub fn set_view_title(view voidptr, title string) {
+	C.vt_set_view_title(view, title.str)
 }
 
 // Metal wrappers.
