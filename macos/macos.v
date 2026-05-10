@@ -200,7 +200,7 @@ fn C.vt_iosurface_get_element_width(surface voidptr) usize
 fn C.vt_iosurface_get_element_height(surface voidptr) usize
 fn C.vt_iosurface_get_pixel_format(surface voidptr) u32
 
-// Exposed by appkit.m for CF callback structs and CF/CoreText constants.
+// Exposed by core_shims.h for CF callback structs and CF/CoreText constants.
 fn C.vt_cf_allocator_null() voidptr
 fn C.vt_cf_type_dictionary_key_callbacks() voidptr
 fn C.vt_cf_type_dictionary_value_callbacks() voidptr
@@ -484,8 +484,8 @@ pub fn (d &CFDictionary) release() {
 pub struct CFMutableDictionary {}
 
 pub fn CFMutableDictionary.create(cap usize) !&CFMutableDictionary {
-	ptr := C.CFDictionaryCreateMutable(unsafe { nil }, isize(cap), C.vt_cf_type_dictionary_key_callbacks(),
-		C.vt_cf_type_dictionary_value_callbacks())
+	ptr := C.CFDictionaryCreateMutable(unsafe { nil }, isize(cap),
+		C.vt_cf_type_dictionary_key_callbacks(), C.vt_cf_type_dictionary_value_callbacks())
 	return require_cf_ref[CFMutableDictionary](ptr, 'CFDictionaryCreateMutable')
 }
 
@@ -517,7 +517,8 @@ pub fn CFData.create_with_bytes_no_copy(data []u8) !&CFData {
 	if data.len > 0 {
 		bytes_ptr = voidptr(data.data)
 	}
-	ptr := C.CFDataCreateWithBytesNoCopy(unsafe { nil }, bytes_ptr, isize(data.len), C.vt_cf_allocator_null())
+	ptr := C.CFDataCreateWithBytesNoCopy(unsafe { nil }, bytes_ptr, isize(data.len),
+		C.vt_cf_allocator_null())
 	return require_cf_ref[CFData](ptr, 'CFDataCreateWithBytesNoCopy')
 }
 
@@ -550,8 +551,11 @@ pub fn CFURL.create_with_string(str &CFString, base &CFURL) !&CFURL {
 }
 
 pub fn CFURL.create_with_file_system_path(path &CFString, style URLPathStyle, dir bool) !&CFURL {
-	ptr := C.CFURLCreateWithFileSystemPath(unsafe { nil }, voidptr(path), int(style),
-		if dir { 1 } else { 0 })
+	ptr := C.CFURLCreateWithFileSystemPath(unsafe { nil }, voidptr(path), int(style), if dir {
+		1
+	} else {
+		0
+	})
 	return require_cf_ref[CFURL](ptr, 'CFURLCreateWithFileSystemPath')
 }
 
@@ -647,12 +651,12 @@ pub fn (s &CFMutableAttributedString) release() {
 }
 
 pub fn (s &CFMutableAttributedString) replace_string(range CFRange, replacement &CFString) {
-	C.vt_cfattributedstring_replace_string(voidptr(s), range.location, range.length, voidptr(replacement))
+	C.vt_cfattributedstring_replace_string(voidptr(s), range.location, range.length,
+		voidptr(replacement))
 }
 
 pub fn (s &CFMutableAttributedString) set_attribute(range CFRange, key voidptr, value voidptr) {
-	C.vt_cfattributedstring_set_attribute(voidptr(s), range.location, range.length, key,
-		value)
+	C.vt_cfattributedstring_set_attribute(voidptr(s), range.location, range.length, key, value)
 }
 
 pub fn (s &CFMutableAttributedString) get_length() int {
@@ -1130,7 +1134,8 @@ pub fn (p &CGMutablePath) release() {
 }
 
 pub fn (p &CGMutablePath) add_rect(rect CGRect) {
-	C.vt_cgpath_add_rect(voidptr(p), rect.origin.x, rect.origin.y, rect.size.width, rect.size.height)
+	C.vt_cgpath_add_rect(voidptr(p), rect.origin.x, rect.origin.y, rect.size.width,
+		rect.size.height)
 }
 
 pub fn (p &CGMutablePath) get_bounding_box() CGRect {
@@ -1216,8 +1221,8 @@ pub fn (ctx &CGContext) set_text_drawing_mode(mode CGContextTextDrawingMode) {
 }
 
 pub fn (ctx &CGContext) set_text_matrix(matrix CGAffineTransform) {
-	C.vt_cgcontext_set_text_matrix(voidptr(ctx), matrix.a, matrix.b, matrix.c, matrix.d,
-		matrix.tx, matrix.ty)
+	C.vt_cgcontext_set_text_matrix(voidptr(ctx), matrix.a, matrix.b, matrix.c, matrix.d, matrix.tx,
+		matrix.ty)
 }
 
 pub fn (ctx &CGContext) set_text_position(x f64, y f64) {
@@ -1304,7 +1309,8 @@ pub fn CFArray.create(values []voidptr) !&CFArray {
 	if values.len > 0 {
 		values_ptr = voidptr(&values[0])
 	}
-	ptr := C.CFArrayCreate(unsafe { nil }, values_ptr, isize(values.len), C.vt_cf_type_array_callbacks())
+	ptr := C.CFArrayCreate(unsafe { nil }, values_ptr, isize(values.len),
+		C.vt_cf_type_array_callbacks())
 	return require_cf_ref[CFArray](ptr, 'CFArrayCreate')
 }
 
