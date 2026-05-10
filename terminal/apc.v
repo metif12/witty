@@ -111,25 +111,26 @@ pub fn (mut self ApcHandler) feed(byte u8) {
 			return
 		}
 		// We identify the APC command by the first byte.
-		ApcStateIdentify {
-			match byte {
-				// Kitty graphics protocol
-				`G` {
-					// XTODO: When kitty graphics are implemented:
-					// self.state = ApcStateKitty{ parser: kitty_gfx.CommandParser.init(alloc) }
-					// For now, we stub it and just collect data.
-					self.state = ApcStateKitty{}
-				}
-				// Unknown
-				else {
-					self.state = ApcStateIgnore{}
-				}
-			}
-		}
+		ApcStateIdentify {}
 		ApcStateKitty {
 			// XTODO: When kitty graphics are implemented, feed the byte
 			// to the parser. On error, transition to ignore state.
 			self.state.data << byte
+			return
+		}
+	}
+
+	match byte {
+		// Kitty graphics protocol
+		`G` {
+			// XTODO: When kitty graphics are implemented:
+			// self.state = ApcStateKitty{ parser: kitty_gfx.CommandParser.init(alloc) }
+			// For now, we stub it and just collect data.
+			self.state = ApcStateKitty{}
+		}
+		// Unknown
+		else {
+			self.state = ApcStateIgnore{}
 		}
 	}
 }
