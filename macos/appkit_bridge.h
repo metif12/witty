@@ -1,6 +1,10 @@
 #include <stdbool.h>
+#include <dispatch/dispatch.h>
 #include <objc/message.h>
 #include <Metal/Metal.h>
+#include <pthread.h>
+#include <stdlib.h>
+#include <string.h>
 
 typedef struct witty_macos_point {
 	double x;
@@ -18,6 +22,42 @@ typedef struct witty_macos_clear_color {
 	double blue;
 	double alpha;
 } witty_macos_clear_color;
+
+typedef struct witty_macos_string_task {
+	void* view;
+	char* text;
+} witty_macos_string_task;
+
+static inline bool witty_macos_is_main_thread(void) {
+	return pthread_main_np() != 0;
+}
+
+static inline void witty_macos_dispatch_main(void* fn, void* ctx) {
+	if (!fn) return;
+	dispatch_async_f(dispatch_get_main_queue(), ctx, (dispatch_function_t)fn);
+}
+
+static inline witty_macos_string_task* witty_macos_string_task_new(void* view, char* text) {
+	witty_macos_string_task* task = (witty_macos_string_task*)calloc(1, sizeof(witty_macos_string_task));
+	if (!task) return NULL;
+	task->view = view;
+	if (text) {
+		size_t len = strlen(text);
+		task->text = (char*)malloc(len + 1);
+		if (!task->text) {
+			free(task);
+			return NULL;
+		}
+		memcpy(task->text, text, len + 1);
+	}
+	return task;
+}
+
+static inline void witty_macos_string_task_free(witty_macos_string_task* task) {
+	if (!task) return;
+	free(task->text);
+	free(task);
+}
 
 static inline witty_macos_point witty_macos_objc_msg_point0(void* obj, void* sel) {
 	return ((witty_macos_point (*)(void*, void*))objc_msgSend)(obj, sel);

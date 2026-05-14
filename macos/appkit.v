@@ -107,6 +107,16 @@ fn C.witty_macos_objc_msg_bool2(obj ObjId, selector Sel, a0 voidptr, a1 voidptr)
 fn C.witty_macos_objc_msg_bool_u64(obj ObjId, selector Sel, a0 u64) bool
 fn C.witty_macos_objc_msg_void_size(obj ObjId, selector Sel, size ObjCSize)
 fn C.witty_macos_objc_msg_void_clear_color(obj ObjId, selector Sel, color MetalClearColor)
+fn C.witty_macos_is_main_thread() bool
+fn C.witty_macos_dispatch_main(fnptr voidptr, ctx voidptr)
+fn C.witty_macos_string_task_new(view voidptr, text &char) &C.witty_macos_string_task
+fn C.witty_macos_string_task_free(task &C.witty_macos_string_task)
+
+struct C.witty_macos_string_task {
+	view voidptr
+	text &char
+}
+
 fn C.MTLCreateSystemDefaultDevice() ObjId
 
 fn C.vt_ct_font_attribute_name() voidptr
@@ -985,11 +995,26 @@ pub fn clipboard_set_text(text string) {
 	msg_bool2(pasteboard, 'setString:forType:', nsstring(text), nsstring('public.utf8-plain-text'))
 }
 
-pub fn request_display(view voidptr) {
+fn request_display_now(view voidptr) {
 	if is_nil(view) {
 		return
 	}
 	msg_void_bool(ObjId(view), 'setNeedsDisplay:', true)
+}
+
+fn request_display_main_task(ctx voidptr) {
+	request_display_now(ctx)
+}
+
+pub fn request_display(view voidptr) {
+	if is_nil(view) {
+		return
+	}
+	if !C.witty_macos_is_main_thread() {
+		C.witty_macos_dispatch_main(voidptr(request_display_main_task), view)
+		return
+	}
+	request_display_now(view)
 }
 
 pub fn view_width(view voidptr) f64 {
@@ -1123,7 +1148,7 @@ pub fn tab_count() int {
 	return count
 }
 
-pub fn set_view_title(view voidptr, title string) {
+fn set_view_title_now(view voidptr, title string) {
 	if is_nil(view) {
 		return
 	}
@@ -1135,6 +1160,35 @@ pub fn set_view_title(view voidptr, title string) {
 	set_base_title(window, base_title)
 	msg_void1(window, 'setRepresentedURL:', url_for_title(base_title))
 	refresh_tab_labels(window)
+}
+
+fn set_view_title_main_task(ctx voidptr) {
+	if ctx == unsafe { nil } {
+		return
+	}
+	task := unsafe { &C.witty_macos_string_task(ctx) }
+	view := task.view
+	title := if task.text == unsafe { nil } {
+		''
+	} else {
+		unsafe { task.text.vstring().clone() }
+	}
+	C.witty_macos_string_task_free(task)
+	set_view_title_now(view, title)
+}
+
+pub fn set_view_title(view voidptr, title string) {
+	if is_nil(view) {
+		return
+	}
+	if !C.witty_macos_is_main_thread() {
+		task := C.witty_macos_string_task_new(view, cstr(title))
+		if task != unsafe { nil } {
+			C.witty_macos_dispatch_main(voidptr(set_view_title_main_task), task)
+		}
+		return
+	}
+	set_view_title_now(view, title)
 }
 
 // Metal wrappers.
