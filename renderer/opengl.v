@@ -1,10 +1,10 @@
 module renderer
 
+import opengl
+
 // Graphics API wrapper for OpenGL.
 //
-// In this V translation, OpenGL-specific functionality is abstracted
-// behind the gg graphics backend. These types and stubs are provided
-// for parity with the Zig source and to document the OpenGL API surface.
+// Translated from ghostty/src/renderer/OpenGL.zig.
 
 // OpenGLAPI wraps the OpenGL graphics API implementation.
 pub struct OpenGLAPI {
@@ -25,25 +25,32 @@ pub const opengl_swap_chain_count = 1
 pub const opengl_custom_shader_y_is_down = false
 
 pub fn OpenGLAPI.init() !OpenGLAPI {
-	// XTODO: OpenGL initialization requires:
-	// 1. Loading OpenGL function pointers via glad
-	// 2. Checking OpenGL version >= 4.3
-	// 3. Enabling GL_DEBUG_OUTPUT
-	// 4. Registering debug message callback
-	// 5. Enabling GL_FRAMEBUFFER_SRGB for linear blending
+	version := opengl.load(unsafe { nil })!
+	major := opengl.version_major(version)
+	minor := opengl.version_minor(version)
+	if major < opengl_min_version_major
+		|| (major == opengl_min_version_major && minor < opengl_min_version_minor) {
+		return error('OpenGL ${major}.${minor} is too old; Witty requires OpenGL ${opengl_min_version_major}.${opengl_min_version_minor}')
+	}
+	opengl.enable(opengl.gl_debug_output) or {}
+	opengl.enable(opengl.gl_framebuffer_srgb) or {}
 	return OpenGLAPI{
 		blending: .none_
 	}
 }
 
 pub fn (mut self OpenGLAPI) deinit() {
-	// Release OpenGL resources
+	opengl.unload()
 }
 
 // Get the current size of the runtime surface.
 pub fn (self &OpenGLAPI) surface_size() (u32, u32) {
-	// XTODO: Requires glGetIntegerv(GL_VIEWPORT, ...)
-	return 0, 0
+	_ = self
+	viewport := opengl.viewport_rect() or { return 0, 0 }
+	if viewport[2] <= 0 || viewport[3] <= 0 {
+		return 0, 0
+	}
+	return u32(viewport[2]), u32(viewport[3])
 }
 
 // OpenGL texture target.
