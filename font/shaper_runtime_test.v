@@ -1,0 +1,88 @@
+module font
+
+fn test_public_shaper_cache_get_put() {
+	mut cache := ShaperCache.init()
+	defer {
+		cache.deinit()
+	}
+
+	run := TextRun{
+		hash:  42
+		cells: 2
+	}
+	if _ := cache.get(run) {
+		assert false, 'expected cache miss before put'
+	}
+
+	mut cells := [
+		ShapeCell{
+			x:           0
+			glyph_index: 65
+		},
+		ShapeCell{
+			x:           1
+			glyph_index: 66
+		},
+	]
+	cache.put(run, cells)!
+	cells[0] = ShapeCell{
+		x:           9
+		glyph_index: 99
+	}
+
+	got := cache.get(run) or {
+		assert false, 'expected cache hit after put'
+		return
+	}
+	assert got.len == 2
+	assert got[0].x == 0
+	assert got[0].glyph_index == 65
+	assert got[1].x == 1
+	assert got[1].glyph_index == 66
+	assert cache.count() == 1
+}
+
+fn test_public_shaper_identity_shape() {
+	mut shaper := Shaper.init(ShaperOptions{})!
+	defer {
+		shaper.deinit()
+	}
+
+	cells := shaper.shape(TextRun{
+		hash:   1
+		offset: 65
+		cells:  3
+	})!
+
+	assert cells.len == 3
+	assert cells[0].x == 65
+	assert cells[0].glyph_index == 65
+	assert cells[1].x == 66
+	assert cells[1].glyph_index == 66
+	assert cells[2].x == 67
+	assert cells[2].glyph_index == 67
+}
+
+fn test_public_run_iterator_yields_single_text_run() {
+	mut shaper := Shaper.init(ShaperOptions{})!
+	defer {
+		shaper.deinit()
+	}
+
+	mut it := shaper.run_iterator(RunOptions{
+		cells:    [u8(`A`), `B`, `C`]
+		cursor_x: u16(1)
+	})
+	run := it.next() or {
+		assert false, 'expected one text run for non-empty cells'
+		return
+	}
+
+	assert run.cells == 3
+	assert run.offset == 0
+	assert run.font_index == 0
+	assert run.hash != 0
+	if _ := it.next() {
+		assert false, 'expected iterator to stop after one fallback run'
+	}
+}

@@ -1,0 +1,1007 @@
+module opengl
+
+// Translated from:
+// - ghostty/pkg/opengl/main.zig
+// - ghostty/pkg/opengl/c.zig
+// - ghostty/pkg/opengl/glad.zig
+// - ghostty/pkg/opengl/errors.zig
+// - ghostty/pkg/opengl/extensions.zig
+// - ghostty/pkg/opengl/primitives.zig
+// - ghostty/pkg/opengl/draw.zig
+// - ghostty/pkg/opengl/Buffer.zig
+// - ghostty/pkg/opengl/Texture.zig
+// - ghostty/pkg/opengl/VertexArray.zig
+// - ghostty/pkg/opengl/Shader.zig
+// - ghostty/pkg/opengl/Program.zig
+// - ghostty/pkg/opengl/Framebuffer.zig
+// - ghostty/pkg/opengl/Renderbuffer.zig
+// - ghostty/pkg/opengl/Sampler.zig
+// - ghostty/pkg/opengl/build.zig
+
+#flag darwin -framework OpenGL
+#flag linux -lGL
+#flag linux -ldl
+#insert "@VMODROOT/opengl/gl_headers.h"
+
+fn C.glGetError() u32
+fn C.glGetIntegerv(pname u32, data &int)
+fn C.glGetStringi(name u32, index u32) &u8
+
+fn C.glClearColor(red f32, green f32, blue f32, alpha f32)
+fn C.glClear(mask u32)
+fn C.glDrawArrays(mode u32, first int, count int)
+fn C.glDrawArraysInstanced(mode u32, first int, count int, primcount int)
+fn C.glDrawElements(mode u32, count int, typ u32, indices voidptr)
+fn C.glDrawElementsInstanced(mode u32, count int, typ u32, indices voidptr, primcount int)
+fn C.glEnable(cap u32)
+fn C.glDisable(cap u32)
+fn C.glFrontFace(mode u32)
+fn C.glBlendFunc(sfactor u32, dfactor u32)
+fn C.glViewport(x int, y int, width int, height int)
+fn C.glPixelStorei(mode u32, param int)
+fn C.glFinish()
+fn C.glFlush()
+
+fn C.glGenBuffers(n int, buffers &u32)
+fn C.glBindBuffer(target u32, buffer u32)
+fn C.glDeleteBuffers(n int, buffers &u32)
+fn C.glBindBufferBase(target u32, index u32, buffer u32)
+fn C.glBufferData(target u32, size isize, data voidptr, usage u32)
+fn C.glBufferSubData(target u32, offset isize, size isize, data voidptr)
+fn C.glVertexAttribPointer(index u32, size int, typ u32, normalized u8, stride int, pointer voidptr)
+fn C.glVertexAttribIPointer(index u32, size int, typ u32, stride int, pointer voidptr)
+fn C.glEnableVertexAttribArray(index u32)
+fn C.glVertexAttribDivisor(index u32, divisor u32)
+fn C.witty_glVertexBindingDivisor(bindingindex u32, divisor u32) int
+fn C.witty_glVertexAttribBinding(attribindex u32, bindingindex u32) int
+fn C.witty_glVertexAttribFormat(attribindex u32, size int, typ u32, normalized u8, relativeoffset u32) int
+fn C.witty_glVertexAttribIFormat(attribindex u32, size int, typ u32, relativeoffset u32) int
+fn C.witty_glVertexAttribLFormat(attribindex u32, size int, typ u32, relativeoffset u32) int
+fn C.witty_glBindVertexBuffer(bindingindex u32, buffer u32, offset isize, stride int) int
+
+fn C.glActiveTexture(texture u32)
+fn C.glGenTextures(n int, textures &u32)
+fn C.glBindTexture(target u32, texture u32)
+fn C.glDeleteTextures(n int, textures &u32)
+fn C.glGenerateMipmap(target u32)
+fn C.glTexParameteri(target u32, pname u32, param int)
+fn C.glTexImage2D(target u32, level int, internalformat int, width int, height int, border int, format u32, typ u32, pixels voidptr)
+fn C.glTexSubImage2D(target u32, level int, xoffset int, yoffset int, width int, height int, format u32, typ u32, pixels voidptr)
+fn C.glCopyTexSubImage2D(target u32, level int, xoffset int, yoffset int, x int, y int, width int, height int)
+
+fn C.glGenVertexArrays(n int, arrays &u32)
+fn C.glBindVertexArray(array u32)
+fn C.glDeleteVertexArrays(n int, arrays &u32)
+
+fn C.glCreateShader(typ u32) u32
+fn C.glShaderSource(shader u32, count int, string &&u8, length &int)
+fn C.glCompileShader(shader u32)
+fn C.glGetShaderiv(shader u32, pname u32, params &int)
+fn C.glGetShaderInfoLog(shader u32, max_length int, length &int, info_log &u8)
+fn C.glDeleteShader(shader u32)
+
+fn C.glCreateProgram() u32
+fn C.glDeleteProgram(program u32)
+fn C.glAttachShader(program u32, shader u32)
+fn C.glLinkProgram(program u32)
+fn C.glGetProgramiv(program u32, pname u32, params &int)
+fn C.glGetProgramInfoLog(program u32, max_length int, length &int, info_log &u8)
+fn C.glUseProgram(program u32)
+fn C.glUniformBlockBinding(program u32, index u32, binding u32)
+fn C.glGetUniformLocation(program u32, name &u8) int
+fn C.glUniform1i(location int, v0 int)
+fn C.glUniform1f(location int, v0 f32)
+fn C.glUniform2f(location int, v0 f32, v1 f32)
+fn C.glUniform3f(location int, v0 f32, v1 f32, v2 f32)
+fn C.glUniform4f(location int, v0 f32, v1 f32, v2 f32, v3 f32)
+fn C.glUniformMatrix4fv(location int, count int, transpose u8, value &f32)
+
+fn C.glGenFramebuffers(n int, ids &u32)
+fn C.glDeleteFramebuffers(n int, framebuffers &u32)
+fn C.glBindFramebuffer(target u32, framebuffer u32)
+fn C.glFramebufferTexture2D(target u32, attachment u32, textarget u32, texture u32, level int)
+fn C.glFramebufferRenderbuffer(target u32, attachment u32, renderbuffertarget u32, renderbuffer u32)
+fn C.glDrawBuffers(n int, bufs &u32)
+fn C.glCheckFramebufferStatus(target u32) u32
+fn C.witty_glBlitFramebuffer(src_x0 int, src_y0 int, src_x1 int, src_y1 int, dst_x0 int, dst_y0 int, dst_x1 int, dst_y1 int, mask u32, filter u32) int
+
+fn C.glGenRenderbuffers(n int, renderbuffers &u32)
+fn C.glDeleteRenderbuffers(n int, renderbuffers &u32)
+fn C.glBindRenderbuffer(target u32, renderbuffer u32)
+fn C.glRenderbufferStorage(target u32, internalformat u32, width int, height int)
+
+fn C.glGenSamplers(n int, samplers &u32)
+fn C.glBindSampler(unit u32, sampler u32)
+fn C.glSamplerParameteri(sampler u32, pname u32, param int)
+fn C.glDeleteSamplers(n int, samplers &u32)
+
+// ============================================================
+// glad.zig compatibility
+// ============================================================
+
+pub fn load(get_proc_address voidptr) !u32 {
+	_ = get_proc_address
+	mut major := int(0)
+	mut minor := int(0)
+	C.glGetIntegerv(C.GL_MAJOR_VERSION, &major)
+	C.glGetIntegerv(C.GL_MINOR_VERSION, &minor)
+	get_error()!
+	return (u32(major) << 16) | u32(minor)
+}
+
+pub fn unload() {
+}
+
+pub fn version_major(res u32) u32 {
+	return res >> 16
+}
+
+pub fn version_minor(res u32) u32 {
+	return res & 0xffff
+}
+
+// ============================================================
+// errors.zig
+// ============================================================
+
+pub fn get_error() ! {
+	code := int(C.glGetError())
+	match code {
+		C.GL_NO_ERROR {}
+		C.GL_INVALID_ENUM { return error('InvalidEnum') }
+		C.GL_INVALID_VALUE { return error('InvalidValue') }
+		C.GL_INVALID_OPERATION { return error('InvalidOperation') }
+		C.GL_INVALID_FRAMEBUFFER_OPERATION { return error('InvalidFramebufferOperation') }
+		C.GL_OUT_OF_MEMORY { return error('OutOfMemory') }
+		else { return error('Unknown') }
+	}
+}
+
+pub fn must_error() ! {
+	get_error()!
+	return error('Unknown')
+}
+
+// ============================================================
+// extensions.zig
+// ============================================================
+
+pub fn extensions_len() !u32 {
+	mut n := int(0)
+	C.glGetIntegerv(C.GL_NUM_EXTENSIONS, &n)
+	get_error()!
+	if n < 0 {
+		return 0
+	}
+	return u32(n)
+}
+
+pub struct ExtensionIterator {
+pub mut:
+	len u32
+	i   u32
+}
+
+pub fn extensions_iterator() !ExtensionIterator {
+	return ExtensionIterator{
+		len: extensions_len()!
+		i:   0
+	}
+}
+
+pub fn (mut it ExtensionIterator) next() ?string {
+	if it.i >= it.len {
+		return none
+	}
+	ptr := C.glGetStringi(C.GL_EXTENSIONS, it.i)
+	get_error() or { return none }
+	it.i++
+	if isnil(ptr) {
+		return none
+	}
+	return unsafe { cstring_to_vstring(&char(ptr)) }
+}
+
+// ============================================================
+// primitives.zig
+// ============================================================
+
+pub enum Primitive {
+	point          = C.GL_POINTS
+	line           = C.GL_LINES
+	line_strip     = C.GL_LINE_STRIP
+	triangle       = C.GL_TRIANGLES
+	triangle_strip = C.GL_TRIANGLE_STRIP
+}
+
+// ============================================================
+// draw.zig
+// ============================================================
+
+pub fn clear_color(r f32, g f32, b f32, a f32) {
+	C.glClearColor(r, g, b, a)
+}
+
+pub fn clear(mask u32) {
+	C.glClear(mask)
+}
+
+pub fn draw_arrays(mode u32, first int, count int) ! {
+	C.glDrawArrays(mode, first, count)
+	get_error()!
+}
+
+pub fn draw_arrays_instanced(mode Primitive, first int, count int, primcount int) ! {
+	C.glDrawArraysInstanced(u32(mode), first, count, primcount)
+	get_error()!
+}
+
+pub fn draw_elements(mode u32, count int, typ u32, offset usize) ! {
+	mut ptr := voidptr(unsafe { nil })
+	if offset > 0 {
+		ptr = voidptr(offset)
+	}
+	C.glDrawElements(mode, count, typ, ptr)
+	get_error()!
+}
+
+pub fn draw_elements_instanced(mode u32, count int, typ u32, primcount int) ! {
+	C.glDrawElementsInstanced(mode, count, typ, unsafe { nil }, primcount)
+	get_error()!
+}
+
+pub fn enable(cap u32) ! {
+	C.glEnable(cap)
+	get_error()!
+}
+
+pub fn disable(cap u32) ! {
+	C.glDisable(cap)
+	get_error()!
+}
+
+pub fn front_face(mode u32) ! {
+	C.glFrontFace(mode)
+	get_error()!
+}
+
+pub fn blend_func(sfactor u32, dfactor u32) ! {
+	C.glBlendFunc(sfactor, dfactor)
+	get_error()!
+}
+
+pub fn viewport(x int, y int, width int, height int) ! {
+	C.glViewport(x, y, width, height)
+	get_error()!
+}
+
+pub fn viewport_rect() ![4]int {
+	mut values := [4]int{}
+	C.glGetIntegerv(C.GL_VIEWPORT, &values[0])
+	get_error()!
+	return values
+}
+
+pub fn pixel_store(mode u32, value int) ! {
+	C.glPixelStorei(mode, value)
+	get_error()!
+}
+
+pub fn finish() {
+	C.glFinish()
+}
+
+pub fn flush() {
+	C.glFlush()
+}
+
+pub const gl_blend = u32(C.GL_BLEND)
+pub const gl_color_buffer_bit = u32(C.GL_COLOR_BUFFER_BIT)
+pub const gl_debug_output = u32(C.GL_DEBUG_OUTPUT)
+pub const gl_framebuffer_srgb = u32(C.GL_FRAMEBUFFER_SRGB)
+pub const gl_one = u32(C.GL_ONE)
+pub const gl_one_minus_src_alpha = u32(C.GL_ONE_MINUS_SRC_ALPHA)
+pub const gl_byte = u32(C.GL_BYTE)
+pub const gl_short = u32(C.GL_SHORT)
+pub const gl_unsigned_short = u32(C.GL_UNSIGNED_SHORT)
+pub const gl_int = u32(C.GL_INT)
+pub const gl_unsigned_int = u32(C.GL_UNSIGNED_INT)
+pub const gl_float = u32(C.GL_FLOAT)
+pub const gl_double = u32(C.GL_DOUBLE)
+pub const gl_half_float = u32(C.GL_HALF_FLOAT)
+pub const gl_unsigned_byte = u32(C.GL_UNSIGNED_BYTE)
+
+// ============================================================
+// Buffer.zig
+// ============================================================
+
+pub struct Buffer {
+pub:
+	id u32
+}
+
+pub enum BufferTarget {
+	array         = C.GL_ARRAY_BUFFER
+	element_array = C.GL_ELEMENT_ARRAY_BUFFER
+	uniform       = C.GL_UNIFORM_BUFFER
+	storage       = C.GL_SHADER_STORAGE_BUFFER
+}
+
+pub enum BufferUsage {
+	stream_draw  = C.GL_STREAM_DRAW
+	stream_read  = C.GL_STREAM_READ
+	stream_copy  = C.GL_STREAM_COPY
+	static_draw  = C.GL_STATIC_DRAW
+	static_read  = C.GL_STATIC_READ
+	static_copy  = C.GL_STATIC_COPY
+	dynamic_draw = C.GL_DYNAMIC_DRAW
+	dynamic_read = C.GL_DYNAMIC_READ
+	dynamic_copy = C.GL_DYNAMIC_COPY
+}
+
+pub struct BufferBinding {
+pub:
+	id     u32
+	target BufferTarget
+}
+
+pub fn Buffer.create() !Buffer {
+	mut id := u32(0)
+	C.glGenBuffers(1, &id)
+	get_error()!
+	return Buffer{
+		id: id
+	}
+}
+
+pub fn (b Buffer) bind(target BufferTarget) !BufferBinding {
+	C.glBindBuffer(u32(target), b.id)
+	get_error()!
+	return BufferBinding{
+		id:     b.id
+		target: target
+	}
+}
+
+pub fn (b Buffer) destroy() {
+	mut id := b.id
+	C.glDeleteBuffers(1, &id)
+}
+
+pub fn (b Buffer) bind_base(target BufferTarget, idx u32) ! {
+	C.glBindBufferBase(u32(target), idx, b.id)
+	get_error()!
+}
+
+pub fn (b BufferBinding) unbind() {
+	C.glBindBuffer(u32(b.target), 0)
+}
+
+pub fn (b BufferBinding) set_data(data []u8, usage BufferUsage) ! {
+	mut ptr := voidptr(unsafe { nil })
+	if data.len > 0 {
+		ptr = voidptr(data.data)
+	}
+	C.glBufferData(u32(b.target), isize(data.len), ptr, u32(usage))
+	get_error()!
+}
+
+pub fn (b BufferBinding) set_sub_data(offset usize, data []u8) ! {
+	mut ptr := voidptr(unsafe { nil })
+	if data.len > 0 {
+		ptr = voidptr(data.data)
+	}
+	C.glBufferSubData(u32(b.target), isize(offset), isize(data.len), ptr)
+	get_error()!
+}
+
+pub fn (b BufferBinding) set_data_null(size usize, usage BufferUsage) ! {
+	C.glBufferData(u32(b.target), isize(size), unsafe { nil }, u32(usage))
+	get_error()!
+}
+
+pub fn (b BufferBinding) enable_attrib_array(idx u32) ! {
+	C.glEnableVertexAttribArray(idx)
+	get_error()!
+}
+
+pub fn (b BufferBinding) attribute_divisor(idx u32, divisor u32) ! {
+	_ = b
+	C.glVertexAttribDivisor(idx, divisor)
+	get_error()!
+}
+
+pub fn (b BufferBinding) attribute_advanced(idx u32, size int, typ u32, normalized bool, stride int, offset usize) ! {
+	_ = b
+	C.glVertexAttribPointer(idx, size, typ,
+		if normalized { u8(C.GL_TRUE) } else { u8(C.GL_FALSE) }, stride, voidptr(offset))
+	get_error()!
+}
+
+pub fn (b BufferBinding) attribute_i_advanced(idx u32, size int, typ u32, stride int, offset usize) ! {
+	_ = b
+	C.glVertexAttribIPointer(idx, size, typ, stride, voidptr(offset))
+	get_error()!
+}
+
+// ============================================================
+// Texture.zig
+// ============================================================
+
+pub struct Texture {
+pub:
+	id u32
+}
+
+pub enum TextureTarget {
+	t1d                   = C.GL_TEXTURE_1D
+	t2d                   = C.GL_TEXTURE_2D
+	t3d                   = C.GL_TEXTURE_3D
+	t1d_array             = C.GL_TEXTURE_1D_ARRAY
+	t2d_array             = C.GL_TEXTURE_2D_ARRAY
+	rectangle             = C.GL_TEXTURE_RECTANGLE
+	cube_map              = C.GL_TEXTURE_CUBE_MAP
+	buffer                = C.GL_TEXTURE_BUFFER
+	t2d_multisample       = 0x9100 // GL_TEXTURE_2D_MULTISAMPLE
+	t2d_multisample_array = 0x9102 // GL_TEXTURE_2D_MULTISAMPLE_ARRAY
+}
+
+pub enum TextureParameter {
+	base_level   = C.GL_TEXTURE_BASE_LEVEL
+	compare_func = C.GL_TEXTURE_COMPARE_FUNC
+	compare_mode = C.GL_TEXTURE_COMPARE_MODE
+	lod_bias     = C.GL_TEXTURE_LOD_BIAS
+	min_filter   = C.GL_TEXTURE_MIN_FILTER
+	mag_filter   = C.GL_TEXTURE_MAG_FILTER
+	min_lod      = C.GL_TEXTURE_MIN_LOD
+	max_lod      = C.GL_TEXTURE_MAX_LOD
+	max_level    = C.GL_TEXTURE_MAX_LEVEL
+	swizzle_r    = C.GL_TEXTURE_SWIZZLE_R
+	swizzle_g    = C.GL_TEXTURE_SWIZZLE_G
+	swizzle_b    = C.GL_TEXTURE_SWIZZLE_B
+	swizzle_a    = C.GL_TEXTURE_SWIZZLE_A
+	wrap_s       = C.GL_TEXTURE_WRAP_S
+	wrap_t       = C.GL_TEXTURE_WRAP_T
+	wrap_r       = C.GL_TEXTURE_WRAP_R
+}
+
+pub enum TextureInternalFormat {
+	red              = C.GL_RED
+	rgb              = C.GL_RGB8
+	rgba             = C.GL_RGBA8
+	srgb             = C.GL_SRGB8
+	srgba            = C.GL_SRGB8_ALPHA8
+	rgba_compressed  = 0x8e8c // GL_COMPRESSED_RGBA_BPTC_UNORM
+	srgba_compressed = 0x8e8d // GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM
+}
+
+pub enum TextureFormat {
+	red  = C.GL_RED
+	rgb  = C.GL_RGB
+	rgba = C.GL_RGBA
+	bgra = C.GL_BGRA
+}
+
+pub enum TextureMinFilter {
+	nearest                = C.GL_NEAREST
+	linear                 = C.GL_LINEAR
+	nearest_mipmap_nearest = C.GL_NEAREST_MIPMAP_NEAREST
+	linear_mipmap_nearest  = C.GL_LINEAR_MIPMAP_NEAREST
+	nearest_mipmap_linear  = C.GL_NEAREST_MIPMAP_LINEAR
+	linear_mipmap_linear   = C.GL_LINEAR_MIPMAP_LINEAR
+}
+
+pub enum TextureMagFilter {
+	nearest = C.GL_NEAREST
+	linear  = C.GL_LINEAR
+}
+
+pub enum TextureWrap {
+	clamp_to_edge   = C.GL_CLAMP_TO_EDGE
+	clamp_to_border = C.GL_CLAMP_TO_BORDER
+	mirrored_repeat = C.GL_MIRRORED_REPEAT
+	repeat          = C.GL_REPEAT
+}
+
+pub enum TextureDataType {
+	unsigned_byte = C.GL_UNSIGNED_BYTE
+}
+
+pub struct TextureBinding {
+pub:
+	target TextureTarget
+}
+
+pub fn texture_active(index u32) ! {
+	C.glActiveTexture(index + u32(C.GL_TEXTURE0))
+	get_error()!
+}
+
+pub fn Texture.create() !Texture {
+	mut id := u32(0)
+	C.glGenTextures(1, &id)
+	get_error()!
+	return Texture{
+		id: id
+	}
+}
+
+pub fn (t Texture) bind(target TextureTarget) !TextureBinding {
+	C.glBindTexture(u32(target), t.id)
+	get_error()!
+	return TextureBinding{
+		target: target
+	}
+}
+
+pub fn (t Texture) destroy() {
+	mut id := t.id
+	C.glDeleteTextures(1, &id)
+}
+
+pub fn (b TextureBinding) unbind() {
+	C.glBindTexture(u32(b.target), 0)
+}
+
+pub fn (b TextureBinding) generate_mipmap() {
+	C.glGenerateMipmap(u32(b.target))
+}
+
+pub fn (b TextureBinding) parameter(name TextureParameter, value int) ! {
+	C.glTexParameteri(u32(b.target), u32(name), value)
+	get_error()!
+}
+
+pub fn (b TextureBinding) image_2d(level int, internal_format TextureInternalFormat, width int, height int, format TextureFormat, typ TextureDataType, data voidptr) ! {
+	C.glTexImage2D(u32(b.target), level, int(internal_format), width, height, 0, u32(format),
+		u32(typ), data)
+	get_error()!
+}
+
+pub fn (b TextureBinding) sub_image_2d(level int, xoffset int, yoffset int, width int, height int, format TextureFormat, typ TextureDataType, data voidptr) ! {
+	C.glTexSubImage2D(u32(b.target), level, xoffset, yoffset, width, height, u32(format), u32(typ),
+		data)
+	get_error()!
+}
+
+pub fn (b TextureBinding) copy_sub_image_2d(level int, xoffset int, yoffset int, x int, y int, width int, height int) ! {
+	C.glCopyTexSubImage2D(u32(b.target), level, xoffset, yoffset, x, y, width, height)
+	get_error()!
+}
+
+// ============================================================
+// VertexArray.zig
+// ============================================================
+
+pub struct VertexArray {
+pub:
+	id u32
+}
+
+pub struct VertexArrayBinding {
+}
+
+pub fn VertexArray.create() !VertexArray {
+	mut id := u32(0)
+	C.glGenVertexArrays(1, &id)
+	get_error()!
+	return VertexArray{
+		id: id
+	}
+}
+
+pub fn (v VertexArray) bind() !VertexArrayBinding {
+	C.glBindVertexArray(v.id)
+	get_error()!
+	return VertexArrayBinding{}
+}
+
+pub fn (v VertexArray) destroy() {
+	mut id := v.id
+	C.glDeleteVertexArrays(1, &id)
+}
+
+pub fn (b VertexArrayBinding) unbind() {
+	_ = b
+	C.glBindVertexArray(0)
+}
+
+pub fn (b VertexArrayBinding) enable_attrib_array(idx u32) ! {
+	_ = b
+	C.glEnableVertexAttribArray(idx)
+	get_error()!
+}
+
+// OpenGL 4.3-only APIs from the Zig package.
+pub fn (b VertexArrayBinding) binding_divisor(idx u32, divisor u32) ! {
+	_ = b
+	if C.witty_glVertexBindingDivisor(idx, divisor) == 0 {
+		return error('glVertexBindingDivisor unavailable')
+	}
+	get_error()!
+}
+
+pub fn (b VertexArrayBinding) attribute_binding(attrib_idx u32, binding_idx u32) ! {
+	_ = b
+	if C.witty_glVertexAttribBinding(attrib_idx, binding_idx) == 0 {
+		return error('glVertexAttribBinding unavailable')
+	}
+	get_error()!
+}
+
+pub fn (b VertexArrayBinding) attribute_format(idx u32, size int, typ u32, normalized bool, offset u32) ! {
+	_ = b
+	if C.witty_glVertexAttribFormat(idx, size, typ, if normalized {
+		u8(C.GL_TRUE)
+	} else {
+		u8(C.GL_FALSE)
+	}, offset) == 0 {
+		return error('glVertexAttribFormat unavailable')
+	}
+	get_error()!
+}
+
+pub fn (b VertexArrayBinding) attribute_i_format(idx u32, size int, typ u32, offset u32) ! {
+	_ = b
+	if C.witty_glVertexAttribIFormat(idx, size, typ, offset) == 0 {
+		return error('glVertexAttribIFormat unavailable')
+	}
+	get_error()!
+}
+
+pub fn (b VertexArrayBinding) attribute_l_format(idx u32, size int, offset u32) ! {
+	_ = b
+	if C.witty_glVertexAttribLFormat(idx, size, C.GL_DOUBLE, offset) == 0 {
+		return error('glVertexAttribLFormat unavailable')
+	}
+	get_error()!
+}
+
+pub fn (b VertexArrayBinding) bind_vertex_buffer(idx u32, buffer u32, offset isize, stride int) ! {
+	_ = b
+	if C.witty_glBindVertexBuffer(idx, buffer, offset, stride) == 0 {
+		return error('glBindVertexBuffer unavailable')
+	}
+	get_error()!
+}
+
+// ============================================================
+// Shader.zig
+// ============================================================
+
+pub struct Shader {
+pub:
+	id u32
+}
+
+pub const shader_type_vertex = u32(C.GL_VERTEX_SHADER)
+pub const shader_type_fragment = u32(C.GL_FRAGMENT_SHADER)
+
+pub fn Shader.create(typ u32) !Shader {
+	id := C.glCreateShader(typ)
+	if id == 0 {
+		must_error()!
+		return error('CreateShader failed')
+	}
+	return Shader{
+		id: id
+	}
+}
+
+pub fn (s Shader) set_source_and_compile(source string) ! {
+	mut src := source.str
+	C.glShaderSource(s.id, 1, &src, unsafe { nil })
+	C.glCompileShader(s.id)
+	mut success := int(0)
+	C.glGetShaderiv(s.id, C.GL_COMPILE_STATUS, &success)
+	if success != int(C.GL_TRUE) {
+		return error('CompileFailed: ${s.get_info_log()}')
+	}
+}
+
+pub fn (s Shader) get_info_log() string {
+	mut msg := []u8{len: 512, init: 0}
+	C.glGetShaderInfoLog(s.id, msg.len, unsafe { nil }, msg.data)
+	return unsafe { cstring_to_vstring(&char(msg.data)) }
+}
+
+pub fn (s Shader) destroy() {
+	C.glDeleteShader(s.id)
+}
+
+// ============================================================
+// Program.zig
+// ============================================================
+
+pub struct Program {
+pub:
+	id u32
+}
+
+pub struct ProgramBinding {
+}
+
+pub fn Program.create() !Program {
+	id := C.glCreateProgram()
+	if id == 0 {
+		must_error()!
+		return error('CreateProgram failed')
+	}
+	return Program{
+		id: id
+	}
+}
+
+pub fn Program.create_vf(vsrc string, fsrc string) !Program {
+	vs := Shader.create(shader_type_vertex)!
+	defer {
+		vs.destroy()
+	}
+	vs.set_source_and_compile(vsrc)!
+
+	fs := Shader.create(shader_type_fragment)!
+	defer {
+		fs.destroy()
+	}
+	fs.set_source_and_compile(fsrc)!
+
+	p := Program.create()!
+	p.attach_shader(vs)!
+	p.attach_shader(fs)!
+	p.link()!
+	return p
+}
+
+pub fn (p Program) destroy() {
+	C.glDeleteProgram(p.id)
+}
+
+pub fn (p Program) attach_shader(s Shader) ! {
+	C.glAttachShader(p.id, s.id)
+	get_error()!
+}
+
+pub fn (p Program) link() ! {
+	C.glLinkProgram(p.id)
+	mut success := int(0)
+	C.glGetProgramiv(p.id, C.GL_LINK_STATUS, &success)
+	if success != int(C.GL_TRUE) {
+		return error('LinkFailed: ${p.get_info_log()}')
+	}
+}
+
+pub fn (p Program) use() !ProgramBinding {
+	C.glUseProgram(p.id)
+	get_error()!
+	return ProgramBinding{}
+}
+
+pub fn (b ProgramBinding) unbind() {
+	_ = b
+	C.glUseProgram(0)
+}
+
+pub fn (p Program) uniform_block_binding(index u32, binding u32) ! {
+	C.glUniformBlockBinding(p.id, index, binding)
+	get_error()!
+}
+
+pub fn (p Program) set_uniform[T](name string, value T) ! {
+	loc := C.glGetUniformLocation(p.id, name.str)
+	if loc < 0 {
+		return error('UniformNameInvalid')
+	}
+	get_error()!
+
+	$if T is bool {
+		C.glUniform1i(loc, if value { 1 } else { 0 })
+	} $else $if T is int {
+		C.glUniform1i(loc, value)
+	} $else $if T is f32 {
+		C.glUniform1f(loc, value)
+	} $else $if T is [2]f32 {
+		C.glUniform2f(loc, value[0], value[1])
+	} $else $if T is [3]f32 {
+		C.glUniform3f(loc, value[0], value[1], value[2])
+	} $else $if T is [4]f32 {
+		C.glUniform4f(loc, value[0], value[1], value[2], value[3])
+	} $else $if T is [16]f32 {
+		C.glUniformMatrix4fv(loc, 1, u8(C.GL_FALSE), &value[0])
+	} $else {
+		return error('unsupported uniform type')
+	}
+
+	get_error()!
+}
+
+pub fn (p Program) get_info_log() string {
+	mut msg := []u8{len: 512, init: 0}
+	C.glGetProgramInfoLog(p.id, msg.len, unsafe { nil }, msg.data)
+	return unsafe { cstring_to_vstring(&char(msg.data)) }
+}
+
+// ============================================================
+// Renderbuffer.zig
+// ============================================================
+
+pub struct Renderbuffer {
+pub:
+	id u32
+}
+
+pub struct RenderbufferBinding {
+pub:
+	previous u32
+}
+
+pub fn Renderbuffer.create() !Renderbuffer {
+	mut id := u32(0)
+	C.glGenRenderbuffers(1, &id)
+	get_error()!
+	return Renderbuffer{
+		id: id
+	}
+}
+
+pub fn (r Renderbuffer) destroy() {
+	mut id := r.id
+	C.glDeleteRenderbuffers(1, &id)
+}
+
+pub fn (r Renderbuffer) bind() !RenderbufferBinding {
+	mut current := int(0)
+	C.glGetIntegerv(C.GL_RENDERBUFFER_BINDING, &current)
+	C.glBindRenderbuffer(C.GL_RENDERBUFFER, r.id)
+	get_error()!
+	return RenderbufferBinding{
+		previous: u32(current)
+	}
+}
+
+pub fn (b RenderbufferBinding) unbind() {
+	C.glBindRenderbuffer(C.GL_RENDERBUFFER, b.previous)
+}
+
+pub fn (b RenderbufferBinding) storage(format TextureInternalFormat, width int, height int) ! {
+	_ = b
+	C.glRenderbufferStorage(C.GL_RENDERBUFFER, u32(format), width, height)
+	get_error()!
+}
+
+// ============================================================
+// Framebuffer.zig
+// ============================================================
+
+pub struct Framebuffer {
+pub:
+	id u32
+}
+
+pub enum FramebufferTarget {
+	framebuffer = C.GL_FRAMEBUFFER
+	draw        = C.GL_DRAW_FRAMEBUFFER
+	read        = C.GL_READ_FRAMEBUFFER
+}
+
+pub enum FramebufferAttachment {
+	color0        = C.GL_COLOR_ATTACHMENT0
+	depth         = C.GL_DEPTH_ATTACHMENT
+	stencil       = C.GL_STENCIL_ATTACHMENT
+	depth_stencil = C.GL_DEPTH_STENCIL_ATTACHMENT
+}
+
+pub enum FramebufferStatus {
+	complete                      = C.GL_FRAMEBUFFER_COMPLETE
+	undefined                     = C.GL_FRAMEBUFFER_UNDEFINED
+	incomplete_attachment         = C.GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT
+	incomplete_missing_attachment = C.GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT
+	incomplete_draw_buffer        = C.GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER
+	incomplete_read_buffer        = C.GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER
+	unsupported                   = C.GL_FRAMEBUFFER_UNSUPPORTED
+	incomplete_multisample        = C.GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE
+	incomplete_layer_targets      = C.GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS
+}
+
+pub struct FramebufferBinding {
+pub:
+	target   FramebufferTarget
+	previous u32
+}
+
+pub fn Framebuffer.create() !Framebuffer {
+	mut id := u32(0)
+	C.glGenFramebuffers(1, &id)
+	get_error()!
+	return Framebuffer{
+		id: id
+	}
+}
+
+pub fn (f Framebuffer) destroy() {
+	mut id := f.id
+	C.glDeleteFramebuffers(1, &id)
+}
+
+pub fn (f Framebuffer) bind(target FramebufferTarget) !FramebufferBinding {
+	mut current := int(0)
+	C.glGetIntegerv(C.GL_FRAMEBUFFER_BINDING, &current)
+	C.glBindFramebuffer(u32(target), f.id)
+	get_error()!
+	return FramebufferBinding{
+		target:   target
+		previous: u32(current)
+	}
+}
+
+pub fn (b FramebufferBinding) unbind() {
+	C.glBindFramebuffer(u32(b.target), b.previous)
+}
+
+pub fn (b FramebufferBinding) texture_2d(attachment FramebufferAttachment, textarget TextureTarget, texture Texture, level int) ! {
+	C.glFramebufferTexture2D(u32(b.target), u32(attachment), u32(textarget), texture.id, level)
+	get_error()!
+}
+
+pub fn (b FramebufferBinding) renderbuffer(attachment FramebufferAttachment, buffer Renderbuffer) ! {
+	C.glFramebufferRenderbuffer(u32(b.target), u32(attachment), C.GL_RENDERBUFFER, buffer.id)
+	get_error()!
+}
+
+pub fn (b FramebufferBinding) draw_buffers(bufs []FramebufferAttachment) ! {
+	_ = b
+	mut raw := []u32{len: bufs.len}
+	for i, buf in bufs {
+		raw[i] = u32(buf)
+	}
+	mut ptr := &u32(unsafe { nil })
+	if raw.len > 0 {
+		ptr = raw.data
+	}
+	C.glDrawBuffers(raw.len, ptr)
+	get_error()!
+}
+
+pub fn (b FramebufferBinding) check_status() FramebufferStatus {
+	return unsafe { FramebufferStatus(C.glCheckFramebufferStatus(u32(b.target))) }
+}
+
+pub fn blit_framebuffer(src_x0 int, src_y0 int, src_x1 int, src_y1 int, dst_x0 int, dst_y0 int, dst_x1 int, dst_y1 int, mask u32, filter TextureMagFilter) ! {
+	if C.witty_glBlitFramebuffer(src_x0, src_y0, src_x1, src_y1, dst_x0, dst_y0, dst_x1, dst_y1,
+		mask, u32(filter)) == 0 {
+		return error('glBlitFramebuffer unavailable')
+	}
+	get_error()!
+}
+
+// ============================================================
+// Sampler.zig
+// ============================================================
+
+pub struct Sampler {
+pub:
+	id u32
+}
+
+pub fn Sampler.create() !Sampler {
+	mut id := u32(0)
+	C.glGenSamplers(1, &id)
+	get_error()!
+	return Sampler{
+		id: id
+	}
+}
+
+pub fn (s Sampler) bind(index u32) ! {
+	C.glBindSampler(index, s.id)
+	get_error()!
+}
+
+pub fn (s Sampler) parameter(name TextureParameter, value int) ! {
+	C.glSamplerParameteri(s.id, u32(name), value)
+	get_error()!
+}
+
+pub fn (s Sampler) destroy() {
+	mut id := s.id
+	C.glDeleteSamplers(1, &id)
+}
