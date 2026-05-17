@@ -246,6 +246,68 @@ pub fn (s CoreSurface) has_selection() bool {
 	return false
 }
 
+// dump_text_locked reads the text covered by `sel` from the active screen.
+// The renderer state mutex is assumed to be held by the caller. The returned
+// DumpedText carries the text bytes along with viewport metadata (if any).
+//
+// This is currently a stub; the full implementation lives in the core
+// terminal package (terminal.Screen.selectionString + page pin math).
+pub fn (s CoreSurface) dump_text_locked(sel voidptr) !DumpedText {
+	_ = sel
+	return DumpedText{}
+}
+
+// DumpedText is the result of dump_text/dump_text_locked.
+pub struct DumpedText {
+pub mut:
+	text     string
+	viewport ?DumpedTextViewport
+}
+
+// DumpedTextViewport is the viewport-relative pixel/offset info for a
+// dumped text region. Mirrors Ghostty's `Surface.Text.Viewport`.
+pub struct DumpedTextViewport {
+pub mut:
+	tl_px_x      f64
+	tl_px_y      f64
+	offset_start u32
+	offset_len   u32
+}
+
+// active_selection returns the active selection on the surface, if any.
+// Currently a stub that always returns none.
+pub fn (s CoreSurface) active_selection() ?voidptr {
+	return none
+}
+
+// resolve_selection converts a CAPI-style selection into a core selection
+// pointer that can be passed back to `dump_text_locked`. Returns none if
+// the coordinates do not refer to a valid screen region.
+pub fn (s CoreSurface) resolve_selection(tl_tag int, tl_coord_tag int, tl_x u32, tl_y u32, br_tag int, br_coord_tag int, br_x u32, br_y u32, rectangle bool) ?voidptr {
+	_ = tl_tag
+	_ = tl_coord_tag
+	_ = tl_x
+	_ = tl_y
+	_ = br_tag
+	_ = br_coord_tag
+	_ = br_x
+	_ = br_y
+	_ = rectangle
+	return none
+}
+
+// renderer_state_lock acquires the renderer-state mutex protecting the
+// terminal/screen access. The current stub is a no-op; real locking is
+// added when the renderer thread is wired in.
+pub fn (mut s CoreSurface) renderer_state_lock() {
+	// stub
+}
+
+// renderer_state_unlock releases the renderer-state mutex.
+pub fn (mut s CoreSurface) renderer_state_unlock() {
+	// stub
+}
+
 pub fn (s CoreSurface) mouse_captured() bool {
 	return false
 }

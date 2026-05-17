@@ -33,6 +33,8 @@ pub mut:
 	command                        ?Command
 	initial_command                ?Command
 	working_directory              ?string
+	env                            RepeatableStringMap
+	initial_input                  ?string
 	term                           string = 'xterm-256color'
 	shell_integration              ShellIntegration        = .detect
 	shell_integration_features     ShellIntegrationFeatures

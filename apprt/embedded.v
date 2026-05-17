@@ -491,6 +491,23 @@ pub fn (mut self Surface) init(mut app App, opts SurfaceOptions) ! {
 		}
 	}
 
+	// Apply any environment variables that were requested.
+	for env_var in opts.env_vars {
+		config.env.entries << configpkg.StringMapEntry{
+			key:   env_var.key
+			value: env_var.value
+		}
+	}
+
+	// If we have an initial input then we set it. Ghostty escapes the
+	// string into a Zig string literal so it can land in `config.input`
+	// as a `.raw` entry; here we store the raw bytes directly.
+	if initial := opts.initial_input {
+		if initial.len > 0 {
+			config.initial_input = initial
+		}
+	}
+
 	// Wait after command
 	if opts.wait_after_command {
 		config.wait_after_command = true
@@ -1270,6 +1287,79 @@ pub fn ghostty_surface_process_exited(surface &Surface) bool {
 // ghostty_surface_has_selection returns true if the surface has a selection.
 pub fn ghostty_surface_has_selection(surface &Surface) bool {
 	return surface.core_surface.has_selection()
+}
+
+// ghostty_surface_read_selection reads the text covered by the user's
+// active selection, if any. Returns true if a selection was read and
+// populated into `result`, false otherwise. Same shape as
+// ghostty_surface_read_text but sourced from the live selection.
+pub fn ghostty_surface_read_selection(mut surface Surface, mut result CAPIText) bool {
+	mut core := &surface.core_surface
+	core.renderer_state_lock()
+	defer {
+		core.renderer_state_unlock()
+	}
+
+	// If we don't have a selection, do nothing.
+	core_sel := core.active_selection() or { return false }
+
+	return read_text_locked(mut surface, core_sel, mut result)
+}
+
+// ghostty_surface_read_text reads arbitrary text from the surface
+// covered by `sel`. This is an expensive operation so callers should
+// cache and throttle calls.
+pub fn ghostty_surface_read_text(mut surface Surface, sel CAPISelection, mut result CAPIText) bool {
+	mut core := &surface.core_surface
+	core.renderer_state_lock()
+	defer {
+		core.renderer_state_unlock()
+	}
+
+	core_sel := core.resolve_selection(
+		int(sel.tl.tag),
+		int(sel.tl.coord_tag),
+		sel.tl.x,
+		sel.tl.y,
+		int(sel.br.tag),
+		int(sel.br.coord_tag),
+		sel.br.x,
+		sel.br.y,
+		sel.rectangle,
+	) or { return false }
+
+	return read_text_locked(mut surface, core_sel, mut result)
+}
+
+// read_text_locked is the shared helper for ghostty_surface_read_selection
+// and ghostty_surface_read_text. The renderer-state mutex must be held by
+// the caller.
+fn read_text_locked(mut surface Surface, core_sel voidptr, mut result CAPIText) bool {
+	dumped := surface.core_surface.dump_text_locked(core_sel) or {
+		log_warn('error reading text err=${err}')
+		return false
+	}
+
+	// Default viewport metadata when the selection is fully off-screen.
+	mut tl_px_x := f64(-1)
+	mut tl_px_y := f64(-1)
+	mut offset_start := u32(0)
+	mut offset_len := u32(0)
+
+	if vp := dumped.viewport {
+		tl_px_x = vp.tl_px_x
+		tl_px_y = vp.tl_px_y
+		offset_start = vp.offset_start
+		offset_len = vp.offset_len
+	}
+
+	result.tl_px_x = tl_px_x
+	result.tl_px_y = tl_px_y
+	result.offset_start = offset_start
+	result.offset_len = offset_len
+	result.text = dumped.text
+	result.text_len = dumped.text.len
+	return true
 }
 
 // ghostty_surface_free_text frees a text result.

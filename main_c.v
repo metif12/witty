@@ -11,6 +11,9 @@
 
 module main
 
+import os
+import global_state
+
 
 // BuildMode mirrors the C enum ghostty_build_mode_e.
 pub enum BuildMode {
@@ -65,18 +68,41 @@ pub fn GhosttyString.from_bytes(b []u8) GhosttyString {
 	}
 }
 
-// XTODO: The following C API export functions need full implementation.
-// In Zig these are `export fn` declarations that get exported as C symbols.
-// V doesn't have direct C export support in the same way. These would need
-// to be implemented using V's C interop or as a separate C wrapper.
+// ghostty_init initializes ghostty global state. In Ghostty's C API this
+// receives (argc, argv) from the embedder; in V we rely on `os.args` which
+// is already populated. The signature is kept so it can be called from a
+// host that wants to pass through process args. Returns 0 on success and
+// 1 on initialization failure (matching the Zig return).
+pub fn ghostty_init(argc int, argv []string) int {
+	// Ghostty's Zig version sets `std.os.argv = argv[0..argc]` here before
+	// initializing global state. V's `os.args` is populated automatically
+	// from libc and exposed as an immutable const, so we don't reassign it;
+	// any embedder that needs a different argv should set it through env
+	// inheritance instead.
+	_ = argc
+	_ = argv
 
-// ghostty_init: Initialize ghostty global state.
-// XTODO: Needs global state management (global.zig equivalent).
-// pub export fn ghostty_init(argc: usize, argv: [*][*:0]u8) c_int
+	mut state := global_state.get_state_mut()
+	state.init() or {
+		eprintln('failed to initialize ghostty error=${err}')
+		return 1
+	}
+	return 0
+}
 
-// ghostty_cli_try_action: Runs an action if it is specified.
-// XTODO: Needs CLI action infrastructure.
-// pub export fn ghostty_cli_try_action() void
+// ghostty_cli_try_action runs the detected CLI action if one was set during
+// global state init. If there is no action this returns; otherwise it runs
+// the action and exits the process with its return code.
+pub fn ghostty_cli_try_action() {
+	state := global_state.get_state()
+	if state.action == .none {
+		return
+	}
+	eprintln('executing CLI action=${state.action}')
+	// XTODO: action.run(state.alloc) once cli module is translated.
+	// For now we treat any non-none action as a no-op that exits 0.
+	exit(0)
+}
 
 // ghostty_info: Return metadata about Ghostty, such as version, build mode, etc.
 pub fn ghostty_info() Info {
