@@ -545,8 +545,8 @@ pub fn (mut self Screen) clear_rows(tl PointTag, bl ?PointTag, protected bool) {
 						}
 					}
 				} else {
-					for mut cell in row.cells {
-						cell = CellData{}
+					for i in 0 .. row.cells.len {
+						row.cells[i] = CellData{}
 					}
 					row.styled = false
 					row.grapheme = false

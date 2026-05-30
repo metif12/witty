@@ -2293,8 +2293,8 @@ fn (mut self Screen) clear_rows_range(start_y int, end_y int, is_protected bool)
 					}
 				}
 			} else {
-				for mut cell in row.cells {
-					cell = CellData{}
+				for i in 0 .. row.cells.len {
+					row.cells[i] = CellData{}
 				}
 				row.styled = false
 				row.grapheme = false
