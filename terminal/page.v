@@ -1153,46 +1153,99 @@ pub mut:
 	grapheme_bytes u32 = grapheme_bytes_default
 }
 
-// Returns the maximum number of columns that can be used with this
-// capacity while still fitting at least one row.
+// Bit sizes of the packed Row and Cell structs in Ghostty's page.zig.
+// Both are `packed struct(u64)`, so they are exactly 64 bits each. We
+// model our grid "budget" using these to faithfully reproduce the
+// row-limiting behavior of Capacity.adjust even though V uses GC-managed
+// memory rather than a single contiguous mmap'd block.
+const row_bit_size = usize(64)
+const cell_bit_size = usize(64)
+
+// Computes the number of bits available for rows and cells in the page.
 //
-// In V, since memory is GC-managed, this is a heuristic based on
-// keeping the total cell count reasonable.
+// In Ghostty this lays out the "meta" members (styles, graphemes,
+// hyperlinks, strings) from the end of the page and finds where they
+// start. In V we don't have a fixed backing buffer, so instead we derive
+// a stable grid-bit budget from this capacity's own cols/rows. This gives
+// us the same invariant the Zig code relies on: adjusting to the same cols
+// returns the same rows, and adjusting to more cols yields fewer rows.
+fn (self PageCapacity) available_bits_for_grid() usize {
+	// witty uses a pure cell-count budget (V arrays + GC, not a fixed
+	// mmap'd block): the total cell capacity cols*rows is what must be
+	// preserved across adjustments. Row metadata is not counted, matching
+	// the witty contract (adjusting to fewer cols yields proportionally
+	// more rows, keeping total cells ~constant).
+	return cell_bit_size * usize(self.cols) * usize(self.rows)
+}
+
+// Returns the maximum number of columns that can be used with this
+// capacity while still fitting at least one row. Returns none if even
+// a single column cannot fit (which would indicate an unusable capacity).
+//
+// Note that this is the maximum number of columns that never increases
+// the amount of memory the original capacity will take.
 pub fn (self PageCapacity) max_cols() ?u16 {
-	// Compute total cell-equivalent "bits" available.
-	total_cells := u32(self.cols) * u32(self.rows)
-	if total_cells == 0 {
+	available_bits := self.available_bits_for_grid()
+
+	// If we can't even fit the row metadata, return none.
+	if available_bits <= row_bit_size {
 		return none
 	}
-	// Maximum cols = total_cells (with 1 row).
-	max := if total_cells > u32(max_u16) { max_u16 } else { u16(total_cells) }
-	return max
+
+	// We do the math of how many columns we can fit in the remaining
+	// bits ignoring the metadata of a row.
+	max_cols := available_bits / cell_bit_size
+
+	// Clamp to CellCountInt (u16) max.
+	if max_cols > usize(max_u16) {
+		return max_u16
+	}
+	return u16(max_cols)
+}
+
+// Adjust the capacity parameters while retaining the same total size.
+//
+// Adjustments always happen by limiting the rows in the page. Everything
+// else can grow. If it is impossible to achieve the desired adjustment
+// (rows would go to zero), an error is returned. Callers that don't want
+// the fallible behavior should use `adjust` which clamps to one row.
+pub fn (self PageCapacity) adjust_checked(cols u16) !PageCapacity {
+	mut adjusted := self
+	if cols > 0 {
+		available_bits := self.available_bits_for_grid()
+
+		// The size per row is the cells per row (n=cols); witty does not
+		// charge per-row metadata against the grid budget.
+		bits_per_row := cell_bit_size * usize(cols)
+		new_rows := available_bits / bits_per_row
+
+		// If our rows go to zero then we can't fit any row metadata
+		// for the desired number of columns.
+		if new_rows == 0 {
+			return error('OutOfMemory')
+		}
+
+		adjusted.cols = cols
+		adjusted.rows = if new_rows > usize(max_u16) { max_u16 } else { u16(new_rows) }
+	}
+	return adjusted
 }
 
 // Adjust the capacity parameters while retaining approximately the same
-// total size. Adjustments happen by limiting the rows in the page.
-// Everything else can grow. If it is impossible to achieve the desired
-// adjustment, returns capacity with 1 row.
+// total size. Adjustments happen by limiting the rows in the page. If it
+// is impossible to achieve the desired adjustment, returns capacity with
+// one row (the infallible variant of `adjust_checked`).
 pub fn (self PageCapacity) adjust(cols u16) PageCapacity {
 	if cols == 0 {
 		return self
 	}
-	// The total "budget" is cols * rows from the original capacity.
-	total_cells := u32(self.cols) * u32(self.rows)
-	new_rows := total_cells / u32(cols)
-	mut capped_rows := u16(0)
-	if new_rows == 0 {
-		capped_rows = 1
-	} else if new_rows > u32(max_u16) {
-		capped_rows = max_u16
-	} else {
-		capped_rows = u16(new_rows)
-	}
-	return PageCapacity{
-		cols: cols
-		rows: capped_rows
-		styles: self.styles
-		grapheme_bytes: self.grapheme_bytes
+	return self.adjust_checked(cols) or {
+		PageCapacity{
+			cols: cols
+			rows: 1
+			styles: self.styles
+			grapheme_bytes: self.grapheme_bytes
+		}
 	}
 }
 

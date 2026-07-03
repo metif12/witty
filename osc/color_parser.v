@@ -426,7 +426,7 @@ fn parse_color_operation(mut parser Parser, terminator_ch u8) ?Command {
 		.s_18 { ColorOperation.osc_18 }
 		.s_19 { ColorOperation.osc_19 }
 		.s_104 { ColorOperation.osc_104 }
-		// XTODO: osc_105 needs s_105 parser state
+		.s_105 { ColorOperation.osc_105 }
 		.s_110 { ColorOperation.osc_110 }
 		.s_111 { ColorOperation.osc_111 }
 		.s_112 { ColorOperation.osc_112 }
@@ -443,18 +443,23 @@ fn parse_color_operation(mut parser Parser, terminator_ch u8) ?Command {
 		}
 	}
 
-	// Parse the color data based on operation type
+	// Parse the color data based on operation type. This mirrors Ghostty's
+	// parseColor which produces a SegmentedList(Request). Here we produce a
+	// []ColorRequest and store it directly on the command.
 	requests := parse_color_data(op, data_str)
 
-	// Store result as a color_operation command
-	// We store the operation name and serialized request data in str_value
+	// Store the result as a color_operation command. The parsed operation and
+	// request list are wired into the dedicated Command fields so downstream
+	// consumers can apply the color changes. We keep str_value/str_value2
+	// populated with the raw data and operation name for logging/debugging.
 	parser.command = Command{
-		cmd_type:   .color_operation
-		terminator: init_terminator(terminator_ch)
-		str_value:  data_str
-		str_value2: op.str()
+		cmd_type:       .color_operation
+		terminator:     init_terminator(terminator_ch)
+		str_value:      data_str
+		str_value2:     op.str()
+		color_op:       op
+		color_requests: requests
 	}
-	_ = requests
 	return parser.command
 }
 

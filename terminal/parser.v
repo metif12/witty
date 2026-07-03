@@ -158,6 +158,19 @@ pub fn SepList.init_empty() SepList {
 	return SepList{}
 }
 
+// count returns the number of set bits, i.e. how many colon (:) separators
+// were used. A non-zero count means at least one colon/mixed separator was
+// present in the CSI parameters.
+pub fn (self SepList) count() int {
+	mut c := 0
+	mut v := self.bits
+	for v != 0 {
+		v &= v - 1
+		c += 1
+	}
+	return c
+}
+
 // ============================================================
 // Parser action data types
 // ============================================================
@@ -347,10 +360,56 @@ fn (mut self VTParser) do_ground(c u8, mut actions []ParserAction) {
 			action_type: .execute_action
 			byte_val: c
 		}
+	} else if c >= 0x80 && c <= 0x9F {
+		// C1 8-bit control codes. These map to the same states/actions as
+		// their 7-bit ESC-prefixed equivalents (the "anywhere" transitions
+		// in the DEC ANSI parse table). Previously these were treated as
+		// printable which is incorrect.
+		self.do_c1(c, mut actions)
 	} else if c != 0x7F {
 		actions << ParserAction{
 			action_type: .print_action
 			char: u32(c)
+		}
+	}
+}
+
+// do_c1 handles the C1 (0x80-0x9F) 8-bit control codes. This mirrors the
+// "anywhere" transitions from Ghostty's parse table (parse_table.zig).
+fn (mut self VTParser) do_c1(c u8, mut actions []ParserAction) {
+	match c {
+		0x90 {
+			// DCS (Device Control String) 8-bit -> dcs_entry
+			self.clear()
+			self.state = .dcs_entry
+		}
+		0x98, 0x9E, 0x9F {
+			// SOS/PM/APC 8-bit -> sos_pm_apc_string
+			self.state = .sos_pm_apc_string
+			actions << ParserAction{
+				action_type: .apc_start_action
+			}
+		}
+		0x9B {
+			// CSI (Control Sequence Introducer) 8-bit -> csi_entry
+			self.clear()
+			self.state = .csi_entry
+		}
+		0x9C {
+			// ST (String Terminator) 8-bit -> ground, no action
+			self.state = .ground
+		}
+		0x9D {
+			// OSC (Operating System Command) 8-bit -> osc_string
+			self.osc_buf = []
+			self.state = .osc_string
+		}
+		else {
+			// 0x80-0x8F, 0x91-0x97, 0x99, 0x9A -> execute (ground)
+			actions << ParserAction{
+				action_type: .execute_action
+				byte_val: c
+			}
 		}
 	}
 }
@@ -701,6 +760,16 @@ fn (mut self VTParser) build_csi_action(final_byte u8) ParserAction {
 		inter_copy << self.intermediates[i]
 	}
 
+	// We only allow colon or mixed separators for the 'm' command.
+	// If any colon separator was used for a non-'m' command, we discard
+	// the sequence entirely (no dispatch). This matches Ghostty and is
+	// derived from real-world Kakoune SGR sequences.
+	if final_byte != u8(`m`) && self.params_sep.count() > 0 {
+		return ParserAction{
+			action_type: .none
+		}
+	}
+
 	return ParserAction{
 		action_type: .csi_dispatch_action
 		csi: CSIAction{
@@ -769,9 +838,10 @@ fn (mut self VTParser) build_dcs_hook_action(final_byte u8) ParserAction {
 }
 
 // parse_osc_command parses an OSC string into a command.
-// The format is: <number>;<data>
+// The format is: <number>[;<data>]. Some OSCs (e.g. 104, 110-119, 133)
+// may legitimately arrive without a trailing semicolon.
 fn parse_osc_command(data string) OscCommand {
-	// Find the first semicolon
+	// Find the first semicolon.
 	mut sep_idx := -1
 	for i, b in data {
 		if b == u8(`;`) {
@@ -780,15 +850,16 @@ fn parse_osc_command(data string) OscCommand {
 		}
 	}
 
-	if sep_idx < 0 {
-		// No semicolon - might be a bare command number
+	// The numeric prefix is everything before the first semicolon (or the
+	// whole string if there is no semicolon).
+	num_str := if sep_idx < 0 { data } else { data[..sep_idx] }
+	payload := if sep_idx < 0 { '' } else { data[sep_idx + 1..] }
+
+	if num_str.len == 0 {
 		return OscCommand{ cmd_type: .invalid }
 	}
 
-	num_str := data[..sep_idx]
-	payload := data[sep_idx + 1..]
-
-	// Parse the command number
+	// Parse the command number.
 	mut num := 0
 	for b in num_str {
 		if b < u8(`0`) || b > u8(`9`) {
@@ -797,7 +868,18 @@ fn parse_osc_command(data string) OscCommand {
 		num = num * 10 + int(b - u8(`0`))
 	}
 
-	// Map number to command type
+	// OSC color operations (4, 5, 10-19, 104, 105, 110-119). These are
+	// handled by the color operation parser which needs the operation
+	// number, so we pass the full OSC string (including the number) as the
+	// command data.
+	if is_color_operation_osc(num) {
+		return OscCommand{
+			cmd_type: .color_operation
+			data: data
+		}
+	}
+
+	// Map number to command type.
 	return match num {
 		0, 2 {
 			OscCommand{
@@ -821,17 +903,40 @@ fn parse_osc_command(data string) OscCommand {
 			// Hyperlinks: 8;params;uri
 			parse_osc_8_hyperlink(payload)
 		}
+		21 {
+			// Kitty color protocol (OSC 21). The body is passed through to
+			// the kitty color parser.
+			OscCommand{
+				cmd_type: .kitty_color_protocol
+				data: payload
+			}
+		}
 		52 {
 			OscCommand{
 				cmd_type: .clipboard_contents
 				data: payload
 			}
 		}
-		// XTODO: many more OSC numbers (9, 10-19, 22, 104-119, 133, 1337, etc.)
+		133 {
+			// Semantic prompt (OSC 133). The body (e.g. "A", "B;redraw=1")
+			// is parsed by the stream dispatcher.
+			OscCommand{
+				cmd_type: .semantic_prompt
+				data: payload
+			}
+		}
+		// XTODO: remaining OSC numbers (9, 22, 777, 1337, etc.)
 		else {
 			OscCommand{ cmd_type: .invalid }
 		}
 	}
+}
+
+// is_color_operation_osc reports whether the given OSC number is a color
+// operation (OSC 4, 5, 10-19, 104, 105, 110-119).
+fn is_color_operation_osc(num int) bool {
+	return num == 4 || num == 5 || (num >= 10 && num <= 19) || num == 104 || num == 105
+		|| (num >= 110 && num <= 119)
 }
 
 // parse_osc_8_hyperlink parses an OSC 8 hyperlink command.

@@ -225,33 +225,44 @@ module search
 // - notifications should be coalesced to avoid spamming a massive
 //   amount of events if the terminal is changing rapidly.
 
+import sync
+import terminal
+import highlight
+
 // The interval at which we refresh the terminal state to check if
 // there are any changes that require us to re-search. This should be
 // balanced to be fast enough to be responsive but not so fast that
 // we hold the terminal lock too often.
 const refresh_interval = 24 // 40 FPS
 
+// EventCallback is the type for event callbacks from the search thread.
+// Mirrors Zig's `*const fn (event: Event, userdata: ?*anyopaque) void`.
+pub type EventCallback = fn (event Event, userdata voidptr)
+
 // Options for the search thread.
+//
+// Source: Thread.Options
 pub struct ThreadOptions {
-pub:
-	// XTODO: mutex and terminal fields require threading and terminal
-	// module integration respectively.
-	// mutex &Mutex
-	// terminal &Terminal
+pub mut:
+	// Mutex that must be held while reading/writing the terminal.
+	mutex &sync.Mutex = unsafe { nil }
+
+	// The terminal data to search.
+	terminal &terminal.Terminal = unsafe { nil }
 
 	// The callback for events from the search thread along with optional
-	// userdata. This can be null if you don't want to receive events,
+	// userdata. This can be none if you don't want to receive events,
 	// which could be useful for a one-time search (although, odd, you
 	// should use our search structures directly then).
-	// event_cb ?EventCallback
-	// event_userdata voidptr
-	placeholder int // avoid empty struct
+	event_cb       ?EventCallback
+	event_userdata voidptr
 }
 
-// EventCallback is the type for event callbacks from the search thread.
-// XTODO: pub type EventCallback = fn (event Event, userdata voidptr)
-
 // The messages that can be sent to the thread.
+//
+// Source: Thread.Message (tagged union). V has no ergonomic payload-
+// carrying unions here, so we model the tag as an enum and carry the
+// payload alongside in Message.
 pub enum MessageType {
 	// Change the search term. If no prior search term is given this
 	// will start a search. If an existing search term is given this will
@@ -261,8 +272,20 @@ pub enum MessageType {
 	select_result
 }
 
+// Message is a message posted to the search thread's mailbox.
+pub struct Message {
+pub:
+	kind MessageType
+	// For change_needle: the new needle bytes.
+	needle []u8
+	// For select_result: the direction to move the selection.
+	select Select
+}
+
 // Events that can be emitted from the search thread. The caller
 // chooses to handle these as they see fit.
+//
+// Source: Thread.Event (tagged union), modeled as tag + payload.
 pub enum EventType {
 	// Search is quitting. The search thread is exiting.
 	quit
@@ -276,36 +299,34 @@ pub enum EventType {
 	viewport_matches
 }
 
-// ThreadSelectedMatch represents a selected search result for the search thread.
-// Named ThreadSelectedMatch to avoid conflict with SelectedMatch in screen_search.v.
+// ThreadSelectedMatch represents a selected search result for the search
+// thread. Named ThreadSelectedMatch to avoid conflict with SelectedMatch
+// in screen_search.v.
+//
+// Source: Thread.Event.SelectedMatch
 pub struct ThreadSelectedMatch {
-pub:
-	idx int
-	// XTODO: highlight field needs FlattenedHighlight type
-	// highlight FlattenedHighlight
+pub mut:
+	idx       int
+	highlight highlight.FlattenedHighlight
 }
 
-// SearchThread handles searching a terminal for a string match.
-// XTODO: Full implementation requires:
-// - xev event loop (or equivalent async I/O)
-// - Threading primitives (Mutex, Thread)
-// - Terminal access
-// - Mailbox/BlockingQueue
-pub struct SearchThread {
-mut:
-	// XTODO: All fields depend on external libraries:
-	// alloc: allocator
-	// mailbox: &Mailbox
-	// loop_: xev.Loop
-	// wakeup: xev.Async
-	// stop: xev.Async
-	// refresh: xev.Timer
-	// search: ?Search
-	// opts: ThreadOptions
-	placeholder int // placeholder to avoid empty struct
+// Event is an event emitted from the search thread. The active tag is
+// `kind`; the remaining fields carry the payload for that tag.
+pub struct Event {
+pub mut:
+	kind EventType
+	// total_matches payload
+	total int
+	// selected_match payload (none => selection cleared)
+	selected ?ThreadSelectedMatch
+	// viewport_matches payload. The memory is owned by the search thread
+	// and is only valid during the callback.
+	viewport_matches []highlight.FlattenedHighlight
 }
 
 // Tick result for search progress.
+//
+// Source: Search.Tick
 pub enum Tick {
 	// All searches are complete.
 	complete
@@ -315,27 +336,534 @@ pub enum Tick {
 	blocked
 }
 
+// SearchThread handles searching a terminal for a string match.
+//
+// Source: Thread (@This()).
+//
+// Boundary: the Zig implementation is driven by an xev event loop with a
+// BlockingQueue mailbox and async wakeup/stop/refresh handles. This
+// codebase has no xev/BlockingQueue bindings, so the event-loop plumbing
+// (loop, wakeup, stop, refresh timer, async completions) is not modeled.
+// Instead we expose a synchronous mailbox (a slice) plus the real search
+// state machine, and `thread_main` drives it in a plain loop. The
+// translated Search/tick/feed/notify logic is faithful; only the I/O
+// scheduling around it is simplified.
+pub struct SearchThread {
+mut:
+	// The mailbox of pending messages for this thread.
+	mailbox []Message
+
+	// Set true to request the loop stop on its next iteration.
+	stop_requested bool
+
+	// The timer-active flag, see startRefreshTimer/stopRefreshTimer.
+	refresh_active bool
+
+	// Search state. Starts as none and is populated when a search is
+	// started (a needle is given).
+	search ?Search
+
+	// The options used to initialize this thread.
+	opts ThreadOptions
+}
+
 // Initialize the thread. This does not START the thread. This only sets
 // up all the internal state necessary prior to starting the thread. It
 // is up to the caller to start the thread with the thread_main entrypoint.
+//
+// Source: Thread.init (minus xev loop/async/timer setup, see boundary
+// note on SearchThread).
 pub fn SearchThread.init(opts ThreadOptions) !SearchThread {
-	// XTODO: Full implementation requires xev event loop, async handles,
-	// and timer initialization.
-	return SearchThread{}
+	return SearchThread{
+		opts: opts
+	}
 }
 
 // Clean up the thread. This is only safe to call once the thread
 // completes executing; the caller must join prior to this.
+//
+// Source: Thread.deinit
 pub fn (mut self SearchThread) deinit() {
-	// XTODO: Cleanup of xev handles, mailbox, and search state.
+	if mut s := self.search {
+		s.deinit()
+		self.search = none
+	}
+	self.mailbox = []
 }
 
 // The main entrypoint for the thread.
+//
+// Source: Thread.threadMain / threadMain_. The xev loop is replaced by a
+// synchronous drain-tick-feed loop. Platform thread naming and QoS class
+// (Darwin pthread_setname_np / setQosClass) are omitted as they are not
+// wired in this environment.
 pub fn (mut self SearchThread) thread_main() {
-	// XTODO: Full implementation requires:
-	// - xev event loop execution
-	// - Mailbox draining
-	// - Search tick/feed interleaving
-	// - Platform thread naming (pthread_setname_np on macOS)
-	// - QoS class setting on macOS
+	self.refresh_active = true
+
+	for {
+		// If a stop was requested we drain our messages and quit.
+		if self.stop_requested {
+			self.mailbox = []
+			break
+		}
+
+		// Drain the mailbox (equivalent to the xev wakeup callback).
+		self.drain_mailbox()
+
+		mut s := self.search or {
+			// If we're not actively searching, there's no work to do. In
+			// the xev version we'd block the loop until an action arrives;
+			// here we simply break out since nothing can make progress.
+			break
+		}
+
+		// If we have an active search, we always send any pending
+		// notifications. Even if the search is complete, there may be
+		// notifications to send.
+		if cb := self.opts.event_cb {
+			s.notify(cb, self.opts.event_userdata)
+		}
+
+		if s.is_complete() {
+			// If our search is complete, there's no more work to do.
+			self.search = s
+			break
+		}
+
+		// Tick the search. This will trigger any event callbacks, lock
+		// for data loading, etc.
+		match s.tick() {
+			// We're complete now when we were not before.
+			.complete {}
+			// Forward progress was made.
+			.progress {}
+			// All searches are blocked. Let's grab the lock and feed data.
+			.blocked {
+				self.opts.mutex.lock()
+				s.feed(mut self.opts.terminal)
+				self.opts.mutex.unlock()
+			}
+		}
+
+		self.search = s
+	}
+
+	// Send the quit message on shutdown.
+	if cb := self.opts.event_cb {
+		cb(Event{ kind: .quit }, self.opts.event_userdata)
+	}
+}
+
+// Drain the mailbox.
+//
+// Source: Thread.drainMailbox
+fn (mut self SearchThread) drain_mailbox() {
+	msgs := self.mailbox.clone()
+	self.mailbox = []
+	for msg in msgs {
+		match msg.kind {
+			.change_needle {
+				self.change_needle(msg.needle)
+			}
+			.select_result {
+				self.do_select(msg.select)
+			}
+		}
+	}
+}
+
+// Post a message to this thread's mailbox. Producers should call
+// thread_main (or resume the loop) after publishing.
+pub fn (mut self SearchThread) push(msg Message) {
+	self.mailbox << msg
+}
+
+// Request the loop to stop on its next iteration.
+//
+// Source: Thread.stopCallback (loop.stop()).
+pub fn (mut self SearchThread) request_stop() {
+	self.stop_requested = true
+}
+
+// Select a search result.
+//
+// Source: Thread.select. The viewport-visibility short circuit and
+// scroll-into-view (screen.pages.pageIterator / screen.scroll) depend on
+// PageList viewport iteration that the flat `Pages` model doesn't provide,
+// so we perform the selection and reset the selected cache but leave the
+// scroll-into-view to the renderer.
+fn (mut self SearchThread) do_select(sel Select) {
+	mut s := self.search or { return }
+	key := s.last_screen.key
+
+	self.opts.mutex.lock()
+	if mut screen_search := s.screens[key] {
+		// Make the selection. Ignore the result because we don't care if
+		// the selection didn't change.
+		screen_search.do_select(sel)
+
+		// No matter what we reset our selected match cache. This will
+		// trigger a callback which will trigger the renderer to wake up so
+		// it can be notified the screen scrolled.
+		s.last_screen.selected = none
+	}
+	self.opts.mutex.unlock()
+
+	self.search = s
+}
+
+// Change the search term to the given value.
+//
+// Source: Thread.changeNeedle
+fn (mut self SearchThread) change_needle(needle []u8) {
+	// Stop the previous search.
+	if mut s := self.search {
+		// If our search is unchanged, do nothing.
+		if eql_ignore_case(s.viewport.needle(), needle) {
+			self.search = s
+			return
+		}
+
+		s.deinit()
+		self.search = none
+
+		// When the search changes then we need to emit that it stopped.
+		if cb := self.opts.event_cb {
+			cb(Event{ kind: .total_matches, total: 0 }, self.opts.event_userdata)
+			cb(Event{ kind: .selected_match, selected: none }, self.opts.event_userdata)
+			cb(Event{ kind: .viewport_matches, viewport_matches: [] }, self.opts.event_userdata)
+		}
+	}
+
+	// No needle means stop the search.
+	if needle.len == 0 {
+		return
+	}
+
+	// Setup our search state.
+	mut new_search := Search.init(needle)
+
+	// We need to grab the terminal lock and do an initial feed.
+	self.opts.mutex.lock()
+	new_search.feed(mut self.opts.terminal)
+	self.opts.mutex.unlock()
+
+	self.search = new_search
+}
+
+// Set our active state so it knows we're running.
+//
+// Source: Thread.startRefreshTimer (the xev timer scheduling is omitted).
+fn (mut self SearchThread) start_refresh_timer() {
+	self.refresh_active = true
+}
+
+// This will stop the refresh on the next iteration.
+//
+// Source: Thread.stopRefreshTimer
+fn (mut self SearchThread) stop_refresh_timer() {
+	self.refresh_active = false
+}
+
+// ============================================================
+// Search - the core cross-screen search state.
+// ============================================================
+
+// ScreenState collects all state related to screen switches, so that
+// when we switch screens everything related goes stale too.
+//
+// Source: Search.ScreenState
+struct ScreenState {
+mut:
+	// Last active screen key.
+	key terminal.ScreenKey = .primary
+	// Last notified total matches count.
+	total ?int
+	// Last notified selected match index + highlight.
+	selected ?ScreenStateSelectedMatch
+}
+
+// ScreenStateSelectedMatch caches the last-notified selection so we can
+// detect changes without re-notifying.
+//
+// Source: Search.ScreenState.SelectedMatch
+struct ScreenStateSelectedMatch {
+mut:
+	idx       int
+	highlight highlight.UntrackedHighlight
+}
+
+// Search state.
+//
+// Source: Search
+pub struct Search {
+mut:
+	// Active viewport search for the active screen.
+	viewport ViewportSearch
+
+	// The searchers for all the screens. Zig uses std.EnumMap keyed by
+	// ScreenSet.Key; we model it as a map keyed by ScreenKey.
+	screens map[terminal.ScreenKey]&ScreenSearch
+
+	// All state related to screen switches.
+	last_screen ScreenState
+
+	// True if we sent the complete notification yet.
+	last_complete bool
+
+	// The last viewport matches we found are stale (need re-search).
+	stale_viewport_matches bool
+}
+
+// Initialize the search state for the given needle.
+//
+// Source: Search.init
+pub fn Search.init(needle []u8) Search {
+	mut vp := ViewportSearch.init(needle)
+
+	// We use dirty tracking for active area changes. Start with it dirty
+	// so the first change is re-searched.
+	vp.active_dirty = true
+
+	return Search{
+		viewport: vp
+		screens: map[terminal.ScreenKey]&ScreenSearch{}
+		last_screen: ScreenState{
+			key: .primary
+		}
+		last_complete: false
+		stale_viewport_matches: true
+	}
+}
+
+// Free resources.
+//
+// Source: Search.deinit
+pub fn (mut self Search) deinit() {
+	self.viewport.deinit()
+	for _, mut ss in self.screens {
+		ss.deinit()
+	}
+	self.screens = map[terminal.ScreenKey]&ScreenSearch{}
+}
+
+// Returns true if all searches on all screens are complete.
+//
+// Source: Search.isComplete
+pub fn (self &Search) is_complete() bool {
+	for _, ss in self.screens {
+		if !ss.state.is_complete() {
+			return false
+		}
+	}
+	return true
+}
+
+// Tick the search forward as much as possible without acquiring the big
+// lock. Returns the overall tick progress.
+//
+// Source: Search.tick. Zig distinguishes tick outcomes via error unions
+// (FeedRequired / SearchComplete / OutOfMemory). Our tick() returns a bool
+// (more work?) and the state enum tells us if a feed is required, so we
+// reproduce the same aggregate logic against that.
+pub fn (mut self Search) tick() Tick {
+	mut result := Tick.complete
+	for _, mut ss in self.screens {
+		if ss.state.is_complete() {
+			// Ignore, good for us. State remains whatever it is.
+			continue
+		}
+
+		if ss.state.needs_feed() {
+			// Blocked on feed. If we think we're complete, we're not
+			// because nothing made progress; otherwise keep our progress.
+			if result == .complete {
+				result = .blocked
+			}
+			continue
+		}
+
+		// Otherwise a tick makes progress.
+		ss.tick()
+		result = .progress
+	}
+
+	return result
+}
+
+// Grab the mutex and update any state that requires it, such as feeding
+// additional data to the searches or updating the active screen.
+//
+// Source: Search.feed
+pub fn (mut self Search) feed(mut t terminal.Terminal) {
+	// Update our active screen.
+	if t.screens.active_key != self.last_screen.key {
+		// The default values will force resets of a bunch of other state
+		// too to force recalculations and notifications.
+		self.last_screen = ScreenState{
+			key: t.screens.active_key
+		}
+	}
+
+	// Reconcile our screens with the terminal screens. Remove searchers
+	// for screens that no longer exist and add searchers for screens that
+	// exist but we don't have yet.
+	//
+	// Remove screens we have that no longer exist or changed.
+	for key in [terminal.ScreenKey.primary, terminal.ScreenKey.alternate] {
+		if mut ss := self.screens[key] {
+			actual := t.screens.get(key) or {
+				// If the screen doesn't exist at all, remove it.
+				ss.deinit()
+				self.screens.delete(key)
+				continue
+			}
+			// If the screen pointer changed, remove it; the screen was
+			// totally reinitialized.
+			if voidptr(actual) != voidptr(ss.screen) {
+				ss.deinit()
+				self.screens.delete(key)
+			}
+		}
+	}
+	// Add screens that exist but we don't have yet.
+	for key in [terminal.ScreenKey.primary, terminal.ScreenKey.alternate] {
+		if key in self.screens {
+			continue
+		}
+		mut screen := t.screens.get(key) or { continue }
+		mut ss := &ScreenSearch(unsafe { nil })
+		ss = &ScreenSearch(memdup_screen_search(ScreenSearch.init(mut screen, self.viewport.needle())))
+		self.screens[key] = ss
+	}
+
+	// See the `search_viewport_dirty` flag on the terminal to know what
+	// exactly this is for. But, if this is set, we know the renderer found
+	// the viewport/active area dirty, so we should mark it as dirty in our
+	// viewport searcher so it forces a re-search.
+	if t.flags.search_viewport_dirty {
+		t.flags.search_viewport_dirty = false
+
+		// Mark our viewport dirty so it researches the active.
+		self.viewport.active_dirty = true
+
+		// Reload our active area for our active screen.
+		if mut ss := self.screens[t.screens.active_key] {
+			ss.reload_active()
+		}
+	}
+
+	// Check our viewport for changes. ViewportSearch.update wants a
+	// &PageList, which the flat `Pages` model doesn't provide, so the
+	// viewport re-search stays disabled here (boundary shared with
+	// viewport_search.v).
+	// if self.viewport.update(&...pages) { self.stale_viewport_matches = true }
+
+	// Feed data to each screen search that needs it.
+	for _, mut ss in self.screens {
+		if ss.state.needs_feed() {
+			ss.feed()
+		}
+	}
+}
+
+// Notify about any changes to the search state.
+//
+// This doesn't require any locking as it only reads internal state.
+//
+// Source: Search.notify
+pub fn (mut self Search) notify(cb EventCallback, ud voidptr) {
+	key := self.last_screen.key
+	mut screen_search := self.screens[key] or { return }
+
+	// Check our total match data.
+	total := screen_search.matches_len()
+	changed_total := if t := self.last_screen.total { t != total } else { true }
+	if changed_total {
+		self.last_screen.total = total
+		cb(Event{ kind: .total_matches, total: total }, ud)
+	}
+
+	// Check our viewport matches. If they're stale, we do the viewport
+	// search now. We do this as part of notify and not tick because the
+	// viewport search is very fast and doesn't require ticked progress or
+	// feeds.
+	if self.stale_viewport_matches {
+		// We always make stale as false. Even if we fail we require a
+		// re-feed to re-search the viewport. The feed process makes it
+		// stale again.
+		self.stale_viewport_matches = false
+
+		mut results := []highlight.FlattenedHighlight{}
+		for {
+			hl := self.viewport.next() or { break }
+			results << hl.clone()
+		}
+		cb(Event{ kind: .viewport_matches, viewport_matches: results }, ud)
+	}
+
+	// Check our last selected match data.
+	if m := screen_search.selected {
+		if flattened := screen_search.selected_match() {
+			untracked := flattened.untracked()
+			mut same := false
+			if prev := self.last_screen.selected {
+				if prev.idx == m.idx && prev.highlight.eql(untracked) {
+					// Same selection, don't update it.
+					same = true
+				}
+			}
+			if !same {
+				// New selection, notify!
+				self.last_screen.selected = ScreenStateSelectedMatch{
+					idx: m.idx
+					highlight: untracked
+				}
+				cb(Event{
+					kind: .selected_match
+					selected: ThreadSelectedMatch{
+						idx: m.idx
+						highlight: flattened
+					}
+				}, ud)
+			}
+		}
+	} else if self.last_screen.selected != none {
+		self.last_screen.selected = none
+		cb(Event{ kind: .selected_match, selected: none }, ud)
+	}
+
+	// Send our complete notification if we just completed.
+	if !self.last_complete && self.is_complete() {
+		self.last_complete = true
+		cb(Event{ kind: .complete }, ud)
+	}
+}
+
+// Heap-allocate a ScreenSearch so we can store a stable pointer in the
+// screens map (mirrors Zig storing ScreenSearch by value in an EnumMap
+// but keeping a stable address for reloadActive/getPtr semantics).
+fn memdup_screen_search(v ScreenSearch) &ScreenSearch {
+	return &ScreenSearch(memdup(&v, int(sizeof(ScreenSearch))))
+}
+
+// Case-insensitive ASCII byte-slice equality (std.ascii.eqlIgnoreCase).
+fn eql_ignore_case(a []u8, b []u8) bool {
+	if a.len != b.len {
+		return false
+	}
+	for i in 0 .. a.len {
+		mut ca := a[i]
+		mut cb := b[i]
+		if ca >= `A` && ca <= `Z` {
+			ca += 32
+		}
+		if cb >= `A` && cb <= `Z` {
+			cb += 32
+		}
+		if ca != cb {
+			return false
+		}
+	}
+	return true
 }

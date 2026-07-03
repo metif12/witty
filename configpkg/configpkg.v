@@ -1,5 +1,7 @@
 module configpkg
 
+import os
+
 // --- Original Ghostty Comments Start: src/config/Config.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/config/Config.zig
@@ -4009,15 +4011,117 @@ pub mut:
 	search_selected_background TerminalColor
 	search_selected_foreground TerminalColor
 	link                       LinkConfig
+	// Enable URL matching. URLs are matched on hover with control (Linux) or
+	// command (macOS) pressed and open using the default system application for
+	// the linked URL. The URL matcher is always lowest priority of any
+	// configured links.
+	link_url bool = true
+	// The named font style to use for each of the requested terminal font
+	// styles. This looks up the style based on the font style string advertised
+	// by the font itself.
+	font_style             string = 'default'
+	font_style_bold        string = 'default'
+	font_style_italic      string = 'default'
+	font_style_bold_italic string = 'default'
+	// The font families to use, with fallback fonts appended by repeating the
+	// option. An empty list means use the platform default.
+	font_family             []string
+	font_family_bold        []string
+	font_family_italic      []string
+	font_family_bold_italic []string
+	// Apply font features. See the docs above.
+	font_feature []string
+	// Draw fonts with a thicker stroke, if supported (macOS only).
+	// (font_thicken/font_thicken_strength are declared in the renderer group.)
+	// Whether the freetype library should synthesize styles. This is a
+	// comma-separated list of style keys with an optional `no-` prefix.
+	// Method to use for calculating the cell width of a grapheme cluster.
+	grapheme_width_method GraphemeWidthMethod = .unicode
+	// The minimum runtime in ms below which we consider a process exit abnormal.
+	// (abnormal_command_exit_runtime declared above.)
+	// The size of the scrollback buffer in bytes. Includes the active screen.
+	scrollback_limit u64 = 10_000_000 // 10MB
+	// Control when the scrollbar is shown to scroll the scrollback buffer.
+	scrollbar Scrollbar = .system
+	// Enable or disable command-finished notifications. See docs above.
+	notify_on_command_finish NotifyOnCommandFinish = .never
+	// The setting that will change the application class value (GTK only).
+	class ?string
+	// This controls the instance name field of the WM_CLASS X11 property.
+	x11_instance_name ?string
+	// The response to send to the ENQ (0x05) character.
+	enquiry_response string
+	// Whether to start the window in a maximized state.
+	maximize bool
+	// Start new windows in fullscreen.
+	fullscreen bool
+	// A theme to use. Can be a built-in theme name or an absolute path. Both
+	// light and dark may be set via `light:foo,dark:bar` syntax.
+	theme ?string
+	// The style of the cursor. A running program can request an explicit cursor
+	// style using escape sequences.
+	cursor_style CursorStyle = .block
+	// The default blinking state of the cursor. null respects DEC Mode 12.
+	cursor_style_blink ?bool
+	// The opacity level of the unfocused split. 1 disables the fading.
+	unfocused_split_opacity f64 = 0.7
+	// The color to dim the unfocused split. Defaults to the background color.
+	unfocused_split_fill ?ColorRGB
+	// The color of the split divider. If not set, a default is chosen.
+	split_divider_color ?ColorRGB
+	// Enable URL matching by default. (link_url declared above.)
+	// Whether window decorations are enabled.
+	window_decoration WindowDecoration = .auto
+	// The theme to use for the window (auto/system/light/dark/ghostty).
+	window_theme WindowTheme = .auto
+	// Whether the mouse follows focus.
+	focus_follows_mouse bool
+	// Whether a new terminal inherits the working directory of the previous one.
+	window_inherit_working_directory bool = true
+	tab_inherit_working_directory    bool = true
+	split_inherit_working_directory  bool = true
+	// Whether a new terminal inherits the font size of the previous one.
+	window_inherit_font_size bool = true
+	// Whether to create the initial window when starting.
+	initial_window bool = true
+	// Whether to enable OSC 133 based right-click actions.
+	right_click_action RightClickAction = .context_menu
+	// Interval in ms for detecting repeated clicks. 0 uses the system default.
+	click_repeat_interval u32
+	// Whether the image storage limit is enabled and its size in bytes.
+	image_storage_limit u32 = 320 * 1000 * 1000
+	// Whether Ghostty may quit after the last window is closed.
+	quit_after_last_window_closed bool
+	// Whether to load the default config files.
+	config_default_files bool = true
+	// A list of additional config files to load.
+	config_file RepeatablePath
+	// Reporting format for OSC color queries.
+	osc_color_report_format OSCColorReportFormat = .format_16_bit
+	// Whether a custom shader animates.
+	custom_shader_animation CustomShaderAnimation = .true_
+	// The multiplier applied to the scroll distance with the mouse wheel.
+	mouse_scroll_multiplier f64 = 1.0
 	// Theme color fields used by list-themes preview
 	foreground  ColorRGB = ColorRGB{ r: 0xff, g: 0xff, b: 0xff }
 	background  ColorRGB = ColorRGB{ r: 0x00, g: 0x00, b: 0x00 }
 	palette     Palette  = Palette.default_palette()
 	diagnostics []Diagnostic
+	// The current conditional state (e.g. light/dark theme). This is not a
+	// user-facing config option; it tracks runtime conditional evaluation.
+	conditional_state ConditionalState
 }
 
+// change_conditional_state returns a new Config with the given conditional
+// state applied. In Ghostty this replays the recorded config steps to rebuild
+// the configuration under the new conditional (e.g. light/dark theme) state.
+// We don't yet record replay steps, so we produce a deep clone with the new
+// conditional state set. Fields are re-finalized so clamped/derived values
+// stay consistent.
 pub fn (c Config) change_conditional_state(state ConditionalState) !Config {
-	mut copy := c
+	mut copy := c.clone()
+	copy.conditional_state = state
+	copy.finalize()
 	return copy
 }
 
@@ -4025,9 +4129,28 @@ pub fn (mut c Config) deinit() {
 	// stub
 }
 
-// clone creates a shallow copy of the config.
+// clone creates a deep copy of the config. Slices and nested collections are
+// cloned so that mutating the copy does not affect the original.
 pub fn (c Config) clone() Config {
-	return c
+	mut copy := c
+	copy.font_family = c.font_family.clone()
+	copy.font_family_bold = c.font_family_bold.clone()
+	copy.font_family_italic = c.font_family_italic.clone()
+	copy.font_family_bold_italic = c.font_family_bold_italic.clone()
+	copy.font_feature = c.font_feature.clone()
+	copy.custom_shader = c.custom_shader.clone() or { RepeatablePath{} }
+	copy.config_file = c.config_file.clone() or { RepeatablePath{} }
+	copy.env = RepeatableStringMap{
+		entries: c.env.entries.clone()
+	}
+	copy.diagnostics = c.diagnostics.clone()
+	if cmd := c.command {
+		copy.command = cmd.clone()
+	}
+	if cmd := c.initial_command {
+		copy.initial_command = cmd.clone()
+	}
+	return copy
 }
 
 // ============================================================
@@ -4444,9 +4567,125 @@ pub:
 	duration u64
 }
 
-pub struct NotifyOnCommandFinish {}
+// NotifyOnCommandFinish controls when command-finished notifications are sent.
+pub enum NotifyOnCommandFinish {
+	never
+	unfocused
+	always
+}
 
 pub struct NotifyOnCommandFinishAction {}
+
+// GraphemeWidthMethod for calculating the cell width of a grapheme cluster.
+pub enum GraphemeWidthMethod {
+	legacy
+	unicode
+}
+
+// Scrollbar controls when the scrollbar is shown.
+pub enum Scrollbar {
+	system
+	never
+}
+
+// CursorStyle sets the default cursor style.
+pub enum CursorStyle {
+	block
+	bar
+	underline
+	block_hollow
+}
+
+// WindowDecoration controls window decorations.
+pub enum WindowDecoration {
+	auto
+	client
+	server
+	none_
+}
+
+// WindowTheme controls the theme used for the window.
+pub enum WindowTheme {
+	auto
+	system
+	light
+	dark
+	ghostty
+}
+
+// RightClickAction controls the action taken on right-click.
+pub enum RightClickAction {
+	ignore
+	paste
+	copy
+	copy_or_paste
+	context_menu
+}
+
+// OSCColorReportFormat controls the reporting format for OSC color queries.
+pub enum OSCColorReportFormat {
+	none_
+	format_8_bit
+	format_16_bit
+}
+
+// CustomShaderAnimation controls whether custom shaders animate.
+pub enum CustomShaderAnimation {
+	false_
+	true_
+	always
+}
+
+// WindowSubtitle controls the window subtitle text.
+pub enum WindowSubtitle {
+	false_
+	working_directory
+}
+
+// WindowSaveState controls whether window state is saved between runs.
+pub enum WindowSaveState {
+	default
+	never
+	always
+}
+
+// WindowNewTabPosition controls where new tabs are placed.
+pub enum WindowNewTabPosition {
+	current
+	end
+}
+
+// WindowShowTabBar controls when the tab bar is shown.
+pub enum WindowShowTabBar {
+	always
+	auto
+	never
+}
+
+// ResizeOverlay controls when a resize overlay is shown.
+pub enum ResizeOverlay {
+	always
+	never
+	after_first
+}
+
+// ResizeOverlayPosition controls where the resize overlay is drawn.
+pub enum ResizeOverlayPosition {
+	center
+	top_left
+	top_center
+	top_right
+	bottom_left
+	bottom_center
+	bottom_right
+}
+
+// AsyncBackend selects the async event loop backend.
+pub enum AsyncBackend {
+	auto
+	epoll
+	io_uring
+}
 
 // ============================================================
 // Color types for theme preview
@@ -4509,11 +4748,351 @@ pub fn (d Diagnostic) str() string {
 	return d.message
 }
 
-// load_file loads a theme configuration file and merges it into this config.
-// XTODO: needs real config file parser to load theme key=value pairs.
+// load loads the configuration from the default files and finalizes it.
+// This mirrors Ghostty's `Config.load`, which layers:
+//   1. Defaults
+//   2. The default (XDG / app-support) config files
+//   3. finalize()
+// CLI-arg parsing and recursive config-file loading are not yet modeled.
+pub fn Config.load() Config {
+	mut c := Config.default_config()
+	path := preferred_default_file_path()
+	if path.len > 0 && os.exists(path) {
+		c.load_file(path)
+	}
+	c.finalize()
+	return c
+}
+
+// load_file loads a configuration file and merges it into this config.
+// It parses `key = value` lines, ignoring blank lines and lines beginning
+// with `#`. Recognised keys are applied to the config; unrecognised keys are
+// ignored. Malformed lines (missing `=`, invalid values, out-of-range
+// indices) are recorded as diagnostics.
 pub fn (mut c Config) load_file(path string) {
-	// Stub: in the real implementation this would parse the file
-	// and apply theme colors to foreground, background, palette, etc.
+	content := os.read_file(path) or {
+		c.diagnostics << Diagnostic{
+			message: 'config-file ${path}: unable to read file'
+		}
+		return
+	}
+	c.load_string(content)
+}
+
+// load_string parses config file contents from an in-memory string. This is
+// the reader-based half of Ghostty's loadReader, minus the OS file handling.
+pub fn (mut c Config) load_string(content string) {
+	mut body := content
+	// Skip a leading UTF-8 byte order mark if present.
+	if body.len >= 3 && body[0] == 0xef && body[1] == 0xbb && body[2] == 0xbf {
+		body = body[3..]
+	}
+	for raw_line in body.split_into_lines() {
+		line := raw_line.trim_space()
+		// Skip blank lines and comments.
+		if line.len == 0 || line[0] == `#` {
+			continue
+		}
+		eq := line.index('=') or {
+			c.diagnostics << Diagnostic{
+				message: 'invalid config line (missing "="): ${line}'
+			}
+			continue
+		}
+		key := line[..eq].trim_space()
+		value := line[eq + 1..].trim_space()
+		c.apply_kv(key, value)
+	}
+}
+
+// apply_kv applies a single `key = value` pair to the config. Keys use the
+// hyphenated Ghostty spelling. Unknown keys are ignored (matching Ghostty's
+// behavior of not failing on unknown options). Invalid values are recorded
+// as diagnostics.
+fn (mut c Config) apply_kv(key string, value string) {
+	match key {
+		'background' {
+			if col := parse_color(value) {
+				c.background = col
+			} else {
+				c.diagnostics << Diagnostic{
+					message: 'invalid color for "background": ${value}'
+				}
+			}
+		}
+		'foreground' {
+			if col := parse_color(value) {
+				c.foreground = col
+			} else {
+				c.diagnostics << Diagnostic{
+					message: 'invalid color for "foreground": ${value}'
+				}
+			}
+		}
+		'palette' {
+			c.apply_palette(value)
+		}
+		'theme' {
+			c.theme = value
+		}
+		'font-family' {
+			c.apply_font_family_value(mut &c.font_family, value)
+		}
+		'font-family-bold' {
+			c.apply_font_family_value(mut &c.font_family_bold, value)
+		}
+		'font-family-italic' {
+			c.apply_font_family_value(mut &c.font_family_italic, value)
+		}
+		'font-family-bold-italic' {
+			c.apply_font_family_value(mut &c.font_family_bold_italic, value)
+		}
+		'font-size' {
+			c.font_size = value.f32()
+		}
+		'term' {
+			c.term = value
+		}
+		'scrollback-limit' {
+			c.scrollback_limit = value.u64()
+		}
+		'background-opacity' {
+			c.background_opacity = value.f64()
+		}
+		'minimum-contrast' {
+			c.minimum_contrast = value.f64()
+		}
+		'unfocused-split-opacity' {
+			c.unfocused_split_opacity = value.f64()
+		}
+		'faint-opacity' {
+			c.faint_opacity = value.f64()
+		}
+		'cursor-opacity' {
+			c.cursor_opacity = value.f64()
+		}
+		'window-width' {
+			c.window_width = value.u32()
+		}
+		'window-height' {
+			c.window_height = value.u32()
+		}
+		'title' {
+			c.title = value
+		}
+		'class' {
+			c.class = value
+		}
+		'x11-instance-name' {
+			c.x11_instance_name = value
+		}
+		'working-directory' {
+			c.working_directory = value
+		}
+		'abnormal-command-exit-runtime' {
+			c.abnormal_command_exit_runtime = value.u32()
+		}
+		else {
+			// Unknown key: ignored, matching Ghostty's tolerance of options
+			// it doesn't recognize (e.g. options for other platforms).
+		}
+	}
+}
+
+// apply_font_family_value appends a font family fallback. Setting the value
+// to an empty string resets the list.
+fn (c Config) apply_font_family_value(mut list []string, value string) {
+	if value.len == 0 {
+		list.clear()
+		return
+	}
+	list << value
+}
+
+// apply_palette parses a palette entry of the form `N=COLOR` where N is a
+// palette index (0-255) and COLOR is a hex color.
+fn (mut c Config) apply_palette(value string) {
+	inner_eq := value.index('=') or {
+		c.diagnostics << Diagnostic{
+			message: 'invalid palette entry (missing "="): ${value}'
+		}
+		return
+	}
+	idx_str := value[..inner_eq].trim_space()
+	col_str := value[inner_eq + 1..].trim_space()
+	idx := parse_palette_index(idx_str) or {
+		c.diagnostics << Diagnostic{
+			message: 'invalid palette index: ${idx_str}'
+		}
+		return
+	}
+	if idx > 255 {
+		c.diagnostics << Diagnostic{
+			message: 'palette index out of range (0-255): ${idx_str}'
+		}
+		return
+	}
+	col := parse_color(col_str) or {
+		c.diagnostics << Diagnostic{
+			message: 'invalid palette color: ${col_str}'
+		}
+		return
+	}
+	c.palette.value[idx] = col
+}
+
+// parse_palette_index parses a palette index in decimal, binary (`0b`),
+// octal (`0o`), or hexadecimal (`0x`) notation.
+fn parse_palette_index(s string) ?int {
+	if s.len == 0 {
+		return none
+	}
+	mut base := 0
+	mut digits := s
+	if s.len > 2 {
+		prefix := s[..2].to_lower()
+		match prefix {
+			'0b' {
+				base = 2
+				digits = s[2..]
+			}
+			'0o' {
+				base = 8
+				digits = s[2..]
+			}
+			'0x' {
+				base = 16
+				digits = s[2..]
+			}
+			else {}
+		}
+	}
+	n := if base == 0 {
+		strconv_parse_int(digits, 10) or { return none }
+	} else {
+		strconv_parse_int(digits, base) or { return none }
+	}
+	if n < 0 {
+		return none
+	}
+	return int(n)
+}
+
+// strconv_parse_int parses an integer from a string in the given base.
+fn strconv_parse_int(s string, base int) ?i64 {
+	if s.len == 0 {
+		return none
+	}
+	mut result := i64(0)
+	for ch in s {
+		digit := hex_digit(ch) or { return none }
+		if digit >= base {
+			return none
+		}
+		result = result * base + digit
+	}
+	return result
+}
+
+// hex_digit returns the numeric value of a hex digit character, or none.
+fn hex_digit(ch u8) ?int {
+	return match ch {
+		`0`...`9` { int(ch - `0`) }
+		`a`...`f` { int(ch - `a` + 10) }
+		`A`...`F` { int(ch - `A` + 10) }
+		else { none }
+	}
+}
+
+// parse_color parses a color specified as hex (`#RRGGBB` or `RRGGBB`).
+// Named X11 colors are not yet supported.
+fn parse_color(value string) ?ColorRGB {
+	mut s := value.trim_space()
+	if s.len == 0 {
+		return none
+	}
+	if s[0] == `#` {
+		s = s[1..]
+	}
+	if s.len != 6 {
+		return none
+	}
+	r := parse_hex_byte(s[0..2]) or { return none }
+	g := parse_hex_byte(s[2..4]) or { return none }
+	b := parse_hex_byte(s[4..6]) or { return none }
+	return ColorRGB{
+		r: r
+		g: g
+		b: b
+	}
+}
+
+// parse_hex_byte parses a two-character hex string into a byte.
+fn parse_hex_byte(s string) ?u8 {
+	if s.len != 2 {
+		return none
+	}
+	hi := hex_digit(s[0]) or { return none }
+	lo := hex_digit(s[1]) or { return none }
+	return u8(hi * 16 + lo)
+}
+
+// finalize applies defaults and clamps values after loading. This mirrors the
+// portable subset of Ghostty's `Config.finalize`. Platform- and apprt-specific
+// behavior (passwd lookup, GTK single-instance detection, click intervals) is
+// not modeled here.
+pub fn (mut c Config) finalize() {
+	// If a font-family is set and the style-specific families are not, default
+	// them to the primary family so styled variants are searched for too.
+	if c.font_family.len > 0 {
+		if c.font_family_bold.len == 0 {
+			c.font_family_bold = c.font_family.clone()
+		}
+		if c.font_family_italic.len == 0 {
+			c.font_family_italic = c.font_family.clone()
+		}
+		if c.font_family_bold_italic.len == 0 {
+			c.font_family_bold_italic = c.font_family.clone()
+		}
+	}
+
+	// Prevent setting TERM to an empty string.
+	if c.term.len == 0 {
+		c.term = 'xterm-256color'
+	}
+
+	// Clamp the mouse scroll multiplier to [0.01, 10000].
+	c.mouse_scroll_multiplier = clamp_f64(c.mouse_scroll_multiplier, 0.01, 10_000.0)
+
+	// Clamp the split opacity.
+	c.unfocused_split_opacity = clamp_f64(c.unfocused_split_opacity, 0.15, 1.0)
+
+	// Clamp the contrast.
+	c.minimum_contrast = clamp_f64(c.minimum_contrast, 1.0, 21.0)
+
+	// Clamp opacities to [0, 1].
+	c.background_opacity = clamp_f64(c.background_opacity, 0.0, 1.0)
+	c.cursor_opacity = clamp_f64(c.cursor_opacity, 0.0, 1.0)
+	c.faint_opacity = clamp_f64(c.faint_opacity, 0.0, 1.0)
+
+	// Minimum window size.
+	if c.window_width > 0 && c.window_width < 10 {
+		c.window_width = 10
+	}
+	if c.window_height > 0 && c.window_height < 4 {
+		c.window_height = 4
+	}
+}
+
+// clamp_f64 clamps v to the inclusive range [lo, hi].
+fn clamp_f64(v f64, lo f64, hi f64) f64 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }
 
 // default_config creates a Config with default values.
@@ -4521,8 +5100,15 @@ pub fn Config.default_config() Config {
 	return Config{}
 }
 
-// preferred_default_file_path returns the preferred default config file path.
+// preferred_default_file_path returns the preferred default config file path,
+// which is `$XDG_CONFIG_HOME/ghostty/config` (falling back to
+// `$HOME/.config/ghostty/config`).
 pub fn preferred_default_file_path() string {
-	// XTODO: implement XDG config path resolution
-	return ''
+	xdg := os.getenv('XDG_CONFIG_HOME')
+	base := if xdg.len > 0 {
+		xdg
+	} else {
+		os.join_path(os.home_dir(), '.config')
+	}
+	return os.join_path(base, 'ghostty', 'config')
 }

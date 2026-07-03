@@ -2025,25 +2025,175 @@ pub fn (mut self Terminal) print(c u32) ! {
 	// purposely ordered in least-likely to most-likely so we can drop out
 	// as quickly as possible.
 	if c > 255 && self.modes.get(.grapheme_cluster) && self.screens.active.cursor.x > 0 {
-		// XTODO
-		// Full grapheme clustering requires uucode.grapheme.BreakState,
-		// unicode.graphemeBreak, and cell grapheme storage on pages.
-		// The VS15/VS16 emoji variation selector handling and grapheme
-		// attachment logic cannot be translated without the unicode tables.
+		// We need the previous cell to determine if we're at a grapheme
+		// break or not. If we are NOT, then we are still combining the
+		// same grapheme. Otherwise, we can stay in this cell.
+		//
+		// NOTE: The full uucode grapheme.BreakState state machine isn't
+		// available here, so we approximate grapheme breaking with a
+		// pragmatic classifier (grapheme_break) that keeps zero-width
+		// combining marks, VS15/VS16, ZWJ, skin-tone modifiers and
+		// regional indicators attached to the previous cell. This covers
+		// the common emoji/combining cases the tests exercise.
+		mut left := u32(1)
+		// If we have wraparound, then we always use the prev col.
+		// If we do not have wraparound, the logic is trickier. If
+		// we're not on the last column, then we just use the previous
+		// column. Otherwise, we need to check if there is text to
+		// figure out if we're attaching to the prev or current.
+		if !self.modes.get(.wraparound) && self.screens.active.cursor.x == right_limit - 1 {
+			cur := self.cursor_cell_ref(0)
+			left = if cur.codepoint_val() == 0 { u32(1) } else { u32(0) }
+		}
+
+		// If the previous cell is a wide spacer tail, then we actually
+		// want to use the cell before that because that has the actual
+		// content.
+		mut prev_left := left
+		mut prev := self.cursor_cell_ref(left)
+		if prev.wide == .spacer_tail {
+			prev_left = left + 1
+			prev = self.cursor_cell_ref(left + 1)
+		}
+
+		// If our cell has no content, then this is a new cell and
+		// necessarily a grapheme break.
+		if prev.codepoint_val() == 0 {
+			// break out of grapheme handling; fall through to width path
+		} else {
+			// Gather the codepoints already in the prev cell to feed the
+			// break classifier.
+			mut cp1 := prev.codepoint
+			mut brk := false
+			if prev.has_grapheme {
+				for cp2 in prev.graphemes {
+					cp1 = cp2
+				}
+			}
+			brk = grapheme_break(cp1, c)
+
+			// If we can NOT break, this means that "c" is part of a
+			// grapheme with the previous char.
+			if !brk {
+				// If this is an emoji variation selector then we need to
+				// modify the cell width accordingly. VS16 makes the
+				// character wide and VS15 makes it narrow.
+				if c == 0xFE0F || c == 0xFE0E {
+					// Check if it is a valid variation sequence. Without the
+					// emoji-variation-sequences.txt table we treat any
+					// wide-capable base (>= 0x1F000 emoji block or already
+					// wide) as valid; otherwise ignore the char.
+					if !is_emoji_vs_base(prev.codepoint) {
+						return
+					}
+
+					if c == 0xFE0F {
+						// VS16: make wide, unless already wide.
+						if prev.wide != .wide {
+							// Move our cursor back to the previous.
+							self.screens.active.cursor_left(prev_left)
+
+							// If we don't have space for the wide char, we need
+							// to insert spacers and wrap.
+							if self.screens.active.cursor.x == right_limit - 1 {
+								if !self.modes.get(.wraparound) {
+									return
+								}
+								spacer := if right_limit == self.cols {
+									CellWide.spacer_head
+								} else {
+									CellWide.narrow
+								}
+								self.print_cell(0, spacer)
+								self.print_wrap()!
+							}
+
+							base := prev.codepoint
+							self.print_cell(base, .wide)
+
+							// Write our spacer
+							self.screens.active.cursor_right(1)
+							self.print_cell(0, .spacer_tail)
+
+							// Move the cursor again so we're beyond our spacer
+							if self.screens.active.cursor.x == right_limit - 1 {
+								self.screens.active.cursor.pending_wrap = true
+							} else {
+								self.screens.active.cursor_right(1)
+							}
+						}
+					} else {
+						// VS15 (0xFE0E): make narrow.
+						if prev.wide == .wide {
+							// Prev cell is no longer wide
+							self.cursor_cell_set_wide(prev_left, .narrow)
+							// Remove the wide spacer tail (cell just after prev)
+							if prev_left >= 1 {
+								self.cursor_cell_set_wide(prev_left - 1, .narrow)
+							}
+
+							// Back track the cursor so that we don't end up
+							// with an extra space after the character.
+							if self.screens.active.cursor.x == right_limit - 1 {
+								self.screens.active.cursor.pending_wrap = false
+							} else {
+								self.screens.active.cursor_left(1)
+							}
+						}
+					}
+				}
+
+				self.screens.active.cursor_mark_dirty()
+				self.append_grapheme_at(prev_left, c)!
+				return
+			}
+		}
 	}
 
 	// Determine the width of this character so we can handle
 	// non-single-width characters properly. We have a fast-path for
 	// byte-sized characters since they're so common. We can ignore
 	// control characters because they're always filtered prior.
-	width := if c <= 0xFF { u16(1) } else { u16(1) } // simplified: full width detection needs unicode tables
+	width := if c <= 0xFF { u16(1) } else { codepoint_width(c) }
 
 	// Attach zero-width characters to our cell as grapheme data.
 	if width == 0 {
-		// XTODO
-		// Zero-width character attachment needs page-level grapheme
-		// storage and cell grapheme append. Cannot translate without
-		// the Page.appendGrapheme infrastructure.
+		// If we have grapheme clustering enabled, we don't blindly attach
+		// any zero width character to our cells and we instead just ignore
+		// it.
+		if self.modes.get(.grapheme_cluster) {
+			return
+		}
+
+		// If we're at cell zero, then this is malformed data and we don't
+		// print anything or even store this. Zero-width characters are
+		// ALWAYS attached to some other non-zero-width character at the
+		// time of writing.
+		if self.screens.active.cursor.x == 0 {
+			return
+		}
+
+		// Find our previous cell (skipping a wide spacer tail).
+		mut prev_left := u32(1)
+		mut prev := self.cursor_cell_ref(1)
+		if prev.wide == .spacer_tail {
+			prev_left = 2
+			prev = self.cursor_cell_ref(2)
+		}
+
+		// If our previous cell has no text, ignore the zero-width char.
+		if !prev.has_text() {
+			return
+		}
+
+		// If this is a emoji variation selector, prev must be an emoji.
+		if c == 0xFE0F || c == 0xFE0E {
+			if !is_extended_pictographic(prev.codepoint) {
+				return
+			}
+		}
+
+		self.append_grapheme_at(prev_left, c)!
 		return
 	}
 
@@ -2263,6 +2413,57 @@ fn (mut self Terminal) print_wrap() ! {
 
 	// Assure that our screen is consistent
 	self.screens.active.assert_integrity()
+}
+
+// ============================================================
+// print helpers
+// ============================================================
+
+// Get a copy of the cell that is `left` columns to the left of the cursor
+// on the cursor's row. left==0 returns the cursor cell itself. If out of
+// range, returns a blank cell.
+fn (self &Terminal) cursor_cell_ref(left u32) CellData {
+	row_idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
+	if row_idx < 0 || row_idx >= self.screens.active.pages.screen_rows.len {
+		return CellData{}
+	}
+	cx := int(self.screens.active.cursor.x) - int(left)
+	if cx < 0 {
+		return CellData{}
+	}
+	row := self.screens.active.pages.screen_rows[row_idx]
+	if cx >= row.cells.len {
+		return CellData{}
+	}
+	return row.cells[cx]
+}
+
+// Set the wide property of the cell `left` columns to the left of the cursor.
+fn (mut self Terminal) cursor_cell_set_wide(left u32, wide CellWide) {
+	row_idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
+	if row_idx < 0 || row_idx >= self.screens.active.pages.screen_rows.len {
+		return
+	}
+	cx := int(self.screens.active.cursor.x) - int(left)
+	if cx < 0 {
+		return
+	}
+	unsafe {
+		mut row := &self.screens.active.pages.screen_rows[row_idx]
+		if cx < row.cells.len {
+			row.cells[cx].wide = wide
+		}
+	}
+}
+
+// Append a grapheme codepoint to the cell `left` columns to the left of the
+// cursor on the cursor's row.
+fn (mut self Terminal) append_grapheme_at(left u32, cp u32) ! {
+	cx := int(self.screens.active.cursor.x) - int(left)
+	if cx < 0 {
+		return
+	}
+	self.screens.active.append_grapheme(u32(cx), cp)!
 }
 
 // ============================================================
@@ -2904,6 +3105,69 @@ pub fn (mut self Terminal) scroll_viewport(behavior ScrollViewport, delta int) !
 // Insert / Delete lines
 // ============================================================
 
+// To be called before shifting a row (as in insertLines and deleteLines).
+//
+// Takes care of boundary conditions such as potentially split wide chars
+// across scrolling region boundaries and orphaned spacer heads at line ends.
+fn (mut self Terminal) row_will_be_shifted(row_idx int) {
+	if row_idx < 0 || row_idx >= self.screens.active.pages.screen_rows.len {
+		return
+	}
+	sr := self.scrolling_region
+	unsafe {
+		mut row := &self.screens.active.pages.screen_rows[row_idx]
+		cols := int(self.screens.active.pages.cols)
+
+		// If our scrolling region includes the rightmost column then we
+		// need to turn any spacer heads in to normal empty cells, since
+		// once we move them they no longer correspond with soft-wrapped
+		// wide characters.
+		//
+		// If it contains either of the 2 leftmost columns, then the wide
+		// characters in the first column which may be associated with a
+		// spacer head will be either moved or cleared, so we also need
+		// to turn the spacer heads in to empty cells in that case.
+		if sr.right == self.cols - 1 || sr.left < 2 {
+			end_idx := cols - 1
+			if end_idx >= 0 && end_idx < row.cells.len {
+				if row.cells[end_idx].wide == .spacer_head {
+					row.cells[end_idx].wide = .narrow
+				}
+			}
+		}
+
+		// If the leftmost or rightmost cells of our scrolling region
+		// are parts of wide chars, we need to clear the cells' contents
+		// since they'd be split by the move.
+		left_i := int(sr.left)
+		right_i := int(sr.right)
+
+		if left_i < row.cells.len && row.cells[left_i].wide == .spacer_tail {
+			wide_i := left_i - 1
+			if wide_i >= 0 && wide_i < row.cells.len {
+				row.cells[wide_i].graphemes = []
+				row.cells[wide_i].has_grapheme = false
+				row.cells[wide_i].content_tag = .codepoint
+				row.cells[wide_i].codepoint = 0
+				row.cells[wide_i].wide = .narrow
+			}
+			row.cells[left_i].wide = .narrow
+		}
+
+		if right_i < row.cells.len && row.cells[right_i].wide == .wide {
+			tail_i := right_i + 1
+			row.cells[right_i].graphemes = []
+			row.cells[right_i].has_grapheme = false
+			row.cells[right_i].content_tag = .codepoint
+			row.cells[right_i].codepoint = 0
+			row.cells[right_i].wide = .narrow
+			if tail_i < row.cells.len {
+				row.cells[tail_i].wide = .narrow
+			}
+		}
+	}
+}
+
 // Insert amount lines at the current cursor row. The contents of the line
 // at the current cursor row and below (to the bottom-most line in the
 // scrolling region) are shifted down by amount lines.
@@ -2942,11 +3206,16 @@ pub fn (mut self Terminal) insert_lines(count int) {
 		src_idx := active_start + src_y
 		dst_idx := active_start + y
 
+		// Handle boundary conditions (split wide chars / orphaned spacer
+		// heads) on the source row before shifting it.
+		self.row_will_be_shifted(src_idx)
+
 		if src_idx < self.screens.active.pages.screen_rows.len
 			&& dst_idx < self.screens.active.pages.screen_rows.len {
 			if !left_right {
 				unsafe {
-					// Full row swap
+					// Full row swap. If our scrolling region is full width,
+					// then we unset wrap on the shifted row.
 					mut dst_row := &self.screens.active.pages.screen_rows[dst_idx]
 					src_row := self.screens.active.pages.screen_rows[src_idx]
 					dst_row.cells = src_row.cells.clone()
@@ -3027,6 +3296,10 @@ pub fn (mut self Terminal) delete_lines(count int) {
 		src_idx := active_start + src_y
 		dst_idx := active_start + y
 
+		// Handle boundary conditions (split wide chars / orphaned spacer
+		// heads) on the source row before shifting it.
+		self.row_will_be_shifted(src_idx)
+
 		if src_idx < self.screens.active.pages.screen_rows.len
 			&& dst_idx < self.screens.active.pages.screen_rows.len {
 			if !left_right {
@@ -3093,21 +3366,39 @@ pub fn (mut self Terminal) insert_blanks(count int) {
 		return
 	}
 
-	// Remaining cols from our cursor to the right margin.
-	rem := int(self.scrolling_region.right) - int(self.screens.active.cursor.x) + 1
-	adjusted_count := if count < rem { count } else { rem }
-	scroll_amount := rem - adjusted_count
-
 	row_idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
 	if row_idx >= self.screens.active.pages.screen_rows.len {
 		return
 	}
 
 	cursor_x := int(self.screens.active.cursor.x)
+
+	// If our X is a wide spacer tail then we need to erase the previous cell
+	// too so we don't split a multi-cell character.
+	if cursor_x < self.screens.active.pages.screen_rows[row_idx].cells.len
+		&& self.screens.active.pages.screen_rows[row_idx].cells[cursor_x].wide == .spacer_tail {
+		self.screens.active.clear_cells(row_idx, cursor_x - 1, cursor_x + 1)
+	}
+
+	// Remaining cols from our cursor to the right margin.
+	rem := int(self.scrolling_region.right) - int(self.screens.active.cursor.x) + 1
+	adjusted_count := if count < rem { count } else { rem }
+	scroll_amount := rem - adjusted_count
+
+	if scroll_amount > 0 {
+		// If our last cell we're shifting is wide, then we need to clear
+		// it to be empty so we don't split the multi-cell char.
+		end := cursor_x + scroll_amount - 1
+		if end < self.screens.active.pages.screen_rows[row_idx].cells.len
+			&& self.screens.active.pages.screen_rows[row_idx].cells[end].wide == .wide {
+			self.screens.active.clear_cells(row_idx, end, end + 2)
+		}
+	}
+
 	unsafe {
 		mut row := &self.screens.active.pages.screen_rows[row_idx]
 
-		// Shift cells right
+		// Shift cells right. We work backwards so we don't overwrite data.
 		if scroll_amount > 0 {
 			for x := cursor_x + scroll_amount - 1; x >= cursor_x; x-- {
 				src_x := x
@@ -3118,7 +3409,7 @@ pub fn (mut self Terminal) insert_blanks(count int) {
 			}
 		}
 
-		// Insert blanks
+		// Insert blanks. The blanks preserve the background color.
 		for x in cursor_x .. cursor_x + adjusted_count {
 			if x < row.cells.len {
 				row.cells[x] = CellData{
@@ -3151,6 +3442,12 @@ pub fn (mut self Terminal) delete_chars(count_req int) {
 	rem := int(self.scrolling_region.right) - int(self.screens.active.cursor.x) + 1
 	count := if count_req < rem { count_req } else { rem }
 
+	// Handle any boundary conditions where the region being moved would
+	// split a multi-cell character.
+	self.screens.active.split_cell_boundary(self.screens.active.cursor.x)
+	self.screens.active.split_cell_boundary(self.screens.active.cursor.x + u32(count))
+	self.screens.active.split_cell_boundary(self.scrolling_region.right + 1)
+
 	row_idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
 	if row_idx >= self.screens.active.pages.screen_rows.len {
 		return
@@ -3171,7 +3468,7 @@ pub fn (mut self Terminal) delete_chars(count_req int) {
 			}
 		}
 
-		// Clear the vacated cells at the right
+		// Clear the vacated cells at the right. The blanks preserve bg color.
 		for x in cursor_x + scroll_amount .. cursor_x + rem {
 			if x < row.cells.len {
 				row.cells[x] = CellData{
@@ -3192,6 +3489,14 @@ pub fn (mut self Terminal) erase_chars(count_req int) {
 	count_min := if count_req < 1 { 1 } else { count_req }
 	count := if count_min < remaining { count_min } else { remaining }
 
+	// Handle any boundary conditions on the edges of the erased area.
+	//
+	// TODO(qwerasd): This isn't actually correct if you take in to account
+	// protected modes. We need to figure out how to make clear_cells or at
+	// least clear_unprotected_cells handle boundary conditions...
+	self.screens.active.split_cell_boundary(self.screens.active.cursor.x)
+	self.screens.active.split_cell_boundary(self.screens.active.cursor.x + u32(count))
+
 	// Reset our row's soft-wrap.
 	self.screens.active.cursor_reset_wrap()
 	self.screens.active.cursor_mark_dirty()
@@ -3203,7 +3508,9 @@ pub fn (mut self Terminal) erase_chars(count_req int) {
 		return
 	}
 
-	// If we never had a protection mode, then we can go with the fast path.
+	// If we never had a protection mode, then we can assume no cells are
+	// protected and go with the fast path. If the last protection mode was
+	// not ISO we also always ignore protection attributes.
 	if self.screens.active.protected_mode != .iso {
 		self.screens.active.clear_cells(row_idx, cursor_x, cursor_x + count)
 		return
@@ -3232,24 +3539,50 @@ pub fn (mut self Terminal) erase_line(mode EraseLine, protected_req bool) {
 	row_idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
 	cursor_x := int(self.screens.active.cursor.x)
 
+	// Get the cursor cell's wide property so we can handle boundary
+	// conditions where a multi-cell character would be split.
+	cursor_wide := if row_idx >= 0 && row_idx < self.screens.active.pages.screen_rows.len
+		&& cursor_x < self.screens.active.pages.screen_rows[row_idx].cells.len {
+		self.screens.active.pages.screen_rows[row_idx].cells[cursor_x].wide
+	} else {
+		CellWide.narrow
+	}
+
 	start, end := match mode {
 		.right {
+			// If our X is a wide spacer tail then we need to erase the
+			// previous cell too so we don't split a multi-cell character.
+			mut x := cursor_x
+			if x > 0 && cursor_wide == .spacer_tail {
+				x -= 1
+			}
 			// Reset our row's soft-wrap.
 			self.screens.active.cursor_reset_wrap()
-			cursor_x, int(self.cols)
+			x, int(self.cols)
 		}
 		.right_unless_pending_wrap {
 			// Like .right, but only if there's no pending wrap.
 			if self.screens.active.cursor.pending_wrap {
 				return
 			}
+			mut x := cursor_x
+			if x > 0 && cursor_wide == .spacer_tail {
+				x -= 1
+			}
 			self.screens.active.cursor_reset_wrap()
-			cursor_x, int(self.cols)
+			x, int(self.cols)
 		}
 		.left {
-			0, cursor_x + 1
+			// If our x is a wide char we need to delete the tail too.
+			mut x := cursor_x
+			if cursor_wide == .wide {
+				x += 1
+			}
+			0, x + 1
 		}
 		.complete {
+			// Note that it seems like complete should reset the soft-wrap
+			// state of the line but in xterm it does not.
 			0, int(self.cols)
 		}
 	}
@@ -3643,20 +3976,38 @@ pub fn (mut self Terminal) switch_screen_mode(mode SwitchScreenMode, enabled boo
 		}
 	}
 
-	// Switch screens
+	// Switch screens first to whatever we're going to.
 	to := if enabled { ScreenKey.alternate } else { ScreenKey.primary }
 	old_ := self.switch_screen(to)!
 
 	match mode {
-		// For these modes, we need to copy the cursor.
+		// For these modes, we need to copy the cursor. We only copy the
+		// cursor if the screen actually changed, otherwise the cursor is
+		// already copied. The cursor is copied regardless of destination
+		// screen. switch_screen returns a nil pointer when the screen
+		// didn't change.
 		.mode_47, .mode_1047 {
-			// cursor is implicitly in the right place after switch
-			_ = old_
+			if old_ != unsafe { nil } {
+				old_cursor := old_.cursor
+				self.screens.active.cursor_copy(old_cursor) or {
+					// cursor copy failed entering alt screen
+				}
+			}
 		}
 		// Mode 1049 restores cursor on the primary screen when disabled.
 		.mode_1049 {
 			if enabled {
 				self.erase_display(.complete, false)
+
+				// When we enter alt screen with 1049, we always copy the
+				// cursor from the primary screen (if we weren't already
+				// on it).
+				if old_ != unsafe { nil } {
+					old_cursor := old_.cursor
+					self.screens.active.cursor_copy(old_cursor) or {
+						// cursor copy failed entering alt screen
+					}
+				}
 			} else {
 				self.restore_cursor()
 			}
@@ -3714,34 +4065,84 @@ pub fn (mut self Terminal) full_reset() {
 	self.flags.dirty.clear = true
 }
 
-// Process a semantic prompt command (OSC 133).
+// Perform a semantic prompt command (OSC 133).
+//
+// If there is an error, we do our best to get the terminal into some
+// coherent state, since callers typically can't handle errors (since
+// they're sending sequences via the pty).
+//
+// Ghostty's semanticPrompt handles 8 spec actions (fresh_line,
+// fresh_line_new_prompt, new_command, prompt_start, end_prompt_start_input,
+// end_prompt_start_input_terminate_eol, end_input_start_output, end_command).
+// The readonly stream in this port only decodes OSC 133 into a 4-value
+// SemanticPromptAction, so we map each of those to the corresponding spec
+// behavior below, translating the full logic where the enum permits.
 pub fn (mut self Terminal) semantic_prompt(action SemanticPromptAction, exit_code ?i32) {
-	// XTODO: Full semantic prompt processing. This is a simplified stub
-	// that just marks the current row.
 	match action {
+		// OSC 133;A (and the implicit start-of-prompt / N command). Same as
+		// fresh_line_new_prompt: first do a fresh-line, then subsequent text
+		// (until B/I) is a prompt string.
 		.prompt_start {
+			self.semantic_prompt_fresh_line()
+
+			// Subsequent text is a prompt string. Default kind is initial.
 			self.screens.active.cursor_set_semantic_content_prompt(.initial)
 		}
+		// OSC 133;B: End of prompt and start of user input.
 		.input_start {
-			idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
-			if idx < self.screens.active.pages.screen_rows.len {
-				unsafe {
-					mut row := &self.screens.active.pages.screen_rows[idx]
-					row.semantic_prompt = .input
-				}
-			}
+			self.screens.active.cursor_set_semantic_content_input(false)
 		}
+		// OSC 133;C: End of input, and start of output.
 		.command_start {
+			self.screens.active.cursor_set_semantic_content_output()
+
+			// If our current row is marked as a prompt and we're at column
+			// zero then we assume we're un-prompting. This is a heuristic to
+			// deal with fish, mostly (it has no PS2 equivalent and its OSC133
+			// marking doesn't output continuation lines as k=s). So we assume
+			// when we get a newline with a prompt cursor that the new line is
+			// also a prompt. But fish changes to output on the newline, so if
+			// we're at col 0 we just assume we're overwriting the prompt.
 			idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
-			if idx < self.screens.active.pages.screen_rows.len {
+			if self.screens.active.cursor.x == 0
+				&& idx >= 0 && idx < self.screens.active.pages.screen_rows.len {
 				unsafe {
 					mut row := &self.screens.active.pages.screen_rows[idx]
-					row.semantic_prompt = .command
+					if row.semantic_prompt != .unknown {
+						row.semantic_prompt = .unknown
+					}
 				}
 			}
 		}
-		.command_end {}
+		// OSC 133;D: End of command. From a terminal state perspective, this
+		// doesn't really do anything. Other terminals appear to do nothing
+		// here. We reset our semantic content state to output.
+		.command_end {
+			self.screens.active.cursor_set_semantic_content_output()
+		}
 	}
+	_ = exit_code
+}
+
+// OSC 133;L: do a fresh-line.
+fn (mut self Terminal) semantic_prompt_fresh_line() {
+	// Spec: "If the cursor is the initial column (left, assuming
+	// left-to-right writing), do nothing." We take the liberty to assume
+	// that in a left/right margin context, if the cursor is outside of the
+	// left margin, we treat it as being at the left margin for the purposes
+	// of this command.
+	left_margin := if self.screens.active.cursor.x < self.scrolling_region.left {
+		u32(0)
+	} else {
+		self.scrolling_region.left
+	}
+
+	if self.screens.active.cursor.x == left_margin {
+		return
+	}
+
+	self.carriage_return()
+	self.index() or {}
 }
 
 // ModeState save/restore
@@ -3813,4 +4214,142 @@ fn (mut self Screen) clear_rows_range(start_y int, end_y int, is_protected bool)
 			row.dirty = true
 		}
 	}
+}
+
+// ============================================================
+// Unicode width and grapheme break helpers
+// ============================================================
+//
+// Ghostty uses the uucode-generated Unicode tables (unicode.table.get(c).width
+// and uucode.grapheme.BreakState) for exact width computation and grapheme
+// segmentation. Those tables are not present in this port, so the functions
+// below are pragmatic approximations that cover the common cases exercised
+// by the terminal (East Asian wide characters, combining marks, emoji,
+// variation selectors, ZWJ, skin tones, and regional indicators). This is a
+// faithful translation of the *logic* around width/grapheme handling with a
+// simplified data source.
+
+// Determine the display width (0, 1, or 2 cells) of a codepoint.
+// Precondition: control characters are filtered prior to calling this.
+fn codepoint_width(c u32) u16 {
+	// Zero-width: combining marks and format characters.
+	if is_zero_width(c) {
+		return 0
+	}
+	// Wide (East Asian Wide/Fullwidth and emoji presentation ranges).
+	if is_wide(c) {
+		return 2
+	}
+	return 1
+}
+
+// Returns true if the codepoint has zero display width. This covers
+// combining marks (Mn/Mc general categories) and format characters
+// (Cf, e.g. ZWJ, VS15/VS16) that attach to a base character.
+fn is_zero_width(c u32) bool {
+	// C0/C1 handled elsewhere; treat NUL as zero for safety.
+	if c == 0 {
+		return true
+	}
+	// Zero Width Space, ZWNJ, ZWJ, and related format chars.
+	if c == 0x200B || c == 0x200C || c == 0x200D || c == 0xFEFF {
+		return true
+	}
+	// Variation selectors VS1-VS16 (includes VS15/VS16).
+	if c >= 0xFE00 && c <= 0xFE0F {
+		return true
+	}
+	// Combining Diacritical Marks and related blocks.
+	if (c >= 0x0300 && c <= 0x036F) // Combining Diacritical Marks
+		|| (c >= 0x0483 && c <= 0x0489) // Cyrillic combining
+		|| (c >= 0x0591 && c <= 0x05BD) // Hebrew points
+		|| (c >= 0x0610 && c <= 0x061A) // Arabic marks
+		|| (c >= 0x064B && c <= 0x065F) // Arabic marks
+		|| c == 0x0670 // Arabic superscript alef
+		|| (c >= 0x06D6 && c <= 0x06DC) // Arabic small high
+		|| (c >= 0x0E31 && c <= 0x0E3A && c != 0x0E32 && c != 0x0E33) // Thai
+		|| (c >= 0x1AB0 && c <= 0x1AFF) // Combining Diacritical Marks Extended
+		|| (c >= 0x1DC0 && c <= 0x1DFF) // Combining Diacritical Marks Supplement
+		|| (c >= 0x20D0 && c <= 0x20FF) // Combining Diacritical Marks for Symbols
+		|| (c >= 0xFE20 && c <= 0xFE2F) { // Combining Half Marks
+		return true
+	}
+	// Emoji skin tone modifiers are zero-width when combined (Extend).
+	if c >= 0x1F3FB && c <= 0x1F3FF {
+		return true
+	}
+	return false
+}
+
+// Returns true if the codepoint is displayed as a wide (2-cell) character.
+fn is_wide(c u32) bool {
+	// Fast reject for ASCII/Latin.
+	if c < 0x1100 {
+		return false
+	}
+	return (c >= 0x1100 && c <= 0x115F) // Hangul Jamo
+		|| c == 0x2329 || c == 0x232A
+		|| (c >= 0x2E80 && c <= 0x303E) // CJK Radicals, Kangxi
+		|| (c >= 0x3041 && c <= 0x33FF) // Hiragana..CJK compat
+		|| (c >= 0x3400 && c <= 0x4DBF) // CJK Ext A
+		|| (c >= 0x4E00 && c <= 0x9FFF) // CJK Unified
+		|| (c >= 0xA000 && c <= 0xA4CF) // Yi
+		|| (c >= 0xAC00 && c <= 0xD7A3) // Hangul Syllables
+		|| (c >= 0xF900 && c <= 0xFAFF) // CJK Compat Ideographs
+		|| (c >= 0xFE10 && c <= 0xFE19) // Vertical forms
+		|| (c >= 0xFE30 && c <= 0xFE6F) // CJK Compat forms, Small forms
+		|| (c >= 0xFF00 && c <= 0xFF60) // Fullwidth forms
+		|| (c >= 0xFFE0 && c <= 0xFFE6) // Fullwidth signs
+		|| (c >= 0x1F300 && c <= 0x1F64F) // Emoji (Misc Symbols/Pictographs, Emoticons)
+		|| (c >= 0x1F900 && c <= 0x1F9FF) // Supplemental Symbols and Pictographs
+		|| (c >= 0x1FA70 && c <= 0x1FAFF) // Symbols and Pictographs Extended-A
+		|| (c >= 0x20000 && c <= 0x3FFFD) // CJK Ext B+ and Supplementary Ideographic
+}
+
+// Returns true if `c` is an emoji that has a text/emoji variation base,
+// i.e. one that can be modified by VS15/VS16. This approximates the
+// emoji-variation-sequences.txt data.
+fn is_emoji_vs_base(c u32) bool {
+	// Common symbols with emoji variation sequences (subset).
+	if c == 0x0023 || c == 0x002A || (c >= 0x0030 && c <= 0x0039) {
+		return true // # * 0-9 (keycap bases)
+	}
+	if (c >= 0x2000 && c <= 0x2BFF) {
+		return true // Many Misc Symbols/Dingbats have VS bases
+	}
+	if is_extended_pictographic(c) {
+		return true
+	}
+	return false
+}
+
+// Returns true if the codepoint is Extended_Pictographic (roughly, an emoji).
+fn is_extended_pictographic(c u32) bool {
+	return c == 0x00A9 || c == 0x00AE || c == 0x203C || c == 0x2049
+		|| (c >= 0x2100 && c <= 0x27BF)
+		|| (c >= 0x2B00 && c <= 0x2BFF)
+		|| (c >= 0x1F000 && c <= 0x1FAFF)
+		|| (c >= 0x1F1E6 && c <= 0x1F1FF) // Regional indicators
+}
+
+// grapheme_break returns true if there is a grapheme cluster boundary
+// between cp1 and cp2 (i.e. they should NOT combine). This is a pragmatic
+// approximation of UAX #29 covering the cases the terminal cares about:
+// combining marks / Extend, ZWJ sequences, VS15/VS16, skin tones, and
+// regional indicator pairs. A break is the default (true).
+fn grapheme_break(cp1 u32, cp2 u32) bool {
+	// GB9: Do not break before extending characters or ZWJ.
+	if is_zero_width(cp2) || cp2 == 0x200D {
+		return false
+	}
+	// GB11: emoji ZWJ sequences: don't break after ZWJ if base was emoji.
+	if cp1 == 0x200D && is_extended_pictographic(cp2) {
+		return false
+	}
+	// GB12/GB13: keep regional indicator pairs together.
+	if (cp1 >= 0x1F1E6 && cp1 <= 0x1F1FF) && (cp2 >= 0x1F1E6 && cp2 <= 0x1F1FF) {
+		return false
+	}
+	// Otherwise, break.
+	return true
 }

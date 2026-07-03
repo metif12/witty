@@ -226,6 +226,24 @@ import math
 import macos
 import opentype as _
 
+// CoreText discovery/scoring helpers implemented in the C shim header.
+// See font/coretext_shims.h. These are only functional on macOS; on other
+// platforms they return null/zero.
+#include "coretext_shims.h"
+
+fn C.witty_ct_release(ptr voidptr)
+fn C.witty_ct_retain(ptr voidptr)
+fn C.witty_ct_build_descriptor(family &char, style &char, codepoint u32, size f64, bold int, italic int, monospace int) voidptr
+fn C.witty_ct_matching_descriptors(search_desc voidptr) voidptr
+fn C.witty_cf_array_count(arr voidptr) int
+fn C.witty_cf_array_get(arr voidptr, i int) voidptr
+fn C.witty_ct_score(desired_style &char, codepoint u32, want_bold int, want_italic int, candidate_desc voidptr) u64
+fn C.witty_ct_descriptor_drop_charset(desc voidptr) voidptr
+fn C.witty_ct_descriptor_path(desc voidptr, buf &u8, len usize) int
+fn C.witty_ct_font_from_descriptor(desc voidptr, size f64) voidptr
+fn C.witty_ct_font_for_string(orig_font voidptr, codepoint u32) voidptr
+fn C.witty_coretext_release(ptr voidptr)
+
 // ============================================================
 // Descriptor
 // ============================================================
@@ -381,17 +399,24 @@ pub fn (d &Descriptor) to_fc_pattern() &fontconfig.Pattern {
 
 // to_coretext_descriptor converts the descriptor to a CoreText font
 // descriptor for font lookup or conversion to a specific font.
+//
+// Builds a CTFontDescriptor from our fields (family, style, codepoint
+// character set, size and symbolic traits) via the C shim. The returned
+// descriptor is retained; callers must release it with macos.cf_release.
 pub fn (d &Descriptor) to_coretext_descriptor() !&macos.CTFontDescriptor {
-	// XTODO: needs real CoreText bindings.
-	// Build a CoreText font descriptor from our fields:
-	// - family name
-	// - style name
-	// - codepoint (character set)
-	// - size
-	// - symbolic traits (bold, italic, monospace)
-	return macos.CTFontDescriptor.create_with_attributes(
-		&macos.CFDictionary{}
-	)!
+	family := d.family or { '' }
+	style := d.style or { '' }
+	ptr := C.witty_ct_build_descriptor(&char(family.str), &char(style.str), d.codepoint,
+		f64(d.size), b2i(d.bold), b2i(d.italic), b2i(d.monospace))
+	if isnil(ptr) {
+		return error('CTFontDescriptorCreateWithAttributes failed')
+	}
+	return unsafe { &macos.CTFontDescriptor(ptr) }
+}
+
+// b2i converts a bool to a C-style 0/1 int.
+fn b2i(b bool) int {
+	return if b { 1 } else { 0 }
 }
 
 // ============================================================
@@ -476,21 +501,35 @@ pub fn (mut it FcDiscoverIterator) next() ?DeferredFace {
 		return none
 	}
 
-	// XTODO: needs real fontconfig C bindings
-	// Get the copied pattern from our fontset that has the
-	// attributes configured for rendering.
+	// Get the copied pattern from our fontset that has the attributes
+	// configured for rendering.
 	font_pattern := it.config.font_render_prepare(it.pattern, it.fonts[it.i]) or {
 		return none
 	}
 
-	// Increment after we return
+	// Increment after we return.
 	defer {
 		it.i += 1
 	}
 
-	// XTODO: populate DeferredFace from fontconfig pattern
-	_ = font_pattern
-	return DeferredFace{}
+	// Ghostty's DeferredFace stores the fontconfig pattern (with its charset
+	// and langset) directly. This V port's DeferredFace is file-path based,
+	// so we extract the font file path and face index from the prepared
+	// pattern (FC_FILE / FC_INDEX) to build a loadable deferred face.
+	//
+	// If the pattern has no file (which shouldn't happen after
+	// font_render_prepare) we skip it and return the next one.
+	path := font_pattern.file() or {
+		font_pattern.destroy()
+		return it.next()
+	}
+	idx := font_pattern.index()
+	font_pattern.destroy()
+
+	return DeferredFace{
+		path:       path
+		face_index: i32(idx)
+	}
 }
 
 // ============================================================
@@ -513,32 +552,151 @@ pub fn (mut ct CoreTextDiscovery) deinit() {
 // discover finds fonts matching the descriptor. Returns an iterator
 // that can be used to build up the deferred fonts.
 pub fn (ct &CoreTextDiscovery) discover(desc Descriptor) !CtDiscoverIterator {
-	// XTODO: needs real CoreText bindings.
-	// Steps:
-	// 1. Convert descriptor to CTFontDescriptor
-	// 2. Create a font collection with that descriptor
-	// 3. Get matching descriptors
-	// 4. Sort by score
-	// 5. Return iterator over the results
+	// Build the CoreText descriptor we'll search for.
+	ct_desc := desc.to_coretext_descriptor()!
+	defer {
+		macos.cf_release(voidptr(ct_desc))
+	}
+
+	// Build our collection and grab the matching descriptors (a CFArray).
+	list := C.witty_ct_matching_descriptors(voidptr(ct_desc))
+	defer {
+		if !isnil(list) {
+			C.witty_ct_release(list)
+		}
+	}
+
+	// Copy the matching descriptors into a V slice, retaining each so they
+	// survive the release of the CFArray, then sort by score.
+	mut zig_list := copy_matching_descriptors(list)
+	sort_matching_descriptors(desc, mut zig_list)
+
 	return CtDiscoverIterator{
-		list:       []
+		list:       zig_list
 		variations: desc.variations
 		i:          0
 	}
 }
 
+// copy_matching_descriptors copies the CFArray of matching descriptors into a
+// V slice, retaining each descriptor (the array releases its members when it
+// is freed, so we must retain to keep them alive).
+fn copy_matching_descriptors(list voidptr) []voidptr {
+	if isnil(list) {
+		return []voidptr{}
+	}
+	n := C.witty_cf_array_count(list)
+	mut out := []voidptr{cap: n}
+	for i in 0 .. n {
+		d := C.witty_cf_array_get(list, i)
+		if !isnil(d) {
+			C.witty_ct_retain(d)
+		}
+		out << d
+	}
+	return out
+}
+
+// sort_matching_descriptors sorts the descriptor list so that the best
+// matches (highest score) come first. This mirrors ghostty's
+// sortMatchingDescriptors: a higher score is "less" (earlier).
+fn sort_matching_descriptors(desc Descriptor, mut list []voidptr) {
+	style_ptr := if s := desc.style { &char(s.str) } else { &char(unsafe { nil }) }
+	list.sort_with_compare(fn [desc, style_ptr] (a &voidptr, b &voidptr) int {
+		lhs := C.witty_ct_score(style_ptr, desc.codepoint, b2i(desc.bold), b2i(desc.italic),
+			*a)
+		rhs := C.witty_ct_score(style_ptr, desc.codepoint, b2i(desc.bold), b2i(desc.italic),
+			*b)
+		// Higher score is earlier.
+		if lhs > rhs {
+			return -1
+		}
+		if lhs < rhs {
+			return 1
+		}
+		return 0
+	})
+}
+
 // discover_fallback finds fallback fonts for a codepoint.
 pub fn (ct &CoreTextDiscovery) discover_fallback(desc Descriptor) !CtDiscoverIterator {
-	// XTODO: needs real CoreText bindings.
-	// If we have a codepoint within the CJK unified ideographs block
-	// then we fallback to macOS to find a font that supports it because
-	// there isn't a better way manually with CoreText that I can find that
-	// properly takes into account system locale.
+	// If we have a codepoint within the CJK unified ideographs block then we
+	// fall back to macOS to find a font that supports it because there isn't
+	// a better way manually with CoreText that properly takes into account
+	// system locale.
 	//
 	// References:
 	// - http://unicode.org/charts/PDF/U4E00.pdf
 	// - https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/fonts/LocaleInFonts.md#unified-han-ideographs
-	return ct.discover(desc)!
+	if desc.codepoint >= 0x4E00 && desc.codepoint <= 0x9FFF {
+		if han := ct.discover_codepoint(desc) {
+			return CtDiscoverIterator{
+				list:       [han]
+				variations: desc.variations
+				i:          0
+			}
+		}
+	}
+
+	mut it := ct.discover(desc)!
+
+	// If our normal discovery doesn't find anything and we have a specific
+	// codepoint, then fall back to CTFontCreateForString to find a matching
+	// font that CoreText wants to use.
+	// See: https://github.com/ghostty-org/ghostty/issues/2499
+	if it.list.len == 0 && desc.codepoint > 0 {
+		if ct_desc := ct.discover_codepoint(desc) {
+			return CtDiscoverIterator{
+				list:       [ct_desc]
+				variations: desc.variations
+				i:          0
+			}
+		}
+	}
+
+	return it
+}
+
+// discover_codepoint discovers a font for a specific codepoint using the
+// CoreText CTFontCreateForString API, starting from a font that best matches
+// the descriptor's requested style. Returns a retained descriptor or none.
+//
+// BOUNDARY: ghostty seeds this with a font from the active Collection (based
+// on the requested style). This V port doesn't thread a Collection through
+// discovery, so we seed from a freshly built descriptor for the requested
+// family/style instead, which is functionally equivalent for lookup.
+fn (ct &CoreTextDiscovery) discover_codepoint(desc Descriptor) ?voidptr {
+	if desc.codepoint == 0 {
+		return none
+	}
+
+	// Build a seed font for the requested family/style (without the codepoint
+	// character-set restriction, which we don't want here).
+	family := desc.family or { '' }
+	style := desc.style or { '' }
+	seed_desc := C.witty_ct_build_descriptor(&char(family.str), &char(style.str), 0,
+		f64(desc.size), b2i(desc.bold), b2i(desc.italic), b2i(desc.monospace))
+	if isnil(seed_desc) {
+		return none
+	}
+	defer {
+		C.witty_ct_release(seed_desc)
+	}
+	seed_font := C.witty_ct_font_from_descriptor(seed_desc, 12.0)
+	if isnil(seed_font) {
+		return none
+	}
+	defer {
+		C.witty_coretext_release(seed_font)
+	}
+
+	// Ask CoreText for a font that can render this codepoint (skipping the
+	// LastResort font). Returns a retained descriptor.
+	out := C.witty_ct_font_for_string(seed_font, desc.codepoint)
+	if isnil(out) {
+		return none
+	}
+	return out
 }
 
 // CtDiscoverIterator iterates over CoreText discovery results.
@@ -551,7 +709,12 @@ pub mut:
 
 // deinit releases the iterator resources.
 pub fn (mut it CtDiscoverIterator) deinit() {
-	// XTODO: release each CTFontDescriptor in the list
+	for d in it.list {
+		if !isnil(d) {
+			C.witty_ct_release(d)
+		}
+	}
+	it.list = []voidptr{}
 }
 
 // next returns the next deferred face, or none if exhausted.
@@ -560,18 +723,38 @@ pub fn (mut it CtDiscoverIterator) next() ?DeferredFace {
 		return none
 	}
 
-	// XTODO: needs real CoreText bindings.
-	// Steps:
-	// 1. Get descriptor from list[i], remove character set restriction
-	// 2. Create CTFont from descriptor
-	// 3. Build DeferredFace
+	// Get our descriptor. We remove the character-set limitation because we
+	// may have used it to filter, but we don't want it anymore because it
+	// would restrict the characters available on the loaded font.
+	src := it.list[it.i]
+	desc := C.witty_ct_descriptor_drop_charset(src)
+	if isnil(desc) {
+		return none
+	}
+	defer {
+		C.witty_ct_release(desc)
+	}
 
+	// Increment after we return.
 	defer {
 		it.i += 1
 	}
 
-	// XTODO: populate DeferredFace from CoreText descriptor
-	return DeferredFace{}
+	// Ghostty stores the CTFont directly in the DeferredFace here. This V
+	// port's DeferredFace is file-path based, so we resolve the descriptor's
+	// font file path (and index defaults to 0 for CoreText descriptors).
+	mut buf := []u8{len: 1024}
+	if C.witty_ct_descriptor_path(desc, &u8(buf.data), usize(buf.len)) == 0 {
+		// No file path available for this descriptor; skip to the next.
+		it.i += 1
+		return it.next()
+	}
+	path := unsafe { cstring_to_vstring(&char(buf.data)) }
+
+	return DeferredFace{
+		path:       path
+		face_index: 0
+	}
 }
 
 // ============================================================
@@ -625,6 +808,40 @@ pub fn (s Score) to_int() u64 {
 	result |= u64(if s.monospace { 1 } else { 0 }) << 27
 	result |= u64(if s.codepoint { 1 } else { 0 }) << 28
 	return result
+}
+
+// from_int unpacks a packed integer score into a Score struct.
+pub fn Score.from_int(v u64) Score {
+	return Score{
+		glyph_count: u16(v & 0xFFFF)
+		fuzzy_style: u8((v >> 16) & 0xFF)
+		bold:        (v >> 24) & 1 == 1
+		italic:      (v >> 25) & 1 == 1
+		exact_style: (v >> 26) & 1 == 1
+		monospace:   (v >> 27) & 1 == 1
+		codepoint:   (v >> 28) & 1 == 1
+	}
+}
+
+// score computes the sorting Score for a candidate CoreText descriptor
+// against the given search descriptor. This mirrors ghostty's Score.score():
+// it loads the font (fonts that can't be loaded score 0), prefers more
+// glyphs, prioritizes codepoint coverage, and matches bold/italic/monospace
+// traits and the style string.
+//
+// The heavy lifting (loading the font, reading symbolic traits, glyph
+// coverage, and style-string fuzzy matching) is done in the C shim
+// (witty_ct_score) since it needs the CoreText framework; here we unpack
+// the resulting packed integer into the symbolic Score fields.
+//
+// BOUNDARY: ghostty additionally refines bold/italic from the 'head'/'OS/2'
+// tables and variation axes. That refinement is omitted; we use the
+// descriptor's symbolic traits, which is correct for the common case.
+pub fn Score.score(desc &Descriptor, ct_desc voidptr) Score {
+	style_ptr := if s := desc.style { &char(s.str) } else { &char(unsafe { nil }) }
+	v := C.witty_ct_score(style_ptr, desc.codepoint, b2i(desc.bold), b2i(desc.italic),
+		ct_desc)
+	return Score.from_int(v)
 }
 
 // Note: DeferredFace is defined in face.v

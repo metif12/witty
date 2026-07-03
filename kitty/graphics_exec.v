@@ -101,6 +101,30 @@ module kitty
 // Executes Kitty graphics commands against the terminal state. This
 // handles query, transmit, display, and delete operations, and manages
 // the quiet settings for controlling responses.
+//
+// ============================================================================
+// DEPENDENCY / BOUNDARY: Screen.kitty_images (ImageStorage)
+// ============================================================================
+// In Ghostty the persistent image storage lives on the active screen as
+// `terminal.screens.active.kitty_images` (an ImageStorage). The witty
+// `terminal.Screen` (terminal/screen.v) does NOT yet expose that field, and
+// this agent is not permitted to edit screen.v.
+//
+// Everything that needs *persistent* storage across commands therefore
+// cannot be wired here yet:
+//   - execute():   `storage.enabled()` gate + chunked `q` inheritance
+//   - transmit:    `storage.loading` chunk accumulation, `next_image_id`
+//                  auto-assignment, `storage.add_image()`
+//   - display:     `storage.image_by_id()/image_by_number()` lookup,
+//                  `storage.add_placement()`, cursor movement using the
+//                  looked-up image's grid size
+//   - delete:      `storage.delete()`
+//
+// The ImageStorage type itself is fully implemented in graphics_storage.v;
+// only the field on Screen is missing. Each site below is marked
+// `STORAGE-DEP` and shows the exact call to make once the field exists.
+// Until then we keep a guarded local path that performs all storage-
+// independent work (validation, response shaping, placement construction).
 
 import terminal
 
@@ -112,12 +136,22 @@ import terminal
 // The allocator must be the same allocator that was used to build
 // the command.
 pub fn execute(mut t terminal.Terminal, cmd &Command) ?Response {
-	// TODO: Needs Screen.kitty_images (ImageStorage) field on terminal.Screen.
-	// Once that field exists, check: if !t.screens.active.kitty_images.enabled() { return none }
+	// STORAGE-DEP: if storage is disabled we disable the whole protocol, so
+	// we don't even respond to queries and the terminal acts as if the
+	// feature is unsupported:
+	//   if !t.screens.active.kitty_images.enabled() { return none }
 
-	// Determine quiet setting from the command. For transmit operations,
-	// the quiet setting may be inherited from the loading image's initial
-	// quiet setting.
+	// The quiet setting used to control the response. This is a var because
+	// in certain special cases (namely chunked transmissions) it can change:
+	// on a transmit the `q` value is inherited from the initial chunk's
+	// loading image unless `q >= 1` is set on this command.
+	// STORAGE-DEP: the inheritance reads/writes storage.loading.quiet:
+	//   if loading := t.screens.active.kitty_images.loading {
+	//       match cmd.quiet {
+	//           .no { quiet = loading.quiet }        // q=0: use start value
+	//           .ok, .failures { loading.quiet = cmd.quiet } // q>=1: adopt
+	//       }
+	//   }
 	mut quiet := cmd.quiet
 
 	// Dispatch based on command control type.
@@ -230,34 +264,48 @@ fn exec_transmit(mut t terminal.Terminal, cmd &Command) Response {
 		placement_id: t_data.placement_id
 	}
 
+	// Image ID and image number are mutually exclusive.
+	if t_data.image_id > 0 && t_data.image_number > 0 {
+		return Response{
+			message: 'EINVAL: image ID and number are mutually exclusive'
+		}
+	}
+
 	// Load and add the image.
 	load_result := load_and_add_image(mut t, cmd) or {
 		encode_error(mut result, err.msg())
 		return result
 	}
 
-	// If more chunks are expected, return an empty response to
-	// indicate we're not done yet.
+	// If we're also displaying, then do that now. This function does both
+	// transmit and transmit-and-display. The display might also be deferred
+	// if it is multi-chunk (in which case load_result.display is none until
+	// the final chunk completes).
+	if disp := load_result.display {
+		// The display command inherits the just-assigned image ID.
+		mut d_copy := disp
+		d_copy.image_id = load_result.image.id
+		disp_cmd := Command{
+			control: Display(d_copy)
+			quiet: cmd.quiet
+		}
+		return exec_display(mut t, &disp_cmd)
+	}
+
+	// If there are more chunks expected we do not respond.
 	if load_result.more {
 		return Response{}
 	}
 
-	// If this image was transmit-and-display, exec the display too.
-	if _ := load_result.display {
-		disp_result := exec_display(mut t, cmd)
-		if !disp_result.ok() {
-			return disp_result
-		}
-	}
-
-	// Update result with the final image ID (may have been auto-assigned).
-	result.id = load_result.image.id
-
-	// If the image has an implicit ID (no user-specified ID or number),
-	// skip the response because the client can't use the ID anyway.
+	// If the loaded image was assigned its ID automatically, not based on a
+	// number or explicitly specified ID, then we don't respond.
 	if load_result.image.implicit_id {
 		return Response{}
 	}
+
+	// After the image is added, set the ID in case it changed. The resulting
+	// image number and placement ID never change.
+	result.id = load_result.image.id
 
 	return result
 }
@@ -283,23 +331,33 @@ fn exec_display(mut t terminal.Terminal, cmd &Command) Response {
 		return result
 	}
 
-	// TODO: Needs Screen.kitty_images (ImageStorage) field on terminal.Screen.
-	// Once available, look up image:
+	// STORAGE-DEP: verify the requested image exists and, if looked up by
+	// number, echo back its concrete ID.
+	//   storage := &t.screens.active.kitty_images
 	//   img := if d.image_id != 0 {
-	//       t.screens.active.kitty_images.image_by_id(d.image_id)
+	//       storage.image_by_id(d.image_id)
 	//   } else {
-	//       t.screens.active.kitty_images.image_by_number(d.image_number)
+	//       storage.image_by_number(d.image_number)
 	//   } or {
-	//       result.message = 'EINVAL: image not found'
+	//       result.message = 'ENOENT: image not found'
 	//       return result
 	//   }
+	//   result.id = img.id
 
 	// Determine placement location.
 	location := if d.virtual_placement {
+		// Virtual placements are not tracked. They also cannot refer to a
+		// parent placement.
+		if d.parent_id > 0 {
+			result.message = 'EINVAL: virtual placement cannot refer to a parent'
+			return result
+		}
 		PlacementLocation(PlacementVirtual{})
 	} else {
-		// Pin at the current cursor position.
-		// TODO: needs t.screens.active.pages.pin() with cursor coords
+		// Pin at the current cursor position. In Zig a *new* pin is tracked
+		// here (separate from the cursor's own tracked pin) so it doesn't
+		// move with the cursor; the flat Pin model captures the position by
+		// value which has the same effect.
 		PlacementLocation(PlacementPin{
 			pin: terminal.Pin{
 				x: t.screens.active.cursor.x
@@ -322,16 +380,25 @@ fn exec_display(mut t terminal.Terminal, cmd &Command) Response {
 		z: d.z
 	}
 
-	// TODO: Needs Screen.kitty_images to add placement:
-	//   t.screens.active.kitty_images.add_placement(img.id, d.placement_id, p)
+	// STORAGE-DEP: add the placement to the active screen's image storage.
+	//   storage.add_placement(img.id, result.placement_id, p) or {
+	//       p.deinit(t.screens.active)
+	//       encode_error(mut result, err.msg())
+	//       return result
+	//   }
 
-	// If cursor movement is configured (the default), move the cursor
-	// to the right past the image placement.
-	// TODO: Needs actual image lookup to calculate grid size for cursor movement.
-	// if d.cursor_movement == .after {
-	//     cols, _ := p.grid_size(img, t)
-	//     // Move cursor right by cols cells
-	// }
+	// Apply cursor movement setting. This only applies to pin placements.
+	// STORAGE-DEP: the number of rows to advance the cursor comes from
+	// p.grid_size(img, t), which needs the looked-up image.
+	//   if p.location is PlacementPin {
+	//       if d.cursor_movement == .after {
+	//           _, rows := p.grid_size(img, t)
+	//           // We use terminal.index() to properly handle scroll regions.
+	//           for _ in 0 .. rows { t.index() or { break } }
+	//           t.set_cursor_pos(t.screens.active.cursor.y,
+	//               p.location.pin.x + cols + 1)
+	//       }
+	//   }
 
 	_ = p
 
@@ -352,10 +419,15 @@ fn exec_delete(mut t terminal.Terminal, cmd &Command) Response {
 		}
 	}
 
-	// TODO: Needs Screen.kitty_images (ImageStorage) field on terminal.Screen.
-	// Once available, delegate: t.screens.active.kitty_images.delete(t, del)
+	// STORAGE-DEP: delegate to the storage, which handles every delete mode
+	// (by ID, by number, all, intersecting cursor/cell, by z-index, column,
+	// row, range, ...). The ImageStorage.delete() implementation already
+	// exists in graphics_storage.v.
+	//   t.screens.active.kitty_images.delete(t, del)
 	_ = del
+	_ = t
 
+	// Delete never responds on success.
 	return Response{}
 }
 
@@ -366,6 +438,17 @@ struct LoadResult {
 	display ?Display
 }
 
+// Starting value for auto-assigned image IDs, matching
+// ImageStorage.next_image_id (mid-way through the u32 range to avoid
+// collisions with buggy programs).
+//
+// STORAGE-DEP: the real, monotonically-incrementing counter lives on the
+// storage. Without Screen.kitty_images we can't persist it, so auto-ID'd
+// images all receive this sentinel. Since such images are also marked
+// implicit_id (when no number is given) they are never referenced by ID in
+// a response, so the collision is harmless for the response path.
+const auto_image_id_start = u32(2147483647)
+
 // Load and add an image to the terminal's image storage.
 //
 // Handles both single-shot and chunked loading. For chunked transfers,
@@ -374,61 +457,55 @@ struct LoadResult {
 fn load_and_add_image(mut t terminal.Terminal, cmd &Command) !LoadResult {
 	t_data := cmd.transmission() or { return error('no transmission in command') }
 
-	// TODO: Needs Screen.kitty_images (ImageStorage) field on terminal.Screen.
-	// The storage is needed for:
-	//   1. Checking/retrieving the in-progress loading image (chunked transfers)
-	//   2. Auto-assigning image IDs via storage.next_image_id
-	//   3. Storing the completed image via storage.add_image()
-
-	// Step 1: Check if there's an in-progress loading image (chunked transfer).
-	// TODO: Once Screen.kitty_images exists:
-	//   if mut loading := t.screens.active.kitty_images.loading {
+	// STORAGE-DEP (chunked transfers): if there is an in-progress loading
+	// image on the storage, append this chunk to it, and on the final chunk
+	// complete + add the image.
+	//   storage := &t.screens.active.kitty_images
+	//   if mut loading := storage.loading {
 	//       loading.add_data(cmd.data)!
 	//       if t_data.more_chunks {
 	//           return LoadResult{ image: loading.image, more: true }
 	//       }
-	//       // Final chunk - complete the image.
 	//       img := loading.complete()!
-	//       t.screens.active.kitty_images.loading = none
-	//       t.screens.active.kitty_images.add_image(img)!
-	//       return LoadResult{
-	//           image: img
-	//           display: loading.display
-	//       }
+	//       storage.loading = none
+	//       storage.add_image(img)!
+	//       return LoadResult{ image: img, display: loading.display }
 	//   }
+	// Because we can't persist `storage.loading`, chunked transfers cannot be
+	// reassembled across calls in this build: each chunk is treated as an
+	// independent (first) chunk below.
 
-	// Step 2: No loading in progress - create new LoadingImage from command.
+	// No loading in progress - create a new LoadingImage from the command.
 	mut loading := LoadingImage.init_from_cmd(cmd)!
 
-	// Step 3: Assign auto image ID if needed.
-	mut img_id := t_data.image_id
-	if img_id == 0 {
-		// TODO: Auto-assign from storage:
-		//   img_id = t.screens.active.kitty_images.next_image_id
-		//   t.screens.active.kitty_images.next_image_id += 1
-		//   if t_data.image_number == 0 {
-		//       loading.image.implicit_id = true
-		//   }
-		img_id = 1 // placeholder until storage is available
-	}
-	loading.image.id = img_id
+	// If the image has no ID, we assign one.
+	if loading.image.id == 0 {
+		// STORAGE-DEP: id = storage.next_image_id; storage.next_image_id +%= 1
+		loading.image.id = auto_image_id_start
 
-	// Step 4: If more chunks are expected, store loading state and return.
+		// If the image also has no number then its auto-ID is "implicit".
+		// See the doc comment on the Image.implicit_id field for detail.
+		if t_data.image_number == 0 {
+			loading.image.implicit_id = true
+		}
+	}
+
+	// If this is chunked, this is the beginning of a new chunked transmission.
 	if t_data.more_chunks {
-		// TODO: Store loading state in storage:
-		//   t.screens.active.kitty_images.loading = &loading
+		// STORAGE-DEP: allocate the loading image on the heap and stash it:
+		//   storage.loading = &loading
 		return LoadResult{
 			image: loading.image
 			more: true
 		}
 	}
 
-	// Step 5: Single-shot transfer - complete the image immediately.
+	// Single-shot transfer - validate and complete the image immediately.
 	display := loading.display
 	img := loading.complete()!
 
-	// TODO: Add to storage:
-	//   t.screens.active.kitty_images.add_image(img)!
+	// STORAGE-DEP: storage.add_image(img)!
+	_ = t
 
 	return LoadResult{
 		image: img

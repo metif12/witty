@@ -1,5 +1,7 @@
 module renderer
 
+import terminal
+
 // --- Original Ghostty Comments Start: src/renderer/cell.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/renderer/cell.zig
@@ -494,4 +496,165 @@ pub struct BgImageBuffer {
 pub mut:
 	opacity f32 = 1.0
 	info    BgImageInfo
+}
+
+// ============================================================
+// Cell classification free functions (from cell.zig)
+// ============================================================
+
+// Returns true if a codepoint for a cell is a covering character. A covering
+// character is a character that covers the entire cell. This is used to
+// make window-padding-color=extend work better. See #2099.
+pub fn is_covering(cp u32) bool {
+	return match cp {
+		// U+2588 FULL BLOCK
+		0x2588 { true }
+		else { false }
+	}
+}
+
+// Returns true of the codepoint is a "symbol-like" character, which
+// for now we define as anything in a private use area, and anything
+// in several unicode blocks:
+// - Arrows
+// - Dingbats
+// - Emoticons
+// - Miscellaneous Symbols
+// - Enclosed Alphanumerics
+// - Enclosed Alphanumeric Supplement
+// - Miscellaneous Symbols and Pictographs
+// - Transport and Map Symbols
+//
+// In the future it may be prudent to expand this to encompass more
+// symbol-like characters, and/or exclude some PUA sections.
+//
+// NOTE: Ghostty computes this from a generated Unicode `is_symbol`
+// property table (unicode/symbols_table.zig via uucode). We don't have
+// that generated table in V, so we translate the documented intent as
+// explicit block/PUA range checks. This is a boundary vs. the exact
+// property table but faithfully covers the enumerated symbol blocks.
+pub fn is_symbol(cp u32) bool {
+	return match true {
+		// Basic Multilingual Plane private use area
+		cp >= 0xE000 && cp <= 0xF8FF { true }
+		// Supplementary Private Use Area-A
+		cp >= 0xF0000 && cp <= 0xFFFFD { true }
+		// Supplementary Private Use Area-B
+		cp >= 0x100000 && cp <= 0x10FFFD { true }
+		// Arrows
+		cp >= 0x2190 && cp <= 0x21FF { true }
+		// Miscellaneous Symbols
+		cp >= 0x2600 && cp <= 0x26FF { true }
+		// Dingbats
+		cp >= 0x2700 && cp <= 0x27BF { true }
+		// Enclosed Alphanumerics
+		cp >= 0x2460 && cp <= 0x24FF { true }
+		// Miscellaneous Symbols and Pictographs
+		cp >= 0x1F300 && cp <= 0x1F5FF { true }
+		// Emoticons
+		cp >= 0x1F600 && cp <= 0x1F64F { true }
+		// Transport and Map Symbols
+		cp >= 0x1F680 && cp <= 0x1F6FF { true }
+		// Enclosed Alphanumeric Supplement
+		cp >= 0x1F100 && cp <= 0x1F1FF { true }
+		else { false }
+	}
+}
+
+// Returns the appropriate constraint_width for the provided cell when
+// rendering its glyph(s). raw_slice is the row's raw cells, x is the
+// cell index, and cols is the number of columns in the screen.
+pub fn constraint_width(raw_slice []terminal.CellData, x int, cols int) u8 {
+	cell := raw_slice[x]
+	cp := cell.codepoint_val()
+
+	grid_width := u8(cell.grid_width())
+
+	// If the grid width of the cell is 2, the constraint
+	// width will always be 2, so we can just return early.
+	if grid_width > 1 {
+		return grid_width
+	}
+
+	// We allow "symbol-like" glyphs to extend to 2 cells wide if there's
+	// space, and if the previous glyph wasn't also a symbol. So if this
+	// codepoint isn't a symbol then we can return the grid width.
+	if !is_symbol(cp) {
+		return grid_width
+	}
+
+	// If we are at the end of the screen it must be constrained to one cell.
+	if x == cols - 1 {
+		return 1
+	}
+
+	// If we have a previous cell and it was a symbol then we need
+	// to also constrain. This is so that multiple PUA glyphs align.
+	// This does not apply if the previous symbol is a graphics
+	// element such as a block element or Powerline glyph.
+	if x > 0 {
+		prev_cp := raw_slice[x - 1].codepoint_val()
+		if is_symbol(prev_cp) && !is_graphics_element(prev_cp) {
+			return 1
+		}
+	}
+
+	// If the next cell is whitespace, then we
+	// allow the glyph to be up to two cells wide.
+	next_cp := raw_slice[x + 1].codepoint_val()
+	if next_cp == 0 || is_space(next_cp) {
+		return 2
+	}
+
+	// Otherwise, this has to be 1 cell wide.
+	return 1
+}
+
+// Whether min contrast should be disabled for a given glyph. True
+// for graphics elements such as blocks and Powerline glyphs.
+pub fn no_min_contrast(cp u32) bool {
+	return is_graphics_element(cp)
+}
+
+// Some general spaces, others intentionally kept
+// to force the font to render as a fixed width.
+fn is_space(cp u32) bool {
+	return match cp {
+		0x0020, // SPACE
+		0x2002 { // EN SPACE
+			true
+		}
+		else {
+			false
+		}
+	}
+}
+
+// Returns true if the codepoint is used for terminal graphics, such
+// as box drawing characters, block elements, and Powerline glyphs.
+fn is_graphics_element(cp u32) bool {
+	return is_box_drawing(cp) || is_block_element(cp) || is_legacy_computing(cp)
+		|| is_powerline(cp)
+}
+
+// Returns true if the codepoint is a box drawing character.
+fn is_box_drawing(cp u32) bool {
+	return cp >= 0x2500 && cp <= 0x257F
+}
+
+// Returns true if the codepoint is a block element.
+fn is_block_element(cp u32) bool {
+	return cp >= 0x2580 && cp <= 0x259F
+}
+
+// Returns true if the codepoint is in a Symbols for Legacy
+// Computing block, including supplements.
+fn is_legacy_computing(cp u32) bool {
+	return (cp >= 0x1FB00 && cp <= 0x1FBFF)
+		|| (cp >= 0x1CC00 && cp <= 0x1CEBF) // Supplement introduced in Unicode 16.0
+}
+
+// Returns true if the codepoint is a part of the Powerline range.
+fn is_powerline(cp u32) bool {
+	return cp >= 0xE0B0 && cp <= 0xE0D7
 }

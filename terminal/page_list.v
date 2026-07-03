@@ -4315,10 +4315,781 @@ pub fn (self &PageList) clone(opts PageCloneOpts) PageList {
 }
 
 // ============================================================
+// ReflowCursor - drives column reflow
+// ============================================================
+
+// We use a cursor to track where we are in the src/dst. This is very
+// similar to Screen.Cursor. We don't use a Screen because we don't need
+// all the same data and we do our best to optimize having direct access
+// to the page memory.
+struct ReflowCursor {
+mut:
+	x            u16
+	y            u16
+	pending_wrap bool
+	node         &PageNode = unsafe { nil }
+	new_rows     usize
+	// This is the final row count of the reflowed pages.
+	total_rows usize
+}
+
+fn ReflowCursor.init(node &PageNode) ReflowCursor {
+	return ReflowCursor{
+		x: 0
+		y: 0
+		pending_wrap: false
+		node: node
+		new_rows: 0
+		// Initially whatever size our input node is.
+		total_rows: usize(node.data.size.rows)
+	}
+}
+
+// Result of writing a cell.
+enum ReflowWriteResult {
+	success
+	repeat
+	skip_next
+	out_of_space
+}
+
+// The destination page for the cursor.
+fn (self &ReflowCursor) page() &Page {
+	return &self.node.data
+}
+
+// True if this cursor is at the bottom of the page by capacity,
+// i.e. we can't scroll anymore.
+fn (self &ReflowCursor) bottom() bool {
+	return self.y == self.node.data.capacity.rows - 1
+}
+
+fn (mut self ReflowCursor) cursor_forward() {
+	if self.x == self.node.data.size.cols - 1 {
+		self.pending_wrap = true
+	} else {
+		self.x += 1
+	}
+}
+
+// Create a new row and move the cursor down. Asserts that the cursor is
+// on the bottom row of the page and that there is capacity to add one.
+fn (mut self ReflowCursor) cursor_scroll() {
+	assert self.y == self.node.data.size.rows - 1
+	assert self.node.data.size.rows < self.node.data.capacity.rows
+
+	// Increase our page size, ensuring a row slot exists.
+	mut page := &self.node.data
+	for page.rows.len <= int(page.size.rows) {
+		page.rows << RowData.init(u32(page.capacity.cols))
+	}
+	page.size.rows += 1
+	self.pending_wrap = false
+	self.x = 0
+	self.y += 1
+}
+
+// Create a new page in the provided list with the provided capacity and
+// one row and move the cursor into it at 0,0.
+fn (mut self ReflowCursor) cursor_new_page(mut list PageList, cap PageCapacity) {
+	// Remember our new row count so we can restore it after
+	// reinitializing our cursor on the new page.
+	new_rows := self.new_rows
+
+	mut node := list.create_page(cap)
+	node.data.size.rows = 1
+	list.pages.insert_after(self.node, node)
+
+	old := ReflowCursor.init(node)
+	self.x = old.x
+	self.y = old.y
+	self.pending_wrap = old.pending_wrap
+	self.node = old.node
+	self.total_rows = old.total_rows
+	self.new_rows = new_rows
+}
+
+// Performs cursor_scroll or cursor_new_page as necessary depending on if
+// the cursor is currently at the bottom.
+fn (mut self ReflowCursor) cursor_scroll_or_new_page(mut list PageList, cap PageCapacity) {
+	// The functions below may overwrite self so we cache our total rows.
+	// We add one because no matter what when this returns we'll have one
+	// more row added.
+	new_total_rows := self.total_rows + 1
+	if self.bottom() {
+		self.cursor_new_page(mut list, cap)
+	} else {
+		self.cursor_scroll()
+	}
+	self.total_rows = new_total_rows
+}
+
+fn (mut self ReflowCursor) cursor_absolute(x u16, y u16) {
+	assert x < self.node.data.size.cols
+	assert y < self.node.data.size.rows
+	self.pending_wrap = false
+	self.x = x
+	self.y = y
+}
+
+fn (mut self ReflowCursor) copy_row_metadata(other &RowData) {
+	mut page := &self.node.data
+	page.rows[int(self.y)].semantic_prompt = other.semantic_prompt
+}
+
+// Reflow the provided row into this cursor.
+fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) {
+	mut src_page := &row.node.data
+	src_row := src_page.rows[int(row.y)]
+	src_y := row.y
+	cells := src_row.cells[..int(src_page.size.cols)]
+
+	// Calculate the columns in this row. First up we trim non-semantic
+	// rightmost blanks.
+	mut cols_len := src_page.size.cols
+	if !src_row.wrap {
+		for cols_len > 0 {
+			if !cells[int(cols_len) - 1].is_empty() {
+				break
+			}
+			cols_len -= 1
+		}
+
+		// If the row has a semantic prompt then the blank row is meaningful
+		// so we just pretend the first cell of the row isn't empty.
+		if cols_len == 0 && src_row.semantic_prompt != .unknown {
+			cols_len = 1
+		}
+	}
+
+	// Handle tracked pin adjustments.
+	for mut p in list.tracked_pins {
+		if voidptr(p.node) != voidptr(row.node) || p.y != src_y {
+			continue
+		}
+		// If this pin is in the blanks on the right and past the end of the
+		// dst col width then we move it to the end of the dst col width.
+		if p.x >= cols_len {
+			limit := self.node.data.size.cols - 1 - self.x
+			p.x = if p.x < limit { p.x } else { limit }
+		}
+		// We increase our col len to at least include this pin. This
+		// ensures blank rows with pins are processed so pins are remapped.
+		if p.x + 1 > cols_len {
+			cols_len = p.x + 1
+		}
+	}
+
+	// Defer processing of blank rows so that blank rows at the end of the
+	// page list are never written.
+	if cols_len == 0 {
+		// If this blank row was a wrap continuation somehow then we won't
+		// need to write it since it should be part of the previous row.
+		if !src_row.wrap_continuation {
+			self.new_rows += 1
+		}
+		return
+	}
+
+	// Inherit increased styles or grapheme bytes from the src page we're
+	// reflowing from for new pages.
+	cap := src_page.capacity.adjust_checked(self.node.data.size.cols) or {
+		mut c2 := src_page.capacity
+		c2.cols = self.node.data.size.cols
+		// We're already a non-standard page. We don't want to inherit a
+		// massive set of rows, so cap it at our std size.
+		c2.rows = if src_page.size.rows < std_capacity.rows {
+			src_page.size.rows
+		} else {
+			std_capacity.rows
+		}
+		c2
+	}
+
+	// Our row isn't blank, write any new rows we deferred.
+	for self.new_rows > 0 {
+		self.cursor_scroll_or_new_page(mut list, cap)
+		self.new_rows -= 1
+	}
+
+	self.copy_row_metadata(src_row)
+
+	mut x := 0
+	for x < int(cols_len) {
+		if self.pending_wrap {
+			self.node.data.rows[int(self.y)].wrap = true
+			self.cursor_scroll_or_new_page(mut list, cap)
+			self.copy_row_metadata(src_row)
+			self.node.data.rows[int(self.y)].wrap_continuation = true
+		}
+
+		// Move any tracked pins from the source.
+		for mut p in list.tracked_pins {
+			if voidptr(p.node) != voidptr(row.node) || p.y != src_y || int(p.x) != x {
+				continue
+			}
+			p.node = self.node
+			p.x = self.x
+			p.y = self.y
+		}
+
+		result := self.write_cell(&cells[x], src_page)
+		match result {
+			.success {
+				// Wrote the cell, move to the next.
+				x += 1
+			}
+			.skip_next {
+				// Wrote the cell but request to skip the next so skip it.
+				// Remap any tracked pins at the skipped position (x+1).
+				for mut p in list.tracked_pins {
+					if voidptr(p.node) != voidptr(row.node) || p.y != src_y
+						|| int(p.x) != x + 1 {
+						continue
+					}
+					p.node = self.node
+					p.x = self.x
+					p.y = self.y
+				}
+				x += 2
+			}
+			.repeat {
+				// Didn't write the cell, repeat writing this same cell.
+			}
+			.out_of_space {
+				// We reached the capacity of a single page. In the V model
+				// managed memory grows dynamically so the only capacity we
+				// can exhaust is rows, which cursor_scroll_or_new_page
+				// handles. If we're on the first row we can't split further,
+				// so we just take the cell.
+				if self.y == 0 {
+					x += 1
+					self.cursor_forward()
+				} else {
+					// Move our last row to a new page. Do NOT increment x so
+					// that we retry writing the same existing cell.
+					self.move_last_row_to_new_page(mut list, cap)
+				}
+			}
+		}
+	}
+
+	// If the source row isn't wrapped then we should scroll afterwards.
+	if !src_row.wrap {
+		self.new_rows += 1
+	}
+}
+
+// Write a cell. On error, this will not unwrite the cell but the cell may
+// be incomplete (but valid). This guarantees the page is in a coherent
+// state even on error.
+fn (mut self ReflowCursor) write_cell(cell &CellData, src_page &Page) ReflowWriteResult {
+	mut page := &self.node.data
+	dst_cols := page.size.cols
+
+	// Copy cell contents.
+	match cell.content_tag {
+		.codepoint, .codepoint_grapheme {
+			match cell.wide {
+				.narrow {
+					page.rows[int(self.y)].cells[int(self.x)] = base_cell_copy(cell)
+				}
+				.wide {
+					if dst_cols > 1 {
+						if self.x == dst_cols - 1 {
+							// If there's a wide character in the last column of
+							// the reflowed page then we need to insert a spacer
+							// head and wrap before handling it.
+							page.rows[int(self.y)].cells[int(self.x)] = CellData{
+								content_tag: .codepoint
+								codepoint: 0
+								wide: .spacer_head
+							}
+							// Move to the next row (this sets pending wrap
+							// which will cause us to wrap on the next iteration).
+							self.cursor_forward()
+							// Reprocess this source cell again.
+							return .repeat
+						} else {
+							page.rows[int(self.y)].cells[int(self.x)] = base_cell_copy(cell)
+						}
+					} else {
+						// Edge case, when resizing to 1 column, wide characters
+						// are just destroyed and replaced with empty narrow
+						// cells.
+						page.rows[int(self.y)].cells[int(self.x)] = CellData{
+							content_tag: .codepoint
+							codepoint: 0
+							wide: .narrow
+						}
+						self.cursor_forward()
+						// Skip spacer tail so it doesn't cause a wrap.
+						return .skip_next
+					}
+				}
+				.spacer_tail {
+					if dst_cols > 1 {
+						page.rows[int(self.y)].cells[int(self.x)] = base_cell_copy(cell)
+					} else {
+						// Edge case, resizing to 1 column: discard spacer tails.
+						return .success
+					}
+				}
+				.spacer_head {
+					// Spacer heads should be ignored. If we need a spacer head
+					// in our reflowed page, it is added when processing the
+					// wide cell it belongs to.
+					return .success
+				}
+			}
+		}
+		.bg_color_palette, .bg_color_rgb {
+			// These are guaranteed to have no style or grapheme data
+			// associated with them so we can fast path them.
+			page.rows[int(self.y)].cells[int(self.x)] = base_cell_copy(cell)
+			self.cursor_forward()
+			return .success
+		}
+	}
+
+	// Reset any managed-memory markers set by the base copy; they'll be
+	// re-applied below if the copy of managed memory succeeds.
+	mut dst := &page.rows[int(self.y)].cells[int(self.x)]
+	dst.content_tag = .codepoint
+	dst.has_hyperlink = false
+	dst.has_grapheme = false
+	dst.graphemes = []
+	dst.style_id = default_style_id
+
+	// Copy Kitty virtual placeholder status.
+	if cell.codepoint_val() == kitty_unicode_placeholder {
+		page.rows[int(self.y)].kitty_virtual_placeholder = true
+	}
+
+	// Copy grapheme data. In the V model, graphemes are stored directly on
+	// the cell, so we copy them from the source cell. Managed memory grows
+	// dynamically so we never hit an out-of-space condition here.
+	if cell.content_tag == .codepoint_grapheme && cell.graphemes.len > 0 {
+		page.set_graphemes(int(self.y), int(self.x), cell.graphemes)
+	}
+
+	// Copy hyperlink data. Hyperlinks are stored directly on cells via the
+	// page hyperlink_map/set. In the V model the string/hyperlink allocators
+	// grow dynamically so we never hit OutOfSpace here.
+	if cell.has_hyperlink {
+		// The source hyperlink id is looked up from the src page map by the
+		// caller of reflow via the cell's row/col. Since we don't have that
+		// context here, hyperlink reflow is approximated by marking the flag;
+		// full hyperlink remap happens through clone_row_from paths elsewhere.
+		page.rows[int(self.y)].cells[int(self.x)].has_hyperlink = true
+		page.rows[int(self.y)].hyperlink = true
+	}
+
+	// Copy style data.
+	if cell.has_styling() {
+		style := src_page.styles.get(cell.style_id)
+		id := page.styles.add_with_id(style, cell.style_id) or { default_style_id }
+		page.rows[int(self.y)].cells[int(self.x)].style_id = id
+		page.rows[int(self.y)].styled = true
+	}
+
+	self.cursor_forward()
+	return .success
+}
+
+// Create a new page in the provided list with the provided capacity then
+// clone the row currently being worked on to it and delete it from the old
+// page. Places cursor in the same position it was in the old row in the new
+// one. Asserts that the cursor is on the final row of the page.
+fn (mut self ReflowCursor) move_last_row_to_new_page(mut list PageList, cap PageCapacity) {
+	assert self.y == self.node.data.size.rows - 1
+	assert !self.pending_wrap
+
+	old_node := self.node
+	mut old_page := &old_node.data
+	old_x := self.x
+
+	// Our total row count never changes, because we're removing one row
+	// from the last page and moving it into a new page.
+	old_total_rows := self.total_rows
+
+	self.cursor_new_page(mut list, cap)
+	assert voidptr(self.node) != voidptr(old_node)
+	assert self.y == 0
+
+	// Restore the x position of the cursor.
+	self.cursor_absolute(old_x, 0)
+
+	// Copy our old data.
+	old_row_idx := old_page.size.rows - 1
+	mut new_page := &self.node.data
+	new_page.clone_row_from(old_page, self.y, old_row_idx)
+
+	// Move any tracked pins from that last row into this new node.
+	for mut p in list.tracked_pins {
+		if voidptr(p.node) != voidptr(old_node) || p.y != old_page.size.rows - 1 {
+			continue
+		}
+		p.node = self.node
+		p.y = self.y
+	}
+
+	// Clear the row from the old page and truncate it.
+	old_page.clear_cells(old_row_idx, 0, old_page.size.cols)
+	old_page.size.rows -= 1
+
+	// If that was the last row in that page then remove it from the list.
+	if old_page.size.rows == 0 {
+		list.destroy_node(old_node)
+	}
+
+	self.total_rows = old_total_rows
+}
+
+// The Kitty graphics unicode placeholder codepoint (U+10EEEE).
+const kitty_unicode_placeholder = u32(0x10EEEE)
+
+// Copy the unmanaged basic content of a cell (no grapheme/style/hyperlink
+// managed memory, which is re-applied by the caller).
+fn base_cell_copy(cell &CellData) CellData {
+	return CellData{
+		codepoint: cell.codepoint
+		content_tag: cell.content_tag
+		style_id: cell.style_id
+		wide: cell.wide
+		is_protected: cell.is_protected
+		has_grapheme: cell.has_grapheme
+		has_hyperlink: cell.has_hyperlink
+		semantic_content: cell.semantic_content
+		graphemes: cell.graphemes.clone()
+		color_palette: cell.color_palette
+		color_rgb_r: cell.color_rgb_r
+		color_rgb_g: cell.color_rgb_g
+		color_rgb_b: cell.color_rgb_b
+		style: cell.style
+	}
+}
+
+// ============================================================
+// Trailing blank line trimming
+// ============================================================
+
+// Returns the number of trailing blank lines, not to exceed max. Max is
+// used to limit our traversal in the case of large scrollback.
+fn (self &PageList) trailing_blank_lines(max u16) u16 {
+	mut count := u16(0)
+
+	// Go through our pages backwards since we're counting trailing blanks.
+	mut it := self.pages.last
+	for {
+		page := it or { break }
+		len := int(page.data.size.rows)
+		for i in 0 .. len {
+			rev_i := len - i - 1
+			if rev_i < page.data.rows.len {
+				// If the row has any text then we're done.
+				if has_text_any(page.data.rows[rev_i].cells[..int(page.data.size.cols)]) {
+					return count
+				}
+			}
+			count += 1
+			if count >= max {
+				return count
+			}
+		}
+		it = page.prev
+	}
+
+	return count
+}
+
+// Trims up to max trailing blank rows from the pagelist and returns the
+// number of rows trimmed. A blank row is any row with no text (but may have
+// styling).
+//
+// IMPORTANT: This function does NOT update total_rows. It returns the
+// number of rows trimmed and the caller must decrement total_rows.
+fn (mut self PageList) trim_trailing_blank_rows(max u16) u16 {
+	mut trimmed := u16(0)
+	bl_pin := self.get_bottom_right(.screen) or { return 0 }
+	mut it := bl_pin.row_iterator(.left_up, none)
+	for {
+		row_pin := it.next() or { break }
+		mut page := &row_pin.node.data
+		if int(row_pin.y) >= page.rows.len {
+			continue
+		}
+		cells := page.rows[int(row_pin.y)].cells[..int(page.size.cols)]
+
+		// If the row has any text then we're done.
+		if has_text_any(cells) {
+			return trimmed
+		}
+
+		// If our tracked pins are in this row then we cannot trim it because
+		// it implies some sort of importance.
+		mut has_pin := false
+		for p in self.tracked_pins {
+			if voidptr(p.node) == voidptr(row_pin.node) && p.y == row_pin.y {
+				has_pin = true
+				break
+			}
+		}
+		if has_pin {
+			return trimmed
+		}
+
+		// No text, we can trim this row.
+		page.size.rows -= 1
+		if page.size.rows == 0 {
+			self.erase_page(row_pin.node)
+		}
+
+		trimmed += 1
+		if trimmed >= max {
+			return trimmed
+		}
+	}
+
+	return trimmed
+}
+
+// ============================================================
+// Erase page / fixup viewport / compact / increaseCapacity
+// ============================================================
+
+// Erase a single page, freeing all its resources. The page can be anywhere
+// in the linked list but must NOT be the final page in the entire list
+// (i.e. must not make the list empty).
+//
+// IMPORTANT: This does NOT update total_rows. The caller is responsible.
+fn (mut self PageList) erase_page(node &PageNode) {
+	// Update any tracked pins to move to the previous or next page.
+	next := node.next or { node.prev or { node } }
+	for mut p in self.tracked_pins {
+		if voidptr(p.node) == voidptr(node) {
+			p.node = next
+			p.y = 0
+			p.x = 0
+		}
+	}
+	self.destroy_node(node)
+}
+
+// This fixes up the viewport data when rows are removed from the PageList.
+// It updates the viewport to `active` if row removal puts the viewport into
+// the active area, to `top` if the viewport is now at row 0, and updates any
+// row offset caches as necessary.
+fn (mut self PageList) fixup_viewport(removed usize) {
+	match self.viewport {
+		.active {}
+		.pin {
+			vp := PagePin{
+				node: self.viewport_pin.node
+				y: self.viewport_pin.y
+				x: self.viewport_pin.x
+			}
+			if self.pin_is_active(vp) {
+				self.viewport = .active
+			} else if v := self.viewport_pin_row_offset {
+				if v < removed {
+					self.viewport = .top
+				} else {
+					self.viewport_pin_row_offset = v - removed
+				}
+			}
+		}
+		.top {
+			first := self.pages.first or { return }
+			if self.pin_is_active(PagePin{ node: first }) {
+				self.viewport = .active
+			}
+		}
+	}
+}
+
+// Increase the capacity of the given page node. In Ghostty this doubles a
+// specific dimension (styles, grapheme_bytes, etc.) and reallocates the
+// backing memory. In the V model, managed memory grows dynamically so the
+// only meaningful capacity dimension is rows. We keep this so the reflow
+// engine can call it for API parity; it currently reclones the page with
+// the same capacity (the rehash/no-op case).
+fn (mut self PageList) increase_capacity(node &PageNode) &PageNode {
+	// In V we don't need to reallocate a backing buffer for managed memory
+	// since arrays/maps grow on demand. We simply return the same node.
+	return node
+}
+
+// Compact a page to use the minimum required memory for the contents it
+// stores. Returns the new node if compaction occurred, or none if the page
+// was already compact.
+//
+// The current design doesn't allow smaller-than-std pages, so if the node's
+// backing page is standard-size or smaller, no compaction occurs.
+pub fn (mut self PageList) compact(node &PageNode) ?&PageNode {
+	mut page := &node.data
+	assert page.size.rows > 0
+
+	// We never compact standard size or smaller pages because changing the
+	// capacity to something smaller won't save memory. Our proxy for
+	// "standard size" is the capacity row count of a std page for our cols.
+	std_cap := initial_capacity(page.size.cols)
+	if page.capacity.rows <= std_cap.rows {
+		return none
+	}
+
+	// Compute the minimum capacity required for this page's content.
+	req_cap := page.exact_row_capacity(0, int(page.size.rows))
+	if req_cap.rows >= page.capacity.rows {
+		return none
+	}
+
+	// Create the new smaller page.
+	mut new_node := self.create_page(req_cap)
+	mut new_page := &new_node.data
+	new_page.size = page.size
+	new_page.dirty = page.dirty
+	// Ensure enough row slots.
+	for new_page.rows.len < int(page.size.rows) {
+		new_page.rows << RowData.init(u32(req_cap.cols))
+	}
+	new_page.clone_from(page, 0, page.size.rows)
+
+	// Fix up all tracked pins to point to the new page.
+	for mut p in self.tracked_pins {
+		if voidptr(p.node) == voidptr(node) {
+			p.node = new_node
+		}
+	}
+
+	// Insert the new page and destroy the old one.
+	self.pages.insert_before(node, new_node)
+	self.destroy_node(node)
+
+	return new_node
+}
+
+// A variant of erase_row that shifts only a bounded number of following
+// rows up, filling the space they leave behind with blank rows.
+//
+// `limit` is exclusive of the erased row. A limit of 1 will erase the target
+// row and shift the row below into its position, leaving a blank row below.
+pub fn (mut self PageList) erase_row_bounded(p PagePin, limit usize) {
+	mut node := p.node
+	mut page := &node.data
+	y := int(p.y)
+
+	// If the row limit is less than the remaining rows before the end of the
+	// page, then we clear the row, rotate it to the end of the boundary limit
+	// and update our pins.
+	if int(page.size.rows) - y > int(limit) {
+		// Shift within the page over the bounded region.
+		for i in 0 .. int(limit) {
+			src := y + i + 1
+			dst := y + i
+			if src < page.rows.len && dst < page.rows.len {
+				page.rows[dst] = page.rows[src].clone_row(u32(page.size.cols))
+			}
+		}
+		clear_idx := y + int(limit)
+		if clear_idx < page.rows.len {
+			page.clear_row(u16(clear_idx))
+		}
+
+		// Update pins in the shifted region.
+		for mut tp in self.tracked_pins {
+			if voidptr(tp.node) == voidptr(node) && tp.y > p.y
+				&& int(tp.y) <= y + int(limit) {
+				if tp.y > 0 {
+					tp.y -= 1
+				}
+			}
+		}
+		page.dirty = true
+		return
+	}
+
+	// The limit extends beyond this page. We shift the remaining rows in this
+	// page up and continue into following pages, tracking how many we shifted.
+	mut shifted := usize(0)
+	for i in y .. int(page.size.rows) - 1 {
+		if i + 1 < page.rows.len && i < page.rows.len {
+			page.rows[i] = page.rows[i + 1].clone_row(u32(page.size.cols))
+		}
+	}
+	shifted += usize(int(page.size.rows) - 1 - y)
+
+	for mut tp in self.tracked_pins {
+		if voidptr(tp.node) == voidptr(node) && tp.y > p.y {
+			if tp.y > 0 {
+				tp.y -= 1
+			}
+		}
+	}
+	page.dirty = true
+
+	mut cur_node := node.next
+	mut prev_node := node
+	for shifted < limit {
+		cn := cur_node or { break }
+		mut cp := &cn.data
+		if cp.size.rows == 0 {
+			cur_node = cn.next
+			continue
+		}
+
+		// Bring the top row of this page up into the previous page.
+		mut prev_page := unsafe { &prev_node.data }
+		last_prev := int(prev_page.size.rows) - 1
+		if last_prev >= 0 && last_prev < prev_page.rows.len && cp.rows.len > 0 {
+			prev_page.rows[last_prev] = cp.rows[0].clone_row(u32(cp.size.cols))
+		}
+
+		// If we can satisfy the limit within this page, do a partial shift.
+		remaining := int(limit) - int(shifted)
+		if int(cp.size.rows) > remaining {
+			for i in 0 .. remaining {
+				if i + 1 < cp.rows.len {
+					cp.rows[i] = cp.rows[i + 1].clone_row(u32(cp.size.cols))
+				}
+			}
+			clear_idx := remaining
+			if clear_idx < cp.rows.len {
+				cp.clear_row(u16(clear_idx))
+			}
+			cp.dirty = true
+			return
+		}
+
+		// Otherwise shift the whole page up and continue.
+		for i in 0 .. int(cp.size.rows) - 1 {
+			if i + 1 < cp.rows.len {
+				cp.rows[i] = cp.rows[i + 1].clone_row(u32(cp.size.cols))
+			}
+		}
+		li := int(cp.size.rows) - 1
+		if li >= 0 && li < cp.rows.len {
+			cp.clear_row(u16(li))
+		}
+		cp.dirty = true
+		shifted += usize(cp.size.rows)
+
+		unsafe {
+			prev_node = cn
+		}
+		cur_node = cn.next
+	}
+}
+
+// ============================================================
 // Resize
 // ============================================================
 
 pub fn (mut self PageList) resize(opts PageResizeOpts) {
+	// Resizing (especially with reflow) can cause our row offset to
+	// become invalid. Rather than do something fancy like we do other
+	// places and try to update it in place, we just invalidate it because
+	// its too easy to get the logic wrong in here.
 	self.viewport_pin_row_offset = none
 
 	if !opts.reflow {
@@ -4326,16 +5097,26 @@ pub fn (mut self PageList) resize(opts PageResizeOpts) {
 		return
 	}
 
+	// Recalculate our minimum max size. This allows grow to work properly
+	// when increasing beyond our initial minimum max size or explicit max
+	// size to fit the active area.
+	self.min_max_size = min_max_size_calc(opts.cols or { self.cols }, opts.rows or { self.rows })
+
+	// On reflow, the main thing that causes reflow is column changes. If
+	// only rows change, reflow is impossible. So we change our behavior based
+	// on the change of columns.
 	cols := opts.cols or { self.cols }
 
 	if cols == self.cols {
 		self.resize_without_reflow(opts)
 	} else if cols > self.cols {
-		// Grow cols then rows
+		// We grow rows after cols so that we can do our unwrapping/reflow
+		// before we do a no-reflow grow.
 		self.resize_cols(cols, opts.cursor)
 		self.resize_without_reflow(opts)
 	} else {
-		// Shrink: change rows first, then cols
+		// We first change our row count so that we have the proper amount
+		// we can use when shrinking our cols.
 		mut copy_opts := PageResizeOpts{
 			cols: self.cols
 			rows: opts.rows
@@ -4346,7 +5127,9 @@ pub fn (mut self PageList) resize(opts PageResizeOpts) {
 		self.resize_cols(cols, opts.cursor)
 	}
 
-	// Fix up viewport if it's now in active area
+	// Various resize operations can change our total row count such
+	// that our viewport pin is now in the active area and has insufficient
+	// space. We need to check for this case and fix it up.
 	if self.viewport == .pin {
 		vp := PagePin{
 			node: self.viewport_pin.node
@@ -4359,94 +5142,433 @@ pub fn (mut self PageList) resize(opts PageResizeOpts) {
 	}
 }
 
-fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) {
-	cols := opts.cols or { self.cols }
-	rows := opts.rows or { self.rows }
+// Resize the pagelist with reflow by adding or removing columns.
+fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) {
+	assert cols != self.cols
 
-	// Handle column changes
-	if cols != self.cols {
-		self.cols = cols
-		// Adjust all page capacities and row widths
-		mut node := self.pages.first
-		for {
-			n := node or { break }
-			mut page := &n.data
-			// Adjust row cells
-			for mut row in page.rows {
-				if row.cells.len < int(cols) {
-					for _ in row.cells.len .. int(cols) {
-						row.cells << CellData{}
+	// Update our cols. We have to do this early because grow() that we
+	// may call below relies on this to calculate the proper page size.
+	self.cols = cols
+
+	// If we have a cursor position (x,y), then we try under any col resizing
+	// to keep the same number remaining active rows beneath it. This is a
+	// very special case if you can imagine clearing the screen (i.e.
+	// scrollClear), having an empty active area, and then resizing to less
+	// cols then we don't want the active area to "jump" to the bottom and
+	// pull down scrollback.
+	mut preserved_pin := &PagePin(unsafe { nil })
+	mut preserved_remaining := usize(0)
+	mut preserved_wrapped := usize(0)
+	mut have_preserved := false
+	if c := cursor {
+		if p := self.get_pin(.active, c.x, c.y) {
+			active_pin := self.get_top_left(.active)
+
+			// We count how many wraps the cursor had before it to begin with
+			// so that we can offset any additional wraps to avoid pushing the
+			// original row contents in to the scrollback.
+			mut wrapped := usize(0)
+			mut row_it := p.row_iterator(.left_up, active_pin)
+			for {
+				next := row_it.next() or { break }
+				if int(next.y) < next.node.data.rows.len {
+					if next.node.data.rows[int(next.y)].wrap_continuation {
+						wrapped += 1
 					}
-				} else if row.cells.len > int(cols) {
-					row.cells = row.cells[..int(cols)]
 				}
 			}
-			page.size.cols = cols
-			page.capacity.cols = cols
-			node = n.next
-		}
 
-		// Clamp tracked pins
-		for mut tp in self.tracked_pins {
-			if tp.x >= cols {
-				tp.x = cols - 1
-			}
+			preserved_pin = self.track_pin(p)
+			preserved_remaining = usize(self.rows) - usize(c.y) - 1
+			preserved_wrapped = wrapped
+			have_preserved = true
 		}
 	}
 
-	// Handle row changes
-	if rows != self.rows {
-		old_rows := self.rows
-		self.rows = rows
+	// Create the first node that contains our reflow.
+	first_page := &(self.pages.first or { return }).data
+	first_cap := first_page.capacity.adjust_checked(cols) or {
+		// We verify all maxed out page layouts work. We're growing columns so
+		// we can only get less rows so use the lesser of our capacity and size
+		// so we minimize wasted rows.
+		mut c2 := first_page.capacity
+		c2.cols = cols
+		c2.rows = if first_page.size.rows < c2.rows { first_page.size.rows } else { c2.rows }
+		c2
+	}
+	mut first_rewritten_node := self.create_page(first_cap)
+	first_rewritten_node.data.size.rows = 1
 
-		if rows > old_rows {
-			// Need more rows
-			diff := int(rows) - int(old_rows)
-			for _ in 0 .. diff {
-				self.grow() or {}
+	// We need to grab our row iterator now before we rewrite our
+	// linked list below.
+	mut it := self.row_iterator(.right_down, .screen, none)
+
+	// Set our new page as the only page. This orphans the existing pages
+	// in the list, but that's fine since we're gonna delete them anyway.
+	self.pages.first = first_rewritten_node
+	self.pages.last = first_rewritten_node
+
+	// Reflow all our rows.
+	mut reflow_cursor := ReflowCursor.init(first_rewritten_node)
+	for {
+		row := it.next() or { break }
+		reflow_cursor.reflow_row(mut self, row)
+
+		// Once we're done reflowing a page, release it immediately.
+		// These old pages are already orphaned from self.pages (which
+		// now holds the new reflowed list), so we must NOT call
+		// destroy_node/pages.remove here: remove() treats a node with
+		// prev == nil as the list head and would clobber self.pages.first
+		// (the new reflow node). We only account for the freed size; V's
+		// GC reclaims the memory.
+		if int(row.y) == int(row.node.data.size.rows) - 1 {
+			self.page_size -= usize(row.node.data.capacity.cols) * usize(row.node.data.capacity.rows) * 16
+		}
+	}
+
+	// At the end of the reflow, setup our total row cache.
+	self.total_rows = reflow_cursor.total_rows
+
+	// If our total rows is less than our active rows, we need to grow.
+	// This can happen if you're growing columns such that enough active
+	// rows unwrap that we no longer have enough.
+	mut total := usize(0)
+	mut node_it := self.pages.first
+	mut enough := false
+	for {
+		node := node_it or { break }
+		total += usize(node.data.size.rows)
+		if total >= usize(self.rows) {
+			enough = true
+			break
+		}
+		node_it = node.next
+	}
+	if !enough {
+		for _ in total .. usize(self.rows) {
+			self.grow() or {}
+		}
+	}
+
+	// See preserved_cursor setup for why.
+	if have_preserved {
+		vp := PagePin{
+			node: preserved_pin.node
+			y: preserved_pin.y
+			x: preserved_pin.x
+		}
+		active_pt := self.point_from_pin(.active, vp) or {
+			self.untrack_pin(preserved_pin)
+			return
+		}
+		active_pin := self.get_top_left(.active)
+
+		// We need to determine how many rows we wrapped from the original
+		// and subtract that from the remaining rows we expect because if
+		// we wrap down we don't want to push our original row contents into
+		// the scrollback.
+		mut wrapped := usize(0)
+		mut row_it := preserved_pin.row_iterator(.left_up, active_pin)
+		for {
+			next := row_it.next() or { break }
+			if int(next.y) < next.node.data.rows.len {
+				if next.node.data.rows[int(next.y)].wrap_continuation {
+					wrapped += 1
+				}
 			}
-		} else {
-			// Fewer rows - trim from scrollback if possible
-			// The active area shrinks; extra rows become scrollback
 		}
 
-		// Recalculate min_max_size
-		self.min_max_size = min_max_size_calc(self.cols, self.rows)
+		current := usize(self.rows) - usize(active_pt.y) - 1
+
+		mut req_rows := preserved_remaining
+		// req_rows -|= wrapped -| c.wrapped_rows  (saturating subtractions)
+		wrap_delta := if wrapped > preserved_wrapped { wrapped - preserved_wrapped } else { usize(0) }
+		req_rows = if req_rows > wrap_delta { req_rows - wrap_delta } else { usize(0) }
+		req_rows = if req_rows > current { req_rows - current } else { usize(0) }
+
+		for req_rows > 0 {
+			self.grow() or {}
+			req_rows -= 1
+		}
+
+		self.untrack_pin(preserved_pin)
 	}
 }
 
-fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) {
-	// TODO: Full reflow implementation.
-	// For now, do a simple column adjustment without reflow.
-	// Real reflow would unwrap/rewrap soft-wrapped lines.
-	self.cols = cols
+fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) {
+	// We only set the new min_max_size if we're not reflowing. If we are
+	// reflowing, then resize handles this for us.
+	if !opts.reflow {
+		self.min_max_size = min_max_size_calc(opts.cols or { self.cols }, opts.rows or {
+			self.rows
+		})
+	}
 
-	// Create new pages with reflowed content
-	// For simplicity, just adjust column counts in existing pages
-	mut node := self.pages.first
-	for {
-		n := node or { break }
-		mut page := &n.data
-		for mut row in page.rows {
-			if row.cells.len < int(cols) {
-				for _ in row.cells.len .. int(cols) {
-					row.cells << CellData{}
+	// Important! We have to do cols first because cols may cause us to
+	// destroy pages if we're increasing cols which will free up page_size
+	// so that when we call grow() in the row mods, we won't prune.
+	if cols := opts.cols {
+		if cols < self.cols {
+			// Making our columns smaller. We always have space for this
+			// in existing pages so we need to go through the pages,
+			// resize the columns, and clear any cells that are beyond
+			// the new size.
+			mut it := self.page_iterator(.right_down, .screen, none)
+			for {
+				chunk := it.next() or { break }
+				mut page := &chunk.node.data
+				for i in 0 .. page.rows.len {
+					page.clear_cells(u16(i), cols, self.cols)
+					// Physically resize this row's cell array to the new width
+					// so backing storage matches size.cols (witty stores rows as
+					// plain V arrays, not a fixed mmap block).
+					mut row := &page.rows[i]
+					if row.cells.len > int(cols) {
+						row.cells = row.cells[..int(cols)]
+					} else {
+						for _ in row.cells.len .. int(cols) {
+							row.cells << CellData{}
+						}
+					}
 				}
-			} else if row.cells.len > int(cols) {
-				row.cells = row.cells[..int(cols)]
+				page.size.cols = cols
+				page.capacity.cols = cols
+			}
+
+			// Update all our tracked pins. If they have an X
+			// beyond the edge, clamp it.
+			for mut p in self.tracked_pins {
+				if p.x >= cols {
+					p.x = cols - 1
+				}
+			}
+
+			self.cols = cols
+		} else if cols > self.cols {
+			// Make our columns larger. This is a bit more complicated because
+			// pages may not have the capacity for this. If they don't have
+			// the capacity we need to allocate a new page and copy the data.
+			old_cols := self.cols
+
+			// We must gather the chunks up front because
+			// resize_without_reflow_grow_cols rewrites the linked list.
+			mut chunks := []PageChunk{}
+			mut it := self.page_iterator(.right_down, .screen, none)
+			for {
+				chunk := it.next() or { break }
+				chunks << chunk
+			}
+			for chunk in chunks {
+				// We need to restore our old cols after we resize because
+				// we have an assertion on this and we want to be able to
+				// call this method multiple times.
+				self.cols = old_cols
+				self.resize_without_reflow_grow_cols(cols, chunk)
+			}
+
+			self.cols = cols
+		}
+	}
+
+	if rows := opts.rows {
+		if rows < self.rows {
+			// Making rows smaller, we simply change our rows value. Changing
+			// the row size doesn't affect anything else since max size and
+			// so on are all byte-based.
+			//
+			// If our rows are shrinking, we prefer to trim trailing
+			// blank lines from the active area instead of creating
+			// history if we can. This matches macOS Terminal.app behavior.
+			trimmed := self.trim_trailing_blank_rows(self.rows - rows)
+
+			// Account for our trimmed rows in the total row cache.
+			self.total_rows -= usize(trimmed)
+
+			// If we didn't trim enough, just modify our row count and this
+			// will create additional history.
+			self.rows = rows
+		} else if rows > self.rows {
+			// Making rows larger we adjust our row count, and then grow
+			// to the row count.
+			mut handled := false
+			if c := opts.cursor {
+				// If our rows increased and our cursor is NOT at the bottom,
+				// we want to try to preserve the y value of the old cursor.
+				// In other words, we don't want to "pull down" scrollback.
+				if c.y < self.rows - 1 {
+					delta := rows - self.rows
+					self.rows = rows
+					for _ in 0 .. delta {
+						self.grow() or {}
+					}
+					handled = true
+				}
+			}
+
+			if !handled {
+				// This must be set BEFORE any calls to grow() so that
+				// grow() doesn't prune pages that we need for the active area.
+				self.rows = rows
+
+				// Cursor is at the bottom or we don't care about cursors.
+				// In this case, if we have enough rows in our pages, we
+				// just update our rows and we're done. This effectively
+				// "pulls down" scrollback. If we don't have enough
+				// scrollback, we add the difference to the active area.
+				mut count := usize(0)
+				mut page := self.pages.first
+				mut enough := false
+				for {
+					p := page or { break }
+					count += usize(p.data.size.rows)
+					if count >= usize(rows) {
+						enough = true
+						break
+					}
+					page = p.next
+				}
+				if !enough {
+					for _ in count .. usize(rows) {
+						self.grow() or {}
+					}
+				}
+
+				// Make sure that the viewport pin isn't below the active
+				// area, since that will lead to all sorts of problems.
+				if self.viewport == .pin {
+					vp := PagePin{
+						node: self.viewport_pin.node
+						y: self.viewport_pin.y
+						x: self.viewport_pin.x
+					}
+					if self.pin_is_active(vp) {
+						self.viewport = .active
+					}
+				}
 			}
 		}
+	}
+}
+
+// Resize a single chunk to grow its columns. This may split the chunk's
+// page into multiple pages if the new column count reduces the row
+// capacity of a page.
+fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk) {
+	assert cols > self.cols
+	mut page := &chunk.node.data
+
+	// Update our col count.
+	self.cols = cols
+
+	// Unlikely fast path: we have capacity in the page. This
+	// is only true if we resized to less cols earlier.
+	if page.capacity.cols >= cols {
 		page.size.cols = cols
-		page.capacity.cols = cols
-		node = n.next
+		// Ensure all rows have enough cell slots.
+		for i in 0 .. page.rows.len {
+			mut row := &page.rows[i]
+			for row.cells.len < int(cols) {
+				row.cells << CellData{}
+			}
+			// Clear any spacer heads exposed by the growth.
+			last_idx := int(page.size.cols) - 1
+			if last_idx >= 0 && last_idx < row.cells.len && row.cells[last_idx].wide == .spacer_head {
+				row.cells[last_idx].wide = .narrow
+			}
+		}
+		return
 	}
 
-	// Clamp tracked pins
-	for mut tp in self.tracked_pins {
-		if tp.x >= cols {
-			tp.x = cols - 1
+	// Likely slow path: we don't have capacity, so we need
+	// to allocate a page, and copy the old data into it.
+	//
+	// Try to fit our new column size into our existing page capacity.
+	// If that doesn't work then use a non-standard page with the
+	// given columns.
+	cap := page.capacity.adjust_checked(cols) or {
+		mut c2 := page.capacity
+		c2.cols = cols
+		// We're growing columns so we can only get less rows so use
+		// the lesser of our capacity and size so we minimize wasted rows.
+		c2.rows = if page.size.rows < c2.rows { page.size.rows } else { c2.rows }
+		c2
+	}
+
+	// Keeps track of all our copied rows. Assertion at the end is that
+	// we copied exactly our page size.
+	mut copied := u16(0)
+
+	// If this chunk isn't the last chunk in the page list, then we've
+	// created a page where we'll never reclaim capacity. To avoid this, we
+	// try to fill our previous page first if it has excess capacity.
+	if mut prev_node := chunk.node.prev {
+		mut prev_page := &prev_node.data
+		// We only want scenarios where we have excess capacity.
+		if prev_page.size.rows < prev_page.capacity.rows {
+			len := if u32(prev_page.capacity.rows) - u32(prev_page.size.rows) < u32(page.size.rows) {
+				prev_page.capacity.rows - prev_page.size.rows
+			} else {
+				page.size.rows
+			}
+			base := prev_page.size.rows
+			for i in 0 .. int(len) {
+				dst_idx := int(base) + i
+				// Ensure prev page has the row slot.
+				for prev_page.rows.len <= dst_idx {
+					prev_page.rows << RowData.init(u32(prev_page.capacity.cols))
+				}
+				prev_page.size.rows += 1
+				prev_page.clone_row_from(page, u16(dst_idx), u16(i))
+				copied += 1
+			}
+
+			// Remap any tracked pins that pointed to rows we just copied.
+			for mut p in self.tracked_pins {
+				if voidptr(p.node) == voidptr(chunk.node) && p.y < len {
+					p.node = prev_node
+					p.y += prev_page.size.rows - len
+				}
+			}
 		}
 	}
+
+	// We need to loop because our col growth may force us to split pages.
+	for copied < page.size.rows {
+		mut new_node := self.create_page(cap)
+		mut new_page := &new_node.data
+
+		// The length we can copy into the new page is at most the number
+		// of rows in our cap. But if we can finish our source page we use that.
+		len := if cap.rows < page.size.rows - copied { cap.rows } else { page.size.rows - copied }
+
+		// Perform the copy.
+		y_start := copied
+		for i in 0 .. int(len) {
+			// Ensure the destination row slot exists.
+			for new_page.rows.len <= i {
+				new_page.rows << RowData.init(u32(cap.cols))
+			}
+			new_page.size.rows += 1
+			new_page.clone_row_from(page, u16(i), u16(int(y_start) + i))
+			copied += 1
+		}
+		y_end := copied
+
+		// Insert our new page.
+		self.pages.insert_before(chunk.node, new_node)
+
+		// Update our tracked pins that pointed to this previous page.
+		for mut p in self.tracked_pins {
+			if voidptr(p.node) == voidptr(chunk.node) && p.y >= y_start && p.y < y_end {
+				p.node = new_node
+				p.y -= y_start
+			}
+		}
+	}
+	assert copied == page.size.rows
+
+	// Remove the old page. Deallocate the old page.
+	self.destroy_node(chunk.node)
 }
 
 // ============================================================

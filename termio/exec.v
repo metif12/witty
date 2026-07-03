@@ -4,6 +4,7 @@ module termio
 // pty as well as spinning up the necessary read thread to read from the
 // pty and forward it to the Termio instance.
 
+import apprt
 import configpkg
 import internal_os
 import os
@@ -83,6 +84,8 @@ pub mut:
 	thread_data ExecThreadData
 	// The read thread handle (V thread).
 	read_thread ?thread = none
+	// The process-exit watcher thread handle (V thread).
+	exit_thread ?thread = none
 }
 
 // Initialize the exec state. This will NOT start it, this only sets
@@ -123,7 +126,20 @@ pub fn (mut self Exec) init_terminal(mut term terminal.Terminal) {
 
 // thread_enter is called when the IO thread starts.
 // Starts the subprocess, creates a quit pipe, and spawns the read thread.
+// This variant does NOT forward data to a Termio; use thread_enter_io to
+// wire the read thread to a Termio instance.
 pub fn (mut self Exec) thread_enter() ! {
+	self.thread_enter_common(unsafe { nil })!
+}
+
+// thread_enter_io is called when the IO thread starts. It starts the
+// subprocess, spawns the read thread (which forwards pty data to the given
+// Termio), and starts the process-exit watcher.
+pub fn (mut self Exec) thread_enter_io(io &Termio) ! {
+	self.thread_enter_common(io)!
+}
+
+fn (mut self Exec) thread_enter_common(io &Termio) ! {
 	// Start our subprocess
 	pty_fds := self.subprocess.start()!
 
@@ -144,11 +160,18 @@ pub fn (mut self Exec) thread_enter() ! {
 		read_thread_fd: pty_fds.read
 	}
 
-	// Spawn the read thread. The read thread gets the pty read fd
-	// and the read end of the quit pipe.
+	// Spawn the read thread. The read thread gets the pty read fd, the read
+	// end of the quit pipe, and (optionally) the Termio to forward data to.
 	read_fd := pty_fds.read
 	quit_fd := pipe_fds[0] // read end - the thread reads to detect quit
-	self.read_thread = spawn thread_main_posix(read_fd, quit_fd)
+	self.read_thread = spawn thread_main_posix(read_fd, quit_fd, io)
+
+	// Start our process-exit watcher. This waits for the child to exit and
+	// notifies the surface. This replaces ghostty's xev.Process watcher.
+	pid := self.subprocess.child_pid
+	if pid > 0 {
+		self.exit_thread = spawn process_exit_watcher(pid, start_ns, io)
+	}
 }
 
 // thread_exit is called when the IO thread exits.
@@ -169,6 +192,13 @@ pub fn (mut self Exec) thread_exit() {
 	if t := self.read_thread {
 		t.wait()
 	}
+	self.read_thread = none
+
+	// Join the process-exit watcher thread if we spawned one.
+	if t := self.exit_thread {
+		t.wait()
+	}
+	self.exit_thread = none
 
 	// Clean up thread data
 	self.thread_data.deinit()
@@ -677,12 +707,20 @@ pub struct ReadThread {}
 // thread_main_posix is the main function for the POSIX read thread.
 // It reads data from the pty fd in a tight loop, falling back to poll()
 // when there is no data available. The quit fd is checked during poll
-// to allow clean shutdown.
-pub fn thread_main_posix(fd int, quit int) {
+// to allow clean shutdown. Each chunk of data read is forwarded to the
+// Termio's process_output which parses the escape codes and mutates the
+// terminal state.
+//
+// io may be null (e.g. in tests / non-wired usage) in which case data is
+// simply drained.
+pub fn thread_main_posix(fd int, quit int, io &Termio) {
 	// Always close our end of the pipe when we exit.
 	defer {
 		C.close(quit)
 	}
+
+	// Take a mutable alias to the Termio so we can call process_output.
+	mut tio := unsafe { io }
 
 	// Set the fd to non-blocking so we can try to read in a tight loop
 	// and only fall back to poll when there's no data.
@@ -723,9 +761,12 @@ pub fn thread_main_posix(fd int, quit int) {
 				// EOF - this happens on macOS when the child process dies.
 				break
 			}
-			// Successfully read data. In the full implementation this would
-			// be forwarded to the Termio instance for processing. For now
-			// we just continue reading.
+			// Successfully read data. Forward it to the Termio for
+			// processing (escape-code parsing + terminal state mutation).
+			if tio != unsafe { nil } {
+				chunk := unsafe { buf[..int(n)].clone() }
+				tio.process_output(chunk)
+			}
 		}
 
 		// Wait for data using poll with infinite timeout (-1).
@@ -746,6 +787,63 @@ pub fn thread_main_posix(fd int, quit int) {
 		if pollfds[0].revents & pollhup != 0 {
 			return
 		}
+	}
+}
+
+// process_exit_watcher waits (blocking) for the child process to exit and
+// then notifies the surface via process_exit_common. This replaces
+// ghostty's xev.Process watcher which asynchronously waits for exit.
+//
+// io may be null in which case only the exited flag on the backend is set.
+fn process_exit_watcher(pid int, start_ns u64, io &Termio) {
+	// Blocking wait for the child to exit.
+	mut status := 0
+	for {
+		res := C.waitpid(pid, &status, 0)
+		if res == pid {
+			break
+		}
+		if res < 0 {
+			// waitpid failed (e.g. child already reaped elsewhere). We
+			// still report exit with a zero code.
+			break
+		}
+		// res == 0 shouldn't happen without WNOHANG, but loop to be safe.
+	}
+
+	// Extract the exit code. WIFEXITED/WEXITSTATUS: on POSIX the low 8 bits
+	// hold signal/exit info. If the process exited normally, the exit code
+	// is in bits 8-15.
+	exit_code := u32((status >> 8) & 0xFF)
+
+	process_exit_common(pid, start_ns, exit_code, io)
+}
+
+// process_exit_common is called when the child process exits. It records
+// the exit on the backend thread data and notifies the surface with the
+// exit metadata. Faithful to Exec.zig processExitCommon.
+fn process_exit_common(pid int, start_ns u64, exit_code u32, io &Termio) {
+	if io != unsafe { nil } {
+		mut tio := unsafe { io }
+		tio.backend.thread_data.exited = true
+
+		// Determine how long the process was running for.
+		now := u64(time.sys_mono_now())
+		runtime_ms := if now > start_ns {
+			(now - start_ns) / u64(time.millisecond)
+		} else {
+			u64(0)
+		}
+
+		// We always notify the surface immediately that the child has
+		// exited and some metadata about the exit.
+		tio.surface_mailbox.push(apprt.SurfaceMessage{
+			kind: .child_exited
+			child_exited: apprt.ChildExited{
+				exit_code: exit_code
+				runtime_ms: runtime_ms
+			}
+		})
 	}
 }
 

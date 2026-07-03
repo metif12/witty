@@ -402,20 +402,23 @@ pub fn (mut self ReadonlyHandler) vt(event StreamEvent) ! {
 			self.terminal.screens.active.end_hyperlink()
 		}
 		.semantic_prompt {
-			// XTODO: full semantic prompt handling
-			// The stream parser needs to be enhanced to parse OSC 133 properly
-			// and produce SemanticPromptAction values.
+			// OSC 133 semantic prompt. The stream has already parsed the
+			// action letter into a SemanticPromptAction; apply it to the
+			// terminal so cursor semantic content / prompt rows update.
+			self.terminal.semantic_prompt(event.payload.semantic_prompt_action, none)
 		}
 		.mouse_shape_action {
 			self.terminal.mouse_shape = event.payload.mouse_shape_val
 		}
 		.color_operation {
-			// XTODO: color operation handling
-			// Requires the OSC color parser to produce proper color operations
+			// OSC 4/5/10-19/104/105/110-119. The raw OSC string (including
+			// the leading operation number) is carried in str1. Parse it and
+			// apply the set/reset requests to the terminal's color state.
+			self.color_operation(event.payload.str1)
 		}
 		.kitty_color_report {
-			// XTODO: kitty color protocol handling
-			// Requires the kitty color parser
+			// OSC 21 (kitty color protocol). The body is carried in str1.
+			self.kitty_color_operation(event.payload.str1)
 		}
 		// No supported DCS commands have any terminal-modifying effects,
 		// but they may in the future. For now we just ignore them.
@@ -449,6 +452,303 @@ fn (mut self ReadonlyHandler) horizontal_tab_back(count u16) {
 			break
 		}
 	}
+}
+
+// color_operation applies an OSC color operation (OSC 4/5/10-19/104/105/
+// 110-119) to the terminal's color state. The raw parameter is the full OSC
+// string including the leading operation number (e.g. "4;0;red", "104",
+// "10;red", "110").
+//
+// This mirrors Ghostty's Handler.colorOperation: palette set/reset and
+// dynamic (foreground/background/cursor) set/reset mutate state; special
+// colors, queries and reset_special are ignored (they have no readonly
+// effect). See stream_readonly.zig and osc/parsers/color.zig.
+fn (mut self ReadonlyHandler) color_operation(raw string) {
+	// Split off the leading operation number.
+	sep := raw.index_u8(`;`)
+	num_str := if sep >= 0 { raw[..sep] } else { raw }
+	body := if sep >= 0 { raw[sep + 1..] } else { '' }
+
+	mut num := 0
+	for b in num_str {
+		if b < u8(`0`) || b > u8(`9`) {
+			return
+		}
+		num = num * 10 + int(b - u8(`0`))
+	}
+
+	match num {
+		4, 5 {
+			self.color_get_set_ansi(num, body)
+		}
+		104 {
+			self.color_reset_ansi(body)
+		}
+		105 {
+			// OSC 105 resets special colors only, which have no readonly
+			// effect, so this is a no-op.
+		}
+		10, 11, 12, 13, 14, 15, 16, 17, 18, 19 {
+			start := unsafe { Dynamic(u8(num)) }
+			self.color_get_set_dynamic(start, body)
+		}
+		110, 111, 112, 113, 114, 115, 116, 117, 118, 119 {
+			color := unsafe { Dynamic(u8(num - 100)) }
+			self.color_reset_dynamic(color, body)
+		}
+		else {}
+	}
+}
+
+// color_get_set_ansi handles OSC 4 (palette) and OSC 5 (special) set/query.
+// Only palette sets mutate readonly state.
+fn (mut self ReadonlyHandler) color_get_set_ansi(op int, body string) {
+	mut remaining := body
+	for remaining.len > 0 {
+		// We expect a `c;spec` pair. If either doesn't exist we stop.
+		s1 := remaining.index_u8(`;`)
+		if s1 < 0 {
+			return
+		}
+		color_str := remaining[..s1]
+		remaining = remaining[s1 + 1..]
+
+		s2 := remaining.index_u8(`;`)
+		mut spec := ''
+		if s2 >= 0 {
+			spec = remaining[..s2]
+			remaining = remaining[s2 + 1..]
+		} else {
+			spec = remaining
+			remaining = ''
+		}
+
+		// Color index must be numeric (u9 range fits palette + special).
+		color := parse_u9(color_str) or { return }
+
+		// "?" is a query which has no readonly effect.
+		if spec == '?' {
+			// Still consume, but nothing to apply for a query.
+			continue
+		}
+
+		rgb := RGB.parse(spec) or { return }
+
+		if op == 5 {
+			// OSC 5 maps directly to special colors, which have no readonly
+			// effect.
+			continue
+		}
+
+		// OSC 4: 0-255 -> palette; 256-259 -> special (ignored).
+		if color <= 255 {
+			self.terminal.flags.dirty.palette = true
+			self.terminal.colors.palette.set(u8(color), rgb)
+		}
+	}
+}
+
+// color_reset_ansi handles OSC 104 (reset palette colors). With no body it
+// resets the whole palette.
+fn (mut self ReadonlyHandler) color_reset_ansi(body string) {
+	if body.len == 0 {
+		// Reset the full table: reset every currently-modified palette entry.
+		for i in 0 .. 256 {
+			if self.terminal.colors.palette.mask_is_set(u8(i)) {
+				self.terminal.flags.dirty.palette = true
+				self.terminal.colors.palette.reset(u8(i))
+			}
+		}
+		return
+	}
+
+	mut any := false
+	for part in body.split(';') {
+		trimmed := part.trim_space()
+		if trimmed.len == 0 {
+			continue
+		}
+		color := parse_u9(trimmed) or { continue }
+		// 0-255 -> palette; 256-259 -> special (ignored).
+		if color <= 255 {
+			any = true
+			self.terminal.flags.dirty.palette = true
+			self.terminal.colors.palette.reset(u8(color))
+		}
+	}
+
+	// If nothing valid was parsed, reset the whole palette.
+	if !any {
+		for i in 0 .. 256 {
+			if self.terminal.colors.palette.mask_is_set(u8(i)) {
+				self.terminal.flags.dirty.palette = true
+				self.terminal.colors.palette.reset(u8(i))
+			}
+		}
+	}
+}
+
+// color_get_set_dynamic handles OSC 10-19 (get/set dynamic colors). Each
+// successive value applies to the next dynamic color in sequence.
+fn (mut self ReadonlyHandler) color_get_set_dynamic(start Dynamic, body string) {
+	mut color := start
+	mut remaining := body
+	for remaining.len > 0 {
+		sep := remaining.index_u8(`;`)
+		mut spec := ''
+		if sep >= 0 {
+			spec = remaining[..sep]
+			remaining = remaining[sep + 1..]
+		} else {
+			spec = remaining
+			remaining = ''
+		}
+
+		if spec != '?' {
+			rgb := RGB.parse(spec) or { return }
+			self.apply_dynamic_set(color, rgb)
+		}
+
+		color = color.next() or { return }
+	}
+}
+
+// color_reset_dynamic handles OSC 110-119 (reset dynamic colors). xterm does
+// not allow any content other than trailing semicolons.
+fn (mut self ReadonlyHandler) color_reset_dynamic(color Dynamic, body string) {
+	if body.len > 0 {
+		for c in body {
+			if c != u8(`;`) {
+				// Any non-semicolon char makes the command invalid.
+				return
+			}
+		}
+	}
+	self.apply_dynamic_reset(color)
+}
+
+// apply_dynamic_set sets a dynamic color. Only foreground/background/cursor
+// have a readonly effect.
+fn (mut self ReadonlyHandler) apply_dynamic_set(color Dynamic, rgb RGB) {
+	match color {
+		.foreground { self.terminal.colors.foreground.set_override(rgb) }
+		.background { self.terminal.colors.background.set_override(rgb) }
+		.cursor { self.terminal.colors.cursor.set_override(rgb) }
+		else {}
+	}
+}
+
+// apply_dynamic_reset resets a dynamic color. Only foreground/background/
+// cursor have a readonly effect.
+fn (mut self ReadonlyHandler) apply_dynamic_reset(color Dynamic) {
+	match color {
+		.foreground { self.terminal.colors.foreground.reset_override() }
+		.background { self.terminal.colors.background.reset_override() }
+		.cursor { self.terminal.colors.cursor.reset_override() }
+		else {}
+	}
+}
+
+// kitty_color_operation applies an OSC 21 (kitty color protocol) command.
+// The body is a semicolon-separated list of `key=value` entries where the
+// key is a palette index or special color name.
+//
+// Mirrors Ghostty's Handler.kittyColorOperation.
+fn (mut self ReadonlyHandler) kitty_color_operation(body string) {
+	for kv in body.split(';') {
+		eq := kv.index_u8(`=`)
+		mut k := ''
+		mut value := ''
+		if eq >= 0 {
+			k = kv[..eq]
+			value = kv[eq + 1..].trim_space()
+		} else {
+			k = kv
+			value = ''
+		}
+		if k.len == 0 {
+			continue
+		}
+
+		// Determine the key: palette index or special color name.
+		mut is_palette := false
+		mut palette_idx := u8(0)
+		mut special := ''
+		if k[0] >= u8(`0`) && k[0] <= u8(`9`) {
+			idx := parse_u9(k) or { continue }
+			if idx > 255 {
+				continue
+			}
+			is_palette = true
+			palette_idx = u8(idx)
+		} else {
+			special = k
+		}
+
+		if value.len == 0 {
+			// Reset.
+			if is_palette {
+				self.terminal.flags.dirty.palette = true
+				self.terminal.colors.palette.reset(palette_idx)
+			} else {
+				self.kitty_special_reset(special)
+			}
+		} else if value == '?' {
+			// Query has no readonly effect.
+			continue
+		} else {
+			// Set.
+			rgb := RGB.parse(value) or { continue }
+			if is_palette {
+				self.terminal.flags.dirty.palette = true
+				self.terminal.colors.palette.set(palette_idx, rgb)
+			} else {
+				self.kitty_special_set(special, rgb)
+			}
+		}
+	}
+}
+
+// kitty_special_set sets a kitty special color. Only foreground/background/
+// cursor have a readonly effect.
+fn (mut self ReadonlyHandler) kitty_special_set(special string, rgb RGB) {
+	match special {
+		'foreground' { self.terminal.colors.foreground.set_override(rgb) }
+		'background' { self.terminal.colors.background.set_override(rgb) }
+		'cursor' { self.terminal.colors.cursor.set_override(rgb) }
+		else {}
+	}
+}
+
+// kitty_special_reset resets a kitty special color. Only foreground/
+// background/cursor have a readonly effect.
+fn (mut self ReadonlyHandler) kitty_special_reset(special string) {
+	match special {
+		'foreground' { self.terminal.colors.foreground.reset_override() }
+		'background' { self.terminal.colors.background.reset_override() }
+		'cursor' { self.terminal.colors.cursor.reset_override() }
+		else {}
+	}
+}
+
+// parse_u9 parses a base-10 unsigned integer in the u9 range (0-511) used for
+// OSC color indices (palette 0-255 plus special 256-259). Returns none on any
+// non-digit, empty input, or overflow.
+fn parse_u9(s string) ?u16 {
+	if s.len == 0 {
+		return none
+	}
+	mut v := u32(0)
+	for c in s {
+		if c < u8(`0`) || c > u8(`9`) {
+			return none
+		}
+		v = v * 10 + u32(c - u8(`0`))
+		if v > 511 {
+			return none
+		}
+	}
+	return u16(v)
 }
 
 fn (mut self ReadonlyHandler) set_mode(mode Mode, enabled bool) ! {

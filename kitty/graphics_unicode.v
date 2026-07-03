@@ -452,10 +452,21 @@ pub fn (mut self PlacementIterator) next() ?VirtualPlacement {
 				continue
 			}
 
-			// Get the style for this cell to extract colors.
-			// TODO: In a full implementation, we'd look up the style from the
-			// style map using cell.style_id. For now, construct a default style
-			// since the style map lookup requires page-level style ref tracking.
+			// Get the style for this cell to extract the colors that encode
+			// the image/placement IDs (fg color -> image id, underline color
+			// -> placement id).
+			//
+			// BOUNDARY: in Ghostty this is `row.style(cell)`, which resolves
+			// `cell.style_id` against the page's ref-counted style table. In
+			// this witty model the only style resolver is the terminal
+			// module's `lookup_style_by_id(pages, style_id)` (formatter.v),
+			// which is (a) NOT public — unreachable from the kitty module —
+			// and (b) itself still a stub that returns an empty CellStyle
+			// because there is no real per-page style table yet. Until the
+			// terminal exposes a public, non-stub style lookup, every cell
+			// resolves to the default style, so image_id_low/placement_id are
+			// effectively read from a zeroed style. Once available, replace
+			// the line below with that lookup keyed on `cell.style_id`.
 			style := terminal.CellStyle{}
 
 			curr := IncompletePlacement.init(pin, &cell, style)

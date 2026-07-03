@@ -948,56 +948,89 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 	}
 
 	// --- Italic ---
+	// If we don't have italic, attempt to create a synthetic italic face.
+	// If we can't create a synthetic italic face, we'll just use the regular
+	// face for italic.
 	have_italic := self.italic_faces.len > 0
 	if !have_italic {
 		if !synthetic_config.italic {
+			// italic style not available and synthetic italic disabled
 			self.italic_faces << EntryOrAlias.new_alias(regular_entry)
+		} else if synthetic := self.create_synthetic_italic(regular_entry) {
+			// synthetic italic face created
+			self.italic_faces << EntryOrAlias.new_entry(Entry{
+				is_loaded:   true
+				loaded_face: synthetic
+				fallback:    false
+			})
 		} else {
-			// Try to create synthetic italic.
-			synthetic := self.create_synthetic_italic(regular_entry) or {
-				self.italic_faces << EntryOrAlias.new_alias(regular_entry)
-				Face{} // dummy, not used
-			}
-			if synthetic.face.handle != unsafe { nil } || true {
-				// Only add if we actually created a synthetic face (not the error path).
-				if self.italic_faces.len == 0 {
-					// The error path already appended an alias above.
-				}
-			}
-			// XTODO: properly handle synthetic face creation
-			if self.italic_faces.len == 0 {
-				self.italic_faces << EntryOrAlias.new_alias(regular_entry)
-			}
+			// Failed to create synthetic italic; italic style will not be
+			// available, so fall back to aliasing the regular face.
+			self.italic_faces << EntryOrAlias.new_alias(regular_entry)
 		}
 	}
 
 	// --- Bold ---
+	// If we don't have bold, use the regular font (or a synthetic bold).
 	have_bold := self.bold_faces.len > 0
 	if !have_bold {
 		if !synthetic_config.bold {
+			// bold style not available and synthetic bold disabled
 			self.bold_faces << EntryOrAlias.new_alias(regular_entry)
+		} else if synthetic := self.create_synthetic_bold(regular_entry) {
+			// synthetic bold face created
+			self.bold_faces << EntryOrAlias.new_entry(Entry{
+				is_loaded:   true
+				loaded_face: synthetic
+				fallback:    false
+			})
 		} else {
-			// XTODO: create synthetic bold face
+			// Failed to create synthetic bold; bold style will not be
+			// available, so fall back to aliasing the regular face.
 			self.bold_faces << EntryOrAlias.new_alias(regular_entry)
 		}
 	}
 
 	// --- Bold Italic ---
+	// If we don't have bold italic, we attempt to synthesize a bold variant
+	// of the italic font. If we can't do that, we'll use the italic font.
 	if self.bold_italic_faces.len == 0 {
 		if !synthetic_config.bold_italic {
+			// bold italic style not available and synthetic bold italic disabled
 			self.bold_italic_faces << EntryOrAlias.new_alias(regular_entry)
-		} else {
-			// Prefer to synthesize on top of the face we already had.
-			// If we have bold, try to synthesize italic on top of bold.
-			// If that fails, try synthesizing bold on top of italic.
-			// XTODO: implement synthetic bold italic creation
-			if self.italic_faces.len > 0 {
-				base_entry := self.italic_faces[0].get_entry()
-				self.bold_italic_faces << EntryOrAlias.new_alias(base_entry)
-			} else {
-				self.bold_italic_faces << EntryOrAlias.new_alias(regular_entry)
-			}
+			return
 		}
+
+		// Prefer to synthesize on top of the face we already had. If we have
+		// bold then we try to synthesize italic on top of bold.
+		if have_bold {
+			mut bold_base := self.bold_faces[0].get_entry()
+			if synthetic := self.create_synthetic_italic(bold_base) {
+				// synthetic bold italic face created from bold
+				self.bold_italic_faces << EntryOrAlias.new_entry(Entry{
+					is_loaded:   true
+					loaded_face: synthetic
+					fallback:    false
+				})
+				return
+			}
+			// If synthesizing italic failed, then we try to synthesize bold
+			// on whatever italic font we have.
+		}
+
+		mut italic_base := self.italic_faces[0].get_entry()
+		if synthetic := self.create_synthetic_bold(italic_base) {
+			// synthetic bold italic face created from italic
+			self.bold_italic_faces << EntryOrAlias.new_entry(Entry{
+				is_loaded:   true
+				loaded_face: synthetic
+				fallback:    false
+			})
+			return
+		}
+
+		// bold italic style not available, using italic font
+		self.bold_italic_faces << EntryOrAlias.new_alias(italic_base)
 	}
 }
 
@@ -1114,38 +1147,17 @@ fn (mut self Collection) scale_factor(face_metrics FaceMetrics, adjustment SizeA
 	face_scale := 1.0 / face_metrics.px_per_em
 
 	// We get the target metrics from the primary face and this face
-	// depending on the specified adjustment.
+	// depending on the specified adjustment. If this face doesn't explicitly
+	// define a metric, or if the value it defines is invalid, we fall through
+	// to other options in the order below.
 	//
-	// If this face doesn't explicitly define a metric, or if the value
-	// it defines is invalid, we fall through to other options.
-	primary_metric, face_metric := match adjustment {
-		.ic_width {
-			// Check if face has a valid ic_width (differs from estimate).
-			if face_metrics.ic_width != none
-				&& face_metrics.ic_width_val() != face_metrics.ic_width_val() {
-				// Invalid, fall through to ex_height.
-				self.scale_factor_for(.ex_height, primary_metrics, face_metrics,
-					primary_scale, face_scale)
-			} else {
-				primary_metrics.ic_width_val() * primary_scale, face_metrics.ic_width_val() * face_scale
-			}
-		}
-		.ex_height {
-			self.scale_factor_for(.ex_height, primary_metrics, face_metrics,
-				primary_scale, face_scale)
-		}
-		.cap_height {
-			self.scale_factor_for(.cap_height, primary_metrics, face_metrics,
-				primary_scale, face_scale)
-		}
-		.line_height {
-			primary_metrics.line_height() * primary_scale, face_metrics.line_height() * face_scale
-		}
-		.none_ {
-			// unreachable
-			1.0, 1.0
-		}
-	}
+	// In order to make sure the value is valid, we compare it with the result
+	// of the estimator function, which rules out both null and invalid values.
+	// In Zig this is `face_metrics.ic_width != face_metrics.icWidth()`, which
+	// is true (fall through) exactly when the raw optional is null or not
+	// positive.
+	primary_metric, face_metric := self.scale_factor_for(adjustment, primary_metrics,
+		face_metrics, primary_scale, face_scale)
 
 	if face_metric == 0.0 {
 		return 1.0
@@ -1153,33 +1165,51 @@ fn (mut self Collection) scale_factor(face_metrics FaceMetrics, adjustment SizeA
 	return primary_metric / face_metric
 }
 
-// scale_factor_for is a helper that returns primary_metric and face_metric
-// for the given adjustment level, falling through to the next level if needed.
+// scale_factor_for returns primary_metric and face_metric for the given
+// adjustment level, falling through to the next level (ic_width -> ex_height
+// -> cap_height -> line_height) if the face doesn't provide a valid value.
 fn (self &Collection) scale_factor_for(adjustment SizeAdjustment, primary_metrics FaceMetrics, face_metrics FaceMetrics, primary_scale f64, face_scale f64) (f64, f64) {
 	match adjustment {
-		.ex_height {
-			// Check if face explicitly defines ex_height.
-			if face_metrics.ex_height != none {
-				return primary_metrics.ex_height_val() * primary_scale, face_metrics.ex_height_val() * face_scale
+		.ic_width {
+			// Valid iff the raw ic_width is present and positive (i.e. the
+			// getter returns the raw value rather than an estimate).
+			if !metric_is_valid(face_metrics.ic_width) {
+				return self.scale_factor_for(.ex_height, primary_metrics, face_metrics,
+					primary_scale, face_scale)
 			}
-			// Fall through to cap_height.
-			return self.scale_factor_for(.cap_height, primary_metrics, face_metrics,
-				primary_scale, face_scale)
+			return primary_metrics.ic_width_val() * primary_scale, face_metrics.ic_width_val() * face_scale
+		}
+		.ex_height {
+			if !metric_is_valid(face_metrics.ex_height) {
+				return self.scale_factor_for(.cap_height, primary_metrics, face_metrics,
+					primary_scale, face_scale)
+			}
+			return primary_metrics.ex_height_val() * primary_scale, face_metrics.ex_height_val() * face_scale
 		}
 		.cap_height {
-			if face_metrics.cap_height != none {
-				return primary_metrics.cap_height_val() * primary_scale, face_metrics.cap_height_val() * face_scale
+			if !metric_is_valid(face_metrics.cap_height) {
+				// Fall through to line_height.
+				return primary_metrics.line_height() * primary_scale, face_metrics.line_height() * face_scale
 			}
-			// Fall through to line_height.
-			return primary_metrics.line_height() * primary_scale, face_metrics.line_height() * face_scale
+			return primary_metrics.cap_height_val() * primary_scale, face_metrics.cap_height_val() * face_scale
 		}
 		.line_height {
 			return primary_metrics.line_height() * primary_scale, face_metrics.line_height() * face_scale
 		}
-		else {
+		.none_ {
+			// unreachable
 			return 1.0, 1.0
 		}
 	}
+}
+
+// metric_is_valid returns true if the optional metric value is present and
+// positive, matching Zig's `raw == getter()` validity check.
+fn metric_is_valid(v ?f64) bool {
+	if value := v {
+		return value > 0
+	}
+	return false
 }
 
 // update_metrics recomputes the cell metrics for this collection,

@@ -1911,6 +1911,11 @@ pub mut:
 	kitty_keyboard  KeyFlagStack
 	semantic_prompt SemanticPrompt
 	dirty           ScreenDirty
+	// Scratch cell/row used only as a safe fallback when a cursor
+	// pointer accessor is called with invalid (out-of-bounds) state,
+	// which should not happen given the callers' preconditions.
+	scratch_cell    CellData
+	scratch_row     RowData
 }
 
 // Initialize a new screen with the given dimensions and scrollback.
@@ -1962,44 +1967,133 @@ pub fn (mut self Screen) reset() {
 // Clone
 // ============================================================
 
-// Clone the screen for a given region.
+// Clone the screen.
+//
+// This copies the screen dimensions and the cell data for the region
+// specified by [top, bot] (inclusive, by row). It does NOT copy Kitty
+// images, live hyperlink cursor state, or other data that isn't needed
+// for read-only operations.
+//
+// Ghostty uses PageList.clone with a tracked pin remapper so that the
+// cursor and selection pins are relocated into the cloned page list. In
+// this port, rows are a flat array so "remapping" is arithmetic: we clone
+// the requested absolute row range and shift the cursor/selection y values
+// by the top of that range.
 pub fn (self &Screen) clone(top PointTag, bot ?PointTag) !Screen {
-	// XTODO: Full clone with page remapping is not implemented.
-	// Requires PageList.clone with tracked pin remapping for selection
-	// and cursor preservation across cloned regions.
+	// Resolve the absolute row range [top_y, bot_y] we are cloning.
+	tl := self.pages.get_top_left(top)
+	bot_tag := bot or { top }
+	br := self.pages.get_bottom_right(bot_tag) or {
+		// Nothing to clone; fall back to top-left row only.
+		Pin{ x: self.pages.cols - 1, y: tl.y }
+	}
+	top_y := int(tl.y)
+	bot_y := int(br.y)
+	row_count := if bot_y >= top_y { bot_y - top_y + 1 } else { 0 }
+
 	mut new_screen := Screen.init(self.pages.cols, self.pages.rows, self.pages.max_scrollback)
 	new_screen.no_scrollback = self.no_scrollback
 	new_screen.dirty = self.dirty
 
-	// Copy active area content
-	for y in 0 .. int(self.pages.rows) {
-		src := self.pages.get_active_row(u32(y))
-		unsafe {
-			mut dst := new_screen.pages.get_active_row_mut(u32(y))
-			dst.cells = src.cells.clone()
-			dst.wrap = src.wrap
-			dst.wrap_continuation = src.wrap_continuation
-			dst.styled = src.styled
-			dst.dirty = src.dirty
-			dst.semantic_prompt = src.semantic_prompt
+	// Build the cloned row array. The viewport is always set to the active
+	// area of the new screen (the bottom "rows" rows). If the clone region
+	// is smaller than a viewport area, blanks are filled in at the bottom.
+	mut cloned := []RowData{cap: row_count}
+	for i in 0 .. row_count {
+		src_idx := top_y + i
+		if src_idx < 0 || src_idx >= self.pages.screen_rows.len {
+			cloned << RowData.init(self.pages.cols)
+			continue
 		}
+		src := self.pages.screen_rows[src_idx]
+		mut dst := RowData.init(self.pages.cols)
+		dst.cells = src.cells.clone()
+		dst.wrap = src.wrap
+		dst.wrap_continuation = src.wrap_continuation
+		dst.styled = src.styled
+		dst.grapheme = src.grapheme
+		dst.hyperlink = src.hyperlink
+		dst.dirty = src.dirty
+		dst.semantic_prompt = src.semantic_prompt
+		dst.kitty_virtual_placeholder = src.kitty_virtual_placeholder
+		cloned << dst
 	}
 
-	// Copy cursor
+	// Ensure we have at least a full active area; pad blanks at the bottom.
+	for cloned.len < int(self.pages.rows) {
+		cloned << RowData.init(self.pages.cols)
+	}
+
+	new_screen.pages.screen_rows = cloned
+	// The active area is the bottom "rows" rows of the cloned region.
+	new_screen.pages.active_start = cloned.len - int(self.pages.rows)
+	if new_screen.pages.active_start < 0 {
+		new_screen.pages.active_start = 0
+	}
+
+	// Remap our cursor. If the cursor isn't in the cloned area, move it to
+	// the top-left arbitrarily because a screen must have SOME cursor.
+	cursor_abs := self.pages.active_start + int(self.cursor.y)
 	new_screen.cursor = self.cursor
+	if cursor_abs >= top_y && cursor_abs <= bot_y {
+		new_active := cursor_abs - new_screen_top(top_y, cloned.len, int(self.pages.rows))
+		if new_active >= 0 && new_active < int(new_screen.pages.rows) {
+			new_screen.cursor.y = u32(new_active)
+		} else {
+			new_screen.cursor.x = 0
+			new_screen.cursor.y = 0
+		}
+	} else {
+		new_screen.cursor.x = 0
+		new_screen.cursor.y = 0
+	}
 	if new_screen.cursor.x >= new_screen.pages.cols {
 		new_screen.cursor.x = 0
 	}
-	if new_screen.cursor.y >= new_screen.pages.rows {
-		new_screen.cursor.y = 0
-	}
 
-	// Copy selection if within bounds
+	// Preserve our selection if we have one and it intersects the clone.
 	if sel := self.selection {
-		new_screen.selection = sel
+		mut s := sel
+		start_y := int(s.start_pin.y)
+		end_y := int(s.end_pin.y)
+		// Order top/bottom for the bounds check.
+		sel_top := if start_y < end_y { start_y } else { end_y }
+		sel_bot := if start_y < end_y { end_y } else { start_y }
+		// If the selection is fully out of bounds, drop it.
+		if sel_bot < top_y || sel_top > bot_y {
+			new_screen.selection = none
+		} else {
+			// Move both pins in bounds and shift into the new space.
+			shift := top_y
+			mut sy := start_y
+			mut ey := end_y
+			if sy < top_y {
+				sy = top_y
+			}
+			if sy > bot_y {
+				sy = bot_y
+			}
+			if ey < top_y {
+				ey = top_y
+			}
+			if ey > bot_y {
+				ey = bot_y
+			}
+			s.start_pin.y = u32(sy - shift)
+			s.end_pin.y = u32(ey - shift)
+			new_screen.selection = s
+		}
 	}
 
 	return new_screen
+}
+
+// Helper: the absolute row index that becomes row 0 of the cloned screen's
+// active area, used to remap the cursor. The cloned region starts at
+// clone_top and has clone_len rows; the active area is the last `rows` rows.
+fn new_screen_top(clone_top int, clone_len int, rows int) int {
+	active_offset := if clone_len > rows { clone_len - rows } else { 0 }
+	return clone_top + active_offset
 }
 
 // ============================================================
@@ -2050,17 +2144,31 @@ pub fn (mut self Screen) cursor_absolute(x u32, y u32) {
 	self.cursor_mark_dirty()
 }
 
-// Reload cursor state from the page pin.
+// Reloads the cursor pointer information into the screen. This is expensive
+// so it should only be done in cases where the pointers are invalidated in
+// such a way that its difficult to recover otherwise.
+//
+// In Ghostty, the tracked pin is always accurate, so the active point is
+// derived from the pin (falling back to the top-left if the pin is outside
+// the active area) and the page row/cell pointers are refreshed. In this
+// port the cursor x/y ARE the source of truth (there are no separate cached
+// pointers), so we clamp them to the active area (top-left on overflow) and
+// then re-ensure our style is consistent, mirroring the tail of cursorReload.
 pub fn (mut self Screen) cursor_reload() {
-	// XTODO: Full cursor reload needs PageList.pointFromPin to
-	// derive cursor x/y from the tracked page pin, plus style
-	// migration if the cursor moved to a new page.
-	// In this simplified version, we just clamp cursor bounds.
-	if self.cursor.x >= self.pages.cols {
+	// Our x/y should always be within the active area. If they are not,
+	// reset the cursor to the top-left (this mirrors the pin fallback).
+	if self.cursor.x >= self.pages.cols || self.cursor.y >= self.pages.rows {
 		self.cursor.x = 0
-	}
-	if self.cursor.y >= self.pages.rows {
 		self.cursor.y = 0
+	}
+
+	// If we have a style, we need to ensure it is consistent because this
+	// method may also be called after a page change. This should never
+	// fail because manual_style_update handles everything; if it does, we
+	// degrade gracefully back to the default style.
+	self.manual_style_update() or {
+		self.cursor.style = CellStyle{}
+		self.cursor.style_id = default_style_id
 	}
 }
 
@@ -2075,37 +2183,70 @@ pub fn (mut self Screen) cursor_mark_dirty() {
 	}
 }
 
-// Copy another cursor's state into this screen.
+// Returns the last cell of the row directly above the cursor row.
+//
+// Precondition: The cursor is not at the top of the screen.
+pub fn (mut self Screen) cursor_cell_end_of_prev() &CellData {
+	assert self.cursor.y > 0
+	prev_idx := self.pages.active_start + int(self.cursor.y) - 1
+	last := int(self.pages.cols) - 1
+	if prev_idx >= 0 && prev_idx < self.pages.screen_rows.len
+		&& last >= 0 && last < self.pages.screen_rows[prev_idx].cells.len {
+		return unsafe { &self.pages.screen_rows[prev_idx].cells[last] }
+	}
+	// Fall back to a scratch cell to avoid a null deref. Callers only
+	// reach here on malformed state.
+	self.scratch_cell = CellData{}
+	return unsafe { &self.scratch_cell }
+}
+
+// Returns the row n rows above the cursor row.
+//
+// Precondition: cursor.y >= n
+pub fn (mut self Screen) cursor_row_up(n u32) &RowData {
+	assert self.cursor.y >= n
+	idx := self.pages.active_start + int(self.cursor.y) - int(n)
+	if idx >= 0 && idx < self.pages.screen_rows.len {
+		return unsafe { &self.pages.screen_rows[idx] }
+	}
+	self.scratch_row = RowData.init(self.pages.cols)
+	return unsafe { &self.scratch_row }
+}
+
+// Copy another cursor's state into this screen. The cursor can be on any
+// screen but the x/y must be within our screen bounds.
+//
+// This does NOT copy the hyperlink from the other cursor (matching the
+// `hyperlink = false` usage in Terminal.switchScreenMode). Full hyperlink
+// migration across pages is not modeled here.
 pub fn (mut self Screen) cursor_copy(other Cursor) ! {
-	// XTODO: Full cursor copy needs style ref-counting across pages
-	// and hyperlink migration. This simplified version copies the
-	// basic cursor state.
-	old_style_id := self.cursor.style_id
-	self.cursor.x = other.x
-	self.cursor.y = other.y
-	self.cursor.cursor_style = other.cursor_style
-	self.cursor.pending_wrap = other.pending_wrap
-	self.cursor.is_protected = other.is_protected
-	self.cursor.style = other.style
-	self.cursor.semantic_content = other.semantic_content
-	self.cursor.semantic_content_clear_eol = other.semantic_content_clear_eol
+	assert other.x < self.pages.cols
+	assert other.y < self.pages.rows
 
-	// Update style
-	if self.cursor.style.default() {
-		self.cursor.style_id = default_style_id
-	} else if old_style_id != default_style_id {
-		// In full implementation, would release old and add new
-		self.cursor.style_id = 1 // simplified
-	}
+	// End any currently active hyperlink on our cursor.
+	self.end_hyperlink()
 
-	// Clamp cursor
-	if self.cursor.x >= self.pages.cols {
-		self.cursor.x = self.pages.cols - 1
-	}
-	if self.cursor.y >= self.pages.rows {
-		self.cursor.y = self.pages.rows - 1
-	}
-	self.cursor_absolute(self.cursor.x, self.cursor.y)
+	old := self.cursor
+	self.cursor = other
+
+	// Keep our old style ID so it can be properly cleaned up below.
+	self.cursor.style_id = old.style_id
+
+	// Hyperlinks are managed separately (and cleared here).
+	self.cursor.hyperlink_id = 0
+	self.cursor.hyperlink_state = none
+
+	// Keep our old X/Y because the new position navigated to by
+	// cursor_absolute needs to be in our own screen.
+	self.cursor.x = old.x
+	self.cursor.y = old.y
+
+	// Call manual style update in order to clean up our old style, if we
+	// have one, and also to load the style from the other cursor.
+	self.manual_style_update()!
+
+	// Move to the correct location to match the other cursor.
+	self.cursor_absolute(other.x, other.y)
 }
 
 // Reset the wrap state of the cursor row.
@@ -2298,6 +2439,34 @@ pub fn (mut self Screen) clear_cells(row_idx int, start int, end int) {
 	}
 }
 
+// Clear cells in a row but only if they are not protected. This works by
+// finding contiguous runs of unprotected cells within [start, end) and
+// clearing each run, matching Ghostty's clearUnprotectedCells.
+pub fn (mut self Screen) clear_unprotected_cells(row_idx int, start int, end int) {
+	if row_idx < 0 || row_idx >= self.pages.screen_rows.len {
+		return
+	}
+	cells_len := self.pages.screen_rows[row_idx].cells.len
+	hi := if end < cells_len { end } else { cells_len }
+	mut x0 := if start < 0 { 0 } else { start }
+	for x0 < hi {
+		// Skip protected cells.
+		for x0 < hi && self.pages.screen_rows[row_idx].cells[x0].is_protected {
+			x0++
+		}
+		if x0 >= hi {
+			break
+		}
+		// Find the end of this unprotected run.
+		mut x1 := x0 + 1
+		for x1 < hi && !self.pages.screen_rows[row_idx].cells[x1].is_protected {
+			x1++
+		}
+		self.clear_cells(row_idx, x0, x1)
+		x0 = x1
+	}
+}
+
 // Returns a blank cell with the current cursor background color.
 pub fn (self &Screen) blank_cell() CellData {
 	if self.cursor.style_id == default_style_id {
@@ -2310,13 +2479,67 @@ pub fn (self &Screen) blank_cell() CellData {
 // Resize
 // ============================================================
 
-// Resize the screen to new dimensions.
+// Resize the screen. The rows or cols can be bigger or smaller.
+//
+// The soft-wrap reflow of cell content itself is delegated to Pages.resize.
+// The surrounding logic translated here from Ghostty's Screen.resize:
+//   - release/restore the cursor style around the resize (in case the cursor
+//     ends up "on a different page")
+//   - track the saved cursor position so we can remap it after resize
+//   - clear prompt/input lines when prompt_redraw is requested
+//   - reload the cursor and fix up the saved cursor's pending wrap
 pub fn (mut self Screen) resize(opts ScreenResize) ! {
-	// XTODO: Full resize with reflow, prompt redraw, saved cursor
-	// adjustment, and hyperlink migration is not implemented.
-	// Requires PageList.resize with reflow support, which handles
-	// soft-wrap reflow when columns change.
+	// Release the cursor style while resizing just in case the cursor ends
+	// up on a different page. We restore it at the end.
+	cursor_style := self.cursor.style
+	self.cursor.style = CellStyle{}
+	self.manual_style_update() or {}
 
+	// Remember the saved cursor absolute position (as a "tracked pin") so we
+	// can remap its X/Y for reflow after the resize. We store the absolute
+	// row so it survives active_start shifts.
+	mut saved_abs := ?int(none)
+	if sc := self.saved_cursor {
+		if sc.x < self.pages.cols && sc.y < self.pages.rows {
+			saved_abs = self.pages.active_start + int(sc.y)
+		}
+	}
+
+	// If our cursor is on a prompt or input line, clear it so the shell can
+	// redraw it. This works with OSC 133 semantic prompts. We check
+	// cursor.semantic_content rather than the row's semantic_prompt because
+	// some shells mark input areas but don't mark continuation lines.
+	if opts.prompt_redraw != .false_ && self.cursor.semantic_content != .output {
+		cur_idx := self.pages.active_start + int(self.cursor.y)
+		match opts.prompt_redraw {
+			.false_ {}
+			.last {
+				// Only clear the current line where the cursor is.
+				self.clear_cells(cur_idx, 0, int(self.pages.cols))
+			}
+			.true_ {
+				// Clear all prompt lines starting from the beginning of this
+				// prompt. Walk up while rows are marked as some kind of
+				// prompt, then clear from there down to the cursor row.
+				mut start := cur_idx
+				for start - 1 >= 0 {
+					sp := self.pages.screen_rows[start - 1].semantic_prompt
+					if sp == .prompt || sp == .prompt_continuation || sp == .input {
+						start -= 1
+					} else {
+						break
+					}
+				}
+				for y := start; y <= cur_idx; y++ {
+					if y >= 0 && y < self.pages.screen_rows.len {
+						self.clear_cells(y, 0, int(self.pages.cols))
+					}
+				}
+			}
+		}
+	}
+
+	// Perform the resize operation (handles reflow in Pages.resize).
 	self.pages.resize(ResizeOpts{
 		cols: opts.cols
 		rows: opts.rows
@@ -2327,21 +2550,48 @@ pub fn (mut self Screen) resize(opts ScreenResize) ! {
 		}
 	})!
 
-	// Erase history if no scrollback
+	// If we have no scrollback and we shrunk our rows, we must explicitly
+	// erase our history. PageList always keeps at least a page of history.
 	if self.no_scrollback {
 		self.pages.erase_rows(.history, ?PointTag(none))
 	}
 
+	// If our cursor was updated, we do a full reload so all our cursor
+	// state is correct.
 	self.cursor_reload()
 
-	// Update saved cursor if present
-	if mut sc := self.saved_cursor {
-		if sc.x >= opts.cols {
-			sc.x = opts.cols - 1
+	// If we reflowed a saved cursor, update it.
+	if abs := saved_abs {
+		if mut sc := self.saved_cursor {
+			new_active := abs - self.pages.active_start
+			if new_active >= 0 && new_active < int(self.pages.rows) {
+				sc.y = u32(new_active)
+				if sc.x >= opts.cols {
+					sc.x = opts.cols - 1
+				}
+				// If we had pending wrap set and we're no longer at the end
+				// of the line, we unset the pending wrap and move the cursor
+				// to reflect the correct next position.
+				if sc.pending_wrap && sc.x != opts.cols - 1 {
+					sc.pending_wrap = false
+					sc.x += 1
+				}
+			} else {
+				// The saved cursor moved outside the active area. There's no
+				// reasonable thing to do so we move it to the top-left.
+				sc.x = 0
+				sc.y = 0
+				sc.pending_wrap = false
+			}
+			self.saved_cursor = sc
 		}
-		if sc.y >= opts.rows {
-			sc.y = opts.rows - 1
-		}
+	}
+
+	// Restore the cursor style. This should not fail; degrade gracefully.
+	self.cursor.style = cursor_style
+	self.manual_style_update() or {
+		self.cursor.style = CellStyle{}
+		self.cursor.style_id = default_style_id
 	}
 }
 
@@ -2458,17 +2708,31 @@ pub fn (mut self Screen) set_attribute(attr SgrAttribute) ! {
 	self.manual_style_update()!
 }
 
-// Update the style ID after a manual style change.
+// Call this whenever you manually change the cursor style.
+//
+// This function can NOT fail if the cursor style is changing to the default
+// style.
+//
+// In Ghostty this maps the cursor's concrete style value to a page-local
+// ref-counted style ID (Page.styles.add), splitting/growing the page as
+// needed. In this port, the concrete style is stored inline on each cell
+// (CellData.style), so style_id is only used as a "has non-default style"
+// discriminator: default_style_id for the default style, and a non-default
+// (non-zero) ID otherwise. We still clear the ID first so that print writes
+// the correct discriminator regardless of intermediate state.
 pub fn (mut self Screen) manual_style_update() ! {
-	// XTODO: Full style management with ref-counted style sets,
-	// page capacity adjustment, and style migration is not implemented.
-	// Requires Page.styles.add/release and page splitting for capacity.
+	// Clear the cursor style ID to prevent weird things from happening.
+	// This also ensures that if the style is default we fall back to
+	// clearing our style.
+	self.cursor.style_id = default_style_id
+
+	// If our new style is the default, just reset to that.
 	if self.cursor.style.default() {
-		self.cursor.style_id = default_style_id
-	} else {
-		// Simplified: assign a non-zero style ID
-		self.cursor.style_id = 1
+		return
 	}
+
+	// After setting the style, we update our style discriminator.
+	self.cursor.style_id = 1
 }
 
 // ============================================================
@@ -3161,16 +3425,20 @@ pub fn (self &Screen) dump_string_alloc_unwrapped(tag PointTag) !string {
 // ============================================================
 
 // Append a grapheme codepoint to a cell.
+// Append a grapheme codepoint to the given cell within the current cursor
+// row. The first codepoint stays on the cell; additional codepoints are
+// stored in the cell's graphemes slice and the content tag is switched to
+// codepoint_grapheme.
 pub fn (mut self Screen) append_grapheme(cell_x u32, cp u32) ! {
-	// XTODO: Full grapheme append needs Page.appendGrapheme with
-	// capacity management and grapheme byte storage.
 	idx := self.pages.active_start + int(self.cursor.y)
 	if idx < self.pages.screen_rows.len {
 		unsafe {
 			mut row := &self.pages.screen_rows[idx]
 			if int(cell_x) < row.cells.len {
-				row.cells[int(cell_x)].graphemes << cp
-				row.cells[int(cell_x)].has_grapheme = true
+				mut cell := &row.cells[int(cell_x)]
+				cell.graphemes << cp
+				cell.has_grapheme = true
+				cell.content_tag = .codepoint_grapheme
 				row.grapheme = true
 			}
 		}
@@ -3194,10 +3462,110 @@ fn (mut self Screen) split_for_capacity() ! {
 	// calculation and cursor pin tracking.
 }
 
-// Split cell boundary (handle wide char boundaries).
+// Clean up boundary conditions where a cell will become discontiguous with
+// a neighboring cell because either one of them will be moved and/or cleared.
+//
+// For performance reasons this is specialized to operate on the cursor row.
+//
+// Handles the boundary between the cell at `x` and the cell at `x - 1`.
+//
+// So, for example, when moving a region of cells [a, b] (inclusive), call this
+// function with `x = a` and `x = b + 1`. It is okay if `x` is out of bounds by
+// 1, this will be interpreted correctly.
+//
+// DOES NOT MODIFY ROW WRAP STATE! See cursor_reset_wrap for that.
+//
+// The following boundary conditions are handled:
+//
+// - `x - 1` is a wide character and `x` is a spacer tail:
+//   o Both cells will be cleared.
+//   o If `x - 1` is the start of the row and was wrapped from a previous row
+//     then the previous row is checked for a spacer head, which is cleared if
+//     present.
+//
+// - `x == 0` and is a wide character:
+//   o If the row is a wrap continuation then the previous row will be checked
+//     for a spacer head, which is cleared if present.
+//
+// - `x == cols` and `x - 1` is a spacer head:
+//   o `x - 1` will be cleared.
 pub fn (mut self Screen) split_cell_boundary(x u32) {
-	// XTODO: Full boundary handling needs page cell pointer access
-	// and spacer head/tail management for wide characters.
+	cols := self.pages.cols
+	// `x` may be up to and INCLUDING `cols`, since that signifies splitting
+	// the boundary to the right of the final cell in the row.
+	if x > cols {
+		return
+	}
+
+	row_idx := self.pages.active_start + int(self.cursor.y)
+	if row_idx < 0 || row_idx >= self.pages.screen_rows.len {
+		return
+	}
+
+	// [ A B C D E F|]
+	//              ^ Boundary between final cell and row end.
+	if x == cols {
+		is_wrap := self.pages.screen_rows[row_idx].wrap
+		if !is_wrap {
+			return
+		}
+		// Spacer head at end of wrapped row.
+		last := int(cols) - 1
+		if last >= 0 && last < self.pages.screen_rows[row_idx].cells.len {
+			if self.pages.screen_rows[row_idx].cells[last].wide == .spacer_head {
+				self.clear_cells(row_idx, last, last + 1)
+			}
+		}
+		return
+	}
+
+	// [|A B C D E F ]
+	//  ^ Boundary between first cell and row start.
+	//
+	//  OR
+	//
+	// [ A|B C D E F ]
+	//    ^ Boundary between first cell and second cell.
+	//
+	// First cell may be a wrapped wide cell with a spacer head on the
+	// previous row that needs to be cleared.
+	if (x == 0 || x == 1) && self.pages.screen_rows[row_idx].wrap_continuation {
+		first_wide := self.pages.screen_rows[row_idx].cells.len > 0
+			&& self.pages.screen_rows[row_idx].cells[0].wide == .wide
+		if first_wide {
+			prev_idx := row_idx - 1
+			if prev_idx >= 0 {
+				last := int(cols) - 1
+				if last >= 0 && last < self.pages.screen_rows[prev_idx].cells.len {
+					if self.pages.screen_rows[prev_idx].cells[last].wide == .spacer_head {
+						self.clear_cells(prev_idx, last, last + 1)
+					}
+				}
+			}
+		}
+	}
+
+	// If x is 0 then we're done.
+	if x == 0 {
+		return
+	}
+
+	// [ ... X|Y ... ]
+	//        ^ Boundary between two cells in the middle of the row.
+	xi := int(x)
+	if xi - 1 < self.pages.screen_rows[row_idx].cells.len {
+		left := self.pages.screen_rows[row_idx].cells[xi - 1]
+		match left.wide {
+			// There should not be spacer heads in the middle of the row.
+			.spacer_head {}
+			// We don't need to do anything for narrow cells or spacer tails.
+			.narrow, .spacer_tail {}
+			// A wide char would be split, so must be cleared.
+			.wide {
+				self.clear_cells(row_idx, xi - 1, xi + 1)
+			}
+		}
+	}
 }
 
 // ============================================================

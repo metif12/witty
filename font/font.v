@@ -410,93 +410,384 @@ pub const sprite_index = u32(0)
 // Metrics holds font measurement data for the grid.
 pub struct Metrics {
 pub mut:
+	// Recommended cell width and height for a monospace grid using this font.
 	cell_width             u32
 	cell_height            u32
+	// Distance in pixels from the bottom of the cell to the text baseline.
 	cell_baseline          u32
-	// Position of the underline from the top of the cell.
+	// Distance in pixels from the top of the cell to the top of the underline.
 	underline_position     u32
-	// Thickness of the underline in pixels.
+	// Thickness in pixels of the underline.
 	underline_thickness    u32
-	// Position of the strikethrough from the top of the cell.
+	// Distance in pixels from the top of the cell to the top of the strikethrough.
 	strikethrough_position u32
-	// Thickness of the strikethrough in pixels.
+	// Thickness in pixels of the strikethrough.
 	strikethrough_thickness u32
-	// Position of the overline from the top of the cell.
-	overline_position      u32
-	// Thickness of the overline in pixels.
+	// Distance in pixels from the top of the cell to the top of the overline.
+	// Can be negative to adjust the position above the top of the cell.
+	overline_position      i32
+	// Thickness in pixels of the overline.
 	overline_thickness     u32
-	// Thickness for box-drawing characters.
+	// Thickness in pixels of box drawing characters.
 	box_thickness          u32
-	// Height of the cursor in pixels.
+	// The thickness in pixels of the cursor sprite. This has a default value
+	// because it is not determined by fonts but rather by user configuration.
+	cursor_thickness       u32 = 1
+	// The height in pixels of the cursor sprite.
 	cursor_height          u32
-	// Icon height for multi-cell glyphs (f64 for precision).
+	// The constraint height for nerd fonts icons.
 	icon_height            f64
-	// Icon height for single-cell glyphs.
+	// The constraint height for nerd fonts icons limited to a single cell width.
 	icon_height_single     f64
-	// Width of the primary face (may differ from cell_width).
+	// The unrounded face width, used in scaling calculations.
 	face_width             f64
-	// Height of the primary face.
+	// The unrounded face height, used in scaling calculations.
 	face_height            f64
-	// Vertical offset of the face within the cell.
+	// The offset from the bottom of the cell to the bottom of the face's
+	// bounding box, based on the rounded and potentially adjusted cell height.
 	face_y                 f64
 }
 
-// calc computes grid Metrics from face-level FaceMetrics.
-// XTODO: implement full metrics calculation with proper rounding,
-// underline/strikethrough position calculation, icon height, etc.
-pub fn Metrics.calc(fm FaceMetrics) Metrics {
-	line_height := fm.ascent - fm.descent + fm.line_gap
-	cell_height := u32(math.round(line_height))
-	cell_width := u32(math.round(fm.cell_width))
-	// Cell baseline is the distance from the bottom of the cell
-	// to the baseline, i.e., ceil(-descent).
-	cell_baseline := u32(math.ceil(-fm.descent))
+// Minimum acceptable values for some fields to prevent modifiers
+// from being able to, for example, cause 0-thickness underlines.
+const metrics_min_cell_width = u32(1)
+const metrics_min_cell_height = u32(1)
+const metrics_min_underline_thickness = u32(1)
+const metrics_min_strikethrough_thickness = u32(1)
+const metrics_min_overline_thickness = u32(1)
+const metrics_min_box_thickness = u32(1)
+const metrics_min_cursor_thickness = u32(1)
+const metrics_min_cursor_height = u32(1)
+const metrics_min_icon_height = f64(1.0)
+const metrics_min_icon_height_single = f64(1.0)
+const metrics_min_face_height = f64(1.0)
+const metrics_min_face_width = f64(1.0)
 
-	// Underline: positioned at cell_height (bottom of cell).
-	// XTODO: proper underline position from face metrics.
-	ul_thickness := u32(math.max(1.0, math.round(fm.underline_thickness or { 1.0 })))
-	ul_position := cell_height
-
-	// Strikethrough: roughly at the center of the ascent.
-	st_thickness := u32(math.max(1.0, math.round(fm.strikethrough_thickness or { f64(ul_thickness) })))
-	st_position := u32(math.round(fm.ascent * 0.6))
-
-	// Overline: at top of cell.
-	ol_thickness := ul_thickness
-
-	// Box drawing thickness.
-	box_thickness := ul_thickness
-
-	// Cap and ex heights for icon height calculation.
-	cap_h := fm.cap_height_val()
-	// Icon height = (2 * cap_height + face_height) / 3
-	icon_h := (2.0 * cap_h + line_height) / 3.0
-
+// default_grid_metrics returns a simple Metrics value with the given cell
+// width and height, used as a convenience for tests and callers that need a
+// grid without a real font face. The icon height is set to the cell height.
+pub fn default_grid_metrics(cell_width u32, cell_height u32) Metrics {
 	return Metrics{
-		cell_width: cell_width
-		cell_height: cell_height
-		cell_baseline: cell_baseline
-		underline_position: ul_position
-		underline_thickness: ul_thickness
-		strikethrough_position: st_position
-		strikethrough_thickness: st_thickness
-		overline_position: 0
-		overline_thickness: ol_thickness
-		box_thickness: box_thickness
-		cursor_height: cell_height
-		icon_height: line_height
-		icon_height_single: icon_h
-		face_width: fm.cell_width
-		face_height: line_height
-		face_y: fm.descent + f64(cell_baseline)
+		cell_width:              cell_width
+		cell_height:             cell_height
+		cell_baseline:           0
+		underline_position:      cell_height
+		underline_thickness:     2
+		strikethrough_position:  cell_height / 2
+		strikethrough_thickness: 1
+		overline_position:       0
+		overline_thickness:      1
+		box_thickness:           1
+		cursor_thickness:        1
+		cursor_height:           cell_height
+		icon_height:             f64(cell_height)
+		icon_height_single:      f64(cell_height)
+		face_width:              f64(cell_width)
+		face_height:             f64(cell_height)
+		face_y:                  0.0
 	}
 }
 
-// apply applies metric modifiers to adjust the computed metrics.
-pub fn (mut m Metrics) apply(modifiers MetricsModifierSet) {
-	// XTODO: implement metric modifier application
-	// (cell padding, custom underline position, etc.)
-	_ = modifiers
+// calc computes grid Metrics from face-level FaceMetrics.
+//
+// Try to pass values with as much precision as possible,
+// do not round them before using them for this function.
+//
+// For any nullable options that are not provided, estimates will be used.
+pub fn Metrics.calc(face FaceMetrics) Metrics {
+	// These are the unrounded advance width and line height values,
+	// which are retained separately from the rounded cell width and
+	// height values (below), for calculations that need to know how
+	// much error there is between the design dimensions of the font
+	// and the pixel dimensions of our cells.
+	face_width := face.cell_width
+	face_height := face.line_height()
+
+	// The cell width and height values need to be integers since they
+	// represent pixel dimensions of the grid cells in the terminal.
+	//
+	// We use round for the cell width to limit the difference from the
+	// "true" width value to no more than 0.5px. See ghostty Metrics.zig
+	// for the full rationale on rounding vs. ceiling.
+	cell_width := math.round(face_width)
+	cell_height := math.round(face_height)
+
+	// We split our line gap in two parts, and put half of it on the top
+	// of the cell and the other half on the bottom, so that our text never
+	// bumps up against either edge of the cell vertically.
+	half_line_gap := face.line_gap / 2
+
+	// NOTE: Unlike all our other metrics, cell_baseline is relative to the
+	// BOTTOM of the cell rather than the top.
+	face_baseline := half_line_gap - face.descent
+	// We calculate the baseline by trying to center the face vertically
+	// in the pixel-rounded cell height, so that before rounding it will
+	// be an even distance from the top and bottom of the cell. We do this
+	// by adding half the difference between the cell height and the face
+	// height.
+	cell_baseline := math.round(face_baseline - (cell_height - face_height) / 2)
+
+	// We keep track of the offset from the bottom of the cell to the bottom
+	// of the face's "true" bounding box, which at this point, since nothing
+	// has been scaled yet, is equivalent to the offset between the baseline
+	// we draw at (cell_baseline) and the one the font wants (face_baseline).
+	face_y := cell_baseline - face_baseline
+
+	// We calculate a top_to_baseline to make following calculations simpler.
+	top_to_baseline := cell_height - cell_baseline
+
+	// Get the other font metrics or their estimates. See doc comments
+	// in FaceMetrics for explanations of the estimation heuristics.
+	cap_height := face.cap_height_val()
+	underline_thickness := math.max(1.0, math.ceil(face.underline_thickness_val()))
+	strikethrough_thickness := math.max(1.0, math.ceil(face.strikethrough_thickness_val()))
+	underline_position := math.round(top_to_baseline - face.underline_position_val())
+	strikethrough_position := math.round(top_to_baseline - face.strikethrough_position_val())
+
+	// Same heuristic as the font_patcher script. We store icon_height
+	// separately from face_height such that modifiers can apply to the former
+	// without affecting the latter.
+	icon_height := face_height
+	icon_height_single := (2 * cap_height + face_height) / 3
+
+	mut result := Metrics{
+		cell_width:              u32(cell_width)
+		cell_height:             u32(cell_height)
+		cell_baseline:           u32(cell_baseline)
+		underline_position:      u32(underline_position)
+		underline_thickness:     u32(underline_thickness)
+		strikethrough_position:  u32(strikethrough_position)
+		strikethrough_thickness: u32(strikethrough_thickness)
+		overline_position:       0
+		overline_thickness:      u32(underline_thickness)
+		box_thickness:           u32(underline_thickness)
+		cursor_thickness:        1
+		cursor_height:           u32(cell_height)
+		icon_height:             icon_height
+		icon_height_single:      icon_height_single
+		face_width:              face_width
+		face_height:             face_height
+		face_y:                  face_y
+	}
+
+	// Ensure all metrics are within their allowable range.
+	result.clamp()
+
+	return result
+}
+
+// apply applies a set of modifiers.
+pub fn (mut m Metrics) apply(mods MetricsModifierSet) {
+	// cell_width and cell_height are handled specially (clamped and,
+	// for height, cause baseline re-centering).
+	if mod := mods.get(.cell_width) {
+		// We clamp these values to a minimum of 1 to prevent
+		// divide-by-zero in downstream operations.
+		original := m.cell_width
+		new := math_max_u32(metrics_modifier_apply_u32(mod, original), 1)
+		if new != original {
+			m.cell_width = new
+		}
+	}
+
+	if mod := mods.get(.cell_height) {
+		original := m.cell_height
+		new := math_max_u32(metrics_modifier_apply_u32(mod, original), 1)
+		if new != original {
+			// Set the new value.
+			m.cell_height = new
+
+			// For cell height, we have to also modify some positions that
+			// are absolute from the top of the cell. The main goal here is
+			// to center the baseline so that text is vertically centered in
+			// the cell.
+			original_f64 := f64(original)
+			new_f64 := f64(new)
+			diff := new_f64 - original_f64
+			half_diff := diff / 2.0
+
+			// If the diff is even, the number of pixels we add will be the
+			// same for the top and bottom, but if the diff is odd then we
+			// want to add the extra pixel to the edge of the cell that needs
+			// it most. See ghostty Metrics.zig for the full explanation.
+			position_with_respect_to_center := m.face_y - (original_f64 - m.face_height) / 2
+
+			mut diff_top := f64(0)
+			mut diff_bottom := f64(0)
+			if position_with_respect_to_center > 0 {
+				// The baseline is higher than it should be, so we add the
+				// extra to the top (or to the bottom for negative diffs due
+				// to how floor and ceil work).
+				diff_top = math.ceil(half_diff)
+				diff_bottom = math.floor(half_diff)
+			} else {
+				// The baseline is lower than it should be, so we add the
+				// extra to the bottom, or vice versa for negative diffs.
+				diff_top = math.floor(half_diff)
+				diff_bottom = math.ceil(half_diff)
+			}
+
+			// The cell baseline and face_y values are relative to the
+			// bottom of the cell so we add the bottom diff to them.
+			m.cell_baseline = add_float_to_int_u32(m.cell_baseline, diff_bottom)
+			m.face_y += diff_bottom
+
+			// These are all relative to the top of the cell.
+			m.underline_position = add_float_to_int_u32(m.underline_position, diff_top)
+			m.strikethrough_position = add_float_to_int_u32(m.strikethrough_position, diff_top)
+			m.overline_position = saturating_add_i32(m.overline_position, i32(diff_top))
+		}
+	}
+
+	// icon_height modifies both icon_height and icon_height_single.
+	if mod := mods.get(.icon_height) {
+		m.icon_height = metrics_modifier_apply_f64(mod, m.icon_height)
+		m.icon_height_single = metrics_modifier_apply_f64(mod, m.icon_height_single)
+	}
+
+	// All remaining keys apply straightforwardly to their matching field.
+	if mod := mods.get(.cell_baseline) {
+		m.cell_baseline = metrics_modifier_apply_u32(mod, m.cell_baseline)
+	}
+	if mod := mods.get(.underline_position) {
+		m.underline_position = metrics_modifier_apply_u32(mod, m.underline_position)
+	}
+	if mod := mods.get(.underline_thickness) {
+		m.underline_thickness = metrics_modifier_apply_u32(mod, m.underline_thickness)
+	}
+	if mod := mods.get(.strikethrough_position) {
+		m.strikethrough_position = metrics_modifier_apply_u32(mod, m.strikethrough_position)
+	}
+	if mod := mods.get(.strikethrough_thickness) {
+		m.strikethrough_thickness = metrics_modifier_apply_u32(mod, m.strikethrough_thickness)
+	}
+	if mod := mods.get(.overline_position) {
+		m.overline_position = metrics_modifier_apply_i32(mod, m.overline_position)
+	}
+	if mod := mods.get(.overline_thickness) {
+		m.overline_thickness = metrics_modifier_apply_u32(mod, m.overline_thickness)
+	}
+	if mod := mods.get(.box_thickness) {
+		m.box_thickness = metrics_modifier_apply_u32(mod, m.box_thickness)
+	}
+	if mod := mods.get(.cursor_thickness) {
+		m.cursor_thickness = metrics_modifier_apply_u32(mod, m.cursor_thickness)
+	}
+	if mod := mods.get(.cursor_height) {
+		m.cursor_height = metrics_modifier_apply_u32(mod, m.cursor_height)
+	}
+
+	// Prevent modifiers from pushing metrics out of their allowable range.
+	m.clamp()
+}
+
+// clamp clamps all metrics to their allowable range.
+fn (mut m Metrics) clamp() {
+	m.cell_width = math_max_u32(m.cell_width, metrics_min_cell_width)
+	m.cell_height = math_max_u32(m.cell_height, metrics_min_cell_height)
+	m.underline_thickness = math_max_u32(m.underline_thickness, metrics_min_underline_thickness)
+	m.strikethrough_thickness = math_max_u32(m.strikethrough_thickness, metrics_min_strikethrough_thickness)
+	m.overline_thickness = math_max_u32(m.overline_thickness, metrics_min_overline_thickness)
+	m.box_thickness = math_max_u32(m.box_thickness, metrics_min_box_thickness)
+	m.cursor_thickness = math_max_u32(m.cursor_thickness, metrics_min_cursor_thickness)
+	m.cursor_height = math_max_u32(m.cursor_height, metrics_min_cursor_height)
+	if m.icon_height < metrics_min_icon_height {
+		m.icon_height = metrics_min_icon_height
+	}
+	if m.icon_height_single < metrics_min_icon_height_single {
+		m.icon_height_single = metrics_min_icon_height_single
+	}
+	if m.face_height < metrics_min_face_height {
+		m.face_height = metrics_min_face_height
+	}
+	if m.face_width < metrics_min_face_width {
+		m.face_width = metrics_min_face_width
+	}
+}
+
+// math_max_u32 returns the larger of two u32 values.
+fn math_max_u32(a u32, b u32) u32 {
+	return if a > b { a } else { b }
+}
+
+// add_float_to_int_u32 performs saturating addition or subtraction of an f64
+// (asserted to be integer-valued) to a u32, returning the new value.
+fn add_float_to_int_u32(i u32, f f64) u32 {
+	// assert(math.floor(f) == f)
+	if f >= 0.0 {
+		add := u32(f)
+		// Saturating add.
+		if i > u32(0xFFFFFFFF) - add {
+			return u32(0xFFFFFFFF)
+		}
+		return i + add
+	}
+	sub := u32(-f)
+	// Saturating subtract.
+	return if i > sub { i - sub } else { u32(0) }
+}
+
+// saturating_add_i32 adds two i32 values, saturating at the i32 bounds.
+fn saturating_add_i32(a i32, b i32) i32 {
+	r := i64(a) + i64(b)
+	if r > i64(0x7FFFFFFF) {
+		return i32(0x7FFFFFFF)
+	}
+	if r < i64(-0x80000000) {
+		return i32(-0x80000000)
+	}
+	return i32(r)
+}
+
+// metrics_modifier_apply_u32 applies a modifier to a u32 value, matching
+// the Zig Modifier.apply semantics for unsigned integers.
+fn metrics_modifier_apply_u32(mod MetricsModifier, v u32) u32 {
+	if mod.is_percent {
+		// Percent is clamped to a minimum of 0.
+		p := if mod.percent > 0 { mod.percent } else { f64(0) }
+		applied := math.round(f64(v) * p)
+		if applied <= 0 {
+			return 0
+		}
+		if applied >= f64(u32(0xFFFFFFFF)) {
+			return u32(0xFFFFFFFF)
+		}
+		return u32(applied)
+	}
+	// Absolute: saturating add, clamped to a minimum of 0 (unsigned).
+	applied := i64(v) + i64(mod.absolute)
+	if applied < 0 {
+		return 0
+	}
+	if applied > i64(u32(0xFFFFFFFF)) {
+		return u32(0xFFFFFFFF)
+	}
+	return u32(applied)
+}
+
+// metrics_modifier_apply_i32 applies a modifier to an i32 value.
+fn metrics_modifier_apply_i32(mod MetricsModifier, v i32) i32 {
+	if mod.is_percent {
+		p := if mod.percent > 0 { mod.percent } else { f64(0) }
+		applied := math.round(f64(v) * p)
+		if applied > f64(i32(0x7FFFFFFF)) {
+			return i32(0x7FFFFFFF)
+		}
+		if applied < f64(i32(-0x80000000)) {
+			return i32(-0x80000000)
+		}
+		return i32(applied)
+	}
+	return saturating_add_i32(v, mod.absolute)
+}
+
+// metrics_modifier_apply_f64 applies a modifier to an f64 value.
+fn metrics_modifier_apply_f64(mod MetricsModifier, v f64) f64 {
+	if mod.is_percent {
+		p := if mod.percent > 0 { mod.percent } else { f64(0) }
+		return v * p
+	}
+	return v + f64(mod.absolute)
 }
 
 // ============================================================
@@ -526,50 +817,299 @@ pub fn (d DesiredSize) pixels() f64 {
 
 // AtlasFormat specifies the pixel format for an atlas.
 pub enum AtlasFormat {
+	// 1 byte per pixel grayscale.
 	grayscale
+	// 4 bytes per pixel BGRA.
 	bgra
 }
 
+// depth returns the number of bytes per pixel for this format.
+pub fn (f AtlasFormat) depth() u32 {
+	return match f {
+		.grayscale { u32(1) }
+		.bgra { u32(4) }
+	}
+}
+
+// AtlasRegion is a region within the texture atlas. These are acquired
+// using the "reserve" function. A region reservation is required to write data.
+pub struct AtlasRegion {
+pub mut:
+	x      u32
+	y      u32
+	width  u32
+	height u32
+}
+
+// AtlasNode is a rectangle of available space in the atlas.
+struct AtlasNode {
+mut:
+	x     u32
+	y     u32
+	width u32
+}
+
 // Atlas holds a texture atlas for font glyphs.
+//
+// The implementation is based on "A Thousand Ways to Pack the Bin - A
+// Practical Approach to Two-Dimensional Rectangle Bin Packing" by Jukka
+// Jylänki (see ghostty/src/font/Atlas.zig for the full commentary).
 pub struct Atlas {
 pub mut:
 	// Modification counter, incremented on each atlas update.
 	modified u64
+	// Resize counter, incremented on each atlas resize.
+	resized u64
 	// The size of the atlas texture (width and height are equal).
 	size u32
 	// The pixel format of this atlas.
 	format AtlasFormat
 	// The raw pixel data.
 	data []u8
+	// The nodes (rectangles) of available space.
+	nodes []AtlasNode
 }
 
 // init creates a new Atlas with the given initial size and format.
 pub fn Atlas.init(size u32, format AtlasFormat) Atlas {
-	bpp := match format {
-		.grayscale { u32(1) }
-		.bgra { u32(4) }
-	}
-	return Atlas{
+	mut a := Atlas{
 		size:   size
 		format: format
-		data:   []u8{len: int(size * size * bpp)}
+		data:   []u8{len: int(size * size * format.depth())}
+		nodes:  []AtlasNode{cap: 64}
 	}
+	// This sets up our initial state.
+	a.clear()
+	return a
 }
 
 // deinit releases atlas resources.
 pub fn (mut a Atlas) deinit() {
 	a.data = []
+	a.nodes = []
 }
 
-// grow doubles the atlas texture, preserving existing data.
-pub fn (mut a Atlas) grow(new_size u32) {
-	bpp := match a.format {
-		.grayscale { u32(1) }
-		.bgra { u32(4) }
+// reserve reserves a region within the atlas with the given width and height.
+//
+// May allocate to add a new rectangle into the internal list of rectangles.
+// This will not automatically enlarge the texture if it is full.
+pub fn (mut a Atlas) reserve(width u32, height u32) !AtlasRegion {
+	// x, y are populated within the best-index search below.
+	mut region := AtlasRegion{
+		x:      0
+		y:      0
+		width:  width
+		height: height
 	}
-	a.data = []u8{len: int(new_size * new_size * bpp)}
-	a.size = new_size
+
+	// If our width/height are 0, then we return the region as-is. This
+	// may seem like an error case but it simplifies downstream callers who
+	// might be trying to write empty data.
+	if width == 0 && height == 0 {
+		return region
+	}
+
+	// Find the location in our nodes list to insert the new node for this region.
+	mut best_height := u32(0xFFFFFFFF)
+	mut best_width := best_height
+	mut chosen := -1
+
+	for i in 0 .. a.nodes.len {
+		// Check if our region fits within this node.
+		y := a.fit(i, width, height) or { continue }
+
+		node := a.nodes[i]
+		if (y + height) < best_height || ((y + height) == best_height
+			&& (node.width > 0 && node.width < best_width)) {
+			chosen = i
+			best_width = node.width
+			best_height = y + height
+			region.x = node.x
+			region.y = y
+		}
+	}
+
+	// If we never found a chosen index, the atlas cannot fit our region.
+	if chosen < 0 {
+		return error('AtlasFull')
+	}
+	best_idx := chosen
+
+	// Insert our new node for this rectangle at the exact best index.
+	a.nodes.insert(best_idx, AtlasNode{
+		x:     region.x
+		y:     region.y + height
+		width: width
+	})
+
+	// Optimize our rectangles.
+	mut i := best_idx + 1
+	for i < a.nodes.len {
+		prev := a.nodes[i - 1]
+		if a.nodes[i].x < (prev.x + prev.width) {
+			shrink := prev.x + prev.width - a.nodes[i].x
+			a.nodes[i].x += shrink
+			// Saturating subtract.
+			a.nodes[i].width = if a.nodes[i].width > shrink {
+				a.nodes[i].width - shrink
+			} else {
+				u32(0)
+			}
+			if a.nodes[i].width <= 0 {
+				// Remove the now-empty node. Zig decrements i then relies on
+				// the loop's i+=1 step; the net effect is that i is unchanged
+				// so we re-examine the node that shifted into this slot.
+				a.nodes.delete(i)
+				continue
+			}
+		}
+
+		break
+	}
+	a.merge()
+
+	return region
+}
+
+// fit attempts to fit a rectangle of width x height into the node at idx.
+// The return value is the y within the texture where the rectangle can be
+// placed. The x is the same as the node.
+fn (a &Atlas) fit(idx int, width u32, height u32) ?u32 {
+	// If the added width exceeds our texture size, it doesn't fit.
+	node := a.nodes[idx]
+	if (node.x + width) > (a.size - 1) {
+		return none
+	}
+
+	// Go node by node looking for space that can fit our width.
+	mut y := node.y
+	mut i := idx
+	mut width_left := width
+	for width_left > 0 {
+		n := a.nodes[i]
+		if n.y > y {
+			y = n.y
+		}
+
+		// If the added height exceeds our texture size, it doesn't fit.
+		if (y + height) > (a.size - 1) {
+			return none
+		}
+
+		// Saturating subtract.
+		width_left = if width_left > n.width { width_left - n.width } else { u32(0) }
+		i += 1
+	}
+
+	return y
+}
+
+// merge merges adjacent nodes with the same y value.
+fn (mut a Atlas) merge() {
+	mut i := 0
+	for i < a.nodes.len - 1 {
+		next := a.nodes[i + 1]
+		if a.nodes[i].y == next.y {
+			a.nodes[i].width += next.width
+			a.nodes.delete(i + 1)
+			continue
+		}
+
+		i += 1
+	}
+}
+
+// set sets the data associated with a reserved region. The data is expected
+// to fit exactly within the region. The data must be formatted with the
+// proper bpp configured on init.
+pub fn (mut a Atlas) set(reg AtlasRegion, data []u8) {
+	depth := a.format.depth()
+	for i in u32(0) .. reg.height {
+		tex_offset := (((reg.y + i) * a.size) + reg.x) * depth
+		data_offset := i * reg.width * depth
+		row := reg.width * depth
+		for j in u32(0) .. row {
+			a.data[int(tex_offset + j)] = data[int(data_offset + j)]
+		}
+	}
+
 	a.modified += 1
+}
+
+// set_from_larger is like set but allows specifying a width for the source
+// data and an offset x and y, so that a section of a larger buffer may be
+// copied in to the atlas.
+pub fn (mut a Atlas) set_from_larger(reg AtlasRegion, src []u8, src_width u32, src_x u32, src_y u32) {
+	depth := a.format.depth()
+	for i in u32(0) .. reg.height {
+		tex_offset := (((reg.y + i) * a.size) + reg.x) * depth
+		src_offset := (((src_y + i) * src_width) + src_x) * depth
+		row := reg.width * depth
+		for j in u32(0) .. row {
+			a.data[int(tex_offset + j)] = src[int(src_offset + j)]
+		}
+	}
+
+	a.modified += 1
+}
+
+// grow grows the texture to the new size, preserving all previously written data.
+pub fn (mut a Atlas) grow(size_new u32) {
+	// assert(size_new >= self.size)
+	if size_new == a.size {
+		return
+	}
+
+	depth := a.format.depth()
+
+	// Keep track of our old data so that we can copy it.
+	data_old := a.data
+	size_old := a.size
+
+	// Update our data and size to our new ones.
+	a.data = []u8{len: int(size_new * size_new * depth)}
+	a.size = size_new
+
+	// Zero the new data out and copy the old data over.
+	// (New data is already zeroed on allocation.)
+	//
+	// We skip the first border row of the old data, since we copy it in
+	// starting at y=1 in the new atlas.
+	a.set(AtlasRegion{
+		x:      0 // don't bother skipping border so we can avoid strides
+		y:      1 // skip the first border row
+		width:  size_old
+		height: size_old - 2 // skip the last border row
+	}, data_old[int(size_old * depth)..])
+
+	// Add the new rectangle for our added righthand space.
+	a.nodes << AtlasNode{
+		x:     size_old - 1
+		y:     1
+		width: size_new - size_old
+	}
+
+	// We are both modified and resized.
+	a.modified += 1
+	a.resized += 1
+}
+
+// clear empties the atlas. This doesn't reclaim any previously allocated memory.
+pub fn (mut a Atlas) clear() {
+	a.modified += 1
+	for i in 0 .. a.data.len {
+		a.data[i] = 0
+	}
+	a.nodes.clear()
+
+	// Add our initial rectangle. This is the size of the full texture
+	// and is the initial rectangle we fit our regions in. We keep a 1px border
+	// to avoid artifacting when sampling the texture.
+	a.nodes << AtlasNode{
+		x:     1
+		y:     1
+		width: a.size - 2
+	}
 }
 
 // ============================================================
@@ -608,7 +1148,7 @@ pub mut:
 // Constraint controls how a glyph is constrained to fit its cell.
 // Specifies scaling/positioning attributes for glyphs.
 pub struct Constraint {
-pub:
+pub mut:
 	// Sizing rule.
 	size ConstraintSize = .none_
 	// Vertical alignment rule.

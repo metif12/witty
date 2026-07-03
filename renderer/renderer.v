@@ -752,6 +752,7 @@ import sync
 import terminal
 import font
 import time
+import configpkg
 
 // Create a renderer type with the provided graphics API wrapper.
 //
@@ -1037,17 +1038,18 @@ fn (mut self Renderer) update_font_grid_uniforms() {
 	]!
 }
 
-// Update the frame data.
+// Update the frame data. This translates the CPU-side of Ghostty's
+// updateFrame: the critical-section extraction (terminal state update,
+// sync-output pause, scrollbar read, OSC8 links, search highlights) plus
+// the cell rebuild and per-frame uniform updates.
+//
+// BOUNDARY: In Ghostty this takes a `*renderer.State` (holding a mutex,
+// mouse, preedit and inspector) and locks it around the critical section.
+// The V thread passes the terminal directly, so the mouse/preedit/inspector
+// (which live on the renderer RenderState, not passed here) and the OSC8
+// link cell matching that depends on the mouse point are boundaries; we
+// translate everything that is reachable from the terminal state.
 pub fn (mut self Renderer) update_frame(state &terminal.Terminal, cursor_blink_visible bool) ! {
-	// XTODO: Full frame update requires complete terminal state integration.
-	// This method should:
-	// 1. Check synchronized output mode
-	// 2. Update terminal_state from terminal
-	// 3. Extract critical data (links, mouse, preedit, scrollbar)
-	// 4. Update search highlights
-	// 5. Rebuild cells
-	// 6. Update uniforms
-
 	// We fully deinit and reset the terminal state every so often
 	// so that a particularly large terminal state doesn't cause
 	// the renderer to hold on to retained memory.
@@ -1060,7 +1062,76 @@ pub fn (mut self Renderer) update_frame(state &terminal.Terminal, cursor_blink_v
 	}
 	self.terminal_state_frame_count += 1
 
-	// Update our background color
+	// Data we extract out of the critical area. In Ghostty this is done
+	// under the state mutex; here we alias the terminal mutably because
+	// the caller owns a mutable terminal and terminal_state.update mutates
+	// dirty flags.
+	mut t := unsafe { &terminal.Terminal(state) }
+
+	// If we're in a synchronized output state, we pause all rendering.
+	if t.modes.get(.synchronized_output) {
+		return
+	}
+
+	// Update our terminal state.
+	self.terminal_state.update(mut t)
+
+	// Get our scrollbar out of the terminal. We synchronize the scrollbar
+	// read with frame data updates.
+	//
+	// BOUNDARY: In Ghostty the scrollbar comes from
+	// `screens.active.pages.scrollbar()` (a PageList method). The V
+	// simplified terminal `Pages` type does not implement `scrollbar()`,
+	// so we use a default (empty) scrollbar here.
+	scrollbar := terminal.Scrollbar{}
+
+	// Get our OSC8 links we're hovering if we have a mouse.
+	//
+	// BOUNDARY: The mouse point/mods live on the renderer RenderState which
+	// isn't passed to this method, so we can't match hovered OSC8 links
+	// here. We use an empty link set.
+	links := terminal.CellSet(map[u64]bool{})
+
+	// Clear our highlight state and update.
+	//
+	// The actual match lists (search_matches / search_selected_match) are
+	// not yet wired onto the renderer; we translate the dirty handling:
+	// clear prior highlights, mark rows dirty, and reset our dirty flag.
+	if self.search_matches_dirty || self.terminal_state.dirty != .false_ {
+		self.search_matches_dirty = false
+
+		mut any_dirty := false
+		for mut r in self.terminal_state.row_data {
+			if r.highlights.len > 0 {
+				r.highlights = []
+				r.dirty = true
+				any_dirty = true
+			}
+		}
+		if any_dirty && self.terminal_state.dirty == .false_ {
+			self.terminal_state.dirty = .partial
+		}
+	}
+
+	// Build our GPU cells.
+	cs := cursor_style(&self.terminal_state, StyleOptions{
+		preedit: false
+		focused: self.focused
+		blink_visible: cursor_blink_visible
+	})
+	self.rebuild_cells(none, cs, &links) or {
+		// This means we weren't able to allocate our buffer to update the
+		// cells. In this case, we continue with our old buffer.
+	}
+
+	// The scrollbar is only emitted during draws so we also check the
+	// scrollbar cache here and update if needed.
+	if !self.scrollbar.eql(scrollbar) {
+		self.scrollbar = scrollbar
+		self.scrollbar_dirty = true
+	}
+
+	// Update our background color.
 	self.uniforms.bg_color = [
 		self.terminal_state.colors.background.r,
 		self.terminal_state.colors.background.g,
@@ -1068,10 +1139,13 @@ pub fn (mut self Renderer) update_frame(state &terminal.Terminal, cursor_blink_v
 		u8(self.config.background_opacity * 255.0),
 	]!
 
-	// Update custom shader uniforms that depend on terminal state
+	// Update custom shader uniforms that depend on terminal state.
 	self.update_custom_shader_uniforms_from_state()
 
-	// Signal shaper we're done for the frame
+	// Reset our dirty state after updating.
+	self.terminal_state.dirty = .false_
+
+	// Signal shaper we're done for the frame.
 	self.font_shaper.end_frame()
 }
 
@@ -1412,17 +1486,63 @@ fn (mut self Renderer) update_custom_shader_uniforms_for_frame() ! {
 	}
 }
 
+// Determines the x/y range for preedit text within a row. We don't
+// render anything within this range in rebuild_row because the preedit
+// is rendered separately.
+struct PreeditRange {
+	y        u16
+	x        [2]u16
+	cp_offset int
+}
+
+// Compute the CellSet key matching terminal.cell_set_key: (y << 32) | x.
+fn cell_set_key(x u32, y u32) u64 {
+	return u64(y) << 32 | u64(x)
+}
+
+// Resolve a config TerminalColor to an RGB, given the cell's style-derived
+// fg/bg colors and a fallback for the explicit `.color` variant.
+//
+// BOUNDARY: In Ghostty, TerminalColor's `.color` variant carries an
+// explicit RGB (via toTerminalRGB()). The V configpkg.TerminalColor enum
+// does not carry an attached color yet, so for `.color` we use the
+// provided fallback (the Ghostty default when no explicit color is set).
+fn resolve_terminal_color(tc configpkg.TerminalColor, inverse bool, fg_style terminal.RGB, bg_style terminal.RGB, fallback terminal.RGB) terminal.RGB {
+	return match tc {
+		.color { fallback }
+		.cell_foreground { if inverse { bg_style } else { fg_style } }
+		.cell_background { if inverse { fg_style } else { bg_style } }
+	}
+}
+
 // Convert the terminal state to GPU cells stored in CPU memory. These
 // are then synced to the GPU in the next frame. This only updates CPU
 // memory and doesn't touch the GPU.
 //
+// This translates the CPU-side of Ghostty's rebuildCells: preedit range
+// setup, grid resize, full-rebuild reset with padding extension, per-row
+// iteration with dirty tracking, cursor rendering info, and preedit text.
+//
 // Dirty state on terminal state won't be reset by this.
-fn (mut self Renderer) rebuild_cells() ! {
-	// XTODO: Full cell rebuild requires complete terminal render state,
-	// font shaping, selection handling, preedit, etc.
-	// For now, this is a simplified version.
-
+fn (mut self Renderer) rebuild_cells(preedit ?RenderPreedit, cursor_style_ ?CursorStyle, links &terminal.CellSet) ! {
 	state := &self.terminal_state
+
+	// Determine our x/y range for preedit. We don't want to render anything
+	// here because we will render the preedit separately.
+	mut preedit_range := ?PreeditRange(none)
+	if p := preedit {
+		// We base the preedit on the position of the cursor in the
+		// viewport. If the cursor isn't visible in the viewport we
+		// don't show it.
+		if cursor_vp := state.cursor.viewport {
+			r_start, r_end, cp_offset := p.range(u32(cursor_vp.x), u32(state.cols) - 1)
+			preedit_range = PreeditRange{
+				y: cursor_vp.y
+				x: [u16(r_start), u16(r_end)]!
+				cp_offset: cp_offset
+			}
+		}
+	}
 
 	grid_size_diff := self.cells.size.rows != u32(state.rows)
 		|| self.cells.size.columns != u32(state.cols)
@@ -1442,10 +1562,466 @@ fn (mut self Renderer) rebuild_cells() ! {
 	if rebuild {
 		// If we are doing a full rebuild, then we clear the entire cell buffer
 		self.cells.reset()
+
+		// We also reset our padding extension depending on the screen type
+		match self.config.padding_color {
+			.background {}
+			// For extension, assume we are extending in all directions.
+			// For "extend" this may be disabled due to heuristics below.
+			.extend, .extend_always {
+				self.uniforms.padding_extend = PaddingExtend{
+					up: true
+					down: true
+					left: true
+					right: true
+				}
+			}
+		}
+	}
+
+	// If our cell contents buffer is shorter than the screen viewport,
+	// we render the rows that fit. Iterate up to the min of state rows
+	// and our cell buffer rows.
+	row_len := if int(state.rows) < int(self.cells.size.rows) {
+		int(state.rows)
+	} else {
+		int(self.cells.size.rows)
+	}
+
+	for y in 0 .. row_len {
+		mut row := &state.row_data[y]
+
+		if !rebuild {
+			// Only rebuild if we are doing a full rebuild or this row is dirty.
+			if !row.dirty {
+				continue
+			}
+
+			// Clear the cells if the row is dirty
+			self.cells.clear(u16(y))
+		}
+
+		// Unmark the dirty state in our render state.
+		row.dirty = false
+
+		self.rebuild_row(u16(y), row, preedit_range, links) or {
+			// This should never happen except under exceptional
+			// scenarios. In this case, we don't want to corrupt
+			// our render state so just clear this row and keep
+			// trying to finish it out.
+			self.cells.clear(u16(y))
+		}
+	}
+
+	// Setup our cursor rendering information.
+	self.rebuild_cursor(preedit, cursor_style_)
+
+	// Setup our preedit text.
+	if p := preedit {
+		if range := preedit_range {
+			mut x := range.x[0]
+			for i := range.cp_offset; i < p.codepoints.len; i++ {
+				cp := p.codepoints[i]
+				self.add_preedit_cell(PreeditCodepoint{
+					codepoint: cp.codepoint
+					wide: cp.wide
+				}, terminal.ViewportPoint{
+					x: x
+					y: range.y
+				}, state.colors.background, state.colors.foreground) or {}
+				x += if cp.wide { u16(2) } else { u16(1) }
+			}
+		}
 	}
 
 	// Update that our cells rebuilt
 	self.cells_rebuilt = true
+}
+
+// Setup cursor rendering info: clear cursor by default, then if visible
+// determine cursor color and set uniforms. Faithful translation of the
+// `cursor:` block in rebuildCells.
+fn (mut self Renderer) rebuild_cursor(preedit ?RenderPreedit, cursor_style_ ?CursorStyle) {
+	state := &self.terminal_state
+
+	// Clear our cursor by default.
+	self.cells.set_cursor(none, none)
+	self.uniforms.cursor_pos = [u16(0xFFFF), u16(0xFFFF)]!
+
+	// If the cursor isn't visible on the viewport, don't show a cursor.
+	cursor_vp := state.cursor.viewport or { return }
+
+	// Get the style of the cell the cursor is on, because we may need
+	// it for styling.
+	cursor_cell_style := if int(cursor_vp.y) < state.row_data.len
+		&& int(cursor_vp.x) < state.row_data[int(cursor_vp.y)].cells.len
+		&& state.row_data[int(cursor_vp.y)].cells[int(cursor_vp.x)].raw.has_styling() {
+		state.row_data[int(cursor_vp.y)].cells[int(cursor_vp.x)].raw.style
+	} else {
+		terminal.CellStyle{}
+	}
+
+	// If we have preedit text, we don't setup a cursor.
+	if preedit != none {
+		return
+	}
+
+	// If there isn't a cursor visual style requested then we don't render.
+	style := cursor_style_ or { return }
+
+	// Determine the cursor color.
+	cursor_color := self.compute_cursor_color(cursor_cell_style)
+
+	self.add_cursor(&state.cursor, style, cursor_color)
+
+	// If the cursor is visible then we set our uniforms.
+	if style == .block {
+		wide := state.cursor.cell.wide
+
+		// If we are a spacer tail of a wide cell, our cursor needs
+		// to move back one cell. Saturating subtraction avoids overflow.
+		cur_x := match wide {
+			.narrow, .spacer_head, .wide { cursor_vp.x }
+			.spacer_tail { if cursor_vp.x > 0 { cursor_vp.x - 1 } else { u16(0) } }
+		}
+		self.uniforms.cursor_pos = [cur_x, cursor_vp.y]!
+
+		self.uniforms.bools.cursor_wide = match wide {
+			.narrow, .spacer_head { false }
+			.wide, .spacer_tail { true }
+		}
+
+		// Determine the cursor text color.
+		uniform_color := self.compute_cursor_text_color(cursor_cell_style)
+		self.uniforms.cursor_color = [
+			uniform_color.r,
+			uniform_color.g,
+			uniform_color.b,
+			u8(255),
+		]!
+	}
+}
+
+// Compute the cursor glyph color per rebuildCells. Uses OSC 12 color if
+// set, else configured cursor color, else the terminal foreground.
+fn (self &Renderer) compute_cursor_color(cursor_style terminal.CellStyle) terminal.RGB {
+	state := &self.terminal_state
+
+	// If an explicit cursor color was set by OSC 12, use that.
+	if v := state.colors.cursor {
+		return v
+	}
+
+	// Use our configured color if specified.
+	if v := self.config.cursor_color {
+		fg_style := cursor_style.fg_rgb(terminal.FgOpts{
+			default_color: state.colors.foreground
+			palette: state.colors.palette
+		})
+		bg_style := cursor_style.bg_rgb(&state.cursor.cell, state.colors.palette) or {
+			state.colors.background
+		}
+		// For the explicit `.color` variant we fall back to foreground
+		// (see resolve_terminal_color boundary note).
+		return resolve_terminal_color(v, cursor_style.flags.inverse, fg_style, bg_style,
+			state.colors.foreground)
+	}
+
+	return state.colors.foreground
+}
+
+// Compute the cursor text (glyph-over-cursor) color per rebuildCells.
+fn (self &Renderer) compute_cursor_text_color(cursor_style terminal.CellStyle) terminal.RGB {
+	state := &self.terminal_state
+
+	// If cursor-text is set, compute the correct color; else use bg color.
+	if txt := self.config.cursor_text {
+		fg_style := cursor_style.fg_rgb(terminal.FgOpts{
+			default_color: state.colors.foreground
+			palette: state.colors.palette
+		})
+		bg_style := cursor_style.bg_rgb(&state.cursor.cell, state.colors.palette) or {
+			state.colors.background
+		}
+		// `.color` falls back to background (Ghostty uses cursor-text color).
+		return resolve_terminal_color(txt, cursor_style.flags.inverse, fg_style, bg_style,
+			state.colors.background)
+	}
+
+	return state.colors.background
+}
+
+// Selection classification for a cell, matching the Zig `selected` enum.
+enum CellSelected {
+	false_
+	selection
+	search
+	search_selected
+}
+
+// Rebuild a single row's cells: padding-extension heuristics, per-cell
+// selection/highlight classification, bg/fg color computation with
+// inversion, bg alpha, and text decorations (underline/overline/
+// strikethrough). Faithful CPU-side translation of rebuildRow.
+//
+// BOUNDARY: The glyph emission path (font-shaping run iterator + addGlyph)
+// is not wired in V because there is no shaper run iterator available on
+// the render state. Underlines/overlines/strikethroughs and background
+// colors ARE emitted; the actual text glyphs are left as a boundary.
+fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range ?PreeditRange, links &terminal.CellSet) ! {
+	state := &self.terminal_state
+
+	// If our viewport is wider than our cell contents buffer, we still
+	// only process cells up to the width of the buffer.
+	cells_len := if row.cells.len < int(self.cells.size.columns) {
+		row.cells.len
+	} else {
+		int(self.cells.size.columns)
+	}
+
+	// Build a raw/style view for padding heuristics.
+	mut cells_raw := []terminal.CellData{cap: row.cells.len}
+	mut cells_style := []terminal.CellStyle{cap: row.cells.len}
+	for c in row.cells {
+		cells_raw << c.raw
+		cells_style << c.raw.style
+	}
+
+	// On primary screen, we still apply vertical padding extension under
+	// certain conditions we feel are safe.
+	match self.config.padding_color {
+		// These already have the correct values set above.
+		.background, .extend_always {}
+		// Apply heuristics for padding extension.
+		.extend {
+			if y == 0 {
+				self.uniforms.padding_extend.up = !never_extend_bg(row.raw, cells_raw,
+					cells_style, state.colors.background)
+			} else if u32(y) == self.cells.size.rows - 1 {
+				self.uniforms.padding_extend.down = !never_extend_bg(row.raw, cells_raw,
+					cells_style, state.colors.background)
+			}
+		}
+	}
+
+	for x in 0 .. cells_len {
+		cell := &row.cells[x].raw
+
+		// If this cell falls within our preedit range then we skip it
+		// because preedits are setup separately.
+		if range := preedit_range {
+			if range.y == y {
+				// We're in or around the preedit range.
+				if u16(x) >= range.x[0] && u16(x) <= range.x[1] {
+					// We're in the preedit range, skip this cell.
+					continue
+				}
+			}
+		}
+
+		wide := cell.wide
+		style := if cell.has_styling() { cell.style } else { terminal.CellStyle{} }
+
+		// True if this cell is selected. Order below matters for precedence.
+		// x_compare handles spacer tails by comparing against the base cell.
+		x_compare := if wide == .spacer_tail && x > 0 { u16(x) - 1 } else { u16(x) }
+		mut selected := CellSelected.false_
+
+		// Selection should take the highest precedence.
+		if sel := row.selection {
+			if x_compare >= sel[0] && x_compare <= sel[1] {
+				selected = .selection
+			}
+		}
+
+		// If we're highlighted, then we're selected.
+		if selected == .false_ {
+			for hl in row.highlights {
+				if x_compare >= hl.range[0] && x_compare <= hl.range[1] {
+					selected = match unsafe { HighlightTag(hl.tag) } {
+						.search_match { CellSelected.search }
+						.search_match_selected { CellSelected.search_selected }
+					}
+					break
+				}
+			}
+		}
+
+		// The `_style` suffixed values are the colors based on the cell
+		// style (SGR), before applying any additional configuration,
+		// inversions, selections, etc.
+		bg_style_opt := style.bg_rgb(cell, state.colors.palette)
+		fg_style := style.fg_rgb(terminal.FgOpts{
+			default_color: state.colors.foreground
+			palette: state.colors.palette
+		})
+
+		// The final background color for the cell.
+		bg := self.compute_cell_bg(selected, style, cell, bg_style_opt, fg_style)
+
+		// The final foreground color for the cell.
+		fg := self.compute_cell_fg(selected, style, bg_style_opt, fg_style)
+
+		// Foreground alpha for this cell.
+		alpha := if style.flags.faint { self.config.faint_opacity } else { u8(255) }
+
+		// Set the cell's background color.
+		{
+			rgb := bg or { state.colors.background }
+
+			// Determine our background alpha. If we have transparency
+			// configured then this is dynamic depending on some situations.
+			bg_alpha := self.compute_bg_alpha(selected, style, bg_style_opt)
+
+			self.cells.set_bg(y, u16(x), CellBg{
+				r: rgb.r
+				g: rgb.g
+				b: rgb.b
+				a: bg_alpha
+			})
+		}
+
+		// If the invisible flag is set on this cell then we don't need to
+		// render any foreground elements, so we skip all glyphs with this
+		// x coordinate. NOTE: matches xterm's behavior.
+		if style.flags.invisible {
+			continue
+		}
+
+		// Give links a single underline, unless they already have an
+		// underline, in which case use a double underline to distinguish.
+		mut underline := style.flags.underline
+		if u64(cell_set_key(u32(x), u32(y))) in links {
+			underline = if style.flags.underline == .single {
+				terminal.UnderlineStyle.double
+			} else {
+				terminal.UnderlineStyle.single
+			}
+		}
+
+		// We draw underlines first so that they layer underneath text.
+		if underline != .none {
+			ul_color := style.underline_color_rgb(state.colors.palette) or { fg }
+			self.add_underline(u16(x), y, underline, ul_color, alpha) or {}
+		}
+
+		if style.flags.overline {
+			self.add_overline(u16(x), y, fg, alpha) or {}
+		}
+
+		// BOUNDARY: glyph emission via the font-shaping run iterator +
+		// addGlyph is not wired in V (no shaper run iterator on the render
+		// state). The text glyphs for this cell are not emitted here.
+
+		// Finally, draw a strikethrough if necessary.
+		if style.flags.strikethrough {
+			self.add_strikethrough(u16(x), y, fg, alpha) or {}
+		}
+	}
+}
+
+// Compute the final background color for a cell given its selection state
+// and style. Returns none if the cell should use the terminal background.
+fn (self &Renderer) compute_cell_bg(selected CellSelected, style terminal.CellStyle, cell &terminal.CellData, bg_style_opt ?terminal.RGB, fg_style terminal.RGB) ?terminal.RGB {
+	state := &self.terminal_state
+	bg_style := bg_style_opt or { state.colors.background }
+	inverse := style.flags.inverse
+
+	return match selected {
+		.selection {
+			// If we have an explicit selection background color specified
+			// in the config, use that. If no configuration, then our
+			// selection background is our foreground color.
+			if v := self.config.selection_background {
+				resolve_terminal_color(v, inverse, fg_style, bg_style, state.colors.foreground)
+			} else {
+				state.colors.foreground
+			}
+		}
+		.search {
+			resolve_terminal_color(self.config.search_background, inverse, fg_style,
+				bg_style, state.colors.foreground)
+		}
+		.search_selected {
+			resolve_terminal_color(self.config.search_selected_background, inverse,
+				fg_style, bg_style, state.colors.foreground)
+		}
+		.false_ {
+			// Two cases cause us to invert (use the fg color as the bg):
+			// - The "inverse" style flag.
+			// - A "covering" glyph.
+			// If exactly one is true then we use fg for bg; else bg_style.
+			if inverse != is_covering(cell.codepoint_val()) {
+				?terminal.RGB(fg_style)
+			} else {
+				bg_style_opt
+			}
+		}
+	}
+}
+
+// Compute the final foreground color for a cell given its selection state
+// and style. Faithful translation of the `fg:` block in rebuildRow.
+fn (self &Renderer) compute_cell_fg(selected CellSelected, style terminal.CellStyle, bg_style_opt ?terminal.RGB, fg_style terminal.RGB) terminal.RGB {
+	state := &self.terminal_state
+
+	// Our happy-path non-selection background color is our style or
+	// our configured defaults.
+	final_bg := bg_style_opt or { state.colors.background }
+	inverse := style.flags.inverse
+
+	return match selected {
+		.selection {
+			if v := self.config.selection_foreground {
+				resolve_terminal_color(v, inverse, fg_style, final_bg, state.colors.background)
+			} else {
+				state.colors.background
+			}
+		}
+		.search {
+			resolve_terminal_color(self.config.search_foreground, inverse, fg_style,
+				final_bg, state.colors.background)
+		}
+		.search_selected {
+			resolve_terminal_color(self.config.search_selected_foreground, inverse,
+				fg_style, final_bg, state.colors.background)
+		}
+		.false_ {
+			if inverse { final_bg } else { fg_style }
+		}
+	}
+}
+
+// Determine the background alpha for a cell. Faithful translation of the
+// `bg_alpha:` block in rebuildRow.
+fn (self &Renderer) compute_bg_alpha(selected CellSelected, style terminal.CellStyle, bg_style_opt ?terminal.RGB) u8 {
+	default := u8(255)
+
+	// Cells that are selected should be fully opaque.
+	if selected != .false_ {
+		return default
+	}
+
+	// Cells that are reversed should be fully opaque.
+	if style.flags.inverse {
+		return default
+	}
+
+	// If the user requested to have opacity on all cells, apply it.
+	if self.config.background_opacity_cells && bg_style_opt != none {
+		mut opacity := f64(default)
+		opacity *= self.config.background_opacity
+		return u8(opacity)
+	}
+
+	// Cells that have an explicit bg color should be fully opaque.
+	if bg_style_opt != none {
+		return default
+	}
+
+	// Otherwise, we won't draw the bg for this cell, we'll let the
+	// already-drawn background color show through.
+	return 0
 }
 
 // Add an underline decoration to the specified cell.

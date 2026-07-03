@@ -247,6 +247,13 @@ pub mut:
 
 	// Whether the draw timer is currently active.
 	draw_active bool
+
+	// Whether the cursor blink timer is currently active. This mirrors
+	// the state of the `cursor_c` completion in Ghostty (whether the
+	// blink timer is running). The actual xev timer is a boundary, so
+	// we track the logical active state here to faithfully reproduce the
+	// focus-handler start/stop logic.
+	cursor_blink_active bool
 }
 
 // The type used for sending messages to the renderer thread.
@@ -314,6 +321,7 @@ pub fn (mut self RendererThread) thread_main() {
 fn (mut self RendererThread) thread_main_inner() ! {
 	// Start blinking the cursor
 	self.flags.cursor_blink_visible = true
+	self.cursor_blink_active = true
 
 	// Sync draw timer
 	self.sync_draw_timer()
@@ -371,20 +379,42 @@ fn (mut self RendererThread) drain_mailbox() ! {
 				}
 			}
 			FocusMessage {
+				// If our state didn't change we do nothing.
 				if self.flags.focused != msg.focused {
+					// Set our state
 					self.flags.focused = msg.focused
+
+					// Set it on the renderer
 					self.renderer.set_focus(msg.focused)!
+
+					// We always resync our draw timer (may disable it)
 					self.sync_draw_timer()
+
 					if !msg.focused {
-						// Stop cursor blink when not focused
+						// If we're not focused, then we stop the cursor blink.
+						// The xev timer cancel is a boundary; here we just mark
+						// the blink timer as inactive so it stops toggling.
+						if self.cursor_blink_active {
+							self.cursor_blink_active = false
+						}
 					} else {
-						// Restart cursor blink when focused
-						self.flags.cursor_blink_visible = true
+						// If we're focused, we immediately show the cursor again
+						// and then restart the timer.
+						if !self.cursor_blink_active {
+							self.flags.cursor_blink_visible = true
+							self.cursor_blink_active = true
+						}
 					}
 				}
 			}
 			ResetCursorBlinkMessage {
 				self.flags.cursor_blink_visible = true
+				// If the blink timer is active, reset it so the cursor stays
+				// visible for a full interval after the reset.
+				if self.cursor_blink_active {
+					// The xev timer reset is a boundary; the logical effect is
+					// that cursor_blink_visible is now true (set above).
+				}
 			}
 			FontGridMessage {
 				self.renderer.set_font_grid(msg.grid)
@@ -442,6 +472,30 @@ fn (mut self RendererThread) render_callback() {
 
 	// Draw
 	self.draw_frame(false)
+}
+
+// Cursor blink timer callback. This is fired by the blink timer on each
+// interval. It toggles the cursor's visibility, wakes up the renderer so
+// the change is drawn, and (in Ghostty) re-arms the timer. The xev timer
+// re-arm is a boundary; here we just perform the toggle + wakeup.
+fn (mut self RendererThread) cursor_timer_callback() {
+	// If the blink timer isn't active (e.g. we lost focus), do nothing.
+	if !self.cursor_blink_active {
+		return
+	}
+
+	// Toggle the cursor visibility state.
+	self.flags.cursor_blink_visible = !self.flags.cursor_blink_visible
+
+	// Wake up the renderer so it can redraw with the new blink state.
+	self.wakeup() or {}
+}
+
+// Wake up the renderer thread to force a render. The xev async wakeup is
+// a boundary; here we drain the mailbox and render immediately.
+fn (mut self RendererThread) wakeup() ! {
+	self.drain_mailbox()!
+	self.render_callback()
 }
 
 // Returns the interval for the blinking cursor in milliseconds.

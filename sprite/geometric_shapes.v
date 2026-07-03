@@ -60,7 +60,8 @@ pub fn draw_25ff(cp u32, mut canvas Canvas, width u32, height u32, metrics font.
 }
 
 // corner_triangle_shade draws a corner triangle filled with the given shade.
-pub fn corner_triangle_shade_geo(metrics font.Metrics, mut canvas Canvas, corner Corner, shade Shade) ! {
+// Translated from ghostty geometric_shapes.zig `cornerTriangleShade`.
+pub fn corner_triangle_shade(metrics font.Metrics, mut canvas Canvas, corner Corner, shade Shade) ! {
 	float_width := f64(metrics.cell_width)
 	float_height := f64(metrics.cell_height)
 

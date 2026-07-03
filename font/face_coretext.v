@@ -11,6 +11,25 @@ module font
 //
 // Translated from ghostty/src/font/face/coretext.zig
 
+// CoreText helpers implemented in the C shim header (font/coretext_shims.h).
+// These are only functional on macOS; on other platforms they return
+// null/zero so the module still compiles.
+#include "coretext_shims.h"
+
+fn C.witty_coretext_create_font_named(name &char, size f64) voidptr
+fn C.witty_coretext_create_font_from_data(data &u8, len usize, size f64) voidptr
+fn C.witty_coretext_copy_font_with_size(font_ptr voidptr, size f64) voidptr
+fn C.witty_coretext_release(ptr voidptr)
+fn C.witty_coretext_copy_family_name(font_ptr voidptr, buf &u8, len usize) int
+fn C.witty_coretext_glyph_for_codepoint(font_ptr voidptr, cp u32, glyph_out &u32) int
+fn C.witty_coretext_copy_table(font_ptr voidptr, tag4 &char, buffer_out &&u8, len_out &u32) int
+fn C.witty_coretext_copy_italic(font_ptr voidptr) voidptr
+fn C.witty_coretext_copy_with_variations(font_ptr voidptr, ids &u32, values &f64, count int, size f64) voidptr
+fn C.witty_coretext_color_info(font_ptr voidptr, has_sbix &int) int
+fn C.witty_coretext_free_buffer(ptr &u8)
+fn C.witty_coretext_get_metrics(font_ptr voidptr, px_per_em &f64, cell_width &f64, ascent &f64, descent &f64, line_gap &f64, underline_position &f64, underline_thickness &f64, strikethrough_position &f64, strikethrough_thickness &f64, cap_height &f64, ex_height &f64) int
+fn C.witty_ct_font_from_descriptor(desc voidptr, size f64) voidptr
+
 // ============================================================
 // CoreTextFace
 // ============================================================
@@ -80,15 +99,18 @@ pub const italic_skew = AffineTransform{
 
 // Initialize a CoreText-based font from a TTF/TTC in memory.
 pub fn CoreTextFace.init(lib Library, source []u8, opts FaceOptions) !CoreTextFace {
-	// XTODO: needs real CoreText bindings
-	// Steps:
-	// 1. Create CFData from source bytes (createWithBytesNoCopy)
-	// 2. Create CTFontDescriptor from the data (createFontDescriptorFromData)
-	// 3. Create CTFont from the descriptor at default size 12
-	// 4. Call init_font_copy to create the final face at the desired size
+	// Create a CTFont from the in-memory data at a default size (12); the
+	// final size is applied by init_font_copy below.
 	_ = lib
-	_ = source
-	return CoreTextFace.init_font_copy(unsafe { nil }, opts)!
+	base := C.witty_coretext_create_font_from_data(&u8(source.data), usize(source.len),
+		12.0)
+	if isnil(base) {
+		return error('CoreText: failed to create font from data')
+	}
+	defer {
+		C.witty_coretext_release(base)
+	}
+	return CoreTextFace.init_font_copy(base, opts)!
 }
 
 // Initialize a CoreText-based face from another initialized font face
@@ -96,146 +118,139 @@ pub fn CoreTextFace.init(lib Library, source []u8, opts FaceOptions) !CoreTextFa
 // because the font is loaded at a default size during discovery, and then
 // adjusted to the final size for final load.
 pub fn CoreTextFace.init_font_copy(base voidptr, opts FaceOptions) !CoreTextFace {
-	// XTODO: needs real CoreText bindings
-	// Create a copy. The copyWithAttributes docs say the size is in points,
-	// but we need to scale the points by the DPI and to do that we use our
-	// function called "pixels".
-	// Steps:
-	// 1. base.copyWithAttributes(opts.size.pixels(), null, null)
-	// 2. Call init_font with the new ct_font
-	_ = base
-	return CoreTextFace.init_font(unsafe { nil }, opts)!
+	// Create a copy. copyWithAttributes takes a size in points, but we need
+	// to scale by the DPI, which is what DesiredSize.pixels() does.
+	ct_font := C.witty_coretext_copy_font_with_size(base, opts.size.pixels())
+	if isnil(ct_font) {
+		return error('CoreText: failed to copy font with size')
+	}
+	// init_font takes ownership of ct_font.
+	return CoreTextFace.init_font(ct_font, opts)!
 }
 
 // Initialize a face with a CTFont. This will take ownership over
 // the CTFont. This does NOT copy or retain the CTFont.
 pub fn CoreTextFace.init_font(ct_font voidptr, opts FaceOptions) !CoreTextFace {
-	// XTODO: needs real CoreText bindings
-	// Steps:
-	// 1. Get symbolic traits from ct_font
-	// 2. If using harfbuzz shaper:
-	//    a. Create harfbuzz font from CoreText font (harfbuzz.coretext.createFont)
-	//    b. Set scale from opts.size.pixels() as F26Dot6
-	// 3. If traits indicate color_glyphs, initialize ColorState
-	// 4. Build the Face struct
-	// 5. Check quirks.disableDefaultFontFeatures
-	// 6. In debug mode, output information about available variation axes,
-	//    if they exist. For each axis, log:
-	//    - name (from kCTFontVariationAxisNameKey)
-	//    - identifier (from kCTFontVariationAxisIdentifierKey)
-	//    - minimum value
-	//    - maximum value
-	//    - default value
-	_ = ct_font
+	if isnil(ct_font) {
+		return error('CoreText: null font')
+	}
+
+	// Determine color state from the font's symbolic traits and tables.
+	mut color := ?ColorState(none)
+	mut has_sbix := int(0)
+	is_color := C.witty_coretext_color_info(ct_font, &has_sbix) != 0
+	if is_color {
+		color = ColorState{
+			sbix: has_sbix != 0
+		}
+	}
+
+	// BOUNDARY: ghostty also builds a Harfbuzz font here (when using the
+	// Harfbuzz shaper) and sets its scale from opts.size.pixels(). The
+	// Harfbuzz+CoreText glue isn't wired in this port yet, so hb_font is
+	// left null. Variation-axis debug logging is likewise omitted.
 	return CoreTextFace{
-		size: opts.size
+		ct_font: ct_font
+		color:   color
+		size:    opts.size
 	}
 }
 
 // deinit releases all resources associated with this face.
 pub fn (mut self CoreTextFace) deinit() {
-	// XTODO: needs real CoreText bindings
-	// Steps:
-	// 1. Release the CTFont (self.ct_font.release())
-	// 2. If using harfbuzz shaper, destroy harfbuzz font (self.hb_font.destroy())
-	// 3. If we have color state, deinit it (self.color.deinit())
+	if !isnil(self.ct_font) {
+		C.witty_coretext_release(self.ct_font)
+		self.ct_font = unsafe { nil }
+	}
+	// BOUNDARY: destroy the Harfbuzz font once that glue is wired.
+	// ColorState holds no owned CoreText data in this port (its SVG data
+	// pointer is always null), so there's nothing to release there.
 }
 
 // Return a new face that is the same as this but has a transformation
 // matrix applied to italicize it.
 pub fn (self &CoreTextFace) synthetic_italic(opts FaceOptions) !CoreTextFace {
-	// XTODO: needs real CoreText bindings
-	// Steps:
-	// 1. Copy the font with the italic_skew transform applied:
-	//    ct_font = self.ct_font.copyWithAttributes(0.0, &italic_skew, null)
-	// 2. Initialize a new face from the copied font:
-	//    return init_font(ct_font, opts)
-	_ = opts
-	return CoreTextFace{
-		size: self.size
+	// Copy the font with the italic-skew transform applied.
+	ct_font := C.witty_coretext_copy_italic(self.ct_font)
+	if isnil(ct_font) {
+		return error('CoreText: failed to create synthetic italic')
 	}
+	return CoreTextFace.init_font(ct_font, opts)!
 }
 
 // Return a new face that is the same as this but applies a synthetic
 // bold effect to it. This is useful for fonts that don't have a bold
 // variant.
 pub fn (self &CoreTextFace) synthetic_bold(opts FaceOptions) !CoreTextFace {
-	// XTODO: needs real CoreText bindings
-	// Steps:
-	// 1. Copy the font without any additional transforms:
-	//    ct_font = self.ct_font.copyWithAttributes(0.0, null, null)
-	// 2. Initialize a new face from the copied font:
-	//    face = init_font(ct_font, opts)
-	// 3. To determine our synthetic bold line width we get a multiplier
-	//    from the font size in points. This is a heuristic that is based
-	//    on the fact that a line width of 1 looks good to me at a certain
-	//    point size. We want to scale that up roughly linearly with the
-	//    font size.
-	//    points_f64 = f64(opts.size.points)
-	//    line_width = max(points_f64 / 14.0, 1)
-	//    face.synthetic_bold = line_width
-	_ = opts
-	return CoreTextFace{
-		size: self.size
+	// Copy the font without any additional transforms.
+	ct_font := C.witty_coretext_copy_font_with_size(self.ct_font, 0.0)
+	if isnil(ct_font) {
+		return error('CoreText: failed to copy font for synthetic bold')
 	}
+	mut face := CoreTextFace.init_font(ct_font, opts)!
+
+	// To determine our synthetic bold line width we get a multiplier from the
+	// font size in points. This is a heuristic: a line width of 1 looks good
+	// at a certain point size, and we scale it up roughly linearly with size.
+	points_f64 := f64(opts.size.points)
+	line_width := if points_f64 / 14.0 > 1.0 { points_f64 / 14.0 } else { f64(1) }
+	face.synthetic_bold = line_width
+
+	return face
 }
 
 // Returns the font name. If allocation is required, buf will be used,
 // but sometimes allocation isn't required and a static string is
 // returned.
 pub fn (self &CoreTextFace) name(mut buf []u8) !string {
-	// XTODO: needs real CoreText bindings
-	// Steps:
-	// 1. Get the family name: family_name = self.ct_font.copyFamilyName()
-	// 2. Try to get a C string pointer directly:
-	//    if family_name.cstringPtr(.utf8) returns a pointer, return it.
-	// 3. "NULL if the internal storage of theString does not allow
-	//    this to be returned efficiently." In this case, we need
-	//    to allocate.
-	//    return family_name.cstring(buf, .utf8) or return error
-	_ = buf
-	return ''
+	// Copy the family name into the caller-provided buffer.
+	if buf.len == 0 {
+		return error('CoreText: name buffer is empty')
+	}
+	if C.witty_coretext_copy_family_name(self.ct_font, &u8(buf.data), usize(buf.len)) == 0 {
+		return error('CoreText: failed to copy family name')
+	}
+	return unsafe { cstring_to_vstring(&char(buf.data)) }
 }
 
 // Resize the font in-place. If this succeeds, the caller is responsible
 // for clearing any glyph caches, font atlas data, etc.
 pub fn (mut self CoreTextFace) set_size(opts FaceOptions) ! {
-	// XTODO: needs real CoreText bindings
-	// We just create a copy and replace ourself:
-	// 1. face = init_font_copy(self.ct_font, opts)
-	// 2. self.deinit()
-	// 3. self = face
-	self.size = opts.size
+	// We just create a copy at the new size and replace ourself.
+	face := CoreTextFace.init_font_copy(self.ct_font, opts)!
+	self.deinit()
+	self = face
 }
 
 // Set the variation axes for this font. This will modify this font
 // in-place.
 pub fn (mut self CoreTextFace) set_variations(vs []Variation, opts FaceOptions) ! {
-	// XTODO: needs real CoreText bindings
 	// If we have no variations, we don't need to do anything.
 	if vs.len == 0 {
 		return
 	}
 
-	// Steps:
-	// 1. Create a new font descriptor with all the variations set:
-	//    desc = self.ct_font.copyDescriptor()
-	//    for v in vs:
-	//      id = Number.create(.int, &v.id)
-	//      next = desc.createCopyWithVariation(id, v.value)
-	//      desc.release()
-	//      desc = next
-	// 2. Put our current size in the opts so that we don't change size:
-	//    new_opts = opts
-	//    new_opts.size = self.size
-	// 3. Initialize a font based on these attributes:
-	//    ct_font = self.ct_font.copyWithAttributes(0, null, desc)
-	//    face = init_font(ct_font, new_opts)
-	// 4. Replace self:
-	//    self.deinit()
-	//    self = face
-	_ = vs
-	_ = opts
+	// Marshal the axis ids/values into parallel arrays for the shim, which
+	// builds a variation-carrying descriptor and copies the font with it.
+	mut ids := []u32{cap: vs.len}
+	mut values := []f64{cap: vs.len}
+	for v in vs {
+		ids << v.id.value
+		values << v.value
+	}
+
+	// Preserve our current size so that applying variations doesn't resize.
+	ct_font := C.witty_coretext_copy_with_variations(self.ct_font, &u32(ids.data),
+		&f64(values.data), vs.len, self.size.pixels())
+	if isnil(ct_font) {
+		return error('CoreText: failed to apply variations')
+	}
+
+	mut new_opts := opts
+	new_opts.size = self.size
+	face := CoreTextFace.init_font(ct_font, new_opts)!
+	self.deinit()
+	self = face
 }
 
 // Returns true if the face has any glyphs that are colorized.
@@ -254,22 +269,14 @@ pub fn (self &CoreTextFace) is_color_glyph(glyph_id u32) bool {
 // Returns the glyph index for the given Unicode code point. If this
 // face doesn't support this glyph, null is returned.
 pub fn (self CoreTextFace) glyph_index(cp u32) ?u32 {
-	// XTODO: needs real CoreText bindings
-	// Steps:
-	// 1. Turn UTF-32 into UTF-16 for CT API:
-	//    var unichars [2]u16
-	//    pair = stringGetSurrogatePairForLongCharacter(cp, &unichars)
-	//    len = if pair { 2 } else { 1 }
-	// 2. Get our glyphs:
-	//    var glyphs = [2]Glyph{ 0, 0 }
-	//    if !self.ct_font.getGlyphsForCharacters(unichars[0..len], glyphs[0..len]):
-	//      return none
-	// 3. We can have pairs due to chars like emoji but we expect all of them
-	//    to decode down into exactly one glyph ID:
-	//    if pair: assert(glyphs[1] == 0)
-	// 4. return u32(glyphs[0])
-	_ = cp
-	return none
+	// The shim handles UTF-32 -> UTF-16 conversion (including surrogate
+	// pairs) and calls CTFontGetGlyphsForCharacters. It returns 0 (and we
+	// return none) if the font doesn't contain the codepoint.
+	mut glyph := u32(0)
+	if C.witty_coretext_glyph_for_codepoint(self.ct_font, cp, &glyph) == 0 {
+		return none
+	}
+	return glyph
 }
 
 // Render a glyph using the glyph index. The rendered glyph is stored
@@ -448,22 +455,67 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 	//     and using it for size normalization will instead make the font
 	//     way too big.
 	//     ic_width = advance (if bounds.width <= advance, else null)
+	//
+	// This V port sources its metrics from CoreText's own font metrics via
+	// the shim (px_per_em, cell_width from the widest ASCII advance, ascent,
+	// descent, line gap, underline, strikethrough, cap and ex height).
+	//
+	// BOUNDARY: ghostty refines these from the 'head'/'post'/'OS/2'/'hhea'
+	// tables (via the opentype module) and derives ic_width from the '水'
+	// ideograph. That table-driven refinement is left as a boundary here; the
+	// CoreText-derived metrics are correct for the common case.
+	mut px_per_em := f64(0)
+	mut cell_width := f64(0)
+	mut ascent := f64(0)
+	mut descent := f64(0)
+	mut line_gap := f64(0)
+	mut ul_pos := f64(0)
+	mut ul_thick := f64(0)
+	mut st_pos := f64(0)
+	mut st_thick := f64(0)
+	mut cap_height := f64(0)
+	mut ex_height := f64(0)
 
-	return FaceMetrics{}
+	if C.witty_coretext_get_metrics(self.ct_font, &px_per_em, &cell_width, &ascent,
+		&descent, &line_gap, &ul_pos, &ul_thick, &st_pos, &st_thick, &cap_height,
+		&ex_height) == 0
+	{
+		return FaceMetrics{}
+	}
+
+	return FaceMetrics{
+		px_per_em:               px_per_em
+		cell_width:              cell_width
+		ascent:                  ascent
+		descent:                 descent
+		line_gap:                line_gap
+		underline_position:      ul_pos
+		underline_thickness:     ul_thick
+		strikethrough_position:  st_pos
+		strikethrough_thickness: st_thick
+		cap_height:              cap_height
+		ex_height:               ex_height
+	}
 }
 
 // Copy the font table data for the given tag.
 pub fn (self CoreTextFace) copy_table(tag string) ![]u8 {
-	// XTODO: needs real CoreText bindings
-	// Steps:
-	// 1. data = self.ct_font.copyTable(FontTableTag.init(tag)) or return none
-	// 2. ptr = data.getPointer()
-	// 3. len = data.getLength()
-	// 4. buf = alloc(u8, len)
-	// 5. memcpy(buf, ptr[0..len])
-	// 6. return buf
-	_ = tag
-	return error('copy_table not implemented')
+	// CTFontCopyTable expects a 4-character tag.
+	if tag.len != 4 {
+		return error('CoreText: font table tag must be 4 characters')
+	}
+	mut ptr := &u8(unsafe { nil })
+	mut n := u32(0)
+	if C.witty_coretext_copy_table(self.ct_font, &char(tag.str), &ptr, &n) == 0 {
+		return error('CoreText: font table not found: ${tag}')
+	}
+	// Copy the C-allocated buffer into a V-owned slice, then free the C one.
+	mut buf := []u8{len: int(n)}
+	if n > 0 {
+		unsafe { vmemcpy(buf.data, ptr, int(n)) }
+	}
+	C.witty_coretext_free_buffer(ptr)
+	return buf
 }
 
 // ============================================================

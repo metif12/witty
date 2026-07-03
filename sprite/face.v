@@ -176,7 +176,9 @@ fn get_draw_fn(cp u32) ?DrawFn {
 		return draw_2580_259f
 	}
 	// Box Drawing | U+2500...U+257F
-	// (handled by box.v draw functions)
+	if cp >= 0x2500 && cp <= 0x257f {
+		return draw_2500_257f
+	}
 	// Braille Patterns | U+2800...U+28FF
 	if cp >= 0x2800 && cp <= 0x28ff {
 		return draw_2800_28ff
@@ -383,26 +385,23 @@ pub fn (self &SpriteFace) has_codepoint(cp u32, p ?font.Presentation) bool {
 }
 
 // render_glyph renders the glyph for the given codepoint.
-pub fn (self &SpriteFace) render_glyph(atlas &font.Atlas, cp u32, opts font.RenderOptions) !font.GlyphInfo {
-	// XTODO: Full render_glyph implementation needs Atlas integration.
-	// The general flow is:
-	// 1. Look up the draw function via get_draw_fn
-	// 2. Calculate width based on opts.cell_width
-	// 3. Create a Canvas with appropriate dimensions and padding
-	// 4. Call the draw function to rasterize the glyph
-	// 5. Write the canvas data to the atlas
-	// 6. Return glyph metrics (width, height, offsets, atlas position)
-
-	_ = atlas
-
+//
+// The general flow, following ghostty's Face.renderGlyph:
+// 1. Look up the draw function via get_draw_fn
+// 2. Calculate width based on opts.cell_width
+// 3. Create a Canvas with appropriate dimensions and padding
+// 4. Call the draw function to rasterize the glyph
+// 5. Write the canvas data to the atlas
+// 6. Return glyph metrics (width, height, offsets, atlas position)
+pub fn (self &SpriteFace) render_glyph(mut atlas font.Atlas, cp u32, opts font.RenderOptions) !font.GlyphInfo {
 	draw := get_draw_fn(cp) or {
 		return font.GlyphInfo{
-			width: 0
-			height: 0
+			width:    0
+			height:   0
 			offset_x: 0
 			offset_y: 0
-			atlas_x: 0
-			atlas_y: 0
+			atlas_x:  0
+			atlas_y:  0
 		}
 	}
 
@@ -425,15 +424,15 @@ pub fn (self &SpriteFace) render_glyph(atlas &font.Atlas, cp u32, opts font.Rend
 
 	draw(cp, mut &canvas, width, height, metrics)!
 
-	// XTODO: Write the drawing to the atlas
-	// region := canvas.write_atlas(atlas)
+	// Write the drawing to the atlas.
+	region := canvas.write_atlas(mut atlas)!
 
 	return font.GlyphInfo{
-		width: width
-		height: height
+		width:    region.width
+		height:   region.height
 		offset_x: 0
 		offset_y: 0
-		atlas_x: 0
-		atlas_y: 0
+		atlas_x:  region.x
+		atlas_y:  region.y
 	}
 }

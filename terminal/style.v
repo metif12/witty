@@ -202,8 +202,8 @@ pub fn (self &CellStyle) fg_rgb(opts FgOpts) RGB {
 					if bold.bright {
 						// bright mode: no special color, use default
 					} else {
-						// color mode: XTODO - use bold color
-						return opts.default_color
+						// color mode: use the explicit bold color
+						return bold.to_terminal_rgb()
 					}
 				}
 			}
@@ -232,7 +232,8 @@ pub fn (self &CellStyle) fg_rgb(opts FgOpts) RGB {
 				&& rgb.b == opts.default_color.b {
 				if bold := opts.bold_color {
 					if !bold.bright {
-						// color mode: XTODO - use bold color
+						// color mode: use the explicit bold color
+						return bold.to_terminal_rgb()
 					}
 				}
 			}

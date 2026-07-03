@@ -143,11 +143,10 @@ module main
 //   * posix_spawn is used for Mac, but doesn't support the necessary
 //     features for tty setup.
 
-import os
-
 // C interop declarations for POSIX process management.
 fn C.fork() int
 fn C.execvp(file &char, argv &&char) int
+fn C.execvpe(file &char, argv &&char, envp &&char) int
 fn C.waitpid(pid int, status &int, options int) int
 fn C.dup2(oldfd int, newfd int) int
 fn C.chdir(path &char) int
@@ -292,9 +291,14 @@ pub mut:
 // of posix_spawn because we need the pre_exec callback to run between
 // fork and exec (e.g. for PTY setup, setsid, signal handling, etc.).
 //
-// XTODO: Windows support is not implemented.
+// Faithful to Zig `start` which dispatches on the target OS. Windows is a
+// boundary (see start_windows).
 pub fn (mut self Command) start() ! {
-	self.start_posix()!
+	$if windows {
+		self.start_windows()!
+	} $else {
+		self.start_posix()!
+	}
 }
 
 // start_posix implements the POSIX fork/exec subprocess launch.
@@ -360,7 +364,7 @@ fn (mut self Command) start_posix() ! {
 	// Finally, replace our process.
 	// Note: we must use the "p"-variant of exec here because we
 	// do not guarantee our command is looked up already in the path.
-	// We use execvp which searches PATH.
+	// We use execvp/execvpe which search PATH.
 
 	// Build null-terminated C argv array.
 	mut c_argv := unsafe { []&char{len: argv.len + 1, init: &char(0)} }
@@ -368,20 +372,22 @@ fn (mut self Command) start_posix() ! {
 		c_argv[i] = arg.str
 	}
 
-	// If we have custom environment variables, set them.
-	// XTODO: Currently we use os.setenv for each var. A more complete
-	// implementation would build a full envp array and use execvpe.
+	// Determine our env vars. Faithful to Zig `startPosix`:
+	//
+	//   const envp = if (self.env) |env_map|
+	//       (try createNullDelimitedEnvMap(arena, env_map)).ptr
+	//   else ... std.c.environ;
+	//
+	// If custom environment variables were provided, we build a full
+	// null-delimited `envp` array (these are the EXACT vars to set; they
+	// are NOT merged with the parent environment) and use execvpe.
+	// Otherwise we use execvp, which inherits the current environment.
 	if self.env.len > 0 {
-		// Clear existing environment and set new vars.
-		// XTODO: This is a simplified approach. The Zig version builds
-		// a null-delimited env map for execvpeZ. We approximate by
-		// setting env vars individually before exec.
-		for key, val in self.env {
-			os.setenv(key, val, true)
-		}
+		mut envp := create_null_delimited_env(self.env)
+		C.execvpe(self.path.str, c_argv.data, envp.data)
+	} else {
+		C.execvp(self.path.str, c_argv.data)
 	}
-
-	C.execvp(self.path.str, c_argv.data)
 
 	// If we are executing this code, the exec failed. We're in the
 	// child process so there isn't much we can do. We try to output
@@ -445,4 +451,105 @@ pub fn (mut self Command) set_data(pointer voidptr) {
 // Returns none if the data pointer is null.
 pub fn (self Command) get_data() voidptr {
 	return self.data
+}
+
+// create_null_delimited_env builds a null-terminated `envp` array for use
+// with execvpe from the given environment map. Each entry is a
+// null-terminated "KEY=VALUE" C string, and the array itself is terminated
+// by a null pointer.
+//
+// This is the V translation of Zig `createNullDelimitedEnvMap`. Unlike Zig,
+// which builds a `[:null]?[*:0]u8`, V manages the backing string memory via
+// its own allocator; we keep the interned `&char` pointers alive by storing
+// the V strings for the duration of the exec (this runs in the freshly forked
+// child right before exec, so no cleanup is required).
+fn create_null_delimited_env(env map[string]string) []&char {
+	// +1 for the terminating null pointer.
+	mut envp := unsafe { []&char{len: env.len + 1, init: &char(0)} }
+	mut i := 0
+	for key, val in env {
+		// "KEY=VALUE" is null-terminated because V strings are.
+		entry := '${key}=${val}'
+		envp[i] = entry.str
+		i++
+	}
+	// The final slot is already the null terminator from init.
+	return envp
+}
+
+// windows_create_command_line builds a Windows command line string from an
+// argv array following the standard Windows quoting/escaping rules. This is
+// the V translation of Zig `windowsCreateCommandLine` (copied from the Zig
+// stdlib) and is pure string logic, so it is fully portable even though the
+// rest of the Windows launch path is not implemented here.
+//
+// See start_windows for why the actual process launch remains a boundary.
+fn windows_create_command_line(argv []string) string {
+	mut buf := []u8{}
+	for arg_i, arg in argv {
+		if arg_i != 0 {
+			buf << u8(` `)
+		}
+		// If the argument contains no special characters, emit it verbatim.
+		if !arg_contains_special(arg) {
+			for b in arg {
+				buf << b
+			}
+			continue
+		}
+		buf << u8(`"`)
+		mut backslash_count := 0
+		for byte in arg {
+			match byte {
+				`\\` {
+					backslash_count++
+				}
+				`"` {
+					// Escape all pending backslashes (doubled) plus the quote.
+					for _ in 0 .. backslash_count * 2 + 1 {
+						buf << u8(`\\`)
+					}
+					buf << u8(`"`)
+					backslash_count = 0
+				}
+				else {
+					for _ in 0 .. backslash_count {
+						buf << u8(`\\`)
+					}
+					buf << byte
+					backslash_count = 0
+				}
+			}
+		}
+		// Double any trailing backslashes so they don't escape the closing quote.
+		for _ in 0 .. backslash_count * 2 {
+			buf << u8(`\\`)
+		}
+		buf << u8(`"`)
+	}
+	return buf.bytestr()
+}
+
+// arg_contains_special returns true if the argument contains any character
+// that requires quoting on a Windows command line.
+fn arg_contains_special(arg string) bool {
+	for b in arg {
+		if b == ` ` || b == `\t` || b == `\n` || b == `"` {
+			return true
+		}
+	}
+	return false
+}
+
+// start_windows launches the subprocess on Windows.
+//
+// BOUNDARY: This is intentionally left unimplemented. The Zig implementation
+// (`startWindows`, `createWindowsEnvBlock`) relies on win32 APIs
+// (CreateProcessW, STARTUPINFOW, PROC_THREAD_ATTRIBUTE_LIST for pty/conpty
+// handle inheritance, UTF-16 conversion, etc.) that are not bound in this V
+// codebase, which targets POSIX (macOS) exclusively. The command-line quoting
+// logic that is pure string manipulation IS translated above
+// (windows_create_command_line) so it is ready for a future Windows port.
+fn (mut self Command) start_windows() ! {
+	return error('Windows subprocess launch is not implemented')
 }

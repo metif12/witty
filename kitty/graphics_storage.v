@@ -85,11 +85,31 @@ pub:
 pub struct PlacementVirtual {}
 
 // Deinitialize the placement, untracking the pin if necessary.
+//
+// In Zig this is:
+//   switch (self.location) {
+//       .pin => |p| s.pages.untrackPin(p),
+//       .virtual => {},
+//   }
+// where `p` is a *PageList.Pin, i.e. a heap-allocated pin registered in
+// the page list's tracked-pin set.
 pub fn (self &Placement) deinit(s &terminal.Screen) {
-	// TODO: Untrack pin from page list when PageList tracking is fully implemented.
-	// In the Zig version this calls s.pages.untrackPin(p) for pin-based placements.
-	// For now this is a no-op since PageList pin tracking is not yet available.
-	_ = s
+	match self.location {
+		PlacementPin {
+			// Untrack the pin so the page list stops keeping it up to date
+			// across scroll/resize. NOTE: in this witty terminal model a
+			// PlacementPin holds a flat `terminal.Pin` *value* rather than a
+			// pointer into the page list's tracked-pin registry, so there is
+			// no per-pin tracking node to remove here. This branch exists to
+			// mirror the Zig structure and is the single place that must be
+			// updated to call `s.pages.untrack_pin(...)` if/when placements
+			// migrate to tracked PagePins.
+			_ = s
+		}
+		PlacementVirtual {
+			// Virtual placements are never tracked.
+		}
+	}
 }
 
 // Calculates the size of this placement's image in pixels,
@@ -188,8 +208,22 @@ pub fn (self &Placement) rect(image Image, t &terminal.Terminal) ?Rect {
 		}
 	}
 
-	// Calculate bottom-right by moving down and clamping to screen bounds.
+	// Calculate the bottom-right pin. In Zig this is done with
+	// `pin.downOverflow(rows - 1)`: moving down `rows-1` rows and, if that
+	// would run past the end of the page list, clamping to the very last
+	// row (the `.overflow => v.end` branch). Here the flat Pin model uses
+	// `pages.screen_rows` as the row backing store, so overflow means
+	// clamping `br_y` to the index of the last existing row.
+	last_row := u32(t.screens.active.pages.screen_rows.len)
 	mut br_y := pin.y + grid_rows - 1
+	if last_row > 0 && br_y > last_row - 1 {
+		// downOverflow: clamp to the last available row.
+		br_y = last_row - 1
+	}
+
+	// We need to sub one here because the x value is one width already. So
+	// if the image is width "1" then we add zero to X because X itself is
+	// width 1.
 	br_x := math.min(pin.x + grid_cols - 1, u32(t.cols) - 1)
 
 	return Rect{

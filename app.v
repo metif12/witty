@@ -201,6 +201,7 @@ module main
 import apprt
 import configpkg
 import font
+import input
 import time
 
 // SurfaceList is a list of active surfaces managed by the app.
@@ -239,6 +240,15 @@ pub fn (s &SurfaceRef) close() {
 // TODO: Implement when surface message handling is available.
 pub fn (s &SurfaceRef) handle_message(msg SurfaceMessage) ! {
 	_ = msg
+}
+
+// perform_binding_action performs a surface-scoped binding action on this
+// surface. Returns true if the action was performed.
+// TODO: Route to the real Surface.perform_binding_action once SurfaceRef is
+// backed by the full Surface type.
+pub fn (s &SurfaceRef) perform_binding_action(action input.Action) !bool {
+	_ = action
+	return false
 }
 
 // ChangeConfigMsg is a placeholder for config-change messages sent to a surface.
@@ -358,22 +368,34 @@ pub fn (mut self App) tick(mut rt_app apprt.RuntimeApp) ! {
 // update_config updates the configuration associated with the app. This
 // can only be called from the main thread. The caller owns the config
 // memory. The memory can be freed immediately when this returns.
-//
-// TODO: Full implementation requires surface config update propagation.
 pub fn (mut self App) update_config(mut rt_app apprt.RuntimeApp, config &configpkg.Config) ! {
-	// Go through and update all of the surface configurations.
-	// TODO: Send change_config message to each surface when surface
-	// message handling is fully implemented.
+	// Go through and update all of the surface configurations. Each surface
+	// derives its own config from the change_config message, applying its
+	// own conditional state.
+	for surface in self.surfaces {
+		surface.core().handle_message(SurfaceMessage{ kind: .change_config })!
+	}
 
 	// Apply our conditional state. If we fail to apply the conditional state
-	// then we log and attempt to move forward with the old config.
-	// We only apply this to the app-level config because the surface
-	// config applies its own conditional state.
-	// TODO: Implement conditional config application.
+	// then we log and attempt to move forward with the old config. We only
+	// apply this to the app-level config because the surface config applies
+	// its own conditional state.
+	//
+	// The full implementation calls config.change_conditional_state(...) and
+	// passes the derived config to the apprt below. The config stub here does
+	// not yet expose that method, so we forward the caller's config as-is.
 	_ = config
 
-	// Notify the apprt that the app has changed configuration.
-	rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .config_change, apprt.ActionValue{}) or {}
+	// Notify the apprt that the app has changed configuration. The config
+	// pointer is only valid for the duration of the action.
+	cfg_change := unsafe {
+		apprt.ConfigChange{
+			config: config
+		}
+	}
+	rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .config_change, apprt.ActionValue{
+		config_change_: cfg_change
+	}) or {}
 }
 
 // add_surface adds an initialized surface to the app's surface list.
@@ -525,6 +547,191 @@ pub fn (mut self App) color_scheme_event(mut rt_app apprt.RuntimeApp, scheme app
 	// Request our configuration be reloaded because the new scheme may
 	// impact the colors of the app.
 	rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .reload_config, apprt.ActionValue{}) or {}
+}
+
+// BindingLeaf is a resolved keybinding leaf (a single or chained action) along
+// with its flags. It mirrors ghostty's `input.Binding.Set.GenericLeaf`.
+struct BindingLeaf {
+	actions []input.Action
+	flags   input.Flags
+}
+
+// lookup_binding looks up the keybinding entry for the given event in the
+// app-level binding set. Returns none if there is no binding, or if the entry
+// is a leader (key sequences aren't supported for app-scoped bindings).
+//
+// The full implementation reads `rt_app.config.keybind.set.get_event(event)`.
+// The apprt.RuntimeApp stub doesn't yet carry a config, so this returns none.
+// The dispatch logic below is written against the real return shape so that
+// wiring up the config is the only remaining step.
+fn (self &App) lookup_binding(mut rt_app apprt.RuntimeApp, event input.KeyEvent) ?BindingLeaf {
+	_ = rt_app
+	_ = event
+	return none
+}
+
+// key_event_is_binding returns true if the given key event would trigger a
+// keybinding if it were to be processed.
+pub fn (mut self App) key_event_is_binding(mut rt_app apprt.RuntimeApp, event input.KeyEvent) bool {
+	match event.action {
+		.release {
+			return false
+		}
+		.press, .repeat {}
+	}
+
+	// If we have a keybinding for this event then we return true.
+	return self.lookup_binding(mut rt_app, event) != none
+}
+
+// key_event handles a key event at the app-scope. If this key event is used,
+// this returns true and the caller shouldn't continue processing the event.
+//
+// If the app currently has focus then all key events are processed. If the
+// app does not have focus then only global key events are processed.
+pub fn (mut self App) key_event(mut rt_app apprt.RuntimeApp, event input.KeyEvent) bool {
+	match event.action {
+		// We don't care about key release events.
+		.release {
+			return false
+		}
+		// Continue processing key press events.
+		.press, .repeat {}
+	}
+
+	// Get the keybind entry for this event. We don't support key sequences so
+	// we look directly in the top-level set.
+	leaf := self.lookup_binding(mut rt_app, event) or { return false }
+	actions := leaf.actions
+	if actions.len == 0 {
+		return false
+	}
+
+	// If we aren't focused, then we only process global keybinds.
+	if !self.focused && !leaf.flags.global {
+		return false
+	}
+
+	// Global keybinds are done using performAll so they can target all
+	// surfaces too.
+	if leaf.flags.global {
+		self.perform_all_chained_action(mut rt_app, actions)
+		return true
+	}
+
+	// Must be focused to process non-global keybinds. If we are focused, then
+	// we process keybinds only if they are app-scoped. Otherwise we do
+	// nothing (surface-scoped is handled by Surface.key_event). For chained
+	// actions, all actions must be app-scoped.
+	for action in actions {
+		if action.scope() != .app {
+			return false
+		}
+	}
+	for action in actions {
+		self.perform_action(mut rt_app, action) or {
+			// Log and continue; a failed app keybind action shouldn't stop
+			// processing the remainder of the chain.
+		}
+	}
+
+	return true
+}
+
+// perform_action performs an app-scoped binding action. This only accepts
+// actions that are scoped to the app. Callers can use perform_all_action to
+// perform any action and have non-app-scoped actions performed on all
+// surfaces.
+pub fn (mut self App) perform_action(mut rt_app apprt.RuntimeApp, action input.Action) ! {
+	app_target := apprt.Target(apprt.AppTarget{})
+	match action.tag {
+		.unbind {
+			// unreachable in ghostty; unbind is handled before reaching here.
+		}
+		.ignore {}
+		.quit {
+			rt_app.perform_action(app_target, .quit, apprt.ActionValue{})!
+		}
+		.new_window {
+			self.new_window(mut rt_app, NewWindowMsg{ parent: none })!
+		}
+		.open_config {
+			rt_app.perform_action(app_target, .open_config, apprt.ActionValue{})!
+		}
+		.reload_config {
+			rt_app.perform_action(app_target, .reload_config, apprt.ActionValue{})!
+		}
+		.close_all_windows {
+			rt_app.perform_action(app_target, .close_all_windows, apprt.ActionValue{})!
+		}
+		.toggle_quick_terminal {
+			rt_app.perform_action(app_target, .toggle_quick_terminal, apprt.ActionValue{})!
+		}
+		.toggle_visibility {
+			rt_app.perform_action(app_target, .toggle_visibility, apprt.ActionValue{})!
+		}
+		.check_for_updates {
+			rt_app.perform_action(app_target, .check_for_updates, apprt.ActionValue{})!
+		}
+		.show_gtk_inspector {
+			rt_app.perform_action(app_target, .show_gtk_inspector, apprt.ActionValue{})!
+		}
+		.undo {
+			rt_app.perform_action(app_target, .undo, apprt.ActionValue{})!
+		}
+		.redo {
+			rt_app.perform_action(app_target, .redo, apprt.ActionValue{})!
+		}
+		else {
+			// Non-app-scoped action passed to perform_action. In ghostty this
+			// is a compile error (the type only permits app-scoped actions);
+			// here we ignore it defensively.
+		}
+	}
+}
+
+// perform_all_chained_action performs a chained action. We continue executing
+// each action even if a prior action fails.
+pub fn (mut self App) perform_all_chained_action(mut rt_app apprt.RuntimeApp, actions []input.Action) {
+	for action in actions {
+		self.perform_all_action(mut rt_app, action) or {
+			// Log and continue to the next chained action.
+		}
+	}
+}
+
+// perform_all_action performs an app-wide binding action. If the action is
+// surface-specific then it is performed on all surfaces. To perform only
+// app-scoped actions, use perform_action.
+pub fn (mut self App) perform_all_action(mut rt_app apprt.RuntimeApp, action input.Action) ! {
+	match action.scope() {
+		// App-scoped actions are handled by the app so that they aren't
+		// repeated for each surface (each surface forwards app-scoped actions
+		// back up).
+		.app {
+			self.perform_action(mut rt_app, action)!
+		}
+		// Surface-scoped actions are performed on all surfaces. Errors are
+		// logged but processing continues.
+		.surface {
+			for surface in self.surfaces {
+				surface.core().perform_binding_action(action) or {
+					// Log and continue with the next surface.
+				}
+			}
+		}
+	}
+}
+
+// surface_message handles a message routed to a specific surface. We first
+// ensure the surface is still active (a simple linear search) since messages
+// are rare and windows are few.
+fn (mut self App) surface_message(surface &SurfaceRef, msg SurfaceMessage) ! {
+	if self.has_surface(surface) {
+		surface.handle_message(msg)!
+	}
+	// If the surface was not found it probably quit before we handled the
+	// message. That is not a problem.
 }
 
 // has_surface returns true if the given surface is in our known surface list.

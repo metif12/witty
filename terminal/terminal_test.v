@@ -1267,26 +1267,36 @@ fn test_mode_47_alt_screen_plain() {
 	mut t := create_test_terminal(5, 5) or { assert false; return }
 	defer { t.deinit() }
 
-	t.print_string('Hello') or { assert false }
-	t.carriage_return()
-	t.linefeed() or { assert false }
-	t.print_string('World') or { assert false }
+	// Print on primary screen
+	t.print_string('1A') or { assert false }
 
-	// Switch to alternate screen
+	// Go to alt screen with mode 47
 	t.switch_screen_mode(.mode_47, true) or { assert false }
 	assert t.screens.active_key == .alternate
 
-	// Write on alternate (5-col terminal, 'Alt' fits without wrap)
-	t.print_string('Alt') or { assert false }
+	// Screen should be empty
+	empty := t.plain_string() or { assert false; return }
+	assert empty == ''
+
+	// Print on alt screen. This should be off center because we copy
+	// the cursor over from the primary screen (matches Ghostty / xterm).
+	t.print_string('2B') or { assert false }
 	alt_str := t.plain_string() or { assert false; return }
-	assert alt_str == 'Alt'
+	assert alt_str == '  2B'
 
 	// Switch back to primary
 	t.switch_screen_mode(.mode_47, false) or { assert false }
 	assert t.screens.active_key == .primary
 
+	// Primary screen should still have the original content
 	str := t.plain_string() or { assert false; return }
-	assert str == 'Hello\nWorld'
+	assert str == '1A'
+
+	// Go back to alt screen with mode 47; it should retain content
+	t.switch_screen_mode(.mode_47, true) or { assert false }
+	assert t.screens.active_key == .alternate
+	retained := t.plain_string() or { assert false; return }
+	assert retained == '  2B'
 }
 
 fn test_mode_1049_alt_screen_plain() {

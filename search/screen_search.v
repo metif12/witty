@@ -439,20 +439,24 @@ pub mut:
 }
 
 // Initialize a screen search for the given screen and needle.
-pub fn ScreenSearch.init(screen &terminal.Screen, needle []u8) ScreenSearch {
-	// XTODO: Full initialization requires:
-	// 1. Create ActiveSearch and immediately search the active area
-	// 2. Set up history search if scrollback exists
-	// 3. Call reload_active() for initial state
-	// Currently returns a minimal valid state.
-	return ScreenSearch{
-		screen: screen
+//
+// Source: ScreenSearch.init. This builds the initial active area search
+// and then calls reload_active() to populate the initial active-area
+// state (and set up history if the screen has scrollback).
+pub fn ScreenSearch.init(mut screen terminal.Screen, needle []u8) ScreenSearch {
+	mut result := ScreenSearch{
+		screen: &screen
 		rows: u16(screen.pages.rows)
 		cols: u16(screen.pages.cols)
 		active_search: ActiveSearch.init(needle)
 		history_search: none
 		state: .active
 	}
+
+	// Update our initial active area state.
+	result.reload_active()
+
+	return result
 }
 
 // Free resources.
@@ -549,33 +553,97 @@ pub fn (mut self ScreenSearch) tick() bool {
 //
 // Feed on a complete screen search will perform some cleanup of
 // potentially stale history results (pruned) and reclaim some memory.
+//
+// Source: ScreenSearch.feed
 pub fn (mut self ScreenSearch) feed() {
-	// XTODO: Full feed implementation requires:
-	// 1. Check if screen dimensions changed (reinit if so)
-	// 2. Feed the next page to the history searcher
-	// 3. Update state machine based on whether more data is available
-	// 4. Prune stale history results
+	// If the screen resizes, we have to reset our entire search. That
+	// isn't ideal but we don't have a better way right now to handle
+	// reflowing the search results beyond putting a tracked pin for
+	// every single result.
+	if u16(self.screen.pages.rows) != self.rows || u16(self.screen.pages.cols) != self.cols {
+		// Reinit
+		new := ScreenSearch.init(mut self.screen, self.needle())
 
-	// If no history search, we're complete.
+		// Deinit/reinit
+		self.deinit()
+		self = new
+
+		// New result should have matching dimensions.
+		assert u16(self.screen.pages.rows) == self.rows, 'feed: rows mismatch after reinit'
+		assert u16(self.screen.pages.cols) == self.cols, 'feed: cols mismatch after reinit'
+	}
+
+	// No history to feed, search is complete.
 	if self.history_search == none {
 		self.state = .complete
 		return
 	}
 
-	// Transition state.
+	// Future: we may want to feed multiple pages at once here to
+	// lower the frequency of lock acquisitions.
+	mut more := false
+	if mut h := self.history_search {
+		more = h.searcher.feed()
+		self.history_search = h
+	}
+	if !more {
+		// No more data to feed, search is complete.
+		self.state = .complete
+
+		// We use this opportunity to also clean up older history
+		// results that may be gone due to scrollback pruning, though.
+		self.prune_history()
+
+		return
+	}
+
+	// Depending on our state handle where feed goes.
 	match self.state {
+		// If we're searching active or history, then feeding doesn't
+		// change the state.
 		.active, .history {}
+		// Feed goes back to searching history.
 		.history_feed { self.state = .history }
+		// If we're complete then the feed call above should always
+		// return false and we can't reach this.
 		.complete {}
 	}
 }
 
-// Go through history results to prune any that reference invalid
-// (pruned) page nodes.
+// Go through our history results in order (newest to oldest) to find
+// any result that contains an invalid serial. Prune up to that point.
+//
+// Source: ScreenSearch.pruneHistory
 fn (mut self ScreenSearch) prune_history() {
-	// XTODO: Requires screen.pages.page_serial_min (PageList feature).
-	// Should iterate history_results and remove entries whose chunks
-	// reference nodes with serials below the minimum valid serial.
+	// The minimum valid page serial lives on the PageList. In this
+	// codebase the screen exposes the flat `Pages` model rather than a
+	// `PageList`, so we source the serial floor from the history
+	// searcher's tracked list. If there is no history search there is
+	// nothing to prune.
+	serial_min := if h := self.history_search {
+		h.searcher.list.page_serial_min
+	} else {
+		return
+	}
+
+	for i in 0 .. self.history_results.len {
+		hl := self.history_results[i]
+		if hl.chunks.len == 0 {
+			continue
+		}
+		// History results only get older as we walk forward, so the
+		// first chunk's serial is the lowest we need to check.
+		lowest := hl.chunks[0].serial
+		if lowest < serial_min {
+			// Everything from here forward we assume is invalid because
+			// our history results only get older.
+			for j := i; j < self.history_results.len; j++ {
+				self.history_results[j].deinit()
+			}
+			self.history_results = self.history_results[..i].clone()
+			return
+		}
+	}
 }
 
 // Search the active area to completion.
@@ -593,10 +661,39 @@ fn (mut self ScreenSearch) tick_active() {
 }
 
 // Search history for loaded matches.
+//
+// Source: ScreenSearch.tickHistory
 fn (mut self ScreenSearch) tick_history() {
-	// XTODO: Requires HistorySearch with PageListSearch integration.
-	// Should consume all loaded matches from the history searcher.
-	self.state = .history_feed
+	if mut h := self.history_search {
+		start_node := h.start_pin.node
+
+		// Try to consume all the loaded matches in one go, because
+		// the search is generally fast for loaded data.
+		for {
+			hl := h.searcher.next() or { break }
+
+			// Ignore selections that are found within the starting
+			// node since those are covered by the active area search.
+			if hl.chunks.len > 0 && voidptr(hl.chunks[0].node) == voidptr(start_node) {
+				continue
+			}
+
+			// Since history only appends to our results in reverse order,
+			// we don't need to update any selected match state. The index
+			// and prior results are unaffected.
+			self.history_results << hl.clone()
+		}
+
+		// Persist the mutated searcher state.
+		self.history_search = h
+
+		// We need to be fed more data.
+		self.state = .history_feed
+		return
+	}
+
+	// No history to search, we're done.
+	self.state = .complete
 }
 
 // Reload the active area because it has changed.
@@ -606,27 +703,341 @@ fn (mut self ScreenSearch) tick_history() {
 // state machine.
 //
 // The caller must hold the necessary locks to access the screen state.
+//
+// Source: ScreenSearch.reloadActive
+//
+// Notes on this translation:
+//   - Zig uses defer/errdefer for the "reset selection on exit" and OOM
+//     cleanup paths. V functions here are infallible (no OOM error is
+//     surfaced), so the errdefer OOM/tripwire branches are unreachable
+//     and are folded away; the deferred select_prev/select-fixup logic is
+//     translated as explicit steps at the end of the function.
+//   - The active-area PageList is not obtainable from `self.screen`
+//     (Screen exposes the flat `Pages` model), so the history-diffing
+//     branches drive through the history searcher's tracked PageList.
 pub fn (mut self ScreenSearch) reload_active() {
-	// XTODO: Full implementation requires:
-	// 1. Check if selection pin became garbage (clear selection if so)
-	// 2. Call active.update(list) to get history boundary changes
-	// 3. Search any new history pages that moved out of active area
-	// 4. Reset and re-search the active area
-	// 5. Fix up selection indices if active results changed
-	// 6. Handle no_scrollback pruning of out-of-active results
+	// If our selection pin became garbage it means we scrolled off
+	// the end. Clear our selection and on exit of this function,
+	// try to select the last match.
+	mut select_prev := false
+	if mut m := self.selected {
+		if m.hl.start != unsafe { nil } && m.hl.end != unsafe { nil }
+			&& (m.hl.start.garbage || m.hl.end.garbage) {
+			m.deinit(mut self.screen)
+			self.selected = none
+			select_prev = true
+		}
+	}
 
-	// Simplified: just reset and re-search active.
+	// active.update() reports the first node of the overlap between the
+	// old and new active areas (the previous active-area start node) so
+	// we can diff new history, or none if there is no history.
+	mut history_node := ?&terminal.PageNode(none)
+	if mut h := self.history_search {
+		history_node = self.active_search.update(h.searcher.list)
+		self.history_search = h
+	}
+
+	if node := history_node {
+		// We need to account for any active area growth that would
+		// cause new pages to move into our history. If there are new
+		// pages then we need to re-search the pages and add them to
+		// our history results.
+
+		// If our screen has no scrollback then we have no history.
+		if self.screen.no_scrollback {
+			assert self.history_search == none, 'no_scrollback but history exists'
+		} else {
+			self.reload_active_history(node)
+		}
+	} else {
+		// No history node means we have no history.
+		if mut h := self.history_search {
+			h.deinit(mut self.screen)
+			self.history_search = none
+			for mut hl in self.history_results {
+				hl.deinit()
+			}
+			self.history_results = []
+		}
+
+		// If we have a selection in the history area, we need to
+		// move it to the end of the active area.
+		if mut m := self.selected {
+			active_len := self.active_results.len
+			if m.idx >= active_len {
+				m.deinit(mut self.screen)
+				self.selected = none
+				self.select_prev()
+			}
+		}
+	}
+
+	// Figure out if we need to fixup our selection later because
+	// it was in the active area.
+	old_active_len := self.active_results.len
+	old_selection_idx := if m := self.selected {
+		?int(m.idx)
+	} else {
+		?int(none)
+	}
+
+	// Reset our active search results and search again.
 	for mut hl in self.active_results {
 		hl.deinit()
 	}
 	self.active_results = []
-
-	old_state := self.state
-	self.tick_active()
-	// Restore state unless we were in the initial active state.
-	if old_state != .active {
-		self.state = old_state
+	match self.state {
+		// If we're in the active state we run a normal tick so
+		// we can move into a better state.
+		.active {
+			self.tick_active()
+		}
+		// Otherwise, just tick it and move back to whatever state
+		// we were in.
+		else {
+			old_state := self.state
+			self.tick_active()
+			self.state = old_state
+		}
 	}
+
+	// If we have no scrollback, we need to prune any active results
+	// that aren't in the actual active area. We only do this for the
+	// no scrollback scenario because with scrollback we actually
+	// rely on our active search searching by page to find history
+	// items as well. This is all related to the fact that PageList
+	// scrollback limits are discrete by page size except we special
+	// case zero.
+	if self.screen.no_scrollback && self.active_results.len > 0 {
+		self.reload_active_prune_no_scrollback()
+	}
+
+	// Now we have to fixup our selection if we had one.
+	if old_idx := old_selection_idx {
+		if mut m := self.selected {
+			if old_idx >= old_active_len {
+				// If our old selection wasn't in the active area, then we
+				// need to fix up our offsets.
+				m.idx -= old_active_len
+				m.idx += self.active_results.len
+				self.selected = m
+			} else {
+				// We search for the matching highlight in the new
+				// active results.
+				mut found := false
+				for i, hl in self.active_results {
+					untracked := hl.untracked()
+					if m.hl.start != unsafe { nil } && m.hl.end != unsafe { nil }
+						&& m.hl.start.eql(untracked.start) && m.hl.end.eql(untracked.end) {
+						// Found it! Update our index.
+						m.idx = self.active_results.len - 1 - i
+						self.selected = m
+						found = true
+						break
+					}
+				}
+				if !found {
+					// No match, just go back to the first match.
+					m.deinit(mut self.screen)
+					self.selected = none
+					self.select_next()
+				}
+			}
+		}
+	}
+
+	// Deferred: if our selection pin became garbage at entry, try to
+	// select the last match now that results are rebuilt.
+	if select_prev {
+		self.select_prev()
+	}
+}
+
+// Handle the history-diffing branch of reload_active when active.update
+// reports that the active-area start node moved (history grew).
+//
+// Source: ScreenSearch.reloadActive (the `history:` block)
+fn (mut self ScreenSearch) reload_active_history(history_node &terminal.PageNode) {
+	// If our start pin became garbage, it means we pruned all the way up
+	// through it, so we have no history anymore. Reset our history state.
+	mut have_history := false
+	if mut h := self.history_search {
+		if h.start_pin != unsafe { nil } && h.start_pin.garbage {
+			h.deinit(mut self.screen)
+			self.history_search = none
+			for mut hl in self.history_results {
+				hl.deinit()
+			}
+			self.history_results = []
+		} else {
+			have_history = true
+			self.history_search = h
+		}
+	}
+
+	if !have_history {
+		// No history search yet, but we now have history. So let's
+		// initialize.
+		if mut h := self.history_search {
+			// (Unreachable in practice: if history_search were set we'd
+			// have taken the have_history path above. Guarded to keep the
+			// borrow checker happy.)
+			self.history_search = h
+			return
+		}
+		mut mutable_list := unsafe { &terminal.PageList(self.pagelist_for(history_node)) }
+		if mutable_list == unsafe { nil } {
+			// No PageList backing available from the screen model, so we
+			// cannot initialize a history searcher here. This is the
+			// subsystem boundary described on reload_active.
+			return
+		}
+		mut searcher := PageListSearch.init(self.needle(), mutable_list, history_node)
+		pin := mutable_list.track_pin(terminal.PagePin{
+			node: unsafe { &terminal.PageNode(history_node) }
+		})
+		self.history_search = HistorySearch{
+			searcher: searcher
+			start_pin: pin
+		}
+		// We don't need to update any history since we had no history
+		// before, so we can break out of the whole conditional.
+		return
+	}
+
+	// We have an existing history searcher; diff from its start node
+	// forward to the new history_node.
+	mut h := self.history_search or { return }
+
+	if voidptr(h.start_pin.node) == voidptr(history_node) {
+		// No change in the starting node, we're done.
+		self.history_search = h
+		return
+	}
+
+	// Do a forward search from our prior node to this one. We collect all
+	// the results into a new list. We ASSUME that reloadActive is being
+	// called frequently enough that there isn't a massive amount of
+	// history to search here.
+	mut window := SlidingWindow.init(.forward, self.needle())
+	for {
+		window.append(h.start_pin.node)
+		if voidptr(h.start_pin.node) == voidptr(history_node) {
+			break
+		}
+		next := h.start_pin.node.next or { break }
+		h.start_pin.node = next
+	}
+	assert voidptr(h.start_pin.node) == voidptr(history_node), 'history diff did not reach node'
+
+	mut results := []highlight.FlattenedHighlight{cap: self.history_results.len}
+	for {
+		hl := window.next() or { break }
+		if hl.chunks.len > 0 && voidptr(hl.chunks[0].node) == voidptr(history_node) {
+			continue
+		}
+		results << hl.clone()
+	}
+	window.deinit()
+
+	// If we have no matches then there is nothing to change in our
+	// history (fast path).
+	if results.len == 0 {
+		self.history_search = h
+		return
+	}
+
+	// The number added to our history. Needed for updating our selection
+	// if we have one.
+	added_len := results.len
+
+	// Matches! Reverse our list then append all the remaining history
+	// items that didn't start on our original node.
+	reverse_flattened(mut results)
+	for hl in self.history_results {
+		results << hl.clone()
+	}
+	for mut hl in self.history_results {
+		hl.deinit()
+	}
+	self.history_results = results
+
+	// If our prior selection was in the history area, update the offset.
+	if mut m := self.selected {
+		active_len := self.active_results.len
+		if m.idx >= active_len {
+			m.idx += added_len
+			self.selected = m
+		}
+	}
+
+	self.history_search = h
+}
+
+// If we have no scrollback, prune any active results that aren't in the
+// actual active area.
+//
+// Source: ScreenSearch.reloadActive (the `active_prune:` block)
+//
+// This requires the active-area top-left PagePin, which comes from the
+// screen's PageList (`self.screen.pages.getTopLeft(.active)`). The witty
+// Screen exposes the flat `Pages` model with no PageList behind it, so we
+// cannot form that pin here. Rather than corrupt the sorted result set we
+// leave it intact; the pruning is a no-op until the screen is backed by a
+// real PageList. See the boundary note on reload_active.
+fn (mut self ScreenSearch) reload_active_prune_no_scrollback() {
+	tl_opt := self.active_top_left()
+	tl := tl_opt or { return }
+
+	mut cut := -1
+	for i, mut hl in self.active_results {
+		if !tl.before(hl.end_pin()) {
+			// Deinit because it's going to be pruned no matter what at
+			// some point for not being in the active area.
+			hl.deinit()
+			continue
+		}
+
+		// In the active area! Since our results are sorted that means
+		// everything after this is also in the active area, so we prune
+		// up to this i.
+		cut = i
+		break
+	}
+
+	if cut < 0 {
+		// None are in the active area...
+		self.active_results = []
+		return
+	}
+
+	if cut > 0 {
+		self.active_results = self.active_results[cut..].clone()
+	}
+}
+
+// Return the active-area top-left PagePin if a real PageList backs the
+// screen, or none. In this codebase the screen uses the flat `Pages`
+// model, so no PageList is available and this returns none.
+fn (self &ScreenSearch) active_top_left() ?terminal.PagePin {
+	// If a history searcher exists it carries a real PageList we can
+	// query; otherwise (the no_scrollback case) there is nothing backing
+	// active-area pins from the screen.
+	h := self.history_search or { return none }
+	mut list := unsafe { &terminal.PageList(h.searcher.list) }
+	return list.get_top_left(.active)
+}
+
+// Return the PageList that should back a newly initialized history
+// searcher for the given node, or nil if the screen model does not
+// provide one (the flat `Pages` case). See boundary note on reload_active.
+fn (self &ScreenSearch) pagelist_for(node &terminal.PageNode) &terminal.PageList {
+	_ = node
+	if h := self.history_search {
+		return unsafe { &terminal.PageList(h.searcher.list) }
+	}
+	return unsafe { nil }
 }
 
 // Return the selected match.
@@ -763,5 +1174,17 @@ fn (mut self ScreenSearch) select_prev() bool {
 			hl: tracked
 		}
 		return true
+	}
+}
+
+// Reverse a slice of FlattenedHighlight in place (std.mem.reverse
+// equivalent used by reload_active when prepending newly-found history).
+fn reverse_flattened(mut arr []highlight.FlattenedHighlight) {
+	mut i := 0
+	mut j := arr.len - 1
+	for i < j {
+		arr[i], arr[j] = arr[j], arr[i]
+		i += 1
+		j -= 1
 	}
 }

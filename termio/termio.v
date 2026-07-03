@@ -172,26 +172,98 @@ module termio
 // --- Original Ghostty Comments End: src/termio/Termio.zig
 
 
+import apprt
+import configpkg
+import renderer
 import sync
 import terminal
+import time
+
+const log_tag_termio = 'io_exec'
 
 // Termio manages terminal IO between the surface and the pty.
+//
+// This maintains the terminal state, pty, subprocess, etc. It parses the
+// stream of bytes from the child process, dispatches the resulting events
+// to the stream handler which mutates terminal state, and coordinates with
+// the renderer and surface via mailboxes.
 pub struct Termio {
 pub mut:
-	terminal voidptr
+	// The derived configuration for this termio implementation.
+	config DerivedConfig
+
+	// The terminal emulator internal state. This is the abstract "terminal"
+	// that manages input, grid updating, etc. and is renderer-agnostic.
+	terminal terminal.Terminal
+
+	// The shared render state.
+	renderer_state &renderer.State = unsafe { nil }
+
+	// A handle to wake up the renderer.
+	renderer_wakeup renderer.Wakeup
+
+	// The mailbox for notifying the renderer of things.
+	renderer_mailbox &renderer.Mailbox = unsafe { nil }
+
+	// The mailbox for communicating with the surface.
+	surface_mailbox apprt.SurfaceMailbox
+
+	// The cached size info.
+	size renderer.Size
+
+	// The mailbox implementation to use.
+	mailbox Mailbox
+
+	// The stream parser. This parses the stream of escape codes and so on
+	// from the child process and collects events which are then dispatched
+	// to the stream handler.
+	terminal_stream terminal.Stream
+
+	// The stream handler. This mutates terminal state and sends messages
+	// to the renderer/surface/termio mailboxes in response to stream events.
+	stream_handler StreamHandler
+
+	// The backend implementation responsible for io (i.e. the pty/exec state).
+	backend Exec
+
+	// Last time the cursor was reset (monotonic nanoseconds). This is used
+	// to prevent message flooding with cursor resets. -1 means never.
+	last_cursor_reset i64 = -1
 }
 
 pub fn (mut t Termio) init(opts TermioOpts) ! {
-	// stub: initializes terminal IO
+	// stub: initializes terminal IO. The full init constructs the terminal,
+	// backend, and stream handler from options. The threading/event-loop
+	// plumbing is modeled elsewhere.
 }
 
 pub fn (mut t Termio) deinit() {
-	// stub: cleans up terminal IO
+	t.backend.deinit()
+	t.terminal.deinit()
+	t.config.deinit()
+	t.mailbox.deinit()
+	t.terminal_stream.deinit()
+	t.stream_handler.deinit()
 }
 
-pub fn (t Termio) queue_message(msg Message, mutex_state MutexState) {
-	_ = msg
-	_ = mutex_state
+// Send a message to the mailbox. Depending on the mailbox type in use this
+// may process now or it may just enqueue and process later. This will also
+// notify the mailbox thread to process the message.
+pub fn (mut t Termio) queue_message(msg Message, mutex_state MutexState) {
+	match mutex_state {
+		.locked {
+			t.mailbox.send(msg, &t.renderer_state.mutex)
+		}
+		.unlocked {
+			t.mailbox.send(msg, unsafe { nil })
+		}
+	}
+}
+
+// Queue a write directly to the pty. If linefeed is true, carriage returns
+// are converted to CRLF.
+pub fn (mut t Termio) queue_write(data []u8, linefeed bool) ! {
+	t.backend.queue_write(data, linefeed)!
 }
 
 pub struct TermioOpts {}
@@ -205,6 +277,20 @@ pub mut:
 	enquiry_response        string
 	cursor_style            terminal.CursorStyle = .block
 	cursor_blink            ?bool
+
+	// The default 256-color palette.
+	palette terminal.DynamicPalette = terminal.dynamic_palette_default_val
+
+	// The default foreground/background/cursor colors. none means unset.
+	foreground   ?terminal.RGB
+	background   ?terminal.RGB
+	cursor_color ?terminal.RGB
+
+	// The image storage limit in bytes.
+	image_storage_limit int
+
+	// The conditional state, used for the color scheme (light/dark) report.
+	conditional_state configpkg.ConditionalState
 }
 
 pub fn DerivedConfig.init(config voidptr) !DerivedConfig {
@@ -212,6 +298,322 @@ pub fn DerivedConfig.init(config voidptr) !DerivedConfig {
 }
 
 pub fn (d DerivedConfig) deinit() {}
+
+// ============================================================
+// Termio methods (translated from Termio.zig)
+// ============================================================
+
+// thread_enter is called when the IO thread starts. It sets up the backend
+// (starting the subprocess and read thread). The backend needs a pointer to
+// this Termio so its read thread can forward pty data to process_output.
+pub fn (mut t Termio) thread_enter() ! {
+	// Setup our backend. The backend's read thread will feed process_output.
+	t.backend.thread_enter_io(t)!
+}
+
+// thread_exit is called when the IO thread exits.
+pub fn (mut t Termio) thread_exit() {
+	t.backend.thread_exit()
+}
+
+// change_config updates the configuration.
+pub fn (mut t Termio) change_config(config &DerivedConfig) ! {
+	// The remainder of this function is modifying terminal state or the read
+	// thread data, all of which requires holding the renderer state lock.
+	t.renderer_state.mutex.lock()
+	defer {
+		t.renderer_state.mutex.unlock()
+	}
+
+	// Deinit our old config. We do this in the lock because the stream
+	// handler may be referencing the old config (i.e. enquiry resp).
+	t.config.deinit()
+	t.config = *config
+
+	// Update our stream handler. The stream handler uses the same renderer
+	// mutex so this is safe to do despite being executed from another thread.
+	t.stream_handler.change_config(&t.config)
+
+	// Update the configuration that we know about.
+	//
+	// Specific things we don't update:
+	//   - command, working-directory: we never restart the underlying
+	//     process so we don't care or need to know about these.
+
+	// Update the default palette.
+	t.terminal.colors.palette.change_default(config.palette.entries)
+	t.terminal.flags.dirty.palette = true
+
+	// Update all our other colors.
+	t.terminal.colors.background.default_color = config.background
+	t.terminal.colors.foreground.default_color = config.foreground
+	t.terminal.colors.cursor.default_color = config.cursor_color
+}
+
+// resize resizes the terminal.
+pub fn (mut t Termio) resize(size renderer.Size) ! {
+	t.size = size
+	grid_size := size.grid()
+
+	// Update the size of our pty.
+	t.backend.resize(grid_size, size.terminal_size())!
+
+	// Enter the critical area that we want to keep small.
+	{
+		t.renderer_state.mutex.lock()
+		defer {
+			t.renderer_state.mutex.unlock()
+		}
+
+		// Update the size of our terminal state.
+		t.terminal.resize(u16(grid_size.columns), u16(grid_size.rows))!
+
+		// Update our pixel sizes.
+		t.terminal.width_px = grid_size.columns * t.size.cell.width
+		t.terminal.height_px = grid_size.rows * t.size.cell.height
+
+		// Disable synchronized output mode so that we show changes
+		// immediately for a resize. This is allowed by the spec.
+		t.terminal.modes.set(.synchronized_output, false)
+
+		// If we have size reporting enabled we need to send a report.
+		if t.terminal.modes.get(.in_band_size_reports) {
+			t.size_report_locked(.mode_2048)!
+		}
+	}
+
+	// Mail the renderer so that it can update the GPU and re-render.
+	t.renderer_mailbox.push(renderer.Message{
+		kind: .font_grid
+	})
+	t.renderer_wakeup.notify() or {}
+}
+
+// size_report makes a size report of the given style.
+pub fn (mut t Termio) size_report(style SizeReportKind) ! {
+	t.renderer_state.mutex.lock()
+	defer {
+		t.renderer_state.mutex.unlock()
+	}
+	t.size_report_locked(style)!
+}
+
+fn (mut t Termio) size_report_locked(style SizeReportKind) ! {
+	grid_size := t.size.grid()
+
+	// Build the size report message. Reports in columns and pixels.
+	message := match style {
+		.mode_2048 {
+			'\x1b[48;${grid_size.rows};${grid_size.columns};${grid_size.rows * t.size.cell.height};${grid_size.columns * t.size.cell.width}t'
+		}
+		.csi_14_t {
+			'\x1b[4;${grid_size.rows * t.size.cell.height};${grid_size.columns * t.size.cell.width}t'
+		}
+		.csi_16_t {
+			'\x1b[6;${t.size.cell.height};${t.size.cell.width}t'
+		}
+		.csi_18_t {
+			'\x1b[8;${grid_size.rows};${grid_size.columns}t'
+		}
+	}
+
+	t.queue_write(message.bytes(), false)!
+}
+
+// reset_synchronized_output resets the synchronized output mode. This is
+// usually called by timer expiration from the termio thread.
+pub fn (mut t Termio) reset_synchronized_output() {
+	t.renderer_state.mutex.lock()
+	defer {
+		t.renderer_state.mutex.unlock()
+	}
+	t.terminal.modes.set(.synchronized_output, false)
+	t.renderer_wakeup.notify() or {}
+}
+
+// clear_screen clears the screen. If history is true, the scrollback is
+// also cleared.
+pub fn (mut t Termio) clear_screen(history bool) ! {
+	{
+		t.renderer_state.mutex.lock()
+		defer {
+			t.renderer_state.mutex.unlock()
+		}
+
+		// If we're on the alternate screen, we do not clear. Since this is
+		// an emulator-level screen clear, this messes up the running
+		// program's knowledge of where the cursor is and causes rendering
+		// issues. So, for alt screen, we do nothing.
+		if t.terminal.screens.active_key == .alternate {
+			return
+		}
+
+		// Clear our selection.
+		t.terminal.screens.active.clear_selection()
+
+		// Clear our scrollback.
+		if history {
+			t.terminal.erase_display(.scrollback, false)
+		}
+
+		// If we're not at a prompt, we just delete above the cursor.
+		//
+		// NOTE: Ghostty erases the exact rows above the cursor (y=0 to
+		// cursor.y-1) and deletes all Kitty graphics. The V terminal's
+		// erase_rows API operates on point tags (not exact y-ranges) and
+		// has no kitty_images storage, so we approximate by erasing the
+		// display above the cursor.
+		if !t.terminal.cursor_is_at_prompt() {
+			if t.terminal.screens.active.cursor.y > 0 {
+				t.terminal.erase_display(.above, false)
+			}
+			return
+		}
+
+		// At a prompt, we want to first fully clear the screen, and then
+		// after send a FF (0x0C) to the shell so that it can repaint the
+		// screen.
+		t.terminal.erase_display(.complete, false)
+	}
+
+	// If we reached here it means we're at a prompt, so we send a form-feed.
+	t.queue_write([u8(0x0C)], false)!
+}
+
+// scroll_viewport scrolls the viewport.
+pub fn (mut t Termio) scroll_viewport(behavior terminal.ScrollViewport, delta int) ! {
+	t.renderer_state.mutex.lock()
+	defer {
+		t.renderer_state.mutex.unlock()
+	}
+	t.terminal.scroll_viewport(behavior, delta)!
+}
+
+// jump_to_prompt jumps the viewport to the prompt.
+pub fn (mut t Termio) jump_to_prompt(delta int) ! {
+	{
+		t.renderer_state.mutex.lock()
+		defer {
+			t.renderer_state.mutex.unlock()
+		}
+		// NOTE: Ghostty scrolls by delta prompts. The V Screen.scroll API
+		// doesn't carry a delta count for delta_prompt, so we scroll to the
+		// nearest prompt. The delta magnitude/direction is a boundary of the
+		// underlying terminal API.
+		_ = delta
+		t.terminal.screens.active.scroll(.delta_prompt)
+	}
+
+	t.renderer_wakeup.notify()!
+}
+
+// focus_gained is called when focus is gained or lost (when focus events
+// are enabled).
+pub fn (mut t Termio) focus_gained(focused bool) ! {
+	t.renderer_state.mutex.lock()
+	focus_event := t.terminal.modes.get(.focus_event)
+	t.renderer_state.mutex.unlock()
+
+	// If we have focus events enabled, we send the focus event.
+	if focus_event {
+		seq := if focused { '\x1b[I' } else { '\x1b[O' }
+		t.queue_write(seq.bytes(), false)!
+	}
+
+	// We always notify our backend of focus changes.
+	t.backend.focus_gained(focused)!
+}
+
+// process_output processes output from the pty. This is the manual API that
+// users can call with pty data but it is also called by the read thread when
+// using an exec subprocess.
+pub fn (mut t Termio) process_output(buf []u8) {
+	// We are modifying terminal state from here on out and we need the lock
+	// to grab our read data.
+	t.renderer_state.mutex.lock()
+	defer {
+		t.renderer_state.mutex.unlock()
+	}
+	t.process_output_locked(buf)
+}
+
+// process_output_locked processes output from readdata but the lock is
+// already held.
+fn (mut t Termio) process_output_locked(buf []u8) {
+	// Schedule a render. We can call this first because we have the lock.
+	t.stream_handler.queue_render() or {}
+
+	// Whenever a character is typed, we ensure the cursor is in the
+	// non-blink state so it is rendered if visible. If we're under HEAVY
+	// read load, we don't want to send a ton of these so we use a timer
+	// under the covers (500ms throttle).
+	now := i64(time.sys_mono_now())
+	if t.last_cursor_reset < 0 || (now - t.last_cursor_reset) > (500 * i64(time.millisecond)) {
+		t.last_cursor_reset = now
+		t.renderer_mailbox.push(renderer.Message{
+			kind: .focus
+		})
+	}
+
+	// Feed the bytes to the stream parser. The parser collects events which
+	// we then dispatch to the stream handler which mutates terminal state.
+	//
+	// NOTE: the inspector "SLOW MODE" path from ghostty is not modeled here
+	// because the V terminal Stream collects events in bulk rather than
+	// dispatching byte-by-byte.
+	t.terminal_stream.next_slice(buf)
+	for event in t.terminal_stream.events {
+		t.stream_handler.vt(event)
+	}
+	t.terminal_stream.clear_events()
+
+	// If our stream handling caused messages to be sent to the mailbox
+	// thread, then we need to wake it up so that it processes them.
+	if t.stream_handler.termio_messaged {
+		t.stream_handler.termio_messaged = false
+		t.mailbox.notify()
+	}
+}
+
+// color_scheme_report sends a DSR response for the current color scheme to
+// the pty.
+pub fn (mut t Termio) color_scheme_report(force bool) ! {
+	t.renderer_state.mutex.lock()
+	defer {
+		t.renderer_state.mutex.unlock()
+	}
+	t.color_scheme_report_locked(force)!
+}
+
+fn (mut t Termio) color_scheme_report_locked(force bool) ! {
+	if !force && !t.terminal.modes.get(.report_color_scheme) {
+		return
+	}
+	output := match t.config.conditional_state.theme {
+		.light { '\x1b[?997;2n' }
+		.dark { '\x1b[?997;1n' }
+	}
+	t.queue_write(output.bytes(), false)!
+}
+
+// ThreadData is the data created and stored in the termio thread when the
+// thread is started and destroyed when the thread is stopped.
+//
+// All of the fields in this struct should only be read/written by the termio
+// thread. As such, a lock is not necessary.
+pub struct ThreadData {
+pub mut:
+	// The shared render state.
+	renderer_state &renderer.State = unsafe { nil }
+
+	// Mailbox for the surface.
+	surface_mailbox apprt.SurfaceMailbox
+
+	// The termio mailbox.
+	mailbox &Mailbox = unsafe { nil }
+}
+
+pub fn (mut self ThreadData) deinit() {}
 
 // OSCColorReportFormat controls how colors are reported in OSC responses.
 pub enum OSCColorReportFormat {
@@ -436,4 +838,9 @@ pub fn (m Mailbox) push(msg Message) int {
 	// stub: always succeeds
 	_ = msg
 	return 1
+}
+
+// notify wakes up the termio thread so it processes any queued messages.
+pub fn (m Mailbox) notify() {
+	// stub: would wake up the termio thread's event loop.
 }

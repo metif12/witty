@@ -1705,6 +1705,8 @@ pub mut:
 struct KeyTableEntry {
 	set  &BindingSet = unsafe { nil }
 	once bool
+	// name is the config name of the activated table.
+	name string
 }
 
 // ---- Placeholder dependency types (stub implementations) ----
@@ -1728,10 +1730,42 @@ pub struct AppAction {
 pub:
 	kind   AppActionKind
 	target &Surface = unsafe { nil }
+	// Payload data for actions that carry values. Only the field matching
+	// the kind is meaningful. These let the surface forward the correct
+	// value to the runtime instead of dropping it.
+	needle          string
+	readonly_on     bool
+	prompt_title    PromptTitleKind
+	fullscreen_mode FullscreenMode
+	inspector_mode  InspectorMode
+	split_dir       SplitDir
+	goto_split      GotoSplitDir
+	goto_window     GotoWindowDir
+	resize_dir      ResizeDir
+	resize_amount   u16
+	goto_tab        int
+	close_tab_mode  CloseTabModeKind
+	move_tab_amount int
+	key_table_name  string
+}
+
+// PromptTitleKind mirrors apprt.PromptTitle.
+pub enum PromptTitleKind {
+	surface
+	tab
+}
+
+// FullscreenMode mirrors apprt.Fullscreen.
+pub enum FullscreenMode {
+	native
+	macos_non_native
+	macos_non_native_visible_menu
+	macos_non_native_padded_notch
 }
 
 pub enum AppActionKind {
 	set_title
+	prompt_title
 	cell_size
 	size_limit
 	initial_size
@@ -1756,9 +1790,34 @@ pub enum AppActionKind {
 	key_table
 	search_total
 	search_selected
+	start_search
+	end_search
 	close_surface
 	close_window
 	close_tab
+	new_window
+	new_tab
+	goto_tab
+	move_tab
+	new_split
+	goto_split
+	goto_window
+	resize_split
+	equalize_splits
+	toggle_split_zoom
+	toggle_fullscreen
+	toggle_maximize
+	toggle_window_decorations
+	toggle_tab_overview
+	toggle_command_palette
+	toggle_background_opacity
+	float_window
+	reset_window_size
+	show_on_screen_keyboard
+	inspector
+	readonly
+	undo
+	redo
 }
 
 pub struct RuntimeSurface {}
@@ -2025,6 +2084,44 @@ fn (t SurfaceTerminal) viewport_pin(x u32, y u32) ?Pin {
 	return Pin{ x: x, y: y }
 }
 
+// select_all returns a selection covering the entire scrollback + screen, or
+// none if there is no content to select.
+fn (t SurfaceTerminal) select_all() ?TermSelection {
+	if t.cols == 0 || t.rows == 0 {
+		return none
+	}
+	return TermSelection{
+		start_pin: Pin{ x: 0, y: 0 }
+		end_pin: Pin{ x: t.cols, y: t.rows }
+	}
+}
+
+// active_is_alternate returns true if the active screen is the alternate
+// screen (which has no scrollback).
+fn (t SurfaceTerminal) active_is_alternate() bool {
+	return t.modes.alternate_screen
+}
+
+// full_reset resets the terminal to its initial state.
+fn (mut t SurfaceTerminal) full_reset() {
+	// Stub: performs a full terminal reset (RIS). The real implementation
+	// resets modes, cursor, screen contents, etc.
+	t.cursor = TermCursor{}
+	t.selection = none
+}
+
+// scroll_to_pin scrolls the viewport so that the given pin is visible.
+fn (mut t SurfaceTerminal) scroll_to_pin(pin Pin) {
+	// Stub: scrolls the active screen so the pin is in view.
+	_ = pin
+}
+
+// scroll_to_row scrolls the active screen to the given row.
+fn (mut t SurfaceTerminal) scroll_to_row(row int) {
+	// Stub: scrolls the active screen to the given absolute row.
+	_ = row
+}
+
 pub struct Pin {
 pub mut:
 	x u32
@@ -2095,6 +2192,35 @@ pub:
 }
 
 fn (w WriteReq) deinit() {
+}
+
+// SurfaceSearch holds the search thread state for a surface. In the full
+// implementation this owns a background search.Thread; here it tracks the
+// active needle so that navigate/end search can be dispatched faithfully.
+@[heap]
+pub struct SurfaceSearch {
+pub mut:
+	needle string
+}
+
+// change_needle updates the search needle and (in the full implementation)
+// notifies the search thread to re-run the search.
+fn (mut s SurfaceSearch) change_needle(needle string) {
+	s.needle = needle
+	// Full implementation: push change_needle message to the search thread
+	// mailbox and notify its wakeup handle.
+}
+
+// navigate moves the search selection to the next/previous match.
+fn (mut s SurfaceSearch) navigate(nav SearchNav) {
+	// Full implementation: push a select(.next/.prev) message to the search
+	// thread mailbox and notify its wakeup handle.
+	_ = nav
+}
+
+// deinit shuts down the search thread.
+fn (mut s SurfaceSearch) deinit() {
+	// Full implementation: notify the thread to stop and join it.
 }
 
 pub struct Config {}
@@ -2269,6 +2395,15 @@ fn (self &DerivedConfig) scaled_padding(x_dpi f32, y_dpi f32) Padding {
 pub struct IOMessage {
 pub:
 	kind IOMessageKind
+	// data carries the raw bytes for write_small/write_stable/write_alloc
+	// messages. For non-write kinds this is empty. This lets us faithfully
+	// encode escape sequences (e.g. mouse reports, CSI/ESC bindings) rather
+	// than only tracking the message kind.
+	data []u8
+	// scroll_delta carries the delta for scroll_viewport messages.
+	scroll_delta i64
+	// prompt_delta carries the delta for jump_to_prompt messages.
+	prompt_delta int
 }
 
 pub enum IOMessageKind {
@@ -2282,6 +2417,18 @@ pub enum IOMessageKind {
 	color_scheme_report
 	selection_scroll
 	visible
+	// clear_screen clears the terminal screen (and optionally history).
+	clear_screen
+	// scroll_viewport scrolls the viewport by IOMessage.scroll_delta.
+	scroll_viewport
+	// scroll_to_top scrolls to the top of the scrollback.
+	scroll_to_top
+	// scroll_to_bottom scrolls to the bottom.
+	scroll_to_bottom
+	// jump_to_prompt jumps to a shell prompt by IOMessage.prompt_delta.
+	jump_to_prompt
+	// reset performs a full terminal reset.
+	reset
 }
 
 pub struct SurfaceMessage {
@@ -2317,6 +2464,108 @@ pub enum SurfaceMessageKind {
 pub struct BindingAction {
 pub:
 	kind BindingActionKind
+	// data holds the string payload for .csi/.esc/.text/.search bindings
+	// and the table name for .activate_key_table*.
+	data string
+	// delta holds the numeric payload for font-size, scroll-row,
+	// jump-to-prompt, scroll-page-lines, etc.
+	delta int
+	// fraction holds the fractional payload for scroll_page_fractional.
+	fraction f32
+	// nav holds the direction for navigate_search.
+	nav SearchNav
+	// tab_mode holds the mode for close_tab.
+	tab_mode CloseTabModeKind
+	// goto_tab holds the (raw) tab index for goto_tab.
+	goto_tab int
+	// split_dir holds the direction for new_split.
+	split_dir SplitDir
+	// goto_split holds the direction for goto_split.
+	goto_split GotoSplitDir
+	// goto_window holds the direction for goto_window.
+	goto_window GotoWindowDir
+	// resize_dir holds the direction for resize_split.
+	resize_dir ResizeDir
+	// inspector_mode holds the mode for the inspector action.
+	inspector_mode InspectorMode
+	// write_screen holds the config for write_*_file actions.
+	write_screen WriteScreenAction
+	// once is true for activate_key_table_once.
+	once bool
+}
+
+// SearchNav is the navigation direction for navigate_search.
+pub enum SearchNav {
+	next
+	previous
+}
+
+// CloseTabModeKind mirrors apprt.CloseTabMode.
+pub enum CloseTabModeKind {
+	this
+	other
+	right
+}
+
+// SplitDir is the direction of a new split (includes auto).
+pub enum SplitDir {
+	right
+	left
+	down
+	up
+	auto
+}
+
+// GotoSplitDir is the direction to navigate to a split.
+pub enum GotoSplitDir {
+	previous
+	next
+	up
+	left
+	down
+	right
+}
+
+// GotoWindowDir is the direction to navigate windows.
+pub enum GotoWindowDir {
+	previous
+	next
+}
+
+// ResizeDir is the direction to resize a split.
+pub enum ResizeDir {
+	up
+	down
+	left
+	right
+}
+
+// InspectorMode controls the inspector action.
+pub enum InspectorMode {
+	toggle
+	show
+	hide
+}
+
+// WriteScreenAction is the config for write_*_file binding actions.
+pub struct WriteScreenAction {
+pub:
+	// emit determines the format (plain/vt/html).
+	emit WriteScreenEmit
+	// action determines what to do with the written file.
+	action WriteScreenTarget
+}
+
+pub enum WriteScreenEmit {
+	plain
+	vt
+	html
+}
+
+pub enum WriteScreenTarget {
+	copy
+	open
+	paste
 }
 
 pub enum BindingActionKind {
@@ -2325,25 +2574,76 @@ pub enum BindingActionKind {
 	csi
 	esc
 	text
+	cursor_key
+	reset
+	start_search
+	search_selection
+	end_search
+	search
+	navigate_search
 	copy_to_clipboard
+	copy_url_to_clipboard
+	copy_title_to_clipboard
 	paste_from_clipboard
+	paste_from_selection
 	increase_font_size
 	decrease_font_size
 	reset_font_size
-	scroll_page_up
-	scroll_page_down
+	set_font_size
+	prompt_surface_title
+	prompt_tab_title
+	clear_screen
 	scroll_to_top
 	scroll_to_bottom
+	scroll_to_row
+	scroll_to_selection
+	scroll_page_up
+	scroll_page_down
+	scroll_page_fractional
+	scroll_page_lines
+	jump_to_prompt
+	write_screen_file
+	write_scrollback_file
+	write_selection_file
+	new_tab
+	close_tab
+	previous_tab
+	next_tab
+	last_tab
+	goto_tab
+	move_tab
+	new_split
+	goto_split
+	goto_window
+	resize_split
+	equalize_splits
+	toggle_split_zoom
+	toggle_readonly
+	reset_window_size
+	toggle_maximize
+	toggle_fullscreen
+	toggle_window_decorations
+	toggle_tab_overview
+	toggle_window_float_on_top
+	toggle_secure_input
+	toggle_mouse_reporting
+	toggle_command_palette
+	toggle_background_opacity
+	show_on_screen_keyboard
+	select_all
+	inspector
 	close_surface
 	close_window
-	close_tab
 	new_window
-	new_tab
-	toggle_fullscreen
-	inspector_toggle
+	activate_key_table
+	activate_key_table_once
 	deactivate_key_table
+	deactivate_all_key_tables
+	end_key_sequence
 	open_url
-	write_screen_file
+	// inspector_toggle is a legacy alias retained for the maybe_handle_binding
+	// path; it toggles the inspector like .inspector with .toggle.
+	inspector_toggle
 }
 
 pub struct BindingFlags {
@@ -2423,6 +2723,9 @@ pub mut:
 
 	selection_scroll_active bool
 	readonly               bool
+
+	// The search state for the surface. When none, no search is active.
+	search ?&SurfaceSearch
 
 	command_timer  ?time.Time
 	last_bell_time ?time.Time
@@ -3166,32 +3469,59 @@ pub fn (mut self Surface) content_scale_callback(content_scale ContentScale) ! {
 
 // mouse_button_callback handles mouse button press/release events.
 pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonState, button input.MouseButton, mods input.Mods) !bool {
-	// Update mods
-	self.mouse.mods = mods
+	// If we have an inspector, we always queue a render.
+	if self.inspector != none {
+		defer {
+			self.queue_render() or {}
+		}
+	}
 
-	// Show mouse on click
+	// Always record our latest mouse state.
+	self.mouse.click_state[int(button) % 10] = if button_action == .press {
+		MouseButtonState.press
+	} else {
+		MouseButtonState.release
+	}
+
+	// Show mouse on click.
 	if self.mouse.hidden {
 		self.show_mouse()
 	}
 
-	btn_idx := int(button) % 10
+	// Update our modifiers if they changed.
+	self.mods_changed(mods)
+
+	// This is set to true if the terminal is allowed to capture shift.
+	shift_capture := self.mouse_shift_capture(true)
+
 	is_press := button_action == .press
 
-	if is_press {
-		self.mouse.click_state[btn_idx] = .press
-
-		// Check for mouse reporting
-		if self.is_mouse_reporting() && !self.mouse_shift_capture(true) {
-			self.mouse_report(?input.MouseButton(button), .press, mods, CursorPos{})!
-			return true
+	// Shift-click continues the previous mouse state if we have a selection.
+	// cursorPosCallback will also do a mouse report so we don't need to do
+	// any of the logic below.
+	if button == .left && is_press {
+		if mods.shift && self.mouse.left_click_count > 0 && !shift_capture {
+			if self.has_selection() {
+				// If we are within the interval that a click would register
+				// an increment then we do not extend the selection.
+				now := time.now()
+				since := now - self.mouse.left_click_time
+				if u64(since) > self.config.mouse_interval {
+					pos := self.rt_surface.get_cursor_pos()!
+					self.cursor_pos_callback(pos, none)!
+					return true
+				}
+			}
 		}
+	}
 
-		// Handle left button
+	if is_press {
+		// Handle left button multi-click selection.
 		if button == .left {
 			self.mouse.left_click_count += 1
 
-			// Double-click: select word
-			if self.mouse.left_click_count == 2 {
+			// Double-click: select word.
+			if self.mouse.left_click_count == 2 && !self.is_mouse_reporting() {
 				pos := self.rt_surface.get_cursor_pos()!
 				vp := self.pos_to_viewport(pos.x, pos.y)
 				if pin := self.renderer_state.terminal.viewport_pin(vp.x, vp.y) {
@@ -3199,12 +3529,13 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 						self.renderer_state.terminal.select_at(sel)!
 					}
 				}
+				self.mouse.left_click_time = time.now()
 				self.queue_render()!
 				return true
 			}
 
-			// Triple-click: select line
-			if self.mouse.left_click_count >= 3 {
+			// Triple-click: select line.
+			if self.mouse.left_click_count >= 3 && !self.is_mouse_reporting() {
 				pos := self.rt_surface.get_cursor_pos()!
 				vp := self.pos_to_viewport(pos.x, pos.y)
 				if pin := self.renderer_state.terminal.viewport_pin(vp.x, vp.y) {
@@ -3212,30 +3543,120 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 						self.renderer_state.terminal.select_at(sel)!
 					}
 				}
+				self.mouse.left_click_time = time.now()
 				self.queue_render()!
 				return true
 			}
+
+			self.mouse.left_click_time = time.now()
 		}
 	} else {
-		self.mouse.click_state[btn_idx] = .release
+		// Release path.
+		if button == .left {
+			// Stop selection scrolling when releasing the left button but
+			// only when selection scrolling is active.
+			if self.selection_scroll_active {
+				self.selection_scroll_active = false
+				self.queue_io(IOMessage{ kind: .selection_scroll })
+			}
 
-		// Check for mouse reporting
-		if self.is_mouse_reporting() && !self.mouse_shift_capture(true) {
-			self.mouse_report(?input.MouseButton(button), .release, mods, CursorPos{})!
+			// The selection clipboard is only updated for left-click drag
+			// when the left button is released. This avoids the clipboard
+			// being updated on every mouse move which would be noisy.
+			if self.config.copy_on_select != .false_ {
+				if sel := self.renderer_state.terminal.selection {
+					self.set_selection(sel)!
+				}
+			}
+
+			// Handle link clicking. We do this before mouse reporting or any
+			// other mouse handling because a successfully clicked link will
+			// swallow the event.
+			if self.mouse.over_link {
+				pos := self.rt_surface.get_cursor_pos()!
+				if processed := self.process_links(pos) {
+					if processed {
+						return true
+					}
+				} else {
+					// Log and continue on error.
+				}
+			}
+
+			// Handle prompt clicking. If we released on a prompt and support
+			// click events, then we move to it.
+			if handled := self.maybe_prompt_click() {
+				if handled {
+					return true
+				}
+			} else {
+				// Log and continue on error.
+			}
+		}
+	}
+
+	// Report mouse events if enabled.
+	if self.is_mouse_reporting() {
+		// If shift is pressed and we aren't allowed to capture it, then we
+		// do not do a mouse report.
+		if !(mods.shift && !shift_capture) {
+			// In any other mouse button scenario without shift pressed we
+			// clear the selection since the underlying application can handle
+			// that in any way (i.e. "scrolling").
+			self.set_selection(none)!
+
+			// We also set the left click count to 0 so that if mouse
+			// reporting is disabled in the middle of a press (before release)
+			// we don't suddenly start selecting text.
+			self.mouse.left_click_count = 0
+
+			pos := self.rt_surface.get_cursor_pos()!
+			report_action := if is_press {
+				MouseReportAction.press
+			} else {
+				MouseReportAction.release
+			}
+			self.mouse_report(?input.MouseButton(button), report_action, self.mouse.mods, pos)!
+
+			// If we're doing mouse reporting we don't support other selection
+			// or highlighting.
 			return true
 		}
+	}
 
-		// Stop selection scroll on release
-		if button == .left && self.selection_scroll_active {
-			self.selection_scroll_active = false
-		}
-
-		// Copy on select
-		if button == .left && self.config.copy_on_select != .false_ {
-			if _ := self.renderer_state.terminal.selection {
-				sel := self.renderer_state.terminal.selection or { return false }
-				self.copy_selection_to_clipboards(sel, 0)!
+	// For left button clicks we always record info for selection/highlight.
+	if button == .left && is_press {
+		pos := self.rt_surface.get_cursor_pos()!
+		vp := self.pos_to_viewport(pos.x, pos.y)
+		if pin := self.renderer_state.terminal.viewport_pin(vp.x, vp.y) {
+			// If we move our cursor too much between clicks then we reset the
+			// multi-click state.
+			if self.mouse.left_click_count > 0 {
+				max_distance := f64(self.size.cell.width)
+				dx := pos.x - self.mouse.left_click_xpos
+				dy := pos.y - self.mouse.left_click_ypos
+				distance := math.sqrt(dx * dx + dy * dy)
+				if distance > max_distance {
+					self.mouse.left_click_count = 0
+				}
 			}
+
+			// Store our click state.
+			self.mouse.left_click_pin = pin
+			self.mouse.left_click_xpos = pos.x
+			self.mouse.left_click_ypos = pos.y
+
+			// Single click clears any existing selection.
+			if self.mouse.left_click_count <= 1 {
+				self.set_selection(none)!
+			}
+		}
+	}
+
+	// Middle-click pastes from our selection clipboard.
+	if button == .middle && is_press {
+		if self.config.copy_on_select != .false_ {
+			self.start_clipboard_request(.paste)!
 		}
 	}
 
@@ -3347,118 +3768,419 @@ pub fn (self &Surface) pos_to_viewport(xpos f64, ypos f64) Coordinate {
 // perform_binding_action performs a binding action from a keybinding.
 pub fn (mut self Surface) perform_binding_action(action BindingAction) !bool {
 	match action.kind {
-		.none_ { return false }
-		.ignore { return true }
-		.csi {
-			self.queue_io(IOMessage{ kind: .write_small })
+		.none_ {
+			return false
+		}
+		.ignore {
 			return true
 		}
-		.esc {
-			self.queue_io(IOMessage{ kind: .write_small })
-			return true
+		.csi, .esc {
+			// We need to send the CSI/ESC sequence as a single write request.
+			// If you split it across two then the shell can interpret it
+			// as two literals.
+			prefix := if action.kind == .csi { '\x1b[' } else { '\x1b' }
+			full_data := (prefix + action.data).bytes()
+			self.queue_io(IOMessage{ kind: .write_small, data: full_data })
+
+			// CSI/ESC triggers a scroll.
+			self.scroll_to_bottom() or {}
 		}
 		.text {
-			self.queue_io(IOMessage{ kind: .write_small })
-			return true
+			// For text we always allocate. The Zig version parses the string
+			// literal escapes via configpkg.string.parse; here we send the
+			// bytes as-is.
+			self.queue_io(IOMessage{ kind: .write_alloc, data: action.data.bytes() })
+
+			// Text triggers a scroll.
+			self.scroll_to_bottom() or {}
+		}
+		.cursor_key {
+			// We send a different sequence depending on if we're in cursor
+			// keys mode. The concrete sequences are carried in action.data
+			// (normal) — full parity would carry both normal+application.
+			self.scroll_to_bottom() or {}
+			self.queue_io(IOMessage{ kind: .write_stable, data: action.data.bytes() })
+		}
+		.reset {
+			self.renderer_state.terminal.full_reset()
+		}
+		.start_search {
+			// To save resources, we don't actually start a search here, we
+			// just notify the apprt. The real thread starts on the first
+			// needle.
+			return self.rt_app.perform_action(AppAction{
+				kind: .start_search
+				target: &self
+				needle: ''
+			})!
+		}
+		.search_selection {
+			selection := self.selection_string() or { return false }
+			return self.rt_app.perform_action(AppAction{
+				kind: .start_search
+				target: &self
+				needle: selection
+			})!
+		}
+		.end_search {
+			// We only return that this was performed if we actually stopped a
+			// search, but we also send the apprt end_search so GUIs can clean
+			// up stale state.
+			performed := self.search != none
+			if mut s := self.search {
+				s.deinit()
+				self.search = none
+			}
+			self.rt_app.perform_action(AppAction{
+				kind: .end_search
+				target: &self
+			})!
+			return performed
+		}
+		.search {
+			text := action.data
+			if mut s := self.search {
+				if text.len == 0 {
+					// Zero-length text means stop searching.
+					s.deinit()
+					self.search = none
+				} else {
+					s.change_needle(text)
+				}
+			} else {
+				// If we're stopping the search and had no prior search, do
+				// nothing.
+				if text.len == 0 {
+					return false
+				}
+				mut s := &SurfaceSearch{ needle: text }
+				self.search = s
+				s.change_needle(text)
+			}
+		}
+		.navigate_search {
+			if mut s := self.search {
+				s.navigate(action.nav)
+			} else {
+				return false
+			}
 		}
 		.copy_to_clipboard {
 			if sel := self.renderer_state.terminal.selection {
-				self.copy_selection_to_clipboards(sel, 0)!
+				self.copy_selection_to_clipboards(sel, action.delta)!
+				// Clear the selection if configured to do so.
 				if self.config.selection_clear_on_copy {
 					self.set_selection(none)!
+					self.queue_render()!
+				}
+				return true
+			}
+			return false
+		}
+		.copy_url_to_clipboard {
+			// If the mouse isn't over a link, nothing we can do.
+			if !self.mouse.over_link {
+				return false
+			}
+			pos := self.rt_surface.get_cursor_pos()!
+			link_info := self.link_at_pos(pos) or { return false }
+			url_text := match link_info.action {
+				.open {
+					// For regex links, get the text from the selection.
+					self.renderer_state.terminal.selection_string()
+				}
+				.open_osc8 {
+					// For OSC8 links, get the URI from hyperlink data.
+					self.osc8_uri(link_info.selection.start()) or { return false }
 				}
 			}
+			self.rt_surface.set_clipboard(url_text, false) or { return false }
+			return true
+		}
+		.copy_title_to_clipboard {
+			title := self.rt_surface.get_title() or { return false }
+			if title.len == 0 {
+				return false
+			}
+			self.rt_surface.set_clipboard(title, false) or { return true }
 			return true
 		}
 		.paste_from_clipboard {
-			self.start_clipboard_request(.paste)!
-			return true
+			return self.start_clipboard_request(.paste)!
+		}
+		.paste_from_selection {
+			return self.start_clipboard_request(.paste)!
 		}
 		.increase_font_size {
+			// Max delta is somewhat arbitrary.
+			clamped_delta := math.max(0, math.min(255, action.delta))
 			mut size := self.font_size
-			size.points += 1.0
-			self.font_size_adjusted = true
+			size.points = math.min(size.points + f32(clamped_delta), f32(255))
 			self.set_font_size(size)!
-			return true
+			self.font_size_adjusted = true
 		}
 		.decrease_font_size {
+			clamped_delta := math.max(0, math.min(255, action.delta))
 			mut size := self.font_size
-			if size.points > 1.0 {
-				size.points -= 1.0
-			}
-			self.font_size_adjusted = true
+			size.points = math.max(f32(1), size.points - f32(clamped_delta))
 			self.set_font_size(size)!
-			return true
+			self.font_size_adjusted = true
 		}
 		.reset_font_size {
 			mut size := self.font_size
 			size.points = self.config.original_font_size
-			self.font_size_adjusted = false
 			self.set_font_size(size)!
-			return true
+			self.font_size_adjusted = false
 		}
-		.scroll_page_up {
-			grid := self.size.grid()
-			self.renderer_state.terminal.scroll_viewport_delta(-i32(grid.rows))!
-			self.queue_render()!
-			return true
+		.set_font_size {
+			mut size := self.font_size
+			points := f32(action.delta)
+			size.points = if points < 1.0 {
+				f32(1.0)
+			} else if points > 255.0 {
+				f32(255.0)
+			} else {
+				points
+			}
+			self.set_font_size(size)!
+			self.font_size_adjusted = true
 		}
-		.scroll_page_down {
-			grid := self.size.grid()
-			self.renderer_state.terminal.scroll_viewport_delta(i32(grid.rows))!
-			self.queue_render()!
-			return true
+		.prompt_surface_title {
+			return self.rt_app.perform_action(AppAction{
+				kind: .prompt_title
+				target: &self
+				prompt_title: .surface
+			})!
+		}
+		.prompt_tab_title {
+			return self.rt_app.perform_action(AppAction{
+				kind: .prompt_title
+				target: &self
+				prompt_title: .tab
+			})!
+		}
+		.clear_screen {
+			// If the active screen is the alternate screen then clear screen
+			// does nothing, so we return false so the keybind is unconsumed.
+			if self.renderer_state.terminal.active_is_alternate() {
+				return false
+			}
+			self.queue_io(IOMessage{ kind: .clear_screen })
 		}
 		.scroll_to_top {
-			self.renderer_state.terminal.scroll_viewport_delta(-999999)!
-			self.queue_render()!
-			return true
+			self.queue_io(IOMessage{ kind: .scroll_to_top })
 		}
 		.scroll_to_bottom {
-			self.scroll_to_bottom()!
+			self.queue_io(IOMessage{ kind: .scroll_to_bottom })
+		}
+		.scroll_to_row {
+			self.renderer_state.terminal.scroll_to_row(action.delta)
 			self.queue_render()!
-			return true
 		}
-		.close_surface {
-			self.close()
-			return true
+		.scroll_to_selection {
+			sel := self.renderer_state.terminal.selection or { return false }
+			self.renderer_state.terminal.scroll_to_pin(sel.top_left())
+			self.queue_render()!
 		}
-		.close_window {
-			self.rt_app.perform_action(AppAction{
-				kind: .close_window
-				target: &self
-			})!
-			return true
+		.scroll_page_up {
+			rows := i64(self.size.grid().rows)
+			self.queue_io(IOMessage{ kind: .scroll_viewport, scroll_delta: -rows })
 		}
-		.close_tab {
-			self.rt_app.perform_action(AppAction{
-				kind: .close_tab
-				target: &self
-			})!
-			return true
+		.scroll_page_down {
+			rows := i64(self.size.grid().rows)
+			self.queue_io(IOMessage{ kind: .scroll_viewport, scroll_delta: rows })
 		}
-		.new_window {
-			self.rt_app.perform_action(AppAction{
-				kind: .set_title
-				target: &self
-			})!
-			return true
+		.scroll_page_fractional {
+			rows := f32(self.size.grid().rows)
+			delta := i64(action.fraction * rows)
+			self.queue_io(IOMessage{ kind: .scroll_viewport, scroll_delta: delta })
+		}
+		.scroll_page_lines {
+			self.queue_io(IOMessage{ kind: .scroll_viewport, scroll_delta: i64(action.delta) })
+		}
+		.jump_to_prompt {
+			self.queue_io(IOMessage{ kind: .jump_to_prompt, prompt_delta: action.delta })
+		}
+		.write_screen_file {
+			self.write_screen_file(.screen, action.write_screen)!
+		}
+		.write_scrollback_file {
+			self.write_screen_file(.history, action.write_screen)!
+		}
+		.write_selection_file {
+			self.write_screen_file(.selection, action.write_screen)!
 		}
 		.new_tab {
-			self.rt_app.perform_action(AppAction{
-				kind: .set_title
+			return self.rt_app.perform_action(AppAction{
+				kind: .new_tab
 				target: &self
 			})!
+		}
+		.close_tab {
+			return self.rt_app.perform_action(AppAction{
+				kind: .close_tab
+				target: &self
+				close_tab_mode: action.tab_mode
+			})!
+		}
+		.previous_tab {
+			return self.goto_tab_action(int(GotoTabSpecial.previous))!
+		}
+		.next_tab {
+			return self.goto_tab_action(int(GotoTabSpecial.next))!
+		}
+		.last_tab {
+			return self.goto_tab_action(int(GotoTabSpecial.last))!
+		}
+		.goto_tab {
+			return self.goto_tab_action(action.goto_tab)!
+		}
+		.move_tab {
+			return self.rt_app.perform_action(AppAction{
+				kind: .move_tab
+				target: &self
+				move_tab_amount: action.delta
+			})!
+		}
+		.new_split {
+			// Resolve .auto based on the surface aspect ratio.
+			dir := if action.split_dir == .auto {
+				if self.size.screen.width > self.size.screen.height {
+					SplitDir.right
+				} else {
+					SplitDir.down
+				}
+			} else {
+				action.split_dir
+			}
+			return self.rt_app.perform_action(AppAction{
+				kind: .new_split
+				target: &self
+				split_dir: dir
+			})!
+		}
+		.goto_split {
+			return self.rt_app.perform_action(AppAction{
+				kind: .goto_split
+				target: &self
+				goto_split: action.goto_split
+			})!
+		}
+		.goto_window {
+			return self.rt_app.perform_action(AppAction{
+				kind: .goto_window
+				target: &self
+				goto_window: action.goto_window
+			})!
+		}
+		.resize_split {
+			return self.rt_app.perform_action(AppAction{
+				kind: .resize_split
+				target: &self
+				resize_dir: action.resize_dir
+				resize_amount: u16(action.delta)
+			})!
+		}
+		.equalize_splits {
+			return self.rt_app.perform_action(AppAction{
+				kind: .equalize_splits
+				target: &self
+			})!
+		}
+		.toggle_split_zoom {
+			return self.rt_app.perform_action(AppAction{
+				kind: .toggle_split_zoom
+				target: &self
+			})!
+		}
+		.toggle_readonly {
+			self.readonly = !self.readonly
+			self.rt_app.perform_action(AppAction{
+				kind: .readonly
+				target: &self
+				readonly_on: self.readonly
+			})!
 			return true
+		}
+		.reset_window_size {
+			return self.rt_app.perform_action(AppAction{
+				kind: .reset_window_size
+				target: &self
+			})!
+		}
+		.toggle_maximize {
+			return self.rt_app.perform_action(AppAction{
+				kind: .toggle_maximize
+				target: &self
+			})!
 		}
 		.toggle_fullscreen {
-			self.rt_app.perform_action(AppAction{
-				kind: .set_title
+			return self.rt_app.perform_action(AppAction{
+				kind: .toggle_fullscreen
+				target: &self
+				fullscreen_mode: .native
+			})!
+		}
+		.toggle_window_decorations {
+			return self.rt_app.perform_action(AppAction{
+				kind: .toggle_window_decorations
 				target: &self
 			})!
-			return true
+		}
+		.toggle_tab_overview {
+			return self.rt_app.perform_action(AppAction{
+				kind: .toggle_tab_overview
+				target: &self
+			})!
+		}
+		.toggle_window_float_on_top {
+			return self.rt_app.perform_action(AppAction{
+				kind: .float_window
+				target: &self
+			})!
+		}
+		.toggle_secure_input {
+			return self.rt_app.perform_action(AppAction{
+				kind: .secure_input
+				target: &self
+			})!
+		}
+		.toggle_mouse_reporting {
+			self.config.mouse_reporting = !self.config.mouse_reporting
+		}
+		.toggle_command_palette {
+			return self.rt_app.perform_action(AppAction{
+				kind: .toggle_command_palette
+				target: &self
+			})!
+		}
+		.toggle_background_opacity {
+			return self.rt_app.perform_action(AppAction{
+				kind: .toggle_background_opacity
+				target: &self
+			})!
+		}
+		.show_on_screen_keyboard {
+			return self.rt_app.perform_action(AppAction{
+				kind: .show_on_screen_keyboard
+				target: &self
+			})!
+		}
+		.select_all {
+			if sel := self.renderer_state.terminal.select_all() {
+				self.set_selection(sel)!
+				self.queue_render()!
+			}
+		}
+		.inspector {
+			return self.rt_app.perform_action(AppAction{
+				kind: .inspector
+				target: &self
+				inspector_mode: action.inspector_mode
+			})!
 		}
 		.inspector_toggle {
+			// Legacy alias used by internal dispatch; toggle directly.
 			if self.inspector != none {
 				self.deactivate_inspector()
 			} else {
@@ -3466,18 +4188,118 @@ pub fn (mut self Surface) perform_binding_action(action BindingAction) !bool {
 			}
 			return true
 		}
+		.close_surface {
+			self.close()
+		}
+		.close_window {
+			return self.rt_app.perform_action(AppAction{
+				kind: .close_window
+				target: &self
+			})!
+		}
+		.new_window {
+			// Zig calls self.app.newWindow(self.rt_app, .{ .parent = self }).
+			// The core App.new_window ultimately dispatches a new_window
+			// action; here we go through the runtime directly since the
+			// surface's rt_app stub is a different type than app's apprt one.
+			return self.rt_app.perform_action(AppAction{
+				kind: .new_window
+				target: &self
+			})!
+		}
+		.activate_key_table, .activate_key_table_once {
+			return self.activate_key_table(action.data, action.kind == .activate_key_table_once)!
+		}
 		.deactivate_key_table {
+			match self.keyboard.table_stack.len {
+				0 {
+					// No key table active. This does nothing.
+					return false
+				}
+				1 {
+					// Final key table active, clear our state.
+					self.keyboard.table_stack.clear()
+				}
+				else {
+					// Restore the prior key table.
+					self.keyboard.table_stack.delete_last()
+				}
+			}
+			self.rt_app.perform_action(AppAction{
+				kind: .key_table
+				target: &self
+			}) or {}
+		}
+		.deactivate_all_key_tables {
 			return self.deactivate_all_key_tables()!
+		}
+		.end_key_sequence {
+			// End the key sequence and flush queued keys to the terminal,
+			// but don't encode the key that triggered this action.
+			self.end_key_sequence(.flush, .retain)
 		}
 		.open_url {
 			self.open_url('')!
-			return true
-		}
-		.write_screen_file {
-			self.write_screen_file(.screen, 0)!
-			return true
 		}
 	}
+
+	return true
+}
+
+// GotoTabSpecial holds the special negative tab targets for goto_tab.
+enum GotoTabSpecial {
+	previous = -1
+	next     = -2
+	last     = -3
+}
+
+// goto_tab_action forwards a goto_tab action to the runtime with the given
+// raw tab index (which may be a GotoTabSpecial negative value).
+fn (mut self Surface) goto_tab_action(idx int) !bool {
+	return self.rt_app.perform_action(AppAction{
+		kind: .goto_tab
+		target: &self
+		goto_tab: idx
+	})!
+}
+
+// activate_key_table activates the named key table, pushing it onto the
+// table stack. Returns false if the table is unknown, already active, or the
+// stack is full.
+fn (mut self Surface) activate_key_table(name string, once bool) !bool {
+	// Look up the table in our config. Key tables aren't wired up yet in the
+	// stub config, so treat an empty name as "not found".
+	if name.len == 0 {
+		return false
+	}
+
+	// If this is the same table as is currently active, do nothing.
+	if self.keyboard.table_stack.len > 0 {
+		active := self.keyboard.table_stack[self.keyboard.table_stack.len - 1]
+		if active.name == name {
+			return false
+		}
+	}
+
+	// If we're already at the max, ignore it.
+	if self.keyboard.table_stack.len >= max_active_key_tables {
+		return false
+	}
+
+	// Add the table to the stack.
+	self.keyboard.table_stack << KeyTableEntry{
+		once: once
+		name: name
+	}
+
+	// Notify the UI.
+	self.rt_app.perform_action(AppAction{
+		kind: .key_table
+		target: &self
+		key_table_name: name
+	}) or {}
+
+	return true
 }
 
 // ---- Private helper methods ----
@@ -3550,38 +4372,185 @@ fn (self &Surface) is_mouse_reporting() bool {
 }
 
 fn (mut self Surface) mouse_report(button ?input.MouseButton, action MouseReportAction, mods input.Mods, pos CursorPos) ! {
-	// Convert cursor position to viewport coordinates
-	vp := self.pos_to_viewport(pos.x, pos.y)
+	mouse_event := self.renderer_state.terminal.flags.mouse_event
+	mouse_format := self.renderer_state.terminal.flags.mouse_format
 
-	// Update event point for tracking
-	self.mouse.event_point = vp
-
-	// Build and send the mouse report based on terminal's mouse format
-	match self.renderer_state.terminal.flags.mouse_format {
+	// Depending on the event, we may do nothing at all.
+	match mouse_event {
+		.none_ {
+			return
+		}
 		.x10 {
-			// X10 format: ESC[M Cb Cx Cy (all +32)
-			self.queue_io(IOMessage{ kind: .write_small })
+			// X10 only reports clicks with mouse button 1, 2, 3. We verify
+			// the button below. It doesn't report motion, and the button
+			// must be pressed.
+			if action != .press {
+				return
+			}
+			b := button or { return }
+			if b !in [.left, .middle, .right] {
+				return
+			}
 		}
-		.utf8 {
-			// UTF-8 extended format
-			self.queue_io(IOMessage{ kind: .write_small })
+		.normal {
+			// Doesn't report motion.
+			if action == .motion {
+				return
+			}
 		}
-		.sgr {
-			// SGR format: ESC[<Cb;Cx;Cy M/m
-			self.queue_io(IOMessage{ kind: .write_small })
+		.button {
+			// Button must be pressed.
+			if button == none {
+				return
+			}
 		}
-		.urxvt {
-			// URXVT format
-			self.queue_io(IOMessage{ kind: .write_small })
-		}
-		.sgr_pixels {
-			// SGR-Pixels format
-			self.queue_io(IOMessage{ kind: .write_small })
+		.any {}
+	}
+
+	// Handle scenarios where the mouse position is outside the viewport. We
+	// always report release events no matter where they happen.
+	if action != .release {
+		max_x := f32(self.size.screen.width)
+		max_y := f32(self.size.screen.height)
+		pos_out_viewport := pos.x < 0 || pos.y < 0 || pos.x > max_x || pos.y > max_y
+		if pos_out_viewport {
+			// If we don't have a motion-tracking event mode, do nothing.
+			if mouse_event !in [.button, .any] {
+				return
+			}
+			// If any button is pressed we still report. Otherwise we don't.
+			mut any_pressed := false
+			for state in self.mouse.click_state {
+				if state != .release {
+					any_pressed = true
+					break
+				}
+			}
+			if !any_pressed {
+				return
+			}
 		}
 	}
-	_ = button
-	_ = action
-	_ = mods
+
+	// This format reports X/Y.
+	viewport_point := self.pos_to_viewport(pos.x, pos.y)
+
+	// Record our new point. We only want to send a mouse event if the cell
+	// changed, unless we're tracking raw pixels.
+	if action == .motion && mouse_format != .sgr_pixels {
+		if last_point := self.mouse.event_point {
+			if last_point.eql(viewport_point) {
+				return
+			}
+		}
+	}
+	self.mouse.event_point = viewport_point
+
+	// Get the code we'll actually write.
+	mut button_code := u8(0)
+	if button == none {
+		// Null button means motion without a button pressed.
+		button_code = 3
+	} else if action == .release && mouse_format != .sgr && mouse_format != .sgr_pixels {
+		// Release is 3. It is NOT 3 in SGR mode because SGR can tell the
+		// application what button was released.
+		button_code = 3
+	} else {
+		b := button or { return }
+		button_code = match b {
+			.left { u8(0) }
+			.middle { u8(1) }
+			.right { u8(2) }
+			.four { u8(64) }
+			.five { u8(65) }
+			.six { u8(66) }
+			.seven { u8(67) }
+			.eight { u8(128) }
+			.nine { u8(129) }
+			else { return } // unsupported
+		}
+	}
+
+	// X10 doesn't have modifiers.
+	if mouse_event != .x10 {
+		if mods.shift {
+			button_code += 4
+		}
+		if mods.alt {
+			button_code += 8
+		}
+		if mods.ctrl {
+			button_code += 16
+		}
+	}
+
+	// Motion adds another bit.
+	if action == .motion {
+		button_code += 32
+	}
+
+	match mouse_format {
+		.x10 {
+			if viewport_point.x > 222 || viewport_point.y > 222 {
+				// X10 mouse format can only encode X/Y up to 223.
+				return
+			}
+			// +1 below is because our x/y is 0-indexed and the protocol wants 1.
+			mut data := []u8{cap: 6}
+			data << u8(0x1b)
+			data << u8(`[`)
+			data << u8(`M`)
+			data << u8(32 + button_code)
+			data << u8(32 + u8(viewport_point.x) + 1)
+			data << u8(32 + u8(viewport_point.y) + 1)
+			self.queue_io(IOMessage{ kind: .write_small, data: data })
+		}
+		.utf8 {
+			mut data := []u8{cap: 12}
+			data << u8(0x1b)
+			data << u8(`[`)
+			data << u8(`M`)
+			data << u8(32 + button_code)
+			// UTF-8 encode the x/y.
+			data << utf8_encode(u32(32 + viewport_point.x + 1))
+			data << utf8_encode(u32(32 + viewport_point.y + 1))
+			self.queue_io(IOMessage{ kind: .write_small, data: data })
+		}
+		.sgr {
+			// Final character to send in the CSI.
+			final := if action == .release { `m` } else { `M` }
+			resp := '\x1b[<${button_code};${viewport_point.x + 1};${viewport_point.y + 1}${rune(final)}'
+			self.queue_io(IOMessage{ kind: .write_small, data: resp.bytes() })
+		}
+		.urxvt {
+			resp := '\x1b[${u16(32) + u16(button_code)};${viewport_point.x + 1};${viewport_point.y + 1}M'
+			self.queue_io(IOMessage{ kind: .write_small, data: resp.bytes() })
+		}
+		.sgr_pixels {
+			// Final character to send in the CSI.
+			final := if action == .release { `m` } else { `M` }
+			// The position has to be adjusted to the terminal (padding-relative)
+			// space and reported in pixels.
+			px := i32(math.round(pos.x - f64(self.size.padding.left)))
+			py := i32(math.round(pos.y - f64(self.size.padding.top)))
+			resp := '\x1b[<${button_code};${px};${py}${rune(final)}'
+			self.queue_io(IOMessage{ kind: .write_small, data: resp.bytes() })
+		}
+	}
+}
+
+// utf8_encode encodes a single codepoint into UTF-8 bytes.
+fn utf8_encode(cp u32) []u8 {
+	if cp < 0x80 {
+		return [u8(cp)]
+	} else if cp < 0x800 {
+		return [u8(0xC0 | (cp >> 6)), u8(0x80 | (cp & 0x3F))]
+	} else if cp < 0x10000 {
+		return [u8(0xE0 | (cp >> 12)), u8(0x80 | ((cp >> 6) & 0x3F)), u8(0x80 | (cp & 0x3F))]
+	} else {
+		return [u8(0xF0 | (cp >> 18)), u8(0x80 | ((cp >> 12) & 0x3F)), u8(0x80 | ((cp >> 6) & 0x3F)),
+			u8(0x80 | (cp & 0x3F))]
+	}
 }
 
 fn (self &Surface) mouse_shift_capture(do_lock bool) bool {
@@ -4005,15 +4974,57 @@ fn (self &Surface) osc8_uri(pin Pin) ?string {
 	return none
 }
 
-fn (mut self Surface) write_screen_file(loc WriteScreenLoc, emit int) ! {
-	// Create temp file for screen content dump
-	tmp_dir := os.temp_dir()
-	tmp_path := os.join_path(tmp_dir, 'Witty_dump.txt')
+fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen WriteScreenAction) ! {
+	// Determine the selection to dump based on the location.
+	sel := match loc {
+		.history {
+			// We do not support this for alternate screens because they
+			// don't have scrollback anyways.
+			if self.renderer_state.terminal.active_is_alternate() {
+				return
+			}
+			// Full impl: pages.getTopLeft(.history)..getBottomRight(.history).
+			// With the stub screen, fall back to the full screen selection.
+			self.renderer_state.terminal.select_all() or { return }
+		}
+		.screen {
+			self.renderer_state.terminal.select_all() or { return }
+		}
+		.selection {
+			self.renderer_state.terminal.selection or {
+				// If we have no selection we have no data, do nothing.
+				return
+			}
+		}
+	}
 
+	// Format the selection into a temporary file. The extension is chosen
+	// based on the emit format.
+	ext := match write_screen.emit {
+		.plain, .vt { 'txt' }
+		.html { 'html' }
+	}
+	tmp_dir := os.temp_dir()
+	tmp_path := os.join_path(tmp_dir, '${loc}.${ext}')
+
+	// The full implementation uses terminal.formatter.ScreenFormatter to
+	// serialize the selection. Here we use the selection text directly.
 	content := self.renderer_state.terminal.selection_string()
 	os.write_file(tmp_path, content)!
-	_ = loc
-	_ = emit
+	_ = sel
+
+	// Act on the written file per the action.
+	match write_screen.action {
+		.copy {
+			self.rt_surface.set_clipboard(tmp_path, false)!
+		}
+		.open {
+			self.open_url(tmp_path)!
+		}
+		.paste {
+			self.queue_io(IOMessage{ kind: .write_alloc, data: tmp_path.bytes() })
+		}
+	}
 }
 
 fn (mut self Surface) complete_clipboard_paste(data string, allow_unsafe bool) ! {

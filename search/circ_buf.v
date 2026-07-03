@@ -133,6 +133,20 @@ module search
 // DataBuf stores encoded page text (bytes) and MetaBuf stores page
 // metadata entries. Both support efficient O(1) append-at-end and
 // delete-from-front operations.
+//
+// Relative to the generic Zig `CircBuf(T, default)` in
+// datastruct/circ_buf.zig, this is a purpose-built rewrite using
+// head/count bookkeeping instead of head/tail/full. The Zig-parity
+// pieces added here are: the forward/reverse `Iterator` (next / seek_by
+// / reset, plus first/last helpers), `resize`, and `rotate_to_zero`.
+//
+// Intentionally omitted (not required by SlidingWindow, the only consumer):
+//   - The `full` flag and the `append`-that-can-error path: our bufs grow
+//     on demand via ensure_unused_capacity, so a "full" state never occurs.
+//   - `getPtrSlice`'s auto-advance/wrap-write behavior: DataBuf.get_ptr_slice
+//     is read-only here; SlidingWindow reserves capacity before writing.
+//   - The `default` value memset on delete: unused slots are logically dead
+//     (guarded by `count`), so we skip zeroing for speed.
 
 import terminal
 import highlight
@@ -271,6 +285,124 @@ fn (mut self DataBuf) grow(min_cap int) {
 	self.head = 0
 }
 
+// Rotate the data so that it is zero-aligned (head == 0). After this the
+// logical data occupies storage[0..count]. This mirrors the Zig
+// `rotateToZero` used prior to a resize/realloc.
+//
+// Source: datastruct/circ_buf.zig rotateToZero
+fn (mut self DataBuf) rotate_to_zero() {
+	// If we're already at zero then do nothing.
+	if self.head == 0 {
+		return
+	}
+	// Reuse grow's compaction: copy into a fresh, head-aligned buffer of
+	// the same capacity. (Zig rotates in-place via std.mem.rotate; we
+	// don't have that primitive here, so a copy is the simplest faithful
+	// equivalent that leaves storage zero-aligned.)
+	if self.storage.len == 0 {
+		self.head = 0
+		return
+	}
+	mut new_storage := []u8{len: self.storage.len}
+	for i in 0 .. self.count {
+		old_idx := (self.head + i) % self.storage.len
+		new_storage[i] = self.storage[old_idx]
+	}
+	self.storage = new_storage
+	self.head = 0
+}
+
+// Resize the buffer to the given capacity (larger or smaller). If larger,
+// the tail is unaffected; new slots default to zero. If smaller than the
+// current count, the buffer is truncated to hold at most `size` bytes.
+//
+// Source: datastruct/circ_buf.zig resize
+fn (mut self DataBuf) resize(size int) {
+	// Rotate to zero so it is aligned, then reallocate at the end.
+	self.rotate_to_zero()
+	mut new_storage := []u8{len: size}
+	keep := if self.count < size { self.count } else { size }
+	for i in 0 .. keep {
+		new_storage[i] = self.storage[i]
+	}
+	self.storage = new_storage
+	if self.count > size {
+		self.count = size
+	}
+	self.head = 0
+}
+
+// ============================================================
+// DataBufIterator - forward/reverse iteration over DataBuf
+// ============================================================
+
+// DataBufIterator iterates over the logical contents of a DataBuf in
+// either forward (oldest to newest) or reverse (newest to oldest) order,
+// with clamped seeking and reset support.
+//
+// Source: datastruct/circ_buf.zig CircBuf.Iterator
+struct DataBufIterator {
+	buf       &DataBuf = unsafe { nil }
+	direction Direction
+mut:
+	idx int
+}
+
+// Return an iterator over the buffer in the given direction.
+fn (b &DataBuf) iterator(direction Direction) DataBufIterator {
+	return DataBufIterator{
+		buf: unsafe { b }
+		idx: 0
+		direction: direction
+	}
+}
+
+// Advance the iterator, returning the next byte or none when exhausted.
+fn (mut it DataBufIterator) next() ?u8 {
+	if it.idx >= it.buf.len() {
+		return none
+	}
+	// Get our logical index depending on direction.
+	logical_idx := match it.direction {
+		.forward { it.idx }
+		.reverse { it.buf.len() - it.idx - 1 }
+	}
+	it.idx += 1
+	return it.buf.get(logical_idx)
+}
+
+// Seek the iterator by a given (possibly negative) amount, clamped to the
+// bounds of the buffer so overflow/underflow are not possible.
+fn (mut it DataBufIterator) seek_by(amount int) {
+	if amount > 0 {
+		it.idx += amount
+	} else {
+		dec := -amount
+		if dec > it.idx {
+			it.idx = 0
+		} else {
+			it.idx -= dec
+		}
+	}
+}
+
+// Reset the iterator back to the first value.
+fn (mut it DataBufIterator) reset() {
+	it.idx = 0
+}
+
+// Get the first (oldest) byte, or none if empty.
+fn (b &DataBuf) first() ?u8 {
+	mut it := b.iterator(.forward)
+	return it.next()
+}
+
+// Get the last (newest) byte, or none if empty.
+fn (b &DataBuf) last() ?u8 {
+	mut it := b.iterator(.reverse)
+	return it.next()
+}
+
 // ============================================================
 // MetaBuf - circular buffer of Meta entries
 // ============================================================
@@ -349,4 +481,109 @@ fn (mut self MetaBuf) grow(min_cap int) {
 	}
 	self.storage = new_storage
 	self.head = 0
+}
+
+// Rotate the data so that it is zero-aligned (head == 0).
+//
+// Source: datastruct/circ_buf.zig rotateToZero
+fn (mut self MetaBuf) rotate_to_zero() {
+	if self.head == 0 {
+		return
+	}
+	if self.storage.len == 0 {
+		self.head = 0
+		return
+	}
+	mut new_storage := []Meta{len: self.storage.len}
+	for i in 0 .. self.count {
+		old_idx := (self.head + i) % self.storage.len
+		new_storage[i] = self.storage[old_idx]
+	}
+	self.storage = new_storage
+	self.head = 0
+}
+
+// Resize the buffer to the given capacity (larger or smaller).
+//
+// Source: datastruct/circ_buf.zig resize
+fn (mut self MetaBuf) resize(size int) {
+	self.rotate_to_zero()
+	mut new_storage := []Meta{len: size}
+	keep := if self.count < size { self.count } else { size }
+	for i in 0 .. keep {
+		new_storage[i] = self.storage[i]
+	}
+	self.storage = new_storage
+	if self.count > size {
+		self.count = size
+	}
+	self.head = 0
+}
+
+// ============================================================
+// MetaBufIterator - forward/reverse iteration over MetaBuf
+// ============================================================
+
+// MetaBufIterator iterates over the logical contents of a MetaBuf in
+// either forward or reverse order.
+//
+// Source: datastruct/circ_buf.zig CircBuf.Iterator
+struct MetaBufIterator {
+	buf       &MetaBuf = unsafe { nil }
+	direction Direction
+mut:
+	idx int
+}
+
+// Return an iterator over the buffer in the given direction.
+fn (b &MetaBuf) iterator(direction Direction) MetaBufIterator {
+	return MetaBufIterator{
+		buf: unsafe { b }
+		idx: 0
+		direction: direction
+	}
+}
+
+// Advance the iterator, returning the next Meta or none when exhausted.
+fn (mut it MetaBufIterator) next() ?Meta {
+	if it.idx >= it.buf.len() {
+		return none
+	}
+	logical_idx := match it.direction {
+		.forward { it.idx }
+		.reverse { it.buf.len() - it.idx - 1 }
+	}
+	it.idx += 1
+	return it.buf.get(logical_idx)
+}
+
+// Seek the iterator by a given (possibly negative) amount, clamped.
+fn (mut it MetaBufIterator) seek_by(amount int) {
+	if amount > 0 {
+		it.idx += amount
+	} else {
+		dec := -amount
+		if dec > it.idx {
+			it.idx = 0
+		} else {
+			it.idx -= dec
+		}
+	}
+}
+
+// Reset the iterator back to the first value.
+fn (mut it MetaBufIterator) reset() {
+	it.idx = 0
+}
+
+// Get the first (oldest) Meta, or none if empty.
+fn (b &MetaBuf) first() ?Meta {
+	mut it := b.iterator(.forward)
+	return it.next()
+}
+
+// Get the last (newest) Meta, or none if empty.
+fn (b &MetaBuf) last() ?Meta {
+	mut it := b.iterator(.reverse)
+	return it.next()
 }

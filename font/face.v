@@ -490,6 +490,7 @@ module font
 // Translated from ghostty/src/font/face/freetype.zig
 
 import freetype
+import math
 
 // ============================================================
 // Library
@@ -585,7 +586,7 @@ pub:
 // GlyphSize holds the position and size of a glyph bounding box
 // as f64 values.
 pub struct GlyphSize {
-pub:
+pub mut:
 	x      f64
 	y      f64
 	width  f64
@@ -633,31 +634,91 @@ pub fn (m FaceMetrics) line_height() f64 {
 	return m.ascent - m.descent + m.line_gap
 }
 
-// cap_height_val returns cap_height if available, or estimates it
-// as 70% of ascent.
+// cap_height_val returns the cap height. If this is not defined in the
+// font (or is non-positive), we estimate it as 75% of the ascent.
 pub fn (m FaceMetrics) cap_height_val() f64 {
-	return m.cap_height or { m.ascent * 0.7 }
-}
-
-// ex_height_val returns ex_height if available, or estimates it
-// as 50% of ascent.
-pub fn (m FaceMetrics) ex_height_val() f64 {
-	return m.ex_height or { m.ascent * 0.5 }
-}
-
-// ic_width_val returns ic_width if available, or estimates it
-// as min(2 * cell_width, ascii_height).
-pub fn (m FaceMetrics) ic_width_val() f64 {
-	if w := m.ic_width {
-		return w
-	}
-	two_cell := 2.0 * m.cell_width
-	if h := m.ascii_height {
-		if h < two_cell {
-			return h
+	if v := m.cap_height {
+		if v > 0 {
+			return v
 		}
 	}
-	return two_cell
+	return 0.75 * m.ascent
+}
+
+// ex_height_val returns the ex height. If this is not defined in the
+// font (or is non-positive), we estimate it as 75% of the cap height.
+pub fn (m FaceMetrics) ex_height_val() f64 {
+	if v := m.ex_height {
+		if v > 0 {
+			return v
+		}
+	}
+	return 0.75 * m.cap_height_val()
+}
+
+// ascii_height_val returns the ASCII height. If we couldn't measure it,
+// we use 1.5 * cap_height as our estimator, based on measurements across
+// programming fonts.
+pub fn (m FaceMetrics) ascii_height_val() f64 {
+	if v := m.ascii_height {
+		if v > 0 {
+			return v
+		}
+	}
+	return 1.5 * m.cap_height_val()
+}
+
+// ic_width_val returns the ideograph width. If this is not defined in the
+// font, we estimate it as the minimum of the ascii height and two cell widths.
+pub fn (m FaceMetrics) ic_width_val() f64 {
+	if v := m.ic_width {
+		if v > 0 {
+			return v
+		}
+	}
+	ah := m.ascii_height_val()
+	two_cell := 2.0 * m.cell_width
+	return if ah < two_cell { ah } else { two_cell }
+}
+
+// underline_thickness_val returns the underline thickness. If this is not
+// defined in the font, we estimate it as 15% of the ex height.
+pub fn (m FaceMetrics) underline_thickness_val() f64 {
+	if v := m.underline_thickness {
+		if v > 0 {
+			return v
+		}
+	}
+	return 0.15 * m.ex_height_val()
+}
+
+// strikethrough_thickness_val returns the strikethrough thickness. If this
+// is not defined in the font, we set it equal to the underline thickness.
+pub fn (m FaceMetrics) strikethrough_thickness_val() f64 {
+	if v := m.strikethrough_thickness {
+		if v > 0 {
+			return v
+		}
+	}
+	return m.underline_thickness_val()
+}
+
+// NOTE: The getters below return positions, not sizes, so both positive and
+// negative values are valid, hence no sign validation.
+
+// underline_position_val returns the underline position. If this is not
+// defined in the font, we place it one underline thickness below the baseline.
+pub fn (m FaceMetrics) underline_position_val() f64 {
+	return m.underline_position or { -m.underline_thickness_val() }
+}
+
+// strikethrough_position_val returns the strikethrough position. If this is
+// not defined in the font, we center it at half the ex height, so that it's
+// perfectly centered on lower case text.
+pub fn (m FaceMetrics) strikethrough_position_val() f64 {
+	return m.strikethrough_position or {
+		(m.ex_height_val() + m.strikethrough_thickness_val()) * 0.5
+	}
 }
 
 // ============================================================
@@ -1207,4 +1268,251 @@ pub fn (mut self Face) get_metrics() FaceMetrics {
 // copy_table copies the font table data for the given tag.
 pub fn (self Face) copy_table(tag string) ![]u8 {
 	return self.face.load_sfnt_table(freetype.Tag.init(tag))
+}
+
+// ============================================================
+// Constraint.constrain (from face.zig)
+// ============================================================
+
+// constrain applies this constraint to the provided glyph size, given the
+// available width and height. constraint_width is the number of cells
+// horizontally available for this glyph.
+//
+// Translated from ghostty/src/font/face.zig RenderOptions.Constraint.constrain
+pub fn (self Constraint) constrain(glyph GlyphSize, metrics Metrics, constraint_width u32) GlyphSize {
+	if !self.does_anything() {
+		return glyph
+	}
+
+	if self.size == .stretch {
+		// Stretched glyphs are usually meant to align across cell
+		// boundaries, which works best if they're scaled and aligned to the
+		// grid rather than the face. This is most easily done by inserting
+		// this little fib in the metrics.
+		mut m := metrics
+		m.face_width = f64(m.cell_width)
+		m.face_height = f64(m.cell_height)
+		m.face_y = 0.0
+
+		// Negative padding for stretched glyphs is a band-aid to avoid gaps
+		// due to pixel rounding, but at the cost of unsightly overlap
+		// artifacts. Since we scale and align to the grid rather than the
+		// face, we don't need it.
+		mut c := self
+		c.pad_bottom = math.max(0.0, c.pad_bottom)
+		c.pad_top = math.max(0.0, c.pad_top)
+		c.pad_left = math.max(0.0, c.pad_left)
+		c.pad_right = math.max(0.0, c.pad_right)
+
+		return c.constrain_inner(glyph, m, constraint_width)
+	}
+
+	return self.constrain_inner(glyph, metrics, constraint_width)
+}
+
+// constrain_inner performs the core constraint math for a glyph.
+fn (self Constraint) constrain_inner(glyph GlyphSize, metrics Metrics, constraint_width u32) GlyphSize {
+	// For extra wide font faces, never stretch glyphs across two cells.
+	// This mirrors font_patcher.
+	min_constraint_width := if self.size == .stretch
+		&& metrics.face_width > 0.9 * metrics.face_height {
+		u32(1)
+	} else {
+		// @min(self.max_constraint_width, constraint_width)
+		mcw := u32(self.max_constraint_width)
+		if mcw < constraint_width { mcw } else { constraint_width }
+	}
+
+	// The bounding box for the glyph's scale group. Scaling and alignment
+	// rules are calculated for this box and then applied to the glyph.
+	group_width := glyph.width / self.relative_width
+	group_height := glyph.height / self.relative_height
+	mut group := GlyphSize{
+		width:  group_width
+		height: group_height
+		x:      glyph.x - (group_width * self.relative_x)
+		y:      glyph.y - (group_height * self.relative_y)
+	}
+
+	// Apply prescribed scaling, preserving the
+	// center bearings of the group bounding box.
+	width_factor, height_factor := self.scale_factors(group, metrics, min_constraint_width)
+	center_x := group.x + (group.width / 2)
+	center_y := group.y + (group.height / 2)
+	group.width *= width_factor
+	group.height *= height_factor
+	group.x = center_x - (group.width / 2)
+	group.y = center_y - (group.height / 2)
+
+	// NOTE: font_patcher jumps through a lot of hoops at this point to ensure
+	// that the glyph remains within the target bounding box after rounding to
+	// font definition units. This is irrelevant here as we're not rounding,
+	// we're staying in f64 and heading straight to rendering.
+
+	// Apply prescribed alignment.
+	group.y = self.aligned_y(group, metrics)
+	group.x = self.aligned_x(group, metrics, min_constraint_width)
+
+	// Transfer the scaling and alignment back to the glyph and return.
+	return GlyphSize{
+		width:  width_factor * glyph.width
+		height: height_factor * glyph.height
+		x:      group.x + (group.width * self.relative_x)
+		y:      group.y + (group.height * self.relative_y)
+	}
+}
+
+// scale_factors returns width and height scaling factors for this scaling group.
+fn (self Constraint) scale_factors(group GlyphSize, metrics Metrics, min_constraint_width u32) (f64, f64) {
+	if self.size == .none_ {
+		return 1.0, 1.0
+	}
+
+	multi_cell := min_constraint_width > 1
+
+	pad_width_factor := f64(min_constraint_width) - (self.pad_left + self.pad_right)
+	pad_height_factor := 1 - (self.pad_bottom + self.pad_top)
+
+	target_width := pad_width_factor * metrics.face_width
+	target_height := pad_height_factor * match self.height {
+		.cell {
+			metrics.face_height
+		}
+		// Like font-patcher, the icon constraint height depends on the
+		// constraint width. Unlike font-patcher, the multi-cell icon_height
+		// may be different from face_height due to the `adjust-icon-height`
+		// config option.
+		.icon {
+			if multi_cell { metrics.icon_height } else { metrics.icon_height_single }
+		}
+	}
+
+	mut width_factor := target_width / group.width
+	mut height_factor := target_height / group.height
+
+	match self.size {
+		.none_ {
+			// unreachable
+		}
+		.fit {
+			// Scale down to fit if needed.
+			height_factor = math.min(1.0, math.min(width_factor, height_factor))
+			width_factor = height_factor
+		}
+		.cover {
+			// Scale to cover.
+			height_factor = math.min(width_factor, height_factor)
+			width_factor = height_factor
+		}
+		.fit_cover1 {
+			// Scale down to fit or up to cover at least one cell.
+			height_factor = math.min(width_factor, height_factor)
+			if multi_cell && height_factor > 1 {
+				// Call back into this function with constraint width 1 to get
+				// single-cell scale factors. We use the height factor as width
+				// could have been modified by max_xy_ratio.
+				_, single_height_factor := self.scale_factors(group, metrics, 1)
+				height_factor = math.max(1.0, single_height_factor)
+			}
+			width_factor = height_factor
+		}
+		.stretch {
+			// No aspect ratio preservation.
+		}
+	}
+
+	// Reduce aspect ratio if required. 0 means no limit.
+	if self.max_xy_ratio > 0 {
+		ratio := self.max_xy_ratio
+		if group.width * width_factor > group.height * height_factor * ratio {
+			width_factor = group.height * height_factor * ratio / group.width
+		}
+	}
+
+	return width_factor, height_factor
+}
+
+// aligned_y returns the vertical bearing for aligning this group.
+fn (self Constraint) aligned_y(group GlyphSize, metrics Metrics) f64 {
+	if self.size == .none_ && self.align_vertical == .none_ {
+		// If we don't have any constraints affecting the vertical axis,
+		// we don't touch vertical alignment.
+		return group.y
+	}
+	// We use face_height and offset by face_y, rather than using cell_height
+	// directly, to account for the asymmetry of the pixel cell around the
+	// face (a consequence of aligning the baseline with a pixel boundary
+	// rather than vertically centering the face).
+	pad_bottom_dy := self.pad_bottom * metrics.face_height
+	pad_top_dy := self.pad_top * metrics.face_height
+	start_y := metrics.face_y + pad_bottom_dy
+	end_y := metrics.face_y + (metrics.face_height - group.height - pad_top_dy)
+	center_y := (start_y + end_y) / 2
+	return match self.align_vertical {
+		// NOTE: Even if there is no prescribed alignment, we ensure that the
+		// group doesn't protrude outside the padded cell, since this is
+		// implied by every available size constraint. If the group is too
+		// high we fall back to centering.
+		.none_ {
+			if end_y < start_y {
+				center_y
+			} else {
+				math.max(start_y, math.min(group.y, end_y))
+			}
+		}
+		.start {
+			start_y
+		}
+		.end_ {
+			end_y
+		}
+		.center, .center1 {
+			center_y
+		}
+	}
+}
+
+// aligned_x returns the horizontal bearing for aligning this group.
+fn (self Constraint) aligned_x(group GlyphSize, metrics Metrics, min_constraint_width u32) f64 {
+	if self.size == .none_ && self.align_horizontal == .none_ {
+		// If we don't have any constraints affecting the horizontal axis,
+		// we don't touch horizontal alignment.
+		return group.x
+	}
+	// For multi-cell constraints, we align relative to the span from the
+	// left edge of the first cell to the right edge of the last face cell
+	// assuming it's left-aligned within the rounded and adjusted pixel cell.
+	// Any horizontal offset to center the face within the grid cell is the
+	// responsibility of the backend-specific rendering code, and should be
+	// done after applying constraints.
+	full_face_span := metrics.face_width + f64((min_constraint_width - 1) * metrics.cell_width)
+	pad_left_dx := self.pad_left * metrics.face_width
+	pad_right_dx := self.pad_right * metrics.face_width
+	start_x := pad_left_dx
+	end_x := full_face_span - group.width - pad_right_dx
+	return match self.align_horizontal {
+		// NOTE: Even if there is no prescribed alignment, we ensure that the
+		// glyph doesn't protrude outside the padded cell. The left-side bound
+		// has priority if the group is too wide.
+		.none_ {
+			math.max(start_x, math.min(group.x, end_x))
+		}
+		.start {
+			start_x
+		}
+		.end_ {
+			math.max(start_x, end_x)
+		}
+		.center {
+			math.max(start_x, (start_x + end_x) / 2)
+		}
+		// NOTE: .center1 implements the font_patcher rule of centering in the
+		// first cell even for multi-cell constraints. Since glyphs are not
+		// allowed to protrude to the left, this results in left-alignment like
+		// .start when the glyph is wider than a cell.
+		.center1 {
+			end1_x := metrics.face_width - group.width - pad_right_dx
+			math.max(start_x, (start_x + end1_x) / 2)
+		}
+	}
 }

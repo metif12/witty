@@ -2734,6 +2734,23 @@ pub enum SetValueType {
 	leaf_chained
 }
 
+// ChainParent is information about a chain parent entry, including which set
+// it belongs to. This is needed because reverse mappings are only maintained
+// in the root set, but the chain parent entry may be in a nested set (for
+// leader key sequences).
+//
+// The Zig version stores raw `key_ptr`/`value_ptr` pointers into the hash map
+// plus the owning `*Set`. Our V forward mapping is an array rather than a hash
+// map, so instead of raw pointers we store the owning set pointer and the
+// index of the entry within that set's `bindings` array. Chaining always
+// happens directly after a put (and puts never reorder existing entries), so
+// this index stays valid for the duration a chain parent is meaningful.
+pub struct ChainParent {
+pub mut:
+	set   &Set = unsafe { nil }
+	index int
+}
+
 // Set is a structure that contains a set of bindings and focuses on fast lookup.
 pub struct Set {
 pub mut:
@@ -2741,6 +2758,12 @@ pub mut:
 	bindings []SetEntry
 	// Reverse mapping: action -> trigger (most recent)
 	reverse []ReverseEntry
+	// The chain parent is the information necessary to attach a chained
+	// action to the proper location in our mapping. It tracks both the
+	// entry in the mapping and the set it belongs to, which is needed
+	// to properly update reverse mappings when converting a leaf to a
+	// chained action. None when chaining is not currently valid.
+	chain_parent ?ChainParent
 }
 
 pub struct SetEntry {
@@ -2775,20 +2798,78 @@ pub fn (s &Set) get_trigger(a Action) ?Trigger {
 	return none
 }
 
+// clone deep-clones the set. Faithful to Zig `clone`.
+//
+// Leaders are recursively deep-cloned into fresh Set allocations so that the
+// clone is fully independent of the original. Leaf and leaf_chained actions
+// hold V strings (GC-managed, immutable) so copying the value structs is a
+// sufficient deep copy; the arrays are duplicated so mutations don't alias.
+// The cloned set has no chain_parent (chaining state is not carried over).
+pub fn (s &Set) clone() Set {
+	mut result := Set{
+		bindings: []SetEntry{cap: s.bindings.len}
+		reverse: s.reverse.clone()
+	}
+
+	for entry in s.bindings {
+		mut value := entry.value
+		match value.typ {
+			.leaf {
+				// Leaves could have data to clone (i.e. text actions contain
+				// allocated strings). V strings copy by reference-count so
+				// the value struct copy is a sufficient deep clone.
+			}
+			.leaf_chained {
+				// Duplicate the actions slice so the clone is independent.
+				value = SetValue{
+					typ: .leaf_chained
+					chain_actions: value.chain_actions.clone()
+					chain_flags: value.chain_flags
+				}
+			}
+			.leader {
+				// Must be deep cloned into a fresh allocation.
+				mut child := value.leader.clone()
+				value = SetValue{
+					typ: .leader
+					leader: &child
+				}
+			}
+		}
+		result.bindings << SetEntry{
+			trigger: entry.trigger
+			value: value
+		}
+	}
+
+	return result
+}
+
 // put adds a binding to the set. If the binding already exists then it is overwritten.
 pub fn (mut s Set) put(t Trigger, action Action) {
 	s.put_flags(t, action, Flags{})
 }
 
 // put_flags adds a binding to the set with explicit flags.
+//
+// This also records the chain_parent so that a subsequent chained action
+// (chain=...) can be attached to the entry just added/updated. Faithful to
+// Zig `putFlags`.
 pub fn (mut s Set) put_flags(t Trigger, action Action, flags Flags) {
+	// unbind should never go into the set, it should be handled prior.
+	// (assert(action != .unbind) in Zig.)
+
+	// This is true if we're going to track this entry as a reverse mapping.
+	// There are certain scenarios we don't. See the reverse map docs.
 	track_reverse := !flags.performable
 
 	// Check for existing entry
 	for i in 0 .. s.bindings.len {
 		if s.bindings[i].trigger.folded_equal(t) {
 			old := s.bindings[i].value
-			// Clean up old reverse mapping
+			// If we have an existing binding for this trigger, we have to
+			// clean up the old value. For a leaf we update the reverse
+			// mapping; chained leaves aren't in the reverse mapping.
 			if old.typ == .leaf && track_reverse {
 				t_hash := t.hash()
 				for ri in 0 .. s.reverse.len {
@@ -2806,6 +2887,11 @@ pub fn (mut s Set) put_flags(t Trigger, action Action, flags Flags) {
 			if track_reverse {
 				s.set_reverse(action, t)
 			}
+			// Record the chain parent pointing to the entry we just updated.
+			s.chain_parent = ChainParent{
+				set: unsafe { &s }
+				index: i
+			}
 			return
 		}
 	}
@@ -2821,6 +2907,60 @@ pub fn (mut s Set) put_flags(t Trigger, action Action, flags Flags) {
 	}
 	if track_reverse {
 		s.set_reverse(action, t)
+	}
+	// Record the chain parent pointing to the entry we just added.
+	s.chain_parent = ChainParent{
+		set: unsafe { &s }
+		index: s.bindings.len - 1
+	}
+}
+
+// append_chain appends a chained action to the prior set action.
+//
+// It is an error if there is no valid prior chain parent. Faithful to Zig
+// `appendChain`.
+pub fn (mut s Set) append_chain(action Action) ! {
+	// Unbind is not a valid chain action; callers must check this.
+	// (assert(action != .unbind) in Zig.)
+
+	parent := s.chain_parent or { return error('NoChainParent') }
+	mut pset := parent.set
+	idx := parent.index
+	pval := pset.bindings[idx].value
+
+	match pval.typ {
+		.leader {
+			// Leader can never be a chain parent.
+			return error('NoChainParent')
+		}
+		.leaf_chained {
+			// If it is already a chained action, we just append the action.
+			mut actions := pset.bindings[idx].value.chain_actions.clone()
+			actions << action
+			pset.bindings[idx].value.chain_actions = actions
+		}
+		.leaf {
+			// If it is a leaf, we need to convert it to a leaf_chained. We
+			// also need to remove any prior reverse mappings for this action
+			// since chained actions are not part of the reverse mapping.
+			prior_action := pval.leaf_action
+			prior_trigger := pset.bindings[idx].trigger
+
+			// Convert to leaf_chained first, before fixing up the reverse
+			// mapping. This is important because fixup_reverse_for_action
+			// searches for other bindings with the same action, and we don't
+			// want to find this entry (which is now chained).
+			pset.bindings[idx].value = SetValue{
+				typ: .leaf_chained
+				chain_actions: [prior_action, action]
+				chain_flags: pval.leaf_flags
+			}
+
+			// Clean up our reverse mapping. Chained actions are not part of
+			// the reverse mapping, so we need to fix up the reverse map
+			// (possibly restoring another trigger for the same action).
+			pset.fixup_reverse_for_action(prior_action, prior_trigger)
+		}
 	}
 }
 
@@ -2838,13 +2978,30 @@ fn (mut s Set) set_reverse(action Action, t Trigger) {
 }
 
 // remove removes a binding for a given trigger.
+//
+// Removal always resets our chain parent. We could make this finer grained
+// but the way it is documented is that chaining must happen directly after
+// sets so this works. Faithful to Zig `removeExact`.
 pub fn (mut s Set) remove(t Trigger) {
+	s.chain_parent = none
 	for i in 0 .. s.bindings.len {
 		if s.bindings[i].trigger.folded_equal(t) {
 			entry := s.bindings[i].value
 			s.bindings.delete(i)
-			if entry.typ == .leaf {
-				s.fixup_reverse_for_action(entry.leaf_action, t)
+			match entry.typ {
+				.leaf {
+					// For an action we need to fix up the reverse mapping.
+					s.fixup_reverse_for_action(entry.leaf_action, t)
+				}
+				.leaf_chained {
+					// Chained leaves are never in our reverse mapping so no
+					// cleanup is required.
+				}
+				.leader {
+					// For a leader removal, the child set is owned by the GC
+					// so no explicit deallocation is needed. Leaders are never
+					// part of reverse maps so no other accounting is needed.
+				}
 			}
 			return
 		}
@@ -2882,9 +3039,12 @@ fn (mut s Set) fixup_reverse_for_action(action Action, old Trigger) {
 	s.reverse.delete(found_idx)
 }
 
-// parse_and_put parses a user input binding and adds it to the set.
+// parse_and_put parses a user input binding and adds it to the set. This
+// handles the "unbind" case, ensures consumed/unconsumed fields are set
+// correctly, handles sequences and chains, etc. Faithful to Zig `parseAndPut`.
 pub fn (mut s Set) parse_and_put(input_str string) ! {
-	// Validate the full sequence first
+	// To make cleanup easier, we ensure that the full sequence is valid
+	// before making any set modifications.
 	mut it := Parser.init(input_str)!
 	for {
 		_ = it.next() or {
@@ -2896,16 +3056,69 @@ pub fn (mut s Set) parse_and_put(input_str string) ! {
 	}
 	it.reset()
 
-	// Now actually process
-	s.parse_and_put_recurse(mut it) or {
-		if err.msg() == 'SequenceUnbind' {
-			return
+	// We use recursion so that we can utilize the stack as our state.
+	//
+	// The return convention (matching Zig's `?*Set`):
+	//   - some(set): a binding was added; `set` recorded its chain parent.
+	//   - none:      nothing was added (e.g. an unbind that left siblings).
+	//   - error('SequenceUnbind'): unbound all the way up (still a success).
+	updated := s.parse_and_put_recurse(mut s, mut it) or {
+		match err.msg() {
+			// If this gets sent up to the root then we've unbound all the
+			// way up and this put was a success. We clear the chain parent
+			// since chaining is no longer valid until a valid binding.
+			'SequenceUnbind' {
+				s.chain_parent = none
+				return
+			}
+			// If our parser input was too short then the format is invalid.
+			'UnexpectedEndOfInput' {
+				return error('InvalidFormat')
+			}
+			// If we had a chain without a parent then the format is wrong.
+			'NoChainParent' {
+				return error('InvalidFormat')
+			}
+			// If we had an invalid action for a chain (e.g. unbind).
+			'InvalidChainAction' {
+				return error('InvalidFormat')
+			}
+			else {
+				return err
+			}
 		}
-		return err
+	}
+
+	// If we have an updated set (a binding was added) then we store it for
+	// our chain parent. If we didn't update a set then we clear our chain
+	// parent since chaining is no longer valid until a valid binding.
+	if !isnil(updated.set) {
+		// A binding was added. Store the chain parent on the root so a
+		// following chain= can attach to it. Faithful to:
+		//   if (updated_set != self) self.chain_parent = updated_set.chain_parent;
+		if updated.set != unsafe { &s } {
+			s.chain_parent = updated.set.chain_parent
+		}
+	} else {
+		s.chain_parent = none
 	}
 }
 
-fn (mut s Set) parse_and_put_recurse(mut it Parser) ! {
+// RecurseResult carries the outcome of parse_and_put_recurse. It models Zig's
+// `?*Set` return: a non-nil `set` means a binding was added and that set
+// recorded its chain parent; a nil `set` means nothing was added. The
+// SequenceUnbind case is signalled via an error rather than this struct.
+struct RecurseResult {
+mut:
+	set &Set = unsafe { nil }
+}
+
+// parse_and_put_recurse returns the set that was ultimately updated if a
+// binding was added (non-nil set), or a nil set if nothing was added. Unbind
+// that unwinds the stack raises 'SequenceUnbind'. Faithful to Zig
+// `parseAndPutRecurse` which takes the root and current set and returns
+// `?*Set`.
+fn (mut s Set) parse_and_put_recurse(mut root Set, mut it Parser) !RecurseResult {
 	elem := it.next() or {
 		if err.msg() == 'done' {
 			return error('UnexpectedEndOfInput')
@@ -2916,30 +3129,35 @@ fn (mut s Set) parse_and_put_recurse(mut it Parser) ! {
 	match elem.typ {
 		.leader {
 			t := elem.trigger
-			// Check for existing leader
+			// If we have a leader, we need to upsert a set for it.
 			for i in 0 .. s.bindings.len {
 				if s.bindings[i].trigger.folded_equal(t) {
 					if s.bindings[i].value.typ == .leader {
+						// We have an existing leader for this key already so
+						// recurse into this set.
 						mut inner := s.bindings[i].value.leader
-						inner.parse_and_put_recurse(mut it) or {
+						return root.parse_and_put_recurse2(mut inner, mut it) or {
 							if err.msg() == 'SequenceUnbind' {
+								// Our child put unbound. If our set is empty we
+								// need to remove it and continue up. Otherwise
+								// we're done (nothing added at this level).
 								if inner.bindings.len == 0 {
-									s.bindings.delete(i)
+									s.remove(t)
 									return error('SequenceUnbind')
 								}
-								return
+								return RecurseResult{}
 							}
 							return err
 						}
-						return
 					}
-					// Remove existing non-leader entry
-					s.bindings.delete(i)
+					// Remove the existing action. Fall through as if we don't
+					// have a leader.
+					s.remove(t)
 					break
 				}
 			}
 
-			// Create new inner set
+			// Create our new set for this leader and insert the leader entry.
 			mut next_set := &Set{}
 			s.bindings << SetEntry{
 				trigger: t
@@ -2948,16 +3166,15 @@ fn (mut s Set) parse_and_put_recurse(mut it Parser) ! {
 					leader: next_set
 				}
 			}
-			next_set.parse_and_put_recurse(mut it) or {
+
+			// Recurse
+			return root.parse_and_put_recurse2(mut next_set, mut it) or {
 				if err.msg() == 'SequenceUnbind' {
-					// Remove the leader we just added
-					for i in 0 .. s.bindings.len {
-						if s.bindings[i].trigger.folded_equal(t) {
-							s.bindings.delete(i)
-							break
-						}
-					}
-					return
+					// If our action was to unbind, we restore the old entry.
+					// Here the leader was freshly created and empty, so we
+					// just remove it and propagate the unbind up.
+					s.remove(t)
+					return error('SequenceUnbind')
 				}
 				return err
 			}
@@ -2969,15 +3186,33 @@ fn (mut s Set) parse_and_put_recurse(mut it Parser) ! {
 				return error('SequenceUnbind')
 			}
 			s.put_flags(b.trigger, b.action, b.flags)
+			return RecurseResult{
+				set: unsafe { &s }
+			}
 		}
 		.chain {
+			// Chains can only happen on the root.
 			action := elem.action
+			// Unbind is not valid for chains.
 			if action.tag == .unbind {
-				return error('InvalidFormat')
+				return error('InvalidChainAction')
 			}
-			return error('InvalidFormat')
+			s.append_chain(action)!
+			return RecurseResult{
+				set: unsafe { &s }
+			}
 		}
 	}
+	// match is exhaustive; unreachable.
+	return error('InvalidFormat')
+}
+
+// parse_and_put_recurse2 is the V-friendly indirection used when recursing
+// into a nested leader set. It exists because the recursion operates on a
+// different `set` (`inner`/`next_set`) than the receiver while still passing
+// the same `root`. It simply forwards to parse_and_put_recurse on the child.
+fn (mut root Set) parse_and_put_recurse2(mut child Set, mut it Parser) !RecurseResult {
+	return child.parse_and_put_recurse(mut root, mut it)
 }
 
 // get_event returns an entry for the given key event.

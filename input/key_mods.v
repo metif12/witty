@@ -244,18 +244,27 @@ pub fn (m Mods) without_locks() Mods {
 	}
 }
 
-// ctrl_or_super checks if super is on (macOS) or ctrl.
+// ctrl_or_super checks if super is on (macOS) or ctrl (everything else).
 pub fn (m Mods) ctrl_or_super() bool {
-	// On macOS, use super (command) key
-	return m.super_
+	// Faithful to Zig: `if (comptime builtin.target.os.tag.isDarwin())`.
+	// On Darwin the "command" (super) key is the primary modifier; on
+	// all other platforms it is ctrl.
+	$if darwin {
+		return m.super_
+	} $else {
+		return m.ctrl
+	}
 }
 
 // ctrl_or_super_mods sets either ctrl or super (but not both) on mods.
 // On Mac, sets super. On non-Mac, sets ctrl.
 pub fn ctrl_or_super_mods(m Mods) Mods {
 	mut copy := m
-	// On macOS, default to super (command)
-	copy.super_ = true
+	$if darwin {
+		copy.super_ = true
+	} $else {
+		copy.ctrl = true
+	}
 	return copy
 }
 
@@ -352,6 +361,118 @@ pub fn (s RemapSet) apply(mods Mods) Mods {
 	}
 
 	return mods
+}
+
+// parse_cli parses from CLI input. Required by Config.
+//
+// An empty value resets the set. A non-empty value is parsed and added
+// to the set. Faithful to Zig `parseCLI`.
+pub fn (mut s RemapSet) parse_cli(inp ?string) ! {
+	value := inp or { '' }
+
+	// Empty value resets the set
+	if value.len == 0 {
+		s.entries = []RemapEntry{}
+		s.mask = RemapMask{}
+		return
+	}
+
+	s.parse(value)!
+}
+
+// deinit releases any resources held by the set. Required by Config.
+pub fn (mut s RemapSet) deinit() {
+	s.entries = []RemapEntry{}
+	s.mask = RemapMask{}
+}
+
+// clone returns a deep copy of the struct. Required by Config.
+pub fn (s RemapSet) clone() RemapSet {
+	return RemapSet{
+		entries: s.entries.clone()
+		mask: s.mask
+	}
+}
+
+// equal compares if two RemapSets are equal. Required by Config.
+pub fn (s RemapSet) equal(other RemapSet) bool {
+	if s.entries.len != other.entries.len {
+		return false
+	}
+
+	// For every from->to mapping in self, the other must have a mapping
+	// with the same "from" and an equal "to".
+	for entry in s.entries {
+		mut found := false
+		for oentry in other.entries {
+			if oentry.from.equal_sided(entry.from) {
+				if !oentry.to.equal_sided(entry.to) {
+					return false
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+
+	return true
+}
+
+// format_entry returns the configuration entry lines for this set. Used by
+// the Formatter. Required by Config. In Zig this writes into a formatter;
+// here we return the list of `key-remap` value strings (one per mapping).
+// If the set is empty, a single empty string is returned to represent the
+// unset (void) value.
+pub fn (s RemapSet) format_entry() []string {
+	if s.entries.len == 0 {
+		return ['']
+	}
+
+	mut out := []string{cap: s.entries.len}
+	for entry in s.entries {
+		from := format_mod(entry.from)
+		to := format_mod(entry.to)
+		out << '${from}=${to}'
+	}
+	return out
+}
+
+// format_mod formats the single set modifier of `mods` with its side prefix.
+// Faithful to Zig `formatMod`: iterates shift, ctrl, alt, super in order and
+// emits the first one that is set, prefixed with its side.
+fn format_mod(mods Mods) string {
+	if mods.shift {
+		return side_prefix(mods.sides.shift) + 'shift'
+	}
+	if mods.ctrl {
+		return side_prefix(mods.sides.ctrl) + 'ctrl'
+	}
+	if mods.alt {
+		return side_prefix(mods.sides.alt) + 'alt'
+	}
+	if mods.super_ {
+		// SideInfo has no super field so super is always treated as left.
+		return 'left_super'
+	}
+	return ''
+}
+
+// side_prefix returns the "right_"/"left_" prefix for the given side.
+// For unset (none_) sides we default to "left_" to match the Zig behavior
+// which always writes a side prefix for a sided mapping.
+fn side_prefix(side Side) string {
+	return if side == .right { 'right_' } else { 'left_' }
+}
+
+// equal_sided compares two Mods including their side information. This is
+// needed for RemapSet.equal since remappings are side-specific.
+fn (a Mods) equal_sided(b Mods) bool {
+	return a.shift == b.shift && a.ctrl == b.ctrl && a.alt == b.alt
+		&& a.super_ == b.super_ && a.sides.shift == b.sides.shift
+		&& a.sides.ctrl == b.sides.ctrl && a.sides.alt == b.sides.alt
 }
 
 // parse_mod parses a single modifier string like "ctrl", "left_shift", "cmd".

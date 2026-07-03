@@ -1,6 +1,8 @@
 module termio
 
 import apprt
+import os
+import osc
 import renderer
 import terminal
 
@@ -366,17 +368,16 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.terminal.screens.active.kitty_keyboard.set(.not_, u32(event.payload.kitty_flags))
 		}
 		.kitty_color_report {
-			// Kitty color protocol: query/set/reset colors.
-			// Currently the stream parser does not dispatch this event
-			// (kitty_color_protocol parsing in stream.v is not yet implemented).
-			// When it does, the payload would carry parsed ColorOSC data.
+			// Kitty color protocol: query/set/reset colors (OSC 21). The
+			// stream dispatches the raw OSC body (after "21;") in str1.
+			self.kitty_color_report(event.payload.str1)
 		}
 		.color_operation {
 			// OSC color operations: set/query/reset palette colors (OSC 4)
-			// and dynamic colors (OSC 10/11/12 for fg/bg/cursor).
-			// Currently the stream parser does not dispatch this event
-			// (color_operation parsing in stream.v is not yet implemented).
-			// When it does, the payload would carry the parsed color spec.
+			// and dynamic colors (OSC 10/11/12 for fg/bg/cursor). The stream
+			// dispatches the raw OSC body (including the operation number,
+			// e.g. "4;0;red" or "10;red") in str1.
+			self.color_operation(event.payload.str1)
 		}
 		.end_hyperlink {
 			self.terminal.screens.active.end_hyperlink()
@@ -1330,22 +1331,35 @@ fn (mut self StreamHandler) report_pwd(url string) {
 		return
 	}
 
-	// Simple path extraction: if it starts with file:// extract the path.
-	// A full implementation would do proper URI parsing and hostname validation.
-	mut path := url
-	if url.starts_with('file://') {
-		// Skip file://hostname/ - find the path after the third /
-		rest := url[7..]
-		slash_idx := rest.index('/') or { -1 }
-		if slash_idx >= 0 {
-			path = rest[slash_idx..]
-		}
-	} else if url.starts_with('kitty-shell-cwd://') {
-		rest := url[18..]
-		slash_idx := rest.index('/') or { -1 }
-		if slash_idx >= 0 {
-			path = rest[slash_idx..]
-		}
+	// Parse the file-style URI. OSC 7 uses "file://<host>/<path>" and
+	// kitty-shell-cwd uses "kitty-shell-cwd://<host>/<path>" where the
+	// path portion is the raw (already-unescaped) path.
+	scheme, host, mut path := parse_pwd_uri(url) or {
+		// invalid url in OSC 7
+		return
+	}
+
+	if scheme != 'file' && scheme != 'kitty-shell-cwd' {
+		// OSC 7 scheme must be file or kitty-shell-cwd.
+		return
+	}
+
+	// OSC 7 is a little sketchy because anyone can send any value from
+	// any host (such as an SSH session). The best practice terminals follow
+	// is to validate the hostname to be local.
+	if host.len == 0 {
+		// OSC 7 uri must contain a hostname.
+		return
+	}
+	if !hostname_is_local(host) {
+		// OSC 7 host must be local.
+		return
+	}
+
+	// For the "file" scheme we percent-decode the path. kitty-shell-cwd
+	// expects the raw, unencoded path so we leave it as-is.
+	if scheme == 'file' {
+		path = percent_decode(path)
 	}
 
 	self.terminal.set_pwd(path) or {}
@@ -1360,6 +1374,495 @@ fn (mut self StreamHandler) report_pwd(url string) {
 		self.window_title(path)
 		self.seen_title = false
 	}
+}
+
+// parse_pwd_uri does a minimal parse of a "scheme://host/path" URI as used
+// by OSC 7. It returns the scheme, host, and path. This is not a fully
+// general URI parser but is sufficient for the file:// and
+// kitty-shell-cwd:// schemes that OSC 7 uses.
+fn parse_pwd_uri(url string) ?(string, string, string) {
+	sep := url.index('://') or { return none }
+	scheme := url[..sep]
+	rest := url[sep + 3..]
+
+	// The host is everything up to the first '/'. The remainder (including
+	// the leading '/') is the path.
+	slash_idx := rest.index('/') or {
+		// No path component: host with an empty path.
+		return scheme, rest, ''
+	}
+	host := rest[..slash_idx]
+	path := rest[slash_idx..]
+	return scheme, host, path
+}
+
+// hostname_is_local checks if a hostname is local to the current machine.
+// This matches both "localhost" and the current hostname of the machine
+// (as returned by gethostname). Faithful to os/hostname.zig isLocal.
+fn hostname_is_local(host string) bool {
+	// A 'localhost' hostname is always considered local.
+	if host == 'localhost' {
+		return true
+	}
+
+	// If hostname is not "localhost" it must match our hostname.
+	our_hostname := os.hostname() or { return false }
+	return host == our_hostname
+}
+
+// percent_decode decodes a percent-encoded (%XX) string. Invalid escapes
+// are left as-is.
+fn percent_decode(s string) string {
+	if !s.contains('%') {
+		return s
+	}
+	mut result := []u8{cap: s.len}
+	mut i := 0
+	for i < s.len {
+		if s[i] == u8(`%`) && i + 2 < s.len {
+			hi := hex_nibble(s[i + 1]) or {
+				result << s[i]
+				i++
+				continue
+			}
+			lo := hex_nibble(s[i + 2]) or {
+				result << s[i]
+				i++
+				continue
+			}
+			result << (hi << 4) | lo
+			i += 3
+		} else {
+			result << s[i]
+			i++
+		}
+	}
+	return result.bytestr()
+}
+
+// ============================================================
+// OSC color operations (OSC 4, 10-19, 104, 110-119)
+// ============================================================
+
+// color_operation handles OSC color set/query/reset operations. The data
+// string is the full OSC body starting with the operation number, e.g.
+// "4;0;red", "10;red", "104", "110".
+//
+// This is faithful to the logic in stream_handler.zig colorOperation and
+// terminal/osc/parsers/color.zig, but does the parsing inline since the
+// V terminal stream currently delivers only the raw OSC body.
+fn (mut self StreamHandler) color_operation(data string) {
+	// Split the operation number from the body.
+	sep := data.index(';') or {
+		// Some resets (OSC 104/110-119) may have no body. Treat the whole
+		// string as the operation number.
+		self.color_operation_op(data, '')
+		return
+	}
+	op_str := data[..sep]
+	body := data[sep + 1..]
+	self.color_operation_op(op_str, body)
+}
+
+fn (mut self StreamHandler) color_operation_op(op_str string, body string) {
+	op := op_str.int()
+
+	// Accumulated query response, if any.
+	mut response := ''
+
+	match true {
+		// OSC 4: get/set/reset ANSI palette colors. Body is
+		// "index;spec;index;spec;..." where spec of "?" is a query.
+		op == 4 {
+			mut it := body.split(';')
+			mut i := 0
+			for i + 1 < it.len {
+				idx_str := it[i]
+				spec := it[i + 1]
+				i += 2
+
+				idx := parse_palette_index(idx_str) or { break }
+
+				if spec == '?' {
+					if r := self.color_query_response_palette(idx) {
+						response += r
+					}
+					continue
+				}
+
+				color := osc.parse_rgb(spec) or { break }
+				trgb := terminal.RGB{
+					r: color.r
+					g: color.g
+					b: color.b
+				}
+				self.terminal.flags.dirty.palette = true
+				self.terminal.colors.palette.set(idx, trgb)
+				self.notify_color_change_palette(idx, trgb)
+			}
+		}
+
+		// OSC 104: reset ANSI palette colors. Body is
+		// "index;index;..." or empty to reset the whole table.
+		op == 104 {
+			if body.len == 0 {
+				// Reset the full table (only the ones that were changed).
+				for j in 0 .. 256 {
+					if self.terminal.colors.palette.mask_is_set(u8(j)) {
+						self.terminal.flags.dirty.palette = true
+						self.terminal.colors.palette.reset(u8(j))
+						self.notify_color_change_palette(u8(j), self.terminal.colors.palette.entries[j])
+					}
+				}
+			} else {
+				for idx_str in body.split(';') {
+					if idx_str.len == 0 {
+						continue
+					}
+					idx := parse_palette_index(idx_str) or { continue }
+					self.terminal.flags.dirty.palette = true
+					self.terminal.colors.palette.reset(idx)
+					self.notify_color_change_palette(idx, self.terminal.colors.palette.entries[int(idx)])
+				}
+			}
+		}
+
+		// OSC 10-19: get/set dynamic colors. Each successive value uses the
+		// next dynamic color. We support fg (10), bg (11), cursor (12).
+		op >= 10 && op <= 19 {
+			mut dyn := op
+			for spec in body.split(';') {
+				if dyn > 19 {
+					break
+				}
+				current := dyn
+				dyn += 1
+
+				if spec == '?' {
+					if r := self.color_query_response_dynamic(current) {
+						response += r
+					}
+					continue
+				}
+
+				color := osc.parse_rgb(spec) or { break }
+				trgb := terminal.RGB{
+					r: color.r
+					g: color.g
+					b: color.b
+				}
+				self.set_dynamic_color(current, trgb)
+				self.notify_color_change_dynamic(current, trgb)
+			}
+		}
+
+		// OSC 110-119: reset dynamic colors. 110=fg, 111=bg, 112=cursor.
+		op >= 110 && op <= 119 {
+			self.reset_dynamic_color(op - 100)
+		}
+
+		else {
+			// Unsupported color operation; ignore.
+		}
+	}
+
+	// If we accumulated any query responses, send them to the pty.
+	if response.len > 0 {
+		self.message_writer(Message.write_req(response))
+	}
+}
+
+// set_dynamic_color sets an OSC 10-19 dynamic color. dyn is the OSC number.
+fn (mut self StreamHandler) set_dynamic_color(dyn int, color terminal.RGB) {
+	match dyn {
+		10 { self.terminal.colors.foreground.set_override(color) }
+		11 { self.terminal.colors.background.set_override(color) }
+		12 { self.terminal.colors.cursor.set_override(color) }
+		// Other dynamic colors (pointer/tektronix/highlight) are not
+		// implemented, matching upstream.
+		else {}
+	}
+}
+
+// reset_dynamic_color resets an OSC 10-19 dynamic color. dyn is the OSC 10-19
+// number (i.e. OSC 110 maps to 10).
+fn (mut self StreamHandler) reset_dynamic_color(dyn int) {
+	match dyn {
+		10 {
+			self.terminal.colors.foreground.reset_override()
+			if c := self.terminal.colors.foreground.default_color {
+				self.notify_color_change_dynamic(10, c)
+			}
+		}
+		11 {
+			self.terminal.colors.background.reset_override()
+			if c := self.terminal.colors.background.default_color {
+				self.notify_color_change_dynamic(11, c)
+			}
+		}
+		12 {
+			self.terminal.colors.cursor.reset_override()
+			if c := self.terminal.colors.cursor.default_color {
+				self.notify_color_change_dynamic(12, c)
+			}
+		}
+		else {}
+	}
+}
+
+// color_query_response_palette builds an OSC 4 query response for a palette
+// index in the currently-configured report format.
+fn (self &StreamHandler) color_query_response_palette(idx u8) ?string {
+	if self.osc_color_report_format == .none_ {
+		return none
+	}
+	color := self.terminal.colors.palette.entries[int(idx)]
+	term := self.osc_terminator()
+	return match self.osc_color_report_format {
+		.bits_16 {
+			'\x1b]4;${idx};rgb:${hex4(color.r)}/${hex4(color.g)}/${hex4(color.b)}${term}'
+		}
+		.bits_8 {
+			'\x1b]4;${idx};rgb:${hex2(color.r)}/${hex2(color.g)}/${hex2(color.b)}${term}'
+		}
+		.none_ {
+			''
+		}
+	}
+}
+
+// color_query_response_dynamic builds an OSC 10-19 query response for a
+// dynamic color in the currently-configured report format.
+fn (self &StreamHandler) color_query_response_dynamic(dyn int) ?string {
+	if self.osc_color_report_format == .none_ {
+		return none
+	}
+	color := match dyn {
+		10 { self.terminal.colors.foreground.get() or { return none } }
+		11 { self.terminal.colors.background.get() or { return none } }
+		12 {
+			self.terminal.colors.cursor.get() or {
+				self.terminal.colors.foreground.get() or { return none }
+			}
+		}
+		else { return none }
+	}
+	term := self.osc_terminator()
+	return match self.osc_color_report_format {
+		.bits_16 {
+			'\x1b]${dyn};rgb:${hex4(color.r)}/${hex4(color.g)}/${hex4(color.b)}${term}'
+		}
+		.bits_8 {
+			'\x1b]${dyn};rgb:${hex2(color.r)}/${hex2(color.g)}/${hex2(color.b)}${term}'
+		}
+		.none_ {
+			''
+		}
+	}
+}
+
+// osc_terminator returns the string terminator (BEL or ST) to use for OSC
+// responses. We use ST (ESC \) as the preferred terminator.
+fn (self &StreamHandler) osc_terminator() string {
+	return '\x1b\\'
+}
+
+// notify_color_change_palette notifies the surface of a palette color change.
+fn (mut self StreamHandler) notify_color_change_palette(idx u8, color terminal.RGB) {
+	self.surface_message_writer(apprt.SurfaceMessage{
+		kind: .color_change
+		color_change: osc.ColoredTarget{
+			target: osc.ColorTarget(osc.ColorTargetPalette{
+				index: idx
+			})
+			color: osc.RGB{
+				r: color.r
+				g: color.g
+				b: color.b
+			}
+		}
+	})
+}
+
+// notify_color_change_dynamic notifies the surface of a dynamic color change.
+fn (mut self StreamHandler) notify_color_change_dynamic(dyn int, color terminal.RGB) {
+	dc := match dyn {
+		10 { osc.DynamicColor.foreground }
+		11 { osc.DynamicColor.background }
+		12 { osc.DynamicColor.cursor }
+		else { return }
+	}
+	self.surface_message_writer(apprt.SurfaceMessage{
+		kind: .color_change
+		color_change: osc.ColoredTarget{
+			target: osc.ColorTarget(osc.ColorTargetDynamic{
+				color: dc
+			})
+			color: osc.RGB{
+				r: color.r
+				g: color.g
+				b: color.b
+			}
+		}
+	})
+}
+
+// ============================================================
+// Kitty color protocol (OSC 21)
+// ============================================================
+
+// kitty_color_report handles the kitty color protocol (OSC 21). The data
+// string is the raw OSC body after "21;", a semicolon-separated list of:
+//   - "key=?"       -> query
+//   - "key=spec"    -> set
+//   - "key="        -> reset
+// where key is a palette index, "foreground", "background", or "cursor".
+//
+// Faithful to stream_handler.zig kittyColorReport.
+fn (mut self StreamHandler) kitty_color_report(data string) {
+	mut response := ''
+
+	for item in data.split(';') {
+		trimmed := item.trim_space()
+		if trimmed.len == 0 {
+			continue
+		}
+
+		eq := trimmed.index('=') or {
+			// No '=': not a valid key/value; skip.
+			continue
+		}
+		key := trimmed[..eq]
+		val := trimmed[eq + 1..]
+
+		if val == '?' {
+			// Query.
+			if response.len == 0 {
+				response += '\x1b]21'
+			}
+			if color := self.kitty_color_get(key) {
+				response += ';${key}=rgb:${hex2(color.r)}/${hex2(color.g)}/${hex2(color.b)}'
+			} else {
+				// Unset color: report the key with an empty value.
+				response += ';${key}='
+			}
+			continue
+		}
+
+		if val.len == 0 {
+			// Reset.
+			self.kitty_color_reset(key)
+			continue
+		}
+
+		// Set.
+		rgb := osc.parse_rgb(val) or { continue }
+		trgb := terminal.RGB{
+			r: rgb.r
+			g: rgb.g
+			b: rgb.b
+		}
+		self.kitty_color_set(key, trgb)
+	}
+
+	// If we had any query writes, terminate and send them.
+	if response.len > 0 {
+		response += self.osc_terminator()
+		self.message_writer(Message.write_req(response))
+	}
+}
+
+// kitty_color_get returns the current color for a kitty color protocol key,
+// or none if unset.
+fn (self &StreamHandler) kitty_color_get(key string) ?terminal.RGB {
+	match key {
+		'foreground' {
+			return self.terminal.colors.foreground.get()
+		}
+		'background' {
+			return self.terminal.colors.background.get()
+		}
+		'cursor' {
+			return self.terminal.colors.cursor.get()
+		}
+		else {
+			idx := parse_palette_index(key) or { return none }
+			return self.terminal.colors.palette.entries[int(idx)]
+		}
+	}
+}
+
+// kitty_color_set sets the color for a kitty color protocol key.
+fn (mut self StreamHandler) kitty_color_set(key string, color terminal.RGB) {
+	match key {
+		'foreground' {
+			self.terminal.colors.foreground.set_override(color)
+		}
+		'background' {
+			self.terminal.colors.background.set_override(color)
+		}
+		'cursor' {
+			self.terminal.colors.cursor.set_override(color)
+		}
+		else {
+			idx := parse_palette_index(key) or { return }
+			self.terminal.flags.dirty.palette = true
+			self.terminal.colors.palette.set(idx, color)
+		}
+	}
+}
+
+// kitty_color_reset resets the color for a kitty color protocol key.
+fn (mut self StreamHandler) kitty_color_reset(key string) {
+	match key {
+		'foreground' {
+			self.terminal.colors.foreground.reset_override()
+		}
+		'background' {
+			self.terminal.colors.background.reset_override()
+		}
+		'cursor' {
+			self.terminal.colors.cursor.reset_override()
+		}
+		else {
+			idx := parse_palette_index(key) or { return }
+			self.terminal.flags.dirty.palette = true
+			self.terminal.colors.palette.reset(idx)
+		}
+	}
+}
+
+// parse_palette_index parses a decimal palette index (0-255) from a string.
+fn parse_palette_index(s string) ?u8 {
+	trimmed := s.trim_space()
+	if trimmed.len == 0 {
+		return none
+	}
+	mut val := 0
+	for c in trimmed {
+		if c < u8(`0`) || c > u8(`9`) {
+			return none
+		}
+		val = val * 10 + int(c - u8(`0`))
+		if val > 255 {
+			return none
+		}
+	}
+	return u8(val)
+}
+
+// hex2 formats a byte as a 2-digit lowercase hex string.
+fn hex2(v u8) string {
+	digits := '0123456789abcdef'
+	return '${digits[int(v >> 4)]:c}${digits[int(v & 0x0F)]:c}'
+}
+
+// hex4 formats a byte scaled to 16 bits (v * 257) as a 4-digit lowercase
+// hex string, matching the "16-bit" OSC color report format.
+fn hex4(v u8) string {
+	scaled := u16(v) * 257
+	digits := '0123456789abcdef'
+	return '${digits[int((scaled >> 12) & 0x0F)]:c}${digits[int((scaled >> 8) & 0x0F)]:c}${digits[int((scaled >> 4) & 0x0F)]:c}${digits[int(scaled & 0x0F)]:c}'
 }
 
 fn (mut self StreamHandler) show_desktop_notification(title string, body string) {

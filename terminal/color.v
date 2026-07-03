@@ -567,7 +567,18 @@ pub fn (tc TerminalColor) to_terminal_rgb() RGB {
 // BoldColor
 // ============================================================
 
+// BoldColor mirrors Ghostty's `union(enum) { color: Color, bright }`.
+// When `bright` is true it represents the `.bright` variant (use the bright
+// palette color). When `bright` is false it represents the `.color` variant
+// and `color` holds the explicit RGB to use for bold text.
 pub struct BoldColor {
 pub:
 	bright bool = true
+	color  RGB
+}
+
+// to_terminal_rgb returns the explicit bold color as a terminal RGB. This is
+// only meaningful for the `.color` variant (when `bright` is false).
+pub fn (bc BoldColor) to_terminal_rgb() RGB {
+	return bc.color
 }

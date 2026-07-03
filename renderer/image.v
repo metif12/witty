@@ -205,6 +205,8 @@ module renderer
 
 
 import terminal
+import kitty
+import math
 
 // Image identifier used to store and lookup images.
 //
@@ -465,8 +467,13 @@ pub fn (mut self ImageRenderState) upload() bool {
 // on the terminal state and our internal state.
 //
 // This does not read/write state used by drawing.
+//
+// BOUNDARY: In Ghostty this reads `t.screens.active.kitty_images.dirty`.
+// The V terminal Screen does not yet expose a `kitty_images` ImageStorage
+// field, so we cannot read the terminal-side dirty flag here. The virtual
+// placement logic below is fully translated. Callers that have access to
+// an ImageStorage should prefer `kitty_requires_update_storage`.
 pub fn (self &ImageRenderState) kitty_requires_update(t &terminal.Terminal) bool {
-	// XTODO: needs screen.kitty_images.dirty check
 	// If we have any virtual references, we must also rebuild our
 	// kitty state on every frame because any cell change can move
 	// an image.
@@ -477,13 +484,38 @@ pub fn (self &ImageRenderState) kitty_requires_update(t &terminal.Terminal) bool
 	return false
 }
 
+// Storage-aware variant of kitty_requires_update that has direct access
+// to the Kitty image storage. This is a faithful translation of Ghostty's
+// State.kittyRequiresUpdate.
+pub fn (self &ImageRenderState) kitty_requires_update_storage(storage &kitty.ImageStorage) bool {
+	// If the terminal kitty image state is dirty, we must update.
+	if storage.dirty {
+		return true
+	}
+
+	// If we have any virtual references, we must also rebuild our
+	// kitty state on every frame because any cell change can move
+	// an image. If the virtual placements were removed, this will
+	// be set to false on the next update.
+	if self.kitty_virtual {
+		return true
+	}
+
+	return false
+}
+
 // Update the Kitty graphics state from the terminal.
 //
 // This reads/writes state used by drawing.
+//
+// BOUNDARY: In Ghostty this reads `t.screens.active.kitty_images` (an
+// ImageStorage) to iterate placements. The V terminal Screen does not yet
+// wire a `kitty_images` field, so this entry point cannot access the real
+// storage. The full CPU-side algorithm (placement iteration, image prep,
+// viewport rect math, z-sorting, bg/text-end computation) lives in
+// `kitty_update_storage`, which callers should use once storage is
+// available. Here we clear our placements to a valid empty state.
 pub fn (mut self ImageRenderState) kitty_update(t &terminal.Terminal, cell_size CellSize) {
-	// XTODO: Full kitty graphics update requires terminal.kitty_images
-	// (ImageStorage) with placement iteration, image preparation, and
-	// viewport coordinate calculation.
 	// We always clear our previous placements no matter what because
 	// we rebuild them from scratch.
 	self.kitty_placements.clear()
@@ -495,6 +527,296 @@ pub fn (mut self ImageRenderState) kitty_update(t &terminal.Terminal, cell_size 
 
 	_ = t
 	_ = cell_size
+}
+
+// A resolved (image, placement) pair for a pin-anchored Kitty placement.
+// The caller extracts these from the terminal's ImageStorage, which is
+// necessary because that storage's placement list is not exposed as a
+// public iterable in the V terminal/kitty modules yet (see BOUNDARY note
+// on kitty_update_storage).
+pub struct KittyPinnedPlacement {
+pub:
+	image     kitty.Image
+	placement kitty.Placement
+}
+
+// Update the Kitty graphics state from the terminal, given the already
+// resolved pin-anchored placements and any virtual placements.
+//
+// This is a faithful translation of the CPU-side of Ghostty's
+// State.kittyUpdate: placement prep (viewport rect math + source rect +
+// viewport-relative Y), virtual placement prep, z-sorting, and the
+// bg/text-end index computation.
+//
+// BOUNDARY: In Ghostty, kittyUpdate iterates `t.screens.active.kitty_images`
+// directly. The V terminal Screen does not yet wire a `kitty_images`
+// ImageStorage field, and the storage's `placements` list plus a
+// `screens.active` accessor are not public. Rather than depend on those
+// unavailable APIs, the caller (once the wiring exists) resolves the
+// pin-anchored placements and virtual placements and passes them here.
+//
+// `top_y` and `bot_y` are the screen-space Y coordinates of the top-left
+// and bottom-right corners of the viewport, computed by the caller (in
+// Ghostty via `pages.pointFromPin(.screen, ...)`).
+pub fn (mut self ImageRenderState) kitty_update_storage(mut storage kitty.ImageStorage, t &terminal.Terminal, top_y u32, bot_y u32, cell_size CellSize, pinned []KittyPinnedPlacement, virtuals []kitty.VirtualPlacement) {
+	// The terminal storage's dirty flag is consumed by this update.
+	defer {
+		storage.dirty = false
+	}
+
+	// We always clear our previous placements no matter what because
+	// we rebuild them from scratch.
+	self.kitty_placements.clear()
+	self.kitty_virtual = false
+
+	// Go through our known images and if there are any that are no longer
+	// in use then mark them to be freed.
+	//
+	// This never conflicts with the below because a placement can't
+	// reference an image that doesn't exist.
+	for id, mut entry in self.images {
+		// We're only looking at Kitty images. Our image map keys are kitty
+		// image IDs directly (u32). If the storage no longer has this
+		// image, mark it for unload.
+		if storage.image_by_id(id) == none {
+			entry.image.mark_for_unload()
+		}
+	}
+
+	// Go through the placements and ensure the image is
+	// on the GPU or else is ready to be sent to the GPU.
+	for pin in pinned {
+		// For errors we log and continue. We try to place
+		// other placements even if one fails.
+		self.prep_kitty_placement(t, top_y, bot_y, pin.image, pin.placement) or { continue }
+	}
+
+	// If we have any virtual placements then we need to prep them. The
+	// presence of virtual placements is signalled by the caller passing
+	// a non-empty list; we set kitty_virtual so future frames rebuild.
+	if virtuals.len > 0 {
+		// We need to mark virtual placements on our renderer so that
+		// we know to rebuild in more scenarios since cell changes can
+		// now trigger placement changes.
+		self.kitty_virtual = true
+
+		for virtual_p in virtuals {
+			// For errors we log and continue. We try to place
+			// other placements even if one fails.
+			self.prep_kitty_virtual_placement(mut storage, virtual_p, cell_size) or { continue }
+		}
+	}
+
+	// Sort the placements by their Z value and compute the bg/text end
+	// indices.
+	self.kitty_sort_and_index()
+}
+
+// Sort the placements by their Z value and compute the bg/text end
+// indices. This is a self-contained faithful translation of the tail of
+// Ghostty's kittyUpdate and operates purely on `kitty_placements`.
+fn (mut self ImageRenderState) kitty_sort_and_index() {
+	// Sort the placements by their Z value.
+	self.kitty_placements.sort_with_compare(fn (a &ImagePlacement, b &ImagePlacement) int {
+		if a.z < b.z {
+			return -1
+		}
+		if a.z > b.z {
+			return 1
+		}
+		// Equal z: use the image id tie-breaker.
+		if a.image_id.z_less_than(b.image_id) {
+			return -1
+		}
+		return 1
+	})
+
+	// Find our indices. The values are sorted by z so we can
+	// find the first placement out of bounds to find the limits.
+	bg_limit := i32(-2147483648 / 2) // std.math.minInt(i32) / 2
+	mut bg_end := ?u32(none)
+	mut text_end := ?u32(none)
+	for i, p in self.kitty_placements {
+		if bg_end == none && p.z >= bg_limit {
+			bg_end = u32(i)
+		}
+		if text_end == none && p.z >= 0 {
+			text_end = u32(i)
+		}
+	}
+
+	// If we didn't see any images with a z > the bg limit,
+	// then our bg end is the end of our placement list.
+	self.kitty_bg_end = bg_end or { u32(self.kitty_placements.len) }
+	// Same idea for the image_text_end.
+	self.kitty_text_end = text_end or { u32(self.kitty_placements.len) }
+}
+
+// Get the viewport-relative position for this placement and add it to
+// the placements list. Faithful translation of prepKittyPlacement.
+fn (mut self ImageRenderState) prep_kitty_placement(t &terminal.Terminal, top_y u32, bot_y u32, image kitty.Image, p kitty.Placement) ! {
+	// Get the rect for the placement. If this placement doesn't have
+	// a rect then its virtual or something so skip it.
+	rect := p.rect(image, t) or { return }
+
+	// This is expensive but necessary. In the V simplified model, pins
+	// carry an absolute screen-space Y directly.
+	img_top_y := rect.top_left.y
+	img_bot_y := rect.bottom_right.y
+
+	// If the selection isn't within our viewport then skip it.
+	if img_top_y > bot_y {
+		return
+	}
+	if img_bot_y < top_y {
+		return
+	}
+
+	// We need to prep this image for upload if it isn't in the
+	// cache OR it is in the cache but the transmit time doesn't
+	// match meaning this image is different.
+	self.prep_kitty_image(image)!
+
+	// Calculate the dimensions of our image, taking in to
+	// account the rows / columns specified by the placement.
+	dest_w, dest_h := p.calculated_size(image, t)
+
+	// Calculate the source rectangle
+	source_x := math.min(image.width, p.source_x)
+	source_y := math.min(image.height, p.source_y)
+	source_width := if p.source_width > 0 {
+		math.min(image.width - source_x, p.source_width)
+	} else {
+		image.width
+	}
+	source_height := if p.source_height > 0 {
+		math.min(image.height - source_y, p.source_height)
+	} else {
+		image.height
+	}
+
+	// Get the viewport-relative Y position of the placement.
+	y_pos := i32(img_top_y) - i32(top_y)
+
+	// Accumulate the placement
+	if dest_w > 0 && dest_h > 0 {
+		self.kitty_placements << ImagePlacement{
+			image_id: KittyImageId{
+				id: image.id
+			}
+			x: i32(rect.top_left.x)
+			y: y_pos
+			z: p.z
+			width: dest_w
+			height: dest_h
+			cell_offset_x: p.x_offset
+			cell_offset_y: p.y_offset
+			source_x: source_x
+			source_y: source_y
+			source_width: source_width
+			source_height: source_height
+		}
+	}
+}
+
+// Prepare a virtual (unicode placeholder) placement. Faithful translation
+// of prepKittyVirtualPlacement.
+fn (mut self ImageRenderState) prep_kitty_virtual_placement(mut storage kitty.ImageStorage, p kitty.VirtualPlacement, cell_size CellSize) ! {
+	image := storage.image_by_id(p.image_id) or {
+		// missing image for virtual placement, ignoring
+		return
+	}
+
+	rp := p.render_placement(storage, &image, cell_size.width, cell_size.height) or {
+		// error rendering virtual placement
+		return
+	}
+
+	// If our placement is zero sized then we don't do anything.
+	if rp.dest_width == 0 || rp.dest_height == 0 {
+		return
+	}
+
+	// The viewport-relative Y. In the V simplified model, the render
+	// placement top_left pin carries an absolute screen Y; virtual
+	// placements only ever take up one row within the viewport.
+	viewport_y := rp.top_left.y
+
+	// Prepare the image for the GPU and store the placement.
+	self.prep_kitty_image(image)!
+	self.kitty_placements << ImagePlacement{
+		image_id: KittyImageId{
+			id: image.id
+		}
+		x: i32(rp.top_left.x)
+		y: i32(viewport_y)
+		z: -1
+		width: rp.dest_width
+		height: rp.dest_height
+		cell_offset_x: rp.offset_x
+		cell_offset_y: rp.offset_y
+		source_x: rp.source_x
+		source_y: rp.source_y
+		source_width: rp.source_width
+		source_height: rp.source_height
+	}
+}
+
+// Prepare the provided Kitty image for upload to the GPU by copying its
+// data and setting it to the pending state. Faithful translation of
+// prepKittyImage + prepImage.
+//
+// BOUNDARY: The actual GPU texture upload happens in `upload`. Here we
+// only prepare the CPU-side pending image state.
+fn (mut self ImageRenderState) prep_kitty_image(image kitty.Image) ! {
+	id := image.id
+	transmit_time := image.transmit_time.unix_nano()
+
+	// If this image exists and its transmit time is the same we assume
+	// it is the identical image so we don't need to send it to the GPU.
+	found_existing := id in self.images
+	if found_existing {
+		existing := self.images[id] or { ImageEntry{} }
+		if existing.transmit_time == transmit_time {
+			return
+		}
+	}
+
+	pixel_format := match image.format {
+		.gray { PixelFormat.gray }
+		.gray_alpha { PixelFormat.gray_alpha }
+		.rgb { PixelFormat.rgb }
+		.rgba { PixelFormat.rgba }
+		.png { return error('png should be decoded by now') }
+	}
+
+	// Copy the data so we own it.
+	pending := PendingImage{
+		width: image.width
+		height: image.height
+		pixel_format: pixel_format
+		data: image.data.clone()
+	}
+
+	if found_existing {
+		// If this was an existing entry, replace it (marks for replace,
+		// which keeps the existing texture if any).
+		mut entry := self.images[id] or { ImageEntry{} }
+		entry.image.mark_for_replace(pending)
+		entry.transmit_time = transmit_time
+		self.images[id] = entry
+	} else {
+		// New entry.
+		self.images[id] = ImageEntry{
+			image: Image{
+				state: .pending
+				pending: pending
+				width: image.width
+				height: image.height
+			}
+			transmit_time: transmit_time
+		}
+	}
 }
 
 // Update our overlay state. None value deletes any existing overlay.

@@ -234,6 +234,12 @@ pub:
 	tab_title ConEmuTabTitle
 	// Semantic prompt data (OSC 133)
 	semantic_prompt_action SemanticAction = .fresh_line
+	// Color operation (OSC 4, 5, 10-19, 104, 105, 110-119). `color_op`
+	// identifies which OSC produced this and `color_requests` holds the
+	// parsed list of set/query/reset requests. (ColorOperation and
+	// ColorRequest are defined in color_parser.v.)
+	color_op       ColorOperation
+	color_requests []ColorRequest
 pub mut:
 	semantic_prompt_options string
 }
@@ -267,6 +273,7 @@ enum OscParserState {
 	s_66
 	s_77
 	s_104
+	s_105
 	s_110
 	s_111
 	s_112
@@ -371,6 +378,7 @@ pub fn (mut self Parser) next(c u8) {
 			match c {
 				`;` { self.start_writing() }
 				`4` { self.state = .s_104 }
+				`5` { self.state = .s_105 }
 				else { self.state = .invalid }
 			}
 		}
@@ -445,7 +453,7 @@ pub fn (mut self Parser) next(c u8) {
 			}
 		}
 		.s_4, .s_12, .s_14, .s_15, .s_16, .s_17, .s_18, .s_19,
-		.s_21, .s_52, .s_66, .s_104, .s_110, .s_111, .s_112, .s_113,
+		.s_21, .s_52, .s_66, .s_104, .s_105, .s_110, .s_111, .s_112, .s_113,
 		.s_114, .s_115, .s_116, .s_117, .s_118, .s_119, .s_1337 {
 			match c {
 				`;` { self.start_writing() }
@@ -485,7 +493,7 @@ pub fn (mut self Parser) end(terminator_ch u8) ?Command {
 			return parse_change_window_icon(mut self, terminator_ch)
 		}
 		.s_4, .s_5, .s_10, .s_11, .s_12, .s_13, .s_14, .s_15,
-		.s_16, .s_17, .s_18, .s_19, .s_104, .s_110, .s_111,
+		.s_16, .s_17, .s_18, .s_19, .s_104, .s_105, .s_110, .s_111,
 		.s_112, .s_113, .s_114, .s_115, .s_116, .s_117, .s_118,
 		.s_119 {
 			return parse_color_operation(mut self, terminator_ch)

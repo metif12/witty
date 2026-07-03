@@ -116,7 +116,31 @@ module kitty
 import os
 import time
 import compress.zlib
+import stbi
 import terminal
+
+// POSIX shared-memory / mmap bindings, required for the shared_memory
+// medium (t=s). shm_open needs libc; these map directly to the Zig
+// std.c.shm_open / posix.fstat / posix.mmap calls.
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+fn C.shm_open(name &char, oflag int, mode u32) int
+fn C.shm_unlink(name &char) int
+fn C.close(fd int) int
+fn C.fstat(fd int, buf &C.stat) int
+fn C.mmap(addr voidptr, length usize, prot int, flags int, fd int, offset i64) voidptr
+fn C.munmap(addr voidptr, length usize) int
+fn C.memcpy(dest voidptr, src voidptr, n usize) voidptr
+
+// mmap protection / flag constants from <sys/mman.h> and <fcntl.h>.
+// These are C macros; we reference them directly (C.PROT_READ etc.).
+// C.O_RDONLY is already provided by the standard headers.
+
+// C.stat is already declared by the `os` module (imported above), so we
+// reuse its declaration here for fstat().
 
 // Maximum width or height of an image. Taken directly from Kitty.
 pub const max_dimension = 10000
@@ -214,57 +238,188 @@ pub fn LoadingImage.init_from_cmd(cmd &Command) !LoadingImage {
 		quiet: cmd.quiet
 	}
 
-	match t.medium {
+	// Special case for the direct medium, we just add the chunk directly.
+	if t.medium == .direct {
+		result.add_data(cmd.data)!
+		return result
+	}
+
+	// Otherwise, the payload data is guaranteed to be a path.
+
+	// posix.realpath *asserts* that the path does not have internal nulls
+	// instead of erroring, so we reject those up-front.
+	if cmd.data.contains(u8(0)) {
+		return error('invalid data: path contains null byte')
+	}
+
+	// For file / temporary_file we resolve to the absolute (real) path.
+	// For shared_memory we use the raw path as-is (it names a shm object,
+	// not a filesystem path).
+	path := match t.medium {
 		.direct {
-			// Direct medium: the data is inline in the command payload.
-			result.add_data(cmd.data)!
+			return error('invalid data: unreachable')
 		}
-		.file {
-			// File medium: read the image data from the specified file path.
-			path := cmd.data.bytestr()
-			if path.len == 0 {
-				return error('invalid data: empty file path')
-			}
-			if path.len > 4096 {
-				return error('file path too long')
-			}
-			data := os.read_bytes(path) or {
-				return error('invalid data: cannot read file ${path}')
-			}
-			result.add_data(data)!
-		}
-		.temporary_file {
-			// Temporary file medium: read from a file that must be in a temp dir.
-			// After reading, the file should be deleted.
-			path := cmd.data.bytestr()
-			if path.len == 0 {
-				return error('invalid data: empty file path')
-			}
-			if path.len > 4096 {
-				return error('file path too long')
-			}
-			if !is_path_in_temp_dir(path) {
-				return error('temporary file not in temp dir')
-			}
-			// Kitty requires temp files to have "tty-graphics-protocol" in name.
-			base := os.base(path)
-			if !base.contains('tty-graphics-protocol') {
-				return error('temporary file not named correctly')
-			}
-			data := os.read_bytes(path) or {
-				return error('invalid data: cannot read temporary file ${path}')
-			}
-			result.add_data(data)!
-			// Best-effort delete of the temporary file after reading.
-			os.rm(path) or {}
+		.file, .temporary_file {
+			os.real_path(cmd.data.bytestr())
 		}
 		.shared_memory {
-			// Shared memory medium requires platform-specific shm_open/mmap.
-			return error('unsupported medium: shared memory not yet implemented')
+			cmd.data.bytestr()
+		}
+	}
+	if path.len == 0 {
+		return error('invalid data: empty file path')
+	}
+
+	// Depending on the medium, load the data from the path.
+	match t.medium {
+		.direct {
+			return error('invalid data: unreachable')
+		}
+		.file {
+			result.read_file(.file, t, path)!
+		}
+		.temporary_file {
+			result.read_file(.temporary_file, t, path)!
+		}
+		.shared_memory {
+			result.read_shared_memory(t, path)!
 		}
 	}
 
 	return result
+}
+
+// Reads the data from a shared memory segment.
+fn (mut self LoadingImage) read_shared_memory(t Transmission, path string) ! {
+	// shm_open requires a NUL-terminated path. Since we only support posix
+	// here, a stack C string is sufficient.
+	pathz := &char(path.str)
+
+	fd := C.shm_open(pathz, C.O_RDONLY, 0)
+	if fd < 0 {
+		return error('invalid data: unable to open shared memory ${path}')
+	}
+	// Always close and unlink the shm object when we're done, matching
+	// the Zig `defer` cleanup order (close then unlink).
+	defer {
+		C.close(fd)
+		C.shm_unlink(pathz)
+	}
+
+	// The size from stat may be larger than our expected size because
+	// shared memory has to be a multiple of the page size.
+	st := C.stat{}
+	if C.fstat(fd, &st) != 0 {
+		return error('invalid data: unable to fstat shared memory ${path}')
+	}
+	if st.st_size <= 0 {
+		return error('invalid data: shared memory empty')
+	}
+	stat_size := usize(st.st_size)
+
+	expected_size := match self.image.format {
+		// Png we decode the full data size because later decoding will
+		// get the proper dimensions and assert validity.
+		.png {
+			stat_size
+		}
+		// For these formats we have a size we must have.
+		.gray, .gray_alpha, .rgb, .rgba {
+			bpp := usize(self.image.format.bpp())
+			usize(self.image.width) * usize(self.image.height) * bpp
+		}
+	}
+
+	// Our stat size must be at least the expected size otherwise
+	// the shared memory data is invalid.
+	if stat_size < expected_size {
+		return error('invalid data: shared memory size too small expected=${expected_size} actual=${stat_size}')
+	}
+
+	// mmap always uses the stat size.
+	map_ptr := C.mmap(unsafe { nil }, stat_size, C.PROT_READ, C.MAP_SHARED, fd,
+		0)
+	if map_ptr == C.MAP_FAILED || map_ptr == unsafe { nil } {
+		return error('invalid data: unable to mmap shared memory ${path}')
+	}
+	defer {
+		C.munmap(map_ptr, stat_size)
+	}
+
+	// Our end size always uses the expected size so we cut off the
+	// padding for mmap alignment.
+	start := usize(t.offset)
+	end := if t.size > 0 {
+		e := usize(t.offset) + usize(t.size)
+		if e < expected_size { e } else { expected_size }
+	} else {
+		expected_size
+	}
+	if start > end || end > stat_size {
+		return error('invalid data: shared memory offset out of bounds')
+	}
+
+	// Copy the mapped region into our data buffer (the mapping is freed
+	// by the deferred munmap above).
+	n := int(end - start)
+	if n > 0 {
+		mut buf := []u8{len: n}
+		unsafe {
+			C.memcpy(buf.data, voidptr(usize(map_ptr) + start), usize(n))
+		}
+		self.data << buf
+	}
+}
+
+// Reads the data from a regular / temporary file and appends it to the
+// loading image. This applies Kitty's "safe file" checks and, for
+// temporary files, deletes the file after reading (regardless of success).
+fn (mut self LoadingImage) read_file(medium TransmissionMedium, t Transmission, path string) ! {
+	// Verify file seems "safe". This is logic copied directly from Kitty,
+	// mostly. This is really rough but it will catch obvious bad actors.
+	if path.starts_with('/proc/') || path.starts_with('/sys/')
+		|| (path.starts_with('/dev/') && !path.starts_with('/dev/shm/')) {
+		return error('invalid data: unsafe file path ${path}')
+	}
+
+	// Temporary file logic
+	if medium == .temporary_file {
+		if !is_path_in_temp_dir(path) {
+			return error('temporary file not in temp dir')
+		}
+		if !path.contains('tty-graphics-protocol') {
+			return error('temporary file not named correctly')
+		}
+	}
+	// Delete the temporary file when we're done, regardless of outcome.
+	defer {
+		if medium == .temporary_file {
+			os.rm(path) or {}
+		}
+	}
+
+	// File must be a regular file.
+	st := os.stat(path) or { return error('invalid data: failed to stat file ${path}') }
+	if st.get_filetype() != .regular {
+		return error('invalid data: not a regular file ${path}')
+	}
+
+	// Read the file, honoring the offset and limiting the total size.
+	start := u64(t.offset)
+	size := if t.size > 0 {
+		if int(t.size) < max_image_size { int(t.size) } else { max_image_size }
+	} else {
+		max_image_size
+	}
+	f := os.open(path) or { return error('invalid data: failed to open file ${path}') }
+	data := f.read_bytes_at(size, start)
+	unsafe {
+		mut fm := &f
+		fm.close()
+	}
+
+	// Set our data
+	self.data << data
 }
 
 // Adds a chunk of data to the image. Use this if the image
@@ -296,9 +451,7 @@ pub fn (mut self LoadingImage) complete() !Image {
 	// Decode the PNG if we have to. PNG decoding produces raw pixel data
 	// and sets the width/height/format from the PNG header.
 	if self.image.format == .png {
-		// TODO: PNG decoding requires stb_image or equivalent integration.
-		// Once available, decode self.data as PNG, extract width/height/format/pixels.
-		return error('unsupported format: PNG decoding not yet implemented')
+		self.decode_png()!
 	}
 
 	// Validate our dimensions.
@@ -323,6 +476,46 @@ pub fn (mut self LoadingImage) complete() !Image {
 	self.image = Image{}
 	self.data = []
 	return result
+}
+
+// Decode the data as PNG. This will also update the image dimensions.
+//
+// In Zig this uses the `wuffs` PNG decoder. Here we use stb_image
+// (vlib/stbi), decoding to RGBA (4 channels), which is exactly what the
+// Zig code does after decode (it forces .rgba).
+fn (mut self LoadingImage) decode_png() ! {
+	if self.data.len == 0 {
+		return error('invalid data: empty png')
+	}
+
+	// desired_channels = 4 forces RGBA output regardless of the source
+	// channel count, matching the Zig code's final format of .rgba.
+	img := stbi.load_from_memory(self.data.data, self.data.len,
+		stbi.LoadParams{ desired_channels: 4 }) or {
+		return error('invalid data: png decode failed')
+	}
+	defer {
+		img.free()
+	}
+
+	pixel_count := usize(img.width) * usize(img.height) * 4
+	if pixel_count > usize(max_image_size) {
+		return error('invalid data: png image too large size=${pixel_count} max_size=${max_image_size}')
+	}
+
+	// Replace our data with the decoded RGBA pixels.
+	mut buf := []u8{len: int(pixel_count)}
+	if pixel_count > 0 {
+		unsafe {
+			C.memcpy(buf.data, img.data, pixel_count)
+		}
+	}
+	self.data = buf
+
+	// Store updated image dimensions.
+	self.image.width = u32(img.width)
+	self.image.height = u32(img.height)
+	self.image.format = .rgba
 }
 
 // Returns true if path appears to be in a temporary directory.
