@@ -1,5 +1,322 @@
 module terminal
 
+// --- Original Ghostty Comments Start: src/terminal/stream.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/terminal/stream.zig
+//
+// Flip this to true when you want verbose debug output for
+// debugging terminal stream issues. In addition to louder
+// output this will also disable the SIMD optimizations in
+// order to make it easier to see every byte. So if you're
+// debugging an issue in the SIMD code then you'll need to
+// do something else.
+// The possible actions that can be emitted by the Stream
+// function for handling.
+// C ABI functions.
+// TODO: Before shipping an ABI-compatible libghostty, verify this.
+// This was just arbitrarily chosen for now.
+// Field types
+// The value of the cursor movement. Depending on the tag of this
+// union this may be an absolute value or it may be a relative
+// value. For example, `cursor_up` is relative, but `cursor_row`
+// is absolute.
+// Returns a type that can process a stream of tty control characters.
+// This will call the `vt` function on type T with the following signature:
+//
+//   fn(comptime action: Action.Key, value: Action.Value(action)) !void
+//
+// The handler type T can choose to react to whatever actions it cares
+// about in its pursuit of implementing a terminal emulator or other
+// functionality.
+//
+// The Handler type must also have a `deinit` function.
+//
+// The "comptime" key is on purpose (vs. a standard Zig tagged union)
+// because it allows the compiler to optimize away unimplemented actions.
+// e.g. you don't need to pay a conditional branching cost on every single
+// action because the Zig compiler codegens separate code paths for every
+// single action at comptime.
+// Initialize an allocation-free stream. This will preallocate various
+// sizes as necessary and anything over that will be dropped. If you
+// want to support more dynamic behavior use initAlloc instead.
+//
+// As a concrete example of something that requires heap allocation,
+// consider OSC 52 (clipboard operations) which can be arbitrarily
+// large.
+//
+// If you want to limit allocation size, use an allocator with
+// a size limit with initAlloc.
+//
+// This takes ownership of the handler and will call deinit
+// when the stream is deinitialized.
+// Initialize the stream that supports heap allocation as necessary.
+// Process a string of characters.
+// Disable SIMD optimizations if build requests it or if our
+// manual debug mode is on.
+// This is the maximum number of codepoints we can decode
+// at one time for this function call. This is somewhat arbitrary
+// so if someone can demonstrate a better number then we can switch.
+// Split the input into chunks that fit into cp_buf.
+// If the scalar UTF-8 decoder was in the middle of processing
+// a code sequence, we continue until it's not.
+// If we're not in the ground state then we process until
+// we are. This can happen if the last chunk of input put us
+// in the middle of a control sequence.
+// If we're in the ground state then we can use SIMD to process
+// input until we see an ESC (0x1B), since all other characters
+// up to that point are just UTF-8.
+// Consume the bytes we just processed.
+// If our offset is NOT an escape then we must have a
+// partial UTF-8 sequence. In that case, we pass it off
+// to the scalar parser.
+// Process control sequences until we run out.
+// Parses back-to-back escape sequences until none are left.
+// Returns the number of bytes consumed from the provided input.
+//
+// Expects input to start with 0x1B, use consumeUntilGround first
+// if the stream may be in the middle of an escape sequence.
+// Parses escape sequences until the parser reaches the ground state.
+// Returns the number of bytes consumed from the provided input.
+// Like nextSlice but takes one byte and is necessarily a scalar
+// operation that can't use SIMD. Prefer nextSlice if you can and
+// try to get multiple bytes at once.
+// The scalar path can be responsible for decoding UTF-8.
+// Process the next byte and print as necessary.
+//
+// This assumes we're in the UTF-8 decoding state. If we may not
+// be in the UTF-8 decoding state call nextSlice or next.
+// We optimize for the scenario where the text being
+// printed in the terminal ISN'T full of ill-formed
+// UTF-8 sequences.
+// It should be impossible for the decoder
+// to not consume the byte twice in a row.
+// To be called whenever the utf-8 decoder produces a codepoint.
+//
+// This function is abstracted this way to handle the case where
+// the decoder emits a 0x1B after rejecting an ill-formed sequence.
+// We need to increase the eval branch limit because a lot of
+// tests end up running almost completely at comptime due to
+// a chain of inline functions.
+// C0 control
+// ESC
+// Process the next character and call any callbacks if necessary.
+//
+// This assumes that we're not in the UTF-8 decoding state. If
+// we may be in the UTF-8 decoding state call nextSlice or next.
+// Fast path for CSI entry.
+// Fast path for CSI params.
+// csi_param is the most common parser state
+// other than ground by a fairly wide margin.
+//
+// ref: https://github.com/qwerasd205/asciinema-stats
+// A C0 escape (yes, this is valid):
+// We ignore C0 escapes > 0xF since execute
+// doesn't have processing for them anyway:
+// We don't currently have any handling for
+// 0x18 or 0x1A, but they should still move
+// the parser state to ground.
+// A parameter digit:
+// The parser's CSI param action uses param_acc_idx
+// to decide if there's a final param that needs to
+// be consumed or not, but it doesn't matter really
+// what it is as long as it's not 0.
+// A parameter separator:
+// Explicitly ignored:
+// Defer to the state machine to
+// handle any other characters:
+// We explicitly inline this call here for performance reasons.
+//
+// We do this rather than mark Parser.next as inline because doing
+// that causes weird behavior in some tests- I'm not sure if they
+// miscompile or it's just very counter-intuitive comptime stuff,
+// but regardless, this is the easy solution.
+// A handler can expose this to get the raw action before
+// it is further parsed. If this returns `true` then we skip
+// processing ourselves.
+// Always skip erroneous actions because we can't
+// be sure...
+// If the character is > 0x7F, it's a C1 (8-bit) control,
+// which is strictly equivalent to `ESC` plus `c - 0x40`.
+// We ignore SOH/STX: https://github.com/microsoft/terminal/issues/10786
+// The branch hints here are based on real world data
+// which indicates that the most common CSI finals are:
+//
+// 1. m
+// 2. H
+// 3. K
+// 4. A
+// 5. C
+// 6. X
+// 7. l
+// 8. h
+// 9. r
+//
+// Together, these 9 finals make up about 96% of all
+// CSI sequences encountered in real world scenarios.
+//
+// Additionally, within the prongs, unlikely branch
+// hints have been added to branches that deal with
+// invalid sequences/commands, this is in order to
+// optimize for the happy path where we're getting
+// valid data from the program we're running.
+//
+// ref: https://github.com/qwerasd205/asciinema-stats
+// CUU - Cursor Up
+// CUD - Cursor Down
+// CUF - Cursor Right
+// CUB - Cursor Left
+// CNL - Cursor Next Line
+// CPL - Cursor Previous Line
+// HPA - Cursor Horizontal Position Absolute
+// TODO: test
+// CUP - Set Cursor Position.
+// TODO: test
+// CHT - Cursor Horizontal Tabulation
+// Erase Display
+// Erase Line
+// IL - Insert Lines
+// TODO: test
+// DL - Delete Lines
+// TODO: test
+// Delete Character (DCH)
+// Scroll Up (SD)
+// Scroll Down (SD)
+// Cursor Tabulation Control
+// Erase Characters (ECH)
+// CHT - Cursor Horizontal Tabulation Back
+// HPR - Cursor Horizontal Position Relative
+// Repeat Previous Char (REP)
+// c - Device Attributes (DA1)
+// VPA - Cursor Vertical Position Absolute
+// VPR - Cursor Vertical Position Relative
+// TBC - Tab Clear
+// TODO: test
+// SM - Set Mode
+// RM - Reset Mode
+// SGR - Select Graphic Rendition
+// This is the most common case.
+// log.info("parse SGR params={any}", .{input.params});
+// log.info("SGR attribute: {}", .{attr});
+// Reset
+// We don't support any of the subparams yet for these.
+// We only support the numeric form.
+// Nothing, but I wanted a place to put this comment:
+// there are others forms of CSI m that have intermediates.
+// `vim --clean` uses `CSI ? 4 m` and I don't know what
+// that means.
+// TODO: test
+// Handle deviceStatusReport first
+// Handle other forms of CSI n
+// This isn't strictly correct. CSI > n has parameters that
+// control what exactly is being disabled. However, we
+// only support reverting back to modify other keys in
+// numeric except format.
+// DECRQM - Request Mode
+// DECSCUSR - Select Cursor Style
+// TODO: test
+// DECSCA
+// XTVERSION
+// DECSTBM - Set Top and Bottom Margins
+// Restore Mode
+// DECSLRM
+// CSI S is ambiguous with zero params so we defer
+// to our handler to do the proper logic. If mode 69
+// is set, then we should invoke DECSLRM, otherwise
+// we should invoke SC.
+// XTSHIFTESCAPE
+// XTWINOPS
+// report the text area size in pixels
+// report cell size in pixels
+// report screen size in characters
+// report window title
+// we only support window title
+// push/pop title
+// Kitty keyboard protocol
+// ICH - Insert Blanks
+// DECSASD - Select Active Status Display
+// Verify we're getting a DECSASD command
+// The branch hints here are based on real world data
+// which indicates that the most common OSC commands are:
+//
+// 1. hyperlink_end
+// 2. change_window_title
+// 3. change_window_icon
+// 4. hyperlink_start
+// 5. report_pwd
+// 6. color_operation
+// 7. semantic_prompt
+//
+// Together, these 7 commands make up about 96% of all
+// OSC commands encountered in real world scenarios.
+//
+// Additionally, within the prongs, unlikely branch
+// hints have been added to branches that deal with
+// invalid sequences/commands, this is in order to
+// optimize for the happy path where we're getting
+// valid data from the program we're running.
+//
+// ref: https://github.com/qwerasd205/asciinema-stats
+// This is an invalid internal state, not an invalid OSC
+// string being parsed. We shouldn't see this.
+// TODO: support slots '-', '.', '/'
+// The branch hints here are based on real world data
+// which indicates that the most common ESC finals are:
+//
+// 1. B
+// 2. \
+// 3. 0
+// 4. M
+// 5. 8
+// 6. 7
+// 7. >
+// 8. =
+//
+// Together, these 8 finals make up nearly 99% of all
+// ESC sequences encountered in real world scenarios.
+//
+// Additionally, within the prongs, unlikely branch
+// hints have been added to branches that deal with
+// invalid sequences/commands, this is in order to
+// optimize for the happy path where we're getting
+// valid data from the program we're running.
+//
+// ref: https://github.com/qwerasd205/asciinema-stats
+// Charsets
+// DECSC - Save Cursor
+// DECRC - Restore Cursor
+// DECALN - Fill Screen with E
+// IND - Index
+// NEL - Next Line
+// HTS - Horizontal Tab Set
+// RI - Reverse Index
+// SS2 - Single Shift 2
+// SS3 - Single Shift 3
+// SPA - Start of Guarded Area
+// EPA - End of Guarded Area
+// DECID
+// RIS - Full Reset
+// LS2 - Locking Shift 2
+// LS3 - Locking Shift 3
+// LS1R - Locking Shift 1 Right
+// LS2R - Locking Shift 2 Right
+// LS3R - Locking Shift 3 Right
+// Set application keypad mode
+// Reset application keypad mode
+// Sets ST (string terminator). We don't have to do anything
+// because our parser always accepts ST.
+// Forces the C type to be reified when the target is C, ensuring
+// all our types are C ABI compatible.
+// Invalid and ignored by the handler
+// Invalid and ignored by the handler
+// Invalid and ignored by the handler
+// Invalid and ignored by the handler
+// Invalid and ignored by the handler
+// Kakoune-style SGR with underline color as 17th parameter
+// This tests the fix where param 17 was being dropped
+//
+// --- Original Ghostty Comments End: src/terminal/stream.zig
+
+
 // Stream processes VT escape sequences and dispatches actions.
 //
 // This is a translation of Ghostty's stream.zig. It takes a byte stream,

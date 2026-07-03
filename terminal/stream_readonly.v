@@ -1,5 +1,100 @@
 module terminal
 
+// --- Original Ghostty Comments Start: src/terminal/stream_readonly.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/terminal/stream_readonly.zig
+//
+// This is a Stream implementation that processes actions against
+// a Terminal and updates the Terminal state. It is called "readonly" because
+// it only processes actions that modify terminal state, while ignoring
+// any actions that require a response (like queries).
+//
+// If you're implementing a terminal emulator that only needs to render
+// output and doesn't need to respond (since it maybe isn't running the
+// actual program), this is the stream type to use. For example, this is
+// ideal for replay tooling, CI logs, PaaS builder output, etc.
+// See Stream, which is just the stream wrapper around this.
+//
+// This isn't attached directly to Terminal because there is additional
+// state and options we plan to add in the future, such as APC/DCS which
+// don't make sense to me to add to the Terminal directly. Instead, you
+// can call `vtHandler` on Terminal to initialize this handler.
+// The terminal state to modify.
+// Currently does nothing but may in the future so callers should
+// call this.
+// No supported DCS commands have any terminal-modifying effects,
+// but they may in the future. For now we just ignore it.
+// APC can modify terminal state (Kitty graphics) but we don't
+// currently support it in the readonly stream.
+// Have no terminal-modifying effect
+// Set the mode on the terminal
+// Some modes require additional processing
+// Move cursor using escape sequences
+// Move to position 2,3
+// Print some text
+// Move cursor to position 1,6 and erase from cursor to end of line
+// Test wraparound mode
+// Set scrolling region from line 5 to 20
+// Configure G0 as DEC special graphics
+// Write to primary screen
+// Switch to alt screen
+// Write to alt screen
+// Switch back to primary
+// Move cursor to 10,15
+// Save cursor
+// Move cursor elsewhere
+// Restore cursor
+// Set bold and write text
+// Verify we can write attributes - just check the string was written
+// Run DECALN
+// Verify entire screen is filled with 'E'
+// Cursor should be at 1,1
+// Make some changes
+// Full reset
+// Verify reset state
+// These should be ignored without error
+// Terminal should still be functional
+// Save default color
+// Set color 0 to red
+// Reset color 0
+// Set multiple colors
+// Reset all palette colors
+// Initially unset
+// Set foreground to red
+// Reset foreground
+// Set background to green
+// Reset background
+// Set cursor to blue
+// Reset cursor
+// After reset, cursor might be null (using default)
+// Set palette color 5 to magenta using kitty protocol
+// Set and then reset palette color
+// Set foreground using kitty protocol
+// Set background using kitty protocol
+// Set cursor using kitty protocol
+// Set and reset foreground
+// After reset, should be unset
+// Clear dirty flag
+// Setting palette color should set dirty flag
+// Clear and test reset
+// Clear and test kitty protocol
+// Write some text and then send OSC 133;A (fresh_line_new_prompt)
+// Should do a fresh line (carriage return + index)
+// Should set cursor semantic_content to prompt
+// Test with redraw option
+// Write some text and then send OSC 133;A (fresh_line_new_prompt)
+// Write some text
+// OSC 133;P marks the start of a prompt (without fresh line behavior)
+// Write some text
+// Should behave like fresh_line_new_prompt - cursor moves to column 0
+// on next line since we had content
+// OSC 133;N when already at column 0 should stay on same line
+// Set input terminated by EOL
+// Linefeed should reset semantic content to output
+//
+// --- Original Ghostty Comments End: src/terminal/stream_readonly.zig
+
+
 // ReadonlyStream processes VT actions against a Terminal and updates
 // the Terminal state. It is called "readonly" because it only processes
 // actions that modify terminal state, while ignoring any actions that

@@ -1,5 +1,177 @@
 module terminal
 
+// --- Original Ghostty Comments Start: src/terminal/hash_map.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/terminal/hash_map.zig
+//
+// This file contains a fork of the Zig stdlib HashMap implementation tuned
+// for use with our terminal page representation.
+//
+// The main goal we need to achieve that wasn't possible with the stdlib
+// HashMap is to utilize offsets rather than full pointers so that we can
+// copy around the entire backing memory and keep the hash map working.
+//
+// Additionally, for serialization/deserialization purposes, we need to be
+// able to create a HashMap instance and manually set the offsets up. The
+// stdlib HashMap does not export Metadata so this isn't possible.
+//
+// Also, I want to be able to understand possible capacity for a given K,V
+// type and fixed memory amount. The stdlib HashMap doesn't publish its
+// internal allocation size calculation.
+//
+// Finally, I removed many of the APIs that we'll never require for our
+// usage just so that this file is smaller, easier to understand, and has
+// less opportunity for bugs.
+//
+// Besides these shortcomings, the stdlib HashMap has some great qualities
+// that we want to keep, namely the fact that it is backed by a single large
+// allocation rather than pointers to separate allocations. This is important
+// because our terminal page representation is backed by a single large
+// allocation so we can give the HashMap a slice of memory to operate in.
+//
+// I haven't carefully benchmarked this implementation against other hash
+// map implementations. It's possible using some of the newer variants out
+// there would be better. However, I trust the built-in version is pretty good
+// and its more important to get the terminal page representation working
+// first then we can measure and improve this later if we find it to be a
+// bottleneck.
+// A HashMap type that uses offsets rather than pointers, making it
+// possible to efficiently move around the backing memory without
+// invalidating the HashMap.
+// This is the pointer-based map that we're wrapping.
+// This is the alignment that the base pointer must have.
+// Returns the total size of the backing memory required for a
+// HashMap with the given capacity. The base ptr must also be
+// aligned to base_align.
+// Initialize a new HashMap with the given capacity and backing
+// memory. The backing memory must be aligned to base_align.
+// Returns the pointer-based map from a base pointer.
+// Fork of stdlib.HashMap as of Zig 0.12 modified to to use offsets
+// for the key/values pointer. The metadata is still a pointer to limit
+// the amount of arithmetic required to access it. See the file comment
+// for full details.
+// This is actually a midway pointer to the single buffer containing
+// a `Header` field, the `Metadata`s and `Entry`s.
+// At `-@sizeOf(Header)` is the Header field.
+// At `sizeOf(Metadata) * capacity + offset`, which is pointed to by
+// self.header().entries, is the array of entries.
+// This means that the hashmap only holds one live allocation, to
+// reduce memory fragmentation and struct size.
+// Pointer to the metadata.
+// This is purely empirical and not a /very smart magic constant™/.
+// Capacity of the first grow when bootstrapping the hashmap.
+// This hashmap is specially designed for sizes that fit in a u32.
+// u64 hashes guarantee us that the fingerprint bits will never be used
+// to compute the index of a slot, maximizing the use of entropy.
+// The keys/values offset are relative to the metadata
+// Metadata for a slot. It can be in three states: empty, used or
+// tombstone. Tombstones indicate that an entry was previously used,
+// they are a simple way to handle removal.
+// To this state, we add 7 bits from the slot's key hash. These are
+// used as a fast way to disambiguate between entries without
+// having to use the equality function. If two fingerprints are
+// different, we know that we don't have to compare the keys at all.
+// The 7 bits are the highest ones from a 64 bit hash. This way, not
+// only we use the `log2(capacity)` lowest bits from the hash to determine
+// a slot index, but we use 7 more bits to quickly resolve collisions
+// when multiple elements with different hashes end up wanting to be in the same slot.
+// Not using the equality function means we don't have to read into
+// the entries array, likely avoiding a cache miss and a potentially
+// costly function call.
+// Initialize a hash map with a given capacity and a buffer. The
+// buffer must fit within the size defined by `layoutForCapacity`.
+// Get all our main pointers
+// Build our map
+// Insert an entry in the map. Assumes it is not already present.
+// Asserts there is enough capacity to store the new key-value pair.
+// Clobbers any existing data. To detect if a put would clobber
+// existing data, see `getOrPutAssumeCapacity`.
+// Insert an entry in the map. Assumes it is not already present,
+// and that no allocation is needed.
+// Inserts a new `Entry` into the hash map, returning the previous one, if any.
+// Inserts a new `Entry` into the hash map, returning the previous one, if any.
+// If insertion happens, asserts there is enough capacity without allocating.
+// If there is an `Entry` with a matching key, it is deleted from
+// the hash map, and then returned from this function.
+// Find the index containing the data for the given key.
+// Whether this function returns null is almost always
+// branched on after this function returns, and this function
+// returns null/not null from separate code paths.  We
+// want the optimizer to remove that branch and instead directly
+// fuse the basic blocks after the branch to the basic blocks
+// from this function.  To encourage that, this function is
+// marked as inline.
+// If you get a compile error on this line, it means that your generic hash
+// function is invalid for these parameters.
+// Don't loop indefinitely when there are no empty slots.
+// If you get a compile error on this line, it means that your generic eql
+// function is invalid for these parameters.
+// verifyContext can't verify the return type of generic eql functions,
+// so we need to double-check it here.
+// Insert an entry if the associated key is not already present, otherwise update preexisting value.
+// Get an optional pointer to the actual key associated with adapted key, if present.
+// Get a copy of the actual key associated with adapted key, if present.
+// Get an optional pointer to the value associated with key, if present.
+// Get a copy of the value associated with key, if present.
+// If allocation fails, try to do the lookup anyway.
+// If we find an existing item, we can return it.
+// Otherwise return the error, we could not add another.
+// If you get a compile error on this line, it means that your generic hash
+// function is invalid for these parameters.
+// verifyContext can't verify the return type of generic hash functions,
+// so we need to double-check it here.
+// If you get a compile error on this line, it means that your generic eql
+// function is invalid for these parameters.
+// verifyContext can't verify the return type of generic eql functions,
+// so we need to double-check it here.
+// Cheap try to lower probing lengths after deletions. Recycle a tombstone.
+// Return true if there is a value associated with key in the map.
+// If there is an `Entry` with a matching key, it is deleted from
+// the hash map, and this function returns true.  Otherwise this
+// function returns false.
+// Delete the entry with key pointed to by key_ptr from the hash map.
+// key_ptr is assumed to be a valid pointer to a key that is present
+// in the hash map.
+// TODO: replace with pointer subtraction once supported by zig
+// if @sizeOf(K) == 0 then there is at most one item in the hash
+// map, which is assumed to exist as key_ptr must be valid.  This
+// item must be at index 0.
+// The memory layout for the underlying buffer for a given capacity.
+// The total size of the buffer required. The buffer is expected
+// to be aligned to `base_align`.
+// The offset to the start of the keys data.
+// The offset to the start of the values data.
+// The capacity that was used to calculate this layout.
+// Returns the memory layout for the buffer for a given capacity.
+// The actual size may be able to fit more than the given capacity
+// because capacity is rounded up to the next power of two. This is
+// a design requirement for this hash map implementation.
+// Cast to usize to prevent overflow in size calculations.
+// See: https://github.com/ziglang/zig/pull/19048
+// Pack our metadata, keys, and values.
+// Our total memory size required is the end of our values
+// aligned to the base required alignment.
+// The offsets we actually store in the map are from the
+// metadata pointer so that we can use self.metadata as
+// the base.
+// shouldn't resize from putAssumeCapacity
+// Repeatedly delete/insert an entry without resizing the map.
+// Put to different keys so entries don't land in the just-freed slot.
+// fetchRemove() should make slots available.
+// Test that layoutForCapacity correctly handles large capacities without overflow.
+// Prior to the fix, new_capacity (u32) was multiplied before widening to usize,
+// causing overflow when new_capacity * @sizeOf(K) exceeded 2^32.
+// See: https://github.com/ghostty-org/ghostty/issues/9862
+// Use 2^30 capacity - this would overflow in u32 when multiplied by @sizeOf(u64)=8
+// 0x40000000 * 8 = 0x2_0000_0000 which wraps to 0 in u32
+// With the fix, total_size should be at least cap * (sizeof(K) + sizeof(V))
+// = 2^30 * 16 = 2^34 bytes = 16 GiB
+// Without the fix, this would wrap and produce a much smaller value.
+// Also verify the individual offsets don't wrap
+//
+// --- Original Ghostty Comments End: src/terminal/hash_map.zig
+
+
 // hash_map.v - Offset-based hash map for terminal page representation.
 // Translated from Ghostty's terminal/hash_map.zig (1,540 lines).
 //

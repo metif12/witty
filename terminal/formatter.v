@@ -1,5 +1,682 @@
 module terminal
 
+// --- Original Ghostty Comments Start: src/terminal/formatter.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/terminal/formatter.zig
+//
+// Formats available.
+// Plain text.
+// Include VT sequences to preserve colors, styles, URLs, etc.
+// This is predominantly SGR sequences but may contain others as needed.
+//
+// Note that for reference colors, like palette indices, this will
+// vary based on the formatter and you should see the docs. For example,
+// PageFormatter with VT will emit SGR sequences with palette indices,
+// not the color itself.
+//
+// For VT, newlines will be emitted as `\r\n` so that the cursor properly
+// moves back to the beginning prior emitting follow-up lines.
+// HTML output.
+//
+// This will emit inline styles for as much styling as possible,
+// in the interest of simplicity and ease of editing. This isn't meant
+// to build the most beautiful or efficient HTML, but rather to be
+// stylistically correct.
+//
+// For colors, RGB values are emitted as inline CSS (#RRGGBB) while palette
+// indices use CSS variables (var(--vt-palette-N)). The palette colors are
+// emitted by TerminalFormatter.Extra.palette as a <style> block if you
+// want to also include that. But if you only format a screen or lower,
+// the formatter doesn't have access to the current palette to render it.
+//
+// Newlines are emitted as actual '\n' characters. Consumers should use
+// CSS white-space: pre or pre-wrap to preserve spacing and alignment.
+// Unicode codepoint range to replace.
+// Asserts: range[0] <= range[1]
+// Replacement value for this range.
+// A single replacement codepoint.
+// A UTF-8 encoded string to replace with. Asserts the
+// UTF-8 encoding (must be valid).
+// Common encoding options regardless of what exact formatter is used.
+// The format to emit.
+// Whether to unwrap soft-wrapped lines. If false, this will emit the
+// screen contents as it is rendered on the page in the given size.
+// Trim trailing whitespace on lines with other text. Trailing blank
+// lines are always trimmed. This only affects trailing whitespace
+// on rows that have at least one other cell with text. Whitespace
+// is currently only space characters (0x20).
+// Replace matching Unicode codepoints with some other values.
+// This will use the last matching range found in the list.
+// Set a background and foreground color to use for the "screen".
+// For styled formats, this will emit the proper sequences or styles.
+// If set, then styled formats in `emit` will use this palette to
+// emit colors directly as RGB. If this is null, styled formats will
+// still work but will use deferred palette styling (e.g. CSS variables
+// for HTML or the actual palette indexes for VT).
+// Maps byte positions in formatted output to PageList pins.
+//
+// Used by formatters that operate on PageLists to track the source position
+// of each byte written. The caller is responsible for freeing the map.
+// Terminal formatter formats the active terminal screen.
+//
+// This will always only emit data related to the currently active screen.
+// If you want to emit data for a specific screen (e.g. primary vs alt), then
+// switch to that screen in the terminal prior to using this.
+//
+// If you want to emit data for all screens (a less common operation), then
+// you must create a no-content TerminalFormatter followed by multiple
+// explicit ScreenFormatter calls. This isn't a common operation so this
+// little extra work should be acceptable.
+//
+// For styled formatting, this will emit the palette colors at the
+// beginning so that the output can be rendered properly according to
+// the current terminal state.
+// The terminal to format.
+// The common options
+// The content to include.
+// Extra stuff to emit, such as terminal modes, palette, cursor, etc.
+// This information is ONLY emitted when the format is "vt".
+// If non-null, then `map` will contain the Pin of every byte
+// byte written to the writer offset by the byte index. It is the
+// caller's responsibility to free the map.
+//
+// Note that some emitted bytes may not correspond to any Pin, such as
+// the extra data around terminal state (palette, modes, etc.). For these,
+// we'll map it to the most previous pin so there is some continuity but
+// its an arbitrary choice.
+//
+// Warning: there is a significant performance hit to track this
+// Emit the palette using OSC 4 sequences.
+// Emit terminal modes that differ from their defaults using CSI h/l
+// sequences. Defaults are according to the Ghostty defaults which
+// are generally match most terminal defaults. This will include
+// things like current screen, bracketed mode, mouse event reporting,
+// etc.
+// Emit scrolling region state using DECSTBM and DECSLRM sequences.
+// Emit tabstop positions by clearing all tabs (CSI 3 g) and setting
+// each configured tabstop with HTS.
+// Emit the present working directory using OSC 7.
+// Emit keyboard modes such as ModifyOtherKeys using CSI > 4 m
+// sequences.
+// The screen extras to emit. TerminalFormatter always only
+// emits data for the currently active screen. If you want to emit
+// data for all screens, you should manually construct a no-content
+// terminal formatter, followed by screen formatters.
+// Emit nothing.
+// Emit style-relevant information only such as palettes.
+// Emit everything. This reconstructs the terminal state as closely
+// as possible.
+// Emit palette before screen content if using VT format. Technically
+// we could do this after but this way if replay is slow for whatever
+// reason the colors will be right right away.
+// For HTML, we emit CSS to setup our palette variables.
+// If we have a pin_map, add the bytes we wrote to map.
+// Map all those bytes to the same pin. Use the top left to ensure
+// the node pointer is always properly initialized.
+// Emit terminal modes that differ from defaults. We probably have
+// some modes we want to emit before and some after, but for now for
+// simplicity we just emit them all before. If we make this more complex
+// later we should add test cases for it.
+// If we have a pin_map, add the bytes we wrote to map.
+// Map all those bytes to the same pin. Use the top left to ensure
+// the node pointer is always properly initialized.
+// Extra terminal state to emit after the screen contents so that
+// it doesn't impact the emitted contents.
+// Emit scrolling region using DECSTBM and DECSLRM
+// DECSTBM: top and bottom margins (1-indexed)
+// Only emit if not the full screen
+// DECSLRM: left and right margins (1-indexed)
+// Only emit if not the full width
+// Emit tabstop positions
+// Clear all tabs (CSI 3 g)
+// Set each configured tabstop by moving cursor and using HTS
+// Move cursor to the column (1-indexed)
+// Set tab (HTS)
+// Emit keyboard modes such as ModifyOtherKeys
+// Only emit if modify_other_keys_2 is true
+// Emit present working directory using OSC 7
+// If we have a pin_map, add the bytes we wrote to map.
+// Screen formatter formats a single terminal screen (e.g. primary vs alt).
+// The screen to format.
+// The common options
+// The content to include.
+// Extra stuff to emit, such as cursor, style, hyperlinks, etc.
+// This information is ONLY emitted when the format is "vt".
+// If non-null, then `map` will contain the Pin of every byte
+// byte written to the writer offset by the byte index. It is the
+// caller's responsibility to free the map.
+//
+// Note that some emitted bytes may not correspond to any Pin, such as
+// the extra data around screen state. For these, we'll map it to the
+// most previous pin so there is some continuity but its an arbitrary
+// choice.
+//
+// Warning: there is a significant performance hit to track this
+// Emit no content, only terminal state such as modes, palette, etc.
+// via extra.
+// Emit the content specified by the selection. Null for all.
+// The selection is inclusive on both ends.
+// Emit cursor position using CUP (CSI H).
+// Emit current SGR style state based on the cursor's active style_id.
+// This reconstructs the SGR attributes (bold, italic, colors, etc.) at
+// the cursor position.
+// Emit current hyperlink state using OSC 8 sequences.
+// This sets the active hyperlink based on cursor.hyperlink_id.
+// Emit character protection mode using DECSCA.
+// Emit Kitty keyboard protocol state using CSI > u and CSI = sequences.
+// Emit character set designations and invocations.
+// This includes G0-G3 designations (ESC ( ) * +) and GL/GR invocations.
+// Emit nothing.
+// Emit style-relevant information only.
+// Emit everything. This reconstructs the screen state as closely
+// as possible.
+// Emit our pagelist contents according to our selection.
+// Emit extra screen state after content if we care. The state has
+// to be emitted after since some state such as cursor position and
+// style are impacted by content rendering.
+// HTML doesn't preserve any screen state because it has
+// nothing to do with rendering.
+// Emit current SGR style state
+// Emit current hyperlink state using OSC 8
+// Start hyperlink with uri (and explicit id if present)
+// Emit character protection mode using DECSCA
+// DEC protected mode
+// Emit Kitty keyboard protocol state using CSI = u
+// Emit character set designations and invocations
+// Emit G0-G3 designations
+// Emit GL invocation if not G0
+// Emit GR invocation if not G2
+// Emit cursor position using CUP (CSI H)
+// CUP is 1-indexed
+// If we have a pin_map, we need to count how many bytes the extras
+// will emit so we can map them all to the same pin. We do this by
+// formatting to a discarding writer with content=none.
+// Map all those bytes to the same pin. Use the first page node
+// to ensure the node pointer is always properly initialized.
+// There is a weird Zig miscompilation here on 0.15.2.
+// If I return the m.map.items value directly then we
+// get undefined memory (even though we're copying a
+// Pin struct). If we duplicate here like this we do
+// not.
+// PageList formatter formats multiple pages as represented by a PageList.
+// The pagelist to format.
+// The common options
+// The bounds of the PageList to format. The top left and bottom right
+// MUST be ordered properly.
+// If true, the boundaries define a rectangle selection where start_x
+// and end_x apply to every row, not just the first and last.
+// If non-null, then `map` will contain the Pin of every byte
+// byte written to the writer offset by the byte index. It is the
+// caller's responsibility to free the map.
+//
+// Warning: there is a significant performance hit to track this
+// If we keep track of pins, we'll need this.
+// For rectangle selection, apply start_x and end_x to all chunks
+// Otherwise only on the first/last, respectively.
+// If we're tracking pins, then we setup a point map for the
+// page formatter (cause it can't track pins). And then we convert
+// this to pins later.
+// If we're tracking pins then grab our points and write them
+// to our pin map.
+// Page formatter.
+//
+// For styled formatting such as VT, this will emit references for palette
+// colors. If you want to capture the palette as-is at the type of formatting,
+// you'll have to emit the sequences for setting up the palette prior to
+// this formatting. (TODO: A function to do this)
+// The page to format.
+// The common options
+// Start and end points within the page to format. If end x is not given
+// then it will be the full width. If end y is not given then it will be
+// the full height.
+//
+// The start and end are both inclusive, so equal values will still
+// return a non-empty result (i.e. a single cell or row).
+//
+// The start x is considered the X in the first row and end X is
+// X in the final row. This isn't a rectangle selection by default.
+//
+// If start X falls on the second column of a wide character, then
+// the entire character will be included (as if you specified the
+// previous column).
+// If true, the start x/y and end x/y define a rectangle selection.
+// In this case, the boundaries will apply to every row, not just
+// the first and last.
+// If non-null, then `map` will contain the x/y coordinate of every
+// byte written to the writer offset by the byte index. It is the
+// caller's responsibility to free the map.
+//
+// The x/y coordinate will be the coordinates within the page.
+//
+// Warning: there is a significant performance hit to track this
+// The previous trailing state from the prior page. If you're iterating
+// over multiple pages this helps ensure that unwrapping and other
+// accounting works properly.
+// Trailing state. This is used to ensure that rows wrapped across
+// multiple pages are unwrapped properly, as well as other accounting
+// we may do in the future.
+// Initializes a page formatter. Other options can be set directly on the
+// struct after initialization and before calling `format()`.
+// Continue our prior trailing state if we have it, but only if we're
+// starting from the beginning (start_y and start_x are both 0).
+// If a non-zero start position is specified, ignore trailing state.
+// Setup our starting column and perform some validation for overflows.
+// Note: start_x only applies to the first row, end_x only applies to the last row.
+// Setup our starting row and perform some validation for overflows.
+// Edge case: if our end x/y falls on a spacer head AND we're unwrapping,
+// then we move the x/y to the start of the next row (if available).
+// Move to next row if available
+//
+// TODO: if unavailable, we should add to our trailing state
+//
+// so the pagelist formatter can be aware and maybe add
+// another page
+// If we only have a single row, validate that start_x <= end_x
+// Wrap HTML output in monospace font styling
+// Setup our div. We use a buffer here that should always
+// fit the stuff we need, in order to make counting bytes easier.
+// Monospace and whitespace preserving
+// Background/foreground colors
+// OSC 10 sets foreground color, OSC 11 sets background color
+// Our style for non-plain formats
+// Determine the x range for this row
+// - First row: start_x to end of row (or end_x if single row)
+// - Last row: start of row to end_x
+// - Middle rows: full width
+// The end is always straightforward
+// The first we have to check if our start X falls on the
+// tail of a wide character.
+// Include the prior cell to get the full wide char
+// If we're a spacer head on our first row then we
+// skip this whole row.
+// If this row is blank, accumulate to avoid a bunch of extra
+// work later. If it isn't blank, make sure we dump all our
+// blanks.
+// Reset style before emitting newlines to prevent background
+// colors from bleeding into the next line's leading cells.
+// Plaintext just uses standard newlines because newlines
+// on their own usually move the cursor back in anywhere
+// you type plaintext.
+// VT uses \r\n because in a raw pty, \n alone doesn't
+// guarantee moving the cursor back to column 0. \r
+// makes it work for sure.
+// HTML uses just \n because HTML rendering will move
+// the cursor back.
+// \r and \n map to the row that ends with this newline.
+// If we're continuing (trailing state) then this will be
+// in a prior page, so we just map to the first row of this
+// page.
+// The first one inherits the x value.
+// All others have x = 0 since they reference their prior
+// blank line.
+// If we're not wrapped, we always add a newline so after
+// the row is printed we can add a newline.
+// If the row doesn't continue a wrap then we need to reset
+// our blank cell count.
+// Go through each cell and print it
+// Skip spacers. These happen naturally when wide characters
+// are printed again on the screen (for well-behaved terminals!)
+// If we have a zero value, then we accumulate a counter. We
+// only want to turn zero values into spaces if we have a non-zero
+// char sometime later.
+// If we're emitting styled output (not plaintext) and
+// the cell has some kind of styling or is not empty
+// then this isn't blank.
+// Cells with no text are blank
+// Trailing spaces are blank. We know it is trailing
+// because if we get a non-empty cell later we'll
+// fill the blanks.
+// This cell is not blank. If we have accumulated blank cells
+// then we want to emit them now.
+// Map each blank cell to its coordinate. Blank cells can span
+// multiple rows if they carry over from wrap continuation.
+// We have space in this row
+// Wrap to previous row
+// Can't go back further, just use (0, 0)
+// If we aren't emitting styled output then we don't
+// have to worry about styles.
+// Get our cell style.
+// If the style hasn't changed, don't bloat output.
+// If we had a previous style, we need to close it,
+// because we've confirmed we have some new style
+// (which is maybe default).
+// For VT, we only close if we're switching to a default
+// style because any non-default style will emit
+// a \x1b[0m as the start of a VT coloring sequence.
+// Unreachable because of the styled() check at the
+// top of this block.
+// At this point, we can copy our style over
+// If we're just the default style now, we're done.
+// New style, emit it.
+// If we have a point map, we map the style to
+// this cell.
+// We combine codepoint and graphemes because both have
+// shared style handling. We use comptime to dup it.
+// If we have a point map, all codepoints map to this
+// cell.
+// Cells with only background color (no text). Emit a space
+// with the appropriate background color SGR sequence.
+// If the style is non-default, we need to close our style tag.
+// Close the monospace wrapper for HTML output
+// Blank cells get an empty space that isn't replaced by anything
+// because it isn't really a space. We do this so that formatting
+// is preserved if we're emitting styles.
+// Search for our replacement
+// If no replacement, write it directly.
+// For HTML, emit ASCII (< 0x80) directly, but encode
+// all non-ASCII as numeric entities to avoid encoding
+// detection issues (fixes #9426). We can't set the
+// meta tag because we emit partial HTML so this ensures
+// proper unicode handling.
+// Returns the style for the given cell. If there is no styling this
+// will return the default style.
+// We use `display: inline` so that the div doesn't impact
+// layout since we're primarily using it as a CSS wrapper.
+// Verify we have only a single page
+// Create the formatter
+// Test our point map.
+// Verify output
+// Verify our point map
+// Verify we have only a single page
+// Create the formatter
+// Test our point map.
+// Verify output
+// Note: we don't test the trailing state, which may have bugs
+// with unwrap...
+// Verify our point map
+// Verify we have only a single page
+// Create the formatter
+// Test our point map.
+// Full string
+// Verify our point map
+// Wide only (from start)
+// Verify our point map
+// Wide only (from tail)
+// Verify our point map
+// Verify we have only a single page
+// Create the formatter
+// Test our point map.
+// Full string
+// Verify our point map
+// Full string (ending on spacer head)
+// Verify our point map
+// Wide only (from start)
+// Verify our point map
+// Wide only (from tail)
+// Verify our point map
+// Verify we have only a single page
+// Create the formatter
+// Verify output
+// Verify point map
+// Verify we have only a single page
+// Create the formatter
+// Verify output
+// Verify point map
+// Verify we have only a single page
+// Create the formatter
+// Verify output
+// Verify point map
+// Verify we have only a single page
+// Create the formatter
+// Verify output. We expect there to be no trailing newlines because
+// we can't differentiate trailing blank lines as being meaningful because
+// the page formatter can't see the cursor position.
+// Verify point map
+// Verify we have only a single page
+// Create the formatter
+// Verify output. We expect there to be no trailing newlines because
+// we can't differentiate trailing blank lines as being meaningful because
+// the page formatter can't see the cursor position.
+// Verify point map
+// Verify we have only a single page
+// Create the formatter
+// Verify output. We expect there to be no trailing newlines because
+// we can't differentiate trailing blank lines as being meaningful because
+// the page formatter can't see the cursor position.
+// Verify point map
+// Verify point map
+// Blank cells are reset when row is not a wrap continuation
+// Verify point map
+// Surgically modify the first row to be a wrap continuation
+// Blank cells are preserved when row is a wrap continuation with unwrap enabled
+// Verify point map - 3 spaces from prior trailing state + "world"
+// The 3 blank cells can't go back beyond (0,0) so they all map to (0,0)
+// Without unwrap, wrapped lines show as separate lines
+// Verify point map
+// With unwrap, wrapped lines are joined together
+// Verify point map
+// Without unwrap, wrapped lines show as separate lines
+// Verify point map
+// With unwrap, wrapped lines are joined together
+// Verify point map - unwrapped text spans 3 rows
+// Verify point map
+// Verify point map
+// Verify point map
+// Verify point map is empty
+// Should clamp to page.size.rows and work normally
+// Verify point map
+// Verify point map is empty
+// Verify point map
+// Verify point map
+// First row: "world" (start_x=6 to end of row)
+// Second row: "test case" (full row)
+// Third row: "foo" (start to end_x=2, inclusive)
+// Verify point map
+// Verify point map is empty
+// Verify point map
+// Verify point map is empty
+// Should NOT output the 5 newlines from trailing_state because start_y is non-zero
+// Verify point map
+// Should NOT output the 2 newlines or 8 spaces from trailing_state because start_x is non-zero
+// Verify point map
+// SHOULD output the 2 newlines from trailing_state because both start_y and start_x are 0
+// Verify point map
+// Verify we have only a single page
+// Create the formatter
+// Verify output
+// Verify point map
+// Verify point map
+// Verify point map - style sequences should point to first character they style
+// \x1b[0m = 4 bytes, \x1b[1m = 4 bytes, total 8 bytes of style sequences
+// All style bytes should map to the first styled character at (0, 0)
+// Then "hello" maps to its respective positions
+// Verify point map matches output length
+// Verify point map - style sequences should point to first character they style
+// \x1b[0m = 4 bytes, \x1b[38;5;1m = 9 bytes, total 13 bytes of style sequences
+// All style bytes should map to the first styled character at (0, 0)
+// Then "red" maps to its respective positions
+// Should emit OSC 10 for foreground, OSC 11 for background, then the text
+// Note: style is reset before newline to prevent background colors from
+// bleeding to the next line's leading cells.
+// Verify point map matches output length
+// Verify point map matches output length
+// Verify pin map
+// Fill the first page almost completely
+// Verify we're still on one page
+// Add one more newline to push content to a second page
+// Write content on the second page
+// Format the entire PageList
+// Verify pin map
+// First part (trimmed blank lines) maps to first node
+// "page one" (8 chars) maps to first node
+// \n - maps to last node as it represents the transition to new page
+// "page two" (8 chars) maps to last node
+// Fill the first page with soft-wrapped content
+// Verify we're on two pages due to wrapping
+// Format without unwrap - should show line breaks
+// Verify pin map
+// First part (trimmed blank lines) maps to first node
+// First line maps to first node
+// \n - maps to last node as it represents the transition to new page
+// "d test" (6 chars) maps to last node
+// Fill the first page with soft-wrapped content
+// Verify we're on two pages due to wrapping
+// Format with unwrap - should join the wrapped lines
+// Verify pin map
+// First part (trimmed blank lines) maps to first node
+// First line from first page
+// "d test" (6 chars) from last page
+// Fill the first page almost completely
+// Verify we're still on one page
+// Add one more newline to push content to a second page
+// New content is still styled
+// Format the entire PageList with VT
+// Verify pin map
+// Just verify we have entries for both pages in the pin map
+// Verify pin map
+// "world" starts at x=6, y=0
+// Fill first page almost completely
+// Verify we're still on one page
+// Push to second page
+// Verify pin map
+// "world" (5 chars) from first page
+// \n - maps to last node as it represents the transition to new page
+// "foo" (3 chars) from last page
+// Verify pin map
+// Verify pin map
+// "hello world" (11 chars) on y=0
+// \n
+// "tes" (3 chars) on y=1
+// Modify some palette colors using VT sequences
+// Create a second terminal and apply the output
+// Verify the palettes match
+// Verify pin map
+// Verify pin map
+// "hello" (5 chars)
+// "\n" maps to end of first line
+// "world" (5 chars)
+// Modify some palette colors using VT sequences
+// Verify pin map - palette bytes should be mapped to top left
+// Verify pin map
+// "line2" (5 chars) from row 1
+// Verify pin map
+// Verify pin map
+// "hello" (5 chars)
+// "\n" maps to end of first line
+// "world" (5 chars)
+// Verify pin map
+// "line2" (5 chars) from row 1
+// Position cursor at a specific location
+// Create a second terminal and apply the output
+// Verify cursor positions match
+// Verify pin map - the extras should be mapped to the last pin
+// Content bytes map to their positions
+// Extra bytes (cursor position) map to last content pin
+// Set some style attributes
+// Create a second terminal and apply the output
+// Verify styles match
+// Verify pin map
+// Set a hyperlink
+// Create a second terminal and apply the output
+// Verify hyperlinks match
+// Verify pin map
+// Enable protection mode
+// Create a second terminal and apply the output
+// Verify protection state matches
+// Verify pin map
+// Set kitty keyboard flags (disambiguate + report_events = 3)
+// Create a second terminal and apply the output
+// Verify kitty keyboard state matches
+// Verify pin map
+// Set G0 to DEC special and shift to G1
+// Create a second terminal and apply the output
+// Verify charset state matches
+// Verify pin map
+// Set scrolling region: top=5, bottom=20
+// Create a second terminal and apply the output
+// Verify scrolling regions match
+// Enable some modes that differ from defaults
+// Create a second terminal and apply the output
+// Verify modes match
+// Clear all tabs and set custom tabstops
+// Create a second terminal and apply the output
+// Verify tabstops match (columns are 0-indexed in the API)
+// Set modify other keys mode 2
+// Create a second terminal and apply the output
+// Verify keyboard mode matches
+// Set pwd using OSC 7
+// Create a second terminal and apply the output
+// Verify pwd matches
+// Set bold, then italic, then reset
+// Plain text without styles should be wrapped in monospace div
+// Set red foreground, blue background
+// Modify some palette colors
+// Verify palette CSS variables are emitted
+// Verify point map length matches output
+// Opening wrapper div
+// Verify each character maps correctly, accounting for escaping
+// < (4 bytes: &lt;) -> x=0
+// t (1 byte) -> x=1
+// a (1 byte) -> x=2
+// g (1 byte) -> x=3
+// > (4 bytes: &gt;) -> x=4
+// & (5 bytes: &amp;) -> x=5
+// " (6 bytes: &quot;) -> x=6
+// ' (5 bytes: &#39;) -> x=7
+// t (1 byte) -> x=8
+// e (1 byte) -> x=9
+// x (1 byte) -> x=10
+// t (1 byte) -> x=11
+// Box drawing characters that caused issue #9426
+// Expected: box drawing chars as numeric entities
+// ╰ = U+2570 = 9584, ─ = U+2500 = 9472, ❯ = U+276F = 10095
+// ASCII should be emitted directly
+// Mix of ASCII and Unicode entities
+// Set a custom palette color and use it
+// Without palette option - should emit palette index
+// With palette option - should emit RGB directly
+// Set a custom palette color and use it
+// Without palette option - should emit CSS variable
+// With palette option - should emit RGB directly
+// Set bold, then reset with SGR 0
+// The reset should properly close the bold style
+// Replace 'o' with 'x'
+// Verify point map - each output byte should map to original cell position
+// "hello world" -> "hellx wxrld"
+// h e l l o   w o r l d
+// 0 1 2 3 4 5 6 7 8 9 10
+// Replace 'o' with 'x', then with 'y' - should prefer last
+// Replace 'o' with a multi-byte string
+// Verify point map - string replacements should all map to the original cell
+// "hello" -> "hellXYZ"
+// h e l l o
+// 0 1 2 3 4
+// All bytes of the replacement string "XYZ" should point to position 4 (where 'o' was)
+// Replace 'b' through 'e' with 'X'
+// Replace 'a'-'m' with 'A' and 'n'-'z' with 'Z'
+// h e l l o   w o r l d
+// A A A A Z   Z Z Z A A
+// Replace lightning bolt with fire emoji
+// Verify point map
+// "hello ⚡ world"
+// h e l l o   ⚡   w o r l  d
+// 0 1 2 3 4 5 6   8 9 10 11 12
+// Note: ⚡ is a wide character occupying cells 6-7
+// 🔥 is 4 UTF-8 bytes, all should map to cell 6 (where ⚡ was)
+// " world" follows
+// Replace 'e' with 'X' in styled text
+// Should preserve styles while replacing text
+// "red text" becomes "rXd tXxt"
+// VT format uses \x1b[38;5;1m for palette color 1
+// Empty map should not change anything
+// This test reproduces a bug where trailing cells with background color
+// but no text are emitted as plain spaces without SGR sequences.
+// This causes TUIs like htop to lose background colors on rehydration.
+// Simulate a TUI row: "CPU:" with text, then trailing cells with red background
+// to end of line (no text after the colored region).
+// \x1b[41m sets red background, then EL fills rest of row with that bg.
+// Reset colors and move to next line with different content
+// The output should preserve the red background SGR for trailing cells on line 1.
+// Bug: the first row outputs "CPU:\r\n" only - losing the background color fill.
+// The red background should appear BEFORE the newline, not after.
+// Find position of CRLF
+// No CRLF found, fail the test
+// Check that red background (48;5;1) appears BEFORE the newline (on line 1)
+// This should be true but currently fails due to the bug
+//
+// --- Original Ghostty Comments End: src/terminal/formatter.zig
+
+
 /*
   Source: formatter.zig — 5,939 lines
   Output: formatter.v — 1,149 lines + formatter_test.v — 1,117 lines = 2,266 V lines total

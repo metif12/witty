@@ -1,5 +1,98 @@
 module terminal
 
+// --- Original Ghostty Comments Start: src/terminal/Parser.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/terminal/Parser.zig
+//
+// VT-series parser for escape and control sequences.
+//
+// This is implemented directly as the state machine described on
+// vt100.net: https://vt100.net/emu/dec_ansi_parser
+// States for the state machine
+// Transition action is an action that can be taken during a state
+// transition. This is more of an internal action, not one used by
+// end users, typically.
+// Action is the action that a caller of the parser is expected to
+// take as a result of some input character.
+// Draw character to the screen. This is a unicode codepoint.
+// Execute the C0 or C1 function.
+// Execute the CSI command. Note that pointers within this
+// structure are only valid until the next call to "next".
+// Execute the ESC command.
+// Execute the OSC command.
+// DCS-related events.
+// APC data
+// The list of separators used for CSI params. The value of the
+// bit can be mapped to Sep. The index of this bit set specifies
+// the separator AFTER that param. For example: 0;4:3 would have
+// index 1 set.
+// The separator used for CSI params.
+// Implement formatter for logging
+// Implement formatter for logging
+// Implement formatter for logging. This is mostly copied from the
+// std.fmt implementation, but we modify it slightly so that we can
+// print out custom formats for some of our primitives.
+// If this is the active field...
+// Unicode
+// Byte
+// Note: we don't do ASCII (u8) because there are a lot
+// of invisible characters we don't want to handle right
+// now.
+// All others do the default behavior
+// Maximum number of intermediate characters during parsing. This is
+// 4 because we also use the intermediates array for UTF8 decoding which
+// can be at most 4 bytes.
+// Maximum number of CSI parameters. This is arbitrary. Practically, the
+// only CSI command that uses more than 3 parameters is the SGR command
+// which can be infinitely long. 24 is a reasonable limit based on empirical
+// data. This used to be 16 but Kakoune has a SGR command that uses 17
+// parameters.
+//
+// We could in the future make this the static limit and then allocate after
+// but that's a lot more work and practically its so rare to exceed this
+// number. I implore TUI authors to not use more than this number of CSI
+// params, but I suspect we'll introduce a slow path with heap allocation
+// one day.
+// Current state of the state machine
+// Intermediate tracking.
+// Param tracking, building
+// Parser for OSC sequences
+// Initialize our undefined fields so Valgrind can catch it.
+// https://github.com/ziglang/zig/issues/19148
+// Next consumes the next character c and returns the actions to execute.
+// Up to 3 actions may need to be executed -- in order -- representing
+// the state exit, transition, and entry actions.
+// log.info("next: {x}", .{c});
+// After generating the actions, we set our next state.
+// When going from one state to another, the actions take place in this order:
+//
+// 1. exit action from old state
+// 2. transition action
+// 3. entry action to new state
+// Exit depends on current state
+// Entry depends on new state
+// Finalize parameters
+// Semicolon separates parameters. If we encounter a semicolon
+// we need to store and move on to the next parameter.
+// Ignore too many parameters
+// Set param final value
+// Reset current param value to 0
+// A numeric value. Add it to our accumulator.
+// Increment our accumulator index. If we overflow then
+// we're out of bounds and we exit immediately.
+// The client is expected to perform no action.
+// Ignore too many parameters
+// Finalize parameters if we have one
+// We only allow colon or mixed separators for the 'm' command.
+// This is from a Kakoune actual SGR sequence.
+// This is from a Kakoune actual SGR sequence also.
+// https://github.com/darrenstarr/VtNetCore/pull/14
+// Saw this on HN, decided to add a test case because why not.
+// Has to be +2 for the loops below
+//
+// --- Original Ghostty Comments End: src/terminal/Parser.zig
+
+
 // VT Parser state machine based on Paul Williams' DEC-compatible parser.
 // https://vt100.net/emu/dec_ansi_parser
 //

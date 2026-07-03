@@ -1,5 +1,1046 @@
 module input
 
+// --- Original Ghostty Comments Start: src/input/Binding.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/input/Binding.zig
+//
+// A binding maps some input trigger to an action. When the trigger
+// occurs, the action is performed.
+// The trigger that needs to be performed to execute the action.
+// The action to take if this binding matches
+// Boolean flags that can be set per binding.
+// Flags the full binding-scoped flags that can be set per binding.
+// True if this binding should consume the input when the
+// action is triggered.
+// True if this binding should be forwarded to all active surfaces
+// in the application.
+// True if this binding is global. Global bindings should work system-wide
+// and not just while Ghostty is focused. This may not work on all platforms.
+// See the keybind config documentation for more information.
+// True if this binding should only be triggered if the action can be
+// performed. If the action can't be performed then the binding acts as
+// if it doesn't exist.
+// C type
+// Converts this to a C-compatible value.
+//
+// Sync with ghostty.h for enums.
+// Full binding parser. The binding parser is implemented as an iterator
+// which yields elements to support multi-key sequences without allocation.
+// A leader trigger in a sequence.
+// The final trigger and action in a sequence.
+// A chained action `chain=<action>` that should be appended
+// to the previous binding. Note that any action is parsed, including
+// invalid actions for chains such as `unbind`. We expect downstream
+// consumers to validate that the action is valid for chaining.
+// Find the equal sign. This is more complicated than it seems on
+// the surface because we need to ignore equal signs that are
+// part of the trigger.
+// TODO: We should change this parser into a real state machine
+// based parser that parses the trigger fully, then yields the
+// action after. The loop below is a total mess.
+// Find: '=+ctrl' or '==action'
+// Looks like the real equal sign.
+// Detect chains. Chains must not have flags.
+// Sequence iterator goes up to the equal, action is after. We can
+// parse the action now.
+// This is kind of hacky but we put a dummy trigger
+// for chained inputs. The `next` will never yield this
+// because we have chain set. When we find a nicer way to
+// do this we can remove it, the e2e is tested.
+// Find the next prefix
+// If the prefix is one of our flags then set it.
+// If we don't recognize the prefix then we're done. We
+// let any unknown prefix fallthrough to trigger-specific
+// parsing in case there are trigger-specific prefixes
+// (none currently but historically there was `physical:`
+// at one point). Breaking here lets us always implement new
+// prefixes.
+// Move past the prefix
+// Get our trigger. If we're out of triggers then we're done.
+// If this is our last trigger then it is our final binding.
+// Global/all bindings can't be sequences
+// If we're a chain then return it as-is.
+// Out of triggers, yield the final action.
+// An iterator that yields each trigger in a sequence of triggers. For
+// example, the sequence "ctrl+a>ctrl+b" would yield "ctrl+a" and then
+// "ctrl+b". The iterator approach allows us to parse a sequence of
+// triggers without allocations.
+// The input of triggers. This is expected to be ONLY triggers. Things
+// like the "unconsumed:" prefix or action must be stripped before
+// passing to this iterator.
+// Returns the next trigger in the sequence if there is no parsing error.
+// Returns true if there are no more triggers to parse.
+// Parse a single, non-sequenced binding. To support sequences you must
+// use parse. This is a convenience function for single bindings aimed
+// primarily at tests.
+//
+// This doesn't support `chain` either, since chaining requires some
+// stateful concept of a prior binding.
+// Returns true if lhs should be sorted before rhs
+// The set of actions that a keybinding can take.
+// Ignore this key combination.
+//
+// Ghostty will not process this combination nor forward it to the child
+// process within the terminal, but it may still be processed by the OS or
+// other applications.
+// Unbind a previously bound key binding.
+//
+// This cannot unbind bindings that were not bound by Ghostty or the user
+// (e.g. bindings set by the OS or some other application).
+// Send a CSI sequence.
+//
+// The value should be the CSI sequence without the CSI header (`ESC [` or
+// `\x1b[`).
+//
+// For example, `csi:0m` can be sent to reset all styles of the current text.
+// Send an `ESC` sequence.
+// Send the specified text.
+//
+// Uses Zig string literal syntax. This is currently not validated.
+// If the text is invalid (i.e. contains an invalid escape sequence),
+// the error will currently only show up in logs.
+// Send data to the pty depending on whether cursor key mode is enabled
+// (`application`) or disabled (`normal`).
+// Reset the terminal.
+//
+// This can fix a lot of issues when a running program puts the terminal
+// into a broken state, equivalent to running the `reset` command.
+//
+// If you do this while in a TUI program such as vim, this may break
+// the program. If you do this while in a shell, you may have to press
+// enter after to get a new prompt.
+// Copy the selected text to the clipboard.
+// Paste the contents of the default clipboard.
+// Paste the contents of the selection clipboard.
+// If there is a URL under the cursor, copy it to the default clipboard.
+// Copy the terminal title to the clipboard. If the terminal title is not
+// set or is empty this has no effect.
+// Increase the font size by the specified amount in points (pt).
+//
+// For example, `increase_font_size:1.5` will increase the font size
+// by 1.5 points.
+// Decrease the font size by the specified amount in points (pt).
+//
+// For example, `decrease_font_size:1.5` will decrease the font size
+// by 1.5 points.
+// Reset the font size to the original configured size.
+// Set the font size to the specified size in points (pt).
+//
+// For example, `set_font_size:14.5` will set the font size
+// to 14.5 points.
+// Start a search for the given text. If the text is empty, then
+// the search is canceled. A canceled search will not disable any GUI
+// elements showing search. For that, the explicit end_search binding
+// should be used.
+//
+// If a previous search is active, it is replaced.
+// Start a search for the current text selection. If there is no
+// selection, this does nothing. If a search is already active, this
+// changes the search terms.
+// Navigate the search results. If there is no active search, this
+// is not performed.
+// Start a search if it isn't started already. This doesn't set any
+// search terms, but opens the UI for searching.
+// End the current search if any and hide any GUI elements.
+// Clear the screen and all scrollback.
+// Select all text on the screen.
+// Scroll to the top of the screen.
+// Scroll to the bottom of the screen.
+// Scroll to the selected text.
+// Scroll to the given absolute row in the screen with 0 being
+// the first row.
+// Scroll the screen up by one page.
+// Scroll the screen down by one page.
+// Scroll the screen by the specified fraction of a page.
+//
+// Positive values scroll downwards, and negative values scroll upwards.
+//
+// For example, `scroll_page_fractional:0.5` would scroll the screen
+// downwards by half a page, while `scroll_page_fractional:-1.5` would
+// scroll it upwards by one and a half pages.
+// Scroll the screen by the specified amount of lines.
+//
+// Positive values scroll downwards, and negative values scroll upwards.
+//
+// For example, `scroll_page_lines:3` would scroll the screen downwards
+// by 3 lines, while `scroll_page_lines:-10` would scroll it upwards by 10
+// lines.
+// Adjust the current selection in the given direction or position,
+// relative to the cursor.
+//
+// WARNING: This does not create a new selection, and does nothing when
+// there currently isn't one.
+//
+// Valid arguments are:
+//
+//   - `left`, `right`
+//
+//     Adjust the selection one cell to the left or right respectively.
+//
+//   - `up`, `down`
+//
+//     Adjust the selection one line upwards or downwards respectively.
+//
+//   - `page_up`, `page_down`
+//
+//     Adjust the selection one page upwards or downwards respectively.
+//
+//   - `home`, `end`
+//
+//     Adjust the selection to the top-left or the bottom-right corner
+//     of the screen respectively.
+//
+//   - `beginning_of_line`, `end_of_line`
+//
+//     Adjust the selection to the beginning or the end of the line
+//     respectively.
+//
+// Jump the viewport forward or back by the given number of prompts.
+//
+// Requires shell integration.
+//
+// Positive values scroll downwards, and negative values scroll upwards.
+// Write the entire scrollback into a temporary file with the specified
+// action. The action determines what to do with the filepath.
+//
+// Valid actions are:
+//
+//   - `copy`
+//
+//     Copy the file path into the clipboard.
+//
+//   - `paste`
+//
+//     Paste the file path into the terminal.
+//
+//   - `open`
+//
+//     Open the file in the default OS editor for text files.
+//
+//     The default OS editor is determined by using `open` on macOS
+//     and `xdg-open` on Linux.
+//
+// Write the contents of the screen into a temporary file with the
+// specified action.
+//
+// See `write_scrollback_file` for possible actions.
+// Write the currently selected text into a temporary file with the
+// specified action.
+//
+// See `write_scrollback_file` for possible actions.
+//
+// Does nothing when no text is selected.
+// Open a new window.
+//
+// If the application isn't currently focused,
+// this will bring it to the front.
+// Open a new tab.
+// Go to the previous tab.
+// Go to the next tab.
+// Go to the last tab.
+// Go to the tab with the specific index, starting from 1.
+//
+// If the tab number is higher than the number of tabs,
+// this will go to the last tab.
+// Moves a tab by a relative offset.
+//
+// Positive values move the tab forwards, and negative values move it
+// backwards. If the new position is out of bounds, it is wrapped around
+// cyclically within the tab list.
+//
+// For example, `move_tab:1` moves the tab one position forwards, and if
+// it was already the last tab in the list, it wraps around and becomes
+// the first tab in the list. Likewise, `move_tab:-1` moves the tab one
+// position backwards, and if it was the first tab, then it will become
+// the last tab.
+// Toggle the tab overview.
+//
+// This is only supported on Linux and when the system's libadwaita
+// version is 1.4 or newer. The current libadwaita version can be
+// found by running `ghostty +version`.
+// Change the title of the current focused surface via a pop-up prompt.
+//
+// This requires libadwaita 1.5 or newer on Linux. The current libadwaita
+// version can be found by running `ghostty +version`.
+// Change the title of the current tab/window via a pop-up prompt. The
+// title set via this prompt overrides any title set by the terminal
+// and persists across focus changes within the tab.
+// Create a new split in the specified direction.
+//
+// Valid arguments:
+//
+//   - `right`, `down`, `left`, `up`
+//
+//     Creates a new split in the corresponding direction.
+//
+//   - `auto`
+//
+//     Creates a new split along the larger direction.
+//     For example, if the parent split is currently wider than it is tall,
+//     then a left-right split would be created, and vice versa.
+//
+// Focus on a split either in the specified direction (`right`, `down`,
+// `left` and `up`), or in the adjacent split in the order of creation
+// (`previous` and `next`).
+// Focus on either the previous window or the next one ('previous', 'next')
+// Zoom in or out of the current split.
+//
+// When a split is zoomed into, it will take up the entire space in
+// the current tab, hiding other splits. The tab or tab bar would also
+// reflect this by displaying an icon indicating the zoomed state.
+// Toggle read-only mode for the current surface.
+//
+// When a surface is in read-only mode:
+//   - No input is sent to the PTY (mouse events, key encoding)
+//   - Input can still be used at the terminal level to make selections,
+//     copy/paste (keybinds), scroll, etc.
+//   - Warn before quit is always enabled in this state even if an active
+//     process is not running
+// Resize the current split in the specified direction and amount in
+// pixels. The two arguments should be joined with a comma (`,`),
+// like in `resize_split:up,10`.
+// Equalize the size of all splits in the current window.
+// Reset the window to the default size. The "default size" is the
+// size that a new window would be created with. This has no effect
+// if the window is fullscreen.
+//
+// Only implemented on macOS.
+// Control the visibility of the terminal inspector.
+//
+// Valid arguments: `toggle`, `show`, `hide`.
+// Show the GTK inspector.
+//
+// Has no effect on macOS.
+// Show the on-screen keyboard if one is present.
+//
+// Only implemented on Linux (GTK). On GNOME, the "Screen Keyboard"
+// accessibility feature must be turned on, which can be found under
+// Settings > Accessibility > Typing. Other platforms are as of now
+// untested.
+// Open the configuration file in the default OS editor.
+//
+// If your default OS editor isn't configured then this will fail.
+// Currently, any failures to open the configuration will show up only in
+// the logs.
+// Reload the configuration.
+//
+// The exact meaning depends on the app runtime in use, but this usually
+// involves re-reading the configuration file and applying any changes
+// Note that not all changes can be applied at runtime.
+// Close the current "surface", whether that is a window, tab, split, etc.
+//
+// This might trigger a close confirmation popup, depending on the value
+// of the `confirm-close-surface` configuration setting.
+// Close the current tab and all splits therein, close all other tabs, or
+// close every tab to the right of the current one depending on the mode.
+//
+// If the mode is not specified, defaults to closing the current tab.
+//
+// This might trigger a close confirmation popup, depending on the value
+// of the `confirm-close-surface` configuration setting.
+// Close the current window and all tabs and splits therein.
+//
+// This might trigger a close confirmation popup, depending on the value
+// of the `confirm-close-surface` configuration setting.
+// Close all windows.
+//
+// WARNING: This action has been deprecated and has no effect on either
+// Linux or macOS. Users are instead encouraged to use `all:close_window`
+// instead.
+// Maximize or unmaximize the current window.
+//
+// This has no effect on macOS as it does not have the concept of
+// maximized windows.
+// Fullscreen or unfullscreen the current window.
+// Toggle window decorations (titlebar, buttons, etc.) for the current window.
+//
+// Only implemented on Linux.
+// Toggle whether the terminal window should always float on top of other
+// windows even when unfocused.
+//
+// Terminal windows always start as normal (not float-on-top) windows.
+//
+// Only implemented on macOS.
+// Toggle secure input mode.
+//
+// This is used to prevent apps from monitoring your keyboard input
+// when entering passwords or other sensitive information.
+//
+// This applies to the entire application, not just the focused terminal.
+// You must manually untoggle it or quit Ghostty entirely to disable it.
+//
+// Only implemented on macOS, as this uses a built-in system API.
+// Toggle mouse reporting on or off.
+//
+// When mouse reporting is disabled, mouse events will not be reported to
+// terminal applications even if they request it. This allows you to always
+// use the mouse for selection and other terminal UI interactions without
+// applications capturing mouse input.
+//
+// This can also be controlled via the `mouse-reporting` configuration
+// option.
+// Toggle the command palette.
+//
+// The command palette is a popup that lets you see what actions
+// you can perform, their associated keybindings (if any), a search bar
+// to filter the actions, and the ability to then execute the action.
+//
+// This requires libadwaita 1.5 or newer on Linux. The current libadwaita
+// version can be found by running `ghostty +version`.
+// Toggle the quick terminal.
+//
+// The quick terminal, also known as the "Quake-style" or drop-down
+// terminal, is a terminal window that appears on demand from a keybinding,
+// often sliding in from a screen edge such as the top. This is useful for
+// quick access to a terminal without having to open a new window or tab.
+//
+// The terminal state is preserved between appearances, so showing the
+// quick terminal after it was already hidden would display the same
+// window instead of creating a new one.
+//
+// As quick terminals are often useful when other windows are currently
+// focused, they are best used with *global* keybinds. For example, one
+// can define the following key bind to toggle the quick terminal from
+// anywhere within the system by pressing `` Cmd+` ``:
+//
+// ```ini
+// keybind = global:cmd+backquote=toggle_quick_terminal
+// ```
+//
+// The quick terminal has some limitations:
+//
+//   - Only one quick terminal instance can exist at a time.
+//
+//   - Unlike normal terminal windows, the quick terminal will not be
+//     restored when the application is restarted on systems that support
+//     window restoration like macOS.
+//
+//   - On Linux, the quick terminal is only supported on Wayland and not
+//     X11, and only on Wayland compositors that support the `wlr-layer-shell-v1`
+//     protocol. In practice, this means that only GNOME users would not be
+//     able to use this feature.
+//
+//   - On Linux, slide-in animations are only supported on KDE, and when
+//     the "Sliding Popups" KWin plugin is enabled.
+//
+//     If you do not have this plugin enabled, open System Settings > Apps
+//     & Windows > Window Management > Desktop Effects, and enable the
+//     plugin in the plugin list. Ghostty would then need to be restarted
+//     fully for this to take effect.
+//
+//   - Quick terminal tabs are only supported on Linux and not on macOS.
+//     This is because tabs on macOS require a title bar.
+//
+//   - On macOS, a fullscreened quick terminal will always be in non-native
+//     fullscreen mode. This is a requirement due to how the quick terminal
+//     is rendered.
+//
+// See the various configurations for the quick terminal in the
+// configuration file to customize its behavior.
+// Show or hide all windows. If all windows become shown, we also ensure
+// Ghostty becomes focused. When hiding all windows, focus is yielded
+// to the next application as determined by the OS.
+//
+// Note: When the focused surface is fullscreen, this method does nothing.
+//
+// Only implemented on macOS.
+// Toggle the window background opacity between transparent and opaque.
+//
+// This does nothing when `background-opacity` is set to 1 or above.
+//
+// When `background-opacity` is less than 1, this action will either make
+// the window transparent or not depending on its current transparency state.
+//
+// Only implemented on macOS.
+// Check for updates.
+//
+// Only implemented on macOS.
+// Undo the last undoable action for the focused surface or terminal,
+// if possible. This can undo actions such as closing tabs or
+// windows.
+//
+// Not every action in Ghostty can be undone or redone. The list
+// of actions support undo/redo is currently limited to:
+//
+//   - New window, close window
+//   - New tab, close tab
+//   - New split, close split
+//
+// All actions are only undoable/redoable for a limited time.
+// For example, restoring a closed split can only be done for
+// some number of seconds since the split was closed. The exact
+// amount is configured with the `undo-timeout` configuration settings.
+//
+// The undo/redo actions being limited ensures that there is
+// bounded memory usage over time, closed surfaces don't continue running
+// in the background indefinitely, and the keybinds become available
+// for terminal applications to use.
+//
+// Only implemented on macOS.
+// Redo the last undoable action for the focused surface or terminal,
+// if possible. See "undo" for more details on what can and cannot
+// be undone or redone.
+// End the currently active key sequence, if any, and flush the
+// keys up to this point to the terminal, excluding the key that
+// triggered this action.
+//
+// For example: `ctrl+w>escape=end_key_sequence` would encode
+// `ctrl+w` to the terminal and exit the key sequence.
+//
+// Normally, an invalid sequence will reset the key sequence and
+// flush all data including the invalid key. This action allows
+// you to flush only the prior keys, which is useful when you want
+// to bind something like a control key (`ctrl+w`) but not send
+// additional inputs.
+// Activate a named key table (see `keybind` configuration documentation).
+// The named key table will remain active until `deactivate_key_table`
+// is called. If you want a one-shot key table activation, use the
+// `activate_key_table_once` action instead.
+//
+// If the named key table does not exist, this action has no effect
+// and performable will report false.
+//
+// If the named key table is already the currently active key table,
+// this action has no effect and performable will report false.
+// Same as activate_key_table, but the key table will only be active
+// until the first valid keybinding from that table is used (including
+// any defined `catch_all` bindings).
+//
+// The "once" check is only done if this is the currently active
+// key table. If another key table is activated later, then this
+// table will remain active until it pops back out to being the
+// active key table.
+// Deactivate the currently active key table, if any. The next most
+// recently activated key table (if any) will become active again.
+// If no key table is active, this action has no effect.
+// Deactivate all active key tables. If no active key table exists,
+// this will report performable as false.
+// Quit Ghostty.
+// Crash Ghostty in the desired thread for the focused surface.
+//
+// WARNING: This is a hard crash (panic) and data can be lost.
+//
+// The purpose of this action is to test crash handling. For some
+// users, it may be useful to test crash reporting functionality in
+// order to determine if it all works as expected.
+//
+// The value determines the crash location:
+//
+//   - `main`
+//
+//     Crash on the main (GUI) thread.
+//
+//   - `io`
+//
+//     Crash on the IO thread for the focused surface.
+//
+//   - `render`
+//
+//     Crash on the render thread for the focused surface.
+//
+// Make this a valid gobject if we're in a GTK environment.
+// For backwards compatibility we map "top" and "bottom" onto the enum
+// values "up" and "down"
+// This type will mix multiple distinct types with a set content-type
+// such as text/html for html, so that the OS/application can choose
+// what is best when pasting.
+// If we don't have a `,`, default to the plain format. This is
+// also very important for backwards compatibility before Ghostty
+// 1.3 which didn't support output formats.
+// Extern because it is used in the embedded runtime ABI.
+// Fields can provide a custom "parse" function
+// Only tuples are supported to avoid ambiguity with field
+// ordering
+// If we have extra parameters it is an error
+// Parse an action in the format of "key=value" where key is the
+// action name and value is the action parameter. The parameter
+// is optional depending on the action.
+// Split our action by colon. A colon may not exist for some
+// actions so it is optional. The part preceding the colon is the
+// action name.
+// An action name is always required
+// If the field type is void we expect no value
+// Cursor keys can't be set currently
+// Get the parameter after the colon. The parameter
+// can be optional for action types that can have a
+// "default" decl.
+// The scope of an action. The scope is the context in which an action
+// must be executed.
+// Returns the scope of an action.
+// Doesn't really matter, so we'll see app.
+// Obviously app actions.
+// These are app but can be special-cased in a surface context.
+// Obviously surface actions.
+// These are less obvious surface actions. They're surface
+// actions because they are relevant to the surface they
+// come from. For example `new_window` needs to be sourced to
+// a surface so inheritance can be done correctly.
+// Returns a union type that only contains actions that are scoped to
+// the given scope.
+// Find all fields that are app-scoped
+// Build our union
+// Returns the scoped version of this action. If the action is not
+// scoped to the given scope then this returns null.
+//
+// The benefit of this function is that it allows us to use Zig's
+// exhaustive switch safety to ensure we always properly handle certain
+// scoped actions.
+// Use comptime to prune out non-app actions
+// Initialize our app action
+// Implements the formatter for the fmt package. This encodes the
+// action back into the format used by parse.
+// All actions start with the tag.
+// Only write the value depending on the type if it's not void
+// Clone this action with the given allocator. The allocator
+// should be an arena-style allocator since fine-grained
+// deallocation is not possible.
+// Returns a hash code that can be used to uniquely identify this
+// action.
+// Hash the action into the given hasher.
+// Always has the active tag.
+// Hash the value of the field.
+// Do nothing for void
+// Floats are hashed by their bits. This is totally not
+// portable and there are edge cases such as NaNs and
+// signed zeros but these are not cases we expect for
+// our bindings.
+// Everything else automatically handle.
+// Compares two actions for equality.
+// For the Set.Context
+// Trigger is the associated key state that can trigger an action.
+// This is an extern struct because this is also used in the C API.
+//
+// This must be kept in sync with include/ghostty.h ghostty_input_trigger_s
+// The key that has to be pressed for a binding to take action.
+// The key modifiers that must be active for this to match.
+// key is the "physical" version. This is the same as mapped for
+// standard US keyboard layouts. For non-US keyboard layouts, this
+// is used to bind to a physical key location rather than a translated
+// key.
+// This is used for binding to keys that produce a certain unicode
+// codepoint. This is useful for binding to keys that don't have a
+// registered keycode with Ghostty.
+// A catch-all key that matches any key press that is otherwise
+// unbound.
+// The extern struct used for triggers in the C API.
+// Parse a single trigger. The input is expected to be ONLY the trigger
+// (i.e. in the sequence `a=ignore` input is only `a`). The trigger may
+// not be part of a sequence (i.e. `a>b`). This parses exactly a single
+// trigger.
+// Check if its a modifier
+// Repeat not allowed
+// Alias modifiers
+// Repeat not allowed
+// Anything after this point is a key and we only support
+// single keys.
+// If the part is empty it means that it is actually
+// a literal `+`, which we treat as a Unicode character.
+// Check if its a key
+// If we're still unset and we have exactly one unicode
+// character then we can use that as a key.
+// Invalid UTF8 drops to invalid format
+// No codepoints or multiple codepoints drops to invalid format
+// Look for a matching w3c name next.
+// Check for catch_all. We do this near the end since its unlikely
+// in most cases that we're setting a catch-all key.
+// If we're still unset then we look for backwards compatible
+// keys with Ghostty 1.1.x. We do this last so its least likely
+// to impact performance for modern users.
+// We didn't recognize this value
+// The values that are backwards compatible with Ghostty 1.1.x.
+// Ghostty 1.2+ doesn't support these anymore since we moved to
+// W3C key codes.
+// Physical variants. This is a blunt approach to this but its
+// glue for backwards compatibility so I'm not too worried about
+// making this super nice.
+// Returns true if this trigger has no key set.
+// Returns a hash code that can be used to uniquely identify this trigger.
+// Hash the trigger into the given hasher.
+// The codepoint we use for comparisons. Case folding can result
+// in more codepoints so we need to use a 3 element array.
+// ASCII fast path
+// Unicode slow path. Case folding can result in more codepoints.
+// If more codepoints are produced then we return the codepoint
+// as-is which isn't correct but until we have a failing test
+// then I don't want to handle this.
+// Returns true if two triggers are equal.
+// Returns true if two triggers are equal using folded codepoints.
+// For the Set.Context
+// Convert the trigger to a C API compatible trigger.
+// catch_all has no associated value so its an error
+// for a C consumer to look at it.
+// Format implementation for fmt package.
+// Modifiers first
+// Key
+// A structure that contains a set of bindings and focuses on fast lookup.
+// The use case is that this will be called on EVERY key input to look
+// for an associated action so it must be fast.
+// The set of bindings.
+// The reverse mapping of action to binding. Note that multiple
+// bindings can map to the same action and this map will only have
+// the most recently added binding for an action.
+//
+// Sequenced triggers are never present in the reverse map at this time.
+// This is a conscious decision since the primary use case of the reverse
+// map is to support GUI toolkit keyboard accelerators and no mainstream
+// GUI toolkit supports sequences.
+//
+// Performable triggers are also not present in the reverse map. This
+// is so that GUI toolkits don't register performable triggers as
+// menu shortcuts (the primary use case of the reverse map). GUI toolkits
+// such as GTK handle menu shortcuts too early in the event lifecycle
+// for performable to work so this is a conscious decision to ease the
+// integration with GUI toolkits.
+// The chain parent is the information necessary to attach a chained
+// action to the proper location in our mapping. It tracks both the
+// entry in the hashmap and the set it belongs to, which is needed
+// to properly update reverse mappings when converting a leaf to
+// a chained action.
+// Information about a chain parent entry, including which set it
+// belongs to. This is needed because reverse mappings are only
+// maintained in the root set, but the chain parent entry may be
+// in a nested set (for leader key sequences).
+// The entry type for the forward mapping of trigger to action.
+// This key is a leader key in a sequence. You must follow the given
+// set to find the next key in the sequence.
+// This trigger completes a sequence and the value is the action
+// to take along with the flags that may define binding behavior.
+// A set of actions to take in response to a trigger.
+// Implements the formatter for the fmt package. This encodes the
+// action back into the format used by parse.
+// the leader key was already printed.
+// action implements the format
+// Writes the configuration entries for the binding
+// that this value is part of.
+//
+// The value may be part of multiple configuration entries
+// if they're all part of the same prefix sequence (e.g. 'a>b', 'a>c').
+// These will result in multiple separate entries in the configuration.
+//
+// `buffer_stream` is a FixedBufferStream used for temporary storage
+// that is shared between calls to nested levels of the set.
+// For example, 'a>b>c=x' and 'a>b>d=y' will reuse the 'a>b' written
+// to the buffer before flushing it to the formatter with 'c=x' and 'd=y'.
+// We'll rewind to this position after each sub-entry,
+// sharing the prefix between siblings.
+// I'm not exactly if this is safe for any arbitrary
+// writer since the Writer interface does not have any
+// rewind functions, but for our use case of a
+// fixed-size buffer writer this should work just fine.
+// When we get to the leaf, the buffer_stream contains
+// the full sequence of keys needed to reach this action.
+// Leaf node of a set is an action to trigger. This is a "leaf" compared
+// to the inner nodes which are "leaders" for sequences.
+// Leaf node of a set that triggers multiple actions in sequence.
+// A generic leaf node that can be used to unify the handling of
+// leaf and leaf_chained.
+// A full key-value entry for the set.
+// Clear any leaders if we have them
+// Parse a user input binding and add it to the set. This will handle
+// the "unbind" case, ensure consumed/unconsumed fields are set correctly,
+// handle sequences, etc.
+//
+// If this returns an OutOfMemory error then the set is in a broken
+// state and should not be used again. Any Error returned is validated
+// before any set modifications are made.
+// To make cleanup easier, we ensure that the full sequence is
+// valid before making any set modifications. This is more expensive
+// computationally but it makes cleanup way, way easier.
+// We use recursion so that we can utilize the stack as our state
+// for cleanup.
+// If this gets sent up to the root then we've unbound
+// all the way up and this put was a success.
+// If our parser input was too short then the format
+// is invalid because we handle all valid cases.
+// If we had a chain without a parent then the format is wrong.
+// If we had an invalid action for a chain (e.g. unbind).
+// Unrecoverable
+// Errors must never fall through.
+// If we have an updated set (a binding was added) then we store
+// it for our chain parent. If we didn't update a set then we clear
+// our chain parent since chaining is no longer valid until a
+// valid binding is saved.
+// A successful addition must have recorded a chain parent.
+// Returns the set that was ultimately updated if a binding was
+// added. Unbind does not return a set since nothing was added.
+// If we have a leader, we need to upsert a set for it.
+// Since we remove the value, we need to copy it.
+// We have an existing leader for this key already
+// so recurse into this set.
+// Our child put unbound. If our set is empty we
+// need to dealloc and continue up. If our set is
+// not empty then we're done.
+// Remove the existing action. Fallthrough as if
+// we don't have a leader.
+// Create our new set for this leader
+// Insert the leader entry
+// Recurse
+// If our action was to unbind, we restore the old
+// action if we have it.
+// Rebuild our chain
+// Chains can only happen on the root.
+// Unbind is not valid for chains.
+// Add a binding to the set. If the binding already exists then
+// this will overwrite it.
+// Add a binding to the set with explicit flags.
+// unbind should never go into the set, it should be handled prior
+// This is true if we're going to track this entry as
+// a reverse mapping. There are certain scenarios we don't.
+// See the reverse map docs for more information.
+// No matter what our chained parent becomes invalid because
+// getOrPut invalidates pointers.
+// If we have any errors we can't trust our values here. And
+// we can't restore the old values because they're also invalidated
+// by getOrPut so we just disable chaining.
+// If we have a leader we need to clean up the memory
+// If we have an existing binding for this trigger, we have to
+// update the reverse mapping to remove the old action.
+// Chained leaves aren't in the reverse mapping so we just
+// clear it out.
+// Invariant: after successful put, chain_parent must be valid and point
+// to the entry we just added/updated.
+// Append a chained action to the prior set action.
+//
+// It is an error if there is no valid prior chain parent.
+// Unbind is not a valid chain action; callers must check this.
+// Leader can never be a chain parent. Verified through various
+// assertions and unit tests.
+// If it is already a chained action, we just append the
+// action. Easy!
+// If it is a leaf, we need to convert it to a leaf_chained.
+// We also need to be careful to remove any prior reverse
+// mappings for this action since chained actions are not
+// part of the reverse mapping.
+// Setup our failable actions list first.
+// Convert to leaf_chained first, before fixing up reverse
+// mapping. This is important because fixupReverseForAction
+// searches for other bindings with the same action, and we
+// don't want to find this entry (which is now chained).
+// Clean up our reverse mapping. Chained actions are not
+// part of the reverse mapping, so we need to fix up the
+// reverse map (possibly restoring another trigger for the
+// same action).
+// Get a binding for a given trigger.
+// Get a trigger for the given action. An action can have multiple
+// triggers so this will return the first one found.
+// Get an entry for the given key event. This will attempt to find
+// a binding using multiple parts of the event in the following order:
+//
+//   1. Translated key (event.key)
+//   2. Physical key (event.physical_key)
+//   3. Unshifted Unicode codepoint (event.unshifted_codepoint)
+//
+// If our UTF-8 text is exactly one codepoint, we try to match that.
+// No codepoints or multiple codepoints drops to invalid format
+// Finally fallback to the full unshifted codepoint if we have one.
+// Question: should we be doing this if we have UTF-8 text? I
+// suspect "no" but we don't currently have any failing scenarios
+// to verify this.
+// Fallback to catch_all with modifiers first, then without modifiers.
+// Remove a binding for a given trigger.
+// Removal always resets our chain parent. We could make this
+// finer grained but the way it is documented is that chaining
+// must happen directly after sets so this works.
+// For a leader removal, we need to deallocate our child set.
+// Leaders are never part of reverse maps so no other accounting
+// needs to be done.
+// For an action we need to fix up the reverse mapping.
+// Chained leaves are never in our reverse mapping so no
+// cleanup is required.
+// Fix up the reverse mapping after removing an action.
+//
+// When an action is removed from a binding (either by removal or by
+// converting to a chained action), we need to update the reverse mapping.
+// If another binding has the same action, we update the reverse mapping
+// to point to that binding. Otherwise, we remove the action from the
+// reverse mapping entirely.
+//
+// The `old` parameter is the trigger that was previously bound to this
+// action. It is used to check if the reverse mapping still points to
+// this trigger; if not, no fixup is needed since the reverse map already
+// points to a different trigger for this action.
+//
+// Note: we'd LIKE to replace this with the most recent binding but
+// our hash map obviously has no concept of ordering so we have to
+// choose whatever. Maybe a switch to an array hash map here.
+// If our value is not the same as the old trigger, we can
+// ignore it because our reverse mapping points somewhere else.
+// It is the same trigger, so let's now go through our bindings
+// and try to find another trigger that maps to the same action.
+// No other trigger points to this action so we remove
+// the reverse mapping completely.
+// Deep clone the set.
+// If we have any leaders we need to clone them.
+// Leaves could have data to clone (i.e. text actions
+// contain allocated strings).
+// Must be deep cloned.
+// We need to clone the action keys in the reverse map since
+// they may contain allocated values.
+// The hash map context for the set. This defines how the hash map
+// gets the hash key and checks for equality.
+// This seems crazy at first glance but this is also how
+// the Zig standard library handles hashing for array
+// hash maps!
+// single character
+// single modifier
+// multiple modifier
+// key can come before modifier
+// physical keys
+// unicode keys
+// unconsumed keys
+// unconsumed physical keys
+// performable keys
+// invalid key
+// repeated control
+// multiple character
+// Exact match
+// Case-sensitive
+// Basic catch_all
+// catch_all with modifiers
+// Modifier
+// Modifier
+// For Ghostty 1.2+ we changed our key names to match the W3C and removed
+// `physical:`. This tests the backwards compatibility with the old format.
+// Note that our backwards compatibility isn't 100% perfect since triggers
+// like `a` now map to unicode instead of "translated" (which was also
+// removed). But we did our best here with what was unambiguous.
+// simple, for sanity
+// duplicates
+// test our full map
+// global keys
+// global physical keys
+// global unconsumed keys
+// global sequences not allowed
+// all keys
+// all physical keys
+// all unconsumed keys
+// all sequences not allowed
+// Equal physical keys
+// Different physical keys
+// Different mods
+// Equal unicode keys
+// Different unicode keys
+// Different key types
+// catch_all
+// catch_all with different mods
+// invalid action
+// no parameters
+// parameter
+// parameter
+// parameter
+// parameter
+// parameter
+// parameter
+// parameter
+// missing parameter
+// too many
+// invalid type
+// Valid
+// Chain can't have flags
+// Chain can't be part of a sequence
+// single character
+// multi character
+// empty
+// empty starting sequence
+// empty ending sequence
+// single character
+// sequence
+// Creates forward mapping
+// Creates reverse mapping
+// Sets up the chain parent properly
+// Creates forward mapping
+// Creates reverse mapping
+// Sets up the chain parent properly
+// Creates forward mapping
+// Sets up the chain parent properly
+// chain_parent should be set
+// chain_parent value should be a leaf
+// chain_parent should be set
+// chain_parent value should be a leaf with correct flags
+// chain_parent should be set and point to 'b' (the final leaf)
+// chain_parent value should be a leaf
+// After first binding, chain_parent should be 'b'
+// After second binding, chain_parent should be updated to 'c'
+// After unbind, chain_parent should be cleared
+// After unbind, chain_parent should be cleared even though 'c' remains
+// But 'c' should still exist
+// After removal, chain_parent should be cleared
+// Try an invalid parse - should fail
+// chain_parent should be unchanged
+// Clone should have null chain_parent
+// But should have the binding
+// Create a chained binding using parseAndPut with chain=
+// Verify we have a leaf_chained
+// Clone the set
+// Verify the cloned set has the leaf_chained with same actions
+// Create a chained binding with text actions (which have allocated strings)
+// Verify we have a leaf_chained
+// Clone the set
+// Verify the cloned set has independent copies of the text
+// Verify the pointers are different (truly cloned, not shared)
+// Creates reverse mapping
+// Creates reverse mapping
+// should be most recent
+// removal should replace
+// trigger should be non-performable
+// removal of performable should do nothing
+// should be most recent
+// Creates forward mapping as leaf_chained
+// Does not create reverse mapping, because reverse mappings are only for
+// non-chained actions.
+// Chain without a prior binding should fail
+// Should have 3 actions chained
+// Should preserve unconsumed flag
+// Chain after unbind should fail because chain_parent is cleared
+// Navigate to the inner set
+// Check the chained binding
+// chain=unbind is not valid
+// Original binding should still exist
+// Physical matches on physical
+// Physical does not match on UTF8/codepoint
+// Matches on codepoint
+// Matches on UTF-8
+// Doesn't match on physical
+// Lowercase codepoint
+// Uppercase codepoint
+// Negative case for sanity
+// Matches unbound key without modifiers
+// Matches unbound key with modifiers (falls back to catch_all without mods)
+// Specific binding takes precedence over catch_all
+// Key with ctrl matches catch_all with ctrl modifier
+// Key without mods matches catch_all without mods
+// Key with different mods falls back to catch_all without mods
+// parameter
+// parameter
+// parameter
+// parameter
+// paramet  r
+// First appendChain converts leaf to leaf_chained and appends the new action
+// Verify reverse mapping exists before chaining
+// Chaining should remove the reverse mapping
+// Reverse mapping should be gone since chained actions are not in reverse map
+// Add a non-performable binding first
+// Add a performable binding (not in reverse map) and chain it
+// close_surface was performable, so not in reverse map
+// Chaining the performable binding should not crash or affect anything
+// The non-performable new_window binding should still be in reverse map
+// Add two bindings for the same action
+// Reverse mapping should point to 'b' (most recent)
+// Chain an action to 'b', which should restore 'a' in the reverse map
+// Now reverse mapping should point to 'a'
+// Create a chained binding
+// Verify it's a leaf_chained
+// Format the entries
+// Write the trigger first (as formatEntry in Config.zig does)
+// Create a chained binding with 3 actions
+// Verify it's a leaf_chained with 3 actions
+// Format the entries
+// Create a chained binding with text actions
+// Format the entries
+//
+// --- Original Ghostty Comments End: src/input/Binding.zig
+
+
 // A binding maps some input trigger to an action. When the trigger
 // occurs, the action is performed.
 

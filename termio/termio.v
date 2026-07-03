@@ -1,5 +1,177 @@
 module termio
 
+// --- Original Ghostty Comments Start: src/termio/Termio.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/termio/Termio.zig
+//
+// Primary terminal IO ("termio") state. This maintains the terminal state,
+// pty, subprocess, etc. This is flexible enough to be used in environments
+// that don't have a pty and simply provides the input/output using raw
+// bytes.
+// Mutex state argument for queueMessage.
+// Allocator
+// This is the implementation responsible for io.
+// The derived configuration for this termio implementation.
+// The terminal emulator internal state. This is the abstract "terminal"
+// that manages input, grid updating, etc. and is renderer-agnostic. It
+// just stores internal state about a grid.
+// The shared render state
+// A handle to wake up the renderer. This hints to the renderer that that
+// a repaint should happen.
+// The mailbox for notifying the renderer of things.
+// The mailbox for communicating with the surface.
+// The cached size info
+// The mailbox implementation to use.
+// The stream parser. This parses the stream of escape codes and so on
+// from the child process and calls callbacks in the stream handler.
+// Last time the cursor was reset. This is used to prevent message
+// flooding with cursor resets.
+// State we have for thread enter. This may be null if we don't need
+// to keep track of any state or if its already been freed.
+// The state we need to keep around only until we enter the IO
+// thread. Then we can throw it all away.
+// Initial input to send to the subprocess after starting. This
+// memory is freed once the subprocess start is attempted, even
+// if it fails, because Exec only starts once.
+// If we have no input then we have no thread enter state
+// Create our arena allocator
+// Allocate our ThreadEnterState
+// Copy the input from the config
+// Return the initialized state
+// Prepare the inputs for use. Allocations happen on the arena.
+// The configuration for this IO that is derived from the main
+// configuration. This must be exported so that we don't need to
+// pass around Config pointers which makes memory management a pain.
+// This has to be last so that we copy AFTER the arena allocations
+// above happen (Zig assigns in order).
+// Initialize the termio state.
+//
+// This will also start the child process if the termio is configured
+// to run a child process.
+// The default terminal modes based on our config.
+// Setup our initial grapheme cluster support if enabled. We use a
+// switch to ensure we get a compiler error if more cases are added.
+// Set default cursor blink settings
+// Create our terminal
+// Set the image size limits
+// Set our default cursor style
+// Setup our terminal size in pixels for certain requests.
+// Setup our backend.
+// Create our stream handler. This points to memory in self so it
+// isn't safe to use until self.* is set.
+// Clear any StreamHandler state
+// Clear any initial state if we have it
+// Always free our thread enter state when we're done.
+// If we have thread enter state then we're going to validate
+// and set that all up now so that we can error before we actually
+// start the command and pty.
+// Setup our backend
+// If we have inputs, then queue them all up.
+// Send a message to the the mailbox. Depending on the mailbox type in
+// use this may process now or it may just enqueue and process later.
+//
+// This will also notify the mailbox thread to process the message. If
+// you're sending a lot of messages, it may be more efficient to use
+// the mailbox directly and then call notify separately.
+// Queue a write directly to the pty.
+//
+// If you're using termio.Thread, this must ONLY be called from the
+// mailbox thread. If you're not on the thread, use queueMessage with
+// mailbox messages instead.
+//
+// If you're not using termio.Thread, this is not threadsafe.
+// Update the configuration.
+// The remainder of this function is modifying terminal state or
+// the read thread data, all of which requires holding the renderer
+// state lock.
+// Deinit our old config. We do this in the lock because the
+// stream handler may be referencing the old config (i.e. enquiry resp)
+// Update our stream handler. The stream handler uses the same
+// renderer mutex so this is safe to do despite being executed
+// from another thread.
+// Update the configuration that we know about.
+//
+// Specific things we don't update:
+//   - command, working-directory: we never restart the underlying
+//   process so we don't care or need to know about these.
+// Update the default palette.
+// Update all our other colors
+// Set the image size limits
+// Resize the terminal.
+// Update the size of our pty.
+// Enter the critical area that we want to keep small
+// Update the size of our terminal state
+// Update our pixel sizes
+// Disable synchronized output mode so that we show changes
+// immediately for a resize. This is allowed by the spec.
+// If we have size reporting enabled we need to send a report.
+// Mail the renderer so that it can update the GPU and re-render
+// Make a size report.
+// 1024 bytes should be enough for size report since report
+// in columns and pixels.
+// Reset the synchronized output mode. This is usually called by timer
+// expiration from the termio thread.
+// Clear the screen.
+// If we're on the alternate screen, we do not clear. Since this is an
+// emulator-level screen clear, this messes up the running programs
+// knowledge of where the cursor is and causes rendering issues. So,
+// for alt screen, we do nothing.
+// Clear our selection
+// Clear our scrollback
+// If we're not at a prompt, we just delete above the cursor.
+// Clear all Kitty graphics state for this screen. This copies
+// Kitty's behavior when Cmd+K deletes all Kitty graphics. I
+// didn't spend time researching whether it only deletes Kitty
+// graphics that are placed baove the cursor or if it deletes
+// all of them. We delete all of them for now but if this behavior
+// isn't fully correct we should fix this later.
+// At a prompt, we want to first fully clear the screen, and then after
+// send a FF (0x0C) to the shell so that it can repaint the screen.
+// Mark the current row as a not a prompt so we can properly
+// clear the full screen in the next eraseDisplay call.
+// TODO: fix this
+// self.terminal.markSemanticPrompt(.command);
+// assert(!self.terminal.cursorIsAtPrompt());
+// If we reached here it means we're at a prompt, so we send a form-feed.
+// Scroll the viewport
+// Jump the viewport to the prompt.
+// Called when focus is gained or lost (when focus events are enabled)
+// If we have focus events enabled, we send the focus event.
+// We always notify our backend of focus changes.
+// Process output from the pty. This is the manual API that users can
+// call with pty data but it is also called by the read thread when using
+// an exec subprocess.
+// We are modifying terminal state from here on out and we need
+// the lock to grab our read data.
+// Process output from readdata but the lock is already held.
+// Schedule a render. We can call this first because we have the lock.
+// Whenever a character is typed, we ensure the cursor is in the
+// non-blink state so it is rendered if visible. If we're under
+// HEAVY read load, we don't want to send a ton of these so we
+// use a timer under the covers
+// If we have an inspector, we enter SLOW MODE because we need to
+// process a byte at a time alternating between the inspector handler
+// and the termio handler. This is very slow compared to our optimizations
+// below but at least users only pay for it if they're using the inspector.
+// If our stream handling caused messages to be sent to the mailbox
+// thread, then we need to wake it up so that it processes them.
+// Sends a DSR response for the current color scheme to the pty.
+// ThreadData is the data created and stored in the termio thread
+// when the thread is started and destroyed when the thread is
+// stopped.
+//
+// All of the fields in this struct should only be read/written by
+// the termio thread. As such, a lock is not necessary.
+// Allocator used for the event data
+// The event loop associated with this thread. This is owned by
+// the Thread but we have a pointer so we can queue new work to it.
+// The shared render state
+// Mailboxes for different threads
+// Data associated with the backend implementation (i.e. pty/exec state)
+//
+// --- Original Ghostty Comments End: src/termio/Termio.zig
+
+
 import sync
 import terminal
 

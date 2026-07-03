@@ -1,5 +1,400 @@
 module font
 
+// --- Original Ghostty Comments Start: src/font/Atlas.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/font/Atlas.zig
+//
+// Implements a texture atlas (https://en.wikipedia.org/wiki/Texture_atlas).
+//
+// The implementation is based on "A Thousand Ways to Pack the Bin - A
+// Practical Approach to Two-Dimensional Rectangle Bin Packing" by Jukka
+// Jylänki. This specific implementation is based heavily on
+// Nicolas P. Rougier's freetype-gl project as well as Jukka's C++
+// implementation: https://github.com/juj/RectangleBinPack
+//
+// Limitations that are easy to fix, but I didn't need them:
+//
+//   * Written data must be packed, no support for custom strides.
+//   * Texture is always a square, no ability to set width != height. Note
+//     that regions written INTO the atlas do not have to be square, only
+//     the full atlas texture itself.
+//
+// Data is the raw texture data.
+// Width and height of the atlas texture. The current implementation is
+// always square so this is both the width and the height.
+// The nodes (rectangles) of available space.
+// The format of the texture data being written into the Atlas. This must be
+// uniform for all textures in the Atlas. If you have some textures with
+// different formats, you must use multiple atlases or convert the textures.
+// This will be incremented every time the atlas is modified. This is useful
+// for knowing if the texture data has changed since the last time it was
+// sent to the GPU. It is up the user of the atlas to read this value atomically
+// to observe it.
+// This will be incremented every time the atlas is resized. This is useful
+// for knowing if a GPU texture can be updated in-place or if it requires
+// a resize operation.
+// 1 byte per pixel grayscale.
+// 3 bytes per pixel BGR.
+// 4 bytes per pixel BGRA.
+// Atlas cannot fit the desired region. You must enlarge the atlas.
+// A region within the texture atlas. These can be acquired using the
+// "reserve" function. A region reservation is required to write data.
+// Number of nodes to preallocate in the list on init.
+//
+// TODO: figure out optimal prealloc based on real world usage
+// Prealloc some nodes.
+// This sets up our initial state
+// Reserve a region within the atlas with the given width and height.
+//
+// May allocate to add a new rectangle into the internal list of rectangles.
+// This will not automatically enlarge the texture if it is full.
+// x, y are populated within :best_idx below
+// If our width/height are 0, then we return the region as-is. This
+// may seem like an error case but it simplifies downstream callers who
+// might be trying to write empty data.
+// Find the location in our nodes list to insert the new node for this region.
+// Check if our region fits within this node.
+// If we never found a chosen index, the atlas cannot fit our region.
+// Insert our new node for this rectangle at the exact best index
+// Optimize our rectangles
+// Attempts to fit a rectangle of width x height into the node at idx.
+// The return value is the y within the texture where the rectangle can be
+// placed. The x is the same as the node.
+// If the added width exceeds our texture size, it doesn't fit.
+// Go node by node looking for space that can fit our width.
+// If the added height exceeds our texture size, it doesn't fit.
+// Merge adjacent nodes with the same y value.
+// Set the data associated with a reserved region. The data is expected
+// to fit exactly within the region. The data must be formatted with the
+// proper bpp configured on init.
+// Like `set` but allows specifying a width for the source data and an
+// offset x and y, so that a section of a larger buffer may be copied
+// in to the atlas.
+// Grow the texture to the new size, preserving all previously written data.
+// We reserve space ahead of time for the new node, so that we
+// won't have to handle any errors after allocating our new data.
+// Function is infallible from this point.
+// Keep track of our old data so that we can copy it.
+// Update our data and size to our new ones.
+// Free the old data once we're done with it.
+// Zero the new data out and copy the old data over.
+// Add the new rectangle for our added righthand space.
+// We are both modified and resized
+// Empty the atlas. This doesn't reclaim any previously allocated memory.
+// Add our initial rectangle. This is the size of the full texture
+// and is the initial rectangle we fit our regions in. We keep a 1px border
+// to avoid artifacting when sampling the texture.
+// Dump the atlas as a PPM to a writer, for debug purposes.
+// Only supports grayscale and bgr atlases.
+//
+// NOTE: BGR atlases will have the red and blue channels
+//       swapped because PPM expects RGB. This would be
+//       easy enough to fix so next time someone needs
+//       to debug a color atlas they should fix it.
+// The wasm-compatible API. This lacks documentation unless the API differs
+// from the standard Zig API. To learn what a function does, just look one
+// level deeper to what Zig function is called and read the documentation there.
+// If you're copying this file (Atlas.zig) out to a separate project,
+// just replace this with the allocator you want to use.
+// The return value for this should be freed by the caller with "free".
+// This creates a Canvas element identified by the id returned that
+// the caller can draw into the DOM to visualize the atlas. The returned
+// ID must be freed from the JS runtime by calling "zigjs.deleteValue".
+// Create our canvas
+// Setup our canvas size
+// This will return the same context on subsequent calls so it
+// is important to reset it.
+// We need to draw pixels so this is format dependent.
+// Convert from BGRA to RGBA by swapping every R and B.
+// Convert from A8 to RGBA so every 4th byte is set to a value.
+// Create an ImageData from our buffer and then write it to the canvas
+// Get our runtime memory
+// Create an array that points to our buffer
+// If we're sharing memory then we have to copy the data since
+// we can't set ImageData directly using a SharedArrayBuffer.
+// Create the image data from our array
+// Draw it
+// doesn't fit due to border
+// 33 because of the 1px border and so on
+// zig fmt: off
+// zig fmt: on
+// 33 because of the 1px border and so on
+// None of the `8`s from the source data outside of the
+// specified region should have made it on to the atlas.
+// Write some data so we can verify that growing doesn't mess it up
+// Expand by exactly 1 should fit our new 1x1 block.
+// Ensure our data is still set. Not the offsets change due to size.
+// This is BGR so its 3 bpp
+// 33 because of the 1px border and so on
+// Atlas is 4x4 so its a 1px border meaning we only have 2x2 available
+// Get our 2x2, which should be ALL our usable space
+// This is BGR so its 3 bpp
+// Our top left skips the first row (size * depth) and the first
+// column (depth) for the 1px border.
+// Expand by exactly 1 should fit our new 1x1 block.
+// Data should be in same place accounting for the new size
+// Should fit the new blocks around the edges
+// We use a fixed buffer allocator so that we can consistently hit OOM.
+//
+// We calculate the size to exactly fit the 4x4 pixels and node list.
+// Write some data so we can verify that attempted growing doesn't mess it up.
+// Expand by 1, should give OOM, modified and resized should be unchanged.
+// Ensure our data is still set.
+// Test every failure point in `init` and ensure that we don't
+// leak memory (testing.allocator verifies) since we're exiting early.
+// Test every failure point in `reserve` and ensure that we don't
+// leak memory (testing.allocator verifies) since we're exiting early.
+// Test every failure point in `grow` and ensure that we don't
+// leak memory (testing.allocator verifies) since we're exiting early.
+// Write some data to verify it's preserved after failed grow
+// Verify atlas state is unchanged after failed grow
+//
+// --- Original Ghostty Comments End: src/font/Atlas.zig
+
+// --- Original Ghostty Comments Start: src/font/Metrics.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/font/Metrics.zig
+//
+// Recommended cell width and height for a monospace grid using this font.
+// Distance in pixels from the bottom of the cell to the text baseline.
+// Distance in pixels from the top of the cell to the top of the underline.
+// Thickness in pixels of the underline.
+// Distance in pixels from the top of the cell to the top of the strikethrough.
+// Thickness in pixels of the strikethrough.
+// Distance in pixels from the top of the cell to the top of the overline.
+// Can be negative to adjust the position above the top of the cell.
+// Thickness in pixels of the overline.
+// Thickness in pixels of box drawing characters.
+// The thickness in pixels of the cursor sprite. This has a default value
+// because it is not determined by fonts but rather by user configuration.
+// The height in pixels of the cursor sprite.
+// The constraint height for nerd fonts icons.
+// The constraint height for nerd fonts icons limited to a single cell width.
+// The unrounded face width, used in scaling calculations.
+// The unrounded face height, used in scaling calculations.
+// The offset from the bottom of the cell to the bottom
+// of the face's bounding box, based on the rounded and
+// potentially adjusted cell height.
+// Minimum acceptable values for some fields to prevent modifiers
+// from being able to, for example, cause 0-thickness underlines.
+// Metrics extracted from a font face, based on
+// the metadata tables and glyph measurements.
+// Pixels per em, dividing the other values in this struct by this should
+// yield sizes in ems, to allow comparing metrics from faces of different
+// sizes.
+// The minimum cell width that can contain any glyph in the ASCII range.
+//
+// Determined by measuring all printable glyphs in the ASCII range.
+// The typographic ascent metric from the font.
+// This represents the maximum vertical position of the highest ascender.
+//
+// Relative to the baseline, in px, +Y=up
+// The typographic descent metric from the font.
+// This represents the minimum vertical position of the lowest descender.
+//
+// Relative to the baseline, in px, +Y=up
+//
+// Note:
+// As this value is generally below the baseline, it is typically negative.
+// The typographic line gap (aka "leading") metric from the font.
+// This represents the additional space to be added between lines in
+// addition to the space defined by the ascent and descent metrics.
+//
+// Positive value in px
+// The TOP of the underline stroke.
+//
+// Relative to the baseline, in px, +Y=up
+// The thickness of the underline stroke in px.
+// The TOP of the strikethrough stroke.
+//
+// Relative to the baseline, in px, +Y=up
+// The thickness of the strikethrough stroke in px.
+// The height of capital letters in the font, either derived from
+// a provided cap height metric or measured from the height of the
+// capital H glyph.
+// The height of lowercase letters in the font, either derived from
+// a provided ex height metric or measured from the height of the
+// lowercase x glyph.
+// The measured height of the bounding box containing all printable
+// ASCII characters. This can be different from ascent - descent for
+// two reasons: non-letter symbols like @ and $ often exceed the
+// the ascender and descender lines; and fonts often bake the line
+// gap into the ascent and descent metrics (as per, e.g., the Google
+// Fonts guidelines: https://simoncozens.github.io/gf-docs/metrics.html).
+//
+// Positive value in px
+// The width of the character "水" (CJK water ideograph, U+6C34),
+// if present. This is used for font size adjustment, to normalize
+// the width of CJK fonts mixed with latin fonts.
+//
+// NOTE: IC = Ideograph Character
+// Convenience function for getting the line height
+// (ascent - descent + line_gap).
+// Convenience function for getting the cap height. If this is not
+// defined in the font, we estimate it as 75% of the ascent.
+// Convenience function for getting the ex height. If this is not
+// defined in the font, we estimate it as 75% of the cap height.
+// Convenience function for getting the ASCII height. If we
+// couldn't measure this, we use 1.5 * cap_height as our
+// estimator, based on measurements across programming fonts.
+// Convenience function for getting the ideograph width. If this is
+// not defined in the font, we estimate it as the minimum of the
+// ascii height and two cell widths.
+// Convenience function for getting the underline thickness. If
+// this is not defined in the font, we estimate it as 15% of the ex
+// height.
+// Convenience function for getting the strikethrough thickness. If
+// this is not defined in the font, we set it equal to the
+// underline thickness.
+// NOTE: The getters below return positions, not sizes, so both
+// positive and negative values are valid, hence no sign validation.
+// Convenience function for getting the underline position. If
+// this is not defined in the font, we place it one underline
+// thickness below the baseline.
+// Convenience function for getting the strikethrough position. If
+// this is not defined in the font, we center it at half the ex
+// height, so that it's perfectly centered on lower case text.
+// Calculate our metrics based on values extracted from a font.
+//
+// Try to pass values with as much precision as possible,
+// do not round them before using them for this function.
+//
+// For any nullable options that are not provided, estimates will be used.
+// These are the unrounded advance width and line height values,
+// which are retained separately from the rounded cell width and
+// height values (below), for calculations that need to know how
+// much error there is between the design dimensions of the font
+// and the pixel dimensions of our cells.
+// The cell width and height values need to be integers since they
+// represent pixel dimensions of the grid cells in the terminal.
+//
+// We use @round for the cell width to limit the difference from
+// the "true" width value to no more than 0.5px. This is a better
+// approximation of the authorial intent of the font than ceiling
+// would be, and makes the apparent spacing match better between
+// low and high DPI displays.
+//
+// This does mean that it's possible for a glyph to overflow the
+// edge of the cell by a pixel if it has no side bearings, but in
+// reality such glyphs are generally meant to connect to adjacent
+// glyphs in some way so it's not really an issue.
+//
+// The same is true for the height. Some fonts are poorly authored
+// and have a descender on a normal glyph that extends right up to
+// the descent value of the face, and this can result in the glyph
+// overflowing the bottom of the cell by a pixel, which isn't good
+// but if we try to prevent it by increasing the cell height then
+// we get line heights that are too large for most users and even
+// more inconsistent across DPIs.
+//
+// Users who experience such cell-height overflows should:
+//
+// 1. Nag the font author to either redesign the glyph to not go
+//    so low, or else adjust the descent value in the metadata.
+//
+// 2. Add an `adjust-cell-height` entry to their config to give
+//    the cell enough room for the glyph.
+// We split our line gap in two parts, and put half of it on the top
+// of the cell and the other half on the bottom, so that our text never
+// bumps up against either edge of the cell vertically.
+// NOTE: Unlike all our other metrics, `cell_baseline` is
+// relative to the BOTTOM of the cell rather than the top.
+// We calculate the baseline by trying to center the face vertically
+// in the pixel-rounded cell height, so that before rounding it will
+// be an even distance from the top and bottom of the cell, meaning
+// it either sticks out the same amount or is inset the same amount,
+// depending on whether the cell height was rounded up or down from
+// the line height. We do this by adding half the difference between
+// the cell height and the face height.
+// We keep track of the offset from the bottom of the cell
+// to the bottom of the face's "true" bounding box, which at
+// this point, since nothing has been scaled yet, is equivalent
+// to the offset between the baseline we draw at (cell_baseline)
+// and the one the font wants (face_baseline).
+// We calculate a top_to_baseline to make following calculations simpler.
+// Get the other font metrics or their estimates. See doc comments
+// in FaceMetrics for explanations of the estimation heuristics.
+// Same heuristic as the font_patcher script. We store icon_height
+// separately from face_height such that modifiers can apply to the former
+// without affecting the latter.
+// Ensure all metrics are within their allowable range.
+// std.log.debug("metrics={}", .{result});
+// Apply a set of modifiers.
+// We clamp these values to a minimum of 1 to prevent divide-by-zero
+// in downstream operations.
+// Compute the new value. If it is the same avoid the work.
+// Set the new value
+// For cell height, we have to also modify some positions
+// that are absolute from the top of the cell. The main goal
+// here is to center the baseline so that text is vertically
+// centered in the cell.
+// If the diff is even, the number of pixels we add
+// will be the same for the top and the bottom, but
+// if the diff is odd then we want to add the extra
+// pixel to the edge of the cell that needs it most.
+//
+// How much the edge "needs it" depends on whether
+// the face is higher or lower than it should be to
+// be perfectly centered in the cell.
+//
+// If the face were perfectly centered then face_y
+// would be equal to half of the difference between
+// the cell height and the face height.
+// The baseline is higher than it should be, so we
+// add the extra to the top, or if it's a negative
+// diff it gets added to the bottom because of how
+// floor and ceil work.
+// The baseline is lower than it should be, so we
+// add the extra to the bottom, or vice versa for
+// negative diffs.
+// The cell baseline and face_y values are relative to the
+// bottom of the cell so we add the bottom diff to them.
+// These are all relative to the top of the cell.
+// Prevent modifiers from pushing metrics out of their allowable range.
+// Helper function for adding an f64 to a u32.
+//
+// Performs saturating addition or subtraction
+// depending on the sign of the provided float.
+//
+// The f64 is asserted to have an integer value.
+// Clamp all metrics to their allowable range.
+// A set of modifiers to apply to metrics. We use a hash map because
+// we expect most metrics to be unmodified and want to take up as
+// little space as possible.
+// A modifier to apply to a metrics value. The modifier value represents
+// a delta, so percent is a percentage to change, not a percentage of.
+// For example, "20%" is 20% larger, not 20% of the value. Likewise,
+// an absolute value of "20" is 20 larger, not literally 20.
+// Parses the modifier value. If the value ends in "%" it is assumed
+// to be a percent, otherwise the value is parsed as an integer.
+// So it works with the config framework.
+// Used by config formatter
+// Apply a modifier to a numeric value.
+// Hash using the hasher.
+// floats can't be hashed directly so we bitcast to i64.
+// for the purpose of what we're trying to do this seems
+// good enough but I would prefer value hashing.
+// Key is an enum of all the available metrics keys.
+// NOTE: This is purposely not pub because we want to force outside callers
+// to use the `.{}` syntax so unused fields are detected by the compiler.
+// We choose numbers such that the subtracted number of pixels is odd,
+// as that's the case that could most easily have off-by-one errors.
+// Here we're removing 25 pixels: 13 on the bottom, 12 on top, split
+// that way because we're simulating a face that's 0.33px higher than
+// it "should" be (due to rounding).
+// Cursor height is separate from cell height and does not follow it.
+// We choose numbers such that the added number of pixels is odd,
+// as that's the case that could most easily have off-by-one errors.
+// Here we're adding 75 pixels: 37 on the bottom, 38 on top, split
+// that way because we're simulating a face that's 0.33px higher
+// than it "should" be (due to rounding).
+// Cursor height is separate from cell height and does not follow it.
+// Face metrics not affected
+// Face metrics not affected
+//
+// --- Original Ghostty Comments End: src/font/Metrics.zig
+
+
 import math
 
 // Default DPI used as the base for scaling calculations.

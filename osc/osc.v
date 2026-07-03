@@ -1,5 +1,138 @@
 module osc
 
+// --- Original Ghostty Comments Start: src/terminal/osc.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/terminal/osc.zig
+//
+// OSC (Operating System Command) related functions and types.
+//
+// OSC is another set of control sequences for terminal programs that start with
+// "ESC ]". Unlike CSI or standard ESC sequences, they may contain strings
+// and other irregular formatting so a dedicated parser is created to handle it.
+// This generally shouldn't ever be set except as an initial zero value.
+// Ignore it.
+// Set the window title of the terminal
+//
+// If title mode 0 is set text is expect to be hex encoded (i.e. utf-8
+// with each code unit further encoded with two hex digits).
+//
+// If title mode 2 is set or the terminal is setup for unconditional
+// utf-8 titles text is interpreted as utf-8. Else text is interpreted
+// as latin1.
+// Set the icon of the terminal window. The name of the icon is not
+// well defined, so this is currently ignored by Ghostty at the time
+// of writing this. We just parse it so that we don't get parse errors
+// in the log.
+// Semantic prompt command: https://gitlab.freedesktop.org/Per_Bothner/specifications/blob/master/proposals/semantic-prompts.md
+// Set or get clipboard contents. If data is null, then the current
+// clipboard contents are sent to the pty. If data is set, this
+// contents is set on the clipboard.
+// OSC 7. Reports the current working directory of the shell. This is
+// a moderately flawed escape sequence but one that many major terminals
+// support so we also support it. To understand the flaws, read through
+// this terminal-wg issue: https://gitlab.freedesktop.org/terminal-wg/specifications/-/issues/20
+// The reported pwd value. This is not checked for validity. It should
+// be a file URL but it is up to the caller to utilize this value.
+// OSC 22. Set the mouse shape. There doesn't seem to be a standard
+// naming scheme for cursors but it looks like terminals such as Foot
+// are moving towards using the W3C CSS cursor names. For OSC parsing,
+// we just parse whatever string is given.
+// OSC color operations to set, reset, or report color settings. Some OSCs
+// allow multiple operations to be specified in a single OSC so we need a
+// list-like datastructure to manage them. We use std.SegmentedList because
+// it minimizes the number of allocations and copies because a large
+// majority of the time there will be only one operation per OSC.
+//
+// Currently, these OSCs are handled by `color_operation`:
+//
+// 4, 5, 10-19, 104, 105, 110-119
+// Kitty color protocol, OSC 21
+// https://sw.kovidgoyal.net/kitty/color-stack/#id1
+// Show a desktop notification (OSC 9 or OSC 777)
+// Start a hyperlink (OSC 8)
+// End a hyperlink (OSC 8)
+// ConEmu sleep (OSC 9;1)
+// ConEmu show GUI message box (OSC 9;2)
+// ConEmu change tab title (OSC 9;3)
+// ConEmu progress report (OSC 9;4)
+// ConEmu wait input (OSC 9;5)
+// ConEmu GUI macro (OSC 9;6)
+// ConEmu run process (OSC 9;7)
+// ConEmu output environment variable (OSC 9;8)
+// ConEmu XTerm keyboard and output emulation (OSC 9;10)
+// https://conemu.github.io/en/TerminalModes.html
+// null => do not change
+// false => turn off
+// true => turn on
+// null => do not change
+// false => turn off
+// true => turn on
+// ConEmu comment (OSC 9;11)
+// Kitty text sizing protocol (OSC 66)
+// NOTE: Order matters, see LibEnum documentation.
+// sync with ghostty_action_progress_report_s
+// @compileLog(@sizeOf(Command));
+// The terminator used to end an OSC command. For OSC commands that demand
+// a response, we try to match the terminator used in the request since that
+// is most likely to be accepted by the calling program.
+// The preferred string terminator is ESC followed by \
+// Some applications and terminals use BELL (0x07) as the string terminator.
+// Initialize the terminator based on the last byte seen. If the
+// last byte is a BEL then we use BEL, otherwise we just assume ST.
+// The terminator as a string. This is static memory so it doesn't
+// need to be freed.
+// Maximum size of a "normal" OSC.
+// Optional allocator used to accept data longer than MAX_BUF.
+// This only applies to some commands (e.g. OSC 52) that can
+// reasonably exceed MAX_BUF.
+// Current state of the parser.
+// Buffer for temporary storage of OSC data
+// Fixed writer for accumulating OSC data
+// Allocating writer for accumulating OSC data
+// Pointer to the active writer for accumulating OSC data
+// The command that is the result of parsing.
+// OSC command prefixes. Not all of these are valid OSCs, but may be
+// needed to "bridge" to a valid OSC (e.g. to support OSC 777 we need to
+// have a state "77" even though there is no OSC 77).
+// Keeping all our undefined values together so we can
+// visually easily duplicate them in the Valgrind check below.
+// Initialize our undefined fields so Valgrind can catch it.
+// https://github.com/ziglang/zig/issues/19148
+// This must be called to clean up any allocated memory.
+// Reset the parser state.
+// If we set up an allocating writer, free up that memory.
+// Handle any cleanup that individual OSCs require.
+// Initialize our undefined fields so Valgrind can catch it.
+// https://github.com/ziglang/zig/issues/19148
+// Make sure that we have an allocator. If we don't, set the state to
+// invalid so that any additional OSC data is discarded.
+// Set up a fixed Writer to collect the rest of the OSC data.
+// Set up an allocating Writer to collect the rest of the OSC data. If we
+// don't have an allocator or setting up the allocator fails, fall back to
+// writing to a fixed buffer and hope that it's big enough.
+// We don't have an allocator - fall back to a fixed buffer and hope
+// that it's big enough.
+// The allocator failed for some reason, fall back to a fixed buffer
+// and hope that it's big enough.
+// Consume the next character c and advance the parser state.
+// If the state becomes invalid for any reason, just discard
+// any further input.
+// If a writer has been initialized, we just accumulate the rest of the
+// OSC sequence in the writer's buffer and skip the state machine.
+// We have overflowed our buffer or had some other error, set the
+// state to invalid so that we discard any further input.
+// handled above, so should never be here
+// End the sequence and return the command, if any. If the return value
+// is null, then no valid command was found. The optional terminator_ch
+// is the final character in the OSC sequence. This is used to determine
+// the response terminator.
+//
+// The returned pointer is only valid until the next call to the parser.
+// Callers should copy out any data they wish to retain across calls.
+//
+// --- Original Ghostty Comments End: src/terminal/osc.zig
+
+
 // OSC (Operating System Command) related functions and types.
 //
 // OSC is another set of control sequences for terminal programs that start with

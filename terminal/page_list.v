@@ -1,5 +1,2359 @@
 module terminal
 
+// --- Original Ghostty Comments Start: src/terminal/PageList.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/terminal/PageList.zig
+//
+// Maintains a linked list of pages to make up a terminal screen
+// and provides higher level operations on top of those pages to
+// make it slightly easier to work with.
+// The number of PageList.Nodes we preheat the pool with. A node is
+// a very small struct so we can afford to preheat many, but the exact
+// number is uncertain. Any number too large is wasting memory, any number
+// too small will cause the pool to have to allocate more memory later.
+// This should be set to some reasonable minimum that we expect a terminal
+// window to scroll into quickly.
+// The list of pages in the screen. These are expected to be in order
+// where the first page is the topmost page (scrollback) and the last is
+// the bottommost page (the current active page).
+// A single node within the PageList linked list.
+//
+// This isn't pub because you can access the type via List.Node.
+// The memory pool we get page nodes from.
+// The standard page capacity that we use as a starting point for
+// all pages. This is chosen as a sane default that fits most terminal
+// usage to support using our pool.
+// The byte size required for a standard page.
+// The memory pool we use for page memory buffers. We use a separate pool
+// so we can allocate these with a page allocator. We have to use a page
+// allocator because we need memory that is zero-initialized and page-aligned.
+// List of pins, known as "tracked" pins. These are pins that are kept
+// up to date automatically through page-modifying operations.
+// The pool of memory used for a pagelist. This can be shared between
+// multiple pagelists but it is not threadsafe.
+// The memory pool we get page nodes, pages from.
+// The list of pages in the screen.
+// A monotonically increasing serial number that is incremented each
+// time a page is allocated or reused as new. The serial is assigned to
+// the Node.
+//
+// The serial number can be used to detect whether the page is identical
+// to the page that was originally referenced by a pointer. Since we reuse
+// and pool memory, pointer stability is not guaranteed, but the serial
+// will always be different for different allocations.
+//
+// Developer note: we never do overflow checking on this. If we created
+// a new page every second it'd take 584 billion years to overflow. We're
+// going to risk it.
+// The lowest still valid serial number that could exist. This allows
+// for quick comparisons to find invalid pages in references.
+// Byte size of the total amount of allocated pages. Note this does
+// not include the total allocated amount in the pool which may be more
+// than this due to preheating.
+// Maximum size of the page allocation in bytes. This only includes pages
+// that are used ONLY for scrollback. If the active area is still partially
+// in a page that also includes scrollback, then that page is not included.
+// This is the minimum max size that we will respect due to the rows/cols
+// of the PageList. We must always be able to fit at least the active area
+// and at least two pages for our algorithms.
+// The total number of rows represented by this PageList. This is used
+// specifically for scrollbar information so we can have the total size.
+// The list of tracked pins. These are kept up to date automatically.
+// The top-left of certain parts of the screen that are frequently
+// accessed so we don't have to traverse the linked list to find them.
+//
+// For other tags, don't need this:
+//   - screen: pages.first
+//   - history: active row minus one
+//
+// The pin used for when the viewport scrolls. This is always pre-allocated
+// so that scrolling doesn't have a failable memory allocation. This should
+// never be access directly; use `viewport`.
+// The row offset from the top that the viewport pin is at. We
+// store the offset from the top because it doesn't change while more
+// data is printed to the terminal.
+//
+// This is null when it isn't calculated. It is calculated on demand
+// when the viewportRowOffset function is called, because it is only
+// required for certain operations such as rendering the scrollbar.
+//
+// In order to make this more efficient, in many places where the value
+// would be invalidated, we update it in-place instead. This is key to
+// keeping our performance decent in normal cases since recalculating
+// this from scratch, depending on the size of the scrollback and position
+// of the pin, can be very expensive.
+//
+// This is only valid if viewport is `pin`. Every other offset is
+// self-evident or quick to calculate.
+// The current desired screen dimensions. I say "desired" because individual
+// pages may still be a different size and not yet reflowed since we lazily
+// reflow text.
+// If this is true then verifyIntegrity will do nothing. This is
+// only present with runtime safety enabled.
+// The viewport location.
+// The viewport is pinned to the active area. By using a specific marker
+// for this instead of tracking the row offset, we eliminate a number of
+// memory writes making scrolling faster.
+// The viewport is pinned to the top of the screen, or the farthest
+// back in the scrollback history.
+// The viewport is pinned to a tracked pin. The tracked pin is ALWAYS
+// s.viewport_pin hence this has no value. We force that value to prevent
+// allocations.
+// Returns the minimum valid "max size" for a given number of rows and cols
+// such that we can fit the active area AND at least two pages. Note we
+// need the two pages for algorithms to work properly (such as grow) but
+// we don't need to fit double the active area.
+//
+// This min size may not be totally correct in the case that a large
+// number of other dimensions makes our row size in a page very small.
+// But this gives us a nice fast heuristic for determining min/max size.
+// Therefore, if the page size is violated you should always also verify
+// that we have enough space for the active area.
+// Invariant required to ensure our divCeil below cannot overflow.
+// Get our capacity to fit our rows. If the cols are too big, it may
+// force less rows than we want meaning we need more than one page to
+// represent a viewport.
+// Calculate the number of standard sized pages we need to represent
+// an active area.
+// Not possible:
+// - initialCapacity guarantees at least 1 row
+// - numerator/denominator can't overflow because of comptime check above
+// We always need at least one page extra so that we
+// can fit partial pages to spread our active area across two pages.
+// Even for caps that can't fit all rows in a single page, we add one
+// because the most extra space we need at any given time is only
+// the partial amount of one page.
+// log.debug("minMaxSize cols={} rows={} cap={} pages={}", .{
+//     cols,
+//     rows,
+//     cap,
+//     pages,
+// });
+// Calculates the initial capacity for a new page for a given column
+// count. This will attempt to fit within std_size at all times so we
+// can use our memory pool, but if cols is too big, this will return a
+// larger capacity.
+//
+// The returned capacity is always guaranteed to layout properly (not
+// overflow). We are able to support capacities up to the maximum int
+// value of cols, so this will never overflow.
+// This is an important invariant that ensures that this function
+// can never return an error. We verify here that our standard capacity
+// when increased to maximum possible columns can always support at
+// least one row in memory.
+//
+// IF THIS EVER FAILS: We probably need to modify our logic below
+// to reduce other elements of the capacity (styles, graphemes, etc.).
+// But, instead, I recommend taking a step back and re-evaluating
+// life choices.
+// If we can adjust our standard capacity, we fit within the
+// standard size and we're good!
+// Ensure our error set doesn't change.
+// This code path means that our standard capacity can't even
+// accommodate our column count! The only solution is to increase
+// our capacity and go non-standard.
+// This is the page allocator we'll use for all our underlying
+// VM page allocations.
+// In tests we use our testing allocator so we can detect leaks.
+// On non-macOS we use our standard Zig page allocator.
+// On macOS we want to tag our memory so we can assign it to our
+// core terminal usage.
+// Initialize the page. The top of the first page in the list is always the
+// top of the active area of the screen (important knowledge for quickly
+// setting up cursors in Screen).
+//
+// max_size is the maximum number of bytes that will be allocated for
+// pages. If this is smaller than the bytes required to show the viewport
+// then max_size will be ignored and the viewport will be shown, but no
+// scrollback will be created. max_size is always rounded down to the nearest
+// terminal page size (not virtual memory page), otherwise we would always
+// slightly exceed max_size in the limits.
+//
+// If max_size is null then there is no defined limit and the screen will
+// grow forever. In reality, the limit is set to the byte limit that your
+// computer can address in memory. If you somehow require more than that
+// (due to disk paging) then please contribute that yourself and perhaps
+// search deep within yourself to find out why you need that.
+// The screen starts with a single page that is the entire viewport,
+// and we'll split it thereafter if it gets too large and add more as
+// necessary.
+// Get our minimum max size, see doc comments for more details.
+// We always track our viewport pin to ensure this is never an allocation
+// Add pages as needed to create our initial viewport.
+// Guaranteed by comptime checks in initialCapacity but
+// redundant here for safety.
+// If we have an error, we need to clean up our non-standard pages
+// since they're not in the pool.
+// In runtime safety modes we have to memset because the Zig allocator
+// interface will always memset to 0xAA for undefined. In non-safe modes
+// we use a page allocator and the OS guarantees zeroed memory.
+// Initialize the first set of pages to contain our viewport so that
+// the top of the first page is always the active area.
+// Add the page to the list
+// Increment our serial
+// Assert that the PageList is in a valid state. This is a no-op in
+// release builds.
+// Pause or resume integrity checks. This is useful when you're doing
+// a multi-step operation that temporarily leaves the PageList in an
+// inconsistent state.
+// Verify the integrity of the PageList. This is expensive and should
+// only be called in debug/test builds.
+// Our viewport pin should never be garbage
+// Grab our total rows
+// While doing this traversal, verify no node has a serial
+// number lower than our min.
+// Verify that our cached total_rows matches the actual row count
+// Verify that all our tracked pins point to valid pages.
+// Verify that our viewport pin row offset is correct.
+// Ensure our viewport has enough rows.
+// Deinit the pagelist. If you own the memory pool (used clonePool) then
+// this will reset the pool and retain capacity.
+// Verify integrity before cleanup
+// Always deallocate our hashmap.
+// Go through our linked list and deallocate all pages that are
+// not standard size.
+// Deallocate all the pages. We don't need to deallocate the list or
+// nodes because they all reside in the pool.
+// Reset the PageList back to an empty state. This is similar to
+// deinit and reinit but it importantly preserves the pointer
+// stability of tracked pins (they're moved to the top-left since
+// all contents are cleared).
+//
+// This can't fail because we always retain at least enough allocated
+// memory to fit the active area.
+// We need enough pages/nodes to keep our active area. This should
+// never fail since we by definition have allocated a page already
+// that fits our size but I'm not confident to make that assertion.
+// The number of pages we need is the number of rows in the active
+// area divided by the row capacity of a page.
+// Before resetting our pools we need to free any pages that
+// are non-standard size since those were allocated outside
+// the pool.
+// Reset our pools to free as much memory as possible while retaining
+// the capacity for at least the minimum number of pages we need.
+// The return value is whether memory was reclaimed or not, but in
+// either case the pool is left in a valid state.
+// Our page pool relies on mmap to zero our page memory. Since we're
+// retaining a certain amount of memory, it won't use mmap and won't
+// be zeroed. This block zeroes out all the memory in the pool arena.
+// Note: we only have to do this for the page pool because the
+// nodes are always fully overwritten on each allocation.
+// WARN: Since HeapAllocator's BufNode is not public API,
+// we have to hardcode its layout here. We do a comptime assert
+// on Zig version to verify we check it on every bump.
+// The fully allocated buffer
+// The buffer minus our header
+// Initialize our pages. This should not be able to fail since
+// we retained the capacity for the minimum number of pages we need.
+// Our total rows always goes back to the default
+// Update all our tracked pins to point to our first page top-left
+// and mark them as garbage, because it got mangled in a way where
+// semantically it really doesn't make sense.
+// Our viewport pin is never garbage
+// Move our viewport back to the active area since everything is gone.
+// The top and bottom (inclusive) points of the region to clone.
+// The x coordinate is ignored; the full row is always cloned.
+// If this is non-null then cloning will attempt to remap the tracked
+// pins into the new cloned area and will keep track of the old to
+// new mapping in this map. If this is null, the cloned pagelist will
+// not retain any previously tracked pins except those required for
+// internal operations.
+//
+// Any pins not present in the map were not remapped.
+// Clone this pagelist from the top to bottom (inclusive).
+//
+// The viewport is always moved to the active area.
+//
+// The cloned pagelist must contain at least enough rows for the active
+// area. If the region specified has less rows than the active area then
+// rows will be added to the bottom of the region to make up the difference.
+// First, count our pages so our preheat is exactly what we need.
+// Setup our pool
+// Create our viewport. In a clone, the viewport always goes
+// to the top.
+// Our list of pages
+// Copy our pages
+// Clone the page. We have to use createPageExt here because
+// we don't know if the source page has a standard size.
+// Remap our tracked pins by changing the page and
+// offsetting the Y position based on the chunk start.
+// We're only interested in pins that were within the chunk.
+// Initialize our viewport pin to point to the first cloned page
+// so it points to valid memory.
+// We always need to have enough rows for our viewport because this is
+// a pagelist invariant that other code relies on.
+// Clear the row. This is not very fast but in reality right
+// now we rarely clone less than the active area and if we do
+// the area is by definition very small.
+// Update our total rows to be our row size.
+// Resize options
+// The new cols/cells of the screen.
+// Whether to reflow the text. If this is false then the text will
+// be truncated if the new size is smaller than the old size.
+// Set this to the current cursor position in the active area. Some
+// resize/reflow behavior depends on the cursor position.
+// Resize
+// TODO: docs
+// Resize does not work with 0 values, this should be protected
+// upstream
+// Resizing (especially with reflow) can cause our row offset to
+// become invalid. Rather than do something fancy like we do other
+// places and try to update it in place, we just invalidate it because
+// its too easy to get the logic wrong in here.
+// Recalculate our minimum max size. This allows grow to work properly
+// when increasing beyond our initial minimum max size or explicit max
+// size to fit the active area.
+// On reflow, the main thing that causes reflow is column changes. If
+// only rows change, reflow is impossible. So we change our behavior based
+// on the change of columns.
+// We grow rows after cols so that we can do our unwrapping/reflow
+// before we do a no-reflow grow.
+// We first change our row count so that we have the proper amount
+// we can use when shrinking our cols.
+// Various resize operations can change our total row count such
+// that our viewport pin is now in the active area and has insufficient
+// space. We need to check for this case and fix it up.
+// Resize the pagelist with reflow by adding or removing columns.
+// Update our cols. We have to do this early because grow() that we
+// may call below relies on this to calculate the proper page size.
+// If we have a cursor position (x,y), then we try under any col resizing
+// to keep the same number remaining active rows beneath it. This is a
+// very special case if you can imagine clearing the screen (i.e.
+// scrollClear), having an empty active area, and then resizing to less
+// cols then we don't want the active area to "jump" to the bottom and
+// pull down scrollback.
+// We count how many wraps the cursor had before it to begin with
+// so that we can offset any additional wraps to avoid pushing the
+// original row contents in to the scrollback.
+// Create the first node that contains our reflow.
+// We verify all maxed out page layouts work.
+// We're growing columns so we can only get less rows so use
+// the lesser of our capacity and size so we minimize wasted
+// rows.
+// We need to grab our rowIterator now before we rewrite our
+// linked list below.
+// If an error occurs, we're in a pretty disastrous broken state,
+// but we should still try to clean up our leaked memory. Free
+// any of the remaining orphaned pages from before. If we reflowed
+// successfully this will be null.
+// Set our new page as the only page. This orphans the existing pages
+// in the list, but that's fine since we're gonna delete them anyway.
+// Reflow all our rows.
+// Once we're done reflowing a page, destroy it immediately.
+// This frees memory and makes it more likely in memory
+// constrained environments that the next reflow will work.
+// At the end of the reflow, setup our total row cache
+// log.warn("total old={} new={}", .{ self.total_rows, reflow_cursor.total_rows });
+// If our total rows is less than our active rows, we need to grow.
+// This can happen if you're growing columns such that enough active
+// rows unwrap that we no longer have enough.
+// See preserved_cursor setup for why.
+// We need to determine how many rows we wrapped from the original
+// and subtract that from the remaining rows we expect because if
+// we wrap down we don't want to push our original row contents into
+// the scrollback.
+// We use a cursor to track where we are in the src/dst. This is very
+// similar to Screen.Cursor, so see that for docs on individual fields.
+// We don't use a Screen because we don't need all the same data and we
+// do our best to optimize having direct access to the page memory.
+// This is the final row count of the reflowed pages.
+// Initially whatever size our input node is.
+// Reflow the provided row in to this cursor.
+// Calculate the columns in this row. First up we trim non-semantic
+// rightmost blanks.
+// If the row has a semantic prompt then the blank row is meaningful
+// so we just consider pretend the first cell of the row isn't empty.
+// Handle tracked pin adjustments.
+// If this pin is in the blanks on the right and past the end
+// of the dst col width then we move it to the end of the dst
+// col width instead.
+// We increase our col len to at least include this pin.
+// This ensures that blank rows with pins are processed,
+// so that the pins can be properly remapped.
+// Defer processing of blank rows so that blank rows
+// at the end of the page list are never written.
+// If this blank row was a wrap continuation somehow
+// then we won't need to write it since it should be
+// a part of the previously written row.
+// Inherit increased styles or grapheme bytes from the src page
+// we're reflowing from for new pages.
+// We're already a non-standard page. We don't want to
+// inherit a massive set of rows, so cap it at our std size.
+// Our row isn't blank, write any new rows we deferred.
+// Move any tracked pins from the source.
+// Wrote the cell, move to the next.
+// Wrote the cell but request to skip the next so skip it.
+// This is used for things like spacers.
+// Remap any tracked pins at the skipped position (x+1)
+// since we won't process that cell in the loop.
+// Didn't write the cell, repeat writing this same cell.
+// System out of memory, we can't fix this.
+// We reached the capacity of a single page and can't
+// add any more of some type of managed memory. When this
+// happens we split out the current row we're working on
+// into a new page and continue from there.
+// If we're already on the first-row, we can't split
+// any further, so we just ignore bad cells and take
+// corrupted (but valid) cell contents.
+// Move our last row to a new page.
+// Do NOT increment x so that we retry writing
+// the same existing cell.
+// If the source row isn't wrapped then we should scroll afterwards.
+// Write a cell. On error, this will not unwrite the cell but
+// the cell may be incomplete (but valid). For example, if the source
+// cell is styled and we failed to allocate space for styles, the
+// written cell may not be styled but it is valid.
+//
+// The key failure to recognize for callers is when we can't increase
+// capacity in our destination page. In this case, the caller may want
+// to split the page at this row, rewrite the row into a new page
+// and continue from there.
+//
+// But this function guarantees the terminal/page will be in a
+// coherent state even on error.
+// Initialize self.page_cell with basic, unmanaged memory contents.
+// This must not fail because we want to make sure we atomically
+// setup our page cell to be valid.
+// Copy cell contents.
+// If there's a wide character in the last column of
+// the reflowed page then we need to insert a spacer
+// head and wrap before handling it.
+// Move to the next row (this sets pending wrap
+// which will cause us to wrap on the next
+// iteration).
+// Decrement the source position so that when we
+// loop we'll process this source cell again,
+// since we can't copy it into a spacer head.
+// Edge case, when resizing to 1 column, wide
+// characters are just destroyed and replaced
+// with empty narrow cells.
+// Skip spacer tail so it doesn't cause a wrap.
+// Edge case, when resizing to 1 column, wide
+// characters are just destroyed and replaced
+// with empty narrow cells, so we should just
+// discard any spacer tails.
+// Spacer heads should be ignored. If we need a
+// spacer head in our reflowed page, it is added
+// when processing the wide cell it belongs to.
+// These are guaranteed to have no style or grapheme
+// data associated with them so we can fast path them.
+// These will create issues by trying to clone managed memory that
+// isn't set if the current dst row needs to be moved to a new page.
+// They'll be fixed once we do properly copy the relevant memory.
+// Copy Kitty virtual placeholder status
+// std.log.warn("\nsrc_y={} src_x={} dst_y={} dst_x={} dst_cols={} cp={X} wide={} page_cell_wide={}", .{
+//     src_y,
+//     x,
+//     self.y,
+//     self.x,
+//     self.page.size.cols,
+//     cell.content.codepoint,
+//     cell.wide,
+//     self.page_cell.wide,
+// });
+// From this point on we're moving on to failable, managed memory.
+// If we reach an error, we do the minimal cleanup necessary to
+// not leave dangling memory but otherwise we gracefully degrade
+// into some functional but not strictly correct cell.
+// Copy grapheme data.
+// Copy the graphemes
+// If our page can't support an additional cell
+// with graphemes then we increase capacity.
+// Attempt to allocate the space that would be required
+// for these graphemes, and if it's not available, then
+// increase capacity. Keep trying until we succeed.
+// Grow our capacity until we can fit the extra bytes.
+// This shouldn't fail since we made sure we have space
+// above. There is no reasonable behavior we can take here
+// so we have a warn level log. This is ALMOST non-recoverable,
+// though we choose to recover by corrupting the cell
+// to a non-grapheme codepoint.
+// Force a crash with safe builds.
+// Unsafe builds we throw away grapheme data!
+// Copy hyperlink data.
+// If our page can't support an additional cell
+// with a hyperlink then we increase capacity.
+// Ensure that the string alloc has sufficient capacity
+// to dupe the link (and the ID if it's not implicit).
+// Keep trying until we have enough capacity.
+// We have enough capacity, free the test alloc.
+// Grow our capacity until we can fit the extra bytes.
+// This shouldn't fail since we did a capacity
+// check above.
+// Force a crash with safe builds.
+// Always free our original link in case the increaseCap
+// call fails so we aren't leaking memory.
+// If the add failed then either the set needs to grow
+// or it needs to be rehashed. Either one of those can
+// be accomplished by increasing capacity, either with
+// no actual change or with an increased hyperlink cap.
+// We need to recreate the link into the new page.
+// This shouldn't fail since we did a capacity
+// check above.
+// Force a crash with safe builds.
+// We assume this one will succeed. We dupe the link
+// again, and don't have to worry about the other one
+// because increasing the capacity naturally clears up
+// any managed memory not associated with a cell yet.
+// This shouldn't happen since we increased capacity
+// above so we handle it like the other similar
+// cases and log it, crash in safe builds, and
+// remove the hyperlink in unsafe builds.
+// Force a crash with safe builds.
+// We expect this to succeed due to the hyperlinkCapacity
+// check we did before. If it doesn't succeed let's
+// log it, crash (in safe builds), and clear our state.
+// Force a crash with safe builds.
+// Unsafe builds we throw away hyperlink data!
+// Copy style data.
+// If the add failed then either the set needs to grow
+// or it needs to be rehashed. Either one of those can
+// be accomplished by increasing capacity, either with
+// no actual change or with an increased style cap.
+// We assume this one will succeed.
+// Should not fail since we just modified capacity
+// above. Log it, crash in safe builds, clear style
+// in unsafe builds.
+// Force a crash with safe builds.
+// Create a new page in the provided list with the provided
+// capacity then clone the row currently being worked on to
+// it and delete it from the old page. Places cursor in the
+// same position it was in in the old row in the new one.
+//
+// Asserts that the cursor is on the final row of the page.
+//
+// Expects that the provided capacity is sufficient to copy
+// the row.
+//
+// If this is the only row in the page, the page is removed
+// from the list after cloning the row.
+// Our total row count never changes, because we're removing one
+// row from the last page and moving it into a new page.
+// We have no cleanup for our old state from here on out. No failures!
+// Restore the x position of the cursor.
+// Copy our old data. This should NOT fail because we have the
+// capacity of the old page which already fits the data we requested.
+// Move any tracked pins from that last row into this new node.
+// p.x remains the same since we're copying the row as-is
+// Clear the row from the old page and truncate it.
+// If that was the last row in that page
+// then we should remove it from the list.
+// Increase the capacity of the current page.
+// Pause integrity checks because the total row count won't
+// be correct during a reflow.
+// We must not fail after this, we've modified our self.node
+// and we need to fix it up.
+// True if this cursor is at the bottom of the page by capacity,
+// i.e. we can't scroll anymore.
+// Create a new row and move the cursor down.
+//
+// Asserts that the cursor is on the bottom row of the
+// page and that there is capacity to add a new one.
+// Scrolling requires that we're on the bottom of our page.
+// We also assert that we have capacity because reflow always
+// works within the capacity of the page.
+// Increase our page size
+// With the increased page size, safely move down a row.
+// Create a new page in the provided list with the provided
+// capacity and one row and move the cursor in to it at 0,0
+// Remember our new row count so we can restore it
+// after reinitializing our cursor on the new page.
+// Performs `cursorScroll` or `cursorNewPage` as necessary
+// depending on if the cursor is currently at the bottom.
+// The functions below may overwrite self so we need to cache
+// our total rows. We add one because no matter what when this
+// returns we'll have one more row added.
+// If the row is wrapped, all empty cells are meaningful.
+// If the row has a semantic prompt then the blank row is meaningful
+// so we always return all but one so that the row is drawn.
+// We only set the new min_max_size if we're not reflowing. If we are
+// reflowing, then resize handles this for us.
+// Important! We have to do cols first because cols may cause us to
+// destroy pages if we're increasing cols which will free up page_size
+// so that when we call grow() in the row mods, we won't prune.
+// Any column change without reflow should not result in row counts
+// changing.
+// Making our columns smaller. We always have space for this
+// in existing pages so we need to go through the pages,
+// resize the columns, and clear any cells that are beyond
+// the new size.
+// Update all our tracked pins. If they have an X
+// beyond the edge, clamp it.
+// Make our columns larger. This is a bit more complicated because
+// pages may not have the capacity for this. If they don't have
+// the capacity we need to allocate a new page and copy the data.
+// See the comment in the while loop when setting self.cols
+// We need to restore our old cols after we resize because
+// we have an assertion on this and we want to be able to
+// call this method multiple times.
+// Making rows smaller, we simply change our rows value. Changing
+// the row size doesn't affect anything else since max size and
+// so on are all byte-based.
+// If our rows are shrinking, we prefer to trim trailing
+// blank lines from the active area instead of creating
+// history if we can.
+//
+// This matches macOS Terminal.app behavior. I chose to match that
+// behavior because it seemed fine in an ocean of differing behavior
+// between terminal apps. I'm completely open to changing it as long
+// as resize behavior isn't regressed in a user-hostile way.
+// Account for our trimmed rows in the total row cache
+// If we didn't trim enough, just modify our row count and this
+// will create additional history.
+// Making rows larger we adjust our row count, and then grow
+// to the row count.
+// If our rows increased and our cursor is NOT at the bottom,
+// we want to try to preserve the y value of the old cursor.
+// In other words, we don't want to "pull down" scrollback.
+// This is purely a UX feature.
+// Cursor is not at the bottom, so we just grow our
+// rows and we're done. Cursor does NOT change for this
+// since we're not pulling down scrollback.
+// This must be set BEFORE any calls to grow() so that
+// grow() doesn't prune pages that we need for the active
+// area.
+// Cursor is at the bottom or we don't care about cursors.
+// In this case, if we have enough rows in our pages, we
+// just update our rows and we're done. This effectively
+// "pulls down" scrollback.
+//
+// If we don't have enough scrollback, we add the difference,
+// to the active area.
+// Make sure that the viewport pin isn't below the active
+// area, since that will lead to all sorts of problems.
+// We never have less rows than our active screen has.
+// Update our col count
+// Unlikely fast path: we have capacity in the page. This
+// is only true if we resized to less cols earlier.
+// Likely slow path: we don't have capacity, so we need
+// to allocate a page, and copy the old data into it.
+// Try to fit our new column size into our existing page capacity.
+// If that doesn't work then use a non-standard page with the
+// given columns.
+// We verify all maxed out page layouts don't overflow,
+// We're growing columns so we can only get less rows so use
+// the lesser of our capacity and size so we minimize wasted
+// rows.
+// On error, we need to undo all the pages we've added.
+// Keeps track of all our copied rows. Assertions at the end is that
+// we copied exactly our page size.
+// This function has an unfortunate side effect in that it causes memory
+// fragmentation on rows if the columns are increasing in a way that
+// shrinks capacity rows. If we have pages that don't divide evenly then
+// we end up creating a final page that is not using its full capacity.
+// If this chunk isn't the last chunk in the page list, then we've created
+// a page where we'll never reclaim that capacity. This makes our max size
+// calculation incorrect since we'll throw away data even though we have
+// excess capacity. To avoid this, we try to fill our previous page
+// first if it has capacity.
+//
+// This can fail for many reasons (can't fit styles/graphemes, etc.) so
+// if it fails then we give up and drop back into creating new pages.
+// We only want scenarios where we have excess capacity.
+// We can copy as much as we can to fill the capacity or our
+// current page size.
+// If an error happens, we undo our row copy and break out
+// into creating a new page.
+// Remap any tracked pins that pointed to rows we just copied to prev.
+// If we have an error, we clear the rows we just added to our prev page.
+// We delete any of the nodes we added.
+// We need to loop because our col growth may force us
+// to split pages.
+// The length we can copy into the new page is at most the number
+// of rows in our cap. But if we can finish our source page we use that.
+// Perform the copy
+// I don't THINK this should be possible, because while our
+// row count may diminish due to the adjustment, our
+// prior capacity should have been sufficient to hold all the
+// managed memory.
+// We can actually safely handle this though by exiting
+// this loop early and cutting our copy short.
+// Insert our new page
+// Update our tracked pins that pointed to this previous page.
+// Our prior errdeferes are invalid after this point so ensure
+// we don't have any more errors.
+// Remove the old page.
+// Deallocate the old page.
+// Returns the number of trailing blank lines, not to exceed max. Max
+// is used to limit our traversal in the case of large scrollback.
+// Go through our pages backwards since we're counting trailing blanks.
+// If the row has any text then we're done.
+// Inc count, if we're beyond max then we're done.
+// Trims up to max trailing blank rows from the pagelist and returns the
+// number of rows trimmed. A blank row is any row with no text (but may
+// have styling).
+//
+// IMPORTANT: This function does NOT update `total_rows`. It returns the
+// number of rows trimmed, and the caller is responsible for decrementing
+// `total_rows` by this amount.
+// If the row has any text then we're done.
+// If our tracked pins are in this row then we cannot trim it
+// because it implies some sort of importance. If we trimmed this
+// we'd invalidate this pin, as well.
+// No text, we can trim this row. Because it has
+// no text we can also be sure it has no styling
+// so we don't need to worry about memory.
+// Scroll options.
+// Scroll to the active area. This is also sometimes referred to as
+// the "bottom" of the screen. This makes it so that the end of the
+// screen is fully visible since the active area is the bottom
+// rows/cols of the screen.
+// Scroll to the top of the screen, which is the farthest back in
+// the scrollback history.
+// Scroll to the given absolute row from the top. A value of zero
+// is the top row. This row will be the first visible row in the viewport.
+// Scrolling into or below the active area will clamp to the active area.
+// Scroll up (negative) or down (positive) by the given number of
+// rows. This is clamped to the "top" and "active" top left.
+// Jump forwards (positive) or backwards (negative) a set number of
+// prompts. If the absolute value is greater than the number of prompts
+// in either direction, jump to the furthest prompt in that direction.
+// Scroll directly to a specific pin in the page. This will be set
+// as the top left of the viewport (ignoring the pin x value).
+// Scroll the viewport. This will never create new scrollback, allocate
+// pages, etc. This can only be used to move the viewport within the
+// previously allocated pages.
+// Special case no-scrollback mode to never allow scrolling.
+// If we're at the top, pin the top.
+// If we're below the top of the active area, pin the active area.
+// See if there are any other faster paths we can take.
+// If we have a pin and we already calculated a row offset,
+// then we can efficiently calculate the delta and move
+// that much from that pin.
+// We have an accurate row offset so store it to prevent
+// calculating this again.
+// Slow path, we've just got to traverse the linked list and
+// get to our row. As a slight speedup, let's pick the traversal
+// that's likely faster based on our absolute row and total rows.
+// Iterate forward from the first node.
+// Iterate backwards from the last node.
+// If we reached here, then we couldn't find the offset.
+// This feels impossible? Just clamp to active, screw it lol.
+// If we're at the top and we're scrolling backwards,
+// we don't have to do anything, because there's nowhere to go.
+// If we're at active and we're scrolling forwards, we don't
+// have to do anything because it'll result in staying in
+// the active.
+// If we're already a pin type, then we can fast-path our
+// delta by simply moving the pin. This has the added benefit
+// that we can update our row offset cache efficiently, too.
+// If we overflow up we're at the top.
+// If we offset its a valid pin but we still have to
+// check if we're in the active area.
+// If we overflow down we're at active.
+// Slow path: we have to calculate the new pin by moving
+// from our viewport.
+// If we are still within the active area, then we pin the
+// viewport to active. This isn't EXACTLY the same behavior as
+// other scrolling because normally when you scroll the viewport
+// is pinned to _that row_ even if new scrollback is created.
+// But in a terminal when you get to the bottom and back into the
+// active area, you usually expect that the viewport will now
+// follow the active area.
+// If we're at the top, then just set the top. This is a lot
+// more efficient everywhere. We must check this after the
+// active check above because we prefer active if they overlap.
+// Pin is not active so we need to track it.
+// Jump the viewport forwards (positive) or backwards (negative) a set number of
+// prompts (delta).
+// If we aren't jumping any prompts then we don't need to do anything.
+// We start at the row before or after our viewport depending on the
+// delta so that we don't land back on our current viewport.
+// Go through prompts delta times
+// If we found a prompt, we move to it. If the prompt is in the active
+// area we keep our viewport as active because we can't scroll DOWN
+// into the active area. Otherwise, we scroll up to the pin.
+// Clear the screen by scrolling written contents up into the scrollback.
+// This will not update the viewport.
+// Go through the active area backwards to find the first non-empty
+// row. We use this to determine how many rows to scroll up.
+// Scroll
+// Compact a page to use the minimum required memory for the contents
+// it stores. Returns the new node pointer if compaction occurred, or null
+// if the page was already compact or compaction would not provide meaningful
+// savings.
+//
+// The current design of PageList at the time of writing this doesn't
+// allow for smaller than `std_size` nodes so if the current node's backing
+// page is standard size or smaller, no compaction will occur. In the
+// future we should fix this up.
+//
+// If this returns OOM, the PageList is left unchanged and no dangling
+// memory references exist. It is safe to ignore the error and continue using
+// the uncompacted page.
+// We should never have empty rows in our pagelist anyways...
+// We never compact standard size or smaller pages because changing
+// the capacity to something smaller won't save memory.
+// Compute the minimum capacity required for this page's content
+// Create the new smaller page
+// cloneFrom should not fail when compacting since req_cap is
+// computed to exactly fit the source content and our expectation
+// of exactRowCapacity ensures it can fit all the requested
+// data.
+// In this case, let's gracefully degrade by pretending we
+// didn't need to compact.
+// Fix up all tracked pins to point to the new page
+// Insert the new page and destroy the old one
+// Allocator OOM
+// Page can't be split further because it is already a single row.
+// Split the given node in the PageList at the given pin.
+//
+// The row at the pin and after will be moved into a new page with
+// the same capacity as the original page. Alternatively, you can "split
+// above" by splitting the row following the desired split row.
+//
+// Since the split happens below the pin, the pin remains valid.
+// Ran into a bug that I can only explain via aliasing. If a tracked
+// pin is passed in, its possible Zig will alias the memory and then
+// when we modify it later it updates our p here. Copying the node
+// fixes this.
+// A page that is already 1 row can't be split. In the future we can
+// theoretically maybe split by soft-wrapping multiple pages but that
+// seems crazy and the rest of our PageList can't handle heterogeneously
+// sized pages today.
+// Splitting at row 0 is a no-op since there's nothing before the split point.
+// At this point we're doing actual modification so make sure
+// on the return that we're good.
+// Create a new node with the same capacity of managed memory.
+// Determine how many rows we're copying
+// Copy our old data. This should NOT fail because we have the
+// capacity of the old page which already fits the data we requested.
+// Rather than crash, we return an OutOfSpace to show that
+// we couldn't split and let our callers gracefully handle it.
+// Realistically though... this should not happen.
+// From this point forward there is no going back. We have no
+// error handling. It is possible but we haven't written it.
+// Move any tracked pins from the copied rows
+// p.x remains the same since we're copying the row as-is
+// Clear our rows
+// This represents the state necessary to render a scrollbar for this
+// PageList. It has the total size, the offset, and the size of the viewport.
+// Total size of the scrollable area.
+// The offset into the total area that the viewport is at. This is
+// guaranteed to be less than or equal to total. This includes the
+// visible row.
+// The length of the visible area. This is including the offset row.
+// A zero-sized scrollable region.
+// Sync with: ghostty_action_scrollbar_s
+// Comparison for scrollbars.
+// Return the scrollbar state for this PageList.
+//
+// This may be expensive to calculate depending on where the viewport
+// is (arbitrary pins are expensive). The caller should take care to only
+// call this as needed and not too frequently.
+// If we have no scrollback, special case no scrollbar.
+// We need to do this because the way PageList works is that
+// it always has SOME extra space (due to the way we allocate by page).
+// So even with no scrollback we have some growth. It is architecturally
+// much simpler to just hide that for no-scrollback cases.
+// Returns the offset of the current viewport from the top of the
+// screen.
+//
+// This is potentially expensive to calculate because if the viewport
+// is a pin and the pin is near the beginning of the scrollback, we
+// will traverse a lot of linked list nodes.
+//
+// The result is cached so repeated calls are cheap.
+// We assert integrity on this code path because it verifies
+// that the cached value is correct.
+// Return cached value if available
+// Traverse from the end and count rows until we reach the
+// viewport pin. We count backwards because most of the time
+// a user is scrolling near the active area.
+// Invalid pins are not possible.
+// The offset is from the bottom and our cached value and this
+// function returns from the top, so we need to invert it.
+// This fixes up the viewport data when rows are removed from the
+// PageList. This will update a viewport to `active` if row removal
+// puts the viewport into the active area, to `top` if the viewport
+// is now at row 0, and updates any row offset caches as necessary.
+//
+// This is unit tested transitively through other tests such as
+// eraseRows.
+// For pin, we check if our pin is now in the active area and if so
+// we move our viewport back to the active area.
+// If we have a cached row offset, we need to update it
+// to account for the erased rows.
+// For top, we move back to active if our erasing moved our
+// top page into the active area.
+// Returns the actual max size. This may be greater than the explicit
+// value if the explicit value is less than the min_max_size.
+//
+// This value is a HEURISTIC. You cannot assert on this value. We may
+// exceed this value if required to fit the active area. This may be
+// required in some cases if the active area has a large number of
+// graphemes, styles, etc.
+// Grow the active area by exactly one row.
+//
+// This may allocate, but also may not if our current page has more
+// capacity we can use. This will prune scrollback if necessary to
+// adhere to max_size.
+//
+// This returns the newly allocated page node if there is one.
+// Fast path: we have capacity in the last page.
+// Increase our total rows by one
+// Slower path: we have no space, we need to allocate a new page.
+// Get the layout first so our failable work is done early.
+// We'll need this for both paths.
+// If allocation would exceed our max size, we prune the first page.
+// We don't need to reallocate because we can simply reuse that first
+// page.
+//
+// We only take this path if we have more than one page since pruning
+// reuses the popped page. It is possible to have a single page and
+// exceed the max size if that page was adjusted to be larger after
+// initial allocation.
+// Decrease our total row count from the pruned page
+// If our total row count is now less than our required
+// rows then we can't prune. The "+ 1" is because we'll add one
+// more row below.
+// If we have a pin viewport cache then we need to update it.
+// If our offset is less than the number of rows in the
+// pruned page, then we are now at the top.
+// Otherwise, our viewport pin is below what we pruned
+// so we just decrement our offset.
+// Update any tracked pins that point to this page to point to the
+// new first page to the top-left, and mark them as garbage.
+// Non-standard pages can't be reused, just destroy them.
+// Reset our memory
+// Initialize our new page and reinsert it as the last
+// We also need to reset the serial number. Since this is the only
+// place we ever reuse a serial number, we also can safely set
+// page_serial_min to be one more than the old serial because we
+// only ever prune the oldest pages.
+// In this case we do NOT need to update page_size because
+// we're reusing an existing page so nothing has changed.
+// We need to allocate a new memory buffer.
+// we don't errdefer this because we've added it to the linked
+// list and its fine to have dangling unused pages.
+// We should never be more than our max size here because we've
+// verified the case above.
+// Record the increased row count
+// Possible dimensions to increase capacity for.
+// An actual system OOM trying to allocate memory.
+// The existing page is already at max capacity for the given
+// adjustment. The caller must create a new page, remove data from
+// the old page, etc. (up to the caller).
+// Increase the capacity of the given page node in the given direction.
+// This will always allocate a new node and remove the old node, so the
+// existing node pointer will be invalid after this call. The newly created
+// node on success is returned.
+//
+// The increase amount is at the control of the PageList implementation,
+// but is guaranteed to always increase by at least one unit in the
+// given dimension. Practically, we'll always increase by much more
+// (we currently double every time) but callers shouldn't depend on that.
+// The only guarantee is some amount of growth.
+//
+// Adjustment can be null if you want to recreate, reclone the page
+// with the same capacity. This is a special case used for rehashing since
+// the logic is otherwise the same. In this case, OutOfMemory is the
+// only possible error.
+// Apply our adjustment
+// We use checked math to prevent overflow. If there is an
+// overflow it means we're out of space in this dimension,
+// since pages can take up to their maxInt capacity in any
+// category.
+// Our final doubling would overflow since maxInt is
+// 2^N - 1 for an unsignged int of N bits. So, if we overflow
+// and we haven't used all the bits, use all the bits.
+// If our capacity exceeds the maximum page size, treat it
+// as an OutOfSpace because things like page splitting will
+// help.
+// Create our new page and clone the old page into it.
+// cloneFrom only errors if there isn't capacity for the data
+// from the source page but we're only increasing capacity so
+// this should never be possible. If it happens, we should crash
+// because we're in no man's land and can't safely recover.
+// Preserve page-level dirty flag (cloneFrom only copies row data)
+// Must not fail after this because the operations we do after this
+// can't be recovered.
+// Fix up all our tracked pins to point to the new page.
+// Insert this page and destroy the old page
+// Create a new page node. This does not add it to the list and this
+// does not do any memory size accounting with max_size/page_size.
+// log.debug("create page cap={}", .{cap});
+// It would be better to encode this into the Zig error handling
+// system but that is a big undertaking and we only have a few
+// centralized call sites so it is handled on its own currently.
+// Our page buffer comes from our standard memory pool if it
+// is within our standard size since this is what the pool
+// dispenses. Otherwise, we use the heap allocator to allocate.
+// Required only with runtime safety because allocators initialize
+// to undefined, 0xAA.
+// Accumulate page size now. We don't assert or check max size
+// because we may exceed it here temporarily as we are allocating
+// pages before destroy.
+// Destroy the memory of the given node in the PageList linked list
+// and return it to the pool. The node is assumed to already be removed
+// from the linked list.
+//
+// IMPORTANT: This function does NOT update `total_rows`. The caller is
+// responsible for accounting for the removed rows. This function only
+// updates `page_size` (byte accounting), not row accounting.
+// Update our accounting for page size
+// Reset the memory to zero so it can be reused
+// Fast-path function to erase exactly 1 row. Erasing means that the row
+// is completely REMOVED, not just cleared. All rows following the removed
+// row will be shifted up by 1 to fill the empty space.
+//
+// Unlike eraseRows, eraseRow does not change the size of any pages. The
+// caller is responsible for adjusting the row count of the final page if
+// that behavior is required.
+// In order to move the following rows up we rotate the rows array by 1.
+// The rotate operation turns e.g. [ 0 1 2 3 ] in to [ 1 2 3 0 ], which
+// works perfectly to move all of our elements where they belong.
+// We adjust the tracked pins in this page, moving up any that were below
+// the removed row.
+// If we have a pinned viewport, we need to adjust for active area.
+// Mark the whole page as dirty.
+//
+// Technically we only need to mark rows from the erased row to the end
+// of the page as dirty, but that's slower and this is a hot function.
+// We iterate through all of the following pages in order to move their
+// rows up by 1 as well.
+// We take the top row of the page and clone it in to the bottom
+// row of the previous page, which gets rid of the top row that was
+// rotated down in the previous page, and accounts for the row in
+// this page that will be rotated down as well.
+//
+//  rotate -> clone --> rotate -> result
+//    0 -.      1         1         1
+//    1  |      2         2         2
+//    2  |      3         3         3
+//    3 <'      0 <.      4         4
+//   ---       --- |     ---       ---  <- page boundary
+//    4         4 -'      4 -.      5
+//    5         5         5  |      6
+//    6         6         6  |      7
+//    7         7         7 <'      4
+// Mark the whole page as dirty.
+// Our tracked pins for this page need to be updated.
+// If the pin is in row 0 that means the corresponding row has
+// been moved to the previous page. Otherwise, move it up by 1.
+// Clear the final row which was rotated from the top of the page.
+// A variant of eraseRow that shifts only a bounded number of following
+// rows up, filling the space they leave behind with blank rows.
+//
+// `limit` is exclusive of the erased row. A limit of 1 will erase the target
+// row and shift the row below in to its position, leaving a blank row below.
+// This function has a lot of repeated code in it because it is a hot path.
+//
+// To get a better idea of what's happening, read eraseRow first for more
+// in-depth explanatory comments. To avoid repetition, the only comments for
+// this function are for where it differs from eraseRow.
+// If the row limit is less than the remaining rows before the end of the
+// page, then we clear the row, rotate it to the end of the boundary limit
+// and update our pins.
+// Mark the whole page as dirty.
+//
+// Technically we only need to mark from the erased row to the
+// limit but this is a hot function, so we want to minimize work.
+// If our viewport is a pin and our pin is within the erased
+// region we need to maybe shift our cache up. We do this here instead
+// of in the pin loop below because its unlikely to be true and we
+// don't want to run the conditional N times.
+// Update pins in the shifted region.
+// Mark the whole page as dirty.
+//
+// Technically we only need to mark rows from the erased row to the end
+// of the page as dirty, but that's slower and this is a hot function.
+// We need to keep track of how many rows we've shifted so that we can
+// determine at what point we need to do a partial shift on subsequent
+// pages.
+// Update tracked pins.
+// See the other places we do something similar in this function
+// for a detailed explanation.
+// We check to see if this page contains enough rows to satisfy the
+// specified limit, accounting for rows we've already shifted in prior
+// pages.
+//
+// The logic here is very similar to the one before the loop.
+// Mark the whole page as dirty.
+//
+// Technically we only need to mark from the erased row to the
+// limit but this is a hot function, so we want to minimize work.
+// See the other places we do something similar in this function
+// for a detailed explanation.
+// Update pins in the shifted region.
+// Mark the whole page as dirty.
+// Account for the rows shifted in this node.
+// See the other places we do something similar in this function
+// for a detailed explanation.
+// Update tracked pins.
+// We reached the end of the page list before the limit, so we clear
+// the final row since it was rotated down from the top of this page.
+// Erase the rows from the given top to bottom (inclusive). Erasing
+// the rows doesn't clear them but actually physically REMOVES the rows.
+// If the top or bottom point is in the middle of a page, the other
+// contents in the page will be preserved but the page itself will be
+// underutilized (size < capacity).
+// The count of rows that was erased.
+// A pageIterator iterates one page at a time from the back forward.
+// "back" here is in terms of scrollback, but actually the front of the
+// linked list.
+// If the chunk is a full page, deinit thit page and remove it from
+// the linked list.
+// A rare special case is that we're deleting everything
+// in our linked list. erasePage requires at least one other
+// page so to handle this we reinit this page, set it to zero
+// size which will let us grow our active area back.
+// We are modifying our chunk so make sure it is in a good state.
+// The chunk is not a full page so we need to move the rows.
+// This is a cheap operation because we're just moving cell offsets,
+// not the actual cell contents.
+// Mark the moved row as dirty.
+// Clear our remaining cells that we didn't shift or swapped
+// in case we grow back into them.
+// Update any tracked pins to shift their y. If it was in the erased
+// row then we move it to the top of this page.
+// Our new size is the amount we scrolled
+// Update our total row count
+// If we deleted active, we need to regrow because one of our invariants
+// is that we always have full active space.
+// If this fails its a pretty big issue actually... but I don't
+// want to turn this function into an error-returning function
+// because erasing active is so rare and even if it happens failing
+// is even more rare...
+// If we have a pinned viewport, we need to adjust for active area.
+// Erase a single page, freeing all its resources. The page can be
+// anywhere in the linked list but must NOT be the final page in the
+// entire list (i.e. must not make the list empty).
+//
+// IMPORTANT: This function does NOT update `total_rows`. The caller is
+// responsible for accounting for the removed rows before or after calling
+// this function.
+// Update any tracked pins to move to the previous or next page.
+// This doesn't get marked garbage because the tracked pin
+// movement is sensical.
+// Remove the page from the linked list
+// Returns the pin for the given point. The pin is NOT tracked so it
+// is only valid as long as the pagelist isn't modified.
+//
+// This will return null if the point is out of bounds. The caller
+// should clamp the point to the bounds of the coordinate space if
+// necessary.
+// getTopLeft is much more expensive than checking the cols bounds
+// so we do this first.
+// Grab the top left and move to the point.
+// Convert the given pin to a tracked pin. A tracked pin will always be
+// automatically updated as the pagelist is modified. If the point the
+// pin points to is removed completely, the tracked pin will be updated
+// to the top-left of the screen.
+// Create our tracked pin
+// Add it to the tracked list
+// Untrack a previously tracked pin. This will deallocate the pin.
+// Returns the tracked pins for this pagelist. The slice is owned by the
+// pagelist and is only valid until the pagelist is modified.
+// Checks if a pin is valid for this pagelist. This is a very slow and
+// expensive operation since we traverse the entire linked list in the
+// worst case. Only for runtime safety/debug.
+// This is very slow so we want to ensure we only ever
+// call this during slow runtime safety builds.
+// Returns the viewport for the given pin, preferring to pin to
+// "active" if the pin is within the active area.
+// If the pin is in the active page, then we can quickly determine
+// if we're beyond the end.
+// This loop is pretty fast because the active area is
+// never that large so this is at most one, two nodes for
+// reasonable terminals (including very large real world
+// ones).
+// A node forward in the active area is our node, so we're
+// definitely in the active area.
+// Returns true if the pin is at the top of the scrollback area.
+// Convert a pin to a point in the given context. If the pin can't fit
+// within the given tag (i.e. its in the history but you requested active),
+// then this will return null.
+//
+// Note that this can be a very expensive operation depending on the tag and
+// the location of the pin. This works by traversing the linked list of pages
+// in the tagged region.
+//
+// Therefore, this is recommended only very rarely.
+// Count our first page which is special because it may be partial.
+// If our top-left is after our y then we're outside the range.
+// We never saw our node, meaning we're outside the range.
+// Get the cell at the given point, or null if the cell does not
+// exist or is out of bounds.
+//
+// Warning: this is slow and should not be used in performance critical paths
+// Log a debug diagram of the page list to the provided writer.
+//
+// EXAMPLE:
+//
+//      +-----+ = PAGE 0
+//  ... |     |
+//   50 | foo |
+//  ... |     |
+//     +--------+ ACTIVE
+//  124 |     | | 0
+//  125 |Text | | 1
+//      :  ^  : : = PIN 0
+//  126 |Wrap…  | 2
+//      +-----+ :
+//      +-----+ : = PAGE 1
+//    0 …ed   | | 3
+//    1 | etc.| | 4
+//      +-----+ :
+//     +--------+
+// Whether we've just skipped some number of rows and drawn
+// an ellipsis row (this is reset when a row is not skipped).
+// Active header
+// Page header
+// Row contents
+// We don't want to print this row's contents
+// unless it has text or is in the active area.
+// If we haven't, draw an ellipsis row.
+// Left pad row number to 5 wide
+// Left edge or wrap continuation marker
+// Row text
+// Skip spacer tails, since wide cells are, well, wide.
+// Write non-printing bytes as base36, for convenience.
+// Right edge or wrap marker
+// Tracked pin marker(s)
+// If we have more than 16 tracked pins in a row, oh well,
+// don't wanna bother making this function allocating.
+// Page footer
+// Active footer
+// Returns the boundaries of the given semantic content type for
+// the prompt at the given pin. The pin row MUST be the first row
+// of a prompt, otherwise the results may be nonsense.
+//
+// To get prompt pins, use promptIterator. Warning that if there are
+// no semantic prompts ever present, promptIterator will iterate the
+// entire PageList. Downstream callers should keep track of a flag if
+// they've ever seen semantic prompt operations to prevent this performance
+// case.
+//
+// Note that some semantic content type such as "input" is usually
+// nested within prompt boundaries, so the returned boundaries may include
+// prompt text.
+// Performance note: we can do this more efficiently in a single
+// forward-pass. Semantic content operations aren't usually fast path
+// but if someone wants to optimize them someday that's great.
+// Safety assertion, our starting point should be a prompt row.
+// so the first returned prompt should be ourselves.
+// Our end is the end of the line just before the next prompt
+// line, which should exist since we verified we have at least
+// two prompts here.
+// Didn't find any further prompt so the end of our zone is
+// the end of the screen.
+// For the prompt, we select all the way up to command output.
+// We include all the input lines, too.
+// For input, we include the start of the input to the end of
+// the input, which may include all the prompts in the middle, too.
+// Find the start
+// No input found
+// Find the end
+// Prompts can be nested in our input for continuation
+// Output means we're done
+// Find the start
+// Skip empty cells - they default to .output but aren't real output
+// No output found
+// Find the end
+// Only extend to cells with actual text
+// Direction that iterators can move.
+// The pin that we are currently at. Also the starting pin when
+// initializing.
+// The pin to end at or null if we end when we can't traverse
+// anymore.
+// The direction to do the traversal.
+// Return the next pin that represents the first row in a prompt.
+// From here, you can find the prompt input, command output, etc.
+// Start at our current pin. If we have no current it means
+// we reached the end and we're done.
+// We need to traverse downwards and look for prompts.
+// Check our limit.
+// This row isn't a prompt. Keep looking.
+// This is a prompt line or continuation line. In either
+// case we consider the first line the prompt, and then
+// skip over any remaining prompt lines. This handles the
+// case where scrollback pruned the prompt.
+// If we're at our limit just return this prompt.
+// Skip over any continuation lines that follow this prompt,
+// up to our limit.
+// Start at our current pin. If we have no current it means
+// we reached the end and we're done.
+// We need to traverse upwards and look for prompts.
+// Check our limit.
+// This row isn't a prompt. Keep looking.
+// This is a prompt line.
+// If this is a prompt continuation, then we continue
+// looking for the start of the prompt OR a non-prompt
+// line, whichever is first. The non-prompt line is to handle
+// poorly behaved programs or scrollback that's been cut-off.
+// If we're at our limit just return this continuation as prompt.
+// No prompt. That means our last pin is good!
+// Prompt continuation, keep looking.
+// Prompt! Found it!
+// No prior rows, trimmed scrollback probably.
+// We still have cells in this row, increase x.
+// We need to move to the next row.
+// We still have cells in this row, decrease x.
+// We need to move to the previous row and last col
+// Increase our offset in the chunk
+// If we are beyond the chunk end, we need to move to the next chunk.
+// If we are at the start of the chunk, we need to move to the
+// previous chunk.
+// If we're at the start of the chunk and its a non-zero
+// offset then we've reached a limit.
+// Create an iterator that can be used to iterate all the rows in
+// a region of the screen from the given top-left. The tag of the
+// top-left point will also determine the end of the iteration,
+// so convert from one reference point to another to change the
+// iteration bounds.
+// Get our current row location
+// If we have no limit, then we consume this entire page. Our
+// next row is the next page.
+// If this is not the same page as our limit then we
+// can consume the entire page.
+// If this is the same page then we only consume up to
+// the limit row.
+// Get our current row location
+// If we have no limit, then we consume this entire page. Our
+// next row is the next page.
+// If this is not the same page as our limit then we
+// can consume the entire page.
+// If this is the same page then we only consume up to
+// the limit row.
+// Start y index (inclusive) of this chunk in the page.
+// End y index (exclusive) of this chunk in the page.
+// Returns true if this chunk represents every row in the page.
+// Returns true if this chunk overlaps with the given other chunk
+// in any way.
+// Return an iterator that iterates through the rows in the tagged area
+// of the point. The iterator returns row "chunks", which are the largest
+// contiguous set of rows in a single backing page for a given portion of
+// the point region.
+//
+// This is a more efficient way to iterate through the data in a region,
+// since you can do simple pointer math and so on.
+//
+// If bl_pt is non-null, iteration will stop at the bottom left point
+// (inclusive). If bl_pt is null, the entire region specified by the point
+// tag will be iterated over. tl_pt and bl_pt must be the same tag, and
+// bl_pt must be greater than or equal to tl_pt.
+//
+// If direction is left_up, iteration will go from bl_pt to tl_pt. If
+// direction is right_down, iteration will go from tl_pt to bl_pt.
+// Both inclusive.
+// Get the top-left of the screen for the given tag.
+// The full screen or history is always just the first page.
+// The active area is calculated backwards from the last page.
+// This makes getting the active top left slower but makes scrolling
+// much faster because we don't need to update the top left. Under
+// heavy load this makes a measurable difference.
+// Returns the bottom right of the screen for the given tag. This can
+// return null because it is possible that a tag is not in the screen
+// (e.g. history does not yet exist).
+// The total rows in the screen. This is the actual row count currently
+// and not a capacity or maximum.
+//
+// This is very slow, it traverses the full list of pages to count the
+// rows, so it is not pub. This is only used for testing/debugging.
+// The total number of pages in this list. This should only be used
+// for tests since it is O(N) over the list of pages.
+// Grow the number of rows available in the page list by n.
+// This is only used for testing so it isn't optimized in any way.
+// Clear all dirty bits on all pages. This is not efficient since it
+// traverses the entire list of pages. This is used for testing/debugging.
+// Returns true if the point is dirty, used for testing.
+// Mark a point as dirty, used for testing.
+// Represents an exact x/y coordinate within the screen. This is called
+// a "pin" because it is a fixed point within the pagelist direct to
+// a specific page pointer and memory offset. The benefit is that this
+// point remains valid even through scrolling without any additional work.
+//
+// A downside is that  the pin is only valid until the pagelist is modified
+// in a way that may invalidate page pointers or shuffle rows, such as resizing,
+// erasing rows, etc.
+//
+// A pin can also be "tracked" which means that it will be updated as the
+// PageList is modified.
+//
+// The PageList maintains a list of active pin references and keeps them
+// all up to date as the pagelist is modified. This isn't cheap so callers
+// should limit the number of active pins as much as possible.
+// This is flipped to true for tracked pins that were tracking
+// a page that got pruned for any reason and where the tracked pin
+// couldn't be moved to a sensical location. Users of the tracked
+// pin could use this data and make their own determination of
+// semantics.
+// Returns the cells for the row that this pin is on. The subset determines
+// what subset of the cells are returned. The "left/right" subsets are
+// inclusive of the x coordinate of the pin.
+// Returns the grapheme codepoints for the given cell. These are only
+// the EXTRA codepoints and not the first codepoint.
+// Returns the style for the given cell in this pin.
+// Check if this pin is dirty.
+// Mark this pin location as dirty.
+// Iterators. These are the same as PageList iterator funcs but operate
+// on pins rather than points. This is MUCH more efficient than calling
+// pointFromPin and building up the iterator from points.
+//
+// The limit pin is inclusive.
+// Check the order according to the iteration direction.
+// Returns true if this pin is between the top and bottom, inclusive.
+//
+// Note: this is primarily unit tested as part of the Kitty
+// graphics deletion code.
+// If top is bottom, must be ordered.
+// If top is not bottom, top must be before bottom.
+// If our pin is the top page and our y is less than the top y
+// then we can't possibly be between the top and bottom.
+// If our y is after the top y but we're on the same page
+// then we're between the top and bottom if our y is less
+// than or equal to the bottom y if its the same page. If the
+// bottom is another page then it means that the range is
+// at least the full top page and since we're the same page
+// we're in the range.
+// Otherwise our y is the same as the top y, so we need to
+// check the x coordinate.
+// Our page is the bottom page so we're between the top and
+// bottom if our y is less than the bottom y.
+// If our y is the same, then we're between if we're before
+// or equal to the bottom x.
+// Our page isn't the top or bottom so we need to check if
+// our page is somewhere between the top and bottom.
+// Since our loop starts at top.page.next we need to check that
+// top != bottom because if they're the same then we can't possibly
+// be between them.
+// Returns true if self is before other. This is very expensive since
+// it requires traversing the linked list of pages. This should not
+// be called in performance critical paths.
+// Move the pin left n columns. n must fit within the size.
+// Move the pin right n columns. n must fit within the size.
+// Move the pin left n columns, stopping at the start of the row.
+// Move the pin right n columns, stopping at the end of the row.
+// Move the pin left n cells, wrapping to the previous row as needed.
+//
+// If the offset goes beyond the top of the screen, returns null.
+//
+// TODO: Unit tests.
+// NOTE: This assumes that all pages have the same width, which may
+//       be violated under certain circumstances by incomplete reflow.
+// Move the pin right n cells, wrapping to the next row as needed.
+//
+// If the offset goes beyond the bottom of the screen, returns null.
+//
+// TODO: Unit tests.
+// NOTE: This assumes that all pages have the same width, which may
+//       be violated under certain circumstances by incomplete reflow.
+// Move the pin down a certain number of rows, or return null if
+// the pin goes beyond the end of the screen.
+// Move the pin up a certain number of rows, or return null if
+// the pin goes beyond the start of the screen.
+// Move the offset down n rows. If the offset goes beyond the
+// end of the screen, return the overflow amount.
+// Index fits within this page
+// Need to traverse page links to find the page
+// Move the offset up n rows. If the offset goes beyond the
+// start of the screen, return the overflow amount.
+// Index fits within this page
+// Need to traverse page links to find the page
+// Returns true if this cell is marked as dirty.
+//
+// This is not very performant this is primarily used for assertions
+// and testing.
+// Get the cell style.
+//
+// Not meant for non-test usage since this is inefficient.
+// Gets the screen point for the given cell.
+//
+// This is REALLY expensive/slow so it isn't pub. This was built
+// for debugging and tests. If you have a need for this outside of
+// this file then consider a different approach and ask yourself very
+// carefully if you really need this.
+// Initial total rows should be our row count
+// Our viewport pin must be defined. It isn't used until the
+// viewport is a pin but it prevents undefined access on clone.
+// Active area should be the top
+// Scrollbar should be where we expect it
+// Test every failure point in `init` and ensure that we don't
+// leak memory (testing.allocator verifies) since we're exiting early.
+// init calls initPages transitively, so let's check that if
+// any failures happen in initPages, we also don't leak memory.
+// Try non-standard pages since they don't go in our pool.
+// Find a cap that makes it so that rows don't fit on one page.
+// Init
+// Initial total rows should be our row count
+// Scrollbar should be where we expect it
+// Initialize with more columns than we can fit in our standard
+// capacity. This is going to force us to go to a non-standard page
+// immediately.
+// We expect a single, non-standard page
+// Initial total rows should be our row count
+// Scrollbar should be where we expect it
+// In history, invalid
+// Grow so we take up at least 5 pages.
+// Prior page
+// Grow so we take up at least 2 pages.
+// Prior page
+// Make sure all points make sense
+// Scrollbar should be in the active area
+// Setup our initial page so that we fully take up one page.
+// Grow once because we guarantee at least two pages of
+// capacity so we want to get to that.
+// Surgically modify our pages so that they have a smaller size.
+// Avoid integrity check failures
+// Grow our row and ensure we don't prune pages because we need
+// enough for the active area.
+// Need scrollback > 0 to have a scrollbar to test
+// This block is all test setup. There is nothing required about this
+// behavior during a refactor. This is setting up a scenario that is
+// possible to trigger a bug (#2280).
+// Increase our capacity until our page is larger than the standard size.
+// This is important because it triggers a scenario where our calculated
+// minSize() which is supposed to accommodate 2 pages is no longer true.
+// Figure out the remaining number of rows. This is the amount that
+// can be added to the current page before we need to allocate a new
+// page.
+// The next one we add will trigger a new page.
+// Scrollbar should be in the active area
+// Grow some rows (simulates normal terminal output)
+// With no scrollback (max_size = 0), total should equal rows
+// With no scrollback, offset should be 0 (nowhere to scroll back to)
+// Remember initial viewport position
+// Try to scroll backwards into "history" - should be no-op
+// Scroll to top - should also be no-op with no scrollback
+// Verify cache is populated
+// Now scroll to a different row - this should use the fast path
+// Verify cache is populated
+// Now scroll up to a different row - this should use the fast path
+// Jump back
+// Jump forward
+// So we know we're using capacity to grow
+// Grow
+// Grow to capacity
+// Grow, should allocate
+// Use std_size to limit scrollback so pruning is triggered.
+// Grow to capacity
+// Grow and allocate one more page. Then fill that page up.
+// Get our page size
+// Create a tracked pin in the first page
+// Scroll back to create a pinned viewport (not active)
+// Get the scrollbar state to populate the cache
+// Next should create a new page, but it should reuse our first
+// page since we're at max size.
+// Our first should now be page2 and our last should be page1
+// Our tracked pin should point to the top-left of the first page
+// Verify the viewport offset cache was invalidated. After pruning,
+// the offset should have changed because we removed rows from
+// the beginning.
+// Use std_size to limit scrollback so pruning is triggered.
+// Grow to capacity of first page
+// Grow and allocate second page, then fill it up
+// Get our page size
+// Scroll back to create a pinned viewport in page2 (NOT page1)
+// This is the key difference from the previous test - the viewport
+// pin is NOT in the page that will be pruned.
+// Get the scrollbar state to populate the cache
+// Next grow will trigger pruning of the first page.
+// The viewport_pin.node is page2, not page1, so it won't be moved
+// by the pin update loop, but the cached offset still needs to be
+// invalidated because rows were removed from the beginning.
+// Our first should now be page2 (page1 was pruned)
+// The viewport pin should still be on page2, unchanged
+// Verify the viewport offset cache was invalidated/updated.
+// After pruning, the offset should have decreased by the number
+// of rows that were pruned.
+// Grow so we take up several pages worth of history
+// Scroll back to create a pinned viewport somewhere in the middle
+// of the scrollback
+// Erase some history rows BEFORE the viewport pin.
+// This removes rows from before our pin, which changes its absolute
+// offset from the top, but the cache is not invalidated.
+// Grow so we take up several pages worth of history
+// Scroll back to create a pinned viewport somewhere in the middle
+// of the scrollback
+// Erase a single row from the history BEFORE the viewport pin.
+// This removes one row from before our pin, which changes its absolute
+// offset from the top by 1, but the cache is not invalidated.
+// Grow so we take up several pages worth of history
+// Scroll back to create a pinned viewport somewhere in the middle
+// of the scrollback
+// Erase a row from the history BEFORE the viewport pin with a bounded
+// shift. This removes one row from before our pin, which changes its
+// absolute offset from the top by 1, but the cache is not invalidated.
+// Verify the scrollbar reflects the change (offset decreased by 1)
+// Grow so we take up several pages worth of history
+// Scroll back to create a pinned viewport somewhere in the middle
+// of the scrollback, after the first page
+// Erase a row from the beginning of history with a limit that spans
+// across multiple pages. This ensures we hit the code path where
+// eraseRowBounded finds the limit boundary in a subsequent page.
+// Verify the scrollbar reflects the change (offset decreased by 1)
+// Grow so we take up several pages worth of history
+// Scroll back to create a pinned viewport somewhere well beyond
+// the first two pages
+// Erase a row from the beginning of history with a limit that is
+// larger than multiple full pages. This ensures we hit the code path
+// where eraseRowBounded continues looping through entire pages,
+// rotating all rows in each page until it reaches the limit or
+// runs out of pages.
+// Verify the scrollbar reflects the change (offset decreased by 1)
+// Grow so we take up several pages worth of history
+// Our total rows should include history
+// Scroll back to create a pinned viewport somewhere in the history,
+// well after the erase will complete
+// Erase a row from the beginning of history with a limit that is
+// LARGER than all remaining pages combined. This ensures we exhaust
+// all pages in the while loop and reach the cleanup code after the loop.
+// Verify the scrollbar reflects the change (offset decreased by 1)
+// Write all our data so we can assert its the same after
+// Increase our styles
+// Verify capacity doubled
+// Verify data preserved
+// Create a tracked pin on the first page
+// Increase capacity
+// Pin should now point to the new node
+// Keep increasing styles capacity until we get OutOfSpace
+// Before OutOfSpace, we should have reached maxInt
+// Shrink columns
+// Increase capacity
+// size.cols should still be 5, not reverted to capacity.cols
+// Grow to create a second page
+// Now we have two pages
+// Increase capacity on the first page only
+// First page capacity should be doubled
+// Second page should be unchanged
+// Set page dirty flag and mark some rows as dirty
+// Increase capacity
+// The page dirty flag should be preserved
+// Row dirty flags should be preserved
+// The viewport should be within a single page
+// Iterate the active area
+// Should only have one chunk
+// Grow to capacity
+// Iterate the active area
+// Grow to capacity
+// Iterate the active area
+// The viewport should be within a single page
+// Iterate the active area
+// Should only have one chunk
+// Grow to capacity
+// Iterate the active area
+// Grow to capacity
+// Iterate the active area
+// Normal prompt
+// Continuation
+// Broken continuation that has non-prompts in between
+// Normal prompt
+// Continuation (prompt on row 6, continuation on rows 7-8)
+// Broken continuation that has non-prompts in between (orphaned continuation at row 12)
+// Prompt continuation at row 0 (no prior rows - simulates trimmed scrollback)
+// Normal prompt later
+// Should return the first continuation line since there's no prior prompt
+// Prompt on row 2, continuation on rows 3-4
+// Starting iteration from row 3 should still find the prompt at row 2
+// Start iteration from row 3 (middle of the continuation)
+// Since we start on a continuation line, we treat it as the prompt start
+// (handles case where scrollback pruned the actual prompt)
+// Returns row 3 since that's the first prompt-related line we encounter
+// Prompt on row 5
+// Prompt on row 10
+// Iterate with limit at row 5 (the prompt row) - should include it
+// Prompt on row 5
+// Prompt on row 10
+// Iterate with limit at row 10 (the prompt row) - should include it
+// tl_pt is the limit (upper bound), bl_pt is the start point for left_up
+// Prompt on row 5
+// Start the prompt for the first 5 cols
+// Next 3 let's make input
+// Prompt on row 10
+// Prompt on row 5
+// First 3 cols are prompt
+// Next 4 are input
+// Rest is output (shouldn't be included in prompt highlight)
+// Prompt on row 10
+// Highlighting from prompt should include prompt and input, but stop at output
+// Prompt starts on row 5
+// First row is all prompt
+// Row 6 continues with input
+// Prompt on row 10
+// Highlighting should span both rows
+// Prompt on row 5 with only prompt content (no input)
+// Prompt on row 10
+// Highlighting should only include the prompt cells
+// Single prompt on row 15, no following prompt
+// Highlighting should include prompt and input up to column 7
+// Prompt on row 5
+// First 3 cols are prompt
+// Next 5 are input
+// Prompt on row 10
+// Highlighting input should only include input cells
+// Prompt on row 5
+// First 2 cols are prompt
+// Next 3 are input
+// Rest is output
+// Prompt on row 10
+// Highlighting input should stop at output
+// Prompt on row 5
+// First 2 cols are prompt
+// Rest is input
+// Row 6 has continuation prompt then more input
+// Continuation prompt
+// More input
+// Prompt on row 10
+// Highlighting input should span both rows, skipping continuation prompts
+// Prompt on row 5 with only prompt, then immediately output
+// First 3 cols are prompt
+// Rest is output (no input!)
+// Prompt on row 10
+// Highlighting input should return null when there's no input
+// Single prompt on row 15, no following prompt
+// Highlighting input with no following prompt
+// Prompt on row 5 with only prompt content, no input or output
+// All cells are prompt
+// Mark rows 6-9 as prompt to ensure no input before next prompt
+// Prompt on row 10
+// Highlighting input should return null when there's only prompts
+// Prompt on row 5
+// First 2 cols are prompt
+// Next 3 are input
+// Cols 5-7 are output
+// Mark remaining cells as prompt to bound the output
+// Prompt on row 10
+// Highlighting output should only include output cells
+// Prompt on row 5
+// First 2 cols are prompt
+// Next 2 are input
+// Rest of row 5 is output
+// Row 6 is all output
+// Row 7 has partial output then input to bound it
+// Prompt on row 10
+// Highlighting output should span multiple rows
+// Prompt on row 5
+// First 2 cols are prompt
+// Next 2 are input
+// Rest is output
+// Row 6 has output then prompt starts
+// Next prompt marker on same row
+// Prompt on row 10
+// Highlighting output should stop before prompt/input
+// Single prompt on row 15, no following prompt
+// Row 16 has output then prompt to bound it
+// Highlighting output with no following prompt
+// Prompt on row 5 with only prompt and input, no output
+// First 3 cols are prompt
+// Rest is input (must explicitly mark all cells to avoid default .output)
+// Mark rows 6-9 as input to ensure no output between prompts
+// Prompt on row 10 (no output between prompts)
+// Highlighting output should return null when there's no output
+// Tests that empty cells with default .output semantic content are
+// not selected as output. This can happen when a prompt/input line
+// doesn't fill the entire row - trailing cells have default .output.
+// Prompt on row 5 - only fills first 3 cells, rest are empty with default .output
+// First 3 cols are prompt with text
+// Cells 3-9 are empty (codepoint = 0) with default .output semantic content
+// This simulates what happens when a short prompt is written
+// Row 6 has input (short, doesn't fill line)
+// Cells 4-9 are empty with default .output
+// Row 7-8 have actual output with text
+// Prompt on row 10
+// Highlighting output should skip empty cells on rows 5-6 and find
+// the actual output starting at row 7
+// Output should start at row 7, not row 5 (where empty cells have default .output)
+// Grow so we take up at least 5 pages.
+// Our total rows should be large
+// Erase the entire history, we should be back to just our active set.
+// We should be back to just one page
+// Grow so we take up at least 5 pages.
+// Erase the entire history, we should be back to just our active set.
+// Grow so we take up at least 5 pages.
+// Our total rows should be large
+// Put a tracked pin in the history
+// Erase the entire history, we should be back to just our active set.
+// Our pin should move to the first page
+// Put a tracked pin in the history
+// Erase only a few rows in our active
+// Our pin should move to the first page
+// Put a tracked pin in the history
+// Erase the entire history, we should be back to just our active set.
+// Our pin should move to the first page
+// Grow so we take up at least 5 pages.
+// Move our viewport to the top
+// Erase the entire history, we should be back to just our active set.
+// Grow so we take up at least 5 pages.
+// Move our viewport to the top
+// Erase the entire history, we should be back to just our active set.
+// Grow so we take up at least 5 pages.
+// Move our viewport to the top
+// Erase the entire history, we should be back to just our active set.
+// Write our letter
+// The row should be empty
+// Pins
+// Erase only a few rows in our active
+// The erased rows should be dirty
+// Pins
+// Erase only a few rows in our active
+// The erased rows should be dirty
+// Pins
+// Erase only a few rows in our active
+// The erased rows should be dirty
+// Our pin should move to the first page
+// Grow to two pages so our active area straddles
+// Pins
+// Erase only a few rows in our active
+// The erased rows should be dirty
+// In page in first page is shifted
+// Out page in first page should not be shifted
+// In page is shifted
+// Out page is not shifted
+// Style the rows we're trimming
+// We're over-counted by 1 because `add` implies `use`.
+// Expect to have one style
+// Put a tracked pin in the screen
+// We should be able to find our tracked pin
+// Put a tracked pin in the screen
+// We should be able to find our tracked pin
+// Mark a row as dirty
+// Should still be dirty
+// Put a tracked pin in the history
+// Resize
+// Our cursor should not move because we have no scrollback so
+// we just grew.
+// Put a tracked pin in the history
+// Resize
+// Our cursor should move since it's in the scrollback
+// This is required for our writing below to work
+// Write into all rows so we don't get trim behavior
+// Resize
+// This is required for our writing below to work
+// Write into all rows so we don't get trim behavior
+// Resize
+// This is required for our writing below to work
+// Write into all rows so we don't get trim behavior
+// Put a tracked pin in the history
+// Resize
+// Our cursor should move since it's in the scrollback
+// This is required for our writing below to work
+// Write into all rows so we don't get trim behavior
+// Put a tracked pin in the history
+// Resize
+// Our cursor should move since it's in the scrollback
+// Write codepoint into first line
+// Fill remaining lines with a background color
+// Put a tracked pin in the history
+// Resize
+// Our cursor should not move since we trimmed
+// Write codepoint into first line
+// Fill remaining lines with a background color
+// Put a tracked pin in a blank line
+// Resize
+// Our cursor should not move since we trimmed
+// Resize to take up two pages
+// Write codepoint into first line
+// Resize down. Every row except the first is blank so we
+// should erase the second page.
+// Write codepoint into first line
+// Fill remaining lines with a background color
+// Resize
+// When the rows are increased we need to make sure that the viewport
+// doesn't end up below the active area if it's currently in pin mode.
+// Make it so we have scrollback
+// Set viewport above active by scrolling up one.
+// The viewport should be a pin now.
+// Resize
+// Question: maybe the viewport should actually be in the active
+// here and not pinned to the top.
+// Resize
+// Put a tracked pin in the history
+// Resize
+// Add a grapheme.
+// Resize
+// Resize
+// Resize
+// try testing.expect(!rac.row.wrap);
+// This test is a bit convoluted so I want to explain: what we are trying
+// to verify here is that when we increase cols such that our rows per page
+// shrinks, we don't fragment our rows across many pages because this ends
+// up wasting a lot of memory.
+//
+// This is particularly important for alternate screen buffers where we
+// don't have scrollback so our max size is very small. If we don't do this,
+// we end up pruning our pages and that causes resizes to fail!
+// This test requires initially that our rows fit into one page.
+// Then we need to resize our cols so that our rows per page shrinks.
+// This will force our resize to split our rows across two pages.
+// Every page except the last should be full
+// Now we need to resize again to a col size that further shrinks
+// our last capacity.
+// Every page except the last should be full
+// Resize less
+// Resize
+// Resize less
+// Resize less
+// Resize to a size that requires more than one page to fit our rows.
+// Resize
+// We want a cap that forces us to have less rows
+// Create initial cap, fits in one page
+// Resize to our large cap
+// Our total rows should be the same, and contents should be the same.
+// Grow to 5 total rows, simulating 3 active + 2 scrollback
+// Active should be on row 3
+// Put a tracked pin in the history
+// Resize
+// Our cursor should not change
+// 12 because we have our 10 rows in the active + 2 in the scrollback
+// because we're preserving the cursor.
+// Active should be at the same place it was.
+// Go through our active, we should get only 3,4,5
+// Resize
+// Resize
+// Active should still be on top
+// First row should be unwrapped
+// Scroll to a pinned viewport in history
+// Resize with reflow - unwrapping rows changes total_rows
+// Verify scrollbar cache was invalidated during reflow
+// We want a wide viewport so our row limit is rather small. This will
+// force the reflow below to create multiple pages, which we assert.
+// Wrap every other row so every line is wrapped for reflow
+// Resize
+// All pages should have the new capacity
+// We should have more than one page, meaning we created at least
+// one page. This is the critical aspect of this test so if this
+// ever goes false we need to adjust this test.
+// Grow to the capacity of the first page.
+// At this point, we have some rows on the first page, and some on the second.
+// We can now wrap across the boundary condition.
+// PageList.diagram ->
+//
+//       +--+ = PAGE 0
+//   ... :  :
+//      +-----+ ACTIVE
+// 15744 |  | | 0
+// 15745 |  | | 1
+// 15746 |  | | 2
+// 15747 |  | | 3
+// 15748 |  | | 4
+// 15749 |  | | 5
+// 15750 |  | | 6
+// 15751 |  | | 7
+// 15752 |01… | 8
+//       +--+ :
+//       +--+ : = PAGE 1
+//     0 …01| | 9
+//       +--+ :
+//      +-----+
+// We expect one fewer rows since we unwrapped a row.
+// Resize
+// PageList.diagram ->
+//
+//      +----+ = PAGE 0
+//  ... :    :
+//      +----+
+//      +----+ = PAGE 1
+//  ... :    :
+//     +-------+ ACTIVE
+// 6272 |    | | 0
+// 6273 |    | | 1
+// 6274 |    | | 2
+// 6275 |    | | 3
+// 6276 |    | | 4
+// 6277 |    | | 5
+// 6278 |    | | 6
+// 6279 |    | | 7
+// 6280 |    | | 8
+// 6281 |0101| | 9
+//      +----+ :
+//     +-------+
+// PAGE 1 ROW 6280, ACTIVE 8
+// PAGE 1 ROW 6281, ACTIVE 9
+// Grow to the capacity of the first page.
+// At this point, we have some rows on the first page, and some on the second.
+// We can now wrap across the boundary condition.
+// Put a tracked pin in wrapped row on the last page
+// We expect one fewer rows since we unwrapped a row.
+// Resize
+// Our cursor should move to the first row
+// Grow to the capacity of the first page.
+// At this point, we have some rows on the first page, and some on the second.
+// We can now wrap across the boundary condition.
+// Put a tracked pin in wrapped row on the last page
+// PageList.diagram ->
+//
+//      +-----+ = PAGE 0
+//  ... :     :
+//     +--------+ ACTIVE
+// 7892 |     | | 0
+// 7893 |     | | 1
+// 7894 |     | | 2
+// 7895 |     | | 3
+// 7896 |01234… | 4
+//      +-----+ :
+//      +-----+ : = PAGE 1
+//    0 …01234| | 5
+//      :  ^  : : = PIN 0
+//    1 |     | | 6
+//    2 |     | | 7
+//    3 |     | | 8
+//    4 |     | | 9
+//      +-----+ :
+//     +--------+
+// Resize
+// PageList.diagram ->
+//
+//      +----+ = PAGE 0
+//  ... :    :
+//     +-------+ ACTIVE
+// 7892 |    | | 0
+// 7893 |    | | 1
+// 7894 |    | | 2
+// 7895 |    | | 3
+// 7896 |0123… | 4
+// 7897 …4012… | 5
+//      :   ^: : = PIN 0
+// 7898 …3400| | 6
+// 7899 |    | | 7
+// 7900 |    | | 8
+// 7901 |    | | 9
+//      +----+ :
+//     +-------+
+// Our cursor should remain on the same cell
+// PAGE 0 ROW 7895, ACTIVE 3
+// PAGE 0 ROW 7896, ACTIVE 4
+// PAGE 0 ROW 7897, ACTIVE 5
+// PAGE 0 ROW 7898, ACTIVE 6
+// PAGE 0 ROW 7899, ACTIVE 7
+// Put a tracked pin in the history
+// Resize
+// Our cursor should move to the first row
+// Put a tracked pin in the history
+// Resize
+// Our cursor should move to the first row
+// Put a tracked pin in the history
+// Resize
+// Our cursor should move to the first row
+// Resize
+// Grow to the capacity of the first page and add
+// one more row so that we have two pages total.
+// We now have two pages.
+// We use almost all string alloc capacity with a hyperlink in the final
+// row of the first page, and do the same on the first row of the second
+// page. We also mark the row as wrapped so that when we resize with more
+// cols the row unwraps and we have a single row that requires almost two
+// times the base string alloc capacity.
+//
+// This forces the reflow to increase capacity.
+//
+//  +--+ = PAGE 0
+//  :  :
+//  | X… <- where X is hyperlinked with almost all string cap.
+//  +--+
+//  +--+ = PAGE 1
+//  …X | <- X here also almost hits string cap with a hyperlink.
+//  +--+
+// Almost hit string alloc cap in bottom right of first page.
+// Mark the final row as wrapped.
+// Almost hit string alloc cap in top left of second page.
+// Mark the first row as a wrap continuation.
+// Resize to 1 column wider, unwrapping the row.
+// Grow to the capacity of the first page and add
+// one more row so that we have two pages total.
+// We now have two pages.
+// We use almost all grapheme alloc capacity with a grapheme in the final
+// row of the first page, and do the same on the first row of the second
+// page. We also mark the row as wrapped so that when we resize with more
+// cols the row unwraps and we have a single row that requires almost two
+// times the base grapheme alloc capacity.
+//
+// This forces the reflow to increase capacity.
+//
+//  +--+ = PAGE 0
+//  :  :
+//  | X… <- where X is a grapheme which uses almost all the capacity.
+//  +--+
+//  +--+ = PAGE 1
+//  …X | <- X here also almost hits grapheme cap.
+//  +--+
+// Almost hit grapheme alloc cap in bottom right of first page.
+// Mark the final row as wrapped.
+// Almost hit grapheme alloc cap in top left of second page.
+// Mark the first row as a wrap continuation.
+// Resize to 1 column wider, unwrapping the row.
+// Grow to the capacity of the first page and add
+// one more row so that we have two pages total.
+// We now have two pages.
+// Give each cell in the final row of the first page a unique style.
+// Mark the final row as wrapped.
+// Do the same for the first row of the second page.
+// Mark the first row as a wrap continuation.
+// Resize to twice as wide, fully unwrapping the row.
+// Resize
+// Resize
+// Resize
+// Resize
+// Resize
+// Resize
+// Resize
+// Resize
+// Active moves due to scrollback
+// First row should be wrapped
+// First row should be wrapped
+// Resize
+// Active moves due to scrollback
+// First row should be wrapped
+// First row should be wrapped
+// Put a tracked pin in the history
+// Resize
+// Our cursor should move to the first row
+// Resize
+// Put a tracked pin in the history
+// Resize
+// Our cursor should move to the first row
+// Put a tracked pin in the history
+// Resize
+// Our cursor should move to the first row
+// Put a tracked pin in the history
+// Resize
+// Our cursor should not move
+// Put a tracked pin in the history
+// Resize
+// Our cursor should move to the first row
+// Put a tracked pin in the history
+// Resize
+// Our cursor should move to the first row
+// Resize
+// First row should be wrapped
+// Resize
+// Resize
+// Grow blank rows to push our rows back into scrollback
+// Put a tracked pin in the history
+// Resize
+// Important: not on last row
+// Our cursor should move to the first row
+// Create a style
+// We're over-counted by 1 because `add` implies `use`.
+// Resize
+// Resize
+// Resize
+// We want to make the screen look like this:
+//
+// 👨‍👨‍👦‍👦👨‍👨‍👦‍👦
+// First family emoji at (0, 0)
+// Second family emoji at (2, 0)
+// Resize
+// Row should be wrapped
+// Write unicode placeholders
+// Resize
+// Write unicode placeholders
+// Resize smaller then larger
+// Write unicode placeholders
+// Active area should be the top
+// Find a cap that makes it so that rows don't fit on one page.
+// Init
+// Create a tracked pin into the active area
+// Our added pin should now be garbage
+// Viewport pin should not be garbage because it makes sense.
+// Active area should be the top
+// This test verifies that when reflowing content with many graphemes,
+// the grapheme map capacity is correctly increased when needed.
+// Get the grapheme capacity from the page. We need more than this many
+// graphemes in a single destination page to trigger capacity increase
+// during reflow. Since each source page can only hold this many graphemes,
+// we create two source pages with graphemes that will merge into one
+// destination page.
+// Use slightly more than half the capacity per page, so combined they
+// exceed the capacity of a single destination page.
+// Grow to the capacity of the first page and add more rows
+// so that we have two pages total.
+// We now have two pages.
+// Add graphemes to both pages. We add graphemes to rows at the END of the
+// first page, and graphemes to rows at the START of the second page.
+// When reflowing to 2 columns, these rows will wrap and stay together
+// on the same destination page, requiring capacity increase.
+// Add graphemes to the end of the first page (last rows)
+// Add graphemes to the beginning of the second page
+// Resize to fewer columns to trigger reflow.
+// The graphemes from both pages will be copied to destination pages.
+// They will all end up in a contiguous region of the destination.
+// If the bug exists (hyperlink_bytes increased instead of grapheme_bytes),
+// this will fail with GraphemeMapOutOfMemory when we exceed capacity.
+// Verify the resize succeeded
+// Regression test: after resize/reflow, the viewport pin can end up at a
+// position where pin.y + rows > total_rows, causing getBottomRight to panic.
+// The plan is to pin viewport in history, then grow columns to unwrap rows.
+// The unwrap reduces total_rows, but the tracked pin moves to a position
+// that no longer has enough rows below it for the viewport height.
+// Make sure we have some history, in this case we have 30 rows of history
+// Fill all rows with wrapped content (pairs that unwrap when cols increase)
+// Pin viewport at row 28 (in history, 2 rows before active area at row 30).
+// After unwrap: row 28 -> row 14, total_rows 40 -> 20, active starts at 10.
+// Pin at 14 needs rows 14-23, but only 0-19 exist -> overflow.
+// Resize with reflow: unwraps rows, reducing total_rows
+// Used to panic here, so test that we can get the bottom right.
+// Create a PageList with 3 * std_size max so we can fit multiple pages
+// but will still trigger reuse.
+// Increase the first page capacity to make it non-standard (larger than std_size).
+// The first page should now have non-standard memory size.
+// First, fill up the first page's capacity
+// Now grow to create a second page
+// Continue growing until we exceed max_size AND the last page is full
+// The first page should still be non-standard
+// Verify we have enough rows for active area (so prune path isn't skipped)
+// Verify last page is full (so grow will need to allocate/reuse)
+// Remember the first page memory pointer before the reuse attempt
+// Create a tracked pin pointing to the non-standard first page
+// Now grow one more time to trigger the reuse path. Since the first page
+// is non-standard, it should be destroyed (not reused). The testing
+// allocator will detect a leak if destroyNode doesn't properly free
+// the non-standard memory.
+// After grow, check if the first page is a different one
+// (meaning the non-standard page was pruned, not reused at the end)
+// The original first page should no longer be the first page
+// If the non-standard page was properly destroyed and not reused,
+// the last page should not have the same memory pointer
+// The tracked pin should have been moved to the new first page and marked as garbage
+// This test specifically verifies the fix for the bug where pruning a
+// non-standard page would cause totalRows() < self.rows.
+//
+// Bug trigger conditions (all must be true simultaneously):
+// 1. first page is non-standard (memory.len > std_size)
+// 2. page_size + PagePool.item_size > maxSize() (triggers prune consideration)
+// 3. pages.first != pages.last (have multiple pages)
+// 4. total_rows >= self.rows (have enough rows for active area)
+// 5. total_rows - first.size.rows + 1 < self.rows (prune would lose too many)
+// This is kind of magic and likely depends on std_size.
+// Make the first page non-standard
+// Fill first page to capacity
+// Grow until we have a second page (first page fills up first)
+// Fill the second page to capacity so that the next grow() triggers prune
+// Now the last page is full. The next grow must either:
+// 1. Prune the first page and reuse it, OR
+// 2. Allocate a new page
+// Verify the bug condition is present: pruning first page would leave < rows
+// Verify prune path conditions are met
+// Verify last page is at capacity (so grow must prune or allocate new)
+// The next grow should trigger prune consideration.
+// Without the fix, this would destroy the non-standard first page,
+// leaving only second_cap + 1 rows, which is < self.rows.
+// Verify the invariant holds - the fix prevents the destructive prune
+// Regression test: when resizeWithoutReflowGrowCols copies rows to a previous
+// page with spare capacity, tracked pins in those rows must be remapped.
+// Without the fix, pins become dangling pointers when the original page is destroyed.
+// Grow until we have two pages.
+// Trim a history row so the first page has spare capacity.
+// This triggers the backfill path in resizeWithoutReflowGrowCols.
+// Ensure the resize takes the slow path (new capacity > current capacity).
+// Track a pin in row 0 of the second page. This row will be copied
+// to the first page during backfill and the pin must be remapped.
+// Write a marker character to the tracked cell so we can verify
+// the pin points to the correct cell after resize.
+// Verify the pin points to a valid node still in the page list.
+// Verify the pin still points to the cell with our marker content.
+// A freshly created page should be at std_size
+// compact should return null since there's nothing to compact
+// Page should still be the same
+// Grow until we have multiple pages
+// Write content to verify it's preserved
+// Create a tracked pin on this page
+// Make the page oversized
+// Set dirty flag after increaseCapacity
+// Compact the page
+// Verify memory is smaller
+// Verify size preserved
+// Verify dirty flag preserved
+// Verify linked list integrity
+// Verify pin updated correctly
+// Verify content preserved
+// Make the page slightly oversized (just one increase)
+// This might not provide enough savings to justify compaction
+// If the page is still at or below std_size, compact returns null
+// If it did grow beyond std_size, verify that compaction
+// works or returns null based on savings calculation
+// Either it compacted or determined insufficient savings
+// Write content to rows: row 0 gets codepoint 0, row 1 gets 1, etc.
+// Split at row 5 (middle)
+// Verify two pages exist
+// First page should have rows 0-4 (5 rows)
+// Second page should have rows 5-9 (5 rows)
+// Verify content in first page is preserved (rows 0-4 have codepoints 0-4)
+// Verify content in second page (original rows 5-9, now at y=0-4)
+// Write content to all rows
+// Split at row 0 should be a no-op
+// Verify only one page exists (no split occurred)
+// Verify all content is still in the original page
+// Write content to all rows
+// Split at last row (row 9)
+// Verify two pages exist
+// First page should have 9 rows
+// Second page should have 1 row
+// Verify content in second page (original row 9, now at y=0)
+// Initialize with 1 row
+// Track a pin at row 7
+// Split at row 5
+// The tracked pin should now be in the second page
+// y should be adjusted: was 7, split at 5, so new y = 7 - 5 = 2
+// x should remain unchanged
+// Track a pin at row 2 (before the split point)
+// Split at row 5
+// The tracked pin should remain in the original page
+// y and x should be unchanged
+// Track a pin at the exact split point (row 5)
+// Split at row 5
+// The tracked pin should be in the new page
+// y should be 0 since it was at the split point: 5 - 5 = 0
+// x should remain unchanged
+// Track multiple pins in different regions
+// Split at row 5
+// Pin before split point stays in original page
+// Pin at split point moves to new page with y=0
+// Pins after split point move to new page with adjusted y
+// Set viewport_pin to row 7 (after split point)
+// Split at row 5
+// viewport_pin should be in the new page
+// y should be adjusted: 7 - 5 = 2
+// x should remain unchanged
+// Create a single page with 12 rows
+// Split at row 4 to create: page1 (rows 0-3), page2 (rows 4-11)
+// Now we have 2 pages
+// Split page2 at row 4 to create: page1 -> page2 (rows 0-3) -> page3 (rows 4-7)
+// Now we have 3 pages
+// Verify linked list order: first -> middle -> last
+// Verify prev pointers
+// Verify next pointers
+// Verify row counts
+// Create a single page with 10 rows
+// Split to create 2 pages first
+// Now split the last page
+// The new page should be the new last
+// Verify row counts: original last has 2 rows, new last has 3 rows
+// Create 2 pages by splitting
+// Get second page (created by first split)
+// Now split the first page again
+// Original first should still be first
+// New page should be inserted between first and second
+// Verify row counts: first has 2, inserted has 3, second has 5
+// Set wrap flags on rows that will be in the second page after split
+// Row 5: wrap = true (this is the start of a wrapped line)
+// Row 6: wrap_continuation = true (this continues the wrap)
+// Row 7: wrap = true, wrap_continuation = true (wrapped and continues)
+// Split at row 5
+// Verify wrap flags are preserved in new page
+// Original row 5 is now row 0 in second page
+// Original row 6 is now row 1 in second page
+// Original row 7 is now row 2 in second page
+// Create a style and apply it to cells in rows 5-7 (which will be in the second page)
+// Release the extra ref from add
+// Split at row 5
+// First page should have no styles (all styled rows moved to second page)
+// Second page should have exactly 1 style (the bold style, used by 3 cells)
+// Verify styled cells are preserved in new page
+// Add a grapheme cluster to row 6 (will be row 1 in second page after split at 5)
+// Split at row 5
+// First page should have no graphemes (the grapheme row moved to second page)
+// Second page should have exactly 1 grapheme
+// Verify grapheme is preserved in new page (original row 6 is now row 1)
+// Add a hyperlink to row 7 (will be row 2 in second page after split at 5)
+// Split at row 5
+// First page should have no hyperlinks (the hyperlink row moved to second page)
+// Second page should have exactly 1 hyperlink
+// Verify hyperlink is preserved in new page (original row 7 is now row 2)
+//
+// --- Original Ghostty Comments End: src/terminal/PageList.zig
+
+
 // PageList manages a doubly-linked list of Pages forming the terminal
 // screen buffer with scrollback, viewport management, and text reflow.
 // Translated from Ghostty's PageList.zig.

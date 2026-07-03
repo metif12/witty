@@ -1,5 +1,126 @@
 module input
 
+// --- Original Ghostty Comments Start: src/input/key_mods.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/input/key_mods.zig
+//
+// Aliases for modifier names.
+// Single modifier
+// A bitmask for all key modifiers.
+//
+// IMPORTANT: Any changes here update include/ghostty.h
+// The standard modifier keys only. Does not include the lock keys,
+// only standard bindable keys.
+// Tracks the side that is active for any given modifier. Note
+// that this doesn't confirm a modifier is pressed; you must check
+// the bool for that in addition to this.
+//
+// Not all platforms support this, check apprt for more info.
+// The mask that has all the side bits set.
+// Integer value of this struct.
+// Returns true if no modifiers are set.
+// Returns true if two mods are equal.
+// Returns only the keys.
+//
+// In the future I want to remove `binding` for this. I didn't want
+// to do that all in one PR where I added this because its a bigger
+// change.
+// Return mods that are only relevant for bindings.
+// Perform `self &~ other` to remove the other mods from self.
+// Returns the mods without locks set.
+// Return the mods to use for key translation. This handles settings
+// like macos-option-as-alt. The translation mods should be used for
+// translation but never sent back in for the key callback.
+// macos-option-as-alt for darwin
+// Alt has to be set only on the correct side
+// Unset alt
+// Checks to see if super is on (MacOS) or ctrl.
+// For our own understanding
+// Unset
+// Set
+// Set but disabled
+// Set wrong side
+// Set with other mods
+// Modifier remapping. See `key-remap` in Config.zig for detailed docs.
+// Available mappings.
+// The mask of remapped modifiers that can be used to quickly
+// check if some input mods need remapping.
+// Parse from CLI input. Required by Config.
+// Empty value resets the set
+// Parse a modifier remap and add it to the set.
+// Find the assignment point ('=')
+// The to side defaults to "left" if no explicit side is given.
+// This is because this is the default unsided value provided by
+// the apprts in the current Mods layout.
+// The from side, if sided, is easy and we put it directly into
+// the map.
+// We need to do some combinatorial explosion here for unsided
+// from in order to assign all possible sides.
+// Must be called prior to any remappings so that the mapping
+// is sorted properly. Otherwise, you will get invalid results.
+// Mods with any right sides prioritize
+// Deep copy of the struct. Required by Config.
+// Compare if two RemapSets are equal. Required by Config.
+// Used by Formatter. Required by Config.
+// Check which mod is set and format it with optional side prefix
+// Only write left_ if we need to distinguish
+// For now, always write left_ if it's a sided mapping
+// Parses a single mode in a single remapping string. E.g.
+// `ctrl` or `left_shift`.
+// Returns true if the given mods need remapping.
+// Apply a remap to the given mods.
+// Tracks which modifier keys and sides have remappings registered.
+// Used as a fast pre-check before doing expensive map lookups.
+//
+// The mask uses separate tracking for left and right sides because
+// remappings can be side-specific (e.g., only remap left_ctrl).
+//
+// Note: `left_sides` uses inverted logic where 1 means "left is remapped"
+// even though `Mod.Side.left = 0`. This allows efficient bitwise matching
+// since we can AND directly with the side bits.
+// Which modifier keys (shift/ctrl/alt/super) have any remapping.
+// Which modifiers have left-side remappings (inverted: 1 = left remapped).
+// Which modifiers have right-side remappings (1 = right remapped).
+// Adds a modifier to the mask, marking it as having a remapping.
+// OR the new keys into our existing keys mask.
+// Example: keys=0b0000, new ctrl → keys=0b0010
+// Both Keys and Side are u4 with matching bit positions.
+// This lets us use keys_int to select which side bits to update.
+// Update left_sides: set bit if this key is active AND side is left.
+// Since Side.left=0, we invert sides (~sides) so left becomes 1.
+// keys_int masks to only affect the modifier being added.
+// Example: left_ctrl → keys_int=0b0010, ~sides=0b1111 (left=0 inverted)
+//          result: left_int | (0b0010 & 0b1111) = left_int | 0b0010
+// Update right_sides: set bit if this key is active AND side is right.
+// Since Side.right=1, we use sides directly.
+// Example: right_ctrl → keys_int=0b0010, sides=0b0010 (right=1)
+//          result: right_int | (0b0010 & 0b0010) = right_int | 0b0010
+// Returns true if the given mods match any remapping in this mask.
+// This is a fast check to avoid expensive map lookups when no
+// remapping could possibly apply.
+//
+// Checks both that the modifier key is remapped AND that the
+// specific side (left/right) being pressed has a remapping.
+// Find which pressed keys have remappings registered.
+// Example: pressed={ctrl,alt}, mask={ctrl} → active=0b0010 (just ctrl)
+// Check if the pressed side matches a remapped side.
+// For left (sides bit = 0): check against left_int (where 1 = left remapped)
+//   ~sides inverts so left becomes 1, then AND with left_int
+// For right (sides bit = 1): check against right_int directly
+//
+// Example: pressing left_ctrl (sides.ctrl=0, left_int.ctrl=1)
+//   ~sides = 0b1111, left_int = 0b0010
+//   (~sides & left_int) = 0b0010 ✓ matches
+//
+// Example: pressing right_ctrl but only left_ctrl is remapped
+//   sides = 0b0010, left_int = 0b0010, right_int = 0b0000
+//   (~0b0010 & 0b0010) | (0b0010 & 0b0000) = 0b0000 ✗ no match
+// Final check: is any active (pressed + remapped) key also side-matched?
+// Unsided creates both left and right mappings
+//
+// --- Original Ghostty Comments End: src/input/key_mods.zig
+
+
 // Modifier remapping. See key-remap in Config for detailed docs.
 
 // Mod represents a single modifier key.

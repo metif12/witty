@@ -1,5 +1,165 @@
 module renderer
 
+// --- Original Ghostty Comments Start: src/renderer/cell.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/renderer/cell.zig
+//
+// The possible cell content keys that exist.
+// Returns the GPU vertex type for this key.
+// The contents of all the cells in the terminal.
+//
+// The goal of this data structure is to allow for efficient row-wise
+// clearing of data from the GPU buffers, to allow for row-wise dirty
+// tracking to eliminate the overhead of rebuilding the GPU buffers
+// each frame.
+//
+// Must be initialized by resizing before calling any operations.
+// Flat array containing cell background colors for the terminal grid.
+//
+// Indexed as `bg_cells[row * size.columns + col]`.
+//
+// Prefer accessing with `Contents.bgCell(row, col).*` instead
+// of directly indexing in order to avoid integer size bugs.
+// The ArrayListCollection which holds all of the foreground cells. When
+// sized with Contents.resize the individual ArrayLists are given enough
+// room that they can hold a single row with #cols glyphs, underlines, and
+// strikethroughs; however, appendAssumeCapacity MUST NOT be used since
+// it is possible to exceed this with combining glyphs that add a glyph
+// but take up no column since they combine with the previous one, as
+// well as with fonts that perform multi-substitutions for glyphs, which
+// can result in a similar situation where multiple glyphs reside in the
+// same column.
+//
+// Allocations should nevertheless be exceedingly rare since hitting the
+// initial capacity of a list would require a row filled with underlined
+// struck through characters, at least one of which is a multi-glyph
+// composite.
+//
+// Rows are indexed as Contents.fg_rows[y + 1], because the first list in
+// the collection is reserved for the cursor, which must be the first item
+// in the buffer.
+//
+// Must be initialized by calling resize on the Contents struct before
+// calling any operations.
+// Resize the cell contents for the given grid size. This will
+// always invalidate the entire cell contents.
+// The foreground lists can hold 3 types of items:
+// - Glyphs
+// - Underlines
+// - Strikethroughs
+// So we give them an initial capacity of size.columns * 3, which will
+// avoid any further allocations in the vast majority of cases. Sadly
+// we can not assume capacity though, since with combining glyphs that
+// form a single grapheme, and multi-substitutions in fonts, the number
+// of glyphs in a row is theoretically unlimited.
+//
+// We have size.rows + 2 lists because indexes 0 and size.rows - 1 are
+// used for special lists containing the cursor cell which need to
+// be first and last in the buffer, respectively.
+// We don't need 3*cols worth of cells for the cursor lists, so we can
+// replace them with smaller lists. This is technically a tiny bit of
+// extra work but resize is not a hot function so it's worth it to not
+// waste the memory.
+// Perform the swap, no going back from here.
+// Reset the cell contents to an empty state without resizing.
+// Set the cursor value. If the value is null then the cursor is hidden.
+// Block cursors should be drawn first
+// Other cursor styles should be drawn last
+// Returns the current cursor glyph if present, checking both cursor lists.
+// Access a background cell. Prefer this function over direct indexing
+// of `bg_cells` in order to avoid integer size bugs causing overflows.
+// Add a cell to the appropriate list. Adding the same cell twice will
+// result in duplication in the vertex buffer. The caller should clear
+// the corresponding row with Contents.clear to remove old cells first.
+// We have a special list containing the cursor cell at the start
+// of our fg row collection, so we need to add 1 to the y to get
+// the correct index.
+// Clear all of the cell contents for a given row.
+// We have a special list containing the cursor cell at the start
+// of our fg row collection, so we need to add 1 to the y to get
+// the correct index.
+// Returns true if a codepoint for a cell is a covering character. A covering
+// character is a character that covers the entire cell. This is used to
+// make window-padding-color=extend work better. See #2099.
+// U+2588 FULL BLOCK
+// Returns true of the codepoint is a "symbol-like" character, which
+// for now we define as anything in a private use area, and anything
+// in several unicode blocks:
+// - Arrows
+// - Dingbats
+// - Emoticons
+// - Miscellaneous Symbols
+// - Enclosed Alphanumerics
+// - Enclosed Alphanumeric Supplement
+// - Miscellaneous Symbols and Pictographs
+// - Transport and Map Symbols
+//
+// In the future it may be prudent to expand this to encompass more
+// symbol-like characters, and/or exclude some PUA sections.
+// Returns the appropriate `constraint_width` for
+// the provided cell when rendering its glyph(s).
+// If the grid width of the cell is 2, the constraint
+// width will always be 2, so we can just return early.
+// We allow "symbol-like" glyphs to extend to 2 cells wide if there's
+// space, and if the previous glyph wasn't also a symbol. So if this
+// codepoint isn't a symbol then we can return the grid width.
+// If we are at the end of the screen it must be constrained to one cell.
+// If we have a previous cell and it was a symbol then we need
+// to also constrain. This is so that multiple PUA glyphs align.
+// This does not apply if the previous symbol is a graphics
+// element such as a block element or Powerline glyph.
+// If the next cell is whitespace, then we
+// allow the glyph to be up to two cells wide.
+// Otherwise, this has to be 1 cell wide.
+// Whether min contrast should be disabled for a given glyph. True
+// for graphics elements such as blocks and Powerline glyphs.
+// Some general spaces, others intentionally kept
+// to force the font to render as a fixed width.
+// Returns true if the codepoint is used for terminal graphics, such
+// as box drawing characters, block elements, and Powerline glyphs.
+// Returns true if the codepoint is a box drawing character.
+// Returns true if the codepoint is a block element.
+// Returns true if the codepoint is in a Symbols for Legacy
+// Computing block, including supplements.
+// Returns true if the codepoint is a part of the Powerline range.
+// We should start off empty after resizing.
+// And the cursor row should have a capacity of 1 and also be empty.
+// Add some contents.
+// The fg row index is offset by 1 because of the cursor list.
+// And we should be able to clear it.
+// Add a block cursor.
+// And remove it.
+// Add a hollow cursor.
+// Set some contents
+// bg and fg cells in row 1
+// bg and fg cells in row 2
+// Clear row 1, this should leave row 2 untouched
+// Row 2 should still contain its cells.
+// Fg row index is +1 because of cursor list at start
+// Set some contents
+// bg and fg cells in row 1
+// bg and fg cells in row 2
+// Clear row 2, this should leave row 1 untouched
+// Row 1 should still contain its cells.
+// Fg row index is +1 because of cursor list at start
+// for each case, the numbers in the comment denote expected
+// constraint widths for the symbol-containing cells
+// symbol->nothing: 2
+// symbol->character: 1
+// symbol->space: 2
+// symbol->no-break space: 1
+// symbol->end of row: 1
+// character->symbol: 2
+// symbol->symbol: 1,1
+// symbol->space->symbol: 2,2
+// symbol->powerline: 1  (dedicated test because powerline is special-cased in cellpkg)
+// powerline->symbol: 2  (dedicated test because powerline is special-cased in cellpkg)
+// powerline->nothing: 2  (dedicated test because powerline is special-cased in cellpkg)
+// powerline->space: 2  (dedicated test because powerline is special-cased in cellpkg)
+//
+// --- Original Ghostty Comments End: src/renderer/cell.zig
+
+
 // ============================================================
 // Cell content types for GPU rendering
 // ============================================================

@@ -1,5 +1,244 @@
 module sprite
 
+// --- Original Ghostty Comments Start: src/font/sprite/draw/box.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/font/sprite/draw/box.zig
+//
+// Box Drawing | U+2500...U+257F
+// https://en.wikipedia.org/wiki/Box_Drawing
+//
+// ─━│┃┄┅┆┇┈┉┊┋┌┍┎┏
+// ┐┑┒┓└┕┖┗┘┙┚┛├┝┞┟
+// ┠┡┢┣┤┥┦┧┨┩┪┫┬┭┮┯
+// ┰┱┲┳┴┵┶┷┸┹┺┻┼┽┾┿
+// ╀╁╂╃╄╅╆╇╈╉╊╋╌╍╎╏
+// ═║╒╓╔╕╖╗╘╙╚╛╜╝╞╟
+// ╠╡╢╣╤╥╦╧╨╩╪╫╬╭╮╯
+// ╰╱╲╳╴╵╶╷╸╹╺╻╼╽╾╿
+//
+// Specification of a traditional intersection-style line/box-drawing char,
+// which can have a different style of line from each edge to the center.
+// '─'
+// '━'
+// '│'
+// '┃'
+// '┄'
+// '┅'
+// '┆'
+// '┇'
+// '┈'
+// '┉'
+// '┊'
+// '┋'
+// '┌'
+// '┍'
+// '┎'
+// '┏'
+// '┐'
+// '┑'
+// '┒'
+// '┓'
+// '└'
+// '┕'
+// '┖'
+// '┗'
+// '┘'
+// '┙'
+// '┚'
+// '┛'
+// '├'
+// '┝'
+// '┞'
+// '┟'
+// '┠'
+// '┡'
+// '┢'
+// '┣'
+// '┤'
+// '┥'
+// '┦'
+// '┧'
+// '┨'
+// '┩'
+// '┪'
+// '┫'
+// '┬'
+// '┭'
+// '┮'
+// '┯'
+// '┰'
+// '┱'
+// '┲'
+// '┳'
+// '┴'
+// '┵'
+// '┶'
+// '┷'
+// '┸'
+// '┹'
+// '┺'
+// '┻'
+// '┼'
+// '┽'
+// '┾'
+// '┿'
+// '╀'
+// '╁'
+// '╂'
+// '╃'
+// '╄'
+// '╅'
+// '╆'
+// '╇'
+// '╈'
+// '╉'
+// '╊'
+// '╋'
+// '╌'
+// '╍'
+// '╎'
+// '╏'
+// '═'
+// '║'
+// '╒'
+// '╓'
+// '╔'
+// '╕'
+// '╖'
+// '╗'
+// '╘'
+// '╙'
+// '╚'
+// '╛'
+// '╜'
+// '╝'
+// '╞'
+// '╟'
+// '╠'
+// '╡'
+// '╢'
+// '╣'
+// '╤'
+// '╥'
+// '╦'
+// '╧'
+// '╨'
+// '╩'
+// '╪'
+// '╫'
+// '╬'
+// '╭'
+// '╮'
+// '╯'
+// '╰'
+// '╱'
+// '╲'
+// '╳'
+// '╴'
+// '╵'
+// '╶'
+// '╷'
+// '╸'
+// '╹'
+// '╺'
+// '╻'
+// '╼'
+// '╽'
+// '╾'
+// '╿'
+// Top of light horizontal strokes
+// Bottom of light horizontal strokes
+// Top of heavy horizontal strokes
+// Bottom of heavy horizontal strokes
+// Top of the top doubled horizontal stroke (bottom is `h_light_top`)
+// Bottom of the bottom doubled horizontal stroke (top is `h_light_bottom`)
+// Left of light vertical strokes
+// Right of light vertical strokes
+// Left of heavy vertical strokes
+// Right of heavy vertical strokes
+// Left of the left doubled vertical stroke (right is `v_light_left`)
+// Right of the right doubled vertical stroke (left is `v_light_right`)
+// The bottom of the up line
+// The top of the down line
+// The right of the left line
+// The left of the right line
+// We overshoot the corners by a tiny bit, but we need to
+// maintain the correct slope, so we calculate that here.
+// We overshoot the corners by a tiny bit, but we need to
+// maintain the correct slope, so we calculate that here.
+// Fraction away from the center to place the middle control points,
+// +------------+
+// |            |
+// |            |
+// |            |
+// |            |
+// | --  --  -- |
+// |            |
+// |            |
+// |            |
+// |            |
+// +------------+
+// Our dashed line should be made such that when tiled horizontally
+// it creates one consistent line with no uneven gap or segment sizes.
+// In order to make sure this is the case, we should have half-sized
+// gaps on the left and right so that it is centered properly.
+// For N dashes, there are N - 1 gaps between them, but we also have
+// half-sized gaps on either side, adding up to N total gaps.
+// We need at least 1 pixel for each gap and each dash, if we don't
+// have that then we can't draw our dashed line correctly so we just
+// draw a solid line and return.
+// We never want the gaps to take up more than 50% of the space,
+// because if they do the dashes are too small and look wrong.
+// Our dashes should be centered vertically.
+// We start at half a gap from the left edge, in order to center
+// our dashes properly.
+// We'll distribute the extra space in to dash widths, 1px at a
+// time. We prefer this to making gaps larger since that is much
+// more visually obvious.
+// We distribute left-over size in to dash widths,
+// since it's less obvious there than in the gaps.
+// Advance by the width of the dash we drew and the width
+// of a gap to get the the start of the next dash.
+// +-----------+
+// |     |     |
+// |     |     |
+// |           |
+// |     |     |
+// |     |     |
+// |           |
+// |     |     |
+// |     |     |
+// |           |
+// +-----------+
+// Our dashed line should be made such that when tiled vertically it
+// it creates one consistent line with no uneven gap or segment sizes.
+// In order to make sure this is the case, we should have an extra gap
+// gap at the bottom.
+//
+// A single full-sized extra gap is preferred to two half-sized ones for
+// vertical to allow better joining to solid characters without creating
+// visible half-sized gaps. Unlike horizontal, centering is a lot less
+// important, visually.
+// Because of the extra gap at the bottom, there are as many gaps as
+// there are dashes.
+// We need at least 1 pixel for each gap and each dash, if we don't
+// have that then we can't draw our dashed line correctly so we just
+// draw a solid line and return.
+// We never want the gaps to take up more than 50% of the space,
+// because if they do the dashes are too small and look wrong.
+// Our dashes should be centered horizontally.
+// We start at the top of the cell.
+// We'll distribute the extra space in to dash heights, 1px at a
+// time. We prefer this to making gaps larger since that is much
+// more visually obvious.
+// We distribute left-over size in to dash widths,
+// since it's less obvious there than in the gaps.
+// Advance by the height of the dash we drew and the height
+// of a gap to get the the start of the next dash.
+//
+// --- Original Ghostty Comments End: src/font/sprite/draw/box.zig
+
+
 // Block Elements | U+2580...U+259F
 // https://en.wikipedia.org/wiki/Block_Elements
 //

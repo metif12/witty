@@ -1,5 +1,185 @@
 module renderer
 
+// --- Original Ghostty Comments Start: src/renderer/Thread.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/renderer/Thread.zig
+//
+// Represents the renderer thread logic. The renderer thread is able to
+// be woken up to render.
+// Whether calls to `drawFrame` must be done from the app thread.
+//
+// If this is `true` then we send a `redraw_surface` message to the apprt
+// whenever we need to draw instead of calling `drawFrame` directly.
+// The type used for sending messages to the IO thread. For now this is
+// hardcoded with a capacity. We can make this a comptime parameter in
+// the future if we want it configurable.
+// Allocator used for some state
+// The main event loop for the application. The user data of this loop
+// is always the allocator used to create the loop. This is a convenience
+// so that users of the loop always have an allocator.
+// This can be used to wake up the renderer and force a render safely from
+// any thread.
+// This can be used to stop the renderer on the next loop iteration.
+// The timer used for rendering
+// The timer used for draw calls. Draw calls don't update from the
+// terminal state so they're much cheaper. They're used for animation
+// and are paused when the terminal is not focused.
+// This async is used to force a draw immediately. This does not
+// coalesce like the wakeup does.
+// The timer used for cursor blinking
+// The surface we're rendering to.
+// The underlying renderer implementation.
+// Pointer to the shared state that is used to generate the final render.
+// The mailbox that can be used to send this thread messages. Note
+// this is a blocking queue so if it is full you will get errors (or block).
+// Mailbox to send messages to the app thread
+// Configuration we need derived from the main config.
+// This is true when a blinking cursor should be visible and false
+// when it should not be visible. This is toggled on a timer by the
+// thread automatically.
+// This is true when the inspector is active.
+// This is true when the view is visible. This is used to determine
+// if we should be rendering or not.
+// This is true when the view is focused. This defaults to true
+// and it is up to the apprt to set the correct value.
+// Initialize the thread. This does not START the thread. This only sets
+// up all the internal state necessary prior to starting the thread. It
+// is up to the caller to start the thread with the threadMain entrypoint.
+// Create our event loop.
+// This async handle is used to "wake up" the renderer and force a render.
+// This async handle is used to stop the loop and force the thread to end.
+// The primary timer for rendering.
+// Draw timer, see comments.
+// Draw now async, see comments.
+// Setup a timer for blinking the cursor
+// The mailbox for messaging this thread
+// Clean up the thread. This is only safe to call once the thread
+// completes executing; the caller must join prior to this.
+// Nothing can possibly access the mailbox anymore, destroy it.
+// The main entrypoint for the thread.
+// Call child function so we can use errors...
+// In the future, we should expose this on the thread struct.
+// Right now, on Darwin, `std.Thread.setName` can only name the current
+// thread, and we have no way to get the current thread from within it,
+// so instead we use this code to name the thread instead.
+// Setup our crash metadata
+// Setup our thread QoS
+// Run our loop start/end callbacks if the renderer cares.
+// Run our thread start/end callbacks. This is important because some
+// renderers have to do per-thread setup. For example, OpenGL has to set
+// some thread-local state since that is how it works.
+// Start the async handlers
+// Send an initial wakeup message so that we render right away.
+// Start blinking the cursor.
+// Start the draw timer
+// Run
+// Thread QoS classes are only relevant on macOS.
+// If we aren't visible (our view is fully occluded) then we
+// always drop our rendering priority down because it's just
+// mostly wasted work.
+//
+// The renderer itself should be doing this as well (for example
+// Metal will stop our DisplayLink) but this also helps with
+// general forced updates and CPU usage i.e. a rebuild cells call.
+// If we're not focused, but we're visible, then we set a higher
+// than default priority because framerates still matter but it isn't
+// as important as when we're focused.
+// We are focused and visible, we are the definition of user interactive.
+// If our renderer supports animations and has them, then we
+// always have a draw timer.
+// If our config says to always animate, we do so.
+// Always animate
+// Only when focused
+// Never animate
+// We're skipping the draw timer. Stop it on the next iteration.
+// Set our active state so it knows we're running. We set this before
+// even checking the active state in case we have a pending shutdown.
+// If our draw timer is already active, then we don't have to do anything.
+// Start the timer which loops
+// Drain the mailbox.
+// There's probably a more elegant way to do this...
+//
+// This is effectively an @autoreleasepool{} block, which we need in
+// order to ensure that autoreleased objects are properly released.
+// If our state didn't change we do nothing.
+// Set our visible state
+// Visibility affects our QoS class
+// If we became visible then we immediately trigger a draw.
+// We don't need to update frame data because that should
+// still be happening.
+// Notify the renderer so it can update any state.
+// Note that we're explicitly today not stopping any
+// cursor timers, draw timers, etc. These things have very
+// little resource cost and properly maintaining their active
+// state across different transitions is going to be bug-prone,
+// so its easier to just let them keep firing and have them
+// check the visible state themselves to control their behavior.
+// If our state didn't change we do nothing.
+// Set our state
+// Focus affects our QoS class
+// Set it on the renderer
+// We always resync our draw timer (may disable it)
+// If we're not focused, then we stop the cursor blink
+// If we're focused, we immediately show the cursor again
+// and then restart the timer.
+// Stop and start the draw timer to capture the new
+// hasAnimations value.
+// Note we don't free the new value because we expect our
+// allocators to match.
+// Note we don't free the new value because we expect our
+// allocators to match.
+// Trigger a draw. This will not update frame data or anything, it will
+// just trigger a draw/paint.
+// If we're invisible, we do not draw.
+// If the renderer is managing a vsync on its own, we only draw
+// when we're forced to via `now`.
+// When we wake up, we check the mailbox. Mailbox producers should
+// wake up our thread after publishing.
+// Render immediately
+// The below is not used anymore but if we ever want to introduce
+// a configuration to introduce a delay to coalesce renders, we can
+// use this.
+//
+// // If the timer is already active then we don't have to do anything.
+// if (t.render_c.state() == .active) return .rearm;
+//
+// // Timer is not active, let's start it
+// t.render_h.run(
+//     &t.loop,
+//     &t.render_c,
+//     10,
+//     Thread,
+//     t,
+//     renderCallback,
+// );
+// Draw immediately
+// This shouldn't happen so we log it.
+// Draw
+// Only continue if we're still active
+// This shouldn't happen so we log it.
+// Update our frame data
+// Draw
+// This is sent when our timer is canceled. That's fine.
+// This shouldn't happen so we log it.
+// This makes it easier to work across platforms where different platforms
+// support different sets of errors, so we just unify it.
+// fn prepFrameCallback(h: *libuv.Prepare) void {
+//     _ = h;
+//
+//     tracy.frameMark();
+// }
+// Returns the interval for the blinking cursor in milliseconds.
+// If we're running under Valgrind, the cursor blink adds enough
+// churn that it makes some stalls annoying unless you're on a
+// super powerful computer, so we delay it.
+//
+// This is a hack, we should change some of our cursor timer
+// logic to be more efficient:
+// https://github.com/ghostty-org/ghostty/issues/8003
+//
+// --- Original Ghostty Comments End: src/renderer/Thread.zig
+
+
 import configpkg
 
 // Constants for renderer thread timing.

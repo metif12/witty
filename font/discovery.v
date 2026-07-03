@@ -1,5 +1,214 @@
 module font
 
+// --- Original Ghostty Comments Start: src/font/discovery.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/font/discovery.zig
+//
+// Discover implementation for the compile options.
+// Descriptor is used to search for fonts. The only required field
+// is "family". The rest are ignored unless they're set to a non-zero
+// value.
+// Font family to search for. This can be a fully qualified font
+// name such as "Fira Code", "monospace", "serif", etc. Memory is
+// owned by the caller and should be freed when this descriptor
+// is no longer in use. The discovery structs will never store the
+// descriptor.
+//
+// On systems that use fontconfig (Linux), this can be a full
+// fontconfig pattern, such as "Fira Code-14:bold".
+// Specific font style to search for. This will filter the style
+// string the font advertises. The "bold/italic" booleans later in this
+// struct filter by the style trait the font has, not the string, so
+// these can be used in conjunction or not.
+// A codepoint that this font must be able to render.
+// Font size in points that the font should support. For conversion
+// to pixels, we will use 72 DPI for Mac and 96 DPI for everything else.
+// (If pixel conversion is necessary, i.e. emoji fonts)
+// True if we want to search specifically for a font that supports
+// specific styles.
+// Variation axes to apply to the font. This also impacts searching
+// for fonts since fonts with the ability to set these variations
+// will be preferred, but not guaranteed.
+// Hash the descriptor with the given hasher.
+// This is not correct, but we don't currently depend on the
+// hash value being different based on decimal values of variations.
+// Returns a hash code that can be used to uniquely identify this
+// action.
+// Deep copy of the struct. The given allocator is expected to
+// be an arena allocator of some sort since the descriptor
+// itself doesn't support fine-grained deallocation of fields.
+// We can't do any errdefer cleanup in here. As documented we
+// expect the allocator to be an arena so any errors should be
+// cleaned up somewhere else.
+// Convert to Fontconfig pattern to use for lookup. The pattern does
+// not have defaults filled/substituted (Fontconfig thing) so callers
+// must still do this.
+// For fontconfig, we always add monospace in the pattern. Since
+// fontconfig sorts by closeness to the pattern, this doesn't fully
+// exclude non-monospace but helps prefer it.
+// Convert to Core Text font descriptor to use for lookup or
+// conversion to a specific font.
+// Family
+// Style
+// Codepoint support
+// Set our size attribute if set
+// Build our traits. If we set any, then we store it in the attributes
+// otherwise we do nothing. We determine this by setting up the packed
+// struct, converting to an int, and checking if it is non-zero.
+// Setting traits is a pain. We have to create a nested dictionary
+// of the symbolic traits value, and set that in our attributes.
+// safe to call multiple times and concurrently
+// Discover fonts from a descriptor. This returns an iterator that can
+// be used to build up the deferred fonts.
+// Build our pattern that we'll search for
+// Search
+// Get the copied pattern from our fontset that has the
+// attributes configured for rendering.
+// Increment after we return
+// Required for the "interface" but does nothing for CoreText.
+// Discover fonts from a descriptor. This returns an iterator that can
+// be used to build up the deferred fonts.
+// Build our pattern that we'll search for
+// Our descriptors have to be in an array
+// Build our collection
+// Sort our descriptors
+// If we have a codepoint within the CJK unified ideographs block
+// then we fallback to macOS to find a font that supports it because
+// there isn't a better way manually with CoreText that I can find that
+// properly takes into account system locale.
+//
+// References:
+// - http://unicode.org/charts/PDF/U4E00.pdf
+// - https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/fonts/LocaleInFonts.md#unified-han-ideographs
+// This is silly but our discover iterator needs a slice so
+// we allocate here. This isn't a performance bottleneck but
+// this is something we can optimize very easily...
+// If our normal discovery doesn't find anything and we have a specific
+// codepoint, then fallback to using CTFontCreateForString to find a
+// matching font CoreText wants to use. See:
+// https://github.com/ghostty-org/ghostty/issues/2499
+// Discover a font for a specific codepoint using the CoreText
+// CTFontCreateForString API.
+// If we have freetype, we can't use CoreText to find a font
+// that supports a specific codepoint because we need to
+// have a CoreText font to be able to do so.
+// Get our original font. This is dependent on the requested style
+// from the descriptor.
+// In all the styles below, we try to match it but if we don't
+// we always fall back to some other option. The order matters
+// here.
+// We need it in utf8 format
+// We need a CFString
+// Get our range length for CTFontCreateForString. It looks like
+// the range uses UTF-16 codepoints and not UTF-32 codepoints.
+// Get our font
+// Do not allow the last resort font to go through. This is the
+// last font used by CoreText if it can't find anything else and
+// only contains replacement characters.
+// If the name doesn't fit in our buffer, then it can't
+// be the last resort font so we break out.
+// If the name is "LastResort" then we don't want to use it.
+// Get the descriptor
+// We need to retain because once the list is freed it will
+// release all its members.
+// Higher score is "less" (earlier)
+// We represent our sorting score as a packed struct so that we
+// can compare scores numerically but build scores symbolically.
+//
+// Note that packed structs store their fields from least to most
+// significant, so the fields here are defined in increasing order
+// of precedence.
+// Number of glyphs in the font, if two fonts have identical
+// scores otherwise then we prefer the one with more glyphs.
+//
+// (Number of glyphs clamped at u16 intmax)
+// A fuzzy match on the style string, less important than
+// an exact match, and less important than trait matches.
+// Whether the bold-ness of the font matches the descriptor.
+// This is less important than italic because a font that's italic
+// when it shouldn't be or not italic when it should be is a bigger
+// problem (subjectively) than being the wrong weight.
+// Whether the italic-ness of the font matches the descriptor.
+// This is less important than an exact match on the style string
+// because we want users to be allowed to override trait matching
+// for the bold/italic/bold italic styles if they want.
+// An exact (case-insensitive) match on the style string.
+// Whether the font is monospace, this is more important than any of
+// the other fields unless we're looking for a specific codepoint,
+// in which case that is the most important thing.
+// If we're looking for a codepoint, whether this font has it.
+// We always load the font if we can since some things can only be
+// inspected on the font itself. Fonts that can't be loaded score
+// 0 automatically because we don't want a font we can't load.
+// We prefer fonts with more glyphs, all else being equal.
+// If we're searching for a codepoint, then we
+// prioritize fonts that have that codepoint.
+// Turn UTF-32 into UTF-16 for CT API
+// Get our glyphs
+// Get our symbolic traits for the descriptor so we can
+// compare boolean attributes like bold, monospace, etc.
+// We try to derived data from the font itself, which is generally
+// more reliable than only using the symbolic traits for this.
+// We start with initial guesses based on the symbolic traits,
+// but refine these with more information if we can get it.
+// Read the 'head' table out of the font data if it's available.
+// Read the 'OS/2' table out of the font data if it's available.
+// Check if we have variation axes in our descriptor, if we
+// do then we can derive weight italic-ness or both from them.
+// Copy the variation values for this instance of the font.
+// if there are none then we just break out immediately.
+// If we see the 'ital' value then we ignore 'slnt'.
+// Default value
+// Value in this font
+// Somewhat subjective threshold, we consider fonts
+// bold if they have a 'wght' set greater than 600.
+// Arbitrary threshold of anything more than a 5
+// degree clockwise slant is considered italic.
+// Get the style string from the font.
+// The first string in this slice will be used for the exact match,
+// and for the fuzzy match, all matching substrings will increase
+// the rank.
+// If we don't have an explicitly desired style name, we base
+// it on the bold and italic properties, this isn't ideal since
+// fonts may use style names other than these, but it helps in
+// some edge cases.
+// Our "fuzzy match" score is 0 if the desired style isn't present
+// in the string, otherwise we give higher priority for styles that
+// have fewer characters not in the desired_styles list.
+// Get our descriptor. We need to remove the character set
+// limitation because we may have used that to filter but we
+// don't want it anymore because it'll restrict the characters
+// available.
+// We create a copy, overwriting the character set attribute.
+// Create our font. We need a size to initialize it so we use size
+// 12 but we will alter the size later.
+// Increment after we return
+// The first result should have the codepoint. Later ones may not
+// because fontconfig returns all fonts sorted.
+// Should have other codepoints too
+// The first result should have the codepoint. Later ones may not
+// because fontconfig returns all fonts sorted.
+// Should have other codepoints too
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!//
+// FIXME: Disabled for now because SF Pro is not available in CI
+//        The solution likely involves directly testing that the
+//        `sortMatchingDescriptors` function sorts a bundled test
+//        font correctly, instead of relying on the system fonts.
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!//
+// We try to get a Regular, Italic, Bold, & Bold Italic version of SF Pro,
+// which should be installed on all Macs, and has many styles which makes
+// it a good test, since there will be many results for each discovery.
+// Regular
+// Regular Italic
+//
+// NOTE: This makes sure that we don't accidentally prefer "Thin Italic",
+//       which we previously did, because it has a shorter name.
+// Bold
+// Bold Italic
+//
+// --- Original Ghostty Comments End: src/font/discovery.zig
+
+
 // Font discovery system for finding fonts on the system.
 //
 // Supports two backends:

@@ -1,5 +1,99 @@
 module kitty
 
+// --- Original Ghostty Comments Start: src/terminal/kitty/graphics_exec.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/terminal/kitty/graphics_exec.zig
+//
+// Execute a Kitty graphics command against the given terminal. This
+// will never fail, but the response may indicate an error and the
+// terminal state may not be updated to reflect the command. This will
+// never put the terminal in an unrecoverable state, however.
+//
+// The allocator must be the same allocator that was used to build
+// the command.
+// If storage is disabled then we disable the full protocol. This means
+// we don't even respond to queries so the terminal completely acts as
+// if this feature is not supported.
+// The quiet settings used to control the response. We have to make this
+// a var because in certain special cases (namely chunked transmissions)
+// this can change.
+// If we're transmitting, then our `q` setting value is complicated.
+// The `q` setting inherits the value from the starting command
+// unless `q` is set >= 1 on this command. If it is, then we save
+// that as the new `q` setting.
+// q=0 we use whatever the start command value is
+// q>=1 we use the new value, but we should already be set to it
+// Handle the quiet settings
+// Execute a "query" command.
+//
+// This command is used to attempt to load an image and respond with
+// success/error but does not persist any of the command to the terminal
+// state.
+// Query requires image ID. We can't actually send a response without
+// an image ID either but we return an error and this will be logged
+// downstream.
+// Build a partial response to start
+// Attempt to load the image. If we cannot, then set an appropriate error.
+// Transmit image data.
+//
+// This loads the image, validates it, and puts it into the terminal
+// screen storage. It does not display the image.
+// If we're also displaying, then do that now. This function does
+// both transmit and transmit and display. The display might also be
+// deferred if it is multi-chunk.
+// If there are more chunks expected we do not respond.
+// If the loaded image was assigned its ID automatically, not based
+// on a number or explicitly specified ID, then we don't respond.
+// After the image is added, set the ID in case it changed.
+// The resulting image number and placement ID never change.
+// Display a previously transmitted image.
+// Display requires image ID or number.
+// Build up our response
+// Verify the requested image exists if we have an ID
+// Make sure our response has the image id in case we looked up by number
+// Location where the placement will go.
+// Virtual placements are not tracked
+// Track a new pin for our cursor. The cursor is always tracked but we
+// don't want this one to move with the cursor.
+// Add the placement
+// Apply cursor movement setting. This only applies to pin placements.
+// We use terminal.index to properly handle scroll regions.
+// Display a previously transmitted image.
+// Delete never responds on success
+// Determine our image. This also handles chunking and early exit.
+// Note: we do NOT want to call "cmd.toOwnedData" here because
+// we're _copying_ the data. We want the command data to be freed.
+// If we have more then we're done
+// We have no more chunks. We're going to be completing the
+// image so we want to destroy the pointer to the loading
+// image and copy it out.
+// We only want to deinit on error. If we're chunking, then we don't
+// want to deinit at all. If we're not chunking, then we'll deinit
+// after we've copied the image out.
+// If the image has no ID, we assign one
+// If the image also has no number then its auto-ID is "implicit".
+// See the doc comment on the Image.implicit_id field for more detail.
+// If this is chunked, this is the beginning of a new chunked transmission.
+// (We checked for an in-progress chunk above.)
+// We allocate the pointer on the heap because its rare and we
+// don't want to always pay the memory cost to keep it around.
+// Dump the image data before it is decompressed
+// loading.debugDump() catch unreachable;
+// Validate and store our image
+// Get our display settings
+// Ensure we deinit the loading state because we're done. The image
+// won't be deinit because of "complete" above.
+// Encode an error code into a message for a response.
+// Initial chunk has q=1
+// Subsequent chunk has no q but should respect initial
+// Initial chunk has q=0
+// Subsequent chunk has no q so should respond OK
+// Initial chunk has q=0
+// Subsequent chunk sets q=1 so should not respond
+//
+// --- Original Ghostty Comments End: src/terminal/kitty/graphics_exec.zig
+
+
 // Kitty graphics protocol execution.
 //
 // Source: kitty/graphics_exec.zig

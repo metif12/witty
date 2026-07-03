@@ -1,5 +1,133 @@
 module search
 
+// --- Original Ghostty Comments Start: src/datastruct/circ_buf.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/datastruct/circ_buf.zig
+//
+// Returns a circular buffer containing type T.
+// Implementation note: there's a lot of unsafe addition of usize
+// here in this implementation that can technically overflow. If someone
+// wants to fix this and make it overflow safe (use subtractions for
+// checks prior to additions) then I welcome it. In reality, we'd
+// have to be a really, really large terminal screen to even worry
+// about this so I'm punting it.
+// We could remove this and just use math with head/tail to figure
+// it out, but our usage of circular buffers stores so much data that
+// this minor overhead is not worth optimizing out.
+// Get our index from the tail
+// Translate the tail index to a storage index
+// Seek the iterator by a given amount. This will clamp
+// the values to the bounds of the buffer so overflows are
+// not possible.
+// Reset the iterator back to the first value.
+// Initialize a new circular buffer that can store size elements.
+// Append a single value to the buffer. If the buffer is full,
+// an error will be returned.
+// Append a single value to the buffer, assuming there is capacity.
+// Append a slice to the buffer.
+// Clear the buffer.
+// Iterate over the circular buffer.
+// Get the first (oldest) value in the buffer.
+// Note: this can be more efficient by not using the
+// iterator, but this was an easy way to implement it.
+// Get the last (newest) value in the buffer.
+// Note: this can be more efficient by not using the
+// iterator, but this was an easy way to implement it.
+// Ensures that there is enough capacity to store amount more
+// items via append.
+// Resize the buffer to the given size (larger or smaller).
+// If larger, new values will be set to the default value.
+// Rotate to zero so it is aligned.
+// Reallocate, this adds to the end so we're ready to go.
+// If we grew, we need to set our new defaults. We can add it
+// at the end since we rotated to start.
+// Fix up our head/tail
+// Rotate the data so that it is zero-aligned.
+// If we're already at zero then do nothing.
+// We use std.mem.rotate to rotate our storage in-place.
+// Then fix up our head and tail.
+// Returns if the buffer is currently empty. To check if its
+// full, just check the "full" attribute.
+// Returns the total capacity allocated for this buffer.
+// Returns the length in elements that are used.
+// Delete the oldest n values from the buffer. If there are less
+// than n values in the buffer, it'll delete everything.
+// Special case n == 0 otherwise we will accidentally break
+// our circular buffer.
+// Clear the values back to default
+// If we're not full, we can just advance the tail. We know
+// it'll be less than the length because otherwise we'd be full.
+// Returns a pointer to the value at offset with the given length,
+// and considers this full amount of data "written" if it is beyond
+// the end of our buffer. This never "rotates" the buffer because
+// the offset can only be within the size of the buffer.
+// Special case the empty slice fast-path.
+// Note: this assertion is very important, it hints the compiler
+// which generates ~10% faster code than without it.
+// End offset is the last offset (exclusive) for our slice.
+// We use exclusive because it makes the math easier and it
+// matches Zigs slicing parameterization.
+// If our slice can't fit it in our length, then we need to advance.
+// Our start and end indexes into the storage buffer
+// std.log.warn("A={} B={}", .{ start_idx, end_idx });
+// Optimistically, our data fits in one slice
+// Advances the head/tail so that we can store amount.
+// Optimistically add our amount
+// If we exceeded the length of the buffer, wrap around.
+// If we're full, we have to keep tail lined up.
+// We're full if the head reached the tail. The head can never
+// pass the tail because advance asserts amount is only in
+// available space left
+// For a given offset from zero, this returns the offset in the
+// storage buffer where this data can be found.
+// This should be subtraction ideally to avoid overflows but
+// it would take a really, really, huge buffer to overflow.
+// Empty
+// Partially full
+// Full
+// Delete and add
+// Empty
+// Partially full
+// Full
+// Delete and add
+// Fill the buffer
+// Delete
+// Fill the buffer
+// Delete
+// Get a slice that doesn't grow
+// Get a slice that does grow, and forces wrap
+// should be empty
+// Get a slice across boundaries
+// Fill the buffer
+// Delete
+// Rotate to zero
+// Fill the buffer
+// Delete all
+// Refill to force a wrap
+// Rotate to zero
+// Fill the buffer
+// Delete all
+// Refill to force a wrap
+// Rotate to zero
+// Resize
+// Fill and write
+// Resize
+// Fill and write
+// Resize
+// Appending an empty slice to empty buffer should be a no-op
+// Buffer should still work normally after appending empty slice
+// Appending an empty slice to non-empty buffer should also be a no-op
+// getPtrSlice with zero length on empty buffer should return empty slices
+// Fill buffer partially
+// getPtrSlice with zero length on non-empty buffer should also work
+// deleteOldest(0) on empty buffer should be a no-op
+// Fill buffer
+// deleteOldest(0) on non-empty buffer should be a no-op
+// Verify data is unchanged
+//
+// --- Original Ghostty Comments End: src/datastruct/circ_buf.zig
+
+
 // Circular buffer implementations for the search sliding window.
 //
 // DataBuf stores encoded page text (bytes) and MetaBuf stores page

@@ -1,5 +1,112 @@
 module sprite
 
+// --- Original Ghostty Comments Start: src/font/sprite/Face.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/font/sprite/Face.zig
+//
+// This implements the built-in "sprite face". This font renders
+// the built-in glyphs for the terminal, such as box drawing fonts, as well
+// as specific sprites that are part of our rendering model such as
+// text decorations (underlines).
+//
+// This isn't really a "font face" so much as it is quacks like a font
+// face with regards to how it works with font.Group. We don't use any
+// dynamic dispatch so it isn't truly an interface but the functions
+// and behaviors are close enough to a system face that it makes it easy
+// to integrate with font.Group. This is desirable so that higher level
+// processes such as GroupCache, Shaper, etc. don't need to be aware of
+// special sprite handling and just treat it like a normal font face.
+// Grid metrics for rendering sprites.
+// Something went wrong while doing math.
+// A function that draws a glyph on the provided canvas.
+// Automatically collect ranges for functions with names
+// in the format `draw<CP>` or `draw<MIN>_<MAX>`.
+// Structs containing drawing functions for codepoint ranges.
+// Count how many draw fns we have
+// Make an array and collect ranges for each function.
+// Sort ranges in ascending order
+// Ensure there's no overlapping ranges
+// We need to copy in to a const rather than a var in order to take
+// the reference at comptime so that we can break with a slice here.
+// For special sprites (cursors, underlines, etc.) all sprites are drawn
+// by functions from `Special` that share the name of the enum field.
+// Pray that the compiler is smart enough to
+// turn this in to a jump table or something...
+// Returns true if the codepoint exists in our sprite font.
+// We ignore presentation. No matter what presentation is
+// requested we always provide glyphs for our codepoints.
+// Render the glyph.
+// It should be impossible for this to be null and we assert that
+// in runtime safety modes but in case it is its not worth memory
+// corruption so we return a valid, blank glyph.
+// We adjust our sprite width based on the cell width.
+// Make a canvas of the desired size
+// Write the drawing to the atlas
+// Used in `testDrawRanges`, checks for diff between the provided atlas
+// and the reference file for the range, returns true if there is a diff.
+// Get the file contents, we compare the PNG data first in
+// order to ensure that no one smuggles arbitrary binary
+// data in to the reference PNGs.
+// Get the reference file contents to compare.
+// Copy the test PNG in to the CWD so it isn't
+// cleaned up with the rest of the tmp dir files.
+// Do our PNG bytes comparison, if it's the same then we can
+// move on, otherwise we'll decode the reference file and do
+// a pixel-for-pixel diff.
+// Copy the test PNG in to the CWD so it isn't
+// cleaned up with the rest of the tmp dir files.
+// Use wuffs to decode the reference PNG to raw pixels.
+// These will be RGBA, so when diffing we can just compare
+// every fourth byte.
+// We'll make a visual representation of the diff using
+// red for removed pixels and green for added. We make
+// a z2d surface for that here.
+// If the pixels match, write it as a faded gray.
+// Otherwise put the reference value in the red
+// channel and the new value in the green channel.
+// If the PNG data differs but not the raw pixels, that's
+// a big red flag, since it could mean someone is trying to
+// smuggle binary data in to the test files.
+// Drop the diff image as a PNG in the cwd.
+// Draws all ranges in to a set of 16x16 glyph atlases, checks for regressions
+// against reference files, logs errors and exposes a diff for any difference
+// between the reference and test atlas.
+//
+// Returns true if there was a diff.
+// Fudged number, not used in anything we care about here.
+// Canvas to draw glyphs on, we'll reuse this for all glyphs.
+// We render glyphs in batches of 256, which we copy (including padding) to
+// a 16 by 16 surface to be compared with the reference file for that range.
+// Try to make the sprite_face_test folder if it doesn't already exist.
+// We set this to true if we have any fails so we can
+// return an error after we're done comparing all glyphs.
+// If we've moved to a new batch of 256, check the
+// current one and clear the surface for the next one.
+// Export to our tmp dir.
+// This test is way too slow to run under Valgrind, unfortunately.
+// Renders all sprites to an atlas and compares
+// it to a ground truth for regression testing.
+// testDrawRanges(width, ascent, descent, thickness):
+//
+// We compare 4 different sets of metrics;
+// - even cell size / even thickness
+// - even cell size / odd thickness
+// - odd cell size / even thickness
+// - odd cell size / odd thickness
+// (Also a decreasing range of sizes.)
+// test "sprite face print all sprites" {
+//     std.debug.print("\n\n", .{});
+//     inline for (ranges) |range| {
+//         for (range.min..range.max + 1) |cp| {
+//             std.debug.print("{u}", .{ @as(u21, @intCast(cp)) });
+//         }
+//     }
+//     std.debug.print("\n\n", .{});
+// }
+//
+// --- Original Ghostty Comments End: src/font/sprite/Face.zig
+
+
 // This implements the built-in "sprite face". This font renders
 // the built-in glyphs for the terminal, such as box drawing fonts, as well
 // as specific sprites that are part of our rendering model such as

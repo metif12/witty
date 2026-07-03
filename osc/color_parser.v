@@ -1,5 +1,104 @@
 module osc
 
+// --- Original Ghostty Comments Start: src/terminal/osc/parsers/color.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/terminal/osc/parsers/color.zig
+//
+// The possible operations we support for colors.
+// Parse OSCs 4, 5, 10-19, 104, 110-119
+// If we've collected any extra data parse that, otherwise use an empty
+// string.
+// Check and make sure that we're parsing the correct OSCs
+// Parse any color operation string. This should NOT include the operation
+// itself, but only the body of the operation. e.g. for "4;a;b;c" the body
+// should be "a;b;c" and the operation should be set accordingly.
+//
+// Color parsing is fairly complicated so we pull this out to a specialized
+// function rather than go through our OSC parsing state machine. This is
+// much slower and requires more memory (since we need to buffer the full
+// request) but grants us an easier to understand and testable implementation.
+//
+// If color changing ends up being a bottleneck we can optimize this later.
+// OSC 4/5
+// Note: in ANY error scenario below we return the accumulated results.
+// This matches the xterm behavior (see misc.c ChangeAnsiColorRequest)
+// We expect a `c; spec` pair. If either doesn't exist then
+// we return the results up to this point.
+// Color must be numeric. u9 because that'll fit our palette + special
+// Parse the color.
+// OSC5 maps directly to the Special enum.
+// OSC4 maps 0-255 to palette, 256-259 to special offset
+// by the palette count.
+// "?" always results in a query.
+// OSC 104/105: Reset ANSI Colors
+// Note: xterm stops parsing the reset list on any error, but we're
+// more flexible and try the next value. This matches the behavior of
+// Kitty and I don't see a downside to being more flexible here. Hopefully
+// no one depends on the exact behavior of xterm.
+// If no parameters are given, we reset the full table.
+// Empty color strings are ignored, not treated as an error.
+// Color must be numeric. u9 because that'll fit our palette + special
+// Parse the color.
+// OSC105 maps directly to the Special enum.
+// OSC104 maps 0-255 to palette, 256-259 to special offset
+// by the palette count.
+// OSC 10-19: Get/Set Dynamic Colors
+// Note: in ANY error scenario below we return the accumulated results.
+// This matches the xterm behavior (see misc.c ChangeColorsRequest)
+// Each successive value uses the next color so long as it exists.
+// OSC 110-119: Reset Dynamic Colors
+// A segmented list is used to avoid copying when many operations
+// are given in a single OSC. In most cases, OSC 4/104/etc. send
+// very few so the prealloc is optimized for that.
+//
+// The exact prealloc value is chosen arbitrarily assuming most
+// color ops have very few. If we can get empirical data on more
+// typical values we can switch to that.
+// A single operation related to the terminal color palette.
+// Test every palette index
+// Simple color set
+// printf '\e]4;0;red\\'
+// Simple color query
+// printf '\e]4;0;?\\'
+// Trailing invalid data produces results up to that point
+// printf '\e]4;0;red;\e\\'
+// Whitespace doesn't produce a working value in xterm but we
+// allow it because Kitty does and it seems harmless.
+//
+// printf '\e]4;0;red \e\\'
+// Test every special color
+// Simple color set
+// printf '\e]4;256;red\\'
+// Test every special color
+// Simple color set
+// printf '\e]4;256;red\\'
+// printf '\e]4;0;red;1;blue\e\\'
+// Multiple requests with same index overwrite each other
+// printf '\e]4;0;red;0;blue\e\\'
+// Test every palette index
+// Simple color set
+// printf '\e]104;0\\'
+// Test every special color
+// Simple color set
+// printf '\e]104;256\\'
+// OSC 10-19: Get/Set Dynamic Colors
+// Example script:
+// printf '\e]10;red\e\\'
+// Example script:
+// printf '\e]11;red;blue\e\\'
+// OSC 110-119: Reset Dynamic Colors
+// Example script:
+// printf '\e]110\e\\'
+// xterm allows a trailing semicolon. script to verify:
+//
+// printf '\e]110;\e\\'
+// xterm does NOT allow any whitespace
+//
+// printf '\e]110 \e\\'
+//
+// --- Original Ghostty Comments End: src/terminal/osc/parsers/color.zig
+
+
 // OSC color operations to set, reset, or report color settings.
 //
 // Currently, these OSCs are handled by color operations:

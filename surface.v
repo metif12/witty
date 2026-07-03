@@ -1,4 +1,1439 @@
 // Surface represents a single terminal "surface". A terminal surface is
+
+// --- Original Ghostty Comments Start: src/Surface.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/Surface.zig
+//
+// Surface represents a single terminal "surface". A terminal surface is
+// a minimal "widget" where the terminal is drawn and responds to events
+// such as keyboard and mouse. Each surface also creates and owns its pty
+// session.
+//
+// The word "surface" is used because it is left to the higher level
+// application runtime to determine if the surface is a window, a tab,
+// a split, a preview pane in a larger window, etc. This struct doesn't care:
+// it just draws and responds to events. The events come from the application
+// runtime so the runtime can determine when and how those are delivered
+// (i.e. with focus, without focus, and so on).
+// The renderer implementation to use.
+// Minimum window size in cells. This is used to prevent the window from
+// being resized to a size that is too small to be useful. These defaults
+// are chosen to match the default size of Mac's Terminal.app, but is
+// otherwise somewhat arbitrary.
+// The maximum number of key tables that can be active at any
+// given time. `activate_key_table` calls after this are ignored.
+// Allocator
+// The app that this surface is attached to.
+// The windowing system surface and app.
+// The font structures
+// This keeps track of if the font size was ever modified. If it wasn't,
+// then config reloading will change the font. If it was manually adjusted,
+// we don't change it on config reload since we assume the user wants
+// a specific size.
+// The renderer for this surface.
+// The render state
+// The renderer thread manager
+// The actual thread
+// Mouse state.
+// Keyboard input state.
+// A currently pressed key. This is used so that we can send a keyboard
+// release event when the surface is unfocused. Note that when the surface
+// is refocused, a key press event may not be sent again -- this depends
+// on the apprt (UI framework) in use, but we want to consistently send
+// a release.
+//
+// This is only sent when a keypress event results in a key event being
+// sent to the pty. If it is consumed by a keybinding or other action,
+// this is not set.
+//
+// Also note the utf8 value is not valid for this event so some unfocused
+// release events may not send exactly the right data within Kitty keyboard
+// events. This seems unspecified in the spec so for now I'm okay with
+// this. Plus, its only for release events where the key text is far
+// less important.
+// The hash value of the last keybinding trigger that we performed. This
+// is only set if the last key input matched a keybinding, consumed it,
+// and performed it. This is used to prevent sending release/repeat events
+// for handled bindings.
+// The terminal IO handler.
+// Terminal inspector
+// All our sizing information.
+// The configuration derived from the main config. We "derive" it so that
+// we don't have a shared pointer hanging around that we need to worry about
+// the lifetime of. This makes updating config at runtime easier.
+// The conditional state of the configuration. This can affect
+// how certain configurations take effect such as light/dark mode.
+// This is managed completely by Ghostty core but an apprt action
+// is sent whenever this changes.
+// This is set to true if our IO thread notifies us our child exited.
+// This is used to determine if we need to confirm, hold open, etc.
+// We maintain our focus state and assume we're focused by default.
+// If we're not initially focused then apprts can call focusCallback
+// to let us know.
+// Used to determine whether to continuously scroll.
+// True if the surface is in read-only mode. When read-only, no input
+// is sent to the PTY but terminal-level operations like selections,
+// (native) scrolling, and copy keybinds still work. Warn before quit is
+// always enabled in this state.
+// Used to send notifications that long running commands have finished.
+// Requires that shell integration be active. Should represent a nanosecond
+// precision timestamp. It does not necessarily need to correspond to the
+// actual time, but we must be able to compare two subsequent timestamps to get
+// the wall clock time that has elapsed between timestamps.
+// Search state
+// Used to rate limit BEL handling.
+// The effect of an input event. This can be used by callers to take
+// the appropriate action after an input event. For example, key
+// input can be forwarded to the OS for further processing if it
+// wasn't handled in any way by Ghostty.
+// The input was not handled in any way by Ghostty and should be
+// forwarded to other subsystems (i.e. the OS) for further
+// processing.
+// The input was handled and consumed by Ghostty.
+// The input resulted in a close event for this surface so
+// the surface, runtime surface, etc. pointers may all be
+// unsafe to use so exit immediately.
+// The search state for the surface.
+// Notify the thread to stop
+// Wait for the OS thread to quit
+// Now it is safe to deinit the state
+// Mouse state for the surface.
+// The last tracked mouse button state by button.
+// The last mods state when the last mouse button (whatever it was) was
+// pressed or release.
+// The point at which the left mouse click happened. This is in screen
+// coordinates so that scrolling preserves the location.
+// The starting xpos/ypos of the left click. Note that if scrolling occurs,
+// these will point to different "cells", but the xpos/ypos will stay
+// stable during scrolling relative to the surface.
+// The count of clicks to count double and triple clicks and so on.
+// The left click time was the last time the left click was done. This
+// is always set on the first left click.
+// The last x/y sent for mouse reports.
+// The pressure stage for the mouse. This should always be none if
+// the mouse is not pressed.
+// Pending scroll amounts for high-precision scrolls
+// True if the mouse is hidden
+// True if the mouse position is currently over a link.
+// The last x/y in the cursor position for links. We use this to
+// only process link hover events when the mouse actually moves cells.
+// Keyboard state for the surface.
+// The currently active key sequence for the surface. If this is null
+// then we're not currently in a key sequence.
+// The queued keys when we're in the middle of a sequenced binding.
+// These are flushed when the sequence is completed and unconsumed or
+// invalid.
+//
+// This is naturally bounded due to the configuration maximum
+// length of a sequence.
+// The stack of tables that is currently active. The first value
+// in this is the first activated table (NOT the default keybinding set).
+//
+// This is bounded by `max_active_key_tables`.
+// The last handled binding. This is used to prevent encoding release
+// events for handled bindings. We only need to keep track of one because
+// at least at the time of writing this, its impossible for two keys of
+// a combination to be handled by different bindings before the release
+// of the prior (namely since you can't bind modifier-only).
+// The configuration that a surface has, this is copied from the main
+// Config struct usually to prevent sharing a single value.
+// For docs for these, see the associated config they are derived from.
+// Build all of our links
+// Assignments happen sequentially so we have to do this last
+// so that the memory is captured from allocs above.
+// Create a new surface. This must be called from the main thread. The
+// pointer to the memory for the surface must be provided and must be
+// stable due to interfacing with various callbacks.
+// Apply our conditional state. If we fail to apply the conditional state
+// then we log and attempt to move forward with the old config.
+// We want a config pointer for everything so we get that either
+// based on our conditional state or the original config.
+// We want to preserve our original working directory. We
+// don't need to dupe memory here because termio will derive
+// it. We preserve this so directory inheritance works.
+// Get our configuration
+// Initialize our renderer with our initialized surface.
+// Determine our DPI configurations so we can properly configure
+// font points to pixels and handle other high-DPI scaling factors.
+// The font size we desire along with the DPI determined for the surface
+// Setup our font group. This will reuse an existing font group if
+// it was already loaded.
+// Build our size struct which has all the sizes we need.
+// Create our terminal grid with the initial size
+// The mutex used to protect our renderer state.
+// Create the renderer thread
+// Create the IO thread
+// Our conditional state is initialized to the app state. This
+// lets us get the most likely correct color theme and so on.
+// The command we're going to execute
+// Start our IO implementation
+// This separate block ({}) is important because our errdefers must
+// be scoped here to be valid.
+// If an error occurs, we don't want to block surface startup.
+// don't leak GHOSTTY_LOG to any subprocesses
+// Initialize our IO backend
+// Get the cgroup if we're on linux and have the decl. I'd love
+// to change this from a decl to a surface options struct because
+// then we can do memory management better (don't need to retain
+// the string around).
+// Initialize our IO mailbox
+// Outside the block, IO has now taken ownership of our temporary state
+// so we can just defer this and not the subcomponents.
+// Report initial cell size on surface creation
+// No max:
+// Call our size callback which handles all our retina setup
+// Note: this shouldn't be necessary and when we clean up the surface
+// init stuff we should get rid of this. But this is required because
+// sizeCallback does retina-aware stuff we don't do here and don't want
+// to duplicate.
+// Give the renderer one more opportunity to finalize any surface
+// setup on the main thread prior to spinning up the rendering thread.
+// Start our renderer thread
+// Start our IO thread
+// Determine our initial window size if configured. We need to do this
+// quite late in the process because our height/width are in grid dimensions,
+// so we need to know our cell sizes first.
+//
+// Note: it is important to do this after the renderer is setup above.
+// This allows the apprt to fully initialize the surface before we
+// start messing with the window.
+// We don't treat this as a fatal error because not setting
+// an initial size shouldn't stop our terminal from working.
+// For xdg-terminal-exec execution we special-case and set the window
+// title to the command being executed. This allows window managers
+// to set custom styling based on the command being executed.
+// If a user specifies a command it is appropriate to set the title as argv[0]
+// we know in the case of a direct command it has been supplied by the user
+// We won't set the title in the case the shell expands the command
+// as that should typically be used to launch a shell which should
+// set its own titles
+// We are no longer the first surface
+// Stop search thread
+// Stop rendering thread
+// We need to become the active rendering thread again
+// Stop our IO thread
+// We need to deinit AFTER everything is stopped, since there are
+// shared values between the two threads.
+// Clean up our keyboard state
+// Clean up our font grid
+// Clean up our render state
+// Close this surface. This will trigger the runtime to start the
+// close process, which should ultimately deinitialize this surface.
+// Returns a mailbox that can be used to send messages to this surface.
+// Queue a message for the IO thread.
+//
+// We centralize all our logic into this spot so we can intercept
+// messages for example in readonly mode.
+// In readonly mode, we don't allow any writes through to the pty.
+// Forces the surface to render. This is useful for when the surface
+// is in the middle of animation (such as a resize, etc.) or when
+// the render timer is managed manually by the apprt.
+// Renderers are required to support `drawFrame` being called from
+// the main thread, so that they can update contents during resize.
+// Activate the inspector. This will begin collecting inspection data.
+// This will not affect the GUI. The GUI must use performAction to
+// show/hide the inspector UI.
+// Setup the inspector
+// Put the inspector onto the render state
+// Notify our components we have an inspector active
+// Deactivate the inspector and stop collecting any information.
+// Remove the inspector from the render state
+// Notify our components we have deactivated inspector
+// Deinit the inspector
+// True if the surface requires confirmation to quit. This should be called
+// by apprt to determine if the surface should confirm before quitting.
+// If the surface is in read-only mode, always require confirmation
+// If the child has exited, then our process is certainly not alive.
+// We check this first to avoid the locking overhead below.
+// Check the configuration for confirming close behavior.
+// Called from the app thread to handle mailbox messages to our specific
+// surface.
+// We ignore the message in case the title was set via config.
+// The ptrCast just gets sliceTo to return the proper type.
+// We know that our title should end in 0.
+// We always use an allocating message because we don't know
+// the length of the title and this isn't a performance critical
+// path.
+// Notify our apprt, but don't send a mode 2031 DSR report
+// because VT sequences were used to change the color.
+// Unsupported dynamic color change notification type
+// Special colors aren't supported for change notification
+// We always allocate for this because we need to null-terminate.
+// If we're no longer active then we don't do anything.
+// If we don't have a left mouse button down then we
+// don't do anything.
+// We need our locked state for the remainder
+// If our screen changed while this is happening, we stop our
+// selection scroll.
+// Scroll the viewport as required
+// Next, trigger our drag behavior
+// We modified our viewport and selection so we need to queue
+// a render.
+// Mark our flag that we exited immediately
+// If our runtime was below some threshold then we assume that this
+// was an abnormal exit and we show an error message.
+// On macOS, our exit code detection doesn't work, possibly
+// because of our `login` wrapper. More investigation required.
+// If the exit code is 0 then it was a good exit.
+// Try and show a GUI message. If it returns true, don't do anything else.
+// If a native GUI notification was not shown, update our terminal to
+// note the abnormal exit.
+// We output a message so that the user knows what's going on and
+// doesn't think their terminal just froze. We show this unconditionally
+// on close even if `wait_after_command` is false and the surface closes
+// immediately because if a user does an `undo` to restore a closed
+// surface then they will see this message and know the process has
+// completed.
+// First try and show a native GUI message.
+// If the native GUI can't be shown, display a text message in the
+// terminal.
+// We also want to ensure that normal keyboard encoding is on
+// so that we can close the terminal. We close the terminal on
+// any key press that encodes a character.
+// Waiting after command we stop here. The terminal is updated, our
+// state is updated, and now its up to the user to decide what to do.
+// If we aren't waiting after the command, then we exit immediately
+// with no confirmation.
+// Called when the child process exited abnormally.
+// Build up our command for the error message
+// No matter what move the cursor back to the column 0.
+// Reset styles
+// If there is data in the viewport, we want to scroll down
+// a little bit and write a horizontal rule before writing
+// our message. This lets the use see the error message the
+// command may have output.
+// Output our error message
+// We don't print this on macOS because the exit code is always 0
+// due to the way we launch the process.
+// Hide the cursor
+// Called when the terminal detects there is a password input prompt.
+// If our password input state is unchanged then we don't
+// waste time doing anything more.
+// Notify our apprt so it can do whatever it wants.
+// We ignore this error because we don't want to fail this
+// entire operation just because the apprt failed to set
+// the secure input state.
+// IMPORTANT: This function is run on the SEARCH THREAD! It is NOT SAFE
+// to access anything other than values that never change on the surface.
+// The surface is guaranteed to be valid for the lifetime of the search
+// thread.
+// NOTE: This runs on the search thread.
+// Copy the flattened match.
+// Send the selected index to the surface mailbox
+// Reset our selected match
+// Reset the selected index
+// When we quit, tell our renderer to reset any search state.
+// Reset search totals in the surface
+// Unhandled, so far.
+// Call this when modifiers change. This is safe to call even if modifiers
+// match the previous state.
+//
+// This is not publicly exported because modifier changes happen implicitly
+// on mouse callbacks, key callbacks, etc.
+//
+// The renderer state mutex MUST NOT be held.
+// The only place we keep track of mods currently is on the mouse.
+// The mouse mods only contain binding modifiers since we don't
+// want caps/num lock or sided modifiers to affect the mouse.
+// We also need to update the renderer so it knows if it should
+// highlight links. Additionally, mark the screen as dirty so
+// that the highlight state of all links is properly updated.
+// We use the clear screen dirty flag to force a rebuild of all
+// rows because changing mouse mods can affect the highlight state
+// of a link. If there is no link this seems very wasteful but
+// its really only one frame so it's not so bad.
+// Not a big deal if this fails.
+// Call this whenever the mouse moves or mods changed. The time
+// at which this is called may matter for the correctness of other
+// mouse events (see cursorPosCallback) but this is shared logic
+// for multiple events.
+// If the position is outside our viewport, do nothing
+// Update the last point that we checked for links so we don't
+// recheck if the mouse moves some pixels to the same point.
+// We use an arena for everything below to make things easy to clean up.
+// In the case we don't do any allocs this is very cheap to setup
+// (effectively just struct init).
+// Get our link at the current position. This returns null if there
+// isn't a link OR if we shouldn't be showing links for some reason
+// (see further comments for cases).
+// If we clicked and our mouse moved cells then we never
+// highlight links until the mouse is unclicked. This follows
+// standard macOS and Linux behavior where a click and drag cancels
+// mouse actions.
+// Show the URL in the status bar
+// If we found a link, setup our internal state and notify the
+// apprt so it can highlight it.
+// No link, if we're previously over a link then we need to clear
+// the over-link apprt state.
+// Called when our renderer health state changes.
+// Called when the scrollbar state changes.
+// This should be called anytime `config_conditional_state` changes
+// so that the apprt can reload the configuration.
+// Update our configuration at runtime. This can be called by the apprt
+// to set a surface-specific configuration that differs from the app
+// or other surfaces.
+// Apply our conditional state. If we fail to apply the conditional state
+// then we log and attempt to move forward with the old config.
+// We want a config pointer for everything so we get that either
+// based on our conditional state or the original config.
+// Update our new derived config immediately
+// If the derivation fails then we just log and return. We don't
+// hard fail in this case because we don't want to error the surface
+// when config fails we just want to keep using the old config.
+// If our mouse is hidden but we disabled mouse hiding, then show it again.
+// If we are in the middle of a key sequence, clear it.
+// Deactivate all key tables since they may have changed. Importantly,
+// we store pointers into the config as part of our table stack so
+// we can't keep them active across config changes. But this behavior
+// also matches key sequences.
+// Before sending any other config changes, we give the renderer a new font
+// grid. We could check to see if there was an actual change to the font,
+// but this is easier and pretty rare so it's not a performance concern.
+//
+// (Calling setFontSize builds and sends a new font grid to the renderer.)
+// If we have manually adjusted the font size, keep it that way.
+// If we haven't, then we update to the configured font size.
+// This allows config changes to update the font size. We used to
+// never do this but it was a common source of confusion and people
+// assumed that Ghostty was broken! This logic makes more sense.
+// We need to store our configs in a heap-allocated pointer so that
+// our messages aren't huge.
+// With mailbox messages sent, we have to wake them up so they process it.
+// If we have a title set then we update our window to have the
+// newly configured title.
+// Notify the window
+// Recalculate the initial size of the window based on the
+// configuration and invoke the apprt `initial_size` action if
+// necessary.
+// Both width and height must be set for this to work, as
+// documented on the config options.
+// The final values are affected by content scale and we need to
+// account for the padding so we get the exact correct grid size.
+// Represents text read from the terminal and some metadata about it
+// that is often useful to apprts.
+// The text that was read from the terminal.
+// The viewport information about this text, if it is visible in
+// the viewport.
+// The top-left corner of the selection in pixels within the viewport.
+// The linear offset of the start of the selection and the length.
+// This is "linear" in the sense that it is the offset in the
+// flattened viewport as a single array of text.
+//
+// Note: these values are currently wrong if there is a partially
+// visible selection in the viewport (i.e. the top-left or
+// bottom-right of the selection is outside the viewport). But the
+// apprt usecase we have right now doesn't require these to be
+// correct so... let's fix this later. The wrong values will always
+// be within the text bounds so we aren't risking an overflow.
+// Grab the value of text at the given selection point. Note that the
+// selection structure is used as a way to determine the area of the
+// screen to read from, it doesn't have to match the user's current
+// selection state.
+//
+// The returned value contains allocated data and must be deinitialized.
+// Same as `dumpText` but assumes the renderer state mutex is already
+// held.
+// Read out the text
+// Calculate our viewport info if we can.
+// If our bottom right pin is before the viewport, then we can't
+// possibly have this text be within the viewport.
+// If our top-left pin is after the viewport, then we can't possibly
+// have this text be within the viewport.
+// I don't think this is possible but I don't want to crash on
+// that assertion so let's just break out...
+// We established that our top-left somewhere before the viewport
+// bottom-right and that our bottom-right is somewhere after
+// the top-left. This means that at least some portion of our
+// selection is within the viewport.
+// Our top-left point. If it doesn't exist in the viewport it must
+// be before and we can return (0,0).
+// Our bottom-right point. If it doesn't exist in the viewport
+// it must be the bottom-right of the viewport.
+// Our sizes are all scaled so we need to send the unscaled values back.
+// Simple x * cell width gives the left
+// Add padding
+// Scale
+// Simple y * cell height gives the top
+// We want the text baseline
+// Add padding
+// Scale
+// Utilize viewport sizing to convert to offsets
+// Returns true if the terminal has a selection.
+// Returns the selected text. This is allocated.
+// Returns the pwd of the terminal, if any. This is always copied because
+// the pwd can change at any point from termio. If we are calling from the IO
+// thread you should just check the terminal directly.
+// Resolves a relative file path to an absolute path using the terminal's pwd.
+// Returns the x/y coordinate of where the IME (Input Method Editor)
+// keyboard should be rendered.
+// TODO: need to handle when scrolling and the cursor is not
+// in the visible portion of the screen.
+// Our sizes are all scaled so we need to send the unscaled values back.
+// Simple x * cell width gives the top-left corner, then add padding offset
+// We want the midpoint
+// And scale it
+// Simple y * cell height gives the top-left corner, then add padding offset
+// We want the bottom
+// And scale it
+// Our height for now is always just the cell height because our preedit
+// rendering only renders in a single line.
+// Our max width is the remaining screen width after the cursor.
+// We don't have to deal with wrapping because the preedit doesn't
+// wrap right now.
+// Note: we don't apply content scale here because it looks like
+// for some reason in macOS its already scaled. I'm not sure why
+// that is so I'm going to just leave this comment here so its known
+// that I left this out on purpose pending more investigation.
+// Build buffer
+// Should not be reachable but don't want to risk it.
+// Decode
+// Ignore this. It is possible to actually have valid data and
+// get this error, so we allow it.
+// When clipboard-write is "ask" a prompt is displayed to the user asking
+// them to confirm the clipboard access. Each app runtime handles this
+// differently.
+// Create an arena to simplify memory management here.
+// The options we'll use for all formatting. We'll just override the
+// emit format.
+// Note: We don't apply codepoint mappings to VT format since it contains
+// escape sequences that should be preserved as-is
+// Note: We don't apply codepoint mappings to HTML format since HTML
+// has its own character encoding and entity system
+// First, generate plain text with codepoint mappings applied
+// Second, generate HTML without codepoint mappings
+// We purposely don't emit background/foreground for mixed
+// mode because the HTML contents is often used for rich text
+// input and with trimmed spaces it looks pretty bad.
+// Note: We don't apply codepoint mappings to HTML format
+// Set the selection contents.
+//
+// This must be called with the renderer mutex held.
+// If copy on select is false then exit early.
+// Set our selection clipboard. If the selection is cleared we do not
+// clear the clipboard. If the selection is set, we only set the clipboard
+// again if it changed, since setting the clipboard can be an expensive
+// operation.
+// Both standard and selection clipboards are set.
+// The selection clipboard is set if supported, otherwise the standard.
+// Change the cell size for the terminal grid. This can happen as
+// a result of changing the font size at runtime.
+// Update our cell size within our size struct
+// Notify the terminal
+// Update our terminal default size if necessary.
+// We don't treat this as a fatal error because not setting
+// an initial size shouldn't stop our terminal from working.
+// Notify the window
+// Change the font size.
+//
+// This can only be called from the main thread.
+// Update our font size so future changes work
+// We need to build up a new font stack for this font size.
+// Set our cell size
+// Notify our render thread of the new font stack. The renderer
+// MUST accept the new font grid and deref the old.
+// Once we've sent the key we can replace our key
+// Schedule render which also drains our mailbox
+// This queues a render operation with the renderer thread. The render
+// isn't guaranteed to happen immediately but it will happen as soon as
+// practical.
+// Crash metadata in case we crash in here
+// Update our screen size, but only if it actually changed. And if
+// the screen size didn't change, then our grid size could not have
+// changed, so we just return.
+// Save our screen size
+// Recalculate our grid size. Because Ghostty supports fluid resizing,
+// its possible the grid doesn't change at all even if the screen size changes.
+// We have to update the IO thread no matter what because we send
+// pixel-level sizing to the subprocess.
+// Mail the IO thread
+// Recalculate the balanced padding if needed.
+// Called to set the preedit state for character input. Preedit is used
+// with dead key states, for example, when typing an accent character.
+// This should be called with null to reset the preedit state.
+//
+// The core surface will NOT reset the preedit state on charCallback or
+// keyCallback and we rely completely on the apprt implementation to track
+// the preedit state correctly.
+//
+// The preedit input must be UTF-8 encoded.
+// log.debug("text preeditCallback value={any}", .{preedit_});
+// Crash metadata in case we crash in here
+// We clear our selection when ANY OF:
+// 1. We have an existing preedit
+// 2. We have preedit text
+// We always clear our prior preedit
+// Mark preedit dirty flag
+// If we have no text, we're done. We queue a render in case we cleared
+// a prior preedit (likely).
+// We convert the UTF-8 text to codepoints.
+// Allocate the codepoints slice
+// I've never seen a preedit text with a zero-width character. In
+// theory its possible but we can't really handle it right now.
+// Let's just ignore it.
+// If we have no codepoints, then we're done.
+// Returns true if the given key event would trigger a keybinding
+// if it were to be processed. This is useful for determining if
+// a key event should be sent to the terminal or not.
+//
+// Note that this function does not check if the binding itself
+// is performable, only if the key event would trigger a binding.
+// If a performable binding is found and the event is not performable,
+// then Ghosty will act as though the binding does not exist.
+// Apply key remappings for consistency with keyCallback
+// Look up our entry
+// If we're in a sequence, check the sequence set
+// Check active key tables (inner-most to outer-most)
+// Check the root set
+// Return flags based on the
+// Called for any key events. This handles keybindings, encoding and
+// sending to the terminal, etc.
+// log.warn("text keyCallback event={}", .{event_orig});
+// Apply key remappings to transform modifiers before any processing.
+// This allows users to remap modifier keys at the app level.
+// Crash metadata in case we crash in here
+// Setup our inspector event if we have an inspector.
+// When we're done processing, we always want to add the event to
+// the inspector.
+// We have to check for the inspector again because our keybinding
+// might close it.
+// Handle keybindings first. We need to handle this on all events
+// (press, repeat, release) because a press may perform a binding but
+// a release should not encode if we consumed the press.
+// If we allow KAM and KAM is enabled then we do nothing.
+// If this input event has text, then we hide the mouse if configured.
+// We only do this on pressed events to avoid hiding the mouse when we
+// change focus due to a keybinding (i.e. switching tabs).
+// If our mouse modifiers change we may need to change our
+// link highlight state.
+// Update our modifiers, this will update mouse mods too
+// We only refresh links if
+// 1. mouse reporting is off
+// OR
+// 2. mouse reporting is on and we are not reporting shift to the terminal
+// Refresh our link state
+// If we have mouse reports on and we don't have shift pressed, we reset state
+// Process the cursor state logic. This will update the cursor shape if
+// needed, depending on the key state.
+// We've processed a key event that produced some data so we want to
+// track the last pressed key.
+// We need to unset the allocated fields that will become invalid
+// If we have a previous pressed key and we're releasing it
+// then we set it to invalid to prevent repeating the release event.
+// if we didn't have a previous event and this is a release
+// event then we just want to set it to null.
+// If our key is invalid and we have no mods, then we're done!
+// This helps catch the state that we naturally released all keys.
+// Encode and send our key. If we didn't encode anything, then we
+// return the effect as ignored.
+// If our process is exited and we press a key that results in
+// an encoded value, we close the surface. We want to eventually
+// move this behavior to the apprt probably.
+// No valid request means that we didn't encode anything.
+// If our event is any keypress that isn't a modifier and we generated
+// some data to send to the pty, then we move the viewport down to the
+// bottom. We also clear the selection for any key other then modifiers.
+// Maybe handles a binding for a given event and if so returns the effect.
+// Returns null if the event is not handled in any way and processing should
+// continue.
+// Release events never trigger a binding but we need to check if
+// we consumed the press event so we don't encode the release.
+// We don't reset the last trigger on release because
+// an apprt may send multiple release events for a single
+// press event.
+// Carry on processing.
+// Find an entry in the keybind set that matches our event.
+// Handle key sequences first.
+// Get our entry from the set for the given event.
+// No entry found. We need to encode everything up to this
+// point and send to the pty since we're in a sequence.
+// We ignore modifiers so that nested sequences such as
+// ctrl+a>ctrl+b>c work.
+// If we have a catch-all of ignore, then we special case our
+// invalid sequence handling to ignore it.
+// Encode everything up to this point
+// No currently active sequence, move on to tables. For tables,
+// we search inner-most table to outer-most. The table stack does
+// NOT include the root set.
+// If this is a one-shot activation AND its the currently
+// active table, then we deactivate it after this.
+// Note: we may want to change the semantics here to
+// remove this table no matter where it is in the stack,
+// maybe.
+// No table, use our default set
+// Determine if this entry has an action or if its a leader key.
+// Setup the next set we'll look at.
+// Store this event so that we can drain and encode on invalid.
+// We don't need to cap this because it is naturally capped by
+// the config validation.
+// Start or continue our key sequence
+// consumed determines if the input is consumed or if we continue
+// encoding the key (if we have a key to encode).
+// If the consumed flag is explicitly set, then we are consumed.
+// If the global or all flag is set, we always consume.
+// We have an action, so at this point we're handling SOMETHING so
+// we reset the last trigger to null. We only set this if we actually
+// perform an action (below)
+// An action also always resets the sequence set.
+// Setup our actions
+// Attempt to perform the action
+// If this is a global or all action, then we perform it on
+// the app and it applies to every surface.
+// "All" actions are always performed since they are global.
+// Perform each action. We are performed if ANY of the chained
+// actions perform.
+// If we performed an action and it was a closing action,
+// our "self" pointer is not safe to use anymore so we need to
+// just exit immediately.
+// If our action was "ignore" then we return the special input
+// effect of "ignored".
+// If we have the performable flag and the action was not performed,
+// then we act as though a binding didn't exist.
+// If we're in a sequence, we treat this as if we pressed a key
+// that doesn't exist in the sequence. Reset our sequence and flush
+// any queued events.
+// If we consume this event, then we are done. If we don't consume
+// it, we processed the action but we still want to process our
+// encodings, too.
+// If we had queued events, we deinit them since we consumed
+// Store our last trigger so we don't encode the release event
+// If we didn't perform OR we didn't consume, then we want to
+// encode any queued events for a sequence.
+// No key table active. This does nothing.
+// Clear the entire table stack.
+// Notify the UI.
+// This checks if the current keybinding sets have a catch_all binding
+// with `ignore`. This is used to determine some special input cases.
+// Get our catch all
+// We have a catch-all entry, see if its an ignore
+// End a key sequence. Safe to call if no key sequence is active.
+//
+// Action and mem determine the behavior of the queued inputs up to this
+// point.
+// Notify apprt key sequence ended
+// No matter what we clear our current sequence set. This restores
+// the set we look at to the root set.
+// If we have no queued data, there is nothing else to do.
+// Run the proper action first
+// Memory handling of the sequence after the action
+// Encodes the key event into a write request. The write request will
+// always copy or allocate so the caller can safely free the event.
+// Build our encoding options, which requires the lock.
+// Try to write the input into a small array. This fits almost
+// every scenario. Larger situations can happen due to long
+// pre-edits.
+// Special-case: we did nothing.
+// Means we need to allocate
+// We need to allocate. We allocate double the UTF-8 length
+// or double the small array size, whichever is larger. That's
+// a heuristic that should work. The only scenario I know while
+// typing this where we don't have enough space is a long preedit,
+// and in that case the size we need is exactly the UTF-8 length,
+// so the double is being safe.
+// This results in a double allocation but this is such an unlikely
+// path the performance impact is unimportant.
+// Copy the encoded data into the inspector event if we have one.
+// We do this before the mailbox because the IO thread could
+// release the memory before we get a chance to copy it.
+// If we don't have alt pressed, it doesn't matter what this
+// config is so we can just say "false" and break out and avoid
+// more expensive checks below.
+// Alt is pressed, we're on macOS. We break some encapsulation
+// here and assume libghostty for ease...
+// Sends text as-is to the terminal without triggering any keyboard
+// protocol. This will treat the input text as if it was pasted
+// from the clipboard so the same logic will be applied. Namely,
+// if bracketed mode is on this will do a bracketed paste. Otherwise,
+// this will filter newlines to '\r'.
+// Crash metadata in case we crash in here
+// Callback for when the surface is fully visible or not, regardless
+// of focus state. This is used to pause rendering when the surface
+// is not visible, and also re-render when it becomes visible again.
+// Crash metadata in case we crash in here
+// Crash metadata in case we crash in here
+// If our focus state is the same we do nothing.
+// Notify our render thread of the new state
+// Notify our app if we gained focus.
+// If we lost focus and we have a keypress, then we want to send a key
+// release event for it. Depending on the apprt, this CAN result in
+// duplicate key release events, but that is better than not sending
+// a key release event at all.
+// All our actions will be releases
+// Release the full key first
+// Release any modifiers if set
+// This is kind of nasty comptime meta programming but all we're doing
+// here is going through all the modifiers and if they're set, releasing
+// both the left and right sides of the modifier. This may not match
+// the exact input event but it ensures a full reset.
+// Schedule render which also drains our mailbox
+// Whenever our focus changes we unhide the mouse. The mouse will be
+// hidden again if the user starts typing. This helps alleviate some
+// buggy behavior upstream in macOS with the mouse never becoming visible
+// again when tabbing between programs (see #2525).
+// Update the focus state and notify the terminal
+// Crash metadata in case we crash in here
+// The point of this callback is to schedule a render, so do that.
+// The amount to scroll. This structure is always normalized so that
+// negative is down, left and positive is up, right. Note that INTERNALLY,
+// vertical scroll on our terminal uses positive for down (right is not
+// supported by our screen since scrollback is only vertical).
+// Mouse scroll event. Negative is down, left. Positive is up, right.
+//
+// "Natural scrolling" is a macOS term for inverting the scroll direction.
+// This should be handled by the apprt implementation. At this layer,
+// negative is always down, left.
+// log.info("SCROLL: xoff={} yoff={} mods={}", .{ xoff, yoff, scroll_mods });
+// Crash metadata in case we crash in here
+// Always show the mouse again if it is hidden
+// We use cell_size to determine if we have accumulated enough to trigger a scroll
+// If we have precision scroll, yoff is the number of pixels to scroll. In non-precision
+// scroll, yoff is the number of wheel ticks. Some mice are capable of reporting fractional
+// wheel ticks, which don't necessarily get reported as precision scrolls. We normalize all
+// scroll events to pixels by multiplying the wheel tick value and the cell size. This means
+// that a wheel tick of 1 results in single scroll event.
+// Round out the yoff to an absolute minimum of 1. macos tries to
+// simulate precision scrolling with non precision events by
+// ramping up the magnitude of the offsets as it detects faster
+// scrolling. Single click (very slow) scrolls are reported with a
+// magnitude of 0.1 which would normally require a few clicks
+// before we register an actual scroll event (depending on cell
+// height and the mouse_scroll_multiplier setting).
+// Add our previously saved pending amount to the offset to get the
+// new offset value. The signs of the pending and yoff should match
+// so that we move further away from zero, but we don't assert
+// this because in theory a user could scroll in the opposite
+// direction and undo a pending scroll.
+// If the new offset is less than a single unit of scroll, we save
+// the new pending value and do not scroll yet.
+// We scroll by the number of rows in the offset and save the remainder
+// Round towards zero.
+// For detailed comments see the y calculation above.
+// log.info("SCROLL: delta_y={} delta_x={}", .{ y.delta, x.delta });
+// If we have an active mouse reporting mode, clear the selection.
+// The selection can occur if the user uses the shift mod key to
+// override mouse grabbing from the window.
+// If we're in alternate screen with alternate scroll enabled, then
+// we convert to cursor keys. This only happens if we're:
+// (1) alt screen (2) no explicit mouse reporting and (3) alt
+// scroll mode enabled.
+// When we send mouse events as cursor keys we always
+// clear the selection.
+// cursor key: application mode
+// cursor key: normal mode
+// We have mouse events, are not in an alternate scroll buffer,
+// or have alternate scroll disabled. In this case, we just run
+// the normal logic.
+// If we're scrolling up or down, then send a mouse event.
+// If mouse reporting is on, we do not want to scroll the
+// viewport.
+// Modify our viewport, this requires a lock since it affects
+// rendering. We have to switch signs here because our delta
+// is negative down but our viewport is positive down.
+// This is called when the content scale of the surface changes. The surface
+// can then update any DPI-sensitive state.
+// Crash metadata in case we crash in here
+// Calculate the new DPI
+// Update our font size which is dependent on the DPI
+// If our DPI didn't actually change, save a lot of work by doing nothing.
+// Update our padding which is dependent on DPI. We only do this for
+// unbalanced padding since balanced padding is not dependent on DPI.
+// Force a resize event because the change in padding will affect
+// pixel-level changes to the renderer and viewport.
+// The type of action to report for a mouse event.
+// Returns true if mouse reporting is enabled both in the config and
+// the terminal state.
+// Mouse reporting must be enabled by both config and terminal state
+// Depending on the event, we may do nothing at all.
+// X10 only reports clicks with mouse button 1, 2, 3. We verify
+// the button later.
+// Doesn't report motion
+// Button must be pressed
+// Everything
+// Handle scenarios where the mouse position is outside the viewport.
+// We always report release events no matter where they happen.
+// If we don't have a motion-tracking event mode, do nothing.
+// If any button is pressed, we still do the report. Otherwise,
+// we do not do the report.
+// This format reports X/Y
+// Record our new point. We only want to send a mouse event if the
+// cell changed, unless we're tracking raw pixels.
+// Get the code we'll actually write
+// Determine our initial button value
+// Null button means motion without a button pressed
+// Release is 3. It is NOT 3 in SGR mode because SGR can tell
+// the application what button was released.
+// X10 doesn't have modifiers
+// Motion adds another bit
+// + 1 below is because our x/y is 0-indexed and the protocol wants 1
+// Ask our IO thread to write the data
+// Maximum of 12 because at most we have 2 fully UTF-8 encoded chars
+// The button code will always fit in a single u8
+// UTF-8 encode the x/y
+// Ask our IO thread to write the data
+// Final character to send in the CSI
+// Response always is at least 4 chars, so this leaves the
+// remainder for numbers which are very large...
+// Ask our IO thread to write the data
+// Response always is at least 4 chars, so this leaves the
+// remainder for numbers which are very large...
+// Ask our IO thread to write the data
+// Final character to send in the CSI
+// The position has to be adjusted to the terminal space.
+// Response always is at least 4 chars, so this leaves the
+// remainder for numbers which are very large...
+// Ask our IO thread to write the data
+// Returns true if the shift modifier is allowed to be captured by modifier
+// events. It is up to the caller to still verify it is a situation in which
+// shift capture makes sense (i.e. left button, mouse click, etc.)
+// Handle our never/always case where we don't need a lock.
+// If the terminal explicitly requests it then we always allow it
+// since we processed never/always at this point.
+// Otherwise, go with the user's preference
+// Returns true if the mouse is currently captured by the terminal
+// (i.e. reporting events).
+// Called for mouse button press/release events. This will return true
+// if the mouse event was consumed in some way (i.e. the program is capturing
+// mouse events). If the event was not consumed, then false is returned.
+// Crash metadata in case we crash in here
+// log.debug("mouse action={} button={} mods={}", .{ action, button, mods });
+// If we have an inspector, we always queue a render
+// Always record our latest mouse state
+// Always show the mouse again if it is hidden
+// Update our modifiers if they changed
+// This is set to true if the terminal is allowed to capture the shift
+// modifier. Note we can do this more efficiently probably with less
+// locking/unlocking but clicking isn't that frequent enough to be a
+// bottleneck.
+// Shift-click continues the previous mouse state if we have a selection.
+// cursorPosCallback will also do a mouse report so we don't need to do any
+// of the logic below.
+// We could do all the conditionals in one but I find it more
+// readable as a human to break this one up.
+// We split this conditional out on its own because this is the
+// only one that requires a renderer mutex grab which is VERY
+// expensive because it could block all our threads.
+// If we are within the interval that the click would register
+// an increment then we do not extend the selection.
+// Click interval very short, we may be increasing
+// click counts so we don't extend the selection.
+// This is a weird behavior, I think either behavior is actually
+// fine. This failure should be exceptionally rare anyways.
+// My thinking here is that we can't be sure if we should extend
+// the selection or not so we just don't.
+// Stop selection scrolling when releasing the left mouse button
+// but only when selection scrolling is active.
+// The selection clipboard is only updated for left-click drag when
+// the left button is released. This is to avoid the clipboard
+// being updated on every mouse move which would be noisy.
+// Handle link clicking. We want to do this before we do mouse
+// reporting or any other mouse handling because a successfully
+// clicked link will swallow the event.
+// Handle prompt clicking. If we released our mouse on a prompt
+// and we support some kind of click events, then we need to
+// move to it.
+// Report mouse events if enabled
+// If we have shift-pressed and we aren't allowed to capture it,
+// then we do not do a mouse report.
+// In any other mouse button scenario without shift pressed we
+// clear the selection since the underlying application can handle
+// that in any way (i.e. "scrolling").
+// We also set the left click count to 0 so that if mouse reporting
+// is disabled in the middle of press (before release) we don't
+// suddenly start selecting text.
+// If we're doing mouse reporting, we do not support any other
+// selection or highlighting.
+// For left button clicks we always record some information for
+// selection/highlighting purposes.
+// Weird... our viewport x/y that we just converted isn't
+// found in our pages. This is probably a bug but we don't
+// want to crash in releases because its harmless. So, we
+// only assert in debug mode.
+// If we move our cursor too much between clicks then we reset
+// the multi-click state.
+// Store it
+// Setup our click counter and timer
+// If we have mouse clicks, then we check if the time elapsed
+// is less than and our interval and if so, increase the count.
+// We only support up to triple-clicks.
+// In all cases below, we set the selection directly rather than use
+// `setSelection` because we want to avoid copying the selection
+// to the selection clipboard. For left mouse clicks we only set
+// the clipboard on release.
+// Single click
+// If we have a selection, clear it. This always happens.
+// Double click, select the word under our mouse.
+// First try to detect if we're clicking on a URL to select the entire URL.
+// Try link detection without requiring modifier keys
+// Ignore any errors, likely regex errors.
+// Triple click, select the line under our mouse
+// We should be bounded by 1 to 3
+// Middle-click pastes from our selection clipboard
+// Right-click down selects word for context menus. If the apprt
+// doesn't implement context menus this can be a bit weird but they
+// are supported by our two main apprts so we always do this. If we
+// want to be careful in the future we can add a function to apprts
+// that let's us know.
+// Get our viewport pin
+// If we already have a selection and the selection contains
+// where we clicked then we don't want to modify the selection.
+// The selection doesn't contain our pin, so we create a new
+// word selection where we clicked.
+// If there is a link at this position, we want to
+// select the link. Otherwise, select the word.
+// Don't consume so that we show the context menu in apprt.
+// Pasting can trigger a lock grab in complete clipboard
+// request so we need to unlock.
+// We don't need to clear selection because we didn't have
+// one to begin with.
+// Before we yield the lock, clear our selection if we have
+// one.
+// Pasting can trigger a lock grab in complete clipboard
+// request so we need to unlock.
+// Consume the event such that the context menu is not displayed.
+// If our screen doesn't handle any prompt clicks, then we never
+// do anything.
+// If our cursor isn't currently at a prompt then we don't handle
+// prompt clicks because we can't move if we're not in a prompt!
+// If we have a selection currently, then releasing the mouse
+// completes the selection and we don't do prompt moving. I don't
+// love this logic, I think it should be generalized to "if the
+// mouse release was on a different cell than the mouse press" but
+// our mouse state at the time of writing this doesn't support that.
+// Get the pin for our mouse click.
+// See mouseButtonCallback for explanation
+// Get our cursor's most current prompt.
+// This shouldn't be possible because we asserted we're at
+// a prompt above, so we MUST find some prompt in a left_up search.
+// If our mouse click is before the prompt, we don't move.
+// We DO ALLOW clicks AFTER the prompt, specifically with Kitty's
+// click_events=1 since we rely on the shell to validate out of
+// bounds clicks. This matches Kitty's logic as best I can tell.
+// At this point we've established:
+// - Screen supports prompt clicks
+// - Cursor is at a prompt
+// - Click is at or below our prompt
+// Guarded at the start of this function
+// For the event, we always send a left-click press event.
+// This matches what Kitty sends.
+// Not that noisy since this only happens on prompt clicks.
+// Ask our IO thread to write the data
+// Returns the link at the given cursor position, if any.
+//
+// Requires the renderer mutex is held.
+// Convert our cursor position to a screen point.
+// Get our comparison mods
+// If we have the proper modifiers set then we can check for OSC8 links.
+// Fall back to configured links
+// Detects if a link is present at the given pin.
+//
+// If mouse mods is null then mouse mod requirements are ignored (all
+// configured links are checked).
+//
+// Requires the renderer state mutex is held.
+// Skip highlight/mods check when mouse_mods is null (double-click mode)
+// This returns the mouse mods to consider for link highlighting or
+// other purposes taking into account when shift is pressed for releasing
+// the mouse from capture.
+//
+// The renderer state mutex must be held.
+// In any of these scenarios, whatever mods are set (even shift)
+// are preserved.
+// We have mouse capture, shift set, and we're not allowed to capture
+// shift, so we can clear shift.
+// Attempt to invoke the action of any link that is under the
+// given position.
+//
+// Requires the renderer state mutex is held.
+// If the apprt handles it then we're done.
+// apprt didn't handle it, fallback to our simple cross-platform
+// URL opener. We log a warning because we want well-behaved
+// apprts to handle this themselves.
+// Return the URI for an OSC8 hyperlink at the given position or null
+// if there is no hyperlink.
+// Crash metadata in case we crash in here
+// We don't currently use the pressure value for anything. In the
+// future, we could report this to applications using new mouse
+// events or utilize it for some custom UI.
+// If the pressure stage is the same as what we already have do nothing
+// Update our pressure stage.
+// If our left mouse button is pressed and we're entering a deep
+// click then we want to start a selection. We treat this as a
+// word selection since that is typical macOS behavior.
+// This should always be set in this state but we don't want
+// to handle state inconsistency here.
+// Cursor position callback.
+//
+// Send negative x or y values to indicate the cursor is outside the
+// viewport. The magnitude of the negative values are meaningless;
+// they are only used to indicate the cursor is outside the viewport.
+// It's important to do this to ensure hover states are cleared.
+//
+// The mods parameter is optional because some apprts do not provide
+// modifier information on cursor position events. If mods is null then
+// we'll use the last known mods. This is usually accurate since mod events
+// will trigger key press events but on some platforms we don't get them.
+// For example, on macOS, unfocused surfaces don't receive key events but
+// do receive mouse events so we have to rely on updated mods.
+// Crash metadata in case we crash in here
+// log.debug("cursor pos x={} y={} mods={?}", .{ pos.x, pos.y, mods });
+// If the position is negative, it is outside our viewport and
+// we need to clear any hover states.
+// Reset our hyperlink state
+// No mouse point so we don't highlight links
+// Mark the link's row as dirty, but continue with updating the
+// mouse state below so we can scroll when our position is negative.
+// Always show the mouse again if it is hidden
+// Update our modifiers if they changed
+// The mouse position in the viewport
+// We always reset the over link status because it will be reprocessed
+// below. But we need the old value to know if we need to undo mouse
+// shape changes.
+// We are reading/writing state for the remainder
+// Stop selection scrolling when inside the viewport within a 1px buffer
+// for fullscreen windows, but only when selection scrolling is active.
+// Update our mouse state. We set this to null initially because we only
+// want to set it when we're not selecting or doing any other mouse
+// event.
+// If we have an inspector, we need to always record position information
+// Handle link hovering
+// We refresh links when
+// 1. we were previously over a link
+// OR
+// 2. the cursor position has changed (either we have no previous state, or the state has
+//    changed)
+// AND
+// 1. mouse reporting is off
+// OR
+// 2. mouse reporting is on and we are not reporting shift to the terminal
+// If we were previously over a link, we always update. We do this so that if the text
+// changed underneath us, even if the mouse didn't move, we update the URL hints and state
+// Do a mouse report
+// Shift overrides mouse "grabbing" in the window, taken from Kitty.
+// This only applies if there is a mouse button pressed so that
+// movement reports are not affected.
+// We use the first mouse button we find pressed in order to report
+// since the spec (afaict) does not say...
+// If we're doing mouse motion tracking, we do not support text
+// selection.
+// Handle cursor position for text selection
+// Left click pressed but count zero can happen if mouse reporting is on.
+// In this scenario, we mark the click state because we need that to
+// properly make some mouse reports, but we don't keep track of the
+// count because we don't want to handle selection.
+// If our terminal screen changed then we don't process this. We don't
+// invalidate our pin or mouse state because if the screen switches
+// back then we can continue our selection.
+// All roads lead to requiring a re-render at this point.
+// If our y is negative, we're above the window. In this case, we scroll
+// up. The amount we scroll up is dependent on how negative we are.
+// We allow for a 1 pixel buffer at the top and bottom to detect
+// scroll even in full screen windows.
+// Note: one day, we can change this from distance to time based if we want.
+// log.warn("CURSOR POS: {} {}", .{ pos, self.size.screen });
+// If the mouse is outside the viewport and we have the left
+// mouse button pressed then we need to start the scroll timer.
+// Convert to points
+// Handle dragging depending on click count
+// Double-click dragging moves the selection one "word" at a time.
+// Get the word closest to our starting click.
+// Get the word closest to our current point.
+// If our current mouse position is before the starting position,
+// then the selection start is the word nearest our current position.
+// Triple-click dragging moves the selection one "line" at a time.
+// Get the line selection under our current drag point. If there isn't a
+// line, do nothing.
+// Get the selection under our click point. We first try to trim
+// whitespace if we've selected a word. But if no word exists then
+// we select the blank line.
+// This logic is in a separate function so that it can be unit tested.
+// Calculates the appropriate selection given pins and pixel x positions for
+// the click point and the drag point, as well as mouse mods and screen size.
+// Explanation:
+//
+// # Normal selections
+//
+// ## Left-to-right selections
+// - The clicked cell is included if it was clicked to the left of its
+//   threshold point and the drag location is right of the threshold point.
+// - The cell under the cursor (the "drag cell") is included if the drag
+//   location is right of its threshold point.
+//
+// ## Right-to-left selections
+// - The clicked cell is included if it was clicked to the right of its
+//   threshold point and the drag location is left of the threshold point.
+// - The cell under the cursor (the "drag cell") is included if the drag
+//   location is left of its threshold point.
+//
+// # Rectangular selections
+//
+// Rectangular selections are handled similarly, except that
+// entire columns are considered rather than individual cells.
+// We only include cells in the selection if the threshold point lies
+// between the start and end points of the selection. A threshold of
+// 60% of the cell width was chosen empirically because it felt good.
+// We use this to clamp the pixel positions below.
+// We need to know how far across in the cell the drag pos is, so
+// we subtract the padding and then take it modulo the cell width.
+// We figure out the fractional part of the click x position similarly.
+// Whether or not this is a rectangular selection.
+// Whether the click pin and drag pin are equal.
+// Whether or not the end point of our selection is before the start point.
+// Special handling for rectangular selections, we only use x position.
+// Whether or not the the click pin cell
+// should be included in the selection.
+// Whether or not the the drag pin cell
+// should be included in the selection.
+// If the click cell should be included in the selection then it's the
+// start, otherwise we get the previous or next cell to it depending on
+// the type and direction of the selection.
+// Likewise for the end pin with the drag cell.
+// If the click cell is the same as the drag cell and the click cell
+// shouldn't be included, or if the cells are adjacent such that the
+// start or end pin becomes the other cell, and that cell should not
+// be included, then we have no selection, so we set it to null.
+//
+// If in rectangular selection mode, we compare columns as well.
+//
+// TODO(qwerasd): this can/should probably be refactored, it's a bit
+//                repetitive and does excess work in rectangle mode.
+// TODO: Clamp selection to the screen area, don't
+//       let it extend past the last written row.
+// Call to notify Ghostty that the color scheme for the terminal has
+// changed.
+// Crash metadata in case we crash in here
+// If our scheme didn't change, then we don't do anything.
+// Setup our conditional state which has the current color theme.
+// If mode 2031 is on, then we report the change live.
+// Get our grid cell
+// Scroll to the bottom of the viewport.
+//
+// Precondition: the render_state mutex must be held.
+// Perform a binding action. A binding is a keybinding. This function
+// must be called from the GUI thread.
+//
+// This function returns true if the binding action was performed. This
+// may return false if the binding action is not supported or if the
+// binding action would do nothing (i.e. previous tab with no tabs).
+//
+// NOTE: At the time of writing this comment, only previous/next tab
+// will ever return false. We can expand this in the future if it becomes
+// useful. We did previous/next tab so we could implement #498.
+// Forward app-scoped actions to the app. Some app-scoped actions are
+// special-cased here because they do some special things when performed
+// from the surface.
+// Undo and redo both support both surface and app targeting.
+// If we are triggering on a surface then we perform the
+// action with the surface target.
+// We need to send the CSI/ESC sequence as a single write request.
+// If you split it across two then the shell can interpret it
+// as two literals.
+// CSI/ESC triggers a scroll.
+// For text we always allocate just because its easier to
+// handle all cases that way.
+// Text triggers a scroll.
+// We send a different sequence depending on if we're
+// in cursor keys mode. We're in "normal" mode if cursor
+// keys mode is NOT set.
+// With the lock held, we must scroll to the bottom.
+// We always scroll to the bottom for these inputs.
+// To save resources, we don't actually start a search here,
+// we just notify the apprt. The real thread will start when
+// the first needles are set.
+// We only return that this was performed if we actually
+// stopped a search, but we also send the apprt end_search so
+// that GUIs can clean up stale stuff.
+// If we're stopping the search and we had no prior search,
+// then there is nothing to do.
+// We need to assign directly to self.search because we need
+// a stable pointer back to the thread state.
+// Zero-length text means stop searching.
+// Clear the selection if configured to do so.
+// If the mouse isn't over a link, nothing we can do.
+// For regex links, get the text from selection
+// For OSC8 links, get the URI directly from hyperlink data
+// Max delta is somewhat arbitrary.
+// Max point size is somewhat arbitrary.
+// Mark that we manually adjusted the font size
+// Max delta is somewhat arbitrary.
+// Mark that we manually adjusted the font size
+// Reset font size also resets the manual adjustment state
+// Mark that we manually adjusted the font size
+// This is a duplicate of some of the logic in termio.clearScreen
+// but we need to do this here so we can know the answer before
+// we send the message. If the currently active screen is on the
+// alternate screen then clear screen does nothing so we want to
+// return false so the keybind can be unconsumed.
+// Look up the table in our config
+// If this is the same table as is currently active, then
+// do nothing.
+// If we're already at the max, ignore it.
+// Add the table to the stack.
+// Notify the UI.
+// No key table active. This does nothing.
+// Final key table active, clear our state.
+// Restore the prior key table. We don't free any memory in
+// this case because we assume it will be freed later when
+// we finish our key table.
+// Notify the UI.
+// End the key sequence and flush queued keys to the terminal,
+// but don't encode the key that triggered this action. This
+// will do that because leaf keys (keys with bindings) aren't
+// in the queued encoding list.
+// Not a big deal if this fails.
+// If we don't have a selection we do not perform this
+// action, allowing the keybind to fall through to the
+// terminal.
+// If the selection endpoint is outside of the current viewpoint,
+// scroll it in to view. Note we always specifically use sel.end
+// because that is what adjust modifies.
+// Our end point is not within the viewport. If the end
+// point is after the br then we need to adjust the end so
+// that it is at the bottom right of the viewport.
+// Queue a render so its shown
+// Returns true if performing the given action result in closing
+// the surface. This is used to determine if our self pointer is
+// still valid after performing some binding action.
+// The portion of the screen to write for writeScreenFile.
+// Create a temporary directory to store our scrollback.
+// Open our scrollback file
+// Screen.dumpString writes byte-by-byte, so buffer it
+// Write the scrollback contents. This requires a lock.
+// We only dump history if we have history. We still keep
+// the file and write the empty file to the pty so that this
+// command always works on the primary screen.
+// We do not support this for alternate screens
+// because they don't have scrollback anyways.
+// If we have no selection we have no data so we do nothing.
+// Get the final path
+// Call this to complete a clipboard request sent to apprt. This should
+// only be called once for each request. The data is immediately copied so
+// it is safe to free the data after this call.
+//
+// If `confirmed` is true then any clipboard confirmation prompts are skipped:
+//
+//   - For "regular" pasting this means that unsafe pastes are allowed. Unsafe
+//     data is defined as data that contains newlines, though this definition
+//     may change later to detect other scenarios.
+//
+//   - For OSC 52 reads and writes no prompt is shown to the user if
+//     `confirmed` is true.
+//
+// If `confirmed` is false then this may return either an UnsafePaste or
+// UnauthorizedPaste error, depending on the type of clipboard request.
+// This starts a clipboard request, with some basic validation. For example,
+// an OSC 52 request is not actually requested if OSC 52 is disabled.
+//
+// Returns true if the request was started, false if it was not (e.g., clipboard
+// doesn't contain text for paste requests). This allows performable keybinds
+// to pass through when the action cannot be performed.
+// No clipboard write code paths travel through this function
+// If we have paste protection enabled, we detect unsafe pastes and return
+// an error. The error approach allows apprt to attempt to complete the paste
+// before falling back to requesting confirmation.
+//
+// We do not do this for bracketed pastes because bracketed pastes are
+// by definition safe since they're framed.
+// If we've disabled paste protection then we always allow the paste.
+// If we're allowed to paste unsafe data then we always allow the paste.
+// This is set during confirmation usually.
+// If we're bracketed and the paste contains and ending
+// bracket then something naughty might be going on and we
+// never trust it.
+// If we are bracketed and configured to trust that then the
+// paste is not unsafe.
+// With the lock held, we must scroll to the bottom.
+// We always scroll to the bottom for these inputs.
+// Encode the data. In most cases this doesn't require any
+// copies, so we optimize for that case.
+// This code path means the data did require a copy and mutation.
+// We must free it.
+// We should never get here if clipboard-read is set to deny
+// If clipboard-read is set to ask and we haven't confirmed with the user,
+// do that now
+// Even if the clipboard data is empty we reply, since presumably
+// the client app is expecting a reply. We first allocate our buffer.
+// This must hold the base64 encoded data PLUS the OSC code surrounding it.
+// Wrap our data with the OSC code
+// Do the base64 encoding
+// Wyhash is used to hash the contents of the desktop notification to limit
+// how fast identical notifications can be sent sequentially.
+// Set a limit of one desktop notification per second so that the OS
+// doesn't kill us when we run out of resources.
+// Set a limit of one notification per five seconds for desktop
+// notifications with identical content.
+// Tell the surface to present itself to the user. This may involve raising the
+// window and switching tabs.
+// Utility function for the unit tests for mouse selection logic.
+//
+// Tests a click and drag on a 10x5 cell grid, x positions are given in
+// fractional cells, e.g. 3.1 would be 10% through the cell at x = 3.
+//
+// NOTE: The size tested with has 10px wide cells, meaning only one digit
+//       after the decimal place has any meaning, e.g. 3.14 is equal to 3.1.
+//
+// The provided start_x/y and end_x/y are the expected start and end points
+// of the resulting selection.
+// Our screen size is 10x5 cells that are
+// 10x20 px, with 5px padding on all sides.
+// We hold both ctrl and alt for rectangular
+// select so that this test is platform agnostic.
+// Like `testMouseSelection` but checks that the resulting selection is null.
+//
+// See `testMouseSelection` for more details.
+// Our screen size is 10x5 cells that are
+// 10x20 px, with 5px padding on all sides.
+// We hold both ctrl and alt for rectangular
+// select so that this test is platform agnostic.
+// We disable format to make these easier to
+// read by pairing sets of coordinates per line.
+// zig fmt: off
+// -- LTR
+// single cell selection
+// including click and drag pin cells
+// including click pin cell but not drag pin cell
+// including drag pin cell but not click pin cell
+// including neither click nor drag pin cells
+// empty selection (single cell on only left half)
+// empty selection (single cell on only right half)
+// empty selection (between two cells, not crossing threshold)
+// -- RTL
+// single cell selection
+// including click and drag pin cells
+// including click pin cell but not drag pin cell
+// including drag pin cell but not click pin cell
+// including neither click nor drag pin cells
+// empty selection (single cell on only left half)
+// empty selection (single cell on only right half)
+// empty selection (between two cells, not crossing threshold)
+// -- Wrapping
+// LTR, wrap excluded cells
+// RTL, wrap excluded cells
+// We disable format to make these easier to
+// read by pairing sets of coordinates per line.
+// zig fmt: off
+// -- LTR
+// single column selection
+// including click and drag pin columns
+// including click pin column but not drag pin column
+// including drag pin column but not click pin column
+// including neither click nor drag pin columns
+// empty selection (single column on only left half)
+// empty selection (single column on only right half)
+// empty selection (between two columns, not crossing threshold)
+// -- RTL
+// single column selection
+// including click and drag pin columns
+// including click pin column but not drag pin column
+// including drag pin column but not click pin column
+// including neither click nor drag pin columns
+// empty selection (single column on only left half)
+// empty selection (single column on only right half)
+// empty selection (between two columns, not crossing threshold)
+// -- Wrapping
+// LTR, do not wrap
+// RTL, do not wrap
+//
+// --- Original Ghostty Comments End: src/Surface.zig
+
 // a minimal "widget" where the terminal is drawn and responds to events
 // such as keyboard and mouse. Each surface also creates and owns its pty
 // session.
@@ -2831,4 +4266,3 @@ fn mouse_selection(click_pin Pin, drag_pin Pin, click_x u32, drag_x u32, mods in
 		rectangle: mods.alt
 	}
 }
-

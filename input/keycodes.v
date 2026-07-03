@@ -1,5 +1,238 @@
 module input
 
+// --- Original Ghostty Comments Start: src/input/keycodes.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/input/keycodes.zig
+//
+// Based on the Chromium source. The Chromium source code is governed by a
+// BSD-style license that can be found in the LICENSE file.
+// https://source.chromium.org/chromium/chromium/src/+/main:ui/events/keycodes/dom/dom_code_data.inc
+// The full list of entries for the current platform.
+// Entry contains the USB code, native keycode, and W3C dom code for
+// the current platform.
+// A map from code to key. This isn't meant to be used at runtime
+// (though it could), so it isn't exported. It it used to build the
+// key value for Entry.
+// The codes for the table from the Chromium data set. These are ALL the
+// codes, not just the ones that are supported by the current platform.
+// These are `pub` but you shouldn't use this because it uses way more
+// memory than is necessary.
+//
+// The format is: usb, evdev, xkb, win, mac, code
+// All of the full entries. This is marked pub but it should NOT be referenced
+// directly because it contains too much data for normal usage. Use `entries`
+// instead which contains just the relevant data for the target platform.
+//   USB     evdev    XKB     Win     Mac   Code
+// =========================================
+// Non-USB codes
+// =========================================
+//   USB     evdev    XKB     Win     Mac   Code
+// =========================================
+// USB Usage Page 0x01: Generic Desktop Page
+// =========================================
+// Sleep could be encoded as USB#0c0032, but there's no corresponding WakeUp
+// in the 0x0c USB page.
+//   USB     evdev    XKB     Win     Mac
+// =========================================
+// USB Usage Page 0x07: Keyboard/Keypad Page
+// =========================================
+// TODO(garykac):
+// XKB#005c ISO Level3 Shift (AltGr)
+// XKB#005e <>||
+// XKB#006d Linefeed
+// XKB#008a SunProps cf. USB#0700a3 CrSel/Props
+// XKB#008e SunOpen
+// Mac#003f kVK_Function
+// Mac#000a kVK_ISO_Section (ISO keyboards only)
+// Mac#0066 kVK_JIS_Eisu (USB#07008a Henkan?)
+//   USB     evdev    XKB     Win     Mac
+// USB#070032 never appears on keyboards that have USB#070031.
+// Platforms use the same scancode as for the two keys.
+// Hence this code can only be generated synthetically
+// (e.g. in a DOM Level 3 KeyboardEvent).
+// The keycap varies on international keyboards:
+//   Dan: '*  Dutch: <>  Ger: #'  UK: #~
+// TODO(garykac): Verify Mac intl keyboard.
+// .{ 0x070032, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// TODO(garykac): CapsLock requires special handling for each platform.
+// PrintScreen is effectively F13 on Mac OS X.
+// USB#0x070049 Insert, labeled "Help/Insert" on Mac -- see note M1 at top.
+// Delete (Forward Delete) named DEL because DELETE conflicts with <windows.h>
+// USB#070064 is not present on US keyboard.
+// This key is typically located near LeftShift key.
+// The keycap varies on international keyboards:
+//   Dan: <> Dutch: ][ Ger: <> UK: \|
+// USB#0x070065 Application Menu (next to RWin key) -- see note L2 at top.
+// USB#0x070073 -- see note W1 at top.
+// USB#0x070075 Help -- see note M1 at top.
+// USB#0x070076 Keyboard Menu -- see note L2 at top.
+// .{ 0x070076, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x070078, 0x0080, 0x0088, 0x0000, 0xffff, ""},
+// .{ 0x070082, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x070083, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x070084, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// International1
+// USB#070086 is used on AS/400 keyboards. Standard Keypad_= is USB#070067.
+// .{ 0x070086, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// USB#070087 is used for Brazilian /? and Japanese _ 'ro'.
+// International2
+// USB#070088 is used as Japanese Hiragana/Katakana key.
+// International3
+// USB#070089 is used as Japanese Yen key.
+// International4
+// USB#07008a is used as Japanese Henkan (Convert) key.
+// International5
+// USB#07008b is used as Japanese Muhenkan (No-convert) key.
+// .{ 0x07008c, 0x005f, 0x0067, 0x005c, 0xffff, ""},
+// .{ 0x07008d, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x07008e, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x07008f, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// LANG1
+// USB#070090 is used as Korean Hangul/English toggle key, and as the Kana key
+// on the Apple Japanese keyboard.
+// LANG2
+// USB#070091 is used as Korean Hanja conversion key, and as the Eisu key on
+// the Apple Japanese keyboard.
+// LANG3
+// USB#070092 is used as Japanese Katakana key.
+// LANG4
+// USB#070093 is used as Japanese Hiragana key.
+// LANG5
+// USB#070094 is used as Japanese Zenkaku/Hankaku (Fullwidth/halfwidth) key.
+// Not mapped on Windows -- see note W1 at top.
+// .{ 0x070095, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x070096, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x070097, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x070098, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x070099, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x07009a, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// USB#0x07009c Keyboard Clear -- see note L1 at top.
+// .{ 0x07009c, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x07009d, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x07009e, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x07009f, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700a0, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700a1, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700a2, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// USB#0x0700a3 Props -- see note L2 at top.
+// .{ 0x0700a4, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700b0, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700b1, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700b2, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700b3, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700b4, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700b5, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700b8, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700b9, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700ba, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700bc, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700bd, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700be, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700bf, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700c0, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700c1, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700c2, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700c3, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700c4, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700c5, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700c6, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700c7, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700c8, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700c9, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700ca, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+//           NUMPAD_DOUBLE_VERTICAL_BAR),  // Keypad_||
+// .{ 0x0700cb, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700cc, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700cd, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700ce, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700cf, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700d5, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700d6, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// USB#0x0700d8 Keypad Clear -- see note L1 at top.
+// .{ 0x0700da, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700db, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700dc, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0700dd, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// USB#0700de - #0700df are reserved.
+// USB#0700e2: left Alt key (Mac left Option key).
+// USB#0700e3: left GUI key, e.g. Windows, Mac Command, ChromeOS Search.
+// USB#0700e6: right Alt key (Mac right Option key).
+// USB#0700e7: right GUI key, e.g. Windows, Mac Command, ChromeOS Search.
+// USB#0700e8 - #07ffff are reserved
+// ==================================
+// USB Usage Page 0x0c: Consumer Page
+// ==================================
+// AL = Application Launch
+// AC = Application Control
+// TODO(garykac): Many XF86 keys have multiple scancodes mapping to them.
+// We need to map all of these into a canonical USB scancode without
+// confusing the reverse-lookup - most likely by simply returning the first
+// found match.
+// TODO(garykac): Find appropriate mappings for:
+// Win#e03c Music - USB#0c0193 is AL_AVCapturePlayback
+// Win#e064 Pictures
+// XKB#0080 XF86LaunchA
+// XKB#0099 XF86Send
+// XKB#009b XF86Xfer
+// XKB#009c XF86Launch1
+// XKB#009d XF86Launch2
+// XKB... remaining XF86 keys
+// KEY_BRIGHTNESS* added in Linux 3.16
+// http://www.usb.org/developers/hidpage/HUTRR41.pdf
+//
+// Keyboard backlight/illumination spec update.
+// https://www.usb.org/sites/default/files/hutrr73_-_fn_key_and_keyboard_backlight_brightness_0.pdf
+//   USB     evdev    XKB     Win     Mac   Code
+//              USB     evdev    XKB     Win     Mac
+// .{ 0x0c00e6, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0c0150, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0c0151, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0c0152, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0c0153, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0c0154, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// .{ 0x0c0155, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// USB#0c0183: AL Consumer Control Configuration
+// USB#0x0c018a AL_EmailReader
+// USB#0x0c018d: AL Contacts/Address Book
+// USB#0x0c018e: AL Calendar/Schedule
+// USB#0x0c018f AL Task/Project Manager
+// .{ 0x0c018f, 0x0241, 0x0249, 0x0000, 0xffff, ""},
+// USB#0x0c0190: AL Log/Journal/Timecard
+// .{ 0x0c0190, 0x0242, 0x024a, 0x0000, 0xffff, ""},
+// USB#0x0c0192: AL_Calculator
+// USB#0c0194: My Computer (AL_LocalMachineBrowser)
+// USB#0x0c019e: AL Terminal Lock/Screensaver
+// USB#0x0c019f AL Control Panel
+// USB#0x0c01a2: AL Select Task/Application
+// USB#0x0c01a7: AL_Documents
+// USB#0x0c01ae: AL Keyboard Layout
+// USB#0c01b4: Home Directory (AL_FileBrowser) (Explorer)
+// .{ 0x0c01b4, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// USB#0x0c01b7: AL Audio Browser
+// USB#0x0c0201: AC New
+// USB#0x0c0203: AC Close
+// USB#0x0c0207: AC Close
+// USB#0x0c0208: AC Print
+// USB#0x0c0221:  AC_Search
+// USB#0x0c0223:  AC_Home
+// USB#0x0c0224:  AC_Back
+// USB#0x0c0225:  AC_Forward
+// USB#0x0c0226:  AC_Stop
+// USB#0x0c0227:  AC_Refresh (Reload)
+// USB#0x0c022a:  AC_Bookmarks (Favorites)
+// USB#0x0c0230:  AC Full Screen View
+// .{ 0x0c0230, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// USB#0x0c0231:  AC Normal View
+// .{ 0x0c0231, 0x0000, 0x0000, 0x0000, 0xffff, ""},
+// USB#0x0c0279:  AC Redo/Repeat
+// USB#0x0c0289:  AC_Reply
+// USB#0x0c028b:  AC_ForwardMsg (MailForward)
+// USB#0x0c028c:  AC_Send
+// USB#0x0c029d:  AC Next Keyboard Layout Select
+//
+// --- Original Ghostty Comments End: src/input/keycodes.zig
+
+
 // Based on the Chromium source. The Chromium source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 // https://source.chromium.org/chromium/chromium/src/+/main:ui/events/keycodes/dom/dom_code_data.inc

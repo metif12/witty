@@ -1,5 +1,113 @@
 module sprite
 
+// --- Original Ghostty Comments Start: src/font/sprite/draw/branch.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/font/sprite/draw/branch.zig
+//
+// Branch Drawing Characters | U+F5D0...U+F60D
+//
+// Branch drawing character set, used for drawing git-like
+// graphs in the terminal. Originally implemented in Kitty.
+// Ref:
+// - https://github.com/kovidgoyal/kitty/pull/7681
+// - https://github.com/kovidgoyal/kitty/pull/7805
+// NOTE: Kitty is GPL licensed, and its code was not referenced
+//       for these characters, only the loose specification of
+//       the character set in the pull request descriptions.
+//
+//                
+//                
+//                
+//              
+//
+// Specification of a branch drawing node, which consists of a
+// circle which is either empty or filled, and lines connecting
+// optionally between the circle and each of the 4 edges.
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// ''
+// Top of horizontal strokes
+// Bottom of horizontal strokes
+// Left of vertical strokes
+// Right of vertical strokes
+// We calculate the center of the circle this way
+// to ensure it aligns with box drawing characters
+// since the lines are sometimes off center to
+// make sure they aren't split between pixels.
+// The radius needs to be the smallest distance from the center to an edge.
+// These @intFromFloat casts shouldn't ever fail since r can never
+// be greater than cx or cy, so when subtracting it from them the
+// result can never be negative.
+// Top of horizontal strokes
+// Bottom of horizontal strokes
+// Left of vertical strokes
+// Right of vertical strokes
+// If we're fading to the top or left, we start with 0.0
+// and increment up as we progress, otherwise we start
+// at 255.0 and increment down (negative).
+//
+// --- Original Ghostty Comments End: src/font/sprite/draw/branch.zig
+
+
 // Branch Drawing Characters | U+F5D0...U+F60D
 //
 // Branch drawing character set, used for drawing git-like

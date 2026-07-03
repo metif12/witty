@@ -1,5 +1,486 @@
 module font
 
+// --- Original Ghostty Comments Start: src/font/face/freetype.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/font/face/freetype.zig
+//
+// Face represents a single font face. A single font face has a single set
+// of properties associated with it such as style, weight, etc.
+//
+// A Face isn't typically meant to be used directly. It is usually used
+// via a Family in order to store it in an Atlas.
+// If we have the freetype backend, we should have load flags.
+// Our Library
+// Our font face.
+// This mutex MUST be held while doing anything with the
+// glyph slot on the freetype face, because this struct
+// may be shared across multiple surfaces.
+//
+// This means that anywhere where `self.face.loadGlyph`
+// is called, this mutex must be held.
+// Harfbuzz font corresponding to this face.
+// Freetype load flags for this font face.
+// Set quirks.disableDefaultFontFeatures
+// Set to true to apply a synthetic italic to the face.
+// The current size this font is set to.
+// Initialize a new font face with the given source in-memory.
+// Initialize a new font face with the given source in-memory.
+// In debug mode, we output information about available variation axes,
+// if they exist.
+// Returns the font name. If allocation is required, buf will be used,
+// but sometimes allocation isn't required and a static string is
+// returned.
+// We look for the font family entry.
+// There are other encodings that are something other than UTF-8
+// but this is one we've seen "in the wild" so far.
+// Return a new face that is the same as this but also has synthetic
+// bold applied.
+// Increase face ref count
+// Return a new face that is the same as this but has a transformation
+// matrix applied to italicize it.
+// Increase face ref count
+// Resize the font in-place. If this succeeds, the caller is responsible
+// for clearing any glyph caches, font atlas data, etc.
+// If we have fixed sizes, we just have to try to pick the one closest
+// to what the user requested. Otherwise, we can choose an arbitrary
+// pixel size.
+// Selects the fixed size in the loaded face that is closest to the
+// requested pixel size.
+// Set the variation axes for this font. This will modify this font
+// in-place.
+// If this font doesn't support variations, we can't do anything.
+// Freetype requires that we send ALL coordinates in at once so the
+// first thing we have to do is get all the vars and put them into
+// an array.
+// To avoid allocations, we cap the number of variation axes we can
+// support. This is arbitrary but Firefox caps this at 16 so I
+// feel like that's probably safe... and we do double cause its
+// cheap.
+// Now we go through each axis and see if its set. This is slow
+// but there usually aren't many axes and usually not many set
+// variations, either.
+// Set them!
+// Returns the glyph index for the given Unicode code point. If this
+// face doesn't support this glyph, null is returned.
+// Returns true if this font is colored. This can be used by callers to
+// determine what kind of atlas to pass in.
+// Returns true if the given glyph ID is colorized.
+// Load the glyph and see what pixel mode it renders with.
+// All modes other than BGRA are non-color.
+// If the glyph fails to load, just return false.
+// NO_SVG set to true because we don't currently support rendering
+// SVG glyphs under FreeType, since that requires bundling another
+// dependency to handle rendering the SVG.
+// Set the load flags to use when loading a glyph for measurement or
+// rendering.
+// Hinting should only be enabled if the configured load flags specify
+// it and the provided constraint doesn't actually do anything, since
+// if it does, then it'll mess up the hinting anyway when it moves or
+// resizes the glyph.
+// If our glyph has color, we want to render the color
+// We don't render, because we'll invoke the render
+// manually after applying constraints further down.
+// use options from config
+// If we're gonna be rendering this glyph in monochrome,
+// then we should use the monochrome hinter as well, or
+// else it won't look very good at all.
+//
+// Otherwise if the user asked for light hinting we
+// use that, otherwise we just use the normal target.
+// NO_SVG set to true because we don't currently support rendering
+// SVG glyphs under FreeType, since that requires bundling another
+// dependency to handle rendering the SVG.
+// Get a rect that represents the position and size of the loaded glyph.
+// If we're dealing with an outline glyph then we get the
+// outline's bounding box instead of using the built-in
+// metrics, since that's more precise and allows better
+// cell-fitting.
+// Get the glyph's bounding box before we transform it at all.
+// We use this rather than the metrics, since it's more precise.
+// Render a glyph using the glyph index. The rendered glyph is stored in the
+// given texture atlas.
+// Load the glyph.
+// For synthetic bold, we embolden the glyph.
+// We need to scale the embolden amount based on the font size.
+// This is a heuristic I found worked well across a variety of
+// founts: 1 pixel per 64 units of height.
+// We get a rect that represents the position
+// and size of the glyph before constraints.
+// If our glyph is smaller than a quarter pixel in either axis
+// then it has no outlines or they're too small to render.
+//
+// In this case we just return 0-sized glyph struct.
+// Next we apply any constraints to get the final size of the glyph.
+// We need to add the baseline position before passing to the constrain
+// function since it operates on cell-relative positions, not baseline.
+// We center all glyphs within the pixel-rounded and adjusted
+// cell width if it's larger than the face width, so that they
+// aren't weirdly off to the left.
+//
+// We don't do this if the glyph has a stretch constraint,
+// since in that case the position was already calculated with the
+// new cell width in mind.
+// We add half the difference to re-center.
+//
+// NOTE: We round this to a whole-pixel amount because under
+//       FreeType, the outlines will be hinted, which isn't
+//       the case under CoreText. If we move the outlines by
+//       a non-whole-pixel amount, it completely ruins the
+//       hinting.
+// If this is a bitmap glyph, it will always render as full pixels,
+// not fractional pixels, so we need to quantize its position and
+// size accordingly to align to full pixels so we get good results.
+// Now we can render the glyph.
+// Manually adjust the glyph outline with this transform.
+//
+// This offers better precision than using the freetype transform
+// matrix, since that has 16.16 coefficients, and also I was having
+// weird issues that I can only assume where due to freetype doing
+// some bad caching or something when I did this using the matrix.
+// We skew by 12 degrees to synthesize italics.
+// Convert to f64 for processing
+// Subtract original bearings
+// Scale
+// Add new bearings
+// Skew
+// Convert back and store
+// Copy the glyph's bitmap, making sure
+// that it's 8bpp and densely packed.
+// If our glyph has a non-color bitmap, we need
+// to convert it to dense 8bpp so that the scale
+// operation works correctly.
+// Make sure the slot owns its bitmap,
+// since we'll be modifying it here.
+// Free the existing glyph bitmap and
+// replace it with the converted one.
+// Round our target width and height
+// as the size for our scaled bitmap.
+// Allocate a buffer for our scaled bitmap.
+//
+// We'll copy this to the original bitmap once we're
+// done so we can free it at the end of this scope.
+// Resize
+// This should never fail because this is a
+// fairly straightforward in-memory operation...
+// Replace the bitmap's buffer and size info.
+// Update the bearings to account for the new positioning.
+// Glyph formats are tags, so we can
+// output a semi-readable error here.
+// If this is a color glyph but we're trying to render it to the
+// grayscale atlas, or vice versa, then we throw and error. Maybe
+// in the future we could convert, but for now it should be fine.
+// Our whole-pixel bearings for the final glyph.
+// The fractional portion will be included in the rasterized position.
+//
+// For the Y position, FreeType's `bitmap_top` is the distance from the
+// baseline to the top of the glyph, but we need the distance from the
+// bottom of the cell to the bottom of the glyph, so first we add the
+// baseline to get the distance from the bottom of the cell to the top
+// of the glyph, then we subtract the height of the glyph to get the
+// bottom.
+// If our bitmap is grayscale, make sure to multiply all pixel
+// values by the right factor to bring `num_grays` up to 256.
+//
+// This is necessary because FT_Bitmap_Convert doesn't do this,
+// it just sets num_grays to the correct number and uses the
+// original smaller pixel values.
+// Must have non-empty bitmap because we return earlier if zero.
+// We assume the rest of this that it is non-zero so this is important.
+// If this doesn't match then something is wrong.
+// Allocate our texture atlas region and copy our bitmap in to it.
+// This should be the distance from the bottom of
+// the cell to the top of the glyph's bounding box.
+// This should be the distance from the left of
+// the cell to the left of the glyph's bounding box.
+// Convert 16.6 pixel format to pixels based on the scale factor of the
+// current font size.
+// Convert 26.6 pixel format to f32
+// Get the `FaceMetrics` for this face.
+// This code relies on this assumption, and it should always be
+// true since we don't do any non-uniform scaling on the font ever.
+// Read the 'head' table out of the font data.
+// Read the 'post' table out of the font data.
+// Read the 'OS/2' table out of the font data.
+// Read the 'hhea' table out of the font data.
+// Whether the font is in a scalable format. We need to know this
+// because many of the metrics provided by FreeType are invalid for
+// non-scalable fonts.
+// We get the UPM from the head table.
+//
+// If we have no head, but it is a scalable face, take the UPM from
+// FreeType's units_per_EM, otherwise we'll assume that UPM == PPEM.
+// If we couldn't get the hhea table, rely on metrics from FreeType.
+// We compute the line gap by adding the (negative) descender
+// and subtracting the (positive) ascender from the line height
+// to get the remaining gap size.
+//
+// NOTE: This might always be 0... but it doesn't hurt to do.
+// If our font has no OS/2 table, then we just
+// blindly use the metrics from the hhea table.
+// If the font says to use typo metrics, trust it.
+// (The USE_TYPO_METRICS bit is bit 7)
+// Otherwise we prefer the height metrics from 'hhea' if they
+// are available, or else OS/2 sTypo* metrics, and if all else
+// fails then we use OS/2 usWin* metrics.
+//
+// This is not "standard" behavior, but it's our best bet to
+// account for fonts being... just weird. It's pretty much what
+// FreeType does to get its generic ascent and descent metrics.
+// usWinDescent is *positive* -> down unlike sTypoDescender
+// and hhea.Descender, so we flip its sign to fix this.
+// Some fonts have degenerate 'post' tables where the underline
+// thickness (and often position) are 0. We consider them null
+// if this is the case and use our own fallbacks when we calculate.
+// If the underline position isn't 0 then we do use it,
+// even if the thickness is't properly specified.
+// Similar logic to the underline above.
+// Cell width is calculated by calculating the widest width of the
+// visible ASCII characters. Usually 'M' is widest but we just take
+// whatever is widest.
+//
+// ASCII height is calculated as the height of the overall bounding
+// box of the same characters.
+//
+// If we fail to load any visible ASCII we just use max_advance from
+// the metrics provided by FreeType, and set ascii_height to null as
+// it's optional.
+// If we couldn't get valid measurements, just use
+// FreeType's max_advance and null, respectively.
+// We use the cap and ex heights specified by the font if they're
+// available, otherwise we try to measure the `H` and `x` glyphs.
+// The OS/2 table does not include these metrics in version 1.
+// Measure "水" (CJK water ideograph, U+6C34) for our ic width.
+// If the advance of the glyph is less than the width of the actual
+// glyph then we just treat it as invalid since it's probably wrong
+// and using it for size normalization will instead make the font
+// way too big.
+//
+// This can sometimes happen if there's a CJK font that has been
+// patched with the nerd fonts patcher and it butchers the advance
+// values so the advance ends up half the width of the actual glyph.
+// Copy the font table data for the given tag.
+// Generate all visible ASCII
+// Test resizing
+// Make sure this glyph has color
+// glyph 3 is mono in Noto
+// Including the newline
+// Any glyph at 12pt @ 96 DPI is a bitmap
+// glyph 77 = 'i'
+// should render crisp
+// Expected pixel pattern for Spleen 8x16 'A' (glyph index from char 'A')
+// Derived from BDF BITMAP data: 00,00,7C,C6,C6,C6,FE,C6,C6,C6,C6,C6,00,00,00,00
+// Including the newline
+// Test parameters for bitmap font tests
+// Spleen 8x16 is a pure bitmap font at 16px height
+// Get glyph index for 'A'
+// Verify dimensions match Spleen 8x16
+// Verify pixel-perfect rendering
+//
+// --- Original Ghostty Comments End: src/font/face/freetype.zig
+
+// --- Original Ghostty Comments Start: src/font/face.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/font/face.zig
+//
+// Face implementation for the compile options.
+// If a DPI can't be calculated, this DPI is used. This is probably
+// wrong on modern devices so it is highly recommended you get the DPI
+// using whatever platform method you can.
+// These are the flags to customize how freetype loads fonts. This is
+// only non-void if the freetype backend is enabled.
+// Options for initializing a font face.
+// The desired size for loading a font.
+// Desired size in points
+// The DPI of the screen so we can convert points to pixels.
+// Converts points to pixels
+// 1 point = 1/72 inch
+// Make this a valid gobject if we're in a GTK environment.
+// A font variation setting. The best documentation for this I know of
+// is actually the CSS font-variation-settings property on MDN:
+// https://developer.mozilla.org/en-US/docs/Web/CSS/font-variation-settings
+// Converts the ID to a string. The return value is only valid
+// for the lifetime of the self pointer.
+// The size and position of a glyph.
+// Additional options for rendering glyphs.
+// The metrics that are defining the grid layout. These are usually
+// the metrics of the primary font face. The grid metrics are used
+// by the font face to better layout the glyph in situations where
+// the font is not exactly the same size as the grid.
+// The number of grid cells this glyph will take up. This can be used
+// optionally by the rasterizer to better layout the glyph.
+// Constraint and alignment properties for the glyph. The rasterizer
+// should call the `constrain` function on this with the original size
+// and bearings of the glyph to get remapped values that the glyph
+// should be scaled/moved to.
+// The number of cells, horizontally that the glyph is free to take up
+// when resized and aligned by `constraint`. This is usually 1, but if
+// there's whitespace to the right of the cell then it can be 2.
+// Thicken the glyph. This draws the glyph with a thicker stroke width.
+// This is purely an aesthetic setting.
+//
+// This only works with CoreText currently.
+// "Strength" of the thickening, between `0` and `255`.
+// Only has an effect when `thicken` is enabled.
+//
+// `0` does not correspond to *no* thickening,
+// just the *lightest* thickening available.
+//
+// CoreText only.
+// See the `constraint` field.
+// Don't constrain the glyph in any way.
+// Sizing rule.
+// Vertical alignment rule.
+// Horizontal alignment rule.
+// Top padding when resizing.
+// Left padding when resizing.
+// Right padding when resizing.
+// Bottom padding when resizing.
+// Size and bearings of the glyph relative
+// to the bounding box of its scale group.
+// Maximum aspect ratio (width/height) to allow when stretching.
+// Maximum number of cells horizontally to use.
+// What to use as the height metric when constraining the glyph and
+// the constraint width is 1,
+// Don't change the size of this glyph.
+// Scale the glyph down if needed to fit within the bounds,
+// preserving aspect ratio.
+// Scale the glyph up or down to exactly match the bounds,
+// preserving aspect ratio.
+// Scale the glyph down if needed to fit within the bounds,
+// preserving aspect ratio. If the glyph doesn't cover a
+// single cell, scale up. If the glyph exceeds a single
+// cell but is within the bounds, do nothing.
+// (Nerd Font specific rule.)
+// Stretch the glyph to exactly fit the bounds in both
+// directions, disregarding aspect ratio.
+// Don't move the glyph on this axis.
+// Move the glyph so that its leading (bottom/left)
+// edge aligns with the leading edge of the axis.
+// Move the glyph so that its trailing (top/right)
+// edge aligns with the trailing edge of the axis.
+// Move the glyph so that it is centered on this axis.
+// Move the glyph so that it is centered on this axis,
+// but always with respect to the first cell even for
+// multi-cell constraints. (Nerd Font specific rule.)
+// Use the full line height of the primary face for
+// constraining this glyph.
+// Use the icon height from the grid metrics for
+// constraining this glyph. Unlike `cell`, the value of
+// this height depends on both the constraint width and the
+// affected by the `adjust-icon-height` config option.
+// Returns true if the constraint does anything. If it doesn't,
+// because it neither sizes nor positions the glyph, then this
+// returns false.
+// Apply this constraint to the provided glyph
+// size, given the available width and height.
+// Number of cells horizontally available for this glyph.
+// Stretched glyphs are usually meant to align across cell
+// boundaries, which works best if they're scaled and
+// aligned to the grid rather than the face. This is most
+// easily done by inserting this little fib in the metrics.
+// Negative padding for stretched glyphs is a band-aid to
+// avoid gaps due to pixel rounding, but at the cost of
+// unsightly overlap artifacts. Since we scale and align to
+// the grid rather than the face, we don't need it.
+// For extra wide font faces, never stretch glyphs across two cells.
+// This mirrors font_patcher.
+// The bounding box for the glyph's scale group.
+// Scaling and alignment rules are calculated for
+// this box and then applied to the glyph.
+// Apply prescribed scaling, preserving the
+// center bearings of the group bounding box
+// NOTE: font_patcher jumps through a lot of hoops at this
+// point to ensure that the glyph remains within the target
+// bounding box after rounding to font definition units.
+// This is irrelevant here as we're not rounding, we're
+// staying in f64 and heading straight to rendering.
+// Apply prescribed alignment
+// Transfer the scaling and alignment back to the glyph and return.
+// Return width and height scaling factors for this scaling group.
+// Like font-patcher, the icon constraint height depends on the
+// constraint width. Unlike font-patcher, the multi-cell
+// icon_height may be different from face_height due to the
+// `adjust-icon-height` config option.
+// Scale down to fit if needed
+// Scale to cover
+// Scale down to fit or up to cover at least one cell
+// NOTE: This is similar to font_patcher's "pa" mode,
+// however, font_patcher will only do the upscaling
+// part if the constraint width is 1, resulting in
+// some icons becoming smaller when the constraint
+// width increases. You'd see icons shrinking when
+// opening up a space after them. This makes no
+// sense, so we've fixed the rule such that these
+// icons are scaled to the same size for multi-cell
+// constraints as they would be for single-cell.
+// Call back into this function with
+// constraint width 1 to get single-cell scale
+// factors. We use the height factor as width
+// could have been modified by max_xy_ratio.
+// Reduce aspect ratio if required
+// Return vertical bearing for aligning this group
+// If we don't have any constraints affecting the vertical axis,
+// we don't touch vertical alignment.
+// We use face_height and offset by face_y, rather than
+// using cell_height directly, to account for the asymmetry
+// of the pixel cell around the face (a consequence of
+// aligning the baseline with a pixel boundary rather than
+// vertically centering the face).
+// NOTE: Even if there is no prescribed alignment, we ensure
+// that the group doesn't protrude outside the padded cell,
+// since this is implied by every available size constraint. If
+// the group is too high we fall back to centering, though if we
+// hit the .none prong we always have self.size != .none, so
+// this should never happen.
+// Return horizontal bearing for aligning this group
+// If we don't have any constraints affecting the horizontal
+// axis, we don't touch horizontal alignment.
+// For multi-cell constraints, we align relative to the span
+// from the left edge of the first cell to the right edge of
+// the last face cell assuming it's left-aligned within the
+// rounded and adjusted pixel cell. Any horizontal offset to
+// center the face within the grid cell is the responsibility
+// of the backend-specific rendering code, and should be done
+// after applying constraints.
+// NOTE: Even if there is no prescribed alignment, we ensure
+// that the glyph doesn't protrude outside the padded cell,
+// since this is implied by every available size constraint. The
+// left-side bound has priority if the group is too wide, though
+// if we hit the .none prong we always have self.size != .none,
+// so this should never happen.
+// NOTE: .center1 implements the font_patcher rule of centering
+// in the first cell even for multi-cell constraints. Since glyphs
+// are not allowed to protrude to the left, this results in the
+// left-alignment like .start when the glyph is wider than a cell.
+// Hardcoded data matches metrics from CoreText at size 12 and DPI 96.
+// Define grid metrics (matches font-family = JetBrains Mono)
+// ASCII (no constraint).
+// BBox of 'x' from JetBrains Mono.
+// Any constraint width: do nothing.
+// Symbol (same constraint as hardcoded in Renderer.addGlyph).
+// BBox of '■' (0x25A0 black square) from Iosevka.
+// NOTE: This glyph is designed to span two cells.
+// Constraint width 1: scale down and shift to fit a single cell.
+// Constraint width 2: do nothing.
+// Emoji (same constraint as hardcoded in SharedGrid.renderGlyph).
+// BBox of '🥸' (0x1F978) from Apple Color Emoji.
+// Constraint width 2: scale to cover two cells with padding, center;
+// Nerd Font default.
+// Verify that this is the constraint we expect.
+// BBox of '' (0xEA61 nf-cod-lightbulb) from Symbols Only.
+// NOTE: This icon is part of a group, so the
+// constraint applies to a larger bounding box.
+// Constraint width 1: scale and shift group to fit a single cell.
+// Constraint width 2: no scaling; left-align and vertically center group.
+// Nerd Font stretch.
+// Verify that this is the constraint we expect.
+// BBox of ' ' (0xE0C0 nf-ple-flame_thick) from Symbols Only.
+// Constraint width 1: stretch and position to exactly cover one cell.
+// Constraint width 1: stretch and position to exactly cover two cells.
+//
+// --- Original Ghostty Comments End: src/font/face.zig
+
+
 // Face represents a single font face. A single font face has a single set
 // of properties associated with it such as style, weight, etc.
 //

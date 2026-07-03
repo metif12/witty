@@ -1,5 +1,114 @@
 module terminal
 
+// --- Original Ghostty Comments Start: src/terminal/sgr.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/terminal/sgr.zig
+//
+// SGR (Select Graphic Rendition) attrinvbute parsing and types.
+// Attribute type for SGR
+// Unset all attributes
+// Unknown attribute, the raw CSI command parameters are here.
+// Bold the text.
+// Italic text.
+// Faint/dim text.
+// Note: reset faint is the same SGR code as reset bold
+// Underline the text
+// Overline the text
+// Blink the text
+// Invert fg/bg colors.
+// Invisible
+// Strikethrough the text.
+// Set foreground color as RGB values.
+// Set background color as RGB values.
+// Set the background/foreground as a named color attribute.
+// Reset the fg/bg to their default values.
+// Set the background/foreground as a named bright color attribute.
+// Set background color as 256-color palette.
+// Set foreground color as 256-color palette.
+// Full is the full SGR input.
+// Partial is the remaining, where we got hung up.
+// C ABI functions.
+// Padding size for C ABI compatibility.
+// Largest variant is Unknown.C: 2 pointers + 2 usize = 32 bytes on 64-bit.
+// We use [8]u64 (64 bytes) to allow room for future expansion while
+// maintaining ABI compatibility.
+// Parser parses the attributes from a list of SGR parameters.
+// Empty state parser.
+// Next returns the next attribute or null if there are no more attributes.
+// We're more likely to not be done than to be done.
+// Add one to ensure we don't loop on unset
+// If we're at index zero it means we must have an empty list
+// and an empty list implicitly means unset, otherwise we're
+// done and return null.
+// Call inlined for performance reasons.
+// Our last one will have an idx be the last value.
+// If we have a colon separator then we need to ensure we're
+// parsing a value that allows it.
+// Colons are fairly rare in the wild.
+// In real world use it's very rare
+// that we receive an invalid sequence.
+// Consume all the colon separated
+// values and return them as unknown.
+// Colons are fairly rare in the wild.
+// Invalid/unknown SGRs are just not very likely.
+// For unknown underline styles,
+// just render a single underline.
+// This is quite a rare condition.
+// We are very likely to have enough parameters.
+// `2` indicates direct-color (r, g, b).
+// We need at least 3 more params for this to make sense.
+// `5` indicates indexed color.
+// We are very likely to have enough parameters.
+// We are very likely to have enough parameters.
+// `2` indicates direct-color (r, g, b).
+// We need at least 3 more params for this to make sense.
+// `5` indicates indexed color.
+// We are very likely to have enough parameters.
+// We are very likely to have enough parameters.
+// `2` indicates direct-color (r, g, b).
+// We need at least 3 more params for this to make sense.
+// `5` indicates indexed color.
+// We are very likely to have enough parameters.
+// 82 instead of 90 to offset to "bright" colors
+// Any direct color style must have at least 5 values.
+// Only used for direct color sets (38, 48, 58) and subparam 2.
+// Note: We use @truncate because the value should be 0 to 255. If
+// it isn't, the behavior is undefined so we just... truncate it.
+// If we don't have a colon, then we expect exactly 3 semicolon
+// separated values.
+// Semicolons are much more common than colons.
+// We have a colon, we might have either 5 or 6 values depending
+// on if the colorspace is present.
+// This is the much more common case in the wild.
+// Invalid/unknown SGRs just don't happen very often at all.
+// Returns true if the present position has a colon separator.
+// This always returns false for the last value since it has no
+// separator.
+// Call inlined for performance reasons.
+// Consumes all the remaining parameters separated by a colon and
+// returns an unknown attribute.
+// Mark all parameters except the last as having a colon after.
+// This used to crash
+// This used to crash
+// These behaviors have been verified against xterm.
+// Colon version should skip the optional color space identifier
+// 3 8 : 2 : Pi : Pr : Pg : Pb
+// 4 8 : 2 : Pi : Pr : Pg : Pb
+// 5 8 : 2 : Pi : Pr : Pg : Pb
+// Semicolon version should not parse optional color space identifier
+// 3 8 ; 2 ; Pr ; Pg ; Pb
+// 4 8 ; 2 ; Pr ; Pg ; Pb
+// 5 8 ; 2 ; Pr ; Pg ; Pb
+// Kakoune sent this complex SGR sequence that caused invalid behavior.
+// This used to crash
+// try testing.expect(p.next() == null);
+// Discussion #5930, another input sent by kakoune
+// echo -e "\033[4:3;38;2;51;51;51;48;2;170;170;170;58;2;255;97;136mset everything in one sequence, broken\033[m"
+// This used to crash
+//
+// --- Original Ghostty Comments End: src/terminal/sgr.zig
+
+
 // SGR (Select Graphic Rendition) attribute parsing.
 //
 // Source: terminal/sgr.zig

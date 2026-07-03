@@ -1,5 +1,209 @@
 module renderer
 
+// --- Original Ghostty Comments Start: src/renderer/image.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/renderer/image.zig
+//
+// Generic image rendering state for the renderer. This stores all
+// images and their placements and exposes only a limited public API
+// for adding images and placements and drawing them.
+// The full image state for the renderer that specifies what images
+// need to be uploaded, pruned, etc.
+// The placements for the Kitty image protocol.
+// The end index (exclusive) for placements that should be
+// drawn below the background, below the text, etc.
+// True if there are any virtual placements. This needs to be known
+// because virtual placements need to be recalculated more often
+// on frame builds and are generally more expensive to handle.
+// Overlays
+// Upload any images to the GPU that need to be uploaded,
+// and remove any images that are no longer needed on the GPU.
+//
+// If any uploads fail, they are ignored. The return value
+// can be used to detect if upload was a total success (true)
+// or not (false).
+// Draw the given named set of placements.
+//
+// Any placements that have non-uploaded images are ignored. Any
+// graphics API errors during drawing are also ignored.
+// Look up the image
+// Get the texture
+// Create our vertex buffer, which is always exactly one item.
+// future(mitchellh): we can group rendering multiple instances of a single image
+// Update our overlay state. Null value deletes any existing overlay.
+// If we don't have an overlay, remove any existing one.
+// For transmit time we always just use the current time
+// and overwrite the overlay.
+// Ensure we have space for our overlay placement. Do this before
+// we upload our image so we don't have to deal with cleaning
+// that up.
+// Setup our image.
+// Setup our placement
+// Returns true if the Kitty graphics state requires an update based
+// on the terminal state and our internal state.
+//
+// This does not read/write state used by drawing.
+// If the terminal kitty image state is dirty, we must update.
+// If we have any virtual references, we must also rebuild our
+// kitty state on every frame because any cell change can move
+// an image. If the virtual placements were removed, this will
+// be set to false on the next update.
+// Update the Kitty graphics state from the terminal.
+//
+// This reads/writes state used by drawing.
+// We always clear our previous placements no matter what because
+// we rebuild them from scratch.
+// Go through our known images and if there are any that are no longer
+// in use then mark them to be freed.
+//
+// This never conflicts with the below because a placement can't
+// reference an image that doesn't exist.
+// We're only looking at Kitty images
+// The top-left and bottom-right corners of our viewport in screen
+// points. This lets us determine offsets and containment of placements.
+// Go through the placements and ensure the image is
+// on the GPU or else is ready to be sent to the GPU.
+// Special logic based on location
+// We need to mark virtual placements on our renderer so that
+// we know to rebuild in more scenarios since cell changes can
+// now trigger placement changes.
+// We also continue out because virtual placements are
+// only triggered by the unicode placeholder, not by the
+// placement itself.
+// Get the image for the placement
+// For errors we log and continue. We try to place
+// other placements even if one fails.
+// If we have virtual placements then we need to scan for placeholders.
+// For errors we log and continue. We try to place
+// other placements even if one fails.
+// Sort the placements by their Z value.
+// Find our indices. The values are sorted by z so we can
+// find the first placement out of bounds to find the limits.
+// If we didn't see any images with a z > the bg limit,
+// then our bg end is the end of our placement list.
+// Same idea for the image_text_end.
+// Get the viewport-relative position for this
+// placement and add it to the placements list.
+// Get the rect for the placement. If this placement doesn't have
+// a rect then its virtual or something so skip it.
+// This is expensive but necessary.
+// If the selection isn't within our viewport then skip it.
+// We need to prep this image for upload if it isn't in the
+// cache OR it is in the cache but the transmit time doesn't
+// match meaning this image is different.
+// Calculate the dimensions of our image, taking in to
+// account the rows / columns specified by the placement.
+// Calculate the source rectangle
+// Get the viewport-relative Y position of the placement.
+// Accumulate the placement
+// If our placement is zero sized then we don't do anything.
+// This is unreachable with virtual placements because we should
+// only ever be looking at virtual placements that are in our
+// viewport in the renderer and virtual placements only ever take
+// up one row.
+// Prepare the image for the GPU and store the placement.
+// Prepare an image for upload to the GPU.
+// If this image exists and its transmit time is the same we assume
+// it is the identical image so we don't need to send it to the GPU.
+// Copy the data so we own it.
+// If this is a new entry we can just remove it since it
+// was never sent to the GPU.
+// If this was an existing entry, it is invalid and
+// we must unload it.
+// Note: we don't need to errdefer free the data because it is
+// put into the map immediately below and our errdefer to
+// handle our map state will fix this up.
+// Store it in the map
+// If any error happens, we unload the image and it is invalid.
+// Prepare the provided Kitty image for upload to the GPU by copying its
+// data with our allocator and setting it to the pending state.
+// constCasts are always gross but this one is safe is because
+// the data is only read from here and copied into its own
+// buffer.
+// Represents a single image placement on the grid.
+// A placement is a request to render an instance of an image.
+// The image being rendered. This MUST be in the image map.
+// The grid x/y where this placement is located.
+// The width/height of the placed image.
+// The offset in pixels from the top left of the cell.
+// This is clamped to the size of a cell.
+// The source rectangle of the placement.
+// Image identifier used to store and lookup images.
+//
+// This is tagged by different image types to make it easier to
+// store different kinds of images in the same map without having
+// to worry about ID collisions.
+// Image sent to the terminal state via the kitty graphics protocol.
+// The value is the ID assigned by the terminal.
+// Debug overlay. This is always composited down to a single
+// image for now. In the future we can support layers here if we want.
+// Z-ordering tie-breaker for images with the same z value.
+// If our tags aren't the same, we sort by tag.
+// Kitty images always sort before (lower z) non-kitty images.
+// No sensical ordering
+// The map used for storing images.
+// The state for a single image that is to be rendered.
+// The image data is pending upload to the GPU.
+//
+// This data is owned by this union so it must be freed once uploaded.
+// This is the same as the pending states but there is
+// a texture already allocated that we want to replace.
+// The image is uploaded and ready to be used.
+// The image isn't uploaded yet but is scheduled to be unloaded.
+// The image is uploaded and is scheduled to be unloaded.
+// The image is uploaded and scheduled to be replaced
+// with new data, but it's also scheduled to be unloaded.
+// Pending image data that needs to be uploaded to the GPU.
+// Data is always expected to be (width * height * bpp).
+// 1 byte per pixel grayscale.
+// 2 bytes per pixel grayscale + alpha.
+// 3 bytes per pixel RGB.
+// 3 bytes per pixel BGR.
+// 4 byte per pixel RGBA.
+// 4 byte per pixel BGRA.
+// Get bytes per pixel for this format.
+// Mark this image for unload whatever state it is in.
+// Mark the current image to be replaced with a pending one. This will
+// attempt to update the existing texture if we have one, otherwise it
+// will act like a new upload.
+// If we have pending data right now, free it.
+// If we have an existing texture, use it in the replace.
+// Otherwise we just become a pending image.
+// Returns true if this image is pending upload.
+// Returns true if this image has an associated texture.
+// Returns true if this image is marked for unload.
+// Converts the image data to a format that can be uploaded to the GPU.
+// If the data is already in a format that can be uploaded, this is a
+// no-op.
+// As things stand, we currently convert all images to RGBA before
+// uploading to the GPU. This just makes things easier. In the future
+// we may want to support other formats.
+// If the pending data isn't RGBA we'll need to swizzle it.
+// Prepare the pending image data for upload to the GPU.
+// This doesn't need GPU access so is safe to call any time.
+// Upload the pending image to the GPU and change the state of this
+// image to ready.
+// Texture creation failed, usually a GPU memory issue.
+// No error recover is required after this call because it just
+// converts in place and is idempotent.
+// Get our pending info
+// Create our texture
+// Uploaded. We can now clear our data and change our state.
+//
+// NOTE: For the `replace` state, this will free the old texture.
+//       We don't currently actually replace the existing texture
+//       in-place but that is an optimization we can do later.
+// Returns any pending image data for this image that requires upload.
+//
+// If there is no pending data to upload, returns null.
+// Returns the texture for this image.
+//
+// If there is no texture for it yet, returns null.
+// Same as getPending but returns a pointer instead of a copy.
+//
+// --- Original Ghostty Comments End: src/renderer/image.zig
+
+
 import terminal
 
 // Image identifier used to store and lookup images.

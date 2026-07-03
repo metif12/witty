@@ -1,5 +1,157 @@
 module sprite
 
+// --- Original Ghostty Comments Start: src/font/sprite/draw/symbols_for_legacy_computing_supplement.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/font/sprite/draw/symbols_for_legacy_computing_supplement.zig
+//
+// Symbols for Legacy Computing Supplement | U+1CC00...U+1CEBF
+// https://en.wikipedia.org/wiki/Symbols_for_Legacy_Computing_Supplement
+//
+// 𜰀 𜰁 𜰂 𜰃 𜰄 𜰅 𜰆 𜰇 𜰈 𜰉 𜰊 𜰋 𜰌 𜰍 𜰎 𜰏
+// 𜰐 𜰑 𜰒 𜰓 𜰔 𜰕 𜰖 𜰗 𜰘 𜰙 𜰚 𜰛 𜰜 𜰝 𜰞 𜰟
+// 𜰠 𜰡 𜰢 𜰣 𜰤 𜰥 𜰦 𜰧 𜰨 𜰩 𜰪 𜰫 𜰬 𜰭 𜰮 𜰯
+// 𜰰 𜰱 𜰲 𜰳 𜰴 𜰵 𜰶 𜰷 𜰸 𜰹 𜰺 𜰻 𜰼 𜰽 𜰾 𜰿
+// 𜱀 𜱁 𜱂 𜱃 𜱄 𜱅 𜱆 𜱇 𜱈 𜱉 𜱊 𜱋 𜱌 𜱍 𜱎 𜱏
+// 𜱐 𜱑 𜱒 𜱓 𜱔 𜱕 𜱖 𜱗 𜱘 𜱙 𜱚 𜱛 𜱜 𜱝 𜱞 𜱟
+// 𜱠 𜱡 𜱢 𜱣 𜱤 𜱥 𜱦 𜱧 𜱨 𜱩 𜱪 𜱫 𜱬 𜱭 𜱮 𜱯
+// 𜱰 𜱱 𜱲 𜱳 𜱴 𜱵 𜱶 𜱷 𜱸 𜱹 𜱺 𜱻 𜱼 𜱽 𜱾 𜱿
+// 𜲀 𜲁 𜲂 𜲃 𜲄 𜲅 𜲆 𜲇 𜲈 𜲉 𜲊 𜲋 𜲌 𜲍 𜲎 𜲏
+// 𜲐 𜲑 𜲒 𜲓 𜲔 𜲕 𜲖 𜲗 𜲘 𜲙 𜲚 𜲛 𜲜 𜲝 𜲞 𜲟
+// 𜲠 𜲡 𜲢 𜲣 𜲤 𜲥 𜲦 𜲧 𜲨 𜲩 𜲪 𜲫 𜲬 𜲭 𜲮 𜲯
+// 𜲰 𜲱 𜲲 𜲳 𜲴 𜲵 𜲶 𜲷 𜲸 𜲹 𜲺 𜲻 𜲼 𜲽 𜲾 𜲿
+// 𜳀 𜳁 𜳂 𜳃 𜳄 𜳅 𜳆 𜳇 𜳈 𜳉 𜳊 𜳋 𜳌 𜳍 𜳎 𜳏
+// 𜳐 𜳑 𜳒 𜳓 𜳔 𜳕 𜳖 𜳗 𜳘 𜳙 𜳚 𜳛 𜳜 𜳝 𜳞 𜳟
+// 𜳠 𜳡 𜳢 𜳣 𜳤 𜳥 𜳦 𜳧 𜳨 𜳩 𜳪 𜳫 𜳬 𜳭 𜳮 𜳯
+// 𜳰 𜳱 𜳲 𜳳 𜳴 𜳵 𜳶 𜳷 𜳸 𜳹
+// 𜴀 𜴁 𜴂 𜴃 𜴄 𜴅 𜴆 𜴇 𜴈 𜴉 𜴊 𜴋 𜴌 𜴍 𜴎 𜴏
+// 𜴐 𜴑 𜴒 𜴓 𜴔 𜴕 𜴖 𜴗 𜴘 𜴙 𜴚 𜴛 𜴜 𜴝 𜴞 𜴟
+// 𜴠 𜴡 𜴢 𜴣 𜴤 𜴥 𜴦 𜴧 𜴨 𜴩 𜴪 𜴫 𜴬 𜴭 𜴮 𜴯
+// 𜴰 𜴱 𜴲 𜴳 𜴴 𜴵 𜴶 𜴷 𜴸 𜴹 𜴺 𜴻 𜴼 𜴽 𜴾 𜴿
+// 𜵀 𜵁 𜵂 𜵃 𜵄 𜵅 𜵆 𜵇 𜵈 𜵉 𜵊 𜵋 𜵌 𜵍 𜵎 𜵏
+// 𜵐 𜵑 𜵒 𜵓 𜵔 𜵕 𜵖 𜵗 𜵘 𜵙 𜵚 𜵛 𜵜 𜵝 𜵞 𜵟
+// 𜵠 𜵡 𜵢 𜵣 𜵤 𜵥 𜵦 𜵧 𜵨 𜵩 𜵪 𜵫 𜵬 𜵭 𜵮 𜵯
+// 𜵰 𜵱 𜵲 𜵳 𜵴 𜵵 𜵶 𜵷 𜵸 𜵹 𜵺 𜵻 𜵼 𜵽 𜵾 𜵿
+// 𜶀 𜶁 𜶂 𜶃 𜶄 𜶅 𜶆 𜶇 𜶈 𜶉 𜶊 𜶋 𜶌 𜶍 𜶎 𜶏
+// 𜶐 𜶑 𜶒 𜶓 𜶔 𜶕 𜶖 𜶗 𜶘 𜶙 𜶚 𜶛 𜶜 𜶝 𜶞 𜶟
+// 𜶠 𜶡 𜶢 𜶣 𜶤 𜶥 𜶦 𜶧 𜶨 𜶩 𜶪 𜶫 𜶬 𜶭 𜶮 𜶯
+// 𜶰 𜶱 𜶲 𜶳 𜶴 𜶵 𜶶 𜶷 𜶸 𜶹 𜶺 𜶻 𜶼 𜶽 𜶾 𜶿
+// 𜷀 𜷁 𜷂 𜷃 𜷄 𜷅 𜷆 𜷇 𜷈 𜷉 𜷊 𜷋 𜷌 𜷍 𜷎 𜷏
+// 𜷐 𜷑 𜷒 𜷓 𜷔 𜷕 𜷖 𜷗 𜷘 𜷙 𜷚 𜷛 𜷜 𜷝 𜷞 𜷟
+// 𜷠 𜷡 𜷢 𜷣 𜷤 𜷥 𜷦 𜷧 𜷨 𜷩 𜷪 𜷫 𜷬 𜷭 𜷮 𜷯
+// 𜷰 𜷱 𜷲 𜷳 𜷴 𜷵 𜷶 𜷷 𜷸 𜷹 𜷺 𜷻 𜷼 𜷽 𜷾 𜷿
+// 𜸀 𜸁 𜸂 𜸃 𜸄 𜸅 𜸆 𜸇 𜸈 𜸉 𜸊 𜸋 𜸌 𜸍 𜸎 𜸏
+// 𜸐 𜸑 𜸒 𜸓 𜸔 𜸕 𜸖 𜸗 𜸘 𜸙 𜸚 𜸛 𜸜 𜸝 𜸞 𜸟
+// 𜸠 𜸡 𜸢 𜸣 𜸤 𜸥 𜸦 𜸧 𜸨 𜸩 𜸪 𜸫 𜸬 𜸭 𜸮 𜸯
+// 𜸰 𜸱 𜸲 𜸳 𜸴 𜸵 𜸶 𜸷 𜸸 𜸹 𜸺 𜸻 𜸼 𜸽 𜸾 𜸿
+// 𜹀 𜹁 𜹂 𜹃 𜹄 𜹅 𜹆 𜹇 𜹈 𜹉 𜹊 𜹋 𜹌 𜹍 𜹎 𜹏
+// 𜹐 𜹑 𜹒 𜹓 𜹔 𜹕 𜹖 𜹗 𜹘 𜹙 𜹚 𜹛 𜹜 𜹝 𜹞 𜹟
+// 𜹠 𜹡 𜹢 𜹣 𜹤 𜹥 𜹦 𜹧 𜹨 𜹩 𜹪 𜹫 𜹬 𜹭 𜹮 𜹯
+// 𜹰 𜹱 𜹲 𜹳 𜹴 𜹵 𜹶 𜹷 𜹸 𜹹 𜹺 𜹻 𜹼 𜹽 𜹾 𜹿
+// 𜺀 𜺁 𜺂 𜺃 𜺄 𜺅 𜺆 𜺇 𜺈 𜺉 𜺊 𜺋 𜺌 𜺍 𜺎 𜺏
+// 𜺐 𜺑 𜺒 𜺓 𜺔 𜺕 𜺖 𜺗 𜺘 𜺙 𜺚 𜺛 𜺜 𜺝 𜺞 𜺟
+// 𜺠 𜺡 𜺢 𜺣 𜺤 𜺥 𜺦 𜺧 𜺨 𜺩 𜺪 𜺫 𜺬 𜺭 𜺮 𜺯
+// 𜺰 𜺱 𜺲 𜺳
+//
+// Octants
+// Octant representation. We use the funny numeric string keys
+// so its easier to parse the actual name used in the Symbols for
+// Legacy Computing spec.
+// Parse the octant data. This is all done at comptime so
+// that this is static data that is embedded in the binary.
+// Skip comments
+// Octants are in the format "BLOCK OCTANT-1235". The numbers
+// at the end are keys into our packed struct. Since we're
+// at comptime we can metaprogram it all.
+// Separated Block Quadrants
+// 𜰡 𜰢 𜰣 𜰤 𜰥 𜰦 𜰧 𜰨 𜰩 𜰪 𜰫 𜰬 𜰭 𜰮 𜰯
+// Struct laid out to match the codepoint order so we can cast from it.
+// Twelfth and Quarter circle pieces.
+// 𜰰 𜰱 𜰲 𜰳 𜰴 𜰵 𜰶 𜰷 𜰸 𜰹 𜰺 𜰻 𜰼 𜰽 𜰾 𜰿
+//
+// 𜰰𜰱𜰲𜰳
+// 𜰴𜰵𜰶𜰷
+// 𜰸𜰹𜰺𜰻
+// 𜰼𜰽𜰾𜰿
+//
+// These are actually ellipses, sized to touch
+// the edge of their enclosing set of cells.
+// 𜰰 UPPER LEFT TWELFTH CIRCLE
+// 𜰱 UPPER CENTRE LEFT TWELFTH CIRCLE
+// 𜰲 UPPER CENTRE RIGHT TWELFTH CIRCLE
+// 𜰳 UPPER RIGHT TWELFTH CIRCLE
+// 𜰴 UPPER MIDDLE LEFT TWELFTH CIRCLE
+// 𜰵 UPPER LEFT QUARTER CIRCLE
+// 𜰶 UPPER RIGHT QUARTER CIRCLE
+// 𜰷 UPPER MIDDLE RIGHT TWELFTH CIRCLE
+// 𜰸 LOWER MIDDLE LEFT TWELFTH CIRCLE
+// 𜰹 LOWER LEFT QUARTER CIRCLE
+// 𜰺 LOWER RIGHT QUARTER CIRCLE
+// 𜰻 LOWER MIDDLE RIGHT TWELFTH CIRCLE
+// 𜰼 LOWER LEFT TWELFTH CIRCLE
+// 𜰽 LOWER CENTRE LEFT TWELFTH CIRCLE
+// 𜰾 LOWER CENTRE RIGHT TWELFTH CIRCLE
+// 𜰿 LOWER RIGHT TWELFTH CIRCLE
+// TODO: These two characters should be easy, but it's not clear how they're
+//       meant to align with adjacent cells, what characters they're meant to
+//       be used with:
+//       - 1CC1F 𜰟 BOX DRAWINGS DOUBLE DIAGONAL UPPER RIGHT TO LOWER LEFT
+//       - 1CC20 𜰠 BOX DRAWINGS DOUBLE DIAGONAL UPPER LEFT TO LOWER RIGHT
+// 𜰛 BOX DRAWINGS LIGHT HORIZONTAL AND UPPER RIGHT
+// 𜰜 BOX DRAWINGS LIGHT HORIZONTAL AND LOWER RIGHT
+// 𜰝 BOX DRAWINGS LIGHT TOP AND UPPER LEFT
+// 𜰞 BOX DRAWINGS LIGHT BOTTOM AND LOWER LEFT
+// 𜸀 RIGHT HALF AND LEFT HALF WHITE CIRCLE
+// 𜸁 LOWER HALF AND UPPER HALF WHITE CIRCLE
+// 𜸋 LEFT HALF WHITE ELLIPSE
+// 𜸌 RIGHT HALF WHITE ELLIPSE
+// 𜸖 BOX DRAWINGS LIGHT VERTICAL AND TOP RIGHT
+// 𜸗 BOX DRAWINGS LIGHT VERTICAL AND BOTTOM RIGHT
+// 𜸘 BOX DRAWINGS LIGHT VERTICAL AND TOP LEFT
+// 𜸙 BOX DRAWINGS LIGHT VERTICAL AND BOTTOM LEFT
+// Separated Block Sextants
+// Struct laid out to match the codepoint order so we can cast from it.
+// Distribute any leftover height in to the middle row of blocks.
+// Sixteenth Blocks
+// 𜺐 UPPER LEFT ONE SIXTEENTH BLOCK
+// 𜺑 UPPER CENTRE LEFT ONE SIXTEENTH BLOCK
+// 𜺒 UPPER CENTRE RIGHT ONE SIXTEENTH BLOCK
+// 𜺓 UPPER RIGHT ONE SIXTEENTH BLOCK
+// 𜺔 UPPER MIDDLE LEFT ONE SIXTEENTH BLOCK
+// 𜺕 UPPER MIDDLE CENTRE LEFT ONE SIXTEENTH BLOCK
+// 𜺖 UPPER MIDDLE CENTRE RIGHT ONE SIXTEENTH BLOCK
+// 𜺗 UPPER MIDDLE RIGHT ONE SIXTEENTH BLOCK
+// 𜺘 LOWER MIDDLE LEFT ONE SIXTEENTH BLOCK
+// 𜺙 LOWER MIDDLE CENTRE LEFT ONE SIXTEENTH BLOCK
+// 𜺚 LOWER MIDDLE CENTRE RIGHT ONE SIXTEENTH BLOCK
+// 𜺛 LOWER MIDDLE RIGHT ONE SIXTEENTH BLOCK
+// 𜺜 LOWER LEFT ONE SIXTEENTH BLOCK
+// 𜺝 LOWER CENTRE LEFT ONE SIXTEENTH BLOCK
+// 𜺞 LOWER CENTRE RIGHT ONE SIXTEENTH BLOCK
+// 𜺟 LOWER RIGHT ONE SIXTEENTH BLOCK
+// 𜺠 RIGHT HALF LOWER ONE QUARTER BLOCK
+// 𜺡 RIGHT THREE QUARTERS LOWER ONE QUARTER BLOCK
+// 𜺢 LEFT THREE QUARTERS LOWER ONE QUARTER BLOCK
+// 𜺣 LEFT HALF LOWER ONE QUARTER BLOCK
+// 𜺤 LOWER HALF LEFT ONE QUARTER BLOCK
+// 𜺥 LOWER THREE QUARTERS LEFT ONE QUARTER BLOCK
+// 𜺦 UPPER THREE QUARTERS LEFT ONE QUARTER BLOCK
+// 𜺧 UPPER HALF LEFT ONE QUARTER BLOCK
+// 𜺨 LEFT HALF UPPER ONE QUARTER BLOCK
+// 𜺩 LEFT THREE QUARTERS UPPER ONE QUARTER BLOCK
+// 𜺪 RIGHT THREE QUARTERS UPPER ONE QUARTER BLOCK
+// 𜺫 RIGHT HALF UPPER ONE QUARTER BLOCK
+// 𜺬 UPPER HALF RIGHT ONE QUARTER BLOCK
+// 𜺭 UPPER THREE QUARTERS RIGHT ONE QUARTER BLOCK
+// 𜺮 LOWER THREE QUARTERS RIGHT ONE QUARTER BLOCK
+// 𜺯 LOWER HALF RIGHT ONE QUARTER BLOCK
+// Radius in pixels of the arc we need to draw.
+// Position in pixels (rather than cells) for x/y
+// Set the clip so we don't include anything outside of the cell.
+// Coefficient for approximating a circular arc.
+//
+// --- Original Ghostty Comments End: src/font/sprite/draw/symbols_for_legacy_computing_supplement.zig
+
+
 // Symbols for Legacy Computing Supplement | U+1CC00...U+1CEBF
 // https://en.wikipedia.org/wiki/Symbols_for_Legacy_Computing_Supplement
 //

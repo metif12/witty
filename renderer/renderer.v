@@ -1,5 +1,752 @@
 module renderer
 
+// --- Original Ghostty Comments Start: src/renderer/generic.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/renderer/generic.zig
+//
+// Create a renderer type with the provided graphics API wrapper.
+//
+// The graphics API wrapper must provide the interface outlined below.
+// Specific details for the interfaces are documented on the existing
+// implementations (`Metal` and `OpenGL`).
+//
+// Hierarchy of graphics abstractions:
+//
+// [ GraphicsAPI ] - Responsible for configuring the runtime surface
+//    |     |        and providing render `Target`s that draw to it,
+//    |     |        as well as `Frame`s and `Pipeline`s.
+//    |     V
+//    | [ Target ] - Represents an abstract target for rendering, which
+//    |              could be a surface directly but is also used as an
+//    |              abstraction for off-screen frame buffers.
+//    V
+// [ Frame ] - Represents the context for drawing a given frame,
+//    |        provides `RenderPass`es for issuing draw commands
+//    |        to, and reports the frame health when complete.
+//    V
+// [ RenderPass ] - Represents a render pass in a frame, consisting of
+//   :              one or more `Step`s applied to the same target(s),
+// [ Step ] - - - - each describing the input buffers and textures and
+//   :              the vertex/fragment functions and geometry to use.
+//   :_ _ _ _ _ _ _ _ _ _/
+//   v
+// [ Pipeline ] - Describes a vertex and fragment function to be used
+//                for a `Step`; the `GraphicsAPI` is responsible for
+//                these and they should be constructed and cached
+//                ahead of time.
+//
+// [ Buffer ] - An abstraction over a GPU buffer.
+//
+// [ Texture ] - An abstraction over a GPU texture.
+//
+// Allocator that can be used
+// This mutex must be held whenever any state used in `drawFrame` is
+// being modified, and also when it's being accessed in `drawFrame`.
+// The configuration we need derived from the main config.
+// The mailbox for communicating with the window.
+// Current font metrics defining our grid.
+// The size of everything.
+// True if the window is focused
+// Flag to indicate that our focus state changed for custom
+// shaders to update their state.
+// The most recent scrollbar state. We use this as a cache to
+// determine if we need to notify the apprt that there was a
+// scrollbar change.
+// The most recent viewport matches so that we can render search
+// matches in the visible frame. This is provided asynchronously
+// from the search thread so we have the dirty flag to also note
+// if we need to rebuild our cells to include search highlights.
+//
+// Note that the selections MAY BE INVALID (point to PageList nodes
+// that do not exist anymore). These must be validated prior to use.
+// The current set of cells to render. This is rebuilt on every frame
+// but we keep this around so that we don't reallocate. Each set of
+// cells goes into a separate shader.
+// Set to true after rebuildCells is called. This can be used
+// to determine if any possible changes have been made to the
+// cells for the draw call.
+// The current GPU uniform values.
+// Custom shader uniform values.
+// Timestamp we rendered out first frame.
+//
+// This is used when updating custom shader uniforms.
+// Timestamp when we rendered out more recent frame.
+//
+// This is used when updating custom shader uniforms.
+// The font structures.
+// The images that we may render.
+// Background image, if we have one.
+// Set whenever the background image changes, signalling
+// that the new background image needs to be uploaded to
+// the GPU.
+//
+// This is initialized as true so that we load the image
+// on renderer initialization, not just on config change.
+// Background image vertex buffer.
+// This value is used to force-update the swap chain copy
+// of the background image buffer whenever we change it.
+// Graphics API state.
+// The CVDisplayLink used to drive the rendering loop in
+// sync with the display. This is void on platforms that
+// don't support a display link.
+// Health of the most recently completed frame.
+// Our swap chain (multiple buffering)
+// This value is used to force-update swap chain targets in the
+// event of a config change that requires it (such as blending mode).
+// If something happened that requires us to reinitialize our shaders,
+// this is set to true so that we can do that whenever possible.
+// Whether or not we have custom shaders.
+// Our shader pipelines.
+// The render state we update per loop.
+// The number of frames since the last terminal state reset.
+// We reset the terminal state after ~100,000 frames (about 10 to
+// 15 minutes at 120Hz) to prevent wasted memory buildup from
+// a large screen.
+// Our overlay state, if any.
+// Swap chain which maintains multiple copies of the state needed to
+// render a frame, so that we can start building the next frame while
+// the previous frame is still being processed on the GPU.
+// The count of buffers we use for double/triple buffering.
+// If this is one then we don't do any double+ buffering at all.
+// This is comptime because there isn't a good reason to change
+// this at runtime and there is a lot of complexity to support it.
+// `buf_count` structs that can hold the
+// data needed by the GPU to draw a frame.
+// Index of the most recently used frame state struct.
+// Semaphore that we wait on to make sure we have an available
+// frame state struct so we can start working on a new frame.
+// Set to true when deinited, if you try to deinit a defunct
+// swap chain it will just be ignored, to prevent double-free.
+//
+// This is required because of `displayUnrealized`, since it
+// `deinits` the swapchain, which leads to a double-free if
+// the renderer is deinited after that.
+// Initialize all of our frame state.
+// Wait for all of our inflight draws to complete
+// so that we can cleanly deinit our GPU state.
+// Get the next frame state to draw to. This will wait on the
+// semaphore to ensure that the frame is available. This must
+// always be paired with a call to releaseFrame.
+// This should be called when the frame has completed drawing.
+// State we need duplicated for every frame. Any state that could be
+// in a data race between the GPU and CPU while a frame is being drawn
+// should be in this struct.
+//
+// While a draw is in-process, we "lock" the state (via a semaphore)
+// and prevent the CPU from updating the state until our graphics API
+// reports that the frame is complete.
+//
+// This is used to implement double/triple buffering.
+// See property of same name on Renderer for explanation.
+// Buffer with the vertex data for our background image.
+//
+// TODO: Make this an optional and only create it
+//       if we actually have a background image.
+// See property of same name on Renderer for explanation.
+// Custom shader state, this is null if we have no custom shaders.
+// Uniform buffer contains exactly 1 uniform struct. The
+// uniform data will be undefined so this must be set before
+// a frame is drawn.
+// Create GPU buffers for our cells.
+//
+// We start them off with a size of 1, which will of course be
+// too small, but they will be resized as needed. This is a bit
+// wasteful but since it's a one-time thing it's not really a
+// huge concern.
+// Create a GPU buffer for our background image info.
+// Initialize our textures for our font atlas.
+//
+// As with the buffers above, we start these off as small
+// as possible since they'll inevitably be resized anyway.
+// Initialize the target. Just as with the other resources,
+// start it off as small as we can since it'll be resized.
+// State relevant to our custom shaders if we have any.
+// When we have a custom shader state, we maintain a front
+// and back texture which we use as a swap chain to render
+// between when multiple custom shaders are defined.
+// Shadertoy uses a sampler for accessing the various channel
+// textures. In Metal, we need to explicitly create these since
+// the glslang-to-msl compiler doesn't do it for us (as we
+// normally would in hand-written MSL). To keep it clean and
+// consistent, we just force all rendering APIs to provide an
+// explicit sampler.
+//
+// Samplers are immutable and describe sampling properties so
+// we can share the sampler across front/back textures (although
+// we only need it for the source texture at a time, we don't
+// need to "swap" it).
+// Swap the front and back textures.
+// Create a GPU buffer to hold our uniforms.
+// Initialize the front and back textures at 1x1 px, this
+// is slightly wasteful but it's only done once so whatever.
+// The configuration for this renderer that is derived from the main
+// configuration. This must be exported so that we don't need to
+// pass around Config pointers which makes memory management a pain.
+// Copy our shaders
+// Copy our background image
+// Copy our font features
+// Get our font styles
+// Our link configs
+// Initialize our graphics API wrapper, this will prepare the
+// surface provided by the apprt and set up any API-specific
+// GPU resources.
+// Prepare our swap chain
+// Create the font shaper.
+// Initialize all the data that requires a critical font section.
+// Render state
+// Note that if we're on macOS with glass effects
+// we'll disable background opacity but we handle
+// that in updateFrame.
+// Fonts
+// Shaders (initialized below)
+// Graphics API stuff
+// Ensure our undefined values above are correctly initialized.
+// Load our custom shaders
+// This is called early right after surface creation.
+// If our API has to do things here, let it.
+// This is called just prior to spinning up the renderer thread for
+// final main thread setup requirements.
+// If our API has to do things to finalize surface init, let it.
+// Callback called by renderer.Thread when it begins.
+// If our API has to do things on thread enter, let it.
+// Callback called by renderer.Thread when it exits.
+// If our API has to do things on thread exit, let it.
+// Called by renderer.Thread when it starts the main loop.
+// If our API has to do things on loop enter, let it.
+// If we don't support a display link we have no work to do.
+// This is when we know our "self" pointer is stable so we can
+// setup the display link. To setup the display link we set our
+// callback and we can start it immediately.
+// Called by renderer.Thread when it exits the main loop.
+// If our API has to do things on loop exit, let it.
+// If we don't support a display link we have no work to do.
+// Stop our display link. If this fails its okay it just means
+// that we either never started it or the view its attached to
+// is gone which is fine.
+// This is called by the GTK apprt after the surface is
+// reinitialized due to any of the events mentioned in
+// the doc comment for `displayUnrealized`.
+// If our API has to do things on realize, let it.
+// Lock the draw mutex so that we can
+// safely reinitialize our GPU resources.
+// We assume that the swap chain was deinited in
+// `displayUnrealized`, in which case it should be
+// marked defunct. If not, we have a problem.
+// We reinitialize our shaders and our swap chain.
+// This is called by the GTK apprt when the surface is being destroyed.
+// This can happen because the surface is being closed but also when
+// moving the window between displays or splitting.
+// If our API has to do things on unrealize, let it.
+// Lock the draw mutex so that we can
+// safely deinitialize our GPU resources.
+// We deinit our swap chain and shaders.
+//
+// This will mark them as defunct so that they
+// can't be double-freed or used in draw calls.
+// Mark the full screen as dirty so that we redraw everything.
+// Called when we get an updated display ID for our display link.
+// True if our renderer has animations so that a higher frequency
+// timer is used.
+// True if our renderer is using vsync. If true, the renderer or apprt
+// is responsible for triggering draw_now calls to the render thread.
+// That is the only way to trigger a drawFrame.
+// Callback when the focus changes for the terminal this is rendering.
+//
+// Must be called on the render thread.
+// Flag that we need to update our custom shaders
+// If we're not focused, then we want to stop the display link
+// because it is a waste of resources and we can move to pure
+// change-driven updates.
+// Callback when the window is visible or occluded.
+//
+// Must be called on the render thread.
+// If we're not visible, then we want to stop the display link
+// because it is a waste of resources and we can move to pure
+// change-driven updates.
+// Set the new font grid.
+//
+// Must be called on the render thread.
+// Update our grid
+// Update all our textures so that they sync on the next frame.
+// We can modify this without a lock because the GPU does not
+// touch this data.
+// Get our metrics from the grid. This doesn't require a lock because
+// the metrics are never recalculated.
+// Reset our shaper cache. If our font changed (not just the size) then
+// the data in the shaper cache may be invalid and cannot be used, so we
+// always clear the cache just in case.
+// Update cell size.
+// Update relevant uniforms
+// Force a full rebuild, because cached rows may still reference
+// an outdated atlas from the old grid and this can cause garbage
+// to be rendered.
+// Update uniforms that are based on the font grid.
+//
+// Caller must hold the draw mutex.
+// Update the frame data.
+// const start = std.time.Instant.now() catch unreachable;
+// const start_micro = std.time.microTimestamp();
+// defer {
+//     const end = std.time.Instant.now() catch unreachable;
+//     log.warn(
+//         "[updateFrame time] start_micro={} duration={}ns",
+//         .{ start_micro, end.since(start) / std.time.ns_per_us },
+//     );
+// }
+// We fully deinit and reset the terminal state every so often
+// so that a particularly large terminal state doesn't cause
+// the renderer to hold on to retained memory.
+//
+// Frame count is ~12 minutes at 120Hz.
+// Create an arena for all our temporary allocations while rebuilding
+// Data we extract out of the critical area.
+// Update all our data as tightly as possible within the mutex.
+// const start = try std.time.Instant.now();
+// const start_micro = std.time.microTimestamp();
+// defer {
+//     const end = std.time.Instant.now() catch unreachable;
+//     std.log.err("[updateFrame critical time] start={}\tduration={} us", .{ start_micro, end.since(start) / std.time.ns_per_us });
+// }
+// If we're in a synchronized output state, we pause all rendering.
+// Update our terminal state
+// If our terminal state is dirty at all we need to redo
+// the viewport search.
+// Get our scrollbar out of the terminal. We synchronize
+// the scrollbar read with frame data updates because this
+// naturally limits the number of calls to this method (it
+// can be expensive) and also makes it so we don't need another
+// cross-thread mailbox message within the IO path.
+// Get our preedit state
+// If we have Kitty graphics data, we enter a SLOW SLOW SLOW path.
+// We only do this if the Kitty image state is dirty meaning only if
+// it changes.
+//
+// If we have any virtual references, we must also rebuild our
+// kitty state on every frame because any cell change can move
+// an image.
+// Get our OSC8 links we're hovering if we have a mouse.
+// This requires terminal state because of URLs.
+// If our mouse isn't hovering, we have no links.
+// If the right mods aren't pressed, then we can't match.
+// Outside the critical area we can update our links to contain
+// our regex results.
+// Clear our highlight state and update.
+// Clear the prior highlights
+// NOTE: The order below matters. Highlights added earlier
+// will take priority.
+// Not a critical error, we just won't show highlights.
+// Not a critical error, we just won't show highlights.
+// From this point forward no more errors.
+// Reset our dirty state after updating.
+// Rebuild the overlay image if we have one. We can do this
+// outside of any critical areas.
+// Acquire the draw mutex for all remaining state updates.
+// Build our GPU cells
+// This means we weren't able to allocate our buffer
+// to update the cells. In this case, we continue with
+// our old buffer (frozen contents) and log it.
+// The scrollbar is only emitted during draws so we also
+// check the scrollbar cache here and update if needed.
+// This is pretty fast.
+// Update our background color
+// If we're on macOS and have glass styles, we remove
+// the background opacity because the glass effect handles
+// it.
+// Prepare our overlay image for upload (or unload). This
+// has to use our general allocator since it modifies
+// state that survives frames.
+// Update custom shader uniforms that depend on terminal state.
+// Notify our shaper we're done for the frame. For some shapers,
+// such as CoreText, this triggers off-thread cleanup logic.
+// Draw the frame to the screen.
+//
+// If `sync` is true, this will synchronously block until
+// the frame is finished drawing and has been presented.
+// const start = std.time.Instant.now() catch unreachable;
+// const start_micro = std.time.microTimestamp();
+// defer {
+//     const end = std.time.Instant.now() catch unreachable;
+//     log.warn(
+//         "[drawFrame time] start_micro={} duration={}ns",
+//         .{ start_micro, end.since(start) / std.time.ns_per_us },
+//     );
+// }
+// We hold a the draw mutex to prevent changes to any
+// data we access while we're in the middle of drawing.
+// After the graphics API is complete (so we defer) we want to
+// update our scrollbar state.
+// Fail instantly if the surface mailbox if full, we'll just
+// get it on the next frame.
+// Let our graphics API do any bookkeeping, etc.
+// that it needs to do before / after `drawFrame`.
+// Retrieve the most up-to-date surface size from the Graphics API
+// If either of our surface dimensions is zero
+// then drawing is absurd, so we just return.
+// Conditions under which we need to draw the frame, otherwise we
+// don't need to since the previous frame should be identical.
+// We still need to present the last target again, because the
+// apprt may be swapping buffers and display an outdated frame
+// if we don't draw something new.
+// Wait for a frame to be available.
+// log.debug("drawing frame index={}", .{self.swap_chain.frame_index});
+// If we need to reinitialize our shaders, do so.
+// Our shaders should not be defunct at this point.
+// If we have custom shaders, make sure we have the
+// custom shader state in our frame state, otherwise
+// if we have a state but don't need it we remove it.
+// If our stored size doesn't match the
+// surface size we need to update it.
+// If this frame's target isn't the correct size, or the target
+// config has changed (such as when the blending mode changes),
+// remove it and replace it with a new one with the right values.
+// Upload images to the GPU as necessary.
+// Upload the background image to the GPU as necessary.
+// Update per-frame custom shader uniforms.
+// Setup our frame data
+// If our background image buffer has changed, sync it.
+// If our font atlas changed, sync the texture data
+// Get a frame context from the graphics API.
+// First we draw our background image, if we have one.
+// The bg image shader also draws the main bg color.
+//
+// Otherwise, if we don't have a background image, we
+// draw the background color by itself in its own step.
+//
+// NOTE: We don't use the clear_color for this because that
+//       would require us to do color space conversion on the
+//       CPU-side. In the future when we have utilities for
+//       that we should remove this step and use clear_color.
+// Then we draw any kitty images that need
+// to be behind text AND cell backgrounds.
+// Then we draw any opaque cell backgrounds.
+// Kitty images between cell backgrounds and text.
+// Text.
+// Kitty images in front of text.
+// Debug overlay. We do this before any custom shader state
+// because our debug overlay is aligned with the grid.
+// If we have custom shaders, then we render them.
+// Sync our uniforms.
+// Callback from the graphics API when a frame is completed.
+// If our health value hasn't changed, then we do nothing. We don't
+// do a cmpxchg here because strict atomicity isn't important.
+// Our health value changed, so we notify the surface so that it
+// can do something about it.
+// Always release our semaphore
+// Call this any time the background image path changes.
+//
+// Caller must hold the draw mutex.
+// Then we try to load the background image if we have a path.
+// Open the file
+// Read it
+// Figure out what type it probably is.
+// Decode it if we know how.
+// If we have an existing background image, replace it.
+// Otherwise, set this as our background image directly.
+// If we don't have a background image path, mark our
+// background image for unload if we currently have one.
+// Make sure our bg image is uploaded if it needs to be.
+// Update the configuration.
+// We always redo the font shaper in case font features changed. We
+// could check to see if there was an actual config change but this is
+// easier and rare enough to not cause performance issues.
+// We also need to reset the shaper cache so shaper info
+// from the previous font isn't reused for the new font.
+// Set our new minimum contrast
+// Set our new color space and blending
+// If our background image path changed, prepare the new bg image.
+// If our background image config changed, update the vertex buffer.
+// Reset our viewport to force a rebuild, in case of a font change.
+// We update our API's blending mode.
+// And indicate that we need to reinitialize our shaders.
+// And indicate that our swap chain targets need to
+// be re-created to account for the new blending mode.
+// Resize the screen.
+// We only actually need the padding from this,
+// everything else is derived elsewhere.
+// Update uniforms that are based on the screen size.
+//
+// Caller must hold the draw mutex.
+// Blank space around the grid.
+// Setup our uniforms
+// Update the background image vertex buffer (CPU-side).
+//
+// This should be called if and when configs change that
+// could affect the background image.
+//
+// Caller must hold the draw mutex.
+// Signal that the buffer was modified.
+// Update custom shader uniforms that depend on terminal state.
+//
+// This should be called in `updateFrame` when terminal state changes.
+// We only need to do this if we have custom shaders.
+// Only update when terminal state is dirty.
+// 256-color palette
+// Background color
+// Foreground color
+// Cursor color
+// NOTE: the following could be optimized to follow a change in
+// config for a slight optimization however this is only 12 bytes
+// each being updated and likely isn't a cause for concern
+// Cursor text color
+// Selection background color
+// Selection foreground color
+// Update per-frame custom shader uniforms.
+//
+// This should be called exactly once per frame, inside `drawFrame`.
+// We only need to do this if we have custom shaders.
+// Update custom cursor uniforms, if we have a cursor.
+// Left edge of the cell the cursor is in.
+// Top edge, relative to the top of the
+// screen, of the cell the cursor is in.
+// If +Y is up in our shaders, we need to flip the coordinate
+// so that it's instead the top edge of the cell relative to
+// the *bottom* of the screen.
+// Add the X bearing to get the -X (left) edge of the cursor.
+// How we deal with the Y bearing depends on which direction
+// is "up", since we want our final `pixel_y` value to be the
+// +Y edge of the cursor.
+// As a reminder, the Y bearing is the distance from the
+// bottom of the cell to the top of the glyph, so to get
+// the +Y edge we need to add the cell height, subtract
+// the Y bearing, and add the glyph height to get the +Y
+// (bottom) edge of the cursor.
+// If the Y direction is reversed though, we instead want
+// the *top* edge of the cursor, which means we just need
+// to subtract the cell height and add the Y bearing.
+// Update focus uniforms
+// If we need to update the time our focus state changed
+// then update it to our current frame time. This may not be
+// exactly correct since it is frame time, not exact focus
+// time, but focus time on its own isn't exactly correct anyways
+// since it comes async from a message.
+// Build the overlay as configured. Returns null if there is no
+// overlay currently configured.
+// const start = std.time.Instant.now() catch unreachable;
+// const start_micro = std.time.microTimestamp();
+// defer {
+//     const end = std.time.Instant.now() catch unreachable;
+//     log.warn(
+//         "[rebuildOverlay time] start_micro={} duration={}ns",
+//         .{ start_micro, end.since(start) / std.time.ns_per_us },
+//     );
+// }
+// If we have no features enabled, don't build an overlay.
+// If we had a previous overlay, deallocate it.
+// If we had a previous overlay, clear it. Otherwise, init.
+// Verify that our overlay size matches our screen
+// size as we know it now. If not, deinit and reinit.
+// Note: these intCasts are always safe because z2d
+// stores as i32 but we always init with a u32.
+// We also depend on cell size.
+// Everything matches, so we can just reset the surface
+// and redraw.
+// If we reached this point we want to reset our overlay.
+// Convert the terminal state to GPU cells stored in CPU memory. These
+// are then synced to the GPU in the next frame. This only updates CPU
+// memory and doesn't touch the GPU.
+//
+// This requires the draw mutex.
+//
+// Dirty state on terminal state won't be reset by this.
+// const start = try std.time.Instant.now();
+// const start_micro = std.time.microTimestamp();
+// defer {
+//     const end = std.time.Instant.now() catch unreachable;
+//     // "[rebuildCells time] <START us>\t<TIME_TAKEN us>"
+//     std.log.warn("[rebuildCells time] {}\t{}", .{start_micro, end.since(start) / std.time.ns_per_us});
+// }
+// Determine our x/y range for preedit. We don't want to render anything
+// here because we will render the preedit separately.
+// We base the preedit on the position of the cursor in the
+// viewport. If the cursor isn't visible in the viewport we
+// don't show it.
+// Update our uniforms accordingly, otherwise
+// our background cells will be out of place.
+// If we are doing a full rebuild, then we clear the entire cell buffer.
+// We also reset our padding extension depending on the screen type
+// For extension, assume we are extending in all directions.
+// For "extend" this may be disabled due to heuristics below.
+// From this point on we never fail. We produce some kind of
+// working terminal state, even if incorrect.
+// Get our row data from our state
+// If our cell contents buffer is shorter than the screen viewport,
+// we render the rows that fit, starting from the bottom. If instead
+// the viewport is shorter than the cell contents buffer, we align
+// the top of the viewport with the top of the contents buffer.
+// Only rebuild if we are doing a full rebuild or this row is dirty.
+// Clear the cells if the row is dirty
+// Unmark the dirty state in our render state.
+// This should never happen except under exceptional
+// scenarios. In this case, we don't want to corrupt
+// our render state so just clear this row and keep
+// trying to finish it out.
+// Setup our cursor rendering information.
+// Clear our cursor by default.
+// If the cursor isn't visible on the viewport, don't show
+// a cursor. Otherwise, get our cursor cell, because we may
+// need it for styling.
+// If we have preedit text, we don't setup a cursor
+// If there isn't a cursor visual style requested then
+// we don't render a cursor.
+// Determine the cursor color.
+// If an explicit cursor color was set by OSC 12, use that.
+// Use our configured color if specified
+// If the cursor is visible then we set our uniforms.
+// If we are a spacer tail of a wide cell, our cursor needs
+// to move back one cell. The saturate is to ensure we don't
+// overflow but this shouldn't happen with well-formed input.
+// If cursor-text is set, then compute the correct color.
+// Otherwise, use the background color.
+// Use the color set by cursor-text, if any.
+// If the cell is reversed, use the opposite cell color instead.
+// Setup our preedit text.
+// Update that our cells rebuilt
+// Log some things
+// log.debug("rebuildCells complete cached_runs={}", .{
+//     self.font_shaper_cache.count(),
+// });
+// If our viewport is wider than our cell contents buffer,
+// we still only process cells up to the width of the buffer.
+// On primary screen, we still apply vertical padding
+// extension under certain conditions we feel are safe.
+//
+// This helps make some scenarios look better while
+// avoiding scenarios we know do NOT look good.
+// These already have the correct values set above.
+// Apply heuristics for padding extension.
+// Iterator of runs for shaping.
+// We want to do font shaping as long as the cursor is
+// visible on this viewport.
+// If this cell falls within our preedit range then we
+// skip this because preedits are setup separately.
+// We're not on the preedit line, no actions necessary.
+// We're before the preedit range, no actions necessary.
+// We're in the preedit range, skip this cell.
+// After exiting the preedit range we need to catch
+// the run position up because of the missed cells.
+// In all other cases, no action is necessary.
+// Step the run iterator until we find a run that ends
+// after the current cell, which will be the soonest run
+// that might contain glyphs for our cell.
+// If we haven't shaped this run, do so now.
+// Try to read the cells from the shaping cache if we can.
+// Otherwise we have to shape them.
+// Try to cache them. If caching fails for any reason we
+// continue because it is just a performance optimization,
+// not a correctness issue.
+// The cells we get from direct shaping are always owned
+// by the shaper and valid until the next shaping call so
+// we can safely use them.
+// Advance our index until we reach or pass
+// our current x position in the shaper cells.
+// True if this cell is selected
+// Order below matters for precedence.
+// Selection should take the highest precedence.
+// If we're highlighted, then we're selected. In the
+// future we want to use a different style for this
+// but this to get started.
+// The `_style` suffixed values are the colors based on
+// the cell style (SGR), before applying any additional
+// configuration, inversions, selections, etc.
+// The final background color for the cell.
+// If we have an explicit selection background color
+// specified in the config, use that.
+//
+// If no configuration, then our selection background
+// is our foreground color.
+// Not selected
+// Two cases cause us to invert (use the fg color as the bg)
+// - The "inverse" style flag.
+// - A "covering" glyph; we use fg for bg in that
+//   case to help make sure that padding extension
+//   works correctly.
+//
+// If one of these is true (but not the other)
+// then we use the fg style color for the bg.
+// Otherwise they cancel out.
+// Our happy-path non-selection background color
+// is our style or our configured defaults.
+// Whether we need to use the bg color as our fg color:
+// - Cell is selected, inverted, and set to cell-foreground
+// - Cell is selected, not inverted, and set to cell-background
+// - Cell is inverted and not selected
+// Foreground alpha for this cell.
+// Set the cell's background color.
+// Determine our background alpha. If we have transparency configured
+// then this is dynamic depending on some situations. This is all
+// in an attempt to make transparency look the best for various
+// situations. See inline comments.
+// Cells that are selected should be fully opaque.
+// Cells that are reversed should be fully opaque.
+// If the user requested to have opacity on all cells, apply it.
+// Cells that have an explicit bg color should be fully opaque.
+// Otherwise, we won't draw the bg for this cell,
+// we'll let the already-drawn background color
+// show through.
+// If the invisible flag is set on this cell then we
+// don't need to render any foreground elements, so
+// we just skip all glyphs with this x coordinate.
+//
+// NOTE: This behavior matches xterm. Some other terminal
+// emulators, e.g. Alacritty, still render text decorations
+// and only make the text itself invisible. The decision
+// has been made here to match xterm's behavior for this.
+// Give links a single underline, unless they already have
+// an underline, in which case use a double underline to
+// distinguish them.
+// We draw underlines first so that they layer underneath text.
+// This improves readability when a colored underline is used
+// which intersects parts of the text (descenders).
+// If we're at or past the end of our shaper run then
+// we need to get the next run from the run iterator.
+// If we haven't shaped this run yet, do so.
+// Try to read the cells from the shaping cache if we can.
+// Otherwise we have to shape them.
+// Try to cache them. If caching fails for any reason we
+// continue because it is just a performance optimization,
+// not a correctness issue.
+// The cells we get from direct shaping are always owned
+// by the shaper and valid until the next shaping call so
+// we can safely use them.
+// If there are no shaper cells for this run, ignore it.
+// This can occur for runs of empty cells, and is fine.
+// If we encounter a shaper cell to the left of the current
+// cell then we have some problems. This logic relies on x
+// position monotonically increasing.
+// NOTE: An assumption is made here that a single cell will never
+// be present in more than one shaper run. If that assumption is
+// violated, this logic breaks.
+// Finally, draw a strikethrough if necessary.
+// Add an underline decoration to the specified cell
+// Add a overline decoration to the specified cell
+// Add a strikethrough decoration to the specified cell
+// Add a glyph to the specified cell.
+// Render
+// If there's no Nerd Font constraint for this codepoint
+// then, if it's a symbol, we constrain it to fit inside
+// its cell(s), we don't modify the alignment at all.
+// If the glyph is 0 width or height, it will be invisible
+// when drawn, so don't bother adding it to the buffer.
+// Add the cursor. We render the cursor over the wide character if
+// we're on the wide character tail.
+// The cursor goes over the screen cursor position.
+// If we're part of a wide character, we move the cursor back
+// to the actual character.
+// This should never happen because we embed nerd
+// fonts so we just log and return instead of fallback.
+// Render the glyph for our preedit text
+// Add our opaque background cell
+// Add our text
+// Add underline
+// Sync the atlas data to the given texture. This copies the bytes
+// associated with the atlas to the given texture. If the atlas no
+// longer fits into the texture, the texture will be resized.
+// Free our old texture
+// Reallocate
+//
+// --- Original Ghostty Comments End: src/renderer/generic.zig
+
+
 import input
 import sync
 import terminal

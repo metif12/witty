@@ -1,5 +1,105 @@
 module terminal
 
+// --- Original Ghostty Comments Start: src/terminal/style.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/terminal/style.zig
+//
+// The unique identifier for a style. This is at most the number of cells
+// that can fit into a terminal page.
+// The Id to use for default styling.
+// The style attributes for a cell.
+// Various colors, all self-explanatory.
+// On/off attributes that don't require much bit width so we use
+// a packed struct to make this take up significantly less space.
+// The color for an SGR attribute. A color can come from multiple
+// sources so we use this to track the source plus color value so that
+// we can properly react to things like palette changes.
+// True if the color is equal to another color.
+// Formatting to make debug logs easier to read
+// by only including non-default attributes.
+// True if the style is the default style.
+// True if the style is equal to another style.
+// Returns the bg color for a cell with this style given the cell
+// that has this style and the palette to use.
+//
+// Note that generally if a cell is a color-only cell, it SHOULD
+// only have the default style, but this is meant to work with the
+// default style as well.
+// The default color to use if the style doesn't specify a
+// foreground color and no configuration options override
+// it.
+// The current color palette. Required to map palette indices to
+// real color values.
+// If specified, the color to use for bold text.
+// Returns the fg color for a cell with this style given the palette
+// and various configuration options.
+// Note we don't pull the bold check to the top-level here because
+// we don't want to duplicate the conditional multiple times since
+// certain colors require more checks (e.g. `bold_is_bright`).
+// Returns the underline color for this style.
+// Returns a bg-color only cell from this style, if it exists.
+// Formatting to make debug logs easier to read
+// by only including non-default attributes.
+// Returns a formatter that renders this style as VT sequences,
+// to be used with `{f}`. This always resets the style first `\x1b[0m`
+// since a style is meant to be fully self-contained.
+//
+// For individual styles, this always emits multiple SGR sequences
+// (i.e. an individual `\x1b[<stuff>m` for each attribute) rather than
+// trying to combine them into a single sequence. We do this because
+// terminals have varying levels of support for combined sequences
+// especially with mixed separators (e.g. `:` vs `;`).
+// Returns a formatter that renders this style as inline CSS properties,
+// to be used with `{f}`. The output is a valid CSS style string suitable
+// for use in a `style` attribute (e.g., "color: rgb(255, 0, 0); font-weight: bold;").
+//
+// Palette colors are emitted as CSS variables like `var(--vt-palette-N)`.
+// If set, palette colors will be emitted as RGB values instead of
+// palette indices. This is useful when you want to capture the
+// exact colors at formatting time rather than relying on the
+// terminal's palette.
+// Always reset the style. Styles are fully self-contained.
+// Even if this style is empty, then that means we want to go
+// back to the default.
+// Our flags
+// Various RGB colors.
+// If set, palette colors will be emitted as RGB values instead of
+// CSS variables. This is useful when you want to capture the exact
+// colors at formatting time rather than relying on CSS variables.
+// Colors
+// Text decoration line
+// Text decoration style
+// `PackedStyle` represents the same data as `Style` but without padding,
+// which is necessary for hashing via re-interpretation of the underlying
+// bytes.
+//
+// `Style` is still preferred for everything else as it has type-safety
+// when using the `Color` tagged union.
+//
+// Empirical testing shows that storing all of the tags first and then the
+// data provides a better layout for serializing into and is faster on
+// benchmarks.
+// After https://github.com/ziglang/zig/issues/19754 is implemented,
+// it will be an compiler-error to have packed union fields of
+// differing size.
+//
+// For now we just need to be careful not to accidentally introduce
+// padding.
+// We pack the style in to 128 bits, fold it to 64 bits,
+// then use std.hash.int to make it sufficiently uniform.
+// Add style
+// Second add should return the same metadata.
+// Look it up
+// Add a second style
+// Look it up
+// Ref count
+// Release
+// We added the first one twice, so
+// We want to support at least this many styles without overflowing.
+//
+// --- Original Ghostty Comments End: src/terminal/style.zig
+
+
 // Style methods for CellStyle.
 //
 // Source: style.zig

@@ -1,5 +1,132 @@
 module main
 
+// --- Original Ghostty Comments Start: src/Command.zig
+//
+// Source: /Users/alexander/code/3rd/ghostty/src/Command.zig
+//
+// Command launches sub-processes. This is an alternate implementation to the
+// Zig std.process.Child since at the time of authoring this, std.process.Child
+// didn't support the options necessary to spawn a shell attached to a pty.
+//
+// Consequently, I didn't implement a lot of features that std.process.Child
+// supports because we didn't need them. Cross-platform subprocessing is not
+// a trivial thing to implement (I've done it in three separate languages now)
+// so if we want to replatform onto std.process.Child I'd love to do that.
+// This was just the fastest way to get something built.
+//
+// Issues with std.process.Child:
+//
+//   * No pre_exec callback for logic after fork but before exec.
+//   * posix_spawn is used for Mac, but doesn't support the necessary
+//     features for tty setup.
+//
+// Path to the command to run. This doesn't have to be an absolute path,
+// because use exec functions that search the PATH, if necessary.
+//
+// This field is null-terminated to avoid a copy for the sake of
+// adding a null terminator since POSIX systems are so common.
+// Command-line arguments. It is the responsibility of the caller to set
+// args[0] to the command. If args is empty then args[0] will automatically
+// be set to equal path.
+// Environment variables for the child process. If this is null, inherits
+// the environment variables from this process. These are the exact
+// environment variables to set; these are /not/ merged.
+// Working directory to change to in the child process. If not set, the
+// working directory of the calling process is preserved.
+// The file handle to set for stdin/out/err. If this isn't set, we do
+// nothing explicitly so it is up to the behavior of the operating system.
+// If set, this will be executed /in the child process/ after fork but
+// before exec. This is useful to setup some state in the child before the
+// exec process takes over, such as signal handlers, setsid, setuid, etc.
+// If set, then the process will be created attached to this pseudo console.
+// `stdin`, `stdout`, and `stderr` will be ignored if set.
+// User data that is sent to the callback. Set with setData and getData
+// for a more user-friendly API.
+// Process ID is set after start is called.
+// LinuxCGroup type depends on our target OS
+// The various methods a process may exit.
+// Exited by normal exit call, value is exit status
+// Exited by a signal, value is the signal
+// Exited by a stop signal, value is signal
+// Unknown exit reason, value is the status from waitpid
+// Start the subprocess. This returns immediately once the child is started.
+//
+// After this is successful, self.pid is available.
+// Use an arena allocator for the temporary allocations we need in this func.
+// IMPORTANT: do all allocation prior to the fork(). I believe it is undefined
+// behavior if you malloc between fork and exec. The source of the Zig
+// stdlib seems to verify this as well as Go.
+// Null-terminate all our arguments
+// Determine our env vars
+// Fork. If we have a cgroup specified on Linxu then we use clone
+// Parent, return immediately.
+// We are the child.
+// Setup our file descriptors for std streams.
+// Setup our working directory
+// This can fail if we don't have permission to go to
+// this directory or if due to race conditions it doesn't
+// exist or any various other reasons. We don't want to
+// crash the entire process if this fails so we ignore it.
+// We don't log because that'll show up in the output.
+// Restore any rlimits that were set by Ghostty. This might fail but
+// any failures are ignored (its best effort).
+// If the user requested a pre exec callback, call it now.
+// Finally, replace our process.
+// Note: we must use the "p"-variant of exec here because we
+// do not guarantee our command is looked up already in the path.
+// If we are executing this code, the exec failed. We're in the
+// child process so there isn't much we can do. We try to output
+// something reasonable. Its important to note we MUST NOT return
+// any other error condition from here on out.
+// We return a very specific error that can be detected to determine
+// we're in the child.
+// TODO: In the case of having FDs instead of pty, need to set up
+// attributes such that the child process only inherits these handles,
+// then set bInheritsHandles below.
+// We use dup3 so that we can clear CLO_ON_EXEC. We do NOT want this
+// file descriptor to be closed on exec since we're exactly exec-ing after
+// this.
+// Mac doesn't support dup3 so we use dup2. We purposely clear
+// CLO_ON_EXEC for this fd.
+// Wait for the command to exit and return information about how it exited.
+// Block until the process exits. This returns immediately if the
+// process already exited.
+// We specify NOHANG because its not our fault if the process we launch
+// for the tty doesn't properly waitpid its children. We don't want
+// to hang the terminal over it.
+// When NOHANG is specified, waitpid will return a pid of 0 if the process
+// doesn't have a status to report. When that happens, it is as though the
+// wait call has not been performed, so we need to keep trying until we get
+// a non-zero pid back, otherwise we end up with zombie processes.
+// Sets command->data to data.
+// Returns command->data.
+// Copied from Zig. This is a publicly exported function but there is no
+// way to get it from the std package.
+// Copied from Zig. This is a publicly exported function but there is no
+// way to get it from the std package.
+// count bytes needed
+// +1 for '='
+// +1 for null byte
+// Copied from Zig. This function could be made public in child_process.zig instead.
+// This runs in the child, so we can exit and it won't
+// kill the test runner.
+// Read our stdout
+// Read our stdout
+// Read our stdout
+// Test validate an execveZ failure correctly terminates when error.ExecFailedInChild is correctly handled
+//
+// Incorrectly handling an error.ExecFailedInChild results in a second copy of the test process running.
+// Duplicating the test process leads to weird behavior
+// zig build test will hang
+// test binary created via -Demit-test-exe will run 2 copies of the test suite
+// If cmd.start fails with error.ExecFailedInChild it's the _child_ process that is running. If it does not
+// terminate in response to that error both the parent and child will continue as if they _are_ the test suite
+// process.
+// I am a child process, I must not get confused and continue running the rest of the test suite.
+//
+// --- Original Ghostty Comments End: src/Command.zig
+
+
 // Command launches sub-processes. This is an alternate implementation to
 // manage subprocess spawning with PTY support.
 //
