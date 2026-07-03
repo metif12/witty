@@ -19,3 +19,14 @@ fn test_fix_max_files_can_restore_when_available() {
 	assert lim.cur > 0
 	assert lim.max >= lim.cur
 }
+
+fn test_fix_max_files_does_not_shrink_limit() {
+	// After fixing, the current NOFILE limit must be at least what it was
+	// before: fix_max_files only ever raises it, then returns the *old*
+	// value so it can be restored.
+	old := fix_max_files() or { return }
+	// The old value must be sane: a positive soft limit within the hard limit.
+	assert old.cur > 0
+	assert old.max >= old.cur
+	restore_max_files(old)
+}

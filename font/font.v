@@ -1265,14 +1265,17 @@ pub enum FontStyle {
 
 // Sprite enumerates built-in sprite glyphs used for cursors,
 // underlines, and other decorations.
-pub enum Sprite {
-	underline
+// Sprites are represented as special codepoints outside of the Unicode
+// codepoint range. The enum values correspond to the codepoint offsets
+// from Sprite.start (0x110000), matching ghostty's font/sprite.zig ordering.
+pub enum Sprite as u32 {
+	underline = 0x110000
 	underline_double
 	underline_dotted
 	underline_dashed
 	underline_curly
-	overline
 	strikethrough
+	overline
 	cursor_rect
 	cursor_hollow_rect
 	cursor_bar

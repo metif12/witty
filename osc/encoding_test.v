@@ -5,8 +5,7 @@ fn test_is_safe_utf8_hello() {
 }
 
 fn test_is_safe_utf8_unicode() {
-	// XTODO: V string handling may differ from Zig for these chars
-	assert is_safe_utf8('safe unicode text')
+	assert is_safe_utf8('安全的ユニコード☀️')
 }
 
 fn test_is_safe_utf8_no_linebreaks() {

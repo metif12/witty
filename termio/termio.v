@@ -647,10 +647,25 @@ pub fn (t Thread) thread_main() {
 	// stub: IO thread main loop
 }
 
-pub struct Stopwatch {}
+// Stopwatch is a cross-thread wakeup/stop signal. In ghostty this is backed
+// by an xev.Async which lets one thread notify another's event loop. Here we
+// model the notification state directly: notify() records that a signal was
+// raised so the consuming thread can observe it.
+pub struct Stopwatch {
+pub mut:
+	// Whether a notification has been raised on this stopwatch.
+	notified bool
+}
 
-pub fn (s Stopwatch) notify() ! {
-	// stub: signals the thread to stop
+// notify raises the wakeup/stop signal. In ghostty this wakes the target
+// event loop; here we record that the signal was raised.
+pub fn (mut s Stopwatch) notify() ! {
+	s.notified = true
+}
+
+// reset clears the notification state.
+pub fn (mut s Stopwatch) reset() {
+	s.notified = false
 }
 
 // ============================================================
@@ -812,35 +827,160 @@ pub enum MutexState {
 	unlocked
 }
 
-// Mailbox for communicating with the IO thread.
+// mailbox_capacity is the number of messages the mailbox can hold. Ghostty
+// uses a BlockingQueue with a capacity of 64 that empirically makes sense for
+// Ghostty usage.
+const mailbox_capacity = 64
+
+// Mailbox is the queue used for storing messages that is periodically drained.
+// Typically used by a multi-threaded application (the surface/stream handler
+// producer side and the termio thread consumer side).
+//
+// This is a translation of ghostty's termio.Mailbox, which wraps a
+// BlockingQueue(termio.Message, 64) plus a wakeup async. The queue is a bounded
+// SPSC ring buffer; here we model it with an inline fixed-size ring buffer so
+// that a zero-valued Mailbox{} is immediately usable.
 pub struct Mailbox {
 mut:
-	// stub: would contain a ring buffer or channel
-	dummy u8
+	// The ring buffer storage. Values are undefined until written.
+	data [mailbox_capacity]Message
+	// The next location to write (next empty loc) and next location to read
+	// (next non-empty loc).
+	write int
+	read  int
+	// The number of written (unread) elements.
+	length int
+	// Guards concurrent producer/consumer access to the ring buffer.
+	mutex &sync.Mutex = unsafe { nil }
+	// Whether the wakeup signal has been raised for the consuming thread.
+	notified bool
 }
 
+// init creates a mailbox. The underlying mutex is allocated here.
 pub fn Mailbox.init() !Mailbox {
-	return Mailbox{}
+	return Mailbox{
+		mutex: sync.new_mutex()
+	}
 }
 
-pub fn (m Mailbox) deinit() {}
+pub fn (mut m Mailbox) deinit() {}
 
-// send pushes a message to the mailbox, unlocking the provided mutex
-// if the mailbox would block.
-pub fn (m Mailbox) send(msg Message, mtx &sync.Mutex) {
-	// stub: would push into a ring buffer
-	_ = msg
-	_ = mtx
+// ensure_mutex lazily allocates the guard mutex so a zero-valued Mailbox{}
+// (e.g. an embedded field that wasn't built via Mailbox.init) is usable.
+fn (mut m Mailbox) ensure_mutex() &sync.Mutex {
+	if m.mutex == unsafe { nil } {
+		m.mutex = sync.new_mutex()
+	}
+	return m.mutex
 }
 
-// push attempts to push a message. Returns number of items pushed (0 or 1).
-pub fn (m Mailbox) push(msg Message) int {
-	// stub: always succeeds
-	_ = msg
+// full returns true if the queue is full. The lock must be held.
+fn (m &Mailbox) full() bool {
+	return m.length == mailbox_capacity
+}
+
+// len returns the number of unread messages in the mailbox.
+pub fn (mut m Mailbox) len() int {
+	mtx := m.ensure_mutex()
+	mtx.lock()
+	defer {
+		mtx.unlock()
+	}
+	return m.length
+}
+
+// send pushes the given message without notifying that there are messages.
+//
+// If the optional mutex is given, it must already be LOCKED. If the send would
+// block (the queue is full), we raise the wakeup, unlock this mutex so the
+// consuming thread can drain, retry the push, and lock it again. This handles
+// the edge case where the queue is full.
+pub fn (mut m Mailbox) send(msg Message, mtx &sync.Mutex) {
+	// Try to write to the queue. This is the fast path because we can queue
+	// without unlocking the renderer state.
+	if m.push(msg) > 0 {
+		return
+	}
+
+	// If we reach here, the queue is full. Wake up the writer thread so that it
+	// can process messages to clear up space. However, the writer thread may
+	// require the renderer lock so we need to unlock.
+	m.notify()
+
+	// Unlock the renderer state (if provided) so the writer thread can acquire
+	// it, then retry queueing our message before continuing. This is a very
+	// slow path that only triggers in pathological cases.
+	if mtx != unsafe { nil } {
+		mtx.unlock()
+	}
+	defer {
+		if mtx != unsafe { nil } {
+			mtx.lock()
+		}
+	}
+	// NOTE: ghostty blocks forever here waiting for space. We approximate a
+	// blocking retry with a bounded spin so a single-threaded caller (e.g.
+	// tests) can't deadlock against itself.
+	for _ in 0 .. mailbox_capacity {
+		if m.push(msg) > 0 {
+			return
+		}
+	}
+}
+
+// push attempts to push a message onto the queue without blocking. Returns the
+// number of items pushed (1 on success, 0 if the queue is full).
+pub fn (mut m Mailbox) push(msg Message) int {
+	mtx := m.ensure_mutex()
+	mtx.lock()
+	defer {
+		mtx.unlock()
+	}
+
+	// If we're full then we failed to write.
+	if m.full() {
+		return 0
+	}
+
+	// Add our data and update our accounting.
+	m.data[m.write] = msg
+	m.write += 1
+	if m.write >= mailbox_capacity {
+		m.write -= mailbox_capacity
+	}
+	m.length += 1
+
 	return 1
 }
 
-// notify wakes up the termio thread so it processes any queued messages.
-pub fn (m Mailbox) notify() {
-	// stub: would wake up the termio thread's event loop.
+// pop removes and returns the next message from the queue without blocking.
+// Returns none if the queue is empty.
+pub fn (mut m Mailbox) pop() ?Message {
+	mtx := m.ensure_mutex()
+	mtx.lock()
+	defer {
+		mtx.unlock()
+	}
+
+	// If we're empty we have nothing.
+	if m.length == 0 {
+		return none
+	}
+
+	// Get the index we're going to read data from and do the accounting.
+	n := m.read
+	m.read += 1
+	if m.read >= mailbox_capacity {
+		m.read -= mailbox_capacity
+	}
+	m.length -= 1
+
+	return m.data[n]
+}
+
+// notify wakes up the termio thread so it processes any queued messages. This
+// records that a wakeup signal was raised. In ghostty this notifies the
+// wakeup async tied to the consuming thread's event loop.
+pub fn (mut m Mailbox) notify() {
+	m.notified = true
 }

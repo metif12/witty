@@ -2,6 +2,24 @@ module internal_os
 
 import os
 
+// C interop declarations for pipes and resource limits.
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/resource.h>
+
+fn C.pipe(fds &int) int
+fn C.fcntl(fd int, cmd int, arg int) int
+fn C.getrlimit(resource int, rlp &C.rlimit) int
+fn C.setrlimit(resource int, rlp &C.rlimit) int
+
+// rlimit mirrors the C `struct rlimit`. rlim_t is an unsigned 64-bit
+// integer on the platforms we target (macOS, Linux, *BSD).
+struct C.rlimit {
+mut:
+	rlim_cur u64
+	rlim_max u64
+}
+
 // open opens a URL or file path using the system default handler.
 pub fn open(url string) ! {
 	os.execute('open "${url}"')
@@ -92,10 +110,105 @@ pub fn get_passwd() !PasswdEntry {
 	}
 }
 
-// pipe creates a pipe and returns [read_fd, write_fd].
-// XTODO: needs real OS pipe implementation via C interop.
+// pipe() that works on POSIX systems. This sets CLOEXEC on the file
+// descriptors. Returns [read_fd, write_fd].
 pub fn pipe() ![2]int {
-	return [0, 0]!
+	mut fds := [2]int{}
+	if C.pipe(&fds[0]) != 0 {
+		return error('failed to create pipe')
+	}
+
+	// POSIX doesn't have pipe2() everywhere (e.g. macOS), so we set
+	// CLOEXEC manually with fcntl to match Ghostty's pipe2(.{ .CLOEXEC = true }).
+	set_cloexec(fds[0])
+	set_cloexec(fds[1])
+	return fds
+}
+
+// set_cloexec sets the FD_CLOEXEC flag on the given file descriptor.
+fn set_cloexec(fd int) {
+	flags := C.fcntl(fd, C.F_GETFD, 0)
+	if flags >= 0 {
+		C.fcntl(fd, C.F_SETFD, flags | C.FD_CLOEXEC)
+	}
+}
+
+// Rlimit mirrors the Unix resource limit (soft/hard) for a resource.
+pub struct Rlimit {
+pub mut:
+	cur u64
+	max u64
+}
+
+// fix_max_files maximizes the number of file descriptors we can have open.
+// We need to do this because each window consumes at least a handful of fds.
+// This is extracted from the Zig compiler source code. Returns the previous
+// limit so it can later be restored, or none if the limit couldn't be queried.
+pub fn fix_max_files() !Rlimit {
+	old := getrlimit_nofile() or {
+		// Oh well; we tried.
+		return error('failed to query file handle limit, may limit max windows')
+	}
+
+	// If we're already at the max, we're done.
+	if old.cur >= old.max {
+		return old
+	}
+
+	// Do a binary search for the limit.
+	mut lim := old
+	mut min := old.cur
+	mut max := u64(1) << 20
+	// But if there's a defined upper bound, don't search, just set it.
+	if old.max != rlim_infinity() {
+		min = old.max
+		max = old.max
+	}
+
+	for {
+		lim.cur = min + (max - min) / 2
+		if setrlimit_nofile(lim) {
+			min = lim.cur
+		} else {
+			max = lim.cur
+		}
+		if min + 1 >= max {
+			break
+		}
+	}
+
+	return old
+}
+
+// restore_max_files restores the file descriptor limit to a previous value.
+pub fn restore_max_files(lim Rlimit) {
+	setrlimit_nofile(lim)
+}
+
+// getrlimit_nofile queries the current NOFILE resource limit.
+fn getrlimit_nofile() ?Rlimit {
+	mut rl := C.rlimit{}
+	if C.getrlimit(C.RLIMIT_NOFILE, &rl) != 0 {
+		return none
+	}
+	return Rlimit{
+		cur: rl.rlim_cur
+		max: rl.rlim_max
+	}
+}
+
+// setrlimit_nofile sets the NOFILE resource limit, returning true on success.
+fn setrlimit_nofile(lim Rlimit) bool {
+	rl := C.rlimit{
+		rlim_cur: lim.cur
+		rlim_max: lim.max
+	}
+	return C.setrlimit(C.RLIMIT_NOFILE, &rl) == 0
+}
+
+// rlim_infinity returns the RLIM_INFINITY sentinel value for this platform.
+fn rlim_infinity() u64 {
+	return u64(C.RLIM_INFINITY)
 }
 
 // ShellCommandBuilder accumulates arguments to build a shell command string.

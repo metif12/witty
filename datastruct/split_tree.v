@@ -596,8 +596,10 @@ pub fn (self &SplitTree[T]) remove(at int) SplitTree[T] {
 	// Count nodes needed after the removal.
 	count := self.count_after_removal(handle_root, at, 0)
 
-	// Pre-allocate nodes with dummy values.
-	mut new_nodes := []Node[T]{len: count, init: Node[T](Split{})}
+	// Pre-allocate nodes with dummy values. We use a helper to construct
+	// the sum-type value because V's generics can't infer the element type
+	// when casting `Node[T](Split{})` directly inside the `init:` field.
+	mut new_nodes := []Node[T]{len: count, init: empty_node[T]()}
 	mut result := SplitTree[T]{
 		nodes:  new_nodes
 		zoomed: -1
@@ -685,6 +687,14 @@ fn (self &SplitTree[T]) count_after_removal(current int, target int, acc int) in
 		return acc + left + right + 1
 	}
 	return acc // unreachable
+}
+
+// empty_node returns a placeholder Node[T] used to pre-fill node arrays
+// before they are overwritten during a tree traversal. We need this helper
+// because V's generics can't infer the element type when casting
+// `Node[T](Split{})` directly inside an array's `init:` field.
+fn empty_node[T]() Node[T] {
+	return Split{}
 }
 
 // ref_nodes increases reference count of all views in the nodes slice.

@@ -146,7 +146,7 @@ fn (mut self Exec) thread_enter_common(io &Termio) ! {
 	// Create pipe for quit signaling.
 	// pipe_fds[0] is the read end, pipe_fds[1] is the write end.
 	mut pipe_fds := [2]int{}
-	if C.pipe(&pipe_fds) != 0 {
+	if C.pipe(&pipe_fds[0]) != 0 {
 		return error('failed to create quit pipe')
 	}
 

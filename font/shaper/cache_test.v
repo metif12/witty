@@ -120,6 +120,27 @@ fn test_cache_clear_on_deinit() {
 	assert c.count() == 0
 }
 
+// Faithful translation of ghostty's `test Cache` in src/font/shaper/Cache.zig.
+fn test_cache_ghostty() {
+	mut c := ShaperCache.init()
+	defer { c.deinit() }
+
+	run := font.TextRun{
+		hash: 1
+	}
+	assert c.get(run) == none
+	c.put(run, [
+		font.ShapeCell{ x: 0, glyph_index: 0 },
+		font.ShapeCell{ x: 1, glyph_index: 1 },
+	])
+
+	actual := c.get(run) or {
+		assert false, 'expected cache hit'
+		return
+	}
+	assert actual.len == 2
+}
+
 fn test_cache_put_duplicates_cells() {
 	mut c := ShaperCache.init()
 	defer { c.deinit() }

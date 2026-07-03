@@ -162,12 +162,12 @@ pub fn (sf &SpriteFace) has_codepoint(cp u32, p ?Presentation) bool {
 }
 
 // render_glyph renders a sprite glyph into the given atlas.
+//
+// Faithful to ghostty's sprite Face.renderGlyph. The actual drawing is
+// delegated to sprite_face_render_glyph (in embedded.v) since the `font`
+// module cannot import the `sprite` module (import cycle).
 pub fn (sf &SpriteFace) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !GlyphInfo {
-	// XTODO: needs real sprite rendering implementation
-	_ = atlas
-	_ = glyph_index
-	_ = opts
-	return GlyphInfo{}
+	return sprite_face_render_glyph(mut atlas, glyph_index, sf.metrics, opts)
 }
 
 // ============================================================

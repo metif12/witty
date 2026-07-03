@@ -734,12 +734,17 @@ pub mut:
 	path       string
 	// The face index within the font file.
 	face_index i32
-	// XTODO: codepoint coverage bitmap for has_codepoint()
+	// Codepoint coverage map used for has_codepoint() without having to
+	// load the face. This is the witty equivalent of the discovery-backed
+	// charset (fontconfig) / loaded CT font used by ghostty's
+	// DeferredFace.hasCodepoint. A codepoint maps to true if this face
+	// covers it. Codepoints not present in the map are not covered.
+	codepoints map[u32]bool
 }
 
 // deinit releases deferred face resources.
 pub fn (mut d DeferredFace) deinit() {
-	// XTODO: free codepoint coverage data
+	d.codepoints = map[u32]bool{}
 }
 
 // load fully loads this deferred face into a Face.
@@ -749,10 +754,24 @@ pub fn (d DeferredFace) load(lib Library, opts FaceOptions) !Face {
 	return error('deferred loading not implemented')
 }
 
-// has_codepoint returns true if this deferred face contains the given
-// codepoint with the specified presentation (or any if presentation is none).
+// has_codepoint returns true if this face can satisfy the given codepoint
+// and presentation. If presentation is none, then it just checks if the
+// codepoint is present at all.
+//
+// Faithful to ghostty's DeferredFace.hasCodepoint: with a discovery
+// mechanism this doesn't require the face to be loaded, using the cached
+// coverage data (here, the codepoints map). Presentation is ignored for
+// coverage in this backend, matching the fact that our coverage map only
+// records presence.
 pub fn (d DeferredFace) has_codepoint(cp u32, presentation ?Presentation) bool {
-	// XTODO: check codepoint coverage bitmap
+	// If we have coverage data, consult it. A codepoint is covered only
+	// if it is present in the map with a true value.
+	if d.codepoints.len > 0 {
+		_ = presentation
+		return d.codepoints[cp] or { false }
+	}
+
+	// XTODO: without coverage data, the face must be loaded to answer this.
 	_ = cp
 	_ = presentation
 	return false

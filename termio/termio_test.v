@@ -47,3 +47,81 @@ fn test_stopwatch_notify_records_signal() {
 
 	assert s.notified
 }
+
+// Translated from ghostty datastruct/blocking_queue.zig "basic push and pop".
+// The Mailbox wraps a bounded ring buffer (BlockingQueue(Message, 64)); this
+// exercises filling to capacity, the full-queue drop, FIFO drain, and reuse.
+fn test_mailbox_fill_drain_reuse() {
+	mut mailbox := Mailbox.init()!
+	defer {
+		mailbox.deinit()
+	}
+
+	// Should have no values.
+	assert mailbox.pop() == none
+	assert mailbox.len() == 0
+
+	// Push until we're full. Each push succeeds (returns 1) until capacity.
+	for i in 0 .. mailbox_capacity {
+		assert mailbox.push(Message.write_stable_msg('m${i}')) == 1
+	}
+	assert mailbox.len() == mailbox_capacity
+
+	// The next push fails because the queue is full.
+	assert mailbox.push(Message.write_stable_msg('overflow')) == 0
+
+	// Pop everything back out in FIFO order.
+	for i in 0 .. mailbox_capacity {
+		msg := mailbox.pop() or {
+			assert false, 'expected message ${i}'
+			return
+		}
+		assert msg.write_stable_data == 'm${i}'
+	}
+	assert mailbox.pop() == none
+	assert mailbox.len() == 0
+
+	// Verify we can still push after fully draining (ring buffer wraps).
+	assert mailbox.push(Message.write_stable_msg('again')) == 1
+	assert mailbox.len() == 1
+}
+
+// send() enqueues into the same underlying queue as push(). When no mutex is
+// supplied (unlocked), it simply pushes without unlocking anything.
+fn test_mailbox_send_enqueues() {
+	mut mailbox := Mailbox.init()!
+	defer {
+		mailbox.deinit()
+	}
+
+	mailbox.send(Message.visible_msg(true), unsafe { nil })
+	assert mailbox.len() == 1
+
+	msg := mailbox.pop() or {
+		assert false, 'expected sent message'
+		return
+	}
+	assert msg.kind == .visible
+	assert msg.flag_val
+}
+
+// notify() records that a wakeup signal was raised for the consuming thread.
+fn test_mailbox_notify_sets_flag() {
+	mut mailbox := Mailbox.init()!
+	defer {
+		mailbox.deinit()
+	}
+
+	assert !mailbox.notified
+	mailbox.notify()
+	assert mailbox.notified
+}
+
+// stopwatch reset clears the notification state.
+fn test_stopwatch_reset_clears() {
+	mut s := Stopwatch{}
+	s.notify()!
+	assert s.notified
+	s.reset()
+	assert !s.notified
+}
