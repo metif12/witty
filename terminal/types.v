@@ -465,49 +465,33 @@ pub fn (self &Pages) get_bottom_right(tag PointTag) ?Pin {
 }
 
 // Resize the pages.
+//
+// The ordering of the column reflow and the row-count change matters and
+// mirrors PageList.resize: when growing columns we reflow first (unwrap) then
+// grow rows; when shrinking columns we change rows first (so more active rows
+// are available) then reflow. This is what lets "more rows + less cols" pull
+// the newly-unwrapped rows up into the enlarged active area.
 pub fn (mut self Pages) resize(opts ResizeOpts) ! {
 	self.reflow_did_reflow = false
 	old_cols := self.cols
 
-	// Column change. If reflow is requested we re-wrap soft-wrapped logical
-	// lines into the new width (tracking the cursor); otherwise we just
-	// truncate/pad each row in place.
-	if opts.cols != old_cols {
-		if opts.reflow {
-			self.reflow_cols(opts.cols, opts.cursor.x, opts.cursor.y)
-			self.reflow_did_reflow = true
-		} else {
-			self.cols = opts.cols
-			for mut row in self.screen_rows {
-				if row.cells.len < int(opts.cols) {
-					for _ in row.cells.len .. int(opts.cols) {
-						row.cells << CellData{}
-					}
-				} else if row.cells.len > int(opts.cols) {
-					row.cells = row.cells[..int(opts.cols)]
-				}
-			}
+	if !opts.reflow || opts.cols == old_cols {
+		// No reflow: columns (if any) change in place, then rows.
+		if opts.cols != old_cols {
+			self.resize_cols_no_reflow(opts.cols)
 		}
-	}
-
-	// Row change.
-	old_rows := self.rows
-	self.rows = opts.rows
-	if old_rows != opts.rows {
-		// Ensure we have enough rows for the active area.
-		active_end := self.active_start + int(opts.rows)
-		for self.screen_rows.len < active_end {
-			self.screen_rows << RowData.init(self.cols)
-		}
-		// If the active area would extend past our rows, pull the active
-		// start up so the bottom aligns with the last row.
-		if self.active_start + int(opts.rows) > self.screen_rows.len {
-			self.active_start = if self.screen_rows.len > int(opts.rows) {
-				self.screen_rows.len - int(opts.rows)
-			} else {
-				0
-			}
-		}
+		self.resize_rows(opts.rows, opts.cursor.y, true)
+	} else if opts.cols > old_cols {
+		// Growing columns: reflow (unwrap) first, then grow rows.
+		self.reflow_cols(opts.cols, opts.cursor.x, opts.cursor.y)
+		self.reflow_did_reflow = true
+		self.resize_rows(opts.rows, opts.cursor.y, false)
+	} else {
+		// Shrinking columns: change rows first so the reflow has the proper
+		// number of active rows to wrap into, then reflow.
+		self.resize_rows(opts.rows, opts.cursor.y, true)
+		self.reflow_cols(opts.cols, opts.cursor.x, opts.cursor.y)
+		self.reflow_did_reflow = true
 	}
 
 	// Finalize the reflowed cursor position (active-relative) now that the
@@ -525,6 +509,84 @@ pub fn (mut self Pages) resize(opts ResizeOpts) ! {
 			self.reflow_cursor_x = self.cols - 1
 		}
 	}
+}
+
+// Change columns in place without reflow: truncate/pad each row.
+fn (mut self Pages) resize_cols_no_reflow(new_cols u32) {
+	self.cols = new_cols
+	for mut row in self.screen_rows {
+		if row.cells.len < int(new_cols) {
+			for _ in row.cells.len .. int(new_cols) {
+				row.cells << CellData{}
+			}
+		} else if row.cells.len > int(new_cols) {
+			row.cells = row.cells[..int(new_cols)]
+		}
+	}
+}
+
+// Change the active row count. Mirrors PageList.resizeWithoutReflow's row
+// handling:
+//   - Shrinking: prefer trimming trailing blank active rows over creating
+//     history; any remainder just becomes history.
+//   - Growing: if the cursor is at (or below) the bottom of the active area,
+//     "pull down" scrollback (the active top moves up to include history),
+//     growing blank rows only if there isn't enough history. If the cursor is
+//     NOT at the bottom, just append blank rows so we don't drag scrollback
+//     down. `has_cursor` distinguishes the "no cursor" case (always pull down).
+fn (mut self Pages) resize_rows(new_rows u32, cursor_y u32, has_cursor bool) {
+	old_rows := self.rows
+	if old_rows == new_rows {
+		self.rows = new_rows
+		return
+	}
+
+	if new_rows < old_rows {
+		// Shrinking: trim trailing blank rows from the active area first.
+		mut want_trim := int(old_rows - new_rows)
+		for want_trim > 0 {
+			last := self.screen_rows.len - 1
+			// Only trim rows that are within the active area and blank.
+			if last < self.active_start + int(new_rows) {
+				break
+			}
+			if !has_text_any(self.screen_rows[last].cells) {
+				self.screen_rows.delete(last)
+				want_trim--
+			} else {
+				break
+			}
+		}
+		self.rows = new_rows
+		return
+	}
+
+	// Growing.
+	// If the cursor is not at the bottom, just append blanks (no pull-down).
+	if has_cursor && cursor_y < old_rows - 1 {
+		delta := int(new_rows) - int(old_rows)
+		self.rows = new_rows
+		for _ in 0 .. delta {
+			self.screen_rows << RowData.init(self.cols)
+		}
+		return
+	}
+
+	// Cursor at the bottom (or no cursor): pull down scrollback. The active
+	// area top moves up to include history; only grow blanks if there isn't
+	// enough total content.
+	self.rows = new_rows
+	if self.screen_rows.len < int(new_rows) {
+		for _ in self.screen_rows.len .. int(new_rows) {
+			self.screen_rows << RowData.init(self.cols)
+		}
+	}
+	// Bottom-anchor the active area to the last `new_rows` rows.
+	mut new_active := self.screen_rows.len - int(new_rows)
+	if new_active < 0 {
+		new_active = 0
+	}
+	self.active_start = new_active
 }
 
 // A tracked point during reflow: a source cell position we want remapped to
@@ -745,22 +807,35 @@ fn (mut c FlatReflowCursor) reflow_row(src RowData, src_abs int) {
 // cols, active_start, reflow_cursor_x and reflow_cursor_abs.
 fn (mut self Pages) reflow_cols(new_cols u32, cur_x u32, cur_y u32) {
 	old_active_start := self.active_start
+	old_rows := int(self.rows)
 	cursor_abs := self.active_start + int(cur_y)
+
+	// Preserve the same number of active rows beneath the cursor (mirrors
+	// PageList.resize_cols preserved_pin logic). This is what keeps a cleared
+	// (scrollClear) active area from jumping to the bottom and pulling down
+	// scrollback: we grow blank rows after the cursor so its distance from the
+	// bottom is preserved.
+	preserved_remaining := old_rows - int(cur_y) - 1
+
+	// Count how many wrap-continuation rows precede the cursor within the old
+	// active area, so we can offset any *additional* wraps introduced by the
+	// reflow and avoid pushing the cursor's own logical line into scrollback.
+	mut preserved_wrapped := 0
+	for r := cursor_abs; r > old_active_start; r-- {
+		if r < self.screen_rows.len && self.screen_rows[r].wrap_continuation {
+			preserved_wrapped++
+		}
+	}
 
 	mut cursor_pin := &FlatReflowPin{
 		src_row: cursor_abs
 		src_col: int(cur_x)
-	}
-	mut active_pin := &FlatReflowPin{
-		src_row: old_active_start
-		src_col: 0
 	}
 
 	mut rc := FlatReflowCursor{
 		cols: int(new_cols)
 	}
 	rc.pins << cursor_pin
-	rc.pins << active_pin
 	// Start with a single row, mirroring PageList's first rewritten node.
 	rc.append_row()
 
@@ -771,20 +846,45 @@ fn (mut self Pages) reflow_cols(new_cols u32, cur_x u32, cur_y u32) {
 	self.cols = new_cols
 	self.screen_rows = rc.out
 
-	mut new_active := if active_pin.new_row >= 0 { active_pin.new_row } else { rc.out.len }
-	if new_active > rc.out.len {
-		new_active = rc.out.len
+	// Remapped cursor absolute row (falls back to bottom if it was never hit).
+	mut cur_abs_new := if cursor_pin.new_row >= 0 {
+		cursor_pin.new_row
+	} else {
+		if self.screen_rows.len > 0 { self.screen_rows.len - 1 } else { 0 }
 	}
+
+	// Grow blank rows beneath the cursor so it keeps the same number of rows
+	// below it (adjusted for any extra wrapping of its own logical line). This
+	// bottom-anchors the active area without dragging scrollback up.
+	new_active_top := if self.screen_rows.len > old_rows {
+		self.screen_rows.len - old_rows
+	} else {
+		0
+	}
+	mut wrapped := 0
+	for r := cur_abs_new; r > new_active_top; r-- {
+		if r < self.screen_rows.len && self.screen_rows[r].wrap_continuation {
+			wrapped++
+		}
+	}
+	wrap_delta := if wrapped > preserved_wrapped { wrapped - preserved_wrapped } else { 0 }
+	current := self.screen_rows.len - cur_abs_new - 1
+
+	mut req_rows := preserved_remaining
+	req_rows = if req_rows > wrap_delta { req_rows - wrap_delta } else { 0 }
+	req_rows = if req_rows > current { req_rows - current } else { 0 }
+	for _ in 0 .. req_rows {
+		self.screen_rows << RowData.init(new_cols)
+	}
+
+	// Anchor the active area to the bottom of the (grown) total rows.
+	mut new_active := self.screen_rows.len - old_rows
 	if new_active < 0 {
 		new_active = 0
 	}
 	self.active_start = new_active
 
-	self.reflow_cursor_abs = if cursor_pin.new_row >= 0 {
-		cursor_pin.new_row
-	} else {
-		self.active_start
-	}
+	self.reflow_cursor_abs = cur_abs_new
 	self.reflow_cursor_x = if cursor_pin.new_row >= 0 {
 		u32(cursor_pin.new_col)
 	} else {

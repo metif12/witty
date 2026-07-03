@@ -1225,3 +1225,390 @@ fn test_screen_prompt_click_move_right_of_input_cursor_on_last_char() {
 	assert r.right == 1
 	assert r.left == 0
 }
+
+// ============================================================
+// Resize + reflow tests (translated from ghostty Screen.zig)
+// ============================================================
+
+// Helper: read the codepoint of the cell at active coordinate (x, y).
+fn active_codepoint(s &Screen, x u32, y u32) u32 {
+	idx := s.pages.active_start + int(y)
+	if idx < 0 || idx >= s.pages.screen_rows.len {
+		return 0
+	}
+	row := s.pages.screen_rows[idx]
+	if int(x) >= row.cells.len {
+		return 0
+	}
+	return row.cells[int(x)].codepoint
+}
+
+// --- resize more cols ---
+
+fn test_screen_resize_more_cols_perfect_split() {
+	mut s := Screen.init(5, 3, 0)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD2EFGH3IJKL') or { assert false }
+	s.resize(ScreenResize{ cols: 10, rows: 3, reflow: true }) or { assert false }
+
+	str := s.dump_string_alloc(.screen) or { assert false; return }
+	assert str == '1ABCD2EFGH\n3IJKL'
+}
+
+fn test_screen_resize_more_cols_no_reflow_preserves_semantic_prompt() {
+	mut s := Screen.init(5, 3, 0)
+	defer { s.deinit() }
+
+	// Set one of the rows to be a prompt
+	s.cursor_set_semantic_content_output()
+	s.test_write_string('1ABCD\n') or { assert false }
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('2EFGH') or { assert false }
+	s.cursor_set_semantic_content_output()
+	s.test_write_string('\n3IJKL') or { assert false }
+
+	s.resize(ScreenResize{ cols: 10, rows: 3, reflow: false }) or { assert false }
+
+	expected := '1ABCD\n2EFGH\n3IJKL'
+	str_view := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view == expected
+	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	assert str_screen == expected
+
+	// Our one row should still be a semantic prompt, the others should not.
+	assert s.pages.get_active_row(0).semantic_prompt == .unknown
+	assert s.pages.get_active_row(1).semantic_prompt == .prompt
+	assert s.pages.get_active_row(2).semantic_prompt == .unknown
+}
+
+fn test_screen_resize_more_cols_reflow_fits_full_width() {
+	mut s := Screen.init(5, 3, 0)
+	defer { s.deinit() }
+	str := '1ABCD2EFGH\n3IJKL'
+	s.test_write_string(str) or { assert false }
+
+	// Verify we soft wrapped
+	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view0 == '1ABCD\n2EFGH\n3IJKL'
+
+	// Put our cursor on row 2, where the soft wrap is
+	s.cursor_absolute(0, 1)
+	assert active_codepoint(s, s.cursor.x, s.cursor.y) == u32(`2`)
+
+	// Resize and verify we undid the soft wrap because we have space now
+	s.resize(ScreenResize{ cols: 10, rows: 3, reflow: true }) or { assert false }
+	str_view1 := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view1 == str
+
+	// Our cursor should've moved
+	assert s.cursor.x == 5
+	assert s.cursor.y == 0
+}
+
+fn test_screen_resize_more_cols_reflow_ends_in_newline() {
+	mut s := Screen.init(6, 3, 0)
+	defer { s.deinit() }
+	str := '1ABCD2EFGH\n3IJKL'
+	s.test_write_string(str) or { assert false }
+
+	// Verify we soft wrapped
+	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view0 == '1ABCD2\nEFGH\n3IJKL'
+
+	// Put our cursor on the last row
+	s.cursor_absolute(0, 2)
+	assert active_codepoint(s, s.cursor.x, s.cursor.y) == u32(`3`)
+
+	// Resize and verify we undid the soft wrap because we have space now
+	s.resize(ScreenResize{ cols: 10, rows: 3, reflow: true }) or { assert false }
+	str_view1 := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view1 == str
+
+	// Our cursor should still be on the 3
+	assert active_codepoint(s, s.cursor.x, s.cursor.y) == u32(`3`)
+}
+
+fn test_screen_resize_more_cols_reflow_forces_more_wrapping() {
+	mut s := Screen.init(5, 3, 0)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD2EFGH\n3IJKL') or { assert false }
+
+	// Put our cursor on row 2, where the soft wrap is
+	s.cursor_absolute(0, 1)
+	assert active_codepoint(s, s.cursor.x, s.cursor.y) == u32(`2`)
+
+	// Verify we soft wrapped
+	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view0 == '1ABCD\n2EFGH\n3IJKL'
+
+	// Resize
+	s.resize(ScreenResize{ cols: 7, rows: 3, reflow: true }) or { assert false }
+	str_view1 := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view1 == '1ABCD2E\nFGH\n3IJKL'
+
+	// Our cursor should've moved
+	assert s.cursor.x == 5
+	assert s.cursor.y == 0
+}
+
+fn test_screen_resize_more_cols_reflow_unwraps_multiple_times() {
+	mut s := Screen.init(5, 3, 0)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD2EFGH3IJKL') or { assert false }
+
+	// Put our cursor on row 3, where the soft wrap is
+	s.cursor_absolute(0, 2)
+	assert active_codepoint(s, s.cursor.x, s.cursor.y) == u32(`3`)
+
+	// Verify we soft wrapped
+	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view0 == '1ABCD\n2EFGH\n3IJKL'
+
+	// Resize
+	s.resize(ScreenResize{ cols: 15, rows: 3, reflow: true }) or { assert false }
+	str_view1 := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view1 == '1ABCD2EFGH3IJKL'
+
+	// Our cursor should've moved
+	assert s.cursor.x == 10
+	assert s.cursor.y == 0
+}
+
+fn test_screen_resize_more_cols_with_populated_scrollback() {
+	mut s := Screen.init(5, 3, 5)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH\n3IJKL\n4ABCD5EFGH') or { assert false }
+	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view0 == '3IJKL\n4ABCD\n5EFGH'
+
+	// Set our cursor to be on the "5"
+	s.cursor_absolute(0, 2)
+	assert active_codepoint(s, s.cursor.x, s.cursor.y) == u32(`5`)
+
+	// Resize
+	s.resize(ScreenResize{ cols: 10, rows: 3, reflow: true }) or { assert false }
+	str_view1 := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view1 == '2EFGH\n3IJKL\n4ABCD5EFGH'
+
+	// Cursor should still be on the "5"
+	assert active_codepoint(s, s.cursor.x, s.cursor.y) == u32(`5`)
+}
+
+fn test_screen_resize_more_cols_with_reflow() {
+	mut s := Screen.init(2, 3, 5)
+	defer { s.deinit() }
+	s.test_write_string('1ABC\n2DEF\n3ABC\n4DEF') or { assert false }
+
+	// Put our cursor on row 3, where the soft wrap is
+	s.cursor_absolute(0, 2)
+	assert active_codepoint(s, s.cursor.x, s.cursor.y) == u32(`E`)
+
+	// Verify we soft wrapped
+	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view0 == 'BC\n4D\nEF'
+
+	// Resize
+	s.resize(ScreenResize{ cols: 7, rows: 3, reflow: true }) or { assert false }
+	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	assert str_screen == '1ABC\n2DEF\n3ABC\n4DEF'
+
+	// Our cursor should've moved
+	assert s.cursor.x == 2
+	assert s.cursor.y == 2
+}
+
+// --- resize less cols ---
+
+fn test_screen_resize_less_cols_reflow_but_row_space() {
+	mut s := Screen.init(5, 3, 1)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD') or { assert false }
+
+	// Put our cursor on the end
+	s.cursor_absolute(4, 0)
+	assert active_codepoint(s, s.cursor.x, s.cursor.y) == u32(`D`)
+
+	s.resize(ScreenResize{ cols: 3, rows: 3, reflow: true }) or { assert false }
+	str_view := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view == '1AB\nCD'
+	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	assert str_screen == '1AB\nCD'
+
+	// Cursor should be on the last line
+	assert s.cursor.x == 1
+	assert s.cursor.y == 1
+}
+
+fn test_screen_resize_less_cols_reflow_with_trimmed_rows() {
+	mut s := Screen.init(5, 3, 0)
+	defer { s.deinit() }
+	s.test_write_string('3IJKL\n4ABCD\n5EFGH') or { assert false }
+	s.resize(ScreenResize{ cols: 3, rows: 3, reflow: true }) or { assert false }
+
+	str_view := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view == 'CD\n5EF\nGH'
+	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	assert str_screen == 'CD\n5EF\nGH'
+}
+
+fn test_screen_resize_less_cols_reflow_with_trimmed_rows_and_scrollback() {
+	mut s := Screen.init(5, 3, 1)
+	defer { s.deinit() }
+	s.test_write_string('3IJKL\n4ABCD\n5EFGH') or { assert false }
+	s.resize(ScreenResize{ cols: 3, rows: 3, reflow: true }) or { assert false }
+
+	str_view := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view == 'CD\n5EF\nGH'
+	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	assert str_screen == '3IJ\nKL\n4AB\nCD\n5EF\nGH'
+}
+
+fn test_screen_resize_less_cols_reflow_previously_wrapped() {
+	mut s := Screen.init(5, 3, 0)
+	defer { s.deinit() }
+	s.test_write_string('3IJKL4ABCD5EFGH') or { assert false }
+
+	str_screen0 := s.dump_string_alloc(.screen) or { assert false; return }
+	assert str_screen0 == '3IJKL\n4ABCD\n5EFGH'
+
+	s.resize(ScreenResize{ cols: 3, rows: 3, reflow: true }) or { assert false }
+
+	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	assert str_screen == 'ABC\nD5E\nFGH'
+}
+
+fn test_screen_resize_less_cols_reflow_and_scrollback() {
+	mut s := Screen.init(5, 3, 5)
+	defer { s.deinit() }
+	s.test_write_string('1A\n2B\n3C\n4D\n5E') or { assert false }
+
+	// Put our cursor on the end
+	s.cursor_absolute(1, s.pages.rows - 1)
+	assert active_codepoint(s, s.cursor.x, s.cursor.y) == u32(`E`)
+
+	s.resize(ScreenResize{ cols: 3, rows: 3, reflow: true }) or { assert false }
+
+	str_view := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view == '3C\n4D\n5E'
+
+	// Cursor should be on the last line
+	assert s.cursor.x == 1
+	assert s.cursor.y == 2
+}
+
+fn test_screen_resize_less_cols_reflow_previously_wrapped_and_scrollback() {
+	mut s := Screen.init(5, 3, 2)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD2EFGH3IJKL4ABCD5EFGH') or { assert false }
+
+	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view0 == '3IJKL\n4ABCD\n5EFGH'
+
+	// Put our cursor on the end
+	s.cursor_absolute(s.pages.cols - 1, s.pages.rows - 1)
+	assert active_codepoint(s, s.cursor.x, s.cursor.y) == u32(`H`)
+
+	s.resize(ScreenResize{ cols: 3, rows: 3, reflow: true }) or { assert false }
+
+	str_view := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view == 'CD5\nEFG\nH'
+	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	assert str_screen == '1AB\nCD2\nEFG\nH3I\nJKL\n4AB\nCD5\nEFG\nH'
+
+	// Cursor should be on the last line
+	assert s.cursor.x == 0
+	assert s.cursor.y == 2
+	assert active_codepoint(s, s.cursor.x, s.cursor.y) == u32(`H`)
+}
+
+fn test_screen_resize_less_cols_with_scrollback_keeps_cursor_row() {
+	mut s := Screen.init(5, 3, 5)
+	defer { s.deinit() }
+	s.test_write_string('1A\n2B\n3C\n4D\n5E') or { assert false }
+
+	// Scroll and clear operation
+	s.scroll_clear() or { assert false }
+
+	// Move our cursor to the beginning
+	s.cursor_absolute(0, 0)
+
+	s.resize(ScreenResize{ cols: 3, rows: 3, reflow: true }) or { assert false }
+
+	str_view := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view == ''
+
+	// Cursor should be on the last line
+	assert s.cursor.x == 0
+	assert s.cursor.y == 0
+}
+
+fn test_screen_resize_more_rows_less_cols_reflow_with_scrollback() {
+	mut s := Screen.init(5, 3, 3)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH3IJKL\n4MNOP') or { assert false }
+
+	str_screen0 := s.dump_string_alloc(.screen) or { assert false; return }
+	assert str_screen0 == '1ABCD\n2EFGH\n3IJKL\n4MNOP'
+	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view0 == '2EFGH\n3IJKL\n4MNOP'
+
+	s.resize(ScreenResize{ cols: 2, rows: 10, reflow: true }) or { assert false }
+
+	str_view := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view == 'BC\nD\n2E\nFG\nH3\nIJ\nKL\n4M\nNO\nP'
+	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	assert str_screen == '1A\nBC\nD\n2E\nFG\nH3\nIJ\nKL\n4M\nNO\nP'
+}
+
+// --- resize more cols with cursor at/not at prompt ---
+
+fn test_screen_resize_more_cols_with_cursor_at_prompt() {
+	mut s := Screen.init(10, 3, 5)
+	defer { s.deinit() }
+
+	s.test_write_string('ABCDE\n') or { assert false }
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('> ') or { assert false }
+	s.cursor_set_semantic_content_input(true)
+	s.test_write_string('echo') or { assert false }
+
+	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view0 == 'ABCDE\n> echo'
+
+	s.resize(ScreenResize{ cols: 20, rows: 3, reflow: true, prompt_redraw: .true_ }) or {
+		assert false
+	}
+
+	// Cursor should not move
+	assert s.cursor.x == 6
+	assert s.cursor.y == 1
+
+	str_view1 := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view1 == 'ABCDE'
+}
+
+fn test_screen_resize_more_cols_with_cursor_not_at_prompt() {
+	mut s := Screen.init(10, 3, 5)
+	defer { s.deinit() }
+
+	s.test_write_string('ABCDE\n') or { assert false }
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('> ') or { assert false }
+	s.cursor_set_semantic_content_input(true)
+	s.test_write_string('echo\n') or { assert false }
+	s.test_write_string('output') or { assert false }
+
+	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view0 == 'ABCDE\n> echo\noutput'
+
+	s.resize(ScreenResize{ cols: 20, rows: 3, reflow: true, prompt_redraw: .true_ }) or {
+		assert false
+	}
+
+	// Cursor should not move
+	assert s.cursor.x == 6
+	assert s.cursor.y == 2
+
+	str_view1 := s.dump_string_alloc(.viewport) or { assert false; return }
+	assert str_view1 == 'ABCDE\n> echo\noutput'
+}
