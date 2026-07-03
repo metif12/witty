@@ -313,6 +313,13 @@ pub mut:
 	rows           u32
 	max_scrollback u32
 	viewport       ViewportState = .active
+	// After a resize, these hold the active-relative cursor position that
+	// the caller (Screen) should apply to its cursor. Reflow moves the
+	// cursor because soft-wrapped content is re-laid-out.
+	reflow_cursor_x   u32
+	reflow_cursor_y   u32
+	reflow_cursor_abs int
+	reflow_did_reflow bool
 }
 
 // ViewportState tracks where the viewport is positioned.
@@ -459,35 +466,41 @@ pub fn (self &Pages) get_bottom_right(tag PointTag) ?Pin {
 
 // Resize the pages.
 pub fn (mut self Pages) resize(opts ResizeOpts) ! {
+	self.reflow_did_reflow = false
 	old_cols := self.cols
-	old_rows := self.rows
 
-	self.cols = opts.cols
-	self.rows = opts.rows
-
-	// Adjust row widths if cols changed
-	if old_cols != opts.cols {
-		for mut row in self.screen_rows {
-			if row.cells.len < int(opts.cols) {
-				// Expand: add cells
-				for _ in row.cells.len .. int(opts.cols) {
-					row.cells << CellData{}
+	// Column change. If reflow is requested we re-wrap soft-wrapped logical
+	// lines into the new width (tracking the cursor); otherwise we just
+	// truncate/pad each row in place.
+	if opts.cols != old_cols {
+		if opts.reflow {
+			self.reflow_cols(opts.cols, opts.cursor.x, opts.cursor.y)
+			self.reflow_did_reflow = true
+		} else {
+			self.cols = opts.cols
+			for mut row in self.screen_rows {
+				if row.cells.len < int(opts.cols) {
+					for _ in row.cells.len .. int(opts.cols) {
+						row.cells << CellData{}
+					}
+				} else if row.cells.len > int(opts.cols) {
+					row.cells = row.cells[..int(opts.cols)]
 				}
-			} else if row.cells.len > int(opts.cols) {
-				// Shrink: truncate cells
-				row.cells = row.cells[..int(opts.cols)]
 			}
 		}
 	}
 
-	// Adjust number of active rows if rows changed
+	// Row change.
+	old_rows := self.rows
+	self.rows = opts.rows
 	if old_rows != opts.rows {
+		// Ensure we have enough rows for the active area.
 		active_end := self.active_start + int(opts.rows)
-		// Ensure we have enough rows
 		for self.screen_rows.len < active_end {
-			self.screen_rows << RowData.init(opts.cols)
+			self.screen_rows << RowData.init(self.cols)
 		}
-		// If cursor was past new bottom, adjust active_start
+		// If the active area would extend past our rows, pull the active
+		// start up so the bottom aligns with the last row.
 		if self.active_start + int(opts.rows) > self.screen_rows.len {
 			self.active_start = if self.screen_rows.len > int(opts.rows) {
 				self.screen_rows.len - int(opts.rows)
@@ -495,6 +508,287 @@ pub fn (mut self Pages) resize(opts ResizeOpts) ! {
 				0
 			}
 		}
+	}
+
+	// Finalize the reflowed cursor position (active-relative) now that the
+	// active area is settled.
+	if self.reflow_did_reflow {
+		mut cy := self.reflow_cursor_abs - self.active_start
+		if cy < 0 {
+			cy = 0
+		}
+		if cy >= int(self.rows) {
+			cy = int(self.rows) - 1
+		}
+		self.reflow_cursor_y = u32(cy)
+		if self.reflow_cursor_x >= self.cols {
+			self.reflow_cursor_x = self.cols - 1
+		}
+	}
+}
+
+// A tracked point during reflow: a source cell position we want remapped to
+// its new position after re-wrapping. Used to follow the cursor and the
+// active-area start across a column reflow.
+struct FlatReflowPin {
+mut:
+	src_row int
+	src_col int
+	new_row int = -1
+	new_col int
+}
+
+// FlatReflowCursor re-lays-out cells into a new column width. It is a
+// faithful port of PageList's ReflowCursor to the flat `Pages` row array:
+// it trims trailing blanks on non-wrapped rows, defers fully-blank trailing
+// rows, and preserves wrap/wrap_continuation flags.
+struct FlatReflowCursor {
+mut:
+	cols         int
+	out          []RowData
+	x            int
+	pending_wrap bool
+	new_rows     int
+	pins         []&FlatReflowPin
+}
+
+fn (mut c FlatReflowCursor) y() int {
+	return c.out.len - 1
+}
+
+fn (mut c FlatReflowCursor) append_row() {
+	c.out << RowData.init(u32(c.cols))
+	c.x = 0
+	c.pending_wrap = false
+}
+
+fn (mut c FlatReflowCursor) cursor_forward() {
+	if c.x == c.cols - 1 {
+		c.pending_wrap = true
+	} else {
+		c.x += 1
+	}
+}
+
+fn (mut c FlatReflowCursor) write_cell(cell CellData) ReflowWriteResult {
+	dst_cols := c.cols
+	match cell.content_tag {
+		.codepoint, .codepoint_grapheme {
+			match cell.wide {
+				.narrow {
+					c.out[c.y()].cells[c.x] = cell
+				}
+				.wide {
+					if dst_cols > 1 {
+						if c.x == dst_cols - 1 {
+							// A wide char in the last column: insert a spacer
+							// head and wrap before handling it.
+							c.out[c.y()].cells[c.x] = CellData{
+								content_tag: .codepoint
+								codepoint: 0
+								wide: .spacer_head
+							}
+							c.cursor_forward()
+							return .repeat
+						} else {
+							c.out[c.y()].cells[c.x] = cell
+						}
+					} else {
+						// Resizing to 1 column: wide chars become empty narrow
+						// cells and their spacer tail is skipped.
+						c.out[c.y()].cells[c.x] = CellData{
+							content_tag: .codepoint
+							codepoint: 0
+							wide: .narrow
+						}
+						c.cursor_forward()
+						return .skip_next
+					}
+				}
+				.spacer_tail {
+					if dst_cols > 1 {
+						c.out[c.y()].cells[c.x] = cell
+					} else {
+						return .success
+					}
+				}
+				.spacer_head {
+					// Spacer heads are re-created when processing the wide
+					// cell they belong to, so ignore the source one.
+					return .success
+				}
+			}
+		}
+		.bg_color_palette, .bg_color_rgb {
+			c.out[c.y()].cells[c.x] = cell
+			c.cursor_forward()
+			return .success
+		}
+	}
+
+	// Propagate row-level flags for managed content on the copied cell.
+	mut row := &c.out[c.y()]
+	if cell.has_grapheme {
+		row.grapheme = true
+	}
+	if cell.has_hyperlink {
+		row.hyperlink = true
+	}
+	if cell.style_id != default_style_id {
+		row.styled = true
+	}
+	c.cursor_forward()
+	return .success
+}
+
+fn (mut c FlatReflowCursor) reflow_row(src RowData, src_abs int) {
+	cells := src.cells
+	mut cols_len := cells.len
+
+	// Trim non-semantic rightmost blanks on non-wrapped rows.
+	if !src.wrap {
+		for cols_len > 0 {
+			if !cells[cols_len - 1].is_empty() {
+				break
+			}
+			cols_len--
+		}
+		// A blank row with a semantic prompt is meaningful; keep one cell.
+		if cols_len == 0 && src.semantic_prompt != .unknown {
+			cols_len = 1
+		}
+	}
+
+	// Handle tracked pins: keep a pin in trailing blanks within the new
+	// width, and make sure its row is processed so it can be remapped.
+	for mut p in c.pins {
+		if p.src_row != src_abs {
+			continue
+		}
+		if p.src_col >= cols_len {
+			limit := c.cols - 1 - c.x
+			cl := if limit < 0 { 0 } else { limit }
+			if p.src_col > cl {
+				p.src_col = cl
+			}
+		}
+		if p.src_col + 1 > cols_len {
+			cols_len = p.src_col + 1
+		}
+	}
+
+	// Defer blank rows so trailing blank rows are never written.
+	if cols_len == 0 {
+		if !src.wrap_continuation {
+			c.new_rows++
+		}
+		return
+	}
+
+	// Our row isn't blank; write any deferred rows first.
+	for c.new_rows > 0 {
+		c.append_row()
+		c.new_rows--
+	}
+
+	c.out[c.y()].semantic_prompt = src.semantic_prompt
+
+	mut x := 0
+	for x < cols_len {
+		if c.pending_wrap {
+			c.out[c.y()].wrap = true
+			c.append_row()
+			c.out[c.y()].semantic_prompt = src.semantic_prompt
+			c.out[c.y()].wrap_continuation = true
+		}
+
+		// Remap any pins at this source position to the current dst.
+		for mut p in c.pins {
+			if p.src_row == src_abs && p.src_col == x {
+				p.new_row = c.y()
+				p.new_col = c.x
+			}
+		}
+
+		result := c.write_cell(cells[x])
+		match result {
+			.success {
+				x++
+			}
+			.skip_next {
+				for mut p in c.pins {
+					if p.src_row == src_abs && p.src_col == x + 1 {
+						p.new_row = c.y()
+						p.new_col = c.x
+					}
+				}
+				x += 2
+			}
+			.repeat {}
+			.out_of_space {
+				// Cannot happen in the flat model (rows grow dynamically).
+				x++
+				c.cursor_forward()
+			}
+		}
+	}
+
+	// If the source row wasn't wrapped, the logical line ends here; defer a
+	// scroll so the next row starts fresh.
+	if !src.wrap {
+		c.new_rows++
+	}
+}
+
+// reflow_cols re-wraps all screen rows into new_cols columns, following the
+// cursor (in active coordinates) to its new position. Updates screen_rows,
+// cols, active_start, reflow_cursor_x and reflow_cursor_abs.
+fn (mut self Pages) reflow_cols(new_cols u32, cur_x u32, cur_y u32) {
+	old_active_start := self.active_start
+	cursor_abs := self.active_start + int(cur_y)
+
+	mut cursor_pin := &FlatReflowPin{
+		src_row: cursor_abs
+		src_col: int(cur_x)
+	}
+	mut active_pin := &FlatReflowPin{
+		src_row: old_active_start
+		src_col: 0
+	}
+
+	mut rc := FlatReflowCursor{
+		cols: int(new_cols)
+	}
+	rc.pins << cursor_pin
+	rc.pins << active_pin
+	// Start with a single row, mirroring PageList's first rewritten node.
+	rc.append_row()
+
+	for i, row in self.screen_rows {
+		rc.reflow_row(row, i)
+	}
+
+	self.cols = new_cols
+	self.screen_rows = rc.out
+
+	mut new_active := if active_pin.new_row >= 0 { active_pin.new_row } else { rc.out.len }
+	if new_active > rc.out.len {
+		new_active = rc.out.len
+	}
+	if new_active < 0 {
+		new_active = 0
+	}
+	self.active_start = new_active
+
+	self.reflow_cursor_abs = if cursor_pin.new_row >= 0 {
+		cursor_pin.new_row
+	} else {
+		self.active_start
+	}
+	self.reflow_cursor_x = if cursor_pin.new_row >= 0 {
+		u32(cursor_pin.new_col)
+	} else {
+		cur_x
 	}
 }
 

@@ -2550,6 +2550,14 @@ pub fn (mut self Screen) resize(opts ScreenResize) ! {
 		}
 	})!
 
+	// If reflow moved the cursor (soft-wrapped content was re-laid-out),
+	// apply the tracked position the reflow computed for us.
+	if self.pages.reflow_did_reflow {
+		self.cursor.x = self.pages.reflow_cursor_x
+		self.cursor.y = self.pages.reflow_cursor_y
+		self.cursor.pending_wrap = false
+	}
+
 	// If we have no scrollback and we shrunk our rows, we must explicitly
 	// erase our history. PageList always keeps at least a page of history.
 	if self.no_scrollback {
