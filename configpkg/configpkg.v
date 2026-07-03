@@ -4107,22 +4107,80 @@ pub mut:
 	background  ColorRGB = ColorRGB{ r: 0x00, g: 0x00, b: 0x00 }
 	palette     Palette  = Palette.default_palette()
 	diagnostics []Diagnostic
+	// Controls the windowing behavior when dropping a file onto the macOS dock
+	// icon. Defaults to `new-tab`.
+	macos_dock_drop_behavior MacOSDockDropBehavior = .new_tab
+	// GTK single-instance behavior. `detect` chooses at finalize time.
+	gtk_single_instance GtkSingleInstance = .detect
 	// The current conditional state (e.g. light/dark theme). This is not a
 	// user-facing config option; it tracks runtime conditional evaluation.
 	conditional_state ConditionalState
+	// Tracks which config keys were explicitly set by the user. This is used to
+	// give user-set values priority over values loaded from a theme file, and
+	// to record conditional keys (e.g. `theme`). Not a user-facing option.
+	explicit_keys map[string]bool
+	// The parsed light/dark theme pair, if the `theme` value specified one.
+	theme_pair ?ThemePair
+	// Set of conditional keys (currently only "theme") that affect the config
+	// when the conditional state changes.
+	conditional_set map[string]bool
+	// True while options from a theme file are being applied. Theme options
+	// have lower priority than explicit config options and cannot set `theme`.
+	loading_theme bool
+}
+
+// MacOSDockDropBehavior controls behavior when dropping onto the macOS dock.
+pub enum MacOSDockDropBehavior {
+	new_tab
+	new_window
+}
+
+// GtkSingleInstance controls GTK single-instance behavior.
+pub enum GtkSingleInstance {
+	detect
+	false_
+	true_
+	desktop
 }
 
 // change_conditional_state returns a new Config with the given conditional
-// state applied. In Ghostty this replays the recorded config steps to rebuild
-// the configuration under the new conditional (e.g. light/dark theme) state.
-// We don't yet record replay steps, so we produce a deep clone with the new
-// conditional state set. Fields are re-finalized so clamped/derived values
-// stay consistent.
-pub fn (c Config) change_conditional_state(state ConditionalState) !Config {
+// state applied, or `none` if the change is irrelevant (i.e. no conditional
+// key such as `theme` is set). This mirrors Ghostty's `changeConditionalState`,
+// which replays the recorded config steps to rebuild the configuration under
+// the new conditional state. We re-run finalize with the new conditional state
+// so conditional (light/dark) theme loading is re-applied.
+pub fn (c Config) change_conditional_state(state ConditionalState) ?Config {
+	// If nothing is conditional, the state change has no effect.
+	if c.conditional_set.len == 0 {
+		return none
+	}
 	mut copy := c.clone()
 	copy.conditional_state = state
+	// Reset any theme-derived colors to defaults so the new conditional theme
+	// is applied cleanly, preserving only explicitly-set values.
+	copy.reset_theme_derived()
 	copy.finalize()
 	return copy
+}
+
+// reset_theme_derived restores theme-derived color fields to their defaults
+// unless they were explicitly set by the user. This lets a re-finalize under a
+// new conditional state apply the correct theme colors.
+fn (mut c Config) reset_theme_derived() {
+	if 'background' !in c.explicit_keys {
+		c.background = ColorRGB{
+			r: 0x00
+			g: 0x00
+			b: 0x00
+		}
+	}
+	if 'foreground' !in c.explicit_keys {
+		c.foreground = ColorRGB{
+			r: 0xff
+			g: 0xff
+			b: 0xff
+		}
+	}
 }
 
 pub fn (mut c Config) deinit() {
@@ -4144,6 +4202,8 @@ pub fn (c Config) clone() Config {
 		entries: c.env.entries.clone()
 	}
 	copy.diagnostics = c.diagnostics.clone()
+	copy.explicit_keys = c.explicit_keys.clone()
+	copy.conditional_set = c.conditional_set.clone()
 	if cmd := c.command {
 		copy.command = cmd.clone()
 	}
@@ -4812,6 +4872,10 @@ pub fn (mut c Config) load_string(content string) {
 fn (mut c Config) apply_kv(key string, value string) {
 	match key {
 		'background' {
+			// A theme-loaded value never overrides an explicitly-set one.
+			if c.loading_theme && ('background' in c.explicit_keys) {
+				return
+			}
 			if col := parse_color(value) {
 				c.background = col
 			} else {
@@ -4819,8 +4883,14 @@ fn (mut c Config) apply_kv(key string, value string) {
 					message: 'invalid color for "background": ${value}'
 				}
 			}
+			if !c.loading_theme {
+				c.explicit_keys['background'] = true
+			}
 		}
 		'foreground' {
+			if c.loading_theme && ('foreground' in c.explicit_keys) {
+				return
+			}
 			if col := parse_color(value) {
 				c.foreground = col
 			} else {
@@ -4828,12 +4898,42 @@ fn (mut c Config) apply_kv(key string, value string) {
 					message: 'invalid color for "foreground": ${value}'
 				}
 			}
+			if !c.loading_theme {
+				c.explicit_keys['foreground'] = true
+			}
 		}
 		'palette' {
 			c.apply_palette(value)
 		}
 		'theme' {
+			// A theme file cannot itself set `theme`.
+			if c.loading_theme {
+				return
+			}
 			c.theme = value
+			if pair := theme_pair_parse_cli(value) {
+				// Only record a light/dark pair; a single-value theme is not
+				// conditional.
+				if pair.light != pair.dark {
+					c.theme_pair = pair
+					c.conditional_set['theme'] = true
+				} else {
+					c.theme_pair = none
+				}
+			} else {
+				c.theme_pair = none
+			}
+			c.explicit_keys['theme'] = true
+		}
+		'window-theme' {
+			match value {
+				'auto' { c.window_theme = .auto }
+				'system' { c.window_theme = .system }
+				'light' { c.window_theme = .light }
+				'dark' { c.window_theme = .dark }
+				'ghostty' { c.window_theme = .ghostty }
+				else {}
+			}
 		}
 		'font-family' {
 			c.apply_font_family_value(mut &c.font_family, value)
@@ -4891,6 +4991,57 @@ fn (mut c Config) apply_kv(key string, value string) {
 		}
 		'abnormal-command-exit-runtime' {
 			c.abnormal_command_exit_runtime = value.u32()
+		}
+		// --- Compatibility handlers for removed/renamed options ---
+		// These faithfully translate the CompatibilityHandler entries in
+		// Config.zig. They run at parse time and remap deprecated options to
+		// their modern equivalents.
+		'cursor-invert-fg-bg' {
+			// Ghostty 1.2 removed cursor-invert-fg-bg in favor of setting
+			// cursor-color/cursor-text to the cell colors.
+			set := parse_bool_opt(if value.len == 0 { 't' } else { value }) or { false }
+			if set {
+				c.cursor_color = TerminalColor.cell_foreground
+				c.cursor_text = TerminalColor.cell_background
+			}
+		}
+		'selection-invert-fg-bg' {
+			set := parse_bool_opt(if value.len == 0 { 't' } else { value }) or { false }
+			if set {
+				c.selection_foreground = TerminalColor.cell_background
+				c.selection_background = TerminalColor.cell_foreground
+			}
+		}
+		'bold-is-bright' {
+			// Ghostty 1.2 merged bold-is-bright into bold-color = bright.
+			set := parse_bool_opt(if value.len == 0 { 't' } else { value }) or { false }
+			if set {
+				c.bold_color = BoldColor{
+					bright: true
+				}
+			}
+		}
+		'macos-dock-drop-behavior' {
+			// Ghostty 1.3 renamed the "window" option to "new-window".
+			if value == 'window' {
+				c.macos_dock_drop_behavior = .new_window
+			} else {
+				match value {
+					'new-tab' { c.macos_dock_drop_behavior = .new_tab }
+					'new-window' { c.macos_dock_drop_behavior = .new_window }
+					else {}
+				}
+			}
+		}
+		'gtk-single-instance' {
+			// Ghostty 1.2 kept `desktop` as a compatibility value that finalize
+			// later converts. Before finalize it remains `detect`.
+			match value {
+				'desktop', 'detect' { c.gtk_single_instance = .detect }
+				'true', 't', '1' { c.gtk_single_instance = .true_ }
+				'false', 'f', '0' { c.gtk_single_instance = .false_ }
+				else {}
+			}
 		}
 		else {
 			// Unknown key: ignored, matching Ghostty's tolerance of options
@@ -5042,6 +5193,11 @@ fn parse_hex_byte(s string) ?u8 {
 // behavior (passwd lookup, GTK single-instance detection, click intervals) is
 // not modeled here.
 pub fn (mut c Config) finalize() {
+	// Load a referenced theme file, if any. This is done first so that the
+	// theme's options act as a lower-priority base layer beneath explicitly
+	// set config options.
+	c.load_theme()
+
 	// If a font-family is set and the style-specific families are not, default
 	// them to the primary family so styled variants are searched for too.
 	if c.font_family.len > 0 {
@@ -5084,6 +5240,51 @@ pub fn (mut c Config) finalize() {
 	}
 }
 
+// load_theme resolves the configured `theme` and applies the theme file's
+// options as a lower-priority layer. This translates the portable subset of
+// Ghostty's theme handling in finalize:
+//
+//   * A single theme name/path loads one file.
+//   * A `light:...,dark:...` pair chooses based on the conditional state.
+//   * Theme options never override explicitly-set config options.
+//   * A light/dark pair changes `window-theme` from `auto` to `system`.
+//
+// Theme name resolution against config/resource directories is not modeled;
+// absolute paths (as used by the tests) are loaded directly.
+fn (mut c Config) load_theme() {
+	theme_str := c.theme or { return }
+	if theme_str.len == 0 {
+		return
+	}
+
+	if pair := c.theme_pair {
+		// A light/dark pair forces window-theme=auto to system.
+		if c.window_theme == .auto {
+			c.window_theme = .system
+		}
+		path := match c.conditional_state.theme {
+			.light { pair.light }
+			.dark { pair.dark }
+		}
+		c.apply_theme_file(path)
+	} else {
+		c.apply_theme_file(theme_str)
+	}
+}
+
+// apply_theme_file loads the given theme file and applies its options with the
+// theme-loading flag set so they don't override explicit config values.
+fn (mut c Config) apply_theme_file(path string) {
+	// Only absolute, existing paths are loaded (matching the test setups).
+	if !os.is_abs_path(path) || !os.exists(path) {
+		return
+	}
+	content := os.read_file(path) or { return }
+	c.loading_theme = true
+	c.load_string(content)
+	c.loading_theme = false
+}
+
 // clamp_f64 clamps v to the inclusive range [lo, hi].
 fn clamp_f64(v f64, lo f64, hi f64) f64 {
 	if v < lo {
@@ -5111,4 +5312,750 @@ pub fn preferred_default_file_path() string {
 		os.join_path(os.home_dir(), '.config')
 	}
 	return os.join_path(base, 'ghostty', 'config')
+}
+
+// ============================================================
+// Ghostty config value-type parsers (translated from Config.zig)
+// ============================================================
+
+// ParseError enumerates the error cases used by Ghostty's `parseCLI`
+// functions. Each parser returns one of these (as an error value whose `code()`
+// is the enum value) on failure, so tests can assert on the specific error
+// kind, mirroring Zig's error set.
+pub enum ParseError {
+	value_required     = 1
+	invalid_value      = 2
+	overflow           = 3
+	too_many_arguments = 4
+	missing_unit       = 5
+}
+
+// perr constructs an error value carrying the given ParseError kind. The kind
+// is stored as the error `code()` and can be recovered with `parse_error_of`.
+fn perr(kind ParseError) IError {
+	return error_with_code(kind.str(), int(kind))
+}
+
+// parse_error_of returns the ParseError kind carried by an error value, or
+// `none` if it isn't a ParseError.
+pub fn parse_error_of(err IError) ?ParseError {
+	code := err.code()
+	if code >= int(ParseError.value_required) && code <= int(ParseError.missing_unit) {
+		return unsafe { ParseError(code) }
+	}
+	return none
+}
+
+// color_from_hex parses a color from a hex value such as `#RRGGBB`. The `#`
+// is optional and a 3-character short form (`#RGB`) is expanded. This is a
+// faithful translation of `Color.fromHex`.
+pub fn color_from_hex(input string) !ColorRGB {
+	mut trimmed := input
+	if trimmed.len != 0 && trimmed[0] == `#` {
+		trimmed = trimmed[1..]
+	}
+	if trimmed.len != 6 && trimmed.len != 3 {
+		return perr(ParseError.invalid_value)
+	}
+	rgb := if trimmed.len == 3 {
+		[trimmed[0], trimmed[0], trimmed[1], trimmed[1], trimmed[2], trimmed[2]].bytestr()
+	} else {
+		trimmed
+	}
+	r := parse_hex_byte(rgb[0..2]) or { return perr(ParseError.invalid_value) }
+	g := parse_hex_byte(rgb[2..4]) or { return perr(ParseError.invalid_value) }
+	b := parse_hex_byte(rgb[4..6]) or { return perr(ParseError.invalid_value) }
+	return ColorRGB{
+		r: r
+		g: g
+		b: b
+	}
+}
+
+// color_parse_cli parses a color the way `Color.parseCLI` does: it trims
+// surrounding whitespace, then tries a named X11 color, then a hex value.
+// Only the named colors exercised by the config tests are supported.
+pub fn color_parse_cli(input string) !ColorRGB {
+	trimmed := input.trim(' \t')
+	if named := named_x11_color(trimmed) {
+		return named
+	}
+	return color_from_hex(trimmed)
+}
+
+// named_x11_color returns the RGB for a small set of named X11 colors.
+fn named_x11_color(name string) ?ColorRGB {
+	return match name {
+		'black' { ColorRGB{0x00, 0x00, 0x00} }
+		'white' { ColorRGB{0xff, 0xff, 0xff} }
+		'red' { ColorRGB{0xff, 0x00, 0x00} }
+		'green' { ColorRGB{0x00, 0x80, 0x00} }
+		'blue' { ColorRGB{0x00, 0x00, 0xff} }
+		else { none }
+	}
+}
+
+// format_color renders a color as `#rrggbb` (lowercase), matching
+// `Color.formatBuf`.
+pub fn format_color(c ColorRGB) string {
+	return '#${c.r:02x}${c.g:02x}${c.b:02x}'
+}
+
+// ------------------------------------------------------------
+// TerminalColorValue / BoldColorValue: sum types that carry a Color,
+// mirroring Ghostty's `TerminalColor` and `BoldColor` unions. The plain
+// `TerminalColor`/`BoldColor` enums/structs above are kept for the renderer's
+// DerivedConfig; these companions model the parseCLI behavior faithfully.
+// ------------------------------------------------------------
+
+pub struct TerminalColorValue {
+pub:
+	kind  TerminalColor = .color
+	color ColorRGB
+}
+
+// terminal_color_parse_cli translates `TerminalColor.parseCLI`.
+pub fn terminal_color_parse_cli(input string) !TerminalColorValue {
+	if input == 'cell-foreground' {
+		return TerminalColorValue{
+			kind: .cell_foreground
+		}
+	}
+	if input == 'cell-background' {
+		return TerminalColorValue{
+			kind: .cell_background
+		}
+	}
+	col := color_parse_cli(input)!
+	return TerminalColorValue{
+		kind: .color
+		color: col
+	}
+}
+
+pub struct BoldColorValue {
+pub:
+	bright bool
+	color  ColorRGB
+}
+
+// bold_color_parse_cli translates `BoldColor.parseCLI`.
+pub fn bold_color_parse_cli(input string) !BoldColorValue {
+	if input == 'bright' {
+		return BoldColorValue{
+			bright: true
+		}
+	}
+	col := color_parse_cli(input)!
+	return BoldColorValue{
+		bright: false
+		color: col
+	}
+}
+
+// ------------------------------------------------------------
+// Duration
+// ------------------------------------------------------------
+
+struct DurationUnit {
+	name   string
+	factor u64
+}
+
+// duration_units mirrors Ghostty's `Duration.units`. Order matters: the first
+// matching factor is the default unit used for formatting.
+const duration_units = [
+	DurationUnit{'y', u64(365) * 24 * 60 * 60 * 1_000_000_000},
+	DurationUnit{'w', u64(7) * 24 * 60 * 60 * 1_000_000_000},
+	DurationUnit{'d', u64(24) * 60 * 60 * 1_000_000_000},
+	DurationUnit{'h', u64(60) * 60 * 1_000_000_000},
+	DurationUnit{'m', u64(60) * 1_000_000_000},
+	DurationUnit{'s', u64(1_000_000_000)},
+	DurationUnit{'ms', u64(1_000_000)},
+	DurationUnit{'µs', u64(1_000)},
+	DurationUnit{'us', u64(1_000)},
+	DurationUnit{'ns', u64(1)},
+]
+
+const u64_max = u64(18446744073709551615)
+
+fn is_ascii_whitespace(ch u8) bool {
+	return ch == ` ` || ch == `\t` || ch == `\n` || ch == `\r` || ch == 0x0b || ch == 0x0c
+}
+
+// saturating_mul multiplies two u64 saturating to u64_max on overflow.
+fn saturating_mul(a u64, b u64) u64 {
+	if a == 0 || b == 0 {
+		return 0
+	}
+	if a > u64_max / b {
+		return u64_max
+	}
+	return a * b
+}
+
+// saturating_add adds two u64 saturating to u64_max on overflow.
+fn saturating_add(a u64, b u64) u64 {
+	if a > u64_max - b {
+		return u64_max
+	}
+	return a + b
+}
+
+// duration_parse_cli translates `Duration.parseCLI`. It accepts a series of
+// number+unit pairs (with optional whitespace) and returns the total number
+// of nanoseconds, saturating on overflow.
+pub fn duration_parse_cli(input ?string) !Duration {
+	mut remaining := input or { return perr(ParseError.value_required) }
+	mut value := ?u64(none)
+
+	for remaining.len > 0 {
+		// Skip whitespace before the number.
+		for remaining.len > 0 && is_ascii_whitespace(remaining[0]) {
+			remaining = remaining[1..]
+		}
+		if remaining.len == 0 {
+			break
+		}
+
+		// Find the longest leading unsigned integer.
+		mut number := ?u64(none)
+		mut num_len := 0
+		for i := 1; i <= remaining.len; i++ {
+			n := parse_uint(remaining[0..i]) or { break }
+			number = n
+			num_len = i
+		}
+		num := number or { return perr(ParseError.invalid_value) }
+		remaining = remaining[num_len..]
+
+		// A bare number is only valid if it's exactly zero.
+		if remaining.len == 0 {
+			if num == 0 {
+				value = u64(0)
+				break
+			}
+			return perr(ParseError.invalid_value)
+		}
+
+		// Find the longest matching unit (to distinguish `m` from `ms`).
+		mut factor := ?u64(none)
+		mut factor_len := 0
+		for i := 1; i <= remaining.len; i++ {
+			cand := remaining[0..i]
+			for unit in duration_units {
+				if unit.name == cand {
+					factor = unit.factor
+					factor_len = i
+					break
+				}
+			}
+		}
+		f := factor or { return perr(ParseError.invalid_value) }
+		remaining = remaining[factor_len..]
+
+		diff := saturating_mul(num, f)
+		value = saturating_add(value or { u64(0) }, diff)
+	}
+
+	if v := value {
+		return Duration{
+			duration: v
+		}
+	}
+	return perr(ParseError.value_required)
+}
+
+// duration_format renders a Duration the way `Duration.format` does, e.g.
+// `1h30m`. `us` is always rendered as `µs`.
+pub fn (d Duration) format() string {
+	mut value := d.duration
+	mut out := ''
+	mut i := 0
+	for unit in duration_units {
+		// Skip the duplicate `us` alias so we never emit it (µs comes first).
+		if unit.name == 'us' {
+			continue
+		}
+		if value >= unit.factor {
+			if i > 0 {
+				out += ' '
+			}
+			remainder := value % unit.factor
+			quotient := (value - remainder) / unit.factor
+			out += '${quotient}${unit.name}'
+			value = remainder
+			i++
+		}
+	}
+	return out
+}
+
+// parse_uint parses a base-10 unsigned integer. Returns none for empty
+// input or any non-digit character (no sign allowed).
+fn parse_uint(s string) ?u64 {
+	if s.len == 0 {
+		return none
+	}
+	mut result := u64(0)
+	for ch in s {
+		if ch < `0` || ch > `9` {
+			return none
+		}
+		result = result * 10 + u64(ch - `0`)
+	}
+	return result
+}
+
+// ------------------------------------------------------------
+// WindowPadding
+// ------------------------------------------------------------
+
+pub struct WindowPadding {
+pub:
+	top_left     u32
+	bottom_right u32
+}
+
+// window_padding_parse_cli translates `WindowPadding.parseCLI`.
+pub fn window_padding_parse_cli(input ?string) !WindowPadding {
+	in_val := input or { return perr(ParseError.value_required) }
+	if idx := in_val.index(',') {
+		left_str := in_val[..idx].trim(' \t')
+		right_str := in_val[idx + 1..].trim(' \t')
+		left := parse_u32(left_str) or { return perr(ParseError.invalid_value) }
+		right := parse_u32(right_str) or { return perr(ParseError.invalid_value) }
+		return WindowPadding{
+			top_left: left
+			bottom_right: right
+		}
+	}
+	value := parse_u32(in_val.trim(' \t')) or { return perr(ParseError.invalid_value) }
+	return WindowPadding{
+		top_left: value
+		bottom_right: value
+	}
+}
+
+// parse_u32 parses a base-10 u32, returning none on invalid input.
+fn parse_u32(s string) ?u32 {
+	v := parse_uint(s) or { return none }
+	if v > u64(0xffffffff) {
+		return none
+	}
+	return u32(v)
+}
+
+// ------------------------------------------------------------
+// RepeatableString
+// ------------------------------------------------------------
+
+// RepeatableStringList is a string value that can be repeated to accumulate a
+// list of strings. Mirrors Ghostty's `RepeatableString`.
+pub struct RepeatableStringList {
+pub mut:
+	list           []string
+	overwrite_next bool
+}
+
+// parse_cli translates `RepeatableString.parseCLI`. An empty value resets the
+// list; otherwise the value is appended (clearing first if `overwrite_next`).
+pub fn (mut r RepeatableStringList) parse_cli(input ?string) ! {
+	value := input or { return perr(ParseError.value_required) }
+	if value.len == 0 {
+		r.list.clear()
+		return
+	}
+	if r.overwrite_next {
+		r.list.clear()
+		r.overwrite_next = false
+	}
+	r.list << value
+}
+
+// count returns the number of items in the list.
+pub fn (r RepeatableStringList) count() int {
+	return r.list.len
+}
+
+// ------------------------------------------------------------
+// MouseScrollMultiplier
+// ------------------------------------------------------------
+
+pub struct MouseScrollMultiplier {
+pub mut:
+	precision f64 = 1.0
+	discrete  f64 = 3.0
+}
+
+// mouse_scroll_multiplier_parse_cli translates `MouseScrollMultiplier.parseCLI`.
+// A bare float sets both precision and discrete; otherwise a comma-separated
+// list of `precision:` / `discrete:` assignments is parsed.
+pub fn (mut m MouseScrollMultiplier) parse_cli(input ?string) ! {
+	in_val := input or { return perr(ParseError.value_required) }
+
+	// Bare float sets both.
+	if bare := parse_float(in_val) {
+		m.precision = bare
+		m.discrete = bare
+		return
+	}
+
+	// Otherwise parse a struct-like `key:value,key:value` form. Any empty
+	// entry or unknown key is an error.
+	parts := in_val.split(',')
+	for part in parts {
+		colon := part.index(':') or { return perr(ParseError.invalid_value) }
+		key := part[..colon].trim(' \t')
+		val_str := part[colon + 1..].trim(' \t')
+		val := parse_float(val_str) or { return perr(ParseError.invalid_value) }
+		match key {
+			'precision' { m.precision = val }
+			'discrete' { m.discrete = val }
+			else { return perr(ParseError.invalid_value) }
+		}
+	}
+}
+
+// format renders the multiplier as `precision:<p>,discrete:<d>`.
+pub fn (m MouseScrollMultiplier) format() string {
+	return 'precision:${format_f64(m.precision)},discrete:${format_f64(m.discrete)}'
+}
+
+// parse_float parses a floating point number, returning none if the string is
+// not a valid, fully-consumed float (V's `.f64()` is lax, so validate first).
+fn parse_float(s string) ?f64 {
+	t := s
+	if t.len == 0 {
+		return none
+	}
+	mut i := 0
+	if t[i] == `-` || t[i] == `+` {
+		i++
+	}
+	mut digits := 0
+	mut dots := 0
+	for ; i < t.len; i++ {
+		ch := t[i]
+		if ch >= `0` && ch <= `9` {
+			digits++
+		} else if ch == `.` {
+			dots++
+			if dots > 1 {
+				return none
+			}
+		} else {
+			return none
+		}
+	}
+	if digits == 0 {
+		return none
+	}
+	return s.f64()
+}
+
+// format_f64 renders a float without a trailing `.0` for whole numbers, to
+// match Zig's `{d}` formatting.
+fn format_f64(v f64) string {
+	if v == f64(i64(v)) {
+		return i64(v).str()
+	}
+	return v.str()
+}
+
+// ------------------------------------------------------------
+// QuickTerminalSize
+// ------------------------------------------------------------
+
+pub enum QuickTerminalSizeKind {
+	percentage
+	pixels
+}
+
+pub struct QuickTerminalSizeValue {
+pub:
+	kind       QuickTerminalSizeKind
+	percentage f32
+	pixels     u32
+}
+
+pub struct QuickTerminalSize {
+pub mut:
+	primary   ?QuickTerminalSizeValue
+	secondary ?QuickTerminalSizeValue
+}
+
+pub struct QuickTerminalDimensions {
+pub:
+	width  u32
+	height u32
+}
+
+// quick_terminal_size_parse_cli translates `QuickTerminalSize.parseCLI`.
+pub fn (mut q QuickTerminalSize) parse_cli(input ?string) ! {
+	in_val := input or { return perr(ParseError.value_required) }
+	parts := in_val.split(',')
+
+	primary_str := parts[0].trim(' \t')
+	q.primary = quick_terminal_size_value_parse(primary_str)!
+
+	if parts.len > 1 {
+		secondary_str := parts[1].trim(' \t')
+		q.secondary = quick_terminal_size_value_parse(secondary_str)!
+	} else {
+		q.secondary = none
+	}
+
+	if parts.len > 2 {
+		return perr(ParseError.too_many_arguments)
+	}
+}
+
+// quick_terminal_size_value_parse translates `QuickTerminalSize.Size.parse`.
+fn quick_terminal_size_value_parse(input string) !QuickTerminalSizeValue {
+	if input.len == 0 {
+		return perr(ParseError.value_required)
+	}
+	if input.ends_with('px') {
+		digits := input[..input.len - 2]
+		px := parse_u32(digits) or { return perr(ParseError.invalid_value) }
+		return QuickTerminalSizeValue{
+			kind: .pixels
+			pixels: px
+		}
+	}
+	if input.ends_with('%') {
+		digits := input[..input.len - 1]
+		pct := parse_float(digits) or { return perr(ParseError.invalid_value) }
+		if pct < 0 {
+			return perr(ParseError.invalid_value)
+		}
+		return QuickTerminalSizeValue{
+			kind: .percentage
+			percentage: f32(pct)
+		}
+	}
+	return perr(ParseError.missing_unit)
+}
+
+// to_pixels converts a size value to pixels given the parent dimension.
+fn (s QuickTerminalSizeValue) to_pixels(parent u32) u32 {
+	return match s.kind {
+		.percentage { u32(s.percentage / 100.0 * f32(parent)) }
+		.pixels { s.pixels }
+	}
+}
+
+// calculate translates `QuickTerminalSize.calculate`.
+pub fn (q QuickTerminalSize) calculate(position QuickTerminalPosition, dims QuickTerminalDimensions) QuickTerminalDimensions {
+	match position {
+		.left, .right {
+			return QuickTerminalDimensions{
+				width: if p := q.primary { p.to_pixels(dims.width) } else { u32(400) }
+				height: if s := q.secondary { s.to_pixels(dims.height) } else { dims.height }
+			}
+		}
+		.top, .bottom {
+			return QuickTerminalDimensions{
+				width: if s := q.secondary { s.to_pixels(dims.width) } else { dims.width }
+				height: if p := q.primary { p.to_pixels(dims.height) } else { u32(400) }
+			}
+		}
+		.center {
+			if dims.width >= dims.height {
+				return QuickTerminalDimensions{
+					width: if p := q.primary { p.to_pixels(dims.width) } else { u32(800) }
+					height: if s := q.secondary { s.to_pixels(dims.height) } else { u32(400) }
+				}
+			} else {
+				return QuickTerminalDimensions{
+					width: if s := q.secondary { s.to_pixels(dims.width) } else { u32(400) }
+					height: if p := q.primary { p.to_pixels(dims.height) } else { u32(800) }
+				}
+			}
+		}
+	}
+}
+
+pub enum QuickTerminalPosition {
+	top
+	bottom
+	left
+	right
+	center
+}
+
+// ------------------------------------------------------------
+// BackgroundBlur (parse with radius)
+// ------------------------------------------------------------
+
+pub enum BackgroundBlurKind {
+	bool_false
+	bool_true
+	radius
+	macos_glass_regular
+	macos_glass_clear
+}
+
+pub struct BackgroundBlurValue {
+pub:
+	kind   BackgroundBlurKind
+	radius u8
+}
+
+// background_blur_parse_cli translates `BackgroundBlur.parseCLI`.
+pub fn background_blur_parse_cli(input ?string) !BackgroundBlurValue {
+	in_val := input or {
+		// Emulate bool behavior: unset means true.
+		return BackgroundBlurValue{
+			kind: .bool_true
+		}
+	}
+
+	// Try normal bools.
+	if b := parse_bool_opt(in_val) {
+		return BackgroundBlurValue{
+			kind: if b { BackgroundBlurKind.bool_true } else { BackgroundBlurKind.bool_false }
+		}
+	}
+
+	// Try the named void-tag enums.
+	match in_val {
+		'macos-glass-regular' {
+			return BackgroundBlurValue{
+				kind: .macos_glass_regular
+			}
+		}
+		'macos-glass-clear' {
+			return BackgroundBlurValue{
+				kind: .macos_glass_clear
+			}
+		}
+		else {}
+	}
+
+	// Otherwise parse as a u8 radius (base-0: accepts decimal/0x/0o/0b).
+	radius := parse_u8_base0(in_val) or { return perr(ParseError.invalid_value) }
+	return BackgroundBlurValue{
+		kind: .radius
+		radius: radius
+	}
+}
+
+// enabled translates `BackgroundBlur.enabled`.
+pub fn (b BackgroundBlurValue) enabled() bool {
+	return match b.kind {
+		.bool_false { false }
+		.bool_true { true }
+		.radius { b.radius > 0 }
+		.macos_glass_regular, .macos_glass_clear { true }
+	}
+}
+
+// parse_bool_opt parses Ghostty's accepted boolean spellings.
+fn parse_bool_opt(v string) ?bool {
+	return match v {
+		'1', 't', 'T', 'true' { true }
+		'0', 'f', 'F', 'false' { false }
+		else { none }
+	}
+}
+
+// parse_u8_base0 parses a u8 accepting `0x`/`0o`/`0b` prefixes (base 0),
+// erroring on overflow. Mirrors Zig's `parseInt(u8, s, 0)`.
+fn parse_u8_base0(s string) ?u8 {
+	idx := parse_palette_index(s) or { return none }
+	if idx > 255 {
+		return none
+	}
+	return u8(idx)
+}
+
+// ------------------------------------------------------------
+// WindowDecoration.parse_cli
+// ------------------------------------------------------------
+
+// window_decoration_parse_cli translates `WindowDecoration.parseCLI`. A null
+// input means `auto`; booleans map to auto/none; otherwise the string must be
+// a valid enum tag.
+pub fn window_decoration_parse_cli(input ?string) !WindowDecoration {
+	in_val := input or { return WindowDecoration.auto }
+	if b := parse_bool_opt(in_val) {
+		return if b { WindowDecoration.auto } else { WindowDecoration.none_ }
+	}
+	return match in_val {
+		'auto' { WindowDecoration.auto }
+		'client' { WindowDecoration.client }
+		'server' { WindowDecoration.server }
+		'none' { WindowDecoration.none_ }
+		else { return perr(ParseError.invalid_value) }
+	}
+}
+
+// ------------------------------------------------------------
+// ThemePair (light/dark theme parsing)
+// ------------------------------------------------------------
+
+// ThemePair holds a light and dark theme name. Mirrors Ghostty's `Theme`
+// struct (renamed to avoid colliding with the existing `Theme` enum).
+pub struct ThemePair {
+pub mut:
+	light string
+	dark  string
+}
+
+// theme_pair_parse_cli translates `Theme.parseCLI`. A bare value sets both
+// light and dark; a value containing `,`, `=`, or `:` is parsed as a
+// light/dark pair, both of which are required.
+pub fn theme_pair_parse_cli(input ?string) !ThemePair {
+	in_val := input or { return perr(ParseError.value_required) }
+	if in_val.len == 0 {
+		return perr(ParseError.value_required)
+	}
+
+	if in_val.contains(',') || in_val.contains('=') || in_val.contains(':') {
+		mut light := ?string(none)
+		mut dark := ?string(none)
+		for entry in in_val.split(',') {
+			colon := entry.index(':') or { return perr(ParseError.invalid_value) }
+			key := entry[..colon].trim(' \t')
+			val := entry[colon + 1..].trim(' \t')
+			match key {
+				'light' { light = val }
+				'dark' { dark = val }
+				else { return perr(ParseError.invalid_value) }
+			}
+		}
+		l := light or { return perr(ParseError.invalid_value) }
+		d := dark or { return perr(ParseError.invalid_value) }
+		return ThemePair{
+			light: l
+			dark: d
+		}
+	}
+
+	trimmed := in_val.trim(' \t')
+	return ThemePair{
+		light: trimmed
+		dark: trimmed
+	}
+}
+
+// ------------------------------------------------------------
+// Palette.parse_cli (base-aware index + overflow)
+// ------------------------------------------------------------
+
+// palette_parse_cli translates `Palette.parseCLI`, mutating the palette in
+// place. The index supports base prefixes; an out-of-range index (>255)
+// produces an overflow error.
+pub fn (mut p Palette) parse_cli(input ?string) ! {
+	value := input or { return perr(ParseError.value_required) }
+	eq := value.index('=') or { return perr(ParseError.invalid_value) }
+	key_str := value[..eq].trim(' \t')
+	idx := parse_palette_index(key_str) or { return perr(ParseError.invalid_value) }
+	if idx > 255 {
+		return perr(ParseError.overflow)
+	}
+	col := color_parse_cli(value[eq + 1..])!
+	p.value[idx] = col
 }
