@@ -248,8 +248,24 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 	// needed, and there is no per-row arena.
 	mut s := t.screens.active
 
-	// The viewport pin: top-left of the active viewport, in absolute rows.
-	viewport_pin := Pin{ x: 0, y: u32(s.pages.active_start) }
+	// Compute the absolute row index of the top of the viewport. The
+	// simplified Pages model keeps a flat row array (screen_rows). The
+	// active area starts at `active_start`, but the viewport can be
+	// scrolled independently (e.g. to the top of scrollback). We resolve
+	// the viewport top based on the current viewport state so that a
+	// scrolled viewport renders scrollback rows and the cursor (which is
+	// always in the active area) can correctly fall out of view.
+	viewport_top := match s.pages.viewport {
+		.active { s.pages.active_start }
+		.top { 0 }
+		.pinned { s.pages.active_start }
+	}
+
+	// The absolute cursor row within screen_rows.
+	cursor_abs_y := u32(s.pages.active_start) + s.cursor.y
+
+	// The viewport pin: top-left of the viewport, in absolute rows.
+	viewport_pin := Pin{ x: 0, y: u32(viewport_top) }
 
 	// Determine if we need a full redraw.
 	//
@@ -325,14 +341,16 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 	// Go through and setup our rows, only rebuilding dirty ones.
 	mut any_dirty := false
 	for y in 0 .. int(self.rows) {
-		abs_y := s.pages.active_start + y
+		abs_y := viewport_top + y
 		if abs_y < 0 || abs_y >= s.pages.screen_rows.len {
 			continue
 		}
 
 		// Find our cursor if we haven't found it yet. We do this even if the
 		// row is not dirty because the cursor is unrelated to row dirtiness.
-		if self.cursor.viewport == none && u32(y) == s.cursor.y {
+		// We compare against the cursor's absolute row so that a scrolled
+		// viewport correctly reports the cursor as out of view (none).
+		if self.cursor.viewport == none && u32(abs_y) == cursor_abs_y {
 			row := s.pages.screen_rows[abs_y]
 			mut wide_tail := false
 			if s.cursor.x > 0 {
@@ -410,7 +428,7 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 		tl := if sel.start_pin.before(sel.end_pin) { sel.start_pin } else { sel.end_pin }
 		br := if sel.start_pin.before(sel.end_pin) { sel.end_pin } else { sel.start_pin }
 		for y in 0 .. int(self.rows) {
-			screen_y := u32(s.pages.active_start) + u32(y)
+			screen_y := u32(viewport_top) + u32(y)
 			if screen_y >= tl.y && screen_y <= br.y {
 				start_x := if screen_y == tl.y { u16(tl.x) } else { u16(0) }
 				end_x := if screen_y == br.y {

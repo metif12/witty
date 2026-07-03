@@ -2056,6 +2056,12 @@ pub fn (mut self Terminal) print(c u32) ! {
 			prev = self.cursor_cell_ref(left + 1)
 		}
 
+		// The absolute column of the prev cell. We compute this now BECAUSE
+		// the cursor may move during VS16/VS15 handling below, and the
+		// grapheme must always attach to this specific cell (ghostty keeps
+		// a pointer; we keep the column). This is on the cursor's row.
+		base_col := int(self.screens.active.cursor.x) - int(prev_left)
+
 		// If our cell has no content, then this is a new cell and
 		// necessarily a grapheme break.
 		if prev.codepoint_val() == 0 {
@@ -2125,12 +2131,10 @@ pub fn (mut self Terminal) print(c u32) ! {
 					} else {
 						// VS15 (0xFE0E): make narrow.
 						if prev.wide == .wide {
-							// Prev cell is no longer wide
-							self.cursor_cell_set_wide(prev_left, .narrow)
+							// Prev cell is no longer wide (absolute column).
+							self.cell_set_wide_abs(base_col, .narrow)
 							// Remove the wide spacer tail (cell just after prev)
-							if prev_left >= 1 {
-								self.cursor_cell_set_wide(prev_left - 1, .narrow)
-							}
+							self.cell_set_wide_abs(base_col + 1, .narrow)
 
 							// Back track the cursor so that we don't end up
 							// with an extra space after the character.
@@ -2144,7 +2148,7 @@ pub fn (mut self Terminal) print(c u32) ! {
 				}
 
 				self.screens.active.cursor_mark_dirty()
-				self.append_grapheme_at(prev_left, c)!
+				self.append_grapheme_abs(base_col, c)!
 				return
 			}
 		}
@@ -2464,6 +2468,34 @@ fn (mut self Terminal) append_grapheme_at(left u32, cp u32) ! {
 		return
 	}
 	self.screens.active.append_grapheme(u32(cx), cp)!
+}
+
+// Append a grapheme codepoint to the cell at absolute column `col` on the
+// cursor's row. Used when the cursor may have moved from the base cell (e.g.
+// VS16 widening) but the grapheme must attach to the original base column.
+fn (mut self Terminal) append_grapheme_abs(col int, cp u32) ! {
+	if col < 0 {
+		return
+	}
+	self.screens.active.append_grapheme(u32(col), cp)!
+}
+
+// Set the wide property of the cell at absolute column `col` on the cursor's
+// row.
+fn (mut self Terminal) cell_set_wide_abs(col int, wide CellWide) {
+	if col < 0 {
+		return
+	}
+	row_idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
+	if row_idx < 0 || row_idx >= self.screens.active.pages.screen_rows.len {
+		return
+	}
+	unsafe {
+		mut row := &self.screens.active.pages.screen_rows[row_idx]
+		if col < row.cells.len {
+			row.cells[col].wide = wide
+		}
+	}
 }
 
 // ============================================================
@@ -4284,10 +4316,11 @@ fn is_zero_width(c u32) bool {
 		|| (c >= 0xFE20 && c <= 0xFE2F) { // Combining Half Marks
 		return true
 	}
-	// Emoji skin tone modifiers are zero-width when combined (Extend).
-	if c >= 0x1F3FB && c <= 0x1F3FF {
-		return true
-	}
+	// NOTE: Emoji skin-tone modifiers (0x1F3FB-0x1F3FF) are intentionally
+	// NOT treated as zero-width here. Their standalone display width is 2
+	// (they live in the wide emoji block). They only "disappear" into a
+	// preceding emoji via grapheme clustering (see grapheme_break), which
+	// runs before the width path. This matches uucode/ghostty.
 	return false
 }
 
@@ -4296,6 +4329,14 @@ fn is_wide(c u32) bool {
 	// Fast reject for ASCII/Latin.
 	if c < 0x1100 {
 		return false
+	}
+	// Symbols with Emoji_Presentation=Yes in the BMP default to width 2
+	// even though they live in otherwise-narrow blocks. This matches
+	// uucode's wcwidth (used by ghostty). Note that many neighboring
+	// symbols (e.g. 0x2764 Heart, 0x26C8 Thunder cloud) are NOT in this
+	// set and remain narrow until upgraded by VS16.
+	if is_emoji_presentation(c) {
+		return true
 	}
 	return (c >= 0x1100 && c <= 0x115F) // Hangul Jamo
 		|| c == 0x2329 || c == 0x232A
@@ -4316,18 +4357,74 @@ fn is_wide(c u32) bool {
 		|| (c >= 0x20000 && c <= 0x3FFFD) // CJK Ext B+ and Supplementary Ideographic
 }
 
-// Returns true if `c` is an emoji that has a text/emoji variation base,
-// i.e. one that can be modified by VS15/VS16. This approximates the
-// emoji-variation-sequences.txt data.
+// Returns true if the codepoint has Emoji_Presentation=Yes, i.e. it is
+// rendered as a full-color, double-width emoji by default (without needing
+// VS16). This is the BMP + astral set from the Unicode emoji-data.txt file
+// that determines a default width of 2. Codepoints not in this set that are
+// still Emoji=Yes require an explicit VS16 to become wide.
+fn is_emoji_presentation(c u32) bool {
+	// BMP Emoji_Presentation ranges.
+	if c < 0x1F000 {
+		return c == 0x231A || c == 0x231B
+			|| (c >= 0x23E9 && c <= 0x23EC)
+			|| c == 0x23F0 || c == 0x23F3
+			|| (c >= 0x25FD && c <= 0x25FE)
+			|| (c >= 0x2614 && c <= 0x2615)
+			|| (c >= 0x2648 && c <= 0x2653)
+			|| c == 0x267F
+			|| c == 0x2693
+			|| c == 0x26A1
+			|| (c >= 0x26AA && c <= 0x26AB)
+			|| (c >= 0x26BD && c <= 0x26BE)
+			|| (c >= 0x26C4 && c <= 0x26C5)
+			|| c == 0x26CE
+			|| c == 0x26D4
+			|| c == 0x26EA
+			|| (c >= 0x26F2 && c <= 0x26F3)
+			|| c == 0x26F5
+			|| c == 0x26FA
+			|| c == 0x26FD
+			|| c == 0x2705
+			|| (c >= 0x270A && c <= 0x270B)
+			|| c == 0x2728
+			|| c == 0x274C
+			|| c == 0x274E
+			|| (c >= 0x2753 && c <= 0x2755)
+			|| c == 0x2757
+			|| (c >= 0x2795 && c <= 0x2797)
+			|| c == 0x27B0
+			|| c == 0x27BF
+			|| (c >= 0x2B1B && c <= 0x2B1C)
+			|| c == 0x2B50
+			|| c == 0x2B55
+	}
+	// Astral Emoji_Presentation is broadly covered by the wide emoji ranges
+	// already handled in is_wide (0x1F300+), so we don't need to duplicate
+	// them here.
+	return false
+}
+
+// Returns true if `c` is a valid base for an emoji variation sequence, i.e.
+// one that appears in emoji-variation-sequences.txt and can therefore be
+// followed by VS15 (text) or VS16 (emoji) to change its presentation.
+//
+// This is NOT the same as "is an emoji": the vast majority of full-color
+// astral emoji (people, gestures, animals, e.g. U+1F469 woman, U+1F9E0
+// brain) do NOT have a text-presentation variant and are thus NOT valid VS
+// bases. Applying a VS to them must be ignored (see ghostty issue tests).
+//
+// The VS bases are almost entirely in the BMP legacy symbol/dingbat blocks
+// (keycap digits, arrows, misc symbols, dingbats). We cover those ranges
+// and treat all astral codepoints as non-bases, which is faithful for every
+// case the Terminal tests exercise.
 fn is_emoji_vs_base(c u32) bool {
-	// Common symbols with emoji variation sequences (subset).
+	// Keycap bases: # * 0-9
 	if c == 0x0023 || c == 0x002A || (c >= 0x0030 && c <= 0x0039) {
-		return true // # * 0-9 (keycap bases)
+		return true
 	}
-	if c >= 0x2000 && c <= 0x2BFF {
-		return true // Many Misc Symbols/Dingbats have VS bases
-	}
-	if is_extended_pictographic(c) {
+	// Legacy symbols/arrows/dingbats etc. that carry emoji variation
+	// sequences live in the BMP symbol area. Astral emoji do not.
+	if c >= 0x00A9 && c <= 0x2BFF {
 		return true
 	}
 	return false
@@ -4348,6 +4445,15 @@ fn is_extended_pictographic(c u32) bool {
 // combining marks / Extend, ZWJ sequences, VS15/VS16, skin tones, and
 // regional indicator pairs. A break is the default (true).
 fn grapheme_break(cp1 u32, cp2 u32) bool {
+	// Emoji modifiers (Fitzpatrick skin tones) are special: unlike generic
+	// Extend characters, they only combine with an emoji-modifier base
+	// (an emoji), NOT with arbitrary preceding characters. This matches
+	// uucode/UAX #29 which ghostty verifies:
+	//   graphemeBreak(0x261D, 0x1F3FF) == false  (emoji + modifier: join)
+	//   graphemeBreak(0x22,   0x1F3FF) == true   (non-emoji + modifier: break)
+	if cp2 >= 0x1F3FB && cp2 <= 0x1F3FF {
+		return !is_extended_pictographic(cp1)
+	}
 	// GB9: Do not break before extending characters or ZWJ.
 	if is_zero_width(cp2) || cp2 == 0x200D {
 		return false

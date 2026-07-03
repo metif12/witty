@@ -1644,6 +1644,716 @@ fn test_print_over_wide_spacer_tail() {
 	assert t.is_dirty(0, 0)
 }
 
+// Helper: count cells in the active area that carry grapheme data. Used to
+// mirror ghostty's page.graphemeCount() assertions. witty stores graphemes
+// inline on the cell rather than in a per-page ref-counted set, so we count
+// cells with has_grapheme set.
+fn active_grapheme_count(t &Terminal) int {
+	mut n := 0
+	start := t.screens.active.pages.active_start
+	for y in start .. t.screens.active.pages.screen_rows.len {
+		row := t.screens.active.pages.screen_rows[y]
+		for cell in row.cells {
+			if cell.has_grapheme {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// ============================================================
+// Wide char + grapheme + variation selector (VS15/VS16) tests
+// Translated from ghostty Terminal.zig.
+// ============================================================
+
+fn test_zero_width_character_at_start() {
+	mut t := create_test_terminal(80, 80) or { assert false; return }
+	defer { t.deinit() }
+
+	// This used to crash the terminal. This is not allowed so we should
+	// just ignore it.
+	t.print(0x200D) or { assert false }
+
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 0
+
+	// Should not be dirty since we changed nothing.
+	assert !t.is_dirty(0, 0)
+}
+
+fn test_print_wide_char_at_edge_creates_spacer_head() {
+	mut t := create_test_terminal(10, 10) or { assert false; return }
+	defer { t.deinit() }
+
+	t.set_cursor_pos(1, 10)
+	t.print(0x1F600) or { assert false } // Smiley face
+	assert t.screens.active.cursor.y == 1
+	assert t.screens.active.cursor.x == 2
+
+	c_head := cell_at(&t, 9, 0)
+	assert c_head.wide == .spacer_head
+	c_wide := cell_at(&t, 0, 1)
+	assert c_wide.codepoint == 0x1F600
+	assert c_wide.wide == .wide
+	c_tail := cell_at(&t, 1, 1)
+	assert c_tail.wide == .spacer_tail
+
+	assert t.is_dirty(0, 0)
+	assert t.is_dirty(0, 1)
+}
+
+fn test_print_wide_char_with_1_column_width() {
+	mut t := create_test_terminal(1, 2) or { assert false; return }
+	defer { t.deinit() }
+
+	t.print(0x1F600) or { assert false }
+
+	// This prints a space so we should be dirty.
+	assert t.is_dirty(0, 0)
+}
+
+fn test_print_multicodepoint_grapheme_disabled_mode_2027() {
+	mut t := create_test_terminal(80, 80) or { assert false; return }
+	defer { t.deinit() }
+
+	// grapheme_cluster disabled by default. This is: 👨‍👩‍👧
+	t.print(0x1F468) or { assert false }
+	t.print(0x200D) or { assert false }
+	t.print(0x1F469) or { assert false }
+	t.print(0x200D) or { assert false }
+	t.print(0x1F467) or { assert false }
+
+	// We should have 6 cells taken up
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 6
+
+	// With mode 2027 disabled, each ZWJ (zero-width) attaches to the
+	// preceding cell's grapheme data, but the emoji themselves remain as
+	// separate wide cells (no cluster merging).
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == 0x1F468
+	assert c0.has_grapheme
+	assert c0.wide == .wide
+	assert c0.graphemes.len == 1
+	c1 := cell_at(&t, 1, 0)
+	assert c1.codepoint == 0
+	assert !c1.has_grapheme
+	assert c1.wide == .spacer_tail
+	c2 := cell_at(&t, 2, 0)
+	assert c2.codepoint == 0x1F469
+	assert c2.has_grapheme
+	assert c2.wide == .wide
+	assert c2.graphemes.len == 1
+	c3 := cell_at(&t, 3, 0)
+	assert c3.codepoint == 0
+	assert !c3.has_grapheme
+	assert c3.wide == .spacer_tail
+	c4 := cell_at(&t, 4, 0)
+	assert c4.codepoint == 0x1F467
+	assert !c4.has_grapheme
+	assert c4.wide == .wide
+	c5 := cell_at(&t, 5, 0)
+	assert c5.codepoint == 0
+	assert !c5.has_grapheme
+	assert c5.wide == .spacer_tail
+
+	assert t.is_dirty(0, 0)
+}
+
+fn test_vs16_doesnt_make_character_with_2027_disabled() {
+	mut t := create_test_terminal(5, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	// grapheme clustering disabled (default)
+	t.print(0x2764) or { assert false } // Heart
+	t.print(0xFE0F) or { assert false } // VS16 to make wide
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == 0x2764
+	assert c0.has_grapheme
+	assert c0.wide == .narrow
+	assert c0.graphemes.len == 1
+	assert c0.graphemes[0] == 0xFE0F
+}
+
+fn test_ignored_vs16_doesnt_mark_dirty() {
+	mut t := create_test_terminal(5, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	t.print(0x2764) or { assert false } // Heart
+	assert t.is_dirty(0, 0)
+
+	t.clear_dirty()
+	t.print(0xFE0F) or { assert false } // VS16 to make wide
+	assert !t.is_dirty(0, 0)
+}
+
+fn test_print_invalid_vs16_non_grapheme() {
+	mut t := create_test_terminal(80, 80) or { assert false; return }
+	defer { t.deinit() }
+
+	// grapheme clustering disabled (default). Issue 1482.
+	t.print(u32(`x`)) or { assert false }
+	t.print(0xFE0F) or { assert false }
+
+	// We should have 1 narrow cell.
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 1
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == u32(`x`)
+	assert !c0.has_grapheme
+	assert c0.wide == .narrow
+	c1 := cell_at(&t, 1, 0)
+	assert c1.codepoint == 0
+}
+
+fn test_invalid_vs16_doesnt_mark_dirty() {
+	mut t := create_test_terminal(5, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	t.print(u32(`x`)) or { assert false }
+	assert t.is_dirty(0, 0)
+
+	t.clear_dirty()
+	t.print(0xFE0F) or { assert false } // VS16 to make wide
+	assert !t.is_dirty(0, 0)
+}
+
+fn test_print_multicodepoint_grapheme_mode_2027() {
+	mut t := create_test_terminal(80, 80) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	// This is: 👨‍👩‍👧
+	t.print(0x1F468) or { assert false }
+	t.print(0x200D) or { assert false }
+	t.print(0x1F469) or { assert false }
+	t.print(0x200D) or { assert false }
+	t.print(0x1F467) or { assert false }
+
+	// We should have 2 cells taken up. It is one character but "wide".
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 2
+
+	assert t.is_dirty(0, 0)
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == 0x1F468
+	assert c0.has_grapheme
+	assert c0.wide == .wide
+	// The other 4 codepoints (ZWJ, 👩, ZWJ, 👧) are stored as graphemes.
+	assert c0.graphemes.len == 4
+	assert c0.graphemes[0] == 0x200D
+	assert c0.graphemes[1] == 0x1F469
+	assert c0.graphemes[2] == 0x200D
+	assert c0.graphemes[3] == 0x1F467
+
+	c1 := cell_at(&t, 1, 0)
+	assert c1.codepoint == 0
+	assert !c1.has_grapheme
+	assert c1.wide == .spacer_tail
+}
+
+fn test_keypad_sequence_vs15() {
+	mut t := create_test_terminal(80, 80) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	// This is: "#︎" (number sign with text presentation selector)
+	t.print(0x23) or { assert false } // # (valid base)
+	t.print(0xFE0E) or { assert false } // VS15 (text presentation)
+
+	// VS15 should combine into a single narrow grapheme cluster.
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 1
+
+	assert t.is_dirty(0, 0)
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == 0x23
+	assert c0.has_grapheme
+	assert c0.wide == .narrow
+}
+
+fn test_keypad_sequence_vs16() {
+	mut t := create_test_terminal(80, 80) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	// This is: "#️" (number sign with emoji presentation selector)
+	t.print(0x23) or { assert false } // # (valid base)
+	t.print(0xFE0F) or { assert false } // VS16 (emoji presentation)
+
+	// VS16 should combine into a single wide grapheme cluster (2 cells).
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 2
+
+	assert t.is_dirty(0, 0)
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == 0x23
+	assert c0.has_grapheme
+	assert c0.wide == .wide
+	c1 := cell_at(&t, 1, 0)
+	assert c1.wide == .spacer_tail
+}
+
+fn test_fitzpatrick_skin_tone_next_valid_base() {
+	mut t := create_test_terminal(80, 80) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	// This is: "👋🏿" (waving hand with dark skin tone)
+	t.print(0x1F44B) or { assert false } // 👋 Waving hand
+	t.print(0x1F3FF) or { assert false } // 🏿 Dark skin tone modifier
+
+	// The skin tone combines into a single wide grapheme cluster (2 cells).
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 2
+
+	assert t.is_dirty(0, 0)
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == 0x1F44B
+	assert c0.has_grapheme
+	assert c0.wide == .wide
+}
+
+fn test_fitzpatrick_skin_tone_next_to_non_base() {
+	mut t := create_test_terminal(80, 80) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	// The skin tone should NOT join with the quotes.
+	t.print(0x22) or { assert false } // "
+	t.print(0x1F3FF) or { assert false } // Dark skin tone
+	t.print(0x22) or { assert false } // "
+
+	// We should have 4 cells taken up.
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 4
+
+	assert t.is_dirty(0, 0)
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == 0x22
+	assert !c0.has_grapheme
+	assert c0.wide == .narrow
+	c1 := cell_at(&t, 1, 0)
+	assert c1.codepoint == 0x1F3FF
+	assert !c1.has_grapheme
+	assert c1.wide == .wide
+	c3 := cell_at(&t, 3, 0)
+	assert c3.codepoint == 0x22
+	assert !c3.has_grapheme
+	assert c3.wide == .narrow
+}
+
+fn test_multicodepoint_grapheme_marks_dirty_on_every_codepoint() {
+	mut t := create_test_terminal(80, 80) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	t.print(0x1F468) or { assert false }
+	assert t.is_dirty(0, 0)
+	t.clear_dirty()
+	t.print(0x200D) or { assert false }
+	assert t.is_dirty(0, 0)
+	t.clear_dirty()
+	t.print(0x1F469) or { assert false }
+	assert t.is_dirty(0, 0)
+	t.clear_dirty()
+	t.print(0x200D) or { assert false }
+	assert t.is_dirty(0, 0)
+	t.clear_dirty()
+	t.print(0x1F467) or { assert false }
+	assert t.is_dirty(0, 0)
+
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 2
+}
+
+fn test_vs15_to_make_narrow_character() {
+	mut t := create_test_terminal(5, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	t.print(0x2614) or { assert false } // Umbrella with rain drops, width=2
+	assert t.is_dirty(0, 0)
+	t.clear_dirty()
+
+	// We should have 2 cells taken up (wide).
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 2
+
+	t.print(0xFE0E) or { assert false } // VS15 to make narrow
+	assert t.is_dirty(0, 0)
+	t.clear_dirty()
+
+	// VS15 should send us back a cell since our char is no longer wide.
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 1
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == 0x2614
+	assert c0.has_grapheme
+	assert c0.wide == .narrow
+	assert c0.graphemes.len == 1
+	// The wide spacer tail must have been reverted to narrow.
+	c1 := cell_at(&t, 1, 0)
+	assert c1.wide == .narrow
+}
+
+fn test_vs15_on_already_narrow_emoji() {
+	mut t := create_test_terminal(5, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	t.print(0x26C8) or { assert false } // Thunder cloud and rain, width=1
+	assert t.is_dirty(0, 0)
+	t.clear_dirty()
+	t.print(0xFE0E) or { assert false } // VS15 to make narrow
+	assert t.is_dirty(0, 0)
+	t.clear_dirty()
+
+	// Character takes up one cell.
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 1
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == 0x26C8
+	assert c0.has_grapheme
+	assert c0.wide == .narrow
+	assert c0.graphemes.len == 1
+}
+
+fn test_print_invalid_vs15_following_emoji_is_wide() {
+	mut t := create_test_terminal(80, 80) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	t.print(0x1F9E0) or { assert false } // 🧠
+	t.print(0xFE0E) or { assert false } // not valid with U+1F9E0 as base
+
+	// We should have 2 cells taken up (wide).
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 2
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == 0x1F9E0
+	assert !c0.has_grapheme
+	assert c0.wide == .wide
+	c1 := cell_at(&t, 1, 0)
+	assert c1.codepoint == 0
+	assert c1.wide == .spacer_tail
+}
+
+fn test_print_invalid_vs15_in_emoji_zwj_sequence() {
+	mut t := create_test_terminal(80, 80) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	t.print(0x1F469) or { assert false } // 👩
+	t.print(0xFE0E) or { assert false } // not valid with U+1F469 as base
+	t.print(0x200D) or { assert false } // ZWJ
+	t.print(0x1F466) or { assert false } // 👦
+
+	// We should have 2 cells taken up (wide).
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 2
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == 0x1F469
+	assert c0.has_grapheme
+	// The invalid VS15 is dropped; only ZWJ + 👦 attach.
+	assert c0.graphemes.len == 2
+	assert c0.graphemes[0] == 0x200D
+	assert c0.graphemes[1] == 0x1F466
+	assert c0.wide == .wide
+	c1 := cell_at(&t, 1, 0)
+	assert c1.codepoint == 0
+	assert c1.wide == .spacer_tail
+}
+
+fn test_vs15_to_make_narrow_character_with_pending_wrap() {
+	mut t := create_test_terminal(2, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	t.print(0x2614) or { assert false } // Umbrella, width=2
+	assert t.is_dirty(0, 0)
+	t.clear_dirty()
+
+	// We only move one because we're in a pending wrap state.
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 1
+	assert t.screens.active.cursor.pending_wrap
+
+	t.print(0xFE0E) or { assert false } // VS15 to make narrow
+	assert t.is_dirty(0, 0)
+	t.clear_dirty()
+
+	// VS15 should clear the pending wrap state.
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 1
+	assert !t.screens.active.cursor.pending_wrap
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == 0x2614
+	assert c0.has_grapheme
+	assert c0.wide == .narrow
+	assert c0.graphemes.len == 1
+}
+
+fn test_vs16_to_make_wide_character_with_mode_2027() {
+	mut t := create_test_terminal(5, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	t.print(0x2764) or { assert false } // Heart
+	assert t.is_dirty(0, 0)
+	t.clear_dirty()
+	t.print(0xFE0F) or { assert false } // VS16 to make wide
+	assert t.is_dirty(0, 0)
+	t.clear_dirty()
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == 0x2764
+	assert c0.has_grapheme
+	assert c0.wide == .wide
+	assert c0.graphemes.len == 1
+	c1 := cell_at(&t, 1, 0)
+	assert c1.wide == .spacer_tail
+}
+
+fn test_vs16_repeated_with_mode_2027() {
+	mut t := create_test_terminal(5, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	t.print(0x2764) or { assert false } // Heart
+	t.print(0xFE0F) or { assert false } // VS16 to make wide
+	t.print(0x2764) or { assert false } // Heart
+	t.print(0xFE0F) or { assert false } // VS16 to make wide
+
+	assert t.is_dirty(0, 0)
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == 0x2764
+	assert c0.has_grapheme
+	assert c0.wide == .wide
+	assert c0.graphemes.len == 1
+	c2 := cell_at(&t, 2, 0)
+	assert c2.codepoint == 0x2764
+	assert c2.has_grapheme
+	assert c2.wide == .wide
+	assert c2.graphemes.len == 1
+}
+
+fn test_print_invalid_vs16_grapheme() {
+	mut t := create_test_terminal(80, 80) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	// Issue 1482.
+	t.print(u32(`x`)) or { assert false }
+	t.print(0xFE0F) or { assert false } // invalid VS16
+
+	// We should have 1 narrow cell.
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 1
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == u32(`x`)
+	assert !c0.has_grapheme
+	assert c0.wide == .narrow
+	c1 := cell_at(&t, 1, 0)
+	assert c1.codepoint == 0
+	assert c1.wide == .narrow
+}
+
+fn test_print_invalid_vs16_with_second_char() {
+	mut t := create_test_terminal(80, 80) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	t.print(u32(`x`)) or { assert false }
+	t.print(0xFE0F) or { assert false }
+	t.print(u32(`y`)) or { assert false }
+
+	// Two separate narrow characters.
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 2
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == u32(`x`)
+	assert !c0.has_grapheme
+	assert c0.wide == .narrow
+	c1 := cell_at(&t, 1, 0)
+	assert c1.codepoint == u32(`y`)
+	assert !c1.has_grapheme
+	assert c1.wide == .narrow
+}
+
+fn test_print_invalid_vs16_with_second_char_combining() {
+	mut t := create_test_terminal(80, 80) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	t.print(u32(`n`)) or { assert false }
+	t.print(0xFE0F) or { assert false } // invalid VS16
+	t.print(0x0303) or { assert false } // combining tilde
+
+	// One narrow cell.
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 1
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == u32(`n`)
+	assert c0.has_grapheme
+	// The invalid VS16 is dropped; only the combining tilde attaches.
+	assert c0.graphemes.len == 1
+	assert c0.graphemes[0] == 0x0303
+	assert c0.wide == .narrow
+	c1 := cell_at(&t, 1, 0)
+	assert c1.codepoint == 0
+	assert c1.wide == .narrow
+}
+
+fn test_overwrite_grapheme_should_clear_grapheme_data() {
+	mut t := create_test_terminal(5, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	t.print(0x26C8) or { assert false } // Thunder cloud and rain
+	t.print(0xFE0E) or { assert false } // VS15 to make narrow
+	assert t.is_dirty(0, 0)
+	t.clear_dirty()
+
+	t.set_cursor_pos(1, 1)
+	t.print(u32(`A`)) or { assert false }
+	assert t.is_dirty(0, 0)
+
+	str := t.plain_string() or { assert false; return }
+	assert str == 'A'
+
+	c0 := cell_at(&t, 0, 0)
+	assert c0.codepoint == u32(`A`)
+	assert !c0.has_grapheme
+	assert c0.wide == .narrow
+}
+
+fn test_overwrite_multicodepoint_grapheme_clears_grapheme_data() {
+	mut t := create_test_terminal(10, 10) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	// This is: 👨‍👩‍👧
+	t.print(0x1F468) or { assert false }
+	t.print(0x200D) or { assert false }
+	t.print(0x1F469) or { assert false }
+	t.print(0x200D) or { assert false }
+	t.print(0x1F467) or { assert false }
+
+	// We should have 2 cells taken up (wide).
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 2
+
+	// One cell with graphemes.
+	assert active_grapheme_count(&t) == 1
+
+	// Move back and overwrite wide.
+	t.set_cursor_pos(1, 1)
+	t.clear_dirty()
+	t.print(u32(`X`)) or { assert false }
+	assert t.is_dirty(0, 0)
+
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 1
+	assert active_grapheme_count(&t) == 0
+
+	str := t.plain_string() or { assert false; return }
+	assert str == 'X'
+}
+
+fn test_overwrite_multicodepoint_grapheme_tail_clears_grapheme_data() {
+	mut t := create_test_terminal(10, 10) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	// This is: 👨‍👩‍👧
+	t.print(0x1F468) or { assert false }
+	t.print(0x200D) or { assert false }
+	t.print(0x1F469) or { assert false }
+	t.print(0x200D) or { assert false }
+	t.print(0x1F467) or { assert false }
+
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 2
+	assert active_grapheme_count(&t) == 1
+
+	// Move back and overwrite the wide tail.
+	t.set_cursor_pos(1, 2)
+	t.print(u32(`X`)) or { assert false }
+
+	str := t.plain_string() or { assert false; return }
+	assert str == ' X'
+
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 2
+	assert active_grapheme_count(&t) == 0
+}
+
+fn test_print_breaks_valid_grapheme_cluster_with_prepend_ascii_for_speed() {
+	mut t := create_test_terminal(5, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+
+	// Make sure we're not at cursor.x == 0 for the next char.
+	t.print(u32(`_`)) or { assert false }
+
+	// U+0600 ARABIC NUMBER SIGN (Prepend)
+	t.print(0x0600) or { assert false }
+	t.print(u32(`1`)) or { assert false }
+
+	// We should have 3 cells taken up, each narrow. Note that this is
+	// **incorrect** grapheme break behavior per UAX #29 GB9b, but as an
+	// optimization we assume a grapheme break when c <= 255.
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 3
+
+	c1 := cell_at(&t, 1, 0)
+	assert c1.codepoint == 0x0600
+	assert !c1.has_grapheme
+	assert c1.wide == .narrow
+	c2 := cell_at(&t, 2, 0)
+	assert c2.codepoint == u32(`1`)
+	assert !c2.has_grapheme
+	assert c2.wide == .narrow
+}
+
 // ============================================================
 // cursorPos additional
 // ============================================================

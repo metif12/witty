@@ -139,6 +139,22 @@ fn test_parse_positional_args_invalid() {
 	assert data.a == u8(84)
 }
 
+// --- parse: unknown field is invalid ---
+// This is the non-diagnostic-tracking branch of Ghostty's
+// "parse: diagnostic tracking" test. When the destination type cannot
+// track diagnostics (canTrackDiags == false), an unknown "--field"
+// returns error.InvalidField. The witty parser has no diagnostics list,
+// so it always takes this branch.
+
+fn test_parse_unknown_field_invalid() {
+	mut data := StringTestData{}
+	if _ := parse[StringTestData](mut data, ['--what', '--a=42']) {
+		assert false, 'expected error'
+	} else {
+		assert err.msg() == 'invalid field'
+	}
+}
+
 // --- parseIntoField: ignore underscore-prefixed fields ---
 // NOTE: V doesn't allow struct field names starting with `_`,
 // so this test is unnecessary. The Zig version uses `_` prefix

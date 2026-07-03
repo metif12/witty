@@ -142,14 +142,36 @@ fn test_get_index_disabled_font_style() {
 }
 
 fn test_get_index_box_glyph() {
-	// XTODO: needs real FreeType library initialization.
-	//
-	// Original test:
-	// 1. Init library and empty collection
-	// 2. Create resolver with sprite face (metrics: px_per_em=30,
-	//    cell_width=18, ascent=30, descent=-6, line_gap=0)
-	// 3. Should find box glyph U+2500 at special sprite index
-	// 4. Verify style is regular and idx is Special.sprite
+	// Translated from ghostty CodepointResolver.zig "getIndex box glyph".
+	// An empty collection plus a sprite face whose metrics are computed via
+	// Metrics.calc. The box glyph U+2500 must resolve to the sprite index.
+	// This path does not require any real font face to be loaded.
+	c := Collection.init()
+	mut r := CodepointResolver{
+		collection: c
+		sprite:     SpriteFace{
+			metrics: Metrics.calc(FaceMetrics{
+				px_per_em:  30.0
+				cell_width: 18.0
+				ascent:     30.0
+				descent:    -6.0
+				line_gap:   0.0
+			})
+		}
+	}
+	defer {
+		r.deinit()
+	}
+
+	// Should find a box glyph.
+	idx := r.get_index(0x2500, .regular, none) or {
+		assert false, 'expected to find box glyph U+2500'
+		return
+	}
+	assert idx.style == .regular
+	// Special.sprite has integer value index_special_start (8191).
+	assert idx.idx == u16(Special.sprite)
+	assert idx.special() or { return } == .sprite
 }
 
 fn test_get_index_with_sprite() {

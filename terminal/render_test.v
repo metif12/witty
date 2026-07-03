@@ -1,23 +1,34 @@
 module terminal
 
 // Tests for RenderState, translated from Ghostty's render.zig.
+//
+// The witty RenderState operates on the simplified Pages model (a flat
+// screen_rows array with an active_start offset) rather than Ghostty's
+// PageList + MultiArrayList. The observable behavior of RenderState.update,
+// link_cells, to_string and the dirty tracking is preserved so these tests
+// mirror the Ghostty originals.
 
 // ============================================================
 // styled
 // ============================================================
 
 fn test_render_state_styled() {
-	// XTODO: This test requires Terminal.decaln() which fills the screen
-	// with 'E' characters. The full implementation needs the Terminal
-	// stream processing pipeline.
-	//
-	// Original test:
-	// var t = try Terminal.init(alloc, .{ .cols = 80, .rows = 24 });
-	// defer t.deinit(alloc);
-	// try t.decaln();
-	// var state: RenderState = .empty;
-	// defer state.deinit(alloc);
-	// try state.update(alloc, &t);
+	// Fill the screen with decaln, then update. This just exercises the
+	// full-screen rebuild path.
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 })!
+	defer {
+		t.deinit()
+	}
+
+	t.decaln()!
+
+	mut state := RenderState.empty()
+	defer {
+		state.deinit()
+	}
+	state.update(mut t)
+
+	assert state.row_data.len == 24
 }
 
 // ============================================================
@@ -25,20 +36,37 @@ fn test_render_state_styled() {
 // ============================================================
 
 fn test_render_state_basic_text() {
-	// XTODO: This test requires Terminal.vtStream() for feeding escape
-	// sequences and the full RenderState.update() with MultiArrayList
-	// cell storage.
-	//
-	// Original test:
-	// var t = try Terminal.init(alloc, .{ .cols = 10, .rows = 3 });
-	// defer t.deinit(alloc);
-	// var s = t.vtStream();
-	// defer s.deinit();
-	// try s.nextSlice("ABCD");
-	// var state: RenderState = .empty;
-	// defer state.deinit(alloc);
-	// try state.update(alloc, &t);
-	// Verify 3 rows, 10 cells each, with 'A','B','C','D' in row 0
+	mut t := Terminal.init(Options{ cols: 10, rows: 3 })!
+	defer {
+		t.deinit()
+	}
+
+	mut s := t.vt_stream()
+	defer {
+		s.deinit()
+	}
+	s.next_slice('ABCD')!
+
+	mut state := RenderState.empty()
+	defer {
+		state.deinit()
+	}
+	state.update(mut t)
+
+	// Verify we have the right number of rows
+	assert state.row_data.len == 3
+
+	// All rows should have cols cells
+	assert state.row_data[0].cells.len == 10
+	assert state.row_data[1].cells.len == 10
+	assert state.row_data[2].cells.len == 10
+
+	// Row zero should contain our text
+	assert state.row_data[0].cells[0].raw.codepoint_val() == u32(`A`)
+	assert state.row_data[0].cells[1].raw.codepoint_val() == u32(`B`)
+	assert state.row_data[0].cells[2].raw.codepoint_val() == u32(`C`)
+	assert state.row_data[0].cells[3].raw.codepoint_val() == u32(`D`)
+	assert state.row_data[0].cells[4].raw.codepoint_val() == 0
 }
 
 // ============================================================
@@ -46,14 +74,42 @@ fn test_render_state_basic_text() {
 // ============================================================
 
 fn test_render_state_styled_text() {
-	// XTODO: This test requires Terminal.vtStream() for SGR escape sequences
-	// (\x1b[1m for bold, etc.) and style lookups in RenderState.
-	//
-	// Original test:
-	// try s.nextSlice("\x1b[1mA");   // Bold
-	// try s.nextSlice("\x1b[0;3mB"); // Italic
-	// try s.nextSlice("\x1b[0;4mC"); // Underline
-	// Verify cell[0] has bold, cell[1] has italic, cell[2] has underline
+	mut t := Terminal.init(Options{ cols: 10, rows: 3 })!
+	defer {
+		t.deinit()
+	}
+
+	mut s := t.vt_stream()
+	defer {
+		s.deinit()
+	}
+	s.next_slice('\x1b[1mA')! // Bold
+	s.next_slice('\x1b[0;3mB')! // Italic
+	s.next_slice('\x1b[0;4mC')! // Underline
+
+	mut state := RenderState.empty()
+	defer {
+		state.deinit()
+	}
+	state.update(mut t)
+
+	assert state.row_data.len == 3
+	assert state.row_data[0].cells.len == 10
+	assert state.row_data[1].cells.len == 10
+	assert state.row_data[2].cells.len == 10
+
+	// Row zero should contain our styled text
+	c0 := state.row_data[0].cells[0]
+	assert c0.raw.codepoint_val() == u32(`A`)
+	assert c0.style.flags.bold
+
+	c1 := state.row_data[0].cells[1]
+	assert c1.raw.codepoint_val() == u32(`B`)
+	assert !c1.style.flags.bold
+	assert c1.style.flags.italic
+
+	assert state.row_data[0].cells[2].raw.codepoint_val() == u32(`C`)
+	assert state.row_data[0].cells[3].raw.codepoint_val() == 0
 }
 
 // ============================================================
@@ -61,13 +117,38 @@ fn test_render_state_styled_text() {
 // ============================================================
 
 fn test_render_state_grapheme() {
-	// XTODO: This test requires grapheme cluster support (ZWJ sequences)
-	// and the full RenderState cell duplication pipeline.
-	//
-	// Original test:
-	// try s.nextSlice("A");
-	// try s.nextSlice("👨‍"); // this has a ZWJ
-	// Verify cell[1] is wide with grapheme data [0x200D]
+	mut t := Terminal.init(Options{ cols: 10, rows: 3 })!
+	defer {
+		t.deinit()
+	}
+
+	mut s := t.vt_stream()
+	defer {
+		s.deinit()
+	}
+	s.next_slice('A')!
+	s.next_slice('👨‍')! // this has a ZWJ
+
+	mut state := RenderState.empty()
+	defer {
+		state.deinit()
+	}
+	state.update(mut t)
+
+	assert state.row_data.len == 3
+	assert state.row_data[0].cells.len == 10
+
+	// Row zero should contain our text
+	assert state.row_data[0].cells[0].raw.codepoint_val() == u32(`A`)
+
+	c1 := state.row_data[0].cells[1]
+	assert c1.raw.codepoint_val() == 0x1F468
+	assert c1.raw.wide == .wide
+	assert c1.grapheme == [u32(0x200D)]
+
+	c2 := state.row_data[0].cells[2]
+	assert c2.raw.codepoint_val() == 0
+	assert c2.raw.wide == .spacer_tail
 }
 
 // ============================================================
@@ -75,14 +156,45 @@ fn test_render_state_grapheme() {
 // ============================================================
 
 fn test_render_state_cursor_in_viewport() {
-	// XTODO: This test requires Terminal.vtStream() for cursor movement
-	// escape sequences (\x1b[H, \x1b[2;3H) and style setting (\x1b[1m).
-	//
-	// Original test:
-	// try s.nextSlice("A\x1b[H");
-	// try state.update(alloc, &t);
-	// Verify cursor at (0,0) in both active and viewport
-	// Then move to (2,1) and verify
+	mut t := Terminal.init(Options{ cols: 10, rows: 5 })!
+	defer {
+		t.deinit()
+	}
+
+	mut s := t.vt_stream()
+	defer {
+		s.deinit()
+	}
+	s.next_slice('A\x1b[H')!
+
+	mut state := RenderState.empty()
+	defer {
+		state.deinit()
+	}
+
+	// Initial update
+	state.update(mut t)
+	assert state.cursor.active.x == 0
+	assert state.cursor.active.y == 0
+	assert (state.cursor.viewport or { panic('nil') }).x == 0
+	assert (state.cursor.viewport or { panic('nil') }).y == 0
+	assert state.cursor.cell.codepoint_val() == u32(`A`)
+	assert state.cursor.style.default()
+
+	// Set a style on the cursor
+	s.next_slice('\x1b[1m')! // Bold
+	state.update(mut t)
+	assert !state.cursor.style.default()
+	assert state.cursor.style.flags.bold
+	s.next_slice('\x1b[0m')! // Reset style
+
+	// Move cursor to 2,1
+	s.next_slice('\x1b[2;3H')!
+	state.update(mut t)
+	assert state.cursor.active.x == 2
+	assert state.cursor.active.y == 1
+	assert (state.cursor.viewport or { panic('nil') }).x == 2
+	assert (state.cursor.viewport or { panic('nil') }).y == 1
 }
 
 // ============================================================
@@ -90,14 +202,37 @@ fn test_render_state_cursor_in_viewport() {
 // ============================================================
 
 fn test_render_state_cursor_out_of_viewport() {
-	// XTODO: This test requires Terminal scrollViewport() and checking
-	// that cursor.viewport becomes null when scrolled away.
-	//
-	// Original test:
-	// try s.nextSlice("A\r\nB\r\nC\r\nD\r\n");
-	// try t.scrollViewport(.top);
-	// try state.update(alloc, &t);
-	// Verify cursor.viewport == null
+	mut t := Terminal.init(Options{ cols: 10, rows: 2, max_scrollback: 10000 })!
+	defer {
+		t.deinit()
+	}
+
+	mut s := t.vt_stream()
+	defer {
+		s.deinit()
+	}
+	s.next_slice('A\r\nB\r\nC\r\nD\r\n')!
+
+	mut state := RenderState.empty()
+	defer {
+		state.deinit()
+	}
+
+	// Initial update
+	state.update(mut t)
+	assert state.cursor.active.x == 0
+	assert state.cursor.active.y == 1
+	assert (state.cursor.viewport or { panic('nil') }).x == 0
+	assert (state.cursor.viewport or { panic('nil') }).y == 1
+
+	// Scroll the viewport to the top
+	t.scroll_viewport(.top, 0)!
+	state.update(mut t)
+
+	// The cursor is still in the active area but out of the viewport.
+	assert state.cursor.active.x == 0
+	assert state.cursor.active.y == 1
+	assert state.cursor.viewport == none
 }
 
 // ============================================================
@@ -105,13 +240,44 @@ fn test_render_state_cursor_out_of_viewport() {
 // ============================================================
 
 fn test_render_state_dirty() {
-	// XTODO: This test requires fine-grained dirty tracking with
-	// per-row dirty flags and the full update pipeline.
-	//
-	// Original test:
-	// First update should trigger .full dirty
-	// Reset dirty, second update with no changes -> .false_
-	// Write "A", third update -> .partial with row[0] dirty
+	mut t := Terminal.init(Options{ cols: 10, rows: 5 })!
+	defer {
+		t.deinit()
+	}
+
+	mut s := t.vt_stream()
+	defer {
+		s.deinit()
+	}
+
+	mut state := RenderState.empty()
+	defer {
+		state.deinit()
+	}
+
+	// First update should trigger redraw due to resize
+	state.update(mut t)
+	assert state.dirty == .full
+
+	// Reset dirty flag and dirty rows
+	state.dirty = .false_
+	for mut r in state.row_data {
+		r.dirty = false
+	}
+
+	// Second update with no changes - no dirty rows
+	state.update(mut t)
+	assert state.dirty == .false_
+	for r in state.row_data {
+		assert !r.dirty
+	}
+
+	// Write to first line
+	s.next_slice('A')!
+	state.update(mut t)
+	assert state.dirty == .partial
+	assert state.row_data[0].dirty // First row dirty
+	assert !state.row_data[1].dirty // Second row clean
 }
 
 // ============================================================
@@ -119,14 +285,40 @@ fn test_render_state_dirty() {
 // ============================================================
 
 fn test_render_state_colors() {
-	// XTODO: This test requires Terminal.vtStream() for OSC color
-	// sequences (\x1b]12;#FF0000\x07 for cursor color, etc.)
-	//
-	// Original test:
-	// try s.nextSlice("\x1b]12;#FF0000\x07");
-	// Verify cursor color is (0xFF, 0, 0)
-	// try s.nextSlice("\x1b]4;0;#FFFFFF\x07");
-	// Verify palette[0] is (0xFF, 0xFF, 0xFF)
+	mut t := Terminal.init(Options{ cols: 10, rows: 5 })!
+	defer {
+		t.deinit()
+	}
+
+	mut s := t.vt_stream()
+	defer {
+		s.deinit()
+	}
+
+	mut state := RenderState.empty()
+	defer {
+		state.deinit()
+	}
+
+	// Default colors
+	state.update(mut t)
+
+	// Change cursor color
+	s.next_slice('\x1b]12;#FF0000\x07')!
+	state.update(mut t)
+
+	c := state.colors.cursor or { panic('nil cursor color') }
+	assert c.r == 0xFF
+	assert c.g == 0
+	assert c.b == 0
+
+	// Change palette color 0 to White
+	s.next_slice('\x1b]4;0;#FFFFFF\x07')!
+	state.update(mut t)
+	p0 := state.colors.palette[0]
+	assert p0.r == 0xFF
+	assert p0.g == 0xFF
+	assert p0.b == 0xFF
 }
 
 // ============================================================
@@ -134,13 +326,32 @@ fn test_render_state_colors() {
 // ============================================================
 
 fn test_render_state_selection_single_line() {
-	// XTODO: This test requires the full RenderState.update() with
-	// selection containment calculation in the row iteration loop.
-	//
-	// Original test:
-	// Select row 1, columns 0-2
-	// Verify sels[0] == null, sels[1] == [0, 2], sels[2] == null
-	// Clear selection, verify all sels are null
+	mut t := Terminal.init(Options{ cols: 10, rows: 3 })!
+	defer {
+		t.deinit()
+	}
+
+	mut screen := t.screens.active
+	p1 := screen.pages.pin(PinOpts{ tag: .active, x: 0, y: 1 }) or { panic('no pin') }
+	p2 := screen.pages.pin(PinOpts{ tag: .active, x: 2, y: 1 }) or { panic('no pin') }
+	screen.select(Selection.init(p1, p2, false))!
+
+	mut state := RenderState.empty()
+	defer {
+		state.deinit()
+	}
+	state.update(mut t)
+
+	assert state.row_data[0].selection == none
+	assert state.row_data[1].selection or { panic('nil') } == [u16(0), u16(2)]!
+	assert state.row_data[2].selection == none
+
+	// Clear the selection
+	screen.select(none)!
+	state.update(mut t)
+	assert state.row_data[0].selection == none
+	assert state.row_data[1].selection == none
+	assert state.row_data[2].selection == none
 }
 
 // ============================================================
@@ -148,12 +359,25 @@ fn test_render_state_selection_single_line() {
 // ============================================================
 
 fn test_render_state_selection_multiple_lines() {
-	// XTODO: This test requires the full RenderState.update() with
-	// multi-row selection containment.
-	//
-	// Original test:
-	// Select from row 1 col 0 to row 2 col 2
-	// Verify sels[1] == [0, cols-1], sels[2] == [0, 2]
+	mut t := Terminal.init(Options{ cols: 10, rows: 3 })!
+	defer {
+		t.deinit()
+	}
+
+	mut screen := t.screens.active
+	p1 := screen.pages.pin(PinOpts{ tag: .active, x: 0, y: 1 }) or { panic('no pin') }
+	p2 := screen.pages.pin(PinOpts{ tag: .active, x: 2, y: 2 }) or { panic('no pin') }
+	screen.select(Selection.init(p1, p2, false))!
+
+	mut state := RenderState.empty()
+	defer {
+		state.deinit()
+	}
+	state.update(mut t)
+
+	assert state.row_data[0].selection == none
+	assert state.row_data[1].selection or { panic('nil') } == [u16(0), u16(screen.pages.cols) - 1]!
+	assert state.row_data[2].selection or { panic('nil') } == [u16(0), u16(2)]!
 }
 
 // ============================================================
@@ -161,13 +385,36 @@ fn test_render_state_selection_multiple_lines() {
 // ============================================================
 
 fn test_render_state_link_cells() {
-	// XTODO: This test requires Terminal.vtStream() for OSC 8 hyperlink
-	// sequences and the full hyperlink tracking system.
-	//
-	// Original test:
-	// try s.nextSlice("\x1b]8;;http://example.com\x1b\\LINK\x1b]8;;\x1b\\");
-	// Query link at (0,0) -> 4 cells
-	// Query at (4,0) -> 0 cells
+	mut t := Terminal.init(Options{ cols: 10, rows: 5 })!
+	defer {
+		t.deinit()
+	}
+
+	mut s := t.vt_stream()
+	defer {
+		s.deinit()
+	}
+
+	mut state := RenderState.empty()
+	defer {
+		state.deinit()
+	}
+
+	// Create a hyperlink
+	s.next_slice('\x1b]8;;http://example.com\x1b\\LINK\x1b]8;;\x1b\\')!
+	state.update(mut t)
+
+	// Query link at 0,0
+	cells := state.link_cells(Pin{ x: 0, y: 0 })
+	assert cells.len == 4
+	assert cells[cell_set_key(0, 0)]
+	assert cells[cell_set_key(1, 0)]
+	assert cells[cell_set_key(2, 0)]
+	assert cells[cell_set_key(3, 0)]
+
+	// Query no link
+	cells2 := state.link_cells(Pin{ x: 4, y: 0 })
+	assert cells2.len == 0
 }
 
 // ============================================================
@@ -175,43 +422,66 @@ fn test_render_state_link_cells() {
 // ============================================================
 
 fn test_render_state_string() {
-	// XTODO: This test requires the full RenderState with proper
-	// UTF-8 encoding and wrapped line handling.
-	//
-	// Original test:
-	// Write "AB" to 5x2 terminal
-	// to_string() should produce "AB\x00\x00\x00\n\x00\x00\x00\x00\x00\n"
+	mut t := Terminal.init(Options{ cols: 5, rows: 2 })!
+	defer {
+		t.deinit()
+	}
+
+	mut s := t.vt_stream()
+	defer {
+		s.deinit()
+	}
+	s.next_slice('AB')!
+
+	mut state := RenderState.empty()
+	defer {
+		state.deinit()
+	}
+	state.update(mut t)
+
+	result := state.to_string()
+	expected := 'AB\x00\x00\x00\n\x00\x00\x00\x00\x00\n'
+	assert result == expected
 }
 
 // ============================================================
 // linkCells with scrollback spanning pages
 // ============================================================
 
-fn test_render_state_link_cells_scrollback_pages() {
-	// XTODO: This test requires PageList with multiple page nodes
-	// and cross-page hyperlink lookup.
-}
+// SKIPPED: This test depends on Ghostty's PageList with multiple page
+// nodes and cross-page hyperlink lookup (page.std_capacity, page node
+// boundaries). The witty simplified Pages model uses a single flat
+// screen_rows array, so there is no page boundary to span and the
+// specific crash this test guards against cannot occur here.
 
 // ============================================================
 // linkCells with invalid viewport point
 // ============================================================
 
 fn test_render_state_link_cells_invalid_point() {
-	// Simplified test: verify empty result for out-of-bounds points
+	mut t := Terminal.init(Options{ cols: 10, rows: 5 })!
+	defer {
+		t.deinit()
+	}
+
+	mut s := t.vt_stream()
+	defer {
+		s.deinit()
+	}
+
 	mut state := RenderState.empty()
 	defer {
 		state.deinit()
 	}
-	state.rows = 5
-	state.cols = 10
+	state.update(mut t)
 
-	// Row out of bounds
-	result1 := state.link_cells(Pin{ x: 0, y: 15 })
-	assert result1.len == 0
+	// Row out of bound
+	cells := state.link_cells(Pin{ x: 0, y: u32(t.rows) + 10 })
+	assert cells.len == 0
 
-	// Col out of bounds
-	result2 := state.link_cells(Pin{ x: 15, y: 0 })
-	assert result2.len == 0
+	// Col out of bound
+	cells2 := state.link_cells(Pin{ x: u32(t.cols) + 10, y: 0 })
+	assert cells2.len == 0
 }
 
 // ============================================================
@@ -219,11 +489,43 @@ fn test_render_state_link_cells_invalid_point() {
 // ============================================================
 
 fn test_render_state_dirty_row_resets_highlights() {
-	// XTODO: This test requires the full RenderState.update() pipeline
-	// with highlight tracking and per-row arena management.
-	//
-	// Original test:
-	// Add highlight to row 0, verify it exists
+	mut t := Terminal.init(Options{ cols: 10, rows: 3 })!
+	defer {
+		t.deinit()
+	}
+
+	mut s := t.vt_stream()
+	defer {
+		s.deinit()
+	}
+	s.next_slice('ABC')!
+
+	mut state := RenderState.empty()
+	defer {
+		state.deinit()
+	}
+	state.update(mut t)
+
+	// Reset dirty state
+	state.dirty = .false_
+	for mut r in state.row_data {
+		r.dirty = false
+	}
+
+	// Manually add a highlight to row 0
+	state.row_data[0].highlights << RenderHighlight{
+		tag:   1
+		range: [u16(0), u16(2)]!
+	}
+
+	// Verify we have a highlight
+	assert state.row_data[0].highlights.len == 1
+
 	// Write to row 0 to make it dirty
-	// Update -> highlight should be cleared
+	s.next_slice('\x1b[H')! // Move to home
+	s.next_slice('X')!
+	state.update(mut t)
+
+	// Verify the highlight was reset on the dirty row
+	assert state.row_data[0].highlights.len == 0
 }

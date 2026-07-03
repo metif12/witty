@@ -563,6 +563,14 @@ pub:
 	value u32
 }
 
+// VariationId.init builds an id from a 4-byte axis tag (e.g. "wght").
+// The first byte is the most significant, matching the OpenType tag layout.
+pub fn VariationId.init(v string) VariationId {
+	return VariationId{
+		value: u32(v[0]) << 24 | u32(v[1]) << 16 | u32(v[2]) << 8 | u32(v[3])
+	}
+}
+
 // str returns the 4-character tag representation.
 pub fn (id VariationId) str() string {
 	bytes := [u8((id.value >> 24) & 0xFF), u8((id.value >> 16) & 0xFF),
