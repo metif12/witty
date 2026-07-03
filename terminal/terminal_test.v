@@ -4244,3 +4244,193 @@ fn test_insert_blanks_split_multi_cell_character() {
 	str := t.plain_string() or { assert false; return }
 	assert str == ' 123'
 }
+
+// ============================================================
+// Background SGR preservation on erase / scroll paths
+// ============================================================
+//
+// Translated from ghostty's Terminal.zig "preserves background sgr" tests.
+// A blank cell created while a background color SGR is active is stored with
+// content_tag == .bg_color_rgb (or .bg_color_palette) and the color inline,
+// NOT as a styled cell.
+
+// Helper: assert that the cell at active (x, y) is a bg_color_rgb cell with
+// the given red/green/blue components.
+fn assert_bg_rgb(t &Terminal, x int, y int, r u8, g u8, b u8) {
+	cell := cell_at(t, x, y)
+	assert cell.content_tag == .bg_color_rgb
+	assert cell.color_rgb_r == r
+	assert cell.color_rgb_g == g
+	assert cell.color_rgb_b == b
+}
+
+fn test_erase_chars_preserves_background_sgr() {
+	mut t := create_test_terminal(10, 10) or { assert false; return }
+	defer { t.deinit() }
+
+	t.print_string('ABC') or { assert false }
+	t.set_cursor_pos(1, 1)
+	t.set_attribute(SgrAttribute{
+		kind: .direct_color_bg
+		r: 0xFF
+		g: 0
+		b: 0
+	}) or { assert false }
+	t.erase_chars(2)
+
+	str := t.plain_string() or { assert false; return }
+	assert str == '  C'
+	assert_bg_rgb(&t, 0, 0, 0xFF, 0, 0)
+	assert_bg_rgb(&t, 1, 0, 0xFF, 0, 0)
+}
+
+fn test_insert_blanks_preserves_background_sgr() {
+	mut t := create_test_terminal(10, 10) or { assert false; return }
+	defer { t.deinit() }
+
+	t.print_string('ABC') or { assert false }
+	t.set_cursor_pos(1, 1)
+	t.set_attribute(SgrAttribute{
+		kind: .direct_color_bg
+		r: 0xFF
+		g: 0
+		b: 0
+	}) or { assert false }
+	t.insert_blanks(2)
+
+	str := t.plain_string() or { assert false; return }
+	assert str == '  ABC'
+	assert_bg_rgb(&t, 0, 0, 0xFF, 0, 0)
+}
+
+fn test_delete_chars_preserves_background_sgr() {
+	mut t := create_test_terminal(10, 10) or { assert false; return }
+	defer { t.deinit() }
+
+	t.print_string('ABC123') or { assert false }
+	t.set_cursor_pos(1, 3)
+	t.set_attribute(SgrAttribute{
+		kind: .direct_color_bg
+		r: 0xFF
+		g: 0
+		b: 0
+	}) or { assert false }
+	t.delete_chars(2)
+
+	str := t.plain_string() or { assert false; return }
+	assert str == 'AB23'
+	// The two right-most columns are the vacated blanks.
+	for x in int(t.cols) - 2 .. int(t.cols) {
+		assert_bg_rgb(&t, x, 0, 0xFF, 0, 0)
+	}
+}
+
+fn test_erase_line_right_preserves_background_sgr() {
+	mut t := create_test_terminal(5, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	t.print_string('ABCDE') or { assert false }
+	t.set_cursor_pos(1, 2)
+	t.set_attribute(SgrAttribute{
+		kind: .direct_color_bg
+		r: 0xFF
+		g: 0
+		b: 0
+	}) or { assert false }
+	t.erase_line(.right, false)
+
+	str := t.plain_string() or { assert false; return }
+	assert str == 'A'
+	for x in 1 .. 5 {
+		assert_bg_rgb(&t, x, 0, 0xFF, 0, 0)
+	}
+}
+
+fn test_erase_line_left_preserves_background_sgr() {
+	mut t := create_test_terminal(5, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	t.print_string('ABCDE') or { assert false }
+	t.set_cursor_pos(1, 2)
+	t.set_attribute(SgrAttribute{
+		kind: .direct_color_bg
+		r: 0xFF
+		g: 0
+		b: 0
+	}) or { assert false }
+	t.erase_line(.left, false)
+
+	str := t.plain_string() or { assert false; return }
+	assert str == '  CDE'
+	for x in 0 .. 2 {
+		assert_bg_rgb(&t, x, 0, 0xFF, 0, 0)
+	}
+}
+
+fn test_erase_line_complete_preserves_background_sgr() {
+	mut t := create_test_terminal(5, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	t.print_string('ABCDE') or { assert false }
+	t.set_cursor_pos(1, 2)
+	t.set_attribute(SgrAttribute{
+		kind: .direct_color_bg
+		r: 0xFF
+		g: 0
+		b: 0
+	}) or { assert false }
+	t.erase_line(.complete, false)
+
+	str := t.plain_string() or { assert false; return }
+	assert str == ''
+	for x in 0 .. 5 {
+		assert_bg_rgb(&t, x, 0, 0xFF, 0, 0)
+	}
+}
+
+fn test_index_bottom_of_primary_screen_background_sgr() {
+	mut t := create_test_terminal(5, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	t.set_cursor_pos(5, 1)
+	t.print(u32(`A`)) or { assert false }
+	t.set_attribute(SgrAttribute{
+		kind: .direct_color_bg
+		r: 0xFF
+		g: 0
+		b: 0
+	}) or { assert false }
+	t.index() or { assert false }
+
+	str := t.plain_string() or { assert false; return }
+	assert str == '\n\n\nA'
+	// The newly-exposed bottom row is filled with the active bg SGR.
+	for x in 0 .. 5 {
+		assert_bg_rgb(&t, x, 4, 0xFF, 0, 0)
+	}
+}
+
+fn test_index_bottom_of_scroll_region_background_sgr() {
+	mut t := create_test_terminal(5, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	t.set_top_and_bottom_margin(1, 3)
+	t.set_cursor_pos(4, 1)
+	t.print(u32(`B`)) or { assert false }
+	t.set_cursor_pos(3, 1)
+	t.print(u32(`A`)) or { assert false }
+	t.set_attribute(SgrAttribute{
+		kind: .direct_color_bg
+		r: 0xFF
+		g: 0
+		b: 0
+	}) or { assert false }
+	t.index() or { assert false }
+
+	str := t.plain_string() or { assert false; return }
+	assert str == '\nA\n\nB'
+	// The newly-exposed blank row at the bottom of the region carries bg SGR.
+	for x in 0 .. int(t.cols) {
+		assert_bg_rgb(&t, x, 2, 0xFF, 0, 0)
+	}
+}

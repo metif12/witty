@@ -3452,11 +3452,10 @@ pub fn (mut self Terminal) insert_blanks(count int) {
 		}
 
 		// Insert blanks. The blanks preserve the background color.
+		blank := self.screens.active.blank_cell()
 		for x in cursor_x .. cursor_x + adjusted_count {
 			if x < row.cells.len {
-				row.cells[x] = CellData{
-					style_id: self.screens.active.cursor.style_id
-				}
+				row.cells[x] = blank
 			}
 		}
 
@@ -3511,11 +3510,10 @@ pub fn (mut self Terminal) delete_chars(count_req int) {
 		}
 
 		// Clear the vacated cells at the right. The blanks preserve bg color.
+		blank := self.screens.active.blank_cell()
 		for x in cursor_x + scroll_amount .. cursor_x + rem {
 			if x < row.cells.len {
-				row.cells[x] = CellData{
-					style_id: self.screens.active.cursor.style_id
-				}
+				row.cells[x] = blank
 			}
 		}
 
@@ -3559,13 +3557,12 @@ pub fn (mut self Terminal) erase_chars(count_req int) {
 	}
 
 	// Respect protected cells
+	blank := self.screens.active.blank_cell()
 	unsafe {
 		mut row := &self.screens.active.pages.screen_rows[row_idx]
 		for x in cursor_x .. cursor_x + count {
 			if x < row.cells.len && !row.cells[x].is_protected {
-				row.cells[x] = CellData{
-					style_id: self.screens.active.cursor.style_id
-				}
+				row.cells[x] = blank
 			}
 		}
 		row.dirty = true
@@ -3644,13 +3641,12 @@ pub fn (mut self Terminal) erase_line(mode EraseLine, protected_req bool) {
 
 	// Protected mode: only clear unprotected cells
 	if row_idx < self.screens.active.pages.screen_rows.len {
+		blank := self.screens.active.blank_cell()
 		unsafe {
 			mut row := &self.screens.active.pages.screen_rows[row_idx]
 			for x in start .. end {
 				if x < row.cells.len && !row.cells[x].is_protected {
-					row.cells[x] = CellData{
-						style_id: self.screens.active.cursor.style_id
-					}
+					row.cells[x] = blank
 				}
 			}
 			row.dirty = true

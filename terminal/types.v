@@ -1051,12 +1051,30 @@ pub fn (self &CellStyle) default() bool {
 }
 
 // Returns a blank cell with the background color of this style.
+//
+// If no background color is set this returns the zero (empty) cell.
+// Otherwise it returns a cell tagged as background-only content, mirroring
+// Ghostty's Style.bgCell: no text, just a background color stored inline so
+// it doesn't require a style-map lookup.
 pub fn (self &CellStyle) bg_cell() !CellData {
-	if self.bg_color == .none {
-		return CellData{}
-	}
-	return CellData{
-		style_id: 1 // non-default
+	return match self.bg_color {
+		.none {
+			CellData{}
+		}
+		.palette {
+			CellData{
+				content_tag: .bg_color_palette
+				color_palette: self.bg_palette
+			}
+		}
+		.rgb {
+			CellData{
+				content_tag: .bg_color_rgb
+				color_rgb_r: self.bg_r
+				color_rgb_g: self.bg_g
+				color_rgb_b: self.bg_b
+			}
+		}
 	}
 }
 

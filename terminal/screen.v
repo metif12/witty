@@ -2300,6 +2300,10 @@ pub fn (mut self Screen) cursor_down_scroll() ! {
 		} else {
 			// Shift everything up: remove first active row, add blank at bottom
 			self.pages.erase_row(PinOpts{ tag: .active, x: 0, y: 0 })!
+			// The newly-vacated bottom row must preserve the current bg SGR,
+			// matching Ghostty's cursorDownScroll which memsets the new row
+			// with blankCell() when a background color is active.
+			self.fill_active_row_blank(self.pages.rows - 1)
 		}
 	} else {
 		// With scrollback: grow by one row, moving old top row to scrollback
@@ -2316,33 +2320,111 @@ pub fn (mut self Screen) cursor_down_scroll() ! {
 	}
 }
 
-// Scroll above the cursor (insert line above).
+// Scroll the active area at and above the cursor. The lines below the cursor
+// are not scrolled. This is a translation of Ghostty's Screen.cursorScrollAbove.
+//
+// The net effect: everything at and above the cursor row scrolls up (the
+// top-most active row moves into scrollback), a blank line appears at the
+// cursor row, and the rows below the cursor shift down by one.
 pub fn (mut self Screen) cursor_scroll_above() ! {
-	// XTODO: Full scroll-above with cross-page row rotation is not
-	// implemented. Requires fastmem.rotateOnceR across page boundaries
-	// and proper pin tracking. This delegates to cursor_down_scroll
-	// when cursor is at the bottom.
+	// We unconditionally mark the cursor row as dirty here because the cursor
+	// always changes rows inside this function.
 	self.cursor_mark_dirty()
+
+	// If the cursor is on the bottom of the screen, it's faster to use our
+	// specialized function for that case.
 	if self.cursor.y == self.pages.rows - 1 {
 		return self.cursor_down_scroll()
 	}
-	// Simplified: insert blank row at cursor, push rows below down
-	idx := self.pages.active_start + int(self.cursor.y)
-	active_end := self.pages.active_start + int(self.pages.rows)
-	// Remove the last active row
-	if active_end - 1 < self.pages.screen_rows.len {
-		self.pages.screen_rows.delete(active_end - 1)
+
+	// The absolute index of the cursor row before we scroll.
+	cursor_abs := self.pages.active_start + int(self.cursor.y)
+	old_active_end := self.pages.active_start + int(self.pages.rows)
+
+	if self.no_scrollback {
+		// Without scrollback we can't push a row into history, so we drop the
+		// top-most active row and rotate a fresh blank row in at the cursor.
+		// This shifts everything above the cursor up by one and everything
+		// at/below the cursor down by one relative to the moved window.
+		if self.pages.active_start < self.pages.screen_rows.len {
+			self.pages.screen_rows.delete(self.pages.active_start)
+		}
+		// A new active window starts one row earlier now; append a blank row
+		// at the bottom so the window keeps its size.
+		self.pages.screen_rows << RowData.init(self.pages.cols)
+	} else {
+		// With scrollback: grow by one row (moving the old top active row into
+		// scrollback) and slide the active window down by one.
+		self.pages.grow() or {}
+		self.pages.active_start += 1
+		active_end := self.pages.active_start + int(self.pages.rows)
+		for self.pages.screen_rows.len < active_end {
+			self.pages.screen_rows << RowData.init(self.pages.cols)
+		}
 	}
-	// Insert blank at cursor position
-	self.pages.screen_rows.insert(idx, RowData.init(self.pages.cols))
-	// Mark all as dirty
-	for i in idx .. active_end {
+
+	// Rotate the region from the (new) cursor row to the bottom of the active
+	// window one step to the right, moving the freshly-created blank bottom
+	// row up to the cursor position and shifting the rows below the cursor
+	// down by one. This mirrors Ghostty's fastmem.rotateOnceR.
+	new_cursor_abs := self.pages.active_start + int(self.cursor.y)
+	new_active_end := self.pages.active_start + int(self.pages.rows)
+	_ = cursor_abs
+	_ = old_active_end
+	if new_cursor_abs < new_active_end && new_active_end <= self.pages.screen_rows.len {
+		last := self.pages.screen_rows[new_active_end - 1]
+		for i := new_active_end - 1; i > new_cursor_abs; i-- {
+			self.pages.screen_rows[i] = self.pages.screen_rows[i - 1]
+		}
+		self.pages.screen_rows[new_cursor_abs] = last
+	}
+
+	// The newly created line at the cursor must be blank and preserve the
+	// current bg SGR, matching Ghostty's memset of the new row with blankCell().
+	if new_cursor_abs < self.pages.screen_rows.len {
+		unsafe {
+			mut row := &self.pages.screen_rows[new_cursor_abs]
+			blank := self.blank_cell()
+			for i in 0 .. row.cells.len {
+				row.cells[i] = blank
+			}
+			row.wrap = false
+			row.wrap_continuation = false
+			row.styled = self.cursor.style_id != default_style_id
+			row.grapheme = false
+			row.hyperlink = false
+		}
+	}
+
+	// Mark the affected rows dirty.
+	for i in new_cursor_abs .. new_active_end {
 		if i < self.pages.screen_rows.len {
 			unsafe {
 				mut row := &self.pages.screen_rows[i]
 				row.dirty = true
 			}
 		}
+	}
+}
+
+// Fill an active-area row entirely with the current cursor's blank cell.
+// This preserves the active background SGR when new rows are exposed by
+// scrolling, mirroring Ghostty's @memset(cells, blankCell()).
+fn (mut self Screen) fill_active_row_blank(y u32) {
+	if self.cursor.style_id == default_style_id {
+		return
+	}
+	idx := self.pages.active_start + int(y)
+	if idx >= self.pages.screen_rows.len {
+		return
+	}
+	blank := self.blank_cell()
+	unsafe {
+		mut row := &self.pages.screen_rows[idx]
+		for i in 0 .. row.cells.len {
+			row.cells[i] = blank
+		}
+		row.dirty = true
 	}
 }
 
@@ -2364,15 +2446,18 @@ pub fn (self &Screen) viewport_is_bottom() bool {
 // Row/Cell management
 // ============================================================
 
-// Clear a row in the active area, filling with blank cells.
+// Clear a row in the active area, filling with blank cells. The blank cell
+// carries the current cursor background SGR so newly-vacated rows preserve
+// the active background color, matching Ghostty's use of clearCells/blankCell.
 fn (mut self Screen) clear_active_row(y u32) {
 	idx := self.pages.active_start + int(y)
 	if idx < self.pages.screen_rows.len {
+		blank := self.blank_cell()
 		unsafe {
 			mut row := &self.pages.screen_rows[idx]
 			for i in 0 .. int(self.pages.cols) {
 				if i < row.cells.len {
-					row.cells[i] = CellData{}
+					row.cells[i] = blank
 				}
 			}
 			row.dirty = true
@@ -2428,11 +2513,15 @@ pub fn (mut self Screen) clear_cells(row_idx int, start int, end int) {
 	if row_idx >= self.pages.screen_rows.len {
 		return
 	}
+	// Cleared cells are filled with the current cursor's blank cell so that
+	// erasing while a background SGR is active preserves that background,
+	// matching Ghostty's Screen.clearCells which @memsets with blankCell().
+	blank := self.blank_cell()
 	unsafe {
 		mut row := &self.pages.screen_rows[row_idx]
 		for i in start .. end {
 			if i < row.cells.len {
-				row.cells[i] = CellData{}
+				row.cells[i] = blank
 			}
 		}
 		row.dirty = true
