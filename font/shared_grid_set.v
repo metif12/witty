@@ -604,6 +604,53 @@ pub fn (m MetricsModifier) hash() u64 {
 	return u64(u32(m.absolute) + 0x80000000)
 }
 
+// parse parses a modifier value. If the value ends in "%" it is assumed to be
+// a percent, otherwise the value is parsed as an integer.
+//
+// A percent modifier stores the multiplier: "20%" -> 1.2, "-20%" -> 0.8, and
+// any value <= -100% clamps to 0.
+pub fn MetricsModifier.parse(input string) !MetricsModifier {
+	if input.len == 0 {
+		return error('invalid format')
+	}
+
+	if input[input.len - 1] == `%` {
+		mut percent := input[0..input.len - 1].f64()
+		// f64() returns 0 for unparseable input; guard against a non-numeric
+		// body (other than a literal "0").
+		if percent == 0 && input[0..input.len - 1] != '0' {
+			return error('invalid format')
+		}
+		percent /= 100.0
+
+		if percent <= -1.0 {
+			return MetricsModifier{
+				is_percent: true
+				percent:    0
+			}
+		}
+		return MetricsModifier{
+			is_percent: true
+			percent:    1.0 + percent
+		}
+	}
+
+	n := input.int()
+	if n == 0 && input != '0' && input != '-0' && input != '+0' {
+		return error('invalid format')
+	}
+	return MetricsModifier{
+		is_percent: false
+		absolute:   i32(n)
+	}
+}
+
+// apply applies this modifier to an unsigned integer value, matching the Zig
+// Modifier.apply semantics for unsigned integers.
+pub fn (m MetricsModifier) apply(v u32) u32 {
+	return metrics_modifier_apply_u32(m, v)
+}
+
 // ============================================================
 // MetricsModifierSet
 // ============================================================

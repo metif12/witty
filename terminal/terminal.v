@@ -4324,7 +4324,7 @@ fn is_emoji_vs_base(c u32) bool {
 	if c == 0x0023 || c == 0x002A || (c >= 0x0030 && c <= 0x0039) {
 		return true // # * 0-9 (keycap bases)
 	}
-	if (c >= 0x2000 && c <= 0x2BFF) {
+	if c >= 0x2000 && c <= 0x2BFF {
 		return true // Many Misc Symbols/Dingbats have VS bases
 	}
 	if is_extended_pictographic(c) {

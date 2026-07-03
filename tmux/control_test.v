@@ -140,6 +140,39 @@ fn test_tmux_sessions_changed() {
 	}
 }
 
+fn test_tmux_sessions_changed_carriage_return() {
+	mut c := ControlParser{}
+	defer { c.deinit() }
+
+	feed_string_none(mut c, '%sessions-changed\r')
+
+	if n := c.put(`\n`) {
+		assert n is NotifSessionsChanged
+	} else {
+		assert false, 'expected notification'
+	}
+}
+
+fn test_tmux_layout_change() {
+	mut c := ControlParser{}
+	defer { c.deinit() }
+
+	feed_string_none(mut c, '%layout-change @2 1234x791,0,0{617x791,0,0,0,617x791,618,0,1} 1234x791,0,0{617x791,0,0,0,617x791,618,0,1} *-')
+
+	if n := c.put(`\n`) {
+		if n is NotifLayoutChange {
+			assert n.window_id == 2
+			assert n.layout == '1234x791,0,0{617x791,0,0,0,617x791,618,0,1}'
+			assert n.visible_layout == '1234x791,0,0{617x791,0,0,0,617x791,618,0,1}'
+			assert n.raw_flags == '*-'
+		} else {
+			assert false, 'expected NotifLayoutChange'
+		}
+	} else {
+		assert false, 'expected notification'
+	}
+}
+
 fn test_tmux_window_add() {
 	mut c := ControlParser{}
 	defer { c.deinit() }

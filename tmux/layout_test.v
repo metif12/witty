@@ -270,6 +270,62 @@ fn test_syntax_error_no_content_delimiter() {
 	assert false, 'expected SyntaxError'
 }
 
+fn test_syntax_error_missing_width() {
+	Layout.parse('x24,0,0,1') or {
+		assert err.msg().contains('SyntaxError')
+		return
+	}
+	assert false, 'expected SyntaxError for missing width'
+}
+
+fn test_syntax_error_missing_height() {
+	Layout.parse('80x,0,0,1') or {
+		assert err.msg().contains('SyntaxError')
+		return
+	}
+	assert false, 'expected SyntaxError for missing height'
+}
+
+fn test_syntax_error_missing_x() {
+	Layout.parse('80x24,,0,1') or {
+		assert err.msg().contains('SyntaxError')
+		return
+	}
+	assert false, 'expected SyntaxError for missing x'
+}
+
+fn test_syntax_error_missing_y() {
+	Layout.parse('80x24,0,,1') or {
+		assert err.msg().contains('SyntaxError')
+		return
+	}
+	assert false, 'expected SyntaxError for missing y'
+}
+
+fn test_syntax_error_missing_pane_id() {
+	Layout.parse('80x24,0,0,') or {
+		assert err.msg().contains('SyntaxError')
+		return
+	}
+	assert false, 'expected SyntaxError for missing pane id'
+}
+
+fn test_syntax_error_non_numeric_width() {
+	Layout.parse('abcx24,0,0,1') or {
+		assert err.msg().contains('SyntaxError')
+		return
+	}
+	assert false, 'expected SyntaxError for non-numeric width'
+}
+
+fn test_syntax_error_non_numeric_pane_id() {
+	Layout.parse('80x24,0,0,abc') or {
+		assert err.msg().contains('SyntaxError')
+		return
+	}
+	assert false, 'expected SyntaxError for non-numeric pane id'
+}
+
 fn test_syntax_error_trailing_data() {
 	Layout.parse('80x24,0,0,1extra') or {
 		assert err.msg().contains('SyntaxError') || err.msg().contains('trailing')
@@ -296,9 +352,12 @@ fn test_syntax_error_unclosed_vertical_bracket() {
 
 fn test_syntax_error_mismatched_brackets() {
 	Layout.parse('80x24,0,0{40x24,0,0,1]') or {
+		// First mismatch case failed as expected; check the second.
+		Layout.parse('80x24,0,0[40x24,0,0,1}') or { return }
+		assert false, 'expected SyntaxError for mismatched brackets [ }'
 		return
 	}
-	assert false, 'expected SyntaxError for mismatched brackets'
+	assert false, 'expected SyntaxError for mismatched brackets { ]'
 }
 
 // parseWithChecksum tests
@@ -392,6 +451,13 @@ fn test_checksum_as_string_max_value() {
 	// Value 0xffff should produce "ffff".
 	checksum := Checksum{ value: 0xffff }
 	assert checksum.as_string() == 'ffff'
+}
+
+fn test_checksum_wraparound() {
+	// Eight 0xff bytes exercise the u16 rotate + wrapping add.
+	input := []u8{len: 8, init: 0xff}.bytestr()
+	checksum := Checksum.calculate(input)
+	assert checksum.as_string() == '03fc'
 }
 
 fn test_checksum_deterministic() {

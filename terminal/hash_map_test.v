@@ -409,6 +409,24 @@ fn test_hash_map_remove_by_index() {
 	assert hm.count() == 0
 }
 
+fn test_hash_map_remove_by_index_zero_sized_key() {
+	// Translated from ghostty "HashMap removeByPtr 0 sized key". In Zig this
+	// exercises a zero-sized key type; witty keys are always u64, so this is
+	// a single-entry remove-by-index round-trip on key 0.
+	mut hm := HashMapUnmanaged.init(64)
+
+	hm.put(0, 0) or { assert false; return }
+	assert hm.count() == 1
+
+	key_idx := hm.get_key_index(0)
+	assert key_idx != none
+	if idx := key_idx {
+		hm.remove_by_index(idx)
+	}
+
+	assert hm.count() == 0
+}
+
 fn test_hash_map_repeat_fetch_remove() {
 	mut hm := HashMapUnmanaged.init(64)
 

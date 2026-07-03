@@ -524,17 +524,29 @@ fn is_path_in_temp_dir(path string) bool {
 	if path.starts_with('/tmp') {
 		return true
 	}
-	if path.starts_with('/var/tmp') {
-		return true
-	}
 	if path.starts_with('/dev/shm') {
 		return true
 	}
-	// Check TMPDIR environment variable if set.
+
+	// Candidate temporary directories. For each we check both the raw
+	// prefix and its resolved (realpath) prefix, since the temporary dir
+	// is sometimes a symlink. On macOS, for example, /tmp is
+	// /private/tmp and $TMPDIR is under /private/var/...
+	mut candidates := ['/tmp', '/var/tmp']
 	tmpdir := os.getenv('TMPDIR')
-	if tmpdir.len > 0 && path.starts_with(tmpdir) {
-		return true
+	if tmpdir.len > 0 {
+		candidates << tmpdir
 	}
+	for dir in candidates {
+		if path.starts_with(dir) {
+			return true
+		}
+		real_dir := os.real_path(dir)
+		if real_dir.len > 0 && path.starts_with(real_dir) {
+			return true
+		}
+	}
+
 	return false
 }
 

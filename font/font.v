@@ -730,14 +730,20 @@ fn add_float_to_int_u32(i u32, f f64) u32 {
 // saturating_add_i32 adds two i32 values, saturating at the i32 bounds.
 fn saturating_add_i32(a i32, b i32) i32 {
 	r := i64(a) + i64(b)
-	if r > i64(0x7FFFFFFF) {
-		return i32(0x7FFFFFFF)
+	if r > i64(max_i32) {
+		return max_i32
 	}
-	if r < i64(-0x80000000) {
-		return i32(-0x80000000)
+	if r < i64(min_i32) {
+		return min_i32
 	}
 	return i32(r)
 }
+
+// i32 bounds. Written as explicit i64 literals because V evaluates
+// `i64(-0x80000000)` incorrectly (the unsigned hex literal is negated after
+// truncation, yielding a positive value).
+const max_i32 = i32(2147483647)
+const min_i32 = i32(-2147483648)
 
 // metrics_modifier_apply_u32 applies a modifier to a u32 value, matching
 // the Zig Modifier.apply semantics for unsigned integers.

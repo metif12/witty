@@ -146,6 +146,33 @@ pub fn (self Variable) name() string {
 	}
 }
 
+// Parse an unsigned integer from a string, faithfully mimicking Zig's
+// `std.fmt.parseInt(usize, value, 10)`. Returns an error for empty input,
+// any non-digit character, or a value that does not fit (including a
+// leading sign, which cannot represent an unsigned value).
+fn parse_usize(value string) !u64 {
+	if value.len == 0 {
+		return error('InvalidCharacter')
+	}
+	// A leading sign means the value cannot fit in an unsigned type.
+	if value[0] == `-` || value[0] == `+` {
+		return error('Overflow')
+	}
+	mut result := u64(0)
+	for c in value {
+		if c < `0` || c > `9` {
+			return error('InvalidCharacter')
+		}
+		digit := u64(c - `0`)
+		new_result := result * 10 + digit
+		if new_result < result {
+			return error('Overflow')
+		}
+		result = new_result
+	}
+	return result
+}
+
 // ============================================================
 // VariableValue - parsed value for a variable
 // ============================================================
@@ -208,27 +235,27 @@ pub fn (self Variable) parse(value string) !VariableValue {
 		return match self {
 			.session_id {
 				if value.len >= 2 && value[0] == `$` {
-					VariableValue(value[1..].int())
+					VariableValue(int(parse_usize(value[1..])!))
 				} else {
 					return error('FormatError: session_id must start with \$')
 				}
 			}
 			.window_id {
 				if value.len >= 2 && value[0] == `@` {
-					VariableValue(value[1..].int())
+					VariableValue(int(parse_usize(value[1..])!))
 				} else {
 					return error('FormatError: window_id must start with @')
 				}
 			}
 			.pane_id {
 				if value.len >= 2 && value[0] == `%` {
-					VariableValue(value[1..].int())
+					VariableValue(int(parse_usize(value[1..])!))
 				} else {
 					return error('FormatError: pane_id must start with %')
 				}
 			}
 			else {
-				VariableValue(value.int())
+				VariableValue(int(parse_usize(value)!))
 			}
 		}
 	}
