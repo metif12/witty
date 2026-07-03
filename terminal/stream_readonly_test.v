@@ -244,3 +244,247 @@ fn test_readonly_ignores_query_actions() {
 	str := t.plain_string() or { panic(err) }
 	assert str == 'Test'
 }
+
+fn test_readonly_osc4_set_and_reset_palette() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+
+	// Save default color
+	default_color_0 := t.colors.palette.original[0]
+
+	// Set color 0 to red
+	s.next_slice('\x1b]4;0;rgb:ff/00/00\x1b\\') or { panic(err) }
+	assert t.colors.palette.entries[0].r == 0xff
+	assert t.colors.palette.entries[0].g == 0x00
+	assert t.colors.palette.entries[0].b == 0x00
+	assert t.colors.palette.mask_is_set(0)
+
+	// Reset color 0
+	s.next_slice('\x1b]104;0\x1b\\') or { panic(err) }
+	assert t.colors.palette.entries[0] == default_color_0
+	assert !t.colors.palette.mask_is_set(0)
+}
+
+fn test_readonly_osc104_reset_all_palette_colors() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+
+	// Set multiple colors
+	s.next_slice('\x1b]4;0;rgb:ff/00/00\x1b\\') or { panic(err) }
+	s.next_slice('\x1b]4;1;rgb:00/ff/00\x1b\\') or { panic(err) }
+	s.next_slice('\x1b]4;2;rgb:00/00/ff\x1b\\') or { panic(err) }
+	assert t.colors.palette.mask_is_set(0)
+	assert t.colors.palette.mask_is_set(1)
+	assert t.colors.palette.mask_is_set(2)
+
+	// Reset all palette colors
+	s.next_slice('\x1b]104\x1b\\') or { panic(err) }
+	assert t.colors.palette.entries[0] == t.colors.palette.original[0]
+	assert t.colors.palette.entries[1] == t.colors.palette.original[1]
+	assert t.colors.palette.entries[2] == t.colors.palette.original[2]
+	assert !t.colors.palette.mask_is_set(0)
+	assert !t.colors.palette.mask_is_set(1)
+	assert !t.colors.palette.mask_is_set(2)
+}
+
+fn test_readonly_osc10_set_and_reset_foreground_color() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+
+	// Initially unset
+	assert t.colors.foreground.get() == none
+
+	// Set foreground to red
+	s.next_slice('\x1b]10;rgb:ff/00/00\x1b\\') or { panic(err) }
+	fg := t.colors.foreground.get() or { panic('no foreground') }
+	assert fg.r == 0xff
+	assert fg.g == 0x00
+	assert fg.b == 0x00
+
+	// Reset foreground
+	s.next_slice('\x1b]110\x1b\\') or { panic(err) }
+	assert t.colors.foreground.get() == none
+}
+
+fn test_readonly_osc11_set_and_reset_background_color() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+
+	// Set background to green
+	s.next_slice('\x1b]11;rgb:00/ff/00\x1b\\') or { panic(err) }
+	bg := t.colors.background.get() or { panic('no background') }
+	assert bg.r == 0x00
+	assert bg.g == 0xff
+	assert bg.b == 0x00
+
+	// Reset background
+	s.next_slice('\x1b]111\x1b\\') or { panic(err) }
+	assert t.colors.background.get() == none
+}
+
+fn test_readonly_osc12_set_and_reset_cursor_color() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+
+	// Set cursor to blue
+	s.next_slice('\x1b]12;rgb:00/00/ff\x1b\\') or { panic(err) }
+	cursor := t.colors.cursor.get() or { panic('no cursor') }
+	assert cursor.r == 0x00
+	assert cursor.g == 0x00
+	assert cursor.b == 0xff
+
+	// Reset cursor
+	s.next_slice('\x1b]112\x1b\\') or { panic(err) }
+	// After reset, cursor might be null (using default)
+}
+
+fn test_readonly_kitty_color_protocol_set_palette() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+
+	// Set palette color 5 to magenta using kitty protocol
+	s.next_slice('\x1b]21;5=rgb:ff/00/ff\x1b\\') or { panic(err) }
+	assert t.colors.palette.entries[5].r == 0xff
+	assert t.colors.palette.entries[5].g == 0x00
+	assert t.colors.palette.entries[5].b == 0xff
+	assert t.colors.palette.mask_is_set(5)
+	assert t.flags.dirty.palette
+}
+
+fn test_readonly_kitty_color_protocol_reset_palette() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+
+	// Set and then reset palette color
+	original := t.colors.palette.original[7]
+	s.next_slice('\x1b]21;7=rgb:aa/bb/cc\x1b\\') or { panic(err) }
+	assert t.colors.palette.mask_is_set(7)
+
+	s.next_slice('\x1b]21;7=\x1b\\') or { panic(err) }
+	assert t.colors.palette.entries[7] == original
+	assert !t.colors.palette.mask_is_set(7)
+}
+
+fn test_readonly_kitty_color_protocol_set_foreground() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+
+	// Set foreground using kitty protocol
+	s.next_slice('\x1b]21;foreground=rgb:12/34/56\x1b\\') or { panic(err) }
+	fg := t.colors.foreground.get() or { panic('no foreground') }
+	assert fg.r == 0x12
+	assert fg.g == 0x34
+	assert fg.b == 0x56
+}
+
+fn test_readonly_kitty_color_protocol_set_background() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+
+	// Set background using kitty protocol
+	s.next_slice('\x1b]21;background=rgb:78/9a/bc\x1b\\') or { panic(err) }
+	bg := t.colors.background.get() or { panic('no background') }
+	assert bg.r == 0x78
+	assert bg.g == 0x9a
+	assert bg.b == 0xbc
+}
+
+fn test_readonly_kitty_color_protocol_set_cursor() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+
+	// Set cursor using kitty protocol
+	s.next_slice('\x1b]21;cursor=rgb:de/f0/12\x1b\\') or { panic(err) }
+	cursor := t.colors.cursor.get() or { panic('no cursor') }
+	assert cursor.r == 0xde
+	assert cursor.g == 0xf0
+	assert cursor.b == 0x12
+}
+
+fn test_readonly_kitty_color_protocol_reset_foreground() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+
+	// Set and reset foreground
+	s.next_slice('\x1b]21;foreground=rgb:11/22/33\x1b\\') or { panic(err) }
+	assert t.colors.foreground.get() != none
+
+	s.next_slice('\x1b]21;foreground=\x1b\\') or { panic(err) }
+	// After reset, should be unset
+	assert t.colors.foreground.get() == none
+}
+
+fn test_readonly_palette_dirty_flag_set_on_color_change() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+
+	// Clear dirty flag
+	t.flags.dirty.palette = false
+
+	// Setting palette color should set dirty flag
+	s.next_slice('\x1b]4;0;rgb:ff/00/00\x1b\\') or { panic(err) }
+	assert t.flags.dirty.palette
+
+	// Clear and test reset
+	t.flags.dirty.palette = false
+	s.next_slice('\x1b]104;0\x1b\\') or { panic(err) }
+	assert t.flags.dirty.palette
+
+	// Clear and test kitty protocol
+	t.flags.dirty.palette = false
+	s.next_slice('\x1b]21;1=rgb:00/ff/00\x1b\\') or { panic(err) }
+	assert t.flags.dirty.palette
+}
+
+fn test_readonly_semantic_prompt_end_of_input_then_start_output() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+
+	// Write some text and then send OSC 133;A (fresh_line_new_prompt)
+	s.next_slice('Hello') or { panic(err) }
+	s.next_slice('\x1b]133;A\x07') or { panic(err) }
+	s.next_slice('prompt\$ ') or { panic(err) }
+	s.next_slice('\x1b]133;B\x07') or { panic(err) }
+	assert t.screens.active.cursor.semantic_content == .input
+	s.next_slice('\x1b]133;C\x07') or { panic(err) }
+	assert t.screens.active.cursor.semantic_content == .output
+}

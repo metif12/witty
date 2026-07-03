@@ -3240,6 +3240,15 @@ fn (self &Screen) prompt_click_line(click_pin Pin) PromptClickMove {
 		return prompt_click_move_zero
 	}
 
+	// The cursor cell's semantic content, used to decide whether to add a
+	// trailing empty input cell to move to at the end (editor behavior).
+	cursor_cell_input := if int(cursor_pin.y) < self.pages.screen_rows.len
+		&& int(cursor_pin.x) < self.pages.screen_rows[int(cursor_pin.y)].cells.len {
+		self.pages.screen_rows[int(cursor_pin.y)].cells[int(cursor_pin.x)].semantic_content == .input
+	} else {
+		false
+	}
+
 	if cursor_pin.before(click_pin) {
 		// Moving right
 		mut count := 0
@@ -3247,7 +3256,25 @@ fn (self &Screen) prompt_click_line(click_pin Pin) PromptClickMove {
 		for y <= int(click_pin.y) && y < self.pages.screen_rows.len {
 			row := self.pages.screen_rows[y]
 			is_cursor_row := u32(y) == cursor_pin.y
-			start_x := if is_cursor_row { int(cursor_pin.x) + 1 } else { 0 }
+			// If this is not the cursor row, verify it's still part of the
+			// continuation of our starting prompt.
+			if !is_cursor_row && row.semantic_prompt != .prompt_continuation {
+				break
+			}
+			// Determine where our input starts. On the cursor row we start
+			// after the cursor. Otherwise we start at the first input cell.
+			mut start_x := 0
+			if is_cursor_row {
+				start_x = int(cursor_pin.x) + 1
+			} else {
+				start_x = int(self.pages.cols)
+				for x in 0 .. int(self.pages.cols) {
+					if x < row.cells.len && row.cells[x].semantic_content == .input {
+						start_x = x
+						break
+					}
+				}
+			}
 			for x in start_x .. int(self.pages.cols) {
 				if x < row.cells.len && row.cells[x].semantic_content == .input {
 					count += 1
@@ -3257,6 +3284,13 @@ fn (self &Screen) prompt_click_line(click_pin Pin) PromptClickMove {
 				}
 			}
 			if !row.wrap {
+				// If we never found our pin, we clicked further right/beyond
+				// it. If we're already on a non-empty input cell then we add
+				// one so we can move to the newest, empty cell at the end,
+				// matching typical editor behavior.
+				if cursor_cell_input {
+					count += 1
+				}
 				break
 			}
 			y += 1

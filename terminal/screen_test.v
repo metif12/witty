@@ -590,3 +590,638 @@ fn test_screen_semantic_content() {
 	s.cursor_set_semantic_content_output()
 	assert s.cursor.semantic_content == .output
 }
+
+// ============================================================
+// Additional tests translated from ghostty Screen.zig
+// ============================================================
+
+fn wsdef_all() []u32 {
+	return [u32(0), u32(` `), u32(`\t`), u32(`'`), u32(`"`), u32(`\``),
+		u32(`|`), u32(`:`), u32(`;`), u32(`,`), u32(`(`), u32(`)`),
+		u32(`[`), u32(`]`), u32(`{`), u32(`}`), u32(`<`), u32(`>`), u32(`$`)]
+}
+
+fn wsdef_line() []u32 {
+	return [u32(0), u32(` `), u32(`\t`)]
+}
+
+// --- cursorCopy ---
+
+fn test_screen_cursor_copy_style_copy() {
+	mut s := Screen.init(10, 10, 0)
+	defer { s.deinit() }
+	s.set_attribute(SgrAttribute{ kind: .bold }) or { assert false }
+
+	mut s2 := Screen.init(10, 10, 0)
+	defer { s2.deinit() }
+	s2.cursor_copy(s.cursor) or { assert false }
+	assert s2.cursor.style.flags.bold
+}
+
+// --- eraseRows / clear history ---
+
+fn test_screen_clear_history_with_no_history() {
+	mut s := Screen.init(10, 3, 3)
+	defer { s.deinit() }
+	s.test_write_string('4ABCD\n5EFGH\n6IJKL') or { assert false }
+	s.erase_rows(.history, ?PointTag(none))
+	str_active := s.dump_string_alloc(.active) or { assert false; return }
+	assert str_active == '4ABCD\n5EFGH\n6IJKL'
+	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	assert str_screen == '4ABCD\n5EFGH\n6IJKL'
+}
+
+fn test_screen_clear_history() {
+	mut s := Screen.init(10, 3, 3)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH\n3IJKL\n4ABCD\n5EFGH\n6IJKL') or { assert false }
+	s.erase_rows(.history, ?PointTag(none))
+	str_active := s.dump_string_alloc(.active) or { assert false; return }
+	assert str_active == '4ABCD\n5EFGH\n6IJKL'
+	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	assert str_screen == '4ABCD\n5EFGH\n6IJKL'
+}
+
+// --- scroll and clear ---
+
+fn test_screen_scroll_and_clear_full_screen() {
+	mut s := Screen.init(10, 3, 5)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
+
+	str0 := s.dump_string_alloc(.active) or { assert false; return }
+	assert str0 == '1ABCD\n2EFGH\n3IJKL'
+
+	s.scroll_clear() or { assert false }
+	str_active := s.dump_string_alloc(.active) or { assert false; return }
+	assert str_active == ''
+	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	assert str_screen == '1ABCD\n2EFGH\n3IJKL'
+}
+
+fn test_screen_scroll_and_clear_partial_screen() {
+	mut s := Screen.init(10, 3, 5)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH') or { assert false }
+
+	str0 := s.dump_string_alloc(.active) or { assert false; return }
+	assert str0 == '1ABCD\n2EFGH'
+
+	s.scroll_clear() or { assert false }
+	str_active := s.dump_string_alloc(.active) or { assert false; return }
+	assert str_active == ''
+	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	assert str_screen == '1ABCD\n2EFGH'
+}
+
+fn test_screen_scroll_and_clear_empty_screen() {
+	mut s := Screen.init(10, 3, 5)
+	defer { s.deinit() }
+	s.scroll_clear() or { assert false }
+	str_active := s.dump_string_alloc(.active) or { assert false; return }
+	assert str_active == ''
+	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	assert str_screen == ''
+}
+
+// --- scrolling ---
+
+fn test_screen_scroll_down_from_0() {
+	mut s := Screen.init(10, 3, 0)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
+
+	// Scrolling up does nothing, but allows it.
+	s.scroll(.delta_row)
+	str := s.dump_string_alloc(.active) or { assert false; return }
+	assert str == '1ABCD\n2EFGH\n3IJKL'
+}
+
+fn test_screen_cursor_down_scroll_preserves_style() {
+	mut s := Screen.init(10, 3, 1)
+	defer { s.deinit() }
+	s.set_attribute(SgrAttribute{ kind: .bold }) or { assert false }
+	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
+	s.cursor_down_scroll() or { assert false }
+
+	assert s.cursor.style.flags.bold
+
+	str := s.dump_string_alloc(.active) or { assert false; return }
+	assert str == '2EFGH\n3IJKL'
+}
+
+// --- resize (no reflow) ---
+
+fn test_screen_resize_no_reflow_more_rows_full() {
+	mut s := Screen.init(10, 3, 0)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
+	s.resize(ScreenResize{ cols: 10, rows: 10, reflow: false }) or { assert false }
+	str := s.dump_string_alloc(.active) or { assert false; return }
+	assert str == '1ABCD\n2EFGH\n3IJKL'
+}
+
+fn test_screen_resize_no_reflow_more_cols_full() {
+	mut s := Screen.init(10, 3, 0)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
+	s.resize(ScreenResize{ cols: 20, rows: 3, reflow: false }) or { assert false }
+	str := s.dump_string_alloc(.active) or { assert false; return }
+	assert str == '1ABCD\n2EFGH\n3IJKL'
+}
+
+fn test_screen_resize_no_reflow_less_cols_full() {
+	mut s := Screen.init(10, 3, 0)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
+	s.resize(ScreenResize{ cols: 4, rows: 3, reflow: false }) or { assert false }
+	str := s.dump_string_alloc(.active) or { assert false; return }
+	assert str == '1ABC\n2EFG\n3IJK'
+}
+
+fn test_screen_resize_more_rows_no_scrollback() {
+	mut s := Screen.init(10, 3, 0)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
+	s.resize(ScreenResize{ cols: 10, rows: 10, reflow: true }) or { assert false }
+	assert s.cursor.x == 5
+	assert s.cursor.y == 2
+	str := s.dump_string_alloc(.active) or { assert false; return }
+	assert str == '1ABCD\n2EFGH\n3IJKL'
+}
+
+// --- selectAll ---
+
+fn test_screen_select_all_multi() {
+	mut s := Screen.init(10, 10, 0)
+	defer { s.deinit() }
+	s.test_write_string('ABC  DEF\n 123\n456') or { assert false }
+	if sel := s.select_all() {
+		assert sel.start().x == 0
+		assert sel.start().y == 0
+		assert sel.end().x == 2
+		assert sel.end().y == 2
+	} else {
+		assert false
+	}
+
+	s.test_write_string('\nFOO\n BAR\n BAZ\n QWERTY\n 12345678') or { assert false }
+	if sel := s.select_all() {
+		assert sel.start().x == 0
+		assert sel.start().y == 0
+		assert sel.end().x == 8
+		assert sel.end().y == 7
+	} else {
+		assert false
+	}
+}
+
+// --- selectLine ---
+
+fn test_screen_select_line_forward_backward() {
+	mut s := Screen.init(10, 10, 0)
+	defer { s.deinit() }
+	s.test_write_string('ABC  DEF\n 123\n456') or { assert false }
+	ws := wsdef_line()
+
+	for x in [u32(0), u32(7), u32(3), u32(9)] {
+		if sel := s.select_line(SelectLine{ pin: Pin{ x: x, y: 0 }, whitespace: ws }) {
+			assert sel.start().x == 0
+			assert sel.start().y == 0
+			assert sel.end().x == 7
+			assert sel.end().y == 0
+		} else {
+			assert false
+		}
+	}
+}
+
+fn test_screen_select_line_across_soft_wrap_coords() {
+	mut s := Screen.init(5, 10, 0)
+	defer { s.deinit() }
+	s.test_write_string(' 12 34012   \n 123') or { assert false }
+	ws := wsdef_line()
+
+	if sel := s.select_line(SelectLine{ pin: Pin{ x: 1, y: 0 }, whitespace: ws }) {
+		assert sel.start().x == 1
+		assert sel.start().y == 0
+		assert sel.end().x == 3
+		assert sel.end().y == 1
+	} else {
+		assert false
+	}
+}
+
+fn test_screen_select_line_across_full_soft_wrap() {
+	mut s := Screen.init(5, 5, 0)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD2EFGH\n3IJKL') or { assert false }
+	ws := wsdef_line()
+
+	if sel := s.select_line(SelectLine{ pin: Pin{ x: 2, y: 1 }, whitespace: ws }) {
+		assert sel.start().x == 0
+		assert sel.start().y == 0
+		assert sel.end().x == 4
+		assert sel.end().y == 1
+	} else {
+		assert false
+	}
+}
+
+fn test_screen_select_line_ignores_blank_lines() {
+	mut s := Screen.init(5, 10, 0)
+	defer { s.deinit() }
+	s.test_write_string(' 12 34012             \n 123') or { assert false }
+	ws := wsdef_line()
+
+	for xy in [[u32(1), u32(0)], [u32(1), u32(1)], [u32(3), u32(0)]] {
+		if sel := s.select_line(SelectLine{ pin: Pin{ x: xy[0], y: xy[1] }, whitespace: ws }) {
+			assert sel.start().x == 1
+			assert sel.start().y == 0
+			assert sel.end().x == 3
+			assert sel.end().y == 1
+		} else {
+			assert false
+		}
+	}
+}
+
+fn test_screen_select_line_disabled_whitespace_trimming() {
+	mut s := Screen.init(5, 10, 0)
+	defer { s.deinit() }
+	s.test_write_string(' 12 34012   \n 123') or { assert false }
+
+	// Going forward, whitespace trimming disabled.
+	if sel := s.select_line(SelectLine{ pin: Pin{ x: 1, y: 0 }, whitespace: none }) {
+		assert sel.start().x == 0
+		assert sel.start().y == 0
+		assert sel.end().x == 4
+		assert sel.end().y == 2
+	} else {
+		assert false
+	}
+
+	// Non-wrapped.
+	if sel := s.select_line(SelectLine{ pin: Pin{ x: 1, y: 3 }, whitespace: none }) {
+		assert sel.start().x == 0
+		assert sel.start().y == 3
+		assert sel.end().x == 4
+		assert sel.end().y == 3
+	} else {
+		assert false
+	}
+}
+
+// --- selectWord ---
+
+fn test_screen_select_word_full() {
+	mut s := Screen.init(10, 10, 0)
+	defer { s.deinit() }
+	s.test_write_string('ABC  DEF\n 123\n456') or { assert false }
+	b := wsdef_all()
+
+	// Going forward, backward, both.
+	for x in [u32(0), u32(2), u32(1)] {
+		if sel := s.select_word(Pin{ x: x, y: 0 }, b) {
+			assert sel.start().x == 0
+			assert sel.start().y == 0
+			assert sel.end().x == 2
+			assert sel.end().y == 0
+		} else {
+			assert false
+		}
+	}
+
+	// Whitespace.
+	if sel := s.select_word(Pin{ x: 3, y: 0 }, b) {
+		assert sel.start().x == 3
+		assert sel.start().y == 0
+		assert sel.end().x == 4
+		assert sel.end().y == 0
+	} else {
+		assert false
+	}
+
+	// Whitespace single char.
+	if sel := s.select_word(Pin{ x: 0, y: 1 }, b) {
+		assert sel.start().x == 0
+		assert sel.start().y == 1
+		assert sel.end().x == 0
+		assert sel.end().y == 1
+	} else {
+		assert false
+	}
+
+	// End of screen.
+	if sel := s.select_word(Pin{ x: 1, y: 2 }, b) {
+		assert sel.start().x == 0
+		assert sel.start().y == 2
+		assert sel.end().x == 2
+		assert sel.end().y == 2
+	} else {
+		assert false
+	}
+}
+
+fn test_screen_select_word_across_soft_wrap() {
+	mut s := Screen.init(5, 10, 0)
+	defer { s.deinit() }
+	s.test_write_string(' 1234012\n 123') or { assert false }
+	b := wsdef_all()
+
+	str := s.dump_string_alloc(.screen) or { assert false; return }
+	assert str == ' 1234\n012\n 123'
+
+	for xy in [[u32(1), u32(0)], [u32(1), u32(1)], [u32(3), u32(0)]] {
+		if sel := s.select_word(Pin{ x: xy[0], y: xy[1] }, b) {
+			assert sel.start().x == 1
+			assert sel.start().y == 0
+			assert sel.end().x == 2
+			assert sel.end().y == 1
+		} else {
+			assert false
+		}
+	}
+}
+
+// --- selectionString ---
+
+fn test_screen_selection_string_multiline() {
+	mut s := Screen.init(5, 3, 0)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
+	sel := Selection.init(Pin{ x: 0, y: 1 }, Pin{ x: 2, y: 2 }, false)
+	str := s.selection_string(SelectionString{ sel: sel, trim: true }) or { assert false; return }
+	assert str == '2EFGH\n3IJ'
+}
+
+fn test_screen_selection_string_start_outside() {
+	mut s := Screen.init(5, 10, 0)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
+	sel := Selection.init(Pin{ x: 0, y: 5 }, Pin{ x: 2, y: 6 }, false)
+	str := s.selection_string(SelectionString{ sel: sel, trim: true }) or { assert false; return }
+	assert str == ''
+}
+
+fn test_screen_selection_string_end_outside() {
+	mut s := Screen.init(5, 10, 0)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
+	sel := Selection.init(Pin{ x: 0, y: 2 }, Pin{ x: 2, y: 6 }, false)
+	str := s.selection_string(SelectionString{ sel: sel, trim: true }) or { assert false; return }
+	assert str == '3IJKL'
+}
+
+fn test_screen_selection_string_trim_space() {
+	mut s := Screen.init(5, 3, 0)
+	defer { s.deinit() }
+	s.test_write_string('1AB  \n2EFGH\n3IJKL') or { assert false }
+	sel := Selection.init(Pin{ x: 0, y: 0 }, Pin{ x: 2, y: 1 }, false)
+
+	str_trim := s.selection_string(SelectionString{ sel: sel, trim: true }) or { assert false; return }
+	assert str_trim == '1AB\n2EF'
+
+	str_notrim := s.selection_string(SelectionString{ sel: sel, trim: false }) or {
+		assert false
+		return
+	}
+	assert str_notrim == '1AB  \n2EF'
+}
+
+fn test_screen_selection_string_trim_empty_line() {
+	mut s := Screen.init(5, 5, 0)
+	defer { s.deinit() }
+	s.test_write_string('1AB  \n\n2EFGH\n3IJKL') or { assert false }
+	sel := Selection.init(Pin{ x: 0, y: 0 }, Pin{ x: 2, y: 2 }, false)
+
+	str_trim := s.selection_string(SelectionString{ sel: sel, trim: true }) or { assert false; return }
+	assert str_trim == '1AB\n\n2EF'
+}
+
+fn test_screen_selection_string_soft_wrap() {
+	mut s := Screen.init(5, 3, 0)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD2EFGH3IJKL') or { assert false }
+	sel := Selection.init(Pin{ x: 0, y: 1 }, Pin{ x: 2, y: 2 }, false)
+	str := s.selection_string(SelectionString{ sel: sel, trim: true }) or { assert false; return }
+	assert str == '2EFGH3IJ'
+}
+
+// --- lineIterator ---
+
+fn test_screen_line_iterator_basic() {
+	mut s := Screen.init(5, 5, 0)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH') or { assert false }
+	mut it := s.line_iterator(Pin{ x: 0, y: u32(s.pages.active_start) })
+
+	sel1 := it.next() or { assert false; return }
+	str1 := s.selection_string(SelectionString{ sel: sel1, trim: false }) or { assert false; return }
+	assert str1 == '1ABCD'
+
+	sel2 := it.next() or { assert false; return }
+	str2 := s.selection_string(SelectionString{ sel: sel2, trim: false }) or { assert false; return }
+	assert str2 == '2EFGH'
+}
+
+fn test_screen_line_iterator_soft_wrap() {
+	mut s := Screen.init(5, 5, 0)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD2EFGH\n3ABCD') or { assert false }
+	mut it := s.line_iterator(Pin{ x: 0, y: u32(s.pages.active_start) })
+
+	sel1 := it.next() or { assert false; return }
+	str1 := s.selection_string(SelectionString{ sel: sel1, trim: false }) or { assert false; return }
+	assert str1 == '1ABCD2EFGH'
+
+	sel2 := it.next() or { assert false; return }
+	str2 := s.selection_string(SelectionString{ sel: sel2, trim: false }) or { assert false; return }
+	assert str2 == '3ABCD'
+}
+
+// --- promptClickMove ---
+
+fn pcm_setup() Screen {
+	mut s := Screen.init(20, 5, 0)
+	s.semantic_prompt.click = .cl_line
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('> ') or {}
+	s.cursor_set_semantic_content_input(true)
+	s.test_write_string('hello') or {}
+	return s
+}
+
+fn test_screen_prompt_click_move_line_right_basic() {
+	mut s := pcm_setup()
+	defer { s.deinit() }
+	s.cursor_absolute(2, 0)
+	r := s.prompt_click_move(Pin{ x: 4, y: u32(s.pages.active_start) })
+	assert r.right == 2
+	assert r.left == 0
+}
+
+fn test_screen_prompt_click_move_cursor_not_on_input() {
+	mut s := Screen.init(20, 5, 0)
+	defer { s.deinit() }
+	s.semantic_prompt.click = .cl_line
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('> ') or { assert false }
+	s.cursor_set_semantic_content_input(true)
+	s.test_write_string('hello') or { assert false }
+	s.cursor_set_semantic_content_output()
+	s.cursor_absolute(0, 0)
+	r := s.prompt_click_move(Pin{ x: 4, y: u32(s.pages.active_start) })
+	assert r.right == 0
+	assert r.left == 0
+}
+
+fn test_screen_prompt_click_move_same_position() {
+	mut s := pcm_setup()
+	defer { s.deinit() }
+	s.cursor_absolute(4, 0)
+	r := s.prompt_click_move(Pin{ x: 4, y: u32(s.pages.active_start) })
+	assert r.right == 0
+	assert r.left == 0
+}
+
+fn test_screen_prompt_click_move_right_skips_non_input() {
+	mut s := Screen.init(20, 5, 0)
+	defer { s.deinit() }
+	s.semantic_prompt.click = .cl_line
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('> ') or { assert false }
+	s.cursor_set_semantic_content_input(true)
+	s.test_write_string('h') or { assert false }
+	s.cursor_set_semantic_content_output()
+	s.test_write_string('X') or { assert false }
+	s.cursor_set_semantic_content_input(true)
+	s.test_write_string('llo') or { assert false }
+	s.cursor_absolute(2, 0)
+	r := s.prompt_click_move(Pin{ x: 5, y: u32(s.pages.active_start) })
+	assert r.right == 2
+	assert r.left == 0
+}
+
+fn test_screen_prompt_click_move_right_soft_wrapped() {
+	mut s := Screen.init(10, 5, 0)
+	defer { s.deinit() }
+	s.semantic_prompt.click = .cl_line
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('> ') or { assert false }
+	s.cursor_set_semantic_content_input(true)
+	s.test_write_string('abcdefgh') or { assert false }
+	s.test_write_string('ij') or { assert false }
+
+	str := s.dump_string_alloc(.active) or { assert false; return }
+	assert str == '> abcdefgh\nij'
+
+	s.cursor_absolute(2, 0)
+	r := s.prompt_click_move(Pin{ x: 1, y: u32(s.pages.active_start) + 1 })
+	assert r.right == 9
+	assert r.left == 0
+}
+
+fn test_screen_prompt_click_move_disabled_when_click_none() {
+	mut s := Screen.init(20, 5, 0)
+	defer { s.deinit() }
+	assert s.semantic_prompt.click == .none
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('> ') or { assert false }
+	s.cursor_set_semantic_content_input(true)
+	s.test_write_string('hello') or { assert false }
+	s.cursor_absolute(2, 0)
+	r := s.prompt_click_move(Pin{ x: 4, y: u32(s.pages.active_start) })
+	assert r.right == 0
+	assert r.left == 0
+}
+
+fn test_screen_prompt_click_move_line_left_basic() {
+	mut s := pcm_setup()
+	defer { s.deinit() }
+	s.cursor_absolute(6, 0)
+	r := s.prompt_click_move(Pin{ x: 2, y: u32(s.pages.active_start) })
+	assert r.left == 4
+	assert r.right == 0
+}
+
+fn test_screen_prompt_click_move_left_skips_non_input() {
+	mut s := Screen.init(20, 5, 0)
+	defer { s.deinit() }
+	s.semantic_prompt.click = .cl_line
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('> ') or { assert false }
+	s.cursor_set_semantic_content_input(true)
+	s.test_write_string('h') or { assert false }
+	s.cursor_set_semantic_content_output()
+	s.test_write_string('X') or { assert false }
+	s.cursor_set_semantic_content_input(true)
+	s.test_write_string('llo') or { assert false }
+	s.cursor_absolute(6, 0)
+	r := s.prompt_click_move(Pin{ x: 2, y: u32(s.pages.active_start) })
+	assert r.left == 3
+	assert r.right == 0
+}
+
+fn test_screen_prompt_click_move_left_soft_wrapped() {
+	mut s := Screen.init(10, 5, 0)
+	defer { s.deinit() }
+	s.semantic_prompt.click = .cl_line
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('> ') or { assert false }
+	s.cursor_set_semantic_content_input(true)
+	s.test_write_string('abcdefgh') or { assert false }
+	s.test_write_string('ij') or { assert false }
+
+	str := s.dump_string_alloc(.active) or { assert false; return }
+	assert str == '> abcdefgh\nij'
+
+	s.cursor_absolute(1, 1)
+	r := s.prompt_click_move(Pin{ x: 2, y: u32(s.pages.active_start) })
+	assert r.left == 9
+	assert r.right == 0
+}
+
+fn test_screen_prompt_click_move_right_of_input_same_line() {
+	mut s := pcm_setup()
+	defer { s.deinit() }
+	s.cursor_absolute(2, 0)
+	r := s.prompt_click_move(Pin{ x: 15, y: u32(s.pages.active_start) })
+	assert r.right == 5
+	assert r.left == 0
+}
+
+fn test_screen_prompt_click_move_right_of_input_cursor_at_end() {
+	mut s := pcm_setup()
+	defer { s.deinit() }
+	// Cursor is already at column 7 (one past 'o') after writing.
+	r := s.prompt_click_move(Pin{ x: 15, y: u32(s.pages.active_start) })
+	assert r.right == 0
+	assert r.left == 0
+}
+
+fn test_screen_prompt_click_move_right_of_input_lower_line() {
+	mut s := pcm_setup()
+	defer { s.deinit() }
+	s.cursor_absolute(2, 0)
+	r := s.prompt_click_move(Pin{ x: 5, y: u32(s.pages.active_start) + 1 })
+	assert r.right == 5
+	assert r.left == 0
+}
+
+fn test_screen_prompt_click_move_right_of_input_cursor_at_end_lower_line() {
+	mut s := pcm_setup()
+	defer { s.deinit() }
+	r := s.prompt_click_move(Pin{ x: 5, y: u32(s.pages.active_start) + 1 })
+	assert r.right == 0
+	assert r.left == 0
+}
+
+fn test_screen_prompt_click_move_right_of_input_cursor_on_last_char() {
+	mut s := pcm_setup()
+	defer { s.deinit() }
+	s.cursor_absolute(6, 0)
+	r := s.prompt_click_move(Pin{ x: 15, y: u32(s.pages.active_start) })
+	assert r.right == 1
+	assert r.left == 0
+}

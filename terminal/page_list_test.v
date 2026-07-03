@@ -2122,3 +2122,2666 @@ fn test_page_node_list_pop() {
 	assert list.last == none
 }
 
+// ============================================================
+// Newly translated tests from Ghostty PageList.zig
+// ============================================================
+
+fn test_page_list_point_from_pin_active_from_prior_page() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	// Grow so we take up at least 5 pages.
+	cap := initial_capacity(80)
+	s.grow_rows(usize(cap.rows) * 5)
+
+	last := s.pages.last or {
+		assert false, 'no last page'
+		return
+	}
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+
+	// Pin in the active (last) page.
+	pt := s.point_from_pin(.active, PagePin{ node: last, y: 0, x: 2 }) or {
+		assert false, 'point_from_pin failed'
+		return
+	}
+	assert pt.x == 2
+	assert pt.y == 0
+
+	// A pin in a prior (first) page is not in the active area.
+	if _ := s.point_from_pin(.active, PagePin{ node: first, y: 0, x: 0 }) {
+		assert false, 'expected point_from_pin to return none for prior page'
+	}
+}
+
+fn test_page_list_scroll_delta_row_back_without_space_preserves_active() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	s.scroll(PageScrollDeltaRow{ delta: -1 })
+
+	pc := s.get_cell(.viewport, 0, 0) or {
+		assert false, 'get_cell failed'
+		return
+	}
+	sp := pc.screen_point()
+	assert sp.x == 0
+	assert sp.y == 0
+
+	assert s.viewport == .active
+
+	sb := s.scrollbar()
+	assert sb.total == s.total_rows
+	assert sb.offset == s.total_rows - usize(s.rows)
+	assert sb.len == usize(s.rows)
+}
+
+fn test_page_list_scroll_to_row_with_cache_fast_path_down() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	s.grow_rows(50)
+
+	s.scroll(PageScrollRow{ n: 10 })
+	assert s.viewport == .pin
+	sb1 := s.scrollbar()
+	assert sb1.total == s.total_rows
+	assert sb1.offset == 10
+	assert sb1.len == usize(s.rows)
+
+	pc1 := s.get_cell(.viewport, 0, 0) or {
+		assert false, 'get_cell failed'
+		return
+	}
+	sp1 := pc1.screen_point()
+	assert sp1.x == 0
+	assert sp1.y == 10
+
+	// Cache should be populated.
+	off1 := s.viewport_pin_row_offset or {
+		assert false, 'viewport_pin_row_offset not cached'
+		return
+	}
+	assert off1 == 10
+
+	// Scroll down to a different row - fast path.
+	s.scroll(PageScrollRow{ n: 20 })
+	assert s.viewport == .pin
+	sb2 := s.scrollbar()
+	assert sb2.offset == 20
+
+	pc2 := s.get_cell(.viewport, 0, 0) or {
+		assert false, 'get_cell failed'
+		return
+	}
+	sp2 := pc2.screen_point()
+	assert sp2.y == 20
+
+	s.grow_rows(10)
+	pc3 := s.get_cell(.viewport, 0, 0) or {
+		assert false, 'get_cell failed'
+		return
+	}
+	sp3 := pc3.screen_point()
+	assert sp3.y == 20
+
+	sb3 := s.scrollbar()
+	assert sb3.offset == 20
+}
+
+fn test_page_list_scroll_to_row_with_cache_fast_path_up() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	s.grow_rows(50)
+
+	s.scroll(PageScrollRow{ n: 30 })
+	assert s.viewport == .pin
+	sb1 := s.scrollbar()
+	assert sb1.offset == 30
+
+	pc1 := s.get_cell(.viewport, 0, 0) or {
+		assert false, 'get_cell failed'
+		return
+	}
+	assert pc1.screen_point().y == 30
+
+	off1 := s.viewport_pin_row_offset or {
+		assert false, 'viewport_pin_row_offset not cached'
+		return
+	}
+	assert off1 == 30
+
+	// Scroll up to a different row - fast path.
+	s.scroll(PageScrollRow{ n: 15 })
+	assert s.viewport == .pin
+	sb2 := s.scrollbar()
+	assert sb2.offset == 15
+
+	pc2 := s.get_cell(.viewport, 0, 0) or {
+		assert false, 'get_cell failed'
+		return
+	}
+	assert pc2.screen_point().y == 15
+
+	s.grow_rows(10)
+	pc3 := s.get_cell(.viewport, 0, 0) or {
+		assert false, 'get_cell failed'
+		return
+	}
+	assert pc3.screen_point().y == 15
+
+	sb3 := s.scrollbar()
+	assert sb3.offset == 15
+}
+
+fn test_page_list_reset_moves_tracked_pins_and_marks_garbage() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	p := s.get_pin(.active, 42, 12) or {
+		assert false, 'get_pin failed'
+		return
+	}
+	tp := s.track_pin(p)
+
+	s.reset()
+
+	// Our added pin should now be garbage.
+	assert tp.garbage
+
+	// Viewport pin should not be garbage because it makes sense.
+	assert !s.viewport_pin.garbage
+
+	s.untrack_pin(tp)
+}
+
+fn test_page_list_clears_history() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	s.grow_rows(30)
+	s.reset()
+	assert s.viewport == .active
+	assert s.pages.first != none
+	assert s.total_rows == usize(s.rows)
+
+	// Active area should be the top.
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	tl := s.get_top_left(.active)
+	assert voidptr(tl.node) == voidptr(first)
+	assert tl.y == 0
+	assert tl.x == 0
+}
+
+// ============================================================
+// erase_row_bounded tests
+// ============================================================
+
+fn test_page_list_erase_row_bounded_less_than_full_row() {
+	mut s := PageList.init(80, 10, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	p_top := s.track_pin(s.get_pin(.active, 0, 5) or {
+		assert false, 'get_pin failed'
+		return
+	})
+	p_bot := s.track_pin(s.get_pin(.active, 0, 8) or {
+		assert false, 'get_pin failed'
+		return
+	})
+	p_out := s.track_pin(s.get_pin(.active, 0, 9) or {
+		assert false, 'get_pin failed'
+		return
+	})
+
+	// Erase only a few rows in our active.
+	erase_pin := s.get_pin(.active, 0, 5) or {
+		assert false, 'get_pin failed'
+		return
+	}
+	s.erase_row_bounded(erase_pin, 3)
+	assert s.total_rows == usize(s.rows)
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(p_top.node) == voidptr(first)
+	assert p_top.y == 4
+	assert p_top.x == 0
+
+	assert voidptr(p_bot.node) == voidptr(first)
+	assert p_bot.y == 7
+	assert p_bot.x == 0
+
+	assert voidptr(p_out.node) == voidptr(first)
+	assert p_out.y == 9
+	assert p_out.x == 0
+
+	s.untrack_pin(p_top)
+	s.untrack_pin(p_bot)
+	s.untrack_pin(p_out)
+}
+
+fn test_page_list_erase_row_bounded_with_pin_at_top() {
+	mut s := PageList.init(80, 10, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	p_top := s.track_pin(s.get_pin(.active, 5, 0) or {
+		assert false, 'get_pin failed'
+		return
+	})
+
+	erase_pin := s.get_pin(.active, 0, 0) or {
+		assert false, 'get_pin failed'
+		return
+	}
+	s.erase_row_bounded(erase_pin, 3)
+	assert s.total_rows == usize(s.rows)
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(p_top.node) == voidptr(first)
+	assert p_top.y == 0
+	assert p_top.x == 0
+
+	s.untrack_pin(p_top)
+}
+
+fn test_page_list_erase_row_bounded_full_rows_single_page() {
+	mut s := PageList.init(80, 10, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	p_in := s.track_pin(s.get_pin(.active, 0, 7) or {
+		assert false, 'get_pin failed'
+		return
+	})
+	p_out := s.track_pin(s.get_pin(.active, 0, 9) or {
+		assert false, 'get_pin failed'
+		return
+	})
+
+	erase_pin := s.get_pin(.active, 0, 5) or {
+		assert false, 'get_pin failed'
+		return
+	}
+	s.erase_row_bounded(erase_pin, 10)
+	assert s.total_rows == usize(s.rows)
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(p_in.node) == voidptr(first)
+	assert p_in.y == 6
+	assert p_in.x == 0
+
+	assert voidptr(p_out.node) == voidptr(first)
+	assert p_out.y == 8
+	assert p_out.x == 0
+
+	s.untrack_pin(p_in)
+	s.untrack_pin(p_out)
+}
+
+fn test_page_list_erase_row_bounded_full_rows_two_pages() {
+	mut s := PageList.init(80, 10, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	// Grow to two pages so our active area straddles.
+	first_page := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	remaining := usize(first_page.data.capacity.rows) - usize(first_page.data.size.rows)
+	s.grow_rows(remaining)
+	s.grow_rows(5)
+	assert s.total_pages() == 2
+
+	last := s.pages.last or {
+		assert false, 'no last page'
+		return
+	}
+	assert last.data.size.rows == 5
+	prev := last.prev or {
+		assert false, 'no prev page'
+		return
+	}
+
+	// Pins
+	p_first := s.track_pin(s.get_pin(.active, 0, 4) or {
+		assert false, 'get_pin failed'
+		return
+	})
+	p_first_out := s.track_pin(s.get_pin(.active, 0, 3) or {
+		assert false, 'get_pin failed'
+		return
+	})
+	p_in := s.track_pin(s.get_pin(.active, 0, 8) or {
+		assert false, 'get_pin failed'
+		return
+	})
+	p_out := s.track_pin(s.get_pin(.active, 0, 9) or {
+		assert false, 'get_pin failed'
+		return
+	})
+
+	// Verify initial pin placement.
+	assert voidptr(p_first.node) == voidptr(prev)
+	assert p_first.y == u16(prev.data.size.rows - 1)
+	assert voidptr(p_first_out.node) == voidptr(prev)
+	assert p_first_out.y == u16(prev.data.size.rows - 2)
+	assert voidptr(p_in.node) == voidptr(last)
+	assert p_in.y == 3
+	assert voidptr(p_out.node) == voidptr(last)
+	assert p_out.y == 4
+
+	// Erase a few rows in our active starting at active y=4.
+	erase_pin := s.get_pin(.active, 0, 4) or {
+		assert false, 'get_pin failed'
+		return
+	}
+	s.erase_row_bounded(erase_pin, 4)
+
+	// In-page pin in first page is shifted up by one.
+	assert voidptr(p_first.node) == voidptr(prev)
+	assert p_first.y == u16(prev.data.size.rows - 2)
+	assert p_first.x == 0
+
+	// Out pin in first page should not be shifted.
+	assert voidptr(p_first_out.node) == voidptr(prev)
+	assert p_first_out.y == u16(prev.data.size.rows - 2)
+	assert p_first_out.x == 0
+
+	// In-page pin in last page is shifted.
+	assert voidptr(p_in.node) == voidptr(last)
+	assert p_in.y == 2
+	assert p_in.x == 0
+
+	// Out pin in last page is not shifted.
+	assert voidptr(p_out.node) == voidptr(last)
+	assert p_out.y == 4
+	assert p_out.x == 0
+
+	s.untrack_pin(p_first)
+	s.untrack_pin(p_first_out)
+	s.untrack_pin(p_in)
+	s.untrack_pin(p_out)
+}
+
+// ============================================================
+// resize (no reflow) tests
+// ============================================================
+
+fn test_page_list_resize_no_reflow_one_row_precise() {
+	mut s := PageList.init(10, 10, usize(0))
+	defer { s.deinit() }
+	assert s.total_rows == 10
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	// Write into all rows so we don't get trim behavior.
+	for y in u16(0) .. 10 {
+		page.rows[int(y)].cells[0] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(`A`)
+		}
+	}
+
+	s.resize(PageResizeOpts{ rows: 1, reflow: false })
+	assert s.rows == 1
+	assert s.total_rows == 10
+
+	pc := s.get_cell(.active, 0, 0) or {
+		assert false, 'get_cell failed'
+		return
+	}
+	sp := pc.screen_point()
+	assert sp.x == 0
+	assert sp.y == 9
+}
+
+fn test_page_list_resize_no_reflow_less_rows_cursor_on_bottom() {
+	mut s := PageList.init(10, 10, usize(0))
+	defer { s.deinit() }
+	assert s.total_rows == 10
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	for y in u16(0) .. 10 {
+		page.rows[int(y)].cells[0] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(y)
+		}
+	}
+
+	p := s.track_pin(s.get_pin(.active, 0, 9) or {
+		assert false, 'get_pin failed'
+		return
+	})
+
+	s.resize(PageResizeOpts{ rows: 5, reflow: false })
+	assert s.rows == 5
+	assert s.total_rows == 10
+
+	// Our cursor should move since it's in the scrollback.
+	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+		assert false, 'point_from_pin failed'
+		return
+	}
+	assert cursor.x == 0
+	assert cursor.y == 4
+
+	pc := s.get_cell(.active, 0, 0) or {
+		assert false, 'get_cell failed'
+		return
+	}
+	sp := pc.screen_point()
+	assert sp.x == 0
+	assert sp.y == 5
+
+	s.untrack_pin(p)
+}
+
+fn test_page_list_resize_no_reflow_less_rows_cursor_in_scrollback() {
+	mut s := PageList.init(10, 10, usize(0))
+	defer { s.deinit() }
+	assert s.total_rows == 10
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	for y in u16(0) .. 10 {
+		page.rows[int(y)].cells[0] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(y)
+		}
+	}
+
+	p := s.track_pin(s.get_pin(.active, 0, 2) or {
+		assert false, 'get_pin failed'
+		return
+	})
+
+	s.resize(PageResizeOpts{ rows: 5, reflow: false })
+	assert s.rows == 5
+	assert s.total_rows == 10
+
+	// Our cursor should now be in scrollback (not active).
+	if _ := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) {
+		assert false, 'expected pin to be outside active'
+	}
+	sp_pin := s.point_from_pin(.screen, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+		assert false, 'point_from_pin screen failed'
+		return
+	}
+	assert sp_pin.x == 0
+	assert sp_pin.y == 2
+
+	pc := s.get_cell(.active, 0, 0) or {
+		assert false, 'get_cell failed'
+		return
+	}
+	sp := pc.screen_point()
+	assert sp.x == 0
+	assert sp.y == 5
+
+	s.untrack_pin(p)
+}
+
+fn test_page_list_resize_no_reflow_more_rows_contains_viewport() {
+	mut s := PageList.init(5, 5, usize(1))
+	defer { s.deinit() }
+
+	// Make it so we have scrollback.
+	s.grow() or {}
+	assert s.rows == 5
+	assert s.total_rows == 6
+
+	// Set viewport above active by scrolling up one.
+	s.scroll(PageScrollDeltaRow{ delta: -1 })
+	assert s.viewport == .top
+
+	s.resize(PageResizeOpts{ rows: 7, reflow: false })
+	assert s.rows == 7
+	assert s.total_rows == 7
+	assert s.viewport == .top
+}
+
+fn test_page_list_resize_no_reflow_more_rows_extends_blank_lines() {
+	mut s := PageList.init(10, 3, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+
+	// Write codepoint into first line.
+	page.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`A`)
+	}
+	// Fill remaining lines with a background color (still blank).
+	for y in u16(1) .. 3 {
+		page.rows[int(y)].cells[0] = CellData{
+			content_tag: .bg_color_rgb
+			color_rgb_r: 0xFF
+		}
+	}
+
+	s.resize(PageResizeOpts{ rows: 7, reflow: false })
+	assert s.rows == 7
+	assert s.total_rows == 7
+
+	pc := s.get_cell(.active, 0, 0) or {
+		assert false, 'get_cell failed'
+		return
+	}
+	sp := pc.screen_point()
+	assert sp.x == 0
+	assert sp.y == 0
+}
+
+fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines() {
+	mut s := PageList.init(10, 5, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+
+	// Write codepoint into first line.
+	page.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`A`)
+	}
+	// Fill remaining lines with a background color (still blank).
+	for y in u16(1) .. 5 {
+		page.rows[int(y)].cells[0] = CellData{
+			content_tag: .bg_color_rgb
+			color_rgb_r: 0xFF
+		}
+	}
+
+	p := s.track_pin(s.get_pin(.active, 0, 0) or {
+		assert false, 'get_pin failed'
+		return
+	})
+
+	s.resize(PageResizeOpts{ rows: 2, reflow: false })
+	assert s.rows == 2
+	assert s.total_rows == 2
+
+	// Cursor should not move since we trimmed.
+	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+		assert false, 'point_from_pin failed'
+		return
+	}
+	assert cursor.x == 0
+	assert cursor.y == 0
+
+	pc := s.get_cell(.active, 0, 0) or {
+		assert false, 'get_cell failed'
+		return
+	}
+	sp := pc.screen_point()
+	assert sp.x == 0
+	assert sp.y == 0
+
+	s.untrack_pin(p)
+}
+
+fn test_page_list_resize_no_reflow_less_cols_clears_graphemes() {
+	mut s := PageList.init(10, 10, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+
+	// Add a grapheme at (9, 0).
+	page.rows[0].cells[9] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`A`)
+	}
+	page.append_grapheme(0, 9, u32(`A`))
+	assert page.grapheme_count() == 1
+
+	s.resize(PageResizeOpts{ cols: 5, reflow: false })
+	assert s.cols == 5
+	assert s.total_rows == 10
+
+	mut it := s.page_iterator(.right_down, .screen, none)
+	for {
+		chunk := it.next() or { break }
+		assert chunk.node.data.grapheme_count() == 0
+	}
+}
+
+fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines_cursor_in_blank_line() {
+	mut s := PageList.init(10, 5, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+
+	page.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`A`)
+	}
+	for y in u16(1) .. 5 {
+		page.rows[int(y)].cells[0] = CellData{
+			content_tag: .bg_color_rgb
+			color_rgb_r: 0xFF
+		}
+	}
+
+	// Tracked pin in a blank line.
+	p := s.track_pin(s.get_pin(.active, 0, 3) or {
+		assert false, 'get_pin failed'
+		return
+	})
+
+	s.resize(PageResizeOpts{ rows: 2, reflow: false })
+	assert s.rows == 2
+	assert s.total_rows == 4
+
+	// Our cursor should not move since we trimmed.
+	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+		assert false, 'point_from_pin failed'
+		return
+	}
+	assert cursor.x == 0
+	assert cursor.y == 1
+
+	s.untrack_pin(p)
+}
+
+fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines_erases_pages() {
+	mut s := PageList.init(100, 5, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+
+	// Resize to take up two pages.
+	rows := u16(int(first.data.capacity.rows) + 10)
+	s.resize(PageResizeOpts{ rows: rows, reflow: false })
+	assert s.total_pages() == 2
+
+	// Write codepoint into first line.
+	mut page := &first.data
+	page.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`A`)
+	}
+
+	// Resize down. Every row except the first is blank so we should
+	// erase the second page.
+	s.resize(PageResizeOpts{ rows: 5, reflow: false })
+	assert s.rows == 5
+	assert s.total_rows == 5
+	assert s.total_pages() == 1
+}
+
+fn test_page_list_resize_no_reflow_more_cols_with_spacer_head() {
+	mut s := PageList.init(2, 3, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+
+	// Row 0: 'x' then a spacer_head (wrapped line).
+	page.rows[0].wrap = true
+	page.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`x`)
+	}
+	page.rows[0].cells[1] = CellData{
+		content_tag: .codepoint
+		codepoint: 0
+		wide: .spacer_head
+	}
+	// Row 1: wide emoji + spacer_tail.
+	page.rows[1].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(0x1F600)
+		wide: .wide
+	}
+	page.rows[1].cells[1] = CellData{
+		content_tag: .codepoint
+		codepoint: 0
+		wide: .spacer_tail
+	}
+
+	s.resize(PageResizeOpts{ cols: 3, reflow: false })
+	assert s.cols == 3
+	assert s.total_rows == 3
+
+	np := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut new_page := &np.data
+	// Row 0 col 0: 'x' narrow.
+	assert new_page.rows[0].cells[0].codepoint == u32(`x`)
+	assert new_page.rows[0].cells[0].wide == .narrow
+	// Row 0 col 1: the spacer head should now be narrow/empty.
+	assert new_page.rows[0].cells[1].codepoint == 0
+	assert new_page.rows[0].cells[1].wide == .narrow
+	// Row 0 col 2: blank narrow.
+	assert new_page.rows[0].cells[2].codepoint == 0
+	assert new_page.rows[0].cells[2].wide == .narrow
+}
+
+fn test_page_list_resize_no_reflow_more_cols_forces_smaller_cap() {
+	cap := initial_capacity(100)
+	cap2 := initial_capacity(500)
+	assert cap2.cols == 500
+	assert cap2.rows < cap.rows
+
+	mut s := PageList.init(cap.cols, u16(cap.rows), usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(first) == voidptr(s.pages.last or { return })
+	mut page := &first.data
+	for y in 0 .. int(s.rows) {
+		for x in 0 .. int(s.cols) {
+			page.rows[y].cells[x] = CellData{
+				content_tag: .codepoint
+				codepoint: u32(`A`)
+			}
+		}
+	}
+
+	rows := s.total_rows
+	s.resize(PageResizeOpts{ cols: cap2.cols, reflow: false })
+	assert s.total_rows == rows
+
+	mut it := s.row_iterator(.right_down, .screen, none)
+	for {
+		row := it.next() or { break }
+		mut rp := &row.node.data
+		assert rp.size.cols == cap2.cols
+		assert rp.rows[int(row.y)].cells[0].codepoint == u32(`A`)
+	}
+}
+
+fn test_page_list_resize_no_reflow_more_rows_adds_blank_rows_if_cursor_at_bottom() {
+	mut s := PageList.init(5, 3, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	// Grow to 5 total rows (3 active + 2 scrollback).
+	s.grow_rows(2)
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(first) == voidptr(s.pages.last or { return })
+	mut page := &first.data
+	for y in 0 .. int(s.total_rows) {
+		page.rows[y].cells[0] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(y)
+		}
+	}
+
+	// Active should be on row 3 (screen y=2).
+	pc0 := s.get_cell(.active, 0, 0) or {
+		assert false, 'get_cell failed'
+		return
+	}
+	assert pc0.screen_point().y == 2
+
+	// Tracked pin at cursor position (near bottom of active).
+	p := s.track_pin(s.get_pin(.active, 0, u16(s.rows - 2)) or {
+		assert false, 'get_pin failed'
+		return
+	})
+	original_cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+		assert false, 'point_from_pin failed'
+		return
+	}
+
+	// Resize with cursor preserved.
+	s.resize(PageResizeOpts{
+		rows: 10
+		reflow: false
+		cursor: PageResizeCursor{
+			x: 0
+			y: u16(s.rows - 2)
+		}
+	})
+	assert s.cols == 5
+	assert s.rows == 10
+
+	// Our cursor should not change.
+	new_cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+		assert false, 'point_from_pin failed'
+		return
+	}
+	assert new_cursor.x == original_cursor.x
+	assert new_cursor.y == original_cursor.y
+
+	// 12 = 10 active + 2 scrollback preserved by the cursor.
+	assert s.total_rows == 12
+
+	pc := s.get_cell(.active, 0, 0) or {
+		assert false, 'get_cell failed'
+		return
+	}
+	assert pc.screen_point().y == 2
+
+	s.untrack_pin(p)
+}
+
+// ============================================================
+// resize reflow tests
+// ============================================================
+
+fn test_page_list_resize_reflow_more_cols_no_wrapped_rows() {
+	mut s := PageList.init(5, 3, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	for y in 0 .. int(s.rows) {
+		for x in 0 .. int(s.cols) {
+			page.rows[y].cells[x] = CellData{
+				content_tag: .codepoint
+				codepoint: u32(`A`)
+			}
+		}
+	}
+
+	s.resize(PageResizeOpts{ cols: 10, reflow: true })
+	assert s.cols == 10
+	assert s.total_rows == 3
+
+	mut it := s.row_iterator(.right_down, .screen, none)
+	for {
+		row := it.next() or { break }
+		mut rp := &row.node.data
+		assert rp.size.cols == 10
+		assert rp.rows[int(row.y)].cells[0].codepoint == u32(`A`)
+	}
+}
+
+fn test_page_list_resize_reflow_more_cols_wrapped_rows() {
+	mut s := PageList.init(2, 4, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	for y in 0 .. int(s.rows) {
+		if y % 2 == 0 {
+			page.rows[y].wrap = true
+		} else {
+			page.rows[y].wrap_continuation = true
+		}
+		for x in 0 .. int(s.cols) {
+			page.rows[y].cells[x] = CellData{
+				content_tag: .codepoint
+				codepoint: u32(`A`)
+			}
+		}
+	}
+
+	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	assert s.cols == 4
+	assert s.total_rows == 4
+
+	// Active should still be on top.
+	pc := s.get_cell(.active, 0, 0) or {
+		assert false, 'get_cell failed'
+		return
+	}
+	sp := pc.screen_point()
+	assert sp.x == 0
+	assert sp.y == 0
+
+	// First row should be unwrapped and hold the reflowed content.
+	mut it := s.row_iterator(.right_down, .screen, none)
+	row := it.next() or {
+		assert false, 'no row'
+		return
+	}
+	mut rp := &row.node.data
+	rd := rp.rows[int(row.y)]
+	assert !rd.wrap
+	assert rp.size.cols == 4
+	assert rd.cells[0].codepoint == u32(`A`)
+	assert rd.cells[2].codepoint == u32(`A`)
+}
+
+fn test_page_list_resize_reflow_invalidates_viewport_offset_cache() {
+	mut s := PageList.init(2, 4, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	s.grow_rows(20)
+
+	last := s.pages.last or {
+		assert false, 'no last page'
+		return
+	}
+	mut page := &last.data
+	for y in 0 .. int(s.rows) {
+		if y % 2 == 0 {
+			page.rows[y].wrap = true
+		} else {
+			page.rows[y].wrap_continuation = true
+		}
+		for x in 0 .. int(s.cols) {
+			page.rows[y].cells[x] = CellData{
+				content_tag: .codepoint
+				codepoint: u32(`A`)
+			}
+		}
+	}
+
+	// Scroll to a pinned viewport in history.
+	pin := s.get_pin(.screen, 0, 10) or {
+		assert false, 'get_pin failed'
+		return
+	}
+	s.scroll(PageScrollPin{ pin: pin })
+	assert s.viewport == .pin
+	sb1 := s.scrollbar()
+	assert sb1.total == s.total_rows
+	assert sb1.offset == 10
+	assert sb1.len == usize(s.rows)
+
+	// Resize with reflow - unwrapping rows changes total_rows.
+	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	assert s.cols == 4
+
+	// Verify the scrollbar cache was invalidated during reflow.
+	sb2 := s.scrollbar()
+	assert sb2.total == s.total_rows
+	assert sb2.offset == 5
+	assert sb2.len == usize(s.rows)
+}
+
+fn test_page_list_resize_reflow_more_cols_creates_multiple_pages() {
+	// Find a wide col count whose capacity has < 100 rows.
+	mut current := u16(100)
+	mut cap := initial_capacity(current)
+	for cap.rows >= 100 {
+		current += 100
+		cap = initial_capacity(current)
+	}
+
+	mut s := PageList.init(cap.cols, u16(cap.rows), usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(first) == voidptr(s.pages.last or { return })
+	mut page := &first.data
+	// Wrap every other row so every line is wrapped for reflow.
+	for y in 0 .. int(s.rows) {
+		if y % 2 == 0 {
+			page.rows[y].wrap = true
+		} else {
+			page.rows[y].wrap_continuation = true
+		}
+		page.rows[y].cells[0] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(`A`)
+		}
+	}
+
+	newcap := initial_capacity(cap.cols + 100)
+	assert newcap.rows < cap.rows
+	s.resize(PageResizeOpts{ cols: newcap.cols, reflow: true })
+	assert s.cols == newcap.cols
+	assert s.total_rows == cap.rows
+
+	mut count := 0
+	mut it := s.pages.first
+	for {
+		p := it or { break }
+		count += 1
+		assert p.data.capacity.cols == newcap.cols
+		assert p.data.capacity.rows == newcap.rows
+		it = p.next
+	}
+	// We should have created at least one additional page.
+	assert count > 1
+}
+
+fn test_page_list_resize_grow_cols_with_unwrap_fixes_viewport_pin() {
+	// Regression: after resize/reflow, the viewport pin can end up where
+	// pin.y + rows > total_rows, causing get_bottom_right to fail.
+	mut s := PageList.init(2, 10, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	s.grow_rows(30)
+	assert s.total_rows == 40
+
+	// Fill all rows with wrapped content.
+	mut pit := s.page_iterator(.right_down, .screen, none)
+	for {
+		chunk := pit.next() or { break }
+		mut page := &chunk.node.data
+		for y in int(chunk.start) .. int(chunk.end) {
+			if y % 2 == 0 {
+				page.rows[y].wrap = true
+			} else {
+				page.rows[y].wrap_continuation = true
+			}
+			for x in 0 .. int(s.cols) {
+				page.rows[y].cells[x] = CellData{
+					content_tag: .codepoint
+					codepoint: u32(`A`)
+				}
+			}
+		}
+	}
+
+	// Pin viewport at row 28 (in history).
+	pin := s.get_pin(.screen, 0, 28) or {
+		assert false, 'get_pin failed'
+		return
+	}
+	s.scroll(PageScrollPin{ pin: pin })
+	assert s.viewport == .pin
+	if _ := s.get_bottom_right(.viewport) {
+		// ok
+	} else {
+		assert false, 'get_bottom_right returned none before resize'
+	}
+
+	// Resize with reflow: unwraps rows, reducing total_rows.
+	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	assert s.cols == 4
+	assert s.total_rows < 40
+
+	// Used to fail here; test that we can still get the bottom right.
+	if _ := s.get_bottom_right(.viewport) {
+		// ok
+	} else {
+		assert false, 'get_bottom_right returned none after resize'
+	}
+}
+
+fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row() {
+	mut s := PageList.init(2, 4, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	// Row 0: wrapped.
+	page.rows[0].wrap = true
+	for x in 0 .. int(s.cols) {
+		page.rows[0].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+		}
+	}
+	// Row 1: wrap continuation.
+	page.rows[1].wrap_continuation = true
+	for x in 0 .. int(s.cols) {
+		page.rows[1].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+		}
+	}
+
+	p := s.track_pin(s.get_pin(.active, 1, 1) or {
+		assert false, 'get_pin failed'
+		return
+	})
+
+	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	assert s.cols == 4
+	assert s.total_rows == 4
+
+	// Cursor should move to the first row (unwrapped).
+	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+		assert false, 'point_from_pin failed'
+		return
+	}
+	assert cursor.x == 3
+	assert cursor.y == 0
+
+	s.untrack_pin(p)
+}
+
+fn test_page_list_resize_reflow_more_cols_cursor_in_not_wrapped_row() {
+	mut s := PageList.init(2, 4, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	page.rows[0].wrap = true
+	for x in 0 .. int(s.cols) {
+		page.rows[0].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+		}
+	}
+	page.rows[1].wrap_continuation = true
+	for x in 0 .. int(s.cols) {
+		page.rows[1].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+		}
+	}
+
+	p := s.track_pin(s.get_pin(.active, 1, 0) or {
+		assert false, 'get_pin failed'
+		return
+	})
+
+	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	assert s.cols == 4
+	assert s.total_rows == 4
+
+	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+		assert false, 'point_from_pin failed'
+		return
+	}
+	assert cursor.x == 1
+	assert cursor.y == 0
+
+	s.untrack_pin(p)
+}
+
+fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row_that_isnt_unwrapped() {
+	mut s := PageList.init(2, 4, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	// Row 0: wrap.
+	page.rows[0].wrap = true
+	for x in 0 .. int(s.cols) {
+		page.rows[0].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+		}
+	}
+	// Row 1: wrap + wrap_continuation.
+	page.rows[1].wrap = true
+	page.rows[1].wrap_continuation = true
+	for x in 0 .. int(s.cols) {
+		page.rows[1].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+		}
+	}
+	// Row 2: wrap_continuation.
+	page.rows[2].wrap_continuation = true
+	for x in 0 .. int(s.cols) {
+		page.rows[2].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+		}
+	}
+
+	p := s.track_pin(s.get_pin(.active, 1, 2) or {
+		assert false, 'get_pin failed'
+		return
+	})
+
+	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	assert s.cols == 4
+	assert s.total_rows == 4
+
+	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+		assert false, 'point_from_pin failed'
+		return
+	}
+	assert cursor.x == 1
+	assert cursor.y == 1
+
+	s.untrack_pin(p)
+}
+
+fn test_page_list_resize_reflow_more_cols_no_reflow_preserves_semantic_prompt() {
+	mut s := PageList.init(2, 4, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	page.rows[1].semantic_prompt = .prompt
+
+	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	assert s.cols == 4
+	assert s.total_rows == 4
+
+	np := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(np) == voidptr(s.pages.last or { return })
+	mut new_page := &np.data
+	assert new_page.rows[1].semantic_prompt == .prompt
+}
+
+fn test_page_list_resize_reflow_less_cols_no_reflow_preserves_semantic_prompt() {
+	mut s := PageList.init(4, 4, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	page.rows[1].semantic_prompt = .prompt
+	for x in 0 .. int(s.cols) {
+		page.rows[1].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+		}
+	}
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	assert s.cols == 2
+	assert s.total_rows == 4
+
+	assert voidptr(s.pages.first or { return }) == voidptr(s.pages.last or { return })
+
+	p1 := s.get_pin(.active, 0, 1) or {
+		assert false, 'get_pin failed'
+		return
+	}
+	assert p1.row_data().wrap
+	assert p1.row_data().semantic_prompt == .prompt
+
+	p2 := s.get_pin(.active, 0, 2) or {
+		assert false, 'get_pin failed'
+		return
+	}
+	assert p2.row_data().semantic_prompt == .prompt
+}
+
+fn test_page_list_resize_reflow_less_cols_no_reflow_preserves_semantic_prompt_on_first_line() {
+	mut s := PageList.init(4, 4, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	page.rows[0].semantic_prompt = .prompt
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	assert s.cols == 2
+	assert s.total_rows == 4
+
+	np := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(np) == voidptr(s.pages.last or { return })
+	mut new_page := &np.data
+	assert new_page.rows[0].semantic_prompt == .prompt
+}
+
+fn test_page_list_resize_reflow_less_cols_wrap_preserves_semantic_prompt() {
+	mut s := PageList.init(4, 4, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	page.rows[0].semantic_prompt = .prompt
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	assert s.cols == 2
+	assert s.total_rows == 4
+
+	np := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(np) == voidptr(s.pages.last or { return })
+	mut new_page := &np.data
+	assert new_page.rows[0].semantic_prompt == .prompt
+}
+
+fn test_page_list_resize_reflow_less_cols_no_wrapped_rows() {
+	mut s := PageList.init(10, 3, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	for y in 0 .. int(s.rows) {
+		for x in 0 .. 4 {
+			page.rows[y].cells[x] = CellData{
+				content_tag: .codepoint
+				codepoint: u32(x)
+			}
+		}
+	}
+
+	s.resize(PageResizeOpts{ cols: 5, reflow: true })
+	assert s.cols == 5
+	assert s.total_rows == 3
+
+	mut it := s.row_iterator(.right_down, .screen, none)
+	for {
+		row := it.next() or { break }
+		mut rp := &row.node.data
+		assert rp.size.cols == 5
+		for x in 0 .. 4 {
+			assert rp.rows[int(row.y)].cells[x].codepoint == u32(x)
+		}
+	}
+}
+
+fn test_page_list_resize_reflow_less_cols_wrapped_rows() {
+	mut s := PageList.init(4, 2, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	for y in 0 .. int(s.rows) {
+		for x in 0 .. int(s.cols) {
+			page.rows[y].cells[x] = CellData{
+				content_tag: .codepoint
+				codepoint: u32(x)
+			}
+		}
+	}
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	assert s.cols == 2
+	assert s.total_rows == 4
+
+	// Active moves due to scrollback.
+	pc := s.get_cell(.active, 0, 0) or {
+		assert false, 'get_cell failed'
+		return
+	}
+	assert pc.screen_point().y == 2
+
+	mut it := s.row_iterator(.right_down, .screen, none)
+	// Row 0: wrapped, cells[0]=0.
+	r0 := it.next() or {
+		assert false, 'no row'
+		return
+	}
+	assert r0.row_data().wrap
+	assert r0.node.data.rows[int(r0.y)].cells[0].codepoint == 0
+	// Row 1: not wrapped, cells[0]=2.
+	r1 := it.next() or {
+		assert false, 'no row'
+		return
+	}
+	assert !r1.row_data().wrap
+	assert r1.node.data.rows[int(r1.y)].cells[0].codepoint == 2
+	// Row 2: wrapped, cells[0]=0.
+	r2 := it.next() or {
+		assert false, 'no row'
+		return
+	}
+	assert r2.row_data().wrap
+	assert r2.node.data.rows[int(r2.y)].cells[0].codepoint == 0
+	// Row 3: not wrapped, cells[0]=2.
+	r3 := it.next() or {
+		assert false, 'no row'
+		return
+	}
+	assert !r3.row_data().wrap
+	assert r3.node.data.rows[int(r3.y)].cells[0].codepoint == 2
+}
+
+fn test_page_list_resize_reflow_less_cols_cursor_in_wrapped_row() {
+	mut s := PageList.init(4, 2, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	for y in 0 .. int(s.rows) {
+		for x in 0 .. int(s.cols) {
+			page.rows[y].cells[x] = CellData{
+				content_tag: .codepoint
+				codepoint: u32(x)
+			}
+		}
+	}
+
+	p := s.track_pin(s.get_pin(.active, 2, 1) or {
+		assert false, 'get_pin failed'
+		return
+	})
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	assert s.cols == 2
+	assert s.total_rows == 4
+
+	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+		assert false, 'point_from_pin failed'
+		return
+	}
+	assert cursor.x == 0
+	assert cursor.y == 1
+
+	s.untrack_pin(p)
+}
+
+fn reflow_cursor_cell_helper(init_cols u16, new_cols u16, pin_x u16, exp_x u32, exp_y u32) {
+	mut s := PageList.init(init_cols, 2, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	first := s.pages.first or { return }
+	mut page := &first.data
+	for y in 0 .. int(s.rows) {
+		for x in 0 .. 2 {
+			page.rows[y].cells[x] = CellData{
+				content_tag: .codepoint
+				codepoint: u32(x)
+			}
+		}
+	}
+
+	p := s.track_pin(s.get_pin(.active, pin_x, 0) or { return })
+
+	s.resize(PageResizeOpts{ cols: new_cols, reflow: true })
+	assert s.cols == new_cols
+	assert s.total_rows == 2
+
+	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+		assert false, 'point_from_pin failed'
+		return
+	}
+	assert cursor.x == exp_x
+	assert cursor.y == exp_y
+
+	s.untrack_pin(p)
+}
+
+fn test_page_list_resize_reflow_less_cols_cursor_in_unchanged_row() {
+	reflow_cursor_cell_helper(4, 2, 1, 1, 0)
+}
+
+fn test_page_list_resize_reflow_less_cols_cursor_in_blank_cell() {
+	reflow_cursor_cell_helper(6, 4, 2, 2, 0)
+}
+
+fn test_page_list_resize_reflow_less_cols_cursor_in_final_blank_cell() {
+	reflow_cursor_cell_helper(6, 4, 3, 3, 0)
+}
+
+fn test_page_list_resize_reflow_less_cols_cursor_in_wrapped_blank_cell() {
+	reflow_cursor_cell_helper(6, 4, 5, 3, 0)
+}
+
+fn test_page_list_resize_reflow_less_cols_blank_lines() {
+	mut s := PageList.init(4, 3, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	for x in 0 .. 4 {
+		page.rows[0].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+		}
+	}
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	assert s.cols == 2
+	assert s.total_rows == 3
+
+	mut it := s.row_iterator(.right_down, .active, none)
+	r0 := it.next() or {
+		assert false, 'no row'
+		return
+	}
+	assert r0.row_data().wrap
+	assert r0.node.data.rows[int(r0.y)].cells[0].codepoint == 0
+	r1 := it.next() or {
+		assert false, 'no row'
+		return
+	}
+	assert !r1.row_data().wrap
+	assert r1.node.data.rows[int(r1.y)].cells[0].codepoint == 2
+}
+
+fn test_page_list_resize_reflow_less_cols_wrapped_rows_with_graphemes() {
+	mut s := PageList.init(4, 2, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	for y in 0 .. int(s.rows) {
+		for x in 0 .. int(s.cols) {
+			page.rows[y].cells[x] = CellData{
+				content_tag: .codepoint
+				codepoint: u32(x)
+			}
+		}
+		page.append_grapheme(y, 2, u32(`A`))
+	}
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	assert s.cols == 2
+	assert s.total_rows == 4
+
+	pc := s.get_cell(.active, 0, 0) or {
+		assert false, 'get_cell failed'
+		return
+	}
+	assert pc.screen_point().y == 2
+
+	np := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(np) == voidptr(s.pages.last or { return })
+
+	mut it := s.row_iterator(.right_down, .screen, none)
+	// Row 0: wrapped, cells[0]=0.
+	r0 := it.next() or {
+		assert false, 'no row'
+		return
+	}
+	assert r0.row_data().wrap
+	assert r0.node.data.rows[int(r0.y)].cells[0].codepoint == 0
+	// Row 1: not wrapped, has grapheme, cells[0]=2.
+	r1 := it.next() or {
+		assert false, 'no row'
+		return
+	}
+	assert !r1.row_data().wrap
+	assert r1.row_data().grapheme
+	assert r1.node.data.rows[int(r1.y)].cells[0].codepoint == 2
+	cps := r1.node.data.lookup_grapheme(int(r1.y), 0) or {
+		assert false, 'lookup_grapheme failed'
+		return
+	}
+	assert cps.len == 1
+	assert cps[0] == u32(`A`)
+}
+
+fn test_page_list_resize_reflow_less_cols_cursor_goes_to_scrollback() {
+	mut s := PageList.init(4, 2, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	for y in 0 .. int(s.rows) {
+		for x in 0 .. int(s.cols) {
+			page.rows[y].cells[x] = CellData{
+				content_tag: .codepoint
+				codepoint: u32(x)
+			}
+		}
+	}
+
+	p := s.track_pin(s.get_pin(.active, 2, 0) or {
+		assert false, 'get_pin failed'
+		return
+	})
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	assert s.cols == 2
+	assert s.total_rows == 4
+
+	// Our cursor should now be in scrollback (outside active).
+	if _ := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) {
+		assert false, 'expected pin outside active'
+	}
+
+	s.untrack_pin(p)
+}
+
+fn test_page_list_resize_reflow_less_cols_copy_style() {
+	mut s := PageList.init(4, 2, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	style_id := page.styles.add(CellStyle{
+		flags: StyleFlags{
+			bold: true
+		}
+	}) or {
+		assert false, 'style add failed'
+		return
+	}
+	for x in 0 .. int(s.cols) - 1 {
+		page.rows[0].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+			style_id: style_id
+		}
+		page.rows[0].styled = true
+		page.styles.use_style(style_id)
+	}
+	page.styles.release(style_id)
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	assert s.cols == 2
+	assert s.total_rows == 2
+
+	mut it := s.row_iterator(.right_down, .active, none)
+	for {
+		row := it.next() or { break }
+		mut rp := &row.node.data
+		rd := rp.rows[int(row.y)]
+		for x in 0 .. int(s.cols) - 1 {
+			c := rd.cells[x]
+			assert c.style_id != 0
+			st := rp.styles.get(c.style_id)
+			assert st.flags.bold
+			assert rd.styled
+		}
+	}
+}
+
+fn test_page_list_resize_reflow_less_cols_to_eliminate_a_wide_char() {
+	mut s := PageList.init(2, 1, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	page.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(0x1F600)
+		wide: .wide
+	}
+	page.rows[0].cells[1] = CellData{
+		content_tag: .codepoint
+		codepoint: 0
+		wide: .spacer_tail
+	}
+
+	s.resize(PageResizeOpts{ cols: 1, reflow: true })
+	assert s.cols == 1
+	assert s.total_rows == 1
+
+	np := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(np) == voidptr(s.pages.last or { return })
+	mut new_page := &np.data
+	assert new_page.rows[0].cells[0].codepoint == 0
+	assert new_page.rows[0].cells[0].wide == .narrow
+}
+
+fn test_page_list_resize_reflow_less_cols_to_wrap_a_wide_char() {
+	mut s := PageList.init(3, 1, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	page.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`x`)
+	}
+	page.rows[0].cells[1] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(0x1F600)
+		wide: .wide
+	}
+	page.rows[0].cells[2] = CellData{
+		content_tag: .codepoint
+		codepoint: 0
+		wide: .spacer_tail
+	}
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	assert s.cols == 2
+	assert s.total_rows == 2
+
+	np := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(np) == voidptr(s.pages.last or { return })
+	mut new_page := &np.data
+	// Row 0: 'x' narrow, wrapped, then spacer head.
+	assert new_page.rows[0].cells[0].codepoint == u32(`x`)
+	assert new_page.rows[0].cells[0].wide == .narrow
+	assert new_page.rows[0].wrap
+	assert new_page.rows[0].cells[1].codepoint == 0
+	assert new_page.rows[0].cells[1].wide == .spacer_head
+	// Row 1: wide emoji + spacer tail.
+	assert new_page.rows[1].cells[0].codepoint == u32(0x1F600)
+	assert new_page.rows[1].cells[0].wide == .wide
+	assert new_page.rows[1].cells[1].codepoint == 0
+	assert new_page.rows[1].cells[1].wide == .spacer_tail
+}
+
+fn test_page_list_resize_reflow_less_cols_blank_lines_between() {
+	mut s := PageList.init(4, 3, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	for x in 0 .. 4 {
+		page.rows[0].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+		}
+		page.rows[2].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+		}
+	}
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	assert s.cols == 2
+	assert s.total_rows == 5
+
+	mut it := s.row_iterator(.right_down, .active, none)
+	r0 := it.next() or {
+		assert false, 'no row'
+		return
+	}
+	assert !r0.row_data().wrap
+	r1 := it.next() or {
+		assert false, 'no row'
+		return
+	}
+	assert r1.row_data().wrap
+	assert r1.node.data.rows[int(r1.y)].cells[0].codepoint == 0
+	r2 := it.next() or {
+		assert false, 'no row'
+		return
+	}
+	assert !r2.row_data().wrap
+	assert r2.node.data.rows[int(r2.y)].cells[0].codepoint == 2
+}
+
+fn test_page_list_resize_reflow_less_cols_blank_lines_between_no_scrollback() {
+	mut s := PageList.init(5, 3, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	page.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`A`)
+	}
+	page.rows[2].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`C`)
+	}
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	assert s.cols == 2
+	assert s.total_rows == 3
+
+	mut it := s.row_iterator(.right_down, .active, none)
+	r0 := it.next() or {
+		assert false, 'no row'
+		return
+	}
+	assert !r0.row_data().wrap
+	assert r0.node.data.rows[int(r0.y)].cells[0].codepoint == u32(`A`)
+	r1 := it.next() or {
+		assert false, 'no row'
+		return
+	}
+	assert r1.node.data.rows[int(r1.y)].cells[0].codepoint == 0
+	r2 := it.next() or {
+		assert false, 'no row'
+		return
+	}
+	assert !r2.row_data().wrap
+	assert r2.node.data.rows[int(r2.y)].cells[0].codepoint == u32(`C`)
+}
+
+fn test_page_list_resize_reflow_less_cols_cursor_not_on_last_line_preserves_location() {
+	mut s := PageList.init(5, 5, usize(1))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	for y in 0 .. int(s.rows) {
+		for x in 0 .. 2 {
+			page.rows[y].cells[x] = CellData{
+				content_tag: .codepoint
+				codepoint: u32(x)
+			}
+		}
+	}
+
+	// Grow blank rows to push our rows back into scrollback.
+	s.grow_rows(5)
+	assert s.total_rows == 10
+
+	p := s.track_pin(s.get_pin(.active, 0, 0) or {
+		assert false, 'get_pin failed'
+		return
+	})
+
+	s.resize(PageResizeOpts{
+		cols: 4
+		reflow: true
+		cursor: PageResizeCursor{
+			x: 1
+			y: 1
+		}
+	})
+	assert s.cols == 4
+	assert s.total_rows == 10
+
+	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+		assert false, 'point_from_pin failed'
+		return
+	}
+	assert cursor.x == 0
+	assert cursor.y == 0
+
+	s.untrack_pin(p)
+}
+
+fn test_page_list_resize_reflow_less_cols_wraps_spacer_head() {
+	mut s := PageList.init(4, 3, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	// Row 0: 'x','x','x' then a spacer_head (wrapped).
+	page.rows[0].wrap = true
+	page.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`x`)
+	}
+	page.rows[0].cells[1] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`x`)
+	}
+	page.rows[0].cells[2] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`x`)
+	}
+	page.rows[0].cells[3] = CellData{
+		content_tag: .codepoint
+		codepoint: 0
+		wide: .spacer_head
+	}
+	// Row 1: wide emoji + spacer tail.
+	page.rows[1].wrap_continuation = true
+	page.rows[1].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(0x1F600)
+		wide: .wide
+	}
+	page.rows[1].cells[1] = CellData{
+		content_tag: .codepoint
+		codepoint: 0
+		wide: .spacer_tail
+	}
+
+	s.resize(PageResizeOpts{ cols: 3, reflow: true })
+	assert s.cols == 3
+	assert s.total_rows == 3
+
+	np := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(np) == voidptr(s.pages.last or { return })
+	mut new_page := &np.data
+	// Row 0: xxx wrapped.
+	assert new_page.rows[0].cells[0].codepoint == u32(`x`)
+	assert new_page.rows[0].cells[0].wide == .narrow
+	assert new_page.rows[0].wrap
+	assert new_page.rows[0].cells[1].codepoint == u32(`x`)
+	assert new_page.rows[0].cells[2].codepoint == u32(`x`)
+	// Row 1: wide emoji + spacer tail.
+	assert new_page.rows[1].cells[0].codepoint == u32(0x1F600)
+	assert new_page.rows[1].cells[0].wide == .wide
+	assert new_page.rows[1].cells[1].codepoint == 0
+	assert new_page.rows[1].cells[1].wide == .spacer_tail
+}
+
+// ============================================================
+// pageIterator / cellIterator precise tests
+// ============================================================
+
+fn test_page_list_page_iterator_single_page_precise() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert first.next == none
+
+	mut it := s.page_iterator(.right_down, .active, none)
+	chunk := it.next() or {
+		assert false, 'no chunk'
+		return
+	}
+	assert voidptr(chunk.node) == voidptr(first)
+	assert chunk.start == 0
+	assert chunk.end == u16(s.rows)
+
+	assert it.next() == none
+}
+
+fn test_page_list_page_iterator_two_pages_precise() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	// Grow to fill page1 then one more to spill onto page2.
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	remaining := usize(first.data.capacity.rows) - usize(first.data.size.rows)
+	s.grow_rows(remaining)
+	s.grow_rows(1)
+	assert s.total_pages() == 2
+
+	last := s.pages.last or {
+		assert false, 'no last page'
+		return
+	}
+
+	mut it := s.page_iterator(.right_down, .active, none)
+	chunk1 := it.next() or {
+		assert false, 'no chunk1'
+		return
+	}
+	assert voidptr(chunk1.node) == voidptr(first)
+	assert chunk1.start == u16(int(first.data.size.rows) - int(s.rows) + 1)
+	assert chunk1.end == first.data.size.rows
+
+	chunk2 := it.next() or {
+		assert false, 'no chunk2'
+		return
+	}
+	assert voidptr(chunk2.node) == voidptr(last)
+	assert chunk2.start == 0
+	assert chunk2.end == 1
+
+	assert it.next() == none
+}
+
+fn test_page_list_page_iterator_history_two_pages() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	remaining := usize(first.data.capacity.rows) - usize(first.data.size.rows)
+	s.grow_rows(remaining)
+	s.grow_rows(1)
+	assert s.total_pages() == 2
+
+	active_tl := s.get_top_left(.active)
+	mut it := s.page_iterator(.right_down, .history, none)
+	chunk := it.next() or {
+		assert false, 'no chunk'
+		return
+	}
+	assert voidptr(chunk.node) == voidptr(first)
+	assert chunk.start == 0
+	assert chunk.end == active_tl.y
+
+	assert it.next() == none
+}
+
+fn test_page_list_page_iterator_reverse_single_page() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert first.next == none
+
+	mut it := s.page_iterator(.left_up, .active, none)
+	chunk := it.next() or {
+		assert false, 'no chunk'
+		return
+	}
+	assert voidptr(chunk.node) == voidptr(first)
+	assert chunk.start == 0
+	assert chunk.end == u16(s.rows)
+
+	assert it.next() == none
+}
+
+fn test_page_list_page_iterator_reverse_two_pages() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	remaining := usize(first.data.capacity.rows) - usize(first.data.size.rows)
+	s.grow_rows(remaining)
+	s.grow_rows(1)
+	assert s.total_pages() == 2
+
+	last := s.pages.last or {
+		assert false, 'no last page'
+		return
+	}
+
+	mut it := s.page_iterator(.left_up, .active, none)
+	mut count := u16(0)
+
+	chunk1 := it.next() or {
+		assert false, 'no chunk1'
+		return
+	}
+	assert voidptr(chunk1.node) == voidptr(last)
+	assert chunk1.start == 0
+	assert chunk1.end == 1
+	count += chunk1.end - chunk1.start
+
+	chunk2 := it.next() or {
+		assert false, 'no chunk2'
+		return
+	}
+	assert voidptr(chunk2.node) == voidptr(first)
+	assert chunk2.start == u16(int(first.data.size.rows) - int(s.rows) + 1)
+	assert chunk2.end == first.data.size.rows
+	count += chunk2.end - chunk2.start
+
+	assert it.next() == none
+	assert count == u16(s.rows)
+}
+
+fn test_page_list_page_iterator_reverse_history_two_pages() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	remaining := usize(first.data.capacity.rows) - usize(first.data.size.rows)
+	s.grow_rows(remaining)
+	s.grow_rows(1)
+	assert s.total_pages() == 2
+
+	active_tl := s.get_top_left(.active)
+	mut it := s.page_iterator(.left_up, .history, none)
+	chunk := it.next() or {
+		assert false, 'no chunk'
+		return
+	}
+	assert voidptr(chunk.node) == voidptr(first)
+	assert chunk.start == 0
+	assert chunk.end == active_tl.y
+
+	assert it.next() == none
+}
+
+fn test_page_list_cell_iterator_precise() {
+	mut s := PageList.init(2, 2, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(first) == voidptr(s.pages.last or { return })
+	mut page := &first.data
+	for y in u16(0) .. 2 {
+		for x in u16(0) .. 2 {
+			page.rows[int(y)].cells[int(x)] = CellData{
+				content_tag: .codepoint
+				codepoint: u32(x)
+			}
+		}
+	}
+
+	mut it := s.cell_iterator(.right_down, .screen, none)
+	expected := [[u32(0), 0], [u32(1), 0], [u32(0), 1], [u32(1), 1]]
+	for exp in expected {
+		p := it.next() or {
+			assert false, 'iterator ended early'
+			return
+		}
+		pt := s.point_from_pin(.screen, p) or {
+			assert false, 'point_from_pin failed'
+			return
+		}
+		assert pt.x == exp[0]
+		assert pt.y == exp[1]
+	}
+	assert it.next() == none
+}
+
+fn test_page_list_cell_iterator_reverse_precise() {
+	mut s := PageList.init(2, 2, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	for y in u16(0) .. 2 {
+		for x in u16(0) .. 2 {
+			page.rows[int(y)].cells[int(x)] = CellData{
+				content_tag: .codepoint
+				codepoint: u32(x)
+			}
+		}
+	}
+
+	mut it := s.cell_iterator(.left_up, .screen, none)
+	expected := [[u32(1), 1], [u32(0), 1], [u32(1), 0], [u32(0), 0]]
+	for exp in expected {
+		p := it.next() or {
+			assert false, 'iterator ended early'
+			return
+		}
+		pt := s.point_from_pin(.screen, p) or {
+			assert false, 'point_from_pin failed'
+			return
+		}
+		assert pt.x == exp[0]
+		assert pt.y == exp[1]
+	}
+	assert it.next() == none
+}
+
+// ============================================================
+// erase tests (whole-region)
+// ============================================================
+
+fn test_page_list_erase_reaccounts_page_size() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	start_size := s.page_size
+
+	// Grow so we take up at least 5 pages.
+	cap := initial_capacity(80)
+	s.grow_rows(usize(cap.rows) * 5)
+	assert s.page_size > start_size
+
+	// Erase the entire history; we should be back to just our active set.
+	s.erase_rows(.history, none)
+	assert s.page_size == start_size
+}
+
+fn test_page_list_erase_row_with_tracked_pin_resets_to_top_left() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	// Grow so we take up at least 5 pages.
+	cap := initial_capacity(80)
+	s.grow_rows(usize(cap.rows) * 5)
+	assert s.total_rows > usize(s.rows)
+
+	// Put a tracked pin in the history.
+	p := s.track_pin(s.get_top_left(.history))
+
+	// Erase the entire history; we should be back to just our active set.
+	s.erase_rows(.history, none)
+	assert s.total_rows == usize(s.rows)
+
+	// Our pin should move to the first page.
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(p.node) == voidptr(first)
+	assert p.y == 0
+	assert p.x == 0
+
+	s.untrack_pin(p)
+}
+
+fn test_page_list_erase_resets_viewport_to_active_if_moves_within_active() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	cap := initial_capacity(80)
+	s.grow_rows(usize(cap.rows) * 5)
+
+	// Move our viewport to the top.
+	s.scroll(PageScrollDeltaRow{ delta: -int(s.total_rows) })
+	assert s.viewport == .top
+
+	// Erase the entire history; we should be back to just our active set.
+	s.erase_rows(.history, none)
+	assert s.viewport == .active
+}
+
+fn test_page_list_erase_resets_viewport_to_active_if_top_is_inside_active() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	cap := initial_capacity(80)
+	s.grow_rows(usize(cap.rows) * 5)
+
+	// Move our viewport to the top.
+	s.scroll(PageScrollTop{})
+
+	// Erase the entire history; we should be back to just our active set.
+	s.erase_rows(.history, none)
+	assert s.viewport == .active
+}
+
+// ============================================================
+// Split tests
+// ============================================================
+
+fn test_page_list_split_single_row_page_returns_out_of_space() {
+	mut s := PageList.init(10, 1, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	split_pin := PagePin{ node: first, y: 0, x: 0 }
+	// Splitting a single-row page is impossible (analogous to ghostty's
+	// error.OutOfSpace). witty returns an error for a page with <= 1 row.
+	mut errored := false
+	s.split(split_pin) or { errored = true }
+	assert errored
+
+	// The page is unchanged.
+	assert s.total_pages() == 1
+	assert first.data.size.rows == 1
+}
+
+fn test_page_list_split_multiple_tracked_pins_across_regions() {
+	mut s := PageList.init(10, 10, usize(0))
+	defer { s.deinit() }
+
+	original := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+
+	pin_before := s.track_pin(PagePin{ node: original, y: 1, x: 0 })
+	pin_at_split := s.track_pin(PagePin{ node: original, y: 5, x: 2 })
+	pin_after1 := s.track_pin(PagePin{ node: original, y: 7, x: 3 })
+	pin_after2 := s.track_pin(PagePin{ node: original, y: 9, x: 8 })
+
+	s.split(PagePin{ node: original, y: 5, x: 0 }) or {
+		assert false, 'split failed: ${err}'
+		return
+	}
+
+	first_page := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	second_page := first_page.next or {
+		assert false, 'no second page'
+		return
+	}
+
+	// Pin before split point stays in original page.
+	assert voidptr(pin_before.node) == voidptr(first_page)
+	assert pin_before.y == 1
+	assert pin_before.x == 0
+
+	// Pin at split point moves to new page with y=0.
+	assert voidptr(pin_at_split.node) == voidptr(second_page)
+	assert pin_at_split.y == 0
+	assert pin_at_split.x == 2
+
+	// Pins after split move to new page with adjusted y.
+	assert voidptr(pin_after1.node) == voidptr(second_page)
+	assert pin_after1.y == 2
+	assert pin_after1.x == 3
+
+	assert voidptr(pin_after2.node) == voidptr(second_page)
+	assert pin_after2.y == 4
+	assert pin_after2.x == 8
+
+	s.untrack_pin(pin_before)
+	s.untrack_pin(pin_at_split)
+	s.untrack_pin(pin_after1)
+	s.untrack_pin(pin_after2)
+}
+
+fn test_page_list_split_tracked_viewport_pin_in_split_region_moves_correctly() {
+	mut s := PageList.init(10, 10, usize(0))
+	defer { s.deinit() }
+
+	original := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+
+	// Set viewport_pin to row 7 (after split point).
+	s.viewport_pin.node = original
+	s.viewport_pin.y = 7
+	s.viewport_pin.x = 6
+
+	s.split(PagePin{ node: original, y: 5, x: 0 }) or {
+		assert false, 'split failed: ${err}'
+		return
+	}
+
+	second := original.next or {
+		assert false, 'no second page'
+		return
+	}
+	assert voidptr(s.viewport_pin.node) == voidptr(second)
+	assert s.viewport_pin.y == 2
+	assert s.viewport_pin.x == 6
+}
+
+fn test_page_list_split_last_page_makes_new_page_the_last() {
+	mut s := PageList.init(10, 10, usize(0))
+	defer { s.deinit() }
+
+	first_node := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	s.split(PagePin{ node: first_node, y: 5, x: 0 }) or {
+		assert false, 'split failed'
+		return
+	}
+
+	last_before := s.pages.last or {
+		assert false, 'no last page'
+		return
+	}
+	assert last_before.data.size.rows == 5
+
+	s.split(PagePin{ node: last_before, y: 2, x: 0 }) or {
+		assert false, 'split failed'
+		return
+	}
+
+	new_last := s.pages.last or {
+		assert false, 'no last page'
+		return
+	}
+	assert voidptr(new_last) != voidptr(last_before)
+	prev := new_last.prev or {
+		assert false, 'no prev'
+		return
+	}
+	assert voidptr(prev) == voidptr(last_before)
+	assert new_last.next == none
+
+	assert last_before.data.size.rows == 2
+	assert new_last.data.size.rows == 3
+}
+
+fn test_page_list_split_first_page_keeps_original_as_first() {
+	mut s := PageList.init(10, 10, usize(0))
+	defer { s.deinit() }
+
+	original_first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	s.split(PagePin{ node: original_first, y: 5, x: 0 }) or {
+		assert false, 'split failed'
+		return
+	}
+
+	// Split the first page again.
+	s.split(PagePin{ node: original_first, y: 2, x: 0 }) or {
+		assert false, 'split failed'
+		return
+	}
+
+	// Original first should still be first.
+	new_first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(new_first) == voidptr(original_first)
+	assert original_first.prev == none
+}
+
+fn test_page_list_split_preserves_styled_cells() {
+	mut s := PageList.init(10, 10, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+
+	// Create a style and apply it to cells in rows 5-7.
+	style := CellStyle{
+		flags: StyleFlags{
+			bold: true
+		}
+	}
+	style_id := page.styles.add(style) or {
+		assert false, 'style add failed'
+		return
+	}
+
+	for y in u16(5) .. 8 {
+		mut row := &page.rows[int(y)]
+		row.cells[0] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(`S`)
+			style_id: style_id
+		}
+		row.styled = true
+		page.styles.use_style(style_id)
+	}
+	// Release the extra ref from add.
+	page.styles.release(style_id)
+
+	s.split(PagePin{ node: first, y: 5, x: 0 }) or {
+		assert false, 'split failed'
+		return
+	}
+
+	second := first.next or {
+		assert false, 'no second page'
+		return
+	}
+	mut second_page := &second.data
+
+	// Verify styled cells preserved in new page (rows 0-2).
+	for y in u16(0) .. 3 {
+		c := second_page.rows[int(y)].cells[0]
+		assert c.codepoint == u32(`S`)
+		assert c.style_id != 0
+		got_style := second_page.styles.get(c.style_id)
+		assert got_style.flags.bold
+		assert second_page.rows[int(y)].styled
+	}
+}
+
+fn test_page_list_split_preserves_grapheme_clusters() {
+	mut s := PageList.init(10, 10, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+
+	// Add a grapheme cluster to row 6 (will be row 1 in second page).
+	mut row6 := &page.rows[6]
+	row6.cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(0x1F468) // Man emoji
+	}
+	page.set_graphemes(6, 0, [u32(0x200D), u32(0x1F469)])
+
+	assert page.grapheme_count() == 1
+
+	s.split(PagePin{ node: first, y: 5, x: 0 }) or {
+		assert false, 'split failed'
+		return
+	}
+
+	second := first.next or {
+		assert false, 'no second page'
+		return
+	}
+	mut second_page := &second.data
+
+	// Second page should have exactly 1 grapheme.
+	assert second_page.grapheme_count() == 1
+
+	c := second_page.rows[1].cells[0]
+	assert c.codepoint == u32(0x1F468)
+	assert second_page.rows[1].grapheme
+
+	cps := second_page.lookup_grapheme(1, 0) or {
+		assert false, 'lookup_grapheme failed'
+		return
+	}
+	assert cps.len == 2
+	assert cps[0] == u32(0x200D)
+	assert cps[1] == u32(0x1F469)
+}
+
+fn test_page_list_split_preserves_hyperlinks() {
+	mut s := PageList.init(10, 10, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+
+	// Add a hyperlink to row 7 (will be row 2 in second page).
+	hyperlink_id := page.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{
+			offset: 0
+		}
+		uri: 'https://example.com'
+	})
+	mut row7 := &page.rows[7]
+	row7.cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`L`)
+	}
+	page.set_hyperlink(7, 0, hyperlink_id)
+
+	s.split(PagePin{ node: first, y: 5, x: 0 }) or {
+		assert false, 'split failed'
+		return
+	}
+
+	second := first.next or {
+		assert false, 'no second page'
+		return
+	}
+	mut second_page := &second.data
+
+	// Second page should have exactly 1 hyperlink.
+	assert second_page.hyperlink_count() == 1
+
+	c := second_page.rows[2].cells[0]
+	assert c.codepoint == u32(`L`)
+	assert c.has_hyperlink
+
+	link_id := second_page.lookup_hyperlink(2, 0) or {
+		assert false, 'lookup_hyperlink failed'
+		return
+	}
+	link := second_page.hyperlink_set.get(link_id)
+	assert link.uri == 'https://example.com'
+}
+

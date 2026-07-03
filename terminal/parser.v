@@ -298,410 +298,127 @@ pub fn (mut self VTParser) deinit() {
 	self.osc_buf = []
 }
 
-// next processes a single byte and returns a list of actions.
+// next consumes the next character c and returns the actions to execute.
+// Up to 3 actions may need to be executed -- in order -- representing the
+// state exit, transition, and entry actions.
+//
+// This is a faithful translation of Ghostty's Parser.next which is driven
+// by the DEC ANSI parse table (parse_table.v). The three ordered actions
+// are appended to the returned list (null actions are simply not appended).
 pub fn (mut self VTParser) next(c u8) []ParserAction {
 	mut actions := []ParserAction{}
 
-	match self.state {
-		.ground {
-			self.do_ground(c, mut actions)
-		}
-		.escape {
-			self.do_escape(c, mut actions)
-		}
-		.escape_intermediate {
-			self.do_escape_intermediate(c, mut actions)
-		}
-		.csi_entry {
-			self.do_csi_entry(c, mut actions)
-		}
-		.csi_param {
-			self.do_csi_param(c, mut actions)
-		}
-		.csi_intermediate {
-			self.do_csi_intermediate(c, mut actions)
-		}
-		.csi_ignore {
-			self.do_csi_ignore(c, mut actions)
-		}
-		.osc_string {
-			self.do_osc_string(c, mut actions)
-		}
-		.dcs_entry {
-			self.do_dcs_entry(c, mut actions)
-		}
-		.dcs_param {
-			self.do_dcs_param(c, mut actions)
-		}
-		.dcs_intermediate {
-			self.do_dcs_intermediate(c, mut actions)
-		}
-		.dcs_passthrough {
-			self.do_dcs_passthrough(c, mut actions)
-		}
-		.dcs_ignore {
-			self.do_dcs_ignore(c, mut actions)
-		}
-		.sos_pm_apc_string {
-			self.do_sos_pm_apc_string(c, mut actions)
+	effect := table_lookup(c, self.state)
+	next_state := effect.state
+	action := effect.action
+
+	// When going from one state to another, the actions take place in this
+	// order:
+	//   1. exit action from old state
+	//   2. transition action
+	//   3. entry action to new state
+
+	// 1. Exit action from old state (only when the state changes).
+	if self.state != next_state {
+		match self.state {
+			.osc_string {
+				actions << self.build_osc_action()
+			}
+			.dcs_passthrough {
+				actions << ParserAction{
+					action_type: .dcs_unhook_action
+				}
+			}
+			.sos_pm_apc_string {
+				actions << ParserAction{
+					action_type: .apc_end_action
+				}
+			}
+			else {}
 		}
 	}
 
+	// 2. Transition action.
+	if a := self.do_action(action, c) {
+		actions << a
+	}
+
+	// 3. Entry action to new state (only when the state changes).
+	if self.state != next_state {
+		match next_state {
+			.escape, .dcs_entry, .csi_entry {
+				self.clear()
+			}
+			.osc_string {
+				self.osc_buf = []
+			}
+			.dcs_passthrough {
+				// build_dcs_hook_action finalizes the pending parameter
+				// (mirrors Ghostty's inline dcs_hook entry action).
+				actions << self.build_dcs_hook_action(c)
+			}
+			.sos_pm_apc_string {
+				actions << ParserAction{
+					action_type: .apc_start_action
+				}
+			}
+			else {}
+		}
+	}
+
+	self.state = next_state
 	return actions
 }
 
-// ============================================================
-// State handlers
-// ============================================================
-
-fn (mut self VTParser) do_ground(c u8, mut actions []ParserAction) {
-	if c < 0x20 {
-		actions << ParserAction{
-			action_type: .execute_action
-			byte_val: c
+// do_action performs a transition action, returning an action to append
+// (or none). This mirrors Ghostty's doAction.
+fn (mut self VTParser) do_action(action TransitionAction, c u8) ?ParserAction {
+	match action {
+		.ta_none, .ta_ignore {
+			return none
 		}
-	} else if c >= 0x80 && c <= 0x9F {
-		// C1 8-bit control codes. These map to the same states/actions as
-		// their 7-bit ESC-prefixed equivalents (the "anywhere" transitions
-		// in the DEC ANSI parse table). Previously these were treated as
-		// printable which is incorrect.
-		self.do_c1(c, mut actions)
-	} else if c != 0x7F {
-		actions << ParserAction{
-			action_type: .print_action
-			char: u32(c)
-		}
-	}
-}
-
-// do_c1 handles the C1 (0x80-0x9F) 8-bit control codes. This mirrors the
-// "anywhere" transitions from Ghostty's parse table (parse_table.zig).
-fn (mut self VTParser) do_c1(c u8, mut actions []ParserAction) {
-	match c {
-		0x90 {
-			// DCS (Device Control String) 8-bit -> dcs_entry
-			self.clear()
-			self.state = .dcs_entry
-		}
-		0x98, 0x9E, 0x9F {
-			// SOS/PM/APC 8-bit -> sos_pm_apc_string
-			self.state = .sos_pm_apc_string
-			actions << ParserAction{
-				action_type: .apc_start_action
+		.ta_print {
+			return ParserAction{
+				action_type: .print_action
+				char: u32(c)
 			}
 		}
-		0x9B {
-			// CSI (Control Sequence Introducer) 8-bit -> csi_entry
-			self.clear()
-			self.state = .csi_entry
-		}
-		0x9C {
-			// ST (String Terminator) 8-bit -> ground, no action
-			self.state = .ground
-		}
-		0x9D {
-			// OSC (Operating System Command) 8-bit -> osc_string
-			self.osc_buf = []
-			self.state = .osc_string
-		}
-		else {
-			// 0x80-0x8F, 0x91-0x97, 0x99, 0x9A -> execute (ground)
-			actions << ParserAction{
+		.ta_execute {
+			return ParserAction{
 				action_type: .execute_action
 				byte_val: c
 			}
 		}
-	}
-}
-
-fn (mut self VTParser) do_escape(c u8, mut actions []ParserAction) {
-	if c <= 0x17 || c == 0x19 || (c >= 0x1C && c <= 0x1F) {
-		// Execute C0 control
-		actions << ParserAction{
-			action_type: .execute_action
-			byte_val: c
+		.ta_collect {
+			self.collect_intermediate(c)
+			return none
 		}
-	} else if c == 0x18 || c == 0x1A {
-		// Cancel -> ground
-		self.state = .ground
-	} else if c == 0x1B {
-		// Another ESC - restart
-		self.clear()
-	} else if c >= 0x20 && c <= 0x2F {
-		// Intermediate -> escape_intermediate
-		self.collect_intermediate(c)
-		self.state = .escape_intermediate
-	} else if c == 0x50 {
-		// 'P' -> DCS entry
-		self.clear()
-		self.state = .dcs_entry
-	} else if c == 0x5B {
-		// '[' -> CSI entry
-		self.clear()
-		self.state = .csi_entry
-	} else if c == 0x5D {
-		// ']' -> OSC string
-		self.osc_buf = []
-		self.state = .osc_string
-	} else if c == 0x58 || c == 0x5E || c == 0x5F {
-		// 'X', '^', '_' -> SOS/PM/APC string
-		self.state = .sos_pm_apc_string
-		actions << ParserAction{ action_type: .apc_start_action }
-	} else if c >= 0x30 && c <= 0x7E {
-		// ESC dispatch (final byte)
-		actions << self.build_esc_action(c)
-		self.state = .ground
-	}
-	// 0x7F (DEL) is ignored
-}
-
-fn (mut self VTParser) do_escape_intermediate(c u8, mut actions []ParserAction) {
-	if c <= 0x17 || c == 0x19 || (c >= 0x1C && c <= 0x1F) {
-		actions << ParserAction{
-			action_type: .execute_action
-			byte_val: c
+		.ta_param {
+			self.process_csi_param_byte(c)
+			return none
 		}
-	} else if c == 0x18 || c == 0x1A {
-		self.state = .ground
-	} else if c == 0x1B {
-		self.clear()
-		self.state = .escape
-	} else if c >= 0x20 && c <= 0x2F {
-		self.collect_intermediate(c)
-	} else if c >= 0x30 && c <= 0x7E {
-		actions << self.build_esc_action(c)
-		self.state = .ground
-	}
-	// 0x7F is ignored
-}
-
-fn (mut self VTParser) do_csi_entry(c u8, mut actions []ParserAction) {
-	if c <= 0x17 || c == 0x19 || (c >= 0x1C && c <= 0x1F) {
-		actions << ParserAction{
-			action_type: .execute_action
-			byte_val: c
+		.ta_osc_put {
+			// Accumulate OSC bytes.
+			self.osc_buf << c
+			return none
 		}
-	} else if c == 0x18 || c == 0x1A {
-		self.state = .ground
-	} else if c == 0x1B {
-		self.clear()
-		self.state = .escape
-	} else if c >= 0x20 && c <= 0x2F {
-		// Intermediate byte
-		self.collect_intermediate(c)
-		self.state = .csi_intermediate
-	} else if (c >= 0x30 && c <= 0x39) || c == 0x3B {
-		// Digit or semicolon -> csi_param, process param
-		self.state = .csi_param
-		self.process_csi_param_byte(c)
-	} else if c == 0x3A {
-		// Colon -> csi_param, process as separator
-		self.state = .csi_param
-		self.process_csi_param_byte(c)
-	} else if c >= 0x3C && c <= 0x3F {
-		// Private marker (< = > ?) -> collect as intermediate, go to csi_param
-		self.collect_intermediate(c)
-		self.state = .csi_param
-	} else if c >= 0x40 && c <= 0x7E {
-		// Final byte -> CSI dispatch with no params
-		actions << self.build_csi_action(c)
-		self.state = .ground
-	}
-	// 0x7F is ignored
-}
-
-fn (mut self VTParser) do_csi_param(c u8, mut actions []ParserAction) {
-	if c <= 0x17 || c == 0x19 || (c >= 0x1C && c <= 0x1F) {
-		actions << ParserAction{
-			action_type: .execute_action
-			byte_val: c
+		.ta_csi_dispatch {
+			return self.build_csi_action(c)
 		}
-	} else if c == 0x18 || c == 0x1A {
-		self.state = .ground
-	} else if c == 0x1B {
-		self.clear()
-		self.state = .escape
-	} else if (c >= 0x30 && c <= 0x39) || c == 0x3A || c == 0x3B {
-		// Digit, colon, or semicolon
-		self.process_csi_param_byte(c)
-	} else if c >= 0x3C && c <= 0x3F {
-		// Second private marker -> csi_ignore (error)
-		self.state = .csi_ignore
-	} else if c >= 0x20 && c <= 0x2F {
-		// Intermediate byte
-		self.collect_intermediate(c)
-		self.state = .csi_intermediate
-	} else if c >= 0x40 && c <= 0x7E {
-		// Final byte -> CSI dispatch
-		actions << self.build_csi_action(c)
-		self.state = .ground
-	}
-	// 0x7F is ignored
-}
-
-fn (mut self VTParser) do_csi_intermediate(c u8, mut actions []ParserAction) {
-	if c <= 0x17 || c == 0x19 || (c >= 0x1C && c <= 0x1F) {
-		actions << ParserAction{
-			action_type: .execute_action
-			byte_val: c
+		.ta_esc_dispatch {
+			return self.build_esc_action(c)
 		}
-	} else if c == 0x18 || c == 0x1A {
-		self.state = .ground
-	} else if c == 0x1B {
-		self.clear()
-		self.state = .escape
-	} else if c >= 0x20 && c <= 0x2F {
-		self.collect_intermediate(c)
-	} else if c >= 0x30 && c <= 0x3F {
-		// Parameter byte after intermediate -> error
-		self.state = .csi_ignore
-	} else if c >= 0x40 && c <= 0x7E {
-		// Final byte -> CSI dispatch
-		actions << self.build_csi_action(c)
-		self.state = .ground
-	}
-	// 0x7F is ignored
-}
-
-fn (mut self VTParser) do_csi_ignore(c u8, mut actions []ParserAction) {
-	if c <= 0x17 || c == 0x19 || (c >= 0x1C && c <= 0x1F) {
-		actions << ParserAction{
-			action_type: .execute_action
-			byte_val: c
+		.ta_put {
+			return ParserAction{
+				action_type: .dcs_put_action
+				byte_val: c
+			}
 		}
-	} else if c == 0x18 || c == 0x1A {
-		self.state = .ground
-	} else if c == 0x1B {
-		self.clear()
-		self.state = .escape
-	} else if c >= 0x40 && c <= 0x7E {
-		// Final byte -> ground (sequence is ignored)
-		self.state = .ground
-	}
-	// Everything else is ignored
-}
-
-fn (mut self VTParser) do_osc_string(c u8, mut actions []ParserAction) {
-	if c == 0x1B {
-		// ESC received - might be ESC \ (ST). Generate osc_dispatch.
-		actions << self.build_osc_action()
-		self.state = .escape
-		self.clear()
-	} else if c == 0x07 {
-		// BEL terminator
-		actions << self.build_osc_action()
-		self.state = .ground
-	} else if c == 0x18 || c == 0x1A {
-		// Cancel
-		self.state = .ground
-	} else if c >= 0x20 || c == 0x09 {
-		// Accumulate printable characters and TAB
-		self.osc_buf << c
-	}
-	// Other C0 controls are ignored
-}
-
-fn (mut self VTParser) do_dcs_entry(c u8, mut actions []ParserAction) {
-	if c <= 0x17 || c == 0x19 || (c >= 0x1C && c <= 0x1F) {
-		// Ignore (no execute in DCS entry)
-	} else if c == 0x18 || c == 0x1A {
-		self.state = .ground
-	} else if c == 0x1B {
-		self.clear()
-		self.state = .escape
-	} else if c >= 0x20 && c <= 0x2F {
-		self.collect_intermediate(c)
-		self.state = .dcs_intermediate
-	} else if (c >= 0x30 && c <= 0x39) || c == 0x3B {
-		self.state = .dcs_param
-		self.process_csi_param_byte(c)
-	} else if c >= 0x3C && c <= 0x3F {
-		self.collect_intermediate(c)
-		self.state = .dcs_param
-	} else if c >= 0x40 && c <= 0x7E {
-		actions << self.build_dcs_hook_action(c)
-		self.state = .dcs_passthrough
-	}
-}
-
-fn (mut self VTParser) do_dcs_param(c u8, mut actions []ParserAction) {
-	if c <= 0x17 || c == 0x19 || (c >= 0x1C && c <= 0x1F) {
-		// Ignore
-	} else if c == 0x18 || c == 0x1A {
-		self.state = .ground
-	} else if c == 0x1B {
-		self.clear()
-		self.state = .escape
-	} else if (c >= 0x30 && c <= 0x39) || c == 0x3B {
-		self.process_csi_param_byte(c)
-	} else if c >= 0x3C && c <= 0x3F {
-		self.state = .dcs_ignore
-	} else if c >= 0x20 && c <= 0x2F {
-		self.collect_intermediate(c)
-		self.state = .dcs_intermediate
-	} else if c >= 0x40 && c <= 0x7E {
-		actions << self.build_dcs_hook_action(c)
-		self.state = .dcs_passthrough
-	}
-}
-
-fn (mut self VTParser) do_dcs_intermediate(c u8, mut actions []ParserAction) {
-	if c <= 0x17 || c == 0x19 || (c >= 0x1C && c <= 0x1F) {
-		// Ignore
-	} else if c == 0x18 || c == 0x1A {
-		self.state = .ground
-	} else if c == 0x1B {
-		self.clear()
-		self.state = .escape
-	} else if c >= 0x20 && c <= 0x2F {
-		self.collect_intermediate(c)
-	} else if c >= 0x30 && c <= 0x3F {
-		self.state = .dcs_ignore
-	} else if c >= 0x40 && c <= 0x7E {
-		actions << self.build_dcs_hook_action(c)
-		self.state = .dcs_passthrough
-	}
-}
-
-fn (mut self VTParser) do_dcs_passthrough(c u8, mut actions []ParserAction) {
-	if c == 0x18 || c == 0x1A {
-		actions << ParserAction{ action_type: .dcs_unhook_action }
-		self.state = .ground
-	} else if c == 0x1B {
-		actions << ParserAction{ action_type: .dcs_unhook_action }
-		self.state = .escape
-		self.clear()
-	} else if c != 0x7F {
-		// Put
-		actions << ParserAction{
-			action_type: .dcs_put_action
-			byte_val: c
-		}
-	}
-}
-
-fn (mut self VTParser) do_dcs_ignore(c u8, mut actions []ParserAction) {
-	if c == 0x18 || c == 0x1A {
-		self.state = .ground
-	} else if c == 0x1B {
-		self.clear()
-		self.state = .escape
-	}
-	// Everything else is ignored
-}
-
-fn (mut self VTParser) do_sos_pm_apc_string(c u8, mut actions []ParserAction) {
-	if c == 0x18 || c == 0x1A {
-		actions << ParserAction{ action_type: .apc_end_action }
-		self.state = .ground
-	} else if c == 0x1B {
-		actions << ParserAction{ action_type: .apc_end_action }
-		self.state = .escape
-		self.clear()
-	} else if c != 0x7F {
-		actions << ParserAction{
-			action_type: .apc_put_action
-			byte_val: c
+		.ta_apc_put {
+			return ParserAction{
+				action_type: .apc_put_action
+				byte_val: c
+			}
 		}
 	}
 }
@@ -743,6 +460,14 @@ fn (mut self VTParser) process_csi_param_byte(c u8) {
 
 // build_csi_action creates a CSI dispatch action from the current parser state.
 fn (mut self VTParser) build_csi_action(final_byte u8) ParserAction {
+	// Ignore too many parameters: if we've hit the max, the whole sequence
+	// is dropped (matches Ghostty).
+	if self.params_idx >= max_params {
+		return ParserAction{
+			action_type: .none
+		}
+	}
+
 	// Finalize params: add accumulator if digits were seen
 	mut p_len := int(self.params_idx)
 	if self.param_acc_idx > 0 && self.params_idx < max_params {

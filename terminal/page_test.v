@@ -1562,3 +1562,202 @@ fn test_page_capacity_adjust() {
 	assert adj2.cols == 512
 	assert adj2.rows < 128
 }
+
+// Test clone_partial_row_from with a hyperlink in the same page, where the
+// hyperlink cell IS within the copied range.
+fn test_page_clone_row_from_partial_hyperlink_in_same_page_copy() {
+	mut page := Page.init(PageCapacity{
+		cols: 10
+		rows: 10
+	})
+	defer {
+		page.deinit()
+	}
+	page.size.rows = u16(page.capacity.rows)
+
+	// We need to create a hyperlink.
+	hyperlink_id := page.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{
+			offset: 0
+		}
+		uri: ''
+	})
+
+	// Write
+	{
+		for x in 0 .. int(page.size.cols) {
+			mut rac := page.get_row_and_cell(x, 0)
+			unsafe {
+				rac.cell.content_tag = .codepoint
+				rac.cell.codepoint = u32(x + 1)
+			}
+		}
+
+		// Hyperlink in a single cell.
+		page.set_hyperlink(0, 7, hyperlink_id)
+	}
+	assert page.hyperlink_count() == 1
+
+	// Clone into the same page (cols 2..8, so cell 7 IS copied).
+	page.clone_partial_row_from(&page, 1, 0, 2, 8)
+
+	// Read it again.
+	{
+		for x in 0 .. int(page.size.cols) {
+			expected := if x >= 2 && x < 8 { u32(x + 1) } else { u32(0) }
+			rac := page.get_row_and_cell(x, 1)
+			assert rac.cell.codepoint == expected
+		}
+		{
+			rac := page.get_row_and_cell(7, 1)
+			assert rac.row.hyperlink
+			assert rac.cell.has_hyperlink
+		}
+	}
+	assert page.hyperlink_count() == 2
+}
+
+// Test clone_partial_row_from with a hyperlink in the same page, where the
+// hyperlink cell is OUTSIDE the copied range (omitted).
+fn test_page_clone_row_from_partial_hyperlink_in_same_page_omit() {
+	mut page := Page.init(PageCapacity{
+		cols: 10
+		rows: 10
+	})
+	defer {
+		page.deinit()
+	}
+	page.size.rows = u16(page.capacity.rows)
+
+	// We need to create a hyperlink.
+	hyperlink_id := page.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{
+			offset: 0
+		}
+		uri: ''
+	})
+
+	// Write
+	{
+		for x in 0 .. int(page.size.cols) {
+			mut rac := page.get_row_and_cell(x, 0)
+			unsafe {
+				rac.cell.content_tag = .codepoint
+				rac.cell.codepoint = u32(x + 1)
+			}
+		}
+
+		// Hyperlink in a single cell.
+		page.set_hyperlink(0, 7, hyperlink_id)
+	}
+	assert page.hyperlink_count() == 1
+
+	// Clone into the same page (cols 2..6, so cell 7 is NOT copied).
+	page.clone_partial_row_from(&page, 1, 0, 2, 6)
+
+	// Read it again.
+	{
+		for x in 0 .. int(page.size.cols) {
+			expected := if x >= 2 && x < 6 { u32(x + 1) } else { u32(0) }
+			rac := page.get_row_and_cell(x, 1)
+			assert rac.cell.codepoint == expected
+		}
+		{
+			rac := page.get_row_and_cell(7, 1)
+			assert !rac.row.hyperlink
+			assert !rac.cell.has_hyperlink
+		}
+	}
+	assert page.hyperlink_count() == 1
+}
+
+// Regression test: verify a single style can be cloned with exact capacity.
+// This tests that capacity_for_count properly accounts for ID 0 being reserved.
+fn test_page_exact_row_capacity_single_style_clone() {
+	mut page := Page.init(PageCapacity{
+		cols: 10
+		rows: 2
+		styles: 8
+	})
+	defer {
+		page.deinit()
+	}
+	page.size.rows = u16(page.capacity.rows)
+
+	// Add exactly one style to row 0.
+	style_id := page.styles.add(CellStyle{
+		flags: StyleFlags{
+			bold: true
+		}
+	}) or {
+		assert false, 'failed to add style'
+		return
+	}
+	{
+		mut rac := page.get_row_and_cell(0, 0)
+		unsafe {
+			rac.row.styled = true
+			rac.cell.style_id = style_id
+		}
+	}
+
+	// exactRowCapacity for just row 0 should give capacity for 1 style.
+	cap := page.exact_row_capacity(0, 1)
+	assert cap.styles == StyleSet.capacity_for_count(1)
+
+	// Create a new page with exact capacity and clone.
+	mut cloned := Page.init(cap)
+	defer {
+		cloned.deinit()
+	}
+	cloned.size.rows = u16(cloned.capacity.rows)
+
+	// This must not fail with a style capacity error.
+	cloned.clone_row_from(&page, 0, 0)
+
+	// Verify the style was cloned correctly.
+	assert cloned.rows[0].cells[0].style_id != default_style_id
+}
+
+// Test exactRowCapacity styles with a maxed-out single row.
+fn test_page_exact_row_capacity_styles_max_single_row() {
+	mut page := Page.init(PageCapacity{
+		cols: 1000
+		rows: 1
+		styles: max_u16
+	})
+	defer {
+		page.deinit()
+	}
+	page.size.rows = u16(page.capacity.rows)
+
+	// Style our first row.
+	page.rows[0].styled = true
+
+	// Fill cells with styles until we get OOM, but limit to a reasonable count
+	// to avoid overflow when computing capacity_for_count near maxInt.
+	mut count := 0
+	max_count := 1000 // Limit to avoid overflow in capacity calculation.
+	for i in 0 .. int(page.size.cols) {
+		if count >= max_count {
+			break
+		}
+		style_id := page.styles.add(CellStyle{
+			fg_color: .rgb
+			fg_r: u8(i & 0xFF)
+			fg_g: u8((i >> 8) & 0xFF)
+			fg_b: 0
+		}) or { break }
+		unsafe {
+			page.rows[0].cells[i].style_id = style_id
+		}
+		count++
+	}
+
+	// Verify we added a meaningful number of styles.
+	assert count > 0
+
+	// Capacity should be at least count (adjusted for load factor).
+	cap := page.exact_row_capacity(0, 1)
+	assert cap.styles == StyleSet.capacity_for_count(count)
+}

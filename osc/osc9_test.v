@@ -176,6 +176,12 @@ fn test_osc9_conemu_progress_remove_ignores_progress() {
 	assert cmd.progress == none
 }
 
+fn test_osc9_conemu_progress_remove_extra_semicolon() {
+	cmd := parse_osc_input('9;4;0;100;')
+	assert cmd.cmd_type == .conemu_progress_report
+	assert cmd.progress_state == .remove
+}
+
 fn test_osc9_conemu_progress_error() {
 	cmd := parse_osc_input('9;4;2')
 	assert cmd.cmd_type == .conemu_progress_report

@@ -237,3 +237,257 @@ fn test_osc4_empty_param() {
 	// This should either return none or an empty color operation
 	_ = p.end(0x1b)
 }
+
+// Translated from ghostty test "OSC 4:" - exhaustive palette + special coverage.
+fn test_osc4_full() {
+	// Test every palette index (0..254 to match ghostty's maxInt(u8) exclusive)
+	for idx := 0; idx < 255; idx++ {
+		// Simple color set: "{idx};red"
+		{
+			list := parse_get_set_ansi_color(.osc_4, '${idx};red')
+			assert list.len == 1
+			req := list[0]
+			assert req is ColorRequestSet
+			if req is ColorRequestSet {
+				assert req.target is ColorTargetPalette
+				if req.target is ColorTargetPalette {
+					assert req.target.index == u8(idx)
+				}
+				assert req.color.r == 255
+				assert req.color.g == 0
+				assert req.color.b == 0
+			}
+		}
+
+		// Simple color query: "{idx};?"
+		{
+			list := parse_get_set_ansi_color(.osc_4, '${idx};?')
+			assert list.len == 1
+			req := list[0]
+			assert req is ColorRequestQuery
+			if req is ColorRequestQuery {
+				assert req.target is ColorTargetPalette
+				if req.target is ColorTargetPalette {
+					assert req.target.index == u8(idx)
+				}
+			}
+		}
+
+		// Trailing invalid data produces results up to that point: "{idx};red;"
+		{
+			list := parse_get_set_ansi_color(.osc_4, '${idx};red;')
+			assert list.len == 1
+			req := list[0]
+			assert req is ColorRequestSet
+			if req is ColorRequestSet {
+				assert req.target is ColorTargetPalette
+				if req.target is ColorTargetPalette {
+					assert req.target.index == u8(idx)
+				}
+				assert req.color.r == 255
+				assert req.color.g == 0
+				assert req.color.b == 0
+			}
+		}
+
+		// Whitespace still parses (Kitty compat): "{idx};red "
+		{
+			list := parse_get_set_ansi_color(.osc_4, '${idx};red ')
+			assert list.len == 1
+			req := list[0]
+			assert req is ColorRequestSet
+			if req is ColorRequestSet {
+				assert req.target is ColorTargetPalette
+				if req.target is ColorTargetPalette {
+					assert req.target.index == u8(idx)
+				}
+				assert req.color.r == 255
+			}
+		}
+	}
+
+	// Test every special color: "{256+i};red"
+	specials := [SpecialColor.bold, .underline, .blink, .reverse, .italic]
+	for i, special in specials {
+		list := parse_get_set_ansi_color(.osc_4, '${256 + i};red')
+		assert list.len == 1
+		req := list[0]
+		assert req is ColorRequestSet
+		if req is ColorRequestSet {
+			assert req.target is ColorTargetSpecial
+			if req.target is ColorTargetSpecial {
+				assert req.target.color == special
+			}
+			assert req.color.r == 255
+			assert req.color.g == 0
+			assert req.color.b == 0
+		}
+	}
+}
+
+// Translated from ghostty test "OSC 5:" - special colors mapped directly.
+fn test_osc5_full() {
+	specials := [SpecialColor.bold, .underline, .blink, .reverse, .italic]
+	for i, special in specials {
+		list := parse_get_set_ansi_color(.osc_5, '${i};red')
+		assert list.len == 1
+		req := list[0]
+		assert req is ColorRequestSet
+		if req is ColorRequestSet {
+			assert req.target is ColorTargetSpecial
+			if req.target is ColorTargetSpecial {
+				assert req.target.color == special
+			}
+			assert req.color.r == 255
+			assert req.color.g == 0
+			assert req.color.b == 0
+		}
+	}
+}
+
+// Translated from ghostty test "OSC 4: multiple requests".
+fn test_osc4_multiple_requests_full() {
+	// Two distinct indices: "0;red;1;blue"
+	{
+		list := parse_get_set_ansi_color(.osc_4, '0;red;1;blue')
+		assert list.len == 2
+		req0 := list[0]
+		assert req0 is ColorRequestSet
+		if req0 is ColorRequestSet {
+			assert req0.target is ColorTargetPalette
+			if req0.target is ColorTargetPalette {
+				assert req0.target.index == 0
+			}
+			assert req0.color.r == 255
+			assert req0.color.g == 0
+			assert req0.color.b == 0
+		}
+		req1 := list[1]
+		assert req1 is ColorRequestSet
+		if req1 is ColorRequestSet {
+			assert req1.target is ColorTargetPalette
+			if req1.target is ColorTargetPalette {
+				assert req1.target.index == 1
+			}
+			assert req1.color.r == 0
+			assert req1.color.g == 0
+			assert req1.color.b == 255
+		}
+	}
+
+	// Same index twice, both preserved: "0;red;0;blue"
+	{
+		list := parse_get_set_ansi_color(.osc_4, '0;red;0;blue')
+		assert list.len == 2
+		req0 := list[0]
+		if req0 is ColorRequestSet {
+			if req0.target is ColorTargetPalette {
+				assert req0.target.index == 0
+			}
+			assert req0.color.r == 255
+			assert req0.color.b == 0
+		}
+		req1 := list[1]
+		if req1 is ColorRequestSet {
+			if req1.target is ColorTargetPalette {
+				assert req1.target.index == 0
+			}
+			assert req1.color.r == 0
+			assert req1.color.b == 255
+		}
+	}
+}
+
+// Translated from ghostty test "OSC 104:" - exhaustive palette + special reset.
+fn test_osc104_full() {
+	for idx := 0; idx < 255; idx++ {
+		list := parse_reset_ansi_color(.osc_104, '${idx}')
+		assert list.len == 1
+		req := list[0]
+		assert req is ColorRequestReset
+		if req is ColorRequestReset {
+			assert req.target is ColorTargetPalette
+			if req.target is ColorTargetPalette {
+				assert req.target.index == u8(idx)
+			}
+		}
+	}
+
+	specials := [SpecialColor.bold, .underline, .blink, .reverse, .italic]
+	for i, special in specials {
+		list := parse_reset_ansi_color(.osc_104, '${256 + i}')
+		assert list.len == 1
+		req := list[0]
+		assert req is ColorRequestReset
+		if req is ColorRequestReset {
+			assert req.target is ColorTargetSpecial
+			if req.target is ColorTargetSpecial {
+				assert req.target.color == special
+			}
+		}
+	}
+}
+
+// Translated from ghostty test "OSC 10..19: dynamic".
+fn test_osc_dynamic_full() {
+	dynamics := [DynamicColor.foreground, .background, .cursor, .pointer_foreground,
+		.pointer_background, .tektronix_foreground, .tektronix_background, .highlight_background,
+		.tektronix_cursor, .highlight_foreground]
+	for color in dynamics {
+		list := parse_get_set_dynamic_color(color, 'red')
+		assert list.len == 1
+		req := list[0]
+		assert req is ColorRequestSet
+		if req is ColorRequestSet {
+			assert req.target is ColorTargetDynamic
+			if req.target is ColorTargetDynamic {
+				assert req.target.color == color
+			}
+			assert req.color.r == 255
+			assert req.color.g == 0
+			assert req.color.b == 0
+		}
+	}
+}
+
+// Translated from ghostty test "OSC 110..119: reset dynamic".
+fn test_osc_reset_dynamic_full() {
+	dynamics := [DynamicColor.foreground, .background, .cursor, .pointer_foreground,
+		.pointer_background, .tektronix_foreground, .tektronix_background, .highlight_background,
+		.tektronix_cursor, .highlight_foreground]
+	for color in dynamics {
+		// Bare reset: ""
+		{
+			list := parse_reset_dynamic_color(color, '')
+			assert list.len == 1
+			req := list[0]
+			assert req is ColorRequestReset
+			if req is ColorRequestReset {
+				assert req.target is ColorTargetDynamic
+				if req.target is ColorTargetDynamic {
+					assert req.target.color == color
+				}
+			}
+		}
+
+		// Trailing semicolon allowed: ";"
+		{
+			list := parse_reset_dynamic_color(color, ';')
+			assert list.len == 1
+			req := list[0]
+			assert req is ColorRequestReset
+			if req is ColorRequestReset {
+				assert req.target is ColorTargetDynamic
+				if req.target is ColorTargetDynamic {
+					assert req.target.color == color
+				}
+			}
+		}
+
+		// Whitespace is not allowed: " "
+		{
+			list := parse_reset_dynamic_color(color, ' ')
+			assert list.len == 0
+		}
+	}
+}

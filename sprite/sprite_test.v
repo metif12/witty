@@ -1,0 +1,603 @@
+module sprite
+
+// Tests for the pure-logic primitives in sprite.v, translated
+// faithfully from the semantics documented in ghostty's
+//   src/font/sprite/draw/common.zig   (Fraction, Thickness, fill, Quads, ...)
+//   src/font/sprite/canvas.zig        (Canvas.pixel/rect/box/invert/flip)
+//
+// Ghostty's sprite module has no dedicated unit `test` blocks for these
+// primitives (its only sprite test is the PNG-regression
+// "sprite face render all sprites" in Face.zig, which is not portable).
+// These tests exercise the documented behavior of the translated logic
+// so the V port is verified against ghostty's exact formulas and
+// worked-example comments.
+
+import font
+
+// ------------------------------------------------------------
+// Fraction.fraction_val -- exact float values per common.zig
+// ------------------------------------------------------------
+
+fn test_fraction_val_min_edge() {
+	// start/left/top/zero all map to 0.0
+	assert Fraction.start.fraction_val() == 0.0
+	assert Fraction.left.fraction_val() == 0.0
+	assert Fraction.top.fraction_val() == 0.0
+	assert Fraction.zero.fraction_val() == 0.0
+}
+
+fn test_fraction_val_eighths() {
+	assert Fraction.one_eighth.fraction_val() == 0.125
+	assert Fraction.eighth.fraction_val() == 0.125
+	assert Fraction.two_eighths.fraction_val() == 0.25
+	assert Fraction.three_eighths.fraction_val() == 0.375
+	assert Fraction.four_eighths.fraction_val() == 0.5
+	assert Fraction.five_eighths.fraction_val() == 0.625
+	assert Fraction.six_eighths.fraction_val() == 0.75
+	assert Fraction.seven_eighths.fraction_val() == 0.875
+}
+
+fn test_fraction_val_quarters() {
+	assert Fraction.one_quarter.fraction_val() == 0.25
+	assert Fraction.quarter.fraction_val() == 0.25
+	assert Fraction.two_quarters.fraction_val() == 0.5
+	assert Fraction.three_quarters.fraction_val() == 0.75
+}
+
+fn test_fraction_val_thirds() {
+	assert Fraction.one_third.fraction_val() == 1.0 / 3.0
+	assert Fraction.third.fraction_val() == 1.0 / 3.0
+	assert Fraction.two_thirds.fraction_val() == 2.0 / 3.0
+}
+
+fn test_fraction_val_halves_and_center() {
+	assert Fraction.half_.fraction_val() == 0.5
+	assert Fraction.one_half.fraction_val() == 0.5
+	assert Fraction.center.fraction_val() == 0.5
+	assert Fraction.middle.fraction_val() == 0.5
+}
+
+fn test_fraction_val_max_edge() {
+	assert Fraction.end_.fraction_val() == 1.0
+	assert Fraction.right.fraction_val() == 1.0
+	assert Fraction.bottom.fraction_val() == 1.0
+	assert Fraction.one.fraction_val() == 1.0
+	assert Fraction.full.fraction_val() == 1.0
+}
+
+// ------------------------------------------------------------
+// Fraction.to_min / to_max -- worked example from common.zig
+//
+// "if size is 7, and we're looking at the half line,
+//  size - round((1 - 0.5) * size) => 3; whereas the max
+//  coordinate directly rounds ... both start -> half and
+//  half -> end will be 4px, from 0 -> 4 and 3 -> 7."
+// ------------------------------------------------------------
+
+fn test_fraction_min_max_odd_size_half() {
+	assert Fraction.half_.to_min(7) == 3
+	assert Fraction.half_.to_max(7) == 4
+	// start -> half spans 0..4 (4px), half -> end spans 3..7 (4px)
+	assert Fraction.start.to_min(7) == 0
+	assert Fraction.end_.to_max(7) == 7
+}
+
+fn test_fraction_min_max_edges() {
+	// The min edge fractions produce 0 as a min coord for any size.
+	assert Fraction.zero.to_min(10) == 0
+	assert Fraction.zero.to_min(8) == 0
+	// The max edge fractions produce `size` as a max coord.
+	assert Fraction.one.to_max(10) == 10
+	assert Fraction.full.to_max(8) == 8
+}
+
+fn test_fraction_min_max_even_size() {
+	// size 8, half -> min = 8 - round(0.5*8) = 8 - 4 = 4; max = round(4) = 4
+	assert Fraction.half_.to_min(8) == 4
+	assert Fraction.half_.to_max(8) == 4
+	// quarter of 8: min = 8 - round(0.75*8) = 8 - 6 = 2; max = round(0.25*8) = 2
+	assert Fraction.one_quarter.to_min(8) == 2
+	assert Fraction.one_quarter.to_max(8) == 2
+}
+
+fn test_fraction_to_float() {
+	assert Fraction.half_.to_float(10) == 5.0
+	assert Fraction.one_quarter.to_float(8) == 2.0
+	assert Fraction.one.to_float(16) == 16.0
+	assert Fraction.zero.to_float(16) == 0.0
+}
+
+fn test_fraction_eighths_index_table() {
+	// The eighths table indexes i/8 -> the corresponding Fraction,
+	// each fraction() == i/8.
+	for i in 0 .. 9 {
+		f := fraction_eighths[i]
+		assert f.fraction_val() == f64(i) / 8.0
+	}
+}
+
+fn test_fraction_quarters_index_table() {
+	for i in 0 .. 5 {
+		f := fraction_quarters[i]
+		assert f.fraction_val() == f64(i) / 4.0
+	}
+}
+
+fn test_fraction_thirds_index_table() {
+	for i in 0 .. 4 {
+		f := fraction_thirds[i]
+		assert f.fraction_val() == f64(i) / 3.0
+	}
+}
+
+fn test_fraction_halves_index_table() {
+	for i in 0 .. 3 {
+		f := fraction_halves[i]
+		assert f.fraction_val() == f64(i) / 2.0
+	}
+}
+
+// ------------------------------------------------------------
+// Thickness.height -- @max(base/2, 1) / base / base*2
+// ------------------------------------------------------------
+
+fn test_thickness_height() {
+	assert Thickness.light.height(4) == 4
+	assert Thickness.heavy.height(4) == 8
+	assert Thickness.super_light.height(4) == 2
+	// super_light floors base/2 but clamps to a minimum of 1.
+	assert Thickness.super_light.height(2) == 1
+	assert Thickness.super_light.height(1) == 1
+	assert Thickness.super_light.height(3) == 1
+	assert Thickness.super_light.height(6) == 3
+}
+
+// ------------------------------------------------------------
+// Shade / Color enum values
+// ------------------------------------------------------------
+
+fn test_shade_values() {
+	assert u8(Shade.off) == 0x00
+	assert u8(Shade.light_) == 0x40
+	assert u8(Shade.medium) == 0x80
+	assert u8(Shade.dark) == 0xc0
+	assert u8(Shade.on) == 0xff
+}
+
+fn test_color_values() {
+	assert u8(Color.off) == 0x00
+	assert u8(Color.on) == 0xff
+}
+
+// ------------------------------------------------------------
+// Canvas.pixel / rect / box primitives
+// ------------------------------------------------------------
+
+// data_at reads a cell-relative pixel back from the canvas (accounting
+// for padding), returning the raw alpha value.
+fn data_at(c &Canvas, x int, y int) u8 {
+	w := int(c.sfc_width())
+	px := x + int(c.padding_x)
+	py := y + int(c.padding_y)
+	return c.data[py * w + px]
+}
+
+fn test_canvas_dimensions() {
+	c := Canvas.init(10, 20, 2, 3)
+	assert c.width == 10
+	assert c.height == 20
+	assert c.padding_x == 2
+	assert c.padding_y == 3
+	assert c.sfc_width() == 10 + 2 * 2
+	assert c.sfc_height() == 20 + 2 * 3
+	// Buffer is fully allocated and zeroed.
+	assert c.data.len == int(c.sfc_width() * c.sfc_height())
+	for v in c.data {
+		assert v == 0
+	}
+}
+
+fn test_canvas_pixel() {
+	mut c := Canvas.init(4, 4, 0, 0)
+	c.pixel(1, 2, .on)
+	assert data_at(&c, 1, 2) == 255
+	// Other pixels remain off.
+	assert data_at(&c, 0, 0) == 0
+	assert data_at(&c, 3, 3) == 0
+}
+
+fn test_canvas_pixel_out_of_bounds_ignored() {
+	mut c := Canvas.init(4, 4, 0, 0)
+	// z2d silently ignores out-of-bounds writes; so does our translation.
+	c.pixel(-1, 0, .on)
+	c.pixel(0, -1, .on)
+	c.pixel(4, 0, .on)
+	c.pixel(0, 4, .on)
+	for v in c.data {
+		assert v == 0
+	}
+}
+
+fn test_canvas_rect() {
+	mut c := Canvas.init(6, 6, 0, 0)
+	c.rect(SpriteRect{ x: 1, y: 1, width: 3, height: 2 }, .on)
+	// Interior of the rect is on.
+	for y in 1 .. 3 {
+		for x in 1 .. 4 {
+			assert data_at(&c, x, y) == 255
+		}
+	}
+	// Just outside is off.
+	assert data_at(&c, 0, 1) == 0
+	assert data_at(&c, 4, 1) == 0
+	assert data_at(&c, 1, 3) == 0
+}
+
+fn test_canvas_draw_box_orders_corners() {
+	mut c := Canvas.init(6, 6, 0, 0)
+	// Pass the corners in reversed order; the box should normalize them.
+	c.draw_box(4, 3, 1, 1, .on)
+	for y in 1 .. 3 {
+		for x in 1 .. 4 {
+			assert data_at(&c, x, y) == 255
+		}
+	}
+	assert data_at(&c, 0, 1) == 0
+	assert data_at(&c, 4, 1) == 0
+}
+
+fn test_canvas_pixel_padding_offset() {
+	// With padding, cell-relative (0,0) maps to surface (padding_x, padding_y).
+	mut c := Canvas.init(4, 4, 2, 3)
+	c.pixel(0, 0, .on)
+	w := int(c.sfc_width())
+	// Direct surface index at (padding_x, padding_y).
+	assert c.data[3 * w + 2] == 255
+	// Surface origin (0,0) untouched.
+	assert c.data[0] == 0
+}
+
+// ------------------------------------------------------------
+// Canvas.invert / flip_horizontal / flip_vertical
+// ------------------------------------------------------------
+
+fn test_canvas_invert() {
+	mut c := Canvas.init(3, 3, 0, 0)
+	c.pixel(0, 0, .on)
+	c.invert()
+	// The on pixel becomes off, and all previously-off pixels become on.
+	assert data_at(&c, 0, 0) == 0
+	assert data_at(&c, 1, 1) == 255
+	assert data_at(&c, 2, 2) == 255
+}
+
+fn test_canvas_flip_horizontal() {
+	mut c := Canvas.init(4, 1, 0, 0)
+	c.pixel(0, 0, .on)
+	c.flip_horizontal()
+	// The pixel at x=0 moves to the far right (x = width-1).
+	assert data_at(&c, 0, 0) == 0
+	assert data_at(&c, 3, 0) == 255
+}
+
+fn test_canvas_flip_horizontal_swaps_clip() {
+	mut c := Canvas.init(4, 4, 0, 0)
+	c.clip_left = 1
+	c.clip_right = 2
+	c.flip_horizontal()
+	assert c.clip_left == 2
+	assert c.clip_right == 1
+}
+
+fn test_canvas_flip_vertical() {
+	mut c := Canvas.init(1, 4, 0, 0)
+	c.pixel(0, 0, .on)
+	c.flip_vertical()
+	assert data_at(&c, 0, 0) == 0
+	assert data_at(&c, 0, 3) == 255
+}
+
+fn test_canvas_flip_vertical_swaps_clip() {
+	mut c := Canvas.init(4, 4, 0, 0)
+	c.clip_top = 1
+	c.clip_bottom = 3
+	c.flip_vertical()
+	assert c.clip_top == 3
+	assert c.clip_bottom == 1
+}
+
+// ------------------------------------------------------------
+// sat_sub -- saturating subtraction (Zig's `-|`)
+// ------------------------------------------------------------
+
+fn test_sat_sub() {
+	assert sat_sub(5, 3) == 2
+	assert sat_sub(3, 5) == 0
+	assert sat_sub(0, 1) == 0
+	assert sat_sub(10, 10) == 0
+}
+
+// ------------------------------------------------------------
+// fill() -- fills the fraction-bounded box with .on
+// ------------------------------------------------------------
+
+fn test_fill_full_cell() {
+	metrics := font.default_grid_metrics(8, 8)
+	mut c := Canvas.init(8, 8, 0, 0)
+	fill(metrics, mut c, Fraction.left, Fraction.right, Fraction.top, Fraction.bottom)
+	// Whole cell should be on.
+	for y in 0 .. 8 {
+		for x in 0 .. 8 {
+			assert data_at(&c, x, y) == 255
+		}
+	}
+}
+
+fn test_fill_upper_left_quadrant() {
+	metrics := font.default_grid_metrics(8, 8)
+	mut c := Canvas.init(8, 8, 0, 0)
+	// Fill from left..half horizontally and top..half vertically.
+	fill(metrics, mut c, Fraction.left, Fraction.half_, Fraction.top, Fraction.half_)
+	// half.to_max(8) == 4, so the region is x in [0,4), y in [0,4).
+	for y in 0 .. 4 {
+		for x in 0 .. 4 {
+			assert data_at(&c, x, y) == 255
+		}
+	}
+	// Right/bottom halves remain off.
+	assert data_at(&c, 4, 0) == 0
+	assert data_at(&c, 0, 4) == 0
+	assert data_at(&c, 7, 7) == 0
+}
+
+// ------------------------------------------------------------
+// hline / vline / hline_middle / vline_middle
+// ------------------------------------------------------------
+
+fn test_hline() {
+	mut c := Canvas.init(6, 6, 0, 0)
+	// Horizontal line spanning x in [1,5), top edge at y=2, thickness 1.
+	hline(mut c, 1, 5, 2, 1)
+	for x in 1 .. 5 {
+		assert data_at(&c, x, 2) == 255
+	}
+	assert data_at(&c, 0, 2) == 0
+	assert data_at(&c, 5, 2) == 0
+	assert data_at(&c, 1, 1) == 0
+	assert data_at(&c, 1, 3) == 0
+}
+
+fn test_vline() {
+	mut c := Canvas.init(6, 6, 0, 0)
+	// Vertical line spanning y in [1,5), left edge at x=3, thickness 1.
+	vline(mut c, 1, 5, 3, 1)
+	for y in 1 .. 5 {
+		assert data_at(&c, 3, y) == 255
+	}
+	assert data_at(&c, 3, 0) == 0
+	assert data_at(&c, 3, 5) == 0
+	assert data_at(&c, 2, 1) == 0
+	assert data_at(&c, 4, 1) == 0
+}
+
+fn test_hline_middle() {
+	// cell 8x8, box_thickness 1 -> thick_px 1, top edge at (8-1)/2 = 3.
+	metrics := font.default_grid_metrics(8, 8)
+	mut c := Canvas.init(8, 8, 0, 0)
+	hline_middle(metrics, mut c, Thickness.light)
+	for x in 0 .. 8 {
+		assert data_at(&c, x, 3) == 255
+	}
+	assert data_at(&c, 0, 2) == 0
+	assert data_at(&c, 0, 4) == 0
+}
+
+fn test_vline_middle() {
+	metrics := font.default_grid_metrics(8, 8)
+	mut c := Canvas.init(8, 8, 0, 0)
+	vline_middle(metrics, mut c, Thickness.light)
+	// left edge at (8-1)/2 = 3.
+	for y in 0 .. 8 {
+		assert data_at(&c, 3, y) == 255
+	}
+	assert data_at(&c, 2, 0) == 0
+	assert data_at(&c, 4, 0) == 0
+}
+
+// ------------------------------------------------------------
+// block_fill / block_shade / full_block_shade
+// ------------------------------------------------------------
+
+fn test_full_block_shade() {
+	metrics := font.default_grid_metrics(6, 6)
+	mut c := Canvas.init(6, 6, 0, 0)
+	full_block_shade(metrics, mut c, Shade.medium)
+	for y in 0 .. 6 {
+		for x in 0 .. 6 {
+			assert data_at(&c, x, y) == 0x80
+		}
+	}
+}
+
+fn test_block_fill_alignment() {
+	metrics := font.default_grid_metrics(8, 8)
+	mut c := Canvas.init(8, 8, 0, 0)
+	// Half-width, half-height block aligned to the top-left corner.
+	block_fill(metrics, mut c, align_upper_left, 0.5, 0.5)
+	// w = round(8*0.5) = 4, h = 4, x=0, y=0.
+	for y in 0 .. 4 {
+		for x in 0 .. 4 {
+			assert data_at(&c, x, y) == 255
+		}
+	}
+	assert data_at(&c, 4, 0) == 0
+	assert data_at(&c, 0, 4) == 0
+}
+
+fn test_block_shade_bottom_right() {
+	metrics := font.default_grid_metrics(8, 8)
+	mut c := Canvas.init(8, 8, 0, 0)
+	block_shade(metrics, mut c, align_lower_right, 0.5, 0.5, Shade.dark)
+	// w=4, h=4, x = 8-4 = 4, y = 8-4 = 4.
+	for y in 4 .. 8 {
+		for x in 4 .. 8 {
+			assert data_at(&c, x, y) == 0xc0
+		}
+	}
+	assert data_at(&c, 3, 7) == 0
+	assert data_at(&c, 7, 3) == 0
+}
+
+// ------------------------------------------------------------
+// Quads / Corner / Edge / Alignment defaults
+// ------------------------------------------------------------
+
+fn test_quads_default() {
+	q := Quads{}
+	assert q.tl == false
+	assert q.tr == false
+	assert q.bl == false
+	assert q.br == false
+}
+
+fn test_alignment_named_constants() {
+	assert align_center.horizontal == .center
+	assert align_center.vertical == .middle
+	assert align_upper_left.horizontal == .left
+	assert align_upper_left.vertical == .top
+	assert align_lower_right.horizontal == .right
+	assert align_lower_right.vertical == .bottom
+	// Aliases resolve to the same underlying alignment.
+	assert align_top == align_upper
+	assert align_bottom == align_lower
+	assert align_middle_center == align_center
+	assert align_top_left == align_upper_left
+}
+
+// ------------------------------------------------------------
+// Diagonal helpers (from common.v) draw *something*.
+// ------------------------------------------------------------
+
+fn count_on(c &Canvas) int {
+	mut n := 0
+	for v in c.data {
+		if v > 0 {
+			n++
+		}
+	}
+	return n
+}
+
+fn test_light_diagonal_upper_left_to_lower_right_draws() {
+	metrics := font.default_grid_metrics(12, 12)
+	mut c := Canvas.init(12, 12, 2, 2)
+	light_diagonal_upper_left_to_lower_right(metrics, mut c)
+	// A diagonal line must set at least ~cell_height pixels.
+	assert count_on(&c) >= 10
+	// And the top-left / bottom-right neighborhood must be lit.
+	assert data_at(&c, 0, 0) > 0 || data_at(&c, 1, 1) > 0
+}
+
+fn test_light_diagonal_upper_right_to_lower_left_draws() {
+	metrics := font.default_grid_metrics(12, 12)
+	mut c := Canvas.init(12, 12, 2, 2)
+	light_diagonal_upper_right_to_lower_left(metrics, mut c)
+	assert count_on(&c) >= 10
+}
+
+// ------------------------------------------------------------
+// Canvas.trim -- clip margins collapse onto the drawn content.
+// (Translated from canvas.zig `Canvas.trim`.)
+// ------------------------------------------------------------
+
+fn test_canvas_trim_single_pixel() {
+	// 6x6 surface (no padding). Draw one pixel at (2,3); trim should
+	// clip everything except a 1x1 region around it.
+	mut c := Canvas.init(6, 6, 0, 0)
+	c.pixel(2, 3, .on)
+	c.trim()
+	// clip_top counts empty rows above the pixel (rows 0,1,2 -> y=3).
+	assert c.clip_top == 3
+	// clip_bottom counts empty rows below (rows 4,5 -> 2).
+	assert c.clip_bottom == 2
+	// clip_left counts empty cols left of x=2 -> 2.
+	assert c.clip_left == 2
+	// clip_right counts empty cols right of x=2 (cols 3,4,5 -> 3).
+	assert c.clip_right == 3
+}
+
+fn test_canvas_trim_full_transparent() {
+	// A fully transparent surface trims to nothing: the trim loops each
+	// stop when the remaining span is empty, meeting in the middle.
+	mut c := Canvas.init(4, 4, 0, 0)
+	c.trim()
+	// top advances until clip_top == height - clip_bottom.
+	assert c.clip_top + c.clip_bottom == c.sfc_height()
+	assert c.clip_left + c.clip_right == c.sfc_width()
+}
+
+// ------------------------------------------------------------
+// Canvas.write_atlas -- writes the trimmed drawing to a grayscale atlas.
+// (Translated from canvas.zig `Canvas.writeAtlas`.)
+// ------------------------------------------------------------
+
+fn test_write_atlas_region_is_trimmed() {
+	mut atlas := font.Atlas.init(32, font.AtlasFormat.grayscale)
+	// Draw a 2x2 block in the middle of an 8x8 (no padding) canvas.
+	mut c := Canvas.init(8, 8, 0, 0)
+	c.rect(SpriteRect{ x: 3, y: 2, width: 2, height: 2 }, .on)
+	region := c.write_atlas(mut atlas) or { panic('write_atlas failed: ${err}') }
+	// The region must be trimmed down to the 2x2 drawn content.
+	assert region.width == 2
+	assert region.height == 2
+	// The atlas must contain the copied 2x2 block at the region origin.
+	for ry in 0 .. 2 {
+		for rx in 0 .. 2 {
+			idx := (region.y + u32(ry)) * atlas.size + (region.x + u32(rx))
+			assert atlas.data[int(idx)] == 255
+		}
+	}
+}
+
+fn test_write_atlas_empty_canvas() {
+	mut atlas := font.Atlas.init(32, font.AtlasFormat.grayscale)
+	// Nothing drawn -> the region collapses to zero size.
+	mut c := Canvas.init(8, 8, 0, 0)
+	region := c.write_atlas(mut atlas) or { panic('write_atlas failed: ${err}') }
+	assert region.width == 0
+	assert region.height == 0
+}
+
+// ------------------------------------------------------------
+// SpriteFace.render_glyph -- full pipeline for a covered codepoint.
+// (Translated from Face.zig `renderGlyph`.)
+// ------------------------------------------------------------
+
+fn test_render_glyph_covered_codepoint() {
+	face := SpriteFace{
+		metrics: font.default_grid_metrics(8, 16)
+	}
+	mut atlas := font.Atlas.init(64, font.AtlasFormat.grayscale)
+	// U+2500 (light horizontal line) is covered and draws a horizontal
+	// line, so the resulting glyph must have a non-zero region.
+	glyph := face.render_glyph(mut atlas, 0x2500, font.RenderOptions{}) or {
+		panic('render_glyph failed: ${err}')
+	}
+	assert glyph.width > 0
+	assert glyph.height > 0
+}
+
+fn test_render_glyph_uncovered_codepoint_is_blank() {
+	face := SpriteFace{
+		metrics: font.default_grid_metrics(8, 16)
+	}
+	mut atlas := font.Atlas.init(64, font.AtlasFormat.grayscale)
+	// 'A' is not a sprite codepoint, so render_glyph returns a blank glyph.
+	glyph := face.render_glyph(mut atlas, 0x0041, font.RenderOptions{}) or {
+		panic('render_glyph failed: ${err}')
+	}
+	assert glyph.width == 0
+	assert glyph.height == 0
+	assert glyph.atlas_x == 0
+	assert glyph.atlas_y == 0
+}

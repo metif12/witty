@@ -1118,3 +1118,530 @@ fn test_codepoint_map_empty() {
 	output := formatter.format()
 	assert output == 'hello world', 'empty map should not change anything'
 }
+
+// ============================================================
+// Additional ghostty-parity tests (driven via ReadonlyStream)
+//
+// These translate ghostty formatter.zig `test "..."` blocks that fill the
+// terminal via the VT stream and then format. The point_map/pin_map
+// assertions from ghostty are omitted because pin/point tracking is not
+// implemented in this port (see formatter.v notes).
+// ============================================================
+
+// Page plain single line with styling: styling does not affect plain output.
+fn test_page_plain_single_line_with_styling() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('hello, \x1b[1mworld\x1b[0m') or { panic(err) }
+
+	f := PageFormatter.init(&t.screens.active.pages, format_plain)
+	r := f.format_with_state()
+	assert r.output == 'hello, world'
+	assert r.state.rows == int(t.screens.active.pages.rows)
+	assert r.state.cells == int(t.screens.active.pages.cols) - 12
+}
+
+// Page plain multiline rectangle.
+fn test_page_plain_multiline_rectangle() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('hello\r\nworld') or { panic(err) }
+
+	mut f := PageFormatter.init(&t.screens.active.pages, format_plain)
+	f.start_x = 1
+	f.end_x = 3
+	f.rectangle = true
+	r := f.format_with_state()
+	assert r.output == 'ell\norl'
+	assert r.state.rows == int(t.screens.active.pages.rows) - 1
+	assert r.state.cells == 0
+}
+
+// Page plain end_x greater than cols clamps.
+fn test_page_plain_end_x_greater_than_cols() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('hello') or { panic(err) }
+
+	mut f := PageFormatter.init(&t.screens.active.pages, format_plain)
+	f.end_x = 100
+	r := f.format_with_state()
+	assert r.output == 'hello'
+	assert r.state.rows == int(t.screens.active.pages.rows)
+	assert r.state.cells == int(t.screens.active.pages.cols) - 5
+}
+
+// Page plain end_x less than start_x on a single row returns empty.
+fn test_page_plain_end_x_less_than_start_x_single_row() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('hello') or { panic(err) }
+
+	mut f := PageFormatter.init(&t.screens.active.pages, format_plain)
+	f.start_x = 10
+	f.end_y = 0
+	f.end_x = 5
+	r := f.format_with_state()
+	assert r.output == ''
+	assert r.state.rows == 0
+	assert r.state.cells == 0
+}
+
+// Page plain soft-wrapped 3 lines without unwrap.
+fn test_page_plain_soft_wrapped_3_lines_no_unwrap() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('hello world this is a test') or { panic(err) }
+
+	f := PageFormatter.init(&t.screens.active.pages, format_plain)
+	r := f.format_with_state()
+	// Without unwrap, wrapped lines show as separate lines
+	assert r.output == 'hello worl\nd this is\na test'
+	assert r.state.rows == int(t.screens.active.pages.rows) - 2
+	assert r.state.cells == int(t.screens.active.pages.cols) - 6
+}
+
+// Page plain soft-wrapped 3 lines with unwrap.
+fn test_page_plain_soft_wrapped_3_lines_with_unwrap() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('hello world this is a test') or { panic(err) }
+
+	f := PageFormatter.init(&t.screens.active.pages, FormatOptions{
+		emit: .plain
+		unwrap: true
+	})
+	r := f.format_with_state()
+	// With unwrap, wrapped lines are joined together
+	assert r.output == 'hello world this is a test'
+	assert r.state.rows == int(t.screens.active.pages.rows) - 2
+	assert r.state.cells == int(t.screens.active.pages.cols) - 6
+}
+
+// Page plain single line soft-wrapped unwrapped.
+fn test_page_plain_single_line_soft_wrapped_unwrapped() {
+	mut t := Terminal.init(Options{ cols: 3, rows: 5 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('hello!') or { panic(err) }
+
+	f := PageFormatter.init(&t.screens.active.pages, FormatOptions{
+		emit: .plain
+		unwrap: true
+	})
+	output := f.format()
+	assert output == 'hello!'
+}
+
+// Page plain single wide char.
+//
+// Note: the ghostty test also asserts state.cells == cols - 4 (⚡ occupies a
+// wide cell + spacer_tail). This port's simplified wide-char cell model does
+// not emit a spacer_tail, so we assert only the formatted output which is the
+// core behavior.
+fn test_page_plain_single_wide_char() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('1A⚡') or { panic(err) }
+
+	// Full string
+	mut f := PageFormatter.init(&t.screens.active.pages, format_plain)
+	assert f.format() == '1A⚡'
+
+	// Wide only (from start of the wide char)
+	mut f2 := PageFormatter.init(&t.screens.active.pages, format_plain)
+	f2.start_x = 2
+	assert f2.format() == '⚡'
+}
+
+// Page plain start_y and start_x zero uses trailing state.
+fn test_page_plain_start_y_and_start_x_zero_uses_trailing_state() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('hello') or { panic(err) }
+
+	mut f := PageFormatter.init(&t.screens.active.pages, format_plain)
+	f.start_y = 0
+	f.start_x = 0
+	f.trailing_state = TrailingState{ rows: 2, cells: 0 }
+	r := f.format_with_state()
+	// SHOULD output the 2 newlines because both start_y and start_x are 0
+	assert r.output == '\n\nhello'
+	assert r.state.rows == int(t.screens.active.pages.rows)
+	assert r.state.cells == int(t.screens.active.pages.cols) - 5
+}
+
+// Page plain with prior trailing state cells, no wrapped line.
+fn test_page_plain_with_prior_trailing_state_cells_no_wrap() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('hello') or { panic(err) }
+
+	mut f := PageFormatter.init(&t.screens.active.pages, format_plain)
+	f.trailing_state = TrailingState{ rows: 0, cells: 3 }
+	r := f.format_with_state()
+	// Blank cells are reset when row is not a wrap continuation
+	assert r.output == 'hello'
+	assert r.state.rows == int(t.screens.active.pages.rows)
+	assert r.state.cells == int(t.screens.active.pages.cols) - 5
+}
+
+// Page plain with prior trailing state cells, with wrap continuation.
+fn test_page_plain_with_prior_trailing_state_cells_wrap_continuation() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('world') or { panic(err) }
+
+	// Surgically modify the first row to be a wrap continuation
+	idx := t.screens.active.pages.active_start
+	t.screens.active.pages.screen_rows[idx].wrap_continuation = true
+
+	mut f := PageFormatter.init(&t.screens.active.pages, FormatOptions{
+		emit: .plain
+		unwrap: true
+	})
+	f.trailing_state = TrailingState{ rows: 0, cells: 3 }
+	r := f.format_with_state()
+	// Blank cells are preserved when the row is a wrap continuation with unwrap
+	assert r.output == '   world'
+	assert r.state.rows == int(t.screens.active.pages.rows)
+	assert r.state.cells == int(t.screens.active.pages.cols) - 5
+}
+
+// Page html mixed ascii and unicode.
+fn test_page_html_mixed_ascii_and_unicode() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('test ╰─❯ ok') or { panic(err) }
+
+	f := PageFormatter.init(&t.screens.active.pages, format_html)
+	output := f.format()
+	assert output == '<div style="font-family: monospace; white-space: pre;">test &#9584;&#9472;&#10095; ok</div>'
+}
+
+// Page codepoint_map multiple ranges.
+fn test_codepoint_map_multiple_ranges() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('hello world') or { panic(err) }
+
+	// Replace 'a'-'m' with 'A' and 'n'-'z' with 'Z'
+	f := PageFormatter.init(&t.screens.active.pages, FormatOptions{
+		emit: .plain
+		codepoint_map: [
+			CodepointMap{
+				range_start: u32(`a`)
+				range_end: u32(`m`)
+				replacement: CodepointReplacement(CodepointRepl{ codepoint: u32(`A`) })
+			},
+			CodepointMap{
+				range_start: u32(`n`)
+				range_end: u32(`z`)
+				replacement: CodepointReplacement(CodepointRepl{ codepoint: u32(`Z`) })
+			},
+		]
+	})
+	// h e l l o   w o r l d
+	// A A A A Z   Z Z Z A A
+	assert f.format() == 'AAAAZ ZZZAA'
+}
+
+// Page codepoint_map unicode replacement.
+fn test_codepoint_map_unicode_replacement() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('hello ⚡ world') or { panic(err) }
+
+	// Replace lightning bolt (U+26A1) with fire emoji
+	f := PageFormatter.init(&t.screens.active.pages, FormatOptions{
+		emit: .plain
+		codepoint_map: [
+			CodepointMap{
+				range_start: 0x26A1
+				range_end: 0x26A1
+				replacement: CodepointReplacement(StringRepl{ str: '🔥' })
+			},
+		]
+	})
+	assert f.format() == 'hello 🔥 world'
+}
+
+// Screen plain single line.
+fn test_screen_plain_single_line() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('hello, world') or { panic(err) }
+
+	f := ScreenFormatter.init(t.screens.active, format_plain)
+	assert f.format() == 'hello, world'
+}
+
+// Screen plain multiline.
+fn test_screen_plain_multiline() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('hello\r\nworld') or { panic(err) }
+
+	f := ScreenFormatter.init(t.screens.active, format_plain)
+	assert f.format() == 'hello\nworld'
+}
+
+// Screen plain with selection.
+fn test_screen_plain_with_selection() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('line1\r\nline2\r\nline3') or { panic(err) }
+
+	start := t.screens.active.pages.pin(PinOpts{ tag: .active, x: 0, y: 1 }) or { panic('no start pin') }
+	end := t.screens.active.pages.pin(PinOpts{ tag: .active, x: 4, y: 1 }) or { panic('no end pin') }
+
+	mut f := ScreenFormatter.init(t.screens.active, format_plain)
+	f.content = ScreenContent(ScreenContentSelection{ sel: Selection.init(start, end, false) })
+	assert f.format() == 'line2'
+}
+
+// Screen vt with cursor position (roundtrip via a second terminal).
+fn test_screen_vt_with_cursor_position() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('hello\r\nworld') or { panic(err) }
+
+	mut f := ScreenFormatter.init(t.screens.active, format_vt)
+	f.extra = ScreenExtra{
+		cursor: true
+	}
+	output := f.format()
+
+	mut t2 := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s2 := ReadonlyStream.init(mut t2)
+	defer {
+		s2.deinit()
+	}
+	s2.next_slice(output) or { panic(err) }
+
+	assert t.screens.active.cursor.x == t2.screens.active.cursor.x
+	assert t.screens.active.cursor.y == t2.screens.active.cursor.y
+}
+
+// Screen vt with style (roundtrip via a second terminal).
+fn test_screen_vt_with_style() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	// Set some style attributes: bold + red foreground
+	s.next_slice('\x1b[1;31mhello') or { panic(err) }
+
+	mut f := ScreenFormatter.init(t.screens.active, format_vt)
+	f.extra = ScreenExtra{
+		style: true
+	}
+	output := f.format()
+
+	mut t2 := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s2 := ReadonlyStream.init(mut t2)
+	defer {
+		s2.deinit()
+	}
+	s2.next_slice(output) or { panic(err) }
+
+	assert cell_style_eql(t.screens.active.cursor.style, t2.screens.active.cursor.style)
+}
+
+// Screen vt with hyperlink (roundtrip via a second terminal).
+fn test_screen_vt_with_hyperlink() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('\x1b]8;;http://example.com\x1b\\hello') or { panic(err) }
+
+	mut f := ScreenFormatter.init(t.screens.active, format_vt)
+	f.extra = ScreenExtra{
+		hyperlink: true
+	}
+	output := f.format()
+
+	mut t2 := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s2 := ReadonlyStream.init(mut t2)
+	defer {
+		s2.deinit()
+	}
+	s2.next_slice(output) or { panic(err) }
+
+	l1 := t.screens.active.cursor.hyperlink_state
+	l2 := t2.screens.active.cursor.hyperlink_state
+	assert (l1 != none) == (l2 != none)
+	if link1 := l1 {
+		link2 := l2 or { panic('l2 missing') }
+		assert link1.uri == link2.uri
+	}
+}
+
+// Screen vt with protection (roundtrip via a second terminal).
+fn test_screen_vt_with_protection() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	s.next_slice('\x1b[1"qhello') or { panic(err) }
+
+	mut f := ScreenFormatter.init(t.screens.active, format_vt)
+	f.extra = ScreenExtra{
+		protection: true
+	}
+	output := f.format()
+
+	mut t2 := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s2 := ReadonlyStream.init(mut t2)
+	defer {
+		s2.deinit()
+	}
+	s2.next_slice(output) or { panic(err) }
+
+	assert t.screens.active.cursor.is_protected == t2.screens.active.cursor.is_protected
+}
+
+// Screen vt with kitty keyboard (roundtrip via a second terminal).
+fn test_screen_vt_with_kitty_keyboard() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	// Set kitty keyboard flags (disambiguate + report_events = 3)
+	s.next_slice('\x1b[=3;1uhello') or { panic(err) }
+
+	mut f := ScreenFormatter.init(t.screens.active, format_vt)
+	f.extra = ScreenExtra{
+		kitty_keyboard: true
+	}
+	output := f.format()
+
+	mut t2 := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s2 := ReadonlyStream.init(mut t2)
+	defer {
+		s2.deinit()
+	}
+	s2.next_slice(output) or { panic(err) }
+
+	assert t.screens.active.kitty_keyboard.current() == t2.screens.active.kitty_keyboard.current()
+}
+
+// Screen vt with charsets (roundtrip via a second terminal).
+fn test_screen_vt_with_charsets() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	// Set G0 to DEC special and shift to G1
+	s.next_slice('\x1b(0\x0ehello') or { panic(err) }
+
+	mut f := ScreenFormatter.init(t.screens.active, format_vt)
+	f.extra = ScreenExtra{
+		charsets: true
+	}
+	output := f.format()
+
+	mut t2 := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s2 := ReadonlyStream.init(mut t2)
+	defer {
+		s2.deinit()
+	}
+	s2.next_slice(output) or { panic(err) }
+
+	assert t.screens.active.charset.gl == t2.screens.active.charset.gl
+	assert t.screens.active.charset.gr == t2.screens.active.charset.gr
+	assert t.screens.active.charset.charsets.get(.g0) == t2.screens.active.charset.charsets.get(.g0)
+}
+
+// Terminal vt with tabstops (roundtrip via a second terminal).
+fn test_terminal_vt_with_tabstops() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer {
+		s.deinit()
+	}
+	// Clear all tabs and set custom tabstops
+	s.next_slice('\x1b[3g') or { panic(err) }
+	s.next_slice('\x1b[5G\x1bH') or { panic(err) }
+	s.next_slice('\x1b[15G\x1bH') or { panic(err) }
+	s.next_slice('\x1b[30G\x1bH') or { panic(err) }
+	s.next_slice('hello') or { panic(err) }
+
+	mut f := TerminalFormatter.init(&t, format_vt)
+	f.extra = TerminalExtra{
+		tabstops: true
+		screen: screen_extra_none
+	}
+	output := f.format()
+
+	mut t2 := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s2 := ReadonlyStream.init(mut t2)
+	defer {
+		s2.deinit()
+	}
+	s2.next_slice(output) or { panic(err) }
+
+	// Verify tabstops match (columns are 0-indexed in the API)
+	for c in 0 .. int(t.cols) {
+		assert t.tabstops.get(u32(c)) == t2.tabstops.get(u32(c))
+	}
+}

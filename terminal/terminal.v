@@ -2902,6 +2902,10 @@ pub fn (mut self Terminal) index() ! {
 		|| screen.cursor.y > self.scrolling_region.bottom {
 		// We only move down if we're not already at the bottom of the screen.
 		if screen.cursor.y < self.rows - 1 {
+			// Ghostty's cursor move (cursorChangePin) marks both the old and
+			// new row dirty. Our screen cursor_down only marks the new row,
+			// so mark the old row dirty here to match.
+			screen.cursor_mark_dirty()
 			screen.cursor_down(1)
 		}
 		return
@@ -2933,6 +2937,9 @@ pub fn (mut self Terminal) index() ! {
 
 	// Increase cursor by 1, maximum to bottom of scroll region
 	if screen.cursor.y < self.scrolling_region.bottom {
+		// Mark the old row dirty too (see note above) to match Ghostty's
+		// cursorChangePin marking both old and new rows dirty.
+		screen.cursor_mark_dirty()
 		screen.cursor_down(1)
 	}
 }
@@ -3215,12 +3222,15 @@ pub fn (mut self Terminal) insert_lines(count int) {
 			if !left_right {
 				unsafe {
 					// Full row swap. If our scrolling region is full width,
-					// then we unset wrap on the shifted row.
+					// then we unset wrap/wrap_continuation on both the source and
+					// destination rows (matches Ghostty's insertLines).
 					mut dst_row := &self.screens.active.pages.screen_rows[dst_idx]
-					src_row := self.screens.active.pages.screen_rows[src_idx]
+					mut src_row := &self.screens.active.pages.screen_rows[src_idx]
+					src_row.wrap = false
+					src_row.wrap_continuation = false
 					dst_row.cells = src_row.cells.clone()
-					dst_row.wrap = src_row.wrap
-					dst_row.wrap_continuation = src_row.wrap_continuation
+					dst_row.wrap = false
+					dst_row.wrap_continuation = false
 					dst_row.styled = src_row.styled
 					dst_row.grapheme = src_row.grapheme
 					dst_row.hyperlink = src_row.hyperlink

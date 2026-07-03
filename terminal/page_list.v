@@ -4141,78 +4141,78 @@ pub fn (mut self PageList) erase_rows(tl PointTag, bl ?PointTag) {
 	mut it := tl_pin.page_iterator(.right_down, bl_pin)
 	for {
 		chunk := it.next() or { break }
-		rows_in_chunk := usize(chunk.end) - usize(chunk.start)
 
 		if chunk.is_full_page() {
-			// Can erase the whole page
-			if (self.pages.first != none && voidptr(chunk.node) != voidptr(self.pages.first or {
-				unsafe { &PageNode(nil) }
-			})) || (self.pages.last != none && voidptr(chunk.node) != voidptr(self.pages.last or {
-				unsafe { &PageNode(nil) }
-			})) {
-				// Move tracked pins away from this page
-				next := chunk.node.next or { chunk.node.prev or { chunk.node } }
-				for mut tp in self.tracked_pins {
-					if voidptr(tp.node) == voidptr(chunk.node) {
-						tp.node = next
-						tp.y = 0
-						tp.x = 0
-						tp.garbage = true
-					}
-				}
-				self.viewport_pin.garbage = false
-
-				self.pages.remove(chunk.node)
-			} else {
-				// Single remaining page - just clear it
+			// A rare special case is that we're deleting everything in
+			// our linked list. erase_page requires at least one other
+			// page so to handle this we reinit this page, set it to zero
+			// size which will let us grow our active area back.
+			if chunk.node.next == none && chunk.node.prev == none {
 				mut page := &chunk.node.data
+				erased += usize(page.size.rows)
+				page.reinit(page.capacity)
 				page.size.rows = 0
-			}
-		} else {
-			// Partial page erase - shift rows
-			mut page := &chunk.node.data
-			start := int(chunk.start)
-			end := int(chunk.end)
-			remaining := int(page.size.rows) - end
-
-			// Shift remaining rows up
-			for i in 0 .. remaining {
-				if start + i < page.rows.len && end + i < page.rows.len {
-					page.rows[start + i] = page.rows[end + i].clone_row(u32(page.size.cols))
-				}
+				break
 			}
 
-			page.size.rows -= u16(end - start)
-
-			// Update tracked pins
-			for mut tp in self.tracked_pins {
-				if voidptr(tp.node) == voidptr(chunk.node) {
-					if tp.y >= u16(end) {
-						tp.y -= u16(end - start)
-					} else if tp.y >= u16(start) {
-						tp.y = u16(start)
-						tp.x = 0
-						tp.garbage = true
-					}
-				}
-			}
-			self.viewport_pin.garbage = false
-			page.dirty = true
+			erased += usize(chunk.node.data.size.rows)
+			self.erase_page(chunk.node)
+			continue
 		}
 
-		erased += rows_in_chunk
+		// The chunk is not a full page so we need to move the rows.
+		// ghostty asserts chunk.start == 0 here.
+		mut page := &chunk.node.data
+		end := int(chunk.end)
+		scroll_amount := int(page.size.rows) - end
+
+		// Swap rows: move the surviving rows to the front, and swap the
+		// erased rows to the back so they can be reused if we grow.
+		for i in 0 .. scroll_amount {
+			if i + end < page.rows.len && i < page.rows.len {
+				old_dst := page.rows[i]
+				page.rows[i] = page.rows[i + end]
+				page.rows[i + end] = old_dst
+				page.rows[i].dirty = true
+			}
+		}
+
+		// Clear our remaining cells that we didn't shift or swapped
+		// in case we grow back into them.
+		for i in scroll_amount .. int(page.size.rows) {
+			page.clear_cells(u16(i), 0, page.size.cols)
+		}
+
+		// Update any tracked pins to shift their y. If it was in the erased
+		// row then we move it to the top of this page.
+		for mut tp in self.tracked_pins {
+			if voidptr(tp.node) == voidptr(chunk.node) {
+				if tp.y >= u16(end) {
+					tp.y -= u16(end)
+				} else {
+					tp.y = 0
+					tp.x = 0
+				}
+			}
+		}
+
+		page.size.rows = u16(scroll_amount)
+		page.dirty = true
+		erased += usize(end)
 	}
 
 	self.total_rows -= erased
 
-	// Regrow if needed to maintain active area
-	for self.total_rows < usize(self.rows) {
-		self.grow() or {}
-		// Clear the new row
-		if mut last := self.pages.last {
-			last.data.clear_row(u16(last.data.size.rows - 1))
+	// If we deleted active, we need to regrow because one of our invariants
+	// is that we always have full active space.
+	if tl == .active {
+		for _ in 0 .. erased {
+			self.grow() or { &PageNode(unsafe { nil }) }
 		}
 	}
+
+	// If we have a pinned viewport, we need to adjust for active area.
+	self.fixup_viewport(erased)
 }
 
 // ============================================================
@@ -4996,11 +4996,25 @@ pub fn (mut self PageList) erase_row_bounded(p PagePin, limit usize) {
 			page.clear_row(u16(clear_idx))
 		}
 
+		// If our viewport is a pin and our pin is within the erased
+		// region we need to maybe shift our cache up.
+		if self.viewport == .pin {
+			if v := self.viewport_pin_row_offset {
+				vp := self.viewport_pin
+				if voidptr(vp.node) == voidptr(node) && vp.y >= p.y
+					&& int(vp.y) <= y + int(limit) && vp.y != 0 {
+					self.viewport_pin_row_offset = v - 1
+				}
+			}
+		}
+
 		// Update pins in the shifted region.
 		for mut tp in self.tracked_pins {
-			if voidptr(tp.node) == voidptr(node) && tp.y > p.y
+			if voidptr(tp.node) == voidptr(node) && tp.y >= p.y
 				&& int(tp.y) <= y + int(limit) {
-				if tp.y > 0 {
+				if tp.y == 0 {
+					tp.x = 0
+				} else {
 					tp.y -= 1
 				}
 			}
@@ -5011,17 +5025,29 @@ pub fn (mut self PageList) erase_row_bounded(p PagePin, limit usize) {
 
 	// The limit extends beyond this page. We shift the remaining rows in this
 	// page up and continue into following pages, tracking how many we shifted.
-	mut shifted := usize(0)
+	// ghostty rotates rows[pn.y..size.rows] which processes size.rows - pn.y
+	// rows, leaving the bottom slot to be filled by the next page's top row.
 	for i in y .. int(page.size.rows) - 1 {
 		if i + 1 < page.rows.len && i < page.rows.len {
 			page.rows[i] = page.rows[i + 1].clone_row(u32(page.size.cols))
 		}
 	}
-	shifted += usize(int(page.size.rows) - 1 - y)
+	mut shifted := usize(int(page.size.rows) - y)
+
+	if self.viewport == .pin {
+		if v := self.viewport_pin_row_offset {
+			vp := self.viewport_pin
+			if voidptr(vp.node) == voidptr(node) && vp.y >= p.y && vp.y != 0 {
+				self.viewport_pin_row_offset = v - 1
+			}
+		}
+	}
 
 	for mut tp in self.tracked_pins {
-		if voidptr(tp.node) == voidptr(node) && tp.y > p.y {
-			if tp.y > 0 {
+		if voidptr(tp.node) == voidptr(node) && tp.y >= p.y {
+			if tp.y == 0 {
+				tp.x = 0
+			} else {
 				tp.y -= 1
 			}
 		}
@@ -5046,18 +5072,31 @@ pub fn (mut self PageList) erase_row_bounded(p PagePin, limit usize) {
 		}
 
 		// If we can satisfy the limit within this page, do a partial shift.
-		remaining := int(limit) - int(shifted)
-		if int(cp.size.rows) > remaining {
-			for i in 0 .. remaining {
+		shifted_limit := int(limit) - int(shifted)
+		if int(cp.size.rows) > shifted_limit {
+			for i in 0 .. shifted_limit {
 				if i + 1 < cp.rows.len {
 					cp.rows[i] = cp.rows[i + 1].clone_row(u32(cp.size.cols))
 				}
 			}
-			clear_idx := remaining
+			clear_idx := shifted_limit
 			if clear_idx < cp.rows.len {
 				cp.clear_row(u16(clear_idx))
 			}
 			cp.dirty = true
+
+			// Update pins in the shifted region.
+			for mut tp in self.tracked_pins {
+				if voidptr(tp.node) != voidptr(cn) || int(tp.y) > shifted_limit {
+					continue
+				}
+				if tp.y == 0 {
+					tp.node = prev_node
+					tp.y = u16(prev_node.data.size.rows - 1)
+					continue
+				}
+				tp.y -= 1
+			}
 			return
 		}
 
@@ -5070,6 +5109,19 @@ pub fn (mut self PageList) erase_row_bounded(p PagePin, limit usize) {
 		li := int(cp.size.rows) - 1
 		if li >= 0 && li < cp.rows.len {
 			cp.clear_row(u16(li))
+		}
+
+		// Update tracked pins for the full-page shift.
+		for mut tp in self.tracked_pins {
+			if voidptr(tp.node) != voidptr(cn) {
+				continue
+			}
+			if tp.y == 0 {
+				tp.node = prev_node
+				tp.y = u16(prev_node.data.size.rows - 1)
+				continue
+			}
+			tp.y -= 1
 		}
 		cp.dirty = true
 		shifted += usize(cp.size.rows)

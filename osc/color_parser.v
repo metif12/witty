@@ -163,15 +163,13 @@ pub fn (c DynamicColor) next() ?DynamicColor {
 }
 
 // SpecialColor represents special colors beyond the 256-color palette.
+// This mirrors ghostty's `terminal.color.Special` enum(u3).
 pub enum SpecialColor {
-	bold
-	underline
-	blink
-	inverse
-	italic
-	strikethrough
-	cursor_color
-	cursor_text_color
+	bold      // 0
+	underline // 1
+	blink     // 2
+	reverse   // 3
+	italic    // 4
 }
 
 // RGB represents an RGB color.
@@ -530,8 +528,8 @@ fn parse_get_set_ansi_color(op ColorOperation, data string) []ColorRequest {
 		// Parse the target based on operation
 		target := match op {
 			.osc_5 {
-				// OSC5 maps directly to the Special enum
-				if color_idx < 0 || color_idx > 7 {
+				// OSC5 maps directly to the Special enum (0-4)
+				if color_idx < 0 || color_idx > 4 {
 					return result
 				}
 				ColorTarget(ColorTargetSpecial{
@@ -539,12 +537,12 @@ fn parse_get_set_ansi_color(op ColorOperation, data string) []ColorRequest {
 				})
 			}
 			.osc_4 {
-				// OSC4 maps 0-255 to palette, 256-259 to special
+				// OSC4 maps 0-255 to palette, 256-260 to special
 				if color_idx >= 0 && color_idx <= 255 {
 					ColorTarget(ColorTargetPalette{
 						index: u8(color_idx)
 					})
-				} else if color_idx >= 256 && color_idx <= 259 {
+				} else if color_idx >= 256 && color_idx <= 260 {
 					ColorTarget(ColorTargetSpecial{
 						color: unsafe { SpecialColor(color_idx - 256) }
 					})
@@ -602,8 +600,8 @@ fn parse_reset_ansi_color(op ColorOperation, data string) []ColorRequest {
 
 		target := match op {
 			.osc_105 {
-				// OSC105 maps directly to the Special enum
-				if color_idx < 0 || color_idx > 7 {
+				// OSC105 maps directly to the Special enum (0-4)
+				if color_idx < 0 || color_idx > 4 {
 					continue
 				}
 				ColorTarget(ColorTargetSpecial{
@@ -611,12 +609,12 @@ fn parse_reset_ansi_color(op ColorOperation, data string) []ColorRequest {
 				})
 			}
 			.osc_104 {
-				// OSC104 maps 0-255 to palette, 256-259 to special
+				// OSC104 maps 0-255 to palette, 256-260 to special
 				if color_idx >= 0 && color_idx <= 255 {
 					ColorTarget(ColorTargetPalette{
 						index: u8(color_idx)
 					})
-				} else if color_idx >= 256 && color_idx <= 259 {
+				} else if color_idx >= 256 && color_idx <= 260 {
 					ColorTarget(ColorTargetSpecial{
 						color: unsafe { SpecialColor(color_idx - 256) }
 					})

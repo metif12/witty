@@ -457,6 +457,49 @@ fn test_osc133_new_command_with_aid() {
 	assert aid == 'foo'
 }
 
+fn test_osc133_new_command_with_cl_line() {
+	mut p := Parser.init(voidptr(0))
+	input := '133;N;cl=line'
+	for ch in input.bytes() {
+		p.next(ch)
+	}
+	cmd := p.end(0) or {
+		assert false, 'expected command'
+		return
+	}
+	assert cmd.cmd_type == .semantic_prompt
+	assert cmd.semantic_prompt_action == .new_command
+	cl := read_click(cmd.semantic_prompt_options) or {
+		assert false, 'expected click'
+		return
+	}
+	assert cl == .line
+}
+
+fn test_osc133_new_command_with_multiple_options() {
+	mut p := Parser.init(voidptr(0))
+	input := '133;N;aid=foo;cl=line'
+	for ch in input.bytes() {
+		p.next(ch)
+	}
+	cmd := p.end(0) or {
+		assert false, 'expected command'
+		return
+	}
+	assert cmd.cmd_type == .semantic_prompt
+	assert cmd.semantic_prompt_action == .new_command
+	aid := read_aid(cmd.semantic_prompt_options) or {
+		assert false, 'expected aid'
+		return
+	}
+	assert aid == 'foo'
+	cl := read_click(cmd.semantic_prompt_options) or {
+		assert false, 'expected click'
+		return
+	}
+	assert cl == .line
+}
+
 fn test_osc133_new_command_extra_contents() {
 	mut p := Parser.init(voidptr(0))
 	input := '133;Nextra'

@@ -401,6 +401,7 @@ pub fn placement_iterator(pages &terminal.Pages, start_y u32, end_y u32) Placeme
 	return PlacementIterator{
 		pages: pages
 		current_y: start_y
+		current_x: 0
 		end_y: end_y
 	}
 }
@@ -410,6 +411,11 @@ pub struct PlacementIterator {
 	pages &terminal.Pages
 mut:
 	current_y u32
+	// The x position within the current row to resume scanning from. This
+	// mirrors Ghostty's mutation of the row pin's x coordinate: when a run
+	// ends mid-row, we leave current_x pointing at the cell that broke the
+	// run so the next call resumes there (allowing multiple runs per row).
+	current_x u32
 	end_y     u32
 }
 
@@ -418,6 +424,7 @@ pub fn (mut self PlacementIterator) next() ?VirtualPlacement {
 		row_idx := int(self.current_y)
 		if row_idx >= self.pages.screen_rows.len {
 			self.current_y++
+			self.current_x = 0
 			continue
 		}
 		row := self.pages.screen_rows[row_idx]
@@ -425,30 +432,34 @@ pub fn (mut self PlacementIterator) next() ?VirtualPlacement {
 		// This row flag is set on rows that have the virtual placeholder
 		if !row.kitty_virtual_placeholder {
 			self.current_y++
+			self.current_x = 0
 			continue
 		}
 
 		// Our current run. A run is always only a single row.
 		mut run := ?IncompletePlacement(none)
 
-		// Iterate over cells and find ones with the placeholder.
-		for x, cell in row.cells {
-			pin := terminal.Pin{ x: u32(x), y: self.current_y }
+		// Iterate over the remaining cells (starting at current_x) and find
+		// ones with the placeholder. A run is always only a single row.
+		mut x := self.current_x
+		for x < u32(row.cells.len) {
+			cell := row.cells[int(x)]
+			pin := terminal.Pin{ x: x, y: self.current_y }
+
+			// "current_x" now points to the cell we're examining so that if
+			// we return a run we resume from here on the next call.
+			self.current_x = x
 
 			// If this cell doesn't have the placeholder, then we
 			// complete the run if we have it otherwise we just move
 			// on and keep searching.
 			if cell.codepoint != kitty.placeholder {
 				if r := run {
-					// Complete the run and return it.
-					// Keep current_y at this row so we continue from here
-					// on the next call (but run is consumed).
-					result := r.complete()
-					// We need to advance past this row on next call
-					// since we've consumed the run.
-					self.current_y++
-					return result
+					// current_x/current_y stay pointing at this cell so the
+					// next call resumes scanning from here.
+					return r.complete()
 				}
+				x++
 				continue
 			}
 
@@ -458,32 +469,23 @@ pub fn (mut self PlacementIterator) next() ?VirtualPlacement {
 			//
 			// BOUNDARY: in Ghostty this is `row.style(cell)`, which resolves
 			// `cell.style_id` against the page's ref-counted style table. In
-			// this witty model the only style resolver is the terminal
-			// module's `lookup_style_by_id(pages, style_id)` (formatter.v),
-			// which is (a) NOT public — unreachable from the kitty module —
-			// and (b) itself still a stub that returns an empty CellStyle
-			// because there is no real per-page style table yet. Until the
-			// terminal exposes a public, non-stub style lookup, every cell
-			// resolves to the default style, so image_id_low/placement_id are
-			// effectively read from a zeroed style. Once available, replace
-			// the line below with that lookup keyed on `cell.style_id`.
-			style := terminal.CellStyle{}
+			// this witty model the resolved style is stored directly on the
+			// cell (CellData.style), so we read it from there.
+			style := cell.style
 
 			curr := IncompletePlacement.init(pin, &cell, style)
 			if mut r := run {
 				// If we can't append, then we complete the previous
 				// run and return it.
 				if !r.append(&curr) {
-					result := r.complete()
-					// Start new run at this cell
-					run = curr
-					// Don't advance row - there may be more on this row
-					// but we simplified to advance to next row
-					self.current_y++
-					return result
+					// current_x stays at this cell so the next call starts a
+					// fresh run from here (matching Ghostty which leaves the
+					// row pin pointed at this same cell).
+					return r.complete()
 				}
-				// append is mutating so if we reached this point
-				// then prev has been updated.
+				// append mutates the local copy `r`, so write it back into
+				// the run to accumulate the width across cells.
+				run = r
 			} else {
 				// For appending, we need to set our initial values.
 				mut prev := curr
@@ -495,10 +497,13 @@ pub fn (mut self PlacementIterator) next() ?VirtualPlacement {
 				}
 				run = prev
 			}
+
+			x++
 		}
 
 		// We move to the next row no matter what
 		self.current_y++
+		self.current_x = 0
 
 		// If we have a run, we complete it here.
 		if r := run {

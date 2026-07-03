@@ -182,6 +182,24 @@ fn test_ensure_large_negative_values() {
 	assert v.z == -2000000000
 }
 
+fn test_ensure_proper_overflow_error_for_u32() {
+	input := 'a=p,i=10000000000'
+	Parser.parse_string(input) or {
+		assert err.msg().contains('Overflow')
+		return
+	}
+	assert false, 'expected overflow error'
+}
+
+fn test_ensure_proper_overflow_error_for_i32() {
+	input := 'a=p,i=1,z=-9999999999'
+	Parser.parse_string(input) or {
+		assert err.msg().contains('Overflow')
+		return
+	}
+	assert false, 'expected overflow error'
+}
+
 fn test_all_i32_values_z() {
 	// 'z' (usually z-axis values)
 	input := 'a=p,i=1,z=-1'

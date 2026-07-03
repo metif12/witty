@@ -236,8 +236,13 @@ fn (mut self Parser) finish_value(next_state ParserState) ! {
 	temp_str := self.kv_temp[0..self.kv_temp_len].bytestr()
 	v := match self.kv_current {
 		`z`, `H`, `V` {
-			// Signed integer fields
-			signed := temp_str.int()
+			// Signed integer fields. Parse as i64 first so we can detect
+			// values that don't fit in an i32 and report an overflow.
+			wide := temp_str.i64()
+			if wide < -2147483648 || wide > 2147483647 {
+				return error('Overflow')
+			}
+			signed := i32(wide)
 			// Reinterpret i32 as u32
 			unsafe { *(&u32(&signed)) }
 		}
