@@ -320,6 +320,17 @@ pub mut:
 	reflow_cursor_y   u32
 	reflow_cursor_abs int
 	reflow_did_reflow bool
+	// Optional saved-cursor tracking through reflow. When
+	// reflow_saved_track is set before a resize, reflow_cols also tracks
+	// the saved cursor position (given by reflow_saved_in_*) and writes the
+	// remapped active-relative position into reflow_saved_out_*. This lets
+	// the terminal reflow the DECSC saved cursor (a tracked pin in ghostty).
+	reflow_saved_track bool
+	reflow_saved_in_x  u32
+	reflow_saved_in_y  u32
+	reflow_saved_out_x u32
+	reflow_saved_out_y u32
+	reflow_saved_abs   int
 }
 
 // ViewportState tracks where the viewport is positioned.
@@ -507,6 +518,21 @@ pub fn (mut self Pages) resize(opts ResizeOpts) ! {
 		self.reflow_cursor_y = u32(cy)
 		if self.reflow_cursor_x >= self.cols {
 			self.reflow_cursor_x = self.cols - 1
+		}
+
+		// Finalize the reflowed saved-cursor position too, if tracked.
+		if self.reflow_saved_track {
+			mut sy := self.reflow_saved_abs - self.active_start
+			if sy < 0 {
+				sy = 0
+			}
+			if sy >= int(self.rows) {
+				sy = int(self.rows) - 1
+			}
+			self.reflow_saved_out_y = u32(sy)
+			if self.reflow_saved_out_x >= self.cols {
+				self.reflow_saved_out_x = self.cols - 1
+			}
 		}
 	}
 }
@@ -832,10 +858,21 @@ fn (mut self Pages) reflow_cols(new_cols u32, cur_x u32, cur_y u32) {
 		src_col: int(cur_x)
 	}
 
+	// Optionally track the saved (DECSC) cursor as a second pin so it gets
+	// remapped through reflow just like the live cursor.
+	saved_abs := self.active_start + int(self.reflow_saved_in_y)
+	mut saved_pin := &FlatReflowPin{
+		src_row: saved_abs
+		src_col: int(self.reflow_saved_in_x)
+	}
+
 	mut rc := FlatReflowCursor{
 		cols: int(new_cols)
 	}
 	rc.pins << cursor_pin
+	if self.reflow_saved_track {
+		rc.pins << saved_pin
+	}
 	// Start with a single row, mirroring PageList's first rewritten node.
 	rc.append_row()
 
@@ -889,6 +926,22 @@ fn (mut self Pages) reflow_cols(new_cols u32, cur_x u32, cur_y u32) {
 		u32(cursor_pin.new_col)
 	} else {
 		cur_x
+	}
+
+	// Stash the remapped saved-cursor absolute row and column if we were
+	// tracking it. The active-relative Y is finalized in Pages.resize once
+	// active_start has settled (the grow path resizes rows afterward).
+	if self.reflow_saved_track {
+		self.reflow_saved_abs = if saved_pin.new_row >= 0 {
+			saved_pin.new_row
+		} else {
+			cur_abs_new
+		}
+		self.reflow_saved_out_x = if saved_pin.new_row >= 0 {
+			u32(saved_pin.new_col)
+		} else {
+			self.reflow_saved_in_x
+		}
 	}
 }
 

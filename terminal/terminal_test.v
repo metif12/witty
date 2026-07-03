@@ -1281,6 +1281,196 @@ fn test_resize_with_left_and_right_margin_set() {
 	assert t.scrolling_region.right == 4
 }
 
+// ------------------------------------------------------------
+// resize-with-reflow tests (from ghostty Terminal.zig)
+// ------------------------------------------------------------
+
+fn test_resize_less_cols_with_wide_char_then_print() {
+	mut t := Terminal.init(Options{ cols: 3, rows: 3 }) or { assert false; return }
+	defer { t.deinit() }
+	t.modes.set(.wraparound, true)
+
+	t.print(u32(`x`)) or { assert false }
+	t.print(u32(`😀`)) or { assert false } // 0x1F600
+	t.resize(2, 3) or { assert false }
+	t.set_cursor_pos(1, 2)
+	t.print(u32(`😀`)) or { assert false } // 0x1F600
+
+	// Should not crash
+	assert t.cols == 2
+}
+
+// https://github.com/mitchellh/ghostty/issues/723
+// This was found via fuzzing so its highly specific.
+fn test_resize_with_left_and_right_margin_set_fuzz() {
+	cols := u16(70)
+	rows := u16(23)
+	mut t := Terminal.init(Options{ cols: cols, rows: rows }) or { assert false; return }
+	defer { t.deinit() }
+	t.modes.set(.wraparound, true)
+
+	t.modes.set(.enable_left_and_right_margin, true)
+	t.print(u32(`0`)) or { assert false }
+	t.modes.set(.enable_mode_3, true)
+	t.resize(cols, rows) or { assert false }
+	t.set_left_and_right_margin(2, 0)
+	t.print_repeat(1850) or { assert false }
+	t.modes.restore(.enable_mode_3)
+	t.resize(cols, rows) or { assert false }
+
+	// Should not crash
+	assert t.cols == cols
+}
+
+// https://github.com/mitchellh/ghostty/issues/1343
+fn test_resize_with_wraparound_off() {
+	cols := u16(4)
+	rows := u16(2)
+	mut t := Terminal.init(Options{ cols: cols, rows: rows }) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.wraparound, false)
+	t.print(u32(`0`)) or { assert false }
+	t.print(u32(`1`)) or { assert false }
+	t.print(u32(`2`)) or { assert false }
+	t.print(u32(`3`)) or { assert false }
+	new_cols := u16(2)
+	t.resize(new_cols, rows) or { assert false }
+
+	str := t.plain_string() or { assert false; return }
+	assert str == '01'
+}
+
+fn test_resize_with_wraparound_on() {
+	cols := u16(4)
+	rows := u16(2)
+	mut t := Terminal.init(Options{ cols: cols, rows: rows }) or { assert false; return }
+	defer { t.deinit() }
+
+	t.modes.set(.wraparound, true)
+	t.print(u32(`0`)) or { assert false }
+	t.print(u32(`1`)) or { assert false }
+	t.print(u32(`2`)) or { assert false }
+	t.print(u32(`3`)) or { assert false }
+	new_cols := u16(2)
+	t.resize(new_cols, rows) or { assert false }
+
+	str := t.plain_string() or { assert false; return }
+	assert str == '01\n23'
+}
+
+fn test_resize_with_high_unique_style_per_cell() {
+	mut t := Terminal.init(Options{ cols: 30, rows: 30 }) or { assert false; return }
+	defer { t.deinit() }
+	t.modes.set(.wraparound, true)
+
+	for y in 0 .. int(t.rows) {
+		for x in 0 .. int(t.cols) {
+			t.set_cursor_pos(y, x)
+			t.set_attribute(SgrAttribute{
+				kind: .direct_color_bg
+				r: u8(x)
+				g: u8(y)
+				b: 0
+			}) or { assert false }
+			t.print(u32(`x`)) or { assert false }
+		}
+	}
+
+	t.resize(60, 30) or { assert false }
+
+	// Should not crash
+	assert t.cols == 60
+}
+
+fn test_resize_with_high_unique_style_per_cell_with_wrapping() {
+	mut t := Terminal.init(Options{ cols: 30, rows: 30 }) or { assert false; return }
+	defer { t.deinit() }
+	t.modes.set(.wraparound, true)
+
+	cell_count := int(t.rows) * int(t.cols)
+	for i in 0 .. cell_count {
+		r := u8(i >> 8)
+		g := u8(i & 0xFF)
+		t.set_attribute(SgrAttribute{
+			kind: .direct_color_bg
+			r: r
+			g: g
+			b: 0
+		}) or { assert false }
+		t.print(u32(`x`)) or { assert false }
+	}
+
+	t.resize(60, 30) or { assert false }
+
+	// Should not crash
+	assert t.cols == 60
+}
+
+fn test_resize_with_reflow_and_saved_cursor() {
+	mut t := Terminal.init(Options{ cols: 2, rows: 3 }) or { assert false; return }
+	defer { t.deinit() }
+	t.modes.set(.wraparound, true)
+
+	t.print_string('1A2B') or { assert false }
+	t.set_cursor_pos(2, 2)
+	{
+		cell := cell_at(&t, int(t.screens.active.cursor.x), int(t.screens.active.cursor.y))
+		assert cell.codepoint == u32(`B`)
+	}
+	{
+		str := t.plain_string() or { assert false; return }
+		assert str == '1A\n2B'
+	}
+
+	t.save_cursor()
+	t.resize(5, 3) or { assert false }
+	t.restore_cursor()
+
+	{
+		str := t.plain_string() or { assert false; return }
+		assert str == '1A2B'
+	}
+
+	// Verify our cursor is still in the same place
+	{
+		cell := cell_at(&t, int(t.screens.active.cursor.x), int(t.screens.active.cursor.y))
+		assert cell.codepoint == u32(`B`)
+	}
+}
+
+fn test_resize_with_reflow_and_saved_cursor_pending_wrap() {
+	mut t := Terminal.init(Options{ cols: 2, rows: 3 }) or { assert false; return }
+	defer { t.deinit() }
+	t.modes.set(.wraparound, true)
+
+	t.print_string('1A2B') or { assert false }
+	{
+		cell := cell_at(&t, int(t.screens.active.cursor.x), int(t.screens.active.cursor.y))
+		assert cell.codepoint == u32(`B`)
+	}
+	{
+		str := t.plain_string() or { assert false; return }
+		assert str == '1A\n2B'
+	}
+
+	t.save_cursor()
+	t.resize(5, 3) or { assert false }
+	t.restore_cursor()
+
+	{
+		str := t.plain_string() or { assert false; return }
+		assert str == '1A2B'
+	}
+
+	// Pending wrap should be reset
+	t.print(u32(`X`)) or { assert false }
+	{
+		str := t.plain_string() or { assert false; return }
+		assert str == '1A2BX'
+	}
+}
+
 // ============================================================
 // Screen switching
 // ============================================================

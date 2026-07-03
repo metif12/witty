@@ -3907,19 +3907,75 @@ pub fn (mut self Terminal) resize(cols u16, rows u16) ! {
 		self.tabstops = Tabstops.init(int(cols), 8)!
 	}
 
-	// Resize primary screen
-	self.screens.primary.resize(ScreenResize{
+	// Whether the active screen will reflow on this resize.
+	active_reflow := self.screens.active_key == .primary && self.modes.get(.wraparound)
+
+	// If we have a saved (DECSC) cursor and we're going to reflow, ask the
+	// reflow to track it as a pin so we can remap its position afterward.
+	// This mirrors ghostty, where the saved cursor is a tracked pin.
+	mut track_saved := false
+	mut saved_pending_wrap := false
+	if sc := self.screens.active.saved_cursor {
+		if active_reflow && u32(cols) != self.cols && sc.x < self.cols && sc.y < self.rows {
+			track_saved = true
+			saved_pending_wrap = sc.pending_wrap
+			self.screens.active.pages.reflow_saved_track = true
+			self.screens.active.pages.reflow_saved_in_x = sc.x
+			self.screens.active.pages.reflow_saved_in_y = sc.y
+		}
+	}
+
+	// Resize the active screen. All terminal state is read/written through
+	// `screens.active`, so this is the screen we must resize to keep content
+	// consistent. The primary screen supports reflow (governed by the
+	// wraparound mode); the alternate screen never reflows.
+	self.screens.active.resize(ScreenResize{
 		cols: u32(cols)
 		rows: u32(rows)
-		reflow: self.modes.get(.wraparound)
+		reflow: active_reflow
 	})!
 
-	// Alternate screen, if it exists, doesn't reflow
-	if self.screens.alternate_ptr != unsafe { nil } {
-		self.screens.alternate_ptr.resize(ScreenResize{
+	// Apply the reflow-tracked saved cursor position. Screen.resize already
+	// ran its own (naive) saved-cursor remap; we override it here with the
+	// pin-tracked result so reflowed content maps correctly.
+	if track_saved && self.screens.active.pages.reflow_did_reflow {
+		if mut sc := self.screens.active.saved_cursor {
+			new_x := self.screens.active.pages.reflow_saved_out_x
+			new_y := self.screens.active.pages.reflow_saved_out_y
+			sc.x = new_x
+			sc.y = new_y
+			sc.pending_wrap = saved_pending_wrap
+			// If we had pending wrap set and we're no longer at the end of
+			// the line, unset pending wrap and move the cursor to reflect the
+			// correct next position (matches ghostty / Screen.resize).
+			if sc.pending_wrap && sc.x != u32(cols) - 1 {
+				sc.pending_wrap = false
+				sc.x += 1
+			}
+			self.screens.active.saved_cursor = sc
+		}
+	}
+	self.screens.active.pages.reflow_saved_track = false
+
+	// Resize the inactive screen too so both stay in sync. When the primary
+	// screen is active, the inactive screen is the alternate (no reflow).
+	// When the alternate screen is active, the inactive screen is the
+	// primary (reflow governed by wraparound).
+	if self.screens.active_key == .primary {
+		// Alternate screen, if it exists, doesn't reflow.
+		if self.screens.alternate_ptr != unsafe { nil } {
+			self.screens.alternate_ptr.resize(ScreenResize{
+				cols: u32(cols)
+				rows: u32(rows)
+				reflow: false
+			})!
+		}
+	} else {
+		// Primary screen supports reflow.
+		self.screens.primary.resize(ScreenResize{
 			cols: u32(cols)
 			rows: u32(rows)
-			reflow: false
+			reflow: self.modes.get(.wraparound)
 		})!
 	}
 
