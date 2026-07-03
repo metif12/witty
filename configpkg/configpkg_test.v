@@ -837,3 +837,269 @@ fn test_compat_window_new_window() {
 	cfg.finalize()
 	assert cfg.macos_dock_drop_behavior == .new_window
 }
+
+// --- Keybinds ---
+// Translations of Config.zig's `Keybinds` tests. Tests that require the config
+// formatter subsystem (formatEntry/formatConfig) are omitted because that
+// subsystem is not translated in witty.
+
+// Config.zig: Keybinds "parseCLI"
+fn test_keybinds_parse_cli() {
+	mut set := Keybinds{}
+	set.parse_cli('shift+a=copy_to_clipboard')!
+	set.parse_cli('shift+a=csi:hello')!
+	// Same trigger, so the second overwrites the first.
+	assert set.set.bindings.len == 1
+}
+
+// Config.zig: Keybinds "parseCLI table definition"
+fn test_keybinds_parse_cli_table_definition() {
+	mut keybinds := Keybinds{}
+
+	// Define a table by adding a binding to it.
+	keybinds.parse_cli('foo/shift+a=copy_to_clipboard')!
+	assert keybinds.tables.len == 1
+	assert 'foo' in keybinds.tables
+
+	table := keybinds.tables['foo'] or { panic('missing table') }
+	assert table.bindings.len == 1
+}
+
+// Config.zig: Keybinds "parseCLI table clear"
+fn test_keybinds_parse_cli_table_clear() {
+	mut keybinds := Keybinds{}
+
+	keybinds.parse_cli('foo/shift+a=copy_to_clipboard')!
+	assert keybinds.tables['foo']!.bindings.len == 1
+
+	// Clear the table with "foo/".
+	keybinds.parse_cli('foo/')!
+	assert keybinds.tables['foo']!.bindings.len == 0
+}
+
+// Config.zig: Keybinds "parseCLI table multiple bindings"
+fn test_keybinds_parse_cli_table_multiple_bindings() {
+	mut keybinds := Keybinds{}
+
+	keybinds.parse_cli('foo/shift+a=copy_to_clipboard')!
+	keybinds.parse_cli('foo/shift+b=paste_from_clipboard')!
+	keybinds.parse_cli('bar/ctrl+c=close_window')!
+
+	assert keybinds.tables.len == 2
+	assert keybinds.tables['foo']!.bindings.len == 2
+	assert keybinds.tables['bar']!.bindings.len == 1
+}
+
+// Config.zig: Keybinds "parseCLI table does not affect root set"
+fn test_keybinds_parse_cli_table_does_not_affect_root_set() {
+	mut keybinds := Keybinds{}
+
+	keybinds.parse_cli('shift+a=copy_to_clipboard')!
+	keybinds.parse_cli('foo/shift+b=paste_from_clipboard')!
+
+	// Root set should have the first binding.
+	assert keybinds.set.bindings.len == 1
+	// Table should have the second binding.
+	assert keybinds.tables['foo']!.bindings.len == 1
+}
+
+// Config.zig: Keybinds "parseCLI table empty name is invalid"
+fn test_keybinds_parse_cli_table_empty_name_is_invalid() {
+	mut keybinds := Keybinds{}
+	keybinds.parse_cli('/shift+a=copy_to_clipboard') or {
+		assert err.msg() == 'InvalidFormat'
+		return
+	}
+	assert false, 'expected an error'
+}
+
+// Config.zig: Keybinds "parseCLI table with key sequence"
+fn test_keybinds_parse_cli_table_with_key_sequence() {
+	mut keybinds := Keybinds{}
+
+	// Key sequences should work within tables.
+	keybinds.parse_cli('foo/ctrl+a>ctrl+b=new_window')!
+
+	table := keybinds.tables['foo'] or { panic('missing table') }
+	assert table.bindings.len == 1
+}
+
+// Config.zig: Keybinds "parseCLI slash in action argument is not a table"
+fn test_keybinds_parse_cli_slash_in_action_argument_is_not_a_table() {
+	mut keybinds := Keybinds{}
+
+	// A slash after the = should not be interpreted as a table delimiter.
+	keybinds.parse_cli('ctrl+a=text:/hello')!
+
+	// Should be in root set, not a table.
+	assert keybinds.set.bindings.len == 1
+	assert keybinds.tables.len == 0
+}
+
+// Config.zig: Keybinds "parseCLI slash as key with modifier is not a table"
+fn test_keybinds_parse_cli_slash_as_key_with_modifier_is_not_a_table() {
+	mut keybinds := Keybinds{}
+
+	// ctrl+/ should be parsed as a keybind with '/' as the key, not a table.
+	keybinds.parse_cli('ctrl+/=text:foo')!
+
+	assert keybinds.set.bindings.len == 1
+	assert keybinds.tables.len == 0
+}
+
+// Config.zig: Keybinds "parseCLI shift+slash as key is not a table"
+fn test_keybinds_parse_cli_shift_slash_as_key_is_not_a_table() {
+	mut keybinds := Keybinds{}
+
+	// shift+/ should be parsed as a keybind, not a table.
+	keybinds.parse_cli('shift+/=ignore')!
+
+	assert keybinds.set.bindings.len == 1
+	assert keybinds.tables.len == 0
+}
+
+// Config.zig: Keybinds "parseCLI bare slash as key is not a table"
+fn test_keybinds_parse_cli_bare_slash_as_key_is_not_a_table() {
+	mut keybinds := Keybinds{}
+
+	// Bare / as a key should work (empty table name is rejected).
+	keybinds.parse_cli('/=text:foo')!
+
+	assert keybinds.set.bindings.len == 1
+	assert keybinds.tables.len == 0
+}
+
+// Config.zig: Keybinds "parseCLI slash in key sequence is not a table"
+fn test_keybinds_parse_cli_slash_in_key_sequence_is_not_a_table() {
+	mut keybinds := Keybinds{}
+
+	// Key sequence ending with / should work.
+	keybinds.parse_cli('ctrl+a>ctrl+/=new_window')!
+
+	assert keybinds.set.bindings.len == 1
+	assert keybinds.tables.len == 0
+}
+
+// Config.zig: Keybinds "parseCLI table with slash in binding"
+fn test_keybinds_parse_cli_table_with_slash_in_binding() {
+	mut keybinds := Keybinds{}
+
+	// Table with a binding that uses / as the key.
+	keybinds.parse_cli('mytable//=text:foo')!
+
+	assert keybinds.set.bindings.len == 0
+	assert keybinds.tables.len == 1
+	assert 'mytable' in keybinds.tables
+	assert keybinds.tables['mytable']!.bindings.len == 1
+}
+
+// Config.zig: Keybinds "parseCLI table with sequence containing slash"
+fn test_keybinds_parse_cli_table_with_sequence_containing_slash() {
+	mut keybinds := Keybinds{}
+
+	// Table with a key sequence that ends with /.
+	keybinds.parse_cli('mytable/a>/=new_window')!
+
+	assert keybinds.set.bindings.len == 0
+	assert keybinds.tables.len == 1
+	assert 'mytable' in keybinds.tables
+}
+
+// Config.zig: Keybinds "clone with tables"
+fn test_keybinds_clone_with_tables() {
+	mut keybinds := Keybinds{}
+	keybinds.parse_cli('shift+a=copy_to_clipboard')!
+	keybinds.parse_cli('foo/shift+b=paste_from_clipboard')!
+	keybinds.parse_cli('bar/ctrl+c=close_window')!
+
+	cloned := keybinds.clone()
+
+	// Verify the clone has the same structure.
+	assert cloned.set.bindings.len == keybinds.set.bindings.len
+	assert cloned.tables.len == keybinds.tables.len
+	assert cloned.tables['foo']!.bindings.len == keybinds.tables['foo']!.bindings.len
+	assert cloned.tables['bar']!.bindings.len == keybinds.tables['bar']!.bindings.len
+}
+
+// Config.zig: Keybinds "equal with tables"
+fn test_keybinds_equal_with_tables() {
+	mut keybinds1 := Keybinds{}
+	keybinds1.parse_cli('foo/shift+a=copy_to_clipboard')!
+
+	mut keybinds2 := Keybinds{}
+	keybinds2.parse_cli('foo/shift+a=copy_to_clipboard')!
+
+	assert keybinds1.equal(keybinds2)
+}
+
+// Config.zig: Keybinds "equal with tables different table count"
+fn test_keybinds_equal_with_tables_different_table_count() {
+	mut keybinds1 := Keybinds{}
+	keybinds1.parse_cli('foo/shift+a=copy_to_clipboard')!
+
+	mut keybinds2 := Keybinds{}
+	keybinds2.parse_cli('foo/shift+a=copy_to_clipboard')!
+	keybinds2.parse_cli('bar/shift+b=paste_from_clipboard')!
+
+	assert !keybinds1.equal(keybinds2)
+}
+
+// Config.zig: Keybinds "equal with tables different table names"
+fn test_keybinds_equal_with_tables_different_table_names() {
+	mut keybinds1 := Keybinds{}
+	keybinds1.parse_cli('foo/shift+a=copy_to_clipboard')!
+
+	mut keybinds2 := Keybinds{}
+	keybinds2.parse_cli('bar/shift+a=copy_to_clipboard')!
+
+	assert !keybinds1.equal(keybinds2)
+}
+
+// Config.zig: Keybinds "equal with tables different bindings"
+fn test_keybinds_equal_with_tables_different_bindings() {
+	mut keybinds1 := Keybinds{}
+	keybinds1.parse_cli('foo/shift+a=copy_to_clipboard')!
+
+	mut keybinds2 := Keybinds{}
+	keybinds2.parse_cli('foo/shift+b=paste_from_clipboard')!
+
+	assert !keybinds1.equal(keybinds2)
+}
+
+// Config.zig: Keybinds "parseCLI clear clears tables"
+fn test_keybinds_parse_cli_clear_clears_tables() {
+	mut keybinds := Keybinds{}
+
+	// Add bindings to root set and tables.
+	keybinds.parse_cli('shift+a=copy_to_clipboard')!
+	keybinds.parse_cli('foo/shift+b=paste_from_clipboard')!
+	keybinds.parse_cli('bar/ctrl+c=close_window')!
+
+	assert keybinds.set.bindings.len == 1
+	assert keybinds.tables.len == 2
+
+	// Clear all keybinds.
+	keybinds.parse_cli('clear')!
+
+	// Both root set and tables should be cleared.
+	assert keybinds.set.bindings.len == 0
+	assert keybinds.tables.len == 0
+}
+
+// Config.zig: Keybinds "parseCLI reset clears tables"
+fn test_keybinds_parse_cli_reset_clears_tables() {
+	mut keybinds := Keybinds{}
+
+	// Add bindings to tables.
+	keybinds.parse_cli('foo/shift+a=copy_to_clipboard')!
+	keybinds.parse_cli('bar/shift+b=paste_from_clipboard')!
+
+	assert keybinds.tables.len == 2
+
+	// Reset to defaults (empty value).
+	keybinds.parse_cli('')!
+
+	// Tables should be cleared, root set has defaults.
+	assert keybinds.tables.len == 0
+	assert keybinds.set.bindings.len > 0
+}

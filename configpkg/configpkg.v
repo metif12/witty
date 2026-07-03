@@ -1,6 +1,7 @@
 module configpkg
 
 import os
+import input as inputpkg
 
 // --- Original Ghostty Comments Start: src/config/Config.zig
 //
@@ -4016,6 +4017,10 @@ pub mut:
 	// the linked URL. The URL matcher is always lowest priority of any
 	// configured links.
 	link_url bool = true
+	// Key bindings. The format is `trigger=action`. See the docs above the
+	// `keybind` handler in `apply_kv` for the full syntax. Backed by an
+	// `input.Set` (root bindings) plus named key tables.
+	keybind Keybinds
 	// The named font style to use for each of the requested terminal font
 	// styles. This looks up the style based on the font style string advertised
 	// by the font itself.
@@ -4143,6 +4148,214 @@ pub enum GtkSingleInstance {
 	desktop
 }
 
+// Keybinds is the config value type backing the `keybind` option. It is a
+// faithful translation of Config.zig's `Keybinds` struct. It holds the root
+// binding `set` plus any named key `tables`. Bindings are parsed via the
+// existing `input.Set.parse_and_put` API.
+pub struct Keybinds {
+pub mut:
+	set    inputpkg.Set
+	// Defined key tables. The default key table is always the root "set",
+	// which allows all table names to be available without reservation.
+	tables map[string]inputpkg.Set
+}
+
+// parse_cli parses a single `keybind` value into this Keybinds. It handles the
+// special `clear` and empty (reset-to-default) values, the `name/binding`
+// table syntax, and otherwise dispatches to the root set's parse_and_put.
+// Faithful to Config.zig `Keybinds.parseCLI`.
+pub fn (mut k Keybinds) parse_cli(input_value string) ! {
+	value := input_value
+
+	// Check for special values.
+	if value.len == 0 {
+		// config has 'keybind =', using default keybinds
+		k.init()
+		return
+	}
+
+	if value == 'clear' {
+		// config has 'keybind = clear', all keybinds cleared
+		k.set = inputpkg.Set{}
+		k.tables = map[string]inputpkg.Set{}
+		return
+	}
+
+	// Check for table syntax: "name/" or "name/binding". We look for '/' only
+	// before the first '=' to avoid matching action arguments like
+	// "foo=text:/hello".
+	eq_idx := value.index_u8(`=`)
+	scan_end := if eq_idx >= 0 { eq_idx } else { value.len }
+	before_eq := value[..scan_end]
+	slash_idx := before_eq.index_u8(`/`)
+	if slash_idx >= 0 {
+		table_name := value[..slash_idx]
+
+		// A length-zero table name is not a table (so `/=action` binds the
+		// slash key). Also, if the table name contains '+' or '>' then it is
+		// part of a sequence/trigger (e.g. `ctrl+/=action`) and not a table.
+		if table_name.len > 0 && table_name.index_u8(`+`) < 0 && table_name.index_u8(`>`) < 0 {
+			binding := value[slash_idx + 1..]
+
+			// Get or create the table.
+			if table_name !in k.tables {
+				k.tables[table_name] = inputpkg.Set{}
+			}
+
+			// If there's no binding after the slash, this is a table
+			// definition/clear command.
+			if binding.len == 0 {
+				k.tables[table_name] = inputpkg.Set{}
+				return
+			}
+
+			// Parse and add the binding to the table.
+			mut t := k.tables[table_name]
+			t.parse_and_put(binding)!
+			k.tables[table_name] = t
+			return
+		}
+	}
+
+	// Parse into default set.
+	k.set.parse_and_put(value)!
+}
+
+// clone deep-copies the Keybinds. Faithful to Config.zig `Keybinds.clone`.
+pub fn (k Keybinds) clone() Keybinds {
+	mut tables := map[string]inputpkg.Set{}
+	for name, s in k.tables {
+		tables[name] = s.clone()
+	}
+	return Keybinds{
+		set: k.set.clone()
+		tables: tables
+	}
+}
+
+// equal returns true if two Keybinds are equal. Only the primary bindings are
+// compared (reverse mappings are not). Faithful to Config.zig `Keybinds.equal`.
+pub fn (k Keybinds) equal(other Keybinds) bool {
+	if !keybinds_set_equal(k.set, other.set) {
+		return false
+	}
+	if k.tables.len != other.tables.len {
+		return false
+	}
+	for name, s in k.tables {
+		other_set := other.tables[name] or { return false }
+		if !keybinds_set_equal(s, other_set) {
+			return false
+		}
+	}
+	return true
+}
+
+// keybinds_set_equal compares two binding sets by their primary bindings.
+// Faithful to Config.zig `Keybinds.equalSet`: equal iff the same triggers map
+// to the same values (recursing into leader sets). Reverse mappings are
+// ignored.
+fn keybinds_set_equal(a inputpkg.Set, b inputpkg.Set) bool {
+	if a.bindings.len != b.bindings.len {
+		return false
+	}
+	for entry in a.bindings {
+		other := b.get(entry.trigger) or { return false }
+		if entry.value.typ != other.value.typ {
+			return false
+		}
+		match entry.value.typ {
+			.leader {
+				if !keybinds_set_equal(*entry.value.leader, *other.value.leader) {
+					return false
+				}
+			}
+			.leaf {
+				if !entry.value.leaf_action.equal(other.value.leaf_action) {
+					return false
+				}
+				if entry.value.leaf_flags != other.value.leaf_flags {
+					return false
+				}
+			}
+			.leaf_chained {
+				if entry.value.chain_flags != other.value.chain_flags {
+					return false
+				}
+				if entry.value.chain_actions.len != other.value.chain_actions.len {
+					return false
+				}
+				for i, act in entry.value.chain_actions {
+					if !act.equal(other.value.chain_actions[i]) {
+						return false
+					}
+				}
+			}
+		}
+	}
+	return true
+}
+
+// init resets this Keybinds to the default key bindings. This is a faithful
+// translation of the leading portion of Config.zig `Keybinds.init` using the
+// macOS (Darwin) modifier defaults, which is the platform witty targets. Only
+// the common cross-platform and Darwin bindings that precede the large
+// platform-specific windowing block are populated here; that is sufficient for
+// a non-empty default set.
+pub fn (mut k Keybinds) init() {
+	k.set = inputpkg.Set{}
+	k.tables = map[string]inputpkg.Set{}
+
+	// keybinds for opening and reloading config
+	k.set.put(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_unicode(u32(`,`))
+		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{ shift: true })
+	}, inputpkg.Action.new(.reload_config))
+	k.set.put(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_unicode(u32(`,`))
+		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{})
+	}, inputpkg.Action.new(.open_config))
+
+	// copy/paste via dedicated keys
+	k.set.put(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_physical(.copy)
+	}, inputpkg.Action.new_enum(.copy_to_clipboard, i32(inputpkg.CopyToClipboard.mixed)))
+	k.set.put(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_physical(.paste)
+	}, inputpkg.Action.new(.paste_from_clipboard))
+
+	// On macOS we default to super for copy/paste.
+	copy_mods := inputpkg.Mods{
+		super_: true
+	}
+	k.set.put_flags(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_unicode(u32(`c`))
+		mods: copy_mods
+	}, inputpkg.Action.new_enum(.copy_to_clipboard, i32(inputpkg.CopyToClipboard.mixed)), inputpkg.Flags{ performable: true })
+	k.set.put(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_unicode(u32(`v`))
+		mods: copy_mods
+	}, inputpkg.Action.new(.paste_from_clipboard))
+
+	// Font size
+	k.set.put(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_unicode(u32(`=`))
+		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{})
+	}, inputpkg.Action.new_float(.increase_font_size, 1))
+	k.set.put(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_unicode(u32(`+`))
+		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{})
+	}, inputpkg.Action.new_float(.increase_font_size, 1))
+	k.set.put(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_unicode(u32(`-`))
+		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{})
+	}, inputpkg.Action.new_float(.decrease_font_size, 1))
+	k.set.put(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_unicode(u32(`0`))
+		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{})
+	}, inputpkg.Action.new(.reset_font_size))
+}
+
 // change_conditional_state returns a new Config with the given conditional
 // state applied, or `none` if the change is irrelevant (i.e. no conditional
 // key such as `theme` is set). This mirrors Ghostty's `changeConditionalState`,
@@ -4202,6 +4415,7 @@ pub fn (c Config) clone() Config {
 		entries: c.env.entries.clone()
 	}
 	copy.diagnostics = c.diagnostics.clone()
+	copy.keybind = c.keybind.clone()
 	copy.explicit_keys = c.explicit_keys.clone()
 	copy.conditional_set = c.conditional_set.clone()
 	if cmd := c.command {
@@ -4580,32 +4794,6 @@ pub enum Theme {
 pub struct ScrollToBottom {
 pub:
 	keystroke bool = true
-}
-
-pub struct Keybinds {
-pub:
-	set BindingSet
-}
-
-pub fn (k Keybinds) clone() !Keybinds {
-	return k
-}
-
-pub struct BindingSet {}
-
-pub fn (s BindingSet) get_event(event voidptr) ?BindingEntry {
-	return none
-}
-
-pub struct BindingEntry {
-pub:
-	kind BindingEntryKind
-}
-
-pub enum BindingEntryKind {
-	leader
-	leaf
-	leaf_chained
 }
 
 pub struct KeyRemapSet {}
@@ -4991,6 +5179,13 @@ fn (mut c Config) apply_kv(key string, value string) {
 		}
 		'abnormal-command-exit-runtime' {
 			c.abnormal_command_exit_runtime = value.u32()
+		}
+		'keybind' {
+			c.keybind.parse_cli(value) or {
+				c.diagnostics << Diagnostic{
+					message: 'invalid keybind "${value}": ${err.msg()}'
+				}
+			}
 		}
 		// --- Compatibility handlers for removed/renamed options ---
 		// These faithfully translate the CompatibilityHandler entries in
