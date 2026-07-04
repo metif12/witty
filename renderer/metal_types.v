@@ -390,9 +390,10 @@ pub mut:
 	// Size of the glyph in the atlas [w, h].
 	glyph_w u32
 	glyph_h u32
-	// Bearing offsets for positioning.
-	bearing_x i32
-	bearing_y i32
+	// Bearing offsets for positioning. i16 to match ghostty's CellText
+	// (the GPU vertex struct must stay 32 bytes).
+	bearing_x i16
+	bearing_y i16
 	// Grid position (column, row).
 	grid_x u16
 	grid_y u16
@@ -429,8 +430,8 @@ pub fn metal_text_cell(cell CellText) MetalTextCell {
 		glyph_y: cell.glyph_pos[1]
 		glyph_w: cell.glyph_size[0]
 		glyph_h: cell.glyph_size[1]
-		bearing_x: cell.bearings[0]
-		bearing_y: cell.bearings[1]
+		bearing_x: i16(cell.bearings[0])
+		bearing_y: i16(cell.bearings[1])
 		grid_x: cell.grid_pos[0]
 		grid_y: cell.grid_pos[1]
 		color: cell.color

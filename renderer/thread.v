@@ -205,7 +205,11 @@ pub enum CustomShaderAnimation {
 
 pub fn ThreadDerivedConfig.init(config &configpkg.Config) ThreadDerivedConfig {
 	return ThreadDerivedConfig{
-		custom_shader_animation: .true_
+		custom_shader_animation: match config.custom_shader_animation {
+			.false_ { CustomShaderAnimation.false_ }
+			.true_ { CustomShaderAnimation.true_ }
+			.always { CustomShaderAnimation.always }
+		}
 	}
 }
 

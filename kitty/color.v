@@ -43,7 +43,7 @@ pub:
 }
 
 // The maximum number of addressable colors: 256 palette + special names.
-pub const kind_max = 256 + 8 // u8 max + Special enum count
+pub const kind_max = 255 + 8 // maxInt(u8) + Special enum count
 
 // Parse a string into a Kind. Returns none if the string cannot be
 // parsed as either a special name or a palette index.

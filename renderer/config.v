@@ -2,6 +2,7 @@ module renderer
 
 import terminal
 import configpkg
+import math
 
 // The configuration for this renderer that is derived from the main
 // configuration. This must be exported so that we don't need to
@@ -92,22 +93,23 @@ pub mut:
 
 // Initialize a DerivedConfig from a full configpkg.Config.
 pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
-	// Get our font styles
+	// Get our font styles. A style is enabled unless its config value is
+	// explicitly "false" (matching ghostty's `font-style-* != .false`).
 	font_styles := FontStyleStatus{
-		bold: true
-		italic: true
-		bold_italic: true
+		bold: config.font_style_bold != 'false'
+		italic: config.font_style_italic != 'false'
+		bold_italic: config.font_style_bold_italic != 'false'
 	}
 
 	bg := terminal.RGB{
-		r: 0
-		g: 0
-		b: 0
+		r: config.background.r
+		g: config.background.g
+		b: config.background.b
 	}
 	fg := terminal.RGB{
-		r: 255
-		g: 255
-		b: 255
+		r: config.foreground.r
+		g: config.foreground.g
+		b: config.foreground.b
 	}
 
 	return DerivedConfig{
@@ -115,7 +117,7 @@ pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
 		background_opacity_cells: config.background_opacity_cells
 		font_thicken: config.font_thicken
 		font_thicken_strength: config.font_thicken_strength
-		font_features: []string{}
+		font_features: config.font_feature.clone()
 		font_styles: font_styles
 		font_shaping_break: config.font_shaping_break
 		cursor_color: config.cursor_color
@@ -124,7 +126,7 @@ pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
 		background: bg
 		foreground: fg
 		bold_color: config.bold_color
-		faint_opacity: u8(config.faint_opacity * 255)
+		faint_opacity: u8(math.ceil(config.faint_opacity * 255))
 		min_contrast: f32(config.minimum_contrast)
 		padding_color: config.window_padding_color
 		selection_background: config.selection_background

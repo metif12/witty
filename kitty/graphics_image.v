@@ -165,13 +165,14 @@ pub mut:
 	// Image height in pixels.
 	height u32
 	// The pixel format of the image data.
-	format TransmissionFormat = .rgba
+	format TransmissionFormat = .rgb
 	// Compression used on the data.
 	compression TransmissionCompression = .none_
 	// The raw pixel data.
 	data []u8
-	// Timestamp when image was transmitted.
-	transmit_time time.Time = time.now()
+	// Timestamp when image was transmitted. Set in complete(), matching
+	// ghostty (which leaves it undefined until then).
+	transmit_time time.Time
 	// True if image was loaded by a command that doesn't specify
 	// an ID or number.
 	implicit_id bool
@@ -469,6 +470,9 @@ pub fn (mut self LoadingImage) complete() !Image {
 	if actual_len != expected_len {
 		return error('unexpected length image id=${self.image.id} expected=${expected_len} actual=${actual_len}')
 	}
+
+	// Set our time.
+	self.image.transmit_time = time.now()
 
 	// Everything looks good, copy the image data over.
 	mut result := self.image
