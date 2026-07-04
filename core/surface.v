@@ -1444,9 +1444,10 @@
 // it just draws and responds to events. The events come from the application
 // runtime so the runtime can determine when and how those are delivered
 // (i.e. with focus, without focus, and so on).
-module main
+module core
 
 import configpkg
+import apprt
 import font
 import input
 import math
@@ -1465,15 +1466,8 @@ const max_active_key_tables = 8
 // Default DPI for font scaling.
 const default_dpi = f32(72.0)
 
-// The effect of an input event.
-pub enum InputEffect {
-	// Input was not handled and should be forwarded to the OS.
-	ignored
-	// Input was handled and consumed.
-	consumed
-	// Input resulted in a close event; surface pointers are now invalid.
-	closed
-}
+// InputEffect (the effect of an input event) lives in the apprt
+// interface; core.Surface returns apprt.InputEffect.
 
 // The action to report for a mouse event.
 enum MouseReportAction {
@@ -3289,7 +3283,7 @@ pub fn (mut self Surface) key_event_is_binding(event KeyEvent) ?BindingFlags {
 }
 
 // key_callback handles key events including keybindings, encoding, and sending to terminal.
-pub fn (mut self Surface) key_callback(event KeyEvent) !InputEffect {
+pub fn (mut self Surface) key_callback(event KeyEvent) !apprt.InputEffect {
 	// Handle keybindings first (press, repeat, release all checked)
 	if v := self.maybe_handle_binding(event) {
 		return v
@@ -4825,7 +4819,7 @@ fn (self &Surface) catch_all_is_ignore() bool {
 	return false
 }
 
-fn (mut self Surface) maybe_handle_binding(event KeyEvent) ?InputEffect {
+fn (mut self Surface) maybe_handle_binding(event KeyEvent) ?apprt.InputEffect {
 	// Release events: check if we consumed the corresponding press
 	if event.action == .release {
 		if last := self.keyboard.last_trigger {

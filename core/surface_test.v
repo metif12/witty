@@ -1,6 +1,7 @@
-module main
+module core
 
 import input
+import apprt
 
 // Test helper: sets up a 10x5 cell grid with 10x20px cells and 5px padding on all sides.
 fn make_test_size() Size {
@@ -133,9 +134,9 @@ fn test_pos_to_viewport_last_cell() {
 }
 
 fn test_input_effect_values() {
-	assert InputEffect.ignored != InputEffect.consumed
-	assert InputEffect.consumed != InputEffect.closed
-	assert InputEffect.ignored != InputEffect.closed
+	assert apprt.InputEffect.ignored != apprt.InputEffect.consumed
+	assert apprt.InputEffect.consumed != apprt.InputEffect.closed
+	assert apprt.InputEffect.ignored != apprt.InputEffect.closed
 }
 
 fn test_needs_confirm_quit_readonly() {
