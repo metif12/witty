@@ -13,3 +13,26 @@ pub enum Runtime {
 	// approach to building the application.
 	gtk
 }
+
+// default_for_os returns the default runtime for the given OS name. The
+// Linux and FreeBSD default is GTK because it is a full featured
+// application. Otherwise we use none so we don't create an exe and instead
+// create libghostty (on macOS, Xcode builds the app that links the lib).
+pub fn Runtime.default_for_os(os_name string) Runtime {
+	return match os_name {
+		'linux', 'freebsd' { Runtime.gtk }
+		else { Runtime.none_ }
+	}
+}
+
+// default_runtime returns the default runtime for the platform witty is
+// currently built for.
+pub fn default_runtime() Runtime {
+	$if linux {
+		return Runtime.gtk
+	} $else $if freebsd {
+		return Runtime.gtk
+	} $else {
+		return Runtime.none_
+	}
+}
