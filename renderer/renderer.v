@@ -1796,10 +1796,10 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		.extend {
 			if y == 0 {
 				self.uniforms.padding_extend.up = !never_extend_bg(row.raw, cells_raw,
-					cells_style, state.colors.background)
+					cells_style, state.colors.palette, state.colors.background)
 			} else if u32(y) == self.cells.size.rows - 1 {
 				self.uniforms.padding_extend.down = !never_extend_bg(row.raw, cells_raw,
-					cells_style, state.colors.background)
+					cells_style, state.colors.palette, state.colors.background)
 			}
 		}
 	}

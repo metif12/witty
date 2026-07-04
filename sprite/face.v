@@ -424,14 +424,17 @@ pub fn (self &SpriteFace) render_glyph(mut atlas font.Atlas, cp u32, opts font.R
 
 	draw(cp, mut &canvas, width, height, metrics)!
 
-	// Write the drawing to the atlas.
+	// Write the drawing to the atlas. This trims blank edges and records
+	// the clip amounts on the canvas.
 	region := canvas.write_atlas(mut atlas)!
 
 	return font.GlyphInfo{
 		width:    region.width
 		height:   region.height
-		offset_x: 0
-		offset_y: 0
+		// Offsets account for padding and the trimmed edges, matching
+		// ghostty Face.renderGlyph.
+		offset_x: i32(canvas.clip_left) - i32(padding_x)
+		offset_y: i32(region.height + canvas.clip_bottom) - i32(padding_y)
 		atlas_x:  region.x
 		atlas_y:  region.y
 	}

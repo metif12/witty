@@ -5,7 +5,7 @@ import terminal
 // Returns true if the row of this pin should never have its background
 // color extended for filling padding space in the renderer. This is
 // a set of heuristics that help making our padding look better.
-pub fn never_extend_bg(row terminal.RowData, cells []terminal.CellData, styles []terminal.CellStyle, default_background terminal.RGB) bool {
+pub fn never_extend_bg(row terminal.RowData, cells []terminal.CellData, styles []terminal.CellStyle, palette [256]terminal.RGB, default_background terminal.RGB) bool {
 	// Any semantic prompts should not have their background extended
 	// because prompts often contain special formatting (such as
 	// powerline) that looks bad when extended.
@@ -15,65 +15,64 @@ pub fn never_extend_bg(row terminal.RowData, cells []terminal.CellData, styles [
 	}
 
 	for x, cell in cells {
-		match cell.content_tag {
-			// If it is a background color cell, we check the color.
-			.bg_color_palette, .bg_color_rgb {
-				s := if cell.style_id != 0 && x < styles.len {
-					styles[x]
-				} else {
-					terminal.CellStyle{}
-				}
-				// No bg color means default background
-				if s.bg_color == .none {
-					return true
-				}
-				if s.bg_color == .rgb {
-					if s.bg_r == default_background.r && s.bg_g == default_background.g
-						&& s.bg_b == default_background.b {
-						return true
-					}
-				}
+		// For codepoint cells we also never extend bg if any cell has a
+		// powerline glyph because these are perfect-fit.
+		if cell.content_tag == .codepoint || cell.content_tag == .codepoint_grapheme {
+			cp := cell.codepoint
+			if (cp >= 0xE0B0 && cp <= 0xE0C8) || cp == 0xE0CA
+				|| (cp >= 0xE0CC && cp <= 0xE0D2) || cp == 0xE0D4 {
+				return true
 			}
-			// If its a codepoint cell we can check the style.
-			.codepoint, .codepoint_grapheme {
-				// For codepoint containing, we also never extend bg
-				// if any cell has a powerline glyph because these are
-				// perfect-fit.
-				cp := cell.codepoint
-				if cp >= 0xE0B0 && cp <= 0xE0C8 {
-					return true
-				}
-				if cp == 0xE0CA {
-					return true
-				}
-				if cp >= 0xE0CC && cp <= 0xE0D2 {
-					return true
-				}
-				if cp == 0xE0D4 {
-					return true
-				}
+		}
 
-				// Never extend a cell that has a default background.
-				// A default background is applied if there is no background
-				// on the style or the explicitly set background
-				// matches our default background.
-				s := if cell.style_id != 0 && x < styles.len {
-					styles[x]
-				} else {
-					terminal.CellStyle{}
-				}
-				if s.bg_color == .none {
-					return true
-				}
-				if s.bg_color == .rgb {
-					if s.bg_r == default_background.r && s.bg_g == default_background.g
-						&& s.bg_b == default_background.b {
-						return true
-					}
-				}
-			}
+		// If any cell has a default background color then we don't extend
+		// because the default background probably looks good enough as an
+		// extension. Resolve the cell's background (mirrors ghostty
+		// Style.bg): bg-color cells carry the color on the cell, otherwise
+		// it comes from the style; a nil result means the default bg.
+		s := if cell.style_id != 0 && x < styles.len {
+			styles[x]
+		} else {
+			terminal.CellStyle{}
+		}
+		bg := resolve_bg(cell, s, palette) or { return true }
+		if bg.r == default_background.r && bg.g == default_background.g
+			&& bg.b == default_background.b {
+			return true
 		}
 	}
 
 	return false
+}
+
+// resolve_bg returns the background RGB for a cell, or none if there is no
+// explicit background (meaning the default background applies). Faithful to
+// ghostty's Style.bg(cell, palette).
+fn resolve_bg(cell terminal.CellData, s terminal.CellStyle, palette [256]terminal.RGB) ?terminal.RGB {
+	match cell.content_tag {
+		.bg_color_palette {
+			return palette[cell.color_palette]
+		}
+		.bg_color_rgb {
+			return terminal.RGB{
+				r: cell.color_rgb_r
+				g: cell.color_rgb_g
+				b: cell.color_rgb_b
+			}
+		}
+		.codepoint, .codepoint_grapheme {
+			if s.bg_color == .palette {
+				return palette[s.bg_palette]
+			}
+			if s.bg_color == .rgb {
+				return terminal.RGB{
+					r: s.bg_r
+					g: s.bg_g
+					b: s.bg_b
+				}
+			}
+			// .none -> default background
+			return none
+		}
+	}
 }
