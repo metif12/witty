@@ -43,6 +43,7 @@ module gtk
 //     opaque handle aliases and `// TODO(gtk)` stubs.
 
 import configpkg
+import core
 
 // --- New opaque handle aliases --------------------------------------------
 // (Grep-verified: none of these `fn C.*` or aliases are declared elsewhere in
@@ -356,12 +357,12 @@ pub fn (mut self Window) winproto() &WinProtoWindow {
 // new_tab creates a new tab with the given parent, inserted at the position
 // dictated by `window-new-tab-position`. The new tab is selected. Mirrors
 // `newTab`.
-pub fn (mut self Window) new_tab(parent &CoreSurface) {
+pub fn (mut self Window) new_tab(parent &core.Surface) {
 	self.new_tab_page(parent, .tab)
 }
 
 // new_tab_for_window mirrors `newTabForWindow`.
-pub fn (mut self Window) new_tab_for_window(parent &CoreSurface) {
+pub fn (mut self Window) new_tab_for_window(parent &core.Surface) {
 	self.new_tab_page(parent, .window)
 }
 
@@ -373,7 +374,7 @@ pub fn (mut self Window) new_tab_for_window(parent &CoreSurface) {
 // the SplitTree "changed" signal are out of scope. The tractable part — the
 // insert-position computation from `window-new-tab-position` — is translated
 // against the AdwTabView C API. Returns the (opaque) AdwTabPage.
-fn (mut self Window) new_tab_page(parent &CoreSurface, context NewSurfaceContext) AdwTabPage {
+fn (mut self Window) new_tab_page(parent &core.Surface, context NewSurfaceContext) AdwTabPage {
 	_ = parent
 	_ = context
 	tab_view := self.tab_view

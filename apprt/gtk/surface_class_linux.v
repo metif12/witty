@@ -21,9 +21,8 @@ module gtk
 //     adapter `Surface` in surface_linux.v.)
 //   * GObject type registration, signal wiring, and `.ui`/blueprint templates
 //     are STUBBED with `// TODO(gtk)` and minimal type-checking bodies.
-//   * Calls into the core surface use the `CoreSurface` placeholder from
-//     surface_linux.v (the real one is `main.Surface`, unimportable here).
-//     Signatures are kept faithful.
+//   * Calls into the core surface dispatch to the real `core.Surface` (see
+//     core/surface.v). Signatures are kept faithful.
 //
 // What is genuinely TRANSLATED: the GLArea realize/unrealize/render/resize
 // setup, the input event handlers (key press/release, mouse down/up/motion/
@@ -34,6 +33,7 @@ module gtk
 // translate_mods).
 
 import apprt
+import core
 import input
 import terminal
 
@@ -141,8 +141,8 @@ pub mut:
 
 	// The core surface backing this GTK surface. This starts out nil because it
 	// can't be initialized until there is a realized GLArea. In ghostty this is
-	// `?*CoreSurface`; we model "unset" with `unsafe { nil }`.
-	core_surface &CoreSurface = unsafe { nil }
+	// `?*core.Surface`; we model "unset" with `unsafe { nil }`.
+	core_surface &core.Surface = unsafe { nil }
 
 	// The apprt Surface adapter (see surface_linux.v).
 	rt_surface Surface
@@ -226,7 +226,7 @@ pub mut:
 // --- Basic accessors ------------------------------------------------------
 
 // core returns the (optional) core surface. Mirrors `Surface.core`.
-pub fn (self &SurfaceWidget) core() &CoreSurface {
+pub fn (self &SurfaceWidget) core() &core.Surface {
 	return self.core_surface
 }
 
@@ -473,6 +473,17 @@ pub fn (self &SurfaceWidget) cgroup_path() ?string {
 
 // --- Key input ------------------------------------------------------------
 
+// core_key_action maps the apprt/input KeyAction to the core.KeyAction used by
+// core.Surface.key_callback. The two enums have different member ordering so a
+// numeric cast is not safe.
+fn core_key_action(action input.KeyAction) core.KeyAction {
+	return match action {
+		.press { core.KeyAction.press }
+		.repeat { core.KeyAction.repeat }
+		.release { core.KeyAction.release }
+	}
+}
+
 // key_event handles a key press or release. This is the meat of keyboard
 // input handling. Faithfully translated from `Surface.keyEvent`:
 //   * runs the GdkEvent through the input method context (for preedit/commit),
@@ -580,14 +591,14 @@ pub fn (mut self SurfaceWidget) key_event(action input.KeyAction, event GdkEvent
 		return false
 	}
 	mut surface := self.core_surface
-	effect := surface.key_callback(input.KeyEvent{
-		action: action
+	// core.Surface.key_callback takes a core.KeyEvent (key/action/mods/utf8).
+	// The richer input.KeyEvent fields (consumed_mods, composing,
+	// unshifted_codepoint) are computed above but not part of the core event.
+	effect := surface.key_callback(core.KeyEvent{
+		action: core_key_action(action)
 		key: physical_key
 		mods: mods
-		consumed_mods: consumed_mods
-		composing: self.im_composing
 		utf8: utf8
-		unshifted_codepoint: 0
 	}) or {
 		eprintln('error in key callback err=${err}')
 		return false
@@ -745,12 +756,10 @@ pub fn (mut self SurfaceWidget) im_commit(str string) {
 		eprintln('error in preedit callback err=${err}')
 	}
 	// Send the text with an invalid key (no PTY encoding for the key itself).
-	surface.key_callback(input.KeyEvent{
+	surface.key_callback(core.KeyEvent{
 		action: .press
 		key: .unidentified
 		mods: input.Mods{}
-		consumed_mods: input.Mods{}
-		composing: false
 		utf8: str
 	}) or {
 		eprintln('error in key callback err=${err}')
@@ -884,7 +893,8 @@ pub fn (mut self SurfaceWidget) ec_mouse_motion(event GdkEvent, x f64, y f64) {
 		mut surface := self.core_surface
 		gtk_mods := C.gdk_event_get_modifier_state(event)
 		mods := translate_mods(gtk_mods)
-		surface.cursor_pos_callback(self.cursor_pos, mods) or {
+		surface.cursor_pos_callback(core.CursorPos{ x: self.cursor_pos.x, y: self.cursor_pos.y },
+			mods) or {
 			eprintln('error in cursor pos callback err=${err}')
 		}
 	}
@@ -900,7 +910,7 @@ pub fn (mut self SurfaceWidget) ec_mouse_leave(event GdkEvent) {
 		mut surface := self.core_surface
 		gtk_mods := C.gdk_event_get_modifier_state(event)
 		mods := translate_mods(gtk_mods)
-		surface.cursor_pos_callback(apprt.CursorPos{ x: -1, y: -1 }, mods) or {
+		surface.cursor_pos_callback(core.CursorPos{ x: -1, y: -1 }, mods) or {
 			eprintln('error in cursor pos callback err=${err}')
 		}
 	}
@@ -930,13 +940,12 @@ pub fn (mut self SurfaceWidget) ec_scroll_vertical(x f64, y f64) bool {
 
 	// Multiply precision scrolls by 10 for a better touchpad response.
 	multiplier := if self.precision_scroll { f64(10.0) } else { f64(1.0) }
-	scroll_mods := input.ScrollMods{
-		precision: self.precision_scroll
-	}
 
 	sx, sy := self.scaled_coordinates(x, y)
 	// We invert because we apply natural scrolling to the values.
-	surface.scroll_callback(sx * -1 * multiplier, sy * -1 * multiplier, scroll_mods) or {
+	// core.Surface.scroll_callback takes a `precision bool` rather than the
+	// full input.ScrollMods (momentum is not consumed by the core yet).
+	surface.scroll_callback(sx * -1 * multiplier, sy * -1 * multiplier, self.precision_scroll) or {
 		eprintln('error in scroll callback err=${err}')
 		return false
 	}
@@ -1014,11 +1023,8 @@ pub fn (mut self SurfaceWidget) glarea_realize() {
 	// If we already have an initialized surface, notify it; otherwise we'll
 	// initialize on the first resize so we have proper initial dimensions.
 	if self.has_core() {
-		mut surface := self.core_surface
-		surface.display_realized() or {
-			eprintln('core displayRealized failed err=${err}')
-			return
-		}
+		// TODO(gtk): core.Surface has no display_realized; the renderer's
+		// display-realized hook is not exposed as a public Surface method.
 		self.redraw()
 	}
 
@@ -1030,7 +1036,6 @@ pub fn (mut self SurfaceWidget) glarea_realize() {
 // `glareaUnrealize`.
 pub fn (mut self SurfaceWidget) glarea_unrealize() {
 	if self.has_core() {
-		mut surface := self.core_surface
 		// The context is not guaranteed current on unrealize, so make it current.
 		C.gtk_gl_area_make_current(self.gl_area)
 		gl_err := C.gtk_gl_area_get_error(self.gl_area)
@@ -1038,7 +1043,8 @@ pub fn (mut self SurfaceWidget) glarea_unrealize() {
 			eprintln('gl_area_make_current failed in unrealize; resources likely leaked')
 			return
 		}
-		surface.display_unrealized()
+		// TODO(gtk): core.Surface has no display_unrealized; the renderer's
+		// display-unrealized hook is not exposed as a public Surface method.
 	}
 
 	// Unset our input method.
@@ -1052,7 +1058,8 @@ pub fn (mut self SurfaceWidget) glarea_render() bool {
 		return true
 	}
 	mut surface := self.core_surface
-	surface.draw_frame(true) or {
+	// core.Surface.draw() draws a single frame (renderer.draw_frame(true)).
+	surface.draw() or {
 		eprintln('failed to draw frame err=${err}')
 		return false
 	}
@@ -1077,10 +1084,11 @@ pub fn (mut self SurfaceWidget) glarea_resize(width int, height int) {
 			x: 1.0
 			y: 1.0
 		} }
-		surface.content_scale_callback(scale) or {
+		surface.content_scale_callback(core.ContentScale{ x: scale.x, y: scale.y }) or {
 			eprintln('error in content scale callback err=${err}')
 		}
-		surface.size_callback(self.size) or {
+		// core.Surface.size_callback takes width/height in pixels, not a struct.
+		surface.size_callback(self.size.width, self.size.height) or {
 			eprintln('error in size callback err=${err}')
 		}
 		// TODO(gtk): schedule the resize overlay if configured.
@@ -1109,11 +1117,10 @@ fn (mut self SurfaceWidget) init_surface() ! {
 		return error('failed to make GL context current')
 	}
 
-	// TODO(gtk): initialize the cgroup, allocate + init a core Surface via
-	// apprt.surface.newConfig / CoreSurface.init, add it to the app surface
-	// list, store it in self.core_surface, and emit the `init` signal. All of
-	// that requires `main.Surface` + the Application GObject, which are
-	// unimportable from this module.
+	// TODO(gtk): initialize the cgroup, allocate + init a core.Surface via
+	// apprt.surface.newConfig / core.Surface.init, add it to the app surface
+	// list, store it in self.core_surface, and emit the `init` signal. This
+	// requires the Application GObject wiring which is out of scope here.
 }
 
 // --- Clipboard ------------------------------------------------------------

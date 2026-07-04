@@ -23,9 +23,8 @@ module gtk
 //   * GObject type registration, signal/property wiring, `.ui`/blueprint
 //     templates, and the AdwTabView/AdwTabPage action plumbing are STUBBED with
 //     `// TODO(gtk)` and minimal type-checking bodies.
-//   * Calls into core surfaces use the `CoreSurface` placeholder (the real one
-//     is `main.Surface`, unimportable here). `Config` and `NewSurfaceContext`
-//     are reused from window_linux.v.
+//   * Calls into core surfaces dispatch to the real `core.Surface`. `Config`
+//     and `NewSurfaceContext` are reused from window_linux.v.
 //
 // What is genuinely TRANSLATED: the active-surface / surface-tree / split-tree
 // content accessors, the needs-confirm-quit delegation, the tab-view / tab-page
@@ -33,6 +32,7 @@ module gtk
 // and the computed-title string building (bell/zoom prefixes + override/terminal/
 // config/default precedence). The GObject template/signal machinery is stubbed.
 
+import core
 import datastruct
 
 // --- New Adw C bindings unique to this file -------------------------------
@@ -121,13 +121,13 @@ fn (mut self Tab) init_action_map() {
 
 // set_parent sets the parent of this tab page (only affects the first surface).
 // Mirrors `setParent`.
-pub fn (mut self Tab) set_parent(parent &CoreSurface) {
+pub fn (mut self Tab) set_parent(parent &core.Surface) {
 	self.set_parent_with_context(parent, .tab)
 }
 
 // set_parent_with_context sets the parent using the given context. Mirrors
 // `setParentWithContext`. Reuses `NewSurfaceContext` from window_linux.v.
-pub fn (mut self Tab) set_parent_with_context(parent &CoreSurface, context NewSurfaceContext) {
+pub fn (mut self Tab) set_parent_with_context(parent &core.Surface, context NewSurfaceContext) {
 	if mut surface := self.get_active_surface() {
 		_ = parent
 		_ = context

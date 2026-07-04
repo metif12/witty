@@ -30,8 +30,8 @@ module gtk
 //   * GObject type registration, signal/property wiring, and `.ui`/blueprint
 //     templates are STUBBED with `// TODO(gtk)` and minimal type-checking
 //     bodies.
-//   * Calls into core surfaces / the application use the `CoreSurface` /
-//     `Application` placeholders (the real ones are unimportable here).
+//   * Calls into core surfaces dispatch to the real `core.Surface`; calls into
+//     the application use the `Application` placeholder (unimportable here).
 //
 // What is genuinely TRANSLATED: the tree navigation glue (new_split, resize,
 // goto), the active-surface-handle lookup, the has-surfaces / is-zoomed /
@@ -852,15 +852,6 @@ pub fn (self &SurfaceWidget) split_tree_label() string {
 		return title
 	}
 	return 'surface'
-}
-
-// --- CoreSurface: needs_confirm_quit --------------------------------------
-
-// needs_confirm_quit reports whether the surface has a running process that
-// requires confirmation before closing. Mirrors `CoreSurface.needsConfirmQuit`.
-// Placeholder: the real logic lives on `main.Surface` (unimportable here).
-pub fn (self &CoreSurface) needs_confirm_quit() bool {
-	return false
 }
 
 // --- small numeric helper -------------------------------------------------

@@ -6,100 +6,18 @@ module gtk
 //
 // Like the App adapter, in ghostty this is a thin wrapper around the GObject
 // `Surface` class (class/surface.zig). That GObject class is out of scope for
-// this translation, so `GtkSurface` (the GObject) and `CoreSurface` are
-// declared as minimal placeholder stubs below to keep this adapter
-// type-checking; the apprt-interface method signatures stay faithful to the
-// Zig original.
+// this translation, so `GtkSurface` (the GObject) is declared as a minimal
+// placeholder stub below to keep this adapter type-checking. The real core
+// surface is `core.Surface` (see core/surface.v); the SurfaceWidget input
+// handlers dispatch directly to its callbacks.
 
 import apprt
-import input
+import core
 
 // TODO(gtk): GObject class `Surface` (class/surface.zig) — out of scope. This
 // minimal placeholder stands in for the GObject Surface instance. The real
 // class is a GTK widget wrapping the terminal renderer, input handling, etc.
 pub struct GtkSurface {}
-
-// TODO(gtk): CoreSurface is `witty`'s root `main.Surface`. The gtk module
-// cannot import the `main` module, so this is a minimal placeholder used only
-// to keep the adapter signatures faithful.
-@[heap]
-pub struct CoreSurface {}
-
-// --- CoreSurface placeholder callbacks -------------------------------------
-// TODO(gtk): these all live on `main.Surface` (unimportable). They are stubbed
-// here with faithful signatures so surface_class_linux.v type-checks. The
-// SurfaceWidget input handlers call these.
-
-// key_callback forwards a key event to the core surface. Mirrors
-// `CoreSurface.keyCallback`.
-pub fn (mut self CoreSurface) key_callback(event input.KeyEvent) !apprt.InputEffect {
-	_ = event
-	return apprt.InputEffect.ignored
-}
-
-// preedit_callback updates the preedit (composing) text. Mirrors
-// `CoreSurface.preeditCallback`. Empty string clears the preedit.
-pub fn (mut self CoreSurface) preedit_callback(text string) ! {
-	_ = text
-}
-
-// mouse_button_callback forwards a mouse button event. Mirrors
-// `CoreSurface.mouseButtonCallback`.
-pub fn (mut self CoreSurface) mouse_button_callback(state input.MouseButtonState, button input.MouseButton, mods input.Mods) !bool {
-	_ = state
-	_ = button
-	_ = mods
-	return false
-}
-
-// cursor_pos_callback forwards a cursor position. Mirrors
-// `CoreSurface.cursorPosCallback`.
-pub fn (mut self CoreSurface) cursor_pos_callback(pos apprt.CursorPos, mods input.Mods) ! {
-	_ = pos
-	_ = mods
-}
-
-// scroll_callback forwards a scroll event. Mirrors `CoreSurface.scrollCallback`.
-pub fn (mut self CoreSurface) scroll_callback(xoff f64, yoff f64, mods input.ScrollMods) ! {
-	_ = xoff
-	_ = yoff
-	_ = mods
-}
-
-// focus_callback forwards a focus change. Mirrors `CoreSurface.focusCallback`.
-pub fn (mut self CoreSurface) focus_callback(focused bool) ! {
-	_ = focused
-}
-
-// content_scale_callback forwards a content-scale change. Mirrors
-// `CoreSurface.contentScaleCallback`.
-pub fn (mut self CoreSurface) content_scale_callback(scale apprt.ContentScale) ! {
-	_ = scale
-}
-
-// size_callback forwards a size change. Mirrors `CoreSurface.sizeCallback`.
-pub fn (mut self CoreSurface) size_callback(size apprt.SurfaceSize) ! {
-	_ = size
-}
-
-// has_selection reports whether the surface has an active selection. Mirrors
-// `CoreSurface.hasSelection`.
-pub fn (self &CoreSurface) has_selection() bool {
-	return false
-}
-
-// display_realized notifies the renderer that the display was realized.
-// Mirrors `CoreSurface.renderer.displayRealized`.
-pub fn (mut self CoreSurface) display_realized() ! {}
-
-// display_unrealized notifies the renderer that the display was unrealized.
-// Mirrors `CoreSurface.renderer.displayUnrealized`.
-pub fn (mut self CoreSurface) display_unrealized() {}
-
-// draw_frame draws a frame. Mirrors `CoreSurface.renderer.drawFrame`.
-pub fn (mut self CoreSurface) draw_frame(sync bool) ! {
-	_ = sync
-}
 
 // Surface is the apprt Surface adapter for the GTK runtime.
 pub struct Surface {
@@ -117,11 +35,11 @@ pub fn (mut self Surface) gobj() &GtkSurface {
 	return self.surface
 }
 
-// core returns the CoreSurface for this apprt surface. Mirrors `Surface.core`.
+// core returns the core.Surface for this apprt surface. Mirrors `Surface.core`.
 //
 // In Zig this asserts non-optional because libghostty should only call this
 // for initialized surfaces.
-pub fn (mut self Surface) core() &CoreSurface {
+pub fn (mut self Surface) core() &core.Surface {
 	return self.surface.core()
 }
 
@@ -200,9 +118,10 @@ pub fn (mut self Surface) redraw_inspector() {
 // (class/surface.zig) which is out of scope. They are stubbed so the adapter
 // type-checks with faithful signatures.
 
-// core returns the (optional) CoreSurface. Here it is always non-nil.
-pub fn (self &GtkSurface) core() &CoreSurface {
-	return &CoreSurface{}
+// core returns the core.Surface. In the real GObject class this is the
+// initialized core surface; here it is a stubbed nil placeholder.
+pub fn (self &GtkSurface) core() &core.Surface {
+	return unsafe { nil }
 }
 
 // close closes the GObject surface.
