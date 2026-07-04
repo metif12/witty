@@ -6,10 +6,11 @@ module gtk
 //
 // In ghostty this struct is a thin wrapper around the GObject `Application`
 // class (class/application.zig). All the heavy lifting lives in that GObject
-// class. Since the GObject widget classes are out of scope for this
-// translation, `Application` (and `CoreApp`) are declared as minimal
-// placeholder stubs below so this adapter type-checks; the apprt-interface
-// method signatures are kept faithful to the Zig original.
+// class, which is translated in `application_linux.v` (the canonical owner of
+// the `Application` type). `CoreApp` remains a minimal placeholder here because
+// the gtk module cannot import witty's root `main` module where the real
+// `App`/`Surface` core types live. The apprt-interface method signatures are
+// kept faithful to the Zig original.
 
 import apprt
 
@@ -36,14 +37,9 @@ pub const object_path = $if prod {
 	'/com/mitchellh/ghostty_debug'
 }
 
-// TODO(gtk): GObject class `Application` (class/application.zig) — out of
-// scope. This minimal placeholder stands in for the GObject Application
-// instance so the adapter below type-checks. The real class wraps a
-// GtkApplication / AdwApplication and owns the run loop.
-pub struct Application {
-mut:
-	core &CoreApp = unsafe { nil }
-}
+// The GObject `Application` class is the canonical entrypoint that wraps a
+// GtkApplication / AdwApplication and owns the run loop. It lives in
+// `application_linux.v`.
 
 // TODO(gtk): CoreApp is `witty`'s root `main.App`. The gtk module cannot
 // import the `main` module, so this is a minimal placeholder used only to
@@ -106,36 +102,4 @@ pub fn App.perform_ipc(target apprt.IpcTarget, action apprt.IpcAction) !bool {
 // `App.redrawInspector`.
 pub fn (self &App) redraw_inspector(mut surface Surface) {
 	surface.redraw_inspector()
-}
-
-// --- Application placeholder methods ---------------------------------------
-// TODO(gtk): all of these belong to the GObject `Application` class
-// (class/application.zig) which is out of scope. They are stubbed so the
-// adapter type-checks with faithful signatures.
-
-// new creates a new GObject Application. Mirrors `Application.new`.
-pub fn Application.new(rt_app &App, core_app &CoreApp) !&Application {
-	_ = rt_app
-	return &Application{
-		core: core_app
-	}
-}
-
-// run runs the GTK application loop.
-pub fn (mut self Application) run() ! {}
-
-// deinit forces disposal of the application.
-pub fn (mut self Application) deinit() {}
-
-// wakeup wakes up the GTK event loop.
-pub fn (mut self Application) wakeup() {}
-
-// unref decrements the reference count of the Application GObject.
-pub fn (mut self Application) unref() {}
-
-// perform_action dispatches an apprt action against the application.
-pub fn (mut self Application) perform_action(target apprt.Target, action apprt.ActionKey) !bool {
-	_ = target
-	_ = action
-	return false
 }

@@ -12,6 +12,7 @@ module gtk
 // Zig original.
 
 import apprt
+import input
 
 // TODO(gtk): GObject class `Surface` (class/surface.zig) — out of scope. This
 // minimal placeholder stands in for the GObject Surface instance. The real
@@ -21,7 +22,84 @@ pub struct GtkSurface {}
 // TODO(gtk): CoreSurface is `witty`'s root `main.Surface`. The gtk module
 // cannot import the `main` module, so this is a minimal placeholder used only
 // to keep the adapter signatures faithful.
+@[heap]
 pub struct CoreSurface {}
+
+// --- CoreSurface placeholder callbacks -------------------------------------
+// TODO(gtk): these all live on `main.Surface` (unimportable). They are stubbed
+// here with faithful signatures so surface_class_linux.v type-checks. The
+// SurfaceWidget input handlers call these.
+
+// key_callback forwards a key event to the core surface. Mirrors
+// `CoreSurface.keyCallback`.
+pub fn (mut self CoreSurface) key_callback(event input.KeyEvent) !apprt.InputEffect {
+	_ = event
+	return apprt.InputEffect.ignored
+}
+
+// preedit_callback updates the preedit (composing) text. Mirrors
+// `CoreSurface.preeditCallback`. Empty string clears the preedit.
+pub fn (mut self CoreSurface) preedit_callback(text string) ! {
+	_ = text
+}
+
+// mouse_button_callback forwards a mouse button event. Mirrors
+// `CoreSurface.mouseButtonCallback`.
+pub fn (mut self CoreSurface) mouse_button_callback(state input.MouseButtonState, button input.MouseButton, mods input.Mods) !bool {
+	_ = state
+	_ = button
+	_ = mods
+	return false
+}
+
+// cursor_pos_callback forwards a cursor position. Mirrors
+// `CoreSurface.cursorPosCallback`.
+pub fn (mut self CoreSurface) cursor_pos_callback(pos apprt.CursorPos, mods input.Mods) ! {
+	_ = pos
+	_ = mods
+}
+
+// scroll_callback forwards a scroll event. Mirrors `CoreSurface.scrollCallback`.
+pub fn (mut self CoreSurface) scroll_callback(xoff f64, yoff f64, mods input.ScrollMods) ! {
+	_ = xoff
+	_ = yoff
+	_ = mods
+}
+
+// focus_callback forwards a focus change. Mirrors `CoreSurface.focusCallback`.
+pub fn (mut self CoreSurface) focus_callback(focused bool) ! {
+	_ = focused
+}
+
+// content_scale_callback forwards a content-scale change. Mirrors
+// `CoreSurface.contentScaleCallback`.
+pub fn (mut self CoreSurface) content_scale_callback(scale apprt.ContentScale) ! {
+	_ = scale
+}
+
+// size_callback forwards a size change. Mirrors `CoreSurface.sizeCallback`.
+pub fn (mut self CoreSurface) size_callback(size apprt.SurfaceSize) ! {
+	_ = size
+}
+
+// has_selection reports whether the surface has an active selection. Mirrors
+// `CoreSurface.hasSelection`.
+pub fn (self &CoreSurface) has_selection() bool {
+	return false
+}
+
+// display_realized notifies the renderer that the display was realized.
+// Mirrors `CoreSurface.renderer.displayRealized`.
+pub fn (mut self CoreSurface) display_realized() ! {}
+
+// display_unrealized notifies the renderer that the display was unrealized.
+// Mirrors `CoreSurface.renderer.displayUnrealized`.
+pub fn (mut self CoreSurface) display_unrealized() {}
+
+// draw_frame draws a frame. Mirrors `CoreSurface.renderer.drawFrame`.
+pub fn (mut self CoreSurface) draw_frame(sync bool) ! {
+	_ = sync
+}
 
 // Surface is the apprt Surface adapter for the GTK runtime.
 pub struct Surface {
