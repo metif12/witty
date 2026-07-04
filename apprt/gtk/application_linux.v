@@ -1,6 +1,7 @@
 module gtk
 
 import apprt
+import core
 import configpkg
 
 // application_linux.v - The primary GTK application (AdwApplication subclass).
@@ -122,7 +123,7 @@ mut:
 	rt_app &App = unsafe { nil }
 
 	// The libghostty App instance. Mirrors `Private.core_app`.
-	core_app &CoreApp = unsafe { nil }
+	core_app &core.App = unsafe { nil }
 
 	// The configuration for the application. Mirrors `Private.config`. Since
 	// the GObject `Config` wrapper is out of scope, we hold the core config
@@ -185,7 +186,7 @@ pub fn Application.default_app() GApplication {
 // single-instance flags, initializes libadwaita and the windowing protocol,
 // and (in ghostty) instantiates the GObject. The GObject instantiation, CSS
 // provider creation, and signal connections are stubbed.
-pub fn Application.new(rt_app &App, core_app &CoreApp) !&Application {
+pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 	// Capture GLib/GObject/GTK log messages via a writer func.
 	// TODO(gtk): glib.logSetWriterFunc — funnel GLib logs into witty logging.
 
@@ -285,7 +286,7 @@ pub fn (mut self Application) deinit() {
 
 // core returns the core app associated with this application. Not
 // reference-counted; do not store. Mirrors `Application.core`.
-pub fn (self &Application) core() &CoreApp {
+pub fn (self &Application) core() &core.App {
 	return self.core_app
 }
 

@@ -13,6 +13,7 @@ module gtk
 // kept faithful to the Zig original.
 
 import apprt
+import core
 
 // must_draw_from_app_thread is detected by the Renderer, in which case it
 // sends a `redraw_surface` message so we can call `drawFrame` ourselves from
@@ -41,12 +42,6 @@ pub const object_path = $if prod {
 // GtkApplication / AdwApplication and owns the run loop. It lives in
 // `application_linux.v`.
 
-// TODO(gtk): CoreApp is `witty`'s root `main.App`. The gtk module cannot
-// import the `main` module, so this is a minimal placeholder used only to
-// keep the adapter signatures faithful.
-@[heap]
-pub struct CoreApp {}
-
 // App is the main entrypoint to the apprt for the GTK runtime. It is
 // initialized in main to start the application.
 pub struct App {
@@ -59,7 +54,7 @@ pub mut:
 //
 // `opts` is required by the apprt interface but unused (an empty struct in
 // Zig). We omit it here since V has no anonymous empty-struct parameter idiom.
-pub fn (mut self App) init(core_app &CoreApp) ! {
+pub fn (mut self App) init(core_app &core.App) ! {
 	app := Application.new(self, core_app)!
 	self.app = app
 }
