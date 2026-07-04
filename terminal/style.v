@@ -152,6 +152,9 @@ pub fn (self &CellStyle) eql(other &CellStyle) bool {
 		&& self.fg_g == other.fg_g && self.fg_b == other.fg_b && self.bg_r == other.bg_r
 		&& self.bg_g == other.bg_g && self.bg_b == other.bg_b
 		&& self.fg_palette == other.fg_palette && self.bg_palette == other.bg_palette
+		&& self.underline_r == other.underline_r && self.underline_g == other.underline_g
+		&& self.underline_b == other.underline_b
+		&& self.underline_palette == other.underline_palette
 }
 
 // Returns the bg color for a cell with this style given the cell
@@ -246,12 +249,12 @@ pub fn (self &CellStyle) fg_rgb(opts FgOpts) RGB {
 pub fn (self &CellStyle) underline_color_rgb(palette [256]RGB) ?RGB {
 	return match self.underline_color {
 		.none { none }
-		.palette { palette[int(self.fg_palette)] }
+		.palette { palette[int(self.underline_palette)] }
 		.rgb {
 			RGB{
-				r: self.fg_r
-				g: self.fg_g
-				b: self.fg_b
+				r: self.underline_r
+				g: self.underline_g
+				b: self.underline_b
 			}
 		}
 	}
@@ -328,6 +331,13 @@ pub fn (self &CellStyle) hash() u64 {
 	h ^= u64(self.bg_b) << 44
 	h ^= u64(self.fg_palette) << 48
 	h ^= u64(self.bg_palette) << 56
+
+	// Mix in the dedicated underline color values so styles differing only
+	// in underline color hash differently.
+	h ^= u64(self.underline_r) << 3
+	h ^= u64(self.underline_g) << 11
+	h ^= u64(self.underline_b) << 19
+	h ^= u64(self.underline_palette) << 27
 
 	// Use integer hash to make it sufficiently uniform
 	h ^= h >> 33

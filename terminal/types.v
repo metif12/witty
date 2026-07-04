@@ -1039,6 +1039,12 @@ pub mut:
 	bg_b            u8
 	fg_palette      u8
 	bg_palette      u8
+	// Dedicated underline-color storage, independent of the fg color.
+	// Ghostty stores this in a separate Style.underline_color Color union.
+	underline_r       u8
+	underline_g       u8
+	underline_b       u8
+	underline_palette u8
 }
 
 // Returns true if this is the default (empty) style.

@@ -121,6 +121,69 @@ fn test_screen_style_reset_with_unset() {
 	assert s.cursor.style_id == u32(0)
 }
 
+// The fg color and the underline color are stored independently: setting an
+// SGR 58 underline color must NOT corrupt the fg color (and vice versa). This
+// mirrors ghostty's separate Style.underline_color union.
+fn test_screen_style_underline_color_independent_from_fg() {
+	mut s := Screen.init(80, 24, 1000)
+	defer { s.deinit() }
+
+	// Set an RGB fg color and a DIFFERENT RGB underline color.
+	s.set_attribute(SgrAttribute{ kind: .direct_color_fg, r: 255, g: 0, b: 0 }) or { assert false }
+	s.set_attribute(SgrAttribute{ kind: .underline_color, r: 0, g: 255, b: 0 }) or { assert false }
+
+	// The fg color must be preserved unchanged.
+	assert s.cursor.style.fg_color == .rgb
+	assert s.cursor.style.fg_r == 255
+	assert s.cursor.style.fg_g == 0
+	assert s.cursor.style.fg_b == 0
+
+	// The underline color is stored in its own fields.
+	assert s.cursor.style.underline_color == .rgb
+	assert s.cursor.style.underline_r == 0
+	assert s.cursor.style.underline_g == 255
+	assert s.cursor.style.underline_b == 0
+
+	// Resolution reads back the correct, independent colors.
+	mut palette := [256]RGB{}
+	fg := s.cursor.style.fg_rgb(FgOpts{
+		default_color: RGB{}
+		palette: palette
+	})
+	assert fg.r == 255 && fg.g == 0 && fg.b == 0
+	ul := s.cursor.style.underline_color_rgb(palette) or { panic('expected underline color') }
+	assert ul.r == 0 && ul.g == 255 && ul.b == 0
+
+	// Palette underline color must read from underline_palette, not fg_palette.
+	palette[7] = RGB{ r: 11, g: 22, b: 33 }
+	s.set_attribute(SgrAttribute{ kind: .underline_color_256, index: 7 }) or { assert false }
+	assert s.cursor.style.underline_color == .palette
+	assert s.cursor.style.underline_palette == 7
+	// fg is still the RGB red we set earlier, untouched by the palette write.
+	assert s.cursor.style.fg_color == .rgb
+	assert s.cursor.style.fg_r == 255
+	ul2 := s.cursor.style.underline_color_rgb(palette) or { panic('expected underline color') }
+	assert ul2.r == 11 && ul2.g == 22 && ul2.b == 33
+
+	// Reset clears only the underline color.
+	s.set_attribute(SgrAttribute{ kind: .reset_underline_color }) or { assert false }
+	assert s.cursor.style.underline_color == .none
+	assert s.cursor.style.fg_color == .rgb
+	assert s.cursor.style.fg_r == 255
+
+	// Two styles differing only in underline color must be distinct.
+	a := CellStyle{
+		underline_color: .rgb
+		underline_r: 1
+	}
+	b := CellStyle{
+		underline_color: .rgb
+		underline_r: 2
+	}
+	assert !a.eql(&b)
+	assert a.hash() != b.hash()
+}
+
 fn test_screen_clear_rows_active_one_line() {
 	mut s := Screen.init(80, 24, 1000)
 	defer { s.deinit() }
