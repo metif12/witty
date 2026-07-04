@@ -1669,12 +1669,15 @@ pub:
 	// will revert back to this state.
 	// The default mode state includes wraparound (bit 0) and
 	// cursor visible (bit 2), matching DEC mode defaults.
-	default_modes ModePacked = ModePacked{ data: 5 }
+	default_modes ModePacked = build_default_modes()
 }
 
 pub struct ModePacked {
 pub mut:
-	data u32
+	// One bit per Mode (indexed by the Mode enum position). This is u64
+	// because there are more than 32 modes; a u32 would alias modes >= 32
+	// onto modes 0-7.
+	data u64
 }
 
 pub struct TerminalFlags {
@@ -1844,12 +1847,12 @@ pub mut:
 }
 
 pub fn (self ModeState) get(mode Mode) bool {
-	bit := u32(1) << (int(mode) & 31)
+	bit := u64(1) << (int(mode) & 63)
 	return (self.values.data & bit) != 0
 }
 
 pub fn (mut self ModeState) set(mode Mode, val bool) {
-	bit := u32(1) << (int(mode) & 31)
+	bit := u64(1) << (int(mode) & 63)
 	if val {
 		self.values.data |= bit
 	} else {
@@ -4241,7 +4244,7 @@ fn (mut self Terminal) semantic_prompt_fresh_line() {
 
 // ModeState save/restore
 pub fn (mut self ModeState) save(mode Mode) {
-	bit := u32(1) << (int(mode) & 31)
+	bit := u64(1) << (int(mode) & 63)
 	if (self.values.data & bit) != 0 {
 		self.saved.data |= bit
 	} else {
@@ -4250,7 +4253,7 @@ pub fn (mut self ModeState) save(mode Mode) {
 }
 
 pub fn (mut self ModeState) restore(mode Mode) bool {
-	bit := u32(1) << (int(mode) & 31)
+	bit := u64(1) << (int(mode) & 63)
 	val := (self.saved.data & bit) != 0
 	if val {
 		self.values.data |= bit

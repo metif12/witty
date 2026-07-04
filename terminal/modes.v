@@ -40,7 +40,7 @@ const mode_entries = [
 	// ANSI modes
 	ModeEntry{ mode: .disable_keyboard, value: 2, ansi: true, default_val: false },
 	ModeEntry{ mode: .insert, value: 4, ansi: true, default_val: false },
-	ModeEntry{ mode: .send_receive_mode, value: 12, ansi: true, default_val: false },
+	ModeEntry{ mode: .send_receive_mode, value: 12, ansi: true, default_val: true },
 	ModeEntry{ mode: .linefeed, value: 20, ansi: true, default_val: false },
 
 	// DEC modes
@@ -65,11 +65,11 @@ const mode_entries = [
 	ModeEntry{ mode: .focus_event, value: 1004, ansi: false, default_val: false },
 	ModeEntry{ mode: .mouse_format_utf8, value: 1005, ansi: false, default_val: false },
 	ModeEntry{ mode: .mouse_format_sgr, value: 1006, ansi: false, default_val: false },
-	ModeEntry{ mode: .mouse_alternate_scroll, value: 1007, ansi: false, default_val: false },
+	ModeEntry{ mode: .mouse_alternate_scroll, value: 1007, ansi: false, default_val: true },
 	ModeEntry{ mode: .mouse_format_urxvt, value: 1015, ansi: false, default_val: false },
 	ModeEntry{ mode: .mouse_format_sgr_pixels, value: 1016, ansi: false, default_val: false },
-	ModeEntry{ mode: .ignore_keypad_with_numlock, value: 1035, ansi: false, default_val: false },
-	ModeEntry{ mode: .alt_esc_prefix, value: 1036, ansi: false, default_val: false },
+	ModeEntry{ mode: .ignore_keypad_with_numlock, value: 1035, ansi: false, default_val: true },
+	ModeEntry{ mode: .alt_esc_prefix, value: 1036, ansi: false, default_val: true },
 	ModeEntry{ mode: .alt_sends_escape, value: 1039, ansi: false, default_val: false },
 	ModeEntry{ mode: .reverse_wrap_extended, value: 1045, ansi: false, default_val: false },
 	ModeEntry{ mode: .alt_screen, value: 1047, ansi: false, default_val: false },
@@ -81,6 +81,21 @@ const mode_entries = [
 	ModeEntry{ mode: .report_color_scheme, value: 2031, ansi: false, default_val: false },
 	ModeEntry{ mode: .in_band_size_reports, value: 2048, ansi: false, default_val: false },
 ]
+
+// Build the default ModePacked from the mode table's default flags. This
+// mirrors ghostty's ModeState.default, which is derived from each entry's
+// `.default`. Modes default to false unless their table entry says otherwise.
+pub fn build_default_modes() ModePacked {
+	mut data := u64(0)
+	for entry in mode_entries {
+		if entry.default_val {
+			data |= u64(1) << (int(entry.mode) & 63)
+		}
+	}
+	return ModePacked{
+		data: data
+	}
+}
 
 // ============================================================
 // mode_from_int - look up a Mode from a protocol value
