@@ -144,79 +144,13 @@ pub enum NewSurfaceContext {
 	split
 }
 
-// --- Config: GObject config-wrapper placeholder ---------------------------
+// --- Config: GObject config wrapper (owned elsewhere) ---------------------
 //
-// TODO(gtk): The real `Config` is the GObject wrapper class (class/config.zig)
-// around the core `configpkg.Config`, exposed via `.get()` (which returns a
-// `*const configpkg.Config`). It is being created concurrently; this minimal
-// placeholder stands in so this file type-checks with faithful call sites. It
-// owns a `configpkg.Config` value and `.get()` hands back a pointer to it,
-// plus the GTK-specific getters that witty's core config does not yet carry
-// (returning ghostty's documented defaults).
-@[heap]
-pub struct Config {
-mut:
-	inner configpkg.Config
-}
-
-// config_new wraps a core config value in a Config GObject placeholder.
-// Mirrors constructing the GObject `Config` from a core config.
-pub fn config_new(inner configpkg.Config) &Config {
-	return &Config{
-		inner: inner
-	}
-}
-
-// get returns the underlying core config. Mirrors `Config.get()`.
-pub fn (self &Config) get() &configpkg.Config {
-	return &self.inner
-}
-
-// ref increments the refcount of the config GObject. Placeholder.
-pub fn (self &Config) ref() &Config {
-	return self
-}
-
-// unref decrements the refcount of the config GObject. Placeholder.
-pub fn (self &Config) unref() {}
-
-// --- GTK-specific config accessors (placeholders) -------------------------
-// TODO(gtk): witty's `configpkg.Config` lacks the GTK-only fields that
-// ghostty's config carries (gtk-titlebar-style, gtk-wide-tabs, etc.). These
-// return ghostty's documented defaults so the appearance logic below stays
-// faithful. When those config fields land they should read from `self.get()`.
-
-fn (self &Config) gtk_titlebar_style() TitlebarStyle {
-	return .native
-}
-
-fn (self &Config) gtk_titlebar() bool {
-	return true
-}
-
-fn (self &Config) gtk_titlebar_hide_when_maximized() bool {
-	return false
-}
-
-fn (self &Config) window_show_tab_bar() configpkg.WindowShowTabBar {
-	return .auto
-}
-
-fn (self &Config) gtk_wide_tabs() bool {
-	return true
-}
-
-fn (self &Config) gtk_toolbar_style() GtkToolbarStyle {
-	return .raised
-}
-
-fn (self &Config) gtk_tabs_location() GtkTabsLocation {
-	return .top
-}
-
-fn (self &Config) window_new_tab_position() configpkg.WindowNewTabPosition {
-	return .current
-}
+// The canonical `Config` GObject wrapper (translated from class/config.zig)
+// now lives in config_class_linux.v, which owns the type, `config_new`, the
+// `.get()`/`.get_mut()` accessors, and the GTK-specific config getters
+// (gtk_titlebar_style, gtk_wide_tabs, ...) that the appearance logic below
+// uses. This file references `Config` directly (same `gtk` module).
 
 // --- SelectTab ------------------------------------------------------------
 
