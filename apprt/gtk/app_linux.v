@@ -98,7 +98,7 @@ pub fn (mut self App) perform_action(target apprt.Target, action apprt.ActionKey
 // other process that is not Ghostty) there is no full-featured apprt App to
 // use.
 pub fn App.perform_ipc(target apprt.IpcTarget, action apprt.IpcAction) !bool {
-	// TODO(gtk): translate ipc/new_window.zig (ipcNewWindow).
+	// action is `apprt.IpcAction`, which is a type alias for IpcNewWindow.
 	return ipc_new_window(target, action)
 }
 
@@ -135,13 +135,6 @@ pub fn (mut self Application) unref() {}
 
 // perform_action dispatches an apprt action against the application.
 pub fn (mut self Application) perform_action(target apprt.Target, action apprt.ActionKey) !bool {
-	_ = target
-	_ = action
-	return false
-}
-
-// ipc_new_window is a placeholder for ipc/new_window.zig's newWindow.
-fn ipc_new_window(target apprt.IpcTarget, action apprt.IpcAction) !bool {
 	_ = target
 	_ = action
 	return false
