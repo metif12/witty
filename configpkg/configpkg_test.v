@@ -1103,3 +1103,45 @@ fn test_keybinds_parse_cli_reset_clears_tables() {
 	assert keybinds.tables.len == 0
 	assert keybinds.set.bindings.len > 0
 }
+
+// Verify config defaults match ghostty's src/config/Config.zig declared defaults.
+fn test_default_values_match_ghostty() {
+	mut cfg := Config.default_config()
+
+	// background: Color = .{ .r = 0x28, .g = 0x2C, .b = 0x34 }
+	assert cfg.background == ColorRGB{
+		r: 0x28
+		g: 0x2C
+		b: 0x34
+	}
+	// foreground: Color = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF }
+	assert cfg.foreground == ColorRGB{
+		r: 0xFF
+		g: 0xFF
+		b: 0xFF
+	}
+	// term: []const u8 = "xterm-ghostty"
+	assert cfg.term == 'xterm-ghostty'
+	// @"title-report": bool = false
+	assert cfg.title_report == false
+	// @"mouse-hide-while-typing": bool = false
+	assert cfg.mouse_hide_while_typing == false
+	// @"selection-clear-on-copy": bool = false
+	assert cfg.selection_clear_on_copy == false
+	// @"selection-clear-on-typing": bool = true
+	assert cfg.selection_clear_on_typing == true
+	// @"cursor-click-to-move": bool = true
+	assert cfg.cursor_click_to_move == true
+	// @"clipboard-trim-trailing-spaces": bool = true
+	assert cfg.clipboard_trim_trailing_spaces == true
+	// @"font-thicken-strength": u8 = 255
+	assert cfg.font_thicken_strength == 255
+	// @"minimum-contrast": f64 = 1
+	assert cfg.minimum_contrast == 1.0
+
+	// Empty term falls back to xterm-ghostty in finalize.
+	mut cfg2 := Config.default_config()
+	cfg2.term = ''
+	cfg2.finalize()
+	assert cfg2.term == 'xterm-ghostty'
+}

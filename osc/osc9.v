@@ -110,7 +110,8 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?Command {
 				// OSC 9;12 mark prompt start
 				`2` {
 					parser.command = Command{
-						cmd_type: .semantic_prompt
+						cmd_type:                .semantic_prompt
+						semantic_prompt_action:  .fresh_line_new_prompt
 					}
 					return parser.command
 				}

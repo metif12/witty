@@ -2932,6 +2932,32 @@ pub fn (mut self Terminal) index() ! {
 	// Unset pending wrap state
 	screen.cursor.pending_wrap = false
 
+	// We handle our cursor semantic prompt state AFTER doing the scrolling,
+	// because we may need to apply it to new rows. This mirrors ghostty's
+	// `defer` in Terminal.index: whenever the cursor's semantic content isn't
+	// `.output` (i.e. `.prompt` or `.input`), the new row is marked as a
+	// prompt continuation. This works around shells that don't send OSC 133
+	// k=s sequences for continuations.
+	defer {
+		if screen.cursor.semantic_content != .output {
+			// Always reset any semantic content clear-eol state. If we aren't
+			// clearing at EOL and we're not output, then we mark the new row as
+			// a prompt continuation.
+			if screen.cursor.semantic_content_clear_eol {
+				screen.cursor.semantic_content = .output
+				screen.cursor.semantic_content_clear_eol = false
+			} else {
+				idx := screen.pages.active_start + int(screen.cursor.y)
+				if idx < screen.pages.screen_rows.len {
+					unsafe {
+						mut row := &screen.pages.screen_rows[idx]
+						row.semantic_prompt = .prompt_continuation
+					}
+				}
+			}
+		}
+	}
+
 	// Outside of the scroll region we move the cursor one line down.
 	if screen.cursor.y < self.scrolling_region.top
 		|| screen.cursor.y > self.scrolling_region.bottom {

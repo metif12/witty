@@ -234,11 +234,14 @@ fn parse_color_channel(s string) ?u8 {
 		return none
 	}
 	val := u32(parse_hex(s) or { return none })
+	// Scale to 8-bit using ghostty's formula: color * maxInt(u8) / divisor
+	// where the divisor is the max value representable in the given number of
+	// hex digits (4, 8, 12, or 16 bits).
 	return match s.len {
-		1 { u8(val * 17) } // 0x0 -> 0x00, 0xf -> 0xff
-		2 { u8(val) }
-		3 { u8(val >> 4) }
-		4 { u8(val >> 8) }
+		1 { u8(val * 255 / 15) } // maxInt(u4) = 15
+		2 { u8(val * 255 / 255) } // maxInt(u8) = 255
+		3 { u8(val * 255 / 4095) } // maxInt(u12) = 4095
+		4 { u8(val * 255 / 65535) } // maxInt(u16) = 65535
 		else { none }
 	}
 }
@@ -286,55 +289,28 @@ fn parse_float_channel(s string) ?u8 {
 	if val < 0.0 || val > 1.0 {
 		return none
 	}
-	return u8(val * 255.0 + 0.5)
+	// ghostty fromIntensity truncates (@intFromFloat), it does not round.
+	return u8(val * 255.0)
 }
 
 // parse_rgb_hash parses "#RGB", "#RRGGBB", "#RRRGGGBBB", "#RRRRGGGGBBBB".
 fn parse_rgb_hash(s string) ?RGB {
-	match s.len {
-		3 {
-			r := parse_hex(s[0..1]) or { return none }
-			g := parse_hex(s[1..2]) or { return none }
-			b := parse_hex(s[2..3]) or { return none }
-			return RGB{
-				r: u8(r * 17)
-				g: u8(g * 17)
-				b: u8(b * 17)
-			}
-		}
-		6 {
-			r := parse_hex(s[0..2]) or { return none }
-			g := parse_hex(s[2..4]) or { return none }
-			b := parse_hex(s[4..6]) or { return none }
-			return RGB{
-				r: u8(r)
-				g: u8(g)
-				b: u8(b)
-			}
-		}
-		9 {
-			r := parse_hex(s[0..3]) or { return none }
-			g := parse_hex(s[3..6]) or { return none }
-			b := parse_hex(s[6..9]) or { return none }
-			return RGB{
-				r: u8(r >> 4)
-				g: u8(g >> 4)
-				b: u8(b >> 4)
-			}
-		}
-		12 {
-			r := parse_hex(s[0..4]) or { return none }
-			g := parse_hex(s[4..8]) or { return none }
-			b := parse_hex(s[8..12]) or { return none }
-			return RGB{
-				r: u8(r >> 8)
-				g: u8(g >> 8)
-				b: u8(b >> 8)
-			}
-		}
-		else {
-			return none
-		}
+	// Each channel is s.len/3 hex digits. parse_color_channel applies the same
+	// ghostty scaling (color * 255 / max) as fromHex.
+	w := match s.len {
+		3 { 1 }
+		6 { 2 }
+		9 { 3 }
+		12 { 4 }
+		else { return none }
+	}
+	r := parse_color_channel(s[0..w]) or { return none }
+	g := parse_color_channel(s[w..2 * w]) or { return none }
+	b := parse_color_channel(s[2 * w..3 * w]) or { return none }
+	return RGB{
+		r: r
+		g: g
+		b: b
 	}
 }
 
@@ -343,7 +319,7 @@ fn parse_named_color(name string) ?RGB {
 	lower := name.to_lower()
 	return match lower {
 		'red' { RGB{r: 255, g: 0, b: 0} }
-		'green' { RGB{r: 0, g: 128, b: 0} }
+		'green' { RGB{r: 0, g: 255, b: 0} }
 		'blue' { RGB{r: 0, g: 0, b: 255} }
 		'white' { RGB{r: 255, g: 255, b: 255} }
 		'black' { RGB{r: 0, g: 0, b: 0} }

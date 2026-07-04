@@ -34,6 +34,15 @@ fn row_wrap_at(t &Terminal, y int) bool {
 	return t.screens.active.pages.screen_rows[idx].wrap
 }
 
+// Helper: read a row's (active-area y) semantic prompt type.
+fn row_semantic_prompt_at(t &Terminal, y int) SemanticPromptType {
+	idx := t.screens.active.pages.active_start + y
+	if idx < 0 || idx >= t.screens.active.pages.screen_rows.len {
+		return .unknown
+	}
+	return t.screens.active.pages.screen_rows[idx].semantic_prompt
+}
+
 // ============================================================
 // Basic input tests
 // ============================================================
@@ -1645,6 +1654,88 @@ fn test_soft_wrap_with_semantic_prompt() {
 
 	str := t.plain_string() or { assert false; return }
 	assert str == 'hello\nworld'
+}
+
+// Translated from ghostty: "Terminal: index in prompt mode marks new row as
+// prompt continuation". This tests the Fish shell workaround: when in prompt
+// mode and we get a newline, assume the new row is a prompt continuation
+// (since Fish doesn't emit OSC133 k=s markers for continuation lines).
+fn test_index_in_prompt_mode_marks_new_row_as_prompt_continuation() {
+	mut t := create_test_terminal(10, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	// Start a prompt.
+	t.semantic_prompt(.prompt_start, none)
+	for c in 'hello' {
+		t.print(u32(c)) or { assert false }
+	}
+
+	// Verify first row is marked as prompt.
+	assert row_semantic_prompt_at(t, 0) == .prompt
+
+	// Now do a linefeed while still in prompt mode.
+	t.carriage_return()
+	t.linefeed() or { assert false }
+
+	// The new row should automatically be marked as prompt continuation.
+	assert row_semantic_prompt_at(t, 1) == .prompt_continuation
+
+	// The cursor semantic content should still be prompt.
+	assert t.screens.active.cursor.semantic_content == .prompt
+}
+
+// Translated from ghostty: "Terminal: index in input mode does not mark new
+// row as prompt". Despite the ghostty test name, input mode DOES mark the new
+// row as a prompt continuation on newline (only output mode does not).
+fn test_index_in_input_mode_marks_new_row_as_prompt_continuation() {
+	mut t := create_test_terminal(10, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	// Start a prompt then switch to input.
+	t.semantic_prompt(.prompt_start, none)
+	for c in '\$ ' {
+		t.print(u32(c)) or { assert false }
+	}
+	t.semantic_prompt(.input_start, none)
+	for c in 'echo \\' {
+		t.print(u32(c)) or { assert false }
+	}
+
+	// Linefeed while in input mode.
+	t.carriage_return()
+	t.linefeed() or { assert false }
+
+	// The new row should be marked as prompt continuation.
+	assert row_semantic_prompt_at(t, 1) == .prompt_continuation
+
+	// Our cursor should still be in input.
+	assert t.screens.active.cursor.semantic_content == .input
+}
+
+// Translated from ghostty: "Terminal: index in output mode does not mark new
+// row as prompt". Output mode should NOT trigger prompt continuation.
+fn test_index_in_output_mode_does_not_mark_new_row_as_prompt() {
+	mut t := create_test_terminal(10, 5) or { assert false; return }
+	defer { t.deinit() }
+
+	// Complete prompt cycle: prompt -> input -> output.
+	t.semantic_prompt(.prompt_start, none)
+	for c in '\$ ' {
+		t.print(u32(c)) or { assert false }
+	}
+	t.semantic_prompt(.input_start, none)
+	for c in 'ls' {
+		t.print(u32(c)) or { assert false }
+	}
+	t.semantic_prompt(.command_start, none)
+
+	// Linefeed while in output mode.
+	t.carriage_return()
+	t.linefeed() or { assert false }
+
+	// The new row should NOT be marked as a prompt. Witty's default row
+	// semantic prompt is `.unknown` (ghostty uses `.none`).
+	assert row_semantic_prompt_at(t, 1) == .unknown
 }
 
 // ============================================================

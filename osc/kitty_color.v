@@ -42,8 +42,10 @@ pub:
 	palette u8
 }
 
-// kitty_color_kind_max is the maximum number of keys in a single OSC 21.
-const kitty_color_kind_max = 256
+// kitty_color_kind_max is the maximum number of distinct keys addressable in a
+// single OSC 21. This mirrors ghostty's `kitty.color.Kind.max`, which is
+// maxInt(u8) + number of special color names = 255 + 8 = 263.
+const kitty_color_kind_max = 255 + 8
 
 // parse_kitty_color_kind parses a key string into a KittyColorKind.
 fn parse_kitty_color_kind(k string) ?KittyColorKind {
@@ -155,9 +157,10 @@ fn parse_kitty_color_protocol(mut parser Parser, terminator_ch u8) ?Command {
 	}
 
 	parser.command = Command{
-		cmd_type:   .kitty_color_protocol
-		terminator: init_terminator(terminator_ch)
-		str_value:  data_str
+		cmd_type:          .kitty_color_protocol
+		terminator:        init_terminator(terminator_ch)
+		str_value:         data_str
+		kitty_color_items: items
 	}
 	return parser.command
 }

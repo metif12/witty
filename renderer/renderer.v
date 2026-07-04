@@ -2299,7 +2299,9 @@ pub:
 pub enum MessageKind {
 	visible
 	focus
+	reset_cursor_blink
 	font_grid
+	resize
 	inspector
 	change_config
 	search_viewport_matches

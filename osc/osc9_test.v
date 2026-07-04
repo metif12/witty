@@ -378,9 +378,12 @@ fn test_osc9_conemu_comment_incomplete_desktop_notification() {
 fn test_osc9_conemu_mark_prompt_start_1() {
 	cmd := parse_osc_input('9;12')
 	assert cmd.cmd_type == .semantic_prompt
+	// ghostty emits semantic_prompt with action fresh_line_new_prompt.
+	assert cmd.semantic_prompt_action == .fresh_line_new_prompt
 }
 
 fn test_osc9_conemu_mark_prompt_start_2() {
 	cmd := parse_osc_input('9;12;abc')
 	assert cmd.cmd_type == .semantic_prompt
+	assert cmd.semantic_prompt_action == .fresh_line_new_prompt
 }

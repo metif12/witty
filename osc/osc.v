@@ -240,6 +240,10 @@ pub:
 	// ColorRequest are defined in color_parser.v.)
 	color_op       ColorOperation
 	color_requests []ColorRequest
+	// Kitty color protocol (OSC 21). Holds the parsed list of query/set/reset
+	// items so downstream consumers can apply them without re-parsing
+	// str_value. (KittyColorItem is defined in kitty_color.v.)
+	kitty_color_items []KittyColorItem
 pub mut:
 	semantic_prompt_options string
 }

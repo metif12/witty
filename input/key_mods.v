@@ -542,11 +542,22 @@ fn init_mods(mod_val Mod, side Side) Mods {
 }
 
 // mods_from_int reconstructs Mods from a u16 integer value.
+//
+// Faithful to the Zig packed `Mods` bitcast layout; the round-trip with
+// `Mods.int()` preserves the standard keys, the locks and the sides.
 fn mods_from_int(v u16) Mods {
 	return Mods{
 		shift: (v & 1) != 0
 		ctrl: (v & 2) != 0
 		alt: (v & 4) != 0
 		super_: (v & 8) != 0
+		caps_lock: (v & 16) != 0
+		num_lock: (v & 32) != 0
+		sides: SideInfo{
+			shift: if (v & 64) != 0 { Side.right } else { Side.left }
+			ctrl: if (v & 128) != 0 { Side.right } else { Side.left }
+			alt: if (v & 256) != 0 { Side.right } else { Side.left }
+			super: if (v & 512) != 0 { Side.right } else { Side.left }
+		}
 	}
 }

@@ -64,6 +64,7 @@ pub mut:
 	shift Side
 	ctrl  Side
 	alt   Side
+	super Side
 }
 
 // Mods is a bitmask for all key modifiers.
@@ -79,12 +80,24 @@ pub mut:
 }
 
 // int returns the integer value of the modifier bitmask.
+//
+// Faithful to Zig's packed `Mods` bitcast layout:
+//   bit 0: shift, 1: ctrl, 2: alt, 3: super,
+//   bit 4: caps_lock, 5: num_lock,
+//   bit 6: sides.shift, 7: sides.ctrl, 8: sides.alt, 9: sides.super
+// where each side bit is 0 for left (and none_) and 1 for right.
 pub fn (m Mods) int() u16 {
 	mut v := u16(0)
 	if m.shift { v |= 1 }
 	if m.ctrl { v |= 2 }
 	if m.alt { v |= 4 }
 	if m.super_ { v |= 8 }
+	if m.caps_lock { v |= 16 }
+	if m.num_lock { v |= 32 }
+	if m.sides.shift == .right { v |= 64 }
+	if m.sides.ctrl == .right { v |= 128 }
+	if m.sides.alt == .right { v |= 256 }
+	if m.sides.super == .right { v |= 512 }
 	return v
 }
 
@@ -109,13 +122,12 @@ pub fn (m Mods) binding() Mods {
 }
 
 // unset performs self &~ other to remove the other mods from self.
+//
+// Faithful to Zig `Mods.unset`: `@bitCast(self.int() & ~other.int())`, so the
+// operation is a pure bitmask over the full packed layout, preserving the
+// side and lock bits that `other` does not clear.
 pub fn (self Mods) unset(other Mods) Mods {
-	return Mods{
-		shift: self.shift && !other.shift
-		ctrl: self.ctrl && !other.ctrl
-		alt: self.alt && !other.alt
-		super_: self.super_ && !other.super_
-	}
+	return mods_from_int(self.int() & ~other.int())
 }
 
 // ButtonState represents the state of a mouse button.
@@ -286,27 +298,25 @@ pub fn (l KeyboardLayout) detect_option_as_alt() OptionAsAlt {
 	}
 }
 
-// translation returns the mods with macos-option-as-alt applied.
+// translation returns the mods to use for key translation. This handles
+// settings like macos-option-as-alt. The translation mods should be used
+// for translation but never sent back in for the key callback.
+//
+// Faithful to Zig `Mods.translation` in key_mods.zig: on Darwin, alt is
+// unset unless option-as-alt is disabled (.false_) or the pressed option
+// key is on the side that should NOT be treated as alt.
 pub fn (m Mods) translation(option_as_alt OptionAsAlt) Mods {
 	mut result := m
-	match option_as_alt {
-		.true_ {
-			// Both option keys treated as alt - no translation needed
+	$if darwin {
+		// Determine whether to unset alt. We keep alt (skip unsetting) when
+		// option-as-alt is disabled or the active side is the "wrong" side.
+		unset_alt := match option_as_alt {
+			.false_ { false }
+			.true_ { true }
+			.left { m.sides.alt != .right }
+			.right { m.sides.alt != .left }
 		}
-		.left {
-			// Only left option is alt; right option remains as-is
-			if m.sides.alt == .right {
-				result.alt = false
-			}
-		}
-		.right {
-			// Only right option is alt; left option remains as-is
-			if m.sides.alt == .left {
-				result.alt = false
-			}
-		}
-		.false_ {
-			// Option is not alt
+		if unset_alt {
 			result.alt = false
 		}
 	}

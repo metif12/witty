@@ -384,7 +384,7 @@ pub fn (mut t Termio) resize(size renderer.Size) ! {
 
 	// Mail the renderer so that it can update the GPU and re-render.
 	t.renderer_mailbox.push(renderer.Message{
-		kind: .font_grid
+		kind: .resize
 	})
 	t.renderer_wakeup.notify() or {}
 }
@@ -551,7 +551,7 @@ fn (mut t Termio) process_output_locked(buf []u8) {
 	if t.last_cursor_reset < 0 || (now - t.last_cursor_reset) > (500 * i64(time.millisecond)) {
 		t.last_cursor_reset = now
 		t.renderer_mailbox.push(renderer.Message{
-			kind: .focus
+			kind: .reset_cursor_blink
 		})
 	}
 

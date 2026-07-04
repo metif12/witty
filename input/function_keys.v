@@ -87,11 +87,34 @@ fn make_cursor_key(normal string, application string) []FunctionKeyEntry {
 	]
 }
 
-// make_kp_keys generates keypad application mode entries.
-fn make_kp_keys(letter string) []FunctionKeyEntry {
-	return [
-		FunctionKeyEntry{ keypad: .application, sequence: '\x1bO${letter}' },
-	]
+// kp_default returns the default keypad application mode entry.
+// Faithful to Zig `kpDefault`: a single entry with mods_empty_is_any = false.
+fn kp_default(suffix string) FunctionKeyEntry {
+	return FunctionKeyEntry{
+		mods_empty_is_any: false
+		keypad: .application
+		sequence: '\x1bO${suffix}'
+	}
+}
+
+// make_kp_keys generates the entries for a keypad key. The suffix is the final
+// character of the sent sequence, such as "r" for kp_2.
+//
+// Faithful to Zig `kpKeys`: returns kpDefault(suffix) ++ pcStyle("\x1bO{}" ++
+// suffix), where each pcStyle entry has keypad = .application. This yields 16
+// entries: 1 default + 15 modifier combinations.
+fn make_kp_keys(suffix string) []FunctionKeyEntry {
+	mut entries := []FunctionKeyEntry{cap: 16}
+	entries << kp_default(suffix)
+	for i, m in fk_modifiers {
+		code := i + 2
+		entries << FunctionKeyEntry{
+			mods: m
+			keypad: .application
+			sequence: '\x1bO${code}${suffix}'
+		}
+	}
+	return entries
 }
 
 // get_function_key_entries returns the function key entries for a given key.

@@ -3949,17 +3949,17 @@ pub mut:
 	abnormal_command_exit_runtime  u32             = 250
 	clipboard_read                 ClipboardAccess = .allow
 	clipboard_write                ClipboardAccess = .allow
-	clipboard_trim_trailing_spaces bool
+	clipboard_trim_trailing_spaces bool                    = true
 	clipboard_paste_protection     bool                    = true
 	clipboard_paste_bracketed_safe bool                    = true
 	copy_on_select                 CopyOnSelect            = .false_
 	confirm_close_surface          ConfirmCloseSurface     = .true_
-	cursor_click_to_move           bool
+	cursor_click_to_move           bool                    = true
 	desktop_notifications          bool                    = true
-	mouse_hide_while_typing        bool                    = true
+	mouse_hide_while_typing        bool
 	mouse_reporting                bool                    = true
 	mouse_shift_capture            MouseShiftCapture       = .false_
-	selection_clear_on_copy        bool                    = true
+	selection_clear_on_copy        bool
 	selection_clear_on_typing      bool                    = true
 	vt_kam_allowed                 bool
 	wait_after_command             bool
@@ -3971,27 +3971,27 @@ pub mut:
 	window_height                  u32
 	window_width                   u32
 	title                          ?string
-	title_report                   bool            = true
+	title_report                   bool
 	command                        ?Command
 	initial_command                ?Command
 	working_directory              ?string
 	env                            RepeatableStringMap
 	initial_input                  ?string
-	term                           string = 'xterm-256color'
+	term                           string = 'xterm-ghostty'
 	shell_integration              ShellIntegration        = .detect
 	shell_integration_features     ShellIntegrationFeatures
 	link_previews                  LinkPreviews            = .false_
 	scroll_to_bottom               ScrollToBottom
 	// Renderer-related fields
 	font_thicken          bool
-	font_thicken_strength u8
+	font_thicken_strength u8               = 255
 	font_shaping_break    FontShapingBreak = .none_
 	cursor_color          ?TerminalColor
 	cursor_opacity        f64              = 1.0
 	cursor_text           ?TerminalColor
 	background_opacity    f64              = 1.0
 	background_opacity_cells bool
-	minimum_contrast      f64
+	minimum_contrast      f64                = 1.0
 	window_padding_color  WindowPaddingColor = .background
 	window_vsync          bool               = true
 	window_colorspace     WindowColorspace   = .srgb
@@ -4109,7 +4109,7 @@ pub mut:
 	mouse_scroll_multiplier f64 = 1.0
 	// Theme color fields used by list-themes preview
 	foreground  ColorRGB = ColorRGB{ r: 0xff, g: 0xff, b: 0xff }
-	background  ColorRGB = ColorRGB{ r: 0x00, g: 0x00, b: 0x00 }
+	background  ColorRGB = ColorRGB{ r: 0x28, g: 0x2C, b: 0x34 }
 	palette     Palette  = Palette.default_palette()
 	diagnostics []Diagnostic
 	// Controls the windowing behavior when dropping a file onto the macOS dock
@@ -4382,9 +4382,9 @@ pub fn (c Config) change_conditional_state(state ConditionalState) ?Config {
 fn (mut c Config) reset_theme_derived() {
 	if 'background' !in c.explicit_keys {
 		c.background = ColorRGB{
-			r: 0x00
-			g: 0x00
-			b: 0x00
+			r: 0x28
+			g: 0x2C
+			b: 0x34
 		}
 	}
 	if 'foreground' !in c.explicit_keys {
@@ -5409,7 +5409,7 @@ pub fn (mut c Config) finalize() {
 
 	// Prevent setting TERM to an empty string.
 	if c.term.len == 0 {
-		c.term = 'xterm-256color'
+		c.term = 'xterm-ghostty'
 	}
 
 	// Clamp the mouse scroll multiplier to [0.01, 10000].

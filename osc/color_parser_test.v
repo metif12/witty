@@ -66,6 +66,92 @@ fn test_rgb_parse_invalid() {
 	assert parse_rgb('notacolor') == none
 }
 
+// Translated from ghostty color.zig test "RGB.parse". Verifies the 8-bit
+// channel scaling (color * 255 / max) for hex specs of 1-4 digits, the
+// intensity (rgbi) truncation, and the named-color values that witty supports.
+fn test_rgb_parse_ghostty() {
+	// rgbi intensity truncates: 1.0 -> 255, others -> 0.
+	assert parse_rgb('rgbi:1.0/0/0')? == RGB{
+		r: 255
+		g: 0
+		b: 0
+	}
+	// Mixed digit widths: 7f (2-digit) = 127, a0a0 (4-digit) scaled = 160.
+	assert parse_rgb('rgb:7f/a0a0/0')? == RGB{
+		r: 127
+		g: 160
+		b: 0
+	}
+	// 1/2/3-digit hex all max out to 255.
+	assert parse_rgb('rgb:f/ff/fff')? == RGB{
+		r: 255
+		g: 255
+		b: 255
+	}
+	assert parse_rgb('#ffffff')? == RGB{
+		r: 255
+		g: 255
+		b: 255
+	}
+	assert parse_rgb('#fff')? == RGB{
+		r: 255
+		g: 255
+		b: 255
+	}
+	// #rrrgggbbb (3-digit channels).
+	assert parse_rgb('#fffffffff')? == RGB{
+		r: 255
+		g: 255
+		b: 255
+	}
+	// #rrrrggggbbbb (4-digit channels).
+	assert parse_rgb('#ffffffffffff')? == RGB{
+		r: 255
+		g: 255
+		b: 255
+	}
+	assert parse_rgb('#ff0010')? == RGB{
+		r: 255
+		g: 0
+		b: 16
+	}
+
+	// Named colors (subset supported by witty).
+	assert parse_rgb('black')? == RGB{
+		r: 0
+		g: 0
+		b: 0
+	}
+	assert parse_rgb('red')? == RGB{
+		r: 255
+		g: 0
+		b: 0
+	}
+	// X11 green is (0, 255, 0), not (0, 128, 0).
+	assert parse_rgb('green')? == RGB{
+		r: 0
+		g: 255
+		b: 0
+	}
+	assert parse_rgb('blue')? == RGB{
+		r: 0
+		g: 0
+		b: 255
+	}
+	assert parse_rgb('white')? == RGB{
+		r: 255
+		g: 255
+		b: 255
+	}
+
+	// Invalid formats.
+	assert parse_rgb('#') == none
+	assert parse_rgb('#ff') == none
+	assert parse_rgb('#ffff') == none
+	assert parse_rgb('#fffff') == none
+	assert parse_rgb('#gggggg') == none
+}
+
 fn test_osc4_set_palette_color() {
 	result := parse_get_set_ansi_color(.osc_4, '0;red')
 	assert result.len == 1

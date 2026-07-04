@@ -725,6 +725,16 @@ pub fn Key.from_ascii(ch u8) ?Key {
 	return none
 }
 
+// ascii_to_upper returns the ASCII-uppercased byte. Only a-z are affected;
+// all other bytes (including digits) are returned unchanged. Faithful to
+// Zig's std.ascii.toUpper.
+fn ascii_to_upper(ch u8) u8 {
+	if ch >= `a` && ch <= `z` {
+		return ch - 32
+	}
+	return ch
+}
+
 // w3c converts a Key to its W3C key code string (e.g. .arrow_up -> "ArrowUp").
 pub fn (k Key) w3c() string {
 	name := k.key_name()
@@ -732,11 +742,11 @@ pub fn (k Key) w3c() string {
 	mut i := 0
 	for i < name.len {
 		if i == 0 {
-			result << name[i] - 32 // toUpper
+			result << ascii_to_upper(name[i])
 		} else if name[i] == `_` {
 			i++
 			if i < name.len {
-				result << name[i] - 32 // toUpper
+				result << ascii_to_upper(name[i])
 			}
 		} else {
 			result << name[i]
