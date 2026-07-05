@@ -208,44 +208,59 @@ import time
 // TODO: When full apprt.Surface type is available, change to []&apprt.Surface.
 type SurfaceList = []&SurfaceRef
 
-// SurfaceRef is a reference to a surface. This is a placeholder type
-// until the full Surface infrastructure is connected.
-// TODO: Replace with the actual Surface type from the surface module.
+// SurfaceRef is witty's stand-in for `*apprt.Surface` (the runtime surface
+// the App tracks). It wraps the real core Surface; `core()` returns it,
+// mirroring ghostty's apprt.Surface.core(). The App reaches surface state
+// through core().
 @[heap]
 pub struct SurfaceRef {
 pub mut:
 	// A unique identifier for this surface (for debugging/tracking).
 	id int
+	// The core Surface this runtime surface wraps.
+	core_surface &Surface = unsafe { nil }
 }
 
-// core returns the core surface reference. This is a placeholder
-// until the full Surface type is available.
-pub fn (s &SurfaceRef) core() &SurfaceRef {
-	return s
+// core returns the core Surface this runtime surface wraps. Mirrors
+// ghostty's apprt.Surface.core().
+pub fn (s &SurfaceRef) core() &Surface {
+	return s.core_surface
 }
 
-// needs_confirm_quit returns whether this surface needs confirmation
-// before quitting (e.g. because it has a running process).
-// TODO: Implement when process tracking is available.
+// needs_confirm_quit returns whether this surface needs confirmation before
+// quitting (e.g. because it has a running process). Delegates to the core
+// surface (ghostty: `v.core().needsConfirmQuit()`).
 pub fn (s &SurfaceRef) needs_confirm_quit() bool {
-	return false
+	if isnil(s.core_surface) {
+		return false
+	}
+	return s.core_surface.needs_confirm_quit()
 }
 
-// close requests the surface to close.
-// TODO: Implement when full surface lifecycle is available.
+// close requests the surface to close. Delegates to the core surface.
 pub fn (s &SurfaceRef) close() {
+	if isnil(s.core_surface) {
+		return
+	}
+	mut cs := s.core_surface
+	cs.close()
 }
 
-// handle_message handles a message sent to this surface.
-// TODO: Implement when surface message handling is available.
+// handle_message handles a message sent to this surface. Delegates to the
+// core surface.
 pub fn (s &SurfaceRef) handle_message(msg SurfaceMessage) ! {
-	_ = msg
+	if isnil(s.core_surface) {
+		return
+	}
+	mut cs := s.core_surface
+	cs.handle_message(msg)!
 }
 
 // perform_binding_action performs a surface-scoped binding action on this
 // surface. Returns true if the action was performed.
-// TODO: Route to the real Surface.perform_binding_action once SurfaceRef is
-// backed by the full Surface type.
+// TODO: core.Surface.perform_binding_action takes core.BindingAction, which
+// diverges from input.Action; wiring this requires reconciling the two
+// action types (ghostty uses input.Binding.Action for both).
 pub fn (s &SurfaceRef) perform_binding_action(action input.Action) !bool {
 	_ = action
 	return false
@@ -373,7 +388,7 @@ pub fn (mut self App) update_config(mut rt_app apprt.RuntimeApp, config &configp
 	// derives its own config from the change_config message, applying its
 	// own conditional state.
 	for surface in self.surfaces {
-		surface.core().handle_message(SurfaceMessage{ kind: .change_config })!
+		surface.handle_message(SurfaceMessage{ kind: .change_config })!
 	}
 
 	// Apply our conditional state. If we fail to apply the conditional state
@@ -715,7 +730,7 @@ pub fn (mut self App) perform_all_action(mut rt_app apprt.RuntimeApp, action inp
 		// logged but processing continues.
 		.surface {
 			for surface in self.surfaces {
-				surface.core().perform_binding_action(action) or {
+				surface.perform_binding_action(action) or {
 					// Log and continue with the next surface.
 				}
 			}
