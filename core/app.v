@@ -1,4 +1,4 @@
-module main
+module core
 
 // --- Original Ghostty Comments Start: src/App.zig
 //
