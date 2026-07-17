@@ -1812,6 +1812,16 @@ pub enum AppActionKind {
 	readonly
 	undo
 	redo
+	// App-scoped actions forwarded from perform_binding_action.
+	ignore
+	unbind
+	open_config
+	close_all_windows
+	quit
+	toggle_quick_terminal
+	toggle_visibility
+	check_for_updates
+	show_gtk_inspector
 }
 
 pub struct RuntimeSurface {}
@@ -2455,39 +2465,6 @@ pub enum SurfaceMessageKind {
 	search_selected
 }
 
-pub struct BindingAction {
-pub:
-	kind BindingActionKind
-	// data holds the string payload for .csi/.esc/.text/.search bindings
-	// and the table name for .activate_key_table*.
-	data string
-	// delta holds the numeric payload for font-size, scroll-row,
-	// jump-to-prompt, scroll-page-lines, etc.
-	delta int
-	// fraction holds the fractional payload for scroll_page_fractional.
-	fraction f32
-	// nav holds the direction for navigate_search.
-	nav SearchNav
-	// tab_mode holds the mode for close_tab.
-	tab_mode CloseTabModeKind
-	// goto_tab holds the (raw) tab index for goto_tab.
-	goto_tab int
-	// split_dir holds the direction for new_split.
-	split_dir SplitDir
-	// goto_split holds the direction for goto_split.
-	goto_split GotoSplitDir
-	// goto_window holds the direction for goto_window.
-	goto_window GotoWindowDir
-	// resize_dir holds the direction for resize_split.
-	resize_dir ResizeDir
-	// inspector_mode holds the mode for the inspector action.
-	inspector_mode InspectorMode
-	// write_screen holds the config for write_*_file actions.
-	write_screen WriteScreenAction
-	// once is true for activate_key_table_once.
-	once bool
-}
-
 // SearchNav is the navigation direction for navigate_search.
 pub enum SearchNav {
 	next
@@ -2562,84 +2539,6 @@ pub enum WriteScreenTarget {
 	paste
 }
 
-pub enum BindingActionKind {
-	none_
-	ignore
-	csi
-	esc
-	text
-	cursor_key
-	reset
-	start_search
-	search_selection
-	end_search
-	search
-	navigate_search
-	copy_to_clipboard
-	copy_url_to_clipboard
-	copy_title_to_clipboard
-	paste_from_clipboard
-	paste_from_selection
-	increase_font_size
-	decrease_font_size
-	reset_font_size
-	set_font_size
-	prompt_surface_title
-	prompt_tab_title
-	clear_screen
-	scroll_to_top
-	scroll_to_bottom
-	scroll_to_row
-	scroll_to_selection
-	scroll_page_up
-	scroll_page_down
-	scroll_page_fractional
-	scroll_page_lines
-	jump_to_prompt
-	write_screen_file
-	write_scrollback_file
-	write_selection_file
-	new_tab
-	close_tab
-	previous_tab
-	next_tab
-	last_tab
-	goto_tab
-	move_tab
-	new_split
-	goto_split
-	goto_window
-	resize_split
-	equalize_splits
-	toggle_split_zoom
-	toggle_readonly
-	reset_window_size
-	toggle_maximize
-	toggle_fullscreen
-	toggle_window_decorations
-	toggle_tab_overview
-	toggle_window_float_on_top
-	toggle_secure_input
-	toggle_mouse_reporting
-	toggle_command_palette
-	toggle_background_opacity
-	show_on_screen_keyboard
-	select_all
-	inspector
-	close_surface
-	close_window
-	new_window
-	activate_key_table
-	activate_key_table_once
-	deactivate_key_table
-	deactivate_all_key_tables
-	end_key_sequence
-	open_url
-	// inspector_toggle is a legacy alias retained for the maybe_handle_binding
-	// path; it toggles the inspector like .inspector with .toggle.
-	inspector_toggle
-}
-
 pub struct BindingFlags {
 pub:
 	consumed    bool
@@ -2678,8 +2577,11 @@ fn key_is_modifier(k input.Key) bool {
 	]
 }
 
-fn closing_action(action BindingAction) bool {
-	return action.kind in [.close_surface, .close_window, .close_tab]
+// closing_action returns true if performing the given action results in
+// closing the surface. This is used to determine if our self pointer is still
+// valid after performing some binding action.
+fn closing_action(action input.Action) bool {
+	return action.tag in [.close_surface, .close_window, .close_tab]
 }
 
 // ---- Surface struct ----
@@ -3760,20 +3662,58 @@ pub fn (self &Surface) pos_to_viewport(xpos f64, ypos f64) Coordinate {
 }
 
 // perform_binding_action performs a binding action from a keybinding.
-pub fn (mut self Surface) perform_binding_action(action BindingAction) !bool {
-	match action.kind {
-		.none_ {
-			return false
+// This is a faithful translation of ghostty's Surface.performBindingAction.
+// It switches on input.ActionTag and reads parameters from the input.Action
+// fields (str_param/float_param/int_param/uint_param/enum_param/enum_param2).
+pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
+	// Forward app-scoped actions to the app. Some app-scoped actions are
+	// special-cased here because they do some special things when performed
+	// from the surface. In ghostty this is `action.scoped(.app)`.
+	if action.scope() == .app {
+		match action.tag {
+			.new_window {
+				// ghostty: self.app.newWindow(self.rt_app, .{ .parent = self }).
+				self.rt_app.perform_action(AppAction{
+					kind: .new_window
+					target: &self
+				})!
+			}
+			// Undo and redo both support both surface and app targeting.
+			// If we are triggering on a surface then we perform the action
+			// with the surface target.
+			.undo {
+				return self.rt_app.perform_action(AppAction{
+					kind: .undo
+					target: &self
+				})!
+			}
+			.redo {
+				return self.rt_app.perform_action(AppAction{
+					kind: .redo
+					target: &self
+				})!
+			}
+			else {
+				// All other app-scoped actions (ignore, unbind, open_config,
+				// reload_config, close_all_windows, quit, toggle_quick_terminal,
+				// toggle_visibility, check_for_updates, show_gtk_inspector) are
+				// forwarded to the app.
+				self.rt_app.perform_action(AppAction{
+					kind: app_action_kind(action.tag)
+					target: &self
+				})!
+			}
 		}
-		.ignore {
-			return true
-		}
+		return true
+	}
+
+	match action.tag {
 		.csi, .esc {
 			// We need to send the CSI/ESC sequence as a single write request.
 			// If you split it across two then the shell can interpret it
 			// as two literals.
-			prefix := if action.kind == .csi { '\x1b[' } else { '\x1b' }
-			full_data := (prefix + action.data).bytes()
+			prefix := if action.tag == .csi { '\x1b[' } else { '\x1b' }
+			full_data := (prefix + action.str_param).bytes()
 			self.queue_io(IOMessage{ kind: .write_small, data: full_data })
 
 			// CSI/ESC triggers a scroll.
@@ -3783,17 +3723,18 @@ pub fn (mut self Surface) perform_binding_action(action BindingAction) !bool {
 			// For text we always allocate. The Zig version parses the string
 			// literal escapes via configpkg.string.parse; here we send the
 			// bytes as-is.
-			self.queue_io(IOMessage{ kind: .write_alloc, data: action.data.bytes() })
+			self.queue_io(IOMessage{ kind: .write_alloc, data: action.str_param.bytes() })
 
 			// Text triggers a scroll.
 			self.scroll_to_bottom() or {}
 		}
 		.cursor_key {
 			// We send a different sequence depending on if we're in cursor
-			// keys mode. The concrete sequences are carried in action.data
-			// (normal) — full parity would carry both normal+application.
+			// keys mode. cursor_key can't be set via config (see binding.v),
+			// so this is effectively unreachable, but we keep witty's prior
+			// behavior of scrolling and writing the (empty) sequence.
 			self.scroll_to_bottom() or {}
-			self.queue_io(IOMessage{ kind: .write_stable, data: action.data.bytes() })
+			self.queue_io(IOMessage{ kind: .write_stable, data: action.str_param.bytes() })
 		}
 		.reset {
 			self.renderer_state.terminal.full_reset()
@@ -3832,7 +3773,7 @@ pub fn (mut self Surface) perform_binding_action(action BindingAction) !bool {
 			return performed
 		}
 		.search {
-			text := action.data
+			text := action.str_param
 			if mut s := self.search {
 				if text.len == 0 {
 					// Zero-length text means stop searching.
@@ -3854,14 +3795,14 @@ pub fn (mut self Surface) perform_binding_action(action BindingAction) !bool {
 		}
 		.navigate_search {
 			if mut s := self.search {
-				s.navigate(action.nav)
+				s.navigate(nav_from_input(action.enum_param))
 			} else {
 				return false
 			}
 		}
 		.copy_to_clipboard {
 			if sel := self.renderer_state.terminal.selection {
-				self.copy_selection_to_clipboards(sel, action.delta)!
+				self.copy_selection_to_clipboards(sel, int(action.enum_param))!
 				// Clear the selection if configured to do so.
 				if self.config.selection_clear_on_copy {
 					self.set_selection(none)!
@@ -3907,16 +3848,17 @@ pub fn (mut self Surface) perform_binding_action(action BindingAction) !bool {
 		}
 		.increase_font_size {
 			// Max delta is somewhat arbitrary.
-			clamped_delta := math.max(0, math.min(255, action.delta))
+			clamped_delta := math.max(f32(0), math.min(f32(255), action.float_param))
 			mut size := self.font_size
-			size.points = math.min(size.points + f32(clamped_delta), f32(255))
+			// Max point size is somewhat arbitrary.
+			size.points = math.min(size.points + clamped_delta, f32(255))
 			self.set_font_size(size)!
 			self.font_size_adjusted = true
 		}
 		.decrease_font_size {
-			clamped_delta := math.max(0, math.min(255, action.delta))
+			clamped_delta := math.max(f32(0), math.min(f32(255), action.float_param))
 			mut size := self.font_size
-			size.points = math.max(f32(1), size.points - f32(clamped_delta))
+			size.points = math.max(f32(1), size.points - clamped_delta)
 			self.set_font_size(size)!
 			self.font_size_adjusted = true
 		}
@@ -3928,7 +3870,7 @@ pub fn (mut self Surface) perform_binding_action(action BindingAction) !bool {
 		}
 		.set_font_size {
 			mut size := self.font_size
-			points := f32(action.delta)
+			points := action.float_param
 			size.points = if points < 1.0 {
 				f32(1.0)
 			} else if points > 255.0 {
@@ -3968,7 +3910,7 @@ pub fn (mut self Surface) perform_binding_action(action BindingAction) !bool {
 			self.queue_io(IOMessage{ kind: .scroll_to_bottom })
 		}
 		.scroll_to_row {
-			self.renderer_state.terminal.scroll_to_row(action.delta)
+			self.renderer_state.terminal.scroll_to_row(int(action.uint_param))
 			self.queue_render()!
 		}
 		.scroll_to_selection {
@@ -3986,23 +3928,23 @@ pub fn (mut self Surface) perform_binding_action(action BindingAction) !bool {
 		}
 		.scroll_page_fractional {
 			rows := f32(self.size.grid().rows)
-			delta := i64(action.fraction * rows)
+			delta := i64(action.float_param * rows)
 			self.queue_io(IOMessage{ kind: .scroll_viewport, scroll_delta: delta })
 		}
 		.scroll_page_lines {
-			self.queue_io(IOMessage{ kind: .scroll_viewport, scroll_delta: i64(action.delta) })
+			self.queue_io(IOMessage{ kind: .scroll_viewport, scroll_delta: i64(action.int_param) })
 		}
 		.jump_to_prompt {
-			self.queue_io(IOMessage{ kind: .jump_to_prompt, prompt_delta: action.delta })
+			self.queue_io(IOMessage{ kind: .jump_to_prompt, prompt_delta: int(action.int_param) })
 		}
 		.write_screen_file {
-			self.write_screen_file(.screen, action.write_screen)!
+			self.write_screen_file(.screen, write_screen_from_input(action))!
 		}
 		.write_scrollback_file {
-			self.write_screen_file(.history, action.write_screen)!
+			self.write_screen_file(.history, write_screen_from_input(action))!
 		}
 		.write_selection_file {
-			self.write_screen_file(.selection, action.write_screen)!
+			self.write_screen_file(.selection, write_screen_from_input(action))!
 		}
 		.new_tab {
 			return self.rt_app.perform_action(AppAction{
@@ -4014,7 +3956,7 @@ pub fn (mut self Surface) perform_binding_action(action BindingAction) !bool {
 			return self.rt_app.perform_action(AppAction{
 				kind: .close_tab
 				target: &self
-				close_tab_mode: action.tab_mode
+				close_tab_mode: close_tab_mode_from_input(action.enum_param)
 			})!
 		}
 		.previous_tab {
@@ -4027,25 +3969,26 @@ pub fn (mut self Surface) perform_binding_action(action BindingAction) !bool {
 			return self.goto_tab_action(int(GotoTabSpecial.last))!
 		}
 		.goto_tab {
-			return self.goto_tab_action(action.goto_tab)!
+			return self.goto_tab_action(int(action.uint_param))!
 		}
 		.move_tab {
 			return self.rt_app.perform_action(AppAction{
 				kind: .move_tab
 				target: &self
-				move_tab_amount: action.delta
+				move_tab_amount: int(action.uint_param)
 			})!
 		}
 		.new_split {
 			// Resolve .auto based on the surface aspect ratio.
-			dir := if action.split_dir == .auto {
+			in_dir := split_dir_from_input(action.enum_param)
+			dir := if in_dir == .auto {
 				if self.size.screen.width > self.size.screen.height {
 					SplitDir.right
 				} else {
 					SplitDir.down
 				}
 			} else {
-				action.split_dir
+				in_dir
 			}
 			return self.rt_app.perform_action(AppAction{
 				kind: .new_split
@@ -4057,22 +4000,22 @@ pub fn (mut self Surface) perform_binding_action(action BindingAction) !bool {
 			return self.rt_app.perform_action(AppAction{
 				kind: .goto_split
 				target: &self
-				goto_split: action.goto_split
+				goto_split: goto_split_from_input(action.enum_param)
 			})!
 		}
 		.goto_window {
 			return self.rt_app.perform_action(AppAction{
 				kind: .goto_window
 				target: &self
-				goto_window: action.goto_window
+				goto_window: goto_window_from_input(action.enum_param)
 			})!
 		}
 		.resize_split {
 			return self.rt_app.perform_action(AppAction{
 				kind: .resize_split
 				target: &self
-				resize_dir: action.resize_dir
-				resize_amount: u16(action.delta)
+				resize_dir: resize_dir_from_input(action.enum_param)
+				resize_amount: u16(action.enum_param2)
 			})!
 		}
 		.equalize_splits {
@@ -4170,17 +4113,8 @@ pub fn (mut self Surface) perform_binding_action(action BindingAction) !bool {
 			return self.rt_app.perform_action(AppAction{
 				kind: .inspector
 				target: &self
-				inspector_mode: action.inspector_mode
+				inspector_mode: inspector_mode_from_input(action.enum_param)
 			})!
-		}
-		.inspector_toggle {
-			// Legacy alias used by internal dispatch; toggle directly.
-			if self.inspector != none {
-				self.deactivate_inspector()
-			} else {
-				self.activate_inspector()!
-			}
-			return true
 		}
 		.close_surface {
 			self.close()
@@ -4191,18 +4125,8 @@ pub fn (mut self Surface) perform_binding_action(action BindingAction) !bool {
 				target: &self
 			})!
 		}
-		.new_window {
-			// Zig calls self.app.newWindow(self.rt_app, .{ .parent = self }).
-			// The core App.new_window ultimately dispatches a new_window
-			// action; here we go through the runtime directly since the
-			// surface's rt_app stub is a different type than app's apprt one.
-			return self.rt_app.perform_action(AppAction{
-				kind: .new_window
-				target: &self
-			})!
-		}
 		.activate_key_table, .activate_key_table_once {
-			return self.activate_key_table(action.data, action.kind == .activate_key_table_once)!
+			return self.activate_key_table(action.str_param, action.tag == .activate_key_table_once)!
 		}
 		.deactivate_key_table {
 			match self.keyboard.table_stack.len {
@@ -4232,12 +4156,142 @@ pub fn (mut self Surface) perform_binding_action(action BindingAction) !bool {
 			// but don't encode the key that triggered this action.
 			self.end_key_sequence(.flush, .retain)
 		}
-		.open_url {
-			self.open_url('')!
+		.adjust_selection {
+			// ghostty adjusts the active screen's selection in the requested
+			// direction and scrolls the endpoint into view. witty's core
+			// selection abstraction (SurfaceTerminal/TermSelection) doesn't yet
+			// expose Selection.adjust here, so we fall through unperformed
+			// (matching ghostty's behavior when there is no selection).
+			// TODO: wire Selection.adjust once the core selection API exposes it.
+			return false
+		}
+		.crash {
+			// ghostty intentionally crashes the requested thread (main/io/render)
+			// to test crash handling. witty has no crash-injection helper yet.
+			// TODO: implement crash injection per thread.
+			return false
+		}
+		else {
+			// Any remaining tags are app-scoped and were handled above, or are
+			// void surface actions with no witty-specific behavior. Returning
+			// true matches ghostty's default (the action was "handled").
 		}
 	}
 
 	return true
+}
+
+// app_action_kind maps an app-scoped input.ActionTag to the corresponding
+// AppActionKind so it can be forwarded to the runtime. Only the app-scoped
+// tags reach this (see perform_binding_action's scope() == .app branch).
+fn app_action_kind(tag input.ActionTag) AppActionKind {
+	return match tag {
+		.ignore { .ignore }
+		.unbind { .unbind }
+		.open_config { .open_config }
+		.reload_config { .reload_config }
+		.close_all_windows { .close_all_windows }
+		.quit { .quit }
+		.toggle_quick_terminal { .toggle_quick_terminal }
+		.toggle_visibility { .toggle_visibility }
+		.check_for_updates { .check_for_updates }
+		.show_gtk_inspector { .show_gtk_inspector }
+		else { .ignore }
+	}
+}
+
+// nav_from_input converts an input.NavigateSearch (stored as enum_param) into
+// the core SearchNav. Note the two enums have different declaration orders.
+fn nav_from_input(e i32) SearchNav {
+	return match unsafe { input.NavigateSearch(e) } {
+		.previous { SearchNav.previous }
+		.next { SearchNav.next }
+	}
+}
+
+// split_dir_from_input converts an input.SplitDirection (stored as enum_param)
+// into the core SplitDir.
+fn split_dir_from_input(e i32) SplitDir {
+	return match unsafe { input.SplitDirection(e) } {
+		.right { SplitDir.right }
+		.down { SplitDir.down }
+		.left { SplitDir.left }
+		.up { SplitDir.up }
+		.auto_ { SplitDir.auto }
+	}
+}
+
+// goto_split_from_input converts an input.SplitFocusDirection (stored as
+// enum_param) into the core GotoSplitDir.
+fn goto_split_from_input(e i32) GotoSplitDir {
+	return match unsafe { input.SplitFocusDirection(e) } {
+		.previous { GotoSplitDir.previous }
+		.next { GotoSplitDir.next }
+		.up { GotoSplitDir.up }
+		.left { GotoSplitDir.left }
+		.down { GotoSplitDir.down }
+		.right { GotoSplitDir.right }
+	}
+}
+
+// goto_window_from_input converts an input.GotoWindow (stored as enum_param)
+// into the core GotoWindowDir.
+fn goto_window_from_input(e i32) GotoWindowDir {
+	return match unsafe { input.GotoWindow(e) } {
+		.previous { GotoWindowDir.previous }
+		.next { GotoWindowDir.next }
+	}
+}
+
+// resize_dir_from_input converts an input.SplitResizeDirection (stored as
+// enum_param) into the core ResizeDir.
+fn resize_dir_from_input(e i32) ResizeDir {
+	return match unsafe { input.SplitResizeDirection(e) } {
+		.up { ResizeDir.up }
+		.down { ResizeDir.down }
+		.left { ResizeDir.left }
+		.right { ResizeDir.right }
+	}
+}
+
+// close_tab_mode_from_input converts an input.CloseTabMode (stored as
+// enum_param) into the core CloseTabModeKind.
+fn close_tab_mode_from_input(e i32) CloseTabModeKind {
+	return match unsafe { input.CloseTabMode(e) } {
+		.this { CloseTabModeKind.this }
+		.other { CloseTabModeKind.other }
+		.right { CloseTabModeKind.right }
+	}
+}
+
+// inspector_mode_from_input converts an input.InspectorMode (stored as
+// enum_param) into the core InspectorMode.
+fn inspector_mode_from_input(e i32) InspectorMode {
+	return match unsafe { input.InspectorMode(e) } {
+		.toggle { InspectorMode.toggle }
+		.show { InspectorMode.show }
+		.hide { InspectorMode.hide }
+	}
+}
+
+// write_screen_from_input builds the core WriteScreenAction from an
+// input.Action's write_*_file parameters (enum_param = action, enum_param2 =
+// format).
+fn write_screen_from_input(action input.Action) WriteScreenAction {
+	target := match unsafe { input.WriteScreenAction(action.enum_param) } {
+		.copy { WriteScreenTarget.copy }
+		.paste { WriteScreenTarget.paste }
+		.open { WriteScreenTarget.open }
+	}
+	emit := match unsafe { input.WriteScreenFormat(action.enum_param2) } {
+		.plain { WriteScreenEmit.plain }
+		.vt { WriteScreenEmit.vt }
+		.html { WriteScreenEmit.html }
+	}
+	return WriteScreenAction{
+		action: target
+		emit: emit
+	}
 }
 
 // GotoTabSpecial holds the special negative tab targets for goto_tab.
@@ -4859,7 +4913,7 @@ fn (mut self Surface) maybe_handle_binding(event KeyEvent) ?apprt.InputEffect {
 		if _ := table.set.get_event(event) {
 			// Found in table; if one-shot and topmost, deactivate
 			if table.once && i == self.keyboard.table_stack.len - 1 {
-				self.perform_binding_action(BindingAction{ kind: .deactivate_key_table }) or {}
+				self.perform_binding_action(input.Action.new(.deactivate_key_table)) or {}
 			}
 			return .consumed
 		}

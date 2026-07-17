@@ -419,11 +419,11 @@ fn test_terminal_selection_eql() {
 }
 
 fn test_closing_action() {
-	assert closing_action(BindingAction{ kind: .close_surface }) == true
-	assert closing_action(BindingAction{ kind: .close_window }) == true
-	assert closing_action(BindingAction{ kind: .close_tab }) == true
-	assert closing_action(BindingAction{ kind: .ignore }) == false
-	assert closing_action(BindingAction{ kind: .none_ }) == false
+	assert closing_action(input.Action.new(.close_surface)) == true
+	assert closing_action(input.Action.new(.close_window)) == true
+	assert closing_action(input.Action.new(.close_tab)) == true
+	assert closing_action(input.Action.new(.ignore)) == false
+	assert closing_action(input.Action.new(.reset)) == false
 }
 
 fn test_has_selection() {

@@ -257,13 +257,14 @@ pub fn (s &SurfaceRef) handle_message(msg SurfaceMessage) ! {
 }
 
 // perform_binding_action performs a surface-scoped binding action on this
-// surface. Returns true if the action was performed.
-// TODO: core.Surface.perform_binding_action takes core.BindingAction, which
-// diverges from input.Action; wiring this requires reconciling the two
-// action types (ghostty uses input.Binding.Action for both).
+// surface. Returns true if the action was performed. Delegates to the real
+// core.Surface, which switches on input.ActionTag (see Surface.perform_binding_action).
 pub fn (s &SurfaceRef) perform_binding_action(action input.Action) !bool {
-	_ = action
-	return false
+	if isnil(s.core_surface) {
+		return false
+	}
+	mut cs := s.core_surface
+	return cs.perform_binding_action(action)!
 }
 
 // ChangeConfigMsg is a placeholder for config-change messages sent to a surface.
