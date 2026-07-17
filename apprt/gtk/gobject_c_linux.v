@@ -1,0 +1,106 @@
+module gtk
+
+// gobject_c_linux.v - Raw GObject/GTK C-API bindings for hand-expanding the
+// class registration that ghostty performs via `gobject.ext.defineClass`,
+// `defineProperty`, `defineSignal`, and the blueprint/gresource template
+// machinery. These are direct declarations of the GObject C API (the same
+// API zig-gobject wraps); each witty class hand-expands its registration
+// onto them instead of using a comptime helper.
+
+#include <gtk/gtk.h>
+#include <glib-object.h>
+
+// GType (usize) and GBytes (voidptr) aliases are declared elsewhere in the
+// module (c_gtk_linux.v / ipc_dbus_linux.v) and reused here.
+
+pub type GtkWidgetClass = voidptr
+pub type GObjectClass = voidptr
+pub type GParamSpec = voidptr
+
+// GClassInitFunc:    fn (gpointer klass, gpointer class_data)
+// GInstanceInitFunc: fn (GTypeInstance *instance, gpointer klass)
+// Both are passed as plain function pointers (voidptr) in GTypeInfo below.
+
+// GTypeInfo mirrors the C struct used by g_type_register_static. Field names
+// match <gobject/gtype.h> so V's codegen assigns into the real struct.
+pub struct C.GTypeInfo {
+pub mut:
+	class_size     u16
+	base_init      voidptr
+	base_finalize  voidptr
+	class_init     voidptr
+	class_finalize voidptr
+	class_data     voidptr
+	instance_size  u16
+	n_preallocs    u16
+	instance_init  voidptr
+	value_table    voidptr
+}
+
+// GTypeQuery mirrors the C struct filled by g_type_query.
+pub struct C.GTypeQuery {
+pub mut:
+	type          GType
+	type_name     &char
+	class_size    u32
+	instance_size u32
+}
+
+// --- Type registration ----------------------------------------------------
+
+fn C.g_type_register_static(parent_type GType, type_name &char, info &C.GTypeInfo, flags int) GType
+fn C.g_type_query(type GType, query &C.GTypeQuery)
+fn C.g_type_add_instance_private(type GType, private_size usize) int
+fn C.g_type_class_peek_parent(g_class voidptr) voidptr
+fn C.g_type_instance_get_private(instance voidptr, private_type GType) voidptr
+fn C.g_type_check_instance_cast(instance voidptr, iface_type GType) voidptr
+
+// --- Parent type get_type() functions --------------------------------------
+
+fn C.adw_bin_get_type() GType
+fn C.adw_dialog_get_type() GType
+fn C.adw_application_window_get_type() GType
+fn C.gtk_box_get_type() GType
+fn C.gtk_widget_get_type() GType
+
+// --- Template (blueprint/.ui) loading --------------------------------------
+// ghostty uses setTemplateFromResource against a compiled gresource; witty
+// loads the equivalent .ui bytes directly via set_template.
+
+fn C.g_bytes_new_static(data voidptr, size usize) GBytes
+fn C.gtk_widget_class_set_template(widget_class voidptr, template_bytes GBytes)
+fn C.gtk_widget_init_template(widget voidptr)
+fn C.gtk_widget_dispose_template(widget voidptr, widget_type GType)
+fn C.gtk_widget_class_bind_template_child_full(widget_class voidptr, name &char, internal int, struct_offset int)
+
+// --- Property registration -------------------------------------------------
+
+fn C.g_object_class_install_property(oclass voidptr, property_id u32, pspec &C.GParamSpec)
+fn C.g_param_spec_boolean(name &char, nick &char, blurb &char, default_value int, flags int) &C.GParamSpec
+fn C.g_param_spec_int(name &char, nick &char, blurb &char, minimum int, maximum int, default_value int, flags int) &C.GParamSpec
+fn C.g_param_spec_uint(name &char, nick &char, blurb &char, minimum u32, maximum u32, default_value u32, flags int) &C.GParamSpec
+fn C.g_param_spec_string(name &char, nick &char, blurb &char, default_value &char, flags int) &C.GParamSpec
+fn C.g_param_spec_object(name &char, nick &char, blurb &char, object_type GType, flags int) &C.GParamSpec
+fn C.g_param_spec_boxed(name &char, nick &char, blurb &char, boxed_type GType, flags int) &C.GParamSpec
+
+// --- Signal registration ---------------------------------------------------
+
+fn C.g_signal_new(signal_name &char, itype GType, signal_flags int, class_offset u32, accumulator voidptr, accu_data voidptr, c_marshaller voidptr, return_type GType, n_params u32, ...) u32
+fn C.g_signal_emit_by_name(instance voidptr, detailed_signal &char, ...)
+
+// GObject GParamFlags we use (from <gobject/gparam.h>).
+pub const g_param_readable = int(1)
+pub const g_param_writable = int(2)
+pub const g_param_readwrite = int(3) // readable | writable
+pub const g_param_construct = int(4)
+
+// GSignalFlags (from <gobject/gsignal.h>).
+pub const g_signal_run_last = int(2)
+pub const g_signal_run_first = int(1)
+
+// GType fundamentals we reference by their C constant expressions.
+fn C.g_object_get_type() GType
+
+// --- Instance creation -----------------------------------------------------
+
+fn C.g_object_new(object_type GType, first_property_name &char, ...) voidptr
