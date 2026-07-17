@@ -104,3 +104,35 @@ fn C.g_object_get_type() GType
 // --- Instance creation -----------------------------------------------------
 
 fn C.g_object_new(object_type GType, first_property_name &char, ...) voidptr
+
+// --- Property get/set vfunc overriding -------------------------------------
+// A class with properties overrides GObjectClass.get_property/set_property in
+// its class_init (cast klass -> GObjectClass* and assign the vfunc pointers).
+// Only the fields witty overrides are declared; V codegen uses the real C
+// struct so named-field assignment resolves correctly.
+pub struct C.GObjectClass {
+pub mut:
+	constructor  voidptr
+	set_property voidptr
+	get_property voidptr
+	dispose      voidptr
+	finalize     voidptr
+	constructed  voidptr
+}
+
+fn C.g_object_class_find_property(oclass voidptr, property_name &char) &C.GParamSpec
+fn C.g_object_notify_by_pspec(object voidptr, pspec &C.GParamSpec)
+
+// GValue accessors (the GValue* is passed as voidptr).
+fn C.g_value_get_boolean(value voidptr) int
+fn C.g_value_set_boolean(value voidptr, v_boolean int)
+fn C.g_value_get_string(value voidptr) &char
+fn C.g_value_set_string(value voidptr, v_string &char)
+fn C.g_value_get_object(value voidptr) voidptr
+fn C.g_value_set_object(value voidptr, v_object voidptr)
+fn C.g_value_get_int(value voidptr) int
+fn C.g_value_set_int(value voidptr, v_int int)
+fn C.g_value_get_uint(value voidptr) u32
+fn C.g_value_set_uint(value voidptr, v_uint u32)
+fn C.g_value_get_boxed(value voidptr) voidptr
+fn C.g_value_set_boxed(value voidptr, v_boxed voidptr)

@@ -1,3 +1,4 @@
+@[has_globals]
 module gtk
 
 // close_confirmation_dialog_linux.v - Close confirmation dialog
@@ -10,16 +11,13 @@ module gtk
 // a `target` property, emits `close-request` / `cancel` signals, and derives
 // its heading/body from the target.
 //
-// V has no GObject class-registration / comptime / template / signal
-// machinery, so:
-//   * The class is modeled as a plain V struct `CloseConfirmationDialog`
-//     wrapping the base `Dialog` plus the `target` private field.
-//   * GObject type registration (`defineClass`), the `target` PROPERTY, the
-//     `.ui` template, and the `close-request`/`cancel` SIGNALS are STUBBED —
-//     see the "GObject class registration" section. Signal emission is modeled
-//     via optional V callbacks so the response routing stays observable.
-//   * The real LOGIC — the target -> heading/body text and the response-id ->
-//     signal routing — is translated directly.
+// The GObject class registration (`defineClass`), the `target` PROPERTY, the
+// `.ui` template, and the `close-request`/`cancel` SIGNALS are hand-expanded
+// below onto the raw GObject/GTK C API. The wrapping V struct
+// `CloseConfirmationDialog` additionally keeps optional V callbacks so the
+// response routing stays observable from V without a GObject signal connect.
+// The real LOGIC — the target -> heading/body text and the response-id ->
+// signal routing — is translated directly.
 
 // --- CloseTarget ----------------------------------------------------------
 //
@@ -54,6 +52,134 @@ pub fn (t CloseTarget) body() string {
 	}
 }
 
+// --- GObject class registration -------------------------------------------
+// Hand-expansion of ghostty's `gobject.ext.defineClass` for
+// `GhosttyCloseConfirmationDialog`: a `.ui` template, a `target` enum property,
+// `close-request`/`cancel` signals, private data, and a dispose vfunc.
+
+// The blueprint (ui/1.2/close-confirmation-dialog.blp) translated to a
+// GtkBuilder .ui XML string. `responses [...]` become the AdwAlertDialog
+// <responses>/<response> element; `_("x")` become translatable="yes";
+// `destructive` becomes appearance="destructive".
+const close_confirmation_dialog_ui = '<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="GhosttyCloseConfirmationDialog" parent="GhosttyDialog">
+    <property name="close-response">cancel</property>
+    <responses>
+      <response id="cancel" translatable="yes">Cancel</response>
+      <response id="close" translatable="yes" appearance="destructive">Close</response>
+    </responses>
+  </template>
+</interface>
+'
+
+// The C-layout private struct mirroring ghostty's `Private` (the `target`
+// field). Registered via g_type_add_instance_private and used to back the
+// `target` property.
+struct C.GhosttyCloseConfirmationDialogPrivate {
+mut:
+	target int
+}
+
+// The GObject type id and the private-data offset (returned by
+// g_type_add_instance_private), both registered lazily on first use.
+__global g_close_confirmation_dialog_type = GType(0)
+__global g_close_confirmation_dialog_priv_offset = int(0)
+
+// Property ids for the get/set vfunc dispatch.
+const close_confirmation_prop_target = u32(1)
+
+// close_confirmation_dialog_priv returns the instance private data pointer.
+fn close_confirmation_dialog_priv(obj voidptr) &C.GhosttyCloseConfirmationDialogPrivate {
+	return &C.GhosttyCloseConfirmationDialogPrivate(C.g_type_instance_get_private(obj,
+		g_close_confirmation_dialog_type))
+}
+
+// close_confirmation_dialog_get_property implements the GObjectClass
+// get_property vfunc for the `target` property.
+fn close_confirmation_dialog_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	if property_id == close_confirmation_prop_target {
+		priv := close_confirmation_dialog_priv(obj)
+		C.g_value_set_int(value, priv.target)
+	}
+}
+
+// close_confirmation_dialog_set_property implements the GObjectClass
+// set_property vfunc for the `target` property.
+fn close_confirmation_dialog_set_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	if property_id == close_confirmation_prop_target {
+		mut priv := close_confirmation_dialog_priv(obj)
+		priv.target = C.g_value_get_int(value)
+	}
+}
+
+// close_confirmation_dialog_dispose disposes the template and chains to the
+// parent. Mirrors the `dispose` vfunc.
+fn close_confirmation_dialog_dispose(obj voidptr) {
+	C.gtk_widget_dispose_template(obj, g_close_confirmation_dialog_type)
+	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
+	if !isnil(parent_class.dispose) {
+		f := DisposeFn(parent_class.dispose)
+		f(obj)
+	}
+}
+
+// close_confirmation_dialog_class_init installs the template, the `target`
+// property, the signals, and overrides the get/set/dispose vfuncs. Mirrors the
+// ghostty `Class.init`.
+fn close_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
+	// Ensure the parent Dialog type is registered (ghostty's ensureType).
+	dialog_get_type()
+
+	// Template.
+	bytes := C.g_bytes_new_static(close_confirmation_dialog_ui.str, usize(close_confirmation_dialog_ui.len))
+	C.gtk_widget_class_set_template(klass, bytes)
+
+	// Property: target (enum, modeled as int).
+	pspec := C.g_param_spec_int(c'target', c'target', c'The close target', 0, 3,
+		0, g_param_readwrite)
+	mut obj_class := &C.GObjectClass(klass)
+	obj_class.get_property = voidptr(close_confirmation_dialog_get_property)
+	obj_class.set_property = voidptr(close_confirmation_dialog_set_property)
+	obj_class.dispose = voidptr(close_confirmation_dialog_dispose)
+	C.g_object_class_install_property(klass, close_confirmation_prop_target, pspec)
+
+	// Signals: close-request, cancel (both void, no params).
+	self_type := g_close_confirmation_dialog_type
+	C.g_signal_new(c'close-request', self_type, g_signal_run_last, 0, unsafe { nil },
+		unsafe { nil }, unsafe { nil }, GType(0), 0)
+	C.g_signal_new(c'cancel', self_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil },
+		unsafe { nil }, GType(0), 0)
+}
+
+// close_confirmation_dialog_instance_init builds the template. Mirrors the
+// ghostty `init` (instanceInit).
+fn close_confirmation_dialog_instance_init(instance voidptr, klass voidptr) {
+	C.gtk_widget_init_template(instance)
+}
+
+// close_confirmation_dialog_get_type lazily registers the
+// GhosttyCloseConfirmationDialog GObject type. Its parent is the GhosttyDialog
+// type; it adds instance-private data for the `target` field.
+pub fn close_confirmation_dialog_get_type() GType {
+	if g_close_confirmation_dialog_type == GType(0) {
+		parent := dialog_get_type()
+		mut query := C.GTypeQuery{}
+		C.g_type_query(parent, &query)
+		info := C.GTypeInfo{
+			class_size:    u16(query.class_size)
+			instance_size: u16(query.instance_size)
+			class_init:    voidptr(close_confirmation_dialog_class_init)
+			instance_init: voidptr(close_confirmation_dialog_instance_init)
+		}
+		g_close_confirmation_dialog_type = C.g_type_register_static(parent, c'GhosttyCloseConfirmationDialog',
+			&info, 0)
+		g_close_confirmation_dialog_priv_offset = C.g_type_add_instance_private(g_close_confirmation_dialog_type,
+			sizeof(C.GhosttyCloseConfirmationDialogPrivate))
+	}
+	return g_close_confirmation_dialog_type
+}
+
 // --- CloseConfirmationDialog ----------------------------------------------
 
 // CloseConfirmationDialog is the close-confirmation dialog GObject
@@ -79,13 +205,15 @@ mut:
 }
 
 // close_confirmation_dialog_new creates a new dialog for the given target.
-// Mirrors `CloseConfirmationDialog.new`.
-//
-// TODO(gtk): ghostty uses `gobject.ext.newInstance(Self, .{ .target = target })`
-// which builds the GObject and runs the `.ui` template init. Here we allocate
-// the plain wrapper.
+// Mirrors `gobject.ext.newInstance(Self, .{ .target = target })`: it builds the
+// GObject (running the `.ui` template init) with the `target` property set.
 pub fn close_confirmation_dialog_new(target CloseTarget) &CloseConfirmationDialog {
+	obj := C.g_object_new(close_confirmation_dialog_get_type(), c'target', int(target),
+		&char(unsafe { nil }))
 	return &CloseConfirmationDialog{
+		dialog: Dialog{
+			obj: obj
+		}
 		target: target
 	}
 }
@@ -108,17 +236,20 @@ pub fn (mut self CloseConfirmationDialog) close() {
 
 // response routes an AdwAlertDialog response id to the appropriate signal.
 // Mirrors the `response` virtual method: "close" -> close-request, anything
-// else -> cancel.
-//
-// TODO(gtk): GObject virtual method — implemented via
-// `Dialog.virtual_methods.response.implement(class, &response)` in ghostty.
-// Here it is a plain method invoked by the (stubbed) response wiring.
+// else -> cancel. In addition to emitting the real GObject signal, it invokes
+// the optional V callback so the routing is observable from V.
 fn (mut self CloseConfirmationDialog) response(response_id string) {
 	if response_id == 'close' {
+		if !isnil(self.dialog.obj) {
+			C.g_signal_emit_by_name(self.dialog.obj, c'close-request')
+		}
 		if cb := self.on_close_request {
 			cb()
 		}
 	} else {
+		if !isnil(self.dialog.obj) {
+			C.g_signal_emit_by_name(self.dialog.obj, c'cancel')
+		}
 		if cb := self.on_cancel {
 			cb()
 		}

@@ -1,3 +1,4 @@
+@[has_globals]
 module gtk
 
 // dialog_linux.v - Base dialog helper (GhosttyDialog).
@@ -57,6 +58,62 @@ fn C.adw_message_dialog_set_body(dialog AdwMessageDialog, body &char)
 fn C.gtk_window_set_transient_for(window GtkWindow, parent GtkWindow)
 fn C.gtk_widget_get_root(widget GtkWidget) GtkWidget
 
+// Parent get_type() functions for the (runtime-chosen) Dialog base class.
+fn C.adw_alert_dialog_get_type() GType
+fn C.adw_message_dialog_get_type() GType
+
+// Shared helpers for the dialog subclasses' hand-expanded vfunc chaining.
+// g_type_check_instance_get_class returns the GTypeClass* of an instance; its
+// parent (g_type_class_peek_parent, declared in gobject_c_linux.v) is the
+// GObjectClass whose dispose/finalize vfuncs we chain to.
+fn C.g_type_check_instance_get_class(instance voidptr) voidptr
+
+// DisposeFn / FinalizeFn are the GObjectClass dispose/finalize vfunc signatures
+// (a single GObject* argument). Used to call the parent-class vfunc pointer.
+pub type DisposeFn = fn (obj voidptr)
+pub type FinalizeFn = fn (obj voidptr)
+
+// --- GObject class registration -------------------------------------------
+// Hand-expansion of ghostty's `gobject.ext.defineClass(Self, .{ .name =
+// "GhosttyDialog", .classInit = &Class.init, .parent_class = &Class.parent })`.
+//
+// `Dialog` in ghostty has NO instanceInit, NO private data, NO properties, NO
+// template and NO signals of its own — it only forwards the parent's `response`
+// virtual method. So the registration is minimal: an empty class_init and a
+// lazily-registered type whose parent is resolved at runtime (AlertDialog for
+// libadwaita >= 1.5, else MessageDialog), mirroring ghostty's comptime
+// `Parent` selection.
+
+// The GObject type id, registered lazily on first use.
+__global g_dialog_type = GType(0)
+
+// dialog_class_init mirrors the empty ghostty `Dialog.Class.init`.
+fn dialog_class_init(klass voidptr, class_data voidptr) {
+	// Nothing to do: Dialog installs no template/properties/signals.
+}
+
+// dialog_get_type lazily registers the GhosttyDialog GObject type. Queries the
+// runtime-chosen parent (AdwAlertDialog vs AdwMessageDialog) for its
+// class/instance sizes.
+pub fn dialog_get_type() GType {
+	if g_dialog_type == GType(0) {
+		parent := if adw_supports_dialogs() {
+			C.adw_alert_dialog_get_type()
+		} else {
+			C.adw_message_dialog_get_type()
+		}
+		mut query := C.GTypeQuery{}
+		C.g_type_query(parent, &query)
+		info := C.GTypeInfo{
+			class_size:    u16(query.class_size)
+			instance_size: u16(query.instance_size)
+			class_init:    voidptr(dialog_class_init)
+		}
+		g_dialog_type = C.g_type_register_static(parent, c'GhosttyDialog', &info, 0)
+	}
+	return g_dialog_type
+}
+
 // --- Dialog ---------------------------------------------------------------
 
 // Dialog is the base dialog GObject (`GhosttyDialog`). Modeled as a struct
@@ -65,12 +122,9 @@ fn C.gtk_widget_get_root(widget GtkWidget) GtkWidget
 @[heap]
 pub struct Dialog {
 mut:
-	// The underlying AdwAlertDialog/AdwMessageDialog GObject. Set at
-	// construction by the (stubbed) GObject instance init.
-	//
-	// TODO(gtk): GObject class registration — in ghostty this instance is
-	// created via `gobject.ext.defineClass`/`newInstance`; here it is a stubbed
-	// handle.
+	// The underlying AdwAlertDialog/AdwMessageDialog GObject, an instance of the
+	// GhosttyDialog type registered by `dialog_get_type()`. Subclasses create
+	// the real instance and stash the pointer here.
 	obj GObject = unsafe { nil }
 }
 
