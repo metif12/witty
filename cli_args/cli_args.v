@@ -22,7 +22,7 @@ pub const whitespace = ' \t'
 // they're generally only called in error cases, so we already have
 // an error message to show users. If there is an error in handling
 // the compatibility, then the handler should return false.
-pub type CompatibilityHandler = fn (key string, value ?string) bool
+pub type CompatibilityHandler = fn (key string, value string) bool
 
 // Parse the command line arguments from args into dst.
 //
@@ -36,54 +36,55 @@ pub type CompatibilityHandler = fn (key string, value ?string) bool
 // allocations. Allocations are necessary for certain types, like `[]const u8`.
 // (Not applicable in V - V uses GC for memory management.)
 //
-// If the destination type has a field "_diagnostics", it must be of type
+// If the destination type has a field "diagnostics", it must be of type
 // "DiagnosticList" and any diagnostic messages will be added to that list.
 // When diagnostics are present, only allocation errors will be returned.
-// (XTODO: Not implemented - requires compile-time field detection.)
 //
-// If the destination type has a decl "compatibility", it must be of type
-// std.StaticStringMap(CompatibilityHandler(T)), and it will be used to
-// handle backwards compatibility for fields with the given name. The
-// field name doesn't need to exist (so you can setup compatibility for
-// removed fields). The value is a function that will be called when
-// all other parsing fails for that field. If a field changes such that
-// the old values would NOT error, then the caller should handle that
-// downstream after parsing is done, not through this method.
-// (XTODO: Not implemented - requires compile-time decl lookup.)
+// A destination may declare `compatibility(key, value) bool` to handle old
+// field names or values after normal parsing fails. It may also declare
+// `parse_manually_hook(arg) bool` and `help()`; these are discovered through
+// V's compile-time method reflection.
 //
 // Note: If the arena is already non-null, then it will be used. In this
 // case, in the case of an error some memory might be leaked into the arena.
 pub fn parse[T](mut dst T, args []string) ! {
-	for arg in args {
-		// XTODO: parseManuallyHook - V doesn't support checking for
-		// method declarations at compile time (Zig's @hasDecl).
-		// Do manual parsing if we have a hook for it.
-		// if (@hasDecl(T, "parseManuallyHook")) {
-		//     if (!try dst.parseManuallyHook(arena_alloc, arg, iter)) return;
-		// }
+	for arg_index, arg in args {
+		// Do manual parsing when the destination declares the V equivalent
+		// `parse_manually_hook(arg) bool`. A true result consumes the arg.
+		mut manually_handled := false
+		$for method in T.methods {
+			$if method.name == 'parse_manually_hook' {
+				manually_handled = dst.$method(arg)
+			}
+		}
+		if manually_handled {
+			continue
+		}
 
-		// XTODO: help flag detection - V doesn't support checking for
-		// method declarations at compile time (Zig's @hasDecl).
-		// If the destination supports help then we check for it, call
-		// the help function and return.
-		// if (@hasDecl(T, "help")) {
-		//     if (mem.eql(u8, arg, "--help") or mem.eql(u8, arg, "-h")) {
-		//         try dst.help();
-		//         return;
-		//     }
-		// }
+		// Destinations with `help()` own --help/-h handling, just as the
+		// Zig parser checks for a help declaration.
+		if arg == '--help' || arg == '-h' {
+			mut showed_help := false
+			$for method in T.methods {
+				$if method.name == 'help' {
+					dst.$method()
+					showed_help = true
+				}
+			}
+			if showed_help {
+				return
+			}
+		}
 
 		// If this doesn't start with "--" then it isn't a config
 		// flag. We don't support positional arguments or configuration
 		// values set with spaces so this is an error.
 		if !arg.starts_with('--') {
-			// XTODO: diagnostic tracking
-			// if (comptime !canTrackDiags(T)) return Error.InvalidField;
-			// try dst._diagnostics.append(arena_alloc, .{
-			//     .key = try arena_alloc.dupeZ(u8, arg),
-			//     .message = "invalid field",
-			//     .location = try diags.Location.fromIter(iter, arena_alloc),
-			// });
+			if append_diagnostic[T](mut dst, arg, 'invalid field', diagnostics.CliLocation{
+				index: arg_index + 1
+			}) {
+				continue
+			}
 			return error('invalid field')
 		}
 
@@ -96,37 +97,44 @@ pub fn parse[T](mut dst T, args []string) ! {
 		}
 
 		parse_into_field[T](mut dst, key, value) or {
-			// XTODO: compatibility handler fallback
-			// If we get an error parsing a field, then we try to fall
-			// back to compatibility handlers if able.
-			// if (@hasDecl(T, "compatibility")) {
-			//     if (T.compatibility.get(key)) |handler| {
-			//         if (handler(dst, arena_alloc, key, value)) {
-			//             break :err;
-			//         }
-			//     }
-			// }
+			// A destination may recover old names/values with
+			// `compatibility(key, value) bool`. The empty string represents a
+			// missing value because V's reflected calls cannot pass optionals.
+			mut compatibility_handled := false
+			compatibility_value := value or { '' }
+			$for method in T.methods {
+				$if method.name == 'compatibility' {
+					compatibility_handled = dst.$method(key, compatibility_value)
+				}
+			}
+			if compatibility_handled {
+				continue
+			}
 
-			// XTODO: diagnostic tracking
-			// if (comptime !canTrackDiags(T)) return err;
-			// ...format error messages and add diagnostics...
+			mut message := err.msg()
+			if message == 'invalid field' {
+				message = 'unknown field'
+			} else if message == 'value required' {
+				message = format_value_required[T](key)
+			} else if message == 'invalid value' {
+				message = format_invalid_value[T](key, value)
+			}
+			if append_diagnostic[T](mut dst, key, message, diagnostics.CliLocation{
+				index: arg_index + 1
+			}) {
+				continue
+			}
 			return err
 		}
 	}
 }
 
-// Convenience function to create a compatibility handler that
-// renames a field from `from` to `to`.
-// XTODO: This requires compile-time field validation (@hasField)
-// and function pointer generation which V doesn't support in the
-// same way as Zig's comptime. The concept is preserved but the
-// implementation would need to be done differently in V.
-// pub fn compatibility_renamed[T](to string) CompatibilityHandler {
-//     return fn (key string, value ?string) bool {
-//         // Would need to call parse_into_field with the renamed field
-//         return false
-//     }
-// }
+// compatibility_renamed applies a value to a replacement field. It is the V
+// form of Ghostty's generated compatibilityRenamed handler.
+pub fn compatibility_renamed[T](mut dst T, to string, value string) bool {
+	parse_into_field[T](mut dst, to, value) or { return false }
+	return true
+}
 
 // Parse a single key/value pair into the destination type T.
 //
@@ -144,66 +152,92 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 
 	$for field in T.fields {
 		if field.name.len > 0 && field.name[0] != `_` && field.name == normalized_key {
+			defaults := T{}
+
 			// If the value is empty string (set but empty string),
 			// then we reset the value to the default.
 			if has_value && raw.len == 0 {
-				// XTODO: Resetting to compile-time default values is not
-				// fully supported in V's $for. In Zig, this uses
-				// field.default_value_ptr to reset the field to the
-				// struct's default value. For now, we just return.
-				// If the field type has an `init` method, we would call it:
-				// if (canHaveDecls and @hasDecl(Field, "init")) {
-				//     try @field(dst, field.name).init(alloc);
-				//     return;
-				// }
+				// Assign from a zero-argument instance to preserve V field
+				// defaults, matching Zig's field.default_value_ptr behavior.
+				dst.$(field.name) = defaults.$(field.name)
 				return
 			}
 
-			// No parseCLI, magic the value based on the type.
-			// XTODO: If the field type has a `parse_cli` method, we would
-			// call that instead. V doesn't support compile-time method
-			// detection (@hasDecl) in $for context.
-			// if (canHaveDecls and @hasDecl(Field, "parseCLI")) { ... }
+			// Composite field types can provide their own mutating parser. V's
+			// method reflection gives us the same dispatch that Zig implements
+			// with @hasDecl(Field, "parseCLI").
+			$if field.is_struct && !field.is_option {
+				$for method in field.methods {
+					$if method.name == 'parse_cli' {
+						if !has_value {
+							return error('value required')
+						}
+						mut parsed_field := dst.$(field.name)
+						parsed_field.$method(raw) or { return error('invalid value') }
+						dst.$(field.name) = parsed_field
+						return
+					}
+				}
+			}
 
-			$if field.typ is string {
+			// No type-specific parser: derive parsing from the field type.
+
+			$if field.unaliased_typ is string {
 				if !has_value {
 					return error('value required')
 				}
 				dst.$(field.name) = raw
 				return
-			} $else $if field.typ is bool {
+			} $else $if field.unaliased_typ is ?string {
+				if !has_value {
+					return error('value required')
+				}
+				dst.$(field.name) = raw
+				return
+			} $else $if field.unaliased_typ is bool {
 				bool_str := if has_value { raw } else { 't' }
 				dst.$(field.name) = parse_bool(bool_str)!
 				return
-			} $else $if field.typ is u8 {
+			} $else $if field.unaliased_typ is ?bool {
+				bool_str := if has_value { raw } else { 't' }
+				dst.$(field.name) = parse_bool(bool_str)!
+				return
+			} $else $if field.unaliased_typ is u8 || field.unaliased_typ is ?u8 {
 				if !has_value {
 					return error('value required')
 				}
 				n := strconv.atoi(raw) or { return error('invalid value') }
+				if n < 0 || n > 0xff {
+					return error('invalid value')
+				}
 				dst.$(field.name) = u8(n)
 				return
-			} $else $if field.typ is u16 {
+			} $else $if field.unaliased_typ is u16 || field.unaliased_typ is ?u16 {
 				if !has_value {
 					return error('value required')
 				}
 				n := strconv.atoi(raw) or { return error('invalid value') }
+				if n < 0 || n > 0xffff {
+					return error('invalid value')
+				}
 				dst.$(field.name) = u16(n)
 				return
-			} $else $if field.typ is u32 {
+			} $else $if field.unaliased_typ is u32 || field.unaliased_typ is ?u32 {
 				if !has_value {
 					return error('value required')
 				}
-				n := strconv.atoi(raw) or { return error('invalid value') }
+				n := strconv.parse_uint(raw, 10, 32) or { return error('invalid value') }
 				dst.$(field.name) = u32(n)
 				return
-			} $else $if field.typ is u64 {
+			} $else $if field.unaliased_typ is u64 || field.unaliased_typ is ?u64 {
 				if !has_value {
 					return error('value required')
 				}
-				n := strconv.atoi(raw) or { return error('invalid value') }
-				dst.$(field.name) = u64(n)
+				dst.$(field.name) = strconv.parse_uint(raw, 10, 64) or {
+					return error('invalid value')
+				}
 				return
-			} $else $if field.typ is int {
+			} $else $if field.unaliased_typ is int || field.unaliased_typ is ?int {
 				if !has_value {
 					return error('value required')
 				}
@@ -211,35 +245,42 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 					return error('invalid value')
 				}
 				return
-			} $else $if field.typ is i8 {
+			} $else $if field.unaliased_typ is i8 || field.unaliased_typ is ?i8 {
 				if !has_value {
 					return error('value required')
 				}
 				n := strconv.atoi(raw) or { return error('invalid value') }
+				if n < -128 || n > 127 {
+					return error('invalid value')
+				}
 				dst.$(field.name) = i8(n)
 				return
-			} $else $if field.typ is i16 {
+			} $else $if field.unaliased_typ is i16 || field.unaliased_typ is ?i16 {
 				if !has_value {
 					return error('value required')
 				}
 				n := strconv.atoi(raw) or { return error('invalid value') }
+				if n < -32768 || n > 32767 {
+					return error('invalid value')
+				}
 				dst.$(field.name) = i16(n)
 				return
-			} $else $if field.typ is i64 {
+			} $else $if field.unaliased_typ is i64 || field.unaliased_typ is ?i64 {
 				if !has_value {
 					return error('value required')
 				}
-				n := strconv.atoi(raw) or { return error('invalid value') }
-				dst.$(field.name) = i64(n)
+				dst.$(field.name) = strconv.parse_int(raw, 10, 64) or {
+					return error('invalid value')
+				}
 				return
-			} $else $if field.typ is f32 {
+			} $else $if field.unaliased_typ is f32 || field.unaliased_typ is ?f32 {
 				if !has_value {
 					return error('value required')
 				}
 				f := strconv.atof64(raw) or { return error('invalid value') }
 				dst.$(field.name) = f32(f)
 				return
-			} $else $if field.typ is f64 {
+			} $else $if field.unaliased_typ is f64 || field.unaliased_typ is ?f64 {
 				if !has_value {
 					return error('value required')
 				}
@@ -247,18 +288,19 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 					return error('invalid value')
 				}
 				return
+			} $else $if field.unaliased_typ is $enum {
+				if !has_value {
+					return error('value required')
+				}
+				parse_enum_value(mut dst.$(field.name), raw)!
+				return
+			} $else $if field.unaliased_typ is $struct {
+				if !has_value {
+					return error('value required')
+				}
+				dst.$(field.name) = parse_auto_struct(raw, defaults.$(field.name))!
+				return
 			} $else {
-				// XTODO: Unsupported field types include:
-				// - Enums (requires string-to-enum conversion,
-				//   Zig uses std.meta.stringToEnum)
-				// - Optional fields (requires unwrapping the inner type,
-				//   Zig uses @typeInfo(.optional).child)
-				// - Structs with parseCLI method (requires @hasDecl)
-				// - Auto-layout structs (requires recursive key:value parsing
-				//   via CommaSplitter)
-				// - Tagged unions (requires runtime union construction,
-				//   Zig uses @unionInit)
-				// - Packed structs (V doesn't have packed structs)
 				return error('unsupported field type')
 			}
 		}
@@ -266,50 +308,190 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 	return error('invalid field')
 }
 
-// XTODO: parseTaggedUnion - Requires runtime union construction which
-// V doesn't support in the same way as Zig's @unionInit.
-// The Zig version:
-// 1. Finds the colon separator to split tag:value
-// 2. Uses inline for to iterate union fields
-// 3. Matches the tag string to a field name
-// 4. Handles void types (no value needed)
-// 5. Creates a temporary struct and parses the value into it
-// 6. Constructs the union with @unionInit
-// pub fn parse_tagged_union[T](v string) !T { ... }
+fn parse_enum_value[T](mut out T, raw string) ! {
+	normalized := raw.replace('-', '_')
+	$for enum_value in T.values {
+		if normalized == enum_value.name {
+			out = enum_value.value
+			return
+		}
+	}
+	return error('invalid value')
+}
 
-// XTODO: parseAutoStruct - Requires CommaSplitter for key:value pairs
-// and compile-time field tracking (StaticBitSet) which V doesn't have.
-// The Zig version:
-// 1. Starts with undefined result
-// 2. Tracks which fields were set with a bitset
-// 3. Splits input by commas using CommaSplitter
-// 4. Finds key:value pairs and parses each field
-// 5. Validates all required fields were set
-// 6. Fills in defaults for optional fields
-// pub fn parse_auto_struct[T](v string, default_ ?T) !T { ... }
+// parse_auto_struct parses comma-separated key:value pairs. Missing fields
+// inherit from default_value. V structs are always initialized, so this is the
+// direct equivalent of Zig's explicit default-field pass.
+pub fn parse_auto_struct[T](value string, default_value T) !T {
+	mut result := default_value
+	mut splitter := CommaSplitter.new(value)
+	for splitter.has_next() {
+		entry := splitter.next() or { return error('invalid value') }
+		colon := entry.index_u8(`:`)
+		if colon < 0 {
+			return error('invalid value')
+		}
+		key := entry[..colon].trim(whitespace)
+		mut field_value := entry[colon + 1..].trim(whitespace)
+		if field_value.len >= 2 && field_value[0] == `"`
+			&& field_value[field_value.len - 1] == `"` {
+			field_value = decode_quoted_value(field_value) or { return error('invalid value') }
+		}
+		parse_into_field[T](mut result, key, field_value) or { return error('invalid value') }
+	}
+	return result
+}
 
-// XTODO: parsePackedStruct - V doesn't have packed structs.
-// The Zig version:
-// 1. Tries to parse standalone boolean ("true"/"false")
-// 2. Splits by commas
-// 3. Handles "no-" prefix for negation
-// 4. Sets individual bool fields
-// pub fn parse_packed_struct[T](v string) !T { ... }
+// parse_packed_struct translates Ghostty's packed all-boolean CLI structs.
+// V does not distinguish packed layout here, so it works for any all-bool
+// struct and retains the same textual representation.
+pub fn parse_packed_struct[T](value string) !T {
+	mut result := T{}
+	if all := parse_bool(value) {
+		$for field in T.fields {
+			$if field.unaliased_typ is bool {
+				result.$(field.name) = all
+			} $else {
+				return error('invalid packed struct field')
+			}
+		}
+		return result
+	}
 
-// XTODO: formatValueRequired - Requires compile-time field iteration
-// to find valid enum values for a given field name.
-// fn format_value_required[T](key string) string { ... }
+	for raw_part in value.split(',') {
+		mut part := raw_part.trim(whitespace)
+		mut enabled := true
+		if part.starts_with('no-') {
+			part = part[3..]
+			enabled = false
+		}
+		part = part.replace('-', '_')
+		mut matched := false
+		$for field in T.fields {
+			$if field.unaliased_typ is bool {
+				if field.name == part {
+					result.$(field.name) = enabled
+					matched = true
+				}
+			} $else {
+				return error('invalid packed struct field')
+			}
+		}
+		if !matched {
+			return error('invalid value')
+		}
+	}
+	return result
+}
 
-// XTODO: formatInvalidValue - Similar to formatValueRequired.
-// fn format_invalid_value[T](key string, value ?string) string { ... }
+pub fn format_value_required[T](key string) string {
+	return 'value required${format_values[T](key)}'
+}
 
-// XTODO: formatValues - Requires compile-time enum field iteration.
-// fn format_values[T](key string) string { ... }
+pub fn format_invalid_value[T](key string, value ?string) string {
+	display := value or { '' }
+	return 'invalid value "${display}"${format_values[T](key)}'
+}
 
-// Returns true if this type can track diagnostics.
-// XTODO: In Zig this checks @hasField(T, "_diagnostics") at compile time.
-// V's $for could potentially check this but it's not implemented yet.
-// fn can_track_diags[T]() bool { ... }
+fn format_values[T](key string) string {
+	normalized_key := key.replace('-', '_')
+	defaults := T{}
+	$for field in T.fields {
+		if field.name == normalized_key {
+			$if field.unaliased_typ is $enum {
+				return enum_value_suffix(defaults.$(field.name))
+			}
+		}
+	}
+	return ''
+}
+
+fn enum_value_suffix[T](_ T) string {
+	mut names := []string{}
+	$for enum_value in T.values {
+		names << enum_value.name.replace('_', '-')
+	}
+	return ', valid values are: ${names.join(', ')}'
+}
+
+fn decode_quoted_value(value string) !string {
+	if value.len < 2 || value[0] != `"` || value[value.len - 1] != `"` {
+		return error('invalid value')
+	}
+	mut result := []u8{cap: value.len - 2}
+	mut i := 1
+	for i < value.len - 1 {
+		if value[i] != `\\` {
+			result << value[i]
+			i++
+			continue
+		}
+		i++
+		if i >= value.len - 1 {
+			return error('invalid value')
+		}
+		match value[i] {
+			`n` { result << `\n` }
+			`r` { result << `\r` }
+			`t` { result << `\t` }
+			`\\` { result << `\\` }
+			`'` { result << `'` }
+			`"` { result << `"` }
+			`x` {
+				if i + 2 >= value.len - 1 {
+					return error('invalid value')
+				}
+				hi := hex_value(value[i + 1]) or { return error('invalid value') }
+				lo := hex_value(value[i + 2]) or { return error('invalid value') }
+				result << u8((hi << 4) | lo)
+				i += 2
+			}
+			`u` {
+				if i + 1 >= value.len - 1 || value[i + 1] != `{` {
+					return error('invalid value')
+				}
+				i += 2
+				mut codepoint := u32(0)
+				mut digits := 0
+				for i < value.len - 1 && value[i] != `}` {
+					nibble := hex_value(value[i]) or { return error('invalid value') }
+					codepoint = (codepoint << 4) | nibble
+					digits++
+					i++
+				}
+				if digits == 0 || i >= value.len - 1 || codepoint > 0x10ffff {
+					return error('invalid value')
+				}
+				result << rune(codepoint).str().bytes()
+			}
+			else {
+				return error('invalid value')
+			}
+		}
+		i++
+	}
+	return result.bytestr()
+}
+
+// append_diagnostic returns true when T exposes a DiagnosticList field named
+// diagnostics. V identifiers cannot begin with an underscore, so this is the
+// language-equivalent of Ghostty's `_diagnostics` convention.
+fn append_diagnostic[T](mut dst T, key string, message string, location diagnostics.Location) bool {
+	mut appended := false
+	$for field in T.fields {
+		$if field.unaliased_typ is diagnostics.DiagnosticList {
+			if field.name == 'diagnostics' {
+				dst.$(field.name).append(diagnostics.Diagnostic{
+					location: location
+					key: key
+					message: message
+				})
+				appended = true
+			}
+		}
+	}
+	return appended
+}
 
 // Parse boolean value from string.
 // Returns true for "1", "t", "T", "true".

@@ -48,6 +48,87 @@ mut:
 	a string
 }
 
+enum EnumTestValue {
+	one
+	two_words
+}
+
+struct EnumTestData {
+mut:
+	value EnumTestValue
+}
+
+struct OptionalTestData {
+mut:
+	text    ?string
+	count   ?u16
+	enabled ?bool
+}
+
+struct AutoStructValue {
+mut:
+	count int
+	name  string = 'default'
+}
+
+struct AutoStructData {
+mut:
+	value AutoStructValue
+}
+
+struct CustomParsedValue {
+mut:
+	value string
+}
+
+fn (mut c CustomParsedValue) parse_cli(input string) ! {
+	c.value = input.to_upper()
+}
+
+struct CustomParsedData {
+mut:
+	value CustomParsedValue
+}
+
+struct PackedBoolData {
+mut:
+	a bool
+	b bool = true
+}
+
+struct DiagnosticTestData {
+mut:
+	a           string
+	diagnostics diagnostics.DiagnosticList
+}
+
+struct HookTestData {
+mut:
+	manual      string
+	help_called bool
+	compat      bool
+}
+
+fn (mut h HookTestData) parse_manually_hook(arg string) bool {
+	if arg.starts_with('+') {
+		h.manual = arg
+		return true
+	}
+	return false
+}
+
+fn (mut h HookTestData) help() {
+	h.help_called = true
+}
+
+fn (mut h HookTestData) compatibility(key string, value string) bool {
+	if key == 'old' && value == 'yes' {
+		h.compat = true
+		return true
+	}
+	return false
+}
+
 // --- parse_bool tests ---
 
 fn test_parse_bool_true_values() {
@@ -118,12 +199,97 @@ fn test_parse_quoted_value() {
 
 fn test_parse_empty_value_resets() {
 	mut data := DefaultResetData{}
+	data.a = 7
+	data.b = true
 	parse[DefaultResetData](mut data, ['--a=', '--b='])!
-	// XTODO: In Zig, empty value resets to the struct default (42 for a).
-	// V's $for doesn't support compile-time default value access, so
-	// the field keeps its current value after returning from the empty-value handler.
-	// assert data.a == u8(42)
-	// assert data.b == false
+	assert data.a == u8(42)
+	assert data.b == false
+}
+
+fn test_parse_into_field_enum() {
+	mut data := EnumTestData{}
+	parse_into_field[EnumTestData](mut data, 'value', 'two-words')!
+	assert data.value == .two_words
+	if _ := parse_into_field[EnumTestData](mut data, 'value', 'missing') {
+		assert false, 'expected invalid enum value'
+	} else {
+		assert err.msg() == 'invalid value'
+	}
+}
+
+fn test_parse_into_field_optional_scalars() {
+	mut data := OptionalTestData{}
+	parse[OptionalTestData](mut data, ['--text=hello', '--count=42', '--enabled'])!
+	assert data.text or { '' } == 'hello'
+	assert data.count or { 0 } == 42
+	assert data.enabled or { false }
+}
+
+fn test_parse_into_field_auto_struct() {
+	mut data := AutoStructData{}
+	parse_into_field[AutoStructData](mut data, 'value', 'count:42,name:"hello, world"')!
+	assert data.value.count == 42
+	assert data.value.name == 'hello, world'
+
+	parsed := parse_auto_struct('count:7', AutoStructValue{})!
+	assert parsed.count == 7
+	assert parsed.name == 'default'
+}
+
+fn test_parse_into_field_custom_parser() {
+	mut data := CustomParsedData{}
+	parse_into_field[CustomParsedData](mut data, 'value', 'hello')!
+	assert data.value.value == 'HELLO'
+}
+
+fn test_parse_packed_struct() {
+	all := parse_packed_struct[PackedBoolData]('true')!
+	assert all.a
+	assert all.b
+
+	selected := parse_packed_struct[PackedBoolData]('a,no-b')!
+	assert selected.a
+	assert !selected.b
+}
+
+fn test_format_enum_values() {
+	assert format_value_required[EnumTestData]('value') == 'value required, valid values are: one, two-words'
+	assert format_invalid_value[EnumTestData]('value', 'bad') == 'invalid value "bad", valid values are: one, two-words'
+}
+
+fn test_parse_tracks_diagnostics_and_continues() {
+	mut data := DiagnosticTestData{}
+	parse[DiagnosticTestData](mut data, ['--what', 'positional', '--a=42'])!
+	assert data.a == '42'
+	items := data.diagnostics.items()
+	assert items.len == 2
+	assert items[0].key == 'what'
+	assert items[0].message == 'unknown field'
+	assert items[0].location is diagnostics.CliLocation
+	if items[0].location is diagnostics.CliLocation {
+		assert items[0].location.index == 1
+	}
+	assert items[1].key == 'positional'
+	assert items[1].message == 'invalid field'
+}
+
+fn test_parse_manual_help_and_compatibility_hooks() {
+	mut manual := HookTestData{}
+	parse[HookTestData](mut manual, ['+new-window', '--old=yes'])!
+	assert manual.manual == '+new-window'
+	assert manual.compat
+
+	mut help := HookTestData{}
+	parse[HookTestData](mut help, ['--help', '--old=yes'])!
+	assert help.help_called
+	assert !help.compat
+}
+
+fn test_compatibility_renamed() {
+	mut data := BoolTestData{}
+	assert compatibility_renamed[BoolTestData](mut data, 'a', 'true')
+	assert data.a
+	assert !compatibility_renamed[BoolTestData](mut data, 'missing', 'true')
 }
 
 // --- parse: positional arguments are invalid ---
