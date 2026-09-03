@@ -10,6 +10,7 @@ pub mut:
 	run_state NoopRunState
 	// The shared memory used for shaping results.
 	cell_buf []font.ShapeCell
+	grid &font.SharedGrid = unsafe { nil }
 }
 
 // NoopCodepoint associates a Unicode codepoint with a cluster (cell) index.
@@ -53,6 +54,7 @@ pub fn (self &NoopShaper) end_frame() {
 }
 
 pub fn (mut self NoopShaper) run_iterator(opts font.RunOptions) font.RunIterator {
+	self.grid = opts.grid
 	return font.RunIterator.new(unsafe { &self })
 }
 
@@ -82,30 +84,18 @@ pub fn (mut self NoopShaper) shape(run font.TextRun) ![]font.ShapeCell {
 	// Go through the run and map each codepoint to a glyph index.
 	self.cell_buf.clear()
 
-	// Note: this is digging into some internal details, we should maybe
-	// expose a public API for this.
-	// XTODO: Need real font face to look up glyph indices.
-	// In the full implementation:
-	//   face := run.grid.resolver.collection.get_face(run.font_index)
-	//   for entry in state.codepoints {
-	//       glyph_index := face.glyph_index(entry.codepoint) or {
-	//           // The run iterator shared logic should guarantee that
-	//           // there is a glyph index for all codepoints in the run.
-	//           // This is not well tested because we don't use the noop
-	//           // shaper in any release builds.
-	//           unreachable
-	//       }
-	//       self.cell_buf << font.ShapeCell{
-	//           x: entry.cluster
-	//           glyph_index: glyph_index
-	//       }
-	//   }
-
-	// Stub: use codepoint as glyph index directly (no real font lookup).
+	if self.grid == unsafe { nil } {
+		return error('noop shaper has no font grid')
+	}
+	mut grid := unsafe { self.grid }
+	face := grid.resolver.collection.get_face(font.Index.from_int(run.font_index))!
 	for entry in state.codepoints {
+		glyph_index := face.glyph_index(entry.codepoint) or {
+			return error('text run contains an unsupported codepoint')
+		}
 		self.cell_buf << font.ShapeCell{
 			x: entry.cluster
-			glyph_index: entry.codepoint
+			glyph_index: glyph_index
 		}
 	}
 

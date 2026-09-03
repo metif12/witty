@@ -490,7 +490,10 @@ module font
 // Translated from ghostty/src/font/face/freetype.zig
 
 import freetype
+import harfbuzz
 import math
+import stb
+import sync
 
 // ============================================================
 // Library
@@ -501,13 +504,14 @@ import math
 pub struct Library {
 pub mut:
 	lib freetype.Library
-	// XTODO: add sync.Mutex when thread-safe access is needed
+	mutex &sync.Mutex = unsafe { nil }
 }
 
 // init creates a new font Library.
 pub fn Library.init() !Library {
 	return Library{
 		lib: freetype.Library.init()!
+		mutex: &sync.Mutex{}
 	}
 }
 
@@ -757,9 +761,10 @@ pub fn (mut d DeferredFace) deinit() {
 
 // load fully loads this deferred face into a Face.
 pub fn (d DeferredFace) load(lib Library, opts FaceOptions) !Face {
-	// XTODO: actually load the face from d.path / d.face_index
-	// using lib.lib.init_face()
-	return error('deferred loading not implemented')
+	if d.path.len == 0 {
+		return error('deferred face has no file path')
+	}
+	return Face.init_file(lib, d.path, d.face_index, opts)
 }
 
 // has_codepoint returns true if this face can satisfy the given codepoint
@@ -779,7 +784,9 @@ pub fn (d DeferredFace) has_codepoint(cp u32, presentation ?Presentation) bool {
 		return d.codepoints[cp] or { false }
 	}
 
-	// XTODO: without coverage data, the face must be loaded to answer this.
+	// A deferred face without discovery coverage cannot prove support without
+	// loading. Callers which construct file-backed deferred faces must attach
+	// their discovery charset, just as the fontconfig backend does in Ghostty.
 	_ = cp
 	_ = presentation
 	return false
@@ -797,8 +804,10 @@ pub mut:
 	// Our font face.
 	face                                freetype.Face
 	// Harfbuzz font corresponding to this face.
-	// XTODO: use harfbuzz.Font when integrated
-	hb_font                             voidptr
+	hb_font                             harfbuzz.Font
+	// FreeType exposes one mutable glyph slot per face. Rendering and metrics
+	// measurement therefore serialize access to that slot.
+	ft_mutex                            &sync.Mutex = unsafe { nil }
 	// Freetype load flags for this font face.
 	load_flags                          FreetypeLoadFlags
 	// Set quirks.disableDefaultFontFeatures.
@@ -813,29 +822,48 @@ pub mut:
 
 // init_file initializes a new font face from a file path.
 pub fn Face.init_file(lib Library, path string, index i32, opts FaceOptions) !Face {
-	// XTODO: needs real FreeType face loading
-	// Steps:
-	// 1. lib.lib.init_face(path, index) to get freetype.Face
-	// 2. face.select_charmap(.unicode) to set Unicode charmap
-	// 3. set_size_(face, opts.size) to set initial size
-	// 4. harfbuzz.freetype.createFont(face.handle) to create HB font
-	// 5. Create mutex for glyph slot access
-	// 6. Check quirks.disableDefaultFontFeatures
-	// 7. In debug mode, output variation axes info
-	return Face{
-		lib: lib
-		load_flags: opts.freetype_load_flags
-		size: opts.size
+	if isnil(lib.mutex) {
+		return error('font library is not initialized')
 	}
+	lib.mutex.lock()
+	defer {
+		lib.mutex.unlock()
+	}
+	mut ft_face := lib.lib.init_face(path, index)!
+	return init_freetype_face(lib, mut ft_face, opts)
 }
 
 // init_mem initializes a new font face from in-memory data.
 pub fn Face.init_mem(lib Library, source []u8, opts FaceOptions) !Face {
-	// XTODO: needs real FreeType face loading from memory
-	// Similar to init_file but uses lib.lib.init_memory_face(source, 0)
-	_ = source
+	if isnil(lib.mutex) {
+		return error('font library is not initialized')
+	}
+	lib.mutex.lock()
+	defer {
+		lib.mutex.unlock()
+	}
+	mut ft_face := lib.lib.init_memory_face(source, 0)!
+	return init_freetype_face(lib, mut ft_face, opts)
+}
+
+fn init_freetype_face(lib Library, mut ft_face freetype.Face, opts FaceOptions) !Face {
+	ft_face.select_charmap(.unicode) or {
+		ft_face.deinit()
+		return err
+	}
+	set_freetype_size(ft_face, opts.size) or {
+		ft_face.deinit()
+		return err
+	}
+	hb_font := harfbuzz.Font.create_freetype(ft_face.handle) or {
+		ft_face.deinit()
+		return err
+	}
 	return Face{
 		lib: lib
+		face: ft_face
+		hb_font: hb_font
+		ft_mutex: &sync.Mutex{}
 		load_flags: opts.freetype_load_flags
 		size: opts.size
 	}
@@ -843,11 +871,14 @@ pub fn Face.init_mem(lib Library, source []u8, opts FaceOptions) !Face {
 
 // deinit destroys this face and releases all resources.
 pub fn (mut self Face) deinit() {
-	// XTODO: needs real FreeType/HarfBuzz cleanup
-	// 1. Destroy ft_mutex
-	// 2. Lock library mutex, deinit freetype face, unlock
-	// 3. Destroy harfbuzz font
-	self.face.deinit()
+	if !isnil(self.lib.mutex) {
+		self.lib.mutex.lock()
+		self.face.deinit()
+		self.lib.mutex.unlock()
+	} else {
+		self.face.deinit()
+	}
+	self.hb_font.destroy()
 }
 
 // name returns the font name. Reads the SFNT name table to find
@@ -856,10 +887,6 @@ pub fn (mut self Face) deinit() {
 // If allocation is required, buf will be used, but sometimes
 // allocation isn't required and a static string is returned.
 pub fn (self &Face) name(mut buf []u8) !string {
-	// XTODO: needs real FreeType SFNT name table access
-	// Reads the font family entry from the name table.
-	// For Microsoft platform with Unicode encoding, performs
-	// byte-swapped UTF-16LE to UTF-8 conversion.
 	count := self.face.get_sfnt_name_count()
 
 	// We look for the font family entry.
@@ -874,9 +901,14 @@ pub fn (self &Face) name(mut buf []u8) !string {
 				if str_data.len % 2 != 0 || str_data.len > 1024 {
 					return str_data.bytestr()
 				}
-				// XTODO: byte-swap UTF-16LE and convert to UTF-8
-				// Need to swap each u16 pair and decode as UTF-16LE
-				return str_data.bytestr()
+				decoded := decode_utf16_be(str_data) or { return str_data.bytestr() }
+				if decoded.len > buf.len {
+					return error('font family name does not fit output buffer')
+				}
+				for j, b in decoded.bytes() {
+					buf[j] = b
+				}
+				return buf[..decoded.len].bytestr()
 			}
 			return str_data.bytestr()
 		}
@@ -885,14 +917,40 @@ pub fn (self &Face) name(mut buf []u8) !string {
 	return ''
 }
 
+fn decode_utf16_be(data []u8) ?string {
+	if data.len % 2 != 0 {
+		return none
+	}
+	mut result := []rune{cap: data.len / 2}
+	mut i := 0
+	for i < data.len {
+		unit := u16(data[i]) << 8 | u16(data[i + 1])
+		i += 2
+		if unit >= 0xd800 && unit <= 0xdbff {
+			if i >= data.len {
+				return none
+			}
+			low := u16(data[i]) << 8 | u16(data[i + 1])
+			if low < 0xdc00 || low > 0xdfff {
+				return none
+			}
+			i += 2
+			result << rune(0x10000 + ((u32(unit) - 0xd800) << 10) + (u32(low) - 0xdc00))
+		} else if unit >= 0xdc00 && unit <= 0xdfff {
+			return none
+		} else {
+			result << rune(unit)
+		}
+	}
+	return result.string()
+}
+
 // synthetic_bold_face returns a new face that is the same as this but
 // also has synthetic bold applied.
 pub fn (self &Face) synthetic_bold_face(opts FaceOptions) !Face {
-	// XTODO: needs real FreeType face ref-counting
-	// Increase face ref count.
 	self.face.ref()
-
-	mut f := Face.init_file(self.lib, '', 0, opts)!
+	mut ft_face := self.face
+	mut f := init_freetype_face(self.lib, mut ft_face, opts)!
 	f.synthetic_italic = self.synthetic_italic
 	f.synthetic_bold = true
 	return f
@@ -901,11 +959,9 @@ pub fn (self &Face) synthetic_bold_face(opts FaceOptions) !Face {
 // synthetic_italic_face returns a new face that is the same as this but
 // has a transformation matrix applied to italicize it.
 pub fn (self &Face) synthetic_italic_face(opts FaceOptions) !Face {
-	// XTODO: needs real FreeType face ref-counting
-	// Increase face ref count.
 	self.face.ref()
-
-	mut f := Face.init_file(self.lib, '', 0, opts)!
+	mut ft_face := self.face
+	mut f := init_freetype_face(self.lib, mut ft_face, opts)!
 	f.synthetic_italic = true
 	f.synthetic_bold = self.synthetic_bold
 	return f
@@ -914,10 +970,34 @@ pub fn (self &Face) synthetic_italic_face(opts FaceOptions) !Face {
 // set_face_size resizes the font in-place. If this succeeds, the caller
 // is responsible for clearing any glyph caches, font atlas data, etc.
 pub fn (mut self Face) set_face_size(opts FaceOptions) ! {
-	// XTODO: needs real FreeType sizing
-	// If scalable: face.set_char_size(0, size_26dot6, xdpi, ydpi)
-	// If bitmap: select_size_nearest(face, round(size.pixels()))
+	set_freetype_size(self.face, opts.size)!
 	self.size = opts.size
+}
+
+fn set_freetype_size(face freetype.Face, size DesiredSize) ! {
+	if face.is_scalable() {
+		face.set_char_size(0, i32(math.round(f64(size.points) * 64.0)), size.xdpi,
+			size.ydpi)!
+		return
+	}
+	select_size_nearest(face, u32(math.round(size.pixels())))!
+}
+
+fn select_size_nearest(face freetype.Face, size u32) ! {
+	count := face.num_fixed_sizes()
+	if count == 0 {
+		return error('font has no selectable fixed sizes')
+	}
+	mut best_i := 0
+	mut best_diff := i64(0)
+	for i in 0 .. count {
+		diff := i64(size) - i64(face.fixed_size_width(i))
+		if i == 0 || diff < best_diff {
+			best_diff = diff
+			best_i = i
+		}
+	}
+	face.select_size(i32(best_i))!
 }
 
 // set_variations sets the variation axes for this font.
@@ -933,7 +1013,10 @@ pub fn (mut self Face) set_variations(vs []Variation, opts FaceOptions) ! {
 	// Freetype requires that we send ALL coordinates in at once so the
 	// first thing we have to do is get all the vars and put them into
 	// an array.
-	mm := self.face.get_mm_var() or { return }
+	mut mm := self.face.get_mm_var() or { return }
+	defer {
+		self.lib.lib.done_mm_var(&mm)
+	}
 
 	// To avoid allocations, we cap the number of variation axes we can
 	// support. This is arbitrary but Firefox caps this at 16 so I
@@ -974,7 +1057,13 @@ pub fn (self Face) has_color() bool {
 
 // is_color_glyph returns true if the given glyph ID is colorized.
 pub fn (self &Face) is_color_glyph(glyph_id u32) bool {
-	// XTODO: needs real FreeType glyph loading with mutex lock
+	if isnil(self.ft_mutex) {
+		return false
+	}
+	self.ft_mutex.lock()
+	defer {
+		self.ft_mutex.unlock()
+	}
 	// Load the glyph and see what pixel mode it renders with.
 	// All modes other than BGRA are non-color.
 	// If the glyph fails to load, just return false.
@@ -987,15 +1076,8 @@ pub fn (self &Face) is_color_glyph(glyph_id u32) bool {
 		no_svg: true
 	}) or { return false }
 
-	glyph := self.face.handle
-	if glyph == unsafe { nil } {
-		return false
-	}
-	glyph_slot := glyph.glyph
-	if glyph_slot == unsafe { nil } {
-		return false
-	}
-	return glyph_slot.bitmap.pixel_mode == freetype.pixel_mode_bgra
+	glyph := self.face.glyph() or { return false }
+	return glyph.bitmap.pixel_mode == freetype.pixel_mode_bgra
 }
 
 // glyph_load_flags returns the LoadFlags to use when loading a glyph
@@ -1069,51 +1151,198 @@ fn get_glyph_size(glyph &freetype.GlyphSlotRec) GlyphSize {
 // render_glyph renders a glyph using the glyph index. The rendered glyph
 // is stored in the given texture atlas.
 pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !GlyphInfo {
-	// XTODO: needs real FreeType glyph loading, outline manipulation,
-	// bitmap conversion, synthetic bold/italic, constraint application,
-	// and atlas allocation.
-	//
-	// Full algorithm:
-	// 1. Lock ft_mutex, load glyph with glyph_load_flags(constrained).
-	// 2. For synthetic bold: embolden outline based on font height heuristic.
-	// 3. Get glyph bounding box via get_glyph_size().
-	// 4. If glyph < 0.25px in either axis, return zero-size glyph.
-	// 5. Apply constraint.constrain() for sizing/positioning.
-	// 6. Center glyph within cell if face_width < cell_width and no stretch.
-	// 7. For bitmap glyphs, quantize to full pixel boundaries.
-	// 8. Render:
-	//    - Outline: transform outline points (scale, translate, skew for
-	//      synthetic italic at 12 degrees), rasterize, bitmap_convert.
-	//    - Bitmap: convert to 8bpp if needed, resize with stb_image_resize,
-	//      bitmap_copy.
-	// 9. Verify pixel mode matches atlas format (grayscale/bgra).
-	// 10. Normalize grayscale pixel values if num_grays < 256.
-	// 11. Reserve atlas region and copy bitmap data.
-	// 12. Calculate offsets (px_x = bitmap_left, px_y = bitmap_top +
-	//     cell_baseline - rows).
-	// 13. Return Glyph with atlas coordinates and offsets.
-	_ = atlas
-	_ = glyph_index
-	_ = opts
+	if isnil(self.ft_mutex) {
+		return error('font face is not initialized')
+	}
+	self.ft_mutex.lock()
+	defer {
+		self.ft_mutex.unlock()
+	}
+
+	self.face.load_glyph(glyph_index, self.glyph_load_flags(opts.constraint.does_anything()))!
+	mut glyph := self.face.glyph() or { return error('FreeType returned no glyph slot') }
+
+	if self.synthetic_bold && glyph.format == freetype.glyph_format_outline {
+		size_metrics := self.face.size_metrics() or { return error('FreeType face has no size metrics') }
+		amount := i64(math.ceil(f64(size_metrics.height) * (64.0 / 2048.0)))
+		freetype.outline_embolden(mut glyph.outline, amount)
+		glyph = self.face.glyph() or { return error('FreeType returned no glyph slot') }
+	}
+
+	rect := get_glyph_size(&glyph)
+	if rect.width < 0.25 || rect.height < 0.25 {
+		return GlyphInfo{}
+	}
+
+	metrics := opts.grid_metrics
+	cell_width := f64(metrics.cell_width)
+	cell_height := f64(metrics.cell_height)
+	cell_baseline := f64(metrics.cell_baseline)
+	glyph_size := opts.constraint.constrain(GlyphSize{
+		width: rect.width
+		height: rect.height
+		x: rect.x
+		y: rect.y + cell_baseline
+	}, metrics, opts.constraint_width)
+	mut width := glyph_size.width
+	mut height := glyph_size.height
+	mut x := glyph_size.x
+	mut y := glyph_size.y
+
+	if opts.constraint.size != .stretch && metrics.face_width < cell_width {
+		x += math.round((cell_width - metrics.face_width) / 2.0)
+	}
+	if glyph.format == freetype.glyph_format_bitmap {
+		width = cell_width - math.round(cell_width - width - x) - math.round(x)
+		height = cell_height - math.round(cell_height - height - y) - math.round(y)
+		x = math.round(x)
+		y = math.round(y)
+	}
+	if width <= 0.0 || height <= 0.0 {
+		return GlyphInfo{}
+	}
+
+	mut bitmap := freetype.Bitmap{}
+	freetype.bitmap_init(mut bitmap)
+	defer {
+		freetype.bitmap_done(self.lib.lib, mut bitmap)
+	}
+	mut bitmap_left := glyph.bitmap_left
+	mut bitmap_top := glyph.bitmap_top
+
+	match glyph.format {
+		freetype.glyph_format_outline {
+			scale_x := width / rect.width
+			scale_y := height / rect.height
+			skew := if self.synthetic_italic { math.tan(12.0 * math.pi / 180.0) } else { 0.0 }
+			point_count := freetype.outline_points_len(&glyph.outline)
+			for i in 0 .. point_count {
+				point := freetype.outline_point(&glyph.outline, i)
+				mut px := freetype.f26dot6_to_f64(point.x)
+				mut py := freetype.f26dot6_to_f64(point.y)
+				px = (px - rect.x) * scale_x + x
+				py = (py - rect.y) * scale_y + y - cell_baseline
+				px += py * skew
+				freetype.outline_set_point(mut glyph.outline, i, freetype.OutlinePoint{
+					x: i64(math.round(px * 64.0))
+					y: i64(math.round(py * 64.0))
+				})
+			}
+			self.face.render_glyph(if self.load_flags.monochrome { .mono } else { .normal })!
+			glyph = self.face.glyph() or { return error('FreeType returned no rendered glyph') }
+			freetype.bitmap_convert(self.lib.lib, &glyph.bitmap, mut bitmap, 1)!
+			bitmap_left = glyph.bitmap_left
+			bitmap_top = glyph.bitmap_top
+		}
+		freetype.glyph_format_bitmap {
+			mut source := glyph.bitmap
+			mut converted := freetype.Bitmap{}
+			mut converted_initialized := false
+			if source.pixel_mode != freetype.pixel_mode_bgra
+				&& source.pixel_mode != freetype.pixel_mode_gray {
+				freetype.bitmap_init(mut converted)
+				converted_initialized = true
+				freetype.bitmap_convert(self.lib.lib, &source, mut converted, 1)!
+				source = converted
+			}
+			defer {
+				if converted_initialized {
+					freetype.bitmap_done(self.lib.lib, mut converted)
+				}
+			}
+
+			w := u32(math.round(width))
+			h := u32(math.round(height))
+			pitch := w * atlas.format.depth()
+			mut scaled := []u8{len: int(pitch * h)}
+			if source.buffer == unsafe { nil }
+				|| !unsafe { stb.stbir_resize_uint8(source.buffer, i32(source.width), i32(source.rows),
+				source.pitch, &scaled[0], i32(w), i32(h), i32(pitch), atlas.format.depth()) } {
+				return error('glyph bitmap resize failed')
+			}
+			scaled_bitmap := freetype.Bitmap{
+				buffer: unsafe { &scaled[0] }
+				width: w
+				rows: h
+				pitch: i32(pitch)
+				pixel_mode: source.pixel_mode
+				num_grays: source.num_grays
+			}
+			freetype.bitmap_copy(self.lib.lib, &scaled_bitmap, mut bitmap)!
+			bitmap_top = i32(math.floor(y - cell_baseline + height))
+			bitmap_left = i32(math.floor(x))
+		}
+		else {
+			return error('unsupported FreeType glyph format ${glyph.format}')
+		}
+	}
+
+	match bitmap.pixel_mode {
+		freetype.pixel_mode_gray {
+			if atlas.format != .grayscale {
+				return error('grayscale glyph requires grayscale atlas')
+			}
+		}
+		freetype.pixel_mode_bgra {
+			if atlas.format != .bgra {
+				return error('color glyph requires BGRA atlas')
+			}
+		}
+		else {
+			return error('unsupported FreeType pixel mode ${bitmap.pixel_mode}')
+		}
+	}
+
+	px_width := bitmap.width
+	px_height := bitmap.rows
+	if px_width == 0 || px_height == 0 || bitmap.buffer == unsafe { nil } {
+		return GlyphInfo{}
+	}
+	row_bytes := u32(if bitmap.pitch < 0 { -bitmap.pitch } else { bitmap.pitch })
+	len := int(row_bytes * px_height)
+	mut pixels := unsafe { bitmap.buffer.vbytes(len) }
+	if bitmap.pixel_mode == freetype.pixel_mode_gray && bitmap.num_grays > 1
+		&& bitmap.num_grays < 256 {
+		factor := u8(255 / (bitmap.num_grays - 1))
+		for mut pixel in pixels {
+			pixel *= factor
+		}
+		bitmap.num_grays = 256
+	}
+	if row_bytes != px_width * atlas.format.depth() {
+		return error('FreeType returned a non-dense glyph bitmap')
+	}
+	// FreeType represents a negative pitch bottom-up. Atlas data is top-down.
+	if bitmap.pitch < 0 {
+		mut top_down := []u8{len: len}
+		for row in 0 .. int(px_height) {
+			src := (int(px_height) - row - 1) * int(row_bytes)
+			dst := row * int(row_bytes)
+			copy(mut top_down[dst..dst + int(row_bytes)], pixels[src..src + int(row_bytes)])
+		}
+		pixels = top_down.clone()
+	}
+
+	region := atlas.reserve(px_width, px_height)!
+	atlas.set(region, pixels)
+	px_y := bitmap_top + i32(metrics.cell_baseline) - i32(px_height)
 	return GlyphInfo{
-		width:    0
-		height:   0
-		offset_x: 0
-		offset_y: 0
-		atlas_x:  0
-		atlas_y:  0
+		width: px_width
+		height: px_height
+		offset_x: bitmap_left
+		offset_y: px_y + i32(px_height)
+		atlas_x: region.x
+		atlas_y: region.y
 	}
 }
 
 // units_to_px_y converts font design units to pixels based on the
 // y-scale factor of the current font size.
 fn (self Face) units_to_px_y(units i32) i32 {
-	if self.face.handle == unsafe { nil } || self.face.handle.size == unsafe { nil } {
-		return 0
-	}
+	metrics := self.face.size_metrics() or { return 0 }
 	return i32(freetype.mul_fix(
 		i64(units),
-		self.face.handle.size.metrics.y_scale,
+		metrics.y_scale,
 	) >> 6)
 }
 
@@ -1135,35 +1364,29 @@ fn (self Face) units_to_px_y(units i32) i32 {
 //
 // IC width is measured from '水' (U+6C34).
 pub fn (mut self Face) get_metrics() FaceMetrics {
-	// XTODO: needs real FreeType table access for full metric extraction.
-	// The stub below returns basic metrics from the FreeType size metrics.
-	// Full implementation requires reading head, post, OS/2, hhea tables
-	// and measuring individual glyphs.
-
 	face := self.face
-	if face.handle == unsafe { nil } || face.handle.size == unsafe { nil } {
-		return FaceMetrics{}
-	}
-
-	size_metrics := face.handle.size.metrics
+	size_metrics := face.size_metrics() or { return FaceMetrics{} }
 
 	// This code relies on this assumption, and it should always be
 	// true since we don't do any non-uniform scaling on the font ever.
-	// assert(size_metrics.x_ppem == size_metrics.y_ppem)
+	assert size_metrics.x_ppem == size_metrics.y_ppem
 
 	// Whether the font is in a scalable format.
-	is_scalable := face.handle.face_flags & freetype.face_flag_scalable != 0
+	is_scalable := face.is_scalable()
 
 	// We get the UPM from the head table.
 	// If we have no head, but it is a scalable face, take the UPM from
 	// FreeType's units_per_EM, otherwise we'll assume that UPM == PPEM.
 	head := face.get_sfnt_table_head()
-	units_per_em := if h := head {
+	mut units_per_em := if h := head {
 		h.units_per_em
 	} else if is_scalable {
-		face.handle.units_per_em
+		face.units_per_em()
 	} else {
 		size_metrics.y_ppem
+	}
+	if units_per_em == 0 {
+		units_per_em = 1
 	}
 	px_per_em := f64(size_metrics.y_ppem)
 	px_per_unit := px_per_em / f64(units_per_em)
@@ -1259,10 +1482,30 @@ pub fn (mut self Face) get_metrics() FaceMetrics {
 		}
 	}
 
-	// --- Cell width ---
-	// XTODO: measure all visible ASCII chars and take widest advance.
-	// For now, use max_advance from FreeType.
-	cell_width := freetype.f26dot6_to_f64(size_metrics.max_advance)
+	// --- Cell width and visible-ASCII bounding height ---
+	mut cell_width := f64(0)
+	mut ascii_top := f64(0)
+	mut ascii_bottom := f64(0)
+	if !isnil(self.ft_mutex) {
+		self.ft_mutex.lock()
+		for cp := u32(32); cp < 127; cp++ {
+			if glyph_index := face.get_char_index(cp) {
+				face.load_glyph(glyph_index, self.glyph_load_flags(false)) or { continue }
+				glyph := face.glyph() or { continue }
+				advance := freetype.f26dot6_to_f64(glyph.advance.x)
+				cell_width = math.max(cell_width, advance)
+				rect := get_glyph_size(&glyph)
+				ascii_top = math.max(ascii_top, rect.y + rect.height)
+				ascii_bottom = math.min(ascii_bottom, rect.y)
+			}
+		}
+		self.ft_mutex.unlock()
+	}
+	if cell_width == 0.0 {
+		cell_width = freetype.f26dot6_to_f64(size_metrics.max_advance)
+	}
+	ascii_estimate := ascii_top - ascii_bottom
+	ascii_height := if ascii_estimate > 0.0 { ?f64(ascii_estimate) } else { ?f64(none) }
 
 	// --- Cap height / ex height ---
 	mut cap_height := ?f64(none)
@@ -1273,9 +1516,14 @@ pub fn (mut self Face) get_metrics() FaceMetrics {
 			ex_height = f64(o.sx_height) * px_per_unit
 		}
 	}
-	// XTODO: if OS/2 v2 not available, measure 'H' and 'x' glyphs.
+	if cap_height == none {
+		cap_height = self.measure_glyph_height(u32(`H`))
+		ex_height = self.measure_glyph_height(u32(`x`))
+	}
 
-	// XTODO: measure '水' for ic_width.
+	// Measure '水' for the CSS ic unit. Reject patched fonts whose
+	// ideograph bounding box is wider than its advance.
+	ic_width := self.measure_ic_width()
 
 	return FaceMetrics{
 		px_per_em:               px_per_em
@@ -1289,7 +1537,41 @@ pub fn (mut self Face) get_metrics() FaceMetrics {
 		strikethrough_thickness: strikethrough_thickness
 		cap_height:              cap_height
 		ex_height:               ex_height
+		ascii_height:            ascii_height
+		ic_width:                ic_width
 	}
+}
+
+fn (self &Face) measure_glyph_height(cp u32) ?f64 {
+	if isnil(self.ft_mutex) {
+		return none
+	}
+	self.ft_mutex.lock()
+	defer {
+		self.ft_mutex.unlock()
+	}
+	glyph_index := self.face.get_char_index(cp) or { return none }
+	self.face.load_glyph(glyph_index, self.glyph_load_flags(false)) or { return none }
+	glyph := self.face.glyph() or { return none }
+	return get_glyph_size(&glyph).height
+}
+
+fn (self &Face) measure_ic_width() ?f64 {
+	if isnil(self.ft_mutex) {
+		return none
+	}
+	self.ft_mutex.lock()
+	defer {
+		self.ft_mutex.unlock()
+	}
+	glyph_index := self.face.get_char_index(0x6c34) or { return none }
+	self.face.load_glyph(glyph_index, self.glyph_load_flags(false)) or { return none }
+	glyph := self.face.glyph() or { return none }
+	advance := freetype.f26dot6_to_f64(glyph.advance.x)
+	if get_glyph_size(&glyph).width > advance {
+		return none
+	}
+	return advance
 }
 
 // copy_table copies the font table data for the given tag.

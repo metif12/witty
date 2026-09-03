@@ -456,6 +456,14 @@ pub fn (i Index) int_val() u16 {
 	return (u16(i.style) << 13) | i.idx
 }
 
+// from_int decodes the packed form carried by TextRun and renderer caches.
+pub fn Index.from_int(value u32) Index {
+	return Index{
+		style: unsafe { FontStyle((value >> 13) & 0x3) }
+		idx: u16(value & 0x1fff)
+	}
+}
+
 // special returns the Special value if this is a special index,
 // or none for normal font indices.
 pub fn (i Index) special() ?Special {

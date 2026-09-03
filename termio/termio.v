@@ -173,6 +173,7 @@ module termio
 
 import apprt
 import configpkg
+import os
 import renderer
 import sync
 import terminal
@@ -231,9 +232,82 @@ pub mut:
 }
 
 pub fn (mut t Termio) init(opts TermioOpts) ! {
-	// stub: initializes terminal IO. The full init constructs the terminal,
-	// backend, and stream handler from options. The threading/event-loop
-	// plumbing is modeled elsewhere.
+	mut size := opts.size
+	if size.grid().columns == 0 || size.grid().rows == 0 {
+		size = renderer.Size{
+			screen: renderer.ScreenSize{ width: 640, height: 384 }
+			cell: renderer.CellSize{ width: 8, height: 16 }
+		}
+	}
+	grid := size.grid()
+	bg := opts.config.background or { terminal.RGB{ r: 0x28, g: 0x2c, b: 0x34 } }
+	fg := opts.config.foreground or { terminal.RGB{ r: 0xff, g: 0xff, b: 0xff } }
+	mut term := terminal.Terminal.init(terminal.Options{
+		cols: u16(grid.columns)
+		rows: u16(grid.rows)
+		max_scrollback: opts.max_scrollback
+		colors: terminal.Colors{
+			background: terminal.DynamicRGB.init(bg)
+			foreground: terminal.DynamicRGB.init(fg)
+			cursor: if cursor := opts.config.cursor_color {
+				terminal.DynamicRGB.init(cursor)
+			} else {
+				terminal.dynamic_rgb_unset
+			}
+			palette: opts.config.palette
+		}
+	})!
+	term.modes.set(.grapheme_cluster, opts.grapheme_cluster)
+	term.modes.set(.cursor_blinking, opts.config.cursor_blink or { true })
+	term.modes.default = term.modes.values
+	term.screens.active.cursor.cursor_style = opts.config.cursor_style
+	term.width_px = grid.columns * size.cell.width
+	term.height_px = grid.rows * size.cell.height
+
+	mut backend_config := opts.backend_config
+	if backend_config.env.len == 0 {
+		backend_config = ExecConfig{
+			...backend_config
+			env: os.environ()
+		}
+	}
+	mut backend := Exec.init(backend_config)!
+	backend.init_terminal(mut term)
+
+	mut renderer_state := opts.renderer_state
+	if renderer_state == unsafe { nil } {
+		renderer_state = &renderer.State{}
+	}
+	mut renderer_mailbox := opts.renderer_mailbox
+	if renderer_mailbox == unsafe { nil } {
+		renderer_mailbox = &renderer.Mailbox{}
+	}
+
+	t.config = opts.config
+	t.terminal = term
+	t.renderer_state = renderer_state
+	t.renderer_wakeup = opts.renderer_wakeup
+	t.renderer_mailbox = renderer_mailbox
+	t.surface_mailbox = opts.surface_mailbox
+	t.size = size
+	t.mailbox = Mailbox.init()!
+	t.terminal_stream = terminal.Stream.init()
+	t.backend = backend
+	t.renderer_state.terminal = voidptr(&t.terminal)
+	t.stream_handler = StreamHandler{
+		size: &t.size
+		terminal: &t.terminal
+		termio_mailbox: &t.mailbox
+		surface_mailbox: t.surface_mailbox
+		renderer_state: t.renderer_state
+		renderer_wakeup: t.renderer_wakeup
+		renderer_mailbox: t.renderer_mailbox
+		osc_color_report_format: t.config.osc_color_report_format
+		clipboard_write: t.config.clipboard_write
+		enquiry_response: t.config.enquiry_response
+		default_cursor_style: t.config.cursor_style
+		default_cursor_blink: t.config.cursor_blink
+	}
 }
 
 pub fn (mut t Termio) deinit() {
@@ -265,7 +339,18 @@ pub fn (mut t Termio) queue_write(data []u8, linefeed bool) ! {
 	t.backend.queue_write(data, linefeed)!
 }
 
-pub struct TermioOpts {}
+pub struct TermioOpts {
+pub:
+	config            DerivedConfig
+	size              renderer.Size
+	max_scrollback    int = 10_000_000
+	grapheme_cluster  bool = true
+	backend_config    ExecConfig
+	renderer_state    &renderer.State = unsafe { nil }
+	renderer_wakeup   renderer.Wakeup
+	renderer_mailbox  &renderer.Mailbox = unsafe { nil }
+	surface_mailbox   apprt.SurfaceMailbox
+}
 
 // DerivedConfig holds configuration derived from the main config
 // that the stream handler needs.
@@ -292,8 +377,45 @@ pub mut:
 	conditional_state configpkg.ConditionalState
 }
 
-pub fn DerivedConfig.init(config voidptr) !DerivedConfig {
-	return DerivedConfig{}
+pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
+	mut palette := [256]terminal.RGB{}
+	for i, color in config.palette.value {
+		palette[i] = terminal.RGB{ r: color.r, g: color.g, b: color.b }
+	}
+	return DerivedConfig{
+		palette: terminal.DynamicPalette.init(palette)
+		foreground: terminal.RGB{
+			r: config.foreground.r
+			g: config.foreground.g
+			b: config.foreground.b
+		}
+		background: terminal.RGB{
+			r: config.background.r
+			g: config.background.g
+			b: config.background.b
+		}
+		cursor_color: none
+		image_storage_limit: int(config.image_storage_limit)
+		cursor_style: match config.cursor_style {
+			.block { .block }
+			.bar { .bar }
+			.underline { .underline }
+			.block_hollow { .block_hollow }
+		}
+		cursor_blink: config.cursor_style_blink
+		osc_color_report_format: match config.osc_color_report_format {
+			.none_ { .none_ }
+			.format_8_bit { .bits_8 }
+			.format_16_bit { .bits_16 }
+		}
+		clipboard_write: match config.clipboard_write {
+			.allow { .allow }
+			.ask { .ask }
+			.deny { .deny }
+		}
+		enquiry_response: config.enquiry_response.clone()
+		conditional_state: config.conditional_state
+	}
 }
 
 pub fn (d DerivedConfig) deinit() {}

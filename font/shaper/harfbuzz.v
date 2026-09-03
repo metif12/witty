@@ -126,21 +126,22 @@ pub fn (mut self HbShaper) shape(run font.TextRun) ![]font.ShapeCell {
 	// We only do shaping if the font is not a special-case. For special-case
 	// fonts, the codepoint == glyph_index so we don't need to run any shaping.
 	if !is_special_font(run.font_index) {
-		// XTODO: We have to lock the grid to get the face and unfortunately
-		// freetype faces (typically used with harfbuzz) are not thread
-		// safe so this has to be an exclusive lock.
-		//
-		// In the full implementation:
-		//   run.grid.lock.lock()
-		//   defer { run.grid.lock.unlock() }
-		//   face := run.grid.resolver.collection.get_face(run.font_index)
-		//   i := if !face.quirks_disable_default_font_features { 0 } else {
-		//       hb_default_feature_strings.len
-		//   }
-		//   harfbuzz.shape(face.hb_font, self.hb_buf, self.hb_feats[i..])
-
-		// Stub: shape with an empty font handle (no-op since font ptr is nil).
-		harfbuzz.shape(harfbuzz.Font{}, self.hb_buf, self.hb_feats)
+		if self.grid != unsafe { nil } {
+			mut grid := unsafe { self.grid }
+			face := grid.resolver.collection.get_face(font.Index.from_int(run.font_index))!
+			feature_start := if face.quirks_disable_default_font_features {
+				hb_default_feature_strings.len
+			} else {
+				0
+			}
+			face.ft_mutex.lock()
+			harfbuzz.shape(face.hb_font, self.hb_buf, self.hb_feats[feature_start..])
+			face.ft_mutex.unlock()
+		} else {
+			// Tests and callers may shape a manually assembled run without a
+			// grid. Preserve the unshaped fallback for that invalid context.
+			harfbuzz.shape(harfbuzz.Font{}, self.hb_buf, self.hb_feats)
+		}
 	}
 
 	// If our buffer is empty, we short-circuit the rest of the work
@@ -149,9 +150,7 @@ pub fn (mut self HbShaper) shape(run font.TextRun) ![]font.ShapeCell {
 		return []font.ShapeCell{}
 	}
 
-	// If the buffer hasn't been shaped (no positions available),
-	// fall back to returning codepoints directly as glyphs.
-	// This happens when we don't have a real font handle yet (XTODO above).
+	// If no font context was supplied, fall back to returning codepoints.
 	if !self.hb_buf.has_positions() {
 		self.cell_buf.clear()
 		for cp in self.codepoints {

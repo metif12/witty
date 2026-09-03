@@ -16,6 +16,7 @@ module harfbuzz
 #flag -lharfbuzz
 
 #include <harfbuzz/hb.h>
+#include <harfbuzz/hb-ft.h>
 
 // === Opaque C types ===
 
@@ -83,6 +84,7 @@ fn C.hb_feature_from_string(str &u8, len int, feature &C.hb_feature_t) int
 
 // Font
 fn C.hb_font_create(face &C.hb_face_t) &C.hb_font_t
+fn C.hb_ft_font_create_referenced(ft_face voidptr) &C.hb_font_t
 fn C.hb_font_destroy(font &C.hb_font_t)
 
 // Face
@@ -301,6 +303,20 @@ pub fn Font.create(face &Face) !Font {
 	fnt := C.hb_font_create(face.ptr)
 	if fnt == unsafe { nil } {
 		return error('failed to create HarfBuzz font')
+	}
+	return Font{ ptr: fnt }
+}
+
+// create_freetype creates a HarfBuzz font which references an FT_Face.
+// HarfBuzz configures its scale and glyph callbacks from the current
+// FreeType face size, matching hb_ft_font_create_referenced.
+pub fn Font.create_freetype(ft_face voidptr) !Font {
+	if isnil(ft_face) {
+		return error('cannot create HarfBuzz font from a null FreeType face')
+	}
+	fnt := C.hb_ft_font_create_referenced(ft_face)
+	if fnt == unsafe { nil } {
+		return error('failed to create HarfBuzz FreeType font')
 	}
 	return Font{ ptr: fnt }
 }

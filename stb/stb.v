@@ -9,24 +9,20 @@ module stb
 // defines STB_IMAGE_RESIZE_IMPLEMENTATION before including the vendored
 // stb_image_resize.h header.
 
-// The shim is resolved relative to this file's directory; add the module
-// directory to the include path so the shim can locate the vendored
-// stb_image_resize.h header alongside it.
+// Compile the v1 implementation in its own translation unit. Some V graphics
+// modules include stb_image_resize2; putting both headers into generated C
+// causes conflicting declarations even though their implementations are
+// independent.
 #flag -I @VMODROOT/stb
-#include "stb_shims.h"
+#flag @VMODROOT/stb/stb_bridge.c
+#include "stb_bridge.h"
 
 // C entry point (medium-complexity API). We use the "generic" form so we can
 // select the box filter, which for integer scale ratios performs
 // nearest-neighbour resampling (each source pixel is replicated into the
 // destination). This is the resampler behaviour our callers rely on for
 // bitmap glyph scaling. Returns 1 on success and 0 on failure.
-fn C.stbir_resize_uint8_generic(input_pixels &u8, input_w int, input_h int, input_stride_in_bytes int, output_pixels &u8, output_w int, output_h int, output_stride_in_bytes int, num_channels int, alpha_channel int, flags int, edge_wrap_mode int, filter int, space int, alloc_context voidptr) int
-
-// stb filter / edge / colorspace enum values from stb_image_resize.h.
-const stbir_filter_box = 1 // nearest-neighbour for integer scale ratios
-const stbir_edge_clamp = 1
-const stbir_colorspace_linear = 0
-const stbir_alpha_channel_none = -1
+fn C.witty_stbir_resize_uint8(input_pixels &u8, input_w int, input_h int, input_stride_in_bytes int, output_pixels &u8, output_w int, output_h int, output_stride_in_bytes int, num_channels int) int
 
 // stbir_resize_uint8 resizes an 8-bit image. `input_stride`/`output_stride`
 // may be 0 to use a tightly-packed `width * num_channels` stride.
@@ -40,10 +36,8 @@ pub fn stbir_resize_uint8(input_pixels &u8, input_w i32, input_h i32, input_stri
 		return false
 	}
 	res := unsafe {
-		C.stbir_resize_uint8_generic(input_pixels, int(input_w), int(input_h), int(input_stride),
-			output_pixels, int(output_w), int(output_h), int(output_stride), int(num_channels),
-			stbir_alpha_channel_none, 0, stbir_edge_clamp, stbir_filter_box, stbir_colorspace_linear,
-			nil)
+		C.witty_stbir_resize_uint8(input_pixels, int(input_w), int(input_h), int(input_stride),
+			output_pixels, int(output_w), int(output_h), int(output_stride), int(num_channels))
 	}
 	return res == 1
 }

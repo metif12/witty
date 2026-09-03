@@ -400,8 +400,8 @@ import math
 // Default DPI used as the base for scaling calculations.
 pub const default_dpi = f32(72.0)
 
-// The font index reserved for built-in sprites (cursors, underlines, etc).
-pub const sprite_index = u32(0)
+// Packed Collection.Index reserved for built-in sprites.
+pub const sprite_index = u32(8191)
 
 // ============================================================
 // Metrics

@@ -8,12 +8,9 @@ module freetype
 //
 // Translated from ghostty/pkg/freetype.
 //
-// The hand-defined `FaceRec`/`GlyphSlotRec`/etc. structs below mirror the
-// public FreeType struct layout so that consumers (font/face.v) can read
-// fields like `face.handle.size.metrics.y_scale` directly. The real
-// `FT_Library`/`FT_Face` opaque handles are stored alongside in private
-// fields (`ft_lib`/`ft_face`) and the actual C entry points are declared
-// as `fn C.FT_*` below.
+// FT_Face and FT_GlyphSlot are accessed only through the C bridge helpers
+// below. Their public C records contain platform-dependent integer widths,
+// so mirroring those records directly in V is not ABI-safe.
 
 import math
 
@@ -39,7 +36,9 @@ import math
 #include <freetype/tttables.h>
 #include <freetype/ttnameid.h>
 #include <freetype/ftoutln.h>
+#include <freetype/ftbbox.h>
 #include <freetype/ftbitmap.h>
+#include "bridge.h"
 
 // Opaque C handle types. FreeType's `FT_Library`, `FT_Face`, etc. are
 // pointers to opaque structs. We treat them as `voidptr` on the V side so
@@ -131,6 +130,71 @@ fn C.FT_GlyphSlot_Own_Bitmap(slot voidptr) int
 // FT_MulFix performs FreeType's 16.16 fixed-point multiply (with rounding).
 fn C.FT_MulFix(a i64, b i64) i64
 
+fn C.witty_ft_has_fixed_sizes(face voidptr) int
+fn C.witty_ft_has_color(face voidptr) int
+fn C.witty_ft_has_sbix(face voidptr) int
+fn C.witty_ft_has_multiple_masters(face voidptr) int
+fn C.witty_ft_is_scalable(face voidptr) int
+fn C.witty_ft_glyph(face voidptr) voidptr
+fn C.witty_ft_size(face voidptr) voidptr
+fn C.witty_ft_face_flags(face voidptr) i64
+fn C.witty_ft_units_per_em(face voidptr) u16
+fn C.witty_ft_num_fixed_sizes(face voidptr) i32
+fn C.witty_ft_fixed_size_width(face voidptr, index i32) i16
+fn C.witty_ft_size_x_ppem(size voidptr) u16
+fn C.witty_ft_size_y_ppem(size voidptr) u16
+fn C.witty_ft_size_x_scale(size voidptr) i64
+fn C.witty_ft_size_y_scale(size voidptr) i64
+fn C.witty_ft_size_ascender(size voidptr) i64
+fn C.witty_ft_size_descender(size voidptr) i64
+fn C.witty_ft_size_height(size voidptr) i64
+fn C.witty_ft_size_max_advance(size voidptr) i64
+fn C.witty_ft_glyph_advance_x(slot voidptr) i64
+fn C.witty_ft_glyph_advance_y(slot voidptr) i64
+fn C.witty_ft_glyph_width(slot voidptr) i64
+fn C.witty_ft_glyph_height(slot voidptr) i64
+fn C.witty_ft_glyph_bearing_x(slot voidptr) i64
+fn C.witty_ft_glyph_bearing_y(slot voidptr) i64
+fn C.witty_ft_glyph_bitmap_left(slot voidptr) i32
+fn C.witty_ft_glyph_bitmap_top(slot voidptr) i32
+fn C.witty_ft_glyph_format(slot voidptr) u32
+fn C.witty_ft_glyph_bitmap(slot voidptr) voidptr
+fn C.witty_ft_glyph_outline(slot voidptr) voidptr
+fn C.witty_ft_outline_n_points(outline voidptr) i16
+fn C.witty_ft_outline_point_x(outline voidptr, index i32) i64
+fn C.witty_ft_outline_point_y(outline voidptr, index i32) i64
+fn C.witty_ft_outline_set_point(outline voidptr, index i32, x i64, y i64)
+fn C.witty_ft_bitmap_rows(bitmap voidptr) u32
+fn C.witty_ft_bitmap_width(bitmap voidptr) u32
+fn C.witty_ft_bitmap_pitch(bitmap voidptr) int
+fn C.witty_ft_bitmap_buffer(bitmap voidptr) &u8
+fn C.witty_ft_bitmap_num_grays(bitmap voidptr) u16
+fn C.witty_ft_bitmap_pixel_mode(bitmap voidptr) u8
+fn C.witty_ft_mm_num_axis(mm voidptr) u32
+fn C.witty_ft_mm_axis_tag(mm voidptr, index u32) u64
+fn C.witty_ft_mm_axis_name(mm voidptr, index u32) &char
+fn C.witty_ft_mm_axis_minimum(mm voidptr, index u32) i64
+fn C.witty_ft_mm_axis_default(mm voidptr, index u32) i64
+fn C.witty_ft_mm_axis_maximum(mm voidptr, index u32) i64
+fn C.witty_ft_get_sfnt_name(face voidptr, index u32, name_id &u16, platform_id &u16, encoding_id &u16, bytes &&u8, length &u32) int
+fn C.witty_tt_head_units_per_em(table voidptr) u16
+fn C.witty_tt_post_underline_position(table voidptr) i16
+fn C.witty_tt_post_underline_thickness(table voidptr) i16
+fn C.witty_tt_os2_version(table voidptr) u16
+fn C.witty_tt_os2_typo_ascender(table voidptr) i16
+fn C.witty_tt_os2_typo_descender(table voidptr) i16
+fn C.witty_tt_os2_typo_line_gap(table voidptr) i16
+fn C.witty_tt_os2_selection(table voidptr) u16
+fn C.witty_tt_os2_win_ascent(table voidptr) u16
+fn C.witty_tt_os2_win_descent(table voidptr) u16
+fn C.witty_tt_os2_cap_height(table voidptr) i16
+fn C.witty_tt_os2_x_height(table voidptr) i16
+fn C.witty_tt_os2_strikeout_size(table voidptr) i16
+fn C.witty_tt_os2_strikeout_position(table voidptr) i16
+fn C.witty_tt_hhea_ascender(table voidptr) i16
+fn C.witty_tt_hhea_descender(table voidptr) i16
+fn C.witty_tt_hhea_line_gap(table voidptr) i16
+
 // The FreeType Unicode charmap encoding tag ('unic' as a FourCC).
 pub const ft_encoding_unicode = u32(0x756E6963)
 
@@ -165,6 +229,9 @@ pub const glyph_format_bitmap = u32(0x62697473) // 'bits'
 
 // Face flags
 pub const face_flag_scalable = i64(1 << 0)
+pub const face_flag_fixed_sizes = i64(1 << 1)
+pub const face_flag_multiple_masters = i64(1 << 8)
+pub const face_flag_color = i64(1 << 14)
 
 // Name IDs
 pub const tt_name_id_font_family = u16(1)
@@ -242,6 +309,7 @@ pub:
 // GlyphSlotRec holds glyph rendering data.
 pub struct GlyphSlotRec {
 pub mut:
+	raw         voidptr = unsafe { nil }
 	advance     Vector
 	metrics     GlyphMetrics
 	bitmap      Bitmap
@@ -270,12 +338,14 @@ pub:
 // Bitmap holds a rendered glyph bitmap.
 pub struct Bitmap {
 pub mut:
-	width      u32
 	rows       u32
+	width      u32
 	pitch      i32
 	buffer     &u8 = unsafe { nil }
-	pixel_mode u8
 	num_grays  u16
+	pixel_mode u8
+	palette_mode u8
+	palette voidptr = unsafe { nil }
 }
 
 // BBox holds a bounding box (26.6 fixed-point).
@@ -290,15 +360,20 @@ pub mut:
 // Outline holds glyph outline data.
 pub struct Outline {
 pub mut:
-	n_points i32
-	points   &OutlinePoint = unsafe { nil }
+	n_contours i16
+	n_points   i16
+	points     &OutlinePoint = unsafe { nil }
+	tags       &char = unsafe { nil }
+	contours   &i16 = unsafe { nil }
+	flags      i32
+	raw        voidptr = unsafe { nil }
 }
 
 // OutlinePoint holds a single outline point (26.6 fixed-point).
 pub struct OutlinePoint {
 pub mut:
-	x i32
-	y i32
+	x i64
+	y i64
 }
 
 // ============================================================
@@ -502,10 +577,7 @@ pub fn (l Library) init_face(path string, index i32) !Face {
 		return error('FT_New_Face(${path}) failed (${err})')
 	}
 	return Face{
-		// The public `handle` field mirrors the FreeType FT_FaceRec layout
-		// so consumers can read fields directly; it aliases the same pointer.
-		handle:  unsafe { &FaceRec(ft_face) }
-		ft_face: ft_face
+		handle: ft_face
 	}
 }
 
@@ -514,15 +586,16 @@ pub fn (l Library) init_memory_face(data []u8, index i32) !Face {
 	if isnil(l.handle) {
 		return error('freetype library not initialized')
 	}
+	mut owned := data.clone()
 	mut ft_face := voidptr(unsafe { nil })
-	base := if data.len > 0 { &u8(data.data) } else { &u8(unsafe { nil }) }
-	err := C.FT_New_Memory_Face(l.handle, base, i64(data.len), i64(index), &ft_face)
+	base := if owned.len > 0 { &u8(owned.data) } else { &u8(unsafe { nil }) }
+	err := C.FT_New_Memory_Face(l.handle, base, i64(owned.len), i64(index), &ft_face)
 	if err != 0 {
 		return error('FT_New_Memory_Face failed (${err})')
 	}
 	return Face{
-		handle:  unsafe { &FaceRec(ft_face) }
-		ft_face: ft_face
+		handle: ft_face
+		memory_data: owned
 	}
 }
 
@@ -541,29 +614,25 @@ pub fn (l Library) done_mm_var(mm &MMVar) {
 
 // Face represents a FreeType font face.
 //
-// `handle` is a pointer typed as the mirror `FaceRec` struct so that
-// consumers can read fields like `.size.metrics.y_scale` directly. It
-// points at the same memory as the raw `FT_Face` (`ft_face`), which we
-// pass to the C entry points.
 pub struct Face {
 pub mut:
-	handle  &FaceRec = unsafe { nil }
-	ft_face voidptr  = unsafe { nil }
+	handle      voidptr = unsafe { nil }
+	memory_data []u8
 }
 
 // deinit destroys this font face.
 pub fn (mut f Face) deinit() {
-	if !isnil(f.ft_face) {
-		C.FT_Done_Face(f.ft_face)
-		f.ft_face = unsafe { nil }
+	if !isnil(f.handle) {
+		C.FT_Done_Face(f.handle)
 		f.handle = unsafe { nil }
+		f.memory_data = []
 	}
 }
 
 // ref increases the reference count of this face.
 pub fn (f Face) ref() {
-	if !isnil(f.ft_face) {
-		C.FT_Reference_Face(f.ft_face)
+	if !isnil(f.handle) {
+		C.FT_Reference_Face(f.handle)
 	}
 }
 
@@ -572,7 +641,7 @@ pub fn (f Face) select_charmap(encoding Encoding) ! {
 	tag := match encoding {
 		.unicode { ft_encoding_unicode }
 	}
-	err := C.FT_Select_Charmap(f.ft_face, tag)
+	err := C.FT_Select_Charmap(f.handle, tag)
 	if err != 0 {
 		return error('FT_Select_Charmap failed (${err})')
 	}
@@ -580,7 +649,7 @@ pub fn (f Face) select_charmap(encoding Encoding) ! {
 
 // set_char_size sets the character size in 26.6 fractional points.
 pub fn (f Face) set_char_size(width i32, height i32, h_res u32, v_res u32) ! {
-	err := C.FT_Set_Char_Size(f.ft_face, i64(width), i64(height), h_res, v_res)
+	err := C.FT_Set_Char_Size(f.handle, i64(width), i64(height), h_res, v_res)
 	if err != 0 {
 		return error('FT_Set_Char_Size failed (${err})')
 	}
@@ -588,7 +657,7 @@ pub fn (f Face) set_char_size(width i32, height i32, h_res u32, v_res u32) ! {
 
 // load_glyph loads a glyph into the glyph slot.
 pub fn (f Face) load_glyph(glyph_index u32, flags LoadFlags) ! {
-	err := C.FT_Load_Glyph(f.ft_face, glyph_index, flags.to_int())
+	err := C.FT_Load_Glyph(f.handle, glyph_index, flags.to_int())
 	if err != 0 {
 		return error('FT_Load_Glyph failed (${err})')
 	}
@@ -596,12 +665,10 @@ pub fn (f Face) load_glyph(glyph_index u32, flags LoadFlags) ! {
 
 // render_glyph renders a loaded glyph to a bitmap.
 pub fn (f Face) render_glyph(mode RenderMode) ! {
-	if isnil(f.ft_face) {
+	if isnil(f.handle) {
 		return error('freetype face not initialized')
 	}
-	// The glyph slot pointer lives inside FT_FaceRec; we route through the
-	// mirror struct which aliases the same memory.
-	slot := voidptr(f.handle.glyph)
+	slot := C.witty_ft_glyph(f.handle)
 	render_mode := match mode {
 		.normal { 0 }
 		.light { 1 }
@@ -616,10 +683,10 @@ pub fn (f Face) render_glyph(mode RenderMode) ! {
 // get_char_index returns the glyph index for a Unicode codepoint.
 // Returns none if the codepoint is not in the font.
 pub fn (f Face) get_char_index(code u32) ?u32 {
-	if isnil(f.ft_face) {
+	if isnil(f.handle) {
 		return none
 	}
-	idx := C.FT_Get_Char_Index(f.ft_face, u64(code))
+	idx := C.FT_Get_Char_Index(f.handle, u64(code))
 	if idx == 0 {
 		return none
 	}
@@ -628,50 +695,99 @@ pub fn (f Face) get_char_index(code u32) ?u32 {
 
 // has_color returns true if the font has color (e.g., emoji) glyphs.
 pub fn (f Face) has_color() bool {
-	// XTODO: check FT_HAS_COLOR flag
-	return false
+	return !isnil(f.handle) && C.witty_ft_has_color(f.handle) != 0
+}
+
+pub fn (f Face) has_fixed_sizes() bool {
+	return !isnil(f.handle) && C.witty_ft_has_fixed_sizes(f.handle) != 0
+}
+
+pub fn (f Face) has_sbix() bool {
+	return !isnil(f.handle) && C.witty_ft_has_sbix(f.handle) != 0
 }
 
 // is_scalable returns true if the font is in a scalable format.
 pub fn (f Face) is_scalable() bool {
-	if f.handle == unsafe { nil } {
-		return true
-	}
-	return f.handle.face_flags & face_flag_scalable != 0
+	return !isnil(f.handle) && C.witty_ft_is_scalable(f.handle) != 0
 }
 
 // has_multiple_masters returns true if the font supports OpenType variations.
 pub fn (f Face) has_multiple_masters() bool {
-	// XTODO: check FT_HAS_MULTIPLE_MASTERS flag
-	return false
+	return !isnil(f.handle) && C.witty_ft_has_multiple_masters(f.handle) != 0
 }
 
 // get_mm_var returns the multiple master / variation data.
 pub fn (f Face) get_mm_var() !MMVar {
-	// XTODO: call FT_Get_MM_Var
-	return error('no multiple masters')
+	mut raw := voidptr(unsafe { nil })
+	err := C.FT_Get_MM_Var(f.handle, &raw)
+	if err != 0 {
+		return error('FT_Get_MM_Var failed (${err})')
+	}
+	num_axis := C.witty_ft_mm_num_axis(raw)
+	mut axes := []MMAxis{cap: int(num_axis)}
+	for i in 0 .. num_axis {
+		name_ptr := C.witty_ft_mm_axis_name(raw, i)
+		axes << MMAxis{
+			tag: C.witty_ft_mm_axis_tag(raw, i)
+			name: if name_ptr == unsafe { nil } { '' } else { unsafe { cstring_to_vstring(name_ptr) } }
+			minimum: C.witty_ft_mm_axis_minimum(raw, i)
+			def: C.witty_ft_mm_axis_default(raw, i)
+			maximum: C.witty_ft_mm_axis_maximum(raw, i)
+		}
+	}
+	return MMVar{ num_axis: num_axis, axis: axes, raw: raw }
 }
 
 // set_var_design_coordinates sets variation axis coordinates.
 pub fn (f Face) set_var_design_coordinates(coords []i64) ! {
-	// XTODO: call FT_Set_Var_Design_Coordinates
+	if coords.len == 0 {
+		return
+	}
+	err := C.FT_Set_Var_Design_Coordinates(f.handle, u32(coords.len), unsafe { &coords[0] })
+	if err != 0 {
+		return error('FT_Set_Var_Design_Coordinates failed (${err})')
+	}
 }
 
 // get_var_design_coordinates gets current variation axis coordinates.
 pub fn (f Face) get_var_design_coordinates(mut coords []i64) ! {
-	// XTODO: call FT_Get_Var_Design_Coordinates
+	if coords.len == 0 {
+		return
+	}
+	err := C.FT_Get_Var_Design_Coordinates(f.handle, u32(coords.len), unsafe { &coords[0] })
+	if err != 0 {
+		return error('FT_Get_Var_Design_Coordinates failed (${err})')
+	}
 }
 
 // get_sfnt_name_count returns the number of name table entries.
 pub fn (f Face) get_sfnt_name_count() u32 {
-	// XTODO: call FT_Get_Sfnt_Name_Count
-	return 0
+	return C.FT_Get_Sfnt_Name_Count(f.handle)
 }
 
 // get_sfnt_name returns the name table entry at the given index.
 pub fn (f Face) get_sfnt_name(index u32) !SfntName {
-	// XTODO: call FT_Get_Sfnt_Name
-	return error('no sfnt name')
+	mut name_id := u16(0)
+	mut platform_id := u16(0)
+	mut encoding_id := u16(0)
+	mut bytes := &u8(unsafe { nil })
+	mut length := u32(0)
+	err := C.witty_ft_get_sfnt_name(f.handle, index, &name_id, &platform_id,
+		&encoding_id, &bytes, &length)
+	if err != 0 {
+		return error('FT_Get_Sfnt_Name failed (${err})')
+	}
+	mut data := []u8{len: int(length)}
+	for i in 0 .. int(length) {
+		data[i] = unsafe { bytes[i] }
+	}
+	return SfntName{
+		name_id: name_id
+		platform_id: platform_id
+		encoding_id: encoding_id
+		string_data: data
+		string_len: length
+	}
 }
 
 // get_sfnt_table returns a pointer to the specified SFNT table.
@@ -681,28 +797,126 @@ pub fn (f Face) get_sfnt_name(index u32) !SfntName {
 //   .os2  -> &TT_OS2
 //   .hhea -> &TT_HoriHeader
 pub fn (f Face) get_sfnt_table_head() ?&TT_Header {
-	// XTODO: call FT_Get_Sfnt_Table(FT_SFNT_HEAD)
-	return none
+	table := C.FT_Get_Sfnt_Table(f.handle, ft_sfnt_head)
+	if isnil(table) {
+		return none
+	}
+	return &TT_Header{ units_per_em: C.witty_tt_head_units_per_em(table) }
 }
 
 pub fn (f Face) get_sfnt_table_post() ?&TT_Postscript {
-	// XTODO: call FT_Get_Sfnt_Table(FT_SFNT_POST)
-	return none
+	table := C.FT_Get_Sfnt_Table(f.handle, ft_sfnt_post)
+	if isnil(table) {
+		return none
+	}
+	return &TT_Postscript{
+		underline_position: C.witty_tt_post_underline_position(table)
+		underline_thickness: C.witty_tt_post_underline_thickness(table)
+	}
 }
 
 pub fn (f Face) get_sfnt_table_os2() ?&TT_OS2 {
-	// XTODO: call FT_Get_Sfnt_Table(FT_SFNT_OS2)
-	return none
+	table := C.FT_Get_Sfnt_Table(f.handle, ft_sfnt_os2)
+	if isnil(table) {
+		return none
+	}
+	return &TT_OS2{
+		version: C.witty_tt_os2_version(table)
+		s_typo_ascender: C.witty_tt_os2_typo_ascender(table)
+		s_typo_descender: C.witty_tt_os2_typo_descender(table)
+		s_typo_line_gap: C.witty_tt_os2_typo_line_gap(table)
+		fs_selection: C.witty_tt_os2_selection(table)
+		us_win_ascent: C.witty_tt_os2_win_ascent(table)
+		us_win_descent: C.witty_tt_os2_win_descent(table)
+		s_cap_height: C.witty_tt_os2_cap_height(table)
+		sx_height: C.witty_tt_os2_x_height(table)
+		y_strikeout_size: C.witty_tt_os2_strikeout_size(table)
+		y_strikeout_position: C.witty_tt_os2_strikeout_position(table)
+	}
 }
 
 pub fn (f Face) get_sfnt_table_hhea() ?&TT_HoriHeader {
-	// XTODO: call FT_Get_Sfnt_Table(FT_SFNT_HHEA)
-	return none
+	table := C.FT_Get_Sfnt_Table(f.handle, ft_sfnt_hhea)
+	if isnil(table) {
+		return none
+	}
+	return &TT_HoriHeader{
+		ascender: C.witty_tt_hhea_ascender(table)
+		descender: C.witty_tt_hhea_descender(table)
+		line_gap: C.witty_tt_hhea_line_gap(table)
+	}
+}
+
+pub fn (f Face) face_flags() i64 {
+	return if isnil(f.handle) { i64(0) } else { C.witty_ft_face_flags(f.handle) }
+}
+
+pub fn (f Face) units_per_em() u16 {
+	return if isnil(f.handle) { u16(0) } else { C.witty_ft_units_per_em(f.handle) }
+}
+
+pub fn (f Face) num_fixed_sizes() int {
+	return if isnil(f.handle) { 0 } else { int(C.witty_ft_num_fixed_sizes(f.handle)) }
+}
+
+pub fn (f Face) fixed_size_width(index int) i16 {
+	return C.witty_ft_fixed_size_width(f.handle, i32(index))
+}
+
+pub fn (f Face) size_metrics() ?SizeMetrics {
+	size := C.witty_ft_size(f.handle)
+	if isnil(size) {
+		return none
+	}
+	return SizeMetrics{
+		x_ppem: C.witty_ft_size_x_ppem(size)
+		y_ppem: C.witty_ft_size_y_ppem(size)
+		x_scale: C.witty_ft_size_x_scale(size)
+		y_scale: C.witty_ft_size_y_scale(size)
+		ascender: C.witty_ft_size_ascender(size)
+		descender: C.witty_ft_size_descender(size)
+		height: C.witty_ft_size_height(size)
+		max_advance: C.witty_ft_size_max_advance(size)
+	}
+}
+
+pub fn (f Face) glyph() ?GlyphSlotRec {
+	slot := C.witty_ft_glyph(f.handle)
+	if isnil(slot) {
+		return none
+	}
+	bitmap_ptr := C.witty_ft_glyph_bitmap(slot)
+	outline_ptr := C.witty_ft_glyph_outline(slot)
+	return GlyphSlotRec{
+		raw: slot
+		advance: Vector{
+			x: C.witty_ft_glyph_advance_x(slot)
+			y: C.witty_ft_glyph_advance_y(slot)
+		}
+		metrics: GlyphMetrics{
+			width: C.witty_ft_glyph_width(slot)
+			height: C.witty_ft_glyph_height(slot)
+			hori_bearing_x: C.witty_ft_glyph_bearing_x(slot)
+			hori_bearing_y: C.witty_ft_glyph_bearing_y(slot)
+		}
+		bitmap: Bitmap{
+			rows: C.witty_ft_bitmap_rows(bitmap_ptr)
+			width: C.witty_ft_bitmap_width(bitmap_ptr)
+			pitch: C.witty_ft_bitmap_pitch(bitmap_ptr)
+			buffer: C.witty_ft_bitmap_buffer(bitmap_ptr)
+			num_grays: C.witty_ft_bitmap_num_grays(bitmap_ptr)
+			pixel_mode: C.witty_ft_bitmap_pixel_mode(bitmap_ptr)
+		}
+		bitmap_left: C.witty_ft_glyph_bitmap_left(slot)
+		bitmap_top: C.witty_ft_glyph_bitmap_top(slot)
+		outline: Outline{ raw: outline_ptr }
+		format: C.witty_ft_glyph_format(slot)
+	}
 }
 
 // select_size selects a fixed bitmap strike by index.
 pub fn (f Face) select_size(index i32) ! {
-	err := C.FT_Select_Size(f.ft_face, index)
+	err := C.FT_Select_Size(f.handle, index)
 	if err != 0 {
 		return error('FT_Select_Size failed (${err})')
 	}
@@ -710,12 +924,12 @@ pub fn (f Face) select_size(index i32) ! {
 
 // load_sfnt_table loads raw SFNT table data by tag.
 pub fn (f Face) load_sfnt_table(tag Tag) ![]u8 {
-	if isnil(f.ft_face) {
+	if isnil(f.handle) {
 		return error('freetype face not initialized')
 	}
 	// First query the length by passing a null buffer.
 	mut length := u64(0)
-	err := C.FT_Load_Sfnt_Table(f.ft_face, u64(tag.value), 0, &u8(unsafe { nil }),
+	err := C.FT_Load_Sfnt_Table(f.handle, u64(tag.value), 0, &u8(unsafe { nil }),
 		&length)
 	if err != 0 {
 		return error('FT_Load_Sfnt_Table (length) failed (${err})')
@@ -725,7 +939,7 @@ pub fn (f Face) load_sfnt_table(tag Tag) ![]u8 {
 	}
 	// Then read the table bytes into a freshly allocated buffer.
 	mut buf := []u8{len: int(length)}
-	err2 := C.FT_Load_Sfnt_Table(f.ft_face, u64(tag.value), 0, &u8(buf.data), &length)
+	err2 := C.FT_Load_Sfnt_Table(f.handle, u64(tag.value), 0, &u8(buf.data), &length)
 	if err2 != 0 {
 		return error('FT_Load_Sfnt_Table (read) failed (${err2})')
 	}
@@ -733,57 +947,87 @@ pub fn (f Face) load_sfnt_table(tag Tag) ![]u8 {
 }
 
 // ============================================================
-// Bitmap operations (stubs)
+// Bitmap operations
 // ============================================================
 
 // bitmap_init initializes a bitmap to empty.
 pub fn bitmap_init(mut bm Bitmap) {
-	bm = Bitmap{}
+	C.FT_Bitmap_Init(voidptr(&bm))
 }
 
 // bitmap_done frees bitmap data.
 //
-// BOUNDARY: The `fn C.FT_Bitmap_Done` binding is declared above, but the
-// hand-defined V `Bitmap` mirror does not share the exact field order of
-// FreeType's `FT_Bitmap` (which is rows, width, pitch, buffer, num_grays,
-// pixel_mode, palette_mode, palette). Passing `&Bitmap` directly would be a
-// layout mismatch, so the actual conversion glue (which must marshal to a
-// real FT_Bitmap) is left for the code that owns the rasterization path.
 pub fn bitmap_done(lib Library, mut bm Bitmap) {
-	// C.FT_Bitmap_Done(lib.handle, <real FT_Bitmap*>) once marshalling exists.
+	if !isnil(lib.handle) {
+		C.FT_Bitmap_Done(lib.handle, voidptr(&bm))
+	}
 }
 
 // bitmap_convert converts a bitmap to a different format.
-// BOUNDARY: see bitmap_done — needs a real FT_Bitmap, not the V mirror.
 pub fn bitmap_convert(lib Library, source &Bitmap, mut target Bitmap, alignment i32) ! {
-	// C.FT_Bitmap_Convert(lib.handle, <src FT_Bitmap*>, <dst FT_Bitmap*>, alignment)
+	err := C.FT_Bitmap_Convert(lib.handle, voidptr(source), voidptr(&target), alignment)
+	if err != 0 {
+		return error('FT_Bitmap_Convert failed (${err})')
+	}
 }
 
 // bitmap_copy copies a bitmap.
-// BOUNDARY: see bitmap_done — needs a real FT_Bitmap, not the V mirror.
 pub fn bitmap_copy(lib Library, source &Bitmap, mut target Bitmap) ! {
-	// C.FT_Bitmap_Copy(lib.handle, <src FT_Bitmap*>, <dst FT_Bitmap*>)
+	err := C.FT_Bitmap_Copy(lib.handle, voidptr(source), voidptr(&target))
+	if err != 0 {
+		return error('FT_Bitmap_Copy failed (${err})')
+	}
 }
 
 // ============================================================
-// Outline operations (stubs)
+// Outline operations
 // ============================================================
 
 // outline_get_bbox computes the bounding box of an outline.
 // `outline` points at the FT_Outline embedded in the live glyph slot, so
 // we pass it straight through to FreeType, which writes into `bbox`.
 pub fn outline_get_bbox(outline &Outline, mut bbox BBox) {
-	C.FT_Outline_Get_BBox(voidptr(outline), voidptr(&bbox))
+	if !isnil(outline.raw) {
+		C.FT_Outline_Get_BBox(outline.raw, voidptr(&bbox))
+	}
 }
 
 // outline_embolden thickens an outline in place.
 pub fn outline_embolden(mut outline Outline, strength i64) {
-	C.FT_Outline_Embolden(voidptr(&outline), strength)
+	if !isnil(outline.raw) {
+		C.FT_Outline_Embolden(outline.raw, strength)
+	}
+}
+
+// outline_points_len returns the number of live points in an outline.
+pub fn outline_points_len(outline &Outline) int {
+	return if isnil(outline.raw) { 0 } else { int(C.witty_ft_outline_n_points(outline.raw)) }
+}
+
+// outline_point returns a point from the live FreeType glyph outline.
+pub fn outline_point(outline &Outline, index int) OutlinePoint {
+	if isnil(outline.raw) || index < 0 || index >= outline_points_len(outline) {
+		return OutlinePoint{}
+	}
+	return OutlinePoint{
+		x: C.witty_ft_outline_point_x(outline.raw, i32(index))
+		y: C.witty_ft_outline_point_y(outline.raw, i32(index))
+	}
+}
+
+// outline_set_point updates a point in the live FreeType glyph outline.
+pub fn outline_set_point(mut outline Outline, index int, point OutlinePoint) {
+	if !isnil(outline.raw) {
+		C.witty_ft_outline_set_point(outline.raw, i32(index), point.x, point.y)
+	}
 }
 
 // glyph_slot_own_bitmap ensures the glyph slot owns its bitmap.
 pub fn glyph_slot_own_bitmap(mut glyph GlyphSlotRec) ! {
-	err := C.FT_GlyphSlot_Own_Bitmap(voidptr(&glyph))
+	if isnil(glyph.raw) {
+		return error('glyph slot is not backed by FreeType')
+	}
+	err := C.FT_GlyphSlot_Own_Bitmap(glyph.raw)
 	if err != 0 {
 		return error('FT_GlyphSlot_Own_Bitmap failed (${err})')
 	}
