@@ -977,6 +977,37 @@ fn test_page_verify_integrity_styles_ref_count_mismatch() {
 	assert result == .mismatched_style_ref
 }
 
+// Page styles use the same fixed-capacity ref-counted set as Ghostty. They
+// must report exhaustion so PageList can grow/split the page instead of
+// silently allocating an unbounded side array.
+fn test_page_style_set_honors_capacity() {
+	mut page := Page.init(PageCapacity{
+		cols: 1
+		rows: 1
+		styles: 8
+	})
+	defer {
+		page.deinit()
+	}
+
+	// Layout.init(8) provides six item slots, with ID zero reserved.
+	for i in 0 .. 5 {
+		page.styles.add(CellStyle{
+			fg_color: .rgb
+			fg_r: u8(i + 1)
+		}) or {
+			assert false, 'style ${i} unexpectedly failed'
+			return
+		}
+	}
+	if _ := page.styles.add(CellStyle{
+		fg_color: .rgb
+		fg_r: 99
+	}) {
+		assert false, 'style set exceeded its page capacity'
+	}
+}
+
 // Test verifyIntegrity with zero rows.
 fn test_page_verify_integrity_zero_rows() {
 	mut page := Page.init(PageCapacity{
@@ -1258,11 +1289,12 @@ fn test_page_capacity_adjust_cols_down() {
 	// Adjusted should have more rows (same total budget).
 	assert adjusted.cols == original.cols / 2
 	assert adjusted.rows > original.rows
-	// Total cells should be approximately the same.
-	original_total := u32(original.cols) * u32(original.rows)
-	adjusted_total := u32(adjusted.cols) * u32(adjusted.rows)
-	assert adjusted_total <= original_total
-	assert adjusted_total >= original_total - u32(adjusted.cols) // allow rounding
+	// The packed row metadata is part of the budget. The result consumes the
+	// greatest whole number of rows that fits the original allocation.
+	budget := original.available_bits_for_grid()
+	used := usize(adjusted.rows) * (row_bit_size + cell_bit_size * usize(adjusted.cols))
+	assert used <= budget
+	assert used + row_bit_size + cell_bit_size * usize(adjusted.cols) > budget
 }
 
 // Test capacity adjust cols down to 1.
@@ -1552,10 +1584,12 @@ fn test_page_capacity_adjust() {
 		rows: 128
 	}
 
-	// Normal cols - no adjustment
+	// The page-alignment slack may fit additional rows even at the same width.
 	adj := cap.adjust(80)
 	assert adj.cols == 80
-	assert adj.rows == 128
+	assert adj.rows >= 128
+	used := usize(adj.rows) * (row_bit_size + cell_bit_size * usize(adj.cols))
+	assert used <= cap.available_bits_for_grid()
 
 	// Very large cols - rows should reduce
 	adj2 := cap.adjust(512)

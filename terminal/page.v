@@ -856,36 +856,26 @@ const hyperlink_cell_multiplier = 16
 
 // Standard capacity for a new page.
 const std_capacity = PageCapacity{
-	cols: 80
-	rows: 128
+	cols: 215
+	rows: 215
+	styles: 128
 }
 
 // Number of pages to preheat the pool with.
 const page_preheat = 4
 
-// ============================================================
-// StyleSet - manages ref-counted styles for a page
-// ============================================================
-
-// StyleEntry stores a style with its reference count.
-struct StyleEntry {
-mut:
-	style     CellStyle
-	ref_count int
-	in_use    bool
-}
-
-// StyleSet manages the available set of styles in use on a page.
+// StyleSet is the page-facing specialization of Ghostty's bounded,
+// reference-counted style set. The adapter keeps Page's u32 style-ID API
+// while the underlying implementation uses the canonical u16 StyleId.
 pub struct StyleSet {
 pub mut:
-	entries []StyleEntry
+	set RefCountedSet
 }
 
-// Initialize a new empty StyleSet.
-pub fn StyleSet.init() StyleSet {
-	// Entry 0 is reserved for the default style (unused).
+// Initialize a new empty StyleSet for the requested page capacity.
+pub fn StyleSet.init(capacity u16) StyleSet {
 	return StyleSet{
-		entries: [StyleEntry{}]
+		set: RefCountedSet.init(RefCountedSetLayout.init(int(capacity)))
 	}
 }
 
@@ -893,118 +883,57 @@ pub fn StyleSet.init() StyleSet {
 // existing ID and increments the ref count. Otherwise adds it and
 // returns the new ID with ref_count = 1.
 pub fn (mut self StyleSet) add(style CellStyle) !u32 {
-	// Check if style already exists.
-	for i := 1; i < self.entries.len; i++ {
-		if self.entries[i].in_use && styles_equal(self.entries[i].style, style) {
-			self.entries[i].ref_count++
-			return u32(i)
-		}
-	}
-	// Find a free slot.
-	for i := 1; i < self.entries.len; i++ {
-		if !self.entries[i].in_use {
-			self.entries[i] = StyleEntry{
-				style: style
-				ref_count: 1
-				in_use: true
-			}
-			return u32(i)
-		}
-	}
-	// No free slot, append.
-	self.entries << StyleEntry{
-		style: style
-		ref_count: 1
-		in_use: true
-	}
-	return u32(self.entries.len - 1)
+	return u32(self.set.add(style)!)
 }
 
 // Add a style, preferring to use the given ID.
 pub fn (mut self StyleSet) add_with_id(style CellStyle, preferred_id u32) !u32 {
-	// Check if style already exists.
-	for i := 1; i < self.entries.len; i++ {
-		if self.entries[i].in_use && styles_equal(self.entries[i].style, style) {
-			self.entries[i].ref_count++
-			return u32(i)
-		}
+	if preferred_id == 0 || preferred_id > max_u16 {
+		return self.add(style)
 	}
-	// Try to use the preferred ID.
-	pid := int(preferred_id)
-	if pid > 0 && pid < self.entries.len && !self.entries[pid].in_use {
-		self.entries[pid] = StyleEntry{
-			style: style
-			ref_count: 1
-			in_use: true
-		}
-		return preferred_id
-	}
-	// Fall back to regular add.
-	return self.add(style)
+	return u32(self.set.add_with_id(style, u16(preferred_id))!.id)
 }
 
 // Increment the ref count for a style.
 pub fn (mut self StyleSet) use_style(id u32) {
-	if int(id) < self.entries.len {
-		self.entries[int(id)].ref_count++
-	}
+	self.set.use_item(u16(id))
 }
 
 // Decrement the ref count for a style. If ref count hits 0, the
 // slot is freed.
 pub fn (mut self StyleSet) release(id u32) {
-	if int(id) < self.entries.len && self.entries[int(id)].in_use {
-		self.entries[int(id)].ref_count--
-		if self.entries[int(id)].ref_count <= 0 {
-			self.entries[int(id)].in_use = false
-			self.entries[int(id)].ref_count = 0
-		}
-	}
+	self.set.release(u16(id))
 }
 
 // Get a style by ID.
 pub fn (self &StyleSet) get(id u32) CellStyle {
-	if int(id) < self.entries.len && self.entries[int(id)].in_use {
-		return self.entries[int(id)].style
-	}
-	return CellStyle{}
+	return *self.set.get(u16(id))
 }
 
 // Get the ref count for a style.
 pub fn (self &StyleSet) ref_count(id u32) int {
-	if int(id) < self.entries.len {
-		return self.entries[int(id)].ref_count
-	}
-	return 0
+	return int(self.set.ref_count(u16(id)))
 }
 
 // Returns the number of styles with capacity for the given count,
-// accounting for load factor. In V, we just return count + 2 to
-// account for the reserved slot 0 and some headroom.
+// accounting for the canonical load factor and reserved ID zero.
 pub fn StyleSet.capacity_for_count(count int) u16 {
-	if count == 0 {
-		return 0
-	}
-	// Match Zig behavior: capacity accounts for load factor.
-	// In practice this means roughly 2x the count, minimum 4.
-	mut cap := count * 2
-	if cap < 4 {
-		cap = 4
-	}
-	return u16(cap)
+	return u16(rcs_capacity_for_count(count))
 }
 
-// Compare two CellStyles for equality.
-fn styles_equal(a CellStyle, b CellStyle) bool {
-	return a.flags.bold == b.flags.bold && a.flags.faint == b.flags.faint
-		&& a.flags.italic == b.flags.italic && a.flags.underline == b.flags.underline
-		&& a.flags.overline == b.flags.overline && a.flags.blink == b.flags.blink
-		&& a.flags.inverse == b.flags.inverse && a.flags.invisible == b.flags.invisible
-		&& a.flags.strikethrough == b.flags.strikethrough && a.fg_color == b.fg_color
-		&& a.bg_color == b.bg_color && a.underline_color == b.underline_color
-		&& a.fg_r == b.fg_r && a.fg_g == b.fg_g && a.fg_b == b.fg_b
-		&& a.bg_r == b.bg_r && a.bg_g == b.bg_g && a.bg_b == b.bg_b
-		&& a.fg_palette == b.fg_palette && a.bg_palette == b.bg_palette
+// clone returns an independent copy preserving IDs, refs, and probe metadata.
+fn (self &StyleSet) clone() StyleSet {
+	return StyleSet{
+		set: RefCountedSet{
+			hash_table: self.set.hash_table.clone()
+			items: self.set.items.clone()
+			max_psl: self.set.max_psl
+			psl_stats: self.set.psl_stats
+			living: self.set.living
+			next_id: self.set.next_id
+			layout: self.set.layout
+		}
+	}
 }
 
 // ============================================================
@@ -1049,6 +978,10 @@ pub mut:
 	styles u16 = 16
 	// Number of bytes to allocate for grapheme data.
 	grapheme_bytes u32 = grapheme_bytes_default
+	// Logical bytes available to the packed row/cell grid. Ghostty derives
+	// this from the page-aligned backing allocation. V stores page members in
+	// separate arrays, so adjusted capacities carry the original grid budget.
+	grid_bytes usize
 }
 
 // Bit sizes of the packed Row and Cell structs in Ghostty's page.zig.
@@ -1068,12 +1001,14 @@ const cell_bit_size = usize(64)
 // us the same invariant the Zig code relies on: adjusting to the same cols
 // returns the same rows, and adjusting to more cols yields fewer rows.
 fn (self PageCapacity) available_bits_for_grid() usize {
-	// witty uses a pure cell-count budget (V arrays + GC, not a fixed
-	// mmap'd block): the total cell capacity cols*rows is what must be
-	// preserved across adjustments. Row metadata is not counted, matching
-	// the witty contract (adjusting to fewer cols yields proportionally
-	// more rows, keeping total cells ~constant).
-	return cell_bit_size * usize(self.cols) * usize(self.rows)
+	if self.grid_bytes > 0 {
+		return self.grid_bytes * 8
+	}
+
+	// Page backing allocations are page aligned. Keep the alignment slack in
+	// the logical grid budget just as Page.layout/availableBitsForGrid do.
+	grid_bytes := usize(self.rows) * (usize(self.cols) + 1) * 8
+	return ((grid_bytes + 4095) / 4096 * 4096) * 8
 }
 
 // Returns the maximum number of columns that can be used with this
@@ -1112,9 +1047,8 @@ pub fn (self PageCapacity) adjust_checked(cols u16) !PageCapacity {
 	if cols > 0 {
 		available_bits := self.available_bits_for_grid()
 
-		// The size per row is the cells per row (n=cols); witty does not
-		// charge per-row metadata against the grid budget.
-		bits_per_row := cell_bit_size * usize(cols)
+		// Each packed row consists of its metadata and n packed cells.
+		bits_per_row := row_bit_size + cell_bit_size * usize(cols)
 		new_rows := available_bits / bits_per_row
 
 		// If our rows go to zero then we can't fit any row metadata
@@ -1125,6 +1059,7 @@ pub fn (self PageCapacity) adjust_checked(cols u16) !PageCapacity {
 
 		adjusted.cols = cols
 		adjusted.rows = if new_rows > usize(max_u16) { max_u16 } else { u16(new_rows) }
+		adjusted.grid_bytes = available_bits / 8
 	}
 	return adjusted
 }
@@ -1143,6 +1078,7 @@ pub fn (self PageCapacity) adjust(cols u16) PageCapacity {
 			rows: 1
 			styles: self.styles
 			grapheme_bytes: self.grapheme_bytes
+			grid_bytes: self.available_bits_for_grid() / 8
 		}
 	}
 }
@@ -1213,7 +1149,7 @@ pub fn Page.init(cap PageCapacity) Page {
 			rows: 0
 		}
 		dirty: false
-		styles: StyleSet.init()
+		styles: StyleSet.init(cap.styles)
 		hyperlink_set: HyperlinkSet.init()
 	}
 }
@@ -1223,7 +1159,7 @@ pub fn Page.init(cap PageCapacity) Page {
 pub fn (mut self Page) deinit() {
 	self.rows = []
 	self.hyperlink_map = map[u64]u32{}
-	self.styles = StyleSet.init()
+	self.styles = StyleSet.init(self.capacity.styles)
 	self.hyperlink_set = HyperlinkSet.init()
 }
 
@@ -1239,7 +1175,7 @@ pub fn (mut self Page) reinit(cap PageCapacity) {
 		self.rows << RowData.init(u32(cap.cols))
 	}
 	self.dirty = false
-	self.styles = StyleSet.init()
+	self.styles = StyleSet.init(cap.styles)
 	self.hyperlink_set = HyperlinkSet.init()
 	self.hyperlink_map = map[u64]u32{}
 }
@@ -1431,9 +1367,7 @@ pub fn (self &Page) clone() Page {
 	}
 
 	// Deep copy the styles.
-	mut new_styles := StyleSet{
-		entries: self.styles.entries.clone()
-	}
+	new_styles := self.styles.clone()
 
 	// Deep copy hyperlink set.
 	mut new_hl_set := HyperlinkSet{
