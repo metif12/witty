@@ -341,15 +341,15 @@ pub fn (mut t Termio) queue_write(data []u8, linefeed bool) ! {
 
 pub struct TermioOpts {
 pub:
-	config            DerivedConfig
-	size              renderer.Size
-	max_scrollback    int = 10_000_000
-	grapheme_cluster  bool = true
-	backend_config    ExecConfig
-	renderer_state    &renderer.State = unsafe { nil }
-	renderer_wakeup   renderer.Wakeup
-	renderer_mailbox  &renderer.Mailbox = unsafe { nil }
-	surface_mailbox   apprt.SurfaceMailbox
+	config           DerivedConfig
+	size             renderer.Size
+	max_scrollback   int = 10_000_000
+	grapheme_cluster bool = true
+	backend_config   ExecConfig
+	renderer_state   &renderer.State = unsafe { nil }
+	renderer_wakeup  renderer.Wakeup
+	renderer_mailbox &renderer.Mailbox = unsafe { nil }
+	surface_mailbox  apprt.SurfaceMailbox
 }
 
 // DerivedConfig holds configuration derived from the main config
@@ -751,16 +751,147 @@ pub enum ClipboardAccess {
 pub struct Thread {
 pub mut:
 	stop Stopwatch
+	// Thread-local flags mirrored from Ghostty's writer thread.
+	linefeed_mode bool
+	has_inspector bool
+	drain         bool
+	scroll_active bool
+	// Timer/coalescing state. Deadlines use time.sys_mono_now nanoseconds.
+	pending_resize  ?renderer.Size
+	resize_deadline i64
+	sync_deadline   i64
+	scroll_deadline i64
 }
 
 pub fn Thread.init() !Thread {
-	return Thread{}
+	return Thread{
+		stop: Stopwatch.init()
+	}
 }
 
-pub fn (mut t Thread) deinit() {}
+pub fn (mut t Thread) deinit() {
+	t.stop.deinit()
+}
 
-pub fn (t Thread) thread_main() {
-	// stub: IO thread main loop
+// thread_main is the writer-thread entry point. Ghostty drives the same state
+// machine with libxev; V's implementation uses a short monotonic polling wait
+// so mailbox and timer behavior remains identical without tying Termio to a
+// particular event-loop implementation.
+pub fn (mut t Thread) thread_main(mut io Termio) {
+	io.thread_enter() or {
+		t.show_start_error(mut io, err.msg())
+		t.drain = true
+	}
+	defer {
+		if !t.drain {
+			io.thread_exit()
+		}
+	}
+
+	for !t.stop.is_notified() {
+		mut did_work := t.drain_mailbox(mut io)
+		now := i64(time.sys_mono_now())
+
+		if resize := t.pending_resize {
+			if now >= t.resize_deadline {
+				io.resize(resize) or {}
+				t.pending_resize = none
+				t.resize_deadline = 0
+				did_work = true
+			}
+		}
+		if t.sync_deadline > 0 && now >= t.sync_deadline {
+			io.reset_synchronized_output()
+			t.sync_deadline = 0
+			did_work = true
+		}
+		if t.scroll_active && now >= t.scroll_deadline {
+			io.surface_mailbox.push(apprt.SurfaceMessage{
+				kind: .selection_scroll_tick
+				selection_scroll_tick: true
+			})
+			t.scroll_deadline = now + 15 * i64(time.millisecond)
+			did_work = true
+		}
+
+		if !did_work {
+			time.sleep(time.millisecond)
+		}
+	}
+
+	// Match the abnormal-exit behavior: after startup failure, continue
+	// accepting and discarding messages until the owner requests shutdown.
+	if t.drain {
+		for io.mailbox.pop() != none {
+		}
+	}
+}
+
+// drain_mailbox dispatches every currently queued writer message. Returning
+// true tells the caller that a renderer wakeup was requested.
+fn (mut t Thread) drain_mailbox(mut io Termio) bool {
+	mut redraw := false
+	for {
+		msg := io.mailbox.pop() or { break }
+		if t.drain {
+			continue
+		}
+		redraw = true
+		match msg.kind {
+			.color_scheme_report { io.color_scheme_report(msg.force_val) or {} }
+			.crash { panic('crash request, crashing intentionally') }
+			.change_config { io.change_config(&msg.config_val) or {} }
+			.inspector {
+				t.has_inspector = msg.flag_val
+			}
+			.resize {
+				t.pending_resize = msg.resize_val
+				if t.resize_deadline == 0 {
+					t.resize_deadline = i64(time.sys_mono_now()) + 25 * i64(time.millisecond)
+				}
+			}
+			.size_report { io.size_report(msg.size_report_val) or {} }
+			.clear_screen { io.clear_screen(msg.flag_val) or {} }
+			.scroll_viewport {
+				io.scroll_viewport(msg.scroll_behavior, msg.scroll_delta) or {}
+			}
+			.selection_scroll {
+				t.scroll_active = msg.flag_val
+				if t.scroll_active {
+					t.scroll_deadline = i64(time.sys_mono_now()) + 15 * i64(time.millisecond)
+				} else {
+					t.scroll_deadline = 0
+				}
+			}
+			.jump_to_prompt { io.jump_to_prompt(msg.prompt_delta) or {} }
+			.start_synchronized_output {
+				t.sync_deadline = i64(time.sys_mono_now()) + 1000 * i64(time.millisecond)
+			}
+			.linefeed_mode {
+				t.linefeed_mode = msg.flag_val
+			}
+			.focused { io.focus_gained(msg.flag_val) or {} }
+			.write_small { io.queue_write(msg.write_small_data.slice(), t.linefeed_mode) or {} }
+			.write_stable { io.queue_write(msg.write_stable_data.bytes(), t.linefeed_mode) or {} }
+			.write_alloc { io.queue_write(msg.write_alloc_data.bytes(), t.linefeed_mode) or {} }
+			.visible {
+				// Visibility is a renderer-thread concern. Kept for compatibility
+				// with older Witty producers; consuming it still triggers redraw.
+			}
+		}
+	}
+	if redraw {
+		io.renderer_wakeup.notify() or {}
+	}
+	return redraw
+}
+
+fn (t &Thread) show_start_error(mut io Termio, message string) {
+	io.renderer_state.mutex.lock()
+	defer { io.renderer_state.mutex.unlock() }
+	io.terminal.modes.set(.cursor_visible, false)
+	io.terminal.erase_display(.complete, false)
+	io.terminal.print_string('error starting IO thread: ${message}\n\nThis terminal is non-functional. Please close it and try again.') or {}
 }
 
 // Stopwatch is a cross-thread wakeup/stop signal. In ghostty this is backed
@@ -771,17 +902,51 @@ pub struct Stopwatch {
 pub mut:
 	// Whether a notification has been raised on this stopwatch.
 	notified bool
+	mutex    &sync.Mutex = unsafe { nil }
+}
+
+pub fn Stopwatch.init() Stopwatch {
+	return Stopwatch{
+		mutex: sync.new_mutex()
+	}
+}
+
+fn (mut s Stopwatch) ensure_mutex() &sync.Mutex {
+	if s.mutex == unsafe { nil } {
+		s.mutex = sync.new_mutex()
+	}
+	return s.mutex
 }
 
 // notify raises the wakeup/stop signal. In ghostty this wakes the target
 // event loop; here we record that the signal was raised.
 pub fn (mut s Stopwatch) notify() ! {
+	mtx := s.ensure_mutex()
+	mtx.lock()
+	defer { mtx.unlock() }
 	s.notified = true
+}
+
+pub fn (mut s Stopwatch) is_notified() bool {
+	mtx := s.ensure_mutex()
+	mtx.lock()
+	defer { mtx.unlock() }
+	return s.notified
 }
 
 // reset clears the notification state.
 pub fn (mut s Stopwatch) reset() {
+	mtx := s.ensure_mutex()
+	mtx.lock()
+	defer { mtx.unlock() }
 	s.notified = false
+}
+
+pub fn (mut s Stopwatch) deinit() {
+	if s.mutex != unsafe { nil } {
+		s.mutex.destroy()
+		s.mutex = unsafe { nil }
+	}
 }
 
 // ============================================================
@@ -800,13 +965,17 @@ pub mut:
 	flag_val          bool
 	force_val         bool
 	size_report_val   SizeReportKind
+	resize_val        renderer.Size
+	config_val        DerivedConfig
+	scroll_behavior   terminal.ScrollViewport
+	scroll_delta      int
+	prompt_delta      int
 }
 
 pub enum MessageKind {
 	write_small
 	write_stable
 	write_alloc
-	write_req
 	resize
 	inspector
 	change_config
@@ -817,6 +986,10 @@ pub enum MessageKind {
 	start_synchronized_output
 	linefeed_mode
 	size_report
+	clear_screen
+	scroll_viewport
+	jump_to_prompt
+	crash
 }
 
 // SizeReportKind identifies what kind of size report to send.
@@ -891,9 +1064,10 @@ pub fn Message.write_stable_msg(data string) Message {
 	}
 }
 
-pub fn Message.resize_msg(size voidptr) Message {
+pub fn Message.resize_msg(size renderer.Size) Message {
 	return Message{
 		kind: .resize
+		resize_val: size
 	}
 }
 
@@ -932,9 +1106,32 @@ pub fn Message.visible_msg(vis bool) Message {
 	}
 }
 
-pub fn Message.change_config_msg(cfg voidptr) Message {
+pub fn Message.change_config_msg(cfg &DerivedConfig) Message {
 	return Message{
 		kind: .change_config
+		config_val: *cfg
+	}
+}
+
+pub fn Message.clear_screen_msg(history bool) Message {
+	return Message{
+		kind: .clear_screen
+		flag_val: history
+	}
+}
+
+pub fn Message.scroll_viewport_msg(behavior terminal.ScrollViewport, delta int) Message {
+	return Message{
+		kind: .scroll_viewport
+		scroll_behavior: behavior
+		scroll_delta: delta
+	}
+}
+
+pub fn Message.jump_to_prompt_msg(delta int) Message {
+	return Message{
+		kind: .jump_to_prompt
+		prompt_delta: delta
 	}
 }
 

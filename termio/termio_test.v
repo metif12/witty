@@ -1,5 +1,7 @@
 module termio
 
+import renderer
+
 fn test_mailbox_push_pop_fifo() {
 	mut mailbox := Mailbox.init()!
 	defer {
@@ -124,4 +126,32 @@ fn test_stopwatch_reset_clears() {
 	assert s.notified
 	s.reset()
 	assert !s.notified
+}
+
+fn test_thread_drain_mailbox_updates_writer_state() {
+	mut tio := Termio{}
+	tio.init(TermioOpts{})!
+	defer { tio.deinit() }
+	mut writer := Thread.init()!
+	defer { writer.deinit() }
+
+	resize := renderer.Size{
+		screen: renderer.ScreenSize{ width: 800, height: 600 }
+		cell: renderer.CellSize{ width: 10, height: 20 }
+	}
+	tio.mailbox.push(Message.inspector_msg(true))
+	tio.mailbox.push(Message{ kind: .linefeed_mode, flag_val: true })
+	tio.mailbox.push(Message.selection_scroll_msg(true))
+	tio.mailbox.push(Message{ kind: .start_synchronized_output })
+	tio.mailbox.push(Message.resize_msg(resize))
+
+	assert writer.drain_mailbox(mut tio)
+	assert writer.has_inspector
+	assert writer.linefeed_mode
+	assert writer.scroll_active
+	assert writer.scroll_deadline > 0
+	assert writer.sync_deadline > 0
+	assert writer.pending_resize or { panic('missing coalesced resize') } == resize
+	assert writer.resize_deadline > 0
+	assert tio.mailbox.len() == 0
 }
