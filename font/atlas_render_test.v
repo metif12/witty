@@ -52,10 +52,26 @@ fn test_atlas_writing_data_from_larger_source() {
 	reg := atlas.reserve(2, 2)!
 	old := atlas.modified
 	atlas.set_from_larger(reg, [
-		u8(8), 8, 8, 8, 8,
-		8, 8, 1, 2, 8,
-		8, 8, 3, 4, 8,
-		8, 8, 8, 8, 8,
+		u8(8),
+		8,
+		8,
+		8,
+		8,
+		8,
+		8,
+		1,
+		2,
+		8,
+		8,
+		8,
+		3,
+		4,
+		8,
+		8,
+		8,
+		8,
+		8,
+		8,
 	], 5, 2, 1)
 	new := atlas.modified
 	assert new > old
@@ -71,6 +87,45 @@ fn test_atlas_writing_data_from_larger_source() {
 	for b in atlas.data {
 		assert b != 8
 	}
+}
+
+fn test_atlas_writing_bgr_data() {
+	mut atlas := Atlas.init(32, .bgr)
+	reg := atlas.reserve(1, 2)!
+	atlas.set(reg, [u8(1), 2, 3, 4, 5, 6])
+
+	depth := atlas.format.depth()
+	assert depth == 3
+	first := int(33 * depth)
+	second := int(65 * depth)
+	assert atlas.data[first..first + 3] == [u8(1), 2, 3]
+	assert atlas.data[second..second + 3] == [u8(4), 5, 6]
+}
+
+fn test_atlas_grow_bgr() {
+	mut atlas := Atlas.init(4, .bgr)
+	reg := atlas.reserve(2, 2)!
+	atlas.set(reg, [
+		u8(10),
+		11,
+		12,
+		13,
+		14,
+		15,
+		20,
+		21,
+		22,
+		23,
+		24,
+		25,
+	])
+	atlas.grow(8)
+
+	depth := atlas.format.depth()
+	first := int((atlas.size + 1) * depth)
+	second_row := int((atlas.size * 2 + 1) * depth)
+	assert atlas.data[first..first + 6] == [u8(10), 11, 12, 13, 14, 15]
+	assert atlas.data[second_row..second_row + 6] == [u8(20), 21, 22, 23, 24, 25]
 }
 
 fn test_atlas_grow() {
@@ -155,7 +210,7 @@ fn test_sprite_face_renders_unicode_sprite_codepoint_without_enum_cast() {
 		metrics: default_grid_metrics(8, 16)
 	}
 	glyph := sf.render_glyph(mut atlas, 0x2500, RenderOptions{
-		cell_width:   1
+		cell_width: 1
 		grid_metrics: default_grid_metrics(8, 16)
 	})!
 
