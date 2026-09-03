@@ -83,14 +83,14 @@ fn test_image_mark_for_replace() {
 
 // Test ImageId z ordering.
 fn test_image_id_z_ordering_kitty() {
-	a := ImageId(KittyImageId{id: 1})
-	b := ImageId(KittyImageId{id: 2})
+	a := ImageId(KittyImageId{ id: 1 })
+	b := ImageId(KittyImageId{ id: 2 })
 	assert a.z_less_than(b)
 	assert !b.z_less_than(a)
 }
 
 fn test_image_id_z_ordering_kitty_before_overlay() {
-	a := ImageId(KittyImageId{id: 1})
+	a := ImageId(KittyImageId{ id: 1 })
 	b := ImageId(OverlayImageId{})
 	// Kitty images always sort before non-kitty images
 	assert a.z_less_than(b)
@@ -119,16 +119,69 @@ fn test_image_render_state_empty() {
 fn test_image_render_state_upload_removes_unloading() {
 	mut state := ImageRenderState.empty()
 	state.images[1] = ImageEntry{
-		image: Image{state: .unloading}
+		image: Image{ state: .unloading }
 	}
 	state.images[2] = ImageEntry{
-		image: Image{state: .ready}
+		image: Image{ state: .ready }
 	}
 	result := state.upload()
 	assert result == true
 	assert 1 !in state.images
 	assert 2 in state.images
 	state.deinit()
+}
+
+fn test_overlay_update_prepares_image_and_placement() {
+	mut state := ImageRenderState.empty()
+	overlay := Overlay{
+		width: 2
+		height: 3
+		pixels: []u8{len: 2 * 3 * 4, init: 7}
+	}
+	state.overlay_update(overlay)
+
+	assert overlay_image_key in state.images
+	entry := state.images[overlay_image_key] or { panic('missing overlay image') }
+	assert entry.image.state == .pending
+	pending := entry.image.pending or { panic('missing pending overlay') }
+	assert pending.width == 2
+	assert pending.height == 3
+	assert pending.pixel_format == .rgba
+	assert pending.data == overlay.pixels
+	assert state.overlay_placements.len == 1
+	placement := state.overlay_placements[0]
+	assert placement.width == 2
+	assert placement.height == 3
+	assert placement.source_width == 2
+	assert placement.source_height == 3
+}
+
+fn test_overlay_update_replaces_then_unloads_image() {
+	mut state := ImageRenderState.empty()
+	state.overlay_update(Overlay{
+		width: 1
+		height: 1
+		pixels: [u8(1), 2, 3, 4]
+	})
+	mut ready_entry := state.images[overlay_image_key] or { panic('missing overlay image') }
+	ready_entry.image.state = .ready
+	state.images[overlay_image_key] = ready_entry
+
+	state.overlay_update(Overlay{
+		width: 1
+		height: 1
+		pixels: [u8(5), 6, 7, 8]
+	})
+	replaced := state.images[overlay_image_key] or { panic('missing replaced overlay') }
+	assert replaced.image.state == .replace
+	assert state.overlay_placements.len == 1
+
+	state.overlay_update(none)
+	unloading := state.images[overlay_image_key] or { panic('missing unloading overlay') }
+	assert unloading.image.state == .unloading
+	assert state.overlay_placements.len == 0
+	state.upload()
+	assert overlay_image_key !in state.images
 }
 
 // Test DrawPlacements enum.

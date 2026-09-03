@@ -203,10 +203,16 @@ module renderer
 //
 // --- Original Ghostty Comments End: src/renderer/image.zig
 
-
 import terminal
 import kitty
 import math
+import time
+
+const overlay_image_key = u64(1) << 32
+
+fn kitty_image_key(id u32) u64 {
+	return u64(id)
+}
 
 // Image identifier used to store and lookup images.
 //
@@ -408,7 +414,7 @@ pub enum DrawPlacements {
 pub struct ImageRenderState {
 pub mut:
 	// Map of image ID to image entry.
-	images map[u32]ImageEntry
+	images map[u64]ImageEntry
 
 	// The placements for the Kitty image protocol.
 	kitty_placements []ImagePlacement
@@ -435,7 +441,7 @@ pub fn (mut self ImageRenderState) deinit() {
 	for _, mut entry in self.images {
 		entry.image.deinit()
 	}
-	self.images = map[u32]ImageEntry{}
+	self.images = map[u64]ImageEntry{}
 	self.kitty_placements = []
 	self.overlay_placements = []
 }
@@ -450,7 +456,7 @@ pub fn (mut self ImageRenderState) upload() bool {
 	// XTODO: Image upload requires GPU API integration.
 	// This method should iterate through images, upload pending ones
 	// to the GPU, and remove unloading ones.
-	mut to_remove := []u32{}
+	mut to_remove := []u64{}
 	for id, mut entry in self.images {
 		if entry.image.is_unloading() {
 			entry.image.deinit()
@@ -575,11 +581,15 @@ pub fn (mut self ImageRenderState) kitty_update_storage(mut storage kitty.ImageS
 	// This never conflicts with the below because a placement can't
 	// reference an image that doesn't exist.
 	for id, mut entry in self.images {
+		if id == overlay_image_key {
+			continue
+		}
 		// We're only looking at Kitty images. Our image map keys are kitty
 		// image IDs directly (u32). If the storage no longer has this
 		// image, mark it for unload.
-		if storage.image_by_id(id) == none {
+		if storage.image_by_id(u32(id)) == none {
 			entry.image.mark_for_unload()
+			self.images[id] = entry
 		}
 	}
 
@@ -769,7 +779,7 @@ fn (mut self ImageRenderState) prep_kitty_virtual_placement(mut storage kitty.Im
 // BOUNDARY: The actual GPU texture upload happens in `upload`. Here we
 // only prepare the CPU-side pending image state.
 fn (mut self ImageRenderState) prep_kitty_image(image kitty.Image) ! {
-	id := image.id
+	id := kitty_image_key(image.id)
 	transmit_time := image.transmit_time.unix_nano()
 
 	// If this image exists and its transmit time is the same we assume
@@ -787,7 +797,9 @@ fn (mut self ImageRenderState) prep_kitty_image(image kitty.Image) ! {
 		.gray_alpha { PixelFormat.gray_alpha }
 		.rgb { PixelFormat.rgb }
 		.rgba { PixelFormat.rgba }
-		.png { return error('png should be decoded by now') }
+		.png {
+			return error('png should be decoded by now')
+		}
 	}
 
 	// Copy the data so we own it.
@@ -821,11 +833,47 @@ fn (mut self ImageRenderState) prep_kitty_image(image kitty.Image) ! {
 
 // Update our overlay state. None value deletes any existing overlay.
 pub fn (mut self ImageRenderState) overlay_update(overlay ?Overlay) {
-	// XTODO: Overlay image upload requires GPU API integration.
 	self.overlay_placements.clear()
 
 	if ov := overlay {
-		_ = ov
+		pending := ov.pending_image()
+		if pending.data.len != int(pending.data_len()) {
+			return
+		}
+
+		if overlay_image_key in self.images {
+			mut entry := self.images[overlay_image_key] or { ImageEntry{} }
+			entry.image.mark_for_replace(pending)
+			entry.image.width = pending.width
+			entry.image.height = pending.height
+			entry.transmit_time = time.now().unix_nano()
+			self.images[overlay_image_key] = entry
+		} else {
+			self.images[overlay_image_key] = ImageEntry{
+				image: Image{
+					state: .pending
+					pending: pending
+					width: pending.width
+					height: pending.height
+				}
+				transmit_time: time.now().unix_nano()
+			}
+		}
+
+		self.overlay_placements << ImagePlacement{
+			image_id: OverlayImageId{}
+			x: 0
+			y: 0
+			z: 0
+			width: pending.width
+			height: pending.height
+			source_width: pending.width
+			source_height: pending.height
+		}
+	} else if overlay_image_key in self.images {
+		mut entry := self.images[overlay_image_key] or { ImageEntry{} }
+		entry.image.mark_for_unload()
+		self.images[overlay_image_key] = entry
 	}
 }
 
