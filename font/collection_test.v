@@ -28,8 +28,8 @@ fn test_add_deferred_without_loading_options() {
 
 	// Adding a deferred face without load options should fail.
 	c.add_deferred(DeferredFace{}, AddOptions{
-		style:           .regular
-		fallback:        false
+		style: .regular
+		fallback: false
 		size_adjustment: .none_
 	}) or {
 		// Expected: deferred loading unavailable
@@ -149,6 +149,22 @@ fn test_index_special() {
 	// Normal index should not be special.
 	normal := Index{}
 	assert normal.special() == none
+}
+
+fn test_index_packed_layout_matches_ghostty() {
+	for style in [FontStyle.regular, .bold, .italic, .bold_italic] {
+		for face_index in [u16(0), 1, 42, 0x1ffe, 0x1fff] {
+			idx := Index{
+				style: style
+				idx: face_index
+			}
+			packed := idx.int_val()
+			assert packed == (face_index << 3) | u16(style)
+			decoded := Index.from_int(packed)
+			assert decoded.style == style
+			assert decoded.idx == face_index
+		}
+	}
 }
 
 fn test_presentation_mode() {

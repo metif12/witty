@@ -460,14 +460,16 @@ pub fn Index.init_special(v Special) Index {
 
 // int_val returns the index as a packed integer.
 pub fn (i Index) int_val() u16 {
-	return (u16(i.style) << 13) | i.idx
+	// Zig packed structs place the first field in the least-significant bits:
+	// style occupies bits 0..2 and the 13-bit face index occupies bits 3..15.
+	return (i.idx << 3) | u16(i.style)
 }
 
 // from_int decodes the packed form carried by TextRun and renderer caches.
 pub fn Index.from_int(value u32) Index {
 	return Index{
-		style: unsafe { FontStyle((value >> 13) & 0x3) }
-		idx: u16(value & 0x1fff)
+		style: unsafe { FontStyle(value & 0x7) }
+		idx: u16((value >> 3) & 0x1fff)
 	}
 }
 
