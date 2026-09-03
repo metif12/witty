@@ -4396,7 +4396,10 @@ fn (mut c Config) reset_theme_derived() {
 }
 
 pub fn (mut c Config) deinit() {
-	// stub
+	// Ghostty releases the arena that owns all configuration allocations and
+	// then invalidates the struct. V's GC owns those allocations, so replacing
+	// the value drops every retained reference and leaves a valid empty config.
+	c = Config{}
 }
 
 // clone creates a deep copy of the config. Slices and nested collections are

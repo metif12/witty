@@ -10,8 +10,7 @@ module terminal
 // This implementation tries to balance denser memory usage (by using a bitset)
 // and minimizing unnecessary allocations.
 //
-// NOTE: This replaces the simpler Tabstops stub in terminal.v. Remove
-// the old Tabstops definition from terminal.v to avoid duplicate symbols.
+// This is the sole Tabstops implementation used by the terminal module.
 
 // Unit is the type we use per tabstop unit (see file docs).
 // Each unit stores 8 tabstop bits.
