@@ -1665,7 +1665,7 @@ fn test_index_in_prompt_mode_marks_new_row_as_prompt_continuation() {
 	defer { t.deinit() }
 
 	// Start a prompt.
-	t.semantic_prompt(.prompt_start, none)
+	t.semantic_prompt(.fresh_line_new_prompt, none)
 	for c in 'hello' {
 		t.print(u32(c)) or { assert false }
 	}
@@ -1692,11 +1692,11 @@ fn test_index_in_input_mode_marks_new_row_as_prompt_continuation() {
 	defer { t.deinit() }
 
 	// Start a prompt then switch to input.
-	t.semantic_prompt(.prompt_start, none)
+	t.semantic_prompt(.fresh_line_new_prompt, none)
 	for c in '\$ ' {
 		t.print(u32(c)) or { assert false }
 	}
-	t.semantic_prompt(.input_start, none)
+	t.semantic_prompt(.end_prompt_start_input, none)
 	for c in 'echo \\' {
 		t.print(u32(c)) or { assert false }
 	}
@@ -1719,15 +1719,15 @@ fn test_index_in_output_mode_does_not_mark_new_row_as_prompt() {
 	defer { t.deinit() }
 
 	// Complete prompt cycle: prompt -> input -> output.
-	t.semantic_prompt(.prompt_start, none)
+	t.semantic_prompt(.fresh_line_new_prompt, none)
 	for c in '\$ ' {
 		t.print(u32(c)) or { assert false }
 	}
-	t.semantic_prompt(.input_start, none)
+	t.semantic_prompt(.end_prompt_start_input, none)
 	for c in 'ls' {
 		t.print(u32(c)) or { assert false }
 	}
-	t.semantic_prompt(.command_start, none)
+	t.semantic_prompt(.end_input_start_output, none)
 
 	// Linefeed while in output mode.
 	t.carriage_return()

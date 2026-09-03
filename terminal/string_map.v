@@ -1,5 +1,7 @@
 module terminal
 
+import regex
+
 // A string along with the mapping of each individual byte in the string
 // to the point in the screen.
 //
@@ -11,7 +13,7 @@ module terminal
 pub struct StringMap {
 pub mut:
 	str     string
-	map_pin []PagePin
+	map_pin []Pin
 }
 
 // deinit frees the string and pin map.
@@ -20,39 +22,49 @@ pub fn (mut self StringMap) deinit() {
 	self.map_pin = []
 }
 
-// SearchIterator iterates over regular expression matches of the string.
-// XTODO: Regex matching requires oniguruma bindings which are not yet
-// available. The search_iterator and SearchIterator are stubbed out.
-
 // search_iterator returns a SearchIterator for the given regex pattern.
-// XTODO: This is a stub. Requires oniguruma regex support.
-pub fn (self StringMap) search_iterator(pattern string) StringSearchIterator {
+//
+// Ghostty receives an already compiled Oniguruma expression. Witty compiles
+// the equivalent V regex here and returns its parse error to the caller.
+pub fn (self StringMap) search_iterator(pattern string) !StringSearchIterator {
+	re := regex.regex_opt(pattern)!
 	return StringSearchIterator{
 		smap: self
-		pattern: pattern
+		regex: re
 	}
 }
 
 // StringSearchIterator iterates over regular expression matches of the string.
-// XTODO: This is a stub. Requires oniguruma regex support.
 pub struct StringSearchIterator {
 pub mut:
-	smap    StringMap
-	pattern string
-	offset  int
+	smap   StringMap
+	regex  regex.RE
+	offset int
 }
 
 // next returns the next regular expression match or none if there are
 // no more matches.
-// XTODO: This is a stub. Always returns none until oniguruma is integrated.
 pub fn (mut self StringSearchIterator) next() ?StringMatch {
-	// XTODO: Implement using oniguruma regex library.
-	// When implemented, this should:
-	// 1. Search self.smap.str[self.offset..] using the compiled regex
-	// 2. On match, create a StringMatch with the match region
-	// 3. Advance self.offset by the end of the match
-	// 4. Return none on no more matches
-	return none
+	if self.offset >= self.smap.str.len {
+		return none
+	}
+
+	base := self.offset
+	start_idx, end_idx := self.regex.find_from(self.smap.str, base)
+	if start_idx < 0 || end_idx < start_idx {
+		self.offset = self.smap.str.len
+		return none
+	}
+
+	// Match offsets are byte offsets, just like Oniguruma's region offsets.
+	// Advance by the end of the match. Guard an empty match so iteration can
+	// never get stuck at the same byte.
+	self.offset = if end_idx > base { end_idx } else { base + 1 }
+	return StringMatch{
+		smap: self.smap
+		start_byte: start_idx
+		end_byte: end_idx
+	}
 }
 
 // StringMatch represents a single regular expression match.
@@ -60,25 +72,21 @@ pub fn (mut self StringSearchIterator) next() ?StringMatch {
 pub struct StringMatch {
 pub mut:
 	smap       StringMap
-	offset     int
 	start_byte int
-	end_byte   int
+	end_byte   int // exclusive
 }
 
-// deinit cleans up the match resources.
-// XTODO: When oniguruma is integrated, this should free the region.
+// V's regex matcher stores match offsets in the iterator and does not allocate
+// a per-match region, so there is no owned match resource to release.
 pub fn (mut self StringMatch) deinit() {
-	// XTODO: Free oniguruma region
+	_ = self
 }
 
 // selection returns the Selection containing the full match.
 // Maps byte offsets back to screen positions via the pin map.
 pub fn (self StringMatch) selection() Selection {
-	start_pt := self.smap.map_pin[self.offset + self.start_byte]
-	end_pt := self.smap.map_pin[self.offset + self.end_byte]
-	return Selection.init(
-		Pin{ x: u32(start_pt.x), y: u32(start_pt.y) },
-		Pin{ x: u32(end_pt.x), y: u32(end_pt.y) },
-		false,
-	)
+	assert self.start_byte >= 0
+	assert self.end_byte > self.start_byte
+	assert self.end_byte <= self.smap.map_pin.len
+	return Selection.init(self.smap.map_pin[self.start_byte], self.smap.map_pin[self.end_byte - 1], false)
 }

@@ -676,7 +676,6 @@ module terminal
 //
 // --- Original Ghostty Comments End: src/terminal/formatter.zig
 
-
 /*
   Source: formatter.zig — 5,939 lines
   Output: formatter.v — 1,149 lines + formatter_test.v — 1,117 lines = 2,266 V lines total
@@ -891,6 +890,7 @@ pub fn (self TerminalFormatter) format() string {
 					sb.write_string('\x1b]4;${i};rgb:${hex02(rgb.r)}/${hex02(rgb.g)}/${hex02(rgb.b)}\x1b\\')
 				}
 			}
+
 			// For HTML, we emit CSS to setup our palette variables.
 			.html {
 				sb.write_string('<style>:root{')
@@ -903,9 +903,20 @@ pub fn (self TerminalFormatter) format() string {
 	}
 
 	// Emit terminal modes that differ from defaults.
-	// XTODO: mode emission requires iterating over all mode fields and
-	// comparing to defaults, which needs the full modes system.
-	// if self.opts.emit == .vt && self.extra.modes { ... }
+	if self.opts.emit == .vt && self.extra.modes {
+		for entry in mode_entries {
+			if entry.disabled {
+				continue
+			}
+			current := self.terminal.modes.get(entry.mode)
+			if current == entry.default_val {
+				continue
+			}
+			prefix := if entry.ansi { '' } else { '?' }
+			suffix := if current { 'h' } else { 'l' }
+			sb.write_string('\x1b[${prefix}${entry.value}${suffix}')
+		}
+	}
 
 	// Format the active screen content
 	mut screen_fmt := ScreenFormatter.init(self.terminal.screens.active, self.opts)
@@ -1079,14 +1090,19 @@ pub fn (self ScreenFormatter) format() string {
 
 	// Emit extra screen state after content if we care.
 	match self.opts.emit {
-		.plain { return sb.str() }
+		.plain {
+			return sb.str()
+		}
 		.vt {
 			if !self.extra.is_set() {
 				return sb.str()
 			}
 		}
+
 		// HTML doesn't preserve any screen state
-		.html { return sb.str() }
+		.html {
+			return sb.str()
+		}
 	}
 
 	// Emit current SGR style state
@@ -1145,7 +1161,9 @@ pub fn (self ScreenFormatter) format() string {
 					.ascii { u8(`B`) }
 					.british { u8(`A`) }
 					.dec_special { u8(`0`) }
-					else { continue }
+					else {
+						continue
+					}
 				}
 				sb.write_u8(0x1b)
 				sb.write_u8(intermediate)
@@ -1159,8 +1177,9 @@ pub fn (self ScreenFormatter) format() string {
 				.g0 { '' } // unreachable
 				.g1 { '\x0e' } // SO - Shift Out
 				.g2 { '\x1bn' } // LS2
-				.g3 { '\x1bo' } // LS3
+				.g3 { '\x1bo' }
 			}
+			// LS3
 			sb.write_string(seq)
 		}
 
@@ -1170,8 +1189,9 @@ pub fn (self ScreenFormatter) format() string {
 				.g0 { '' } // unreachable
 				.g1 { '\x1b~' } // LS1R
 				.g2 { '' } // unreachable
-				.g3 { '\x1b|' } // LS3R
+				.g3 { '\x1b|' }
 			}
+			// LS3R
 			sb.write_string(seq)
 		}
 	}
@@ -1358,7 +1378,9 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 			if int(start_x) < cells.len {
 				match cells[int(start_x)].wide {
 					.spacer_tail { start_x - 1 }
-					.spacer_head { continue } // skip this whole row
+					.spacer_head {
+						continue
+					} // skip this whole row
 					else { start_x }
 				}
 			} else {
@@ -1425,7 +1447,9 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 			// Skip spacers
 			match cell.wide {
 				.narrow, .wide {}
-				.spacer_head, .spacer_tail { continue }
+				.spacer_head, .spacer_tail {
+					continue
+				}
 			}
 
 			// If we have a zero value, then we accumulate a counter.
@@ -1463,8 +1487,9 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 									sb.write_string(format_style_close(self.opts.emit))
 								}
 							}
-							.plain {} // unreachable
+							.plain {}
 						}
+						// unreachable
 					}
 
 					style = cell_style
@@ -1573,23 +1598,33 @@ fn (self PageFormatter) write_codepoint(mut sb strings.Builder, codepoint u32) {
 
 // Returns the style for the given cell.
 fn (self PageFormatter) cell_style(cell CellData) CellStyle {
-	if cell.content_tag == .codepoint {
-		if !cell_has_styling(cell) {
-			return CellStyle{}
+	return match cell.content_tag {
+		.codepoint, .codepoint_grapheme {
+			if cell_has_styling(cell) { cell.style } else { CellStyle{} }
 		}
-		// XTODO: look up style from a style table by style_id.
-		// For now, return a placeholder that at least preserves
-		// the style_id being non-default.
-		return lookup_style_by_id(self.pages, cell.style_id)
+		.bg_color_palette {
+			CellStyle{
+				bg_color: .palette
+				bg_palette: cell.color_palette
+			}
+		}
+		.bg_color_rgb {
+			CellStyle{
+				bg_color: .rgb
+				bg_r: cell.color_rgb_r
+				bg_g: cell.color_rgb_g
+				bg_b: cell.color_rgb_b
+			}
+		}
 	}
-	// bg_color_only: return style with just background color
-	return CellStyle{}
 }
 
 // Format a style open tag.
 fn (self PageFormatter) format_style_open(style CellStyle) string {
 	match self.opts.emit {
-		.plain { return '' } // unreachable
+		.plain {
+			return ''
+		} // unreachable
 		.vt {
 			return format_style_vt_with_palette(style, self.opts.palette)
 		}
@@ -1810,21 +1845,6 @@ fn cell_style_eql(a CellStyle, b CellStyle) bool {
 		&& a.fg_r == b.fg_r && a.fg_g == b.fg_g && a.fg_b == b.fg_b && a.bg_r == b.bg_r
 		&& a.bg_g == b.bg_g && a.bg_b == b.bg_b && a.fg_palette == b.fg_palette
 		&& a.bg_palette == b.bg_palette
-}
-
-// XTODO: lookup a CellStyle from a style table by style_id.
-// Ghostty uses a per-page style table with ref-counting. We don't have
-// that yet, so for now we return a default style for id 0, and a
-// placeholder for non-zero ids. This will need to be replaced when
-// the style system is implemented.
-fn lookup_style_by_id(pages &Pages, style_id u32) CellStyle {
-	if style_id == default_style_id {
-		return CellStyle{}
-	}
-	// XTODO: when we have a real style table, look up the style here.
-	// For now return a default non-empty style marker so at least we
-	// know there was a style.
-	return CellStyle{}
 }
 
 // Max u32 sentinel value.

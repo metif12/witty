@@ -35,7 +35,6 @@ struct ModeEntry {
 // It is not valuable to redocument them all here.
 //
 // The order matches the Zig source for easy cross-reference.
-// Modes not yet present in the Mode enum are commented out with XTODO.
 const mode_entries = [
 	// ANSI modes
 	ModeEntry{ mode: .disable_keyboard, value: 2, ansi: true, default_val: false },

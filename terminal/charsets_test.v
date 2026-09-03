@@ -124,18 +124,3 @@ fn test_charset_dec_special_identity_outside_range() {
 		assert tbl[i] == u16(i), 'DEC Special table mismatch at index ${i}'
 	}
 }
-
-// ============================================================
-// UTF-8 fallback test
-// ============================================================
-
-// Test that requesting a table for utf8 returns the ascii table
-// as a safe fallback (utf8 is not table-based).
-fn test_charset_utf8_fallback() {
-	tbl := charset_table(.utf8)
-	assert tbl.len == 256
-	// Should be identity (ascii fallback)
-	for i in 0 .. 256 {
-		assert tbl[i] == u16(i)
-	}
-}

@@ -32,14 +32,9 @@ pub fn charset_table(set Charset) []u16 {
 		.dec_special { charset_dec_special[..] }
 		// ascii is a direct identity mapping but we support a table
 		.ascii { charset_ascii[..] }
-		// utf8 is not a table; callers should check for utf8 and not use tables.
-		// For safety, return the ascii table.
-		.utf8 { charset_ascii[..] }
-		// Other charsets not yet implemented - return ascii as fallback.
-		// XTODO: implement lookup tables for dutch, finnish, french,
-		// french_canadian, german, italian, norwegian, portuguese,
-		// spanish, swedish, swiss charsets.
-		else { charset_ascii[..] }
+		// UTF-8 is not table based. Reaching this branch is a caller bug,
+		// matching Ghostty's unreachable branch.
+		.utf8 { panic('UTF-8 does not have a charset lookup table') }
 	}
 }
 

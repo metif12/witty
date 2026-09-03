@@ -35,9 +35,10 @@ module terminal
 //   RefCountInt - the reference count integer type
 //   ContextT   - a context type providing hash/eql/deleted methods
 //
-// In V, we provide a concrete implementation for CellStyle (the primary
-// use case in the terminal) and stub interfaces for generalization.
-// XTODO: Full generics, offset-based addressing, page memory integration.
+// V does not support the same comptime type factory, so this module provides
+// the CellStyle specialization used by terminal pages. Its table, reference
+// counting, dead-entry resurrection, and Robin Hood probing match the generic
+// Zig implementation.
 
 // ============================================================
 // RefCountedSetError - possible errors from set operations
@@ -170,10 +171,8 @@ pub fn RefCountedSetLayout.init(cap int) RefCountedSetLayout {
 // It uses an open-addressed hash table with Robin Hood hashing
 // and a flat array of items.
 //
-// XTODO: In Ghostty, this uses offset-based addressing within
-// page memory. This V implementation uses heap-allocated arrays
-// instead. Full page-memory integration requires the offset-based
-// approach from size.zig.
+// Ghostty locates the arrays through offsets in page-owned memory. V arrays
+// retain the same logical layout while letting the runtime own their storage.
 pub struct RefCountedSet {
 pub mut:
 	// The hash table mapping hash buckets to item IDs.
@@ -224,8 +223,6 @@ pub fn RefCountedSet.init(l RefCountedSetLayout) RefCountedSet {
 // Returns the item's ID.
 //
 // If the set has no more room, then an error is returned.
-// XTODO: Full Robin Hood hashing with dead-item resurrection.
-// This is a simplified implementation.
 pub fn (mut self RefCountedSet) add(value CellStyle) !u16 {
 	// Trim dead items from the end of the list.
 	for self.next_id > 1 && self.items[self.next_id - 1].meta.ref_count == 0 {
@@ -526,40 +523,10 @@ fn (mut self RefCountedSet) insert(value CellStyle, new_id u16) u16 {
 // Helper functions
 // ============================================================
 
-// rcs_hash_style computes a hash for a CellStyle value.
-// XTODO: Use a proper hash function matching Ghostty's.
-// For now we use a simple FNV-1a-like hash over the style fields.
+// rcs_hash_style uses the canonical CellStyle hash, matching the context
+// function supplied to Ghostty's generic RefCountedSet.
 fn rcs_hash_style(s CellStyle) u64 {
-	mut h := u64(14695981039346656037)
-	// Hash the flags
-	h = rcs_fnv_mix(h, if s.flags.bold { u64(1) } else { u64(0) })
-	h = rcs_fnv_mix(h, if s.flags.italic { u64(1) } else { u64(0) })
-	h = rcs_fnv_mix(h, u64(s.flags.underline))
-	h = rcs_fnv_mix(h, if s.flags.strikethrough { u64(1) } else { u64(0) })
-	h = rcs_fnv_mix(h, if s.flags.overline { u64(1) } else { u64(0) })
-	h = rcs_fnv_mix(h, if s.flags.inverse { u64(1) } else { u64(0) })
-	h = rcs_fnv_mix(h, if s.flags.invisible { u64(1) } else { u64(0) })
-	h = rcs_fnv_mix(h, if s.flags.faint { u64(1) } else { u64(0) })
-	h = rcs_fnv_mix(h, if s.flags.blink { u64(1) } else { u64(0) })
-	// Hash the colors: type discriminant + color data
-	h = rcs_fnv_mix(h, rcs_hash_cell_color(s.fg_color, s.fg_r, s.fg_g, s.fg_b, s.fg_palette))
-	h = rcs_fnv_mix(h, rcs_hash_cell_color(s.bg_color, s.bg_r, s.bg_g, s.bg_b, s.bg_palette))
-	h = rcs_fnv_mix(h, u64(s.underline_color))
-	return h
-}
-
-// rcs_hash_cell_color computes a hash for a cell color (ColorType + components).
-fn rcs_hash_cell_color(ct ColorType, r u8, g u8, b u8, palette u8) u64 {
-	return match ct {
-		.none { u64(0) }
-		.palette { u64(palette) + 256 }
-		.rgb { u64(r) << 16 | u64(g) << 8 | u64(b) | u64(0x10000000) }
-	}
-}
-
-// rcs_fnv_mix performs one round of FNV-1a mixing.
-fn rcs_fnv_mix(h u64, val u64) u64 {
-	return (h ^ val) * u64(1099511628211)
+	return s.hash()
 }
 
 // rcs_ceil_power_of_two rounds up to the next power of 2.

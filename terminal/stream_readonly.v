@@ -402,10 +402,8 @@ pub fn (mut self ReadonlyHandler) vt(event StreamEvent) ! {
 			self.terminal.screens.active.end_hyperlink()
 		}
 		.semantic_prompt {
-			// OSC 133 semantic prompt. The stream has already parsed the
-			// action letter into a SemanticPromptAction; apply it to the
-			// terminal so cursor semantic content / prompt rows update.
-			self.terminal.semantic_prompt(event.payload.semantic_prompt_action, none)
+			self.terminal.semantic_prompt_options(event.payload.semantic_prompt_action,
+				event.payload.semantic_prompt_opts)
 		}
 		.mouse_shape_action {
 			self.terminal.mouse_shape = event.payload.mouse_shape_val

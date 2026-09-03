@@ -132,8 +132,7 @@ pub fn OffsetBuf.init_offset(base &u8, offset int) OffsetBuf {
 // The base address for the start of the data for the user
 // of this OffsetBuf. This is where your data structure should
 // begin; anything before this is NOT your memory.
-// XTODO: Returns a raw pointer. In V, pointer arithmetic is unsafe
-// and not idiomatic. This is a low-level memory layout helper.
+// Pointer arithmetic is intentionally confined to this low-level helper.
 pub fn (self OffsetBuf) start() &u8 {
 	return unsafe { self.base + self.offset }
 }
@@ -170,8 +169,7 @@ pub fn (self OffsetBuf) rebase(extra int) OffsetBuf {
 
 // Get the offset for a given type from some base pointer to the
 // actual pointer to the type.
-// XTODO: This requires pointer arithmetic which is unsafe in V.
-// In practice, this is used internally by page-level memory management.
+// Pointer arithmetic is intentionally confined to this low-level helper.
 pub fn get_offset(base &u8, ptr &u8) Offset {
 	base_int := u64(base)
 	ptr_int := u64(ptr)

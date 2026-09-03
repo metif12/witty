@@ -1,5 +1,7 @@
 module terminal
 
+import osc
+
 // --- Original Ghostty Comments Start: src/terminal/Parser.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/terminal/Parser.zig
@@ -566,138 +568,95 @@ fn (mut self VTParser) build_dcs_hook_action(final_byte u8) ParserAction {
 // The format is: <number>[;<data>]. Some OSCs (e.g. 104, 110-119, 133)
 // may legitimately arrive without a trailing semicolon.
 fn parse_osc_command(data string) OscCommand {
-	// Find the first semicolon.
-	mut sep_idx := -1
-	for i, b in data {
-		if b == u8(`;`) {
-			sep_idx = i
-			break
-		}
+	mut parser := osc.Parser.init(unsafe { nil })
+	for byte_val in data.bytes() {
+		parser.next(byte_val)
 	}
+	cmd := parser.end(0x1b) or { return OscCommand{ cmd_type: .invalid } }
 
-	// The numeric prefix is everything before the first semicolon (or the
-	// whole string if there is no semicolon).
-	num_str := if sep_idx < 0 { data } else { data[..sep_idx] }
-	payload := if sep_idx < 0 { '' } else { data[sep_idx + 1..] }
-
-	if num_str.len == 0 {
-		return OscCommand{ cmd_type: .invalid }
-	}
-
-	// Parse the command number.
-	mut num := 0
-	for b in num_str {
-		if b < u8(`0`) || b > u8(`9`) {
-			return OscCommand{ cmd_type: .invalid }
+	return match cmd.cmd_type {
+		.invalid { OscCommand{ cmd_type: .invalid } }
+		.change_window_title {
+			OscCommand{ cmd_type: .change_window_title, data: cmd.str_value }
 		}
-		num = num * 10 + int(b - u8(`0`))
-	}
-
-	// OSC color operations (4, 5, 10-19, 104, 105, 110-119). These are
-	// handled by the color operation parser which needs the operation
-	// number, so we pass the full OSC string (including the number) as the
-	// command data.
-	if is_color_operation_osc(num) {
-		return OscCommand{
-			cmd_type: .color_operation
-			data: data
+		.change_window_icon {
+			OscCommand{ cmd_type: .change_window_icon, data: cmd.str_value }
 		}
-	}
-
-	// Map number to command type.
-	return match num {
-		0, 2 {
-			OscCommand{
-				cmd_type: .change_window_title
-				data: payload
-			}
-		}
-		1 {
-			OscCommand{
-				cmd_type: .change_window_icon
-				data: payload
-			}
-		}
-		7 {
-			OscCommand{
-				cmd_type: .report_pwd
-				data: payload
-			}
-		}
-		8 {
-			// Hyperlinks: 8;params;uri
-			parse_osc_8_hyperlink(payload)
-		}
-		21 {
-			// Kitty color protocol (OSC 21). The body is passed through to
-			// the kitty color parser.
-			OscCommand{
-				cmd_type: .kitty_color_protocol
-				data: payload
-			}
-		}
-		52 {
+		.clipboard_contents {
 			OscCommand{
 				cmd_type: .clipboard_contents
-				data: payload
+				data: cmd.str_value
+				data2: cmd.str_value2
 			}
 		}
-		133 {
-			// Semantic prompt (OSC 133). The body (e.g. "A", "B;redraw=1")
-			// is parsed by the stream dispatcher.
+		.report_pwd { OscCommand{ cmd_type: .report_pwd, data: cmd.str_value } }
+		.mouse_shape { OscCommand{ cmd_type: .mouse_shape, data: cmd.str_value } }
+		.color_operation { OscCommand{ cmd_type: .color_operation, data: data } }
+		.kitty_color_protocol {
+			OscCommand{ cmd_type: .kitty_color_protocol, data: cmd.str_value }
+		}
+		.show_desktop_notification {
+			// OSC 9 carries only a body; OSC 777 carries title and body.
+			if data.starts_with('777;') {
+				OscCommand{
+					cmd_type: .show_desktop_notification
+					data: cmd.str_value
+					data2: cmd.str_value2
+				}
+			} else {
+				OscCommand{
+					cmd_type: .show_desktop_notification
+					data2: cmd.str_value
+				}
+			}
+		}
+		.hyperlink_start {
+			OscCommand{
+				cmd_type: .hyperlink_start
+				data: cmd.str_value
+				data2: cmd.str_value2
+			}
+		}
+		.hyperlink_end { OscCommand{ cmd_type: .hyperlink_end } }
+		.semantic_prompt {
+			action := match cmd.semantic_prompt_action {
+				.fresh_line { 'L' }
+				.fresh_line_new_prompt { 'A' }
+				.new_command { 'N' }
+				.prompt_start { 'P' }
+				.end_prompt_start_input { 'B' }
+				.end_prompt_start_input_terminate_eol { 'I' }
+				.end_input_start_output { 'C' }
+				.end_command { 'D' }
+			}
 			OscCommand{
 				cmd_type: .semantic_prompt
-				data: payload
+				data: if cmd.semantic_prompt_options.len > 0 {
+					'${action};${cmd.semantic_prompt_options}'
+				} else {
+					action
+				}
 			}
 		}
-		// XTODO: remaining OSC numbers (9, 22, 777, 1337, etc.)
-		else {
-			OscCommand{ cmd_type: .invalid }
+		.conemu_progress_report {
+			state := match cmd.progress_state {
+				.remove { '0' }
+				.set { '1' }
+				.err_state { '2' }
+				.indeterminate { '3' }
+				.pause { '4' }
+			}
+			OscCommand{
+				cmd_type: .conemu_progress_report
+				data: if progress := cmd.progress { '${state};${progress}' } else { state }
+			}
 		}
-	}
-}
-
-// is_color_operation_osc reports whether the given OSC number is a color
-// operation (OSC 4, 5, 10-19, 104, 105, 110-119).
-fn is_color_operation_osc(num int) bool {
-	return num == 4 || num == 5 || (num >= 10 && num <= 19) || num == 104 || num == 105
-		|| (num >= 110 && num <= 119)
-}
-
-// parse_osc_8_hyperlink parses an OSC 8 hyperlink command.
-// Format: params;uri (where params can contain id=...)
-fn parse_osc_8_hyperlink(data string) OscCommand {
-	mut sep_idx := -1
-	for i, b in data {
-		if b == u8(`;`) {
-			sep_idx = i
-			break
+		.kitty_text_sizing { OscCommand{ cmd_type: .kitty_text_sizing } }
+		.conemu_sleep, .conemu_show_message_box, .conemu_change_tab_title,
+		.conemu_wait_input, .conemu_guimacro, .conemu_run_process,
+		.conemu_output_environment_variable, .conemu_xterm_emulation,
+		.conemu_comment {
+			OscCommand{ cmd_type: .conemu_ignored }
 		}
-	}
-
-	if sep_idx < 0 {
-		return OscCommand{ cmd_type: .invalid }
-	}
-
-	params_str := data[..sep_idx]
-	uri := data[sep_idx + 1..]
-
-	if uri.len == 0 {
-		// Empty URI means end hyperlink
-		return OscCommand{ cmd_type: .hyperlink_end }
-	}
-
-	// Extract id from params if present
-	mut id_val := ''
-	for part in params_str.split(':') {
-		if part.starts_with('id=') {
-			id_val = part[3..]
-		}
-	}
-
-	return OscCommand{
-		cmd_type: .hyperlink_start
-		data: uri
-		data2: id_val
 	}
 }

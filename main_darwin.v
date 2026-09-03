@@ -9,27 +9,44 @@ import time
 
 // C interop declarations needed in this module.
 #include <unistd.h>
+
 #include <signal.h>
+
 #include <sys/wait.h>
 
 fn C.fork() int
+
 fn C.execvp(file &char, argv &&char) int
+
 fn C.dup2(oldfd int, newfd int) int
+
 fn C.close(fd int) int
+
 fn C.read(fd int, buf voidptr, count usize) int
+
 fn C.write(fd int, buf voidptr, count usize) int
-fn C.gethostname(name &u8, len usize) int
+
+fn C.gethostname(name &char, len usize) int
+
 fn C.kill(pid int, sig int) int
+
 fn C.waitpid(pid int, status &int, options int) int
+
 fn C._exit(status int)
+
 fn C.setenv(name &char, value &char, overwrite int) int
 
 // CoreGraphics C functions for drawing.
 fn C.CGContextSetRGBFillColor(ctx voidptr, r f64, g f64, b f64, a f64)
+
 fn C.CGContextFillRect(ctx voidptr, rect C.CGRect)
+
 fn C.CGContextSetTextMatrix(ctx voidptr, t C.CGAffineTransform)
+
 fn C.CGContextSetRGBStrokeColor(ctx voidptr, r f64, g f64, b f64, a f64)
+
 fn C.CGContextSetLineWidth(ctx voidptr, width f64)
+
 fn C.CGContextStrokeRect(ctx voidptr, rect C.CGRect)
 
 // CGRect and CGAffineTransform for CoreGraphics calls.
@@ -158,7 +175,7 @@ fn get_app_config() AppConfig {
 	ct_font := macos.create_font('Menlo', 13.0)
 	return AppConfig{
 		shell: shell
-		font:  ct_font
+		font: ct_font
 	}
 }
 
@@ -172,7 +189,7 @@ fn default_tab_title() string {
 
 fn local_hostname_lower() string {
 	mut buf := [256]u8{}
-	if C.gethostname(&buf[0], usize(buf.len - 1)) != 0 {
+	if C.gethostname(&char(&buf[0]), usize(buf.len - 1)) != 0 {
 		return ''
 	}
 	mut n := 0
@@ -369,8 +386,8 @@ fn spawn_terminal(cfg AppConfig) !&TermState {
 	term.screens.active = &term.screens.primary
 
 	mut p := pty.Pty.open(pty.Winsize{
-		ws_row:    cfg.rows
-		ws_col:    cfg.cols
+		ws_row: cfg.rows
+		ws_col: cfg.cols
 		ws_xpixel: u16(cfg.pixel_w)
 		ws_ypixel: u16(cfg.pixel_h)
 	})!
@@ -395,12 +412,12 @@ fn spawn_terminal(cfg AppConfig) !&TermState {
 	p.close_slave()
 
 	mut state := &TermState{
-		term:      term
-		pty_fd:    p.master
+		term: term
+		pty_fd: p.master
 		child_pid: pid
-		font:      cfg.font
-		cols:      int(cfg.cols)
-		rows:      int(cfg.rows)
+		font: cfg.font
+		cols: int(cfg.cols)
+		rows: int(cfg.rows)
 	}
 	// Construct ReadonlyStream manually. We cannot use ReadonlyStream.init()
 	// because it takes Terminal by value, copies it, then stores &copy —
@@ -410,7 +427,7 @@ fn spawn_terminal(cfg AppConfig) !&TermState {
 		handler: terminal.ReadonlyHandler{
 			terminal: state.term
 		}
-		stream:  terminal.Stream.init()
+		stream: terminal.Stream.init()
 	}
 	return state
 }
@@ -448,9 +465,9 @@ fn main() {
 	retain_tab_state(state)
 
 	// 5. Spawn read thread for this tab
-	spawn read_pty_thread(state.pty_fd, state.view)
 
 	// 6. Run the app
+	spawn read_pty_thread(state.pty_fd, state.view)
 	macos.app_run()
 }
 
@@ -541,25 +558,24 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 	}
 
 	// Fill background using terminal default background color.
-	C.CGContextSetRGBFillColor(ctx, f64(default_bg.r) / 255.0, f64(default_bg.g) / 255.0,
-		f64(default_bg.b) / 255.0, 1.0)
+	C.CGContextSetRGBFillColor(ctx, f64(default_bg.r) / 255.0, f64(default_bg.g) / 255.0, f64(default_bg.b) / 255.0, 1.0)
 	C.CGContextFillRect(ctx, C.CGRect{
 		origin: C.CGPoint{
 			x: 0
 			y: 0
 		}
-		size:   C.CGSize{
-			width:  width
+		size: C.CGSize{
+			width: width
 			height: height
 		}
 	})
 
 	// Set text matrix for flipped view (CoreText draws upward by default).
 	C.CGContextSetTextMatrix(ctx, C.CGAffineTransform{
-		a:  1
-		b:  0
-		c:  0
-		d:  -1
+		a: 1
+		b: 0
+		c: 0
+		d: -1
 		tx: 0
 		ty: 0
 	})
@@ -580,15 +596,14 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 			}
 			cell := row.cells[col_idx]
 			bg := cell.style.bg_rgb(&cell, palette) or { continue }
-			C.CGContextSetRGBFillColor(ctx, f64(bg.r) / 255.0, f64(bg.g) / 255.0, f64(bg.b) / 255.0,
-				1.0)
+			C.CGContextSetRGBFillColor(ctx, f64(bg.r) / 255.0, f64(bg.g) / 255.0, f64(bg.b) / 255.0, 1.0)
 			C.CGContextFillRect(ctx, C.CGRect{
 				origin: C.CGPoint{
 					x: f64(col_idx) * cell_w
 					y: f64(row_idx) * cell_h
 				}
-				size:   C.CGSize{
-					width:  cell_w
+				size: C.CGSize{
+					width: cell_w
 					height: cell_h
 				}
 			})
@@ -656,8 +671,7 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 			if run_buf.len > 0 {
 				y_pos := f64(row_idx) * cell_h + cell_h * 0.8
 				x_pos := f64(run_start) * cell_w
-				macos.draw_text(ctx, run_buf.data, run_buf.len, state.font, x_pos, y_pos,
-					fg_r, fg_g, fg_b)
+				macos.draw_text(ctx, run_buf.data, run_buf.len, state.font, x_pos, y_pos, fg_r, fg_g, fg_b)
 			}
 
 			run_start = run_end
@@ -679,15 +693,14 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 			base_r := f64(default_bg.r) / 255.0
 			base_g := f64(default_bg.g) / 255.0
 			base_b := f64(default_bg.b) / 255.0
-			C.CGContextSetRGBFillColor(ctx, clamp01(base_r + 0.20), clamp01(base_g + 0.20),
-				clamp01(base_b + 0.30), 0.55)
+			C.CGContextSetRGBFillColor(ctx, clamp01(base_r + 0.20), clamp01(base_g + 0.20), clamp01(base_b + 0.30), 0.55)
 			C.CGContextFillRect(ctx, C.CGRect{
 				origin: C.CGPoint{
 					x: f64(sx_start) * cell_w
 					y: f64(sy) * cell_h
 				}
-				size:   C.CGSize{
-					width:  f64(sx_end - sx_start) * cell_w
+				size: C.CGSize{
+					width: f64(sx_end - sx_start) * cell_w
 					height: cell_h
 				}
 			})
@@ -713,8 +726,8 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 						x: x
 						y: y
 					}
-					size:   C.CGSize{
-						width:  cell_w
+					size: C.CGSize{
+						width: cell_w
 						height: cell_h
 					}
 				})
@@ -727,8 +740,8 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 						x: x + 0.5
 						y: y + 0.5
 					}
-					size:   C.CGSize{
-						width:  cell_w - 1.0
+					size: C.CGSize{
+						width: cell_w - 1.0
 						height: cell_h - 1.0
 					}
 				})
@@ -741,8 +754,8 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 						x: x
 						y: y
 					}
-					size:   C.CGSize{
-						width:  bar_w
+					size: C.CGSize{
+						width: bar_w
 						height: cell_h
 					}
 				})
@@ -755,8 +768,8 @@ fn on_draw(userdata voidptr, ctx voidptr, width f64, height f64) {
 						x: x
 						y: y + cell_h - line_h
 					}
-					size:   C.CGSize{
-						width:  cell_w
+					size: C.CGSize{
+						width: cell_w
 						height: line_h
 					}
 				})
@@ -789,9 +802,9 @@ fn on_key(userdata voidptr, keycode u16, modflags u64, chars &u8, len int, uchar
 
 	// Build modifier state from NSEvent modifier flags
 	mods := input.Mods{
-		shift:  (modflags & ns_shift_mask) != 0
-		ctrl:   (modflags & ns_ctrl_mask) != 0
-		alt:    (modflags & ns_alt_mask) != 0
+		shift: (modflags & ns_shift_mask) != 0
+		ctrl: (modflags & ns_ctrl_mask) != 0
+		alt: (modflags & ns_alt_mask) != 0
 		super_: (modflags & ns_cmd_mask) != 0
 	}
 
@@ -827,11 +840,11 @@ fn on_key(userdata voidptr, keycode u16, modflags u64, chars &u8, len int, uchar
 	action := if is_repeat { input.KeyAction.repeat } else { input.KeyAction.press }
 
 	event := input.KeyEvent{
-		action:              action
-		key:                 key
-		mods:                mods
-		consumed_mods:       consumed
-		utf8:                utf8_text
+		action: action
+		key: key
+		mods: mods
+		consumed_mods: consumed
+		utf8: utf8_text
 		unshifted_codepoint: unshifted_cp
 	}
 
@@ -839,7 +852,7 @@ fn on_key(userdata voidptr, keycode u16, modflags u64, chars &u8, len int, uchar
 	opts := input.Options{
 		cursor_key_application: state.term.modes.get(.cursor_keys)
 		keypad_key_application: state.term.modes.get(.keypad_keys)
-		alt_esc_prefix:         state.term.modes.get(.alt_esc_prefix)
+		alt_esc_prefix: state.term.modes.get(.alt_esc_prefix)
 	}
 
 	encoded := input.encode(event, opts)
@@ -887,7 +900,7 @@ fn on_action(userdata voidptr, action_id int) {
 		vt_action_copy {
 			if sel := screen.selection {
 				text := screen.selection_string(terminal.SelectionString{
-					sel:  sel
+					sel: sel
 					trim: true
 				}) or { return }
 				if text.len > 0 {
@@ -936,8 +949,8 @@ fn on_resize(userdata voidptr, width f64, height f64) {
 			master: state.pty_fd
 		}
 		p.set_size(pty.Winsize{
-			ws_row:    u16(new_rows)
-			ws_col:    u16(new_cols)
+			ws_row: u16(new_rows)
+			ws_col: u16(new_cols)
 			ws_xpixel: u16(width)
 			ws_ypixel: u16(height)
 		}) or {}
@@ -1065,7 +1078,7 @@ fn on_mouse(userdata voidptr, event_type int, x f64, y f64, modflags u64) {
 			mut screen := unsafe { state.term.screens.active }
 			if sel := screen.selection {
 				text := screen.selection_string(terminal.SelectionString{
-					sel:  sel
+					sel: sel
 					trim: true
 				}) or { return }
 				if text.len > 0 {

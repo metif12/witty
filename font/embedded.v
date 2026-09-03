@@ -7,63 +7,57 @@ module font
 // Be careful to ensure that any fonts you embed are licensed for
 // redistribution and include their license as necessary.
 //
-// Translated from ghostty/src/font/embedded.zig
-//
-// XTODO: V cannot @embedFile like Zig. These are empty byte array stubs
-// that need to be replaced with real embedded font data. Options include:
-//   1. Read font files at runtime from a known path
-//   2. Use V's $embed_file() compile-time embedding
-//   3. Use a build step to generate V source with byte literals
-// For now, all constants are empty []u8 placeholders.
+// Translated from ghostty/src/font/embedded.zig. V's `$embed_file` provides
+// the same compile-time resource embedding used by Zig's `@embedFile`.
 
 // Default fonts that we prefer for Ghostty.
-pub const embedded_variable = []u8{}
-pub const embedded_variable_italic = []u8{}
+pub const embedded_variable = $embed_file('res/JetBrainsMono-Variable.ttf').to_bytes()
+pub const embedded_variable_italic = $embed_file('res/JetBrainsMono-VariableItalic.ttf').to_bytes()
 
 // Symbols-only nerd font.
-pub const embedded_symbols_nerd_font = []u8{}
+pub const embedded_symbols_nerd_font = $embed_file('res/SymbolsNerdFont-Regular.ttf').to_bytes()
 
 // Static jetbrains mono faces, currently unused.
-pub const embedded_regular = []u8{}
-pub const embedded_bold = []u8{}
-pub const embedded_italic = []u8{}
-pub const embedded_bold_italic = []u8{}
+pub const embedded_regular = $embed_file('res/JetBrainsMono-Regular.ttf').to_bytes()
+pub const embedded_bold = $embed_file('res/JetBrainsMono-Bold.ttf').to_bytes()
+pub const embedded_italic = $embed_file('res/JetBrainsMono-Italic.ttf').to_bytes()
+pub const embedded_bold_italic = $embed_file('res/JetBrainsMono-BoldItalic.ttf').to_bytes()
 
 // Emoji fonts
-pub const embedded_emoji = []u8{}
-pub const embedded_emoji_text = []u8{}
+pub const embedded_emoji = $embed_file('res/NotoColorEmoji.ttf').to_bytes()
+pub const embedded_emoji_text = $embed_file('res/NotoEmoji-Regular.ttf').to_bytes()
 
 // Fonts below are ONLY used for testing.
 
 // Fonts with general properties
-pub const embedded_arabic = []u8{}
+pub const embedded_arabic = $embed_file('res/KawkabMono-Regular.ttf').to_bytes()
 
 // A font for testing which is patched with nerd font symbols.
-pub const embedded_test_nerd_font = []u8{}
+pub const embedded_test_nerd_font = $embed_file('res/JetBrainsMonoNerdFont-Regular.ttf').to_bytes()
 
 // Specific font families below:
-pub const embedded_code_new_roman = []u8{}
-pub const embedded_inconsolata = []u8{}
-pub const embedded_geist_mono = []u8{}
-pub const embedded_jetbrains_mono = []u8{}
-pub const embedded_julia_mono = []u8{}
+pub const embedded_code_new_roman = $embed_file('res/CodeNewRoman-Regular.otf').to_bytes()
+pub const embedded_inconsolata = $embed_file('res/Inconsolata-Regular.ttf').to_bytes()
+pub const embedded_geist_mono = $embed_file('res/GeistMono-Regular.ttf').to_bytes()
+pub const embedded_jetbrains_mono = $embed_file('res/JetBrainsMonoNoNF-Regular.ttf').to_bytes()
+pub const embedded_julia_mono = $embed_file('res/JuliaMono-Regular.ttf').to_bytes()
 
 // Cozette is a unique font because it embeds some emoji characters
 // but has a text presentation.
-pub const embedded_cozette = []u8{}
+pub const embedded_cozette = $embed_file('res/CozetteVector.ttf').to_bytes()
 
 // Monaspace has weird ligature behaviors we want to test in our shapers
 // so we embed it here.
-pub const embedded_monaspace_neon = []u8{}
+pub const embedded_monaspace_neon = $embed_file('res/MonaspaceNeon-Regular.otf').to_bytes()
 
 // Terminus TTF is a scalable font with bitmap glyphs at various sizes.
-pub const embedded_terminus_ttf = []u8{}
+pub const embedded_terminus_ttf = $embed_file('res/TerminusTTF-Regular.ttf').to_bytes()
 
 // Spleen is a monospaced bitmap font available in multiple formats.
 // Used for testing bitmap font support across different file formats.
-pub const embedded_spleen_bdf = []u8{}
-pub const embedded_spleen_pcf = []u8{}
-pub const embedded_spleen_otb = []u8{}
+pub const embedded_spleen_bdf = $embed_file('res/spleen-8x16.bdf').to_bytes()
+pub const embedded_spleen_pcf = $embed_file('res/spleen-8x16.pcf').to_bytes()
+pub const embedded_spleen_otb = $embed_file('res/spleen-8x16.otb').to_bytes()
 
 // ============================================================
 // Built-in sprite rendering
@@ -101,11 +95,11 @@ mut:
 fn sprite_canvas_init(w u32, h u32, pad_x u32, pad_y u32) SpriteCanvas {
 	total := (w + 2 * pad_x) * (h + 2 * pad_y)
 	return SpriteCanvas{
-		width:     w
-		height:    h
+		width: w
+		height: h
 		padding_x: pad_x
 		padding_y: pad_y
-		data:      []u8{len: int(total)}
+		data: []u8{len: int(total)}
 	}
 }
 
@@ -299,12 +293,12 @@ pub fn render_sprite_glyph(mut atlas Atlas, sprite Sprite, metrics Metrics, cell
 	region := canvas.write_atlas(mut atlas)!
 
 	return GlyphInfo{
-		width:    region.width
-		height:   region.height
+		width: region.width
+		height: region.height
 		offset_x: i32(canvas.clip_left) - i32(padding_x)
 		offset_y: i32(region.height + canvas.clip_bottom) - i32(padding_y)
-		atlas_x:  region.x
-		atlas_y:  region.y
+		atlas_x: region.x
+		atlas_y: region.y
 	}
 }
 
@@ -313,14 +307,11 @@ pub fn render_sprite_glyph(mut atlas Atlas, sprite Sprite, metrics Metrics, cell
 fn draw_special_sprite(mut canvas SpriteCanvas, sprite Sprite, width u32, height u32, metrics Metrics) {
 	match sprite {
 		.underline {
-			canvas.rect(0, i32(metrics.underline_position), i32(width), i32(metrics.underline_thickness),
-				255)
+			canvas.rect(0, i32(metrics.underline_position), i32(width), i32(metrics.underline_thickness), 255)
 		}
 		.underline_double {
-			canvas.rect(0, i32(metrics.underline_position), i32(width), i32(metrics.underline_thickness),
-				255)
-			canvas.rect(0, i32(metrics.underline_position) + 2 * i32(metrics.underline_thickness),
-				i32(width), i32(metrics.underline_thickness), 255)
+			canvas.rect(0, i32(metrics.underline_position), i32(width), i32(metrics.underline_thickness), 255)
+			canvas.rect(0, i32(metrics.underline_position) + 2 * i32(metrics.underline_thickness), i32(width), i32(metrics.underline_thickness), 255)
 		}
 		.underline_dotted {
 			// Dotted underline: dots one thickness wide with gaps.
@@ -334,24 +325,19 @@ fn draw_special_sprite(mut canvas SpriteCanvas, sprite Sprite, width u32, height
 		.underline_dashed {
 			// Dashed underline: dashes a quarter cell wide with gaps.
 			dash := i32(width) / 4
-			canvas.rect(0, i32(metrics.underline_position), dash, i32(metrics.underline_thickness),
-				255)
-			canvas.rect(dash * 2, i32(metrics.underline_position), dash, i32(metrics.underline_thickness),
-				255)
+			canvas.rect(0, i32(metrics.underline_position), dash, i32(metrics.underline_thickness), 255)
+			canvas.rect(dash * 2, i32(metrics.underline_position), dash, i32(metrics.underline_thickness), 255)
 		}
 		.underline_curly {
 			// Approximate a curly underline with a straight stroke; the
 			// full vector rendering lives in the sprite module.
-			canvas.rect(0, i32(metrics.underline_position), i32(width), i32(metrics.underline_thickness),
-				255)
+			canvas.rect(0, i32(metrics.underline_position), i32(width), i32(metrics.underline_thickness), 255)
 		}
 		.overline {
-			canvas.rect(0, i32(metrics.overline_position), i32(width), i32(metrics.overline_thickness),
-				255)
+			canvas.rect(0, i32(metrics.overline_position), i32(width), i32(metrics.overline_thickness), 255)
 		}
 		.strikethrough {
-			canvas.rect(0, i32(metrics.strikethrough_position), i32(width), i32(metrics.strikethrough_thickness),
-				255)
+			canvas.rect(0, i32(metrics.strikethrough_position), i32(width), i32(metrics.strikethrough_thickness), 255)
 		}
 		.cursor_rect {
 			canvas.rect(0, 0, i32(width), i32(height), 255)
@@ -360,15 +346,13 @@ fn draw_special_sprite(mut canvas SpriteCanvas, sprite Sprite, width u32, height
 			// Fill the entire rect then hollow out the inside.
 			canvas.rect(0, 0, i32(width), i32(height), 255)
 			t := metrics.cursor_thickness
-			canvas.rect(i32(t), i32(t), i32(sprite_sat_sub(width, t * 2)), i32(sprite_sat_sub(height,
-				t * 2)), 0)
+			canvas.rect(i32(t), i32(t), i32(sprite_sat_sub(width, t * 2)), i32(sprite_sat_sub(height, t * 2)), 0)
 		}
 		.cursor_bar {
 			canvas.rect(0, 0, i32(metrics.cursor_thickness), i32(height), 255)
 		}
 		.cursor_underline {
-			canvas.rect(0, i32(sprite_sat_sub(height, metrics.cursor_thickness)), i32(width),
-				i32(metrics.cursor_thickness), 255)
+			canvas.rect(0, i32(sprite_sat_sub(height, metrics.cursor_thickness)), i32(width), i32(metrics.cursor_thickness), 255)
 		}
 	}
 }
@@ -403,12 +387,12 @@ pub fn render_builtin_cell_glyph(mut atlas Atlas, cp u32, metrics Metrics) !Glyp
 	}
 
 	return GlyphInfo{
-		width:    region.width
-		height:   region.height
+		width: region.width
+		height: region.height
 		offset_x: 0
 		offset_y: 0
-		atlas_x:  region.x
-		atlas_y:  region.y
+		atlas_x: region.x
+		atlas_y: region.y
 	}
 }
 
@@ -447,12 +431,12 @@ pub fn sprite_face_render_glyph(mut atlas Atlas, cp u32, metrics Metrics, opts R
 	region := canvas.write_atlas(mut atlas)!
 
 	return GlyphInfo{
-		width:    region.width
-		height:   region.height
+		width: region.width
+		height: region.height
 		offset_x: i32(canvas.clip_left) - i32(padding_x)
 		offset_y: i32(region.height + canvas.clip_bottom) - i32(padding_y)
-		atlas_x:  region.x
-		atlas_y:  region.y
+		atlas_x: region.x
+		atlas_y: region.y
 	}
 }
 

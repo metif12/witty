@@ -1,6 +1,7 @@
 module termio
 
 import apprt
+import kitty
 import os
 import osc
 import renderer
@@ -701,19 +702,11 @@ fn hex_nibble(c u8) ?u8 {
 // ============================================================
 
 pub fn (mut self StreamHandler) apc_end() {
-	mut cmd := self.apc.end() or { return }
-	defer { cmd.deinit() }
-
-	match cmd.kind {
-		.kitty {
-			// Kitty graphics protocol command processing.
-			// A full implementation would parse the APC data as a kitty
-			// graphics command, execute it against the terminal's image
-			// storage, and send back a response. This requires:
-			// - kitty.graphics_command.parse(cmd.data)
-			// - terminal.screen.kitty_images storage
-			// - Response encoding back to the pty
-			// Currently a no-op until kitty graphics exec is implemented.
+	cmd := self.apc.end() or { return }
+	if response := kitty.execute(mut self.terminal, &cmd) {
+		encoded := response.encode()
+		if encoded.len > 0 {
+			self.message_writer(Message.write_req(encoded))
 		}
 	}
 }
@@ -1260,55 +1253,23 @@ fn (mut self StreamHandler) clipboard_contents(kind u8, data string) {
 }
 
 fn (mut self StreamHandler) semantic_prompt(payload terminal.ActionPayload) {
-	// OSC 133 semantic prompt. The payload.str1 carries the raw OSC data
-	// which begins with a single character identifying the action:
-	//   A = prompt start
-	//   B = input start (end of prompt, start of user input)
-	//   C = command start (end of input, start of command execution)
-	//   D = command end (may include exit code after ;)
-	data := payload.str1
-	if data.len == 0 {
-		return
-	}
-
-	action_char := data[0]
-	// Parse optional exit code for command_end (D;exitcode)
-	mut exit_code := ?i32(none)
-	if action_char == u8(`D`) && data.len > 1 {
-		// Look for ;exitcode
-		if data[1] == u8(`;`) && data.len > 2 {
-			code_str := data[2..]
-			// Parse the exit code string
-			mut val := 0
-			mut neg := false
-			mut start := 0
-			if code_str.len > 0 && code_str[0] == u8(`-`) {
-				neg = true
-				start = 1
-			}
-			mut valid := start < code_str.len
-			for i in start .. code_str.len {
-				if code_str[i] >= u8(`0`) && code_str[i] <= u8(`9`) {
-					val = val * 10 + int(code_str[i] - u8(`0`))
-				} else {
-					valid = false
-					break
-				}
-			}
-			if valid {
-				exit_code = if neg { i32(-val) } else { i32(val) }
-			}
+	match payload.semantic_prompt_action {
+		.end_input_start_output {
+			self.surface_message_writer(apprt.SurfaceMessage{ kind: .start_command })
 		}
+		.end_command {
+			raw := osc.read_exit_code(payload.semantic_prompt_opts) or { i32(0) }
+			code := if raw >= 0 && raw <= 255 { u8(raw) } else { u8(1) }
+			self.surface_message_writer(apprt.SurfaceMessage{
+				kind: .stop_command
+				stop_command_exit_code: code
+			})
+		}
+		else {}
 	}
 
-	action := match action_char {
-		u8(`A`) { terminal.SemanticPromptAction.prompt_start }
-		u8(`B`) { terminal.SemanticPromptAction.input_start }
-		u8(`C`) { terminal.SemanticPromptAction.command_start }
-		u8(`D`) { terminal.SemanticPromptAction.command_end }
-		else { return }
-	}
-	self.terminal.semantic_prompt(action, exit_code)
+	self.terminal.semantic_prompt_options(payload.semantic_prompt_action,
+		payload.semantic_prompt_opts)
 }
 
 fn (mut self StreamHandler) report_pwd(url string) {
@@ -1923,55 +1884,58 @@ fn (mut self StreamHandler) progress_report(state u16) {
 }
 
 // ============================================================
-// Stub types for APC and DCS handlers
+// APC and DCS handlers
 // ============================================================
 
 // ApcHandler maintains APC (Application Program Command) state.
 // APC is used by the kitty graphics protocol.
 pub struct ApcHandler {
 mut:
-	active bool
-	data   []u8
+	state  ApcHandlerState
+	parser kitty.Parser
 }
 
 pub fn (mut self ApcHandler) deinit() {
-	self.data = []u8{}
+	self.state = .inactive
+	self.parser = kitty.Parser.init()
 }
 
 pub fn (mut self ApcHandler) start() {
-	self.active = true
-	self.data = []u8{}
+	self.state = .identify
+	self.parser = kitty.Parser.init()
 }
 
 pub fn (mut self ApcHandler) feed(byte_val u8) {
-	if self.active {
-		self.data << byte_val
+	match self.state {
+		.inactive, .ignore {}
+		.identify {
+			self.state = if byte_val == `G` { .kitty } else { .ignore }
+		}
+		.kitty {
+			self.parser.feed(byte_val) or {
+				self.state = .ignore
+			}
+		}
 	}
 }
 
-pub fn (mut self ApcHandler) end() ?ApcCommand {
-	if !self.active {
+pub fn (mut self ApcHandler) end() ?kitty.Command {
+	defer {
+		self.state = .inactive
+		self.parser = kitty.Parser.init()
+	}
+
+	if self.state != .kitty {
 		return none
 	}
-	self.active = false
-	return ApcCommand{
-		kind: .kitty
-		data: self.data
-	}
+	return self.parser.complete() or { return none }
 }
 
-pub struct ApcCommand {
-pub mut:
-	kind ApcCommandKind
-	data []u8
-}
-
-pub enum ApcCommandKind {
+enum ApcHandlerState {
+	inactive
+	identify
 	kitty
-}
-
-pub fn (mut self ApcCommand) deinit() {
-	self.data = []u8{}
+	ignore
 }
 
 // DcsHandler wraps terminal.DcsHandler, delegating all DCS state

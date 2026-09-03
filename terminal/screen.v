@@ -1723,7 +1723,6 @@ module terminal
 //
 // --- Original Ghostty Comments End: src/terminal/Screen.zig
 
-
 import strings
 
 // Screen represents a single terminal screen with cursor, selection,
@@ -1760,17 +1759,17 @@ pub enum SemanticClick {
 // Cursor holds the cursor position and associated state.
 pub struct Cursor {
 pub mut:
-	x                        u32
-	y                        u32
-	cursor_style             CursorStyle    = .block
-	pending_wrap             bool
-	is_protected             bool
-	style                    CellStyle
-	style_id                 u32
-	hyperlink_id             u32
-	hyperlink_implicit_id    u32
-	hyperlink_state          ?Hyperlink
-	semantic_content         SemanticContent = .output
+	x                          u32
+	y                          u32
+	cursor_style               CursorStyle = .block
+	pending_wrap               bool
+	is_protected               bool
+	style                      CellStyle
+	style_id                   u32
+	hyperlink_id               u32
+	hyperlink_implicit_id      u32
+	hyperlink_state            ?Hyperlink
+	semantic_content           SemanticContent = .output
 	semantic_content_clear_eol bool
 }
 
@@ -1789,9 +1788,9 @@ pub mut:
 // CharsetState holds the charset mapping state.
 pub struct CharsetState {
 pub mut:
-	charsets CharsetArray
-	gl       CharsetSlot = .g0
-	gr       CharsetSlot = .g2
+	charsets     CharsetArray
+	gl           CharsetSlot = .g0
+	gr           CharsetSlot = .g2
 	single_shift ?CharsetSlot
 }
 
@@ -1815,10 +1814,18 @@ pub fn (self CharsetArray) get(slot CharsetSlot) Charset {
 
 pub fn (mut self CharsetArray) set(slot CharsetSlot, charset Charset) {
 	match slot {
-		.g0 { self.g0 = charset }
-		.g1 { self.g1 = charset }
-		.g2 { self.g2 = charset }
-		.g3 { self.g3 = charset }
+		.g0 {
+			self.g0 = charset
+		}
+		.g1 {
+			self.g1 = charset
+		}
+		.g2 {
+			self.g2 = charset
+		}
+		.g3 {
+			self.g3 = charset
+		}
 	}
 }
 
@@ -1854,14 +1861,17 @@ pub struct SelectionString {
 pub:
 	sel  Selection
 	trim bool = true
+	// When non-nil, receives one screen pin for every byte in the returned
+	// UTF-8 string. This is used to map regex match offsets back to cells.
+	map &StringMap = unsafe { nil }
 }
 
 // SelectLine options for selecting a line.
 pub struct SelectLine {
 pub:
-	pin                       Pin
-	whitespace                ?[]u32
-	semantic_prompt_boundary  bool = true
+	pin                      Pin
+	whitespace               ?[]u32
+	semantic_prompt_boundary bool = true
 }
 
 // LineIterator iterates over soft-wrapped lines.
@@ -1907,15 +1917,15 @@ pub mut:
 	saved_cursor    ?SavedCursor
 	selection       ?Selection
 	charset         CharsetState
-	protected_mode  ProtectedMode    = .off
+	protected_mode  ProtectedMode = .off
 	kitty_keyboard  KeyFlagStack
 	semantic_prompt SemanticPrompt
 	dirty           ScreenDirty
 	// Scratch cell/row used only as a safe fallback when a cursor
 	// pointer accessor is called with invalid (out-of-bounds) state,
 	// which should not happen given the callers' preconditions.
-	scratch_cell    CellData
-	scratch_row     RowData
+	scratch_cell CellData
+	scratch_row  RowData
 }
 
 // Initialize a new screen with the given dimensions and scrollback.
@@ -2278,7 +2288,45 @@ pub fn (mut self Screen) scroll(behavior Scroll) {
 	match behavior {
 		.active { self.pages.scroll(.active) }
 		.top { self.pages.scroll(.top) }
-		else { self.pages.scroll(.active) }
+		.pin_scroll, .row, .delta_row, .delta_prompt {}
+	}
+}
+
+pub fn (mut self Screen) scroll_delta_rows(delta int) {
+	self.pages.scroll_delta(delta)
+}
+
+pub fn (mut self Screen) scroll_to_row(row usize) {
+	self.pages.viewport_start = clamp_int(int(row), 0, self.pages.active_start)
+	self.pages.viewport = if self.pages.viewport_start == 0 {
+		.top
+	} else if self.pages.viewport_start == self.pages.active_start {
+		.active
+	} else {
+		.pinned
+	}
+}
+
+pub fn (mut self Screen) scroll_delta_prompts(delta int) {
+	if delta == 0 {
+		return
+	}
+	mut remaining := if delta < 0 { -delta } else { delta }
+	current := match self.pages.viewport {
+		.active { self.pages.active_start }
+		.top { 0 }
+		.pinned { self.pages.viewport_start }
+	}
+	mut y := current + if delta > 0 { 1 } else { -1 }
+	for y >= 0 && y < self.pages.screen_rows.len {
+		if self.pages.screen_rows[y].semantic_prompt == .prompt {
+			remaining -= 1
+			if remaining == 0 {
+				self.scroll_to_row(usize(y))
+				return
+			}
+		}
+		y += if delta > 0 { 1 } else { -1 }
 	}
 }
 
@@ -2838,14 +2886,22 @@ pub fn (mut self Screen) manual_style_update() ! {
 
 // Start a hyperlink on the cursor.
 pub fn (mut self Screen) start_hyperlink(uri string, id_ ?string) ! {
-	// XTODO: Full hyperlink management needs page-level hyperlink
-	// set insertion, ref counting, and capacity adjustment.
-	// This is a simplified stub.
 	self.end_hyperlink()
+	link_id := if explicit := id_ {
+		HyperlinkIdKind(HyperlinkExplicitId{
+			value: explicit.clone()
+		})
+	} else {
+		self.cursor.hyperlink_implicit_id += 1
+		HyperlinkIdKind(HyperlinkImplicitId{
+			offset: self.cursor.hyperlink_implicit_id
+		})
+	}
+	// This is a non-zero active-state discriminator in the flat Pages model.
 	self.cursor.hyperlink_id = self.cursor.hyperlink_implicit_id + 1
-	self.cursor.hyperlink_implicit_id += 1
 	self.cursor.hyperlink_state = Hyperlink{
-		uri: uri
+		id: link_id
+		uri: uri.clone()
 	}
 }
 
@@ -2860,15 +2916,15 @@ pub fn (mut self Screen) end_hyperlink() {
 
 // Set the hyperlink on the current cell.
 pub fn (mut self Screen) cursor_set_hyperlink() ! {
-	// XTODO: Full implementation needs Page.setHyperlink with
-	// ref counting and hyperlink_map capacity management.
 	assert self.cursor.hyperlink_id != 0
+	link := self.cursor.hyperlink_state or { return error('active hyperlink has no value') }
 	idx := self.pages.active_start + int(self.cursor.y)
 	if idx < self.pages.screen_rows.len {
 		unsafe {
 			mut row := &self.pages.screen_rows[idx]
 			if int(self.cursor.x) < row.cells.len {
 				row.cells[int(self.cursor.x)].has_hyperlink = true
+				row.cells[int(self.cursor.x)].hyperlink = link.dupe()
 			}
 			row.hyperlink = true
 		}
@@ -2926,15 +2982,13 @@ pub fn (mut self Screen) clear_selection() {
 
 // Get the string for a selection.
 pub fn (mut self Screen) selection_string(opts SelectionString) !string {
-	// XTODO: Full selection string extraction needs ScreenFormatter
-	// with unwrap support, soft-wrap handling, and StringMap building.
-	// This is a simplified version that reads cells directly.
 	sel := opts.sel
 	// Order the selection for iteration (start before end)
 	start := if sel.start_pin.before(sel.end_pin) { sel.start_pin } else { sel.end_pin }
 	end := if sel.start_pin.before(sel.end_pin) { sel.end_pin } else { sel.start_pin }
 
-	mut result := strings.new_builder(256)
+	mut result := []u8{cap: 256}
+	mut pin_map := []Pin{cap: 256}
 	mut first_row := true
 
 	for y in int(start.y) .. int(end.y) + 1 {
@@ -2950,36 +3004,85 @@ pub fn (mut self Screen) selection_string(opts SelectionString) !string {
 			if y > 0 && self.pages.screen_rows[y - 1].wrap {
 				// Soft wrap: no newline
 			} else {
-				result.write_string('\n')
+				result << `\n`
+				pin_map << Pin{ x: 0, y: u32(y) }
 			}
 		}
 
 		for x in start_x .. end_x {
 			if x < row.cells.len {
 				cp := row.cells[x].codepoint
-				if cp == 0 {
-					result.write_string(' ')
-				} else {
-					result.write_rune(rune(cp))
+				cell_bytes := if cp == 0 { [u8(` `)] } else { rune(cp).str().bytes() }
+				result << cell_bytes
+				for _ in 0 .. cell_bytes.len {
+					pin_map << Pin{ x: u32(x), y: u32(y) }
 				}
 			}
 		}
 		first_row = false
 	}
 
-	mut s := result.str()
 	if opts.trim {
-		// Trim trailing whitespace from each line
-		lines := s.split('\n')
-		mut trimmed := []string{}
-		for line in lines {
-			trimmed << line.trim_right(' \t')
-		}
-		s = trimmed.join('\n')
-		// Trim trailing empty lines
-		s = s.trim_right('\n')
+		result, pin_map = trim_selection_bytes(result, pin_map)
 	}
-	return s
+	if !isnil(opts.map) {
+		unsafe {
+			mut output_map := opts.map
+			output_map.str = result.bytestr()
+			output_map.map_pin = pin_map.clone()
+		}
+	}
+	return result.bytestr()
+}
+
+// trim_selection_bytes applies the same trimming rules as selectionString:
+// trailing spaces/tabs are removed from each logical line and trailing empty
+// lines are removed. The byte-to-pin map is transformed in lockstep.
+fn trim_selection_bytes(input []u8, pins []Pin) ([]u8, []Pin) {
+	assert input.len == pins.len
+	mut line_ranges := [][2]int{}
+	mut line_start := 0
+	for i, ch in input {
+		if ch == `\n` {
+			mut line_end := i
+			for line_end > line_start && input[line_end - 1] in [` `, `\t`] {
+				line_end--
+			}
+			line_ranges << [line_start, line_end]!
+			line_start = i + 1
+		}
+	}
+	mut final_end := input.len
+	for final_end > line_start && input[final_end - 1] in [` `, `\t`] {
+		final_end--
+	}
+	line_ranges << [line_start, final_end]!
+
+	mut last := line_ranges.len - 1
+	for last >= 0 && line_ranges[last][0] == line_ranges[last][1] {
+		last--
+	}
+	if last < 0 {
+		return []u8{}, []Pin{}
+	}
+
+	mut out := []u8{cap: input.len}
+	mut out_pins := []Pin{cap: pins.len}
+	for line_idx in 0 .. last + 1 {
+		range_ := line_ranges[line_idx]
+		out << input[range_[0]..range_[1]]
+		out_pins << pins[range_[0]..range_[1]]
+		if line_idx < last {
+			out << `\n`
+			// The source newline immediately follows the untrimmed line.
+			mut newline_idx := range_[1]
+			for newline_idx < input.len && input[newline_idx] != `\n` {
+				newline_idx++
+			}
+			out_pins << if newline_idx < pins.len { pins[newline_idx] } else { Pin{} }
+		}
+	}
+	return out, out_pins
 }
 
 // Select a line around the given pin.
@@ -3275,9 +3378,6 @@ pub fn (self &Screen) select_word(pin Pin, boundary_codepoints []u32) ?Selection
 
 // Select command output around the given pin.
 pub fn (mut self Screen) select_output(pin Pin) ?Selection {
-	// XTODO: Full output selection needs PageList.highlightSemanticContent
-	// and prompt iteration. Requires shell integration (OSC 133) to
-	// properly delimit command output regions.
 	if int(pin.y) >= self.pages.screen_rows.len {
 		return none
 	}
@@ -3289,21 +3389,75 @@ pub fn (mut self Screen) select_output(pin Pin) ?Selection {
 	if cell.semantic_content != .output {
 		return none
 	}
-	// Simplified: select from pin to end of contiguous output
-	start := pin
-	mut end := pin
-	for y in int(pin.y) .. self.pages.screen_rows.len {
+
+	// Locate the prompt zone containing this output. Prompt metadata is stored
+	// on rows in the flat Pages representation.
+	mut prompt_y := -1
+	for y := int(pin.y); y >= 0; y-- {
+		if self.pages.screen_rows[y].semantic_prompt == .prompt {
+			prompt_y = y
+			break
+		}
+	}
+	if prompt_y < 0 {
+		// With no prior prompt, Ghostty selects from the start of the screen to
+		// immediately before the next prompt, trimming trailing empty cells.
+		mut next_prompt := -1
+		for y in int(pin.y) .. self.pages.screen_rows.len {
+			if self.pages.screen_rows[y].semantic_prompt == .prompt {
+				next_prompt = y
+				break
+			}
+		}
+		if next_prompt <= 0 {
+			return none
+		}
+		mut end := Pin{ x: self.pages.cols - 1, y: u32(next_prompt - 1) }
+		for y := int(end.y); y >= 0; y-- {
+			r := self.pages.screen_rows[y]
+			for x := r.cells.len - 1; x >= 0; x-- {
+				if r.cells[x].has_text() {
+					end = Pin{ x: u32(x), y: u32(y) }
+					return Selection.init(Pin{ x: 0, y: 0 }, end, false)
+				}
+			}
+		}
+		return none
+	}
+
+	// The zone ends immediately before the next non-continuation prompt.
+	mut zone_end_y := self.pages.screen_rows.len - 1
+	for y in prompt_y + 1 .. self.pages.screen_rows.len {
+		if self.pages.screen_rows[y].semantic_prompt == .prompt {
+			zone_end_y = y - 1
+			break
+		}
+	}
+
+	mut start := ?Pin(none)
+	mut end := ?Pin(none)
+	for y in prompt_y .. zone_end_y + 1 {
 		r := self.pages.screen_rows[y]
-		start_x := if y == int(pin.y) { int(pin.x) } else { 0 }
-		for x in start_x .. int(self.pages.cols) {
-			if x < r.cells.len && r.cells[x].semantic_content == .output {
-				end = Pin{ x: u32(x), y: u32(y) }
-			} else {
-				return Selection.init(start, end, false)
+		for x, output_cell in r.cells {
+			if output_cell.semantic_content == .prompt || output_cell.semantic_content == .input {
+				if start_pin := start {
+					if end_pin := end {
+						return Selection.init(start_pin, end_pin, false)
+					}
+				}
+				continue
+			}
+			// Empty cells default to output but do not delimit actual output.
+			if output_cell.has_text() {
+				p := Pin{ x: u32(x), y: u32(y) }
+				if start == none {
+					start = p
+				}
+				end = p
 			}
 		}
 	}
-	return Selection.init(start, end, false)
+	return Selection.init(start or { return none }, end or { return none }, false)
 }
 
 // Returns a line iterator starting from the given pin.
@@ -3324,7 +3478,9 @@ pub fn (self &Screen) prompt_click_move(click_pin Pin) PromptClickMove {
 		return prompt_click_move_zero
 	}
 	match self.semantic_prompt.click {
-		.none, .click_events { return prompt_click_move_zero }
+		.none, .click_events {
+			return prompt_click_move_zero
+		}
 		.cl_line, .cl_multiple, .cl_conservative_vertical, .cl_smart_vertical {
 			return self.prompt_click_line(click_pin)
 		}
@@ -3496,59 +3652,34 @@ pub fn (self &Screen) dump_string_alloc(tag PointTag) !string {
 
 // Dump unwrapped (soft-wraps joined) contents to a string.
 pub fn (self &Screen) dump_string_alloc_unwrapped(tag PointTag) !string {
-	// XTODO: Full unwrapped dump needs ScreenFormatter with unwrap=true.
-	// This simplified version joins soft-wrapped lines.
-	start_y, end_y := match tag {
-		.screen {
-			0, self.pages.screen_rows.len
-		}
-		.active {
-			self.pages.active_start, self.pages.active_start + int(self.pages.rows)
-		}
-		else {
-			self.pages.active_start, self.pages.active_start + int(self.pages.rows)
-		}
+	start_y, end_y := self.dump_row_range(tag)
+	if end_y <= start_y || self.pages.cols == 0 {
+		return ''
 	}
+	mut formatter := PageFormatter.init(&self.pages, FormatOptions{
+		emit: .plain
+		unwrap: true
+		trim: false
+	})
+	formatter.start_y = u32(start_y)
+	formatter.end_y = u32(end_y - 1)
+	formatter.end_x = self.pages.cols - 1
+	return formatter.format()
+}
 
-	mut result := strings.new_builder(256)
-	mut first_line := true
-
-	mut y := start_y
-	for y < end_y && y < self.pages.screen_rows.len {
-		if !first_line {
-			result.write_string('\n')
+fn (self &Screen) dump_row_range(tag PointTag) (int, int) {
+	return match tag {
+		.screen { 0, self.pages.screen_rows.len }
+		.active, .viewport {
+			end := if self.pages.active_start + int(self.pages.rows) < self.pages.screen_rows.len {
+				self.pages.active_start + int(self.pages.rows)
+			} else {
+				self.pages.screen_rows.len
+			}
+			self.pages.active_start, end
 		}
-		first_line = false
-
-		// Collect all rows in this soft-wrapped line
-		for {
-			row := self.pages.screen_rows[y]
-			mut last_x := -1
-			for x := int(self.pages.cols) - 1; x >= 0; x-- {
-				if x < row.cells.len && row.cells[x].codepoint != 0 {
-					last_x = x
-					break
-				}
-			}
-			for x in 0 .. last_x + 1 {
-				if x < row.cells.len {
-					cp := row.cells[x].codepoint
-					if cp == 0 {
-						result.write_string(' ')
-					} else {
-						result.write_rune(rune(cp))
-					}
-				}
-			}
-			if !row.wrap || y + 1 >= end_y {
-				y += 1
-				break
-			}
-			y += 1
-		}
+		.history { 0, self.pages.active_start }
 	}
-
-	return result.str()
 }
 
 // ============================================================
@@ -3582,15 +3713,13 @@ pub fn (mut self Screen) append_grapheme(cell_x u32, cp u32) ! {
 
 // Increase capacity of the page containing the given node.
 pub fn (mut self Screen) increase_capacity() ! {
-	// XTODO: Full page capacity management is not implemented.
-	// Requires PageList.increaseCapacity which can reallocate pages,
-	// adjust tracked pins, and migrate styles/hyperlinks.
+	// Pages uses growable V arrays rather than fixed packed allocations, so
+	// capacity increases happen automatically at the point of insertion.
 }
 
 // Split a page for capacity reasons.
 fn (mut self Screen) split_for_capacity() ! {
-	// XTODO: Page splitting needs PageList.split with capacity
-	// calculation and cursor pin tracking.
+	// The flat Pages storage has no fixed-capacity page boundary to split.
 }
 
 // Clean up boundary conditions where a cell will become discontiguous with

@@ -111,10 +111,7 @@ fn test_readonly_charsets() {
 	s.next_slice('`') or { panic(err) } // Should print diamond character
 
 	str := t.plain_string() or { panic(err) }
-	// XTODO: full DEC special graphics charset mapping is not yet
-	// implemented. When it is, this should produce U+25C6 (diamond).
-	// For now, just verify something was printed.
-	assert str.len > 0
+	assert str == '◆'
 }
 
 fn test_readonly_alt_screen() {
@@ -481,10 +478,10 @@ fn test_readonly_semantic_prompt_end_of_input_then_start_output() {
 
 	// Write some text and then send OSC 133;A (fresh_line_new_prompt)
 	s.next_slice('Hello') or { panic(err) }
-	s.next_slice('\x1b]133;A\x07') or { panic(err) }
+	s.next_slice('\x1b]133;A\a') or { panic(err) }
 	s.next_slice('prompt\$ ') or { panic(err) }
-	s.next_slice('\x1b]133;B\x07') or { panic(err) }
+	s.next_slice('\x1b]133;B\a') or { panic(err) }
 	assert t.screens.active.cursor.semantic_content == .input
-	s.next_slice('\x1b]133;C\x07') or { panic(err) }
+	s.next_slice('\x1b]133;C\a') or { panic(err) }
 	assert t.screens.active.cursor.semantic_content == .output
 }

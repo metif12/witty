@@ -99,7 +99,6 @@ module terminal
 //
 // --- Original Ghostty Comments End: src/terminal/style.zig
 
-
 // Style methods for CellStyle.
 //
 // Source: style.zig
@@ -394,12 +393,7 @@ pub fn (self RGB) eql(other RGB) bool {
 	return self.r == other.r && self.g == other.g && self.b == other.b
 }
 
-// ============================================================
-// Set (XTODO)
-// ============================================================
-
-// XTODO: RefCountedSet for styles
-// The Set type manages a deduplicated, ref-counted collection of styles.
-// It is backed by a hash map and provides add/get/release operations.
-// This requires the full RefCountedSet implementation which is not yet
-// translated.
+// Ghostty exports its style-specialized RefCountedSet as `style.Set`.
+// StyleSet is the V specialization used by Page, so expose the same public
+// name without duplicating the implementation.
+pub type Set = StyleSet

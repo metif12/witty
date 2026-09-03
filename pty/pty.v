@@ -14,16 +14,25 @@ module pty
 // We declare the C functions we need for PTY management. These are
 // available on macOS (via <util.h>) and Linux (via <pty.h>).
 #include <sys/ioctl.h>
+
 #include <termios.h>
+
 #include <fcntl.h>
+
 #include <util.h>
 
 fn C.openpty(master &int, slave &int, name &char, termp voidptr, winp voidptr) int
+
 fn C.close(fd int) int
-fn C.ioctl(fd int, request u64, arg voidptr) int
+
+fn C.ioctl(fd i32, request u64, args ...voidptr) i32
+
 fn C.tcgetattr(fd int, termios_p voidptr) int
+
 fn C.tcsetattr(fd int, optional_actions int, termios_p voidptr) int
+
 fn C.setsid() int
+
 fn C.fcntl(fd int, cmd int, arg int) int
 
 // ioctl request codes. These are platform-specific constants.

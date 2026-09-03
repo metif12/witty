@@ -69,6 +69,10 @@ pub mut:
 	has_grapheme bool
 	// Whether this cell is a hyperlink.
 	has_hyperlink bool
+	// The resolved OSC 8 hyperlink. The Zig page stores this indirectly in a
+	// ref-counted page table; the flat V Pages representation stores the same
+	// value inline so copied render cells remain self-contained.
+	hyperlink Hyperlink
 	// The semantic type of the content of this cell.
 	semantic_content SemanticContent = .output
 	// Additional codepoints for grapheme clusters. These are the
@@ -313,6 +317,8 @@ pub mut:
 	rows           u32
 	max_scrollback u32
 	viewport       ViewportState = .active
+	// Absolute row at the top of a pinned viewport.
+	viewport_start int
 	// After a resize, these hold the active-relative cursor position that
 	// the caller (Screen) should apply to its cursor. Reflow moves the
 	// cursor because soft-wrapped content is re-laid-out.
@@ -366,6 +372,7 @@ pub fn (mut self Pages) reset() {
 	}
 	self.active_start = 0
 	self.viewport = .active
+	self.viewport_start = 0
 }
 
 // Get an active row (read-only).
@@ -386,6 +393,35 @@ pub fn (mut self Pages) get_active_row_mut(y u32) &RowData {
 // Scroll the viewport.
 pub fn (mut self Pages) scroll(behavior ViewportState) {
 	self.viewport = behavior
+	self.viewport_start = match behavior {
+		.active { self.active_start }
+		.top { 0 }
+		.pinned { self.viewport_start }
+	}
+}
+
+// Scroll the viewport by physical rows and clamp it between the top of
+// scrollback and the active area.
+pub fn (mut self Pages) scroll_delta(delta int) {
+	base := match self.viewport {
+		.active { self.active_start }
+		.top { 0 }
+		.pinned { self.viewport_start }
+	}
+	self.viewport_start = clamp_int(base + delta, 0, self.active_start)
+	self.viewport = if self.viewport_start == 0 {
+		.top
+	} else if self.viewport_start == self.active_start {
+		.active
+	} else {
+		.pinned
+	}
+}
+
+fn clamp_int(value int, lower int, upper int) int {
+	return if value < lower {
+		lower
+	} else if value > upper { upper } else { value }
 }
 
 // Scroll and clear - move all active content to scrollback.
@@ -399,6 +435,7 @@ pub fn (mut self Pages) scroll_clear() ! {
 	// Enforce max scrollback
 	self.trim_scrollback()
 	self.viewport = .active
+	self.viewport_start = self.active_start
 }
 
 // Grow the screen by one row (for scrollback).
@@ -413,6 +450,12 @@ fn (mut self Pages) trim_scrollback() {
 	for self.screen_rows.len > max && self.active_start > 0 {
 		self.screen_rows.delete(0)
 		self.active_start -= 1
+		if self.viewport == .pinned && self.viewport_start > 0 {
+			self.viewport_start -= 1
+		}
+	}
+	if self.viewport == .active {
+		self.viewport_start = self.active_start
 	}
 }
 
@@ -454,7 +497,7 @@ pub fn (self &Pages) get_top_left(tag PointTag) Pin {
 	return match tag {
 		.screen { Pin{ x: 0, y: 0 } }
 		.active { Pin{ x: 0, y: u32(self.active_start) } }
-		.viewport { Pin{ x: 0, y: u32(self.active_start) } }
+		.viewport { Pin{ x: 0, y: u32(self.viewport_start) } }
 		.history { Pin{ x: 0, y: 0 } }
 	}
 }
@@ -464,7 +507,12 @@ pub fn (self &Pages) get_bottom_right(tag PointTag) ?Pin {
 	return match tag {
 		.screen { Pin{ x: self.cols - 1, y: u32(self.screen_rows.len - 1) } }
 		.active { Pin{ x: self.cols - 1, y: u32(self.active_start + int(self.rows) - 1) } }
-		.viewport { Pin{ x: self.cols - 1, y: u32(self.active_start + int(self.rows) - 1) } }
+		.viewport {
+			Pin{
+				x: self.cols - 1
+				y: u32(clamp_int(self.viewport_start + int(self.rows) - 1, 0, self.screen_rows.len - 1))
+			}
+		}
 		.history {
 			if self.active_start > 0 {
 				Pin{ x: self.cols - 1, y: u32(self.active_start - 1) }
@@ -1149,19 +1197,8 @@ pub enum ProtectedMode {
 pub enum Charset {
 	utf8
 	ascii
-	dec_special
 	british
-	dutch
-	finnish
-	french
-	french_canadian
-	german
-	italian
-	norwegian
-	portuguese
-	spanish
-	swedish
-	swiss
+	dec_special
 }
 
 pub enum CharsetSlot {
@@ -1215,9 +1252,15 @@ pub enum KeyFlagSetOp {
 
 pub fn (mut self KeyFlagStack) set(op KeyFlagSetOp, new_flags u32) {
 	match op {
-		.set_ { self.flags[self.idx] = new_flags }
-		.or_ { self.flags[self.idx] |= new_flags }
-		.not_ { self.flags[self.idx] &= ~new_flags }
+		.set_ {
+			self.flags[self.idx] = new_flags
+		}
+		.or_ {
+			self.flags[self.idx] |= new_flags
+		}
+		.not_ {
+			self.flags[self.idx] &= ~new_flags
+		}
 	}
 }
 

@@ -258,7 +258,7 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 	viewport_top := match s.pages.viewport {
 		.active { s.pages.active_start }
 		.top { 0 }
-		.pinned { s.pages.active_start }
+		.pinned { s.pages.viewport_start }
 	}
 
 	// The absolute cursor row within screen_rows.
@@ -298,8 +298,8 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 	self.cursor.style = s.cursor.style
 	self.cursor.visual_style = s.cursor.cursor_style
 	self.cursor.password_input = t.flags.password_input
-	self.cursor.visible = true // modes.get(.cursor_visible) not yet wired
-	self.cursor.blinking = false // modes.get(.cursor_blinking) not yet wired
+	self.cursor.visible = t.modes.get(.cursor_visible)
+	self.cursor.blinking = t.modes.get(.cursor_blinking)
 
 	// Always reset the cursor viewport position; recomputed below.
 	self.cursor.viewport = none
@@ -495,12 +495,6 @@ fn cell_set_key(x u32, y u32) u64 {
 // For example, you may want to hold a lock for the duration of the
 // update and hyperlink lookup to ensure no updates happen in between.
 pub fn (self &RenderState) link_cells(viewport_point Pin) CellSet {
-	// XTODO: Full hyperlink cell lookup requires:
-	// - Page hyperlink set with ref-counted hyperlink entries
-	// - Hyperlink ID lookup from cell data
-	// - Hyperlink equality comparison across pages
-	// - Cross-page node traversal for multi-page viewports
-	// The simplified model doesn't store hyperlink IDs in cells.
 	mut result := CellSet{}
 
 	// Our viewport point is sent in by the caller and can't be trusted.
@@ -515,11 +509,9 @@ pub fn (self &RenderState) link_cells(viewport_point Pin) CellSet {
 	if int(viewport_point.x) < row.cells.len {
 		cell := row.cells[int(viewport_point.x)]
 		if cell.raw.has_hyperlink {
-			// Find all cells with the same hyperlink
-			// In the simplified model, we just mark cells with has_hyperlink
 			for ry, r in self.row_data {
 				for rx, c in r.cells {
-					if c.raw.has_hyperlink {
+					if c.raw.has_hyperlink && cell.raw.hyperlink.eql(&c.raw.hyperlink) {
 						result[cell_set_key(u32(rx), u32(ry))] = true
 					}
 				}
@@ -542,23 +534,21 @@ pub fn (self &RenderState) link_cells(viewport_point Pin) CellSet {
 // the the top/bottom line of the viewport are not included, since
 // the render state cuts them off.
 pub fn (self &RenderState) to_string() string {
-	// XTODO: Full string conversion requires:
-	// - Proper UTF-8 encoding of codepoints (including multi-byte)
-	// - Grapheme cluster support for multi-codepoint cells
-	// - Wrapped line joining
-	// - StringMap building for byte-to-cell coordinate mapping
-	// Simplified implementation: basic codepoint to string conversion.
 	mut sb := strings.new_builder(int(self.rows) * int(self.cols))
-	for y, row in self.row_data {
+	for row in self.row_data {
 		for cell in row.cells {
 			cp := cell.raw.codepoint_val()
 			if cp == 0 {
 				sb.write_u8(0) // null byte for empty cells
 			} else {
 				write_utf8(mut sb, cp)
+				if cell.raw.has_grapheme {
+					for grapheme_cp in cell.grapheme {
+						write_utf8(mut sb, grapheme_cp)
+					}
+				}
 			}
 		}
-		_ = y
 		if !row.raw.wrap {
 			sb.write_u8(u8(`\n`))
 		}

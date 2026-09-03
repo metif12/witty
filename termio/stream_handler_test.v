@@ -451,6 +451,37 @@ fn test_stream_handler_dcs_apc() {
 	})
 }
 
+fn test_apc_handler_rejects_unknown_and_invalid_commands() {
+	for input in ['Xabcdef1234', 'Gabcdef1234', 'Ga=p,i=10000000000',
+		'Ga=p,i=1,z=-9999999999'] {
+		mut handler := ApcHandler{}
+		handler.start()
+		for byte_val in input.bytes() {
+			handler.feed(byte_val)
+		}
+		assert handler.end() == none
+	}
+}
+
+fn test_apc_handler_parses_valid_kitty_command() {
+	mut handler := ApcHandler{}
+	handler.start()
+	for byte_val in 'Gf=24,s=10,v=20,hello=world'.bytes() {
+		handler.feed(byte_val)
+	}
+	cmd := handler.end() or {
+		assert false
+		return
+	}
+	transmission := cmd.transmission() or {
+		assert false
+		return
+	}
+	assert transmission.format_ == .rgb
+	assert transmission.width == 10
+	assert transmission.height == 20
+}
+
 // Test change_config.
 fn test_stream_handler_change_config() {
 	mut handler, mut ctx := make_test_handler()

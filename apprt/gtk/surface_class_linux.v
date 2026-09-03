@@ -73,23 +73,35 @@ pub type GtkAdjustment = voidptr
 
 // GtkGLArea
 fn C.gtk_gl_area_queue_render(area GtkGLArea)
+
 fn C.gtk_gl_area_make_current(area GtkGLArea)
+
 fn C.gtk_gl_area_get_error(area GtkGLArea) GError
 
 // GtkWidget (extra helpers not in c_gtk_linux.v)
 fn C.gtk_widget_has_focus(widget GtkWidget) bool
+
 fn C.gtk_widget_set_cursor_from_name(widget GtkWidget, name &char)
+
 fn C.gtk_widget_set_visible(widget GtkWidget, visible bool)
+
 fn C.gtk_widget_add_css_class(widget GtkWidget, css_class &char)
+
 fn C.gtk_widget_remove_css_class(widget GtkWidget, css_class &char)
+
 fn C.gtk_widget_get_clipboard(widget GtkWidget) GdkClipboard
+
 fn C.gtk_widget_get_primary_clipboard(widget GtkWidget) GdkClipboard
 
 // GtkIMContext
 fn C.gtk_im_context_filter_keypress(context GtkIMContext, event GdkEvent) bool
+
 fn C.gtk_im_context_focus_in(context GtkIMContext)
+
 fn C.gtk_im_context_focus_out(context GtkIMContext)
+
 fn C.gtk_im_context_reset(context GtkIMContext)
+
 fn C.gtk_im_context_set_client_widget(context GtkIMContext, widget GtkWidget)
 
 // GdkEvent
@@ -188,7 +200,7 @@ pub mut:
 	cursor_pos apprt.CursorPos
 
 	// Input method state. All related to key input.
-	in_keyevent IMKeyEvent = .false_
+	in_keyevent  IMKeyEvent = .false_
 	im_composing bool
 	im_buf       []u8 = []u8{len: 128}
 	im_len       int
@@ -372,19 +384,46 @@ pub fn (mut self SurfaceWidget) set_mouse_hidden(hidden bool) {
 }
 
 // apply_mouse_shape sets the widget cursor from the current mouse shape.
-// Mirrors the body of `propMouseShape`. Note: witty's terminal.MouseShape is a
-// reduced enum (6 shapes) versus ghostty's 34, so only those cases exist.
+// The enum values use the W3C/GTK cursor names directly.
 fn (self &SurfaceWidget) apply_mouse_shape() {
 	if self.mouse_hidden {
 		return
 	}
 	name := match self.mouse_shape {
 		.default_ { c'default' }
-		.text { c'text' }
-		.pointer { c'pointer' }
-		.crosshair { c'crosshair' }
+		.context_menu { c'context-menu' }
 		.help { c'help' }
+		.pointer { c'pointer' }
 		.progress { c'progress' }
+		.wait { c'wait' }
+		.cell { c'cell' }
+		.crosshair { c'crosshair' }
+		.text { c'text' }
+		.vertical_text { c'vertical-text' }
+		.alias { c'alias' }
+		.copy { c'copy' }
+		.move { c'move' }
+		.no_drop { c'no-drop' }
+		.not_allowed { c'not-allowed' }
+		.grab { c'grab' }
+		.grabbing { c'grabbing' }
+		.all_scroll { c'all-scroll' }
+		.col_resize { c'col-resize' }
+		.row_resize { c'row-resize' }
+		.n_resize { c'n-resize' }
+		.e_resize { c'e-resize' }
+		.s_resize { c's-resize' }
+		.w_resize { c'w-resize' }
+		.ne_resize { c'ne-resize' }
+		.nw_resize { c'nw-resize' }
+		.se_resize { c'se-resize' }
+		.sw_resize { c'sw-resize' }
+		.ew_resize { c'ew-resize' }
+		.ns_resize { c'ns-resize' }
+		.nesw_resize { c'nesw-resize' }
+		.nwse_resize { c'nwse-resize' }
+		.zoom_in { c'zoom-in' }
+		.zoom_out { c'zoom-out' }
 	}
 	C.gtk_widget_set_cursor_from_name(self.widget, name)
 }
@@ -508,7 +547,11 @@ pub fn (mut self SurfaceWidget) key_event(action input.KeyAction, event GdkEvent
 		// Note that we're in a keypress; some logic depends on this (see the
 		// commit handler). We track whether we were composing beforehand
 		// because different input methods call callbacks in different orders.
-		self.in_keyevent = if self.im_composing { IMKeyEvent.composing } else { IMKeyEvent.not_composing }
+		self.in_keyevent = if self.im_composing {
+			IMKeyEvent.composing
+		} else {
+			IMKeyEvent.not_composing
+		}
 
 		// Pass the event through the input method. Returns true if handled.
 		im_handled := C.gtk_im_context_filter_keypress(self.im_context, event)
@@ -893,8 +936,7 @@ pub fn (mut self SurfaceWidget) ec_mouse_motion(event GdkEvent, x f64, y f64) {
 		mut surface := self.core_surface
 		gtk_mods := C.gdk_event_get_modifier_state(event)
 		mods := translate_mods(gtk_mods)
-		surface.cursor_pos_callback(core.CursorPos{ x: self.cursor_pos.x, y: self.cursor_pos.y },
-			mods) or {
+		surface.cursor_pos_callback(core.CursorPos{ x: self.cursor_pos.x, y: self.cursor_pos.y }, mods) or {
 			eprintln('error in cursor pos callback err=${err}')
 		}
 	}
@@ -1080,10 +1122,12 @@ pub fn (mut self SurfaceWidget) glarea_resize(width int, height int) {
 	if self.has_core() {
 		mut surface := self.core_surface
 		// Update content scale too (no dedicated signal for it).
-		scale := self.get_content_scale() or { apprt.ContentScale{
-			x: 1.0
-			y: 1.0
-		} }
+		scale := self.get_content_scale() or {
+			apprt.ContentScale{
+				x: 1.0
+				y: 1.0
+			}
+		}
 		surface.content_scale_callback(core.ContentScale{ x: scale.x, y: scale.y }) or {
 			eprintln('error in content scale callback err=${err}')
 		}

@@ -171,7 +171,6 @@ module termio
 //
 // --- Original Ghostty Comments End: src/termio/Termio.zig
 
-
 import apprt
 import configpkg
 import renderer
@@ -273,7 +272,7 @@ pub struct TermioOpts {}
 pub struct DerivedConfig {
 pub mut:
 	osc_color_report_format OSCColorReportFormat = .bits_16
-	clipboard_write         ClipboardAccess      = .allow
+	clipboard_write         ClipboardAccess = .allow
 	enquiry_response        string
 	cursor_style            terminal.CursorStyle = .block
 	cursor_blink            ?bool
@@ -496,12 +495,7 @@ pub fn (mut t Termio) jump_to_prompt(delta int) ! {
 		defer {
 			t.renderer_state.mutex.unlock()
 		}
-		// NOTE: Ghostty scrolls by delta prompts. The V Screen.scroll API
-		// doesn't carry a delta count for delta_prompt, so we scroll to the
-		// nearest prompt. The delta magnitude/direction is a boundary of the
-		// underlying terminal API.
-		_ = delta
-		t.terminal.screens.active.scroll(.delta_prompt)
+		t.terminal.screens.active.scroll_delta_prompts(delta)
 	}
 
 	t.renderer_wakeup.notify()!

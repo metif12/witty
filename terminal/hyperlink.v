@@ -88,6 +88,27 @@ pub fn (self &Hyperlink) dupe() Hyperlink {
 	}
 }
 
+// eql compares the logical hyperlink identity and target.
+pub fn (self &Hyperlink) eql(other &Hyperlink) bool {
+	if self.uri != other.uri {
+		return false
+	}
+	return match self.id {
+		HyperlinkImplicitId {
+			match other.id {
+				HyperlinkImplicitId { self.id.offset == other.id.offset }
+				else { false }
+			}
+		}
+		HyperlinkExplicitId {
+			match other.id {
+				HyperlinkExplicitId { self.id.value == other.id.value }
+				else { false }
+			}
+		}
+	}
+}
+
 // ============================================================
 // HyperlinkPageEntry - a hyperlink that has been committed to
 // page memory. This is a "page entry" because while it represents

@@ -316,7 +316,6 @@ module terminal
 //
 // --- Original Ghostty Comments End: src/terminal/stream.zig
 
-
 // Stream processes VT escape sequences and dispatches actions.
 //
 // This is a translation of Ghostty's stream.zig. It takes a byte stream,
@@ -450,6 +449,8 @@ pub:
 	modify_key_format ModifyKeyFormat
 	// Device attribute request (for .device_attributes)
 	device_attr DeviceAttributeReq
+	// Device status request (for .device_status)
+	device_status DeviceStatusRequest
 	// Size report style (for .size_report)
 	size_report_style SizeReportStyle
 	// Status display (for .active_status_display)
@@ -507,10 +508,14 @@ pub:
 
 // SemanticPromptAction identifies a semantic prompt action (OSC 133).
 pub enum SemanticPromptAction {
+	fresh_line
+	fresh_line_new_prompt
+	new_command
 	prompt_start
-	input_start
-	command_start
-	command_end
+	end_prompt_start_input
+	end_prompt_start_input_terminate_eol
+	end_input_start_output
+	end_command
 }
 
 // ProgressState for ConEmu progress reports.
@@ -811,6 +816,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.cursor_up, ActionPayload{ num: val })
 			}
 		}
+
 		// CUD - Cursor Down
 		u8(`B`) {
 			if input.intermediates.len == 0 {
@@ -818,6 +824,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.cursor_down, ActionPayload{ num: val })
 			}
 		}
+
 		// CUF - Cursor Right
 		u8(`C`) {
 			if input.intermediates.len == 0 {
@@ -825,6 +832,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.cursor_right, ActionPayload{ num: val })
 			}
 		}
+
 		// CUB - Cursor Left
 		u8(`D`), u8(`j`) {
 			if input.intermediates.len == 0 {
@@ -832,6 +840,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.cursor_left, ActionPayload{ num: val })
 			}
 		}
+
 		// CNL - Cursor Next Line
 		u8(`E`) {
 			if input.intermediates.len == 0 {
@@ -840,6 +849,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.carriage_return, ActionPayload{})
 			}
 		}
+
 		// CPL - Cursor Previous Line
 		u8(`F`) {
 			if input.intermediates.len == 0 {
@@ -848,6 +858,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.carriage_return, ActionPayload{})
 			}
 		}
+
 		// HPA - Cursor Horizontal Position Absolute
 		u8(`G`), u8(`\``) {
 			if input.intermediates.len == 0 {
@@ -855,6 +866,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.cursor_col, ActionPayload{ num: val })
 			}
 		}
+
 		// CUP - Set Cursor Position
 		u8(`H`), u8(`f`) {
 			if input.intermediates.len == 0 {
@@ -862,6 +874,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.cursor_pos, ActionPayload{ num: row, num2: col })
 			}
 		}
+
 		// CHT - Cursor Horizontal Tabulation
 		u8(`I`) {
 			if input.intermediates.len == 0 {
@@ -869,14 +882,17 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.horizontal_tab, ActionPayload{ num: val })
 			}
 		}
+
 		// Erase Display
 		u8(`J`) {
 			self.csi_erase_display(input)
 		}
+
 		// Erase Line
 		u8(`K`) {
 			self.csi_erase_line(input)
 		}
+
 		// IL - Insert Lines
 		u8(`L`) {
 			if input.intermediates.len == 0 {
@@ -884,6 +900,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.insert_lines, ActionPayload{ num: val })
 			}
 		}
+
 		// DL - Delete Lines
 		u8(`M`) {
 			if input.intermediates.len == 0 {
@@ -891,6 +908,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.delete_lines, ActionPayload{ num: val })
 			}
 		}
+
 		// DCH - Delete Character
 		u8(`P`) {
 			if input.intermediates.len == 0 {
@@ -898,6 +916,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.delete_chars, ActionPayload{ num: val })
 			}
 		}
+
 		// SU - Scroll Up
 		u8(`S`) {
 			if input.intermediates.len == 0 {
@@ -905,6 +924,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.scroll_up, ActionPayload{ num: val })
 			}
 		}
+
 		// SD - Scroll Down
 		u8(`T`) {
 			if input.intermediates.len == 0 {
@@ -912,10 +932,12 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.scroll_down, ActionPayload{ num: val })
 			}
 		}
+
 		// Cursor Tabulation Control
 		u8(`W`) {
 			self.csi_tab_control(input)
 		}
+
 		// ECH - Erase Characters
 		u8(`X`) {
 			if input.intermediates.len == 0 {
@@ -923,6 +945,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.erase_chars, ActionPayload{ num: val })
 			}
 		}
+
 		// CBT - Cursor Horizontal Tabulation Back
 		u8(`Z`) {
 			if input.intermediates.len == 0 {
@@ -930,6 +953,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.horizontal_tab_back, ActionPayload{ num: val })
 			}
 		}
+
 		// HPR - Cursor Horizontal Position Relative
 		u8(`a`) {
 			if input.intermediates.len == 0 {
@@ -937,6 +961,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.cursor_col_relative, ActionPayload{ num: val })
 			}
 		}
+
 		// REP - Repeat Previous Char
 		u8(`b`) {
 			if input.intermediates.len == 0 {
@@ -944,10 +969,12 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.print_repeat, ActionPayload{ num: val })
 			}
 		}
+
 		// DA - Device Attributes
 		u8(`c`) {
 			self.csi_device_attributes(input)
 		}
+
 		// VPA - Cursor Vertical Position Absolute
 		u8(`d`) {
 			if input.intermediates.len == 0 {
@@ -955,6 +982,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.cursor_row, ActionPayload{ num: val })
 			}
 		}
+
 		// VPR - Cursor Vertical Position Relative
 		u8(`e`) {
 			if input.intermediates.len == 0 {
@@ -962,6 +990,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.cursor_row_relative, ActionPayload{ num: val })
 			}
 		}
+
 		// TBC - Tab Clear
 		u8(`g`) {
 			if input.intermediates.len == 0 && input.params.len == 1 {
@@ -972,46 +1001,57 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				}
 			}
 		}
+
 		// SM - Set Mode
 		u8(`h`) {
 			self.csi_set_reset_mode(input, true)
 		}
+
 		// RM - Reset Mode
 		u8(`l`) {
 			self.csi_set_reset_mode(input, false)
 		}
+
 		// SGR - Select Graphic Rendition
 		u8(`m`) {
 			self.csi_sgr(input)
 		}
+
 		// DSR and CSI > n
 		u8(`n`) {
 			self.csi_dsr(input)
 		}
+
 		// DECRQM - Request Mode
 		u8(`p`) {
 			self.csi_request_mode(input)
 		}
+
 		// DECSCUSR / DECSCA / XTVERSION
 		u8(`q`) {
 			self.csi_q(input)
 		}
+
 		// DECSTBM / Restore Mode
 		u8(`r`) {
 			self.csi_r(input)
 		}
+
 		// DECSLRM / Save Mode / XTSHIFTESCAPE
 		u8(`s`) {
 			self.csi_s(input)
 		}
+
 		// XTWINOPS
 		u8(`t`) {
 			self.csi_t(input)
 		}
+
 		// SCORC / Kitty keyboard
 		u8(`u`) {
 			self.csi_u(input)
 		}
+
 		// ICH - Insert Blanks
 		u8(`@`) {
 			if input.intermediates.len == 0 {
@@ -1019,6 +1059,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 				self.dispatch(.insert_blanks, ActionPayload{ num: val })
 			}
 		}
+
 		// DECSASD - Select Active Status Display
 		u8(`}`) {
 			if input.intermediates.len == 1 && input.intermediates[0] == u8(`$`)
@@ -1088,7 +1129,9 @@ fn (mut self Stream) csi_erase_display(input CSIAction) {
 		2 { ActionKey.erase_display_complete }
 		3 { ActionKey.erase_display_scrollback }
 		4 { ActionKey.erase_display_scroll_complete }
-		else { return }
+		else {
+			return
+		}
 	}
 
 	self.dispatch(key, ActionPayload{ flag: protected_ })
@@ -1115,7 +1158,9 @@ fn (mut self Stream) csi_erase_line(input CSIAction) {
 		0 { ActionKey.erase_line_right }
 		1 { ActionKey.erase_line_left }
 		2 { ActionKey.erase_line_complete }
-		else { return }
+		else {
+			return
+		}
 	}
 
 	self.dispatch(key, ActionPayload{ flag: protected_ })
@@ -1183,7 +1228,9 @@ fn (mut self Stream) csi_sgr(input CSIAction) {
 			1 { ModifyKeyFormat.cursor_keys }
 			2 { ModifyKeyFormat.function_keys }
 			4 { ModifyKeyFormat.other_keys_none }
-			else { return }
+			else {
+				return
+			}
 		}
 
 		mut final_format := format
@@ -1206,11 +1253,9 @@ fn (mut self Stream) csi_dsr(input CSIAction) {
 		}
 		question := input.intermediates.len == 1 && input.intermediates[0] == u8(`?`)
 
-		if _ := DeviceStatusRequest.from_int(input.params[0], question) {
+		if request := DeviceStatusRequest.from_int(input.params[0], question) {
 			self.dispatch(.device_status, ActionPayload{
-				// XTODO: proper device status request payload
-				num: input.params[0]
-				flag: question
+				device_status: request
 			})
 		}
 		return
@@ -1259,7 +1304,9 @@ fn (mut self Stream) csi_device_attributes(input CSIAction) {
 		match input.intermediates[0] {
 			u8(`>`) { DeviceAttributeReq.secondary }
 			u8(`=`) { DeviceAttributeReq.tertiary }
-			else { return }
+			else {
+				return
+			}
 		}
 	} else {
 		return
@@ -1287,7 +1334,9 @@ fn (mut self Stream) csi_q(input CSIAction) {
 						4 { AnsiCursorStyle.steady_underline }
 						5 { AnsiCursorStyle.blinking_bar }
 						6 { AnsiCursorStyle.steady_bar }
-						else { return }
+						else {
+							return
+						}
 					}
 				}
 				else {
@@ -1296,6 +1345,7 @@ fn (mut self Stream) csi_q(input CSIAction) {
 			}
 			self.dispatch(.cursor_style, ActionPayload{ cursor_style: style })
 		}
+
 		// DECSCA - Select Character Protection Attribute
 		u8(`"`) {
 			pm := match input.params.len {
@@ -1306,7 +1356,9 @@ fn (mut self Stream) csi_q(input CSIAction) {
 					match input.params[0] {
 						0, 2 { ActionKey.protected_mode_off }
 						1 { ActionKey.protected_mode_dec }
-						else { return }
+						else {
+							return
+						}
 					}
 				}
 				else {
@@ -1315,6 +1367,7 @@ fn (mut self Stream) csi_q(input CSIAction) {
 			}
 			self.dispatch(pm, ActionPayload{})
 		}
+
 		// XTVERSION
 		u8(`>`) {
 			self.dispatch(.xtversion, ActionPayload{})
@@ -1388,7 +1441,9 @@ fn (mut self Stream) csi_s(input CSIAction) {
 						match input.params[0] {
 							0 { false }
 							1 { true }
-							else { return }
+							else {
+								return
+							}
 						}
 					} else {
 						return
@@ -1471,7 +1526,9 @@ fn (mut self Stream) csi_u(input CSIAction) {
 				u8(`>`) {
 					// Kitty keyboard push
 					flags := if input.params.len == 1 {
-						if input.params[0] > 31 { return }
+						if input.params[0] > 31 {
+							return
+						}
 						u8(input.params[0])
 					} else {
 						u8(0)
@@ -1488,7 +1545,9 @@ fn (mut self Stream) csi_u(input CSIAction) {
 				u8(`=`) {
 					// Kitty keyboard set
 					flags := if input.params.len >= 1 {
-						if input.params[0] > 31 { return }
+						if input.params[0] > 31 {
+							return
+						}
 						u8(input.params[0])
 					} else {
 						u8(0)
@@ -1498,7 +1557,9 @@ fn (mut self Stream) csi_u(input CSIAction) {
 						1 { ActionKey.kitty_keyboard_set }
 						2 { ActionKey.kitty_keyboard_set_or }
 						3 { ActionKey.kitty_keyboard_set_not }
-						else { return }
+						else {
+							return
+						}
 					}
 					self.dispatch(key, ActionPayload{ kitty_flags: flags })
 				}
@@ -1525,20 +1586,10 @@ fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 			// Ignored (icon not supported)
 		}
 		.clipboard_contents {
-			// OSC 52 format: kind;base64data
-			// kind is a single character (c=clipboard, s=selection, p=primary, etc.)
-			mut clip_kind := u8(`c`) // default to clipboard
-			mut clip_data := cmd.data
-			sep := cmd.data.index_u8(u8(`;`))
-			if sep >= 0 {
-				if sep > 0 {
-					clip_kind = cmd.data[0]
-				}
-				clip_data = cmd.data[sep + 1..]
-			}
+			clip_kind := if cmd.data2.len > 0 { cmd.data2[0] } else { u8(`c`) }
 			self.dispatch(.clipboard_contents, ActionPayload{
 				clipboard_kind: clip_kind
-				str1: clip_data
+				str1: cmd.data
 			})
 		}
 		.report_pwd {
@@ -1561,34 +1612,28 @@ fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 			self.dispatch(.end_hyperlink, ActionPayload{})
 		}
 		.show_desktop_notification {
-			// OSC 777 iterm-style: title;body
-			// OSC 9: just the body (no title)
-			// cmd.data may contain title;body or just body
-			mut title := ''
-			mut body := cmd.data
-			sep := cmd.data.index_u8(u8(`;`))
-			if sep >= 0 {
-				title = cmd.data[..sep]
-				body = cmd.data[sep + 1..]
-			}
 			self.dispatch(.show_desktop_notification, ActionPayload{
-				str1: title
-				str2: body
+				str1: cmd.data
+				str2: cmd.data2
 			})
 		}
 		.semantic_prompt {
-			// OSC 133 format: action[;options]
-			// action is a single character: A=prompt_start, B=input_start, C=command_start, D=command_end
 			if cmd.data.len == 0 {
 				return
 			}
 			action_char := cmd.data[0]
 			action := match action_char {
-				u8(`A`) { SemanticPromptAction.prompt_start }
-				u8(`B`) { SemanticPromptAction.input_start }
-				u8(`C`) { SemanticPromptAction.command_start }
-				u8(`D`) { SemanticPromptAction.command_end }
-				else { return }
+				u8(`L`) { SemanticPromptAction.fresh_line }
+				u8(`A`) { SemanticPromptAction.fresh_line_new_prompt }
+				u8(`N`) { SemanticPromptAction.new_command }
+				u8(`P`) { SemanticPromptAction.prompt_start }
+				u8(`B`) { SemanticPromptAction.end_prompt_start_input }
+				u8(`I`) { SemanticPromptAction.end_prompt_start_input_terminate_eol }
+				u8(`C`) { SemanticPromptAction.end_input_start_output }
+				u8(`D`) { SemanticPromptAction.end_command }
+				else {
+					return
+				}
 			}
 			// Parse any ;k=v options after the action letter
 			mut opts := ''
@@ -1645,7 +1690,9 @@ fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 				2 { ProgressState.error_state }
 				3 { ProgressState.indeterminate }
 				4 { ProgressState.pause }
-				else { return }
+				else {
+					return
+				}
 			}
 			self.dispatch(.progress_report, ActionPayload{
 				progress_state: state
@@ -1675,6 +1722,7 @@ fn (mut self Stream) esc_dispatch(action ESCAction) {
 		u8(`0`) {
 			self.configure_charset(action.intermediates, .dec_special)
 		}
+
 		// DECSC - Save Cursor
 		u8(`7`) {
 			if action.intermediates.len == 0 {
@@ -1690,30 +1738,35 @@ fn (mut self Stream) esc_dispatch(action ESCAction) {
 				self.dispatch(.decaln, ActionPayload{})
 			}
 		}
+
 		// IND - Index
 		u8(`D`) {
 			if action.intermediates.len == 0 {
 				self.dispatch(.index, ActionPayload{})
 			}
 		}
+
 		// NEL - Next Line
 		u8(`E`) {
 			if action.intermediates.len == 0 {
 				self.dispatch(.next_line, ActionPayload{})
 			}
 		}
+
 		// HTS - Horizontal Tab Set
 		u8(`H`) {
 			if action.intermediates.len == 0 {
 				self.dispatch(.tab_set, ActionPayload{})
 			}
 		}
+
 		// RI - Reverse Index
 		u8(`M`) {
 			if action.intermediates.len == 0 {
 				self.dispatch(.reverse_index, ActionPayload{})
 			}
 		}
+
 		// SS2 - Single Shift 2
 		u8(`N`) {
 			if action.intermediates.len == 0 {
@@ -1724,6 +1777,7 @@ fn (mut self Stream) esc_dispatch(action ESCAction) {
 				})
 			}
 		}
+
 		// SS3 - Single Shift 3
 		u8(`O`) {
 			if action.intermediates.len == 0 {
@@ -1734,18 +1788,21 @@ fn (mut self Stream) esc_dispatch(action ESCAction) {
 				})
 			}
 		}
+
 		// SPA - Start of Guarded Area
 		u8(`V`) {
 			if action.intermediates.len == 0 {
 				self.dispatch(.protected_mode_iso, ActionPayload{})
 			}
 		}
+
 		// EPA - End of Guarded Area
 		u8(`W`) {
 			if action.intermediates.len == 0 {
 				self.dispatch(.protected_mode_off, ActionPayload{})
 			}
 		}
+
 		// DECID
 		u8(`Z`) {
 			if action.intermediates.len == 0 {
@@ -1754,12 +1811,14 @@ fn (mut self Stream) esc_dispatch(action ESCAction) {
 				})
 			}
 		}
+
 		// RIS - Full Reset
 		u8(`c`) {
 			if action.intermediates.len == 0 {
 				self.dispatch(.full_reset, ActionPayload{})
 			}
 		}
+
 		// LS2 - Locking Shift 2
 		u8(`n`) {
 			if action.intermediates.len == 0 {
@@ -1770,6 +1829,7 @@ fn (mut self Stream) esc_dispatch(action ESCAction) {
 				})
 			}
 		}
+
 		// LS3 - Locking Shift 3
 		u8(`o`) {
 			if action.intermediates.len == 0 {
@@ -1780,6 +1840,7 @@ fn (mut self Stream) esc_dispatch(action ESCAction) {
 				})
 			}
 		}
+
 		// LS1R - Locking Shift 1 Right
 		u8(`~`) {
 			if action.intermediates.len == 0 {
@@ -1790,6 +1851,7 @@ fn (mut self Stream) esc_dispatch(action ESCAction) {
 				})
 			}
 		}
+
 		// LS2R - Locking Shift 2 Right
 		u8(`}`) {
 			if action.intermediates.len == 0 {
@@ -1800,6 +1862,7 @@ fn (mut self Stream) esc_dispatch(action ESCAction) {
 				})
 			}
 		}
+
 		// LS3R - Locking Shift 3 Right
 		u8(`|`) {
 			if action.intermediates.len == 0 {
@@ -1810,6 +1873,7 @@ fn (mut self Stream) esc_dispatch(action ESCAction) {
 				})
 			}
 		}
+
 		// Set application keypad mode
 		u8(`=`) {
 			if action.intermediates.len == 0 {
@@ -1819,6 +1883,7 @@ fn (mut self Stream) esc_dispatch(action ESCAction) {
 				}
 			}
 		}
+
 		// Reset application keypad mode
 		u8(`>`) {
 			if action.intermediates.len == 0 {
@@ -1827,6 +1892,7 @@ fn (mut self Stream) esc_dispatch(action ESCAction) {
 				}
 			}
 		}
+
 		// ST (String Terminator) - no-op, parser always accepts ST
 		u8(`\\`) {}
 		else {}
@@ -1842,7 +1908,9 @@ fn (mut self Stream) configure_charset(intermediates []u8, charset Charset) {
 		u8(`)`) { CharsetSlot.g1 }
 		u8(`*`) { CharsetSlot.g2 }
 		u8(`+`) { CharsetSlot.g3 }
-		else { return }
+		else {
+			return
+		}
 	}
 	self.dispatch(.configure_charset, ActionPayload{
 		charset_slot: slot
@@ -1859,15 +1927,7 @@ fn (mut self Stream) configure_charset(intermediates []u8, charset Charset) {
 
 // mouse_shape_from_string converts a string to a MouseShape.
 pub fn mouse_shape_from_string(s string) ?MouseShape {
-	return match s {
-		'default' { MouseShape.default_ }
-		'text' { MouseShape.text }
-		'pointer' { MouseShape.pointer }
-		'crosshair' { MouseShape.crosshair }
-		'help' { MouseShape.help }
-		'progress' { MouseShape.progress }
-		else { none }
-	}
+	return MouseShape.from_string(s)
 }
 
 // SgrParser is defined in sgr.v with full colon-separator support.

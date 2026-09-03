@@ -8,47 +8,8 @@ module terminal
 //
 // Must be kept in sync with ghostty_cursor_shape_e
 //
-// Note: A simpler MouseShape is also defined in terminal.v. This is the
-// canonical full definition from mouse_shape.zig.
-pub enum FullMouseShape {
-	default_
-	context_menu
-	help
-	pointer
-	progress
-	wait
-	cell
-	crosshair
-	text
-	vertical_text
-	alias
-	copy
-	move
-	no_drop
-	not_allowed
-	grab
-	grabbing
-	all_scroll
-	col_resize
-	row_resize
-	n_resize
-	e_resize
-	s_resize
-	w_resize
-	ne_resize
-	nw_resize
-	se_resize
-	sw_resize
-	ew_resize
-	ns_resize
-	nesw_resize
-	nwse_resize
-	zoom_in
-	zoom_out
-}
-
 // Build cursor shape from string or none if it's unknown.
-pub fn FullMouseShape.from_string(v string) ?FullMouseShape {
+pub fn MouseShape.from_string(v string) ?MouseShape {
 	// W3C names
 	return match v {
 		'default' { .default_ }
@@ -111,6 +72,3 @@ pub fn FullMouseShape.from_string(v string) ?FullMouseShape {
 		else { none }
 	}
 }
-
-// XTODO: getGObjectType - GTK GObject integration is not translated.
-// In Zig this conditionally builds a GObject type for GTK environments.

@@ -1509,11 +1509,11 @@ module terminal
 //
 // --- Original Ghostty Comments End: src/terminal/Terminal.zig
 
-
 // The primary terminal emulation structure. This represents a single
 // "terminal" containing a grid of characters and exposes various operations
 // on that grid. This also maintains the scrollback buffer.
 
+import osc
 import strings
 
 // Default tabstop interval
@@ -1541,7 +1541,7 @@ pub mut:
 	cols u16
 
 	// The size of the screen in pixels. This is used for pty events and images.
-	width_px u32
+	width_px  u32
 	height_px u32
 
 	// The current scrolling region.
@@ -1621,10 +1621,10 @@ pub mut:
 // These are all mutually exclusive (hence in a single enum).
 pub enum MouseEvents {
 	none
-	x10      // 9
-	normal   // 1000
-	button   // 1002
-	any      // 1003
+	x10 // 9
+	normal // 1000
+	button // 1002
+	any // 1003
 }
 
 // Returns true if this event sends motion events.
@@ -1636,9 +1636,9 @@ pub fn (self MouseEvents) motion() bool {
 // These are all mutually exclusive (hence in a single enum).
 pub enum MouseFormat {
 	x10
-	utf8       // 1005
-	sgr        // 1006
-	urxvt      // 1015
+	utf8 // 1005
+	sgr // 1006
+	urxvt // 1015
 	sgr_pixels // 1016
 }
 
@@ -1803,7 +1803,9 @@ pub fn (mut self ScreenSet) deinit() {
 
 pub fn (mut self ScreenSet) get(key ScreenKey) ?&Screen {
 	match key {
-		.primary { return &self.primary }
+		.primary {
+			return &self.primary
+		}
 		.alternate {
 			if self.alternate_ptr != unsafe { nil } {
 				return self.alternate_ptr
@@ -1830,9 +1832,12 @@ pub fn (mut self ScreenSet) switch_to(key ScreenKey) {
 
 pub fn (mut self ScreenSet) remove(key ScreenKey) {
 	match key {
-		.alternate { self.alternate_ptr = unsafe { nil } }
-		.primary {} // never remove primary
+		.alternate {
+			self.alternate_ptr = unsafe { nil }
+		}
+		.primary {}
 	}
+	// never remove primary
 }
 
 // ============================================================
@@ -1865,46 +1870,46 @@ pub fn (mut self ModeState) reset() {
 }
 
 pub enum Mode {
-	wraparound             // = 0
-	origin                 // = 1
-	cursor_visible         // = 2
-	insert                 // = 3
-	linefeed               // = 4
-	grapheme_cluster       // = 5 (mode 2027)
-	reverse_wrap           // = 6
-	reverse_wrap_extended  // = 7
+	wraparound // = 0
+	origin // = 1
+	cursor_visible // = 2
+	insert // = 3
+	linefeed // = 4
+	grapheme_cluster // = 5 (mode 2027)
+	reverse_wrap // = 6
+	reverse_wrap_extended // = 7
 	enable_left_and_right_margin // = 8
-	enable_mode_3          // = 9 (DECCOLM support)
-	column_132             // = 10
-	bracketed_paste        // = 11
-	focus_event            // = 12
-	cursor_blinking        // = 13
-	autorepeat             // = 14
-	reverse_colors         // = 15
-	alt_screen_legacy      // = 16 (mode 47)
-	alt_screen             // = 17 (mode 1047)
+	enable_mode_3 // = 9 (DECCOLM support)
+	column_132 // = 10
+	bracketed_paste // = 11
+	focus_event // = 12
+	cursor_blinking // = 13
+	autorepeat // = 14
+	reverse_colors // = 15
+	alt_screen_legacy // = 16 (mode 47)
+	alt_screen // = 17 (mode 1047)
 	alt_screen_save_cursor_clear_enter // = 18 (mode 1049)
-	save_cursor            // = 19 (mode 1048)
-	synchronized_output    // = 20
-	in_band_size_reports   // = 21 (mode 2048)
-	mouse_event_x10       // = 22 (mode 9)
-	mouse_event_normal    // = 23 (mode 1000)
-	mouse_event_button    // = 24 (mode 1002)
-	mouse_event_any       // = 25 (mode 1003)
-	mouse_format_utf8     // = 26 (mode 1005)
-	mouse_format_sgr      // = 27 (mode 1006)
-	mouse_format_urxvt    // = 28 (mode 1015)
+	save_cursor // = 19 (mode 1048)
+	synchronized_output // = 20
+	in_band_size_reports // = 21 (mode 2048)
+	mouse_event_x10 // = 22 (mode 9)
+	mouse_event_normal // = 23 (mode 1000)
+	mouse_event_button // = 24 (mode 1002)
+	mouse_event_any // = 25 (mode 1003)
+	mouse_format_utf8 // = 26 (mode 1005)
+	mouse_format_sgr // = 27 (mode 1006)
+	mouse_format_urxvt // = 28 (mode 1015)
 	mouse_format_sgr_pixels // = 29 (mode 1016)
-	disable_keyboard      // = 30 (KAM, ANSI mode 2)
-	send_receive_mode     // = 31 (SRM, ANSI mode 12)
-	cursor_keys           // = 32 (DECCKM, DEC mode 1)
-	slow_scroll            // = 33 (DEC mode 4)
-	keypad_keys           // = 34 (DEC mode 66)
+	disable_keyboard // = 30 (KAM, ANSI mode 2)
+	send_receive_mode // = 31 (SRM, ANSI mode 12)
+	cursor_keys // = 32 (DECCKM, DEC mode 1)
+	slow_scroll // = 33 (DEC mode 4)
+	keypad_keys // = 34 (DEC mode 66)
 	mouse_alternate_scroll // = 35 (DEC mode 1007)
 	ignore_keypad_with_numlock // = 36 (DEC mode 1035)
-	alt_esc_prefix        // = 37 (DEC mode 1036)
-	alt_sends_escape      // = 38 (DEC mode 1039)
-	report_color_scheme   // = 39 (DEC mode 2031)
+	alt_esc_prefix // = 37 (DEC mode 1036)
+	alt_sends_escape // = 38 (DEC mode 1039)
+	report_color_scheme // = 39 (DEC mode 2031)
 }
 
 // ============================================================
@@ -1913,11 +1918,39 @@ pub enum Mode {
 
 pub enum MouseShape {
 	default_
-	text
-	pointer
-	crosshair
+	context_menu
 	help
+	pointer
 	progress
+	wait
+	cell
+	crosshair
+	text
+	vertical_text
+	alias
+	copy
+	move
+	no_drop
+	not_allowed
+	grab
+	grabbing
+	all_scroll
+	col_resize
+	row_resize
+	n_resize
+	e_resize
+	s_resize
+	w_resize
+	ne_resize
+	nw_resize
+	se_resize
+	sw_resize
+	ew_resize
+	ns_resize
+	nesw_resize
+	nwse_resize
+	zoom_in
+	zoom_out
 }
 
 // ============================================================
@@ -2305,8 +2338,9 @@ fn (mut self Terminal) print_cell(unmapped_c u32, wide CellWide) {
 						row.cells[cell_x - 1] = CellData{}
 					}
 				}
-				.spacer_head {} // TODO: investigate
+				.spacer_head {}
 			}
+			// TODO: investigate
 		}
 
 		// If the prior value had graphemes, clear those
@@ -2358,13 +2392,22 @@ fn (mut self Terminal) print_cell(unmapped_c u32, wide CellWide) {
 	}
 }
 
-fn (self &Terminal) map_charset(unmapped_c u32) u32 {
-	// XTODO
-	// Full charset mapping requires charsets.table() lookup for
-	// non-UTF8/ASCII character sets. Single-shift handling also
-	// needs charset.single_shift state.
-	// For now, return as-is (UTF-8/ASCII passthrough).
-	return unmapped_c
+fn (mut self Terminal) map_charset(unmapped_c u32) u32 {
+	// A single shift applies to exactly one printed character.
+	slot := if once := self.screens.active.charset.single_shift {
+		self.screens.active.charset.single_shift = none
+		once
+	} else {
+		self.screens.active.charset.gl
+	}
+	set := self.screens.active.charset.charsets.get(slot)
+	if set == .utf8 || set == .ascii {
+		return unmapped_c
+	}
+	if unmapped_c > 0xff {
+		return u32(` `)
+	}
+	return u32(charset_table(set)[int(unmapped_c)])
 }
 
 fn (mut self Terminal) print_wrap() ! {
@@ -2518,8 +2561,12 @@ pub fn (mut self Terminal) invoke_charset(active ActiveSlot, slot CharsetSlot, s
 		return
 	}
 	match active {
-		.gl { self.screens.active.charset.gl = slot }
-		.gr { self.screens.active.charset.gr = slot }
+		.gl {
+			self.screens.active.charset.gl = slot
+		}
+		.gr {
+			self.screens.active.charset.gr = slot
+		}
 	}
 }
 
@@ -2683,11 +2730,13 @@ pub fn (mut self Terminal) cursor_left(count_req int) {
 					return
 				}
 			}
+
 			// Handled in while loop
 			.reverse_extended {}
 			// Handled above
-			.none {} // unreachable
+			.none {}
 		}
+		// unreachable
 	}
 
 	for {
@@ -3161,10 +3210,7 @@ pub fn (mut self Terminal) scroll_viewport(behavior ScrollViewport, delta int) !
 		.top { self.screens.active.scroll(.top) }
 		.bottom { self.screens.active.scroll(.active) }
 		.delta {
-			// XTODO
-			// Full delta scroll needs PageList.scroll with delta_row support.
-			// This simplified version just scrolls active.
-			self.screens.active.scroll(.active)
+			self.screens.active.scroll_delta_rows(delta)
 		}
 	}
 }
@@ -3320,8 +3366,7 @@ pub fn (mut self Terminal) insert_lines(count int) {
 			if !left_right {
 				self.screens.active.clear_active_row(u32(y))
 			} else {
-				self.screens.active.clear_cells(idx, int(self.scrolling_region.left),
-					int(self.scrolling_region.right) + 1)
+				self.screens.active.clear_cells(idx, int(self.scrolling_region.left), int(self.scrolling_region.right) + 1)
 			}
 		}
 	}
@@ -3407,8 +3452,7 @@ pub fn (mut self Terminal) delete_lines(count int) {
 			if !left_right {
 				self.screens.active.clear_active_row(u32(y))
 			} else {
-				self.screens.active.clear_cells(idx, int(self.scrolling_region.left),
-					int(self.scrolling_region.right) + 1)
+				self.screens.active.clear_cells(idx, int(self.scrolling_region.left), int(self.scrolling_region.right) + 1)
 			}
 		}
 	}
@@ -3740,8 +3784,7 @@ pub fn (mut self Terminal) erase_display(mode EraseDisplay, protected_req bool) 
 
 			// All lines above
 			if self.screens.active.cursor.y > 0 {
-				self.screens.active.clear_rows_range(0, int(self.screens.active.cursor.y),
-					is_protected)
+				self.screens.active.clear_rows_range(0, int(self.screens.active.cursor.y), is_protected)
 			}
 		}
 		.scrollback {
@@ -3768,9 +3811,15 @@ fn (self &Terminal) check_at_prompt_for_clear() bool {
 		}
 		row := self.screens.active.pages.screen_rows[idx]
 		match row.semantic_prompt {
-			.prompt, .prompt_continuation { return true }
-			.unknown { return false }
-			else { continue }
+			.prompt, .prompt_continuation {
+				return true
+			}
+			.unknown {
+				return false
+			}
+			else {
+				continue
+			}
 		}
 	}
 	return false
@@ -3881,8 +3930,34 @@ pub fn (mut self Terminal) print_attributes() !string {
 		result.write_string(';9')
 	}
 
-	// Foreground and background color formatting would go here
-	// XTODO: full color attribute printing needs style color type matching
+	match pen.fg_color {
+		.none {}
+		.palette {
+			idx := pen.fg_palette
+			if idx >= 16 {
+				result.write_string(';38:5:${idx}')
+			} else if idx >= 8 {
+				result.write_string(';9${idx - 8}')
+			} else {
+				result.write_string(';3${idx}')
+			}
+		}
+		.rgb { result.write_string(';38:2::${pen.fg_r}:${pen.fg_g}:${pen.fg_b}') }
+	}
+	match pen.bg_color {
+		.none {}
+		.palette {
+			idx := pen.bg_palette
+			if idx >= 16 {
+				result.write_string(';48:5:${idx}')
+			} else if idx >= 8 {
+				result.write_string(';10${idx - 8}')
+			} else {
+				result.write_string(';4${idx}')
+			}
+		}
+		.rgb { result.write_string(';48:2::${pen.bg_r}:${pen.bg_g}:${pen.bg_b}') }
+	}
 
 	return result.str()
 }
@@ -4091,6 +4166,7 @@ pub fn (mut self Terminal) switch_screen_mode(mode SwitchScreenMode, enabled boo
 				self.erase_display(.complete, false)
 			}
 		}
+
 		// 1049 unconditionally saves the cursor on enabling.
 		.mode_1049 {
 			if enabled {
@@ -4117,6 +4193,7 @@ pub fn (mut self Terminal) switch_screen_mode(mode SwitchScreenMode, enabled boo
 				}
 			}
 		}
+
 		// Mode 1049 restores cursor on the primary screen when disabled.
 		.mode_1049 {
 			if enabled {
@@ -4194,29 +4271,58 @@ pub fn (mut self Terminal) full_reset() {
 // coherent state, since callers typically can't handle errors (since
 // they're sending sequences via the pty).
 //
-// Ghostty's semanticPrompt handles 8 spec actions (fresh_line,
-// fresh_line_new_prompt, new_command, prompt_start, end_prompt_start_input,
-// end_prompt_start_input_terminate_eol, end_input_start_output, end_command).
-// The readonly stream in this port only decodes OSC 133 into a 4-value
-// SemanticPromptAction, so we map each of those to the corresponding spec
-// behavior below, translating the full logic where the enum permits.
 pub fn (mut self Terminal) semantic_prompt(action SemanticPromptAction, exit_code ?i32) {
-	match action {
-		// OSC 133;A (and the implicit start-of-prompt / N command). Same as
-		// fresh_line_new_prompt: first do a fresh-line, then subsequent text
-		// (until B/I) is a prompt string.
-		.prompt_start {
-			self.semantic_prompt_fresh_line()
+	options := if code := exit_code { '${code}' } else { '' }
+	self.semantic_prompt_options(action, options)
+}
 
-			// Subsequent text is a prompt string. Default kind is initial.
-			self.screens.active.cursor_set_semantic_content_prompt(.initial)
+// Perform a semantic prompt command with its raw semicolon-separated options.
+// Malformed and unknown options are ignored as required by the OSC 133 spec.
+pub fn (mut self Terminal) semantic_prompt_options(action SemanticPromptAction, options string) {
+	match action {
+		.fresh_line {
+			self.semantic_prompt_fresh_line()
 		}
-		// OSC 133;B: End of prompt and start of user input.
-		.input_start {
+		.fresh_line_new_prompt {
+			self.semantic_prompt_fresh_line()
+			self.screens.active.cursor_set_semantic_content_prompt(prompt_kind_from_osc(options))
+
+			if redraw := osc.read_redraw(options) {
+				self.flags.shell_redraws_prompt = match redraw {
+					.redraw_false { .false_ }
+					.redraw_true { .true_ }
+					.last { .last }
+				}
+			}
+
+			if click_events := osc.read_click_events(options) {
+				if click_events {
+					self.screens.active.semantic_prompt.click = .click_events
+					return
+				}
+			}
+			if click := osc.read_click(options) {
+				self.screens.active.semantic_prompt.click = match click {
+					.line { .cl_line }
+					.multiple { .cl_multiple }
+					.conservative_vertical { .cl_conservative_vertical }
+					.smart_vertical { .cl_smart_vertical }
+				}
+			}
+		}
+		.new_command {
+			self.semantic_prompt_options(.fresh_line_new_prompt, options)
+		}
+		.prompt_start {
+			self.screens.active.cursor_set_semantic_content_prompt(prompt_kind_from_osc(options))
+		}
+		.end_prompt_start_input {
 			self.screens.active.cursor_set_semantic_content_input(false)
 		}
-		// OSC 133;C: End of input, and start of output.
-		.command_start {
+		.end_prompt_start_input_terminate_eol {
+			self.screens.active.cursor_set_semantic_content_input(true)
+		}
+		.end_input_start_output {
 			self.screens.active.cursor_set_semantic_content_output()
 
 			// If our current row is marked as a prompt and we're at column
@@ -4237,14 +4343,21 @@ pub fn (mut self Terminal) semantic_prompt(action SemanticPromptAction, exit_cod
 				}
 			}
 		}
-		// OSC 133;D: End of command. From a terminal state perspective, this
-		// doesn't really do anything. Other terminals appear to do nothing
-		// here. We reset our semantic content state to output.
-		.command_end {
+
+		.end_command {
 			self.screens.active.cursor_set_semantic_content_output()
 		}
 	}
-	_ = exit_code
+}
+
+fn prompt_kind_from_osc(options string) PromptKind {
+	kind := osc.read_prompt_kind(options) or { return .initial }
+	return match kind {
+		.initial { .initial }
+		.right { .right }
+		.continuation { .continuation }
+		.secondary { .secondary }
+	}
 }
 
 // OSC 133;L: do a fresh-line.
@@ -4384,16 +4497,27 @@ fn is_zero_width(c u32) bool {
 	}
 	// Combining Diacritical Marks and related blocks.
 	if (c >= 0x0300 && c <= 0x036F) // Combining Diacritical Marks
+
 		|| (c >= 0x0483 && c <= 0x0489) // Cyrillic combining
+
 		|| (c >= 0x0591 && c <= 0x05BD) // Hebrew points
+
 		|| (c >= 0x0610 && c <= 0x061A) // Arabic marks
+
 		|| (c >= 0x064B && c <= 0x065F) // Arabic marks
+
 		|| c == 0x0670 // Arabic superscript alef
+
 		|| (c >= 0x06D6 && c <= 0x06DC) // Arabic small high
+
 		|| (c >= 0x0E31 && c <= 0x0E3A && c != 0x0E32 && c != 0x0E33) // Thai
+
 		|| (c >= 0x1AB0 && c <= 0x1AFF) // Combining Diacritical Marks Extended
+
 		|| (c >= 0x1DC0 && c <= 0x1DFF) // Combining Diacritical Marks Supplement
+
 		|| (c >= 0x20D0 && c <= 0x20FF) // Combining Diacritical Marks for Symbols
+
 		|| (c >= 0xFE20 && c <= 0xFE2F) { // Combining Half Marks
 		return true
 	}
@@ -4420,21 +4544,36 @@ fn is_wide(c u32) bool {
 		return true
 	}
 	return (c >= 0x1100 && c <= 0x115F) // Hangul Jamo
+
 		|| c == 0x2329 || c == 0x232A
 		|| (c >= 0x2E80 && c <= 0x303E) // CJK Radicals, Kangxi
+
 		|| (c >= 0x3041 && c <= 0x33FF) // Hiragana..CJK compat
+
 		|| (c >= 0x3400 && c <= 0x4DBF) // CJK Ext A
+
 		|| (c >= 0x4E00 && c <= 0x9FFF) // CJK Unified
+
 		|| (c >= 0xA000 && c <= 0xA4CF) // Yi
+
 		|| (c >= 0xAC00 && c <= 0xD7A3) // Hangul Syllables
+
 		|| (c >= 0xF900 && c <= 0xFAFF) // CJK Compat Ideographs
+
 		|| (c >= 0xFE10 && c <= 0xFE19) // Vertical forms
+
 		|| (c >= 0xFE30 && c <= 0xFE6F) // CJK Compat forms, Small forms
+
 		|| (c >= 0xFF00 && c <= 0xFF60) // Fullwidth forms
+
 		|| (c >= 0xFFE0 && c <= 0xFFE6) // Fullwidth signs
+
 		|| (c >= 0x1F300 && c <= 0x1F64F) // Emoji (Misc Symbols/Pictographs, Emoticons)
+
 		|| (c >= 0x1F900 && c <= 0x1F9FF) // Supplemental Symbols and Pictographs
+
 		|| (c >= 0x1FA70 && c <= 0x1FAFF) // Symbols and Pictographs Extended-A
+
 		|| (c >= 0x20000 && c <= 0x3FFFD) // CJK Ext B+ and Supplementary Ideographic
 }
 
