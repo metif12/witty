@@ -11,53 +11,53 @@ module font
 // the same compile-time resource embedding used by Zig's `@embedFile`.
 
 // Default fonts that we prefer for Ghostty.
-pub const embedded_variable = $embed_file('res/JetBrainsMono-Variable.ttf').to_bytes()
-pub const embedded_variable_italic = $embed_file('res/JetBrainsMono-VariableItalic.ttf').to_bytes()
+pub const embedded_variable = $embed_file('@VMODROOT/font/res/JetBrainsMono-Variable.ttf').to_bytes()
+pub const embedded_variable_italic = $embed_file('@VMODROOT/font/res/JetBrainsMono-VariableItalic.ttf').to_bytes()
 
 // Symbols-only nerd font.
-pub const embedded_symbols_nerd_font = $embed_file('res/SymbolsNerdFont-Regular.ttf').to_bytes()
+pub const embedded_symbols_nerd_font = $embed_file('@VMODROOT/font/res/SymbolsNerdFont-Regular.ttf').to_bytes()
 
 // Static jetbrains mono faces, currently unused.
-pub const embedded_regular = $embed_file('res/JetBrainsMono-Regular.ttf').to_bytes()
-pub const embedded_bold = $embed_file('res/JetBrainsMono-Bold.ttf').to_bytes()
-pub const embedded_italic = $embed_file('res/JetBrainsMono-Italic.ttf').to_bytes()
-pub const embedded_bold_italic = $embed_file('res/JetBrainsMono-BoldItalic.ttf').to_bytes()
+pub const embedded_regular = $embed_file('@VMODROOT/font/res/JetBrainsMono-Regular.ttf').to_bytes()
+pub const embedded_bold = $embed_file('@VMODROOT/font/res/JetBrainsMono-Bold.ttf').to_bytes()
+pub const embedded_italic = $embed_file('@VMODROOT/font/res/JetBrainsMono-Italic.ttf').to_bytes()
+pub const embedded_bold_italic = $embed_file('@VMODROOT/font/res/JetBrainsMono-BoldItalic.ttf').to_bytes()
 
 // Emoji fonts
-pub const embedded_emoji = $embed_file('res/NotoColorEmoji.ttf').to_bytes()
-pub const embedded_emoji_text = $embed_file('res/NotoEmoji-Regular.ttf').to_bytes()
+pub const embedded_emoji = $embed_file('@VMODROOT/font/res/NotoColorEmoji.ttf').to_bytes()
+pub const embedded_emoji_text = $embed_file('@VMODROOT/font/res/NotoEmoji-Regular.ttf').to_bytes()
 
 // Fonts below are ONLY used for testing.
 
 // Fonts with general properties
-pub const embedded_arabic = $embed_file('res/KawkabMono-Regular.ttf').to_bytes()
+pub const embedded_arabic = $embed_file('@VMODROOT/font/res/KawkabMono-Regular.ttf').to_bytes()
 
 // A font for testing which is patched with nerd font symbols.
-pub const embedded_test_nerd_font = $embed_file('res/JetBrainsMonoNerdFont-Regular.ttf').to_bytes()
+pub const embedded_test_nerd_font = $embed_file('@VMODROOT/font/res/JetBrainsMonoNerdFont-Regular.ttf').to_bytes()
 
 // Specific font families below:
-pub const embedded_code_new_roman = $embed_file('res/CodeNewRoman-Regular.otf').to_bytes()
-pub const embedded_inconsolata = $embed_file('res/Inconsolata-Regular.ttf').to_bytes()
-pub const embedded_geist_mono = $embed_file('res/GeistMono-Regular.ttf').to_bytes()
-pub const embedded_jetbrains_mono = $embed_file('res/JetBrainsMonoNoNF-Regular.ttf').to_bytes()
-pub const embedded_julia_mono = $embed_file('res/JuliaMono-Regular.ttf').to_bytes()
+pub const embedded_code_new_roman = $embed_file('@VMODROOT/font/res/CodeNewRoman-Regular.otf').to_bytes()
+pub const embedded_inconsolata = $embed_file('@VMODROOT/font/res/Inconsolata-Regular.ttf').to_bytes()
+pub const embedded_geist_mono = $embed_file('@VMODROOT/font/res/GeistMono-Regular.ttf').to_bytes()
+pub const embedded_jetbrains_mono = $embed_file('@VMODROOT/font/res/JetBrainsMonoNoNF-Regular.ttf').to_bytes()
+pub const embedded_julia_mono = $embed_file('@VMODROOT/font/res/JuliaMono-Regular.ttf').to_bytes()
 
 // Cozette is a unique font because it embeds some emoji characters
 // but has a text presentation.
-pub const embedded_cozette = $embed_file('res/CozetteVector.ttf').to_bytes()
+pub const embedded_cozette = $embed_file('@VMODROOT/font/res/CozetteVector.ttf').to_bytes()
 
 // Monaspace has weird ligature behaviors we want to test in our shapers
 // so we embed it here.
-pub const embedded_monaspace_neon = $embed_file('res/MonaspaceNeon-Regular.otf').to_bytes()
+pub const embedded_monaspace_neon = $embed_file('@VMODROOT/font/res/MonaspaceNeon-Regular.otf').to_bytes()
 
 // Terminus TTF is a scalable font with bitmap glyphs at various sizes.
-pub const embedded_terminus_ttf = $embed_file('res/TerminusTTF-Regular.ttf').to_bytes()
+pub const embedded_terminus_ttf = $embed_file('@VMODROOT/font/res/TerminusTTF-Regular.ttf').to_bytes()
 
 // Spleen is a monospaced bitmap font available in multiple formats.
 // Used for testing bitmap font support across different file formats.
-pub const embedded_spleen_bdf = $embed_file('res/spleen-8x16.bdf').to_bytes()
-pub const embedded_spleen_pcf = $embed_file('res/spleen-8x16.pcf').to_bytes()
-pub const embedded_spleen_otb = $embed_file('res/spleen-8x16.otb').to_bytes()
+pub const embedded_spleen_bdf = $embed_file('@VMODROOT/font/res/spleen-8x16.bdf').to_bytes()
+pub const embedded_spleen_pcf = $embed_file('@VMODROOT/font/res/spleen-8x16.pcf').to_bytes()
+pub const embedded_spleen_otb = $embed_file('@VMODROOT/font/res/spleen-8x16.otb').to_bytes()
 
 // ============================================================
 // Built-in sprite rendering

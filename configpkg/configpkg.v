@@ -3941,26 +3941,25 @@ import input as inputpkg
 //
 // --- Original Ghostty Comments End: src/config/Config.zig
 
-
 // Config represents the full ghostty configuration.
 pub struct Config {
 pub mut:
-	font_size                      f32             = 13.0
-	abnormal_command_exit_runtime  u32             = 250
+	font_size                      f32 = 13.0
+	abnormal_command_exit_runtime  u32 = 250
 	clipboard_read                 ClipboardAccess = .allow
 	clipboard_write                ClipboardAccess = .allow
-	clipboard_trim_trailing_spaces bool                    = true
-	clipboard_paste_protection     bool                    = true
-	clipboard_paste_bracketed_safe bool                    = true
-	copy_on_select                 CopyOnSelect            = .false_
-	confirm_close_surface          ConfirmCloseSurface     = .true_
-	cursor_click_to_move           bool                    = true
-	desktop_notifications          bool                    = true
+	clipboard_trim_trailing_spaces bool = true
+	clipboard_paste_protection     bool = true
+	clipboard_paste_bracketed_safe bool = true
+	copy_on_select                 CopyOnSelect = .false_
+	confirm_close_surface          ConfirmCloseSurface = .true_
+	cursor_click_to_move           bool = true
+	desktop_notifications          bool = true
 	mouse_hide_while_typing        bool
-	mouse_reporting                bool                    = true
-	mouse_shift_capture            MouseShiftCapture       = .false_
+	mouse_reporting                bool = true
+	mouse_shift_capture            MouseShiftCapture = .false_
 	selection_clear_on_copy        bool
-	selection_clear_on_typing      bool                    = true
+	selection_clear_on_typing      bool = true
 	vt_kam_allowed                 bool
 	wait_after_command             bool
 	window_padding_top             u32
@@ -3978,37 +3977,37 @@ pub mut:
 	env                            RepeatableStringMap
 	initial_input                  ?string
 	term                           string = 'xterm-ghostty'
-	shell_integration              ShellIntegration        = .detect
+	shell_integration              ShellIntegration = .detect
 	shell_integration_features     ShellIntegrationFeatures
-	link_previews                  LinkPreviews            = .false_
+	link_previews                  LinkPreviews = .false_
 	scroll_to_bottom               ScrollToBottom
 	// Renderer-related fields
-	font_thicken          bool
-	font_thicken_strength u8               = 255
-	font_shaping_break    FontShapingBreak = .none_
-	cursor_color          ?TerminalColor
-	cursor_opacity        f64              = 1.0
-	cursor_text           ?TerminalColor
-	background_opacity    f64              = 1.0
-	background_opacity_cells bool
-	minimum_contrast      f64                = 1.0
-	window_padding_color  WindowPaddingColor = .background
-	window_vsync          bool               = true
-	window_colorspace     WindowColorspace   = .srgb
-	alpha_blending        AlphaBlending      = .none_
-	background_blur       BackgroundBlur     = .none_
-	custom_shader         RepeatablePath
-	background_image      ?Path
-	background_image_opacity  f32 = 1.0
-	background_image_position BackgroundImagePosition = .center
-	background_image_fit      BackgroundImageFit      = .contain
-	background_image_repeat   bool
-	faint_opacity             f64 = 0.5
-	bold_color                ?BoldColor
-	selection_background      ?TerminalColor
-	selection_foreground      ?TerminalColor
-	search_background         TerminalColor
-	search_foreground         TerminalColor
+	font_thicken               bool
+	font_thicken_strength      u8 = 255
+	font_shaping_break         FontShapingBreak
+	cursor_color               ?TerminalColor
+	cursor_opacity             f64 = 1.0
+	cursor_text                ?TerminalColor
+	background_opacity         f64 = 1.0
+	background_opacity_cells   bool
+	minimum_contrast           f64 = 1.0
+	window_padding_color       WindowPaddingColor = .background
+	window_vsync               bool = true
+	window_colorspace          WindowColorspace = .srgb
+	alpha_blending             AlphaBlending = .none_
+	background_blur            BackgroundBlur = .none_
+	custom_shader              RepeatablePath
+	background_image           ?Path
+	background_image_opacity   f32 = 1.0
+	background_image_position  BackgroundImagePosition = .center
+	background_image_fit       BackgroundImageFit = .contain
+	background_image_repeat    bool
+	faint_opacity              f64 = 0.5
+	bold_color                 ?BoldColor
+	selection_background       ?TerminalColor
+	selection_foreground       ?TerminalColor
+	search_background          TerminalColor
+	search_foreground          TerminalColor
 	search_selected_background TerminalColor
 	search_selected_foreground TerminalColor
 	link                       LinkConfig
@@ -4110,7 +4109,7 @@ pub mut:
 	// Theme color fields used by list-themes preview
 	foreground  ColorRGB = ColorRGB{ r: 0xff, g: 0xff, b: 0xff }
 	background  ColorRGB = ColorRGB{ r: 0x28, g: 0x2C, b: 0x34 }
-	palette     Palette  = Palette.default_palette()
+	palette     Palette = Palette.default_palette()
 	diagnostics []Diagnostic
 	// Controls the windowing behavior when dropping a file onto the macOS dock
 	// icon. Defaults to `new-tab`.
@@ -4154,7 +4153,7 @@ pub enum GtkSingleInstance {
 // existing `input.Set.parse_and_put` API.
 pub struct Keybinds {
 pub mut:
-	set    inputpkg.Set
+	set inputpkg.Set
 	// Defined key tables. The default key table is always the root "set",
 	// which allows all table names to be available without reservation.
 	tables map[string]inputpkg.Set
@@ -4431,11 +4430,10 @@ pub fn (c Config) clone() Config {
 // Types used by renderer DerivedConfig
 // ============================================================
 
-// FontShapingBreak controls where font shaping breaks runs.
-pub enum FontShapingBreak {
-	none_
-	character
-	grapheme
+// FontShapingBreak controls optional shaping-run boundaries.
+pub struct FontShapingBreak {
+pub:
+	cursor bool = true
 }
 
 // TerminalColor can be an explicit color or derived from cell fg/bg.
@@ -4617,15 +4615,19 @@ pub fn (c Command) clone() Command {
 // string_val returns the command as a string.
 pub fn (c Command) string_val() string {
 	match c {
-		ShellCmd { return c.shell }
-		DirectCmd { return c.direct.join(' ') }
+		ShellCmd {
+			return c.shell
+		}
+		DirectCmd {
+			return c.direct.join(' ')
+		}
 	}
 }
 
 // ArgIterator iterates over the arguments of a command.
 pub struct ArgIterator {
 mut:
-	kind     ArgIterKind
+	kind ArgIterKind
 	// For shell commands
 	shell_str string
 	pos       int
@@ -4733,12 +4735,12 @@ pub fn (mut it RepeatableStringMapIterator) next() ?StringMapEntry {
 // ShellIntegrationFeatures controls which shell integration features are enabled.
 pub struct ShellIntegrationFeatures {
 pub:
-	cursor        bool = true
-	sudo          bool = true
-	title         bool = true
-	ssh_env       bool = true
-	ssh_terminfo  bool = true
-	path          bool = true
+	cursor       bool = true
+	sudo         bool = true
+	title        bool = true
+	ssh_env      bool = true
+	ssh_terminfo bool = true
+	path         bool = true
 }
 
 pub enum ShellIntegration {
@@ -4958,14 +4960,22 @@ pub fn Palette.default_palette() Palette {
 	mut p := Palette{}
 	// Standard 16 colors (approximate)
 	colors_16 := [
-		ColorRGB{0x00, 0x00, 0x00}, ColorRGB{0xaa, 0x00, 0x00},
-		ColorRGB{0x00, 0xaa, 0x00}, ColorRGB{0xaa, 0x55, 0x00},
-		ColorRGB{0x00, 0x00, 0xaa}, ColorRGB{0xaa, 0x00, 0xaa},
-		ColorRGB{0x00, 0xaa, 0xaa}, ColorRGB{0xaa, 0xaa, 0xaa},
-		ColorRGB{0x55, 0x55, 0x55}, ColorRGB{0xff, 0x55, 0x55},
-		ColorRGB{0x55, 0xff, 0x55}, ColorRGB{0xff, 0xff, 0x55},
-		ColorRGB{0x55, 0x55, 0xff}, ColorRGB{0xff, 0x55, 0xff},
-		ColorRGB{0x55, 0xff, 0xff}, ColorRGB{0xff, 0xff, 0xff},
+		ColorRGB{0x00, 0x00, 0x00},
+		ColorRGB{0xaa, 0x00, 0x00},
+		ColorRGB{0x00, 0xaa, 0x00},
+		ColorRGB{0xaa, 0x55, 0x00},
+		ColorRGB{0x00, 0x00, 0xaa},
+		ColorRGB{0xaa, 0x00, 0xaa},
+		ColorRGB{0x00, 0xaa, 0xaa},
+		ColorRGB{0xaa, 0xaa, 0xaa},
+		ColorRGB{0x55, 0x55, 0x55},
+		ColorRGB{0xff, 0x55, 0x55},
+		ColorRGB{0x55, 0xff, 0x55},
+		ColorRGB{0xff, 0xff, 0x55},
+		ColorRGB{0x55, 0x55, 0xff},
+		ColorRGB{0xff, 0x55, 0xff},
+		ColorRGB{0x55, 0xff, 0xff},
+		ColorRGB{0xff, 0xff, 0xff},
 	]
 	for i, c in colors_16 {
 		p.value[i] = c
@@ -5115,11 +5125,21 @@ fn (mut c Config) apply_kv(key string, value string) {
 		}
 		'window-theme' {
 			match value {
-				'auto' { c.window_theme = .auto }
-				'system' { c.window_theme = .system }
-				'light' { c.window_theme = .light }
-				'dark' { c.window_theme = .dark }
-				'ghostty' { c.window_theme = .ghostty }
+				'auto' {
+					c.window_theme = .auto
+				}
+				'system' {
+					c.window_theme = .system
+				}
+				'light' {
+					c.window_theme = .light
+				}
+				'dark' {
+					c.window_theme = .dark
+				}
+				'ghostty' {
+					c.window_theme = .ghostty
+				}
 				else {}
 			}
 		}
@@ -5187,6 +5207,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 				}
 			}
 		}
+
 		// --- Compatibility handlers for removed/renamed options ---
 		// These faithfully translate the CompatibilityHandler entries in
 		// Config.zig. They run at parse time and remap deprecated options to
@@ -5222,8 +5243,12 @@ fn (mut c Config) apply_kv(key string, value string) {
 				c.macos_dock_drop_behavior = .new_window
 			} else {
 				match value {
-					'new-tab' { c.macos_dock_drop_behavior = .new_tab }
-					'new-window' { c.macos_dock_drop_behavior = .new_window }
+					'new-tab' {
+						c.macos_dock_drop_behavior = .new_tab
+					}
+					'new-window' {
+						c.macos_dock_drop_behavior = .new_window
+					}
 					else {}
 				}
 			}
@@ -5232,9 +5257,15 @@ fn (mut c Config) apply_kv(key string, value string) {
 			// Ghostty 1.2 kept `desktop` as a compatibility value that finalize
 			// later converts. Before finalize it remains `detect`.
 			match value {
-				'desktop', 'detect' { c.gtk_single_instance = .detect }
-				'true', 't', '1' { c.gtk_single_instance = .true_ }
-				'false', 'f', '0' { c.gtk_single_instance = .false_ }
+				'desktop', 'detect' {
+					c.gtk_single_instance = .detect
+				}
+				'true', 't', '1' {
+					c.gtk_single_instance = .true_
+				}
+				'false', 'f', '0' {
+					c.gtk_single_instance = .false_
+				}
 				else {}
 			}
 		}
@@ -5905,9 +5936,15 @@ pub fn (mut m MouseScrollMultiplier) parse_cli(input ?string) ! {
 		val_str := part[colon + 1..].trim(' \t')
 		val := parse_float(val_str) or { return perr(ParseError.invalid_value) }
 		match key {
-			'precision' { m.precision = val }
-			'discrete' { m.discrete = val }
-			else { return perr(ParseError.invalid_value) }
+			'precision' {
+				m.precision = val
+			}
+			'discrete' {
+				m.discrete = val
+			}
+			else {
+				return perr(ParseError.invalid_value)
+			}
 		}
 	}
 }
@@ -6183,7 +6220,9 @@ pub fn window_decoration_parse_cli(input ?string) !WindowDecoration {
 		'client' { WindowDecoration.client }
 		'server' { WindowDecoration.server }
 		'none' { WindowDecoration.none_ }
-		else { return perr(ParseError.invalid_value) }
+		else {
+			return perr(ParseError.invalid_value)
+		}
 	}
 }
 
@@ -6216,9 +6255,15 @@ pub fn theme_pair_parse_cli(input ?string) !ThemePair {
 			key := entry[..colon].trim(' \t')
 			val := entry[colon + 1..].trim(' \t')
 			match key {
-				'light' { light = val }
-				'dark' { dark = val }
-				else { return perr(ParseError.invalid_value) }
+				'light' {
+					light = val
+				}
+				'dark' {
+					dark = val
+				}
+				else {
+					return perr(ParseError.invalid_value)
+				}
 			}
 		}
 		l := light or { return perr(ParseError.invalid_value) }

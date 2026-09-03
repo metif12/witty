@@ -394,8 +394,10 @@ module font
 //
 // --- Original Ghostty Comments End: src/font/Metrics.zig
 
-
+import harfbuzz
+import hash
 import math
+import terminal
 
 // Default DPI used as the base for scaling calculations.
 pub const default_dpi = f32(72.0)
@@ -411,41 +413,41 @@ pub const sprite_index = u32(8191)
 pub struct Metrics {
 pub mut:
 	// Recommended cell width and height for a monospace grid using this font.
-	cell_width             u32
-	cell_height            u32
+	cell_width  u32
+	cell_height u32
 	// Distance in pixels from the bottom of the cell to the text baseline.
-	cell_baseline          u32
+	cell_baseline u32
 	// Distance in pixels from the top of the cell to the top of the underline.
-	underline_position     u32
+	underline_position u32
 	// Thickness in pixels of the underline.
-	underline_thickness    u32
+	underline_thickness u32
 	// Distance in pixels from the top of the cell to the top of the strikethrough.
 	strikethrough_position u32
 	// Thickness in pixels of the strikethrough.
 	strikethrough_thickness u32
 	// Distance in pixels from the top of the cell to the top of the overline.
 	// Can be negative to adjust the position above the top of the cell.
-	overline_position      i32
+	overline_position i32
 	// Thickness in pixels of the overline.
-	overline_thickness     u32
+	overline_thickness u32
 	// Thickness in pixels of box drawing characters.
-	box_thickness          u32
+	box_thickness u32
 	// The thickness in pixels of the cursor sprite. This has a default value
 	// because it is not determined by fonts but rather by user configuration.
-	cursor_thickness       u32 = 1
+	cursor_thickness u32 = 1
 	// The height in pixels of the cursor sprite.
-	cursor_height          u32
+	cursor_height u32
 	// The constraint height for nerd fonts icons.
-	icon_height            f64
+	icon_height f64
 	// The constraint height for nerd fonts icons limited to a single cell width.
-	icon_height_single     f64
+	icon_height_single f64
 	// The unrounded face width, used in scaling calculations.
-	face_width             f64
+	face_width f64
 	// The unrounded face height, used in scaling calculations.
-	face_height            f64
+	face_height f64
 	// The offset from the bottom of the cell to the bottom of the face's
 	// bounding box, based on the rounded and potentially adjusted cell height.
-	face_y                 f64
+	face_y f64
 }
 
 // Minimum acceptable values for some fields to prevent modifiers
@@ -468,23 +470,23 @@ const metrics_min_face_width = f64(1.0)
 // grid without a real font face. The icon height is set to the cell height.
 pub fn default_grid_metrics(cell_width u32, cell_height u32) Metrics {
 	return Metrics{
-		cell_width:              cell_width
-		cell_height:             cell_height
-		cell_baseline:           0
-		underline_position:      cell_height
-		underline_thickness:     2
-		strikethrough_position:  cell_height / 2
+		cell_width: cell_width
+		cell_height: cell_height
+		cell_baseline: 0
+		underline_position: cell_height
+		underline_thickness: 2
+		strikethrough_position: cell_height / 2
 		strikethrough_thickness: 1
-		overline_position:       0
-		overline_thickness:      1
-		box_thickness:           1
-		cursor_thickness:        1
-		cursor_height:           cell_height
-		icon_height:             f64(cell_height)
-		icon_height_single:      f64(cell_height)
-		face_width:              f64(cell_width)
-		face_height:             f64(cell_height)
-		face_y:                  0.0
+		overline_position: 0
+		overline_thickness: 1
+		box_thickness: 1
+		cursor_thickness: 1
+		cursor_height: cell_height
+		icon_height: f64(cell_height)
+		icon_height_single: f64(cell_height)
+		face_width: f64(cell_width)
+		face_height: f64(cell_height)
+		face_y: 0.0
 	}
 }
 
@@ -551,23 +553,23 @@ pub fn Metrics.calc(face FaceMetrics) Metrics {
 	icon_height_single := (2 * cap_height + face_height) / 3
 
 	mut result := Metrics{
-		cell_width:              u32(cell_width)
-		cell_height:             u32(cell_height)
-		cell_baseline:           u32(cell_baseline)
-		underline_position:      u32(underline_position)
-		underline_thickness:     u32(underline_thickness)
-		strikethrough_position:  u32(strikethrough_position)
+		cell_width: u32(cell_width)
+		cell_height: u32(cell_height)
+		cell_baseline: u32(cell_baseline)
+		underline_position: u32(underline_position)
+		underline_thickness: u32(underline_thickness)
+		strikethrough_position: u32(strikethrough_position)
 		strikethrough_thickness: u32(strikethrough_thickness)
-		overline_position:       0
-		overline_thickness:      u32(underline_thickness)
-		box_thickness:           u32(underline_thickness)
-		cursor_thickness:        1
-		cursor_height:           u32(cell_height)
-		icon_height:             icon_height
-		icon_height_single:      icon_height_single
-		face_width:              face_width
-		face_height:             face_height
-		face_y:                  face_y
+		overline_position: 0
+		overline_thickness: u32(underline_thickness)
+		box_thickness: u32(underline_thickness)
+		cursor_thickness: 1
+		cursor_height: u32(cell_height)
+		icon_height: icon_height
+		icon_height_single: icon_height_single
+		face_width: face_width
+		face_height: face_height
+		face_y: face_y
 	}
 
 	// Ensure all metrics are within their allowable range.
@@ -879,10 +881,10 @@ pub mut:
 // init creates a new Atlas with the given initial size and format.
 pub fn Atlas.init(size u32, format AtlasFormat) Atlas {
 	mut a := Atlas{
-		size:   size
+		size: size
 		format: format
-		data:   []u8{len: int(size * size * format.depth())}
-		nodes:  []AtlasNode{cap: 64}
+		data: []u8{len: int(size * size * format.depth())}
+		nodes: []AtlasNode{cap: 64}
 	}
 	// This sets up our initial state.
 	a.clear()
@@ -902,9 +904,9 @@ pub fn (mut a Atlas) deinit() {
 pub fn (mut a Atlas) reserve(width u32, height u32) !AtlasRegion {
 	// x, y are populated within the best-index search below.
 	mut region := AtlasRegion{
-		x:      0
-		y:      0
-		width:  width
+		x: 0
+		y: 0
+		width: width
 		height: height
 	}
 
@@ -943,8 +945,8 @@ pub fn (mut a Atlas) reserve(width u32, height u32) !AtlasRegion {
 
 	// Insert our new node for this rectangle at the exact best index.
 	a.nodes.insert(best_idx, AtlasNode{
-		x:     region.x
-		y:     region.y + height
+		x: region.x
+		y: region.y + height
 		width: width
 	})
 
@@ -1082,16 +1084,16 @@ pub fn (mut a Atlas) grow(size_new u32) {
 	// We skip the first border row of the old data, since we copy it in
 	// starting at y=1 in the new atlas.
 	a.set(AtlasRegion{
-		x:      0 // don't bother skipping border so we can avoid strides
-		y:      1 // skip the first border row
-		width:  size_old
+		x: 0 // don't bother skipping border so we can avoid strides
+		y: 1 // skip the first border row
+		width: size_old
 		height: size_old - 2 // skip the last border row
 	}, data_old[int(size_old * depth)..])
 
 	// Add the new rectangle for our added righthand space.
 	a.nodes << AtlasNode{
-		x:     size_old - 1
-		y:     1
+		x: size_old - 1
+		y: 1
 		width: size_new - size_old
 	}
 
@@ -1112,8 +1114,8 @@ pub fn (mut a Atlas) clear() {
 	// and is the initial rectangle we fit our regions in. We keep a 1px border
 	// to avoid artifacting when sampling the texture.
 	a.nodes << AtlasNode{
-		x:     1
-		y:     1
+		x: 1
+		y: 1
 		width: a.size - 2
 	}
 }
@@ -1171,10 +1173,10 @@ pub mut:
 	pad_bottom f64
 	// Size and bearings of the glyph relative
 	// to the bounding box of its scale group.
-	relative_width f64 = 1.0
+	relative_width  f64 = 1.0
 	relative_height f64 = 1.0
-	relative_x f64
-	relative_y f64
+	relative_x      f64
+	relative_y      f64
 	// Maximum aspect ratio (width/height) to allow when stretching.
 	// 0 means no limit.
 	max_xy_ratio f64
@@ -1248,7 +1250,9 @@ pub enum ConstraintHeight {
 
 // Backward compatibility aliases.
 pub type GlyphConstraint = Constraint
+
 pub type GlyphConstraintSize = ConstraintSize
+
 pub const none_constraint = constraint_none
 
 // Presentation for a glyph (text or emoji).
@@ -1295,33 +1299,117 @@ pub enum Sprite as u32 {
 // Shaper performs text shaping (converting codepoints to positioned glyphs).
 pub struct Shaper {
 mut:
-	features []string
+	features   []string
+	hb_buf     harfbuzz.Buffer
+	hb_feats   []harfbuzz.Feature
+	codepoints []ShaperCodepoint
+	cell_buf   []ShapeCell
+	grid       &SharedGrid = unsafe { nil }
+}
+
+struct ShaperCodepoint {
+	cluster   u32
+	codepoint u32
 }
 
 pub fn Shaper.init(opts ShaperOptions) !Shaper {
+	mut feats := []harfbuzz.Feature{}
+	mut feature_names := ['liga']
+	feature_names << opts.features
+	for feature in feature_names {
+		if parsed := harfbuzz.feature_from_string(feature) {
+			feats << parsed
+		}
+	}
 	return Shaper{
 		features: opts.features.clone()
+		hb_buf: harfbuzz.Buffer.create()!
+		hb_feats: feats
 	}
 }
 
 pub fn (mut s Shaper) deinit() {
+	s.hb_buf.destroy()
 	s.features = []
+	s.hb_feats = []
+	s.codepoints = []
+	s.cell_buf = []
 }
 
 // Signal that we're done processing the current frame.
 // For some shapers (e.g. CoreText), this triggers off-thread cleanup.
 pub fn (mut s Shaper) end_frame() {
-	// stub
+	// The FreeType/HarfBuzz backend has no deferred per-frame resources.
 }
 
 // Shape a text run into positioned glyphs.
 pub fn (mut s Shaper) shape(run TextRun) ![]ShapeCell {
-	return []ShapeCell{}
+	if run.font_index == sprite_index {
+		s.cell_buf.clear()
+		for cp in s.codepoints {
+			s.cell_buf << ShapeCell{ x: cp.cluster, glyph_index: cp.codepoint }
+		}
+		return s.cell_buf
+	}
+	if s.hb_buf.get_length() == 0 {
+		return []ShapeCell{}
+	}
+	grid_ptr := if run.grid != unsafe { nil } { run.grid } else { s.grid }
+	if grid_ptr == unsafe { nil } {
+		return error('font shaper has no grid')
+	}
+	mut grid := unsafe { grid_ptr }
+	face := grid.resolver.collection.get_face(Index.from_int(run.font_index))!
+	feature_start := if face.quirks_disable_default_font_features { 1 } else { 0 }
+	face.ft_mutex.lock()
+	harfbuzz.shape(face.hb_font, s.hb_buf, s.hb_feats[feature_start..])
+	face.ft_mutex.unlock()
+
+	info := s.hb_buf.get_glyph_infos()
+	positions := s.hb_buf.get_glyph_positions() or { return error('HarfBuzz returned no positions') }
+	if info.len != positions.len {
+		return error('HarfBuzz glyph info/position length mismatch')
+	}
+	mut run_cluster := u32(0)
+	mut run_x := i32(0)
+	mut run_y := i32(0)
+	mut cell_cluster := u32(0)
+	mut cell_x := i32(0)
+	s.cell_buf.clear()
+	for i in 0 .. info.len {
+		idx := int(info[i].cluster)
+		if idx < 0 || idx >= s.codepoints.len {
+			return error('HarfBuzz returned an invalid cluster index')
+		}
+		cluster := s.codepoints[idx].cluster
+		if cell_cluster != cluster {
+			after_current_cluster := cluster <= run_cluster
+			first_in_cluster := idx == 0 || s.codepoints[idx - 1].cluster != cluster
+			if first_in_cluster && !after_current_cluster {
+				cell_cluster = cluster
+				cell_x = run_x
+			}
+		}
+		pos := positions[i]
+		s.cell_buf << ShapeCell{
+			x: cell_cluster
+			glyph_index: info[i].codepoint
+			x_offset: run_x - cell_x + ((pos.x_offset + 32) >> 6)
+			y_offset: run_y + ((pos.y_offset + 32) >> 6)
+		}
+		run_x += (pos.x_advance + 32) >> 6
+		run_y += (pos.y_advance + 32) >> 6
+		if cluster > run_cluster {
+			run_cluster = cluster
+		}
+	}
+	return s.cell_buf
 }
 
 // Create a run iterator for the given options.
 pub fn (mut s Shaper) run_iterator(opts RunOptions) RunIterator {
-	return RunIterator.new(unsafe { &s })
+	s.grid = opts.grid
+	return RunIterator.new(unsafe { &s }, opts)
 }
 
 pub struct ShaperOptions {
@@ -1349,12 +1437,15 @@ pub fn (mut c ShaperCache) deinit() {
 
 // Get cached shaping results for a run.
 pub fn (c &ShaperCache) get(run TextRun) ?[]ShapeCell {
+	if run.hash in c.entries {
+		return c.entries[run.hash]
+	}
 	return none
 }
 
 // Store shaping results for a run in the cache.
 pub fn (mut c ShaperCache) put(run TextRun, cells []ShapeCell) ! {
-	// stub: cache the result
+	c.entries[run.hash] = cells.clone()
 }
 
 // Return the number of cached entries.
@@ -1376,6 +1467,7 @@ pub:
 	font_index u32
 	offset     u32
 	cells      u32
+	grid       &SharedGrid = unsafe { nil }
 }
 
 // ShapeCell represents a positioned glyph from shaping.
@@ -1390,33 +1482,294 @@ pub:
 // RunOptions configures the run iterator.
 pub struct RunOptions {
 pub:
-	grid      &SharedGrid = unsafe { nil }
-	cells     []u8 // placeholder for multi-array slice
-	selection ?[2]u16
-	cursor_x  ?u16
+	grid &SharedGrid = unsafe { nil }
+	// Render cells are the production representation. `cells` retains the
+	// byte-row adapter used by small standalone shaper tests.
+	render_cells []terminal.RenderCell
+	cells        []u8
+	selection    ?[2]u16
+	cursor_x     ?u16
 }
 
 // RunIterator iterates over text runs for shaping.
 pub struct RunIterator {
 pub mut:
 	shaper_ptr voidptr = unsafe { nil }
-	done       bool
+	opts       RunOptions
+	i          int
 }
 
 // Create a new RunIterator with an opaque pointer to the shaper.
-pub fn RunIterator.new(shaper_ptr voidptr) RunIterator {
+pub fn RunIterator.new(shaper_ptr voidptr, opts ...RunOptions) RunIterator {
 	return RunIterator{
 		shaper_ptr: shaper_ptr
+		opts: if opts.len > 0 { opts[0] } else { RunOptions{} }
 	}
 }
 
 // Get the next text run, or none if done.
 pub fn (mut it RunIterator) next() ?TextRun {
-	if it.done {
+	if it.shaper_ptr == unsafe { nil } {
 		return none
 	}
-	it.done = true
+	mut shaper := unsafe { &Shaper(it.shaper_ptr) }
+	if it.opts.render_cells.len == 0 {
+		return it.next_bytes(mut shaper)
+	}
+	return it.next_render_cells(mut shaper)
+}
+
+fn (mut it RunIterator) prepare(mut shaper Shaper) {
+	shaper.hb_buf.reset()
+	shaper.hb_buf.set_content_type(.unicode)
+	shaper.hb_buf.set_cluster_level(.characters)
+	// Terminal rows are laid out in strictly increasing X order. Ghostty
+	// deliberately forces LTR here even for scripts whose natural direction
+	// is RTL because bidi layout is handled outside of the font shaper.
+	shaper.hb_buf.set_direction(.ltr)
+	shaper.codepoints.clear()
+}
+
+fn add_shaper_codepoint(mut shaper Shaper, mut hasher ShaperRunHasher, cp u32, cluster u32) {
+	hasher.add(cp)
+	hasher.add(cluster)
+	shaper.hb_buf.add(cp, u32(shaper.codepoints.len))
+	shaper.codepoints << ShaperCodepoint{ codepoint: cp, cluster: cluster }
+}
+
+fn (mut it RunIterator) next_bytes(mut shaper Shaper) ?TextRun {
+	mut max := it.opts.cells.len
+	for max > 0 && it.opts.cells[max - 1] == 0 {
+		max--
+	}
+	if it.i >= max {
+		return none
+	}
+	it.prepare(mut shaper)
+	start := it.i
+	mut hasher := ShaperRunHasher{}
+	for it.i < max {
+		cp := if it.opts.cells[it.i] == 0 { u32(` `) } else { u32(it.opts.cells[it.i]) }
+		add_shaper_codepoint(mut shaper, mut hasher, cp, u32(it.i - start))
+		it.i++
+	}
+	shaper.hb_buf.guess_segment_properties()
+	hasher.add(u32(it.i - start))
+	hasher.add(0)
+	return TextRun{
+		hash: hasher.final()
+		font_index: 0
+		offset: u32(start)
+		cells: u32(it.i - start)
+		grid: it.opts.grid
+	}
+}
+
+fn (mut it RunIterator) next_render_cells(mut shaper Shaper) ?TextRun {
+	cells := it.opts.render_cells
+	mut max := cells.len
+	for max > 0 && cells[max - 1].raw.is_empty() {
+		max--
+	}
+	for it.i < max && cell_style(cells[it.i]).flags.invisible {
+		it.i++
+	}
+	if it.i >= max {
+		return none
+	}
+	it.prepare(mut shaper)
+	start := it.i
+	base_style := cell_style(cells[start])
+	font_style := style_to_font_style(base_style)
+	mut current_font := Index{}
+	mut has_font := false
+	mut hasher := ShaperRunHasher{}
+	mut j := start
+	for j < max {
+		cell := cells[j]
+		if bounds := it.opts.selection {
+			if j > start && ((bounds[0] > 0 && j == int(bounds[0]))
+				|| (bounds[1] > 0 && j == int(bounds[1]) + 1)) {
+				break
+			}
+		}
+		if cell.raw.wide == .spacer_head || cell.raw.wide == .spacer_tail {
+			j++
+			continue
+		}
+		if j > start {
+			prev := cells[j - 1]
+			if prev.raw.content_tag == .codepoint && cell.raw.content_tag == .codepoint {
+				prev_cp := prev.raw.codepoint_val()
+				cp := cell.raw.codepoint_val()
+				if (prev_cp == `f` && (cp == `l` || cp == `i`))
+					|| (prev_cp == `s` && cp == `t`) {
+					break
+				}
+			}
+			if prev.raw.style_id != cell.raw.style_id {
+				comparable_base := comparable_style(base_style)
+				comparable_current := comparable_style(cell_style(cell))
+				if !comparable_base.eql(&comparable_current) {
+					break
+				}
+			}
+		}
+		if cell.raw.content_tag != .codepoint_grapheme {
+			if cursor_x := it.opts.cursor_x {
+				if (start == int(cursor_x) && j == start + 1) || (start < int(cursor_x)
+					&& j == int(cursor_x)) {
+					break
+				}
+			}
+		}
+		mut presentation := ?Presentation(none)
+		if cell.raw.content_tag == .codepoint_grapheme && cell.grapheme.len > 0 {
+			if cell.grapheme[0] == 0xfe0e {
+				presentation = Presentation.text
+			} else if cell.grapheme[0] == 0xfe0f {
+				presentation = Presentation.emoji
+			}
+		}
+		mut resolved_cp := cell.raw.codepoint_val()
+		idx := index_for_render_cell(it.opts.grid, &cell, font_style, presentation) or {
+			mut grid := unsafe { it.opts.grid }
+			fallback := grid.get_index(0xfffd, font_style, presentation) or { return none }
+			if fallback.has_value {
+				resolved_cp = 0xfffd
+				fallback.index
+			} else {
+				space := grid.get_index(u32(` `), font_style, presentation) or { return none }
+				if !space.has_value {
+					return none
+				}
+				resolved_cp = u32(` `)
+				space.index
+			}
+		}
+		if !has_font {
+			current_font = idx
+			has_font = true
+		} else if idx.int_val() != current_font.int_val() {
+			break
+		}
+		cluster := u32(j - start)
+		if resolved_cp == 0 || resolved_cp == 0x10eeee {
+			resolved_cp = u32(` `)
+		}
+		add_shaper_codepoint(mut shaper, mut hasher, resolved_cp, cluster)
+		if resolved_cp == cell.raw.codepoint_val() && cell.raw.content_tag == .codepoint_grapheme {
+			for cp in cell.grapheme {
+				if cp != 0xfe0e && cp != 0xfe0f {
+					add_shaper_codepoint(mut shaper, mut hasher, cp, cluster)
+				}
+			}
+		}
+		j++
+	}
+	if j == start {
+		return none
+	}
+	shaper.hb_buf.guess_segment_properties()
+	hasher.add(u32(j - start))
+	hasher.add(u32(current_font.int_val()))
+	it.i = j
+	return TextRun{
+		hash: hasher.final()
+		font_index: u32(current_font.int_val())
+		offset: u32(start)
+		cells: u32(j - start)
+		grid: it.opts.grid
+	}
+}
+
+fn cell_style(cell terminal.RenderCell) terminal.CellStyle {
+	return if cell.raw.has_styling() { cell.style } else { terminal.CellStyle{} }
+}
+
+fn style_to_font_style(style terminal.CellStyle) FontStyle {
+	return if style.flags.bold {
+		if style.flags.italic { .bold_italic } else { .bold }
+	} else if style.flags.italic {
+		.italic
+	} else {
+		.regular
+	}
+}
+
+fn comparable_style(style terminal.CellStyle) terminal.CellStyle {
+	mut result := style
+	result.bg_color = .none
+	result.bg_r = 0
+	result.bg_g = 0
+	result.bg_b = 0
+	result.bg_palette = 0
+	return result
+}
+
+fn index_for_render_cell(grid_ptr &SharedGrid, cell &terminal.RenderCell, style FontStyle, presentation ?Presentation) ?Index {
+	if grid_ptr == unsafe { nil } {
+		return none
+	}
+	mut grid := unsafe { grid_ptr }
+	primary_cp := cell.raw.codepoint_val()
+	if cell.raw.is_empty() || primary_cp == 0 || primary_cp == 0x10eeee {
+		space := grid.get_index(u32(` `), style, presentation) or { return none }
+		return if space.has_value { space.index } else { none }
+	}
+	primary_value := grid.get_index(primary_cp, style, presentation) or { return none }
+	if !primary_value.has_value {
+		return none
+	}
+	primary := primary_value.index
+	if cell.raw.content_tag != .codepoint_grapheme {
+		return primary
+	}
+	mut candidates := [primary]
+	for cp in cell.grapheme {
+		if cp == 0xfe0e || cp == 0xfe0f || cp == 0x200d {
+			continue
+		}
+		value := grid.get_index(cp, style, none) or { return none }
+		if !value.has_value {
+			return none
+		}
+		candidates << value.index
+	}
+	for idx in candidates {
+		if !grid.has_codepoint(idx, primary_cp, presentation) {
+			continue
+		}
+		mut all := true
+		for cp in cell.grapheme {
+			if cp != 0xfe0e && cp != 0xfe0f && cp != 0x200d
+				&& !grid.has_codepoint(idx, cp, none) {
+				all = false
+				break
+			}
+		}
+		if all {
+			return idx
+		}
+	}
 	return none
+}
+
+struct ShaperRunHasher {
+mut:
+	seed u64
+}
+
+fn (mut h ShaperRunHasher) add(value u32) {
+	mut bytes := [4]u8{}
+	for i in 0 .. 4 {
+		bytes[i] = u8(value >> (i * 8))
+	}
+	h.seed = hash.sum64(bytes[..], h.seed)
+}
+
+fn (h ShaperRunHasher) final() u64 {
+	return hash.sum64_string('witty.font.run', h.seed)
 }
 
 // ============================================================

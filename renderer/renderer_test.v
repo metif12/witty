@@ -1,5 +1,8 @@
 module renderer
 
+import font
+import terminal
+
 // ============================================================
 // Renderer tests
 // ============================================================
@@ -26,7 +29,7 @@ fn test_derived_config_deinit() {
 // Test CellContents resize and reset.
 fn test_cell_contents_resize() ! {
 	mut cells := CellContents{}
-	cells.resize(GridSize{columns: 80, rows: 24})!
+	cells.resize(GridSize{ columns: 80, rows: 24 })!
 	assert cells.size.columns == 80
 	assert cells.size.rows == 24
 	assert cells.bg_cells.len == 80 * 24
@@ -36,10 +39,10 @@ fn test_cell_contents_resize() ! {
 // Test CellContents reset clears everything.
 fn test_cell_contents_reset() ! {
 	mut cells := CellContents{}
-	cells.resize(GridSize{columns: 10, rows: 5})!
+	cells.resize(GridSize{ columns: 10, rows: 5 })!
 
 	// Set some bg cell data
-	cells.set_bg(0, 0, CellBg{r: 255, g: 0, b: 0, a: 255})
+	cells.set_bg(0, 0, CellBg{ r: 255, g: 0, b: 0, a: 255 })
 
 	// Add a fg cell
 	cells.add(.text, CellText{
@@ -59,7 +62,7 @@ fn test_cell_contents_reset() ! {
 // Test CellContents clear for a specific row.
 fn test_cell_contents_clear_row() ! {
 	mut cells := CellContents{}
-	cells.resize(GridSize{columns: 10, rows: 5})!
+	cells.resize(GridSize{ columns: 10, rows: 5 })!
 
 	// Add fg cells to rows 0 and 1
 	cells.add(.text, CellText{
@@ -80,14 +83,14 @@ fn test_cell_contents_clear_row() ! {
 // Test cursor set/get.
 fn test_cell_contents_cursor() ! {
 	mut cells := CellContents{}
-	cells.resize(GridSize{columns: 80, rows: 24})!
+	cells.resize(GridSize{ columns: 80, rows: 24 })!
 
 	// No cursor by default
 	assert cells.get_cursor_glyph() == none
 
 	// Set a cursor
 	cursor_cell := CellText{
-		bools: CellTextBools{is_cursor_glyph: true}
+		bools: CellTextBools{ is_cursor_glyph: true }
 		grid_pos: [u16(5), u16(10)]!
 		color: [u8(255), 255, 255, 255]!
 	}
@@ -123,9 +126,9 @@ fn test_ortho2d() {
 // Test Size.terminal_size.
 fn test_size_terminal_size() {
 	s := Size{
-		screen: ScreenSize{width: 800, height: 600}
-		cell: CellSize{width: 10, height: 20}
-		padding: Padding{top: 5, bottom: 5, left: 5, right: 5}
+		screen: ScreenSize{ width: 800, height: 600 }
+		cell: CellSize{ width: 10, height: 20 }
+		padding: Padding{ top: 5, bottom: 5, left: 5, right: 5 }
 	}
 	ts := s.terminal_size()
 	// Usable area: 790x590, grid: 79x29, terminal: 790x580
@@ -136,11 +139,11 @@ fn test_size_terminal_size() {
 // Test Size.blank_padding.
 fn test_size_blank_padding() {
 	s := Size{
-		screen: ScreenSize{width: 800, height: 600}
-		cell: CellSize{width: 10, height: 20}
-		padding: Padding{top: 0, bottom: 0, left: 0, right: 0}
+		screen: ScreenSize{ width: 800, height: 600 }
+		cell: CellSize{ width: 10, height: 20 }
+		padding: Padding{ top: 0, bottom: 0, left: 0, right: 0 }
 	}
-	grid := GridSize{columns: 80, rows: 30}
+	grid := GridSize{ columns: 80, rows: 30 }
 	bp := s.blank_padding(grid)
 	// Screen 800x600, grid 80*10=800, 30*20=600 => no extra padding
 	assert bp.left == 0
@@ -151,8 +154,8 @@ fn test_size_blank_padding() {
 
 // Test Padding.add.
 fn test_padding_add() {
-	a := Padding{top: 5, bottom: 5, left: 10, right: 10}
-	b := Padding{top: 3, bottom: 3, left: 7, right: 7}
+	a := Padding{ top: 5, bottom: 5, left: 10, right: 10 }
+	b := Padding{ top: 3, bottom: 3, left: 7, right: 7 }
 	c := a.add(b)
 	assert c.top == 8
 	assert c.bottom == 8
@@ -163,9 +166,9 @@ fn test_padding_add() {
 // Test GridSize.
 fn test_grid_size() {
 	mut s := Size{
-		screen: ScreenSize{width: 800, height: 600}
-		cell: CellSize{width: 10, height: 20}
-		padding: Padding{top: 0, bottom: 0, left: 0, right: 0}
+		screen: ScreenSize{ width: 800, height: 600 }
+		cell: CellSize{ width: 10, height: 20 }
+		padding: Padding{ top: 0, bottom: 0, left: 0, right: 0 }
 	}
 	g := s.grid()
 	assert g.columns == 80
@@ -174,9 +177,9 @@ fn test_grid_size() {
 
 // Test ScreenSize.equals.
 fn test_screen_size_equals() {
-	a := ScreenSize{width: 800, height: 600}
-	b := ScreenSize{width: 800, height: 600}
-	c := ScreenSize{width: 1024, height: 768}
+	a := ScreenSize{ width: 800, height: 600 }
+	b := ScreenSize{ width: 800, height: 600 }
+	c := ScreenSize{ width: 1024, height: 768 }
 	assert a.equals(b)
 	assert !a.equals(c)
 }
@@ -224,9 +227,9 @@ fn test_highlight_tag() {
 fn test_preedit_width() {
 	p := Preedit{
 		codepoints: [
-			PreeditCodepoint{codepoint: 0x3042, wide: true},  // あ (wide)
-			PreeditCodepoint{codepoint: 0x3044, wide: true},  // い (wide)
-			PreeditCodepoint{codepoint: 0x61, wide: false},    // a (narrow)
+			PreeditCodepoint{ codepoint: 0x3042, wide: true }, // あ (wide)
+			PreeditCodepoint{ codepoint: 0x3044, wide: true }, // い (wide)
+			PreeditCodepoint{ codepoint: 0x61, wide: false }, // a (narrow)
 		]
 	}
 	assert p.width() == 5 // 2 + 2 + 1
@@ -236,7 +239,7 @@ fn test_preedit_width() {
 fn test_cell_text_init() {
 	ct := CellText{
 		atlas: .grayscale
-		bools: CellTextBools{no_min_contrast: true}
+		bools: CellTextBools{ no_min_contrast: true }
 		grid_pos: [u16(42), u16(7)]!
 		color: [u8(200), 100, 50, 255]!
 		glyph_pos: [u32(100), u32(200)]!
@@ -278,7 +281,7 @@ fn test_padding_extend() {
 // Test multiple fg cells per row.
 fn test_multiple_fg_cells_per_row() ! {
 	mut cells := CellContents{}
-	cells.resize(GridSize{columns: 80, rows: 24})!
+	cells.resize(GridSize{ columns: 80, rows: 24 })!
 
 	// Add multiple cells to the same row
 	for col in 0 .. 10 {
@@ -296,14 +299,14 @@ fn test_multiple_fg_cells_per_row() ! {
 // Test set_bg / get_bg.
 fn test_bg_cell_set_get() ! {
 	mut cells := CellContents{}
-	cells.resize(GridSize{columns: 10, rows: 5})!
+	cells.resize(GridSize{ columns: 10, rows: 5 })!
 
 	// Set bg for cell at (3, 2)
-	cells.set_bg(2, 3, CellBg{r: 100, g: 150, b: 200, a: 255})
+	cells.set_bg(2, 3, CellBg{ r: 100, g: 150, b: 200, a: 255 })
 
 	// Read it back
 	idx := 2 * 10 + 3
-	assert cells.bg_cells[idx] == CellBg{r: 100, g: 150, b: 200, a: 255}
+	assert cells.bg_cells[idx] == CellBg{ r: 100, g: 150, b: 200, a: 255 }
 
 	// Also test get_bg
 	got := cells.get_bg(2, 3)
@@ -335,12 +338,71 @@ fn test_font_style_status() {
 // Test Size.balance_padding.
 fn test_balance_padding() {
 	mut s := Size{
-		screen: ScreenSize{width: 810, height: 610}
-		cell: CellSize{width: 10, height: 20}
+		screen: ScreenSize{ width: 810, height: 610 }
+		cell: CellSize{ width: 10, height: 20 }
 		padding: Padding{}
 	}
-	s.balance_padding(Padding{top: 0, bottom: 0, left: 0, right: 0})
+	s.balance_padding(Padding{ top: 0, bottom: 0, left: 0, right: 0 })
 	// 810/10 = 81 cols, extra 0. 610/20 = 30 rows, extra 10.
 	assert s.padding.top == 5
 	assert s.padding.bottom == 5
+}
+
+// Verify the production row path shapes codepoints, rasterizes their glyphs,
+// and emits foreground cells backed by the shared font atlases.
+fn test_rebuild_row_shapes_and_renders_text() ! {
+	mut library := font.Library.init()!
+	defer { library.deinit() }
+
+	mut collection := font.Collection.init()
+	collection.load_options = font.LoadOptions{
+		library: library
+		size: font.DesiredSize{
+			points: 12
+			xdpi: 96
+			ydpi: 96
+		}
+	}
+	load_opts := collection.load_options or { return error('missing font load options') }
+	collection.add(font.Face.init_mem(library, font.embedded_regular, load_opts.face_options())!, font.AddOptions{
+		style: .regular
+		fallback: false
+		size_adjustment: .none_
+	})!
+
+	mut grid := font.SharedGrid.init(font.CodepointResolver{
+		collection: collection
+	})!
+	defer { grid.deinit() }
+
+	mut render := Renderer.init(RendererOpts{
+		font_grid: &grid
+		config: DerivedConfig{}
+		size: Size{
+			screen: ScreenSize{ width: 300, height: 100 }
+			cell: CellSize{
+				width: grid.metrics.cell_width
+				height: grid.metrics.cell_height
+			}
+		}
+	})!
+	defer { render.deinit() }
+	render.cells.resize(GridSize{ columns: 3, rows: 1 })!
+
+	row := terminal.RenderRow{
+		cells: [
+			terminal.RenderCell{ raw: terminal.CellData.init(u32(`A`)) },
+			terminal.RenderCell{ raw: terminal.CellData.init(u32(`B`)) },
+			terminal.RenderCell{ raw: terminal.CellData.init(u32(`C`)) },
+		]
+	}
+	links := terminal.CellSet{}
+	render.rebuild_row(0, &row, none, &links)!
+
+	assert render.cells.fg_rows[0].len == 3
+	for cell in render.cells.fg_rows[0] {
+		assert cell.glyph_size[0] > 0
+		assert cell.glyph_size[1] > 0
+	}
+	assert grid.glyphs.len == 3
 }

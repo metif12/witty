@@ -746,7 +746,6 @@ module renderer
 //
 // --- Original Ghostty Comments End: src/renderer/generic.zig
 
-
 import input
 import sync
 import terminal
@@ -857,8 +856,8 @@ pub mut:
 	last_frame_time i64 = -1
 
 	// The font structures.
-	font_grid &font.SharedGrid = unsafe { nil }
-	font_shaper font.Shaper
+	font_grid         &font.SharedGrid = unsafe { nil }
+	font_shaper       font.Shaper
 	font_shaper_cache font.ShaperCache
 
 	// Whether or not we have custom shaders.
@@ -1490,8 +1489,8 @@ fn (mut self Renderer) update_custom_shader_uniforms_for_frame() ! {
 // render anything within this range in rebuild_row because the preedit
 // is rendered separately.
 struct PreeditRange {
-	y        u16
-	x        [2]u16
+	y         u16
+	x         [2]u16
 	cp_offset int
 }
 
@@ -1510,8 +1509,12 @@ fn cell_set_key(x u32, y u32) u64 {
 fn resolve_terminal_color(tc configpkg.TerminalColor, inverse bool, fg_style terminal.RGB, bg_style terminal.RGB, fallback terminal.RGB) terminal.RGB {
 	return match tc {
 		.color { fallback }
-		.cell_foreground { if inverse { bg_style } else { fg_style } }
-		.cell_background { if inverse { fg_style } else { bg_style } }
+		.cell_foreground {
+			if inverse { bg_style } else { fg_style }
+		}
+		.cell_background {
+			if inverse { fg_style } else { bg_style }
+		}
 	}
 }
 
@@ -1682,7 +1685,9 @@ fn (mut self Renderer) rebuild_cursor(preedit ?RenderPreedit, cursor_style_ ?Cur
 		// to move back one cell. Saturating subtraction avoids overflow.
 		cur_x := match wide {
 			.narrow, .spacer_head, .wide { cursor_vp.x }
-			.spacer_tail { if cursor_vp.x > 0 { cursor_vp.x - 1 } else { u16(0) } }
+			.spacer_tail {
+				if cursor_vp.x > 0 { cursor_vp.x - 1 } else { u16(0) }
+			}
 		}
 		self.uniforms.cursor_pos = [cur_x, cursor_vp.y]!
 
@@ -1723,8 +1728,7 @@ fn (self &Renderer) compute_cursor_color(cursor_style terminal.CellStyle) termin
 		}
 		// For the explicit `.color` variant we fall back to foreground
 		// (see resolve_terminal_color boundary note).
-		return resolve_terminal_color(v, cursor_style.flags.inverse, fg_style, bg_style,
-			state.colors.foreground)
+		return resolve_terminal_color(v, cursor_style.flags.inverse, fg_style, bg_style, state.colors.foreground)
 	}
 
 	return state.colors.foreground
@@ -1744,8 +1748,7 @@ fn (self &Renderer) compute_cursor_text_color(cursor_style terminal.CellStyle) t
 			state.colors.background
 		}
 		// `.color` falls back to background (Ghostty uses cursor-text color).
-		return resolve_terminal_color(txt, cursor_style.flags.inverse, fg_style, bg_style,
-			state.colors.background)
+		return resolve_terminal_color(txt, cursor_style.flags.inverse, fg_style, bg_style, state.colors.background)
 	}
 
 	return state.colors.background
@@ -1759,15 +1762,13 @@ enum CellSelected {
 	search_selected
 }
 
-// Rebuild a single row's cells: padding-extension heuristics, per-cell
-// selection/highlight classification, bg/fg color computation with
-// inversion, bg alpha, and text decorations (underline/overline/
-// strikethrough). Faithful CPU-side translation of rebuildRow.
-//
-// BOUNDARY: The glyph emission path (font-shaping run iterator + addGlyph)
-// is not wired in V because there is no shaper run iterator available on
-// the render state. Underlines/overlines/strikethroughs and background
-// colors ARE emitted; the actual text glyphs are left as a boundary.
+struct RowShapedGlyph {
+	cell       font.ShapeCell
+	font_index u32
+}
+
+// Rebuild a single row's cells: shaping, selection/highlight classification,
+// color computation, glyph emission, and text decorations.
 fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range ?PreeditRange, links &terminal.CellSet) ! {
 	state := &self.terminal_state
 
@@ -1787,6 +1788,40 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		cells_style << c.raw.style
 	}
 
+	// Shape the row into glyphs before emitting individual cell layers. Runs
+	// split on style, selection, cursor, and font boundaries; multiple glyphs
+	// may share one cell for ligatures and combining marks.
+	mut shaped := [][]RowShapedGlyph{len: cells_len}
+	cursor_x := if viewport := state.cursor.viewport {
+		if self.config.font_shaping_break.cursor && viewport.y == y {
+			?u16(viewport.x)
+		} else {
+			?u16(none)
+		}
+	} else {
+		?u16(none)
+	}
+	mut run_iter := self.font_shaper.run_iterator(font.RunOptions{
+		grid: self.font_grid
+		render_cells: row.cells[..cells_len]
+		selection: row.selection
+		cursor_x: cursor_x
+	})
+	for {
+		run := run_iter.next() or { break }
+		shaped_cells := self.font_shaper_cache.get(run) or {
+			new_cells := self.font_shaper.shape(run)!
+			self.font_shaper_cache.put(run, new_cells) or {}
+			new_cells
+		}
+		for shaped_cell in shaped_cells {
+			x := int(run.offset + shaped_cell.x)
+			if x >= 0 && x < shaped.len {
+				shaped[x] << RowShapedGlyph{ cell: shaped_cell, font_index: run.font_index }
+			}
+		}
+	}
+
 	// On primary screen, we still apply vertical padding extension under
 	// certain conditions we feel are safe.
 	match self.config.padding_color {
@@ -1795,11 +1830,9 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		// Apply heuristics for padding extension.
 		.extend {
 			if y == 0 {
-				self.uniforms.padding_extend.up = !never_extend_bg(row.raw, cells_raw,
-					cells_style, state.colors.palette, state.colors.background)
+				self.uniforms.padding_extend.up = !never_extend_bg(row.raw, cells_raw, cells_style, state.colors.palette, state.colors.background)
 			} else if u32(y) == self.cells.size.rows - 1 {
-				self.uniforms.padding_extend.down = !never_extend_bg(row.raw, cells_raw,
-					cells_style, state.colors.palette, state.colors.background)
+				self.uniforms.padding_extend.down = !never_extend_bg(row.raw, cells_raw, cells_style, state.colors.palette, state.colors.background)
 			}
 		}
 	}
@@ -1909,9 +1942,9 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 			self.add_overline(u16(x), y, fg, alpha) or {}
 		}
 
-		// BOUNDARY: glyph emission via the font-shaping run iterator +
-		// addGlyph is not wired in V (no shaper run iterator on the render
-		// state). The text glyphs for this cell are not emitted here.
+		for shaped_glyph in shaped[x] {
+			self.add_glyph(u16(x), y, fg, alpha, shaped_glyph.cell.glyph_index, shaped_glyph.font_index, shaped_glyph.cell.x_offset, shaped_glyph.cell.y_offset, u32(cell.grid_width()), cells_raw, x, cells_len)!
+		}
 
 		// Finally, draw a strikethrough if necessary.
 		if style.flags.strikethrough {
@@ -1939,12 +1972,10 @@ fn (self &Renderer) compute_cell_bg(selected CellSelected, style terminal.CellSt
 			}
 		}
 		.search {
-			resolve_terminal_color(self.config.search_background, inverse, fg_style,
-				bg_style, state.colors.foreground)
+			resolve_terminal_color(self.config.search_background, inverse, fg_style, bg_style, state.colors.foreground)
 		}
 		.search_selected {
-			resolve_terminal_color(self.config.search_selected_background, inverse,
-				fg_style, bg_style, state.colors.foreground)
+			resolve_terminal_color(self.config.search_selected_background, inverse, fg_style, bg_style, state.colors.foreground)
 		}
 		.false_ {
 			// Two cases cause us to invert (use the fg color as the bg):
@@ -1979,12 +2010,10 @@ fn (self &Renderer) compute_cell_fg(selected CellSelected, style terminal.CellSt
 			}
 		}
 		.search {
-			resolve_terminal_color(self.config.search_foreground, inverse, fg_style,
-				final_bg, state.colors.background)
+			resolve_terminal_color(self.config.search_foreground, inverse, fg_style, final_bg, state.colors.background)
 		}
 		.search_selected {
-			resolve_terminal_color(self.config.search_selected_foreground, inverse,
-				fg_style, final_bg, state.colors.background)
+			resolve_terminal_color(self.config.search_selected_foreground, inverse, fg_style, final_bg, state.colors.background)
 		}
 		.false_ {
 			if inverse { final_bg } else { fg_style }
@@ -2056,8 +2085,7 @@ fn (mut self Renderer) add_underline(x u16, y u16, style terminal.UnderlineStyle
 
 // Add an overline decoration to the specified cell.
 fn (mut self Renderer) add_overline(x u16, y u16, color terminal.RGB, alpha u8) ! {
-	render := self.font_grid.render_glyph(font.Index.init_special(.sprite), u32(font.Sprite.overline),
-		font.RenderOptions{
+	render := self.font_grid.render_glyph(font.Index.init_special(.sprite), u32(font.Sprite.overline), font.RenderOptions{
 		cell_width: 1
 		grid_metrics: self.grid_metrics
 	})!
@@ -2074,8 +2102,7 @@ fn (mut self Renderer) add_overline(x u16, y u16, color terminal.RGB, alpha u8) 
 
 // Add a strikethrough decoration to the specified cell.
 fn (mut self Renderer) add_strikethrough(x u16, y u16, color terminal.RGB, alpha u8) ! {
-	render := self.font_grid.render_glyph(font.Index.init_special(.sprite), u32(font.Sprite.strikethrough),
-		font.RenderOptions{
+	render := self.font_grid.render_glyph(font.Index.init_special(.sprite), u32(font.Sprite.strikethrough), font.RenderOptions{
 		cell_width: 1
 		grid_metrics: self.grid_metrics
 	})!
@@ -2091,18 +2118,19 @@ fn (mut self Renderer) add_strikethrough(x u16, y u16, color terminal.RGB, alpha
 }
 
 // Add a glyph to the specified cell.
-fn (mut self Renderer) add_glyph(x u16, y u16, color terminal.RGB, alpha u8, glyph_index u32, font_index u32, x_offset i32, y_offset i32, cell_width u32) ! {
-	// XTODO: Full glyph rendering requires font grid render_glyph
-	// with constraint handling and Nerd Font attributes.
-	fidx := font.Index{
-		style: unsafe { font.FontStyle(font_index >> 13) }
-		idx:   u16(font_index & 0x1FFF)
+fn (mut self Renderer) add_glyph(x u16, y u16, color terminal.RGB, alpha u8, glyph_index u32, font_index u32, x_offset i32, y_offset i32, cell_width u32, raw_cells []terminal.CellData, raw_x int, cols int) ! {
+	fidx := font.Index.from_int(font_index)
+	cp := raw_cells[raw_x].codepoint_val()
+	constraint := font.get_constraint(cp) or {
+		if is_symbol(cp) { font.Constraint{ size: .fit } } else { font.Constraint{} }
 	}
 	render := self.font_grid.render_glyph(fidx, glyph_index, font.RenderOptions{
 		grid_metrics: self.grid_metrics
 		thicken: self.config.font_thicken
 		thicken_strength: self.config.font_thicken_strength
 		cell_width: cell_width
+		constraint: constraint
+		constraint_width: u32(constraint_width(raw_cells, raw_x, cols))
 	})!
 
 	// If the glyph is 0 width or height, it will be invisible
@@ -2118,6 +2146,7 @@ fn (mut self Renderer) add_glyph(x u16, y u16, color terminal.RGB, alpha u8, gly
 		}
 		grid_pos: [x, y]!
 		color: [color.r, color.g, color.b, alpha]!
+		bools: CellTextBools{ no_min_contrast: no_min_contrast(cp) }
 		glyph_pos: [render.glyph.atlas_x, render.glyph.atlas_y]!
 		glyph_size: [render.glyph.width, render.glyph.height]!
 		bearings: [
@@ -2153,8 +2182,10 @@ fn (mut self Renderer) add_cursor(cursor_state &terminal.RenderCursor, cursor_st
 		.block_hollow { font.Sprite.cursor_hollow_rect }
 		.bar { font.Sprite.cursor_bar }
 		.underline { font.Sprite.cursor_underline }
-		.lock { font.Sprite.cursor_rect } // fallback for lock
+		.lock { font.Sprite.cursor_rect }
 	}
+
+	// fallback for lock
 
 	render := self.font_grid.render_glyph(
 		font.Index.init_special(.sprite),
@@ -2182,8 +2213,11 @@ fn (mut self Renderer) add_cursor(cursor_state &terminal.RenderCursor, cursor_st
 
 // Add a preedit (IME composition) cell.
 fn (mut self Renderer) add_preedit_cell(cp PreeditCodepoint, coord terminal.ViewportPoint, screen_bg terminal.RGB, screen_fg terminal.RGB) ! {
-	// XTODO: Preedit cell rendering requires font_grid.render_codepoint
-	// for the actual codepoint glyph rendering.
+	render := self.font_grid.render_codepoint(cp.codepoint, .regular, .text, font.RenderOptions{
+		grid_metrics: self.grid_metrics
+	}) or {
+		return
+	}
 
 	// Add our opaque background cell
 	self.cells.set_bg(coord.y, coord.x, CellBg{
@@ -2200,6 +2234,15 @@ fn (mut self Renderer) add_preedit_cell(cp PreeditCodepoint, coord terminal.View
 			a: 255
 		})
 	}
+
+	self.cells.add(.text, CellText{
+		atlas: .grayscale
+		grid_pos: [coord.x, coord.y]!
+		color: [screen_fg.r, screen_fg.g, screen_fg.b, u8(255)]!
+		glyph_pos: [render.glyph.atlas_x, render.glyph.atlas_y]!
+		glyph_size: [render.glyph.width, render.glyph.height]!
+		bearings: [render.glyph.offset_x, render.glyph.offset_y]!
+	})!
 
 	// Add underline for preedit text
 	self.add_underline(coord.x, coord.y, .single, screen_fg, 255)!
@@ -2309,7 +2352,7 @@ pub enum MessageKind {
 }
 
 pub fn Message.init_change_config(config voidptr) !Message {
-	return Message{kind: .change_config}
+	return Message{ kind: .change_config }
 }
 
 pub fn (m Message) deinit() {}
@@ -2384,7 +2427,7 @@ pub fn (s Size) grid() GridSize {
 	}
 	cols := if s.cell.width > 0 { usable_w / s.cell.width } else { u32(0) }
 	rows := if s.cell.height > 0 { usable_h / s.cell.height } else { u32(0) }
-	return GridSize{columns: cols, rows: rows}
+	return GridSize{ columns: cols, rows: rows }
 }
 
 pub struct GridSize {
