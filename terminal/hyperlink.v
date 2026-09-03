@@ -1,239 +1,289 @@
 module terminal
 
-// hyperlink.v - Hyperlink types for the terminal emulator.
+// Hyperlink types translated from Ghostty's terminal/hyperlink.zig.
 //
-// Translated from Ghostty's terminal/hyperlink.zig.
-//
-// Contains:
-// - HyperlinkId type alias (u16)
-// - Hyperlink struct with id (explicit string / implicit offset) and uri string
-// - HyperlinkPageEntry struct - page-resident hyperlink with offset-based storage
-// - HyperlinkSet type - ref-counted set of hyperlinks
-//
-// The complex offset-based storage and RefCountedSet parts are stubbed
-// as XTODO since they require the full page memory management system.
+// Ghostty stores page-entry strings as offsets into a page-owned allocation.
+// Witty's Page is made from GC-owned V arrays, so the corresponding V page
+// entry owns ordinary strings. The identity, deduplication, ref-counting, and
+// lifetime semantics remain the same without manufacturing pointer offsets.
 
-// ============================================================
-// HyperlinkId - the unique identifier for a hyperlink.
-// ============================================================
-
-// HyperlinkId is the unique identifier for a hyperlink. This is at most
-// the number of cells that can fit in a single terminal page, since each
-// cell can only contain at most one hyperlink.
+// HyperlinkId is the unique identifier for a hyperlink within one page.
+// ID zero is reserved for cells without a hyperlink.
 pub type HyperlinkId = u16
 
-// ============================================================
-// HyperlinkIdKind - the kind of hyperlink id (explicit or implicit).
-// ============================================================
-
-// HyperlinkIdKind represents whether a hyperlink ID was explicitly
-// provided via the OSC 8 sequence or implicitly generated.
+// HyperlinkIdKind represents an explicit OSC 8 ID or an implicit screen ID.
 pub type HyperlinkIdKind = HyperlinkExplicitId | HyperlinkImplicitId
 
-// HyperlinkExplicitId is an explicitly provided ID via the OSC8 sequence.
 pub struct HyperlinkExplicitId {
 pub:
 	value string
 }
 
-// HyperlinkImplicitId is an auto-generated ID based on an incrementing
-// counter attached to the screen. No ID was provided so we auto-generate
-// the ID based on an incrementing counter.
 pub struct HyperlinkImplicitId {
 pub:
 	offset u32
 }
 
-// ============================================================
-// Hyperlink - a fully decoded hyperlink that may or may not have
-// its memory within a page.
-// ============================================================
-
-// Hyperlink is a fully decoded hyperlink that may or may not have its
-// memory within a page. The memory location of this is dependent
-// on the context so users should check with the source of the
-// hyperlink.
+// Hyperlink is the decoded form used by the terminal and public APIs.
 pub struct Hyperlink {
 pub mut:
 	id  HyperlinkIdKind
 	uri string
 }
 
-// deinit deallocates all the pointers in the hyperlink.
-//
-// WARNING: This should only be called if the hyperlink was
-// heap-allocated. This DOES NOT need to be unconditionally called.
-pub fn (self &Hyperlink) deinit() {
-	// In V, strings are managed by the GC, so there's nothing
-	// explicit to free here. This method exists for API compatibility.
-	// The GC will handle deallocation.
-}
+// V strings are reference counted by the runtime, so deinit has no explicit
+// allocation to release. It is retained to mirror Ghostty's API.
+pub fn (self &Hyperlink) deinit() {}
 
-// dupe duplicates a hyperlink by cloning all values.
-// The returned hyperlink should have deinit called when done.
 pub fn (self &Hyperlink) dupe() Hyperlink {
-	new_id := match self.id {
-		HyperlinkImplicitId {
-			HyperlinkIdKind(self.id)
-		}
-		HyperlinkExplicitId {
-			HyperlinkIdKind(HyperlinkExplicitId{
-				value: self.id.value.clone()
-			})
-		}
-	}
 	return Hyperlink{
-		id: new_id
+		id: hyperlink_id_dupe(self.id)
 		uri: self.uri.clone()
 	}
 }
 
-// eql compares the logical hyperlink identity and target.
 pub fn (self &Hyperlink) eql(other &Hyperlink) bool {
-	if self.uri != other.uri {
-		return false
+	return self.uri == other.uri && hyperlink_ids_equal(self.id, other.id)
+}
+
+fn hyperlink_id_dupe(id HyperlinkIdKind) HyperlinkIdKind {
+	return match id {
+		HyperlinkImplicitId { HyperlinkIdKind(HyperlinkImplicitId{ offset: id.offset }) }
+		HyperlinkExplicitId {
+			HyperlinkIdKind(HyperlinkExplicitId{ value: id.value.clone() })
+		}
 	}
-	return match self.id {
+}
+
+fn hyperlink_ids_equal(a HyperlinkIdKind, b HyperlinkIdKind) bool {
+	return match a {
 		HyperlinkImplicitId {
-			match other.id {
-				HyperlinkImplicitId { self.id.offset == other.id.offset }
+			match b {
+				HyperlinkImplicitId { a.offset == b.offset }
 				else { false }
 			}
 		}
 		HyperlinkExplicitId {
-			match other.id {
-				HyperlinkExplicitId { self.id.value == other.id.value }
+			match b {
+				HyperlinkExplicitId { a.value == b.value }
 				else { false }
 			}
 		}
 	}
 }
 
-// ============================================================
-// HyperlinkPageEntry - a hyperlink that has been committed to
-// page memory. This is a "page entry" because while it represents
-// a hyperlink, some decoding (pointer chasing) is still necessary
-// to get the fully realized ID, URI, etc.
-// ============================================================
-
-// HyperlinkPageEntryIdKind represents the kind of page-entry hyperlink id.
+// HyperlinkPageEntry is the page-resident representation. In Ghostty the
+// strings below are offset slices; in Witty they are owned strings because a
+// Page itself is not a relocatable contiguous allocation.
 pub type HyperlinkPageEntryIdKind = HyperlinkPageEntryExplicitId | HyperlinkPageEntryImplicitId
 
-// HyperlinkPageEntryExplicitId is an explicitly provided ID via the OSC8 sequence,
-// stored as an offset/length slice into page memory.
 pub struct HyperlinkPageEntryExplicitId {
 pub:
-	offset u32
-	len    u32
+	value string
 }
 
-// HyperlinkPageEntryImplicitId is an auto-generated ID based on an incrementing
-// counter. No ID was provided so we auto-generate it.
 pub struct HyperlinkPageEntryImplicitId {
 pub:
 	offset u32
 }
 
-// HyperlinkPageEntry is a hyperlink that has been committed to page memory.
-// While it represents a hyperlink, some decoding (pointer chasing) is still
-// necessary to get the fully realized ID, URI, etc.
 pub struct HyperlinkPageEntry {
-pub mut:
-	id         HyperlinkPageEntryIdKind
-	uri_offset u32
-	uri_len    u32
+pub:
+	id  HyperlinkPageEntryIdKind
+	uri string
 }
 
-// dupe duplicates this hyperlink from one page to another.
-// XTODO: Full page-to-page duplication requires page memory management.
-pub fn (self &HyperlinkPageEntry) dupe() HyperlinkPageEntry {
-	// Shallow copy for now since we don't have page memory management.
+pub fn HyperlinkPageEntry.from_hyperlink(link &Hyperlink) HyperlinkPageEntry {
+	id := match link.id {
+		HyperlinkImplicitId {
+			HyperlinkPageEntryIdKind(HyperlinkPageEntryImplicitId{ offset: link.id.offset })
+		}
+		HyperlinkExplicitId {
+			HyperlinkPageEntryIdKind(HyperlinkPageEntryExplicitId{ value: link.id.value.clone() })
+		}
+	}
 	return HyperlinkPageEntry{
-		id: self.id
-		uri_offset: self.uri_offset
-		uri_len: self.uri_len
+		id: id
+		uri: link.uri.clone()
 	}
 }
 
-// hash computes a hash of this page entry.
-// XTODO: Full implementation requires page memory base pointer
-// for resolving offset-based strings.
+pub fn (self &HyperlinkPageEntry) hyperlink() Hyperlink {
+	id := match self.id {
+		HyperlinkPageEntryImplicitId {
+			HyperlinkIdKind(HyperlinkImplicitId{ offset: self.id.offset })
+		}
+		HyperlinkPageEntryExplicitId {
+			HyperlinkIdKind(HyperlinkExplicitId{ value: self.id.value.clone() })
+		}
+	}
+	return Hyperlink{
+		id: id
+		uri: self.uri.clone()
+	}
+}
+
+pub fn (self &HyperlinkPageEntry) dupe() HyperlinkPageEntry {
+	link := self.hyperlink()
+	return HyperlinkPageEntry.from_hyperlink(&link)
+}
+
+// hash uses FNV-1a over the active ID tag/value and URI. Ghostty uses Wyhash;
+// hash-table correctness requires stable equal hashes, not the same algorithm.
 pub fn (self &HyperlinkPageEntry) hash() u64 {
-	// Simplified hash using the raw offset/length values.
-	mut h := u64(0)
+	mut result := u64(0xcbf29ce484222325)
 	match self.id {
 		HyperlinkPageEntryImplicitId {
-			h = u64(self.id.offset) * 31
+			result = hyperlink_hash_byte(result, 0)
+			for shift in [u32(0), 8, 16, 24] {
+				result = hyperlink_hash_byte(result, u8(self.id.offset >> shift))
+			}
 		}
 		HyperlinkPageEntryExplicitId {
-			h = (u64(self.id.offset) * 31 + u64(self.id.len)) * 31
+			result = hyperlink_hash_byte(result, 1)
+			result = hyperlink_hash_string(result, self.id.value)
 		}
 	}
-	h = h * 31 + u64(self.uri_offset)
-	h = h * 31 + u64(self.uri_len)
-	return h
+	return hyperlink_hash_string(result, self.uri)
 }
 
-// eql checks equality between two page entries.
-// XTODO: Full implementation requires page memory base pointers
-// for resolving offset-based strings.
 pub fn (self &HyperlinkPageEntry) eql(other &HyperlinkPageEntry) bool {
-	// Check that the id kinds match
-	match self.id {
+	if self.uri != other.uri {
+		return false
+	}
+	return match self.id {
 		HyperlinkPageEntryImplicitId {
 			match other.id {
-				HyperlinkPageEntryImplicitId {
-					if self.id.offset != other.id.offset {
-						return false
-					}
-				}
-				else {
-					return false
-				}
+				HyperlinkPageEntryImplicitId { self.id.offset == other.id.offset }
+				else { false }
 			}
 		}
 		HyperlinkPageEntryExplicitId {
 			match other.id {
-				HyperlinkPageEntryExplicitId {
-					if self.id.offset != other.id.offset || self.id.len != other.id.len {
-						return false
-					}
-				}
-				else {
-					return false
-				}
+				HyperlinkPageEntryExplicitId { self.id.value == other.id.value }
+				else { false }
 			}
 		}
 	}
-	return self.uri_offset == other.uri_offset && self.uri_len == other.uri_len
 }
 
-// free frees the memory for this entry from its page.
-// XTODO: Full implementation requires page string allocator.
-pub fn (self &HyperlinkPageEntry) free() {
-	// In V with GC, nothing to free explicitly.
-	// XTODO: When page memory management is implemented,
-	// this should free the string allocator entries.
+// V owns entry strings, so dropping the last reference is sufficient.
+pub fn (self &HyperlinkPageEntry) free() {}
+
+fn hyperlink_hash_byte(current u64, value u8) u64 {
+	return (current ^ u64(value)) * u64(0x100000001b3)
 }
 
-// ============================================================
-// HyperlinkSet - the set of hyperlinks. This is ref-counted so
-// that a set of cells can share the same hyperlink without
-// duplicating the data.
-// ============================================================
+fn hyperlink_hash_string(current u64, value string) u64 {
+	mut result := current
+	for byte in value.bytes() {
+		result = hyperlink_hash_byte(result, byte)
+	}
+	return result
+}
 
-// HyperlinkSet is a ref-counted set of hyperlinks for a page.
-// XTODO: Full implementation requires RefCountedSet which is
-// a complex data structure with offset-based storage.
+struct HyperlinkSetEntry {
+mut:
+	link      Hyperlink
+	ref_count int
+	in_use    bool
+}
+
+// HyperlinkSet is the page-local ref-counted set. Dead slots are reused and
+// ID zero remains reserved, matching Ghostty's RefCountedSet specialization.
 pub struct HyperlinkSet {
 pub mut:
-	// XTODO: The actual storage would be a RefCountedSet(HyperlinkPageEntry, ...)
-	// For now this is a stub.
-	entries []HyperlinkPageEntry
+	entries []HyperlinkSetEntry
 }
 
-// HyperlinkMap is the mapping of cell to hyperlink. We use a map to save space
-// since it's very unlikely a cell is a hyperlink, so it's a waste to store
-// the hyperlink ID in the cell itself.
-// XTODO: In the Zig version this is an AutoOffsetHashMap(Offset(Cell), Id).
-pub type HyperlinkMap = map[u32]HyperlinkId
+pub fn HyperlinkSet.init() HyperlinkSet {
+	return HyperlinkSet{
+		entries: [HyperlinkSetEntry{}]
+	}
+}
+
+// add returns an existing semantic link ID or stores a duplicate in a free
+// slot. The returned ID owns one reference.
+pub fn (mut self HyperlinkSet) add(link Hyperlink) u32 {
+	for i := 1; i < self.entries.len; i++ {
+		if self.entries[i].in_use && self.entries[i].link.eql(&link) {
+			self.entries[i].ref_count++
+			return u32(i)
+		}
+	}
+
+	for i := 1; i < self.entries.len; i++ {
+		if !self.entries[i].in_use {
+			self.entries[i] = HyperlinkSetEntry{
+				link: link.dupe()
+				ref_count: 1
+				in_use: true
+			}
+			return u32(i)
+		}
+	}
+
+	self.entries << HyperlinkSetEntry{
+		link: link.dupe()
+		ref_count: 1
+		in_use: true
+	}
+	return u32(self.entries.len - 1)
+}
+
+pub fn (self &HyperlinkSet) lookup(link &Hyperlink) ?u32 {
+	for i := 1; i < self.entries.len; i++ {
+		if self.entries[i].in_use && self.entries[i].link.eql(link) {
+			return u32(i)
+		}
+	}
+	return none
+}
+
+pub fn (mut self HyperlinkSet) use_link(id u32) {
+	assert id > 0 && int(id) < self.entries.len
+	assert self.entries[int(id)].in_use
+	self.entries[int(id)].ref_count++
+}
+
+pub fn (mut self HyperlinkSet) release(id u32) {
+	assert id > 0 && int(id) < self.entries.len
+	mut entry := &self.entries[int(id)]
+	assert entry.in_use && entry.ref_count > 0
+	entry.ref_count--
+	if entry.ref_count == 0 {
+		entry.link.deinit()
+		entry.link = Hyperlink{}
+		entry.in_use = false
+	}
+}
+
+pub fn (self &HyperlinkSet) get(id u32) Hyperlink {
+	assert id > 0 && int(id) < self.entries.len
+	assert self.entries[int(id)].in_use
+	return self.entries[int(id)].link
+}
+
+pub fn (self &HyperlinkSet) ref_count(id u32) int {
+	if id == 0 || int(id) >= self.entries.len || !self.entries[int(id)].in_use {
+		return 0
+	}
+	return self.entries[int(id)].ref_count
+}
+
+pub fn (self &HyperlinkSet) count() int {
+	mut result := 0
+	for i := 1; i < self.entries.len; i++ {
+		if self.entries[i].in_use {
+			result++
+		}
+	}
+	return result
+}
+
+pub fn HyperlinkSet.capacity_for_count(count int) int {
+	return rcs_capacity_for_count(count)
+}
+
+// Pages use a sparse mapping from a cell offset to the page-local link ID.
+pub type HyperlinkMap = map[u64]HyperlinkId

@@ -805,7 +805,6 @@ module terminal
 //
 // --- Original Ghostty Comments End: src/terminal/page.zig
 
-
 // Page represents a specific section of terminal screen. The primary
 // idea of a page is that it is a fully self-contained unit that can be
 // serialized, copied, etc. as a convenient way to represent a section
@@ -1009,107 +1008,6 @@ fn styles_equal(a CellStyle, b CellStyle) bool {
 }
 
 // ============================================================
-// HyperlinkStorage - manages hyperlinks with ref counting
-// ============================================================
-
-// HyperlinkEntry stores a hyperlink with its reference count.
-struct HyperlinkEntry {
-mut:
-	link      Hyperlink
-	ref_count int
-	in_use    bool
-}
-
-// HyperlinkStorage manages the set of hyperlinks for a page.
-pub struct HyperlinkStorage {
-pub mut:
-	entries []HyperlinkEntry
-}
-
-// Initialize a new empty HyperlinkStorage.
-pub fn HyperlinkStorage.init() HyperlinkStorage {
-	// Entry 0 is reserved (unused).
-	return HyperlinkStorage{
-		entries: [HyperlinkEntry{}]
-	}
-}
-
-// Add a hyperlink and return its ID (with ref_count = 1).
-pub fn (mut self HyperlinkStorage) add(link Hyperlink) u32 {
-	// Check if link already exists.
-	for i := 1; i < self.entries.len; i++ {
-		if self.entries[i].in_use && self.entries[i].link.uri == link.uri {
-			self.entries[i].ref_count++
-			return u32(i)
-		}
-	}
-	// Find free slot.
-	for i := 1; i < self.entries.len; i++ {
-		if !self.entries[i].in_use {
-			self.entries[i] = HyperlinkEntry{
-				link: link
-				ref_count: 1
-				in_use: true
-			}
-			return u32(i)
-		}
-	}
-	// Append.
-	self.entries << HyperlinkEntry{
-		link: link
-		ref_count: 1
-		in_use: true
-	}
-	return u32(self.entries.len - 1)
-}
-
-// Increment ref count for a hyperlink.
-pub fn (mut self HyperlinkStorage) use_link(id u32) {
-	if int(id) < self.entries.len {
-		self.entries[int(id)].ref_count++
-	}
-}
-
-// Decrement ref count for a hyperlink. Free if reaches 0.
-pub fn (mut self HyperlinkStorage) release(id u32) {
-	if int(id) < self.entries.len && self.entries[int(id)].in_use {
-		self.entries[int(id)].ref_count--
-		if self.entries[int(id)].ref_count <= 0 {
-			self.entries[int(id)].in_use = false
-			self.entries[int(id)].ref_count = 0
-		}
-	}
-}
-
-// Get a hyperlink by ID.
-pub fn (self &HyperlinkStorage) get(id u32) Hyperlink {
-	if int(id) < self.entries.len && self.entries[int(id)].in_use {
-		return self.entries[int(id)].link
-	}
-	return Hyperlink{}
-}
-
-// Get ref count for a hyperlink.
-pub fn (self &HyperlinkStorage) ref_count(id u32) int {
-	if int(id) < self.entries.len {
-		return self.entries[int(id)].ref_count
-	}
-	return 0
-}
-
-// Returns the number of hyperlinks with capacity for the given count.
-pub fn HyperlinkStorage.capacity_for_count(count int) int {
-	if count == 0 {
-		return 0
-	}
-	mut cap := count * 2
-	if cap < 4 {
-		cap = 4
-	}
-	return cap
-}
-
-// ============================================================
 // IntegrityError
 // ============================================================
 
@@ -1296,7 +1194,7 @@ pub mut:
 	// The structures used for tracking hyperlinks within the page.
 	// The map maps cell positions to hyperlink IDs and the IDs are in
 	// the ref counted set.
-	hyperlink_set HyperlinkStorage
+	hyperlink_set HyperlinkSet
 	hyperlink_map map[u64]u32 // cell_key -> hyperlink_id
 }
 
@@ -1316,7 +1214,7 @@ pub fn Page.init(cap PageCapacity) Page {
 		}
 		dirty: false
 		styles: StyleSet.init()
-		hyperlink_set: HyperlinkStorage.init()
+		hyperlink_set: HyperlinkSet.init()
 	}
 }
 
@@ -1326,7 +1224,7 @@ pub fn (mut self Page) deinit() {
 	self.rows = []
 	self.hyperlink_map = map[u64]u32{}
 	self.styles = StyleSet.init()
-	self.hyperlink_set = HyperlinkStorage.init()
+	self.hyperlink_set = HyperlinkSet.init()
 }
 
 // Reinitialize the page with the same capacity.
@@ -1342,7 +1240,7 @@ pub fn (mut self Page) reinit(cap PageCapacity) {
 	}
 	self.dirty = false
 	self.styles = StyleSet.init()
-	self.hyperlink_set = HyperlinkStorage.init()
+	self.hyperlink_set = HyperlinkSet.init()
 	self.hyperlink_map = map[u64]u32{}
 }
 
@@ -1538,7 +1436,7 @@ pub fn (self &Page) clone() Page {
 	}
 
 	// Deep copy hyperlink set.
-	mut new_hl_set := HyperlinkStorage{
+	mut new_hl_set := HyperlinkSet{
 		entries: self.hyperlink_set.entries.clone()
 	}
 
