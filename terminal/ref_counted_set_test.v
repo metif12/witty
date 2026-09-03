@@ -229,3 +229,57 @@ fn test_rcs_release_multiple() {
 	assert s.ref_count(id) == 0
 	assert s.count() == 0
 }
+
+fn test_rcs_add_with_id_reuses_dead_slot() {
+	l := RefCountedSetLayout.init(32)
+	mut set := RefCountedSet.init(l)
+	first := set.add(CellStyle{})!
+	set.release(first)
+
+	replacement := CellStyle{
+		flags: StyleFlags{
+			bold: true
+		}
+	}
+	result := set.add_with_id(replacement, first)!
+	assert result.used_requested
+	assert result.id == first
+	assert set.lookup(replacement) or { panic('replacement missing') } == first
+	assert set.ref_count(first) == 1
+	assert set.count() == 1
+}
+
+fn test_rcs_add_with_id_reuses_matching_live_slot() {
+	l := RefCountedSetLayout.init(32)
+	mut set := RefCountedSet.init(l)
+	style := CellStyle{
+		flags: StyleFlags{
+			italic: true
+		}
+	}
+	id := set.add(style)!
+
+	result := set.add_with_id(style, id)!
+	assert result.used_requested
+	assert result.id == id
+	assert set.ref_count(id) == 2
+	assert set.count() == 1
+}
+
+fn test_rcs_add_with_id_falls_back_when_requested_slot_is_live() {
+	l := RefCountedSetLayout.init(32)
+	mut set := RefCountedSet.init(l)
+	first := set.add(CellStyle{})!
+	second_style := CellStyle{
+		flags: StyleFlags{
+			underline: .single
+		}
+	}
+
+	result := set.add_with_id(second_style, first)!
+	assert !result.used_requested
+	second := result.id
+	assert second != first
+	assert set.lookup(second_style) or { panic('second style missing') } == second
+	assert set.count() == 2
+}

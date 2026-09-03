@@ -268,6 +268,52 @@ pub fn (mut self RefCountedSet) add(value CellStyle) !u16 {
 	return id
 }
 
+// AddWithIdResult is V's explicit representation of Zig's optional ID return.
+pub struct AddWithIdResult {
+pub:
+	used_requested bool
+	id             u16
+}
+
+// Add an item and, when possible, reuse the caller-provided ID.
+pub fn (mut self RefCountedSet) add_with_id(value CellStyle, id u16) !AddWithIdResult {
+	assert id > 0, 'ID must be > 0'
+
+	if id < self.next_id {
+		if self.items[id].meta.ref_count == 0 {
+			if self.psl_stats[31] > 0 {
+				return error('out of memory: psl_stats overflow')
+			}
+
+			self.delete_item(id)
+			added_id := self.upsert(value, id)
+			self.items[added_id].meta.ref_count += 1
+			self.living += 1
+			if added_id == id {
+				return AddWithIdResult{
+					used_requested: true
+					id: id
+				}
+			}
+			return AddWithIdResult{
+				id: added_id
+			}
+		}
+
+		if self.items[id].value.eql(&value) {
+			self.items[id].meta.ref_count += 1
+			return AddWithIdResult{
+				used_requested: true
+				id: id
+			}
+		}
+	}
+
+	return AddWithIdResult{
+		id: self.add(value)!
+	}
+}
+
 // Increment an item's reference count by 1.
 pub fn (mut self RefCountedSet) use_item(id u16) {
 	assert id > 0, 'ID must be > 0'
@@ -402,6 +448,14 @@ fn (mut self RefCountedSet) delete_item(id u16) {
 	}
 
 	self.hash_table[p] = 0
+}
+
+// Find a value in the table or insert it using new_id.
+fn (mut self RefCountedSet) upsert(value CellStyle, new_id u16) u16 {
+	if id := self.lookup(value) {
+		return id
+	}
+	return self.insert(value, new_id)
 }
 
 // Insert the given value into the hash table with the given ID.
