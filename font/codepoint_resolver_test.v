@@ -2,9 +2,23 @@ module font
 
 // Tests for CodepointResolver (translated from ghostty/src/font/CodepointResolver.zig)
 //
-// XTODO: Most tests require embedded font data and real FreeType/CoreText
-// face initialization to function. They are preserved here as stubs for
-// completeness and future implementation.
+fn make_regular_collection() !Collection {
+	mut c := Collection.init()
+	c.load_options = LoadOptions{
+		library: Library.init()!
+		size: DesiredSize{
+			points: 12
+			xdpi: 96
+			ydpi: 96
+		}
+	}
+	lo := c.load_options or { return error('missing load options') }
+	c.add(Face.init_mem(lo.library, embedded_regular, lo.face_options())!, AddOptions{
+		style: .regular
+		size_adjustment: .none_
+	})!
+	return c
+}
 
 fn test_style_status_defaults() {
 	s := StyleStatus{}
@@ -116,29 +130,54 @@ fn test_codepoint_resolver_init_deinit() {
 }
 
 fn test_get_index_basic() {
-	// XTODO: needs embedded font data (regular, emoji, emoji_text)
-	// and real FreeType face initialization.
-	//
-	// Original test:
-	// 1. Init library and collection with regular font, emoji font,
-	//    and emoji text font
-	// 2. Create resolver wrapping the collection
-	// 3. Should find all visible ASCII (32..127) at index 0
-	// 4. Should find emoji (U+1F978) at index 1
-	// 5. Should find text emoji (U+270C) with .text at index 2
-	// 6. Should find text emoji (U+270C) with .emoji at index 1
-	// 7. Box glyph (U+1FB00) should be none since no sprite face set
+	mut c := make_regular_collection() or { panic(err) }
+	lo := c.load_options or { panic('missing load options') }
+	c.add(Face.init_mem(lo.library, embedded_emoji, lo.face_options()) or { panic(err) }, AddOptions{
+		style: .regular
+		size_adjustment: .none_
+	}) or { panic(err) }
+	c.add(Face.init_mem(lo.library, embedded_emoji_text, lo.face_options()) or { panic(err) }, AddOptions{
+		style: .regular
+		size_adjustment: .none_
+	}) or { panic(err) }
+
+	mut r := CodepointResolver{ collection: c }
+	defer { r.deinit() }
+	for cp := u32(32); cp < 127; cp++ {
+		idx := r.get_index(cp, .regular, none) or { panic('missing ASCII U+${cp:04X}') }
+		assert idx.style == .regular
+		assert idx.idx == 0
+	}
+	emoji := r.get_index(0x1f978, .regular, none) or { panic('missing emoji face') }
+	assert emoji.idx == 1
+	text := r.get_index(0x270c, .regular, Presentation.text) or { panic('missing text emoji') }
+	assert text.idx == 2
+	graphical := r.get_index(0x270c, .regular, Presentation.emoji) or {
+		panic('missing graphical emoji')
+	}
+	assert graphical.idx == 1
+	assert r.get_index(0x1fb00, .regular, none) == none
 }
 
 fn test_get_index_disabled_font_style() {
-	// XTODO: needs embedded font data and real FreeType face initialization.
-	//
-	// Original test:
-	// 1. Init library and collection with regular, bold, italic faces
-	// 2. Create resolver, disable bold style
-	// 3. Regular 'A' should find regular face (style=regular, idx=0)
-	// 4. Bold 'A' should fall back to regular (style=regular, idx=0)
-	// 5. Italic 'A' should still find italic face (style=italic, idx=0)
+	mut c := make_regular_collection() or { panic(err) }
+	lo := c.load_options or { panic('missing load options') }
+	for style in [FontStyle.bold, .italic] {
+		c.add(Face.init_mem(lo.library, embedded_regular, lo.face_options()) or { panic(err) }, AddOptions{
+			style: style
+			size_adjustment: .none_
+		}) or { panic(err) }
+	}
+	mut r := CodepointResolver{ collection: c }
+	defer { r.deinit() }
+	r.styles.set(.bold, false)
+
+	regular := r.get_index(0x41, .regular, none) or { panic('missing regular A') }
+	assert regular.style == .regular && regular.idx == 0
+	bold := r.get_index(0x41, .bold, none) or { panic('missing bold fallback A') }
+	assert bold.style == .regular && bold.idx == 0
+	italic := r.get_index(0x41, .italic, none) or { panic('missing italic A') }
+	assert italic.style == .italic && italic.idx == 0
 }
 
 fn test_get_index_box_glyph() {
@@ -149,13 +188,13 @@ fn test_get_index_box_glyph() {
 	c := Collection.init()
 	mut r := CodepointResolver{
 		collection: c
-		sprite:     SpriteFace{
+		sprite: SpriteFace{
 			metrics: Metrics.calc(FaceMetrics{
-				px_per_em:  30.0
+				px_per_em: 30.0
 				cell_width: 18.0
-				ascent:     30.0
-				descent:    -6.0
-				line_gap:   0.0
+				ascent: 30.0
+				descent: -6.0
+				line_gap: 0.0
 			})
 		}
 	}
@@ -178,9 +217,9 @@ fn test_get_index_with_sprite() {
 	// Test that sprite face is used for box drawing characters.
 	mut r := CodepointResolver{
 		collection: Collection.init()
-		sprite:     SpriteFace{
+		sprite: SpriteFace{
 			metrics: Metrics{
-				cell_width:  10
+				cell_width: 10
 				cell_height: 20
 			}
 		}
@@ -200,30 +239,44 @@ fn test_get_index_with_sprite() {
 }
 
 fn test_get_index_style_fallback() {
-	// XTODO: needs embedded font data and real FreeType face initialization.
-	//
-	// Original test:
-	// 1. Create collection with only regular face
-	// 2. Request bold style for 'A'
-	// 3. Should fall back to regular style since bold is not available
+	c := make_regular_collection() or { panic(err) }
+	mut r := CodepointResolver{ collection: c }
+	defer { r.deinit() }
+	idx := r.get_index(0x41, .bold, none) or { panic('missing regular style fallback') }
+	assert idx.style == .regular
+	assert idx.idx == 0
 }
 
 fn test_get_presentation() {
-	// XTODO: needs embedded font data and real FreeType face initialization.
-	//
-	// Original test:
-	// 1. Create resolver with regular and emoji faces
-	// 2. getPresentation for sprite index should return .text
-	// 3. getPresentation for regular face with non-color glyph should return .text
-	// 4. getPresentation for emoji face with color glyph should return .emoji
+	mut c := make_regular_collection() or { panic(err) }
+	lo := c.load_options or { panic('missing load options') }
+	emoji_idx := c.add(Face.init_mem(lo.library, embedded_emoji, lo.face_options()) or { panic(err) }, AddOptions{
+		style: .regular
+		size_adjustment: .none_
+	}) or { panic(err) }
+	mut r := CodepointResolver{ collection: c }
+	defer { r.deinit() }
+	assert r.get_presentation(Index.init_special(.sprite), 0x2500) or { panic(err) } == .text
+	regular_face := r.collection.get_face(Index{}) or { panic(err) }
+	regular_glyph := regular_face.glyph_index(0x41) or { panic('missing regular A') }
+	assert r.get_presentation(Index{}, regular_glyph) or { panic(err) } == .text
+	emoji_face := r.collection.get_face(emoji_idx) or { panic(err) }
+	emoji_glyph := emoji_face.glyph_index(0x1f978) or { panic('missing emoji glyph') }
+	assert r.get_presentation(emoji_idx, emoji_glyph) or { panic(err) } == .emoji
 }
 
 fn test_render_glyph() {
-	// XTODO: needs embedded font data, real FreeType rendering, and Atlas.
-	//
-	// Original test:
-	// 1. Create resolver with regular face
-	// 2. Create grayscale atlas
-	// 3. Render glyph for 'A' using renderGlyph
-	// 4. Verify glyph has non-zero dimensions
+	c := make_regular_collection() or { panic(err) }
+	mut r := CodepointResolver{ collection: c }
+	defer { r.deinit() }
+	mut face := r.collection.get_face(Index{}) or { panic(err) }
+	glyph_index := face.glyph_index(0x41) or { panic('missing A') }
+	metrics := Metrics.calc(face.get_metrics())
+	mut atlas := Atlas.init(512, .grayscale)
+	defer { atlas.deinit() }
+	glyph := r.render_glyph(mut atlas, Index{}, glyph_index, RenderOptions{
+		grid_metrics: metrics
+	}) or { panic(err) }
+	assert glyph.width > 0
+	assert glyph.height > 0
 }

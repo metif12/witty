@@ -1,5 +1,7 @@
 module font
 
+import sync
+
 // This structure represents the state required to render a terminal
 // grid using the font subsystem. It is "shared" because it is able to
 // be shared across multiple surfaces.
@@ -55,7 +57,7 @@ pub mut:
 	// this directly if they need to i.e. access the atlas directly. Because
 	// callers can use this lock directly, maintainers need to be extra careful
 	// to review call sites to ensure they are using the lock correctly.
-	// XTODO: use sync.RwMutex when V has one; for now single-threaded.
+	lock &sync.RwMutex = unsafe { nil }
 }
 
 // Initialize the grid.
@@ -69,16 +71,17 @@ pub mut:
 // necessary for correct rendering.
 pub fn SharedGrid.init(resolver CodepointResolver) !SharedGrid {
 	// We need to support loading options since we use the size data
-	assert(resolver.collection.load_options != none)
+	assert resolver.collection.load_options != none
 
 	atlas_grayscale := Atlas.init(512, .grayscale)
 	atlas_color := Atlas.init(512, .bgra)
 
 	mut result := SharedGrid{
-		resolver:        resolver
+		resolver: resolver
 		atlas_grayscale: atlas_grayscale
-		atlas_color:     atlas_color
-		metrics:         Metrics{} // Loaded below
+		atlas_color: atlas_color
+		metrics: Metrics{} // Loaded below
+		lock: sync.new_rwmutex()
 	}
 
 	// Initialize our metrics.
@@ -94,6 +97,9 @@ pub fn (mut self SharedGrid) deinit() {
 	self.atlas_grayscale.deinit()
 	self.atlas_color.deinit()
 	self.resolver.deinit()
+	if self.lock != unsafe { nil } {
+		self.lock.destroy()
+	}
 }
 
 fn (mut self SharedGrid) reload_metrics() ! {
@@ -114,7 +120,7 @@ fn (mut self SharedGrid) reload_metrics() ! {
 // This is not thread safe.
 pub fn (self &SharedGrid) cell_size() CellSize {
 	return CellSize{
-		width:  self.metrics.cell_width
+		width: self.metrics.cell_width
 		height: self.metrics.cell_height
 	}
 }
@@ -130,21 +136,31 @@ pub fn (self &SharedGrid) cell_size() CellSize {
 // On error (e.g. face loading failure), returns an error.
 pub fn (mut self SharedGrid) get_index(cp u32, style FontStyle, p ?Presentation) !CodepointValue {
 	key := CodepointKey{
-		style:        style
-		codepoint:    cp
+		style: style
+		codepoint: cp
 		presentation: p
 	}
 	h := key.hash_key()
 
 	// Fast path: the cache has the value. This is almost always true and
 	// only requires a read lock.
-	// XTODO: use shared lock for concurrent reads
+	self.lock.rlock()
+	if h in self.codepoints {
+		value := self.codepoints[h]
+		self.lock.runlock()
+		return value
+	}
+	self.lock.runlock()
+
+	// Slow path: we need to search this codepoint
+	self.lock.lock()
+	defer { self.lock.unlock() }
+
+	// Another thread may have filled the cache while we waited for the write
+	// lock, so check again before performing discovery or loading a face.
 	if h in self.codepoints {
 		return self.codepoints[h]
 	}
-
-	// Slow path: we need to search this codepoint
-	// XTODO: use exclusive lock for writes
 
 	// Load a value and cache it. This even caches negative matches.
 	value := self.resolver.get_index(cp, style, p)
@@ -152,7 +168,7 @@ pub fn (mut self SharedGrid) get_index(cp u32, style FontStyle, p ?Presentation)
 	if idx := value {
 		self.codepoints[h] = CodepointValue{
 			has_value: true
-			index:     idx
+			index: idx
 		}
 
 		// If the font is a sprite font then we don't need to preload
@@ -169,7 +185,7 @@ pub fn (mut self SharedGrid) get_index(cp u32, style FontStyle, p ?Presentation)
 
 		return CodepointValue{
 			has_value: true
-			index:     idx
+			index: idx
 		}
 	}
 
@@ -183,7 +199,8 @@ pub fn (mut self SharedGrid) get_index(cp u32, style FontStyle, p ?Presentation)
 
 // Returns true if the given font index has the codepoint and presentation.
 pub fn (self &SharedGrid) has_codepoint(idx Index, cp u32, p ?Presentation) bool {
-	// XTODO: use shared lock for concurrent reads
+	self.lock.rlock()
+	defer { self.lock.runlock() }
 	return self.resolver.collection.has_codepoint(idx, cp, if pr := p {
 		PresentationMode.explicit(pr)
 	} else {
@@ -208,9 +225,16 @@ pub fn (mut self SharedGrid) render_codepoint(cp u32, style FontStyle, p ?Presen
 	index := cv.index
 
 	// Get the glyph for the font
-	// XTODO: use shared lock for concurrent reads
-	face := self.resolver.collection.get_face(index) or { return none }
-	glyph_index := face.glyph_index(cp) or { return none }
+	self.lock.rlock()
+	face := self.resolver.collection.get_face(index) or {
+		self.lock.runlock()
+		return none
+	}
+	glyph_index := face.glyph_index(cp) or {
+		self.lock.runlock()
+		return none
+	}
+	self.lock.runlock()
 
 	// Render
 	return self.render_glyph(index, glyph_index, opts) or { return none }
@@ -222,19 +246,23 @@ pub fn (mut self SharedGrid) render_glyph(index Index, glyph_index u32, opts Ren
 	key := GlyphKey{
 		index: index
 		glyph: glyph_index
-		opts:  opts
+		opts: opts
 	}
 	h := key.hash_key()
 
 	// Fast path: the cache has the value. This is almost always true and
 	// only requires a read lock.
-	// XTODO: use shared lock for concurrent reads
+	self.lock.rlock()
 	if h in self.glyphs {
-		return self.glyphs[h]
+		value := self.glyphs[h]
+		self.lock.runlock()
+		return value
 	}
+	self.lock.runlock()
 
 	// Slow path: we need to render this glyph
-	// XTODO: use exclusive lock for writes
+	self.lock.lock()
+	defer { self.lock.unlock() }
 
 	// Check again in case another thread beat us to it.
 	if h in self.glyphs {
@@ -279,7 +307,7 @@ pub fn (mut self SharedGrid) render_glyph(index Index, glyph_index u32, opts Ren
 
 	// Cache and return
 	result := RenderResult{
-		glyph:        glyph
+		glyph: glyph
 		presentation: p
 	}
 	self.glyphs[h] = result
