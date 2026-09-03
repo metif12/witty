@@ -171,7 +171,6 @@ module terminal
 //
 // --- Original Ghostty Comments End: src/terminal/hash_map.zig
 
-
 // hash_map.v - Offset-based hash map for terminal page representation.
 // Translated from Ghostty's terminal/hash_map.zig (1,540 lines).
 //
@@ -180,10 +179,8 @@ module terminal
 // The map is backed by a single contiguous allocation with metadata, keys,
 // and values laid out sequentially.
 //
-// The main differences from the Zig version:
-// - Uses V arrays instead of a single contiguous buffer with pointer arithmetic
-// - Concrete u64 key/value types instead of comptime generics
-// - XTODO for offset-based memory layout (needed for terminal page integration)
+// The main differences from the Zig version are the use of V arrays in place
+// of raw allocation slices and a concrete u64 key/value specialization.
 //
 // The core algorithm is preserved: open addressing with linear probing,
 // 7-bit fingerprinting for fast collision resolution, and tombstone-based
@@ -325,17 +322,35 @@ fn hash_max(a i64, b i64) i64 {
 // OffsetHashMap - offset-based wrapper
 // ============================================================
 
-// OffsetHashMap stores an offset to the hash map metadata within a
-// page's contiguous memory buffer. This allows the entire page
-// (including the hash map) to be moved/copied without invalidating
-// the map's internal pointers.
-//
-// XTODO: Full offset-based implementation requires V pointer arithmetic
-// and the ability to reconstruct a HashMapUnmanaged from a base pointer
-// and metadata offset. Currently stubbed - use HashMapUnmanaged directly.
+// OffsetHashMap is the relocatable wrapper used by pages. Ghostty recreates
+// an unmanaged map from the metadata offset in a contiguous page allocation.
+// Witty pages use GC-owned arrays, so the stable heap allocation below is the
+// corresponding V representation; metadata_offset is retained for serialized
+// layout accounting.
 pub struct OffsetHashMap {
 pub mut:
 	metadata_offset Offset
+	inner           &HashMapUnmanaged = unsafe { nil }
+}
+
+pub fn OffsetHashMap.layout(cap u32) HashMapLayout {
+	return layout_for_capacity(cap, i64(sizeof(u64)), i64(sizeof(u64)), i64(sizeof(u64)), i64(sizeof(u64)))
+}
+
+pub fn OffsetHashMap.init(buf OffsetBuf, layout HashMapLayout) OffsetHashMap {
+	mut inner := HashMapUnmanaged.init(layout.capacity)
+	return OffsetHashMap{
+		metadata_offset: buf.member(16)
+		inner: &inner
+	}
+}
+
+// map returns the persistent unmanaged map. The base argument is retained in
+// the API because callers rebuild this view after moving a Ghostty page.
+pub fn (self &OffsetHashMap) map(base &u8) &HashMapUnmanaged {
+	_ = base
+	assert self.inner != unsafe { nil }
+	return self.inner
 }
 
 // ============================================================
@@ -412,8 +427,8 @@ pub fn (mut it HashMapIter) next() ?HashMapIterEntry {
 // The map has a fixed capacity set at initialization and does not
 // resize. Exceeding capacity returns an error.
 //
-// XTODO: Generic type parameters, offset-based single-buffer layout,
-// custom hash/equality contexts.
+// V specializes this implementation to u64 keys and values; typed page maps
+// encode their compact integer keys into this representation.
 pub struct HashMapUnmanaged {
 pub mut:
 	metadata []HashSlotMetadata

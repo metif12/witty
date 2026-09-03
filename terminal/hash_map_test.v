@@ -9,7 +9,10 @@ fn test_hash_map_basic_usage() {
 	count := u32(5)
 	mut total := u64(0)
 	for i in 0 .. count {
-		hm.put(u64(i), u64(i)) or { assert false, 'put failed'; return }
+		hm.put(u64(i), u64(i)) or {
+			assert false, 'put failed'
+			return
+		}
 		total += u64(i)
 	}
 
@@ -23,7 +26,10 @@ fn test_hash_map_basic_usage() {
 
 	sum = 0
 	for i in 0 .. count {
-		val := hm.get(u64(i)) or { assert false, 'get failed'; return }
+		val := hm.get(u64(i)) or {
+			assert false, 'get failed'
+			return
+		}
 		assert val == u64(i)
 		sum += val
 	}
@@ -47,7 +53,10 @@ fn test_hash_map_ensure_unused_capacity_with_tombstones() {
 	mut hm := HashMapUnmanaged.init(32)
 
 	for i in 0 .. 100 {
-		hm.ensure_unused_capacity(1) or { assert false, 'ensure failed'; return }
+		hm.ensure_unused_capacity(1) or {
+			assert false, 'ensure failed'
+			return
+		}
 		hm.put_assume_capacity(u64(i), u64(i))
 		hm.remove(u64(i))
 	}
@@ -58,7 +67,10 @@ fn test_hash_map_clear_retaining_capacity() {
 
 	hm.clear_retaining_capacity()
 
-	hm.put(1, 1) or { assert false; return }
+	hm.put(1, 1) or {
+		assert false
+		return
+	}
 	assert hm.get(1) or { 0 } == u64(1)
 	assert hm.count() == 1
 
@@ -80,7 +92,10 @@ fn test_hash_map_clear_retaining_capacity() {
 fn test_hash_map_ensure_total_capacity_with_existing() {
 	mut hm := HashMapUnmanaged.init(hash_map_minimal_capacity)
 
-	hm.put(0, 0) or { assert false; return }
+	hm.put(0, 0) or {
+		assert false
+		return
+	}
 	assert hm.count() == 1
 	assert hm.capacity() == hash_map_minimal_capacity
 
@@ -96,7 +111,10 @@ fn test_hash_map_remove() {
 	mut hm := HashMapUnmanaged.init(32)
 
 	for i in 0 .. 16 {
-		hm.put(u64(i), u64(i)) or { assert false; return }
+		hm.put(u64(i), u64(i)) or {
+			assert false
+			return
+		}
 	}
 
 	for i in 0 .. 16 {
@@ -126,7 +144,10 @@ fn test_hash_map_reverse_removes() {
 	mut hm := HashMapUnmanaged.init(32)
 
 	for i in 0 .. 16 {
-		hm.put_no_clobber(u64(i), u64(i)) or { assert false; return }
+		hm.put_no_clobber(u64(i), u64(i)) or {
+			assert false
+			return
+		}
 	}
 
 	mut i := u32(16)
@@ -146,7 +167,10 @@ fn test_hash_map_multiple_removes_same_metadata() {
 	mut hm := HashMapUnmanaged.init(32)
 
 	for i in 0 .. 16 {
-		hm.put(u64(i), u64(i)) or { assert false; return }
+		hm.put(u64(i), u64(i)) or {
+			assert false
+			return
+		}
 	}
 
 	hm.remove(7)
@@ -166,10 +190,22 @@ fn test_hash_map_multiple_removes_same_metadata() {
 		}
 	}
 
-	hm.put(15, 15) or { assert false; return }
-	hm.put(13, 13) or { assert false; return }
-	hm.put(14, 14) or { assert false; return }
-	hm.put(7, 7) or { assert false; return }
+	hm.put(15, 15) or {
+		assert false
+		return
+	}
+	hm.put(13, 13) or {
+		assert false
+		return
+	}
+	hm.put(14, 14) or {
+		assert false
+		return
+	}
+	hm.put(7, 7) or {
+		assert false
+		return
+	}
 	for i in 0 .. 16 {
 		assert hm.get(u64(i)) or { 999 } == u64(i)
 	}
@@ -184,7 +220,10 @@ fn test_hash_map_put_and_remove_loop() {
 
 	// Fill the map
 	for i in 0 .. size {
-		hm.put(u64(i), u64(i)) or { assert false; return }
+		hm.put(u64(i), u64(i)) or {
+			assert false
+			return
+		}
 	}
 	assert hm.count() == size
 
@@ -196,7 +235,10 @@ fn test_hash_map_put_and_remove_loop() {
 
 	// Refill and remove again
 	for i in 0 .. size {
-		hm.put(u64(i), u64(i)) or { assert false; return }
+		hm.put(u64(i), u64(i)) or {
+			assert false
+			return
+		}
 	}
 	assert hm.count() == size
 	for i in 0 .. size {
@@ -209,7 +251,10 @@ fn test_hash_map_put() {
 	mut hm := HashMapUnmanaged.init(32)
 
 	for i in 0 .. 16 {
-		hm.put(u64(i), u64(i)) or { assert false; return }
+		hm.put(u64(i), u64(i)) or {
+			assert false
+			return
+		}
 	}
 
 	for i in 0 .. 16 {
@@ -218,7 +263,10 @@ fn test_hash_map_put() {
 
 	// Overwrite all values
 	for i in 0 .. 16 {
-		hm.put(u64(i), u64(i) * 16 + 1) or { assert false; return }
+		hm.put(u64(i), u64(i) * 16 + 1) or {
+			assert false
+			return
+		}
 	}
 
 	for i in 0 .. 16 {
@@ -231,7 +279,10 @@ fn test_hash_map_put_full_load() {
 	mut hm := HashMapUnmanaged.init(cap)
 
 	for i in 0 .. cap {
-		hm.put(u64(i), u64(i)) or { assert false; return }
+		hm.put(u64(i), u64(i)) or {
+			assert false
+			return
+		}
 	}
 	for i in 0 .. cap {
 		assert hm.get(u64(i)) or { 999 } == u64(i)
@@ -252,7 +303,10 @@ fn test_hash_map_put_assume_capacity() {
 
 	mut sum := u64(0)
 	for i in 0 .. 20 {
-		idx := hm.get_ptr(u64(i)) or { assert false; return }
+		idx := hm.get_ptr(u64(i)) or {
+			assert false
+			return
+		}
 		sum += hm.values[idx]
 	}
 	assert sum == 190
@@ -306,11 +360,17 @@ fn test_hash_map_get_or_put() {
 	mut hm := HashMapUnmanaged.init(32)
 
 	for i in 0 .. 10 {
-		hm.put(u64(i * 2), 2) or { assert false; return }
+		hm.put(u64(i * 2), 2) or {
+			assert false
+			return
+		}
 	}
 
 	for i in 0 .. 20 {
-		hm.get_or_put_value(u64(i), 1) or { assert false; return }
+		hm.get_or_put_value(u64(i), 1) or {
+			assert false
+			return
+		}
 	}
 
 	mut sum := u64(0)
@@ -323,45 +383,87 @@ fn test_hash_map_get_or_put() {
 fn test_hash_map_basic_hash_map_usage() {
 	mut hm := HashMapUnmanaged.init(32)
 
-	r1 := hm.fetch_put(1, 11) or { assert false; return }
+	r1 := hm.fetch_put(1, 11) or {
+		assert false
+		return
+	}
 	assert !r1.had_previous
-	r2 := hm.fetch_put(2, 22) or { assert false; return }
+	r2 := hm.fetch_put(2, 22) or {
+		assert false
+		return
+	}
 	assert !r2.had_previous
-	r3 := hm.fetch_put(3, 33) or { assert false; return }
+	r3 := hm.fetch_put(3, 33) or {
+		assert false
+		return
+	}
 	assert !r3.had_previous
-	r4 := hm.fetch_put(4, 44) or { assert false; return }
+	r4 := hm.fetch_put(4, 44) or {
+		assert false
+		return
+	}
 	assert !r4.had_previous
 
-	hm.put_no_clobber(5, 55) or { assert false; return }
+	hm.put_no_clobber(5, 55) or {
+		assert false
+		return
+	}
 
-	r5 := hm.fetch_put(5, 66) or { assert false; return }
+	r5 := hm.fetch_put(5, 66) or {
+		assert false
+		return
+	}
 	assert r5.had_previous
 	assert r5.previous.value == 55
-	r6 := hm.fetch_put(5, 55) or { assert false; return }
+	r6 := hm.fetch_put(5, 55) or {
+		assert false
+		return
+	}
 	assert r6.had_previous
 	assert r6.previous.value == 66
 
-	gop1 := hm.get_or_put(5) or { assert false; return }
+	gop1 := hm.get_or_put(5) or {
+		assert false
+		return
+	}
 	assert gop1.found_existing == true
 	assert hm.values[gop1.idx] == 55
 	hm.values[gop1.idx] = 77
-	entry5 := hm.get_entry(5) or { assert false; return }
+	entry5 := hm.get_entry(5) or {
+		assert false
+		return
+	}
 	assert entry5.value == 77
 
-	gop2 := hm.get_or_put(99) or { assert false; return }
+	gop2 := hm.get_or_put(99) or {
+		assert false
+		return
+	}
 	assert gop2.found_existing == false
 	hm.values[gop2.idx] = 42
-	entry99 := hm.get_entry(99) or { assert false; return }
+	entry99 := hm.get_entry(99) or {
+		assert false
+		return
+	}
 	assert entry99.value == 42
 
-	gop3 := hm.get_or_put_value(5, 5) or { assert false; return }
+	gop3 := hm.get_or_put_value(5, 5) or {
+		assert false
+		return
+	}
 	assert gop3.value == 77
 
-	gop4 := hm.get_or_put_value(100, 41) or { assert false; return }
+	gop4 := hm.get_or_put_value(100, 41) or {
+		assert false
+		return
+	}
 	assert gop4.value == 41
 
 	assert hm.contains(2)
-	entry2 := hm.get_entry(2) or { assert false; return }
+	entry2 := hm.get_entry(2) or {
+		assert false
+		return
+	}
 	assert entry2.value == 22
 	assert hm.get(2) or { 0 } == u64(22)
 
@@ -384,7 +486,10 @@ fn test_hash_map_ensure_unused_capacity() {
 	cap := u32(64)
 	mut hm := HashMapUnmanaged.init(cap)
 
-	hm.ensure_unused_capacity(32) or { assert false; return }
+	hm.ensure_unused_capacity(32) or {
+		assert false
+		return
+	}
 
 	mut got_error := false
 	hm.ensure_unused_capacity(cap + 1) or { got_error = true }
@@ -395,7 +500,10 @@ fn test_hash_map_remove_by_index() {
 	mut hm := HashMapUnmanaged.init(64)
 
 	for i in 0 .. 10 {
-		hm.put(u64(i), 0) or { assert false; return }
+		hm.put(u64(i), 0) or {
+			assert false
+			return
+		}
 	}
 	assert hm.count() == 10
 
@@ -415,7 +523,10 @@ fn test_hash_map_remove_by_index_zero_sized_key() {
 	// a single-entry remove-by-index round-trip on key 0.
 	mut hm := HashMapUnmanaged.init(64)
 
-	hm.put(0, 0) or { assert false; return }
+	hm.put(0, 0) or {
+		assert false
+		return
+	}
 	assert hm.count() == 1
 
 	key_idx := hm.get_key_index(0)
@@ -448,10 +559,25 @@ fn test_hash_map_repeat_fetch_remove() {
 }
 
 fn test_hash_map_offset_basic_usage() {
-	// Test the OffsetHashMap wrapper concept. Since offset-based addressing
-	// is XTODO, this just tests that the type exists and can be created.
-	om := OffsetHashMap{}
-	assert om.metadata_offset.offset == 0
+	layout := OffsetHashMap.layout(16)
+	mut backing := []u8{len: int(layout.total_size)}
+	base := unsafe { &backing[0] }
+	offset_map := OffsetHashMap.init(OffsetBuf.init(base), layout)
+	assert offset_map.metadata_offset.offset == 16
+
+	mut hashmap := offset_map.map(base)
+	for i in u64(0) .. u64(5) {
+		hashmap.put(i, i * i)!
+	}
+	assert hashmap.count() == 5
+	assert hashmap.get(3)? == 9
+
+	// Recreating the view retains the same map contents, mirroring rebuilding
+	// the pointer view from a moved page base in Ghostty.
+	mut remade := offset_map.map(base)
+	assert remade.get(4)? == 16
+	assert remade.remove(2)
+	assert hashmap.get(2) == none
 }
 
 fn test_hash_map_layout_for_capacity() {
