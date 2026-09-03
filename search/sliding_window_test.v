@@ -4,15 +4,12 @@ module search
 //
 // Source: terminal/search/sliding_window.zig (tests section, lines 635-1677)
 //
-// Most tests from the Zig source require Screen/Terminal instances with
-// PageList (linked list model). Since the V Screen uses the simpler Pages
-// model, and SlidingWindow.append() is XTODO (needs PageFormatter point_map),
-// those tests are stubbed here with XTODO markers.
-//
-// Basic tests for the CircBuf data structures and search helpers are
-// included and functional.
+// The search cases use PageList nodes directly so they exercise the same
+// formatter mapping and node identities as production without depending on
+// the older flat Screen facade.
 
 import highlight
+import terminal
 
 // ============================================================
 // CircBuf / DataBuf tests
@@ -250,129 +247,294 @@ fn test_sliding_window_next_data_shorter_than_needle() {
 	assert w.next() == none
 }
 
-// ============================================================
-// Original Zig test stubs (XTODO)
-// ============================================================
+// Build a PageList node directly. This keeps these tests focused on the
+// sliding-window/formatter contract while preserving the same Page data and
+// linked-node identities used by the production search path.
+fn sliding_test_node(lines []string, wraps []bool, cols u16, serial u64) &terminal.PageNode {
+	mut page := terminal.Page.init(terminal.PageCapacity{
+		cols: cols
+		rows: u16(lines.len)
+	})
+	page.size.rows = u16(lines.len)
+	for y, line in lines {
+		for x, cp in line.runes() {
+			if x >= int(cols) {
+				break
+			}
+			page.rows[y].cells[x] = terminal.CellData.init(u32(cp))
+		}
+		if y < wraps.len {
+			page.rows[y].wrap = wraps[y]
+			page.rows[y].wrap_continuation = y > 0 && wraps[y - 1]
+		}
+	}
+	return &terminal.PageNode{
+		data: page
+		serial: serial
+	}
+}
 
-// XTODO: Requires Screen/Terminal with PageList and SlidingWindow.append().
-// Original test: "SlidingWindow single append"
-// Tests finding two matches in a single page after append.
+fn sliding_assert_match(mut window SlidingWindow, start_x u16, start_y u16, end_x u16, end_y u16) {
+	h := window.next() or {
+		assert false, 'expected a search match'
+		return
+	}
+	assert h.top_x == start_x
+	assert h.chunks[0].start == start_y
+	assert h.bot_x == end_x
+	assert h.chunks[h.chunks.len - 1].end - 1 == end_y
+}
+
 fn test_sliding_window_single_append() {
-	// XTODO: Needs SlidingWindow.append() which requires PageFormatter point_map.
+	mut node := sliding_test_node(['hello. boo! hello. boo!'], [false], 80, 1)
+	defer { node.data.deinit() }
+	mut w := SlidingWindow.init(.forward, 'boo!'.bytes())
+	w.append(node)
+	sliding_assert_match(mut w, 7, 0, 10, 0)
+	sliding_assert_match(mut w, 19, 0, 22, 0)
+	assert w.next() == none
 }
 
-// XTODO: Original test: "SlidingWindow single append case insensitive ASCII"
 fn test_sliding_window_single_append_case_insensitive() {
-	// XTODO: Needs SlidingWindow.append() which requires PageFormatter point_map.
+	mut node := sliding_test_node(['hello. boo!'], [false], 80, 1)
+	defer { node.data.deinit() }
+	mut w := SlidingWindow.init(.forward, 'Boo!'.bytes())
+	w.append(node)
+	sliding_assert_match(mut w, 7, 0, 10, 0)
 }
 
-// XTODO: Original test: "SlidingWindow single append single char"
 fn test_sliding_window_single_append_single_char() {
-	// XTODO: Needs SlidingWindow.append() which requires PageFormatter point_map.
+	mut node := sliding_test_node(['aba'], [false], 8, 1)
+	defer { node.data.deinit() }
+	mut w := SlidingWindow.init(.forward, 'a'.bytes())
+	w.append(node)
+	sliding_assert_match(mut w, 0, 0, 0, 0)
+	sliding_assert_match(mut w, 2, 0, 2, 0)
+	assert w.next() == none
 }
 
-// XTODO: Original test: "SlidingWindow single append no match"
 fn test_sliding_window_single_append_no_match() {
-	// XTODO: Needs SlidingWindow.append() which requires PageFormatter point_map.
+	mut node := sliding_test_node(['hello. boo!'], [false], 80, 1)
+	defer { node.data.deinit() }
+	mut w := SlidingWindow.init(.forward, 'nope!'.bytes())
+	w.append(node)
+	assert w.next() == none
+	assert w.meta.len() == 1
 }
 
-// XTODO: Original test: "SlidingWindow two pages"
 fn test_sliding_window_two_pages() {
-	// XTODO: Needs SlidingWindow.append() and multi-page Screen setup.
+	mut first := sliding_test_node(['first boo!'], [false], 20, 1)
+	mut second := sliding_test_node(['second boo!'], [false], 20, 2)
+	defer {
+		first.data.deinit()
+		second.data.deinit()
+	}
+	mut w := SlidingWindow.init(.forward, 'boo!'.bytes())
+	w.append(first)
+	w.append(second)
+	sliding_assert_match(mut w, 6, 0, 9, 0)
+	sliding_assert_match(mut w, 7, 0, 10, 0)
 }
 
-// XTODO: Original test: "SlidingWindow two pages single char"
 fn test_sliding_window_two_pages_single_char() {
-	// XTODO: Needs SlidingWindow.append() and multi-page Screen setup.
+	mut first := sliding_test_node(['abc'], [false], 8, 1)
+	mut second := sliding_test_node(['cab'], [false], 8, 2)
+	defer {
+		first.data.deinit()
+		second.data.deinit()
+	}
+	mut w := SlidingWindow.init(.forward, 'b'.bytes())
+	w.append(first)
+	w.append(second)
+	sliding_assert_match(mut w, 1, 0, 1, 0)
+	sliding_assert_match(mut w, 2, 0, 2, 0)
 }
 
-// XTODO: Original test: "SlidingWindow two pages match across boundary"
 fn test_sliding_window_two_pages_match_across_boundary() {
-	// XTODO: Needs SlidingWindow.append() and multi-page Screen setup.
+	mut first := sliding_test_node(['hello'], [true], 8, 1)
+	mut second := sliding_test_node([', world!'], [false], 8, 2)
+	defer {
+		first.data.deinit()
+		second.data.deinit()
+	}
+	mut w := SlidingWindow.init(.forward, 'hello, world'.bytes())
+	w.append(first)
+	w.append(second)
+	sliding_assert_match(mut w, 0, 0, 6, 0)
 }
 
-// XTODO: Original test: "SlidingWindow two pages no match across boundary with newline"
 fn test_sliding_window_two_pages_no_match_boundary_newline() {
-	// XTODO: Needs SlidingWindow.append() and multi-page Screen setup.
+	sliding_test_boundary_newline(.forward)
 }
 
-// XTODO: Original test: "SlidingWindow two pages no match across boundary with newline reverse"
 fn test_sliding_window_two_pages_no_match_boundary_newline_reverse() {
-	// XTODO: Needs SlidingWindow.append() and reverse multi-page setup.
+	sliding_test_boundary_newline(.reverse)
 }
 
-// XTODO: Original test: "SlidingWindow two pages no match prunes first page"
+fn sliding_test_boundary_newline(direction Direction) {
+	mut first := sliding_test_node(['hello'], [false], 8, 1)
+	mut second := sliding_test_node([', world!'], [false], 8, 2)
+	defer {
+		first.data.deinit()
+		second.data.deinit()
+	}
+	mut w := SlidingWindow.init(direction, 'hello, world'.bytes())
+	if direction == .forward {
+		w.append(first)
+		w.append(second)
+	} else {
+		w.append(second)
+		w.append(first)
+	}
+	assert w.next() == none
+}
+
 fn test_sliding_window_two_pages_no_match_prunes_first() {
-	// XTODO: Needs SlidingWindow.append() and multi-page Screen setup.
+	sliding_test_pruning(.forward, false)
 }
 
-// XTODO: Original test: "SlidingWindow two pages no match keeps both pages"
 fn test_sliding_window_two_pages_no_match_keeps_both() {
-	// XTODO: Needs SlidingWindow.append() and large needle setup.
+	sliding_test_pruning(.forward, true)
 }
 
-// XTODO: Original test: "SlidingWindow single append across circular buffer boundary"
+fn sliding_test_pruning(direction Direction, long_needle bool) {
+	mut first := sliding_test_node(['abcdefgh'], [false], 12, 1)
+	mut second := sliding_test_node(['ijklmnop'], [false], 12, 2)
+	defer {
+		first.data.deinit()
+		second.data.deinit()
+	}
+	needle := if long_needle { 'xxxxxxxxxxxxxxxxxxxxxxxx'.bytes() } else { 'nope!'.bytes() }
+	mut w := SlidingWindow.init(direction, needle)
+	if direction == .forward {
+		w.append(first)
+		w.append(second)
+	} else {
+		w.append(second)
+		w.append(first)
+	}
+	assert w.next() == none
+	assert w.meta.len() == if long_needle { 2 } else { 1 }
+}
+
 fn test_sliding_window_circ_buf_boundary() {
-	// XTODO: Needs SlidingWindow.append() to fill and wrap the circular buffer.
+	sliding_test_circular_boundary(.forward)
 }
 
-// XTODO: Original test: "SlidingWindow single append match on boundary"
+fn sliding_test_circular_boundary(direction Direction) {
+	mut node := sliding_test_node(['XXXXXXXXXXXXXXXXXXXboo!XXXXX'], [true], 32, 1)
+	defer { node.data.deinit() }
+	mut w := SlidingWindow.init(direction, 'abc'.bytes())
+	w.append(node)
+	w.append(node)
+	assert w.next() == none
+	assert w.meta.len() == 1
+	w.test_change_needle(if direction == .forward { 'boo'.bytes() } else { 'oob'.bytes() })
+	w.append(node)
+	slices := w.data.get_ptr_slice(0, w.data.len())
+	assert slices.first.len > 0
+	assert slices.second.len > 0
+	sliding_assert_match(mut w, 19, 0, 21, 0)
+}
+
 fn test_sliding_window_match_on_boundary() {
-	// XTODO: Needs SlidingWindow.append() with soft-wrapped rows.
+	sliding_test_match_on_boundary(.forward)
 }
 
-// XTODO: Original test: "SlidingWindow single append reversed"
+fn sliding_test_match_on_boundary(direction Direction) {
+	mut node := sliding_test_node(['o!XXXXXXXXXXXXXXXXXXXbo'], [true], 28, 1)
+	defer { node.data.deinit() }
+	mut w := SlidingWindow.init(direction, 'abcd'.bytes())
+	w.append(node)
+	w.append(node)
+	assert w.next() == none
+	w.test_change_needle(if direction == .forward { 'boo!'.bytes() } else { '!oob'.bytes() })
+	w.append(node)
+	sliding_assert_match(mut w, 21, 0, 1, 0)
+}
+
 fn test_sliding_window_single_append_reversed() {
-	// XTODO: Needs SlidingWindow.append() with reverse direction.
+	mut node := sliding_test_node(['hello. boo! hello. boo!'], [false], 80, 1)
+	defer { node.data.deinit() }
+	mut w := SlidingWindow.init(.reverse, 'boo!'.bytes())
+	w.append(node)
+	sliding_assert_match(mut w, 19, 0, 22, 0)
+	sliding_assert_match(mut w, 7, 0, 10, 0)
 }
 
-// XTODO: Original test: "SlidingWindow single append no match reversed"
 fn test_sliding_window_single_append_no_match_reversed() {
-	// XTODO: Needs SlidingWindow.append() with reverse direction.
+	mut node := sliding_test_node(['hello. boo!'], [false], 80, 1)
+	defer { node.data.deinit() }
+	mut w := SlidingWindow.init(.reverse, 'nope!'.bytes())
+	w.append(node)
+	assert w.next() == none
+	assert w.meta.len() == 1
 }
 
-// XTODO: Original test: "SlidingWindow two pages reversed"
 fn test_sliding_window_two_pages_reversed() {
-	// XTODO: Needs SlidingWindow.append() and reverse multi-page setup.
+	mut first := sliding_test_node(['first boo!'], [false], 20, 1)
+	mut second := sliding_test_node(['second boo!'], [false], 20, 2)
+	defer {
+		first.data.deinit()
+		second.data.deinit()
+	}
+	mut w := SlidingWindow.init(.reverse, 'boo!'.bytes())
+	w.append(second)
+	w.append(first)
+	sliding_assert_match(mut w, 7, 0, 10, 0)
+	sliding_assert_match(mut w, 6, 0, 9, 0)
 }
 
-// XTODO: Original test: "SlidingWindow two pages match across boundary reversed"
 fn test_sliding_window_two_pages_match_boundary_reversed() {
-	// XTODO: Needs SlidingWindow.append() and reverse multi-page setup.
+	mut first := sliding_test_node(['hello'], [true], 8, 1)
+	mut second := sliding_test_node([', world!'], [false], 8, 2)
+	defer {
+		first.data.deinit()
+		second.data.deinit()
+	}
+	mut w := SlidingWindow.init(.reverse, 'hello, world'.bytes())
+	w.append(second)
+	w.append(first)
+	sliding_assert_match(mut w, 0, 0, 6, 0)
 }
 
-// XTODO: Original test: "SlidingWindow two pages no match prunes first page reversed"
 fn test_sliding_window_two_pages_no_match_prunes_reversed() {
-	// XTODO: Needs SlidingWindow.append() and reverse multi-page setup.
+	sliding_test_pruning(.reverse, false)
 }
 
-// XTODO: Original test: "SlidingWindow two pages no match keeps both pages reversed"
 fn test_sliding_window_two_pages_no_match_keeps_both_reversed() {
-	// XTODO: Needs SlidingWindow.append() and reverse large needle setup.
+	sliding_test_pruning(.reverse, true)
 }
 
-// XTODO: Original test: "SlidingWindow single append across circular buffer boundary reversed"
 fn test_sliding_window_circ_buf_boundary_reversed() {
-	// XTODO: Needs SlidingWindow.append() and reverse circular buffer wrapping.
+	sliding_test_circular_boundary(.reverse)
 }
 
-// XTODO: Original test: "SlidingWindow single append match on boundary reversed"
 fn test_sliding_window_match_on_boundary_reversed() {
-	// XTODO: Needs SlidingWindow.append() with reverse and soft-wrapped rows.
+	sliding_test_match_on_boundary(.reverse)
 }
 
-// XTODO: Original test: "SlidingWindow single append soft wrapped"
 fn test_sliding_window_soft_wrapped() {
-	// XTODO: Needs Terminal with VT stream processing and SlidingWindow.append().
+	sliding_test_soft_wrap(.forward)
 }
 
-// XTODO: Original test: "SlidingWindow single append reversed soft wrapped"
 fn test_sliding_window_soft_wrapped_reversed() {
-	// XTODO: Needs Terminal with VT stream processing and SlidingWindow.append().
+	sliding_test_soft_wrap(.reverse)
 }
 
-// XTODO: Original test: "SlidingWindow append whitespace only node"
+fn sliding_test_soft_wrap(direction Direction) {
+	mut node := sliding_test_node(['A', 'xxbo', 'o!', 'C'], [false, true, false, false], 4, 1)
+	defer { node.data.deinit() }
+	mut w := SlidingWindow.init(direction, 'boo!'.bytes())
+	w.append(node)
+	sliding_assert_match(mut w, 2, 1, 1, 2)
+}
+
 fn test_sliding_window_whitespace_only_node() {
-	// XTODO: Tests a real bug where a whitespace-only page encoding
-	// to zero bytes would crash. Needs Screen setup.
+	mut node := sliding_test_node([''], [true], 80, 1)
+	defer { node.data.deinit() }
+	mut w := SlidingWindow.init(.forward, 'x'.bytes())
+	assert w.append(node) == 0
+	assert w.meta.len() == 0
+	assert w.next() == none
 }

@@ -63,7 +63,11 @@ fn test_viewport_history_does_not_research_unchanged_pages() {
 	mut list := terminal.PageList.init(10, 2, usize(100_000_000))
 	defer { list.deinit() }
 	write_page_list_text(mut list, .screen, 0, 0, 'Fizz')
-	list.grow_rows(3000)
+	initial_node := list.pages.first or {
+		assert false, 'missing initial page'
+		return
+	}
+	list.grow_rows(usize(initial_node.data.capacity.rows))
 	list.scroll(terminal.PageScrollTop{})
 	assert list.viewport == .top
 

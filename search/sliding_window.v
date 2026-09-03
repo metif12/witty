@@ -433,103 +433,47 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 // The total bytes will be larger since this omits metadata, but it is
 // an accurate measure of the text content size added.
 pub fn (mut self SlidingWindow) append(node &terminal.PageNode) int {
-	// Format page text and build the cell_map that maps encoded bytes
-	// back to cell coordinates (row, column). This is a basic implementation
-	// that iterates over page rows and encodes cell codepoints as UTF-8.
-
 	page := &node.data
-	mut encoded := []u8{}
-	mut cell_map := []highlight.Coordinate{}
+	if page.size.rows == 0 {
+		return 0
+	}
 
-	for row_idx in 0 .. int(page.size.rows) {
-		if row_idx >= page.rows.len {
-			break
+	// PageFormatter is the canonical terminal-text encoder. A lightweight
+	// Pages view lets the V port reuse it for PageList nodes without copying
+	// any row or cell data.
+	pages_view := terminal.Pages{
+		screen_rows: page.rows
+		cols: page.size.cols
+		rows: page.size.rows
+	}
+	mut point_map := terminal.PointMap{}
+	formatter := terminal.PageFormatter{
+		pages: &pages_view
+		opts: terminal.FormatOptions{
+			emit: .plain
+			unwrap: true
 		}
-		row := page.rows[row_idx]
-
-		for col_idx in 0 .. int(page.size.cols) {
-			if col_idx >= row.cells.len {
-				break
-			}
-			cell := row.cells[col_idx]
-
-			// Skip spacer cells for wide characters.
-			if cell.wide == .spacer_tail || cell.wide == .spacer_head {
-				continue
-			}
-
-			cp := cell.codepoint
-			if cp == 0 {
-				// Empty cell: encode as space.
-				encoded << u8(` `)
-				cell_map << highlight.Coordinate{
-					x: u16(col_idx)
-					y: u32(row_idx)
-				}
-			} else if cp < 0x80 {
-				encoded << u8(cp)
-				cell_map << highlight.Coordinate{
-					x: u16(col_idx)
-					y: u32(row_idx)
-				}
-			} else if cp < 0x800 {
-				encoded << u8(0xC0 | (cp >> 6))
-				cell_map << highlight.Coordinate{
-					x: u16(col_idx)
-					y: u32(row_idx)
-				}
-				encoded << u8(0x80 | (cp & 0x3F))
-				cell_map << highlight.Coordinate{
-					x: u16(col_idx)
-					y: u32(row_idx)
-				}
-			} else if cp < 0x10000 {
-				encoded << u8(0xE0 | (cp >> 12))
-				cell_map << highlight.Coordinate{
-					x: u16(col_idx)
-					y: u32(row_idx)
-				}
-				encoded << u8(0x80 | ((cp >> 6) & 0x3F))
-				cell_map << highlight.Coordinate{
-					x: u16(col_idx)
-					y: u32(row_idx)
-				}
-				encoded << u8(0x80 | (cp & 0x3F))
-				cell_map << highlight.Coordinate{
-					x: u16(col_idx)
-					y: u32(row_idx)
-				}
-			} else {
-				encoded << u8(0xF0 | (cp >> 18))
-				cell_map << highlight.Coordinate{
-					x: u16(col_idx)
-					y: u32(row_idx)
-				}
-				encoded << u8(0x80 | ((cp >> 12) & 0x3F))
-				cell_map << highlight.Coordinate{
-					x: u16(col_idx)
-					y: u32(row_idx)
-				}
-				encoded << u8(0x80 | ((cp >> 6) & 0x3F))
-				cell_map << highlight.Coordinate{
-					x: u16(col_idx)
-					y: u32(row_idx)
-				}
-				encoded << u8(0x80 | (cp & 0x3F))
-				cell_map << highlight.Coordinate{
-					x: u16(col_idx)
-					y: u32(row_idx)
-				}
-			}
+		point_map: &point_map
+	}
+	mut encoded := formatter.format().bytes()
+	mut cell_map := []highlight.Coordinate{cap: point_map.points.len + 1}
+	for point in point_map.points {
+		cell_map << highlight.Coordinate{
+			x: point.x
+			y: point.y
 		}
+	}
+	assert cell_map.len == encoded.len
 
-		// If the row is not soft-wrapped, append a newline.
-		if !row.wrap {
-			encoded << u8(`\n`)
-			cell_map << highlight.Coordinate{
-				x: u16(page.size.cols - 1)
-				y: u32(row_idx)
-			}
+	// PageFormatter trims trailing blank rows, so append the page boundary
+	// newline exactly when the final physical row is not soft-wrapped.
+	last_row := page.rows[int(page.size.rows) - 1]
+	if !last_row.wrap {
+		encoded << u8(`\n`)
+		cell_map << if cell_map.len > 0 {
+			cell_map[cell_map.len - 1]
+		} else {
+			highlight.Coordinate{}
 		}
 	}
 
@@ -569,6 +513,7 @@ pub fn (mut self SlidingWindow) append(node &terminal.PageNode) int {
 		self.chunk_buf = []highlight.Chunk{cap: self.meta.len()}
 	}
 
+	self.assert_integrity()
 	return content_len
 }
 

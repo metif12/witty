@@ -17,7 +17,11 @@ fn write_pagelist_search_text(node &terminal.PageNode, x int, y int, text string
 fn test_pagelist_search_initial_page_and_feed() {
 	mut list := terminal.PageList.init(80, 24, usize(100_000_000))
 	defer { list.deinit() }
-	list.grow_rows(110)
+	initial_node := list.pages.first or {
+		assert false, 'missing initial page'
+		return
+	}
+	list.grow_rows(usize(initial_node.data.capacity.rows))
 	first_node := list.pages.first or {
 		assert false, 'missing first page'
 		return
