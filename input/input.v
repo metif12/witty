@@ -1,5 +1,17 @@
 module input
 
+#include "keymap_shims.h"
+
+#flag darwin -framework Carbon
+
+fn C.witty_keymap_current_source() voidptr
+
+fn C.witty_keymap_release(source voidptr)
+
+fn C.witty_keymap_source_id(source voidptr, out &char, cap usize) int
+
+fn C.witty_keymap_translate(source voidptr, code u16, modifiers u32, dead_key &u32, out &char, cap usize, composing &int) int
+
 // KeyEvent represents a keyboard event.
 // This is a generic key input event that provides the information needed
 // regardless of apprt to generate proper terminal control sequences.
@@ -36,10 +48,18 @@ pub fn (e KeyEvent) binding_hash() u64 {
 	h = h * 31 + u64(e.unshifted_codepoint)
 	bm := e.mods.binding()
 	mut mi := u64(0)
-	if bm.shift { mi |= 1 }
-	if bm.ctrl { mi |= 2 }
-	if bm.alt { mi |= 4 }
-	if bm.super_ { mi |= 8 }
+	if bm.shift {
+		mi |= 1
+	}
+	if bm.ctrl {
+		mi |= 2
+	}
+	if bm.alt {
+		mi |= 4
+	}
+	if bm.super_ {
+		mi |= 8
+	}
 	h = h * 31 + mi
 	return h
 }
@@ -88,16 +108,36 @@ pub mut:
 // where each side bit is 0 for left (and none_) and 1 for right.
 pub fn (m Mods) int() u16 {
 	mut v := u16(0)
-	if m.shift { v |= 1 }
-	if m.ctrl { v |= 2 }
-	if m.alt { v |= 4 }
-	if m.super_ { v |= 8 }
-	if m.caps_lock { v |= 16 }
-	if m.num_lock { v |= 32 }
-	if m.sides.shift == .right { v |= 64 }
-	if m.sides.ctrl == .right { v |= 128 }
-	if m.sides.alt == .right { v |= 256 }
-	if m.sides.super == .right { v |= 512 }
+	if m.shift {
+		v |= 1
+	}
+	if m.ctrl {
+		v |= 2
+	}
+	if m.alt {
+		v |= 4
+	}
+	if m.super_ {
+		v |= 8
+	}
+	if m.caps_lock {
+		v |= 16
+	}
+	if m.num_lock {
+		v |= 32
+	}
+	if m.sides.shift == .right {
+		v |= 64
+	}
+	if m.sides.ctrl == .right {
+		v |= 128
+	}
+	if m.sides.alt == .right {
+		v |= 256
+	}
+	if m.sides.super == .right {
+		v |= 512
+	}
 	return v
 }
 
@@ -172,9 +212,9 @@ pub enum Momentum {
 
 // PressureStage represents the pressure stage of a pressure-sensitive input device.
 pub enum PressureStage {
-	none_   // The input device is unpressed.
-	normal  // Normal press amount (after a "click" on macOS trackpads).
-	deep    // Deep press amount (after a "force click" on macOS trackpads).
+	none_ // The input device is unpressed.
+	normal // Normal press amount (after a "click" on macOS trackpads).
+	deep // Deep press amount (after a "force click" on macOS trackpads).
 }
 
 // ScrollMods contains additional information about a scroll event.
@@ -191,9 +231,9 @@ pub mut:
 // docs for a more detailed description of why this is needed.
 pub enum OptionAsAlt {
 	false_ // don't treat option as alt (macOS default)
-	true_  // treat both options as alt
-	left   // treat left option as alt
-	right  // treat right option as alt
+	true_ // treat both options as alt
+	left // treat left option as alt
+	right // treat right option as alt
 }
 
 // Link matching.
@@ -256,21 +296,84 @@ pub mut:
 }
 
 pub fn Keymap.init() !Keymap {
-	return Keymap{}
+	state := C.witty_keymap_current_source()
+	if state == unsafe { nil } {
+		return error('failed to get keyboard input source')
+	}
+	return Keymap{ state: state }
 }
 
 pub fn (mut k Keymap) deinit() {
+	if k.state != unsafe { nil } {
+		C.witty_keymap_release(k.state)
+	}
 	k.state = unsafe { nil }
 }
 
 pub fn (mut k Keymap) reload() ! {
-	// stub: reload the keymap from the OS
+	new_state := C.witty_keymap_current_source()
+	if new_state == unsafe { nil } {
+		return error('failed to get keyboard input source')
+	}
+	if k.state != unsafe { nil } {
+		C.witty_keymap_release(k.state)
+	}
+	k.state = new_state
 }
 
 // source_id returns the keyboard layout source identifier.
-pub fn (k Keymap) source_id(buf []u8) !string {
-	_ = buf
-	return ''
+pub fn (k Keymap) source_id(mut buf []u8) !string {
+	if buf.len == 0 {
+		return error('keyboard source ID buffer is empty')
+	}
+	if C.witty_keymap_source_id(k.state, unsafe { &char(buf.data) }, usize(buf.len)) != 0 {
+		return error('keyboard source ID does not fit in buffer')
+	}
+	return unsafe { cstring_to_vstring(&char(buf.data)) }
+}
+
+// KeymapState is the opaque state threaded through consecutive translations.
+// A non-zero dead_key means the current input is composing.
+pub struct KeymapState {
+pub mut:
+	dead_key u32
+}
+
+pub struct KeymapTranslation {
+pub:
+	text      string
+	composing bool
+	mods      Mods
+}
+
+// translate maps a native macOS virtual key code through the selected input
+// source. Ctrl is deliberately removed before Carbon translation so Ctrl+C
+// produces "c", not the control character 0x03; the original modifiers are
+// otherwise returned after that consumption step.
+pub fn (k Keymap) translate(mut out []u8, mut state KeymapState, code u16, input_mods Mods) !KeymapTranslation {
+	if out.len == 0 {
+		return error('keyboard translation buffer is empty')
+	}
+	mut mods := input_mods
+	mods.ctrl = false
+	modifier_state := (u32(if mods.super_ { 1 } else { 0 }) | u32(if mods.shift {
+		1 << 1
+	} else {
+		0
+	}) | u32(if mods.caps_lock {
+		1 << 2
+	} else {
+		0
+	}) | u32(if mods.alt { 1 << 3 } else { 0 }))
+	mut composing := 0
+	if C.witty_keymap_translate(k.state, code, modifier_state, &state.dead_key, unsafe { &char(out.data) }, usize(out.len), &composing) != 0 {
+		return error('keyboard translation failed')
+	}
+	return KeymapTranslation{
+		text: unsafe { cstring_to_vstring(&char(out.data)) }
+		composing: composing != 0
+		mods: mods
+	}
 }
 
 // KeyboardLayout represents a detected keyboard layout.
@@ -285,7 +388,12 @@ pub enum KeyboardLayout {
 
 // map_apple_id maps an Apple keyboard layout source ID to a KeyboardLayout.
 pub fn KeyboardLayout.map_apple_id(id string) ?KeyboardLayout {
-	_ = id
+	if id == 'com.apple.keylayout.US' {
+		return .us_standard
+	}
+	if id == 'com.apple.keylayout.USInternational' {
+		return .us_international
+	}
 	return none
 }
 
@@ -293,7 +401,7 @@ pub fn KeyboardLayout.map_apple_id(id string) ?KeyboardLayout {
 // for this keyboard layout.
 pub fn (l KeyboardLayout) detect_option_as_alt() OptionAsAlt {
 	return match l {
-		.us_standard, .dvorak, .colemak { .true_ }
+		.us_standard, .us_international { .true_ }
 		else { .false_ }
 	}
 }

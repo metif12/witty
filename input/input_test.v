@@ -134,7 +134,27 @@ fn test_mods_int_roundtrip() {
 
 fn test_keyboard_layout_detect_option_as_alt() {
 	assert KeyboardLayout.us_standard.detect_option_as_alt() == .true_
+	assert KeyboardLayout.us_international.detect_option_as_alt() == .true_
 	assert KeyboardLayout.unknown.detect_option_as_alt() == .false_
+}
+
+fn test_keyboard_layout_map_apple_id() {
+	assert KeyboardLayout.map_apple_id('com.apple.keylayout.US') or { panic('missing US') } == .us_standard
+	assert KeyboardLayout.map_apple_id('com.apple.keylayout.USInternational') or {
+		panic('missing US International')
+	} == .us_international
+	assert KeyboardLayout.map_apple_id('example.unknown') == none
+}
+
+fn test_keymap_current_source() {
+	mut keymap := Keymap.init() or { panic(err) }
+	defer { keymap.deinit() }
+	mut buf := []u8{len: 256}
+	id := keymap.source_id(mut buf) or { panic(err) }
+	$if macos {
+		assert id.len > 0
+	}
+	keymap.reload() or { panic(err) }
 }
 
 // Tests for ScrollMods.
