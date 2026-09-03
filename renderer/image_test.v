@@ -1,5 +1,8 @@
 module renderer
 
+import kitty
+import terminal
+
 // ============================================================
 // Image tests
 // ============================================================
@@ -182,6 +185,75 @@ fn test_overlay_update_replaces_then_unloads_image() {
 	assert state.overlay_placements.len == 0
 	state.upload()
 	assert overlay_image_key !in state.images
+}
+
+fn test_kitty_update_reads_terminal_storage() ! {
+	mut t := terminal.Terminal.init(terminal.Options{
+		rows: 5
+		cols: 5
+	})!
+	t.width_px = 50
+	t.height_px = 100
+	defer {
+		kitty.deinit_terminal_storage(mut t)
+		t.deinit()
+	}
+
+	transmit := kitty.Parser.parse_string('a=t,f=24,t=d,i=7,s=1,v=1;////')!
+	assert (kitty.execute(mut t, &transmit) or { panic('expected transmit response') }).ok()
+	display := kitty.Parser.parse_string('a=p,i=7,p=9,c=1,r=1,C=1')!
+	assert (kitty.execute(mut t, &display) or { panic('expected display response') }).ok()
+
+	mut state := ImageRenderState.empty()
+	defer {
+		state.deinit()
+	}
+	assert state.kitty_requires_update(&t)
+	state.kitty_update(&t, CellSize{
+		width: 10
+		height: 20
+	})
+
+	storage := kitty.terminal_storage(&t) or { panic('expected image storage') }
+	assert !storage.dirty
+	assert kitty_image_key(7) in state.images
+	assert state.kitty_placements.len == 1
+	placement := state.kitty_placements[0]
+	assert placement.image_id == ImageId(KittyImageId{ id: 7 })
+	assert placement.x == 0
+	assert placement.y == 0
+	assert placement.width == 10
+	assert placement.height == 20
+}
+
+fn test_kitty_virtual_placement_keeps_renderer_updates_active_without_placeholder() ! {
+	mut t := terminal.Terminal.init(terminal.Options{
+		rows: 5
+		cols: 5
+	})!
+	t.width_px = 50
+	t.height_px = 100
+	defer {
+		kitty.deinit_terminal_storage(mut t)
+		t.deinit()
+	}
+
+	transmit := kitty.Parser.parse_string('a=t,f=24,t=d,i=7,s=1,v=1;////')!
+	assert (kitty.execute(mut t, &transmit) or { panic('expected transmit response') }).ok()
+	virtual_display := kitty.Parser.parse_string('a=p,i=7,p=9,c=1,r=1,U=1,C=1')!
+	assert (kitty.execute(mut t, &virtual_display) or { panic('expected display response') }).ok()
+
+	mut state := ImageRenderState.empty()
+	defer {
+		state.deinit()
+	}
+	state.kitty_update(&t, CellSize{
+		width: 10
+		height: 20
+	})
+	assert state.kitty_virtual
+	assert state.kitty_placements.len == 0
+	assert state.kitty_requires_update(&t)
 }
 
 // Test DrawPlacements enum.

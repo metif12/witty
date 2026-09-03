@@ -1543,6 +1543,9 @@ pub mut:
 	// The size of the screen in pixels. This is used for pty events and images.
 	width_px  u32
 	height_px u32
+	// Configured Kitty image storage limit. ImageStorage itself remains in
+	// the kitty module behind Screen.kitty_images to avoid an import cycle.
+	kitty_image_limit usize = 320 * 1000 * 1000
 
 	// The current scrolling region.
 	scrolling_region ScrollingRegion
@@ -1775,7 +1778,7 @@ pub enum SwitchScreenMode {
 
 pub struct ScreenSet {
 pub mut:
-	primary       Screen
+	primary       &Screen = unsafe { nil }
 	alternate_ptr &Screen = unsafe { nil }
 	active        &Screen = unsafe { nil }
 	active_key    ScreenKey = .primary
@@ -1787,11 +1790,12 @@ pub enum ScreenKey {
 }
 
 pub fn ScreenSet.init(cols u16, rows u16, max_scrollback int) !ScreenSet {
-	mut ss := ScreenSet{
-		primary: Screen.init(u32(cols), u32(rows), u32(max_scrollback))
+	mut init_primary := Screen.init(u32(cols), u32(rows), u32(max_scrollback))
+	primary := unsafe { &Screen(memdup(&init_primary, int(sizeof(Screen)))) }
+	return ScreenSet{
+		primary: primary
+		active: primary
 	}
-	ss.active = &ss.primary
-	return ss
 }
 
 pub fn (mut self ScreenSet) deinit() {
@@ -1804,7 +1808,7 @@ pub fn (mut self ScreenSet) deinit() {
 pub fn (mut self ScreenSet) get(key ScreenKey) ?&Screen {
 	match key {
 		.primary {
-			return &self.primary
+			return self.primary
 		}
 		.alternate {
 			if self.alternate_ptr != unsafe { nil } {
@@ -1818,7 +1822,7 @@ pub fn (mut self ScreenSet) get(key ScreenKey) ?&Screen {
 pub fn (mut self ScreenSet) switch_to(key ScreenKey) {
 	match key {
 		.primary {
-			self.active = &self.primary
+			self.active = self.primary
 			self.active_key = .primary
 		}
 		.alternate {
@@ -1833,6 +1837,9 @@ pub fn (mut self ScreenSet) switch_to(key ScreenKey) {
 pub fn (mut self ScreenSet) remove(key ScreenKey) {
 	match key {
 		.alternate {
+			if self.alternate_ptr != unsafe { nil } {
+				self.alternate_ptr.deinit()
+			}
 			self.alternate_ptr = unsafe { nil }
 		}
 		.primary {}
@@ -3303,6 +3310,7 @@ pub fn (mut self Terminal) insert_lines(count int) {
 		|| self.screens.active.cursor.x > self.scrolling_region.right {
 		return
 	}
+	self.screens.active.mark_kitty_images_dirty()
 
 	start_y := self.screens.active.cursor.y
 
@@ -3394,6 +3402,7 @@ pub fn (mut self Terminal) delete_lines(count int) {
 		|| self.screens.active.cursor.x > self.scrolling_region.right {
 		return
 	}
+	self.screens.active.mark_kitty_images_dirty()
 
 	start_y := self.screens.active.cursor.y
 
@@ -3748,6 +3757,7 @@ pub fn (mut self Terminal) erase_display(mode EraseDisplay, protected_req bool) 
 			}
 			// Unsets pending wrap state
 			self.screens.active.cursor.pending_wrap = false
+			self.screens.active.clear_kitty_images()
 		}
 		.complete {
 			// If we're on the primary screen and our last non-empty row is
@@ -3763,6 +3773,7 @@ pub fn (mut self Terminal) erase_display(mode EraseDisplay, protected_req bool) 
 			// All active area
 			self.screens.active.clear_rows(.active, ?PointTag(none), is_protected)
 			self.screens.active.cursor.pending_wrap = false
+			self.screens.active.clear_kitty_images()
 			self.flags.dirty.clear = true
 		}
 		.below {
@@ -3873,18 +3884,6 @@ pub fn (mut self Terminal) decaln() ! {
 
 	// Reset the cursor to the top-left
 	self.set_cursor_pos(1, 1)
-}
-
-// ============================================================
-// Kitty graphics (stub)
-// ============================================================
-
-// Execute a kitty graphics command.
-pub fn (mut self Terminal) kitty_graphics(cmd voidptr) ?voidptr {
-	// XTODO
-	// Requires kitty.graphics module with Command/Response types
-	// and the full execute() function.
-	return none
 }
 
 // ============================================================
@@ -4148,6 +4147,7 @@ pub fn (mut self Terminal) switch_screen(key ScreenKey) !&Screen {
 
 	// Clear selection on new screen
 	self.screens.active.clear_selection()
+	self.screens.active.mark_kitty_images_dirty()
 
 	// Mark terminal as dirty
 	self.flags.dirty.clear = true
@@ -4343,7 +4343,6 @@ pub fn (mut self Terminal) semantic_prompt_options(action SemanticPromptAction, 
 				}
 			}
 		}
-
 		.end_command {
 			self.screens.active.cursor_set_semantic_content_output()
 		}

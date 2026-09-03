@@ -173,6 +173,7 @@ module termio
 
 import apprt
 import configpkg
+import kitty
 import os
 import renderer
 import sync
@@ -263,6 +264,7 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 	term.screens.active.cursor.cursor_style = opts.config.cursor_style
 	term.width_px = grid.columns * size.cell.width
 	term.height_px = grid.rows * size.cell.height
+	term.kitty_image_limit = usize(opts.config.image_storage_limit)
 
 	mut backend_config := opts.backend_config
 	if backend_config.env.len == 0 {
@@ -312,6 +314,7 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 
 pub fn (mut t Termio) deinit() {
 	t.backend.deinit()
+	kitty.deinit_terminal_storage(mut t.terminal)
 	t.terminal.deinit()
 	t.config.deinit()
 	t.mailbox.deinit()
@@ -469,6 +472,10 @@ pub fn (mut t Termio) change_config(config &DerivedConfig) ! {
 	t.terminal.colors.background.default_color = config.background
 	t.terminal.colors.foreground.default_color = config.foreground
 	t.terminal.colors.cursor.default_color = config.cursor_color
+
+	// Set image limits on both existing screens; future alternate screens use
+	// Terminal.kitty_image_limit when their storage is first materialized.
+	kitty.set_terminal_storage_limit(mut t.terminal, usize(config.image_storage_limit))
 }
 
 // resize resizes the terminal.
@@ -580,14 +587,13 @@ pub fn (mut t Termio) clear_screen(history bool) ! {
 		// If we're not at a prompt, we just delete above the cursor.
 		//
 		// NOTE: Ghostty erases the exact rows above the cursor (y=0 to
-		// cursor.y-1) and deletes all Kitty graphics. The V terminal's
-		// erase_rows API operates on point tags (not exact y-ranges) and
-		// has no kitty_images storage, so we approximate by erasing the
-		// display above the cursor.
+		// cursor.y-1). The flat V terminal exposes the equivalent display
+		// operation for this range.
 		if !t.terminal.cursor_is_at_prompt() {
 			if t.terminal.screens.active.cursor.y > 0 {
 				t.terminal.erase_display(.above, false)
 			}
+			kitty.clear_active_images(mut t.terminal)
 			return
 		}
 

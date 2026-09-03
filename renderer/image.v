@@ -474,19 +474,19 @@ pub fn (mut self ImageRenderState) upload() bool {
 //
 // This does not read/write state used by drawing.
 //
-// BOUNDARY: In Ghostty this reads `t.screens.active.kitty_images.dirty`.
-// The V terminal Screen does not yet expose a `kitty_images` ImageStorage
-// field, so we cannot read the terminal-side dirty flag here. The virtual
-// placement logic below is fully translated. Callers that have access to
-// an ImageStorage should prefer `kitty_requires_update_storage`.
 pub fn (self &ImageRenderState) kitty_requires_update(t &terminal.Terminal) bool {
+	if storage := kitty.terminal_storage(t) {
+		if storage.dirty {
+			return true
+		}
+	}
+
 	// If we have any virtual references, we must also rebuild our
 	// kitty state on every frame because any cell change can move
 	// an image.
 	if self.kitty_virtual {
 		return true
 	}
-	_ = t
 	return false
 }
 
@@ -514,32 +514,55 @@ pub fn (self &ImageRenderState) kitty_requires_update_storage(storage &kitty.Ima
 //
 // This reads/writes state used by drawing.
 //
-// BOUNDARY: In Ghostty this reads `t.screens.active.kitty_images` (an
-// ImageStorage) to iterate placements. The V terminal Screen does not yet
-// wire a `kitty_images` field, so this entry point cannot access the real
-// storage. The full CPU-side algorithm (placement iteration, image prep,
-// viewport rect math, z-sorting, bg/text-end computation) lives in
-// `kitty_update_storage`, which callers should use once storage is
-// available. Here we clear our placements to a valid empty state.
 pub fn (mut self ImageRenderState) kitty_update(t &terminal.Terminal, cell_size CellSize) {
-	// We always clear our previous placements no matter what because
-	// we rebuild them from scratch.
-	self.kitty_placements.clear()
-	self.kitty_virtual = false
+	mut storage := kitty.terminal_storage(t) or {
+		self.kitty_placements.clear()
+		self.kitty_virtual = false
+		self.kitty_bg_end = 0
+		self.kitty_text_end = 0
+		return
+	}
 
-	// Reset z-layer indices
-	self.kitty_bg_end = 0
-	self.kitty_text_end = 0
+	top := t.screens.active.pages.get_top_left(.viewport)
+	bot := t.screens.active.pages.get_bottom_right(.viewport) or { top }
 
-	_ = t
-	_ = cell_size
+	mut pinned := []KittyPinnedPlacement{}
+	mut has_virtual := false
+	for entry in storage.placements {
+		match entry.value.location {
+			kitty.PlacementPin {
+				image := storage.image_by_id(entry.key.image_id) or { continue }
+				pinned << KittyPinnedPlacement{
+					image: image
+					placement: entry.value
+				}
+			}
+			kitty.PlacementVirtual {
+				has_virtual = true
+			}
+		}
+	}
+
+	mut virtuals := []kitty.VirtualPlacement{}
+	if has_virtual {
+		mut it := kitty.placement_iterator(&t.screens.active.pages, top.y, bot.y + 1)
+		for {
+			placement := it.next() or { break }
+			virtuals << placement
+		}
+	}
+
+	self.kitty_update_storage(mut storage, t, top.y, bot.y, cell_size, pinned, virtuals)
+	// A virtual placement keeps this state hot even when the current viewport
+	// contains no matching Unicode placeholder cells.
+	if has_virtual {
+		self.kitty_virtual = true
+	}
 }
 
 // A resolved (image, placement) pair for a pin-anchored Kitty placement.
-// The caller extracts these from the terminal's ImageStorage, which is
-// necessary because that storage's placement list is not exposed as a
-// public iterable in the V terminal/kitty modules yet (see BOUNDARY note
-// on kitty_update_storage).
+// The terminal-facing entry point resolves these from ImageStorage before
+// handing them to the shared CPU-side update routine.
 pub struct KittyPinnedPlacement {
 pub:
 	image     kitty.Image
@@ -553,13 +576,6 @@ pub:
 // State.kittyUpdate: placement prep (viewport rect math + source rect +
 // viewport-relative Y), virtual placement prep, z-sorting, and the
 // bg/text-end index computation.
-//
-// BOUNDARY: In Ghostty, kittyUpdate iterates `t.screens.active.kitty_images`
-// directly. The V terminal Screen does not yet wire a `kitty_images`
-// ImageStorage field, and the storage's `placements` list plus a
-// `screens.active` accessor are not public. Rather than depend on those
-// unavailable APIs, the caller (once the wiring exists) resolves the
-// pin-anchored placements and virtual placements and passes them here.
 //
 // `top_y` and `bot_y` are the screen-space Y coordinates of the top-left
 // and bottom-right corners of the viewport, computed by the caller (in

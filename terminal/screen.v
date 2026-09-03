@@ -1904,6 +1904,19 @@ pub const prompt_click_move_zero = PromptClickMove{
 	right: 0
 }
 
+// KittyImagesEvent is sent through Screen's opaque Kitty storage hook. The
+// terminal package owns screen lifecycle while the kitty package owns the
+// concrete storage type, so this keeps both responsibilities intact without
+// introducing an import cycle.
+pub enum KittyImagesEvent {
+	reset
+	deinit
+	dirty
+	clear
+}
+
+pub type KittyImagesLifecycleFn = fn (voidptr, &Screen, KittyImagesEvent)
+
 // ============================================================
 // Screen struct
 // ============================================================
@@ -1911,16 +1924,21 @@ pub const prompt_click_move_zero = PromptClickMove{
 @[heap]
 pub struct Screen {
 pub mut:
-	pages           Pages
-	no_scrollback   bool
-	cursor          Cursor
-	saved_cursor    ?SavedCursor
-	selection       ?Selection
-	charset         CharsetState
-	protected_mode  ProtectedMode = .off
-	kitty_keyboard  KeyFlagStack
-	semantic_prompt SemanticPrompt
-	dirty           ScreenDirty
+	pages          Pages
+	no_scrollback  bool
+	cursor         Cursor
+	saved_cursor   ?SavedCursor
+	selection      ?Selection
+	charset        CharsetState
+	protected_mode ProtectedMode = .off
+	kitty_keyboard KeyFlagStack
+	// Opaque pointer to kitty.ImageStorage. Keeping the storage behind an
+	// opaque module boundary avoids a terminal -> kitty -> terminal import
+	// cycle while still giving every screen independent persistent state.
+	kitty_images           voidptr
+	kitty_images_lifecycle KittyImagesLifecycleFn = unsafe { nil }
+	semantic_prompt        SemanticPrompt
+	dirty                  ScreenDirty
 	// Scratch cell/row used only as a safe fallback when a cursor
 	// pointer accessor is called with invalid (out-of-bounds) state,
 	// which should not happen given the callers' preconditions.
@@ -1943,7 +1961,14 @@ pub fn Screen.init(cols u32, rows u32, max_scrollback u32) Screen {
 
 // Clean up screen resources.
 pub fn (mut self Screen) deinit() {
+	if self.kitty_images != unsafe { nil }
+		&& self.kitty_images_lifecycle != unsafe { nil } {
+		lifecycle := self.kitty_images_lifecycle
+		lifecycle(self.kitty_images, self, KittyImagesEvent.deinit)
+	}
 	self.pages.deinit()
+	self.kitty_images = unsafe { nil }
+	self.kitty_images_lifecycle = unsafe { nil }
 	self.selection = none
 	self.saved_cursor = none
 }
@@ -1961,6 +1986,11 @@ pub fn (self &Screen) assert_integrity() {
 // Reset the screen: clear content, move cursor to top-left, reset state.
 pub fn (mut self Screen) reset() {
 	self.pages.reset()
+	if self.kitty_images != unsafe { nil }
+		&& self.kitty_images_lifecycle != unsafe { nil } {
+		lifecycle := self.kitty_images_lifecycle
+		lifecycle(self.kitty_images, self, KittyImagesEvent.reset)
+	}
 	self.cursor = Cursor{
 		x: 0
 		y: 0
@@ -1971,6 +2001,24 @@ pub fn (mut self Screen) reset() {
 	self.protected_mode = .off
 	self.semantic_prompt = terminal.semantic_prompt_disabled
 	self.clear_selection()
+}
+
+// Mark Kitty placements dirty after operations such as switching screens.
+pub fn (self &Screen) mark_kitty_images_dirty() {
+	if self.kitty_images != unsafe { nil }
+		&& self.kitty_images_lifecycle != unsafe { nil } {
+		lifecycle := self.kitty_images_lifecycle
+		lifecycle(self.kitty_images, self, KittyImagesEvent.dirty)
+	}
+}
+
+// Clear all non-virtual placements and their now-unused images.
+pub fn (self &Screen) clear_kitty_images() {
+	if self.kitty_images != unsafe { nil }
+		&& self.kitty_images_lifecycle != unsafe { nil } {
+		lifecycle := self.kitty_images_lifecycle
+		lifecycle(self.kitty_images, self, KittyImagesEvent.clear)
+	}
 }
 
 // ============================================================
@@ -2285,6 +2333,7 @@ pub fn (mut self Screen) cursor_reset_wrap() {
 
 // Scroll the viewport.
 pub fn (mut self Screen) scroll(behavior Scroll) {
+	self.mark_kitty_images_dirty()
 	match behavior {
 		.active { self.pages.scroll(.active) }
 		.top { self.pages.scroll(.top) }
@@ -2293,10 +2342,12 @@ pub fn (mut self Screen) scroll(behavior Scroll) {
 }
 
 pub fn (mut self Screen) scroll_delta_rows(delta int) {
+	self.mark_kitty_images_dirty()
 	self.pages.scroll_delta(delta)
 }
 
 pub fn (mut self Screen) scroll_to_row(row usize) {
+	self.mark_kitty_images_dirty()
 	self.pages.viewport_start = clamp_int(int(row), 0, self.pages.active_start)
 	self.pages.viewport = if self.pages.viewport_start == 0 {
 		.top
@@ -2311,6 +2362,7 @@ pub fn (mut self Screen) scroll_delta_prompts(delta int) {
 	if delta == 0 {
 		return
 	}
+	self.mark_kitty_images_dirty()
 	mut remaining := if delta < 0 { -delta } else { delta }
 	current := match self.pages.viewport {
 		.active { self.pages.active_start }
@@ -2332,6 +2384,7 @@ pub fn (mut self Screen) scroll_delta_prompts(delta int) {
 
 // Scroll and clear the screen, moving content to scrollback.
 pub fn (mut self Screen) scroll_clear() ! {
+	self.mark_kitty_images_dirty()
 	self.pages.scroll_clear()!
 	self.cursor_reload()
 }
@@ -2339,6 +2392,7 @@ pub fn (mut self Screen) scroll_clear() ! {
 // Scroll down when cursor is at the bottom of the screen.
 pub fn (mut self Screen) cursor_down_scroll() ! {
 	assert self.cursor.y == self.pages.rows - 1
+	self.mark_kitty_images_dirty()
 
 	if self.no_scrollback {
 		if self.pages.rows == 1 {
@@ -2375,6 +2429,7 @@ pub fn (mut self Screen) cursor_down_scroll() ! {
 // top-most active row moves into scrollback), a blank line appears at the
 // cursor row, and the rows below the cursor shift down by one.
 pub fn (mut self Screen) cursor_scroll_above() ! {
+	self.mark_kitty_images_dirty()
 	// We unconditionally mark the cursor row as dirty here because the cursor
 	// always changes rows inside this function.
 	self.cursor_mark_dirty()
@@ -2626,6 +2681,7 @@ pub fn (self &Screen) blank_cell() CellData {
 //   - clear prompt/input lines when prompt_redraw is requested
 //   - reload the cursor and fix up the saved cursor's pending wrap
 pub fn (mut self Screen) resize(opts ScreenResize) ! {
+	self.mark_kitty_images_dirty()
 	// Release the cursor style while resizing just in case the cursor ends
 	// up on a different page. We restore it at the end.
 	cursor_style := self.cursor.style

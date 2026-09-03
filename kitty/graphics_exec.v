@@ -93,7 +93,6 @@ module kitty
 //
 // --- Original Ghostty Comments End: src/terminal/kitty/graphics_exec.zig
 
-
 // Kitty graphics protocol execution.
 //
 // Source: kitty/graphics_exec.zig
@@ -102,31 +101,100 @@ module kitty
 // handles query, transmit, display, and delete operations, and manages
 // the quiet settings for controlling responses.
 //
-// ============================================================================
-// DEPENDENCY / BOUNDARY: Screen.kitty_images (ImageStorage)
-// ============================================================================
-// In Ghostty the persistent image storage lives on the active screen as
-// `terminal.screens.active.kitty_images` (an ImageStorage). The witty
-// `terminal.Screen` (terminal/screen.v) does NOT yet expose that field, and
-// this agent is not permitted to edit screen.v.
-//
-// Everything that needs *persistent* storage across commands therefore
-// cannot be wired here yet:
-//   - execute():   `storage.enabled()` gate + chunked `q` inheritance
-//   - transmit:    `storage.loading` chunk accumulation, `next_image_id`
-//                  auto-assignment, `storage.add_image()`
-//   - display:     `storage.image_by_id()/image_by_number()` lookup,
-//                  `storage.add_placement()`, cursor movement using the
-//                  looked-up image's grid size
-//   - delete:      `storage.delete()`
-//
-// The ImageStorage type itself is fully implemented in graphics_storage.v;
-// only the field on Screen is missing. Each site below is marked
-// `STORAGE-DEP` and shows the exact call to make once the field exists.
-// Until then we keep a guarded local path that performs all storage-
-// independent work (validation, response shaping, placement construction).
-
 import terminal
+
+fn storage_lifecycle(storage_ptr voidptr, screen &terminal.Screen, event terminal.KittyImagesEvent) {
+	mut storage := unsafe { &ImageStorage(storage_ptr) }
+	match event {
+		.dirty {
+			storage.dirty = true
+		}
+		.reset {
+			limit := storage.total_limit
+			storage.deinit(screen)
+			fresh := ImageStorage{
+				total_limit: limit
+				dirty: true
+			}
+			unsafe {
+				*storage = fresh
+			}
+		}
+		.deinit {
+			storage.deinit(screen)
+		}
+		.clear {
+			storage.clear_screen_images(screen)
+		}
+	}
+}
+
+// terminal.Screen keeps this value opaque to avoid a terminal -> kitty ->
+// terminal import cycle. The actual value and all of its behavior remain the
+// canonical ImageStorage implementation in this module.
+fn active_storage(mut t terminal.Terminal) &ImageStorage {
+	if t.screens.active.kitty_images == unsafe { nil } {
+		storage := &ImageStorage{
+			total_limit: t.kitty_image_limit
+		}
+		t.screens.active.kitty_images = voidptr(storage)
+		t.screens.active.kitty_images_lifecycle = storage_lifecycle
+	}
+	return unsafe { &ImageStorage(t.screens.active.kitty_images) }
+}
+
+// terminal_storage exposes the active screen's storage to the renderer.
+pub fn terminal_storage(t &terminal.Terminal) ?&ImageStorage {
+	if t.screens.active.kitty_images == unsafe { nil } {
+		return none
+	}
+	return unsafe { &ImageStorage(t.screens.active.kitty_images) }
+}
+
+fn deinit_screen_storage(mut screen terminal.Screen) {
+	if screen.kitty_images == unsafe { nil } {
+		return
+	}
+	mut storage := unsafe { &ImageStorage(screen.kitty_images) }
+	storage.deinit(&screen)
+	screen.kitty_images = unsafe { nil }
+	screen.kitty_images_lifecycle = unsafe { nil }
+}
+
+// deinit_terminal_storage releases both primary and alternate screen state.
+// Call this before terminal.Terminal.deinit clears the opaque pointers.
+pub fn deinit_terminal_storage(mut t terminal.Terminal) {
+	deinit_screen_storage(mut t.screens.primary)
+	if t.screens.alternate_ptr != unsafe { nil } {
+		deinit_screen_storage(mut t.screens.alternate_ptr)
+	}
+}
+
+// set_terminal_storage_limit updates the configured limit and all storage
+// instances that have already been materialized.
+pub fn set_terminal_storage_limit(mut t terminal.Terminal, limit usize) {
+	t.kitty_image_limit = limit
+	if t.screens.primary.kitty_images != unsafe { nil } {
+		mut storage := unsafe { &ImageStorage(t.screens.primary.kitty_images) }
+		storage.set_limit(t.screens.primary, limit)
+	}
+	if t.screens.alternate_ptr != unsafe { nil }
+		&& t.screens.alternate_ptr.kitty_images != unsafe { nil } {
+		mut storage := unsafe { &ImageStorage(t.screens.alternate_ptr.kitty_images) }
+		storage.set_limit(t.screens.alternate_ptr, limit)
+	}
+}
+
+// clear_active_images implements the emulator-level clear used by Cmd+K.
+pub fn clear_active_images(mut t terminal.Terminal) {
+	mut storage := active_storage(mut t)
+	storage.delete(&t, FullDelete{
+		kind: .all
+		data: DeleteData(DeleteAll{
+			delete: true
+		})
+	})
+}
 
 // Execute a Kitty graphics command against the given terminal. This
 // will never fail, but the response may indicate an error and the
@@ -136,22 +204,13 @@ import terminal
 // The allocator must be the same allocator that was used to build
 // the command.
 pub fn execute(mut t terminal.Terminal, cmd &Command) ?Response {
-	// STORAGE-DEP: if storage is disabled we disable the whole protocol, so
-	// we don't even respond to queries and the terminal acts as if the
-	// feature is unsupported:
-	//   if !t.screens.active.kitty_images.enabled() { return none }
+	mut storage := active_storage(mut t)
+	if !storage.enabled() {
+		return none
+	}
 
-	// The quiet setting used to control the response. This is a var because
-	// in certain special cases (namely chunked transmissions) it can change:
-	// on a transmit the `q` value is inherited from the initial chunk's
-	// loading image unless `q >= 1` is set on this command.
-	// STORAGE-DEP: the inheritance reads/writes storage.loading.quiet:
-	//   if loading := t.screens.active.kitty_images.loading {
-	//       match cmd.quiet {
-	//           .no { quiet = loading.quiet }        // q=0: use start value
-	//           .ok, .failures { loading.quiet = cmd.quiet } // q>=1: adopt
-	//       }
-	//   }
+	// The quiet setting can change only for transmissions: later chunks
+	// inherit the initial chunk's value unless they explicitly raise q.
 	mut quiet := cmd.quiet
 
 	// Dispatch based on command control type.
@@ -161,15 +220,31 @@ pub fn execute(mut t terminal.Terminal, cmd &Command) ?Response {
 			if tr.is_query {
 				exec_query(cmd)
 			} else {
-				r := exec_transmit(mut t, cmd)
-				// Inherit quiet from loading image if set on first chunk.
-				// The exec_transmit may update quiet via the loading state.
-				r
+				if mut loading := storage.loading {
+					match cmd.quiet {
+						.no {
+							quiet = loading.quiet
+						}
+						.ok, .failures {
+							loading.quiet = cmd.quiet
+						}
+					}
+				}
+				exec_transmit(mut t, cmd)
 			}
 		}
 		TransmitAndDisplay {
-			r := exec_transmit(mut t, cmd)
-			r
+			if mut loading := storage.loading {
+				match cmd.quiet {
+					.no {
+						quiet = loading.quiet
+					}
+					.ok, .failures {
+						loading.quiet = cmd.quiet
+					}
+				}
+			}
+			exec_transmit(mut t, cmd)
 		}
 		Display {
 			exec_display(mut t, cmd)
@@ -178,13 +253,13 @@ pub fn execute(mut t terminal.Terminal, cmd &Command) ?Response {
 			exec_delete(mut t, cmd)
 		}
 		AnimationFrameLoading {
-			Response{ message: 'EINVAL: animation frames not supported' }
+			Response{ message: 'ERROR: unimplemented action' }
 		}
 		AnimationControl {
-			Response{ message: 'EINVAL: animation control not supported' }
+			Response{ message: 'ERROR: unimplemented action' }
 		}
 		AnimationFrameComposition {
-			Response{ message: 'EINVAL: animation composition not supported' }
+			Response{ message: 'ERROR: unimplemented action' }
 		}
 	}
 
@@ -331,18 +406,17 @@ fn exec_display(mut t terminal.Terminal, cmd &Command) Response {
 		return result
 	}
 
-	// STORAGE-DEP: verify the requested image exists and, if looked up by
-	// number, echo back its concrete ID.
-	//   storage := &t.screens.active.kitty_images
-	//   img := if d.image_id != 0 {
-	//       storage.image_by_id(d.image_id)
-	//   } else {
-	//       storage.image_by_number(d.image_number)
-	//   } or {
-	//       result.message = 'ENOENT: image not found'
-	//       return result
-	//   }
-	//   result.id = img.id
+	mut storage := active_storage(mut t)
+	img_opt := if d.image_id != 0 {
+		storage.image_by_id(d.image_id)
+	} else {
+		storage.image_by_number(d.image_number)
+	}
+	img := img_opt or {
+		result.message = 'ENOENT: image not found'
+		return result
+	}
+	result.id = img.id
 
 	// Determine placement location.
 	location := if d.virtual_placement {
@@ -380,27 +454,17 @@ fn exec_display(mut t terminal.Terminal, cmd &Command) Response {
 		z: d.z
 	}
 
-	// STORAGE-DEP: add the placement to the active screen's image storage.
-	//   storage.add_placement(img.id, result.placement_id, p) or {
-	//       p.deinit(t.screens.active)
-	//       encode_error(mut result, err.msg())
-	//       return result
-	//   }
+	storage.add_placement(img.id, result.placement_id, p)
 
 	// Apply cursor movement setting. This only applies to pin placements.
-	// STORAGE-DEP: the number of rows to advance the cursor comes from
-	// p.grid_size(img, t), which needs the looked-up image.
-	//   if p.location is PlacementPin {
-	//       if d.cursor_movement == .after {
-	//           _, rows := p.grid_size(img, t)
-	//           // We use terminal.index() to properly handle scroll regions.
-	//           for _ in 0 .. rows { t.index() or { break } }
-	//           t.set_cursor_pos(t.screens.active.cursor.y,
-	//               p.location.pin.x + cols + 1)
-	//       }
-	//   }
-
-	_ = p
+	if p.location is PlacementPin && d.cursor_movement == .after {
+		pin := (p.location as PlacementPin).pin
+		cols, rows := p.grid_size(img, &t)
+		for _ in 0 .. rows {
+			t.index() or { break }
+		}
+		t.set_cursor_pos(int(t.screens.active.cursor.y), int(pin.x + cols + 1))
+	}
 
 	return result
 }
@@ -419,13 +483,8 @@ fn exec_delete(mut t terminal.Terminal, cmd &Command) Response {
 		}
 	}
 
-	// STORAGE-DEP: delegate to the storage, which handles every delete mode
-	// (by ID, by number, all, intersecting cursor/cell, by z-index, column,
-	// row, range, ...). The ImageStorage.delete() implementation already
-	// exists in graphics_storage.v.
-	//   t.screens.active.kitty_images.delete(t, del)
-	_ = del
-	_ = t
+	mut storage := active_storage(mut t)
+	storage.delete(&t, del)
 
 	// Delete never responds on success.
 	return Response{}
@@ -438,17 +497,6 @@ struct LoadResult {
 	display ?Display
 }
 
-// Starting value for auto-assigned image IDs, matching
-// ImageStorage.next_image_id (mid-way through the u32 range to avoid
-// collisions with buggy programs).
-//
-// STORAGE-DEP: the real, monotonically-incrementing counter lives on the
-// storage. Without Screen.kitty_images we can't persist it, so auto-ID'd
-// images all receive this sentinel. Since such images are also marked
-// implicit_id (when no number is given) they are never referenced by ID in
-// a response, so the collision is harmless for the response path.
-const auto_image_id_start = u32(2147483647)
-
 // Load and add an image to the terminal's image storage.
 //
 // Handles both single-shot and chunked loading. For chunked transfers,
@@ -456,32 +504,42 @@ const auto_image_id_start = u32(2147483647)
 // until the final chunk completes it.
 fn load_and_add_image(mut t terminal.Terminal, cmd &Command) !LoadResult {
 	t_data := cmd.transmission() or { return error('no transmission in command') }
+	mut storage := active_storage(mut t)
 
-	// STORAGE-DEP (chunked transfers): if there is an in-progress loading
-	// image on the storage, append this chunk to it, and on the final chunk
-	// complete + add the image.
-	//   storage := &t.screens.active.kitty_images
-	//   if mut loading := storage.loading {
-	//       loading.add_data(cmd.data)!
-	//       if t_data.more_chunks {
-	//           return LoadResult{ image: loading.image, more: true }
-	//       }
-	//       img := loading.complete()!
-	//       storage.loading = none
-	//       storage.add_image(img)!
-	//       return LoadResult{ image: img, display: loading.display }
-	//   }
-	// Because we can't persist `storage.loading`, chunked transfers cannot be
-	// reassembled across calls in this build: each chunk is treated as an
-	// independent (first) chunk below.
+	if mut loading_ptr := storage.loading {
+		loading_ptr.add_data(cmd.data)!
+		if t_data.more_chunks {
+			return LoadResult{
+				image: loading_ptr.image
+				more: true
+			}
+		}
+
+		display := loading_ptr.display
+		img := loading_ptr.complete() or {
+			loading_ptr.destroy()
+			storage.loading = none
+			return err
+		}
+		storage.loading = none
+		storage.add_image(img)!
+		return LoadResult{
+			image: img
+			display: display
+		}
+	}
 
 	// No loading in progress - create a new LoadingImage from the command.
 	mut loading := LoadingImage.init_from_cmd(cmd)!
 
 	// If the image has no ID, we assign one.
 	if loading.image.id == 0 {
-		// STORAGE-DEP: id = storage.next_image_id; storage.next_image_id +%= 1
-		loading.image.id = auto_image_id_start
+		loading.image.id = storage.next_image_id
+		storage.next_image_id = if storage.next_image_id == u32(0xffffffff) {
+			u32(0)
+		} else {
+			storage.next_image_id + 1
+		}
 
 		// If the image also has no number then its auto-ID is "implicit".
 		// See the doc comment on the Image.implicit_id field for detail.
@@ -492,8 +550,7 @@ fn load_and_add_image(mut t terminal.Terminal, cmd &Command) !LoadResult {
 
 	// If this is chunked, this is the beginning of a new chunked transmission.
 	if t_data.more_chunks {
-		// STORAGE-DEP: allocate the loading image on the heap and stash it:
-		//   storage.loading = &loading
+		storage.loading = &loading
 		return LoadResult{
 			image: loading.image
 			more: true
@@ -503,9 +560,7 @@ fn load_and_add_image(mut t terminal.Terminal, cmd &Command) !LoadResult {
 	// Single-shot transfer - validate and complete the image immediately.
 	display := loading.display
 	img := loading.complete()!
-
-	// STORAGE-DEP: storage.add_image(img)!
-	_ = t
+	storage.add_image(img)!
 
 	return LoadResult{
 		image: img

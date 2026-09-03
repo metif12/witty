@@ -41,7 +41,7 @@ pub fn (mut self ScreenSet) get_or_init(key ScreenKey, cols u32, rows u32, max_s
 		}
 		.primary {
 			// Primary is always initialized; this should not happen.
-			return &self.primary
+			return self.primary
 		}
 	}
 }

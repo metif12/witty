@@ -44,7 +44,7 @@ pub:
 	placement_id PlacementId
 }
 
-fn (a PlacementKey) == (b PlacementKey) bool {
+fn (a PlacementKey) ==(b PlacementKey) bool {
 	return a.image_id == b.image_id && a.placement_id.tag == b.placement_id.tag
 		&& a.placement_id.id == b.placement_id.id
 }
@@ -239,8 +239,8 @@ pub fn (self &Placement) rect(image Image, t &terminal.Terminal) ?Rect {
 // PlacementEntry - a key-value pair for the placement map
 // ============================================================
 
-struct PlacementEntry {
-mut:
+pub struct PlacementEntry {
+pub mut:
 	key   PlacementKey
 	value Placement
 }
@@ -316,6 +316,7 @@ pub fn (mut self ImageStorage) set_limit(s &terminal.Screen, limit usize) {
 		self.deinit(s)
 		self.images = map[u32]Image{}
 		self.placements = []
+		self.loading = none
 		self.total_bytes = 0
 		self.total_limit = 0
 		self.dirty = false
@@ -411,6 +412,30 @@ fn (mut self ImageStorage) clear_placements(s &terminal.Screen) {
 	self.placements.clear()
 }
 
+// Clear all pin-anchored placements. Virtual placements remain until they are
+// explicitly deleted, matching Kitty's delete-all semantics.
+pub fn (mut self ImageStorage) clear_screen_images(s &terminal.Screen) {
+	mut i := 0
+	for i < self.placements.len {
+		entry := self.placements[i]
+		if entry.value.location is PlacementVirtual {
+			i++
+			continue
+		}
+
+		image_id := entry.key.image_id
+		entry.value.deinit(s)
+		self.placements.delete(i)
+		self.delete_if_unused(image_id)
+	}
+
+	ids := self.images.keys()
+	for id in ids {
+		self.delete_if_unused(id)
+	}
+	self.dirty = true
+}
+
 // Get an image by its ID. If the image doesn't exist, return none.
 pub fn (self &ImageStorage) image_by_id(image_id u32) ?Image {
 	if image_id in self.images {
@@ -452,34 +477,22 @@ pub fn (mut self ImageStorage) delete(t &terminal.Terminal, cmd FullDelete) {
 				}
 			}
 
-			// Iterate placements, removing non-virtual ones
-			mut i := 0
-			for i < self.placements.len {
-				entry := self.placements[i]
-				// Skip virtual placements
-				if entry.value.location is PlacementVirtual {
-					i++
-					continue
-				}
-
-				image_id := entry.key.image_id
-				entry.value.deinit(t.screens.active)
-				self.placements.delete(i)
-				if delete_images {
-					self.delete_if_unused(image_id)
-				}
-				// Don't increment i since we deleted at i
-			}
-
 			if delete_images {
-				// Collect image IDs to check
-				ids := self.images.keys()
-				for id in ids {
-					self.delete_if_unused(id)
+				self.clear_screen_images(t.screens.active)
+			} else {
+				// Iterate placements, removing non-virtual ones.
+				mut i := 0
+				for i < self.placements.len {
+					entry := self.placements[i]
+					if entry.value.location is PlacementVirtual {
+						i++
+						continue
+					}
+					entry.value.deinit(t.screens.active)
+					self.placements.delete(i)
 				}
+				self.dirty = true
 			}
-
-			self.dirty = true
 		}
 		.id {
 			v := cmd.data as DeleteById
@@ -499,14 +512,10 @@ pub fn (mut self ImageStorage) delete(t &terminal.Terminal, cmd FullDelete) {
 					false
 				}
 			}
-			self.delete_intersecting(
-				t,
-				terminal.Pin{
-					x: t.screens.active.cursor.x
-					y: u32(t.screens.active.pages.active_start) + t.screens.active.cursor.y
-				},
-				delete_images_flag
-			)
+			self.delete_intersecting(t, terminal.Pin{
+				x: t.screens.active.cursor.x
+				y: u32(t.screens.active.pages.active_start) + t.screens.active.cursor.y
+			}, delete_images_flag)
 		}
 		.intersect_cell {
 			v := cmd.data as DeleteIntersectCell
@@ -646,6 +655,7 @@ pub fn (mut self ImageStorage) delete(t &terminal.Terminal, cmd FullDelete) {
 			}
 			self.dirty = true
 		}
+
 		// We don't support animation frames yet so they are successfully deleted!
 		.animation_frames {}
 	}
