@@ -263,3 +263,34 @@ fn test_has_global_keybinds() {
 	app := App{}
 	assert app.has_global_keybinds() == false
 }
+
+fn test_has_global_keybinds_leaf() {
+	mut app := App{}
+	app.config.keybind.parse_cli('global:ctrl+a=new_window')!
+	assert app.has_global_keybinds()
+}
+
+fn test_has_global_keybinds_chained_leaf() {
+	mut app := App{}
+	app.config.keybind.parse_cli('global:ctrl+a=new_window')!
+	app.config.keybind.parse_cli('chain=toggle_fullscreen')!
+	assert app.has_global_keybinds()
+}
+
+fn test_has_global_keybinds_ignores_global_leaf_under_leader() {
+	mut app := App{}
+	// Global trigger sequences are invalid, so construct the otherwise-valid
+	// nested shape directly to verify parity with Ghostty's top-level scan.
+	mut leader := input.Set{}
+	leader.put_flags(input.Trigger.parse('b')!, input.Action.new(.new_window), input.Flags{
+		global: true
+	})
+	app.config.keybind.set.bindings << input.SetEntry{
+		trigger: input.Trigger.parse('ctrl+a')!
+		value: input.SetValue{
+			typ: .leader
+			leader: &leader
+		}
+	}
+	assert !app.has_global_keybinds()
+}

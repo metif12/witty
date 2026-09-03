@@ -162,9 +162,21 @@ pub fn (mut self App) terminate() {
 // has_global_keybinds returns true if there are any global keybinds
 // in the configuration.
 pub fn (self &App) has_global_keybinds() bool {
-	// The BindingSet is currently a stub without iteration support.
-	// When keybind iteration is available, this should check for
-	// any entries with the global flag set.
+	for entry in self.config.keybind.set.bindings {
+		match entry.value.typ {
+			.leader {}
+			.leaf {
+				if entry.value.leaf_flags.global {
+					return true
+				}
+			}
+			.leaf_chained {
+				if entry.value.chain_flags.global {
+					return true
+				}
+			}
+		}
+	}
 	return false
 }
 
@@ -217,7 +229,7 @@ pub fn (self &App) keyboard_layout() input.KeyboardLayout {
 	// Attempt to detect the keyboard layout via the keymap source ID.
 	// On macOS this maps to Apple keyboard layout identifiers.
 	mut buf := []u8{len: 256}
-	source_id := self.keymap.source_id(buf) or { return .unknown }
+	source_id := self.keymap.source_id(mut buf) or { return .unknown }
 	if source_id.len == 0 {
 		return .unknown
 	}
@@ -345,8 +357,8 @@ pub:
 pub enum PlatformTag {
 	// "0" is reserved for invalid so we can detect unset values
 	// from the C API.
-	macos  = 1
-	ios    = 2
+	macos = 1
+	ios   = 2
 }
 
 // PlatformC is the C ABI compatible version of Platform. The tag is
@@ -494,7 +506,7 @@ pub fn (mut self Surface) init(mut app App, opts SurfaceOptions) ! {
 	// Apply any environment variables that were requested.
 	for env_var in opts.env_vars {
 		config.env.entries << configpkg.StringMapEntry{
-			key:   env_var.key
+			key: env_var.key
 			value: env_var.value
 		}
 	}
@@ -1028,20 +1040,28 @@ fn mods_from_int(v int) input.Mods {
 // mods_to_int converts input.Mods to an integer bitmask.
 fn mods_to_int(m input.Mods) int {
 	mut v := 0
-	if m.shift { v |= 1 }
-	if m.ctrl { v |= 2 }
-	if m.alt { v |= 4 }
-	if m.super_ { v |= 8 }
+	if m.shift {
+		v |= 1
+	}
+	if m.ctrl {
+		v |= 2
+	}
+	if m.alt {
+		v |= 4
+	}
+	if m.super_ {
+		v |= 8
+	}
 	return v
 }
 
 // CAPISurfaceSize represents the C API surface size with grid and pixel info.
 pub struct CAPISurfaceSize {
 pub:
-	columns       u16
-	rows          u16
-	width_px      u32
-	height_px     u32
+	columns        u16
+	rows           u16
+	width_px       u32
+	height_px      u32
 	cell_width_px  u32
 	cell_height_px u32
 }
@@ -1731,4 +1751,3 @@ pub fn ghostty_inspector_metal_shutdown(mut insp TerminalInspector) {
 	// Requires cimgui Metal backend bindings - not available in V runtime.
 	_ = insp
 }
-
