@@ -26,9 +26,9 @@ pub mut:
 
 // The colors we use for overlays.
 pub enum OverlayColor {
-	hyperlink       // light blue
+	hyperlink // light blue
 	semantic_prompt // orange/gold
-	semantic_input  // cyan
+	semantic_input // cyan
 }
 
 pub struct OverlayRGB {
@@ -40,21 +40,27 @@ pub:
 
 pub fn (c OverlayColor) rgb() OverlayRGB {
 	return match c {
-		.hyperlink { OverlayRGB{
-			r: 180
-			g: 180
-			b: 255
-		} }
-		.semantic_prompt { OverlayRGB{
-			r: 255
-			g: 200
-			b: 64
-		} }
-		.semantic_input { OverlayRGB{
-			r: 64
-			g: 200
-			b: 255
-		} }
+		.hyperlink {
+			OverlayRGB{
+				r: 180
+				g: 180
+				b: 255
+			}
+		}
+		.semantic_prompt {
+			OverlayRGB{
+				r: 255
+				g: 200
+				b: 64
+			}
+		}
+		.semantic_input {
+			OverlayRGB{
+				r: 64
+				g: 200
+				b: 255
+			}
+		}
 	}
 }
 
@@ -136,23 +142,71 @@ pub fn (mut self Overlay) apply_features(state &terminal.RenderState, features [
 // because the render state doesn't contain this. This will be added
 // later.
 fn (mut self Overlay) highlight_hyperlinks(state &terminal.RenderState) {
-	// XTODO: Hyperlink highlighting requires render state row_data
-	// with hyperlink flags per cell. The algorithm:
-	// 1. Iterate rows, skip non-hyperlink rows
-	// 2. Find contiguous runs of hyperlink cells
-	// 3. Draw highlight rectangles for each run
-	_ = state
+	for y, row in state.row_data {
+		if !row.raw.hyperlink {
+			continue
+		}
+
+		mut x := 0
+		for x < row.cells.len {
+			if !row.cells[x].raw.has_hyperlink {
+				x++
+				continue
+			}
+
+			start_x := x
+			for x < row.cells.len && row.cells[x].raw.has_hyperlink {
+				x++
+			}
+			self.highlight_grid_rect(start_x, y, x - start_x, 1, .hyperlink)
+		}
+	}
 }
 
 // Highlight semantic prompts in the render state.
 fn (mut self Overlay) highlight_semantic_prompts(state &terminal.RenderState) {
-	// XTODO: Semantic prompt highlighting requires render state row_data
-	// with semantic_prompt metadata. The algorithm:
-	// 1. Find prompt rows and their continuations
-	// 2. Draw colored bar at the left edge
-	// 3. Find contiguous semantic content cells (prompt/input)
-	// 4. Draw highlight rectangles for each run
-	_ = state
+	// Highlight the row-level prompt bars, joining continuation rows.
+	mut y := 0
+	for y < state.row_data.len {
+		if state.row_data[y].raw.semantic_prompt == .unknown {
+			y++
+			continue
+		}
+
+		start_y := y
+		y++
+		for y < state.row_data.len
+			&& state.row_data[y].raw.semantic_prompt == .prompt_continuation {
+			y++
+		}
+		bar_width := if self.cell_size.width < 5 { int(self.cell_size.width) } else { 5 }
+		self.highlight_pixel_rect(0, start_y, bar_width, y - start_y, .semantic_prompt)
+	}
+
+	// Highlight contiguous prompt/input content. Output is intentionally
+	// omitted because it would make the debug overlay too noisy.
+	for row_y, row in state.row_data {
+		mut x := 0
+		for x < row.cells.len {
+			content := row.cells[x].raw.semantic_content
+			if content == .output {
+				x++
+				continue
+			}
+
+			start_x := x
+			x++
+			for x < row.cells.len && row.cells[x].raw.semantic_content == content {
+				x++
+			}
+			color := if content == .prompt {
+				OverlayColor.semantic_prompt
+			} else {
+				OverlayColor.semantic_input
+			}
+			self.highlight_grid_rect(start_x, row_y, x - start_x, 1, color)
+		}
+	}
 }
 
 // Draw a filled and bordered rectangle at grid coordinates.
@@ -183,13 +237,7 @@ fn (mut self Overlay) highlight_grid_rect(x int, y int, width int, height int, c
 			a := if is_border { border_a } else { fill_a }
 
 			idx := (row * int(self.width) + col_px) * 4
-			if idx >= 0 && idx + 3 < self.pixels.len {
-				// Alpha-blend the overlay pixel
-				self.pixels[idx + 0] = col.r
-				self.pixels[idx + 1] = col.g
-				self.pixels[idx + 2] = col.b
-				self.pixels[idx + 3] = a
-			}
+			self.composite_pixel(idx, col, a)
 		}
 	}
 }
@@ -218,12 +266,23 @@ fn (mut self Overlay) highlight_pixel_rect(x int, y int, width_px int, height in
 			a := if is_border { border_a } else { fill_a }
 
 			idx := (row * int(self.width) + col_px) * 4
-			if idx >= 0 && idx + 3 < self.pixels.len {
-				self.pixels[idx + 0] = col.r
-				self.pixels[idx + 1] = col.g
-				self.pixels[idx + 2] = col.b
-				self.pixels[idx + 3] = a
-			}
+			self.composite_pixel(idx, col, a)
 		}
 	}
+}
+
+// z2d's RGBA surfaces store premultiplied colors and composite with src-over.
+fn (mut self Overlay) composite_pixel(idx int, color OverlayRGB, alpha u8) {
+	if idx < 0 || idx + 3 >= self.pixels.len {
+		return
+	}
+	src_a := u32(alpha)
+	inv_a := u32(255) - src_a
+	src_r := (u32(color.r) * src_a + 127) / 255
+	src_g := (u32(color.g) * src_a + 127) / 255
+	src_b := (u32(color.b) * src_a + 127) / 255
+	self.pixels[idx] = u8(src_r + (u32(self.pixels[idx]) * inv_a + 127) / 255)
+	self.pixels[idx + 1] = u8(src_g + (u32(self.pixels[idx + 1]) * inv_a + 127) / 255)
+	self.pixels[idx + 2] = u8(src_b + (u32(self.pixels[idx + 2]) * inv_a + 127) / 255)
+	self.pixels[idx + 3] = u8(src_a + (u32(self.pixels[idx + 3]) * inv_a + 127) / 255)
 }
