@@ -5,14 +5,12 @@
 // the intention is to grow it later so that we can better test said logic).
 module main
 
-// MouseShape cursor types
-pub enum MouseShape {
-	default_
-	text
-	pointer
-	crosshair
-	progress
-}
+import terminal
+
+// MouseShape is the terminal protocol's complete named cursor-shape set.
+// Keeping the surface helper on the canonical type prevents the truncated
+// surface-only enum from losing shapes received through OSC 22.
+pub type MouseShape = terminal.MouseShape
 
 // MouseEvents tracking mode
 pub enum MouseEvents {

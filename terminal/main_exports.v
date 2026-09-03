@@ -118,11 +118,6 @@ module terminal
 //   ref_counted_set   - Reference-counted set
 //   size              - Size and offset types
 //
-// XTODO areas not yet translated:
-//   charsets          - Character set mapping tables
-//   kitty             - Kitty graphics/keyboard protocol
-//   search            - Terminal text search
-//   tmux              - tmux control mode
-//   x11_color         - X11 color name database
-//   StringMap         - String interning map
-//   ScreenSet         - Set of screens (primary/alternate)
+// Other Zig namespaces are V modules imported directly by consumers:
+// `kitty`, `search`, and `tmux`. Character sets, X11 colors, string interning,
+// and the primary/alternate ScreenSet are implemented in this module.

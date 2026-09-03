@@ -19,6 +19,7 @@ module main
 // or are too Ghostty-internal.
 
 import terminal
+import input
 
 // Re-export key terminal types.
 // In Zig these are pub const aliases; in V we use type aliases where
@@ -26,78 +27,114 @@ import terminal
 
 // Core terminal types
 pub type Terminal = terminal.Terminal
+
 pub type Screen = terminal.Screen
+
 pub type Selection = terminal.Selection
+
 pub type RenderState = terminal.RenderState
 
 // Page types
 pub type Page = terminal.Page
+
 pub type PageList = terminal.PageList
 
 // Cell and style types
 pub type CellData = terminal.CellData
 
-// XTODO: The following re-exports from the Zig version need their
-// corresponding V modules to be implemented first:
-//
-// pub const apc = terminal.apc
-// pub const dcs = terminal.dcs
-// pub const osc = terminal.osc
-// pub const point = terminal.point
-// pub const color = terminal.color
-// pub const device_status = terminal.device_status
-// pub const formatter = terminal.formatter
-// pub const highlight = terminal.highlight
-// pub const kitty = terminal.kitty
-// pub const modes = terminal.modes
-// pub const parse_table = terminal.parse_table
-// pub const search = terminal.search
-// pub const size = terminal.size
-// pub const x11_color = terminal.x11_color
-//
-// pub const Charset = terminal.Charset
-// pub const CharsetSlot = terminal.CharsetSlot
-// pub const CharsetActiveSlot = terminal.CharsetActiveSlot
-// pub const Cell = page.Cell
-// pub const Coordinate = point.Coordinate
-// pub const CSI = Parser.Action.CSI
-// pub const DCS = Parser.Action.DCS
-// pub const MouseShape = terminal.MouseShape
-// pub const Parser = terminal.Parser
-// pub const Pin = PageList.Pin
-// pub const Point = point.Point
-// pub const ScreenSet = terminal.ScreenSet
-// pub const SizeReportStyle = terminal.SizeReportStyle
-// pub const StringMap = terminal.StringMap
-// pub const Style = terminal.Style
-// pub const Stream = terminal.Stream
-// pub const StreamAction = terminal.StreamAction
-// pub const Cursor = Screen.Cursor
-// pub const CursorStyle = Screen.CursorStyle
-// pub const CursorStyleReq = terminal.CursorStyle
-// pub const DeviceAttributeReq = terminal.DeviceAttributeReq
-// pub const Mode = modes.Mode
-// pub const ModePacked = modes.ModePacked
-// pub const ModifyKeyFormat = terminal.ModifyKeyFormat
-// pub const ProtectedMode = terminal.ProtectedMode
-// pub const StatusLineType = terminal.StatusLineType
-// pub const StatusDisplay = terminal.StatusDisplay
-// pub const EraseDisplay = terminal.EraseDisplay
-// pub const EraseLine = terminal.EraseLine
-// pub const TabClear = terminal.TabClear
-// pub const Attribute = terminal.Attribute
+pub type Cell = terminal.CellData
 
-// XTODO: Terminal-specific input encoding is also part of libghostty-vt.
-// In Zig this is a nested struct with re-exports from input/paste.zig,
-// input/key.zig, and input/key_encode.zig. Needs V input module first.
-//
-// Input types would include:
-// - PasteError, PasteOptions, is_safe_paste, encode_paste
-// - Key, KeyAction, KeyEvent, KeyMods
-// - KeyEncodeOptions, encode_key
+pub type Charset = terminal.Charset
 
-// XTODO: C API exports.
-// In Zig, when building as a C library, the comptime block exports
-// functions like ghostty_key_event_new, ghostty_osc_new, etc.
-// V doesn't have the same C export mechanism. This would need to be
-// implemented using V's C interop features if a C library build is needed.
+pub type CharsetSlot = terminal.CharsetSlot
+
+pub type CharsetActiveSlot = terminal.ActiveSlot
+
+pub type Coordinate = terminal.Coordinate
+
+pub type CSI = terminal.CSIAction
+
+pub type DCS = terminal.DCSAction
+
+pub type Parser = terminal.VTParser
+
+pub type Pin = terminal.PagePin
+
+pub type Point = terminal.Point
+
+pub type ScreenSet = terminal.ScreenSet
+
+pub type SizeReportStyle = terminal.SizeReportStyle
+
+pub type StringMap = terminal.StringMap
+
+pub type Style = terminal.CellStyle
+
+pub type Stream = terminal.Stream
+
+pub type StreamAction = terminal.StreamEvent
+
+pub type Cursor = terminal.Cursor
+
+pub type CursorStyle = terminal.CursorStyle
+
+pub type CursorStyleReq = terminal.AnsiCursorStyle
+
+pub type DeviceAttributeReq = terminal.DeviceAttributeReq
+
+pub type Mode = terminal.Mode
+
+pub type ModePacked = terminal.ModePacked
+
+pub type ModifyKeyFormat = terminal.ModifyKeyFormat
+
+pub type ProtectedMode = terminal.ProtectedMode
+
+pub type StatusLineType = terminal.StatusLineType
+
+pub type StatusDisplay = terminal.StatusDisplay
+
+pub type EraseDisplay = terminal.CsiEraseDisplay
+
+pub type EraseLine = terminal.CsiEraseLine
+
+pub type TabClear = terminal.TabClear
+
+pub type Attribute = terminal.SgrAttribute
+
+pub type ReadonlyHandler = terminal.ReadonlyHandler
+
+pub type ReadonlyStream = terminal.ReadonlyStream
+
+pub type Scrollbar = terminal.Scrollbar
+
+// V has no nested public module declarations, so the APIs under Zig's
+// `lib_vt.input` namespace use an Input prefix at this module boundary.
+pub type InputPasteOptions = input.PasteOptions
+
+pub type InputKey = input.Key
+
+pub type InputKeyAction = input.KeyAction
+
+pub type InputKeyEvent = input.KeyEvent
+
+pub type InputKeyMods = input.Mods
+
+pub type InputKeyEncodeOptions = input.Options
+
+pub fn input_is_safe_paste(data string) bool {
+	return input.paste_is_safe(data)
+}
+
+pub fn input_encode_paste(data string, opts InputPasteOptions) [3]string {
+	return input.paste_encode(data, opts)
+}
+
+pub fn input_encode_key(event InputKeyEvent, opts InputKeyEncodeOptions) string {
+	return input.encode(event, opts)
+}
+
+// Package-level APIs that are namespaces in Zig are V modules (`osc`,
+// `kitty`, `search`, and so on) and are imported directly by V callers. The
+// C-facing wrappers live in the `terminal_c` module; V does not require Zig's
+// comptime @export aggregation to make those callable.
