@@ -2,6 +2,7 @@ module global_state
 
 import os
 import internal_os
+import cli_args
 
 // Global process state. This is initialized in main() for exe artifacts
 // and by ghostty_init() for lib artifacts. This should ONLY be used by
@@ -61,19 +62,72 @@ pub mut:
 // since V does not support $if in struct field initializers.
 const is_macos = $if macos { true } $else { false }
 
-// Action represents a CLI sub-command action. In the Zig original this
-// is cli.ghostty.Action; here we use a simple enum placeholder.
+// Action represents the special commands accepted through +<action>.
 pub enum Action {
 	none
-	// XTODO: add real action variants once cli module is translated
+	version
+	help
+	list_fonts
+	list_keybinds
+	list_themes
+	list_colors
+	list_actions
+	ssh_cache
+	edit_config
+	show_config
+	validate_config
+	show_face
+	crash_report
+	boo
+	new_window
+}
+
+pub fn (action Action) cli_name() string {
+	return action.str().replace('_', '-')
+}
+
+// detect_action translates cli/action.zig's generic action detector and
+// cli/ghostty.zig's special-case handling.
+pub fn detect_action(args []string) !Action {
+	mut fallback := Action.none
+	mut pending := Action.none
+	for arg in args {
+		if arg == '--version' {
+			return .version
+		}
+		if arg == '--help' || arg == '-h' {
+			fallback = .help
+		}
+		if arg == '-e' && pending == .none {
+			return .none
+		}
+		if !arg.starts_with('+') {
+			continue
+		}
+		if pending != .none {
+			return error('multiple actions')
+		}
+		pending = action_from_name(arg[1..]) or { return error('invalid action: ${arg[1..]}') }
+	}
+	if pending != .none {
+		return pending
+	}
+	return fallback
+}
+
+fn action_from_name(name string) ?Action {
+	for action in [Action.version, .help, .list_fonts, .list_keybinds, .list_themes, .list_colors,
+		.list_actions, .ssh_cache, .edit_config, .show_config, .validate_config, .show_face,
+		.crash_report, .boo, .new_window] {
+		if action.cli_name() == name {
+			return action
+		}
+	}
+	return none
 }
 
 // Initialize the global state.
 pub fn (mut self GlobalState) init() ! {
-	// XTODO: most of the init body depends on cli, crash, i18n, glslang,
-	// oniguruma, and apprt modules that are not yet translated. The
-	// structure is preserved from the Zig original for future completion.
-
 	// Initialize ourself to nothing so we don't have any extra state.
 	// IMPORTANT: this MUST be initialized before any log output because
 	// the log function uses the global state.
@@ -82,8 +136,7 @@ pub fn (mut self GlobalState) init() ! {
 	self.rlimits = ResourceLimits{}
 	self.resources_dir = ResourcesDir{}
 
-	// XTODO: detect CLI action from args
-	// self.action = cli.action.detect_args(...)
+	self.action = detect_action(if os.args.len > 1 { os.args[1..] } else { []string{} })!
 
 	// If we have an action executing, we disable logging by default
 	// since we write to stderr we don't want logs messing up our
@@ -98,16 +151,11 @@ pub fn (mut self GlobalState) init() ! {
 	// this. Env vars are useful for logging too because they are
 	// easy to set.
 	if v := os.getenv_opt('GHOSTTY_LOG') {
-		// XTODO: parse packed struct fields from env var value
-		// self.logging = cli.args.parse_packed_struct(Logging, v) or Logging{}
-		_ = v
+		self.logging = cli_args.parse_packed_struct[Logging](v) or { Logging{} }
 	}
 
 	// Setup our signal handlers before logging
 	init_signals()
-
-	// XTODO: setup xev backend if dynamic
-	// XTODO: output debug information (version, build, runtime, font_backend, etc.)
 
 	// As early as possible, initialize our resource limits.
 	self.rlimits = ResourceLimits.new()
@@ -115,30 +163,16 @@ pub fn (mut self GlobalState) init() ! {
 	// XTODO: initialize crash reporting
 	// crash.init(...)
 
-	// We need to make sure the process locale is set properly. Locale
-	// affects a lot of behaviors in a shell.
-	// XTODO: ensure_locale(...)
-
-	// XTODO: initialize glslang for shader compilation
-	// XTODO: initialize oniguruma for regex
-
 	// Find our resources directory once for the app so every launch
 	// hereafter can use this cached value.
-	// XTODO: self.resources_dir = apprt.runtime.resources_dir()
-
-	// XTODO: setup i18n
+	self.resources_dir = ResourcesDir.detect()
 }
 
 // Cleans up the global state. This doesn't _need_ to be called but
 // doing so in dev modes will check for memory leaks.
 pub fn (mut self GlobalState) deinit() {
-	// XTODO: depends on crash module for flush
-	// crash.deinit()
-
-	// In V there is no GPA to deinit; the GC/allocator handles cleanup.
-	// The Zig original deinits the GPA here to detect memory leaks in
-	// debug builds.
-	_ = self
+	self.rlimits.restore()
+	self.resources_dir = ResourcesDir{}
 }
 
 // init_signals sets up process signal handlers.
@@ -212,13 +246,11 @@ pub fn (r ResourcesDir) host() string {
 // resources directory. This mirrors ghostty's per-target sentinel list;
 // we include both the generic Linux/BSD sentinels and the macOS one so
 // detection works regardless of how resources were laid out.
-const resources_sentinels = $if windows {
-	['terminfo/ghostty.terminfo']
-} $else $if macos {
-	['terminfo/78/xterm-ghostty', 'terminfo/g/ghostty', 'terminfo/x/xterm-ghostty']
-} $else {
-	['terminfo/g/ghostty', 'terminfo/x/xterm-ghostty']
-}
+const resources_sentinels = $if windows { ['terminfo/ghostty.terminfo'] } $else $if macos { [
+	'terminfo/78/xterm-ghostty',
+	'terminfo/g/ghostty',
+	'terminfo/x/xterm-ghostty',
+] } $else { ['terminfo/g/ghostty', 'terminfo/x/xterm-ghostty'] }
 
 // detect gets the directory to the bundled resources directory, if it
 // exists (not all platforms or packages have it). This is a faithful

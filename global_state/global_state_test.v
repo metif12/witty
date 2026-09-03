@@ -1,6 +1,53 @@
 module global_state
 
 import os
+import cli_args
+
+fn test_detect_action_direct_match() {
+	assert detect_action(['--font-size=12', '+list-themes'])! == .list_themes
+}
+
+fn test_detect_action_version_is_immediate() {
+	assert detect_action(['+help', '--version', '+list-fonts'])! == .version
+}
+
+fn test_detect_action_help_is_fallback() {
+	assert detect_action(['--help'])! == .help
+	assert detect_action(['--help', '+list-fonts'])! == .list_fonts
+}
+
+fn test_detect_action_exec_aborts_before_action() {
+	assert detect_action(['-e', '+help'])! == .none
+	assert detect_action(['+help', '-e'])! == .help
+}
+
+fn test_detect_action_rejects_invalid_and_multiple_actions() {
+	if _ := detect_action(['+invalid']) {
+		assert false, 'invalid action must fail'
+	} else {
+		assert err.msg().contains('invalid action')
+	}
+	if _ := detect_action(['+help', '+version']) {
+		assert false, 'multiple actions must fail'
+	} else {
+		assert err.msg() == 'multiple actions'
+	}
+}
+
+fn test_logging_env_uses_packed_boolean_parser() {
+	old := os.getenv_opt('GHOSTTY_LOG')
+	os.setenv('GHOSTTY_LOG', 'stderr,no-macos', true)
+	defer {
+		if value := old {
+			os.setenv('GHOSTTY_LOG', value, true)
+		} else {
+			os.unsetenv('GHOSTTY_LOG')
+		}
+	}
+	parsed := cli_args.parse_packed_struct[Logging](os.getenv('GHOSTTY_LOG'))!
+	assert parsed.stderr
+	assert !parsed.macos
+}
 
 fn test_resources_dir_detects_env() {
 	old := os.getenv_opt('GHOSTTY_RESOURCES_DIR')
@@ -63,7 +110,7 @@ fn test_resources_dir_host_falls_back_to_app() {
 
 	// When host_path is set explicitly, host() returns it.
 	res2 := ResourcesDir{
-		app_path:  '/some/app/path'
+		app_path: '/some/app/path'
 		host_path: '/some/host/path'
 	}
 	assert res2.host() == '/some/host/path'
