@@ -16,9 +16,6 @@ module search
 // this can include extra matches outside the viewport if the data
 // lives in the same page.
 //
-// XTODO: Full implementation requires PageList with linked list page
-// nodes, viewport tracking, and active area boundary detection.
-
 import terminal
 import highlight
 
@@ -83,27 +80,85 @@ pub fn (self &ViewportSearch) needle() []u8 {
 // Returns true if the viewport changed and a re-search is needed.
 // Returns false if the viewport is unchanged.
 pub fn (mut self ViewportSearch) update(list &terminal.PageList) bool {
-	// XTODO: Full implementation requires PageList with:
-	// - getTopLeft(.viewport) / getBottomRight(.viewport) for viewport bounds
-	// - getTopLeft(.active) / getBottomRight(.active) for active area bounds
-	// - pageIterator for traversing page nodes in the viewport
-	// - Page node pointers for fingerprint comparison
-	//
-	// The algorithm is:
-	// 1. Build a new fingerprint from the current viewport page nodes
-	// 2. Compare with the old fingerprint:
-	//    - If unchanged AND viewport doesn't overlap active area (or active
-	//      isn't dirty), return false (no re-search needed)
-	//    - Otherwise, update fingerprint and rebuild the sliding window
-	// 3. Clear the sliding window
-	// 4. Add overlap pages before the viewport (for cross-page needle matches)
-	// 5. Add all viewport pages to the sliding window
-	// 6. Add overlap pages after the viewport
-	// 7. Return true (re-search needed)
+	fingerprint := ViewportFingerprint.init(list)
+	if fingerprint.nodes.len == 0 {
+		self.reset()
+		return true
+	}
 
-	// For now, always indicate a re-search is needed since we can't
-	// properly track viewport changes without PageList integration.
-	_ = list
+	if old := self.fingerprint {
+		if old.eql(fingerprint) {
+			mut check_active := true
+			if dirty := self.active_dirty {
+				check_active = dirty
+				if dirty {
+					self.active_dirty = false
+				}
+			}
+
+			mut overlaps_active := false
+			if check_active {
+				active_tl := list.get_top_left(.active)
+				if active_br := list.get_bottom_right(.active) {
+					for node in old.nodes {
+						if voidptr(node) == voidptr(active_tl.node)
+							|| voidptr(node) == voidptr(active_br.node) {
+							overlaps_active = true
+							break
+						}
+					}
+				}
+			}
+			if !overlaps_active {
+				return false
+			}
+		}
+	}
+
+	self.fingerprint = fingerprint
+	if self.active_dirty != none {
+		self.active_dirty = false
+	}
+	self.window.clear_and_retain_capacity()
+
+	overlap_needed := if self.window.needle.len > 0 { self.window.needle.len - 1 } else { 0 }
+	mut node := fingerprint.nodes[0].prev
+	mut added := 0
+	for {
+		current := node or { break }
+		if current.data.size.rows == 0
+			|| !current.data.get_row(int(current.data.size.rows) - 1).wrap {
+			break
+		}
+		added += self.window.append(current)
+		if added >= overlap_needed {
+			break
+		}
+		node = current.prev
+	}
+
+	for viewport_node in fingerprint.nodes {
+		self.window.append(viewport_node)
+	}
+
+	end := fingerprint.nodes[fingerprint.nodes.len - 1]
+	if end.data.size.rows > 0 && end.data.get_row(int(end.data.size.rows) - 1).wrap {
+		node = end.next
+		added = 0
+		for {
+			current := node or { break }
+			added += self.window.append(current)
+			if added >= overlap_needed {
+				break
+			}
+			if current.data.size.rows == 0
+				|| !current.data.get_row(int(current.data.size.rows) - 1).wrap {
+				break
+			}
+			node = current.next
+		}
+	}
+
 	return true
 }
 
@@ -125,21 +180,20 @@ pub fn (mut self ViewportSearch) next() ?highlight.FlattenedHighlight {
 struct ViewportFingerprint {
 mut:
 	// The page node pointers that make up the viewport.
-	nodes []voidptr
+	nodes []&terminal.PageNode
 }
 
 fn ViewportFingerprint.init(list &terminal.PageList) ViewportFingerprint {
-	// XTODO: Requires PageList with:
-	// - getTopLeft(.viewport) to get the top-left pin
-	// - getBottomRight(.viewport) to get the bottom-right pin
-	// - pageIterator to traverse page nodes in the viewport range
-	//
-	// The fingerprint collects all unique page node pointers that
-	// the viewport touches. This allows cheap comparison to detect
-	// viewport scrolling.
-	_ = list
+	tl := list.get_top_left(.viewport)
+	br := list.get_bottom_right(.viewport) or { return ViewportFingerprint{} }
+	mut iterator := tl.page_iterator(.right_down, br)
+	mut nodes := []&terminal.PageNode{}
+	for {
+		chunk := iterator.next() or { break }
+		nodes << chunk.node
+	}
 	return ViewportFingerprint{
-		nodes: []
+		nodes: nodes
 	}
 }
 
@@ -152,7 +206,7 @@ fn (self &ViewportFingerprint) eql(other ViewportFingerprint) bool {
 		return false
 	}
 	for i, n in self.nodes {
-		if n != other.nodes[i] {
+		if voidptr(n) != voidptr(other.nodes[i]) {
 			return false
 		}
 	}

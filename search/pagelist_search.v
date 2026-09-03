@@ -20,9 +20,6 @@ pub mut:
 	// Tracked pin to the current search position in the page list.
 	// This is tracked so it auto-updates if pages are modified.
 	pin &terminal.PagePin = unsafe { nil }
-
-	// Whether we have exhausted the page list.
-	exhausted bool
 }
 
 // Initialize a new page list search starting from the given node.
@@ -33,13 +30,16 @@ pub fn PageListSearch.init(needle []u8, list &terminal.PageList, start &terminal
 	pin := mutable_list.track_pin(terminal.PagePin{
 		node: unsafe { &terminal.PageNode(start) }
 		y: u16(start.data.size.rows - 1)
-		x: 0
+		x: u16(start.data.size.cols - 1)
 	})
+	mut window := SlidingWindow.init(.reverse, needle)
+	// Load the initial node while the caller already has safe access to the
+	// page list. The tracked pin remains on this node and feed starts at prev.
+	window.append(start)
 	return PageListSearch{
 		list: list
-		window: SlidingWindow.init(.reverse, needle)
+		window: window
 		pin: pin
-		exhausted: false
 	}
 }
 
@@ -64,29 +64,28 @@ pub fn (mut self PageListSearch) next() ?highlight.FlattenedHighlight {
 //
 // The caller must hold the necessary locks to access the page list.
 pub fn (mut self PageListSearch) feed() bool {
-	if self.exhausted {
+	if self.pin.garbage {
 		return false
 	}
 
-	// Get the current node from the pin.
-	node := self.pin.node
-	if node == unsafe { nil } {
-		self.exhausted = true
-		return false
+	mut remaining := self.window.needle.len
+	mut node := self.pin.node.prev
+	for {
+		current := node or { break }
+		added := self.window.append(current)
+		if added >= remaining {
+			remaining = 0
+		} else {
+			remaining -= added
+		}
+		self.pin.node = current
+		self.pin.y = u16(current.data.size.rows - 1)
+		self.pin.x = u16(current.data.size.cols - 1)
+		if remaining == 0 {
+			break
+		}
+		node = current.prev
 	}
 
-	// Append the current node to the sliding window.
-	self.window.append(node)
-
-	// Move the pin to the previous node in the list.
-	if prev := node.prev {
-		self.pin.node = prev
-		self.pin.y = u16(prev.data.size.rows - 1)
-		self.pin.x = 0
-	} else {
-		// No more previous nodes -- we have reached the beginning.
-		self.exhausted = true
-	}
-
-	return true
+	return remaining < self.window.needle.len
 }

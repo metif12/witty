@@ -1,44 +1,80 @@
 module search
 
-// Tests for ViewportSearch.
-//
-// Source: terminal/search/viewport.zig (tests)
-//
-// All tests require Terminal/Screen instances with PageList integration,
-// VT stream processing, and viewport scrolling support. Since the V
-// implementation uses the simpler Pages model and ViewportSearch.update()
-// is XTODO (needs PageList with page node tracking), these tests are
-// stubbed with XTODO markers.
+import terminal
 
-// XTODO: Original test: "simple search"
-// Tests basic viewport search finding two matches, then verifying
-// viewport re-search is triggered when viewport overlaps active area.
+fn write_page_list_text(mut list terminal.PageList, tag terminal.PointTag, x u16, y u16, text string) {
+	for i, ch in text.runes() {
+		pin := list.get_pin(tag, x + u16(i), y) or { continue }
+		mut row := &pin.node.data.rows[int(pin.y)]
+		row.cells[int(pin.x)] = terminal.CellData{
+			content_tag: .codepoint
+			codepoint: u32(ch)
+		}
+	}
+}
+
 fn test_viewport_simple_search() {
-	// XTODO: Requires Terminal.init, VT stream, ViewportSearch.init,
-	// update(), next(), and pointFromPin() on PageList.
+	mut list := terminal.PageList.init(10, 10, usize(0x7fffffffffffffff))
+	defer { list.deinit() }
+	write_page_list_text(mut list, .active, 0, 0, 'Fizz')
+	write_page_list_text(mut list, .active, 0, 2, 'Fizz')
+
+	mut finder := ViewportSearch.init('Fizz'.bytes())
+	defer { finder.deinit() }
+	assert finder.update(&list)
+	// The viewport covers mutable active content, so without dirty tracking
+	// an unchanged fingerprint still requires a new search.
+	assert finder.update(&list)
+
+	first := finder.next() or {
+		assert false, 'missing first match'
+		return
+	}
+	assert first.start_pin().x == 0
+	assert first.start_pin().y == 0
+	assert first.end_pin().x == 3
+	second := finder.next() or {
+		assert false, 'missing second match'
+		return
+	}
+	assert second.start_pin().y == 2
+	assert finder.next() == none
 }
 
-// XTODO: Original test: "clear screen and search"
-// Tests that clearing the screen and rewriting content triggers
-// re-search with updated results.
-fn test_viewport_clear_screen_and_search() {
-	// XTODO: Requires Terminal, VT stream with ESC[2J clear,
-	// ViewportSearch with update() and next().
+fn test_viewport_dirty_tracking() {
+	mut list := terminal.PageList.init(10, 10, usize(0x7fffffffffffffff))
+	defer { list.deinit() }
+	write_page_list_text(mut list, .active, 0, 0, 'Fizz')
+
+	mut finder := ViewportSearch.init('Fizz'.bytes())
+	defer { finder.deinit() }
+	finder.active_dirty = false
+	assert finder.update(&list)
+	assert !finder.update(&list)
+
+	write_page_list_text(mut list, .active, 0, 0, 'Buzz')
+	assert !finder.update(&list)
+	finder.active_dirty = true
+	assert finder.update(&list)
+	assert finder.next() == none
 }
 
-// XTODO: Original test: "clear screen and search dirty tracking"
-// Tests the active_dirty flag mechanism: when dirty tracking is on,
-// viewport only re-searches when active_dirty is set to true.
-fn test_viewport_clear_screen_dirty_tracking() {
-	// XTODO: Requires Terminal, VT stream, ViewportSearch with
-	// active_dirty flag and update().
-}
+fn test_viewport_history_does_not_research_unchanged_pages() {
+	mut list := terminal.PageList.init(10, 2, usize(100_000_000))
+	defer { list.deinit() }
+	write_page_list_text(mut list, .screen, 0, 0, 'Fizz')
+	list.grow_rows(3000)
+	list.scroll(terminal.PageScrollTop{})
+	assert list.viewport == .top
 
-// XTODO: Original test: "history search, no active area"
-// Tests viewport search when scrolled to top of history (viewport
-// doesn't overlap active area), verifying that update returns false
-// since viewport hasn't changed.
-fn test_viewport_history_no_active_area() {
-	// XTODO: Requires Terminal with multi-page scrollback,
-	// scrollViewport(.top), and ViewportSearch with update().
+	mut finder := ViewportSearch.init('Fizz'.bytes())
+	defer { finder.deinit() }
+	assert finder.update(&list)
+	match_ := finder.next() or {
+		assert false, 'missing history match'
+		return
+	}
+	assert match_.start_pin().x == 0
+	assert match_.start_pin().y == 0
+	assert !finder.update(&list)
 }

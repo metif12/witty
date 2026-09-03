@@ -6,9 +6,6 @@ module search
 //
 // Source: terminal/search/active.zig
 //
-// XTODO: This is a stub. Full implementation requires PageList
-// integration with the active area boundary tracking.
-
 import terminal
 import highlight
 
@@ -37,14 +34,43 @@ pub fn (mut self ActiveSearch) deinit() {
 //
 // The caller must hold the necessary locks to access the page list.
 pub fn (mut self ActiveSearch) update(list &terminal.PageList) ?&terminal.PageNode {
-	// XTODO: Requires PageList active area boundary detection.
-	// Should:
-	// 1. Determine the current active area start node
-	// 2. Clear the sliding window
-	// 3. Append all active area page nodes to the window
-	// 4. Return the first node if there's history before the active area
-	_ = list
-	return none
+	self.window.clear_and_retain_capacity()
+
+	// Load the pages that cover the addressable active area, starting at the
+	// newest page as in Ghostty's active searcher.
+	mut remaining := usize(list.rows)
+	mut node := list.pages.last
+	mut first_active := ?&terminal.PageNode(none)
+	for {
+		current := node or { break }
+		self.window.append(current)
+		first_active = unsafe { &terminal.PageNode(current) }
+
+		if remaining <= usize(current.data.size.rows) {
+			node = current.prev
+			break
+		}
+		remaining -= usize(current.data.size.rows)
+		node = current.prev
+	}
+
+	// Include preceding soft-wrapped pages so a match that crosses the
+	// history/active boundary remains discoverable.
+	overlap_needed := if self.window.needle.len > 0 { self.window.needle.len - 1 } else { 0 }
+	for {
+		current := node or { break }
+		if current.data.size.rows == 0
+			|| !current.data.get_row(int(current.data.size.rows) - 1).wrap {
+			break
+		}
+		added := self.window.append(current)
+		if added >= overlap_needed {
+			break
+		}
+		node = current.prev
+	}
+
+	return first_active
 }
 
 // Search for the next match in the active area.
