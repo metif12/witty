@@ -28,8 +28,8 @@ pub mut:
 // init_fill creates a StyleStatus with all styles set to the given value.
 pub fn StyleStatus.init_fill(val bool) StyleStatus {
 	return StyleStatus{
-		bold:        val
-		italic:      val
+		bold: val
+		italic: val
 		bold_italic: val
 	}
 }
@@ -48,9 +48,15 @@ pub fn (s &StyleStatus) get(style FontStyle) bool {
 pub fn (mut s StyleStatus) set(style FontStyle, val bool) {
 	match style {
 		.regular {} // Regular cannot be disabled
-		.bold { s.bold = val }
-		.italic { s.italic = val }
-		.bold_italic { s.bold_italic = val }
+		.bold {
+			s.bold = val
+		}
+		.italic {
+			s.italic = val
+		}
+		.bold_italic {
+			s.bold_italic = val
+		}
 	}
 }
 
@@ -109,7 +115,7 @@ fn (mut dc DescriptorCache) put(desc Descriptor, idx ?Index) {
 	if i := idx {
 		dc.entries[key] = DescriptorCacheEntry{
 			has_index: true
-			index:     i
+			index: i
 		}
 	} else {
 		dc.entries[key] = DescriptorCacheEntry{
@@ -119,12 +125,11 @@ fn (mut dc DescriptorCache) put(desc Descriptor, idx ?Index) {
 }
 
 // ============================================================
-// SpriteFace (stub)
+// SpriteFace
 // ============================================================
 
 // SpriteFace handles rendering of built-in sprite glyphs (box drawing
 // characters, underlines, cursors, etc.) using 2D graphics APIs.
-// XTODO: full SpriteFace implementation in a separate file.
 pub struct SpriteFace {
 pub mut:
 	metrics Metrics
@@ -133,32 +138,8 @@ pub mut:
 // has_codepoint returns true if this sprite face can render the given
 // codepoint with the optional presentation.
 pub fn (sf &SpriteFace) has_codepoint(cp u32, p ?Presentation) bool {
-	// XTODO: check against actual sprite glyph ranges (box drawing,
-	// block elements, braille, legacy computing symbols, etc.)
-	// For now, check a subset of common sprite codepoint ranges.
 	_ = p
-
-	// Box Drawing: U+2500..U+257F
-	if cp >= 0x2500 && cp <= 0x257F {
-		return true
-	}
-	// Block Elements: U+2580..U+259F
-	if cp >= 0x2580 && cp <= 0x259F {
-		return true
-	}
-	// Braille Patterns: U+2800..U+28FF
-	if cp >= 0x2800 && cp <= 0x28FF {
-		return true
-	}
-	// Symbols for Legacy Computing: U+1FB00..U+1FB3B
-	if cp >= 0x1FB00 && cp <= 0x1FB3B {
-		return true
-	}
-	// Powerline symbols
-	if cp >= 0xE0B0 && cp <= 0xE0B3 {
-		return true
-	}
-	return false
+	return sprite_face_has_codepoint(cp)
 }
 
 // render_glyph renders a sprite glyph into the given atlas.
@@ -177,6 +158,20 @@ pub fn (sf &SpriteFace) render_glyph(mut atlas Atlas, glyph_index u32, opts Rend
 // default_fallback_adjustment is the size adjustment used for
 // fallback fonts discovered via font discovery.
 pub const default_fallback_adjustment = SizeAdjustment.none_
+
+// is_emoji_presentation is generated from the Emoji_Presentation property in
+// the exact uucode/Unicode data revision pinned by the matching Ghostty
+// commit. Adjacent ranges are coalesced without changing membership.
+fn is_emoji_presentation(cp u32) bool {
+	return match cp {
+		0x231a...0x231b, 0x23e9...0x23ec, 0x23f0, 0x23f3, 0x25fd...0x25fe, 0x2614...0x2615, 0x2648...0x2653, 0x267f, 0x2693, 0x26a1, 0x26aa...0x26ab, 0x26bd...0x26be, 0x26c4...0x26c5, 0x26ce, 0x26d4, 0x26ea, 0x26f2...0x26f3, 0x26f5, 0x26fa, 0x26fd, 0x2705, 0x270a...0x270b, 0x2728, 0x274c, 0x274e, 0x2753...0x2755, 0x2757, 0x2795...0x2797, 0x27b0, 0x27bf, 0x2b1b...0x2b1c, 0x2b50, 0x2b55, 0x1f004, 0x1f0cf, 0x1f18e, 0x1f191...0x1f19a, 0x1f1e6...0x1f1ff, 0x1f201, 0x1f21a, 0x1f22f, 0x1f232...0x1f236, 0x1f238...0x1f23a, 0x1f250...0x1f251, 0x1f300...0x1f320, 0x1f32d...0x1f335, 0x1f337...0x1f37c, 0x1f37e...0x1f393, 0x1f3a0...0x1f3ca, 0x1f3cf...0x1f3d3, 0x1f3e0...0x1f3f0, 0x1f3f4, 0x1f3f8...0x1f43e, 0x1f440, 0x1f442...0x1f4fc, 0x1f4ff...0x1f53d, 0x1f54b...0x1f54e, 0x1f550...0x1f567, 0x1f57a, 0x1f595...0x1f596, 0x1f5a4, 0x1f5fb...0x1f64f, 0x1f680...0x1f6c5, 0x1f6cc, 0x1f6d0...0x1f6d2, 0x1f6d5...0x1f6d7, 0x1f6dc...0x1f6df, 0x1f6eb...0x1f6ec, 0x1f6f4...0x1f6fc, 0x1f7e0...0x1f7eb, 0x1f7f0, 0x1f90c...0x1f93a, 0x1f93c...0x1f945, 0x1f947...0x1f9ff, 0x1fa70...0x1fa7c, 0x1fa80...0x1fa89, 0x1fa8f...0x1fac6, 0x1face...0x1fadc, 0x1fadf...0x1fae9, 0x1faf0...0x1faf8 {
+			true
+		}
+		else {
+			false
+		}
+	}
+}
 
 // ============================================================
 // CodepointResolver
@@ -198,9 +193,7 @@ pub mut:
 
 	// If discovery is available, we'll look up fonts where we can't find
 	// the codepoint. This can be set after initialization.
-	// XTODO: use real Discover type when available. Currently a stub
-	// pointer since font discovery requires platform-specific backends.
-	discover voidptr = unsafe { nil }
+	discover &Discover = unsafe { nil }
 
 	// A map of codepoints to font requests for codepoint-level overrides.
 	// The memory associated with the map is owned by the caller and is not
@@ -296,10 +289,7 @@ pub fn (mut self CodepointResolver) get_index(cp u32, style FontStyle, p ?Presen
 	p_mode := if pr := p {
 		PresentationMode.explicit(pr)
 	} else {
-		// XTODO: use uucode.get(.is_emoji_presentation, cp) when
-		// Unicode character database is available. For now, default
-		// to text presentation.
-		PresentationMode.default_(.text)
+		PresentationMode.default_(if is_emoji_presentation(cp) { .emoji } else { .text })
 	}
 
 	// If we can find the exact value, then return that.
@@ -317,18 +307,33 @@ pub fn (mut self CodepointResolver) get_index(cp u32, style FontStyle, p ?Presen
 	}
 
 	// If we are regular, try looking for a fallback using discovery.
-	if style == .regular {
-		// XTODO: Font discovery fallback. When discovery is available:
-		// 1. Get load_options from collection
-		// 2. Create a discovery iterator with the codepoint and style info
-		// 3. Iterate through discovered faces
-		// 4. Check if discovered face has the codepoint with correct presentation
-		// 5. Add the face to the collection as a deferred fallback
-		// 6. Return the new index
-		//
-		// For now, discovery is not available so we skip this step.
-		if self.discover != unsafe { nil } {
-			// Discovery would happen here
+	if style == .regular && self.discover != unsafe { nil } {
+		if load_opts := self.collection.load_options {
+			desc := Descriptor{
+				codepoint: cp
+				size: load_opts.size.points
+				monospace: false
+			}
+			mut it := self.discover.discover_fallback(desc) or {
+				return self.collection.get_index(cp, .regular, PresentationMode.any())
+			}
+			defer { it.deinit() }
+			for {
+				mut deferred := it.next() or { break }
+				if !deferred.has_codepoint(cp, p_mode.requested()) {
+					deferred.deinit()
+					continue
+				}
+				idx := self.collection.add_deferred(deferred, AddOptions{
+					style: style
+					fallback: true
+					size_adjustment: default_fallback_adjustment
+				}) or {
+					deferred.deinit()
+					break
+				}
+				return idx
+			}
 		}
 	}
 
@@ -346,10 +351,9 @@ pub fn (mut self CodepointResolver) get_index(cp u32, style FontStyle, p ?Presen
 // get_index_codepoint_override checks if the codepoint is in the map of
 // codepoint overrides, finds the override font, and returns it.
 fn (mut self CodepointResolver) get_index_codepoint_override(cp u32) ?Index {
-	// XTODO: discovery-based codepoint override lookup.
-	// If discovery is disabled then we can't do codepoint overrides
-	// since the override is based on discovery to find the font.
-	// For now, discovery is always treated as disabled.
+	if self.discover == unsafe { nil } {
+		return none
+	}
 
 	// Get our codepoint map. If we have no map set then we have no
 	// codepoint overrides and we're done.
@@ -377,16 +381,32 @@ fn (mut self CodepointResolver) get_index_codepoint_override(cp u32) ?Index {
 		return none
 	}
 
-	// Slow path: we have to find this descriptor and load the font.
-	// XTODO: needs font discovery (Discover) to be implemented.
-	// When discovery is available:
-	// 1. Use discover.discover(desc) to get an iterator
-	// 2. Get the first matching face
-	// 3. Add it to the collection as a deferred face
-	// 4. Cache the descriptor -> index mapping
-	// 5. Return the index
-	//
-	// For now, we add a null (negative) cache entry and return none.
+	// Slow path: discover the requested family and retain the first result
+	// that actually covers this codepoint.
+	mut query := desc.clone()
+	query.codepoint = cp
+	mut it := self.discover.discover(query) or {
+		self.descriptor_cache.put(desc, none)
+		return none
+	}
+	defer { it.deinit() }
+	for {
+		mut deferred := it.next() or { break }
+		if !deferred.has_codepoint(cp, none) {
+			deferred.deinit()
+			continue
+		}
+		idx := self.collection.add_deferred(deferred, AddOptions{
+			style: .regular
+			fallback: false
+			size_adjustment: default_fallback_adjustment
+		}) or {
+			deferred.deinit()
+			break
+		}
+		self.descriptor_cache.put(desc, idx)
+		return idx
+	}
 	self.descriptor_cache.put(desc, none)
 	return none
 }

@@ -56,9 +56,9 @@ fn test_gridset_key_with_families() {
 
 fn test_gridset_key_descriptors_for_style() {
 	cfg := GridSetDerivedConfig{
-		font_family:             ['Regular Font']
-		font_family_bold:        ['Bold Font']
-		font_family_italic:      ['Italic Font']
+		font_family: ['Regular Font']
+		font_family_bold: ['Bold Font']
+		font_family_italic: ['Italic Font']
 		font_family_bold_italic: ['BoldItalic Font']
 	}
 	k := GridSetKey.init(&cfg, DesiredSize{ points: 12 })
@@ -85,7 +85,7 @@ fn test_gridset_key_metric_modifiers() {
 	cfg1 := GridSetDerivedConfig{
 		adjust_cell_width: MetricsModifier{
 			is_percent: true
-			percent:    1.2
+			percent: 1.2
 		}
 	}
 	cfg2 := GridSetDerivedConfig{}
@@ -129,37 +129,39 @@ fn test_gridset_derived_config_defaults() {
 }
 
 fn test_shared_grid_set_init_deinit() {
-	// XTODO: needs real FreeType library for full test.
-	// mut set := SharedGridSet.init() or { return }
-	// defer { set.deinit() }
-	// assert set.count() == 0
+	mut set := SharedGridSet.init() or {
+		assert false, err.msg()
+		return
+	}
+	defer { set.deinit() }
+	assert set.count() == 0
 }
 
 fn test_shared_grid_set_ref_deref() {
-	// XTODO: needs real FreeType library and embedded fonts.
-	// When available:
-	//
-	// mut set := SharedGridSet.init() or { return }
-	// defer { set.deinit() }
-	//
-	// cfg := GridSetDerivedConfig{}
-	//
-	// // Get a grid for the given config
-	// key1, grid1 := set.ref(&cfg, DesiredSize{ points: 12 }) or { return }
-	// assert set.count() == 1
-	//
-	// // Get another
-	// key2, grid2 := set.ref(&cfg, DesiredSize{ points: 12 }) or { return }
-	// assert set.count() == 1
-	//
-	// // They should be pointer equivalent
-	// assert voidptr(grid1) == voidptr(grid2)
-	//
-	// // If I deref grid2 then we should still have a count of 1
-	// set.deref(key2)
-	// assert set.count() == 1
-	//
-	// // If I deref grid1 then we should have a count of 0
-	// set.deref(key1)
-	// assert set.count() == 0
+	mut set := SharedGridSet.init() or {
+		assert false, err.msg()
+		return
+	}
+	defer { set.deinit() }
+
+	cfg := GridSetDerivedConfig{}
+
+	key1, grid1 := set.ref(&cfg, DesiredSize{ points: 12 }) or {
+		assert false, err.msg()
+		return
+	}
+	assert set.count() == 1
+
+	key2, grid2 := set.ref(&cfg, DesiredSize{ points: 12 }) or {
+		assert false, err.msg()
+		return
+	}
+	assert set.count() == 1
+	assert voidptr(grid1) == voidptr(grid2)
+
+	set.deref(key2)
+	assert set.count() == 1
+
+	set.deref(key1)
+	assert set.count() == 0
 }

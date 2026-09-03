@@ -1,5 +1,7 @@
 module font
 
+import sync
+
 // This structure contains a set of SharedGrid structures keyed by
 // unique font configuration.
 //
@@ -27,12 +29,13 @@ pub mut:
 	// The font library that is used for all font groups.
 	font_lib Library
 
-	// Font discovery mechanism.
-	// XTODO: use real Discover type when available.
-	font_discover voidptr = unsafe { nil }
+	// Font discovery is initialized lazily because Fontconfig/CoreText setup
+	// is relatively expensive and some library users only use embedded faces.
+	font_discover             Discover
+	font_discover_initialized bool
 
 	// Lock to protect multi-threaded access to the map.
-	// XTODO: use sync.Mutex when V has one; for now single-threaded.
+	lock &sync.Mutex = unsafe { nil }
 }
 
 // Initialize a new SharedGridSet.
@@ -41,6 +44,7 @@ pub fn SharedGridSet.init() !SharedGridSet {
 
 	return SharedGridSet{
 		font_lib: font_lib
+		lock: sync.new_mutex()
 	}
 }
 
@@ -52,14 +56,18 @@ pub fn (mut self SharedGridSet) deinit() {
 	}
 	self.grids = []
 
-	// XTODO: deinit font_discover if non-null
+	if self.font_discover_initialized {
+		self.font_discover.deinit()
+		self.font_discover_initialized = false
+	}
 
 	self.font_lib.deinit()
 }
 
 // Returns the number of cached grids.
 pub fn (self &SharedGridSet) count() int {
-	// XTODO: use lock for thread safety
+	self.lock.lock()
+	defer { self.lock.unlock() }
 	return self.grids.len
 }
 
@@ -74,7 +82,8 @@ pub fn (self &SharedGridSet) count() int {
 pub fn (mut self SharedGridSet) ref(config &GridSetDerivedConfig, font_size DesiredSize) !(GridSetKey, &SharedGrid) {
 	mut key := GridSetKey.init(config, font_size)
 
-	// XTODO: use lock for thread safety
+	self.lock.lock()
+	defer { self.lock.unlock() }
 	hashcode := key.hashcode()
 
 	// Check if we already have a grid for this config
@@ -102,8 +111,9 @@ pub fn (mut self SharedGridSet) ref(config &GridSetDerivedConfig, font_size Desi
 
 	// Init our resolver which just requires setting fields.
 	resolver := CodepointResolver{
-		collection:   c
-		styles:       styles
+		collection: c
+		styles: styles
+		discover: self.discover()!
 		codepoint_map: key.codepoint_map
 	}
 
@@ -111,9 +121,9 @@ pub fn (mut self SharedGridSet) ref(config &GridSetDerivedConfig, font_size Desi
 	grid := &sg
 
 	self.grids << ReffedGridEntry{
-		key:       key
-		hashcode:  hashcode
-		grid:      grid
+		key: key
+		hashcode: hashcode
+		grid: grid
 		ref_count: 1
 	}
 
@@ -128,8 +138,8 @@ fn (mut self SharedGridSet) collection(key &GridSetKey, size DesiredSize, config
 	// - metric_modifiers is owned by the key which is freed only when
 	//   the ref count for this grid reaches zero.
 	load_options := LoadOptions{
-		library:             self.font_lib
-		size:                size
+		library: self.font_lib
+		size: size
 		freetype_load_flags: key.freetype_load_flags
 	}
 
@@ -137,16 +147,36 @@ fn (mut self SharedGridSet) collection(key &GridSetKey, size DesiredSize, config
 	c.load_options = load_options
 	c.metric_modifiers = key.metric_modifiers
 
-	// XTODO: Search for fonts using discovery (fontconfig / CoreText).
-	// When Discover != void:
-	//   - For each style (regular, bold, italic, bold_italic):
-	//     - Get descriptors from key.descriptors_for_style(style)
-	//     - Use discovery to find matching fonts
-	//     - Add deferred faces to collection
-	//   - If style != regular and desc.variations.len > 0 and font not found:
-	//     - Retry with bold=false, italic=false
-	//
-	// For now, discovery is not available so we skip this step.
+	// Search configured families in priority order for every style.
+	mut disco := self.discover()!
+	for style in [FontStyle.regular, .bold, .italic, .bold_italic] {
+		for desc in key.descriptors_for_style(style) {
+			if face := discover_loaded_face(disco, desc, self.font_lib, load_options) {
+				c.add(face, AddOptions{
+					style: style
+					fallback: false
+					size_adjustment: .none_
+				})!
+				continue
+			}
+
+			// Variable fonts sometimes omit the bold/italic symbolic trait even
+			// though their axes can produce the requested style. Retry without
+			// the trait filter in that case, exactly as Ghostty does.
+			if style != .regular && desc.variations.len > 0 {
+				mut retry := desc.clone()
+				retry.bold = false
+				retry.italic = false
+				if face := discover_loaded_face(disco, retry, self.font_lib, load_options) {
+					c.add(face, AddOptions{
+						style: style
+						fallback: false
+						size_adjustment: .none_
+					})!
+				}
+			}
+		}
+	}
 
 	// Complete our styles to ensure we have something to satisfy every
 	// possible style request. We do this before adding our built-in font
@@ -156,15 +186,15 @@ fn (mut self SharedGridSet) collection(key &GridSetKey, size DesiredSize, config
 
 	// Our built-in font will be used as a backup
 	_ = c.add(Face.init_mem(self.font_lib, embedded_variable, load_options.face_options())!, AddOptions{
-		style:           .regular
-		fallback:        true
+		style: .regular
+		fallback: true
 		size_adjustment: default_fallback_adjustment
 	})!
 
 	// Bold variant with weight=700
 	bold_idx := c.add(Face.init_mem(self.font_lib, embedded_variable, load_options.face_options())!, AddOptions{
-		style:           .bold
-		fallback:        true
+		style: .bold
+		fallback: true
 		size_adjustment: default_fallback_adjustment
 	})!
 	mut bold_face := c.get_face(bold_idx)!
@@ -177,15 +207,15 @@ fn (mut self SharedGridSet) collection(key &GridSetKey, size DesiredSize, config
 
 	// Italic variant
 	_ = c.add(Face.init_mem(self.font_lib, embedded_variable_italic, load_options.face_options())!, AddOptions{
-		style:           .italic
-		fallback:        true
+		style: .italic
+		fallback: true
 		size_adjustment: default_fallback_adjustment
 	})!
 
 	// Bold-italic variant with weight=700
 	bold_italic_idx := c.add(Face.init_mem(self.font_lib, embedded_variable_italic, load_options.face_options())!, AddOptions{
-		style:           .bold_italic
-		fallback:        true
+		style: .bold_italic
+		fallback: true
 		size_adjustment: default_fallback_adjustment
 	})!
 	mut bold_italic_face := c.get_face(bold_italic_idx)!
@@ -198,47 +228,80 @@ fn (mut self SharedGridSet) collection(key &GridSetKey, size DesiredSize, config
 
 	// Nerd-font symbols fallback.
 	_ = c.add(Face.init_mem(self.font_lib, embedded_symbols_nerd_font, load_options.face_options())!, AddOptions{
-		style:           .regular
-		fallback:        true
+		style: .regular
+		fallback: true
 		// No size adjustment for the symbols font.
 		size_adjustment: .none_
 	})!
 
-	// XTODO: On macOS, always search for and add the Apple Emoji font
-	// as our preferred emoji font for fallback. We do this in case
-	// people add other emoji fonts to their system, we always want to
-	// prefer the official one. Users can override this by explicitly
-	// specifying a font-family for emoji.
-	// Requires CoreText discovery to be available.
-
-	// Emoji fallback. We don't include this on Mac since Mac is expected
-	// to always have the Apple Emoji available on the system.
-	// XTODO: conditionally include based on platform detection.
-	_ = c.add(Face.init_mem(self.font_lib, embedded_emoji, load_options.face_options())!, AddOptions{
-		style:           .regular
-		fallback:        true
-		// No size adjustment for emojis.
-		size_adjustment: .none_
-	})!
-	_ = c.add(Face.init_mem(self.font_lib, embedded_emoji_text, load_options.face_options())!, AddOptions{
-		style:           .regular
-		fallback:        true
-		// No size adjustment for emojis.
-		size_adjustment: .none_
-	})!
+	// Prefer the platform emoji face on macOS. Other targets use the
+	// bundled color and text emoji faces.
+	$if macos {
+		if face := discover_loaded_face(disco, Descriptor{
+			family: 'Apple Color Emoji'
+			size: size.points
+		}, self.font_lib, load_options) {
+			c.add(face, AddOptions{
+				style: .regular
+				fallback: true
+				size_adjustment: .none_
+			})!
+		}
+	} $else {
+		_ = c.add(Face.init_mem(self.font_lib, embedded_emoji, load_options.face_options())!, AddOptions{
+			style: .regular
+			fallback: true
+			size_adjustment: .none_
+		})!
+		_ = c.add(Face.init_mem(self.font_lib, embedded_emoji_text, load_options.face_options())!, AddOptions{
+			style: .regular
+			fallback: true
+			size_adjustment: .none_
+		})!
+	}
 
 	return c
+}
+
+// Initialize discovery once for the lifetime of the set. Fontconfig in
+// particular is not safe to repeatedly tear down and initialize.
+fn (mut self SharedGridSet) discover() !&Discover {
+	if !self.font_discover_initialized {
+		self.font_discover = Discover.init()!
+		self.font_discover_initialized = true
+	}
+	return &self.font_discover
+}
+
+// Resolve a descriptor and eagerly load the first usable result. Ghostty can
+// retain native discovery charset objects for deferred matching; Witty keeps
+// the same lookup order but loads here so the complete face charmap is
+// available on every backend.
+fn discover_loaded_face(disco &Discover, desc Descriptor, library Library, load_options LoadOptions) ?Face {
+	mut it := disco.discover(desc) or { return none }
+	defer { it.deinit() }
+	for {
+		mut deferred := it.next() or { return none }
+		face := deferred.load(library, load_options.face_options()) or {
+			deferred.deinit()
+			continue
+		}
+		deferred.deinit()
+		return face
+	}
+	return none
 }
 
 // Decrement the ref count for the given key. If the ref count is zero,
 // the grid will be deinitialized and removed from the map.
 pub fn (mut self SharedGridSet) deref(key GridSetKey) {
-	// XTODO: use lock for thread safety
+	self.lock.lock()
+	defer { self.lock.unlock() }
 	hashcode := key.hashcode()
 
 	for i, mut entry in self.grids {
 		if entry.hashcode == hashcode {
-			assert(entry.ref_count >= 1)
+			assert entry.ref_count >= 1
 
 			// If we have more than one reference, decrement and return.
 			if entry.ref_count > 1 {
@@ -279,34 +342,34 @@ mut:
 // config-specific repeatable types. In V, we use simpler types.
 pub struct GridSetDerivedConfig {
 pub mut:
-	font_family             []string
-	font_family_bold        []string
-	font_family_italic      []string
-	font_family_bold_italic []string
-	font_style              GridSetFontStyleConfig = .default_
-	font_style_bold         GridSetFontStyleConfig = .default_
-	font_style_italic       GridSetFontStyleConfig = .default_
-	font_style_bold_italic  GridSetFontStyleConfig = .default_
-	font_variation             []Variation
-	font_variation_bold        []Variation
-	font_variation_italic      []Variation
-	font_variation_bold_italic []Variation
-	font_codepoint_map      CodepointMap
-	font_synthetic_style    FontSyntheticStyle
-	adjust_cell_width             ?MetricsModifier
-	adjust_cell_height            ?MetricsModifier
-	adjust_font_baseline          ?MetricsModifier
-	adjust_underline_position     ?MetricsModifier
-	adjust_underline_thickness    ?MetricsModifier
-	adjust_strikethrough_position ?MetricsModifier
+	font_family                    []string
+	font_family_bold               []string
+	font_family_italic             []string
+	font_family_bold_italic        []string
+	font_style                     GridSetFontStyleConfig = .default_
+	font_style_bold                GridSetFontStyleConfig = .default_
+	font_style_italic              GridSetFontStyleConfig = .default_
+	font_style_bold_italic         GridSetFontStyleConfig = .default_
+	font_variation                 []Variation
+	font_variation_bold            []Variation
+	font_variation_italic          []Variation
+	font_variation_bold_italic     []Variation
+	font_codepoint_map             CodepointMap
+	font_synthetic_style           FontSyntheticStyle
+	adjust_cell_width              ?MetricsModifier
+	adjust_cell_height             ?MetricsModifier
+	adjust_font_baseline           ?MetricsModifier
+	adjust_underline_position      ?MetricsModifier
+	adjust_underline_thickness     ?MetricsModifier
+	adjust_strikethrough_position  ?MetricsModifier
 	adjust_strikethrough_thickness ?MetricsModifier
-	adjust_overline_position      ?MetricsModifier
-	adjust_overline_thickness     ?MetricsModifier
-	adjust_cursor_thickness       ?MetricsModifier
-	adjust_cursor_height          ?MetricsModifier
-	adjust_box_thickness          ?MetricsModifier
-	adjust_icon_height            ?MetricsModifier
-	freetype_load_flags     FreetypeLoadFlags = freetype_load_flags_default
+	adjust_overline_position       ?MetricsModifier
+	adjust_overline_thickness      ?MetricsModifier
+	adjust_cursor_thickness        ?MetricsModifier
+	adjust_cursor_height           ?MetricsModifier
+	adjust_box_thickness           ?MetricsModifier
+	adjust_icon_height             ?MetricsModifier
+	freetype_load_flags            FreetypeLoadFlags = freetype_load_flags_default
 }
 
 // deinit releases resources.
@@ -376,9 +439,9 @@ pub fn GridSetKey.init(config_src &GridSetDerivedConfig, font_size DesiredSize) 
 	// Regular family descriptors
 	for family in config_src.font_family {
 		descriptors << Descriptor{
-			family:     family
-			style:      config_src.font_style.name_value()
-			size:       font_size.points
+			family: family
+			style: config_src.font_style.name_value()
+			size: font_size.points
 			variations: config_src.font_variation
 		}
 	}
@@ -395,10 +458,10 @@ pub fn GridSetKey.init(config_src &GridSetDerivedConfig, font_size DesiredSize) 
 	for family in config_src.font_family_bold {
 		bold_style := config_src.font_style_bold.name_value()
 		descriptors << Descriptor{
-			family:     family
-			style:      bold_style
-			size:       font_size.points
-			bold:       bold_style == none
+			family: family
+			style: bold_style
+			size: font_size.points
+			bold: bold_style == none
 			variations: config_src.font_variation_bold
 		}
 	}
@@ -407,10 +470,10 @@ pub fn GridSetKey.init(config_src &GridSetDerivedConfig, font_size DesiredSize) 
 	for family in config_src.font_family_italic {
 		italic_style := config_src.font_style_italic.name_value()
 		descriptors << Descriptor{
-			family:     family
-			style:      italic_style
-			size:       font_size.points
-			italic:     italic_style == none
+			family: family
+			style: italic_style
+			size: font_size.points
+			italic: italic_style == none
 			variations: config_src.font_variation_italic
 		}
 	}
@@ -419,11 +482,11 @@ pub fn GridSetKey.init(config_src &GridSetDerivedConfig, font_size DesiredSize) 
 	for family in config_src.font_family_bold_italic {
 		bi_style := config_src.font_style_bold_italic.name_value()
 		descriptors << Descriptor{
-			family:     family
-			style:      bi_style
-			size:       font_size.points
-			bold:       bi_style == none
-			italic:     bi_style == none
+			family: family
+			style: bi_style
+			size: font_size.points
+			bold: bi_style == none
+			italic: bi_style == none
 			variations: config_src.font_variation_bold_italic
 		}
 	}
@@ -483,11 +546,11 @@ pub fn GridSetKey.init(config_src &GridSetDerivedConfig, font_size DesiredSize) 
 	bold_italic_offset := italic_offset + config_src.font_family_bold_italic.len
 
 	return GridSetKey{
-		descriptors:     descriptors
-		style_offsets:   [regular_offset, bold_offset, italic_offset, bold_italic_offset]!
-		codepoint_map:   codepoint_map
+		descriptors: descriptors
+		style_offsets: [regular_offset, bold_offset, italic_offset, bold_italic_offset]!
+		codepoint_map: codepoint_map
 		metric_modifiers: metric_modifiers
-		font_size:       font_size
+		font_size: font_size
 		freetype_load_flags: config_src.freetype_load_flags
 	}
 }
@@ -540,11 +603,9 @@ pub fn (self &GridSetKey) hashcode() u64 {
 
 	// Hash metric modifier values
 	if self.metric_modifiers.count() > 0 {
-		for mk in [MetricsKey.cell_width, .cell_height, .cell_baseline,
-			.underline_position, .underline_thickness,
-			.strikethrough_position, .strikethrough_thickness,
-			.overline_position, .overline_thickness,
-			.box_thickness, .cursor_height, .icon_height,
+		for mk in [MetricsKey.cell_width, .cell_height, .cell_baseline, .underline_position,
+			.underline_thickness, .strikethrough_position, .strikethrough_thickness,
+			.overline_position, .overline_thickness, .box_thickness, .cursor_height, .icon_height,
 			.cursor_thickness] {
 			if m := self.metric_modifiers.get(mk) {
 				state = state * 31 + u64(int(mk))
@@ -591,9 +652,9 @@ pub:
 	// If true, this is a percent modifier; otherwise absolute.
 	is_percent bool
 	// The percentage value (1.2 = 20% increase). Used when is_percent == true.
-	percent    f64
+	percent f64
 	// The absolute delta value. Used when is_percent == false.
-	absolute   i32
+	absolute i32
 }
 
 // hash returns a hash value for this modifier.
@@ -626,12 +687,12 @@ pub fn MetricsModifier.parse(input string) !MetricsModifier {
 		if percent <= -1.0 {
 			return MetricsModifier{
 				is_percent: true
-				percent:    0
+				percent: 0
 			}
 		}
 		return MetricsModifier{
 			is_percent: true
-			percent:    1.0 + percent
+			percent: 1.0 + percent
 		}
 	}
 
@@ -641,7 +702,7 @@ pub fn MetricsModifier.parse(input string) !MetricsModifier {
 	}
 	return MetricsModifier{
 		is_percent: false
-		absolute:   i32(n)
+		absolute: i32(n)
 	}
 }
 

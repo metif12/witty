@@ -480,7 +480,6 @@ module font
 //
 // --- Original Ghostty Comments End: src/font/face.zig
 
-
 // Face represents a single font face. A single font face has a single set
 // of properties associated with it such as style, weight, etc.
 //
@@ -503,7 +502,7 @@ import sync
 // A Library can be shared across multiple faces and surfaces.
 pub struct Library {
 pub mut:
-	lib freetype.Library
+	lib   freetype.Library
 	mutex &sync.Mutex = unsafe { nil }
 }
 
@@ -530,15 +529,15 @@ pub fn (mut l Library) deinit() {
 pub struct FreetypeLoadFlags {
 pub:
 	// Whether to enable hinting.
-	hinting        bool = true
+	hinting bool = true
 	// Whether to force the auto-hinter.
 	force_autohint bool
 	// Whether to enable the auto-hinter.
-	autohint       bool = true
+	autohint bool = true
 	// Whether to render glyphs in monochrome.
-	monochrome     bool
+	monochrome bool
 	// Whether to use light hinting mode.
-	light          bool
+	light bool
 }
 
 // Default load flags.
@@ -552,7 +551,7 @@ pub const freetype_load_flags_default = FreetypeLoadFlags{}
 pub struct FaceOptions {
 pub mut:
 	// The desired font size.
-	size                DesiredSize
+	size DesiredSize
 	// Freetype load flags to use when loading glyphs.
 	freetype_load_flags FreetypeLoadFlags = freetype_load_flags_default
 }
@@ -577,8 +576,8 @@ pub fn VariationId.init(v string) VariationId {
 
 // str returns the 4-character tag representation.
 pub fn (id VariationId) str() string {
-	bytes := [u8((id.value >> 24) & 0xFF), u8((id.value >> 16) & 0xFF),
-		u8((id.value >> 8) & 0xFF), u8(id.value & 0xFF)]
+	bytes := [u8((id.value >> 24) & 0xFF), u8((id.value >> 16) & 0xFF), u8((id.value >> 8) & 0xFF),
+		u8(id.value & 0xFF)]
 	return bytes.bytestr()
 }
 
@@ -586,7 +585,7 @@ pub fn (id VariationId) str() string {
 pub struct Variation {
 pub:
 	// The 4-byte axis identifier (e.g., 'wght', 'wdth').
-	id    VariationId
+	id VariationId
 	// The value for this axis.
 	value f64
 }
@@ -614,31 +613,31 @@ pub mut:
 pub struct FaceMetrics {
 pub mut:
 	// Pixels per em unit.
-	px_per_em               f64
+	px_per_em f64
 	// Width of the widest visible ASCII character.
-	cell_width              f64
+	cell_width f64
 	// Ascent from baseline to top of em square (positive).
-	ascent                  f64
+	ascent f64
 	// Descent from baseline to bottom (negative).
-	descent                 f64
+	descent f64
 	// Line gap (additional leading between lines).
-	line_gap                f64
+	line_gap f64
 	// Underline position (from baseline, negative = below).
-	underline_position      ?f64
+	underline_position ?f64
 	// Underline thickness.
-	underline_thickness     ?f64
+	underline_thickness ?f64
 	// Strikethrough position (from baseline).
-	strikethrough_position  ?f64
+	strikethrough_position ?f64
 	// Strikethrough thickness.
 	strikethrough_thickness ?f64
 	// Cap height (height of capital letters like 'H').
-	cap_height              ?f64
+	cap_height ?f64
 	// x-height (height of lowercase letters like 'x').
-	ex_height               ?f64
+	ex_height ?f64
 	// Height of the bounding box of visible ASCII characters.
-	ascii_height            ?f64
+	ascii_height ?f64
 	// Advance width of '水' (CJK ideograph), for ic-width sizing.
-	ic_width                ?f64
+	ic_width ?f64
 }
 
 // line_height returns the total line height (ascent - descent + gap).
@@ -743,7 +742,7 @@ pub fn (m FaceMetrics) strikethrough_position_val() f64 {
 pub struct DeferredFace {
 pub mut:
 	// The path to the font file, if file-based.
-	path       string
+	path string
 	// The face index within the font file.
 	face_index i32
 	// Codepoint coverage map used for has_codepoint() without having to
@@ -752,11 +751,16 @@ pub mut:
 	// DeferredFace.hasCodepoint. A codepoint maps to true if this face
 	// covers it. Codepoints not present in the map are not covered.
 	codepoints map[u32]bool
+	// Presentation advertised by discovery metadata, when known.
+	presentation ?Presentation
+	// Variation axes selected by discovery/configuration.
+	variations []Variation
 }
 
 // deinit releases deferred face resources.
 pub fn (mut d DeferredFace) deinit() {
 	d.codepoints = map[u32]bool{}
+	d.variations = []
 }
 
 // load fully loads this deferred face into a Face.
@@ -764,7 +768,14 @@ pub fn (d DeferredFace) load(lib Library, opts FaceOptions) !Face {
 	if d.path.len == 0 {
 		return error('deferred face has no file path')
 	}
-	return Face.init_file(lib, d.path, d.face_index, opts)
+	mut face := Face.init_file(lib, d.path, d.face_index, opts)!
+	if d.variations.len > 0 {
+		face.set_variations(d.variations, opts) or {
+			face.deinit()
+			return err
+		}
+	}
+	return face
 }
 
 // has_codepoint returns true if this face can satisfy the given codepoint
@@ -780,8 +791,15 @@ pub fn (d DeferredFace) has_codepoint(cp u32, presentation ?Presentation) bool {
 	// If we have coverage data, consult it. A codepoint is covered only
 	// if it is present in the map with a true value.
 	if d.codepoints.len > 0 {
-		_ = presentation
-		return d.codepoints[cp] or { false }
+		if !d.codepoints[cp] {
+			return false
+		}
+		if expected := presentation {
+			if actual := d.presentation {
+				return expected == actual
+			}
+		}
+		return true
 	}
 
 	// A deferred face without discovery coverage cannot prove support without
@@ -800,24 +818,24 @@ pub fn (d DeferredFace) has_codepoint(cp u32, presentation ?Presentation) bool {
 pub struct Face {
 pub mut:
 	// Our Library.
-	lib                                 Library
+	lib Library
 	// Our font face.
-	face                                freetype.Face
+	face freetype.Face
 	// Harfbuzz font corresponding to this face.
-	hb_font                             harfbuzz.Font
+	hb_font harfbuzz.Font
 	// FreeType exposes one mutable glyph slot per face. Rendering and metrics
 	// measurement therefore serialize access to that slot.
-	ft_mutex                            &sync.Mutex = unsafe { nil }
+	ft_mutex &sync.Mutex = unsafe { nil }
 	// Freetype load flags for this font face.
-	load_flags                          FreetypeLoadFlags
+	load_flags FreetypeLoadFlags
 	// Set quirks.disableDefaultFontFeatures.
 	quirks_disable_default_font_features bool
 	// Set to true to apply a synthetic italic to the face.
-	synthetic_italic                    bool
+	synthetic_italic bool
 	// Set to true to apply a synthetic bold to the face.
-	synthetic_bold                      bool
+	synthetic_bold bool
 	// The current size this font is set to.
-	size                                DesiredSize
+	size DesiredSize
 }
 
 // init_file initializes a new font face from a file path.
@@ -976,8 +994,7 @@ pub fn (mut self Face) set_face_size(opts FaceOptions) ! {
 
 fn set_freetype_size(face freetype.Face, size DesiredSize) ! {
 	if face.is_scalable() {
-		face.set_char_size(0, i32(math.round(f64(size.points) * 64.0)), size.xdpi,
-			size.ydpi)!
+		face.set_char_size(0, i32(math.round(f64(size.points) * 64.0)), size.xdpi, size.ydpi)!
 		return
 	}
 	select_size_nearest(face, u32(math.round(size.pixels())))!
@@ -1069,7 +1086,7 @@ pub fn (self &Face) is_color_glyph(glyph_id u32) bool {
 	// If the glyph fails to load, just return false.
 	self.face.load_glyph(glyph_id, freetype.LoadFlags{
 		render: true
-		color:  self.face.has_color()
+		color: self.face.has_color()
 		// NO_SVG set to true because we don't currently support rendering
 		// SVG glyphs under FreeType, since that requires bundling another
 		// dependency to handle rendering the SVG.
@@ -1092,21 +1109,21 @@ fn (self Face) glyph_load_flags(constrained bool) freetype.LoadFlags {
 
 	return freetype.LoadFlags{
 		// If our glyph has color, we want to render the color.
-		color:          self.face.has_color()
+		color: self.face.has_color()
 		// We don't render, because we'll invoke the render
 		// manually after applying constraints further down.
-		render:         false
+		render: false
 		// Use options from config.
-		no_hinting:     !do_hinting
+		no_hinting: !do_hinting
 		force_autohint: self.load_flags.force_autohint
-		no_autohint:    !self.load_flags.autohint
+		no_autohint: !self.load_flags.autohint
 		// If we're gonna be rendering this glyph in monochrome,
 		// then we should use the monochrome hinter as well, or
 		// else it won't look very good at all.
 		//
 		// Otherwise if the user asked for light hinting we
 		// use that, otherwise we just use the normal target.
-		target:         if self.load_flags.monochrome {
+		target: if self.load_flags.monochrome {
 			.mono
 		} else if self.load_flags.light {
 			.light
@@ -1115,7 +1132,7 @@ fn (self Face) glyph_load_flags(constrained bool) freetype.LoadFlags {
 		}
 		// NO_SVG set to true because we don't currently support rendering
 		// SVG glyphs under FreeType.
-		no_svg:         true
+		no_svg: true
 	}
 }
 
@@ -1133,17 +1150,17 @@ fn get_glyph_size(glyph &freetype.GlyphSlotRec) GlyphSize {
 		freetype.outline_get_bbox(&glyph.outline, mut bbox)
 
 		return GlyphSize{
-			x:      freetype.f26dot6_to_f64(bbox.x_min)
-			y:      freetype.f26dot6_to_f64(bbox.y_min)
-			width:  freetype.f26dot6_to_f64(bbox.x_max - bbox.x_min)
+			x: freetype.f26dot6_to_f64(bbox.x_min)
+			y: freetype.f26dot6_to_f64(bbox.y_min)
+			width: freetype.f26dot6_to_f64(bbox.x_max - bbox.x_min)
 			height: freetype.f26dot6_to_f64(bbox.y_max - bbox.y_min)
 		}
 	}
 
 	return GlyphSize{
-		x:      freetype.f26dot6_to_f64(glyph.metrics.hori_bearing_x)
-		y:      freetype.f26dot6_to_f64(glyph.metrics.hori_bearing_y - glyph.metrics.height)
-		width:  freetype.f26dot6_to_f64(glyph.metrics.width)
+		x: freetype.f26dot6_to_f64(glyph.metrics.hori_bearing_x)
+		y: freetype.f26dot6_to_f64(glyph.metrics.hori_bearing_y - glyph.metrics.height)
+		width: freetype.f26dot6_to_f64(glyph.metrics.width)
 		height: freetype.f26dot6_to_f64(glyph.metrics.height)
 	}
 }
@@ -1256,8 +1273,9 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 			pitch := w * atlas.format.depth()
 			mut scaled := []u8{len: int(pitch * h)}
 			if source.buffer == unsafe { nil }
-				|| !unsafe { stb.stbir_resize_uint8(source.buffer, i32(source.width), i32(source.rows),
-				source.pitch, &scaled[0], i32(w), i32(h), i32(pitch), atlas.format.depth()) } {
+				|| !unsafe {
+					stb.stbir_resize_uint8(source.buffer, i32(source.width), i32(source.rows), source.pitch, &scaled[0], i32(w), i32(h), i32(pitch), atlas.format.depth())
+				} {
 				return error('glyph bitmap resize failed')
 			}
 			scaled_bitmap := freetype.Bitmap{
@@ -1526,19 +1544,19 @@ pub fn (mut self Face) get_metrics() FaceMetrics {
 	ic_width := self.measure_ic_width()
 
 	return FaceMetrics{
-		px_per_em:               px_per_em
-		cell_width:              cell_width
-		ascent:                  ascent
-		descent:                 descent
-		line_gap:                line_gap
-		underline_position:      underline_position
-		underline_thickness:     underline_thickness
-		strikethrough_position:  strikethrough_position
+		px_per_em: px_per_em
+		cell_width: cell_width
+		ascent: ascent
+		descent: descent
+		line_gap: line_gap
+		underline_position: underline_position
+		underline_thickness: underline_thickness
+		strikethrough_position: strikethrough_position
 		strikethrough_thickness: strikethrough_thickness
-		cap_height:              cap_height
-		ex_height:               ex_height
-		ascii_height:            ascii_height
-		ic_width:                ic_width
+		cap_height: cap_height
+		ex_height: ex_height
+		ascii_height: ascii_height
+		ic_width: ic_width
 	}
 }
 
@@ -1637,10 +1655,10 @@ fn (self Constraint) constrain_inner(glyph GlyphSize, metrics Metrics, constrain
 	group_width := glyph.width / self.relative_width
 	group_height := glyph.height / self.relative_height
 	mut group := GlyphSize{
-		width:  group_width
+		width: group_width
 		height: group_height
-		x:      glyph.x - (group_width * self.relative_x)
-		y:      glyph.y - (group_height * self.relative_y)
+		x: glyph.x - (group_width * self.relative_x)
+		y: glyph.y - (group_height * self.relative_y)
 	}
 
 	// Apply prescribed scaling, preserving the
@@ -1664,10 +1682,10 @@ fn (self Constraint) constrain_inner(glyph GlyphSize, metrics Metrics, constrain
 
 	// Transfer the scaling and alignment back to the glyph and return.
 	return GlyphSize{
-		width:  width_factor * glyph.width
+		width: width_factor * glyph.width
 		height: height_factor * glyph.height
-		x:      group.x + (group.width * self.relative_x)
-		y:      group.y + (group.height * self.relative_y)
+		x: group.x + (group.width * self.relative_x)
+		y: group.y + (group.height * self.relative_y)
 	}
 }
 
@@ -1687,6 +1705,7 @@ fn (self Constraint) scale_factors(group GlyphSize, metrics Metrics, min_constra
 		.cell {
 			metrics.face_height
 		}
+
 		// Like font-patcher, the icon constraint height depends on the
 		// constraint width. Unlike font-patcher, the multi-cell icon_height
 		// may be different from face_height due to the `adjust-icon-height`
@@ -1815,6 +1834,7 @@ fn (self Constraint) aligned_x(group GlyphSize, metrics Metrics, min_constraint_
 		.center {
 			math.max(start_x, (start_x + end_x) / 2)
 		}
+
 		// NOTE: .center1 implements the font_patcher rule of centering in the
 		// first cell even for multi-cell constraints. Since glyphs are not
 		// allowed to protrude to the left, this results in left-alignment like

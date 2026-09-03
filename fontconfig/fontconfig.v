@@ -12,41 +12,68 @@ module fontconfig
 
 // C compiler flags for the fontconfig library.
 #flag darwin -I/opt/homebrew/include
+
 #flag darwin -L/opt/homebrew/lib
+
 #flag linux -I/usr/include
+
 #flag -lfontconfig
 
 #include <fontconfig/fontconfig.h>
+
 #include "fontconfig_shims.h"
 
 // === C function declarations ===
 
 fn C.FcInit() int
+
 fn C.FcInitLoadConfigAndFonts() voidptr
+
 fn C.FcConfigDestroy(config voidptr)
+
 fn C.FcConfigSubstitute(config voidptr, pat voidptr, kind int) int
+
 fn C.FcDefaultSubstitute(pat voidptr)
+
 fn C.FcFontSort(config voidptr, pat voidptr, trim int, csp &voidptr, result &int) voidptr
+
 fn C.FcFontRenderPrepare(config voidptr, pat voidptr, font voidptr) voidptr
 
 fn C.FcPatternCreate() voidptr
+
 fn C.FcPatternDestroy(pat voidptr)
+
 fn C.FcPatternAddString(pat voidptr, object &char, s &char) int
+
 fn C.FcPatternAddInteger(pat voidptr, object &char, i int) int
+
 fn C.FcPatternAddCharSet(pat voidptr, object &char, cs voidptr) int
+
 fn C.FcPatternGetString(pat voidptr, object &char, n int, s &&char) int
+
 fn C.FcPatternGetInteger(pat voidptr, object &char, n int, i &int) int
+
+fn C.FcPatternGetCharSet(pat voidptr, object &char, n int, cs &voidptr) int
+
+fn C.FcPatternGetLangSet(pat voidptr, object &char, n int, ls &voidptr) int
 
 fn C.FcFontSetDestroy(fs voidptr)
 
 fn C.FcCharSetCreate() voidptr
+
 fn C.FcCharSetDestroy(cs voidptr)
+
 fn C.FcCharSetAddChar(cs voidptr, ucs4 u32) int
+
+fn C.FcCharSetHasChar(cs voidptr, ucs4 u32) int
+
+fn C.FcLangSetHasLang(ls voidptr, lang &char) int
 
 // vt_fontconfig_fontset_fonts and vt_fontconfig_fontset_nfont read the
 // `fonts`/`nfont` fields out of the opaque FcFontSet struct without us
 // having to hard-code the struct layout on the V side.
 fn C.vt_fontconfig_fontset_nfont(fs voidptr) int
+
 fn C.vt_fontconfig_fontset_font(fs voidptr, idx int) voidptr
 
 // FcResult values (from fontconfig.h). FcResultMatch is 0.
@@ -83,8 +110,7 @@ pub fn (c Config) destroy() {
 // font_sort sorts fonts matching a pattern by closeness.
 pub fn (c Config) font_sort(pat &Pattern, trim bool, csp voidptr) FontSortResult {
 	mut result := int(0)
-	fs := C.FcFontSort(c.handle, pat.handle, if trim { 1 } else { 0 }, &voidptr(unsafe { nil }),
-		&result)
+	fs := C.FcFontSort(c.handle, pat.handle, if trim { 1 } else { 0 }, &voidptr(unsafe { nil }), &result)
 	return FontSortResult{
 		result: match result {
 			fc_result_match { MatchResult.match_ }
@@ -213,6 +239,29 @@ pub fn (p &Pattern) index() int {
 		return 0
 	}
 	return ival
+}
+
+// has_char reports whether the pattern's character set contains cp.
+pub fn (p &Pattern) has_char(cp u32) bool {
+	mut charset := voidptr(unsafe { nil })
+	if C.FcPatternGetCharSet(p.handle, c'charset', 0, &charset) != fc_result_match
+		|| isnil(charset) {
+		return false
+	}
+	return C.FcCharSetHasChar(charset, cp) != 0
+}
+
+// is_emoji reports whether Fontconfig marks this font with the emoji
+// presentation language (`und-zsye`).
+pub fn (p &Pattern) is_emoji() bool {
+	mut langset := voidptr(unsafe { nil })
+	if C.FcPatternGetLangSet(p.handle, c'lang', 0, &langset) != fc_result_match
+		|| isnil(langset) {
+		return false
+	}
+	// FcLangEqual (0) and FcLangDifferentCountry (1) are matches;
+	// FcLangDifferentLang is 2.
+	return C.FcLangSetHasLang(langset, c'und-zsye') < 2
 }
 
 // ============================================================

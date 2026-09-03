@@ -404,6 +404,22 @@ pub fn render_builtin_cell_glyph(mut atlas Atlas, cp u32, metrics Metrics) !Glyp
 // vector drawing lives in the `sprite` module which the `font` module
 // cannot import (cycle); here we render a full-cell placeholder so that
 // callers within the font module still get a valid, non-empty glyph.
+pub fn sprite_face_has_codepoint(cp u32) bool {
+	if cp >= u32(Sprite.underline) && cp <= u32(Sprite.cursor_underline) {
+		return true
+	}
+	return (cp >= 0x2500 && cp <= 0x257f) || (cp >= 0x2580 && cp <= 0x259f)
+		|| (cp >= 0x2800 && cp <= 0x28ff) || (cp >= 0x25e2 && cp <= 0x25e5)
+		|| (cp >= 0x25f8 && cp <= 0x25fa) || cp == 0x25ff
+		|| (cp >= 0xe0b0 && cp <= 0xe0bf) || cp == 0xe0d2 || cp == 0xe0d4
+		|| (cp >= 0xf5d0 && cp <= 0xf60d) || (cp >= 0x1fb00 && cp <= 0x1fbaf)
+		|| (cp >= 0x1fbbd && cp <= 0x1fbbf)
+		|| (cp >= 0x1fbce && cp <= 0x1fbef) || (cp >= 0x1cd00 && cp <= 0x1cde5)
+		|| (cp >= 0x1cc1b && cp <= 0x1cc1e) || (cp >= 0x1cc21 && cp <= 0x1cc3f)
+		|| cp == 0x1ce00 || cp == 0x1ce01 || cp == 0x1ce0b || cp == 0x1ce0c
+		|| (cp >= 0x1ce16 && cp <= 0x1ce19) || (cp >= 0x1ce51 && cp <= 0x1ceaf)
+}
+
 pub fn sprite_face_render_glyph(mut atlas Atlas, cp u32, metrics Metrics, opts RenderOptions) !GlyphInfo {
 	// Special sprite codepoints are drawn directly.
 	if sprite := sprite_for_codepoint(cp) {

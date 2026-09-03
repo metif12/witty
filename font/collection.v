@@ -335,7 +335,6 @@ module font
 //
 // --- Original Ghostty Comments End: src/font/Collection.zig
 
-
 // A font collection is a list of faces of different styles. The list is
 // ordered by priority (per style). All fonts in a collection share the same
 // size so they can be used interchangeably in cases a glyph is missing in one
@@ -395,7 +394,7 @@ pub:
 // explicit creates a PresentationMode requiring an explicit presentation.
 pub fn PresentationMode.explicit(p Presentation) PresentationMode {
 	return PresentationMode{
-		kind:         .explicit_
+		kind: .explicit_
 		presentation: p
 	}
 }
@@ -403,7 +402,7 @@ pub fn PresentationMode.explicit(p Presentation) PresentationMode {
 // default_ creates a PresentationMode using the UCD default presentation.
 pub fn PresentationMode.default_(p Presentation) PresentationMode {
 	return PresentationMode{
-		kind:         .default_
+		kind: .default_
 		presentation: p
 	}
 }
@@ -412,6 +411,14 @@ pub fn PresentationMode.default_(p Presentation) PresentationMode {
 pub fn PresentationMode.any() PresentationMode {
 	return PresentationMode{
 		kind: .any
+	}
+}
+
+// requested returns the presentation constraint represented by this mode.
+pub fn (p PresentationMode) requested() ?Presentation {
+	return match p.kind {
+		.explicit_, .default_ { p.presentation }
+		.any { none }
 	}
 }
 
@@ -431,7 +438,7 @@ pub:
 	// What style this index refers to.
 	style FontStyle = .regular
 	// The index within the style's face list.
-	idx   u16
+	idx u16
 }
 
 // The starting index for special (built-in) fonts.
@@ -447,7 +454,7 @@ pub enum Special {
 pub fn Index.init_special(v Special) Index {
 	return Index{
 		style: .regular
-		idx:   u16(v)
+		idx: u16(v)
 	}
 }
 
@@ -491,19 +498,19 @@ pub fn (i Index) special() ?Special {
 pub struct Entry {
 pub mut:
 	// Whether the face is loaded (true) or deferred (false).
-	is_loaded     bool
+	is_loaded bool
 	// The deferred face (valid when !is_loaded).
 	deferred_face DeferredFace
 	// The loaded face (valid when is_loaded).
-	loaded_face   Face
+	loaded_face Face
 	// Whether this face is a fallback face.
-	fallback      bool
+	fallback bool
 	// Whether to use the scale value or the adjustment enum.
-	use_scale     bool = true
+	use_scale bool = true
 	// Size adjustment to compute once the face is loaded.
-	adjustment    SizeAdjustment = .none_
+	adjustment SizeAdjustment = .none_
 	// Computed scale factor for this face.
-	scale         f64 = 1.0
+	scale f64 = 1.0
 }
 
 // deinit releases the face resources.
@@ -580,9 +587,9 @@ fn (self Entry) has_codepoint_any(cp u32) bool {
 pub struct EntryOrAlias {
 pub mut:
 	// Whether this is an alias (true) or a real entry (false).
-	is_alias    bool
+	is_alias bool
 	// The actual entry data (valid when !is_alias).
-	entry       Entry
+	entry Entry
 	// Pointer to the aliased entry (valid when is_alias).
 	alias_entry &Entry = unsafe { nil }
 }
@@ -598,7 +605,7 @@ pub fn EntryOrAlias.new_entry(e Entry) &EntryOrAlias {
 // The alias must point to a non-alias entry.
 pub fn EntryOrAlias.new_alias(target &Entry) &EntryOrAlias {
 	return &EntryOrAlias{
-		is_alias:    true
+		is_alias: true
 		alias_entry: target
 	}
 }
@@ -620,9 +627,9 @@ pub fn (eoa &EntryOrAlias) get_entry() &Entry {
 pub struct LoadOptions {
 pub mut:
 	// The library to use for loading faces. Not owned by the collection.
-	library             Library
+	library Library
 	// The desired font size for all loaded faces.
-	size                DesiredSize = DesiredSize{
+	size DesiredSize = DesiredSize{
 		points: 12
 	}
 	// Freetype load flags to use when loading glyphs.
@@ -637,7 +644,7 @@ pub fn (mut self LoadOptions) deinit() {
 // face_options returns the FaceOptions derived from these load options.
 pub fn (self &LoadOptions) face_options() FaceOptions {
 	return FaceOptions{
-		size:                self.size
+		size: self.size
 		freetype_load_flags: self.freetype_load_flags
 	}
 }
@@ -652,11 +659,11 @@ pub fn (self &LoadOptions) face_options() FaceOptions {
 pub struct AddOptions {
 pub:
 	// What style this face is.
-	style           FontStyle
+	style FontStyle
 	// What size adjustment to use.
 	size_adjustment SizeAdjustment
 	// Whether this is a fallback face.
-	fallback        bool
+	fallback bool
 }
 
 // ============================================================
@@ -685,16 +692,16 @@ pub mut:
 	bold_italic_faces []&EntryOrAlias
 	// The metric modifiers to use for this collection.
 	// Call update_metrics() to recompute after making changes.
-	metric_modifiers  MetricsModifierSet
+	metric_modifiers MetricsModifierSet
 	// Metrics for this collection.
 	// Call update_metrics() to (re)compute these.
-	metrics           ?Metrics
+	metrics ?Metrics
 	// The face metrics for the primary face in the collection.
 	// Kept around to avoid re-computing when calculating scale factors.
 	primary_face_metrics ?FaceMetrics
 	// Load options for deferred faces.
 	// If not set, deferred faces will not be loaded.
-	load_options      ?LoadOptions
+	load_options ?LoadOptions
 }
 
 // init creates an empty collection.
@@ -705,8 +712,7 @@ pub fn Collection.init() Collection {
 // deinit releases all faces and resources in the collection.
 pub fn (mut self Collection) deinit() {
 	// Deinit all entries. Aliases can be ignored.
-	for list in [self.regular_faces, self.bold_faces, self.italic_faces,
-		self.bold_italic_faces] {
+	for list in [self.regular_faces, self.bold_faces, self.italic_faces, self.bold_italic_faces] {
 		for item in list {
 			if !item.is_alias {
 				unsafe {
@@ -788,16 +794,16 @@ pub fn (mut self Collection) add(face Face, opts AddOptions) !Index {
 	}
 
 	self.append_face(opts.style, EntryOrAlias.new_entry(Entry{
-		is_loaded:   true
+		is_loaded: true
 		loaded_face: owned_face
-		fallback:    opts.fallback
-		use_scale:   true
-		scale:       scale_factor
+		fallback: opts.fallback
+		use_scale: true
+		scale: scale_factor
 	}))
 
 	return Index{
 		style: opts.style
-		idx:   u16(count)
+		idx: u16(count)
 	}
 }
 
@@ -817,14 +823,14 @@ pub fn (mut self Collection) add_deferred(face DeferredFace, opts AddOptions) !I
 
 	self.append_face(opts.style, EntryOrAlias.new_entry(Entry{
 		deferred_face: face
-		fallback:      opts.fallback
-		use_scale:     false
-		adjustment:    opts.size_adjustment
+		fallback: opts.fallback
+		use_scale: false
+		adjustment: opts.size_adjustment
 	}))
 
 	return Index{
 		style: opts.style
-		idx:   u16(count)
+		idx: u16(count)
 	}
 }
 
@@ -900,7 +906,7 @@ pub fn (self &Collection) get_index(cp u32, style FontStyle, p_mode Presentation
 		if item.get_entry().has_codepoint(cp, p_mode) {
 			return Index{
 				style: style
-				idx:   u16(i)
+				idx: u16(i)
 			}
 		}
 	}
@@ -967,9 +973,9 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 		} else if synthetic := self.create_synthetic_italic(regular_entry) {
 			// synthetic italic face created
 			self.italic_faces << EntryOrAlias.new_entry(Entry{
-				is_loaded:   true
+				is_loaded: true
 				loaded_face: synthetic
-				fallback:    false
+				fallback: false
 			})
 		} else {
 			// Failed to create synthetic italic; italic style will not be
@@ -988,9 +994,9 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 		} else if synthetic := self.create_synthetic_bold(regular_entry) {
 			// synthetic bold face created
 			self.bold_faces << EntryOrAlias.new_entry(Entry{
-				is_loaded:   true
+				is_loaded: true
 				loaded_face: synthetic
-				fallback:    false
+				fallback: false
 			})
 		} else {
 			// Failed to create synthetic bold; bold style will not be
@@ -1016,9 +1022,9 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 			if synthetic := self.create_synthetic_italic(bold_base) {
 				// synthetic bold italic face created from bold
 				self.bold_italic_faces << EntryOrAlias.new_entry(Entry{
-					is_loaded:   true
+					is_loaded: true
 					loaded_face: synthetic
-					fallback:    false
+					fallback: false
 				})
 				return
 			}
@@ -1030,9 +1036,9 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 		if synthetic := self.create_synthetic_bold(italic_base) {
 			// synthetic bold italic face created from italic
 			self.bold_italic_faces << EntryOrAlias.new_entry(Entry{
-				is_loaded:   true
+				is_loaded: true
 				loaded_face: synthetic
-				fallback:    false
+				fallback: false
 			})
 			return
 		}
@@ -1101,8 +1107,7 @@ pub fn (mut self Collection) set_collection_size(size DesiredSize) ! {
 	// Resize all our faces that are loaded.
 	// We skip entries that are aliases, since the underlying face
 	// will have a non-alias entry somewhere.
-	for list in [self.regular_faces, self.bold_faces, self.italic_faces,
-		self.bold_italic_faces] {
+	for list in [self.regular_faces, self.bold_faces, self.italic_faces, self.bold_italic_faces] {
 		for item in list {
 			if item.is_alias {
 				continue
@@ -1164,8 +1169,7 @@ fn (mut self Collection) scale_factor(face_metrics FaceMetrics, adjustment SizeA
 	// In Zig this is `face_metrics.ic_width != face_metrics.icWidth()`, which
 	// is true (fall through) exactly when the raw optional is null or not
 	// positive.
-	primary_metric, face_metric := self.scale_factor_for(adjustment, primary_metrics,
-		face_metrics, primary_scale, face_scale)
+	primary_metric, face_metric := self.scale_factor_for(adjustment, primary_metrics, face_metrics, primary_scale, face_scale)
 
 	if face_metric == 0.0 {
 		return 1.0
@@ -1182,15 +1186,13 @@ fn (self &Collection) scale_factor_for(adjustment SizeAdjustment, primary_metric
 			// Valid iff the raw ic_width is present and positive (i.e. the
 			// getter returns the raw value rather than an estimate).
 			if !metric_is_valid(face_metrics.ic_width) {
-				return self.scale_factor_for(.ex_height, primary_metrics, face_metrics,
-					primary_scale, face_scale)
+				return self.scale_factor_for(.ex_height, primary_metrics, face_metrics, primary_scale, face_scale)
 			}
 			return primary_metrics.ic_width_val() * primary_scale, face_metrics.ic_width_val() * face_scale
 		}
 		.ex_height {
 			if !metric_is_valid(face_metrics.ex_height) {
-				return self.scale_factor_for(.cap_height, primary_metrics, face_metrics,
-					primary_scale, face_scale)
+				return self.scale_factor_for(.cap_height, primary_metrics, face_metrics, primary_scale, face_scale)
 			}
 			return primary_metrics.ex_height_val() * primary_scale, face_metrics.ex_height_val() * face_scale
 		}

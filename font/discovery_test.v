@@ -1,5 +1,7 @@
 module font
 
+import os
+
 // Tests for font discovery.
 // Translated from ghostty/src/font/discovery.zig
 
@@ -20,68 +22,79 @@ fn test_descriptor_hash_family_names() {
 
 // test_fontconfig tests basic fontconfig discovery.
 fn test_fontconfig() {
-	// TODO: requires real fontconfig backend
-	// Uncomment when fontconfig bindings are available:
-	//
-	// mut fc := FontconfigDiscovery.init()
-	// defer { fc.deinit() }
-	// mut it := fc.discover(Descriptor{ family: 'monospace', size: 12 }) or { return }
-	// defer { it.deinit() }
+	mut fc := FontconfigDiscovery.init()
+	defer { fc.deinit() }
+	mut it := fc.discover(Descriptor{ family: 'monospace', size: 12 }) or {
+		assert false, err.msg()
+		return
+	}
+	defer { it.deinit() }
+	mut face := it.next() or {
+		assert false, 'fontconfig returned no monospace font'
+		return
+	}
+	defer { face.deinit() }
+	assert face.path.len > 0
+	assert os.exists(face.path)
 }
 
 // test_fontconfig_codepoint tests fontconfig discovery for a specific codepoint.
 fn test_fontconfig_codepoint() {
-	// TODO: requires real fontconfig backend
-	// Uncomment when fontconfig bindings are available:
-	//
-	// mut fc := FontconfigDiscovery.init()
-	// defer { fc.deinit() }
-	// mut it := fc.discover(Descriptor{ codepoint: `A`, size: 12 }) or { return }
-	// defer { it.deinit() }
-	//
-	// // The first result should have the codepoint. Later ones may not
-	// // because fontconfig returns all fonts sorted.
-	// mut face := it.next() or { return } or { return }
-	// defer { face.deinit() }
-	// assert face.has_codepoint(`A`, unsafe { nil })
-	//
-	// // Should have other codepoints too
-	// assert face.has_codepoint(`B`, unsafe { nil })
+	mut fc := FontconfigDiscovery.init()
+	defer { fc.deinit() }
+	mut it := fc.discover(Descriptor{ codepoint: u32(0x41), size: 12 }) or {
+		assert false, err.msg()
+		return
+	}
+	defer { it.deinit() }
+
+	// The first result must carry the requested-codepoint coverage metadata.
+	mut face := it.next() or {
+		assert false, 'fontconfig returned no face for U+0041'
+		return
+	}
+	defer { face.deinit() }
+	assert face.has_codepoint(u32(0x41), none)
 }
 
 // test_coretext tests basic CoreText discovery.
 fn test_coretext() {
-	// TODO: requires real CoreText backend
-	// Uncomment when CoreText bindings are available:
-	//
-	// mut ct := CoreTextDiscovery.init()
-	// defer { ct.deinit() }
-	// mut it := ct.discover(Descriptor{ family: 'Monaco', size: 12 }) or { return }
-	// defer { it.deinit() }
-	// mut count := 0
-	// for {
-	//     _ = it.next() or { break } or { break }
-	//     count += 1
-	// }
-	// assert count > 0
+	$if macos {
+		mut ct := CoreTextDiscovery.init()
+		defer { ct.deinit() }
+		mut it := ct.discover(Descriptor{ family: 'Menlo', size: 12 }) or {
+			assert false, err.msg()
+			return
+		}
+		defer { it.deinit() }
+		mut face := it.next() or {
+			assert false, 'CoreText returned no Menlo face'
+			return
+		}
+		defer { face.deinit() }
+		assert face.path.len > 0
+		assert os.exists(face.path)
+	}
 }
 
 // test_coretext_codepoint tests CoreText discovery for a specific codepoint.
 fn test_coretext_codepoint() {
-	// TODO: requires real CoreText backend
-	// Uncomment when CoreText bindings are available:
-	//
-	// mut ct := CoreTextDiscovery.init()
-	// defer { ct.deinit() }
-	// mut it := ct.discover(Descriptor{ codepoint: `A`, size: 12 }) or { return }
-	// defer { it.deinit() }
-	//
-	// // The first result should have the codepoint.
-	// face := it.next() or { return } or { return }
-	// assert face.has_codepoint(`A`, unsafe { nil })
-	//
-	// // Should have other codepoints too
-	// assert face.has_codepoint(`B`, unsafe { nil })
+	$if macos {
+		mut ct := CoreTextDiscovery.init()
+		defer { ct.deinit() }
+		mut it := ct.discover(Descriptor{ codepoint: u32(0x41), size: 12 }) or {
+			assert false, err.msg()
+			return
+		}
+		defer { it.deinit() }
+
+		mut face := it.next() or {
+			assert false, 'CoreText returned no face for U+0041'
+			return
+		}
+		defer { face.deinit() }
+		assert face.has_codepoint(u32(0x41), none)
+	}
 }
 
 // test_coretext_sorting tests that CoreText sorts results correctly.
@@ -126,13 +139,13 @@ fn test_score_comparison() {
 // test_descriptor_clone tests that cloning a descriptor works correctly.
 fn test_descriptor_clone() {
 	d := Descriptor{
-		family:    'Test Family'
-		style:     'Bold'
+		family: 'Test Family'
+		style: 'Bold'
 		codepoint: 0x41
-		size:      12.0
-		bold:      true
+		size: 12.0
+		bold: true
 		variations: [Variation{
-			id:    VariationId{ value: 0x77676874 } // 'wght'
+			id: VariationId{ value: 0x77676874 } // 'wght'
 			value: 700.0
 		}]
 	}

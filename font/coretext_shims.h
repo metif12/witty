@@ -356,6 +356,16 @@ static void *witty_ct_matching_descriptors(void *search_desc) {
 	return (void *)list;
 }
 
+static int witty_ct_descriptor_is_color(void *desc_ptr) {
+	if (!desc_ptr) return 0;
+	CTFontRef font = CTFontCreateWithFontDescriptor(
+		(CTFontDescriptorRef)desc_ptr, 12.0, NULL);
+	if (!font) return 0;
+	CTFontSymbolicTraits traits = CTFontGetSymbolicTraits(font);
+	CFRelease(font);
+	return (traits & kCTFontTraitColorGlyphs) != 0;
+}
+
 static int witty_cf_array_count(void *arr) {
 	if (!arr) return 0;
 	return (int)CFArrayGetCount((CFArrayRef)arr);
@@ -810,6 +820,11 @@ static void *witty_ct_build_descriptor(
 static void *witty_ct_matching_descriptors(void *search_desc) {
 	(void)search_desc;
 	return NULL;
+}
+
+static int witty_ct_descriptor_is_color(void *desc_ptr) {
+	(void)desc_ptr;
+	return 0;
 }
 
 static int witty_cf_array_count(void *arr) { (void)arr; return 0; }
