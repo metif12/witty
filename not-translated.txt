@@ -1,0 +1,13 @@
+  ---
+  Summary: ~188 files not yet translated, with the largest gaps
+  being:
+  - os/ (33 files) — entire OS abstraction layer
+  - renderer/metal/ + renderer/opengl/ (19 files) — GPU sub-modules
+  - config/ (17 files) — configuration system
+  - cli/ (18 files) — CLI commands
+  - font/ (15 files) — font subsystem gaps
+  - benchmark/ (12 files) — entire benchmark suite
+  - inspector/ (10 files) — inspector widgets
+  - datastruct/ (10 files) — data structures
+  - synthetic/ (9 files), lib/ (8 files), unicode/ (8 files), simd/
+  (6 files) — entire modules

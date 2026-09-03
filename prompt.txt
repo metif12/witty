@@ -1,0 +1,12 @@
+Translate /Users/alexander/code/3rd/ghostty/src/Surface.zig to V (use V compiler at ~/code/v/v).
+
+Translated V files must go to ~/code/Witty/
+
+The resulting V code has to be very simple, readable, but do the same thing.
+
+All tests go to a separate filename_test.v.
+
+If a function/method can't be translated due to missing dependencies etc, generate function body with a // XTODO
+body. For each function explain why its body couldn't be translated in the comment under // XTODO
+
+Once you're done with translating the files, finish. Print number of initial lines of code, and number of V lines.

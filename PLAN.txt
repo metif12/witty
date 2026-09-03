@@ -1,0 +1,37 @@
+Key Design Decisions
+
+ 1. Global state (__global g_state): V callbacks passed to C can't be closures. We use a global pointer to the terminal state. This matches how
+ Ghostty's embedded runtime passes opaque userdata pointers.
+ 2. ReadonlyStream for v0: We use the existing ReadonlyStream to process PTY output into the terminal. This handles all VT100 escape sequences. We
+ skip the full termio/exec.v subprocess machinery for now since it has extra dependencies (configpkg, shell integration) - we can wire that in
+ later.
+ 3. Rendering status: Ghostty renders through src/renderer/generic.zig plus the Metal backend. Witty currently uses a temporary CoreGraphics
+ presenter in main.v with the same high-level pass ordering while renderer/metal*.v is still being ported.
+ 4. Thread safety: The read thread calls request_display() which uses dispatch_async(dispatch_get_main_queue(), ...) to safely trigger a redraw on
+ the main thread.
+ 5. No Objective-C source file is needed: macos/appkit.v uses vlib's macOS ObjC message-send bridge, with small C shims for CoreFoundation,
+ CoreText, CoreGraphics, and extra msgsend signatures.
+
+ Implementation Order
+
+ 1. Create macos/appkit.v - just app + window + solid color background
+ 2. Modify main.v - open window, verify it shows
+ 3. Add draw callback - render a test string to verify CoreText works
+ 4. Add PTY + fork/exec shell - spawn /bin/zsh
+ 5. Add read thread - read PTY, feed to ReadonlyStream
+ 6. Implement terminal grid rendering in draw callback
+ 7. Add key callback - forward keystrokes to PTY
+ 8. Add resize handling
+
+ Verification
+
+ cd /Users/alexander/code/Witty
+ ~/code/v/v .           # or: ~/code/v/v main.v
+ ./Witty            # should open a window with a working shell
+
+ The terminal window should:
+ - Open an 80x24 terminal window
+ - Show the shell prompt (zsh)
+ - Accept keyboard input
+ - Display command output
+ - Respond to Ctrl+C, Ctrl+D, etc.
