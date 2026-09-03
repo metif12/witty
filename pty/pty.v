@@ -4,7 +4,7 @@ module pty
 // interface for creating and managing pseudo-terminals (PTYs).
 //
 // On POSIX systems, this wraps the openpty/ioctl/tcgetattr family of
-// calls. On Windows, this would wrap the ConPTY API (XTODO).
+// calls. The C shim selects the correct macOS or Linux headers/constants.
 //
 // The PTY is used to connect a terminal emulator to a subprocess (shell).
 // The master side is read/written by the terminal emulator, and the slave
@@ -13,42 +13,29 @@ module pty
 // C interop declarations.
 // We declare the C functions we need for PTY management. These are
 // available on macOS (via <util.h>) and Linux (via <pty.h>).
-#include <sys/ioctl.h>
+#include "pty_shims.h"
 
-#include <termios.h>
-
-#include <fcntl.h>
-
-#include <util.h>
+#flag linux -lutil
 
 fn C.openpty(master &int, slave &int, name &char, termp voidptr, winp voidptr) int
 
 fn C.close(fd int) int
 
-fn C.ioctl(fd i32, request u64, args ...voidptr) i32
-
-fn C.tcgetattr(fd int, termios_p voidptr) int
-
-fn C.tcsetattr(fd int, optional_actions int, termios_p voidptr) int
-
 fn C.setsid() int
 
 fn C.fcntl(fd int, cmd int, arg int) int
 
-// ioctl request codes. These are platform-specific constants.
-// On macOS they differ from Linux due to ioctl encoding differences.
-// https://github.com/ziglang/zig/issues/13277
-// macOS values are hardcoded; on Linux these come from C headers.
-const tiocswinsz = u64(0x80087467) // macOS: _IOW('t', 103, struct winsize)
-const tiocgwinsz = u64(0x40087468) // macOS: _IOR('t', 104, struct winsize)
-const tiocsctty = u64(0x20007461) // macOS: _IO('t', 97)
+fn C.witty_pty_enable_utf8(fd int) int
 
-// termios constants (macOS values).
-// On macOS these are unsigned long values.
-const tcsanow = 0
-const iutf8 = u64(0x00004000)
-const icanon = u64(0x00000100)
-const echo_flag = u64(0x00000008)
+fn C.witty_pty_get_mode(fd int, canonical &int, echo &int) int
+
+fn C.witty_pty_get_size(fd int, row &u16, col &u16, xpixel &u16, ypixel &u16) int
+
+fn C.witty_pty_set_size(fd int, row u16, col u16, xpixel u16, ypixel u16) int
+
+fn C.witty_pty_set_controlling_terminal(fd int) int
+
+fn C.witty_pty_reset_signals() int
 
 // fcntl constants
 const f_getfd = 1
@@ -96,33 +83,6 @@ pub mut:
 // Fd is a file descriptor type alias.
 pub type Fd = int
 
-// Termios is a representation of the POSIX termios struct.
-// On macOS, the flags are `unsigned long` (u64 on 64-bit), and the
-// struct is 72 bytes total. On Linux, flags are `unsigned int` (u32).
-// We use the macOS layout here since this is our target platform.
-// XTODO: Add Linux layout support via $if.
-//
-// macOS layout (72 bytes):
-//   offset 0:  c_iflag  (u64)
-//   offset 8:  c_oflag  (u64)
-//   offset 16: c_cflag  (u64)
-//   offset 24: c_lflag  (u64)
-//   offset 32: c_cc     ([20]u8)
-//   offset 52: padding  (4 bytes)
-//   offset 56: c_ispeed (u64)
-//   offset 64: c_ospeed (u64)
-struct Termios {
-mut:
-	c_iflag  u64
-	c_oflag  u64
-	c_cflag  u64
-	c_lflag  u64
-	c_cc     [20]u8
-	pad0     u32
-	c_ispeed u64
-	c_ospeed u64
-}
-
 // open creates a new PTY with the given initial size.
 //
 // This uses the POSIX openpty() call to create a master/slave pair,
@@ -147,11 +107,7 @@ pub fn Pty.open(size Winsize) !Pty {
 
 	// Enable UTF-8 mode. This is on by default on Linux but it
 	// is NOT on by default on macOS so we ensure that it is always set.
-	mut attrs := Termios{}
-	if C.tcgetattr(master_fd, voidptr(&attrs)) == 0 {
-		attrs.c_iflag |= iutf8
-		C.tcsetattr(master_fd, tcsanow, voidptr(&attrs))
-	}
+	C.witty_pty_enable_utf8(master_fd)
 
 	return Pty{
 		master: master_fd
@@ -182,14 +138,15 @@ pub fn (mut self Pty) close_slave() {
 // get_mode reads the current termios mode from the pty master.
 // Returns the simplified Mode struct with canonical and echo flags.
 pub fn (self Pty) get_mode() !Mode {
-	mut attrs := Termios{}
-	if C.tcgetattr(self.master, voidptr(&attrs)) != 0 {
+	mut canonical := 0
+	mut echo := 0
+	if C.witty_pty_get_mode(self.master, &canonical, &echo) != 0 {
 		return error('tcgetattr failed')
 	}
 
 	return Mode{
-		canonical: (attrs.c_lflag & icanon) != 0
-		echo: (attrs.c_lflag & echo_flag) != 0
+		canonical: canonical != 0
+		echo: echo != 0
 	}
 }
 
@@ -198,7 +155,7 @@ pub fn (self Pty) get_mode() !Mode {
 // terminal window size.
 pub fn (self Pty) get_size() !Winsize {
 	mut ws := Winsize{}
-	if C.ioctl(self.master, tiocgwinsz, voidptr(&ws)) < 0 {
+	if C.witty_pty_get_size(self.master, &ws.ws_row, &ws.ws_col, &ws.ws_xpixel, &ws.ws_ypixel) != 0 {
 		return error('ioctl TIOCGWINSZ failed')
 	}
 	return ws
@@ -209,8 +166,7 @@ pub fn (self Pty) get_size() !Winsize {
 // terminal window size. This will cause a SIGWINCH signal to be
 // sent to the foreground process group of the terminal.
 pub fn (mut self Pty) set_size(size Winsize) ! {
-	mut size_copy := size
-	if C.ioctl(self.master, tiocswinsz, voidptr(&size_copy)) < 0 {
+	if C.witty_pty_set_size(self.master, size.ws_row, size.ws_col, size.ws_xpixel, size.ws_ypixel) != 0 {
 		return error('ioctl TIOCSWINSZ failed')
 	}
 }
@@ -224,9 +180,14 @@ pub fn (mut self Pty) set_size(size Winsize) ! {
 //   3. Closes both the master and slave fds (they're no longer needed
 //      in the child after dup2 has been called for stdin/stdout/stderr)
 //
-// XTODO: Signal resetting (sigaction for SIGABRT, SIGCHLD, etc.)
-// is not yet implemented. The Zig version resets ~13 signals to SIG_DFL.
 pub fn (self Pty) child_pre_exec() ! {
+	// A fork inherits the parent's signal dispositions. Restore every signal
+	// Ghostty resets before launching the child so the shell cannot inherit
+	// ignored or application-specific handlers.
+	if C.witty_pty_reset_signals() != 0 {
+		return error('failed to reset child signal handlers')
+	}
+
 	// Create a new process group / session.
 	if C.setsid() < 0 {
 		return error('setsid failed')
@@ -234,7 +195,7 @@ pub fn (self Pty) child_pre_exec() ! {
 
 	// Set controlling terminal. The slave fd becomes the controlling
 	// terminal for the new session.
-	if C.ioctl(self.slave, tiocsctty, voidptr(u64(0))) < 0 {
+	if C.witty_pty_set_controlling_terminal(self.slave) != 0 {
 		return error('ioctl TIOCSCTTY failed: could not set controlling terminal')
 	}
 
