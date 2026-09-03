@@ -77,6 +77,7 @@ fn test_page_plain_trailing_blank_lines() {
 	for i, ch in 'world'.runes() {
 		set_cell(mut pages, 1, i, u32(ch))
 	}
+
 	// Rows 2+ are blank and should be trimmed
 
 	formatter := PageFormatter.init(&pages, format_plain)
@@ -550,8 +551,7 @@ fn test_page_html_plain_text() {
 
 	formatter := PageFormatter.init(&pages, format_html)
 	output := formatter.format()
-	assert output == '<div style="font-family: monospace; white-space: pre;">hello, world</div>',
-		'HTML should wrap in monospace div'
+	assert output == '<div style="font-family: monospace; white-space: pre;">hello, world</div>', 'HTML should wrap in monospace div'
 }
 
 // ============================================================
@@ -582,7 +582,7 @@ fn test_page_html_background_foreground_colors() {
 
 fn test_page_html_with_escaping() {
 	mut pages := Pages.init(80, 24, 0)
-	for i, ch in '<tag>&"\x27text'.runes() {
+	for i, ch in '<tag>&"\'text'.runes() {
 		set_cell(mut pages, 0, i, u32(ch))
 	}
 
@@ -1041,6 +1041,79 @@ fn test_codepoint_map_replace_with_string() {
 
 	output := formatter.format()
 	assert output == 'hellXYZ', 'string replacement should work'
+}
+
+fn test_page_point_map_replacement_and_newline() {
+	mut pages := Pages.init(8, 2, 0)
+	for i, ch in 'hello'.runes() {
+		set_cell(mut pages, 0, i, u32(ch))
+	}
+	set_cell(mut pages, 1, 0, u32(`z`))
+
+	mut points := PointMap{}
+	mut formatter := PageFormatter.init(&pages, FormatOptions{
+		emit: .plain
+		codepoint_map: [
+			CodepointMap{
+				range_start: u32(`o`)
+				range_end: u32(`o`)
+				replacement: CodepointReplacement(StringRepl{ str: 'XYZ' })
+			},
+		]
+	})
+	formatter.point_map = &points
+	output := formatter.format()
+
+	assert output == 'hellXYZ\nz'
+	assert points.points.len == output.len
+	assert points.points[0].eql(Coordinate{ x: 0, y: 0 })
+	assert points.points[3].eql(Coordinate{ x: 3, y: 0 })
+	for i in 4 .. 7 {
+		assert points.points[i].eql(Coordinate{ x: 4, y: 0 })
+	}
+	assert points.points[7].eql(Coordinate{ x: 4, y: 0 })
+	assert points.points[8].eql(Coordinate{ x: 0, y: 1 })
+}
+
+fn test_page_point_map_multibyte_replacement() {
+	mut pages := make_pages_with_text(8, 1, 'x', 0)
+	mut points := PointMap{}
+	mut formatter := PageFormatter.init(&pages, FormatOptions{
+		emit: .plain
+		codepoint_map: [
+			CodepointMap{
+				range_start: u32(`x`)
+				range_end: u32(`x`)
+				replacement: CodepointReplacement(StringRepl{ str: '🔥' })
+			},
+		]
+	})
+	formatter.point_map = &points
+	output := formatter.format()
+
+	assert output == '🔥'
+	assert points.points.len == output.len
+	for point in points.points {
+		assert point.eql(Coordinate{ x: 0, y: 0 })
+	}
+}
+
+fn test_screen_pin_map() {
+	mut screen := Screen.init(8, 2, 0)
+	for i, ch in 'abc'.runes() {
+		set_cell(mut screen.pages, 0, i, u32(ch))
+	}
+	mut pins := PinMap{}
+	mut formatter := ScreenFormatter.init(&screen, format_plain)
+	formatter.pin_map = &pins
+	output := formatter.format()
+
+	assert output == 'abc'
+	assert pins.pins.len == output.len
+	for i, pin in pins.pins {
+		assert pin.x == i
+		assert pin.y == 0
+	}
 }
 
 // ============================================================

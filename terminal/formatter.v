@@ -684,7 +684,6 @@ module terminal
   - Zig's comptime patterns, explicit allocator passing, and Writer generics are replaced by V's strings.Builder
   - Zig's verbose test infrastructure (custom allocators, errdefer, error unions) becomes simple V test functions
   - The PageListFormatter was merged into PageFormatter since V uses a simpler Pages array model
-  - PinMap/PointMap tracking (a perf/debugging feature) was omitted (XTODO)
 
 */
 
@@ -787,6 +786,47 @@ pub const format_plain = FormatOptions{ emit: .plain }
 pub const format_vt = FormatOptions{ emit: .vt }
 pub const format_html = FormatOptions{ emit: .html }
 
+// Maps every output byte to its source position in the flat screen storage.
+pub struct PinMap {
+pub mut:
+	pins []Pin
+}
+
+// Maps every output byte to its source coordinate within a page.
+pub struct PointMap {
+pub mut:
+	points []Coordinate
+}
+
+fn append_point_bytes(mapping &PointMap, point Coordinate, count int) {
+	if mapping == unsafe { nil } || count <= 0 {
+		return
+	}
+	unsafe {
+		for _ in 0 .. count {
+			mapping.points << point
+		}
+	}
+}
+
+fn append_pin_bytes(mapping &PinMap, pin Pin, count int) {
+	if mapping == unsafe { nil } || count <= 0 {
+		return
+	}
+	unsafe {
+		for _ in 0 .. count {
+			mapping.pins << pin
+		}
+	}
+}
+
+fn last_pin_or_origin(mapping &PinMap) Pin {
+	if mapping != unsafe { nil } && mapping.pins.len > 0 {
+		return mapping.pins[mapping.pins.len - 1]
+	}
+	return Pin{}
+}
+
 // Terminal formatter formats the active terminal screen.
 //
 // This will always only emit data related to the currently active screen.
@@ -812,7 +852,8 @@ pub mut:
 	content ScreenContent = ScreenContent(ScreenContentSelection{ sel: none })
 	// Extra stuff to emit, such as terminal modes, palette, cursor, etc.
 	// This information is ONLY emitted when the format is "vt".
-	extra TerminalExtra = terminal_extra_styles
+	extra   TerminalExtra = terminal_extra_styles
+	pin_map &PinMap = unsafe { nil }
 }
 
 // Extra stuff to emit for terminal formatting.
@@ -875,6 +916,7 @@ pub fn TerminalFormatter.init(t &Terminal, opts FormatOptions) TerminalFormatter
 		opts: opts
 		content: ScreenContent(ScreenContentSelection{ sel: none })
 		extra: terminal_extra_styles
+		pin_map: unsafe { nil }
 	}
 }
 
@@ -883,6 +925,7 @@ pub fn (self TerminalFormatter) format() string {
 
 	// Emit palette before screen content if using VT format.
 	if self.extra.palette {
+		before := sb.len
 		match self.opts.emit {
 			.plain {}
 			.vt {
@@ -900,10 +943,12 @@ pub fn (self TerminalFormatter) format() string {
 				sb.write_string('}</style>')
 			}
 		}
+		append_pin_bytes(self.pin_map, Pin{}, sb.len - before)
 	}
 
 	// Emit terminal modes that differ from defaults.
 	if self.opts.emit == .vt && self.extra.modes {
+		before := sb.len
 		for entry in mode_entries {
 			if entry.disabled {
 				continue
@@ -916,16 +961,20 @@ pub fn (self TerminalFormatter) format() string {
 			suffix := if current { 'h' } else { 'l' }
 			sb.write_string('\x1b[${prefix}${entry.value}${suffix}')
 		}
+		append_pin_bytes(self.pin_map, Pin{}, sb.len - before)
 	}
 
 	// Format the active screen content
 	mut screen_fmt := ScreenFormatter.init(self.terminal.screens.active, self.opts)
 	screen_fmt.content = self.content
 	screen_fmt.extra = self.extra.screen
+	screen_fmt.pin_map = self.pin_map
 	sb.write_string(screen_fmt.format())
 
 	// Extra terminal state to emit after the screen contents
 	if self.opts.emit == .vt {
+		before := sb.len
+		prior_pin := last_pin_or_origin(self.pin_map)
 		// Emit scrolling region using DECSTBM and DECSLRM
 		if self.extra.scrolling_region {
 			region := self.terminal.scrolling_region
@@ -970,6 +1019,7 @@ pub fn (self TerminalFormatter) format() string {
 				sb.write_string('\x1b]7;${self.terminal.pwd}\x1b\\')
 			}
 		}
+		append_pin_bytes(self.pin_map, prior_pin, sb.len - before)
 	}
 
 	return sb.str()
@@ -987,7 +1037,8 @@ pub mut:
 	content ScreenContent = ScreenContent(ScreenContentSelection{ sel: none })
 	// Extra stuff to emit, such as cursor, style, hyperlinks, etc.
 	// This information is ONLY emitted when the format is "vt".
-	extra ScreenExtra = screen_extra_none
+	extra   ScreenExtra = screen_extra_none
+	pin_map &PinMap = unsafe { nil }
 }
 
 // Content to include in screen formatting.
@@ -1062,6 +1113,7 @@ pub fn ScreenFormatter.init(screen &Screen, opts FormatOptions) ScreenFormatter 
 		opts: opts
 		content: ScreenContent(ScreenContentSelection{ sel: none })
 		extra: screen_extra_none
+		pin_map: unsafe { nil }
 	}
 }
 
@@ -1073,6 +1125,10 @@ pub fn (self ScreenFormatter) format() string {
 		ScreenContentSelection {
 			// Emit our page content according to our selection.
 			mut page_fmt := PageFormatter.init(&self.screen.pages, self.opts)
+			mut point_map := PointMap{}
+			if self.pin_map != unsafe { nil } {
+				page_fmt.point_map = &point_map
+			}
 			if sel := self.content.sel {
 				// Order the selection for formatting (start before end)
 				s := if sel.start_pin.before(sel.end_pin) { sel.start_pin } else { sel.end_pin }
@@ -1085,6 +1141,14 @@ pub fn (self ScreenFormatter) format() string {
 			}
 			result := page_fmt.format_with_state()
 			sb.write_string(result.output)
+			if self.pin_map != unsafe { nil } {
+				for point in point_map.points {
+					append_pin_bytes(self.pin_map, Pin{
+						x: point.x
+						y: point.y
+					}, 1)
+				}
+			}
 		}
 	}
 
@@ -1104,6 +1168,10 @@ pub fn (self ScreenFormatter) format() string {
 			return sb.str()
 		}
 	}
+
+	// State emitted after content is mapped to the most recent content pin.
+	extras_start := sb.len
+	prior_pin := last_pin_or_origin(self.pin_map)
 
 	// Emit current SGR style state
 	if self.extra.style {
@@ -1202,6 +1270,7 @@ pub fn (self ScreenFormatter) format() string {
 		// CUP is 1-indexed
 		sb.write_string('\x1b[${cursor.y + 1};${cursor.x + 1}H')
 	}
+	append_pin_bytes(self.pin_map, prior_pin, sb.len - extras_start)
 
 	return sb.str()
 }
@@ -1229,6 +1298,7 @@ pub mut:
 	rectangle bool
 	// The previous trailing state from the prior page.
 	trailing_state ?TrailingState
+	point_map      &PointMap = unsafe { nil }
 }
 
 // Trailing state for cross-page continuation.
@@ -1257,6 +1327,7 @@ pub fn PageFormatter.init(pages &Pages, opts FormatOptions) PageFormatter {
 		end_y: max_u32
 		rectangle: false
 		trailing_state: none
+		point_map: unsafe { nil }
 	}
 }
 
@@ -1337,6 +1408,7 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 	match self.opts.emit {
 		.plain {}
 		.html {
+			before := sb.len
 			sb.write_string('<div style="font-family: monospace; white-space: pre;')
 			// Background/foreground colors
 			if bg := self.opts.background {
@@ -1346,8 +1418,10 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 				sb.write_string('color: #${hex02(fg.r)}${hex02(fg.g)}${hex02(fg.b)};')
 			}
 			sb.write_string('">')
+			append_point_bytes(self.point_map, Coordinate{}, sb.len - before)
 		}
 		.vt {
+			before := sb.len
 			// OSC 10 sets foreground color, OSC 11 sets background color
 			if fg := self.opts.foreground {
 				sb.write_string('\x1b]10;rgb:${hex02(fg.r)}/${hex02(fg.g)}/${hex02(fg.b)}\x1b\\')
@@ -1355,6 +1429,7 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 			if bg := self.opts.background {
 				sb.write_string('\x1b]11;rgb:${hex02(bg.r)}/${hex02(bg.g)}/${hex02(bg.b)}\x1b\\')
 			}
+			append_point_bytes(self.point_map, Coordinate{}, sb.len - before)
 		}
 	}
 
@@ -1409,7 +1484,14 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 			// Reset style before emitting newlines to prevent background
 			// colors from bleeding into the next line's leading cells.
 			if !style.default() {
+				before := sb.len
 				sb.write_string(format_style_close(self.opts.emit))
+				last := if self.point_map != unsafe { nil } && self.point_map.points.len > 0 {
+					self.point_map.points[self.point_map.points.len - 1]
+				} else {
+					Coordinate{}
+				}
+				append_point_bytes(self.point_map, last, sb.len - before)
 				style = CellStyle{}
 			}
 
@@ -1423,8 +1505,22 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 				.html { '\n' }
 			}
 
-			for _ in 0 .. blank_rows {
+			map_start := if self.point_map != unsafe { nil } && self.point_map.points.len > 0 {
+				self.point_map.points[self.point_map.points.len - 1]
+			} else {
+				Coordinate{}
+			}
+			for row_offset in 0 .. blank_rows {
 				sb.write_string(newline)
+				point := if row_offset == 0 {
+					map_start
+				} else {
+					Coordinate{
+						x: 0
+						y: map_start.y + u32(row_offset)
+					}
+				}
+				append_point_bytes(self.point_map, point, newline.len)
 			}
 			blank_rows = 0
 		}
@@ -1442,7 +1538,8 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 		}
 
 		// Go through each cell and print it
-		for _, cell in cells_subset {
+		for cell_offset, cell in cells_subset {
+			x := row_start_x + u32(cell_offset)
 
 			// Skip spacers
 			match cell.wide {
@@ -1466,8 +1563,25 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 			// This cell is not blank. If we have accumulated blank cells
 			// then we want to emit them now.
 			if blank_cells > 0 {
+				mut blank_x := x
+				mut blank_y := y
+				mut blank_points := []Coordinate{cap: blank_cells}
 				for _ in 0 .. blank_cells {
+					if blank_x > 0 {
+						blank_x--
+					} else if blank_y > 0 {
+						blank_y--
+						blank_x = page_cols - 1
+					}
+					blank_points << Coordinate{
+						x: u16(blank_x)
+						y: blank_y
+					}
+				}
+				blank_points.reverse_in_place()
+				for point in blank_points {
 					sb.write_u8(` `)
+					append_point_bytes(self.point_map, point, 1)
 				}
 				blank_cells = 0
 			}
@@ -1480,6 +1594,7 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 				if !cell_style_eql(cell_style, style) {
 					// If we had a previous style, we need to close it
 					if !style.default() {
+						before := sb.len
 						match self.opts.emit {
 							.html { sb.write_string(format_style_close(self.opts.emit)) }
 							.vt {
@@ -1489,6 +1604,10 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 							}
 							.plain {}
 						}
+						append_point_bytes(self.point_map, Coordinate{
+							x: u16(x)
+							y: y
+						}, sb.len - before)
 						// unreachable
 					}
 
@@ -1497,12 +1616,19 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 					// If we're just the default style now, we're done.
 					if !cell_style.default() {
 						// New style, emit it.
+						before := sb.len
 						sb.write_string(self.format_style_open(style))
+						append_point_bytes(self.point_map, Coordinate{
+							x: u16(x)
+							y: y
+						}, sb.len - before)
 					}
 				}
 			}
 
-			// Write the cell content
+			// Write the cell content. Every output byte, including every byte
+			// of UTF-8 and replacement strings, maps to this source cell.
+			before_content := sb.len
 			if cell.content_tag == .codepoint {
 				if !cell.has_text() {
 					// Blank cells get an empty space for formatting preservation
@@ -1520,17 +1646,35 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 				// bg_color_only: emit a space with the appropriate background
 				sb.write_u8(` `)
 			}
+			append_point_bytes(self.point_map, Coordinate{
+				x: u16(x)
+				y: y
+			}, sb.len - before_content)
 		}
 	}
 
 	// If the style is non-default, we need to close our style tag.
 	if !style.default() {
+		before := sb.len
 		sb.write_string(format_style_close(self.opts.emit))
+		last := if self.point_map != unsafe { nil } && self.point_map.points.len > 0 {
+			self.point_map.points[self.point_map.points.len - 1]
+		} else {
+			Coordinate{}
+		}
+		append_point_bytes(self.point_map, last, sb.len - before)
 	}
 
 	// Close the monospace wrapper for HTML output
 	if self.opts.emit == .html {
+		before := sb.len
 		sb.write_string('</div>')
+		last := if self.point_map != unsafe { nil } && self.point_map.points.len > 0 {
+			self.point_map.points[self.point_map.points.len - 1]
+		} else {
+			Coordinate{}
+		}
+		append_point_bytes(self.point_map, last, sb.len - before)
 	}
 
 	return FormatResult{
