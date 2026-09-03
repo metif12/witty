@@ -31,11 +31,11 @@ import math
 // or "off", but intermediate shades are used for the block shade
 // characters.
 pub enum Color as u8 {
-	off = 0x00
+	off    = 0x00
 	light_ = 0x40
 	medium = 0x80
-	dark = 0xc0
-	on = 0xff
+	dark   = 0xc0
+	on     = 0xff
 }
 
 // ============================================================
@@ -99,11 +99,11 @@ pub fn (c &Canvas) sfc_height() u32 {
 pub fn Canvas.init(w u32, h u32, pad_x u32, pad_y u32) Canvas {
 	total := (w + 2 * pad_x) * (h + 2 * pad_y)
 	return Canvas{
-		width:     w
-		height:    h
+		width: w
+		height: h
 		padding_x: pad_x
 		padding_y: pad_y
-		data:      []u8{len: int(total)}
+		data: []u8{len: int(total)}
 	}
 }
 
@@ -167,9 +167,9 @@ pub fn (mut c Canvas) draw_box(x0 i32, y0 i32, x1 i32, y1 i32, color Color) {
 	br_x := if x0 > x1 { x0 } else { x1 }
 	br_y := if y0 > y1 { y0 } else { y1 }
 	c.rect(SpriteRect{
-		x:      tl_x
-		y:      tl_y
-		width:  br_x - tl_x
+		x: tl_x
+		y: tl_y
+		width: br_x - tl_x
 		height: br_y - tl_y
 	}, color)
 }
@@ -181,7 +181,7 @@ pub fn (mut c Canvas) line(l LineSegment, thickness f64, color Color) ! {
 	path.line_to(l.p1.x, l.p1.y)
 	c.stroke_path(path.wrapped_path, StrokeOptions{
 		line_cap_mode: .butt
-		line_width:    thickness
+		line_width: thickness
 	}, color)!
 }
 
@@ -212,14 +212,14 @@ pub fn (mut c Canvas) triangle(t Triangle, color Color) ! {
 pub fn (mut c Canvas) static_path(max_nodes int) StaticPath {
 	return StaticPath{
 		canvas: unsafe { &c }
-		nodes:  []PathNode{cap: max_nodes}
+		nodes: []PathNode{cap: max_nodes}
 	}
 }
 
 // get_context returns a drawing context for the canvas.
 pub fn (mut c Canvas) get_context() Context {
 	return Context{
-		canvas:     unsafe { &c }
+		canvas: unsafe { &c }
 		line_width: 2.0
 	}
 }
@@ -397,7 +397,7 @@ fn atlas_reserve(mut atlas font.Atlas, width u32, height u32) !GlyphRegion {
 	// may seem like an error case but it simplifies downstream callers.
 	if width == 0 || height == 0 {
 		return GlyphRegion{
-			width:  width
+			width: width
 			height: height
 		}
 	}
@@ -416,9 +416,9 @@ fn atlas_reserve(mut atlas font.Atlas, width u32, height u32) !GlyphRegion {
 					if region_is_free(atlas, x, y, bordered_w, bordered_h) {
 						atlas.modified += 1
 						return GlyphRegion{
-							x:      x
-							y:      y
-							width:  width
+							x: x
+							y: y
+							width: width
 							height: height
 						}
 					}
@@ -529,8 +529,8 @@ fn (p &StaticPath) ty(y f64) f64 {
 pub fn (mut p StaticPath) move_to(x f64, y f64) {
 	p.nodes << PathNode{
 		kind: .move_to
-		x:    p.tx(x)
-		y:    p.ty(y)
+		x: p.tx(x)
+		y: p.ty(y)
 	}
 	p.wrapped_path = Path{
 		nodes: p.nodes
@@ -541,8 +541,8 @@ pub fn (mut p StaticPath) move_to(x f64, y f64) {
 pub fn (mut p StaticPath) line_to(x f64, y f64) {
 	p.nodes << PathNode{
 		kind: .line_to
-		x:    p.tx(x)
-		y:    p.ty(y)
+		x: p.tx(x)
+		y: p.ty(y)
 	}
 	p.wrapped_path = Path{
 		nodes: p.nodes
@@ -554,12 +554,12 @@ pub fn (mut p StaticPath) line_to(x f64, y f64) {
 pub fn (mut p StaticPath) curve_to(c1x f64, c1y f64, c2x f64, c2y f64, x f64, y f64) {
 	p.nodes << PathNode{
 		kind: .curve_to
-		x:    p.tx(x)
-		y:    p.ty(y)
-		c1x:  p.tx(c1x)
-		c1y:  p.ty(c1y)
-		c2x:  p.tx(c2x)
-		c2y:  p.ty(c2y)
+		x: p.tx(x)
+		y: p.ty(y)
+		c1x: p.tx(c1x)
+		c1y: p.ty(c1y)
+		c2x: p.tx(c2x)
+		c2y: p.ty(c2y)
 	}
 	p.wrapped_path = Path{
 		nodes: p.nodes
@@ -638,6 +638,9 @@ fn flatten_path(path Path) [][]Point {
 			}
 			.close {
 				if cur.len > 0 {
+					if cur.len > 1 && (cur.last().x != cur[0].x || cur.last().y != cur[0].y) {
+						cur << cur[0]
+					}
 					polys << cur
 					cur = []Point{}
 				}
@@ -753,7 +756,7 @@ fn (mut c Canvas) fill_polys(polys [][]Point, color Color) {
 					t := (sy - lo.y) / (hi.y - lo.y)
 					x := lo.x + t * (hi.x - lo.x)
 					xs << XCross{
-						x:   x
+						x: x
 						dir: dir
 					}
 				}
@@ -841,12 +844,10 @@ fn accumulate_span(mut coverage []f64, xa f64, xb f64, w int) {
 
 // stroke_path strokes the given (open or closed) path with the given
 // options. Each segment is expanded in to a quad of the requested width
-// (butt caps) and filled; the union of these quads produces the stroke.
-// Round joins/caps are approximated by additionally filling small
-// squares at joints, which is imperceptible at box-drawing sizes.
+// and filled; the union of these quads produces the stroke.
 pub fn (mut c Canvas) stroke_path(path Path, opts StrokeOptions, color Color) ! {
 	half := opts.line_width / 2.0
-	polys := stroke_to_polys(path, half)
+	polys := stroke_to_polys(path, half, opts.line_cap_mode)
 	if polys.len == 0 {
 		return
 	}
@@ -856,11 +857,47 @@ pub fn (mut c Canvas) stroke_path(path Path, opts StrokeOptions, color Color) ! 
 	for poly in polys {
 		c.fill_polys([poly], color)
 	}
+
+	if opts.line_cap_mode == .round_ {
+		for sub in flatten_path(path) {
+			if sub.len < 2 || points_equal(sub[0], sub.last()) {
+				continue
+			}
+			c.fill_polys([circle_polygon(sub[0], half), circle_polygon(sub.last(), half)], color)
+		}
+	}
+}
+
+// inner_stroke_path strokes only the portion of a path that lies inside
+// the shape produced by closing it. Ghostty uses the same two-surface mask
+// technique around z2d; the V renderer performs that alpha multiplication
+// directly on two temporary canvases.
+pub fn (mut c Canvas) inner_stroke_path(path Path, opts StrokeOptions, color Color) ! {
+	mut closed_nodes := path.nodes.clone()
+	closed_nodes << PathNode{
+		kind: .close
+	}
+
+	mut fill_canvas := Canvas.init(c.width, c.height, c.padding_x, c.padding_y)
+	fill_canvas.fill_path(Path{ nodes: closed_nodes }, FillOptions{}, .on)!
+
+	mut stroke_canvas := Canvas.init(c.width, c.height, c.padding_x, c.padding_y)
+	stroke_canvas.stroke_path(path, StrokeOptions{
+		line_cap_mode: opts.line_cap_mode
+		line_width: opts.line_width * 2.0
+	}, color)!
+
+	for i in 0 .. c.data.len {
+		masked := u8(math.round(f64(fill_canvas.data[i]) * f64(stroke_canvas.data[i]) / 255.0))
+		dst := u32(c.data[i])
+		src := u32(masked)
+		c.data[i] = u8(src + (dst * (255 - src) + 127) / 255)
+	}
 }
 
 // stroke_to_polys converts a path in to a list of quad polygons, one
 // per line segment, each offset by `half` on either side of the segment.
-fn stroke_to_polys(path Path, half f64) [][]Point {
+fn stroke_to_polys(path Path, half f64, cap LineCapMode) [][]Point {
 	mut polys := [][]Point{}
 	subs := flatten_path(path)
 	for sub in subs {
@@ -868,8 +905,8 @@ fn stroke_to_polys(path Path, half f64) [][]Point {
 			continue
 		}
 		for k in 0 .. sub.len - 1 {
-			a := sub[k]
-			b := sub[k + 1]
+			mut a := sub[k]
+			mut b := sub[k + 1]
 			dx := b.x - a.x
 			dy := b.y - a.y
 			len := math.sqrt(dx * dx + dy * dy)
@@ -879,6 +916,20 @@ fn stroke_to_polys(path Path, half f64) [][]Point {
 			// Unit normal.
 			nx := -dy / len * half
 			ny := dx / len * half
+			if cap == .square && !points_equal(sub[0], sub.last()) {
+				if k == 0 {
+					a = Point{
+						x: a.x - dx / len * half
+						y: a.y - dy / len * half
+					}
+				}
+				if k == sub.len - 2 {
+					b = Point{
+						x: b.x + dx / len * half
+						y: b.y + dy / len * half
+					}
+				}
+			}
 			polys << [
 				Point{
 					x: a.x + nx
@@ -902,6 +953,23 @@ fn stroke_to_polys(path Path, half f64) [][]Point {
 	return polys
 }
 
+fn points_equal(a Point, b Point) bool {
+	return a.x == b.x && a.y == b.y
+}
+
+fn circle_polygon(center Point, radius f64) []Point {
+	segments := 24
+	mut points := []Point{cap: segments}
+	for i in 0 .. segments {
+		angle := f64(i) * math.tau / f64(segments)
+		points << Point{
+			x: center.x + radius * math.cos(angle)
+			y: center.y + radius * math.sin(angle)
+		}
+	}
+	return points
+}
+
 // ============================================================
 // Context (for arc/circle drawing)
 // ============================================================
@@ -911,10 +979,11 @@ fn stroke_to_polys(path Path, half f64) [][]Point {
 // padding transform is applied through the underlying StaticPath.
 pub struct Context {
 pub mut:
-	canvas     &Canvas = unsafe { nil }
-	line_width f64 = 2.0
-	color      Color = .on
-	nodes      []PathNode
+	canvas        &Canvas = unsafe { nil }
+	line_width    f64 = 2.0
+	line_cap_mode LineCapMode = .butt
+	color         Color = .on
+	nodes         []PathNode
 	// Tracks the current point for relative operations like `arc`.
 	has_current bool
 	cur_x       f64
@@ -968,8 +1037,8 @@ fn (ctx &Context) ty(y f64) f64 {
 pub fn (mut ctx Context) move_to(x f64, y f64) {
 	ctx.nodes << PathNode{
 		kind: .move_to
-		x:    ctx.tx(x)
-		y:    ctx.ty(y)
+		x: ctx.tx(x)
+		y: ctx.ty(y)
 	}
 	ctx.cur_x = x
 	ctx.cur_y = y
@@ -986,8 +1055,8 @@ pub fn (mut ctx Context) line_to(x f64, y f64) {
 	}
 	ctx.nodes << PathNode{
 		kind: .line_to
-		x:    ctx.tx(x)
-		y:    ctx.ty(y)
+		x: ctx.tx(x)
+		y: ctx.ty(y)
 	}
 	ctx.cur_x = x
 	ctx.cur_y = y
@@ -997,12 +1066,12 @@ pub fn (mut ctx Context) line_to(x f64, y f64) {
 pub fn (mut ctx Context) curve_to(c1x f64, c1y f64, c2x f64, c2y f64, x f64, y f64) {
 	ctx.nodes << PathNode{
 		kind: .curve_to
-		x:    ctx.tx(x)
-		y:    ctx.ty(y)
-		c1x:  ctx.tx(c1x)
-		c1y:  ctx.ty(c1y)
-		c2x:  ctx.tx(c2x)
-		c2y:  ctx.ty(c2y)
+		x: ctx.tx(x)
+		y: ctx.ty(y)
+		c1x: ctx.tx(c1x)
+		c1y: ctx.ty(c1y)
+		c2x: ctx.tx(c2x)
+		c2y: ctx.ty(c2y)
 	}
 	ctx.cur_x = x
 	ctx.cur_y = y
@@ -1083,8 +1152,8 @@ pub fn (mut ctx Context) stroke() ! {
 		nodes: ctx.nodes
 	}
 	ctx.canvas.stroke_path(path, StrokeOptions{
-		line_cap_mode: .butt
-		line_width:    ctx.line_width
+		line_cap_mode: ctx.line_cap_mode
+		line_width: ctx.line_width
 	}, ctx.color)!
 }
 
@@ -1123,7 +1192,9 @@ pub enum Thickness {
 // thickness value is expected to be in pixels.
 pub fn (t Thickness) height(base u32) u32 {
 	return match t {
-		.super_light { if base / 2 > 1 { base / 2 } else { u32(1) } }
+		.super_light {
+			if base / 2 > 1 { base / 2 } else { u32(1) }
+		}
 		.light { base }
 		.heavy { base * 2 }
 	}
@@ -1135,11 +1206,11 @@ pub fn (t Thickness) height(base u32) u32 {
 
 // Shades.
 pub enum Shade as u8 {
-	off = 0x00
+	off    = 0x00
 	light_ = 0x40
 	medium = 0x80
-	dark = 0xc0
-	on = 0xff
+	dark   = 0xc0
+	on     = 0xff
 }
 
 // ============================================================
@@ -1200,7 +1271,7 @@ pub enum VerticalAlignment {
 pub struct Alignment {
 pub:
 	horizontal HorizontalAlignment = .center
-	vertical   VerticalAlignment   = .middle
+	vertical   VerticalAlignment = .middle
 }
 
 // Named alignment constants.
@@ -1217,19 +1288,19 @@ pub const align_right = Alignment{
 	horizontal: .right
 }
 pub const align_upper_left = Alignment{
-	vertical:   .top
+	vertical: .top
 	horizontal: .left
 }
 pub const align_upper_right = Alignment{
-	vertical:   .top
+	vertical: .top
 	horizontal: .right
 }
 pub const align_lower_left = Alignment{
-	vertical:   .bottom
+	vertical: .bottom
 	horizontal: .left
 }
 pub const align_lower_right = Alignment{
-	vertical:   .bottom
+	vertical: .bottom
 	horizontal: .right
 }
 pub const align_center = Alignment{}
@@ -1295,12 +1366,11 @@ pub enum Fraction {
 }
 
 // This can be indexed to get the fraction for i/8.
-pub const fraction_eighths = [Fraction.zero, .one_eighth, .two_eighths, .three_eighths,
-	.four_eighths, .five_eighths, .six_eighths, .seven_eighths, .one]
+pub const fraction_eighths = [Fraction.zero, .one_eighth, .two_eighths, .three_eighths, .four_eighths,
+	.five_eighths, .six_eighths, .seven_eighths, .one]
 
 // This can be indexed to get the fraction for i/4.
-pub const fraction_quarters = [Fraction.zero, .one_quarter, .two_quarters, .three_quarters,
-	.one]
+pub const fraction_quarters = [Fraction.zero, .one_quarter, .two_quarters, .three_quarters, .one]
 
 // This can be indexed to get the fraction for i/3.
 pub const fraction_thirds = [Fraction.zero, .one_third, .two_thirds, .one]
@@ -1379,8 +1449,7 @@ pub const seven_eighths_f = f64(0.875)
 // Fill a section of the cell, specified by a
 // horizontal and vertical pair of fraction lines.
 pub fn fill(metrics font.Metrics, mut canvas Canvas, x0 Fraction, x1 Fraction, y0 Fraction, y1 Fraction) {
-	canvas.draw_box(x0.to_min(metrics.cell_width), y0.to_min(metrics.cell_height), x1.to_max(metrics.cell_width),
-		y1.to_max(metrics.cell_height), .on)
+	canvas.draw_box(x0.to_min(metrics.cell_width), y0.to_min(metrics.cell_height), x1.to_max(metrics.cell_width), y1.to_max(metrics.cell_height), .on)
 }
 
 // ============================================================
@@ -1390,15 +1459,13 @@ pub fn fill(metrics font.Metrics, mut canvas Canvas, x0 Fraction, x1 Fraction, y
 // Centered vertical line of the provided thickness.
 pub fn vline_middle(metrics font.Metrics, mut canvas Canvas, thickness Thickness) {
 	thick_px := thickness.height(metrics.box_thickness)
-	vline(mut canvas, 0, i32(metrics.cell_height), i32(sat_sub(metrics.cell_width, thick_px) / 2),
-		thick_px)
+	vline(mut canvas, 0, i32(metrics.cell_height), i32(sat_sub(metrics.cell_width, thick_px) / 2), thick_px)
 }
 
 // Centered horizontal line of the provided thickness.
 pub fn hline_middle(metrics font.Metrics, mut canvas Canvas, thickness Thickness) {
 	thick_px := thickness.height(metrics.box_thickness)
-	hline(mut canvas, 0, i32(metrics.cell_width), i32(sat_sub(metrics.cell_height, thick_px) / 2),
-		thick_px)
+	hline(mut canvas, 0, i32(metrics.cell_width), i32(sat_sub(metrics.cell_height, thick_px) / 2), thick_px)
 }
 
 // Vertical line with the left edge at x, between y1 and y2.
@@ -1460,9 +1527,9 @@ pub fn block_shade(metrics font.Metrics, mut canvas Canvas, alignment Alignment,
 	}
 
 	canvas.rect(SpriteRect{
-		x:      i32(x)
-		y:      i32(y)
-		width:  i32(w)
+		x: i32(x)
+		y: i32(y)
+		width: i32(w)
 		height: i32(h)
 	}, unsafe { Color(u8(shade)) })
 }

@@ -20,14 +20,11 @@ pub fn draw_e0b0(cp u32, mut canvas Canvas, width u32, height u32, metrics font.
 	_ = metrics
 	float_width := f64(width)
 	float_height := f64(height)
-	// XTODO: needs canvas.triangle() for proper triangle fill.
-	// For now use fill_path with a triangular path.
-	mut path := canvas.static_path(5)
-	path.move_to(0, 0)
-	path.line_to(float_width, float_height / 2)
-	path.line_to(0, float_height)
-	path.close()
-	canvas.fill_path(path.wrapped_path, FillOptions{}, .on)!
+	canvas.triangle(Triangle{
+		p0: Point{ x: 0, y: 0 }
+		p1: Point{ x: float_width, y: float_height / 2 }
+		p2: Point{ x: 0, y: float_height }
+	}, .on)!
 }
 
 //
@@ -36,12 +33,11 @@ pub fn draw_e0b2(cp u32, mut canvas Canvas, width u32, height u32, metrics font.
 	_ = metrics
 	float_width := f64(width)
 	float_height := f64(height)
-	mut path := canvas.static_path(5)
-	path.move_to(float_width, 0)
-	path.line_to(0, float_height / 2)
-	path.line_to(float_width, float_height)
-	path.close()
-	canvas.fill_path(path.wrapped_path, FillOptions{}, .on)!
+	canvas.triangle(Triangle{
+		p0: Point{ x: float_width, y: 0 }
+		p1: Point{ x: 0, y: float_height / 2 }
+		p2: Point{ x: float_width, y: float_height }
+	}, .on)!
 }
 
 //
@@ -50,12 +46,11 @@ pub fn draw_e0b8(cp u32, mut canvas Canvas, width u32, height u32, metrics font.
 	_ = metrics
 	float_width := f64(width)
 	float_height := f64(height)
-	mut path := canvas.static_path(5)
-	path.move_to(0, 0)
-	path.line_to(float_width, float_height)
-	path.line_to(0, float_height)
-	path.close()
-	canvas.fill_path(path.wrapped_path, FillOptions{}, .on)!
+	canvas.triangle(Triangle{
+		p0: Point{ x: 0, y: 0 }
+		p1: Point{ x: float_width, y: float_height }
+		p2: Point{ x: 0, y: float_height }
+	}, .on)!
 }
 
 //
@@ -72,12 +67,11 @@ pub fn draw_e0ba(cp u32, mut canvas Canvas, width u32, height u32, metrics font.
 	_ = metrics
 	float_width := f64(width)
 	float_height := f64(height)
-	mut path := canvas.static_path(5)
-	path.move_to(float_width, 0)
-	path.line_to(float_width, float_height)
-	path.line_to(0, float_height)
-	path.close()
-	canvas.fill_path(path.wrapped_path, FillOptions{}, .on)!
+	canvas.triangle(Triangle{
+		p0: Point{ x: float_width, y: 0 }
+		p1: Point{ x: float_width, y: float_height }
+		p2: Point{ x: 0, y: float_height }
+	}, .on)!
 }
 
 //
@@ -94,12 +88,11 @@ pub fn draw_e0bc(cp u32, mut canvas Canvas, width u32, height u32, metrics font.
 	_ = metrics
 	float_width := f64(width)
 	float_height := f64(height)
-	mut path := canvas.static_path(5)
-	path.move_to(0, 0)
-	path.line_to(float_width, 0)
-	path.line_to(0, float_height)
-	path.close()
-	canvas.fill_path(path.wrapped_path, FillOptions{}, .on)!
+	canvas.triangle(Triangle{
+		p0: Point{ x: 0, y: 0 }
+		p1: Point{ x: float_width, y: 0 }
+		p2: Point{ x: 0, y: float_height }
+	}, .on)!
 }
 
 //
@@ -116,12 +109,11 @@ pub fn draw_e0be(cp u32, mut canvas Canvas, width u32, height u32, metrics font.
 	_ = metrics
 	float_width := f64(width)
 	float_height := f64(height)
-	mut path := canvas.static_path(5)
-	path.move_to(0, 0)
-	path.line_to(float_width, 0)
-	path.line_to(float_width, float_height)
-	path.close()
-	canvas.fill_path(path.wrapped_path, FillOptions{}, .on)!
+	canvas.triangle(Triangle{
+		p0: Point{ x: 0, y: 0 }
+		p1: Point{ x: float_width, y: 0 }
+		p2: Point{ x: float_width, y: float_height }
+	}, .on)!
 }
 
 //
@@ -143,36 +135,16 @@ pub fn draw_e0b1(cp u32, mut canvas Canvas, width u32, height u32, metrics font.
 	path.line_to(float_width, float_height / 2)
 	path.line_to(0, float_height)
 
-	// XTODO: needs canvas.strokePath with line_cap_mode = .butt
-	// For now approximate with line drawing.
-	float_thick := f64(Thickness.light.height(metrics.box_thickness))
-	canvas.line(LineSegment{
-		p0: Point{ x: 0, y: 0 }
-		p1: Point{ x: float_width, y: float_height / 2 }
-	}, float_thick, .on) or {}
-	canvas.line(LineSegment{
-		p0: Point{ x: float_width, y: float_height / 2 }
-		p1: Point{ x: 0, y: float_height }
-	}, float_thick, .on) or {}
+	canvas.stroke_path(path.wrapped_path, StrokeOptions{
+		line_cap_mode: .butt
+		line_width: f64(Thickness.light.height(metrics.box_thickness))
+	}, .on)!
 }
 
 //
 pub fn draw_e0b3(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
-	// XTODO: needs canvas.flipHorizontal() for proper mirroring.
-	// For now draw the mirrored version directly.
-	_ = cp
-	float_width := f64(width)
-	float_height := f64(height)
-
-	float_thick := f64(Thickness.light.height(metrics.box_thickness))
-	canvas.line(LineSegment{
-		p0: Point{ x: float_width, y: 0 }
-		p1: Point{ x: 0, y: float_height / 2 }
-	}, float_thick, .on) or {}
-	canvas.line(LineSegment{
-		p0: Point{ x: 0, y: float_height / 2 }
-		p1: Point{ x: float_width, y: float_height }
-	}, float_thick, .on) or {}
+	draw_e0b1(cp, mut canvas, width, height, metrics)!
+	canvas.flip_horizontal()
 }
 
 //
@@ -184,18 +156,14 @@ pub fn draw_e0b4(cp u32, mut canvas Canvas, width u32, height u32, metrics font.
 	float_height := f64(height)
 
 	// Coefficient for approximating a circular arc.
-	// XTODO: needs curveTo support for proper Bezier curves.
-	// For now approximate with a triangular fill.
-
+	c := (math.sqrt2 - 1.0) * 4.0 / 3.0
 	radius := math.min(float_width, float_height / 2)
 
 	mut path := canvas.static_path(6)
 	path.move_to(0, 0)
-	// XTODO: curveTo(radius * c, 0, radius, radius - radius * c, radius, radius)
-	path.line_to(radius, radius)
+	path.curve_to(radius * c, 0, radius, radius - radius * c, radius, radius)
 	path.line_to(radius, float_height - radius)
-	// XTODO: curveTo(radius, float_height - radius + radius * c, radius * c, float_height, 0, float_height)
-	path.line_to(0, float_height)
+	path.curve_to(radius, float_height - radius + radius * c, radius * c, float_height, 0, float_height)
 	path.close()
 
 	canvas.fill_path(path.wrapped_path, FillOptions{}, .on)!
@@ -209,71 +177,31 @@ pub fn draw_e0b5(cp u32, mut canvas Canvas, width u32, height u32, metrics font.
 	float_height := f64(height)
 
 	// Coefficient for approximating a circular arc.
-	// XTODO: needs curveTo and innerStrokePath for proper arc stroke.
-	// For now approximate with lines.
-
+	c := (math.sqrt2 - 1.0) * 4.0 / 3.0
 	radius := math.min(float_width, float_height / 2)
-	float_thick := f64(metrics.box_thickness)
 
-	canvas.line(LineSegment{
-		p0: Point{ x: 0, y: 0 }
-		p1: Point{ x: radius, y: radius }
-	}, float_thick, .on) or {}
-	canvas.line(LineSegment{
-		p0: Point{ x: radius, y: radius }
-		p1: Point{ x: radius, y: float_height - radius }
-	}, float_thick, .on) or {}
-	canvas.line(LineSegment{
-		p0: Point{ x: radius, y: float_height - radius }
-		p1: Point{ x: 0, y: float_height }
-	}, float_thick, .on) or {}
+	mut path := canvas.static_path(4)
+	path.move_to(0, 0)
+	path.curve_to(radius * c, 0, radius, radius - radius * c, radius, radius)
+	path.line_to(radius, float_height - radius)
+	path.curve_to(radius, float_height - radius + radius * c, radius * c, float_height, 0, float_height)
+
+	canvas.inner_stroke_path(path.wrapped_path, StrokeOptions{
+		line_width: f64(metrics.box_thickness)
+		line_cap_mode: .butt
+	}, .on)!
 }
 
 //
 pub fn draw_e0b6(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
-	// XTODO: needs canvas.flipHorizontal() for proper mirroring.
-	// For now draw the mirrored version directly.
-	_ = cp
-	_ = metrics
-
-	float_width := f64(width)
-	float_height := f64(height)
-
-	radius := math.min(float_width, float_height / 2)
-
-	mut path := canvas.static_path(6)
-	path.move_to(float_width, 0)
-	path.line_to(float_width - radius, radius)
-	path.line_to(float_width - radius, float_height - radius)
-	path.line_to(float_width, float_height)
-	path.close()
-
-	canvas.fill_path(path.wrapped_path, FillOptions{}, .on)!
+	draw_e0b4(cp, mut canvas, width, height, metrics)!
+	canvas.flip_horizontal()
 }
 
 //
 pub fn draw_e0b7(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
-	// XTODO: needs canvas.flipHorizontal() for proper mirroring.
-	_ = cp
-
-	float_width := f64(width)
-	float_height := f64(height)
-
-	radius := math.min(float_width, float_height / 2)
-	float_thick := f64(metrics.box_thickness)
-
-	canvas.line(LineSegment{
-		p0: Point{ x: float_width, y: 0 }
-		p1: Point{ x: float_width - radius, y: radius }
-	}, float_thick, .on) or {}
-	canvas.line(LineSegment{
-		p0: Point{ x: float_width - radius, y: radius }
-		p1: Point{ x: float_width - radius, y: float_height - radius }
-	}, float_thick, .on) or {}
-	canvas.line(LineSegment{
-		p0: Point{ x: float_width - radius, y: float_height - radius }
-		p1: Point{ x: float_width, y: float_height }
-	}, float_thick, .on) or {}
+	draw_e0b5(cp, mut canvas, width, height, metrics)!
+	canvas.flip_horizontal()
 }
 
 //
@@ -311,35 +239,6 @@ pub fn draw_e0d2(cp u32, mut canvas Canvas, width u32, height u32, metrics font.
 
 //
 pub fn draw_e0d4(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
-	// XTODO: needs canvas.flipHorizontal() for proper mirroring.
-	// For now draw the mirrored version directly.
-	_ = cp
-
-	float_width := f64(width)
-	float_height := f64(height)
-	float_thick := f64(metrics.box_thickness)
-
-	// Top piece (mirrored)
-	{
-		mut path := canvas.static_path(6)
-		path.move_to(float_width, 0)
-		path.line_to(0, 0)
-		path.line_to(float_width / 2, float_height / 2 - float_thick / 2)
-		path.line_to(float_width, float_height / 2 - float_thick / 2)
-		path.close()
-
-		canvas.fill_path(path.wrapped_path, FillOptions{}, .on)!
-	}
-
-	// Bottom piece (mirrored)
-	{
-		mut path := canvas.static_path(6)
-		path.move_to(float_width, float_height)
-		path.line_to(0, float_height)
-		path.line_to(float_width / 2, float_height / 2 + float_thick / 2)
-		path.line_to(float_width, float_height / 2 + float_thick / 2)
-		path.close()
-
-		canvas.fill_path(path.wrapped_path, FillOptions{}, .on)!
-	}
+	draw_e0d2(cp, mut canvas, width, height, metrics)!
+	canvas.flip_horizontal()
 }

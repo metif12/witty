@@ -307,6 +307,79 @@ fn test_canvas_flip_vertical_swaps_clip() {
 }
 
 // ------------------------------------------------------------
+// Vector path stroking
+// ------------------------------------------------------------
+
+fn test_stroke_path_closes_closed_subpaths() {
+	mut c := Canvas.init(12, 12, 0, 0)
+	mut path := c.static_path(4)
+	path.move_to(2, 2)
+	path.line_to(9, 2)
+	path.line_to(9, 9)
+	path.close()
+	c.stroke_path(path.wrapped_path, StrokeOptions{ line_width: 2 }, .on)!
+
+	// This lies on the final segment from (9, 9) back to (2, 2).
+	assert data_at(&c, 5, 5) > 0
+}
+
+fn test_stroke_path_round_caps_extend_past_endpoints() {
+	mut butt := Canvas.init(12, 12, 0, 0)
+	mut butt_path := butt.static_path(2)
+	butt_path.move_to(3, 6)
+	butt_path.line_to(9, 6)
+	butt.stroke_path(butt_path.wrapped_path, StrokeOptions{
+		line_cap_mode: .butt
+		line_width: 2
+	}, .on)!
+
+	mut rounded := Canvas.init(12, 12, 0, 0)
+	mut rounded_path := rounded.static_path(2)
+	rounded_path.move_to(3, 6)
+	rounded_path.line_to(9, 6)
+	rounded.stroke_path(rounded_path.wrapped_path, StrokeOptions{
+		line_cap_mode: .round_
+		line_width: 2
+	}, .on)!
+
+	assert data_at(&butt, 2, 6) == 0
+	assert data_at(&rounded, 2, 6) > 0
+}
+
+fn test_inner_stroke_path_masks_the_outer_half() {
+	mut c := Canvas.init(12, 12, 0, 0)
+	mut path := c.static_path(3)
+	path.move_to(2, 2)
+	path.line_to(10, 2)
+	path.line_to(10, 10)
+	c.inner_stroke_path(path.wrapped_path, StrokeOptions{ line_width: 2 }, .on)!
+
+	assert data_at(&c, 5, 1) == 0
+	assert data_at(&c, 5, 2) > 0
+}
+
+fn test_powerline_mirrored_variants_are_exact_flips() {
+	metrics := font.default_grid_metrics(12, 20)
+	mut left := Canvas.init(12, 20, 0, 0)
+	draw_e0b5(0xe0b5, mut left, 12, 20, metrics)!
+	left.flip_horizontal()
+
+	mut right := Canvas.init(12, 20, 0, 0)
+	draw_e0b7(0xe0b7, mut right, 12, 20, metrics)!
+	assert left.data == right.data
+}
+
+fn test_cursor_uses_cursor_thickness_metric() {
+	mut metrics := font.default_grid_metrics(8, 8)
+	metrics.cursor_thickness = 2
+	mut c := Canvas.init(8, 8, 0, 0)
+	draw_cursor_hollow_rect(0, mut c, 8, 8, metrics)!
+
+	assert data_at(&c, 1, 1) == 255
+	assert data_at(&c, 2, 2) == 0
+}
+
+// ------------------------------------------------------------
 // sat_sub -- saturating subtraction (Zig's `-|`)
 // ------------------------------------------------------------
 

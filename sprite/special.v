@@ -160,10 +160,6 @@ pub fn draw_underline_dashed(cp u32, mut canvas Canvas, width u32, height u32, m
 pub fn draw_underline_curly(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
 	_ = cp
 
-	// XTODO: needs curveTo/moveTo/stroke context methods for proper
-	// curly underline rendering. The implementation below is a
-	// simplified approximation.
-
 	mut ctx := canvas.get_context()
 	defer {
 		ctx.deinit()
@@ -180,6 +176,10 @@ pub fn draw_underline_curly(cp u32, mut canvas Canvas, width u32, height u32, me
 	// the nicest undercurls at 1px underline thickness; thinner tends to look
 	// too thin compared to straight underlines and has artefacting.
 	ctx.line_width = f64(metrics.underline_thickness)
+
+	// Adjacent underlines overlap these rounded caps, while isolated ends
+	// look cleaner than they do with butt caps.
+	ctx.line_cap_mode = .round_
 
 	// Empirically this looks good.
 	amplitude := float_width / math.pi
@@ -202,19 +202,11 @@ pub fn draw_underline_curly(cp u32, mut canvas Canvas, width u32, height u32, me
 
 	center := 0.5 * float_width
 
-	// XTODO: needs moveTo/curveTo/stroke on Context.
 	// We create a single cycle of a wave that peaks at the center of the cell.
-	// For now approximate with lines.
-	canvas.line(LineSegment{
-		p0: Point{ x: 0, y: bottom_ }
-		p1: Point{ x: center, y: top_ }
-	}, ctx.line_width, .on) or {}
-	canvas.line(LineSegment{
-		p0: Point{ x: center, y: top_ }
-		p1: Point{ x: float_width, y: bottom_ }
-	}, ctx.line_width, .on) or {}
-
-	_ = r
+	ctx.move_to(0, bottom_)
+	ctx.curve_to(center * r, bottom_, center - center * r, top_, center, top_)
+	ctx.curve_to(center + center * r, top_, float_width - center * r, bottom_, float_width, bottom_)
+	ctx.stroke()!
 }
 
 // draw_strikethrough draws a strikethrough decoration.
@@ -272,8 +264,7 @@ pub fn draw_cursor_hollow_rect(cp u32, mut canvas Canvas, width u32, height u32,
 
 	// We fill the entire rect and then hollow out the inside, this isn't very
 	// efficient but it doesn't need to be and it's the easiest way to write it.
-	// XTODO: needs cursor_thickness field on Metrics. Using box_thickness as proxy.
-	cursor_thickness := metrics.box_thickness
+	cursor_thickness := metrics.cursor_thickness
 	canvas.rect(SpriteRect{
 		x: 0
 		y: 0
@@ -293,8 +284,7 @@ pub fn draw_cursor_bar(cp u32, mut canvas Canvas, width u32, height u32, metrics
 	_ = cp
 	_ = width
 
-	// XTODO: needs cursor_thickness field on Metrics. Using box_thickness as proxy.
-	cursor_thickness := metrics.box_thickness
+	cursor_thickness := metrics.cursor_thickness
 
 	// We place the bar cursor half of its thickness over the left edge of the
 	// cell, so that it sits centered between characters, not biased to a side.
@@ -313,8 +303,7 @@ pub fn draw_cursor_bar(cp u32, mut canvas Canvas, width u32, height u32, metrics
 pub fn draw_cursor_underline(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
 	_ = cp
 
-	// XTODO: needs cursor_thickness field on Metrics. Using box_thickness as proxy.
-	cursor_thickness := metrics.box_thickness
+	cursor_thickness := metrics.cursor_thickness
 
 	// We can go beyond the height of the cell a bit, but
 	// we want to be sure never to exceed the height of the
