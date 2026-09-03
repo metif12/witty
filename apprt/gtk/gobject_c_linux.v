@@ -75,13 +75,13 @@ fn C.gtk_widget_class_bind_template_child_full(widget_class voidptr, name &char,
 
 // --- Property registration -------------------------------------------------
 
-fn C.g_object_class_install_property(oclass voidptr, property_id u32, pspec &C.GParamSpec)
-fn C.g_param_spec_boolean(name &char, nick &char, blurb &char, default_value int, flags int) &C.GParamSpec
-fn C.g_param_spec_int(name &char, nick &char, blurb &char, minimum int, maximum int, default_value int, flags int) &C.GParamSpec
-fn C.g_param_spec_uint(name &char, nick &char, blurb &char, minimum u32, maximum u32, default_value u32, flags int) &C.GParamSpec
-fn C.g_param_spec_string(name &char, nick &char, blurb &char, default_value &char, flags int) &C.GParamSpec
-fn C.g_param_spec_object(name &char, nick &char, blurb &char, object_type GType, flags int) &C.GParamSpec
-fn C.g_param_spec_boxed(name &char, nick &char, blurb &char, boxed_type GType, flags int) &C.GParamSpec
+fn C.g_object_class_install_property(oclass voidptr, property_id u32, pspec GParamSpec)
+fn C.g_param_spec_boolean(name &char, nick &char, blurb &char, default_value int, flags int) GParamSpec
+fn C.g_param_spec_int(name &char, nick &char, blurb &char, minimum int, maximum int, default_value int, flags int) GParamSpec
+fn C.g_param_spec_uint(name &char, nick &char, blurb &char, minimum u32, maximum u32, default_value u32, flags int) GParamSpec
+fn C.g_param_spec_string(name &char, nick &char, blurb &char, default_value &char, flags int) GParamSpec
+fn C.g_param_spec_object(name &char, nick &char, blurb &char, object_type GType, flags int) GParamSpec
+fn C.g_param_spec_boxed(name &char, nick &char, blurb &char, boxed_type GType, flags int) GParamSpec
 
 // --- Signal registration ---------------------------------------------------
 
@@ -120,8 +120,8 @@ pub mut:
 	constructed  voidptr
 }
 
-fn C.g_object_class_find_property(oclass voidptr, property_name &char) &C.GParamSpec
-fn C.g_object_notify_by_pspec(object voidptr, pspec &C.GParamSpec)
+fn C.g_object_class_find_property(oclass voidptr, property_name &char) GParamSpec
+fn C.g_object_notify_by_pspec(object voidptr, pspec GParamSpec)
 
 // GValue accessors (the GValue* is passed as voidptr).
 fn C.g_value_get_boolean(value voidptr) int

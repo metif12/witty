@@ -1,3 +1,4 @@
+@[has_globals]
 module gtk
 
 // resize_overlay_linux.v - The GObject ResizeOverlay widget class for the GTK
@@ -14,10 +15,12 @@ module gtk
 //      don't flicker while GTK is busy rearranging widgets mid-resize.
 //   3. `duration` (timer): how long the overlay stays visible before hiding.
 //
-// FOLLOWING THE ESTABLISHED PATTERN (surface_class_linux.v etc.): the GObject
-// registration, `.ui`/blueprint template, and property machinery are stubbed
-// with `// TODO(gtk)`; the real timer/idle state-machine logic is translated.
-// The class is modeled as a plain V struct wrapping the GObject/GtkWidget ptr.
+// The GObject class registration (ghostty's `gobject.ext.defineClass`), the
+// blueprint template, the five properties (duration/first-delay/label/
+// overlay-halign/overlay-valign), and the dispose/finalize vfuncs are
+// hand-expanded onto the raw GObject/GTK C API below. The real timer/idle
+// state-machine logic is translated. The class is additionally modeled as a
+// plain V struct wrapping the GObject/GtkWidget ptr for callers in V.
 
 // --- New C bindings unique to this file -----------------------------------
 //
@@ -29,6 +32,24 @@ module gtk
 pub type GtkLabel = voidptr
 
 fn C.gtk_label_set_label(label GtkLabel, str &char)
+
+// gtk_align_get_type is the registered GType of the gtk.Align enum, used to
+// register the overlay-halign / overlay-valign enum properties. Declared here
+// (first overlay file that needs it); other overlay files reuse it.
+fn C.gtk_align_get_type() GType
+
+// g_param_spec_enum registers an enum-typed property. Not declared in
+// gobject_c_linux.v.
+fn C.g_param_spec_enum(name &char, nick &char, blurb &char, enum_type GType, default_value int, flags int) &C.GParamSpec
+
+// g_value_get_enum / g_value_set_enum read/write enum GValues. Not declared in
+// gobject_c_linux.v.
+fn C.g_value_get_enum(value voidptr) int
+
+fn C.g_value_set_enum(value voidptr, v_enum int)
+
+// glib.idleAdd equivalent (declared in split_tree_class_linux.v as
+// C.g_idle_add) is reused here for the idle coalescing source.
 
 // --- gtk.Align ------------------------------------------------------------
 
@@ -50,8 +71,9 @@ pub enum Align {
 // class-registration TODO at the end).
 @[heap]
 pub struct ResizeOverlay {
-pub mut:
+
 	// The GtkWidget (adw.Bin) pointer for this instance.
+pub mut:
 	widget GtkWidget = unsafe { nil }
 
 	// The label with the text (template child).
@@ -81,13 +103,20 @@ pub mut:
 	valign Align = .center
 }
 
-// new_resize_overlay creates a new ResizeOverlay. Mirrors instance `init`:
-// initializes the template and arms the first-delay timer if configured.
+// new_resize_overlay creates a new ResizeOverlay. Mirrors
+// `gobject.ext.newInstance` + the instance `init`: it builds the GObject
+// (running the `.ui` template init, which binds the `label` child), reads the
+// template child back into the wrapper, and arms the first-delay timer if
+// configured.
 pub fn new_resize_overlay() &ResizeOverlay {
-	mut self := &ResizeOverlay{}
-	// TODO(gtk): gtk.Widget.initTemplate(self.as(gtk.Widget)).
+	obj := C.g_object_new(resize_overlay_get_type(), &char(unsafe { nil }))
+	priv := resize_overlay_priv(obj)
+	mut self := &ResizeOverlay{
+		widget: obj
+		label: priv.label
+	}
+	// init: arm the first-delay timer.
 	if self.first_delay > 0 {
-		// TODO(gtk): delay_timer = glib.timeoutAdd(first_delay, onDelayTimer, self).
 		self.delay_timer = C.g_timeout_add(self.first_delay, on_resize_delay_timer, self)
 	}
 	return self
@@ -97,7 +126,9 @@ pub fn new_resize_overlay() &ResizeOverlay {
 // is currently hidden; callers must call `schedule`. Mirrors `setLabel`.
 pub fn (mut self ResizeOverlay) set_label(label ?string) {
 	self.label_text = label
-	// TODO(gtk): notifyByPspec(properties.label).
+	if !isnil(self.widget) {
+		C.g_object_notify_by_pspec(self.widget, g_resize_overlay_pspec_label)
+	}
 }
 
 // schedule schedules the overlay to be shown on the next idle tick. To avoid
@@ -115,10 +146,8 @@ pub fn (mut self ResizeOverlay) schedule() {
 	if self.idler != 0 {
 		return
 	}
-	// TODO(gtk): idler = glib.idleAdd(onIdle, self). glib.idleAdd isn't bound in
-	// the module yet; we model it with a zero-delay timeout which fires on the
-	// next main-loop iteration, matching the coalescing semantics.
-	self.idler = C.g_timeout_add(0, on_resize_idle, self)
+	// idler = glib.idleAdd(onIdle, self).
+	self.idler = C.g_idle_add(on_resize_idle, self)
 }
 
 // on_idle is the idle callback that actually shows/hides the overlay. Mirrors
@@ -178,13 +207,14 @@ pub fn (mut self ResizeOverlay) dispose() {
 		C.g_source_remove(self.delay_timer)
 		self.delay_timer = 0
 	}
-	// TODO(gtk): gtk.Widget.disposeTemplate + chain up to parent dispose.
+	if !isnil(self.widget) {
+		resize_overlay_dispose(voidptr(self.widget))
+	}
 }
 
 // --- C-ABI timeout/idle trampolines ---------------------------------------
 // These are the plain-C callbacks that glib invokes. Each recovers `self` from
 // the user-data pointer and forwards to the corresponding method.
-
 fn on_resize_idle(ud voidptr) int {
 	if isnil(ud) {
 		return 0
@@ -209,12 +239,209 @@ fn on_resize_delay_timer(ud voidptr) int {
 	return self.on_delay_timer()
 }
 
-// --- GObject class registration (stub) ------------------------------------
-//
-// TODO(gtk): In ghostty this class is registered via gobject.ext.defineClass
-// with an instanceInit, classInit, and a Private struct. classInit loads the
-// `resize-overlay` blueprint `.ui` template, binds the `label` template child,
-// registers the `duration`/`first-delay`/`label`/`overlay-halign`/
-// `overlay-valign` properties, and wires the dispose/finalize virtual methods.
-// V has no such machinery, so all of that is stubbed; the timer/idle handlers
-// above are plain methods instead of C template callbacks.
+// --- GObject class registration -------------------------------------------
+// Hand-expansion of ghostty's `gobject.ext.defineClass` for
+// `GhosttyResizeOverlay` (parent adw.Bin): a `.ui` template with a bound
+// `label` child, five properties, and dispose/finalize vfuncs.
+
+// The blueprint (ui/1.2/resize-overlay.blp) translated to a GtkBuilder .ui XML
+// string. `visible: false` and the duration/first-delay/overlay-*align
+// template properties become <property> elements; `styles [...]` become
+// <style><class .../></style>; `halign/valign: bind template.overlay-*align`
+// become <binding>/<lookup name="overlay-*align">GhosttyResizeOverlay</lookup>.
+const resize_overlay_ui = '<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="GhosttyResizeOverlay" parent="AdwBin">
+    <property name="visible">false</property>
+    <property name="duration">750</property>
+    <property name="first-delay">250</property>
+    <property name="overlay-halign">center</property>
+    <property name="overlay-valign">center</property>
+    <child>
+      <object class="AdwBin">
+        <child>
+          <object class="GtkLabel" id="label">
+            <style>
+              <class name="background"/>
+              <class name="resize-overlay"/>
+            </style>
+            <property name="focusable">false</property>
+            <property name="focus-on-click">false</property>
+            <property name="justify">center</property>
+            <property name="selectable">false</property>
+            <property name="halign">
+              <binding>
+                <lookup name="overlay-halign">GhosttyResizeOverlay</lookup>
+              </binding>
+            </property>
+            <property name="valign">
+              <binding>
+                <lookup name="overlay-valign">GhosttyResizeOverlay</lookup>
+              </binding>
+            </property>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>
+'
+
+// The C-layout private struct mirroring ghostty\'s `Private`. The idler/timer/
+// delay_timer sources and label_text are managed by the V wrapper (which holds
+// the timeout-source user-data), so only the fields the template + property
+// accessors touch are stored here.
+struct C.GhosttyResizeOverlayPrivate {
+mut:
+	label       voidptr
+	label_text  &char = unsafe { nil }
+	duration    u32
+	first_delay u32
+	halign      int
+	valign      int
+}
+
+// The GObject type id and private-data offset, registered lazily.
+__global g_resize_overlay_type = GType(0)
+__global g_resize_overlay_priv_offset = int(0)
+
+// The registered GParamSpec* pointers, captured in class_init so the wrapper
+// methods can notify them.
+__global g_resize_overlay_pspec_duration = &C.GParamSpec(unsafe { nil })
+__global g_resize_overlay_pspec_first_delay = &C.GParamSpec(unsafe { nil })
+__global g_resize_overlay_pspec_label = &C.GParamSpec(unsafe { nil })
+__global g_resize_overlay_pspec_halign = &C.GParamSpec(unsafe { nil })
+__global g_resize_overlay_pspec_valign = &C.GParamSpec(unsafe { nil })
+
+// Property ids for the get/set vfunc dispatch.
+const resize_overlay_prop_duration = u32(1)
+const resize_overlay_prop_first_delay = u32(2)
+const resize_overlay_prop_label = u32(3)
+const resize_overlay_prop_halign = u32(4)
+const resize_overlay_prop_valign = u32(5)
+
+fn resize_overlay_priv(obj voidptr) &C.GhosttyResizeOverlayPrivate {
+	return &C.GhosttyResizeOverlayPrivate(C.g_type_instance_get_private(obj, g_resize_overlay_type))
+}
+
+// resize_overlay_get_property implements the GObjectClass get_property vfunc.
+fn resize_overlay_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	priv := resize_overlay_priv(obj)
+	match property_id {
+		resize_overlay_prop_duration { C.g_value_set_uint(value, priv.duration) }
+		resize_overlay_prop_first_delay { C.g_value_set_uint(value, priv.first_delay) }
+		resize_overlay_prop_label { C.g_value_set_string(value, priv.label_text) }
+		resize_overlay_prop_halign { C.g_value_set_enum(value, priv.halign) }
+		resize_overlay_prop_valign { C.g_value_set_enum(value, priv.valign) }
+		else {}
+	}
+}
+
+// resize_overlay_set_property implements the GObjectClass set_property vfunc.
+fn resize_overlay_set_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	mut priv := resize_overlay_priv(obj)
+	match property_id {
+		resize_overlay_prop_duration {
+			priv.duration = C.g_value_get_uint(value)
+		}
+		resize_overlay_prop_first_delay {
+			priv.first_delay = C.g_value_get_uint(value)
+		}
+		resize_overlay_prop_label {
+			if !isnil(priv.label_text) {
+				C.g_free(priv.label_text)
+			}
+			priv.label_text = C.g_strdup(C.g_value_get_string(value))
+		}
+		resize_overlay_prop_halign {
+			priv.halign = C.g_value_get_enum(value)
+		}
+		resize_overlay_prop_valign {
+			priv.valign = C.g_value_get_enum(value)
+		}
+		else {}
+	}
+}
+
+// resize_overlay_dispose disposes the template and chains to the parent.
+// Mirrors the `dispose` vfunc (the source-removal is done by the wrapper).
+fn resize_overlay_dispose(obj voidptr) {
+	C.gtk_widget_dispose_template(obj, g_resize_overlay_type)
+	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
+	if !isnil(parent_class.dispose) {
+		f := DisposeFn(parent_class.dispose)
+		f(obj)
+	}
+}
+
+// resize_overlay_finalize frees the owned label text and chains to the parent.
+// Mirrors the `finalize` vfunc.
+fn resize_overlay_finalize(obj voidptr) {
+	mut priv := resize_overlay_priv(obj)
+	if !isnil(priv.label_text) {
+		C.g_free(priv.label_text)
+		priv.label_text = unsafe { nil }
+	}
+	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
+	if !isnil(parent_class.finalize) {
+		f := FinalizeFn(parent_class.finalize)
+		f(obj)
+	}
+}
+
+// resize_overlay_class_init installs the template, binds the `label` child,
+// registers the five properties, and overrides the get/set/dispose/finalize
+// vfuncs. Mirrors the ghostty `Class.init`.
+fn resize_overlay_class_init(klass voidptr, class_data voidptr) {
+	bytes := C.g_bytes_new_static(resize_overlay_ui.str, usize(resize_overlay_ui.len))
+	C.gtk_widget_class_set_template(klass, bytes)
+
+	// Binding: label template child into the private struct.
+	label_offset := g_resize_overlay_priv_offset + int(__offsetof(C.GhosttyResizeOverlayPrivate, label))
+	C.gtk_widget_class_bind_template_child_full(klass, c'label', 0, label_offset)
+
+	// Properties.
+	align_type := C.gtk_align_get_type()
+	g_resize_overlay_pspec_duration = C.g_param_spec_uint(c'duration', c'duration', c'Overlay display duration', 250, u32(-1), 750, g_param_readwrite)
+	g_resize_overlay_pspec_first_delay = C.g_param_spec_uint(c'first-delay', c'first-delay', c'First delay before showing', 250, u32(-1), 250, g_param_readwrite)
+	g_resize_overlay_pspec_label = C.g_param_spec_string(c'label', c'label', c'The overlay label text', &char(unsafe { nil }), g_param_readwrite)
+	g_resize_overlay_pspec_halign = C.g_param_spec_enum(c'overlay-halign', c'overlay-halign', c'Overlay horizontal alignment', align_type, int(Align.center), g_param_readwrite)
+	g_resize_overlay_pspec_valign = C.g_param_spec_enum(c'overlay-valign', c'overlay-valign', c'Overlay vertical alignment', align_type, int(Align.center), g_param_readwrite)
+
+	mut obj_class := &C.GObjectClass(klass)
+	obj_class.get_property = voidptr(resize_overlay_get_property)
+	obj_class.set_property = voidptr(resize_overlay_set_property)
+	obj_class.dispose = voidptr(resize_overlay_dispose)
+	obj_class.finalize = voidptr(resize_overlay_finalize)
+
+	C.g_object_class_install_property(klass, resize_overlay_prop_duration, g_resize_overlay_pspec_duration)
+	C.g_object_class_install_property(klass, resize_overlay_prop_label, g_resize_overlay_pspec_label)
+	C.g_object_class_install_property(klass, resize_overlay_prop_first_delay, g_resize_overlay_pspec_first_delay)
+	C.g_object_class_install_property(klass, resize_overlay_prop_halign, g_resize_overlay_pspec_halign)
+	C.g_object_class_install_property(klass, resize_overlay_prop_valign, g_resize_overlay_pspec_valign)
+}
+
+// resize_overlay_instance_init builds the template. Mirrors the ghostty `init`
+// (instanceInit); the first-delay timer is armed by the V wrapper's `new`.
+fn resize_overlay_instance_init(instance voidptr, klass voidptr) {
+	C.gtk_widget_init_template(instance)
+}
+
+// resize_overlay_get_type lazily registers the GhosttyResizeOverlay GObject
+// type, parented to AdwBin, with instance-private data.
+pub fn resize_overlay_get_type() GType {
+	if g_resize_overlay_type == GType(0) {
+		parent := C.adw_bin_get_type()
+		mut query := C.GTypeQuery{}
+		C.g_type_query(parent, &query)
+		info := C.GTypeInfo{
+			class_size: u16(query.class_size)
+			instance_size: u16(query.instance_size)
+			class_init: voidptr(resize_overlay_class_init)
+			instance_init: voidptr(resize_overlay_instance_init)
+		}
+		g_resize_overlay_type = C.g_type_register_static(parent, c'GhosttyResizeOverlay', &info, 0)
+		g_resize_overlay_priv_offset = C.g_type_add_instance_private(g_resize_overlay_type, sizeof(C.GhosttyResizeOverlayPrivate))
+	}
+	return g_resize_overlay_type
+}

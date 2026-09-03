@@ -1,3 +1,4 @@
+@[has_globals]
 module gtk
 
 // key_state_overlay_linux.v - The GObject KeyStateOverlay widget class for the
@@ -11,15 +12,19 @@ module gtk
 // snaps between top-center and bottom-center of its parent (horizontal
 // alignment is always center for this overlay).
 //
-// FOLLOWING THE ESTABLISHED PATTERN: GObject registration, `.ui`/blueprint
-// template, and property/signal machinery are stubbed with `// TODO(gtk)`; the
+// The GObject class registration (ghostty's `gobject.ext.defineClass`), the
+// blueprint template with its five template callbacks, the five properties
+// (tables/has-tables/sequence/has-sequence/valign-target), and the dispose/
+// finalize vfuncs are hand-expanded onto the raw GObject/GTK C API below. The
 // real state logic (tables/sequence StringLists, has-* derivations, the
 // chevron/has-state/text closures, and the drag-end vertical realignment) is
-// translated. The class is a plain V struct wrapping the GObject/GtkWidget ptr.
+// translated. The class is additionally modeled as a plain V struct wrapping
+// the GObject/GtkWidget ptr for callers in V.
 //
 // Reuses: `Align` (resize_overlay_linux.v), `StringList` (ext_slice_linux.v),
 // `GtkWidget` (c_gtk_linux.v). GtkWidget allocation/parent/queue-resize C
-// helpers are declared in search_overlay_linux.v and reused here.
+// helpers are declared in search_overlay_linux.v and reused here; the enum
+// param-spec + gtk_align_get_type helpers come from resize_overlay_linux.v.
 
 // --- KeyStateOverlay ------------------------------------------------------
 
@@ -28,8 +33,9 @@ module gtk
 // are modeled as `&StringList` that may be nil.
 @[heap]
 pub struct KeyStateOverlay {
-pub mut:
+
 	// The GtkWidget (adw.Bin) pointer for this instance.
+pub mut:
 	widget GtkWidget = unsafe { nil }
 
 	// The key-table stack. nil means "unset".
@@ -42,9 +48,14 @@ pub mut:
 	valign_target Align = .end
 }
 
-// new_key_state_overlay creates a new KeyStateOverlay. Mirrors instance `init`.
+// new_key_state_overlay creates a new KeyStateOverlay. Mirrors
+// `gobject.ext.newInstance` + the instance `init` (which just runs the
+// template).
 pub fn new_key_state_overlay() &KeyStateOverlay {
-	return &KeyStateOverlay{}
+	obj := C.g_object_new(key_state_overlay_get_type(), &char(unsafe { nil }))
+	return &KeyStateOverlay{
+		widget: obj
+	}
 }
 
 // --- Property getters/setters ---------------------------------------------
@@ -72,7 +83,10 @@ pub fn (mut self KeyStateOverlay) set_tables(value &StringList) {
 			self.tables = value
 		}
 	}
-	// TODO(gtk): notifyByPspec(properties.tables) + (properties.has-tables).
+	if !isnil(self.widget) {
+		C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_tables)
+		C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_has_tables)
+	}
 }
 
 // set_sequence replaces the key-sequence StringList, destroying the old one.
@@ -88,7 +102,10 @@ pub fn (mut self KeyStateOverlay) set_sequence(value &StringList) {
 			self.sequence = value
 		}
 	}
-	// TODO(gtk): notifyByPspec(properties.sequence) + (properties.has-sequence).
+	if !isnil(self.widget) {
+		C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_sequence)
+		C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_has_sequence)
+	}
 }
 
 // get_has_tables reports whether there is at least one key table. Mirrors
@@ -182,7 +199,9 @@ pub fn (mut self KeyStateOverlay) on_drag_end(offset_y f64) {
 
 	if new_valign != self.valign_target {
 		self.valign_target = new_valign
-		// TODO(gtk): notifyByPspec(properties.valign-target).
+		if !isnil(self.widget) {
+			C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_valign_target)
+		}
 		C.gtk_widget_queue_resize(self.widget)
 	}
 }
@@ -200,15 +219,381 @@ pub fn (mut self KeyStateOverlay) finalize() {
 		mut s := self.sequence
 		s.destroy()
 	}
-	// TODO(gtk): chain up to parent finalize.
+	if !isnil(self.widget) {
+		key_state_overlay_finalize(voidptr(self.widget))
+	}
 }
 
-// --- GObject class registration (stub) ------------------------------------
-//
-// TODO(gtk): In ghostty this class is registered via gobject.ext.defineClass.
-// classInit loads the `key-state-overlay` blueprint `.ui` template, wires the
-// template callbacks (on_drag_end, show_chevron, has_state, tables_text,
-// sequence_text), registers the tables / has-tables / sequence / has-sequence /
-// valign-target properties, and wires dispose/finalize. V has no such
-// machinery, so all of that is stubbed; the handlers above are plain methods
-// instead of C template callbacks.
+// --- GObject class registration -------------------------------------------
+// Hand-expansion of ghostty's `gobject.ext.defineClass` for
+// `GhosttyKeyStateOverlay` (parent adw.Bin): a `.ui` template with five
+// template callbacks, five properties, and dispose/finalize vfuncs.
+
+// The blueprint (ui/1.2/key-state-overlay.blp) translated to a GtkBuilder .ui
+// XML string. `visible: bind $has_state(...) as <bool>` and the other bound
+// values become <binding> elements with <closure type="..." function="...">;
+// `drag-end => $on_drag_end()` becomes a <signal>; `styles [...]` become
+// <style>; `_("x")` would become translatable="yes" (none here).
+const key_state_overlay_ui = '<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="GhosttyKeyStateOverlay" parent="AdwBin">
+    <property name="visible">
+      <binding>
+        <closure type="gboolean" function="has_state">
+          <lookup name="has-tables">GhosttyKeyStateOverlay</lookup>
+          <lookup name="has-sequence">GhosttyKeyStateOverlay</lookup>
+        </closure>
+      </binding>
+    </property>
+    <property name="valign-target">end</property>
+    <property name="halign">center</property>
+    <property name="valign">
+      <binding>
+        <lookup name="valign-target">GhosttyKeyStateOverlay</lookup>
+      </binding>
+    </property>
+    <child>
+      <object class="GtkGestureDrag">
+        <property name="button">1</property>
+        <property name="propagation-phase">capture</property>
+        <signal name="drag-end" handler="on_drag_end"/>
+      </object>
+    </child>
+    <child>
+      <object class="AdwBin">
+        <child>
+          <object class="GtkBox" id="container">
+            <style>
+              <class name="background"/>
+              <class name="key-state-overlay"/>
+            </style>
+            <property name="orientation">horizontal</property>
+            <property name="spacing">6</property>
+            <child>
+              <object class="GtkImage">
+                <property name="icon-name">input-keyboard-symbolic</property>
+                <property name="pixel-size">16</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="tables_label">
+                <property name="visible">
+                  <binding>
+                    <lookup name="has-tables">GhosttyKeyStateOverlay</lookup>
+                  </binding>
+                </property>
+                <property name="label">
+                  <binding>
+                    <closure type="gchararray" function="tables_text">
+                      <lookup name="tables">GhosttyKeyStateOverlay</lookup>
+                    </closure>
+                  </binding>
+                </property>
+                <property name="xalign">0.0</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="chevron_label">
+                <property name="visible">
+                  <binding>
+                    <closure type="gboolean" function="show_chevron">
+                      <lookup name="has-tables">GhosttyKeyStateOverlay</lookup>
+                      <lookup name="has-sequence">GhosttyKeyStateOverlay</lookup>
+                    </closure>
+                  </binding>
+                </property>
+                <property name="label">›</property>
+                <style>
+                  <class name="dim-label"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="sequence_label">
+                <property name="visible">
+                  <binding>
+                    <lookup name="has-sequence">GhosttyKeyStateOverlay</lookup>
+                  </binding>
+                </property>
+                <property name="label">
+                  <binding>
+                    <closure type="gchararray" function="sequence_text">
+                      <lookup name="sequence">GhosttyKeyStateOverlay</lookup>
+                    </closure>
+                  </binding>
+                </property>
+                <property name="xalign">0.0</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkSpinner" id="pending_spinner">
+                <property name="visible">
+                  <binding>
+                    <lookup name="has-sequence">GhosttyKeyStateOverlay</lookup>
+                  </binding>
+                </property>
+                <property name="spinning">
+                  <binding>
+                    <lookup name="has-sequence">GhosttyKeyStateOverlay</lookup>
+                  </binding>
+                </property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>
+'
+
+// The C-layout private struct mirroring ghostty\'s `Private`. The StringLists
+// are owned V objects (their boxed GType is a placeholder), so they are stored
+// as opaque pointers here and the real getter/setter logic lives in the V
+// wrapper methods; only valign_target is a plain value used by the accessor.
+struct C.GhosttyKeyStateOverlayPrivate {
+mut:
+	tables        voidptr
+	sequence      voidptr
+	valign_target int
+}
+
+// The GObject type id and private-data offset, registered lazily.
+__global g_key_state_overlay_type = GType(0)
+__global g_key_state_overlay_priv_offset = int(0)
+
+// Registered GParamSpec* pointers, captured in class_init for notify.
+__global g_key_state_overlay_pspec_tables = &C.GParamSpec(unsafe { nil })
+__global g_key_state_overlay_pspec_has_tables = &C.GParamSpec(unsafe { nil })
+__global g_key_state_overlay_pspec_sequence = &C.GParamSpec(unsafe { nil })
+__global g_key_state_overlay_pspec_has_sequence = &C.GParamSpec(unsafe { nil })
+__global g_key_state_overlay_pspec_valign_target = &C.GParamSpec(unsafe { nil })
+
+// Property ids for the get/set vfunc dispatch.
+const key_state_prop_tables = u32(1)
+const key_state_prop_has_tables = u32(2)
+const key_state_prop_sequence = u32(3)
+const key_state_prop_has_sequence = u32(4)
+const key_state_prop_valign_target = u32(5)
+
+// --- Template-callback trampolines ----------------------------------------
+// These are the C-ABI closures the .ui bindings invoke. show_chevron/has_state
+// are pure functions of their bool args; tables_text/sequence_text receive a
+// StringList pointer (from the tables/sequence property) and return a
+// glib-owned string; on_drag_end forwards to the wrapper via user-data.
+fn key_state_show_chevron_cb(self voidptr, has_tables int, has_sequence int) int {
+	return if has_tables != 0 && has_sequence != 0 { 1 } else { 0 }
+}
+
+fn key_state_has_state_cb(self voidptr, has_tables int, has_sequence int) int {
+	return if has_tables != 0 || has_sequence != 0 { 1 } else { 0 }
+}
+
+fn key_state_tables_text_cb(self voidptr, tables voidptr) &char {
+	if isnil(tables) {
+		return &char(unsafe { nil })
+	}
+	list := unsafe { &StringList(tables) }
+	if list.strings.len == 0 {
+		return &char(unsafe { nil })
+	}
+	mut sb := ''
+	for i, s in list.strings {
+		if i > 0 {
+			sb += ' > '
+		}
+		sb += s
+	}
+	return C.g_strdup(sb.str)
+}
+
+fn key_state_sequence_text_cb(self voidptr, sequence voidptr) &char {
+	if isnil(sequence) {
+		return &char(unsafe { nil })
+	}
+	list := unsafe { &StringList(sequence) }
+	if list.strings.len == 0 {
+		return &char(unsafe { nil })
+	}
+	mut sb := ''
+	for i, s in list.strings {
+		if i > 0 {
+			sb += ' '
+		}
+		sb += s
+	}
+	return C.g_strdup(sb.str)
+}
+
+fn key_state_priv(obj voidptr) &C.GhosttyKeyStateOverlayPrivate {
+	return &C.GhosttyKeyStateOverlayPrivate(C.g_type_instance_get_private(obj, g_key_state_overlay_type))
+}
+
+// key_state_overlay_get_property implements the GObjectClass get_property vfunc.
+// The StringList-backed tables/sequence and their has-* derivations are served
+// from the private pointers so the template lookups resolve.
+fn key_state_overlay_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	priv := key_state_priv(obj)
+	match property_id {
+		key_state_prop_tables {
+			C.g_value_set_pointer(value, priv.tables)
+		}
+		key_state_prop_has_tables {
+			has := if isnil(priv.tables) {
+				false
+			} else {
+				unsafe { &StringList(priv.tables) }
+				.strings.len > 0
+			}
+			C.g_value_set_boolean(value, b2i(has))
+		}
+		key_state_prop_sequence {
+			C.g_value_set_pointer(value, priv.sequence)
+		}
+		key_state_prop_has_sequence {
+			has := if isnil(priv.sequence) {
+				false
+			} else {
+				unsafe { &StringList(priv.sequence) }
+				.strings.len > 0
+			}
+			C.g_value_set_boolean(value, b2i(has))
+		}
+		key_state_prop_valign_target {
+			C.g_value_set_enum(value, priv.valign_target)
+		}
+		else {}
+	}
+}
+
+// key_state_overlay_set_property implements the GObjectClass set_property vfunc.
+fn key_state_overlay_set_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	mut priv := key_state_priv(obj)
+	match property_id {
+		key_state_prop_tables {
+			priv.tables = C.g_value_get_pointer(value)
+		}
+		key_state_prop_sequence {
+			priv.sequence = C.g_value_get_pointer(value)
+		}
+		key_state_prop_valign_target {
+			priv.valign_target = C.g_value_get_enum(value)
+		}
+		else {}
+	}
+}
+
+// key_state_overlay_dispose disposes the template and chains up. Mirrors the
+// `dispose` vfunc.
+fn key_state_overlay_dispose(obj voidptr) {
+	C.gtk_widget_dispose_template(obj, g_key_state_overlay_type)
+	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
+	if !isnil(parent_class.dispose) {
+		f := DisposeFn(parent_class.dispose)
+		f(obj)
+	}
+}
+
+// key_state_overlay_finalize chains up. The owned StringLists are released by
+// the V wrapper's finalize. Mirrors the `finalize` vfunc.
+fn key_state_overlay_finalize(obj voidptr) {
+	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
+	if !isnil(parent_class.finalize) {
+		f := FinalizeFn(parent_class.finalize)
+		f(obj)
+	}
+}
+
+// key_state_overlay_class_init installs the template, wires the five template
+// callbacks, registers the five properties, and overrides the
+// get/set/dispose/finalize vfuncs. Mirrors the ghostty `Class.init`.
+fn key_state_overlay_class_init(klass voidptr, class_data voidptr) {
+	bytes := C.g_bytes_new_static(key_state_overlay_ui.str, usize(key_state_overlay_ui.len))
+	C.gtk_widget_class_set_template(klass, bytes)
+
+	// Template callbacks.
+	C.gtk_widget_class_bind_template_callback_full(klass, c'on_drag_end', voidptr(key_state_on_drag_end_cb))
+	C.gtk_widget_class_bind_template_callback_full(klass, c'show_chevron', voidptr(key_state_show_chevron_cb))
+	C.gtk_widget_class_bind_template_callback_full(klass, c'has_state', voidptr(key_state_has_state_cb))
+	C.gtk_widget_class_bind_template_callback_full(klass, c'tables_text', voidptr(key_state_tables_text_cb))
+	C.gtk_widget_class_bind_template_callback_full(klass, c'sequence_text', voidptr(key_state_sequence_text_cb))
+
+	// Properties.
+	align_type := C.gtk_align_get_type()
+	g_key_state_overlay_pspec_tables = C.g_param_spec_pointer(c'tables', c'tables', c'The key table stack', g_param_readwrite)
+	g_key_state_overlay_pspec_has_tables = C.g_param_spec_boolean(c'has-tables', c'has-tables', c'Whether there are key tables', 0, g_param_readable)
+	g_key_state_overlay_pspec_sequence = C.g_param_spec_pointer(c'sequence', c'sequence', c'The pending key sequence', g_param_readwrite)
+	g_key_state_overlay_pspec_has_sequence = C.g_param_spec_boolean(c'has-sequence', c'has-sequence', c'Whether there is a pending sequence', 0, g_param_readable)
+	g_key_state_overlay_pspec_valign_target = C.g_param_spec_enum(c'valign-target', c'valign-target', c'Target vertical alignment', align_type, int(Align.end), g_param_readwrite)
+
+	mut obj_class := &C.GObjectClass(klass)
+	obj_class.get_property = voidptr(key_state_overlay_get_property)
+	obj_class.set_property = voidptr(key_state_overlay_set_property)
+	obj_class.dispose = voidptr(key_state_overlay_dispose)
+	obj_class.finalize = voidptr(key_state_overlay_finalize)
+
+	C.g_object_class_install_property(klass, key_state_prop_tables, g_key_state_overlay_pspec_tables)
+	C.g_object_class_install_property(klass, key_state_prop_has_tables, g_key_state_overlay_pspec_has_tables)
+	C.g_object_class_install_property(klass, key_state_prop_sequence, g_key_state_overlay_pspec_sequence)
+	C.g_object_class_install_property(klass, key_state_prop_has_sequence, g_key_state_overlay_pspec_has_sequence)
+	C.g_object_class_install_property(klass, key_state_prop_valign_target, g_key_state_overlay_pspec_valign_target)
+}
+
+fn key_state_overlay_instance_init(instance voidptr, klass voidptr) {
+	C.gtk_widget_init_template(instance)
+}
+
+// key_state_overlay_get_type lazily registers the GhosttyKeyStateOverlay GObject
+// type, parented to AdwBin, with instance-private data.
+pub fn key_state_overlay_get_type() GType {
+	if g_key_state_overlay_type == GType(0) {
+		parent := C.adw_bin_get_type()
+		mut query := C.GTypeQuery{}
+		C.g_type_query(parent, &query)
+		info := C.GTypeInfo{
+			class_size: u16(query.class_size)
+			instance_size: u16(query.instance_size)
+			class_init: voidptr(key_state_overlay_class_init)
+			instance_init: voidptr(key_state_overlay_instance_init)
+		}
+		g_key_state_overlay_type = C.g_type_register_static(parent, c'GhosttyKeyStateOverlay', &info, 0)
+		g_key_state_overlay_priv_offset = C.g_type_add_instance_private(g_key_state_overlay_type, sizeof(C.GhosttyKeyStateOverlayPrivate))
+	}
+	return g_key_state_overlay_type
+}
+
+// key_state_on_drag_end_cb is the C-ABI trampoline for the drag gesture's
+// "drag-end" signal. Bound via bindTemplateCallback, GTK passes
+// (gesture, offset_x, offset_y, instance) where `instance` is the overlay
+// widget. It operates directly on the GObject instance/private (mirroring
+// ghostty's `onDragEnd`, which uses `self.private()`): the key state overlay
+// only moves between top-center and bottom-center, so horizontal alignment is
+// always center.
+fn key_state_on_drag_end_cb(gesture voidptr, offset_x f64, offset_y f64, instance voidptr) {
+	if isnil(instance) {
+		return
+	}
+	mut priv := key_state_priv(instance)
+	parent := C.gtk_widget_get_parent(instance)
+	if isnil(parent) {
+		return
+	}
+
+	parent_height := f64(C.gtk_widget_get_allocated_height(parent))
+	self_height := f64(C.gtk_widget_get_allocated_height(instance))
+
+	self_y := if priv.valign_target == int(Align.start) {
+		f64(0)
+	} else {
+		parent_height - self_height
+	}
+	new_y := self_y + offset_y + (self_height / 2)
+
+	new_valign := if new_y > parent_height / 2 { Align.end } else { Align.start }
+
+	if int(new_valign) != priv.valign_target {
+		priv.valign_target = int(new_valign)
+		C.g_object_notify_by_pspec(instance, g_key_state_overlay_pspec_valign_target)
+		C.gtk_widget_queue_resize(instance)
+	}
+}
