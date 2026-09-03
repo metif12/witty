@@ -3,6 +3,7 @@ module global_state
 import os
 import internal_os
 import cli_args
+import crash
 
 // Global process state. This is initialized in main() for exe artifacts
 // and by ghostty_init() for lib artifacts. This should ONLY be used by
@@ -160,8 +161,9 @@ pub fn (mut self GlobalState) init() ! {
 	// As early as possible, initialize our resource limits.
 	self.rlimits = ResourceLimits.new()
 
-	// XTODO: initialize crash reporting
-	// crash.init(...)
+	// Initialize crash reporting. This is a no-op for builds such as Witty
+	// that do not link Ghostty's optional Sentry native SDK.
+	crash.initialize() or { eprintln('crash reporting initialization failed: ${err}') }
 
 	// Find our resources directory once for the app so every launch
 	// hereafter can use this cached value.
@@ -173,6 +175,7 @@ pub fn (mut self GlobalState) init() ! {
 pub fn (mut self GlobalState) deinit() {
 	self.rlimits.restore()
 	self.resources_dir = ResourcesDir{}
+	crash.shutdown()
 }
 
 // init_signals sets up process signal handlers.
