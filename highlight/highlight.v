@@ -127,21 +127,10 @@ pub fn (self UntrackedHighlight) eql(other UntrackedHighlight) bool {
 	return self.start.eql(other.start) && self.end.eql(other.end)
 }
 
-// Track this highlight by creating tracked pins in the screen's page list.
-pub fn (self &UntrackedHighlight) track(mut screen terminal.Screen) TrackedHighlight {
-	// XTODO: Requires PageList.track_pin integration with Screen.
-	// Screen.pages is currently the simple Pages model, not PageList.
-	// For now, creates heap-allocated pins that simulate tracking.
-	start_pin := &terminal.PagePin{
-		node: self.start.node
-		y: self.start.y
-		x: self.start.x
-	}
-	end_pin := &terminal.PagePin{
-		node: self.end.node
-		y: self.end.y
-		x: self.end.x
-	}
+// Track this highlight by creating tracked pins in its backing page list.
+pub fn (self &UntrackedHighlight) track(mut list terminal.PageList) TrackedHighlight {
+	start_pin := list.track_pin(self.start)
+	end_pin := list.track_pin(self.end)
 	return TrackedHighlight{
 		start: start_pin
 		end: end_pin
@@ -164,8 +153,11 @@ pub mut:
 }
 
 // Free tracked resources by untracking the pins.
-pub fn (self TrackedHighlight) deinit(mut screen terminal.Screen) {
-	// XTODO: Should call screen.pages.untrack_pin for both pins
-	// when Screen uses PageList instead of simple Pages.
-	_ = screen
+pub fn (self TrackedHighlight) deinit(mut list terminal.PageList) {
+	if self.start != unsafe { nil } {
+		list.untrack_pin(self.start)
+	}
+	if self.end != unsafe { nil } {
+		list.untrack_pin(self.end)
+	}
 }

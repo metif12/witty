@@ -2353,7 +2353,6 @@ module terminal
 //
 // --- Original Ghostty Comments End: src/terminal/PageList.zig
 
-
 // PageList manages a doubly-linked list of Pages forming the terminal
 // screen buffer with scrollback, viewport management, and text reflow.
 // Translated from Ghostty's PageList.zig.
@@ -2373,8 +2372,8 @@ pub enum IterDirection {
 
 pub enum PageViewport {
 	active // Pinned to active area (bottom)
-	top    // Pinned to top of scrollback
-	pin    // Pinned to a tracked pin
+	top // Pinned to top of scrollback
+	pin // Pinned to a tracked pin
 }
 
 // ============================================================
@@ -2754,9 +2753,9 @@ pub fn (self &PagePin) prompt_iterator(direction IterDirection, limit ?PagePin) 
 
 pub struct PageCell {
 pub:
-	node &PageNode = unsafe { nil }
-	row  &RowData  = unsafe { nil }
-	cell &CellData = unsafe { nil }
+	node    &PageNode = unsafe { nil }
+	row     &RowData = unsafe { nil }
+	cell    &CellData = unsafe { nil }
 	row_idx u16
 	col_idx u16
 }
@@ -2810,7 +2809,12 @@ pub:
 	pin PagePin
 }
 
-pub type PageScroll = PageScrollActive | PageScrollTop | PageScrollRow | PageScrollDeltaRow | PageScrollDeltaPrompt | PageScrollPin
+pub type PageScroll = PageScrollActive
+	| PageScrollTop
+	| PageScrollRow
+	| PageScrollDeltaRow
+	| PageScrollDeltaPrompt
+	| PageScrollPin
 
 // ============================================================
 // Scrollbar
@@ -2849,10 +2853,10 @@ pub:
 
 pub struct PageResizeOpts {
 pub:
-	cols    ?u16
-	rows    ?u16
-	reflow  bool = true
-	cursor  ?PageResizeCursor
+	cols   ?u16
+	rows   ?u16
+	reflow bool = true
+	cursor ?PageResizeCursor
 }
 
 pub struct PageResizeCursor {
@@ -2914,7 +2918,7 @@ fn (mut self PageIterator) next_down() ?PageChunk {
 
 	start := cur.y
 
-	match mut self.limit {
+	match self.limit {
 		PageIteratorLimitNone {
 			// Consume entire page from start
 			self.row = if next := node.next {
@@ -3011,7 +3015,7 @@ fn (mut self PageIterator) next_up() ?PageChunk {
 	node := cur.node
 	end := cur.y + 1 // exclusive
 
-	match mut self.limit {
+	match self.limit {
 		PageIteratorLimitNone {
 			self.row = if prev := node.prev {
 				PagePin{
@@ -3144,7 +3148,9 @@ pub fn (mut self RowIterator) next() ?PagePin {
 	}
 
 	match self.page_it.direction {
-		.right_down { self.offset += 1 }
+		.right_down {
+			self.offset += 1
+		}
 		.left_up {
 			if self.offset == 0 {
 				// Need next chunk
@@ -3265,8 +3271,8 @@ pub mut:
 	tracked_pins []&PagePin
 
 	// Viewport state.
-	viewport              PageViewport = .active
-	viewport_pin          &PagePin     = unsafe { nil }
+	viewport                PageViewport = .active
+	viewport_pin            &PagePin = unsafe { nil }
 	viewport_pin_row_offset ?usize
 
 	// Current desired screen dimensions.
@@ -3322,6 +3328,73 @@ pub fn PageList.init(cols u16, rows u16, max_size ?usize) PageList {
 		viewport: .active
 		viewport_pin: viewport_pin
 		viewport_pin_row_offset: none
+	}
+}
+
+// Build a linked-page snapshot from the flat storage used by Screen.
+//
+// Search and highlight are translations of Ghostty's PageList-based
+// implementations. Screen predates that translation and still stores rows in
+// Pages, so this is the single conversion boundary between the two models.
+// The snapshot owns all mutable row/cell slices; callers may safely search it
+// after releasing the terminal lock while the live screen continues changing.
+pub fn PageList.from_pages(src &Pages) &PageList {
+	assert src.cols > 0 && src.cols <= max_u16
+	assert src.rows > 0 && src.rows <= max_u16
+
+	mut result := PageList.init(u16(src.cols), u16(src.rows), none)
+	total := src.active_start + int(src.rows)
+	assert total >= int(src.rows)
+	if total > int(src.rows) {
+		result.grow_rows(usize(total - int(src.rows)))
+	}
+
+	mut src_y := 0
+	mut node := result.pages.first
+	for {
+		mut current := node or { break }
+		for page_y in 0 .. int(current.data.size.rows) {
+			if src_y >= total || src_y >= src.screen_rows.len {
+				break
+			}
+			current.data.rows[page_y] = clone_row_for_page_list(src.screen_rows[src_y], src.cols)
+			src_y++
+		}
+		node = current.next
+	}
+	assert src_y == total, 'PageList snapshot copied ${src_y} of ${total} rows'
+
+	// Mirror the live viewport so ViewportSearch sees the same rows.
+	match src.viewport {
+		.active { result.scroll(PageScrollActive{}) }
+		.top { result.scroll(PageScrollTop{}) }
+		.pinned {
+			result.scroll(PageScrollRow{
+				n: usize(src.viewport_start)
+			})
+		}
+	}
+	return &result
+}
+
+fn clone_row_for_page_list(src RowData, cols u32) RowData {
+	mut cells := []CellData{len: int(cols)}
+	limit := if src.cells.len < cells.len { src.cells.len } else { cells.len }
+	for x in 0 .. limit {
+		mut cell := src.cells[x]
+		cell.graphemes = src.cells[x].graphemes.clone()
+		cells[x] = cell
+	}
+	return RowData{
+		cells: cells
+		wrap: src.wrap
+		wrap_continuation: src.wrap_continuation
+		grapheme: src.grapheme
+		styled: src.styled
+		hyperlink: src.hyperlink
+		semantic_prompt: src.semantic_prompt
+		kitty_virtual_placeholder: src.kitty_virtual_placeholder
+		dirty: src.dirty
 	}
 }
 
@@ -5334,7 +5407,11 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) {
 
 		mut req_rows := preserved_remaining
 		// req_rows -|= wrapped -| c.wrapped_rows  (saturating subtractions)
-		wrap_delta := if wrapped > preserved_wrapped { wrapped - preserved_wrapped } else { usize(0) }
+		wrap_delta := if wrapped > preserved_wrapped {
+			wrapped - preserved_wrapped
+		} else {
+			usize(0)
+		}
 		req_rows = if req_rows > wrap_delta { req_rows - wrap_delta } else { usize(0) }
 		req_rows = if req_rows > current { req_rows - current } else { usize(0) }
 

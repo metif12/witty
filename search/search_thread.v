@@ -206,7 +206,6 @@ module search
 //
 // --- Original Ghostty Comments End: src/terminal/search/Thread.zig
 
-
 // Search thread that handles searching a terminal for a string match.
 // This is expected to run on a dedicated thread to try to prevent too much
 // overhead to other terminal read/write operations.
@@ -485,13 +484,11 @@ pub fn (mut self SearchThread) request_stop() {
 	self.stop_requested = true
 }
 
-// Select a search result.
+// Select a search result and scroll it into view when necessary.
 //
-// Source: Thread.select. The viewport-visibility short circuit and
-// scroll-into-view (screen.pages.pageIterator / screen.scroll) depend on
-// PageList viewport iteration that the flat `Pages` model doesn't provide,
-// so we perform the selection and reset the selected cache but leave the
-// scroll-into-view to the renderer.
+// Source: Thread.select. The canonical code checks overlapping PageList
+// chunks; at the flat Screen boundary the equivalent check uses absolute row
+// coordinates obtained from the search snapshot.
 fn (mut self SearchThread) do_select(sel Select) {
 	mut s := self.search or { return }
 	key := s.last_screen.key
@@ -501,11 +498,42 @@ fn (mut self SearchThread) do_select(sel Select) {
 		// Make the selection. Ignore the result because we don't care if
 		// the selection didn't change.
 		screen_search.do_select(sel)
+		flattened := screen_search.selected_match() or {
+			self.opts.mutex.unlock()
+			self.search = s
+			return
+		}
 
 		// No matter what we reset our selected match cache. This will
 		// trigger a callback which will trigger the renderer to wake up so
 		// it can be notified the screen scrolled.
 		s.last_screen.selected = none
+
+		mut live_screen := self.opts.terminal.screens.get(key) or {
+			self.opts.mutex.unlock()
+			self.search = s
+			return
+		}
+		start := screen_search.pages.point_from_pin(.screen, flattened.start_pin()) or {
+			self.opts.mutex.unlock()
+			self.search = s
+			return
+		}
+		end := screen_search.pages.point_from_pin(.screen, flattened.end_pin()) or {
+			self.opts.mutex.unlock()
+			self.search = s
+			return
+		}
+		viewport_top := live_screen.pages.viewport_start
+		viewport_bot := viewport_top + int(live_screen.pages.rows) - 1
+		if int(end.y) < viewport_top || int(start.y) > viewport_bot {
+			target := if int(start.y) > live_screen.pages.active_start {
+				live_screen.pages.active_start
+			} else {
+				int(start.y)
+			}
+			live_screen.pages.scroll_delta(target - viewport_top)
+		}
 	}
 	self.opts.mutex.unlock()
 
@@ -732,8 +760,7 @@ pub fn (mut self Search) feed(mut t terminal.Terminal) {
 			continue
 		}
 		mut screen := t.screens.get(key) or { continue }
-		mut ss := &ScreenSearch(unsafe { nil })
-		ss = &ScreenSearch(memdup_screen_search(ScreenSearch.init(mut screen, self.viewport.needle())))
+		mut ss := heap_screen_search(ScreenSearch.init(mut screen, self.viewport.needle()))
 		self.screens[key] = ss
 	}
 
@@ -753,11 +780,13 @@ pub fn (mut self Search) feed(mut t terminal.Terminal) {
 		}
 	}
 
-	// Check our viewport for changes. ViewportSearch.update wants a
-	// &PageList, which the flat `Pages` model doesn't provide, so the
-	// viewport re-search stays disabled here (boundary shared with
-	// viewport_search.v).
-	// if self.viewport.update(&...pages) { self.stale_viewport_matches = true }
+	// Check our viewport for changes against the same stable PageList
+	// snapshot used by the active screen searcher.
+	if active_search := self.screens[t.screens.active_key] {
+		if self.viewport.update(active_search.pages) {
+			self.stale_viewport_matches = true
+		}
+	}
 
 	// Feed data to each screen search that needs it.
 	for _, mut ss in self.screens {
@@ -840,11 +869,10 @@ pub fn (mut self Search) notify(cb EventCallback, ud voidptr) {
 	}
 }
 
-// Heap-allocate a ScreenSearch so we can store a stable pointer in the
-// screens map (mirrors Zig storing ScreenSearch by value in an EnumMap
-// but keeping a stable address for reloadActive/getPtr semantics).
-fn memdup_screen_search(v ScreenSearch) &ScreenSearch {
-	return &ScreenSearch(memdup(&v, int(sizeof(ScreenSearch))))
+// Heap-allocate a ScreenSearch so the screens map retains a stable pointer.
+fn heap_screen_search(v ScreenSearch) &ScreenSearch {
+	mut result := v
+	return &result
 }
 
 // Case-insensitive ASCII byte-slice equality (std.ascii.eqlIgnoreCase).
