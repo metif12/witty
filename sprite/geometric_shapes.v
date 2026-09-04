@@ -88,9 +88,8 @@ pub fn corner_triangle_shade(metrics font.Metrics, mut canvas Canvas, corner Cor
 }
 
 // corner_triangle_outline draws a corner triangle as an outline (stroke only).
-// Uses individual line segments as an approximation since innerStrokePath
-// is not available. The ideal approach would use a stroke with
-// line_cap_mode = .butt and line_width = float_thick.
+// This follows Ghostty's innerStrokePath operation so the stroke is clipped to
+// the triangle instead of extending half of its width outside the cell.
 pub fn corner_triangle_outline(metrics font.Metrics, mut canvas Canvas, corner Corner) ! {
 	float_thick := f64(Thickness.light.height(metrics.box_thickness))
 	float_width := f64(metrics.cell_width)
@@ -117,8 +116,8 @@ pub fn corner_triangle_outline(metrics font.Metrics, mut canvas Canvas, corner C
 	path.line_to(x2, y2)
 	path.close()
 
-	// Draw the outline edges as individual line segments.
-	canvas.line(LineSegment{ p0: Point{ x: x0, y: y0 }, p1: Point{ x: x1, y: y1 } }, float_thick, .on) or {}
-	canvas.line(LineSegment{ p0: Point{ x: x1, y: y1 }, p1: Point{ x: x2, y: y2 } }, float_thick, .on) or {}
-	canvas.line(LineSegment{ p0: Point{ x: x2, y: y2 }, p1: Point{ x: x0, y: y0 } }, float_thick, .on) or {}
+	canvas.inner_stroke_path(path.wrapped_path, StrokeOptions{
+		line_cap_mode: .butt
+		line_width: float_thick
+	}, .on)!
 }

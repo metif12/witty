@@ -369,6 +369,34 @@ fn test_powerline_mirrored_variants_are_exact_flips() {
 	assert left.data == right.data
 }
 
+fn test_branch_arc_glyph_uses_box_bezier_arc() {
+	metrics := font.default_grid_metrics(12, 20)
+	mut actual := Canvas.init(12, 20, 0, 0)
+	draw_f5d0_f60d(0xf5d6, mut actual, 12, 20, metrics)!
+
+	mut expected := Canvas.init(12, 20, 0, 0)
+	box_arc(metrics, mut expected, .br, .light)!
+	assert actual.data == expected.data
+}
+
+fn test_geometric_outline_uses_inner_stroke_path() {
+	metrics := font.default_grid_metrics(12, 20)
+	mut actual := Canvas.init(12, 20, 0, 0)
+	corner_triangle_outline(metrics, mut actual, .tl)!
+
+	mut expected := Canvas.init(12, 20, 0, 0)
+	mut path := expected.static_path(5)
+	path.move_to(0, 0)
+	path.line_to(0, 20)
+	path.line_to(12, 0)
+	path.close()
+	expected.inner_stroke_path(path.wrapped_path, StrokeOptions{
+		line_cap_mode: .butt
+		line_width: f64(Thickness.light.height(metrics.box_thickness))
+	}, .on)!
+	assert actual.data == expected.data
+}
+
 fn test_cursor_uses_cursor_thickness_metric() {
 	mut metrics := font.default_grid_metrics(8, 8)
 	metrics.cursor_thickness = 2

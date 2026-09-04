@@ -153,139 +153,139 @@ pub fn draw_f5d0_f60d(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		// ''
 		0x0f5d5 { fading_line(metrics, mut canvas, .top, .light) }
 		// ''
-		0x0f5d6 { draw_arc(metrics, mut canvas, .br, .light)! }
+		0x0f5d6 { box_arc(metrics, mut canvas, .br, .light)! }
 		// ''
-		0x0f5d7 { draw_arc(metrics, mut canvas, .bl, .light)! }
+		0x0f5d7 { box_arc(metrics, mut canvas, .bl, .light)! }
 		// ''
-		0x0f5d8 { draw_arc(metrics, mut canvas, .tr, .light)! }
+		0x0f5d8 { box_arc(metrics, mut canvas, .tr, .light)! }
 		// ''
-		0x0f5d9 { draw_arc(metrics, mut canvas, .tl, .light)! }
+		0x0f5d9 { box_arc(metrics, mut canvas, .tl, .light)! }
 		// ''
 		0x0f5da {
 			vline_middle(metrics, mut canvas, .light)
-			draw_arc(metrics, mut canvas, .tr, .light)!
+			box_arc(metrics, mut canvas, .tr, .light)!
 		}
 
 		// ''
 		0x0f5db {
 			vline_middle(metrics, mut canvas, .light)
-			draw_arc(metrics, mut canvas, .br, .light)!
+			box_arc(metrics, mut canvas, .br, .light)!
 		}
 
 		// ''
 		0x0f5dc {
-			draw_arc(metrics, mut canvas, .tr, .light)!
-			draw_arc(metrics, mut canvas, .br, .light)!
+			box_arc(metrics, mut canvas, .tr, .light)!
+			box_arc(metrics, mut canvas, .br, .light)!
 		}
 
 		// ''
 		0x0f5dd {
 			vline_middle(metrics, mut canvas, .light)
-			draw_arc(metrics, mut canvas, .tl, .light)!
+			box_arc(metrics, mut canvas, .tl, .light)!
 		}
 
 		// ''
 		0x0f5de {
 			vline_middle(metrics, mut canvas, .light)
-			draw_arc(metrics, mut canvas, .bl, .light)!
+			box_arc(metrics, mut canvas, .bl, .light)!
 		}
 
 		// ''
 		0x0f5df {
-			draw_arc(metrics, mut canvas, .tl, .light)!
-			draw_arc(metrics, mut canvas, .bl, .light)!
+			box_arc(metrics, mut canvas, .tl, .light)!
+			box_arc(metrics, mut canvas, .bl, .light)!
 		}
 
 		// ''
 		0x0f5e0 {
-			draw_arc(metrics, mut canvas, .bl, .light)!
+			box_arc(metrics, mut canvas, .bl, .light)!
 			hline_middle(metrics, mut canvas, .light)
 		}
 
 		// ''
 		0x0f5e1 {
-			draw_arc(metrics, mut canvas, .br, .light)!
+			box_arc(metrics, mut canvas, .br, .light)!
 			hline_middle(metrics, mut canvas, .light)
 		}
 
 		// ''
 		0x0f5e2 {
-			draw_arc(metrics, mut canvas, .br, .light)!
-			draw_arc(metrics, mut canvas, .bl, .light)!
+			box_arc(metrics, mut canvas, .br, .light)!
+			box_arc(metrics, mut canvas, .bl, .light)!
 		}
 
 		// ''
 		0x0f5e3 {
-			draw_arc(metrics, mut canvas, .tl, .light)!
+			box_arc(metrics, mut canvas, .tl, .light)!
 			hline_middle(metrics, mut canvas, .light)
 		}
 
 		// ''
 		0x0f5e4 {
-			draw_arc(metrics, mut canvas, .tr, .light)!
+			box_arc(metrics, mut canvas, .tr, .light)!
 			hline_middle(metrics, mut canvas, .light)
 		}
 
 		// ''
 		0x0f5e5 {
-			draw_arc(metrics, mut canvas, .tr, .light)!
-			draw_arc(metrics, mut canvas, .tl, .light)!
+			box_arc(metrics, mut canvas, .tr, .light)!
+			box_arc(metrics, mut canvas, .tl, .light)!
 		}
 
 		// ''
 		0x0f5e6 {
 			vline_middle(metrics, mut canvas, .light)
-			draw_arc(metrics, mut canvas, .tl, .light)!
-			draw_arc(metrics, mut canvas, .tr, .light)!
+			box_arc(metrics, mut canvas, .tl, .light)!
+			box_arc(metrics, mut canvas, .tr, .light)!
 		}
 
 		// ''
 		0x0f5e7 {
 			vline_middle(metrics, mut canvas, .light)
-			draw_arc(metrics, mut canvas, .bl, .light)!
-			draw_arc(metrics, mut canvas, .br, .light)!
+			box_arc(metrics, mut canvas, .bl, .light)!
+			box_arc(metrics, mut canvas, .br, .light)!
 		}
 
 		// ''
 		0x0f5e8 {
 			hline_middle(metrics, mut canvas, .light)
-			draw_arc(metrics, mut canvas, .bl, .light)!
-			draw_arc(metrics, mut canvas, .tl, .light)!
+			box_arc(metrics, mut canvas, .bl, .light)!
+			box_arc(metrics, mut canvas, .tl, .light)!
 		}
 
 		// ''
 		0x0f5e9 {
 			hline_middle(metrics, mut canvas, .light)
-			draw_arc(metrics, mut canvas, .tr, .light)!
-			draw_arc(metrics, mut canvas, .br, .light)!
+			box_arc(metrics, mut canvas, .tr, .light)!
+			box_arc(metrics, mut canvas, .br, .light)!
 		}
 
 		// ''
 		0x0f5ea {
 			vline_middle(metrics, mut canvas, .light)
-			draw_arc(metrics, mut canvas, .tl, .light)!
-			draw_arc(metrics, mut canvas, .br, .light)!
+			box_arc(metrics, mut canvas, .tl, .light)!
+			box_arc(metrics, mut canvas, .br, .light)!
 		}
 
 		// ''
 		0x0f5eb {
 			vline_middle(metrics, mut canvas, .light)
-			draw_arc(metrics, mut canvas, .tr, .light)!
-			draw_arc(metrics, mut canvas, .bl, .light)!
+			box_arc(metrics, mut canvas, .tr, .light)!
+			box_arc(metrics, mut canvas, .bl, .light)!
 		}
 
 		// ''
 		0x0f5ec {
 			hline_middle(metrics, mut canvas, .light)
-			draw_arc(metrics, mut canvas, .tl, .light)!
-			draw_arc(metrics, mut canvas, .br, .light)!
+			box_arc(metrics, mut canvas, .tl, .light)!
+			box_arc(metrics, mut canvas, .br, .light)!
 		}
 
 		// ''
 		0x0f5ed {
 			hline_middle(metrics, mut canvas, .light)
-			draw_arc(metrics, mut canvas, .tr, .light)!
-			draw_arc(metrics, mut canvas, .bl, .light)!
+			box_arc(metrics, mut canvas, .tr, .light)!
+			box_arc(metrics, mut canvas, .bl, .light)!
 		}
 
 		// ''
@@ -703,117 +703,4 @@ fn fading_line(metrics font.Metrics, mut canvas Canvas, to Edge, thickness Thick
 			}
 		}
 	}
-}
-
-// draw_arc draws a rounded corner arc for box drawing.
-// Uses multiple line segments computed via sin/cos to approximate the
-// quarter-circle arc, since curveTo is not available on StaticPath.
-fn draw_arc(metrics font.Metrics, mut canvas Canvas, corner Corner, thickness Thickness) ! {
-	thick_px := thickness.height(metrics.box_thickness)
-	float_width := f64(metrics.cell_width)
-	float_height := f64(metrics.cell_height)
-	float_thick := f64(thick_px)
-	center_x := f64((metrics.cell_width - thick_px) / 2) + float_thick / 2
-	center_y := f64((metrics.cell_height - thick_px) / 2) + float_thick / 2
-
-	r := math.min(float_width, float_height) / 2
-
-	// Number of segments for the arc approximation.
-	arc_segments := 8
-
-	// Compute the start/end points for the straight segments leading to
-	// and from the arc, plus the arc points themselves using sin/cos.
-	//
-	// For each corner the arc sweeps a quarter circle. We compute
-	// arc_segments + 1 points along the arc and draw line segments
-	// between consecutive points, plus the straight line segments
-	// connecting the arc endpoints to the cell edges.
-
-	// Determine start angle and arc center based on corner.
-	// The arc center is at (center_x, center_y) offset by radius in the
-	// appropriate direction.
-	mut arc_cx := f64(0)
-	mut arc_cy := f64(0)
-	mut start_angle := f64(0)
-	mut edge_start_x := f64(0)
-	mut edge_start_y := f64(0)
-	mut edge_end_x := f64(0)
-	mut edge_end_y := f64(0)
-
-	match corner {
-		.tl {
-			// Arc goes from top-center to left-center
-			arc_cx = center_x - r
-			arc_cy = center_y - r
-			start_angle = 0 // 0 to pi/2 sweeps from right to bottom
-			// but we want from bottom (center_x, center_y-r+r=center_y) to right (center_x-r+r=center_x)
-			// Actually: arc center is at (center_x - r, center_y - r), radius r
-			// Point at angle 0: (arc_cx + r, arc_cy) = (center_x, center_y - r) -- on vertical line going up
-			// Point at angle pi/2: (arc_cx, arc_cy + r) = (center_x - r, center_y) -- on horizontal line going left
-			edge_start_x = center_x
-			edge_start_y = 0
-			edge_end_x = 0
-			edge_end_y = center_y
-		}
-		.tr {
-			// Arc goes from top-center to right-center
-			arc_cx = center_x + r
-			arc_cy = center_y - r
-			start_angle = math.pi / 2 // pi/2 to pi
-			edge_start_x = center_x
-			edge_start_y = 0
-			edge_end_x = float_width
-			edge_end_y = center_y
-		}
-		.bl {
-			// Arc goes from bottom-center to left-center
-			arc_cx = center_x - r
-			arc_cy = center_y + r
-			start_angle = 3 * math.pi / 2 // 3pi/2 to 2pi
-			edge_start_x = center_x
-			edge_start_y = float_height
-			edge_end_x = 0
-			edge_end_y = center_y
-		}
-		.br {
-			// Arc goes from bottom-center to right-center
-			arc_cx = center_x + r
-			arc_cy = center_y + r
-			start_angle = math.pi // pi to 3pi/2
-			edge_start_x = center_x
-			edge_start_y = float_height
-			edge_end_x = float_width
-			edge_end_y = center_y
-		}
-	}
-
-	// Build the arc points.
-	mut arc_points_x := []f64{len: arc_segments + 1}
-	mut arc_points_y := []f64{len: arc_segments + 1}
-	for i in 0 .. arc_segments + 1 {
-		t := f64(i) / f64(arc_segments)
-		angle := start_angle + t * math.pi / 2
-		arc_points_x[i] = arc_cx + r * math.cos(angle)
-		arc_points_y[i] = arc_cy + r * math.sin(angle)
-	}
-
-	// Draw the straight segment from the edge to the first arc point.
-	canvas.line(LineSegment{
-		p0: Point{ x: edge_start_x, y: edge_start_y }
-		p1: Point{ x: arc_points_x[0], y: arc_points_y[0] }
-	}, float_thick, .on) or {}
-
-	// Draw the arc segments.
-	for i in 0 .. arc_segments {
-		canvas.line(LineSegment{
-			p0: Point{ x: arc_points_x[i], y: arc_points_y[i] }
-			p1: Point{ x: arc_points_x[i + 1], y: arc_points_y[i + 1] }
-		}, float_thick, .on) or {}
-	}
-
-	// Draw the straight segment from the last arc point to the edge.
-	canvas.line(LineSegment{
-		p0: Point{ x: arc_points_x[arc_segments], y: arc_points_y[arc_segments] }
-		p1: Point{ x: edge_end_x, y: edge_end_y }
-	}, float_thick, .on) or {}
 }
