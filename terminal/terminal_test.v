@@ -5486,9 +5486,43 @@ fn test_horizontal_tab_back_with_cursor_before_left_margin() {
 // ============================================================
 // insert mode with wide characters
 // ============================================================
-// Note: tests that leave a wide char (with spacer_tail) in the MIDDLE of a
-// line are skipped because plainString in this port renders the spacer_tail
-// as a space (the dump helper lives in screen.v which is out of scope).
+
+fn test_insert_mode_with_wide_characters() {
+	mut t := create_test_terminal(5, 2) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('hello') or { assert false }
+	t.set_cursor_pos(1, 2)
+	t.modes.set(.insert, true)
+	t.print(0x1f600) or { assert false }
+
+	str := t.plain_string() or {
+		assert false
+		return
+	}
+	assert str == 'h😀el'
+}
+
+fn test_insert_mode_with_wide_characters_at_end() {
+	mut t := create_test_terminal(5, 2) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('well') or { assert false }
+	t.modes.set(.insert, true)
+	t.print(0x1f600) or { assert false }
+
+	str := t.plain_string() or {
+		assert false
+		return
+	}
+	assert str == 'well\n😀'
+}
 
 fn test_insert_mode_pushing_off_wide_character() {
 	mut t := create_test_terminal(5, 2) or {
