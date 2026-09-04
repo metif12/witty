@@ -77,6 +77,18 @@ fn C.g_type_check_instance_cast(instance voidptr, iface_type GType) voidptr
 
 fn C.g_boxed_type_register_static(type_name &char, boxed_copy voidptr, boxed_free voidptr) GType
 
+// GEnumValue and g_enum_register_static back hand-expanded enum GTypes such
+// as GhosttyMouseShape. The values array passed to GLib is static storage and
+// ends with an entry whose name and nick are null.
+pub struct C.GEnumValue {
+pub mut:
+	value      int
+	value_name &char
+	value_nick &char
+}
+
+fn C.g_enum_register_static(name &char, values &C.GEnumValue) GType
+
 // --- Parent type get_type() functions --------------------------------------
 
 fn C.adw_bin_get_type() GType
@@ -122,6 +134,8 @@ fn C.g_param_spec_string(name &char, nick &char, blurb &char, default_value &cha
 fn C.g_param_spec_object(name &char, nick &char, blurb &char, object_type GType, flags int) &C.GParamSpec
 
 fn C.g_param_spec_boxed(name &char, nick &char, blurb &char, boxed_type GType, flags int) &C.GParamSpec
+
+fn C.g_param_spec_enum(name &char, nick &char, blurb &char, enum_type GType, default_value int, flags int) &C.GParamSpec
 
 // --- Signal registration ---------------------------------------------------
 
@@ -197,3 +211,5 @@ fn C.g_value_get_boxed(value voidptr) voidptr
 fn C.g_value_dup_boxed(value voidptr) voidptr
 
 fn C.g_value_set_boxed(value voidptr, v_boxed voidptr)
+
+fn C.g_value_take_boxed(value voidptr, v_boxed voidptr)

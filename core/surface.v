@@ -1468,7 +1468,7 @@ const min_window_height_cells = u32(4)
 const max_active_key_tables = 8
 
 // Default DPI for font scaling.
-const default_dpi = f32(72.0)
+const default_dpi = f32(font.default_dpi)
 
 // InputEffect (the effect of an input event) lives in the apprt
 // interface; core.Surface returns apprt.InputEffect.
@@ -2665,8 +2665,8 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 	// Determine font size with DPI
 	self.font_size = DesiredSize{
 		points: derived_config.original_font_size
-		xdpi: u32(x_dpi)
-		ydpi: u32(y_dpi)
+		xdpi: u16(x_dpi)
+		ydpi: u16(y_dpi)
 	}
 
 	// Get font grid (shared across surfaces with same config)
@@ -3434,8 +3434,8 @@ pub fn (mut self Surface) content_scale_callback(content_scale ContentScale) ! {
 
 	// Update font size with new DPI
 	mut new_size := self.font_size
-	new_size.xdpi = u32(x_dpi)
-	new_size.ydpi = u32(y_dpi)
+	new_size.xdpi = u16(x_dpi)
+	new_size.ydpi = u16(y_dpi)
 	self.set_font_size(new_size)!
 
 	// Recalculate padding with new DPI

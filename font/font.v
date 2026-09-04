@@ -399,8 +399,9 @@ import hash
 import math
 import terminal
 
-// Default DPI used as the base for scaling calculations.
-pub const default_dpi = f32(72.0)
+// Default DPI for the platform. Fontconfig environments conventionally use
+// 96 DPI while CoreText uses 72 DPI, matching font.face.default_dpi.
+pub const default_dpi = $if macos { u16(72) } $else { u16(96) }
 
 // Packed Collection.Index reserved for built-in sprites.
 // Packed Index{style: regular, idx: Special.sprite}. Index stores the
@@ -808,14 +809,13 @@ fn metrics_modifier_apply_f64(mod MetricsModifier, v f64) f64 {
 pub struct DesiredSize {
 pub mut:
 	points f32
-	xdpi   u32
-	ydpi   u32
+	xdpi   u16 = default_dpi
+	ydpi   u16 = default_dpi
 }
 
 // pixels returns the pixel size derived from points and DPI.
 pub fn (d DesiredSize) pixels() f64 {
-	dpi := if d.ydpi > 0 { f64(d.ydpi) } else { f64(default_dpi) }
-	return f64(d.points) * dpi / f64(default_dpi)
+	return f64(d.points) * f64(d.ydpi) / 72.0
 }
 
 // Note: SharedGridSet is in shared_grid_set.v

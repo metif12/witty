@@ -38,12 +38,7 @@ fn C.gtk_label_set_label(label GtkLabel, str &char)
 // (first overlay file that needs it); other overlay files reuse it.
 fn C.gtk_align_get_type() GType
 
-// g_param_spec_enum registers an enum-typed property. Not declared in
-// gobject_c_linux.v.
-fn C.g_param_spec_enum(name &char, nick &char, blurb &char, enum_type GType, default_value int, flags int) &C.GParamSpec
-
-// g_value_get_enum / g_value_set_enum read/write enum GValues. Not declared in
-// gobject_c_linux.v.
+// g_value_get_enum / g_value_set_enum read/write enum GValues.
 fn C.g_value_get_enum(value voidptr) int
 
 fn C.g_value_set_enum(value voidptr, v_enum int)

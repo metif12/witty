@@ -21,8 +21,8 @@ module gtk
 //     `SurfaceWidget`, not `Surface`, to avoid colliding with the apprt
 //     adapter `Surface` in surface_linux.v.)
 //   * Blueprint children and callbacks are created and connected explicitly;
-//     the remaining non-scrollable GObject properties are called out at their
-//     implementation sites.
+//     all native GObject properties, signals, and GtkScrollable overrides are
+//     registered through the equivalent C API.
 //   * Calls into the core surface dispatch to the real `core.Surface` (see
 //     core/surface.v). Signatures are kept faithful.
 //
@@ -42,6 +42,7 @@ import terminal
 import osc
 import internal_os
 import datastruct
+import font
 import os
 
 // --- New C bindings unique to this file -----------------------------------
@@ -359,16 +360,157 @@ const gdk_scroll_unit_surface = int(1)
 const gdk_gl_api_gl = int(1)
 
 __global g_terminal_surface_type = GType(0)
+__global g_surface_size_type = GType(0)
+__global g_font_desired_size_type = GType(0)
+__global g_mouse_shape_type = GType(0)
+__global g_mouse_shape_values [35]C.GEnumValue
+__global g_surface_pspec_bell_ringing = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_config = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_child_exited = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_default_size = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_error = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_font_size_request = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_focused = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_key_sequence = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_key_table = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_min_size = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_mouse_shape = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_mouse_hidden = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_mouse_hover_url = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_pwd = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_title = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_title_override = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_zoom = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_is_split = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_readonly = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_hadjustment = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_vadjustment = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_hscroll_policy = &C.GParamSpec(unsafe { nil })
+__global g_surface_pspec_vscroll_policy = &C.GParamSpec(unsafe { nil })
 
 struct C.GhosttySurfacePrivate {
 mut:
 	wrapper voidptr
 }
 
-const surface_prop_hadjustment = u32(1)
-const surface_prop_vadjustment = u32(2)
-const surface_prop_hscroll_policy = u32(3)
-const surface_prop_vscroll_policy = u32(4)
+const surface_prop_bell_ringing = u32(1)
+const surface_prop_config = u32(2)
+const surface_prop_child_exited = u32(3)
+const surface_prop_default_size = u32(4)
+const surface_prop_error = u32(5)
+const surface_prop_font_size_request = u32(6)
+const surface_prop_focused = u32(7)
+const surface_prop_key_sequence = u32(8)
+const surface_prop_key_table = u32(9)
+const surface_prop_min_size = u32(10)
+const surface_prop_mouse_shape = u32(11)
+const surface_prop_mouse_hidden = u32(12)
+const surface_prop_mouse_hover_url = u32(13)
+const surface_prop_pwd = u32(14)
+const surface_prop_title = u32(15)
+const surface_prop_title_override = u32(16)
+const surface_prop_zoom = u32(17)
+const surface_prop_is_split = u32(18)
+const surface_prop_readonly = u32(19)
+const surface_prop_hadjustment = u32(20)
+const surface_prop_vadjustment = u32(21)
+const surface_prop_hscroll_policy = u32(22)
+const surface_prop_vscroll_policy = u32(23)
+
+// defineProperty always marks its compile-time strings static. None of the
+// Surface properties at the pinned revision use explicit-notify.
+const surface_param_static_strings = int(32 | 64 | 128)
+
+fn surface_size_boxed_copy(value voidptr) voidptr {
+	if isnil(value) {
+		return unsafe { nil }
+	}
+	size := unsafe { &Size(value) }
+	return voidptr(&Size{
+		width: size.width
+		height: size.height
+	})
+}
+
+fn surface_size_boxed_free(value voidptr) {
+	if !isnil(value) {
+		unsafe { free(value) }
+	}
+}
+
+fn surface_size_get_type() GType {
+	if g_surface_size_type == GType(0) {
+		g_surface_size_type = C.g_boxed_type_register_static(c'GhosttySurfaceSize', voidptr(surface_size_boxed_copy), voidptr(surface_size_boxed_free))
+	}
+	return g_surface_size_type
+}
+
+fn font_desired_size_boxed_copy(value voidptr) voidptr {
+	if isnil(value) {
+		return unsafe { nil }
+	}
+	size := unsafe { &font.DesiredSize(value) }
+	return voidptr(&font.DesiredSize{
+		points: size.points
+		xdpi: size.xdpi
+		ydpi: size.ydpi
+	})
+}
+
+fn font_desired_size_boxed_free(value voidptr) {
+	if !isnil(value) {
+		unsafe { free(value) }
+	}
+}
+
+fn font_desired_size_get_type() GType {
+	if g_font_desired_size_type == GType(0) {
+		g_font_desired_size_type = C.g_boxed_type_register_static(c'GhosttyFontDesiredSize', voidptr(font_desired_size_boxed_copy), voidptr(font_desired_size_boxed_free))
+	}
+	return g_font_desired_size_type
+}
+
+fn mouse_shape_get_type() GType {
+	if g_mouse_shape_type == GType(0) {
+		g_mouse_shape_values[0] = C.GEnumValue{ value: int(terminal.MouseShape.default_), value_name: c'default', value_nick: c'default' }
+		g_mouse_shape_values[1] = C.GEnumValue{ value: int(terminal.MouseShape.context_menu), value_name: c'context_menu', value_nick: c'context_menu' }
+		g_mouse_shape_values[2] = C.GEnumValue{ value: int(terminal.MouseShape.help), value_name: c'help', value_nick: c'help' }
+		g_mouse_shape_values[3] = C.GEnumValue{ value: int(terminal.MouseShape.pointer), value_name: c'pointer', value_nick: c'pointer' }
+		g_mouse_shape_values[4] = C.GEnumValue{ value: int(terminal.MouseShape.progress), value_name: c'progress', value_nick: c'progress' }
+		g_mouse_shape_values[5] = C.GEnumValue{ value: int(terminal.MouseShape.wait), value_name: c'wait', value_nick: c'wait' }
+		g_mouse_shape_values[6] = C.GEnumValue{ value: int(terminal.MouseShape.cell), value_name: c'cell', value_nick: c'cell' }
+		g_mouse_shape_values[7] = C.GEnumValue{ value: int(terminal.MouseShape.crosshair), value_name: c'crosshair', value_nick: c'crosshair' }
+		g_mouse_shape_values[8] = C.GEnumValue{ value: int(terminal.MouseShape.text), value_name: c'text', value_nick: c'text' }
+		g_mouse_shape_values[9] = C.GEnumValue{ value: int(terminal.MouseShape.vertical_text), value_name: c'vertical_text', value_nick: c'vertical_text' }
+		g_mouse_shape_values[10] = C.GEnumValue{ value: int(terminal.MouseShape.alias), value_name: c'alias', value_nick: c'alias' }
+		g_mouse_shape_values[11] = C.GEnumValue{ value: int(terminal.MouseShape.copy), value_name: c'copy', value_nick: c'copy' }
+		g_mouse_shape_values[12] = C.GEnumValue{ value: int(terminal.MouseShape.move), value_name: c'move', value_nick: c'move' }
+		g_mouse_shape_values[13] = C.GEnumValue{ value: int(terminal.MouseShape.no_drop), value_name: c'no_drop', value_nick: c'no_drop' }
+		g_mouse_shape_values[14] = C.GEnumValue{ value: int(terminal.MouseShape.not_allowed), value_name: c'not_allowed', value_nick: c'not_allowed' }
+		g_mouse_shape_values[15] = C.GEnumValue{ value: int(terminal.MouseShape.grab), value_name: c'grab', value_nick: c'grab' }
+		g_mouse_shape_values[16] = C.GEnumValue{ value: int(terminal.MouseShape.grabbing), value_name: c'grabbing', value_nick: c'grabbing' }
+		g_mouse_shape_values[17] = C.GEnumValue{ value: int(terminal.MouseShape.all_scroll), value_name: c'all_scroll', value_nick: c'all_scroll' }
+		g_mouse_shape_values[18] = C.GEnumValue{ value: int(terminal.MouseShape.col_resize), value_name: c'col_resize', value_nick: c'col_resize' }
+		g_mouse_shape_values[19] = C.GEnumValue{ value: int(terminal.MouseShape.row_resize), value_name: c'row_resize', value_nick: c'row_resize' }
+		g_mouse_shape_values[20] = C.GEnumValue{ value: int(terminal.MouseShape.n_resize), value_name: c'n_resize', value_nick: c'n_resize' }
+		g_mouse_shape_values[21] = C.GEnumValue{ value: int(terminal.MouseShape.e_resize), value_name: c'e_resize', value_nick: c'e_resize' }
+		g_mouse_shape_values[22] = C.GEnumValue{ value: int(terminal.MouseShape.s_resize), value_name: c's_resize', value_nick: c's_resize' }
+		g_mouse_shape_values[23] = C.GEnumValue{ value: int(terminal.MouseShape.w_resize), value_name: c'w_resize', value_nick: c'w_resize' }
+		g_mouse_shape_values[24] = C.GEnumValue{ value: int(terminal.MouseShape.ne_resize), value_name: c'ne_resize', value_nick: c'ne_resize' }
+		g_mouse_shape_values[25] = C.GEnumValue{ value: int(terminal.MouseShape.nw_resize), value_name: c'nw_resize', value_nick: c'nw_resize' }
+		g_mouse_shape_values[26] = C.GEnumValue{ value: int(terminal.MouseShape.se_resize), value_name: c'se_resize', value_nick: c'se_resize' }
+		g_mouse_shape_values[27] = C.GEnumValue{ value: int(terminal.MouseShape.sw_resize), value_name: c'sw_resize', value_nick: c'sw_resize' }
+		g_mouse_shape_values[28] = C.GEnumValue{ value: int(terminal.MouseShape.ew_resize), value_name: c'ew_resize', value_nick: c'ew_resize' }
+		g_mouse_shape_values[29] = C.GEnumValue{ value: int(terminal.MouseShape.ns_resize), value_name: c'ns_resize', value_nick: c'ns_resize' }
+		g_mouse_shape_values[30] = C.GEnumValue{ value: int(terminal.MouseShape.nesw_resize), value_name: c'nesw_resize', value_nick: c'nesw_resize' }
+		g_mouse_shape_values[31] = C.GEnumValue{ value: int(terminal.MouseShape.nwse_resize), value_name: c'nwse_resize', value_nick: c'nwse_resize' }
+		g_mouse_shape_values[32] = C.GEnumValue{ value: int(terminal.MouseShape.zoom_in), value_name: c'zoom_in', value_nick: c'zoom_in' }
+		g_mouse_shape_values[33] = C.GEnumValue{ value: int(terminal.MouseShape.zoom_out), value_name: c'zoom_out', value_nick: c'zoom_out' }
+		g_mouse_shape_values[34] = C.GEnumValue{ value: 0, value_name: &char(unsafe { nil }), value_nick: &char(unsafe { nil }) }
+		g_mouse_shape_type = C.g_enum_register_static(c'GhosttyMouseShape', &g_mouse_shape_values[0])
+	}
+	return g_mouse_shape_type
+}
 
 fn terminal_surface_priv(obj voidptr) &C.GhosttySurfacePrivate {
 	return &C.GhosttySurfacePrivate(C.g_type_instance_get_private(obj, g_terminal_surface_type))
@@ -379,6 +521,21 @@ fn terminal_surface_get_property(obj voidptr, property_id u32, value voidptr, ps
 	priv := terminal_surface_priv(obj)
 	if isnil(priv.wrapper) {
 		match property_id {
+			surface_prop_bell_ringing, surface_prop_child_exited, surface_prop_error, surface_prop_focused, surface_prop_mouse_hidden, surface_prop_zoom, surface_prop_is_split, surface_prop_readonly {
+				C.g_value_set_boolean(value, 0)
+			}
+			surface_prop_mouse_shape {
+				C.g_value_set_enum(value, int(terminal.MouseShape.text))
+			}
+			surface_prop_config {
+				C.g_value_set_object(value, unsafe { nil })
+			}
+			surface_prop_default_size, surface_prop_font_size_request, surface_prop_key_sequence, surface_prop_key_table, surface_prop_min_size {
+				C.g_value_set_boxed(value, unsafe { nil })
+			}
+			surface_prop_mouse_hover_url, surface_prop_pwd, surface_prop_title, surface_prop_title_override {
+				C.g_value_set_string(value, &char(unsafe { nil }))
+			}
 			surface_prop_hadjustment, surface_prop_vadjustment {
 				C.g_value_set_object(value, unsafe { nil })
 			}
@@ -391,6 +548,79 @@ fn terminal_surface_get_property(obj voidptr, property_id u32, value voidptr, ps
 	}
 	self := unsafe { &SurfaceWidget(priv.wrapper) }
 	match property_id {
+		surface_prop_bell_ringing { C.g_value_set_boolean(value, b2i(self.bell_ringing)) }
+		surface_prop_config {
+			C.g_value_set_object(value, if isnil(self.config) {
+				unsafe { nil }
+			} else {
+				self.config.obj
+			})
+		}
+		surface_prop_child_exited { C.g_value_set_boolean(value, b2i(self.child_exited)) }
+		surface_prop_default_size {
+			if size := self.default_size {
+				C.g_value_set_boxed(value, &size)
+			} else {
+				C.g_value_set_boxed(value, unsafe { nil })
+			}
+		}
+		surface_prop_error { C.g_value_set_boolean(value, b2i(self.error_state)) }
+		surface_prop_font_size_request {
+			if size := self.font_size_request {
+				C.g_value_set_boxed(value, &size)
+			} else {
+				C.g_value_set_boxed(value, unsafe { nil })
+			}
+		}
+		surface_prop_focused { C.g_value_set_boolean(value, b2i(self.focused)) }
+		surface_prop_key_sequence {
+			list := StringList.create(self.key_sequence)
+			C.g_value_take_boxed(value, list)
+		}
+		surface_prop_key_table {
+			list := StringList.create(self.key_tables)
+			C.g_value_take_boxed(value, list)
+		}
+		surface_prop_min_size {
+			if size := self.min_size {
+				C.g_value_set_boxed(value, &size)
+			} else {
+				C.g_value_set_boxed(value, unsafe { nil })
+			}
+		}
+		surface_prop_mouse_shape { C.g_value_set_enum(value, int(self.mouse_shape)) }
+		surface_prop_mouse_hidden { C.g_value_set_boolean(value, b2i(self.mouse_hidden)) }
+		surface_prop_mouse_hover_url {
+			if text := self.mouse_hover_url {
+				C.g_value_set_string(value, &char(text.str))
+			} else {
+				C.g_value_set_string(value, &char(unsafe { nil }))
+			}
+		}
+		surface_prop_pwd {
+			if text := self.pwd {
+				C.g_value_set_string(value, &char(text.str))
+			} else {
+				C.g_value_set_string(value, &char(unsafe { nil }))
+			}
+		}
+		surface_prop_title {
+			if text := self.title {
+				C.g_value_set_string(value, &char(text.str))
+			} else {
+				C.g_value_set_string(value, &char(unsafe { nil }))
+			}
+		}
+		surface_prop_title_override {
+			if text := self.title_override {
+				C.g_value_set_string(value, &char(text.str))
+			} else {
+				C.g_value_set_string(value, &char(unsafe { nil }))
+			}
+		}
+		surface_prop_zoom { C.g_value_set_boolean(value, b2i(self.zoom)) }
+		surface_prop_is_split { C.g_value_set_boolean(value, b2i(self.is_split)) }
+		surface_prop_readonly { C.g_value_set_boolean(value, b2i(self.get_readonly())) }
 		surface_prop_hadjustment { C.g_value_set_object(value, self.hadj) }
 		surface_prop_vadjustment { C.g_value_set_object(value, self.vadj) }
 		surface_prop_hscroll_policy { C.g_value_set_enum(value, int(self.hscroll_policy)) }
@@ -407,6 +637,90 @@ fn terminal_surface_set_property(obj voidptr, property_id u32, value voidptr, ps
 	}
 	mut self := unsafe { &SurfaceWidget(priv.wrapper) }
 	match property_id {
+		surface_prop_bell_ringing {
+			self.set_bell_ringing(C.g_value_get_boolean(value) != 0)
+		}
+		surface_prop_config {
+			config_obj := C.g_value_get_object(value)
+			if isnil(config_obj) {
+				self.set_config_reference(unsafe { nil })
+			} else {
+				config_private := config_priv(config_obj)
+				if !isnil(config_private.wrapper) {
+					self.set_config_reference(unsafe { &Config(config_private.wrapper) })
+				}
+			}
+		}
+		surface_prop_child_exited {
+			self.child_exited = C.g_value_get_boolean(value) != 0
+		}
+		surface_prop_default_size {
+			boxed := C.g_value_get_boxed(value)
+			if isnil(boxed) {
+				self.default_size = none
+			} else {
+				self.set_default_size(unsafe { *&Size(boxed) })
+			}
+		}
+		surface_prop_error {
+			self.set_error(C.g_value_get_boolean(value) != 0)
+		}
+		surface_prop_font_size_request {
+			boxed := C.g_value_get_boxed(value)
+			if isnil(boxed) {
+				self.font_size_request = none
+			} else {
+				self.font_size_request = unsafe { *&font.DesiredSize(boxed) }
+			}
+		}
+		surface_prop_focused {
+			self.focused = C.g_value_get_boolean(value) != 0
+			self.sync_unfocused_split_overlay()
+		}
+		surface_prop_min_size {
+			boxed := C.g_value_get_boxed(value)
+			if isnil(boxed) {
+				self.min_size = none
+			} else {
+				self.set_min_size(unsafe { *&Size(boxed) })
+			}
+		}
+		surface_prop_mouse_shape {
+			self.set_mouse_shape(unsafe { terminal.MouseShape(C.g_value_get_enum(value)) })
+		}
+		surface_prop_mouse_hidden {
+			self.set_mouse_hidden(C.g_value_get_boolean(value) != 0)
+		}
+		surface_prop_mouse_hover_url {
+			text := C.g_value_get_string(value)
+			self.set_mouse_hover_url(if isnil(text) {
+				none
+			} else {
+				unsafe { cstring_to_vstring(text) }
+			})
+		}
+		surface_prop_pwd {
+			text := C.g_value_get_string(value)
+			self.set_pwd(if isnil(text) { none } else { unsafe { cstring_to_vstring(text) } })
+		}
+		surface_prop_title {
+			text := C.g_value_get_string(value)
+			self.set_title(if isnil(text) { none } else { unsafe { cstring_to_vstring(text) } })
+		}
+		surface_prop_title_override {
+			text := C.g_value_get_string(value)
+			self.set_title_override(if isnil(text) {
+				none
+			} else {
+				unsafe { cstring_to_vstring(text) }
+			})
+		}
+		surface_prop_zoom {
+			self.zoom = C.g_value_get_boolean(value) != 0
+		}
+		surface_prop_is_split {
+			self.set_is_split(C.g_value_get_boolean(value) != 0)
+		}
 		surface_prop_hadjustment {
 			self.set_hadjustment(GtkAdjustment(C.g_value_get_object(value)))
 		}
@@ -428,15 +742,154 @@ fn terminal_surface_scrollable_init(iface voidptr, data voidptr) {
 	_ = data
 }
 
+fn terminal_surface_parent_object_class(obj voidptr) &C.GObjectClass {
+	return &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
+}
+
+fn terminal_surface_dispose(obj voidptr) {
+	priv := terminal_surface_priv(obj)
+	if !isnil(priv.wrapper) {
+		mut self := unsafe { &SurfaceWidget(priv.wrapper) }
+		if !isnil(self.config) {
+			self.config.unref()
+			self.config = unsafe { nil }
+		}
+		if !isnil(self.vadj_signal_group) {
+			C.g_signal_group_set_target(self.vadj_signal_group, unsafe { nil })
+			object_unref(GObject(self.vadj_signal_group))
+			self.vadj_signal_group = unsafe { nil }
+		}
+		if !isnil(self.hadj) {
+			object_unref(GObject(self.hadj))
+			self.hadj = unsafe { nil }
+		}
+		if !isnil(self.vadj) {
+			object_unref(GObject(self.vadj))
+			self.vadj = unsafe { nil }
+		}
+		if self.progress_bar_timer != 0 {
+			C.g_source_remove(self.progress_bar_timer)
+			self.progress_bar_timer = 0
+		}
+		if self.idle_rechild != 0 {
+			C.g_source_remove(self.idle_rechild)
+			self.idle_rechild = 0
+		}
+		if self.pending_horizontal_scroll_reset != 0 {
+			C.g_source_remove(self.pending_horizontal_scroll_reset)
+			self.pending_horizontal_scroll_reset = 0
+		}
+		C.adw_bin_set_child(AdwBin(obj), GtkWidget(unsafe { nil }))
+		if !isnil(self.terminal_page) {
+			object_unref(GObject(self.terminal_page))
+			self.terminal_page = unsafe { nil }
+		}
+		if !isnil(self.error_page) {
+			object_unref(GObject(self.error_page))
+			self.error_page = unsafe { nil }
+		}
+		if !isnil(self.im_context) {
+			object_unref(GObject(self.im_context))
+			self.im_context = unsafe { nil }
+		}
+	}
+	parent_class := terminal_surface_parent_object_class(obj)
+	if !isnil(parent_class.dispose) {
+		f := DisposeFn(parent_class.dispose)
+		f(obj)
+	}
+}
+
+fn terminal_surface_finalize(obj voidptr) {
+	mut priv := terminal_surface_priv(obj)
+	if !isnil(priv.wrapper) {
+		mut self := unsafe { &SurfaceWidget(priv.wrapper) }
+		if self.has_core() {
+			if !isnil(self.core_surface_ref) && !isnil(self.app) && !isnil(self.app.core_app) {
+				mut app := unsafe { self.app.core_app }
+				app.delete_surface(self.core_surface_ref)
+			}
+			mut core_surface := self.core_surface
+			core_surface.deinit()
+			self.core_surface = unsafe { nil }
+			self.core_surface_ref = unsafe { nil }
+		}
+		self.clear_cgroup()
+		self.mouse_hover_url = none
+		self.default_size = none
+		self.font_size_request = none
+		self.min_size = none
+		self.pwd = none
+		self.title = none
+		self.title_override = none
+		self.key_sequence.clear()
+		self.key_tables.clear()
+		self.widget = unsafe { nil }
+		priv.wrapper = unsafe { nil }
+	}
+	parent_class := terminal_surface_parent_object_class(obj)
+	if !isnil(parent_class.finalize) {
+		f := FinalizeFn(parent_class.finalize)
+		f(obj)
+	}
+}
+
 fn terminal_surface_class_init(klass voidptr, class_data voidptr) {
 	_ = class_data
 	mut obj_class := &C.GObjectClass(klass)
 	obj_class.get_property = voidptr(terminal_surface_get_property)
 	obj_class.set_property = voidptr(terminal_surface_set_property)
+	obj_class.dispose = voidptr(terminal_surface_dispose)
+	obj_class.finalize = voidptr(terminal_surface_finalize)
+	nil_str := &char(unsafe { nil })
+	readwrite := g_param_readwrite | surface_param_static_strings
+	readable := g_param_readable | surface_param_static_strings
+	g_surface_pspec_bell_ringing = C.g_param_spec_boolean(c'bell-ringing', nil_str, nil_str, 0, readwrite)
+	g_surface_pspec_config = C.g_param_spec_object(c'config', nil_str, nil_str, config_get_type(), readwrite)
+	g_surface_pspec_child_exited = C.g_param_spec_boolean(c'child-exited', nil_str, nil_str, 0, readwrite)
+	g_surface_pspec_default_size = C.g_param_spec_boxed(c'default-size', nil_str, nil_str, surface_size_get_type(), readwrite)
+	g_surface_pspec_error = C.g_param_spec_boolean(c'error', nil_str, nil_str, 0, readwrite)
+	g_surface_pspec_font_size_request = C.g_param_spec_boxed(c'font-size-request', nil_str, nil_str, font_desired_size_get_type(), readwrite)
+	g_surface_pspec_focused = C.g_param_spec_boolean(c'focused', nil_str, nil_str, 0, readwrite)
+	g_surface_pspec_key_sequence = C.g_param_spec_boxed(c'key-sequence', nil_str, nil_str, StringList.get_gobject_type(), readable)
+	g_surface_pspec_key_table = C.g_param_spec_boxed(c'key-table', nil_str, nil_str, StringList.get_gobject_type(), readable)
+	g_surface_pspec_min_size = C.g_param_spec_boxed(c'min-size', nil_str, nil_str, surface_size_get_type(), readwrite)
+	g_surface_pspec_mouse_shape = C.g_param_spec_enum(c'mouse-shape', nil_str, nil_str, mouse_shape_get_type(), int(terminal.MouseShape.text), readwrite)
+	g_surface_pspec_mouse_hidden = C.g_param_spec_boolean(c'mouse-hidden', nil_str, nil_str, 0, readwrite)
+	g_surface_pspec_mouse_hover_url = C.g_param_spec_string(c'mouse-hover-url', nil_str, nil_str, nil_str, readwrite)
+	g_surface_pspec_pwd = C.g_param_spec_string(c'pwd', nil_str, nil_str, nil_str, readwrite)
+	g_surface_pspec_title = C.g_param_spec_string(c'title', nil_str, nil_str, nil_str, readwrite)
+	g_surface_pspec_title_override = C.g_param_spec_string(c'title-override', nil_str, nil_str, nil_str, readwrite)
+	g_surface_pspec_zoom = C.g_param_spec_boolean(c'zoom', nil_str, nil_str, 0, readwrite)
+	g_surface_pspec_is_split = C.g_param_spec_boolean(c'is-split', nil_str, nil_str, 0, readwrite)
+	g_surface_pspec_readonly = C.g_param_spec_boolean(c'readonly', nil_str, nil_str, 0, readable)
+	C.g_object_class_install_property(klass, surface_prop_bell_ringing, g_surface_pspec_bell_ringing)
+	C.g_object_class_install_property(klass, surface_prop_config, g_surface_pspec_config)
+	C.g_object_class_install_property(klass, surface_prop_child_exited, g_surface_pspec_child_exited)
+	C.g_object_class_install_property(klass, surface_prop_default_size, g_surface_pspec_default_size)
+	C.g_object_class_install_property(klass, surface_prop_error, g_surface_pspec_error)
+	C.g_object_class_install_property(klass, surface_prop_font_size_request, g_surface_pspec_font_size_request)
+	C.g_object_class_install_property(klass, surface_prop_focused, g_surface_pspec_focused)
+	C.g_object_class_install_property(klass, surface_prop_key_sequence, g_surface_pspec_key_sequence)
+	C.g_object_class_install_property(klass, surface_prop_key_table, g_surface_pspec_key_table)
+	C.g_object_class_install_property(klass, surface_prop_min_size, g_surface_pspec_min_size)
+	C.g_object_class_install_property(klass, surface_prop_mouse_shape, g_surface_pspec_mouse_shape)
+	C.g_object_class_install_property(klass, surface_prop_mouse_hidden, g_surface_pspec_mouse_hidden)
+	C.g_object_class_install_property(klass, surface_prop_mouse_hover_url, g_surface_pspec_mouse_hover_url)
+	C.g_object_class_install_property(klass, surface_prop_pwd, g_surface_pspec_pwd)
+	C.g_object_class_install_property(klass, surface_prop_title, g_surface_pspec_title)
+	C.g_object_class_install_property(klass, surface_prop_title_override, g_surface_pspec_title_override)
+	C.g_object_class_install_property(klass, surface_prop_zoom, g_surface_pspec_zoom)
+	C.g_object_class_install_property(klass, surface_prop_is_split, g_surface_pspec_is_split)
+	C.g_object_class_install_property(klass, surface_prop_readonly, g_surface_pspec_readonly)
 	C.g_object_class_override_property(klass, surface_prop_hadjustment, c'hadjustment')
 	C.g_object_class_override_property(klass, surface_prop_vadjustment, c'vadjustment')
 	C.g_object_class_override_property(klass, surface_prop_hscroll_policy, c'hscroll-policy')
 	C.g_object_class_override_property(klass, surface_prop_vscroll_policy, c'vscroll-policy')
+	g_surface_pspec_hadjustment = C.g_object_class_find_property(klass, c'hadjustment')
+	g_surface_pspec_vadjustment = C.g_object_class_find_property(klass, c'vadjustment')
+	g_surface_pspec_hscroll_policy = C.g_object_class_find_property(klass, c'hscroll-policy')
+	g_surface_pspec_vscroll_policy = C.g_object_class_find_property(klass, c'vscroll-policy')
 	for name in ['bell', 'close-request', 'clipboard-read', 'init', 'menu', 'present-request',
 		'toggle-fullscreen', 'toggle-maximize'] {
 		C.g_signal_new(&char(name.str), g_terminal_surface_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(4), 0)
@@ -552,7 +1005,7 @@ pub mut:
 	// The apprt Surface adapter (see surface_linux.v).
 	rt_surface Surface
 
-	// The configuration this surface uses (out of scope: config GObject).
+	// The configuration this surface uses (the GhosttyConfig GObject wrapper).
 	config &Config = unsafe { nil }
 
 	// The cgroup created for this surface, if any.
@@ -562,9 +1015,9 @@ pub mut:
 	default_size ?Size
 	min_size     ?Size
 
-	// The requested font size in points (only applies to initialization).
-	// 0 means "unset". In ghostty this is `?*font.face.DesiredSize`.
-	font_size_request f32
+	// The requested font size (only applies to initialization). This is a value
+	// copy of Ghostty's boxed `?*font.face.DesiredSize`.
+	font_size_request ?font.DesiredSize
 
 	// The mouse shape to show for the surface.
 	mouse_shape terminal.MouseShape = .text
@@ -664,6 +1117,12 @@ pub fn (mut self SurfaceWidget) rt() &Surface {
 	return &self.rt_surface
 }
 
+fn (self &SurfaceWidget) notify_property(pspec &C.GParamSpec) {
+	if !isnil(self.widget) && !isnil(pspec) {
+		C.g_object_notify_by_pspec(self.widget, pspec)
+	}
+}
+
 // set_parent captures inheritable state before the GLArea realizes. No parent
 // pointer is retained, matching Ghostty's Surface.setParent.
 pub fn (mut self SurfaceWidget) set_parent(parent &core.Surface, context NewSurfaceContext) {
@@ -671,7 +1130,8 @@ pub fn (mut self SurfaceWidget) set_parent(parent &core.Surface, context NewSurf
 		return
 	}
 	self.context = context
-	self.font_size_request = parent.font_size.points
+	self.font_size_request = parent.font_size
+	self.notify_property(g_surface_pspec_font_size_request)
 	if isnil(self.config) {
 		return
 	}
@@ -681,7 +1141,7 @@ pub fn (mut self SurfaceWidget) set_parent(parent &core.Surface, context NewSurf
 		.split { self.config.get().split_inherit_working_directory }
 	}
 	if inherit_pwd {
-		self.pwd = parent.pwd()
+		self.set_pwd(parent.pwd())
 	}
 }
 
@@ -764,6 +1224,7 @@ pub fn (self &SurfaceWidget) get_title() ?string {
 // set_title sets the terminal-set title (a copy). Mirrors `Surface.setTitle`.
 pub fn (mut self SurfaceWidget) set_title(title ?string) {
 	self.title = title
+	self.notify_property(g_surface_pspec_title)
 	self.sync_tab()
 }
 
@@ -771,6 +1232,7 @@ pub fn (mut self SurfaceWidget) set_title(title ?string) {
 // `Surface.setTitleOverride`.
 pub fn (mut self SurfaceWidget) set_title_override(title ?string) {
 	self.title_override = title
+	self.notify_property(g_surface_pspec_title_override)
 	self.sync_tab()
 }
 
@@ -858,6 +1320,7 @@ pub fn (self &SurfaceWidget) get_pwd() ?string {
 // set_pwd sets the pwd (a copy). Mirrors `Surface.setPwd`.
 pub fn (mut self SurfaceWidget) set_pwd(pwd ?string) {
 	self.pwd = pwd
+	self.notify_property(g_surface_pspec_pwd)
 	self.sync_tab()
 }
 
@@ -878,6 +1341,7 @@ pub fn (self &SurfaceWidget) get_mouse_shape() terminal.MouseShape {
 // `Surface.setMouseShape` + `propMouseShape`.
 pub fn (mut self SurfaceWidget) set_mouse_shape(shape terminal.MouseShape) {
 	self.mouse_shape = shape
+	self.notify_property(g_surface_pspec_mouse_shape)
 	self.apply_mouse_shape()
 }
 
@@ -891,6 +1355,7 @@ pub fn (self &SurfaceWidget) get_mouse_hidden() bool {
 // `Surface.setMouseHidden` + `propMouseHidden`.
 pub fn (mut self SurfaceWidget) set_mouse_hidden(hidden bool) {
 	self.mouse_hidden = hidden
+	self.notify_property(g_surface_pspec_mouse_hidden)
 	if self.mouse_hidden {
 		C.gtk_widget_set_cursor_from_name(self.widget, c'none')
 		return
@@ -947,6 +1412,7 @@ fn (self &SurfaceWidget) apply_mouse_shape() {
 // Mirrors `Surface.setMouseHoverUrl` + `propMouseHoverUrl`.
 pub fn (mut self SurfaceWidget) set_mouse_hover_url(url ?string) {
 	self.mouse_hover_url = url
+	self.notify_property(g_surface_pspec_mouse_hover_url)
 	text := url or { '' }
 	if !isnil(self.url_left) {
 		C.gtk_label_set_label(self.url_left, &char(text.str))
@@ -967,6 +1433,10 @@ pub fn (self &SurfaceWidget) get_bell_ringing() bool {
 
 // set_bell_ringing sets the bell ringing state. Mirrors `Surface.setBellRinging`.
 pub fn (mut self SurfaceWidget) set_bell_ringing(ringing bool) {
+	C.g_object_freeze_notify(self.widget)
+	defer {
+		C.g_object_thaw_notify(self.widget)
+	}
 	// Logic around bell reaction happens on every event even if we're already
 	// ringing.
 	if ringing {
@@ -978,6 +1448,7 @@ pub fn (mut self SurfaceWidget) set_bell_ringing(ringing bool) {
 		return
 	}
 	self.bell_ringing = ringing
+	self.notify_property(g_surface_pspec_bell_ringing)
 	self.sync_bell_border_overlay()
 	self.sync_tab()
 }
@@ -990,12 +1461,19 @@ fn (self &SurfaceWidget) sync_bell_border_overlay() {
 	C.gtk_revealer_set_reveal_child(self.bell_revealer, show)
 }
 
-// set_readonly mirrors the readonly property binding in surface.blp.
-pub fn (mut self SurfaceWidget) set_readonly(readonly bool) {
-	if self.readonly == readonly {
-		return
+// get_readonly reads the canonical state from the core, matching the pinned
+// read-only GObject property getter.
+pub fn (self &SurfaceWidget) get_readonly() bool {
+	if !self.has_core() {
+		return false
 	}
+	return self.core_surface.readonly
+}
+
+// set_readonly mirrors Surface.setReadonly and the readonly blueprint binding.
+pub fn (mut self SurfaceWidget) set_readonly(readonly bool) {
 	self.readonly = readonly
+	self.notify_property(g_surface_pspec_readonly)
 	if !isnil(self.readonly_revealer) {
 		C.gtk_revealer_set_reveal_child(self.readonly_revealer, readonly)
 	}
@@ -1007,6 +1485,7 @@ pub fn (mut self SurfaceWidget) set_is_split(is_split bool) {
 		return
 	}
 	self.is_split = is_split
+	self.notify_property(g_surface_pspec_is_split)
 	self.sync_unfocused_split_overlay()
 }
 
@@ -1243,6 +1722,7 @@ fn surface_media_file_ended_cb(media_file GtkMediaFile, pspec voidptr, data void
 // set_error sets the error state. Mirrors `Surface.setError`.
 pub fn (mut self SurfaceWidget) set_error(v bool) {
 	self.error_state = v
+	self.notify_property(g_surface_pspec_error)
 	if v {
 		C.gtk_widget_add_css_class(self.widget, c'background')
 	} else {
@@ -1277,7 +1757,7 @@ pub fn (self &SurfaceWidget) get_default_size() ?Size {
 // set_default_size sets the default size. Mirrors `Surface.setDefaultSize`.
 pub fn (mut self SurfaceWidget) set_default_size(size Size) {
 	self.default_size = size
-	// TODO(gtk): notifyByPspec(properties.default-size).
+	self.notify_property(g_surface_pspec_default_size)
 }
 
 // get_min_size returns the min size, if set. Mirrors `Surface.getMinSize`.
@@ -1288,10 +1768,35 @@ pub fn (self &SurfaceWidget) get_min_size() ?Size {
 // set_min_size sets the min size. Mirrors `Surface.setMinSize`.
 pub fn (mut self SurfaceWidget) set_min_size(size Size) {
 	self.min_size = size
-	// TODO(gtk): notifyByPspec(properties.min-size).
+	self.notify_property(g_surface_pspec_min_size)
 }
 
 // --- cgroup ---------------------------------------------------------------
+
+// init_cgroup creates this surface's child scope under the application's
+// transient cgroup. Failure is deliberately non-fatal, matching Ghostty.
+fn (mut self SurfaceWidget) init_cgroup() {
+	if self.cgroup_path != none || isnil(self.app) {
+		return
+	}
+	base := self.app.cgroup_base() or { return }
+	name := 'surfaces/${usize(voidptr(self)):X}.scope'
+	cgroup_create(base, name, -1) or {
+		eprintln('failed to create surface cgroup: ${err}')
+		return
+	}
+	self.cgroup_path = '${base}/${name}'
+}
+
+// clear_cgroup removes this surface's child scope after its process has been
+// shut down. A dangling empty cgroup is non-fatal.
+fn (mut self SurfaceWidget) clear_cgroup() {
+	path := self.cgroup_path or { return }
+	cgroup_remove(path) or {
+		eprintln('failed to remove cgroup for surface path=${path}: ${err}')
+	}
+	self.cgroup_path = none
+}
 
 // cgroup_path returns the cgroup path, if any. Mirrors `Surface.cgroupPath`.
 pub fn (self &SurfaceWidget) cgroup_path() ?string {
@@ -1842,8 +2347,8 @@ pub fn (mut self SurfaceWidget) ec_scroll_vertical(x f64, y f64) bool {
 
 // ec_scroll_horizontal is the GtkEventControllerScroll "scroll" handler for
 // horizontal scroll. Mirrors `ecMouseScrollHorizontal`: accumulates horizontal
-// scroll and switches tabs when the threshold is crossed. The 500ms reset timer
-// is stubbed (needs a glib timeout source).
+// scroll, resets the accumulator after 500ms of inactivity, and switches tabs
+// when the threshold is crossed.
 pub fn (mut self SurfaceWidget) ec_scroll_horizontal(x f64) bool {
 	self.pending_horizontal_scroll += x
 
@@ -1889,7 +2394,7 @@ pub fn (mut self SurfaceWidget) ec_focus_enter() {
 	self.sync_unfocused_split_overlay()
 	C.gtk_im_context_focus_in(self.im_context)
 	self.notify_focus()
-	// TODO(gtk): notifyByPspec(properties.focused).
+	self.notify_property(g_surface_pspec_focused)
 	// Bell stops ringing as soon as we gain focus.
 	self.set_bell_ringing(false)
 }
@@ -1901,13 +2406,12 @@ pub fn (mut self SurfaceWidget) ec_focus_leave() {
 	self.sync_unfocused_split_overlay()
 	C.gtk_im_context_focus_out(self.im_context)
 	self.notify_focus()
-	// TODO(gtk): notifyByPspec(properties.focused).
+	self.notify_property(g_surface_pspec_focused)
 }
 
 // notify_focus forwards the focus state to the core surface. In ghostty this is
 // deferred onto a glib idle source (idleFocus) to avoid a deadlock where a
-// libghostty callback triggers focus loss while a lock is held. We invoke it
-// directly here; the idle-source deferral is stubbed.
+// libghostty callback triggers focus loss while a lock is held.
 fn (self &SurfaceWidget) notify_focus() {
 	object_ref(self.widget)
 	C.g_idle_add(voidptr(surface_idle_focus_cb), voidptr(self))
@@ -2078,13 +2582,27 @@ pub fn (mut self SurfaceWidget) apply_config() {
 // set_shared_config points the surface at its application's stable config
 // object. This is used after an application-wide config change.
 pub fn (mut self SurfaceWidget) set_shared_config(config &Config) {
+	self.set_config_reference(config)
+}
+
+// set_config_reference is the object-field accessor used by the native
+// `config` property. It releases the previous GObject, retains the incoming
+// one, emits notify::config, and runs the translated property callback.
+fn (mut self SurfaceWidget) set_config_reference(config &Config) {
 	if self.config == config {
+		self.notify_property(g_surface_pspec_config)
+		self.apply_config()
 		return
 	}
 	if !isnil(self.config) {
 		self.config.unref()
 	}
-	self.config = config_ref(config)
+	self.config = unsafe { nil }
+	if !isnil(config) {
+		self.config = config_ref(config)
+	}
+	self.notify_property(g_surface_pspec_config)
+	self.apply_config()
 }
 
 // set_owned_config installs a surface-local config object for a targeted
@@ -2094,6 +2612,7 @@ pub fn (mut self SurfaceWidget) set_owned_config(config configpkg.Config) {
 		self.config.unref()
 	}
 	self.config = config_new(config)
+	self.notify_property(g_surface_pspec_config)
 	self.apply_config()
 }
 
@@ -2116,9 +2635,9 @@ fn (mut self SurfaceWidget) resize_overlay_schedule() {
 }
 
 // init_surface initializes the core surface on the first GLArea resize.
-// Mirrors `initSurface`. The bulk (creating/initializing the core Surface,
-// cgroup, config wiring) needs `main.Surface`/Application which are out of
-// scope, so those are stubbed; the structure and error handling are kept.
+// Mirrors `initSurface`: it creates the core/runtime bridge, applies inherited
+// font and working-directory state, creates the transient cgroup when enabled,
+// registers the surface, and emits `init`.
 fn (mut self SurfaceWidget) init_surface() ! {
 	if self.has_core() {
 		return
@@ -2134,6 +2653,8 @@ fn (mut self SurfaceWidget) init_surface() ! {
 	if isnil(self.app) || isnil(self.config) || isnil(self.app.core_app) {
 		return error('surface application state is unavailable')
 	}
+
+	self.init_cgroup()
 
 	mut surface := &core.Surface{}
 	mut surface_ref := &core.SurfaceRef{
@@ -2159,8 +2680,8 @@ fn (mut self SurfaceWidget) init_surface() ! {
 	}
 
 	mut surface_config := self.config.get().clone()
-	if self.font_size_request > 0 {
-		surface_config.font_size = self.font_size_request
+	if font_size_request := self.font_size_request {
+		surface_config.font_size = font_size_request.points
 	}
 	if pwd := self.pwd {
 		surface_config.working_directory = pwd
@@ -2171,6 +2692,7 @@ fn (mut self SurfaceWidget) init_surface() ! {
 		core_app.delete_surface(surface_ref)
 		self.core_surface = unsafe { nil }
 		self.core_surface_ref = unsafe { nil }
+		self.clear_cgroup()
 		return error('core surface initialization failed: ${err}')
 	}
 	if !isnil(self.split_tree) && !isnil(self.split_tree.window) {
@@ -2705,6 +3227,11 @@ pub fn (self &SurfaceWidget) get_hadjustment() GtkAdjustment {
 // set_hadjustment sets the horizontal adjustment (reffed). Mirrors
 // `Surface.setHAdjustment`.
 pub fn (mut self SurfaceWidget) set_hadjustment(adj GtkAdjustment) {
+	C.g_object_freeze_notify(self.widget)
+	defer {
+		C.g_object_thaw_notify(self.widget)
+	}
+	self.notify_property(g_surface_pspec_hadjustment)
 	if !isnil(self.hadj) {
 		object_unref(self.hadj)
 		self.hadj = unsafe { nil }
@@ -2725,6 +3252,11 @@ pub fn (self &SurfaceWidget) get_vadjustment() GtkAdjustment {
 // set_vadjustment sets the vertical adjustment (reffed). Mirrors
 // `Surface.setVAdjustment`.
 pub fn (mut self SurfaceWidget) set_vadjustment(adj GtkAdjustment) {
+	C.g_object_freeze_notify(self.widget)
+	defer {
+		C.g_object_thaw_notify(self.widget)
+	}
+	self.notify_property(g_surface_pspec_vadjustment)
 	if !isnil(self.vadj) {
 		object_unref(self.vadj)
 		self.vadj = unsafe { nil }
@@ -2825,6 +3357,11 @@ pub fn (mut self SurfaceWidget) set_search_selected(selected ?usize) {
 // converted to the same human-readable GTK label and appended until an end
 // action clears the pending sequence.
 pub fn (mut self SurfaceWidget) key_sequence_action(value apprt.KeySequence) {
+	C.g_object_freeze_notify(self.widget)
+	defer {
+		C.g_object_thaw_notify(self.widget)
+	}
+	self.notify_property(g_surface_pspec_key_sequence)
 	if value.active {
 		label := label_from_trigger(value.trigger) or { return }
 		self.key_sequence << label.clone()
@@ -2841,6 +3378,11 @@ pub fn (mut self SurfaceWidget) key_sequence_action(value apprt.KeySequence) {
 // key_table_action mirrors Surface.keyTableAction, maintaining the activation
 // stack displayed by the key-state overlay.
 pub fn (mut self SurfaceWidget) key_table_action(value apprt.KeyTable) {
+	C.g_object_freeze_notify(self.widget)
+	defer {
+		C.g_object_thaw_notify(self.widget)
+	}
+	self.notify_property(g_surface_pspec_key_table)
 	match value.tag {
 		.activate { self.key_tables << value.name.clone() }
 		.deactivate {
@@ -2861,6 +3403,7 @@ pub fn (mut self SurfaceWidget) key_table_action(value apprt.KeyTable) {
 // sync and show the native banner with the full exit payload.
 pub fn (mut self SurfaceWidget) child_exited_action(data apprt.ChildExited) bool {
 	self.child_exited = true
+	self.notify_property(g_surface_pspec_child_exited)
 	if !adw_supports_banner() || isnil(self.child_exited_overlay) {
 		return false
 	}
@@ -3261,7 +3804,6 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 	C.g_signal_connect_data(w.search_overlay.widget, c'next-match', GCallback(voidptr(surface_search_next_cb)), voidptr(w), unsafe { nil }, 0)
 	C.g_signal_connect_data(w.search_overlay.widget, c'previous-match', GCallback(voidptr(surface_search_previous_cb)), voidptr(w), unsafe { nil }, 0)
 	C.g_signal_connect_data(w.child_exited_overlay.widget, c'close-request', GCallback(voidptr(surface_child_exited_close_cb)), voidptr(w), unsafe { nil }, 0)
-	C.g_object_weak_ref(GObject(w.widget), voidptr(surface_widget_finalized_cb), voidptr(w))
 	return w
 }
 
@@ -3271,56 +3813,6 @@ fn surface_child_exited_close_cb(overlay GtkWidget, data voidptr) {
 		self := unsafe { &SurfaceWidget(data) }
 		self.close()
 	}
-}
-
-fn surface_widget_finalized_cb(data voidptr, object GObject) {
-	_ = object
-	if isnil(data) {
-		return
-	}
-	mut self := unsafe { &SurfaceWidget(data) }
-	if self.idle_rechild != 0 {
-		C.g_source_remove(self.idle_rechild)
-		self.idle_rechild = 0
-	}
-	if self.pending_horizontal_scroll_reset != 0 {
-		C.g_source_remove(self.pending_horizontal_scroll_reset)
-		self.pending_horizontal_scroll_reset = 0
-	}
-	if self.progress_bar_timer != 0 {
-		C.g_source_remove(self.progress_bar_timer)
-		self.progress_bar_timer = 0
-	}
-	if !isnil(self.vadj_signal_group) {
-		C.g_signal_group_set_target(self.vadj_signal_group, unsafe { nil })
-		object_unref(GObject(self.vadj_signal_group))
-		self.vadj_signal_group = unsafe { nil }
-	}
-	if !isnil(self.hadj) {
-		object_unref(GObject(self.hadj))
-		self.hadj = unsafe { nil }
-	}
-	if !isnil(self.vadj) {
-		object_unref(GObject(self.vadj))
-		self.vadj = unsafe { nil }
-	}
-	if !isnil(self.terminal_page) {
-		object_unref(GObject(self.terminal_page))
-		self.terminal_page = unsafe { nil }
-	}
-	if !isnil(self.error_page) {
-		object_unref(GObject(self.error_page))
-		self.error_page = unsafe { nil }
-	}
-	if !isnil(self.im_context) {
-		object_unref(GObject(self.im_context))
-		self.im_context = unsafe { nil }
-	}
-	if !isnil(self.config) {
-		self.config.unref()
-		self.config = unsafe { nil }
-	}
-	self.widget = unsafe { nil }
 }
 
 fn surface_url_enter_cb(controller GtkEventControllerMotion, x f64, y f64, data voidptr) {

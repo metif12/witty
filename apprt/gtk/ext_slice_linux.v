@@ -64,6 +64,7 @@ fn string_list_boxed_free(value voidptr) {
 	}
 	mut list := unsafe { &StringList(value) }
 	list.destroy()
+	unsafe { free(list) }
 }
 
 // get_gobject_type returns the registered boxed GObject type for StringList.
