@@ -1,5 +1,7 @@
 module main
 
+#include "@VMODROOT/command_exec.h"
+
 // --- Original Ghostty Comments Start: src/Command.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/Command.zig
@@ -126,7 +128,6 @@ module main
 //
 // --- Original Ghostty Comments End: src/Command.zig
 
-
 // Command launches sub-processes. This is an alternate implementation to
 // manage subprocess spawning with PTY support.
 //
@@ -145,16 +146,27 @@ module main
 
 // C interop declarations for POSIX process management.
 fn C.fork() int
+
 fn C.execvp(file &char, argv &&char) int
-fn C.execvpe(file &char, argv &&char, envp &&char) int
+
+fn C.witty_execvpe(file &char, argv &&char, envp &&char) int
+
 fn C.waitpid(pid int, status &int, options int) int
+
 fn C.dup2(oldfd int, newfd int) int
+
 fn C.chdir(path &char) int
+
+fn C.write(fd int, buf voidptr, count usize) int
+
 fn C.setsid() int
+
 fn C._exit(status int)
 
 // WNOHANG flag for non-blocking waitpid.
 const wnohang = 1
+
+const exec_failure_message = 'Requested executable not found. Please verify the command is on the PATH and try again.\n'
 
 // WIFEXITED and friends - macros for interpreting waitpid status.
 // These match the POSIX definitions on macOS and Linux.
@@ -311,6 +323,21 @@ fn (mut self Command) start_posix() ! {
 		[self.path]
 	}
 
+	// Null-terminate the argument pointers before fork. `argv` owns the
+	// backing strings for the lifetime of this function.
+	mut c_argv := unsafe { []&char{len: argv.len + 1, init: &char(0)} }
+	for i, arg in argv {
+		c_argv[i] = arg.str
+	}
+
+	// Build the exact environment before fork and retain its backing strings.
+	// An empty map represents inheritance, matching Command.env's contract.
+	env := if self.env.len > 0 {
+		create_null_delimited_env(self.env)
+	} else {
+		NullDelimitedEnv{}
+	}
+
 	// Fork. IMPORTANT: do all allocation prior to the fork().
 	// It is undefined behavior to malloc between fork and exec.
 	pid := C.fork()
@@ -364,13 +391,7 @@ fn (mut self Command) start_posix() ! {
 	// Finally, replace our process.
 	// Note: we must use the "p"-variant of exec here because we
 	// do not guarantee our command is looked up already in the path.
-	// We use execvp/execvpe which search PATH.
-
-	// Build null-terminated C argv array.
-	mut c_argv := unsafe { []&char{len: argv.len + 1, init: &char(0)} }
-	for i, arg in argv {
-		c_argv[i] = arg.str
-	}
+	// We use execvp/witty_execvpe, both of which search PATH.
 
 	// Determine our env vars. Faithful to Zig `startPosix`:
 	//
@@ -383,8 +404,7 @@ fn (mut self Command) start_posix() ! {
 	// are NOT merged with the parent environment) and use execvpe.
 	// Otherwise we use execvp, which inherits the current environment.
 	if self.env.len > 0 {
-		mut envp := create_null_delimited_env(self.env)
-		C.execvpe(self.path.str, c_argv.data, envp.data)
+		C.witty_execvpe(self.path.str, c_argv.data, env.pointers.data)
 	} else {
 		C.execvp(self.path.str, c_argv.data)
 	}
@@ -393,9 +413,7 @@ fn (mut self Command) start_posix() ! {
 	// child process so there isn't much we can do. We try to output
 	// something reasonable. It's important to note we MUST NOT return
 	// any other error condition from here on out - we must exit.
-	eprintln('exec failed for command: ${self.path}')
-	eprintln('Requested executable not found or could not be executed.')
-	eprintln('Please verify the command is on the PATH and try again.')
+	C.write(2, exec_failure_message.str, exec_failure_message.len)
 
 	// Exit with status 1 to indicate failure. We use _exit to avoid
 	// running any atexit handlers from the parent process.
@@ -463,18 +481,24 @@ pub fn (self Command) get_data() voidptr {
 // its own allocator; we keep the interned `&char` pointers alive by storing
 // the V strings for the duration of the exec (this runs in the freshly forked
 // child right before exec, so no cleanup is required).
-fn create_null_delimited_env(env map[string]string) []&char {
-	// +1 for the terminating null pointer.
-	mut envp := unsafe { []&char{len: env.len + 1, init: &char(0)} }
-	mut i := 0
+struct NullDelimitedEnv {
+	entries  []string
+	pointers []&char
+}
+
+fn create_null_delimited_env(env map[string]string) NullDelimitedEnv {
+	mut entries := []string{cap: env.len}
 	for key, val in env {
-		// "KEY=VALUE" is null-terminated because V strings are.
-		entry := '${key}=${val}'
-		envp[i] = entry.str
-		i++
+		entries << '${key}=${val}'
 	}
-	// The final slot is already the null terminator from init.
-	return envp
+	mut pointers := unsafe { []&char{len: entries.len + 1, init: &char(0)} }
+	for i, entry in entries {
+		pointers[i] = entry.str
+	}
+	return NullDelimitedEnv{
+		entries: entries
+		pointers: pointers
+	}
 }
 
 // windows_create_command_line builds a Windows command line string from an

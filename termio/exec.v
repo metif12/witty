@@ -13,28 +13,51 @@ import renderer
 import terminal
 import time
 
+#include "@VMODROOT/command_exec.h"
+
 // C interop declarations for process management.
 #include <signal.h>
+
 #include <unistd.h>
+
 #include <poll.h>
+
 #include <fcntl.h>
+
 #include <sys/wait.h>
 
 fn C.pipe(fds voidptr) int
+
 fn C.fork() int
+
 fn C.setsid() int
+
 fn C.dup2(oldfd int, newfd int) int
-fn C.execvpe(file &char, argv &&char, envp &&char) int
+
+fn C.witty_execvpe(file &char, argv &&char, envp &&char) int
+
 fn C.execvp(file &char, argv &&char) int
+
+fn C.chdir(path &char) int
+
 fn C.close(fd int) int
+
 fn C.read(fd int, buf voidptr, count usize) int
+
 fn C.write(fd int, buf voidptr, count usize) int
+
 fn C.poll(fds voidptr, nfds u32, timeout int) int
+
 fn C.fcntl(fd int, cmd int, arg int) int
+
 fn C.kill(pid int, sig int) int
+
 fn C.killpg(pgrp int, sig int) int
+
 fn C.getpgid(pid int) int
+
 fn C.waitpid(pid int, status &int, options int) int
+
 fn C._exit(status int)
 
 // Signal constants
@@ -338,6 +361,26 @@ pub mut:
 	child_pid   int = -1
 }
 
+struct NullDelimitedEnv {
+	entries  []string
+	pointers []&char
+}
+
+fn null_delimited_env(env map[string]string) NullDelimitedEnv {
+	mut entries := []string{cap: env.len}
+	for key, value in env {
+		entries << '${key}=${value}'
+	}
+	mut pointers := unsafe { []&char{len: entries.len + 1, init: &char(0)} }
+	for i, entry in entries {
+		pointers[i] = entry.str
+	}
+	return NullDelimitedEnv{
+		entries: entries
+		pointers: pointers
+	}
+}
+
 // init initializes the subprocess configuration. This will NOT start it,
 // this only sets up the internal state necessary to start it later.
 pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
@@ -442,8 +485,7 @@ pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
 	// used by both automatic and manual shell integrations.
 	setup_features(mut env, cfg.shell_integration_features)
 
-	shell_command := setup_shell_command(cfg.shell_integration, cfg.resources_dir,
-		default_shell_command, mut env)
+	shell_command := setup_shell_command(cfg.shell_integration, cfg.resources_dir, default_shell_command, mut env)
 
 	// Add the environment variables that override any others.
 	mut it := cfg.env_override.iterator()
@@ -529,18 +571,13 @@ pub fn (mut self Subprocess) start() !PtyFds {
 	}
 	c_argv << &char(unsafe { nil })
 
-	// Build null-terminated envp array if env is set. We build this before
-	// fork so we have stable pointers. We also track whether env was set
-	// so we can use it in the child without accessing self after fork.
-	has_env := if _ := self.env { true } else { false }
-	mut c_envp := []&char{}
-	if env := self.env {
-		for k, v in env {
-			entry := '${k}=${v}'
-			c_envp << entry.str
-		}
+	// Build the exact environment before fork and retain all backing strings.
+	env := if values := self.env {
+		null_delimited_env(values)
+	} else {
+		NullDelimitedEnv{}
 	}
-	c_envp << &char(unsafe { nil })
+	has_env := env.pointers.len > 0
 
 	// Fork the process.
 	pid := C.fork()
@@ -563,23 +600,16 @@ pub fn (mut self Subprocess) start() !PtyFds {
 
 		// Change to the requested working directory if specified.
 		if cwd.len > 0 {
-			os.chdir(cwd) or {}
+			C.chdir(cwd.str)
 		}
 
-		// Set environment variables if we had an env map.
-		// execvpe is not available on macOS, so we set env vars
-		// manually via os.setenv, then use execvp.
+		// Execute with the exact environment assembled during initialization.
+		// witty_execvpe supplies Zig's portable execvpeZ behavior on macOS too.
 		if has_env {
-			for i := 0; i < c_envp.len - 1; i++ {
-				entry_str := unsafe { cstring_to_vstring(c_envp[i]) }
-				eq_pos := entry_str.index('=') or { continue }
-				k := entry_str[..eq_pos]
-				v := entry_str[eq_pos + 1..]
-				os.setenv(k, v, true)
-			}
+			C.witty_execvpe(c_argv[0], c_argv.data, env.pointers.data)
+		} else {
+			C.execvp(c_argv[0], c_argv.data)
 		}
-
-		C.execvp(c_argv[0], c_argv.data)
 
 		// If execvp returns, exec failed.
 		C._exit(127)
@@ -867,7 +897,9 @@ fn setup_shell_command(integration configpkg.ShellIntegration, resources_dir ?st
 		.fish { ?Shell(Shell.fish) }
 		.nushell { ?Shell(Shell.nushell) }
 		.zsh { ?Shell(Shell.zsh) }
-		.none_ { ?Shell(none) } // handled above
+		.none_ { // handled above
+			?Shell(none)
+		}
 	}
 
 	result := setup_shell_integration(dir, default_cmd, mut env, force)

@@ -1,5 +1,7 @@
 module main
 
+import os
+
 // Tests for Command and Exit types.
 
 fn test_exit_normal() {
@@ -170,4 +172,62 @@ fn test_wifsignaled() {
 fn test_wtermsig() {
 	assert wtermsig(9) == 9
 	assert wtermsig(15) == 15 // SIGTERM
+}
+
+fn test_command_start_with_exact_environment_and_path_search() {
+	$if windows {
+		return
+	}
+	mut cmd := Command{
+		path: 'sh'
+		args: ['sh', '-c', 'test "\$WITTY_COMMAND_ENV" = translated && test -z "\$HOME"']
+		env: {
+			'PATH':              '/bin:/usr/bin'
+			'WITTY_COMMAND_ENV': 'translated'
+		}
+	}
+	cmd.start() or { assert false, err.msg() }
+	exit := cmd.wait(true) or { panic(err) }
+	assert exit == Exit(ExitNormal{
+		status: 0
+	})
+}
+
+fn test_command_start_inherits_environment() {
+	$if windows {
+		return
+	}
+	name := 'WITTY_COMMAND_INHERIT_TEST'
+	previous := os.getenv_opt(name)
+	os.setenv(name, 'inherited', true)
+	defer {
+		if value := previous {
+			os.setenv(name, value, true)
+		} else {
+			os.unsetenv(name)
+		}
+	}
+	mut cmd := Command{
+		path: '/bin/sh'
+		args: ['/bin/sh', '-c', 'test "\$WITTY_COMMAND_INHERIT_TEST" = inherited']
+	}
+	cmd.start() or { assert false, err.msg() }
+	exit := cmd.wait(true) or { panic(err) }
+	assert exit == Exit(ExitNormal{
+		status: 0
+	})
+}
+
+fn test_command_exec_failure_exits_child() {
+	$if windows {
+		return
+	}
+	mut cmd := Command{
+		path: '/not/a/witty-binary'
+	}
+	cmd.start() or { assert false, err.msg() }
+	exit := cmd.wait(true) or { panic(err) }
+	assert exit == Exit(ExitNormal{
+		status: 1
+	})
 }
