@@ -150,6 +150,11 @@ pub fn run_cli_action(action global_state.Action, args []string) !int {
 			println('  - V version     : ${@VEXE}')
 			println('  - build mode    : ${if is_debug { 'debug' } else { 'release' }}')
 			println('  - app runtime   : ${artifact}')
+			$if linux {
+				kernel := internal_os.get_kernel_info() or { 'Kernel information unavailable' }
+				println('  - kernel version: ${kernel}')
+				println('  - desktop env   : ${internal_os.desktop_environment()}')
+			}
 			0
 		}
 		.help {

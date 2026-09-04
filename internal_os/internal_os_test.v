@@ -198,3 +198,55 @@ fn test_hostname_is_local() {
 	assert hostname_is_local(os.hostname()!)!
 	assert !hostname_is_local('not-the-local-hostname')!
 }
+
+fn test_desktop_environment_matches_platform() {
+	$if macos {
+		assert desktop_environment() == .macos
+	} $else $if windows {
+		assert desktop_environment() == .windows
+	} $else $if !linux && !freebsd {
+		assert desktop_environment() == .other
+	}
+}
+
+fn test_desktop_environment_linux_and_bsd_detection() {
+	$if linux || freebsd {
+		old_session := os.getenv_opt('XDG_SESSION_DESKTOP')
+		old_current := os.getenv_opt('XDG_CURRENT_DESKTOP')
+		defer {
+			if value := old_session {
+				os.setenv('XDG_SESSION_DESKTOP', value, true)
+			} else {
+				os.unsetenv('XDG_SESSION_DESKTOP')
+			}
+			if value := old_current {
+				os.setenv('XDG_CURRENT_DESKTOP', value, true)
+			} else {
+				os.unsetenv('XDG_CURRENT_DESKTOP')
+			}
+		}
+
+		os.unsetenv('XDG_CURRENT_DESKTOP')
+		os.setenv('XDG_SESSION_DESKTOP', 'gnome', true)
+		assert desktop_environment() == .gnome
+		os.setenv('XDG_SESSION_DESKTOP', 'GNOME-XORG', true)
+		assert desktop_environment() == .gnome
+		os.setenv('XDG_SESSION_DESKTOP', 'foobar', true)
+		assert desktop_environment() == .other
+		os.unsetenv('XDG_SESSION_DESKTOP')
+		os.setenv('XDG_CURRENT_DESKTOP', 'GNOME:Unity', true)
+		assert desktop_environment() == .gnome
+		os.setenv('XDG_CURRENT_DESKTOP', 'FOOBAR:GNOME', true)
+		assert desktop_environment() == .other
+	}
+}
+
+fn test_get_kernel_info() {
+	$if linux {
+		info := get_kernel_info() or { panic('kernel information unavailable') }
+		assert info.len > 0
+		assert info == info.trim_space()
+	} $else {
+		assert get_kernel_info() == none
+	}
+}
