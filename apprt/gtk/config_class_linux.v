@@ -144,52 +144,45 @@ fn (mut self Config) finalize() {
 
 // --- GTK-specific config accessors ----------------------------------------
 //
-// These GTK-only knobs live in ghostty's config (gtk-titlebar-style,
-// gtk-wide-tabs, etc.). witty's core `configpkg.Config` does not yet carry
-// them, so these return ghostty's documented defaults, keeping the appearance
-// logic in window_linux.v faithful. When those config fields land they should
-// read from `self.get()`.
-//
-// (Moved here from window_linux.v, which previously owned the placeholder
-// `Config`.)
+// These expose GTK-only core configuration to the window wrapper.
 
 // gtk_titlebar_style mirrors `config.@"gtk-titlebar-style"`.
-pub fn (self &Config) gtk_titlebar_style() TitlebarStyle {
-	return .native
+pub fn (self &Config) gtk_titlebar_style() configpkg.GtkTitlebarStyle {
+	return self.inner.gtk_titlebar_style
 }
 
 // gtk_titlebar mirrors `config.@"gtk-titlebar"`.
 pub fn (self &Config) gtk_titlebar() bool {
-	return true
+	return self.inner.gtk_titlebar
 }
 
 // gtk_titlebar_hide_when_maximized mirrors
 // `config.@"gtk-titlebar-hide-when-maximized"`.
 pub fn (self &Config) gtk_titlebar_hide_when_maximized() bool {
-	return false
+	return self.inner.gtk_titlebar_hide_when_maximized
 }
 
 // window_show_tab_bar mirrors `config.@"window-show-tab-bar"`.
 pub fn (self &Config) window_show_tab_bar() configpkg.WindowShowTabBar {
-	return .auto
+	return self.inner.window_show_tab_bar
 }
 
 // gtk_wide_tabs mirrors `config.@"gtk-wide-tabs"`.
 pub fn (self &Config) gtk_wide_tabs() bool {
-	return true
+	return self.inner.gtk_wide_tabs
 }
 
 // gtk_toolbar_style mirrors `config.@"gtk-toolbar-style"`.
-pub fn (self &Config) gtk_toolbar_style() GtkToolbarStyle {
-	return .raised
+pub fn (self &Config) gtk_toolbar_style() configpkg.GtkToolbarStyle {
+	return self.inner.gtk_toolbar_style
 }
 
 // gtk_tabs_location mirrors `config.@"gtk-tabs-location"`.
-pub fn (self &Config) gtk_tabs_location() GtkTabsLocation {
-	return .top
+pub fn (self &Config) gtk_tabs_location() configpkg.GtkTabsLocation {
+	return self.inner.gtk_tabs_location
 }
 
 // window_new_tab_position mirrors `config.@"window-new-tab-position"`.
 pub fn (self &Config) window_new_tab_position() configpkg.WindowNewTabPosition {
-	return .current
+	return self.inner.window_new_tab_position
 }

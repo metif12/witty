@@ -190,6 +190,12 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 		enum_config_string(c.window_decoration.str()),
 	])
 	add_group(mut result, 'window-theme', [c.window_theme.str()])
+	add_group(mut result, 'window-new-tab-position', [
+		enum_config_string(c.window_new_tab_position.str()),
+	])
+	add_group(mut result, 'window-show-tab-bar', [
+		enum_config_string(c.window_show_tab_bar.str()),
+	])
 	add_group(mut result, 'title', [optional_string(c.title)])
 	add_group(mut result, 'title-report', [bool_string(c.title_report)])
 	add_group(mut result, 'class', [optional_string(c.class)])
@@ -292,6 +298,20 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	add_group(mut result, 'gtk-single-instance', [
 		enum_config_string(c.gtk_single_instance.str()),
 	])
+	add_group(mut result, 'gtk-titlebar', [bool_string(c.gtk_titlebar)])
+	add_group(mut result, 'gtk-tabs-location', [
+		enum_config_string(c.gtk_tabs_location.str()),
+	])
+	add_group(mut result, 'gtk-titlebar-hide-when-maximized', [
+		bool_string(c.gtk_titlebar_hide_when_maximized),
+	])
+	add_group(mut result, 'gtk-toolbar-style', [
+		enum_config_string(c.gtk_toolbar_style.str()),
+	])
+	add_group(mut result, 'gtk-titlebar-style', [
+		enum_config_string(c.gtk_titlebar_style.str()),
+	])
+	add_group(mut result, 'gtk-wide-tabs', [bool_string(c.gtk_wide_tabs)])
 	add_group(mut result, 'palette', palette_strings(c.palette))
 	return result
 }

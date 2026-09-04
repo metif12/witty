@@ -102,37 +102,13 @@ fn C.gtk_widget_set_size_request(widget GtkWidget, width int, height int)
 fn C.gdk_display_is_rgba(display GdkDisplay) int
 fn C.gdk_display_is_composited(display GdkDisplay) int
 
-// --- ToolbarStyle / TitlebarStyle placeholder enums -----------------------
-//
-// These GTK-specific style enums live in ghostty's config (GtkToolbarStyle /
-// GtkTitlebarStyle) and libadwaita (adw.ToolbarStyle). witty's core
-// `configpkg.Config` does not (yet) carry the GTK-specific style config, so we
-// mirror the enum shapes here as small module-local placeholders.
+// --- Toolbar style ---------------------------------------------------------
 
 // AdwToolbarStyle mirrors `adw.ToolbarStyle`.
 pub enum AdwToolbarStyle {
 	flat
 	raised
 	raised_border
-}
-
-// TitlebarStyle mirrors `configpkg.Config.GtkTitlebarStyle`.
-pub enum TitlebarStyle {
-	native
-	tabs
-}
-
-// GtkToolbarStyle mirrors `configpkg.Config.GtkToolbarStyle`.
-pub enum GtkToolbarStyle {
-	flat
-	raised
-	raised_border
-}
-
-// GtkTabsLocation mirrors `configpkg.Config.GtkTabsLocation`.
-pub enum GtkTabsLocation {
-	top
-	bottom
 }
 
 // NewSurfaceContext mirrors `apprt.surface.NewSurfaceContext`. The `apprt`
@@ -843,9 +819,9 @@ pub fn (self &Window) get_toolbar_style() AdwToolbarStyle {
 	}
 }
 
-// get_titlebar_style computes the TitlebarStyle from the config. Mirrors
+// get_titlebar_style computes the GtkTitlebarStyle from the config. Mirrors
 // `getTitlebarStyle`.
-pub fn (self &Window) get_titlebar_style() TitlebarStyle {
+pub fn (self &Window) get_titlebar_style() configpkg.GtkTitlebarStyle {
 	if self.config == unsafe { nil } {
 		return .native
 	}

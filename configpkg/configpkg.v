@@ -4090,6 +4090,10 @@ pub mut:
 	window_decoration WindowDecoration = .auto
 	// The theme to use for the window (auto/system/light/dark/ghostty).
 	window_theme WindowTheme = .auto
+	// Position new tabs after the current tab or at the end.
+	window_new_tab_position WindowNewTabPosition = .current
+	// Controls whether the GTK tab bar is always, automatically, or never shown.
+	window_show_tab_bar WindowShowTabBar = .auto
 	// Whether the mouse follows focus.
 	focus_follows_mouse bool
 	// Whether a new terminal inherits the working directory of the previous one.
@@ -4128,6 +4132,13 @@ pub mut:
 	macos_dock_drop_behavior MacOSDockDropBehavior = .new_tab
 	// GTK single-instance behavior. `detect` chooses at finalize time.
 	gtk_single_instance GtkSingleInstance = .detect
+	// GTK window chrome configuration.
+	gtk_titlebar                     bool = true
+	gtk_tabs_location                GtkTabsLocation = .top
+	gtk_titlebar_hide_when_maximized bool
+	gtk_toolbar_style                GtkToolbarStyle = .raised
+	gtk_titlebar_style               GtkTitlebarStyle = .native
+	gtk_wide_tabs                    bool = true
 	// The current conditional state (e.g. light/dark theme). This is not a
 	// user-facing config option; it tracks runtime conditional evaluation.
 	conditional_state ConditionalState
@@ -4158,6 +4169,25 @@ pub enum GtkSingleInstance {
 	false_
 	true_
 	desktop
+}
+
+// GtkTabsLocation controls which edge hosts the tab bar.
+pub enum GtkTabsLocation {
+	top
+	bottom
+}
+
+// GtkToolbarStyle controls the visual separation of the toolbar and terminal.
+pub enum GtkToolbarStyle {
+	flat
+	raised
+	raised_border
+}
+
+// GtkTitlebarStyle selects a traditional titlebar or a merged tab titlebar.
+pub enum GtkTitlebarStyle {
+	native
+	tabs
 }
 
 // Keybinds is the config value type backing the `keybind` option. It is a
@@ -5869,7 +5899,8 @@ fn is_boolean_config_key(key string) bool {
 		'title-report', 'link-url', 'maximize', 'fullscreen', 'focus-follows-mouse',
 		'window-inherit-working-directory', 'tab-inherit-working-directory',
 		'split-inherit-working-directory', 'window-inherit-font-size', 'initial-window',
-		'quit-after-last-window-closed', 'config-default-files']
+		'quit-after-last-window-closed', 'config-default-files', 'gtk-titlebar',
+		'gtk-titlebar-hide-when-maximized', 'gtk-wide-tabs']
 }
 
 // load_file loads a configuration file and merges it into this config.
@@ -6370,7 +6401,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 				return
 			}
 		}
-		'font-thicken', 'background-opacity-cells', 'background-image-repeat', 'window-vsync', 'clipboard-trim-trailing-spaces', 'clipboard-paste-protection', 'clipboard-paste-bracketed-safe', 'cursor-click-to-move', 'desktop-notifications', 'mouse-hide-while-typing', 'mouse-reporting', 'selection-clear-on-copy', 'selection-clear-on-typing', 'vt-kam-allowed', 'wait-after-command', 'window-padding-balance', 'title-report', 'link-url', 'maximize', 'fullscreen', 'focus-follows-mouse', 'window-inherit-working-directory', 'tab-inherit-working-directory', 'split-inherit-working-directory', 'window-inherit-font-size', 'initial-window', 'quit-after-last-window-closed', 'config-default-files' {
+		'font-thicken', 'background-opacity-cells', 'background-image-repeat', 'window-vsync', 'clipboard-trim-trailing-spaces', 'clipboard-paste-protection', 'clipboard-paste-bracketed-safe', 'cursor-click-to-move', 'desktop-notifications', 'mouse-hide-while-typing', 'mouse-reporting', 'selection-clear-on-copy', 'selection-clear-on-typing', 'vt-kam-allowed', 'wait-after-command', 'window-padding-balance', 'title-report', 'link-url', 'maximize', 'fullscreen', 'focus-follows-mouse', 'window-inherit-working-directory', 'tab-inherit-working-directory', 'split-inherit-working-directory', 'window-inherit-font-size', 'initial-window', 'quit-after-last-window-closed', 'config-default-files', 'gtk-titlebar', 'gtk-titlebar-hide-when-maximized', 'gtk-wide-tabs' {
 			parsed := c.parse_config_bool(key, value) or { return }
 			match key {
 				'font-thicken' {
@@ -6456,6 +6487,15 @@ fn (mut c Config) apply_kv(key string, value string) {
 				}
 				'config-default-files' {
 					c.config_default_files = parsed
+				}
+				'gtk-titlebar' {
+					c.gtk_titlebar = parsed
+				}
+				'gtk-titlebar-hide-when-maximized' {
+					c.gtk_titlebar_hide_when_maximized = parsed
+				}
+				'gtk-wide-tabs' {
+					c.gtk_wide_tabs = parsed
 				}
 				else {}
 			}
@@ -6674,6 +6714,27 @@ fn (mut c Config) apply_kv(key string, value string) {
 				return
 			}
 		}
+		'window-new-tab-position' {
+			c.window_new_tab_position = match value {
+				'current' { .current }
+				'end' { .end }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'window-show-tab-bar' {
+			c.window_show_tab_bar = match value {
+				'always' { .always }
+				'auto' { .auto }
+				'never' { .never }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
 		'right-click-action' {
 			c.right_click_action = parse_right_click_action(value) or {
 				c.invalid_config_value(key, value)
@@ -6770,6 +6831,37 @@ fn (mut c Config) apply_kv(key string, value string) {
 					c.gtk_single_instance = .false_
 				}
 				else {}
+			}
+		}
+		'gtk-tabs-location' {
+			c.gtk_tabs_location = match value {
+				'top' { .top }
+				'bottom' { .bottom }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'gtk-toolbar-style' {
+			c.gtk_toolbar_style = match value {
+				'flat' { .flat }
+				'raised' { .raised }
+				'raised-border' { .raised_border }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'gtk-titlebar-style' {
+			c.gtk_titlebar_style = match value {
+				'native' { .native }
+				'tabs' { .tabs }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
 			}
 		}
 		else {

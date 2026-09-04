@@ -671,6 +671,63 @@ fn test_repeatable_command_rejects_missing_and_invalid_fields() {
 	assert false, 'expected invalid command palette entries'
 }
 
+fn test_gtk_window_config_parse_format_and_defaults() {
+	mut cfg := Config.default_config()
+	assert cfg.window_new_tab_position == .current
+	assert cfg.window_show_tab_bar == .auto
+	assert cfg.gtk_titlebar
+	assert cfg.gtk_tabs_location == .top
+	assert !cfg.gtk_titlebar_hide_when_maximized
+	assert cfg.gtk_toolbar_style == .raised
+	assert cfg.gtk_titlebar_style == .native
+	assert cfg.gtk_wide_tabs
+
+	cfg.load_string('window-new-tab-position = end
+window-show-tab-bar = never
+gtk-titlebar = false
+gtk-tabs-location = bottom
+gtk-titlebar-hide-when-maximized = true
+gtk-toolbar-style = raised-border
+gtk-titlebar-style = tabs
+gtk-wide-tabs = false')
+	assert cfg.diagnostics.len == 0
+	assert cfg.window_new_tab_position == .end
+	assert cfg.window_show_tab_bar == .never
+	assert !cfg.gtk_titlebar
+	assert cfg.gtk_tabs_location == .bottom
+	assert cfg.gtk_titlebar_hide_when_maximized
+	assert cfg.gtk_toolbar_style == .raised_border
+	assert cfg.gtk_titlebar_style == .tabs
+	assert !cfg.gtk_wide_tabs
+
+	formatted := cfg.format_config(true)
+	assert formatted.contains('window-new-tab-position = end\n')
+	assert formatted.contains('window-show-tab-bar = never\n')
+	assert formatted.contains('gtk-titlebar = false\n')
+	assert formatted.contains('gtk-tabs-location = bottom\n')
+	assert formatted.contains('gtk-titlebar-hide-when-maximized = true\n')
+	assert formatted.contains('gtk-toolbar-style = raised-border\n')
+	assert formatted.contains('gtk-titlebar-style = tabs\n')
+	assert formatted.contains('gtk-wide-tabs = false\n')
+
+	mut roundtrip := Config.default_config()
+	roundtrip.load_string(formatted)
+	assert roundtrip.window_new_tab_position == cfg.window_new_tab_position
+	assert roundtrip.window_show_tab_bar == cfg.window_show_tab_bar
+	assert roundtrip.gtk_titlebar == cfg.gtk_titlebar
+	assert roundtrip.gtk_tabs_location == cfg.gtk_tabs_location
+	assert roundtrip.gtk_titlebar_hide_when_maximized == cfg.gtk_titlebar_hide_when_maximized
+	assert roundtrip.gtk_toolbar_style == cfg.gtk_toolbar_style
+	assert roundtrip.gtk_titlebar_style == cfg.gtk_titlebar_style
+	assert roundtrip.gtk_wide_tabs == cfg.gtk_wide_tabs
+}
+
+fn test_gtk_window_config_rejects_invalid_enum() {
+	mut cfg := Config.default_config()
+	cfg.load_string('gtk-toolbar-style = floating')
+	assert cfg.diagnostics.len == 1
+}
+
 // --- WindowDecoration ---
 
 // Config.zig: WindowDecoration "parse WindowDecoration"
