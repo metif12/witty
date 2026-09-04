@@ -282,6 +282,9 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	add_group(mut result, 'quit-after-last-window-closed', [
 		bool_string(c.quit_after_last_window_closed),
 	])
+	add_group(mut result, 'quit-after-last-window-closed-delay', [
+		optional_duration_string(c.quit_after_last_window_closed_delay),
+	])
 	add_group(mut result, 'theme', [optional_string(c.theme)])
 	add_group(mut result, 'config-default-files', [
 		bool_string(c.config_default_files),
@@ -335,6 +338,10 @@ fn optional_bool_string(value ?bool) string {
 
 fn optional_string(value ?string) string {
 	return value or { '' }
+}
+
+fn optional_duration_string(value ?Duration) string {
+	return if actual := value { actual.format() } else { '' }
 }
 
 fn repeat_strings(values []string) []string {

@@ -26,3 +26,23 @@ fn test_application_accelerator_ignores_chained_binding() {
 	assert app.accelerator_for_action(input.Action.new(.ignore)) == none
 	assert app.accelerator_for_action(input.Action.new(.new_window)) == none
 }
+
+fn test_application_quit_timer_without_delay_expires_immediately() {
+	mut app := Application{
+		config: configpkg.Config{
+			quit_after_last_window_closed: true
+		}
+	}
+	app.start_quit_timer()
+	assert app.quit_timer_state == .expired
+}
+
+fn test_application_quit_timer_callback_marks_expired() {
+	mut app := Application{
+		quit_timer_state: .active
+		quit_timer_source: 42
+	}
+	assert handle_quit_timer_expired(voidptr(&app)) == 0
+	assert app.quit_timer_state == .expired
+	assert app.quit_timer_source == 0
+}

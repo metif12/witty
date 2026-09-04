@@ -413,9 +413,8 @@ fn (self &Application) must_quit() bool {
 
 	// If we have no windows attached to our app, also quit — but only when no
 	// closed-delay is configured (with a delay we exit eventually via timer).
-	// TODO(gtk): quit-after-last-window-closed-delay is not on the placeholder
-	// config; treat as unset, matching the null branch.
-	if self.requested_window && !isnil(self.obj) {
+	if self.config.quit_after_last_window_closed_delay == none && self.requested_window
+		&& !isnil(self.obj) {
 		windows := C.gtk_application_get_windows(GtkApplication(self.obj))
 		if isnil(windows) {
 			// log.debug("must_quit due to no app windows")
@@ -467,10 +466,24 @@ fn (mut self Application) start_quit_timer() {
 		return
 	}
 
-	// TODO(gtk): quit-after-last-window-closed-delay is not on the placeholder
-	// config. With no delay configured we treat the timer as immediately
-	// expired (matching ghostty's `else` branch).
+	if delay := self.config.quit_after_last_window_closed_delay {
+		self.quit_timer_source = C.g_timeout_add(delay.as_milliseconds(), voidptr(handle_quit_timer_expired), voidptr(self))
+		self.quit_timer_state = .active
+	} else {
+		// If no delay is configured, treat the timer as immediately expired.
+		self.quit_timer_state = .expired
+	}
+}
+
+// handle_quit_timer_expired marks the one-shot GLib timeout as expired.
+fn handle_quit_timer_expired(data voidptr) int {
+	if isnil(data) {
+		return 0
+	}
+	mut self := unsafe { &Application(data) }
 	self.quit_timer_state = .expired
+	self.quit_timer_source = 0
+	return 0
 }
 
 // stop_quit_timer is called when a new surface gets opened. Mirrors

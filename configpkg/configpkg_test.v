@@ -371,6 +371,30 @@ fn test_duration_format_max() {
 	assert d.format() == '584y 49w 23h 34m 33s 709ms 551µs 615ns'
 }
 
+fn test_duration_as_milliseconds_saturates() {
+	assert Duration{ duration: 999_999 }.as_milliseconds() == 0
+	assert Duration{ duration: 1_500_000 }.as_milliseconds() == 1
+	assert Duration{ duration: u64_max }.as_milliseconds() == u32(0xffff_ffff)
+}
+
+fn test_quit_after_last_window_closed_delay_parse_and_format() {
+	mut cfg := Config.default_config()
+	assert cfg.quit_after_last_window_closed == default_quit_after_last_window_closed
+	assert cfg.quit_after_last_window_closed_delay == none
+	cfg.load_string('quit-after-last-window-closed-delay = 1s500ms')
+	delay := cfg.quit_after_last_window_closed_delay or {
+		assert false, 'expected quit delay'
+		return
+	}
+	assert delay.duration == 1_500_000_000
+	assert cfg.format_config(true).contains('quit-after-last-window-closed-delay = 1s 500ms\n')
+
+	cfg.load_string('quit-after-last-window-closed-delay =')
+	assert cfg.quit_after_last_window_closed_delay == none
+	cfg.load_string('quit-after-last-window-closed-delay = soon')
+	assert cfg.diagnostics.len == 1
+}
+
 // --- WindowPadding ---
 
 // Config.zig: WindowPadding "parse WindowPadding"

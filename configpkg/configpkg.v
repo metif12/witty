@@ -9,6 +9,7 @@ import themepkg
 import cli_args
 
 const default_gtk_opengl_debug = $if debug { true } $else { false }
+const default_quit_after_last_window_closed = $if linux { true } $else { false }
 
 // --- Original Ghostty Comments Start: src/config/Config.zig
 //
@@ -4114,7 +4115,9 @@ pub mut:
 	// Whether the image storage limit is enabled and its size in bytes.
 	image_storage_limit u32 = 320 * 1000 * 1000
 	// Whether Ghostty may quit after the last window is closed.
-	quit_after_last_window_closed bool
+	quit_after_last_window_closed bool = default_quit_after_last_window_closed
+	// Optional delay before quitting after the last window closes.
+	quit_after_last_window_closed_delay ?Duration
 	// Whether to load the default config files.
 	config_default_files bool = true
 	// A list of additional config files to load.
@@ -5600,6 +5603,16 @@ pub:
 	duration u64
 }
 
+// as_milliseconds converts the nanosecond duration to the unsigned millisecond
+// range accepted by GLib, saturating on overflow.
+pub fn (d Duration) as_milliseconds() u32 {
+	ms := d.duration / 1_000_000
+	if ms > u64(0xffff_ffff) {
+		return u32(0xffff_ffff)
+	}
+	return u32(ms)
+}
+
 // NotifyOnCommandFinish controls when command-finished notifications are sent.
 pub enum NotifyOnCommandFinish {
 	never
@@ -5855,6 +5868,7 @@ pub fn (mut c Config) load_cli_args(args []string) {
 			c.initial_command = Command(DirectCmd{ direct: command_args.clone() })
 			c.gtk_single_instance = .false_
 			c.quit_after_last_window_closed = true
+			c.quit_after_last_window_closed_delay = none
 			if c.shell_integration != .none_ {
 				c.shell_integration = .detect
 			}
@@ -6744,6 +6758,16 @@ fn (mut c Config) apply_kv(key string, value string) {
 				'current' { .current }
 				'end' { .end }
 				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'quit-after-last-window-closed-delay' {
+			if value.len == 0 {
+				c.quit_after_last_window_closed_delay = none
+			} else {
+				c.quit_after_last_window_closed_delay = duration_parse_cli(value) or {
 					c.invalid_config_value(key, value)
 					return
 				}
