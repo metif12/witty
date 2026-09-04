@@ -215,6 +215,22 @@ pub fn (mut self SplitTreeWidget) set_tree(tree_ ?&datastruct.SplitTree[SurfaceW
 
 	// TODO(gtk): notifyByPspec(properties.tree).
 	self.prop_tree()
+	self.sync_tab()
+}
+
+// sync_tab replaces the split-tree property notifications consumed by the Tab
+// blueprint with a direct update of the owning V wrapper.
+fn (self &SplitTreeWidget) sync_tab() {
+	if isnil(self.window) {
+		return
+	}
+	mut window := unsafe { self.window }
+	for mut tab in window.tabs {
+		if tab.split_tree == self {
+			tab.prop_split_tree()
+			return
+		}
+	}
 }
 
 // --- Derived state (properties) -------------------------------------------
@@ -616,9 +632,10 @@ pub fn (mut self SplitTreeWidget) close_confirmation_close() {
 		}
 	}
 
-	// Remove it from the tree.
+	// Tear down the core surface before publishing the empty/new tree. An empty
+	// tree synchronously closes its tab, so doing this first prevents the tab
+	// close path from deinitializing the same surface twice.
 	new_tree := self.tree.remove(handle)
-	self.set_tree(&new_tree)
 	if !isnil(closing) && !isnil(closing.core_surface_ref) && !isnil(closing.app)
 		&& !isnil(closing.app.core_app) {
 		mut app := unsafe { closing.app.core_app }
@@ -635,11 +652,40 @@ pub fn (mut self SplitTreeWidget) close_confirmation_close() {
 			}
 		}
 	}
+	self.set_tree(&new_tree)
 
 	// Grab focus. We set last_focused because focus is set when the tree is
 	// redrawn.
 	if !isnil(next_focus) {
 		self.last_focused = next_focus
+	}
+}
+
+// deinit_surfaces releases every core surface owned by this tab. It is called
+// only after AdwTabView has accepted a page close; detached/moved pages keep
+// their surfaces alive.
+pub fn (mut self SplitTreeWidget) deinit_surfaces() {
+	for mut surface in self.surfaces {
+		if isnil(surface) {
+			continue
+		}
+		if !isnil(surface.core_surface_ref) && !isnil(surface.app)
+			&& !isnil(surface.app.core_app) {
+			mut app := unsafe { surface.app.core_app }
+			app.delete_surface(surface.core_surface_ref)
+		}
+		if surface.has_core() {
+			mut core_surface := surface.core_surface
+			core_surface.deinit()
+			surface.core_surface = unsafe { nil }
+			surface.core_surface_ref = unsafe { nil }
+		}
+	}
+	self.surfaces.clear()
+	if self.has_tree {
+		self.disconnect_surface_handlers()
+		self.tree.free()
+		self.has_tree = false
 	}
 }
 
@@ -652,7 +698,7 @@ pub fn (mut self SplitTreeWidget) prop_surface_focused(mut surface SurfaceWidget
 		return
 	}
 	self.last_focused = &surface
-	// TODO(gtk): notifyByPspec(properties.active-surface).
+	self.sync_tab()
 }
 
 // prop_surface_parent handles a surface's notify::parent. Mirrors

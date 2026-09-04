@@ -45,6 +45,10 @@ fn C.adw_tab_page_get_selected(page AdwTabPage) int
 
 fn C.adw_tab_page_set_needs_attention(page AdwTabPage, needs_attention int)
 
+fn C.adw_tab_page_set_title(page AdwTabPage, title &char)
+
+fn C.adw_tab_page_set_tooltip(page AdwTabPage, tooltip &char)
+
 fn C.adw_tab_view_select_next_page(view AdwTabView) int
 
 fn C.adw_tab_view_select_previous_page(view AdwTabView) int
@@ -139,7 +143,7 @@ pub mut:
 
 // new_tab creates a new Tab. Mirrors the GObject `init`: it pulls the config
 // from the application if unset and creates the initial surface in the split
-// tree. Template/action wiring is stubbed.
+// tree.
 pub fn new_tab(window &Window, config &Config) &Tab {
 	obj := C.g_object_new(tab_get_type(), &char(unsafe { nil }))
 	split_tree := new_split_tree_widget(window, config)
@@ -154,16 +158,71 @@ pub fn new_tab(window &Window, config &Config) &Tab {
 	// Init our actions.
 	self.init_action_map()
 	self.split_tree.new_split(.right, none)
+	self.sync_from_active_surface()
 
 	return self
 }
 
 // init_action_map registers the "tab" action group. Mirrors `initActionMap`.
-// The gio.SimpleAction callback trampolines are out of scope; the action logic
-// lives in the action_* methods below.
 fn (mut self Tab) init_action_map() {
-	// TODO(gtk): build the [close, ring-bell, next-page, previous-page] Action
-	// set and ext.actions.add_as_group(self, self.widget, "tab", ...).
+	string_type := C.g_variant_type_new(c's')
+	actions := [
+		Action.new('close', GCallback(voidptr(tab_action_close_cb)), string_type),
+		Action.new('ring-bell', GCallback(voidptr(tab_action_ring_bell_cb)), unsafe { nil }),
+		Action.new('next-page', GCallback(voidptr(tab_action_next_page_cb)), unsafe { nil }),
+		Action.new('previous-page', GCallback(voidptr(tab_action_previous_page_cb)), unsafe { nil }),
+	]
+	add_as_group(voidptr(self), self.widget, 'tab', actions)
+	C.g_variant_type_free(string_type)
+}
+
+fn tab_action_close_cb(action GSimpleAction, parameter GVariant, data voidptr) {
+	_ = action
+	if isnil(parameter) || isnil(data) {
+		return
+	}
+	mut length := usize(0)
+	value := C.g_variant_get_string(parameter, &length)
+	if isnil(value) {
+		return
+	}
+	mode := match unsafe { cstring_to_vstring(value) } {
+		'this' { CloseTabMode.this }
+		'other' { CloseTabMode.other }
+		'right' { CloseTabMode.right }
+		else {
+			return
+		}
+	}
+	mut self := unsafe { &Tab(data) }
+	self.action_close(mode)
+}
+
+fn tab_action_ring_bell_cb(action GSimpleAction, parameter GVariant, data voidptr) {
+	_ = action
+	_ = parameter
+	if !isnil(data) {
+		mut self := unsafe { &Tab(data) }
+		self.action_ring_bell()
+	}
+}
+
+fn tab_action_next_page_cb(action GSimpleAction, parameter GVariant, data voidptr) {
+	_ = action
+	_ = parameter
+	if !isnil(data) {
+		mut self := unsafe { &Tab(data) }
+		self.action_next_page()
+	}
+}
+
+fn tab_action_previous_page_cb(action GSimpleAction, parameter GVariant, data voidptr) {
+	_ = action
+	_ = parameter
+	if !isnil(data) {
+		mut self := unsafe { &Tab(data) }
+		self.action_previous_page()
+	}
 }
 
 // set_parent sets the parent of this tab page (only affects the first surface).
@@ -244,7 +303,18 @@ pub fn (self &Tab) get_title() ?string {
 // set_title sets the tab title. Mirrors the "title" property setter.
 pub fn (mut self Tab) set_title(title ?string) {
 	self.title = title
-	// TODO(gtk): notifyByPspec(properties.title).
+	page := self.get_tab_page()
+	if !isnil(page) {
+		if value := title {
+			C.adw_tab_page_set_title(page, &char(value.str))
+		} else {
+			C.adw_tab_page_set_title(page, c'')
+		}
+	}
+	if !isnil(self.window) {
+		mut window := unsafe { self.window }
+		window.sync_selected_tab()
+	}
 }
 
 // get_tooltip returns the tab tooltip, if any. Mirrors the "tooltip" property.
@@ -255,7 +325,27 @@ pub fn (self &Tab) get_tooltip() ?string {
 // set_tooltip sets the tab tooltip. Mirrors the "tooltip" property setter.
 pub fn (mut self Tab) set_tooltip(tooltip ?string) {
 	self.tooltip = tooltip
-	// TODO(gtk): notifyByPspec(properties.tooltip).
+	page := self.get_tab_page()
+	if !isnil(page) {
+		if value := tooltip {
+			C.adw_tab_page_set_tooltip(page, &char(value.str))
+		} else {
+			C.adw_tab_page_set_tooltip(page, c'')
+		}
+	}
+}
+
+// sync_from_active_surface is the direct equivalent of the tab blueprint's
+// title and tooltip bindings.
+pub fn (mut self Tab) sync_from_active_surface() {
+	mut surface := self.get_active_surface() or {
+		self.set_title(none)
+		self.set_tooltip(none)
+		return
+	}
+	title := self.computed_title(self.config, surface.title, surface.title_override, self.split_tree.get_is_zoomed(), surface.bell_ringing)
+	self.set_title(title)
+	self.set_tooltip(surface.pwd)
 }
 
 // --- Signal handlers ------------------------------------------------------
@@ -264,8 +354,6 @@ pub fn (mut self Tab) set_tooltip(tooltip ?string) {
 // `propSplitTree`: notifies the surface-tree property and, if the tree is now
 // empty, requests the tab be closed.
 pub fn (mut self Tab) prop_split_tree() {
-	// TODO(gtk): notifyByPspec(properties.surface-tree).
-
 	// If our tree is empty we close the tab.
 	empty := if tree := self.get_surface_tree() {
 		tree.is_empty()
@@ -273,15 +361,16 @@ pub fn (mut self Tab) prop_split_tree() {
 		true
 	}
 	if empty {
-		// TODO(gtk): signals.close-request.emit(self).
+		self.action_close(.this)
 		return
 	}
+	self.sync_from_active_surface()
 }
 
 // prop_active_surface handles the split tree's "notify::active-surface".
 // Mirrors `propActiveSurface`.
 pub fn (mut self Tab) prop_active_surface() {
-	// TODO(gtk): notifyByPspec(properties.active-surface).
+	self.sync_from_active_surface()
 }
 
 // --- Actions --------------------------------------------------------------
@@ -383,17 +472,3 @@ fn config_title(config_ &Config) ?string {
 	}
 	return config_.get().title
 }
-
-// --- GObject class registration (stub) ------------------------------------
-//
-// TODO(gtk): In ghostty, the class is registered via
-// gobject.ext.defineClass(...) with an instanceInit (init), classInit
-// (Class.init), and a Private struct. classInit loads the "tab" blueprint `.ui`
-// template, binds the `split_tree` template child, binds the template callbacks
-// (computed_title -> computed_title, notify_active_surface -> prop_active_surface,
-// notify_tree -> prop_split_tree), and registers the active-surface / config /
-// split-tree / surface-tree / title / tooltip properties and the "close-request"
-// signal, plus dispose/finalize virtual methods.
-//
-// V has no such machinery, so all of that is stubbed. The handlers above are
-// plain methods rather than C template callbacks.

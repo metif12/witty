@@ -404,6 +404,55 @@ fn test_complete_clipboard_paste_rejects_unsafe_text() {
 	assert false, 'expected UnsafePaste'
 }
 
+fn test_runtime_clipboard_request_preserves_source_and_request() ! {
+	mut runtime := RuntimeSurface{}
+	request := apprt.ClipboardRequest{
+		kind: .osc_52_read
+		clipboard: .primary
+	}
+	assert runtime.clipboard_request(.standard, request)!
+	assert runtime.requests.len == 1
+	assert runtime.requests[0].clipboard == .standard
+	assert runtime.requests[0].request == request
+}
+
+fn test_complete_clipboard_request_osc52_read() ! {
+	mut surf := make_test_surface()
+	surf.config.clipboard_read = .allow
+	surf.complete_clipboard_request(apprt.ClipboardRequest{
+		kind: .osc_52_read
+		clipboard: .selection
+	}, 'hello', false)!
+	assert surf.io.messages.len == 1
+	assert surf.io.messages[0].data.bytestr() == '\x1b]52;s;aGVsbG8=\x1b\\'
+}
+
+fn test_complete_clipboard_request_osc52_read_requires_confirmation() {
+	mut surf := make_test_surface()
+	surf.config.clipboard_read = .ask
+	surf.complete_clipboard_request(apprt.ClipboardRequest{
+		kind: .osc_52_read
+		clipboard: .standard
+	}, 'hello', false) or {
+		assert err.msg() == 'UnauthorizedPaste'
+		assert surf.io.messages.len == 0
+		return
+	}
+	assert false, 'expected UnauthorizedPaste'
+}
+
+fn test_complete_clipboard_request_osc52_write() ! {
+	mut surf := make_test_surface()
+	mut runtime := RuntimeSurface{}
+	surf.rt_surface = &runtime
+	surf.complete_clipboard_request(apprt.ClipboardRequest{
+		kind: .osc_52_write
+		clipboard: .primary
+	}, 'hello', true)!
+	assert runtime.clipboards[.primary][0].mime == 'text/plain'
+	assert runtime.clipboards[.primary][0].data == 'hello'
+}
+
 fn test_end_key_sequence_no_queued() {
 	mut surf := Surface{}
 	// With no queued items, should just clear sequence_set

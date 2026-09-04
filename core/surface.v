@@ -1876,7 +1876,13 @@ pub type RuntimeSurfaceSetClipboardFn = fn (voidptr, apprt.Clipboard, []apprt.Cl
 
 pub type RuntimeSurfaceSupportsSelectionFn = fn (voidptr) bool
 
-pub type RuntimeSurfaceClipboardRequestFn = fn (voidptr, ClipboardRequestKind) !
+pub type RuntimeSurfaceClipboardRequestFn = fn (voidptr, apprt.Clipboard, apprt.ClipboardRequest) !bool
+
+pub struct RuntimeClipboardRequest {
+pub:
+	clipboard apprt.Clipboard
+	request   apprt.ClipboardRequest
+}
 
 pub struct RuntimeSurface {
 pub mut:
@@ -1884,9 +1890,8 @@ pub mut:
 	size                  ScreenSize = ScreenSize{ width: 800, height: 600 }
 	cursor_pos            CursorPos
 	title                 ?string
-	clipboard             map[ClipboardRequestKind]string
 	clipboards            map[apprt.Clipboard][]apprt.ClipboardContent
-	requests              []ClipboardRequestKind
+	requests              []RuntimeClipboardRequest
 	closed                bool
 	close_confirm         bool
 	selection_clipboard   bool
@@ -1972,12 +1977,6 @@ fn (mut r RuntimeSurface) set_clipboard_at(loc apprt.Clipboard, contents []apprt
 		return error('clipboard confirmation required')
 	}
 	r.clipboards[loc] = contents.clone()
-	for content in contents {
-		if content.mime == 'text/plain' && loc == .standard {
-			r.clipboard[.paste] = content.data
-			break
-		}
-	}
 }
 
 fn (r RuntimeSurface) supports_clipboard_selection() bool {
@@ -1990,20 +1989,18 @@ fn (r RuntimeSurface) supports_clipboard_selection() bool {
 	return r.selection_clipboard
 }
 
-fn (mut r RuntimeSurface) clipboard_request(kind ClipboardRequestKind) ! {
+fn (mut r RuntimeSurface) clipboard_request(loc apprt.Clipboard, req apprt.ClipboardRequest) !bool {
 	if unsafe { voidptr(&r) == nil } {
-		return
+		return false
 	}
 	if r.clipboard_request_fn != unsafe { nil } {
-		r.clipboard_request_fn(r.user_data, kind)!
-		return
+		return r.clipboard_request_fn(r.user_data, loc, req)!
 	}
-	r.requests << kind
-}
-
-pub enum ClipboardRequestKind {
-	osc_52_read
-	paste
+	r.requests << RuntimeClipboardRequest{
+		clipboard: loc
+		request: req
+	}
+	return true
 }
 
 pub struct Renderer {
@@ -2836,10 +2833,13 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			if self.config.clipboard_read == .deny {
 				return
 			}
-			self.start_clipboard_request(.osc_52_read)!
+			self.start_clipboard_request(.standard, apprt.ClipboardRequest{
+				kind: .osc_52_read
+				clipboard: msg.clipboard_type
+			})!
 		}
 		.clipboard_write {
-			self.clipboard_write(msg.clipboard_write_req.data.bytestr(), .paste)!
+			self.clipboard_write(msg.clipboard_write_req.data.bytestr(), msg.clipboard_write_type)!
 		}
 		.pwd_change {
 			self.rt_app.perform_action(AppAction{
@@ -3628,7 +3628,15 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 	// Middle-click pastes from our selection clipboard.
 	if button == .middle && is_press {
 		if self.config.copy_on_select != .false_ {
-			self.start_clipboard_request(.paste)!
+			clipboard := if self.rt_surface.supports_clipboard_selection() {
+				apprt.Clipboard.selection
+			} else {
+				apprt.Clipboard.standard
+			}
+			self.start_clipboard_request(clipboard, apprt.ClipboardRequest{
+				kind: .paste
+				clipboard: clipboard
+			})!
 		}
 	}
 
@@ -3933,10 +3941,16 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			return true
 		}
 		.paste_from_clipboard {
-			return self.start_clipboard_request(.paste)!
+			return self.start_clipboard_request(.standard, apprt.ClipboardRequest{
+				kind: .paste
+				clipboard: .standard
+			})!
 		}
 		.paste_from_selection {
-			return self.start_clipboard_request(.paste)!
+			return self.start_clipboard_request(.selection, apprt.ClipboardRequest{
+				kind: .paste
+				clipboard: .selection
+			})!
 		}
 		.increase_font_size {
 			// Max delta is somewhat arbitrary.
@@ -5325,6 +5339,38 @@ fn (mut self Surface) complete_clipboard_paste(data string, allow_unsafe bool) !
 	}
 }
 
+// complete_clipboard_request completes exactly one request previously sent to
+// the application runtime. The data is copied into the IO queue before return.
+pub fn (mut self Surface) complete_clipboard_request(req apprt.ClipboardRequest, data string, confirmed bool) ! {
+	match req.kind {
+		.paste {
+			self.complete_clipboard_paste(data, confirmed)!
+		}
+		.osc_52_read {
+			if self.config.clipboard_read == .deny {
+				return error('UnauthorizedPaste')
+			}
+			if self.config.clipboard_read == .ask && !confirmed {
+				return error('UnauthorizedPaste')
+			}
+			kind := match req.clipboard {
+				.standard { 'c' }
+				.selection { 's' }
+				.primary { 'p' }
+			}
+			encoded := base64.encode_str(data)
+			response := '\x1b]52;${kind};${encoded}\x1b\\'
+			self.queue_io(IOMessage{ kind: .write_alloc, data: response.bytes() })
+		}
+		.osc_52_write {
+			self.rt_surface.set_clipboard_at(req.clipboard, [apprt.ClipboardContent{
+				mime: 'text/plain'
+				data: data
+			}], !confirmed)!
+		}
+	}
+}
+
 fn (mut self Surface) show_desktop_notification(title string, body string) ! {
 	// Rate limit: at most one notification per second
 	now := time.now()
@@ -5411,21 +5457,22 @@ fn (mut self Surface) copy_selection_to_clipboards(sel TermSelection, clipboards
 	}
 }
 
-fn (mut self Surface) clipboard_write(data string, loc ClipboardRequestKind) ! {
+fn (mut self Surface) clipboard_write(data string, loc apprt.Clipboard) ! {
 	if self.config.clipboard_write == .deny {
 		return
 	}
 	decoded := base64.decode(data)
-	self.rt_surface.set_clipboard(decoded.bytestr(), self.config.clipboard_write == .ask)!
-	_ = loc
+	self.rt_surface.set_clipboard_at(loc, [apprt.ClipboardContent{
+		mime: 'text/plain'
+		data: decoded.bytestr()
+	}], self.config.clipboard_write == .ask)!
 }
 
-fn (mut self Surface) start_clipboard_request(kind ClipboardRequestKind) !bool {
-	if kind == .osc_52_read && self.config.clipboard_read == .deny {
+fn (mut self Surface) start_clipboard_request(loc apprt.Clipboard, req apprt.ClipboardRequest) !bool {
+	if req.kind == .osc_52_read && self.config.clipboard_read == .deny {
 		return false
 	}
-	self.rt_surface.clipboard_request(kind)!
-	return true
+	return self.rt_surface.clipboard_request(loc, req)!
 }
 
 fn (self &Surface) link_at_pos(pos CursorPos) ?Link {

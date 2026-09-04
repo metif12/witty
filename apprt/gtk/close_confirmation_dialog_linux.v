@@ -91,8 +91,7 @@ const close_confirmation_prop_target = u32(1)
 
 // close_confirmation_dialog_priv returns the instance private data pointer.
 fn close_confirmation_dialog_priv(obj voidptr) &C.GhosttyCloseConfirmationDialogPrivate {
-	return &C.GhosttyCloseConfirmationDialogPrivate(C.g_type_instance_get_private(obj,
-		g_close_confirmation_dialog_type))
+	return &C.GhosttyCloseConfirmationDialogPrivate(C.g_type_instance_get_private(obj, g_close_confirmation_dialog_type))
 }
 
 // close_confirmation_dialog_get_property implements the GObjectClass
@@ -136,8 +135,7 @@ fn close_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
 	C.gtk_widget_class_set_template(klass, bytes)
 
 	// Property: target (enum, modeled as int).
-	pspec := C.g_param_spec_int(c'target', c'target', c'The close target', 0, 3,
-		0, g_param_readwrite)
+	pspec := C.g_param_spec_int(c'target', c'target', c'The close target', 0, 3, 0, g_param_readwrite)
 	mut obj_class := &C.GObjectClass(klass)
 	obj_class.get_property = voidptr(close_confirmation_dialog_get_property)
 	obj_class.set_property = voidptr(close_confirmation_dialog_set_property)
@@ -146,10 +144,8 @@ fn close_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
 
 	// Signals: close-request, cancel (both void, no params).
 	self_type := g_close_confirmation_dialog_type
-	C.g_signal_new(c'close-request', self_type, g_signal_run_last, 0, unsafe { nil },
-		unsafe { nil }, unsafe { nil }, GType(0), 0)
-	C.g_signal_new(c'cancel', self_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil },
-		unsafe { nil }, GType(0), 0)
+	C.g_signal_new(c'close-request', self_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 0)
+	C.g_signal_new(c'cancel', self_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 0)
 }
 
 // close_confirmation_dialog_instance_init builds the template. Mirrors the
@@ -167,15 +163,13 @@ pub fn close_confirmation_dialog_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size:    u16(query.class_size)
+			class_size: u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init:    voidptr(close_confirmation_dialog_class_init)
+			class_init: voidptr(close_confirmation_dialog_class_init)
 			instance_init: voidptr(close_confirmation_dialog_instance_init)
 		}
-		g_close_confirmation_dialog_type = C.g_type_register_static(parent, c'GhosttyCloseConfirmationDialog',
-			&info, 0)
-		g_close_confirmation_dialog_priv_offset = C.g_type_add_instance_private(g_close_confirmation_dialog_type,
-			sizeof(C.GhosttyCloseConfirmationDialogPrivate))
+		g_close_confirmation_dialog_type = C.g_type_register_static(parent, c'GhosttyCloseConfirmationDialog', &info, 0)
+		g_close_confirmation_dialog_priv_offset = C.g_type_add_instance_private(g_close_confirmation_dialog_type, sizeof(C.GhosttyCloseConfirmationDialogPrivate))
 	}
 	return g_close_confirmation_dialog_type
 }
@@ -208,13 +202,30 @@ mut:
 // Mirrors `gobject.ext.newInstance(Self, .{ .target = target })`: it builds the
 // GObject (running the `.ui` template init) with the `target` property set.
 pub fn close_confirmation_dialog_new(target CloseTarget) &CloseConfirmationDialog {
-	obj := C.g_object_new(close_confirmation_dialog_get_type(), c'target', int(target),
-		&char(unsafe { nil }))
+	obj := C.g_object_new(close_confirmation_dialog_get_type(), c'target', int(target), &char(unsafe { nil }))
+	C.g_signal_connect_data(obj, c'response', GCallback(voidptr(close_confirmation_native_response_cb)), unsafe { nil }, unsafe { nil }, 0)
 	return &CloseConfirmationDialog{
 		dialog: Dialog{
 			obj: obj
 		}
 		target: target
+	}
+}
+
+// AdwAlertDialog and AdwMessageDialog both expose the same response signal.
+// Ghostty overrides the corresponding virtual method; connecting the inherited
+// signal here provides the same routing without relying on a generated Zig
+// virtual-method trampoline.
+fn close_confirmation_native_response_cb(obj GObject, response_id &char, user_data voidptr) {
+	_ = user_data
+	if isnil(obj) || isnil(response_id) {
+		return
+	}
+	response := unsafe { cstring_to_vstring(response_id) }
+	if response == 'close' {
+		C.g_signal_emit_by_name(obj, c'close-request')
+	} else {
+		C.g_signal_emit_by_name(obj, c'cancel')
 	}
 }
 

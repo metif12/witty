@@ -46,10 +46,21 @@ pub type GCallback = voidptr
 // --- New C bindings -------------------------------------------------------
 
 fn C.g_simple_action_new(name &char, parameter_type GVariantType) GSimpleAction
+
 fn C.g_simple_action_new_stateful(name &char, parameter_type GVariantType, state GVariant) GSimpleAction
+
 fn C.g_action_map_add_action(action_map GActionMap, action GAction)
+
+fn C.g_action_map_lookup_action(action_map GActionMap, action_name &char) GAction
+
+fn C.g_action_get_name(action GAction) &char
+
+fn C.g_simple_action_set_enabled(action GSimpleAction, enabled int)
+
 fn C.g_simple_action_group_new() GSimpleActionGroup
+
 fn C.g_signal_connect_data(instance voidptr, detailed_signal &char, c_handler GCallback, data voidptr, destroy_data voidptr, connect_flags int) u64
+
 fn C.gtk_widget_insert_action_group(widget GtkWidget, name &char, group GActionGroup)
 
 // --- Action name validation -----------------------------------------------
@@ -67,12 +78,24 @@ pub fn action_name_is_valid(name string) bool {
 	}
 	for c in name {
 		match true {
-			c == `-` { continue }
-			c == `.` { continue }
-			c >= `0` && c <= `9` { continue }
-			c >= `a` && c <= `z` { continue }
-			c >= `A` && c <= `Z` { continue }
-			else { return false }
+			c == `-` {
+				continue
+			}
+			c == `.` {
+				continue
+			}
+			c >= `0` && c <= `9` {
+				continue
+			}
+			c >= `a` && c <= `z` {
+				continue
+			}
+			c >= `A` && c <= `Z` {
+				continue
+			}
+			else {
+				return false
+			}
 		}
 	}
 	return true
@@ -91,7 +114,7 @@ pub:
 	name           string
 	callback       GCallback
 	parameter_type GVariantType = unsafe { nil }
-	state          GVariant     = unsafe { nil }
+	state          GVariant = unsafe { nil }
 }
 
 // new initializes a new action, checking that the name is valid. Mirrors
@@ -137,8 +160,7 @@ pub fn add_to_map(self voidptr, action_map GActionMap, actions []Action) {
 		} else {
 			C.g_simple_action_new(name, entry.parameter_type)
 		}
-		C.g_signal_connect_data(action, c'activate', entry.callback, self, unsafe { nil },
-			0)
+		C.g_signal_connect_data(action, c'activate', entry.callback, self, unsafe { nil }, 0)
 		C.g_action_map_add_action(action_map, action)
 		// Ghostty defers action.unref() here; the map holds its own ref.
 		object_unref(action)

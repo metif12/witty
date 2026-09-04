@@ -111,6 +111,8 @@ fn C.gtk_window_destroy(window GtkWindow)
 
 fn C.gtk_window_set_handle_menubar_accel(window GtkWindow, handle_menubar_accel int)
 
+fn C.gtk_show_about_dialog(parent GtkWindow, first_property_name &char, ...)
+
 fn C.adw_application_window_set_content(window AdwApplicationWindow, content GtkWidget)
 
 fn C.adw_tab_overview_new() AdwTabOverview
@@ -142,6 +144,10 @@ fn C.adw_toast_overlay_new() AdwToastOverlay
 fn C.adw_toast_overlay_set_child(overlay AdwToastOverlay, child GtkWidget)
 
 fn C.adw_tab_view_new() AdwTabView
+
+fn C.adw_tab_page_get_child(page AdwTabPage) GtkWidget
+
+fn C.adw_tab_view_close_page_finish(view AdwTabView, page AdwTabPage, confirm int)
 
 fn C.adw_toast_new(title &char) voidptr
 
@@ -289,6 +295,7 @@ mut:
 
 	// See tab_overview_open for why we have this. 0 means "no timer".
 	tab_overview_focus_timer u32
+	pending_close_page       AdwTabPage = unsafe { nil }
 
 	// A weak reference to a command palette.
 	command_palette WeakRef = weak_ref_empty()
@@ -348,6 +355,10 @@ pub fn Window.new(app &Application) &Window {
 	C.g_signal_connect_data(self.obj, c'close-request', GCallback(voidptr(window_close_request_cb)), voidptr(self), unsafe { nil }, 0)
 	C.g_signal_connect_data(self.obj, c'realize', GCallback(voidptr(window_realize_cb)), voidptr(self), unsafe { nil }, 0)
 	C.g_signal_connect_data(self.tab_view, c'notify::n-pages', GCallback(voidptr(window_n_pages_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.tab_view, c'notify::selected-page', GCallback(voidptr(window_selected_page_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.tab_view, c'close-page', GCallback(voidptr(window_close_page_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.tab_view, c'page-detached', GCallback(voidptr(window_page_detached_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.tab_overview, c'create-tab', GCallback(voidptr(window_overview_create_tab_cb)), voidptr(self), unsafe { nil }, 0)
 	self.init(app)
 	return self
 }
@@ -444,33 +455,155 @@ fn window_n_pages_cb(view AdwTabView, pspec voidptr, user_data voidptr) {
 	self.tab_view_n_pages()
 }
 
+fn window_selected_page_cb(view AdwTabView, pspec voidptr, user_data voidptr) {
+	_ = view
+	_ = pspec
+	if !isnil(user_data) {
+		mut self := unsafe { &Window(user_data) }
+		self.sync_selected_tab()
+	}
+}
+
+fn window_close_page_cb(view AdwTabView, page AdwTabPage, user_data voidptr) int {
+	if isnil(user_data) {
+		return 0
+	}
+	mut self := unsafe { &Window(user_data) }
+	mut tab := self.tab_for_page(page) or { return 0 }
+	if !tab.get_needs_confirm_quit() {
+		tab.split_tree.deinit_surfaces()
+		C.adw_tab_view_close_page_finish(view, page, 1)
+		return 1
+	}
+	self.pending_close_page = page
+	mut dialog := close_confirmation_dialog_new(.tab)
+	C.g_signal_connect_data(dialog.dialog.obj, c'close-request', GCallback(voidptr(window_close_tab_confirmed_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(dialog.dialog.obj, c'cancel', GCallback(voidptr(window_close_tab_cancelled_cb)), voidptr(self), unsafe { nil }, 0)
+	dialog.present(tab.widget)
+	return 1
+}
+
+fn window_close_tab_confirmed_cb(dialog GObject, user_data voidptr) {
+	_ = dialog
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Window(user_data) }
+	page := self.pending_close_page
+	self.pending_close_page = unsafe { nil }
+	if isnil(page) {
+		return
+	}
+	if mut tab := self.tab_for_page(page) {
+		tab.split_tree.deinit_surfaces()
+	}
+	C.adw_tab_view_close_page_finish(self.tab_view, page, 1)
+}
+
+fn window_close_tab_cancelled_cb(dialog GObject, user_data voidptr) {
+	_ = dialog
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Window(user_data) }
+	page := self.pending_close_page
+	self.pending_close_page = unsafe { nil }
+	if !isnil(page) {
+		C.adw_tab_view_close_page_finish(self.tab_view, page, 0)
+	}
+}
+
+fn window_page_detached_cb(view AdwTabView, page AdwTabPage, position int, user_data voidptr) {
+	_ = view
+	_ = position
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Window(user_data) }
+	child := C.adw_tab_page_get_child(page)
+	for i, tab in self.tabs {
+		if tab.widget == child {
+			self.tabs.delete(i)
+			break
+		}
+	}
+}
+
+fn window_overview_create_tab_cb(overview AdwTabOverview, user_data voidptr) AdwTabPage {
+	_ = overview
+	if isnil(user_data) {
+		return AdwTabPage(unsafe { nil })
+	}
+	mut self := unsafe { &Window(user_data) }
+	return self.new_tab_page(none, .tab)
+}
+
 // init_action_map sets up our action map. Mirrors `initActionMap`.
-//
-// TODO(gtk): the actual action callbacks are C trampolines bound to this
-// GObject via `ext.actions.add`. Those trampolines and the GObject action-map
-// upcast are out of scope. We keep the action name table for parity.
 fn (mut self Window) init_action_map() {
-	// The action names, mirroring the Zig `actions` array. The callbacks are
-	// stubbed (see the `action_*` methods below), so this list documents the
-	// intended surface of the window's action map.
-	_ = [
-		'about',
-		'close',
-		'close-tab',
-		'new-tab',
-		'new-window',
-		'ring-bell',
-		'split-right',
-		'split-left',
-		'split-up',
-		'split-down',
-		'copy',
-		'paste',
-		'reset',
-		'clear',
-		'toggle-command-palette',
-		'toggle-inspector',
-	]
+	string_type := C.g_variant_type_new(c's')
+	mut actions := []Action{}
+	for name in ['about', 'close', 'new-tab', 'new-window', 'ring-bell', 'split-right', 'split-left',
+		'split-up', 'split-down', 'copy', 'paste', 'reset', 'clear', 'toggle-command-palette',
+		'toggle-inspector'] {
+		actions << Action.new(name, GCallback(voidptr(window_action_cb)), unsafe { nil })
+	}
+	actions << Action.new('close-tab', GCallback(voidptr(window_action_cb)), string_type)
+	add_to_map(voidptr(self), GActionMap(self.obj), actions)
+	C.g_variant_type_free(string_type)
+}
+
+fn window_action_cb(action GSimpleAction, parameter GVariant, data voidptr) {
+	if isnil(action) || isnil(data) {
+		return
+	}
+	name_ptr := C.g_action_get_name(action)
+	if isnil(name_ptr) {
+		return
+	}
+	name := unsafe { cstring_to_vstring(name_ptr) }
+	mut self := unsafe { &Window(data) }
+	match name {
+		'about' { self.action_about() }
+		'close' { self.action_close() }
+		'close-tab' {
+			if isnil(parameter) {
+				return
+			}
+			mut length := usize(0)
+			value := C.g_variant_get_string(parameter, &length)
+			if isnil(value) {
+				return
+			}
+			match unsafe { cstring_to_vstring(value) } {
+				'this' {
+					self.perform_input_action(input.Action.new_enum(.close_tab, i32(input.CloseTabMode.this)))
+				}
+				'other' {
+					self.perform_input_action(input.Action.new_enum(.close_tab, i32(input.CloseTabMode.other)))
+				}
+				'right' {
+					self.perform_input_action(input.Action.new_enum(.close_tab, i32(input.CloseTabMode.right)))
+				}
+				else {}
+			}
+		}
+		'new-tab' { self.action_new_tab() }
+		'new-window' { self.action_new_window() }
+		'ring-bell' { self.action_ring_bell() }
+		'split-right' { self.action_split_right() }
+		'split-left' { self.action_split_left() }
+		'split-up' { self.action_split_up() }
+		'split-down' { self.action_split_down() }
+		'copy' { self.action_copy() }
+		'paste' { self.action_paste() }
+		'reset' { self.action_reset() }
+		'clear' { self.action_clear() }
+		'toggle-command-palette' {
+			self.perform_input_action(input.Action.new(.toggle_command_palette))
+		}
+		'toggle-inspector' { self.toggle_inspector() }
+		else {}
+	}
 }
 
 // sync_apprt_window mirrors the winproto bridge into the current window state.
@@ -551,8 +684,66 @@ fn (mut self Window) new_tab_page(parent ?&core.Surface, context NewSurfaceConte
 
 	// Add the page and select it.
 	page := adw_tab_view_insert(tab_view, tab.widget, position)
+	tab.sync_from_active_surface()
 	adw_tab_view_set_selected_page(tab_view, page)
 	return page
+}
+
+fn (self &Window) tab_for_page(page AdwTabPage) ?&Tab {
+	if isnil(page) {
+		return none
+	}
+	child := C.adw_tab_page_get_child(page)
+	for tab in self.tabs {
+		if tab.widget == child {
+			return tab
+		}
+	}
+	return none
+}
+
+// sync_selected_tab is the direct equivalent of Window's title binding group.
+pub fn (mut self Window) sync_selected_tab() {
+	page := adw_tab_view_get_selected_page(self.tab_view)
+	if isnil(page) {
+		return
+	}
+	C.adw_tab_page_set_needs_attention(page, 0)
+	tab := self.tab_for_page(page) or { return }
+	if title := tab.title {
+		self.set_title(title)
+	}
+}
+
+// present_surface selects the tab that owns surface, focuses it, and raises the
+// window. Mirrors Window.surfacePresentRequest.
+pub fn (mut self Window) present_surface(surface &SurfaceWidget) {
+	for tab in self.tabs {
+		if tab.split_tree == surface.split_tree {
+			page := C.adw_tab_view_get_page(self.tab_view, tab.widget)
+			if !isnil(page) {
+				C.adw_tab_view_set_selected_page(self.tab_view, page)
+			}
+			break
+		}
+	}
+	surface.grab_focus()
+	C.gtk_window_present(self.as_window())
+}
+
+// surface_initialized applies the initial default/minimum dimensions once per
+// window, exactly as Ghostty's Surface.init signal handler does.
+pub fn (mut self Window) surface_initialized(surface &SurfaceWidget) {
+	if self.surface_init {
+		return
+	}
+	self.surface_init = true
+	if size := surface.get_default_size() {
+		C.gtk_window_set_default_size(self.as_window(), int(size.width), int(size.height))
+	}
+	if size := surface.get_min_size() {
+		C.gtk_widget_set_size_request(self.as_widget(), int(size.width), int(size.height))
+	}
 }
 
 // select_tab selects the tab as requested. Returns true if the tab selection
@@ -613,7 +804,6 @@ pub fn (mut self Window) select_tab(n SelectTab) bool {
 // Returns whether this affected any tab positioning. Mirrors `moveTab`. The
 // wrap-around position arithmetic is fully translated.
 pub fn (mut self Window) move_tab(surface &Surface, amount i64) bool {
-	_ = surface
 	tab_view := self.tab_view
 
 	// If we have one tab we never move.
@@ -622,10 +812,19 @@ pub fn (mut self Window) move_tab(surface &Surface, amount i64) bool {
 		return false
 	}
 
-	// TODO(gtk): resolve the Tab that contains the surface via
-	// ext.getAncestor(Tab, surface.as(gtk.Widget)). Out of scope; use a nil
-	// tab widget placeholder for the position computation.
-	tab_widget := unsafe { GtkWidget(nil) }
+	if isnil(surface) || isnil(surface.surface) || isnil(surface.surface.split_tree) {
+		return false
+	}
+	mut tab_widget := GtkWidget(unsafe { nil })
+	for tab in self.tabs {
+		if tab.split_tree == surface.surface.split_tree {
+			tab_widget = tab.widget
+			break
+		}
+	}
+	if isnil(tab_widget) {
+		return false
+	}
 
 	// Get the page position that contains the tab.
 	page := adw_tab_view_get_page(tab_view, tab_widget)
@@ -743,13 +942,17 @@ fn (mut self Window) sync_appearance() {
 
 // sync_actions syncs the state of any actions on this window. Mirrors
 // `syncActions`.
-//
-// TODO(gtk): the gio.ActionMap upcast + SimpleAction lookup/setEnabled are out
-// of scope. The tractable part — computing whether the active surface has a
-// selection — is retained but ends at the (stubbed) core surface.
 fn (mut self Window) sync_actions() {
-	// has_selection := ... self.get_active_surface()?.core()?.has_selection()
-	// TODO(gtk): enable/disable the "copy" action based on has_selection.
+	mut has_selection := false
+	if surface := self.get_active_surface() {
+		if surface.has_core() {
+			has_selection = surface.core().has_selection()
+		}
+	}
+	action := C.g_action_map_lookup_action(GActionMap(self.obj), c'copy')
+	if !isnil(action) {
+		C.g_simple_action_set_enabled(GSimpleAction(action), b2i(has_selection))
+	}
 }
 
 // toggle_css_class adds or removes a CSS class based on `value`. Mirrors
@@ -769,10 +972,6 @@ fn (mut self Window) toggle_css_class(class string, value bool) {
 // `core_surface.performBindingAction(action)` is out of scope (core types are
 // placeholders). Kept as a faithful stub. `action` is an opaque action tag.
 fn (mut self Window) perform_binding_action(action BindingActionTag) {
-	mut surface := self.get_active_surface() or { return }
-	if !surface.has_core() {
-		return
-	}
 	binding := match action {
 		.new_tab { input.Action.new(.new_tab) }
 		.new_window { input.Action.new(.new_window) }
@@ -787,8 +986,18 @@ fn (mut self Window) perform_binding_action(action BindingActionTag) {
 		.reset { input.Action.new(.reset) }
 		.clear_screen { input.Action.new(.clear_screen) }
 	}
+	self.perform_input_action(binding)
+}
+
+fn (mut self Window) perform_input_action(action input.Action) {
+	mut surface := self.get_active_surface() or { return }
+	if !surface.has_core() {
+		return
+	}
 	mut core_surface := surface.core()
-	core_surface.perform_binding_action(binding) or {}
+	core_surface.perform_binding_action(action) or {
+		eprintln('error performing window binding action: ${err}')
+	}
 }
 
 // add_toast queues a simple text-based toast. All text-based toasts share the
@@ -830,11 +1039,7 @@ pub fn (self &Window) get_active_surface() ?&SurfaceWidget {
 	if isnil(page) {
 		return none
 	}
-	position := adw_tab_view_get_page_position(self.tab_view, page)
-	if position < 0 || position >= self.tabs.len {
-		return none
-	}
-	mut tab := self.tabs[position]
+	mut tab := self.tab_for_page(page) or { return none }
 	return tab.get_active_surface()
 }
 
@@ -1210,9 +1415,15 @@ pub fn (mut self Window) tab_view_n_pages() {
 	}
 }
 
-// --- Actions (stubbed callbacks) ------------------------------------------
-// Mirrors the `action*` handlers. Each ultimately performs a binding action on
-// the active surface (out of scope), so they are faithful stubs.
+// --- Actions ---------------------------------------------------------------
+
+pub fn (mut self Window) action_about() {
+	C.gtk_show_about_dialog(self.as_window(), c'program-name', c'Witty', c'logo-icon-name', &char(application_id.str), c'title', c'About Witty', c'website', c'https://ghostty.org', unsafe { nil })
+}
+
+pub fn (mut self Window) toggle_inspector() {
+	self.perform_input_action(input.Action.new_enum(.inspector, i32(input.InspectorMode.toggle)))
+}
 
 pub fn (mut self Window) action_close() {
 	C.gtk_window_close(self.as_window())

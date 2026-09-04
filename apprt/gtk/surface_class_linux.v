@@ -71,6 +71,11 @@ pub type GtkIMContext = voidptr
 // GdkClipboard*.
 pub type GdkClipboard = voidptr
 
+// GdkContentProvider* / GdkContentFormats*.
+pub type GdkContentProvider = voidptr
+
+pub type GdkContentFormats = voidptr
+
 // GtkAdjustment*.
 pub type GtkAdjustment = voidptr
 
@@ -80,6 +85,8 @@ fn C.gtk_gl_area_queue_render(area GtkGLArea)
 fn C.gtk_gl_area_make_current(area GtkGLArea)
 
 fn C.gtk_gl_area_get_error(area GtkGLArea) GError
+
+fn C.gtk_gl_area_set_allowed_apis(area GtkGLArea, apis int)
 
 // GtkWidget (extra helpers not in c_gtk_linux.v)
 fn C.gtk_widget_has_focus(widget GtkWidget) bool
@@ -96,6 +103,8 @@ fn C.gtk_widget_get_clipboard(widget GtkWidget) GdkClipboard
 
 fn C.gtk_widget_get_primary_clipboard(widget GtkWidget) GdkClipboard
 
+fn C.gtk_widget_add_controller(widget GtkWidget, controller voidptr)
+
 // GtkIMContext
 fn C.gtk_im_context_filter_keypress(context GtkIMContext, event GdkEvent) bool
 
@@ -107,11 +116,63 @@ fn C.gtk_im_context_reset(context GtkIMContext)
 
 fn C.gtk_im_context_set_client_widget(context GtkIMContext, widget GtkWidget)
 
+fn C.gtk_im_context_get_preedit_string(context GtkIMContext, str &&char, attrs voidptr, cursor_pos voidptr)
+
+// Event controllers and gestures.
+fn C.gtk_event_controller_key_new() GtkEventControllerKey
+
+fn C.gtk_event_controller_focus_new() GtkEventControllerFocus
+
+fn C.gtk_event_controller_motion_new() GtkEventControllerMotion
+
+fn C.gtk_event_controller_scroll_new(flags int) GtkEventControllerScroll
+
+fn C.gtk_event_controller_scroll_get_unit(controller GtkEventControllerScroll) int
+
+fn C.gtk_event_controller_get_current_event(controller voidptr) GdkEvent
+
+fn C.gtk_gesture_click_new() GtkGestureClick
+
+fn C.gtk_gesture_single_set_button(gesture voidptr, button u32)
+
+fn C.gtk_gesture_single_get_current_button(gesture voidptr) u32
+
 // GdkEvent
 fn C.gdk_event_get_modifier_state(event GdkEvent) u32
 
+fn C.gdk_event_get_device(event GdkEvent) GdkDevice
+
+fn C.gdk_device_get_num_lock_state(device GdkDevice) bool
+
+fn C.gdk_key_event_get_consumed_modifiers(event GdkEvent) u32
+
+fn C.gdk_key_event_get_layout(event GdkEvent) u32
+
+pub struct C.GdkKeymapKey {
+pub mut:
+	keycode u32
+	group   int
+	level   int
+}
+
+fn C.gdk_display_map_keycode(display GdkDisplay, keycode u32, keys &&C.GdkKeymapKey, keyvals &&u32, n_entries &int) bool
+
 // GdkClipboard
 fn C.gdk_clipboard_set_text(clipboard GdkClipboard, text &char)
+
+fn C.gdk_clipboard_set_content(clipboard GdkClipboard, provider GdkContentProvider) bool
+
+fn C.gdk_clipboard_get_formats(clipboard GdkClipboard) GdkContentFormats
+
+fn C.gdk_clipboard_read_text_async(clipboard GdkClipboard, cancellable voidptr, callback GCallback, user_data voidptr)
+
+fn C.gdk_clipboard_read_text_finish(clipboard GdkClipboard, result GAsyncResult, error &GError) &char
+
+fn C.gdk_content_formats_contain_gtype(formats GdkContentFormats, type_ GType) bool
+
+fn C.gdk_content_provider_new_for_bytes(mime_type &char, bytes GBytes) GdkContentProvider
+
+fn C.gdk_content_provider_new_union(providers &GdkContentProvider, n_providers usize) GdkContentProvider
 
 fn C.adw_bin_new() AdwBin
 
@@ -131,6 +192,11 @@ fn C.gtk_widget_set_focusable(widget GtkWidget, focusable int)
 
 fn C.gtk_widget_set_focus_on_click(widget GtkWidget, focus_on_click int)
 
+const gtk_event_controller_scroll_vertical = int(1)
+const gtk_event_controller_scroll_horizontal = int(2)
+const gdk_scroll_unit_surface = int(1)
+const gdk_gl_api_gl = int(1)
+
 __global g_terminal_surface_type = GType(0)
 
 fn terminal_surface_class_init(klass voidptr, class_data voidptr) {
@@ -140,6 +206,9 @@ fn terminal_surface_class_init(klass voidptr, class_data voidptr) {
 		'toggle-fullscreen', 'toggle-maximize'] {
 		C.g_signal_new(&char(name.str), g_terminal_surface_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(4), 0)
 	}
+	mut clipboard_type := g_type_int
+	mut clipboard_text := g_type_string
+	C.g_signal_new(c'clipboard-write', g_terminal_surface_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(4), 2, clipboard_type, clipboard_text)
 }
 
 fn terminal_surface_instance_init(instance voidptr, klass voidptr) {
@@ -183,6 +252,13 @@ pub struct Size {
 pub mut:
 	width  u32
 	height u32
+}
+
+@[heap]
+struct ClipboardReadRequest {
+mut:
+	surface &SurfaceWidget
+	state   apprt.ClipboardRequest
 }
 
 // --- SurfaceWidget --------------------------------------------------------
@@ -294,7 +370,13 @@ pub mut:
 	vadj GtkAdjustment = unsafe { nil }
 
 	// How much pending horizontal scroll we have.
-	pending_horizontal_scroll f64
+	pending_horizontal_scroll       f64
+	pending_horizontal_scroll_reset u32
+
+	// Async reads and confirmation dialogs retain their V payload until the
+	// corresponding GLib callback completes.
+	pending_clipboard_reads   []&ClipboardReadRequest
+	pending_clipboard_dialogs []&ClipboardConfirmationDialog
 }
 
 // --- Basic accessors ------------------------------------------------------
@@ -414,14 +496,14 @@ pub fn (self &SurfaceWidget) get_title() ?string {
 // set_title sets the terminal-set title (a copy). Mirrors `Surface.setTitle`.
 pub fn (mut self SurfaceWidget) set_title(title ?string) {
 	self.title = title
-	// TODO(gtk): notifyByPspec(properties.title) — GObject property notify.
+	self.sync_tab()
 }
 
 // set_title_override sets the manually overridden title. Mirrors
 // `Surface.setTitleOverride`.
 pub fn (mut self SurfaceWidget) set_title_override(title ?string) {
 	self.title_override = title
-	// TODO(gtk): notifyByPspec(properties.title-override).
+	self.sync_tab()
 }
 
 // get_pwd returns the pwd, if any. Mirrors `Surface.getPwd`.
@@ -432,7 +514,13 @@ pub fn (self &SurfaceWidget) get_pwd() ?string {
 // set_pwd sets the pwd (a copy). Mirrors `Surface.setPwd`.
 pub fn (mut self SurfaceWidget) set_pwd(pwd ?string) {
 	self.pwd = pwd
-	// TODO(gtk): notifyByPspec(properties.pwd).
+	self.sync_tab()
+}
+
+fn (self &SurfaceWidget) sync_tab() {
+	if !isnil(self.split_tree) {
+		self.split_tree.sync_tab()
+	}
 }
 
 // --- Mouse shape / hidden / hover url --------------------------------------
@@ -539,15 +627,24 @@ pub fn (mut self SurfaceWidget) set_bell_ringing(ringing bool) {
 		return
 	}
 	self.bell_ringing = ringing
-	// TODO(gtk): notifyByPspec(properties.bell-ringing).
+	self.sync_tab()
 }
 
 // ring_bell handles bell features that happen on every BEL (audio/system).
 // Mirrors `Surface.ringBell` (audio playback and action activation are stubbed
 // because they need the config GObject + GtkMediaFile machinery).
 fn (self &SurfaceWidget) ring_bell() {
-	// TODO(gtk): emit `bell` signal; activate tab.ring-bell / win.ring-bell;
-	// play bell-audio via GtkMediaFile per config.@"bell-features".
+	if isnil(self.split_tree) || isnil(self.split_tree.window) {
+		return
+	}
+	mut window := unsafe { self.split_tree.window }
+	for mut tab in window.tabs {
+		if tab.split_tree == self.split_tree {
+			tab.action_ring_bell()
+			break
+		}
+	}
+	window.action_ring_bell()
 }
 
 // set_error sets the error state. Mirrors `Surface.setError`.
@@ -666,28 +763,27 @@ pub fn (mut self SurfaceWidget) key_event(action input.KeyAction, event GdkEvent
 	// Get the unicode value for this keyval.
 	keyval_cp := keyval_unicode(keyval)
 
-	// We want the physical unmapped key to process physical keybinds.
-	//
-	// NOTE(gtk): ghostty looks up the physical key from the platform keycode via
-	// input.keycodes (native == keycode). witty's keycodes table currently holds
-	// macOS native codes, not Linux/XKB codes, so that lookup can't be done
-	// faithfully here yet. We fall back to the keyval-based remapped key, which
-	// is correct for the common (non-physical-binding) case.
+	// Until the platform keycode table supplies a native match, the XKB-remapped
+	// keyval is the same fallback used by Ghostty for remappable keys.
 	physical_key := key_from_keyval(keyval) or { input.Key.unidentified }
 
 	// Get our modifiers for the event.
 	//
-	// TODO(gtk): faithful port of key.eventMods needs winproto.eventMods +
-	// GdkDevice num-lock state. We translate the base GTK modifier bitmask and
-	// then apply sided-modifier fixups for the modifier keys themselves, which
-	// is the part of eventMods that doesn't require the device/winproto.
-	mut mods := translate_mods(gtk_mods)
+	device := C.gdk_event_get_device(event)
+	mut mods := if !isnil(self.app) {
+		mut app := unsafe { self.app }
+		mut winproto := app.winproto()
+		winproto.event_mods(device, gtk_mods)
+	} else {
+		translate_mods(gtk_mods)
+	}
+	if !isnil(device) {
+		mods.num_lock = C.gdk_device_get_num_lock_state(device)
+	}
 	self.apply_sided_mods(mut mods, physical_key, action)
 
-	// Consumed modifiers. ghostty masks getConsumedModifiers() with the GDK
-	// modifier mask and translates. Without the GdkKeyEvent accessor wired we
-	// leave this empty (no consumed mods), matching the "no consumed" default.
-	consumed_mods := input.Mods{}
+	consumed_mods := translate_mods(C.gdk_key_event_get_consumed_modifiers(event))
+	unshifted_codepoint := self.keyval_unicode_unshifted(event, keycode)
 
 	// If we have no UTF-8 text, try to convert the keyval to a text value.
 	// GTK won't process e.g. Ctrl+Shift+1 as "Ctrl+!" but the keyval is set
@@ -717,14 +813,14 @@ pub fn (mut self SurfaceWidget) key_event(action input.KeyAction, event GdkEvent
 		return false
 	}
 	mut surface := self.core_surface
-	// core.Surface.key_callback takes a core.KeyEvent (key/action/mods/utf8).
-	// The richer input.KeyEvent fields (consumed_mods, composing,
-	// unshifted_codepoint) are computed above but not part of the core event.
 	effect := surface.key_callback(core.KeyEvent{
 		action: core_key_action(action)
 		key: physical_key
 		mods: mods
+		consumed_mods: consumed_mods
+		composing: self.im_composing
 		utf8: utf8
+		unshifted_codepoint: unshifted_codepoint
 	}) or {
 		eprintln('error in key callback err=${err}')
 		return false
@@ -752,6 +848,34 @@ pub fn (mut self SurfaceWidget) key_event(action input.KeyAction, event GdkEvent
 	}
 
 	return false
+}
+
+// keyval_unicode_unshifted finds the level-zero keyval for the event's active
+// keyboard layout. This is the pinned GTK implementation used by the Kitty
+// keyboard protocol.
+fn (self &SurfaceWidget) keyval_unicode_unshifted(event GdkEvent, keycode u32) u32 {
+	display := C.gtk_widget_get_display(self.gl_area)
+	if isnil(display) {
+		return 0
+	}
+	layout := C.gdk_key_event_get_layout(event)
+	mut keys := unsafe { &C.GdkKeymapKey(nil) }
+	mut keyvals := unsafe { &u32(nil) }
+	mut n_entries := 0
+	if !C.gdk_display_map_keycode(display, keycode, &keys, &keyvals, &n_entries) {
+		return 0
+	}
+	defer {
+		C.g_free(keys)
+		C.g_free(keyvals)
+	}
+	for i in 0 .. n_entries {
+		key := unsafe { keys[i] }
+		if key.group == int(layout) && key.level == 0 {
+			return keyval_unicode(unsafe { keyvals[i] })
+		}
+	}
+	return 0
 }
 
 // apply_sided_mods applies the sided-modifier fixups for modifier keys
@@ -1006,10 +1130,9 @@ pub fn (mut self SurfaceWidget) ec_mouse_motion(event GdkEvent, x f64, y f64) {
 	}
 
 	// If we don't have focus and focus-follows-mouse is on, grab it.
-	// TODO(gtk): gate on config.@"focus-follows-mouse" once witty's
-	// configpkg.Config carries that field.
-	if !isnil(self.config) && !C.gtk_widget_has_focus(self.gl_area) {
-		// C.gtk_widget_grab_focus(self.gl_area)
+	if !isnil(self.config) && self.config.get().focus_follows_mouse
+		&& !C.gtk_widget_has_focus(self.gl_area) {
+		C.gtk_widget_grab_focus(self.gl_area)
 	}
 
 	// Our pos changed, update.
@@ -1085,14 +1208,36 @@ pub fn (mut self SurfaceWidget) ec_scroll_horizontal(x f64) bool {
 	self.pending_horizontal_scroll += x
 
 	if abs_f64(self.pending_horizontal_scroll) < 120 {
-		// TODO(gtk): (re)arm a 500ms glib timeout to reset pending scroll.
+		if self.pending_horizontal_scroll_reset != 0 {
+			C.g_source_remove(self.pending_horizontal_scroll_reset)
+		}
+		self.pending_horizontal_scroll_reset = C.g_timeout_add(500, voidptr(surface_horizontal_scroll_reset_cb), self)
 		return true
 	}
 
-	// TODO(gtk): activate "tab.next-page" / "tab.previous-page" action based on
-	// the sign of pending_horizontal_scroll.
+	if !isnil(self.split_tree) && !isnil(self.split_tree.window) {
+		mut window := unsafe { self.split_tree.window }
+		if self.pending_horizontal_scroll < 0 {
+			window.select_tab(SelectTab{ kind: .next })
+		} else {
+			window.select_tab(SelectTab{ kind: .previous })
+		}
+	}
+	if self.pending_horizontal_scroll_reset != 0 {
+		C.g_source_remove(self.pending_horizontal_scroll_reset)
+		self.pending_horizontal_scroll_reset = 0
+	}
 	self.pending_horizontal_scroll = 0.0
 	return true
+}
+
+fn surface_horizontal_scroll_reset_cb(data voidptr) int {
+	if !isnil(data) {
+		mut self := unsafe { &SurfaceWidget(data) }
+		self.pending_horizontal_scroll = 0
+		self.pending_horizontal_scroll_reset = 0
+	}
+	return 0
 }
 
 // --- Focus event controllers ----------------------------------------------
@@ -1122,14 +1267,23 @@ pub fn (mut self SurfaceWidget) ec_focus_leave() {
 // libghostty callback triggers focus loss while a lock is held. We invoke it
 // directly here; the idle-source deferral is stubbed.
 fn (self &SurfaceWidget) notify_focus() {
-	// TODO(gtk): defer onto glib.idleAddOnce(idleFocus) as in ghostty.
-	if !self.has_core() {
-		return
+	object_ref(self.widget)
+	C.g_idle_add(voidptr(surface_idle_focus_cb), voidptr(self))
+}
+
+fn surface_idle_focus_cb(data voidptr) int {
+	if isnil(data) {
+		return 0
 	}
-	mut surface := self.core_surface
-	surface.focus_callback(self.focused) or {
-		eprintln('error in focus callback err=${err}')
+	self := unsafe { &SurfaceWidget(data) }
+	defer { object_unref(self.widget) }
+	if self.has_core() {
+		mut surface := self.core_surface
+		surface.focus_callback(self.focused) or {
+			eprintln('error in focus callback err=${err}')
+		}
 	}
+	return 0
 }
 
 // --- GLArea lifecycle -----------------------------------------------------
@@ -1286,6 +1440,10 @@ fn (mut self SurfaceWidget) init_surface() ! {
 		self.core_surface_ref = unsafe { nil }
 		return error('core surface initialization failed: ${err}')
 	}
+	if !isnil(self.split_tree) && !isnil(self.split_tree.window) {
+		mut window := unsafe { self.split_tree.window }
+		window.surface_initialized(self)
+	}
 	C.g_signal_emit_by_name(self.widget, c'init')
 }
 
@@ -1436,6 +1594,21 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			window.action_ring_bell()
 			return true
 		}
+		.inspector {
+			mut core_surface := self.core_surface
+			match action.inspector_mode {
+				.show { core_surface.activate_inspector()! }
+				.hide { core_surface.deactivate_inspector() }
+				.toggle {
+					if core_surface.inspector == none {
+						core_surface.activate_inspector()!
+					} else {
+						core_surface.deactivate_inspector()
+					}
+				}
+			}
+			return true
+		}
 		.open_config {
 			return self.app.perform_action(apprt.Target(apprt.AppTarget{}), .open_config, apprt.ActionValue{})!
 		}
@@ -1494,16 +1667,9 @@ fn surface_core_supports_selection_cb(data voidptr) bool {
 	return true
 }
 
-fn surface_core_clipboard_request_cb(data voidptr, kind core.ClipboardRequestKind) ! {
+fn surface_core_clipboard_request_cb(data voidptr, clipboard apprt.Clipboard, request apprt.ClipboardRequest) !bool {
 	mut self := unsafe { &SurfaceWidget(data) }
-	request_kind := match kind {
-		.paste { apprt.ClipboardRequestType.paste }
-		.osc_52_read { apprt.ClipboardRequestType.osc_52_read }
-	}
-	self.clipboard_request(.standard, apprt.ClipboardRequest{
-		kind: request_kind
-		clipboard: .standard
-	})!
+	return self.clipboard_request(clipboard, request)!
 }
 
 // --- Clipboard ------------------------------------------------------------
@@ -1518,10 +1684,7 @@ fn (self &SurfaceWidget) clipboard_for(clipboard apprt.Clipboard) GdkClipboard {
 }
 
 // set_clipboard sets the clipboard contents. Mirrors `Surface.setClipboard` +
-// `Clipboard.set`. The multi-provider (MIME) union path and the confirmation
-// dialog path need the gdk.ContentProvider machinery and the confirmation
-// dialog GObject; here we implement the common plaintext no-confirm path and
-// stub the rest.
+// `Clipboard.set`, including all MIME providers and OSC 52 confirmation.
 pub fn (mut self SurfaceWidget) set_clipboard(clipboard_type apprt.Clipboard, contents []apprt.ClipboardContent, confirm bool) {
 	// Grab the plaintext content used for signals and confirmation dialogs.
 	mut text := ''
@@ -1542,35 +1705,195 @@ pub fn (mut self SurfaceWidget) set_clipboard(clipboard_type apprt.Clipboard, co
 		if isnil(clipboard) {
 			return
 		}
-		// TODO(gtk): build a gdk.ContentProvider union over all MIME types as
-		// in ghostty; for now set the plaintext content directly.
-		C.gdk_clipboard_set_text(clipboard, text.str)
-		// TODO(gtk): emit `clipboard-write` signal (clipboard_type, text).
+
+		mut providers := []GdkContentProvider{cap: contents.len}
+		for content in contents {
+			bytes := C.g_bytes_new(content.data.str, usize(content.data.len))
+			if content.mime == 'text/plain' {
+				mut text_providers := [
+					C.gdk_content_provider_new_for_bytes(c'text/plain;charset=utf-8', bytes),
+					C.gdk_content_provider_new_for_bytes(c'text/plain', bytes),
+				]
+				providers << C.gdk_content_provider_new_union(unsafe { &text_providers[0] }, text_providers.len)
+			} else {
+				providers << C.gdk_content_provider_new_for_bytes(&char(content.mime.str), bytes)
+			}
+			C.g_bytes_unref(bytes)
+		}
+		if providers.len > 0 {
+			all := C.gdk_content_provider_new_union(unsafe { &providers[0] }, providers.len)
+			if !isnil(all) {
+				_ = C.gdk_clipboard_set_content(clipboard, all)
+				object_unref(all)
+			} else {
+				C.gdk_clipboard_set_text(clipboard, text.str)
+			}
+		} else {
+			C.gdk_clipboard_set_text(clipboard, text.str)
+		}
+		C.g_signal_emit_by_name(self.widget, c'clipboard-write', int(clipboard_type), text.str)
 		return
 	}
 
-	// TODO(gtk): show the clipboard confirmation dialog (osc_52_write).
+	self.show_clipboard_confirmation(apprt.ClipboardRequest{
+		kind: .osc_52_write
+		clipboard: clipboard_type
+	}, text)
 }
 
 // clipboard_request requests clipboard contents (reads the clipboard). Mirrors
-// `Surface.clipboardRequest` + `Clipboard.request`. The async read + completion
-// wiring (readTextAsync, completeClipboardRequest) is stubbed; the synchronous
-// early-outs are preserved.
+// `Surface.clipboardRequest` + `Clipboard.request`.
 pub fn (mut self SurfaceWidget) clipboard_request(clipboard_type apprt.Clipboard, state apprt.ClipboardRequest) !bool {
 	clipboard := self.clipboard_for(clipboard_type)
 	if isnil(clipboard) {
 		return false
 	}
 
-	// TODO(gtk): for paste requests, verify the clipboard has a text format via
-	// gdk.Clipboard.getFormats().containGtype(string); if not, return false so
-	// performable keybinds can pass through.
-	//
-	// TODO(gtk): allocate a Request (reffing self), then
-	// gdk.Clipboard.readTextAsync(..., clipboardReadText, ud) and, on
-	// completion, call core.completeClipboardRequest(state, str, false).
-	_ = state
+	if state.kind == .paste {
+		formats := C.gdk_clipboard_get_formats(clipboard)
+		if isnil(formats) || !C.gdk_content_formats_contain_gtype(formats, g_type_string) {
+			return false
+		}
+	}
+
+	request := &ClipboardReadRequest{
+		surface: self
+		state: state
+	}
+	self.pending_clipboard_reads << request
+	object_ref(self.widget)
+	C.gdk_clipboard_read_text_async(clipboard, unsafe { nil }, GCallback(voidptr(surface_clipboard_read_text_cb)), request)
 	return true
+}
+
+fn surface_clipboard_read_text_cb(source GObject, result GAsyncResult, data voidptr) {
+	if isnil(source) || isnil(data) {
+		return
+	}
+	mut request := unsafe { &ClipboardReadRequest(data) }
+	mut self := unsafe { request.surface }
+	defer {
+		self.finish_clipboard_read(request)
+		object_unref(self.widget)
+	}
+
+	mut read_error := GError(unsafe { nil })
+	text_ptr := C.gdk_clipboard_read_text_finish(GdkClipboard(source), result, &read_error)
+	if !isnil(read_error) {
+		eprintln('failed to read clipboard: ${error_message(read_error)}')
+		C.g_error_free(read_error)
+		return
+	}
+	if isnil(text_ptr) || !self.has_core() {
+		return
+	}
+	defer {
+		C.g_free(text_ptr)
+	}
+	text := unsafe { cstring_to_vstring(text_ptr) }
+	mut surface := self.core_surface
+	surface.complete_clipboard_request(request.state, text, false) or {
+		if err.msg() in ['UnsafePaste', 'UnauthorizedPaste'] {
+			self.show_clipboard_confirmation(request.state, text)
+			return
+		}
+		eprintln('failed to complete clipboard request: ${err}')
+		return
+	}
+	C.g_signal_emit_by_name(self.widget, c'clipboard-read')
+}
+
+fn (mut self SurfaceWidget) finish_clipboard_read(request &ClipboardReadRequest) {
+	for i, pending in self.pending_clipboard_reads {
+		if pending == request {
+			self.pending_clipboard_reads.delete(i)
+			return
+		}
+	}
+}
+
+fn (mut self SurfaceWidget) show_clipboard_confirmation(request apprt.ClipboardRequest, text string) {
+	mut dialog := clipboard_confirmation_dialog_new_for_request(request, text)
+	self.pending_clipboard_dialogs << dialog
+	C.g_signal_connect_data(dialog.dialog.obj, c'confirm', GCallback(voidptr(surface_clipboard_confirmation_confirm_cb)), self, unsafe { nil }, 0)
+	C.g_signal_connect_data(dialog.dialog.obj, c'deny', GCallback(voidptr(surface_clipboard_confirmation_deny_cb)), self, unsafe { nil }, 0)
+	dialog.present(self.widget)
+}
+
+fn (mut self SurfaceWidget) clipboard_dialog_for_object(obj GObject) ?&ClipboardConfirmationDialog {
+	for dialog in self.pending_clipboard_dialogs {
+		if dialog.dialog.obj == obj {
+			return dialog
+		}
+	}
+	return none
+}
+
+fn (mut self SurfaceWidget) finish_clipboard_dialog(dialog &ClipboardConfirmationDialog) {
+	for i, pending in self.pending_clipboard_dialogs {
+		if pending == dialog {
+			mut owned := self.pending_clipboard_dialogs[i]
+			owned.dispose()
+			self.pending_clipboard_dialogs.delete(i)
+			return
+		}
+	}
+}
+
+fn surface_clipboard_confirmation_confirm_cb(obj GObject, remember int, data voidptr) {
+	if isnil(obj) || isnil(data) {
+		return
+	}
+	mut self := unsafe { &SurfaceWidget(data) }
+	mut dialog := self.clipboard_dialog_for_object(obj) or { return }
+	request := dialog.get_request() or { return }
+	text := dialog.text
+	defer {
+		self.finish_clipboard_dialog(dialog)
+	}
+	if !self.has_core() {
+		return
+	}
+	mut surface := self.core_surface
+	if remember != 0 {
+		match request.kind {
+			.osc_52_read {
+				surface.config.clipboard_read = .allow
+			}
+			.osc_52_write {
+				surface.config.clipboard_write = .allow
+			}
+			.paste {}
+		}
+	}
+	surface.complete_clipboard_request(request, text, true) or {
+		eprintln('failed to complete confirmed clipboard request: ${err}')
+	}
+}
+
+fn surface_clipboard_confirmation_deny_cb(obj GObject, remember int, data voidptr) {
+	if isnil(obj) || isnil(data) {
+		return
+	}
+	mut self := unsafe { &SurfaceWidget(data) }
+	mut dialog := self.clipboard_dialog_for_object(obj) or { return }
+	request := dialog.get_request() or { return }
+	defer {
+		self.finish_clipboard_dialog(dialog)
+	}
+	if remember == 0 || !self.has_core() {
+		return
+	}
+	mut surface := self.core_surface
+	match request.kind {
+		.osc_52_read {
+			surface.config.clipboard_read = .deny
+		}
+		.osc_52_write {
+			surface.config.clipboard_write = .deny
+		}
+		.paste {}
+	}
 }
 
 // --- Gtk.Scrollable adjustments -------------------------------------------
@@ -1637,8 +1960,8 @@ pub fn (self &SurfaceWidget) present() {
 	if isnil(self.split_tree) || isnil(self.split_tree.window) {
 		return
 	}
-	C.gtk_window_present(self.split_tree.window.as_window())
-	self.grab_focus()
+	mut window := unsafe { self.split_tree.window }
+	window.present_surface(self)
 }
 
 // toggle_fullscreen requests the container toggle fullscreen. Mirrors
@@ -1692,6 +2015,7 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 	C.gtk_widget_set_focus_on_click(GtkWidget(gl_area), 1)
 	C.gtk_gl_area_set_has_stencil_buffer(gl_area, 0)
 	C.gtk_gl_area_set_has_depth_buffer(gl_area, 0)
+	C.gtk_gl_area_set_allowed_apis(gl_area, gdk_gl_api_gl)
 	box := C.gtk_box_new(0, 0)
 	C.gtk_box_append(box, GtkWidget(gl_area))
 	terminal_page := C.gtk_overlay_new()
@@ -1716,7 +2040,201 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 	C.g_signal_connect_data(w.gl_area, c'unrealize', GCallback(voidptr(surface_glarea_unrealize_cb)), voidptr(w), unsafe { nil }, 0)
 	C.g_signal_connect_data(w.gl_area, c'render', GCallback(voidptr(surface_glarea_render_cb)), voidptr(w), unsafe { nil }, 0)
 	C.g_signal_connect_data(w.gl_area, c'resize', GCallback(voidptr(surface_glarea_resize_cb)), voidptr(w), unsafe { nil }, 0)
+
+	focus := C.gtk_event_controller_focus_new()
+	C.g_signal_connect_data(focus, c'enter', GCallback(voidptr(surface_focus_enter_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(focus, c'leave', GCallback(voidptr(surface_focus_leave_cb)), voidptr(w), unsafe { nil }, 0)
+	C.gtk_widget_add_controller(box, focus)
+
+	key := C.gtk_event_controller_key_new()
+	C.g_signal_connect_data(key, c'key-pressed', GCallback(voidptr(surface_key_pressed_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(key, c'key-released', GCallback(voidptr(surface_key_released_cb)), voidptr(w), unsafe { nil }, 0)
+	C.gtk_widget_add_controller(box, key)
+
+	vertical_scroll := C.gtk_event_controller_scroll_new(gtk_event_controller_scroll_vertical)
+	C.g_signal_connect_data(vertical_scroll, c'scroll', GCallback(voidptr(surface_vertical_scroll_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(vertical_scroll, c'scroll-begin', GCallback(voidptr(surface_vertical_scroll_begin_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(vertical_scroll, c'scroll-end', GCallback(voidptr(surface_vertical_scroll_end_cb)), voidptr(w), unsafe { nil }, 0)
+	C.gtk_widget_add_controller(box, vertical_scroll)
+
+	horizontal_scroll := C.gtk_event_controller_scroll_new(gtk_event_controller_scroll_horizontal)
+	C.g_signal_connect_data(horizontal_scroll, c'scroll', GCallback(voidptr(surface_horizontal_scroll_cb)), voidptr(w), unsafe { nil }, 0)
+	C.gtk_widget_add_controller(box, horizontal_scroll)
+
+	motion := C.gtk_event_controller_motion_new()
+	C.g_signal_connect_data(motion, c'motion', GCallback(voidptr(surface_mouse_motion_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(motion, c'leave', GCallback(voidptr(surface_mouse_leave_cb)), voidptr(w), unsafe { nil }, 0)
+	C.gtk_widget_add_controller(box, motion)
+
+	click := C.gtk_gesture_click_new()
+	C.gtk_gesture_single_set_button(click, 0)
+	C.g_signal_connect_data(click, c'pressed', GCallback(voidptr(surface_mouse_pressed_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(click, c'released', GCallback(voidptr(surface_mouse_released_cb)), voidptr(w), unsafe { nil }, 0)
+	C.gtk_widget_add_controller(box, click)
+
+	C.g_signal_connect_data(w.im_context, c'preedit-start', GCallback(voidptr(surface_im_preedit_start_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(w.im_context, c'preedit-changed', GCallback(voidptr(surface_im_preedit_changed_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(w.im_context, c'preedit-end', GCallback(voidptr(surface_im_preedit_end_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(w.im_context, c'commit', GCallback(voidptr(surface_im_commit_cb)), voidptr(w), unsafe { nil }, 0)
 	return w
+}
+
+fn surface_focus_enter_cb(controller GtkEventControllerFocus, data voidptr) {
+	_ = controller
+	if isnil(data) {
+		return
+	}
+	mut self := unsafe { &SurfaceWidget(data) }
+	self.ec_focus_enter()
+	if !isnil(self.split_tree) {
+		mut tree := unsafe { self.split_tree }
+		tree.prop_surface_focused(mut self)
+	}
+}
+
+fn surface_focus_leave_cb(controller GtkEventControllerFocus, data voidptr) {
+	_ = controller
+	if !isnil(data) {
+		mut self := unsafe { &SurfaceWidget(data) }
+		self.ec_focus_leave()
+	}
+}
+
+fn surface_key_pressed_cb(controller GtkEventControllerKey, keyval u32, keycode u32, state u32, data voidptr) int {
+	if isnil(data) {
+		return 0
+	}
+	event := C.gtk_event_controller_get_current_event(controller)
+	mut self := unsafe { &SurfaceWidget(data) }
+	return b2i(self.ec_key_pressed(event, keyval, keycode, state))
+}
+
+fn surface_key_released_cb(controller GtkEventControllerKey, keyval u32, keycode u32, state u32, data voidptr) {
+	if isnil(data) {
+		return
+	}
+	event := C.gtk_event_controller_get_current_event(controller)
+	mut self := unsafe { &SurfaceWidget(data) }
+	self.ec_key_released(event, keyval, keycode, state)
+}
+
+fn surface_vertical_scroll_begin_cb(controller GtkEventControllerScroll, data voidptr) {
+	_ = controller
+	if !isnil(data) {
+		mut self := unsafe { &SurfaceWidget(data) }
+		self.ec_scroll_vertical_precision_begin()
+	}
+}
+
+fn surface_vertical_scroll_end_cb(controller GtkEventControllerScroll, data voidptr) {
+	_ = controller
+	if !isnil(data) {
+		mut self := unsafe { &SurfaceWidget(data) }
+		self.ec_scroll_vertical_precision_end()
+	}
+}
+
+fn surface_vertical_scroll_cb(controller GtkEventControllerScroll, x f64, y f64, data voidptr) int {
+	_ = controller
+	if isnil(data) {
+		return 0
+	}
+	mut self := unsafe { &SurfaceWidget(data) }
+	return b2i(self.ec_scroll_vertical(x, y))
+}
+
+fn surface_horizontal_scroll_cb(controller GtkEventControllerScroll, x f64, y f64, data voidptr) int {
+	_ = y
+	if isnil(data) || C.gtk_event_controller_scroll_get_unit(controller) != gdk_scroll_unit_surface {
+		return 0
+	}
+	mut self := unsafe { &SurfaceWidget(data) }
+	return b2i(self.ec_scroll_horizontal(x))
+}
+
+fn surface_mouse_motion_cb(controller GtkEventControllerMotion, x f64, y f64, data voidptr) {
+	if isnil(data) {
+		return
+	}
+	event := C.gtk_event_controller_get_current_event(controller)
+	mut self := unsafe { &SurfaceWidget(data) }
+	self.ec_mouse_motion(event, x, y)
+}
+
+fn surface_mouse_leave_cb(controller GtkEventControllerMotion, data voidptr) {
+	if isnil(data) {
+		return
+	}
+	event := C.gtk_event_controller_get_current_event(controller)
+	mut self := unsafe { &SurfaceWidget(data) }
+	self.ec_mouse_leave(event)
+}
+
+fn surface_mouse_pressed_cb(gesture GtkGestureClick, n_press int, x f64, y f64, data voidptr) {
+	_ = n_press
+	if isnil(data) {
+		return
+	}
+	event := C.gtk_event_controller_get_current_event(gesture)
+	button := C.gtk_gesture_single_get_current_button(gesture)
+	mut self := unsafe { &SurfaceWidget(data) }
+	self.gc_mouse_down(event, button, x, y)
+}
+
+fn surface_mouse_released_cb(gesture GtkGestureClick, n_press int, x f64, y f64, data voidptr) {
+	_ = n_press
+	_ = x
+	_ = y
+	if isnil(data) {
+		return
+	}
+	event := C.gtk_event_controller_get_current_event(gesture)
+	button := C.gtk_gesture_single_get_current_button(gesture)
+	mut self := unsafe { &SurfaceWidget(data) }
+	self.gc_mouse_up(event, button)
+}
+
+fn surface_im_preedit_start_cb(context GtkIMContext, data voidptr) {
+	_ = context
+	if !isnil(data) {
+		mut self := unsafe { &SurfaceWidget(data) }
+		self.im_preedit_start()
+	}
+}
+
+fn surface_im_preedit_changed_cb(context GtkIMContext, data voidptr) {
+	if isnil(data) {
+		return
+	}
+	mut text := unsafe { &char(nil) }
+	C.gtk_im_context_get_preedit_string(context, &text, unsafe { nil }, unsafe { nil })
+	defer {
+		if !isnil(text) {
+			C.g_free(text)
+		}
+	}
+	mut preedit := ''
+	if !isnil(text) {
+		preedit = unsafe { cstring_to_vstring(text) }
+	}
+	mut self := unsafe { &SurfaceWidget(data) }
+	self.im_preedit_changed(preedit)
+}
+
+fn surface_im_preedit_end_cb(context GtkIMContext, data voidptr) {
+	_ = context
+	if !isnil(data) {
+		mut self := unsafe { &SurfaceWidget(data) }
+		self.im_preedit_end()
+	}
+}
+
+fn surface_im_commit_cb(context GtkIMContext, text &char, data voidptr) {
+	_ = context
+	if !isnil(data) && !isnil(text) {
+		mut self := unsafe { &SurfaceWidget(data) }
+		self.im_commit(unsafe { cstring_to_vstring(text) })
+	}
 }
 
 fn surface_glarea_realize_cb(area GtkGLArea, data voidptr) {
