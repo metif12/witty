@@ -132,6 +132,12 @@ pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
 		}
 	}
 	links := LinkSet.from_config(configured_links)!
+	custom_shaders := config.custom_shader.clone()!
+	bg_image := if configured_bg_image := config.background_image {
+		configured_bg_image.clone()!
+	} else {
+		none
+	}
 
 	return DerivedConfig{
 		background_opacity: clamp_f64(config.background_opacity, 0.0, 1.0)
@@ -168,8 +174,8 @@ pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
 		search_foreground: config.search_foreground
 		search_selected_background: config.search_selected_background
 		search_selected_foreground: config.search_selected_foreground
-		custom_shaders: config.custom_shader
-		bg_image: config.background_image
+		custom_shaders: custom_shaders
+		bg_image: bg_image
 		bg_image_opacity: config.background_image_opacity
 		bg_image_position: config.background_image_position
 		bg_image_fit: config.background_image_fit
@@ -183,6 +189,8 @@ pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
 
 pub fn (mut c DerivedConfig) deinit() {
 	c.font_features = []
+	c.custom_shaders.items = []
+	c.bg_image = none
 	c.links.deinit()
 }
 

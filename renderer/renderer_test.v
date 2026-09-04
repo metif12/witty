@@ -62,9 +62,26 @@ fn test_renderer_emits_health_transitions_and_dirty_scrollbar() {
 fn test_derived_config_deinit() {
 	mut config := DerivedConfig{
 		font_features: ['liga', 'calt']
+		custom_shaders: configpkg.RepeatablePath{
+			items: [configpkg.Path{ path: '/tmp/shader.glsl' }]
+		}
+		bg_image: configpkg.Path{ path: '/tmp/background.png' }
 	}
 	config.deinit()
 	assert config.font_features.len == 0
+	assert config.custom_shaders.items.len == 0
+	assert config.bg_image == none
+}
+
+fn test_derived_config_owns_shader_path_list() {
+	mut cfg := configpkg.Config.default_config()
+	cfg.custom_shader.items << configpkg.Path{ path: '/tmp/first.glsl' }
+	mut derived := DerivedConfig.init(&cfg)!
+	cfg.custom_shader.items[0].path = '/tmp/changed.glsl'
+	cfg.custom_shader.items << configpkg.Path{ path: '/tmp/second.glsl' }
+	assert derived.custom_shaders.items.len == 1
+	assert derived.custom_shaders.items[0].path == '/tmp/first.glsl'
+	derived.deinit()
 }
 
 fn test_derived_config_compiles_default_links() {
