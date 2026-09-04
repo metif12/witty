@@ -415,3 +415,26 @@ fn test_set_window_background_blur_accepts_null_window() {
 	}
 	ghostty_set_window_background_blur(&app, unsafe { nil })
 }
+
+fn test_core_surface_retains_embedded_macos_option_as_alt() {
+	mut cfg := configpkg.Config.default_config()
+	cfg.macos_option_as_alt = .right
+	mut core_app := CoreApp{}
+	mut app := App{}
+	mut surface := CoreSurface{}
+	surface.init(&cfg, &core_app, &app, unsafe { nil })!
+	assert surface.config.macos_option_as_alt? == .right
+}
+
+fn test_surface_key_translation_mods_honors_explicit_option_as_alt() {
+	$if macos {
+		mut surface := Surface{}
+		surface.core_surface.config.macos_option_as_alt = .true_
+		mods := input.Mods{
+			alt: true
+			sides: input.SideInfo{ alt: .left }
+		}
+		translated := mods_from_int(ghostty_surface_key_translation_mods(&surface, mods_to_int(mods)))
+		assert !translated.alt
+	}
+}

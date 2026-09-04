@@ -758,6 +758,71 @@ fn test_repeatable_readable_io_clear_clone_and_format() {
 	assert values.items.len == 0
 }
 
+fn test_macos_configuration_parse_clone_and_format() {
+	mut cfg := Config.default_config()
+	assert cfg.macos_non_native_fullscreen == .false_
+	assert cfg.macos_window_buttons == .visible
+	assert cfg.macos_titlebar_style == .transparent
+	assert cfg.macos_titlebar_proxy_icon == .visible
+	assert cfg.macos_option_as_alt == none
+	assert cfg.macos_window_shadow
+	assert cfg.macos_hidden == .never
+	assert cfg.macos_auto_secure_input
+	assert cfg.macos_secure_input_indication
+	assert cfg.macos_icon == .official
+	assert cfg.macos_icon_frame == .aluminum
+	assert cfg.macos_shortcuts == .ask
+
+	cfg.load_string('macos-non-native-fullscreen = padded-notch\nmacos-window-buttons = hidden\nmacos-titlebar-style = tabs\nmacos-titlebar-proxy-icon = hidden\nmacos-dock-drop-behavior = new-window\nmacos-option-as-alt = left\nmacos-window-shadow = false\nmacos-hidden = always\nmacos-auto-secure-input = false\nmacos-secure-input-indication = false\nmacos-icon = custom-style\nmacos-custom-icon = /tmp/icon.icns\nmacos-icon-frame = chrome\nmacos-icon-ghost-color = RebeccaPurple\nmacos-icon-screen-color = black, white ,#123456\nmacos-shortcuts = deny\n')
+	assert cfg.diagnostics.len == 0
+	assert cfg.macos_non_native_fullscreen == .padded_notch
+	assert cfg.macos_window_buttons == .hidden
+	assert cfg.macos_titlebar_style == .tabs
+	assert cfg.macos_titlebar_proxy_icon == .hidden
+	assert cfg.macos_dock_drop_behavior == .new_window
+	assert cfg.macos_option_as_alt? == .left
+	assert !cfg.macos_window_shadow
+	assert cfg.macos_hidden == .always
+	assert !cfg.macos_auto_secure_input
+	assert !cfg.macos_secure_input_indication
+	assert cfg.macos_icon == .custom_style
+	assert cfg.macos_custom_icon? == '/tmp/icon.icns'
+	assert cfg.macos_icon_frame == .chrome
+	assert cfg.macos_icon_ghost_color? == ColorRGB{ r: 0x66, g: 0x33, b: 0x99 }
+	colors := cfg.macos_icon_screen_color or { panic('missing icon gradient') }
+	assert colors.colors == [ColorRGB{ r: 0, g: 0, b: 0 }, ColorRGB{
+		r: 0xff
+		g: 0xff
+		b: 0xff
+	}, ColorRGB{ r: 0x12, g: 0x34, b: 0x56 }]
+
+	cloned := cfg.clone()
+	assert cloned.macos_icon_screen_color?.colors == colors.colors
+	formatted := cfg.format_config(true)
+	assert formatted.contains('macos-non-native-fullscreen = padded-notch\n')
+	assert formatted.contains('macos-option-as-alt = left\n')
+	assert formatted.contains('macos-icon = custom-style\n')
+	assert formatted.contains('macos-icon-screen-color = #000000,#ffffff,#123456\n')
+
+	mut roundtrip := Config.default_config()
+	roundtrip.load_string(formatted)
+	assert roundtrip.diagnostics.len == 0
+	assert roundtrip.macos_icon_screen_color?.colors == colors.colors
+}
+
+fn test_macos_color_list_resets_and_limits_entries() {
+	mut colors := ColorList{}
+	colors.parse_cli('black,white')!
+	colors.parse_cli('#123456')!
+	assert colors.colors == [ColorRGB{ r: 0x12, g: 0x34, b: 0x56 }]
+
+	colors.parse_cli(['black'].repeat(65).join(',')) or {
+		assert err.msg() == 'invalid value'
+		return
+	}
+	assert false, 'expected the 64-color limit'
+}
+
 fn test_repeatable_command_rejects_missing_and_invalid_fields() {
 	mut commands := RepeatableCommand{}
 	commands.parse_cli('title:Foo') or {

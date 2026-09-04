@@ -4195,9 +4195,25 @@ pub mut:
 	background  ColorRGB = ColorRGB{ r: 0x28, g: 0x2C, b: 0x34 }
 	palette     Palette = Palette.default_palette()
 	diagnostics []Diagnostic
+	// macOS window, keyboard, security, icon, and automation behavior.
+	macos_non_native_fullscreen NonNativeFullscreen = .false_
+	macos_window_buttons        MacWindowButtons = .visible
+	macos_titlebar_style        MacTitlebarStyle = .transparent
+	macos_titlebar_proxy_icon   MacTitlebarProxyIcon = .visible
 	// Controls the windowing behavior when dropping a file onto the macOS dock
 	// icon. Defaults to `new-tab`.
-	macos_dock_drop_behavior MacOSDockDropBehavior = .new_tab
+	macos_dock_drop_behavior      MacOSDockDropBehavior = .new_tab
+	macos_option_as_alt           ?inputpkg.OptionAsAlt
+	macos_window_shadow           bool = true
+	macos_hidden                  MacHidden = .never
+	macos_auto_secure_input       bool = true
+	macos_secure_input_indication bool = true
+	macos_icon                    MacAppIcon = .official
+	macos_custom_icon             ?string
+	macos_icon_frame              MacAppIconFrame = .aluminum
+	macos_icon_ghost_color        ?ColorRGB
+	macos_icon_screen_color       ?ColorList
+	macos_shortcuts               MacShortcuts = .ask
 	// GTK single-instance behavior. `detect` chooses at finalize time.
 	gtk_single_instance GtkSingleInstance = .detect
 	// Linux systemd cgroup isolation and per-terminal limits.
@@ -4245,6 +4261,94 @@ pub mut:
 pub enum MacOSDockDropBehavior {
 	new_tab
 	new_window
+}
+
+pub enum NonNativeFullscreen {
+	false_
+	true_
+	visible_menu
+	padded_notch
+}
+
+pub enum MacWindowButtons {
+	visible
+	hidden
+}
+
+pub enum MacTitlebarStyle {
+	native
+	transparent
+	tabs
+	hidden
+}
+
+pub enum MacTitlebarProxyIcon {
+	visible
+	hidden
+}
+
+pub enum MacHidden {
+	never
+	always
+}
+
+pub enum MacAppIcon {
+	official
+	blueprint
+	chalkboard
+	microchip
+	glass
+	holographic
+	paper
+	retro
+	xray
+	custom
+	custom_style
+}
+
+pub enum MacAppIconFrame {
+	aluminum
+	beige
+	plastic
+	chrome
+}
+
+pub enum MacShortcuts {
+	allow
+	deny
+	ask
+}
+
+pub struct ColorList {
+pub mut:
+	colors []ColorRGB
+}
+
+pub fn (mut c ColorList) parse_cli(input ?string) ! {
+	value := input or { return error('value required') }
+	if value.len == 0 {
+		return error('value required')
+	}
+	c.colors = []
+	for raw in value.split(',') {
+		trimmed := raw.trim(' \t')
+		if trimmed.len == 0 {
+			continue
+		}
+		if c.colors.len == 64 {
+			return error('invalid value')
+		}
+		c.colors << color_parse_cli(trimmed)!
+	}
+	if c.colors.len == 0 {
+		return error('invalid value')
+	}
+}
+
+pub fn (c ColorList) clone() ColorList {
+	return ColorList{
+		colors: c.colors.clone()
+	}
 }
 
 // GtkSingleInstance controls GTK single-instance behavior.
@@ -4936,6 +5040,9 @@ pub fn (c Config) clone() Config {
 	copy.config_file = c.config_file.clone() or { RepeatablePath{} }
 	copy.gtk_custom_css = c.gtk_custom_css.clone() or { RepeatablePath{} }
 	copy.input = c.input.clone()
+	if colors := c.macos_icon_screen_color {
+		copy.macos_icon_screen_color = colors.clone()
+	}
 	copy.env = RepeatableStringMap{
 		entries: c.env.entries.clone()
 	}
@@ -7616,9 +7723,59 @@ fn (mut c Config) apply_kv(key string, value string) {
 				}
 			}
 		}
+		'macos-non-native-fullscreen' {
+			c.macos_non_native_fullscreen = match value {
+				'' { .false_ }
+				'false' { .false_ }
+				'true' { .true_ }
+				'visible-menu' { .visible_menu }
+				'padded-notch' { .padded_notch }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'macos-window-buttons' {
+			c.macos_window_buttons = match value {
+				'' { .visible }
+				'visible' { .visible }
+				'hidden' { .hidden }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'macos-titlebar-style' {
+			c.macos_titlebar_style = match value {
+				'' { .transparent }
+				'native' { .native }
+				'transparent' { .transparent }
+				'tabs' { .tabs }
+				'hidden' { .hidden }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'macos-titlebar-proxy-icon' {
+			c.macos_titlebar_proxy_icon = match value {
+				'' { .visible }
+				'visible' { .visible }
+				'hidden' { .hidden }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
 		'macos-dock-drop-behavior' {
 			// Ghostty 1.3 renamed the "window" option to "new-window".
-			if value == 'window' {
+			if value.len == 0 {
+				c.macos_dock_drop_behavior = .new_tab
+			} else if value == 'window' {
 				c.macos_dock_drop_behavior = .new_window
 			} else {
 				match value {
@@ -7628,7 +7785,128 @@ fn (mut c Config) apply_kv(key string, value string) {
 					'new-window' {
 						c.macos_dock_drop_behavior = .new_window
 					}
-					else {}
+					else {
+						c.invalid_config_value(key, value)
+						return
+					}
+				}
+			}
+		}
+		'macos-option-as-alt' {
+			if value.len == 0 {
+				c.macos_option_as_alt = none
+			} else {
+				c.macos_option_as_alt = match value {
+					'false' { inputpkg.OptionAsAlt.false_ }
+					'true' { inputpkg.OptionAsAlt.true_ }
+					'left' { inputpkg.OptionAsAlt.left }
+					'right' { inputpkg.OptionAsAlt.right }
+					else {
+						c.invalid_config_value(key, value)
+						return
+					}
+				}
+			}
+		}
+		'macos-window-shadow' {
+			c.macos_window_shadow = if value.len == 0 {
+				true
+			} else {
+				c.parse_config_bool(key, value) or { return }
+			}
+		}
+		'macos-hidden' {
+			c.macos_hidden = match value {
+				'' { .never }
+				'never' { .never }
+				'always' { .always }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'macos-auto-secure-input' {
+			c.macos_auto_secure_input = if value.len == 0 {
+				true
+			} else {
+				c.parse_config_bool(key, value) or { return }
+			}
+		}
+		'macos-secure-input-indication' {
+			c.macos_secure_input_indication = if value.len == 0 {
+				true
+			} else {
+				c.parse_config_bool(key, value) or { return }
+			}
+		}
+		'macos-icon' {
+			c.macos_icon = match value {
+				'' { .official }
+				'official' { .official }
+				'blueprint' { .blueprint }
+				'chalkboard' { .chalkboard }
+				'microchip' { .microchip }
+				'glass' { .glass }
+				'holographic' { .holographic }
+				'paper' { .paper }
+				'retro' { .retro }
+				'xray' { .xray }
+				'custom' { .custom }
+				'custom-style' { .custom_style }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'macos-custom-icon' {
+			c.macos_custom_icon = if value.len == 0 { none } else { value }
+		}
+		'macos-icon-frame' {
+			c.macos_icon_frame = match value {
+				'' { .aluminum }
+				'aluminum' { .aluminum }
+				'beige' { .beige }
+				'plastic' { .plastic }
+				'chrome' { .chrome }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'macos-icon-ghost-color' {
+			if value.len == 0 {
+				c.macos_icon_ghost_color = none
+			} else {
+				c.macos_icon_ghost_color = color_parse_cli(value) or {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'macos-icon-screen-color' {
+			if value.len == 0 {
+				c.macos_icon_screen_color = none
+			} else {
+				mut colors := ColorList{}
+				colors.parse_cli(value) or {
+					c.invalid_config_value(key, value)
+					return
+				}
+				c.macos_icon_screen_color = colors
+			}
+		}
+		'macos-shortcuts' {
+			c.macos_shortcuts = match value {
+				'' { .ask }
+				'allow' { .allow }
+				'deny' { .deny }
+				'ask' { .ask }
+				else {
+					c.invalid_config_value(key, value)
+					return
 				}
 			}
 		}

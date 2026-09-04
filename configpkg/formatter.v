@@ -428,8 +428,45 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	add_group(mut result, 'osc-color-report-format', [
 		osc_color_report_format_string(c.osc_color_report_format),
 	])
+	add_group(mut result, 'macos-non-native-fullscreen', [
+		enum_config_string(c.macos_non_native_fullscreen.str()),
+	])
+	add_group(mut result, 'macos-window-buttons', [
+		enum_config_string(c.macos_window_buttons.str()),
+	])
+	add_group(mut result, 'macos-titlebar-style', [
+		enum_config_string(c.macos_titlebar_style.str()),
+	])
+	add_group(mut result, 'macos-titlebar-proxy-icon', [
+		enum_config_string(c.macos_titlebar_proxy_icon.str()),
+	])
 	add_group(mut result, 'macos-dock-drop-behavior', [
 		enum_config_string(c.macos_dock_drop_behavior.str()),
+	])
+	add_group(mut result, 'macos-option-as-alt', [
+		optional_option_as_alt_string(c.macos_option_as_alt),
+	])
+	add_group(mut result, 'macos-window-shadow', [bool_string(c.macos_window_shadow)])
+	add_group(mut result, 'macos-hidden', [enum_config_string(c.macos_hidden.str())])
+	add_group(mut result, 'macos-auto-secure-input', [
+		bool_string(c.macos_auto_secure_input),
+	])
+	add_group(mut result, 'macos-secure-input-indication', [
+		bool_string(c.macos_secure_input_indication),
+	])
+	add_group(mut result, 'macos-icon', [enum_config_string(c.macos_icon.str())])
+	add_group(mut result, 'macos-custom-icon', [optional_string(c.macos_custom_icon)])
+	add_group(mut result, 'macos-icon-frame', [
+		enum_config_string(c.macos_icon_frame.str()),
+	])
+	add_group(mut result, 'macos-icon-ghost-color', [
+		optional_color_string(c.macos_icon_ghost_color),
+	])
+	add_group(mut result, 'macos-icon-screen-color', [
+		optional_color_list_string(c.macos_icon_screen_color),
+	])
+	add_group(mut result, 'macos-shortcuts', [
+		enum_config_string(c.macos_shortcuts.str()),
 	])
 	add_group(mut result, 'linux-cgroup', [enum_config_string(c.linux_cgroup.str())])
 	add_group(mut result, 'linux-cgroup-memory-limit', [
@@ -604,6 +641,14 @@ fn optional_terminal_color_string(value ?TerminalColor) string {
 
 fn optional_color_string(value ?ColorRGB) string {
 	return if actual := value { format_color(actual) } else { '' }
+}
+
+fn optional_color_list_string(value ?ColorList) string {
+	return if actual := value { actual.colors.map(format_color(it)).join(',') } else { '' }
+}
+
+fn optional_option_as_alt_string(value ?input.OptionAsAlt) string {
+	return if actual := value { enum_config_string(actual.str()) } else { '' }
 }
 
 fn optional_bold_color_string(value ?BoldColor) string {

@@ -1457,10 +1457,11 @@ pub fn ghostty_surface_set_occlusion(mut surface Surface, visible bool) {
 // `_key` function -- the original mods should be used for that.
 pub fn ghostty_surface_key_translation_mods(surface &Surface, mods_raw int) int {
 	mods := mods_from_int(mods_raw)
-	// Apply option-as-alt translation based on detected keyboard layout.
-	result := mods.translation(
-		surface.app.keyboard_layout().detect_option_as_alt(),
-	)
+	// An explicit surface setting wins; otherwise use the active layout.
+	option_as_alt := surface.core_surface.config.macos_option_as_alt or {
+		surface.app.keyboard_layout().detect_option_as_alt()
+	}
+	result := mods.translation(option_as_alt)
 	return mods_to_int(result)
 }
 

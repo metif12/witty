@@ -53,6 +53,26 @@ fn test_derived_config_preserves_complete_font_configuration() {
 	assert derived.font.freetype_load_flags.force_autohint
 }
 
+fn test_derived_config_preserves_macos_surface_options() {
+	mut cfg := configpkg.Config.default_config()
+	cfg.load_string('macos-non-native-fullscreen = visible-menu\nmacos-option-as-alt = right\n')
+	assert cfg.diagnostics.len == 0
+	derived := DerivedConfig.from_config(&cfg)!
+	assert derived.macos_non_native_fullscreen == .visible_menu
+	assert derived.macos_option_as_alt? == .right
+}
+
+fn test_toggle_fullscreen_uses_configured_macos_mode() {
+	mut runtime := RuntimeApp{ actions_handled: true }
+	mut surf := make_test_surface()
+	surf.rt_app = &runtime
+	surf.config.macos_non_native_fullscreen = .padded_notch
+	assert surf.perform_binding_action(input.Action.new(.toggle_fullscreen))!
+	assert runtime.actions.len == 1
+	assert runtime.actions[0].kind == .toggle_fullscreen
+	assert runtime.actions[0].fullscreen_mode == .macos_non_native_padded_notch
+}
+
 fn test_surface_key_binding_applies_modifier_remap() {
 	mut cfg := configpkg.Config.default_config()
 	cfg.keybind.set = input.Set{}

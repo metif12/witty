@@ -195,8 +195,12 @@ pub mut:
 }
 
 pub fn (mut s CoreSurface) init(config voidptr, core_app &CoreApp, app &App, surface voidptr) ! {
-	// stub: initialize core surface
-	_ = config
+	// Retain the surface-specific configuration used by the embedded ABI.
+	if !isnil(config) {
+		cfg := unsafe { &configpkg.Config(config) }
+		s.config.macos_option_as_alt = cfg.macos_option_as_alt
+		s.config.selection_word_chars = cfg.selection_word_chars.codepoints.map(rune(it).str()).join('')
+	}
 	_ = core_app
 	_ = app
 	_ = surface
@@ -418,7 +422,7 @@ pub mut:
 pub struct SurfaceConfig {
 pub mut:
 	// macos-option-as-alt setting for this surface.
-	macos_option_as_alt ?voidptr
+	macos_option_as_alt ?input.OptionAsAlt
 	// Selection word boundary characters.
 	selection_word_chars string
 }

@@ -1725,6 +1725,7 @@ pub mut:
 	actions_handled bool
 	user_data       voidptr = unsafe { nil }
 	action_fn       RuntimeAppActionFn = unsafe { nil }
+	keyboard_layout input.KeyboardLayout
 }
 
 fn (mut r RuntimeApp) perform_action(action AppAction) !bool {
@@ -2301,6 +2302,8 @@ pub mut:
 	mouse_hide_while_typing          bool
 	mouse_reporting                  bool
 	mouse_shift_capture              MouseShiftCapture
+	macos_non_native_fullscreen      configpkg.NonNativeFullscreen
+	macos_option_as_alt              ?input.OptionAsAlt
 	selection_clear_on_copy          bool
 	selection_clear_on_typing        bool
 	selection_word_chars             []u32
@@ -2402,6 +2405,8 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 		mouse_hide_while_typing: config.mouse_hide_while_typing
 		mouse_reporting: config.mouse_reporting
 		mouse_shift_capture: unsafe { MouseShiftCapture(config.mouse_shift_capture) }
+		macos_non_native_fullscreen: config.macos_non_native_fullscreen
+		macos_option_as_alt: config.macos_option_as_alt
 		selection_clear_on_copy: config.selection_clear_on_copy
 		selection_clear_on_typing: config.selection_clear_on_typing
 		selection_word_chars: config.selection_word_chars.codepoints.clone()
@@ -4205,10 +4210,16 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			})!
 		}
 		.toggle_fullscreen {
+			mode := match self.config.macos_non_native_fullscreen {
+				.false_ { FullscreenMode.native }
+				.true_ { FullscreenMode.macos_non_native }
+				.visible_menu { FullscreenMode.macos_non_native_visible_menu }
+				.padded_notch { FullscreenMode.macos_non_native_padded_notch }
+			}
 			return self.rt_app.perform_action(AppAction{
 				kind: .toggle_fullscreen
 				target: &self
-				fullscreen_mode: .native
+				fullscreen_mode: mode
 			})!
 		}
 		.toggle_window_decorations {
@@ -5280,6 +5291,13 @@ fn (mut self Surface) handle_binding_entry(event KeyEvent, entry &input.SetEntry
 fn (mut self Surface) encode_key(event KeyEvent) ?WriteReq {
 	t := self.renderer_state.terminal
 	flags := t.screens.active.kitty_keyboard.current()
+	option_as_alt := self.config.macos_option_as_alt or {
+		if !self.mouse.mods.alt {
+			input.OptionAsAlt.false_
+		} else {
+			self.rt_app.keyboard_layout.detect_option_as_alt()
+		}
+	}
 	encoded := input.encode(event, input.Options{
 		cursor_key_application: t.modes.get(.cursor_keys)
 		keypad_key_application: t.modes.get(.keypad_keys)
@@ -5292,6 +5310,7 @@ fn (mut self Surface) encode_key(event KeyEvent) ?WriteReq {
 			report_all: flags & 8 != 0
 			report_associated: flags & 16 != 0
 		}
+		macos_option_as_alt: option_as_alt
 	})
 	if encoded.len == 0 {
 		return none
