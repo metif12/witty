@@ -352,11 +352,7 @@ fn surface_scrolled_window_dispose(obj voidptr) {
 		self.dispose()
 	}
 	C.gtk_widget_dispose_template(obj, g_surface_scrolled_window_type)
-	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
-	if !isnil(parent_class.dispose) {
-		f := DisposeFn(parent_class.dispose)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_dispose(obj)
 }
 
 // surface_scrolled_window_finalize chains up. Mirrors `finalize`.
@@ -368,11 +364,7 @@ fn surface_scrolled_window_finalize(obj voidptr) {
 		self.surface = unsafe { nil }
 		priv.wrapper = unsafe { nil }
 	}
-	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
-	if !isnil(parent_class.finalize) {
-		f := FinalizeFn(parent_class.finalize)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_finalize(obj)
 }
 
 // surface_scrolled_window_class_init installs the template, wires the
@@ -390,11 +382,10 @@ fn surface_scrolled_window_class_init(klass voidptr, class_data voidptr) {
 	// Object properties.
 	g_surface_scrolled_window_pspec_config = C.g_param_spec_object(c'config', c'config', c'The configuration', config_get_type(), g_param_readwrite)
 	g_surface_scrolled_window_pspec_surface = C.g_param_spec_object(c'surface', c'surface', c'The embedded surface', terminal_surface_get_type(), g_param_readwrite)
-	mut obj_class := &C.GObjectClass(klass)
-	obj_class.get_property = voidptr(surface_scrolled_window_get_property)
-	obj_class.set_property = voidptr(surface_scrolled_window_set_property)
-	obj_class.dispose = voidptr(surface_scrolled_window_dispose)
-	obj_class.finalize = voidptr(surface_scrolled_window_finalize)
+	C.witty_gobject_class_set_get_property(klass, voidptr(surface_scrolled_window_get_property))
+	C.witty_gobject_class_set_set_property(klass, voidptr(surface_scrolled_window_set_property))
+	C.witty_gobject_class_set_dispose(klass, voidptr(surface_scrolled_window_dispose))
+	C.witty_gobject_class_set_finalize(klass, voidptr(surface_scrolled_window_finalize))
 	C.g_object_class_install_property(klass, surface_scrolled_window_prop_config, g_surface_scrolled_window_pspec_config)
 	C.g_object_class_install_property(klass, surface_scrolled_window_prop_surface, g_surface_scrolled_window_pspec_surface)
 }

@@ -85,20 +85,15 @@ fn config_finalize_object(obj voidptr) {
 		wrapper.obj = unsafe { nil }
 		priv.wrapper = unsafe { nil }
 	}
-	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
-	if !isnil(parent_class.finalize) {
-		f := FinalizeFn(parent_class.finalize)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_finalize(obj)
 }
 
 fn config_class_init(klass voidptr, class_data voidptr) {
 	_ = class_data
 	g_config_pspec_diagnostics_buffer = C.g_param_spec_object(c'diagnostics-buffer', c'diagnostics-buffer', c'The formatted configuration diagnostics', C.gtk_text_buffer_get_type(), g_param_readable)
 	g_config_pspec_has_diagnostics = C.g_param_spec_boolean(c'has-diagnostics', c'has-diagnostics', c'Whether configuration diagnostics exist', 0, g_param_readable)
-	mut obj_class := &C.GObjectClass(klass)
-	obj_class.get_property = voidptr(config_get_property)
-	obj_class.finalize = voidptr(config_finalize_object)
+	C.witty_gobject_class_set_get_property(klass, voidptr(config_get_property))
+	C.witty_gobject_class_set_finalize(klass, voidptr(config_finalize_object))
 	C.g_object_class_install_property(klass, config_prop_diagnostics_buffer, g_config_pspec_diagnostics_buffer)
 	C.g_object_class_install_property(klass, config_prop_has_diagnostics, g_config_pspec_has_diagnostics)
 }

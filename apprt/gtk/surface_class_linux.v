@@ -742,10 +742,6 @@ fn terminal_surface_scrollable_init(iface voidptr, data voidptr) {
 	_ = data
 }
 
-fn terminal_surface_parent_object_class(obj voidptr) &C.GObjectClass {
-	return &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
-}
-
 fn terminal_surface_dispose(obj voidptr) {
 	priv := terminal_surface_priv(obj)
 	if !isnil(priv.wrapper) {
@@ -793,11 +789,7 @@ fn terminal_surface_dispose(obj voidptr) {
 			self.im_context = unsafe { nil }
 		}
 	}
-	parent_class := terminal_surface_parent_object_class(obj)
-	if !isnil(parent_class.dispose) {
-		f := DisposeFn(parent_class.dispose)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_dispose(obj)
 }
 
 fn terminal_surface_finalize(obj voidptr) {
@@ -827,20 +819,15 @@ fn terminal_surface_finalize(obj voidptr) {
 		self.widget = unsafe { nil }
 		priv.wrapper = unsafe { nil }
 	}
-	parent_class := terminal_surface_parent_object_class(obj)
-	if !isnil(parent_class.finalize) {
-		f := FinalizeFn(parent_class.finalize)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_finalize(obj)
 }
 
 fn terminal_surface_class_init(klass voidptr, class_data voidptr) {
 	_ = class_data
-	mut obj_class := &C.GObjectClass(klass)
-	obj_class.get_property = voidptr(terminal_surface_get_property)
-	obj_class.set_property = voidptr(terminal_surface_set_property)
-	obj_class.dispose = voidptr(terminal_surface_dispose)
-	obj_class.finalize = voidptr(terminal_surface_finalize)
+	C.witty_gobject_class_set_get_property(klass, voidptr(terminal_surface_get_property))
+	C.witty_gobject_class_set_set_property(klass, voidptr(terminal_surface_set_property))
+	C.witty_gobject_class_set_dispose(klass, voidptr(terminal_surface_dispose))
+	C.witty_gobject_class_set_finalize(klass, voidptr(terminal_surface_finalize))
 	nil_str := &char(unsafe { nil })
 	readwrite := g_param_readwrite | surface_param_static_strings
 	readable := g_param_readable | surface_param_static_strings

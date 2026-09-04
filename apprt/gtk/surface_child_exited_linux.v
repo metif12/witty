@@ -262,11 +262,7 @@ fn surface_child_exited_dispose(obj voidptr) {
 	if adw_supports_banner() {
 		C.gtk_widget_dispose_template(obj, g_surface_child_exited_type)
 	}
-	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
-	if !isnil(parent_class.dispose) {
-		f := DisposeFn(parent_class.dispose)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_dispose(obj)
 }
 
 // surface_child_exited_finalize releases the private boxed data and chains up.
@@ -277,11 +273,7 @@ fn surface_child_exited_finalize(obj voidptr) {
 		child_exited_boxed_free(priv.data)
 		priv.data = unsafe { nil }
 	}
-	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
-	if !isnil(parent_class.finalize) {
-		f := FinalizeFn(parent_class.finalize)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_finalize(obj)
 }
 
 // surface_child_exited_class_init installs the template, binds the `banner`
@@ -289,9 +281,8 @@ fn surface_child_exited_finalize(obj voidptr) {
 // and `close-request` signal, and overrides the get/set/dispose/finalize
 // vfuncs. Mirrors the ghostty `Class.init`.
 fn surface_child_exited_class_init(klass voidptr, class_data voidptr) {
-	mut obj_class := &C.GObjectClass(klass)
-	obj_class.dispose = voidptr(surface_child_exited_dispose)
-	obj_class.finalize = voidptr(surface_child_exited_finalize)
+	C.witty_gobject_class_set_dispose(klass, voidptr(surface_child_exited_dispose))
+	C.witty_gobject_class_set_finalize(klass, voidptr(surface_child_exited_finalize))
 
 	if adw_supports_banner() {
 		bytes := C.g_bytes_new_static(surface_child_exited_ui.str, usize(surface_child_exited_ui.len))
@@ -307,8 +298,8 @@ fn surface_child_exited_class_init(klass voidptr, class_data voidptr) {
 
 		// Property: data (the GhosttyApprtChildExited boxed type).
 		g_surface_child_exited_pspec_data = C.g_param_spec_boxed(c'data', c'data', c'The child-exited data', child_exited_boxed_get_type(), g_param_readwrite)
-		obj_class.get_property = voidptr(surface_child_exited_get_property)
-		obj_class.set_property = voidptr(surface_child_exited_set_property)
+		C.witty_gobject_class_set_get_property(klass, voidptr(surface_child_exited_get_property))
+		C.witty_gobject_class_set_set_property(klass, voidptr(surface_child_exited_set_property))
 		C.g_object_class_install_property(klass, surface_child_exited_prop_data, g_surface_child_exited_pspec_data)
 	}
 

@@ -178,10 +178,6 @@ fn split_tree_set_property(obj voidptr, property_id u32, value voidptr, pspec vo
 	}
 }
 
-fn split_tree_parent_object_class(obj voidptr) &C.GObjectClass {
-	return &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
-}
-
 fn split_tree_dispose(obj voidptr) {
 	priv := split_tree_priv(obj)
 	if !isnil(priv.wrapper) {
@@ -196,11 +192,7 @@ fn split_tree_dispose(obj voidptr) {
 			C.adw_bin_set_child(self.tree_bin, GtkWidget(unsafe { nil }))
 		}
 	}
-	parent_class := split_tree_parent_object_class(obj)
-	if !isnil(parent_class.dispose) {
-		f := DisposeFn(parent_class.dispose)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_dispose(obj)
 }
 
 fn split_tree_finalize(obj voidptr) {
@@ -219,22 +211,17 @@ fn split_tree_finalize(obj voidptr) {
 		self.tree_bin = unsafe { nil }
 		priv.wrapper = unsafe { nil }
 	}
-	parent_class := split_tree_parent_object_class(obj)
-	if !isnil(parent_class.finalize) {
-		f := FinalizeFn(parent_class.finalize)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_finalize(obj)
 }
 
 fn split_tree_class_init(klass voidptr, class_data voidptr) {
 	_ = class_data
 	_ = terminal_surface_get_type()
 	tree_type := surface_tree_get_type()
-	mut obj_class := &C.GObjectClass(klass)
-	obj_class.get_property = voidptr(split_tree_get_property)
-	obj_class.set_property = voidptr(split_tree_set_property)
-	obj_class.dispose = voidptr(split_tree_dispose)
-	obj_class.finalize = voidptr(split_tree_finalize)
+	C.witty_gobject_class_set_get_property(klass, voidptr(split_tree_get_property))
+	C.witty_gobject_class_set_set_property(klass, voidptr(split_tree_set_property))
+	C.witty_gobject_class_set_dispose(klass, voidptr(split_tree_dispose))
+	C.witty_gobject_class_set_finalize(klass, voidptr(split_tree_finalize))
 	readable := g_param_readable | split_tree_param_static_strings
 	readwrite := g_param_readwrite | split_tree_param_static_strings
 	nil_str := &char(unsafe { nil })

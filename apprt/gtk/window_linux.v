@@ -340,10 +340,6 @@ fn window_set_property(obj voidptr, property_id u32, value voidptr, pspec voidpt
 	}
 }
 
-fn window_parent_object_class(obj voidptr) &C.GObjectClass {
-	return &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
-}
-
 fn window_dispose_object(obj voidptr) {
 	priv := window_priv(obj)
 	if !isnil(priv.wrapper) {
@@ -351,11 +347,7 @@ fn window_dispose_object(obj voidptr) {
 		self.dispose_resources()
 	}
 	C.adw_application_window_set_content(AdwApplicationWindow(obj), unsafe { nil })
-	parent_class := window_parent_object_class(obj)
-	if !isnil(parent_class.dispose) {
-		f := DisposeFn(parent_class.dispose)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_dispose(obj)
 }
 
 fn window_finalize_object(obj voidptr) {
@@ -366,22 +358,17 @@ fn window_finalize_object(obj voidptr) {
 		self.obj = unsafe { nil }
 		priv.wrapper = unsafe { nil }
 	}
-	parent_class := window_parent_object_class(obj)
-	if !isnil(parent_class.finalize) {
-		f := FinalizeFn(parent_class.finalize)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_finalize(obj)
 }
 
 fn window_class_init(klass voidptr, class_data voidptr) {
 	_ = class_data
 	_ = terminal_surface_get_type()
 	_ = config_get_type()
-	mut obj_class := &C.GObjectClass(klass)
-	obj_class.get_property = voidptr(window_get_property)
-	obj_class.set_property = voidptr(window_set_property)
-	obj_class.dispose = voidptr(window_dispose_object)
-	obj_class.finalize = voidptr(window_finalize_object)
+	C.witty_gobject_class_set_get_property(klass, voidptr(window_get_property))
+	C.witty_gobject_class_set_set_property(klass, voidptr(window_set_property))
+	C.witty_gobject_class_set_dispose(klass, voidptr(window_dispose_object))
+	C.witty_gobject_class_set_finalize(klass, voidptr(window_finalize_object))
 	readable := g_param_readable | window_param_static_strings
 	readwrite := g_param_readwrite | window_param_static_strings
 	nil_str := &char(unsafe { nil })

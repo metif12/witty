@@ -116,11 +116,7 @@ fn close_confirmation_dialog_set_property(obj voidptr, property_id u32, value vo
 // parent. Mirrors the `dispose` vfunc.
 fn close_confirmation_dialog_dispose(obj voidptr) {
 	C.gtk_widget_dispose_template(obj, g_close_confirmation_dialog_type)
-	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
-	if !isnil(parent_class.dispose) {
-		f := DisposeFn(parent_class.dispose)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_dispose(obj)
 }
 
 // close_confirmation_dialog_class_init installs the template, the `target`
@@ -136,10 +132,9 @@ fn close_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
 
 	// Property: target (enum, modeled as int).
 	pspec := C.g_param_spec_int(c'target', c'target', c'The close target', 0, 3, 0, g_param_readwrite)
-	mut obj_class := &C.GObjectClass(klass)
-	obj_class.get_property = voidptr(close_confirmation_dialog_get_property)
-	obj_class.set_property = voidptr(close_confirmation_dialog_set_property)
-	obj_class.dispose = voidptr(close_confirmation_dialog_dispose)
+	C.witty_gobject_class_set_get_property(klass, voidptr(close_confirmation_dialog_get_property))
+	C.witty_gobject_class_set_set_property(klass, voidptr(close_confirmation_dialog_set_property))
+	C.witty_gobject_class_set_dispose(klass, voidptr(close_confirmation_dialog_dispose))
 	C.g_object_class_install_property(klass, close_confirmation_prop_target, pspec)
 
 	// Signals: close-request, cancel (both void, no params).

@@ -205,21 +205,13 @@ fn global_shortcuts_notify_config_cb(obj voidptr, pspec voidptr, data voidptr) {
 	}
 }
 
-fn global_shortcuts_parent_object_class(obj voidptr) &C.GObjectClass {
-	return &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
-}
-
 fn global_shortcuts_dispose_object(obj voidptr) {
 	priv := global_shortcuts_priv(obj)
 	if !isnil(priv.wrapper) {
 		mut self := unsafe { &GlobalShortcuts(priv.wrapper) }
 		self.dispose_resources()
 	}
-	parent_class := global_shortcuts_parent_object_class(obj)
-	if !isnil(parent_class.dispose) {
-		f := DisposeFn(parent_class.dispose)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_dispose(obj)
 }
 
 fn global_shortcuts_finalize_object(obj voidptr) {
@@ -229,21 +221,16 @@ fn global_shortcuts_finalize_object(obj voidptr) {
 		self.obj = unsafe { nil }
 		priv.wrapper = unsafe { nil }
 	}
-	parent_class := global_shortcuts_parent_object_class(obj)
-	if !isnil(parent_class.finalize) {
-		f := FinalizeFn(parent_class.finalize)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_finalize(obj)
 }
 
 fn global_shortcuts_class_init(klass voidptr, class_data voidptr) {
 	_ = class_data
 	_ = config_get_type()
-	mut obj_class := &C.GObjectClass(klass)
-	obj_class.get_property = voidptr(global_shortcuts_get_property)
-	obj_class.set_property = voidptr(global_shortcuts_set_property)
-	obj_class.dispose = voidptr(global_shortcuts_dispose_object)
-	obj_class.finalize = voidptr(global_shortcuts_finalize_object)
+	C.witty_gobject_class_set_get_property(klass, voidptr(global_shortcuts_get_property))
+	C.witty_gobject_class_set_set_property(klass, voidptr(global_shortcuts_set_property))
+	C.witty_gobject_class_set_dispose(klass, voidptr(global_shortcuts_dispose_object))
+	C.witty_gobject_class_set_finalize(klass, voidptr(global_shortcuts_finalize_object))
 	readwrite := g_param_readwrite | global_shortcuts_param_static_strings
 	nil_str := &char(unsafe { nil })
 	g_global_shortcuts_pspec_config = C.g_param_spec_object(c'config', nil_str, nil_str, config_get_type(), readwrite)

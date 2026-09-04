@@ -120,11 +120,7 @@ fn config_errors_dialog_dispose(obj voidptr) {
 		priv.config = unsafe { nil }
 	}
 	C.gtk_widget_dispose_template(obj, g_config_errors_dialog_type)
-	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
-	if !isnil(parent_class.dispose) {
-		f := DisposeFn(parent_class.dispose)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_dispose(obj)
 }
 
 // config_errors_dialog_class_init installs the template, the `config` property,
@@ -136,10 +132,9 @@ fn config_errors_dialog_class_init(klass voidptr, class_data voidptr) {
 	C.gtk_widget_class_set_template(klass, bytes)
 
 	pspec := C.g_param_spec_object(c'config', c'config', c'The config being shown', config_get_type(), g_param_readwrite)
-	mut obj_class := &C.GObjectClass(klass)
-	obj_class.get_property = voidptr(config_errors_dialog_get_property)
-	obj_class.set_property = voidptr(config_errors_dialog_set_property)
-	obj_class.dispose = voidptr(config_errors_dialog_dispose)
+	C.witty_gobject_class_set_get_property(klass, voidptr(config_errors_dialog_get_property))
+	C.witty_gobject_class_set_set_property(klass, voidptr(config_errors_dialog_set_property))
+	C.witty_gobject_class_set_dispose(klass, voidptr(config_errors_dialog_dispose))
 	C.g_object_class_install_property(klass, config_errors_prop_config, pspec)
 
 	C.g_signal_new(c'reload-config', g_config_errors_dialog_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 0)

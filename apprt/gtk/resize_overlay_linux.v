@@ -347,11 +347,7 @@ fn resize_overlay_dispose(obj voidptr) {
 		priv.delay_timer = 0
 	}
 	C.gtk_widget_dispose_template(obj, g_resize_overlay_type)
-	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
-	if !isnil(parent_class.dispose) {
-		f := DisposeFn(parent_class.dispose)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_dispose(obj)
 }
 
 // resize_overlay_finalize frees the owned label text and chains to the parent.
@@ -362,11 +358,7 @@ fn resize_overlay_finalize(obj voidptr) {
 		C.g_free(priv.label_text)
 		priv.label_text = unsafe { nil }
 	}
-	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
-	if !isnil(parent_class.finalize) {
-		f := FinalizeFn(parent_class.finalize)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_finalize(obj)
 }
 
 // resize_overlay_class_init installs the template, binds the `label` child,
@@ -388,11 +380,10 @@ fn resize_overlay_class_init(klass voidptr, class_data voidptr) {
 	g_resize_overlay_pspec_halign = C.g_param_spec_enum(c'overlay-halign', c'overlay-halign', c'Overlay horizontal alignment', align_type, int(Align.center), g_param_readwrite)
 	g_resize_overlay_pspec_valign = C.g_param_spec_enum(c'overlay-valign', c'overlay-valign', c'Overlay vertical alignment', align_type, int(Align.center), g_param_readwrite)
 
-	mut obj_class := &C.GObjectClass(klass)
-	obj_class.get_property = voidptr(resize_overlay_get_property)
-	obj_class.set_property = voidptr(resize_overlay_set_property)
-	obj_class.dispose = voidptr(resize_overlay_dispose)
-	obj_class.finalize = voidptr(resize_overlay_finalize)
+	C.witty_gobject_class_set_get_property(klass, voidptr(resize_overlay_get_property))
+	C.witty_gobject_class_set_set_property(klass, voidptr(resize_overlay_set_property))
+	C.witty_gobject_class_set_dispose(klass, voidptr(resize_overlay_dispose))
+	C.witty_gobject_class_set_finalize(klass, voidptr(resize_overlay_finalize))
 
 	C.g_object_class_install_property(klass, resize_overlay_prop_duration, g_resize_overlay_pspec_duration)
 	C.g_object_class_install_property(klass, resize_overlay_prop_label, g_resize_overlay_pspec_label)

@@ -1,3 +1,4 @@
+@[has_globals]
 module gtk
 
 import apprt
@@ -15,15 +16,13 @@ import os
 //
 // In ghostty this is a GObject class (a subclass of adw.Application) created
 // with `gobject.ext.defineClass`, with signal vfunc overrides and GObject
-// properties. V models the private state in a stable heap wrapper, so:
+// properties. V hand-expands the same class and keeps its translated private
+// state in a stable heap wrapper, so:
 //
-//   * The class is modeled as a plain V struct `Application` that wraps the
-//     underlying GObject pointer (`obj`) plus the private state fields that
-//     ghostty keeps in its `Private` struct. Methods become ordinary
-//     `pub fn (self Application)` / `pub fn Application.new(...)`.
-//   * A real AdwApplication is created and its startup/activate signals invoke
-//     the translated vfunc bodies. The custom `config` GObject property and
-//     dispose/finalize overrides remain represented by wrapper methods.
+//   * `GhosttyApplication` is a real AdwApplication subclass whose native
+//     private storage points at `Application`.
+//   * Its startup/activate/dispose/finalize virtual methods and read-only
+//     `config` object property are installed on the native class.
 //   * The core `App` (libghostty `CoreApp`) is the root `main.App`, which the
 //     gtk module cannot import, so calls into it go through the `CoreApp`
 //     placeholder (declared in app_linux.v). Method SIGNATURES are kept
@@ -69,8 +68,6 @@ fn C.gtk_application_set_accels_for_action(app GtkApplication, detailed_action_n
 
 // AdwApplication / AdwStyleManager
 fn C.adw_application_get_style_manager(app AdwApplication) voidptr
-
-fn C.adw_application_new(application_id &char, flags GApplicationFlags) AdwApplication
 
 fn C.adw_style_manager_set_color_scheme(style_manager voidptr, color_scheme int)
 
@@ -157,6 +154,112 @@ pub enum QuitTimerState {
 	expired
 }
 
+// --- GObject class registration -------------------------------------------
+
+struct C.GhosttyApplicationPrivate {
+mut:
+	wrapper voidptr
+}
+
+__global g_ghostty_application_type = GType(0)
+__global g_ghostty_application_pspec_config = &C.GParamSpec(unsafe { nil })
+
+const ghostty_application_prop_config = u32(1)
+const ghostty_application_param_static_strings = int(32 | 64 | 128)
+
+fn ghostty_application_priv(obj voidptr) &C.GhosttyApplicationPrivate {
+	return &C.GhosttyApplicationPrivate(C.g_type_instance_get_private(obj, g_ghostty_application_type))
+}
+
+fn ghostty_application_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	_ = pspec
+	priv := ghostty_application_priv(obj)
+	if property_id != ghostty_application_prop_config || isnil(priv.wrapper) {
+		return
+	}
+	self := unsafe { &Application(priv.wrapper) }
+	C.g_value_set_object(value, if isnil(self.config_object) {
+		unsafe { nil }
+	} else {
+		self.config_object.obj
+	})
+}
+
+fn ghostty_application_startup(obj voidptr) {
+	C.witty_gapplication_call_parent_startup(obj)
+	priv := ghostty_application_priv(obj)
+	if !isnil(priv.wrapper) {
+		mut self := unsafe { &Application(priv.wrapper) }
+		self.startup()
+	}
+}
+
+fn ghostty_application_activate(obj voidptr) {
+	priv := ghostty_application_priv(obj)
+	if !isnil(priv.wrapper) {
+		mut self := unsafe { &Application(priv.wrapper) }
+		self.activate()
+	}
+	C.witty_gapplication_call_parent_activate(obj)
+}
+
+fn ghostty_application_dispose(obj voidptr) {
+	priv := ghostty_application_priv(obj)
+	if !isnil(priv.wrapper) {
+		mut self := unsafe { &Application(priv.wrapper) }
+		self.dispose()
+	}
+	C.witty_gobject_call_parent_dispose(obj)
+}
+
+fn ghostty_application_finalize(obj voidptr) {
+	mut priv := ghostty_application_priv(obj)
+	if !isnil(priv.wrapper) {
+		mut self := unsafe { &Application(priv.wrapper) }
+		self.finalize()
+		self.obj = unsafe { nil }
+		priv.wrapper = unsafe { nil }
+	}
+	C.witty_gobject_call_parent_finalize(obj)
+}
+
+fn ghostty_application_class_init(klass voidptr, class_data voidptr) {
+	_ = class_data
+	_ = config_get_type()
+	C.witty_gobject_class_set_get_property(klass, voidptr(ghostty_application_get_property))
+	C.witty_gobject_class_set_dispose(klass, voidptr(ghostty_application_dispose))
+	C.witty_gobject_class_set_finalize(klass, voidptr(ghostty_application_finalize))
+	C.witty_gapplication_class_set_startup(klass, voidptr(ghostty_application_startup))
+	C.witty_gapplication_class_set_activate(klass, voidptr(ghostty_application_activate))
+
+	flags := g_param_readable | ghostty_application_param_static_strings
+	nil_str := &char(unsafe { nil })
+	g_ghostty_application_pspec_config = C.g_param_spec_object(c'config', nil_str, nil_str, config_get_type(), flags)
+	C.g_object_class_install_property(klass, ghostty_application_prop_config, g_ghostty_application_pspec_config)
+}
+
+fn ghostty_application_instance_init(instance voidptr, klass voidptr) {
+	_ = instance
+	_ = klass
+}
+
+pub fn ghostty_application_get_type() GType {
+	if g_ghostty_application_type == GType(0) {
+		parent := C.adw_application_get_type()
+		mut query := C.GTypeQuery{}
+		C.g_type_query(parent, &query)
+		info := C.GTypeInfo{
+			class_size: u16(query.class_size)
+			instance_size: u16(query.instance_size)
+			class_init: voidptr(ghostty_application_class_init)
+			instance_init: voidptr(ghostty_application_instance_init)
+		}
+		g_ghostty_application_type = C.g_type_register_static(parent, c'GhosttyApplication', &info, 0)
+		_ = C.g_type_add_instance_private(g_ghostty_application_type, sizeof(C.GhosttyApplicationPrivate))
+	}
+	return g_ghostty_application_type
+}
+
 // --- Application ----------------------------------------------------------
 //
 // The canonical GTK application object. In ghostty this is `Application`, a
@@ -228,17 +331,30 @@ mut:
 
 	// Stable V wrappers for the GhosttyWindow objects owned by GtkApplication.
 	windows []&Window
+
+	// GObject dispose/finalize can run after the explicit application teardown.
+	disposed      bool
+	deinitialized bool
 }
 
 // default gets this application as the default GApplication, cast to our
 // `Application`. Mirrors `Application.default`.
 //
-// TODO(gtk): GObject class registration — ghostty casts the default
-// GApplication to a `GhosttyApplication`. Here we retrieve the default
-// GApplication pointer; the surrounding `Application` wrapper is reconstructed
-// by `application_default()` (surface_linux.v) which owns the singleton stub.
 pub fn Application.default_app() GApplication {
 	return C.g_application_get_default()
+}
+
+// default returns the translated wrapper for the default GhosttyApplication.
+pub fn Application.default() ?&Application {
+	obj := C.g_application_get_default()
+	if isnil(obj) {
+		return none
+	}
+	priv := ghostty_application_priv(obj)
+	if isnil(priv.wrapper) {
+		return none
+	}
+	return unsafe { &Application(priv.wrapper) }
 }
 
 // new creates a new Application. Mirrors `Application.new`.
@@ -318,9 +434,7 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 	}
 	C.gtk_style_context_add_provider_for_display(display, css_provider, gtk_style_provider_priority_application + 3)
 
-	// Instantiate the application object. The Zig implementation subclasses
-	// AdwApplication to install vfuncs; V connects the equivalent startup and
-	// activate signals to the stable heap wrapper below.
+	// Instantiate the native GhosttyApplication subclass.
 	mut self := &Application{
 		rt_app: unsafe { rt_app }
 		core_app: unsafe { core_app }
@@ -333,21 +447,21 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 		winproto: winproto
 		css_provider: css_provider
 	}
-	obj := C.adw_application_new(&char(app_id.str), GApplicationFlags(app_flags))
+	obj := C.g_object_new(ghostty_application_get_type(), c'application-id', &char(app_id.str), c'flags', GApplicationFlags(app_flags), &char(unsafe { nil }))
 	if isnil(obj) {
 		self.deinit()
 		return error('failed to create AdwApplication')
 	}
 	self.obj = GApplication(obj)
+	mut priv := ghostty_application_priv(obj)
+	priv.wrapper = voidptr(self)
 	C.g_application_set_resource_base_path(self.obj, c'/com/mitchellh/ghostty')
-	C.g_signal_connect_data(self.obj, c'startup', GCallback(voidptr(application_startup_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(self.obj, c'activate', GCallback(voidptr(application_activate_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'notify::config', GCallback(voidptr(application_config_notify_cb)), voidptr(self), unsafe { nil }, 0)
 
 	C.g_signal_connect_data(css_provider, c'parsing-error', GCallback(voidptr(application_css_parsing_error_cb)), voidptr(self), unsafe { nil }, 0)
 
-	// Trigger initial config changes (notify by pspec). Here we apply the
-	// config-derived setup directly.
-	self.prop_config()
+	// Trigger initial config changes through the native property notification.
+	C.g_object_notify_by_pspec(self.obj, g_ghostty_application_pspec_config)
 
 	return self
 }
@@ -357,6 +471,10 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 // Normally the GObject finalizer would do this, but applications are never
 // fully unreferenced, so this ensures cleanup happens.
 pub fn (mut self Application) deinit() {
+	if self.deinitialized {
+		return
+	}
+	self.deinitialized = true
 	self.dispose()
 	self.winproto.deinit()
 	if !isnil(self.global_shortcuts) {
@@ -386,6 +504,8 @@ pub fn (mut self Application) deinit() {
 	}
 	self.custom_css_providers.clear()
 	self.windows.clear()
+	self.runtime_bridge.config.deinit()
+	self.config.deinit()
 }
 
 // core returns the core app associated with this application. Not
@@ -706,7 +826,9 @@ pub fn (self &Application) get_config() configpkg.Config {
 // set_config sets the configuration and re-applies config-derived state.
 // Mirrors `Application.setConfig`.
 fn (mut self Application) set_config(config configpkg.Config) {
+	self.config.deinit()
 	self.config = config
+	self.runtime_bridge.config.deinit()
 	self.runtime_bridge.config = config.clone()
 	if isnil(self.config_object) {
 		self.config_object = config_new(config)
@@ -719,7 +841,11 @@ fn (mut self Application) set_config(config configpkg.Config) {
 		shortcuts.set_config(self.config_object)
 	}
 	// notify "config" pspec -> prop_config.
-	self.prop_config()
+	if !isnil(self.obj) {
+		C.g_object_notify_by_pspec(self.obj, g_ghostty_application_pspec_config)
+	} else {
+		self.prop_config()
+	}
 	for mut window in self.windows {
 		for mut tab in window.tabs {
 			for mut surface in tab.split_tree.surfaces {
@@ -730,6 +856,15 @@ fn (mut self Application) set_config(config configpkg.Config) {
 	}
 	// Show our errors if we have any.
 	self.show_config_errors_dialog()
+}
+
+fn application_config_notify_cb(obj voidptr, pspec voidptr, user_data voidptr) {
+	_ = obj
+	_ = pspec
+	if !isnil(user_data) {
+		mut self := unsafe { &Application(user_data) }
+		self.prop_config()
+	}
 }
 
 // prop_config responds to a "config" property change. Mirrors ghostty's
@@ -1240,29 +1375,13 @@ fn (mut self Application) activate() {
 	core_app.request_new_window(none)
 }
 
-// Signal trampolines install the two Application vfunc bodies on the concrete
-// AdwApplication instance created by Application.new.
-fn application_startup_cb(obj GApplication, user_data voidptr) {
-	_ = obj
-	if isnil(user_data) {
-		return
-	}
-	mut self := unsafe { &Application(user_data) }
-	self.startup()
-}
-
-fn application_activate_cb(obj GApplication, user_data voidptr) {
-	_ = obj
-	if isnil(user_data) {
-		return
-	}
-	mut self := unsafe { &Application(user_data) }
-	self.activate()
-}
-
 // dispose releases the config errors dialog and signal source. Mirrors the
 // `dispose` vfunc.
 fn (mut self Application) dispose() {
+	if self.disposed {
+		return
+	}
+	self.disposed = true
 	if !isnil(self.config_errors_dialog) {
 		mut diag := self.config_errors_dialog
 		diag.close()

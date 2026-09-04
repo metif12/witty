@@ -11,6 +11,8 @@ module gtk
 
 #include <glib-object.h>
 
+#include "gobject_shims.h"
+
 // GType (usize) and GBytes (voidptr) aliases are declared elsewhere in the
 // module (c_gtk_linux.v / ipc_dbus_linux.v) and reused here.
 
@@ -97,6 +99,8 @@ fn C.adw_dialog_get_type() GType
 
 fn C.adw_application_window_get_type() GType
 
+fn C.adw_application_get_type() GType
+
 fn C.adw_window_get_type() GType
 
 fn C.gtk_box_get_type() GType
@@ -168,20 +172,30 @@ fn C.g_object_bind_property(source voidptr, source_property &char, target voidpt
 
 fn C.g_object_new(object_type GType, first_property_name &char, ...) voidptr
 
-// --- Property get/set vfunc overriding -------------------------------------
-// A class with properties overrides GObjectClass.get_property/set_property in
-// its class_init (cast klass -> GObjectClass* and assign the vfunc pointers).
-// Only the fields witty overrides are declared; V codegen uses the real C
-// struct so named-field assignment resolves correctly.
-pub struct C.GObjectClass {
-pub mut:
-	constructor  voidptr
-	set_property voidptr
-	get_property voidptr
-	dispose      voidptr
-	finalize     voidptr
-	constructed  voidptr
-}
+// --- Property/vfunc overriding --------------------------------------------
+// These tiny C shims operate on GLib's real public class structs. V's external
+// struct declarations use a different C tag for typedef-backed GLib structs,
+// so accessing their fields directly would be ABI-incorrect.
+
+fn C.witty_gobject_class_set_get_property(klass voidptr, callback voidptr)
+
+fn C.witty_gobject_class_set_set_property(klass voidptr, callback voidptr)
+
+fn C.witty_gobject_class_set_dispose(klass voidptr, callback voidptr)
+
+fn C.witty_gobject_class_set_finalize(klass voidptr, callback voidptr)
+
+fn C.witty_gobject_call_parent_dispose(instance voidptr)
+
+fn C.witty_gobject_call_parent_finalize(instance voidptr)
+
+fn C.witty_gapplication_class_set_startup(klass voidptr, callback voidptr)
+
+fn C.witty_gapplication_class_set_activate(klass voidptr, callback voidptr)
+
+fn C.witty_gapplication_call_parent_startup(instance voidptr)
+
+fn C.witty_gapplication_call_parent_activate(instance voidptr)
 
 fn C.g_object_class_find_property(oclass voidptr, property_name &char) &C.GParamSpec
 

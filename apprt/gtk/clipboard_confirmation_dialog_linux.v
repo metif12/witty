@@ -269,11 +269,7 @@ fn clipboard_confirmation_dialog_dispose(obj voidptr) {
 		priv.clipboard_contents = unsafe { nil }
 	}
 	C.gtk_widget_dispose_template(obj, g_clipboard_confirmation_dialog_type)
-	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
-	if !isnil(parent_class.dispose) {
-		f := DisposeFn(parent_class.dispose)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_dispose(obj)
 }
 
 // clipboard_confirmation_dialog_finalize clears the boxed request and chains to
@@ -281,11 +277,7 @@ fn clipboard_confirmation_dialog_dispose(obj voidptr) {
 fn clipboard_confirmation_dialog_finalize(obj voidptr) {
 	mut priv := clipboard_confirmation_dialog_priv(obj)
 	priv.request = unsafe { nil }
-	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
-	if !isnil(parent_class.finalize) {
-		f := FinalizeFn(parent_class.finalize)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_finalize(obj)
 }
 
 // --- Template callbacks (C-callable) --------------------------------------
@@ -356,11 +348,10 @@ fn clipboard_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
 	can_remember_pspec := C.g_param_spec_boolean(c'can-remember', c'can-remember', c'Whether the choice can be remembered', 0, g_param_readwrite)
 	contents_pspec := C.g_param_spec_object(c'clipboard-contents', c'clipboard-contents', c'The clipboard contents', C.g_object_get_type(), g_param_readwrite)
 	request_pspec := C.g_param_spec_pointer(c'request', c'request', c'The clipboard request', g_param_readwrite)
-	mut obj_class := &C.GObjectClass(klass)
-	obj_class.get_property = voidptr(clipboard_confirmation_dialog_get_property)
-	obj_class.set_property = voidptr(clipboard_confirmation_dialog_set_property)
-	obj_class.dispose = voidptr(clipboard_confirmation_dialog_dispose)
-	obj_class.finalize = voidptr(clipboard_confirmation_dialog_finalize)
+	C.witty_gobject_class_set_get_property(klass, voidptr(clipboard_confirmation_dialog_get_property))
+	C.witty_gobject_class_set_set_property(klass, voidptr(clipboard_confirmation_dialog_set_property))
+	C.witty_gobject_class_set_dispose(klass, voidptr(clipboard_confirmation_dialog_dispose))
+	C.witty_gobject_class_set_finalize(klass, voidptr(clipboard_confirmation_dialog_finalize))
 	C.g_object_class_install_property(klass, clipboard_prop_blur, blur_pspec)
 	C.g_object_class_install_property(klass, clipboard_prop_can_remember, can_remember_pspec)
 	C.g_object_class_install_property(klass, clipboard_prop_clipboard_contents, contents_pspec)

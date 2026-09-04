@@ -164,21 +164,13 @@ fn tab_set_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) 
 	}
 }
 
-fn tab_parent_object_class(obj voidptr) &C.GObjectClass {
-	return &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
-}
-
 fn tab_dispose(obj voidptr) {
 	priv := tab_priv(obj)
 	if !isnil(priv.wrapper) {
 		mut self := unsafe { &Tab(priv.wrapper) }
 		self.set_config_reference(unsafe { nil })
 	}
-	parent_class := tab_parent_object_class(obj)
-	if !isnil(parent_class.dispose) {
-		f := DisposeFn(parent_class.dispose)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_dispose(obj)
 }
 
 fn tab_finalize(obj voidptr) {
@@ -191,11 +183,7 @@ fn tab_finalize(obj voidptr) {
 		self.split_tree = unsafe { nil }
 		priv.wrapper = unsafe { nil }
 	}
-	parent_class := tab_parent_object_class(obj)
-	if !isnil(parent_class.finalize) {
-		f := FinalizeFn(parent_class.finalize)
-		f(obj)
-	}
+	C.witty_gobject_call_parent_finalize(obj)
 }
 
 fn tab_class_init(klass voidptr, class_data voidptr) {
@@ -203,11 +191,10 @@ fn tab_class_init(klass voidptr, class_data voidptr) {
 	_ = split_tree_get_type()
 	_ = terminal_surface_get_type()
 	_ = config_get_type()
-	mut obj_class := &C.GObjectClass(klass)
-	obj_class.get_property = voidptr(tab_get_property)
-	obj_class.set_property = voidptr(tab_set_property)
-	obj_class.dispose = voidptr(tab_dispose)
-	obj_class.finalize = voidptr(tab_finalize)
+	C.witty_gobject_class_set_get_property(klass, voidptr(tab_get_property))
+	C.witty_gobject_class_set_set_property(klass, voidptr(tab_set_property))
+	C.witty_gobject_class_set_dispose(klass, voidptr(tab_dispose))
+	C.witty_gobject_class_set_finalize(klass, voidptr(tab_finalize))
 	readable := g_param_readable | tab_param_static_strings
 	readwrite := g_param_readwrite | tab_param_static_strings
 	nil_str := &char(unsafe { nil })
