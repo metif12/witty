@@ -3288,6 +3288,64 @@ fn test_page_list_resize_no_reflow_less_cols_clears_graphemes() {
 	}
 }
 
+fn test_page_list_resize_no_reflow_preserves_hyperlink_key_stride() {
+	mut s := PageList.init(4, 3, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	link := Hyperlink{
+		id: HyperlinkExplicitId{
+			value: 'resize-link'
+		}
+		uri: 'https://example.com/resize-link'
+	}
+	link_id := page.insert_hyperlink(link)
+	page.rows[1].cells[1] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`a`)
+		hyperlink: link.dupe()
+	}
+	page.set_hyperlink(1, 1, link_id)
+	page.hyperlink_set.use_link(link_id)
+	page.rows[1].cells[3] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`b`)
+		hyperlink: link.dupe()
+	}
+	page.set_hyperlink(1, 3, link_id)
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: false })
+	shrunk_node := s.pages.first or { return }
+	shrunk := &shrunk_node.data
+	assert shrunk.size.cols == 2
+	assert shrunk.capacity.cols == 4
+	shrunk_link_id := shrunk.lookup_hyperlink(1, 1) or {
+		assert false, 'retained hyperlink mapping was lost on shrink'
+		return
+	}
+	assert shrunk_link_id == link_id
+	assert shrunk.hyperlink_count() == 1
+	assert shrunk.hyperlink_set.ref_count(link_id) == 1
+
+	s.resize(PageResizeOpts{ cols: 4, reflow: false })
+	regrown_node := s.pages.first or { return }
+	regrown := &regrown_node.data
+	regrown_link_id := regrown.lookup_hyperlink(1, 1) or {
+		assert false, 'retained hyperlink mapping was lost on regrow'
+		return
+	}
+	assert regrown_link_id == link_id
+	assert regrown.lookup_hyperlink(1, 3) == none
+	assert regrown.rows[1].cells[3].is_zero()
+	if integrity_error := regrown.verify_integrity() {
+		assert false, 'resized page failed integrity: ${integrity_error}'
+	}
+}
+
 fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines_cursor_in_blank_line() {
 	mut s := PageList.init(10, 5, usize(0))
 	defer { s.deinit() }

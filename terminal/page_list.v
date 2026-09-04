@@ -5546,7 +5546,6 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) {
 					}
 				}
 				page.size.cols = cols
-				page.capacity.cols = cols
 			}
 
 			// Update all our tracked pins. If they have an X
