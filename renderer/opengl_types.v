@@ -98,7 +98,7 @@ pub fn (mut self GLBuffer) sync_values[T](values []T) {
 		return
 	}
 	byte_len := values.len * int($sizeof(T))
-	bytes := unsafe { (&u8(values.data))[..byte_len] }
+	bytes := unsafe { voidptr(values.data).vbytes(byte_len) }
 	self.sync(bytes)
 }
 

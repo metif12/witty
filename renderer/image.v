@@ -328,6 +328,12 @@ pub enum ImageUploadState {
 	replace
 }
 
+pub enum ImageTextureBackend {
+	none_
+	metal
+	opengl
+}
+
 // The state for a single image that is to be rendered.
 pub struct Image {
 pub mut:
@@ -337,6 +343,10 @@ pub mut:
 	pending ?PendingImage
 	// GPU texture handle (opaque, backend-specific).
 	texture_handle voidptr = unsafe { nil }
+	// OpenGL textures are integer object names rather than pointers, so they
+	// retain their typed wrapper alongside the Metal handle.
+	gl_texture      GLTexture
+	texture_backend ImageTextureBackend
 	// Width/height of the image.
 	width  u32
 	height u32
@@ -369,11 +379,21 @@ pub fn (self &Image) has_texture() bool {
 }
 
 pub fn (mut self Image) deinit() {
-	macos.metal_release(self.texture_handle)
+	self.release_texture()
 	self.pending = none
-	self.texture_handle = unsafe { nil }
 	self.width = 0
 	self.height = 0
+}
+
+fn (mut self Image) release_texture() {
+	match self.texture_backend {
+		.metal { macos.metal_release(self.texture_handle) }
+		.opengl { self.gl_texture.deinit() }
+		.none_ {}
+	}
+	self.texture_handle = unsafe { nil }
+	self.gl_texture = GLTexture{}
+	self.texture_backend = .none_
 }
 
 // Entry in the image map, pairing an image with its transmit time.
@@ -491,10 +511,48 @@ fn (mut self Image) upload(api &MetalAPI) ! {
 	pending := self.pending or { return error('image has no pending data') }
 	rgba := pending_to_rgba(pending)!
 	mut texture := MetalTexture.init(api.image_texture_options(.rgba, true), pending.width, pending.height, rgba)!
-	old_texture := self.texture_handle
+	self.release_texture()
 	self.texture_handle = texture.handle
+	self.texture_backend = .metal
 	texture.handle = unsafe { nil }
-	macos.metal_release(old_texture)
+	self.pending = none
+	self.width = pending.width
+	self.height = pending.height
+	self.state = .ready
+}
+
+pub fn (mut self ImageRenderState) upload_opengl(api &OpenGLAPI) bool {
+	mut success := true
+	mut to_remove := []u64{}
+	for id, mut entry in self.images {
+		if entry.image.is_unloading() {
+			entry.image.deinit()
+			to_remove << id
+			continue
+		}
+		if entry.image.is_pending() {
+			entry.image.upload_opengl(api) or {
+				success = false
+				self.images[id] = entry
+				continue
+			}
+			self.images[id] = entry
+		}
+	}
+	for id in to_remove {
+		self.images.delete(id)
+	}
+	return success
+}
+
+fn (mut self Image) upload_opengl(api &OpenGLAPI) ! {
+	pending := self.pending or { return error('image has no pending data') }
+	rgba := pending_to_rgba(pending)!
+	mut texture := GLTexture.init(api.image_texture_options(.rgba, true), pending.width, pending.height, rgba)!
+	self.release_texture()
+	self.gl_texture = texture
+	texture.id = 0
+	self.texture_backend = .opengl
 	self.pending = none
 	self.width = pending.width
 	self.height = pending.height
@@ -1015,6 +1073,52 @@ pub fn (mut self ImageRenderState) draw(api &MetalAPI, pipeline MetalPipeline, m
 			textures: [entry.image.texture_handle]
 			draw_type: .triangle_strip
 			vertex_count: 4
+		})
+		buffer.deinit()
+	}
+}
+
+pub fn (mut self ImageRenderState) draw_opengl(api &OpenGLAPI, pipeline GLPipeline, mut pass GLRenderPass, placement_type DrawPlacements) {
+	placements := match placement_type {
+		.kitty_below_bg {
+			self.kitty_placements[..math.min(int(self.kitty_bg_end), self.kitty_placements.len)]
+		}
+		.kitty_below_text {
+			start := math.min(int(self.kitty_bg_end), self.kitty_placements.len)
+			end := math.min(int(self.kitty_text_end), self.kitty_placements.len)
+			self.kitty_placements[start..end]
+		}
+		.kitty_above_text {
+			start := math.min(int(self.kitty_text_end), self.kitty_placements.len)
+			self.kitty_placements[start..]
+		}
+		.overlay { self.overlay_placements }
+	}
+	for placement in placements {
+		entry := self.images[image_key(placement.image_id)] or { continue }
+		if entry.image.state != .ready || entry.image.texture_backend != .opengl
+			|| entry.image.gl_texture.id == 0 {
+			continue
+		}
+		vertex := GLImageVertex{
+			grid_pos: [f32(placement.x), f32(placement.y)]!
+			cell_offset: [f32(placement.cell_offset_x), f32(placement.cell_offset_y)]!
+			source_rect: [f32(placement.source_x), f32(placement.source_y),
+				f32(placement.source_width), f32(placement.source_height)]!
+			dest_size: [f32(placement.width), f32(placement.height)]!
+		}
+		mut buffer := GLBuffer.init(api.image_buffer_options(), u32($sizeof(GLImageVertex))) or {
+			continue
+		}
+		buffer.sync_values([vertex])
+		pass.step(GLRenderStep{
+			pipeline: pipeline
+			buffers: [buffer]
+			textures: [entry.image.gl_texture]
+			draw: GLDraw{
+				primitive: .triangle_strip
+				vertex_count: 4
+			}
 		})
 		buffer.deinit()
 	}
