@@ -133,7 +133,8 @@ pub fn (self &SharedGrid) cell_size() CellSize {
 // load without complicating future calls.
 //
 // Returns a CodepointValue where has_value indicates whether a font was found.
-// On error (e.g. face loading failure), returns an error.
+// V cannot currently represent Zig's error union containing an optional, so
+// this wrapper preserves both states without discarding loading errors.
 pub fn (mut self SharedGrid) get_index(cp u32, style FontStyle, p ?Presentation) !CodepointValue {
 	key := CodepointKey{
 		style: style
@@ -343,7 +344,8 @@ fn (k CodepointKey) hash_key() u64 {
 // CodepointValue wraps an optional Index for caching.
 // V maps return zero values for missing keys, so we use a wrapper
 // with a has_value flag to distinguish "not cached" from "cached as none".
-struct CodepointValue {
+pub struct CodepointValue {
+pub:
 	has_value bool
 	index     Index
 }

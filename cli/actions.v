@@ -1,8 +1,10 @@
 module cli
 
 import configpkg
+import encoding.utf8.validate
 import font
 import os
+import strconv
 import terminal
 
 // list_colors_output implements the deterministic plain output of
@@ -340,6 +342,241 @@ fn parse_show_config_options(args []string) !ShowConfigOptions {
 		}
 	}
 	return opts
+}
+
+pub struct ShowFaceOptions {
+pub mut:
+	cp           ?u32
+	string_value ?string
+	style        font.FontStyle = .regular
+	presentation ?font.Presentation
+	config_args  []string
+}
+
+pub struct ShowFaceResult {
+pub:
+	code   int
+	output string
+	errors string
+}
+
+// show_face resolves codepoints through the same SharedGrid used by terminal
+// surfaces, including configured faces, platform fallbacks, embedded faces,
+// emoji presentation, and Ghostty's internal sprite font.
+pub fn show_face(args []string) !ShowFaceResult {
+	opts := parse_show_face_options(args)!
+	if opts.cp == none && opts.string_value == none {
+		return ShowFaceResult{
+			code: 1
+			errors: 'You must specify a codepoint with --cp or a string with --string\n'
+		}
+	}
+
+	mut config := configpkg.Config.load_args(opts.config_args)
+	mut errors := []string{}
+	for diagnostic in config.diagnostics {
+		errors << 'config error: ${diagnostic}'
+	}
+
+	mut grid_set := font.SharedGridSet.init() or {
+		return ShowFaceResult{
+			code: 1
+			errors: output_lines(errors) + 'Unable to initialize font grid set: ${err}\n'
+		}
+	}
+	defer {
+		grid_set.deinit()
+	}
+	mut font_config := derived_font_config(config)
+	defer {
+		font_config.deinit()
+	}
+	key, mut grid := grid_set.ref(&font_config, font.DesiredSize{
+		points: config.font_size
+		xdpi: 96
+		ydpi: 96
+	}) or {
+		return ShowFaceResult{
+			code: 1
+			errors: output_lines(errors) + 'Unable to get font grid: ${err}\n'
+		}
+	}
+	defer {
+		grid_set.deref(key)
+	}
+	mut output := []string{}
+	if cp := opts.cp {
+		if lookup_error := show_face_lookup(mut grid, cp, opts.style, opts.presentation, mut output) {
+			errors << lookup_error
+			return ShowFaceResult{
+				code: 1
+				output: output_lines(output)
+				errors: output_lines(errors)
+			}
+		}
+	}
+	if value := opts.string_value {
+		if !validate.utf8_string(value) {
+			errors << 'Unable to parse string as unicode: invalid UTF-8'
+			return ShowFaceResult{
+				code: 1
+				output: output_lines(output)
+				errors: output_lines(errors)
+			}
+		}
+		for cp in value.runes() {
+			if lookup_error := show_face_lookup(mut grid, u32(cp), opts.style, opts.presentation, mut output) {
+				errors << lookup_error
+				return ShowFaceResult{
+					code: 1
+					output: output_lines(output)
+					errors: output_lines(errors)
+				}
+			}
+		}
+	}
+
+	return ShowFaceResult{
+		output: output_lines(output)
+		errors: output_lines(errors)
+	}
+}
+
+pub fn run_show_face(args []string) !int {
+	result := show_face(args) or {
+		eprintln('Error parsing args: ${err}')
+		return 1
+	}
+	print(result.output)
+	eprint(result.errors)
+	return result.code
+}
+
+fn parse_show_face_options(args []string) !ShowFaceOptions {
+	mut opts := ShowFaceOptions{}
+	for arg in args {
+		if !arg.starts_with('--') {
+			opts.config_args << arg
+			continue
+		}
+		key_value := arg[2..]
+		equals := key_value.index_u8(`=`)
+		key := if equals < 0 { key_value } else { key_value[..equals] }
+		value := if equals < 0 { none } else { ?string(key_value[equals + 1..]) }
+		match key {
+			'cp' {
+				raw := value or { return error('value required for --cp') }
+				opts.cp = parse_show_face_codepoint(raw) or {
+					return error('invalid value for --cp: ${raw}')
+				}
+			}
+			'string' {
+				opts.string_value = value or { return error('value required for --string') }
+			}
+			'style' {
+				raw := value or { return error('value required for --style') }
+				opts.style = match raw {
+					'regular' { .regular }
+					'bold' { .bold }
+					'italic' { .italic }
+					'bold_italic' { .bold_italic }
+					else {
+						return error('invalid value for --style: ${raw}')
+					}
+				}
+			}
+			'presentation' {
+				raw := value or { return error('value required for --presentation') }
+				opts.presentation = match raw {
+					'text' { font.Presentation.text }
+					'emoji' { font.Presentation.emoji }
+					else {
+						return error('invalid value for --presentation: ${raw}')
+					}
+				}
+			}
+			else {
+				// The upstream action enables diagnostics so ordinary Config flags
+				// remain available alongside action-specific flags.
+				opts.config_args << arg
+			}
+		}
+	}
+	return opts
+}
+
+fn parse_show_face_codepoint(value string) ?u32 {
+	if value.len == 0 {
+		return none
+	}
+	mut digits := value
+	mut base := 10
+	if value.len > 2 && value[0] == `0` {
+		match value[1] {
+			`x`, `X` {
+				base = 16
+				digits = value[2..]
+			}
+			`o`, `O` {
+				base = 8
+				digits = value[2..]
+			}
+			`b`, `B` {
+				base = 2
+				digits = value[2..]
+			}
+			else {}
+		}
+	}
+	if digits.len == 0 {
+		return none
+	}
+	parsed := strconv.parse_uint(digits, base, 32) or { return none }
+	if parsed > 0x1fffff {
+		return none
+	}
+	return u32(parsed)
+}
+
+fn derived_font_config(config &configpkg.Config) font.GridSetDerivedConfig {
+	return font.GridSetDerivedConfig{
+		font_family: config.font_family.clone()
+		font_family_bold: config.font_family_bold.clone()
+		font_family_italic: config.font_family_italic.clone()
+		font_family_bold_italic: config.font_family_bold_italic.clone()
+		font_style: if config.font_style == 'false' { .false_ } else { .default_ }
+		font_style_bold: if config.font_style_bold == 'false' { .false_ } else { .default_ }
+		font_style_italic: if config.font_style_italic == 'false' { .false_ } else { .default_ }
+		font_style_bold_italic: if config.font_style_bold_italic == 'false' {
+			.false_
+		} else {
+			.default_
+		}
+	}
+}
+
+fn show_face_lookup(mut grid font.SharedGrid, cp u32, style font.FontStyle, presentation ?font.Presentation, mut output []string) ?string {
+	value := grid.get_index(cp, style, presentation) or {
+		return 'Unable to get face: ${err}'
+	}
+	display := rune(cp).str()
+	if !value.has_value {
+		output << 'U+${cp:02X} « ${display} » not found.'
+		return none
+	}
+	if _ := value.index.special() {
+		output << "U+${cp:02X} « ${display} » is handled by Ghostty's internal sprites."
+		return none
+	}
+	mut name_buf := []u8{len: 1024}
+	face := grid.resolver.collection.get_face(value.index) or {
+		return 'Unable to get face: ${err}'
+	}
+	name := face.name(mut name_buf) or {
+		return 'Unable to get name of face: ${err}'
+	}
+	output << 'U+${cp:02X} « ${display} » found in face “${name}”.'
+	return none
 }
 
 fn output_lines(lines []string) string {
