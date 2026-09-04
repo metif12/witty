@@ -641,7 +641,7 @@ fn test_stream_handler_report_pwd_empty() {
 	assert ctx.messages.len == 2
 	assert ctx.messages[0].kind == .set_title
 	assert ctx.messages[1].kind == .pwd_change
-	assert ctx.messages[1].pwd_change.data.bytestr() == ''
+	assert ctx.messages[1].pwd_change.slice().bytestr() == ''
 }
 
 fn test_stream_handler_clipboard_read_forwards_clipboard_type() {
@@ -664,7 +664,18 @@ fn test_stream_handler_clipboard_write_forwards_contents_and_type() {
 	assert ctx.messages.len == 1
 	assert ctx.messages[0].kind == .clipboard_write
 	assert ctx.messages[0].clipboard_write_type == .selection
-	assert ctx.messages[0].clipboard_write_req.data.bytestr() == 'translated clipboard data'
+	assert ctx.messages[0].clipboard_write_req.slice().bytestr() == 'translated clipboard data'
+}
+
+fn test_stream_handler_clipboard_write_owns_contents() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	mut data := 'owned clipboard data'.bytes()
+	handler.clipboard_contents(`c`, data.bytestr())
+	data[0] = `X`
+
+	assert ctx.messages[0].clipboard_write_req.slice().bytestr() == 'owned clipboard data'
 }
 
 fn test_stream_handler_report_pwd_forwards_decoded_path() {
@@ -675,7 +686,7 @@ fn test_stream_handler_report_pwd_forwards_decoded_path() {
 
 	assert ctx.messages.len == 2
 	assert ctx.messages[0].kind == .pwd_change
-	assert ctx.messages[0].pwd_change.data.bytestr() == '/tmp/translated path'
+	assert ctx.messages[0].pwd_change.slice().bytestr() == '/tmp/translated path'
 	assert ctx.messages[1].kind == .set_title
 }
 
@@ -687,7 +698,7 @@ fn test_stream_handler_report_pwd_preserves_kitty_raw_path() {
 
 	assert ctx.messages.len == 2
 	assert ctx.messages[0].kind == .pwd_change
-	assert ctx.messages[0].pwd_change.data.bytestr() == '/tmp/raw%20path??#fragment'
+	assert ctx.messages[0].pwd_change.slice().bytestr() == '/tmp/raw%20path??#fragment'
 	assert ctx.messages[1].kind == .set_title
 }
 

@@ -2171,10 +2171,7 @@ fn SurfaceSearch.init(t &terminal.Terminal, surface &Surface) !&SurfaceSearch {
 
 fn (mut s SurfaceSearch) change_needle(needle string) {
 	s.needle = needle
-	s.state.push(searchpkg.Message{
-		kind: .change_needle
-		needle: needle.bytes()
-	})
+	s.state.push(searchpkg.Message.change_needle(needle.bytes()))
 }
 
 fn (mut s SurfaceSearch) navigate(nav SearchNav) {
@@ -2892,13 +2889,13 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			})!
 		}
 		.clipboard_write {
-			self.clipboard_write(msg.clipboard_write_req.data.bytestr(), msg.clipboard_write_type)!
+			self.clipboard_write(msg.clipboard_write_req.slice().bytestr(), msg.clipboard_write_type)!
 		}
 		.pwd_change {
 			self.rt_app.perform_action(AppAction{
 				kind: .pwd
 				target: &self
-				pwd: msg.pwd_change.data.bytestr()
+				pwd: msg.pwd_change.slice().bytestr()
 			})!
 		}
 		.close {

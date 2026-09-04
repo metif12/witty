@@ -6,13 +6,34 @@ module apprt
 import terminal
 import renderer
 import configpkg
+import datastruct
 import osc
 
 // WriteReq represents a write request. Magic number comes from the max size
 // we want this union to be.
 pub struct WriteReq {
-pub:
-	data []u8
+mut:
+	payload datastruct.MessageData[u8]
+}
+
+pub fn WriteReq.init(data []u8) WriteReq {
+	return WriteReq{
+		payload: datastruct.MessageData.init[u8](255, data)
+	}
+}
+
+pub fn WriteReq.stable(data []u8) WriteReq {
+	return WriteReq{
+		payload: datastruct.MessageData.from_stable[u8](data)
+	}
+}
+
+pub fn (self &WriteReq) slice() []u8 {
+	return self.payload.slice()
+}
+
+pub fn (mut self WriteReq) deinit() {
+	self.payload.deinit()
 }
 
 // SurfaceMessage represents the message types that can be sent to a single surface.

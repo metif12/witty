@@ -228,6 +228,7 @@ import sync
 import time
 import terminal
 import highlight
+import datastruct
 
 // The interval at which we refresh the terminal state to check if
 // there are any changes that require us to re-search. This should be
@@ -277,9 +278,16 @@ pub struct Message {
 pub:
 	kind MessageType
 	// For change_needle: the new needle bytes.
-	needle []u8
+	needle datastruct.MessageData[u8]
 	// For select_result: the direction to move the selection.
 	select Select
+}
+
+pub fn Message.change_needle(data []u8) Message {
+	return Message{
+		kind: .change_needle
+		needle: datastruct.MessageData.init[u8](255, data)
+	}
 }
 
 // Events that can be emitted from the search thread. The caller
@@ -461,7 +469,7 @@ pub fn (mut self SearchThread) thread_main() {
 fn (mut self SearchThread) handle_message(msg Message) {
 	match msg.kind {
 		.change_needle {
-			self.change_needle(msg.needle)
+			self.change_needle(msg.needle.slice())
 		}
 		.select_result {
 			self.do_select(msg.select)
@@ -525,17 +533,7 @@ fn (mut self SearchThread) refresh_search() {
 // Post a message to this thread's mailbox. Producers should call
 // thread_main (or resume the loop) after publishing.
 pub fn (mut self SearchThread) push(msg Message) {
-	// change_needle messages own their bytes in Ghostty. Clone here so a
-	// producer may immediately reuse or release its input buffer.
-	owned := if msg.kind == .change_needle {
-		Message{
-			...msg
-			needle: msg.needle.clone()
-		}
-	} else {
-		msg
-	}
-	self.mailbox <- owned
+	self.mailbox <- msg
 }
 
 // Request the loop to stop on its next iteration.
