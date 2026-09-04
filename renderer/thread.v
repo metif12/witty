@@ -291,6 +291,10 @@ pub fn RendererMailbox.create() &RendererMailbox {
 }
 
 pub fn (mut self RendererMailbox) destroy() {
+	if self.mutex == unsafe { nil } {
+		self.queue.clear()
+		return
+	}
 	self.mutex.lock()
 	self.queue.clear()
 	self.mutex.unlock()
@@ -299,6 +303,9 @@ pub fn (mut self RendererMailbox) destroy() {
 
 // Push a message to the mailbox.
 pub fn (mut self RendererMailbox) push(msg RendererMessage) int {
+	if self.mutex == unsafe { nil } {
+		self.mutex = sync.new_mutex()
+	}
 	self.mutex.lock()
 	defer {
 		self.mutex.unlock()
@@ -312,6 +319,9 @@ pub fn (mut self RendererMailbox) push(msg RendererMessage) int {
 
 // Pop a message from the mailbox.
 pub fn (mut self RendererMailbox) pop() ?RendererMessage {
+	if self.mutex == unsafe { nil } {
+		self.mutex = sync.new_mutex()
+	}
 	self.mutex.lock()
 	defer {
 		self.mutex.unlock()
@@ -541,8 +551,18 @@ fn (mut self RendererThread) draw_frame(now bool) {
 
 // Render callback - updates frame data and draws.
 fn (mut self RendererThread) render_callback() {
-	// Update our frame data
-	self.renderer.update_frame(self.state.terminal_, self.flags.cursor_blink_visible) or {}
+	if self.state == unsafe { nil } || self.state.terminal_ == unsafe { nil } {
+		return
+	}
+	// Terminal state is shared with termio. Keep the same critical section as
+	// Ghostty while rebuilding the renderer's immutable frame snapshot.
+	if self.state.mutex != unsafe { nil } {
+		self.state.mutex.lock()
+		self.renderer.update_frame(self.state.terminal_, self.flags.cursor_blink_visible) or {}
+		self.state.mutex.unlock()
+	} else {
+		self.renderer.update_frame(self.state.terminal_, self.flags.cursor_blink_visible) or {}
+	}
 
 	// Draw
 	self.draw_frame(false)

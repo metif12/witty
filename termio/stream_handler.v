@@ -34,7 +34,7 @@ pub mut:
 
 	// The default cursor state. This is used with CSI q. This is
 	// set to true when we're currently in the default cursor state.
-	default_cursor bool = true
+	default_cursor       bool = true
 	default_cursor_style terminal.CursorStyle = .block
 	default_cursor_blink ?bool
 
@@ -47,7 +47,7 @@ pub mut:
 	// The clipboard write access configuration.
 	clipboard_write ClipboardAccess = .allow
 
-	//---------------------------------------------------------------
+	// ---------------------------------------------------------------
 	// Internal state
 
 	// The APC command handler maintains the APC state. APC is like
@@ -111,7 +111,7 @@ fn (mut self StreamHandler) surface_message_writer(msg apprt.SurfaceMessage) {
 }
 
 fn (mut self StreamHandler) message_writer(msg Message) {
-	self.termio_mailbox.send(msg, &self.renderer_state.mutex)
+	self.termio_mailbox.send(msg, self.renderer_state.mutex)
 	self.termio_messaged = true
 }
 
@@ -119,7 +119,7 @@ fn (mut self StreamHandler) message_writer(msg Message) {
 // if necessary to ensure we don't deadlock.
 //
 // This assumes the renderer state mutex is locked.
-fn (mut self StreamHandler) renderer_message_writer(msg renderer.Message) {
+fn (mut self StreamHandler) renderer_message_writer(msg renderer.RendererMessage) {
 	// See termio.Mailbox.send for more details on how this works.
 
 	// Try instant first. If it works then we can return.
@@ -168,8 +168,7 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.enquiry()
 		}
 		.invoke_charset {
-			self.terminal.invoke_charset(event.payload.charset_bank, event.payload.charset_slot,
-				event.payload.charset_locking)
+			self.terminal.invoke_charset(event.payload.charset_bank, event.payload.charset_slot, event.payload.charset_locking)
 		}
 		.cursor_up {
 			self.terminal.cursor_up(int(event.payload.num))
@@ -187,16 +186,14 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.terminal.set_cursor_pos(int(event.payload.num), int(event.payload.num2))
 		}
 		.cursor_col {
-			self.terminal.set_cursor_pos(int(self.terminal.screens.active.cursor.y) + 1,
-				int(event.payload.num))
+			self.terminal.set_cursor_pos(int(self.terminal.screens.active.cursor.y) + 1, int(event.payload.num))
 		}
 		.cursor_row {
 			self.terminal.set_cursor_pos(int(event.payload.num), int(self.terminal.screens.active.cursor.x) + 1)
 		}
 		.cursor_col_relative {
 			col := int(self.terminal.screens.active.cursor.x) + 1 + int(event.payload.num)
-			self.terminal.set_cursor_pos(int(self.terminal.screens.active.cursor.y) + 1,
-				col)
+			self.terminal.set_cursor_pos(int(self.terminal.screens.active.cursor.y) + 1, col)
 		}
 		.cursor_row_relative {
 			row := int(self.terminal.screens.active.cursor.y) + 1 + int(event.payload.num)
@@ -332,7 +329,11 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.terminal.set_protected_mode(.dec)
 		}
 		.mouse_shift_capture {
-			self.terminal.flags.mouse_shift_capture = if event.payload.flag { .true_ } else { .false_ }
+			self.terminal.flags.mouse_shift_capture = if event.payload.flag {
+				.true_
+			} else {
+				.false_
+			}
 		}
 		.size_report {
 			self.send_size_report(event.payload.size_report_style)
@@ -399,10 +400,14 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.show_desktop_notification(event.payload.str1, event.payload.str2)
 		}
 		.progress_report {
-			self.progress_report(event.payload.num)
+			self.progress_report(event.payload.progress_state, event.payload.progress_percent)
 		}
 		.start_hyperlink {
-			id_val := if event.payload.str2.len > 0 { ?string(event.payload.str2) } else { ?string(none) }
+			id_val := if event.payload.str2.len > 0 {
+				?string(event.payload.str2)
+			} else {
+				?string(none)
+			}
 			self.terminal.screens.active.start_hyperlink(event.payload.str1, id_val) or {}
 		}
 		.clipboard_contents {
@@ -443,6 +448,7 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 		.apc_put {
 			self.apc.feed(event.payload.byte_val)
 		}
+
 		// Unimplemented
 		.title_push, .title_pop {}
 	}
@@ -628,11 +634,18 @@ fn (self &StreamHandler) format_sgr() string {
 fn (self &StreamHandler) format_decscusr() int {
 	blinking := self.terminal.modes.get(.cursor_blinking)
 	return match self.terminal.screens.active.cursor.cursor_style {
-		.block { if blinking { 1 } else { 2 } }
-		.underline { if blinking { 3 } else { 4 } }
-		.bar { if blinking { 5 } else { 6 } }
-		.block_hollow { 2 } // No standard DECSCUSR for hollow, report as steady block
+		.block {
+			if blinking { 1 } else { 2 }
+		}
+		.underline {
+			if blinking { 3 } else { 4 }
+		}
+		.bar {
+			if blinking { 5 } else { 6 }
+		}
+		.block_hollow { 2 }
 	}
+	// No standard DECSCUSR for hollow, report as steady block
 }
 
 // xtgettcap_lookup looks up a hex-encoded terminfo capability name
@@ -652,8 +665,10 @@ fn xtgettcap_lookup(hex_key string) ?string {
 		'Setulc' { '\x1b[58:2::%p1%{65536}%/%d:%p1%{256}%/%{255}%&%d:%p1%{255}%&%dm' }
 		'Smol' { '\x1b[53m' }
 		'Rmol' { '\x1b[55m' }
-		'Ms' { '\x1b]52;%p1%s;%p2%s\x07' }
-		else { return none }
+		'Ms' { '\x1b]52;%p1%s;%p2%s\a' }
+		else {
+			return none
+		}
 	}
 	return hex_encode(val)
 }
@@ -852,7 +867,6 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) {
 		.origin {
 			self.terminal.set_cursor_pos(1, 1)
 		}
-
 		.enable_left_and_right_margin {
 			if !enabled {
 				// When we disable left/right margin mode we need to
@@ -861,15 +875,12 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) {
 				self.terminal.scrolling_region.right = self.terminal.cols - 1
 			}
 		}
-
 		.alt_screen_legacy {
 			self.terminal.switch_screen_mode(.mode_47, enabled) or {}
 		}
-
 		.alt_screen {
 			self.terminal.switch_screen_mode(.mode_1047, enabled) or {}
 		}
-
 		.alt_screen_save_cursor_clear_enter {
 			self.terminal.switch_screen_mode(.mode_1049, enabled) or {}
 		}
@@ -891,7 +902,6 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) {
 			grid_size := self.size.grid()
 			self.terminal.resize(u16(grid_size.columns), u16(grid_size.rows)) or {}
 		}
-
 		.column_132 {
 			self.terminal.deccolm(if enabled { .cols_132 } else { .cols_80 }) or {}
 		}
@@ -905,14 +915,12 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) {
 				})
 			}
 		}
-
 		.linefeed {
 			self.message_writer(Message{
 				kind: .linefeed_mode
 				flag_val: enabled
 			})
 		}
-
 		.in_band_size_reports {
 			if enabled {
 				self.message_writer(Message{
@@ -921,13 +929,11 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) {
 				})
 			}
 		}
-
 		.focus_event {
 			if enabled {
 				self.message_writer(Message.focused_msg(self.terminal.flags.focused))
 			}
 		}
-
 		.mouse_event_x10 {
 			if enabled {
 				self.terminal.flags.mouse_event = .x10
@@ -964,7 +970,6 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) {
 				self.set_mouse_shape(.text)
 			}
 		}
-
 		.mouse_format_utf8 {
 			self.terminal.flags.mouse_format = if enabled { .utf8 } else { .x10 }
 		}
@@ -977,7 +982,6 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) {
 		.mouse_format_sgr_pixels {
 			self.terminal.flags.mouse_format = if enabled { .sgr_pixels } else { .x10 }
 		}
-
 		else {}
 	}
 }
@@ -1013,11 +1017,9 @@ pub fn (mut self StreamHandler) device_attributes(req terminal.DeviceAttributeRe
 			}
 			self.message_writer(Message.write_stable_msg(resp))
 		}
-
 		.secondary {
 			self.message_writer(Message.write_stable_msg('\x1b[>1;10;0c'))
 		}
-
 		.tertiary {}
 	}
 }
@@ -1031,7 +1033,6 @@ pub fn (mut self StreamHandler) device_status_report(req terminal.DeviceStatusRe
 		.operating_status {
 			self.message_writer(Message.write_stable_msg('\x1b[0n'))
 		}
-
 		.cursor_position {
 			mut pos_x := int(self.terminal.screens.active.cursor.x)
 			mut pos_y := int(self.terminal.screens.active.cursor.y)
@@ -1052,7 +1053,6 @@ pub fn (mut self StreamHandler) device_status_report(req terminal.DeviceStatusRe
 			resp := '\x1b[${pos_y + 1};${pos_x + 1}R'
 			self.message_writer(Message.write_req(resp))
 		}
-
 		.color_scheme {
 			self.message_writer(Message.color_scheme_report_msg(true))
 		}
@@ -1073,32 +1073,26 @@ pub fn (mut self StreamHandler) set_cursor_style(style terminal.AnsiCursorStyle)
 			self.terminal.screens.active.cursor.cursor_style = self.default_cursor_style
 			self.terminal.modes.set(.cursor_blinking, self.default_cursor_blink or { true })
 		}
-
 		.blinking_block {
 			self.terminal.screens.active.cursor.cursor_style = .block
 			self.terminal.modes.set(.cursor_blinking, true)
 		}
-
 		.steady_block {
 			self.terminal.screens.active.cursor.cursor_style = .block
 			self.terminal.modes.set(.cursor_blinking, false)
 		}
-
 		.blinking_underline {
 			self.terminal.screens.active.cursor.cursor_style = .underline
 			self.terminal.modes.set(.cursor_blinking, true)
 		}
-
 		.steady_underline {
 			self.terminal.screens.active.cursor.cursor_style = .underline
 			self.terminal.modes.set(.cursor_blinking, false)
 		}
-
 		.blinking_bar {
 			self.terminal.screens.active.cursor.cursor_style = .bar
 			self.terminal.modes.set(.cursor_blinking, true)
 		}
-
 		.steady_bar {
 			self.terminal.screens.active.cursor.cursor_style = .bar
 			self.terminal.modes.set(.cursor_blinking, false)
@@ -1268,8 +1262,7 @@ fn (mut self StreamHandler) semantic_prompt(payload terminal.ActionPayload) {
 		else {}
 	}
 
-	self.terminal.semantic_prompt_options(payload.semantic_prompt_action,
-		payload.semantic_prompt_opts)
+	self.terminal.semantic_prompt_options(payload.semantic_prompt_action, payload.semantic_prompt_opts)
 }
 
 fn (mut self StreamHandler) report_pwd(url string) {
@@ -1521,7 +1514,6 @@ fn (mut self StreamHandler) color_operation_op(op_str string, body string) {
 		op >= 110 && op <= 119 {
 			self.reset_dynamic_color(op - 100)
 		}
-
 		else {
 			// Unsupported color operation; ignore.
 		}
@@ -1606,7 +1598,9 @@ fn (self &StreamHandler) color_query_response_dynamic(dyn int) ?string {
 				self.terminal.colors.foreground.get() or { return none }
 			}
 		}
-		else { return none }
+		else {
+			return none
+		}
 	}
 	term := self.osc_terminator()
 	return match self.osc_color_report_format {
@@ -1651,7 +1645,9 @@ fn (mut self StreamHandler) notify_color_change_dynamic(dyn int, color terminal.
 		10 { osc.DynamicColor.foreground }
 		11 { osc.DynamicColor.background }
 		12 { osc.DynamicColor.cursor }
-		else { return }
+		else {
+			return
+		}
 	}
 	self.surface_message_writer(apprt.SurfaceMessage{
 		kind: .color_change
@@ -1831,13 +1827,21 @@ fn (mut self StreamHandler) show_desktop_notification(title string, body string)
 		kind: .desktop_notification
 	}
 
-	title_len := if title.len < msg.notification_title.len { title.len } else { msg.notification_title.len - 1 }
+	title_len := if title.len < msg.notification_title.len {
+		title.len
+	} else {
+		msg.notification_title.len - 1
+	}
 	for i in 0 .. title_len {
 		msg.notification_title[i] = title[i]
 	}
 	msg.notification_title[title_len] = 0
 
-	body_len := if body.len < msg.notification_body.len { body.len } else { msg.notification_body.len - 1 }
+	body_len := if body.len < msg.notification_body.len {
+		body.len
+	} else {
+		msg.notification_body.len - 1
+	}
 	for i in 0 .. body_len {
 		msg.notification_body[i] = body[i]
 	}
@@ -1877,9 +1881,20 @@ pub fn (mut self StreamHandler) send_size_report(style terminal.SizeReportStyle)
 }
 
 // Display a GUI progress report.
-fn (mut self StreamHandler) progress_report(state u16) {
+fn (mut self StreamHandler) progress_report(state terminal.ProgressState, progress i8) {
+	report_state := match state {
+		.remove { osc.ProgressState.remove }
+		.set { osc.ProgressState.set }
+		.error_state { osc.ProgressState.err_state }
+		.indeterminate { osc.ProgressState.indeterminate }
+		.pause { osc.ProgressState.pause }
+	}
 	self.surface_message_writer(apprt.SurfaceMessage{
 		kind: .progress_report
+		progress_report: osc.ProgressReport{
+			state: report_state
+			progress: if progress >= 0 { ?u8(u8(progress)) } else { none }
+		}
 	})
 }
 

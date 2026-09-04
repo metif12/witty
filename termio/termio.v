@@ -278,11 +278,15 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 
 	mut renderer_state := opts.renderer_state
 	if renderer_state == unsafe { nil } {
-		renderer_state = &renderer.State{}
+		renderer_state = &renderer.State{
+			mutex: sync.new_mutex()
+		}
+	} else if renderer_state.mutex == unsafe { nil } {
+		renderer_state.mutex = sync.new_mutex()
 	}
 	mut renderer_mailbox := opts.renderer_mailbox
 	if renderer_mailbox == unsafe { nil } {
-		renderer_mailbox = &renderer.Mailbox{}
+		renderer_mailbox = renderer.RendererMailbox.create()
 	}
 
 	t.config = opts.config
@@ -295,7 +299,7 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 	t.mailbox = Mailbox.init()!
 	t.terminal_stream = terminal.Stream.init()
 	t.backend = backend
-	t.renderer_state.terminal = voidptr(&t.terminal)
+	t.renderer_state.terminal_ = &t.terminal
 	t.stream_handler = StreamHandler{
 		size: &t.size
 		terminal: &t.terminal
@@ -328,7 +332,7 @@ pub fn (mut t Termio) deinit() {
 pub fn (mut t Termio) queue_message(msg Message, mutex_state MutexState) {
 	match mutex_state {
 		.locked {
-			t.mailbox.send(msg, &t.renderer_state.mutex)
+			t.mailbox.send(msg, t.renderer_state.mutex)
 		}
 		.unlocked {
 			t.mailbox.send(msg, unsafe { nil })
@@ -511,9 +515,9 @@ pub fn (mut t Termio) resize(size renderer.Size) ! {
 	}
 
 	// Mail the renderer so that it can update the GPU and re-render.
-	t.renderer_mailbox.push(renderer.Message{
-		kind: .resize
-	})
+	t.renderer_mailbox.push(renderer.RendererMessage(renderer.ResizeMessage{
+		size: t.size
+	}))
 	t.renderer_wakeup.notify() or {}
 }
 
@@ -672,9 +676,7 @@ fn (mut t Termio) process_output_locked(buf []u8) {
 	now := i64(time.sys_mono_now())
 	if t.last_cursor_reset < 0 || (now - t.last_cursor_reset) > (500 * i64(time.millisecond)) {
 		t.last_cursor_reset = now
-		t.renderer_mailbox.push(renderer.Message{
-			kind: .reset_cursor_blink
-		})
+		t.renderer_mailbox.push(renderer.RendererMessage(renderer.ResetCursorBlinkMessage{}))
 	}
 
 	// Feed the bytes to the stream parser. The parser collects events which

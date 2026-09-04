@@ -239,8 +239,12 @@ pub enum OptionAsAlt {
 // Link matching.
 pub struct Link {
 pub:
+	regex     string
 	action    LinkAction
 	highlight LinkHighlight
+	// Used by the *_mods highlight variants. Zig represents these variants as
+	// tagged-union payloads; V keeps the payload beside the enum tag.
+	mods Mods
 }
 
 pub enum LinkAction {

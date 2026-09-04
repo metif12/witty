@@ -31,7 +31,24 @@ mut:
 
 // open opens a URL or file path using the system default handler.
 pub fn open(url string) ! {
-	os.execute('open "${url}"')
+	mut process := $if macos { os.new_process('/usr/bin/open') } $else $if linux || freebsd { os.new_process('xdg-open') } $else $if windows { os.new_process('rundll32') } $else { /* return_stmt */ }
+	$if windows {
+		process.set_args(['url.dll,FileProtocolHandler', url])
+	} $else {
+		process.set_args([url])
+	}
+	process.run()
+	if process.status == .aborted {
+		return error('failed to start URL handler: ${process.err}')
+	}
+	spawn reap_open_process(mut process)
+}
+
+// The platform URL opener may block until the target application exits. Reap
+// it away from the caller so opening a link never stalls terminal input.
+fn reap_open_process(mut process os.Process) {
+	process.wait()
+	process.close()
 }
 
 // TempDir manages a temporary directory for scratch files.

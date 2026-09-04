@@ -2,6 +2,8 @@ module termio
 
 import renderer
 import terminal
+import apprt
+import osc
 
 // ============================================================
 // StreamHandler tests
@@ -10,11 +12,19 @@ import terminal
 // TestContext holds all test allocations so pointers stay valid.
 struct TestContext {
 mut:
-	t         terminal.Terminal
-	mailbox   Mailbox
-	rstate    renderer.State
-	rmailbox  renderer.Mailbox
-	rsize     renderer.Size
+	t        terminal.Terminal
+	mailbox  Mailbox
+	rstate   renderer.State
+	rmailbox renderer.Mailbox
+	rsize    renderer.Size
+	messages []apprt.SurfaceMessage
+}
+
+fn collect_surface_message(app voidptr, surface voidptr, msg apprt.SurfaceMessage) int {
+	_ = app
+	mut ctx := unsafe { &TestContext(surface) }
+	ctx.messages << msg
+	return 1
 }
 
 // Helper to create a StreamHandler with a test terminal.
@@ -31,10 +41,31 @@ fn make_test_handler() (&StreamHandler, &TestContext) {
 		termio_mailbox: &ctx.mailbox
 		renderer_state: &ctx.rstate
 		renderer_mailbox: &ctx.rmailbox
+		surface_mailbox: apprt.SurfaceMailbox{
+			surface: ctx
+			push_fn: collect_surface_message
+		}
 		size: &ctx.rsize
 		default_cursor_style: .block
 	}
 	return handler, ctx
+}
+
+fn test_progress_report_forwards_payload() {
+	mut handler, mut ctx := make_test_handler()
+	defer {
+		ctx.t.deinit()
+	}
+	handler.progress_report(.set, 42)
+	assert ctx.messages.len == 1
+	assert ctx.messages[0].kind == .progress_report
+	assert ctx.messages[0].progress_report.state == osc.ProgressState.set
+	assert ctx.messages[0].progress_report.progress or { 0 } == 42
+
+	handler.progress_report(.indeterminate, -1)
+	assert ctx.messages.len == 2
+	assert ctx.messages[1].progress_report.state == .indeterminate
+	assert ctx.messages[1].progress_report.progress == none
 }
 
 // Test that the StreamHandler can be created and deinitialized.
@@ -452,8 +483,7 @@ fn test_stream_handler_dcs_apc() {
 }
 
 fn test_apc_handler_rejects_unknown_and_invalid_commands() {
-	for input in ['Xabcdef1234', 'Gabcdef1234', 'Ga=p,i=10000000000',
-		'Ga=p,i=1,z=-9999999999'] {
+	for input in ['Xabcdef1234', 'Gabcdef1234', 'Ga=p,i=10000000000', 'Ga=p,i=1,z=-9999999999'] {
 		mut handler := ApcHandler{}
 		handler.start()
 		for byte_val in input.bytes() {

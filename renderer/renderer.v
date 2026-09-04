@@ -746,14 +746,13 @@ module renderer
 //
 // --- Original Ghostty Comments End: src/renderer/generic.zig
 
-import input
-import sync
 import terminal
 import font
 import time
 import configpkg
 import highlight
 import stbi
+import macos
 
 // Create a renderer type with the provided graphics API wrapper.
 //
@@ -2575,96 +2574,37 @@ pub:
 	size Size
 }
 
-// State holds shared renderer state protected by a mutex.
-pub struct State {
-pub mut:
-	terminal  voidptr
-	preedit   ?Preedit
-	mouse     MouseState
-	inspector ?voidptr
-	mutex     sync.Mutex
-}
+// Compatibility names retained for translated termio callers. These point at
+// the actual shared render state and bounded renderer mailbox rather than a
+// second, inert implementation.
+pub type State = RenderState
 
-pub struct MouseState {
-pub mut:
-	point ?Coordinate
-	mods  input.Mods
-}
+pub type Mailbox = RendererMailbox
 
-pub struct Coordinate {
-pub mut:
-	x u32
-	y u32
-}
+pub type Message = RendererMessage
 
-pub struct Preedit {
-pub mut:
-	codepoints []PreeditCodepoint
-}
+pub type MouseState = RenderMouse
 
-pub struct PreeditCodepoint {
+pub type Coordinate = terminal.ViewportPoint
+
+pub type Preedit = RenderPreedit
+
+pub type PreeditCodepoint = RenderPreeditCodepoint
+
+// Wakeup is the producer-side handle Ghostty passes to termio. It targets the
+// real renderer thread and preserves wakeup coalescing there.
+pub struct Wakeup {
 pub:
-	codepoint u32
-	wide      bool
+	thread &RendererThread = unsafe { nil }
 }
-
-pub fn (p Preedit) width() int {
-	mut w := 0
-	for cp in p.codepoints {
-		w += if cp.wide { 2 } else { 1 }
-	}
-	return w
-}
-
-// Thread manages the renderer thread and its mailbox.
-pub struct Thread {
-pub mut:
-	wakeup  Wakeup
-	mailbox Mailbox
-}
-
-pub fn Thread.init() !Thread {
-	return Thread{}
-}
-
-pub fn (mut t Thread) deinit() {}
-
-pub struct Wakeup {}
 
 pub fn (w Wakeup) notify() ! {
-	// stub: wakes up the renderer thread
+	if w.thread == unsafe { nil } {
+		return
+	}
+	mut render_thread := unsafe { w.thread }
+	render_thread.wakeup()
 }
-
-pub struct Mailbox {}
-
-// push attempts to push a message. Returns number of items pushed (0 or 1).
-pub fn (m Mailbox) push(msg Message) int {
-	_ = msg
-	return 1
-}
-
-pub struct Message {
-pub:
-	kind MessageKind
-}
-
-pub enum MessageKind {
-	visible
-	focus
-	reset_cursor_blink
-	font_grid
-	resize
-	inspector
-	change_config
-	search_viewport_matches
-	search_selected_match
-}
-
-pub fn Message.init_change_config(config voidptr) !Message {
-	return Message{ kind: .change_config }
-}
-
-pub fn (m Message) deinit() {}
 
 // Health status of the renderer.
 pub enum Health {
@@ -2841,40 +2781,44 @@ pub fn (mut s Size) balance_padding(explicit Padding) {
 
 // This is called early right after surface creation.
 pub fn surface_init() ! {
-	// stub: initialize surface for rendering
+	// Metal has no early per-surface initialization hook.
 }
 
 // This is called just prior to spinning up the renderer thread for
 // final main thread setup requirements.
 pub fn (r &Renderer) finalize_surface_init() ! {
-	// stub: finalize surface init on main thread
+	// Metal has no main-thread finalization hook.
 }
 
 // Callback called by renderer.Thread when it begins.
 pub fn (r &Renderer) thread_enter() ! {
-	// stub: enter rendering thread
+	// Metal has no thread-local context to bind.
 }
 
 // Callback called by renderer.Thread when it exits.
 pub fn (r &Renderer) thread_exit() {
-	// stub: exit rendering thread
+	// Metal has no thread-local context to release.
 }
 
 // Called by renderer.Thread when it starts the main loop.
 pub fn (mut r Renderer) loop_enter() ! {
-	// stub: enter main loop
+	if r.metal.layer != unsafe { nil } {
+		macos.metal_iosurface_layer_set_display_callback(r.metal.layer, voidptr(renderer_display_callback), voidptr(&r))
+	}
 }
 
 // Called by renderer.Thread when it exits the main loop.
 pub fn (mut r Renderer) loop_exit() {
-	// stub: exit main loop
+	if r.metal.layer != unsafe { nil } {
+		macos.metal_iosurface_layer_set_display_callback(r.metal.layer, unsafe { nil }, unsafe { nil })
+	}
 }
 
 // This is called by the GTK apprt after the surface is
 // reinitialized due to any of the events mentioned in
 // the doc comment for display_unrealized.
 pub fn (mut r Renderer) display_realized() ! {
-	// stub: reinitialize GPU resources after display realize
+	// Metal retains its device resources across view realization.
 	r.mark_dirty()
 }
 
@@ -2882,5 +2826,13 @@ pub fn (mut r Renderer) display_realized() ! {
 // This can happen because the surface is being closed but also when
 // moving the window between displays or splitting.
 pub fn (mut r Renderer) display_unrealized() {
-	// stub: deinitialize GPU resources on display unrealize
+	// Metal retains its device resources across view realization.
+}
+
+fn renderer_display_callback(context voidptr) {
+	if context == unsafe { nil } {
+		return
+	}
+	mut renderer_impl := unsafe { &Renderer(context) }
+	renderer_impl.draw_frame(true) or {}
 }

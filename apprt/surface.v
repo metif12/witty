@@ -154,16 +154,20 @@ pub struct SurfaceMailbox {
 pub:
 	surface voidptr
 	app     voidptr
+	push_fn SurfaceMailboxPushFn = unsafe { nil }
 }
+
+pub type SurfaceMailboxPushFn = fn (app voidptr, surface voidptr, msg SurfaceMessage) int
 
 // push sends a message to the surface.
 // Surface message sending is implemented on the app thread, so the
 // message must be rewrapped with the surface pointer and sent to the
 // app thread.
 pub fn (m SurfaceMailbox) push(msg SurfaceMessage) int {
-	// TODO: Implement actual message forwarding to the app thread.
-	_ = msg
-	return 1
+	if m.push_fn == unsafe { nil } {
+		return 0
+	}
+	return m.push_fn(m.app, m.surface, msg)
 }
 
 // NewSurfaceContext describes where a new surface should be created

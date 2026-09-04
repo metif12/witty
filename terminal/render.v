@@ -591,10 +591,20 @@ pub fn (self &RenderState) link_cells(viewport_point Pin) CellSet {
 // the the top/bottom line of the viewport are not included, since
 // the render state cuts them off.
 pub fn (self &RenderState) to_string() string {
+	result, _ := self.to_mapped_string()
+	return result
+}
+
+// to_mapped_string returns the rendered viewport text and, for every byte in
+// that UTF-8 text, the viewport cell that produced it. Regex consumers use the
+// byte map to turn match offsets back into terminal cells.
+pub fn (self &RenderState) to_mapped_string() (string, []ViewportPoint) {
 	mut sb := strings.new_builder(int(self.rows) * int(self.cols))
-	for row in self.row_data {
-		for cell in row.cells {
+	mut points := []ViewportPoint{cap: int(self.rows) * int(self.cols)}
+	for y, row in self.row_data {
+		for x, cell in row.cells {
 			cp := cell.raw.codepoint_val()
+			before := sb.len
 			if cp == 0 {
 				sb.write_u8(0) // null byte for empty cells
 			} else {
@@ -605,10 +615,14 @@ pub fn (self &RenderState) to_string() string {
 					}
 				}
 			}
+			for _ in before .. sb.len {
+				points << ViewportPoint{ x: u16(x), y: u16(y) }
+			}
 		}
 		if !row.raw.wrap {
 			sb.write_u8(u8(`\n`))
+			points << ViewportPoint{ x: u16(row.cells.len), y: u16(y) }
 		}
 	}
-	return sb.str()
+	return sb.str(), points
 }
