@@ -712,6 +712,52 @@ fn test_repeatable_command_parse_clear_clone_and_format() {
 	assert commands.items.len == 0
 }
 
+fn test_readable_io_parse_clone_parse_and_format() {
+	raw := ReadableIO.parse_cli('foo\\n\\u{1F601}\\x21')!
+	assert raw == ReadableIO{
+		kind: .raw
+		value: 'foo\\n\\u{1F601}\\x21'
+	}
+	assert raw.clone_parsed()! == ReadableIO{
+		kind: .raw
+		value: 'foo\n😁!'
+	}
+	assert ReadableIO.parse_cli('raw:hello')! == ReadableIO{ kind: .raw, value: 'hello' }
+	assert ReadableIO.parse_cli('path:file.txt')! == ReadableIO{ kind: .path, value: 'file.txt' }
+	assert ReadableIO.parse_cli('other:value')! == ReadableIO{
+		kind: .raw
+		value: 'other:value'
+	}
+
+	ReadableIO.parse_cli('bad\\q') or {
+		assert err.msg() == 'invalid string'
+		return
+	}
+	assert false, 'expected an invalid Zig escape'
+}
+
+fn test_repeatable_readable_io_clear_clone_and_format() {
+	mut values := RepeatableReadableIO{}
+	values.parse_cli('raw:A')!
+	values.parse_cli('path:B')!
+	assert values.items.len == 2
+	assert values.clone().items == values.items
+
+	mut cfg := Config.default_config()
+	cfg.input = values
+	formatted := cfg.format_config(true)
+	assert formatted.contains('input = raw:A\n')
+	assert formatted.contains('input = path:B\n')
+
+	mut roundtrip := Config.default_config()
+	roundtrip.load_string(formatted)
+	assert roundtrip.diagnostics.len == 0
+	assert roundtrip.input.items == values.items
+
+	values.parse_cli('')!
+	assert values.items.len == 0
+}
+
 fn test_repeatable_command_rejects_missing_and_invalid_fields() {
 	mut commands := RepeatableCommand{}
 	commands.parse_cli('title:Foo') or {
@@ -1888,7 +1934,8 @@ fn test_load_string_applies_full_existing_config_surface() {
 	cfg.load_string('
 command = direct:nvim file.txt
 initial-command = shell:echo hi
-initial-input = hello
+input = hello
+input = path:startup.txt
 env = FOO=first
 env = BAR=second
 env = FOO=replaced
@@ -1994,7 +2041,10 @@ auto-update-channel = stable
 			assert false, 'expected shell command'
 		}
 	}
-	assert cfg.initial_input? == 'hello'
+	assert cfg.input.items == [ReadableIO{ kind: .raw, value: 'hello' }, ReadableIO{
+		kind: .path
+		value: 'startup.txt'
+	}]
 	assert cfg.env.entries == [StringMapEntry{'FOO', 'replaced'}, StringMapEntry{'BAR', 'second'}]
 	assert cfg.enquiry_response == 'witty'
 	assert cfg.font_feature == ['liga', 'calt']

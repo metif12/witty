@@ -511,12 +511,14 @@ pub fn (mut self Surface) init(mut app App, opts SurfaceOptions) ! {
 		}
 	}
 
-	// If we have an initial input then we set it. Ghostty escapes the
-	// string into a Zig string literal so it can land in `config.input`
-	// as a `.raw` entry; here we store the raw bytes directly.
+	// If we have initial input, escape the bytes into the retained config
+	// representation. Termio decodes this after cloning the startup state.
 	if initial := opts.initial_input {
 		if initial.len > 0 {
-			config.initial_input = initial
+			config.input.items << configpkg.ReadableIO{
+				kind: .raw
+				value: input.zig_escape(initial)
+			}
 		}
 	}
 

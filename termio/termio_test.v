@@ -1,5 +1,7 @@
 module termio
 
+import configpkg
+import os
 import renderer
 
 fn test_mailbox_push_pop_fifo() {
@@ -41,6 +43,58 @@ fn test_termio_queue_message_uses_mailbox() {
 	}
 	assert msg.kind == .visible
 	assert msg.flag_val
+}
+
+fn test_termio_clones_and_decodes_startup_input() {
+	mut config := configpkg.Config.default_config()
+	config.load_string('input = raw:hello\\nworld\ninput = path:startup\\x2etxt\n')
+	assert config.diagnostics.len == 0
+
+	mut tio := Termio{}
+	tio.init(TermioOpts{
+		full_config: &config
+	})!
+	defer {
+		tio.deinit()
+	}
+
+	assert tio.thread_enter_input == [configpkg.ReadableIO{
+		kind: .raw
+		value: 'hello\nworld'
+	}, configpkg.ReadableIO{
+		kind: .path
+		value: 'startup.txt'
+	}]
+}
+
+fn test_prepare_initial_input_opens_all_sources_before_start() {
+	path := os.join_path(os.temp_dir(), 'witty-termio-input-${os.getpid()}')
+	os.write_file(path, 'from file')!
+	defer {
+		os.rm(path) or {}
+	}
+
+	tio := Termio{
+		thread_enter_input: [configpkg.ReadableIO{ kind: .raw, value: 'raw bytes' },
+			configpkg.ReadableIO{ kind: .path, value: path }]
+	}
+	mut prepared := tio.prepare_initial_input()!
+	defer {
+		close_prepared_inputs(mut prepared)
+	}
+	assert prepared.len == 2
+	assert prepared[0].data.bytestr() == 'raw bytes'
+	assert read_initial_input_file(mut prepared[1].file)!.bytestr() == 'from file'
+
+	missing := Termio{
+		thread_enter_input: [configpkg.ReadableIO{ kind: .raw, value: 'not sent' },
+			configpkg.ReadableIO{ kind: .path, value: path + '.missing' }]
+	}
+	missing.prepare_initial_input() or {
+		assert err.msg() == 'input not found'
+		return
+	}
+	assert false, 'expected a missing startup input error'
 }
 
 fn test_stopwatch_notify_records_signal() {

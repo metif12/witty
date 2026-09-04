@@ -230,6 +230,10 @@ pub mut:
 	// Last time the cursor was reset (monotonic nanoseconds). This is used
 	// to prevent message flooding with cursor resets. -1 means never.
 	last_cursor_reset i64 = -1
+
+	// Startup-only input, cloned and escape-decoded from the full config.
+	// This is discarded after the one allowed subprocess start attempt.
+	thread_enter_input []configpkg.ReadableIO
 }
 
 pub fn (mut t Termio) init(opts TermioOpts) ! {
@@ -299,6 +303,11 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 	t.mailbox = Mailbox.init()!
 	t.terminal_stream = terminal.Stream.init()
 	t.backend = backend
+	if opts.full_config != unsafe { nil } && opts.full_config.input.items.len > 0 {
+		t.thread_enter_input = opts.full_config.input.clone_parsed()!.items
+	} else {
+		t.thread_enter_input = []
+	}
 	t.renderer_state.terminal_ = &t.terminal
 	t.stream_handler = StreamHandler{
 		size: &t.size
@@ -324,6 +333,7 @@ pub fn (mut t Termio) deinit() {
 	t.mailbox.deinit()
 	t.terminal_stream.deinit()
 	t.stream_handler.deinit()
+	t.thread_enter_input = []
 }
 
 // Send a message to the mailbox. Depending on the mailbox type in use this
@@ -349,6 +359,7 @@ pub fn (mut t Termio) queue_write(data []u8, linefeed bool) ! {
 pub struct TermioOpts {
 pub:
 	config           DerivedConfig
+	full_config      &configpkg.Config = unsafe { nil }
 	size             renderer.Size
 	max_scrollback   int = 10_000_000
 	grapheme_cluster bool = true
@@ -435,8 +446,92 @@ pub fn (d DerivedConfig) deinit() {}
 // (starting the subprocess and read thread). The backend needs a pointer to
 // this Termio so its read thread can forward pty data to process_output.
 pub fn (mut t Termio) thread_enter() ! {
+	defer {
+		// Exec only starts once, so startup input is never retained afterward.
+		t.thread_enter_input = []
+	}
+
+	// Open every configured path before starting the command. If any source is
+	// missing, no subprocess starts and therefore none of the input is sent.
+	mut inputs := t.prepare_initial_input()!
+	defer {
+		close_prepared_inputs(mut inputs)
+	}
+
 	// Setup our backend. The backend's read thread will feed process_output.
 	t.backend.thread_enter_io(t)!
+	for mut item in inputs {
+		data := match item.kind {
+			.raw { item.data }
+			.path {
+				read_initial_input_file(mut item.file) or {
+					t.backend.thread_exit()
+					return error('input failed')
+				}
+			}
+		}
+		t.queue_write(data, false) or {
+			t.backend.thread_exit()
+			return error('input failed')
+		}
+	}
+}
+
+const initial_input_max_bytes = 10 * 1024 * 1024
+
+struct PreparedInput {
+	kind ReadableInputKind
+	data []u8
+mut:
+	file os.File
+}
+
+enum ReadableInputKind {
+	raw
+	path
+}
+
+fn (t &Termio) prepare_initial_input() ![]PreparedInput {
+	mut result := []PreparedInput{cap: t.thread_enter_input.len}
+	for item in t.thread_enter_input {
+		match item.kind {
+			.raw {
+				result << PreparedInput{
+					kind: .raw
+					data: item.value.bytes()
+				}
+			}
+			.path {
+				file := os.open(item.value) or {
+					close_prepared_inputs(mut result)
+					return error('input not found')
+				}
+				result << PreparedInput{
+					kind: .path
+					file: file
+				}
+			}
+		}
+	}
+	return result
+}
+
+fn read_initial_input_file(mut file os.File) ![]u8 {
+	mut data := []u8{len: initial_input_max_bytes + 1}
+	read := file.read_from(0, mut data)!
+	if read > initial_input_max_bytes {
+		return error('input failed')
+	}
+	data.trim(read)
+	return data
+}
+
+fn close_prepared_inputs(mut inputs []PreparedInput) {
+	for mut item in inputs {
+		if item.kind == .path {
+			item.file.close()
+		}
+	}
 }
 
 // thread_exit is called when the IO thread exits.

@@ -342,7 +342,7 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	add_group(mut result, 'initial-command', [
 		optional_command_string(c.initial_command),
 	])
-	add_group(mut result, 'initial-input', [optional_string(c.initial_input)])
+	add_group(mut result, 'input', readable_io_strings(c.input))
 	add_group(mut result, 'env', env_strings(c.env))
 	add_group(mut result, 'term', [c.term])
 	add_group(mut result, 'enquiry-response', [c.enquiry_response])
@@ -467,6 +467,13 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	])
 	add_group(mut result, 'palette', palette_strings(c.palette))
 	return result
+}
+
+fn readable_io_strings(value RepeatableReadableIO) []string {
+	if value.items.len == 0 {
+		return ['']
+	}
+	return value.items.map(it.format_entry())
 }
 
 fn add_group(mut groups []ConfigEntryGroup, key string, values []string) {

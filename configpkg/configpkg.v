@@ -3990,7 +3990,7 @@ pub mut:
 	initial_command                ?Command
 	working_directory              ?string
 	env                            RepeatableStringMap
-	initial_input                  ?string
+	input                          RepeatableReadableIO
 	term                           string = 'xterm-ghostty'
 	shell_integration              ShellIntegration = .detect
 	shell_integration_features     ShellIntegrationFeatures
@@ -4935,6 +4935,7 @@ pub fn (c Config) clone() Config {
 	copy.custom_shader = c.custom_shader.clone() or { RepeatablePath{} }
 	copy.config_file = c.config_file.clone() or { RepeatablePath{} }
 	copy.gtk_custom_css = c.gtk_custom_css.clone() or { RepeatablePath{} }
+	copy.input = c.input.clone()
 	copy.env = RepeatableStringMap{
 		entries: c.env.entries.clone()
 	}
@@ -5124,6 +5125,157 @@ pub fn (mut p RepeatablePath) parse_cli(input ?string) ! {
 	parsed := item
 	if parsed.path.len > 0 {
 		p.items << parsed
+	}
+}
+
+// ReadableIO is a startup input source. Values retain their Zig string
+// escapes so configuration formatting can recreate the original value.
+pub enum ReadableIOKind {
+	raw
+	path
+}
+
+pub struct ReadableIO {
+pub:
+	kind  ReadableIOKind
+	value string
+}
+
+// parse_zig_string decodes the escape sequences accepted by Zig string
+// literals. The output never contains more bytes than the input.
+pub fn parse_zig_string(value string) !string {
+	mut result := []u8{cap: value.len}
+	mut i := 0
+	for i < value.len {
+		if value[i] != `\\` {
+			result << value[i]
+			i++
+			continue
+		}
+
+		i++
+		if i >= value.len {
+			return error('invalid string')
+		}
+		match value[i] {
+			`n` { result << `\n` }
+			`r` { result << `\r` }
+			`t` { result << `\t` }
+			`\\` { result << `\\` }
+			`'` { result << `'` }
+			`"` { result << `"` }
+			`x` {
+				if i + 2 >= value.len {
+					return error('invalid string')
+				}
+				hi := zig_hex_digit(value[i + 1]) or { return error('invalid string') }
+				lo := zig_hex_digit(value[i + 2]) or { return error('invalid string') }
+				result << u8((hi << 4) | lo)
+				i += 2
+			}
+			`u` {
+				if i + 1 >= value.len || value[i + 1] != `{` {
+					return error('invalid string')
+				}
+				i += 2
+				mut codepoint := u32(0)
+				mut digits := 0
+				for i < value.len && value[i] != `}` {
+					if digits == 6 {
+						return error('invalid string')
+					}
+					nibble := zig_hex_digit(value[i]) or { return error('invalid string') }
+					codepoint = (codepoint << 4) | nibble
+					digits++
+					i++
+				}
+				if digits == 0 || i >= value.len || codepoint > 0x10ffff
+					|| (codepoint >= 0xd800 && codepoint <= 0xdfff) {
+					return error('invalid string')
+				}
+				result << rune(codepoint).str().bytes()
+			}
+			else {
+				return error('invalid string')
+			}
+		}
+		i++
+	}
+	return result.bytestr()
+}
+
+fn zig_hex_digit(value u8) ?u32 {
+	return match value {
+		`0`...`9` { u32(value - `0`) }
+		`a`...`f` { u32(value - `a` + 10) }
+		`A`...`F` { u32(value - `A` + 10) }
+		else { none }
+	}
+}
+
+pub fn ReadableIO.parse_cli(input ?string) !ReadableIO {
+	value := input or { return error('value required') }
+	if value.len == 0 {
+		return error('value required')
+	}
+
+	// Validate the complete input before parsing the tag. Parsed values are
+	// retained below so formatting is lossless.
+	parse_zig_string(value)!
+	if value.starts_with('raw:') {
+		return ReadableIO{ kind: .raw, value: value[4..].clone() }
+	}
+	if value.starts_with('path:') {
+		return ReadableIO{ kind: .path, value: value[5..].clone() }
+	}
+	return ReadableIO{ kind: .raw, value: value.clone() }
+}
+
+pub fn (r ReadableIO) clone() ReadableIO {
+	return ReadableIO{
+		kind: r.kind
+		value: r.value.clone()
+	}
+}
+
+pub fn (r ReadableIO) clone_parsed() !ReadableIO {
+	return ReadableIO{
+		kind: r.kind
+		value: parse_zig_string(r.value)!
+	}
+}
+
+pub fn (r ReadableIO) format_entry() string {
+	return '${r.kind.str()}:${r.value}'
+}
+
+pub struct RepeatableReadableIO {
+pub mut:
+	items []ReadableIO
+}
+
+pub fn (mut r RepeatableReadableIO) parse_cli(input ?string) ! {
+	value := input or { return error('value required') }
+	if value.len == 0 {
+		r.items.clear()
+		return
+	}
+	r.items << ReadableIO.parse_cli(value)!
+}
+
+pub fn (r RepeatableReadableIO) clone() RepeatableReadableIO {
+	return RepeatableReadableIO{
+		items: r.items.map(it.clone())
+	}
+}
+
+pub fn (r RepeatableReadableIO) clone_parsed() !RepeatableReadableIO {
+	mut items := []ReadableIO{cap: r.items.len}
+	for item in r.items {
+		items << item.clone_parsed()!
+	}
+	return RepeatableReadableIO{
+		items: items
 	}
 }
 
@@ -6604,8 +6756,11 @@ fn (mut c Config) apply_kv(key string, value string) {
 				}
 			}
 		}
-		'initial-input' {
-			c.initial_input = value
+		'input' {
+			c.input.parse_cli(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
 		}
 		'gtk-quick-terminal-namespace' {
 			c.gtk_quick_terminal_namespace = value
