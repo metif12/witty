@@ -76,8 +76,7 @@ fn test_unicode_placement_none() {
 fn test_unicode_placement_single_row_col() {
 	mut pages := terminal.Pages.init(5, 5, 0)
 	// \u{10EEEE}\u{0305}\u{0305}
-	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305],
-		terminal.CellStyle{})
+	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305], terminal.CellStyle{})
 	pages.screen_rows[0].kitty_virtual_placeholder = true
 
 	mut it := placement_iterator(&pages, 0, 5)
@@ -95,10 +94,8 @@ fn test_unicode_placement_single_row_col() {
 fn test_unicode_placement_continuation_break() {
 	mut pages := terminal.Pages.init(10, 5, 0)
 	// Two runs because it jumps cols (col 0 then col 2).
-	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305],
-		terminal.CellStyle{}) // row 0, col 0
-	pages.screen_rows[0].cells[1] = placeholder_cell([u32(0x0305), 0x030E],
-		terminal.CellStyle{}) // row 0, col 2
+	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305], terminal.CellStyle{}) // row 0, col 0
+	pages.screen_rows[0].cells[1] = placeholder_cell([u32(0x0305), 0x030E], terminal.CellStyle{}) // row 0, col 2
 	pages.screen_rows[0].kitty_virtual_placeholder = true
 
 	mut it := placement_iterator(&pages, 0, 5)
@@ -128,12 +125,9 @@ fn test_unicode_placement_continuation_break() {
 fn test_unicode_placement_continuation_with_diacritics_set() {
 	mut pages := terminal.Pages.init(10, 5, 0)
 	// Three cells that continue even though they're explicit.
-	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305],
-		terminal.CellStyle{}) // col 0
-	pages.screen_rows[0].cells[1] = placeholder_cell([u32(0x0305), 0x030D],
-		terminal.CellStyle{}) // col 1
-	pages.screen_rows[0].cells[2] = placeholder_cell([u32(0x0305), 0x030E],
-		terminal.CellStyle{}) // col 2
+	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305], terminal.CellStyle{}) // col 0
+	pages.screen_rows[0].cells[1] = placeholder_cell([u32(0x0305), 0x030D], terminal.CellStyle{}) // col 1
+	pages.screen_rows[0].cells[2] = placeholder_cell([u32(0x0305), 0x030E], terminal.CellStyle{}) // col 2
 	pages.screen_rows[0].kitty_virtual_placeholder = true
 
 	mut it := placement_iterator(&pages, 0, 5)
@@ -152,8 +146,7 @@ fn test_unicode_placement_continuation_with_diacritics_set() {
 fn test_unicode_placement_continuation_with_no_col() {
 	mut pages := terminal.Pages.init(10, 5, 0)
 	// First cell fully specified, the rest have no col diacritic.
-	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305],
-		terminal.CellStyle{})
+	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305], terminal.CellStyle{})
 	pages.screen_rows[0].cells[1] = placeholder_cell([u32(0x0305)], terminal.CellStyle{})
 	pages.screen_rows[0].cells[2] = placeholder_cell([u32(0x0305)], terminal.CellStyle{})
 	pages.screen_rows[0].kitty_virtual_placeholder = true
@@ -195,10 +188,8 @@ fn test_unicode_placement_continuation_with_no_diacritics() {
 fn test_unicode_placement_run_ending() {
 	mut pages := terminal.Pages.init(10, 5, 0)
 	// Two placeholders then normal text "ABC".
-	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305],
-		terminal.CellStyle{})
-	pages.screen_rows[0].cells[1] = placeholder_cell([u32(0x0305), 0x030D],
-		terminal.CellStyle{})
+	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305], terminal.CellStyle{})
+	pages.screen_rows[0].cells[1] = placeholder_cell([u32(0x0305), 0x030D], terminal.CellStyle{})
 	pages.screen_rows[0].cells[2] = text_cell(`A`)
 	pages.screen_rows[0].cells[3] = text_cell(`B`)
 	pages.screen_rows[0].cells[4] = text_cell(`C`)
@@ -223,10 +214,8 @@ fn test_unicode_placement_run_starting_in_the_middle() {
 	pages.screen_rows[0].cells[0] = text_cell(`A`)
 	pages.screen_rows[0].cells[1] = text_cell(`B`)
 	pages.screen_rows[0].cells[2] = text_cell(`C`)
-	pages.screen_rows[0].cells[3] = placeholder_cell([u32(0x0305), 0x0305],
-		terminal.CellStyle{})
-	pages.screen_rows[0].cells[4] = placeholder_cell([u32(0x0305), 0x030D],
-		terminal.CellStyle{})
+	pages.screen_rows[0].cells[3] = placeholder_cell([u32(0x0305), 0x0305], terminal.CellStyle{})
+	pages.screen_rows[0].cells[4] = placeholder_cell([u32(0x0305), 0x030D], terminal.CellStyle{})
 	pages.screen_rows[0].kitty_virtual_placeholder = true
 
 	mut it := placement_iterator(&pages, 0, 5)
@@ -271,8 +260,7 @@ fn test_unicode_placement_specifying_image_id_with_high_bits() {
 		fg_color: .palette
 		fg_palette: 42
 	}
-	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305, 0x030E],
-		style)
+	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305, 0x030E], style)
 	pages.screen_rows[0].kitty_virtual_placeholder = true
 
 	mut it := placement_iterator(&pages, 0, 5)
@@ -288,12 +276,53 @@ fn test_unicode_placement_specifying_image_id_with_high_bits() {
 	assert it.next() == none
 }
 
-// SKIPPED (un-translated logic): "unicode placement: specifying placement id as
-// palette". The placement id comes from the underline color palette value, but
-// the witty terminal.CellStyle only tracks underline_color as a ColorType and
-// does not store an underline palette/rgb value (and terminal/ is out of scope
-// to edit). Without underline palette storage there is no faithful way to encode
-// placement id 21, so this test is intentionally omitted rather than weakened.
+fn test_unicode_placement_specifying_placement_id_as_palette() {
+	mut pages := terminal.Pages.init(5, 5, 0)
+	style := terminal.CellStyle{
+		fg_color: .palette
+		fg_palette: 42
+		underline_color: .palette
+		underline_palette: 21
+	}
+	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305], style)
+	pages.screen_rows[0].kitty_virtual_placeholder = true
+
+	mut it := placement_iterator(&pages, 0, 5)
+	p := it.next() or {
+		assert false, 'expected placement'
+		return
+	}
+	assert p.image_id == 42
+	assert p.placement_id == 21
+	assert p.row == 0
+	assert p.col == 0
+	assert it.next() == none
+}
+
+fn test_unicode_placement_specifying_placement_id_as_rgb() {
+	mut pages := terminal.Pages.init(5, 5, 0)
+	style := terminal.CellStyle{
+		fg_color: .palette
+		fg_palette: 42
+		underline_color: .rgb
+		underline_r: 0x12
+		underline_g: 0x34
+		underline_b: 0x56
+	}
+	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305], style)
+	pages.screen_rows[0].kitty_virtual_placeholder = true
+
+	mut it := placement_iterator(&pages, 0, 5)
+	p := it.next() or {
+		assert false, 'expected placement'
+		return
+	}
+	assert p.image_id == 42
+	assert p.placement_id == 0x123456
+	assert p.row == 0
+	assert p.col == 0
+	assert it.next() == none
+}
 
 // fn test_unicode_render_placement_dog_4x2() {
 //     // Requires full terminal with VirtualPlacement.render_placement test
