@@ -821,6 +821,10 @@ pub mut:
 	// True if the window is focused.
 	focused bool = true
 
+	// CVDisplayLink drives draw-only frames at the active display refresh rate
+	// when window-vsync is enabled.
+	display_link &macos.CVDisplayLink = unsafe { nil }
+
 	// Flag to indicate that our focus state changed for custom
 	// shaders to update their state.
 	custom_shader_focused_changed bool
@@ -961,6 +965,19 @@ pub fn Renderer.init(opts RendererOpts) !Renderer {
 
 	has_custom_shaders := post_shaders.len > 0
 
+	mut display_link := unsafe { &macos.CVDisplayLink(nil) }
+	if opts.config.vsync {
+		display_link = macos.CVDisplayLink.create_with_active_cg_displays() or {
+			for mut frame in frames {
+				frame.deinit()
+			}
+			shaders.deinit()
+			metal.deinit()
+			font_shaper.deinit()
+			return err
+		}
+	}
+
 	mut result := Renderer{
 		metal: metal
 		images: ImageRenderState.empty()
@@ -970,6 +987,7 @@ pub fn Renderer.init(opts RendererOpts) !Renderer {
 		grid_metrics: metrics
 		size: opts.size
 		focused: true
+		display_link: display_link
 		scrollbar: terminal.Scrollbar{}
 		scrollbar_dirty: false
 		search_matches_dirty: false
@@ -1017,6 +1035,11 @@ pub fn Renderer.init(opts RendererOpts) !Renderer {
 
 // Deinitialize the renderer and free all resources.
 pub fn (mut self Renderer) deinit() {
+	if self.display_link != unsafe { nil } {
+		self.display_link.stop() or {}
+		self.display_link.release()
+		self.display_link = unsafe { nil }
+	}
 	for mut frame in self.frames {
 		frame.deinit()
 	}
@@ -1057,7 +1080,21 @@ pub fn (self &Renderer) has_animations() bool {
 // is responsible for triggering draw_now calls to the render thread.
 // That is the only way to trigger a draw_frame.
 pub fn (self &Renderer) has_vsync() bool {
-	return false
+	if self.display_link == unsafe { nil } {
+		return false
+	}
+	return self.display_link.is_running()
+}
+
+// set_macos_display_id moves the display link to the screen currently hosting
+// the window. Failure is non-fatal, matching Ghostty's renderer behavior.
+pub fn (mut self Renderer) set_macos_display_id(display_id u32) {
+	if self.display_link == unsafe { nil } {
+		return
+	}
+	self.display_link.set_current_cg_display(display_id) or {
+		eprintln('renderer: error setting display link display id=${display_id}: ${err}')
+	}
 }
 
 // Callback when the focus changes for the terminal this is rendering.
@@ -1068,16 +1105,27 @@ pub fn (mut self Renderer) set_focus(focus bool) ! {
 
 	// Flag that we need to update our custom shaders
 	self.custom_shader_focused_changed = true
+
+	if self.display_link != unsafe { nil } {
+		if focus {
+			self.display_link.start() or {}
+		} else {
+			self.display_link.stop() or {}
+		}
+	}
 }
 
 // Callback when the window is visible or occluded.
 //
 // Must be called on the render thread.
 pub fn (mut self Renderer) set_visible(visible bool) {
-	// On platforms with display links, we would start/stop
-	// the display link here based on visibility. With gg,
-	// visibility is managed by the framework.
-	_ = visible
+	if self.display_link != unsafe { nil } {
+		if visible && self.focused {
+			self.display_link.start() or {}
+		} else {
+			self.display_link.stop() or {}
+		}
+	}
 }
 
 // Set the new font grid.
@@ -2888,16 +2936,18 @@ pub fn (r &Renderer) thread_exit() {
 }
 
 // Called by renderer.Thread when it starts the main loop.
-pub fn (mut r Renderer) loop_enter() ! {
-	if r.metal.layer != unsafe { nil } {
-		macos.metal_iosurface_layer_set_display_callback(r.metal.layer, voidptr(renderer_display_callback), voidptr(&r))
+pub fn (mut r Renderer) loop_enter(render_thread &RendererThread) ! {
+	if r.display_link == unsafe { nil } {
+		return
 	}
+	r.display_link.set_output_callback(voidptr(renderer_display_link_callback), voidptr(render_thread))!
+	r.display_link.start() or {}
 }
 
 // Called by renderer.Thread when it exits the main loop.
 pub fn (mut r Renderer) loop_exit() {
-	if r.metal.layer != unsafe { nil } {
-		macos.metal_iosurface_layer_set_display_callback(r.metal.layer, unsafe { nil }, unsafe { nil })
+	if r.display_link != unsafe { nil } {
+		r.display_link.stop() or {}
 	}
 }
 
@@ -2916,10 +2966,16 @@ pub fn (mut r Renderer) display_unrealized() {
 	// Metal retains its device resources across view realization.
 }
 
-fn renderer_display_callback(context voidptr) {
+fn renderer_display_link_callback(display_link voidptr, now voidptr, output_time voidptr, flags_in u64, flags_out &u64, context voidptr) int {
+	_ = display_link
+	_ = now
+	_ = output_time
+	_ = flags_in
+	_ = flags_out
 	if context == unsafe { nil } {
-		return
+		return 0
 	}
-	mut renderer_impl := unsafe { &Renderer(context) }
-	renderer_impl.draw_frame(true) or {}
+	mut render_thread := unsafe { &RendererThread(context) }
+	render_thread.draw_now()
+	return 0
 }

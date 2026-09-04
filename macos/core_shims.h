@@ -427,6 +427,19 @@ bool vt_display_link_set_current_display(void *link_ptr, unsigned int display_id
 	return CVDisplayLinkSetCurrentCGDisplay((CVDisplayLinkRef)link_ptr, display_id) == kCVReturnSuccess;
 }
 
+bool vt_display_link_set_output_callback(
+	void *link_ptr,
+	void *callback,
+	void *context
+) {
+	if (!link_ptr || !callback) return false;
+	return CVDisplayLinkSetOutputCallback(
+		(CVDisplayLinkRef)link_ptr,
+		(CVDisplayLinkOutputCallback)callback,
+		context
+	) == kCVReturnSuccess;
+}
+
 void* vt_os_log_create(const char *subsystem, const char *category) {
 	return (void*)os_log_create(subsystem, category);
 }

@@ -364,6 +364,17 @@ pub fn (mut self RendererThread) thread_main() {
 }
 
 fn (mut self RendererThread) thread_main_inner() ! {
+	// Run the renderer lifecycle hooks on the renderer thread. The loop hook
+	// installs platform event sources such as macOS CVDisplayLink.
+	self.renderer.loop_enter(self)!
+	defer {
+		self.renderer.loop_exit()
+	}
+	self.renderer.thread_enter()!
+	defer {
+		self.renderer.thread_exit()
+	}
+
 	// Start blinking the cursor and arm the animation timer exactly as the
 	// xev-backed renderer thread does.
 	now := time.sys_mono_now()
@@ -521,8 +532,7 @@ fn (mut self RendererThread) drain_mailbox() ! {
 				self.flags.has_inspector = msg.active
 			}
 			MacosDisplayIdMessage {
-				// macOS display ID change handling
-				_ = msg.display_id
+				self.renderer.set_macos_display_id(msg.display_id)
 			}
 		}
 	}

@@ -3,6 +3,7 @@ module renderer
 import font
 import terminal
 import configpkg
+import sync
 
 // ============================================================
 // Renderer tests
@@ -422,6 +423,22 @@ fn test_rebuild_row_shapes_and_renders_text() ! {
 		}
 	})!
 	defer { render.deinit() }
+
+	// The renderer loop owns CVDisplayLink lifecycle. Its callback only queues
+	// draw-now work onto the renderer thread; it never renders on CoreVideo's
+	// callback thread.
+	mut render_thread := RendererThread{
+		event: sync.new_semaphore()
+		event_mutex: sync.new_mutex()
+	}
+	defer {
+		render_thread.event.destroy()
+		render_thread.event_mutex.destroy()
+	}
+	render.loop_enter(&render_thread)!
+	assert render.has_vsync()
+	render.loop_exit()
+	assert !render.has_vsync()
 	render.cells.resize(GridSize{ columns: 3, rows: 1 })!
 
 	row := terminal.RenderRow{

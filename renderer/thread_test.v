@@ -61,6 +61,22 @@ fn test_renderer_thread_async_event_semantics() {
 	assert draws_again == 0
 }
 
+fn test_display_link_callback_queues_draw_now() {
+	mut render_thread := RendererThread{
+		event: sync.new_semaphore()
+		event_mutex: sync.new_mutex()
+	}
+	defer {
+		render_thread.event.destroy()
+		render_thread.event_mutex.destroy()
+	}
+
+	mut flags_out := u64(0)
+	assert renderer_display_link_callback(unsafe { nil }, unsafe { nil }, unsafe { nil }, 0, &flags_out, voidptr(&render_thread)) == 0
+	_, _, draws := render_thread.take_pending_events()
+	assert draws == 1
+}
+
 fn test_renderer_thread_timer_deadlines() {
 	assert cursor_blink_interval() == 600 * u64(time.millisecond)
 	assert draw_interval_ns() == 8 * u64(time.millisecond)
