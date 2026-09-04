@@ -13,8 +13,10 @@ These sources are the exact dependencies selected by Ghostty commit
 
 `build.sh` reproduces Ghostty's dcimgui compile flags and source list, using
 the Metal renderer backend on macOS and the OpenGL 3 renderer backend on
-Linux. It writes a native static archive under `lib/`; rerun it when building
-on a different architecture.
+Linux. The V bindings expose the native inspector API on both platforms and
+the renderer-backend lifecycle as `metal_*` or `opengl_*` methods. The script
+writes a native static archive under `lib/`; rerun it when building on a
+different architecture.
 
 The checked-in macOS arm64 archive has SHA-256
 `8e4a438f605ff75802029a31a7071773f75be528340d61ca8617f2682521cf8e`.

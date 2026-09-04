@@ -20,7 +20,7 @@ case "$witty_cimgui_system" in
     Linux)
         witty_cimgui_platform=linux
         witty_cimgui_freetype_flags=$(pkg-config --cflags freetype2)
-        witty_cimgui_extra_sources="$witty_cimgui_imgui/backends/imgui_impl_opengl3.cpp"
+        witty_cimgui_extra_sources="$witty_cimgui_imgui/backends/imgui_impl_opengl3.cpp $witty_cimgui_root/opengl_bridge.cpp"
         ;;
     *)
         echo "unsupported platform: $witty_cimgui_system" >&2

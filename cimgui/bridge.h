@@ -827,6 +827,11 @@ bool witty_cimgui_metal_init(void* device);
 void witty_cimgui_metal_shutdown(void);
 void witty_cimgui_metal_new_frame(void* descriptor);
 void witty_cimgui_metal_render(void* command_buffer, void* descriptor);
+#elif defined(__linux__)
+bool witty_cimgui_opengl_init(ImGuiContext* context);
+void witty_cimgui_opengl_shutdown(ImGuiContext* context);
+void witty_cimgui_opengl_new_frame(ImGuiContext* context);
+void witty_cimgui_opengl_render(ImGuiContext* context);
 #endif
 
 #ifdef __cplusplus
