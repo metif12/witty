@@ -1,6 +1,7 @@
 module apprt
 
 import configpkg
+import input
 
 // "apprt" is the "application runtime" package. This abstracts the
 // application runtime and lifecycle management such as creating windows,
@@ -346,8 +347,8 @@ pub fn (s CoreSurface) mouse_captured() bool {
 	return false
 }
 
-pub fn (mut s CoreSurface) perform_binding_action(action_ voidptr) !bool {
-	_ = action_
+pub fn (mut s CoreSurface) perform_binding_action(action input.Action) !bool {
+	_ = action
 	return false
 }
 

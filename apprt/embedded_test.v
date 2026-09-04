@@ -2,8 +2,109 @@ module apprt
 
 import input
 
+struct EmbeddedActionCapture {
+mut:
+	calls  int
+	target Target = AppTarget{}
+	action RuntimeAction
+}
+
+fn embedded_action_test_callback(app &App, target Target, action RuntimeAction) bool {
+	mut capture := unsafe { &EmbeddedActionCapture(app.opts.userdata) }
+	capture.calls++
+	capture.target = target
+	capture.action = action
+
+	match target {
+		AppTarget {
+			return action.action == .open_config
+		}
+		SurfaceTarget {
+			match action.target {
+				SurfaceTarget {
+					return target.surface != unsafe { nil } && action.target.surface == target.surface
+				}
+				AppTarget {
+					return false
+				}
+			}
+		}
+	}
+}
+
 fn test_embedded_perform_ipc_reports_unhandled() {
 	assert perform_ipc('new-window')! == false
+}
+
+fn test_embedded_action_callback_receives_target_tag_and_payload() {
+	mut capture := EmbeddedActionCapture{}
+	mut app := App{
+		opts: AppOptions{
+			userdata: voidptr(&capture)
+			action_cb: embedded_action_test_callback
+		}
+	}
+	assert app.perform_action(Target(AppTarget{}), .open_config, ActionValue{})!
+	assert capture.calls == 1
+	assert capture.action.action == .open_config
+
+	mut core_surface := CoreSurface{}
+	target := Target(SurfaceTarget{ surface: voidptr(&core_surface) })
+	action := RuntimeAction{
+		target: target
+		action: .resize_split
+		data: ActionValue{
+			resize_split_: ResizeSplit{
+				direction: .left
+				amount: 42
+			}
+		}
+	}
+	assert app.perform_action(target, action.action, action.data)!
+	assert capture.calls == 2
+	assert action.data.resize_split_.direction == .left
+	assert action.data.resize_split_.amount == 42
+}
+
+fn test_embedded_split_helpers_dispatch_surface_actions() {
+	mut capture := EmbeddedActionCapture{}
+	mut app := App{
+		opts: AppOptions{
+			userdata: voidptr(&capture)
+			action_cb: embedded_action_test_callback
+		}
+	}
+	mut surface := Surface{ app: &app }
+
+	ghostty_surface_split(mut surface, .down)
+	assert capture.action.action == .new_split
+	assert capture.action.data.new_split == .down
+
+	ghostty_surface_split_focus(mut surface, .previous)
+	assert capture.action.action == .goto_split
+	assert capture.action.data.goto_split_ == .previous
+
+	ghostty_surface_split_resize(mut surface, .right, 17)
+	assert capture.action.action == .resize_split
+	assert capture.action.data.resize_split_.direction == .right
+	assert capture.action.data.resize_split_.amount == 17
+
+	ghostty_surface_split_equalize(mut surface)
+	assert capture.action.action == .equalize_splits
+	match capture.target {
+		SurfaceTarget {
+			assert capture.target.surface == voidptr(&surface.core_surface)
+		}
+		AppTarget {
+			assert false, 'split helper must target its surface'
+		}
+	}
+	assert capture.calls == 4
+}
+
+fn test_embedded_binding_action_rejects_invalid_syntax() {
+	mut surface := Surface{}
+	assert !ghostty_surface_binding_action(mut surface, 'not_an_action')
 }
 
 // Test creating default AppOptions.

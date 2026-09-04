@@ -66,8 +66,9 @@ pub mut:
 	// a full tick of the app loop.
 	wakeup_cb fn (voidptr) = unsafe { nil }
 
-	// Callback called to handle an action.
-	action_cb fn (&App, voidptr, voidptr) bool = unsafe { nil }
+	// Callback called to handle an action. RuntimeAction is the V equivalent
+	// of Ghostty's tagged ghostty_action_s value.
+	action_cb fn (&App, Target, RuntimeAction) bool = unsafe { nil }
 
 	// Read the clipboard value. The return value must be preserved
 	// by the host until the next call. If there is no valid clipboard
@@ -279,7 +280,11 @@ pub fn (mut self App) perform_action(target_ Target, action ActionKey, data Acti
 	log_debug('dispatching action target=${target_} action=${action} data=${data}')
 
 	if self.opts.action_cb != unsafe { nil } {
-		return self.opts.action_cb(self, unsafe { nil }, unsafe { nil })
+		return self.opts.action_cb(self, target_, RuntimeAction{
+			target: target_
+			action: action
+			data: data
+		})
 	}
 	return false
 }
@@ -1218,7 +1223,7 @@ pub fn ghostty_app_keyboard_changed(mut v App) {
 
 // ghostty_app_open_config opens the configuration.
 pub fn ghostty_app_open_config(mut v App) {
-	v.perform_action(Target(AppTarget{}), .reload_config, ActionValue{}) or {
+	v.perform_action(Target(AppTarget{}), .open_config, ActionValue{}) or {
 		log_err('error reloading config err=${err}')
 		return
 	}
@@ -1483,7 +1488,9 @@ pub fn ghostty_surface_key_is_binding(mut surface Surface, event CAPIKeyEvent) b
 		return false
 	}
 
-	_ = surface.core_surface.key_event_is_binding(&core_event)
+	if _ := surface.core_surface.key_event_is_binding(&core_event) {
+		return true
+	}
 	return false
 }
 
@@ -1560,27 +1567,25 @@ pub fn ghostty_surface_request_close(mut surface Surface) {
 // direction.
 pub fn ghostty_surface_split(mut surface Surface, direction SplitDirection) {
 	surface.app.perform_action(
-		Target(AppTarget{}),
-		.present_terminal,
-		ActionValue{},
+		Target(SurfaceTarget{ surface: voidptr(&surface.core_surface) }),
+		.new_split,
+		ActionValue{ new_split: direction },
 	) or {
 		log_err('error creating new split err=${err}')
 		return
 	}
-	_ = direction
 }
 
 // ghostty_surface_split_focus focuses on the next split (if any).
 pub fn ghostty_surface_split_focus(mut surface Surface, direction GotoSplit) {
 	surface.app.perform_action(
-		Target(AppTarget{}),
-		.present_terminal,
-		ActionValue{},
+		Target(SurfaceTarget{ surface: voidptr(&surface.core_surface) }),
+		.goto_split,
+		ActionValue{ goto_split_: direction },
 	) or {
 		log_err('error focusing split err=${err}')
 		return
 	}
-	_ = direction
 }
 
 // ghostty_surface_split_resize resizes the current split by moving the
@@ -1588,23 +1593,26 @@ pub fn ghostty_surface_split_focus(mut surface Surface, direction GotoSplit) {
 // between 0 and 1 that specifies by how much the divider will move.
 pub fn ghostty_surface_split_resize(mut surface Surface, direction ResizeSplitDirection, amount u16) {
 	surface.app.perform_action(
-		Target(AppTarget{}),
-		.present_terminal,
-		ActionValue{},
+		Target(SurfaceTarget{ surface: voidptr(&surface.core_surface) }),
+		.resize_split,
+		ActionValue{
+			resize_split_: ResizeSplit{
+				direction: direction
+				amount: amount
+			}
+		},
 	) or {
 		log_err('error resizing split err=${err}')
 		return
 	}
-	_ = direction
-	_ = amount
 }
 
 // ghostty_surface_split_equalize equalizes the size of all splits in the
 // current window.
 pub fn ghostty_surface_split_equalize(mut surface Surface) {
 	surface.app.perform_action(
-		Target(AppTarget{}),
-		.present_terminal,
+		Target(SurfaceTarget{ surface: voidptr(&surface.core_surface) }),
+		.equalize_splits,
 		ActionValue{},
 	) or {
 		log_err('error equalizing splits err=${err}')
@@ -1614,11 +1622,15 @@ pub fn ghostty_surface_split_equalize(mut surface Surface) {
 
 // ghostty_surface_binding_action invokes a binding action on the surface.
 pub fn ghostty_surface_binding_action(mut surface Surface, action_str string) bool {
-	// Binding action parsing is not yet implemented. When available, this
-	// would parse action_str into an ActionKey and perform it on the surface.
-	_ = surface
-	log_warn('binding action parsing not available: ${action_str}')
-	return false
+	action := input.Action.parse(action_str) or {
+		log_err('error parsing binding action action=${action_str} err=${err}')
+		return false
+	}
+
+	return surface.core_surface.perform_binding_action(action) or {
+		log_err('error performing binding action action=${action_str} err=${err}')
+		return false
+	}
 }
 
 // ghostty_surface_complete_clipboard_request completes a clipboard read
