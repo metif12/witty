@@ -119,9 +119,9 @@ fn test_config_c_api_gets_composite_values() {
 
 	mut palette := configpkg.CConfigPalette{}
 	assert ghostty_config_get(mut config, voidptr(&palette), 'palette')
-	assert palette.colors[0].r == 0
-	assert palette.colors[1].r == 0xaa
-	assert palette.colors[15].b == 0xff
+	assert palette.colors[0].r == 0x1d
+	assert palette.colors[1].r == 0xcc
+	assert palette.colors[15].b == 0xea
 
 	config.quick_terminal_size.parse_cli('72%,480px')!
 	mut quick_size := configpkg.CConfigQuickTerminalSize{}

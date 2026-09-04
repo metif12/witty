@@ -5703,12 +5703,22 @@ pub fn (m RepeatableCodepointMap) equal(other RepeatableCodepointMap) bool {
 	}
 	for i, entry in m.map.entries {
 		other_entry := other.map.entries[i]
-		if entry.range != other_entry.range || entry.descriptor.family != other_entry.descriptor.family
+		if entry.range != other_entry.range || !optional_string_equal(entry.descriptor.family, other_entry.descriptor.family)
 			|| entry.descriptor.monospace != other_entry.descriptor.monospace {
 			return false
 		}
 	}
 	return true
+}
+
+fn optional_string_equal(a ?string, b ?string) bool {
+	if av := a {
+		if bv := b {
+			return av == bv
+		}
+		return false
+	}
+	return b == none
 }
 
 // RepeatableClipboardCodepointMap maps Unicode ranges to formatter
@@ -6263,43 +6273,12 @@ pub mut:
 	value [256]ColorRGB
 }
 
-// default_palette returns a standard 256-color palette.
+// default_palette returns Ghostty's canonical 256-color palette.
 pub fn Palette.default_palette() Palette {
 	mut p := Palette{}
-	// Standard 16 colors (approximate)
-	colors_16 := [
-		ColorRGB{0x00, 0x00, 0x00},
-		ColorRGB{0xaa, 0x00, 0x00},
-		ColorRGB{0x00, 0xaa, 0x00},
-		ColorRGB{0xaa, 0x55, 0x00},
-		ColorRGB{0x00, 0x00, 0xaa},
-		ColorRGB{0xaa, 0x00, 0xaa},
-		ColorRGB{0x00, 0xaa, 0xaa},
-		ColorRGB{0xaa, 0xaa, 0xaa},
-		ColorRGB{0x55, 0x55, 0x55},
-		ColorRGB{0xff, 0x55, 0x55},
-		ColorRGB{0x55, 0xff, 0x55},
-		ColorRGB{0xff, 0xff, 0x55},
-		ColorRGB{0x55, 0x55, 0xff},
-		ColorRGB{0xff, 0x55, 0xff},
-		ColorRGB{0x55, 0xff, 0xff},
-		ColorRGB{0xff, 0xff, 0xff},
-	]
-	for i, c in colors_16 {
-		p.value[i] = c
-	}
-	// 216-color cube (indices 16..231)
-	for i in 16 .. 232 {
-		idx := i - 16
-		r := u8((idx / 36) * 51)
-		g := u8(((idx / 6) % 6) * 51)
-		b := u8((idx % 6) * 51)
-		p.value[i] = ColorRGB{r, g, b}
-	}
-	// Grayscale ramp (indices 232..255)
-	for i in 232 .. 256 {
-		v := u8(8 + (i - 232) * 10)
-		p.value[i] = ColorRGB{v, v, v}
+	for i in 0 .. 256 {
+		color := terminal.default_palette[i]
+		p.value[i] = ColorRGB{color.r, color.g, color.b}
 	}
 	return p
 }

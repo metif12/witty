@@ -222,6 +222,14 @@ fn test_bold_color_parse_cli() {
 
 // --- Palette ---
 
+fn test_palette_default_matches_terminal_palette() {
+	p := Palette.default_palette()
+	for i in 0 .. 256 {
+		expected := terminal.default_palette[i]
+		assert p.value[i] == ColorRGB{expected.r, expected.g, expected.b}
+	}
+}
+
 // Config.zig: Palette "parseCLI"
 fn test_palette_parse_cli() {
 	mut p := Palette.default_palette()
