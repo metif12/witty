@@ -6,6 +6,7 @@ import configpkg
 import input
 import global_state
 import internal_os
+import os
 
 // application_linux.v - The primary GTK application (AdwApplication subclass).
 //
@@ -76,6 +77,21 @@ fn C.adw_style_manager_get_dark(style_manager voidptr) bool
 
 fn C.adw_init()
 
+// GTK CSS
+pub type GtkCssProvider = voidptr
+
+fn C.gtk_css_provider_new() GtkCssProvider
+
+fn C.gtk_css_provider_load_from_data(provider GtkCssProvider, data &char, length isize)
+
+fn C.gtk_css_section_to_string(section voidptr) &char
+
+fn C.g_quark_to_string(quark u32) &char
+
+fn C.gtk_style_context_add_provider_for_display(display GdkDisplay, provider GtkCssProvider, priority u32)
+
+fn C.gtk_style_context_remove_provider_for_display(display GdkDisplay, provider GtkCssProvider)
+
 // GLib main loop + sources
 fn C.g_main_context_default() voidptr
 
@@ -114,6 +130,10 @@ pub enum AdwColorScheme {
 	prefer_dark  = 3
 	force_dark   = 4
 }
+
+const gtk_style_provider_priority_application = u32(600)
+const gtk_style_provider_priority_user = u32(800)
+const application_style_css = $embed_file('style.css').to_string()
 
 // --- GApplicationFlags ----------------------------------------------------
 //
@@ -198,13 +218,12 @@ mut:
 	// The reusable config errors dialog owned by the application.
 	config_errors_dialog &ConfigErrorsDialog = unsafe { nil }
 
-	// CSS provider for styles derived from configuration. Mirrors
-	// `Private.css_provider`. Out of scope: the actual gtk.CssProvider.
-	css_provider voidptr = unsafe { nil }
+	// CSS provider for shipped and configuration-derived application styles.
+	css_provider GtkCssProvider = unsafe { nil }
 
 	// Providers for user-defined custom stylesheets. Mirrors
 	// `Private.custom_css_providers`.
-	custom_css_providers []voidptr
+	custom_css_providers []GtkCssProvider
 
 	// Stable V wrappers for the GhosttyWindow objects owned by GtkApplication.
 	windows []&Window
@@ -288,9 +307,13 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 		}
 	}
 
-	// Wrap our configuration in a GObject and create the CSS provider.
-	// TODO(gtk): Config.new(alloc, &config) + gtk.CssProvider.new() +
-	// gtk.StyleContext.addProviderForDisplay — GObject/CSS out of scope.
+	// The runtime provider is retained for the application's lifetime. The
+	// priority matches Ghostty's application priority + 3.
+	css_provider := C.gtk_css_provider_new()
+	if isnil(css_provider) {
+		return error('failed to create GTK CSS provider')
+	}
+	C.gtk_style_context_add_provider_for_display(display, css_provider, gtk_style_provider_priority_application + 3)
 
 	// Instantiate the application object. The Zig implementation subclasses
 	// AdwApplication to install vfuncs; V connects the equivalent startup and
@@ -305,10 +328,11 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 		}
 		global_shortcuts: GlobalShortcuts.new()
 		winproto: winproto
+		css_provider: css_provider
 	}
 	obj := C.adw_application_new(&char(app_id.str), GApplicationFlags(app_flags))
 	if isnil(obj) {
-		self.winproto.deinit()
+		self.deinit()
 		return error('failed to create AdwApplication')
 	}
 	self.obj = GApplication(obj)
@@ -316,9 +340,7 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 	C.g_signal_connect_data(self.obj, c'startup', GCallback(voidptr(application_startup_cb)), voidptr(self), unsafe { nil }, 0)
 	C.g_signal_connect_data(self.obj, c'activate', GCallback(voidptr(application_activate_cb)), voidptr(self), unsafe { nil }, 0)
 
-	// Signals: connect "notify::config" -> propConfig, and the CSS provider
-	// "parsing-error" -> signalCssParsingError.
-	// TODO(gtk): signal vfunc overrides — connections are out of scope.
+	C.g_signal_connect_data(css_provider, c'parsing-error', GCallback(voidptr(application_css_parsing_error_cb)), voidptr(self), unsafe { nil }, 0)
 
 	// Trigger initial config changes (notify by pspec). Here we apply the
 	// config-derived setup directly.
@@ -344,8 +366,21 @@ pub fn (mut self Application) deinit() {
 		config.unref()
 		self.config_object = unsafe { nil }
 	}
-	// TODO(gtk): unref CSS providers and remove style providers from display.
-	self.custom_css_providers = []voidptr{}
+	display := C.gdk_display_get_default()
+	if !isnil(display) && !isnil(self.css_provider) {
+		C.gtk_style_context_remove_provider_for_display(display, self.css_provider)
+	}
+	if !isnil(self.css_provider) {
+		object_unref(GObject(self.css_provider))
+		self.css_provider = unsafe { nil }
+	}
+	for provider in self.custom_css_providers {
+		if !isnil(display) {
+			C.gtk_style_context_remove_provider_for_display(display, provider)
+		}
+		object_unref(GObject(provider))
+	}
+	self.custom_css_providers.clear()
 	self.windows.clear()
 }
 
@@ -693,10 +728,135 @@ fn (mut self Application) prop_config() {
 	// Sync our accelerators for menu items.
 	self.sync_action_accelerators()
 
-	// Load runtime + custom CSS. Failures leave the old CSS in place.
-	// TODO(gtk): loadRuntimeCss / loadCustomCss — CSS provider + gtk.CssProvider
-	// are out of scope. The runtime CSS generation is pure string building but
-	// depends on gtk.CssProvider.loadFromBytes to apply, so it is stubbed.
+	self.load_runtime_css()
+	self.load_custom_css()
+}
+
+// application_runtime_css translates loadRuntimeCss, including both GTK
+// version branches. The shipped stylesheet is prepended because Witty does
+// not use Ghostty's compiled GResource autoloading.
+fn application_runtime_css(config &configpkg.Config, gtk_416 bool) string {
+	mut css := application_style_css + '\n'
+	background := config.window_titlebar_background or { config.background }
+	foreground := config.window_titlebar_foreground or { config.foreground }
+
+	if gtk_416 {
+		css += '/*\n * Child Exited Overlay\n */\n\n'
+		css += '.child-exited.normal revealer widget {\n  background-color: color-mix(\n    in srgb,\n    var(--success-bg-color),\n    transparent 50%\n  );\n}\n\n'
+		css += '.child-exited.abnormal revealer widget {\n  background-color: color-mix(\n    in srgb,\n    var(--error-bg-color),\n    transparent 50%\n  );\n}\n\n'
+		css += '/*\n * Surface\n */\n\n'
+		css += '.surface progressbar.error trough progress {\n  background-color: color-mix(\n    in srgb,\n    var(--error-bg-color),\n    transparent 50%\n  );\n}\n\n'
+		css += '.surface .bell-overlay {\n  border-color: color-mix(\n    in srgb,\n    var(--accent-color),\n    transparent 50%\n  );\n}\n\n'
+		css += '/*\n * Splits\n */\n\n'
+		css += '.window .split paned > separator {\n  background-color: color-mix(\n    in srgb,\n    var(--window-bg-color),\n    transparent 0%\n  );\n}\n\n'
+		if config.window_theme == .ghostty {
+			css += ':root {\n'
+			css += '  --ghostty-fg: rgb(${foreground.r},${foreground.g},${foreground.b});\n'
+			css += '  --ghostty-bg: rgb(${background.r},${background.g},${background.b});\n'
+			css += '  --headerbar-fg-color: var(--ghostty-fg);\n  --headerbar-bg-color: var(--ghostty-bg);\n'
+			css += '  --headerbar-backdrop-color: oklab(from var(--headerbar-bg-color) calc(l * 0.9) a b / alpha);\n'
+			css += '  --overview-fg-color: var(--ghostty-fg);\n  --overview-bg-color: var(--ghostty-bg);\n'
+			css += '  --popover-fg-color: var(--ghostty-fg);\n  --popover-bg-color: var(--ghostty-bg);\n'
+			css += '  --window-fg-color: var(--ghostty-fg);\n  --window-bg-color: var(--ghostty-bg);\n}\n'
+			css += 'windowhandle {\n  background-color: var(--headerbar-bg-color);\n  color: var(--headerbar-fg-color);\n}\n'
+			css += 'windowhandle:backdrop {\n background-color: var(--headerbar-backdrop-color);\n}\n'
+		}
+	} else if config.window_theme == .ghostty {
+		css += 'windowhandle {\n  background-color: rgb(${background.r},${background.g},${background.b});\n'
+		css += '  color: rgb(${foreground.r},${foreground.g},${foreground.b});\n}\n'
+		css += 'windowhandle:backdrop {\n background-color: oklab(from rgb(${background.r},${background.g},${background.b}) calc(l * 0.9) a b / alpha);\n}\n'
+	}
+
+	fill := config.unfocused_split_fill or { config.background }
+	css += 'widget.unfocused-split {\n opacity: ${1.0 - config.unfocused_split_opacity:.2f};\n background-color: rgb(${fill.r},${fill.g},${fill.b});\n}\n'
+	if divider := config.split_divider_color {
+		css += '.window .split paned > separator {\n  color: rgb(${divider.r},${divider.g},${divider.b});\n'
+		css += '  background: rgb(${divider.r},${divider.g},${divider.b});\n}\n'
+	}
+	if font_family := config.window_title_font_family {
+		css += '.window headerbar {\n  font-family: "${font_family}";\n}\n'
+	}
+	return css
+}
+
+fn (mut self Application) load_runtime_css() {
+	if isnil(self.css_provider) {
+		return
+	}
+	css := application_runtime_css(&self.config, gtk_runtime_at_least(4, 16, 0))
+	C.gtk_css_provider_load_from_data(self.css_provider, &char(css.str), isize(css.len))
+}
+
+fn (mut self Application) load_custom_css() {
+	display := C.gdk_display_get_default()
+	if isnil(display) {
+		eprintln('unable to get display while loading custom CSS')
+		return
+	}
+
+	for provider in self.custom_css_providers {
+		C.gtk_style_context_remove_provider_for_display(display, provider)
+		object_unref(GObject(provider))
+	}
+	self.custom_css_providers.clear()
+
+	css_file_size_limit := u64(5 * 1024 * 1024)
+	for entry in self.config.gtk_custom_css.items {
+		path := entry.path
+		if !os.exists(path) {
+			if !entry.optional {
+				eprintln('error opening gtk-custom-css file ${path}: file not found')
+			}
+			continue
+		}
+		if os.file_size(path) > css_file_size_limit {
+			eprintln('gtk-custom-css file ${path} was larger than 5 MiB')
+			continue
+		}
+		contents := os.read_bytes(path) or {
+			eprintln('error reading gtk-custom-css file ${path}: ${err}')
+			continue
+		}
+		provider := C.gtk_css_provider_new()
+		if isnil(provider) {
+			eprintln('unable to create CSS provider for ${path}')
+			continue
+		}
+		C.g_signal_connect_data(provider, c'parsing-error', GCallback(voidptr(application_css_parsing_error_cb)), voidptr(self), unsafe { nil }, 0)
+		self.custom_css_providers << provider
+		C.gtk_css_provider_load_from_data(provider, &char(contents.data), isize(contents.len))
+		C.gtk_style_context_add_provider_for_display(display, provider, gtk_style_provider_priority_user)
+	}
+}
+
+fn application_css_parsing_error_cb(provider GtkCssProvider, section voidptr, err GError, data voidptr) {
+	_ = provider
+	_ = data
+	if isnil(err) {
+		eprintln('CSS parsing failed')
+		return
+	}
+	c_err := unsafe { &C.GError(err) }
+	message := if isnil(c_err.message) {
+		'unknown error'
+	} else {
+		unsafe { cstring_to_vstring(c_err.message) }
+	}
+	domain_ptr := C.g_quark_to_string(c_err.domain)
+	domain := if isnil(domain_ptr) {
+		'unknown-domain'
+	} else {
+		unsafe { cstring_to_vstring(domain_ptr) }
+	}
+	mut location := 'unknown location'
+	if !isnil(section) {
+		location_ptr := C.gtk_css_section_to_string(section)
+		if !isnil(location_ptr) {
+			location = unsafe { cstring_to_vstring(location_ptr) }
+			C.g_free(location_ptr)
+		}
+	}
+	eprintln('CSS parsing failed at ${location}: ${domain} ${c_err.code} ${message}')
 }
 
 // show_config_errors_dialog shows the config errors dialog if the config has

@@ -4094,8 +4094,13 @@ pub mut:
 	// Enable URL matching by default. (link_url declared above.)
 	// Whether window decorations are enabled.
 	window_decoration WindowDecoration = .auto
+	// Font used for application window and tab titles.
+	window_title_font_family ?string
 	// The theme to use for the window (auto/system/light/dark/ghostty).
 	window_theme WindowTheme = .auto
+	// Optional titlebar colors used by the GTK ghostty window theme.
+	window_titlebar_background ?ColorRGB
+	window_titlebar_foreground ?ColorRGB
 	// Position new tabs after the current tab or at the end.
 	window_new_tab_position WindowNewTabPosition = .current
 	// Controls whether the GTK tab bar is always, automatically, or never shown.
@@ -4159,6 +4164,8 @@ pub mut:
 	gtk_toolbar_style                GtkToolbarStyle = .raised
 	gtk_titlebar_style               GtkTitlebarStyle = .native
 	gtk_wide_tabs                    bool = true
+	// User stylesheets loaded by the GTK application in declaration order.
+	gtk_custom_css RepeatablePath
 	// The current conditional state (e.g. light/dark theme). This is not a
 	// user-facing config option; it tracks runtime conditional evaluation.
 	conditional_state ConditionalState
@@ -4865,6 +4872,7 @@ pub fn (c Config) clone() Config {
 	copy.font_feature = c.font_feature.clone()
 	copy.custom_shader = c.custom_shader.clone() or { RepeatablePath{} }
 	copy.config_file = c.config_file.clone() or { RepeatablePath{} }
+	copy.gtk_custom_css = c.gtk_custom_css.clone() or { RepeatablePath{} }
 	copy.env = RepeatableStringMap{
 		entries: c.env.entries.clone()
 	}
@@ -6027,6 +6035,7 @@ fn (mut c Config) expand_paths(base string) {
 	}
 	c.custom_shader.expand(base) or { c.add_diagnostic('error expanding custom-shader path: ${err}') }
 	c.config_file.expand(base) or { c.add_diagnostic('error expanding config-file path: ${err}') }
+	c.gtk_custom_css.expand(base) or { c.add_diagnostic('error expanding gtk-custom-css path: ${err}') }
 	if mut background_image := c.background_image {
 		background_image.expand(base) or {
 			c.add_diagnostic('error expanding background-image path: ${err}')
@@ -6247,6 +6256,29 @@ fn (mut c Config) apply_kv(key string, value string) {
 				else {}
 			}
 		}
+		'window-title-font-family' {
+			c.window_title_font_family = if value.len == 0 { none } else { value }
+		}
+		'window-titlebar-background' {
+			if value.len == 0 {
+				c.window_titlebar_background = none
+			} else {
+				c.window_titlebar_background = color_parse_cli(value) or {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'window-titlebar-foreground' {
+			if value.len == 0 {
+				c.window_titlebar_foreground = none
+			} else {
+				c.window_titlebar_foreground = color_parse_cli(value) or {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
 		'font-family' {
 			c.apply_font_family_value(mut &c.font_family, value)
 		}
@@ -6385,6 +6417,11 @@ fn (mut c Config) apply_kv(key string, value string) {
 		}
 		'custom-shader' {
 			c.custom_shader.parse_cli(value) or {
+				c.invalid_config_value(key, value)
+			}
+		}
+		'gtk-custom-css' {
+			c.gtk_custom_css.parse_cli(value) or {
 				c.invalid_config_value(key, value)
 			}
 		}

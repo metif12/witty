@@ -849,6 +849,34 @@ fn test_bell_features_parse_format_and_defaults() {
 	assert cfg.diagnostics.len == 1
 }
 
+fn test_gtk_css_config_parse_format_clone_and_clear() {
+	mut cfg := Config.default_config()
+	cfg.load_string('window-title-font-family = Cantarell\nwindow-titlebar-background = #123456\nwindow-titlebar-foreground = aliceblue\ngtk-custom-css = one.css\ngtk-custom-css = ?optional.css')
+	assert cfg.diagnostics.len == 0
+	assert cfg.window_title_font_family? == 'Cantarell'
+	assert cfg.window_titlebar_background? == ColorRGB{18, 52, 86}
+	assert cfg.window_titlebar_foreground? == ColorRGB{240, 248, 255}
+	assert cfg.gtk_custom_css.items == [
+		Path{ path: 'one.css' },
+		Path{ path: 'optional.css', optional: true },
+	]
+
+	cloned := cfg.clone()
+	assert cloned.gtk_custom_css.equal(&cfg.gtk_custom_css)
+	formatted := cfg.format_config(true)
+	assert formatted.contains('window-title-font-family = Cantarell\n')
+	assert formatted.contains('window-titlebar-background = #123456\n')
+	assert formatted.contains('window-titlebar-foreground = #f0f8ff\n')
+	assert formatted.contains('gtk-custom-css = one.css\n')
+	assert formatted.contains('gtk-custom-css = ?optional.css\n')
+
+	cfg.load_string('window-title-font-family =\nwindow-titlebar-background =\nwindow-titlebar-foreground =\ngtk-custom-css =')
+	assert cfg.window_title_font_family == none
+	assert cfg.window_titlebar_background == none
+	assert cfg.window_titlebar_foreground == none
+	assert cfg.gtk_custom_css.items.len == 0
+}
+
 fn test_app_notifications_parse_format_and_defaults() {
 	mut cfg := Config.default_config()
 	assert cfg.app_notifications.clipboard_copy

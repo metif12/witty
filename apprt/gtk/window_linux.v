@@ -321,6 +321,7 @@ pub fn Window.new(app &Application) &Window {
 	if isnil(obj) {
 		return &Window{}
 	}
+	C.gtk_widget_add_css_class(GtkWidget(obj), c'window')
 
 	tab_view := C.adw_tab_view_new()
 	toast_overlay := C.adw_toast_overlay_new()
@@ -1319,6 +1320,11 @@ pub fn (mut self Window) prop_config() {
 	}
 	self.sync_apprt_window()
 	self.sync_appearance()
+	for mut tab in self.tabs {
+		for mut surface in tab.split_tree.surfaces {
+			surface.apply_config()
+		}
+	}
 }
 
 // surface_clipboard_write shows the same standard-clipboard toast as

@@ -189,7 +189,16 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	add_group(mut result, 'window-decoration', [
 		enum_config_string(c.window_decoration.str()),
 	])
+	add_group(mut result, 'window-title-font-family', [
+		optional_string(c.window_title_font_family),
+	])
 	add_group(mut result, 'window-theme', [c.window_theme.str()])
+	add_group(mut result, 'window-titlebar-background', [
+		optional_color_string(c.window_titlebar_background),
+	])
+	add_group(mut result, 'window-titlebar-foreground', [
+		optional_color_string(c.window_titlebar_foreground),
+	])
 	add_group(mut result, 'window-new-tab-position', [
 		enum_config_string(c.window_new_tab_position.str()),
 	])
@@ -339,6 +348,7 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 		enum_config_string(c.gtk_titlebar_style.str()),
 	])
 	add_group(mut result, 'gtk-wide-tabs', [bool_string(c.gtk_wide_tabs)])
+	add_group(mut result, 'gtk-custom-css', repeat_paths(c.gtk_custom_css))
 	add_group(mut result, 'palette', palette_strings(c.palette))
 	return result
 }

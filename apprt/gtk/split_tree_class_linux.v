@@ -844,6 +844,7 @@ pub fn new_split_tree_split(split_tree &SplitTreeWidget, handle int, layout data
 	}
 	paned := C.gtk_paned_new(orientation)
 	bin := C.adw_bin_new()
+	C.gtk_widget_add_css_class(GtkWidget(bin), c'split')
 	C.adw_bin_set_child(bin, GtkWidget(paned))
 	mut self := &SplitTreeSplit{
 		widget: GtkWidget(bin)

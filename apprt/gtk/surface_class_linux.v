@@ -1810,6 +1810,13 @@ fn (mut self SurfaceWidget) apply_resize_overlay_config() {
 	self.resize_overlay.set_position(halign, valign)
 }
 
+// apply_config mirrors the surface's notify::config handler and refreshes
+// every programmatic binding that depends on the shared Config object.
+pub fn (mut self SurfaceWidget) apply_config() {
+	self.apply_resize_overlay_config()
+	self.sync_bell_border_overlay()
+}
+
 // resize_overlay_schedule mirrors `resizeOverlaySchedule`.
 fn (mut self SurfaceWidget) resize_overlay_schedule() {
 	if !self.has_core() || isnil(self.config) || isnil(self.resize_overlay) {
@@ -2841,6 +2848,7 @@ fn surface_unfocused_revealer_new() GtkWidget {
 
 pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &Config) &SurfaceWidget {
 	obj := C.g_object_new(terminal_surface_get_type(), &char(unsafe { nil }))
+	C.gtk_widget_add_css_class(GtkWidget(obj), c'surface')
 	gl_area := C.gtk_gl_area_new()
 	C.gtk_widget_set_hexpand(GtkWidget(gl_area), 1)
 	C.gtk_widget_set_vexpand(GtkWidget(gl_area), 1)
@@ -2906,8 +2914,7 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 	native_priv.wrapper = voidptr(w)
 	w.rt_surface = Surface{ surface: w }
 	w.mouse_shape = .text
-	w.apply_resize_overlay_config()
-	w.sync_bell_border_overlay()
+	w.apply_config()
 	w.sync_unfocused_split_overlay()
 	w.focused = true
 	w.in_keyevent = .false_
