@@ -156,13 +156,13 @@ pub fn append_env(existing string, value string) string {
 	if existing.len == 0 {
 		return value
 	}
-	return '${existing}:${value}'
+	return '${existing}${os.path_delimiter}${value}'
 }
 
 // append_env_always appends a value, always using the colon separator
 // even if the existing value is empty (resulting in a leading colon).
 pub fn append_env_always(existing string, value string) string {
-	return '${existing}:${value}'
+	return '${existing}${os.path_delimiter}${value}'
 }
 
 // prepend_env prepends a value to an existing environment variable string,
@@ -171,7 +171,35 @@ pub fn prepend_env(existing string, value string) string {
 	if existing.len == 0 {
 		return value
 	}
-	return '${value}:${existing}'
+	return '${value}${os.path_delimiter}${existing}'
+}
+
+// getenv returns the value of an environment variable, preserving the
+// distinction between a missing variable and a variable set to an empty
+// string.
+pub fn getenv(key string) ?string {
+	return os.getenv_opt(key)
+}
+
+// getenv_not_empty returns none for both missing and empty variables.
+pub fn getenv_not_empty(key string) ?string {
+	value := getenv(key) or { return none }
+	if value.len == 0 {
+		return none
+	}
+	return value
+}
+
+// setenv replaces an environment variable and returns the platform result
+// code, matching libc setenv/_putenv_s semantics used by Ghostty.
+pub fn setenv(key string, value string) int {
+	return os.setenv(key, value, true)
+}
+
+// unsetenv removes an environment variable and returns the platform result
+// code.
+pub fn unsetenv(key string) int {
+	return os.unsetenv(key)
 }
 
 // is_flatpak returns true if running inside a Flatpak sandbox.
@@ -181,15 +209,124 @@ pub fn is_flatpak() bool {
 
 // home returns the user's home directory.
 pub fn home() ?string {
-	h := os.home_dir()
-	if h.len == 0 {
+	$if windows {
+		drive := getenv('HOMEDRIVE') or { return none }
+		path := getenv('HOMEPATH') or { return none }
+		return drive + path
+	} $else $if ios {
+		return none
+	} $else {
+
+		// HOME wins exactly as supplied, including an empty value or trailing
+		// separator. This is observable in expand_home.
+		if value := getenv('HOME') {
+			return value
+		}
+
+		$if macos {
+			// Multi-user macOS setups require NSFileManager rather than passwd.
+			if value := home_macos() {
+				return value
+			}
+		}
+
+		// getpwuid_r is the portable fallback on every supported Unix host.
+		entry := get_passwd() or { PasswdEntry{} }
+		if value := entry.home {
+			return value
+		}
+
+		// Last resort: ask the login shell to change to its home directory.
+		result := os.execute('/bin/sh -c "cd && pwd"')
+		if result.exit_code == 0 {
+			return result.output.trim(' \n\t')
+		}
 		return none
 	}
-	// Strip trailing separator
-	if h.ends_with('/') || h.ends_with('\\') {
-		return h[..h.len - 1]
+}
+
+// expand_home expands only paths beginning with "~/". A lone tilde and
+// named-user forms such as "~root/" are deliberately left untouched.
+pub fn expand_home(path string) !string {
+	$if ios {
+		return path
+	} $else {
+		if !path.starts_with('~/') {
+			return path
+		}
+		home_dir := home() or { return error('home detection failed') }
+		return home_dir + path[1..]
 	}
-	return h
+}
+
+// PathExpandResult preserves Ghostty's error-union-of-optional return in V,
+// which cannot directly express !?string. value == none means the command
+// was not present in PATH; errors are still returned by expand.
+pub struct PathExpandResult {
+pub:
+	value ?string
+}
+
+// expand searches PATH for cmd and returns the first executable non-directory
+// entry. Commands containing a slash are returned unchanged without probing.
+pub fn expand(cmd string) !PathExpandResult {
+	if cmd.contains('/') {
+		return PathExpandResult{
+			value: cmd.clone()
+		}
+	}
+
+	path_env := getenv('PATH') or { return PathExpandResult{} }
+	mut saw_access_denied := false
+	for search_path in path_env.split(os.path_delimiter) {
+		// std.mem.tokenizeScalar, used by Ghostty, skips empty PATH entries.
+		if search_path.len == 0 {
+			continue
+		}
+		full_path := search_path + os.path_separator + cmd
+		if full_path.len + 1 > os.max_path_len {
+			return error('path too long')
+		}
+
+		file_stat := os.stat(full_path) or {
+			if err.code() == C.EACCES {
+				saw_access_denied = true
+				continue
+			}
+			if err.code() == C.ENOENT || err.code() == C.ENOTDIR {
+				continue
+			}
+			return err
+		}
+		if file_stat.get_filetype() == .directory {
+			continue
+		}
+		// Ghostty opens the candidate before inspecting its mode, so a file
+		// that cannot be opened for reading contributes AccessDenied even if
+		// stat itself succeeds.
+		if !os.is_readable(full_path) {
+			saw_access_denied = true
+			continue
+		}
+
+		$if windows {
+			return PathExpandResult{
+				value: full_path
+			}
+		} $else {
+			mode := file_stat.get_mode()
+			if mode.owner.execute || mode.group.execute || mode.others.execute {
+				return PathExpandResult{
+					value: full_path
+				}
+			}
+		}
+	}
+
+	if saw_access_denied {
+		return error('access denied')
+	}
+	return PathExpandResult{}
 }
 
 // PasswdEntry represents a passwd database entry.

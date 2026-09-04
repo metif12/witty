@@ -565,6 +565,24 @@ fn objc_utf8_string(obj ObjId) string {
 	return unsafe { ptr.vstring().clone() }
 }
 
+// home_directory_for_current_user returns the current user's home through
+// NSFileManager. This is the reliable lookup for multi-user macOS sessions.
+pub fn home_directory_for_current_user() ?string {
+	manager := msg_id(get_class('NSFileManager'), 'defaultManager')
+	if is_nil(manager) {
+		return none
+	}
+	home_url := msg_id(manager, 'homeDirectoryForCurrentUser')
+	if is_nil(home_url) {
+		return none
+	}
+	home_path := msg_id(home_url, 'path')
+	if is_nil(home_path) {
+		return none
+	}
+	return objc_utf8_string(home_path)
+}
+
 fn shared_app() ObjId {
 	return msg_id(get_class('NSApplication'), 'sharedApplication')
 }

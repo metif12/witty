@@ -36,6 +36,83 @@ fn test_temp_dir_is_unique_and_deletes_contents() {
 	first.deinit()
 }
 
+fn test_environment_access_preserves_missing_and_empty() {
+	key := 'WITTY_INTERNAL_OS_ENV_TEST'
+	previous := os.getenv_opt(key)
+	defer {
+		if value := previous {
+			os.setenv(key, value, true)
+		} else {
+			os.unsetenv(key)
+		}
+	}
+
+	assert unsetenv(key) == 0
+	assert getenv(key) == none
+	assert getenv_not_empty(key) == none
+	assert setenv(key, '') == 0
+	assert (getenv(key) or { 'missing' }) == ''
+	assert getenv_not_empty(key) == none
+	assert setenv(key, 'value') == 0
+	assert (getenv(key) or { '' }) == 'value'
+	assert (getenv_not_empty(key) or { '' }) == 'value'
+}
+
+fn test_environment_path_composition_uses_platform_delimiter() {
+	assert append_env('', 'foo') == 'foo'
+	assert append_env('a:b', 'foo') == 'a:b${os.path_delimiter}foo'
+	assert append_env_always('', 'foo') == '${os.path_delimiter}foo'
+	assert prepend_env('', 'foo') == 'foo'
+	assert prepend_env('a:b', 'foo') == 'foo${os.path_delimiter}a:b'
+}
+
+fn test_home_preserves_environment_value_and_expand_home_rules() {
+	previous := os.getenv_opt('HOME')
+	defer {
+		if value := previous {
+			os.setenv('HOME', value, true)
+		} else {
+			os.unsetenv('HOME')
+		}
+	}
+	os.setenv('HOME', '/home/witty-test/', true)
+
+	assert (home() or { '' }) == '/home/witty-test/'
+	assert expand_home('~/Downloads/shader.glsl')! == '/home/witty-test//Downloads/shader.glsl'
+	assert expand_home('~')! == '~'
+	assert expand_home('~abc/')! == '~abc/'
+	assert expand_home('/home/user')! == '/home/user'
+	assert expand_home('')! == ''
+}
+
+fn test_expand_searches_path_for_executable_files() {
+	mut temp := TempDir.init()!
+	defer { temp.deinit() }
+	command_name := 'witty-path-expand-command'
+	command_path := os.join_path(temp.path, command_name)
+	os.write_file(command_path, '#!/bin/sh\nexit 0\n')!
+	$if !windows {
+		os.chmod(command_path, 0o700)!
+	}
+
+	previous := os.getenv_opt('PATH')
+	defer {
+		if value := previous {
+			os.setenv('PATH', value, true)
+		} else {
+			os.unsetenv('PATH')
+		}
+	}
+	os.setenv('PATH', temp.path, true)
+
+	found := expand(command_name)!
+	assert (found.value or { '' }) == command_path
+	missing := expand('witty-path-command-that-does-not-exist')!
+	assert missing.value == none
+	with_slash := expand('foo/env')!
+	assert (with_slash.value or { '' }) == 'foo/env'
+}
+
 fn test_shell_command_builder_ignores_empty_arguments() {
 	mut command := ShellCommandBuilder.init()
 	defer { command.deinit() }
