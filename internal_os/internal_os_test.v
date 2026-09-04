@@ -31,6 +31,14 @@ fn test_fix_max_files_does_not_shrink_limit() {
 	restore_max_files(old)
 }
 
+fn test_get_passwd_returns_shell_and_home() {
+	$if !windows {
+		entry := get_passwd()!
+		assert (entry.shell or { '' }).len > 0
+		assert (entry.home or { '' }).len > 0
+	}
+}
+
 fn test_i18n_locale_canonicalization() {
 	assert canonicalize_locale('en_US') == 'en_US'
 	assert canonicalize_locale('en-US') == 'en_US'

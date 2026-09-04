@@ -465,8 +465,7 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 	single_instance := match config.gtk_single_instance {
 		.false_ { false }
 		.true_ { true }
-		.detect { true }
-		.desktop { true }
+		.detect { panic('gtk-single-instance must be finalized before GTK initialization') }
 	}
 
 	// Setup the flags for our application.

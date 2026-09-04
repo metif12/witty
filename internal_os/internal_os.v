@@ -9,6 +9,8 @@ import os
 
 #include <sys/resource.h>
 
+#include <pwd.h>
+
 fn C.pipe(fds &int) int
 
 fn C.fcntl(fd i32, cmd i32, arg ...voidptr) i32
@@ -21,6 +23,16 @@ fn C.getpid() int
 
 fn C.getppid() int
 
+fn C.getuid() int
+
+fn C.getpwuid_r(uid int, pwd &C.passwd, buf &char, buflen usize, result &&C.passwd) int
+
+struct C.passwd {
+	pw_name  &char
+	pw_dir   &char
+	pw_shell &char
+}
+
 // rlimit mirrors the C `struct rlimit`. rlim_t is an unsigned 64-bit
 // integer on the platforms we target (macOS, Linux, *BSD).
 struct C.rlimit {
@@ -31,7 +43,16 @@ mut:
 
 // open opens a URL or file path using the system default handler.
 pub fn open(url string) ! {
-	mut process := $if macos { os.new_process('/usr/bin/open') } $else $if linux || freebsd { os.new_process('xdg-open') } $else $if windows { os.new_process('rundll32') } $else { /* return_stmt */ }
+	mut process := os.new_process('')
+	$if macos {
+		process = os.new_process('/usr/bin/open')
+	} $else $if linux || freebsd {
+		process = os.new_process('xdg-open')
+	} $else $if windows {
+		process = os.new_process('rundll32')
+	} $else {
+		return error('URL opening is unsupported on this platform')
+	}
 	$if windows {
 		process.set_args(['url.dll,FileProtocolHandler', url])
 	} $else {
@@ -141,17 +162,33 @@ pub fn home() ?string {
 // PasswdEntry represents a passwd database entry.
 pub struct PasswdEntry {
 pub:
-	name ?string
-	home ?string
+	shell ?string
+	home  ?string
+	name  ?string
 }
 
 // get_passwd returns the passwd entry for the current user.
 pub fn get_passwd() !PasswdEntry {
-	name := os.loginname() or { return PasswdEntry{} }
-	h := home() or { return PasswdEntry{ name: name } }
+	$if windows {
+		name := os.loginname() or { return PasswdEntry{} }
+		h := home() or { return PasswdEntry{ name: name } }
+		return PasswdEntry{
+			name: name
+			home: h
+		}
+	}
+
+	mut buf := []u8{len: 1024}
+	mut pw := C.passwd{}
+	mut pw_result := &C.passwd(unsafe { nil })
+	if C.getpwuid_r(C.getuid(), &pw, unsafe { &char(buf.data) }, usize(buf.len), &pw_result) != 0
+		|| isnil(pw_result) {
+		return PasswdEntry{}
+	}
 	return PasswdEntry{
-		name: name
-		home: h
+		shell: if isnil(pw.pw_shell) { none } else { unsafe { cstring_to_vstring(pw.pw_shell) } }
+		home: if isnil(pw.pw_dir) { none } else { unsafe { cstring_to_vstring(pw.pw_dir) } }
+		name: if isnil(pw.pw_name) { none } else { unsafe { cstring_to_vstring(pw.pw_name) } }
 	}
 }
 

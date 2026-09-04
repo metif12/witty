@@ -8,11 +8,13 @@ import strconv
 import themepkg
 import cli_args
 import font
+import internal_os
 
 const default_gtk_opengl_debug = $if debug { true } $else { false }
 const default_quit_after_last_window_closed = $if linux { true } $else { false }
 const default_linux_cgroup = $if linux { LinuxCgroup.single_instance } $else { LinuxCgroup.never }
 const default_quick_terminal_autohide = $if macos { true } $else { false }
+const default_font_size = $if macos { f32(13) } $else { f32(12) }
 
 // --- Original Ghostty Comments Start: src/config/Config.zig
 //
@@ -3955,7 +3957,7 @@ const default_quick_terminal_autohide = $if macos { true } $else { false }
 // Config represents the full ghostty configuration.
 pub struct Config {
 pub mut:
-	font_size                      f32 = 13.0
+	font_size                      f32 = default_font_size
 	abnormal_command_exit_runtime  u32 = 250
 	clipboard_read                 ClipboardAccess = .ask
 	clipboard_write                ClipboardAccess = .allow
@@ -4356,7 +4358,6 @@ pub enum GtkSingleInstance {
 	detect
 	false_
 	true_
-	desktop
 }
 
 // LinuxCgroup controls when systemd cgroup isolation is enabled.
@@ -6717,23 +6718,16 @@ fn (mut c Config) apply_kv(key string, value string) {
 			}
 		}
 		'window-theme' {
-			match value {
-				'auto' {
-					c.window_theme = .auto
+			c.window_theme = match value {
+				'auto' { .auto }
+				'system' { .system }
+				'light' { .light }
+				'dark' { .dark }
+				'ghostty' { .ghostty }
+				else {
+					c.invalid_config_value(key, value)
+					return
 				}
-				'system' {
-					c.window_theme = .system
-				}
-				'light' {
-					c.window_theme = .light
-				}
-				'dark' {
-					c.window_theme = .dark
-				}
-				'ghostty' {
-					c.window_theme = .ghostty
-				}
-				else {}
 			}
 		}
 		'window-title-font-family' {
@@ -7460,7 +7454,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 				'block' { .block }
 				'bar' { .bar }
 				'underline' { .underline }
-				'block_hollow', 'block-hollow' { .block_hollow }
+				'block_hollow' { .block_hollow }
 				else {
 					c.invalid_config_value(key, value)
 					return
@@ -7963,7 +7957,10 @@ fn (mut c Config) apply_kv(key string, value string) {
 				'false', 'f', '0' {
 					c.gtk_single_instance = .false_
 				}
-				else {}
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
 			}
 		}
 		'gtk-tabs-location' {
@@ -8632,10 +8629,7 @@ fn parse_hex_byte(s string) ?u8 {
 	return u8(hi * 16 + lo)
 }
 
-// finalize applies defaults and clamps values after loading. This mirrors the
-// portable subset of Ghostty's `Config.finalize`. Platform- and apprt-specific
-// behavior (passwd lookup, GTK single-instance detection, click intervals) is
-// not modeled here.
+// finalize applies defaults and clamps values after loading.
 pub fn (mut c Config) finalize() {
 	// Load a referenced theme file, if any. This is done first so that the
 	// theme's options act as a lower-priority base layer beneath explicitly
@@ -8661,6 +8655,69 @@ pub fn (mut c Config) finalize() {
 		c.term = 'xterm-ghostty'
 	}
 
+	// The default working directory depends on whether this looks like a CLI
+	// launch. Desktop launches use the account home; CLI launches inherit.
+	probable_cli := probable_cli_environment()
+	wd := c.working_directory or {
+		if probable_cli { 'inherit' } else { 'home' }
+	}
+	wd_home := wd == 'home'
+
+	// Shell and passwd lookup are deliberately skipped in tests in Ghostty.
+	$if !test {
+		if c.command == none || wd_home {
+			if c.command == none && !internal_os.is_flatpak() && probable_cli {
+				if shell := os.getenv_opt('SHELL') {
+					if shell.len > 0 {
+						c.command = Command(ShellCmd{ shell: shell })
+					}
+				}
+			}
+
+			$if windows {
+				if c.command == none {
+					c.command = Command(ShellCmd{ shell: 'cmd.exe' })
+				}
+				if wd_home {
+					if home := internal_os.home() {
+						c.working_directory = home
+					}
+				}
+			} $else {
+				passwd := internal_os.get_passwd() or { internal_os.PasswdEntry{} }
+				if c.command == none {
+					if shell := passwd.shell {
+						c.command = Command(ShellCmd{ shell: shell })
+					}
+				}
+				if wd_home {
+					if home := passwd.home {
+						c.working_directory = home
+					}
+				}
+			}
+		}
+	}
+
+	// Linux is Witty's GTK artifact, so this is the translated apprt-specific
+	// default from Config.finalize.
+	$if linux {
+		if c.gtk_single_instance == .detect {
+			c.gtk_single_instance = if probable_cli { .false_ } else { .true_ }
+		}
+	}
+
+	// "inherit" is represented by null in the retained configuration.
+	if wd == 'inherit' {
+		c.working_directory = none
+	}
+
+	$if !test {
+		if c.click_repeat_interval == 0 {
+			c.click_repeat_interval = internal_os.click_interval() or { 500 }
+		}
+	}
+
 	// Clamp both mouse scroll multipliers to [0.01, 10000].
 	c.mouse_scroll_multiplier.precision = clamp_f64(c.mouse_scroll_multiplier.precision, 0.01, 10_000.0)
 	c.mouse_scroll_multiplier.discrete = clamp_f64(c.mouse_scroll_multiplier.discrete, 0.01, 10_000.0)
@@ -8681,9 +8738,7 @@ pub fn (mut c Config) finalize() {
 		}
 	}
 
-	// Clamp opacities to [0, 1].
-	c.background_opacity = clamp_f64(c.background_opacity, 0.0, 1.0)
-	c.cursor_opacity = clamp_f64(c.cursor_opacity, 0.0, 1.0)
+	// Ghostty only clamps faint opacity at configuration finalization.
 	c.faint_opacity = clamp_f64(c.faint_opacity, 0.0, 1.0)
 
 	// Minimum window size.
@@ -8704,6 +8759,25 @@ pub fn (mut c Config) finalize() {
 	// Sided mappings must be ordered before their unsided counterparts so
 	// matching produces the same first-match result as Ghostty.
 	c.key_remap.finalize()
+}
+
+// probable_cli_environment translates Config.probableCliEnvironment. Keep
+// uses of this heuristic limited to the same startup defaults as the source.
+fn probable_cli_environment() bool {
+	$if windows {
+		return false
+	}
+	$if macos {
+		if internal_os.launched_from_desktop() {
+			return false
+		}
+	}
+	if term_program := os.getenv_opt('TERM_PROGRAM') {
+		if term_program.len > 0 {
+			return true
+		}
+	}
+	return os.args.len > 1
 }
 
 // load_theme resolves the configured `theme`, loads it into a fresh default

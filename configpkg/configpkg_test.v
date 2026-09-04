@@ -1829,6 +1829,12 @@ fn test_keybinds_parse_cli_reset_clears_tables() {
 // Verify config defaults match ghostty's src/config/Config.zig declared defaults.
 fn test_default_values_match_ghostty() {
 	mut cfg := Config.default_config()
+	// @"font-size": f32 = 13 on macOS and 12 everywhere else.
+	$if macos {
+		assert cfg.font_size == 13
+	} $else {
+		assert cfg.font_size == 12
+	}
 
 	// background: Color = .{ .r = 0x28, .g = 0x2C, .b = 0x34 }
 	assert cfg.background == ColorRGB{
@@ -1866,6 +1872,32 @@ fn test_default_values_match_ghostty() {
 	cfg2.term = ''
 	cfg2.finalize()
 	assert cfg2.term == 'xterm-ghostty'
+}
+
+fn test_finalize_translates_inherit_working_directory_and_preserves_unclamped_opacities() {
+	mut cfg := Config.default_config()
+	cfg.working_directory = 'inherit'
+	cfg.background_opacity = 2
+	cfg.cursor_opacity = -1
+	cfg.faint_opacity = 2
+	cfg.finalize()
+	assert cfg.working_directory == none
+	assert cfg.background_opacity == 2
+	assert cfg.cursor_opacity == -1
+	assert cfg.faint_opacity == 1
+}
+
+fn test_probable_cli_environment_uses_term_program() {
+	previous := os.getenv_opt('TERM_PROGRAM')
+	os.setenv('TERM_PROGRAM', 'witty-test', true)
+	defer {
+		if value := previous {
+			os.setenv('TERM_PROGRAM', value, true)
+		} else {
+			os.unsetenv('TERM_PROGRAM')
+		}
+	}
+	assert probable_cli_environment()
 }
 
 fn test_default_config_initializes_complete_darwin_keybinds() {
@@ -2296,6 +2328,16 @@ fn test_config_empty_link_uses_field_default_not_runtime_default_url() {
 	cfg.load_string('link =\n')
 	assert cfg.diagnostics.len == 0
 	assert cfg.link.links.items.len == 0
+}
+
+fn test_config_enum_parser_rejects_values_not_present_in_source() {
+	mut cfg := Config.default_config()
+	cfg.load_string('
+window-theme = sepia
+gtk-single-instance = maybe
+cursor-style = block-hollow
+')
+	assert cfg.diagnostics.len == 3
 }
 
 fn test_repeatable_config_values_reset_and_env_remove() {
