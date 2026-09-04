@@ -2131,35 +2131,46 @@ pub fn (self &Screen) clone(top PointTag, bot ?PointTag) !Screen {
 
 	// Preserve our selection if we have one and it intersects the clone.
 	if sel := self.selection {
-		mut s := sel
-		start_y := int(s.start_pin.y)
-		end_y := int(s.end_pin.y)
-		// Order top/bottom for the bounds check.
-		sel_top := if start_y < end_y { start_y } else { end_y }
-		sel_bot := if start_y < end_y { end_y } else { start_y }
-		// If the selection is fully out of bounds, drop it.
-		if sel_bot < top_y || sel_top > bot_y {
+		// Ghostty orders the tracked selection vertically before remapping it.
+		// Mirrored rectangle selections keep their horizontal orientation.
+		ordered := match sel.order(self) {
+			.forward, .mirrored_forward { sel }
+			.reverse, .mirrored_reverse {
+				Selection.init(sel.end_pin, sel.start_pin, sel.rectangle)
+			}
+		}
+		start_y := int(ordered.start_pin.y)
+		end_y := int(ordered.end_pin.y)
+		if end_y < top_y || start_y > bot_y {
 			new_screen.selection = none
 		} else {
-			// Move both pins in bounds and shift into the new space.
-			shift := top_y
-			mut sy := start_y
-			mut ey := end_y
-			if sy < top_y {
-				sy = top_y
+			start_pin := if start_y < top_y {
+				Pin{
+					x: if ordered.rectangle { ordered.start_pin.x } else { 0 }
+					y: 0
+				}
+			} else {
+				Pin{
+					x: ordered.start_pin.x
+					y: u32(start_y - top_y)
+				}
 			}
-			if sy > bot_y {
-				sy = bot_y
+			end_pin := if end_y > bot_y {
+				Pin{
+					x: if ordered.rectangle {
+						ordered.end_pin.x
+					} else {
+						self.pages.cols - 1
+					}
+					y: u32(bot_y - top_y)
+				}
+			} else {
+				Pin{
+					x: ordered.end_pin.x
+					y: u32(end_y - top_y)
+				}
 			}
-			if ey < top_y {
-				ey = top_y
-			}
-			if ey > bot_y {
-				ey = bot_y
-			}
-			s.start_pin.y = u32(sy - shift)
-			s.end_pin.y = u32(ey - shift)
-			new_screen.selection = s
+			new_screen.selection = Selection.init(start_pin, end_pin, ordered.rectangle)
 		}
 	}
 

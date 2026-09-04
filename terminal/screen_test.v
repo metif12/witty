@@ -817,6 +817,65 @@ fn test_screen_clone_deep_copies_managed_cells_and_resets_cursor_state() {
 	assert cloned.pages.screen_rows[0].cells[0].hyperlink.uri == 'https://example.com/screen-clone'
 }
 
+fn test_screen_clone_clips_and_orders_selection() {
+	mut s := Screen.init(4, 3, 10)
+	defer { s.deinit() }
+	for _ in 0 .. 3 {
+		s.pages.screen_rows << RowData.init(4)
+	}
+	s.pages.active_start = 3
+	s.pages.viewport_start = 3
+	s.selection = Selection.init(Pin{ x: 1, y: 5 }, Pin{ x: 2, y: 0 }, false)
+
+	mut active_clone := s.clone(.active, ?PointTag(none)) or {
+		assert false, 'active clone failed'
+		return
+	}
+	defer { active_clone.deinit() }
+	active_selection := active_clone.selection or {
+		assert false, 'clipped active selection was dropped'
+		return
+	}
+	assert active_selection.start_pin.eql(Pin{ x: 0, y: 0 })
+	assert active_selection.end_pin.eql(Pin{ x: 1, y: 2 })
+
+	mut history_clone := s.clone(.history, ?PointTag(none)) or {
+		assert false, 'history clone failed'
+		return
+	}
+	defer { history_clone.deinit() }
+	history_selection := history_clone.selection or {
+		assert false, 'clipped history selection was dropped'
+		return
+	}
+	assert history_selection.start_pin.eql(Pin{ x: 2, y: 0 })
+	assert history_selection.end_pin.eql(Pin{ x: 3, y: 2 })
+}
+
+fn test_screen_clone_preserves_rectangle_selection_edges() {
+	mut s := Screen.init(4, 3, 10)
+	defer { s.deinit() }
+	for _ in 0 .. 3 {
+		s.pages.screen_rows << RowData.init(4)
+	}
+	s.pages.active_start = 3
+	s.pages.viewport_start = 3
+	s.selection = Selection.init(Pin{ x: 2, y: 0 }, Pin{ x: 1, y: 5 }, true)
+
+	mut cloned := s.clone(.active, ?PointTag(none)) or {
+		assert false, 'rectangle clone failed'
+		return
+	}
+	defer { cloned.deinit() }
+	selection := cloned.selection or {
+		assert false, 'clipped rectangle selection was dropped'
+		return
+	}
+	assert selection.rectangle
+	assert selection.start_pin.eql(Pin{ x: 2, y: 0 })
+	assert selection.end_pin.eql(Pin{ x: 1, y: 2 })
+}
+
 fn test_screen_soft_wrap_write() {
 	mut s := Screen.init(5, 5, 0)
 	defer { s.deinit() }
