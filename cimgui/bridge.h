@@ -176,6 +176,43 @@ static inline bool witty_cimgui_dock_space_over_main_viewport(ImGuiContext* cont
     ) == id;
 }
 
+static inline bool witty_cimgui_screen_dockspace(
+    ImGuiContext* context,
+    unsigned int id
+) {
+    ImGui_SetCurrentContext(context);
+    bool setup = ImGui_DockBuilderGetNode(id) == NULL;
+    if (setup) {
+        (void)ImGui_DockBuilderAddNodeEx(id, ImGuiDockNodeFlags_DockSpace);
+        ImGui_DockBuilderDockWindow("Info", id);
+        ImGui_DockBuilderDockWindow("Cell", id);
+        ImGui_DockBuilderDockWindow("PageList", id);
+        ImGui_DockBuilderFinish(id);
+    }
+    return ImGui_DockSpaceEx(
+        id,
+        (ImVec2){0.0f, 0.0f},
+        ImGuiDockNodeFlags_None,
+        NULL
+    ) == id;
+}
+
+static inline void witty_cimgui_set_next_window_size_max(
+    ImGuiContext* context,
+    float width,
+    float height
+) {
+    ImGui_SetCurrentContext(context);
+    ImVec2 viewport_size = ImGui_GetMainViewport()->Size;
+    ImGui_SetNextWindowSize(
+        (ImVec2){
+            width < viewport_size.x ? width : viewport_size.x,
+            height < viewport_size.y ? height : viewport_size.y,
+        },
+        ImGuiCond_FirstUseEver
+    );
+}
+
 static inline bool witty_cimgui_begin_window(ImGuiContext* context, const char* name) {
     ImGui_SetCurrentContext(context);
     return ImGui_Begin(name, NULL, ImGuiWindowFlags_NoFocusOnAppearing);
@@ -297,6 +334,14 @@ static inline void witty_cimgui_text_wrapped(ImGuiContext* context, const char* 
 static inline bool witty_cimgui_collapsing_header(ImGuiContext* context, const char* label) {
     ImGui_SetCurrentContext(context);
     return ImGui_CollapsingHeader(label, 0);
+}
+
+static inline bool witty_cimgui_collapsing_header_default_open(
+    ImGuiContext* context,
+    const char* label
+) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_CollapsingHeader(label, ImGuiTreeNodeFlags_DefaultOpen);
 }
 
 static inline void witty_cimgui_separator_text(ImGuiContext* context, const char* label) {
@@ -432,6 +477,27 @@ static inline void witty_cimgui_table_setup_column(
 static inline void witty_cimgui_table_headers_row(ImGuiContext* context) {
     ImGui_SetCurrentContext(context);
     ImGui_TableHeadersRow();
+}
+
+static inline void witty_cimgui_screens_table_headers(
+    ImGuiContext* context,
+    const char* help
+) {
+    ImGui_SetCurrentContext(context);
+    ImGui_TableNextRowEx(ImGuiTableRowFlags_Headers, 0.0f);
+    (void)ImGui_TableSetColumnIndex(0);
+    ImGui_PushStyleVarImVec2(
+        ImGuiStyleVar_FramePadding,
+        (ImVec2){0.0f, 0.0f}
+    );
+    witty_cimgui_help_marker(context, help);
+    ImGui_PopStyleVar();
+    ImGui_SameLineEx(0.0f, ImGui_GetStyle()->ItemInnerSpacing.x);
+    ImGui_TableHeader("Screen");
+    (void)ImGui_TableSetColumnIndex(1);
+    ImGui_TableHeader("Status");
+    (void)ImGui_TableSetColumnIndex(2);
+    ImGui_TableHeader("");
 }
 
 static inline void witty_cimgui_table_next_row(ImGuiContext* context) {

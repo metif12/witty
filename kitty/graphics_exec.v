@@ -151,6 +151,15 @@ pub fn terminal_storage(t &terminal.Terminal) ?&ImageStorage {
 	return unsafe { &ImageStorage(t.screens.active.kitty_images) }
 }
 
+// screen_storage exposes one screen's opaque storage to inspector and
+// renderer code without introducing terminal's intentional kitty import cycle.
+pub fn screen_storage(screen &terminal.Screen) ?&ImageStorage {
+	if screen.kitty_images == unsafe { nil } {
+		return none
+	}
+	return unsafe { &ImageStorage(screen.kitty_images) }
+}
+
 fn deinit_screen_storage(mut screen terminal.Screen) {
 	if screen.kitty_images == unsafe { nil } {
 		return

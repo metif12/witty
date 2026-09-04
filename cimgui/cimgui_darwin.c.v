@@ -80,6 +80,10 @@ fn C.witty_cimgui_dock_finish(context voidptr, id u32)
 
 fn C.witty_cimgui_dock_space_over_main_viewport(context voidptr, id u32) bool
 
+fn C.witty_cimgui_screen_dockspace(context voidptr, id u32) bool
+
+fn C.witty_cimgui_set_next_window_size_max(context voidptr, width f32, height f32)
+
 fn C.witty_cimgui_begin_window(context voidptr, name &char) bool
 
 fn C.witty_cimgui_begin_window_open(context voidptr, name &char, open &bool) bool
@@ -99,6 +103,8 @@ fn C.witty_cimgui_text_disabled(context voidptr, value &char)
 fn C.witty_cimgui_text_wrapped(context voidptr, value &char)
 
 fn C.witty_cimgui_collapsing_header(context voidptr, label &char) bool
+
+fn C.witty_cimgui_collapsing_header_default_open(context voidptr, label &char) bool
 
 fn C.witty_cimgui_separator_text(context voidptr, label &char)
 
@@ -135,6 +141,8 @@ fn C.witty_cimgui_table_setup_scroll_freeze(context voidptr, columns int, rows i
 fn C.witty_cimgui_table_setup_column(context voidptr, label &char, flags int, width f32)
 
 fn C.witty_cimgui_table_headers_row(context voidptr)
+
+fn C.witty_cimgui_screens_table_headers(context voidptr, help &char)
 
 fn C.witty_cimgui_table_next_row(context voidptr)
 
@@ -293,6 +301,14 @@ pub fn (ctx Context) dock_space_over_main_viewport(id u32) bool {
 	return C.witty_cimgui_dock_space_over_main_viewport(ctx.handle, id)
 }
 
+pub fn (ctx Context) screen_dockspace(id u32) bool {
+	return C.witty_cimgui_screen_dockspace(ctx.handle, id)
+}
+
+pub fn (ctx Context) set_next_window_size_max(width f32, height f32) {
+	C.witty_cimgui_set_next_window_size_max(ctx.handle, width, height)
+}
+
 pub fn (ctx Context) begin_window(name string) bool {
 	return C.witty_cimgui_begin_window(ctx.handle, name.str)
 }
@@ -338,6 +354,10 @@ pub fn (ctx Context) text_wrapped(value string) {
 
 pub fn (ctx Context) collapsing_header(label string) bool {
 	return C.witty_cimgui_collapsing_header(ctx.handle, label.str)
+}
+
+pub fn (ctx Context) collapsing_header_default_open(label string) bool {
+	return C.witty_cimgui_collapsing_header_default_open(ctx.handle, label.str)
 }
 
 pub fn (ctx Context) separator_text(label string) {
@@ -414,6 +434,10 @@ pub fn (ctx Context) table_setup_column(label string, flags int, width f32) {
 
 pub fn (ctx Context) table_headers_row() {
 	C.witty_cimgui_table_headers_row(ctx.handle)
+}
+
+pub fn (ctx Context) screens_table_headers(help string) {
+	C.witty_cimgui_screens_table_headers(ctx.handle, help.str)
 }
 
 pub fn (ctx Context) table_next_row() {

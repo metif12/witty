@@ -112,6 +112,16 @@ pub fn (ctx Context) dock_space_over_main_viewport(id u32) bool {
 	return false
 }
 
+pub fn (ctx Context) screen_dockspace(id u32) bool {
+	_ = id
+	return false
+}
+
+pub fn (ctx Context) set_next_window_size_max(width f32, height f32) {
+	_ = width
+	_ = height
+}
+
 pub fn (ctx Context) begin_window(name string) bool {
 	_ = name
 	return false
@@ -155,6 +165,11 @@ pub fn (ctx Context) text_wrapped(value string) {
 }
 
 pub fn (ctx Context) collapsing_header(label string) bool {
+	_ = label
+	return false
+}
+
+pub fn (ctx Context) collapsing_header_default_open(label string) bool {
 	_ = label
 	return false
 }
@@ -236,6 +251,10 @@ pub fn (ctx Context) table_setup_column(label string, flags int, width f32) {
 }
 
 pub fn (ctx Context) table_headers_row() {}
+
+pub fn (ctx Context) screens_table_headers(help string) {
+	_ = help
+}
 
 pub fn (ctx Context) table_next_row() {}
 

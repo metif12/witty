@@ -150,6 +150,7 @@ pub const table_flags_borders_row_bg_sizing_fixed_fit = (1 << 6) | (1 << 7) | (1
 pub const table_flags_row_bg_sizing_fixed_fit = (1 << 6) | (1 << 13)
 pub const color_edit_flags_none = 0
 pub const color_edit_flags_no_inputs = 1 << 5
+pub const color_edit_flags_style = (1 << 2) | (1 << 7) | (1 << 22)
 
 // Context owns one Dear ImGui context. Ghostty creates one context per
 // terminal inspector and always makes it current before touching its state.

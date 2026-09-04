@@ -90,6 +90,7 @@ fn test_inspector_renders_key_stream_into_real_imgui_frame() {
 	defer {
 		term.deinit()
 	}
+	value.terminal_info.screens[.primary] = ScreenInfo{}
 
 	context.begin_frame(1.0 / 60.0)
 	value.render(context.handle, SurfaceInfo{

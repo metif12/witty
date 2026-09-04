@@ -20,6 +20,7 @@ mut:
 	mouse_header  DetachableHeader
 	color_header  DetachableHeader
 	modes_header  DetachableHeader
+	screens       map[terminal.ScreenKey]ScreenInfo
 }
 
 fn (mut self TerminalInfo) draw(context cimgui.Context, open bool, mut term terminal.Terminal) {
@@ -85,9 +86,14 @@ fn (mut self TerminalInfo) draw(context cimgui.Context, open bool, mut term term
 		}
 		context.end_window()
 	}
+
+	self.draw_screen_window(context, .primary, mut term)
+	self.draw_screen_window(context, .alternate, mut term)
 }
 
 fn (mut self TerminalInfo) draw_open(context cimgui.Context, mut term terminal.Terminal) {
+	draw_terminal_screens(context, mut term, mut self.screens)
+
 	mut open, mut detached := context.detachable_header('Misc', self.misc_header.detached)
 	self.misc_header.detached = detached
 	if open {
@@ -116,6 +122,63 @@ fn (mut self TerminalInfo) draw_open(context cimgui.Context, mut term terminal.T
 	self.modes_header.detached = detached
 	if open {
 		draw_terminal_modes(context, term)
+	}
+}
+
+fn (mut self TerminalInfo) draw_screen_window(context cimgui.Context, key terminal.ScreenKey, mut term terminal.Terminal) {
+	if key !in self.screens {
+		return
+	}
+	mut screen := term.screens.get(key) or {
+		self.screens.delete(key)
+		return
+	}
+	context.set_next_window_size_max(400, 300)
+	visible, still_open := context.begin_window_open('Screen: ${key}', true)
+	mut info := self.screens[key]
+	info.draw(context, visible, mut screen, key, term.screens.active_key, term.flags.modify_other_keys_2, term.colors.palette.entries)
+	context.end_window()
+	if still_open {
+		self.screens[key] = info
+	} else {
+		self.screens.delete(key)
+	}
+}
+
+fn draw_terminal_screens(context cimgui.Context, mut term terminal.Terminal, mut screens map[terminal.ScreenKey]ScreenInfo) {
+	if !context.begin_table('screens', 3, cimgui.table_flags_borders_row_bg_sizing_fixed_fit) {
+		return
+	}
+	defer {
+		context.end_table()
+	}
+	context.table_setup_column('Screen', cimgui.table_column_width_fixed, 0)
+	context.table_setup_column('Status', cimgui.table_column_width_fixed, 0)
+	context.table_setup_column('', cimgui.table_column_width_fixed, 0)
+	context.screens_table_headers('A terminal can have multiple screens, only one of which is active at a time. Each screen has its own grid, contents, and other state. This section allows you to inspect the different screens managed by the terminal.')
+
+	for key in [terminal.ScreenKey.primary, .alternate] {
+		initialized := term.screens.get(key) != none
+		active := term.screens.active_key == key
+		context.table_next_row()
+		context.table_set_column(0)
+		context.text(key.str())
+		context.table_set_column(1)
+		if active {
+			context.text_colored(cimgui.Color{ r: 0.4, g: 1.0, b: 0.4 }, 'active')
+		} else if initialized {
+			context.text_colored(cimgui.Color{ r: 0.6, g: 0.6, b: 0.6 }, 'initialized')
+		} else {
+			context.text_colored(cimgui.Color{ r: 0.4, g: 0.4, b: 0.4 }, '(not initialized)')
+		}
+		context.table_set_column(2)
+		context.push_id_int(int(key))
+		context.begin_disabled(!initialized)
+		if context.button('View') && key !in screens {
+			screens[key] = ScreenInfo{}
+		}
+		context.end_disabled()
+		context.pop_id()
 	}
 }
 
