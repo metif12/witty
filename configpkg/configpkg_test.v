@@ -681,8 +681,8 @@ fn test_repeatable_command_parse_clear_clone_and_format() {
 	mut defaults := Config.default_config()
 	assert defaults.command_palette_entry.items.len == input.command_defaults.len
 	defaults.load_string('command-palette-entry =\ncommand-palette-entry = title:Only,action:ignore\n')
-	assert defaults.command_palette_entry.items.len == 1
-	assert defaults.command_palette_entry.items[0].title == 'Only'
+	assert defaults.command_palette_entry.items.len == input.command_defaults.len + 1
+	assert defaults.command_palette_entry.items.last().title == 'Only'
 
 	mut commands := RepeatableCommand{}
 	commands.parse_cli('title:Foo,action:ignore')!
@@ -2232,6 +2232,70 @@ fn test_config_mouse_scroll_multiplier_struct_and_finalize() {
 	assert cfg.mouse_scroll_multiplier.precision == 0.01
 	assert cfg.mouse_scroll_multiplier.discrete == 10_000
 	assert cfg.format_config(true).contains('mouse-scroll-multiplier = precision:0.01,discrete:10000\n')
+}
+
+fn test_config_empty_values_reset_every_field_kind_to_source_defaults() {
+	mut cfg := Config.default_config()
+	cfg.load_string('
+background = ff0000
+term = ansi
+window-vsync = false
+font-size = 42
+window-theme = dark
+mouse-scroll-multiplier = precision:4,discrete:8
+selection-word-chars = abc
+keybind = clear
+command-palette-entry =
+command-palette-entry = title:Custom,action:quit
+theme = light:One,dark:Two
+_xdg-terminal-exec = true
+')
+	assert cfg.diagnostics.len == 0
+	assert cfg.term == 'ansi'
+	assert !cfg.window_vsync
+	assert cfg.selection_word_chars.codepoints == [u32(0), u32(`a`), u32(`b`), u32(`c`)]
+	assert cfg.keybind.set.bindings.len == 0
+	assert cfg.command_palette_entry.items.len == input.command_defaults.len + 1
+	assert cfg.command_palette_entry.items.last().title == 'Custom'
+	assert cfg.theme_pair != none
+	assert cfg.xdg_terminal_exec
+
+	cfg.load_string('
+background =
+term =
+window-vsync =
+font-size =
+window-theme =
+mouse-scroll-multiplier =
+selection-word-chars =
+keybind =
+command-palette-entry =
+theme =
+_xdg-terminal-exec =
+')
+	assert cfg.diagnostics.len == 0
+	defaults := Config.default_config()
+	assert cfg.background == defaults.background
+	assert cfg.term == defaults.term
+	assert cfg.window_vsync == defaults.window_vsync
+	assert cfg.font_size == defaults.font_size
+	assert cfg.window_theme == defaults.window_theme
+	assert cfg.mouse_scroll_multiplier == defaults.mouse_scroll_multiplier
+	assert cfg.selection_word_chars == defaults.selection_word_chars
+	assert cfg.keybind.equal(defaults.keybind)
+	assert cfg.command_palette_entry.items.len == defaults.command_palette_entry.items.len
+	assert cfg.theme == none
+	assert cfg.theme_pair == none
+	assert 'theme' !in cfg.conditional_set
+	assert !cfg.xdg_terminal_exec
+}
+
+fn test_config_empty_link_uses_field_default_not_runtime_default_url() {
+	mut cfg := Config.default_config()
+	assert cfg.link.links.items.len == 1
+	cfg.load_string('link =\n')
+	assert cfg.diagnostics.len == 0
+	assert cfg.link.links.items.len == 0
 }
 
 fn test_repeatable_config_values_reset_and_env_remove() {

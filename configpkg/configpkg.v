@@ -6587,6 +6587,14 @@ fn clone_replay_steps(steps []ReplayStep) []ReplayStep {
 // behavior of not failing on unknown options). Invalid values are recorded
 // as diagnostics.
 fn (mut c Config) apply_kv(key string, value string) {
+	// Ghostty's reflected CLI parser handles an explicitly empty value before
+	// any type-specific parser: it resets the field to its declared default.
+	// Keep this centralized so every Config field has the same behavior rather
+	// than duplicating subtly different empty handling in each match arm.
+	if value.len == 0 && c.reset_empty_config_value(key) {
+		return
+	}
+
 	match key {
 		'background' {
 			if col := parse_color(value) {
@@ -7999,6 +8007,51 @@ fn (mut c Config) apply_kv(key string, value string) {
 			}
 		}
 	}
+}
+
+// reset_empty_config_value translates cli.args.parseIntoField's empty-value
+// path. Config.default_config represents the source-level field defaults,
+// including platform-dependent values and types whose Zig defaults are backed
+// by static data. Internal bookkeeping fields are deliberately excluded from
+// reflected config lookup, just like Ghostty's underscore-prefixed fields.
+fn (mut c Config) reset_empty_config_value(key string) bool {
+	// RepeatableLink has no usable parser yet in the pinned source, but an empty
+	// value is accepted by the generic reset path and restores its field default
+	// (an empty list), not Config.default's appended URL matcher.
+	if key == 'link' {
+		c.link = LinkConfig{}
+		return true
+	}
+
+	// Witty stores the parsed conditional theme alongside the public field.
+	// Reset that derived state together with the source field.
+	if key == 'theme' {
+		c.theme = none
+		c.theme_pair = none
+		c.conditional_set.delete('theme')
+		return true
+	}
+
+	// This source field intentionally starts with an underscore and is handled
+	// by Config's manual parser hook.
+	if key == '_xdg-terminal-exec' {
+		c.xdg_terminal_exec = false
+		return true
+	}
+
+	normalized_key := key.replace('-', '_')
+	defaults := Config.default_config()
+	$for field in Config.fields {
+		$if !field.is_map {
+			if field.name == normalized_key
+				&& field.name !in ['diagnostics', 'conditional_state', 'theme_pair', 'loading_theme',
+					'replay_steps', 'replaying', 'xdg_terminal_exec'] {
+				c.$(field.name) = defaults.$(field.name)
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // apply_repeatable_string implements the repeatable-string parser used by
