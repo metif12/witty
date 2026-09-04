@@ -2,6 +2,7 @@ module inspector
 
 import cimgui
 import input
+import renderer
 import terminal
 import encoding.utf8.validate
 
@@ -93,8 +94,12 @@ pub fn (event &KeyEvent) pty_text() string {
 // Inspector owns the inspection streams associated with one terminal surface.
 pub struct Inspector {
 pub mut:
-	key_events []KeyEvent
-	mouse      InspectorMouse
+	// This must remain the first field: renderer.RenderState treats its opaque
+	// inspector pointer as this cycle-breaking bridge prefix.
+	renderer_bridge renderer.InspectorOverlayBridge
+	key_events      []KeyEvent
+	mouse           InspectorMouse
+	renderer        RendererInfo
 }
 
 pub struct InspectorMouse {
@@ -102,6 +107,28 @@ pub mut:
 	last_xpos  f64
 	last_ypos  f64
 	last_point ?terminal.Pin
+}
+
+pub struct RendererInfo {
+mut:
+	features []renderer.OverlayFeature
+}
+
+// overlay_features returns an owned copy of the renderer debug overlays in
+// their activation order, matching Ghostty's AutoArrayHashMap values view.
+pub fn (self &RendererInfo) overlay_features() []renderer.OverlayFeature {
+	return self.features.clone()
+}
+
+fn (mut self RendererInfo) set_feature(feature renderer.OverlayFeature, enabled bool) {
+	index := self.features.index(feature)
+	if enabled {
+		if index < 0 {
+			self.features << feature
+		}
+	} else if index >= 0 {
+		self.features.delete(index)
+	}
 }
 
 // SurfaceInfo is the runtime-neutral projection consumed by Ghostty's Surface
@@ -133,12 +160,24 @@ pub:
 
 pub fn Inspector.init() !Inspector {
 	return Inspector{
+		renderer_bridge: renderer.InspectorOverlayBridge{
+			overlay_features_fn: inspector_overlay_features
+		}
 		key_events: []KeyEvent{cap: 2}
 	}
 }
 
+fn inspector_overlay_features(ptr voidptr) []renderer.OverlayFeature {
+	if isnil(ptr) {
+		return []renderer.OverlayFeature{}
+	}
+	insp := unsafe { &Inspector(ptr) }
+	return insp.renderer.overlay_features()
+}
+
 pub fn (mut self Inspector) deinit() {
 	self.clear_key_events()
+	self.renderer.features.clear()
 }
 
 pub fn (mut self Inspector) clear_key_events() {
@@ -178,12 +217,65 @@ pub fn (mut self Inspector) render(context_handle voidptr, surface_info SurfaceI
 	self.draw_key_stream(context, open)
 	context.end_window()
 
+	open_renderer := context.begin_window('Renderer')
+	self.draw_renderer_info(context, open_renderer)
+	context.end_window()
+
 	if first_render {
 		// Ghostty focuses the terminal panel when the complete dockspace is first
 		// built. Keeping that exact target also preserves focus when the remaining
 		// panels are drawn later in this frame.
 		context.set_window_focus('Terminal')
 	}
+}
+
+fn (mut self Inspector) draw_renderer_info(context cimgui.Context, open bool) {
+	if !open {
+		return
+	}
+
+	context.set_next_item_open(true)
+	if !context.collapsing_header('Overlays') {
+		return
+	}
+
+	context.separator_text('Hyperlinks')
+	mut hyperlinks := self.renderer.features.contains(.highlight_hyperlinks)
+	_, hyperlinks = context.checkbox('Overlay Hyperlinks', hyperlinks)
+	context.same_line()
+	context.help_marker('When enabled, highlights OSC8 hyperlinks.')
+	self.renderer.set_feature(.highlight_hyperlinks, hyperlinks)
+
+	context.separator_text('Semantic Prompts')
+	mut semantic_prompts := self.renderer.features.contains(.semantic_prompts)
+	_, semantic_prompts = context.checkbox('Overlay Semantic Prompts', semantic_prompts)
+	context.same_line()
+	context.help_marker('When enabled, highlights OSC 133 semantic prompts.')
+	self.renderer.set_feature(.semantic_prompts, semantic_prompts)
+
+	context.indent()
+	defer {
+		context.unindent()
+	}
+	context.text_disabled('Colors:')
+
+	prompt_rgb := renderer.OverlayColor.semantic_prompt.rgb()
+	_ = context.color_button('##prompt_color', cimgui.Color{
+		r: f32(prompt_rgb.r) / 255.0
+		g: f32(prompt_rgb.g) / 255.0
+		b: f32(prompt_rgb.b) / 255.0
+	})
+	context.same_line()
+	context.text('Prompt')
+
+	input_rgb := renderer.OverlayColor.semantic_input.rgb()
+	_ = context.color_button('##input_color', cimgui.Color{
+		r: f32(input_rgb.r) / 255.0
+		g: f32(input_rgb.g) / 255.0
+		b: f32(input_rgb.b) / 255.0
+	})
+	context.same_line()
+	context.text('Input')
 }
 
 fn draw_surface_info(context cimgui.Context, open bool, info SurfaceInfo) {

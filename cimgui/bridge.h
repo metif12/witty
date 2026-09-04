@@ -216,6 +216,48 @@ static inline void witty_cimgui_separator_text(ImGuiContext* context, const char
     ImGui_SeparatorText(label);
 }
 
+static inline void witty_cimgui_set_next_item_open(ImGuiContext* context, bool open) {
+    ImGui_SetCurrentContext(context);
+    ImGui_SetNextItemOpen(open, ImGuiCond_Once);
+}
+
+static inline bool witty_cimgui_checkbox(ImGuiContext* context, const char* label, bool* value) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_Checkbox(label, value);
+}
+
+static inline void witty_cimgui_help_marker(ImGuiContext* context, const char* value) {
+    ImGui_SetCurrentContext(context);
+    ImGui_TextDisabledUnformatted("(?)");
+    if (!ImGui_BeginItemTooltip()) return;
+    ImGui_PushTextWrapPos(ImGui_GetFontSize() * 35.0f);
+    ImGui_TextUnformatted(value);
+    ImGui_PopTextWrapPos();
+    ImGui_EndTooltip();
+}
+
+static inline void witty_cimgui_indent(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_Indent();
+}
+
+static inline void witty_cimgui_unindent(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_Unindent();
+}
+
+static inline bool witty_cimgui_color_button(
+    ImGuiContext* context,
+    const char* label,
+    float r,
+    float g,
+    float b,
+    float a
+) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_ColorButton(label, (ImVec4){r, g, b, a}, ImGuiColorEditFlags_NoTooltip);
+}
+
 static inline void witty_cimgui_text_colored(
     ImGuiContext* context,
     float r,

@@ -59,6 +59,62 @@ fn test_terminal_color_resolves_explicit_and_cell_colors() {
 	assert resolve_terminal_color(configpkg.TerminalColor{ kind: .cell_background }, true, fg, bg) == fg
 }
 
+fn inspector_features_callback(ptr voidptr) []OverlayFeature {
+	assert !isnil(ptr)
+	return [.semantic_prompts, .highlight_hyperlinks]
+}
+
+fn test_render_state_reads_features_from_opaque_inspector() {
+	bridge := InspectorOverlayBridge{
+		overlay_features_fn: inspector_features_callback
+	}
+	state := RenderState{
+		inspector: voidptr(&bridge)
+	}
+	assert state.inspector_overlay_features() == [.semantic_prompts, .highlight_hyperlinks]
+	assert RenderState{}.inspector_overlay_features().len == 0
+}
+
+fn test_renderer_rebuilds_reuses_and_removes_inspector_overlay() ! {
+	mut render := Renderer{
+		size: Size{
+			screen: ScreenSize{ width: 40, height: 10 }
+			cell: CellSize{ width: 10, height: 10 }
+		}
+		images: ImageRenderState.empty()
+		terminal_state: terminal.RenderState{
+			row_data: [terminal.RenderRow{
+				raw: terminal.RowData{ hyperlink: true }
+				cells: [
+					terminal.RenderCell{},
+					terminal.RenderCell{ raw: terminal.CellData{ has_hyperlink: true } },
+					terminal.RenderCell{ raw: terminal.CellData{ has_hyperlink: true } },
+					terminal.RenderCell{},
+				]
+			}]
+		}
+	}
+
+	render.rebuild_overlay([.highlight_hyperlinks])!
+	mut overlay := render.overlay or { return error('overlay was not created') }
+	assert overlay.width == 40
+	assert overlay.height == 10
+	assert overlay.pixels[(5 * 40 + 15) * 4 + 3] == 96
+	pixels := overlay.pixels.data
+
+	render.rebuild_overlay([.highlight_hyperlinks])!
+	overlay = render.overlay or { return error('overlay was not retained') }
+	assert overlay.pixels.data == pixels
+	render.images.overlay_update(render.overlay)
+	assert render.images.overlay_placements.len == 1
+
+	render.rebuild_overlay([])!
+	assert render.overlay == none
+	render.images.overlay_update(render.overlay)
+	assert render.images.overlay_placements.len == 0
+	render.images.deinit()
+}
+
 // Test CellContents resize and reset.
 fn test_cell_contents_resize() ! {
 	mut cells := CellContents{}

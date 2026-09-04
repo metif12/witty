@@ -48,6 +48,17 @@ fn test_inspector_key_stream_is_bounded_and_evicts_oldest() {
 	assert value.key_events.len == 0
 }
 
+fn test_renderer_overlay_features_preserve_activation_order() {
+	mut value := RendererInfo{}
+	value.set_feature(.semantic_prompts, true)
+	value.set_feature(.highlight_hyperlinks, true)
+	value.set_feature(.semantic_prompts, true)
+	assert value.overlay_features() == [.semantic_prompts, .highlight_hyperlinks]
+
+	value.set_feature(.semantic_prompts, false)
+	assert value.overlay_features() == [.highlight_hyperlinks]
+}
+
 fn test_inspector_renders_key_stream_into_real_imgui_frame() {
 	if !cimgui.available() {
 		return

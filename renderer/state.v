@@ -4,6 +4,27 @@ import sync
 import terminal
 import input
 
+pub type InspectorOverlayFeaturesFn = fn (voidptr) []OverlayFeature
+
+// InspectorOverlayBridge is the renderer-visible prefix of Inspector. Keeping
+// it as Inspector's first field lets RenderState retain Ghostty's opaque
+// inspector pointer without creating a V module import cycle.
+pub struct InspectorOverlayBridge {
+pub:
+	overlay_features_fn InspectorOverlayFeaturesFn = unsafe { nil }
+}
+
+fn (self &RenderState) inspector_overlay_features() []OverlayFeature {
+	if isnil(self.inspector) {
+		return []OverlayFeature{}
+	}
+	bridge := unsafe { &InspectorOverlayBridge(self.inspector) }
+	if bridge.overlay_features_fn == unsafe { nil } {
+		return []OverlayFeature{}
+	}
+	return bridge.overlay_features_fn(self.inspector)
+}
+
 // This is the render state that is given to a renderer.
 // It holds thread-safe shared state between the terminal and renderer.
 pub struct RenderState {

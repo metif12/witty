@@ -144,6 +144,29 @@ pub fn (ctx Context) separator_text(label string) {
 	_ = label
 }
 
+pub fn (ctx Context) set_next_item_open(open bool) {
+	_ = open
+}
+
+pub fn (ctx Context) checkbox(label string, value bool) (bool, bool) {
+	_ = label
+	return false, value
+}
+
+pub fn (ctx Context) help_marker(value string) {
+	_ = value
+}
+
+pub fn (ctx Context) indent() {}
+
+pub fn (ctx Context) unindent() {}
+
+pub fn (ctx Context) color_button(label string, color Color) bool {
+	_ = label
+	_ = color
+	return false
+}
+
 pub fn (ctx Context) text_colored(color Color, value string) {
 	_ = color
 	_ = value

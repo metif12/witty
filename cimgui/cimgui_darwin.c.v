@@ -96,6 +96,18 @@ fn C.witty_cimgui_collapsing_header(context voidptr, label &char) bool
 
 fn C.witty_cimgui_separator_text(context voidptr, label &char)
 
+fn C.witty_cimgui_set_next_item_open(context voidptr, open bool)
+
+fn C.witty_cimgui_checkbox(context voidptr, label &char, value &bool) bool
+
+fn C.witty_cimgui_help_marker(context voidptr, value &char)
+
+fn C.witty_cimgui_indent(context voidptr)
+
+fn C.witty_cimgui_unindent(context voidptr)
+
+fn C.witty_cimgui_color_button(context voidptr, label &char, r f32, g f32, b f32, a f32) bool
+
 fn C.witty_cimgui_text_colored(context voidptr, r f32, g f32, b f32, a f32, value &char)
 
 fn C.witty_cimgui_button(context voidptr, label &char) bool
@@ -285,6 +297,32 @@ pub fn (ctx Context) collapsing_header(label string) bool {
 
 pub fn (ctx Context) separator_text(label string) {
 	C.witty_cimgui_separator_text(ctx.handle, label.str)
+}
+
+pub fn (ctx Context) set_next_item_open(open bool) {
+	C.witty_cimgui_set_next_item_open(ctx.handle, open)
+}
+
+pub fn (ctx Context) checkbox(label string, value bool) (bool, bool) {
+	mut updated := value
+	changed := C.witty_cimgui_checkbox(ctx.handle, label.str, &updated)
+	return changed, updated
+}
+
+pub fn (ctx Context) help_marker(value string) {
+	C.witty_cimgui_help_marker(ctx.handle, value.str)
+}
+
+pub fn (ctx Context) indent() {
+	C.witty_cimgui_indent(ctx.handle)
+}
+
+pub fn (ctx Context) unindent() {
+	C.witty_cimgui_unindent(ctx.handle)
+}
+
+pub fn (ctx Context) color_button(label string, color Color) bool {
+	return C.witty_cimgui_color_button(ctx.handle, label.str, color.r, color.g, color.b, color.a)
 }
 
 pub fn (ctx Context) text_colored(color Color, value string) {

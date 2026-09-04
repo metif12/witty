@@ -801,6 +801,8 @@ pub mut:
 
 	// GPU-side image state (Kitty graphics and debug overlays).
 	images ImageRenderState
+	// CPU-side inspector overlay surface, when at least one feature is enabled.
+	overlay ?Overlay
 
 	// Compiled built-in and custom shader pipelines.
 	shaders MetalShaders
@@ -1046,6 +1048,10 @@ pub fn (mut self Renderer) deinit() {
 	self.frames = []MetalFrameState{}
 	self.shaders.deinit()
 	self.images.deinit()
+	if mut overlay := self.overlay {
+		overlay.deinit()
+	}
+	self.overlay = none
 	if mut image := self.bg_image {
 		image.deinit()
 	}
@@ -1193,6 +1199,7 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 	if t == unsafe { nil } {
 		return
 	}
+	overlay_features := state.inspector_overlay_features()
 
 	// If we're in a synchronized output state, we pause all rendering.
 	if t.modes.get(.synchronized_output) {
@@ -1252,6 +1259,12 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 		}
 	}
 
+	// Rebuild the inspector overlay after terminal-state highlights have been
+	// updated, matching Ghostty's renderer update order.
+	self.rebuild_overlay(overlay_features) or {
+		eprintln('renderer: error rebuilding overlay surface: ${err}')
+	}
+
 	// Build our GPU cells.
 	preedit := if value := state.preedit { value.clone() } else { none }
 	cs := cursor_style(&self.terminal_state, StyleOptions{
@@ -1279,6 +1292,10 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 		u8(self.config.background_opacity * 255.0),
 	]!
 
+	// Prepare the rebuilt overlay image for upload, or unload the prior image
+	// when every overlay feature has been disabled.
+	self.images.overlay_update(self.overlay)
+
 	// Update custom shader uniforms that depend on terminal state.
 	self.update_custom_shader_uniforms_from_state()
 
@@ -1287,6 +1304,37 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 
 	// Signal shaper we're done for the frame.
 	self.font_shaper.end_frame()
+}
+
+// rebuild_overlay builds or reuses the CPU overlay surface for the selected
+// inspector features. Size and cell metrics are part of the cached surface's
+// identity, exactly as in Ghostty's generic renderer.
+fn (mut self Renderer) rebuild_overlay(features []OverlayFeature) ! {
+	if features.len == 0 {
+		if mut old := self.overlay {
+			old.deinit()
+		}
+		self.overlay = none
+		return
+	}
+
+	terminal_size := self.size.terminal_size()
+	if mut current := self.overlay {
+		if current.width == terminal_size.width && current.height == terminal_size.height
+			&& current.cell_size.width == self.size.cell.width
+			&& current.cell_size.height == self.size.cell.height {
+			current.reset()
+			current.apply_features(&self.terminal_state, features)
+			self.overlay = current
+			return
+		}
+		current.deinit()
+		self.overlay = none
+	}
+
+	mut overlay := Overlay.init(self.size)!
+	overlay.apply_features(&self.terminal_state, features)
+	self.overlay = overlay
 }
 
 fn render_flattened_highlight(src highlight.FlattenedHighlight) terminal.RenderFlattenedHighlight {
