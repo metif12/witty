@@ -118,6 +118,18 @@ fn C.gtk_im_context_set_client_widget(context GtkIMContext, widget GtkWidget)
 
 fn C.gtk_im_context_get_preedit_string(context GtkIMContext, str &&char, attrs voidptr, cursor_pos voidptr)
 
+pub struct C.GdkRectangle {
+pub mut:
+	x      int
+	y      int
+	width  int
+	height int
+}
+
+fn C.gtk_im_context_set_cursor_location(context GtkIMContext, area &C.GdkRectangle)
+
+fn C.gtk_im_context_activate_osk(context GtkIMContext, event GdkEvent) bool
+
 // Event controllers and gestures.
 fn C.gtk_event_controller_key_new() GtkEventControllerKey
 
@@ -745,7 +757,14 @@ pub fn (mut self SurfaceWidget) key_event(action input.KeyAction, event GdkEvent
 		// Notify the IM context where the cursor is so it can render dropdowns
 		// in the right place.
 		if self.has_core() {
-			// TODO(gtk): set_cursor_location from core_surface.imePoint().
+			ime_point := self.core_surface.ime_point()
+			rect := C.GdkRectangle{
+				x: int(ime_point.x)
+				y: int(ime_point.y)
+				width: 1
+				height: 1
+			}
+			C.gtk_im_context_set_cursor_location(self.im_context, &rect)
 		}
 
 		// Note that we're in a keypress; some logic depends on this (see the
@@ -1135,8 +1154,19 @@ pub fn (mut self SurfaceWidget) gc_mouse_up(event GdkEvent, button u32) {
 	// Trigger the on-screen keyboard if we have no selection and the callback
 	// didn't intercept.
 	if !consumed && btn == .left && !surface.has_selection() {
-		// TODO(gtk): activate the on-screen keyboard via im_context.activateOsk.
+		if !self.show_on_screen_keyboard(event) {
+			eprintln('failed to activate the on-screen keyboard')
+		}
 	}
+}
+
+// show_on_screen_keyboard asks the current input context to activate the
+// platform on-screen keyboard for the event.
+pub fn (self &SurfaceWidget) show_on_screen_keyboard(event GdkEvent) bool {
+	if isnil(self.im_context) {
+		return false
+	}
+	return C.gtk_im_context_activate_osk(self.im_context, event)
 }
 
 // ec_mouse_motion is the GtkEventControllerMotion "motion" handler. Mirrors
