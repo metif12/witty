@@ -1268,14 +1268,18 @@ mut:
 	length int
 	// Guards concurrent producer/consumer access to the ring buffer.
 	mutex &sync.Mutex = unsafe { nil }
+	// Wakes a producer blocked because the fixed-capacity queue is full.
+	not_full &sync.Cond = unsafe { nil }
 	// Whether the wakeup signal has been raised for the consuming thread.
 	notified bool
 }
 
 // init creates a mailbox. The underlying mutex is allocated here.
 pub fn Mailbox.init() !Mailbox {
+	mutex := sync.new_mutex()
 	return Mailbox{
-		mutex: sync.new_mutex()
+		mutex: mutex
+		not_full: sync.new_cond(mutex)
 	}
 }
 
@@ -1286,6 +1290,9 @@ pub fn (mut m Mailbox) deinit() {}
 fn (mut m Mailbox) ensure_mutex() &sync.Mutex {
 	if m.mutex == unsafe { nil } {
 		m.mutex = sync.new_mutex()
+	}
+	if m.not_full == unsafe { nil } {
+		m.not_full = sync.new_cond(m.mutex)
 	}
 	return m.mutex
 }
@@ -1334,14 +1341,15 @@ pub fn (mut m Mailbox) send(msg Message, mtx &sync.Mutex) {
 			mtx.lock()
 		}
 	}
-	// NOTE: ghostty blocks forever here waiting for space. We approximate a
-	// blocking retry with a bounded spin so a single-threaded caller (e.g.
-	// tests) can't deadlock against itself.
-	for _ in 0 .. mailbox_capacity {
-		if m.push(msg) > 0 {
-			return
-		}
+	// Match BlockingQueue.push(.forever): sleep until the consumer frees a
+	// slot, then enqueue the message before returning.
+	queue_mutex := m.ensure_mutex()
+	queue_mutex.lock()
+	for m.full() {
+		m.not_full.wait()
 	}
+	m.push_locked(msg)
+	queue_mutex.unlock()
 }
 
 // push attempts to push a message onto the queue without blocking. Returns the
@@ -1358,15 +1366,19 @@ pub fn (mut m Mailbox) push(msg Message) int {
 		return 0
 	}
 
-	// Add our data and update our accounting.
+	m.push_locked(msg)
+	return 1
+}
+
+// push_locked adds one message. The caller must hold the queue mutex and must
+// have already established that the queue is not full.
+fn (mut m Mailbox) push_locked(msg Message) {
 	m.data[m.write] = msg
 	m.write += 1
 	if m.write >= mailbox_capacity {
 		m.write -= mailbox_capacity
 	}
 	m.length += 1
-
-	return 1
 }
 
 // pop removes and returns the next message from the queue without blocking.
@@ -1390,6 +1402,7 @@ pub fn (mut m Mailbox) pop() ?Message {
 		m.read -= mailbox_capacity
 	}
 	m.length -= 1
+	m.not_full.signal()
 
 	return m.data[n]
 }

@@ -4,6 +4,12 @@ import configpkg
 import os
 import renderer
 
+fn mailbox_send_forever_for_test(mailbox_ptr voidptr, done chan bool) {
+	mut mailbox := unsafe { &Mailbox(mailbox_ptr) }
+	mailbox.send(Message.write_stable_msg('overflow'), unsafe { nil })
+	done <- true
+}
+
 fn test_mailbox_push_pop_fifo() {
 	mut mailbox := Mailbox.init()!
 	defer {
@@ -171,6 +177,31 @@ fn test_mailbox_notify_sets_flag() {
 	assert !mailbox.notified
 	mailbox.notify()
 	assert mailbox.notified
+}
+
+fn test_mailbox_send_waits_for_space_without_dropping_message() {
+	mut mailbox := Mailbox.init()!
+	defer {
+		mailbox.deinit()
+	}
+	for i in 0 .. mailbox_capacity {
+		assert mailbox.push(Message.write_stable_msg('m${i}')) == 1
+	}
+
+	done := chan bool{ cap: 1 }
+	worker := spawn mailbox_send_forever_for_test(voidptr(&mailbox), done)
+	first := mailbox.pop() or { panic('full mailbox unexpectedly empty') }
+	assert first.write_stable_data == 'm0'
+	worker.wait()
+	assert <-done
+	assert mailbox.len() == mailbox_capacity
+
+	for i in 1 .. mailbox_capacity {
+		msg := mailbox.pop() or { panic('missing queued message ${i}') }
+		assert msg.write_stable_data == 'm${i}'
+	}
+	last := mailbox.pop() or { panic('blocked message was dropped') }
+	assert last.write_stable_data == 'overflow'
 }
 
 // stopwatch reset clears the notification state.
