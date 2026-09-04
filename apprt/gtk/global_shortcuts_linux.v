@@ -211,20 +211,12 @@ fn (mut self GlobalShortcuts) refresh() {
 	if isnil(self.config) {
 		return
 	}
-	config := self.config.get()
 
 	// Our map starts out empty again.
 	mut new_map := []ShortcutMapEntry{}
 
 	// Update the map from the keybind set, keeping only global, single-action
 	// leaves whose trigger can be represented as an XDG shortcut string.
-	//
-	// TODO(gtk): the placeholder `configpkg.Config` does not yet carry a keybind
-	// `Set` (`config.keybind.set.bindings`), so we cannot iterate the real
-	// bindings. The faithful structure is preserved below; once the config
-	// exposes a keybind Set, restore the loop over `config.keybind.set.bindings`
-	// and drop this early guard.
-	_ = config
 	self.refresh_map_from_bindings(mut new_map)
 
 	self.map = new_map
@@ -238,27 +230,31 @@ fn (mut self GlobalShortcuts) refresh() {
 // refresh_map_from_bindings is the translated body of ghostty's binding loop in
 // `refresh`. It iterates the config keybind set, keeps global single-action
 // leaves, and maps each such binding's XDG shortcut string to its action.
-//
-// TODO(gtk): this receives an empty binding set today (the placeholder config
-// has no keybind `Set`). The real loop — kept here in structure — is:
-//
-//   for entry in config.keybind.set.bindings {
-//       leaf := match entry.value.typ {
-//           .leader { continue }
-//           .leaf, .leaf_chained { entry.value.generic() }
-//       }
-//       if !leaf.flags.global { continue }
-//       actions := leaf.actions_slice()
-//       if actions.len != 1 { continue }
-//       shortcut := xdg_shortcut_from_trigger(entry.trigger) or { continue }
-//       new_map << ShortcutMapEntry{ id: shortcut, action: actions[0] }
-//   }
 fn (mut self GlobalShortcuts) refresh_map_from_bindings(mut new_map []ShortcutMapEntry) {
-	// Intentionally empty: no keybind Set available on the placeholder config.
-	// The per-binding translation (global filter + single-action restriction +
-	// `xdg_shortcut_from_trigger`) is available via `map_binding` below and is
-	// wired here once the config exposes a keybind Set.
-	_ = new_map
+	if isnil(self.config) {
+		return
+	}
+	config := self.config.get()
+	for entry in config.keybind.set.bindings {
+		mapped := match entry.value.typ {
+			.leader {
+				continue
+			}
+			.leaf {
+				map_binding(entry.trigger, entry.value.leaf_flags, [
+					entry.value.leaf_action,
+				]) or {
+					continue
+				}
+			}
+			.leaf_chained {
+				map_binding(entry.trigger, entry.value.chain_flags, entry.value.chain_actions) or {
+					continue
+				}
+			}
+		}
+		new_map << mapped
+	}
 }
 
 // map_binding is the per-binding translation extracted from ghostty's `refresh`
@@ -284,7 +280,7 @@ fn map_binding(trigger input.Trigger, flags input.Flags, actions []input.Action)
 	shortcut := xdg_shortcut_from_trigger(trigger) or { return none }
 
 	return ShortcutMapEntry{
-		id:     shortcut
+		id: shortcut
 		action: actions[0]
 	}
 }
@@ -584,12 +580,8 @@ fn generate_token() string {
 
 // action_to_string renders an action as the human-readable description used in
 // the bind payload. Mirrors ghostty's `{f}` formatting of `Binding.Action`.
-//
-// TODO(gtk): witty's `input.Action` has no full string formatter; we use the
-// action tag name (stable + unique per tag), matching the approach taken in
-// command_palette_linux.v (`prop_get_action_key`).
 fn action_to_string(action input.Action) string {
-	return action.tag.str()
+	return action.format()
 }
 
 // --- GObject class registration (stub) ------------------------------------
