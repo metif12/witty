@@ -1,6 +1,7 @@
 module renderer
 
 import terminal
+import unicode
 
 // --- Original Ghostty Comments Start: src/renderer/cell.zig
 //
@@ -533,37 +534,10 @@ pub fn is_covering(cp u32) bool {
 // In the future it may be prudent to expand this to encompass more
 // symbol-like characters, and/or exclude some PUA sections.
 //
-// NOTE: Ghostty computes this from a generated Unicode `is_symbol`
-// property table (unicode/symbols_table.zig via uucode). We don't have
-// that generated table in V, so we translate the documented intent as
-// explicit block/PUA range checks. This is a boundary vs. the exact
-// property table but faithfully covers the enumerated symbol blocks.
+// The generated Unicode property table is shared with the terminal and is
+// emitted from Ghostty's pinned uucode configuration.
 pub fn is_symbol(cp u32) bool {
-	return match true {
-		// Basic Multilingual Plane private use area
-		cp >= 0xE000 && cp <= 0xF8FF { true }
-		// Supplementary Private Use Area-A
-		cp >= 0xF0000 && cp <= 0xFFFFD { true }
-		// Supplementary Private Use Area-B
-		cp >= 0x100000 && cp <= 0x10FFFD { true }
-		// Arrows
-		cp >= 0x2190 && cp <= 0x21FF { true }
-		// Miscellaneous Symbols
-		cp >= 0x2600 && cp <= 0x26FF { true }
-		// Dingbats
-		cp >= 0x2700 && cp <= 0x27BF { true }
-		// Enclosed Alphanumerics
-		cp >= 0x2460 && cp <= 0x24FF { true }
-		// Miscellaneous Symbols and Pictographs
-		cp >= 0x1F300 && cp <= 0x1F5FF { true }
-		// Emoticons
-		cp >= 0x1F600 && cp <= 0x1F64F { true }
-		// Transport and Map Symbols
-		cp >= 0x1F680 && cp <= 0x1F6FF { true }
-		// Enclosed Alphanumeric Supplement
-		cp >= 0x1F100 && cp <= 0x1F1FF { true }
-		else { false }
-	}
+	return unicode.is_symbol(cp)
 }
 
 // Returns the appropriate constraint_width for the provided cell when

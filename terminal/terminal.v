@@ -1,5 +1,7 @@
 module terminal
 
+import unicode
+
 // --- Original Ghostty Comments Start: src/terminal/Terminal.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/terminal/Terminal.zig
@@ -2117,7 +2119,7 @@ pub fn (mut self Terminal) print(c u32) ! {
 					// emoji-variation-sequences.txt table we treat any
 					// wide-capable base (>= 0x1F000 emoji block or already
 					// wide) as valid; otherwise ignore the char.
-					if !is_emoji_vs_base(prev.codepoint) {
+					if !unicode.get(prev.codepoint).emoji_vs_base {
 						return
 					}
 
@@ -2186,7 +2188,7 @@ pub fn (mut self Terminal) print(c u32) ! {
 	// non-single-width characters properly. We have a fast-path for
 	// byte-sized characters since they're so common. We can ignore
 	// control characters because they're always filtered prior.
-	width := if c <= 0xFF { u16(1) } else { codepoint_width(c) }
+	width := if c <= 0xFF { u16(1) } else { u16(unicode.get(c).width) }
 
 	// Attach zero-width characters to our cell as grapheme data.
 	if width == 0 {
@@ -2220,7 +2222,7 @@ pub fn (mut self Terminal) print(c u32) ! {
 
 		// If this is a emoji variation selector, prev must be an emoji.
 		if c == 0xFE0F || c == 0xFE0E {
-			if !is_extended_pictographic(prev.codepoint) {
+			if unicode.get(prev.codepoint).grapheme_break != .extended_pictographic {
 				return
 			}
 		}
@@ -4438,272 +4440,18 @@ fn (mut self Screen) clear_rows_range(start_y int, end_y int, is_protected bool)
 }
 
 // ============================================================
-// Unicode width and grapheme break helpers
+// Unicode grapheme break helper
 // ============================================================
-//
-// Ghostty uses the uucode-generated Unicode tables (unicode.table.get(c).width
-// and uucode.grapheme.BreakState) for exact width computation and grapheme
-// segmentation. Those tables are not present in this port, so the functions
-// below are pragmatic approximations that cover the common cases exercised
-// by the terminal (East Asian wide characters, combining marks, emoji,
-// variation selectors, ZWJ, skin tones, and regional indicators). This is a
-// faithful translation of the *logic* around width/grapheme handling with a
-// simplified data source.
 
-// Determine the display width (0, 1, or 2 cells) of a codepoint.
-// Precondition: control characters are filtered prior to calling this.
-fn codepoint_width(c u32) u16 {
-	// Emoji modifiers are zero-width inside a valid emoji grapheme, but are
-	// double-width when displayed by themselves.
-	if c >= 0x1F3FB && c <= 0x1F3FF {
-		return 2
-	}
-	if is_emoji_presentation(c) {
-		return 2
-	}
-	if is_zero_width(c) {
-		return 0
-	}
-	width := utf8_str_visible_length(rune(c).str())
-	if width > 0 {
-		return if width >= 2 { u16(2) } else { u16(1) }
-	}
-	// utf8_str_visible_length treats both Extend and SpacingMark/Prepend
-	// grapheme properties as zero. Ghostty's width table only makes Extend
-	// zero-width. Probe the standard library's table-driven grapheme state:
-	// only Extend preserves an Extended_Pictographic + Extend* + ZWJ chain.
-	probe := rune(0x1f469).str() + rune(c).str() + rune(0x200d).str() + rune(0x1f469).str()
-	return if probe.graphemes().len == 1 { u16(0) } else { u16(1) }
-}
-
-// Returns true if the codepoint has zero display width. This covers
-// combining marks (Mn/Mc general categories) and format characters
-// (Cf, e.g. ZWJ, VS15/VS16) that attach to a base character.
-fn is_zero_width(c u32) bool {
-	// C0/C1 handled elsewhere; treat NUL as zero for safety.
-	if c == 0 {
-		return true
-	}
-	// Zero Width Space, ZWNJ, ZWJ, and related format chars.
-	if c == 0x200B || c == 0x200C || c == 0x200D || c == 0xFEFF {
-		return true
-	}
-	// Variation selectors VS1-VS16 (includes VS15/VS16).
-	if c >= 0xFE00 && c <= 0xFE0F {
-		return true
-	}
-	// Combining Diacritical Marks and related blocks.
-	if (c >= 0x0300 && c <= 0x036F) // Combining Diacritical Marks
-
-		|| (c >= 0x0483 && c <= 0x0489) // Cyrillic combining
-
-		|| (c >= 0x0591 && c <= 0x05BD) // Hebrew points
-
-		|| (c >= 0x0610 && c <= 0x061A) // Arabic marks
-
-		|| (c >= 0x064B && c <= 0x065F) // Arabic marks
-
-		|| c == 0x0670 // Arabic superscript alef
-
-		|| (c >= 0x06D6 && c <= 0x06DC) // Arabic small high
-
-		|| (c >= 0x0E31 && c <= 0x0E3A && c != 0x0E32 && c != 0x0E33) // Thai
-
-		|| (c >= 0x1AB0 && c <= 0x1AFF) // Combining Diacritical Marks Extended
-
-		|| (c >= 0x1DC0 && c <= 0x1DFF) // Combining Diacritical Marks Supplement
-
-		|| (c >= 0x20D0 && c <= 0x20FF) // Combining Diacritical Marks for Symbols
-
-		|| (c >= 0xFE20 && c <= 0xFE2F) { // Combining Half Marks
-		return true
-	}
-	// NOTE: Emoji skin-tone modifiers (0x1F3FB-0x1F3FF) are intentionally
-	// NOT treated as zero-width here. Their standalone display width is 2
-	// (they live in the wide emoji block). They only "disappear" into a
-	// preceding emoji via grapheme clustering (see grapheme_break), which
-	// runs before the width path. This matches uucode/ghostty.
-	return false
-}
-
-// Returns true if the codepoint is displayed as a wide (2-cell) character.
-fn is_wide(c u32) bool {
-	// Fast reject for ASCII/Latin.
-	if c < 0x1100 {
-		return false
-	}
-	// Symbols with Emoji_Presentation=Yes in the BMP default to width 2
-	// even though they live in otherwise-narrow blocks. This matches
-	// uucode's wcwidth (used by ghostty). Note that many neighboring
-	// symbols (e.g. 0x2764 Heart, 0x26C8 Thunder cloud) are NOT in this
-	// set and remain narrow until upgraded by VS16.
-	if is_emoji_presentation(c) {
-		return true
-	}
-	return (c >= 0x1100 && c <= 0x115F) // Hangul Jamo
-
-		|| c == 0x2329 || c == 0x232A
-		|| (c >= 0x2E80 && c <= 0x303E) // CJK Radicals, Kangxi
-
-		|| (c >= 0x3041 && c <= 0x33FF) // Hiragana..CJK compat
-
-		|| (c >= 0x3400 && c <= 0x4DBF) // CJK Ext A
-
-		|| (c >= 0x4E00 && c <= 0x9FFF) // CJK Unified
-
-		|| (c >= 0xA000 && c <= 0xA4CF) // Yi
-
-		|| (c >= 0xAC00 && c <= 0xD7A3) // Hangul Syllables
-
-		|| (c >= 0xF900 && c <= 0xFAFF) // CJK Compat Ideographs
-
-		|| (c >= 0xFE10 && c <= 0xFE19) // Vertical forms
-
-		|| (c >= 0xFE30 && c <= 0xFE6F) // CJK Compat forms, Small forms
-
-		|| (c >= 0xFF00 && c <= 0xFF60) // Fullwidth forms
-
-		|| (c >= 0xFFE0 && c <= 0xFFE6) // Fullwidth signs
-
-		|| (c >= 0x1F300 && c <= 0x1F64F) // Emoji (Misc Symbols/Pictographs, Emoticons)
-
-		|| (c >= 0x1F900 && c <= 0x1F9FF) // Supplemental Symbols and Pictographs
-
-		|| (c >= 0x1FA70 && c <= 0x1FAFF) // Symbols and Pictographs Extended-A
-
-		|| (c >= 0x20000 && c <= 0x3FFFD) // CJK Ext B+ and Supplementary Ideographic
-}
-
-// Returns true if the codepoint has Emoji_Presentation=Yes, i.e. it is
-// rendered as a full-color, double-width emoji by default (without needing
-// VS16). This is the BMP + astral set from the Unicode emoji-data.txt file
-// that determines a default width of 2. Codepoints not in this set that are
-// still Emoji=Yes require an explicit VS16 to become wide.
-fn is_emoji_presentation(c u32) bool {
-	// BMP Emoji_Presentation ranges.
-	if c < 0x1F000 {
-		return c == 0x231A || c == 0x231B
-			|| (c >= 0x23E9 && c <= 0x23EC)
-			|| c == 0x23F0 || c == 0x23F3
-			|| (c >= 0x25FD && c <= 0x25FE)
-			|| (c >= 0x2614 && c <= 0x2615)
-			|| (c >= 0x2648 && c <= 0x2653)
-			|| c == 0x267F
-			|| c == 0x2693
-			|| c == 0x26A1
-			|| (c >= 0x26AA && c <= 0x26AB)
-			|| (c >= 0x26BD && c <= 0x26BE)
-			|| (c >= 0x26C4 && c <= 0x26C5)
-			|| c == 0x26CE
-			|| c == 0x26D4
-			|| c == 0x26EA
-			|| (c >= 0x26F2 && c <= 0x26F3)
-			|| c == 0x26F5
-			|| c == 0x26FA
-			|| c == 0x26FD
-			|| c == 0x2705
-			|| (c >= 0x270A && c <= 0x270B)
-			|| c == 0x2728
-			|| c == 0x274C
-			|| c == 0x274E
-			|| (c >= 0x2753 && c <= 0x2755)
-			|| c == 0x2757
-			|| (c >= 0x2795 && c <= 0x2797)
-			|| c == 0x27B0
-			|| c == 0x27BF
-			|| (c >= 0x2B1B && c <= 0x2B1C)
-			|| c == 0x2B50
-			|| c == 0x2B55
-	}
-	// Astral Emoji_Presentation is broadly covered by the wide emoji ranges
-	// already handled in is_wide (0x1F300+), so we don't need to duplicate
-	// them here.
-	return false
-}
-
-// Returns true if `c` is a valid base for an emoji variation sequence, i.e.
-// one that appears in emoji-variation-sequences.txt and can therefore be
-// followed by VS15 (text) or VS16 (emoji) to change its presentation.
-//
-// This is NOT the same as "is an emoji": the vast majority of full-color
-// astral emoji (people, gestures, animals, e.g. U+1F469 woman, U+1F9E0
-// brain) do NOT have a text-presentation variant and are thus NOT valid VS
-// bases. Applying a VS to them must be ignored (see ghostty issue tests).
-//
-// The VS bases are almost entirely in the BMP legacy symbol/dingbat blocks
-// (keycap digits, arrows, misc symbols, dingbats). We cover those ranges
-// and treat all astral codepoints as non-bases, which is faithful for every
-// case the Terminal tests exercise.
-fn is_emoji_vs_base(c u32) bool {
-	// Keycap bases: # * 0-9
-	if c == 0x0023 || c == 0x002A || (c >= 0x0030 && c <= 0x0039) {
-		return true
-	}
-	// Legacy symbols/arrows/dingbats etc. that carry emoji variation
-	// sequences live in the BMP symbol area. Astral emoji do not.
-	if c >= 0x00A9 && c <= 0x2BFF {
-		return true
-	}
-	return false
-}
-
-// Returns true if the codepoint is Extended_Pictographic (roughly, an emoji).
-fn is_extended_pictographic(c u32) bool {
-	return c == 0x00A9 || c == 0x00AE || c == 0x203C || c == 0x2049
-		|| (c >= 0x2100 && c <= 0x27BF)
-		|| (c >= 0x2B00 && c <= 0x2BFF)
-		|| (c >= 0x1F000 && c <= 0x1FAFF)
-		|| (c >= 0x1F1E6 && c <= 0x1F1FF) // Regional indicators
-}
-
-fn is_indic_conjunct_linker(c u32) bool {
-	return c == 0x094d || c == 0x09cd || c == 0x0acd || c == 0x0b4d || c == 0x0c4d
-		|| c == 0x0d4d
-}
-
-fn is_indic_conjunct_consonant(c u32) bool {
-	return (c >= 0x0915 && c <= 0x0939) || (c >= 0x0958 && c <= 0x095f)
-		|| (c >= 0x0978 && c <= 0x097f) || (c >= 0x0995 && c <= 0x09a8)
-		|| (c >= 0x09aa && c <= 0x09b0) || c == 0x09b2 || (c >= 0x09b6 && c <= 0x09b9)
-		|| (c >= 0x09dc && c <= 0x09dd) || c == 0x09df || (c >= 0x09f0 && c <= 0x09f1)
-		|| (c >= 0x0a95 && c <= 0x0aa8) || (c >= 0x0aaa && c <= 0x0ab0)
-		|| (c >= 0x0ab2 && c <= 0x0ab3) || (c >= 0x0ab5 && c <= 0x0ab9) || c == 0x0af9
-		|| (c >= 0x0b15 && c <= 0x0b28) || (c >= 0x0b2a && c <= 0x0b30)
-		|| (c >= 0x0b32 && c <= 0x0b33) || (c >= 0x0b35 && c <= 0x0b39)
-		|| (c >= 0x0b5c && c <= 0x0b5d) || c == 0x0b5f || c == 0x0b71
-		|| (c >= 0x0c15 && c <= 0x0c28) || (c >= 0x0c2a && c <= 0x0c39)
-		|| (c >= 0x0c58 && c <= 0x0c5a) || (c >= 0x0d15 && c <= 0x0d3a)
-}
-
-// Returns whether appending cp creates a new Unicode extended grapheme
-// cluster. The standard library implementation is generated from the
-// Unicode GraphemeBreakProperty and emoji data, just as Ghostty's uucode
-// BreakState is.
+// Replays the existing cell grapheme to reconstruct uucode's BreakState, then
+// determines whether appending cp starts a new grapheme. This is the same
+// state reconstruction performed by Ghostty's Terminal.print.
 fn grapheme_break_cell(prev CellData, cp u32) bool {
-	// Emoji modifiers (Fitzpatrick skin tones) are special: unlike generic
-	// Extend characters, they only combine with an emoji-modifier base
-	// (an emoji), NOT with arbitrary preceding characters. This matches
-	// uucode/UAX #29 which ghostty verifies:
-	//   graphemeBreak(0x261D, 0x1F3FF) == false  (emoji + modifier: join)
-	//   graphemeBreak(0x22,   0x1F3FF) == true   (non-emoji + modifier: break)
-	if cp >= 0x1F3FB && cp <= 0x1F3FF {
-		return !is_extended_pictographic(prev.codepoint)
+	mut state := unicode.BreakState.default
+	mut cp1 := prev.codepoint
+	for cp2 in prev.graphemes {
+		assert !unicode.grapheme_break(cp1, cp2, &state)
+		cp1 = cp2
 	}
-	// Unicode 15.1 GB9c: Consonant [Extend Linker]* Linker [Extend Linker]*
-	// × Consonant. V's bundled Unicode 13 tables predate this rule.
-	if is_indic_conjunct_consonant(prev.codepoint) && is_indic_conjunct_consonant(cp) {
-		for part in prev.graphemes {
-			if is_indic_conjunct_linker(part) {
-				return false
-			}
-		}
-	}
-	mut runes := []rune{cap: prev.graphemes.len + 2}
-	runes << rune(prev.codepoint)
-	for part in prev.graphemes {
-		runes << rune(part)
-	}
-	before := runes.string().graphemes().len
-	runes << rune(cp)
-	return runes.string().graphemes().len > before
+	return unicode.grapheme_break(cp1, cp, &state)
 }
