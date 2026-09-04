@@ -832,6 +832,56 @@ fn test_page_move_cells_graphemes() {
 	}
 }
 
+fn test_page_clone_partial_row_marks_kitty_virtual_placeholder() {
+	mut src := Page.init(PageCapacity{
+		cols: 4
+		rows: 2
+		styles: 8
+	})
+	defer { src.deinit() }
+	src.size.rows = 2
+	src.rows[0].cells[2] = CellData{
+		content_tag: .codepoint
+		codepoint: kitty_unicode_placeholder
+	}
+	src.set_graphemes(0, 2, [u32(0x0305)])
+	src.rows[0].kitty_virtual_placeholder = true
+
+	mut dst := Page.init(PageCapacity{
+		cols: 4
+		rows: 2
+		styles: 8
+	})
+	defer { dst.deinit() }
+	dst.size.rows = 2
+	dst.clone_partial_row_from(&src, 0, 0, 1, 3)
+
+	assert dst.rows[0].cells[2].codepoint == kitty_unicode_placeholder
+	assert dst.rows[0].kitty_virtual_placeholder
+}
+
+fn test_page_move_cells_marks_kitty_virtual_placeholder() {
+	mut page := Page.init(PageCapacity{
+		cols: 4
+		rows: 2
+		styles: 8
+	})
+	defer { page.deinit() }
+	page.size.rows = 2
+	page.rows[0].cells[1] = CellData{
+		content_tag: .codepoint
+		codepoint: kitty_unicode_placeholder
+	}
+	page.set_graphemes(0, 1, [u32(0x0305)])
+	page.rows[0].kitty_virtual_placeholder = true
+
+	page.move_cells(0, 0, 1, 0, int(page.size.cols))
+
+	assert !page.rows[0].kitty_virtual_placeholder
+	assert page.rows[1].cells[1].codepoint == kitty_unicode_placeholder
+	assert page.rows[1].kitty_virtual_placeholder
+}
+
 // Test verifyIntegrity with good graphemes.
 fn test_page_verify_integrity_graphemes_good() {
 	mut page := Page.init(PageCapacity{

@@ -854,6 +854,9 @@ const string_chunk = string_chunk_len
 const hyperlink_count_default = 4
 const hyperlink_cell_multiplier = 16
 
+// Kitty graphics protocol Unicode placeholder / virtual placement codepoint.
+const kitty_unicode_placeholder = u32(0x10EEEE)
+
 // Standard capacity for a new page.
 const std_capacity = PageCapacity{
 	cols: 215
@@ -1575,6 +1578,11 @@ pub fn (mut self Page) clone_partial_row_from(other &Page, dst_row_idx u16, src_
 			dst_row.styled = true
 		}
 
+		// Copy Kitty virtual placeholder status.
+		if src_cell.codepoint_val() == kitty_unicode_placeholder {
+			dst_row.kitty_virtual_placeholder = true
+		}
+
 		dst_row.cells[xi] = dst_cell
 	}
 
@@ -1657,6 +1665,9 @@ pub fn (mut self Page) move_cells(src_row_idx int, src_left int, dst_row_idx int
 					dst_row.cells[di].has_hyperlink = true
 					dst_row.hyperlink = true
 				}
+			}
+			if src_cell.codepoint_val() == kitty_unicode_placeholder {
+				dst_row.kitty_virtual_placeholder = true
 			}
 		}
 	}

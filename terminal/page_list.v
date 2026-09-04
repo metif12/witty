@@ -4801,9 +4801,6 @@ fn (mut self ReflowCursor) move_last_row_to_new_page(mut list PageList, cap Page
 	self.total_rows = old_total_rows
 }
 
-// The Kitty graphics unicode placeholder codepoint (U+10EEEE).
-const kitty_unicode_placeholder = u32(0x10EEEE)
-
 // Copy the unmanaged basic content of a cell (no grapheme/style/hyperlink
 // managed memory, which is re-applied by the caller).
 fn base_cell_copy(cell &CellData) CellData {
