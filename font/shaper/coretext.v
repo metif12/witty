@@ -47,7 +47,7 @@ pub mut:
 	// Dedicated thread for releasing CoreFoundation objects. Some objects,
 	// such as those produced by CoreText, have excessively slow release
 	// callback logic.
-	cf_release_thread macos.CFReleaseThread
+	cf_release_thread &macos.CFReleaseThread = unsafe { nil }
 	// User-specified font features.
 	feature_strings []string
 }
@@ -238,9 +238,11 @@ pub fn (mut self Shaper) deinit() {
 	}
 	self.cf_release_pool = []
 
-	// Stop the CF release thread
-	self.cf_release_thread.stop()
-	self.cf_release_thread.deinit()
+	// Stop and join the CF release thread before releasing its mailbox.
+	if self.cf_release_thread != unsafe { nil } {
+		self.cf_release_thread.deinit()
+		self.cf_release_thread = unsafe { nil }
+	}
 }
 
 // Signal that we're done processing the current frame.
