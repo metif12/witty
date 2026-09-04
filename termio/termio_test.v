@@ -10,6 +10,16 @@ fn mailbox_send_forever_for_test(mailbox_ptr voidptr, done chan bool) {
 	done <- true
 }
 
+struct TermioWakeupProbe {
+mut:
+	count int
+}
+
+fn termio_wakeup_probe(data voidptr) {
+	mut probe := unsafe { &TermioWakeupProbe(data) }
+	probe.count++
+}
+
 fn test_mailbox_push_pop_fifo() {
 	mut mailbox := Mailbox.init()!
 	defer {
@@ -239,4 +249,19 @@ fn test_thread_drain_mailbox_updates_writer_state() {
 	assert writer.pending_resize or { panic('missing coalesced resize') } == resize
 	assert writer.resize_deadline > 0
 	assert tio.mailbox.len() == 0
+}
+
+fn test_process_output_notifies_callback_renderer_wakeup() {
+	mut probe := TermioWakeupProbe{}
+	mut tio := Termio{}
+	tio.init(TermioOpts{
+		renderer_wakeup: renderer.Wakeup{
+			user_data: &probe
+			notify_fn: termio_wakeup_probe
+		}
+	})!
+	defer { tio.deinit() }
+
+	tio.process_output('hello'.bytes())
+	assert probe.count == 1
 }

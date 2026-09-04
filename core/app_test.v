@@ -131,6 +131,38 @@ fn test_app_present_surface_request_ignores_stale_address() ! {
 	assert app.pending_message_count() == 0
 }
 
+fn test_renderer_wakeup_routes_core_pointer_to_runtime_render() ! {
+	mut app := App{}
+	mut runtime := apprt.RuntimeApp{}
+	mut core_surface := Surface{ app: &app }
+	mut surface := &SurfaceRef{ core_surface: &core_surface }
+	app.surfaces = SurfaceList([surface])
+
+	surface_renderer_wakeup(voidptr(&core_surface))
+	assert app.pending_message_count() == 1
+	app.tick(mut runtime)!
+	assert runtime.actions.len == 1
+	assert runtime.actions[0].action == .render
+	target := runtime.actions[0].target
+	match target {
+		apprt.SurfaceTarget {
+			assert target.surface == voidptr(&core_surface)
+		}
+		else {
+			assert false, 'expected surface render target'
+		}
+	}
+}
+
+fn test_renderer_wakeup_ignores_stale_core_pointer() ! {
+	mut app := App{}
+	mut runtime := apprt.RuntimeApp{}
+	mut stale_surface := Surface{ app: &app }
+	surface_renderer_wakeup(voidptr(&stale_surface))
+	app.tick(mut runtime)!
+	assert runtime.actions.len == 0
+}
+
 fn test_termio_surface_message_routes_core_pointer_to_live_surface() ! {
 	mut app := App{}
 	mut apprt_runtime := apprt.RuntimeApp{}

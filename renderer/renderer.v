@@ -2776,17 +2776,24 @@ pub type PreeditCodepoint = RenderPreeditCodepoint
 
 // Wakeup is the producer-side handle Ghostty passes to termio. It targets the
 // real renderer thread and preserves wakeup coalescing there.
+pub type WakeupFn = fn (voidptr)
+
 pub struct Wakeup {
 pub:
-	thread &RendererThread = unsafe { nil }
+	thread    &RendererThread = unsafe { nil }
+	user_data voidptr = unsafe { nil }
+	notify_fn WakeupFn = unsafe { nil }
 }
 
 pub fn (w Wakeup) notify() ! {
-	if w.thread == unsafe { nil } {
+	if w.thread != unsafe { nil } {
+		mut render_thread := unsafe { w.thread }
+		render_thread.wakeup()
 		return
 	}
-	mut render_thread := unsafe { w.thread }
-	render_thread.wakeup()
+	if w.notify_fn != unsafe { nil } {
+		w.notify_fn(w.user_data)
+	}
 }
 
 // Health status of the renderer.

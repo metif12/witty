@@ -532,6 +532,15 @@ fn (mut self App) drain_mailbox(mut rt_app apprt.RuntimeApp) ! {
 							surface: surface.core_surface
 						}), .render, apprt.ActionValue{})!
 					}
+				} else if core_surface := msg.core_surface {
+					for surface in self.surfaces {
+						if voidptr(surface.core_surface) == voidptr(core_surface) {
+							rt_app.perform_action(apprt.Target(apprt.SurfaceTarget{
+								surface: surface.core_surface
+							}), .render, apprt.ActionValue{})!
+							break
+						}
+					}
 				}
 			}
 			SurfaceAppMsg {
@@ -934,7 +943,8 @@ pub struct QuitMsg {}
 // send this message if it needs to.
 pub struct RedrawSurfaceMsg {
 pub:
-	surface ?&SurfaceRef
+	surface      ?&SurfaceRef
+	core_surface ?&Surface
 }
 
 pub struct SurfaceAppMsg {

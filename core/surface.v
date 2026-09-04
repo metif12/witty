@@ -2084,11 +2084,16 @@ fn (mut t RendererThread) deinit() {
 
 pub struct RendererWakeup {
 pub mut:
-	count u64
+	count     u64
+	user_data voidptr = unsafe { nil }
+	notify_fn rendererpkg.WakeupFn = unsafe { nil }
 }
 
 fn (mut w RendererWakeup) notify() ! {
 	w.count++
+	if w.notify_fn != unsafe { nil } {
+		w.notify_fn(w.user_data)
+	}
 }
 
 // Keep the public surface names while using the real emulator types.
@@ -2599,6 +2604,20 @@ fn termio_surface_message_push(app_ptr voidptr, surface_ptr voidptr, msg apprt.S
 	}))
 }
 
+fn surface_renderer_wakeup(surface_ptr voidptr) {
+	if isnil(surface_ptr) {
+		return
+	}
+	mut surface := unsafe { &Surface(surface_ptr) }
+	if isnil(surface.app) {
+		return
+	}
+	mut app := unsafe { surface.app }
+	app.mailbox.try_push(Message(RedrawSurfaceMsg{
+		core_surface: surface
+	}))
+}
+
 // SearchNav is the navigation direction for navigate_search.
 pub enum SearchNav {
 	next
@@ -2817,6 +2836,10 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 	self.renderer_state = RendererState{
 		mutex: sync.new_mutex()
 	}
+	self.renderer_thread.wakeup = RendererWakeup{
+		user_data: unsafe { voidptr(&self) }
+		notify_fn: surface_renderer_wakeup
+	}
 	self.renderer_mailbox = rendererpkg.RendererMailbox.create()
 	env := rt_surface.default_termio_env()!
 	resources_dir_value := global_state.get_state().resources_dir.app()
@@ -2839,7 +2862,10 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 			linux_cgroup: rt_surface.linux_cgroup
 		}
 		renderer_state: &self.renderer_state
-		renderer_wakeup: rendererpkg.Wakeup{}
+		renderer_wakeup: rendererpkg.Wakeup{
+			user_data: voidptr(&self)
+			notify_fn: surface_renderer_wakeup
+		}
 		renderer_mailbox: self.renderer_mailbox
 		surface_mailbox: apprt.SurfaceMailbox{
 			surface: voidptr(&self)
