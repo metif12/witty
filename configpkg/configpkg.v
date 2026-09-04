@@ -15,6 +15,7 @@ const default_quit_after_last_window_closed = $if linux { true } $else { false }
 const default_linux_cgroup = $if linux { LinuxCgroup.single_instance } $else { LinuxCgroup.never }
 const default_quick_terminal_autohide = $if macos { true } $else { false }
 const default_font_size = $if macos { f32(13) } $else { f32(12) }
+const config_template = $embed_file('config-template').to_string()
 
 // --- Original Ghostty Comments Start: src/config/Config.zig
 //
@@ -6353,13 +6354,47 @@ pub fn Config.load_args(args []string) Config {
 }
 
 // load_default_files reads the platform's default configuration paths in the
-// same order as Ghostty's Config.loadDefaultFiles. Missing paths are ignored.
+// same order as Ghostty's Config.loadDefaultFiles. If no default file exists,
+// it creates Ghostty's commented starter template at the preferred location.
 pub fn (mut c Config) load_default_files() {
-	for path in default_file_paths() {
-		if os.is_file(path) {
-			c.load_file(path)
+	legacy_xdg_path := legacy_xdg_config_path()
+	xdg_path := default_xdg_config_path()
+	legacy_xdg_loaded := c.load_optional_file(legacy_xdg_path)
+	preferred_xdg_loaded := c.load_optional_file(xdg_path)
+	xdg_loaded := legacy_xdg_loaded || preferred_xdg_loaded
+	$if macos {
+		legacy_app_support_path := app_support_config_path('config')
+		app_support_path := app_support_config_path('config.ghostty')
+		legacy_app_support_loaded := c.load_optional_file(legacy_app_support_path)
+		preferred_app_support_loaded := c.load_optional_file(app_support_path)
+		app_support_loaded := legacy_app_support_loaded || preferred_app_support_loaded
+		if !app_support_loaded && !xdg_loaded {
+			write_config_template(app_support_path) or {}
+		}
+	} $else {
+		if !xdg_loaded {
+			write_config_template(xdg_path) or {}
 		}
 	}
+}
+
+// load_optional_file mirrors Config.loadOptionalFile's action for purposes of
+// choosing whether to create a template. Any path other than a missing path is
+// considered handled, including an empty file or a path that cannot be read.
+fn (mut c Config) load_optional_file(path string) bool {
+	if !os.exists(path) {
+		return false
+	}
+	c.load_file(path)
+	return true
+}
+
+fn write_config_template(path string) ! {
+	directory := os.dir(path)
+	if directory.len > 0 {
+		os.mkdir_all(directory)!
+	}
+	os.write_file(path, config_template.replace('{[path]s}', path))!
 }
 
 // load_cli_args applies Ghostty's `--key=value` configuration syntax and the
@@ -9066,15 +9101,6 @@ fn app_support_config_path(name string) string {
 	} $else {
 		return os.join_path(os.home_dir(), 'Library', 'Application Support', 'com.mitchellh.ghostty', name)
 	}
-}
-
-fn default_file_paths() []string {
-	mut paths := [legacy_xdg_config_path(), default_xdg_config_path()]
-	$if macos {
-		paths << app_support_config_path('config')
-		paths << app_support_config_path('config.ghostty')
-	}
-	return paths
 }
 
 // ============================================================

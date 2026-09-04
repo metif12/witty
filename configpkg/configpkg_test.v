@@ -1020,6 +1020,35 @@ fn test_editable_config_path_creates_file_without_truncating() ! {
 	assert os.read_file(path)! == 'keep me'
 }
 
+fn test_write_config_template_creates_parent_and_interpolates_path() ! {
+	dir := os.join_path(os.temp_dir(), 'witty-config-template-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	path := os.join_path(dir, 'ghostty', 'config.ghostty')
+	write_config_template(path)!
+	content := os.read_file(path)!
+	assert content.contains('#   ${path}\n')
+	assert !content.contains('{[path]s}')
+	assert !content.contains('\nfont-family =')
+}
+
+fn test_load_optional_file_distinguishes_only_missing_paths() ! {
+	dir := os.join_path(os.temp_dir(), 'witty-optional-config-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	os.mkdir_all(dir)!
+	missing := os.join_path(dir, 'missing')
+	empty := os.join_path(dir, 'empty')
+	os.write_file(empty, '')!
+	mut cfg := Config.default_config()
+	assert !cfg.load_optional_file(missing)
+	assert cfg.load_optional_file(empty)
+}
+
 fn test_preferred_config_path_prefers_nonempty_then_existing() ! {
 	dir := os.join_path(os.temp_dir(), 'witty-preferred-config-${os.getpid()}')
 	os.rmdir_all(dir) or {}
