@@ -4127,9 +4127,20 @@ pub mut:
 	window_inherit_font_size bool = true
 	// Whether to create the initial window when starting.
 	initial_window bool = true
+	// Quick-terminal placement and dimensions.
+	quick_terminal_position QuickTerminalPosition = .top
+	quick_terminal_size     QuickTerminalSize
+	// Wayland layer-shell configuration for the quick terminal.
+	gtk_quick_terminal_layer     QuickTerminalLayer = .top
+	gtk_quick_terminal_namespace string = 'ghostty-quick-terminal'
+	// Platform-specific quick-terminal presentation behavior.
+	quick_terminal_screen             QuickTerminalScreen = .main
+	quick_terminal_animation_duration f64 = 0.2
 	// Automatically hide a quick terminal when it loses focus. Ghostty defaults
 	// this on for macOS and off for Linux/BSD.
-	quick_terminal_autohide bool = default_quick_terminal_autohide
+	quick_terminal_autohide               bool = default_quick_terminal_autohide
+	quick_terminal_space_behavior         QuickTerminalSpaceBehavior = .move
+	quick_terminal_keyboard_interactivity QuickTerminalKeyboardInteractivity = .on_demand
 	// Whether to enable OSC 133 based right-click actions.
 	right_click_action RightClickAction = .context_menu
 	// Interval in ms for detecting repeated clicks. 0 uses the system default.
@@ -6428,6 +6439,9 @@ fn (mut c Config) apply_kv(key string, value string) {
 		'initial-input' {
 			c.initial_input = value
 		}
+		'gtk-quick-terminal-namespace' {
+			c.gtk_quick_terminal_namespace = value
+		}
 		'env' {
 			c.apply_env(value)
 		}
@@ -6688,12 +6702,19 @@ fn (mut c Config) apply_kv(key string, value string) {
 		'font-thicken-strength' {
 			c.font_thicken_strength = c.parse_config_u8(key, value) or { return }
 		}
-		'background-image-opacity', 'mouse-scroll-multiplier' {
+		'background-image-opacity', 'mouse-scroll-multiplier', 'quick-terminal-animation-duration' {
 			parsed := c.parse_config_f64(key, value) or { return }
-			if key == 'background-image-opacity' {
-				c.background_image_opacity = f32(parsed)
-			} else {
-				c.mouse_scroll_multiplier = parsed
+			match key {
+				'background-image-opacity' {
+					c.background_image_opacity = f32(parsed)
+				}
+				'mouse-scroll-multiplier' {
+					c.mouse_scroll_multiplier = parsed
+				}
+				'quick-terminal-animation-duration' {
+					c.quick_terminal_animation_duration = parsed
+				}
+				else {}
 			}
 		}
 		'clipboard-read', 'clipboard-write' {
@@ -6958,6 +6979,69 @@ fn (mut c Config) apply_kv(key string, value string) {
 			c.resize_overlay_duration = duration_parse_cli(value) or {
 				c.invalid_config_value(key, value)
 				return
+			}
+		}
+		'quick-terminal-position' {
+			c.quick_terminal_position = match value {
+				'top' { .top }
+				'bottom' { .bottom }
+				'left' { .left }
+				'right' { .right }
+				'center' { .center }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'quick-terminal-size' {
+			c.quick_terminal_size.parse_cli(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
+		'gtk-quick-terminal-layer' {
+			c.gtk_quick_terminal_layer = match value {
+				'overlay' { .overlay }
+				'top' { .top }
+				'bottom' { .bottom }
+				'background' { .background }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'quick-terminal-screen' {
+			c.quick_terminal_screen = match value {
+				'main' { .main }
+				'mouse' { .mouse }
+				'macos-menu-bar' { .macos_menu_bar }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'quick-terminal-space-behavior' {
+			c.quick_terminal_space_behavior = match value {
+				'remain' { .remain }
+				'move' { .move }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'quick-terminal-keyboard-interactivity' {
+			c.quick_terminal_keyboard_interactivity = match value {
+				'none' { .none_ }
+				'on-demand' { .on_demand }
+				'exclusive' { .exclusive }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
 			}
 		}
 		'right-click-action' {
@@ -8463,6 +8547,30 @@ pub enum QuickTerminalPosition {
 	left
 	right
 	center
+}
+
+pub enum QuickTerminalLayer {
+	overlay
+	top
+	bottom
+	background
+}
+
+pub enum QuickTerminalScreen {
+	main
+	mouse
+	macos_menu_bar
+}
+
+pub enum QuickTerminalSpaceBehavior {
+	remain
+	move
+}
+
+pub enum QuickTerminalKeyboardInteractivity {
+	none_
+	on_demand
+	exclusive
 }
 
 // ------------------------------------------------------------

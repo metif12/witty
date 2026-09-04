@@ -237,8 +237,34 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 		bool_string(c.window_inherit_font_size),
 	])
 	add_group(mut result, 'initial-window', [bool_string(c.initial_window)])
+	add_group(mut result, 'quick-terminal-position', [
+		enum_config_string(c.quick_terminal_position.str()),
+	])
+	if c.quick_terminal_size.primary != none {
+		add_group(mut result, 'quick-terminal-size', [
+			quick_terminal_size_string(c.quick_terminal_size),
+		])
+	}
+	add_group(mut result, 'gtk-quick-terminal-layer', [
+		enum_config_string(c.gtk_quick_terminal_layer.str()),
+	])
+	add_group(mut result, 'gtk-quick-terminal-namespace', [
+		c.gtk_quick_terminal_namespace,
+	])
+	add_group(mut result, 'quick-terminal-screen', [
+		enum_config_string(c.quick_terminal_screen.str()),
+	])
+	add_group(mut result, 'quick-terminal-animation-duration', [
+		'${c.quick_terminal_animation_duration}',
+	])
 	add_group(mut result, 'quick-terminal-autohide', [
 		bool_string(c.quick_terminal_autohide),
+	])
+	add_group(mut result, 'quick-terminal-space-behavior', [
+		enum_config_string(c.quick_terminal_space_behavior.str()),
+	])
+	add_group(mut result, 'quick-terminal-keyboard-interactivity', [
+		enum_config_string(c.quick_terminal_keyboard_interactivity.str()),
 	])
 	add_group(mut result, 'working-directory', [optional_string(c.working_directory)])
 	add_group(mut result, 'command', [optional_command_string(c.command)])
@@ -439,6 +465,22 @@ fn background_blur_string(value BackgroundBlur) string {
 		.radius { '${value.radius}' }
 		.macos_glass_regular { 'macos-glass-regular' }
 		.macos_glass_clear { 'macos-glass-clear' }
+	}
+}
+
+fn quick_terminal_size_string(value QuickTerminalSize) string {
+	primary := value.primary or { return '' }
+	mut result := quick_terminal_size_value_string(primary)
+	if secondary := value.secondary {
+		result += ',${quick_terminal_size_value_string(secondary)}'
+	}
+	return result
+}
+
+fn quick_terminal_size_value_string(value QuickTerminalSizeValue) string {
+	return match value.kind {
+		.percentage { '${format_f64(f64(value.percentage))}%' }
+		.pixels { '${value.pixels}px' }
 	}
 }
 

@@ -736,14 +736,30 @@ fn test_gtk_window_config_parse_format_and_defaults() {
 	assert cfg.gtk_toolbar_style == .raised
 	assert cfg.gtk_titlebar_style == .native
 	assert cfg.gtk_wide_tabs
+	assert cfg.quick_terminal_position == .top
+	assert cfg.quick_terminal_size.primary == none
+	assert cfg.gtk_quick_terminal_layer == .top
+	assert cfg.gtk_quick_terminal_namespace == 'ghostty-quick-terminal'
+	assert cfg.quick_terminal_screen == .main
+	assert cfg.quick_terminal_animation_duration == 0.2
 	assert cfg.quick_terminal_autohide == default_quick_terminal_autohide
+	assert cfg.quick_terminal_space_behavior == .move
+	assert cfg.quick_terminal_keyboard_interactivity == .on_demand
 
 	gtk_debug_value := if default_gtk_opengl_debug { 'false' } else { 'true' }
 	quick_autohide_value := if default_quick_terminal_autohide { 'false' } else { 'true' }
 	cfg.load_string('window-new-tab-position = end
 window-show-tab-bar = never
 window-subtitle = working-directory
+quick-terminal-position = right
+quick-terminal-size = 50%,320px
+gtk-quick-terminal-layer = overlay
+gtk-quick-terminal-namespace = dev.ghostty.quick
+quick-terminal-screen = macos-menu-bar
+quick-terminal-animation-duration = 0.35
 quick-terminal-autohide = ${quick_autohide_value}
+quick-terminal-space-behavior = remain
+quick-terminal-keyboard-interactivity = exclusive
 gtk-opengl-debug = ${gtk_debug_value}
 gtk-titlebar = false
 gtk-tabs-location = bottom
@@ -755,7 +771,26 @@ gtk-wide-tabs = false')
 	assert cfg.window_new_tab_position == .end
 	assert cfg.window_show_tab_bar == .never
 	assert cfg.window_subtitle == .working_directory
+	assert cfg.quick_terminal_position == .right
+	quick_primary := cfg.quick_terminal_size.primary or {
+		assert false
+		return
+	}
+	quick_secondary := cfg.quick_terminal_size.secondary or {
+		assert false
+		return
+	}
+	assert quick_primary.kind == .percentage
+	assert quick_primary.percentage == 50
+	assert quick_secondary.kind == .pixels
+	assert quick_secondary.pixels == 320
+	assert cfg.gtk_quick_terminal_layer == .overlay
+	assert cfg.gtk_quick_terminal_namespace == 'dev.ghostty.quick'
+	assert cfg.quick_terminal_screen == .macos_menu_bar
+	assert cfg.quick_terminal_animation_duration == 0.35
 	assert cfg.quick_terminal_autohide == !default_quick_terminal_autohide
+	assert cfg.quick_terminal_space_behavior == .remain
+	assert cfg.quick_terminal_keyboard_interactivity == .exclusive
 	assert cfg.gtk_opengl_debug == !default_gtk_opengl_debug
 	assert !cfg.gtk_titlebar
 	assert cfg.gtk_tabs_location == .bottom
@@ -768,7 +803,15 @@ gtk-wide-tabs = false')
 	assert formatted.contains('window-new-tab-position = end\n')
 	assert formatted.contains('window-show-tab-bar = never\n')
 	assert formatted.contains('window-subtitle = working-directory\n')
+	assert formatted.contains('quick-terminal-position = right\n')
+	assert formatted.contains('quick-terminal-size = 50%,320px\n')
+	assert formatted.contains('gtk-quick-terminal-layer = overlay\n')
+	assert formatted.contains('gtk-quick-terminal-namespace = dev.ghostty.quick\n')
+	assert formatted.contains('quick-terminal-screen = macos-menu-bar\n')
+	assert formatted.contains('quick-terminal-animation-duration = 0.35\n')
 	assert formatted.contains('quick-terminal-autohide = ${quick_autohide_value}\n')
+	assert formatted.contains('quick-terminal-space-behavior = remain\n')
+	assert formatted.contains('quick-terminal-keyboard-interactivity = exclusive\n')
 	assert formatted.contains('gtk-opengl-debug = ${gtk_debug_value}\n')
 	assert formatted.contains('gtk-titlebar = false\n')
 	assert formatted.contains('gtk-tabs-location = bottom\n')
@@ -782,7 +825,24 @@ gtk-wide-tabs = false')
 	assert roundtrip.window_new_tab_position == cfg.window_new_tab_position
 	assert roundtrip.window_show_tab_bar == cfg.window_show_tab_bar
 	assert roundtrip.window_subtitle == cfg.window_subtitle
+	assert roundtrip.quick_terminal_position == cfg.quick_terminal_position
+	roundtrip_primary := roundtrip.quick_terminal_size.primary or {
+		assert false
+		return
+	}
+	roundtrip_secondary := roundtrip.quick_terminal_size.secondary or {
+		assert false
+		return
+	}
+	assert roundtrip_primary == quick_primary
+	assert roundtrip_secondary == quick_secondary
+	assert roundtrip.gtk_quick_terminal_layer == cfg.gtk_quick_terminal_layer
+	assert roundtrip.gtk_quick_terminal_namespace == cfg.gtk_quick_terminal_namespace
+	assert roundtrip.quick_terminal_screen == cfg.quick_terminal_screen
+	assert roundtrip.quick_terminal_animation_duration == cfg.quick_terminal_animation_duration
 	assert roundtrip.quick_terminal_autohide == cfg.quick_terminal_autohide
+	assert roundtrip.quick_terminal_space_behavior == cfg.quick_terminal_space_behavior
+	assert roundtrip.quick_terminal_keyboard_interactivity == cfg.quick_terminal_keyboard_interactivity
 	assert roundtrip.gtk_opengl_debug == cfg.gtk_opengl_debug
 	assert roundtrip.gtk_titlebar == cfg.gtk_titlebar
 	assert roundtrip.gtk_tabs_location == cfg.gtk_tabs_location
