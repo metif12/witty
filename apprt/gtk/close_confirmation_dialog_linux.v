@@ -13,11 +13,8 @@ module gtk
 //
 // The GObject class registration (`defineClass`), the `target` PROPERTY, the
 // `.ui` template, and the `close-request`/`cancel` SIGNALS are hand-expanded
-// below onto the raw GObject/GTK C API. The wrapping V struct
-// `CloseConfirmationDialog` additionally keeps optional V callbacks so the
-// response routing stays observable from V without a GObject signal connect.
-// The real LOGIC — the target -> heading/body text and the response-id ->
-// signal routing — is translated directly.
+// below onto the raw GObject/GTK C API. The target -> heading/body text and
+// response virtual method are translated directly.
 
 // --- CloseTarget ----------------------------------------------------------
 //
@@ -85,6 +82,8 @@ mut:
 // g_type_add_instance_private), both registered lazily on first use.
 __global g_close_confirmation_dialog_type = GType(0)
 __global g_close_confirmation_dialog_priv_offset = int(0)
+__global g_close_confirmation_target_type = GType(0)
+__global g_close_confirmation_target_values = [5]C.GEnumValue{}
 
 // Property ids for the get/set vfunc dispatch.
 const close_confirmation_prop_target = u32(1)
@@ -99,7 +98,7 @@ fn close_confirmation_dialog_priv(obj voidptr) &C.GhosttyCloseConfirmationDialog
 fn close_confirmation_dialog_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
 	if property_id == close_confirmation_prop_target {
 		priv := close_confirmation_dialog_priv(obj)
-		C.g_value_set_int(value, priv.target)
+		C.g_value_set_enum(value, priv.target)
 	}
 }
 
@@ -108,8 +107,20 @@ fn close_confirmation_dialog_get_property(obj voidptr, property_id u32, value vo
 fn close_confirmation_dialog_set_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
 	if property_id == close_confirmation_prop_target {
 		mut priv := close_confirmation_dialog_priv(obj)
-		priv.target = C.g_value_get_int(value)
+		priv.target = C.g_value_get_enum(value)
 	}
+}
+
+fn close_confirmation_target_get_type() GType {
+	if g_close_confirmation_target_type == GType(0) {
+		g_close_confirmation_target_values[0] = C.GEnumValue{ value: int(CloseTarget.app), value_name: c'app', value_nick: c'app' }
+		g_close_confirmation_target_values[1] = C.GEnumValue{ value: int(CloseTarget.tab), value_name: c'tab', value_nick: c'tab' }
+		g_close_confirmation_target_values[2] = C.GEnumValue{ value: int(CloseTarget.window), value_name: c'window', value_nick: c'window' }
+		g_close_confirmation_target_values[3] = C.GEnumValue{ value: int(CloseTarget.surface), value_name: c'surface', value_nick: c'surface' }
+		g_close_confirmation_target_values[4] = C.GEnumValue{ value: 0, value_name: &char(unsafe { nil }), value_nick: &char(unsafe { nil }) }
+		g_close_confirmation_target_type = C.g_enum_register_static(c'GhosttyCloseConfirmationDialogTarget', &g_close_confirmation_target_values[0])
+	}
+	return g_close_confirmation_target_type
 }
 
 // close_confirmation_dialog_dispose disposes the template and chains to the
@@ -130,11 +141,12 @@ fn close_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
 	bytes := C.g_bytes_new_static(close_confirmation_dialog_ui.str, usize(close_confirmation_dialog_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
 
-	// Property: target (enum, modeled as int).
-	pspec := C.g_param_spec_int(c'target', c'target', c'The close target', 0, 3, 0, g_param_readwrite)
+	// Property: target.
+	pspec := C.g_param_spec_enum(c'target', c'target', c'The close target', close_confirmation_target_get_type(), int(CloseTarget.app), g_param_readwrite)
 	C.witty_gobject_class_set_get_property(klass, voidptr(close_confirmation_dialog_get_property))
 	C.witty_gobject_class_set_set_property(klass, voidptr(close_confirmation_dialog_set_property))
 	C.witty_gobject_class_set_dispose(klass, voidptr(close_confirmation_dialog_dispose))
+	C.witty_dialog_class_set_response(klass, b2i(adw_supports_dialogs()), voidptr(close_confirmation_native_response_cb))
 	C.g_object_class_install_property(klass, close_confirmation_prop_target, pspec)
 
 	// Signals: close-request, cancel (both void, no params).
@@ -182,15 +194,6 @@ mut:
 
 	// The close target. Mirrors `Private.target` (the `target` property).
 	target CloseTarget = .app
-
-	// Signal callbacks. Ghostty emits GObject signals (`close-request` /
-	// `cancel`); we model them as optional V callbacks so callers can observe
-	// the response routing.
-	//
-	// TODO(gtk): GObject signals — registered via `gobject.ext.defineSignal`
-	// and emitted with `.impl.emit(...)`. Stubbed as plain callbacks here.
-	on_close_request ?fn ()
-	on_cancel        ?fn ()
 }
 
 // close_confirmation_dialog_new creates a new dialog for the given target.
@@ -198,7 +201,6 @@ mut:
 // GObject (running the `.ui` template init) with the `target` property set.
 pub fn close_confirmation_dialog_new(target CloseTarget) &CloseConfirmationDialog {
 	obj := C.g_object_new(close_confirmation_dialog_get_type(), c'target', int(target), &char(unsafe { nil }))
-	C.g_signal_connect_data(obj, c'response', GCallback(voidptr(close_confirmation_native_response_cb)), unsafe { nil }, unsafe { nil }, 0)
 	return &CloseConfirmationDialog{
 		dialog: Dialog{
 			obj: obj
@@ -208,11 +210,9 @@ pub fn close_confirmation_dialog_new(target CloseTarget) &CloseConfirmationDialo
 }
 
 // AdwAlertDialog and AdwMessageDialog both expose the same response signal.
-// Ghostty overrides the corresponding virtual method; connecting the inherited
-// signal here provides the same routing without relying on a generated Zig
-// virtual-method trampoline.
-fn close_confirmation_native_response_cb(obj GObject, response_id &char, user_data voidptr) {
-	_ = user_data
+// This callback is installed as the corresponding virtual method on whichever
+// parent Dialog class is available.
+fn close_confirmation_native_response_cb(obj GObject, response_id &char) {
 	if isnil(obj) || isnil(response_id) {
 		return
 	}
@@ -238,28 +238,6 @@ pub fn (mut self CloseConfirmationDialog) present(parent GtkWidget) {
 // close closes the dialog. Mirrors `CloseConfirmationDialog.close`.
 pub fn (mut self CloseConfirmationDialog) close() {
 	self.dialog.close()
-}
-
-// response routes an AdwAlertDialog response id to the appropriate signal.
-// Mirrors the `response` virtual method: "close" -> close-request, anything
-// else -> cancel. In addition to emitting the real GObject signal, it invokes
-// the optional V callback so the routing is observable from V.
-fn (mut self CloseConfirmationDialog) response(response_id string) {
-	if response_id == 'close' {
-		if !isnil(self.dialog.obj) {
-			C.g_signal_emit_by_name(self.dialog.obj, c'close-request')
-		}
-		if cb := self.on_close_request {
-			cb()
-		}
-	} else {
-		if !isnil(self.dialog.obj) {
-			C.g_signal_emit_by_name(self.dialog.obj, c'cancel')
-		}
-		if cb := self.on_cancel {
-			cb()
-		}
-	}
 }
 
 // --- GObject reference counting -------------------------------------------

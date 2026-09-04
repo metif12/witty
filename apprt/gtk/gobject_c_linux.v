@@ -201,6 +201,8 @@ fn C.witty_gapplication_call_parent_startup(instance voidptr)
 
 fn C.witty_gapplication_call_parent_activate(instance voidptr)
 
+fn C.witty_dialog_class_set_response(klass voidptr, alert_dialog int, callback voidptr)
+
 fn C.g_object_class_find_property(oclass voidptr, property_name &char) &C.GParamSpec
 
 fn C.g_object_notify_by_pspec(object voidptr, pspec &C.GParamSpec)

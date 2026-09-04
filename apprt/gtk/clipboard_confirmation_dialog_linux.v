@@ -16,8 +16,8 @@ module gtk
 // The GObject class registration (`defineClass`), the four PROPERTIES, the
 // `.ui` template + child bindings + template callbacks, and the
 // `confirm`/`deny` SIGNALS are hand-expanded below onto the raw GObject/GTK C
-// API. The V struct `ClipboardConfirmationDialog` keeps the private fields +
-// optional V callbacks so the response routing stays observable from V.
+// API. The V struct `ClipboardConfirmationDialog` keeps the translated private
+// fields.
 // The real LOGIC — the request -> heading/body text (prop_request), the blur /
 // reveal / hide widget-state toggles, and the response-id -> signal routing
 // (with the remember flag) — is translated directly.
@@ -352,6 +352,7 @@ fn clipboard_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
 	C.witty_gobject_class_set_set_property(klass, voidptr(clipboard_confirmation_dialog_set_property))
 	C.witty_gobject_class_set_dispose(klass, voidptr(clipboard_confirmation_dialog_dispose))
 	C.witty_gobject_class_set_finalize(klass, voidptr(clipboard_confirmation_dialog_finalize))
+	C.witty_dialog_class_set_response(klass, b2i(adw_supports_dialogs()), voidptr(clipboard_confirmation_native_response_cb))
 	C.g_object_class_install_property(klass, clipboard_prop_blur, blur_pspec)
 	C.g_object_class_install_property(klass, clipboard_prop_can_remember, can_remember_pspec)
 	C.g_object_class_install_property(klass, clipboard_prop_clipboard_contents, contents_pspec)
@@ -420,13 +421,6 @@ mut:
 	hide_button      GtkButton = unsafe { nil }
 	remember_choice  AdwSwitchRow = unsafe { nil }
 
-	// Signal callbacks. Ghostty emits GObject `confirm` / `deny` signals, each
-	// carrying the remember flag; modeled here as optional V callbacks.
-	//
-	// TODO(gtk): GObject signals — registered via `gobject.ext.defineSignal`.
-	on_confirm ?fn (remember bool)
-	on_deny    ?fn (remember bool)
-
 	// V owns the request payload and text while the dialog is presented. The
 	// generated Zig bindings keep the same values in boxed/object properties.
 	text string
@@ -438,7 +432,6 @@ mut:
 // the GObject private into the V wrapper.
 pub fn clipboard_confirmation_dialog_new() &ClipboardConfirmationDialog {
 	obj := C.g_object_new(clipboard_confirmation_dialog_get_type(), &char(unsafe { nil }))
-	C.g_signal_connect_data(obj, c'response', GCallback(voidptr(clipboard_confirmation_native_response_cb)), unsafe { nil }, unsafe { nil }, 0)
 	priv := clipboard_confirmation_dialog_priv(obj)
 	mut self := &ClipboardConfirmationDialog{
 		dialog: Dialog{
@@ -483,8 +476,7 @@ pub fn clipboard_confirmation_dialog_new_for_request(req apprt.ClipboardRequest,
 // Route the inherited Adwaita response signal to Ghostty's confirm/deny
 // signals. This is the runtime C-API equivalent of the Zig response-vfunc
 // override.
-fn clipboard_confirmation_native_response_cb(obj GObject, response_id &char, user_data voidptr) {
-	_ = user_data
+fn clipboard_confirmation_native_response_cb(obj GObject, response_id &char) {
 	if isnil(obj) || isnil(response_id) {
 		return
 	}
@@ -573,38 +565,6 @@ fn (mut self ClipboardConfirmationDialog) hide_button_clicked() {
 	C.gtk_widget_add_css_class(self.text_view, c'blurred')
 	C.gtk_widget_set_visible(self.hide_button, b2i(false))
 	C.gtk_widget_set_visible(self.reveal_button, b2i(true))
-}
-
-// --- Virtual methods ------------------------------------------------------
-
-// response routes an AdwAlertDialog response id to confirm/deny, carrying the
-// remember flag. Mirrors the `response` virtual method.
-//
-// TODO(gtk): GObject virtual method — implemented via
-// `Dialog.virtual_methods.response.implement(class, &response)` in ghostty.
-fn (mut self ClipboardConfirmationDialog) response(response_id string) {
-	// The remember switch only exists on libadwaita >= 1.4.
-	remember := if self.can_remember && !isnil(self.remember_choice) {
-		C.adw_switch_row_get_active(self.remember_choice) != 0
-	} else {
-		false
-	}
-
-	if response_id == 'cancel' {
-		if !isnil(self.dialog.obj) {
-			C.g_signal_emit_by_name(self.dialog.obj, c'deny', b2i(remember))
-		}
-		if cb := self.on_deny {
-			cb(remember)
-		}
-	} else if response_id == 'ok' {
-		if !isnil(self.dialog.obj) {
-			C.g_signal_emit_by_name(self.dialog.obj, c'confirm', b2i(remember))
-		}
-		if cb := self.on_confirm {
-			cb(remember)
-		}
-	}
 }
 
 // dispose releases the clipboard-contents buffer held by the V wrapper. The

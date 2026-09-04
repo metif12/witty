@@ -2,6 +2,7 @@
 
 #include <gio/gio.h>
 #include <glib-object.h>
+#include <adwaita.h>
 
 static inline void witty_gobject_class_set_get_property(
     gpointer klass,
@@ -79,4 +80,22 @@ static inline gssize witty_glog_field_length(
     const GLogField *fields,
     gsize index) {
   return fields[index].length;
+}
+
+static inline void witty_dialog_class_set_response(
+    gpointer klass,
+    gboolean alert_dialog,
+    gpointer callback) {
+#if ADW_CHECK_VERSION(1, 5, 0)
+  if (alert_dialog) {
+    ADW_ALERT_DIALOG_CLASS(klass)->response =
+        (void (*)(AdwAlertDialog *, const char *))callback;
+  } else {
+#else
+  (void)alert_dialog;
+  {
+#endif
+    ADW_MESSAGE_DIALOG_CLASS(klass)->response =
+        (void (*)(AdwMessageDialog *, const char *))callback;
+  }
 }
