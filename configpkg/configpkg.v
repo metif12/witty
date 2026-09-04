@@ -10,6 +10,7 @@ import cli_args
 
 const default_gtk_opengl_debug = $if debug { true } $else { false }
 const default_quit_after_last_window_closed = $if linux { true } $else { false }
+const default_linux_cgroup = $if linux { LinuxCgroup.single_instance } $else { LinuxCgroup.never }
 
 // --- Original Ghostty Comments Start: src/config/Config.zig
 //
@@ -4138,6 +4139,11 @@ pub mut:
 	macos_dock_drop_behavior MacOSDockDropBehavior = .new_tab
 	// GTK single-instance behavior. `detect` chooses at finalize time.
 	gtk_single_instance GtkSingleInstance = .detect
+	// Linux systemd cgroup isolation and per-terminal limits.
+	linux_cgroup                 LinuxCgroup = default_linux_cgroup
+	linux_cgroup_memory_limit    ?u64
+	linux_cgroup_processes_limit ?u64
+	linux_cgroup_hard_fail       bool
 	// Enable GTK OpenGL diagnostics when stderr logging is active.
 	gtk_opengl_debug bool = default_gtk_opengl_debug
 	// GTK window chrome configuration.
@@ -4177,6 +4183,13 @@ pub enum GtkSingleInstance {
 	false_
 	true_
 	desktop
+}
+
+// LinuxCgroup controls when systemd cgroup isolation is enabled.
+pub enum LinuxCgroup {
+	never
+	always
+	single_instance
 }
 
 // GtkTabsLocation controls which edge hosts the tab bar.
@@ -5929,8 +5942,8 @@ fn is_boolean_config_key(key string) bool {
 		'title-report', 'link-url', 'maximize', 'fullscreen', 'focus-follows-mouse',
 		'window-inherit-working-directory', 'tab-inherit-working-directory',
 		'split-inherit-working-directory', 'window-inherit-font-size', 'initial-window',
-		'quit-after-last-window-closed', 'config-default-files', 'gtk-opengl-debug', 'gtk-titlebar',
-		'gtk-titlebar-hide-when-maximized', 'gtk-wide-tabs']
+		'quit-after-last-window-closed', 'config-default-files', 'linux-cgroup-hard-fail',
+		'gtk-opengl-debug', 'gtk-titlebar', 'gtk-titlebar-hide-when-maximized', 'gtk-wide-tabs']
 }
 
 // load_file loads a configuration file and merges it into this config.
@@ -6437,7 +6450,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 				return
 			}
 		}
-		'font-thicken', 'background-opacity-cells', 'background-image-repeat', 'window-vsync', 'clipboard-trim-trailing-spaces', 'clipboard-paste-protection', 'clipboard-paste-bracketed-safe', 'cursor-click-to-move', 'desktop-notifications', 'mouse-hide-while-typing', 'mouse-reporting', 'selection-clear-on-copy', 'selection-clear-on-typing', 'vt-kam-allowed', 'wait-after-command', 'window-padding-balance', 'title-report', 'link-url', 'maximize', 'fullscreen', 'focus-follows-mouse', 'window-inherit-working-directory', 'tab-inherit-working-directory', 'split-inherit-working-directory', 'window-inherit-font-size', 'initial-window', 'quit-after-last-window-closed', 'config-default-files', 'gtk-opengl-debug', 'gtk-titlebar', 'gtk-titlebar-hide-when-maximized', 'gtk-wide-tabs' {
+		'font-thicken', 'background-opacity-cells', 'background-image-repeat', 'window-vsync', 'clipboard-trim-trailing-spaces', 'clipboard-paste-protection', 'clipboard-paste-bracketed-safe', 'cursor-click-to-move', 'desktop-notifications', 'mouse-hide-while-typing', 'mouse-reporting', 'selection-clear-on-copy', 'selection-clear-on-typing', 'vt-kam-allowed', 'wait-after-command', 'window-padding-balance', 'title-report', 'link-url', 'maximize', 'fullscreen', 'focus-follows-mouse', 'window-inherit-working-directory', 'tab-inherit-working-directory', 'split-inherit-working-directory', 'window-inherit-font-size', 'initial-window', 'quit-after-last-window-closed', 'config-default-files', 'linux-cgroup-hard-fail', 'gtk-opengl-debug', 'gtk-titlebar', 'gtk-titlebar-hide-when-maximized', 'gtk-wide-tabs' {
 			parsed := c.parse_config_bool(key, value) or { return }
 			match key {
 				'font-thicken' {
@@ -6523,6 +6536,9 @@ fn (mut c Config) apply_kv(key string, value string) {
 				}
 				'config-default-files' {
 					c.config_default_files = parsed
+				}
+				'linux-cgroup-hard-fail' {
+					c.linux_cgroup_hard_fail = parsed
 				}
 				'gtk-opengl-debug' {
 					c.gtk_opengl_debug = parsed
@@ -6864,6 +6880,31 @@ fn (mut c Config) apply_kv(key string, value string) {
 					}
 					else {}
 				}
+			}
+		}
+		'linux-cgroup' {
+			c.linux_cgroup = match value {
+				'never' { .never }
+				'always' { .always }
+				'single-instance' { .single_instance }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'linux-cgroup-memory-limit' {
+			if value.len == 0 {
+				c.linux_cgroup_memory_limit = none
+			} else {
+				c.linux_cgroup_memory_limit = c.parse_config_u64(key, value) or { return }
+			}
+		}
+		'linux-cgroup-processes-limit' {
+			if value.len == 0 {
+				c.linux_cgroup_processes_limit = none
+			} else {
+				c.linux_cgroup_processes_limit = c.parse_config_u64(key, value) or { return }
 			}
 		}
 		'gtk-single-instance' {

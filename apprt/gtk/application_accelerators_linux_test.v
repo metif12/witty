@@ -46,3 +46,10 @@ fn test_application_quit_timer_callback_marks_expired() {
 	assert app.quit_timer_state == .expired
 	assert app.quit_timer_source == 0
 }
+
+fn test_application_cgroup_mode_gate() {
+	assert !cgroup_isolation_enabled(.never, g_application_default_flags)
+	assert cgroup_isolation_enabled(.always, g_application_non_unique)
+	assert cgroup_isolation_enabled(.single_instance, g_application_default_flags)
+	assert !cgroup_isolation_enabled(.single_instance, g_application_non_unique)
+}

@@ -63,6 +63,18 @@ fn C.g_variant_builder_end(builder GVariantBuilder) GVariant
 
 fn C.g_variant_new_variant(value GVariant) GVariant
 
+fn C.g_variant_new_tuple(children &GVariant, n_children usize) GVariant
+
+fn C.g_variant_new_string(str &char) GVariant
+
+fn C.g_variant_new_boolean(value int) GVariant
+
+fn C.g_variant_new_uint32(value u32) GVariant
+
+fn C.g_variant_new_dict_entry(key GVariant, value GVariant) GVariant
+
+fn C.g_variant_get_type_string(value GVariant) &char
+
 // GDBus session-bus connection + synchronous method call.
 fn C.g_bus_get_sync(bus_type int, cancellable voidptr, error &GError) GDBusConnection
 

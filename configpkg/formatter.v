@@ -299,6 +299,16 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	add_group(mut result, 'macos-dock-drop-behavior', [
 		enum_config_string(c.macos_dock_drop_behavior.str()),
 	])
+	add_group(mut result, 'linux-cgroup', [enum_config_string(c.linux_cgroup.str())])
+	add_group(mut result, 'linux-cgroup-memory-limit', [
+		optional_u64_string(c.linux_cgroup_memory_limit),
+	])
+	add_group(mut result, 'linux-cgroup-processes-limit', [
+		optional_u64_string(c.linux_cgroup_processes_limit),
+	])
+	add_group(mut result, 'linux-cgroup-hard-fail', [
+		bool_string(c.linux_cgroup_hard_fail),
+	])
 	add_group(mut result, 'gtk-single-instance', [
 		enum_config_string(c.gtk_single_instance.str()),
 	])
@@ -342,6 +352,10 @@ fn optional_string(value ?string) string {
 
 fn optional_duration_string(value ?Duration) string {
 	return if actual := value { actual.format() } else { '' }
+}
+
+fn optional_u64_string(value ?u64) string {
+	return if actual := value { actual.str() } else { '' }
 }
 
 fn repeat_strings(values []string) []string {

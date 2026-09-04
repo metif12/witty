@@ -22,7 +22,7 @@ import os
 // The D-Bus scope creation (create_scope) builds a GVariant parameter tuple and
 // calls StartTransientUnit on org.freedesktop.systemd1. There is no D-Bus
 // binding module in witty yet, so the minimal GVariant/GDBusConnection C
-// functions it needs are declared locally below (unique names).
+// functions it needs are declared once in ipc_dbus_linux.v.
 
 // --- Options --------------------------------------------------------------
 
@@ -51,13 +51,7 @@ pub enum CgroupError {
 // The core GVariant / GVariantBuilder / GDBusConnection types and functions
 // (g_variant_type_*, g_variant_builder_*, g_dbus_connection_call_sync,
 // g_variant_unref, etc.) are already declared in ipc_dbus_linux.v — reused
-// here, NOT redeclared. Only the GVariant constructors this file uniquely needs
-// are declared below.
-
-fn C.g_variant_new_string(str &char) GVariant
-fn C.g_variant_new_boolean(value int) GVariant
-fn C.g_variant_new_uint32(value u32) GVariant
-fn C.g_variant_new_dict_entry(key GVariant, value GVariant) GVariant
+// here, NOT redeclared.
 
 // --- cgroup v2 filesystem helpers -----------------------------------------
 // Translated from ghostty/src/os/cgroup.zig (internal_os.cgroup.*).
@@ -280,22 +274,44 @@ fn create_scope(dbus GDBusConnection, pid_ int) ! {
 	value := C.g_variant_builder_end(builder)
 	C.g_variant_builder_unref(builder)
 
-	err := GError(unsafe { nil })
+	mut call_error := GError(unsafe { nil })
 	reply := C.g_dbus_connection_call_sync(dbus, c'org.freedesktop.systemd1',
 		c'/org/freedesktop/systemd1', c'org.freedesktop.systemd1.Manager', c'StartTransientUnit',
-		value, reply_type, 0, -1, unsafe { nil }, &err)
+		value, reply_type, 0, -1, unsafe { nil }, &call_error)
 	if isnil(reply) {
-		// log.err("creating transient cgroup scope failed ...")
+		if !isnil(call_error) {
+			C.g_error_free(call_error)
+		}
 		return error('D-Bus StartTransientUnit call failed')
 	}
 	C.g_variant_unref(reply)
+	if !isnil(call_error) {
+		C.g_error_free(call_error)
+	}
 }
 
-// add_sv appends a "(sv)" dict entry (string key -> variant value) to the
+// add_sv appends a "(sv)" tuple (string key -> variant value) to the
 // builder. This corresponds to the Zig `builder.add("(sv)", key, value)` calls.
 fn add_sv(builder GVariantBuilder, key string, value GVariant) {
-	entry := C.g_variant_new_dict_entry(C.g_variant_new_string(&char(key.str)), value)
-	C.g_variant_builder_add_value(builder, entry)
+	mut children := [
+		C.g_variant_new_string(&char(key.str)),
+		C.g_variant_new_variant(value),
+	]
+	tuple := C.g_variant_new_tuple(unsafe { &children[0] }, usize(children.len))
+	C.g_variant_builder_add_value(builder, tuple)
+}
+
+// new_property_array builds the systemd `a(sv)` property payload used by
+// StartTransientUnit. Keeping this construction separate also lets us verify
+// the exact tuple signature without making a D-Bus call.
+fn new_property_array(key string, value GVariant) GVariant {
+	properties_type := C.g_variant_type_new(c'a(sv)')
+	builder := C.g_variant_builder_new(properties_type)
+	C.g_variant_type_free(properties_type)
+	add_sv(builder, key, value)
+	result := C.g_variant_builder_end(builder)
+	C.g_variant_builder_unref(builder)
+	return result
 }
 
 // new_uint32_array builds a GVariant array "au" containing a single u32.

@@ -66,11 +66,9 @@ fn C.g_dbus_connection_call_finish(connection GDBusConnection, result GAsyncResu
 // Non-variadic GVariant construction and accessors used by the portal
 // payloads and signal callbacks.
 fn C.g_variant_new_object_path(path &char) GVariant
-fn C.g_variant_new_tuple(children &GVariant, n_children usize) GVariant
 fn C.g_variant_get_child_value(value GVariant, index usize) GVariant
 fn C.g_variant_get_uint32(value GVariant) u32
 fn C.g_variant_get_string(value GVariant, length &usize) &char
-fn C.g_variant_get_type_string(value GVariant) &char
 fn C.g_variant_lookup_value(dictionary GVariant, key &char, expected_type GVariantType) GVariant
 
 // The bus-unique name of the connection (e.g. ":1.192"), or nil.

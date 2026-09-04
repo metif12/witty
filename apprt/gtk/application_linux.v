@@ -724,19 +724,49 @@ fn (mut self Application) startup_global_shortcuts() {
 // startup_cgroup sets up the systemd cgroup for the application, if enabled.
 // Mirrors `Application.startupCgroup`.
 fn (mut self Application) startup_cgroup() ! {
-	// TODO(gtk): linux-cgroup config knobs (never/always/single-instance,
-	// memory-limit, processes-limit, hard-fail) are not on the placeholder
-	// config, and we need a live dbus connection from the GApplication. When a
-	// dbus connection is available we call `cgroup_init` (cgroup_linux.v).
+	flags := if isnil(self.obj) {
+		g_application_default_flags
+	} else {
+		C.g_application_get_flags(self.obj)
+	}
+	if !cgroup_isolation_enabled(self.config.linux_cgroup, flags) {
+		return
+	}
+
 	if isnil(self.obj) {
+		if self.config.linux_cgroup_hard_fail {
+			return error('D-Bus connection required for cgroup isolation')
+		}
 		return
 	}
 	dbus := C.g_application_get_dbus_connection(self.obj)
 	if isnil(dbus) {
+		if self.config.linux_cgroup_hard_fail {
+			return error('D-Bus connection required for cgroup isolation')
+		}
 		return
 	}
-	// cgroup isolation is gated on config in ghostty; with the placeholder
-	// config we do not enable it by default.
+
+	path := cgroup_init(dbus, Options{
+		memory_high: self.config.linux_cgroup_memory_limit
+		pids_max: self.config.linux_cgroup_processes_limit
+	}) or {
+		if self.config.linux_cgroup_hard_fail {
+			return error('cgroup initialization failed: ${err}')
+		}
+		return
+	}
+	self.transient_cgroup_base = path
+}
+
+// cgroup_isolation_enabled applies Ghostty's mode gate. A GApplication with
+// NON_UNIQUE set is not a single-instance process.
+fn cgroup_isolation_enabled(mode configpkg.LinuxCgroup, app_flags int) bool {
+	return match mode {
+		.never { false }
+		.always { true }
+		.single_instance { app_flags & g_application_non_unique == 0 }
+	}
 }
 
 // activate handles the GApplication "activate" signal: queue a new window.

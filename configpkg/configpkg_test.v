@@ -758,6 +758,35 @@ fn test_gtk_window_config_rejects_invalid_enum() {
 	assert cfg.diagnostics.len == 1
 }
 
+fn test_linux_cgroup_config_parse_format_and_defaults() {
+	mut cfg := Config.default_config()
+	assert cfg.linux_cgroup == default_linux_cgroup
+	assert cfg.linux_cgroup_memory_limit == none
+	assert cfg.linux_cgroup_processes_limit == none
+	assert !cfg.linux_cgroup_hard_fail
+
+	cfg.load_string('linux-cgroup = always
+linux-cgroup-memory-limit = 1048576
+linux-cgroup-processes-limit = 256
+linux-cgroup-hard-fail = true')
+	assert cfg.diagnostics.len == 0
+	assert cfg.linux_cgroup == .always
+	assert cfg.linux_cgroup_memory_limit or { 0 } == 1_048_576
+	assert cfg.linux_cgroup_processes_limit or { 0 } == 256
+	assert cfg.linux_cgroup_hard_fail
+	formatted := cfg.format_config(true)
+	assert formatted.contains('linux-cgroup = always\n')
+	assert formatted.contains('linux-cgroup-memory-limit = 1048576\n')
+	assert formatted.contains('linux-cgroup-processes-limit = 256\n')
+	assert formatted.contains('linux-cgroup-hard-fail = true\n')
+
+	cfg.load_string('linux-cgroup-memory-limit =\nlinux-cgroup-processes-limit =')
+	assert cfg.linux_cgroup_memory_limit == none
+	assert cfg.linux_cgroup_processes_limit == none
+	cfg.load_string('linux-cgroup = sometimes')
+	assert cfg.diagnostics.len == 1
+}
+
 fn test_bell_features_parse_format_and_defaults() {
 	mut cfg := Config.default_config()
 	assert !cfg.bell_features.system
