@@ -803,8 +803,9 @@ pub enum GraphicsBackend {
 // Renderer handles drawing the terminal surface using the platform backend.
 pub struct Renderer {
 pub mut:
-	backend    GraphicsBackend
-	draw_mutex &sync.Mutex = unsafe { nil }
+	backend         GraphicsBackend
+	draw_mutex      &sync.Mutex = unsafe { nil }
+	surface_mailbox SurfaceMailbox
 
 	// The Metal graphics API for rendering.
 	metal MetalAPI
@@ -1005,6 +1006,7 @@ fn Renderer.init_metal(opts RendererOpts) !Renderer {
 	mut result := Renderer{
 		backend: .metal
 		draw_mutex: sync.new_mutex()
+		surface_mailbox: opts.surface_mailbox
 		metal: metal
 		images: ImageRenderState.empty()
 		shaders: shaders
@@ -1096,6 +1098,7 @@ fn Renderer.init_opengl(opts RendererOpts) !Renderer {
 	mut result := Renderer{
 		backend: .opengl
 		draw_mutex: sync.new_mutex()
+		surface_mailbox: opts.surface_mailbox
 		opengl: api
 		images: ImageRenderState.empty()
 		gl_shaders: shaders
@@ -1520,6 +1523,14 @@ pub fn (mut self Renderer) draw_frame(sync_ bool) ! {
 		self.draw_mutex.lock()
 		defer {
 			self.draw_mutex.unlock()
+		}
+	}
+	defer {
+		if self.scrollbar_dirty
+			&& self.surface_mailbox.push(SurfaceEvent(ScrollbarEvent{
+				scrollbar: self.scrollbar
+			})) > 0 {
+			self.scrollbar_dirty = false
 		}
 	}
 	match self.backend {
@@ -1988,9 +1999,13 @@ fn (self &Renderer) sync_gl_atlas_texture(atlas &font.Atlas, mut texture GLTextu
 // Callback from the graphics API when a frame is completed.
 pub fn (mut self Renderer) frame_completed(health Health) {
 	// If our health value hasn't changed, then we do nothing.
-	if self.health != health {
-		self.health = health
+	if self.health == health {
+		return
 	}
+	self.health = health
+	self.surface_mailbox.push(SurfaceEvent(RendererHealthEvent{
+		health: health
+	}))
 }
 
 // Call this any time the background image path changes.
@@ -3182,6 +3197,8 @@ pub:
 	config DerivedConfig
 	// Initial size.
 	size Size
+	// Mailbox used for renderer health and scrollbar notifications.
+	surface_mailbox SurfaceMailbox
 }
 
 // Compatibility names retained for translated termio callers. These point at

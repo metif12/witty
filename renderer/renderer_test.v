@@ -5,6 +5,21 @@ import terminal
 import configpkg
 import sync
 
+struct SurfaceEventCapture {
+mut:
+	health_events    []Health
+	scrollbar_events []terminal.Scrollbar
+}
+
+fn capture_surface_event(data voidptr, event SurfaceEvent) int {
+	mut capture := unsafe { &SurfaceEventCapture(data) }
+	match event {
+		RendererHealthEvent { capture.health_events << event.health }
+		ScrollbarEvent { capture.scrollbar_events << event.scrollbar }
+	}
+	return capture.health_events.len + capture.scrollbar_events.len
+}
+
 // ============================================================
 // Renderer tests
 // ============================================================
@@ -17,6 +32,30 @@ fn test_derived_config_defaults() {
 	assert config.min_contrast == 0.0
 	assert config.vsync == true
 	assert config.faint_opacity == 128
+}
+
+fn test_renderer_emits_health_transitions_and_dirty_scrollbar() {
+	mut capture := SurfaceEventCapture{}
+	mailbox := SurfaceMailbox{
+		user_data: voidptr(&capture)
+		push_fn: capture_surface_event
+	}
+	mut render := Renderer{
+		surface_mailbox: mailbox
+		scrollbar: terminal.Scrollbar{ total: 20, offset: 3, len: 5 }
+		scrollbar_dirty: true
+	}
+	render.frame_completed(.unhealthy)
+	render.frame_completed(.unhealthy)
+	render.frame_completed(.healthy)
+	assert capture.health_events == [.unhealthy, .healthy]
+
+	// A zero-sized renderer exits before GPU work, but the source renderer's
+	// deferred scrollbar delivery still runs for that draw attempt.
+	render.draw_frame(false)!
+	assert capture.scrollbar_events.len == 1
+	assert capture.scrollbar_events[0].eql(render.scrollbar)
+	assert !render.scrollbar_dirty
 }
 
 // Test DerivedConfig init and deinit.
