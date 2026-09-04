@@ -728,6 +728,7 @@ fn test_gtk_window_config_parse_format_and_defaults() {
 	mut cfg := Config.default_config()
 	assert cfg.window_new_tab_position == .current
 	assert cfg.window_show_tab_bar == .auto
+	assert cfg.window_subtitle == .false_
 	assert cfg.gtk_opengl_debug == default_gtk_opengl_debug
 	assert cfg.gtk_titlebar
 	assert cfg.gtk_tabs_location == .top
@@ -735,10 +736,14 @@ fn test_gtk_window_config_parse_format_and_defaults() {
 	assert cfg.gtk_toolbar_style == .raised
 	assert cfg.gtk_titlebar_style == .native
 	assert cfg.gtk_wide_tabs
+	assert cfg.quick_terminal_autohide == default_quick_terminal_autohide
 
 	gtk_debug_value := if default_gtk_opengl_debug { 'false' } else { 'true' }
+	quick_autohide_value := if default_quick_terminal_autohide { 'false' } else { 'true' }
 	cfg.load_string('window-new-tab-position = end
 window-show-tab-bar = never
+window-subtitle = working-directory
+quick-terminal-autohide = ${quick_autohide_value}
 gtk-opengl-debug = ${gtk_debug_value}
 gtk-titlebar = false
 gtk-tabs-location = bottom
@@ -749,6 +754,8 @@ gtk-wide-tabs = false')
 	assert cfg.diagnostics.len == 0
 	assert cfg.window_new_tab_position == .end
 	assert cfg.window_show_tab_bar == .never
+	assert cfg.window_subtitle == .working_directory
+	assert cfg.quick_terminal_autohide == !default_quick_terminal_autohide
 	assert cfg.gtk_opengl_debug == !default_gtk_opengl_debug
 	assert !cfg.gtk_titlebar
 	assert cfg.gtk_tabs_location == .bottom
@@ -760,6 +767,8 @@ gtk-wide-tabs = false')
 	formatted := cfg.format_config(true)
 	assert formatted.contains('window-new-tab-position = end\n')
 	assert formatted.contains('window-show-tab-bar = never\n')
+	assert formatted.contains('window-subtitle = working-directory\n')
+	assert formatted.contains('quick-terminal-autohide = ${quick_autohide_value}\n')
 	assert formatted.contains('gtk-opengl-debug = ${gtk_debug_value}\n')
 	assert formatted.contains('gtk-titlebar = false\n')
 	assert formatted.contains('gtk-tabs-location = bottom\n')
@@ -772,6 +781,8 @@ gtk-wide-tabs = false')
 	roundtrip.load_string(formatted)
 	assert roundtrip.window_new_tab_position == cfg.window_new_tab_position
 	assert roundtrip.window_show_tab_bar == cfg.window_show_tab_bar
+	assert roundtrip.window_subtitle == cfg.window_subtitle
+	assert roundtrip.quick_terminal_autohide == cfg.quick_terminal_autohide
 	assert roundtrip.gtk_opengl_debug == cfg.gtk_opengl_debug
 	assert roundtrip.gtk_titlebar == cfg.gtk_titlebar
 	assert roundtrip.gtk_tabs_location == cfg.gtk_tabs_location

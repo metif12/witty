@@ -1836,9 +1836,7 @@ fn (mut self Application) toggle_quick_terminal() bool {
 	if isnil(window) || isnil(window.obj) {
 		return false
 	}
-	window.quick_terminal = true
-	window.sync_apprt_window()
-	window.prop_quick_terminal(mut self)
+	window.set_quick_terminal(true)
 	window.sync_appearance()
 	self.windows << window
 	window.new_tab_for_window(none)

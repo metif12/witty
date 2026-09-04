@@ -729,17 +729,57 @@ pub fn (mut self SplitTreeWidget) goto_(to datastruct.Goto) bool {
 
 // --- Surface lifecycle wiring ---------------------------------------------
 
+fn split_tree_surface_close_request_cb(widget GtkWidget, data voidptr) {
+	if isnil(data) {
+		return
+	}
+	surface := window_surface_wrapper(widget) or { return }
+	mut self := unsafe { &SplitTreeWidget(data) }
+	self.surface_close_request(surface)
+}
+
+fn split_tree_surface_focused_cb(widget GtkWidget, pspec voidptr, data voidptr) {
+	_ = pspec
+	if isnil(data) {
+		return
+	}
+	surface := window_surface_wrapper(widget) or { return }
+	mut self := unsafe { &SplitTreeWidget(data) }
+	self.prop_surface_focused(surface)
+}
+
+fn split_tree_surface_parent_cb(widget GtkWidget, pspec voidptr, data voidptr) {
+	_ = widget
+	_ = pspec
+	if !isnil(data) {
+		mut self := unsafe { &SplitTreeWidget(data) }
+		self.prop_surface_parent()
+	}
+}
+
 // connect_surface_handlers connects per-surface close/focus/parent handlers.
 // Mirrors `connectSurfaceHandlers`.
-fn (self &SplitTreeWidget) connect_surface_handlers() {
-	// SurfaceWidget owns a direct pointer to this tree and forwards close,
-	// focus, and parent changes without crossing an untyped GSignal boundary.
+fn (mut self SplitTreeWidget) connect_surface_handlers() {
+	tree := self.get_tree() or { return }
+	mut it := tree.iterator()
+	for {
+		entry := it.next() or { break }
+		surface := entry.view
+		C.g_signal_connect_data(surface.widget, c'close-request', GCallback(voidptr(split_tree_surface_close_request_cb)), voidptr(self), unsafe { nil }, 0)
+		C.g_signal_connect_data(surface.widget, c'notify::focused', GCallback(voidptr(split_tree_surface_focused_cb)), voidptr(self), unsafe { nil }, 0)
+		C.g_signal_connect_data(surface.widget, c'notify::parent', GCallback(voidptr(split_tree_surface_parent_cb)), voidptr(self), unsafe { nil }, 0)
+	}
 }
 
 // disconnect_surface_handlers disconnects the per-surface handlers.
 // Mirrors `disconnectSurfaceHandlers`.
-fn (self &SplitTreeWidget) disconnect_surface_handlers() {
-	// Direct owner links are stable for the lifetime of the tab.
+fn (mut self SplitTreeWidget) disconnect_surface_handlers() {
+	tree := self.get_tree() or { return }
+	mut it := tree.iterator()
+	for {
+		entry := it.next() or { break }
+		C.g_signal_handlers_disconnect_matched(entry.view.widget, g_signal_match_data, 0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
+	}
 }
 
 // --- Action handlers ------------------------------------------------------
@@ -937,11 +977,11 @@ pub fn (mut self SplitTreeWidget) deinit_surfaces() {
 
 // prop_surface_focused handles a surface's notify::focused. Mirrors
 // `propSurfaceFocused`: records the last-focused surface (never clears it).
-pub fn (mut self SplitTreeWidget) prop_surface_focused(mut surface SurfaceWidget) {
+pub fn (mut self SplitTreeWidget) prop_surface_focused(surface &SurfaceWidget) {
 	if !surface.get_focused() {
 		return
 	}
-	self.last_focused = &surface
+	self.last_focused = surface
 	self.notify_property(g_split_tree_pspec_active_surface)
 }
 

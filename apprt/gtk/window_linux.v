@@ -5,48 +5,18 @@ module gtk
 //
 // Translated from ghostty/src/apprt/gtk/class/window.zig.
 //
-// The Zig original is a GObject class (`GhosttyWindow`, an
-// `adw.ApplicationWindow`) that hosts the tabs + split tree for a Ghostty
-// window. It is registered via `gobject.ext.defineClass`, uses a blueprint
-// `.ui` template for its widget tree (AdwTabOverview / AdwTabBar / AdwTabView /
-// AdwToolbarView / AdwToastOverlay), and wires up a large number of GObject
-// signal handlers, properties, and template callbacks.
-//
-// V has no GObject class-registration / `.ui`-template machinery, and the
-// `gtk` module cannot import witty's root `module main`. So per the translation
-// plan:
-//
-//   * The class is modeled as a plain V struct `Window` that wraps the
-//     underlying GObject/GtkWindow pointer plus the private-state fields, with
-//     the class methods translated as `pub fn`.
-//   * GObject type registration, the property system, signal-handler
-//     connection, `.ui`/blueprint templates, and the AdwTabView/AdwTabBar
-//     widget wiring are STUBBED with `// TODO(gtk)` and minimal type-checking
-//     bodies (or C calls where a plain GTK/Adw function exists).
-//   * The TRACTABLE structural logic IS translated: tab position selection,
-//     tab selection/move arithmetic, fullscreen/maximize toggling, the
-//     dynamic appearance getters (headerbar-visible, tabs-*, toolbar/titlebar
-//     style), config application, and the winproto integration.
-//
-// Cross-class references:
-//   * `Application` is the GObject application class (app_linux.v placeholder).
-//   * `Surface` is the apprt surface adapter (surface_linux.v). The GObject
-//     surface widget class is stubbed as `GtkSurface` there.
-//   * `Config` (the GObject config wrapper, class/config.zig) is modeled here
-//     as a small placeholder wrapping `&configpkg.Config` with a `.get()`
-//     accessor, extended with the GTK-specific config getters that witty's
-//     core `configpkg.Config` does not yet carry.
-//   * The winproto placeholder `ApprtWindow` (winproto_linux.v) stands in for
-//     the pointer that winproto backends receive; this `Window` owns a
-//     `WinProtoWindow` and an `ApprtWindow` bridge for that integration.
-//   * `Tab`, `SplitTree`, `CommandPalette`, `CloseConfirmationDialog`, and the
-//     AdwTabView/AdwTabPage widgets are out of scope; they are referenced via
-//     opaque handle aliases and `// TODO(gtk)` stubs.
+// GhosttyWindow is registered as a real AdwApplicationWindow subclass. The
+// native instance private data points at a stable V wrapper, allowing the ten
+// properties and the dispose/finalize vfuncs to share the translated Window
+// implementation. The blueprint widget graph is built programmatically with
+// the same AdwTabOverview / AdwTabBar / AdwTabView / AdwToolbarView /
+// AdwToastOverlay hierarchy and signal contract as the pinned Zig source.
 
 import configpkg
 import core
 import input
 import apprt
+import datastruct
 
 // --- New opaque handle aliases --------------------------------------------
 // (Grep-verified: none of these `fn C.*` or aliases are declared elsewhere in
@@ -128,6 +98,10 @@ fn C.adw_tab_overview_set_view(overview AdwTabOverview, view AdwTabView)
 
 fn C.adw_tab_overview_set_enable_new_tab(overview AdwTabOverview, enable_new_tab int)
 
+fn C.adw_tab_overview_set_show_start_title_buttons(overview AdwTabOverview, show_start_title_buttons int)
+
+fn C.adw_tab_overview_set_show_end_title_buttons(overview AdwTabOverview, show_end_title_buttons int)
+
 fn C.adw_toolbar_view_new() AdwToolbarView
 
 fn C.adw_toolbar_view_set_content(view AdwToolbarView, content GtkWidget)
@@ -144,11 +118,17 @@ fn C.adw_tab_bar_set_autohide(tab_bar AdwTabBar, autohide int)
 
 fn C.adw_tab_bar_set_expand_tabs(tab_bar AdwTabBar, expand_tabs int)
 
+fn C.adw_tab_bar_set_start_action_widget(tab_bar AdwTabBar, widget GtkWidget)
+
+fn C.adw_tab_bar_set_end_action_widget(tab_bar AdwTabBar, widget GtkWidget)
+
 fn C.adw_toast_overlay_new() AdwToastOverlay
 
 fn C.adw_toast_overlay_set_child(overlay AdwToastOverlay, child GtkWidget)
 
 fn C.adw_tab_view_new() AdwTabView
+
+fn C.adw_tab_view_set_shortcuts(view AdwTabView, shortcuts int)
 
 fn C.adw_tab_page_get_child(page AdwTabPage) GtkWidget
 
@@ -164,6 +144,42 @@ fn C.gtk_box_new(orientation int, spacing int) GtkWidget
 
 fn C.gtk_box_append(box GtkWidget, child GtkWidget)
 
+fn C.adw_header_bar_pack_start(header_bar GtkWidget, child GtkWidget)
+
+fn C.adw_header_bar_pack_end(header_bar GtkWidget, child GtkWidget)
+
+fn C.adw_window_title_new(title &char, subtitle &char) GtkWidget
+
+fn C.adw_window_title_set_title(window_title GtkWidget, title &char)
+
+fn C.adw_window_title_set_subtitle(window_title GtkWidget, subtitle &char)
+
+fn C.adw_split_button_new() GtkWidget
+
+fn C.adw_split_button_set_icon_name(button GtkWidget, icon_name &char)
+
+fn C.adw_split_button_set_dropdown_tooltip(button GtkWidget, tooltip &char)
+
+fn C.adw_split_button_set_menu_model(button GtkWidget, menu_model GMenuModel)
+
+fn C.gtk_toggle_button_new() GtkWidget
+
+fn C.gtk_toggle_button_get_active(button GtkWidget) int
+
+fn C.gtk_toggle_button_set_active(button GtkWidget, active int)
+
+fn C.gtk_button_set_icon_name(button GtkWidget, icon_name &char)
+
+fn C.gtk_menu_button_new() GtkWidget
+
+fn C.gtk_menu_button_set_icon_name(button GtkWidget, icon_name &char)
+
+fn C.gtk_menu_button_set_menu_model(button GtkWidget, menu_model GMenuModel)
+
+fn C.gtk_menu_button_get_active(button GtkWidget) int
+
+fn C.gtk_window_controls_new(side int) GtkWidget
+
 fn C.gtk_widget_add_css_class(widget GtkWidget, css_class &char)
 
 fn C.gtk_widget_remove_css_class(widget GtkWidget, css_class &char)
@@ -178,6 +194,10 @@ fn C.gdk_display_is_rgba(display GdkDisplay) int
 
 fn C.gdk_display_is_composited(display GdkDisplay) int
 
+fn C.adw_toolbar_style_get_type() GType
+
+fn C.g_signal_handlers_disconnect_matched(instance voidptr, mask u32, signal_id u32, detail u32, closure voidptr, func voidptr, data voidptr) u32
+
 // --- Toolbar style ---------------------------------------------------------
 
 // AdwToolbarStyle mirrors `adw.ToolbarStyle`.
@@ -187,23 +207,204 @@ pub enum AdwToolbarStyle {
 	raised_border
 }
 
-// NewSurfaceContext mirrors `apprt.surface.NewSurfaceContext`. The `apprt`
-// module is not imported here (to avoid a cross-module dependency in the
-// widget class); this local placeholder keeps the `new_tab_page` signature
-// faithful.
+// NewSurfaceContext mirrors `apprt.surface.NewSurfaceContext` at the GTK
+// boundary.
 pub enum NewSurfaceContext {
 	window
 	tab
 	split
 }
 
-// Registered lazily on the GTK main thread, matching defineClass's generated
-// getGObjectType implementation in Ghostty.
 __global g_window_type = GType(0)
+__global g_window_titlebar_style_type = GType(0)
+__global g_window_titlebar_style_values [3]C.GEnumValue
+__global g_window_pspec_active_surface = &C.GParamSpec(unsafe { nil })
+__global g_window_pspec_config = &C.GParamSpec(unsafe { nil })
+__global g_window_pspec_debug = &C.GParamSpec(unsafe { nil })
+__global g_window_pspec_headerbar_visible = &C.GParamSpec(unsafe { nil })
+__global g_window_pspec_quick_terminal = &C.GParamSpec(unsafe { nil })
+__global g_window_pspec_tabs_autohide = &C.GParamSpec(unsafe { nil })
+__global g_window_pspec_tabs_visible = &C.GParamSpec(unsafe { nil })
+__global g_window_pspec_tabs_wide = &C.GParamSpec(unsafe { nil })
+__global g_window_pspec_toolbar_style = &C.GParamSpec(unsafe { nil })
+__global g_window_pspec_titlebar_style = &C.GParamSpec(unsafe { nil })
+
+struct C.GhosttyWindowPrivate {
+mut:
+	wrapper voidptr
+}
+
+const window_prop_active_surface = u32(1)
+const window_prop_config = u32(2)
+const window_prop_debug = u32(3)
+const window_prop_headerbar_visible = u32(4)
+const window_prop_quick_terminal = u32(5)
+const window_prop_tabs_autohide = u32(6)
+const window_prop_tabs_visible = u32(7)
+const window_prop_tabs_wide = u32(8)
+const window_prop_toolbar_style = u32(9)
+const window_prop_titlebar_style = u32(10)
+const window_param_static_strings = int(32 | 64 | 128)
+const g_signal_match_data = u32(1 << 4)
+
+fn window_titlebar_style_get_type() GType {
+	if g_window_titlebar_style_type == GType(0) {
+		g_window_titlebar_style_values[0] = C.GEnumValue{ value: int(configpkg.GtkTitlebarStyle.native), value_name: c'native', value_nick: c'native' }
+		g_window_titlebar_style_values[1] = C.GEnumValue{ value: int(configpkg.GtkTitlebarStyle.tabs), value_name: c'tabs', value_nick: c'tabs' }
+		g_window_titlebar_style_values[2] = C.GEnumValue{ value: 0, value_name: &char(unsafe { nil }), value_nick: &char(unsafe { nil }) }
+		g_window_titlebar_style_type = C.g_enum_register_static(c'GhosttyGtkTitlebarStyle', &g_window_titlebar_style_values[0])
+	}
+	return g_window_titlebar_style_type
+}
+
+fn window_priv(obj voidptr) &C.GhosttyWindowPrivate {
+	return &C.GhosttyWindowPrivate(C.g_type_instance_get_private(obj, g_window_type))
+}
+
+fn window_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	_ = pspec
+	priv := window_priv(obj)
+	if isnil(priv.wrapper) {
+		return
+	}
+	self := unsafe { &Window(priv.wrapper) }
+	match property_id {
+		window_prop_active_surface {
+			if surface := self.get_active_surface() {
+				C.g_value_set_object(value, surface.widget)
+			} else {
+				C.g_value_set_object(value, unsafe { nil })
+			}
+		}
+		window_prop_config {
+			C.g_value_set_object(value, if isnil(self.config) {
+				unsafe { nil }
+			} else {
+				self.config.obj
+			})
+		}
+		window_prop_debug {
+			C.g_value_set_boolean(value, $if !prod { 1 } $else { 0 })
+		}
+		window_prop_headerbar_visible {
+			C.g_value_set_boolean(value, b2i(self.get_headerbar_visible()))
+		}
+		window_prop_quick_terminal {
+			C.g_value_set_boolean(value, b2i(self.quick_terminal))
+		}
+		window_prop_tabs_autohide {
+			C.g_value_set_boolean(value, b2i(self.get_tabs_autohide()))
+		}
+		window_prop_tabs_visible {
+			C.g_value_set_boolean(value, b2i(self.get_tabs_visible()))
+		}
+		window_prop_tabs_wide {
+			C.g_value_set_boolean(value, b2i(self.get_tabs_wide()))
+		}
+		window_prop_toolbar_style {
+			C.g_value_set_enum(value, int(self.get_toolbar_style()))
+		}
+		window_prop_titlebar_style {
+			C.g_value_set_enum(value, int(self.get_titlebar_style()))
+		}
+		else {}
+	}
+}
+
+fn window_set_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	_ = pspec
+	priv := window_priv(obj)
+	if isnil(priv.wrapper) {
+		return
+	}
+	mut self := unsafe { &Window(priv.wrapper) }
+	match property_id {
+		window_prop_config {
+			config_obj := C.g_value_get_object(value)
+			if isnil(config_obj) {
+				self.set_config_reference(unsafe { nil })
+			} else {
+				config_private := config_priv(config_obj)
+				self.set_config_reference(if isnil(config_private.wrapper) {
+					unsafe { nil }
+				} else {
+					unsafe { &Config(config_private.wrapper) }
+				})
+			}
+		}
+		window_prop_quick_terminal {
+			self.quick_terminal = C.g_value_get_boolean(value) != 0
+			self.sync_apprt_window()
+		}
+		else {}
+	}
+}
+
+fn window_parent_object_class(obj voidptr) &C.GObjectClass {
+	return &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
+}
+
+fn window_dispose_object(obj voidptr) {
+	priv := window_priv(obj)
+	if !isnil(priv.wrapper) {
+		mut self := unsafe { &Window(priv.wrapper) }
+		self.dispose_resources()
+	}
+	C.adw_application_window_set_content(AdwApplicationWindow(obj), unsafe { nil })
+	parent_class := window_parent_object_class(obj)
+	if !isnil(parent_class.dispose) {
+		f := DisposeFn(parent_class.dispose)
+		f(obj)
+	}
+}
+
+fn window_finalize_object(obj voidptr) {
+	mut priv := window_priv(obj)
+	if !isnil(priv.wrapper) {
+		mut self := unsafe { &Window(priv.wrapper) }
+		self.finalize_resources()
+		self.obj = unsafe { nil }
+		priv.wrapper = unsafe { nil }
+	}
+	parent_class := window_parent_object_class(obj)
+	if !isnil(parent_class.finalize) {
+		f := FinalizeFn(parent_class.finalize)
+		f(obj)
+	}
+}
 
 fn window_class_init(klass voidptr, class_data voidptr) {
-	_ = klass
 	_ = class_data
+	_ = terminal_surface_get_type()
+	_ = config_get_type()
+	mut obj_class := &C.GObjectClass(klass)
+	obj_class.get_property = voidptr(window_get_property)
+	obj_class.set_property = voidptr(window_set_property)
+	obj_class.dispose = voidptr(window_dispose_object)
+	obj_class.finalize = voidptr(window_finalize_object)
+	readable := g_param_readable | window_param_static_strings
+	readwrite := g_param_readwrite | window_param_static_strings
+	nil_str := &char(unsafe { nil })
+	g_window_pspec_active_surface = C.g_param_spec_object(c'active-surface', nil_str, nil_str, terminal_surface_get_type(), readable)
+	g_window_pspec_config = C.g_param_spec_object(c'config', nil_str, nil_str, config_get_type(), readwrite)
+	g_window_pspec_debug = C.g_param_spec_boolean(c'debug', nil_str, nil_str, $if !prod { 1 } $else { 0 }, readable)
+	g_window_pspec_headerbar_visible = C.g_param_spec_boolean(c'headerbar-visible', nil_str, nil_str, 1, readable)
+	g_window_pspec_quick_terminal = C.g_param_spec_boolean(c'quick-terminal', nil_str, nil_str, 1, readwrite)
+	g_window_pspec_tabs_autohide = C.g_param_spec_boolean(c'tabs-autohide', nil_str, nil_str, 1, readable)
+	g_window_pspec_tabs_visible = C.g_param_spec_boolean(c'tabs-visible', nil_str, nil_str, 1, readable)
+	g_window_pspec_tabs_wide = C.g_param_spec_boolean(c'tabs-wide', nil_str, nil_str, 1, readable)
+	g_window_pspec_toolbar_style = C.g_param_spec_enum(c'toolbar-style', nil_str, nil_str, C.adw_toolbar_style_get_type(), int(AdwToolbarStyle.raised), readable)
+	g_window_pspec_titlebar_style = C.g_param_spec_enum(c'titlebar-style', nil_str, nil_str, window_titlebar_style_get_type(), int(configpkg.GtkTitlebarStyle.native), readable)
+	C.g_object_class_install_property(klass, window_prop_active_surface, g_window_pspec_active_surface)
+	C.g_object_class_install_property(klass, window_prop_config, g_window_pspec_config)
+	C.g_object_class_install_property(klass, window_prop_debug, g_window_pspec_debug)
+	C.g_object_class_install_property(klass, window_prop_headerbar_visible, g_window_pspec_headerbar_visible)
+	C.g_object_class_install_property(klass, window_prop_quick_terminal, g_window_pspec_quick_terminal)
+	C.g_object_class_install_property(klass, window_prop_tabs_autohide, g_window_pspec_tabs_autohide)
+	C.g_object_class_install_property(klass, window_prop_tabs_visible, g_window_pspec_tabs_visible)
+	C.g_object_class_install_property(klass, window_prop_tabs_wide, g_window_pspec_tabs_wide)
+	C.g_object_class_install_property(klass, window_prop_toolbar_style, g_window_pspec_toolbar_style)
+	C.g_object_class_install_property(klass, window_prop_titlebar_style, g_window_pspec_titlebar_style)
 }
 
 fn window_instance_init(instance voidptr, klass voidptr) {
@@ -223,6 +424,7 @@ pub fn window_get_type() GType {
 			instance_init: voidptr(window_instance_init)
 		}
 		g_window_type = C.g_type_register_static(parent, c'GhosttyWindow', &info, 0)
+		_ = C.g_type_add_instance_private(g_window_type, sizeof(C.GhosttyWindowPrivate))
 	}
 	return g_window_type
 }
@@ -265,7 +467,7 @@ pub:
 pub struct Window {
 mut:
 	// The underlying AdwApplicationWindow GObject. Set at construction by the
-	// (stubbed) GObject instance init.
+	// native subclass constructor.
 	obj AdwApplicationWindow = unsafe { nil }
 
 	// Stable owner used by signal callbacks that need application state.
@@ -305,16 +507,125 @@ mut:
 	// The lazily-created command palette owned by this window.
 	command_palette &CommandPalette = unsafe { nil }
 
-	// Template children (out of scope widgets). Populated by the stubbed
-	// template init.
-	tab_overview  AdwTabOverview = unsafe { nil }
-	tab_bar       AdwTabBar = unsafe { nil }
-	tab_view      AdwTabView = unsafe { nil }
-	toolbar       AdwToolbarView = unsafe { nil }
-	toast_overlay AdwToastOverlay = unsafe { nil }
+	// Children in the programmatic equivalent of window.blp.
+	tab_overview           AdwTabOverview = unsafe { nil }
+	tab_bar                AdwTabBar = unsafe { nil }
+	tab_view               AdwTabView = unsafe { nil }
+	toolbar                AdwToolbarView = unsafe { nil }
+	toast_overlay          AdwToastOverlay = unsafe { nil }
+	header_bar             GtkWidget = unsafe { nil }
+	window_title           GtkWidget = unsafe { nil }
+	tab_bar_start          GtkWidget = unsafe { nil }
+	tab_bar_end            GtkWidget = unsafe { nil }
+	overview_header_toggle GtkWidget = unsafe { nil }
+	overview_tab_toggle    GtkWidget = unsafe { nil }
 
 	// V-side owners for the GhosttyTab wrappers inserted in tab_view.
-	tabs []&Tab
+	tabs      []&Tab
+	disposed  bool
+	finalized bool
+}
+
+fn window_split_menu_new() GMenu {
+	menu := C.g_menu_new()
+	surface_menu_append(menu, 'Split Up', c'win.split-up')
+	surface_menu_append(menu, 'Split Down', c'win.split-down')
+	surface_menu_append(menu, 'Split Left', c'win.split-left')
+	surface_menu_append(menu, 'Split Right', c'win.split-right')
+	return menu
+}
+
+fn window_main_menu_new() GMenu {
+	menu := C.g_menu_new()
+
+	mut section := C.g_menu_new()
+	surface_menu_append(section, 'Copy', c'win.copy')
+	surface_menu_append(section, 'Paste', c'win.paste')
+	surface_menu_section(menu, section)
+
+	section = C.g_menu_new()
+	surface_menu_append(section, 'New Window', c'win.new-window')
+	surface_menu_append(section, 'Close Window', c'win.close')
+	surface_menu_section(menu, section)
+
+	section = C.g_menu_new()
+	surface_menu_append(section, 'New Tab', c'win.new-tab')
+	surface_menu_append(section, 'Close Tab', c'win.close-tab::this')
+	surface_menu_section(menu, section)
+
+	section = C.g_menu_new()
+	submenu := C.g_menu_new()
+	surface_menu_append(submenu, 'Change Title…', c'win.prompt-title')
+	surface_menu_append(submenu, 'Split Up', c'win.split-up')
+	surface_menu_append(submenu, 'Split Down', c'win.split-down')
+	surface_menu_append(submenu, 'Split Left', c'win.split-left')
+	surface_menu_append(submenu, 'Split Right', c'win.split-right')
+	surface_menu_append_submenu(section, 'Split', submenu)
+	object_unref(GObject(submenu))
+	surface_menu_section(menu, section)
+
+	section = C.g_menu_new()
+	surface_menu_append(section, 'Clear', c'win.clear')
+	surface_menu_append(section, 'Reset', c'win.reset')
+	surface_menu_section(menu, section)
+
+	section = C.g_menu_new()
+	surface_menu_append(section, 'Command Palette', c'win.toggle-command-palette')
+	surface_menu_append(section, 'Terminal Inspector', c'win.toggle-inspector')
+	surface_menu_append(section, 'Open Configuration', c'app.open-config')
+	surface_menu_append(section, 'Reload Configuration', c'app.reload-config')
+	surface_menu_section(menu, section)
+
+	section = C.g_menu_new()
+	surface_menu_append(section, 'About Ghostty', c'win.about')
+	surface_menu_append(section, 'Quit', c'app.quit')
+	surface_menu_section(menu, section)
+	return menu
+}
+
+fn window_split_button_new(menu GMenu, flat bool, self &Window) GtkWidget {
+	button := C.adw_split_button_new()
+	if flat {
+		C.gtk_widget_add_css_class(button, c'flat')
+	}
+	C.adw_split_button_set_icon_name(button, c'tab-new-symbolic')
+	tooltip := i18n_('New Tab')
+	dropdown_tooltip := i18n_('New Split')
+	C.gtk_widget_set_tooltip_text(button, &char(tooltip.str))
+	C.adw_split_button_set_dropdown_tooltip(button, &char(dropdown_tooltip.str))
+	C.adw_split_button_set_menu_model(button, GMenuModel(menu))
+	C.gtk_widget_set_focusable(button, 0)
+	C.gtk_widget_set_focus_on_click(button, 0)
+	C.g_signal_connect_data(button, c'clicked', GCallback(voidptr(window_new_tab_button_cb)), voidptr(self), unsafe { nil }, 0)
+	return button
+}
+
+fn window_overview_toggle_new(flat bool, self &Window) GtkWidget {
+	button := C.gtk_toggle_button_new()
+	if flat {
+		C.gtk_widget_add_css_class(button, c'flat')
+	}
+	C.gtk_button_set_icon_name(button, c'view-grid-symbolic')
+	tooltip := i18n_('View Open Tabs')
+	C.gtk_widget_set_tooltip_text(button, &char(tooltip.str))
+	C.gtk_widget_set_focusable(button, 0)
+	C.gtk_widget_set_focus_on_click(button, 0)
+	C.g_signal_connect_data(button, c'toggled', GCallback(voidptr(window_overview_toggle_cb)), voidptr(self), unsafe { nil }, 0)
+	return button
+}
+
+fn window_menu_button_new(menu GMenu, flat bool, self &Window) GtkWidget {
+	button := C.gtk_menu_button_new()
+	if flat {
+		C.gtk_widget_add_css_class(button, c'flat')
+	}
+	C.gtk_menu_button_set_icon_name(button, c'open-menu-symbolic')
+	C.gtk_menu_button_set_menu_model(button, GMenuModel(menu))
+	tooltip := i18n_('Main Menu')
+	C.gtk_widget_set_tooltip_text(button, &char(tooltip.str))
+	C.gtk_widget_set_focusable(button, 0)
+	C.g_signal_connect_data(button, c'notify::active', GCallback(voidptr(window_menu_active_cb)), voidptr(self), unsafe { nil }, 0)
+	return button
 }
 
 // new creates the GhosttyWindow GObject and the libadwaita widget graph from
@@ -328,34 +639,76 @@ pub fn Window.new(app &Application) &Window {
 	C.gtk_widget_add_css_class(GtkWidget(obj), c'window')
 
 	tab_view := C.adw_tab_view_new()
+	C.adw_tab_view_set_shortcuts(tab_view, 0)
 	toast_overlay := C.adw_toast_overlay_new()
 	C.adw_toast_overlay_set_child(toast_overlay, GtkWidget(tab_view))
-
-	content := C.gtk_box_new(1, 0)
-	C.gtk_box_append(content, GtkWidget(toast_overlay))
-
 	toolbar := C.adw_toolbar_view_new()
-	C.adw_toolbar_view_set_content(toolbar, content)
 	tab_bar := C.adw_tab_bar_new()
 	C.adw_tab_bar_set_view(tab_bar, tab_view)
-	C.adw_toolbar_view_add_top_bar(toolbar, GtkWidget(tab_bar))
-
 	tab_overview := C.adw_tab_overview_new()
 	C.adw_tab_overview_set_view(tab_overview, tab_view)
 	C.adw_tab_overview_set_enable_new_tab(tab_overview, 1)
-	C.adw_tab_overview_set_child(tab_overview, GtkWidget(toolbar))
-	C.adw_application_window_set_content(AdwApplicationWindow(obj), GtkWidget(tab_overview))
 
 	mut self := &Window{
 		obj: AdwApplicationWindow(obj)
 		app: app
-		config: app.config_object
 		tab_overview: tab_overview
 		tab_bar: tab_bar
 		tab_view: tab_view
 		toolbar: toolbar
 		toast_overlay: toast_overlay
 	}
+	mut priv := window_priv(obj)
+	priv.wrapper = voidptr(self)
+	self.set_config_reference(app.config_object)
+
+	// Build the two menus shared by the header bar and integrated tab bar.
+	split_menu := window_split_menu_new()
+	main_menu := window_main_menu_new()
+
+	// Traditional header bar.
+	header_bar := C.adw_header_bar_new()
+	window_title := C.adw_window_title_new(c'', c'')
+	C.adw_header_bar_set_title_widget(header_bar, window_title)
+	C.adw_header_bar_pack_start(header_bar, window_split_button_new(split_menu, false, self))
+	header_end := C.gtk_box_new(0, 0)
+	overview_header_toggle := window_overview_toggle_new(false, self)
+	C.gtk_box_append(header_end, overview_header_toggle)
+	C.gtk_box_append(header_end, window_menu_button_new(main_menu, false, self))
+	C.adw_header_bar_pack_end(header_bar, header_end)
+	C.adw_toolbar_view_add_top_bar(toolbar, header_bar)
+
+	// Integrated tab titlebar controls used by gtk-titlebar-style=tabs.
+	tab_bar_start := C.gtk_box_new(0, 0)
+	C.gtk_box_append(tab_bar_start, C.gtk_window_controls_new(0))
+	C.gtk_box_append(tab_bar_start, window_split_button_new(split_menu, true, self))
+	C.adw_tab_bar_set_start_action_widget(tab_bar, tab_bar_start)
+	tab_bar_end := C.gtk_box_new(0, 0)
+	overview_tab_toggle := window_overview_toggle_new(true, self)
+	C.gtk_box_append(tab_bar_end, overview_tab_toggle)
+	C.gtk_box_append(tab_bar_end, window_menu_button_new(main_menu, true, self))
+	C.gtk_box_append(tab_bar_end, C.gtk_window_controls_new(1))
+	C.adw_tab_bar_set_end_action_widget(tab_bar, tab_bar_end)
+	C.adw_toolbar_view_add_top_bar(toolbar, GtkWidget(tab_bar))
+
+	// Terminal body and debug-build warning.
+	content := C.gtk_box_new(1, 0)
+	debug_warning := GtkWidget(C.g_object_new(debug_warning_get_type(), &char(unsafe { nil })))
+	C.gtk_widget_set_visible(debug_warning, $if !prod { 1 } $else { 0 })
+	C.gtk_box_append(content, debug_warning)
+	C.gtk_box_append(content, GtkWidget(toast_overlay))
+	C.adw_toolbar_view_set_content(toolbar, content)
+	C.adw_tab_overview_set_child(tab_overview, GtkWidget(toolbar))
+	C.adw_application_window_set_content(AdwApplicationWindow(obj), GtkWidget(tab_overview))
+	object_unref(GObject(split_menu))
+	object_unref(GObject(main_menu))
+
+	self.header_bar = header_bar
+	self.window_title = window_title
+	self.tab_bar_start = tab_bar_start
+	self.tab_bar_end = tab_bar_end
+	self.overview_header_toggle = overview_header_toggle
+	self.overview_tab_toggle = overview_tab_toggle
 	C.gtk_window_set_default_size(self.as_window(), 800, 600)
 	C.gtk_window_set_handle_menubar_accel(self.as_window(), 0)
 	C.g_signal_connect_data(self.obj, c'close-request', GCallback(voidptr(window_close_request_cb)), voidptr(self), unsafe { nil }, 0)
@@ -363,8 +716,17 @@ pub fn Window.new(app &Application) &Window {
 	C.g_signal_connect_data(self.tab_view, c'notify::n-pages', GCallback(voidptr(window_n_pages_cb)), voidptr(self), unsafe { nil }, 0)
 	C.g_signal_connect_data(self.tab_view, c'notify::selected-page', GCallback(voidptr(window_selected_page_cb)), voidptr(self), unsafe { nil }, 0)
 	C.g_signal_connect_data(self.tab_view, c'close-page', GCallback(voidptr(window_close_page_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.tab_view, c'page-attached', GCallback(voidptr(window_page_attached_cb)), voidptr(self), unsafe { nil }, 0)
 	C.g_signal_connect_data(self.tab_view, c'page-detached', GCallback(voidptr(window_page_detached_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.tab_view, c'create-window', GCallback(voidptr(window_create_window_cb)), voidptr(self), unsafe { nil }, 0)
 	C.g_signal_connect_data(self.tab_overview, c'create-tab', GCallback(voidptr(window_overview_create_tab_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.tab_overview, c'notify::open', GCallback(voidptr(window_overview_open_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'notify::config', GCallback(voidptr(window_notify_config_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'notify::fullscreened', GCallback(voidptr(window_notify_fullscreened_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'notify::is-active', GCallback(voidptr(window_notify_is_active_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'notify::maximized', GCallback(voidptr(window_notify_maximized_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'notify::quick-terminal', GCallback(voidptr(window_notify_quick_terminal_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'notify::scale-factor', GCallback(voidptr(window_notify_scale_factor_cb)), voidptr(self), unsafe { nil }, 0)
 	self.init(app)
 	return self
 }
@@ -376,7 +738,7 @@ pub fn Window.new(app &Application) &Window {
 fn (mut self Window) init(app &Application) {
 	// If our configuration is null then we get it from the application.
 	if self.config == unsafe { nil } {
-		self.config = app.config_object
+		self.set_config_reference(app.config_object)
 	}
 
 	// We initialize our windowing protocol to none because we can't actually
@@ -389,10 +751,6 @@ fn (mut self Window) init(app &Application) {
 	$if !prod {
 		self.add_css_class('devel')
 	}
-
-	// TODO(gtk): setup the tab binding group (gobject.BindingGroup) that syncs
-	// the "title" property from the currently active tab. GObject bindings are
-	// out of scope.
 
 	// Set our window icon.
 	self.set_icon_name(application_id)
@@ -425,8 +783,7 @@ fn (mut self Window) init(app &Application) {
 	// affect bindings set up initially in initTemplate.
 	self.sync_appearance()
 
-	// TODO(gtk): notifyByPspec("active-surface") to initialize the dynamic
-	// title getter. GObject property system out of scope.
+	self.notify_property(g_window_pspec_active_surface)
 }
 
 fn window_close_request_cb(window GtkWindow, user_data voidptr) int {
@@ -451,6 +808,15 @@ fn window_realize_cb(widget GtkWidget, user_data voidptr) {
 	self.window_realize(mut app)
 }
 
+fn window_gdk_surface_resize_cb(surface GdkSurface, pspec voidptr, user_data voidptr) {
+	_ = surface
+	_ = pspec
+	if !isnil(user_data) {
+		mut self := unsafe { &Window(user_data) }
+		self.prop_gdk_surface_resize()
+	}
+}
+
 fn window_n_pages_cb(view AdwTabView, pspec voidptr, user_data voidptr) {
 	_ = view
 	_ = pspec
@@ -459,6 +825,65 @@ fn window_n_pages_cb(view AdwTabView, pspec voidptr, user_data voidptr) {
 	}
 	mut self := unsafe { &Window(user_data) }
 	self.tab_view_n_pages()
+}
+
+fn window_notify_config_cb(obj voidptr, pspec voidptr, user_data voidptr) {
+	_ = obj
+	_ = pspec
+	if !isnil(user_data) {
+		mut self := unsafe { &Window(user_data) }
+		self.prop_config()
+	}
+}
+
+fn window_notify_fullscreened_cb(obj voidptr, pspec voidptr, user_data voidptr) {
+	_ = obj
+	_ = pspec
+	if !isnil(user_data) {
+		mut self := unsafe { &Window(user_data) }
+		self.prop_fullscreened()
+	}
+}
+
+fn window_notify_is_active_cb(obj voidptr, pspec voidptr, user_data voidptr) {
+	_ = obj
+	_ = pspec
+	if !isnil(user_data) {
+		mut self := unsafe { &Window(user_data) }
+		self.prop_is_active()
+	}
+}
+
+fn window_notify_maximized_cb(obj voidptr, pspec voidptr, user_data voidptr) {
+	_ = obj
+	_ = pspec
+	if !isnil(user_data) {
+		mut self := unsafe { &Window(user_data) }
+		self.prop_maximized()
+	}
+}
+
+fn window_notify_quick_terminal_cb(obj voidptr, pspec voidptr, user_data voidptr) {
+	_ = obj
+	_ = pspec
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Window(user_data) }
+	if isnil(self.app) {
+		return
+	}
+	mut app := unsafe { self.app }
+	self.prop_quick_terminal(mut app)
+}
+
+fn window_notify_scale_factor_cb(obj voidptr, pspec voidptr, user_data voidptr) {
+	_ = obj
+	_ = pspec
+	if !isnil(user_data) {
+		mut self := unsafe { &Window(user_data) }
+		self.prop_scale_factor()
+	}
 }
 
 fn window_selected_page_cb(view AdwTabView, pspec voidptr, user_data voidptr) {
@@ -527,12 +952,81 @@ fn window_page_detached_cb(view AdwTabView, page AdwTabPage, position int, user_
 	}
 	mut self := unsafe { &Window(user_data) }
 	child := C.adw_tab_page_get_child(page)
-	for i, tab in self.tabs {
+	for i, mut tab in self.tabs {
 		if tab.widget == child {
+			C.g_signal_handlers_disconnect_matched(tab.widget, g_signal_match_data, 0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
+			if !isnil(tab.split_tree) {
+				C.g_signal_handlers_disconnect_matched(tab.split_tree.widget, g_signal_match_data, 0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
+			}
+			if tree := tab.get_surface_tree() {
+				self.disconnect_surface_handlers(tree)
+			}
+			tab.window = unsafe { nil }
 			self.tabs.delete(i)
 			break
 		}
 	}
+}
+
+fn window_page_attached_cb(view AdwTabView, page AdwTabPage, position int, user_data voidptr) {
+	_ = view
+	if isnil(user_data) {
+		return
+	}
+	child := C.adw_tab_page_get_child(page)
+	if isnil(child) {
+		return
+	}
+	priv := tab_priv(voidptr(child))
+	if isnil(priv.wrapper) {
+		return
+	}
+	mut self := unsafe { &Window(user_data) }
+	mut tab := unsafe { &Tab(priv.wrapper) }
+	tab.window = self
+	if !isnil(tab.split_tree) {
+		tab.split_tree.window = self
+		C.g_signal_handlers_disconnect_matched(tab.split_tree.widget, g_signal_match_data, 0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
+		C.g_signal_connect_data(tab.split_tree.widget, c'changed', GCallback(voidptr(window_tab_split_tree_changed_cb)), voidptr(self), unsafe { nil }, 0)
+	}
+	mut found := false
+	for candidate in self.tabs {
+		if candidate == tab {
+			found = true
+			break
+		}
+	}
+	if !found {
+		if position >= 0 && position <= self.tabs.len {
+			self.tabs.insert(position, tab)
+		} else {
+			self.tabs << tab
+		}
+	}
+	C.g_signal_handlers_disconnect_matched(tab.widget, g_signal_match_data, 0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
+	C.g_signal_connect_data(tab.widget, c'close-request', GCallback(voidptr(window_tab_close_request_cb)), voidptr(self), unsafe { nil }, 0)
+	if tree := tab.get_surface_tree() {
+		self.connect_surface_handlers(tree)
+	}
+}
+
+fn window_create_window_cb(view AdwTabView, user_data voidptr) AdwTabView {
+	_ = view
+	if isnil(user_data) {
+		return AdwTabView(unsafe { nil })
+	}
+	self := unsafe { &Window(user_data) }
+	if isnil(self.app) {
+		return AdwTabView(unsafe { nil })
+	}
+	mut app := unsafe { self.app }
+	mut window := Window.new(app)
+	if isnil(window.obj) {
+		return AdwTabView(unsafe { nil })
+	}
+	app.windows << window
+	C.gtk_window_present(window.as_window())
+	return window.tab_view
 }
 
 fn window_tab_close_request_cb(tab_widget GtkWidget, user_data voidptr) {
@@ -546,13 +1040,76 @@ fn window_tab_close_request_cb(tab_widget GtkWidget, user_data voidptr) {
 	}
 }
 
+fn window_new_tab_button_cb(button GtkWidget, user_data voidptr) {
+	_ = button
+	if !isnil(user_data) {
+		mut self := unsafe { &Window(user_data) }
+		self.perform_binding_action(.new_tab)
+	}
+}
+
+fn window_overview_toggle_cb(button GtkWidget, user_data voidptr) {
+	if isnil(user_data) {
+		return
+	}
+	self := unsafe { &Window(user_data) }
+	active := C.gtk_toggle_button_get_active(button)
+	if active != adw_tab_overview_get_open(self.tab_overview) {
+		adw_tab_overview_set_open(self.tab_overview, active)
+	}
+}
+
+fn window_menu_active_cb(button GtkWidget, pspec voidptr, user_data voidptr) {
+	_ = pspec
+	if !gtk_at_least(4, 10, 0) || C.gtk_menu_button_get_active(button) == 0 || isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Window(user_data) }
+	self.sync_actions()
+}
+
 fn window_overview_create_tab_cb(overview AdwTabOverview, user_data voidptr) AdwTabPage {
 	_ = overview
 	if isnil(user_data) {
 		return AdwTabPage(unsafe { nil })
 	}
 	mut self := unsafe { &Window(user_data) }
+	if mut surface := self.get_active_surface() {
+		if surface.has_core() {
+			return self.new_tab_page(surface.core(), .tab)
+		}
+	}
 	return self.new_tab_page(none, .tab)
+}
+
+fn window_overview_open_cb(overview AdwTabOverview, pspec voidptr, user_data voidptr) {
+	_ = pspec
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Window(user_data) }
+	open := adw_tab_overview_get_open(overview)
+	C.gtk_toggle_button_set_active(self.overview_header_toggle, open)
+	C.gtk_toggle_button_set_active(self.overview_tab_toggle, open)
+	if open != 0 {
+		return
+	}
+	if self.tab_overview_focus_timer != 0 {
+		C.g_source_remove(self.tab_overview_focus_timer)
+	}
+	self.tab_overview_focus_timer = C.g_timeout_add(500, voidptr(window_overview_focus_timer_cb), voidptr(self))
+}
+
+fn window_overview_focus_timer_cb(user_data voidptr) int {
+	if isnil(user_data) {
+		return 0
+	}
+	mut self := unsafe { &Window(user_data) }
+	self.tab_overview_focus_timer = 0
+	if surface := self.get_active_surface() {
+		surface.grab_focus()
+	}
+	return 0
 }
 
 // init_action_map sets up our action map. Mirrors `initActionMap`.
@@ -668,22 +1225,14 @@ pub fn (mut self Window) new_tab_for_window(parent ?&core.Surface) {
 	self.new_tab_page(parent, .window)
 }
 
-// new_tab_page creates a Tab, computes its insert position from the config,
-// inserts + selects it, and wires up its bindings/signals. Mirrors
-// `newTabPage`.
-//
-// TODO(gtk): the Tab GObject, AdwTabView insert/select, property bindings, and
-// the SplitTree "changed" signal are out of scope. The tractable part — the
-// insert-position computation from `window-new-tab-position` — is translated
-// against the AdwTabView C API. Returns the (opaque) AdwTabPage.
+// new_tab_page creates a Tab, computes its insert position, inserts/selects it,
+// and wires the SplitTree changed signal. Mirrors `newTabPage`.
 fn (mut self Window) new_tab_page(parent ?&core.Surface, context NewSurfaceContext) AdwTabPage {
-	_ = context
 	tab_view := self.tab_view
 	if isnil(tab_view) || isnil(self.config) {
 		return AdwTabPage(unsafe { nil })
 	}
 	mut tab := new_tab(self, self.config)
-	C.g_signal_connect_data(tab.widget, c'close-request', GCallback(voidptr(window_tab_close_request_cb)), voidptr(self), unsafe { nil }, 0)
 	if p := parent {
 		tab.set_parent_with_context(p, context)
 	}
@@ -707,17 +1256,118 @@ fn (mut self Window) new_tab_page(parent ?&core.Surface, context NewSurfaceConte
 			adw_tab_view_get_n_pages(tab_view)
 		}
 	}
-	if position >= 0 && position <= self.tabs.len {
-		self.tabs.insert(position, tab)
-	} else {
-		self.tabs << tab
-	}
-
 	// Add the page and select it.
 	page := adw_tab_view_insert(tab_view, tab.widget, position)
 	tab.sync_from_active_surface()
 	adw_tab_view_set_selected_page(tab_view, page)
+	if tree := tab.get_surface_tree() {
+		self.connect_surface_handlers(tree)
+	}
 	return page
+}
+
+fn window_tab_split_tree_changed_cb(split_tree GtkWidget, old_tree voidptr, new_tree voidptr, user_data voidptr) {
+	_ = split_tree
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Window(user_data) }
+	if !isnil(old_tree) {
+		tree := unsafe { &datastruct.SplitTree[SurfaceWidget](old_tree) }
+		self.disconnect_surface_handlers(tree)
+	}
+	if !isnil(new_tree) {
+		tree := unsafe { &datastruct.SplitTree[SurfaceWidget](new_tree) }
+		self.connect_surface_handlers(tree)
+	}
+}
+
+fn window_surface_wrapper(widget GtkWidget) ?&SurfaceWidget {
+	if isnil(widget) {
+		return none
+	}
+	priv := terminal_surface_priv(voidptr(widget))
+	if isnil(priv.wrapper) {
+		return none
+	}
+	return unsafe { &SurfaceWidget(priv.wrapper) }
+}
+
+fn window_surface_present_request_cb(widget GtkWidget, user_data voidptr) {
+	if isnil(user_data) {
+		return
+	}
+	surface := window_surface_wrapper(widget) or { return }
+	mut self := unsafe { &Window(user_data) }
+	self.present_surface(surface)
+}
+
+fn window_surface_clipboard_write_cb(widget GtkWidget, clipboard_type int, text_ptr &char, user_data voidptr) {
+	_ = widget
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Window(user_data) }
+	text := if isnil(text_ptr) { '' } else { unsafe { cstring_to_vstring(text_ptr) } }
+	self.surface_clipboard_write(unsafe { apprt.Clipboard(clipboard_type) }, text)
+}
+
+fn window_surface_menu_cb(widget GtkWidget, user_data voidptr) {
+	_ = widget
+	if !isnil(user_data) {
+		mut self := unsafe { &Window(user_data) }
+		self.sync_actions()
+	}
+}
+
+fn window_surface_toggle_fullscreen_cb(widget GtkWidget, user_data voidptr) {
+	_ = widget
+	if !isnil(user_data) {
+		mut self := unsafe { &Window(user_data) }
+		self.toggle_fullscreen()
+	}
+}
+
+fn window_surface_toggle_maximize_cb(widget GtkWidget, user_data voidptr) {
+	_ = widget
+	if !isnil(user_data) {
+		mut self := unsafe { &Window(user_data) }
+		self.toggle_maximize()
+	}
+}
+
+fn window_surface_init_cb(widget GtkWidget, user_data voidptr) {
+	if isnil(user_data) {
+		return
+	}
+	surface := window_surface_wrapper(widget) or { return }
+	mut self := unsafe { &Window(user_data) }
+	self.surface_initialized(surface)
+}
+
+fn (mut self Window) connect_surface_handlers(tree &datastruct.SplitTree[SurfaceWidget]) {
+	mut it := tree.iterator()
+	for {
+		entry := it.next() or { break }
+		surface := entry.view
+		C.g_signal_handlers_disconnect_matched(surface.widget, g_signal_match_data, 0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
+		C.g_signal_connect_data(surface.widget, c'present-request', GCallback(voidptr(window_surface_present_request_cb)), voidptr(self), unsafe { nil }, 0)
+		C.g_signal_connect_data(surface.widget, c'clipboard-write', GCallback(voidptr(window_surface_clipboard_write_cb)), voidptr(self), unsafe { nil }, 0)
+		C.g_signal_connect_data(surface.widget, c'menu', GCallback(voidptr(window_surface_menu_cb)), voidptr(self), unsafe { nil }, 0)
+		C.g_signal_connect_data(surface.widget, c'toggle-fullscreen', GCallback(voidptr(window_surface_toggle_fullscreen_cb)), voidptr(self), unsafe { nil }, 0)
+		C.g_signal_connect_data(surface.widget, c'toggle-maximize', GCallback(voidptr(window_surface_toggle_maximize_cb)), voidptr(self), unsafe { nil }, 0)
+		if !self.surface_init {
+			C.g_signal_connect_data(surface.widget, c'init', GCallback(voidptr(window_surface_init_cb)), voidptr(self), unsafe { nil }, 0)
+		}
+	}
+}
+
+fn (mut self Window) disconnect_surface_handlers(tree &datastruct.SplitTree[SurfaceWidget]) {
+	mut it := tree.iterator()
+	for {
+		entry := it.next() or { break }
+		C.g_signal_handlers_disconnect_matched(entry.view.widget, g_signal_match_data, 0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
+	}
 }
 
 fn (self &Window) tab_for_page(page AdwTabPage) ?&Tab {
@@ -737,6 +1387,7 @@ fn (self &Window) tab_for_page(page AdwTabPage) ?&Tab {
 pub fn (mut self Window) sync_selected_tab() {
 	page := adw_tab_view_get_selected_page(self.tab_view)
 	if isnil(page) {
+		self.sync_window_title()
 		return
 	}
 	C.adw_tab_page_set_needs_attention(page, 0)
@@ -744,6 +1395,28 @@ pub fn (mut self Window) sync_selected_tab() {
 	if title := tab.title {
 		self.set_title(title)
 	}
+	self.sync_window_title()
+}
+
+fn (self &Window) sync_window_title() {
+	if isnil(self.window_title) {
+		return
+	}
+	title_ptr := C.gtk_window_get_title(self.as_window())
+	C.adw_window_title_set_title(self.window_title, if isnil(title_ptr) {
+		c''
+	} else {
+		title_ptr
+	})
+	mut subtitle := ''
+	if !isnil(self.config) && self.config.get().window_subtitle == .working_directory {
+		if surface := self.get_active_surface() {
+			if pwd := surface.pwd {
+				subtitle = pwd
+			}
+		}
+	}
+	C.adw_window_title_set_subtitle(self.window_title, &char(subtitle.str))
 }
 
 // present_surface selects the tab that owns surface, focuses it, and raises the
@@ -933,10 +1606,18 @@ fn (mut self Window) sync_appearance() {
 		}
 	}
 
-	// TODO(gtk): notifyByPspec for the dynamic config-driven properties
-	// (headerbar-visible, tabs-autohide, tabs-visible, tabs-wide,
-	// toolbar-style, titlebar-style). GObject property system out of scope; the
-	// getters below (get_headerbar_visible, etc.) are the tractable logic.
+	for pspec in [g_window_pspec_headerbar_visible, g_window_pspec_tabs_autohide,
+		g_window_pspec_tabs_visible, g_window_pspec_tabs_wide, g_window_pspec_toolbar_style,
+		g_window_pspec_titlebar_style] {
+		self.notify_property(pspec)
+	}
+	C.gtk_widget_set_visible(self.header_bar, b2i(self.get_headerbar_visible()))
+	titlebar_tabs := self.get_titlebar_style() == .tabs
+	C.gtk_widget_set_visible(self.tab_bar_start, b2i(titlebar_tabs))
+	C.gtk_widget_set_visible(self.tab_bar_end, b2i(titlebar_tabs))
+	csd_enabled := self.winproto.client_side_decoration_enabled()
+	C.adw_tab_overview_set_show_start_title_buttons(self.tab_overview, b2i(csd_enabled))
+	C.adw_tab_overview_set_show_end_title_buttons(self.tab_overview, b2i(csd_enabled))
 
 	// Remainder uses the config.
 	if self.config == unsafe { nil } {
@@ -996,12 +1677,8 @@ fn (mut self Window) toggle_css_class(class string, value bool) {
 	}
 }
 
-// perform_binding_action performs a binding action on the window's active
-// surface. Mirrors `performBindingAction`.
-//
-// TODO(gtk): resolving the active surface's core and calling
-// `core_surface.performBindingAction(action)` is out of scope (core types are
-// placeholders). Kept as a faithful stub. `action` is an opaque action tag.
+// perform_binding_action maps the window action helpers to the canonical input
+// actions and dispatches them to the active core surface.
 fn (mut self Window) perform_binding_action(action BindingActionTag) {
 	binding := match action {
 		.new_tab { input.Action.new(.new_tab) }
@@ -1048,6 +1725,36 @@ fn (mut self Window) add_toast(title string) {
 
 // --- Properties -----------------------------------------------------------
 
+fn (mut self Window) set_config_reference(config &Config) {
+	if self.config == config {
+		return
+	}
+	if !isnil(self.config) {
+		self.config.unref()
+		self.config = unsafe { nil }
+	}
+	if !isnil(config) {
+		mut owned := unsafe { config }
+		self.config = owned.ref()
+	}
+	self.sync_apprt_window()
+}
+
+fn (self &Window) notify_property(pspec &C.GParamSpec) {
+	if !isnil(self.obj) && !isnil(pspec) {
+		C.g_object_notify_by_pspec(self.obj, pspec)
+	}
+}
+
+pub fn (mut self Window) set_quick_terminal(value bool) {
+	if isnil(self.obj) {
+		self.quick_terminal = value
+		self.sync_apprt_window()
+		return
+	}
+	C.g_object_set(GObject(self.obj), c'quick-terminal', b2i(value), unsafe { nil })
+}
+
 // is_quick_terminal reports whether this terminal is a quick terminal. Mirrors
 // `isQuickTerminal`.
 pub fn (self &Window) is_quick_terminal() bool {
@@ -1058,8 +1765,6 @@ pub fn (self &Window) is_quick_terminal() bool {
 // "active-surface" property. This does not ref the value. Mirrors
 // `getActiveSurface`.
 //
-// TODO(gtk): resolving the selected Tab and its active surface is out of scope
-// (Tab is not translated). Returns none.
 pub fn (self &Window) get_active_surface() ?&SurfaceWidget {
 	if isnil(self.tab_view) {
 		return none
@@ -1140,8 +1845,6 @@ fn (mut self Window) unset_window_decoration() {
 // get_needs_confirm_quit returns true if this window needs confirmation before
 // quitting. Mirrors `getNeedsConfirmQuit`.
 //
-// TODO(gtk): iterating the tab pages and querying each Tab's
-// getNeedsConfirmQuit is out of scope (Tab not translated). Returns false.
 fn (self &Window) get_needs_confirm_quit() bool {
 	for tab in self.tabs {
 		if !isnil(tab) && tab.get_needs_confirm_quit() {
@@ -1319,9 +2022,11 @@ pub fn (mut self Window) window_realize(mut app Application) {
 		return
 	}
 
-	// TODO(gtk): connect gdk_surface "notify::width"/"notify::height" to
-	// prop_gdk_surface_width/height. Requires the realized GdkSurface + GObject
-	// signal connection; out of scope.
+	gdk_surface := C.gtk_native_get_surface(self.as_native())
+	if !isnil(gdk_surface) {
+		C.g_signal_connect_data(gdk_surface, c'notify::width', GCallback(voidptr(window_gdk_surface_resize_cb)), voidptr(self), unsafe { nil }, 0)
+		C.g_signal_connect_data(gdk_surface, c'notify::height', GCallback(voidptr(window_gdk_surface_resize_cb)), voidptr(self), unsafe { nil }, 0)
+	}
 
 	// When we are realized we always setup our appearance since this calls
 	// some winproto functions.
@@ -1336,6 +2041,7 @@ pub fn (mut self Window) prop_config() {
 	}
 	self.sync_apprt_window()
 	self.sync_appearance()
+	self.sync_window_title()
 	for mut tab in self.tabs {
 		for mut surface in tab.split_tree.surfaces {
 			surface.apply_config()
@@ -1366,10 +2072,9 @@ pub fn (mut self Window) prop_gdk_surface_resize() {
 pub fn (mut self Window) prop_is_active() {
 	// Hide quick-terminal if set to autohide.
 	if self.is_quick_terminal() {
-		// TODO(gtk): quick-terminal-autohide config field is absent in witty's
-		// core config; the autohide toggle is retained as intent.
-		if C.gtk_window_is_active(self.as_window()) == 0 {
-			// self.toggle_visibility() when quick-terminal-autohide is set
+		if !isnil(self.config) && self.config.get().quick_terminal_autohide
+			&& C.gtk_window_is_active(self.as_window()) == 0 {
+			self.toggle_visibility()
 		}
 	}
 
@@ -1538,10 +2243,8 @@ pub fn (mut self Window) action_ring_bell() {
 	}
 }
 
-// BindingActionTag is a placeholder for the subset of `input.Binding.Action`
-// tags the window's actions dispatch. TODO(gtk): the real actions carry data
-// (close-tab mode, split direction, clipboard target); those are resolved at
-// the core layer which is out of scope.
+// BindingActionTag names the fixed actions exposed by Window's GTK action map;
+// perform_binding_action supplies their canonical payloads.
 pub enum BindingActionTag {
 	new_tab
 	new_window
@@ -1557,9 +2260,27 @@ pub enum BindingActionTag {
 
 // --- dispose / finalize ---------------------------------------------------
 
-// dispose releases references held by the window. Mirrors `dispose` (minus the
-// GObject template disposal + parent chaining).
-pub fn (mut self Window) dispose() {
+fn (mut self Window) dispose_resources() {
+	if self.disposed {
+		return
+	}
+	self.disposed = true
+	if self.tab_overview_focus_timer != 0 {
+		C.g_source_remove(self.tab_overview_focus_timer)
+		self.tab_overview_focus_timer = 0
+	}
+	for mut tab in self.tabs {
+		C.g_signal_handlers_disconnect_matched(tab.widget, g_signal_match_data, 0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
+		if !isnil(tab.split_tree) {
+			C.g_signal_handlers_disconnect_matched(tab.split_tree.widget, g_signal_match_data, 0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
+			if tree := tab.get_surface_tree() {
+				self.disconnect_surface_handlers(tree)
+			}
+		}
+		tab.window = unsafe { nil }
+	}
+	self.tabs.clear()
+	self.pending_close_page = unsafe { nil }
 	if !isnil(self.command_palette) {
 		mut palette := self.command_palette
 		palette.dispose()
@@ -1570,16 +2291,47 @@ pub fn (mut self Window) dispose() {
 		self.config.unref()
 		self.config = unsafe { nil }
 	}
-
-	// TODO(gtk): tab_bindings.setSource(null) + gtk.Widget.disposeTemplate +
-	// parent dispose chaining. Out of scope.
+	if !isnil(self.app) {
+		mut app := unsafe { self.app }
+		for i, candidate in app.windows {
+			if candidate == self {
+				app.windows.delete(i)
+				break
+			}
+		}
+	}
 }
 
-// finalize tears down the winproto state. Mirrors `finalize` (minus GObject
-// parent chaining and the binding-group unref).
-pub fn (mut self Window) finalize() {
+// dispose releases references held by the window. Native instances call this
+// before chaining to AdwApplicationWindow.dispose.
+pub fn (mut self Window) dispose() {
+	self.dispose_resources()
+}
+
+fn (mut self Window) finalize_resources() {
+	if self.finalized {
+		return
+	}
+	self.finalized = true
 	self.winproto.deinit()
-	// TODO(gtk): tab_bindings.unref + parent finalize chaining. Out of scope.
+	self.app = unsafe { nil }
+	self.tab_overview = unsafe { nil }
+	self.tab_bar = unsafe { nil }
+	self.tab_view = unsafe { nil }
+	self.toolbar = unsafe { nil }
+	self.toast_overlay = unsafe { nil }
+	self.header_bar = unsafe { nil }
+	self.window_title = unsafe { nil }
+	self.tab_bar_start = unsafe { nil }
+	self.tab_bar_end = unsafe { nil }
+	self.overview_header_toggle = unsafe { nil }
+	self.overview_tab_toggle = unsafe { nil }
+}
+
+// finalize tears down protocol state. Native instances then chain to the
+// AdwApplicationWindow parent finalizer.
+pub fn (mut self Window) finalize() {
+	self.finalize_resources()
 }
 
 // --- Upcasts / thin wrappers ----------------------------------------------
@@ -1610,6 +2362,9 @@ fn (self &Window) as_tab_bar_widget() GtkWidget {
 
 fn (self &Window) set_title(title string) {
 	C.gtk_window_set_title(self.as_window(), &char(title.str))
+	if !isnil(self.window_title) {
+		C.adw_window_title_set_title(self.window_title, &char(title.str))
+	}
 }
 
 fn (self &Window) set_icon_name(name string) {

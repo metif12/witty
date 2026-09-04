@@ -192,6 +192,9 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	add_group(mut result, 'window-title-font-family', [
 		optional_string(c.window_title_font_family),
 	])
+	add_group(mut result, 'window-subtitle', [
+		enum_config_string(c.window_subtitle.str()),
+	])
 	add_group(mut result, 'window-theme', [c.window_theme.str()])
 	add_group(mut result, 'window-titlebar-background', [
 		optional_color_string(c.window_titlebar_background),
@@ -234,6 +237,9 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 		bool_string(c.window_inherit_font_size),
 	])
 	add_group(mut result, 'initial-window', [bool_string(c.initial_window)])
+	add_group(mut result, 'quick-terminal-autohide', [
+		bool_string(c.quick_terminal_autohide),
+	])
 	add_group(mut result, 'working-directory', [optional_string(c.working_directory)])
 	add_group(mut result, 'command', [optional_command_string(c.command)])
 	add_group(mut result, 'initial-command', [

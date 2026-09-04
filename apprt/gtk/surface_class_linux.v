@@ -2695,10 +2695,6 @@ fn (mut self SurfaceWidget) init_surface() ! {
 		self.clear_cgroup()
 		return error('core surface initialization failed: ${err}')
 	}
-	if !isnil(self.split_tree) && !isnil(self.split_tree.window) {
-		mut window := unsafe { self.split_tree.window }
-		window.surface_initialized(self)
-	}
 	C.g_signal_emit_by_name(self.widget, c'init')
 }
 
@@ -3048,10 +3044,6 @@ pub fn (mut self SurfaceWidget) set_clipboard(clipboard_type apprt.Clipboard, co
 			C.gdk_clipboard_set_text(clipboard, text.str)
 		}
 		C.g_signal_emit_by_name(self.widget, c'clipboard-write', int(clipboard_type), text.str)
-		if !isnil(self.split_tree) && !isnil(self.split_tree.window) {
-			mut window := unsafe { self.split_tree.window }
-			window.surface_clipboard_write(clipboard_type, text)
-		}
 		return
 	}
 
@@ -3474,44 +3466,36 @@ fn surface_search_navigate(data voidptr, direction input.NavigateSearch) {
 }
 
 // --- Container requests ---------------------------------------------------
-// Ghostty emits GObject signals for these. The V wrapper routes each request
-// directly to the same owning split tree/window operation.
 
 // close requests the surface be closed. Mirrors `Surface.close` (emits
 // `close-request`).
 pub fn (self &SurfaceWidget) close() {
-	if !isnil(self.split_tree) {
-		mut tree := unsafe { self.split_tree }
-		surface := unsafe { self }
-		tree.surface_close_request(surface)
+	if !isnil(self.widget) {
+		C.g_signal_emit_by_name(self.widget, c'close-request')
 	}
 }
 
 // present requests this surface come to the front. Mirrors `Surface.present`
 // (emits `present-request`).
 pub fn (self &SurfaceWidget) present() {
-	if isnil(self.split_tree) || isnil(self.split_tree.window) {
-		return
+	if !isnil(self.widget) {
+		C.g_signal_emit_by_name(self.widget, c'present-request')
 	}
-	mut window := unsafe { self.split_tree.window }
-	window.present_surface(self)
 }
 
 // toggle_fullscreen requests the container toggle fullscreen. Mirrors
 // `Surface.toggleFullscreen` (emits `toggle-fullscreen`).
 pub fn (self &SurfaceWidget) toggle_fullscreen() {
-	if !isnil(self.split_tree) && !isnil(self.split_tree.window) {
-		mut window := unsafe { self.split_tree.window }
-		window.toggle_fullscreen()
+	if !isnil(self.widget) {
+		C.g_signal_emit_by_name(self.widget, c'toggle-fullscreen')
 	}
 }
 
 // toggle_maximize requests the container toggle maximize. Mirrors
 // `Surface.toggleMaximize` (emits `toggle-maximize`).
 pub fn (self &SurfaceWidget) toggle_maximize() {
-	if !isnil(self.split_tree) && !isnil(self.split_tree.window) {
-		mut window := unsafe { self.split_tree.window }
-		window.toggle_maximize()
+	if !isnil(self.widget) {
+		C.g_signal_emit_by_name(self.widget, c'toggle-maximize')
 	}
 }
 
@@ -3848,10 +3832,6 @@ fn surface_focus_enter_cb(controller GtkEventControllerFocus, data voidptr) {
 	}
 	mut self := unsafe { &SurfaceWidget(data) }
 	self.ec_focus_enter()
-	if !isnil(self.split_tree) {
-		mut tree := unsafe { self.split_tree }
-		tree.prop_surface_focused(mut self)
-	}
 }
 
 fn surface_focus_leave_cb(controller GtkEventControllerFocus, data voidptr) {

@@ -11,6 +11,7 @@ import cli_args
 const default_gtk_opengl_debug = $if debug { true } $else { false }
 const default_quit_after_last_window_closed = $if linux { true } $else { false }
 const default_linux_cgroup = $if linux { LinuxCgroup.single_instance } $else { LinuxCgroup.never }
+const default_quick_terminal_autohide = $if macos { true } $else { false }
 
 // --- Original Ghostty Comments Start: src/config/Config.zig
 //
@@ -4100,6 +4101,8 @@ pub mut:
 	window_decoration WindowDecoration = .auto
 	// Font used for application window and tab titles.
 	window_title_font_family ?string
+	// Text shown in the GTK window subtitle.
+	window_subtitle WindowSubtitle = .false_
 	// The theme to use for the window (auto/system/light/dark/ghostty).
 	window_theme WindowTheme = .auto
 	// Optional titlebar colors used by the GTK ghostty window theme.
@@ -4124,6 +4127,9 @@ pub mut:
 	window_inherit_font_size bool = true
 	// Whether to create the initial window when starting.
 	initial_window bool = true
+	// Automatically hide a quick terminal when it loses focus. Ghostty defaults
+	// this on for macOS and off for Linux/BSD.
+	quick_terminal_autohide bool = default_quick_terminal_autohide
 	// Whether to enable OSC 133 based right-click actions.
 	right_click_action RightClickAction = .context_menu
 	// Interval in ms for detecting repeated clicks. 0 uses the system default.
@@ -6547,7 +6553,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 				return
 			}
 		}
-		'font-thicken', 'background-opacity-cells', 'background-image-repeat', 'window-vsync', 'clipboard-trim-trailing-spaces', 'clipboard-paste-protection', 'clipboard-paste-bracketed-safe', 'cursor-click-to-move', 'desktop-notifications', 'mouse-hide-while-typing', 'mouse-reporting', 'selection-clear-on-copy', 'selection-clear-on-typing', 'vt-kam-allowed', 'wait-after-command', 'window-padding-balance', 'title-report', 'link-url', 'maximize', 'fullscreen', 'focus-follows-mouse', 'window-inherit-working-directory', 'tab-inherit-working-directory', 'split-inherit-working-directory', 'window-inherit-font-size', 'initial-window', 'quit-after-last-window-closed', 'config-default-files', 'linux-cgroup-hard-fail', 'gtk-opengl-debug', 'gtk-titlebar', 'gtk-titlebar-hide-when-maximized', 'gtk-wide-tabs' {
+		'font-thicken', 'background-opacity-cells', 'background-image-repeat', 'window-vsync', 'clipboard-trim-trailing-spaces', 'clipboard-paste-protection', 'clipboard-paste-bracketed-safe', 'cursor-click-to-move', 'desktop-notifications', 'mouse-hide-while-typing', 'mouse-reporting', 'selection-clear-on-copy', 'selection-clear-on-typing', 'vt-kam-allowed', 'wait-after-command', 'window-padding-balance', 'title-report', 'link-url', 'maximize', 'fullscreen', 'focus-follows-mouse', 'window-inherit-working-directory', 'tab-inherit-working-directory', 'split-inherit-working-directory', 'window-inherit-font-size', 'initial-window', 'quick-terminal-autohide', 'quit-after-last-window-closed', 'config-default-files', 'linux-cgroup-hard-fail', 'gtk-opengl-debug', 'gtk-titlebar', 'gtk-titlebar-hide-when-maximized', 'gtk-wide-tabs' {
 			parsed := c.parse_config_bool(key, value) or { return }
 			match key {
 				'font-thicken' {
@@ -6627,6 +6633,9 @@ fn (mut c Config) apply_kv(key string, value string) {
 				}
 				'initial-window' {
 					c.initial_window = parsed
+				}
+				'quick-terminal-autohide' {
+					c.quick_terminal_autohide = parsed
 				}
 				'quit-after-last-window-closed' {
 					c.quit_after_last_window_closed = parsed
@@ -6876,6 +6885,16 @@ fn (mut c Config) apply_kv(key string, value string) {
 			c.window_decoration = window_decoration_parse_cli(value) or {
 				c.invalid_config_value(key, value)
 				return
+			}
+		}
+		'window-subtitle' {
+			c.window_subtitle = match value {
+				'false' { .false_ }
+				'working-directory' { .working_directory }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
 			}
 		}
 		'window-new-tab-position' {
