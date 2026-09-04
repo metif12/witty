@@ -71,10 +71,95 @@ fn test_data_buf_delete_oldest() {
 }
 
 fn test_data_buf_empty_slices() {
-	buf := DataBuf.new()
+	mut buf := DataBuf.new()
 	slices := buf.get_ptr_slice(0, 0)
 	assert slices.first.len == 0
 	assert slices.second.len == 0
+}
+
+fn test_data_buf_append_full_delete_and_wrap() ! {
+	mut buf := DataBuf.new()
+	buf.resize(3)
+	assert buf.empty()
+	buf.append(1)!
+	buf.append(2)!
+	buf.append(3)!
+	assert buf.full
+	buf.append(4) or {
+		assert err.msg() == 'OutOfMemory'
+		buf.delete_oldest(1)
+		buf.append(4)!
+		mut it := buf.iterator(.forward)
+		assert it.next() or { 0 } == 2
+		assert it.next() or { 0 } == 3
+		assert it.next() or { 0 } == 4
+		assert it.next() == none
+		return
+	}
+	assert false, 'expected append to reject a full buffer'
+}
+
+fn test_data_buf_get_ptr_slice_advances_and_wraps() {
+	mut buf := DataBuf.new()
+	buf.resize(4)
+	mut initial := buf.get_ptr_slice(0, 3)
+	initial.first[0] = 1
+	initial.first[1] = 2
+	initial.first[2] = 3
+	buf.delete_oldest(3)
+
+	mut wrapped := buf.get_ptr_slice(0, 4)
+	assert wrapped.first.len == 1
+	assert wrapped.second.len == 3
+	wrapped.first[0] = 4
+	wrapped.second[0] = 5
+	wrapped.second[1] = 6
+	wrapped.second[2] = 7
+	assert buf.full
+
+	buf.rotate_to_zero()
+	assert buf.tail == 0
+	assert buf.head == 0
+	mut all := buf.get_ptr_slice(0, 4)
+	assert all.first == [u8(4), 5, 6, 7]
+	assert all.second.len == 0
+}
+
+fn test_data_buf_resize_full() {
+	mut buf := DataBuf.new()
+	buf.resize(4)
+	mut data := buf.get_ptr_slice(0, 4)
+	for i in 0 .. 4 {
+		data.first[i] = u8(i + 1)
+	}
+
+	buf.resize(6)
+	assert !buf.full
+	assert buf.len() == 4
+
+	mut shrinking := DataBuf.new()
+	shrinking.resize(4)
+	mut full := shrinking.get_ptr_slice(0, 4)
+	for i in 0 .. 4 {
+		full.first[i] = u8(i + 1)
+	}
+	shrinking.resize(3)
+	assert shrinking.full
+	assert shrinking.len() == 3
+	mut shrunk := shrinking.get_ptr_slice(0, 3)
+	assert shrunk.first == [u8(1), 2, 3]
+}
+
+fn test_data_buf_zero_length_operations_are_noops() {
+	mut buf := DataBuf.new()
+	buf.resize(5)
+	buf.append_slice_assume_capacity([]u8{})
+	buf.delete_oldest(0)
+	assert buf.empty()
+	buf.append_slice_assume_capacity('hello'.bytes())
+	buf.delete_oldest(0)
+	assert buf.len() == 5
+	assert buf.first() or { 0 } == `h`
 }
 
 fn test_meta_buf_basic() {

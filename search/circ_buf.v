@@ -127,26 +127,10 @@ module search
 //
 // --- Original Ghostty Comments End: src/datastruct/circ_buf.zig
 
-
-// Circular buffer implementations for the search sliding window.
-//
-// DataBuf stores encoded page text (bytes) and MetaBuf stores page
-// metadata entries. Both support efficient O(1) append-at-end and
-// delete-from-front operations.
-//
-// Relative to the generic Zig `CircBuf(T, default)` in
-// datastruct/circ_buf.zig, this is a purpose-built rewrite using
-// head/count bookkeeping instead of head/tail/full. The Zig-parity
-// pieces added here are: the forward/reverse `Iterator` (next / seek_by
-// / reset, plus first/last helpers), `resize`, and `rotate_to_zero`.
-//
-// Intentionally omitted (not required by SlidingWindow, the only consumer):
-//   - The `full` flag and the `append`-that-can-error path: our bufs grow
-//     on demand via ensure_unused_capacity, so a "full" state never occurs.
-//   - `getPtrSlice`'s auto-advance/wrap-write behavior: DataBuf.get_ptr_slice
-//     is read-only here; SlidingWindow reserves capacity before writing.
-//   - The `default` value memset on delete: unused slots are logically dead
-//     (guarded by `count`), so we skip zeroing for speed.
+// Concrete instantiations of Ghostty's datastruct.CircBuf for the search
+// sliding window. DataBuf uses a zero byte as its default and MetaBuf uses an
+// empty Meta. The head/tail/full invariants and operations below translate the
+// generic implementation directly.
 
 import terminal
 import highlight
@@ -159,8 +143,15 @@ import highlight
 // The first slice covers data before the wrap point, the second
 // covers data after the wrap (empty if no wrap occurs).
 struct ByteSlices {
+mut:
 	first  []u8
 	second []u8
+}
+
+struct MetaSlices {
+mut:
+	first  []Meta
+	second []Meta
 }
 
 // ============================================================
@@ -191,15 +182,24 @@ struct DataBuf {
 mut:
 	storage []u8
 	head    int
-	count   int
+	tail    int
+	full    bool
 }
 
 fn DataBuf.new() DataBuf {
-	return DataBuf{}
+	return DataBuf{
+		full: true
+	}
 }
 
 fn (self &DataBuf) len() int {
-	return self.count
+	if self.full {
+		return self.storage.len
+	}
+	if self.head >= self.tail {
+		return self.head - self.tail
+	}
+	return self.storage.len - (self.tail - self.head)
 }
 
 fn (self &DataBuf) capacity() int {
@@ -208,108 +208,144 @@ fn (self &DataBuf) capacity() int {
 
 fn (mut self DataBuf) clear() {
 	self.head = 0
-	self.count = 0
+	self.tail = 0
+	self.full = false
+}
+
+fn (self &DataBuf) empty() bool {
+	return !self.full && self.head == self.tail
+}
+
+fn (mut self DataBuf) append(value u8) ! {
+	if self.full {
+		return error('OutOfMemory')
+	}
+	self.append_assume_capacity(value)
+}
+
+fn (mut self DataBuf) append_assume_capacity(value u8) {
+	assert !self.full
+	self.storage[self.head] = value
+	self.head++
+	if self.head >= self.storage.len {
+		self.head = 0
+	}
+	self.full = self.head == self.tail
 }
 
 // Ensure there is unused capacity for at least `additional` more bytes.
 fn (mut self DataBuf) ensure_unused_capacity(additional int) {
-	needed := self.count + additional
+	needed := self.len() + additional
 	if needed <= self.storage.len {
 		return
 	}
-	self.grow(needed)
+	self.resize(needed)
 }
 
 // Append a slice of bytes, assuming capacity is sufficient.
 fn (mut self DataBuf) append_slice_assume_capacity(items []u8) {
-	for item in items {
-		idx := (self.head + self.count) % self.storage.len
-		self.storage[idx] = item
-		self.count += 1
+	mut slices := self.get_ptr_slice(self.len(), items.len)
+	for i in 0 .. slices.first.len {
+		slices.first[i] = items[i]
+	}
+	for i in 0 .. slices.second.len {
+		slices.second[i] = items[slices.first.len + i]
 	}
 }
 
 // Delete the oldest n bytes from the front of the buffer.
 fn (mut self DataBuf) delete_oldest(n int) {
-	assert n <= self.count, 'DataBuf.delete_oldest: n=${n} > count=${self.count}'
-	self.head = (self.head + n) % self.storage.len
-	self.count -= n
+	assert n <= self.storage.len, 'DataBuf.delete_oldest: n=${n} > capacity=${self.storage.len}'
+	if n == 0 {
+		return
+	}
+
+	mut slices := self.get_ptr_slice(0, n)
+	for i in 0 .. slices.first.len {
+		slices.first[i] = 0
+	}
+	for i in 0 .. slices.second.len {
+		slices.second[i] = 0
+	}
+
+	self.tail += if self.len() < n { self.len() } else { n }
+	if self.tail >= self.storage.len {
+		self.tail -= self.storage.len
+	}
+	self.full = false
 }
 
 // Get the byte at position i (0-based from the logical start).
 fn (self &DataBuf) get(i int) u8 {
-	idx := (self.head + i) % self.storage.len
-	return self.storage[idx]
+	assert i < self.len()
+	return self.storage[self.storage_offset(i)]
 }
 
 // Get two contiguous slices covering the range [offset, offset+length).
 // The first slice is before any wrap point, the second is after the wrap.
 // If no wrap occurs, the second slice is empty.
-fn (self &DataBuf) get_ptr_slice(offset int, length int) ByteSlices {
-	if length == 0 || self.storage.len == 0 {
+fn (mut self DataBuf) get_ptr_slice(offset int, length int) ByteSlices {
+	if length == 0 {
 		return ByteSlices{}
 	}
-	cap := self.storage.len
-	start := (self.head + offset) % cap
-	if start + length <= cap {
-		// No wrap
+	assert offset + length <= self.capacity()
+
+	end_offset := offset + length
+	if end_offset > self.len() {
+		self.advance(end_offset - self.len())
+	}
+
+	start := self.storage_offset(offset)
+	end := self.storage_offset(end_offset - 1)
+	if end >= start {
 		return ByteSlices{
-			first: self.storage[start..start + length]
+			first: unsafe { self.storage[start..end + 1] }
 		}
 	}
-	// Wraps around
-	first_len := cap - start
 	return ByteSlices{
-		first: self.storage[start..cap]
-		second: self.storage[0..length - first_len]
+		first: unsafe { self.storage[start..] }
+		second: unsafe { self.storage[..end + 1] }
 	}
 }
 
-// Grow internal storage to at least the given capacity.
-fn (mut self DataBuf) grow(min_cap int) {
-	new_cap := if self.storage.len == 0 {
-		if min_cap > 8 { min_cap } else { 8 }
-	} else {
-		mut c := self.storage.len * 2
-		for c < min_cap {
-			c *= 2
-		}
-		c
+fn (mut self DataBuf) advance(amount int) {
+	assert amount <= self.storage.len - self.len()
+	self.head += amount
+	if self.head >= self.storage.len {
+		self.head -= self.storage.len
 	}
-	mut new_storage := []u8{len: new_cap}
-	for i in 0 .. self.count {
-		old_idx := (self.head + i) % self.storage.len
-		new_storage[i] = self.storage[old_idx]
+	if self.full {
+		self.tail = self.head
 	}
-	self.storage = new_storage
-	self.head = 0
+	self.full = self.head == self.tail
 }
 
-// Rotate the data so that it is zero-aligned (head == 0). After this the
+fn (self &DataBuf) storage_offset(offset int) int {
+	assert offset < self.storage.len
+	fits_offset := self.tail + offset
+	if fits_offset < self.storage.len {
+		return fits_offset
+	}
+	return fits_offset - self.storage.len
+}
+
+// Rotate the data so that it is zero-aligned (tail == 0). After this the
 // logical data occupies storage[0..count]. This mirrors the Zig
 // `rotateToZero` used prior to a resize/realloc.
 //
 // Source: datastruct/circ_buf.zig rotateToZero
 fn (mut self DataBuf) rotate_to_zero() {
-	// If we're already at zero then do nothing.
-	if self.head == 0 {
+	if self.tail == 0 {
 		return
 	}
-	// Reuse grow's compaction: copy into a fresh, head-aligned buffer of
-	// the same capacity. (Zig rotates in-place via std.mem.rotate; we
-	// don't have that primitive here, so a copy is the simplest faithful
-	// equivalent that leaves storage zero-aligned.)
-	if self.storage.len == 0 {
-		self.head = 0
-		return
-	}
+	length := self.len()
 	mut new_storage := []u8{len: self.storage.len}
-	for i in 0 .. self.count {
-		old_idx := (self.head + i) % self.storage.len
-		new_storage[i] = self.storage[old_idx]
+	for i in 0 .. length {
+		new_storage[i] = self.storage[self.storage_offset(i)]
 	}
 	self.storage = new_storage
-	self.head = 0
+	self.head = length % self.storage.len
+	self.tail = 0
 }
 
 // Resize the buffer to the given capacity (larger or smaller). If larger,
@@ -318,18 +354,19 @@ fn (mut self DataBuf) rotate_to_zero() {
 //
 // Source: datastruct/circ_buf.zig resize
 fn (mut self DataBuf) resize(size int) {
-	// Rotate to zero so it is aligned, then reallocate at the end.
 	self.rotate_to_zero()
+	prev_len := self.len()
+	prev_cap := self.storage.len
 	mut new_storage := []u8{len: size}
-	keep := if self.count < size { self.count } else { size }
+	keep := if prev_len < size { prev_len } else { size }
 	for i in 0 .. keep {
 		new_storage[i] = self.storage[i]
 	}
 	self.storage = new_storage
-	if self.count > size {
-		self.count = size
+	if size > prev_cap && self.full {
+		self.head = prev_len
+		self.full = false
 	}
-	self.head = 0
 }
 
 // ============================================================
@@ -342,7 +379,7 @@ fn (mut self DataBuf) resize(size int) {
 //
 // Source: datastruct/circ_buf.zig CircBuf.Iterator
 struct DataBufIterator {
-	buf       &DataBuf = unsafe { nil }
+	buf       DataBuf
 	direction Direction
 mut:
 	idx int
@@ -351,7 +388,7 @@ mut:
 // Return an iterator over the buffer in the given direction.
 fn (b &DataBuf) iterator(direction Direction) DataBufIterator {
 	return DataBufIterator{
-		buf: unsafe { b }
+		buf: *b
 		idx: 0
 		direction: direction
 	}
@@ -414,15 +451,24 @@ struct MetaBuf {
 mut:
 	storage []Meta
 	head    int
-	count   int
+	tail    int
+	full    bool
 }
 
 fn MetaBuf.new() MetaBuf {
-	return MetaBuf{}
+	return MetaBuf{
+		full: true
+	}
 }
 
 fn (self &MetaBuf) len() int {
-	return self.count
+	if self.full {
+		return self.storage.len
+	}
+	if self.head >= self.tail {
+		return self.head - self.tail
+	}
+	return self.storage.len - (self.tail - self.head)
 }
 
 fn (self &MetaBuf) capacity() int {
@@ -431,76 +477,139 @@ fn (self &MetaBuf) capacity() int {
 
 fn (mut self MetaBuf) clear() {
 	self.head = 0
-	self.count = 0
+	self.tail = 0
+	self.full = false
+}
+
+fn (self &MetaBuf) empty() bool {
+	return !self.full && self.head == self.tail
+}
+
+fn (mut self MetaBuf) append(value Meta) ! {
+	if self.full {
+		return error('OutOfMemory')
+	}
+	self.append_assume_capacity(value)
 }
 
 // Ensure there is unused capacity for at least `additional` more entries.
 fn (mut self MetaBuf) ensure_unused_capacity(additional int) {
-	needed := self.count + additional
+	needed := self.len() + additional
 	if needed <= self.storage.len {
 		return
 	}
-	self.grow(needed)
+	self.resize(needed)
 }
 
 // Append a Meta entry, assuming capacity is sufficient.
 fn (mut self MetaBuf) append_assume_capacity(val Meta) {
-	idx := (self.head + self.count) % self.storage.len
-	self.storage[idx] = val
-	self.count += 1
+	assert !self.full
+	self.storage[self.head] = val
+	self.head++
+	if self.head >= self.storage.len {
+		self.head = 0
+	}
+	self.full = self.head == self.tail
+}
+
+fn (mut self MetaBuf) append_slice_assume_capacity(items []Meta) {
+	mut slices := self.get_ptr_slice(self.len(), items.len)
+	for i in 0 .. slices.first.len {
+		slices.first[i] = items[i]
+	}
+	for i in 0 .. slices.second.len {
+		slices.second[i] = items[slices.first.len + i]
+	}
 }
 
 // Delete the oldest n entries from the front.
 fn (mut self MetaBuf) delete_oldest(n int) {
-	assert n <= self.count, 'MetaBuf.delete_oldest: n=${n} > count=${self.count}'
-	self.head = (self.head + n) % self.storage.len
-	self.count -= n
+	assert n <= self.storage.len, 'MetaBuf.delete_oldest: n=${n} > capacity=${self.storage.len}'
+	if n == 0 {
+		return
+	}
+
+	mut slices := self.get_ptr_slice(0, n)
+	for i in 0 .. slices.first.len {
+		slices.first[i] = Meta{}
+	}
+	for i in 0 .. slices.second.len {
+		slices.second[i] = Meta{}
+	}
+
+	self.tail += if self.len() < n { self.len() } else { n }
+	if self.tail >= self.storage.len {
+		self.tail -= self.storage.len
+	}
+	self.full = false
 }
 
 // Get the Meta entry at position i (0-based from logical start).
 fn (self &MetaBuf) get(i int) Meta {
-	idx := (self.head + i) % self.storage.len
-	return self.storage[idx]
+	assert i < self.len()
+	return self.storage[self.storage_offset(i)]
 }
 
-// Grow internal storage to at least the given capacity.
-fn (mut self MetaBuf) grow(min_cap int) {
-	new_cap := if self.storage.len == 0 {
-		if min_cap > 8 { min_cap } else { 8 }
-	} else {
-		mut c := self.storage.len * 2
-		for c < min_cap {
-			c *= 2
+fn (mut self MetaBuf) get_ptr_slice(offset int, length int) MetaSlices {
+	if length == 0 {
+		return MetaSlices{}
+	}
+	assert offset + length <= self.capacity()
+
+	end_offset := offset + length
+	if end_offset > self.len() {
+		self.advance(end_offset - self.len())
+	}
+
+	start := self.storage_offset(offset)
+	end := self.storage_offset(end_offset - 1)
+	if end >= start {
+		return MetaSlices{
+			first: unsafe { self.storage[start..end + 1] }
 		}
-		c
 	}
-	mut new_storage := []Meta{len: new_cap}
-	for i in 0 .. self.count {
-		old_idx := (self.head + i) % self.storage.len
-		new_storage[i] = self.storage[old_idx]
+	return MetaSlices{
+		first: unsafe { self.storage[start..] }
+		second: unsafe { self.storage[..end + 1] }
 	}
-	self.storage = new_storage
-	self.head = 0
+}
+
+fn (mut self MetaBuf) advance(amount int) {
+	assert amount <= self.storage.len - self.len()
+	self.head += amount
+	if self.head >= self.storage.len {
+		self.head -= self.storage.len
+	}
+	if self.full {
+		self.tail = self.head
+	}
+	self.full = self.head == self.tail
+}
+
+fn (self &MetaBuf) storage_offset(offset int) int {
+	assert offset < self.storage.len
+	fits_offset := self.tail + offset
+	if fits_offset < self.storage.len {
+		return fits_offset
+	}
+	return fits_offset - self.storage.len
 }
 
 // Rotate the data so that it is zero-aligned (head == 0).
 //
 // Source: datastruct/circ_buf.zig rotateToZero
 fn (mut self MetaBuf) rotate_to_zero() {
-	if self.head == 0 {
+	if self.tail == 0 {
 		return
 	}
-	if self.storage.len == 0 {
-		self.head = 0
-		return
-	}
+	length := self.len()
 	mut new_storage := []Meta{len: self.storage.len}
-	for i in 0 .. self.count {
-		old_idx := (self.head + i) % self.storage.len
-		new_storage[i] = self.storage[old_idx]
+	for i in 0 .. length {
+		new_storage[i] = self.storage[self.storage_offset(i)]
 	}
 	self.storage = new_storage
-	self.head = 0
+	self.head = length % self.storage.len
+	self.tail = 0
 }
 
 // Resize the buffer to the given capacity (larger or smaller).
@@ -508,16 +617,18 @@ fn (mut self MetaBuf) rotate_to_zero() {
 // Source: datastruct/circ_buf.zig resize
 fn (mut self MetaBuf) resize(size int) {
 	self.rotate_to_zero()
+	prev_len := self.len()
+	prev_cap := self.storage.len
 	mut new_storage := []Meta{len: size}
-	keep := if self.count < size { self.count } else { size }
+	keep := if prev_len < size { prev_len } else { size }
 	for i in 0 .. keep {
 		new_storage[i] = self.storage[i]
 	}
 	self.storage = new_storage
-	if self.count > size {
-		self.count = size
+	if size > prev_cap && self.full {
+		self.head = prev_len
+		self.full = false
 	}
-	self.head = 0
 }
 
 // ============================================================
@@ -529,7 +640,7 @@ fn (mut self MetaBuf) resize(size int) {
 //
 // Source: datastruct/circ_buf.zig CircBuf.Iterator
 struct MetaBufIterator {
-	buf       &MetaBuf = unsafe { nil }
+	buf       MetaBuf
 	direction Direction
 mut:
 	idx int
@@ -538,7 +649,7 @@ mut:
 // Return an iterator over the buffer in the given direction.
 fn (b &MetaBuf) iterator(direction Direction) MetaBufIterator {
 	return MetaBufIterator{
-		buf: unsafe { b }
+		buf: *b
 		idx: 0
 		direction: direction
 	}
