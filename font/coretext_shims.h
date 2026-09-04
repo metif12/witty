@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #ifdef __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
@@ -222,28 +223,16 @@ static void witty_coretext_destroy_hb_font(void *font_ptr) {
 	if (font_ptr) hb_font_destroy((hb_font_t *)font_ptr);
 }
 
-static int witty_coretext_render_glyph(
+static int witty_coretext_glyph_bounds(
 	void *font_ptr,
 	uint32_t glyph_id,
-	double cell_height,
-	double cell_baseline,
-	uint32_t *width_out,
-	uint32_t *height_out,
-	int32_t *offset_x_out,
-	int32_t *offset_y_out,
-	uint8_t **buffer_out
+	double *x_out,
+	double *y_out,
+	double *width_out,
+	double *height_out
 ) {
-	if (!font_ptr || !width_out || !height_out || !offset_x_out || !offset_y_out || !buffer_out) {
-		return 0;
-	}
-	*width_out = 0;
-	*height_out = 0;
-	*offset_x_out = 0;
-	*offset_y_out = 0;
-	*buffer_out = NULL;
-
+	if (!font_ptr || !x_out || !y_out || !width_out || !height_out) return 0;
 	CGGlyph glyph = (CGGlyph)glyph_id;
-	if (glyph == 0) return 0;
 	CGRect rect = CTFontGetBoundingRectsForGlyphs(
 		(CTFontRef)font_ptr,
 		kCTFontOrientationHorizontal,
@@ -251,63 +240,93 @@ static int witty_coretext_render_glyph(
 		NULL,
 		1
 	);
-	if (CGRectIsNull(rect) || rect.size.width <= 0.0 || rect.size.height <= 0.0) return 1;
+	if (CGRectIsNull(rect)) return 0;
+	*x_out = rect.origin.x;
+	*y_out = rect.origin.y;
+	*width_out = rect.size.width;
+	*height_out = rect.size.height;
+	return 1;
+}
 
-	double pad = 1.0;
-	double min_x = floor(rect.origin.x - pad);
-	double min_y = floor(rect.origin.y - pad);
-	double max_x = ceil(rect.origin.x + rect.size.width + pad);
-	double max_y = ceil(rect.origin.y + rect.size.height + pad);
-	size_t width = (size_t)(max_x - min_x);
-	size_t height = (size_t)(max_y - min_y);
-	if (width == 0 || height == 0 || width > 512 || height > 512) return 0;
+static int witty_coretext_render_glyph(
+	void *font_ptr,
+	uint32_t glyph_id,
+	uint32_t canvas_width,
+	uint32_t canvas_height,
+	double rect_x,
+	double rect_y,
+	double translate_x,
+	double translate_y,
+	double scale_x,
+	double scale_y,
+	int is_color,
+	int thicken,
+	uint8_t thicken_strength,
+	double synthetic_bold,
+	uint8_t **buffer_out
+) {
+	if (!font_ptr || !buffer_out || canvas_width == 0 || canvas_height == 0) return 0;
+	*buffer_out = NULL;
 
-	size_t len = width * height;
-	uint8_t *raw = (uint8_t *)calloc(len, 1);
-	if (!raw) return 0;
+	const size_t depth = is_color ? 4 : 1;
+	if ((size_t)canvas_width > SIZE_MAX / (size_t)canvas_height ||
+		(size_t)canvas_width * (size_t)canvas_height > SIZE_MAX / depth) return 0;
+	const size_t len = (size_t)canvas_width * (size_t)canvas_height * depth;
+	uint8_t *buf = (uint8_t *)calloc(len, 1);
+	if (!buf) return 0;
 
-	CGColorSpaceRef gray = CGColorSpaceCreateDeviceGray();
-	if (!gray) {
-		free(raw);
+	CGColorSpaceRef color_space = CGColorSpaceCreateWithName(
+		is_color ? kCGColorSpaceDisplayP3 : kCGColorSpaceLinearGray);
+	if (!color_space) {
+		free(buf);
 		return 0;
 	}
-	CGContextRef ctx = CGBitmapContextCreate(raw, width, height, 8, width, gray, kCGImageAlphaNone);
-	CGColorSpaceRelease(gray);
+	const CGBitmapInfo bitmap_info = is_color
+		? (kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst)
+		: kCGImageAlphaOnly;
+	CGContextRef ctx = CGBitmapContextCreate(
+		buf,
+		canvas_width,
+		canvas_height,
+		8,
+		(size_t)canvas_width * depth,
+		color_space,
+		bitmap_info);
+	CGColorSpaceRelease(color_space);
 	if (!ctx) {
-		free(raw);
+		free(buf);
 		return 0;
 	}
 
-	CGContextSetAllowsAntialiasing(ctx, true);
-	CGContextSetShouldAntialias(ctx, true);
 	CGContextSetAllowsFontSmoothing(ctx, true);
-	CGContextSetShouldSmoothFonts(ctx, true);
+	CGContextSetShouldSmoothFonts(ctx, thicken != 0);
 	CGContextSetAllowsFontSubpixelPositioning(ctx, true);
 	CGContextSetShouldSubpixelPositionFonts(ctx, true);
 	CGContextSetAllowsFontSubpixelQuantization(ctx, false);
 	CGContextSetShouldSubpixelQuantizeFonts(ctx, false);
-	CGContextSetGrayFillColor(ctx, 1.0, 1.0);
+	CGContextSetAllowsAntialiasing(ctx, true);
+	CGContextSetShouldAntialias(ctx, true);
+	if (is_color) {
+		CGContextSetRGBFillColor(ctx, 1.0, 1.0, 1.0, 1.0);
+		CGContextSetRGBStrokeColor(ctx, 1.0, 1.0, 1.0, 1.0);
+	} else {
+		const double strength = (double)thicken_strength / 255.0;
+		CGContextSetGrayFillColor(ctx, strength, 1.0);
+		CGContextSetGrayStrokeColor(ctx, strength, 1.0);
+	}
+	if (synthetic_bold > 0.0) {
+		CGContextSetTextDrawingMode(ctx, kCGTextFillStroke);
+		CGContextSetLineWidth(ctx, synthetic_bold);
+	}
+	CGContextTranslateCTM(ctx, translate_x, translate_y);
+	CGContextScaleCTM(ctx, scale_x, scale_y);
 	CGContextSetTextMatrix(ctx, CGAffineTransformIdentity);
 
-	CGPoint pos = CGPointMake(-min_x, -min_y);
+	CGGlyph glyph = (CGGlyph)glyph_id;
+	CGPoint pos = CGPointMake(-rect_x, -rect_y);
 	CTFontDrawGlyphs((CTFontRef)font_ptr, &glyph, &pos, 1, ctx);
 	CGContextRelease(ctx);
-
-	uint8_t *out = (uint8_t *)malloc(len);
-	if (!out) {
-		free(raw);
-		return 0;
-	}
-	for (size_t y = 0; y < height; y++) {
-		memcpy(out + (y * width), raw + ((height - 1 - y) * width), width);
-	}
-	free(raw);
-
-	*width_out = (uint32_t)width;
-	*height_out = (uint32_t)height;
-	*offset_x_out = (int32_t)min_x;
-	*offset_y_out = (int32_t)(cell_height - cell_baseline + max_y);
-	*buffer_out = out;
+	*buffer_out = buf;
 	return 1;
 }
 
@@ -911,25 +930,29 @@ static void witty_coretext_destroy_hb_font(void *font_ptr) {
 	(void)font_ptr;
 }
 
-static int witty_coretext_render_glyph(
-	void *font_ptr,
-	uint32_t glyph_id,
-	double cell_height,
-	double cell_baseline,
-	uint32_t *width_out,
-	uint32_t *height_out,
-	int32_t *offset_x_out,
-	int32_t *offset_y_out,
-	uint8_t **buffer_out
+static int witty_coretext_glyph_bounds(
+	void *font_ptr, uint32_t glyph_id, double *x_out, double *y_out,
+	double *width_out, double *height_out
 ) {
-	(void)font_ptr;
-	(void)glyph_id;
-	(void)cell_height;
-	(void)cell_baseline;
+	(void)font_ptr; (void)glyph_id;
+	if (x_out) *x_out = 0;
+	if (y_out) *y_out = 0;
 	if (width_out) *width_out = 0;
 	if (height_out) *height_out = 0;
-	if (offset_x_out) *offset_x_out = 0;
-	if (offset_y_out) *offset_y_out = 0;
+	return 0;
+}
+
+static int witty_coretext_render_glyph(
+	void *font_ptr, uint32_t glyph_id, uint32_t canvas_width,
+	uint32_t canvas_height, double rect_x, double rect_y,
+	double translate_x, double translate_y, double scale_x, double scale_y,
+	int is_color, int thicken, uint8_t thicken_strength,
+	double synthetic_bold, uint8_t **buffer_out
+) {
+	(void)font_ptr; (void)glyph_id; (void)canvas_width; (void)canvas_height;
+	(void)rect_x; (void)rect_y; (void)translate_x; (void)translate_y;
+	(void)scale_x; (void)scale_y; (void)is_color; (void)thicken;
+	(void)thicken_strength; (void)synthetic_bold;
 	if (buffer_out) *buffer_out = NULL;
 	return 0;
 }

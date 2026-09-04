@@ -1154,9 +1154,9 @@ pub mut:
 	cell_width       u32 = 1
 	grid_metrics     Metrics
 	thicken          bool
-	thicken_strength u8
+	thicken_strength u8 = 255
 	constraint       Constraint
-	constraint_width u32
+	constraint_width u32 = 1
 }
 
 // Constraint controls how a glyph is constrained to fit its cell.

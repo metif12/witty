@@ -1,5 +1,6 @@
 module font
 
+import math
 import opentype
 
 // CoreText-based font face implementation for macOS.
@@ -48,7 +49,9 @@ fn C.witty_coretext_create_hb_font(font_ptr voidptr, pixels f64) voidptr
 
 fn C.witty_coretext_destroy_hb_font(font_ptr voidptr)
 
-fn C.witty_coretext_render_glyph(font_ptr voidptr, glyph_id u32, cell_height f64, cell_baseline f64, width_out &u32, height_out &u32, offset_x_out &i32, offset_y_out &i32, buffer_out &&u8) int
+fn C.witty_coretext_glyph_bounds(font_ptr voidptr, glyph_id u32, x_out &f64, y_out &f64, width_out &f64, height_out &f64) int
+
+fn C.witty_coretext_render_glyph(font_ptr voidptr, glyph_id u32, canvas_width u32, canvas_height u32, rect_x f64, rect_y f64, translate_x f64, translate_y f64, scale_x f64, scale_y f64, is_color int, thicken int, thicken_strength u8, synthetic_bold f64, buffer_out &&u8) int
 
 fn C.witty_ct_font_from_descriptor(desc voidptr, size f64) voidptr
 
@@ -85,7 +88,7 @@ pub fn release_coretext_font(font_ptr voidptr) {
 pub struct CoreTextFace {
 pub mut:
 	// Our font face (CoreText CTFont). Stored as voidptr because
-	// real CoreText bindings are not yet available.
+	// V's C interop treats Objective-C/CoreFoundation objects opaquely.
 	ct_font voidptr = unsafe { nil }
 
 	// Harfbuzz font corresponding to this face. We only use this
@@ -337,105 +340,114 @@ pub fn (self CoreTextFace) glyph_index(cp u32) ?u32 {
 	return glyph
 }
 
+struct CoreTextGlyphLayout {
+	rect        GlyphSize
+	px_width    u32
+	px_height   u32
+	offset_x    i32
+	offset_y    i32
+	translate_x f64
+	translate_y f64
+	scale_x     f64
+	scale_y     f64
+}
+
+// coretext_glyph_layout translates the backend-independent portion of
+// CoreText Face.renderGlyph: synthetic-bold bounds, constraints, alignment,
+// subpixel bearings, and the final raster canvas dimensions.
+fn coretext_glyph_layout(bounds GlyphSize, sbix bool, synthetic_bold ?f64, opts RenderOptions) ?CoreTextGlyphLayout {
+	mut rect := bounds
+	if !sbix {
+		if line_width := synthetic_bold {
+			rect.width += line_width
+			rect.height += line_width
+			rect.x -= line_width / 2
+			rect.y -= line_width / 2
+		}
+	}
+	if rect.width < 0.25 || rect.height < 0.25 {
+		return none
+	}
+
+	metrics := opts.grid_metrics
+	cell_width := f64(metrics.cell_width)
+	cell_height := f64(metrics.cell_height)
+	glyph_size := opts.constraint.constrain(GlyphSize{
+		width: rect.width
+		height: rect.height
+		x: rect.x
+		y: rect.y + f64(metrics.cell_baseline)
+	}, metrics, opts.constraint_width)
+	mut x := glyph_size.x
+	mut y := glyph_size.y
+	mut width := glyph_size.width
+	mut height := glyph_size.height
+
+	if opts.constraint.size != .stretch {
+		dx := (cell_width - metrics.face_width) / 2
+		x += dx
+		if dx < 0 {
+			x -= math.trunc(dx)
+		}
+	}
+	if sbix {
+		width = cell_width - math.round(cell_width - width - x) - math.round(x)
+		height = cell_height - math.round(cell_height - height - y) - math.round(y)
+		x = math.round(x)
+		y = math.round(y)
+	}
+
+	canvas_padding := if opts.thicken && !sbix { u32(1) } else { u32(0) }
+	px_x := i32(math.floor(x)) - i32(canvas_padding)
+	px_y := i32(math.floor(y)) - i32(canvas_padding)
+	frac_x := x - math.floor(x)
+	frac_y := y - math.floor(y)
+	px_width := u32(math.ceil(width + frac_x)) + 2 * canvas_padding
+	px_height := u32(math.ceil(height + frac_y)) + 2 * canvas_padding
+	return CoreTextGlyphLayout{
+		rect: rect
+		px_width: px_width
+		px_height: px_height
+		offset_x: px_x
+		offset_y: px_y + i32(px_height)
+		translate_x: frac_x + f64(canvas_padding)
+		translate_y: frac_y + f64(canvas_padding)
+		scale_x: width / rect.width
+		scale_y: height / rect.height
+	}
+}
+
 // Render a glyph using the glyph index. The rendered glyph is stored
 // in the given texture atlas.
 pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !GlyphInfo {
-	// Full algorithm:
-	// 1. Get the bounding rect for rendering this glyph:
-	//    glyphs = [glyph_index]
-	//    rect = self.ct_font.getBoundingRectsForGlyphs(.horizontal, &glyphs, null)
-	//    (coordinate space: (0,0) bottom-left, +Y up)
-	//
-	// 2. Determine whether this is a color glyph:
-	//    is_color = self.is_color_glyph(glyph_index)
-	//    sbix = is_color && self.color != none && self.color.sbix
-	//
-	// 3. If we're rendering a synthetic bold then we will gain 50% of
-	//    the line width on every edge, which means we should increase
-	//    our width and height by the line width and subtract half from
-	//    our origin points.
-	//    We don't add extra size if it's a sbix color font though,
-	//    since bitmaps aren't affected by synthetic bold.
-	//    if !sbix { if line_width := self.synthetic_bold {
-	//      rect.size.width += line_width
-	//      rect.size.height += line_width
-	//      rect.origin.x -= line_width / 2
-	//      rect.origin.y -= line_width / 2
-	//    }}
-	//
-	// 4. If our rect is smaller than a quarter pixel in either axis
-	//    then it has no outlines or they're too small to render.
-	//    Return 0-sized glyph.
-	//
-	// 5. Apply constraints via opts.constraint.constrain() for sizing/positioning.
-	//    Add cell_baseline to y before constraining.
-	//
-	// 6. Center glyph within cell if face_width < cell_width and not stretch:
-	//    dx = (cell_width - metrics.face_width) / 2
-	//    x += dx
-	//    if dx < 0: x -= trunc(dx)
-	//
-	// 7. If this is a bitmap glyph (sbix), quantize position and size
-	//    to align to full pixels.
-	//
-	// 8. Calculate canvas_padding (1 if thicken and not sbix, else 0).
-	//
-	// 9. Compute whole-pixel bearings (px_x, px_y) and fractional offsets
-	//    (frac_x, frac_y).
-	//
-	// 10. Compute pixel width and height including fractional offset and
-	//     canvas padding.
-	//
-	// 11. Create appropriate color space and bitmap context:
-	//     - Grayscale (A8) for text glyphs
-	//     - RGBA (displayP3, premultiplied_first, byte_order_32_little) for color
-	//
-	// 12. Verify atlas format depth matches font color depth.
-	//
-	// 13. Allocate buffer, create CGBitmapContext.
-	//
-	// 14. Configure context:
-	//     - Initial fill (transparent)
-	//     - Font smoothing (thicken)
-	//     - Subpixel positioning enabled
-	//     - Subpixel quantization disabled
-	//     - Anti-aliasing enabled
-	//     - Set fill/stroke color
-	//     - If synthetic bold: set text drawing mode to fill_stroke with line_width
-	//
-	// 15. Translate CTM by (frac_x + canvas_padding, frac_y + canvas_padding).
-	//
-	// 16. Scale CTM by (width / rect.size.width, height / rect.size.height).
-	//
-	// 17. Draw glyph at position (-rect.origin.x, -rect.origin.y).
-	//
-	// 18. Write rasterized glyph to the atlas (atlas.reserve, atlas.set).
-	//
-	// 19. Compute offset_y = px_y + px_height, offset_x = px_x.
-	//
-	// 20. Return GlyphInfo with atlas coordinates and offsets.
-	if atlas.format != .grayscale {
-		return error('CoreText shim currently produces grayscale glyphs')
+	mut bounds := GlyphSize{}
+	if C.witty_coretext_glyph_bounds(self.ct_font, glyph_index, &bounds.x, &bounds.y, &bounds.width, &bounds.height) == 0 {
+		return error('CoreText: failed to get glyph bounds')
 	}
-	mut width := u32(0)
-	mut height := u32(0)
-	mut offset_x := i32(0)
-	mut offset_y := i32(0)
-	mut pixels := &u8(unsafe { nil })
-	if C.witty_coretext_render_glyph(self.ct_font, glyph_index, f64(opts.grid_metrics.cell_height), f64(opts.grid_metrics.cell_baseline), &width, &height, &offset_x, &offset_y, &pixels) == 0 {
-		return error('CoreText: failed to rasterize glyph')
-	}
-	if width == 0 || height == 0 || pixels == unsafe { nil } {
+	is_color := self.is_color_glyph(glyph_index)
+	sbix := if color := self.color { is_color && color.sbix } else { false }
+	layout := coretext_glyph_layout(bounds, sbix, self.synthetic_bold, opts) or {
 		return GlyphInfo{}
 	}
+	depth := if is_color { u32(4) } else { u32(1) }
+	if atlas.format.depth() != depth {
+		return error('CoreText: font atlas color depth does not match glyph color depth')
+	}
+	mut pixels := &u8(unsafe { nil })
+	line_width := self.synthetic_bold or { 0.0 }
+	if C.witty_coretext_render_glyph(self.ct_font, glyph_index, layout.px_width, layout.px_height, layout.rect.x, layout.rect.y, layout.translate_x, layout.translate_y, layout.scale_x, layout.scale_y, int(is_color), int(opts.thicken), opts.thicken_strength, line_width, &pixels) == 0 {
+		return error('CoreText: failed to rasterize glyph')
+	}
 	defer { C.witty_coretext_free_buffer(pixels) }
-	region := atlas.reserve(width, height)!
-	atlas.set(region, unsafe { pixels.vbytes(int(width * height)) })
+	region := atlas.reserve(layout.px_width, layout.px_height)!
+	atlas.set(region, unsafe {
+		pixels.vbytes(int(layout.px_width * layout.px_height * depth))
+	})
 	return GlyphInfo{
-		width: width
-		height: height
-		offset_x: offset_x
-		offset_y: offset_y
+		width: layout.px_width
+		height: layout.px_height
+		offset_x: layout.offset_x
+		offset_y: layout.offset_y
 		atlas_x: region.x
 		atlas_y: region.y
 	}

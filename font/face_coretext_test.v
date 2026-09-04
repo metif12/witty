@@ -1,6 +1,40 @@
 module font
 
 import opentype
+import math
+
+fn test_coretext_render_options_match_source_defaults() {
+	opts := RenderOptions{}
+	assert opts.cell_width == 1
+	assert opts.constraint_width == 1
+	assert opts.thicken_strength == 255
+}
+
+fn test_coretext_glyph_layout_preserves_source_subpixel_math() {
+	layout := coretext_glyph_layout(GlyphSize{
+		width: 5.2
+		height: 7.1
+		x: 1.25
+		y: -3.5
+	}, false, none, RenderOptions{
+		grid_metrics: Metrics{
+			cell_width: 10
+			cell_height: 20
+			cell_baseline: 4
+			face_width: 8
+			face_height: 12
+		}
+		thicken: true
+	}) or { panic('expected a drawable glyph') }
+	assert layout.px_width == 8
+	assert layout.px_height == 10
+	assert layout.offset_x == 1
+	assert layout.offset_y == 9
+	assert math.abs(layout.translate_x - 1.25) < 0.000001
+	assert math.abs(layout.translate_y - 1.5) < 0.000001
+	assert math.abs(layout.scale_x - 1.0) < 0.000001
+	assert math.abs(layout.scale_y - 1.0) < 0.000001
+}
 
 fn named_coretext_test_face(name string, points f32) !CoreTextFace {
 	base := C.witty_coretext_create_font_named(&char(name.str), f64(points))
@@ -46,6 +80,13 @@ fn test_coretext_emoji_color_detection() {
 		defer { face.deinit() }
 		glyph := face.glyph_index(0x1f978) or { panic('emoji glyph unavailable') }
 		assert face.is_color_glyph(glyph)
+		mut atlas := Atlas.init(512, .bgra)
+		defer { atlas.deinit() }
+		info := face.render_glyph(mut atlas, glyph, RenderOptions{
+			grid_metrics: Metrics.calc(face.get_metrics())
+		}) or { panic(err) }
+		assert info.width > 0
+		assert info.height > 0
 	}
 }
 
