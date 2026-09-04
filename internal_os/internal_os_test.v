@@ -46,6 +46,12 @@ fn test_i18n_unknown_message_falls_back_to_msgid() {
 	assert translate(msgid) == msgid
 }
 
+fn test_systemd_detection_is_false_off_linux() {
+	$if !linux {
+		assert !launched_by_systemd()
+	}
+}
+
 fn test_hostname_validation() {
 	for hostname in ['example', 'example.com', 'www.example.com', 'example.com.',
 		'host-name.example.com.', '123.example.com.', 'a-b.com', '127.0.0.1',
