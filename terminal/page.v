@@ -1325,10 +1325,9 @@ pub fn (self &Page) verify_integrity() ?IntegrityError {
 
 // A helper that verifies integrity and panics on violation.
 pub fn (self &Page) assert_integrity() {
-	result := self.verify_integrity() or { return }
-	// If we get here without error, integrity is verified.
-	// In V, the error return pattern is different from Zig.
-	_ = result
+	if violation := self.verify_integrity() {
+		panic('page integrity violation: ${violation}')
+	}
 }
 
 // Clone the contents of this page. This creates a deep copy.

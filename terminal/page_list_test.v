@@ -2196,6 +2196,51 @@ fn test_page_list_verify_integrity() {
 
 	s.grow_rows(100)
 	assert s.verify_integrity()
+
+	// Cached row count must match the linked pages.
+	s.total_rows++
+	assert !s.verify_integrity()
+	s.total_rows--
+
+	// Every live page serial must be at least page_serial_min.
+	s.page_serial_min = s.page_serial
+	assert !s.verify_integrity()
+	s.page_serial_min = 0
+
+	// Tracked pins must point within a live page.
+	old_y := s.viewport_pin.y
+	s.viewport_pin.y = s.viewport_pin.node.data.size.rows
+	assert !s.verify_integrity()
+	s.viewport_pin.y = old_y
+
+	// A pinned viewport cache must equal its independently calculated offset.
+	s.viewport = .pin
+	s.viewport_pin.node = s.pages.first or {
+		assert false, 'missing first page'
+		return
+	}
+	s.viewport_pin.y = 0
+	s.viewport_pin.x = 0
+	s.viewport_pin_row_offset = 1
+	assert !s.verify_integrity()
+	s.viewport_pin_row_offset = 0
+	assert s.verify_integrity()
+
+	// A pin too close to the bottom cannot fill the viewport.
+	last := s.pages.last or {
+		assert false, 'missing last page'
+		return
+	}
+	s.viewport_pin.node = last
+	s.viewport_pin.y = last.data.size.rows - 1
+	s.viewport_pin_row_offset = none
+	assert !s.verify_integrity()
+
+	// Restore a valid state for deferred cleanup.
+	s.viewport = .active
+	s.viewport_pin.node = s.pages.first or { return }
+	s.viewport_pin.y = 0
+	s.viewport_pin.x = 0
 }
 
 // ============================================================

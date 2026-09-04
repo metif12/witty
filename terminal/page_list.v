@@ -5861,17 +5861,32 @@ pub fn (self &PageList) cell_iterator(direction IterDirection, tl PointTag, bl ?
 // ============================================================
 
 pub fn (self &PageList) assert_integrity() {
-	// Verify total_rows cache
-	actual := self.count_total_rows()
-	assert actual == self.total_rows, 'total_rows mismatch: cached=${self.total_rows} actual=${actual}'
+	assert self.verify_integrity(), 'PageList integrity check failed'
 }
 
 pub fn (self &PageList) verify_integrity() bool {
-	actual := self.count_total_rows()
-	if actual != self.total_rows {
+	// The viewport pin is permanently tracked and must never be garbage.
+	if self.viewport_pin.garbage {
 		return false
 	}
-	// Verify tracked pins
+
+	// Verify the row cache and reject nodes whose serial predates the oldest
+	// still-valid allocation after page recycling.
+	mut actual_rows := usize(0)
+	mut node := self.pages.first
+	for {
+		current := node or { break }
+		if current.serial < self.page_serial_min {
+			return false
+		}
+		actual_rows += usize(current.data.size.rows)
+		node = current.next
+	}
+	if actual_rows != self.total_rows {
+		return false
+	}
+
+	// Verify every tracked pin still points into a live page.
 	for p in self.tracked_pins {
 		if !self.pin_is_valid(PagePin{
 			node: p.node
@@ -5881,5 +5896,36 @@ pub fn (self &PageList) verify_integrity() bool {
 			return false
 		}
 	}
+
+	if self.viewport == .pin {
+		// Calculate the pinned viewport offset without consulting the cache so
+		// a stale cache cannot validate itself.
+		mut actual_offset := usize(0)
+		mut found := false
+		mut current_node := self.pages.first
+		for {
+			current := current_node or { break }
+			if voidptr(current) == voidptr(self.viewport_pin.node) {
+				actual_offset += usize(self.viewport_pin.y)
+				found = true
+				break
+			}
+			actual_offset += usize(current.data.size.rows)
+			current_node = current.next
+		}
+		if !found {
+			return false
+		}
+		if cached_offset := self.viewport_pin_row_offset {
+			if cached_offset != actual_offset {
+				return false
+			}
+		}
+		if actual_offset > self.total_rows
+			|| self.total_rows - actual_offset < usize(self.rows) {
+			return false
+		}
+	}
+
 	return true
 }
