@@ -1,0 +1,81 @@
+module internal_os
+
+#include <locale.h>
+
+fn C.setlocale(category int, locale &char) &char
+
+// ensure_locale initializes libc's process locale from the environment. If an
+// invalid LANG prevents that, it retries the platform default and finally the
+// UTF-8 locale used by Ghostty as its fallback.
+pub fn ensure_locale() ! {
+	lang := getenv('LANG')
+	$if macos {
+		mut needs_cocoa_locale := true
+		if value := lang {
+			needs_cocoa_locale = value.len == 0
+		}
+		if needs_cocoa_locale {
+			set_lang_from_cocoa()
+		}
+	}
+
+	if set_process_locale('') != none {
+		return
+	}
+
+	if old_lang := getenv('LANG') {
+		if old_lang.len > 0 {
+			// Do both, as upstream does, so LANG is guaranteed not to retain
+			// the invalid value on any supported C runtime.
+			setenv('LANG', '')
+			unsetenv('LANG')
+			if value := set_process_locale('') {
+				if value != 'C' {
+					return
+				}
+			}
+		}
+	}
+
+	if set_process_locale('en_US.UTF-8') != none {
+		setenv('LANG', 'en_US.UTF-8')
+	}
+}
+
+fn set_process_locale(value string) ?string {
+	result := C.setlocale(C.LC_ALL, &char(value.str))
+	if isnil(result) {
+		return none
+	}
+	return unsafe { cstring_to_vstring(result) }
+}
+
+$if macos {
+	fn set_lang_from_cocoa() {
+		locale := macos_system_locale() or { return }
+		lang_value := '${locale.language}_${locale.country}.UTF-8'
+		// The pinned implementation uses a 128-byte fixed buffer.
+		if lang_value.len >= 128 || setenv('LANG', lang_value) < 0 {
+			return
+		}
+
+		preferred := macos_preferred_languages()
+		mut canonical := []string{cap: preferred.len}
+		mut total_len := 0
+		for language in preferred {
+			value := canonicalize_locale(language) + '.UTF-8'
+			total_len += value.len
+			if canonical.len > 0 {
+				total_len++
+			}
+			// Match upstream's 1024-byte buffer including its terminator.
+			if total_len >= 1024 {
+				return
+			}
+			canonical << value
+		}
+		if canonical.len > 0 {
+			setenv('LANGUAGE', canonical.join(':'))
+		}
+	}
+}

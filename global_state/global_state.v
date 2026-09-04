@@ -179,6 +179,10 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 	// that do not link Ghostty's optional Sentry native SDK.
 	crash.initialize() or { eprintln('crash reporting initialization failed: ${err}') }
 
+	// Locale affects libc, gettext, and every child shell, so initialize it
+	// before loading translated resources or starting an application runtime.
+	internal_os.ensure_locale()!
+
 	// Find our resources directory once for the app so every launch
 	// hereafter can use this cached value.
 	self.resources_dir = ResourcesDir.detect()

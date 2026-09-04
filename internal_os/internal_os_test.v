@@ -250,3 +250,8 @@ fn test_get_kernel_info() {
 		assert get_kernel_info() == none
 	}
 }
+
+fn test_ensure_locale_initializes_libc() {
+	ensure_locale()!
+	assert set_process_locale('') != none
+}

@@ -583,6 +583,54 @@ pub fn home_directory_for_current_user() ?string {
 	return objc_utf8_string(home_path)
 }
 
+// SystemLocale contains the language and country components reported by
+// NSLocale.currentLocale.
+pub struct SystemLocale {
+pub:
+	language string
+	country  string
+}
+
+// system_locale returns the current Cocoa locale used to seed LANG for app
+// launches where the parent process did not provide one.
+pub fn system_locale() ?SystemLocale {
+	pool := msg_id(alloc('NSAutoreleasePool'), 'init')
+	defer { msg_void(pool, 'drain') }
+	locale := msg_id(get_class('NSLocale'), 'currentLocale')
+	if is_nil(locale) {
+		return none
+	}
+	language_obj := msg_id(locale, 'languageCode')
+	country_obj := msg_id(locale, 'countryCode')
+	if is_nil(language_obj) || is_nil(country_obj) {
+		return none
+	}
+	return SystemLocale{
+		language: objc_utf8_string(language_obj)
+		country: objc_utf8_string(country_obj)
+	}
+}
+
+// preferred_languages returns NSLocale.preferredLanguages in priority order.
+pub fn preferred_languages() []string {
+	pool := msg_id(alloc('NSAutoreleasePool'), 'init')
+	defer { msg_void(pool, 'drain') }
+	values := msg_id(get_class('NSLocale'), 'preferredLanguages')
+	if is_nil(values) {
+		return []string{}
+	}
+	count := int(msg_u64(values, 'count'))
+	mut result := []string{cap: count}
+	for i in 0 .. count {
+		value := msg_id_u64(values, 'objectAtIndex:', u64(i))
+		if is_nil(value) {
+			continue
+		}
+		result << objc_utf8_string(value)
+	}
+	return result
+}
+
 fn shared_app() ObjId {
 	return msg_id(get_class('NSApplication'), 'sharedApplication')
 }
