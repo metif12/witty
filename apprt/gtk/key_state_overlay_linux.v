@@ -29,23 +29,14 @@ module gtk
 // --- KeyStateOverlay ------------------------------------------------------
 
 // KeyStateOverlay is the V model of the `GhosttyKeyStateOverlay` GObject class.
-// Fields mirror the Zig `Private` struct. The Zig `?*ext.StringList` optionals
-// are modeled as `&StringList` that may be nil.
+// The state itself lives in the registered GObject instance-private storage;
+// this wrapper only carries the widget pointer.
 @[heap]
 pub struct KeyStateOverlay {
 
 	// The GtkWidget (adw.Bin) pointer for this instance.
 pub mut:
 	widget GtkWidget = unsafe { nil }
-
-	// The key-table stack. nil means "unset".
-	tables &StringList = unsafe { nil }
-
-	// The pending key sequence. nil means "unset".
-	sequence &StringList = unsafe { nil }
-
-	// Target vertical alignment for the overlay (top vs bottom center).
-	valign_target Align = .end
 }
 
 // new_key_state_overlay creates a new KeyStateOverlay. Mirrors
@@ -62,68 +53,76 @@ pub fn new_key_state_overlay() &KeyStateOverlay {
 
 // get_tables returns the key-table StringList. Mirrors `getTables`.
 pub fn (self &KeyStateOverlay) get_tables() &StringList {
-	return self.tables
+	if isnil(self.widget) {
+		return unsafe { nil }
+	}
+	return unsafe { &StringList(key_state_priv(voidptr(self.widget)).tables) }
 }
 
 // get_sequence returns the key-sequence StringList. Mirrors `getSequence`.
 pub fn (self &KeyStateOverlay) get_sequence() &StringList {
-	return self.sequence
+	if isnil(self.widget) {
+		return unsafe { nil }
+	}
+	return unsafe { &StringList(key_state_priv(voidptr(self.widget)).sequence) }
 }
 
 // set_tables replaces the key-table StringList, destroying the old one (which
 // this object owns). Mirrors `setTables`.
 pub fn (mut self KeyStateOverlay) set_tables(value &StringList) {
-	if !isnil(self.tables) {
-		mut old := self.tables
+	if isnil(self.widget) {
+		return
+	}
+	mut priv := key_state_priv(voidptr(self.widget))
+	if !isnil(priv.tables) {
+		mut old := unsafe { &StringList(priv.tables) }
 		old.destroy()
-		self.tables = unsafe { nil }
+		priv.tables = unsafe { nil }
 	}
 	if !isnil(value) {
-		unsafe {
-			self.tables = value
-		}
+		priv.tables = voidptr(value)
 	}
-	if !isnil(self.widget) {
-		C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_tables)
-		C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_has_tables)
-	}
+	C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_tables)
+	C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_has_tables)
 }
 
 // set_sequence replaces the key-sequence StringList, destroying the old one.
 // Mirrors `setSequence`.
 pub fn (mut self KeyStateOverlay) set_sequence(value &StringList) {
-	if !isnil(self.sequence) {
-		mut old := self.sequence
+	if isnil(self.widget) {
+		return
+	}
+	mut priv := key_state_priv(voidptr(self.widget))
+	if !isnil(priv.sequence) {
+		mut old := unsafe { &StringList(priv.sequence) }
 		old.destroy()
-		self.sequence = unsafe { nil }
+		priv.sequence = unsafe { nil }
 	}
 	if !isnil(value) {
-		unsafe {
-			self.sequence = value
-		}
+		priv.sequence = voidptr(value)
 	}
-	if !isnil(self.widget) {
-		C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_sequence)
-		C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_has_sequence)
-	}
+	C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_sequence)
+	C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_has_sequence)
 }
 
 // get_has_tables reports whether there is at least one key table. Mirrors
 // `getHasTables`.
 pub fn (self &KeyStateOverlay) get_has_tables() bool {
-	if isnil(self.tables) {
+	tables := self.get_tables()
+	if isnil(tables) {
 		return false
 	}
-	return self.tables.strings.len > 0
+	return tables.strings.len > 0
 }
 
 // get_has_sequence reports whether there is a pending key sequence. Mirrors
 // `getHasSequence`.
 pub fn (self &KeyStateOverlay) get_has_sequence() bool {
-	if isnil(self.sequence) {
+	sequence := self.get_sequence()
+	if isnil(sequence) {
 		return false
 	}
-	return self.sequence.strings.len > 0
+	return sequence.strings.len > 0
 }
 
 // --- Closures (label/visibility helpers) ----------------------------------
@@ -184,6 +183,10 @@ pub fn (self &KeyStateOverlay) sequence_text(list &StringList) ?string {
 // state overlay only moves between top-center and bottom-center; horizontal
 // alignment is always center. Mirrors `onDragEnd`.
 pub fn (mut self KeyStateOverlay) on_drag_end(offset_y f64) {
+	if isnil(self.widget) {
+		return
+	}
+	mut priv := key_state_priv(voidptr(self.widget))
 	parent := C.gtk_widget_get_parent(self.widget)
 	if isnil(parent) {
 		return
@@ -192,35 +195,35 @@ pub fn (mut self KeyStateOverlay) on_drag_end(offset_y f64) {
 	parent_height := f64(C.gtk_widget_get_allocated_height(parent))
 	self_height := f64(C.gtk_widget_get_allocated_height(self.widget))
 
-	self_y := if self.valign_target == .start { f64(0) } else { parent_height - self_height }
+	self_y := if priv.valign_target == int(Align.start) {
+		f64(0)
+	} else {
+		parent_height - self_height
+	}
 	new_y := self_y + offset_y + (self_height / 2)
 
 	new_valign := if new_y > parent_height / 2 { Align.end } else { Align.start }
 
-	if new_valign != self.valign_target {
-		self.valign_target = new_valign
-		if !isnil(self.widget) {
-			C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_valign_target)
-		}
+	if int(new_valign) != priv.valign_target {
+		priv.valign_target = int(new_valign)
+		C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_valign_target)
 		C.gtk_widget_queue_resize(self.widget)
 	}
 }
 
-// --- Virtual methods ------------------------------------------------------
+// --- GObject reference counting -------------------------------------------
 
-// finalize releases the owned StringLists. Mirrors the `finalize` virtual
-// method.
-pub fn (mut self KeyStateOverlay) finalize() {
-	if !isnil(self.tables) {
-		mut t := self.tables
-		t.destroy()
-	}
-	if !isnil(self.sequence) {
-		mut s := self.sequence
-		s.destroy()
-	}
+pub fn (mut self KeyStateOverlay) ref() &KeyStateOverlay {
 	if !isnil(self.widget) {
-		key_state_overlay_finalize(voidptr(self.widget))
+		object_ref(GObject(self.widget))
+	}
+	return self
+}
+
+pub fn (mut self KeyStateOverlay) unref() {
+	if !isnil(self.widget) {
+		object_unref(GObject(self.widget))
+		self.widget = unsafe { nil }
 	}
 }
 
@@ -348,9 +351,7 @@ const key_state_overlay_ui = '<?xml version="1.0" encoding="UTF-8"?>
 '
 
 // The C-layout private struct mirroring ghostty\'s `Private`. The StringLists
-// are owned V objects (their boxed GType is a placeholder), so they are stored
-// as opaque pointers here and the real getter/setter logic lives in the V
-// wrapper methods; only valign_target is a plain value used by the accessor.
+// are registered boxed values whose ownership is transferred into this object.
 struct C.GhosttyKeyStateOverlayPrivate {
 mut:
 	tables        voidptr
@@ -436,26 +437,24 @@ fn key_state_overlay_get_property(obj voidptr, property_id u32, value voidptr, p
 	priv := key_state_priv(obj)
 	match property_id {
 		key_state_prop_tables {
-			C.g_value_set_pointer(value, priv.tables)
+			C.g_value_set_boxed(value, priv.tables)
 		}
 		key_state_prop_has_tables {
 			has := if isnil(priv.tables) {
 				false
 			} else {
-				unsafe { &StringList(priv.tables) }
-				.strings.len > 0
+				unsafe { &StringList(priv.tables) }.strings.len > 0
 			}
 			C.g_value_set_boolean(value, b2i(has))
 		}
 		key_state_prop_sequence {
-			C.g_value_set_pointer(value, priv.sequence)
+			C.g_value_set_boxed(value, priv.sequence)
 		}
 		key_state_prop_has_sequence {
 			has := if isnil(priv.sequence) {
 				false
 			} else {
-				unsafe { &StringList(priv.sequence) }
-				.strings.len > 0
+				unsafe { &StringList(priv.sequence) }.strings.len > 0
 			}
 			C.g_value_set_boolean(value, b2i(has))
 		}
@@ -471,10 +470,20 @@ fn key_state_overlay_set_property(obj voidptr, property_id u32, value voidptr, p
 	mut priv := key_state_priv(obj)
 	match property_id {
 		key_state_prop_tables {
-			priv.tables = C.g_value_get_pointer(value)
+			if !isnil(priv.tables) {
+				mut old := unsafe { &StringList(priv.tables) }
+				old.destroy()
+			}
+			priv.tables = C.g_value_dup_boxed(value)
+			C.g_object_notify_by_pspec(obj, g_key_state_overlay_pspec_has_tables)
 		}
 		key_state_prop_sequence {
-			priv.sequence = C.g_value_get_pointer(value)
+			if !isnil(priv.sequence) {
+				mut old := unsafe { &StringList(priv.sequence) }
+				old.destroy()
+			}
+			priv.sequence = C.g_value_dup_boxed(value)
+			C.g_object_notify_by_pspec(obj, g_key_state_overlay_pspec_has_sequence)
 		}
 		key_state_prop_valign_target {
 			priv.valign_target = C.g_value_get_enum(value)
@@ -494,9 +503,20 @@ fn key_state_overlay_dispose(obj voidptr) {
 	}
 }
 
-// key_state_overlay_finalize chains up. The owned StringLists are released by
-// the V wrapper's finalize. Mirrors the `finalize` vfunc.
+// key_state_overlay_finalize releases the owned StringLists and chains up.
+// Mirrors the `finalize` vfunc.
 fn key_state_overlay_finalize(obj voidptr) {
+	mut priv := key_state_priv(obj)
+	if !isnil(priv.tables) {
+		mut tables := unsafe { &StringList(priv.tables) }
+		tables.destroy()
+		priv.tables = unsafe { nil }
+	}
+	if !isnil(priv.sequence) {
+		mut sequence := unsafe { &StringList(priv.sequence) }
+		sequence.destroy()
+		priv.sequence = unsafe { nil }
+	}
 	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
 	if !isnil(parent_class.finalize) {
 		f := FinalizeFn(parent_class.finalize)
@@ -520,9 +540,10 @@ fn key_state_overlay_class_init(klass voidptr, class_data voidptr) {
 
 	// Properties.
 	align_type := C.gtk_align_get_type()
-	g_key_state_overlay_pspec_tables = C.g_param_spec_pointer(c'tables', c'tables', c'The key table stack', g_param_readwrite)
+	string_list_type := StringList.get_gobject_type()
+	g_key_state_overlay_pspec_tables = C.g_param_spec_boxed(c'tables', c'tables', c'The key table stack', string_list_type, g_param_readwrite)
 	g_key_state_overlay_pspec_has_tables = C.g_param_spec_boolean(c'has-tables', c'has-tables', c'Whether there are key tables', 0, g_param_readable)
-	g_key_state_overlay_pspec_sequence = C.g_param_spec_pointer(c'sequence', c'sequence', c'The pending key sequence', g_param_readwrite)
+	g_key_state_overlay_pspec_sequence = C.g_param_spec_boxed(c'sequence', c'sequence', c'The pending key sequence', string_list_type, g_param_readwrite)
 	g_key_state_overlay_pspec_has_sequence = C.g_param_spec_boolean(c'has-sequence', c'has-sequence', c'Whether there is a pending sequence', 0, g_param_readable)
 	g_key_state_overlay_pspec_valign_target = C.g_param_spec_enum(c'valign-target', c'valign-target', c'Target vertical alignment', align_type, int(Align.end), g_param_readwrite)
 
@@ -540,6 +561,8 @@ fn key_state_overlay_class_init(klass voidptr, class_data voidptr) {
 }
 
 fn key_state_overlay_instance_init(instance voidptr, klass voidptr) {
+	mut priv := key_state_priv(instance)
+	priv.valign_target = int(Align.end)
 	C.gtk_widget_init_template(instance)
 }
 

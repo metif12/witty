@@ -1,3 +1,4 @@
+@[has_globals]
 module gtk
 
 // ext_slice_linux.v - Slice helpers for GTK objects.
@@ -9,10 +10,9 @@ module gtk
 // type ("GhosttyStringList") with copy/free funcs.
 //
 // V has automatic memory management (GC / autofree) for the `[]string` payload,
-// so we do not need the arena machinery. We keep the type and its API faithful
-// in shape. Registering the boxed GObject type (gobject.ext.defineBoxed) is a
-// comptime GObject construction that has no clean V equivalent, so it is stubbed
-// with a `get_gobject_type` placeholder — TODO(gtk).
+// so the arena allocation is represented by owned string clones. The GObject
+// boxed type and its deep-copy/free callbacks are registered explicitly through
+// the C API.
 
 // StringList is a boxed type that holds a list of string slices.
 //
@@ -37,21 +37,41 @@ pub fn StringList.create(strings []string) &StringList {
 }
 
 // deinit releases the resources held by the StringList. Mirrors
-// `StringList.deinit`. With V's memory management this is a no-op, kept for
-// API parity.
-pub fn (mut self StringList) deinit() {}
+// `StringList.deinit`. Clearing the owned slice releases its references under
+// V's memory management.
+pub fn (mut self StringList) deinit() {
+	self.strings = []
+}
 
 // destroy frees the StringList itself. Mirrors `StringList.destroy`.
 pub fn (mut self StringList) destroy() {
 	self.deinit()
 }
 
+__global g_string_list_type = GType(0)
+
+fn string_list_boxed_copy(value voidptr) voidptr {
+	if isnil(value) {
+		return unsafe { nil }
+	}
+	list := unsafe { &StringList(value) }
+	return voidptr(StringList.create(list.strings))
+}
+
+fn string_list_boxed_free(value voidptr) {
+	if isnil(value) {
+		return
+	}
+	mut list := unsafe { &StringList(value) }
+	list.destroy()
+}
+
 // get_gobject_type returns the registered boxed GObject type for StringList.
-//
-// TODO(gtk): the Zig original registers a boxed GObject type via
-// `gobject.ext.defineBoxed(StringList, .{ .name = "GhosttyStringList", ... })`
-// with C copy/free trampolines. That comptime GObject registration has no clean
-// V equivalent; this returns 0 (G_TYPE_INVALID) as a placeholder.
+// Mirrors `gobject.ext.defineBoxed` with the GhosttyStringList name and the
+// deep-copy/free functions above.
 pub fn StringList.get_gobject_type() GType {
-	return GType(0)
+	if g_string_list_type == GType(0) {
+		g_string_list_type = C.g_boxed_type_register_static(c'GhosttyStringList', voidptr(string_list_boxed_copy), voidptr(string_list_boxed_free))
+	}
+	return g_string_list_type
 }

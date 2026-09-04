@@ -65,6 +65,8 @@ fn C.g_type_instance_get_private(instance voidptr, private_type GType) voidptr
 
 fn C.g_type_check_instance_cast(instance voidptr, iface_type GType) voidptr
 
+fn C.g_boxed_type_register_static(type_name &char, boxed_copy voidptr, boxed_free voidptr) GType
+
 // --- Parent type get_type() functions --------------------------------------
 
 fn C.adw_bin_get_type() GType
@@ -171,5 +173,7 @@ fn C.g_value_get_uint(value voidptr) u32
 fn C.g_value_set_uint(value voidptr, v_uint u32)
 
 fn C.g_value_get_boxed(value voidptr) voidptr
+
+fn C.g_value_dup_boxed(value voidptr) voidptr
 
 fn C.g_value_set_boxed(value voidptr, v_boxed voidptr)
