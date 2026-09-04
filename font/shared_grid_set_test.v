@@ -116,8 +116,9 @@ fn test_gridset_metrics_modifier_set() {
 }
 
 fn test_gridset_font_style_config() {
-	assert GridSetFontStyleConfig.default_.name_value() == none
-	assert GridSetFontStyleConfig.false_.name_value() == none
+	assert GridSetFontStyleConfig{}.name_value() == none
+	assert GridSetFontStyleConfig{ kind: .false_ }.name_value() == none
+	assert GridSetFontStyleConfig{ kind: .name, name: 'Heavy' }.name_value()? == 'Heavy'
 }
 
 fn test_gridset_derived_config_defaults() {

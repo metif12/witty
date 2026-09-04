@@ -107,9 +107,9 @@ pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
 	// Get our font styles. A style is enabled unless its config value is
 	// explicitly "false" (matching ghostty's `font-style-* != .false`).
 	font_styles := FontStyleStatus{
-		bold: config.font_style_bold != 'false'
-		italic: config.font_style_italic != 'false'
-		bold_italic: config.font_style_bold_italic != 'false'
+		bold: config.font_style_bold.kind != .false_
+		italic: config.font_style_italic.kind != .false_
+		bold_italic: config.font_style_bold_italic.kind != .false_
 	}
 
 	bg := terminal.RGB{

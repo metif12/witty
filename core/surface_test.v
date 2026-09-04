@@ -35,6 +35,24 @@ fn test_derived_config_uses_selection_and_clipboard_maps() {
 	assert derived.clipboard_codepoint_map[0].range_start == 0x2500
 }
 
+fn test_derived_config_preserves_complete_font_configuration() {
+	mut cfg := configpkg.Config.default_config()
+	cfg.load_string('font-style-bold = Heavy\nfont-variation = wght=350\nfont-codepoint-map = U+E000-U+E001=Symbols\nfont-synthetic-style = no-bold,italic,bold-italic\nadjust-cell-width = 10%\nfreetype-load-flags = no-hinting,force-autohint\n')
+	assert cfg.diagnostics.len == 0
+	derived := DerivedConfig.from_config(&cfg)!
+	assert derived.font.font_style_bold.name_value()? == 'Heavy'
+	assert derived.font.font_variation.len == 1
+	assert derived.font.font_variation[0].id.str() == 'wght'
+	assert derived.font.font_variation[0].value == 350
+	assert derived.font.font_codepoint_map.entries.len == 1
+	assert derived.font.font_codepoint_map.entries[0].descriptor.family? == 'Symbols'
+	assert !derived.font.font_synthetic_style.bold
+	assert derived.font.adjust_cell_width?.is_percent
+	assert derived.font.adjust_cell_width?.percent == 1.1
+	assert !derived.font.freetype_load_flags.hinting
+	assert derived.font.freetype_load_flags.force_autohint
+}
+
 fn test_surface_key_binding_applies_modifier_remap() {
 	mut cfg := configpkg.Config.default_config()
 	cfg.keybind.set = input.Set{}
@@ -210,8 +228,10 @@ fn test_needs_confirm_quit_config_false() {
 
 fn test_scaled_padding() {
 	cfg := DerivedConfig{
-		window_padding_y: configpkg.WindowPadding{10, 20}
-		window_padding_x: configpkg.WindowPadding{15, 5}
+		window_padding_top: 10
+		window_padding_bottom: 20
+		window_padding_left: 15
+		window_padding_right: 5
 	}
 	// At 72 DPI, scaling factor is 1.0 (72/72)
 	p := cfg.scaled_padding(72.0, 72.0)
@@ -223,8 +243,10 @@ fn test_scaled_padding() {
 
 fn test_scaled_padding_2x() {
 	cfg := DerivedConfig{
-		window_padding_y: configpkg.WindowPadding{10, 20}
-		window_padding_x: configpkg.WindowPadding{15, 5}
+		window_padding_top: 10
+		window_padding_bottom: 20
+		window_padding_left: 15
+		window_padding_right: 5
 	}
 	// At 144 DPI, scaling factor is 2.0 (144/72)
 	p := cfg.scaled_padding(144.0, 144.0)

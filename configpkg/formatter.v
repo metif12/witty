@@ -2,6 +2,7 @@ module configpkg
 
 import terminal
 import input
+import font
 
 // Generated from the documentation comments in the pinned Ghostty
 // config/Config.zig. Records are separated by ASCII record separators so the
@@ -74,18 +75,72 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	add_group(mut result, 'font-family-bold', repeat_strings(c.font_family_bold))
 	add_group(mut result, 'font-family-italic', repeat_strings(c.font_family_italic))
 	add_group(mut result, 'font-family-bold-italic', repeat_strings(c.font_family_bold_italic))
-	add_group(mut result, 'font-style', [c.font_style])
-	add_group(mut result, 'font-style-bold', [c.font_style_bold])
-	add_group(mut result, 'font-style-italic', [c.font_style_italic])
-	add_group(mut result, 'font-style-bold-italic', [c.font_style_bold_italic])
+	add_group(mut result, 'font-style', [font_style_string(c.font_style)])
+	add_group(mut result, 'font-style-bold', [font_style_string(c.font_style_bold)])
+	add_group(mut result, 'font-style-italic', [
+		font_style_string(c.font_style_italic),
+	])
+	add_group(mut result, 'font-style-bold-italic', [
+		font_style_string(c.font_style_bold_italic),
+	])
+	add_group(mut result, 'font-synthetic-style', [
+		font_synthetic_style_string(c.font_synthetic_style),
+	])
 	add_group(mut result, 'font-size', ['${c.font_size}'])
 	add_group(mut result, 'font-feature', repeat_strings(c.font_feature))
+	add_group(mut result, 'font-variation', font_variation_strings(c.font_variation))
+	add_group(mut result, 'font-variation-bold', font_variation_strings(c.font_variation_bold))
+	add_group(mut result, 'font-variation-italic', font_variation_strings(c.font_variation_italic))
+	add_group(mut result, 'font-variation-bold-italic', font_variation_strings(c.font_variation_bold_italic))
+	add_group(mut result, 'font-codepoint-map', font_codepoint_map_strings(c.font_codepoint_map))
 	add_group(mut result, 'font-thicken', [bool_string(c.font_thicken)])
 	add_group(mut result, 'font-thicken-strength', ['${c.font_thicken_strength}'])
 	add_group(mut result, 'font-shaping-break', [
 		font_shaping_break_string(c.font_shaping_break),
 	])
+	add_group(mut result, 'adjust-cell-width', [
+		metric_modifier_string(c.adjust_cell_width),
+	])
+	add_group(mut result, 'adjust-cell-height', [
+		metric_modifier_string(c.adjust_cell_height),
+	])
+	add_group(mut result, 'adjust-font-baseline', [
+		metric_modifier_string(c.adjust_font_baseline),
+	])
+	add_group(mut result, 'adjust-underline-position', [
+		metric_modifier_string(c.adjust_underline_position),
+	])
+	add_group(mut result, 'adjust-underline-thickness', [
+		metric_modifier_string(c.adjust_underline_thickness),
+	])
+	add_group(mut result, 'adjust-strikethrough-position', [
+		metric_modifier_string(c.adjust_strikethrough_position),
+	])
+	add_group(mut result, 'adjust-strikethrough-thickness', [
+		metric_modifier_string(c.adjust_strikethrough_thickness),
+	])
+	add_group(mut result, 'adjust-overline-position', [
+		metric_modifier_string(c.adjust_overline_position),
+	])
+	add_group(mut result, 'adjust-overline-thickness', [
+		metric_modifier_string(c.adjust_overline_thickness),
+	])
+	add_group(mut result, 'adjust-cursor-thickness', [
+		metric_modifier_string(c.adjust_cursor_thickness),
+	])
+	add_group(mut result, 'adjust-cursor-height', [
+		metric_modifier_string(c.adjust_cursor_height),
+	])
+	add_group(mut result, 'adjust-box-thickness', [
+		metric_modifier_string(c.adjust_box_thickness),
+	])
+	add_group(mut result, 'adjust-icon-height', [
+		metric_modifier_string(c.adjust_icon_height),
+	])
 	add_group(mut result, 'grapheme-width-method', [c.grapheme_width_method.str()])
+	add_group(mut result, 'freetype-load-flags', [
+		freetype_load_flags_string(c.freetype_load_flags),
+	])
 	add_group(mut result, 'scrollback-limit', ['${c.scrollback_limit}'])
 	add_group(mut result, 'scrollbar', [c.scrollbar.str()])
 	add_group(mut result, 'background', [format_color(c.background)])
@@ -463,6 +518,59 @@ fn async_backend_string(value AsyncBackend) string {
 
 fn repeat_strings(values []string) []string {
 	return if values.len == 0 { [''] } else { values.clone() }
+}
+
+fn font_style_string(value FontStyle) string {
+	return match value.kind {
+		.default_ { 'default' }
+		.false_ { 'false' }
+		.name { value.name }
+	}
+}
+
+fn font_variation_strings(value RepeatableFontVariation) []string {
+	if value.list.len == 0 {
+		return ['']
+	}
+	return value.list.map('${it.id.str()}=${format_f64(it.value)}')
+}
+
+fn font_codepoint_map_strings(value RepeatableCodepointMap) []string {
+	if value.map.entries.len == 0 {
+		return ['']
+	}
+	mut result := []string{cap: value.map.entries.len}
+	for entry in value.map.entries {
+		family := entry.descriptor.family or { '' }
+		if entry.range[0] == entry.range[1] {
+			result << 'U+${entry.range[0]:04X}=${family}'
+		} else {
+			result << 'U+${entry.range[0]:04X}-U+${entry.range[1]:04X}=${family}'
+		}
+	}
+	return result
+}
+
+fn metric_modifier_string(value ?font.MetricsModifier) string {
+	modifier := value or { return '' }
+	if modifier.is_percent {
+		return '${format_f64((modifier.percent - 1.0) * 100.0)}%'
+	}
+	return modifier.absolute.str()
+}
+
+fn font_synthetic_style_string(value font.FontSyntheticStyle) string {
+	return [if value.bold { 'bold' } else { 'no-bold' },
+		if value.italic { 'italic' } else { 'no-italic' },
+		if value.bold_italic { 'bold-italic' } else { 'no-bold-italic' }].join(',')
+}
+
+fn freetype_load_flags_string(value font.FreetypeLoadFlags) string {
+	return [if value.hinting { 'hinting' } else { 'no-hinting' },
+		if value.force_autohint { 'force-autohint' } else { 'no-force-autohint' },
+		if value.monochrome { 'monochrome' } else { 'no-monochrome' },
+		if value.autohint { 'autohint' } else { 'no-autohint' },
+		if value.light { 'light' } else { 'no-light' }].join(',')
 }
 
 fn enum_config_string(value string) string {

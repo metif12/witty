@@ -1855,6 +1855,13 @@ clipboard-codepoint-map = U+2500=U+002D
 	assert cfg.diagnostics.len == 0
 }
 
+fn test_font_configuration_rejects_invalid_values_and_resets_metric_modifier() {
+	mut cfg := Config.default_config()
+	cfg.load_string('adjust-cell-width = 2\nadjust-cell-width = \nfont-variation = abc=1\nfont-codepoint-map = U+0001-0002=Symbols\nadjust-cell-height = 1.5\nfont-synthetic-style = shadow\nfreetype-load-flags = lcd\n')
+	assert cfg.adjust_cell_width == none
+	assert cfg.diagnostics.len == 5
+}
+
 fn test_config_key_remap_is_parsed_cloned_and_finalized() {
 	mut cfg := Config.default_config()
 	cfg.load_string('key-remap = ctrl=super\nkey-remap = right_ctrl=alt\n')
@@ -1892,9 +1899,31 @@ font-style = Regular
 font-style-bold = Bold
 font-style-italic = Italic
 font-style-bold-italic = Bold Italic
+font-synthetic-style = bold,no-italic,no-bold-italic
+font-variation = wght=200
+font-variation = slnt=-15.5
+font-variation-bold = wght=700
+font-variation-italic = ital=1
+font-variation-bold-italic = opsz=13
+font-codepoint-map = U+ABCD=Comic Sans
+font-codepoint-map = U+0001-U+0005,U+0006=Verdana
 font-thicken = true
 font-thicken-strength = 42
 font-shaping-break = no-cursor
+adjust-cell-width = 1
+adjust-cell-height = 20%
+adjust-font-baseline = -2
+adjust-underline-position = 3
+adjust-underline-thickness = 4
+adjust-strikethrough-position = -5
+adjust-strikethrough-thickness = 6
+adjust-overline-position = -7
+adjust-overline-thickness = 8
+adjust-cursor-thickness = 9
+adjust-cursor-height = -10%
+adjust-box-thickness = 11
+adjust-icon-height = 12%
+freetype-load-flags = no-hinting,force-autohint,monochrome,no-autohint,light
 custom-shader = one.glsl
 custom-shader = ?"optional shader.glsl"
 config-file = extra.conf
@@ -1969,10 +1998,45 @@ auto-update-channel = stable
 	assert cfg.env.entries == [StringMapEntry{'FOO', 'replaced'}, StringMapEntry{'BAR', 'second'}]
 	assert cfg.enquiry_response == 'witty'
 	assert cfg.font_feature == ['liga', 'calt']
-	assert cfg.font_style == 'Regular'
-	assert cfg.font_style_bold == 'Bold'
-	assert cfg.font_style_italic == 'Italic'
-	assert cfg.font_style_bold_italic == 'Bold Italic'
+	assert cfg.font_style == FontStyle{ kind: .name, name: 'Regular' }
+	assert cfg.font_style_bold == FontStyle{ kind: .name, name: 'Bold' }
+	assert cfg.font_style_italic == FontStyle{ kind: .name, name: 'Italic' }
+	assert cfg.font_style_bold_italic == FontStyle{ kind: .name, name: 'Bold Italic' }
+	assert cfg.font_synthetic_style.bold
+	assert !cfg.font_synthetic_style.italic
+	assert !cfg.font_synthetic_style.bold_italic
+	assert cfg.font_variation.list.len == 2
+	assert cfg.font_variation.list[0].id.str() == 'wght'
+	assert cfg.font_variation.list[0].value == 200
+	assert cfg.font_variation.list[1].id.str() == 'slnt'
+	assert cfg.font_variation.list[1].value == -15.5
+	assert cfg.font_variation_bold.list[0].id.str() == 'wght'
+	assert cfg.font_variation_italic.list[0].id.str() == 'ital'
+	assert cfg.font_variation_bold_italic.list[0].id.str() == 'opsz'
+	assert cfg.font_codepoint_map.map.entries.len == 3
+	assert cfg.font_codepoint_map.map.entries[0].range == [u32(0xabcd), u32(0xabcd)]!
+	assert cfg.font_codepoint_map.map.entries[0].descriptor.family? == 'Comic Sans'
+	assert cfg.font_codepoint_map.map.entries[1].range == [u32(1), u32(5)]!
+	assert cfg.font_codepoint_map.map.entries[2].range == [u32(6), u32(6)]!
+	assert cfg.adjust_cell_width?.absolute == 1
+	assert cfg.adjust_cell_height?.is_percent
+	assert cfg.adjust_cell_height?.percent == 1.2
+	assert cfg.adjust_font_baseline?.absolute == -2
+	assert cfg.adjust_underline_position?.absolute == 3
+	assert cfg.adjust_underline_thickness?.absolute == 4
+	assert cfg.adjust_strikethrough_position?.absolute == -5
+	assert cfg.adjust_strikethrough_thickness?.absolute == 6
+	assert cfg.adjust_overline_position?.absolute == -7
+	assert cfg.adjust_overline_thickness?.absolute == 8
+	assert cfg.adjust_cursor_thickness?.absolute == 9
+	assert cfg.adjust_cursor_height?.percent == 0.9
+	assert cfg.adjust_box_thickness?.absolute == 11
+	assert cfg.adjust_icon_height?.percent == 1.12
+	assert !cfg.freetype_load_flags.hinting
+	assert cfg.freetype_load_flags.force_autohint
+	assert cfg.freetype_load_flags.monochrome
+	assert !cfg.freetype_load_flags.autohint
+	assert cfg.freetype_load_flags.light
 	assert cfg.font_thicken
 	assert cfg.font_thicken_strength == 42
 	assert !cfg.font_shaping_break.cursor
@@ -2228,9 +2292,15 @@ fn test_format_config_default_formats_all_supported_values() {
 
 fn test_format_config_changes_only_round_trips_supported_values() {
 	mut original := Config.default_config()
-	original.load_string('font-size = 17.5\nbackground = RebeccaPurple\ncommand = direct:echo hello\ncustom-shader = ?shader.glsl\nkeybind = ctrl+a>n=new_window\nkeybind = chain=move_tab:-1\nsplit-preserve-zoom = navigation\nwindow-padding-x = 6,7\nwindow-padding-y = 8\nwindow-position-x = -9\nwindow-position-y = 10\nwindow-save-state = never\nwindow-step-resize = true\nundo-timeout = 45s\nasync-backend = io_uring\nauto-update = check\nauto-update-channel = stable\n')
+	original.load_string('font-size = 17.5\nfont-style-bold = Heavy\nfont-synthetic-style = no-bold,italic,bold-italic\nfont-variation = wght=321.5\nfont-codepoint-map = U+0001-U+0002=Symbols\nadjust-cell-height = -25%\nfreetype-load-flags = no-hinting,force-autohint\nbackground = RebeccaPurple\ncommand = direct:echo hello\ncustom-shader = ?shader.glsl\nkeybind = ctrl+a>n=new_window\nkeybind = chain=move_tab:-1\nsplit-preserve-zoom = navigation\nwindow-padding-x = 6,7\nwindow-padding-y = 8\nwindow-position-x = -9\nwindow-position-y = 10\nwindow-save-state = never\nwindow-step-resize = true\nundo-timeout = 45s\nasync-backend = io_uring\nauto-update = check\nauto-update-channel = stable\n')
 	formatted := original.format_config(true)
 	assert formatted.contains('font-size = 17.5\n')
+	assert formatted.contains('font-style-bold = Heavy\n')
+	assert formatted.contains('font-synthetic-style = no-bold,italic,bold-italic\n')
+	assert formatted.contains('font-variation = wght=321.5\n')
+	assert formatted.contains('font-codepoint-map = U+0001-U+0002=Symbols\n')
+	assert formatted.contains('adjust-cell-height = -25%\n')
+	assert formatted.contains('freetype-load-flags = no-hinting,force-autohint,no-monochrome,autohint,light\n')
 	assert formatted.contains('background = #663399\n')
 	assert formatted.contains('command = direct:echo hello\n')
 	assert formatted.contains('custom-shader = ?shader.glsl\n')
@@ -2252,6 +2322,12 @@ fn test_format_config_changes_only_round_trips_supported_values() {
 	parsed.load_string(formatted)
 	assert parsed.diagnostics.len == 0
 	assert parsed.font_size == original.font_size
+	assert parsed.font_style_bold == original.font_style_bold
+	assert parsed.font_synthetic_style == original.font_synthetic_style
+	assert parsed.font_variation.equal(original.font_variation)
+	assert parsed.font_codepoint_map.equal(original.font_codepoint_map)
+	assert parsed.adjust_cell_height == original.adjust_cell_height
+	assert parsed.freetype_load_flags == original.freetype_load_flags
 	assert parsed.background == original.background
 	assert parsed.command?.string_val() == original.command?.string_val()
 	assert parsed.custom_shader.equal(&original.custom_shader)

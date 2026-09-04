@@ -7,6 +7,7 @@ import encoding.utf8.validate
 import strconv
 import themepkg
 import cli_args
+import font
 
 const default_gtk_opengl_debug = $if debug { true } $else { false }
 const default_quit_after_last_window_closed = $if linux { true } $else { false }
@@ -4042,10 +4043,10 @@ pub mut:
 	// The named font style to use for each of the requested terminal font
 	// styles. This looks up the style based on the font style string advertised
 	// by the font itself.
-	font_style             string = 'default'
-	font_style_bold        string = 'default'
-	font_style_italic      string = 'default'
-	font_style_bold_italic string = 'default'
+	font_style             FontStyle
+	font_style_bold        FontStyle
+	font_style_italic      FontStyle
+	font_style_bold_italic FontStyle
 	// The font families to use, with fallback fonts appended by repeating the
 	// option. An empty list means use the platform default.
 	font_family             []string
@@ -4053,7 +4054,27 @@ pub mut:
 	font_family_italic      []string
 	font_family_bold_italic []string
 	// Apply font features. See the docs above.
-	font_feature []string
+	font_feature                   []string
+	font_variation                 RepeatableFontVariation
+	font_variation_bold            RepeatableFontVariation
+	font_variation_italic          RepeatableFontVariation
+	font_variation_bold_italic     RepeatableFontVariation
+	font_codepoint_map             RepeatableCodepointMap
+	font_synthetic_style           font.FontSyntheticStyle
+	adjust_cell_width              ?font.MetricsModifier
+	adjust_cell_height             ?font.MetricsModifier
+	adjust_font_baseline           ?font.MetricsModifier
+	adjust_underline_position      ?font.MetricsModifier
+	adjust_underline_thickness     ?font.MetricsModifier
+	adjust_strikethrough_position  ?font.MetricsModifier
+	adjust_strikethrough_thickness ?font.MetricsModifier
+	adjust_overline_position       ?font.MetricsModifier
+	adjust_overline_thickness      ?font.MetricsModifier
+	adjust_cursor_thickness        ?font.MetricsModifier
+	adjust_cursor_height           ?font.MetricsModifier
+	adjust_box_thickness           ?font.MetricsModifier
+	adjust_icon_height             ?font.MetricsModifier
+	freetype_load_flags            font.FreetypeLoadFlags = font.freetype_load_flags_default
 	// Draw fonts with a thicker stroke, if supported (macOS only).
 	// (font_thicken/font_thicken_strength are declared in the renderer group.)
 	// Whether the freetype library should synthesize styles. This is a
@@ -4906,6 +4927,11 @@ pub fn (c Config) clone() Config {
 	copy.font_family_italic = c.font_family_italic.clone()
 	copy.font_family_bold_italic = c.font_family_bold_italic.clone()
 	copy.font_feature = c.font_feature.clone()
+	copy.font_variation = c.font_variation.clone()
+	copy.font_variation_bold = c.font_variation_bold.clone()
+	copy.font_variation_italic = c.font_variation_italic.clone()
+	copy.font_variation_bold_italic = c.font_variation_bold_italic.clone()
+	copy.font_codepoint_map = c.font_codepoint_map.clone()
 	copy.custom_shader = c.custom_shader.clone() or { RepeatablePath{} }
 	copy.config_file = c.config_file.clone() or { RepeatablePath{} }
 	copy.gtk_custom_css = c.gtk_custom_css.clone() or { RepeatablePath{} }
@@ -5307,6 +5333,112 @@ pub fn (s SelectionWordChars) equal(other SelectionWordChars) bool {
 	return s.codepoints == other.codepoints
 }
 
+// FontStyle is the tagged value used by the four font-style options. A named
+// style is kept distinct from the special default and false values.
+pub enum FontStyleKind {
+	default_
+	false_
+	name
+}
+
+pub struct FontStyle {
+pub:
+	kind FontStyleKind
+	name string
+}
+
+pub fn font_style_parse_cli(input ?string) !FontStyle {
+	value := input or { return perr(ParseError.value_required) }
+	return match value {
+		'default' { FontStyle{ kind: .default_ } }
+		'false' { FontStyle{ kind: .false_ } }
+		else { FontStyle{ kind: .name, name: value } }
+	}
+}
+
+pub fn (s FontStyle) name_value() ?string {
+	return if s.kind == .name { s.name } else { none }
+}
+
+// RepeatableFontVariation stores OpenType variation axes in declaration order.
+pub struct RepeatableFontVariation {
+pub mut:
+	list []font.Variation
+}
+
+pub fn (mut r RepeatableFontVariation) parse_cli(input ?string) ! {
+	value := input or { return perr(ParseError.value_required) }
+	eq_idx := value.index_u8(`=`)
+	if eq_idx < 0 {
+		return perr(ParseError.invalid_value)
+	}
+	id := value[..eq_idx].trim(' \t')
+	axis_value := value[eq_idx + 1..].trim(' \t')
+	if id.len != 4 {
+		return perr(ParseError.invalid_value)
+	}
+	parsed := strconv.atof64(axis_value) or { return perr(ParseError.invalid_value) }
+	r.list << font.Variation{
+		id: font.VariationId.init(id)
+		value: parsed
+	}
+}
+
+pub fn (r RepeatableFontVariation) clone() RepeatableFontVariation {
+	return RepeatableFontVariation{
+		list: r.list.clone()
+	}
+}
+
+pub fn (r RepeatableFontVariation) equal(other RepeatableFontVariation) bool {
+	return r.list == other.list
+}
+
+// RepeatableCodepointMap maps one or more Unicode ranges to a named font.
+pub struct RepeatableCodepointMap {
+pub mut:
+	map font.CodepointMap
+}
+
+pub fn (mut m RepeatableCodepointMap) parse_cli(input ?string) ! {
+	value := input or { return perr(ParseError.value_required) }
+	eq_idx := value.index_u8(`=`)
+	if eq_idx < 0 {
+		return perr(ParseError.invalid_value)
+	}
+	ranges := parse_unicode_ranges(value[..eq_idx].trim(' \t'))!
+	family := value[eq_idx + 1..].trim(' \t')
+	for range_ in ranges {
+		m.map.add(font.CodepointMapEntry{
+			range: range_
+			descriptor: font.Descriptor{
+				family: family
+				monospace: false
+			}
+		})
+	}
+}
+
+pub fn (m RepeatableCodepointMap) clone() RepeatableCodepointMap {
+	return RepeatableCodepointMap{
+		map: m.map.clone()
+	}
+}
+
+pub fn (m RepeatableCodepointMap) equal(other RepeatableCodepointMap) bool {
+	if m.map.entries.len != other.map.entries.len {
+		return false
+	}
+	for i, entry in m.map.entries {
+		other_entry := other.map.entries[i]
+		if entry.range != other_entry.range || entry.descriptor.family != other_entry.descriptor.family
+			|| entry.descriptor.monospace != other_entry.descriptor.monospace {
+			return false
+		}
+	}
+	return true
+}
+
 // RepeatableClipboardCodepointMap maps Unicode ranges to formatter
 // replacements. Entries remain in insertion order because later entries take
 // priority during clipboard formatting.
@@ -5377,9 +5509,10 @@ fn parse_unicode_ranges(value string) ![][2]u32 {
 		}
 		start_text := body[..hyphen].trim(' \t')
 		mut end_text := body[hyphen + 1..].trim(' \t')
-		if end_text.starts_with('U+') {
-			end_text = end_text[2..]
+		if !end_text.starts_with('U+') {
+			return perr(ParseError.invalid_value)
 		}
+		end_text = end_text[2..]
 		start := parse_unicode_hex(start_text)!
 		end := parse_unicode_hex(end_text)!
 		if start > end {
@@ -5402,7 +5535,7 @@ fn parse_unicode_hex(value string) !u32 {
 		return perr(ParseError.invalid_value)
 	}
 	cp := strconv.parse_uint(value, 16, 32) or { return perr(ParseError.invalid_value) }
-	if cp > 0x10ffff {
+	if cp > 0x1fffff {
 		return perr(ParseError.invalid_value)
 	}
 	return u32(cp)
@@ -6487,16 +6620,116 @@ fn (mut c Config) apply_kv(key string, value string) {
 			apply_repeatable_string(mut c.font_feature, value)
 		}
 		'font-style' {
-			c.font_style = value
+			c.font_style = font_style_parse_cli(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
 		}
 		'font-style-bold' {
-			c.font_style_bold = value
+			c.font_style_bold = font_style_parse_cli(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
 		}
 		'font-style-italic' {
-			c.font_style_italic = value
+			c.font_style_italic = font_style_parse_cli(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
 		}
 		'font-style-bold-italic' {
-			c.font_style_bold_italic = value
+			c.font_style_bold_italic = font_style_parse_cli(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
+		'font-variation' {
+			c.font_variation.parse_cli(value) or {
+				c.invalid_config_value(key, value)
+			}
+		}
+		'font-variation-bold' {
+			c.font_variation_bold.parse_cli(value) or {
+				c.invalid_config_value(key, value)
+			}
+		}
+		'font-variation-italic' {
+			c.font_variation_italic.parse_cli(value) or {
+				c.invalid_config_value(key, value)
+			}
+		}
+		'font-variation-bold-italic' {
+			c.font_variation_bold_italic.parse_cli(value) or {
+				c.invalid_config_value(key, value)
+			}
+		}
+		'font-codepoint-map' {
+			c.font_codepoint_map.parse_cli(value) or {
+				c.invalid_config_value(key, value)
+			}
+		}
+		'font-synthetic-style' {
+			c.font_synthetic_style = parse_font_synthetic_style(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
+		'freetype-load-flags' {
+			c.freetype_load_flags = parse_freetype_load_flags(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
+		'adjust-cell-width', 'adjust-cell-height', 'adjust-font-baseline', 'adjust-underline-position', 'adjust-underline-thickness', 'adjust-strikethrough-position', 'adjust-strikethrough-thickness', 'adjust-overline-position', 'adjust-overline-thickness', 'adjust-cursor-thickness', 'adjust-cursor-height', 'adjust-box-thickness', 'adjust-icon-height' {
+			mut parsed := ?font.MetricsModifier(none)
+			if value.len > 0 {
+				parsed = metric_modifier_parse_cli(value) or {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+			match key {
+				'adjust-cell-width' {
+					c.adjust_cell_width = parsed
+				}
+				'adjust-cell-height' {
+					c.adjust_cell_height = parsed
+				}
+				'adjust-font-baseline' {
+					c.adjust_font_baseline = parsed
+				}
+				'adjust-underline-position' {
+					c.adjust_underline_position = parsed
+				}
+				'adjust-underline-thickness' {
+					c.adjust_underline_thickness = parsed
+				}
+				'adjust-strikethrough-position' {
+					c.adjust_strikethrough_position = parsed
+				}
+				'adjust-strikethrough-thickness' {
+					c.adjust_strikethrough_thickness = parsed
+				}
+				'adjust-overline-position' {
+					c.adjust_overline_position = parsed
+				}
+				'adjust-overline-thickness' {
+					c.adjust_overline_thickness = parsed
+				}
+				'adjust-cursor-thickness' {
+					c.adjust_cursor_thickness = parsed
+				}
+				'adjust-cursor-height' {
+					c.adjust_cursor_height = parsed
+				}
+				'adjust-box-thickness' {
+					c.adjust_box_thickness = parsed
+				}
+				'adjust-icon-height' {
+					c.adjust_icon_height = parsed
+				}
+				else {}
+			}
 		}
 		'custom-shader' {
 			c.custom_shader.parse_cli(value) or {
@@ -7462,6 +7695,96 @@ fn parse_split_preserve_zoom(value string) ?SplitPreserveZoom {
 		result.navigation = !negative
 	}
 	return result
+}
+
+fn parse_font_synthetic_style(value string) ?font.FontSyntheticStyle {
+	if b := parse_bool_opt(value) {
+		return font.FontSyntheticStyle{
+			bold: b
+			italic: b
+			bold_italic: b
+		}
+	}
+	mut bold := true
+	mut italic := true
+	mut bold_italic := true
+	for raw in value.split(',') {
+		part := raw.trim_space()
+		negative := part.starts_with('no-')
+		name := if negative { part[3..] } else { part }
+		match name {
+			'bold' {
+				bold = !negative
+			}
+			'italic' {
+				italic = !negative
+			}
+			'bold-italic' {
+				bold_italic = !negative
+			}
+			else {
+				return none
+			}
+		}
+	}
+	return font.FontSyntheticStyle{
+		bold: bold
+		italic: italic
+		bold_italic: bold_italic
+	}
+}
+
+fn parse_freetype_load_flags(value string) ?font.FreetypeLoadFlags {
+	if b := parse_bool_opt(value) {
+		return font.FreetypeLoadFlags{
+			hinting: b
+			force_autohint: b
+			monochrome: b
+			autohint: b
+			light: b
+		}
+	}
+	mut hinting := true
+	mut force_autohint := false
+	mut monochrome := false
+	mut autohint := true
+	mut light := true
+	for raw in value.split(',') {
+		part := raw.trim_space()
+		negative := part.starts_with('no-')
+		name := if negative { part[3..] } else { part }
+		match name {
+			'hinting' {
+				hinting = !negative
+			}
+			'force-autohint' {
+				force_autohint = !negative
+			}
+			'monochrome' {
+				monochrome = !negative
+			}
+			'autohint' {
+				autohint = !negative
+			}
+			'light' {
+				light = !negative
+			}
+			else {
+				return none
+			}
+		}
+	}
+	return font.FreetypeLoadFlags{
+		hinting: hinting
+		force_autohint: force_autohint
+		monochrome: monochrome
+		autohint: autohint
+		light: light
+	}
+}
+
+fn metric_modifier_parse_cli(value string) !font.MetricsModifier {
+	return font.MetricsModifier.parse(value) or { return perr(ParseError.invalid_value) }
 }
 
 fn parse_shell_integration_features(value string) ?ShellIntegrationFeatures {

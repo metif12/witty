@@ -1,6 +1,7 @@
 module font
 
 import sync
+import strconv
 
 // This structure contains a set of SharedGrid structures keyed by
 // unique font configuration.
@@ -105,9 +106,9 @@ pub fn (mut self SharedGridSet) ref(config &GridSetDerivedConfig, font_size Desi
 
 	// Setup our enabled/disabled styles
 	mut styles := StyleStatus.init_fill(true)
-	styles.set(.bold, config.font_style_bold != .false_)
-	styles.set(.italic, config.font_style_italic != .false_)
-	styles.set(.bold_italic, config.font_style_bold_italic != .false_)
+	styles.set(.bold, !config.font_style_bold.is_disabled())
+	styles.set(.italic, !config.font_style_italic.is_disabled())
+	styles.set(.bold_italic, !config.font_style_bold_italic.is_disabled())
 
 	// Init our resolver which just requires setting fields.
 	resolver := CodepointResolver{
@@ -346,10 +347,10 @@ pub mut:
 	font_family_bold               []string
 	font_family_italic             []string
 	font_family_bold_italic        []string
-	font_style                     GridSetFontStyleConfig = .default_
-	font_style_bold                GridSetFontStyleConfig = .default_
-	font_style_italic              GridSetFontStyleConfig = .default_
-	font_style_bold_italic         GridSetFontStyleConfig = .default_
+	font_style                     GridSetFontStyleConfig
+	font_style_bold                GridSetFontStyleConfig
+	font_style_italic              GridSetFontStyleConfig
+	font_style_bold_italic         GridSetFontStyleConfig
 	font_variation                 []Variation
 	font_variation_bold            []Variation
 	font_variation_italic          []Variation
@@ -380,19 +381,25 @@ pub fn (mut self GridSetDerivedConfig) deinit() {
 // GridSetFontStyleConfig mirrors the config FontStyle which can be
 // "default" (use the face's own style name) or "false" (disabled) or
 // a specific style name string.
-pub enum GridSetFontStyleConfig {
-	// Use the default style from the font's style name.
+pub enum GridSetFontStyleKind {
 	default_
-	// The style is explicitly disabled.
 	false_
+	name
 }
 
-// name_value returns the style name if configured, or none for default.
+pub struct GridSetFontStyleConfig {
+pub:
+	kind GridSetFontStyleKind
+	name string
+}
+
+// name_value returns the style name if configured, or none for default/false.
 pub fn (s GridSetFontStyleConfig) name_value() ?string {
-	return match s {
-		.default_ { none }
-		.false_ { none }
-	}
+	return if s.kind == .name { s.name } else { none }
+}
+
+pub fn (s GridSetFontStyleConfig) is_disabled() bool {
+	return s.kind == .false_
 }
 
 // ============================================================
@@ -676,10 +683,7 @@ pub fn MetricsModifier.parse(input string) !MetricsModifier {
 	}
 
 	if input[input.len - 1] == `%` {
-		mut percent := input[0..input.len - 1].f64()
-		// f64() returns 0 for unparseable input; guard against a non-numeric
-		// body (other than a literal "0").
-		if percent == 0 && input[0..input.len - 1] != '0' {
+		mut percent := strconv.atof64(input[0..input.len - 1]) or {
 			return error('invalid format')
 		}
 		percent /= 100.0
@@ -696,10 +700,7 @@ pub fn MetricsModifier.parse(input string) !MetricsModifier {
 		}
 	}
 
-	n := input.int()
-	if n == 0 && input != '0' && input != '-0' && input != '+0' {
-		return error('invalid format')
-	}
+	n := strconv.parse_int(input, 10, 32) or { return error('invalid format') }
 	return MetricsModifier{
 		is_percent: false
 		absolute: i32(n)
