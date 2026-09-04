@@ -1544,21 +1544,17 @@ pub fn (mut self Page) clone_partial_row_from(other &Page, dst_row_idx u16, src_
 			src_key := cell_key(int(src_row_idx), xi, int(other.capacity.cols))
 			if src_key in other.hyperlink_map {
 				src_hl_id := other.hyperlink_map[src_key]
-				if same_page {
+				hl_id := if same_page {
 					// Same page: reuse the hyperlink ID.
 					self.hyperlink_set.use_link(src_hl_id)
-				} else {
-					// Different page: clone the hyperlink.
-					src_link := other.hyperlink_set.get(src_hl_id)
-					// Add returns existing ID if duplicate.
-					self.hyperlink_set.add(src_link)
-				}
-				dst_key := cell_key(int(dst_row_idx), xi, int(self.capacity.cols))
-				hl_id := if same_page {
 					src_hl_id
 				} else {
-					self.hyperlink_set.add(other.hyperlink_set.get(other.hyperlink_map[src_key]))
+					// Different page: clone the hyperlink, preferring the
+					// source ID just like Ghostty's addWithIdContext path.
+					src_link := other.hyperlink_set.get(src_hl_id)
+					self.hyperlink_set.add_with_id(src_link, src_hl_id)
 				}
+				dst_key := cell_key(int(dst_row_idx), xi, int(self.capacity.cols))
 				self.hyperlink_map[dst_key] = hl_id
 				dst_cell.has_hyperlink = true
 				dst_row.hyperlink = true

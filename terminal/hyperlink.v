@@ -231,6 +231,34 @@ pub fn (mut self HyperlinkSet) add(link Hyperlink) u32 {
 	return u32(self.entries.len - 1)
 }
 
+// add_with_id adds a hyperlink while preferring the source page's ID. This is
+// used when cloning/reflowing pages so the common case keeps stable IDs. If
+// the requested slot is occupied by a different live link, normal allocation
+// and deduplication determine the returned ID.
+pub fn (mut self HyperlinkSet) add_with_id(link Hyperlink, preferred_id u32) u32 {
+	assert preferred_id > 0
+
+	// Upsert semantics take precedence over the preferred slot: if the same
+	// hyperlink is already live under another ID, reuse it and increment its
+	// reference count instead of creating a duplicate entry.
+	if existing := self.lookup(&link) {
+		self.use_link(existing)
+		return existing
+	}
+
+	if int(preferred_id) < self.entries.len {
+		mut entry := &self.entries[int(preferred_id)]
+		if !entry.in_use {
+			entry.link = link.dupe()
+			entry.ref_count = 1
+			entry.in_use = true
+			return preferred_id
+		}
+	}
+
+	return self.add(link)
+}
+
 pub fn (self &HyperlinkSet) lookup(link &Hyperlink) ?u32 {
 	for i := 1; i < self.entries.len; i++ {
 		if self.entries[i].in_use && self.entries[i].link.eql(link) {

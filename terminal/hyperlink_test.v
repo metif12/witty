@@ -114,3 +114,38 @@ fn test_hyperlink_set_lookup() {
 	other := explicit_link('other', 'https://example.com')
 	assert set.lookup(&other) == none
 }
+
+fn test_hyperlink_set_add_with_id_reuses_requested_slot() {
+	mut set := HyperlinkSet.init()
+	first := set.add(implicit_link(1, 'https://one.example'))
+	second := set.add(implicit_link(2, 'https://two.example'))
+	assert first == 1
+	assert second == 2
+	set.release(first)
+
+	reused := set.add_with_id(explicit_link('replacement', 'https://three.example'), first)
+	assert reused == first
+	assert set.get(reused).uri == 'https://three.example'
+	assert set.ref_count(reused) == 1
+}
+
+fn test_hyperlink_set_add_with_id_falls_back_for_live_slot() {
+	mut set := HyperlinkSet.init()
+	first := set.add(implicit_link(1, 'https://one.example'))
+	second := set.add_with_id(implicit_link(2, 'https://two.example'), first)
+	assert second != first
+	assert set.get(first).uri == 'https://one.example'
+	assert set.get(second).uri == 'https://two.example'
+}
+
+fn test_hyperlink_set_add_with_id_deduplicates_before_reusing_slot() {
+	mut set := HyperlinkSet.init()
+	first := set.add(implicit_link(1, 'https://one.example'))
+	second := set.add(implicit_link(2, 'https://two.example'))
+	set.release(first)
+
+	reused := set.add_with_id(implicit_link(2, 'https://two.example'), first)
+	assert reused == second
+	assert set.ref_count(second) == 2
+	assert set.count() == 1
+}

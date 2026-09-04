@@ -4606,7 +4606,7 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) {
 			p.y = self.y
 		}
 
-		result := self.write_cell(&cells[x], src_page)
+		result := self.write_cell(&cells[x], src_page, int(src_y), x)
 		match result {
 			.success {
 				// Wrote the cell, move to the next.
@@ -4656,7 +4656,7 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) {
 // Write a cell. On error, this will not unwrite the cell but the cell may
 // be incomplete (but valid). This guarantees the page is in a coherent
 // state even on error.
-fn (mut self ReflowCursor) write_cell(cell &CellData, src_page &Page) ReflowWriteResult {
+fn (mut self ReflowCursor) write_cell(cell &CellData, src_page &Page, src_y int, src_x int) ReflowWriteResult {
 	mut page := &self.node.data
 	dst_cols := page.size.cols
 
@@ -4746,16 +4746,16 @@ fn (mut self ReflowCursor) write_cell(cell &CellData, src_page &Page) ReflowWrit
 		page.set_graphemes(int(self.y), int(self.x), cell.graphemes)
 	}
 
-	// Copy hyperlink data. Hyperlinks are stored directly on cells via the
-	// page hyperlink_map/set. In the V model the string/hyperlink allocators
-	// grow dynamically so we never hit OutOfSpace here.
+	// Copy hyperlink data. The V page allocators grow dynamically, so the
+	// capacity-growth loop in Ghostty is unnecessary, but the source lookup,
+	// preferred-ID insertion, refcount, and destination mapping are identical.
 	if cell.has_hyperlink {
-		// The source hyperlink id is looked up from the src page map by the
-		// caller of reflow via the cell's row/col. Since we don't have that
-		// context here, hyperlink reflow is approximated by marking the flag;
-		// full hyperlink remap happens through clone_row_from paths elsewhere.
-		page.rows[int(self.y)].cells[int(self.x)].has_hyperlink = true
-		page.rows[int(self.y)].hyperlink = true
+		src_id := src_page.lookup_hyperlink(src_y, src_x) or {
+			panic('hyperlinked source cell is missing its page mapping')
+		}
+		src_link := src_page.hyperlink_set.get(src_id)
+		dst_id := page.hyperlink_set.add_with_id(src_link, src_id)
+		page.set_hyperlink(int(self.y), int(self.x), dst_id)
 	}
 
 	// Copy style data.

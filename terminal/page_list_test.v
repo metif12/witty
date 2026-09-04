@@ -3589,6 +3589,128 @@ fn test_page_list_resize_reflow_less_cols_wrapped_rows() {
 	assert r3.node.data.rows[int(r3.y)].cells[0].codepoint == 2
 }
 
+fn test_page_list_resize_reflow_preserves_hyperlink_mapping() {
+	mut s := PageList.init(4, 2, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	page.rows[0].cells[3] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`L`)
+	}
+	source_id := page.insert_hyperlink(Hyperlink{
+		id: HyperlinkExplicitId{
+			value: 'link-id'
+		}
+		uri: 'https://example.com/reflow'
+	})
+	page.set_hyperlink(0, 3, source_id)
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+
+	mut found := false
+	mut it := s.row_iterator(.right_down, .screen, none)
+	for {
+		pin := it.next() or { break }
+		mut reflowed := &pin.node.data
+		for x, cell in reflowed.rows[int(pin.y)].cells[..int(reflowed.size.cols)] {
+			if cell.codepoint != u32(`L`) {
+				continue
+			}
+			assert cell.has_hyperlink
+			id := reflowed.lookup_hyperlink(int(pin.y), x) or {
+				assert false, 'reflowed hyperlink mapping missing'
+				return
+			}
+			link := reflowed.hyperlink_set.get(id)
+			assert link.uri == 'https://example.com/reflow'
+			match link.id {
+				HyperlinkExplicitId {
+					assert link.id.value == 'link-id'
+				}
+				HyperlinkImplicitId {
+					assert false
+				}
+			}
+			found = true
+		}
+	}
+	assert found
+}
+
+fn test_page_list_resize_reflow_preserves_hyperlinks_across_source_pages() {
+	mut s := PageList.init(2, 4, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	s.split(PagePin{ node: first, y: 2, x: 0 }) or {
+		assert false, 'split failed'
+		return
+	}
+	second := first.next or {
+		assert false, 'no second page'
+		return
+	}
+
+	mut first_page := &first.data
+	first_page.rows[1].wrap = true
+	first_page.rows[1].cells[1] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`A`)
+	}
+	first_id := first_page.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{
+			offset: 1
+		}
+		uri: 'https://example.com/first'
+	})
+	first_page.set_hyperlink(1, 1, first_id)
+
+	mut second_page := &second.data
+	second_page.rows[0].wrap_continuation = true
+	second_page.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`B`)
+	}
+	second_id := second_page.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{
+			offset: 2
+		}
+		uri: 'https://example.com/second'
+	})
+	second_page.set_hyperlink(0, 0, second_id)
+
+	// The wrapped logical line crosses the old page boundary and is unwrapped
+	// into one destination row.
+	s.resize(PageResizeOpts{ cols: 3, reflow: true })
+
+	mut found := map[u32]string{}
+	mut it := s.row_iterator(.right_down, .screen, none)
+	for {
+		pin := it.next() or { break }
+		mut reflowed := &pin.node.data
+		for x, cell in reflowed.rows[int(pin.y)].cells[..int(reflowed.size.cols)] {
+			if cell.codepoint != u32(`A`) && cell.codepoint != u32(`B`) {
+				continue
+			}
+			id := reflowed.lookup_hyperlink(int(pin.y), x) or {
+				assert false, 'reflowed hyperlink mapping missing'
+				return
+			}
+			found[cell.codepoint] = reflowed.hyperlink_set.get(id).uri
+		}
+	}
+	assert found[u32(`A`)] == 'https://example.com/first'
+	assert found[u32(`B`)] == 'https://example.com/second'
+}
+
 fn test_page_list_resize_reflow_less_cols_cursor_in_wrapped_row() {
 	mut s := PageList.init(4, 2, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
@@ -4783,5 +4905,5 @@ fn test_page_list_split_preserves_hyperlinks() {
 	}
 	link := second_page.hyperlink_set.get(link_id)
 	assert link.uri == 'https://example.com'
+	assert second_page.hyperlink_set.ref_count(link_id) == 1
 }
-
