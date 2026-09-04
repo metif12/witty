@@ -1751,11 +1751,11 @@ fn cell_style(cell terminal.RenderCell) terminal.CellStyle {
 
 fn style_to_font_style(style terminal.CellStyle) FontStyle {
 	return if style.flags.bold {
-		if style.flags.italic { .bold_italic } else { .bold }
+		if style.flags.italic { FontStyle.bold_italic } else { FontStyle.bold }
 	} else if style.flags.italic {
-		.italic
+		FontStyle.italic
 	} else {
-		.regular
+		FontStyle.regular
 	}
 }
 

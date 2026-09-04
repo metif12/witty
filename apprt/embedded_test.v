@@ -2,6 +2,7 @@ module apprt
 
 import configpkg
 import input
+import cimgui
 
 struct EmbeddedActionCapture {
 mut:
@@ -281,6 +282,49 @@ fn test_embedded_split_helpers_dispatch_surface_actions() {
 fn test_embedded_binding_action_rejects_invalid_syntax() {
 	mut surface := Surface{}
 	assert !ghostty_surface_binding_action(mut surface, 'not_an_action')
+}
+
+fn test_embedded_inspector_context_and_input_dispatch() {
+	if !cimgui.available() {
+		return
+	}
+	mut capture := EmbeddedActionCapture{}
+	mut app := App{
+		opts: AppOptions{
+			userdata: voidptr(&capture)
+			action_cb: embedded_action_test_callback
+		}
+	}
+	mut surface := Surface{ app: &app }
+	mut inspector := TerminalInspector{}
+	inspector.init(mut surface)!
+	assert !isnil(inspector.context.handle)
+
+	inspector.update_size(640, 480)
+	width, height := inspector.context.display_size()
+	assert width == 640
+	assert height == 480
+	inspector.update_content_scale(2, 2)
+	assert inspector.content_scale == 2
+
+	inspector.mouse_button_callback(.press, .left, input.Mods{})
+	inspector.scroll_callback(10, -20, input.ScrollMods{ precision: true })
+	inspector.cursor_pos_callback(12, 24)
+	inspector.focus_callback(true)
+	inspector.text_callback('hello')
+	inspector.key_callback(.press, .key_a, input.Mods{ super_: true })!
+	assert capture.action.action == .render_inspector
+	match capture.target {
+		SurfaceTarget {
+			assert capture.target.surface == voidptr(&surface.core_surface)
+		}
+		AppTarget {
+			assert false, 'inspector redraw must target its surface'
+		}
+	}
+
+	inspector.deinit()
+	assert isnil(inspector.context.handle)
 }
 
 // Test creating default AppOptions.

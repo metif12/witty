@@ -100,6 +100,51 @@ fn test_surface_key_binding_applies_modifier_remap() {
 	assert !flags.global
 }
 
+fn test_surface_inspector_records_owned_key_and_pty_data() {
+	mut surf := make_test_surface()
+	surf.activate_inspector()!
+
+	mut event := input.KeyEvent{
+		action: .press
+		key: .key_x
+		utf8: 'x'
+		unshifted_codepoint: u32(`x`)
+	}
+	assert surf.key_callback(event)! == .consumed
+	event.utf8 = 'changed'
+
+	insp := surf.inspector or {
+		assert false, 'inspector unexpectedly inactive'
+		return
+	}
+	assert insp.key_events.len == 1
+	assert insp.key_events[0].event.utf8 == 'x'
+	assert insp.key_events[0].pty == [u8(`x`)]
+
+	surf.deactivate_inspector()
+}
+
+fn test_surface_inspector_records_triggered_binding() {
+	mut surf := make_test_surface()
+	surf.config.keybind.set.put(input.Trigger{
+		key: input.TriggerKey.new_physical(.f1)
+	}, input.Action.new(.ignore))
+	surf.activate_inspector()!
+	defer {
+		surf.deactivate_inspector()
+	}
+
+	assert surf.key_callback(input.KeyEvent{ action: .press, key: .f1 })! == .ignored
+	insp := surf.inspector or {
+		assert false, 'inspector unexpectedly inactive'
+		return
+	}
+	assert insp.key_events.len == 1
+	assert insp.key_events[0].binding.len == 1
+	assert insp.key_events[0].binding[0].tag == .ignore
+	assert insp.key_events[0].pty.len == 0
+}
+
 fn test_grid_size_basic() {
 	s := make_test_size()
 	g := s.grid()

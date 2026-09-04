@@ -1,5 +1,7 @@
 module input
 
+import cimgui
+
 // --- Original Ghostty Comments Start: src/input/key.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/input/key.zig
@@ -147,7 +149,6 @@ module input
 // non-Mac we default to ctrl (i.e. ctrl+c for copy).
 //
 // --- Original Ghostty Comments End: src/input/key.zig
-
 
 // The set of key codes that the terminal is aware of. These represent
 // physical keys on the keyboard. The logical key (or key string)
@@ -642,10 +643,124 @@ pub fn (k Key) codepoint() ?u32 {
 	}
 }
 
+// imgui_key returns the Dear ImGui key for this physical key. This is the
+// exact mapping used by Ghostty's inspector input backend.
+pub fn (k Key) imgui_key() ?cimgui.Key {
+	return match k {
+		.key_a { .key_a }
+		.key_b { .key_b }
+		.key_c { .key_c }
+		.key_d { .key_d }
+		.key_e { .key_e }
+		.key_f { .key_f }
+		.key_g { .key_g }
+		.key_h { .key_h }
+		.key_i { .key_i }
+		.key_j { .key_j }
+		.key_k { .key_k }
+		.key_l { .key_l }
+		.key_m { .key_m }
+		.key_n { .key_n }
+		.key_o { .key_o }
+		.key_p { .key_p }
+		.key_q { .key_q }
+		.key_r { .key_r }
+		.key_s { .key_s }
+		.key_t { .key_t }
+		.key_u { .key_u }
+		.key_v { .key_v }
+		.key_w { .key_w }
+		.key_x { .key_x }
+		.key_y { .key_y }
+		.key_z { .key_z }
+		.digit_0 { .key_0 }
+		.digit_1 { .key_1 }
+		.digit_2 { .key_2 }
+		.digit_3 { .key_3 }
+		.digit_4 { .key_4 }
+		.digit_5 { .key_5 }
+		.digit_6 { .key_6 }
+		.digit_7 { .key_7 }
+		.digit_8 { .key_8 }
+		.digit_9 { .key_9 }
+		.semicolon { .semicolon }
+		.space { .space }
+		.quote { .apostrophe }
+		.comma { .comma }
+		.backquote { .grave_accent }
+		.period { .period }
+		.slash { .slash }
+		.minus { .minus }
+		.equal { .equal }
+		.bracket_left { .left_bracket }
+		.bracket_right { .right_bracket }
+		.backslash { .backslash }
+		.arrow_up, .numpad_up { .up_arrow }
+		.arrow_down, .numpad_down { .down_arrow }
+		.arrow_left, .numpad_left { .left_arrow }
+		.arrow_right, .numpad_right { .right_arrow }
+		.home, .numpad_home { .home }
+		.end, .numpad_end { .end }
+		.insert, .numpad_insert { .insert }
+		.delete, .numpad_delete { .delete }
+		.caps_lock { .caps_lock }
+		.scroll_lock { .scroll_lock }
+		.num_lock { .num_lock }
+		.page_up, .numpad_page_up, .numpad_page_down { .page_up }
+		.page_down { .page_down }
+		.escape { .escape }
+		.enter { .enter }
+		.tab { .tab }
+		.backspace { .backspace }
+		.print_screen { .print_screen }
+		.pause { .pause }
+		.context_menu { .menu }
+		.f1 { .f1 }
+		.f2 { .f2 }
+		.f3 { .f3 }
+		.f4 { .f4 }
+		.f5 { .f5 }
+		.f6 { .f6 }
+		.f7 { .f7 }
+		.f8 { .f8 }
+		.f9 { .f9 }
+		.f10 { .f10 }
+		.f11 { .f11 }
+		.f12 { .f12 }
+		.numpad_0 { .keypad_0 }
+		.numpad_1 { .keypad_1 }
+		.numpad_2 { .keypad_2 }
+		.numpad_3 { .keypad_3 }
+		.numpad_4 { .keypad_4 }
+		.numpad_5 { .keypad_5 }
+		.numpad_6 { .keypad_6 }
+		.numpad_7 { .keypad_7 }
+		.numpad_8 { .keypad_8 }
+		.numpad_9 { .keypad_9 }
+		.numpad_decimal { .keypad_decimal }
+		.numpad_divide { .keypad_divide }
+		.numpad_multiply { .keypad_multiply }
+		.numpad_subtract { .keypad_subtract }
+		.numpad_add { .keypad_add }
+		.numpad_enter { .keypad_enter }
+		.numpad_equal { .keypad_equal }
+		.numpad_begin { .tab }
+		.shift_left { .left_shift }
+		.control_left { .left_ctrl }
+		.alt_left { .left_alt }
+		.meta_left { .left_super }
+		.shift_right { .right_shift }
+		.control_right { .right_ctrl }
+		.alt_right { .right_alt }
+		.meta_right { .right_super }
+		else { none }
+	}
+}
+
 // True if this key is a modifier.
 pub fn (k Key) is_modifier() bool {
-	return k in [.shift_left, .control_left, .alt_left, .meta_left,
-		.shift_right, .control_right, .alt_right, .meta_right]
+	return k in [.shift_left, .control_left, .alt_left, .meta_left, .shift_right, .control_right,
+		.alt_right, .meta_right]
 }
 
 // is_printable returns true if this key represents a printable character
@@ -657,16 +772,45 @@ pub fn (k Key) is_printable() bool {
 // is_keypad returns true if this is a keypad (numpad) key.
 pub fn (k Key) is_keypad() bool {
 	return k in [
-		.numpad_0, .numpad_1, .numpad_2, .numpad_3, .numpad_4,
-		.numpad_5, .numpad_6, .numpad_7, .numpad_8, .numpad_9,
-		.numpad_add, .numpad_backspace, .numpad_clear, .numpad_clear_entry,
-		.numpad_comma, .numpad_decimal, .numpad_divide, .numpad_enter,
-		.numpad_equal, .numpad_memory_add, .numpad_memory_clear,
-		.numpad_memory_recall, .numpad_memory_store, .numpad_memory_subtract,
-		.numpad_multiply, .numpad_paren_left, .numpad_paren_right,
-		.numpad_subtract, .numpad_separator, .numpad_up, .numpad_down,
-		.numpad_right, .numpad_left, .numpad_begin, .numpad_home,
-		.numpad_end, .numpad_insert, .numpad_delete, .numpad_page_up,
+		.numpad_0,
+		.numpad_1,
+		.numpad_2,
+		.numpad_3,
+		.numpad_4,
+		.numpad_5,
+		.numpad_6,
+		.numpad_7,
+		.numpad_8,
+		.numpad_9,
+		.numpad_add,
+		.numpad_backspace,
+		.numpad_clear,
+		.numpad_clear_entry,
+		.numpad_comma,
+		.numpad_decimal,
+		.numpad_divide,
+		.numpad_enter,
+		.numpad_equal,
+		.numpad_memory_add,
+		.numpad_memory_clear,
+		.numpad_memory_recall,
+		.numpad_memory_store,
+		.numpad_memory_subtract,
+		.numpad_multiply,
+		.numpad_paren_left,
+		.numpad_paren_right,
+		.numpad_subtract,
+		.numpad_separator,
+		.numpad_up,
+		.numpad_down,
+		.numpad_right,
+		.numpad_left,
+		.numpad_begin,
+		.numpad_home,
+		.numpad_end,
+		.numpad_insert,
+		.numpad_delete,
+		.numpad_page_up,
 		.numpad_page_down,
 	]
 }
@@ -676,14 +820,7 @@ pub fn (k Key) is_keypad() bool {
 // in ways that destroy physical key info (e.g. XKB_KEY_c to XKB_KEY_Cyrillic_tse).
 pub fn (k Key) should_be_remappable() bool {
 	return match k {
-		.backquote, .backslash, .bracket_left, .bracket_right, .comma,
-		.digit_0, .digit_1, .digit_2, .digit_3, .digit_4,
-		.digit_5, .digit_6, .digit_7, .digit_8, .digit_9,
-		.equal, .intl_backslash, .intl_ro, .intl_yen,
-		.key_a, .key_b, .key_c, .key_d, .key_e, .key_f, .key_g, .key_h,
-		.key_i, .key_j, .key_k, .key_l, .key_m, .key_n, .key_o, .key_p,
-		.key_q, .key_r, .key_s, .key_t, .key_u, .key_v, .key_w, .key_x,
-		.key_y, .key_z, .minus, .period, .quote, .semicolon, .slash {
+		.backquote, .backslash, .bracket_left, .bracket_right, .comma, .digit_0, .digit_1, .digit_2, .digit_3, .digit_4, .digit_5, .digit_6, .digit_7, .digit_8, .digit_9, .equal, .intl_backslash, .intl_ro, .intl_yen, .key_a, .key_b, .key_c, .key_d, .key_e, .key_f, .key_g, .key_h, .key_i, .key_j, .key_k, .key_l, .key_m, .key_n, .key_o, .key_p, .key_q, .key_r, .key_s, .key_t, .key_u, .key_v, .key_w, .key_x, .key_y, .key_z, .minus, .period, .quote, .semicolon, .slash {
 			false
 		}
 		else { true }

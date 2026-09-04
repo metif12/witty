@@ -10,6 +10,9 @@ import input
 import configpkg
 import internal_os
 import math
+import time
+import cimgui
+import font
 
 // log_warn logs a warning message.
 fn log_warn(msg string) {
@@ -888,8 +891,8 @@ pub fn (mut self Surface) occlusion_callback(visible bool) {
 // queue_inspector_render queues an inspector render.
 fn (mut self Surface) queue_inspector_render() {
 	self.app.perform_action(
-		Target(AppTarget{}),
-		.renderer_health,
+		Target(SurfaceTarget{ surface: voidptr(&self.core_surface) }),
+		.render_inspector,
 		ActionValue{},
 	) or {
 		log_err('error rendering the inspector err=${err}')
@@ -967,6 +970,8 @@ pub struct TerminalInspector {
 pub mut:
 	surface       &Surface = unsafe { nil }
 	content_scale f64 = 1.0
+	context       cimgui.Context
+	metal_active  bool
 
 	// Our previous instant used to calculate delta time for animations.
 	prev_time_ns ?i64
@@ -974,10 +979,9 @@ pub mut:
 
 // TerminalInspector.init initializes the inspector.
 pub fn (mut self TerminalInspector) init(mut surface Surface) ! {
-	// Requires cimgui bindings - not available in V runtime.
-	// Full implementation would create ImGui context, set up backend
-	// platform name, core inspector, and activate the inspector.
+	context := cimgui.Context.create(font.embedded_regular)!
 	self.surface = unsafe { surface }
+	self.context = context
 
 	surface.core_surface.activate_inspector() or {
 		log_err('failed to activate inspector err=${err}')
@@ -986,8 +990,13 @@ pub fn (mut self TerminalInspector) init(mut surface Surface) ! {
 
 // deinit destroys the inspector.
 pub fn (mut self TerminalInspector) deinit() {
-	// Requires cimgui bindings - not available in V runtime.
 	self.surface.core_surface.deactivate_inspector()
+	if self.metal_active {
+		self.context.metal_shutdown()
+		self.metal_active = false
+	}
+	self.context.destroy()
+	self.context = cimgui.Context{}
 }
 
 // queue_render queues a render for the next frame.
@@ -997,92 +1006,119 @@ pub fn (mut self TerminalInspector) queue_render() {
 
 // init_metal initializes the inspector for a metal backend.
 pub fn (mut self TerminalInspector) init_metal(device voidptr) bool {
-	// Requires cimgui Metal backend bindings - not available in V runtime.
-	_ = device
-	return false
+	if self.metal_active {
+		self.context.metal_shutdown()
+		self.metal_active = false
+	}
+	if !self.context.metal_init(device) {
+		log_warn('failed to initialize metal backend')
+		return false
+	}
+	self.metal_active = true
+	log_debug('initialized metal backend')
+	return true
 }
 
 // render_metal renders the inspector using the Metal backend.
 pub fn (mut self TerminalInspector) render_metal(command_buffer voidptr, desc voidptr) ! {
-	// Requires cimgui Metal backend bindings - not available in V runtime.
-	_ = command_buffer
-	_ = desc
+	if !self.metal_active {
+		return error('inspector Metal backend is not initialized')
+	}
+
+	// Ghostty submits two frames so Dear ImGui completes all internal state
+	// processing before the draw data is encoded.
+	for _ in 0 .. 2 {
+		self.context.metal_new_frame(desc)
+		self.new_frame()!
+
+		// The terminal inspector builds its widgets between NewFrame and Render.
+		// Core inspection data remains owned by the core surface.
+		self.context.render_frame()
+	}
+
+	self.context.metal_render(command_buffer, desc)
 }
 
 // update_content_scale updates the inspector's content scale.
 pub fn (mut self TerminalInspector) update_content_scale(x f64, y f64) {
-	// Requires cimgui bindings for ImGuiStyle scaling - not available in V runtime.
 	_ = y
 
 	// Cache our scale because we use it for cursor position calculations.
 	self.content_scale = x
+	self.context.reset_style(f32(x))
 }
 
 // update_size updates the inspector's display size.
 pub fn (mut self TerminalInspector) update_size(width u32, height u32) {
-	// Requires cimgui bindings - not available in V runtime.
-	_ = width
-	_ = height
+	self.context.set_size(width, height)
 }
 
 // mouse_button_callback handles a mouse button event for the inspector.
 pub fn (mut self TerminalInspector) mouse_button_callback(action input.MouseButtonState, button input.MouseButton, mods input.Mods) {
-	// Requires cimgui bindings - not available in V runtime.
 	_ = mods
 	self.queue_render()
 
-	_ = action
-	_ = button
+	imgui_button := match button {
+		.left { cimgui.MouseButton.left }
+		.middle { cimgui.MouseButton.middle }
+		.right { cimgui.MouseButton.right }
+		else {
+			return
+		}
+	}
+	self.context.add_mouse_button(imgui_button, action == .press)
 }
 
 // scroll_callback handles a scroll event for the inspector.
 pub fn (mut self TerminalInspector) scroll_callback(xoff f64, yoff f64, mods input.ScrollMods) {
-	// Requires cimgui bindings - not available in V runtime.
-	// For precision scrolling (trackpads), values are scaled down to
-	// approximate discrete wheel notches.
 	self.queue_render()
 
 	scale := if mods.precision { 0.1 } else { 1.0 }
-	_ = xoff * scale
-	_ = yoff * scale
+	self.context.add_mouse_wheel(f32(xoff * scale), f32(yoff * scale))
 }
 
 // cursor_pos_callback handles a cursor position update for the inspector.
 pub fn (mut self TerminalInspector) cursor_pos_callback(x f64, y f64) {
-	// Requires cimgui bindings - not available in V runtime.
 	self.queue_render()
-
-	_ = x * self.content_scale
-	_ = y * self.content_scale
+	self.context.add_mouse_pos(f32(x * self.content_scale), f32(y * self.content_scale))
 }
 
 // focus_callback handles focus state changes for the inspector.
 pub fn (mut self TerminalInspector) focus_callback(focused bool) {
-	// Requires cimgui bindings - not available in V runtime.
 	self.queue_render()
-	_ = focused
+	self.context.add_focus(focused)
 }
 
 // text_callback handles text input for the inspector.
 pub fn (mut self TerminalInspector) text_callback(text string) {
-	// Requires cimgui bindings - not available in V runtime.
 	self.queue_render()
-	_ = text
+	self.context.add_text(text)
 }
 
 // key_callback handles key input for the inspector.
 pub fn (mut self TerminalInspector) key_callback(action input.KeyAction, key input.Key, mods input.Mods) ! {
-	// Requires cimgui bindings - not available in V runtime.
 	self.queue_render()
-	_ = action
-	_ = key
-	_ = mods
+
+	self.context.add_key(.left_shift, mods.shift)
+	self.context.add_key(.left_ctrl, mods.ctrl)
+	self.context.add_key(.left_alt, mods.alt)
+	self.context.add_key(.left_super, mods.super_)
+
+	if imgui_key := key.imgui_key() {
+		self.context.add_key(imgui_key, action == .press || action == .repeat)
+	}
 }
 
 // new_frame sets up a new ImGui frame with delta time calculation.
 fn (mut self TerminalInspector) new_frame() ! {
-	// Requires cimgui bindings - not available in V runtime.
-	// Would calculate delta time and set io.DeltaTime.
+	now := i64(time.sys_mono_now())
+	delta_time := if previous := self.prev_time_ns {
+		f32(math.max(0.00001, f64(now - previous) / 1_000_000_000.0))
+	} else {
+		f32(1.0 / 60.0)
+	}
+	self.prev_time_ns = now
+	self.context.begin_frame(delta_time)
 }
 
 // -----------------------------------------------------------------------
@@ -1906,6 +1942,8 @@ pub fn ghostty_inspector_metal_render(mut insp TerminalInspector, command_buffer
 
 // ghostty_inspector_metal_shutdown shuts down the inspector Metal backend.
 pub fn ghostty_inspector_metal_shutdown(mut insp TerminalInspector) {
-	// Requires cimgui Metal backend bindings - not available in V runtime.
-	_ = insp
+	if insp.metal_active {
+		insp.context.metal_shutdown()
+		insp.metal_active = false
+	}
 }

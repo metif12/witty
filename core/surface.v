@@ -1459,6 +1459,7 @@ import search as searchpkg
 import osc
 import internal_os
 import terminal
+import inspector as inspectorpkg
 
 // Minimum window size in cells.
 const min_window_width_cells = u32(10)
@@ -2131,18 +2132,7 @@ fn (mut t IOThread) deinit() {
 	t.running = false
 }
 
-pub struct Inspector {
-pub mut:
-	key_events []KeyEvent
-}
-
-fn (mut i Inspector) deinit() {
-}
-
-fn (mut i Inspector) record_key_event(ev KeyEvent) bool {
-	i.key_events << ev
-	return true
-}
+pub type Inspector = inspectorpkg.Inspector
 
 pub type BindingSet = input.Set
 
@@ -3012,7 +3002,8 @@ pub fn (mut self Surface) activate_inspector() ! {
 	if self.inspector != none {
 		return
 	}
-	mut insp := &Inspector{}
+	mut inspector_value := Inspector.init()!
+	mut insp := &inspector_value
 	self.inspector = insp
 
 	// Put the inspector onto the render state
@@ -3315,8 +3306,27 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 		event.mods = self.config.key_remaps.apply(event_orig.mods)
 	}
 
+	// Clone the event before any key processing so the inspector records the
+	// remapped event and owns its UTF-8 data independently of the caller.
+	inspecting := self.inspector != none
+	mut inspector_event := inspectorpkg.KeyEvent{}
+	if inspecting {
+		inspector_event = inspectorpkg.KeyEvent.init(event)
+	}
+	defer {
+		if inspecting {
+			if mut active_inspector := self.inspector {
+				if active_inspector.record_key_event(inspector_event) {
+					self.queue_render() or {}
+				}
+			} else {
+				inspector_event.deinit()
+			}
+		}
+	}
+
 	// Handle keybindings first (press, repeat, release all checked)
-	if v := self.maybe_handle_binding(event) {
+	if v := self.maybe_handle_binding(event, inspecting, mut inspector_event) {
 		return v
 	}
 
@@ -3352,6 +3362,9 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 
 	// Encode and send the key to the terminal
 	if write_req := self.encode_key(event) {
+		if inspecting {
+			inspector_event.pty = write_req.data.clone()
+		}
 		// If process exited and we got an encoded key, close surface
 		if self.child_exited {
 			self.close()
@@ -5239,7 +5252,7 @@ fn binding_entry_has_ignore(entry &input.SetEntry) bool {
 	}
 }
 
-fn (mut self Surface) maybe_handle_binding(event KeyEvent) ?apprt.InputEffect {
+fn (mut self Surface) maybe_handle_binding(event KeyEvent, inspecting bool, mut inspector_event inspectorpkg.KeyEvent) ?apprt.InputEffect {
 	// Release events: check if we consumed the corresponding press
 	if event.action == .release {
 		if last := self.keyboard.last_trigger {
@@ -5268,7 +5281,7 @@ fn (mut self Surface) maybe_handle_binding(event KeyEvent) ?apprt.InputEffect {
 			self.end_key_sequence(.flush, .retain)
 			return none
 		}
-		return self.handle_binding_entry(event, entry)
+		return self.handle_binding_entry(event, entry, inspecting, mut inspector_event)
 	}
 
 	// Check key tables (inner to outer)
@@ -5279,15 +5292,15 @@ fn (mut self Surface) maybe_handle_binding(event KeyEvent) ?apprt.InputEffect {
 			if table.once && i == self.keyboard.table_stack.len - 1 {
 				self.perform_binding_action(input.Action.new(.deactivate_key_table)) or {}
 			}
-			return self.handle_binding_entry(event, entry)
+			return self.handle_binding_entry(event, entry, inspecting, mut inspector_event)
 		}
 	}
 
 	entry := self.config.keybind.set.get_event(event) or { return none }
-	return self.handle_binding_entry(event, entry)
+	return self.handle_binding_entry(event, entry, inspecting, mut inspector_event)
 }
 
-fn (mut self Surface) handle_binding_entry(event KeyEvent, entry &input.SetEntry) ?apprt.InputEffect {
+fn (mut self Surface) handle_binding_entry(event KeyEvent, entry &input.SetEntry, inspecting bool, mut inspector_event inspectorpkg.KeyEvent) ?apprt.InputEffect {
 	if entry.value.typ == .leader {
 		self.keyboard.sequence_set = *entry.value.leader
 		if req := self.encode_key(event) {
@@ -5313,6 +5326,9 @@ fn (mut self Surface) handle_binding_entry(event KeyEvent, entry &input.SetEntry
 		[entry.value.leaf_action]
 	} else {
 		entry.value.chain_actions
+	}
+	if inspecting {
+		inspector_event.binding = actions.clone()
 	}
 	consumed := flags.consumed || flags.global || flags.all
 	self.keyboard.last_trigger = none
