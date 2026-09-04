@@ -775,6 +775,22 @@ fn test_screen_cursor_movement() {
 	assert s.cursor.y == 5
 }
 
+fn test_screen_cursor_cell_left_right() {
+	mut s := Screen.init(10, 3, 0)
+	defer { s.deinit() }
+	s.cursor_absolute(5, 1)
+	row_idx := s.pages.active_start + 1
+	s.pages.screen_rows[row_idx].cells[3].codepoint = u32(`L`)
+	s.pages.screen_rows[row_idx].cells[7].codepoint = u32(`R`)
+
+	left := s.cursor_cell_left(2)
+	right := s.cursor_cell_right(2)
+	assert left.codepoint == u32(`L`)
+	assert right.codepoint == u32(`R`)
+	assert voidptr(left) == voidptr(&s.pages.screen_rows[row_idx].cells[3])
+	assert voidptr(right) == voidptr(&s.pages.screen_rows[row_idx].cells[7])
+}
+
 fn test_screen_prompt_click_move_zero() {
 	mut s := Screen.init(10, 10, 0)
 	defer { s.deinit() }

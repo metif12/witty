@@ -2189,6 +2189,20 @@ fn new_screen_top(clone_top int, clone_len int, rows int) int {
 // Cursor movement
 // ============================================================
 
+// Returns the cell n positions to the right of the cursor.
+pub fn (mut self Screen) cursor_cell_right(n u32) &CellData {
+	assert self.cursor.x + n < self.pages.cols
+	row_idx := self.pages.active_start + int(self.cursor.y)
+	return unsafe { &self.pages.screen_rows[row_idx].cells[int(self.cursor.x + n)] }
+}
+
+// Returns the cell n positions to the left of the cursor.
+pub fn (mut self Screen) cursor_cell_left(n u32) &CellData {
+	assert self.cursor.x >= n
+	row_idx := self.pages.active_start + int(self.cursor.y)
+	return unsafe { &self.pages.screen_rows[row_idx].cells[int(self.cursor.x - n)] }
+}
+
 // Move the cursor right by n positions.
 pub fn (mut self Screen) cursor_right(n u32) {
 	assert self.cursor.x + n < self.pages.cols

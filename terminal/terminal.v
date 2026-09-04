@@ -2466,38 +2466,20 @@ fn (mut self Terminal) print_wrap() ! {
 // Get a copy of the cell that is `left` columns to the left of the cursor
 // on the cursor's row. left==0 returns the cursor cell itself. If out of
 // range, returns a blank cell.
-fn (self &Terminal) cursor_cell_ref(left u32) CellData {
-	row_idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
-	if row_idx < 0 || row_idx >= self.screens.active.pages.screen_rows.len {
+fn (mut self Terminal) cursor_cell_ref(left u32) CellData {
+	if left > self.screens.active.cursor.x {
 		return CellData{}
 	}
-	cx := int(self.screens.active.cursor.x) - int(left)
-	if cx < 0 {
-		return CellData{}
-	}
-	row := self.screens.active.pages.screen_rows[row_idx]
-	if cx >= row.cells.len {
-		return CellData{}
-	}
-	return row.cells[cx]
+	return *self.screens.active.cursor_cell_left(left)
 }
 
 // Set the wide property of the cell `left` columns to the left of the cursor.
 fn (mut self Terminal) cursor_cell_set_wide(left u32, wide CellWide) {
-	row_idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
-	if row_idx < 0 || row_idx >= self.screens.active.pages.screen_rows.len {
+	if left > self.screens.active.cursor.x {
 		return
 	}
-	cx := int(self.screens.active.cursor.x) - int(left)
-	if cx < 0 {
-		return
-	}
-	unsafe {
-		mut row := &self.screens.active.pages.screen_rows[row_idx]
-		if cx < row.cells.len {
-			row.cells[cx].wide = wide
-		}
-	}
+	mut cell := self.screens.active.cursor_cell_left(left)
+	cell.wide = wide
 }
 
 // Append a grapheme codepoint to the cell `left` columns to the left of the
