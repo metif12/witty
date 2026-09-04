@@ -40,6 +40,33 @@ fn test_stream_print() {
 	assert s.events.len == 1
 	assert s.events[0].key == .print
 	assert s.events[0].payload.cp == u32(`x`)
+	assert s.raw_events.len == 0
+}
+
+// The inspector slow path consumes every parser action alongside the semantic
+// stream, including actions whose terminal handlers intentionally do nothing.
+fn test_stream_collects_raw_parser_actions() {
+	mut s := Stream.init()
+	s.capture_raw = true
+	defer {
+		s.deinit()
+	}
+
+	s.next_slice('x\x07\x1b[5C\x1b]0;title\x07'.bytes())
+	assert s.raw_events.len == 4
+	assert s.raw_events[0].action_type == .print_action
+	assert s.raw_events[0].char == u32(`x`)
+	assert s.raw_events[1].action_type == .execute_action
+	assert s.raw_events[1].byte_val == 0x07
+	assert s.raw_events[2].action_type == .csi_dispatch_action
+	assert s.raw_events[2].csi.params == [u16(5)]
+	assert s.raw_events[2].csi.final_byte == u8(`C`)
+	assert s.raw_events[3].action_type == .osc_dispatch_action
+	assert s.raw_events[3].osc.cmd_type == .change_window_title
+	assert s.raw_events[3].osc.data == 'title'
+	s.clear_events()
+	assert s.events.len == 0
+	assert s.raw_events.len == 0
 }
 
 // Test that invalid UTF-8 byte 0xFF produces replacement character U+FFFD.

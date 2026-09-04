@@ -152,6 +152,28 @@ pub fn (ctx Context) set_window_focus(name string) {
 	_ = name
 }
 
+pub fn (ctx Context) open_popup(name string) {
+	_ = name
+}
+
+pub fn (ctx Context) begin_popup_modal(name string) bool {
+	_ = name
+	return false
+}
+
+pub fn (ctx Context) end_popup() {}
+
+pub fn (ctx Context) close_current_popup() {}
+
+pub fn (ctx Context) window_focused() bool {
+	return false
+}
+
+pub fn (ctx Context) key_pressed(key Key) bool {
+	_ = key
+	return false
+}
+
 pub fn (ctx Context) text(value string) {
 	_ = value
 }
@@ -183,6 +205,11 @@ pub fn (ctx Context) set_next_item_open(open bool) {
 }
 
 pub fn (ctx Context) checkbox(label string, value bool) (bool, bool) {
+	_ = label
+	return false, value
+}
+
+pub fn (ctx Context) input_text(label string, value string) (bool, string) {
 	_ = label
 	return false, value
 }
@@ -305,6 +332,10 @@ pub fn (ctx Context) screens_table_headers(help string) {
 
 pub fn (ctx Context) table_next_row() {}
 
+pub fn (ctx Context) table_next_column() bool {
+	return false
+}
+
 pub fn (ctx Context) table_set_column(column int) {
 	_ = column
 }
@@ -312,6 +343,15 @@ pub fn (ctx Context) table_set_column(column int) {
 pub fn (ctx Context) table_set_bg_color(target int, color u32) {
 	_ = target
 	_ = color
+}
+
+pub fn (ctx Context) selectable_bool(label string, selected bool) (bool, bool) {
+	_ = label
+	return false, selected
+}
+
+pub fn (ctx Context) set_scroll_here_y(ratio f32) {
+	_ = ratio
 }
 
 pub fn (ctx Context) push_id(value voidptr) {

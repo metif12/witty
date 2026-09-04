@@ -158,3 +158,167 @@ fn test_flat_pagelist_inspector_projects_regions_and_style_usage() {
 	assert styles.len == 1
 	assert styles[0].refs == 2
 }
+
+fn test_vt_event_encodings_match_pinned_ghostty() {
+	assert encode_vt_action(terminal.ParserAction{
+		action_type: .print_action
+		char: u32(`A`)
+	}) == "'A' (U+41)"
+	assert encode_vt_action(terminal.ParserAction{
+		action_type: .execute_action
+		byte_val: 0x07
+	}) == 'BEL (0x7)'
+	assert encode_vt_action(terminal.ParserAction{
+		action_type: .execute_action
+		byte_val: 0x19
+	}) == '? (0x19)'
+	assert encode_vt_action(terminal.ParserAction{
+		action_type: .csi_dispatch_action
+		csi: terminal.CSIAction{
+			intermediates: [u8(`?`)]
+			params: [u16(1), 4]
+			final_byte: u8(`h`)
+		}
+	}) == '? 1;4 h'
+	assert encode_vt_action(terminal.ParserAction{
+		action_type: .esc_dispatch_action
+		esc: terminal.ESCAction{
+			intermediates: [u8(`(`)]
+			final_byte: u8(`B`)
+		}
+	}) == '( B'
+	osc := terminal.ParserAction{
+		action_type: .osc_dispatch_action
+		osc: terminal.OscCommand{
+			cmd_type: .hyperlink_start
+			data: 'https://example.com'
+			data2: 'link-id'
+		}
+	}
+	assert encode_vt_action(osc) == 'hyperlink_start '
+	assert vt_action_metadata(osc) == {
+		'data':  'https://example.com'
+		'data2': 'link-id'
+	}
+}
+
+fn test_vt_stream_filters_snapshots_and_sequence_gaps() {
+	mut term := terminal.Terminal.init(terminal.Options{
+		cols: 80
+		rows: 24
+	})!
+	defer {
+		term.deinit()
+	}
+	mut stream := VTStream.init()
+	defer {
+		stream.deinit()
+	}
+
+	// Print is excluded by default but still advances the sequence.
+	stream.record(terminal.ParserAction{
+		action_type: .print_action
+		char: u32(`x`)
+	}, &term)
+	assert stream.events.len == 0
+	term.screens.active.cursor.x = 7
+	term.scrolling_region.top = 3
+	stream.record(terminal.ParserAction{
+		action_type: .execute_action
+		byte_val: 0x07
+	}, &term)
+	assert stream.events.len == 1
+	assert stream.events[0].seq == 2
+	assert stream.events[0].cursor.x == 7
+	assert stream.events[0].scrolling_region.top == 3
+	term.screens.active.cursor.x = 12
+	term.scrolling_region.top = 4
+	assert stream.events[0].cursor.x == 7
+	assert stream.events[0].scrolling_region.top == 3
+
+	stream.paused = true
+	stream.record(terminal.ParserAction{
+		action_type: .execute_action
+		byte_val: 0x08
+	}, &term)
+	stream.paused = false
+	stream.filter_text = 'does-not-match'
+	stream.record(terminal.ParserAction{
+		action_type: .execute_action
+		byte_val: 0x09
+	}, &term)
+	stream.filter_text = 'bel'
+	stream.record(terminal.ParserAction{
+		action_type: .execute_action
+		byte_val: 0x07
+	}, &term)
+	assert stream.events.len == 2
+	assert stream.events[1].seq == 5
+}
+
+fn test_vt_stream_parallel_parser_records_complete_actions() {
+	mut term := terminal.Terminal.init(terminal.Options{
+		cols: 80
+		rows: 24
+	})!
+	defer {
+		term.deinit()
+	}
+	mut stream := VTStream.init()
+	defer {
+		stream.deinit()
+	}
+
+	term.screens.active.cursor.x = 9
+	for byte in '\x1b[2C'.bytes() {
+		stream.record_pty_byte(byte, &term)
+	}
+	assert stream.events.len == 1
+	assert stream.events[0].kind == .csi
+	assert stream.events[0].raw_description == '2 C'
+	assert stream.events[0].cursor.x == 9
+	// The inspector parser only observes; the real terminal parser applies the
+	// corresponding semantic action after inspection.
+	assert term.screens.active.cursor.x == 9
+}
+
+fn test_vt_stream_is_bounded_and_navigation_matches_reverse_table() {
+	mut term := terminal.Terminal.init(terminal.Options{
+		cols: 2
+		rows: 2
+	})!
+	defer {
+		term.deinit()
+	}
+	mut stream := VTStream.init()
+	defer {
+		stream.deinit()
+	}
+	for _ in 0 .. 101 {
+		stream.record(terminal.ParserAction{
+			action_type: .execute_action
+			byte_val: 0x07
+		}, &term)
+	}
+	assert stream.events.len == max_vt_events
+	assert stream.events[0].seq == 2
+	assert stream.events[99].seq == 101
+
+	stream.navigate(.down)
+	assert stream.selected_event_seq or { u32(0) } == u32(101)
+	stream.navigate(.down)
+	assert stream.selected_event_seq or { u32(0) } == u32(100)
+	stream.navigate(.up)
+	assert stream.selected_event_seq or { u32(0) } == u32(101)
+	stream.reset()
+	assert stream.events.len == 0
+	assert stream.current_seq == 1
+}
+
+fn test_imgui_text_filter_semantics() {
+	assert imgui_text_filter_pass('', 'anything')
+	assert imgui_text_filter_pass('abc,xyz', 'prefix XYZ suffix')
+	assert imgui_text_filter_pass('-abc', 'xyz')
+	assert !imgui_text_filter_pass('-abc', 'ABC')
+	assert !imgui_text_filter_pass('abc', 'xyz')
+}

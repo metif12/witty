@@ -539,6 +539,12 @@ pub mut:
 	utf8d  UTF8Decoder
 	// Collected stream events
 	events []StreamEvent
+	// Enabled only on the inspector's parallel parser stream. The terminal's
+	// main stream keeps this false so normal operation pays no capture cost.
+	capture_raw bool
+	// Raw parser actions retained for Ghostty's Terminal IO inspector. These
+	// are cleared alongside the semantic events after each dispatch batch.
+	raw_events []ParserAction
 }
 
 // init creates a new stream.
@@ -550,11 +556,13 @@ pub fn Stream.init() Stream {
 pub fn (mut self Stream) deinit() {
 	self.parser.deinit()
 	self.events = []
+	self.raw_events = []
 }
 
 // clear_events clears the collected events.
 pub fn (mut self Stream) clear_events() {
 	self.events.clear()
+	self.raw_events.clear()
 }
 
 // ============================================================
@@ -673,6 +681,9 @@ fn (mut self Stream) next_non_utf8(c u8) {
 	actions := self.parser.next(c)
 
 	for action in actions {
+		if self.capture_raw && action.action_type !in [.none, .print_action, .execute_action] {
+			self.raw_events << action
+		}
 		match action.action_type {
 			.print_action {
 				self.do_print(action.char)
@@ -729,10 +740,22 @@ fn (mut self Stream) dispatch(key ActionKey, payload ActionPayload) {
 // ============================================================
 
 fn (mut self Stream) do_print(c u32) {
+	if self.capture_raw {
+		self.raw_events << ParserAction{
+			action_type: .print_action
+			char: c
+		}
+	}
 	self.dispatch(.print, ActionPayload{ cp: c })
 }
 
 fn (mut self Stream) execute(c u8) {
+	if self.capture_raw {
+		self.raw_events << ParserAction{
+			action_type: .execute_action
+			byte_val: c
+		}
+	}
 	// If the character is > 0x7F, it's a C1 (8-bit) control,
 	// which is strictly equivalent to ESC plus c - 0x40.
 	if c > 0x7F {
@@ -742,7 +765,6 @@ fn (mut self Stream) execute(c u8) {
 		})
 		return
 	}
-
 	// Map C0 control codes to actions
 	// We ignore SOH/STX: https://github.com/microsoft/terminal/issues/10786
 	if c == 0x00 || c == 0x01 || c == 0x02 {

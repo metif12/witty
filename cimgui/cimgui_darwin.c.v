@@ -96,6 +96,18 @@ fn C.witty_cimgui_end_window(context voidptr)
 
 fn C.witty_cimgui_set_window_focus(context voidptr, name &char)
 
+fn C.witty_cimgui_open_popup(context voidptr, name &char)
+
+fn C.witty_cimgui_begin_popup_modal(context voidptr, name &char) bool
+
+fn C.witty_cimgui_end_popup(context voidptr)
+
+fn C.witty_cimgui_close_current_popup(context voidptr)
+
+fn C.witty_cimgui_window_focused(context voidptr) bool
+
+fn C.witty_cimgui_key_pressed(context voidptr, key int) bool
+
 fn C.witty_cimgui_text(context voidptr, value &char)
 
 fn C.witty_cimgui_text_disabled(context voidptr, value &char)
@@ -111,6 +123,8 @@ fn C.witty_cimgui_separator_text(context voidptr, label &char)
 fn C.witty_cimgui_set_next_item_open(context voidptr, open bool)
 
 fn C.witty_cimgui_checkbox(context voidptr, label &char, value &bool) bool
+
+fn C.witty_cimgui_input_text(context voidptr, label &char, value &char, capacity usize) bool
 
 fn C.witty_cimgui_input_u16(context voidptr, label &char, value &u16) bool
 
@@ -170,9 +184,15 @@ fn C.witty_cimgui_screens_table_headers(context voidptr, help &char)
 
 fn C.witty_cimgui_table_next_row(context voidptr)
 
+fn C.witty_cimgui_table_next_column(context voidptr) bool
+
 fn C.witty_cimgui_table_set_column(context voidptr, column int)
 
 fn C.witty_cimgui_table_set_bg_color(context voidptr, target int, color u32)
+
+fn C.witty_cimgui_selectable_bool(context voidptr, label &char, selected &bool) bool
+
+fn C.witty_cimgui_set_scroll_here_y(context voidptr, ratio f32)
 
 fn C.witty_cimgui_push_id_ptr(context voidptr, value voidptr)
 
@@ -366,6 +386,30 @@ pub fn (ctx Context) set_window_focus(name string) {
 	C.witty_cimgui_set_window_focus(ctx.handle, name.str)
 }
 
+pub fn (ctx Context) open_popup(name string) {
+	C.witty_cimgui_open_popup(ctx.handle, name.str)
+}
+
+pub fn (ctx Context) begin_popup_modal(name string) bool {
+	return C.witty_cimgui_begin_popup_modal(ctx.handle, name.str)
+}
+
+pub fn (ctx Context) end_popup() {
+	C.witty_cimgui_end_popup(ctx.handle)
+}
+
+pub fn (ctx Context) close_current_popup() {
+	C.witty_cimgui_close_current_popup(ctx.handle)
+}
+
+pub fn (ctx Context) window_focused() bool {
+	return C.witty_cimgui_window_focused(ctx.handle)
+}
+
+pub fn (ctx Context) key_pressed(key Key) bool {
+	return C.witty_cimgui_key_pressed(ctx.handle, int(key))
+}
+
 pub fn (ctx Context) text(value string) {
 	C.witty_cimgui_text(ctx.handle, value.str)
 }
@@ -398,6 +442,14 @@ pub fn (ctx Context) checkbox(label string, value bool) (bool, bool) {
 	mut updated := value
 	changed := C.witty_cimgui_checkbox(ctx.handle, label.str, &updated)
 	return changed, updated
+}
+
+pub fn (ctx Context) input_text(label string, value string) (bool, string) {
+	mut buffer := [512]u8{}
+	length := if value.len < buffer.len - 1 { value.len } else { buffer.len - 1 }
+	copy(mut buffer[..length], value.bytes()[..length])
+	changed := C.witty_cimgui_input_text(ctx.handle, label.str, &char(&buffer[0]), buffer.len)
+	return changed, unsafe { cstring_to_vstring(&char(&buffer[0])) }.clone()
 }
 
 pub fn (ctx Context) input_u16(label string, value u16) (bool, u16) {
@@ -520,12 +572,26 @@ pub fn (ctx Context) table_next_row() {
 	C.witty_cimgui_table_next_row(ctx.handle)
 }
 
+pub fn (ctx Context) table_next_column() bool {
+	return C.witty_cimgui_table_next_column(ctx.handle)
+}
+
 pub fn (ctx Context) table_set_column(column int) {
 	C.witty_cimgui_table_set_column(ctx.handle, column)
 }
 
 pub fn (ctx Context) table_set_bg_color(target int, color u32) {
 	C.witty_cimgui_table_set_bg_color(ctx.handle, target, color)
+}
+
+pub fn (ctx Context) selectable_bool(label string, selected bool) (bool, bool) {
+	mut updated := selected
+	changed := C.witty_cimgui_selectable_bool(ctx.handle, label.str, &updated)
+	return changed, updated
+}
+
+pub fn (ctx Context) set_scroll_here_y(ratio f32) {
+	C.witty_cimgui_set_scroll_here_y(ctx.handle, ratio)
 }
 
 pub fn (ctx Context) push_id(value voidptr) {

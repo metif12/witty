@@ -774,17 +774,25 @@ fn (mut t Termio) process_output_locked(buf []u8) {
 		t.renderer_mailbox.push(renderer.RendererMessage(renderer.ResetCursorBlinkMessage{}))
 	}
 
-	// Feed the bytes to the stream parser. The parser collects events which
-	// we then dispatch to the stream handler which mutates terminal state.
-	//
-	// NOTE: the inspector "SLOW MODE" path from ghostty is not modeled here
-	// because the V terminal Stream collects events in bulk rather than
-	// dispatching byte-by-byte.
-	t.terminal_stream.next_slice(buf)
-	for event in t.terminal_stream.events {
-		t.stream_handler.vt(event)
+	// If the inspector is active, use Ghostty's slow path: process a byte at a
+	// time, record each raw action with pre-dispatch terminal state, and then
+	// apply the semantic actions. Normal operation retains the bulk fast path.
+	if !isnil(t.renderer_state.inspector) {
+		for byte in buf {
+			t.renderer_state.record_inspector_pty_byte(byte)
+			t.terminal_stream.next(byte)
+			for event in t.terminal_stream.events {
+				t.stream_handler.vt(event)
+			}
+			t.terminal_stream.clear_events()
+		}
+	} else {
+		t.terminal_stream.next_slice(buf)
+		for event in t.terminal_stream.events {
+			t.stream_handler.vt(event)
+		}
+		t.terminal_stream.clear_events()
 	}
-	t.terminal_stream.clear_events()
 
 	// If our stream handling caused messages to be sent to the mailbox
 	// thread, then we need to wake it up so that it processes them.

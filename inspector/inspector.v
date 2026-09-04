@@ -100,6 +100,7 @@ pub mut:
 	key_events      []KeyEvent
 	mouse           InspectorMouse
 	terminal_info   TerminalInfo
+	vt_stream       VTStream
 	renderer        RendererInfo
 }
 
@@ -163,8 +164,10 @@ pub fn Inspector.init() !Inspector {
 	return Inspector{
 		renderer_bridge: renderer.InspectorOverlayBridge{
 			overlay_features_fn: inspector_overlay_features
+			record_pty_byte_fn: inspector_record_pty_byte
 		}
 		key_events: []KeyEvent{cap: 2}
+		vt_stream: VTStream.init()
 	}
 }
 
@@ -176,8 +179,17 @@ fn inspector_overlay_features(ptr voidptr) []renderer.OverlayFeature {
 	return insp.renderer.overlay_features()
 }
 
+fn inspector_record_pty_byte(ptr voidptr, byte u8, term &terminal.Terminal) {
+	if isnil(ptr) {
+		return
+	}
+	mut insp := unsafe { &Inspector(ptr) }
+	insp.vt_stream.record_pty_byte(byte, term)
+}
+
 pub fn (mut self Inspector) deinit() {
 	self.clear_key_events()
+	self.vt_stream.deinit()
 	self.renderer.features.clear()
 }
 
@@ -220,6 +232,12 @@ pub fn (mut self Inspector) render(context_handle voidptr, surface_info SurfaceI
 
 	open := context.begin_window('Keyboard')
 	self.draw_key_stream(context, open)
+	context.end_window()
+
+	open_termio := context.begin_window('Terminal IO')
+	if open_termio {
+		self.vt_stream.draw(context, term.colors.palette.entries)
+	}
 	context.end_window()
 
 	open_renderer := context.begin_window('Renderer')

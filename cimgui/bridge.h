@@ -317,6 +317,36 @@ static inline void witty_cimgui_set_window_focus(ImGuiContext* context, const ch
     ImGui_SetWindowFocusStr(name);
 }
 
+static inline void witty_cimgui_open_popup(ImGuiContext* context, const char* name) {
+    ImGui_SetCurrentContext(context);
+    ImGui_OpenPopup(name, ImGuiPopupFlags_None);
+}
+
+static inline bool witty_cimgui_begin_popup_modal(ImGuiContext* context, const char* name) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_BeginPopupModal(name, NULL, ImGuiWindowFlags_AlwaysAutoResize);
+}
+
+static inline void witty_cimgui_end_popup(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_EndPopup();
+}
+
+static inline void witty_cimgui_close_current_popup(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_CloseCurrentPopup();
+}
+
+static inline bool witty_cimgui_window_focused(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+}
+
+static inline bool witty_cimgui_key_pressed(ImGuiContext* context, int key) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_IsKeyPressed(key);
+}
+
 static inline void witty_cimgui_text(ImGuiContext* context, const char* value) {
     ImGui_SetCurrentContext(context);
     ImGui_TextUnformatted(value);
@@ -358,6 +388,16 @@ static inline void witty_cimgui_set_next_item_open(ImGuiContext* context, bool o
 static inline bool witty_cimgui_checkbox(ImGuiContext* context, const char* label, bool* value) {
     ImGui_SetCurrentContext(context);
     return ImGui_Checkbox(label, value);
+}
+
+static inline bool witty_cimgui_input_text(
+    ImGuiContext* context,
+    const char* label,
+    char* value,
+    size_t capacity
+) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_InputText(label, value, capacity, ImGuiInputTextFlags_None);
 }
 
 static inline bool witty_cimgui_input_u16(
@@ -599,6 +639,11 @@ static inline void witty_cimgui_table_next_row(ImGuiContext* context) {
     ImGui_TableNextRow();
 }
 
+static inline bool witty_cimgui_table_next_column(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_TableNextColumn();
+}
+
 static inline void witty_cimgui_table_set_column(ImGuiContext* context, int column) {
     ImGui_SetCurrentContext(context);
     (void)ImGui_TableSetColumnIndex(column);
@@ -611,6 +656,20 @@ static inline void witty_cimgui_table_set_bg_color(
 ) {
     ImGui_SetCurrentContext(context);
     ImGui_TableSetBgColor(target, color, -1);
+}
+
+static inline bool witty_cimgui_selectable_bool(
+    ImGuiContext* context,
+    const char* label,
+    bool* selected
+) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_SelectableBoolPtr(label, selected, ImGuiSelectableFlags_SpanAllColumns);
+}
+
+static inline void witty_cimgui_set_scroll_here_y(ImGuiContext* context, float ratio) {
+    ImGui_SetCurrentContext(context);
+    ImGui_SetScrollHereY(ratio);
 }
 
 static inline void witty_cimgui_push_id_ptr(ImGuiContext* context, const void* value) {
