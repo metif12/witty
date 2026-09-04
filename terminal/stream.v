@@ -1,5 +1,7 @@
 module terminal
 
+import simd
+
 // --- Original Ghostty Comments Start: src/terminal/stream.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/terminal/stream.zig
@@ -569,13 +571,107 @@ pub fn (mut self Stream) clear_events() {
 // Byte processing
 // ============================================================
 
-// next_slice processes a string of bytes.
-// In the Zig version, this has SIMD optimizations. Here we use
-// the scalar path which processes one byte at a time.
+// next_slice processes a string of bytes. Printable UTF-8 is decoded in
+// batches while control sequences and partial sequences stay on the scalar
+// state-machine path. The inspector capture path is intentionally scalar so
+// it retains every raw parser action.
 pub fn (mut self Stream) next_slice(input_ []u8) {
-	for c in input_ {
-		self.next(c)
+	if self.capture_raw {
+		for c in input_ {
+			self.next(c)
+		}
+		return
 	}
+
+	mut cp_buf := []u32{len: 4096}
+	mut offset := 0
+	for {
+		len := int_min(cp_buf.len, input_.len - offset)
+		self.next_slice_capped(input_[offset..offset + len], mut cp_buf)
+		offset += len
+		if offset >= input_.len {
+			break
+		}
+	}
+}
+
+fn (mut self Stream) next_slice_capped(input_ []u8, mut cp_buf []u32) {
+	assert input_.len <= cp_buf.len
+	mut offset := 0
+
+	// Complete any UTF-8 sequence split across calls before bulk decoding.
+	for self.utf8d.state != 0 {
+		if offset >= input_.len {
+			return
+		}
+		self.next_utf8(input_[offset])
+		offset++
+	}
+	if offset >= input_.len {
+		return
+	}
+
+	// Finish a control sequence carried over from the previous chunk.
+	offset += self.consume_until_ground(input_[offset..])
+	if offset >= input_.len {
+		return
+	}
+	offset += self.consume_all_escapes(input_[offset..])
+
+	for self.parser.state == .ground && offset < input_.len {
+		result := simd.utf8_decode_until_control_seq(input_[offset..], mut cp_buf)
+		for cp in cp_buf[..result.decoded] {
+			if cp <= 0x0f {
+				self.execute(u8(cp))
+			} else {
+				self.do_print(cp)
+			}
+		}
+		offset += result.consumed
+		if offset >= input_.len {
+			return
+		}
+
+		// A non-ESC stop is an incomplete or invalid leading sequence. Give
+		// the remainder to the incremental decoder so it can carry state.
+		if input_[offset] != 0x1b {
+			for c in input_[offset..] {
+				self.next_utf8(c)
+			}
+			return
+		}
+		offset += self.consume_all_escapes(input_[offset..])
+	}
+}
+
+// consume_all_escapes parses consecutive escape sequences and returns their
+// byte count. The caller enters at an ESC while the parser is in ground.
+fn (mut self Stream) consume_all_escapes(input_ []u8) int {
+	mut offset := 0
+	for offset < input_.len && input_[offset] == 0x1b {
+		self.parser.state = .escape
+		self.parser.clear()
+		offset++
+		offset += self.consume_until_ground(input_[offset..])
+		if offset >= input_.len {
+			return input_.len
+		}
+	}
+	return offset
+}
+
+// consume_until_ground advances an in-progress escape sequence until the VT
+// parser returns to ground, or consumes all available input.
+fn (mut self Stream) consume_until_ground(input_ []u8) int {
+	mut offset := 0
+	for self.parser.state != .ground {
+		if offset >= input_.len {
+			return input_.len
+		}
+		self.next_non_utf8(input_[offset])
+		offset++
+	}
+	return offset
 }
 
 // next processes a single byte.

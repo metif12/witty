@@ -52,7 +52,7 @@ fn test_stream_collects_raw_parser_actions() {
 		s.deinit()
 	}
 
-	s.next_slice('x\x07\x1b[5C\x1b]0;title\x07'.bytes())
+	s.next_slice('x\a\x1b[5C\x1b]0;title\a'.bytes())
 	assert s.raw_events.len == 4
 	assert s.raw_events[0].action_type == .print_action
 	assert s.raw_events[0].char == u32(`x`)
@@ -93,6 +93,33 @@ fn test_simd_complete_incomplete_utf8() {
 	assert has_event(s.events, .print)
 	ev := get_last_event(s.events, .print)
 	assert ev.payload.cp == 0x800
+}
+
+fn test_simd_next_slice_crosses_internal_chunk_boundary() {
+	mut s := Stream.init()
+	input := 'x'.repeat(5000).bytes()
+	s.next_slice(input)
+	assert s.events.len == 5000
+	assert s.events[0].key == .print
+	assert s.events.last().payload.cp == u32(`x`)
+}
+
+fn test_simd_escape_sequence_crosses_internal_chunk_boundary() {
+	mut s := Stream.init()
+	input := ('x'.repeat(4095) + '\x1b[5C').bytes()
+	s.next_slice(input)
+	assert s.events.len == 4096
+	assert s.events.last().key == .cursor_right
+	assert s.events.last().payload.num == 5
+}
+
+fn test_simd_utf8_sequence_crosses_internal_chunk_boundary() {
+	mut s := Stream.init()
+	input := ('x'.repeat(4095) + '€y').bytes()
+	s.next_slice(input)
+	assert s.events.len == 4097
+	assert s.events[4095].payload.cp == 0x20ac
+	assert s.events[4096].payload.cp == u32(`y`)
 }
 
 // Test CUF (Cursor Forward/Right) CSI sequence.
@@ -443,7 +470,10 @@ fn test_stream_change_window_title_invalid_utf8() {
 
 	// Invalid UTF-8 in title (0xC0 without continuation)
 	mut s2 := Stream.init()
-	s2.next_slice('\x1b]2;abc\xc0\x1b\\'.bytes())
+	mut invalid := '\x1b]2;abc'.bytes()
+	invalid << u8(0xc0)
+	invalid << '\x1b\\'.bytes()
+	s2.next_slice(invalid)
 	assert !has_event(s2.events, .window_title)
 }
 
