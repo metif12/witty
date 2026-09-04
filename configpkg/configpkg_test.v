@@ -615,6 +615,15 @@ fn test_parse_background_blur() {
 	assert false, 'expected invalid_value for empty'
 }
 
+fn test_background_blur_cval() {
+	assert BackgroundBlur{ kind: .bool_false }.cval() == 0
+	assert BackgroundBlur{ kind: .bool_true }.cval() == 20
+	assert BackgroundBlur{ kind: .radius, radius: 37 }.cval() == 37
+	assert BackgroundBlur{ kind: .radius, radius: 255 }.cval() == 255
+	assert BackgroundBlur{ kind: .macos_glass_regular }.cval() == -1
+	assert BackgroundBlur{ kind: .macos_glass_clear }.cval() == -2
+}
+
 // --- WindowDecoration ---
 
 // Config.zig: WindowDecoration "parse WindowDecoration"

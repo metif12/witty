@@ -1,5 +1,6 @@
 module apprt
 
+import configpkg
 import input
 
 struct EmbeddedActionCapture {
@@ -398,4 +399,19 @@ fn test_has_global_keybinds_ignores_global_leaf_under_leader() {
 		}
 	}
 	assert !app.has_global_keybinds()
+}
+
+fn test_set_window_background_blur_accepts_null_window() {
+	mut app := App{}
+	// Opaque windows return before entering the platform bridge.
+	ghostty_set_window_background_blur(&app, unsafe { nil })
+
+	// A null Objective-C object is also a safe no-op in the bridge. Exercising
+	// this branch ensures the platform implementation and private API symbols
+	// are compiled and linked by the test executable.
+	app.config.background_opacity = 0.5
+	app.config.background_blur = configpkg.BackgroundBlur{
+		kind: .bool_true
+	}
+	ghostty_set_window_background_blur(&app, unsafe { nil })
 }

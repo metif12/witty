@@ -38,6 +38,22 @@ typedef struct witty_metal_vertex_attribute {
 
 typedef void (*witty_metal_layer_display_callback)(void*);
 
+// Private CoreGraphics APIs used by Terminal.app and other terminals to set
+// the blur radius behind a translucent NSWindow.
+extern void* CGSDefaultConnectionForThread(void);
+extern int CGSSetWindowBackgroundBlurRadius(void*, size_t, int);
+
+static inline void witty_macos_set_window_background_blur(void* window, int radius) {
+	if (!window) return;
+	SEL selector = sel_registerName("windowNumber");
+	size_t window_number = ((size_t (*)(id, SEL))objc_msgSend)((id)window, selector);
+	(void)CGSSetWindowBackgroundBlurRadius(
+		CGSDefaultConnectionForThread(),
+		window_number,
+		radius
+	);
+}
+
 static inline bool witty_macos_is_main_thread(void) {
 	return pthread_main_np() != 0;
 }

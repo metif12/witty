@@ -4904,6 +4904,18 @@ pub fn (b BackgroundBlur) enabled() bool {
 	}
 }
 
+// cval returns the integer representation consumed by the macOS private
+// background-blur API. The negative values select the two macOS glass modes.
+pub fn (b BackgroundBlur) cval() i16 {
+	return match b.kind {
+		.bool_false { i16(0) }
+		.bool_true { i16(20) }
+		.radius { i16(b.radius) }
+		.macos_glass_regular { i16(-1) }
+		.macos_glass_clear { i16(-2) }
+	}
+}
+
 // BackgroundImagePosition for the background image.
 pub enum BackgroundImagePosition {
 	top_left

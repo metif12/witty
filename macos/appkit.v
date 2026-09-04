@@ -161,6 +161,8 @@ fn C.witty_macos_objc_msg_void_size(obj ObjId, selector Sel, size ObjCSize)
 
 fn C.witty_macos_objc_msg_void_clear_color(obj ObjId, selector Sel, color MetalClearColor)
 
+fn C.witty_macos_set_window_background_blur(window voidptr, radius int)
+
 fn C.witty_metal_new_buffer_length(device voidptr, length usize, options u64) voidptr
 
 fn C.witty_metal_new_buffer_bytes(device voidptr, bytes voidptr, length usize, options u64) voidptr
@@ -515,6 +517,12 @@ fn msg_f64(obj ObjId, selector string) f64 {
 		return 0
 	}
 	return C.macos_objc_msg_f64(obj, sel(selector))
+}
+
+// set_window_background_blur applies the private CoreGraphics background blur
+// radius to an NSWindow. The caller is responsible for checking transparency.
+pub fn set_window_background_blur(window voidptr, radius i16) {
+	C.witty_macos_set_window_background_blur(window, int(radius))
 }
 
 @[inline]

@@ -1715,10 +1715,11 @@ pub fn ghostty_inspector_set_focus(mut insp TerminalInspector, focused bool) {
 // because this is what every terminal appears to use, including
 // Terminal.app.
 pub fn ghostty_set_window_background_blur(app &App, window voidptr) {
-	// Background blur requires CGSSetWindowBackgroundBlurRadius via the
-	// CoreGraphics private API (macOS only). Not available in V runtime.
-	_ = app
-	_ = window
+	// Blur only has a visible effect when the window itself is translucent.
+	if app.config.background_opacity >= 1.0 {
+		return
+	}
+	set_window_background_blur(window, app.config.background_blur.cval())
 }
 
 // -----------------------------------------------------------------------
