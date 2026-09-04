@@ -3,6 +3,7 @@ module main
 import configpkg
 import global_state
 import os
+import apprt
 
 fn test_ghostty_info_exposes_stable_version_bytes() {
 	info := ghostty_info()
@@ -171,4 +172,66 @@ fn test_config_c_api_file_loading_and_diagnostics() {
 	assert !isnil(diagnostic.message)
 	assert unsafe { cstring_to_vstring(diagnostic.message) }.contains('font-size')
 	assert unsafe { cstring_to_vstring(ghostty_config_get_diagnostic(config, 99).message) } == ''
+}
+
+fn test_embedded_c_abi_layouts_match_ghostty_header() {
+	assert sizeof(RuntimeConfigC) == 64
+	assert sizeof(InputKeyC) == 32
+	assert sizeof(SurfaceConfigC) == 88
+	assert sizeof(TextC) == 40
+	assert sizeof(PointC) == 16
+	assert sizeof(SelectionC) == 36
+	assert sizeof(apprt.CAPISurfaceSize) == 20
+	assert sizeof(apprt.CAPITarget) == 16
+	assert sizeof(apprt.CAPIAction) == 32
+	assert sizeof(apprt.CAPIClipboardContentC) == 16
+	assert sizeof(apprt.CAPIInputTrigger) == 12
+}
+
+fn test_embedded_surface_config_defaults_and_conversion() {
+	defaults := ghostty_surface_config_new_c()
+	assert defaults.platform_tag == 0
+	assert defaults.scale_factor == 1.0
+	assert defaults.context == 0
+	assert isnil(defaults.working_directory)
+
+	assert surface_options_from_c(&SurfaceConfigC{
+		platform_tag: 3
+	}) == none
+	assert surface_options_from_c(&SurfaceConfigC{
+		platform_tag: 1
+		platform: voidptr(1)
+		scale_factor: 2.0
+		context: 3
+	}) == none
+
+	env := [EnvVarC{ key: c'WITTY_C_ABI', value: c'ok' }]
+	converted := surface_options_from_c(&SurfaceConfigC{
+		platform_tag: 1
+		platform: voidptr(1)
+		scale_factor: 2.0
+		env_vars: &env[0]
+		env_var_count: 1
+		initial_input: c'hello'
+		context: 2
+	}) or { panic('valid surface config was rejected') }
+	assert converted.platform_tag == 1
+	assert converted.scale_factor == 2.0
+	assert converted.env_vars == [apprt.EnvVar{ key: 'WITTY_C_ABI', value: 'ok' }]
+	assert converted.initial_input or { '' } == 'hello'
+	assert converted.context == .split
+}
+
+fn test_embedded_input_key_conversion_rejects_invalid_action() {
+	assert input_key_from_c(InputKeyC{ action: -1 }) == none
+	assert input_key_from_c(InputKeyC{ action: 3 }) == none
+	key := input_key_from_c(InputKeyC{
+		action: 1
+		mods: 3
+		text: c'x'
+		unshifted_codepoint: u32(`X`)
+	}) or { panic('valid key was rejected') }
+	assert key.action == .press
+	assert key.mods == 3
+	assert key.text or { '' } == 'x'
 }

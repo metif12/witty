@@ -68,7 +68,8 @@ pub mut:
 
 	// Callback called to handle an action. RuntimeAction is the V equivalent
 	// of Ghostty's tagged ghostty_action_s value.
-	action_cb fn (&App, Target, RuntimeAction) bool = unsafe { nil }
+	action_cb   fn (&App, Target, RuntimeAction) bool = unsafe { nil }
+	c_action_cb fn (voidptr, CAPITarget, CAPIAction) bool = unsafe { nil }
 
 	// Read the clipboard value. The return value must be preserved
 	// by the host until the next call. If there is no valid clipboard
@@ -78,10 +79,12 @@ pub mut:
 	// This may be called after a read clipboard call to request
 	// confirmation that the clipboard value is safe to read. The embedder
 	// must call complete_clipboard_request with the given request.
-	confirm_read_clipboard_cb fn (voidptr, string, &ClipboardRequest, ClipboardRequestType) = unsafe { nil }
+	confirm_read_clipboard_cb   fn (voidptr, string, &ClipboardRequest, ClipboardRequestType) = unsafe { nil }
+	c_confirm_read_clipboard_cb fn (voidptr, &char, &ClipboardRequest, int) = unsafe { nil }
 
 	// Write the clipboard value.
-	write_clipboard_cb fn (voidptr, int, []ClipboardContent, bool) = unsafe { nil }
+	write_clipboard_cb   fn (voidptr, int, []ClipboardContent, bool) = unsafe { nil }
+	c_write_clipboard_cb fn (voidptr, int, &CAPIClipboardContentC, usize, bool) = unsafe { nil }
 
 	// Close the current surface given by this function.
 	close_surface_cb fn (voidptr, bool) = unsafe { nil }
@@ -246,10 +249,20 @@ pub fn (self &App) wait() ! {
 // new_surface creates a new surface for the app.
 fn (mut self App) new_surface(opts SurfaceOptions) !&Surface {
 	// Grab a surface allocation because we're going to need it.
-	mut surface := &Surface{}
+	raw := unsafe { malloc(sizeof(Surface)) }
+	if isnil(raw) {
+		return error('OutOfMemory')
+	}
+	mut surface := unsafe { &Surface(raw) }
+	unsafe {
+		*surface = Surface{}
+	}
 
 	// Create the surface
-	surface.init(mut self, opts)!
+	surface.init(mut self, opts) or {
+		unsafe { free(surface) }
+		return err
+	}
 
 	return surface
 }
@@ -257,6 +270,7 @@ fn (mut self App) new_surface(opts SurfaceOptions) !&Surface {
 // close_surface closes the given surface.
 pub fn (mut self App) close_surface(mut surface Surface) {
 	surface.deinit()
+	unsafe { free(&surface) }
 }
 
 // redraw_inspector queues a render for the inspector.
@@ -279,6 +293,13 @@ pub fn (mut self App) perform_action(target_ Target, action ActionKey, data Acti
 			action: action
 			data: data
 		})
+	}
+	if self.opts.c_action_cb != unsafe { nil } {
+		return self.opts.c_action_cb(voidptr(self), target_.capi(), RuntimeAction{
+			target: target_
+			action: action
+			data: data
+		}.capi())
 	}
 	return false
 }
@@ -429,6 +450,9 @@ pub mut:
 	// The current title of the surface. The embedded apprt saves this so
 	// that getTitle works without the implementer needing to save it.
 	title ?string
+
+	// Retain the borrowed working-directory pointer returned by the C ABI.
+	capi_inherited_working_directory string
 }
 
 // SurfaceOptions contains initialization options for a Surface.
@@ -629,12 +653,22 @@ pub fn (mut self Surface) clipboard_request(clipboard_type Clipboard, state Clip
 	// so that it is stable until the read_clipboard callback and call
 	// complete_clipboard_request. This sucks but clipboard requests aren't
 	// high throughput so it's probably fine.
+	raw_state := unsafe { malloc(sizeof(ClipboardRequest)) }
+	if isnil(raw_state) {
+		return error('OutOfMemory')
+	}
+	mut state_ptr := unsafe { &ClipboardRequest(raw_state) }
+	unsafe {
+		*state_ptr = state
+	}
 	if self.app.opts.read_clipboard_cb != unsafe { nil } {
 		self.app.opts.read_clipboard_cb(
 			self.userdata,
 			int(clipboard_type),
-			&state,
+			state_ptr,
 		)
+	} else {
+		unsafe { free(state_ptr) }
 	}
 
 	// Embedded apprt can't synchronously check clipboard content types,
@@ -643,21 +677,36 @@ pub fn (mut self Surface) clipboard_request(clipboard_type Clipboard, state Clip
 }
 
 // complete_clipboard_request completes a clipboard read request.
-fn (mut self Surface) complete_clipboard_request(str string, state ClipboardRequest, confirmed bool) {
+fn (mut self Surface) complete_clipboard_request(str string, state &ClipboardRequest, confirmed bool) {
 	// Attempt to complete the request, but we may request
 	// confirmation.
-	self.core_surface.complete_clipboard_request(state, str, confirmed) or {
+	self.core_surface.complete_clipboard_request(*state, str, confirmed) or {
+		if err.msg() !in ['UnsafePaste', 'UnauthorizedPaste'] {
+			log_err('error completing clipboard request err=${err}')
+			unsafe { free(state) }
+			return
+		}
 		// If the paste is unsafe or unauthorized, ask for confirmation.
 		if self.app.opts.confirm_read_clipboard_cb != unsafe { nil } {
 			self.app.opts.confirm_read_clipboard_cb(
 				self.userdata,
 				str,
-				&state,
+				state,
 				state.kind,
 			)
+			return
 		}
-		return
+		if self.app.opts.c_confirm_read_clipboard_cb != unsafe { nil } {
+			self.app.opts.c_confirm_read_clipboard_cb(
+				self.userdata,
+				&char(str.str),
+				state,
+				int(state.kind),
+			)
+			return
+		}
 	}
+	unsafe { free(state) }
 }
 
 // set_clipboard sets the clipboard content.
@@ -667,6 +716,27 @@ pub fn (self &Surface) set_clipboard(clipboard_type Clipboard, contents []Clipbo
 			self.userdata,
 			int(clipboard_type),
 			contents,
+			confirm,
+		)
+		return
+	}
+	if self.app.opts.c_write_clipboard_cb != unsafe { nil } {
+		mut values := []CAPIClipboardContentC{len: contents.len}
+		for idx, content in contents {
+			values[idx] = CAPIClipboardContentC{
+				mime: &char(content.mime.str)
+				data: &char(content.data.str)
+			}
+		}
+		mut ptr := unsafe { &CAPIClipboardContentC(nil) }
+		if values.len > 0 {
+			ptr = unsafe { &values[0] }
+		}
+		self.app.opts.c_write_clipboard_cb(
+			self.userdata,
+			int(clipboard_type),
+			ptr,
+			usize(values.len),
 			confirm,
 		)
 	}
@@ -1161,8 +1231,17 @@ fn app_new_(opts &AppOptions, config &configpkg.Config) !&App {
 	mut core_app := CoreApp.create()!
 
 	// Create our runtime app
-	mut app := &App{}
+	raw := unsafe { malloc(sizeof(App)) }
+	if isnil(raw) {
+		core_app.destroy()
+		return error('OutOfMemory')
+	}
+	mut app := unsafe { &App(raw) }
+	unsafe {
+		*app = App{}
+	}
 	app.init(core_app, config, *opts) or {
+		unsafe { free(app) }
 		core_app.destroy()
 		return err
 	}
@@ -1187,6 +1266,7 @@ pub fn ghostty_app_userdata(v &App) voidptr {
 pub fn ghostty_app_free(mut v App) {
 	mut core_app := v.core_app
 	v.terminate()
+	unsafe { free(&v) }
 	core_app.destroy()
 }
 
@@ -1505,15 +1585,41 @@ pub fn ghostty_surface_key(mut surface Surface, event CAPIKeyEvent) bool {
 // ghostty_surface_key_is_binding returns true if the given key event would
 // trigger a binding if it were sent to the surface right now.
 pub fn ghostty_surface_key_is_binding(mut surface Surface, event CAPIKeyEvent) bool {
+	return ghostty_surface_key_binding_flags(mut surface, event) != none
+}
+
+// ghostty_surface_key_binding_flags returns the C bitmask for a matching
+// binding, preserving the optional out-parameter behavior of ghostty.h.
+pub fn ghostty_surface_key_binding_flags(mut surface Surface, event CAPIKeyEvent) ?u32 {
 	core_event := event.key_event().core() or {
 		log_warn('error processing key event')
-		return false
+		return none
 	}
 
-	if _ := surface.core_surface.key_event_is_binding(&core_event) {
-		return true
+	flags_raw := surface.core_surface.key_event_is_binding(&core_event) or { return none }
+	flags := unsafe { &EmbeddedBindingFlags(flags_raw) }
+	mut result := u32(0)
+	if flags.consumed {
+		result |= 1
 	}
-	return false
+	if flags.all {
+		result |= 2
+	}
+	if flags.global {
+		result |= 4
+	}
+	if flags.performable {
+		result |= 8
+	}
+	return result
+}
+
+// Mirrors core.BindingFlags across the intentionally opaque apprt bridge.
+struct EmbeddedBindingFlags {
+	consumed    bool
+	global      bool
+	all         bool
+	performable bool
 }
 
 // ghostty_surface_text sends raw text to the terminal. This is treated
@@ -1666,7 +1772,7 @@ pub fn ghostty_surface_binding_action(mut surface Surface, action_str string) bo
 // ghostty_surface_complete_clipboard_request completes a clipboard read
 // request started via the read callback. This can only be called once
 // for a given request.
-pub fn ghostty_surface_complete_clipboard_request(mut surface Surface, str string, state ClipboardRequest, confirmed bool) {
+pub fn ghostty_surface_complete_clipboard_request(mut surface Surface, str string, state &ClipboardRequest, confirmed bool) {
 	surface.complete_clipboard_request(str, state, confirmed)
 }
 

@@ -10,6 +10,32 @@ mut:
 	action RuntimeAction
 }
 
+struct EmbeddedClipboardCapture {
+mut:
+	read_clipboard int
+	read_state     &ClipboardRequest = unsafe { nil }
+	write_count    usize
+	write_mime     string
+	write_data     string
+	write_confirm  bool
+}
+
+fn embedded_read_clipboard_test_callback(userdata voidptr, clipboard int, state &ClipboardRequest) {
+	mut capture := unsafe { &EmbeddedClipboardCapture(userdata) }
+	capture.read_clipboard = clipboard
+	unsafe { capture.read_state = state }
+}
+
+fn embedded_write_clipboard_c_test_callback(userdata voidptr, _ int, contents &CAPIClipboardContentC, count usize, confirm bool) {
+	mut capture := unsafe { &EmbeddedClipboardCapture(userdata) }
+	capture.write_count = count
+	capture.write_confirm = confirm
+	if count > 0 {
+		capture.write_mime = unsafe { cstring_to_vstring(contents[0].mime) }
+		capture.write_data = unsafe { cstring_to_vstring(contents[0].data) }
+	}
+}
+
 fn embedded_action_test_callback(app &App, target Target, action RuntimeAction) bool {
 	mut capture := unsafe { &EmbeddedActionCapture(app.opts.userdata) }
 	capture.calls++
@@ -35,6 +61,36 @@ fn embedded_action_test_callback(app &App, target Target, action RuntimeAction) 
 
 fn test_embedded_perform_ipc_reports_unhandled() {
 	assert perform_ipc('new-window')! == false
+}
+
+fn test_embedded_clipboard_c_callbacks_preserve_request_and_project_contents() {
+	mut capture := EmbeddedClipboardCapture{}
+	mut app := App{
+		opts: AppOptions{
+			read_clipboard_cb: embedded_read_clipboard_test_callback
+			c_write_clipboard_cb: embedded_write_clipboard_c_test_callback
+		}
+	}
+	mut surface := Surface{
+		app: &app
+		userdata: voidptr(&capture)
+	}
+	request := ClipboardRequest{ kind: .osc_52_read, clipboard: .selection }
+	assert surface.clipboard_request(.selection, request)!
+	assert capture.read_clipboard == int(Clipboard.selection)
+	assert !isnil(capture.read_state)
+	assert capture.read_state.kind == .osc_52_read
+	assert capture.read_state.clipboard == .selection
+
+	surface.complete_clipboard_request('clipboard response', capture.read_state, true)
+	surface.set_clipboard(.standard, [ClipboardContent{
+		mime: 'text/plain'
+		data: 'clipboard value'
+	}], true)!
+	assert capture.write_count == 1
+	assert capture.write_mime == 'text/plain'
+	assert capture.write_data == 'clipboard value'
+	assert capture.write_confirm
 }
 
 fn test_embedded_action_callback_receives_target_tag_and_payload() {
