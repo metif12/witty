@@ -3,6 +3,16 @@ module renderer
 import sync
 import time
 
+struct RedrawCapture {
+mut:
+	count int
+}
+
+fn capture_redraw(data voidptr) {
+	mut capture := unsafe { &RedrawCapture(data) }
+	capture.count++
+}
+
 fn test_renderer_mailbox_is_bounded_and_fifo() {
 	mut mailbox := RendererMailbox.create()
 	defer {
@@ -89,4 +99,23 @@ fn test_renderer_thread_timer_deadlines() {
 	}
 	assert render_thread.next_timer_timeout(500) == 500
 	assert render_thread.next_timer_timeout(1_000) == 0
+}
+
+fn test_renderer_thread_routes_app_thread_draws_through_redraw_callback() {
+	mut capture := RedrawCapture{}
+	mut render := Renderer{}
+	mut render_thread := RendererThread{
+		renderer: &render
+		draw_from_app_thread: true
+		app_redraw: Wakeup{
+			user_data: voidptr(&capture)
+			notify_fn: capture_redraw
+		}
+	}
+	render_thread.draw_frame(false)
+	assert capture.count == 1
+
+	render_thread.flags.visible = false
+	render_thread.draw_frame(true)
+	assert capture.count == 1
 }

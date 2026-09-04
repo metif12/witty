@@ -2,6 +2,7 @@ module renderer
 
 import font
 import highlight
+import configpkg
 
 // The messages that can be sent to a renderer thread.
 // This is the full message definition matching the Zig union type.
@@ -45,7 +46,10 @@ pub struct ResetCursorBlinkMessage {}
 // including a font size change, family change, etc.
 pub struct FontGridMessage {
 pub:
-	grid &font.SharedGrid = unsafe { nil }
+	grid    &font.SharedGrid = unsafe { nil }
+	set     &font.SharedGridSet = unsafe { nil }
+	new_key font.GridSetKey
+	old_key font.GridSetKey
 }
 
 // Changes the size. The screen size might change, padding, grid, etc.
@@ -57,8 +61,8 @@ pub:
 // The derived configuration to update the renderer with.
 pub struct ChangeConfigMessage {
 pub mut:
-	thread_config  &ThreadDerivedConfig = unsafe { nil }
-	renderer_config &DerivedConfig       = unsafe { nil }
+	thread_config   &ThreadDerivedConfig = unsafe { nil }
+	renderer_config &DerivedConfig = unsafe { nil }
 }
 
 // Matches for the current viewport from the search thread. These happen
@@ -89,10 +93,12 @@ pub:
 }
 
 // Initialize a change_config message.
-pub fn RendererMessage.init_change_config(config &DerivedConfig, thread_config &ThreadDerivedConfig) !RendererMessage {
+pub fn RendererMessage.init_change_config(config &configpkg.Config) !RendererMessage {
+	mut thread_value := ThreadDerivedConfig.init(config)
+	mut renderer_value := DerivedConfig.init(config)!
 	return RendererMessage(ChangeConfigMessage{
-		thread_config: unsafe { thread_config }
-		renderer_config: unsafe { config }
+		thread_config: &thread_value
+		renderer_config: &renderer_value
 	})
 }
 
@@ -100,7 +106,10 @@ pub fn RendererMessage.init_change_config(config &DerivedConfig, thread_config &
 pub fn (msg &RendererMessage) deinit() {
 	match msg {
 		ChangeConfigMessage {
-			// Would free thread_config and renderer_config here
+			if msg.renderer_config != unsafe { nil } {
+				mut config := unsafe { msg.renderer_config }
+				config.deinit()
+			}
 		}
 		else {}
 	}

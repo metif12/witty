@@ -245,6 +245,11 @@ pub mut:
 	// The mailbox that can be used to send this thread messages.
 	mailbox &RendererMailbox = unsafe { nil }
 
+	// GTK requires GPU work on the application thread. This callback is the
+	// translated App.Mailbox redraw_surface message boundary used there.
+	app_redraw           Wakeup
+	draw_from_app_thread bool
+
 	// Configuration we need derived from the main config.
 	config ThreadDerivedConfig
 
@@ -292,10 +297,16 @@ pub fn RendererMailbox.create() &RendererMailbox {
 
 pub fn (mut self RendererMailbox) destroy() {
 	if self.mutex == unsafe { nil } {
+		for msg in self.queue {
+			msg.deinit()
+		}
 		self.queue.clear()
 		return
 	}
 	self.mutex.lock()
+	for msg in self.queue {
+		msg.deinit()
+	}
 	self.queue.clear()
 	self.mutex.unlock()
 	self.mutex.destroy()
@@ -336,17 +347,22 @@ pub fn (mut self RendererMailbox) pop() ?RendererMessage {
 
 // Initialize the thread. This does not START the thread. This only sets
 // up all the internal state necessary prior to starting the thread.
-pub fn RendererThread.init(config &configpkg.Config, renderer_impl &Renderer, state &RenderState) !RendererThread {
+pub fn RendererThread.init(config &configpkg.Config, renderer_impl &Renderer, state &RenderState, app_redraw Wakeup) !RendererThread {
 	mut mailbox := RendererMailbox.create()
 
-	return RendererThread{
+	mut result := RendererThread{
 		config: ThreadDerivedConfig.init(config)
 		renderer: unsafe { renderer_impl }
 		state: unsafe { state }
 		mailbox: mailbox
+		app_redraw: app_redraw
 		event: sync.new_semaphore()
 		event_mutex: sync.new_mutex()
 	}
+	$if linux {
+		result.draw_from_app_thread = true
+	}
+	return result
 }
 
 // Clean up the thread.
@@ -505,6 +521,10 @@ fn (mut self RendererThread) drain_mailbox() ! {
 			}
 			FontGridMessage {
 				self.renderer.set_font_grid(msg.grid)
+				if msg.set != unsafe { nil } {
+					mut set := unsafe { msg.set }
+					set.deref(msg.old_key)
+				}
 			}
 			ResizeMessage {
 				self.renderer.set_screen_size(msg.size)
@@ -556,7 +576,11 @@ fn (mut self RendererThread) draw_frame(now bool) {
 		return
 	}
 
-	self.renderer.draw_frame(false) or {}
+	if self.draw_from_app_thread {
+		self.app_redraw.notify() or {}
+	} else {
+		self.renderer.draw_frame(false) or {}
+	}
 }
 
 // Render callback - updates frame data and draws.
