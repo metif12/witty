@@ -199,6 +199,53 @@ pub fn (ctx Context) color_edit3(label string, color Color, flags int) bool {
 	return false
 }
 
+pub fn (ctx Context) input_u32(label string, value u32) (bool, u32) {
+	_ = label
+	return false, value
+}
+
+pub fn (ctx Context) set_next_item_width_for_text(text string) {
+	_ = text
+}
+
+pub fn (ctx Context) begin_combo(label string, preview string) bool {
+	_ = label
+	_ = preview
+	return false
+}
+
+pub fn (ctx Context) end_combo() {}
+
+pub fn (ctx Context) selectable(label string, selected bool) bool {
+	_ = label
+	_ = selected
+	return false
+}
+
+pub fn (ctx Context) set_item_default_focus() {}
+
+pub fn (ctx Context) begin_list_box(label string) bool {
+	_ = label
+	return false
+}
+
+pub fn (ctx Context) end_list_box() {}
+
+pub fn (ctx Context) begin_rows_child(label string, visible_rows u32) bool {
+	_ = label
+	_ = visible_rows
+	return false
+}
+
+pub fn (ctx Context) end_child() {}
+
+pub fn (ctx Context) tree_node(label string) bool {
+	_ = label
+	return false
+}
+
+pub fn (ctx Context) tree_pop() {}
+
 pub fn (ctx Context) help_marker(value string) {
 	_ = value
 }
@@ -306,6 +353,13 @@ pub fn (ctx Context) push_item_width_for_text(text string) {
 pub fn (ctx Context) pop_item_width() {}
 
 pub fn (ctx Context) align_text_to_frame_padding() {}
+
+pub fn (ctx Context) pagelist_scrollbar(total usize, offset usize, len usize) i64 {
+	_ = total
+	_ = offset
+	_ = len
+	return 0
+}
 
 pub fn (ctx Context) tooltip(value string) {
 	_ = value

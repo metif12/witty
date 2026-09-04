@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "dcimgui.h"
@@ -381,6 +382,99 @@ static inline bool witty_cimgui_color_edit3(
     return ImGui_ColorEdit3(label, color, flags);
 }
 
+static inline bool witty_cimgui_input_u32(
+    ImGuiContext* context,
+    const char* label,
+    unsigned int* value
+) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_InputScalar(label, ImGuiDataType_U32, value);
+}
+
+static inline void witty_cimgui_set_next_item_width_for_text(
+    ImGuiContext* context,
+    const char* text
+) {
+    ImGui_SetCurrentContext(context);
+    ImGui_SetNextItemWidth(ImGui_CalcTextSize(text).x);
+}
+
+static inline bool witty_cimgui_begin_combo(
+    ImGuiContext* context,
+    const char* label,
+    const char* preview
+) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_BeginCombo(label, preview, ImGuiComboFlags_HeightSmall);
+}
+
+static inline void witty_cimgui_end_combo(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_EndCombo();
+}
+
+static inline bool witty_cimgui_selectable(
+    ImGuiContext* context,
+    const char* label,
+    bool selected
+) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_SelectableEx(
+        label,
+        selected,
+        ImGuiSelectableFlags_None,
+        (ImVec2){0.0f, 0.0f}
+    );
+}
+
+static inline void witty_cimgui_set_item_default_focus(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_SetItemDefaultFocus();
+}
+
+static inline bool witty_cimgui_begin_list_box(
+    ImGuiContext* context,
+    const char* label
+) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_BeginListBox(label, (ImVec2){0.0f, 0.0f});
+}
+
+static inline void witty_cimgui_end_list_box(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_EndListBox();
+}
+
+static inline bool witty_cimgui_begin_rows_child(
+    ImGuiContext* context,
+    const char* label,
+    unsigned int visible_rows
+) {
+    ImGui_SetCurrentContext(context);
+    float height = ImGui_GetTextLineHeightWithSpacing() * ((float)visible_rows + 2.0f);
+    return ImGui_BeginChild(
+        label,
+        (ImVec2){0.0f, height},
+        ImGuiChildFlags_Borders,
+        ImGuiWindowFlags_None
+    );
+}
+
+static inline void witty_cimgui_end_child(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_EndChild();
+}
+
+static inline bool witty_cimgui_tree_node(ImGuiContext* context, const char* label) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_TreeNodeEx(label, ImGuiTreeNodeFlags_None);
+}
+
+static inline void witty_cimgui_tree_pop(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_TreePop();
+}
+
 static inline void witty_cimgui_help_marker(ImGuiContext* context, const char* value) {
     ImGui_SetCurrentContext(context);
     ImGui_TextDisabledUnformatted("(?)");
@@ -585,6 +679,73 @@ static inline void witty_cimgui_pop_item_width(ImGuiContext* context) {
 static inline void witty_cimgui_align_text_to_frame_padding(ImGuiContext* context) {
     ImGui_SetCurrentContext(context);
     ImGui_AlignTextToFramePadding();
+}
+
+// Ghostty's inspector PageList scrollbar widget. The returned row delta is
+// zero unless the invisible drag target was moved during this frame.
+static inline long long witty_cimgui_pagelist_scrollbar(
+    ImGuiContext* context,
+    size_t total,
+    size_t offset,
+    size_t len
+) {
+    ImGui_SetCurrentContext(context);
+    if (total == 0) return 0;
+
+    float avail_width = ImGui_GetContentRegionAvail().x;
+    float bar_height = ImGui_GetFrameHeight();
+    ImVec2 cursor_pos = ImGui_GetCursorScreenPos();
+    float total_f = (float)total;
+    float grab_start = ((float)offset / total_f) * avail_width;
+    float grab_width = ((float)len / total_f) * avail_width;
+    if (grab_width < 4.0f) grab_width = 4.0f;
+
+    ImDrawList* draw_list = ImGui_GetWindowDrawList();
+    ImU32 bg_color = ImGui_GetColorU32(ImGuiCol_ScrollbarBg);
+    ImU32 grab_color = ImGui_GetColorU32(ImGuiCol_ScrollbarGrab);
+    ImDrawList_AddRectFilledEx(
+        draw_list,
+        cursor_pos,
+        (ImVec2){cursor_pos.x + avail_width, cursor_pos.y + bar_height},
+        bg_color,
+        0.0f,
+        ImDrawFlags_None
+    );
+    ImDrawList_AddRectFilledEx(
+        draw_list,
+        (ImVec2){cursor_pos.x + grab_start, cursor_pos.y},
+        (ImVec2){cursor_pos.x + grab_start + grab_width, cursor_pos.y + bar_height},
+        grab_color,
+        0.0f,
+        ImDrawFlags_None
+    );
+    (void)ImGui_InvisibleButton(
+        "scrollbar_drag",
+        (ImVec2){avail_width, bar_height},
+        ImGuiButtonFlags_None
+    );
+
+    long long delta_row = 0;
+    if (ImGui_IsItemActive()) {
+        ImVec2 drag_delta = ImGui_GetMouseDragDelta(ImGuiMouseButton_Left, 0.0f);
+        if (drag_delta.x != 0.0f) {
+            delta_row = (long long)((drag_delta.x / avail_width) * total_f);
+            ImGui_ResetMouseDragDelta();
+        }
+    }
+    if (ImGui_IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+        char tooltip[128];
+        snprintf(
+            tooltip,
+            sizeof(tooltip),
+            "offset=%zu len=%zu total=%zu",
+            offset,
+            len,
+            total
+        );
+        ImGui_SetTooltipUnformatted(tooltip);
+    }
+    return delta_row;
 }
 
 static inline void witty_cimgui_tooltip(ImGuiContext* context, const char* value) {

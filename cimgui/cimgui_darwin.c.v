@@ -116,6 +116,30 @@ fn C.witty_cimgui_input_u16(context voidptr, label &char, value &u16) bool
 
 fn C.witty_cimgui_color_edit3(context voidptr, label &char, r f32, g f32, b f32, flags int) bool
 
+fn C.witty_cimgui_input_u32(context voidptr, label &char, value &u32) bool
+
+fn C.witty_cimgui_set_next_item_width_for_text(context voidptr, text &char)
+
+fn C.witty_cimgui_begin_combo(context voidptr, label &char, preview &char) bool
+
+fn C.witty_cimgui_end_combo(context voidptr)
+
+fn C.witty_cimgui_selectable(context voidptr, label &char, selected bool) bool
+
+fn C.witty_cimgui_set_item_default_focus(context voidptr)
+
+fn C.witty_cimgui_begin_list_box(context voidptr, label &char) bool
+
+fn C.witty_cimgui_end_list_box(context voidptr)
+
+fn C.witty_cimgui_begin_rows_child(context voidptr, label &char, visible_rows u32) bool
+
+fn C.witty_cimgui_end_child(context voidptr)
+
+fn C.witty_cimgui_tree_node(context voidptr, label &char) bool
+
+fn C.witty_cimgui_tree_pop(context voidptr)
+
 fn C.witty_cimgui_help_marker(context voidptr, value &char)
 
 fn C.witty_cimgui_indent(context voidptr)
@@ -175,6 +199,8 @@ fn C.witty_cimgui_push_item_width_for_text(context voidptr, text &char)
 fn C.witty_cimgui_pop_item_width(context voidptr)
 
 fn C.witty_cimgui_align_text_to_frame_padding(context voidptr)
+
+fn C.witty_cimgui_pagelist_scrollbar(context voidptr, total usize, offset usize, len usize) i64
 
 fn C.witty_cimgui_tooltip(context voidptr, value &char)
 
@@ -384,6 +410,56 @@ pub fn (ctx Context) color_edit3(label string, color Color, flags int) bool {
 	return C.witty_cimgui_color_edit3(ctx.handle, label.str, color.r, color.g, color.b, flags)
 }
 
+pub fn (ctx Context) input_u32(label string, value u32) (bool, u32) {
+	mut updated := value
+	changed := C.witty_cimgui_input_u32(ctx.handle, label.str, &updated)
+	return changed, updated
+}
+
+pub fn (ctx Context) set_next_item_width_for_text(text string) {
+	C.witty_cimgui_set_next_item_width_for_text(ctx.handle, text.str)
+}
+
+pub fn (ctx Context) begin_combo(label string, preview string) bool {
+	return C.witty_cimgui_begin_combo(ctx.handle, label.str, preview.str)
+}
+
+pub fn (ctx Context) end_combo() {
+	C.witty_cimgui_end_combo(ctx.handle)
+}
+
+pub fn (ctx Context) selectable(label string, selected bool) bool {
+	return C.witty_cimgui_selectable(ctx.handle, label.str, selected)
+}
+
+pub fn (ctx Context) set_item_default_focus() {
+	C.witty_cimgui_set_item_default_focus(ctx.handle)
+}
+
+pub fn (ctx Context) begin_list_box(label string) bool {
+	return C.witty_cimgui_begin_list_box(ctx.handle, label.str)
+}
+
+pub fn (ctx Context) end_list_box() {
+	C.witty_cimgui_end_list_box(ctx.handle)
+}
+
+pub fn (ctx Context) begin_rows_child(label string, visible_rows u32) bool {
+	return C.witty_cimgui_begin_rows_child(ctx.handle, label.str, visible_rows)
+}
+
+pub fn (ctx Context) end_child() {
+	C.witty_cimgui_end_child(ctx.handle)
+}
+
+pub fn (ctx Context) tree_node(label string) bool {
+	return C.witty_cimgui_tree_node(ctx.handle, label.str)
+}
+
+pub fn (ctx Context) tree_pop() {
+	C.witty_cimgui_tree_pop(ctx.handle)
+}
+
 pub fn (ctx Context) help_marker(value string) {
 	C.witty_cimgui_help_marker(ctx.handle, value.str)
 }
@@ -502,6 +578,10 @@ pub fn (ctx Context) pop_item_width() {
 
 pub fn (ctx Context) align_text_to_frame_padding() {
 	C.witty_cimgui_align_text_to_frame_padding(ctx.handle)
+}
+
+pub fn (ctx Context) pagelist_scrollbar(total usize, offset usize, len usize) i64 {
+	return C.witty_cimgui_pagelist_scrollbar(ctx.handle, total, offset, len)
 }
 
 pub fn (ctx Context) tooltip(value string) {
