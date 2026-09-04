@@ -2,6 +2,7 @@ module shaper
 
 import font
 import macos
+import terminal
 
 // ============================================================
 // Test helpers
@@ -9,11 +10,15 @@ import macos
 
 struct TestShaper {
 mut:
-	shp Shaper
+	shp  Shaper
+	grid font.SharedGrid
+	lib  font.Library
 }
 
 fn (mut self TestShaper) deinit() {
 	self.shp.deinit()
+	self.grid.deinit()
+	self.lib.deinit()
 }
 
 enum TestFont {
@@ -31,35 +36,161 @@ fn create_shaper() !TestShaper {
 }
 
 fn create_shaper_with_font(font_req TestFont) !TestShaper {
-	// XTODO: Full test setup requires loading embedded fonts
-	// (inconsolata, geist_mono, jetbrains_mono, monaspace_neon,
-	// nerd_font, Apple Color Emoji) into a Collection / SharedGrid.
-	// For now we create a shaper with "dlig" feature enabled.
-	_ = font_req
+	data := match font_req {
+		.code_new_roman { font.embedded_code_new_roman }
+		.geist_mono { font.embedded_geist_mono }
+		.inconsolata { font.embedded_inconsolata }
+		.jetbrains_mono { font.embedded_jetbrains_mono }
+		.monaspace_neon { font.embedded_monaspace_neon }
+		.nerd_font { font.embedded_test_nerd_font }
+	}
+	mut lib := font.Library.init()!
+	mut collection := font.Collection.init()
+	collection.load_options = font.LoadOptions{
+		library: lib
+		size: font.DesiredSize{ points: 12, xdpi: 72, ydpi: 72 }
+	}
+	load_options := collection.load_options or { return error('missing load options') }
+	collection.add(font.Face.init_mem(lib, data, load_options.face_options())!, font.AddOptions{
+		style: .regular
+		fallback: false
+		size_adjustment: .none_
+	})!
 
-	// Some of our tests rely on dlig being enabled by default
+	// CoreText cannot load the embedded Noto color font format, so use the
+	// platform emoji face exactly as Ghostty's CoreText test setup does.
+	mut discovery := font.Discover.init()!
+	defer { discovery.deinit() }
+	mut iterator := discovery.discover(font.Descriptor{
+		family: 'Apple Color Emoji'
+		size: 12
+		monospace: false
+	})!
+	defer { iterator.deinit() }
+	if emoji := iterator.next() {
+		collection.add_deferred(emoji, font.AddOptions{
+			style: .regular
+			fallback: false
+			size_adjustment: .none_
+		})!
+	}
+	collection.add(font.Face.init_mem(lib, font.embedded_emoji_text, load_options.face_options())!, font.AddOptions{
+		style: .regular
+		fallback: false
+		size_adjustment: .none_
+	})!
+	grid := font.SharedGrid.init(font.CodepointResolver{
+		collection: collection
+	})!
 	mut shp := Shaper.init(font.ShaperOptions{
 		features: ['dlig']
 	})!
 
 	return TestShaper{
 		shp: shp
+		grid: grid
+		lib: lib
 	}
 }
 
 // Return a fully initialized shaper by discovering a named font on the system.
 fn create_shaper_with_discovered_font(font_req string) !TestShaper {
-	// XTODO: Font discovery requires CoreText APIs.
-	// (CTFontManagerCreateFontDescriptorsFromURL or similar.)
-	_ = font_req
-
+	mut lib := font.Library.init()!
+	mut collection := font.Collection.init()
+	collection.load_options = font.LoadOptions{
+		library: lib
+		size: font.DesiredSize{ points: 12, xdpi: 72, ydpi: 72 }
+	}
+	mut discovery := font.Discover.init()!
+	defer { discovery.deinit() }
+	mut iterator := discovery.discover(font.Descriptor{
+		family: font_req
+		size: 12
+		monospace: false
+	})!
+	defer { iterator.deinit() }
+	mut deferred := iterator.next() or { return error('font not found: ${font_req}') }
+	load_options := collection.load_options or { return error('missing load options') }
+	mut face := deferred.load(lib, load_options.face_options())!
+	mut name_buf := []u8{len: 512}
+	name := face.name(mut name_buf) or { '' }
+	if !name.contains(font_req) {
+		face.deinit()
+		return error('font not found: ${font_req}')
+	}
+	collection.add(face, font.AddOptions{
+		style: .regular
+		fallback: false
+		size_adjustment: .none_
+	})!
+	grid := font.SharedGrid.init(font.CodepointResolver{
+		collection: collection
+	})!
 	mut shp := Shaper.init(font.ShaperOptions{
 		features: []string{}
 	})!
 
 	return TestShaper{
 		shp: shp
+		grid: grid
+		lib: lib
 	}
+}
+
+struct CtShapeResult {
+mut:
+	runs   []font.TextRun
+	glyphs [][]font.ShapeCell
+}
+
+fn ct_render_row(input string, cols u16, graphemes bool) ![]terminal.RenderCell {
+	mut term := terminal.Terminal.init(terminal.Options{ cols: cols, rows: 3 })!
+	defer { term.deinit() }
+	term.modes.set(.grapheme_cluster, graphemes)
+	mut stream := term.vt_stream()
+	defer { stream.deinit() }
+	stream.next_slice(input)!
+	mut state := terminal.RenderState.empty()
+	defer { state.deinit() }
+	state.update(mut term)
+	mut result := []terminal.RenderCell{cap: state.row_data[0].cells.len}
+	for cell in state.row_data[0].cells {
+		result << terminal.RenderCell{
+			raw: cell.raw
+			grapheme: cell.grapheme.clone()
+			style: cell.style
+		}
+	}
+	return result
+}
+
+fn (mut td TestShaper) shape_render_cells(cells []terminal.RenderCell, selection ?[2]u16, cursor_x ?u16) !CtShapeResult {
+	mut result := CtShapeResult{}
+	mut iterator := td.shp.run_iterator(font.RunOptions{
+		grid: &td.grid
+		render_cells: cells
+		selection: selection
+		cursor_x: cursor_x
+	})
+	for {
+		run := iterator.next() or { break }
+		result.runs << run
+		result.glyphs << td.shp.shape(run)!.clone()
+	}
+	return result
+}
+
+fn (mut td TestShaper) shape_text(input string, cols u16, graphemes bool) !CtShapeResult {
+	cells := ct_render_row(input, cols, graphemes)!
+	return td.shape_render_cells(cells, none, none)
+}
+
+fn ct_codepoints(codepoints []u32) string {
+	mut result := ''
+	for cp in codepoints {
+		result += rune(cp).str()
+	}
+	return result
 }
 
 // ============================================================
@@ -70,43 +201,30 @@ fn create_shaper_with_discovered_font(font_req string) !TestShaper {
 // Verifies basic run iteration: plain text, text with spaces, emoji splits,
 // and bad ligatures (fl, fi, st).
 fn test_run_iterator() {
-	// XTODO: Requires terminal.Terminal, terminal.RenderState, and vtStream
-	// which are not available in the shaper module.
-
 	mut td := create_shaper() or { return }
 	defer { td.deinit() }
-
-	// Basic test: "ABCD" in a 5-col terminal should be 1 run.
-	// {
-	//     mut t := terminal.Terminal.init(.{ cols: 5, rows: 3 }) or { return }
-	//     defer { t.deinit() }
-	//     mut s := t.vt_stream()
-	//     defer { s.deinit() }
-	//     s.next_slice('ABCD') or { return }
-	//     mut state := terminal.RenderState.empty
-	//     defer { state.deinit() }
-	//     state.update(&t) or { return }
-	//     mut shp := &td.shp
-	//     mut it := shp.run_iterator(.{ grid: td.grid, cells: state.row_data.get(0).cells.slice() })
-	//     mut count := 0
-	//     for { _ = it.next() or { break }; count++ }
-	//     assert count == 1
-	// }
-
-	// Spaces should be part of a run
-	// "ABCD   EFG" should be 1 run.
-
-	// Emoji should split into 3 runs ("A", emoji, "D").
-
-	// Bad ligatures "fl", "fi", "st" should each be 2 runs.
+	assert (td.shape_text('ABCD', 5, false) or { panic(err) }).runs.len == 1
+	assert (td.shape_text('ABCD   EFG', 10, false) or { panic(err) }).runs.len == 1
+	assert (td.shape_text('A😃D', 5, false) or { panic(err) }).runs.len == 3
+	for input in ['fl', 'fi', 'st'] {
+		assert (td.shape_text(input, 5, false) or { panic(err) }).runs.len == 2
+	}
 }
 
 // test "run iterator: empty cells with background set"
 fn test_run_iterator_empty_cells_with_bg() {
-	// XTODO: Requires terminal infrastructure to create cells with
-	// bg_color_rgb content_tag and verify they produce runs.
 	mut td := create_shaper() or { return }
 	defer { td.deinit() }
+	mut cells := ct_render_row('\x1b[48;2;255;0;0mA', 5, false) or { panic(err) }
+	for i in 1 .. 3 {
+		cells[i].raw = terminal.CellData{
+			content_tag: .bg_color_rgb
+			color_rgb_r: 255
+		}
+	}
+	result := td.shape_render_cells(cells, none, none) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.glyphs[0].len == 3
 }
 
 // test "shape"
@@ -114,10 +232,8 @@ fn test_run_iterator_empty_cells_with_bg() {
 fn test_shape_thumbs_up() {
 	mut td := create_shaper() or { return }
 	defer { td.deinit() }
-
-	// XTODO: Would encode 0x1F44D (thumbs up plain) twice, then 0x1F3FD
-	// (medium skin tone), feed to terminal, shape, and verify 1 run.
-	// The actual shaping requires CoreText APIs.
+	result := td.shape_text('👍👍🏽', 10, false) or { panic(err) }
+	assert result.runs.len == 1
 }
 
 // test "shape nerd fonts"
@@ -125,9 +241,8 @@ fn test_shape_thumbs_up() {
 fn test_shape_nerd_fonts() {
 	mut td := create_shaper_with_font(.nerd_font) or { return }
 	defer { td.deinit() }
-
-	// XTODO: Would encode 0x20, 0xF024B, 0x20, feed to terminal,
-	// shape, and verify 1 run.
+	result := td.shape_text(' ' + rune(0xf024b).str() + ' ', 10, false) or { panic(err) }
+	assert result.runs.len == 1
 }
 
 // test "shape inconsolata ligs"
@@ -135,10 +250,12 @@ fn test_shape_nerd_fonts() {
 fn test_shape_inconsolata_ligs() {
 	mut td := create_shaper() or { return }
 	defer { td.deinit() }
-
-	// ">=" should be 1 run, 2 cells, 1 shaped glyph (ligature).
-	// "===" should be 1 run, 3 cells, 1 shaped glyph (ligature).
-	// XTODO: Requires terminal + CoreText shaping.
+	for input in ['>=', '==='] {
+		result := td.shape_text(input, 5, false) or { panic(err) }
+		assert result.runs.len == 1
+		assert result.runs[0].cells == u32(input.len)
+		assert result.glyphs[0].len == 1
+	}
 }
 
 // test "shape monaspace ligs"
@@ -146,9 +263,10 @@ fn test_shape_inconsolata_ligs() {
 fn test_shape_monaspace_ligs() {
 	mut td := create_shaper_with_font(.monaspace_neon) or { return }
 	defer { td.deinit() }
-
-	// "===" should be 1 run, 3 cells, 1 shaped glyph.
-	// XTODO: Requires terminal + CoreText shaping.
+	result := td.shape_text('===', 5, false) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.runs[0].cells == 3
+	assert result.glyphs[0].len == 1
 }
 
 // https://github.com/mitchellh/ghostty/issues/1708
@@ -158,8 +276,10 @@ fn test_shape_left_replaced_lig_last_run() {
 	mut td := create_shaper_with_font(.geist_mono) or { return }
 	defer { td.deinit() }
 
-	// "!==" should be 1 run, 3 cells, 1 shaped glyph.
-	// XTODO: Requires terminal + CoreText shaping.
+	result := td.shape_text('!==', 5, false) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.runs[0].cells == 3
+	assert result.glyphs[0].len == 1
 }
 
 // https://github.com/mitchellh/ghostty/issues/1708
@@ -169,8 +289,10 @@ fn test_shape_left_replaced_lig_early_run() {
 	mut td := create_shaper_with_font(.geist_mono) or { return }
 	defer { td.deinit() }
 
-	// "!==X" should be 1 run, 4 cells, 2 shaped glyphs.
-	// XTODO: Requires terminal + CoreText shaping.
+	result := td.shape_text('!==X', 5, false) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.runs[0].cells == 4
+	assert result.glyphs[0].len == 2
 }
 
 // https://github.com/mitchellh/ghostty/issues/1664
@@ -180,8 +302,9 @@ fn test_shape_omega_jb_mono() {
 	mut td := create_shaper_with_font(.jetbrains_mono) or { return }
 	defer { td.deinit() }
 
-	// "\u{03C9} foo" should be 1 run, 5 cells.
-	// XTODO: Requires terminal + CoreText shaping.
+	result := td.shape_text('ω foo', 10, false) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.glyphs[0].len == 5
 }
 
 // test "shape emoji width"
@@ -190,8 +313,9 @@ fn test_shape_emoji_width() {
 	mut td := create_shaper() or { return }
 	defer { td.deinit() }
 
-	// "👍" should be 1 run, 1 shaped cell.
-	// XTODO: Requires terminal + CoreText shaping.
+	result := td.shape_text('👍', 5, false) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.glyphs[0].len == 1
 }
 
 // test "shape emoji width long"
@@ -201,9 +325,9 @@ fn test_shape_emoji_width_long() {
 	mut td := create_shaper() or { return }
 	defer { td.deinit() }
 
-	// Long emoji (0x1F9D4 + graphemes 0x1F3FB, 0x200D, 0x2642, 0xFE0F)
-	// should shape to 1 run, 1 cell.
-	// XTODO: Requires terminal + page grapheme setup + CoreText shaping.
+	result := td.shape_text('🧔🏻‍♂️', 30, true) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.glyphs[0].len == 1
 }
 
 // test "shape variation selector VS15"
@@ -212,8 +336,9 @@ fn test_shape_variation_selector_vs15() {
 	mut td := create_shaper() or { return }
 	defer { td.deinit() }
 
-	// 0x270C + 0xFE0E should be 1 run, 1 cell.
-	// XTODO: Requires terminal + CoreText shaping.
+	result := td.shape_text('✌︎', 10, false) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.glyphs[0].len == 1
 }
 
 // test "shape variation selector VS16"
@@ -222,8 +347,9 @@ fn test_shape_variation_selector_vs16() {
 	mut td := create_shaper() or { return }
 	defer { td.deinit() }
 
-	// 0x270C + 0xFE0F should be 1 run, 1 cell.
-	// XTODO: Requires terminal + CoreText shaping.
+	result := td.shape_text('✌️', 10, false) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.glyphs[0].len == 1
 }
 
 // test "shape with empty cells in between"
@@ -232,8 +358,9 @@ fn test_shape_empty_cells_between() {
 	mut td := create_shaper() or { return }
 	defer { td.deinit() }
 
-	// "A\x1b[5CB" should be 1 run, 7 cells.
-	// XTODO: Requires terminal + CoreText shaping.
+	result := td.shape_text('A\x1b[5CB', 30, false) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.glyphs[0].len == 7
 }
 
 // test "shape Combining characters"
@@ -242,68 +369,90 @@ fn test_shape_combining_characters() {
 	mut td := create_shaper() or { return }
 	defer { td.deinit() }
 
-	// 'n' + 0x0308 + 0x0308 + 'a' should be 1 run, 4 cells.
-	// cells[0..2].x == 0, cells[3].x == 1.
-	// XTODO: Requires terminal with grapheme_cluster mode + CoreText shaping.
+	result := td.shape_text('n̈̈a', 30, true) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.glyphs[0].len == 4
+	assert result.glyphs[0].map(it.x) == [u32(0), 0, 0, 1]
 }
 
 // test "shape Devanagari string"
 // Tests that non-monotonic CoreText output is sorted correctly.
 fn test_shape_devanagari() {
-	// XTODO: Requires Arial Unicode MS font discovery + terminal + CoreText shaping.
-	// The string "अपार्टमेंट" should produce 8 cells with specific x values.
 	mut td := create_shaper_with_discovered_font('Arial Unicode MS') or { return }
 	defer { td.deinit() }
+	result := td.shape_text('अपार्टमेंट', 30, false) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.glyphs[0].len == 8
+	assert result.glyphs[0].map(it.x) == [u32(0), 1, 2, 4, 4, 5, 5, 6]
 }
 
 // test "shape Tai Tham vowels (position differs from advance)"
 // Tests that position.x offset is correct when it differs from advance.
 fn test_shape_tai_tham_vowels() {
-	// XTODO: Requires Noto Sans Tai Tham font discovery.
-	// 0x1A2F + 0x1A70 should produce 2 cells, both at x=0.
-	// cells[0].x_offset == cell_width, cells[1].x_offset == 0.
 	mut td := create_shaper_with_discovered_font('Noto Sans Tai Tham') or { return }
 	defer { td.deinit() }
+	result := td.shape_text(ct_codepoints([u32(0x1a2f), 0x1a70]), 30, true) or {
+		panic(err)
+	}
+	assert result.runs.len == 1
+	assert result.glyphs[0].len == 2
+	assert result.glyphs[0].map(it.x) == [u32(0), 0]
+	cell_width := i32(td.grid.metrics.cell_width)
+	assert result.glyphs[0][0].x_offset == cell_width
+	assert result.glyphs[0][1].x_offset == 0
 }
 
 // test "shape Tai Tham letters (position.y differs from advance)"
 // Tests ligature across grapheme clusters with y-offset.
 fn test_shape_tai_tham_letters() {
-	// XTODO: Requires Noto Sans Tai Tham font discovery.
-	// HA + SAKOT + YA + U should produce 3 cells, all at x=0.
-	// cells[2].y_offset == -3.
 	mut td := create_shaper_with_discovered_font('Noto Sans Tai Tham') or { return }
 	defer { td.deinit() }
+	input := ct_codepoints([u32(0x1a49), 0x1a60, 0x1a3f, 0x1a69])
+	result := td.shape_text(input, 30, true) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.glyphs[0].len == 3
+	assert result.glyphs[0].map(it.x) == [u32(0), 0, 0]
+	assert result.glyphs[0][2].y_offset == -3
 }
 
 // test "shape Javanese ligatures"
 // Tests PANGKON ligature with correct x_offset.
 fn test_shape_javanese_ligatures() {
-	// XTODO: Requires Noto Sans Javanese font discovery.
-	// NA + PANGKON + HA + SUKU vowel -> 3 cells at x=0.
-	// cells[2].x_offset > 3 * cell_width.
 	mut td := create_shaper_with_discovered_font('Noto Sans Javanese') or { return }
 	defer { td.deinit() }
+	input := ct_codepoints([u32(0xa9a4), 0xa9c0, 0xa9b2, 0xa9b8])
+	result := td.shape_text(input, 30, true) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.glyphs[0].len == 3
+	assert result.glyphs[0].map(it.x) == [u32(0), 0, 0]
+	cell_width := i32(td.grid.metrics.cell_width)
+	assert result.glyphs[0][2].x_offset > 3 * cell_width
 }
 
 // test "shape Chakma vowel sign with ligature (vowel sign renders first)"
 // Tests out-of-order rendering where vowel sign appears before the consonant.
 fn test_shape_chakma_vowel_sign() {
-	// XTODO: Requires Noto Sans Chakma font discovery.
-	// BAA + TAA + Virama + YYAA + Vowel Sign U -> 4 cells.
-	// cells[1].x_offset < cells[2].x_offset (vowel renders before TAA).
 	mut td := create_shaper_with_discovered_font('Noto Sans Chakma') or { return }
 	defer { td.deinit() }
+	input := ct_codepoints([u32(0x1111d), 0x11116, 0x11133, 0x11120, 0x1112c])
+	result := td.shape_text(input, 30, true) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.glyphs[0].len == 4
+	assert result.glyphs[0].map(it.x) == [u32(0), 0, 0, 0]
+	assert result.glyphs[0][1].x_offset < result.glyphs[0][2].x_offset
 }
 
 // test "shape Bengali ligatures with out of order vowels"
 // Tests Bengali text where vowel sign E renders before SSA.
 fn test_shape_bengali_ligatures() {
-	// XTODO: Requires Arial Unicode MS font discovery.
-	// RA + AA vowel + SSA + Virama + TTA + Virama + RA + E vowel -> 8 cells.
-	// cells[2].x_offset < cells[3].x_offset.
 	mut td := create_shaper_with_discovered_font('Arial Unicode MS') or { return }
 	defer { td.deinit() }
+	input := ct_codepoints([u32(0x09b0), 0x09be, 0x09b7, 0x09cd, 0x099f, 0x09cd, 0x09b0, 0x09c7])
+	result := td.shape_text(input, 30, true) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.glyphs[0].len == 8
+	assert result.glyphs[0].map(it.x) == [u32(0), 0, 0, 0, 0, 0, 0, 0]
+	assert result.glyphs[0][2].x_offset < result.glyphs[0][3].x_offset
 }
 
 // test "shape box glyphs"
@@ -313,10 +462,13 @@ fn test_shape_box_glyphs() {
 	mut td := create_shaper() or { return }
 	defer { td.deinit() }
 
-	// 0x2500 + 0x2501 -> 1 run, 2 cells.
-	// cells[0].glyph_index == 0x2500, cells[0].x == 0.
-	// cells[1].glyph_index == 0x2501, cells[1].x == 1.
-	// XTODO: Requires terminal + sprite font detection.
+	result := td.shape_text('─━', 10, false) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.glyphs[0].len == 2
+	assert result.glyphs[0][0].glyph_index == 0x2500
+	assert result.glyphs[0][0].x == 0
+	assert result.glyphs[0][1].glyph_index == 0x2501
+	assert result.glyphs[0][1].x == 1
 }
 
 // test "shape selection boundary"
@@ -325,13 +477,13 @@ fn test_shape_selection_boundary() {
 	mut td := create_shaper() or { return }
 	defer { td.deinit() }
 
-	// "a1b2c3d4e5" with various selections:
-	// Full line selection {0, cols-1} -> 1 run.
-	// Selection {2, cols-1} -> 2 runs.
-	// Selection {0, 3} -> 2 runs.
-	// Selection {1, 3} -> 3 runs.
-	// Selection {1, 1} -> 3 runs.
-	// XTODO: Requires terminal + RunIterator with selection support.
+	cells := ct_render_row('a1b2c3d4e5', 10, false) or { panic(err) }
+	selections := [[u16(0), 9]!, [u16(2), 9]!, [u16(0), 3]!, [u16(1), 3]!, [u16(1), 1]!]
+	expected := [1, 2, 2, 3, 3]
+	for i, selection in selections {
+		result := td.shape_render_cells(cells, selection, none) or { panic(err) }
+		assert result.runs.len == expected[i]
+	}
 }
 
 // test "shape cursor boundary"
@@ -340,13 +492,17 @@ fn test_shape_cursor_boundary() {
 	mut td := create_shaper() or { return }
 	defer { td.deinit() }
 
-	// "a1b2c3d4e5" with various cursor positions:
-	// No cursor -> 1 run.
-	// cursor_x=0 -> 2 runs.
-	// cursor_x=1 -> 3 runs.
-	// cursor_x=9 -> 2 runs.
-	// Without cursor splitting remains 1.
-	// XTODO: Requires terminal + RunIterator with cursor_x support.
+	cells := ct_render_row('a1b2c3d4e5', 10, false) or { panic(err) }
+	assert (td.shape_render_cells(cells, none, none) or { panic(err) }).runs.len == 1
+	for cursor_x, expected in {
+		u16(0): 2
+		u16(1): 3
+		u16(9): 2
+	} {
+		result := td.shape_render_cells(cells, none, cursor_x) or { panic(err) }
+		assert result.runs.len == expected
+		assert (td.shape_render_cells(cells, none, none) or { panic(err) }).runs.len == 1
+	}
 }
 
 // test "shape cursor boundary and colored emoji"
@@ -355,9 +511,12 @@ fn test_shape_cursor_boundary_colored_emoji() {
 	mut td := create_shaper() or { return }
 	defer { td.deinit() }
 
-	// "👍🏼" with cursor at 0 or 1 should not split the emoji run.
-	// Always 1 run.
-	// XTODO: Requires terminal + cursor handling for wide chars.
+	cells := ct_render_row('👍🏼', 3, false) or { panic(err) }
+	assert (td.shape_render_cells(cells, none, none) or { panic(err) }).runs.len == 1
+	for cursor_x in [u16(0), 1] {
+		assert (td.shape_render_cells(cells, none, cursor_x) or { panic(err) }).runs.len == 1
+		assert (td.shape_render_cells(cells, none, none) or { panic(err) }).runs.len == 1
+	}
 }
 
 // test "shape cell attribute change"
@@ -366,12 +525,13 @@ fn test_shape_cell_attribute_change() {
 	mut td := create_shaper() or { return }
 	defer { td.deinit() }
 
-	// ">=" plain -> 1 run.
-	// ">" + bold "=" -> 2 runs.
-	// fg color change between ">" and "=" -> 2 runs.
-	// bg color change between ">" and "=" -> 1 run (no split).
-	// Same bg on both -> 1 run.
-	// XTODO: Requires terminal with ANSI escape sequence processing.
+	inputs := ['>=', '>\x1b[1m=', '\x1b[38;2;1;2;3m>\x1b[38;2;3;2;1m=', '\x1b[48;2;1;2;3m>\x1b[48;2;3;2;1m=',
+		'\x1b[48;2;1;2;3m>=']
+	expected := [1, 2, 2, 1, 1]
+	for i, input in inputs {
+		result := td.shape_text(input, 10, false) or { panic(err) }
+		assert result.runs.len == expected[i]
+	}
 }
 
 // test "shape high plane sprite font codepoint"
@@ -399,6 +559,21 @@ fn test_shape_high_plane_sprite_font_codepoint() {
 	assert sp.is_pair == true
 	assert sp.hi == 0xD83E
 	assert sp.lo == 0xDF70
+
+	cells := ct_render_row(rune(0x1fb70).str(), 10, false) or { panic(err) }
+	result := td.shape_render_cells(cells, none, none) or { panic(err) }
+	assert result.runs.len == 1
+	assert result.runs[0].cells == 1
+	assert result.runs[0].offset == 0
+	assert result.runs[0].font_index == font.sprite_index
+	assert td.shp.run_state.unichars == [u16(0xd83e), 0xdf70]
+	assert td.shp.run_state.codepoints == [
+		Codepoint{ codepoint: 0x1fb70, cluster: 0 },
+		Codepoint{ codepoint: 0, cluster: 0 },
+	]
+	assert result.glyphs[0].len == 1
+	assert result.glyphs[0][0].x == 0
+	assert result.glyphs[0][0].glyph_index == 0x1fb70
 }
 
 // test "add_codepoint with surrogate pairs"

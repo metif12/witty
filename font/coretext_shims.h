@@ -130,7 +130,10 @@ static int witty_coretext_get_metrics(
 	double *strikethrough_position,
 	double *strikethrough_thickness,
 	double *cap_height,
-	double *ex_height
+	double *ex_height,
+	double *ascii_height,
+	double *ic_width,
+	int *has_ic_width
 ) {
 	if (!font_ptr) return 0;
 	CTFontRef font = (CTFontRef)font_ptr;
@@ -148,15 +151,31 @@ static int witty_coretext_get_metrics(
 	for (int i = 0; i < 95; i++) chars[i] = (UniChar)(32 + i);
 	memset(glyphs, 0, sizeof(glyphs));
 	memset(advances, 0, sizeof(advances));
-	if (CTFontGetGlyphsForCharacters(font, chars, glyphs, 95)) {
-		CTFontGetAdvancesForGlyphs(font, kCTFontOrientationHorizontal, glyphs, advances, 95);
-		for (int i = 0; i < 95; i++) {
-			if (glyphs[i] != 0 && advances[i].width > max_advance) {
-				max_advance = advances[i].width;
-			}
+	(void)CTFontGetGlyphsForCharacters(font, chars, glyphs, 95);
+	CTFontGetAdvancesForGlyphs(font, kCTFontOrientationHorizontal, glyphs, advances, 95);
+	for (int i = 0; i < 95; i++) {
+		if (advances[i].width > max_advance) {
+			max_advance = advances[i].width;
 		}
 	}
-	if (max_advance <= 0.0) max_advance = size * 0.62;
+	CGRect ascii_bounds = CTFontGetBoundingRectsForGlyphs(
+		font, kCTFontOrientationHorizontal, glyphs, NULL, 95);
+
+	double measured_ic_width = 0.0;
+	int measured_has_ic_width = 0;
+	UniChar water_char = 0x6C34;
+	CGGlyph water_glyph = 0;
+	if (CTFontGetGlyphsForCharacters(font, &water_char, &water_glyph, 1) && water_glyph != 0) {
+		CGSize water_advance = CGSizeZero;
+		CTFontGetAdvancesForGlyphs(
+			font, kCTFontOrientationHorizontal, &water_glyph, &water_advance, 1);
+		CGRect water_bounds = CTFontGetBoundingRectsForGlyphs(
+			font, kCTFontOrientationHorizontal, &water_glyph, NULL, 1);
+		if (water_bounds.size.width <= water_advance.width) {
+			measured_ic_width = water_advance.width;
+			measured_has_ic_width = 1;
+		}
+	}
 
 	if (px_per_em) *px_per_em = size;
 	if (cell_width) *cell_width = max_advance;
@@ -175,6 +194,9 @@ static int witty_coretext_get_metrics(
 	}
 	if (cap_height) *cap_height = cap;
 	if (ex_height) *ex_height = xh;
+	if (ascii_height) *ascii_height = ascii_bounds.size.height;
+	if (ic_width) *ic_width = measured_ic_width;
+	if (has_ic_width) *has_ic_width = measured_has_ic_width;
 	return 1;
 }
 
@@ -775,7 +797,10 @@ static int witty_coretext_get_metrics(
 	double *strikethrough_position,
 	double *strikethrough_thickness,
 	double *cap_height,
-	double *ex_height
+	double *ex_height,
+	double *ascii_height,
+	double *ic_width,
+	int *has_ic_width
 ) {
 	(void)font_ptr;
 	(void)px_per_em;
@@ -789,6 +814,9 @@ static int witty_coretext_get_metrics(
 	(void)strikethrough_thickness;
 	(void)cap_height;
 	(void)ex_height;
+	(void)ascii_height;
+	(void)ic_width;
+	(void)has_ic_width;
 	return 0;
 }
 

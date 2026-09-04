@@ -229,9 +229,18 @@ fn test_face_metrics() {
 	narrow := collection_test_metrics(mut c, narrow_idx)
 	wide := collection_test_metrics(mut c, wide_idx)
 	assert_collection_close(16.0, narrow.px_per_em, 0.001)
-	assert_collection_close(8.0, narrow.cell_width, 0.001)
+	$if macos {
+		// The native CoreText backend uses unhinted advances.
+		assert_collection_close(7.3828125, narrow.cell_width, 0.001)
+	} $else {
+		assert_collection_close(8.0, narrow.cell_width, 0.001)
+	}
 	assert_collection_close(12.3046875, narrow.ascent, 0.001)
-	assert_collection_close(10.0, wide.cell_width, 0.001)
+	$if macos {
+		assert_collection_close(9.6, wide.cell_width, 0.001)
+	} $else {
+		assert_collection_close(10.0, wide.cell_width, 0.001)
+	}
 	assert_collection_close(14.72, wide.ascent, 0.001)
 	assert narrow.ic_width_val() == 2 * narrow.cell_width
 	assert wide.ic_width_val() == wide.ascii_height_val()

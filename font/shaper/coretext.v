@@ -524,23 +524,18 @@ fn (mut self Shaper) get_font(run font.TextRun) !&macos.CFDictionary {
 		grid.lock.runlock()
 		return err
 	}
-	mut name_buf := []u8{len: 1024}
-	font_name := face.name(mut name_buf) or {
+	if isnil(face.ct_font) {
 		grid.lock.runlock()
-		return err
+		return error('CoreText shaper face has no CoreText font')
 	}
-	font_size := face.size.pixels()
+	original := unsafe { &macos.CTFont(face.ct_font) }
 	disable_defaults := face.quirks_disable_default_font_features
 	grid.lock.runlock()
 
-	name := macos.CFString.create_with_bytes(font_name.bytes(), .utf8, false)!
-	defer { name.release() }
-	base_desc := macos.CTFontDescriptor.create_with_name_and_size(name, font_size)!
-	defer { base_desc.release() }
 	feature_attrs := if disable_defaults { self.features_no_default } else { self.features }
-	desc := base_desc.copy_with_attributes(feature_attrs)!
+	desc := macos.CTFontDescriptor.create_with_attributes(feature_attrs)!
 	defer { desc.release() }
-	run_font := macos.CTFont.create_with_descriptor(desc, font_size)!
+	run_font := original.copy_with_attributes(0, unsafe { nil }, desc)!
 	defer { run_font.release() }
 
 	attr_keys := [macos.StringAttribute.font.key()]

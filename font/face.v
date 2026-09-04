@@ -490,7 +490,9 @@ module font
 
 import freetype
 import harfbuzz
+import macos
 import math
+import os
 import stb
 import sync
 
@@ -823,6 +825,9 @@ pub mut:
 	face freetype.Face
 	// Harfbuzz font corresponding to this face.
 	hb_font harfbuzz.Font
+	// CoreText font created from the same source. The CoreText shaper must
+	// copy this exact face rather than resolving an installed font by name.
+	ct_font voidptr = unsafe { nil }
 	// FreeType exposes one mutable glyph slot per face. Rendering and metrics
 	// measurement therefore serialize access to that slot.
 	ft_mutex &sync.Mutex = unsafe { nil }
@@ -848,7 +853,16 @@ pub fn Face.init_file(lib Library, path string, index i32, opts FaceOptions) !Fa
 		lib.mutex.unlock()
 	}
 	mut ft_face := lib.lib.init_face(path, index)!
-	return init_freetype_face(lib, mut ft_face, opts)
+	mut result := init_freetype_face(lib, mut ft_face, opts)!
+	$if macos {
+		if source := os.read_bytes(path) {
+			if mut core_face := CoreTextFace.init(lib, source, opts) {
+				result.ct_font = core_face.ct_font
+				core_face.ct_font = unsafe { nil }
+			}
+		}
+	}
+	return result
 }
 
 // init_mem initializes a new font face from in-memory data.
@@ -861,7 +875,14 @@ pub fn Face.init_mem(lib Library, source []u8, opts FaceOptions) !Face {
 		lib.mutex.unlock()
 	}
 	mut ft_face := lib.lib.init_memory_face(source, 0)!
-	return init_freetype_face(lib, mut ft_face, opts)
+	mut result := init_freetype_face(lib, mut ft_face, opts)!
+	$if macos {
+		if mut core_face := CoreTextFace.init(lib, source, opts) {
+			result.ct_font = core_face.ct_font
+			core_face.ct_font = unsafe { nil }
+		}
+	}
+	return result
 }
 
 fn init_freetype_face(lib Library, mut ft_face freetype.Face, opts FaceOptions) !Face {
@@ -897,6 +918,10 @@ pub fn (mut self Face) deinit() {
 		self.face.deinit()
 	}
 	self.hb_font.destroy()
+	if !isnil(self.ct_font) {
+		macos.cf_release(self.ct_font)
+		self.ct_font = unsafe { nil }
+	}
 }
 
 // name returns the font name. Reads the SFNT name table to find
@@ -969,6 +994,9 @@ pub fn (self &Face) synthetic_bold_face(opts FaceOptions) !Face {
 	self.face.ref()
 	mut ft_face := self.face
 	mut f := init_freetype_face(self.lib, mut ft_face, opts)!
+	if !isnil(self.ct_font) {
+		f.ct_font = macos.cf_retain(self.ct_font)
+	}
 	f.synthetic_italic = self.synthetic_italic
 	f.synthetic_bold = true
 	return f
@@ -980,6 +1008,9 @@ pub fn (self &Face) synthetic_italic_face(opts FaceOptions) !Face {
 	self.face.ref()
 	mut ft_face := self.face
 	mut f := init_freetype_face(self.lib, mut ft_face, opts)!
+	if !isnil(self.ct_font) {
+		f.ct_font = macos.cf_retain(self.ct_font)
+	}
 	f.synthetic_italic = true
 	f.synthetic_bold = self.synthetic_bold
 	return f
@@ -989,6 +1020,12 @@ pub fn (self &Face) synthetic_italic_face(opts FaceOptions) !Face {
 // is responsible for clearing any glyph caches, font atlas data, etc.
 pub fn (mut self Face) set_face_size(opts FaceOptions) ! {
 	set_freetype_size(self.face, opts.size)!
+	if !isnil(self.ct_font) {
+		mut resized := CoreTextFace.init_font_copy(self.ct_font, opts)!
+		macos.cf_release(self.ct_font)
+		self.ct_font = resized.ct_font
+		resized.ct_font = unsafe { nil }
+	}
 	self.size = opts.size
 }
 
@@ -1523,7 +1560,7 @@ pub fn (mut self Face) get_metrics() FaceMetrics {
 		cell_width = freetype.f26dot6_to_f64(size_metrics.max_advance)
 	}
 	ascii_estimate := ascii_top - ascii_bottom
-	ascii_height := if ascii_estimate > 0.0 { ?f64(ascii_estimate) } else { ?f64(none) }
+	mut ascii_height := if ascii_estimate > 0.0 { ?f64(ascii_estimate) } else { ?f64(none) }
 
 	// --- Cap height / ex height ---
 	mut cap_height := ?f64(none)
@@ -1541,7 +1578,23 @@ pub fn (mut self Face) get_metrics() FaceMetrics {
 
 	// Measure '水' for the CSS ic unit. Reject patched fonts whose
 	// ideograph bounding box is wider than its advance.
-	ic_width := self.measure_ic_width()
+	mut ic_width := self.measure_ic_width()
+
+	$if macos {
+		// CoreText shaping uses unhinted native advances and bounds. Preserve
+		// the table-derived vertical metrics above, but measure horizontal
+		// layout through the exact CTFont used by the shaper.
+		if !isnil(self.ct_font) {
+			mut core_face := CoreTextFace{
+				ct_font: self.ct_font
+				size: self.size
+			}
+			core_metrics := core_face.get_metrics()
+			cell_width = core_metrics.cell_width
+			ascii_height = core_metrics.ascii_height
+			ic_width = core_metrics.ic_width
+		}
+	}
 
 	return FaceMetrics{
 		px_per_em: px_per_em

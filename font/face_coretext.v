@@ -40,7 +40,7 @@ fn C.witty_coretext_color_info(font_ptr voidptr, has_sbix &int) int
 
 fn C.witty_coretext_free_buffer(ptr &u8)
 
-fn C.witty_coretext_get_metrics(font_ptr voidptr, px_per_em &f64, cell_width &f64, ascent &f64, descent &f64, line_gap &f64, underline_position &f64, underline_thickness &f64, strikethrough_position &f64, strikethrough_thickness &f64, cap_height &f64, ex_height &f64) int
+fn C.witty_coretext_get_metrics(font_ptr voidptr, px_per_em &f64, cell_width &f64, ascent &f64, descent &f64, line_gap &f64, underline_position &f64, underline_thickness &f64, strikethrough_position &f64, strikethrough_thickness &f64, cap_height &f64, ex_height &f64, ascii_height &f64, ic_width &f64, has_ic_width &int) int
 
 fn C.witty_coretext_render_glyph(font_ptr voidptr, glyph_id u32, cell_height f64, cell_baseline f64, width_out &u32, height_out &u32, offset_x_out &i32, offset_y_out &i32, buffer_out &&u8) int
 
@@ -514,8 +514,11 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 	mut st_thick := f64(0)
 	mut cap_height := f64(0)
 	mut ex_height := f64(0)
+	mut ascii_height := f64(0)
+	mut ic_width := f64(0)
+	mut has_ic_width := int(0)
 
-	if C.witty_coretext_get_metrics(self.ct_font, &px_per_em, &cell_width, &ascent, &descent, &line_gap, &ul_pos, &ul_thick, &st_pos, &st_thick, &cap_height, &ex_height) == 0 {
+	if C.witty_coretext_get_metrics(self.ct_font, &px_per_em, &cell_width, &ascent, &descent, &line_gap, &ul_pos, &ul_thick, &st_pos, &st_thick, &cap_height, &ex_height, &ascii_height, &ic_width, &has_ic_width) == 0 {
 		return FaceMetrics{}
 	}
 
@@ -531,6 +534,8 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 		strikethrough_thickness: st_thick
 		cap_height: cap_height
 		ex_height: ex_height
+		ascii_height: ascii_height
+		ic_width: if has_ic_width != 0 { ic_width } else { none }
 	}
 }
 
