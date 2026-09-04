@@ -99,3 +99,84 @@ fn test_opengl_atlas_texture_options_match_atlas_layout() {
 		assert err.msg().contains('unsupported')
 	}
 }
+
+fn test_opengl_shader_include_expansion_matches_source_preprocessor() {
+	expanded := expand_gl_shader(gl_cell_text_vertex_shader_raw)
+	assert expanded.starts_with('#version 430 core')
+	assert !expanded.starts_with('#include "common.glsl"')
+	assert expanded.contains('layout(location = 0) in uvec2 glyph_pos;')
+}
+
+fn test_opengl_shader_vertex_layouts_match_source() {
+	assert $sizeof(GLTextCell) == 32
+	assert __offsetof(GLTextCell, glyph_x) == 0
+	assert __offsetof(GLTextCell, glyph_w) == 8
+	assert __offsetof(GLTextCell, bearing_x) == 16
+	assert __offsetof(GLTextCell, grid_x) == 20
+	assert __offsetof(GLTextCell, color) == 24
+	assert __offsetof(GLTextCell, atlas) == 28
+	assert __offsetof(GLTextCell, flags) == 29
+
+	text := gl_text_cell_attributes()
+	assert text.len == 7
+	assert text[0] == GLVertexAttribute{ scalar_type: .u32_, count: 2, offset: 0 }
+	assert text[6] == GLVertexAttribute{ scalar_type: .u8_, count: 1, offset: 29 }
+
+	image := gl_image_attributes()
+	assert image.len == 4
+	assert image[0].offset == 0
+	assert image[3].offset == 32
+
+	bg_image := gl_bg_image_attributes()
+	assert bg_image.len == 2
+	assert bg_image[1].offset == 4
+}
+
+fn test_opengl_uniform_conversion_packs_boolean_fields() {
+	packed := gl_uniforms(Uniforms{
+		padding_extend: PaddingExtend{
+			left: true
+			up: true
+		}
+		bools: UniformBools{
+			cursor_wide: true
+			use_display_p3: true
+			use_linear_blending: true
+			use_linear_correction: true
+		}
+	})
+	assert packed.padding_extend == 5
+	assert packed.cursor_wide == 1
+	assert packed.use_display_p3 == 1
+	assert packed.use_linear_blending == 1
+	assert packed.use_linear_correction == 1
+	assert __offsetof(GLUniforms, screen_size) == 64
+	assert __offsetof(GLUniforms, grid_padding) == 96
+	assert __offsetof(GLUniforms, cursor_wide) == 132
+}
+
+fn test_opengl_text_and_background_image_values_are_packed_for_gpu() {
+	text := gl_text_cell(CellText{
+		atlas: .color
+		bools: CellTextBools{
+			no_min_contrast: true
+			is_cursor_glyph: true
+		}
+		bearings: [i32(-2), 7]!
+	})
+	assert text.atlas == 1
+	assert text.flags == 3
+	assert text.bearing_x == -2
+	assert text.bearing_y == 7
+
+	bg := gl_bg_image_vertex(BgImageBuffer{
+		opacity: 0.5
+		info: BgImageInfo{
+			position: .br
+			fit: .stretch
+			repeat: true
+		}
+	})
+	assert bg.opacity == 0.5
+	assert bg.info == u8(8 | (2 << 4) | (1 << 6))
+}
