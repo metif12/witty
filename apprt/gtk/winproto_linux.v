@@ -27,96 +27,116 @@ pub enum Protocol {
 	x11
 }
 
-// --- ApprtWindow placeholder -----------------------------------------------
+// --- ApprtWindow -----------------------------------------------------------
 //
-// TODO(gtk): The GObject `Window` class (class/window.zig) is out of scope for
-// this translation. In ghostty the winproto backends receive a
-// `*class.window.Window` ("ApprtWindow") and call GObject accessors on it
-// (getWindowDecoration, getConfig, isQuickTerminal, and the `as(...)` upcasts
-// to gtk.Widget / gtk.Native / gtk.Window). This minimal stub stands in for
-// that class so the winproto backends type-check with faithful call sites.
-//
-// The "Window" terminology here matches ghostty's winproto docs: this is the
-// per-window apprt object, distinct from the winproto per-window state
-// (X11Window / WaylandWindow / NoopWindow).
-//
-// `@[heap]` so the winproto per-window states may hold a stable `&ApprtWindow`
-// reference (mirroring ghostty's `*ApprtWindow`).
+// Ghostty passes the concrete `*class.window.Window` into the protocol
+// backends. Witty keeps the native GObject and its translated state in a
+// stable heap-allocated `Window` wrapper, so this bridge holds that same
+// object by reference and forwards every accessor to it. The separate bridge
+// type avoids a recursive value layout (`Window` owns `WinProtoWindow`) while
+// preserving the source's direct, live view of window state.
 @[heap]
 pub struct ApprtWindow {
 mut:
-	// Cached config wrapper. In ghostty this is a `?*Config` on the widget.
-	config &configpkg.Config = unsafe { nil }
-	// Whether this window is the quick terminal.
-	quick_terminal bool
-	// The desired window decoration mode.
-	decoration configpkg.WindowDecoration = .auto
+	owner &Window = unsafe { nil }
 }
 
 // as_widget returns this window upcast to a GtkWidget. Mirrors
 // `apprt_window.as(gtk.Widget)`.
 pub fn (self &ApprtWindow) as_widget() GtkWidget {
-	return unsafe { GtkWidget(nil) }
+	if isnil(self.owner) {
+		return unsafe { GtkWidget(nil) }
+	}
+	return self.owner.as_widget()
 }
 
 // as_window returns this window upcast to a GtkWindow. Mirrors
 // `apprt_window.as(gtk.Window)`.
 pub fn (self &ApprtWindow) as_window() GtkWindow {
-	return unsafe { GtkWindow(nil) }
+	if isnil(self.owner) {
+		return unsafe { GtkWindow(nil) }
+	}
+	return self.owner.as_window()
 }
 
 // get_surface returns the GdkSurface for this window, or none. Mirrors
 // `apprt_window.as(gtk.Native).getSurface()`.
 pub fn (self &ApprtWindow) get_surface() ?GdkSurface {
-	return none
+	if isnil(self.owner) {
+		return none
+	}
+	surface := C.gtk_native_get_surface(self.owner.as_native())
+	if isnil(surface) {
+		return none
+	}
+	return surface
 }
 
 // get_surface_transform writes the surface transform (in surface coords) into
 // x and y. Mirrors `apprt_window.as(gtk.Native).getSurfaceTransform`.
 pub fn (self &ApprtWindow) get_surface_transform(x &f64, y &f64) {
-	unsafe {
-		*x = 0
-		*y = 0
+	if isnil(self.owner) {
+		unsafe {
+			*x = 0
+			*y = 0
+		}
+		return
 	}
+	C.gtk_native_get_surface_transform(self.owner.as_native(), x, y)
 }
 
 // get_scale_factor returns the widget scale factor. Mirrors
 // `apprt_window.as(gtk.Widget).getScaleFactor()`.
 pub fn (self &ApprtWindow) get_scale_factor() int {
-	return 1
+	if isnil(self.owner) {
+		return 1
+	}
+	return C.gtk_widget_get_scale_factor(self.owner.as_widget())
 }
 
 // get_width returns the widget width. Mirrors
 // `apprt_window.as(gtk.Widget).getWidth()`.
 pub fn (self &ApprtWindow) get_width() int {
-	return 0
+	if isnil(self.owner) {
+		return 0
+	}
+	return C.gtk_widget_get_width(self.owner.as_widget())
 }
 
 // get_height returns the widget height. Mirrors
 // `apprt_window.as(gtk.Widget).getHeight()`.
 pub fn (self &ApprtWindow) get_height() int {
-	return 0
+	if isnil(self.owner) {
+		return 0
+	}
+	return C.gtk_widget_get_height(self.owner.as_widget())
 }
 
 // get_window_decoration returns the desired decoration mode. Mirrors
 // `apprt_window.getWindowDecoration()`.
 pub fn (self &ApprtWindow) get_window_decoration() configpkg.WindowDecoration {
-	return self.decoration
+	if isnil(self.owner) {
+		return .auto
+	}
+	return self.owner.get_window_decoration()
 }
 
 // get_config returns the (optional) config wrapper. Mirrors
 // `apprt_window.getConfig()`.
-pub fn (self &ApprtWindow) get_config() ?&configpkg.Config {
-	if self.config == unsafe { nil } {
+pub fn (self &ApprtWindow) get_config() ?&Config {
+	if isnil(self.owner) {
 		return none
 	}
-	return self.config
+	return self.owner.get_config()
 }
 
 // is_quick_terminal reports whether this window is the quick terminal. Mirrors
 // `apprt_window.isQuickTerminal()`.
 pub fn (self &ApprtWindow) is_quick_terminal() bool {
-	return self.quick_terminal
+	if isnil(self.owner) {
+		return false
+	}
+	return self.owner.is_quick_terminal()
 }
 
 // --- App: per-application window-protocol state ----------------------------

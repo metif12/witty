@@ -19,8 +19,8 @@ module gtk
 // hand-expanded onto the raw GObject/GTK C API below, including the pre-1.3
 // no-op variant. The real logic (storing the ChildExited data, deriving the
 // banner title + css-class from the exit code) is translated. The class is
-// additionally modeled as a plain V struct wrapping the GObject/GtkWidget ptr
-// for callers.
+// additionally modeled as a V owner wrapping the GObject/GtkWidget pointer for
+// callers.
 //
 // Reuses: `apprt.ChildExited` (apprt/surface.v), `gtk_widget_add_css_class` /
 // `gtk_widget_remove_css_class` (surface_class_linux.v). The adw.Banner title
@@ -132,8 +132,9 @@ pub fn (self &SurfaceChildExited) close_button_clicked() {
 // Hand-expansion of ghostty's `gobject.ext.defineClass` for the Adwaita >= 1.3
 // banner variant `GhosttySurfaceChildExited` (parent adw.Bin): a `.ui` template
 // with a bound `banner` child + notify_data/clicked callbacks, the `data`
-// property, the `close-request` signal, and dispose/finalize vfuncs. The pre-1.3
-// no-op fallback (which just emits `close-request` on setData) is not modeled.
+// property, the `close-request` signal, and dispose/finalize vfuncs. The
+// pre-1.3 variant registers only `close-request`; `set_data` immediately emits
+// it so libghostty falls back to its text exit message.
 
 // The blueprint (ui/1.3/surface-child-exited.blp) translated to a GtkBuilder
 // .ui XML string. `styles [...]` become <style>; `notify::data =>

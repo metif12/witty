@@ -356,7 +356,8 @@ pub fn (self X11Window) client_side_decoration_enabled() bool {
 // sync_blur applies (or removes) the KDE blur region property. Mirrors
 // `x11.Window.syncBlur`.
 fn (mut self X11Window) sync_blur() ! {
-	config := self.apprt_window.get_config() or { return }
+	config_object := self.apprt_window.get_config() or { return }
+	config := config_object.get()
 
 	// When blur is disabled, remove the property if it was previously set.
 	blur := config.background_blur

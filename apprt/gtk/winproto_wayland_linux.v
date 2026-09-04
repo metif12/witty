@@ -314,7 +314,8 @@ fn (mut self WaylandWindow) sync_blur() ! {
 	if manager == unsafe { nil } {
 		return
 	}
-	config := self.apprt_window.get_config() or { return }
+	config_object := self.apprt_window.get_config() or { return }
+	config := config_object.get()
 	blur := config.background_blur
 
 	if self.blur_token != unsafe { nil } {

@@ -84,6 +84,8 @@ fn C.gtk_window_set_handle_menubar_accel(window GtkWindow, handle_menubar_accel 
 
 fn C.gtk_native_get_surface(native GtkNative) GdkSurface
 
+fn C.gtk_native_get_surface_transform(native GtkNative, x &f64, y &f64) int
+
 fn C.gdk_surface_beep(surface GdkSurface)
 
 fn C.gtk_show_about_dialog(parent GtkWindow, first_property_name &char, ...)
@@ -334,7 +336,6 @@ fn window_set_property(obj voidptr, property_id u32, value voidptr, pspec voidpt
 		}
 		window_prop_quick_terminal {
 			self.quick_terminal = C.g_value_get_boolean(value) != 0
-			self.sync_apprt_window()
 		}
 		else {}
 	}
@@ -647,6 +648,7 @@ pub fn Window.new(app &Application) &Window {
 	}
 	mut priv := window_priv(obj)
 	priv.wrapper = voidptr(self)
+	self.apprt_window.owner = self
 	self.set_config_reference(app.config_object)
 
 	// Build the two menus shared by the header bar and integrated tab bar.
@@ -761,10 +763,6 @@ fn (mut self Window) init(app &Application) {
 			self.set_title(title)
 		}
 	}
-
-	// Keep the winproto bridge's view of config/quick-terminal/decoration in
-	// sync so the winproto integration sees consistent state.
-	self.sync_apprt_window()
 
 	// We always sync our appearance at the end because loading our config can
 	// affect bindings set up initially in initTemplate.
@@ -1178,17 +1176,6 @@ fn (mut self Window) toggle_command_palette() {
 	palette.config = self.config
 	palette.app = self.app
 	palette.toggle(self)
-}
-
-// sync_apprt_window mirrors the winproto bridge into the current window state.
-// (Not present in the Zig original, which passes `*Window` directly; here the
-// bridge caches the small accessor set that winproto reads.)
-fn (mut self Window) sync_apprt_window() {
-	self.apprt_window.quick_terminal = self.quick_terminal
-	self.apprt_window.decoration = self.get_window_decoration()
-	if self.config != unsafe { nil } {
-		self.apprt_window.config = self.config.get()
-	}
 }
 
 // --- Winproto -------------------------------------------------------------
@@ -1724,7 +1711,6 @@ fn (mut self Window) set_config_reference(config &Config) {
 		mut owned := unsafe { config }
 		self.config = owned.ref()
 	}
-	self.sync_apprt_window()
 }
 
 fn (self &Window) notify_property(pspec &C.GParamSpec) {
@@ -1736,7 +1722,6 @@ fn (self &Window) notify_property(pspec &C.GParamSpec) {
 pub fn (mut self Window) set_quick_terminal(value bool) {
 	if isnil(self.obj) {
 		self.quick_terminal = value
-		self.sync_apprt_window()
 		return
 	}
 	C.g_object_set(GObject(self.obj), c'quick-terminal', b2i(value), unsafe { nil })
@@ -1817,7 +1802,6 @@ pub fn (mut self Window) toggle_window_decorations() {
 fn (mut self Window) set_window_decoration(new configpkg.WindowDecoration) {
 	self.window_decoration = new
 	self.has_window_decoration = true
-	self.sync_apprt_window()
 	self.sync_appearance()
 }
 
@@ -1825,7 +1809,6 @@ fn (mut self Window) set_window_decoration(new configpkg.WindowDecoration) {
 // Mirrors the null branch of `setWindowDecoration`.
 fn (mut self Window) unset_window_decoration() {
 	self.has_window_decoration = false
-	self.sync_apprt_window()
 	self.sync_appearance()
 }
 
@@ -2026,7 +2009,6 @@ pub fn (mut self Window) prop_config() {
 	if !isnil(self.config) && self.config.get().app_notifications.config_reload {
 		self.add_toast('Reloaded the configuration')
 	}
-	self.sync_apprt_window()
 	self.sync_appearance()
 	self.sync_window_title()
 	for mut tab in self.tabs {
