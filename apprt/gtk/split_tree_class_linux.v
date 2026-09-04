@@ -450,7 +450,6 @@ pub fn (mut self SplitTreeWidget) set_tree(tree_ ?&datastruct.SplitTree[SurfaceW
 
 	self.notify_property(g_split_tree_pspec_tree)
 	self.prop_tree()
-	self.sync_tab()
 }
 
 fn (self &SplitTreeWidget) notify_property(pspec &C.GParamSpec) {
@@ -459,8 +458,9 @@ fn (self &SplitTreeWidget) notify_property(pspec &C.GParamSpec) {
 	}
 }
 
-// sync_tab replaces the split-tree property notifications consumed by the Tab
-// blueprint with a direct update of the owning V wrapper.
+// sync_tab evaluates the Tab blueprint's nested Surface title/tooltip bindings
+// when a surface property changes. SplitTree property changes use native
+// notify signals and the callbacks installed by new_tab.
 fn (self &SplitTreeWidget) sync_tab() {
 	if isnil(self.window) {
 		return
@@ -468,7 +468,7 @@ fn (self &SplitTreeWidget) sync_tab() {
 	mut window := unsafe { self.window }
 	for mut tab in window.tabs {
 		if tab.split_tree == self {
-			tab.prop_split_tree()
+			tab.sync_from_active_surface()
 			return
 		}
 	}
@@ -943,7 +943,6 @@ pub fn (mut self SplitTreeWidget) prop_surface_focused(mut surface SurfaceWidget
 	}
 	self.last_focused = &surface
 	self.notify_property(g_split_tree_pspec_active_surface)
-	self.sync_tab()
 }
 
 // prop_surface_parent handles a surface's notify::parent. Mirrors

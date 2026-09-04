@@ -535,6 +535,17 @@ fn window_page_detached_cb(view AdwTabView, page AdwTabPage, position int, user_
 	}
 }
 
+fn window_tab_close_request_cb(tab_widget GtkWidget, user_data voidptr) {
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Window(user_data) }
+	page := C.adw_tab_view_get_page(self.tab_view, tab_widget)
+	if !isnil(page) {
+		C.adw_tab_view_close_page(self.tab_view, page)
+	}
+}
+
 fn window_overview_create_tab_cb(overview AdwTabOverview, user_data voidptr) AdwTabPage {
 	_ = overview
 	if isnil(user_data) {
@@ -672,6 +683,7 @@ fn (mut self Window) new_tab_page(parent ?&core.Surface, context NewSurfaceConte
 		return AdwTabPage(unsafe { nil })
 	}
 	mut tab := new_tab(self, self.config)
+	C.g_signal_connect_data(tab.widget, c'close-request', GCallback(voidptr(window_tab_close_request_cb)), voidptr(self), unsafe { nil }, 0)
 	if p := parent {
 		tab.set_parent_with_context(p, context)
 	}

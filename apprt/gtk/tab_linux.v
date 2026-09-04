@@ -11,27 +11,10 @@ module gtk
 // `.ui`/blueprint template, GObject property/signal registration, and
 // template-child bindings.
 //
-// As with the other GTK classes in this apprt, V has no GObject
-// class-registration or `.ui`-template machinery, and this `gtk` submodule
-// CANNOT import witty's root `module main` where the real core `Surface` lives.
-// Therefore:
-//
-//   * The class is modeled as a plain V struct `Tab` that wraps the
-//     GObject/GtkWidget pointer and holds the fields that were in the Zig
-//     `Private` struct. Methods are `pub fn` on that struct.
-//   * The split tree it contains is the `SplitTreeWidget` from
-//     split_tree_class_linux.v.
-//   * GObject type registration, signal/property wiring, `.ui`/blueprint
-//     templates, and the AdwTabView/AdwTabPage action plumbing are STUBBED with
-//     `// TODO(gtk)` and minimal type-checking bodies.
-//   * Calls into core surfaces dispatch to the real `core.Surface`. `Config`
-//     and `NewSurfaceContext` are reused from window_linux.v.
-//
-// What is genuinely TRANSLATED: the active-surface / surface-tree / split-tree
-// content accessors, the needs-confirm-quit delegation, the tab-view / tab-page
-// ancestor lookups, the close/ring-bell/next-page/previous-page action logic,
-// and the computed-title string building (bell/zoom prefixes + override/terminal/
-// config/default precedence). The GObject template/signal machinery is stubbed.
+// The class is modeled as a stable V wrapper around a real GhosttyTab GtkBox
+// subclass. Its native properties, close-request signal, ownership vfuncs, and
+// SplitTree notification wiring mirror the pinned Zig class; the blueprint's
+// title/tooltip expressions are evaluated by sync_from_active_surface.
 
 import core
 import datastruct
@@ -70,14 +53,180 @@ fn C.gtk_widget_set_vexpand(widget GtkWidget, expand int)
 fn C.gtk_orientable_set_orientation(orientable voidptr, orientation int)
 
 __global g_tab_type = GType(0)
+__global g_tab_pspec_active_surface = &C.GParamSpec(unsafe { nil })
+__global g_tab_pspec_config = &C.GParamSpec(unsafe { nil })
+__global g_tab_pspec_split_tree = &C.GParamSpec(unsafe { nil })
+__global g_tab_pspec_surface_tree = &C.GParamSpec(unsafe { nil })
+__global g_tab_pspec_title = &C.GParamSpec(unsafe { nil })
+__global g_tab_pspec_tooltip = &C.GParamSpec(unsafe { nil })
+
+struct C.GhosttyTabPrivate {
+mut:
+	wrapper voidptr
+}
+
+const tab_prop_active_surface = u32(1)
+const tab_prop_config = u32(2)
+const tab_prop_split_tree = u32(3)
+const tab_prop_surface_tree = u32(4)
+const tab_prop_title = u32(5)
+const tab_prop_tooltip = u32(6)
+const tab_param_static_strings = int(32 | 64 | 128)
+
+fn tab_priv(obj voidptr) &C.GhosttyTabPrivate {
+	return &C.GhosttyTabPrivate(C.g_type_instance_get_private(obj, g_tab_type))
+}
+
+fn tab_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	_ = pspec
+	priv := tab_priv(obj)
+	if isnil(priv.wrapper) {
+		return
+	}
+	mut self := unsafe { &Tab(priv.wrapper) }
+	match property_id {
+		tab_prop_active_surface {
+			if surface := self.get_active_surface() {
+				C.g_value_set_object(value, surface.widget)
+			} else {
+				C.g_value_set_object(value, unsafe { nil })
+			}
+		}
+		tab_prop_config {
+			if isnil(self.config) {
+				C.g_value_set_object(value, unsafe { nil })
+			} else {
+				C.g_value_set_object(value, self.config.obj)
+			}
+		}
+		tab_prop_split_tree {
+			if isnil(self.split_tree) {
+				C.g_value_set_object(value, unsafe { nil })
+			} else {
+				C.g_value_set_object(value, self.split_tree.widget)
+			}
+		}
+		tab_prop_surface_tree {
+			if tree := self.get_surface_tree() {
+				C.g_value_set_boxed(value, tree)
+			} else {
+				C.g_value_set_boxed(value, unsafe { nil })
+			}
+		}
+		tab_prop_title {
+			if title := self.title {
+				C.g_value_set_string(value, &char(title.str))
+			} else {
+				C.g_value_set_string(value, unsafe { nil })
+			}
+		}
+		tab_prop_tooltip {
+			if tooltip := self.tooltip {
+				C.g_value_set_string(value, &char(tooltip.str))
+			} else {
+				C.g_value_set_string(value, unsafe { nil })
+			}
+		}
+		else {}
+	}
+}
+
+fn tab_set_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	_ = pspec
+	priv := tab_priv(obj)
+	if isnil(priv.wrapper) {
+		return
+	}
+	mut self := unsafe { &Tab(priv.wrapper) }
+	match property_id {
+		tab_prop_config {
+			config_obj := C.g_value_get_object(value)
+			if isnil(config_obj) {
+				self.set_config_reference(unsafe { nil })
+			} else {
+				config_private := config_priv(config_obj)
+				self.set_config_reference(if isnil(config_private.wrapper) {
+					unsafe { nil }
+				} else {
+					unsafe { &Config(config_private.wrapper) }
+				})
+			}
+		}
+		tab_prop_title {
+			text := C.g_value_get_string(value)
+			self.set_title(if isnil(text) { none } else { unsafe { cstring_to_vstring(text) } })
+		}
+		tab_prop_tooltip {
+			text := C.g_value_get_string(value)
+			self.set_tooltip(if isnil(text) { none } else { unsafe { cstring_to_vstring(text) } })
+		}
+		else {}
+	}
+}
+
+fn tab_parent_object_class(obj voidptr) &C.GObjectClass {
+	return &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
+}
+
+fn tab_dispose(obj voidptr) {
+	priv := tab_priv(obj)
+	if !isnil(priv.wrapper) {
+		mut self := unsafe { &Tab(priv.wrapper) }
+		self.set_config_reference(unsafe { nil })
+	}
+	parent_class := tab_parent_object_class(obj)
+	if !isnil(parent_class.dispose) {
+		f := DisposeFn(parent_class.dispose)
+		f(obj)
+	}
+}
+
+fn tab_finalize(obj voidptr) {
+	mut priv := tab_priv(obj)
+	if !isnil(priv.wrapper) {
+		mut self := unsafe { &Tab(priv.wrapper) }
+		self.title = none
+		self.tooltip = none
+		self.widget = unsafe { nil }
+		self.split_tree = unsafe { nil }
+		priv.wrapper = unsafe { nil }
+	}
+	parent_class := tab_parent_object_class(obj)
+	if !isnil(parent_class.finalize) {
+		f := FinalizeFn(parent_class.finalize)
+		f(obj)
+	}
+}
 
 fn tab_class_init(klass voidptr, class_data voidptr) {
-	_ = klass
 	_ = class_data
+	_ = split_tree_get_type()
+	_ = terminal_surface_get_type()
+	_ = config_get_type()
+	mut obj_class := &C.GObjectClass(klass)
+	obj_class.get_property = voidptr(tab_get_property)
+	obj_class.set_property = voidptr(tab_set_property)
+	obj_class.dispose = voidptr(tab_dispose)
+	obj_class.finalize = voidptr(tab_finalize)
+	readable := g_param_readable | tab_param_static_strings
+	readwrite := g_param_readwrite | tab_param_static_strings
+	nil_str := &char(unsafe { nil })
+	g_tab_pspec_active_surface = C.g_param_spec_object(c'active-surface', nil_str, nil_str, terminal_surface_get_type(), readable)
+	g_tab_pspec_config = C.g_param_spec_object(c'config', nil_str, nil_str, config_get_type(), readwrite)
+	g_tab_pspec_split_tree = C.g_param_spec_object(c'split-tree', nil_str, nil_str, split_tree_get_type(), readable)
+	g_tab_pspec_surface_tree = C.g_param_spec_boxed(c'surface-tree', nil_str, nil_str, surface_tree_get_type(), readable)
+	g_tab_pspec_title = C.g_param_spec_string(c'title', nil_str, nil_str, nil_str, readwrite)
+	g_tab_pspec_tooltip = C.g_param_spec_string(c'tooltip', nil_str, nil_str, nil_str, readwrite)
+	C.g_object_class_install_property(klass, tab_prop_active_surface, g_tab_pspec_active_surface)
+	C.g_object_class_install_property(klass, tab_prop_config, g_tab_pspec_config)
+	C.g_object_class_install_property(klass, tab_prop_split_tree, g_tab_pspec_split_tree)
+	C.g_object_class_install_property(klass, tab_prop_surface_tree, g_tab_pspec_surface_tree)
+	C.g_object_class_install_property(klass, tab_prop_title, g_tab_pspec_title)
+	C.g_object_class_install_property(klass, tab_prop_tooltip, g_tab_pspec_tooltip)
+	C.g_signal_new(c'close-request', g_tab_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(4), 0)
 }
 
 fn tab_instance_init(instance voidptr, klass voidptr) {
-	_ = instance
 	_ = klass
 	C.gtk_orientable_set_orientation(instance, 1)
 	C.gtk_widget_set_hexpand(GtkWidget(instance), 1)
@@ -96,6 +245,7 @@ pub fn tab_get_type() GType {
 			instance_init: voidptr(tab_instance_init)
 		}
 		g_tab_type = C.g_type_register_static(parent, c'GhosttyTab', &info, 0)
+		_ = C.g_type_add_instance_private(g_tab_type, sizeof(C.GhosttyTabPrivate))
 	}
 	return g_tab_type
 }
@@ -117,8 +267,8 @@ pub enum CloseTabMode {
 
 // Tab is the V model of the `GhosttyTab` GObject class. It wraps the
 // GObject/GtkWidget pointer and carries the state that lived in the Zig
-// `Private` struct. The GObject/template machinery it would normally register
-// is stubbed (see the class-registration TODO block at the end).
+// `Private` struct; the native instance private data points back to this stable
+// wrapper for property and lifecycle dispatch.
 @[heap]
 pub struct Tab {
 pub mut:
@@ -150,17 +300,38 @@ pub fn new_tab(window &Window, config &Config) &Tab {
 	C.gtk_box_append(GtkWidget(obj), split_tree.widget)
 	mut self := &Tab{
 		widget: GtkWidget(obj)
-		config: config
 		window: window
 		split_tree: split_tree
 	}
+	mut priv := tab_priv(obj)
+	priv.wrapper = voidptr(self)
+	self.set_config_reference(config)
+	C.g_signal_connect_data(split_tree.widget, c'notify::tree', GCallback(voidptr(tab_split_tree_notify_tree_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(split_tree.widget, c'notify::active-surface', GCallback(voidptr(tab_split_tree_notify_active_surface_cb)), voidptr(self), unsafe { nil }, 0)
 
 	// Init our actions.
 	self.init_action_map()
 	self.split_tree.new_split(.right, none)
-	self.sync_from_active_surface()
 
 	return self
+}
+
+fn tab_split_tree_notify_tree_cb(split_tree GtkWidget, pspec voidptr, data voidptr) {
+	_ = split_tree
+	_ = pspec
+	if !isnil(data) {
+		mut self := unsafe { &Tab(data) }
+		self.prop_split_tree()
+	}
+}
+
+fn tab_split_tree_notify_active_surface_cb(split_tree GtkWidget, pspec voidptr, data voidptr) {
+	_ = split_tree
+	_ = pspec
+	if !isnil(data) {
+		mut self := unsafe { &Tab(data) }
+		self.prop_active_surface()
+	}
 }
 
 // init_action_map registers the "tab" action group. Mirrors `initActionMap`.
@@ -241,6 +412,26 @@ pub fn (mut self Tab) set_parent_with_context(parent &core.Surface, context NewS
 
 // --- Properties -----------------------------------------------------------
 
+fn (mut self Tab) set_config_reference(config &Config) {
+	if self.config == config {
+		return
+	}
+	if !isnil(self.config) {
+		self.config.unref()
+		self.config = unsafe { nil }
+	}
+	if !isnil(config) {
+		mut owned := unsafe { config }
+		self.config = owned.ref()
+	}
+}
+
+fn (self &Tab) notify_property(pspec &C.GParamSpec) {
+	if !isnil(self.widget) && !isnil(pspec) {
+		C.g_object_notify_by_pspec(self.widget, pspec)
+	}
+}
+
 // get_active_surface returns the currently active surface, or `none`. See the
 // "active-surface" property. Mirrors `getActiveSurface`. Does not ref.
 pub fn (mut self Tab) get_active_surface() ?&SurfaceWidget {
@@ -303,6 +494,7 @@ pub fn (self &Tab) get_title() ?string {
 // set_title sets the tab title. Mirrors the "title" property setter.
 pub fn (mut self Tab) set_title(title ?string) {
 	self.title = title
+	self.notify_property(g_tab_pspec_title)
 	page := self.get_tab_page()
 	if !isnil(page) {
 		if value := title {
@@ -325,6 +517,7 @@ pub fn (self &Tab) get_tooltip() ?string {
 // set_tooltip sets the tab tooltip. Mirrors the "tooltip" property setter.
 pub fn (mut self Tab) set_tooltip(tooltip ?string) {
 	self.tooltip = tooltip
+	self.notify_property(g_tab_pspec_tooltip)
 	page := self.get_tab_page()
 	if !isnil(page) {
 		if value := tooltip {
@@ -354,6 +547,8 @@ pub fn (mut self Tab) sync_from_active_surface() {
 // `propSplitTree`: notifies the surface-tree property and, if the tree is now
 // empty, requests the tab be closed.
 pub fn (mut self Tab) prop_split_tree() {
+	self.notify_property(g_tab_pspec_surface_tree)
+
 	// If our tree is empty we close the tab.
 	empty := if tree := self.get_surface_tree() {
 		tree.is_empty()
@@ -361,7 +556,9 @@ pub fn (mut self Tab) prop_split_tree() {
 		true
 	}
 	if empty {
-		self.action_close(.this)
+		if !isnil(self.widget) {
+			C.g_signal_emit_by_name(self.widget, c'close-request')
+		}
 		return
 	}
 	self.sync_from_active_surface()
@@ -370,6 +567,7 @@ pub fn (mut self Tab) prop_split_tree() {
 // prop_active_surface handles the split tree's "notify::active-surface".
 // Mirrors `propActiveSurface`.
 pub fn (mut self Tab) prop_active_surface() {
+	self.notify_property(g_tab_pspec_active_surface)
 	self.sync_from_active_surface()
 }
 
