@@ -190,8 +190,11 @@ fn (mut self Exec) thread_enter_common(io &Termio) ! {
 
 	// Start our process-exit watcher. This waits for the child to exit and
 	// notifies the surface. This replaces ghostty's xev.Process watcher.
-	pid := self.subprocess.child_pid
-	if pid > 0 {
+	if !isnil(self.subprocess.flatpak_command) {
+		command := self.subprocess.flatpak_command
+		self.exit_thread = spawn flatpak_process_exit_watcher(command, start_ns, io)
+	} else if self.subprocess.child_pid > 0 {
+		pid := self.subprocess.child_pid
 		self.exit_thread = spawn process_exit_watcher(pid, start_ns, io)
 	}
 }
@@ -360,6 +363,9 @@ pub mut:
 	running      bool
 	child_pid    int = -1
 	linux_cgroup ?string
+	// Stable native command state when the process was launched on a Flatpak
+	// host. A host PID cannot be watched or signalled with local POSIX calls.
+	flatpak_command &internal_os.FlatpakHostCommand = unsafe { nil }
 }
 
 struct NullDelimitedEnv {
@@ -532,6 +538,14 @@ pub fn (mut self Subprocess) deinit() {
 	if mut p := self.pty_ {
 		p.deinit()
 	}
+	if !isnil(self.flatpak_command) {
+		mut command := unsafe { self.flatpak_command }
+		command.deinit()
+		unsafe {
+			free(command)
+		}
+		self.flatpak_command = unsafe { nil }
+	}
 	self.env = none
 }
 
@@ -556,7 +570,15 @@ pub fn (mut self Subprocess) start() !PtyFds {
 	// because our cwd can be set by the shell (OSC 7) and we don't
 	// want to break new windows.
 	cwd := if c := self.cwd {
-		if os.is_dir(c) { c } else { '' }
+		$if linux {
+			if internal_os.is_flatpak() {
+				if flatpak_cwd_accessible(c) { c } else { '' }
+			} else {
+				if os.is_dir(c) { c } else { '' }
+			}
+		} $else {
+			if os.is_dir(c) { c } else { '' }
+		}
 	} else {
 		''
 	}
@@ -580,6 +602,38 @@ pub fn (mut self Subprocess) start() !PtyFds {
 		NullDelimitedEnv{}
 	}
 	has_env := env.pointers.len > 0
+
+	// Flatpak cannot fork a sandbox child into the host namespace. Use the
+	// Development portal with the same argv, environment, cwd, and PTY slave
+	// descriptors as the pinned implementation.
+	$if linux {
+		if internal_os.is_flatpak() {
+			mut command := &internal_os.FlatpakHostCommand{
+				argv: self.args
+				cwd: if cwd.len > 0 { cwd } else { none }
+				env: self.env
+				stdin: p.slave
+				stdout: p.slave
+				stderr: p.slave
+			}
+			pid := command.spawn() or {
+				command.deinit()
+				unsafe {
+					free(command)
+				}
+				return err
+			}
+			self.flatpak_command = command
+			self.child_pid = int(pid)
+			p.close_slave()
+			self.env = none
+			self.running = true
+			return PtyFds{
+				read: p.master
+				write: p.master
+			}
+		}
+	}
 
 	// When configured on Linux, clone directly into the cgroup so there is no
 	// race where the child can execute before a later move. Other launches use
@@ -655,6 +709,15 @@ pub fn (mut self Subprocess) external_exit() {
 // This does not close the pty.
 pub fn (mut self Subprocess) stop() {
 	if !self.running {
+		return
+	}
+
+	if !isnil(self.flatpak_command) {
+		mut command := unsafe { self.flatpak_command }
+		command.signal(sig_hup, true) or {
+			eprintln('error sending SIGHUP to Flatpak host command: ${err}')
+		}
+		self.running = false
 		return
 	}
 
@@ -858,6 +921,33 @@ fn process_exit_watcher(pid int, start_ns u64, io &Termio) {
 	exit_code := u32((status >> 8) & 0xFF)
 
 	process_exit_common(pid, start_ns, exit_code, io)
+}
+
+// flatpak_process_exit_watcher mirrors the asynchronous Flatpak wait in the
+// source using Witty's dedicated process watcher thread.
+fn flatpak_process_exit_watcher(command &internal_os.FlatpakHostCommand, start_ns u64, io &Termio) {
+	mut host_command := unsafe { command }
+	exit_code := host_command.wait() or { u8(0) }
+	process_exit_common(-1, start_ns, u32(exit_code), io)
+}
+
+fn flatpak_cwd_accessible(cwd string) bool {
+	mut dev_null := os.open_file('/dev/null', 'rw') or { return false }
+	defer {
+		dev_null.close()
+	}
+	mut command := internal_os.FlatpakHostCommand{
+		argv: ['/bin/sh', '-c', ':']
+		cwd: cwd
+		stdin: dev_null.fd
+		stdout: dev_null.fd
+		stderr: dev_null.fd
+	}
+	defer {
+		command.deinit()
+	}
+	command.spawn() or { return false }
+	return command.wait() or { return false } == 0
 }
 
 // process_exit_common is called when the child process exits. It records
