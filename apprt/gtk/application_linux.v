@@ -90,6 +90,8 @@ fn C.g_timeout_add(interval u32, function voidptr, data voidptr) u32
 
 fn C.g_source_remove(tag u32) bool
 
+fn C.g_unix_signal_add(signum int, handler voidptr, user_data voidptr) u32
+
 // GTK window helpers.
 // NOTE: gtk_window_present / gtk_window_destroy / gtk_window_is_active are
 // declared in window_linux.v — reused here, NOT redeclared. `is_active` there
@@ -118,6 +120,9 @@ pub enum AdwColorScheme {
 // for single-instance resolution.
 pub const g_application_default_flags = 0
 pub const g_application_non_unique = 0x20
+
+// Linux signal number used by Ghostty for on-demand configuration reloads.
+const sigusr2 = 12
 
 // --- Quit timer state -----------------------------------------------------
 //
@@ -660,7 +665,7 @@ fn (mut self Application) show_config_errors_dialog() {
 
 // wakeup wakes up the GTK event loop. Mirrors `Application.wakeup`.
 pub fn (self &Application) wakeup() {
-	C.g_main_context_wakeup(unsafe { nil })
+	C.g_main_context_wakeup(C.g_main_context_default())
 }
 
 // --- Virtual methods (GObject vfunc overrides) ----------------------------
@@ -740,17 +745,36 @@ fn (mut self Application) startup_style_manager() {
 	}
 	C.adw_style_manager_set_color_scheme(style, int(scheme))
 
-	// TODO(gtk): connect "notify::dark" -> handleStyleManagerDark (signal
-	// override, out of scope). Do an initial sync.
+	C.g_signal_connect_data(style, c'notify::dark', GCallback(voidptr(application_style_manager_dark_cb)), voidptr(self), unsafe { nil }, 0)
 	self.handle_style_manager_dark(style)
 }
 
 // startup_signals sets up unix signal handlers (SIGUSR2 -> reload config).
 // Mirrors `Application.startupSignals`.
 fn (mut self Application) startup_signals() {
-	// TODO(gtk): glib.unixSignalAdd(SIGUSR2, handleSigusr2, self) — the glib
-	// unix signal source is out of scope; record none.
-	self.signal_source = none
+	if self.signal_source != none {
+		return
+	}
+	self.signal_source = C.g_unix_signal_add(sigusr2, voidptr(application_sigusr2_cb), voidptr(self))
+}
+
+fn application_sigusr2_cb(user_data voidptr) int {
+	if isnil(user_data) {
+		return 1
+	}
+	mut self := unsafe { &Application(user_data) }
+	if isnil(self.core_app) {
+		return 1
+	}
+	mut core_app := unsafe { self.core_app }
+	core_app.perform_action(mut self.runtime_bridge, input.Action.new(.reload_config)) or {
+		eprintln('error reloading config after SIGUSR2: ${err}')
+		return 1
+	}
+	self.dispatch_runtime_actions() or {
+		eprintln('error dispatching config reload after SIGUSR2: ${err}')
+	}
+	return 1
 }
 
 // startup_action_map registers our GActions (new-window, open-config, quit,
@@ -1005,12 +1029,27 @@ fn (mut self Application) handle_style_manager_dark(style voidptr) {
 	} else {
 		apprt.ColorScheme.dark
 	}
-	// log.debug("style manager changed scheme")
-	_ = scheme
+	if !isnil(self.core_app) {
+		mut core_app := unsafe { self.core_app }
+		core_app.color_scheme_event(mut self.runtime_bridge, scheme) or {
+			eprintln('error updating app color scheme: ${err}')
+		}
+		core_app.color_scheme_surfaces(scheme)
+		self.dispatch_runtime_actions() or {
+			eprintln('error reloading config for color scheme: ${err}')
+		}
+	}
+	// GTK 4.20 CSS provider prefers-color-scheme propagation is translated
+	// with CSS provider lifecycle support.
+}
 
-	// TODO(gtk): core_app.colorSchemeEvent(rt, scheme) + per-surface
-	// colorSchemeCallback + (GTK 4.20) css_provider "prefers-color-scheme"
-	// property — need the real CoreApp/surfaces and CSS provider.
+fn application_style_manager_dark_cb(style voidptr, pspec &C.GParamSpec, user_data voidptr) {
+	_ = pspec
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Application(user_data) }
+	self.handle_style_manager_dark(style)
 }
 
 // --- apprt API ------------------------------------------------------------

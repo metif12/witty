@@ -122,3 +122,7 @@ fn test_application_dispatches_core_runtime_actions() ! {
 	app.dispatch_runtime_actions()!
 	assert app.quit_timer_state == .off
 }
+
+fn test_application_sigusr2_callback_continues_without_instance() {
+	assert application_sigusr2_cb(unsafe { nil }) == 1
+}

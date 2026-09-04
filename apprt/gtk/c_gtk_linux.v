@@ -22,6 +22,8 @@ module gtk
 
 #include <adwaita.h>
 
+#include <glib-unix.h>
+
 // --- Opaque handle type aliases -------------------------------------------
 //
 // These are all just `voidptr`. Declared once here for the whole module.

@@ -643,6 +643,19 @@ pub fn (mut self App) color_scheme_event(mut rt_app apprt.RuntimeApp, scheme app
 	rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .reload_config, apprt.ActionValue{}) or {}
 }
 
+// color_scheme_surfaces notifies every live terminal surface after the app's
+// conditional theme state changes. GTK invokes this alongside
+// color_scheme_event, matching Ghostty's style-manager callback.
+pub fn (mut self App) color_scheme_surfaces(scheme apprt.ColorScheme) {
+	for surface in self.surfaces {
+		if isnil(surface.core_surface) {
+			continue
+		}
+		mut core_surface := surface.core_surface
+		core_surface.color_scheme_callback(scheme) or {}
+	}
+}
+
 // BindingLeaf is a resolved keybinding leaf (a single or chained action) along
 // with its flags. It mirrors ghostty's `input.Binding.Set.GenericLeaf`.
 struct BindingLeaf {
