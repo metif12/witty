@@ -746,6 +746,77 @@ fn test_screen_clone() {
 	assert (cloned.dump_string_alloc(.active) or { panic(err) }) == 'hello\nworld'
 }
 
+fn test_screen_clone_deep_copies_managed_cells_and_resets_cursor_state() {
+	mut s := Screen.init(3, 2, 10)
+	defer { s.deinit() }
+	style := CellStyle{
+		flags: StyleFlags{
+			bold: true
+		}
+	}
+	link := Hyperlink{
+		id: HyperlinkExplicitId{
+			value: 'screen-clone'
+		}
+		uri: 'https://example.com/screen-clone'
+	}
+	s.pages.screen_rows[0].grapheme = true
+	s.pages.screen_rows[0].styled = true
+	s.pages.screen_rows[0].hyperlink = true
+	s.pages.screen_rows[0].cells[0] = CellData{
+		content_tag: .codepoint_grapheme
+		codepoint: u32(`x`)
+		has_grapheme: true
+		graphemes: [u32(0x0301)]
+		style_id: 1
+		style: style
+		has_hyperlink: true
+		hyperlink: link.dupe()
+	}
+	s.cursor = Cursor{
+		x: 1
+		y: 1
+		pending_wrap: true
+		is_protected: true
+		style: style
+		style_id: 1
+		hyperlink_id: 7
+		hyperlink_implicit_id: 6
+		hyperlink_state: link.dupe()
+		semantic_content: .input
+		semantic_content_clear_eol: true
+	}
+
+	mut cloned := s.clone(.screen, ?PointTag(none)) or {
+		assert false, 'screen clone failed'
+		return
+	}
+	defer { cloned.deinit() }
+	cell := cloned.pages.screen_rows[0].cells[0]
+	assert cell.graphemes == [u32(0x0301)]
+	assert cell.style.eql(&style)
+	assert cell.hyperlink.eql(&link)
+	assert cloned.cursor.x == 1
+	assert cloned.cursor.y == 1
+	assert !cloned.cursor.pending_wrap
+	assert !cloned.cursor.is_protected
+	assert cloned.cursor.style.default()
+	assert cloned.cursor.style_id == default_style_id
+	assert cloned.cursor.hyperlink_id == 0
+	assert cloned.cursor.hyperlink_implicit_id == 0
+	assert cloned.cursor.hyperlink_state == none
+	assert cloned.cursor.semantic_content == .output
+	assert !cloned.cursor.semantic_content_clear_eol
+
+	// The clone owns nested managed values, not only the outer cell array.
+	s.pages.screen_rows[0].cells[0].graphemes[0] = u32(0x0302)
+	s.pages.screen_rows[0].cells[0].style.flags.bold = false
+	s.pages.screen_rows[0].cells[0].hyperlink.uri = 'https://example.com/changed'
+	assert cloned.pages.screen_rows[0].cells[0].graphemes == [u32(0x0301)]
+	assert cloned.pages.screen_rows[0].cells[0].style.flags.bold
+	assert cloned.pages.screen_rows[0].cells[0].hyperlink.uri == 'https://example.com/screen-clone'
+}
+
 fn test_screen_soft_wrap_write() {
 	mut s := Screen.init(5, 5, 0)
 	defer { s.deinit() }

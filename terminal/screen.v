@@ -2074,7 +2074,15 @@ pub fn (self &Screen) clone(top PointTag, bot ?PointTag) !Screen {
 		}
 		src := self.pages.screen_rows[src_idx]
 		mut dst := RowData.init(self.pages.cols)
-		dst.cells = src.cells.clone()
+		limit := if src.cells.len < dst.cells.len { src.cells.len } else { dst.cells.len }
+		for x in 0 .. limit {
+			mut cell := src.cells[x]
+			cell.graphemes = src.cells[x].graphemes.clone()
+			if src.cells[x].has_hyperlink {
+				cell.hyperlink = src.cells[x].hyperlink.dupe()
+			}
+			dst.cells[x] = cell
+		}
 		dst.wrap = src.wrap
 		dst.wrap_continuation = src.wrap_continuation
 		dst.styled = src.styled
@@ -2101,7 +2109,10 @@ pub fn (self &Screen) clone(top PointTag, bot ?PointTag) !Screen {
 	// Remap our cursor. If the cursor isn't in the cloned area, move it to
 	// the top-left arbitrarily because a screen must have SOME cursor.
 	cursor_abs := self.pages.active_start + int(self.cursor.y)
-	new_screen.cursor = self.cursor
+	new_screen.cursor = Cursor{
+		x: self.cursor.x
+		y: 0
+	}
 	if cursor_abs >= top_y && cursor_abs <= bot_y {
 		new_active := cursor_abs - new_screen_top(top_y, cloned.len, int(self.pages.rows))
 		if new_active >= 0 && new_active < int(new_screen.pages.rows) {
