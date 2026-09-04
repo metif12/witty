@@ -1,10 +1,10 @@
 module renderer
 
+import macos
+
 // Metal sub-types: Buffer, Frame, RenderPass, Pipeline, Sampler, Target, Texture
 //
-// These are stubs providing type parity with the Zig Metal renderer
-// subdirectory (metal/*.zig). In the V translation, the gg graphics
-// backend handles these abstractions internally.
+// These wrappers mirror the native Metal resources used by Ghostty.
 
 // ============================================================
 // Metal Buffer
@@ -13,11 +13,7 @@ module renderer
 // MetalBuffer wraps a Metal GPU buffer (MTLBuffer).
 //
 // Port of ghostty's src/renderer/metal/buffer.zig `Buffer(comptime T)`.
-// In ghostty the actual bytes live in the MTLBuffer's `contents` pointer;
-// in this pure-logic port we keep a CPU-side copy in `data` so behavior can
-// be exercised without a live GPU. Lengths/capacities are in elements, which
-// for this port are single bytes (`u8`), matching the vertex-buffer usage
-// where the element type is chosen by the caller.
+// The local specialization stores bytes, so lengths are byte counts.
 pub struct MetalBuffer {
 pub mut:
 	// The underlying buffer handle (opaque).
@@ -26,15 +22,13 @@ pub mut:
 	opts MetalBufferOptions
 	// The number of elements currently stored in the buffer.
 	len u32
-	// The allocated capacity (in elements) of the buffer.
-	capacity u32
-	// CPU-side copy of the buffer contents. Mirrors the MTLBuffer `contents`.
-	data []u8
 }
 
 // MetalBufferOptions configures how a buffer is created.
 pub struct MetalBufferOptions {
 pub:
+	// MTLDevice used to allocate this buffer.
+	device voidptr = unsafe { nil }
 	// CPU cache mode (write_combined for write-only from CPU).
 	cpu_cache_mode MetalCPUCacheMode = .write_combined
 	// Storage mode.
@@ -48,52 +42,79 @@ pub enum MetalCPUCacheMode {
 
 // Initialize a buffer with the given length pre-allocated.
 pub fn MetalBuffer.init(opts MetalBufferOptions, len u32) !MetalBuffer {
-	// XTODO: Requires [device newBufferWithLength:options:]
+	if opts.device == unsafe { nil } {
+		return error('Metal buffer requires a device')
+	}
+	handle := macos.metal_new_buffer_length(opts.device, usize(len), opts.resource_options())
+	if handle == unsafe { nil } {
+		return error('Metal buffer allocation failed')
+	}
 	return MetalBuffer{
+		handle: handle
 		opts: opts
 		len: len
-		capacity: len
-		data: []u8{len: int(len)}
 	}
 }
 
 // Init the buffer filled with the given data.
 pub fn MetalBuffer.init_fill(opts MetalBufferOptions, data []u8) !MetalBuffer {
-	// XTODO: Requires [device newBufferWithBytes:length:options:]
+	if data.len == 0 {
+		return MetalBuffer.init(opts, 0)
+	}
+	if opts.device == unsafe { nil } {
+		return error('Metal buffer requires a device')
+	}
+	handle := macos.metal_new_buffer_bytes(opts.device, data, opts.resource_options())
+	if handle == unsafe { nil } {
+		return error('Metal buffer allocation failed')
+	}
 	return MetalBuffer{
+		handle: handle
 		opts: opts
 		len: u32(data.len)
-		capacity: u32(data.len)
-		data: data.clone()
 	}
 }
 
 pub fn (mut self MetalBuffer) deinit() {
+	macos.metal_release(self.handle)
 	self.handle = unsafe { nil }
-	self.data = []u8{}
+	self.len = 0
 }
 
 // Sync new contents to the buffer. The data is expected to be the complete
 // contents of the buffer. If the amount of data is larger than the buffer
 // capacity, the buffer is reallocated to hold it. If the amount of data is
 // smaller than the buffer capacity, the remaining data is left untouched.
-pub fn (mut self MetalBuffer) sync(data []u8) {
-	// XTODO: Requires memcpy to buffer contents pointer
-	// and didModifyRange: for managed storage mode.
-	req := u32(data.len)
-
-	// If we need more capacity than we have, reallocate.
-	if req > self.capacity {
-		self.capacity = req
-		self.data = []u8{len: int(req)}
+pub fn (mut self MetalBuffer) sync(data []u8) ! {
+	req_bytes := usize(data.len)
+	available_bytes := macos.metal_buffer_length(self.handle)
+	if req_bytes > available_bytes {
+		macos.metal_release(self.handle)
+		new_len := req_bytes * 2
+		self.handle = macos.metal_new_buffer_length(self.opts.device, new_len, self.opts.resource_options())
+		if self.handle == unsafe { nil } {
+			self.len = 0
+			return error('Metal buffer reallocation failed')
+		}
+		self.len = u32(new_len)
 	}
-
-	// Copy the requested bytes into our storage.
-	for i in 0 .. int(req) {
-		self.data[i] = data[i]
+	if req_bytes == 0 {
+		return
 	}
+	dst := macos.metal_buffer_contents(self.handle)
+	if dst == unsafe { nil } {
+		return error('Metal buffer contents pointer is null')
+	}
+	unsafe { vmemcpy(dst, data.data, data.len) }
+	if self.opts.storage_mode == .managed {
+		macos.metal_buffer_did_modify(self.handle, req_bytes)
+	}
+}
 
-	self.len = req
+fn (opts MetalBufferOptions) resource_options() u64 {
+	cache := if opts.cpu_cache_mode == .write_combined { u64(1) } else { u64(0) }
+	storage := if opts.storage_mode == .managed { u64(1 << 4) } else { u64(0) }
+	return cache | storage
 }
 
 // ============================================================
@@ -136,7 +157,7 @@ pub:
 	// The pipeline to use.
 	pipeline MetalPipeline
 	// Draw call configuration.
-	draw_type MetalPrimitiveType = .triangle_strip
+	draw_type    MetalPrimitiveType = .triangle_strip
 	vertex_count u32 = 4
 }
 
@@ -192,8 +213,8 @@ pub mut:
 // MetalSamplerOptions configures sampler creation.
 pub struct MetalSamplerOptions {
 pub:
-	min_filter     MetalSamplerFilter      = .linear
-	mag_filter     MetalSamplerFilter      = .linear
+	min_filter     MetalSamplerFilter = .linear
+	mag_filter     MetalSamplerFilter = .linear
 	s_address_mode MetalSamplerAddressMode = .clamp_to_edge
 	t_address_mode MetalSamplerAddressMode = .clamp_to_edge
 }
@@ -245,10 +266,7 @@ pub fn (mut self MetalTarget) deinit() {
 
 // MetalTexture wraps a Metal texture (MTLTexture).
 //
-// Port of ghostty's src/renderer/metal/texture.zig. As with MetalBuffer, the
-// real MTLTexture bytes are replaced here with a CPU-side `data` buffer of
-// size `width * height * bpp` so that region uploads can be exercised without
-// a live GPU.
+// Port of ghostty's src/renderer/metal/texture.zig.
 pub struct MetalTexture {
 pub mut:
 	// The texture handle.
@@ -258,13 +276,12 @@ pub mut:
 	height u32
 	// Bytes per pixel for this texture.
 	bpp u32
-	// CPU-side copy of the texture contents (row-major, width*height*bpp).
-	data []u8
 }
 
 // MetalTextureOptions configures texture creation.
 pub struct MetalTextureOptions {
 pub:
+	device       voidptr = unsafe { nil }
 	pixel_format MetalPixelFormat = .bgra8unorm
 	storage_mode MetalStorageMode = .shared
 	usage        MetalTextureUsage
@@ -273,25 +290,30 @@ pub:
 // Initialize a texture. If data is provided, it is uploaded starting at the
 // top-left (0, 0) origin.
 pub fn MetalTexture.init(opts MetalTextureOptions, width u32, height u32, data ?[]u8) !MetalTexture {
-	// XTODO: Requires MTLTextureDescriptor setup and
-	// [device newTextureWithDescriptor:]
+	if opts.device == unsafe { nil } {
+		return error('Metal texture requires a device')
+	}
+	if width == 0 || height == 0 {
+		return error('Metal texture dimensions must be non-zero')
+	}
 	bpp := bpp_of(opts.pixel_format)
+	handle := macos.metal_new_texture(opts.device, metal_pixel_format_value(opts.pixel_format), usize(width), usize(height), metal_resource_options(.default_cache, opts.storage_mode), metal_texture_usage_value(opts.usage))
+	if handle == unsafe { nil } {
+		return error('Metal texture allocation failed')
+	}
 	mut self := MetalTexture{
+		handle: handle
 		width: width
 		height: height
 		bpp: bpp
-		data: []u8{len: int(width * height * bpp)}
 	}
 
-	// If we have data, we set it here.
 	if d := data {
-		// Upload the provided bytes at the origin. Ghostty uploads the
-		// full texture in one replaceRegion; here we copy as many bytes
-		// as were supplied so partial seed data can be exercised.
-		n := if d.len < self.data.len { d.len } else { self.data.len }
-		for i in 0 .. n {
-			self.data[i] = d[i]
+		if d.len != int(width * height * bpp) {
+			self.deinit()
+			return error('Metal texture data size does not match dimensions')
 		}
+		self.replace_region(0, 0, width, height, d)!
 	}
 
 	return self
@@ -307,6 +329,7 @@ fn bpp_of(pixel_format MetalPixelFormat) u32 {
 		.r8unorm, .r8unorm_srgb {
 			u32(1)
 		}
+
 		// 32-bit pixel formats.
 		.rgba8unorm, .rgba8unorm_srgb, .bgra8unorm, .bgra8unorm_srgb {
 			u32(4)
@@ -315,8 +338,8 @@ fn bpp_of(pixel_format MetalPixelFormat) u32 {
 }
 
 pub fn (mut self MetalTexture) deinit() {
+	macos.metal_release(self.handle)
 	self.handle = unsafe { nil }
-	self.data = []u8{}
 }
 
 // Replace a rectangular region of the texture with the provided data.
@@ -325,17 +348,48 @@ pub fn (mut self MetalTexture) deinit() {
 // data is laid out with a stride of `width * bpp` (the region width), and is
 // written into the texture using the texture's own row stride of
 // `self.width * bpp`.
-pub fn (mut self MetalTexture) replace_region(x u32, y u32, width u32, height u32, data []u8) {
-	// XTODO: Requires [texture replaceRegion:mipmapLevel:withBytes:bytesPerRow:]
-	tex_stride := self.width * self.bpp
-	src_stride := width * self.bpp
-	for row in 0 .. height {
-		dst_off := (y + row) * tex_stride + x * self.bpp
-		src_off := row * src_stride
-		for col in 0 .. src_stride {
-			self.data[int(dst_off + col)] = data[int(src_off + col)]
-		}
+pub fn (mut self MetalTexture) replace_region(x u32, y u32, width u32, height u32, data []u8) ! {
+	if x + width > self.width || y + height > self.height {
+		return error('Metal texture region is out of bounds')
 	}
+	required := width * height * self.bpp
+	if data.len != int(required) {
+		return error('Metal texture region data size does not match dimensions')
+	}
+	if required == 0 {
+		return
+	}
+	macos.metal_texture_replace_region(self.handle, usize(x), usize(y), usize(width), usize(height), data, usize(width * self.bpp))
+}
+
+fn metal_resource_options(cache MetalCPUCacheMode, storage MetalStorageMode) u64 {
+	return (if cache == .write_combined { u64(1) } else { u64(0) }) | (if storage == .managed {
+		u64(1 << 4)
+	} else {
+		u64(0)
+	})
+}
+
+fn metal_pixel_format_value(format MetalPixelFormat) u64 {
+	return match format {
+		.r8unorm { 10 }
+		.r8unorm_srgb { 11 }
+		.rgba8unorm { 70 }
+		.rgba8unorm_srgb { 71 }
+		.bgra8unorm { 80 }
+		.bgra8unorm_srgb { 81 }
+	}
+}
+
+fn metal_texture_usage_value(usage MetalTextureUsage) u64 {
+	mut value := u64(0)
+	if usage.shader_read {
+		value |= 1
+	}
+	if usage.render_target {
+		value |= 4
+	}
+	return value
 }
 
 // ============================================================

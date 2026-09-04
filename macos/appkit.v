@@ -161,6 +161,22 @@ fn C.witty_macos_objc_msg_void_size(obj ObjId, selector Sel, size ObjCSize)
 
 fn C.witty_macos_objc_msg_void_clear_color(obj ObjId, selector Sel, color MetalClearColor)
 
+fn C.witty_metal_new_buffer_length(device voidptr, length usize, options u64) voidptr
+
+fn C.witty_metal_new_buffer_bytes(device voidptr, bytes voidptr, length usize, options u64) voidptr
+
+fn C.witty_metal_buffer_length(buffer voidptr) usize
+
+fn C.witty_metal_buffer_contents(buffer voidptr) voidptr
+
+fn C.witty_metal_buffer_did_modify(buffer voidptr, length usize)
+
+fn C.witty_metal_new_texture(device voidptr, pixel_format u64, width usize, height usize, resource_options u64, usage u64) voidptr
+
+fn C.witty_metal_texture_replace_region(texture voidptr, x usize, y usize, width usize, height usize, bytes voidptr, bytes_per_row usize)
+
+fn C.witty_metal_texture_get_bytes(texture voidptr, bytes voidptr, bytes_per_row usize, x usize, y usize, width usize, height usize)
+
 fn C.witty_macos_is_main_thread() bool
 
 fn C.witty_macos_dispatch_main(fnptr voidptr, ctx voidptr)
@@ -1279,6 +1295,59 @@ pub fn metal_layer_surface_size(layer voidptr) (f64, f64) {
 	return bounds.width * scale, bounds.height * scale
 }
 
+pub fn metal_system_default_device() voidptr {
+	return C.MTLCreateSystemDefaultDevice()
+}
+
+pub fn metal_new_command_queue(device voidptr) voidptr {
+	return msg_id(ObjId(device), 'newCommandQueue')
+}
+
+pub fn metal_new_buffer_length(device voidptr, length usize, options u64) voidptr {
+	return C.witty_metal_new_buffer_length(device, length, options)
+}
+
+pub fn metal_new_buffer_bytes(device voidptr, data []u8, options u64) voidptr {
+	mut bytes := voidptr(unsafe { nil })
+	if data.len > 0 {
+		bytes = voidptr(data.data)
+	}
+	return C.witty_metal_new_buffer_bytes(device, bytes, usize(data.len), options)
+}
+
+pub fn metal_buffer_length(buffer voidptr) usize {
+	return C.witty_metal_buffer_length(buffer)
+}
+
+pub fn metal_buffer_contents(buffer voidptr) voidptr {
+	return C.witty_metal_buffer_contents(buffer)
+}
+
+pub fn metal_buffer_did_modify(buffer voidptr, length usize) {
+	C.witty_metal_buffer_did_modify(buffer, length)
+}
+
+pub fn metal_new_texture(device voidptr, pixel_format u64, width usize, height usize, resource_options u64, usage u64) voidptr {
+	return C.witty_metal_new_texture(device, pixel_format, width, height, resource_options,
+		usage)
+}
+
+pub fn metal_texture_replace_region(texture voidptr, x usize, y usize, width usize, height usize, data []u8, bytes_per_row usize) {
+	if data.len == 0 {
+		return
+	}
+	C.witty_metal_texture_replace_region(texture, x, y, width, height, voidptr(data.data),
+		bytes_per_row)
+}
+
+pub fn metal_texture_get_bytes(texture voidptr, mut data []u8, bytes_per_row usize, x usize, y usize, width usize, height usize) {
+	if data.len == 0 {
+		return
+	}
+	C.witty_metal_texture_get_bytes(texture, voidptr(data.data), bytes_per_row, x, y, width,
+		height)
+}
+
 pub fn metal_next_drawable(layer voidptr) voidptr {
 	return msg_id(ObjId(layer), 'nextDrawable')
 }
@@ -1330,7 +1399,7 @@ pub fn metal_present_and_commit(cmd_buf voidptr, drawable voidptr) {
 }
 
 pub fn metal_release(ptr voidptr) {
-	// Objects returned by these wrappers are autoreleased or owned by AppKit.
+	msg_void(ObjId(ptr), 'release')
 }
 
 pub fn metal_max_texture_size(device voidptr) u32 {

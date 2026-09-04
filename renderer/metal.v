@@ -24,6 +24,9 @@ pub mut:
 
 	// The maximum 2D texture width and height supported by the device.
 	max_texture_size u32
+
+	// True when this instance created and therefore owns device and queue.
+	owns_handles bool
 }
 
 // Storage mode for Metal resources.
@@ -78,18 +81,37 @@ pub fn MetalAPI.init_from_view(view voidptr) !MetalAPI {
 
 // init creates a MetalAPI with default/stub values (no device).
 pub fn MetalAPI.init() !MetalAPI {
+	device := macos.metal_system_default_device()
+	if device == unsafe { nil } {
+		return error('Metal not available')
+	}
+	queue := macos.metal_new_command_queue(device)
+	if queue == unsafe { nil } {
+		return error('Metal command queue unavailable')
+	}
 	return MetalAPI{
+		device: device
+		queue: queue
 		blending: .none_
-		default_storage_mode: .shared
-		max_texture_size: 16384
+		default_storage_mode: if macos.metal_has_unified_memory(device) {
+			.shared
+		} else {
+			.managed
+		}
+		max_texture_size: macos.metal_max_texture_size(device)
+		owns_handles: true
 	}
 }
 
 pub fn (mut self MetalAPI) deinit() {
-	// Handles are owned by the view; nothing to release here.
+	if self.owns_handles {
+		macos.metal_release(self.queue)
+		macos.metal_release(self.device)
+	}
 	self.device = unsafe { nil }
 	self.queue = unsafe { nil }
 	self.layer = unsafe { nil }
+	self.owns_handles = false
 }
 
 // next_drawable gets the next drawable from the Metal layer.

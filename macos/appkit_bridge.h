@@ -2,6 +2,7 @@
 #include <dispatch/dispatch.h>
 #include <objc/message.h>
 #include <Metal/Metal.h>
+#include <objc/runtime.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -81,4 +82,107 @@ static inline void witty_macos_objc_msg_void_size(void* obj, void* sel, witty_ma
 
 static inline void witty_macos_objc_msg_void_clear_color(void* obj, void* sel, witty_macos_clear_color color) {
 	((void (*)(void*, void*, witty_macos_clear_color))objc_msgSend)(obj, sel, color);
+}
+
+static inline void* witty_metal_new_buffer_length(void* device, size_t length, unsigned long long options) {
+	if (!device) return NULL;
+	return ((void* (*)(void*, SEL, unsigned long, unsigned long long))objc_msgSend)(
+		device,
+		sel_registerName("newBufferWithLength:options:"),
+		(unsigned long)length,
+		options
+	);
+}
+
+static inline void* witty_metal_new_buffer_bytes(void* device, const void* bytes, size_t length, unsigned long long options) {
+	if (!device || (!bytes && length != 0)) return NULL;
+	return ((void* (*)(void*, SEL, const void*, unsigned long, unsigned long long))objc_msgSend)(
+		device,
+		sel_registerName("newBufferWithBytes:length:options:"),
+		bytes,
+		(unsigned long)length,
+		options
+	);
+}
+
+static inline size_t witty_metal_buffer_length(void* buffer) {
+	if (!buffer) return 0;
+	return ((unsigned long (*)(void*, SEL))objc_msgSend)(buffer, sel_registerName("length"));
+}
+
+static inline void* witty_metal_buffer_contents(void* buffer) {
+	if (!buffer) return NULL;
+	return ((void* (*)(void*, SEL))objc_msgSend)(buffer, sel_registerName("contents"));
+}
+
+static inline void witty_metal_buffer_did_modify(void* buffer, size_t length) {
+	if (!buffer) return;
+	NSRange range = NSMakeRange(0, length);
+	((void (*)(void*, SEL, NSRange))objc_msgSend)(buffer, sel_registerName("didModifyRange:"), range);
+}
+
+static inline void* witty_metal_new_texture(
+	void* device,
+	unsigned long long pixel_format,
+	size_t width,
+	size_t height,
+	unsigned long long resource_options,
+	unsigned long long usage
+) {
+	if (!device || width == 0 || height == 0) return NULL;
+	Class cls = objc_getClass("MTLTextureDescriptor");
+	if (!cls) return NULL;
+	void* desc = ((void* (*)(void*, SEL))objc_msgSend)((void*)cls, sel_registerName("alloc"));
+	desc = ((void* (*)(void*, SEL))objc_msgSend)(desc, sel_registerName("init"));
+	if (!desc) return NULL;
+	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(desc, sel_registerName("setPixelFormat:"), pixel_format);
+	((void (*)(void*, SEL, unsigned long))objc_msgSend)(desc, sel_registerName("setWidth:"), (unsigned long)width);
+	((void (*)(void*, SEL, unsigned long))objc_msgSend)(desc, sel_registerName("setHeight:"), (unsigned long)height);
+	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(desc, sel_registerName("setResourceOptions:"), resource_options);
+	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(desc, sel_registerName("setUsage:"), usage);
+	void* texture = ((void* (*)(void*, SEL, void*))objc_msgSend)(device, sel_registerName("newTextureWithDescriptor:"), desc);
+	((void (*)(void*, SEL))objc_msgSend)(desc, sel_registerName("release"));
+	return texture;
+}
+
+static inline void witty_metal_texture_replace_region(
+	void* texture,
+	size_t x,
+	size_t y,
+	size_t width,
+	size_t height,
+	const void* bytes,
+	size_t bytes_per_row
+) {
+	if (!texture || !bytes) return;
+	MTLRegion region = MTLRegionMake2D((NSUInteger)x, (NSUInteger)y, (NSUInteger)width, (NSUInteger)height);
+	((void (*)(void*, SEL, MTLRegion, unsigned long, const void*, unsigned long))objc_msgSend)(
+		texture,
+		sel_registerName("replaceRegion:mipmapLevel:withBytes:bytesPerRow:"),
+		region,
+		0,
+		bytes,
+		(unsigned long)bytes_per_row
+	);
+}
+
+static inline void witty_metal_texture_get_bytes(
+	void* texture,
+	void* bytes,
+	size_t bytes_per_row,
+	size_t x,
+	size_t y,
+	size_t width,
+	size_t height
+) {
+	if (!texture || !bytes) return;
+	MTLRegion region = MTLRegionMake2D((NSUInteger)x, (NSUInteger)y, (NSUInteger)width, (NSUInteger)height);
+	((void (*)(void*, SEL, void*, unsigned long, MTLRegion, unsigned long))objc_msgSend)(
+		texture,
+		sel_registerName("getBytes:bytesPerRow:fromRegion:mipmapLevel:"),
+		bytes,
+		(unsigned long)bytes_per_row,
+		region,
+		0
+	);
 }
