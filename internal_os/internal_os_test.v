@@ -298,3 +298,11 @@ fn test_parse_terminal_exec() {
 		[]string{}
 	}) == ['a', '-e', 'b', 'c']
 }
+
+fn test_cgroup_path_from_contents() {
+	parsed := cgroup_path_from_contents('0::/user.slice/user-1000.slice/session-1.scope\n')
+	assert (parsed.value or { '' }) == '/user.slice/user-1000.slice/session-1.scope'
+	last := cgroup_path_from_contents('1:name:first\n0::/last.scope \r\n')
+	assert (last.value or { '' }) == '/last.scope'
+	assert cgroup_path_from_contents('missing delimiters').value == none
+}

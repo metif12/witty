@@ -7,6 +7,7 @@ module termio
 import apprt
 import build_meta
 import configpkg
+import global_state
 import internal_os
 import os
 import pty
@@ -344,19 +345,21 @@ pub:
 	working_directory          ?string
 	resources_dir              ?string
 	term                       string = 'xterm-ghostty'
+	linux_cgroup               ?string
 }
 
 // Subprocess manages the child process lifecycle.
 pub struct Subprocess {
 pub mut:
-	cwd         ?string
-	env         ?map[string]string
-	args        []string
-	grid_size   renderer.GridSize
-	screen_size renderer.ScreenSize
-	pty_        ?pty.Pty
-	running     bool
-	child_pid   int = -1
+	cwd          ?string
+	env          ?map[string]string
+	args         []string
+	grid_size    renderer.GridSize
+	screen_size  renderer.ScreenSize
+	pty_         ?pty.Pty
+	running      bool
+	child_pid    int = -1
+	linux_cgroup ?string
 }
 
 struct NullDelimitedEnv {
@@ -513,6 +516,7 @@ pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
 		env: env
 		cwd: cwd
 		args: args
+		linux_cgroup: cfg.linux_cgroup
 		// Should be initialized with init_terminal call.
 		grid_size: renderer.GridSize{}
 		screen_size: renderer.ScreenSize{
@@ -577,8 +581,14 @@ pub fn (mut self Subprocess) start() !PtyFds {
 	}
 	has_env := env.pointers.len > 0
 
-	// Fork the process.
-	pid := C.fork()
+	// When configured on Linux, clone directly into the cgroup so there is no
+	// race where the child can execute before a later move. Other launches use
+	// the normal fork path.
+	pid := $if linux { if cgroup := self.linux_cgroup {
+		internal_os.cgroup_clone_into(cgroup)!
+	} else {
+		C.fork()
+	} } $else { C.fork() }
 	if pid < 0 {
 		return error('fork failed')
 	}
@@ -600,6 +610,9 @@ pub fn (mut self Subprocess) start() !PtyFds {
 		if cwd.len > 0 {
 			C.chdir(cwd.str)
 		}
+
+		// Do not leak Witty's raised file-descriptor limit into the shell.
+		global_state.get_state().rlimits.restore()
 
 		// Execute with the exact environment assembled during initialization.
 		// witty_execvpe supplies Zig's portable execvpeZ behavior on macOS too.

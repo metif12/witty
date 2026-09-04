@@ -1,5 +1,6 @@
 module gtk
 
+import internal_os
 import os
 
 // cgroup_linux.v - Systemd cgroup single-instance management.
@@ -62,90 +63,59 @@ pub enum CgroupError {
 // It reads /proc/<pid>/cgroup whose first line looks like:
 //   0::/user.slice/user-1000.slice/session-1.scope
 // The cgroup path is the field after the last ':'.
-pub fn cgroup_current(pid int) ?string {
-	path := '/proc/${pid}/cgroup'
-	contents := os.read_file(path) or { return none }
-
-	// Find the last ':'.
-	idx := contents.last_index_u8(`:`)
-	if idx < 0 {
-		return none
-	}
-	result := contents[idx + 1..].trim_right(' \r\n')
-	return result
+pub fn cgroup_current(pid int) !internal_os.CgroupCurrentResult {
+	return internal_os.cgroup_current(pid)
 }
 
 // cgroup_create creates a new cgroup. If `move` is set (>= 0), the given pid is
 // moved into the created cgroup. Mirrors `os.cgroup.create`.
 pub fn cgroup_create(cgroup string, child string, move int) ! {
-	path := '/sys/fs/cgroup${cgroup}/${child}'
-	os.mkdir_all(path)!
-
-	if move >= 0 {
-		pid_path := '/sys/fs/cgroup${cgroup}/${child}/cgroup.procs'
-		os.write_file(pid_path, move.str())!
-	}
+	pid := if move >= 0 { ?int(move) } else { none }
+	internal_os.cgroup_create(cgroup, child, pid)!
 }
 
 // cgroup_remove removes a cgroup. This only succeeds if the cgroup is empty.
 // The path must be '/'-prefixed. Mirrors `os.cgroup.remove`.
 pub fn cgroup_remove(cgroup string) ! {
-	if cgroup.len == 0 || cgroup[0] != `/` {
-		return error('cgroup path must be non-empty and /-prefixed')
-	}
-	path := '/sys/fs/cgroup${cgroup}'
-	// If it doesn't exist, that's fine - maybe it was already cleaned up.
-	if !os.exists(path) {
-		return
-	}
-	os.rmdir(path)!
+	internal_os.cgroup_remove(cgroup)!
 }
 
 // cgroup_move_into moves the given PID into the given cgroup. Mirrors
 // `os.cgroup.moveInto`.
 pub fn cgroup_move_into(cgroup string, pid int) ! {
-	path := '/sys/fs/cgroup${cgroup}/cgroup.procs'
-	os.write_file(path, pid.str())!
+	internal_os.cgroup_move_into(cgroup, pid)!
 }
 
 // cgroup_controllers returns the raw space-separated list of available
 // controllers for the given ('/'-prefixed) cgroup. Mirrors
 // `os.cgroup.controllers`.
 pub fn cgroup_controllers(cgroup string) !string {
-	path := '/sys/fs/cgroup${cgroup}/cgroup.controllers'
-	contents := os.read_file(path)!
-	return contents.trim_right(' \r\n')
+	return internal_os.cgroup_controllers(cgroup)
 }
 
 // cgroup_configure_controllers writes `v` (a valid cgroup.subtree_control
 // value) to the cgroup's cgroup.subtree_control. Mirrors
 // `os.cgroup.configureControllers`.
 pub fn cgroup_configure_controllers(cgroup string, v string) ! {
-	if cgroup.len == 0 || cgroup[0] != `/` {
-		return error('cgroup path must be /-prefixed')
-	}
-	path := '/sys/fs/cgroup${cgroup}/cgroup.subtree_control'
-	os.write_file(path, v)!
+	internal_os.cgroup_configure_controllers(cgroup, v)!
 }
 
 // cgroup_configure_memory_high writes a memory.high (soft) limit in bytes.
 // Mirrors `os.cgroup.configureLimit(.{ .memory_high = ... })`.
 pub fn cgroup_configure_memory_high(cgroup string, size u64) ! {
-	if cgroup.len == 0 || cgroup[0] != `/` {
-		return error('cgroup path must be /-prefixed')
-	}
-	path := '/sys/fs/cgroup${cgroup}/memory.high'
-	os.write_file(path, size.str())!
+	internal_os.cgroup_configure_limit(cgroup, internal_os.CgroupLimit{
+		kind: .memory_high
+		value: size
+	})!
 }
 
 // cgroup_configure_pids_max writes a pids.max (hard) limit. Mirrors
 // `os.cgroup.configureLimit(.{ .pids_max = ... })`.
 pub fn cgroup_configure_pids_max(cgroup string, size u64) ! {
-	if cgroup.len == 0 || cgroup[0] != `/` {
-		return error('cgroup path must be /-prefixed')
-	}
-	path := '/sys/fs/cgroup${cgroup}/pids.max'
-	os.write_file(path, size.str())!
+	internal_os.cgroup_configure_limit(cgroup, internal_os.CgroupLimit{
+		kind: .pids_max
+		value: size
+	})!
 }
 
 // --- High-level init ------------------------------------------------------
@@ -176,14 +146,16 @@ pub fn cgroup_init(dbus GDBusConnection, opts Options) !string {
 	pid := os.getpid()
 
 	// Get our initial cgroup so we can detect the switch to the transient one.
-	original := cgroup_current(pid) or { '' }
+	original_result := cgroup_current(pid)!
+	original := original_result.value or { '' }
 
 	// Create our transient scope. If this succeeds the unit was created but we
 	// may not have moved into it yet, so busy-loop until the move completes.
 	create_scope(dbus, pid)!
 	mut transient := ''
 	for {
-		current := cgroup_current(pid) or { '' }
+		current_result := cgroup_current(pid)!
+		current := current_result.value or { '' }
 		if current != original {
 			transient = current
 			break
@@ -191,6 +163,7 @@ pub fn cgroup_init(dbus GDBusConnection, opts Options) !string {
 		// Sleep 25ms between polls, matching the Zig original.
 		sleep_ms(25)
 	}
+
 	// log.info("transient scope created cgroup={s}", .{transient});
 
 	// Create the app cgroup and move ourselves into it. This is required
@@ -275,9 +248,7 @@ fn create_scope(dbus GDBusConnection, pid_ int) ! {
 	C.g_variant_builder_unref(builder)
 
 	mut call_error := GError(unsafe { nil })
-	reply := C.g_dbus_connection_call_sync(dbus, c'org.freedesktop.systemd1',
-		c'/org/freedesktop/systemd1', c'org.freedesktop.systemd1.Manager', c'StartTransientUnit',
-		value, reply_type, 0, -1, unsafe { nil }, &call_error)
+	reply := C.g_dbus_connection_call_sync(dbus, c'org.freedesktop.systemd1', c'/org/freedesktop/systemd1', c'org.freedesktop.systemd1.Manager', c'StartTransientUnit', value, reply_type, 0, -1, unsafe { nil }, &call_error)
 	if isnil(reply) {
 		if !isnil(call_error) {
 			C.g_error_free(call_error)

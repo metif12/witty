@@ -1,5 +1,8 @@
 module main
 
+import internal_os
+import global_state
+
 #include "@VMODROOT/command_exec.h"
 
 // --- Original Ghostty Comments Start: src/Command.zig
@@ -291,6 +294,9 @@ pub mut:
 	// exec process takes over, such as signal handlers, setsid, setuid, etc.
 	pre_exec ?PreExecFn
 
+	// Linux cgroup v2 path. When set, clone3 creates the child directly in it.
+	linux_cgroup ?string
+
 	// User data pointer. Use set_data/get_data for a more user-friendly API.
 	data voidptr
 
@@ -351,7 +357,11 @@ fn (mut self Command) start_posix() ! {
 
 	// Fork. IMPORTANT: do all allocation prior to the fork().
 	// It is undefined behavior to malloc between fork and exec.
-	pid := C.fork()
+	pid := $if linux { if cgroup := self.linux_cgroup {
+		internal_os.cgroup_clone_into(cgroup)!
+	} else {
+		C.fork()
+	} } $else { C.fork() }
 	if pid < 0 {
 		return error('fork failed')
 	}
@@ -391,6 +401,10 @@ fn (mut self Command) start_posix() ! {
 	if self.cwd.len > 0 {
 		C.chdir(self.cwd.str)
 	}
+
+	// Ghostty may raise process-wide resource limits during startup. Restore
+	// the inherited originals in the child before handing control to it.
+	global_state.get_state().rlimits.restore()
 
 	// If the user requested a pre exec callback, call it now.
 	// This runs in the child process after fork but before exec,

@@ -127,6 +127,13 @@ fn test_subprocess_init_with_cwd() {
 	}
 }
 
+fn test_subprocess_init_preserves_linux_cgroup() {
+	sub := Subprocess.init(ExecConfig{
+		linux_cgroup: '/user.slice/witty.scope'
+	})!
+	assert (sub.linux_cgroup or { '' }) == '/user.slice/witty.scope'
+}
+
 fn test_subprocess_init_with_env_override() {
 	sub := Subprocess.init(ExecConfig{
 		env_override: configpkg.RepeatableStringMap{
