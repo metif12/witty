@@ -395,6 +395,26 @@ fn test_quit_after_last_window_closed_delay_parse_and_format() {
 	assert cfg.diagnostics.len == 1
 }
 
+fn test_resize_overlay_defaults_parse_and_format() {
+	mut cfg := Config.default_config()
+	assert cfg.resize_overlay == .after_first
+	assert cfg.resize_overlay_position == .center
+	assert cfg.resize_overlay_duration.duration == 750_000_000
+
+	cfg.load_string('resize-overlay = always\nresize-overlay-position = bottom-right\nresize-overlay-duration = 1s250ms')
+	assert cfg.diagnostics.len == 0
+	assert cfg.resize_overlay == .always
+	assert cfg.resize_overlay_position == .bottom_right
+	assert cfg.resize_overlay_duration.duration == 1_250_000_000
+	formatted := cfg.format_config(true)
+	assert formatted.contains('resize-overlay = always\n')
+	assert formatted.contains('resize-overlay-position = bottom-right\n')
+	assert formatted.contains('resize-overlay-duration = 1s 250ms\n')
+
+	cfg.load_string('resize-overlay = sometimes\nresize-overlay-position = middle\nresize-overlay-duration = soon')
+	assert cfg.diagnostics.len == 3
+}
+
 // --- WindowPadding ---
 
 // Config.zig: WindowPadding "parse WindowPadding"

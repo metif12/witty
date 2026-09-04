@@ -134,6 +134,8 @@ fn C.g_object_ref_sink(object GObject) GObject
 
 fn C.g_object_weak_ref(object GObject, notify voidptr, data voidptr)
 
+fn C.g_object_set(object GObject, first_property_name &char, ...)
+
 // --- Instance creation -----------------------------------------------------
 
 fn C.g_object_new(object_type GType, first_property_name &char, ...) voidptr

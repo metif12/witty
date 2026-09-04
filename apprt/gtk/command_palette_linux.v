@@ -85,8 +85,6 @@ fn C.adw_dialog_close(dialog AdwDialog) bool
 
 fn C.gtk_widget_get_realized(widget GtkWidget) bool
 
-fn C.g_object_set(object GObject, first_property_name &char, ...)
-
 // --- CommandDataKind ------------------------------------------------------
 
 // CommandDataKind mirrors the tag of the Zig `Private.CommandData` union

@@ -65,10 +65,10 @@ pub enum Align {
 
 // --- ResizeOverlay --------------------------------------------------------
 
-// ResizeOverlay is the V model of the `GhosttyResizeOverlay` GObject class. It
-// wraps the GObject/GtkWidget pointer and carries the fields that lived in the
-// Zig `Private` struct. The GObject/template machinery is stubbed (see the
-// class-registration TODO at the end).
+// ResizeOverlay is the V wrapper for the `GhosttyResizeOverlay` GObject class.
+// Runtime state lives in the native instance-private struct, matching the Zig
+// implementation, so GLib callbacks never depend on the lifetime of this V
+// wrapper.
 @[heap]
 pub struct ResizeOverlay {
 
@@ -78,56 +78,51 @@ pub mut:
 
 	// The label with the text (template child).
 	label GtkLabel = unsafe { nil }
-
-	// The text to set on the label when scheduled. `none` means "hide".
-	label_text ?string
-
-	// The time (ms) that the overlay stays visible once shown.
-	duration u32 = 750
-
-	// The first delay (ms) before any overlay is shown. Must be specified during
-	// construction otherwise it has no effect.
-	first_delay u32 = 250
-
-	// The idle source id used to update the label. 0 means "no source".
-	idler u32
-
-	// The timer source id for dismissing the overlay. 0 means "no timer".
-	timer u32
-
-	// The first-delay timer source id. 0 means "no timer".
-	delay_timer u32
-
-	// The alignment of the overlay within its parent.
-	halign Align = .center
-	valign Align = .center
 }
 
 // new_resize_overlay creates a new ResizeOverlay. Mirrors
 // `gobject.ext.newInstance` + the instance `init`: it builds the GObject
 // (running the `.ui` template init, which binds the `label` child), reads the
-// template child back into the wrapper, and arms the first-delay timer if
-// configured.
+// template child back into the wrapper. Instance initialization arms the
+// first-delay timer from native private state.
 pub fn new_resize_overlay() &ResizeOverlay {
 	obj := C.g_object_new(resize_overlay_get_type(), &char(unsafe { nil }))
 	priv := resize_overlay_priv(obj)
-	mut self := &ResizeOverlay{
+	return &ResizeOverlay{
 		widget: obj
 		label: priv.label
 	}
-	// init: arm the first-delay timer.
-	if self.first_delay > 0 {
-		self.delay_timer = C.g_timeout_add(self.first_delay, on_resize_delay_timer, self)
-	}
-	return self
 }
 
 // set_label sets the overlay label text. This does NOT show the overlay if it
 // is currently hidden; callers must call `schedule`. Mirrors `setLabel`.
 pub fn (mut self ResizeOverlay) set_label(label ?string) {
-	self.label_text = label
+	if isnil(self.widget) {
+		return
+	}
+	mut priv := resize_overlay_priv(voidptr(self.widget))
+	if !isnil(priv.label_text) {
+		C.g_free(priv.label_text)
+		priv.label_text = unsafe { nil }
+	}
+	if text := label {
+		priv.label_text = C.g_strdup(&char(text.str))
+	}
+	C.g_object_notify_by_pspec(self.widget, g_resize_overlay_pspec_label)
+}
+
+// set_duration updates how long the overlay remains visible. The native
+// property machinery applies the same 250ms minimum as Ghostty.
+pub fn (mut self ResizeOverlay) set_duration(duration u32) {
 	if !isnil(self.widget) {
-		C.g_object_notify_by_pspec(self.widget, g_resize_overlay_pspec_label)
+		C.g_object_set(GObject(self.widget), c'duration', duration, unsafe { nil })
+	}
+}
+
+// set_position updates the alignment properties bound by the widget template.
+pub fn (mut self ResizeOverlay) set_position(halign Align, valign Align) {
+	if !isnil(self.widget) {
+		C.g_object_set(GObject(self.widget), c'overlay-halign', int(halign), c'overlay-valign', int(valign), unsafe { nil })
 	}
 }
 
@@ -135,108 +130,79 @@ pub fn (mut self ResizeOverlay) set_label(label ?string) {
 // flickering during resizes we defer the actual show to when GTK is idle.
 // Mirrors `schedule`.
 pub fn (mut self ResizeOverlay) schedule() {
+	if isnil(self.widget) {
+		return
+	}
+	mut priv := resize_overlay_priv(voidptr(self.widget))
 	// If we have a delay timer then we're not showing anything yet, so do
 	// nothing.
-	if self.delay_timer != 0 {
+	if priv.delay_timer != 0 {
 		return
 	}
 
 	// Wait until GTK is "idle" before updating the widget; scheduling multiple
 	// idle sources would be wasteful, so bail if one is already armed.
-	if self.idler != 0 {
+	if priv.idler != 0 {
 		return
 	}
-	// idler = glib.idleAdd(onIdle, self).
-	self.idler = C.g_idle_add(on_resize_idle, self)
+	priv.idler = C.g_idle_add(on_resize_idle, self.widget)
 }
 
-// on_idle is the idle callback that actually shows/hides the overlay. Mirrors
+// on_resize_idle is the idle callback that actually shows/hides the overlay. Mirrors
 // `onIdle`. Returns 0 (G_SOURCE_REMOVE) as in the Zig original.
-fn (mut self ResizeOverlay) on_idle() int {
-	// No matter what, our idler is complete with this callback.
-	self.idler = 0
-
-	// Cancel our previous show timer no matter what.
-	if self.timer != 0 {
-		C.g_source_remove(self.timer)
-		self.timer = 0
-	}
-
-	// If we have a label to show, show ourselves. Otherwise hide.
-	text := self.label_text or {
-		C.gtk_widget_set_visible(self.widget, false)
-		return 0
-	}
-
-	// Set our label and show it.
-	C.gtk_label_set_label(self.label, text.str)
-	C.gtk_widget_set_visible(self.widget, true)
-
-	// Setup the new timer to hide ourselves after the duration.
-	self.timer = C.g_timeout_add(self.duration, on_resize_timer, self)
-
-	return 0
-}
-
-// on_timer hides the overlay when the display duration elapses. Mirrors
-// `onTimer`.
-fn (mut self ResizeOverlay) on_timer() int {
-	self.timer = 0
-	C.gtk_widget_set_visible(self.widget, false)
-	return 0
-}
-
-// on_delay_timer clears the first-delay timer once it elapses. Mirrors
-// `onDelayTimer`.
-fn (mut self ResizeOverlay) on_delay_timer() int {
-	self.delay_timer = 0
-	return 0
-}
-
-// dispose removes any pending sources. Mirrors the `dispose` virtual method.
-pub fn (mut self ResizeOverlay) dispose() {
-	if self.idler != 0 {
-		C.g_source_remove(self.idler)
-		self.idler = 0
-	}
-	if self.timer != 0 {
-		C.g_source_remove(self.timer)
-		self.timer = 0
-	}
-	if self.delay_timer != 0 {
-		C.g_source_remove(self.delay_timer)
-		self.delay_timer = 0
-	}
-	if !isnil(self.widget) {
-		resize_overlay_dispose(voidptr(self.widget))
-	}
-}
-
-// --- C-ABI timeout/idle trampolines ---------------------------------------
-// These are the plain-C callbacks that glib invokes. Each recovers `self` from
-// the user-data pointer and forwards to the corresponding method.
 fn on_resize_idle(ud voidptr) int {
 	if isnil(ud) {
 		return 0
 	}
-	mut self := unsafe { &ResizeOverlay(ud) }
-	return self.on_idle()
+	mut priv := resize_overlay_priv(ud)
+	// No matter what, our idler is complete with this callback.
+	priv.idler = 0
+
+	// Cancel our previous show timer no matter what.
+	if priv.timer != 0 {
+		if !C.g_source_remove(priv.timer) {
+			eprintln('unable to remove size overlay timer')
+		}
+		priv.timer = 0
+	}
+
+	// If we have a label to show, show ourselves. Otherwise hide.
+	if isnil(priv.label_text) {
+		C.gtk_widget_set_visible(GtkWidget(ud), false)
+		return 0
+	}
+
+	// Set our label and show it.
+	C.gtk_label_set_label(GtkLabel(priv.label), priv.label_text)
+	C.gtk_widget_set_visible(GtkWidget(ud), true)
+
+	// Setup the new timer to hide ourselves after the duration.
+	priv.timer = C.g_timeout_add(priv.duration, on_resize_timer, ud)
+
+	return 0
 }
 
+// on_resize_timer hides the overlay when the display duration elapses. Mirrors
+// `onTimer`.
 fn on_resize_timer(ud voidptr) int {
 	if isnil(ud) {
 		return 0
 	}
-	mut self := unsafe { &ResizeOverlay(ud) }
-	return self.on_timer()
+	mut priv := resize_overlay_priv(ud)
+	priv.timer = 0
+	C.gtk_widget_set_visible(GtkWidget(ud), false)
+	return 0
 }
 
+// on_resize_delay_timer clears the first-delay timer once it elapses. Mirrors
+// `onDelayTimer`.
 fn on_resize_delay_timer(ud voidptr) int {
 	if isnil(ud) {
 		return 0
 	}
-	mut self := unsafe { &ResizeOverlay(ud) }
-	return self.on_delay_timer()
+	mut priv := resize_overlay_priv(ud)
+	priv.delay_timer = 0
+	return 0
 }
 
 // --- GObject class registration -------------------------------------------
@@ -287,16 +253,16 @@ const resize_overlay_ui = '<?xml version="1.0" encoding="UTF-8"?>
 </interface>
 '
 
-// The C-layout private struct mirroring ghostty\'s `Private`. The idler/timer/
-// delay_timer sources and label_text are managed by the V wrapper (which holds
-// the timeout-source user-data), so only the fields the template + property
-// accessors touch are stored here.
+// The C-layout private struct mirroring ghostty\'s `Private`.
 struct C.GhosttyResizeOverlayPrivate {
 mut:
 	label       voidptr
 	label_text  &char = unsafe { nil }
 	duration    u32
 	first_delay u32
+	idler       u32
+	timer       u32
+	delay_timer u32
 	halign      int
 	valign      int
 }
@@ -363,9 +329,28 @@ fn resize_overlay_set_property(obj voidptr, property_id u32, value voidptr, pspe
 	}
 }
 
-// resize_overlay_dispose disposes the template and chains to the parent.
-// Mirrors the `dispose` vfunc (the source-removal is done by the wrapper).
+// resize_overlay_dispose removes all pending sources, disposes the template,
+// and chains to the parent. Mirrors the `dispose` vfunc.
 fn resize_overlay_dispose(obj voidptr) {
+	mut priv := resize_overlay_priv(obj)
+	if priv.idler != 0 {
+		if !C.g_source_remove(priv.idler) {
+			eprintln('unable to remove resize overlay idler')
+		}
+		priv.idler = 0
+	}
+	if priv.timer != 0 {
+		if !C.g_source_remove(priv.timer) {
+			eprintln('unable to remove resize overlay timer')
+		}
+		priv.timer = 0
+	}
+	if priv.delay_timer != 0 {
+		if !C.g_source_remove(priv.delay_timer) {
+			eprintln('unable to remove resize overlay delay timer')
+		}
+		priv.delay_timer = 0
+	}
 	C.gtk_widget_dispose_template(obj, g_resize_overlay_type)
 	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
 	if !isnil(parent_class.dispose) {
@@ -421,10 +406,14 @@ fn resize_overlay_class_init(klass voidptr, class_data voidptr) {
 	C.g_object_class_install_property(klass, resize_overlay_prop_valign, g_resize_overlay_pspec_valign)
 }
 
-// resize_overlay_instance_init builds the template. Mirrors the ghostty `init`
-// (instanceInit); the first-delay timer is armed by the V wrapper's `new`.
+// resize_overlay_instance_init builds the template and arms the first-delay
+// timer. Mirrors the ghostty `init` (instanceInit).
 fn resize_overlay_instance_init(instance voidptr, klass voidptr) {
 	C.gtk_widget_init_template(instance)
+	mut priv := resize_overlay_priv(instance)
+	if priv.first_delay > 0 {
+		priv.delay_timer = C.g_timeout_add(priv.first_delay, on_resize_delay_timer, instance)
+	}
 }
 
 // resize_overlay_get_type lazily registers the GhosttyResizeOverlay GObject

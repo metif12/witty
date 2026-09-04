@@ -346,9 +346,10 @@ pub mut:
 
 	// URL hover labels and the right-click context menu from the surface
 	// blueprint.
-	url_left     GtkLabel = unsafe { nil }
-	url_right    GtkLabel = unsafe { nil }
-	context_menu GtkPopover = unsafe { nil }
+	url_left       GtkLabel = unsafe { nil }
+	url_right      GtkLabel = unsafe { nil }
+	context_menu   GtkPopover = unsafe { nil }
+	resize_overlay &ResizeOverlay = unsafe { nil }
 
 	// The core surface backing this GTK surface. This starts out nil because it
 	// can't be initialized until there is a realized GLArea. In ghostty this is
@@ -1515,7 +1516,7 @@ pub fn (mut self SurfaceWidget) glarea_resize(width int, height int) {
 		surface.size_callback(self.size.width, self.size.height) or {
 			eprintln('error in size callback err=${err}')
 		}
-		// TODO(gtk): schedule the resize overlay if configured.
+		self.resize_overlay_schedule()
 		return
 	}
 
@@ -1523,6 +1524,62 @@ pub fn (mut self SurfaceWidget) glarea_resize(width int, height int) {
 	self.init_surface() or {
 		eprintln('surface failed to initialize err=${err}')
 	}
+}
+
+// apply_resize_overlay_config mirrors the resize-overlay portion of
+// `propConfig`: it updates the display duration and the label alignment.
+fn (mut self SurfaceWidget) apply_resize_overlay_config() {
+	if isnil(self.config) || isnil(self.resize_overlay) {
+		return
+	}
+	cfg := self.config.get()
+	mut halign := Align.center
+	mut valign := Align.center
+	match cfg.resize_overlay_position {
+		.center {}
+		.top_left {
+			halign = .start
+			valign = .start
+		}
+		.top_right {
+			halign = .end
+			valign = .start
+		}
+		.top_center {
+			valign = .start
+		}
+		.bottom_left {
+			halign = .start
+			valign = .end
+		}
+		.bottom_right {
+			halign = .end
+			valign = .end
+		}
+		.bottom_center {
+			valign = .end
+		}
+	}
+	self.resize_overlay.set_duration(cfg.resize_overlay_duration.as_milliseconds())
+	self.resize_overlay.set_position(halign, valign)
+}
+
+// resize_overlay_schedule mirrors `resizeOverlaySchedule`.
+fn (mut self SurfaceWidget) resize_overlay_schedule() {
+	if !self.has_core() || isnil(self.config) || isnil(self.resize_overlay) {
+		return
+	}
+	cfg := self.config.get()
+	match cfg.resize_overlay {
+		.always, .after_first {}
+		.never {
+			return
+		}
+	}
+	self.apply_resize_overlay_config()
+	grid_size := self.core_surface.size.grid()
+	self.resize_overlay.set_label('${grid_size.columns} x ${grid_size.rows}')
+	self.resize_overlay.schedule()
 }
 
 // init_surface initializes the core surface on the first GLArea resize.
@@ -2274,8 +2331,10 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 	C.gtk_overlay_set_child(terminal_page, box)
 	url_left := surface_url_label_new(.start)
 	url_right := surface_url_label_new(.end)
+	resize_overlay := new_resize_overlay()
 	C.gtk_overlay_add_overlay(terminal_page, GtkWidget(url_left))
 	C.gtk_overlay_add_overlay(terminal_page, GtkWidget(url_right))
+	C.gtk_overlay_add_overlay(terminal_page, resize_overlay.widget)
 	C.g_object_ref_sink(GObject(terminal_page))
 	C.adw_bin_set_child(AdwBin(obj), terminal_page)
 	error_page := surface_error_page_new()
@@ -2293,9 +2352,11 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 		url_left: url_left
 		url_right: url_right
 		context_menu: context_menu
+		resize_overlay: resize_overlay
 	}
 	w.rt_surface = Surface{ surface: w }
 	w.mouse_shape = .text
+	w.apply_resize_overlay_config()
 	w.focused = true
 	w.in_keyevent = .false_
 	w.gtk_enable_primary_paste = true

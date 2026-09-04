@@ -4100,6 +4100,11 @@ pub mut:
 	window_new_tab_position WindowNewTabPosition = .current
 	// Controls whether the GTK tab bar is always, automatically, or never shown.
 	window_show_tab_bar WindowShowTabBar = .auto
+	// Controls when, where, and for how long the terminal grid size is shown
+	// while a GTK surface is resized.
+	resize_overlay          ResizeOverlay = .after_first
+	resize_overlay_position ResizeOverlayPosition = .center
+	resize_overlay_duration Duration = Duration{ duration: 750 * 1_000_000 }
 	// Whether the mouse follows focus.
 	focus_follows_mouse bool
 	// Whether a new terminal inherits the working directory of the previous one.
@@ -6813,6 +6818,38 @@ fn (mut c Config) apply_kv(key string, value string) {
 					c.invalid_config_value(key, value)
 					return
 				}
+			}
+		}
+		'resize-overlay' {
+			c.resize_overlay = match value {
+				'always' { .always }
+				'never' { .never }
+				'after-first' { .after_first }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'resize-overlay-position' {
+			c.resize_overlay_position = match value {
+				'center' { .center }
+				'top-left' { .top_left }
+				'top-center' { .top_center }
+				'top-right' { .top_right }
+				'bottom-left' { .bottom_left }
+				'bottom-center' { .bottom_center }
+				'bottom-right' { .bottom_right }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'resize-overlay-duration' {
+			c.resize_overlay_duration = duration_parse_cli(value) or {
+				c.invalid_config_value(key, value)
+				return
 			}
 		}
 		'right-click-action' {

@@ -196,6 +196,15 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	add_group(mut result, 'window-show-tab-bar', [
 		enum_config_string(c.window_show_tab_bar.str()),
 	])
+	add_group(mut result, 'resize-overlay', [
+		enum_config_string(c.resize_overlay.str()),
+	])
+	add_group(mut result, 'resize-overlay-position', [
+		enum_config_string(c.resize_overlay_position.str()),
+	])
+	add_group(mut result, 'resize-overlay-duration', [
+		c.resize_overlay_duration.format(),
+	])
 	add_group(mut result, 'title', [optional_string(c.title)])
 	add_group(mut result, 'title-report', [bool_string(c.title_report)])
 	add_group(mut result, 'class', [optional_string(c.class)])
