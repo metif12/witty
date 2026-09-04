@@ -159,6 +159,53 @@ pub fn get_env_map() !map[string]string {
 	return os.environ()
 }
 
+// ArgIterator is the flattened translation of os/args.zig's platform-aware
+// command-line iterator. V owns its process arguments, so the iterator keeps
+// an owned snapshot and has the same next/skip/deinit lifecycle.
+pub struct ArgIterator {
+mut:
+	args  []string
+	index int
+}
+
+pub fn args_iterator() ArgIterator {
+	return ArgIterator{
+		args: os.args.clone()
+	}
+}
+
+pub fn (mut self ArgIterator) deinit() {
+	self.args.clear()
+	self.index = 0
+}
+
+pub fn (mut self ArgIterator) next() ?string {
+	if self.index >= self.args.len {
+		return none
+	}
+	result := self.args[self.index]
+	self.index++
+	return result
+}
+
+pub fn (mut self ArgIterator) skip() bool {
+	if self.index >= self.args.len {
+		return false
+	}
+	self.index++
+	return true
+}
+
+// launched_by_dbus_activation reports the environment contract used by D-Bus
+// activation. Values may be empty; presence of both variables is sufficient.
+pub fn launched_by_dbus_activation() bool {
+	$if linux {
+		return getenv('DBUS_STARTER_ADDRESS') != none && getenv('DBUS_STARTER_BUS_TYPE') != none
+	} $else {
+		return false
+	}
+}
+
 // launched_from_desktop detects launches from Finder on macOS and desktop
 // files on Linux/BSD. This is the platform switch used by Ghostty when
 // deciding whether GUI-only environment overrides should reach child shells.
@@ -463,6 +510,26 @@ pub fn fix_max_files() !Rlimit {
 // restore_max_files restores the file descriptor limit to a previous value.
 pub fn restore_max_files(lim Rlimit) {
 	setrlimit_nofile(lim)
+}
+
+// alloc_tmp_dir returns the source-compatible recommended temporary directory.
+// V strings are garbage collected, so free_tmp_dir is intentionally a no-op.
+pub fn alloc_tmp_dir() ?string {
+	$if windows {
+		return getenv('TMP')
+	} $else {
+		if value := getenv('TMPDIR') {
+			return value
+		}
+		if value := getenv('TMP') {
+			return value
+		}
+		return '/tmp'
+	}
+}
+
+pub fn free_tmp_dir(dir string) {
+	_ = dir
 }
 
 // getrlimit_nofile queries the current NOFILE resource limit.

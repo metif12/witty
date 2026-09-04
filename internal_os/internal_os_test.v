@@ -88,6 +88,79 @@ fn test_environment_path_composition_uses_platform_delimiter() {
 	assert prepend_env('a:b', 'foo') == 'foo${os.path_delimiter}a:b'
 }
 
+fn test_argument_iterator_next_skip_and_deinit() {
+	mut iter := args_iterator()
+	first := iter.next() or {
+		assert false, 'process must have argv[0]'
+		return
+	}
+	assert first.len > 0
+	for iter.skip() {
+	}
+	assert iter.next() == none
+	iter.deinit()
+	assert iter.next() == none
+}
+
+fn test_dbus_activation_requires_both_environment_variables() {
+	address_key := 'DBUS_STARTER_ADDRESS'
+	bus_key := 'DBUS_STARTER_BUS_TYPE'
+	previous_address := os.getenv_opt(address_key)
+	previous_bus := os.getenv_opt(bus_key)
+	defer {
+		if value := previous_address {
+			os.setenv(address_key, value, true)
+		} else {
+			os.unsetenv(address_key)
+		}
+		if value := previous_bus {
+			os.setenv(bus_key, value, true)
+		} else {
+			os.unsetenv(bus_key)
+		}
+	}
+
+	os.unsetenv(address_key)
+	os.unsetenv(bus_key)
+	assert !launched_by_dbus_activation()
+	os.setenv(address_key, '', true)
+	assert !launched_by_dbus_activation()
+	os.setenv(bus_key, '', true)
+	$if linux {
+		assert launched_by_dbus_activation()
+	} $else {
+		assert !launched_by_dbus_activation()
+	}
+}
+
+fn test_alloc_tmp_dir_precedence() {
+	$if !windows {
+		previous_tmpdir := os.getenv_opt('TMPDIR')
+		previous_tmp := os.getenv_opt('TMP')
+		defer {
+			if value := previous_tmpdir {
+				os.setenv('TMPDIR', value, true)
+			} else {
+				os.unsetenv('TMPDIR')
+			}
+			if value := previous_tmp {
+				os.setenv('TMP', value, true)
+			} else {
+				os.unsetenv('TMP')
+			}
+		}
+
+		os.unsetenv('TMPDIR')
+		os.unsetenv('TMP')
+		assert alloc_tmp_dir() or { '' } == '/tmp'
+		os.setenv('TMP', '/tmp/from-tmp', true)
+		assert alloc_tmp_dir() or { '' } == '/tmp/from-tmp'
+		os.setenv('TMPDIR', '/tmp/from-tmpdir', true)
+		assert alloc_tmp_dir() or { '' } == '/tmp/from-tmpdir'
+		free_tmp_dir('/tmp/from-tmpdir')
+	}
+}
+
 fn test_home_preserves_environment_value_and_expand_home_rules() {
 	previous := os.getenv_opt('HOME')
 	defer {
