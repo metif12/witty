@@ -480,7 +480,9 @@ pub fn (fd &FontconfigDiscovery) discover(desc Descriptor) !FcDiscoverIterator {
 }
 
 // discover_fallback is like discover but for fallback font discovery.
-pub fn (fd &FontconfigDiscovery) discover_fallback(desc Descriptor) !FcDiscoverIterator {
+
+pub fn (fd &FontconfigDiscovery) discover_fallback(mut collection Collection, desc Descriptor) !FcDiscoverIterator {
+	_ = collection
 	return fd.discover(desc)!
 }
 
@@ -624,7 +626,7 @@ fn sort_matching_descriptors(desc Descriptor, mut list []voidptr) {
 }
 
 // discover_fallback finds fallback fonts for a codepoint.
-pub fn (ct &CoreTextDiscovery) discover_fallback(desc Descriptor) !CtDiscoverIterator {
+pub fn (ct &CoreTextDiscovery) discover_fallback(mut collection Collection, desc Descriptor) !CtDiscoverIterator {
 	// If we have a codepoint within the CJK unified ideographs block then we
 	// fall back to macOS to find a font that supports it because there isn't
 	// a better way manually with CoreText that properly takes into account
@@ -634,7 +636,7 @@ pub fn (ct &CoreTextDiscovery) discover_fallback(desc Descriptor) !CtDiscoverIte
 	// - http://unicode.org/charts/PDF/U4E00.pdf
 	// - https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/fonts/LocaleInFonts.md#unified-han-ideographs
 	if desc.codepoint >= 0x4E00 && desc.codepoint <= 0x9FFF {
-		if han := ct.discover_codepoint(desc) {
+		if han := ct.discover_codepoint(mut collection, desc) {
 			return CtDiscoverIterator{
 				list: [han]
 				variations: desc.variations
@@ -651,7 +653,7 @@ pub fn (ct &CoreTextDiscovery) discover_fallback(desc Descriptor) !CtDiscoverIte
 	// font that CoreText wants to use.
 	// See: https://github.com/ghostty-org/ghostty/issues/2499
 	if it.list.len == 0 && desc.codepoint > 0 {
-		if ct_desc := ct.discover_codepoint(desc) {
+		if ct_desc := ct.discover_codepoint(mut collection, desc) {
 			return CtDiscoverIterator{
 				list: [ct_desc]
 				variations: desc.variations
@@ -665,35 +667,44 @@ pub fn (ct &CoreTextDiscovery) discover_fallback(desc Descriptor) !CtDiscoverIte
 }
 
 // discover_codepoint discovers a font for a specific codepoint using the
-// CoreText CTFontCreateForString API, starting from a font that best matches
-// the descriptor's requested style. Returns a retained descriptor or none.
-//
-// BOUNDARY: ghostty seeds this with a font from the active Collection (based
-// on the requested style). This V port doesn't thread a Collection through
-// discovery, so we seed from a freshly built descriptor for the requested
-// family/style instead, which is functionally equivalent for lookup.
-fn (ct &CoreTextDiscovery) discover_codepoint(desc Descriptor) ?voidptr {
+// CoreText CTFontCreateForString API, starting from the active collection face
+// that best matches the descriptor's requested style. Returns a retained
+// descriptor or none.
+fn (ct &CoreTextDiscovery) discover_codepoint(mut collection Collection, desc Descriptor) ?voidptr {
 	if desc.codepoint == 0 {
 		return none
 	}
 
-	// Build a seed font for the requested family/style (without the codepoint
-	// character-set restriction, which we don't want here).
-	family := desc.family or { '' }
-	style := desc.style or { '' }
-	seed_desc := C.witty_ct_build_descriptor(&char(family.str), &char(style.str), 0, f64(desc.size), b2i(desc.bold), b2i(desc.italic), b2i(desc.monospace))
-	if isnil(seed_desc) {
-		return none
+	// The order matters: prefer an exact style, then progressively fall back
+	// to the primary regular face.
+	mut styles := []FontStyle{}
+	if desc.bold && desc.italic {
+		styles << .bold_italic
 	}
-	defer {
-		C.witty_ct_release(seed_desc)
+	if desc.bold {
+		styles << .bold
 	}
-	seed_font := C.witty_ct_font_from_descriptor(seed_desc, 12.0)
+	if desc.italic {
+		styles << .italic
+	}
+	styles << .regular
+
+	mut seed_font := voidptr(unsafe { nil })
+	for style in styles {
+		if collection.face_count(style) == 0 {
+			continue
+		}
+		face := collection.get_face(Index{
+			style: style
+			idx: 0
+		}) or { continue }
+		if !isnil(face.ct_font) {
+			seed_font = face.ct_font
+			break
+		}
+	}
 	if isnil(seed_font) {
 		return none
-	}
-	defer {
-		C.witty_coretext_release(seed_font)
 	}
 
 	// Ask CoreText for a font that can render this codepoint (skipping the
@@ -817,18 +828,18 @@ pub fn (d &Discover) discover(desc Descriptor) !DiscoverIterator {
 	}
 }
 
-pub fn (d &Discover) discover_fallback(desc Descriptor) !DiscoverIterator {
+pub fn (d &Discover) discover_fallback(mut collection Collection, desc Descriptor) !DiscoverIterator {
 	return match d.backend {
 		.fontconfig {
 			DiscoverIterator{
 				backend: .fontconfig
-				fc: d.fc.discover_fallback(desc)!
+				fc: d.fc.discover_fallback(mut collection, desc)!
 			}
 		}
 		.coretext {
 			DiscoverIterator{
 				backend: .coretext
-				ct: d.ct.discover_fallback(desc)!
+				ct: d.ct.discover_fallback(mut collection, desc)!
 			}
 		}
 	}
@@ -927,14 +938,10 @@ pub fn Score.from_int(v u64) Score {
 // glyphs, prioritizes codepoint coverage, and matches bold/italic/monospace
 // traits and the style string.
 //
-// The heavy lifting (loading the font, reading symbolic traits, glyph
-// coverage, and style-string fuzzy matching) is done in the C shim
-// (witty_ct_score) since it needs the CoreText framework; here we unpack
-// the resulting packed integer into the symbolic Score fields.
-//
-// BOUNDARY: ghostty additionally refines bold/italic from the 'head'/'OS/2'
-// tables and variation axes. That refinement is omitted; we use the
-// descriptor's symbolic traits, which is correct for the common case.
+// The heavy lifting (loading the font, reading symbolic and OpenType traits,
+// variation axes, glyph coverage, and style-string fuzzy matching) is done in
+// the C shim since it needs the CoreText framework; here we unpack the packed
+// score into its symbolic fields.
 pub fn Score.score(desc &Descriptor, ct_desc voidptr) Score {
 	style_ptr := if s := desc.style { &char(s.str) } else { &char(unsafe { nil }) }
 	v := C.witty_ct_score(style_ptr, desc.codepoint, b2i(desc.bold), b2i(desc.italic), ct_desc)

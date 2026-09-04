@@ -7,6 +7,8 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreGraphics/CoreGraphics.h>
 #include <CoreText/CoreText.h>
+#include <harfbuzz/hb.h>
+#include <harfbuzz/hb-coretext.h>
 
 static double witty_coretext_font_size(double size) {
 	return size > 0.0 ? size : 13.0;
@@ -198,6 +200,26 @@ static int witty_coretext_get_metrics(
 	if (ic_width) *ic_width = measured_ic_width;
 	if (has_ic_width) *has_ic_width = measured_has_ic_width;
 	return 1;
+}
+
+static uint32_t witty_coretext_units_per_em(void *font_ptr) {
+	if (!font_ptr) return 0;
+	return (uint32_t)CTFontGetUnitsPerEm((CTFontRef)font_ptr);
+}
+
+static void *witty_coretext_create_hb_font(void *font_ptr, double pixels) {
+	if (!font_ptr) return NULL;
+	hb_font_t *font = hb_coretext_font_create((CTFontRef)font_ptr);
+	if (!font) return NULL;
+	float scale = (float)pixels;
+	uint32_t scale_bits = 0;
+	memcpy(&scale_bits, &scale, sizeof(scale_bits));
+	hb_font_set_scale(font, (int32_t)scale_bits, (int32_t)scale_bits);
+	return (void *)font;
+}
+
+static void witty_coretext_destroy_hb_font(void *font_ptr) {
+	if (font_ptr) hb_font_destroy((hb_font_t *)font_ptr);
 }
 
 static int witty_coretext_render_glyph(
@@ -415,10 +437,8 @@ static void *witty_cf_array_get(void *arr, int i) {
 // Score.to_int(): glyph_count[0..16), fuzzy_style[16..24), bold[24],
 // italic[25], exact_style[26], monospace[27], codepoint[28].
 //
-// This mirrors ghostty's Score.score() using CoreText's own trait/attribute
-// APIs. Refinement of bold/italic via the 'head'/'OS/2'/variation tables is
-// intentionally omitted here (documented boundary): we rely on the descriptor
-// symbolic traits, which is correct for the common case.
+// This mirrors ghostty's Score.score() using CoreText's trait/attribute APIs,
+// OpenType head/OS/2 flags, and active variation-axis values.
 static uint64_t witty_ct_score(
 	const char *desired_style, // may be NULL
 	uint32_t codepoint,
@@ -462,6 +482,62 @@ static uint64_t witty_ct_score(
 		is_bold = (t & kCTFontTraitBold) ? 1 : 0;
 		is_italic = (t & kCTFontTraitItalic) ? 1 : 0;
 		is_mono = (t & kCTFontTraitMonoSpace) ? 1 : 0;
+	}
+	{
+		CFDataRef head = CTFontCopyTable(font, (CTFontTableTag)'head', kCTFontTableOptionNoOptions);
+		if (head) {
+			const UInt8 *bytes = CFDataGetBytePtr(head);
+			CFIndex len = CFDataGetLength(head);
+			if (bytes && len >= 46) {
+				uint16_t mac_style = ((uint16_t)bytes[44] << 8) | bytes[45];
+				is_bold = is_bold || ((mac_style & 1) != 0);
+				is_italic = is_italic || ((mac_style & 2) != 0);
+			}
+			CFRelease(head);
+		}
+
+		CFDataRef os2 = CTFontCopyTable(font, (CTFontTableTag)'OS/2', kCTFontTableOptionNoOptions);
+		if (os2) {
+			const UInt8 *bytes = CFDataGetBytePtr(os2);
+			CFIndex len = CFDataGetLength(os2);
+			if (bytes && len >= 64) {
+				uint16_t selection = ((uint16_t)bytes[62] << 8) | bytes[63];
+				is_bold = is_bold || ((selection & 0x20) != 0);
+				is_italic = is_italic || ((selection & 0x01) != 0);
+			}
+			CFRelease(os2);
+		}
+
+		CFArrayRef axes = CTFontCopyVariationAxes(font);
+		CFDictionaryRef values = (CFDictionaryRef)CTFontCopyAttribute(font, kCTFontVariationAttribute);
+		if (axes && values) {
+			int ital_seen = 0;
+			CFIndex count = CFArrayGetCount(axes);
+			for (CFIndex i = 0; i < count; i++) {
+				CFDictionaryRef axis = (CFDictionaryRef)CFArrayGetValueAtIndex(axes, i);
+				CFNumberRef id_number = (CFNumberRef)CFDictionaryGetValue(axis, kCTFontVariationAxisIdentifierKey);
+				CFNumberRef default_number = (CFNumberRef)CFDictionaryGetValue(axis, kCTFontVariationAxisDefaultValueKey);
+				if (!id_number || !default_number) continue;
+
+				int32_t identifier = 0;
+				double value = 0;
+				if (!CFNumberGetValue(id_number, kCFNumberSInt32Type, &identifier)) continue;
+				(void)CFNumberGetValue(default_number, kCFNumberDoubleType, &value);
+				CFNumberRef configured = (CFNumberRef)CFDictionaryGetValue(values, id_number);
+				if (configured) (void)CFNumberGetValue(configured, kCFNumberDoubleType, &value);
+
+				if ((uint32_t)identifier == (uint32_t)'wght') {
+					is_bold = value > 600.0;
+				} else if ((uint32_t)identifier == (uint32_t)'ital') {
+					is_italic = value > 0.5;
+					ital_seen = 1;
+				} else if (!ital_seen && (uint32_t)identifier == (uint32_t)'slnt') {
+					is_italic = value <= -5.0;
+				}
+			}
+		}
+		if (values) CFRelease(values);
+		if (axes) CFRelease(axes);
 	}
 	monospace = is_mono ? 1 : 0;
 	bold_match = (want_bold == is_bold) ? 1 : 0;
@@ -818,6 +894,21 @@ static int witty_coretext_get_metrics(
 	(void)ic_width;
 	(void)has_ic_width;
 	return 0;
+}
+
+static uint32_t witty_coretext_units_per_em(void *font_ptr) {
+	(void)font_ptr;
+	return 0;
+}
+
+static void *witty_coretext_create_hb_font(void *font_ptr, double pixels) {
+	(void)font_ptr;
+	(void)pixels;
+	return NULL;
+}
+
+static void witty_coretext_destroy_hb_font(void *font_ptr) {
+	(void)font_ptr;
 }
 
 static int witty_coretext_render_glyph(

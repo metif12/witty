@@ -42,6 +42,12 @@ fn C.witty_coretext_free_buffer(ptr &u8)
 
 fn C.witty_coretext_get_metrics(font_ptr voidptr, px_per_em &f64, cell_width &f64, ascent &f64, descent &f64, line_gap &f64, underline_position &f64, underline_thickness &f64, strikethrough_position &f64, strikethrough_thickness &f64, cap_height &f64, ex_height &f64, ascii_height &f64, ic_width &f64, has_ic_width &int) int
 
+fn C.witty_coretext_units_per_em(font_ptr voidptr) u32
+
+fn C.witty_coretext_create_hb_font(font_ptr voidptr, pixels f64) voidptr
+
+fn C.witty_coretext_destroy_hb_font(font_ptr voidptr)
+
 fn C.witty_coretext_render_glyph(font_ptr voidptr, glyph_id u32, cell_height f64, cell_baseline f64, width_out &u32, height_out &u32, offset_x_out &i32, offset_y_out &i32, buffer_out &&u8) int
 
 fn C.witty_ct_font_from_descriptor(desc voidptr, size f64) voidptr
@@ -169,12 +175,17 @@ pub fn CoreTextFace.init_font(ct_font voidptr, opts FaceOptions) !CoreTextFace {
 		}
 	}
 
-	// BOUNDARY: ghostty also builds a Harfbuzz font here (when using the
-	// Harfbuzz shaper) and sets its scale from opts.size.pixels(). The
-	// Harfbuzz+CoreText glue isn't wired in this port yet, so hb_font is
-	// left null. Variation-axis debug logging is likewise omitted.
+	hb_font := C.witty_coretext_create_hb_font(ct_font, opts.size.pixels())
+	if isnil(hb_font) {
+		if c := color {
+			c.deinit()
+		}
+		C.witty_coretext_release(ct_font)
+		return error('CoreText: failed to create HarfBuzz font')
+	}
 	return CoreTextFace{
 		ct_font: ct_font
+		hb_font: hb_font
 		color: color
 		size: opts.size
 	}
@@ -186,11 +197,14 @@ pub fn (mut self CoreTextFace) deinit() {
 		C.witty_coretext_release(self.ct_font)
 		self.ct_font = unsafe { nil }
 	}
+	if !isnil(self.hb_font) {
+		C.witty_coretext_destroy_hb_font(self.hb_font)
+		self.hb_font = unsafe { nil }
+	}
 	if c := self.color {
 		c.deinit()
 	}
 	self.color = none
-	// BOUNDARY: destroy the Harfbuzz font once that glue is wired.
 	// ColorState holds no owned CoreText data in this port (its SVG data
 	// pointer is always null), so there's nothing to release there.
 }
@@ -410,99 +424,10 @@ pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts R
 	}
 }
 
-// Get the FaceMetrics for this face.
+// Get the FaceMetrics for this face. CoreText supplies glyph measurements;
+// OpenType tables supply the same metric precedence and broken-table handling
+// used by Ghostty.
 pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
-	// Full algorithm:
-	//
-	// 1. Read the 'head' table out of the font data:
-	//    macOS bitmap-only fonts use a 'bhed' tag rather than 'head', but
-	//    the table format is byte-identical to the 'head' table, so if we
-	//    can't find 'head' we try 'bhed' instead before failing.
-	//    ref: https://fontforge.org/docs/techref/bitmaponlysfnt.html
-	//    head_tag = FontTableTag.init("head")
-	//    bhed_tag = FontTableTag.init("bhed")
-	//    data = ct_font.copyTable(head_tag) or ct_font.copyTable(bhed_tag) or null
-	//    head = opentype.Head.init(data) or null
-	//
-	// 2. Read the 'post' table out of the font data:
-	//    tag = FontTableTag.init("post")
-	//    data = ct_font.copyTable(tag) or null
-	//    post = opentype.Post.init(data) or null
-	//
-	// 3. Read the 'OS/2' table out of the font data if it's available:
-	//    tag = FontTableTag.init("OS/2")
-	//    data = ct_font.copyTable(tag) or null
-	//    os2 = opentype.OS2.init(data) or null
-	//
-	// 4. Read the 'hhea' table out of the font data:
-	//    tag = FontTableTag.init("hhea")
-	//    data = ct_font.copyTable(tag) or null
-	//    hhea = opentype.Hhea.init(data) or null
-	//
-	// 5. Calculate units_per_em:
-	//    If head table present: head.unitsPerEm
-	//    Else: ct_font.getUnitsPerEm()
-	//    px_per_em = ct_font.getSize()
-	//    px_per_unit = px_per_em / units_per_em
-	//
-	// 6. Vertical metrics (ascent, descent, line_gap):
-	//    If no hhea table: use CoreText metrics:
-	//      ascent = ct_font.getAscent()
-	//      descent = -ct_font.getDescent()
-	//      line_gap = ct_font.getLeading()
-	//    Else if no OS/2 table: use hhea metrics * px_per_unit
-	//    Else:
-	//      If OS/2 fsSelection USE_TYPO_METRICS bit set:
-	//        use OS/2 sTypo* metrics * px_per_unit
-	//      Else prefer hhea if non-zero, then OS/2 sTypo*, then OS/2 usWin*
-	//      (usWinDescent is positive->down, flip sign)
-	//
-	// 7. Underline (from post table):
-	//    Some fonts have degenerate 'post' tables where the underline
-	//    thickness (and often position) are 0.
-	//    If underlineThickness == 0: broken underline
-	//    underline_position = f64(post.underlinePosition) * px_per_unit (if not broken+zero)
-	//    underline_thickness = f64(post.underlineThickness) * px_per_unit (if not broken)
-	//
-	// 8. Strikethrough (from OS/2 table):
-	//    Similar logic to the underline above.
-	//    If yStrikeoutSize == 0: broken strikethrough
-	//    strikethrough_position = f64(os2.yStrikeoutPosition) * px_per_unit
-	//    strikethrough_thickness = f64(os2.yStrikeoutSize) * px_per_unit
-	//
-	// 9. Cap height and ex height:
-	//    We fall back to whatever CoreText does if the
-	//    OS/2 table doesn't specify a cap or ex height.
-	//    If no OS/2: cap_height = ct_font.getCapHeight(), ex_height = ct_font.getXHeight()
-	//    Else if OS/2 has sCapHeight: use it * px_per_unit, else ct_font.getCapHeight()
-	//    Else if OS/2 has sxHeight: use it * px_per_unit, else ct_font.getXHeight()
-	//
-	// 10. Cell width:
-	//     Build array of all visible ASCII chars (32..127 as u16)
-	//     Get glyph IDs via ct_font.getGlyphsForCharacters
-	//     Get advances via ct_font.getAdvancesForGlyphs(.horizontal)
-	//     cell_width = max advance width
-	//     ascii_height = bounding rect height of all ASCII glyphs
-	//
-	// 11. IC width:
-	//     Measure '水' (CJK water ideograph, U+6C34):
-	//     glyph = self.glyph_index(0x6C34) or null
-	//     advance = ct_font.getAdvancesForGlyphs(.horizontal, &[glyph], null)
-	//     bounds = ct_font.getBoundingRectsForGlyphs(.horizontal, &[glyph], null)
-	//     If the advance of the glyph is less than the width of the actual
-	//     glyph then we just treat it as invalid since it's probably wrong
-	//     and using it for size normalization will instead make the font
-	//     way too big.
-	//     ic_width = advance (if bounds.width <= advance, else null)
-	//
-	// This V port sources its metrics from CoreText's own font metrics via
-	// the shim (px_per_em, cell_width from the widest ASCII advance, ascent,
-	// descent, line gap, underline, strikethrough, cap and ex height).
-	//
-	// BOUNDARY: ghostty refines these from the 'head'/'post'/'OS/2'/'hhea'
-	// tables (via the opentype module) and derives ic_width from the '水'
-	// ideograph. That table-driven refinement is left as a boundary here; the
-	// CoreText-derived metrics are correct for the common case.
 	mut px_per_em := f64(0)
 	mut cell_width := f64(0)
 	mut ascent := f64(0)
@@ -522,7 +447,7 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 		return FaceMetrics{}
 	}
 
-	return FaceMetrics{
+	base := FaceMetrics{
 		px_per_em: px_per_em
 		cell_width: cell_width
 		ascent: ascent
@@ -537,6 +462,105 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 		ascii_height: ascii_height
 		ic_width: if has_ic_width != 0 { ic_width } else { none }
 	}
+
+	head := self.parse_head_table()
+	post := self.parse_post_table()
+	os2 := self.parse_os2_table()
+	hhea := self.parse_hhea_table()
+	units_per_em := if value := head {
+		u32(value.units_per_em)
+	} else {
+		C.witty_coretext_units_per_em(self.ct_font)
+	}
+	return refine_coretext_metrics(base, units_per_em, post, os2, hhea)
+}
+
+fn (self CoreTextFace) parse_head_table() ?opentype.Head {
+	data := self.copy_table('head') or {
+		self.copy_table('bhed') or { return none }
+	}
+	return opentype.Head.init(data) or { none }
+}
+
+fn (self CoreTextFace) parse_post_table() ?opentype.Post {
+	data := self.copy_table('post') or { return none }
+	return opentype.Post.init(data) or { none }
+}
+
+fn (self CoreTextFace) parse_os2_table() ?opentype.OS2 {
+	data := self.copy_table('OS/2') or { return none }
+	return opentype.OS2.init(data) or { none }
+}
+
+fn (self CoreTextFace) parse_hhea_table() ?opentype.Hhea {
+	data := self.copy_table('hhea') or { return none }
+	return opentype.Hhea.init(data) or { none }
+}
+
+fn refine_coretext_metrics(base FaceMetrics, units_per_em u32, post ?opentype.Post, os2 ?opentype.OS2, hhea ?opentype.Hhea) FaceMetrics {
+	if units_per_em == 0 {
+		return base
+	}
+	px_per_unit := base.px_per_em / f64(units_per_em)
+	mut result := base
+
+	if hhea_value := hhea {
+		if os2_value := os2 {
+			if os2_value.fs_selection.use_typo_metrics {
+				result.ascent = f64(os2_value.s_typo_ascender) * px_per_unit
+				result.descent = f64(os2_value.s_typo_descender) * px_per_unit
+				result.line_gap = f64(os2_value.s_typo_line_gap) * px_per_unit
+			} else if hhea_value.ascender != 0 || hhea_value.descender != 0 {
+				result.ascent = f64(hhea_value.ascender) * px_per_unit
+				result.descent = f64(hhea_value.descender) * px_per_unit
+				result.line_gap = f64(hhea_value.line_gap) * px_per_unit
+			} else if os2_value.s_typo_ascender != 0 || os2_value.s_typo_descender != 0 {
+				result.ascent = f64(os2_value.s_typo_ascender) * px_per_unit
+				result.descent = f64(os2_value.s_typo_descender) * px_per_unit
+				result.line_gap = f64(os2_value.s_typo_line_gap) * px_per_unit
+			} else {
+				result.ascent = f64(os2_value.us_win_ascent) * px_per_unit
+				result.descent = -f64(os2_value.us_win_descent) * px_per_unit
+				result.line_gap = 0
+			}
+		} else {
+			result.ascent = f64(hhea_value.ascender) * px_per_unit
+			result.descent = f64(hhea_value.descender) * px_per_unit
+			result.line_gap = f64(hhea_value.line_gap) * px_per_unit
+		}
+	}
+
+	result.underline_position = none
+	result.underline_thickness = none
+	if post_value := post {
+		broken := post_value.underline_thickness == 0
+		if !broken || post_value.underline_position != 0 {
+			result.underline_position = f64(post_value.underline_position) * px_per_unit
+		}
+		if !broken {
+			result.underline_thickness = f64(post_value.underline_thickness) * px_per_unit
+		}
+	}
+
+	result.strikethrough_position = none
+	result.strikethrough_thickness = none
+	if os2_value := os2 {
+		broken := os2_value.y_strikeout_size == 0
+		if !broken || os2_value.y_strikeout_position != 0 {
+			result.strikethrough_position = f64(os2_value.y_strikeout_position) * px_per_unit
+		}
+		if !broken {
+			result.strikethrough_thickness = f64(os2_value.y_strikeout_size) * px_per_unit
+		}
+		if os2_value.has_s_cap_height {
+			result.cap_height = f64(os2_value.s_cap_height) * px_per_unit
+		}
+		if os2_value.has_sx_height {
+			result.ex_height = f64(os2_value.sx_height) * px_per_unit
+		}
+	}
+
+	return result
 }
 
 // Copy the font table data for the given tag.

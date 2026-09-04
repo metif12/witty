@@ -313,7 +313,7 @@ pub fn (mut self CodepointResolver) get_index(cp u32, style FontStyle, p ?Presen
 				size: load_opts.size.points
 				monospace: false
 			}
-			mut it := self.discover.discover_fallback(desc) or {
+			mut it := self.discover.discover_fallback(mut self.collection, desc) or {
 				return self.collection.get_index(cp, .regular, PresentationMode.any())
 			}
 			defer { it.deinit() }

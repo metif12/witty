@@ -1,5 +1,7 @@
 module font
 
+import opentype
+
 fn named_coretext_test_face(name string, points f32) !CoreTextFace {
 	base := C.witty_coretext_create_font_named(&char(name.str), f64(points))
 	if base == unsafe { nil } {
@@ -55,6 +57,7 @@ fn test_coretext_in_memory_font() {
 			}
 		}) or { panic(err) }
 		defer { face.deinit() }
+		assert face.hb_font != unsafe { nil }
 		assert face.glyph_index(u32(`A`)) != none
 		mut atlas := Atlas.init(128, .grayscale)
 		defer { atlas.deinit() }
@@ -65,6 +68,63 @@ fn test_coretext_in_memory_font() {
 		assert info.width > 0
 		assert info.height > 0
 	}
+}
+
+fn test_coretext_metrics_refine_hhea_and_post_tables() {
+	base := FaceMetrics{
+		px_per_em: 10
+		cell_width: 6
+		ascent: 7
+		descent: -2
+		line_gap: 0
+	}
+	metrics := refine_coretext_metrics(base, 1000, opentype.Post{
+		underline_position: -100
+		underline_thickness: 50
+	}, none, opentype.Hhea{
+		ascender: 800
+		descender: -200
+		line_gap: 100
+	})
+	assert metrics.ascent == 8
+	assert metrics.descent == -2
+	assert metrics.line_gap == 1
+	assert metrics.underline_position? == -1
+	assert metrics.underline_thickness? == 0.5
+	assert metrics.strikethrough_position == none
+	assert metrics.strikethrough_thickness == none
+}
+
+fn test_coretext_metrics_refine_typographic_os2_tables() {
+	base := FaceMetrics{
+		px_per_em: 20
+		cap_height: 11
+		ex_height: 5
+	}
+	metrics := refine_coretext_metrics(base, 1000, none, opentype.OS2{
+		fs_selection: opentype.FSSelection{
+			use_typo_metrics: true
+		}
+		s_typo_ascender: 700
+		s_typo_descender: -300
+		s_typo_line_gap: 50
+		y_strikeout_size: 40
+		y_strikeout_position: 300
+		has_s_cap_height: true
+		s_cap_height: 650
+		has_sx_height: true
+		sx_height: 450
+	}, opentype.Hhea{
+		ascender: 900
+		descender: -100
+	})
+	assert metrics.ascent == 14
+	assert metrics.descent == -6
+	assert metrics.line_gap == 1
+	assert metrics.strikethrough_position? == 6
+	assert metrics.strikethrough_thickness? == 0.8
+	assert metrics.cap_height? == 13
+	assert metrics.ex_height? == 9
 }
 
 fn test_coretext_variable_font_variation() {
