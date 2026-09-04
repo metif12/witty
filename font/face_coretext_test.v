@@ -1,115 +1,128 @@
 module font
 
-// Tests for CoreTextFace (coretext.zig tests).
-//
-// All tests are marked XTODO because they require real CoreText bindings
-// (macOS framework), embedded test fonts, and a working Atlas implementation.
-//
-// Translated from ghostty/src/font/face/coretext.zig tests
-
-// test: basic ASCII glyph rendering
-// Initialize a face from Monaco at 12pt, render all visible ASCII (32..127).
-// Verify each codepoint has a glyph index and can be rendered to an atlas.
-fn test_basic_ascii_rendering() {
-	// XTODO: needs real CoreText bindings
-	// Steps:
-	// 1. Create a 512x512 grayscale Atlas
-	// 2. Create a CTFont for "Monaco" at size 12
-	// 3. Initialize CoreTextFace via init_font_copy with size 12pt
-	// 4. For each visible ASCII char (32..127):
-	//    a. assert glyph_index(i) != none
-	//    b. render_glyph(atlas, glyph_index, grid_metrics from face.get_metrics())
+fn named_coretext_test_face(name string, points f32) !CoreTextFace {
+	base := C.witty_coretext_create_font_named(&char(name.str), f64(points))
+	if base == unsafe { nil } {
+		return error('CoreText font unavailable: ${name}')
+	}
+	defer { C.witty_coretext_release(base) }
+	return CoreTextFace.init_font_copy(base, FaceOptions{
+		size: DesiredSize{
+			points: points
+		}
+	})
 }
 
-// test: font name
-// Initialize a face from Menlo, verify name() returns "Menlo".
-fn test_name() {
-	// XTODO: needs real CoreText bindings
-	// Steps:
-	// 1. Create a CTFont for "Menlo" at size 12
-	// 2. Initialize CoreTextFace via init_font_copy with size 12pt
-	// 3. mut buf := []u8{len: 1024}
-	// 4. font_name := face.name(mut buf)!
-	// 5. assert font_name == 'Menlo'
+fn test_coretext_basic_ascii_rendering() {
+	$if macos {
+		mut face := named_coretext_test_face('Menlo', 12) or { panic(err) }
+		defer { face.deinit() }
+		metrics := Metrics.calc(face.get_metrics())
+		mut atlas := Atlas.init(512, .grayscale)
+		defer { atlas.deinit() }
+		for cp in u32(32) .. u32(127) {
+			glyph := face.glyph_index(cp) or { panic('Menlo is missing ASCII ${cp}') }
+			face.render_glyph(mut atlas, glyph, RenderOptions{
+				grid_metrics: metrics
+			}) or { panic(err) }
+		}
+	}
 }
 
-// test: emoji (color glyph detection)
-// Initialize a face from "Apple Color Emoji", verify color glyph detection.
-fn test_emoji() {
-	// XTODO: needs real CoreText bindings
-	// Steps:
-	// 1. Create a CTFont for "Apple Color Emoji" at size 12
-	// 2. Initialize CoreTextFace via init_font_copy with size 18pt
-	// 3. Glyph index check:
-	//    id := face.glyph_index(0x1F978) // '🥸'
-	//    assert id != none
-	//    assert face.is_color_glyph(id)
+fn test_coretext_name() {
+	$if macos {
+		mut face := named_coretext_test_face('Menlo', 12) or { panic(err) }
+		defer { face.deinit() }
+		mut buf := []u8{len: 1024}
+		assert face.name(mut buf)! == 'Menlo'
+	}
 }
 
-// test: in-memory font loading
-// Load an embedded test font from memory, render all visible ASCII.
-fn test_in_memory() {
-	// XTODO: needs real CoreText bindings and embedded test fonts
-	// Steps:
-	// 1. Create a 512x512 grayscale Atlas
-	// 2. Create a Library
-	// 3. Initialize CoreTextFace via init() with embedded regular font, size 12pt
-	// 4. For each visible ASCII char (32..127):
-	//    a. assert glyph_index(i) != none
-	//    b. render_glyph(atlas, glyph_index, grid_metrics from face.get_metrics())
+fn test_coretext_emoji_color_detection() {
+	$if macos {
+		mut face := named_coretext_test_face('Apple Color Emoji', 18) or { panic(err) }
+		defer { face.deinit() }
+		glyph := face.glyph_index(0x1f978) or { panic('emoji glyph unavailable') }
+		assert face.is_color_glyph(glyph)
+	}
 }
 
-// test: variable font loading
-// Load an embedded variable test font from memory, render all visible ASCII.
-fn test_variable() {
-	// XTODO: needs real CoreText bindings and embedded test fonts
-	// Steps:
-	// 1. Create a 512x512 grayscale Atlas
-	// 2. Create a Library
-	// 3. Initialize CoreTextFace via init() with embedded variable font, size 12pt
-	// 4. For each visible ASCII char (32..127):
-	//    a. assert glyph_index(i) != none
-	//    b. render_glyph(atlas, glyph_index, grid_metrics from face.get_metrics())
+fn test_coretext_in_memory_font() {
+	$if macos {
+		mut face := CoreTextFace.init(Library{}, embedded_regular, FaceOptions{
+			size: DesiredSize{
+				points: 12
+			}
+		}) or { panic(err) }
+		defer { face.deinit() }
+		assert face.glyph_index(u32(`A`)) != none
+		mut atlas := Atlas.init(128, .grayscale)
+		defer { atlas.deinit() }
+		glyph := face.glyph_index(u32(`A`)) or { panic('missing A') }
+		info := face.render_glyph(mut atlas, glyph, RenderOptions{
+			grid_metrics: Metrics.calc(face.get_metrics())
+		}) or { panic(err) }
+		assert info.width > 0
+		assert info.height > 0
+	}
 }
 
-// test: variable font set variation
-// Load an embedded variable test font, set wght=400, render all visible ASCII.
-fn test_variable_set_variation() {
-	// XTODO: needs real CoreText bindings and embedded test fonts
-	// Steps:
-	// 1. Create a 512x512 grayscale Atlas
-	// 2. Create a Library
-	// 3. Initialize CoreTextFace via init() with embedded variable font, size 12pt
-	// 4. Set variations: [Variation{ id: VariationId.init("wght"), value: 400 }]
-	// 5. For each visible ASCII char (32..127):
-	//    a. assert glyph_index(i) != none
-	//    b. render_glyph(atlas, glyph_index, grid_metrics from face.get_metrics())
+fn test_coretext_variable_font_variation() {
+	$if macos {
+		opts := FaceOptions{
+			size: DesiredSize{
+				points: 12
+			}
+		}
+		mut face := CoreTextFace.init(Library{}, embedded_variable, opts) or { panic(err) }
+		defer { face.deinit() }
+		face.set_variations([Variation{
+			id: VariationId.init('wght')
+			value: 400
+		}], opts) or { panic(err) }
+		assert face.glyph_index(u32(`A`)) != none
+	}
 }
 
-// test: SVG font table
-// Load an embedded font with an SVG table, verify copyTable returns data.
-fn test_svg_font_table() {
-	// XTODO: needs real CoreText bindings and embedded test fonts (JuliaMono)
-	// Steps:
-	// 1. Create a Library
-	// 2. Initialize CoreTextFace via init() with embedded julia_mono font, size 12pt
-	// 3. table := face.copy_table("SVG ")!
-	// 4. assert table.len > 0
+fn test_coretext_svg_font_table_and_color_range() {
+	$if macos {
+		mut face := CoreTextFace.init(Library{}, embedded_julia_mono, FaceOptions{
+			size: DesiredSize{
+				points: 12
+			}
+		}) or { panic(err) }
+		defer { face.deinit() }
+		table := face.copy_table('SVG ') or { panic(err) }
+		assert table.len > 0
+		text_glyph := face.glyph_index(u32(`A`)) or { panic('missing A') }
+		assert !face.is_color_glyph(text_glyph)
+		color_glyph := face.glyph_index(0xe800) or { panic('missing SVG glyph') }
+		assert face.is_color_glyph(color_glyph)
+	}
 }
 
-// test: glyph index colored vs text
-// Load a font with both text and color glyphs, verify distinction.
-fn test_glyph_index_colored_vs_text() {
-	// XTODO: needs real CoreText bindings and embedded test fonts (JuliaMono)
-	// Steps:
-	// 1. Create a Library
-	// 2. Initialize CoreTextFace via init() with embedded julia_mono font, size 12pt
-	// 3. Text glyph check:
-	//    glyph := face.glyph_index(u32(`A`))
-	//    assert glyph == 4
-	//    assert !face.is_color_glyph(glyph)
-	// 4. Color glyph check:
-	//    glyph := face.glyph_index(0xE800)
-	//    assert glyph == 11482
-	//    assert face.is_color_glyph(glyph)
+fn test_coretext_deferred_face_queries_and_load() {
+	$if macos {
+		font_ptr := C.witty_coretext_create_font_named(c'Menlo', 12)
+		if font_ptr == unsafe { nil } {
+			panic('Menlo unavailable')
+		}
+		mut deferred := CoreTextDeferredFace{
+			ct_font: font_ptr
+		}
+		defer { deferred.deinit() }
+		assert deferred.has_codepoint(u32(`A`), .text)
+		assert !deferred.has_codepoint(u32(`A`), .emoji)
+		mut buf := []u8{len: 1024}
+		assert deferred.family_name(mut buf)! == 'Menlo'
+		mut display_buf := []u8{len: 1024}
+		assert deferred.name(mut display_buf)!.len > 0
+		mut loaded := deferred.load(Library{}, FaceOptions{
+			size: DesiredSize{
+				points: 13
+			}
+		}) or { panic(err) }
+		defer { loaded.deinit() }
+		assert loaded.glyph_index(u32(`A`)) != none
+	}
 }

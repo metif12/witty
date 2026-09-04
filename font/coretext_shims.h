@@ -87,6 +87,16 @@ static int witty_coretext_copy_family_name(void *font_ptr, uint8_t *buf, size_t 
 	return ok ? 1 : 0;
 }
 
+static int witty_coretext_copy_display_name(void *font_ptr, uint8_t *buf, size_t len) {
+	if (!font_ptr || !buf || len == 0) return 0;
+	buf[0] = 0;
+	CFStringRef name = CTFontCopyDisplayName((CTFontRef)font_ptr);
+	if (!name) return 0;
+	Boolean ok = CFStringGetCString(name, (char *)buf, (CFIndex)len, kCFStringEncodingUTF8);
+	CFRelease(name);
+	return ok ? 1 : 0;
+}
+
 static int witty_coretext_glyph_for_codepoint(void *font_ptr, uint32_t cp, uint32_t *glyph_out) {
 	if (!font_ptr || !glyph_out) return 0;
 	UniChar chars[2] = {0, 0};
@@ -735,6 +745,12 @@ static void witty_coretext_release(void *ptr) {
 }
 
 static int witty_coretext_copy_family_name(void *font_ptr, uint8_t *buf, size_t len) {
+	(void)font_ptr;
+	if (buf && len > 0) buf[0] = 0;
+	return 0;
+}
+
+static int witty_coretext_copy_display_name(void *font_ptr, uint8_t *buf, size_t len) {
 	(void)font_ptr;
 	if (buf && len > 0) buf[0] = 0;
 	return 0;

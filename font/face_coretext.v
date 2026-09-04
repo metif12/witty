@@ -1,13 +1,15 @@
 module font
 
+import opentype
+
 // CoreText-based font face implementation for macOS.
 //
 // A CoreTextFace represents a single font face backed by Apple's CoreText
 // framework. It provides glyph lookup, rendering, metrics, and table access.
 //
 // This is the macOS equivalent of the FreeType-based Face in face.v.
-// Most method bodies are marked XTODO since they require real CoreText
-// (macOS framework) bindings.
+// CoreText calls are isolated in coretext_shims.h so this module also
+// compiles on non-Apple targets, where constructors report unsupported data.
 //
 // Translated from ghostty/src/font/face/coretext.zig
 
@@ -17,18 +19,40 @@ module font
 #include "coretext_shims.h"
 
 fn C.witty_coretext_create_font_named(name &char, size f64) voidptr
+
 fn C.witty_coretext_create_font_from_data(data &u8, len usize, size f64) voidptr
+
 fn C.witty_coretext_copy_font_with_size(font_ptr voidptr, size f64) voidptr
+
 fn C.witty_coretext_release(ptr voidptr)
+
 fn C.witty_coretext_copy_family_name(font_ptr voidptr, buf &u8, len usize) int
+
 fn C.witty_coretext_glyph_for_codepoint(font_ptr voidptr, cp u32, glyph_out &u32) int
+
 fn C.witty_coretext_copy_table(font_ptr voidptr, tag4 &char, buffer_out &&u8, len_out &u32) int
+
 fn C.witty_coretext_copy_italic(font_ptr voidptr) voidptr
+
 fn C.witty_coretext_copy_with_variations(font_ptr voidptr, ids &u32, values &f64, count int, size f64) voidptr
+
 fn C.witty_coretext_color_info(font_ptr voidptr, has_sbix &int) int
+
 fn C.witty_coretext_free_buffer(ptr &u8)
+
 fn C.witty_coretext_get_metrics(font_ptr voidptr, px_per_em &f64, cell_width &f64, ascent &f64, descent &f64, line_gap &f64, underline_position &f64, underline_thickness &f64, strikethrough_position &f64, strikethrough_thickness &f64, cap_height &f64, ex_height &f64) int
+
+fn C.witty_coretext_render_glyph(font_ptr voidptr, glyph_id u32, cell_height f64, cell_baseline f64, width_out &u32, height_out &u32, offset_x_out &i32, offset_y_out &i32, buffer_out &&u8) int
+
 fn C.witty_ct_font_from_descriptor(desc voidptr, size f64) voidptr
+
+fn C.witty_ct_font_copy_descriptor(font voidptr) voidptr
+
+fn C.witty_ct_descriptor_path(desc voidptr, buf &u8, len usize) int
+
+fn C.witty_ct_release(ptr voidptr)
+
+fn C.witty_coretext_copy_display_name(font_ptr voidptr, buf &u8, len usize) int
 
 // ============================================================
 // CoreTextFace
@@ -89,10 +113,10 @@ pub:
 
 // The italic skew transform as a struct.
 pub const italic_skew = AffineTransform{
-	a:  italic_skew_a
-	b:  italic_skew_b
-	c:  italic_skew_c
-	d:  italic_skew_d
+	a: italic_skew_a
+	b: italic_skew_b
+	c: italic_skew_c
+	d: italic_skew_d
 	tx: italic_skew_tx
 	ty: italic_skew_ty
 }
@@ -102,8 +126,7 @@ pub fn CoreTextFace.init(lib Library, source []u8, opts FaceOptions) !CoreTextFa
 	// Create a CTFont from the in-memory data at a default size (12); the
 	// final size is applied by init_font_copy below.
 	_ = lib
-	base := C.witty_coretext_create_font_from_data(&u8(source.data), usize(source.len),
-		12.0)
+	base := C.witty_coretext_create_font_from_data(&u8(source.data), usize(source.len), 12.0)
 	if isnil(base) {
 		return error('CoreText: failed to create font from data')
 	}
@@ -137,11 +160,12 @@ pub fn CoreTextFace.init_font(ct_font voidptr, opts FaceOptions) !CoreTextFace {
 
 	// Determine color state from the font's symbolic traits and tables.
 	mut color := ?ColorState(none)
-	mut has_sbix := int(0)
-	is_color := C.witty_coretext_color_info(ct_font, &has_sbix) != 0
+	mut ignored_sbix := int(0)
+	is_color := C.witty_coretext_color_info(ct_font, &ignored_sbix) != 0
 	if is_color {
-		color = ColorState{
-			sbix: has_sbix != 0
+		color = ColorState.init(ct_font) or {
+			C.witty_coretext_release(ct_font)
+			return error(err.msg())
 		}
 	}
 
@@ -151,8 +175,8 @@ pub fn CoreTextFace.init_font(ct_font voidptr, opts FaceOptions) !CoreTextFace {
 	// left null. Variation-axis debug logging is likewise omitted.
 	return CoreTextFace{
 		ct_font: ct_font
-		color:   color
-		size:    opts.size
+		color: color
+		size: opts.size
 	}
 }
 
@@ -162,6 +186,10 @@ pub fn (mut self CoreTextFace) deinit() {
 		C.witty_coretext_release(self.ct_font)
 		self.ct_font = unsafe { nil }
 	}
+	if c := self.color {
+		c.deinit()
+	}
+	self.color = none
 	// BOUNDARY: destroy the Harfbuzz font once that glue is wired.
 	// ColorState holds no owned CoreText data in this port (its SVG data
 	// pointer is always null), so there's nothing to release there.
@@ -240,8 +268,7 @@ pub fn (mut self CoreTextFace) set_variations(vs []Variation, opts FaceOptions) 
 	}
 
 	// Preserve our current size so that applying variations doesn't resize.
-	ct_font := C.witty_coretext_copy_with_variations(self.ct_font, &u32(ids.data),
-		&f64(values.data), vs.len, self.size.pixels())
+	ct_font := C.witty_coretext_copy_with_variations(self.ct_font, &u32(ids.data), &f64(values.data), vs.len, self.size.pixels())
 	if isnil(ct_font) {
 		return error('CoreText: failed to apply variations')
 	}
@@ -282,7 +309,6 @@ pub fn (self CoreTextFace) glyph_index(cp u32) ?u32 {
 // Render a glyph using the glyph index. The rendered glyph is stored
 // in the given texture atlas.
 pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !GlyphInfo {
-	// XTODO: needs real CoreText bindings
 	// Full algorithm:
 	// 1. Get the bounding rect for rendering this glyph:
 	//    glyphs = [glyph_index]
@@ -357,22 +383,35 @@ pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts R
 	// 19. Compute offset_y = px_y + px_height, offset_x = px_x.
 	//
 	// 20. Return GlyphInfo with atlas coordinates and offsets.
-	_ = atlas
-	_ = glyph_index
-	_ = opts
+	if atlas.format != .grayscale {
+		return error('CoreText shim currently produces grayscale glyphs')
+	}
+	mut width := u32(0)
+	mut height := u32(0)
+	mut offset_x := i32(0)
+	mut offset_y := i32(0)
+	mut pixels := &u8(unsafe { nil })
+	if C.witty_coretext_render_glyph(self.ct_font, glyph_index, f64(opts.grid_metrics.cell_height), f64(opts.grid_metrics.cell_baseline), &width, &height, &offset_x, &offset_y, &pixels) == 0 {
+		return error('CoreText: failed to rasterize glyph')
+	}
+	if width == 0 || height == 0 || pixels == unsafe { nil } {
+		return GlyphInfo{}
+	}
+	defer { C.witty_coretext_free_buffer(pixels) }
+	region := atlas.reserve(width, height)!
+	atlas.set(region, unsafe { pixels.vbytes(int(width * height)) })
 	return GlyphInfo{
-		width:    0
-		height:   0
-		offset_x: 0
-		offset_y: 0
-		atlas_x:  0
-		atlas_y:  0
+		width: width
+		height: height
+		offset_x: offset_x
+		offset_y: offset_y
+		atlas_x: region.x
+		atlas_y: region.y
 	}
 }
 
 // Get the FaceMetrics for this face.
 pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
-	// XTODO: needs real CoreText bindings
 	// Full algorithm:
 	//
 	// 1. Read the 'head' table out of the font data:
@@ -476,25 +515,22 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 	mut cap_height := f64(0)
 	mut ex_height := f64(0)
 
-	if C.witty_coretext_get_metrics(self.ct_font, &px_per_em, &cell_width, &ascent,
-		&descent, &line_gap, &ul_pos, &ul_thick, &st_pos, &st_thick, &cap_height,
-		&ex_height) == 0
-	{
+	if C.witty_coretext_get_metrics(self.ct_font, &px_per_em, &cell_width, &ascent, &descent, &line_gap, &ul_pos, &ul_thick, &st_pos, &st_thick, &cap_height, &ex_height) == 0 {
 		return FaceMetrics{}
 	}
 
 	return FaceMetrics{
-		px_per_em:               px_per_em
-		cell_width:              cell_width
-		ascent:                  ascent
-		descent:                 descent
-		line_gap:                line_gap
-		underline_position:      ul_pos
-		underline_thickness:     ul_thick
-		strikethrough_position:  st_pos
+		px_per_em: px_per_em
+		cell_width: cell_width
+		ascent: ascent
+		descent: descent
+		line_gap: line_gap
+		underline_position: ul_pos
+		underline_thickness: ul_thick
+		strikethrough_position: st_pos
 		strikethrough_thickness: st_thick
-		cap_height:              cap_height
-		ex_height:               ex_height
+		cap_height: cap_height
+		ex_height: ex_height
 	}
 }
 
@@ -533,19 +569,15 @@ pub mut:
 
 	// The SVG font table data (if any), which we can use to determine
 	// if a glyph is present in the SVG table.
-	// Stored as voidptr because opentype.SVG needs real bindings.
-	svg     voidptr = unsafe { nil }
-	has_svg bool
+	svg ?opentype.SVG
 
-	// The SVG font table data reference (retained CoreFoundation data).
-	// Stored as voidptr because it needs real CoreText bindings.
-	svg_data voidptr = unsafe { nil }
+	// Owns the bytes referenced by svg.
+	svg_data []u8
 }
 
 // init creates a ColorState from a CoreText font by checking for
 // sbix and SVG tables.
 pub fn ColorState.init(ct_font voidptr) !ColorState {
-	// XTODO: needs real CoreText bindings
 	// Steps:
 	// 1. Check for sbix table:
 	//    sbix is true if the table exists in the font data at all.
@@ -560,14 +592,27 @@ pub fn ColorState.init(ct_font voidptr) !ColorState {
 	//    data = ct_font.copyTable(tag) or null
 	//    svg = opentype.SVG.init(data.getPointer()[0..data.getLength()]) or null
 	//    (On error: EndOfStream or SVGVersionNotSupported -> InvalidSVGTable)
-	_ = ct_font
-	return ColorState{}
+	mut has_sbix := int(0)
+	_ = C.witty_coretext_color_info(ct_font, &has_sbix)
+	mut svg_data := []u8{}
+	mut svg := ?opentype.SVG(none)
+	mut ptr := &u8(unsafe { nil })
+	mut len := u32(0)
+	if C.witty_coretext_copy_table(ct_font, c'SVG ', &ptr, &len) != 0 {
+		defer { C.witty_coretext_free_buffer(ptr) }
+		svg_data = unsafe { ptr.vbytes(int(len)) }.clone()
+		svg = opentype.SVG.init(svg_data)!
+	}
+	return ColorState{
+		sbix: has_sbix != 0
+		svg: svg
+		svg_data: svg_data
+	}
 }
 
 // deinit releases resources held by the ColorState.
 pub fn (self &ColorState) deinit() {
-	// XTODO: needs real CoreText bindings
-	// if self.svg_data != nil: svg_data.release()
+	// V owns svg_data and releases it with the containing face.
 }
 
 // Returns true if the given glyph ID is colored.
@@ -585,10 +630,8 @@ pub fn (self &ColorState) is_color_glyph(glyph_id u32) bool {
 	}
 
 	// if we have svg data, check it
-	if self.has_svg {
-		// XTODO: check if glyph is in SVG table
-		// svg.hasGlyph(u16(glyph_id))
-		return false
+	if svg := self.svg {
+		return svg.has_glyph(u16(glyph_id))
 	}
 
 	return false
@@ -613,14 +656,16 @@ pub mut:
 
 // deinit releases the CoreText deferred face resources.
 pub fn (mut self CoreTextDeferredFace) deinit() {
-	// XTODO: release the CTFont
-	// self.ct_font.release()
+	if self.ct_font != unsafe { nil } {
+		C.witty_coretext_release(self.ct_font)
+		self.ct_font = unsafe { nil }
+	}
+	self.variations = []
 }
 
 // has_codepoint returns true if this deferred face can render the given
 // codepoint with the specified presentation.
 pub fn (self CoreTextDeferredFace) has_codepoint(cp u32, p ?Presentation) bool {
-	// XTODO: needs real CoreText bindings
 	// Steps:
 	// 1. This presentation check isn't as detailed as isColorGlyph
 	//    because forced presentation modes are only used for emoji and
@@ -641,49 +686,55 @@ pub fn (self CoreTextDeferredFace) has_codepoint(cp u32, p ?Presentation) bool {
 	// 3. Get our glyphs:
 	//    var glyphs = [2]Glyph{ 0, 0 }
 	//    return ct_font.getGlyphsForCharacters(unichars[0..len], glyphs[0..len])
-	_ = cp
-	_ = p
-	return false
+	if presentation := p {
+		mut has_sbix := int(0)
+		is_color := C.witty_coretext_color_info(self.ct_font, &has_sbix) != 0
+		actual := if is_color { Presentation.emoji } else { Presentation.text }
+		if actual != presentation {
+			return false
+		}
+	}
+	mut glyph := u32(0)
+	return C.witty_coretext_glyph_for_codepoint(self.ct_font, cp, &glyph) != 0
 }
 
 // family_name returns the family name of the deferred CoreText font.
 pub fn (self CoreTextDeferredFace) family_name(mut buf []u8) !string {
-	// XTODO: needs real CoreText bindings
-	// family_name = ct_font.copyAttribute(.family_name) or return "unknown"
-	// return family_name.cstringPtr(.utf8) or family_name.cstring(buf, .utf8)
-	_ = buf
-	return ''
+	if buf.len == 0 || C.witty_coretext_copy_family_name(self.ct_font, &u8(buf.data), usize(buf.len)) == 0 {
+		return error('CoreText: failed to copy family name')
+	}
+	return unsafe { cstring_to_vstring(&char(buf.data)) }
 }
 
 // name returns the display name of the deferred CoreText font.
 pub fn (self CoreTextDeferredFace) name(mut buf []u8) !string {
-	// XTODO: needs real CoreText bindings
 	// display_name = ct_font.copyDisplayName()
 	// return display_name.cstringPtr(.utf8) or display_name.cstring(buf, .utf8)
 	// "NULL if the internal storage of theString does not allow
 	// this to be returned efficiently." In this case, we need
 	// to allocate. But we can't return an allocated string because
 	// we don't have an allocator. Let's use the stack and log it.
-	_ = buf
-	return ''
+	if buf.len == 0 || C.witty_coretext_copy_display_name(self.ct_font, &u8(buf.data), usize(buf.len)) == 0 {
+		return error('CoreText: failed to copy display name')
+	}
+	return unsafe { cstring_to_vstring(&char(buf.data)) }
 }
 
 // load loads this deferred CoreText face into a CoreTextFace.
 pub fn (self CoreTextDeferredFace) load(lib Library, opts FaceOptions) !CoreTextFace {
-	// XTODO: needs real CoreText bindings
 	// Steps:
 	// 1. face = CoreTextFace.init_font_copy(self.ct_font, opts)
 	// 2. face.set_variations(self.variations, opts)
 	// 3. return face
 	_ = lib
-	_ = opts
-	return error('CoreText deferred loading not implemented')
+	mut face := CoreTextFace.init_font_copy(self.ct_font, opts)!
+	face.set_variations(self.variations, opts)!
+	return face
 }
 
 // load_freetype loads a CoreText deferred face through FreeType instead.
 // This is for the coretext_freetype backend.
 pub fn (self CoreTextDeferredFace) load_freetype(lib Library, opts FaceOptions) !Face {
-	// XTODO: needs real CoreText bindings
 	// Steps:
 	// 1. Get the URL for the font so we can get the filepath:
 	//    url = ct_font.copyAttribute(.url) or return error
@@ -696,7 +747,17 @@ pub fn (self CoreTextDeferredFace) load_freetype(lib Library, opts FaceOptions) 
 	// 5. face = Face.init_file(lib, path, 0, opts)
 	// 6. face.set_variations(self.variations, opts)
 	// 7. return face
-	_ = lib
-	_ = opts
-	return error('CoreText+FreeType deferred loading not implemented')
+	desc := C.witty_ct_font_copy_descriptor(self.ct_font)
+	if desc == unsafe { nil } {
+		return error('CoreText: failed to copy font descriptor')
+	}
+	defer { C.witty_ct_release(desc) }
+	mut path_buf := []u8{len: 4096}
+	if C.witty_ct_descriptor_path(desc, &u8(path_buf.data), usize(path_buf.len)) == 0 {
+		return error('CoreText: font has no file URL')
+	}
+	path := unsafe { cstring_to_vstring(&char(path_buf.data)) }
+	mut face := Face.init_file(lib, path, 0, opts)!
+	face.set_variations(self.variations, opts)!
+	return face
 }
