@@ -668,6 +668,14 @@ fn (mut self Pages) resize_rows(new_rows u32, cursor_y u32, has_cursor bool) {
 			}
 		}
 		self.rows = new_rows
+		// Any non-trimmed rows displaced by the smaller active area become
+		// history. Keep the active area bottom-anchored, just as PageList's
+		// active pin is derived from the final total row count.
+		mut new_active := self.screen_rows.len - int(new_rows)
+		if new_active < 0 {
+			new_active = 0
+		}
+		self.active_start = new_active
 		return
 	}
 

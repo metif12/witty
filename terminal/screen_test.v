@@ -1200,6 +1200,55 @@ fn test_screen_resize_no_reflow_less_cols_full() {
 	assert str == '1ABC\n2EFG\n3IJK'
 }
 
+fn test_screen_resize_no_reflow_less_rows_keeps_bottom_and_cursor() {
+	mut s := Screen.init(2, 4, 10)
+	defer { s.deinit() }
+	s.test_write_string('1\n2\n3\n4') or { assert false }
+	assert s.cursor.x == 1
+	assert s.cursor.y == 3
+
+	s.resize(ScreenResize{ cols: 2, rows: 2, reflow: false }) or { assert false }
+
+	assert s.pages.active_start == 2
+	str := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
+	assert str == '3\n4'
+	assert s.cursor.x == 1
+	assert s.cursor.y == 1
+}
+
+fn test_screen_resize_no_reflow_less_cols_clamps_cursor() {
+	mut s := Screen.init(5, 2, 10)
+	defer { s.deinit() }
+	s.cursor_absolute(4, 1)
+
+	s.resize(ScreenResize{ cols: 3, rows: 2, reflow: false }) or { assert false }
+
+	assert s.cursor.x == 2
+	assert s.cursor.y == 1
+}
+
+fn test_screen_resize_no_reflow_more_rows_pulls_cursor_with_history() {
+	mut s := Screen.init(2, 2, 10)
+	defer { s.deinit() }
+	s.test_write_string('1\n2\n3\n4') or { assert false }
+	assert s.pages.active_start == 2
+	assert s.cursor.y == 1
+
+	s.resize(ScreenResize{ cols: 2, rows: 4, reflow: false }) or { assert false }
+
+	assert s.pages.active_start == 0
+	assert s.cursor.x == 1
+	assert s.cursor.y == 3
+	str := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
+	assert str == '1\n2\n3\n4'
+}
+
 fn test_screen_resize_more_rows_no_scrollback() {
 	mut s := Screen.init(10, 3, 0)
 	defer { s.deinit() }
@@ -1833,6 +1882,26 @@ fn test_screen_resize_more_cols_reflow_fits_full_width() {
 	// Our cursor should've moved
 	assert s.cursor.x == 5
 	assert s.cursor.y == 0
+}
+
+fn test_screen_resize_more_cols_reflows_saved_cursor() {
+	mut s := Screen.init(2, 3, 5)
+	defer { s.deinit() }
+	s.test_write_string('1A2B') or { assert false }
+	s.saved_cursor = SavedCursor{
+		x: 1
+		y: 1
+	}
+
+	s.resize(ScreenResize{ cols: 5, rows: 3, reflow: true }) or { assert false }
+
+	if sc := s.saved_cursor {
+		assert sc.x == 3
+		assert sc.y == 0
+		assert !sc.pending_wrap
+	} else {
+		assert false
+	}
 }
 
 fn test_screen_resize_more_cols_reflow_ends_in_newline() {

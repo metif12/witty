@@ -2729,19 +2729,27 @@ pub fn (self &Screen) blank_cell() CellData {
 //   - reload the cursor and fix up the saved cursor's pending wrap
 pub fn (mut self Screen) resize(opts ScreenResize) ! {
 	self.mark_kitty_images_dirty()
+	old_cols := self.pages.cols
+	cursor_abs := self.pages.active_start + int(self.cursor.y)
 	// Release the cursor style while resizing just in case the cursor ends
 	// up on a different page. We restore it at the end.
 	cursor_style := self.cursor.style
 	self.cursor.style = CellStyle{}
 	self.manual_style_update() or {}
 
-	// Remember the saved cursor absolute position (as a "tracked pin") so we
-	// can remap its X/Y for reflow after the resize. We store the absolute
-	// row so it survives active_start shifts.
+	// Remember the saved cursor position and ask the column reflow to track
+	// it, mirroring the tracked PageList pin used by Ghostty. The absolute
+	// fallback handles row-only and no-reflow resizes.
 	mut saved_abs := ?int(none)
+	self.pages.reflow_saved_track = false
 	if sc := self.saved_cursor {
 		if sc.x < self.pages.cols && sc.y < self.pages.rows {
 			saved_abs = self.pages.active_start + int(sc.y)
+			if opts.reflow && opts.cols != old_cols {
+				self.pages.reflow_saved_track = true
+				self.pages.reflow_saved_in_x = sc.x
+				self.pages.reflow_saved_in_y = sc.y
+			}
 		}
 	}
 
@@ -2796,6 +2804,21 @@ pub fn (mut self Screen) resize(opts ScreenResize) ! {
 		self.cursor.x = self.pages.reflow_cursor_x
 		self.cursor.y = self.pages.reflow_cursor_y
 		self.cursor.pending_wrap = false
+	} else {
+		// With no column reflow, the cursor's tracked cell remains on the
+		// same absolute row. Convert it back to an active coordinate after
+		// the active area has grown or shrunk, and clamp X like PageList's
+		// tracked pins do during a no-reflow column shrink.
+		new_y := cursor_abs - self.pages.active_start
+		if new_y >= 0 && new_y < int(self.pages.rows) {
+			self.cursor.y = u32(new_y)
+			if self.cursor.x >= self.pages.cols {
+				self.cursor.x = self.pages.cols - 1
+			}
+		} else {
+			self.cursor.x = 0
+			self.cursor.y = 0
+		}
 	}
 
 	// If we have no scrollback and we shrunk our rows, we must explicitly
@@ -2808,12 +2831,23 @@ pub fn (mut self Screen) resize(opts ScreenResize) ! {
 	// state is correct.
 	self.cursor_reload()
 
-	// If we reflowed a saved cursor, update it.
+	// Update the saved cursor from the reflow pin, or from its unchanged
+	// absolute row when no column reflow occurred.
 	if abs := saved_abs {
 		if mut sc := self.saved_cursor {
-			new_active := abs - self.pages.active_start
-			if new_active >= 0 && new_active < int(self.pages.rows) {
-				sc.y = u32(new_active)
+			mut valid := false
+			if self.pages.reflow_did_reflow && self.pages.reflow_saved_track {
+				sc.x = self.pages.reflow_saved_out_x
+				sc.y = self.pages.reflow_saved_out_y
+				valid = true
+			} else {
+				new_active := abs - self.pages.active_start
+				if new_active >= 0 && new_active < int(self.pages.rows) {
+					sc.y = u32(new_active)
+					valid = true
+				}
+			}
+			if valid {
 				if sc.x >= opts.cols {
 					sc.x = opts.cols - 1
 				}
@@ -2834,6 +2868,7 @@ pub fn (mut self Screen) resize(opts ScreenResize) ! {
 			self.saved_cursor = sc
 		}
 	}
+	self.pages.reflow_saved_track = false
 
 	// Restore the cursor style. This should not fail; degrade gracefully.
 	self.cursor.style = cursor_style
