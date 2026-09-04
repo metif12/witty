@@ -327,9 +327,10 @@ fn (mut self App) perform_pre_action(target_ Target, action ActionKey, data Acti
 // apprt App to use.
 pub fn perform_ipc(action string) !bool {
 	// IPC is not supported in the embedded runtime. The embedded runtime
-	// runs within a host application that manages its own IPC.
+	// runs within a host application that manages its own IPC. Returning false
+	// tells the caller that no existing instance handled the action.
 	_ = action
-	return error('IPC is not supported in the embedded runtime')
+	return false
 }
 
 // -----------------------------------------------------------------------
@@ -822,13 +823,17 @@ fn (mut self Surface) queue_inspector_render() {
 // new_surface_options returns the options to use for a surface that
 // inherits from this one.
 pub fn (self &Surface) new_surface_options(context NewSurfaceContext) SurfaceOptions {
-	font_size := if self.app.config.font_size != 0 {
+	font_size := if self.app.config.window_inherit_font_size {
 		self.core_surface.font_size.points
 	} else {
 		f32(0)
 	}
 
-	working_directory := self.core_surface.pwd() or { '' }
+	working_directory := if should_inherit_working_directory(context, &self.app.config) {
+		self.core_surface.pwd() or { '' }
+	} else {
+		''
+	}
 
 	return SurfaceOptions{
 		font_size: font_size
@@ -846,14 +851,21 @@ pub fn (self &Surface) new_surface_options(context NewSurfaceContext) SurfaceOpt
 pub fn (self &Surface) default_termio_env() !map[string]string {
 	mut env := internal_os.get_env_map()!
 
-	// Remove environment variables that should not be inherited by the
-	// child process in the embedded runtime.
-	env.delete('GHOSTTY_MAC_LAUNCH_SOURCE')
+	$if macos || ios {
+		// Xcode injects a set of loader variables as a group. Only scrub the group
+		// when its marker is present, matching Ghostty and avoiding changes to
+		// deliberately configured shell environments.
+		if '__XCODE_BUILT_PRODUCTS_DIR_PATHS' in env {
+			for key in ['__XCODE_BUILT_PRODUCTS_DIR_PATHS', '__XPC_DYLD_LIBRARY_PATH',
+				'DYLD_FRAMEWORK_PATH', 'DYLD_INSERT_LIBRARIES', 'DYLD_LIBRARY_PATH', 'LD_LIBRARY_PATH',
+				'SECURITYSESSIONID', 'XPC_SERVICE_NAME'] {
+				env.delete(key)
+			}
+		}
 
-	// Remove Xcode-injected variables that can interfere with child processes.
-	for k in env.keys() {
-		if k.starts_with('__XCODE_') || k.starts_with('XCODE_') {
-			env.delete(k)
+		env.delete('GHOSTTY_MAC_LAUNCH_SOURCE')
+		if internal_os.launched_from_desktop() {
+			env.delete('LANGUAGE')
 		}
 	}
 

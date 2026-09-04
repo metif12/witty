@@ -4,13 +4,22 @@ import os
 
 // C interop declarations for pipes and resource limits.
 #include <unistd.h>
+
 #include <fcntl.h>
+
 #include <sys/resource.h>
 
 fn C.pipe(fds &int) int
+
 fn C.fcntl(fd int, cmd int, arg int) int
+
 fn C.getrlimit(resource int, rlp &C.rlimit) int
+
 fn C.setrlimit(resource int, rlp &C.rlimit) int
+
+fn C.getpid() int
+
+fn C.getppid() int
 
 // rlimit mirrors the C `struct rlimit`. rlim_t is an unsigned 64-bit
 // integer on the platforms we target (macOS, Linux, *BSD).
@@ -49,6 +58,25 @@ pub fn (t TempDir) deinit() {
 // get_env_map returns the current environment as a map.
 pub fn get_env_map() !map[string]string {
 	return os.environ()
+}
+
+// launched_from_desktop detects launches from Finder on macOS and desktop
+// files on Linux/BSD. This is the platform switch used by Ghostty when
+// deciding whether GUI-only environment overrides should reach child shells.
+pub fn launched_from_desktop() bool {
+	$if macos {
+		if os.getenv('GHOSTTY_MAC_LAUNCH_SOURCE') == 'app' {
+			return true
+		}
+		return C.getppid() == 1
+	} $else $if linux || freebsd {
+		pid := os.getenv('GIO_LAUNCHED_DESKTOP_FILE_PID').int()
+		return pid > 0 && pid == C.getpid()
+	} $else $if ios {
+		return true
+	} $else {
+		return false
+	}
 }
 
 // append_env appends a value to an existing environment variable string,

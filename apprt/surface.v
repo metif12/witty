@@ -177,8 +177,9 @@ pub enum NewSurfaceContext {
 // should_inherit_working_directory returns true if the given context should
 // inherit the working directory from the focused surface.
 pub fn should_inherit_working_directory(context NewSurfaceContext, config &configpkg.Config) bool {
-	// TODO: Needs config fields for window/tab/split-inherit-working-directory.
-	_ = context
-	_ = config
-	return false
+	return match context {
+		.window { config.window_inherit_working_directory }
+		.tab { config.tab_inherit_working_directory }
+		.split { config.split_inherit_working_directory }
+	}
 }

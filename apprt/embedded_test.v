@@ -2,6 +2,10 @@ module apprt
 
 import input
 
+fn test_embedded_perform_ipc_reports_unhandled() {
+	assert perform_ipc('new-window')! == false
+}
+
 // Test creating default AppOptions.
 fn test_app_options_default() {
 	opts := AppOptions{}
