@@ -317,6 +317,54 @@ fn test_page_clone_styles() {
 	}
 }
 
+fn test_page_clone_preserves_inline_managed_values() {
+	mut page := Page.init(PageCapacity{
+		cols: 2
+		rows: 1
+		styles: 8
+	})
+	defer { page.deinit() }
+	page.size.rows = 1
+
+	style := CellStyle{
+		flags: StyleFlags{
+			bold: true
+		}
+	}
+	style_id := page.styles.add(style) or {
+		assert false, 'failed to add style'
+		return
+	}
+	link := Hyperlink{
+		id: HyperlinkExplicitId{
+			value: 'clone-inline'
+		}
+		uri: 'https://example.com/clone-inline'
+	}
+	link_id := page.insert_hyperlink(link)
+	page.rows[0].styled = true
+	page.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`x`)
+		style_id: style_id
+		style: style
+		hyperlink: link.dupe()
+	}
+	page.set_hyperlink(0, 0, link_id)
+
+	mut cloned := page.clone()
+	defer { cloned.deinit() }
+	cell := cloned.rows[0].cells[0]
+	assert cell.style.eql(&style)
+	assert cell.hyperlink.eql(&link)
+	assert cloned.styles.get(cell.style_id).eql(&style)
+	cloned_link_id := cloned.lookup_hyperlink(0, 0) or {
+		assert false, 'cloned hyperlink has no mapping'
+		return
+	}
+	assert cloned.hyperlink_set.get(cloned_link_id).eql(&link)
+}
+
 // Test cloneFrom (copy between pages).
 fn test_page_clone_from() {
 	mut page := Page.init(PageCapacity{
@@ -1660,12 +1708,13 @@ fn test_page_clone_row_from_partial_hyperlink_in_same_page_copy() {
 	page.size.rows = u16(page.capacity.rows)
 
 	// We need to create a hyperlink.
-	hyperlink_id := page.insert_hyperlink(Hyperlink{
+	link := Hyperlink{
 		id: HyperlinkImplicitId{
 			offset: 0
 		}
-		uri: ''
-	})
+		uri: 'https://example.com/partial-inline'
+	}
+	hyperlink_id := page.insert_hyperlink(link)
 
 	// Write
 	{
@@ -1678,6 +1727,7 @@ fn test_page_clone_row_from_partial_hyperlink_in_same_page_copy() {
 		}
 
 		// Hyperlink in a single cell.
+		page.rows[0].cells[7].hyperlink = link.dupe()
 		page.set_hyperlink(0, 7, hyperlink_id)
 	}
 	assert page.hyperlink_count() == 1
@@ -1696,6 +1746,7 @@ fn test_page_clone_row_from_partial_hyperlink_in_same_page_copy() {
 			rac := page.get_row_and_cell(7, 1)
 			assert rac.row.hyperlink
 			assert rac.cell.has_hyperlink
+			assert rac.cell.hyperlink.eql(&link)
 		}
 	}
 	assert page.hyperlink_count() == 2

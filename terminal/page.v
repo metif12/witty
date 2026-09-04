@@ -1350,9 +1350,13 @@ pub fn (self &Page) clone() Page {
 				color_rgb_r: cell.color_rgb_r
 				color_rgb_g: cell.color_rgb_g
 				color_rgb_b: cell.color_rgb_b
+				style: cell.style
 			}
 			if cell.graphemes.len > 0 {
 				new_cell.graphemes = cell.graphemes.clone()
+			}
+			if cell.has_hyperlink {
+				new_cell.hyperlink = cell.hyperlink.dupe()
 			}
 			new_cells << new_cell
 		}
@@ -1532,6 +1536,7 @@ pub fn (mut self Page) clone_partial_row_from(other &Page, dst_row_idx u16, src_
 			color_rgb_r: src_cell.color_rgb_r
 			color_rgb_g: src_cell.color_rgb_g
 			color_rgb_b: src_cell.color_rgb_b
+			style: src_cell.style
 		}
 
 		// Copy graphemes.
@@ -1544,6 +1549,7 @@ pub fn (mut self Page) clone_partial_row_from(other &Page, dst_row_idx u16, src_
 
 		// Copy hyperlinks.
 		if src_cell.has_hyperlink {
+			dst_cell.hyperlink = src_cell.hyperlink.dupe()
 			src_key := cell_key(int(src_row_idx), xi, int(other.capacity.cols))
 			if src_key in other.hyperlink_map {
 				src_hl_id := other.hyperlink_map[src_key]
