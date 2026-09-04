@@ -171,8 +171,6 @@ pub enum SemanticPromptType {
 	unknown
 	prompt
 	prompt_continuation
-	input
-	command
 }
 
 // RowData is the data for a single row in the terminal grid.
@@ -534,6 +532,314 @@ pub fn (self &Pages) get_bottom_right(tag PointTag) ?Pin {
 				Pin{ x: self.cols - 1, y: u32(self.active_start - 1) }
 			} else {
 				return none
+			}
+		}
+	}
+}
+
+pub struct FlatCellIterator {
+pub mut:
+	pages     &Pages = unsafe { nil }
+	cell      ?Pin
+	limit     ?Pin
+	direction IterDirection = .right_down
+}
+
+pub fn (self &Pages) cell_iterator(at Pin, direction IterDirection, limit ?Pin) FlatCellIterator {
+	if int(at.y) >= self.screen_rows.len || at.x >= self.cols {
+		return FlatCellIterator{}
+	}
+	return FlatCellIterator{
+		pages: self
+		cell: at
+		limit: limit
+		direction: direction
+	}
+}
+
+pub fn (mut self FlatCellIterator) next() ?Pin {
+	cell := self.cell or { return none }
+	if limit := self.limit {
+		if cell.eql(limit) {
+			self.cell = none
+			return cell
+		}
+	}
+
+	match self.direction {
+		.right_down {
+			if cell.x + 1 < self.pages.cols {
+				self.cell = Pin{ x: cell.x + 1, y: cell.y }
+			} else if int(cell.y) + 1 < self.pages.screen_rows.len {
+				self.cell = Pin{ x: 0, y: cell.y + 1 }
+			} else {
+				self.cell = none
+			}
+		}
+		.left_up {
+			if cell.x > 0 {
+				self.cell = Pin{ x: cell.x - 1, y: cell.y }
+			} else if cell.y > 0 {
+				self.cell = Pin{ x: self.pages.cols - 1, y: cell.y - 1 }
+			} else {
+				self.cell = none
+			}
+		}
+	}
+	return cell
+}
+
+pub struct FlatPromptIterator {
+pub mut:
+	pages     &Pages = unsafe { nil }
+	current   ?Pin
+	limit     ?Pin
+	direction IterDirection = .left_up
+}
+
+pub fn (self &Pages) prompt_iterator(at Pin, direction IterDirection, limit ?Pin) FlatPromptIterator {
+	if int(at.y) >= self.screen_rows.len {
+		return FlatPromptIterator{}
+	}
+	return FlatPromptIterator{
+		pages: self
+		current: at
+		limit: limit
+		direction: direction
+	}
+}
+
+fn (self &Pages) pin_down(pin Pin) ?Pin {
+	if int(pin.y) + 1 >= self.screen_rows.len {
+		return none
+	}
+	return Pin{ x: pin.x, y: pin.y + 1 }
+}
+
+fn (self &Pages) pin_up(pin Pin) ?Pin {
+	if pin.y == 0 {
+		return none
+	}
+	return Pin{ x: pin.x, y: pin.y - 1 }
+}
+
+pub fn (mut self FlatPromptIterator) next() ?Pin {
+	return match self.direction {
+		.right_down { self.next_right_down() }
+		.left_up { self.next_left_up() }
+	}
+}
+
+fn (mut self FlatPromptIterator) next_right_down() ?Pin {
+	start := self.current or { return none }
+	mut current := ?Pin(start)
+	for {
+		p := current or { break }
+		at_limit := if limit := self.limit { limit.eql(p) } else { false }
+		match self.pages.screen_rows[int(p.y)].semantic_prompt {
+			.unknown {
+				if at_limit {
+					break
+				}
+			}
+			.prompt, .prompt_continuation {
+				if at_limit {
+					self.current = none
+					return Pin{ x: 0, y: p.y }
+				}
+
+				mut end_pin := p
+				for {
+					next_pin := self.pages.pin_down(end_pin) or { break }
+					match self.pages.screen_rows[int(next_pin.y)].semantic_prompt {
+						.prompt_continuation {
+							if limit := self.limit {
+								if limit.eql(next_pin) {
+									break
+								}
+							}
+						}
+						.prompt, .unknown {
+							self.current = next_pin
+							return Pin{ x: 0, y: p.y }
+						}
+					}
+					end_pin = next_pin
+				}
+
+				self.current = none
+				return Pin{ x: 0, y: p.y }
+			}
+		}
+		current = self.pages.pin_down(p)
+	}
+	self.current = none
+	return none
+}
+
+fn (mut self FlatPromptIterator) next_left_up() ?Pin {
+	start := self.current or { return none }
+	mut current := ?Pin(start)
+	for {
+		p := current or { break }
+		at_limit := if limit := self.limit { limit.eql(p) } else { false }
+		match self.pages.screen_rows[int(p.y)].semantic_prompt {
+			.unknown {
+				if at_limit {
+					break
+				}
+			}
+			.prompt {
+				self.current = if at_limit { none } else { self.pages.pin_up(p) }
+				return Pin{ x: 0, y: p.y }
+			}
+			.prompt_continuation {
+				if at_limit {
+					self.current = none
+					return Pin{ x: 0, y: p.y }
+				}
+
+				mut end_pin := p
+				for {
+					prior := self.pages.pin_up(end_pin) or { break }
+					if limit := self.limit {
+						if limit.eql(prior) {
+							break
+						}
+					}
+					match self.pages.screen_rows[int(prior.y)].semantic_prompt {
+						.unknown {
+							self.current = prior
+							return Pin{ x: 0, y: end_pin.y }
+						}
+						.prompt_continuation {}
+						.prompt {
+							self.current = self.pages.pin_up(prior)
+							return Pin{ x: 0, y: prior.y }
+						}
+					}
+					end_pin = prior
+				}
+
+				self.current = none
+				return Pin{ x: 0, y: p.y }
+			}
+		}
+		current = self.pages.pin_up(p)
+	}
+	self.current = none
+	return none
+}
+
+pub struct SemanticHighlight {
+pub mut:
+	start Pin
+	end   Pin
+}
+
+// Returns the boundaries of semantic content belonging to the prompt at `at`.
+// This is the flat-storage translation of PageList.highlightSemanticContent.
+pub fn (self &Pages) highlight_semantic_content(at Pin, content SemanticContent) ?SemanticHighlight {
+	mut prompt_it := self.prompt_iterator(at, .right_down, none)
+	first := prompt_it.next() or { return none }
+	assert first.y == at.y
+	zone_end := if next := prompt_it.next() {
+		Pin{ x: self.cols - 1, y: next.y - 1 }
+	} else {
+		self.get_bottom_right(.screen) or { return none }
+	}
+
+	match content {
+		.prompt {
+			mut result := SemanticHighlight{
+				start: Pin{ x: 0, y: at.y }
+				end: at
+			}
+			mut it := self.cell_iterator(at, .right_down, zone_end)
+			for {
+				p := it.next() or { break }
+				match self.screen_rows[int(p.y)].cells[int(p.x)].semantic_content {
+					.prompt, .input {
+						result.end = p
+					}
+					.output {
+						break
+					}
+				}
+			}
+			return result
+		}
+		.input {
+			mut result_start := ?Pin(none)
+			mut result_end := Pin{}
+			mut it := self.cell_iterator(at, .right_down, zone_end)
+			for {
+				p := it.next() or { return none }
+				match self.screen_rows[int(p.y)].cells[int(p.x)].semantic_content {
+					.prompt {}
+					.input {
+						result_start = p
+						result_end = p
+						break
+					}
+					.output {
+						return none
+					}
+				}
+			}
+			for {
+				p := it.next() or { break }
+				match self.screen_rows[int(p.y)].cells[int(p.x)].semantic_content {
+					.prompt {}
+					.output {
+						break
+					}
+					.input {
+						result_end = p
+					}
+				}
+			}
+			return SemanticHighlight{
+				start: result_start or { return none }
+				end: result_end
+			}
+		}
+		.output {
+			mut result_start := ?Pin(none)
+			mut result_end := Pin{}
+			mut it := self.cell_iterator(at, .right_down, zone_end)
+			for {
+				p := it.next() or { return none }
+				cell := self.screen_rows[int(p.y)].cells[int(p.x)]
+				match cell.semantic_content {
+					.prompt, .input {}
+					.output {
+						if !cell.has_text() {
+							continue
+						}
+						result_start = p
+						result_end = p
+						break
+					}
+				}
+			}
+			for {
+				p := it.next() or { break }
+				cell := self.screen_rows[int(p.y)].cells[int(p.x)]
+				match cell.semantic_content {
+					.prompt, .input {
+						break
+					}
+					.output {
+						if cell.has_text() {
+							result_end = p
+						}
+					}
+				}
+			}
+			return SemanticHighlight{
+				start: result_start or { return none }
+				end: result_end
 			}
 		}
 	}

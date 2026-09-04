@@ -3816,9 +3816,6 @@ fn (self &Terminal) check_at_prompt_for_clear() bool {
 			.unknown {
 				return false
 			}
-			else {
-				continue
-			}
 		}
 	}
 	return false

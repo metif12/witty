@@ -2730,20 +2730,45 @@ pub fn (self &PagePin) page_iterator(direction IterDirection, limit ?PagePin) Pa
 }
 
 pub fn (self &PagePin) row_iterator(direction IterDirection, limit ?PagePin) RowIterator {
+	mut page_it := self.page_iterator(direction, limit)
+	chunk := page_it.next() or {
+		return RowIterator{
+			page_it: page_it
+		}
+	}
 	return RowIterator{
-		page_it: self.page_iterator(direction, limit)
+		page_it: page_it
+		chunk: chunk
+		offset: match direction {
+			.right_down { chunk.start }
+			.left_up { chunk.end - 1 }
+		}
 	}
 }
 
 pub fn (self &PagePin) cell_iterator(direction IterDirection, limit ?PagePin) CellIterator {
+	mut row_it := self.row_iterator(direction, limit)
+	mut cell := row_it.next() or {
+		return CellIterator{
+			row_it: row_it
+		}
+	}
+	cell.x = self.x
 	return CellIterator{
-		row_it: self.row_iterator(direction, limit)
+		row_it: row_it
+		cell: cell
 	}
 }
 
 pub fn (self &PagePin) prompt_iterator(direction IterDirection, limit ?PagePin) PromptIterator {
 	return PromptIterator{
-		row_it: self.row_iterator(direction, limit)
+		current: PagePin{
+			node: self.node
+			y: self.y
+			x: self.x
+		}
+		limit: limit
+		direction: direction
 	}
 }
 
@@ -3112,35 +3137,7 @@ pub mut:
 }
 
 pub fn (mut self RowIterator) next() ?PagePin {
-	// If we have no chunk yet, get the first one
-	if self.chunk == none {
-		self.chunk = self.page_it.next() or { return none }
-		ch := self.chunk or { return none }
-		self.offset = match self.page_it.direction {
-			.right_down { ch.start }
-			.left_up { ch.end - 1 }
-		}
-	}
-
 	ch := self.chunk or { return none }
-
-	// Check bounds
-	if self.page_it.direction == .right_down {
-		if self.offset >= ch.end {
-			self.chunk = self.page_it.next() or { return none }
-			new_ch := self.chunk or { return none }
-			self.offset = new_ch.start
-			return self.next()
-		}
-	} else {
-		if self.offset < ch.start {
-			self.chunk = self.page_it.next() or { return none }
-			new_ch := self.chunk or { return none }
-			self.offset = new_ch.end - 1
-			return self.next()
-		}
-	}
-
 	result := PagePin{
 		node: ch.node
 		y: self.offset
@@ -3150,17 +3147,24 @@ pub fn (mut self RowIterator) next() ?PagePin {
 	match self.page_it.direction {
 		.right_down {
 			self.offset += 1
+			if self.offset >= ch.end {
+				self.chunk = self.page_it.next()
+				if next_chunk := self.chunk {
+					self.offset = next_chunk.start
+				}
+			}
 		}
 		.left_up {
 			if self.offset == 0 {
-				// Need next chunk
 				self.chunk = self.page_it.next()
-				if new_ch := self.chunk {
-					self.offset = new_ch.end - 1
+				if next_chunk := self.chunk {
+					self.offset = next_chunk.end - 1
 				}
-				return result
+			} else if self.offset == ch.start {
+				self.chunk = none
+			} else {
+				self.offset -= 1
 			}
-			self.offset -= 1
 		}
 	}
 
@@ -3176,19 +3180,6 @@ pub mut:
 }
 
 pub fn (mut self CellIterator) next() ?PagePin {
-	if self.cell == none {
-		row := self.row_it.next() or { return none }
-		self.cell = PagePin{
-			node: row.node
-			y: row.y
-			x: if self.row_it.page_it.direction == .right_down {
-				u16(0)
-			} else {
-				row.node.data.size.cols - 1
-			}
-		}
-	}
-
 	c := self.cell or { return none }
 	result := c
 
@@ -3201,7 +3192,7 @@ pub fn (mut self CellIterator) next() ?PagePin {
 					x: c.x + 1
 				}
 			} else {
-				self.cell = none
+				self.cell = self.row_it.next()
 			}
 		}
 		.left_up {
@@ -3212,7 +3203,15 @@ pub fn (mut self CellIterator) next() ?PagePin {
 					x: c.x - 1
 				}
 			} else {
-				self.cell = none
+				if next_cell := self.row_it.next() {
+					self.cell = PagePin{
+						node: next_cell.node
+						y: next_cell.y
+						x: next_cell.node.data.size.cols - 1
+					}
+				} else {
+					self.cell = none
+				}
 			}
 		}
 	}
@@ -3224,22 +3223,116 @@ pub fn (mut self CellIterator) next() ?PagePin {
 
 pub struct PromptIterator {
 pub mut:
-	row_it RowIterator
+	current   ?PagePin
+	limit     ?PagePin
+	direction IterDirection = .left_up
 }
 
 pub fn (mut self PromptIterator) next() ?PagePin {
+	return match self.direction {
+		.right_down { self.next_right_down() }
+		.left_up { self.next_left_up() }
+	}
+}
+
+fn (mut self PromptIterator) next_right_down() ?PagePin {
+	start := self.current or { return none }
+	mut current := ?PagePin(start)
 	for {
-		row := self.row_it.next() or { return none }
-		if int(row.y) < row.node.data.rows.len {
-			rd := row.node.data.rows[int(row.y)]
-			match rd.semantic_prompt {
-				.prompt, .input, .command {
-					return row
+		p := current or { break }
+		at_limit := if limit := self.limit { limit.eql(p) } else { false }
+		match p.row_data().semantic_prompt {
+			.unknown {
+				if at_limit {
+					break
 				}
-				else {}
+			}
+			.prompt, .prompt_continuation {
+				if at_limit {
+					self.current = none
+					return p.left(p.x)
+				}
+
+				mut end_pin := p
+				for {
+					next_pin := end_pin.down(1) or { break }
+					match next_pin.row_data().semantic_prompt {
+						.prompt_continuation {
+							if limit := self.limit {
+								if limit.eql(next_pin) {
+									break
+								}
+							}
+						}
+						.prompt, .unknown {
+							self.current = next_pin
+							return p.left(p.x)
+						}
+					}
+					end_pin = next_pin
+				}
+
+				self.current = none
+				return p.left(p.x)
 			}
 		}
+		current = p.down(1)
 	}
+	self.current = none
+	return none
+}
+
+fn (mut self PromptIterator) next_left_up() ?PagePin {
+	start := self.current or { return none }
+	mut current := ?PagePin(start)
+	for {
+		p := current or { break }
+		at_limit := if limit := self.limit { limit.eql(p) } else { false }
+		match p.row_data().semantic_prompt {
+			.unknown {
+				if at_limit {
+					break
+				}
+			}
+			.prompt {
+				self.current = if at_limit { none } else { p.up(1) }
+				return p.left(p.x)
+			}
+			.prompt_continuation {
+				if at_limit {
+					self.current = none
+					return p.left(p.x)
+				}
+
+				mut end_pin := p
+				for {
+					prior := end_pin.up(1) or { break }
+					if limit := self.limit {
+						if limit.eql(prior) {
+							break
+						}
+					}
+					match prior.row_data().semantic_prompt {
+						.unknown {
+							self.current = prior
+							return end_pin.left(end_pin.x)
+						}
+						.prompt_continuation {}
+						.prompt {
+							self.current = prior.up(1)
+							return prior.left(prior.x)
+						}
+					}
+					end_pin = prior
+				}
+
+				self.current = none
+				return p.left(p.x)
+			}
+		}
+		current = p.up(1)
+	}
+	self.current = none
 	return none
 }
 
@@ -3724,6 +3817,127 @@ pub fn (self &PageList) get_bottom_right(tag PointTag) ?PagePin {
 				node: p.node
 				y: p.y
 				x: self.cols - 1
+			}
+		}
+	}
+}
+
+// PageSemanticHighlight is an untracked semantic-content range. Callers that
+// need the range to survive page mutations must track both pins themselves.
+pub struct PageSemanticHighlight {
+pub mut:
+	start PagePin
+	end   PagePin
+}
+
+// Returns the boundaries of semantic content belonging to the prompt at `at`.
+// The pin must be on the first row of a prompt, as returned by PromptIterator.
+pub fn (self &PageList) highlight_semantic_content(at PagePin, content SemanticContent) ?PageSemanticHighlight {
+	mut prompt_it := at.prompt_iterator(.right_down, none)
+	first := prompt_it.next() or { return none }
+	assert first.y == at.y
+
+	zone_end := if next := prompt_it.next() {
+		mut previous := next.up(1) or { next }
+		previous.x = previous.node.data.size.cols - 1
+		previous
+	} else {
+		self.get_bottom_right(.screen) or { return none }
+	}
+
+	match content {
+		.prompt {
+			mut result := PageSemanticHighlight{
+				start: at.left(at.x)
+				end: at
+			}
+			mut it := at.cell_iterator(.right_down, zone_end)
+			for {
+				p := it.next() or { break }
+				match p.cell_data().semantic_content {
+					.prompt, .input {
+						result.end = p
+					}
+					.output {
+						break
+					}
+				}
+			}
+			return result
+		}
+		.input {
+			mut result_start := ?PagePin(none)
+			mut result_end := PagePin{}
+			mut it := at.cell_iterator(.right_down, zone_end)
+			for {
+				p := it.next() or { return none }
+				match p.cell_data().semantic_content {
+					.prompt {}
+					.input {
+						result_start = p
+						result_end = p
+						break
+					}
+					.output {
+						return none
+					}
+				}
+			}
+
+			for {
+				p := it.next() or { break }
+				match p.cell_data().semantic_content {
+					.prompt {}
+					.output {
+						break
+					}
+					.input {
+						result_end = p
+					}
+				}
+			}
+			return PageSemanticHighlight{
+				start: result_start or { return none }
+				end: result_end
+			}
+		}
+		.output {
+			mut result_start := ?PagePin(none)
+			mut result_end := PagePin{}
+			mut it := at.cell_iterator(.right_down, zone_end)
+			for {
+				p := it.next() or { return none }
+				cell := p.cell_data()
+				match cell.semantic_content {
+					.prompt, .input {}
+					.output {
+						if !cell.has_text() {
+							continue
+						}
+						result_start = p
+						result_end = p
+						break
+					}
+				}
+			}
+
+			for {
+				p := it.next() or { break }
+				cell := p.cell_data()
+				match cell.semantic_content {
+					.prompt, .input {
+						break
+					}
+					.output {
+						if cell.has_text() {
+							result_end = p
+						}
+					}
+				}
+			}
+			return PageSemanticHighlight{
+				start: result_start or { return none }
+				end: result_end
 			}
 		}
 	}

@@ -1978,6 +1978,31 @@ fn test_page_list_cell_iterator_reverse() {
 	assert count == usize(s.cols) * usize(s.rows)
 }
 
+fn test_page_list_cell_iterator_preserves_starting_column() {
+	mut s := PageList.init(5, 2, usize(0))
+	defer { s.deinit() }
+
+	start := s.get_pin(.screen, 3, 0) or {
+		assert false
+		return
+	}
+	limit := s.get_pin(.screen, 4, 0) or {
+		assert false
+		return
+	}
+	mut forward := start.cell_iterator(.right_down, limit)
+	assert (forward.next() or { PagePin{} }).x == 3
+	assert (forward.next() or { PagePin{} }).x == 4
+	assert forward.next() == none
+
+	mut reverse := start.cell_iterator(.left_up, s.get_pin(.screen, 0, 0))
+	assert (reverse.next() or { PagePin{} }).x == 3
+	assert (reverse.next() or { PagePin{} }).x == 2
+	assert (reverse.next() or { PagePin{} }).x == 1
+	assert (reverse.next() or { PagePin{} }).x == 0
+	assert reverse.next() == none
+}
+
 fn test_page_list_prompt_iterator() {
 	mut s := PageList.init(10, 20, usize(0))
 	defer { s.deinit() }
@@ -1990,10 +2015,10 @@ fn test_page_list_prompt_iterator() {
 	mut page := &first.data
 
 	page.rows[5].semantic_prompt = .prompt
-	page.rows[10].semantic_prompt = .command
-	page.rows[15].semantic_prompt = .input
+	page.rows[10].semantic_prompt = .prompt
+	page.rows[11].semantic_prompt = .prompt_continuation
 
-	// Forward prompt iterator should find 3 prompts
+	// A continuation belongs to the prompt immediately before it.
 	tl := s.get_top_left(.screen)
 	mut it := tl.prompt_iterator(.right_down, none)
 	mut count := 0
@@ -2001,7 +2026,7 @@ fn test_page_list_prompt_iterator() {
 		_ := it.next() or { break }
 		count += 1
 	}
-	assert count == 3
+	assert count == 2
 }
 
 fn test_page_list_prompt_iterator_reverse() {
@@ -2015,8 +2040,8 @@ fn test_page_list_prompt_iterator_reverse() {
 	mut page := &first.data
 
 	page.rows[5].semantic_prompt = .prompt
-	page.rows[10].semantic_prompt = .command
-	page.rows[15].semantic_prompt = .input
+	page.rows[10].semantic_prompt = .prompt
+	page.rows[11].semantic_prompt = .prompt_continuation
 
 	// Reverse prompt iterator from bottom
 	br := s.get_bottom_right(.screen) or {
@@ -2029,7 +2054,92 @@ fn test_page_list_prompt_iterator_reverse() {
 		_ := it.next() or { break }
 		count += 1
 	}
-	assert count == 3
+	assert count == 2
+}
+
+fn test_page_list_highlight_semantic_content() {
+	mut s := PageList.init(10, 8, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	page.rows[2].semantic_prompt = .prompt
+	page.rows[6].semantic_prompt = .prompt
+
+	for x in 0 .. 2 {
+		page.rows[2].cells[x] = CellData{
+			codepoint: u32(`$`)
+			semantic_content: .prompt
+		}
+	}
+	for x in 2 .. 5 {
+		page.rows[2].cells[x] = CellData{
+			codepoint: u32(`i`)
+			semantic_content: .input
+		}
+	}
+	for x in 0 .. 3 {
+		page.rows[3].cells[x] = CellData{
+			codepoint: u32(`o`)
+			semantic_content: .output
+		}
+	}
+	page.rows[4].cells[1] = CellData{
+		codepoint: u32(`z`)
+		semantic_content: .output
+	}
+
+	at := s.get_pin(.screen, 0, 2) or {
+		assert false
+		return
+	}
+	prompt := s.highlight_semantic_content(at, .prompt) or {
+		assert false, 'prompt highlight missing'
+		return
+	}
+	assert (s.point_from_pin(.screen, prompt.start) or { Pin{} }) == Pin{ x: 0, y: 2 }
+	assert (s.point_from_pin(.screen, prompt.end) or { Pin{} }) == Pin{ x: 4, y: 2 }
+
+	input := s.highlight_semantic_content(at, .input) or {
+		assert false, 'input highlight missing'
+		return
+	}
+	assert (s.point_from_pin(.screen, input.start) or { Pin{} }) == Pin{ x: 2, y: 2 }
+	assert (s.point_from_pin(.screen, input.end) or { Pin{} }) == Pin{ x: 4, y: 2 }
+
+	output := s.highlight_semantic_content(at, .output) or {
+		assert false, 'output highlight missing'
+		return
+	}
+	assert (s.point_from_pin(.screen, output.start) or { Pin{} }) == Pin{ x: 0, y: 3 }
+	assert (s.point_from_pin(.screen, output.end) or { Pin{} }) == Pin{ x: 1, y: 4 }
+}
+
+fn test_page_list_highlight_semantic_content_missing_input_and_output() {
+	mut s := PageList.init(5, 3, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false
+		return
+	}
+	mut page := &first.data
+	page.rows[0].semantic_prompt = .prompt
+	for x in 0 .. 5 {
+		page.rows[0].cells[x] = CellData{
+			codepoint: u32(`$`)
+			semantic_content: .prompt
+		}
+	}
+	at := s.get_pin(.screen, 0, 0) or {
+		assert false
+		return
+	}
+	assert s.highlight_semantic_content(at, .input) == none
+	assert s.highlight_semantic_content(at, .output) == none
 }
 
 // ============================================================

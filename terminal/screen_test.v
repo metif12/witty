@@ -514,6 +514,106 @@ fn test_screen_select_word() {
 	}
 }
 
+fn test_flat_pages_highlight_semantic_content() {
+	mut pages := Pages.init(10, 8, 0)
+	pages.screen_rows[2].semantic_prompt = .prompt
+	pages.screen_rows[6].semantic_prompt = .prompt
+	for x in 0 .. 2 {
+		pages.screen_rows[2].cells[x] = CellData{
+			codepoint: u32(`$`)
+			semantic_content: .prompt
+		}
+	}
+	for x in 2 .. 5 {
+		pages.screen_rows[2].cells[x] = CellData{
+			codepoint: u32(`i`)
+			semantic_content: .input
+		}
+	}
+	for x in 0 .. 3 {
+		pages.screen_rows[3].cells[x] = CellData{
+			codepoint: u32(`o`)
+			semantic_content: .output
+		}
+	}
+	pages.screen_rows[4].cells[1] = CellData{
+		codepoint: u32(`z`)
+		semantic_content: .output
+	}
+
+	prompt := pages.highlight_semantic_content(Pin{ x: 0, y: 2 }, .prompt) or {
+		assert false
+		return
+	}
+	assert prompt.start == Pin{ x: 0, y: 2 }
+	assert prompt.end == Pin{ x: 4, y: 2 }
+	input := pages.highlight_semantic_content(Pin{ x: 0, y: 2 }, .input) or {
+		assert false
+		return
+	}
+	assert input.start == Pin{ x: 2, y: 2 }
+	assert input.end == Pin{ x: 4, y: 2 }
+	output := pages.highlight_semantic_content(Pin{ x: 0, y: 2 }, .output) or {
+		assert false
+		return
+	}
+	assert output.start == Pin{ x: 0, y: 3 }
+	assert output.end == Pin{ x: 1, y: 4 }
+}
+
+fn test_screen_select_output() {
+	mut s := Screen.init(10, 15, 0)
+	defer { s.deinit() }
+
+	s.cursor_set_semantic_content_output()
+	s.test_write_string('output1\n') or { assert false }
+	s.test_write_string('output1\n') or { assert false }
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('prompt2\n') or { assert false }
+	s.cursor_set_semantic_content_input(true)
+	s.test_write_string('input2\n') or { assert false }
+	s.cursor_set_semantic_content_output()
+	s.test_write_string('output2output2output2output2\n') or { assert false }
+	s.test_write_string('output2\n') or { assert false }
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('\$ ') or { assert false }
+	s.cursor_set_semantic_content_input(true)
+	s.test_write_string('input3\n') or { assert false }
+	s.cursor_set_semantic_content_output()
+	s.test_write_string('output3\n') or { assert false }
+	s.test_write_string('output3\n') or { assert false }
+	s.test_write_string('output3') or { assert false }
+
+	first := s.select_output(Pin{ x: 1, y: 1 }) or {
+		assert false, 'first output selection missing'
+		return
+	}
+	first_text := s.selection_string(SelectionString{ sel: first }) or {
+		assert false
+		return
+	}
+	assert first_text == 'output1\noutput1'
+
+	second := s.select_output(Pin{ x: 3, y: 7 }) or {
+		assert false, 'second output selection missing'
+		return
+	}
+	second_text := s.selection_string(SelectionString{ sel: second }) or {
+		assert false
+		return
+	}
+	assert second_text == 'output2output2output2output2\noutput2'
+
+	third := s.select_output(Pin{ x: 2, y: 10 }) or {
+		assert false, 'third output selection missing'
+		return
+	}
+	assert third.start() == Pin{ x: 0, y: 9 }
+	assert third.end() == Pin{ x: 6, y: 11 }
+	assert s.select_output(Pin{ x: 1, y: 8 }) == none
+	assert s.select_output(Pin{ x: 5, y: 8 }) == none
+}
+
 fn test_screen_selection_string_basic() {
 	mut s := Screen.init(20, 10, 0)
 	defer { s.deinit() }

@@ -2780,21 +2780,15 @@ pub fn (mut self Screen) resize(opts ScreenResize) ! {
 				self.clear_cells(cur_idx, 0, int(self.pages.cols))
 			}
 			.true_ {
-				// Clear all prompt lines starting from the beginning of this
-				// prompt. Walk up while rows are marked as some kind of
-				// prompt, then clear from there down to the cursor row.
-				mut start := cur_idx
-				for start - 1 >= 0 {
-					sp := self.pages.screen_rows[start - 1].semantic_prompt
-					if sp == .prompt || sp == .prompt_continuation || sp == .input {
-						start -= 1
-					} else {
-						break
-					}
-				}
-				for y := start; y <= cur_idx; y++ {
-					if y >= 0 && y < self.pages.screen_rows.len {
-						self.clear_cells(y, 0, int(self.pages.cols))
+				mut prompt_it := self.pages.prompt_iterator(Pin{
+					x: self.cursor.x
+					y: u32(cur_idx)
+				}, .left_up, none)
+				if start := prompt_it.next() {
+					for y := int(start.y); y <= cur_idx; y++ {
+						if y >= 0 && y < self.pages.screen_rows.len {
+							self.clear_cells(y, 0, int(self.pages.cols))
+						}
 					}
 				}
 			}
@@ -3544,74 +3538,36 @@ pub fn (mut self Screen) select_output(pin Pin) ?Selection {
 		return none
 	}
 
-	// Locate the prompt zone containing this output. Prompt metadata is stored
-	// on rows in the flat Pages representation.
-	mut prompt_y := -1
-	for y := int(pin.y); y >= 0; y-- {
-		if self.pages.screen_rows[y].semantic_prompt == .prompt {
-			prompt_y = y
-			break
-		}
-	}
-	if prompt_y < 0 {
-		// With no prior prompt, Ghostty selects from the start of the screen to
-		// immediately before the next prompt, trimming trailing empty cells.
-		mut next_prompt := -1
-		for y in int(pin.y) .. self.pages.screen_rows.len {
-			if self.pages.screen_rows[y].semantic_prompt == .prompt {
-				next_prompt = y
+	mut prior_it := self.pages.prompt_iterator(pin, .left_up, none)
+	prompt_pin := prior_it.next() or {
+		mut next_it := self.pages.prompt_iterator(pin, .right_down, none)
+		next := next_it.next() or { return none }
+		mut end_pin := next.up(1) or { return none }
+		end_pin.x = self.pages.cols - 1
+		start_pin := self.pages.get_top_left(.screen)
+		mut cell_it := self.pages.cell_iterator(end_pin, .left_up, start_pin)
+		for {
+			p := cell_it.next() or { break }
+			end_pin = p
+			if self.pages.screen_rows[int(p.y)].cells[int(p.x)].has_text() {
 				break
 			}
 		}
-		if next_prompt <= 0 {
-			return none
-		}
-		mut end := Pin{ x: self.pages.cols - 1, y: u32(next_prompt - 1) }
-		for y := int(end.y); y >= 0; y-- {
-			r := self.pages.screen_rows[y]
-			for x := r.cells.len - 1; x >= 0; x-- {
-				if r.cells[x].has_text() {
-					end = Pin{ x: u32(x), y: u32(y) }
-					return Selection.init(Pin{ x: 0, y: 0 }, end, false)
-				}
-			}
-		}
-		return none
+		return Selection.init(start_pin, end_pin, false)
 	}
 
-	// The zone ends immediately before the next non-continuation prompt.
-	mut zone_end_y := self.pages.screen_rows.len - 1
-	for y in prompt_y + 1 .. self.pages.screen_rows.len {
-		if self.pages.screen_rows[y].semantic_prompt == .prompt {
-			zone_end_y = y - 1
+	mut semantic := self.pages.highlight_semantic_content(prompt_pin, .output) or {
+		return none
+	}
+	mut cell_it := self.pages.cell_iterator(semantic.end, .left_up, semantic.start)
+	for {
+		p := cell_it.next() or { break }
+		semantic.end = p
+		if self.pages.screen_rows[int(p.y)].cells[int(p.x)].has_text() {
 			break
 		}
 	}
-
-	mut start := ?Pin(none)
-	mut end := ?Pin(none)
-	for y in prompt_y .. zone_end_y + 1 {
-		r := self.pages.screen_rows[y]
-		for x, output_cell in r.cells {
-			if output_cell.semantic_content == .prompt || output_cell.semantic_content == .input {
-				if start_pin := start {
-					if end_pin := end {
-						return Selection.init(start_pin, end_pin, false)
-					}
-				}
-				continue
-			}
-			// Empty cells default to output but do not delimit actual output.
-			if output_cell.has_text() {
-				p := Pin{ x: u32(x), y: u32(y) }
-				if start == none {
-					start = p
-				}
-				end = p
-			}
-		}
-	}
-	return Selection.init(start or { return none }, end or { return none }, false)
+	return Selection.init(semantic.start, semantic.end, false)
 }
 
 // Returns a line iterator starting from the given pin.
