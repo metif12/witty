@@ -17,7 +17,7 @@ fn test_command_palette_action_accelerator_from_config_keybind() {
 	assert command.prop_get_action() or { '' } == '<Shift><Ctrl>a'
 
 	command.dispose()
-	cfg.finalize()
+	cfg.unref()
 }
 
 fn test_command_palette_action_without_keybind_is_none() {
@@ -30,7 +30,7 @@ fn test_command_palette_action_without_keybind_is_none() {
 	assert command.prop_get_action() == none
 
 	command.dispose()
-	cfg.finalize()
+	cfg.unref()
 }
 
 fn test_command_palette_action_key_uses_full_action_format() {
@@ -43,7 +43,7 @@ fn test_command_palette_action_key_uses_full_action_format() {
 	assert command.prop_get_action_key() or { '' } == 'text:hello world'
 
 	command.dispose()
-	cfg.finalize()
+	cfg.unref()
 }
 
 fn test_command_palette_filter_matches_title_or_action_key() {
@@ -83,5 +83,5 @@ fn test_command_palette_uses_configured_entries() {
 	assert command.get_action() or { input.Action{} } == input.Action.new(.ignore)
 
 	palette.dispose()
-	cfg.finalize()
+	cfg.unref()
 }

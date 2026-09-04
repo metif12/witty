@@ -14,5 +14,5 @@ fn test_tab_computed_title_uses_config_title_and_bell_features() {
 
 	cfg.get_mut().bell_features.title = false
 	assert tab.computed_title(cfg, 'Terminal Title', none, false, true) == 'Terminal Title'
-	cfg.finalize()
+	cfg.unref()
 }

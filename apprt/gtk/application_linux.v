@@ -195,9 +195,8 @@ mut:
 	// `Private.signal_source`.
 	signal_source ?u32
 
-	// If non-null, we're currently showing a config errors dialog. Mirrors
-	// `Private.config_errors_dialog` (a WeakRef to the dialog).
-	config_errors_dialog WeakRef = weak_ref_empty()
+	// The reusable config errors dialog owned by the application.
+	config_errors_dialog &ConfigErrorsDialog = unsafe { nil }
 
 	// CSS provider for styles derived from configuration. Mirrors
 	// `Private.css_provider`. Out of scope: the actual gtk.CssProvider.
@@ -300,7 +299,7 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 		rt_app: unsafe { rt_app }
 		core_app: unsafe { core_app }
 		config: config
-		config_object: config_new(config.clone())
+		config_object: config_new(config)
 		runtime_bridge: apprt.RuntimeApp{
 			config: config.clone()
 		}
@@ -333,6 +332,7 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 // Normally the GObject finalizer would do this, but applications are never
 // fully unreferenced, so this ensures cleanup happens.
 pub fn (mut self Application) deinit() {
+	self.dispose()
 	self.winproto.deinit()
 	if !isnil(self.global_shortcuts) {
 		mut shortcuts := unsafe { self.global_shortcuts }
@@ -669,7 +669,7 @@ fn (mut self Application) set_config(config configpkg.Config) {
 	self.config = config
 	self.runtime_bridge.config = config.clone()
 	if isnil(self.config_object) {
-		self.config_object = config_new(config.clone())
+		self.config_object = config_new(config)
 	} else {
 		mut object := unsafe { self.config_object }
 		object.replace(config.clone())
@@ -702,12 +702,33 @@ fn (mut self Application) prop_config() {
 // show_config_errors_dialog shows the config errors dialog if the config has
 // diagnostics. Mirrors `Application.showConfigErrorsDialog`.
 fn (mut self Application) show_config_errors_dialog() {
-	// TODO(gtk): ConfigErrorsDialog GObject + WeakRef management are out of
-	// scope. Diagnostics live on the config; the dialog presentation is
-	// stubbed.
-	if self.config.diagnostics.len == 0 {
+	if !isnil(self.config_errors_dialog) {
+		mut dialog := self.config_errors_dialog
+		dialog.set_config(self.config_object)
+		if self.config_object.has_diagnostics() {
+			dialog.present(unsafe { nil })
+		} else {
+			dialog.close()
+		}
 		return
 	}
+	if isnil(self.config_object) || !self.config_object.has_diagnostics() {
+		return
+	}
+
+	mut dialog := config_errors_dialog_new(self.config_object)
+	C.g_signal_connect_data(dialog.dialog.obj, c'reload-config', GCallback(voidptr(application_config_errors_reload_cb)), voidptr(self), unsafe { nil }, 0)
+	self.config_errors_dialog = dialog
+	dialog.present(unsafe { nil })
+}
+
+fn application_config_errors_reload_cb(dialog GObject, data voidptr) {
+	_ = dialog
+	if isnil(data) {
+		return
+	}
+	mut self := unsafe { &Application(data) }
+	self.reload_config(false) or { eprintln('error reloading config: ${err}') }
 }
 
 // --- Libghostty callbacks -------------------------------------------------
@@ -1048,11 +1069,13 @@ fn application_activate_cb(obj GApplication, user_data voidptr) {
 // dispose releases the config errors dialog and signal source. Mirrors the
 // `dispose` vfunc.
 fn (mut self Application) dispose() {
-	if diag := self.config_errors_dialog.get_dialog() {
-		_ = diag
-		// diag.close(); diag.unref()
+	if !isnil(self.config_errors_dialog) {
+		mut diag := self.config_errors_dialog
+		diag.close()
+		diag.dispose()
+		diag.unref()
+		self.config_errors_dialog = unsafe { nil }
 	}
-	self.config_errors_dialog.set(unsafe { nil })
 
 	if v := self.signal_source {
 		if !C.g_source_remove(v) {
@@ -1270,14 +1293,4 @@ fn find_active_window(data voidptr, _ voidptr) int {
 		return 0
 	}
 	return -1
-}
-
-// get_dialog is a WeakRef accessor for the config errors dialog. Provided here
-// so `dispose` can retrieve the (optional) dialog GObject.
-fn (mut self WeakRef) get_dialog() ?GObject {
-	obj := self.get()
-	if isnil(obj) {
-		return none
-	}
-	return obj
 }

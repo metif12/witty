@@ -13,6 +13,8 @@ gtk-toolbar-style = flat
 gtk-titlebar-style = tabs
 gtk-wide-tabs = false')
 	mut cfg := config_new(inner)
+	assert !isnil(cfg.obj)
+	assert config_get_type() != GType(0)
 
 	assert cfg.window_new_tab_position() == .end
 	assert cfg.window_show_tab_bar() == .always
@@ -23,5 +25,5 @@ gtk-wide-tabs = false')
 	assert cfg.gtk_titlebar_style() == .tabs
 	assert !cfg.gtk_wide_tabs()
 
-	cfg.finalize()
+	cfg.unref()
 }

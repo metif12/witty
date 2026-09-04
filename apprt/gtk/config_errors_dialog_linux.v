@@ -19,11 +19,7 @@ module gtk
 // emit) and the config ref/unref ownership (get/set/dispose) — is translated
 // directly.
 //
-// NOTE(config type): ghostty's `config` property is `?*Config` (an object
-// property against `GhosttyConfig`). witty's `Config` (config_class_linux.v) is
-// not yet a registered GObject type, so the property is installed against the
-// base `G_TYPE_OBJECT`; the get/set vfuncs thread the `Config.obj` GObject
-// pointer through `g_value_get/set_object` exactly as ghostty does.
+// The `config` property is typed as GhosttyConfig, matching the pinned class.
 
 // --- GObject class registration -------------------------------------------
 // Hand-expansion of ghostty's `gobject.ext.defineClass` for
@@ -139,16 +135,14 @@ fn config_errors_dialog_class_init(klass voidptr, class_data voidptr) {
 	bytes := C.g_bytes_new_static(config_errors_dialog_ui.str, usize(config_errors_dialog_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
 
-	pspec := C.g_param_spec_object(c'config', c'config', c'The config being shown',
-		C.g_object_get_type(), g_param_readwrite)
+	pspec := C.g_param_spec_object(c'config', c'config', c'The config being shown', config_get_type(), g_param_readwrite)
 	mut obj_class := &C.GObjectClass(klass)
 	obj_class.get_property = voidptr(config_errors_dialog_get_property)
 	obj_class.set_property = voidptr(config_errors_dialog_set_property)
 	obj_class.dispose = voidptr(config_errors_dialog_dispose)
 	C.g_object_class_install_property(klass, config_errors_prop_config, pspec)
 
-	C.g_signal_new(c'reload-config', g_config_errors_dialog_type, g_signal_run_last,
-		0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 0)
+	C.g_signal_new(c'reload-config', g_config_errors_dialog_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 0)
 }
 
 fn config_errors_dialog_instance_init(instance voidptr, klass voidptr) {
@@ -163,15 +157,13 @@ pub fn config_errors_dialog_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size:    u16(query.class_size)
+			class_size: u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init:    voidptr(config_errors_dialog_class_init)
+			class_init: voidptr(config_errors_dialog_class_init)
 			instance_init: voidptr(config_errors_dialog_instance_init)
 		}
-		g_config_errors_dialog_type = C.g_type_register_static(parent, c'GhosttyConfigErrorsDialog',
-			&info, 0)
-		g_config_errors_dialog_priv_offset = C.g_type_add_instance_private(g_config_errors_dialog_type,
-			sizeof(C.GhosttyConfigErrorsDialogPrivate))
+		g_config_errors_dialog_type = C.g_type_register_static(parent, c'GhosttyConfigErrorsDialog', &info, 0)
+		g_config_errors_dialog_priv_offset = C.g_type_add_instance_private(g_config_errors_dialog_type, sizeof(C.GhosttyConfigErrorsDialogPrivate))
 	}
 	return g_config_errors_dialog_type
 }
@@ -192,10 +184,7 @@ mut:
 	config &Config = unsafe { nil }
 
 	// Signal callback. Ghostty emits a GObject `reload-config` signal; modeled
-	// here as an optional V callback.
-	//
-	// TODO(gtk): GObject signal — registered via `gobject.ext.defineSignal` and
-	// emitted with `.impl.emit(...)`.
+	// here as both the native signal and an optional direct V callback.
 	on_reload_config ?fn ()
 }
 
@@ -215,7 +204,17 @@ pub fn config_errors_dialog_new(config &Config) &ConfigErrorsDialog {
 		}
 	}
 	self.set_config(config)
+	C.g_signal_connect_data(obj, c'response', GCallback(voidptr(config_errors_dialog_response_cb)), voidptr(self), unsafe { nil }, 0)
 	return self
+}
+
+fn config_errors_dialog_response_cb(obj GObject, response_id &char, data voidptr) {
+	_ = obj
+	if isnil(response_id) || isnil(data) {
+		return
+	}
+	mut self := unsafe { &ConfigErrorsDialog(data) }
+	self.response(unsafe { cstring_to_vstring(response_id) })
 }
 
 // present shows the dialog. Mirrors `ConfigErrorsDialog.present`.
@@ -273,6 +272,10 @@ fn (mut self ConfigErrorsDialog) set_config(config &Config) {
 	self.config = unsafe { config }
 	if !isnil(self.config) {
 		self.config.ref()
+	}
+	if !isnil(self.dialog.obj) {
+		config_obj := if isnil(config) { GObject(unsafe { nil }) } else { config.obj }
+		C.g_object_set(self.dialog.obj, c'config', config_obj, unsafe { nil })
 	}
 }
 

@@ -23,7 +23,7 @@ fn test_global_shortcuts_refreshes_map_from_config_bindings() {
 	assert shortcuts.action_for_id('CTRL+x') == none
 
 	shortcuts.dispose()
-	cfg.finalize()
+	cfg.unref()
 }
 
 fn test_global_shortcut_action_description_uses_full_action_format() {
