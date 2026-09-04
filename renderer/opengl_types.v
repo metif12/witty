@@ -92,6 +92,16 @@ pub fn (mut self GLBuffer) sync(data []u8) {
 	self.len = u32(data.len)
 }
 
+pub fn (mut self GLBuffer) sync_values[T](values []T) {
+	if values.len == 0 {
+		self.sync([]u8{})
+		return
+	}
+	byte_len := values.len * int($sizeof(T))
+	bytes := unsafe { (&u8(values.data))[..byte_len] }
+	self.sync(bytes)
+}
+
 // ============================================================
 // OpenGL Frame
 // ============================================================
@@ -696,6 +706,184 @@ pub fn (mut self GLTexture) replace_region(x u32, y u32, width u32, height u32, 
 		binding.unbind()
 	}
 	binding.sub_image_2d(0, int(x), int(y), int(width), int(height), gl_texture_format(self.format), .unsigned_byte, ptr) or { return }
+}
+
+// ============================================================
+// OpenGL per-frame resources
+// ============================================================
+
+// GLFrameState owns every OpenGL resource whose contents can change while a
+// frame is being assembled. OpenGL completes synchronously, so its swap chain
+// contains one of these states, matching renderer/opengl/Frame.zig.
+pub struct GLFrameState {
+pub mut:
+	uniforms                 GLBuffer
+	cells                    GLBuffer
+	cells_bg                 GLBuffer
+	bg_image_buffer          GLBuffer
+	grayscale                GLTexture
+	grayscale_modified       u64
+	color                    GLTexture
+	color_modified           u64
+	target                   GLTarget
+	target_config_modified   u64
+	bg_image_buffer_modified u64
+	custom_shader_state      ?GLCustomShaderState
+}
+
+pub fn GLFrameState.init(api &OpenGLAPI, custom_shaders bool) !GLFrameState {
+	mut uniforms := GLBuffer.init(api.uniform_buffer_options(), u32($sizeof(GLUniforms)))!
+	mut cells := GLBuffer.init(api.fg_buffer_options(), u32($sizeof(GLTextCell))) or {
+		uniforms.deinit()
+		return err
+	}
+	mut cells_bg := GLBuffer.init(api.bg_buffer_options(), u32($sizeof(CellBg))) or {
+		cells.deinit()
+		uniforms.deinit()
+		return err
+	}
+	mut bg_image_buffer := GLBuffer.init(api.bg_image_buffer_options(), u32($sizeof(GLBgImageVertex))) or {
+		cells_bg.deinit()
+		cells.deinit()
+		uniforms.deinit()
+		return err
+	}
+	mut grayscale := GLTexture.init(api.atlas_texture_options(.grayscale)!, 1, 1, [
+		u8(0),
+	]) or {
+		bg_image_buffer.deinit()
+		cells_bg.deinit()
+		cells.deinit()
+		uniforms.deinit()
+		return err
+	}
+	mut color := GLTexture.init(api.atlas_texture_options(.bgra)!, 1, 1, [u8(0), 0, 0, 0]) or {
+		grayscale.deinit()
+		bg_image_buffer.deinit()
+		cells_bg.deinit()
+		cells.deinit()
+		uniforms.deinit()
+		return err
+	}
+	mut custom_shader_state := if custom_shaders {
+		GLCustomShaderState.init(api) or {
+			color.deinit()
+			grayscale.deinit()
+			bg_image_buffer.deinit()
+			cells_bg.deinit()
+			cells.deinit()
+			uniforms.deinit()
+			return err
+		}
+	} else {
+		none
+	}
+	mut target := api.init_target(1, 1) or {
+		if mut state := custom_shader_state {
+			state.deinit()
+		}
+		color.deinit()
+		grayscale.deinit()
+		bg_image_buffer.deinit()
+		cells_bg.deinit()
+		cells.deinit()
+		uniforms.deinit()
+		return err
+	}
+	return GLFrameState{
+		uniforms: uniforms
+		cells: cells
+		cells_bg: cells_bg
+		bg_image_buffer: bg_image_buffer
+		grayscale: grayscale
+		color: color
+		target: target
+		custom_shader_state: custom_shader_state
+	}
+}
+
+pub fn (mut self GLFrameState) deinit() {
+	self.target.deinit()
+	self.uniforms.deinit()
+	self.cells.deinit()
+	self.cells_bg.deinit()
+	self.grayscale.deinit()
+	self.color.deinit()
+	self.bg_image_buffer.deinit()
+	if mut state := self.custom_shader_state {
+		state.deinit()
+	}
+	self.custom_shader_state = none
+}
+
+pub fn (mut self GLFrameState) resize_target(api &OpenGLAPI, width u32, height u32) ! {
+	if mut state := self.custom_shader_state {
+		state.resize(api, width, height)!
+		self.custom_shader_state = state
+	}
+	mut target := api.init_target(width, height)!
+	self.target.deinit()
+	self.target = target
+}
+
+// GLCustomShaderState is the ping-pong texture pair and uniforms used by a
+// chain of Shadertoy-compatible post-processing pipelines.
+pub struct GLCustomShaderState {
+pub mut:
+	front_texture GLTexture
+	back_texture  GLTexture
+	sampler       GLSampler
+	uniforms      GLBuffer
+}
+
+pub fn GLCustomShaderState.init(api &OpenGLAPI) !GLCustomShaderState {
+	mut uniforms := GLBuffer.init(api.uniform_buffer_options(), u32($sizeof(CustomShaderUniforms)))!
+	mut front_texture := GLTexture.init(api.texture_options(), 1, 1, none) or {
+		uniforms.deinit()
+		return err
+	}
+	mut back_texture := GLTexture.init(api.texture_options(), 1, 1, none) or {
+		front_texture.deinit()
+		uniforms.deinit()
+		return err
+	}
+	mut sampler := GLSampler.init(api.sampler_options()) or {
+		back_texture.deinit()
+		front_texture.deinit()
+		uniforms.deinit()
+		return err
+	}
+	return GLCustomShaderState{
+		front_texture: front_texture
+		back_texture: back_texture
+		sampler: sampler
+		uniforms: uniforms
+	}
+}
+
+pub fn (mut self GLCustomShaderState) deinit() {
+	self.front_texture.deinit()
+	self.back_texture.deinit()
+	self.sampler.deinit()
+	self.uniforms.deinit()
+}
+
+pub fn (mut self GLCustomShaderState) swap() {
+	front := self.front_texture
+	self.front_texture = self.back_texture
+	self.back_texture = front
+}
+
+pub fn (mut self GLCustomShaderState) resize(api &OpenGLAPI, width u32, height u32) ! {
+	mut front_texture := GLTexture.init(api.texture_options(), width, height, none)!
+	mut back_texture := GLTexture.init(api.texture_options(), width, height, none) or {
+		front_texture.deinit()
+		return err
+	}
+	self.front_texture.deinit()
+	self.back_texture.deinit()
+	self.front_texture = front_texture
+	self.back_texture = back_texture
 }
 
 // ============================================================
