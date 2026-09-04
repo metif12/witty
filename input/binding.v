@@ -1817,7 +1817,7 @@ fn crash_thread_name(value i32) string {
 	return if unsafe { CrashThread(value) } == .main_thread { 'main' } else { enum_name[CrashThread](value) }
 }
 
-fn zig_escape(value string) string {
+pub fn zig_escape(value string) string {
 	mut result := strings.new_builder(value.len)
 	for ch in value.bytes() {
 		if ch == `\\` {

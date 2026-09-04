@@ -52,6 +52,7 @@ pub type GtkSingleSelection = voidptr
 pub type GioListStore = voidptr
 
 fn C.adw_dialog_close(dialog AdwDialog) bool
+
 fn C.gtk_widget_get_realized(widget GtkWidget) bool
 
 // --- CommandDataKind ------------------------------------------------------
@@ -91,7 +92,7 @@ pub mut:
 	jump_surface WeakRef = weak_ref_empty()
 	// Cached lazily-computed jump title/description.
 	jump_title       string
-	jump_description  string
+	jump_description string
 	// A stable sort key for jump commands (the surface pointer in ghostty).
 	sort_key usize
 }
@@ -166,17 +167,11 @@ pub fn (mut self Command) prop_get_action() ?string {
 		return none
 	}
 
-	// TODO(gtk): pull the keybind set off the config and look up the trigger for
-	// this action, i.e. `cfg.keybind.set.getTrigger(action)`. witty's placeholder
-	// Config (window_linux.v) does not yet carry a keybind Set, so we cannot do
-	// the faithful lookup. The structure is preserved: once the config exposes a
-	// keybind Set, restore the two lines below.
-	//
-	//   trigger := cfg.keybind_set().get_trigger(self.command.action) or { return none }
-	//   accel := accel_from_trigger(trigger) or { return none }
-	//   self.action_str = accel
-	//   return self.action_str
-	return none
+	cfg := self.config.get()
+	trigger := cfg.keybind.set.get_trigger(self.command.action) or { return none }
+	accel := accel_from_trigger(trigger) or { return none }
+	self.action_str = accel
+	return self.action_str
 }
 
 // prop_get_title returns the display title. For jump commands this is
@@ -346,12 +341,8 @@ pub fn (mut self CommandPalette) prop_config() {
 // `command-palette-entry`, filtering out actions unsupported on GTK. Mirrors
 // `collectRegularCommands`.
 fn (mut self CommandPalette) collect_regular_commands() {
-	// TODO(gtk): iterate `cfg.@"command-palette-entry".value.items`. witty's
-	// placeholder Config (window_linux.v) does not yet carry a
-	// command-palette-entry list, so we fall back to the built-in default
-	// command set (input.command_defaults), applying the same GTK-support
-	// filter. When the config field lands, iterate it instead.
-	for command in input.command_defaults {
+	cfg := self.config.get()
+	for command in cfg.command_palette_entry.items {
 		if !is_action_supported_on_gtk(command.action) {
 			continue
 		}
@@ -373,8 +364,7 @@ fn (mut self CommandPalette) collect_jump_commands() {
 // implemented on GTK. Mirrors `isActionSupportedOnGtk`.
 fn is_action_supported_on_gtk(action input.Action) bool {
 	return match action.tag {
-		.close_all_windows, .toggle_secure_input, .check_for_updates, .redo, .undo,
-		.reset_window_size, .toggle_window_float_on_top {
+		.close_all_windows, .toggle_secure_input, .check_for_updates, .redo, .undo, .reset_window_size, .toggle_window_float_on_top {
 			false
 		}
 		else {

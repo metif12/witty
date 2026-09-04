@@ -1,6 +1,7 @@
 module configpkg
 
 import terminal
+import input
 
 // Generated from the documentation comments in the pinned Ghostty
 // config/Config.zig. Records are separated by ASCII record separators so the
@@ -280,6 +281,7 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	])
 	add_group(mut result, 'config-file', repeat_paths(c.config_file))
 	add_group(mut result, 'keybind', keybind_values(c.keybind))
+	add_group(mut result, 'command-palette-entry', command_palette_entry_strings(c.command_palette_entry))
 	add_group(mut result, 'key-remap', c.key_remap.format_entry())
 	add_group(mut result, 'osc-color-report-format', [
 		osc_color_report_format_string(c.osc_color_report_format),
@@ -388,6 +390,22 @@ fn optional_command_string(value ?Command) string {
 		}
 	}
 	return ''
+}
+
+fn command_palette_entry_strings(value RepeatableCommand) []string {
+	if value.items.len == 0 {
+		return ['']
+	}
+	mut result := []string{cap: value.items.len}
+	for item in value.items {
+		mut entry := 'title:"${input.zig_escape(item.title)}"'
+		if item.description.len > 0 {
+			entry += ',description:"${input.zig_escape(item.description)}"'
+		}
+		entry += ',action:"${item.action.format()}"'
+		result << entry
+	}
+	return result
 }
 
 fn env_strings(value RepeatableStringMap) []string {

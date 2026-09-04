@@ -414,7 +414,7 @@ fn enum_value_suffix[T](_ T) string {
 	return ', valid values are: ${names.join(', ')}'
 }
 
-fn decode_quoted_value(value string) !string {
+pub fn decode_quoted_value(value string) !string {
 	if value.len < 2 || value[0] != `"` || value[value.len - 1] != `"` {
 		return error('invalid value')
 	}

@@ -624,6 +624,53 @@ fn test_background_blur_cval() {
 	assert BackgroundBlur{ kind: .macos_glass_clear }.cval() == -2
 }
 
+fn test_repeatable_command_parse_clear_clone_and_format() {
+	mut defaults := Config.default_config()
+	assert defaults.command_palette_entry.items.len == input.command_defaults.len
+	defaults.load_string('command-palette-entry =\ncommand-palette-entry = title:Only,action:ignore\n')
+	assert defaults.command_palette_entry.items.len == 1
+	assert defaults.command_palette_entry.items[0].title == 'Only'
+
+	mut commands := RepeatableCommand{}
+	commands.parse_cli('title:Foo,action:ignore')!
+	commands.parse_cli('title:"Bar, Baz",description:"line\\ntext",action:"text:hello, world"')!
+	assert commands.items.len == 2
+	assert commands.items[0].title == 'Foo'
+	assert commands.items[0].action.tag == .ignore
+	assert commands.items[1].title == 'Bar, Baz'
+	assert commands.items[1].description == 'line\ntext'
+	assert commands.items[1].action.tag == .text
+	assert commands.items[1].action.str_param == 'hello, world'
+
+	clone := commands.clone()
+	assert clone.equal(commands)
+
+	mut cfg := Config{}
+	cfg.command_palette_entry = commands
+	formatted := cfg.format_config(false)
+	assert formatted.contains('command-palette-entry = title:"Foo",action:"ignore"\n')
+	assert formatted.contains('command-palette-entry = title:"Bar, Baz",description:"line\\ntext",action:"text:hello, world"\n')
+
+	mut roundtrip := Config{}
+	roundtrip.load_string(formatted)
+	assert roundtrip.command_palette_entry.equal(cfg.command_palette_entry)
+
+	commands.parse_cli('')!
+	assert commands.items.len == 0
+}
+
+fn test_repeatable_command_rejects_missing_and_invalid_fields() {
+	mut commands := RepeatableCommand{}
+	commands.parse_cli('title:Foo') or {
+		commands.parse_cli('action:ignore') or {
+			commands.parse_cli('title:Foo,unknown:x,action:ignore') or {
+				commands.parse_cli('title:Foo,action:not_an_action') or { return }
+			}
+		}
+	}
+	assert false, 'expected invalid command palette entries'
+}
+
 // --- WindowDecoration ---
 
 // Config.zig: WindowDecoration "parse WindowDecoration"

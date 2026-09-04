@@ -6,6 +6,7 @@ import terminal
 import encoding.utf8.validate
 import strconv
 import themepkg
+import cli_args
 
 // --- Original Ghostty Comments Start: src/config/Config.zig
 //
@@ -4026,6 +4027,8 @@ pub mut:
 	// `keybind` handler in `apply_kv` for the full syntax. Backed by an
 	// `input.Set` (root bindings) plus named key tables.
 	keybind Keybinds
+	// Custom and built-in commands exposed by application command palettes.
+	command_palette_entry RepeatableCommand
 	// One-way physical modifier remappings applied before keybinding lookup
 	// and terminal input encoding.
 	key_remap inputpkg.RemapSet
@@ -4810,6 +4813,7 @@ pub fn (c Config) clone() Config {
 	}
 	copy.diagnostics = c.diagnostics.clone()
 	copy.keybind = c.keybind.clone()
+	copy.command_palette_entry = c.command_palette_entry.clone()
 	copy.key_remap = c.key_remap.clone()
 	copy.selection_word_chars = c.selection_word_chars.clone()
 	copy.clipboard_codepoint_map = c.clipboard_codepoint_map.clone()
@@ -4994,6 +4998,88 @@ pub fn (mut p RepeatablePath) parse_cli(input ?string) ! {
 	if parsed.path.len > 0 {
 		p.items << parsed
 	}
+}
+
+// RepeatableCommand is the configured list of command-palette entries.
+pub struct RepeatableCommand {
+pub mut:
+	items []inputpkg.Command
+}
+
+// init installs Ghostty's built-in command palette entries.
+pub fn (mut r RepeatableCommand) init() {
+	r.items = inputpkg.command_defaults.map(it.clone())
+}
+
+// parse_cli appends a title/action/description record. An empty value clears
+// the complete list, matching repeatable configuration semantics.
+pub fn (mut r RepeatableCommand) parse_cli(input string) ! {
+	if input.len == 0 {
+		r.items.clear()
+		return
+	}
+
+	mut title := ''
+	mut description := ''
+	mut action_text := ''
+	mut has_title := false
+	mut has_action := false
+	mut splitter := cli_args.CommaSplitter.new(input)
+	for splitter.has_next() {
+		entry := splitter.next() or { return error('invalid value') }
+		colon := entry.index_u8(`:`)
+		if colon < 0 {
+			return error('invalid value')
+		}
+		key := entry[..colon].trim_space()
+		mut value := entry[colon + 1..].trim_space()
+		if value.len >= 2 && value[0] == `"` && value[value.len - 1] == `"` {
+			value = cli_args.decode_quoted_value(value) or { return error('invalid value') }
+		}
+		match key {
+			'title' {
+				title = value
+				has_title = true
+			}
+			'description' {
+				description = value
+			}
+			'action' {
+				action_text = value
+				has_action = true
+			}
+			else {
+				return error('invalid value')
+			}
+		}
+	}
+	if !has_title || !has_action {
+		return error('invalid value')
+	}
+	action := inputpkg.Action.parse(action_text) or { return error('invalid value') }
+	r.items << inputpkg.Command{
+		action: action
+		title: title
+		description: description
+	}
+}
+
+pub fn (r RepeatableCommand) clone() RepeatableCommand {
+	return RepeatableCommand{
+		items: r.items.map(it.clone())
+	}
+}
+
+pub fn (r RepeatableCommand) equal(other RepeatableCommand) bool {
+	if r.items.len != other.items.len {
+		return false
+	}
+	for i, item in r.items {
+		if !item.equal(other.items[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // Path represents a config file path.
@@ -6151,6 +6237,13 @@ fn (mut c Config) apply_kv(key string, value string) {
 				}
 			}
 		}
+		'command-palette-entry' {
+			c.command_palette_entry.parse_cli(value) or {
+				c.diagnostics << Diagnostic{
+					message: 'invalid command-palette-entry "${value}": ${err.msg()}'
+				}
+			}
+		}
 		'key-remap' {
 			c.key_remap.parse_cli(value) or {
 				c.diagnostics << Diagnostic{
@@ -7272,6 +7365,7 @@ pub fn Config.default_config() Config {
 		result.copy_on_select = .false_
 	}
 	result.keybind.init()
+	result.command_palette_entry.init()
 	result.selection_word_chars = SelectionWordChars.defaults()
 	result.link = LinkConfig{
 		links: LinkList{
