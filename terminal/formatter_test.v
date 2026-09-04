@@ -35,6 +35,30 @@ fn set_cell(mut pages Pages, row int, col int, cp u32) {
 	}
 }
 
+fn set_page_list_line(mut list PageList, row u16, text string) {
+	for x, cp in text.runes() {
+		if x >= int(list.cols) {
+			break
+		}
+		pin := list.get_pin(.screen, u16(x), row) or { break }
+		mut page_row := &pin.node.data.rows[int(pin.y)]
+		page_row.cells[int(pin.x)] = CellData.init(u32(cp))
+	}
+}
+
+fn append_formatter_page(mut list PageList, rows u16) &PageNode {
+	first := list.pages.first or { panic('expected first page') }
+	mut node := &PageNode{
+		data: Page.init(first.data.capacity)
+		serial: list.page_serial
+	}
+	list.page_serial++
+	node.data.size.rows = rows
+	list.pages.append(node)
+	list.total_rows += usize(rows)
+	return node
+}
+
 // ============================================================
 // Page plain single line
 // ============================================================
@@ -943,6 +967,37 @@ fn test_terminal_vt_scrolling_region() ! {
 	assert output.contains('\x1b[6;21r'), 'should contain DECSTBM with 1-indexed values'
 }
 
+// Terminal VT with modes preserves every non-default ANSI/DEC mode through a
+// formatter round trip.
+fn test_terminal_vt_modes() ! {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 })!
+	mut stream := ReadonlyStream.init(mut t)
+	defer {
+		stream.deinit()
+	}
+	stream.next_slice('\x1b[?2004h\x1b[?1000h\x1b[?7lhello')!
+
+	mut formatter := TerminalFormatter.init(&t, format_vt)
+	formatter.extra = TerminalExtra{
+		modes: true
+		screen: screen_extra_none
+	}
+	output := formatter.format()
+	assert output.contains('\x1b[?2004h')
+	assert output.contains('\x1b[?1000h')
+	assert output.contains('\x1b[?7l')
+
+	mut restored := Terminal.init(Options{ cols: 80, rows: 24 })!
+	mut restored_stream := ReadonlyStream.init(mut restored)
+	defer {
+		restored_stream.deinit()
+	}
+	restored_stream.next_slice(output)!
+	assert restored.modes.get(.bracketed_paste) == t.modes.get(.bracketed_paste)
+	assert restored.modes.get(.mouse_event_normal) == t.modes.get(.mouse_event_normal)
+	assert restored.modes.get(.wraparound) == t.modes.get(.wraparound)
+}
+
 // ============================================================
 // Terminal VT with keyboard modes
 // ============================================================
@@ -1432,6 +1487,250 @@ fn test_page_list_plain_spanning_two_pages_with_pin_map() {
 		assert pins.pins[i].x == i - 4
 		assert pins.pins[i].y == 0
 	}
+}
+
+fn test_page_list_plain_single_line_with_pin_map() {
+	mut list := PageList.init(16, 1, none)
+	defer {
+		list.deinit()
+	}
+	set_page_list_line(mut list, 0, 'hello, world')
+
+	mut pins := PagePinMap{}
+	mut formatter := PageListFormatter.init(&list, format_plain)
+	formatter.pin_map = &pins
+	output := formatter.format()
+	assert output == 'hello, world'
+	assert pins.pins.len == output.len
+	first := list.pages.first or {
+		assert false
+		return
+	}
+	for i, pin in pins.pins {
+		assert voidptr(pin.node) == voidptr(first)
+		assert pin.x == i
+		assert pin.y == 0
+	}
+}
+
+fn test_page_list_soft_wrap_spanning_pages() {
+	mut list := PageList.init(10, 1, none)
+	defer {
+		list.deinit()
+	}
+	mut first := list.pages.first or {
+		assert false
+		return
+	}
+	mut second := append_formatter_page(mut list, 1)
+	set_page_list_line(mut list, 0, 'hello worl')
+	first.data.rows[0].wrap = true
+	second.data.rows[0].wrap_continuation = true
+	for i, cp in 'd test'.runes() {
+		second.data.rows[0].cells[i] = CellData.init(u32(cp))
+	}
+
+	mut pins := PagePinMap{}
+	mut formatter := PageListFormatter.init(&list, format_plain)
+	formatter.pin_map = &pins
+	output := formatter.format()
+	assert output == 'hello worl\nd test'
+	assert pins.pins.len == output.len
+	for i in 0 .. 10 {
+		assert voidptr(pins.pins[i].node) == voidptr(first)
+	}
+	assert voidptr(pins.pins[10].node) == voidptr(second)
+	for i in 11 .. output.len {
+		assert voidptr(pins.pins[i].node) == voidptr(second)
+	}
+
+	pins.pins.clear()
+	mut unwrapped := PageListFormatter.init(&list, FormatOptions{
+		emit: .plain
+		unwrap: true
+	})
+	unwrapped.pin_map = &pins
+	output_unwrapped := unwrapped.format()
+	assert output_unwrapped == 'hello world test'
+	assert pins.pins.len == output_unwrapped.len
+	for i in 0 .. 10 {
+		assert voidptr(pins.pins[i].node) == voidptr(first)
+	}
+	for i in 10 .. output_unwrapped.len {
+		assert voidptr(pins.pins[i].node) == voidptr(second)
+	}
+}
+
+fn test_page_list_plain_x_bounds_single_page() {
+	mut list := PageList.init(16, 3, none)
+	defer {
+		list.deinit()
+	}
+	set_page_list_line(mut list, 0, 'hello world')
+	set_page_list_line(mut list, 1, 'test case')
+	set_page_list_line(mut list, 2, 'foo bar')
+	first := list.pages.first or {
+		assert false
+		return
+	}
+
+	mut pins := PagePinMap{}
+	mut formatter := PageListFormatter.init(&list, format_plain)
+	formatter.top_left = PagePin{
+		node: first
+		y: 0
+		x: 6
+	}
+	formatter.bottom_right = PagePin{
+		node: first
+		y: 2
+		x: 2
+	}
+	formatter.pin_map = &pins
+	output := formatter.format()
+	assert output == 'world\ntest case\nfoo'
+	assert pins.pins.len == output.len
+	for i in 0 .. 5 {
+		assert pins.pins[i].x == 6 + i
+		assert pins.pins[i].y == 0
+	}
+}
+
+fn test_page_list_plain_x_bounds_spanning_pages() {
+	mut list := PageList.init(16, 1, none)
+	defer {
+		list.deinit()
+	}
+	first := list.pages.first or {
+		assert false
+		return
+	}
+	mut second := append_formatter_page(mut list, 1)
+	set_page_list_line(mut list, 0, 'hello world')
+	for i, cp in 'foo bar test'.runes() {
+		second.data.rows[0].cells[i] = CellData.init(u32(cp))
+	}
+
+	mut pins := PagePinMap{}
+	mut formatter := PageListFormatter.init(&list, format_plain)
+	formatter.top_left = PagePin{
+		node: first
+		y: 0
+		x: 6
+	}
+	formatter.bottom_right = PagePin{
+		node: second
+		y: 0
+		x: 2
+	}
+	formatter.pin_map = &pins
+	output := formatter.format()
+	assert output == 'world\nfoo'
+	assert pins.pins.len == output.len
+	for i in 0 .. 5 {
+		assert voidptr(pins.pins[i].node) == voidptr(first)
+		assert pins.pins[i].x == 6 + i
+	}
+	assert voidptr(pins.pins[5].node) == voidptr(second)
+	for i in 0 .. 3 {
+		assert voidptr(pins.pins[6 + i].node) == voidptr(second)
+		assert pins.pins[6 + i].x == i
+	}
+}
+
+fn test_page_list_plain_start_or_end_x_only() {
+	mut list := PageList.init(16, 2, none)
+	defer {
+		list.deinit()
+	}
+	set_page_list_line(mut list, 0, 'hello world')
+	set_page_list_line(mut list, 1, 'test')
+	first := list.pages.first or {
+		assert false
+		return
+	}
+
+	mut start := PageListFormatter.init(&list, format_plain)
+	start.top_left = PagePin{
+		node: first
+		y: 0
+		x: 6
+	}
+	assert start.format() == 'world\ntest'
+
+	mut end := PageListFormatter.init(&list, format_plain)
+	end.bottom_right = PagePin{
+		node: first
+		y: 1
+		x: 2
+	}
+	assert end.format() == 'hello world\ntes'
+}
+
+fn test_page_list_plain_rectangles() {
+	mut list := PageList.init(30, 8, none)
+	defer {
+		list.deinit()
+	}
+	lines := [
+		'Lorem ipsum dolor',
+		'sit amet, consectetur',
+		'adipiscing elit, sed do',
+		'eiusmod tempor incididunt',
+		'ut labore et dolore',
+		'',
+		'magna aliqua. Ut enim',
+		'ad minim veniam, quis',
+	]
+	for y, line in lines {
+		set_page_list_line(mut list, u16(y), line)
+	}
+	first := list.pages.first or {
+		assert false
+		return
+	}
+
+	mut basic := PageListFormatter.init(&list, format_plain)
+	basic.top_left = PagePin{
+		node: first
+		y: 1
+		x: 2
+	}
+	basic.bottom_right = PagePin{
+		node: first
+		y: 3
+		x: 6
+	}
+	basic.rectangle = true
+	assert basic.format() == 't ame\nipisc\nusmod'
+
+	mut eol := PageListFormatter.init(&list, format_plain)
+	eol.top_left = PagePin{
+		node: first
+		y: 0
+		x: 12
+	}
+	eol.bottom_right = PagePin{
+		node: first
+		y: 4
+		x: 26
+	}
+	eol.rectangle = true
+	assert eol.format() == 'dolor\nnsectetur\nlit, sed do\nor incididunt\n dolore'
+
+	mut breaks := PageListFormatter.init(&list, format_plain)
+	breaks.top_left = PagePin{
+		node: first
+		y: 2
+		x: 11
+	}
+	breaks.bottom_right = PagePin{
+		node: first
+		y: 7
+		x: 26
+	}
+	breaks.rectangle = true
+	assert breaks.format() == 'elit, sed do\npor incididunt\nt dolore\n\na. Ut enim\nniam, quis'
 }
 
 fn test_page_list_vt_uses_each_pages_style_table() {
