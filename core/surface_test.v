@@ -717,6 +717,21 @@ fn test_selection_scroll_tick_no_click() ! {
 	surf.selection_scroll_tick()!
 }
 
+fn test_selection_scroll_stops_after_screen_switch() ! {
+	mut runtime := RuntimeSurface{}
+	mut surf := make_test_surface()
+	surf.rt_surface = &runtime
+	surf.selection_scroll_active = true
+	surf.mouse.left_click_count = 1
+	surf.mouse.left_click_screen = .primary
+	surf.renderer_state.terminal_.switch_screen(.alternate)!
+
+	surf.selection_scroll_tick()!
+	assert surf.io.messages.len == 1
+	assert surf.io.messages[0].kind == .selection_scroll
+	assert !surf.io.messages[0].flag
+}
+
 fn test_complete_clipboard_paste_empty() ! {
 	mut surf := Surface{}
 	// Empty data should return immediately

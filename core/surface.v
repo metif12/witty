@@ -1646,6 +1646,9 @@ pub mut:
 
 	// Pin at which the left mouse click happened.
 	left_click_pin ?Pin
+	// Screen that owns left_click_pin. Selection scrolling stops if the active
+	// screen changes while a drag is in progress.
+	left_click_screen terminal.ScreenKey
 
 	// Starting xpos/ypos of the left click.
 	left_click_xpos f64
@@ -3578,9 +3581,18 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 	}
 
 	// Check if KAM (keyboard action mode) is enabled
-	if self.config.vt_kam_allowed
-		&& self.renderer_state.terminal_.modes.get(.disable_keyboard) {
-		return .consumed
+	if self.config.vt_kam_allowed {
+		locked := self.renderer_state.mutex != unsafe { nil }
+		if locked {
+			self.renderer_state.mutex.lock()
+		}
+		disabled := self.renderer_state.terminal_.modes.get(.disable_keyboard)
+		if locked {
+			self.renderer_state.mutex.unlock()
+		}
+		if disabled {
+			return .consumed
+		}
 	}
 
 	// Hide mouse on typing if configured
@@ -3626,13 +3638,35 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 
 	// For non-modifier keys: clear selection and scroll to bottom
 	if !key_is_modifier(event.key) {
+		locked := self.renderer_state.mutex != unsafe { nil }
+		if locked {
+			self.renderer_state.mutex.lock()
+		}
 		if self.config.selection_clear_on_typing || event.key == .escape {
-			self.set_selection(none)!
+			self.set_selection(none) or {
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
+				return err
+			}
 		}
 		if self.config.scroll_to_bottom_keystroke {
-			self.scroll_to_bottom()!
+			self.renderer_state.terminal_.scroll_viewport(.bottom, 0) or {
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
+				return err
+			}
 		}
-		self.queue_render()!
+		self.queue_render() or {
+			if locked {
+				self.renderer_state.mutex.unlock()
+			}
+			return err
+		}
+		if locked {
+			self.renderer_state.mutex.unlock()
+		}
 	}
 
 	return .consumed
@@ -3676,7 +3710,14 @@ pub fn (mut self Surface) focus_callback(focused bool) ! {
 	}
 
 	// Update terminal focus flag
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
 	self.renderer_state.terminal_.flags.focused = focused
+	if locked {
+		self.renderer_state.mutex.unlock()
+	}
 
 	// Notify IO thread
 	self.queue_io(IOMessage{ kind: .focused, flag: focused })
@@ -3731,51 +3772,63 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, precision bool) ! 
 		}
 	}
 
-	if self.is_mouse_reporting() {
-		self.set_selection(none)!
-	}
+	{
+		locked := self.renderer_state.mutex != unsafe { nil }
+		if locked {
+			self.renderer_state.mutex.lock()
+		}
+		defer {
+			if locked {
+				self.renderer_state.mutex.unlock()
+			}
+		}
 
-	mut t := self.renderer_state.terminal_
-	if t.screens.active_key == .alternate && t.flags.mouse_event == .none
-		&& t.modes.get(.mouse_alternate_scroll) {
-		if y.delta != 0 {
+		if self.is_mouse_reporting() {
 			self.set_selection(none)!
-			seq := if t.modes.get(.cursor_keys) {
-				if y.direction() == .up_right { '\x1bOA' } else { '\x1bOB' }
-			} else {
-				if y.direction() == .up_right { '\x1b[A' } else { '\x1b[B' }
+		}
+
+		mut t := self.renderer_state.terminal_
+		if t.screens.active_key == .alternate && t.flags.mouse_event == .none
+			&& t.modes.get(.mouse_alternate_scroll) {
+			if y.delta != 0 {
+				self.set_selection(none)!
+				seq := if t.modes.get(.cursor_keys) {
+					if y.direction() == .up_right { '\x1bOA' } else { '\x1bOB' }
+				} else {
+					if y.direction() == .up_right { '\x1b[A' } else { '\x1b[B' }
+				}
+				for _ in 0 .. int(y.magnitude()) {
+					self.queue_io(IOMessage{ kind: .write_stable, data: seq.bytes() })
+				}
 			}
+			return
+		}
+
+		if self.is_mouse_reporting() {
 			for _ in 0 .. int(y.magnitude()) {
-				self.queue_io(IOMessage{ kind: .write_stable, data: seq.bytes() })
+				pos := self.rt_surface.get_cursor_pos()!
+				button := if y.direction() == .up_right {
+					input.MouseButton.four
+				} else {
+					input.MouseButton.five
+				}
+				self.mouse_report(button, .press, self.mouse.mods, pos)!
 			}
+			for _ in 0 .. int(x.magnitude()) {
+				pos := self.rt_surface.get_cursor_pos()!
+				button := if x.direction() == .up_right {
+					input.MouseButton.six
+				} else {
+					input.MouseButton.seven
+				}
+				self.mouse_report(button, .press, self.mouse.mods, pos)!
+			}
+			return
 		}
-		return
-	}
 
-	if self.is_mouse_reporting() {
-		for _ in 0 .. int(y.magnitude()) {
-			pos := self.rt_surface.get_cursor_pos()!
-			button := if y.direction() == .up_right {
-				input.MouseButton.four
-			} else {
-				input.MouseButton.five
-			}
-			self.mouse_report(button, .press, self.mouse.mods, pos)!
+		if y.delta != 0 {
+			t.scroll_viewport(.delta, int(-y.delta))!
 		}
-		for _ in 0 .. int(x.magnitude()) {
-			pos := self.rt_surface.get_cursor_pos()!
-			button := if x.direction() == .up_right {
-				input.MouseButton.six
-			} else {
-				input.MouseButton.seven
-			}
-			self.mouse_report(button, .press, self.mouse.mods, pos)!
-		}
-		return
-	}
-
-	if y.delta != 0 {
-		t.scroll_viewport(.delta, int(-y.delta))!
 	}
 	self.queue_render()!
 }
@@ -3988,6 +4041,7 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 
 			// Store our click state.
 			self.mouse.left_click_pin = pin
+			self.mouse.left_click_screen = self.renderer_state.terminal_.screens.active_key
 			self.mouse.left_click_xpos = pos.x
 			self.mouse.left_click_ypos = pos.y
 
@@ -5463,6 +5517,10 @@ fn (mut self Surface) child_exited_handler(runtime_ms u32, exit_code u32) {
 		false
 	}
 	if !shown {
+		locked := self.renderer_state.mutex != unsafe { nil }
+		if locked {
+			self.renderer_state.mutex.lock()
+		}
 		mut t := self.renderer_state.terminal_
 		if !isnil(t) {
 			t.carriage_return()
@@ -5471,6 +5529,9 @@ fn (mut self Surface) child_exited_handler(runtime_ms u32, exit_code u32) {
 			t.modes.set(.cursor_visible, false)
 			t.modes.set(.disable_keyboard, false)
 			t.screens.active.kitty_keyboard.set(.set_, 0)
+		}
+		if locked {
+			self.renderer_state.mutex.unlock()
 		}
 	}
 
@@ -5482,6 +5543,15 @@ fn (mut self Surface) child_exited_handler(runtime_ms u32, exit_code u32) {
 // child_exited_abnormally writes Ghostty's detailed launch-failure report into
 // the terminal when the application runtime cannot show a native banner.
 fn (mut self Surface) child_exited_abnormally(info apprt.ChildExited) ! {
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
+	defer {
+		if locked {
+			self.renderer_state.mutex.unlock()
+		}
+	}
 	mut t := self.renderer_state.terminal_
 	if isnil(t) {
 		return
@@ -5532,11 +5602,21 @@ fn (mut self Surface) child_exited_abnormally(info apprt.ChildExited) ! {
 }
 
 fn (mut self Surface) password_input(v bool) ! {
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
 	// Check if state actually changed
 	if self.renderer_state.terminal_.flags.password_input == v {
+		if locked {
+			self.renderer_state.mutex.unlock()
+		}
 		return
 	}
 	self.renderer_state.terminal_.flags.password_input = v
+	if locked {
+		self.renderer_state.mutex.unlock()
+	}
 
 	// Notify runtime for secure input handling (e.g. macOS SecureInput)
 	self.rt_app.perform_action(AppAction{
@@ -5764,6 +5844,15 @@ fn (mut self Surface) handle_binding_entry(event KeyEvent, entry &input.SetEntry
 }
 
 fn (mut self Surface) encode_key(event KeyEvent) ?WriteReq {
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
+	defer {
+		if locked {
+			self.renderer_state.mutex.unlock()
+		}
+	}
 	t := self.renderer_state.terminal_
 	flags := t.screens.active.kitty_keyboard.current()
 	option_as_alt := self.config.macos_option_as_alt or {
@@ -5804,6 +5893,23 @@ fn (mut self Surface) selection_scroll_tick() ! {
 	pos := self.rt_surface.get_cursor_pos()!
 	pos_vp := self.pos_to_viewport(pos.x, pos.y)
 	delta := if pos.y < 0 { i32(-1) } else { i32(1) }
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
+	defer {
+		if locked {
+			self.renderer_state.mutex.unlock()
+		}
+	}
+
+	// A stored click pin belongs to the screen it was created for. Stop the
+	// selection-scroll loop if an application switched primary/alternate
+	// screens during the drag.
+	if self.mouse.left_click_screen != self.renderer_state.terminal_.screens.active_key {
+		self.queue_io(IOMessage{ kind: .selection_scroll, flag: false })
+		return
+	}
 
 	// Scroll the viewport
 	self.renderer_state.terminal_.scroll_viewport(.delta, int(delta))!
@@ -5877,6 +5983,10 @@ fn (self &Surface) osc8_uri(pin Pin) ?string {
 }
 
 fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen WriteScreenAction) ! {
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
 	screen := self.renderer_state.terminal_.screens.active
 	pages := &screen.pages
 	sel := match loc {
@@ -5884,16 +5994,32 @@ fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen WriteSc
 			// We do not support this for alternate screens because they
 			// don't have scrollback anyways.
 			if self.renderer_state.terminal_.screens.active_key == .alternate {
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
 				return
 			}
-			terminal.Selection.init(pages.get_top_left(.history), pages.get_bottom_right(.history) or { return }, false)
+			terminal.Selection.init(pages.get_top_left(.history), pages.get_bottom_right(.history) or {
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
+				return
+			}, false)
 		}
 		.screen {
-			terminal.Selection.init(pages.get_top_left(.screen), pages.get_bottom_right(.screen) or { return }, false)
+			terminal.Selection.init(pages.get_top_left(.screen), pages.get_bottom_right(.screen) or {
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
+				return
+			}, false)
 		}
 		.selection {
 			self.renderer_state.terminal_.screens.active.selection or {
 				// If we have no selection we have no data, do nothing.
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
 				return
 			}
 		}
@@ -5923,6 +6049,9 @@ fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen WriteSc
 		sel: sel.ordered(screen, .forward)
 	})
 	content := formatter.format()
+	if locked {
+		self.renderer_state.mutex.unlock()
+	}
 	os.write_file(tmp_path, content)!
 
 	// Act on the written file per the action.
@@ -5948,6 +6077,10 @@ fn (mut self Surface) complete_clipboard_paste(data string, allow_unsafe bool) !
 		return
 	}
 
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
 	bracketed := self.renderer_state.terminal_.modes.get(.bracketed_paste)
 	if self.config.clipboard_paste_protection && !allow_unsafe {
 		unsafe_paste := if bracketed {
@@ -5957,12 +6090,23 @@ fn (mut self Surface) complete_clipboard_paste(data string, allow_unsafe bool) !
 			!input.paste_is_safe(data)
 		}
 		if unsafe_paste {
+			if locked {
+				self.renderer_state.mutex.unlock()
+			}
 			return error('UnsafePaste')
 		}
 	}
 
 	// Scroll to bottom before pasting
-	self.scroll_to_bottom()!
+	self.scroll_to_bottom() or {
+		if locked {
+			self.renderer_state.mutex.unlock()
+		}
+		return err
+	}
+	if locked {
+		self.renderer_state.mutex.unlock()
+	}
 
 	paste_opts := input.PasteOptions{
 		bracketed: bracketed
