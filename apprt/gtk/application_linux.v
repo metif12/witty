@@ -487,20 +487,61 @@ pub fn (mut self Application) quit() {
 	}
 
 	// If the core app doesn't need to confirm quit, exit immediately.
-	// TODO(gtk): core_app.needsConfirmQuit() — needs the real CoreApp. We
-	// assume no confirmation is required (the common case).
+	if isnil(self.core_app) || !self.core_app.needs_confirm_quit() {
+		self.quit_now()
+		return
+	}
+
+	// Parent the prompt to the active application window when one exists.
+	parent := self.active_window()
+	mut dialog := close_confirmation_dialog_new(.app)
+	C.g_signal_connect_data(dialog.dialog.obj, c'close-request', GCallback(voidptr(application_close_confirmed_cb)), voidptr(self), unsafe { nil }, 0)
+	dialog.present(GtkWidget(parent))
+}
+
+fn application_close_confirmed_cb(dialog GObject, user_data voidptr) {
+	_ = dialog
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Application(user_data) }
 	self.quit_now()
+}
+
+// active_window returns the active window owned by this GtkApplication, or
+// nil when none is focused.
+fn (self &Application) active_window() GtkWindow {
+	if isnil(self.obj) {
+		return unsafe { nil }
+	}
+	windows := C.gtk_application_get_windows(GtkApplication(self.obj))
+	for i in u32(0) .. list_length(windows) {
+		window := GtkWindow(list_data_at(windows, i))
+		if !isnil(window) && C.gtk_window_is_active(window) != 0 {
+			return window
+		}
+	}
+	return unsafe { nil }
 }
 
 // quit_now destroys all our windows and triggers the run loop exit. Mirrors
 // `Application.quitNow`.
 fn (mut self Application) quit_now() {
-	// Get all our windows and destroy them, forcing them to free. We only
-	// destroy OUR windows (they own everything else) so shutdown cascades.
-	list := C.gtk_window_list_toplevels()
-	// TODO(gtk): iterate the toplevel list and destroy each Window GObject via
-	// `gtk_window_destroy`; the GObject `Window` type check is out of scope.
-	_ = list
+	// GtkApplication's window list contains only our windows, unlike the global
+	// GTK toplevel list which may include nested IME/fcitx windows we do not own.
+	if !isnil(self.obj) {
+		windows := C.gtk_application_get_windows(GtkApplication(self.obj))
+		mut owned := []GtkWindow{cap: int(list_length(windows))}
+		for i in u32(0) .. list_length(windows) {
+			window := GtkWindow(list_data_at(windows, i))
+			if !isnil(window) {
+				owned << window
+			}
+		}
+		for window in owned {
+			C.gtk_window_destroy(window)
+		}
+	}
 
 	// Trigger our runloop exit.
 	self.running = false

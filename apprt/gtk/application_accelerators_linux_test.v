@@ -126,3 +126,11 @@ fn test_application_dispatches_core_runtime_actions() ! {
 fn test_application_sigusr2_callback_continues_without_instance() {
 	assert application_sigusr2_cb(unsafe { nil }) == 1
 }
+
+fn test_application_quit_without_confirmation_stops_runloop() {
+	mut app := Application{
+		running: true
+	}
+	app.quit()
+	assert !app.running
+}

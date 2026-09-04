@@ -77,9 +77,21 @@ pub fn list_find(list GList, func GCompareFunc) voidptr {
 
 fn C.g_list_nth_data(list GList, n u32) voidptr
 
+fn C.g_list_length(list GList) u32
+
 // list_node_data returns the `data` payload of a GList node (element index 0).
 fn list_node_data(node GList) voidptr {
 	return C.g_list_nth_data(node, 0)
+}
+
+// list_length returns the number of nodes in a GLib list.
+fn list_length(list GList) u32 {
+	return C.g_list_length(list)
+}
+
+// list_data_at returns the data pointer at an index, or nil.
+fn list_data_at(list GList, index u32) voidptr {
+	return C.g_list_nth_data(list, index)
 }
 
 // --- Widget ancestor ------------------------------------------------------
