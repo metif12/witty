@@ -17,6 +17,25 @@ fn test_page_init() {
 	assert page.rows.len == 80
 }
 
+fn test_page_pause_integrity_checks_is_nested() {
+	mut page := Page.init(PageCapacity{
+		cols: 3
+		rows: 2
+		styles: 8
+	})
+	defer {
+		page.deinit()
+	}
+	assert page.verify_integrity() != none
+	page.pause_integrity_checks_set(true)
+	page.pause_integrity_checks_set(true)
+	assert page.verify_integrity() == none
+	page.pause_integrity_checks_set(false)
+	assert page.verify_integrity() == none
+	page.pause_integrity_checks_set(false)
+	assert page.verify_integrity() != none
+}
+
 // Test that CellData is zero by default.
 fn test_cell_is_zero_by_default() {
 	cell := CellData.init(0)

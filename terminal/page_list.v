@@ -1,5 +1,7 @@
 module terminal
 
+import strings
+
 // --- Original Ghostty Comments Start: src/terminal/PageList.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/terminal/PageList.zig
@@ -3371,6 +3373,10 @@ pub mut:
 	// Current desired screen dimensions.
 	cols u16
 	rows u16
+
+	// A nesting counter used by multi-step mutations that temporarily leave
+	// the page list inconsistent.
+	pause_integrity_checks usize
 }
 
 // ============================================================
@@ -3619,7 +3625,7 @@ fn min_max_size_calc(cols u16, rows u16) usize {
 	return pages * usize(cap.cols) * usize(cap.rows) * 16
 }
 
-fn (self &PageList) max_size() usize {
+pub fn (self &PageList) max_size() usize {
 	if self.explicit_max_size > self.min_max_size {
 		return self.explicit_max_size
 	}
@@ -3822,6 +3828,136 @@ pub fn (self &PageList) get_bottom_right(tag PointTag) ?PagePin {
 	}
 }
 
+// Returns the debug diagram Ghostty uses to inspect page boundaries, the
+// active area, wraps, and tracked pins.
+pub fn (self &PageList) diagram() !string {
+	active_pin := self.get_top_left(.active)
+	mut active := false
+	mut active_index := usize(0)
+	mut page_index := usize(0)
+	mut cols := usize(0)
+	mut out := strings.new_builder(int(self.total_rows) * (int(self.cols) + 16))
+
+	mut current := self.pages.first
+	for {
+		node := current or { break }
+		cols = usize(node.data.size.cols)
+		mut skipped := false
+		for y in 0 .. int(node.data.size.rows) {
+			if !active && voidptr(node) == voidptr(active_pin.node) && y == int(active_pin.y) {
+				active = true
+				out.write_string('     +-')
+				out.write_string('-'.repeat(int(cols)))
+				out.write_string('--+ ACTIVE\n')
+			}
+
+			if y == 0 {
+				out.write_string('      +')
+				out.write_string('-'.repeat(int(cols)))
+				out.write_u8(u8(`+`))
+				if active {
+					out.write_string(' :')
+				}
+				out.write_string(' = PAGE ${page_index}\n')
+			}
+
+			row := node.data.rows[y]
+			cells := row.cells[..int(cols)]
+			row_has_content := has_text_any(cells)
+			if !active && !row_has_content {
+				if !skipped {
+					out.write_string('  ... :')
+					out.write_string(' '.repeat(int(cols)))
+					out.write_string(':\n')
+				}
+				skipped = true
+				continue
+			}
+
+			skipped = false
+			out.write_string('${y:5} ')
+			out.write_string(if row.wrap_continuation { '…' } else { '|' })
+			if row_has_content {
+				for cell in cells {
+					if cell.wide == .spacer_tail {
+						continue
+					}
+					if cell.codepoint < u32(` `) {
+						out.write_u8('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[int(cell.codepoint)])
+					} else {
+						out.write_rune(rune(cell.codepoint))
+						if cell.has_grapheme {
+							for cp in cell.graphemes {
+								out.write_rune(rune(cp))
+							}
+						}
+					}
+				}
+			} else {
+				out.write_string(' '.repeat(int(cols)))
+			}
+			out.write_string(if row.wrap { '…' } else { '|' })
+			if active {
+				out.write_string(' | ${active_index}')
+				active_index += 1
+			}
+			out.write_u8(u8(`\n`))
+
+			mut pins := []&PagePin{}
+			for pin in self.tracked_pins {
+				if voidptr(pin.node) == voidptr(node) && pin.y == u16(y) {
+					pins << pin
+					if pins.len >= 16 {
+						return error('too many tracked pins in row')
+					}
+				}
+			}
+			if pins.len > 0 {
+				pins.sort(a.x < b.x)
+				out.write_string('      :')
+				mut x := usize(0)
+				for pin in pins {
+					if x > usize(pin.x) {
+						continue
+					}
+					out.write_string(' '.repeat(int(usize(pin.x) - x)))
+					out.write_u8(u8(`^`))
+					x = usize(pin.x) + 1
+				}
+				out.write_string(' '.repeat(int(cols - x)))
+				out.write_u8(u8(`:`))
+				if active {
+					out.write_string(' :')
+				}
+				out.write_string(if pins.len > 1 { ' = PINS' } else { ' = PIN' })
+				first_x := pins[0].x
+				for i, pin in pins {
+					if pin.x != first_x {
+						out.write_u8(u8(`,`))
+					}
+					out.write_string(' ${i}')
+				}
+				out.write_u8(u8(`\n`))
+			}
+		}
+
+		out.write_string('      +')
+		out.write_string('-'.repeat(int(cols)))
+		out.write_u8(u8(`+`))
+		if active {
+			out.write_string(' :')
+		}
+		out.write_u8(u8(`\n`))
+		page_index += 1
+		current = node.next
+	}
+
+	out.write_string('     +-')
+	out.write_string('-'.repeat(int(cols)))
+	out.write_string('--+\n')
+	return out.str()
+}
+
 // PageSemanticHighlight is an untracked semantic-content range. Callers that
 // need the range to survive page mutations must track both pins themselves.
 pub struct PageSemanticHighlight {
@@ -3984,6 +4120,15 @@ pub fn (mut self PageList) untrack_pin(p &PagePin) {
 			return
 		}
 	}
+}
+
+pub fn (self &PageList) count_tracked_pins() usize {
+	return usize(self.tracked_pins.len)
+}
+
+// Returns a borrowed view that remains valid only until the PageList changes.
+pub fn (self &PageList) tracked_pins_view() []&PagePin {
+	return self.tracked_pins
 }
 
 // Returns true if pin points to a valid page in the list.
@@ -6096,10 +6241,16 @@ pub fn (self &PageList) cell_iterator(direction IterDirection, tl PointTag, bl ?
 // ============================================================
 
 pub fn (self &PageList) assert_integrity() {
+	if self.pause_integrity_checks > 0 {
+		return
+	}
 	assert self.verify_integrity(), 'PageList integrity check failed'
 }
 
 pub fn (self &PageList) verify_integrity() bool {
+	if self.pause_integrity_checks > 0 {
+		return true
+	}
 	// The viewport pin is permanently tracked and must never be garbage.
 	if self.viewport_pin.garbage {
 		return false
@@ -6163,4 +6314,14 @@ pub fn (self &PageList) verify_integrity() bool {
 	}
 
 	return true
+}
+
+// Temporarily pause or resume integrity checks around multi-step mutations.
+pub fn (mut self PageList) pause_integrity_checks_set(pause bool) {
+	if pause {
+		self.pause_integrity_checks += 1
+	} else {
+		assert self.pause_integrity_checks > 0
+		self.pause_integrity_checks -= 1
+	}
 }

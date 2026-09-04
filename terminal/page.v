@@ -1139,6 +1139,10 @@ pub mut:
 	// the ref counted set.
 	hyperlink_set HyperlinkSet
 	hyperlink_map map[u64]u32 // cell_key -> hyperlink_id
+
+	// A nesting counter used by multi-step mutations that temporarily leave
+	// the page inconsistent.
+	pause_integrity_checks usize
 }
 
 // Initialize a new page, allocating the required backing memory.
@@ -1192,6 +1196,9 @@ pub fn (mut self Page) reinit(cap PageCapacity) {
 //
 // Integrity errors are also logged as warnings.
 pub fn (self &Page) verify_integrity() ?IntegrityError {
+	if self.pause_integrity_checks > 0 {
+		return none
+	}
 	// Some things that seem like we should check but do not:
 	//
 	// - We do not check that the style ref count is exact, only that
@@ -1331,6 +1338,16 @@ pub fn (self &Page) verify_integrity() ?IntegrityError {
 pub fn (self &Page) assert_integrity() {
 	if violation := self.verify_integrity() {
 		panic('page integrity violation: ${violation}')
+	}
+}
+
+// Temporarily pause or resume integrity checks around multi-step mutations.
+pub fn (mut self Page) pause_integrity_checks_set(pause bool) {
+	if pause {
+		self.pause_integrity_checks += 1
+	} else {
+		assert self.pause_integrity_checks > 0
+		self.pause_integrity_checks -= 1
 	}
 }
 

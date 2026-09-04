@@ -53,6 +53,53 @@ fn test_page_list_init() {
 	assert cell.cell.codepoint == 0
 }
 
+fn test_page_list_tracked_pin_accessors_and_diagram() {
+	mut s := PageList.init(3, 2, usize(0))
+	defer { s.deinit() }
+
+	// The viewport pin is permanently tracked.
+	assert s.count_tracked_pins() == 1
+	pin := s.get_pin(.screen, 2, 1) or {
+		assert false
+		return
+	}
+	tracked := s.track_pin(pin)
+	assert s.count_tracked_pins() == 2
+	view := s.tracked_pins_view()
+	assert view.len == 2
+	assert voidptr(view[1]) == voidptr(tracked)
+
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	first.data.rows[0].cells[0].codepoint = u32(`A`)
+	diagram := s.diagram() or {
+		assert false, err.msg()
+		return
+	}
+	assert diagram.contains('ACTIVE')
+	assert diagram.contains('= PAGE 0')
+	assert diagram.contains('A00')
+	assert diagram.contains('= PIN')
+}
+
+fn test_page_list_pause_integrity_checks_is_nested() {
+	mut s := PageList.init(3, 2, usize(0))
+	defer { s.deinit() }
+	original_total := s.total_rows
+	s.total_rows += 1
+	assert !s.verify_integrity()
+	s.pause_integrity_checks_set(true)
+	s.pause_integrity_checks_set(true)
+	assert s.verify_integrity()
+	s.pause_integrity_checks_set(false)
+	assert s.verify_integrity()
+	s.pause_integrity_checks_set(false)
+	assert !s.verify_integrity()
+	s.total_rows = original_total
+}
+
 fn test_page_list_init_rows_across_two_pages() {
 	// Use enough rows to require two pages
 	cap := initial_capacity(80)
