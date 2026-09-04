@@ -1,3 +1,4 @@
+@[has_globals]
 module gtk
 
 // split_tree_class_linux.v - The GObject SplitTree *widget* class for the GTK
@@ -13,8 +14,9 @@ module gtk
 // back into the tree.
 //
 // Witty keeps the immutable surface tree in V and constructs the equivalent
-// GtkBox/AdwBin/GtkPaned graph directly. This avoids depending on Ghostty's Zig
-// blueprint bindings while retaining the same actions and lifecycle.
+// GtkBox/AdwBin/GtkPaned graph directly. The surrounding GhosttySplitTree
+// GObject class, boxed tree value, properties, signal, and lifecycle are
+// registered through the same GLib contracts as Ghostty's Zig implementation.
 
 import datastruct
 
@@ -60,6 +62,218 @@ fn C.g_idle_add(function voidptr, data voidptr) u32
 // `Surface.Tree` (a `SplitTree(*Surface)`); here it is the same immutable tree
 // data structure parameterized on the local `SurfaceWidget` view type.
 pub type SurfaceTree = datastruct.SplitTree[SurfaceWidget]
+
+// --- GObject class and boxed tree registration ----------------------------
+
+__global g_split_tree_type = GType(0)
+__global g_surface_tree_boxed_type = GType(0)
+__global g_split_tree_pspec_active_surface = &C.GParamSpec(unsafe { nil })
+__global g_split_tree_pspec_has_surfaces = &C.GParamSpec(unsafe { nil })
+__global g_split_tree_pspec_is_zoomed = &C.GParamSpec(unsafe { nil })
+__global g_split_tree_pspec_tree = &C.GParamSpec(unsafe { nil })
+__global g_split_tree_pspec_is_split = &C.GParamSpec(unsafe { nil })
+
+struct C.GhosttySplitTreePrivate {
+mut:
+	wrapper voidptr
+}
+
+const split_tree_prop_active_surface = u32(1)
+const split_tree_prop_has_surfaces = u32(2)
+const split_tree_prop_is_zoomed = u32(3)
+const split_tree_prop_tree = u32(4)
+const split_tree_prop_is_split = u32(5)
+
+// defineProperty marks its compile-time name/nick/blurb strings as static.
+const split_tree_param_static_strings = int(32 | 64 | 128)
+
+fn split_tree_priv(obj voidptr) &C.GhosttySplitTreePrivate {
+	return &C.GhosttySplitTreePrivate(C.g_type_instance_get_private(obj, g_split_tree_type))
+}
+
+// surface_tree_boxed_copy/free mirror Surface.Tree.getGObjectType's custom
+// boxed callbacks. A boxed copy owns a cloned immutable tree and therefore a
+// reference to every SurfaceWidget leaf.
+fn surface_tree_boxed_copy(value voidptr) voidptr {
+	if isnil(value) {
+		return unsafe { nil }
+	}
+	tree := unsafe { &SurfaceTree(value) }
+	copy := tree.clone()
+	return voidptr(&SurfaceTree{
+		nodes: copy.nodes
+		zoomed: copy.zoomed
+	})
+}
+
+fn surface_tree_boxed_free(value voidptr) {
+	if isnil(value) {
+		return
+	}
+	mut tree := unsafe { &SurfaceTree(value) }
+	tree.free()
+	unsafe { free(tree) }
+}
+
+// surface_tree_get_type returns the exact boxed type instantiated by
+// datastruct.SplitTree(Surface) in the pinned Ghostty source.
+pub fn surface_tree_get_type() GType {
+	if g_surface_tree_boxed_type == GType(0) {
+		g_surface_tree_boxed_type = C.g_boxed_type_register_static(c'GhosttySplitTreeSurface', voidptr(surface_tree_boxed_copy), voidptr(surface_tree_boxed_free))
+	}
+	return g_surface_tree_boxed_type
+}
+
+fn split_tree_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	_ = pspec
+	priv := split_tree_priv(obj)
+	if isnil(priv.wrapper) {
+		return
+	}
+	mut self := unsafe { &SplitTreeWidget(priv.wrapper) }
+	match property_id {
+		split_tree_prop_active_surface {
+			if surface := self.get_active_surface() {
+				C.g_value_set_object(value, surface.widget)
+			} else {
+				C.g_value_set_object(value, unsafe { nil })
+			}
+		}
+		split_tree_prop_has_surfaces {
+			C.g_value_set_boolean(value, b2i(self.get_has_surfaces()))
+		}
+		split_tree_prop_is_zoomed {
+			C.g_value_set_boolean(value, b2i(self.get_is_zoomed()))
+		}
+		split_tree_prop_tree {
+			if self.has_tree {
+				C.g_value_set_boxed(value, &self.tree)
+			} else {
+				C.g_value_set_boxed(value, unsafe { nil })
+			}
+		}
+		split_tree_prop_is_split {
+			C.g_value_set_boolean(value, b2i(self.get_is_split()))
+		}
+		else {}
+	}
+}
+
+fn split_tree_set_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	_ = pspec
+	if property_id != split_tree_prop_tree {
+		return
+	}
+	priv := split_tree_priv(obj)
+	if isnil(priv.wrapper) {
+		return
+	}
+	mut self := unsafe { &SplitTreeWidget(priv.wrapper) }
+	boxed := C.g_value_get_boxed(value)
+	if isnil(boxed) {
+		self.set_tree(none)
+	} else {
+		tree := unsafe { &datastruct.SplitTree[SurfaceWidget](boxed) }
+		self.set_tree(tree)
+	}
+}
+
+fn split_tree_parent_object_class(obj voidptr) &C.GObjectClass {
+	return &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
+}
+
+fn split_tree_dispose(obj voidptr) {
+	priv := split_tree_priv(obj)
+	if !isnil(priv.wrapper) {
+		mut self := unsafe { &SplitTreeWidget(priv.wrapper) }
+		self.last_focused = unsafe { nil }
+		if self.rebuild_source != 0 {
+			C.g_source_remove(self.rebuild_source)
+			self.rebuild_source = 0
+		}
+		self.rebuild_pending = false
+		if !isnil(self.tree_bin) {
+			C.adw_bin_set_child(self.tree_bin, GtkWidget(unsafe { nil }))
+		}
+	}
+	parent_class := split_tree_parent_object_class(obj)
+	if !isnil(parent_class.dispose) {
+		f := DisposeFn(parent_class.dispose)
+		f(obj)
+	}
+}
+
+fn split_tree_finalize(obj voidptr) {
+	mut priv := split_tree_priv(obj)
+	if !isnil(priv.wrapper) {
+		mut self := unsafe { &SplitTreeWidget(priv.wrapper) }
+		if self.has_tree {
+			self.disconnect_surface_handlers()
+			self.tree.free()
+			self.has_tree = false
+		}
+		self.surfaces.clear()
+		self.scrolled_windows.clear()
+		self.splits.clear()
+		self.widget = unsafe { nil }
+		self.tree_bin = unsafe { nil }
+		priv.wrapper = unsafe { nil }
+	}
+	parent_class := split_tree_parent_object_class(obj)
+	if !isnil(parent_class.finalize) {
+		f := FinalizeFn(parent_class.finalize)
+		f(obj)
+	}
+}
+
+fn split_tree_class_init(klass voidptr, class_data voidptr) {
+	_ = class_data
+	_ = terminal_surface_get_type()
+	tree_type := surface_tree_get_type()
+	mut obj_class := &C.GObjectClass(klass)
+	obj_class.get_property = voidptr(split_tree_get_property)
+	obj_class.set_property = voidptr(split_tree_set_property)
+	obj_class.dispose = voidptr(split_tree_dispose)
+	obj_class.finalize = voidptr(split_tree_finalize)
+	readable := g_param_readable | split_tree_param_static_strings
+	readwrite := g_param_readwrite | split_tree_param_static_strings
+	nil_str := &char(unsafe { nil })
+	g_split_tree_pspec_active_surface = C.g_param_spec_object(c'active-surface', nil_str, nil_str, terminal_surface_get_type(), readable)
+	g_split_tree_pspec_has_surfaces = C.g_param_spec_boolean(c'has-surfaces', nil_str, nil_str, 0, readable)
+	g_split_tree_pspec_is_zoomed = C.g_param_spec_boolean(c'is-zoomed', nil_str, nil_str, 0, readable)
+	g_split_tree_pspec_tree = C.g_param_spec_boxed(c'tree', nil_str, nil_str, tree_type, readwrite)
+	g_split_tree_pspec_is_split = C.g_param_spec_boolean(c'is-split', nil_str, nil_str, 0, readable)
+	C.g_object_class_install_property(klass, split_tree_prop_active_surface, g_split_tree_pspec_active_surface)
+	C.g_object_class_install_property(klass, split_tree_prop_has_surfaces, g_split_tree_pspec_has_surfaces)
+	C.g_object_class_install_property(klass, split_tree_prop_is_zoomed, g_split_tree_pspec_is_zoomed)
+	C.g_object_class_install_property(klass, split_tree_prop_tree, g_split_tree_pspec_tree)
+	C.g_object_class_install_property(klass, split_tree_prop_is_split, g_split_tree_pspec_is_split)
+	C.g_signal_new(c'changed', g_split_tree_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(4), 2, tree_type, tree_type)
+}
+
+fn split_tree_instance_init(instance voidptr, klass voidptr) {
+	_ = klass
+	C.gtk_orientable_set_orientation(instance, 1)
+	C.gtk_widget_set_hexpand(GtkWidget(instance), 1)
+	C.gtk_widget_set_vexpand(GtkWidget(instance), 1)
+}
+
+pub fn split_tree_get_type() GType {
+	if g_split_tree_type == GType(0) {
+		parent := C.gtk_box_get_type()
+		mut query := C.GTypeQuery{}
+		C.g_type_query(parent, &query)
+		info := C.GTypeInfo{
+			class_size: u16(query.class_size)
+			instance_size: u16(query.instance_size)
+			class_init: voidptr(split_tree_class_init)
+			instance_init: voidptr(split_tree_instance_init)
+		}
+		g_split_tree_type = C.g_type_register_static(parent, c'GhosttySplitTree', &info, 0)
+		_ = C.g_type_add_instance_private(g_split_tree_type, sizeof(C.GhosttySplitTreePrivate))
+	}
+	return g_split_tree_type
+}
 
 // --- SplitTreeWidget ------------------------------------------------------
 
@@ -112,7 +326,7 @@ pub mut:
 // `init`: it sets up the widget graph, action group, and basic state.
 pub fn new_split_tree_widget(window &Window, config &Config) &SplitTreeWidget {
 	tree_bin := C.adw_bin_new()
-	widget := C.gtk_box_new(1, 0)
+	widget := GtkWidget(C.g_object_new(split_tree_get_type(), &char(unsafe { nil })))
 	C.gtk_widget_set_hexpand(GtkWidget(tree_bin), 1)
 	C.gtk_widget_set_vexpand(GtkWidget(tree_bin), 1)
 	C.gtk_box_append(widget, GtkWidget(tree_bin))
@@ -122,6 +336,8 @@ pub fn new_split_tree_widget(window &Window, config &Config) &SplitTreeWidget {
 		config: config
 		tree_bin: tree_bin
 	}
+	mut priv := split_tree_priv(voidptr(widget))
+	priv.wrapper = voidptr(w)
 	w.pending_close = -1
 	w.init_action_map()
 	return w
@@ -189,16 +405,25 @@ pub fn (mut self SplitTreeWidget) get_tree() ?&datastruct.SplitTree[SurfaceWidge
 pub fn (mut self SplitTreeWidget) set_tree(tree_ ?&datastruct.SplitTree[SurfaceWidget]) {
 	// Normalize: empty trees become "no tree".
 	mut new_has := false
-	mut new_tree := datastruct.SplitTree.empty[SurfaceWidget]()
+	mut new_ptr := voidptr(&self.tree)
 	if t := tree_ {
 		if !t.is_empty() {
-			new_tree = t.clone()
 			new_has = true
+			new_ptr = voidptr(t)
 		}
 	}
+	if !new_has {
+		new_ptr = unsafe { nil }
+	}
 
-	// Emit the "changed" signal so handlers see both before and after values.
-	// TODO(gtk): signals.changed.emit(self, priv.tree, new_tree).
+	// Emit before replacing the tree so handlers can inspect both values.
+	mut old_ptr := voidptr(&self.tree)
+	if !self.has_tree {
+		old_ptr = unsafe { nil }
+	}
+	if !isnil(self.widget) {
+		C.g_signal_emit_by_name(self.widget, c'changed', old_ptr, new_ptr)
+	}
 
 	// Free the old tree (unref its views) and disconnect surface handlers.
 	if self.has_tree {
@@ -208,9 +433,11 @@ pub fn (mut self SplitTreeWidget) set_tree(tree_ ?&datastruct.SplitTree[SurfaceW
 	}
 
 	if new_has {
-		self.tree = new_tree
-		self.has_tree = true
-		self.connect_surface_handlers()
+		if t := tree_ {
+			self.tree = t.clone()
+			self.has_tree = true
+			self.connect_surface_handlers()
+		}
 	}
 
 	// Ghostty binds SplitTree.is-split to every Surface.is-split. Keep the
@@ -221,9 +448,15 @@ pub fn (mut self SplitTreeWidget) set_tree(tree_ ?&datastruct.SplitTree[SurfaceW
 		surface.set_is_split(is_split)
 	}
 
-	// TODO(gtk): notifyByPspec(properties.tree).
+	self.notify_property(g_split_tree_pspec_tree)
 	self.prop_tree()
 	self.sync_tab()
+}
+
+fn (self &SplitTreeWidget) notify_property(pspec &C.GParamSpec) {
+	if !isnil(self.widget) && !isnil(pspec) {
+		C.g_object_notify_by_pspec(self.widget, pspec)
+	}
 }
 
 // sync_tab replaces the split-tree property notifications consumed by the Tab
@@ -486,7 +719,9 @@ pub fn (mut self SplitTreeWidget) goto_(to datastruct.Goto) bool {
 	// behavior and clears zoom when navigating.
 	if self.tree.zoomed >= 0 {
 		self.tree.zoom(-1)
+		self.notify_property(g_split_tree_pspec_tree)
 		self.prop_tree()
+		self.notify_property(g_split_tree_pspec_is_zoomed)
 	}
 
 	return true
@@ -550,6 +785,7 @@ pub fn (mut self SplitTreeWidget) action_zoom() {
 		}
 		self.tree.zoom(active)
 	}
+	self.notify_property(g_split_tree_pspec_tree)
 	self.prop_tree()
 }
 
@@ -706,6 +942,7 @@ pub fn (mut self SplitTreeWidget) prop_surface_focused(mut surface SurfaceWidget
 		return
 	}
 	self.last_focused = &surface
+	self.notify_property(g_split_tree_pspec_active_surface)
 	self.sync_tab()
 }
 
@@ -750,7 +987,8 @@ fn (mut self SplitTreeWidget) prop_tree() {
 	}
 
 	// Dependent properties.
-	// TODO(gtk): notifyByPspec(properties.has-surfaces / properties.is-zoomed).
+	self.notify_property(g_split_tree_pspec_has_surfaces)
+	self.notify_property(g_split_tree_pspec_is_zoomed)
 }
 
 fn split_tree_rebuild_cb(data voidptr) int {
@@ -763,8 +1001,7 @@ fn split_tree_rebuild_cb(data voidptr) int {
 }
 
 // on_rebuild rebuilds the widget tree from the current data model. Mirrors
-// `onRebuild`. In ghostty this is a glib idle callback; here it is a plain
-// method (the C idle trampoline is stubbed).
+// `onRebuild`; split_tree_rebuild_cb is its GLib idle trampoline.
 pub fn (mut self SplitTreeWidget) on_rebuild() {
 	self.rebuild_source = 0
 
@@ -786,7 +1023,8 @@ pub fn (mut self SplitTreeWidget) on_rebuild() {
 		self.last_focused.grab_focus()
 	}
 
-	// TODO(gtk): notifyByPspec(properties.is-split / properties.active-surface).
+	self.notify_property(g_split_tree_pspec_is_split)
+	self.notify_property(g_split_tree_pspec_active_surface)
 }
 
 // build_tree builds the widget subtree for the node at `current`. Leaves become
