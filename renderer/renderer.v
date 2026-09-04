@@ -927,7 +927,7 @@ pub fn Renderer.init(opts RendererOpts) !Renderer {
 		}
 	}
 	metal.blending = match opts.config.blending {
-		.none_ { .none_ }
+		.native { .none_ }
 		.linear { .linear }
 		.linear_corrected { .linear_corrected }
 	}
@@ -1544,7 +1544,7 @@ pub fn (mut self Renderer) change_config(config &DerivedConfig) ! {
 	}
 	if blending_changed {
 		self.metal.blending = match config.blending {
-			.none_ { .none_ }
+			.native { .none_ }
 			.linear { .linear }
 			.linear_corrected { .linear_corrected }
 		}
@@ -1604,7 +1604,7 @@ fn (mut self Renderer) update_bg_image_buffer() {
 				.top_center { .tc }
 				.top_right { .tr }
 				.center_left { .ml }
-				.center { .mc }
+				.center, .center_center { .mc }
 				.center_right { .mr }
 				.bottom_left { .bl }
 				.bottom_center { .bc }
@@ -2023,6 +2023,7 @@ fn (self &Renderer) compute_cursor_color(cursor_style terminal.CellStyle) termin
 		fg_style := cursor_style.fg_rgb(terminal.FgOpts{
 			default_color: state.colors.foreground
 			palette: state.colors.palette
+			bold_color: self.config.bold_color
 		})
 		bg_style := cursor_style.bg_rgb(&state.cursor.cell, state.colors.palette) or {
 			state.colors.background
@@ -2042,6 +2043,7 @@ fn (self &Renderer) compute_cursor_text_color(cursor_style terminal.CellStyle) t
 		fg_style := cursor_style.fg_rgb(terminal.FgOpts{
 			default_color: state.colors.foreground
 			palette: state.colors.palette
+			bold_color: self.config.bold_color
 		})
 		bg_style := cursor_style.bg_rgb(&state.cursor.cell, state.colors.palette) or {
 			state.colors.background
@@ -2185,6 +2187,7 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		fg_style := style.fg_rgb(terminal.FgOpts{
 			default_color: state.colors.foreground
 			palette: state.colors.palette
+			bold_color: self.config.bold_color
 		})
 
 		// The final background color for the cell.

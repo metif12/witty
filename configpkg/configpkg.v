@@ -3949,13 +3949,13 @@ pub struct Config {
 pub mut:
 	font_size                      f32 = 13.0
 	abnormal_command_exit_runtime  u32 = 250
-	clipboard_read                 ClipboardAccess = .allow
+	clipboard_read                 ClipboardAccess = .ask
 	clipboard_write                ClipboardAccess = .allow
 	clipboard_trim_trailing_spaces bool = true
 	clipboard_paste_protection     bool = true
 	clipboard_paste_bracketed_safe bool = true
 	clipboard_codepoint_map        RepeatableClipboardCodepointMap
-	copy_on_select                 CopyOnSelect = .false_
+	copy_on_select                 CopyOnSelect = .true_
 	confirm_close_surface          ConfirmCloseSurface = .true_
 	cursor_click_to_move           bool = true
 	desktop_notifications          bool = true
@@ -3984,7 +3984,7 @@ pub mut:
 	term                           string = 'xterm-ghostty'
 	shell_integration              ShellIntegration = .detect
 	shell_integration_features     ShellIntegrationFeatures
-	link_previews                  LinkPreviews = .false_
+	link_previews                  LinkPreviews = .true_
 	scroll_to_bottom               ScrollToBottom
 	// Renderer-related fields
 	font_thicken               bool
@@ -3999,8 +3999,8 @@ pub mut:
 	window_padding_color       WindowPaddingColor = .background
 	window_vsync               bool = true
 	window_colorspace          WindowColorspace = .srgb
-	alpha_blending             AlphaBlending = .none_
-	background_blur            BackgroundBlur = .none_
+	alpha_blending             AlphaBlending = .native
+	background_blur            BackgroundBlur = BackgroundBlur{ kind: .bool_false }
 	custom_shader              RepeatablePath
 	background_image           ?Path
 	background_image_opacity   f32 = 1.0
@@ -4865,7 +4865,7 @@ pub enum WindowColorspace {
 
 // AlphaBlending mode for the renderer.
 pub enum AlphaBlending {
-	none_
+	native
 	linear
 	linear_corrected
 }
@@ -4875,11 +4875,29 @@ pub fn (b AlphaBlending) is_linear() bool {
 	return b == .linear || b == .linear_corrected
 }
 
-// BackgroundBlur for window transparency effects.
-pub enum BackgroundBlur {
-	none_
+// BackgroundBlur carries every variant accepted by Ghostty, including the
+// platform-specific numeric radius form.
+pub enum BackgroundBlurKind {
+	bool_false
+	bool_true
+	radius
 	macos_glass_regular
 	macos_glass_clear
+}
+
+pub struct BackgroundBlur {
+pub:
+	kind   BackgroundBlurKind
+	radius u8
+}
+
+pub fn (b BackgroundBlur) enabled() bool {
+	return match b.kind {
+		.bool_false { false }
+		.bool_true { true }
+		.radius { b.radius > 0 }
+		.macos_glass_regular, .macos_glass_clear { true }
+	}
 }
 
 // BackgroundImagePosition for the background image.
@@ -4889,6 +4907,7 @@ pub enum BackgroundImagePosition {
 	top_right
 	center_left
 	center
+	center_center
 	center_right
 	bottom_left
 	bottom_center
@@ -4907,6 +4926,7 @@ pub enum BackgroundImageFit {
 pub struct BoldColor {
 pub:
 	bright bool = true
+	color  ColorRGB
 }
 
 // RepeatablePath holds a list of file paths.
@@ -5290,12 +5310,12 @@ pub fn (mut it RepeatableStringMapIterator) next() ?StringMapEntry {
 
 // ShellIntegrationFeatures controls which shell integration features are enabled.
 pub struct ShellIntegrationFeatures {
-pub:
+pub mut:
 	cursor       bool = true
-	sudo         bool = true
+	sudo         bool
 	title        bool = true
-	ssh_env      bool = true
-	ssh_terminfo bool = true
+	ssh_env      bool
+	ssh_terminfo bool
 	path         bool = true
 }
 
@@ -5312,6 +5332,7 @@ pub enum ShellIntegration {
 pub enum LinkPreviews {
 	true_
 	false_
+	osc8
 }
 
 pub enum ClipboardAccess {
@@ -5350,8 +5371,9 @@ pub enum Theme {
 }
 
 pub struct ScrollToBottom {
-pub:
+pub mut:
 	keystroke bool = true
+	output    bool
 }
 
 pub struct Duration {
@@ -5778,34 +5800,34 @@ fn (mut c Config) apply_kv(key string, value string) {
 			c.apply_font_family_value(mut &c.font_family_bold_italic, value)
 		}
 		'font-size' {
-			c.font_size = value.f32()
+			c.font_size = f32(c.parse_config_f64(key, value) or { return })
 		}
 		'term' {
 			c.term = value
 		}
 		'scrollback-limit' {
-			c.scrollback_limit = value.u64()
+			c.scrollback_limit = c.parse_config_u64(key, value) or { return }
 		}
 		'background-opacity' {
-			c.background_opacity = value.f64()
+			c.background_opacity = c.parse_config_f64(key, value) or { return }
 		}
 		'minimum-contrast' {
-			c.minimum_contrast = value.f64()
+			c.minimum_contrast = c.parse_config_f64(key, value) or { return }
 		}
 		'unfocused-split-opacity' {
-			c.unfocused_split_opacity = value.f64()
+			c.unfocused_split_opacity = c.parse_config_f64(key, value) or { return }
 		}
 		'faint-opacity' {
-			c.faint_opacity = value.f64()
+			c.faint_opacity = c.parse_config_f64(key, value) or { return }
 		}
 		'cursor-opacity' {
-			c.cursor_opacity = value.f64()
+			c.cursor_opacity = c.parse_config_f64(key, value) or { return }
 		}
 		'window-width' {
-			c.window_width = value.u32()
+			c.window_width = c.parse_config_u32(key, value) or { return }
 		}
 		'window-height' {
-			c.window_height = value.u32()
+			c.window_height = c.parse_config_u32(key, value) or { return }
 		}
 		'title' {
 			c.title = value
@@ -5820,7 +5842,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 			c.working_directory = value
 		}
 		'abnormal-command-exit-runtime' {
-			c.abnormal_command_exit_runtime = value.u32()
+			c.abnormal_command_exit_runtime = c.parse_config_u32(key, value) or { return }
 		}
 		'selection-word-chars' {
 			c.selection_word_chars.parse_cli(value) or {
@@ -5847,6 +5869,443 @@ fn (mut c Config) apply_kv(key string, value string) {
 			c.key_remap.parse_cli(value) or {
 				c.diagnostics << Diagnostic{
 					message: 'invalid key-remap "${value}": ${err.msg()}'
+				}
+			}
+		}
+		'command' {
+			if value.len == 0 {
+				c.command = none
+			} else {
+				c.command = parse_command(value) or {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'initial-command' {
+			if value.len == 0 {
+				c.initial_command = none
+			} else {
+				c.initial_command = parse_command(value) or {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'initial-input' {
+			c.initial_input = value
+		}
+		'env' {
+			c.apply_env(value)
+		}
+		'enquiry-response' {
+			c.enquiry_response = value
+		}
+		'font-feature' {
+			apply_repeatable_string(mut c.font_feature, value)
+		}
+		'font-style' {
+			c.font_style = value
+		}
+		'font-style-bold' {
+			c.font_style_bold = value
+		}
+		'font-style-italic' {
+			c.font_style_italic = value
+		}
+		'font-style-bold-italic' {
+			c.font_style_bold_italic = value
+		}
+		'custom-shader' {
+			apply_repeatable_string(mut c.custom_shader.items, value)
+		}
+		'config-file' {
+			apply_repeatable_string(mut c.config_file.items, value)
+		}
+		'background-image' {
+			c.background_image = if value.len == 0 { none } else { Path{ path: value } }
+		}
+		'bold-color' {
+			if value.len == 0 {
+				c.bold_color = none
+			} else {
+				parsed := bold_color_parse_cli(value) or {
+					c.invalid_config_value(key, value)
+					return
+				}
+				c.bold_color = BoldColor{
+					bright: parsed.bright
+					color: parsed.color
+				}
+			}
+		}
+		'unfocused-split-fill' {
+			if value.len == 0 {
+				c.unfocused_split_fill = none
+			} else {
+				c.unfocused_split_fill = color_parse_cli(value) or {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'split-divider-color' {
+			if value.len == 0 {
+				c.split_divider_color = none
+			} else {
+				c.split_divider_color = color_parse_cli(value) or {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'font-shaping-break' {
+			c.font_shaping_break = parse_font_shaping_break(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
+		'shell-integration-features' {
+			c.shell_integration_features = parse_shell_integration_features(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
+		'scroll-to-bottom' {
+			c.scroll_to_bottom = parse_scroll_to_bottom(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
+		'font-thicken', 'background-opacity-cells', 'background-image-repeat', 'window-vsync', 'clipboard-trim-trailing-spaces', 'clipboard-paste-protection', 'clipboard-paste-bracketed-safe', 'cursor-click-to-move', 'desktop-notifications', 'mouse-hide-while-typing', 'mouse-reporting', 'selection-clear-on-copy', 'selection-clear-on-typing', 'vt-kam-allowed', 'wait-after-command', 'window-padding-balance', 'title-report', 'link-url', 'maximize', 'fullscreen', 'focus-follows-mouse', 'window-inherit-working-directory', 'tab-inherit-working-directory', 'split-inherit-working-directory', 'window-inherit-font-size', 'initial-window', 'quit-after-last-window-closed', 'config-default-files' {
+			parsed := c.parse_config_bool(key, value) or { return }
+			match key {
+				'font-thicken' {
+					c.font_thicken = parsed
+				}
+				'background-opacity-cells' {
+					c.background_opacity_cells = parsed
+				}
+				'background-image-repeat' {
+					c.background_image_repeat = parsed
+				}
+				'window-vsync' {
+					c.window_vsync = parsed
+				}
+				'clipboard-trim-trailing-spaces' {
+					c.clipboard_trim_trailing_spaces = parsed
+				}
+				'clipboard-paste-protection' {
+					c.clipboard_paste_protection = parsed
+				}
+				'clipboard-paste-bracketed-safe' {
+					c.clipboard_paste_bracketed_safe = parsed
+				}
+				'cursor-click-to-move' {
+					c.cursor_click_to_move = parsed
+				}
+				'desktop-notifications' {
+					c.desktop_notifications = parsed
+				}
+				'mouse-hide-while-typing' {
+					c.mouse_hide_while_typing = parsed
+				}
+				'mouse-reporting' {
+					c.mouse_reporting = parsed
+				}
+				'selection-clear-on-copy' {
+					c.selection_clear_on_copy = parsed
+				}
+				'selection-clear-on-typing' {
+					c.selection_clear_on_typing = parsed
+				}
+				'vt-kam-allowed' {
+					c.vt_kam_allowed = parsed
+				}
+				'wait-after-command' {
+					c.wait_after_command = parsed
+				}
+				'window-padding-balance' {
+					c.window_padding_balance = parsed
+				}
+				'title-report' {
+					c.title_report = parsed
+				}
+				'link-url' {
+					c.link_url = parsed
+				}
+				'maximize' {
+					c.maximize = parsed
+				}
+				'fullscreen' {
+					c.fullscreen = parsed
+				}
+				'focus-follows-mouse' {
+					c.focus_follows_mouse = parsed
+				}
+				'window-inherit-working-directory' {
+					c.window_inherit_working_directory = parsed
+				}
+				'tab-inherit-working-directory' {
+					c.tab_inherit_working_directory = parsed
+				}
+				'split-inherit-working-directory' {
+					c.split_inherit_working_directory = parsed
+				}
+				'window-inherit-font-size' {
+					c.window_inherit_font_size = parsed
+				}
+				'initial-window' {
+					c.initial_window = parsed
+				}
+				'quit-after-last-window-closed' {
+					c.quit_after_last_window_closed = parsed
+				}
+				'config-default-files' {
+					c.config_default_files = parsed
+				}
+				else {}
+			}
+		}
+		'window-padding-top', 'window-padding-bottom', 'window-padding-left', 'window-padding-right', 'click-repeat-interval', 'image-storage-limit' {
+			parsed := c.parse_config_u32(key, value) or { return }
+			match key {
+				'window-padding-top' {
+					c.window_padding_top = parsed
+				}
+				'window-padding-bottom' {
+					c.window_padding_bottom = parsed
+				}
+				'window-padding-left' {
+					c.window_padding_left = parsed
+				}
+				'window-padding-right' {
+					c.window_padding_right = parsed
+				}
+				'click-repeat-interval' {
+					c.click_repeat_interval = parsed
+				}
+				'image-storage-limit' {
+					c.image_storage_limit = parsed
+				}
+				else {}
+			}
+		}
+		'font-thicken-strength' {
+			c.font_thicken_strength = c.parse_config_u8(key, value) or { return }
+		}
+		'background-image-opacity', 'mouse-scroll-multiplier' {
+			parsed := c.parse_config_f64(key, value) or { return }
+			if key == 'background-image-opacity' {
+				c.background_image_opacity = f32(parsed)
+			} else {
+				c.mouse_scroll_multiplier = parsed
+			}
+		}
+		'clipboard-read', 'clipboard-write' {
+			parsed := match value {
+				'allow' { ClipboardAccess.allow }
+				'ask' { ClipboardAccess.ask }
+				'deny' { ClipboardAccess.deny }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+			if key == 'clipboard-read' {
+				c.clipboard_read = parsed
+			} else {
+				c.clipboard_write = parsed
+			}
+		}
+		'copy-on-select' {
+			c.copy_on_select = match value {
+				'false', '0', 'f', 'F' { .false_ }
+				'true', '1', 't', 'T' { .true_ }
+				'clipboard' { .clipboard }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'confirm-close-surface' {
+			c.confirm_close_surface = match value {
+				'always' { .always }
+				'false', '0', 'f', 'F' { .false_ }
+				'true', '1', 't', 'T' { .true_ }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'mouse-shift-capture' {
+			c.mouse_shift_capture = match value {
+				'never' { .never }
+				'always' { .always }
+				'false', '0', 'f', 'F' { .false_ }
+				'true', '1', 't', 'T' { .true_ }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'shell-integration' {
+			c.shell_integration = parse_shell_integration(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
+		'link-previews' {
+			c.link_previews = match value {
+				'false', '0', 'f', 'F' { .false_ }
+				'true', '1', 't', 'T' { .true_ }
+				'osc8' { .osc8 }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'grapheme-width-method' {
+			c.grapheme_width_method = match value {
+				'legacy' { .legacy }
+				'unicode' { .unicode }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'scrollbar' {
+			c.scrollbar = match value {
+				'system' { .system }
+				'never' { .never }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'notify-on-command-finish' {
+			c.notify_on_command_finish = match value {
+				'never' { .never }
+				'unfocused' { .unfocused }
+				'always' { .always }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'cursor-style' {
+			c.cursor_style = match value {
+				'block' { .block }
+				'bar' { .bar }
+				'underline' { .underline }
+				'block_hollow', 'block-hollow' { .block_hollow }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'cursor-style-blink' {
+			c.cursor_style_blink = if value.len == 0 {
+				none
+			} else {
+				c.parse_config_bool(key, value) or { return }
+			}
+		}
+		'window-padding-color' {
+			c.window_padding_color = match value {
+				'background' { .background }
+				'extend' { .extend }
+				'extend-always' { .extend_always }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'window-colorspace' {
+			c.window_colorspace = match value {
+				'srgb' { .srgb }
+				'display-p3' { .display_p3 }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'alpha-blending' {
+			c.alpha_blending = match value {
+				'native' { .native }
+				'linear' { .linear }
+				'linear-corrected' { .linear_corrected }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'background-blur' {
+			c.background_blur = background_blur_parse_cli(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
+		'background-image-position' {
+			c.background_image_position = parse_background_image_position(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
+		'background-image-fit' {
+			c.background_image_fit = match value {
+				'contain' { .contain }
+				'cover' { .cover }
+				'stretch' { .stretch }
+				'none' { .none_ }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'window-decoration' {
+			c.window_decoration = window_decoration_parse_cli(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
+		'right-click-action' {
+			c.right_click_action = parse_right_click_action(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
+		'osc-color-report-format' {
+			c.osc_color_report_format = match value {
+				'none' { .none_ }
+				'8-bit' { .format_8_bit }
+				'16-bit' { .format_16_bit }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'custom-shader-animation' {
+			c.custom_shader_animation = match value {
+				'false', '0', 'f', 'F' { .false_ }
+				'true', '1', 't', 'T' { .true_ }
+				'always' { .always }
+				else {
+					c.invalid_config_value(key, value)
+					return
 				}
 			}
 		}
@@ -5924,6 +6383,252 @@ fn (mut c Config) apply_kv(key string, value string) {
 			// Unknown key: ignored, matching Ghostty's tolerance of options
 			// it doesn't recognize (e.g. options for other platforms).
 		}
+	}
+}
+
+// apply_repeatable_string implements the repeatable-string parser used by
+// font-feature: an empty value clears all values and every other value appends.
+fn apply_repeatable_string(mut list []string, value string) {
+	if value.len == 0 {
+		list.clear()
+		return
+	}
+	list << value
+}
+
+// apply_env implements RepeatableStringMap.parseCLI. Entries retain insertion
+// order, assigning an existing key replaces its value, an empty value removes
+// that key, and an entirely empty option clears the map.
+fn (mut c Config) apply_env(value string) {
+	if value.len == 0 {
+		c.env.entries.clear()
+		return
+	}
+	eq := value.index('=') or {
+		c.invalid_config_value('env', value)
+		return
+	}
+	key := value[..eq].trim_space()
+	val := value[eq + 1..].trim_space()
+	for i, entry in c.env.entries {
+		if entry.key != key {
+			continue
+		}
+		if val.len == 0 {
+			c.env.entries.delete(i)
+		} else {
+			c.env.entries[i] = StringMapEntry{
+				key: key
+				value: val
+			}
+		}
+		return
+	}
+	if val.len > 0 {
+		c.env.entries << StringMapEntry{
+			key: key
+			value: val
+		}
+	}
+}
+
+fn (mut c Config) invalid_config_value(key string, value string) {
+	c.diagnostics << Diagnostic{
+		message: 'invalid value for "${key}": ${value}'
+	}
+}
+
+fn (mut c Config) parse_config_bool(key string, value string) ?bool {
+	return parse_bool_opt(value) or {
+		c.invalid_config_value(key, value)
+		return none
+	}
+}
+
+fn (mut c Config) parse_config_u32(key string, value string) ?u32 {
+	parsed := strconv.parse_uint(value, 0, 32) or {
+		c.invalid_config_value(key, value)
+		return none
+	}
+	return u32(parsed)
+}
+
+fn (mut c Config) parse_config_u64(key string, value string) ?u64 {
+	parsed := strconv.parse_uint(value, 0, 64) or {
+		c.invalid_config_value(key, value)
+		return none
+	}
+	return parsed
+}
+
+fn (mut c Config) parse_config_u8(key string, value string) ?u8 {
+	parsed := strconv.parse_uint(value, 0, 8) or {
+		c.invalid_config_value(key, value)
+		return none
+	}
+	return u8(parsed)
+}
+
+fn (mut c Config) parse_config_f64(key string, value string) ?f64 {
+	parsed := strconv.atof64(value) or {
+		c.invalid_config_value(key, value)
+		return none
+	}
+	return parsed
+}
+
+// Packed boolean structs start from their declared defaults. A standalone
+// boolean sets every field; otherwise comma-separated names toggle individual
+// fields and the no- prefix disables one.
+fn parse_font_shaping_break(value string) ?FontShapingBreak {
+	if b := parse_bool_opt(value) {
+		return FontShapingBreak{ cursor: b }
+	}
+	mut result := FontShapingBreak{}
+	for raw in value.split(',') {
+		part := raw.trim_space()
+		negative := part.starts_with('no-')
+		name := if negative { part[3..] } else { part }
+		if name != 'cursor' {
+			return none
+		}
+		result = FontShapingBreak{ cursor: !negative }
+	}
+	return result
+}
+
+fn parse_shell_integration_features(value string) ?ShellIntegrationFeatures {
+	if b := parse_bool_opt(value) {
+		return ShellIntegrationFeatures{
+			cursor: b
+			sudo: b
+			title: b
+			ssh_env: b
+			ssh_terminfo: b
+			path: b
+		}
+	}
+	mut result := ShellIntegrationFeatures{}
+	for raw in value.split(',') {
+		part := raw.trim_space()
+		negative := part.starts_with('no-')
+		name := if negative { part[3..] } else { part }
+		enabled := !negative
+		match name {
+			'cursor' {
+				result.cursor = enabled
+			}
+			'sudo' {
+				result.sudo = enabled
+			}
+			'title' {
+				result.title = enabled
+			}
+			'ssh-env' {
+				result.ssh_env = enabled
+			}
+			'ssh-terminfo' {
+				result.ssh_terminfo = enabled
+			}
+			'path' {
+				result.path = enabled
+			}
+			else {
+				return none
+			}
+		}
+	}
+	return result
+}
+
+fn parse_scroll_to_bottom(value string) ?ScrollToBottom {
+	if b := parse_bool_opt(value) {
+		return ScrollToBottom{
+			keystroke: b
+			output: b
+		}
+	}
+	mut result := ScrollToBottom{}
+	for raw in value.split(',') {
+		part := raw.trim_space()
+		negative := part.starts_with('no-')
+		name := if negative { part[3..] } else { part }
+		enabled := !negative
+		match name {
+			'keystroke' {
+				result.keystroke = enabled
+			}
+			'output' {
+				result.output = enabled
+			}
+			else {
+				return none
+			}
+		}
+	}
+	return result
+}
+
+fn parse_shell_integration(value string) ?ShellIntegration {
+	return match value {
+		'detect' { ShellIntegration.detect }
+		'none' { ShellIntegration.none_ }
+		'bash' { ShellIntegration.bash }
+		'elvish' { ShellIntegration.elvish }
+		'fish' { ShellIntegration.fish }
+		'nushell' { ShellIntegration.nushell }
+		'zsh' { ShellIntegration.zsh }
+		else { none }
+	}
+}
+
+// parse_command translates config/command.zig. The direct prefix bypasses
+// shell expansion and intentionally uses a naive split on literal spaces.
+fn parse_command(value string) ?Command {
+	trimmed := value.trim(' ')
+	if trimmed.len == 0 {
+		return none
+	}
+	if trimmed.starts_with('direct:') {
+		command := trimmed[7..].trim(' ')
+		return Command(DirectCmd{
+			direct: command.split(' ')
+		})
+	}
+	if trimmed.starts_with('shell:') {
+		return Command(ShellCmd{
+			shell: trimmed[6..].trim(' ')
+		})
+	}
+	return Command(ShellCmd{
+		shell: trimmed
+	})
+}
+
+fn parse_background_image_position(value string) ?BackgroundImagePosition {
+	return match value {
+		'top-left' { BackgroundImagePosition.top_left }
+		'top-center' { BackgroundImagePosition.top_center }
+		'top-right' { BackgroundImagePosition.top_right }
+		'center-left' { BackgroundImagePosition.center_left }
+		'center-center' { BackgroundImagePosition.center_center }
+		'center' { BackgroundImagePosition.center }
+		'center-right' { BackgroundImagePosition.center_right }
+		'bottom-left' { BackgroundImagePosition.bottom_left }
+		'bottom-center' { BackgroundImagePosition.bottom_center }
+		'bottom-right' { BackgroundImagePosition.bottom_right }
+		else { none }
+	}
+}
+
+fn parse_right_click_action(value string) ?RightClickAction {
+	return match value {
+		'ignore' { RightClickAction.ignore }
+		'paste' { RightClickAction.paste }
+		'copy' { RightClickAction.copy }
+		'copy-or-paste' { RightClickAction.copy_or_paste }
+		'context-menu' { RightClickAction.context_menu }
+		else { none }
 	}
 }
 
@@ -6032,27 +6737,10 @@ fn hex_digit(ch u8) ?int {
 	}
 }
 
-// parse_color parses a color specified as hex (`#RRGGBB` or `RRGGBB`).
-// Named X11 colors are not yet supported.
+// parse_color is the optional-return adapter used by the config reader. The
+// public parser handles short/long hex values and the complete X11 color set.
 fn parse_color(value string) ?ColorRGB {
-	mut s := value.trim_space()
-	if s.len == 0 {
-		return none
-	}
-	if s[0] == `#` {
-		s = s[1..]
-	}
-	if s.len != 6 {
-		return none
-	}
-	r := parse_hex_byte(s[0..2]) or { return none }
-	g := parse_hex_byte(s[2..4]) or { return none }
-	b := parse_hex_byte(s[4..6]) or { return none }
-	return ColorRGB{
-		r: r
-		g: g
-		b: b
-	}
+	return color_parse_cli(value) or { return none }
 }
 
 // parse_hex_byte parses a two-character hex string into a byte.
@@ -6190,6 +6878,12 @@ fn clamp_f64(v f64, lo f64, hi f64) f64 {
 // default_config creates a Config with default values.
 pub fn Config.default_config() Config {
 	mut result := Config{}
+	$if !macos {
+		result.alpha_blending = .linear_corrected
+	}
+	$if !macos && !linux {
+		result.copy_on_select = .false_
+	}
 	result.keybind.init()
 	result.selection_word_chars = SelectionWordChars.defaults()
 	result.link = LinkConfig{
@@ -6278,7 +6972,6 @@ pub fn color_from_hex(input string) !ColorRGB {
 
 // color_parse_cli parses a color the way `Color.parseCLI` does: it trims
 // surrounding whitespace, then tries a named X11 color, then a hex value.
-// Only the named colors exercised by the config tests are supported.
 pub fn color_parse_cli(input string) !ColorRGB {
 	trimmed := input.trim(' \t')
 	if named := named_x11_color(trimmed) {
@@ -6287,16 +6980,16 @@ pub fn color_parse_cli(input string) !ColorRGB {
 	return color_from_hex(trimmed)
 }
 
-// named_x11_color returns the RGB for a small set of named X11 colors.
+// named_x11_color resolves the complete embedded X.Org rgb.txt table.
 fn named_x11_color(name string) ?ColorRGB {
-	return match name {
-		'black' { ColorRGB{0x00, 0x00, 0x00} }
-		'white' { ColorRGB{0xff, 0xff, 0xff} }
-		'red' { ColorRGB{0xff, 0x00, 0x00} }
-		'green' { ColorRGB{0x00, 0x80, 0x00} }
-		'blue' { ColorRGB{0x00, 0x00, 0xff} }
-		else { none }
+	if rgb := terminal.x11_color_get(name) {
+		return ColorRGB{
+			r: rgb.r
+			g: rgb.g
+			b: rgb.b
+		}
 	}
+	return none
 }
 
 // format_color renders a color as `#rrggbb` (lowercase), matching
@@ -6791,32 +7484,18 @@ pub enum QuickTerminalPosition {
 // BackgroundBlur (parse with radius)
 // ------------------------------------------------------------
 
-pub enum BackgroundBlurKind {
-	bool_false
-	bool_true
-	radius
-	macos_glass_regular
-	macos_glass_clear
-}
-
-pub struct BackgroundBlurValue {
-pub:
-	kind   BackgroundBlurKind
-	radius u8
-}
-
 // background_blur_parse_cli translates `BackgroundBlur.parseCLI`.
-pub fn background_blur_parse_cli(input ?string) !BackgroundBlurValue {
+pub fn background_blur_parse_cli(input ?string) !BackgroundBlur {
 	in_val := input or {
 		// Emulate bool behavior: unset means true.
-		return BackgroundBlurValue{
+		return BackgroundBlur{
 			kind: .bool_true
 		}
 	}
 
 	// Try normal bools.
 	if b := parse_bool_opt(in_val) {
-		return BackgroundBlurValue{
+		return BackgroundBlur{
 			kind: if b { BackgroundBlurKind.bool_true } else { BackgroundBlurKind.bool_false }
 		}
 	}
@@ -6824,12 +7503,12 @@ pub fn background_blur_parse_cli(input ?string) !BackgroundBlurValue {
 	// Try the named void-tag enums.
 	match in_val {
 		'macos-glass-regular' {
-			return BackgroundBlurValue{
+			return BackgroundBlur{
 				kind: .macos_glass_regular
 			}
 		}
 		'macos-glass-clear' {
-			return BackgroundBlurValue{
+			return BackgroundBlur{
 				kind: .macos_glass_clear
 			}
 		}
@@ -6838,19 +7517,9 @@ pub fn background_blur_parse_cli(input ?string) !BackgroundBlurValue {
 
 	// Otherwise parse as a u8 radius (base-0: accepts decimal/0x/0o/0b).
 	radius := parse_u8_base0(in_val) or { return perr(ParseError.invalid_value) }
-	return BackgroundBlurValue{
+	return BackgroundBlur{
 		kind: .radius
 		radius: radius
-	}
-}
-
-// enabled translates `BackgroundBlur.enabled`.
-pub fn (b BackgroundBlurValue) enabled() bool {
-	return match b.kind {
-		.bool_false { false }
-		.bool_true { true }
-		.radius { b.radius > 0 }
-		.macos_glass_regular, .macos_glass_clear { true }
 	}
 }
 

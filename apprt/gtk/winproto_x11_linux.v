@@ -19,8 +19,11 @@ import input
 import configpkg
 
 #flag linux -lX11
+
 #include <X11/Xlib.h>
+
 #include <X11/Xatom.h>
+
 #include <X11/XKBlib.h>
 
 // --- Opaque X11 handle aliases ---------------------------------------------
@@ -39,8 +42,11 @@ pub type XWindow = u64
 // out the underlying Xlib Display, set the program class, and resolve atoms.
 
 fn C.gdk_x11_display_get_xdisplay(display GdkDisplay) XDisplay
+
 fn C.gdk_x11_display_set_program_class(display GdkDisplay, program_class &char)
+
 fn C.gdk_x11_get_xatom_by_name_for_display(display GdkDisplay, atom_name &char) XAtom
+
 fn C.gdk_x11_surface_get_xid(surface GdkSurface) XWindow
 
 // g_set_prgname sets the GLib program name (used to derive WM_CLASS instance).
@@ -53,12 +59,19 @@ fn C.GDK_IS_X11_DISPLAY(display GdkDisplay) int
 // --- Xlib C declarations ---------------------------------------------------
 
 fn C.XkbQueryExtension(display XDisplay, opcode_rtrn &int, event_rtrn &int, error_rtrn &int, major_in_out &int, minor_in_out &int) int
+
 fn C.XkbSelectEventDetails(display XDisplay, device_spec u32, event_type u32, bits_to_change u64, values_for_bits u64) int
+
 fn C.XEventsQueued(display XDisplay, mode int) int
+
 fn C.XPeekEvent(display XDisplay, event_return voidptr) int
+
 fn C.XGetWindowProperty(display XDisplay, w XWindow, property XAtom, long_offset i64, long_length i64, delete int, req_type XAtom, actual_type_return &XAtom, actual_format_return &int, nitems_return &u64, bytes_after_return &u64, prop_return &voidptr) int
+
 fn C.XChangeProperty(display XDisplay, w XWindow, property XAtom, typ XAtom, format int, mode int, data &u8, nelements int) int
+
 fn C.XDeleteProperty(display XDisplay, w XWindow, property XAtom) int
+
 fn C.XFree(data voidptr) int
 
 // C.XkbStateNotifyEvent mirrors the real `XkbStateNotifyEvent` from XKBlib.h.
@@ -167,11 +180,7 @@ pub fn X11App.init(gdk_display GdkDisplay, app_id string, config &configpkg.Conf
 	xlib_display := C.gdk_x11_display_get_xdisplay(gdk_display)
 
 	// Select the program name used to derive the WM_CLASS instance name.
-	default_program_name := $if prod {
-		'ghostty'
-	} $else {
-		'ghostty-debug'
-	}
+	default_program_name := $if prod { 'ghostty' } $else { 'ghostty-debug' }
 	x11_program_name := config.x11_instance_name or { default_program_name }
 
 	// Set the X11 window class property (WM_CLASS). g_set_prgname supplies
@@ -185,14 +194,12 @@ pub fn X11App.init(gdk_display GdkDisplay, app_id string, config &configpkg.Conf
 	mut base_error_code := 0
 	mut major := xkb_major_version
 	mut minor := xkb_minor_version
-	if C.XkbQueryExtension(xlib_display, &opcode, &base_event_code, &base_error_code,
-		&major, &minor) == 0 {
+	if C.XkbQueryExtension(xlib_display, &opcode, &base_event_code, &base_error_code, &major, &minor) == 0 {
 		eprintln('Fatal: error initializing Xkb extension: XkbQueryExtension failed')
 		return none
 	}
 
-	if C.XkbSelectEventDetails(xlib_display, xkb_use_core_kbd, xkb_state_notify, xkb_modifier_state_mask,
-		xkb_modifier_state_mask) == 0 {
+	if C.XkbSelectEventDetails(xlib_display, xkb_use_core_kbd, xkb_state_notify, xkb_modifier_state_mask, xkb_modifier_state_mask) == 0 {
 		eprintln('Fatal: error initializing Xkb extension: XkbSelectEventDetails failed')
 		return none
 	}
@@ -284,7 +291,7 @@ pub mut:
 
 	// Cache last applied values to avoid redundant X11 property updates.
 	// Redundant updates cause visual glitches with some WMs (ghostty #8075).
-	last_applied_blur_region     ?Region
+	last_applied_blur_region      ?Region
 	last_applied_decoration_hints ?MotifWMHints
 }
 
@@ -381,8 +388,7 @@ fn (mut self X11Window) sync_decorations() ! {
 	mut hints := MotifWMHints{}
 
 	// Read the existing hints, if any. A missing property is fine.
-	self.get_window_property_motif(self.app.atoms.motif_wm_hints, self.app.atoms.motif_wm_hints,
-		mut hints) or {
+	self.get_window_property_motif(self.app.atoms.motif_wm_hints, self.app.atoms.motif_wm_hints, mut hints) or {
 		if err.msg() != 'property not found' {
 			return err
 		}
@@ -401,8 +407,7 @@ fn (mut self X11Window) sync_decorations() ! {
 		}
 	}
 
-	self.change_property_motif(self.app.atoms.motif_wm_hints, self.app.atoms.motif_wm_hints,
-		mut hints)!
+	self.change_property_motif(self.app.atoms.motif_wm_hints, self.app.atoms.motif_wm_hints, mut hints)!
 	self.last_applied_decoration_hints = hints
 }
 
@@ -431,9 +436,7 @@ fn (mut self X11Window) get_window_property_motif(name XAtom, typ XAtom, mut res
 	mut bytes_after_return := u64(0)
 	mut prop_return := voidptr(0)
 
-	code := C.XGetWindowProperty(self.app.display, self.xid, name, 0, i64(max_i64), 0,
-		typ, &actual_type_return, &actual_format_return, &nitems_return, &bytes_after_return,
-		&prop_return)
+	code := C.XGetWindowProperty(self.app.display, self.xid, name, 0, i64(max_i64), 0, typ, &actual_type_return, &actual_format_return, &nitems_return, &bytes_after_return, &prop_return)
 	if code != x_success {
 		return error('request failed')
 	}
@@ -458,8 +461,7 @@ fn (mut self X11Window) get_window_property_motif(name XAtom, typ XAtom, mut res
 fn (mut self X11Window) change_property_region(name XAtom, typ XAtom, value &Region) ! {
 	// Region has 4 c_long fields; each c_long is one format-32 element.
 	nelements := int(sizeof(Region) / sizeof(i64))
-	status := C.XChangeProperty(self.app.display, self.xid, name, typ, prop_format_32,
-		prop_mode_replace, &u8(value), nelements)
+	status := C.XChangeProperty(self.app.display, self.xid, name, typ, prop_format_32, prop_mode_replace, &u8(value), nelements)
 	// Xlib's XChangeProperty returns 1 on success.
 	if status == 0 {
 		return error('request failed')
@@ -470,8 +472,7 @@ fn (mut self X11Window) change_property_region(name XAtom, typ XAtom, value &Reg
 // mode. Mirrors the relevant instantiation of `x11.Window.changeProperty`.
 fn (mut self X11Window) change_property_motif(name XAtom, typ XAtom, mut value MotifWMHints) ! {
 	nelements := int(sizeof(MotifWMHints) / sizeof(i64))
-	status := C.XChangeProperty(self.app.display, self.xid, name, typ, prop_format_32,
-		prop_mode_replace, &u8(value), nelements)
+	status := C.XChangeProperty(self.app.display, self.xid, name, typ, prop_format_32, prop_mode_replace, &u8(value), nelements)
 	if status == 0 {
 		return error('request failed')
 	}
@@ -489,8 +490,6 @@ fn (mut self X11Window) delete_property(name XAtom) ! {
 const max_i64 = i64(9223372036854775807)
 
 // blur_enabled reports whether the given config background_blur value enables
-// blur. The witty config models `background_blur` as a truncated enum; blur is
-// enabled for any non-`none_` value.
 fn blur_enabled(blur configpkg.BackgroundBlur) bool {
-	return blur != .none_
+	return blur.enabled()
 }

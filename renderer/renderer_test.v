@@ -35,6 +35,16 @@ fn test_derived_config_compiles_default_links() {
 	assert derived.links.links.len == 0
 }
 
+fn test_derived_config_preserves_explicit_bold_color() {
+	mut cfg := configpkg.Config.default_config()
+	cfg.load_string('bold-color = #123456\n')
+	mut derived := DerivedConfig.init(&cfg)!
+	bold := derived.bold_color or { panic('missing bold color') }
+	assert !bold.bright
+	assert bold.color == terminal.RGB{ r: 0x12, g: 0x34, b: 0x56 }
+	derived.deinit()
+}
+
 fn test_terminal_color_resolves_explicit_and_cell_colors() {
 	fg := terminal.RGB{ r: 10, g: 20, b: 30 }
 	bg := terminal.RGB{ r: 40, g: 50, b: 60 }

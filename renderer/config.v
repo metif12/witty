@@ -65,7 +65,7 @@ pub mut:
 		color: configpkg.ColorRGB{ r: 0, g: 0, b: 0 }
 	}
 	// Bold color override.
-	bold_color ?configpkg.BoldColor
+	bold_color ?terminal.BoldColor
 	// Opacity for faint text (SGR 2), as a u8 (0-255).
 	faint_opacity u8 = 128
 	// Minimum contrast ratio for text against background.
@@ -89,9 +89,9 @@ pub mut:
 	// Which color space to use.
 	colorspace configpkg.WindowColorspace = .srgb
 	// Alpha blending mode.
-	blending configpkg.AlphaBlending = .none_
+	blending configpkg.AlphaBlending = .native
 	// Background blur mode.
-	background_blur configpkg.BackgroundBlur = .none_
+	background_blur configpkg.BackgroundBlur = configpkg.BackgroundBlur{ kind: .bool_false }
 }
 
 // FontStyleStatus tracks which font styles are enabled.
@@ -147,7 +147,18 @@ pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
 		cursor_opacity: clamp_f64(config.cursor_opacity, 0.0, 1.0)
 		background: bg
 		foreground: fg
-		bold_color: config.bold_color
+		bold_color: if bold := config.bold_color {
+			terminal.BoldColor{
+				bright: bold.bright
+				color: terminal.RGB{
+					r: bold.color.r
+					g: bold.color.g
+					b: bold.color.b
+				}
+			}
+		} else {
+			none
+		}
 		faint_opacity: u8(math.ceil(config.faint_opacity * 255))
 		min_contrast: f32(config.minimum_contrast)
 		padding_color: config.window_padding_color

@@ -1285,3 +1285,199 @@ fn test_config_key_remap_is_parsed_cloned_and_finalized() {
 	cloned := cfg.clone()
 	assert cloned.key_remap.equal(cfg.key_remap)
 }
+
+fn test_load_string_applies_full_existing_config_surface() {
+	mut cfg := Config.default_config()
+	cfg.load_string('
+command = direct:nvim file.txt
+initial-command = shell:echo hi
+initial-input = hello
+env = FOO=first
+env = BAR=second
+env = FOO=replaced
+enquiry-response = witty
+font-feature = liga
+font-feature = calt
+font-style = Regular
+font-style-bold = Bold
+font-style-italic = Italic
+font-style-bold-italic = Bold Italic
+font-thicken = true
+font-thicken-strength = 42
+font-shaping-break = no-cursor
+custom-shader = one.glsl
+config-file = extra.conf
+background-image = bg.png
+background-image-opacity = 0.75
+background-image-position = center-center
+background-image-fit = cover
+background-image-repeat = true
+background-opacity-cells = true
+bold-color = RebeccaPurple
+unfocused-split-fill = LightGoldenrodYellow
+split-divider-color = #abc
+window-padding-top = 1
+window-padding-bottom = 2
+window-padding-left = 3
+window-padding-right = 4
+window-padding-balance = true
+window-padding-color = extend-always
+window-vsync = false
+window-colorspace = display-p3
+alpha-blending = linear
+background-blur = 37
+clipboard-read = deny
+clipboard-write = ask
+copy-on-select = clipboard
+confirm-close-surface = always
+mouse-shift-capture = never
+shell-integration = fish
+shell-integration-features = no-cursor,sudo,ssh-env,no-path
+link-previews = osc8
+scroll-to-bottom = no-keystroke,output
+grapheme-width-method = legacy
+scrollbar = never
+notify-on-command-finish = always
+cursor-style = bar
+cursor-style-blink = false
+right-click-action = copy-or-paste
+osc-color-report-format = 8-bit
+custom-shader-animation = always
+mouse-scroll-multiplier = 2.5
+image-storage-limit = 0x100
+')
+
+	assert cfg.diagnostics.len == 0
+	command := cfg.command or { panic('missing command') }
+	match command {
+		DirectCmd {
+			assert command.direct == ['nvim', 'file.txt']
+		}
+		ShellCmd {
+			assert false, 'expected direct command'
+		}
+	}
+	initial_command := cfg.initial_command or { panic('missing initial command') }
+	match initial_command {
+		ShellCmd {
+			assert initial_command.shell == 'echo hi'
+		}
+		DirectCmd {
+			assert false, 'expected shell command'
+		}
+	}
+	assert cfg.initial_input? == 'hello'
+	assert cfg.env.entries == [StringMapEntry{'FOO', 'replaced'}, StringMapEntry{'BAR', 'second'}]
+	assert cfg.enquiry_response == 'witty'
+	assert cfg.font_feature == ['liga', 'calt']
+	assert cfg.font_style == 'Regular'
+	assert cfg.font_style_bold == 'Bold'
+	assert cfg.font_style_italic == 'Italic'
+	assert cfg.font_style_bold_italic == 'Bold Italic'
+	assert cfg.font_thicken
+	assert cfg.font_thicken_strength == 42
+	assert !cfg.font_shaping_break.cursor
+	assert cfg.custom_shader.items == ['one.glsl']
+	assert cfg.config_file.items == ['extra.conf']
+	assert cfg.background_image?.path == 'bg.png'
+	assert cfg.background_image_opacity == 0.75
+	assert cfg.background_image_position == .center_center
+	assert cfg.background_image_fit == .cover
+	assert cfg.background_image_repeat
+	assert cfg.background_opacity_cells
+	assert cfg.bold_color?.bright == false
+	assert cfg.bold_color?.color == ColorRGB{102, 51, 153}
+	assert cfg.unfocused_split_fill? == ColorRGB{250, 250, 210}
+	assert cfg.split_divider_color? == ColorRGB{170, 187, 204}
+	assert cfg.window_padding_top == 1
+	assert cfg.window_padding_bottom == 2
+	assert cfg.window_padding_left == 3
+	assert cfg.window_padding_right == 4
+	assert cfg.window_padding_balance
+	assert cfg.window_padding_color == .extend_always
+	assert !cfg.window_vsync
+	assert cfg.window_colorspace == .display_p3
+	assert cfg.alpha_blending == .linear
+	assert cfg.background_blur.kind == .radius
+	assert cfg.background_blur.radius == 37
+	assert cfg.clipboard_read == .deny
+	assert cfg.clipboard_write == .ask
+	assert cfg.copy_on_select == .clipboard
+	assert cfg.confirm_close_surface == .always
+	assert cfg.mouse_shift_capture == .never
+	assert cfg.shell_integration == .fish
+	assert !cfg.shell_integration_features.cursor
+	assert cfg.shell_integration_features.sudo
+	assert cfg.shell_integration_features.ssh_env
+	assert !cfg.shell_integration_features.path
+	assert cfg.link_previews == .osc8
+	assert !cfg.scroll_to_bottom.keystroke
+	assert cfg.scroll_to_bottom.output
+	assert cfg.grapheme_width_method == .legacy
+	assert cfg.scrollbar == .never
+	assert cfg.notify_on_command_finish == .always
+	assert cfg.cursor_style == .bar
+	assert cfg.cursor_style_blink? == false
+	assert cfg.right_click_action == .copy_or_paste
+	assert cfg.osc_color_report_format == .format_8_bit
+	assert cfg.custom_shader_animation == .always
+	assert cfg.mouse_scroll_multiplier == 2.5
+	assert cfg.image_storage_limit == 0x100
+}
+
+fn test_repeatable_config_values_reset_and_env_remove() {
+	mut cfg := Config.default_config()
+	cfg.load_string('
+font-feature = liga
+font-feature =
+custom-shader = one
+custom-shader =
+config-file = one
+config-file =
+env = A=B
+env = A=
+env = C=D
+env =
+command = echo hi
+command =
+')
+	assert cfg.font_feature.len == 0
+	assert cfg.custom_shader.items.len == 0
+	assert cfg.config_file.items.len == 0
+	assert cfg.env.entries.len == 0
+	assert cfg.command == none
+	assert cfg.diagnostics.len == 0
+}
+
+fn test_invalid_scalar_config_values_are_diagnostics_not_zeroes() {
+	mut cfg := Config.default_config()
+	before_font_size := cfg.font_size
+	before_window_width := cfg.window_width
+	cfg.load_string('
+font-size = nope
+window-width = -1
+font-thicken-strength = 256
+background-image-opacity = nope
+font-shaping-break = mouse
+shell-integration = powershell
+right-click-action = explode
+')
+	assert cfg.font_size == before_font_size
+	assert cfg.window_width == before_window_width
+	assert cfg.font_thicken_strength == 255
+	assert cfg.background_image_opacity == 1.0
+	assert cfg.diagnostics.len == 7
+}
+
+fn test_named_colors_work_for_base_colors_and_palette() {
+	mut cfg := Config.default_config()
+	cfg.load_string('
+background = RebeccaPurple
+foreground = LightGoldenrodYellow
+palette = 17=DeepSkyBlue
+')
+	assert cfg.background == ColorRGB{102, 51, 153}
+	assert cfg.foreground == ColorRGB{250, 250, 210}
+	assert cfg.palette.value[17] == ColorRGB{0, 191, 255}
+	assert cfg.diagnostics.len == 0
+}
