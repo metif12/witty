@@ -259,9 +259,10 @@ fn test_size_terminal_size() {
 		padding: Padding{ top: 5, bottom: 5, left: 5, right: 5 }
 	}
 	ts := s.terminal_size()
-	// Usable area: 790x590, grid: 79x29, terminal: 790x580
+	// The terminal area is the screen with padding removed. It is not rounded
+	// down to a whole-cell multiple.
 	assert ts.width == 790
-	assert ts.height == 580
+	assert ts.height == 590
 }
 
 // Test Size.blank_padding.
@@ -278,6 +279,19 @@ fn test_size_blank_padding() {
 	assert bp.right == 0
 	assert bp.top == 0
 	assert bp.bottom == 0
+}
+
+fn test_size_blank_padding_is_trailing_and_includes_explicit_padding() {
+	s := Size{
+		screen: ScreenSize{ width: 108, height: 112 }
+		cell: CellSize{ width: 10, height: 20 }
+		padding: Padding{ top: 2, bottom: 3, left: 1, right: 2 }
+	}
+	bp := s.blank_padding(GridSize{ columns: 10, rows: 5 })
+	assert bp.left == 1
+	assert bp.top == 2
+	assert bp.right == 7
+	assert bp.bottom == 10
 }
 
 // Test Padding.add.
@@ -301,6 +315,12 @@ fn test_grid_size() {
 	g := s.grid()
 	assert g.columns == 80
 	assert g.rows == 30
+}
+
+fn test_grid_size_equals() {
+	a := GridSize{ columns: 80, rows: 24 }
+	assert a.equals(GridSize{ columns: 80, rows: 24 })
+	assert !a.equals(GridSize{ columns: 81, rows: 24 })
 }
 
 // Test ScreenSize.equals.
@@ -474,9 +494,23 @@ fn test_balance_padding() {
 		padding: Padding{}
 	}
 	s.balance_padding(Padding{ top: 0, bottom: 0, left: 0, right: 0 })
-	// 810/10 = 81 cols, extra 0. 610/20 = 30 rows, extra 10.
+	// 810/10 = 81 cols, extra 0. 610/20 = 30 rows, extra 10. The
+	// vertical shift caps top padding to half a cell width.
 	assert s.padding.top == 5
 	assert s.padding.bottom == 5
+}
+
+fn test_balance_padding_caps_top_and_moves_excess_to_bottom() {
+	mut s := Size{
+		screen: ScreenSize{ width: 805, height: 639 }
+		cell: CellSize{ width: 10, height: 20 }
+		padding: Padding{}
+	}
+	s.balance_padding(Padding{ top: 0, bottom: 0, left: 0, right: 0 })
+	assert s.padding.left == 2
+	assert s.padding.right == 2
+	assert s.padding.top == 5
+	assert s.padding.bottom == 13
 }
 
 // Verify the production row path shapes codepoints, rasterizes their glyphs,

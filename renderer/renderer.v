@@ -3321,34 +3321,10 @@ pub mut:
 	rows    u32
 }
 
-// Get the terminal rendering area size (grid area only).
+// Get the terminal rendering area. This is the surface size with the
+// configured padding removed; it is intentionally not rounded to whole cells.
 pub fn (s &Size) terminal_size() ScreenSize {
-	g := GridSize{
-		columns: if s.cell.width > 0 {
-			usable_w := if s.screen.width > s.padding.left + s.padding.right {
-				s.screen.width - s.padding.left - s.padding.right
-			} else {
-				u32(0)
-			}
-			usable_w / s.cell.width
-		} else {
-			u32(0)
-		}
-		rows: if s.cell.height > 0 {
-			usable_h := if s.screen.height > s.padding.top + s.padding.bottom {
-				s.screen.height - s.padding.top - s.padding.bottom
-			} else {
-				u32(0)
-			}
-			usable_h / s.cell.height
-		} else {
-			u32(0)
-		}
-	}
-	return ScreenSize{
-		width: g.columns * s.cell.width
-		height: g.rows * s.cell.height
-	}
+	return s.screen.sub_padding(s.padding)
 }
 
 pub fn (s Size) terminal_width() u32 {
@@ -3370,49 +3346,26 @@ pub fn (s Size) terminal_width() u32 {
 
 // Compute the blank padding (space between the grid and the edge of the screen).
 pub fn (s &Size) blank_padding(grid GridSize) Padding {
-	term := s.terminal_size()
-	usable_w := if s.screen.width > s.padding.left + s.padding.right {
-		s.screen.width - s.padding.left - s.padding.right
-	} else {
-		u32(0)
-	}
-	usable_h := if s.screen.height > s.padding.top + s.padding.bottom {
-		s.screen.height - s.padding.top - s.padding.bottom
-	} else {
-		u32(0)
-	}
-	extra_w := if usable_w > term.width { usable_w - term.width } else { u32(0) }
-	extra_h := if usable_h > term.height { usable_h - term.height } else { u32(0) }
-	return Padding{
-		left: s.padding.left + extra_w / 2
-		right: s.padding.right + (extra_w - extra_w / 2)
-		top: s.padding.top + extra_h / 2
-		bottom: s.padding.bottom + (extra_h - extra_h / 2)
-	}
+	return s.screen.blank_padding_calc(s.padding, grid, s.cell).add(s.padding)
 }
 
 pub fn (mut s Size) balance_padding(explicit Padding) {
-	g := s.grid()
-	total_w := g.columns * s.cell.width
-	total_h := g.rows * s.cell.height
-	usable_w := if s.screen.width > explicit.left + explicit.right {
-		s.screen.width - explicit.left - explicit.right
+	// grid() must account for the explicit padding before the balanced
+	// whitespace is calculated.
+	s.padding = explicit
+	s.padding = Padding.balanced(s.screen, s.grid(), s.cell)
+
+	// A large top inset is visually heavy. Match Ghostty by limiting it to
+	// the balanced explicit horizontal padding plus half a cell width and
+	// moving the excess to the bottom.
+	max_padding_left := (explicit.left + explicit.right + s.cell.width) / 2
+	vshift := if s.padding.top > max_padding_left {
+		s.padding.top - max_padding_left
 	} else {
 		u32(0)
 	}
-	usable_h := if s.screen.height > explicit.top + explicit.bottom {
-		s.screen.height - explicit.top - explicit.bottom
-	} else {
-		u32(0)
-	}
-	extra_w := if usable_w > total_w { usable_w - total_w } else { u32(0) }
-	extra_h := if usable_h > total_h { usable_h - total_h } else { u32(0) }
-	s.padding = Padding{
-		left: explicit.left + extra_w / 2
-		right: explicit.right + (extra_w - extra_w / 2)
-		top: explicit.top + extra_h / 2
-		bottom: explicit.bottom + (extra_h - extra_h / 2)
-	}
+	s.padding.top -= vshift
+	s.padding.bottom += vshift
 }
 
 // This is called early right after surface creation.

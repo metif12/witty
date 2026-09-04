@@ -212,3 +212,8 @@ pub fn (mut self GridSize) update_from_screen(screen ScreenSize, cell CellSize) 
 	self.columns = if calc_cols > 1 { calc_cols } else { 1 }
 	self.rows = if calc_rows > 1 { calc_rows } else { 1 }
 }
+
+// Returns true if two grid sizes are equal.
+pub fn (self GridSize) equals(other GridSize) bool {
+	return self.columns == other.columns && self.rows == other.rows
+}
