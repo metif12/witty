@@ -3353,11 +3353,18 @@ pub fn PageList.from_pages(src &Pages) &PageList {
 	mut node := result.pages.first
 	for {
 		mut current := node or { break }
+		page_src_start := src_y
+		page_src_end := if src_y + int(current.data.size.rows) < total {
+			src_y + int(current.data.size.rows)
+		} else {
+			total
+		}
+		prepare_page_list_snapshot_styles(mut current.data, src.screen_rows[page_src_start..page_src_end], src.cols)
 		for page_y in 0 .. int(current.data.size.rows) {
 			if src_y >= total || src_y >= src.screen_rows.len {
 				break
 			}
-			current.data.rows[page_y] = clone_row_for_page_list(src.screen_rows[src_y], src.cols)
+			clone_row_for_page_list(mut current.data, page_y, &src.screen_rows[src_y], src.cols)
 			src_y++
 		}
 		node = current.next
@@ -3377,16 +3384,46 @@ pub fn PageList.from_pages(src &Pages) &PageList {
 	return &result
 }
 
-fn clone_row_for_page_list(src RowData, cols u32) RowData {
-	mut cells := []CellData{len: int(cols)}
-	limit := if src.cells.len < cells.len { src.cells.len } else { cells.len }
-	for x in 0 .. limit {
-		mut cell := src.cells[x]
-		cell.graphemes = src.cells[x].graphemes.clone()
-		cells[x] = cell
+// Resize a snapshot page's bounded style set for the concrete styles in the
+// flat rows it will own. Flat Pages uses style_id only as a non-default marker,
+// so the linked page must deduplicate the inline CellStyle values themselves.
+fn prepare_page_list_snapshot_styles(mut dst Page, rows []RowData, cols u32) {
+	mut styles_by_hash := map[u64][]CellStyle{}
+	mut unique_count := 0
+	for row in rows {
+		limit := if row.cells.len < int(cols) { row.cells.len } else { int(cols) }
+		for cell in row.cells[..limit] {
+			if cell.style_id == default_style_id {
+				continue
+			}
+
+			hash := cell.style.hash()
+			mut bucket := styles_by_hash[hash] or { []CellStyle{} }
+			mut found := false
+			for style in bucket {
+				if style.eql(&cell.style) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				bucket << cell.style
+				styles_by_hash[hash] = bucket
+				unique_count++
+			}
+		}
 	}
-	return RowData{
-		cells: cells
+
+	style_capacity := StyleSet.capacity_for_count(unique_count)
+	dst.capacity.styles = style_capacity
+	dst.styles = StyleSet.init(style_capacity)
+}
+
+// Copy one flat row into a linked Page, translating inline styles and
+// hyperlinks into the page-local ref-counted tables used by Ghostty's model.
+fn clone_row_for_page_list(mut dst Page, dst_y int, src &RowData, cols u32) {
+	dst.rows[dst_y] = RowData{
+		cells: []CellData{len: int(cols)}
 		wrap: src.wrap
 		wrap_continuation: src.wrap_continuation
 		grapheme: src.grapheme
@@ -3395,6 +3432,29 @@ fn clone_row_for_page_list(src RowData, cols u32) RowData {
 		semantic_prompt: src.semantic_prompt
 		kitty_virtual_placeholder: src.kitty_virtual_placeholder
 		dirty: src.dirty
+	}
+	limit := if src.cells.len < int(cols) { src.cells.len } else { int(cols) }
+	for x in 0 .. limit {
+		src_cell := &src.cells[x]
+		mut cell := *src_cell
+		cell.graphemes = src.cells[x].graphemes.clone()
+
+		// The flat ID is only a discriminator. Allocate the concrete inline
+		// value in this page and replace it with the resulting page-local ID.
+		cell.style_id = default_style_id
+		if src_cell.style_id != default_style_id {
+			cell.style_id = dst.styles.add(src_cell.style) or {
+				panic('PageList snapshot style capacity was undersized')
+			}
+		}
+
+		// set_hyperlink installs the page mapping after the base cell is copied.
+		cell.has_hyperlink = false
+		dst.rows[dst_y].cells[x] = cell
+		if src_cell.has_hyperlink {
+			id := dst.insert_hyperlink(src_cell.hyperlink)
+			dst.set_hyperlink(dst_y, x, id)
+		}
 	}
 }
 

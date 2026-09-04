@@ -74,6 +74,90 @@ fn test_page_list_init_more_than_max_cols() {
 	assert s.total_rows == 24
 }
 
+fn test_page_list_from_pages_translates_managed_cells() {
+	mut src := Pages.init(4, 2, 0)
+	defer { src.deinit() }
+
+	style_a := CellStyle{
+		flags: StyleFlags{
+			bold: true
+		}
+	}
+	style_b := CellStyle{
+		flags: StyleFlags{
+			italic: true
+		}
+	}
+	link := Hyperlink{
+		id: HyperlinkExplicitId{
+			value: 'snapshot-link'
+		}
+		uri: 'https://example.com/snapshot'
+	}
+
+	src.screen_rows[0].styled = true
+	src.screen_rows[0].hyperlink = true
+	src.screen_rows[0].grapheme = true
+	src.screen_rows[0].cells[0] = CellData{
+		content_tag: .codepoint_grapheme
+		codepoint: u32(`a`)
+		has_grapheme: true
+		graphemes: [u32(0x0301)]
+		style_id: 1
+		style: style_a
+		has_hyperlink: true
+		hyperlink: link.dupe()
+	}
+	src.screen_rows[0].cells[1] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`b`)
+		style_id: 1
+		style: style_a
+		has_hyperlink: true
+		hyperlink: link.dupe()
+	}
+	src.screen_rows[0].cells[2] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`c`)
+		style_id: 1
+		style: style_b
+	}
+
+	mut list := PageList.from_pages(&src)
+	defer { list.deinit() }
+	node := list.pages.first or {
+		assert false, 'snapshot has no page'
+		return
+	}
+	page := &node.data
+	row := page.rows[0]
+
+	assert row.cells[0].graphemes == [u32(0x0301)]
+	assert row.cells[0].style_id != default_style_id
+	assert row.cells[0].style_id == row.cells[1].style_id
+	assert row.cells[2].style_id != row.cells[0].style_id
+	assert page.styles.get(row.cells[0].style_id).eql(&style_a)
+	assert page.styles.get(row.cells[2].style_id).eql(&style_b)
+	assert page.styles.ref_count(row.cells[0].style_id) == 2
+	assert page.styles.ref_count(row.cells[2].style_id) == 1
+
+	first_link_id := page.lookup_hyperlink(0, 0) or {
+		assert false, 'first snapshot hyperlink has no mapping'
+		return
+	}
+	second_link_id := page.lookup_hyperlink(0, 1) or {
+		assert false, 'second snapshot hyperlink has no mapping'
+		return
+	}
+	assert first_link_id == second_link_id
+	assert page.hyperlink_set.get(first_link_id).eql(&link)
+	assert page.hyperlink_set.ref_count(first_link_id) == 2
+
+	if integrity_error := page.verify_integrity() {
+		assert false, 'snapshot page failed integrity: ${integrity_error}'
+	}
+}
+
 // ============================================================
 // pointFromPin tests
 // ============================================================
