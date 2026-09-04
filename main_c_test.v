@@ -188,6 +188,13 @@ fn test_embedded_c_abi_layouts_match_ghostty_header() {
 	assert sizeof(apprt.CAPIInputTrigger) == 12
 }
 
+fn test_benchmark_c_api_dispatches_actions() {
+	assert ghostty_benchmark_cli_c(c'codepoint-width', c'')
+	assert ghostty_benchmark_cli_c(c'grapheme-break', c'')
+	assert !ghostty_benchmark_cli_c(c'not-a-benchmark', c'')
+	assert !ghostty_benchmark_cli_c(unsafe { nil }, c'')
+}
+
 fn test_embedded_surface_config_defaults_and_conversion() {
 	defaults := ghostty_surface_config_new_c()
 	assert defaults.platform_tag == 0

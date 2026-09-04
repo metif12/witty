@@ -5,6 +5,7 @@
 module main
 
 import apprt
+import benchmark
 import configpkg
 import input
 
@@ -121,6 +122,22 @@ fn optional_cstring(value &char) ?string {
 		return none
 	}
 	return unsafe { cstring_to_vstring(value) }
+}
+
+// Run one of Ghostty's benchmark CLI actions. The implementation mirrors
+// src/benchmark/CApi.zig: unknown actions and action failures return false.
+@[export: 'ghostty_benchmark_cli']
+fn ghostty_benchmark_cli_c(action_name &char, args &char) bool {
+	if isnil(action_name) || isnil(args) {
+		return false
+	}
+	action := unsafe { cstring_to_vstring(action_name) }
+	argument_string := unsafe { cstring_to_vstring(args) }
+	benchmark.run_cli(action, argument_string) or {
+		eprintln('benchmark: failed to run action=${action} err=${err}')
+		return false
+	}
+	return true
 }
 
 fn surface_options_from_c(opts &SurfaceConfigC) ?apprt.SurfaceOptions {
