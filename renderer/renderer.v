@@ -754,6 +754,7 @@ import configpkg
 import highlight
 import stbi
 import macos
+import sync
 
 // Create a renderer type with the provided graphics API wrapper.
 //
@@ -761,8 +762,9 @@ import macos
 // Specific details for the interfaces are documented on the existing
 // implementations (Metal and OpenGL).
 //
-// In this V translation, we use Metal as our graphics backend
-// on macOS, with stubs for OpenGL and WebGL.
+// V cannot return a type from a comptime function as Zig does, so the two
+// native specializations share the CPU-side renderer state and retain their
+// backend-specific API, shaders, and frame resources side by side.
 //
 // Hierarchy of graphics abstractions:
 //
@@ -793,11 +795,21 @@ import macos
 //
 // [ Texture ] - An abstraction over a GPU texture.
 
-// Renderer handles drawing the terminal surface using Metal.
+pub enum GraphicsBackend {
+	metal
+	opengl
+}
+
+// Renderer handles drawing the terminal surface using the platform backend.
 pub struct Renderer {
 pub mut:
+	backend    GraphicsBackend
+	draw_mutex &sync.Mutex = unsafe { nil }
+
 	// The Metal graphics API for rendering.
 	metal MetalAPI
+	// The OpenGL graphics API used by GTK.
+	opengl OpenGLAPI
 
 	// GPU-side image state (Kitty graphics and debug overlays).
 	images ImageRenderState
@@ -805,10 +817,12 @@ pub mut:
 	overlay ?Overlay
 
 	// Compiled built-in and custom shader pipelines.
-	shaders MetalShaders
+	shaders    MetalShaders
+	gl_shaders GLShaders
 
 	// Per-frame resources used for triple buffering.
 	frames      []MetalFrameState
+	gl_frames   []GLFrameState
 	frame_index int = -1
 
 	// The configuration we need derived from the main config.
@@ -918,6 +932,14 @@ pub mut:
 
 // Initialize the renderer.
 pub fn Renderer.init(opts RendererOpts) !Renderer {
+	$if linux {
+		return Renderer.init_opengl(opts)
+	} $else {
+		return Renderer.init_metal(opts)
+	}
+}
+
+fn Renderer.init_metal(opts RendererOpts) !Renderer {
 	// Create the font shaper
 	mut font_shaper := font.Shaper.init(font.ShaperOptions{})!
 
@@ -981,6 +1003,8 @@ pub fn Renderer.init(opts RendererOpts) !Renderer {
 	}
 
 	mut result := Renderer{
+		backend: .metal
+		draw_mutex: sync.new_mutex()
 		metal: metal
 		images: ImageRenderState.empty()
 		shaders: shaders
@@ -1035,6 +1059,87 @@ pub fn Renderer.init(opts RendererOpts) !Renderer {
 	return result
 }
 
+fn Renderer.init_opengl(opts RendererOpts) !Renderer {
+	mut font_shaper := font.Shaper.init(font.ShaperOptions{})!
+	mut api := OpenGLAPI.init(RendererOptions{
+		config: opts.config
+		font_grid: opts.font_grid
+		size: opts.size
+	}) or {
+		font_shaper.deinit()
+		return err
+	}
+	post_shaders := load_shaders_from_files(opts.config.custom_shaders, .glsl) or {
+		eprintln('renderer: error loading custom shaders: ${err}')
+		[]string{}
+	}
+	mut shaders := api.init_shaders(post_shaders) or {
+		api.deinit()
+		font_shaper.deinit()
+		return err
+	}
+	mut frames := []GLFrameState{cap: opengl_swap_chain_count}
+	for _ in 0 .. opengl_swap_chain_count {
+		frame := GLFrameState.init(&api, post_shaders.len > 0) or {
+			for mut initialized in frames {
+				initialized.deinit()
+			}
+			shaders.deinit()
+			api.deinit()
+			font_shaper.deinit()
+			return err
+		}
+		frames << frame
+	}
+
+	metrics := opts.font_grid.metrics
+	mut result := Renderer{
+		backend: .opengl
+		draw_mutex: sync.new_mutex()
+		opengl: api
+		images: ImageRenderState.empty()
+		gl_shaders: shaders
+		gl_frames: frames
+		config: opts.config
+		grid_metrics: metrics
+		size: opts.size
+		focused: true
+		scrollbar: terminal.Scrollbar{}
+		search_matches: []highlight.FlattenedHighlight{}
+		cells: CellContents{}
+		uniforms: Uniforms{
+			min_contrast: opts.config.min_contrast
+			cursor_pos: [u16(0xFFFF), u16(0xFFFF)]!
+			bg_color: [
+				opts.config.background.r,
+				opts.config.background.g,
+				opts.config.background.b,
+				u8(opts.config.background_opacity * 255.0),
+			]!
+			bools: UniformBools{
+				use_display_p3: opts.config.colorspace == .display_p3
+				use_linear_blending: opts.config.blending.is_linear()
+				use_linear_correction: opts.config.blending == .linear_corrected
+			}
+		}
+		custom_shader_uniforms: CustomShaderUniforms{
+			focus: 1
+		}
+		font_grid: opts.font_grid
+		font_shaper: font_shaper
+		font_shaper_cache: font.ShaperCache.init()
+		has_custom_shaders: post_shaders.len > 0
+	}
+	result.update_font_grid_uniforms()
+	result.update_screen_size_uniforms()
+	result.update_bg_image_buffer()
+	result.prep_background_image() or {
+		result.deinit()
+		return err
+	}
+	return result
+}
+
 // Deinitialize the renderer and free all resources.
 pub fn (mut self Renderer) deinit() {
 	if self.display_link != unsafe { nil } {
@@ -1042,11 +1147,22 @@ pub fn (mut self Renderer) deinit() {
 		self.display_link.release()
 		self.display_link = unsafe { nil }
 	}
-	for mut frame in self.frames {
-		frame.deinit()
+	match self.backend {
+		.metal {
+			for mut frame in self.frames {
+				frame.deinit()
+			}
+			self.frames = []MetalFrameState{}
+			self.shaders.deinit()
+		}
+		.opengl {
+			for mut frame in self.gl_frames {
+				frame.deinit()
+			}
+			self.gl_frames = []GLFrameState{}
+			self.gl_shaders.deinit()
+		}
 	}
-	self.frames = []MetalFrameState{}
-	self.shaders.deinit()
 	self.images.deinit()
 	if mut overlay := self.overlay {
 		overlay.deinit()
@@ -1056,7 +1172,6 @@ pub fn (mut self Renderer) deinit() {
 		image.deinit()
 	}
 	self.bg_image = none
-	self.metal.deinit()
 	for mut match_ in self.search_matches {
 		match_.deinit()
 	}
@@ -1069,6 +1184,14 @@ pub fn (mut self Renderer) deinit() {
 	self.font_shaper.deinit()
 	self.font_shaper_cache.deinit()
 	self.config.deinit()
+	match self.backend {
+		.metal { self.metal.deinit() }
+		.opengl { self.opengl.deinit() }
+	}
+	if self.draw_mutex != unsafe { nil } {
+		self.draw_mutex.destroy()
+		self.draw_mutex = unsafe { nil }
+	}
 }
 
 // Mark the full screen as dirty so that we redraw everything.
@@ -1086,6 +1209,9 @@ pub fn (self &Renderer) has_animations() bool {
 // is responsible for triggering draw_now calls to the render thread.
 // That is the only way to trigger a draw_frame.
 pub fn (self &Renderer) has_vsync() bool {
+	if self.backend != .metal {
+		return false
+	}
 	if self.display_link == unsafe { nil } {
 		return false
 	}
@@ -1095,6 +1221,9 @@ pub fn (self &Renderer) has_vsync() bool {
 // set_macos_display_id moves the display link to the screen currently hosting
 // the window. Failure is non-fatal, matching Ghostty's renderer behavior.
 pub fn (mut self Renderer) set_macos_display_id(display_id u32) {
+	if self.backend != .metal {
+		return
+	}
 	if self.display_link == unsafe { nil } {
 		return
 	}
@@ -1112,7 +1241,7 @@ pub fn (mut self Renderer) set_focus(focus bool) ! {
 	// Flag that we need to update our custom shaders
 	self.custom_shader_focused_changed = true
 
-	if self.display_link != unsafe { nil } {
+	if self.backend == .metal && self.display_link != unsafe { nil } {
 		if focus {
 			self.display_link.start() or {}
 		} else {
@@ -1125,7 +1254,7 @@ pub fn (mut self Renderer) set_focus(focus bool) ! {
 //
 // Must be called on the render thread.
 pub fn (mut self Renderer) set_visible(visible bool) {
-	if self.display_link != unsafe { nil } {
+	if self.backend == .metal && self.display_link != unsafe { nil } {
 		if visible && self.focused {
 			self.display_link.start() or {}
 		} else {
@@ -1138,8 +1267,30 @@ pub fn (mut self Renderer) set_visible(visible bool) {
 //
 // Must be called on the render thread.
 pub fn (mut self Renderer) set_font_grid(grid &font.SharedGrid) {
+	if self.draw_mutex != unsafe { nil } {
+		self.draw_mutex.lock()
+		defer {
+			self.draw_mutex.unlock()
+		}
+	}
 	// Update our grid
 	self.font_grid = unsafe { grid }
+
+	// Force every frame to upload both atlases from the replacement grid.
+	match self.backend {
+		.metal {
+			for mut frame in self.frames {
+				frame.grayscale_modified = 0
+				frame.color_modified = 0
+			}
+		}
+		.opengl {
+			for mut frame in self.gl_frames {
+				frame.grayscale_modified = 0
+				frame.color_modified = 0
+			}
+		}
+	}
 
 	// Get our metrics from the grid. This doesn't require a lock because
 	// the metrics are never recalculated.
@@ -1264,6 +1415,9 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 	self.rebuild_overlay(overlay_features) or {
 		eprintln('renderer: error rebuilding overlay surface: ${err}')
 	}
+	if self.draw_mutex != unsafe { nil } {
+		self.draw_mutex.lock()
+	}
 
 	// Build our GPU cells.
 	preedit := if value := state.preedit { value.clone() } else { none }
@@ -1298,6 +1452,9 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 
 	// Update custom shader uniforms that depend on terminal state.
 	self.update_custom_shader_uniforms_from_state()
+	if self.draw_mutex != unsafe { nil } {
+		self.draw_mutex.unlock()
+	}
 
 	// Reset our dirty state after updating.
 	self.terminal_state.dirty = .false_
@@ -1359,6 +1516,19 @@ fn render_flattened_highlight(src highlight.FlattenedHighlight) terminal.RenderF
 // If `sync` is true, this will synchronously block until
 // the frame is finished drawing and has been presented.
 pub fn (mut self Renderer) draw_frame(sync_ bool) ! {
+	if self.draw_mutex != unsafe { nil } {
+		self.draw_mutex.lock()
+		defer {
+			self.draw_mutex.unlock()
+		}
+	}
+	match self.backend {
+		.metal { self.draw_frame_metal(sync_)! }
+		.opengl { self.draw_frame_opengl(sync_)! }
+	}
+}
+
+fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	mut surface_width, mut surface_height := self.metal.surface_size()
 	// A MetalAPI created without a view is useful for off-screen rendering and
 	// tests. In that case the configured screen size is the render-target size.
@@ -1592,6 +1762,229 @@ fn (self &Renderer) sync_atlas_texture(atlas &font.Atlas, mut texture MetalTextu
 	texture.replace_region(0, 0, atlas.size, atlas.size, atlas.data)!
 }
 
+fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
+	// OpenGL completes synchronously regardless of the requested mode.
+	_ = sync_
+	self.opengl.draw_frame_start()
+	defer {
+		self.opengl.draw_frame_end()
+	}
+
+	surface_width, surface_height := self.opengl.surface_size()
+	if surface_width == 0 || surface_height == 0 {
+		return
+	}
+	size_changed := self.size.screen.width != surface_width
+		|| self.size.screen.height != surface_height
+	needs_redraw := size_changed || self.cells_rebuilt || self.has_animations() || sync_
+	if !needs_redraw {
+		self.opengl.present_last_target()!
+		return
+	}
+	self.cells_rebuilt = false
+	if self.gl_frames.len == 0 {
+		return error('OpenGL swap chain is unavailable')
+	}
+
+	if self.reinitialize_shaders {
+		self.reinitialize_shaders = false
+		post_shaders := load_shaders_from_files(self.config.custom_shaders, .glsl) or {
+			eprintln('renderer: error loading custom shaders: ${err}')
+			[]string{}
+		}
+		mut replacement := self.opengl.init_shaders(post_shaders)!
+		self.gl_shaders.deinit()
+		self.gl_shaders = replacement
+		self.has_custom_shaders = post_shaders.len > 0
+	}
+
+	next_index := (self.frame_index + 1) % self.gl_frames.len
+	if self.has_custom_shaders {
+		if _ := self.gl_frames[next_index].custom_shader_state {
+		} else {
+			mut state := GLCustomShaderState.init(&self.opengl)!
+			state.resize(&self.opengl, surface_width, surface_height)!
+			self.gl_frames[next_index].custom_shader_state = state
+		}
+	} else if mut state := self.gl_frames[next_index].custom_shader_state {
+		state.deinit()
+		self.gl_frames[next_index].custom_shader_state = none
+	}
+
+	if size_changed {
+		self.size.screen = ScreenSize{
+			width: surface_width
+			height: surface_height
+		}
+		self.update_screen_size_uniforms()
+	}
+
+	self.frame_index = next_index
+	mut frame_state := &self.gl_frames[self.frame_index]
+	if frame_state.target.width != surface_width || frame_state.target.height != surface_height
+		|| frame_state.target_config_modified != self.target_config_modified {
+		frame_state.resize_target(&self.opengl, surface_width, surface_height)!
+		frame_state.target_config_modified = self.target_config_modified
+	}
+
+	_ = self.images.upload_opengl(&self.opengl)
+	self.upload_background_image()!
+	self.update_custom_shader_uniforms_for_frame()!
+
+	gpu_uniforms := gl_uniforms(self.uniforms)
+	frame_state.uniforms.sync_values([gpu_uniforms])
+	frame_state.cells_bg.sync_values(self.cells.bg_cells)
+	foreground := self.gl_text_cells()
+	frame_state.cells.sync_values(foreground)
+	if mut state := frame_state.custom_shader_state {
+		state.uniforms.sync_values([self.custom_shader_uniforms])
+		frame_state.custom_shader_state = state
+	}
+	if frame_state.bg_image_buffer_modified != self.bg_image_buffer_modified {
+		bg_vertex := gl_bg_image_vertex(self.bg_image_buffer)
+		frame_state.bg_image_buffer.sync_values([bg_vertex])
+		frame_state.bg_image_buffer_modified = self.bg_image_buffer_modified
+	}
+
+	if self.font_grid.atlas_grayscale.modified > frame_state.grayscale_modified {
+		self.sync_gl_atlas_texture(&self.font_grid.atlas_grayscale, mut frame_state.grayscale)!
+		frame_state.grayscale_modified = self.font_grid.atlas_grayscale.modified
+	}
+	if self.font_grid.atlas_color.modified > frame_state.color_modified {
+		self.sync_gl_atlas_texture(&self.font_grid.atlas_color, mut frame_state.color)!
+		frame_state.color_modified = self.font_grid.atlas_color.modified
+	}
+
+	mut frame := self.opengl.begin_frame(mut frame_state.target)!
+	mut terminal_attachment := GLRenderAttachment{
+		kind: .target
+		target: frame_state.target
+		clear_color: [f32(0), 0, 0, 0]!
+	}
+	if state := frame_state.custom_shader_state {
+		terminal_attachment = GLRenderAttachment{
+			kind: .texture
+			texture: state.back_texture
+			clear_color: [f32(0), 0, 0, 0]!
+		}
+	}
+	mut pass := GLRenderPass.begin_with_attachments([terminal_attachment])!
+
+	if image := self.bg_image {
+		if image.state == .ready && image.texture_backend == .opengl
+			&& image.gl_texture.id != 0 {
+			pass.step(GLRenderStep{
+				pipeline: self.gl_shaders.bg_image
+				uniforms: frame_state.uniforms
+				buffers: [frame_state.bg_image_buffer]
+				textures: [image.gl_texture]
+				draw: GLDraw{ primitive: .triangle, vertex_count: 3 }
+			})
+		}
+	} else {
+		pass.step(GLRenderStep{
+			pipeline: self.gl_shaders.bg_color
+			uniforms: frame_state.uniforms
+			buffers: [GLBuffer{}, frame_state.cells_bg]
+			draw: GLDraw{ primitive: .triangle, vertex_count: 3 }
+		})
+	}
+
+	self.images.draw_opengl(&self.opengl, self.gl_shaders.image, mut pass, .kitty_below_bg)
+	pass.step(GLRenderStep{
+		pipeline: self.gl_shaders.cell_bg
+		uniforms: frame_state.uniforms
+		buffers: [GLBuffer{}, frame_state.cells_bg]
+		draw: GLDraw{ primitive: .triangle, vertex_count: 3 }
+	})
+	self.images.draw_opengl(&self.opengl, self.gl_shaders.image, mut pass, .kitty_below_text)
+	pass.step(GLRenderStep{
+		pipeline: self.gl_shaders.cell_text
+		uniforms: frame_state.uniforms
+		buffers: [frame_state.cells, frame_state.cells_bg]
+		textures: [frame_state.grayscale, frame_state.color]
+		draw: GLDraw{
+			primitive: .triangle_strip
+			vertex_count: 4
+			instance_count: u32(foreground.len)
+		}
+	})
+	self.images.draw_opengl(&self.opengl, self.gl_shaders.image, mut pass, .kitty_above_text)
+	self.images.draw_opengl(&self.opengl, self.gl_shaders.image, mut pass, .overlay)
+	pass.complete()
+
+	if mut state := frame_state.custom_shader_state {
+		for index, pipeline in self.gl_shaders.post_pipelines {
+			mut attachment := GLRenderAttachment{
+				kind: .target
+				target: frame_state.target
+				clear_color: [f32(0), 0, 0, 0]!
+			}
+			if index < self.gl_shaders.post_pipelines.len - 1 {
+				attachment = GLRenderAttachment{
+					kind: .texture
+					texture: state.front_texture
+					clear_color: [f32(0), 0, 0, 0]!
+				}
+			}
+			mut post_pass := GLRenderPass.begin_with_attachments([attachment])!
+			post_pass.step(GLRenderStep{
+				pipeline: pipeline
+				uniforms: state.uniforms
+				textures: [state.back_texture]
+				samplers: [state.sampler]
+				draw: GLDraw{ primitive: .triangle, vertex_count: 3 }
+			})
+			post_pass.complete()
+			state.swap()
+		}
+		frame_state.custom_shader_state = state
+	}
+
+	frame.complete()
+	self.frame_completed(if frame.healthy { .healthy } else { .unhealthy })
+}
+
+fn (self &Renderer) gl_text_cells() []GLTextCell {
+	mut count := 0
+	for row in self.cells.fg_rows {
+		count += row.len
+	}
+	if self.cells.cursor != none {
+		count++
+	}
+	mut result := []GLTextCell{cap: count}
+	cursor_first := if style := self.cells.cursor_style { style == .block } else { false }
+	if cursor_first {
+		if cursor := self.cells.cursor {
+			result << gl_text_cell(cursor)
+		}
+	}
+	for row in self.cells.fg_rows {
+		for cell in row {
+			result << gl_text_cell(cell)
+		}
+	}
+	if !cursor_first {
+		if cursor := self.cells.cursor {
+			result << gl_text_cell(cursor)
+		}
+	}
+	return result
+}
+
+fn (self &Renderer) sync_gl_atlas_texture(atlas &font.Atlas, mut texture GLTexture) ! {
+	if atlas.format == .bgr {
+		return error('BGR font atlases are unsupported by OpenGL')
+	}
+	if atlas.size > texture.width {
+		mut replacement := GLTexture.init(self.opengl.atlas_texture_options(atlas.format)!, atlas.size, atlas.size, none)!
+		texture.deinit()
+		texture = replacement
+	}
+	texture.replace_region(0, 0, atlas.size, atlas.size, atlas.data)
+}
+
 // Callback from the graphics API when a frame is completed.
 pub fn (mut self Renderer) frame_completed(health Health) {
 	// If our health value hasn't changed, then we do nothing.
@@ -1648,7 +2041,10 @@ fn (mut self Renderer) upload_background_image() ! {
 			return
 		}
 		if image.is_pending() {
-			image.upload(&self.metal)!
+			match self.backend {
+				.metal { image.upload(&self.metal)! }
+				.opengl { image.upload_opengl(&self.opengl)! }
+			}
 			self.bg_image = image
 		}
 	}
@@ -1657,6 +2053,12 @@ fn (mut self Renderer) upload_background_image() ! {
 
 // Update the configuration.
 pub fn (mut self Renderer) change_config(config &DerivedConfig) ! {
+	if self.draw_mutex != unsafe { nil } {
+		self.draw_mutex.lock()
+		defer {
+			self.draw_mutex.unlock()
+		}
+	}
 	// We always redo the font shaper in case font features changed. We
 	// could check to see if there was an actual config change but this is
 	// easier and rare enough to not cause performance issues.
@@ -1699,10 +2101,18 @@ pub fn (mut self Renderer) change_config(config &DerivedConfig) ! {
 		self.update_bg_image_buffer()
 	}
 	if blending_changed {
-		self.metal.blending = match config.blending {
-			.native { .none_ }
-			.linear { .linear }
-			.linear_corrected { .linear_corrected }
+		blending := match config.blending {
+			.native { AlphaBlendingMode.none_ }
+			.linear { AlphaBlendingMode.linear }
+			.linear_corrected { AlphaBlendingMode.linear_corrected }
+		}
+		match self.backend {
+			.metal {
+				self.metal.blending = blending
+			}
+			.opengl {
+				self.opengl.blending = blending
+			}
 		}
 		self.reinitialize_shaders = true
 		self.target_config_modified++
@@ -1717,6 +2127,12 @@ pub fn (mut self Renderer) change_config(config &DerivedConfig) ! {
 
 // Resize the screen.
 pub fn (mut self Renderer) set_screen_size(size Size) {
+	if self.draw_mutex != unsafe { nil } {
+		self.draw_mutex.lock()
+		defer {
+			self.draw_mutex.unlock()
+		}
+	}
 	// We only actually need the padding from this,
 	// everything else is derived elsewhere.
 	self.size.padding = size.padding
@@ -1928,12 +2344,23 @@ fn (mut self Renderer) update_custom_shader_uniforms_for_frame() ! {
 		mut pixel_x := f32(u32(cursor.grid_pos[0]) * cell.width + padding.left)
 		// Top edge of the cell the cursor is in
 		mut pixel_y := f32(u32(cursor.grid_pos[1]) * cell.height + padding.top)
+		if self.backend == .opengl {
+			pixel_y = f32(screen.height) - pixel_y
+		}
 
 		// Add the X bearing to get the left edge of the cursor
 		pixel_x += f32(cursor.bearings[0])
-		pixel_y += f32(cell.height)
-		pixel_y -= f32(cursor.bearings[1])
-		pixel_y += f32(cursor.glyph_size[1])
+		match self.backend {
+			.metal {
+				pixel_y += f32(cell.height)
+				pixel_y -= f32(cursor.bearings[1])
+				pixel_y += f32(cursor.glyph_size[1])
+			}
+			.opengl {
+				pixel_y -= f32(cell.height)
+				pixel_y += f32(cursor.bearings[1])
+			}
+		}
 
 		new_cursor := [pixel_x, pixel_y, cursor_width, cursor_height]!
 		new_cursor_color := [
@@ -2971,27 +3398,38 @@ pub fn (mut s Size) balance_padding(explicit Padding) {
 
 // This is called early right after surface creation.
 pub fn surface_init() ! {
-	// Metal has no early per-surface initialization hook.
+	$if linux {
+		OpenGLAPI.surface_init()!
+	}
 }
 
 // This is called just prior to spinning up the renderer thread for
 // final main thread setup requirements.
 pub fn (r &Renderer) finalize_surface_init() ! {
-	// Metal has no main-thread finalization hook.
+	if r.backend == .opengl {
+		r.opengl.finalize_surface_init()!
+	}
 }
 
 // Callback called by renderer.Thread when it begins.
 pub fn (r &Renderer) thread_enter() ! {
-	// Metal has no thread-local context to bind.
+	if r.backend == .opengl {
+		r.opengl.thread_enter()!
+	}
 }
 
 // Callback called by renderer.Thread when it exits.
 pub fn (r &Renderer) thread_exit() {
-	// Metal has no thread-local context to release.
+	if r.backend == .opengl {
+		r.opengl.thread_exit()
+	}
 }
 
 // Called by renderer.Thread when it starts the main loop.
 pub fn (mut r Renderer) loop_enter(render_thread &RendererThread) ! {
+	if r.backend != .metal {
+		return
+	}
 	if r.display_link == unsafe { nil } {
 		return
 	}
@@ -3001,7 +3439,7 @@ pub fn (mut r Renderer) loop_enter(render_thread &RendererThread) ! {
 
 // Called by renderer.Thread when it exits the main loop.
 pub fn (mut r Renderer) loop_exit() {
-	if r.display_link != unsafe { nil } {
+	if r.backend == .metal && r.display_link != unsafe { nil } {
 		r.display_link.stop() or {}
 	}
 }
@@ -3010,15 +3448,51 @@ pub fn (mut r Renderer) loop_exit() {
 // reinitialized due to any of the events mentioned in
 // the doc comment for display_unrealized.
 pub fn (mut r Renderer) display_realized() ! {
-	// Metal retains its device resources across view realization.
-	r.mark_dirty()
+	if r.backend == .metal {
+		r.mark_dirty()
+		return
+	}
+	r.opengl.display_realized()
+	if r.draw_mutex != unsafe { nil } {
+		r.draw_mutex.lock()
+		defer {
+			r.draw_mutex.unlock()
+		}
+	}
+	if r.gl_frames.len != 0 || !r.gl_shaders.defunct {
+		return error('OpenGL display resources are already initialized')
+	}
+	post_shaders := load_shaders_from_files(r.config.custom_shaders, .glsl) or {
+		eprintln('renderer: error loading custom shaders: ${err}')
+		[]string{}
+	}
+	r.gl_shaders = r.opengl.init_shaders(post_shaders)!
+	r.gl_frames = []GLFrameState{cap: opengl_swap_chain_count}
+	for _ in 0 .. opengl_swap_chain_count {
+		r.gl_frames << GLFrameState.init(&r.opengl, r.has_custom_shaders)!
+	}
+	r.reinitialize_shaders = false
+	r.target_config_modified = 1
 }
 
 // This is called by the GTK apprt when the surface is being destroyed.
 // This can happen because the surface is being closed but also when
 // moving the window between displays or splitting.
 pub fn (mut r Renderer) display_unrealized() {
-	// Metal retains its device resources across view realization.
+	if r.backend == .metal {
+		return
+	}
+	if r.draw_mutex != unsafe { nil } {
+		r.draw_mutex.lock()
+		defer {
+			r.draw_mutex.unlock()
+		}
+	}
+	for mut frame in r.gl_frames {
+		frame.deinit()
+	}
+	r.gl_frames = []GLFrameState{}
+	r.gl_shaders.deinit()
 }
 
 fn renderer_display_link_callback(display_link voidptr, now voidptr, output_time voidptr, flags_in u64, flags_out &u64, context voidptr) int {
