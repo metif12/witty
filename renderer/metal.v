@@ -124,6 +124,37 @@ pub fn (self &MetalAPI) create_command_buffer() voidptr {
 	return macos.metal_create_command_buffer(self.queue)
 }
 
+pub fn (self &MetalAPI) buffer_options() MetalBufferOptions {
+	return MetalBufferOptions{
+		device: self.device
+		cpu_cache_mode: .write_combined
+		storage_mode: self.default_storage_mode
+	}
+}
+
+pub fn (self &MetalAPI) image_texture_options(format PixelFormat, srgb bool) MetalTextureOptions {
+	pixel_format := match format {
+		.gray {
+			if srgb { MetalPixelFormat.r8unorm_srgb } else { MetalPixelFormat.r8unorm }
+		}
+		.rgba {
+			if srgb { MetalPixelFormat.rgba8unorm_srgb } else { MetalPixelFormat.rgba8unorm }
+		}
+		.bgra {
+			if srgb { MetalPixelFormat.bgra8unorm_srgb } else { MetalPixelFormat.bgra8unorm }
+		}
+		else { MetalPixelFormat.rgba8unorm }
+	}
+	return MetalTextureOptions{
+		device: self.device
+		pixel_format: pixel_format
+		storage_mode: self.default_storage_mode
+		usage: MetalTextureUsage{
+			shader_read: true
+		}
+	}
+}
+
 // present_and_commit presents the drawable and commits the command buffer.
 pub fn (self &MetalAPI) present_and_commit(cmd_buf voidptr, drawable voidptr) {
 	macos.metal_present_and_commit(cmd_buf, drawable)

@@ -2,6 +2,7 @@ module renderer
 
 import kitty
 import terminal
+import macos
 
 // ============================================================
 // Image tests
@@ -120,6 +121,10 @@ fn test_image_render_state_empty() {
 
 // Test ImageRenderState upload removes unloading images.
 fn test_image_render_state_upload_removes_unloading() {
+	mut api := MetalAPI.init()!
+	defer {
+		api.deinit()
+	}
 	mut state := ImageRenderState.empty()
 	state.images[1] = ImageEntry{
 		image: Image{ state: .unloading }
@@ -127,7 +132,7 @@ fn test_image_render_state_upload_removes_unloading() {
 	state.images[2] = ImageEntry{
 		image: Image{ state: .ready }
 	}
-	result := state.upload()
+	result := state.upload(&api)
 	assert result == true
 	assert 1 !in state.images
 	assert 2 in state.images
@@ -160,6 +165,10 @@ fn test_overlay_update_prepares_image_and_placement() {
 }
 
 fn test_overlay_update_replaces_then_unloads_image() {
+	mut api := MetalAPI.init()!
+	defer {
+		api.deinit()
+	}
 	mut state := ImageRenderState.empty()
 	state.overlay_update(Overlay{
 		width: 1
@@ -183,8 +192,104 @@ fn test_overlay_update_replaces_then_unloads_image() {
 	unloading := state.images[overlay_image_key] or { panic('missing unloading overlay') }
 	assert unloading.image.state == .unloading
 	assert state.overlay_placements.len == 0
-	state.upload()
+	state.upload(&api)
 	assert overlay_image_key !in state.images
+}
+
+fn test_image_upload_converts_to_rgba_texture() ! {
+	mut api := MetalAPI.init()!
+	defer {
+		api.deinit()
+	}
+	mut state := ImageRenderState.empty()
+	defer {
+		state.deinit()
+	}
+	state.images[3] = ImageEntry{
+		image: Image{
+			state: .pending
+			pending: PendingImage{
+				width: 2
+				height: 1
+				pixel_format: .gray_alpha
+				data: [u8(20), 40, 60, 80]
+			}
+			width: 2
+			height: 1
+		}
+	}
+	assert state.upload(&api)
+	entry := state.images[3] or { return error('missing uploaded image') }
+	assert entry.image.state == .ready
+	assert entry.image.pending == none
+	assert entry.image.texture_handle != unsafe { nil }
+	mut bytes := []u8{len: 8}
+	macos.metal_texture_get_bytes(entry.image.texture_handle, mut bytes, 8, 0, 0, 2, 1)
+	assert bytes == [u8(20), 20, 20, 40, 60, 60, 60, 80]
+}
+
+fn test_image_draw_encodes_gpu_placement() ! {
+	mut api := MetalAPI.init()!
+	defer {
+		api.deinit()
+	}
+	mut shaders := MetalShaders.init(api.device, []string{}, .bgra8unorm)!
+	defer {
+		shaders.deinit()
+	}
+	mut state := ImageRenderState.empty()
+	defer {
+		state.deinit()
+	}
+	state.images[7] = ImageEntry{
+		image: Image{
+			state: .pending
+			pending: PendingImage{
+				width: 1
+				height: 1
+				pixel_format: .rgba
+				data: [u8(255), 0, 0, 255]
+			}
+			width: 1
+			height: 1
+		}
+	}
+	state.kitty_placements << ImagePlacement{
+		image_id: KittyImageId{ id: 7 }
+		width: 1
+		height: 1
+		source_width: 1
+		source_height: 1
+	}
+	state.kitty_bg_end = 1
+	assert state.upload(&api)
+
+	mut target := MetalTarget.init(MetalTargetOptions{
+		device: api.device
+		width: 4
+		height: 4
+		storage_mode: api.default_storage_mode
+	})!
+	defer {
+		target.deinit()
+	}
+	mut uniforms := MetalBuffer.init_fill(api.buffer_options(), []u8{len: int($sizeof(Uniforms))})!
+	defer {
+		uniforms.deinit()
+	}
+	mut frame := MetalFrame.begin(api.queue)!
+	mut pass := MetalRenderPass.begin(frame.command_buffer, [MetalRenderPassAttachment{
+		texture: target.texture
+		clear_color: [f64(0), 0, 0, 1]!
+	}])!
+	pass.step(MetalRenderStep{
+		pipeline: shaders.bg_color
+		uniforms: uniforms.handle
+		vertex_count: 3
+	})
+	state.draw(&api, shaders.image, mut pass, .kitty_below_bg)
+	pass.complete()
+	assert frame.complete(true) == .completed
 }
 
 fn test_kitty_update_reads_terminal_storage() ! {

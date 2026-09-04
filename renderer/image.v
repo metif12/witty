@@ -207,11 +207,19 @@ import terminal
 import kitty
 import math
 import time
+import macos
 
 const overlay_image_key = u64(1) << 32
 
 fn kitty_image_key(id u32) u64 {
 	return u64(id)
+}
+
+fn image_key(id ImageId) u64 {
+	return match id {
+		KittyImageId { kitty_image_key(id.id) }
+		OverlayImageId { overlay_image_key }
+	}
 }
 
 // Image identifier used to store and lookup images.
@@ -361,8 +369,11 @@ pub fn (self &Image) has_texture() bool {
 }
 
 pub fn (mut self Image) deinit() {
+	macos.metal_release(self.texture_handle)
 	self.pending = none
 	self.texture_handle = unsafe { nil }
+	self.width = 0
+	self.height = 0
 }
 
 // Entry in the image map, pairing an image with its transmit time.
@@ -452,21 +463,91 @@ pub fn (mut self ImageRenderState) deinit() {
 // If any uploads fail, they are ignored. The return value
 // can be used to detect if upload was a total success (true)
 // or not (false).
-pub fn (mut self ImageRenderState) upload() bool {
-	// XTODO: Image upload requires GPU API integration.
-	// This method should iterate through images, upload pending ones
-	// to the GPU, and remove unloading ones.
+pub fn (mut self ImageRenderState) upload(api &MetalAPI) bool {
+	mut success := true
 	mut to_remove := []u64{}
 	for id, mut entry in self.images {
 		if entry.image.is_unloading() {
 			entry.image.deinit()
 			to_remove << id
+			continue
+		}
+		if entry.image.is_pending() {
+			entry.image.upload(api) or {
+				success = false
+				self.images[id] = entry
+				continue
+			}
+			self.images[id] = entry
 		}
 	}
 	for id in to_remove {
 		self.images.delete(id)
 	}
-	return true
+	return success
+}
+
+fn (mut self Image) upload(api &MetalAPI) ! {
+	pending := self.pending or { return error('image has no pending data') }
+	rgba := pending_to_rgba(pending)!
+	mut texture := MetalTexture.init(api.image_texture_options(.rgba, true), pending.width, pending.height, rgba)!
+	old_texture := self.texture_handle
+	self.texture_handle = texture.handle
+	texture.handle = unsafe { nil }
+	macos.metal_release(old_texture)
+	self.pending = none
+	self.width = pending.width
+	self.height = pending.height
+	self.state = .ready
+}
+
+fn pending_to_rgba(pending PendingImage) ![]u8 {
+	if pending.data.len != int(pending.data_len()) {
+		return error('image data size does not match dimensions')
+	}
+	if pending.pixel_format == .rgba {
+		return pending.data.clone()
+	}
+	pixels := int(pending.width * pending.height)
+	mut rgba := []u8{len: pixels * 4}
+	for i in 0 .. pixels {
+		src := i * int(pending.pixel_format.bpp())
+		dst := i * 4
+		match pending.pixel_format {
+			.gray {
+				rgba[dst] = pending.data[src]
+				rgba[dst + 1] = pending.data[src]
+				rgba[dst + 2] = pending.data[src]
+				rgba[dst + 3] = 255
+			}
+			.gray_alpha {
+				rgba[dst] = pending.data[src]
+				rgba[dst + 1] = pending.data[src]
+				rgba[dst + 2] = pending.data[src]
+				rgba[dst + 3] = pending.data[src + 1]
+			}
+			.rgb {
+				rgba[dst] = pending.data[src]
+				rgba[dst + 1] = pending.data[src + 1]
+				rgba[dst + 2] = pending.data[src + 2]
+				rgba[dst + 3] = 255
+			}
+			.bgr {
+				rgba[dst] = pending.data[src + 2]
+				rgba[dst + 1] = pending.data[src + 1]
+				rgba[dst + 2] = pending.data[src]
+				rgba[dst + 3] = 255
+			}
+			.bgra {
+				rgba[dst] = pending.data[src + 2]
+				rgba[dst + 1] = pending.data[src + 1]
+				rgba[dst + 2] = pending.data[src]
+				rgba[dst + 3] = pending.data[src + 3]
+			}
+			.rgba {}
+		}
+	}
+	return rgba
 }
 
 // Returns true if the Kitty graphics state requires an update based
@@ -897,8 +978,42 @@ pub fn (mut self ImageRenderState) overlay_update(overlay ?Overlay) {
 //
 // Any placements that have non-uploaded images are ignored. Any
 // graphics API errors during drawing are also ignored.
-pub fn (mut self ImageRenderState) draw(placement_type DrawPlacements) {
-	// XTODO: Drawing requires GPU API integration (pipeline, render pass,
-	// buffer creation, texture binding).
-	_ = placement_type
+pub fn (mut self ImageRenderState) draw(api &MetalAPI, pipeline MetalPipeline, mut pass MetalRenderPass, placement_type DrawPlacements) {
+	placements := match placement_type {
+		.kitty_below_bg {
+			self.kitty_placements[..math.min(int(self.kitty_bg_end), self.kitty_placements.len)]
+		}
+		.kitty_below_text {
+			start := math.min(int(self.kitty_bg_end), self.kitty_placements.len)
+			end := math.min(int(self.kitty_text_end), self.kitty_placements.len)
+			self.kitty_placements[start..end]
+		}
+		.kitty_above_text {
+			start := math.min(int(self.kitty_text_end), self.kitty_placements.len)
+			self.kitty_placements[start..]
+		}
+		.overlay { self.overlay_placements }
+	}
+	for placement in placements {
+		entry := self.images[image_key(placement.image_id)] or { continue }
+		if entry.image.state != .ready || entry.image.texture_handle == unsafe { nil } {
+			continue
+		}
+		vertex := MetalImageVertex{
+			grid_pos: [f32(placement.x), f32(placement.y)]!
+			cell_offset: [f32(placement.cell_offset_x), f32(placement.cell_offset_y)]!
+			source_rect: [f32(placement.source_x), f32(placement.source_y),
+				f32(placement.source_width), f32(placement.source_height)]!
+			dest_size: [f32(placement.width), f32(placement.height)]!
+		}
+		mut buffer := MetalBuffer.init_value(api.buffer_options(), &vertex) or { continue }
+		pass.step(MetalRenderStep{
+			pipeline: pipeline
+			buffers: [buffer.handle]
+			textures: [entry.image.texture_handle]
+			draw_type: .triangle_strip
+			vertex_count: 4
+		})
+		buffer.deinit()
+	}
 }

@@ -75,6 +75,22 @@ pub fn MetalBuffer.init_fill(opts MetalBufferOptions, data []u8) !MetalBuffer {
 	}
 }
 
+pub fn MetalBuffer.init_value[T](opts MetalBufferOptions, value &T) !MetalBuffer {
+	if opts.device == unsafe { nil } {
+		return error('Metal buffer requires a device')
+	}
+	length := usize($sizeof(T))
+	handle := macos.metal_new_buffer_raw(opts.device, voidptr(value), length, opts.resource_options())
+	if handle == unsafe { nil } {
+		return error('Metal buffer allocation failed')
+	}
+	return MetalBuffer{
+		handle: handle
+		opts: opts
+		len: u32(length)
+	}
+}
+
 pub fn (mut self MetalBuffer) deinit() {
 	macos.metal_release(self.handle)
 	self.handle = unsafe { nil }

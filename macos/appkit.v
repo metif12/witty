@@ -1363,6 +1363,10 @@ pub fn metal_new_buffer_bytes(device voidptr, data []u8, options u64) voidptr {
 	return C.witty_metal_new_buffer_bytes(device, bytes, usize(data.len), options)
 }
 
+pub fn metal_new_buffer_raw(device voidptr, data voidptr, length usize, options u64) voidptr {
+	return C.witty_metal_new_buffer_bytes(device, data, length, options)
+}
+
 pub fn metal_buffer_length(buffer voidptr) usize {
 	return C.witty_metal_buffer_length(buffer)
 }
