@@ -66,9 +66,9 @@ fn C.g_value_set_uint64(value voidptr, v_uint64 u64)
 
 // --- SearchOverlay --------------------------------------------------------
 
-// SearchOverlay is the V model of the `GhosttySearchOverlay` GObject class.
-// Fields mirror the Zig `Private` struct. Optional match counts use V's `?u64`
-// (Zig's `?usize`).
+// SearchOverlay is the V wrapper for the `GhosttySearchOverlay` GObject class.
+// Search state lives in the native instance-private struct, matching the Zig
+// implementation and the properties used by the template bindings.
 @[heap]
 pub struct SearchOverlay {
 
@@ -78,19 +78,6 @@ pub mut:
 
 	// The search entry widget (template child).
 	search_entry GtkSearchEntry = unsafe { nil }
-
-	// True when a search is active, meaning we should show the overlay.
-	active bool
-
-	// Total number of search matches (`none` means unknown/none).
-	search_total ?u64
-
-	// Currently selected match index (`none` means none selected).
-	search_selected ?u64
-
-	// Target horizontal / vertical alignment for the overlay.
-	halign_target Align = .end
-	valign_target Align = .start
 }
 
 // new_search_overlay creates a new SearchOverlay. Mirrors
@@ -118,16 +105,17 @@ pub fn (self &SearchOverlay) grab_focus() {
 // active, it re-emits the current search text so the search is (re)run. Mirrors
 // `setSearchActive`.
 pub fn (mut self SearchOverlay) set_search_active(active bool) {
-	if !self.active && active {
-		text := self.entry_text()
-		self.emit_search_changed(text)
+	if !isnil(self.widget) {
+		C.g_object_set(GObject(self.widget), c'active', b2i(active), unsafe { nil })
 	}
-	self.active = active
 }
 
 // get_search_active returns the active state. Mirrors `getSearchActive`.
 pub fn (self &SearchOverlay) get_search_active() bool {
-	return self.active
+	if isnil(self.widget) {
+		return false
+	}
+	return search_overlay_priv(voidptr(self.widget)).active != 0
 }
 
 // set_search_contents sets the contents of the search entry and emits a
@@ -141,63 +129,89 @@ pub fn (mut self SearchOverlay) set_search_contents(content string) {
 // only when the value (or its presence) actually changes. Mirrors
 // `setSearchTotal`.
 pub fn (mut self SearchOverlay) set_search_total(total ?u64) {
-	had_total := self.search_total != none
-	if opt_u64_eq(self.search_total, total) {
+	if isnil(self.widget) {
 		return
 	}
-	self.search_total = total
-	if !isnil(self.widget) {
-		C.g_object_notify_by_pspec(self.widget, g_search_overlay_pspec_search_total)
+	mut priv := search_overlay_priv(voidptr(self.widget))
+	had_total := priv.has_search_total != 0
+	same_total := if value := total { had_total && priv.search_total == value } else { !had_total }
+	if same_total {
+		return
 	}
+	if value := total {
+		priv.search_total = value
+		priv.has_search_total = 1
+	} else {
+		priv.search_total = 0
+		priv.has_search_total = 0
+	}
+	C.g_object_notify_by_pspec(self.widget, g_search_overlay_pspec_search_total)
 	now_total := total != none
 	if had_total != now_total {
-		if !isnil(self.widget) {
-			C.g_object_notify_by_pspec(self.widget, g_search_overlay_pspec_has_search_total)
-		}
+		C.g_object_notify_by_pspec(self.widget, g_search_overlay_pspec_has_search_total)
 	}
 }
 
 // set_search_selected sets the currently selected match index. Mirrors
 // `setSearchSelected`.
 pub fn (mut self SearchOverlay) set_search_selected(selected ?u64) {
-	had_selected := self.search_selected != none
-	if opt_u64_eq(self.search_selected, selected) {
+	if isnil(self.widget) {
 		return
 	}
-	self.search_selected = selected
-	if !isnil(self.widget) {
-		C.g_object_notify_by_pspec(self.widget, g_search_overlay_pspec_search_selected)
+	mut priv := search_overlay_priv(voidptr(self.widget))
+	had_selected := priv.has_search_selected != 0
+	same_selected := if value := selected {
+		had_selected && priv.search_selected == value
+	} else {
+		!had_selected
 	}
+	if same_selected {
+		return
+	}
+	if value := selected {
+		priv.search_selected = value
+		priv.has_search_selected = 1
+	} else {
+		priv.search_selected = 0
+		priv.has_search_selected = 0
+	}
+	C.g_object_notify_by_pspec(self.widget, g_search_overlay_pspec_search_selected)
 	now_selected := selected != none
 	if had_selected != now_selected {
-		if !isnil(self.widget) {
-			C.g_object_notify_by_pspec(self.widget, g_search_overlay_pspec_has_search_selected)
-		}
+		C.g_object_notify_by_pspec(self.widget, g_search_overlay_pspec_has_search_selected)
 	}
 }
 
 // get_search_total returns the total match count (0 if unknown). Mirrors
 // `getSearchTotal`.
 pub fn (self &SearchOverlay) get_search_total() u64 {
-	return self.search_total or { 0 }
+	if isnil(self.widget) {
+		return 0
+	}
+	return search_overlay_priv(voidptr(self.widget)).search_total
 }
 
 // get_has_search_total reports whether a total is known. Mirrors
 // `getHasSearchTotal`.
 pub fn (self &SearchOverlay) get_has_search_total() bool {
-	return self.search_total != none
+	return !isnil(self.widget)
+		&& search_overlay_priv(voidptr(self.widget)).has_search_total != 0
 }
 
 // get_search_selected returns the selected match index (0 if none). Mirrors
 // `getSearchSelected`.
 pub fn (self &SearchOverlay) get_search_selected() u64 {
-	return self.search_selected or { 0 }
+	if isnil(self.widget) {
+		return 0
+	}
+	return search_overlay_priv(voidptr(self.widget)).search_selected
 }
 
 // get_has_search_selected reports whether a match is selected. Mirrors
 // `getHasSearchSelected`.
 pub fn (self &SearchOverlay) get_has_search_selected() bool {
-	return self.search_selected != none
+	return !isnil(self.widget)
+		&& search_overlay_priv(voidptr(self.widget)).has_search_selected != 0
 }
 
 // match_label builds the "selected/total" label shown in the overlay. Mirrors
@@ -287,57 +301,9 @@ pub fn (self &SearchOverlay) search_entry_key_pressed(keyval u32, keycode u32, g
 // end we move our halign/valign to whichever corner we crossed into (based on
 // the parent midpoints). Mirrors `onDragEnd`.
 pub fn (mut self SearchOverlay) on_drag_end(offset_x f64, offset_y f64) {
-	parent := C.gtk_widget_get_parent(self.widget)
-	if isnil(parent) {
-		return
+	if !isnil(self.widget) {
+		search_on_drag_end_cb(unsafe { nil }, offset_x, offset_y, voidptr(self.widget))
 	}
-
-	parent_width := f64(C.gtk_widget_get_allocated_width(parent))
-	parent_height := f64(C.gtk_widget_get_allocated_height(parent))
-	self_width := f64(C.gtk_widget_get_allocated_width(self.widget))
-	self_height := f64(C.gtk_widget_get_allocated_height(self.widget))
-
-	self_x := if self.halign_target == .start { f64(0) } else { parent_width - self_width }
-	self_y := if self.valign_target == .start { f64(0) } else { parent_height - self_height }
-
-	new_x := self_x + offset_x + (self_width / 2)
-	new_y := self_y + offset_y + (self_height / 2)
-
-	new_halign := if new_x > parent_width / 2 { Align.end } else { Align.start }
-	new_valign := if new_y > parent_height / 2 { Align.end } else { Align.start }
-
-	mut changed := false
-	if new_halign != self.halign_target {
-		self.halign_target = new_halign
-		if !isnil(self.widget) {
-			C.g_object_notify_by_pspec(self.widget, g_search_overlay_pspec_halign_target)
-		}
-		changed = true
-	}
-	if new_valign != self.valign_target {
-		self.valign_target = new_valign
-		if !isnil(self.widget) {
-			C.g_object_notify_by_pspec(self.widget, g_search_overlay_pspec_valign_target)
-		}
-		changed = true
-	}
-
-	if changed {
-		C.gtk_widget_queue_resize(self.widget)
-	}
-}
-
-// --- helpers --------------------------------------------------------------
-
-// opt_u64_eq compares two `?u64` for equality, treating `none == none` as true.
-fn opt_u64_eq(a ?u64, b ?u64) bool {
-	av := a or {
-		return b == none
-	}
-	bv := b or {
-		return false
-	}
-	return av == bv
 }
 
 // --- GObject class registration -------------------------------------------
@@ -540,7 +506,12 @@ fn search_overlay_set_property(obj voidptr, property_id u32, value voidptr, pspe
 	mut priv := search_overlay_priv(obj)
 	match property_id {
 		search_prop_active {
-			priv.active = C.g_value_get_boolean(value)
+			active := C.g_value_get_boolean(value)
+			if priv.active == 0 && active != 0 {
+				text := C.gtk_editable_get_text(priv.search_entry)
+				C.g_signal_emit_by_name(obj, c'search-changed', text)
+			}
+			priv.active = active
 		}
 		search_prop_halign_target {
 			priv.halign_target = C.g_value_get_enum(value)

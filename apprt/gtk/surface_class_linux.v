@@ -461,6 +461,7 @@ pub mut:
 	url_right      GtkLabel = unsafe { nil }
 	context_menu   GtkPopover = unsafe { nil }
 	resize_overlay &ResizeOverlay = unsafe { nil }
+	search_overlay &SearchOverlay = unsafe { nil }
 
 	// The core surface backing this GTK surface. This starts out nil because it
 	// can't be initialized until there is a realized GLArea. In ghostty this is
@@ -1888,6 +1889,22 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			self.set_scrollbar(action.scrollbar)
 			return true
 		}
+		.start_search {
+			self.set_search_active(true, action.needle)
+			return true
+		}
+		.end_search {
+			self.set_search_active(false, '')
+			return true
+		}
+		.search_total {
+			self.set_search_total(action.search_total)
+			return true
+		}
+		.search_selected {
+			self.set_search_selected(action.search_selected)
+			return true
+		}
 		.pwd {
 			self.set_pwd(if action.pwd.len > 0 { action.pwd } else { none })
 			return true
@@ -2326,6 +2343,98 @@ pub fn (mut self SurfaceWidget) set_scrollbar(scrollbar terminal.Scrollbar) {
 	C.g_signal_group_unblock(self.vadj_signal_group)
 }
 
+// set_search_active mirrors `setSearchActive`: update the overlay property,
+// optionally replace the needle, and focus/select the entry when opening.
+pub fn (mut self SurfaceWidget) set_search_active(active bool, needle string) {
+	if isnil(self.search_overlay) {
+		return
+	}
+	self.search_overlay.set_search_active(active)
+	if needle.len > 0 {
+		self.search_overlay.set_search_contents(needle)
+	}
+	if active {
+		self.search_overlay.grab_focus()
+	}
+}
+
+pub fn (mut self SurfaceWidget) set_search_total(total ?usize) {
+	if isnil(self.search_overlay) {
+		return
+	}
+	value := if actual := total { ?u64(u64(actual)) } else { ?u64(none) }
+	self.search_overlay.set_search_total(value)
+}
+
+pub fn (mut self SurfaceWidget) set_search_selected(selected ?usize) {
+	if isnil(self.search_overlay) {
+		return
+	}
+	value := if actual := selected { ?u64(u64(actual)) } else { ?u64(none) }
+	self.search_overlay.set_search_selected(value)
+}
+
+fn surface_search_stop_cb(overlay GtkWidget, data voidptr) {
+	_ = overlay
+	if isnil(data) {
+		return
+	}
+	mut self := unsafe { &SurfaceWidget(data) }
+	if !self.has_core() {
+		return
+	}
+	mut surface := self.core_surface
+	surface.perform_binding_action(input.Action.new(.end_search)) or {
+		eprintln('unable to perform end_search action err=${err}')
+	}
+	C.gtk_widget_grab_focus(GtkWidget(self.gl_area))
+}
+
+fn surface_search_changed_cb(overlay GtkWidget, needle_ptr &char, data voidptr) {
+	_ = overlay
+	if isnil(data) {
+		return
+	}
+	mut self := unsafe { &SurfaceWidget(data) }
+	if !self.has_core() {
+		return
+	}
+	mut needle := ''
+	if !isnil(needle_ptr) {
+		unsafe {
+			needle = cstring_to_vstring(needle_ptr)
+		}
+	}
+	mut surface := self.core_surface
+	surface.perform_binding_action(input.Action.new_str(.search, needle)) or {
+		eprintln('unable to perform search action err=${err}')
+	}
+}
+
+fn surface_search_next_cb(overlay GtkWidget, data voidptr) {
+	_ = overlay
+	surface_search_navigate(data, .next)
+}
+
+fn surface_search_previous_cb(overlay GtkWidget, data voidptr) {
+	_ = overlay
+	surface_search_navigate(data, .previous)
+}
+
+fn surface_search_navigate(data voidptr, direction input.NavigateSearch) {
+	if isnil(data) {
+		return
+	}
+	mut self := unsafe { &SurfaceWidget(data) }
+	if !self.has_core() {
+		return
+	}
+	mut surface := self.core_surface
+	surface.perform_binding_action(input.Action.new_enum(.navigate_search, i32(direction))) or {
+		eprintln('unable to perform navigate_search action err=${err}')
+	}
+}
+
 // --- Container requests ---------------------------------------------------
 // Ghostty emits GObject signals for these. The V wrapper routes each request
 // directly to the same owning split tree/window operation.
@@ -2502,9 +2611,11 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 	url_left := surface_url_label_new(.start)
 	url_right := surface_url_label_new(.end)
 	resize_overlay := new_resize_overlay()
+	search_overlay := new_search_overlay()
+	C.gtk_overlay_add_overlay(terminal_page, resize_overlay.widget)
 	C.gtk_overlay_add_overlay(terminal_page, GtkWidget(url_left))
 	C.gtk_overlay_add_overlay(terminal_page, GtkWidget(url_right))
-	C.gtk_overlay_add_overlay(terminal_page, resize_overlay.widget)
+	C.gtk_overlay_add_overlay(terminal_page, search_overlay.widget)
 	C.g_object_ref_sink(GObject(terminal_page))
 	C.adw_bin_set_child(AdwBin(obj), terminal_page)
 	error_page := surface_error_page_new()
@@ -2523,6 +2634,7 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 		url_right: url_right
 		context_menu: context_menu
 		resize_overlay: resize_overlay
+		search_overlay: search_overlay
 	}
 	mut native_priv := terminal_surface_priv(obj)
 	native_priv.wrapper = voidptr(w)
@@ -2577,6 +2689,10 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 	C.g_signal_connect_data(url_motion, c'leave', GCallback(voidptr(surface_url_leave_cb)), voidptr(w), unsafe { nil }, 0)
 	C.gtk_widget_add_controller(GtkWidget(w.url_left), url_motion)
 	C.g_signal_connect_data(w.context_menu, c'closed', GCallback(voidptr(surface_context_menu_closed_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(w.search_overlay.widget, c'stop-search', GCallback(voidptr(surface_search_stop_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(w.search_overlay.widget, c'search-changed', GCallback(voidptr(surface_search_changed_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(w.search_overlay.widget, c'next-match', GCallback(voidptr(surface_search_next_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(w.search_overlay.widget, c'previous-match', GCallback(voidptr(surface_search_previous_cb)), voidptr(w), unsafe { nil }, 0)
 	C.g_object_weak_ref(GObject(w.widget), voidptr(surface_widget_finalized_cb), voidptr(w))
 	return w
 }
