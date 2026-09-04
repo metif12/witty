@@ -752,6 +752,7 @@ import terminal
 import font
 import time
 import configpkg
+import highlight
 
 // Create a renderer type with the provided graphics API wrapper.
 //
@@ -827,7 +828,9 @@ pub mut:
 	//
 	// Note that the selections MAY BE INVALID (point to PageList nodes
 	// that do not exist anymore). These must be validated prior to use.
-	search_matches_dirty bool
+	search_matches        []highlight.FlattenedHighlight
+	search_selected_match ?highlight.FlattenedHighlight
+	search_matches_dirty  bool
 
 	// The current set of cells to render. This is rebuilt on every frame
 	// but we keep this around so that we don't reallocate. Each set of
@@ -913,6 +916,8 @@ pub fn Renderer.init(opts RendererOpts) !Renderer {
 		scrollbar: terminal.Scrollbar{}
 		scrollbar_dirty: false
 		search_matches_dirty: false
+		search_matches: []highlight.FlattenedHighlight{}
+		search_selected_match: none
 		// Render state
 		cells: CellContents{}
 		uniforms: Uniforms{
@@ -951,6 +956,14 @@ pub fn Renderer.init(opts RendererOpts) !Renderer {
 
 // Deinitialize the renderer and free all resources.
 pub fn (mut self Renderer) deinit() {
+	for mut match_ in self.search_matches {
+		match_.deinit()
+	}
+	self.search_matches = []
+	if mut match_ := self.search_selected_match {
+		match_.deinit()
+	}
+	self.search_selected_match = none
 	self.terminal_state.deinit()
 	self.font_shaper.deinit()
 	self.font_shaper_cache.deinit()
@@ -1091,11 +1104,8 @@ pub fn (mut self Renderer) update_frame(state &terminal.Terminal, cursor_blink_v
 	// here. We use an empty link set.
 	links := terminal.CellSet(map[u64]bool{})
 
-	// Clear our highlight state and update.
-	//
-	// The actual match lists (search_matches / search_selected_match) are
-	// not yet wired onto the renderer; we translate the dirty handling:
-	// clear prior highlights, mark rows dirty, and reset our dirty flag.
+	// Clear our highlight state and update. The order matters: selected
+	// highlights are appended first and therefore take visual priority.
 	if self.search_matches_dirty || self.terminal_state.dirty != .false_ {
 		self.search_matches_dirty = false
 
@@ -1109,6 +1119,20 @@ pub fn (mut self Renderer) update_frame(state &terminal.Terminal, cursor_blink_v
 		}
 		if any_dirty && self.terminal_state.dirty == .false_ {
 			self.terminal_state.dirty = .partial
+		}
+
+		if selected := self.search_selected_match {
+			converted := render_flattened_highlight(selected)
+			self.terminal_state.update_highlights_flattened(u8(HighlightTag.search_match_selected), [
+				converted,
+			])
+		}
+		if self.search_matches.len > 0 {
+			mut converted := []terminal.RenderFlattenedHighlight{cap: self.search_matches.len}
+			for match_ in self.search_matches {
+				converted << render_flattened_highlight(match_)
+			}
+			self.terminal_state.update_highlights_flattened(u8(HighlightTag.search_match), converted)
 		}
 	}
 
@@ -1146,6 +1170,23 @@ pub fn (mut self Renderer) update_frame(state &terminal.Terminal, cursor_blink_v
 
 	// Signal shaper we're done for the frame.
 	self.font_shaper.end_frame()
+}
+
+fn render_flattened_highlight(src highlight.FlattenedHighlight) terminal.RenderFlattenedHighlight {
+	mut chunks := []terminal.RenderHighlightChunk{cap: src.chunks.len}
+	for chunk in src.chunks {
+		chunks << terminal.RenderHighlightChunk{
+			node: chunk.node
+			serial: chunk.serial
+			start: chunk.start
+			end: chunk.end
+		}
+	}
+	return terminal.RenderFlattenedHighlight{
+		chunks: chunks
+		top_x: src.top_x
+		bot_x: src.bot_x
+	}
 }
 
 // Draw the frame to the screen.

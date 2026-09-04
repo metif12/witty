@@ -179,7 +179,6 @@ module renderer
 //
 // --- Original Ghostty Comments End: src/renderer/Thread.zig
 
-
 import configpkg
 
 // Constants for renderer thread timing.
@@ -432,9 +431,17 @@ fn (mut self RendererThread) drain_mailbox() ! {
 				self.sync_draw_timer()
 			}
 			SearchViewportMatchesMessage {
+				for mut old in self.renderer.search_matches {
+					old.deinit()
+				}
+				self.renderer.search_matches = msg.matches
 				self.renderer.search_matches_dirty = true
 			}
 			SearchSelectedMatchMessage {
+				if mut old := self.renderer.search_selected_match {
+					old.deinit()
+				}
+				self.renderer.search_selected_match = msg.match_
 				self.renderer.search_matches_dirty = true
 			}
 			InspectorMessage {

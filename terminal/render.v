@@ -168,6 +168,24 @@ pub:
 	range [2]u16
 }
 
+// Flattened highlight data accepted by RenderState. This mirrors
+// highlight.FlattenedHighlight without importing the highlight module back
+// into terminal (which would create a module cycle).
+pub struct RenderHighlightChunk {
+pub:
+	node   &PageNode = unsafe { nil }
+	serial u64
+	start  u16
+	end    u16
+}
+
+pub struct RenderFlattenedHighlight {
+pub:
+	chunks []RenderHighlightChunk
+	top_x  u16
+	bot_x  u16
+}
+
 // A cell within a rendered row.
 pub struct RenderCell {
 pub mut:
@@ -461,20 +479,59 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 //
 // This will not clear any previous highlights, so the caller must
 // manually clear them if desired.
-pub fn (mut self RenderState) update_highlights_flattened(tag u8, ranges []RenderHighlight) {
-	// XTODO: Full highlight update requires flattened highlight chunks
-	// with page node references and row range matching.
-	// Simplified: just append highlights to matching rows.
-	for hl in ranges {
-		y := int(hl.range[1]) // Use range as y index for simplified model
-		if y < self.row_data.len {
-			self.row_data[y].highlights << RenderHighlight{
-				tag: tag
-				range: hl.range
+pub fn (mut self RenderState) update_highlights_flattened(tag u8, hls []RenderFlattenedHighlight) {
+	if hls.len == 0 {
+		return
+	}
+
+	mut any_dirty := false
+	for mut row in self.row_data {
+		for hl in hls {
+			for i, chunk in hl.chunks {
+				// Reject recycled nodes before dereferencing their page data.
+				if chunk.node == unsafe { nil } || chunk.node.serial != chunk.serial {
+					continue
+				}
+				node_y := page_node_screen_y(chunk.node)
+				row_start := node_y + u32(chunk.start)
+				row_end := node_y + u32(chunk.end)
+				if row.pin.y < row_start || row.pin.y >= row_end {
+					continue
+				}
+
+				local_y := u16(row.pin.y - node_y)
+				start_x := if i == 0 && local_y == chunk.start { hl.top_x } else { u16(0) }
+				end_x := if i == hl.chunks.len - 1 && local_y == chunk.end - 1 {
+					hl.bot_x
+				} else {
+					self.cols - 1
+				}
+				row.highlights << RenderHighlight{
+					tag: tag
+					range: [start_x, end_x]!
+				}
+				row.dirty = true
+				any_dirty = true
 			}
-			self.row_data[y].dirty = true
 		}
 	}
+
+	if any_dirty && self.dirty == .false_ {
+		self.dirty = .partial
+	}
+}
+
+// Return the absolute row of a PageList node without requiring access to the
+// PageList owner. Flattened highlights retain the linked nodes themselves.
+fn page_node_screen_y(node &PageNode) u32 {
+	mut y := u32(0)
+	mut prev := node.prev
+	for {
+		current := prev or { break }
+		y += u32(current.data.size.rows)
+		prev = current.prev
+	}
+	return y
 }
 
 // A set of coordinates representing cells.

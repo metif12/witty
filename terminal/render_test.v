@@ -304,7 +304,7 @@ fn test_render_state_colors() {
 	state.update(mut t)
 
 	// Change cursor color
-	s.next_slice('\x1b]12;#FF0000\x07')!
+	s.next_slice('\x1b]12;#FF0000\a')!
 	state.update(mut t)
 
 	c := state.colors.cursor or { panic('nil cursor color') }
@@ -313,7 +313,7 @@ fn test_render_state_colors() {
 	assert c.b == 0
 
 	// Change palette color 0 to White
-	s.next_slice('\x1b]4;0;#FFFFFF\x07')!
+	s.next_slice('\x1b]4;0;#FFFFFF\a')!
 	state.update(mut t)
 	p0 := state.colors.palette[0]
 	assert p0.r == 0xFF
@@ -514,7 +514,7 @@ fn test_render_state_dirty_row_resets_highlights() {
 
 	// Manually add a highlight to row 0
 	state.row_data[0].highlights << RenderHighlight{
-		tag:   1
+		tag: 1
 		range: [u16(0), u16(2)]!
 	}
 
@@ -528,4 +528,64 @@ fn test_render_state_dirty_row_resets_highlights() {
 
 	// Verify the highlight was reset on the dirty row
 	assert state.row_data[0].highlights.len == 0
+}
+
+fn test_render_state_update_flattened_highlights() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 4 })!
+	defer { t.deinit() }
+	mut state := RenderState.empty()
+	defer { state.deinit() }
+	state.update(mut t)
+	state.dirty = .false_
+
+	mut list := PageList.from_pages(&t.screens.active.pages)
+	defer { list.deinit() }
+	node := list.pages.first or { panic('missing snapshot page') }
+	state.update_highlights_flattened(7, [RenderFlattenedHighlight{
+		chunks: [RenderHighlightChunk{
+			node: node
+			serial: node.serial
+			start: 1
+			end: 3
+		}]
+		top_x: 2
+		bot_x: 4
+	}])
+
+	assert state.row_data[0].highlights.len == 0
+	assert state.row_data[1].highlights == [RenderHighlight{
+		tag: 7
+		range: [u16(2), u16(9)]!
+	}]
+	assert state.row_data[2].highlights == [RenderHighlight{
+		tag: 7
+		range: [u16(0), u16(4)]!
+	}]
+	assert state.row_data[3].highlights.len == 0
+	assert state.row_data[1].dirty
+	assert state.row_data[2].dirty
+	assert state.dirty == .partial
+}
+
+fn test_render_state_ignores_recycled_flattened_highlight_node() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 2 })!
+	defer { t.deinit() }
+	mut state := RenderState.empty()
+	defer { state.deinit() }
+	state.update(mut t)
+	state.dirty = .false_
+
+	mut list := PageList.from_pages(&t.screens.active.pages)
+	defer { list.deinit() }
+	node := list.pages.first or { panic('missing snapshot page') }
+	state.update_highlights_flattened(1, [RenderFlattenedHighlight{
+		chunks: [RenderHighlightChunk{
+			node: node
+			serial: node.serial + 1
+			start: 0
+			end: 1
+		}]
+	}])
+	assert state.row_data[0].highlights.len == 0
+	assert state.dirty == .false_
 }
