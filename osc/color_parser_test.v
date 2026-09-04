@@ -20,6 +20,24 @@ fn test_rgb_parse_named_blue() {
 	assert rgb.b == 255
 }
 
+fn test_rgb_parse_complete_x11_named_colors() {
+	assert parse_rgb('medium spring green')? == RGB{
+		r: 0
+		g: 250
+		b: 154
+	}
+	assert parse_rgb('FoReStGReEn')? == RGB{
+		r: 34
+		g: 139
+		b: 34
+	}
+	assert parse_rgb('lawngreen')? == RGB{
+		r: 124
+		g: 252
+		b: 0
+	}
+}
+
 fn test_rgb_parse_hash_6() {
 	rgb := parse_rgb('#aabbcc') or {
 		assert false, 'expected rgb'
@@ -68,7 +86,7 @@ fn test_rgb_parse_invalid() {
 
 // Translated from ghostty color.zig test "RGB.parse". Verifies the 8-bit
 // channel scaling (color * 255 / max) for hex specs of 1-4 digits, the
-// intensity (rgbi) truncation, and the named-color values that witty supports.
+// intensity (rgbi) truncation, and named-color values.
 fn test_rgb_parse_ghostty() {
 	// rgbi intensity truncates: 1.0 -> 255, others -> 0.
 	assert parse_rgb('rgbi:1.0/0/0')? == RGB{
@@ -116,7 +134,7 @@ fn test_rgb_parse_ghostty() {
 		b: 16
 	}
 
-	// Named colors (subset supported by witty).
+	// Named colors.
 	assert parse_rgb('black')? == RGB{
 		r: 0
 		g: 0

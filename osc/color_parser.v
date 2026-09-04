@@ -1,5 +1,7 @@
 module osc
 
+import x11rgb
+
 // --- Original Ghostty Comments Start: src/terminal/osc/parsers/color.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/terminal/osc/parsers/color.zig
@@ -98,7 +100,6 @@ module osc
 //
 // --- Original Ghostty Comments End: src/terminal/osc/parsers/color.zig
 
-
 // OSC color operations to set, reset, or report color settings.
 //
 // Currently, these OSCs are handled by color operations:
@@ -134,9 +135,9 @@ pub enum ColorOperation {
 
 // DynamicColor represents the dynamic color targets for OSC 10-19.
 pub enum DynamicColor {
-	foreground       // 10
-	background       // 11
-	cursor           // 12
+	foreground // 10
+	background // 11
+	cursor // 12
 	pointer_foreground // 13
 	pointer_background // 14
 	tektronix_foreground // 15
@@ -165,11 +166,11 @@ pub fn (c DynamicColor) next() ?DynamicColor {
 // SpecialColor represents special colors beyond the 256-color palette.
 // This mirrors ghostty's `terminal.color.Special` enum(u3).
 pub enum SpecialColor {
-	bold      // 0
+	bold // 0
 	underline // 1
-	blink     // 2
-	reverse   // 3
-	italic    // 4
+	blink // 2
+	reverse // 3
+	italic // 4
 }
 
 // RGB represents an RGB color.
@@ -185,7 +186,7 @@ pub:
 //   - rgb:RR/GG/BB (hex, 1-4 digits per channel)
 //   - rgbi:R.R/G.G/B.B (float intensity 0.0-1.0)
 //   - #RGB, #RRGGBB, #RRRGGGBBB, #RRRRGGGGBBBB
-//   - Named X11 colors (a subset)
+//   - Named X11 colors
 pub fn parse_rgb(spec string) ?RGB {
 	s := spec.trim_space()
 	if s.len == 0 {
@@ -302,7 +303,9 @@ fn parse_rgb_hash(s string) ?RGB {
 		6 { 2 }
 		9 { 3 }
 		12 { 4 }
-		else { return none }
+		else {
+			return none
+		}
 	}
 	r := parse_color_channel(s[0..w]) or { return none }
 	g := parse_color_channel(s[w..2 * w]) or { return none }
@@ -314,21 +317,13 @@ fn parse_rgb_hash(s string) ?RGB {
 	}
 }
 
-// parse_named_color parses a limited set of X11 named colors.
+// parse_named_color uses the complete, case-insensitive X.Org color table.
 fn parse_named_color(name string) ?RGB {
-	lower := name.to_lower()
-	return match lower {
-		'red' { RGB{r: 255, g: 0, b: 0} }
-		'green' { RGB{r: 0, g: 255, b: 0} }
-		'blue' { RGB{r: 0, g: 0, b: 255} }
-		'white' { RGB{r: 255, g: 255, b: 255} }
-		'black' { RGB{r: 0, g: 0, b: 0} }
-		'yellow' { RGB{r: 255, g: 255, b: 0} }
-		'cyan' { RGB{r: 0, g: 255, b: 255} }
-		'magenta' { RGB{r: 255, g: 0, b: 255} }
-		'orange' { RGB{r: 255, g: 165, b: 0} }
-		'aliceblue' { RGB{r: 0xf0, g: 0xf8, b: 0xff} }
-		else { none }
+	rgb := x11rgb.get(name) or { return none }
+	return RGB{
+		r: rgb.r
+		g: rgb.g
+		b: rgb.b
 	}
 }
 
@@ -351,7 +346,11 @@ pub:
 }
 
 // ColorRequest represents a single color operation request.
-pub type ColorRequest = ColorRequestSet | ColorRequestQuery | ColorRequestReset | ColorRequestResetPalette | ColorRequestResetSpecial
+pub type ColorRequest = ColorRequestSet
+	| ColorRequestQuery
+	| ColorRequestReset
+	| ColorRequestResetPalette
+	| ColorRequestResetSpecial
 
 pub struct ColorRequestSet {
 pub:
@@ -427,11 +426,11 @@ fn parse_color_operation(mut parser Parser, terminator_ch u8) ?Command {
 	// consumers can apply the color changes. We keep str_value/str_value2
 	// populated with the raw data and operation name for logging/debugging.
 	parser.command = Command{
-		cmd_type:       .color_operation
-		terminator:     init_terminator(terminator_ch)
-		str_value:      data_str
-		str_value2:     op.str()
-		color_op:       op
+		cmd_type: .color_operation
+		terminator: init_terminator(terminator_ch)
+		str_value: data_str
+		str_value2: op.str()
+		color_op: op
 		color_requests: requests
 	}
 	return parser.command
@@ -533,14 +532,14 @@ fn parse_get_set_ansi_color(op ColorOperation, data string) []ColorRequest {
 
 		// "?" always results in a query.
 		if spec_str == '?' {
-			result << ColorRequestQuery{target: target}
+			result << ColorRequestQuery{ target: target }
 			continue
 		}
 
 		rgb := parse_rgb(spec_str) or { return result }
 		result << ColorRequestSet{
 			target: target
-			color:  rgb
+			color: rgb
 		}
 	}
 	return result
@@ -603,7 +602,7 @@ fn parse_reset_ansi_color(op ColorOperation, data string) []ColorRequest {
 			}
 		}
 
-		result << ColorRequestReset{target: target}
+		result << ColorRequestReset{ target: target }
 	}
 
 	// If nothing was parsed (all invalid), reset the full table
@@ -637,15 +636,15 @@ fn parse_get_set_dynamic_color(start DynamicColor, data string) []ColorRequest {
 			remaining = ''
 		}
 
-		target := ColorTarget(ColorTargetDynamic{color: color})
+		target := ColorTarget(ColorTargetDynamic{ color: color })
 
 		if spec_str == '?' {
-			result << ColorRequestQuery{target: target}
+			result << ColorRequestQuery{ target: target }
 		} else {
 			rgb := parse_rgb(spec_str) or { return result }
 			result << ColorRequestSet{
 				target: target
-				color:  rgb
+				color: rgb
 			}
 		}
 
@@ -670,7 +669,7 @@ fn parse_reset_dynamic_color(color DynamicColor, data string) []ColorRequest {
 		}
 	}
 	result << ColorRequestReset{
-		target: ColorTargetDynamic{color: color}
+		target: ColorTargetDynamic{ color: color }
 	}
 	return result
 }

@@ -1,5 +1,7 @@
 module terminal
 
+import x11rgb
+
 // X11 color-name lookup translated from terminal/x11_color.zig.
 //
 // Ghostty builds a case-insensitive static map from this X.Org rgb.txt at
@@ -7,8 +9,6 @@ module terminal
 // translation scans the same embedded data. Color lookup is configuration-path
 // work, not render-path work, and retaining the canonical data avoids a large,
 // hand-maintained duplicate table.
-
-const x11_rgb_data = $embed_file('@VMODROOT/terminal/res/rgb.txt').to_string()
 
 pub struct NamedRGB {
 pub:
@@ -20,20 +20,13 @@ pub:
 // Ghostty exposes this complete table through `+list-colors`.
 pub fn x11_color_entries() []NamedRGB {
 	mut result := []NamedRGB{}
-	for line in x11_rgb_data.split_into_lines() {
-		if line.len < 13 {
-			continue
-		}
-		name := line[12..].trim_space()
-		if name.len == 0 {
-			continue
-		}
+	for entry in x11rgb.entries() {
 		result << NamedRGB{
-			name: name
+			name: entry.name
 			rgb: RGB{
-				r: u8(line[0..3].trim_space().int())
-				g: u8(line[4..7].trim_space().int())
-				b: u8(line[8..11].trim_space().int())
+				r: entry.rgb.r
+				g: entry.rgb.g
+				b: entry.rgb.b
 			}
 		}
 	}
@@ -42,15 +35,10 @@ pub fn x11_color_entries() []NamedRGB {
 
 // x11_color_get looks up an X11 color name using ASCII-insensitive matching.
 pub fn x11_color_get(name string) ?RGB {
-	if name.len == 0 {
-		return none
+	rgb := x11rgb.get(name) or { return none }
+	return RGB{
+		r: rgb.r
+		g: rgb.g
+		b: rgb.b
 	}
-	wanted := name.to_lower()
-	for entry in x11_color_entries() {
-		if entry.name.to_lower() != wanted {
-			continue
-		}
-		return entry.rgb
-	}
-	return none
 }
