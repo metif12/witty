@@ -2302,6 +2302,7 @@ pub mut:
 	confirm_close_surface            ConfirmCloseSurface
 	cursor_click_to_move             bool
 	desktop_notifications            bool
+	right_click_action               configpkg.RightClickAction
 	mouse_interval                   u64
 	mouse_hide_while_typing          bool
 	mouse_reporting                  bool
@@ -2406,6 +2407,7 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 		confirm_close_surface: unsafe { ConfirmCloseSurface(config.confirm_close_surface) }
 		cursor_click_to_move: config.cursor_click_to_move
 		desktop_notifications: config.desktop_notifications
+		right_click_action: config.right_click_action
 		mouse_interval: u64(config.click_repeat_interval) * u64(time.millisecond)
 		mouse_hide_while_typing: config.mouse_hide_while_typing
 		mouse_reporting: config.mouse_reporting
@@ -3899,52 +3901,7 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 		}
 	}
 
-	if is_press {
-		// Handle left button multi-click selection.
-		if button == .left {
-			self.mouse.left_click_count += 1
-
-			// Double-click: select word.
-			if self.mouse.left_click_count == 2 && !self.is_mouse_reporting() {
-				pos := self.rt_surface.get_cursor_pos()!
-				vp := self.pos_to_viewport(pos.x, pos.y)
-				if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
-					tag: .viewport
-					x: vp.x
-					y: vp.y
-				}) {
-					if sel := self.renderer_state.terminal_.screens.active.select_word(pin, self.config.selection_word_chars) {
-						self.renderer_state.terminal_.screens.active.select(sel)!
-					}
-				}
-				self.mouse.left_click_time = time.now()
-				self.queue_render()!
-				return true
-			}
-
-			// Triple-click: select line.
-			if self.mouse.left_click_count >= 3 && !self.is_mouse_reporting() {
-				pos := self.rt_surface.get_cursor_pos()!
-				vp := self.pos_to_viewport(pos.x, pos.y)
-				if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
-					tag: .viewport
-					x: vp.x
-					y: vp.y
-				}) {
-					if sel := self.renderer_state.terminal_.screens.active.select_line(terminal.SelectLine{
-						pin: pin
-					}) {
-						self.renderer_state.terminal_.screens.active.select(sel)!
-					}
-				}
-				self.mouse.left_click_time = time.now()
-				self.queue_render()!
-				return true
-			}
-
-			self.mouse.left_click_time = time.now()
-		}
-	} else {
+	if !is_press {
 		// Release path.
 		if button == .left {
 			// Stop selection scrolling when releasing the left button but
@@ -3958,8 +3915,21 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			// when the left button is released. This avoids the clipboard
 			// being updated on every mouse move which would be noisy.
 			if self.config.copy_on_select != .false_ {
+				locked := self.renderer_state.mutex != unsafe { nil }
+				if locked {
+					self.renderer_state.mutex.lock()
+				}
 				if sel := self.renderer_state.terminal_.screens.active.selection {
-					self.set_selection(sel)!
+					copy := terminal.Selection.init(sel.start(), sel.end(), sel.rectangle)
+					self.set_selection(copy) or {
+						if locked {
+							self.renderer_state.mutex.unlock()
+						}
+						return err
+					}
+				}
+				if locked {
+					self.renderer_state.mutex.unlock()
 				}
 			}
 
@@ -3968,12 +3938,21 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			// swallow the event.
 			if self.mouse.over_link {
 				pos := self.rt_surface.get_cursor_pos()!
-				if processed := self.process_links(pos) {
-					if processed {
-						return true
+				locked := self.renderer_state.mutex != unsafe { nil }
+				if locked {
+					self.renderer_state.mutex.lock()
+				}
+				processed := self.process_links(pos) or {
+					if locked {
+						self.renderer_state.mutex.unlock()
 					}
-				} else {
-					// Log and continue on error.
+					false
+				}
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
+				if processed {
+					return true
 				}
 			}
 
@@ -3989,40 +3968,62 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 		}
 	}
 
-	// Report mouse events if enabled.
-	if self.is_mouse_reporting() {
-		// If shift is pressed and we aren't allowed to capture it, then we
-		// do not do a mouse report.
-		if !(mods.shift && !shift_capture) {
-			// In any other mouse button scenario without shift pressed we
-			// clear the selection since the underlying application can handle
-			// that in any way (i.e. "scrolling").
-			self.set_selection(none)!
-
-			// We also set the left click count to 0 so that if mouse
-			// reporting is disabled in the middle of a press (before release)
-			// we don't suddenly start selecting text.
-			self.mouse.left_click_count = 0
-
-			pos := self.rt_surface.get_cursor_pos()!
-			report_action := if is_press {
-				MouseReportAction.press
-			} else {
-				MouseReportAction.release
+	// Report mouse events if enabled. Mouse-report state and selection share
+	// the renderer mutex with the IO and renderer threads.
+	{
+		locked := self.renderer_state.mutex != unsafe { nil }
+		if locked {
+			self.renderer_state.mutex.lock()
+		}
+		defer {
+			if locked {
+				self.renderer_state.mutex.unlock()
 			}
-			self.mouse_report(?input.MouseButton(button), report_action, self.mouse.mods, pos)!
+		}
+		if self.is_mouse_reporting() {
+			// If shift is pressed and we aren't allowed to capture it, then we
+			// do not do a mouse report.
+			if !(mods.shift && !shift_capture) {
+				// In any other mouse button scenario without shift pressed we
+				// clear the selection since the underlying application can handle
+				// that in any way (i.e. "scrolling").
+				self.set_selection(none)!
 
-			// If we're doing mouse reporting we don't support other selection
-			// or highlighting.
-			return true
+				// We also set the left click count to 0 so that if mouse
+				// reporting is disabled in the middle of a press (before release)
+				// we don't suddenly start selecting text.
+				self.mouse.left_click_count = 0
+
+				pos := self.rt_surface.get_cursor_pos()!
+				report_action := if is_press {
+					MouseReportAction.press
+				} else {
+					MouseReportAction.release
+				}
+				self.mouse_report(?input.MouseButton(button), report_action, self.mouse.mods, pos)!
+
+				// If we're doing mouse reporting we don't support other selection
+				// or highlighting.
+				return true
+			}
 		}
 	}
 
 	// For left button clicks we always record info for selection/highlight.
 	if button == .left && is_press {
+		locked := self.renderer_state.mutex != unsafe { nil }
+		if locked {
+			self.renderer_state.mutex.lock()
+		}
+		defer {
+			if locked {
+				self.renderer_state.mutex.unlock()
+			}
+		}
+		mut screen := self.renderer_state.terminal_.screens.active
 		pos := self.rt_surface.get_cursor_pos()!
 		vp := self.pos_to_viewport(pos.x, pos.y)
-		if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
+		if pin := screen.pages.pin(terminal.PinOpts{
 			tag: .viewport
 			x: vp.x
 			y: vp.y
@@ -4045,9 +4046,49 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			self.mouse.left_click_xpos = pos.x
 			self.mouse.left_click_ypos = pos.y
 
-			// Single click clears any existing selection.
-			if self.mouse.left_click_count <= 1 {
-				self.set_selection(none)!
+			// Reset a stale click sequence, then advance it. Counts are always
+			// bounded to the single/double/triple-click states.
+			now := time.now()
+			if self.mouse.left_click_count > 0
+				&& u64(now - self.mouse.left_click_time) > self.config.mouse_interval {
+				self.mouse.left_click_count = 0
+			}
+			self.mouse.left_click_time = now
+			self.mouse.left_click_count++
+			if self.mouse.left_click_count > 3 {
+				self.mouse.left_click_count = 1
+			}
+
+			// Directly update selection here. Clipboard publication for mouse
+			// selection happens on release, matching Ghostty.
+			match self.mouse.left_click_count {
+				1 {
+					if screen.selection != none {
+						screen.select(none)!
+						self.queue_render()!
+					}
+				}
+				2 {
+					if link := self.link_at_pin(pin, none) {
+						screen.select(link.selection)!
+						self.queue_render()!
+					} else if selection := screen.select_word(pin, self.config.selection_word_chars) {
+						screen.select(selection)!
+						self.queue_render()!
+					}
+				}
+				3 {
+					sel := if mods.ctrl_or_super() {
+						screen.select_output(pin)
+					} else {
+						screen.select_line(terminal.SelectLine{ pin: pin })
+					}
+					if selection := sel {
+						screen.select(selection)!
+						self.queue_render()!
+					}
+				}
+				else {}
 			}
 		}
 	}
@@ -4067,6 +4108,154 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 		}
 	}
 
+	// Right-click behavior is configurable. Context-menu mode prepares a word
+	// or link selection but deliberately leaves the event unconsumed so the
+	// application runtime can present its native menu.
+	if button == .right && is_press {
+		locked := self.renderer_state.mutex != unsafe { nil }
+		if locked {
+			self.renderer_state.mutex.lock()
+		}
+		mut screen := self.renderer_state.terminal_.screens.active
+		pos := self.rt_surface.get_cursor_pos() or {
+			if locked {
+				self.renderer_state.mutex.unlock()
+			}
+			return err
+		}
+		vp := self.pos_to_viewport(pos.x, pos.y)
+		pin := screen.pages.pin(terminal.PinOpts{
+			tag: .viewport
+			x: vp.x
+			y: vp.y
+		}) or {
+			if locked {
+				self.renderer_state.mutex.unlock()
+			}
+			return false
+		}
+
+		match self.config.right_click_action {
+			.ignore {
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
+				return true
+			}
+			.context_menu {
+				if prev := screen.selection {
+					if prev.contains(screen, pin) {
+						if locked {
+							self.renderer_state.mutex.unlock()
+						}
+						return false
+					}
+				}
+				if link := self.link_at_pos(pos) {
+					selection := terminal.Selection.init(link.selection.start(), link.selection.end(), link.selection.rectangle)
+					self.set_selection(selection) or {
+						if locked {
+							self.renderer_state.mutex.unlock()
+						}
+						return err
+					}
+				} else if sel := screen.select_word(pin, self.config.selection_word_chars) {
+					selection := terminal.Selection.init(sel.start(), sel.end(), sel.rectangle)
+					self.set_selection(selection) or {
+						if locked {
+							self.renderer_state.mutex.unlock()
+						}
+						return err
+					}
+				}
+				self.queue_render() or {
+					if locked {
+						self.renderer_state.mutex.unlock()
+					}
+					return err
+				}
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
+				return false
+			}
+			.copy, .copy_or_paste {
+				if sel := screen.selection {
+					self.copy_selection_to_clipboards(sel, [.standard], .mixed) or {
+						if locked {
+							self.renderer_state.mutex.unlock()
+						}
+						return err
+					}
+					self.set_selection(none) or {
+						if locked {
+							self.renderer_state.mutex.unlock()
+						}
+						return err
+					}
+					self.queue_render() or {
+						if locked {
+							self.renderer_state.mutex.unlock()
+						}
+						return err
+					}
+					if locked {
+						self.renderer_state.mutex.unlock()
+					}
+					return true
+				}
+				if self.config.right_click_action == .copy {
+					self.set_selection(none) or {
+						if locked {
+							self.renderer_state.mutex.unlock()
+						}
+						return err
+					}
+					self.queue_render() or {
+						if locked {
+							self.renderer_state.mutex.unlock()
+						}
+						return err
+					}
+					if locked {
+						self.renderer_state.mutex.unlock()
+					}
+					return true
+				}
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
+				self.start_clipboard_request(.standard, apprt.ClipboardRequest{
+					kind: .paste
+					clipboard: .standard
+				})!
+				return true
+			}
+			.paste {
+				self.set_selection(none) or {
+					if locked {
+						self.renderer_state.mutex.unlock()
+					}
+					return err
+				}
+				self.queue_render() or {
+					if locked {
+						self.renderer_state.mutex.unlock()
+					}
+					return err
+				}
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
+				self.start_clipboard_request(.standard, apprt.ClipboardRequest{
+					kind: .paste
+					clipboard: .standard
+				})!
+				return true
+			}
+		}
+	}
+
 	self.queue_render()!
 	return false
 }
@@ -4075,19 +4264,54 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) ! {
 	// Update mods if provided
 	if m := mods {
-		self.mouse.mods = m
+		self.mods_changed(m)
 	}
 
 	// Convert to viewport coordinates
 	pos_vp := self.pos_to_viewport(pos.x, pos.y)
+	if pos.x < 0 || pos.y < 0 {
+		self.mouse.link_point = none
+		if self.mouse.over_link {
+			self.mouse.over_link = false
+			self.rt_app.perform_action(AppAction{
+				kind: .mouse_shape
+				target: &self
+				mouse_shape: self.renderer_state.terminal_.mouse_shape
+			})!
+			self.rt_app.perform_action(AppAction{
+				kind: .mouse_over_link
+				target: &self
+			})!
+			self.queue_render()!
+		}
+	}
+	if self.mouse.hidden {
+		self.show_mouse()
+	}
+
+	over_link := self.mouse.over_link
+	self.mouse.over_link = false
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
+	defer {
+		if locked {
+			self.renderer_state.mutex.unlock()
+		}
+	}
+
+	if pos.y >= 1 && self.selection_scroll_active {
+		self.queue_io(IOMessage{ kind: .selection_scroll, flag: false })
+	}
+	self.renderer_state.mouse.point = none
+	if pos.x < 0 || pos.y < 0 {
+		self.renderer_state.terminal_.screens.active.dirty.hyperlink_hover = true
+	}
 
 	// If we have an inspector, always record position information. The
 	// inspector renderer reads this state while holding the same mutex.
 	if mut insp := self.inspector {
-		locked := self.renderer_state.mutex != unsafe { nil }
-		if locked {
-			self.renderer_state.mutex.lock()
-		}
 		insp.mouse.last_xpos = pos.x
 		insp.mouse.last_ypos = pos.y
 		insp.mouse.last_point = self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
@@ -4095,28 +4319,52 @@ pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) !
 			x: pos_vp.x
 			y: pos_vp.y
 		})
-		if locked {
-			self.renderer_state.mutex.unlock()
-		}
 		self.queue_render()!
 	}
 
 	// Check for link hover
-	if self.mouse.link_point == none || !(self.mouse.link_point or { Coordinate{} }).eql(pos_vp) {
-		self.mouse_refresh_links(pos, pos_vp, self.mouse.over_link)!
+	if (over_link || self.mouse.link_point == none
+		|| !(self.mouse.link_point or { Coordinate{} }).eql(pos_vp))
+		&& (self.renderer_state.terminal_.flags.mouse_event == .none
+			|| (self.mouse.mods.shift && !self.mouse_shift_capture(false))) {
+		self.mouse_refresh_links(pos, pos_vp, over_link)!
 	}
 
 	// Handle mouse reporting for motion events
 	if self.is_mouse_reporting() {
-		report_motion := self.renderer_state.terminal_.flags.mouse_event in [.button, .any]
-		if report_motion {
-			self.mouse_report(none, .motion, self.mouse.mods, pos)!
+		mut report := true
+		if self.mouse.mods.shift && !self.mouse_shift_capture(false) {
+			for state in self.mouse.click_state {
+				if state != .release {
+					report = false
+					break
+				}
+			}
+		}
+		if report {
+			mut button := ?input.MouseButton(none)
+			for i, state in self.mouse.click_state {
+				if state == .press {
+					button = unsafe { input.MouseButton(i) }
+					break
+				}
+			}
+			self.mouse_report(button, .motion, self.mouse.mods, pos)!
+			return
 		}
 	}
 
 	// Handle selection drag (left click held)
 	if self.mouse.click_state[int(input.MouseButton.left)] == .press
 		&& self.mouse.left_click_count > 0 {
+		if self.mouse.left_click_screen != self.renderer_state.terminal_.screens.active_key {
+			return
+		}
+		self.queue_render()!
+		max_y := f64(self.size.screen.height)
+		if (pos.y <= 1 || pos.y > max_y - 1) && !self.selection_scroll_active {
+			self.queue_io(IOMessage{ kind: .selection_scroll, flag: true })
+		}
 		if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
 			tag: .viewport
 			x: pos_vp.x
@@ -4128,14 +4376,6 @@ pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) !
 				else { self.drag_left_click_triple(pin)! }
 			}
 		}
-
-		// Start selection scrolling if cursor is outside viewport
-		if pos.y < 0 || pos.y > f64(self.size.screen.height) {
-			self.selection_scroll_active = true
-			self.queue_io(IOMessage{ kind: .selection_scroll, flag: true })
-		}
-
-		self.queue_render()!
 	}
 }
 
@@ -4149,6 +4389,15 @@ pub fn (mut self Surface) mouse_pressure_callback(stage MousePressureStage, pres
 	// On deep press with left mouse button, select word under cursor
 	if stage == .deep && self.mouse.click_state[int(input.MouseButton.left)] == .press
 		&& self.has_terminal() {
+		locked := self.renderer_state.mutex != unsafe { nil }
+		if locked {
+			self.renderer_state.mutex.lock()
+		}
+		defer {
+			if locked {
+				self.renderer_state.mutex.unlock()
+			}
+		}
 		pos := self.rt_surface.get_cursor_pos()!
 		vp := self.pos_to_viewport(pos.x, pos.y)
 		if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
@@ -5047,13 +5296,20 @@ fn (mut self Surface) mods_changed(mods input.Mods) {
 	if self.mouse.mods.equal(mods) {
 		return
 	}
-	self.mouse.mods = mods
+	self.mouse.mods = mods.binding()
 
 	// Update renderer mouse mods for link highlighting
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
 	self.renderer_state.mouse.mods = self.mouse_mods_with_capture(self.mouse.mods)
 
 	// Force screen rebuild to update link highlight state
 	self.renderer_state.terminal_.flags.dirty.clear = true
+	if locked {
+		self.renderer_state.mutex.unlock()
+	}
 
 	self.queue_render() or {}
 }
@@ -5360,7 +5616,7 @@ fn (self &Surface) mouse_mods_with_capture(mods input.Mods) input.Mods {
 	return mods
 }
 
-fn (mut self Surface) set_selection(sel ?TermSelection) ! {
+fn (mut self Surface) set_selection(sel ?terminal.Selection) ! {
 	prev := self.renderer_state.terminal_.screens.active.selection
 	self.renderer_state.terminal_.screens.active.select(sel)!
 
@@ -6289,7 +6545,7 @@ fn (self &Surface) link_at_pos(pos CursorPos) ?Link {
 	return self.link_at_pin(pin, mouse_mods)
 }
 
-fn (self &Surface) link_at_pin(pin Pin, mouse_mods input.Mods) ?Link {
+fn (self &Surface) link_at_pin(pin Pin, mouse_mods ?input.Mods) ?Link {
 	if self.config.links.len == 0 {
 		return none
 	}
@@ -6309,9 +6565,11 @@ fn (self &Surface) link_at_pin(pin Pin, mouse_mods input.Mods) ?Link {
 		strmap.deinit()
 	}
 	for link_cfg in self.config.links {
-		if link_cfg.highlight in [.always_mods, .hover_mods]
-			&& !link_cfg.mods.equal(mouse_mods) {
-			continue
+		if mods := mouse_mods {
+			if link_cfg.highlight in [.always_mods, .hover_mods]
+				&& !link_cfg.mods.equal(mods) {
+				continue
+			}
 		}
 		mut it := strmap.search_iterator(link_cfg.pattern) or { continue }
 		for {
@@ -6331,6 +6589,15 @@ fn (self &Surface) link_at_pin(pin Pin, mouse_mods input.Mods) ?Link {
 fn (mut self Surface) maybe_prompt_click() !bool {
 	if !self.config.cursor_click_to_move {
 		return false
+	}
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
+	defer {
+		if locked {
+			self.renderer_state.mutex.unlock()
+		}
 	}
 	t := self.renderer_state.terminal_
 	screen := t.screens.active

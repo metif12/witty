@@ -92,6 +92,13 @@ fn test_derived_config_preserves_macos_surface_options() {
 	assert derived.macos_option_as_alt? == .right
 }
 
+fn test_derived_config_preserves_right_click_action() {
+	mut cfg := configpkg.Config.default_config()
+	cfg.right_click_action = .copy_or_paste
+	derived := DerivedConfig.from_config(&cfg)!
+	assert derived.right_click_action == .copy_or_paste
+}
+
 fn test_toggle_fullscreen_uses_configured_macos_mode() {
 	mut runtime := RuntimeApp{ actions_handled: true }
 	mut surf := make_test_surface()
@@ -211,6 +218,73 @@ fn test_surface_mouse_buttons_use_canonical_enum_indices() {
 
 	surf.mouse_button_callback(.release, .ten, input.Mods{})!
 	assert surf.mouse.click_state[int(input.MouseButton.ten)] == .release
+}
+
+fn test_left_click_uses_source_multi_click_selection_state_machine() {
+	mut runtime := RuntimeSurface{ cursor_pos: CursorPos{ x: 15, y: 15 } }
+	mut surf := make_test_surface()
+	surf.rt_surface = &runtime
+	surf.size = make_test_size()
+	surf.config.mouse_interval = u64(10 * time.second)
+	surf.renderer_state.terminal_.print_string('one two')!
+
+	assert !surf.mouse_button_callback(.press, .left, input.Mods{})!
+	assert surf.mouse.left_click_count == 1
+	assert surf.mouse.left_click_screen == .primary
+	surf.mouse_button_callback(.release, .left, input.Mods{})!
+
+	assert !surf.mouse_button_callback(.press, .left, input.Mods{})!
+	assert surf.mouse.left_click_count == 2
+	selection := surf.renderer_state.terminal_.screens.active.selection or {
+		assert false, 'double click did not select a word'
+		return
+	}
+	assert selection.contains(surf.renderer_state.terminal_.screens.active, terminal.Pin{
+		x: 1
+		y: 0
+	})
+	surf.mouse_button_callback(.release, .left, input.Mods{})!
+
+	assert !surf.mouse_button_callback(.press, .left, input.Mods{})!
+	assert surf.mouse.left_click_count == 3
+	line := surf.renderer_state.terminal_.screens.active.selection or {
+		assert false, 'triple click did not select a line'
+		return
+	}
+	assert line.start().y == 0
+	assert line.end().y == 0
+}
+
+fn test_right_click_context_menu_selects_word_without_consuming() {
+	mut runtime := RuntimeSurface{ cursor_pos: CursorPos{ x: 15, y: 15 } }
+	mut surf := make_test_surface()
+	surf.rt_surface = &runtime
+	surf.size = make_test_size()
+	surf.config.right_click_action = .context_menu
+	surf.renderer_state.terminal_.print_string('hello world')!
+
+	assert !surf.mouse_button_callback(.press, .right, input.Mods{})!
+	selection := surf.renderer_state.terminal_.screens.active.selection or {
+		assert false, 'right click did not select a word'
+		return
+	}
+	assert selection.contains(surf.renderer_state.terminal_.screens.active, terminal.Pin{
+		x: 1
+		y: 0
+	})
+}
+
+fn test_right_click_copy_or_paste_requests_paste_without_selection() {
+	mut runtime := RuntimeSurface{ cursor_pos: CursorPos{ x: 15, y: 15 } }
+	mut surf := make_test_surface()
+	surf.rt_surface = &runtime
+	surf.size = make_test_size()
+	surf.config.right_click_action = .copy_or_paste
+
+	assert surf.mouse_button_callback(.press, .right, input.Mods{})!
+	assert runtime.requests.len == 1
+	assert runtime.requests[0].clipboard == .standard
+	assert runtime.requests[0].request.kind == .paste
 }
 
 fn test_mouse_shift_capture_uses_terminal_override_then_config_default() {
