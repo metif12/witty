@@ -26,6 +26,10 @@ import configpkg
 
 #include <X11/XKBlib.h>
 
+#include <gdk/x11/gdkx.h>
+
+#include "x11_shims.h"
+
 // --- Opaque X11 handle aliases ---------------------------------------------
 
 // XDisplay is an opaque Xlib `Display*`.
@@ -48,6 +52,8 @@ fn C.gdk_x11_display_set_program_class(display GdkDisplay, program_class &char)
 fn C.gdk_x11_get_xatom_by_name_for_display(display GdkDisplay, atom_name &char) XAtom
 
 fn C.gdk_x11_surface_get_xid(surface GdkSurface) XWindow
+
+fn C.gdk_x11_surface_set_urgency_hint(surface GdkSurface, urgent int)
 
 // g_set_prgname sets the GLib program name (used to derive WM_CLASS instance).
 fn C.g_set_prgname(prgname &char)
@@ -74,15 +80,11 @@ fn C.XDeleteProperty(display XDisplay, w XWindow, property XAtom) int
 
 fn C.XFree(data voidptr) int
 
-// C.XkbStateNotifyEvent mirrors the real `XkbStateNotifyEvent` from XKBlib.h.
-// The actual struct layout (and thus field offsets) comes from the system
-// header when compiling on Linux; we declare the fields here so V's checker
-// can resolve the accesses we make (`xkb_type`, `lookup_mods`). We over-declare
-// the struct so a fixed-size stack buffer can safely hold any XkbEvent variant.
-struct C.XkbStateNotifyEvent {
-	xkb_type    int
-	lookup_mods u8
-}
+fn C.witty_x11_event_type(event voidptr) int
+
+fn C.witty_xkb_event_type(event voidptr) int
+
+fn C.witty_xkb_event_lookup_mods(event voidptr) u32
 
 // Xlib event type constants (from XKBlib.h / X.h).
 const xkb_use_core_kbd = u32(0x0100)
@@ -232,20 +234,18 @@ pub fn (self X11App) event_mods(device GdkDevice, gtk_mods u32) ?input.Mods {
 
 	// XAnyEvent's first field is `int type`; if it isn't the Xkb base event
 	// code, this isn't an Xkb event at all.
-	event_type := unsafe { *(&int(&next_event[0])) }
+	event_type := C.witty_x11_event_type(&next_event[0])
 	if event_type != self.base_event_code {
 		return none
 	}
 
-	// Reinterpret the buffer as an XkbStateNotifyEvent. Field offsets come from
-	// the real XKBlib.h layout on Linux. Confirm the Xkb sub-type is
-	// StateNotify, then read the `lookup_mods` field.
-	xkb_ev := unsafe { &C.XkbStateNotifyEvent(&next_event[0]) }
-	if xkb_ev.xkb_type != int(xkb_state_notify) {
+	// Confirm the Xkb sub-type is StateNotify, then read lookup_mods through the
+	// real Xlib union layout.
+	if C.witty_xkb_event_type(&next_event[0]) != int(xkb_state_notify) {
 		return none
 	}
 
-	lookup_mods := u64(xkb_ev.lookup_mods)
+	lookup_mods := u64(C.witty_xkb_event_lookup_mods(&next_event[0]))
 
 	mut mods := input.Mods{}
 	if lookup_mods & x_shift_mask != 0 {
@@ -285,6 +285,7 @@ pub struct X11Window {
 pub mut:
 	app          &X11App = unsafe { nil }
 	apprt_window &ApprtWindow = unsafe { nil }
+	x11_surface  GdkSurface = unsafe { nil }
 	xid          XWindow
 
 	blur_region Region
@@ -306,6 +307,7 @@ pub fn X11Window.init(mut app X11App, mut apprt_window ApprtWindow) !X11Window {
 	return X11Window{
 		app: &app
 		apprt_window: &apprt_window
+		x11_surface: surface
 		xid: xid
 	}
 }
@@ -418,11 +420,9 @@ pub fn (mut self X11Window) add_subprocess_env(mut env map[string]string) ! {
 
 // set_urgent mirrors `x11.Window.setUrgent`.
 pub fn (mut self X11Window) set_urgent(urgent bool) ! {
-	// ghostty uses gdk_x11.X11Surface.setUrgencyHint. We don't have that
-	// binding wired up to a GdkSurface here; this is a faithful placeholder.
-	// TODO(gtk): wire to gdk_x11_surface_set_urgency_hint once the GdkSurface
-	// for this window is threaded through.
-	_ = urgent
+	if !isnil(self.x11_surface) {
+		C.gdk_x11_surface_set_urgency_hint(self.x11_surface, b2i(urgent))
+	}
 }
 
 // --- Low-level property helpers --------------------------------------------
@@ -461,7 +461,7 @@ fn (mut self X11Window) get_window_property_motif(name XAtom, typ XAtom, mut res
 fn (mut self X11Window) change_property_region(name XAtom, typ XAtom, value &Region) ! {
 	// Region has 4 c_long fields; each c_long is one format-32 element.
 	nelements := int(sizeof(Region) / sizeof(i64))
-	status := C.XChangeProperty(self.app.display, self.xid, name, typ, prop_format_32, prop_mode_replace, &u8(value), nelements)
+	status := C.XChangeProperty(self.app.display, self.xid, name, typ, prop_format_32, prop_mode_replace, unsafe { &u8(value) }, nelements)
 	// Xlib's XChangeProperty returns 1 on success.
 	if status == 0 {
 		return error('request failed')
@@ -472,7 +472,7 @@ fn (mut self X11Window) change_property_region(name XAtom, typ XAtom, value &Reg
 // mode. Mirrors the relevant instantiation of `x11.Window.changeProperty`.
 fn (mut self X11Window) change_property_motif(name XAtom, typ XAtom, mut value MotifWMHints) ! {
 	nelements := int(sizeof(MotifWMHints) / sizeof(i64))
-	status := C.XChangeProperty(self.app.display, self.xid, name, typ, prop_format_32, prop_mode_replace, &u8(value), nelements)
+	status := C.XChangeProperty(self.app.display, self.xid, name, typ, prop_format_32, prop_mode_replace, unsafe { &u8(value) }, nelements)
 	if status == 0 {
 		return error('request failed')
 	}
