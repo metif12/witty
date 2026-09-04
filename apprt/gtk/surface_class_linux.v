@@ -36,6 +36,7 @@ module gtk
 
 import apprt
 import core
+import configpkg
 import input
 import terminal
 import osc
@@ -2074,6 +2075,28 @@ pub fn (mut self SurfaceWidget) apply_config() {
 	self.sync_bell_border_overlay()
 }
 
+// set_shared_config points the surface at its application's stable config
+// object. This is used after an application-wide config change.
+pub fn (mut self SurfaceWidget) set_shared_config(config &Config) {
+	if self.config == config {
+		return
+	}
+	if !isnil(self.config) {
+		self.config.unref()
+	}
+	self.config = config_ref(config)
+}
+
+// set_owned_config installs a surface-local config object for a targeted
+// reload. The core config is cloned by config_new, matching Config.new.
+pub fn (mut self SurfaceWidget) set_owned_config(config configpkg.Config) {
+	if !isnil(self.config) {
+		self.config.unref()
+	}
+	self.config = config_new(config)
+	self.apply_config()
+}
+
 // resize_overlay_schedule mirrors `resizeOverlaySchedule`.
 fn (mut self SurfaceWidget) resize_overlay_schedule() {
 	if !self.has_core() || isnil(self.config) || isnil(self.resize_overlay) {
@@ -2299,6 +2322,10 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			self.set_readonly(action.readonly_on)
 			return true
 		}
+		.config_change {
+			self.apply_config()
+			return true
+		}
 		.start_search {
 			self.set_search_active(true, action.needle)
 			return true
@@ -2327,7 +2354,7 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			return true
 		}
 		.pwd {
-			self.set_pwd(if action.pwd.len > 0 { action.pwd } else { none })
+			self.set_pwd(action.pwd)
 			return true
 		}
 		.present_terminal {
@@ -3157,7 +3184,7 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 		widget: GtkWidget(obj)
 		app: window.app
 		split_tree: split_tree
-		config: config
+		config: config_ref(config)
 		gl_area: gl_area
 		im_context: C.gtk_im_multicontext_new()
 		terminal_page: terminal_page
@@ -3288,6 +3315,10 @@ fn surface_widget_finalized_cb(data voidptr, object GObject) {
 	if !isnil(self.im_context) {
 		object_unref(GObject(self.im_context))
 		self.im_context = unsafe { nil }
+	}
+	if !isnil(self.config) {
+		self.config.unref()
+		self.config = unsafe { nil }
 	}
 	self.widget = unsafe { nil }
 }

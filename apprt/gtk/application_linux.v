@@ -3,6 +3,7 @@ module gtk
 import apprt
 import core
 import configpkg
+import datastruct
 import input
 import global_state
 import internal_os
@@ -719,6 +720,11 @@ fn (mut self Application) set_config(config configpkg.Config) {
 	// notify "config" pspec -> prop_config.
 	self.prop_config()
 	for mut window in self.windows {
+		for mut tab in window.tabs {
+			for mut surface in tab.split_tree.surfaces {
+				surface.set_shared_config(self.config_object)
+			}
+		}
 		window.prop_config()
 	}
 	// Show our errors if we have any.
@@ -891,7 +897,9 @@ fn application_config_errors_reload_cb(dialog GObject, data voidptr) {
 		return
 	}
 	mut self := unsafe { &Application(data) }
-	self.reload_config(false) or { eprintln('error reloading config: ${err}') }
+	self.reload_config(apprt.Target(apprt.AppTarget{}), false) or {
+		eprintln('error reloading config: ${err}')
+	}
 }
 
 // --- Libghostty callbacks -------------------------------------------------
@@ -1100,7 +1108,7 @@ fn application_action_reload_config_cb(action GSimpleAction, parameter GVariant,
 		return
 	}
 	mut self := unsafe { &Application(user_data) }
-	self.reload_config(false) or {
+	self.reload_config(apprt.Target(apprt.AppTarget{}), false) or {
 		eprintln('error reloading config: ${err}')
 	}
 }
@@ -1108,13 +1116,31 @@ fn application_action_reload_config_cb(action GSimpleAction, parameter GVariant,
 // reload_config performs the hard/soft load used by the application action.
 // A soft reload reapplies the current loaded config; a hard reload reads it
 // again from Ghostty's normal config sources.
-fn (mut self Application) reload_config(soft bool) ! {
+fn (mut self Application) reload_config(target apprt.Target, soft bool) ! {
 	internal_os.systemd_notify_reloading()
 	defer {
 		internal_os.systemd_notify_ready()
 	}
 	config := if soft { self.config.clone() } else { configpkg.Config.load() }
-	self.set_config(config)
+	match target {
+		apprt.SurfaceTarget {
+			mut surface := surface_from_target(target) or {
+				return error('reload target surface is unavailable')
+			}
+			mut core_surface := surface.core_surface
+			core_surface.update_config(&config)!
+			surface.set_owned_config(config)
+		}
+		apprt.AppTarget {
+			if isnil(self.core_app) {
+				self.set_config(config)
+				return
+			}
+			mut core_app := unsafe { self.core_app }
+			core_app.update_config(mut self.runtime_bridge, &config)!
+			self.dispatch_runtime_actions()!
+		}
+	}
 }
 
 // startup_global_shortcuts sets up desktop-portal global shortcuts. Mirrors
@@ -1294,13 +1320,183 @@ fn application_style_manager_dark_cb(style voidptr, pspec &C.GParamSpec, user_da
 // --- apprt API ------------------------------------------------------------
 
 // perform_action performs an apprt action. Mirrors `Application.performAction`.
-//
-// The large per-action switch in ghostty dispatches into the `Action` struct,
-// which operates on the GObject `Surface`/`Window` classes (out of scope). The
-// app-level actions that live entirely on the application (quit, quit_timer)
-// are handled here; the rest are acknowledged as unhandled for now.
 pub fn (mut self Application) perform_action(target apprt.Target, action apprt.ActionKey, data apprt.ActionValue) !bool {
 	match action {
+		.close_tab {
+			mut surface := surface_from_target(target) or { return false }
+			mut tab := tab_from_surface(surface) or { return false }
+			mode := match data.close_tab {
+				.this { CloseTabMode.this }
+				.other { CloseTabMode.other }
+				.right { CloseTabMode.right }
+			}
+			tab.action_close(mode)
+			return true
+		}
+		.close_window {
+			surface := surface_from_target(target) or { return false }
+			mut window := window_from_surface(surface) or { return false }
+			window.action_close()
+			return true
+		}
+		.config_change {
+			if unsafe { data.config_change_.config == nil } {
+				return true
+			}
+			match target {
+				apprt.AppTarget {
+					self.set_config(data.config_change_.config.clone())
+				}
+				apprt.SurfaceTarget {
+					mut surface := surface_from_target(target) or { return false }
+					surface.set_owned_config(data.config_change_.config.clone())
+				}
+			}
+			return true
+		}
+		.desktop_notification {
+			match target {
+				apprt.AppTarget {
+					self.send_desktop_notification(data.desktop_notification.title, data.desktop_notification.body)
+				}
+				apprt.SurfaceTarget {
+					surface := surface_from_target(target) or { return false }
+					surface.send_desktop_notification(data.desktop_notification.title, data.desktop_notification.body)
+				}
+			}
+			return true
+		}
+		.equalize_splits {
+			surface := surface_from_target(target) or { return false }
+			if isnil(surface.split_tree) {
+				return false
+			}
+			mut tree := unsafe { surface.split_tree }
+			tree.action_equalize()
+			return true
+		}
+		.goto_split {
+			surface := surface_from_target(target) or { return false }
+			if isnil(surface.split_tree) {
+				return false
+			}
+			to := match data.goto_split_ {
+				.previous { datastruct.Goto(datastruct.GotoPrevious{}) }
+				.next { datastruct.Goto(datastruct.GotoNext{}) }
+				.up { datastruct.Goto(datastruct.GotoSpatial{ direction: .up }) }
+				.left { datastruct.Goto(datastruct.GotoSpatial{ direction: .left }) }
+				.down { datastruct.Goto(datastruct.GotoSpatial{ direction: .down }) }
+				.right { datastruct.Goto(datastruct.GotoSpatial{ direction: .right }) }
+			}
+			mut tree := unsafe { surface.split_tree }
+			return tree.goto_(to)
+		}
+		.goto_window {
+			return self.goto_window(data.goto_window_)
+		}
+		.goto_tab {
+			surface := surface_from_target(target) or { return false }
+			mut window := window_from_surface(surface) or { return false }
+			raw := int(data.goto_tab)
+			selection := if raw == int(apprt.GotoTab.previous) {
+				SelectTab{ kind: .previous }
+			} else if raw == int(apprt.GotoTab.next) {
+				SelectTab{ kind: .next }
+			} else if raw == int(apprt.GotoTab.last) {
+				SelectTab{ kind: .last }
+			} else if raw >= 0 {
+				SelectTab{ kind: .n, n: usize(raw) }
+			} else {
+				return false
+			}
+			return window.select_tab(selection)
+		}
+		.initial_size {
+			mut surface := surface_from_target(target) or { return false }
+			surface.set_default_size(Size{
+				width: data.initial_size_.width
+				height: data.initial_size_.height
+			})
+			return true
+		}
+		.inspector {
+			mut surface := surface_from_target(target) or { return false }
+			if !surface.has_core() {
+				return false
+			}
+			mut core_surface := surface.core_surface
+			match data.inspector_ {
+				.show { core_surface.activate_inspector()! }
+				.hide { core_surface.deactivate_inspector() }
+				.toggle {
+					if core_surface.inspector == none {
+						core_surface.activate_inspector()!
+					} else {
+						core_surface.deactivate_inspector()
+					}
+				}
+			}
+			return true
+		}
+		.key_sequence {
+			mut surface := surface_from_target(target) or { return false }
+			surface.key_sequence_action(data.key_sequence_)
+			return true
+		}
+		.key_table {
+			mut surface := surface_from_target(target) or { return false }
+			surface.key_table_action(data.key_table_)
+			return true
+		}
+		.mouse_over_link {
+			if mut surface := surface_from_target(target) {
+				surface.set_mouse_hover_url(if data.mouse_over_link_.url.len > 0 {
+					data.mouse_over_link_.url
+				} else {
+					none
+				})
+			}
+			return true
+		}
+		.mouse_shape {
+			if mut surface := surface_from_target(target) {
+				surface.set_mouse_shape(data.mouse_shape_)
+			}
+			return true
+		}
+		.mouse_visibility {
+			if mut surface := surface_from_target(target) {
+				surface.set_mouse_hidden(data.mouse_visibility_ == .hidden)
+			}
+			return true
+		}
+		.move_tab {
+			mut surface := surface_from_target(target) or { return false }
+			mut window := window_from_surface(surface) or { return false }
+			mut rt_surface := surface.rt()
+			return window.move_tab(rt_surface, i64(data.move_tab.amount))
+		}
+		.new_split {
+			mut surface := surface_from_target(target) or { return false }
+			if isnil(surface.split_tree) {
+				return false
+			}
+			direction := match data.new_split {
+				.right { datastruct.Direction.right }
+				.down { datastruct.Direction.down }
+				.left { datastruct.Direction.left }
+				.up { datastruct.Direction.up }
+			}
+			mut tree := unsafe { surface.split_tree }
+			tree.new_split(direction, surface)
+			return true
+		}
+		.new_tab {
+			surface := surface_from_target(target) or { return false }
+			mut window := window_from_surface(surface) or { return false }
+			window.new_tab(surface.core_surface)
+			return true
+		}
 		.new_window {
 			match target {
 				apprt.SurfaceTarget {
@@ -1326,13 +1522,7 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			return true
 		}
 		.reload_config {
-			self.reload_config(data.reload_config_.soft)!
-			return true
-		}
-		.config_change {
-			if unsafe { data.config_change_.config != nil } {
-				self.set_config(data.config_change_.config.clone())
-			}
+			self.reload_config(target, data.reload_config_.soft)!
 			return true
 		}
 		.open_config {
@@ -1344,17 +1534,315 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			internal_os.open(data.open_url_.url) or { return false }
 			return true
 		}
+		.pwd {
+			if mut surface := surface_from_target(target) {
+				surface.set_pwd(data.pwd_.pwd)
+			}
+			return true
+		}
+		.present_terminal {
+			surface := surface_from_target(target) or { return false }
+			surface.present()
+			return true
+		}
+		.progress_report {
+			mut surface := surface_from_target(target) or { return false }
+			surface.set_progress_report(data.progress_report_)
+			return true
+		}
+		.prompt_title {
+			if data.prompt_title_ != .surface {
+				return false
+			}
+			mut surface := surface_from_target(target) or { return false }
+			surface.prompt_title()
+			return true
+		}
+		.render {
+			if surface := surface_from_target(target) {
+				surface.redraw()
+			}
+			return true
+		}
+		.resize_split {
+			surface := surface_from_target(target) or { return false }
+			if isnil(surface.split_tree) || !surface.split_tree.get_is_split() {
+				return false
+			}
+			direction := match data.resize_split_.direction {
+				.up { datastruct.Direction.up }
+				.down { datastruct.Direction.down }
+				.left { datastruct.Direction.left }
+				.right { datastruct.Direction.right }
+			}
+			mut tree := unsafe { surface.split_tree }
+			return tree.resize(direction, data.resize_split_.amount)
+		}
+		.ring_bell {
+			if mut surface := surface_from_target(target) {
+				surface.set_bell_ringing(true)
+			}
+			return true
+		}
+		.scrollbar {
+			if mut surface := surface_from_target(target) {
+				surface.set_scrollbar(data.scrollbar_)
+			}
+			return true
+		}
+		.set_title {
+			if mut surface := surface_from_target(target) {
+				surface.set_title(data.set_title_.title)
+			}
+			return true
+		}
+		.show_child_exited {
+			mut surface := surface_from_target(target) or { return false }
+			return surface.child_exited_action(data.show_child_exited_)
+		}
 		.show_gtk_inspector {
 			C.gtk_window_set_interactive_debugging(true)
 			return true
 		}
-		else {
-			// TODO(gtk): the remaining actions dispatch into GObject
-			// Surface/Window logic (Action.*), which is out of scope.
-			_ = target
+		.size_limit {
+			mut surface := surface_from_target(target) or { return false }
+			surface.set_min_size(Size{
+				width: data.size_limit_.min_width
+				height: data.size_limit_.min_height
+			})
+			return true
+		}
+		.toggle_maximize {
+			if surface := surface_from_target(target) {
+				surface.toggle_maximize()
+			}
+			return true
+		}
+		.toggle_fullscreen {
+			if surface := surface_from_target(target) {
+				surface.toggle_fullscreen()
+			}
+			return true
+		}
+		.toggle_quick_terminal {
+			return self.toggle_quick_terminal()
+		}
+		.toggle_tab_overview {
+			surface := surface_from_target(target) or { return false }
+			mut window := window_from_surface(surface) or { return false }
+			window.toggle_tab_overview()
+			return true
+		}
+		.toggle_window_decorations {
+			surface := surface_from_target(target) or { return false }
+			mut window := window_from_surface(surface) or { return false }
+			window.toggle_window_decorations()
+			return true
+		}
+		.toggle_command_palette {
+			surface := surface_from_target(target) or { return false }
+			mut window := window_from_surface(surface) or { return false }
+			window.toggle_command_palette()
+			return true
+		}
+		.toggle_split_zoom {
+			surface := surface_from_target(target) or { return false }
+			if isnil(surface.split_tree) || !surface.split_tree.get_is_split() {
+				return false
+			}
+			mut tree := unsafe { surface.split_tree }
+			tree.action_zoom()
+			return true
+		}
+		.show_on_screen_keyboard {
+			mut surface := surface_from_target(target) or { return false }
+			return surface.show_on_screen_keyboard(unsafe { nil })
+		}
+		.command_finished {
+			mut surface := surface_from_target(target) or { return false }
+			return surface.command_finished(data.command_finished_)
+		}
+		.start_search {
+			if mut surface := surface_from_target(target) {
+				surface.set_search_active(true, data.start_search_.needle)
+			}
+			return true
+		}
+		.end_search {
+			if mut surface := surface_from_target(target) {
+				surface.set_search_active(false, '')
+			}
+			return true
+		}
+		.search_total {
+			if mut surface := surface_from_target(target) {
+				surface.set_search_total(data.search_total_.total)
+			}
+			return true
+		}
+		.search_selected {
+			if mut surface := surface_from_target(target) {
+				surface.set_search_selected(data.search_selected_.selected)
+			}
+			return true
+		}
+		.readonly {
+			mut surface := surface_from_target(target) or { return false }
+			surface.set_readonly(data.readonly_ == .on)
+			return true
+		}
+		.secure_input, .close_all_windows, .float_window, .toggle_visibility, .toggle_background_opacity, .cell_size, .render_inspector, .renderer_health, .color_change, .reset_window_size, .check_for_updates, .undo, .redo {
+			// These actions are also explicitly unimplemented in the pinned GTK
+			// runtime.
 			return false
 		}
 	}
+}
+
+// surface_from_target follows the core Surface's runtime pointer back to the
+// GTK surface wrapper. This is the V equivalent of `core.rt_surface.surface`.
+fn surface_from_target(target apprt.Target) ?&SurfaceWidget {
+	match target {
+		apprt.AppTarget {
+			return none
+		}
+		apprt.SurfaceTarget {
+			if isnil(target.surface) {
+				return none
+			}
+			core_surface := unsafe { &core.Surface(target.surface) }
+			if isnil(core_surface.rt_surface) || isnil(core_surface.rt_surface.user_data) {
+				return none
+			}
+			surface := unsafe { &SurfaceWidget(core_surface.rt_surface.user_data) }
+			if isnil(surface) || surface.core_surface != core_surface {
+				return none
+			}
+			return surface
+		}
+	}
+}
+
+fn window_from_surface(surface &SurfaceWidget) ?&Window {
+	if isnil(surface) || isnil(surface.split_tree) || isnil(surface.split_tree.window) {
+		return none
+	}
+	return surface.split_tree.window
+}
+
+fn tab_from_surface(surface &SurfaceWidget) ?&Tab {
+	window := window_from_surface(surface) or { return none }
+	for tab in window.tabs {
+		if tab.split_tree == surface.split_tree {
+			return tab
+		}
+	}
+	return none
+}
+
+// send_desktop_notification sends an application-scoped notification. A zero
+// present-surface target matches Ghostty's no-surface notification behavior.
+fn (self &Application) send_desktop_notification(title string, body string) {
+	if isnil(self.obj) {
+		return
+	}
+	actual_title := if title.len == 0 { 'Ghostty' } else { title }
+	notification := C.g_notification_new(&char(actual_title.str))
+	if isnil(notification) {
+		return
+	}
+	defer {
+		object_unref(GObject(notification))
+	}
+	C.g_notification_set_body(notification, &char(body.str))
+	icon := C.g_themed_icon_new(c'com.mitchellh.ghostty')
+	if !isnil(icon) {
+		C.g_notification_set_icon(notification, icon)
+		object_unref(GObject(icon))
+	}
+	target := C.g_variant_new_uint64(0)
+	C.g_notification_set_default_action_and_target_value(notification, c'app.present-surface', target)
+	C.g_application_send_notification(self.obj, &char(body.str), notification)
+}
+
+fn (mut self Application) goto_window(direction apprt.GotoWindow) bool {
+	toplevels := C.gtk_window_list_toplevels()
+	if isnil(toplevels) {
+		return false
+	}
+	defer {
+		C.g_list_free(toplevels)
+	}
+	count := int(list_length(toplevels))
+	if count == 0 {
+		return false
+	}
+	mut active := -1
+	for i := 0; i < count; i++ {
+		gtk_window := GtkWindow(list_data_at(toplevels, u32(i)))
+		if !isnil(gtk_window) && C.gtk_window_is_active(gtk_window) != 0 {
+			active = i
+			break
+		}
+	}
+	start := if active >= 0 {
+		active
+	} else if direction == .next {
+		-1
+	} else {
+		0
+	}
+	for offset := 1; offset <= count; offset++ {
+		index := if direction == .next {
+			(start + offset) % count
+		} else {
+			(start - offset + count * 2) % count
+		}
+		gtk_window := GtkWindow(list_data_at(toplevels, u32(index)))
+		if isnil(gtk_window) || C.gtk_window_is_active(gtk_window) != 0
+			|| C.gtk_widget_get_visible(GtkWidget(gtk_window)) == 0 {
+			continue
+		}
+		mut window := &Window(unsafe { nil })
+		for candidate in self.windows {
+			if !isnil(candidate) && candidate.as_window() == gtk_window {
+				window = candidate
+				break
+			}
+		}
+		if isnil(window) {
+			continue
+		}
+		mut surface := window.get_active_surface() or { continue }
+		C.gtk_window_present(gtk_window)
+		surface.grab_focus()
+		return true
+	}
+	return false
+}
+
+fn (mut self Application) toggle_quick_terminal() bool {
+	for mut window in self.windows {
+		if !isnil(window) && window.is_quick_terminal() {
+			window.toggle_visibility()
+			return true
+		}
+	}
+	if !self.winproto.supports_quick_terminal() {
+		return false
+	}
+	mut window := Window.new(self)
+	if isnil(window) || isnil(window.obj) {
+		return false
+	}
+	window.quick_terminal = true
+	window.sync_apprt_window()
+	window.prop_quick_terminal(mut self)
+	window.sync_appearance()
+	self.windows << window
+	window.new_tab_for_window(none)
+	C.gtk_window_present(window.as_window())
+	return true
 }
 
 // new_window translates Action.newWindow/initAndShowWindow: mark that window

@@ -25,9 +25,15 @@ module gtk
 // --- New C bindings -------------------------------------------------------
 
 fn C.g_boxed_copy(boxed_type GType, src_boxed voidptr) voidptr
+
 fn C.g_boxed_free(boxed_type GType, boxed voidptr)
+
 fn C.g_list_find_custom(list GList, data voidptr, func GCompareFunc) GList
+
+fn C.g_list_free(list GList)
+
 fn C.gtk_widget_get_ancestor(widget GtkWidget, widget_type GType) GtkWidget
+
 fn C.g_type_check_value_holds(value GValue, type GType) int
 
 // --- Opaque handle aliases (module-local) ---------------------------------
