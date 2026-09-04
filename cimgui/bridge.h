@@ -181,6 +181,94 @@ static inline bool witty_cimgui_begin_window(ImGuiContext* context, const char* 
     return ImGui_Begin(name, NULL, ImGuiWindowFlags_NoFocusOnAppearing);
 }
 
+static inline bool witty_cimgui_begin_window_open(
+    ImGuiContext* context,
+    const char* name,
+    bool* open
+) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_Begin(name, open, ImGuiWindowFlags_NoFocusOnAppearing);
+}
+
+// This is Ghostty's inspector/widgets.zig DetachableHeader.window translated
+// into a single bridge call. A negative result means no window was begun.
+static inline int witty_cimgui_detachable_window(
+    ImGuiContext* context,
+    const char* label,
+    bool* detached,
+    bool* window_first,
+    bool dock
+) {
+    ImGui_SetCurrentContext(context);
+    if (!*detached) {
+        *window_first = true;
+        return -1;
+    }
+
+    if (*window_first) {
+        *window_first = false;
+        if (dock) {
+            ImGuiID dock_id = ImGui_GetWindowDockID();
+            if (dock_id != 0) {
+                ImGuiID dock_id_right = 0;
+                ImGuiID dock_id_left = 0;
+                (void)ImGui_DockBuilderSplitNode(
+                    dock_id,
+                    ImGuiDir_Right,
+                    0.4f,
+                    &dock_id_right,
+                    &dock_id_left
+                );
+                ImGui_DockBuilderDockWindow(label, dock_id_right);
+                ImGui_DockBuilderFinish(dock_id);
+            }
+        }
+    }
+
+    return ImGui_Begin(
+        label,
+        detached,
+        ImGuiWindowFlags_NoFocusOnAppearing
+    ) ? 1 : 0;
+}
+
+// This is Ghostty's inspector/widgets.zig DetachableHeader.header translated
+// into a single bridge call so the ImVec2 layout values remain C-native.
+static inline bool witty_cimgui_detachable_header(
+    ImGuiContext* context,
+    const char* label,
+    bool* detached
+) {
+    ImGui_SetCurrentContext(context);
+    if (*detached) return false;
+
+    ImGui_PushID(label);
+    ImGui_SetNextItemAllowOverlap();
+    bool is_open = ImGui_CollapsingHeader(label, ImGuiTreeNodeFlags_None);
+
+    ImVec2 header_max = ImGui_GetItemRectMax();
+    ImVec2 header_min = ImGui_GetItemRectMin();
+    float button_size = ImGui_GetFrameHeight() - 4.0f;
+    ImGui_SameLine();
+    ImGui_SetCursorScreenPos((ImVec2){
+        header_max.x - button_size - 4.0f,
+        header_min.y + 2.0f,
+    });
+    ImGui_PushStyleVarImVec2(
+        ImGuiStyleVar_FramePadding,
+        (ImVec2){0.0f, 0.0f}
+    );
+    if (ImGui_ButtonEx(">>##detach", (ImVec2){button_size, button_size})) {
+        *detached = true;
+    }
+    ImGui_PopStyleVar();
+    if (ImGui_IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+        ImGui_SetTooltipUnformatted("Detach into separate window");
+    }
+    ImGui_PopID();
+    return is_open;
+}
+
 static inline void witty_cimgui_end_window(ImGuiContext* context) {
     ImGui_SetCurrentContext(context);
     ImGui_End();
@@ -224,6 +312,28 @@ static inline void witty_cimgui_set_next_item_open(ImGuiContext* context, bool o
 static inline bool witty_cimgui_checkbox(ImGuiContext* context, const char* label, bool* value) {
     ImGui_SetCurrentContext(context);
     return ImGui_Checkbox(label, value);
+}
+
+static inline bool witty_cimgui_input_u16(
+    ImGuiContext* context,
+    const char* label,
+    unsigned short* value
+) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_InputScalar(label, ImGuiDataType_U16, value);
+}
+
+static inline bool witty_cimgui_color_edit3(
+    ImGuiContext* context,
+    const char* label,
+    float r,
+    float g,
+    float b,
+    int flags
+) {
+    ImGui_SetCurrentContext(context);
+    float color[3] = {r, g, b};
+    return ImGui_ColorEdit3(label, color, flags);
 }
 
 static inline void witty_cimgui_help_marker(ImGuiContext* context, const char* value) {
@@ -348,6 +458,16 @@ static inline void witty_cimgui_push_id_ptr(ImGuiContext* context, const void* v
     ImGui_PushIDPtr(value);
 }
 
+static inline void witty_cimgui_push_id_str(ImGuiContext* context, const char* value) {
+    ImGui_SetCurrentContext(context);
+    ImGui_PushID(value);
+}
+
+static inline void witty_cimgui_push_id_int(ImGuiContext* context, int value) {
+    ImGui_SetCurrentContext(context);
+    ImGui_PushIDInt(value);
+}
+
 static inline void witty_cimgui_pop_id(ImGuiContext* context) {
     ImGui_SetCurrentContext(context);
     ImGui_PopID();
@@ -366,6 +486,39 @@ static inline void witty_cimgui_new_line(ImGuiContext* context) {
 static inline bool witty_cimgui_item_hovered(ImGuiContext* context) {
     ImGui_SetCurrentContext(context);
     return ImGui_IsItemHovered(0);
+}
+
+static inline bool witty_cimgui_item_hovered_delay_short(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_IsItemHovered(ImGuiHoveredFlags_DelayShort);
+}
+
+static inline void witty_cimgui_begin_disabled(ImGuiContext* context, bool disabled) {
+    ImGui_SetCurrentContext(context);
+    ImGui_BeginDisabled(disabled);
+}
+
+static inline void witty_cimgui_end_disabled(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_EndDisabled();
+}
+
+static inline void witty_cimgui_push_item_width_for_text(
+    ImGuiContext* context,
+    const char* text
+) {
+    ImGui_SetCurrentContext(context);
+    ImGui_PushItemWidth(ImGui_CalcTextSize(text).x);
+}
+
+static inline void witty_cimgui_pop_item_width(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_PopItemWidth();
+}
+
+static inline void witty_cimgui_align_text_to_frame_padding(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_AlignTextToFramePadding();
 }
 
 static inline void witty_cimgui_tooltip(ImGuiContext* context, const char* value) {

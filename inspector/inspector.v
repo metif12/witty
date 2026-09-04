@@ -99,6 +99,7 @@ pub mut:
 	renderer_bridge renderer.InspectorOverlayBridge
 	key_events      []KeyEvent
 	mouse           InspectorMouse
+	terminal_info   TerminalInfo
 	renderer        RendererInfo
 }
 
@@ -202,12 +203,16 @@ pub fn (mut self Inspector) record_key_event(event KeyEvent) bool {
 // render draws the inspector UI into the active Dear ImGui frame. The context
 // handle is passed across the apprt/core boundary to avoid reversing their
 // dependency direction.
-pub fn (mut self Inspector) render(context_handle voidptr, surface_info SurfaceInfo) {
+pub fn (mut self Inspector) render(context_handle voidptr, surface_info SurfaceInfo, mut term terminal.Terminal) {
 	if isnil(context_handle) {
 		return
 	}
 	context := cimgui.Context{ handle: context_handle }
 	first_render := create_main_dockspace(context)
+
+	open_terminal := context.begin_window('Terminal')
+	self.terminal_info.draw(context, open_terminal, mut term)
+	context.end_window()
 
 	open_surface := context.begin_window('Surface')
 	draw_surface_info(context, open_surface, surface_info)

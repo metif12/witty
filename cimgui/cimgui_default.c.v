@@ -117,6 +117,25 @@ pub fn (ctx Context) begin_window(name string) bool {
 	return false
 }
 
+pub fn (ctx Context) begin_window_open(name string, open bool) (bool, bool) {
+	_ = name
+	return false, open
+}
+
+pub fn (ctx Context) detachable_window(label string, detached bool, window_first bool, dock bool) (int, bool, bool) {
+	_ = label
+	_ = dock
+	if !detached {
+		return -1, detached, true
+	}
+	return 0, detached, false
+}
+
+pub fn (ctx Context) detachable_header(label string, detached bool) (bool, bool) {
+	_ = label
+	return false, detached
+}
+
 pub fn (ctx Context) end_window() {}
 
 pub fn (ctx Context) set_window_focus(name string) {
@@ -151,6 +170,18 @@ pub fn (ctx Context) set_next_item_open(open bool) {
 pub fn (ctx Context) checkbox(label string, value bool) (bool, bool) {
 	_ = label
 	return false, value
+}
+
+pub fn (ctx Context) input_u16(label string, value u16) (bool, u16) {
+	_ = label
+	return false, value
+}
+
+pub fn (ctx Context) color_edit3(label string, color Color, flags int) bool {
+	_ = label
+	_ = color
+	_ = flags
+	return false
 }
 
 pub fn (ctx Context) help_marker(value string) {
@@ -221,6 +252,14 @@ pub fn (ctx Context) push_id(value voidptr) {
 	_ = value
 }
 
+pub fn (ctx Context) push_id_str(value string) {
+	_ = value
+}
+
+pub fn (ctx Context) push_id_int(value int) {
+	_ = value
+}
+
 pub fn (ctx Context) pop_id() {}
 
 pub fn (ctx Context) same_line() {}
@@ -230,6 +269,24 @@ pub fn (ctx Context) new_line() {}
 pub fn (ctx Context) item_hovered() bool {
 	return false
 }
+
+pub fn (ctx Context) item_hovered_delay_short() bool {
+	return false
+}
+
+pub fn (ctx Context) begin_disabled(disabled bool) {
+	_ = disabled
+}
+
+pub fn (ctx Context) end_disabled() {}
+
+pub fn (ctx Context) push_item_width_for_text(text string) {
+	_ = text
+}
+
+pub fn (ctx Context) pop_item_width() {}
+
+pub fn (ctx Context) align_text_to_frame_padding() {}
 
 pub fn (ctx Context) tooltip(value string) {
 	_ = value

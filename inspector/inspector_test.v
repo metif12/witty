@@ -2,6 +2,7 @@ module inspector
 
 import cimgui
 import input
+import terminal
 
 const test_font = $embed_file('@VMODROOT/font/res/JetBrainsMono-Regular.ttf').to_bytes()
 
@@ -82,6 +83,13 @@ fn test_inspector_renders_key_stream_into_real_imgui_frame() {
 	event.binding = [input.Action.new(.copy_to_clipboard)]
 	event.pty = [u8(`A`)]
 	value.record_key_event(event)
+	mut term := terminal.Terminal.init(terminal.Options{
+		cols: 80
+		rows: 24
+	})!
+	defer {
+		term.deinit()
+	}
 
 	context.begin_frame(1.0 / 60.0)
 	value.render(context.handle, SurfaceInfo{
@@ -101,7 +109,7 @@ fn test_inspector_renders_key_stream_into_real_imgui_frame() {
 		click_grid_y: 5
 		left_click_xpos: 40
 		left_click_ypos: 100
-	})
+	}, mut term)
 	dockspace_id := context.get_id('Main Dockspace')
 	assert context.dock_node_exists(dockspace_id)
 	context.render_frame()

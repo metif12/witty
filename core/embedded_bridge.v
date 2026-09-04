@@ -927,6 +927,7 @@ fn bridge_surface_inspector_render(ptr voidptr, context_handle voidptr) {
 		click_pressed[index] = state == .press
 	}
 	grid := self.surface.size.grid()
+	mut term := self.surface.renderer_state.terminal
 	insp.render(context_handle, inspectorpkg.SurfaceInfo{
 		screen_width: self.surface.size.screen.width
 		screen_height: self.surface.size.screen.height
@@ -949,7 +950,7 @@ fn bridge_surface_inspector_render(ptr voidptr, context_handle voidptr) {
 		click_grid_y: click_grid_y
 		left_click_xpos: self.surface.mouse.left_click_xpos
 		left_click_ypos: self.surface.mouse.left_click_ypos
-	})
+	}, mut term)
 	if locked {
 		self.surface.renderer_state.mutex.unlock()
 	}

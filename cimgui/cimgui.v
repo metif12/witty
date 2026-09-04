@@ -144,6 +144,12 @@ pub:
 pub const table_flags_key_stream = (1 << 0) | (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10) | (1 << 13) | (1 << 25)
 pub const table_column_width_stretch = 1 << 3
 pub const table_column_width_fixed = 1 << 4
+pub const table_column_no_resize = 1 << 5
+pub const table_column_prefer_sort_ascending = 1 << 14
+pub const table_flags_borders_row_bg_sizing_fixed_fit = (1 << 6) | (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10) | (1 << 13)
+pub const table_flags_row_bg_sizing_fixed_fit = (1 << 6) | (1 << 13)
+pub const color_edit_flags_none = 0
+pub const color_edit_flags_no_inputs = 1 << 5
 
 // Context owns one Dear ImGui context. Ghostty creates one context per
 // terminal inspector and always makes it current before touching its state.

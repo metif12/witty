@@ -82,6 +82,12 @@ fn C.witty_cimgui_dock_space_over_main_viewport(context voidptr, id u32) bool
 
 fn C.witty_cimgui_begin_window(context voidptr, name &char) bool
 
+fn C.witty_cimgui_begin_window_open(context voidptr, name &char, open &bool) bool
+
+fn C.witty_cimgui_detachable_window(context voidptr, label &char, detached &bool, window_first &bool, dock bool) int
+
+fn C.witty_cimgui_detachable_header(context voidptr, label &char, detached &bool) bool
+
 fn C.witty_cimgui_end_window(context voidptr)
 
 fn C.witty_cimgui_set_window_focus(context voidptr, name &char)
@@ -99,6 +105,10 @@ fn C.witty_cimgui_separator_text(context voidptr, label &char)
 fn C.witty_cimgui_set_next_item_open(context voidptr, open bool)
 
 fn C.witty_cimgui_checkbox(context voidptr, label &char, value &bool) bool
+
+fn C.witty_cimgui_input_u16(context voidptr, label &char, value &u16) bool
+
+fn C.witty_cimgui_color_edit3(context voidptr, label &char, r f32, g f32, b f32, flags int) bool
 
 fn C.witty_cimgui_help_marker(context voidptr, value &char)
 
@@ -134,6 +144,10 @@ fn C.witty_cimgui_table_set_bg_color(context voidptr, target int, color u32)
 
 fn C.witty_cimgui_push_id_ptr(context voidptr, value voidptr)
 
+fn C.witty_cimgui_push_id_str(context voidptr, value &char)
+
+fn C.witty_cimgui_push_id_int(context voidptr, value int)
+
 fn C.witty_cimgui_pop_id(context voidptr)
 
 fn C.witty_cimgui_same_line(context voidptr)
@@ -141,6 +155,18 @@ fn C.witty_cimgui_same_line(context voidptr)
 fn C.witty_cimgui_new_line(context voidptr)
 
 fn C.witty_cimgui_item_hovered(context voidptr) bool
+
+fn C.witty_cimgui_item_hovered_delay_short(context voidptr) bool
+
+fn C.witty_cimgui_begin_disabled(context voidptr, disabled bool)
+
+fn C.witty_cimgui_end_disabled(context voidptr)
+
+fn C.witty_cimgui_push_item_width_for_text(context voidptr, text &char)
+
+fn C.witty_cimgui_pop_item_width(context voidptr)
+
+fn C.witty_cimgui_align_text_to_frame_padding(context voidptr)
 
 fn C.witty_cimgui_tooltip(context voidptr, value &char)
 
@@ -271,6 +297,25 @@ pub fn (ctx Context) begin_window(name string) bool {
 	return C.witty_cimgui_begin_window(ctx.handle, name.str)
 }
 
+pub fn (ctx Context) begin_window_open(name string, open bool) (bool, bool) {
+	mut updated := open
+	visible := C.witty_cimgui_begin_window_open(ctx.handle, name.str, &updated)
+	return visible, updated
+}
+
+pub fn (ctx Context) detachable_window(label string, detached bool, window_first bool, dock bool) (int, bool, bool) {
+	mut updated_detached := detached
+	mut updated_first := window_first
+	visible := C.witty_cimgui_detachable_window(ctx.handle, label.str, &updated_detached, &updated_first, dock)
+	return visible, updated_detached, updated_first
+}
+
+pub fn (ctx Context) detachable_header(label string, detached bool) (bool, bool) {
+	mut updated := detached
+	open := C.witty_cimgui_detachable_header(ctx.handle, label.str, &updated)
+	return open, updated
+}
+
 pub fn (ctx Context) end_window() {
 	C.witty_cimgui_end_window(ctx.handle)
 }
@@ -307,6 +352,16 @@ pub fn (ctx Context) checkbox(label string, value bool) (bool, bool) {
 	mut updated := value
 	changed := C.witty_cimgui_checkbox(ctx.handle, label.str, &updated)
 	return changed, updated
+}
+
+pub fn (ctx Context) input_u16(label string, value u16) (bool, u16) {
+	mut updated := value
+	changed := C.witty_cimgui_input_u16(ctx.handle, label.str, &updated)
+	return changed, updated
+}
+
+pub fn (ctx Context) color_edit3(label string, color Color, flags int) bool {
+	return C.witty_cimgui_color_edit3(ctx.handle, label.str, color.r, color.g, color.b, flags)
 }
 
 pub fn (ctx Context) help_marker(value string) {
@@ -377,6 +432,14 @@ pub fn (ctx Context) push_id(value voidptr) {
 	C.witty_cimgui_push_id_ptr(ctx.handle, value)
 }
 
+pub fn (ctx Context) push_id_str(value string) {
+	C.witty_cimgui_push_id_str(ctx.handle, value.str)
+}
+
+pub fn (ctx Context) push_id_int(value int) {
+	C.witty_cimgui_push_id_int(ctx.handle, value)
+}
+
 pub fn (ctx Context) pop_id() {
 	C.witty_cimgui_pop_id(ctx.handle)
 }
@@ -391,6 +454,30 @@ pub fn (ctx Context) new_line() {
 
 pub fn (ctx Context) item_hovered() bool {
 	return C.witty_cimgui_item_hovered(ctx.handle)
+}
+
+pub fn (ctx Context) item_hovered_delay_short() bool {
+	return C.witty_cimgui_item_hovered_delay_short(ctx.handle)
+}
+
+pub fn (ctx Context) begin_disabled(disabled bool) {
+	C.witty_cimgui_begin_disabled(ctx.handle, disabled)
+}
+
+pub fn (ctx Context) end_disabled() {
+	C.witty_cimgui_end_disabled(ctx.handle)
+}
+
+pub fn (ctx Context) push_item_width_for_text(text string) {
+	C.witty_cimgui_push_item_width_for_text(ctx.handle, text.str)
+}
+
+pub fn (ctx Context) pop_item_width() {
+	C.witty_cimgui_pop_item_width(ctx.handle)
+}
+
+pub fn (ctx Context) align_text_to_frame_padding() {
+	C.witty_cimgui_align_text_to_frame_padding(ctx.handle)
 }
 
 pub fn (ctx Context) tooltip(value string) {
