@@ -932,14 +932,18 @@ pub fn Renderer.init(opts RendererOpts) !Renderer {
 		.linear_corrected { .linear_corrected }
 	}
 
-	mut shaders := MetalShaders.init(metal.device, []string{}, metal.target_pixel_format()) or {
+	post_shaders := load_shaders_from_files(opts.config.custom_shaders, .msl) or {
+		eprintln('renderer: error loading custom shaders: ${err}')
+		[]string{}
+	}
+	mut shaders := MetalShaders.init(metal.device, post_shaders, metal.target_pixel_format()) or {
 		metal.deinit()
 		font_shaper.deinit()
 		return err
 	}
 	mut frames := []MetalFrameState{cap: metal_swap_chain_count}
 	for _ in 0 .. metal_swap_chain_count {
-		frame := MetalFrameState.init(&metal) or {
+		frame := MetalFrameState.init(&metal, post_shaders.len > 0) or {
 			for mut initialized in frames {
 				initialized.deinit()
 			}
@@ -955,7 +959,7 @@ pub fn Renderer.init(opts RendererOpts) !Renderer {
 	grid := opts.font_grid
 	metrics := grid.metrics
 
-	has_custom_shaders := false
+	has_custom_shaders := post_shaders.len > 0
 
 	mut result := Renderer{
 		metal: metal
@@ -1289,9 +1293,31 @@ pub fn (mut self Renderer) draw_frame(sync_ bool) ! {
 
 	if self.reinitialize_shaders {
 		self.reinitialize_shaders = false
-		mut replacement := MetalShaders.init(self.metal.device, []string{}, self.metal.target_pixel_format())!
+		post_shaders := load_shaders_from_files(self.config.custom_shaders, .msl) or {
+			eprintln('renderer: error loading custom shaders: ${err}')
+			[]string{}
+		}
+		mut replacement := MetalShaders.init(self.metal.device, post_shaders, self.metal.target_pixel_format())!
 		self.shaders.deinit()
 		self.shaders = replacement
+		self.has_custom_shaders = post_shaders.len > 0
+	}
+
+	if self.has_custom_shaders {
+		if frame_state := self.frames[(self.frame_index + 1) % self.frames.len].custom_shader_state {
+			_ = frame_state
+		} else {
+			mut state := MetalCustomShaderState.init(&self.metal)!
+			state.resize(&self.metal, surface_width, surface_height)!
+			next_index := (self.frame_index + 1) % self.frames.len
+			self.frames[next_index].custom_shader_state = state
+		}
+	} else {
+		next_index := (self.frame_index + 1) % self.frames.len
+		if mut state := self.frames[next_index].custom_shader_state {
+			state.deinit()
+			self.frames[next_index].custom_shader_state = none
+		}
 	}
 
 	if size_changed {
@@ -1312,12 +1338,17 @@ pub fn (mut self Renderer) draw_frame(sync_ bool) ! {
 
 	_ = self.images.upload(&self.metal)
 	self.upload_background_image()!
+	self.update_custom_shader_uniforms_for_frame()!
 
 	gpu_uniforms := metal_uniforms(self.uniforms)
 	frame_state.uniforms.sync_values([gpu_uniforms])!
 	frame_state.cells_bg.sync_values(self.cells.bg_cells)!
 	foreground := self.metal_text_cells()
 	frame_state.cells.sync_values(foreground)!
+	if mut state := frame_state.custom_shader_state {
+		state.uniforms.sync_values([self.custom_shader_uniforms])!
+		frame_state.custom_shader_state = state
+	}
 
 	if frame_state.bg_image_buffer_modified != self.bg_image_buffer_modified {
 		bg_vertex := metal_bg_image_vertex(self.bg_image_buffer)
@@ -1335,8 +1366,12 @@ pub fn (mut self Renderer) draw_frame(sync_ bool) ! {
 	}
 
 	mut frame := MetalFrame.begin(self.metal.queue)!
+	mut terminal_target := unsafe { voidptr(frame_state.target.texture) }
+	if state := frame_state.custom_shader_state {
+		terminal_target = unsafe { voidptr(state.back_texture.handle) }
+	}
 	mut pass := MetalRenderPass.begin(frame.command_buffer, [MetalRenderPassAttachment{
-		texture: frame_state.target.texture
+		texture: terminal_target
 		clear_color: [f64(0), 0, 0, 0]!
 	}])!
 
@@ -1384,6 +1419,30 @@ pub fn (mut self Renderer) draw_frame(sync_ bool) ! {
 	self.images.draw(&self.metal, self.shaders.image, mut pass, .kitty_above_text)
 	self.images.draw(&self.metal, self.shaders.image, mut pass, .overlay)
 	pass.complete()
+
+	if mut state := frame_state.custom_shader_state {
+		for index, pipeline in self.shaders.post_pipelines {
+			mut output_texture := unsafe { voidptr(frame_state.target.texture) }
+			if index < self.shaders.post_pipelines.len - 1 {
+				output_texture = unsafe { voidptr(state.front_texture.handle) }
+			}
+			mut post_pass := MetalRenderPass.begin(frame.command_buffer, [MetalRenderPassAttachment{
+				texture: output_texture
+				clear_color: [f64(0), 0, 0, 0]!
+			}])!
+			post_pass.step(MetalRenderStep{
+				pipeline: pipeline
+				uniforms: state.uniforms.handle
+				textures: [state.back_texture.handle]
+				samplers: [state.sampler.handle]
+				draw_type: .triangle
+				vertex_count: 3
+			})
+			post_pass.complete()
+			state.swap()
+		}
+		frame_state.custom_shader_state = state
+	}
 
 	// Ghostty presents from the command-buffer completion callback. The V
 	// bridge waits here before handing the IOSurface to Core Animation, which
@@ -1531,6 +1590,7 @@ pub fn (mut self Renderer) change_config(config &DerivedConfig) ! {
 		|| self.config.bg_image_repeat != config.bg_image_repeat
 		|| self.config.bg_image_opacity != config.bg_image_opacity
 	blending_changed := self.config.blending != config.blending
+	custom_shaders_changed := !self.config.custom_shaders.equal(&config.custom_shaders)
 
 	self.config.deinit()
 	self.config = *config
@@ -1550,6 +1610,9 @@ pub fn (mut self Renderer) change_config(config &DerivedConfig) ! {
 		}
 		self.reinitialize_shaders = true
 		self.target_config_modified++
+	}
+	if custom_shaders_changed {
+		self.reinitialize_shaders = true
 	}
 
 	// Reset our viewport to force a rebuild, in case of a font change
@@ -1684,6 +1747,31 @@ fn (mut self Renderer) update_custom_shader_uniforms_from_state() {
 			f32(1.0),
 		]!
 	}
+
+	if cursor_text := self.config.cursor_text {
+		self.custom_shader_uniforms.cursor_text = [
+			f32(cursor_text.color.r) / 255.0,
+			f32(cursor_text.color.g) / 255.0,
+			f32(cursor_text.color.b) / 255.0,
+			f32(1.0),
+		]!
+	}
+	if selection_background := self.config.selection_background {
+		self.custom_shader_uniforms.selection_background_color = [
+			f32(selection_background.color.r) / 255.0,
+			f32(selection_background.color.g) / 255.0,
+			f32(selection_background.color.b) / 255.0,
+			f32(1.0),
+		]!
+	}
+	if selection_foreground := self.config.selection_foreground {
+		self.custom_shader_uniforms.selection_foreground_color = [
+			f32(selection_foreground.color.r) / 255.0,
+			f32(selection_foreground.color.g) / 255.0,
+			f32(selection_foreground.color.b) / 255.0,
+			f32(1.0),
+		]!
+	}
 }
 
 // Update per-frame custom shader uniforms.
@@ -1743,10 +1831,13 @@ fn (mut self Renderer) update_custom_shader_uniforms_for_frame() ! {
 		// Left edge of the cell the cursor is in
 		mut pixel_x := f32(u32(cursor.grid_pos[0]) * cell.width + padding.left)
 		// Top edge of the cell the cursor is in
-		pixel_y := f32(u32(cursor.grid_pos[1]) * cell.height + padding.top)
+		mut pixel_y := f32(u32(cursor.grid_pos[1]) * cell.height + padding.top)
 
 		// Add the X bearing to get the left edge of the cursor
 		pixel_x += f32(cursor.bearings[0])
+		pixel_y += f32(cell.height)
+		pixel_y -= f32(cursor.bearings[1])
+		pixel_y += f32(cursor.glyph_size[1])
 
 		new_cursor := [pixel_x, pixel_y, cursor_width, cursor_height]!
 		new_cursor_color := [
@@ -1775,7 +1866,7 @@ fn (mut self Renderer) update_custom_shader_uniforms_for_frame() ! {
 	}
 
 	// Update focus uniforms
-	uniforms.focus = if self.focused { u32(1) } else { u32(0) }
+	uniforms.focus = if self.focused { i32(1) } else { i32(0) }
 
 	// If we need to update the time our focus state changed
 	// then update it to our current frame time.

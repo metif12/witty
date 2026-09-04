@@ -164,6 +164,30 @@ pub fn (self &MetalAPI) image_texture_options(format PixelFormat, srgb bool) Met
 	}
 }
 
+// custom_shader_texture_options returns the render-target/readable texture
+// configuration used by Ghostty's ping-pong post-processing passes.
+pub fn (self &MetalAPI) custom_shader_texture_options() MetalTextureOptions {
+	return MetalTextureOptions{
+		device: self.device
+		pixel_format: self.target_pixel_format()
+		storage_mode: self.default_storage_mode
+		usage: MetalTextureUsage{
+			shader_read: true
+			render_target: true
+		}
+	}
+}
+
+pub fn (self &MetalAPI) custom_shader_sampler_options() MetalSamplerOptions {
+	return MetalSamplerOptions{
+		device: self.device
+		min_filter: .linear
+		mag_filter: .linear
+		s_address_mode: .clamp_to_edge
+		t_address_mode: .clamp_to_edge
+	}
+}
+
 pub fn (self &MetalAPI) target_pixel_format() MetalPixelFormat {
 	return if self.blending.is_linear() { .bgra8unorm_srgb } else { .bgra8unorm }
 }

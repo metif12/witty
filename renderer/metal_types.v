@@ -842,9 +842,10 @@ pub mut:
 	target                   MetalTarget
 	target_config_modified   u64
 	bg_image_buffer_modified u64
+	custom_shader_state      ?MetalCustomShaderState
 }
 
-pub fn MetalFrameState.init(api &MetalAPI) !MetalFrameState {
+pub fn MetalFrameState.init(api &MetalAPI, custom_shaders bool) !MetalFrameState {
 	mut uniforms := MetalBuffer.init(api.buffer_options(), u32($sizeof(MetalUniforms)))!
 	mut cells := MetalBuffer.init(api.buffer_options(), u32($sizeof(MetalTextCell))) or {
 		uniforms.deinit()
@@ -883,7 +884,23 @@ pub fn MetalFrameState.init(api &MetalAPI) !MetalFrameState {
 		uniforms.deinit()
 		return err
 	}
+	mut custom_shader_state := if custom_shaders {
+		MetalCustomShaderState.init(api) or {
+			color.deinit()
+			grayscale.deinit()
+			bg_image_buffer.deinit()
+			cells_bg.deinit()
+			cells.deinit()
+			uniforms.deinit()
+			return err
+		}
+	} else {
+		none
+	}
 	target := MetalTarget.init(api.target_options(1, 1)) or {
+		if mut state := custom_shader_state {
+			state.deinit()
+		}
 		color.deinit()
 		grayscale.deinit()
 		bg_image_buffer.deinit()
@@ -900,6 +917,7 @@ pub fn MetalFrameState.init(api &MetalAPI) !MetalFrameState {
 		grayscale: grayscale
 		color: color
 		target: target
+		custom_shader_state: custom_shader_state
 	}
 }
 
@@ -911,12 +929,80 @@ pub fn (mut self MetalFrameState) deinit() {
 	self.grayscale.deinit()
 	self.color.deinit()
 	self.bg_image_buffer.deinit()
+	if mut state := self.custom_shader_state {
+		state.deinit()
+	}
+	self.custom_shader_state = none
 }
 
 pub fn (mut self MetalFrameState) resize_target(api &MetalAPI, width u32, height u32) ! {
+	if mut state := self.custom_shader_state {
+		state.resize(api, width, height)!
+		self.custom_shader_state = state
+	}
 	target := MetalTarget.init(api.target_options(width, height))!
 	self.target.deinit()
 	self.target = target
+}
+
+// MetalCustomShaderState is the per-frame ping-pong state used by Ghostty's
+// custom shader chain.
+pub struct MetalCustomShaderState {
+pub mut:
+	front_texture MetalTexture
+	back_texture  MetalTexture
+	sampler       MetalSampler
+	uniforms      MetalBuffer
+}
+
+pub fn MetalCustomShaderState.init(api &MetalAPI) !MetalCustomShaderState {
+	mut uniforms := MetalBuffer.init(api.buffer_options(), u32($sizeof(CustomShaderUniforms)))!
+	mut front_texture := MetalTexture.init(api.custom_shader_texture_options(), 1, 1, none) or {
+		uniforms.deinit()
+		return err
+	}
+	mut back_texture := MetalTexture.init(api.custom_shader_texture_options(), 1, 1, none) or {
+		front_texture.deinit()
+		uniforms.deinit()
+		return err
+	}
+	sampler := MetalSampler.init(api.custom_shader_sampler_options()) or {
+		back_texture.deinit()
+		front_texture.deinit()
+		uniforms.deinit()
+		return err
+	}
+	return MetalCustomShaderState{
+		front_texture: front_texture
+		back_texture: back_texture
+		sampler: sampler
+		uniforms: uniforms
+	}
+}
+
+pub fn (mut self MetalCustomShaderState) deinit() {
+	self.front_texture.deinit()
+	self.back_texture.deinit()
+	self.sampler.deinit()
+	self.uniforms.deinit()
+}
+
+pub fn (mut self MetalCustomShaderState) swap() {
+	front := self.front_texture
+	self.front_texture = self.back_texture
+	self.back_texture = front
+}
+
+pub fn (mut self MetalCustomShaderState) resize(api &MetalAPI, width u32, height u32) ! {
+	mut front_texture := MetalTexture.init(api.custom_shader_texture_options(), width, height, none)!
+	back_texture := MetalTexture.init(api.custom_shader_texture_options(), width, height, none) or {
+		front_texture.deinit()
+		return err
+	}
+	self.front_texture.deinit()
+	self.back_texture.deinit()
+	self.front_texture = front_texture
+	self.back_texture = back_texture
 }
 
 const metal_shader_source = $embed_file('shaders.metal').to_string()

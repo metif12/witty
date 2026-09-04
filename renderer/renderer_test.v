@@ -244,6 +244,9 @@ fn test_custom_shader_uniforms_defaults() {
 	assert u.focus == 1
 	assert u.frame_rate == 60.0
 	assert u.time == 0.0
+	assert $sizeof(CustomShaderUniforms) == 4480
+	assert __offsetof(CustomShaderUniforms, channel_time) == 32
+	assert __offsetof(CustomShaderUniforms, palette) == 288
 }
 
 // Test HighlightTag enum.

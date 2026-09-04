@@ -161,7 +161,6 @@ import terminal
 //
 // --- Original Ghostty Comments End: src/renderer/cell.zig
 
-
 // ============================================================
 // Cell content types for GPU rendering
 // ============================================================
@@ -391,7 +390,9 @@ pub mut:
 	// Rendering frame rate.
 	frame_rate f32 = 60.0
 	// Current frame number.
-	frame u32
+	frame i32
+	// std140 padding before the first array.
+	padding_frame u32
 	// Channel time (4 channels, each has time).
 	channel_time [4][4]f32
 	// Channel resolution (4 channels, each [w, h, aspect, 0]).
@@ -402,6 +403,8 @@ pub mut:
 	date [4]f32
 	// Audio sample rate (N/A).
 	sample_rate f32
+	// std140 padding before the cursor vectors.
+	padding_sample [3]f32
 	// Current cursor position and size [x, y, w, h].
 	current_cursor [4]f32
 	// Previous cursor position and size [x, y, w, h].
@@ -415,7 +418,9 @@ pub mut:
 	// Time when window was last focused.
 	time_focus f32
 	// Whether the window is focused (0 or 1).
-	focus u32 = 1
+	focus i32 = 1
+	// std140 padding before the palette array.
+	padding_focus u32
 	// 256-color palette as normalized floats [r, g, b, a].
 	palette [256][4]f32
 	// Background color as normalized floats.
@@ -487,7 +492,7 @@ pub enum BgImageFit {
 pub struct BgImageInfo {
 pub mut:
 	position BgImagePosition = .mc
-	fit      BgImageFit      = .contain
+	fit      BgImageFit = .contain
 	repeat   bool
 }
 
