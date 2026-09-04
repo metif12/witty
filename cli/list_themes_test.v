@@ -1,6 +1,7 @@
 module cli
 
 import configpkg
+import vaxis
 
 // Test should_include_theme with dark filter
 fn test_should_include_theme_dark_filter() {
@@ -70,11 +71,15 @@ fn test_theme_list_element_sorting() {
 // Test ThemeListElement to_uri
 fn test_theme_list_element_to_uri() {
 	theme := ThemeListElement{
-		path:  '/home/user/.config/ghostty/themes/Dracula'
+		path: '/home/user/.config/ghostty/themes/Dracula'
 		theme: 'Dracula'
 	}
 	uri := theme.to_uri()
 	assert uri == 'file:///home/user/.config/ghostty/themes/Dracula'
+	spaced := ThemeListElement{
+		path: '/home/user/My Themes/Dracula'
+	}.to_uri()
+	assert spaced == 'file:///home/user/My%20Themes/Dracula'
 }
 
 // Test Preview up/down navigation
@@ -154,4 +159,50 @@ fn test_options_defaults() {
 	assert opts.path == false
 	assert opts.plain == false
 	assert opts.color == .all
+}
+
+fn test_preview_search_uses_text_input() {
+	mut p := Preview.new([
+		ThemeListElement{ theme: 'Dracula' },
+		ThemeListElement{ theme: 'Gruvbox' },
+	], .all)
+	p.mode = .search
+	p.update(Event(KeyPressEvent{
+		key: vaxis.Key{ codepoint: u32(`d`) }
+	}))
+	assert p.search_text == 'd'
+	assert p.filtered.len == 1
+	assert p.themes[p.filtered[0]].theme == 'Dracula'
+
+	p.update(Event(KeyPressEvent{
+		key: vaxis.Key{ codepoint: vaxis.backspace }
+	}))
+	assert p.search_text == ''
+	assert p.filtered.len == 2
+}
+
+fn test_preview_mouse_selects_visible_theme() {
+	mut p := Preview.new([
+		ThemeListElement{ theme: 'One' },
+		ThemeListElement{ theme: 'Two' },
+		ThemeListElement{ theme: 'Three' },
+	], .all)
+	p.winsize = vaxis.Winsize{ rows: 20, cols: 100 }
+	p.update(Event(MouseEvent{
+		mouse: vaxis.Mouse{
+			button: .left
+			type_: .release
+			row: 2
+			col: 5
+		}
+	}))
+	assert p.current == 2
+}
+
+fn test_preview_draws_empty_state() {
+	mut p := Preview.new([], .all)
+	p.winsize = vaxis.Winsize{ rows: 12, cols: 80 }
+	output := p.draw()
+	assert output.contains('No theme found!')
+	assert output.contains('\x1b[2J\x1b[H')
 }

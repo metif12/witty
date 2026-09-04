@@ -1,6 +1,9 @@
 module cli
 
 import os
+import strings
+import time
+import net.urllib
 import configpkg
 import themepkg
 import tui
@@ -57,8 +60,10 @@ fn theme_list_less_than(a &ThemeListElement, b &ThemeListElement) int {
 
 // to_uri converts the theme path to a file:// URI string.
 pub fn (self &ThemeListElement) to_uri() string {
-	// Simple file:// URI construction
-	return 'file://${self.path}'
+	return urllib.URL{
+		scheme: 'file'
+		path: self.path
+	}.str()
 }
 
 // Event is the union of possible input events for the TUI preview.
@@ -104,14 +109,19 @@ mut:
 	mode         PreviewMode = .normal
 	color_scheme vaxis.Scheme = .light
 	search_text  string
+	text_input   vaxis.TextInput
+	winsize      vaxis.Winsize
 	theme_filter ColorScheme
 }
 
 // Preview.new creates a new Preview with the given themes and filter.
 fn Preview.new(themes []ThemeListElement, theme_filter ColorScheme) Preview {
 	mut p := Preview{
-		themes:       themes
+		themes: themes
 		theme_filter: theme_filter
+		text_input: vaxis.TextInput.new()
+		winsize: vaxis.terminal_size()
+		color_scheme: vaxis.detect_color_scheme()
 	}
 	p.update_filtered()
 	return p
@@ -142,7 +152,7 @@ fn (mut self Preview) update_filtered() {
 			}
 			r := zf.rank(theme.theme, tokens, zf.RankOptions{
 				to_lower: true
-				plain:    true
+				plain: true
 			})
 			if r != none {
 				theme.rank = r
@@ -239,6 +249,7 @@ fn (mut self Preview) update(event Event) {
 						self.mode = .save
 					}
 					if key.matches_any([u32(`x`), u32(`/`)], vaxis.Modifiers{ ctrl: true }) {
+						self.text_input.clear_retaining_capacity()
 						self.search_text = ''
 						self.update_filtered()
 					}
@@ -250,20 +261,16 @@ fn (mut self Preview) update(event Event) {
 							self.current = self.filtered.len - 1
 						}
 					}
-					if key.matches_any([u32(`j`), u32(`+`), vaxis.down, vaxis.kp_down, vaxis.kp_add],
-						vaxis.Modifiers{})
-					{
+					if key.matches_any([u32(`j`), u32(`+`), vaxis.down, vaxis.kp_down, vaxis.kp_add], vaxis.Modifiers{}) {
 						self.down(1)
 					}
 					if key.matches_any([vaxis.page_down, vaxis.kp_down], vaxis.Modifiers{}) {
 						self.down(20)
 					}
-					if key.matches_any([u32(`k`), u32(`-`), vaxis.up, vaxis.kp_up, vaxis.kp_subtract],
-						vaxis.Modifiers{})
-					{
+					if key.matches_any([u32(`k`), u32(`-`), vaxis.up, vaxis.kp_up, vaxis.kp_subtract], vaxis.Modifiers{}) {
 						self.up(1)
 					}
-					if key.matches_any([vaxis.page_down, vaxis.kp_page_up], vaxis.Modifiers{}) {
+					if key.matches_any([vaxis.page_up, vaxis.kp_page_up], vaxis.Modifiers{}) {
 						self.up(20)
 					}
 					if key.matches_any([u32(`h`), u32(`x`)], vaxis.Modifiers{}) {
@@ -272,13 +279,23 @@ fn (mut self Preview) update(event Event) {
 					if key.matches(u32(`d`), vaxis.Modifiers{}) {
 						self.hex = false
 					}
-					// 'c' copies theme name, 'C' copies theme path
-					// XTODO: clipboard copy needs vaxis.copyToSystemClipboard
+					if self.filtered.len > 0 && key.matches(u32(`c`), vaxis.Modifiers{}) {
+						vaxis.copy_to_system_clipboard(self.themes[self.filtered[self.current]].theme)
+					} else if self.filtered.len > 0
+						&& key.matches(u32(`c`), vaxis.Modifiers{ shift: true }) {
+						vaxis.copy_to_system_clipboard(self.themes[self.filtered[self.current]].path)
+					}
 					if key.matches(u32(`f`), vaxis.Modifiers{}) {
 						match self.theme_filter {
-							.all { self.theme_filter = .dark }
-							.dark { self.theme_filter = .light }
-							.light { self.theme_filter = .all }
+							.all {
+								self.theme_filter = .dark
+							}
+							.dark {
+								self.theme_filter = .light
+							}
+							.light {
+								self.theme_filter = .all
+							}
 						}
 						self.update_filtered()
 					}
@@ -300,11 +317,13 @@ fn (mut self Preview) update(event Event) {
 						return
 					}
 					if key.matches_any([u32(`x`), u32(`/`)], vaxis.Modifiers{ ctrl: true }) {
+						self.text_input.clear_retaining_capacity()
 						self.search_text = ''
 						self.update_filtered()
 						return
 					}
-					// XTODO: integrate with vaxis TextInput for character-by-character input
+					self.text_input.update(key)
+					self.search_text = self.text_input.get_text()
 					self.update_filtered()
 				}
 				.save {
@@ -324,10 +343,22 @@ fn (mut self Preview) update(event Event) {
 			self.color_scheme = event.scheme
 		}
 		MouseEvent {
-			// XTODO: mouse handling needs vaxis window hit testing
+			if self.mode == .normal {
+				if event.mouse.button == .wheel_up {
+					self.up(1)
+				} else if event.mouse.button == .wheel_down {
+					self.down(1)
+				} else if event.mouse.button == .left && event.mouse.type_ == .release
+					&& event.mouse.col < min_int(32, int(self.winsize.cols)) {
+					selection := self.window + event.mouse.row
+					if selection < self.filtered.len {
+						self.current = selection
+					}
+				}
+			}
 		}
 		WinsizeEvent {
-			// XTODO: window resize needs vaxis resize
+			self.winsize = event.winsize
 		}
 	}
 }
@@ -414,43 +445,384 @@ fn (self &Preview) ui_err() vaxis.Style {
 
 // run is the TUI preview event loop.
 fn (mut self Preview) run() {
-	// XTODO: TUI preview requires vaxis event loop, alt screen, mouse mode,
-	// terminal querying, and rendering pipeline. None of these have V equivalents yet.
-	// The full draw() and drawPreview() methods render a split-pane TUI with:
-	// - Left pane: scrollable theme list with selection indicator
-	// - Right pane: preview of the selected theme's colors with a code sample
-	// - Modal overlays for help, search, and save dialogs
+	mut tty := vaxis.Tty.new()
+	self.winsize = vaxis.terminal_size()
+	self.color_scheme = vaxis.detect_color_scheme()
+	vaxis.begin_session('👻 Ghostty Theme Preview 👻')
+	defer {
+		self.text_input.deinit()
+		vaxis.end_session()
+	}
+
+	mut dirty := true
+	for !self.should_quit {
+		winsize := vaxis.terminal_size()
+		if winsize != self.winsize {
+			self.update(Event(WinsizeEvent{
+				winsize: winsize
+			}))
+			dirty = true
+		}
+
+		mut handled_input := false
+		for {
+			event := tty.poll() or { break }
+			match event {
+				vaxis.Key {
+					self.update(Event(KeyPressEvent{
+						key: event
+					}))
+				}
+				vaxis.Mouse {
+					self.update(Event(MouseEvent{
+						mouse: event
+					}))
+				}
+			}
+			handled_input = true
+			dirty = true
+		}
+
+		if dirty && !self.should_quit {
+			print(self.draw())
+			flush_stdout()
+			dirty = false
+		}
+		if !handled_input {
+			time.sleep(8 * time.millisecond)
+		}
+	}
 }
 
 // draw renders the full TUI interface.
-fn (mut self Preview) draw() {
-	// XTODO: requires vaxis Window, child windows, printSegment, fill, etc.
-	// This method:
-	// 1. Draws the theme list on the left (32 cols wide)
-	// 2. Handles mouse hover highlighting
-	// 3. Scrolls to keep current selection visible
-	// 4. Draws the theme preview on the right (drawPreview)
-	// 5. Shows modal overlays based on mode:
-	//    - .normal: hides cursor
-	//    - .help: shows key help overlay (F1/? to toggle)
-	//    - .search: shows search input box
-	//    - .save: shows save instructions dialog
+fn (mut self Preview) draw() string {
+	width := max_int(int(self.winsize.cols), 1)
+	height := max_int(int(self.winsize.rows), 1)
+	list_width := min_int(32, width)
+	standard := self.ui_standard()
+
+	if self.filtered.len == 0 {
+		self.current = 0
+		self.window = 0
+	} else {
+		end := self.window + height - 1
+		if self.current > end {
+			self.window = self.current - height + 1
+		}
+		if self.current < self.window {
+			self.window = self.current
+		}
+		if self.window >= self.filtered.len {
+			self.window = self.filtered.len - 1
+		}
+	}
+
+	mut out := strings.new_builder(width * height * 2)
+	out.write_string(vaxis.clear_screen())
+	for row in 0 .. height {
+		put_segment(mut out, row, 0, width, ' '.repeat(width), standard)
+	}
+
+	for row in 0 .. height {
+		index := self.window + row
+		if index >= self.filtered.len {
+			break
+		}
+		theme := self.themes[self.filtered[index]]
+		if index == self.current {
+			put_segment(mut out, row, 0, list_width, ' '.repeat(list_width), self.ui_selected())
+			put_segment(mut out, row, 0, list_width, '❯ ', self.ui_selected())
+			put_link(mut out, row, 2, list_width, theme.theme, theme.to_uri(), self.ui_selected())
+			if list_width >= 2 {
+				put_segment(mut out, row, list_width - 2, list_width, ' ❮', self.ui_selected())
+			}
+		} else {
+			put_link(mut out, row, 2, list_width, theme.theme, theme.to_uri(), standard)
+		}
+	}
+
+	if width > list_width {
+		out.write_string(self.draw_preview(list_width, width - list_width, height))
+	}
+
+	match self.mode {
+		.normal {
+			out.write_string(vaxis.hide_cursor())
+		}
+		.help {
+			draw_help_modal(mut out, width, height, standard)
+			out.write_string(vaxis.hide_cursor())
+		}
+		.search {
+			modal_width := min_int(max_int(width - 40, 20), max_int(width - 2, 1))
+			x := max_int((width - modal_width) / 2, 0)
+			y := max_int(height - 5, 0)
+			draw_box(mut out, x, y, modal_width, 3, standard)
+			text := '/ ${self.search_text}'
+			put_segment(mut out, y + 1, x + 2, x + modal_width - 1, text, standard)
+			out.write_string(vaxis.show_cursor(y + 1, min_int(x + 2 + text.runes().len, x + modal_width - 2)))
+		}
+		.save {
+			if self.filtered.len > 0 {
+				theme := self.themes[self.filtered[self.current]]
+				draw_save_modal(mut out, width, height, theme.theme, standard)
+			}
+			out.write_string(vaxis.hide_cursor())
+		}
+	}
+
+	return out.str()
 }
 
 // draw_preview renders the theme color preview pane.
-fn (mut self Preview) draw_preview(x_off int, width int) {
-	// XTODO: requires vaxis rendering.
-	// This method renders:
-	// 1. Theme name (bold italic, centered, as a hyperlink)
-	// 2. Theme file path (centered, as a hyperlink)
-	// 3. Config diagnostics (if any loading errors)
-	// 4. 16-color palette grid (hex or decimal)
-	// 5. A styled "bat" code preview (ziggzagg.zig)
-	//    showing: const, fn, pub, while, if/else, strings with
-	//    syntax highlighting colors from the theme palette
-	// 6. A starship-style prompt line
-	// 7. Lorem ipsum with various text styles (bold, italic,
-	//    underline, double underline, dashed, curly, dotted)
+fn (mut self Preview) draw_preview(x_off int, width int, height int) string {
+	mut out := strings.new_builder(width * height)
+	if self.filtered.len == 0 {
+		text := 'No theme found!'
+		put_segment(mut out, max_int(height / 2 - 1, 0), x_off + max_int((width - text.len) / 2, 0), x_off + width, text, self.ui_standard())
+		return out.str()
+	}
+
+	theme := self.themes[self.filtered[self.current]]
+	mut config := configpkg.Config.default_config()
+	config.load_file(theme.path)
+	fg := vaxis.Color{ rgb: [config.foreground.r, config.foreground.g, config.foreground.b]! }
+	bg := vaxis.Color{ rgb: [config.background.r, config.background.g, config.background.b]! }
+	standard := vaxis.Style{
+		fg: fg
+		bg: bg
+	}
+	bold := vaxis.Style{
+		fg: fg
+		bg: bg
+		bold: true
+	}
+	title_style := vaxis.Style{
+		fg: fg
+		bg: bg
+		bold: true
+		italic: true
+	}
+
+	for row in 0 .. height {
+		put_segment(mut out, row, x_off, x_off + width, ' '.repeat(width), standard)
+	}
+	put_link(mut out, 1, x_off + max_int((width - theme.theme.runes().len) / 2, 0), x_off + width, theme.theme, theme.to_uri(), title_style)
+	put_link(mut out, 2, x_off + max_int((width - theme.path.runes().len) / 2, 0), x_off + width, theme.path, theme.to_uri(), standard)
+
+	mut next_row := 4
+	if config.diagnostics.len > 0 && next_row < height {
+		put_segment(mut out, next_row, x_off + 2, x_off + width, 'Problems were encountered trying to load the theme:', self.ui_err())
+		next_row++
+		for diagnostic in config.diagnostics {
+			if next_row >= height {
+				break
+			}
+			put_segment(mut out, next_row, x_off + 2, x_off + width, diagnostic.message, self.ui_err())
+			next_row++
+		}
+	}
+
+	for i in 0 .. 16 {
+		row := next_row + (i / 8) * 2
+		col := x_off + (i % 8) * 8
+		if row >= height || col >= x_off + width {
+			continue
+		}
+		label := if self.hex { ' ${i:02x}' } else { '${i:3}' }
+		put_segment(mut out, row, col, x_off + width, label, standard)
+		palette_style := vaxis.Style{
+			fg: color_from_palette(config, i)
+			bg: bg
+		}
+		put_segment(mut out, row, col + 4, x_off + width, '████', palette_style)
+		if row + 1 < height {
+			put_segment(mut out, row + 1, col + 4, x_off + width, '████', palette_style)
+		}
+	}
+	next_row += 5
+
+	code_lines := [
+		'→ bat ziggzagg.zig',
+		'───────┬────────────────────────────────────────',
+		'       │ File: ziggzagg.zig',
+		'───────┼────────────────────────────────────────',
+		'   1   │ const std = @import("std");',
+		'   2   │',
+		'   3   │ pub fn main() !void {',
+		'   4   │     const stdout = std.Io.getStdOut().writer();',
+		'   5   │     var i: usize = 1;',
+		'   6   │     while (i <= 16) : (i += 1) {',
+		'   7   │         if (i % 15 == 0) {',
+		'   8   │             try stdout.writeAll("ZiggZagg\\n");',
+		'   9   │         } else if (i % 3 == 0) {',
+		'  10   │             try stdout.writeAll("Zigg\\n");',
+		'  11   │         } else if (i % 5 == 0) {',
+		'  12   │             try stdout.writeAll("Zagg\\n");',
+		'  13   │         } else {',
+		'  14   │             try stdout.print("{d}\\n", .{i});',
+		'  15   │         }',
+		'  16   │     }',
+		'  17   │ }',
+		'───────┴────────────────────────────────────────',
+		'ghostty on  main [+] via  v0.13.0',
+		'✦ at 10:36:15 →',
+	]
+	for i, line in code_lines {
+		row := next_row + i
+		if row >= height {
+			break
+		}
+		style := match i {
+			0 { vaxis.Style{ fg: color_from_palette(config, 4), bg: bg } }
+			1, 2, 3, 21 { vaxis.Style{ fg: color_from_palette(config, 238), bg: bg } }
+			22 { vaxis.Style{ fg: color_from_palette(config, 6), bg: bg } }
+			23 { vaxis.Style{ fg: color_from_palette(config, 3), bg: bg } }
+			else { standard }
+		}
+		put_segment(mut out, row, x_off + 2, x_off + width, line, style)
+	}
+	next_row += code_lines.len
+
+	words := lorem_ipsum.split_any(' \n')
+	mut row := next_row + 1
+	mut col := x_off + 2
+	for word in words {
+		if word.len == 0 || row >= height {
+			continue
+		}
+		word_width := word.runes().len
+		if col + word_width >= x_off + width {
+			row++
+			col = x_off + 2
+		}
+		if row >= height {
+			break
+		}
+		style := match word {
+			'ipsum' { vaxis.Style{ fg: color_from_palette(config, 2), bg: bg } }
+			'consectetur' { bold }
+			'reprehenderit' { vaxis.Style{ fg: fg, bg: bg, italic: true } }
+			'Praesent' { title_style }
+			'auctor' { vaxis.Style{ fg: fg, bg: bg, ul_style: .single } }
+			'dui' { vaxis.Style{ fg: fg, bg: bg, ul_style: .double_ } }
+			'erat' { vaxis.Style{ fg: fg, bg: bg, ul_style: .dashed } }
+			'enim' { vaxis.Style{ fg: fg, bg: bg, ul_style: .dotted } }
+			'odio' { vaxis.Style{ fg: fg, bg: bg, ul_style: .curly } }
+			else { standard }
+		}
+		put_segment(mut out, row, col, x_off + width, word, style)
+		col += word_width + 1
+	}
+	return out.str()
+}
+
+fn put_segment(mut out strings.Builder, row int, col int, right int, text string, style vaxis.Style) {
+	if row < 0 || col < 0 || col >= right {
+		return
+	}
+	visible := vaxis.truncate(text, right - col)
+	if visible.len == 0 {
+		return
+	}
+	out.write_string(vaxis.position(row, col))
+	out.write_string(vaxis.styled(visible, style))
+}
+
+fn put_link(mut out strings.Builder, row int, col int, right int, text string, uri string, style vaxis.Style) {
+	if row < 0 || col < 0 || col >= right {
+		return
+	}
+	visible := vaxis.truncate(text, right - col)
+	if visible.len == 0 {
+		return
+	}
+	out.write_string(vaxis.position(row, col))
+	out.write_string(vaxis.hyperlink(visible, uri, style))
+}
+
+fn draw_box(mut out strings.Builder, x int, y int, width int, height int, style vaxis.Style) {
+	if width < 2 || height < 2 {
+		return
+	}
+	put_segment(mut out, y, x, x + width, '┌${'─'.repeat(width - 2)}┐', style)
+	for row in y + 1 .. y + height - 1 {
+		put_segment(mut out, row, x, x + width, '│${' '.repeat(width - 2)}│', style)
+	}
+	put_segment(mut out, y + height - 1, x, x + width, '└${'─'.repeat(width - 2)}┘', style)
+}
+
+fn draw_help_modal(mut out strings.Builder, screen_width int, screen_height int, style vaxis.Style) {
+	help := [
+		'^C, q, ESC — Quit.',
+		'F1, ?, ^H   — Toggle help window.',
+		'f            — Cycle through theme filters.',
+		'k, ↑         — Move up 1 theme.',
+		'ScrollUp     — Move up 1 theme.',
+		'PgUp         — Move up 20 themes.',
+		'j, ↓         — Move down 1 theme.',
+		'ScrollDown   — Move down 1 theme.',
+		'PgDown       — Move down 20 themes.',
+		'h, x         — Show palette numbers in hexadecimal.',
+		'd            — Show palette numbers in decimal.',
+		'c            — Copy theme name to the clipboard.',
+		'C            — Copy theme path to the clipboard.',
+		'Home         — Go to the start of the list.',
+		'End          — Go to the end of the list.',
+		'/            — Start search.',
+		'^X, ^/       — Clear search.',
+		'⏎            — Save theme or close search window.',
+		'w            — Write theme to auto config file.',
+	]
+	width := min_int(60, max_int(screen_width - 2, 1))
+	height := min_int(help.len + 3, max_int(screen_height - 2, 1))
+	x := max_int((screen_width - width) / 2, 0)
+	y := max_int((screen_height - height) / 2, 0)
+	draw_box(mut out, x, y, width, height, style)
+	for i, line in help {
+		if i + 1 >= height - 1 {
+			break
+		}
+		put_segment(mut out, y + i + 1, x + 2, x + width - 1, line, style)
+	}
+}
+
+fn draw_save_modal(mut out strings.Builder, screen_width int, screen_height int, theme string, style vaxis.Style) {
+	instructions := [
+		'To apply this theme, add the following line to your Ghostty configuration:',
+		'',
+		'theme = ${theme}',
+		'',
+		'Save the configuration file and then reload it to apply the new theme.',
+		'',
+		"Or press 'w' to write an auto theme file to your preferred config path.",
+		'Then add the following line to your Ghostty configuration and reload:',
+		'',
+		'config-file = ?auto/theme.ghostty',
+		'',
+		'For more details on configuration and themes, visit:',
+		'',
+		'https://ghostty.org/docs/config/reference',
+	]
+	width := min_int(92, max_int(screen_width - 2, 1))
+	height := min_int(instructions.len + 3, max_int(screen_height - 2, 1))
+	x := max_int((screen_width - width) / 2, 0)
+	y := max_int((screen_height - height) / 2, 0)
+	draw_box(mut out, x, y, width, height, style)
+	for i, line in instructions {
+		if i + 1 >= height - 1 {
+			break
+		}
+		put_segment(mut out, y + i + 1, x + 2, x + width - 1, line, style)
+	}
+}
+
+fn min_int(a int, b int) int {
+	return if a < b { a } else { b }
+}
+
+fn max_int(a int, b int) int {
+	return if a > b { a } else { b }
 }
 
 // save_selected_theme writes the selected theme to the auto config file.
@@ -498,7 +870,6 @@ fn color_from_palette(cfg configpkg.Config, palette int) vaxis.Color {
 
 // preview launches the TUI preview for the given themes.
 fn preview(themes []ThemeListElement, theme_filter ColorScheme) {
-	// XTODO: requires vaxis TUI library
 	mut app := Preview.new(themes, theme_filter)
 	app.run()
 }
@@ -595,9 +966,9 @@ pub fn run_list_themes(args []string) int {
 			}
 			count += 1
 			themes << ThemeListElement{
-				path:     full_path
+				path: full_path
 				location: loc.location
-				theme:    entry
+				theme: entry
 			}
 		}
 	}
