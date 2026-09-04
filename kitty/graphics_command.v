@@ -8,7 +8,7 @@ module kitty
 // images and animations using escape sequences. This module implements
 // the parser for the command portion of the protocol.
 
-import encoding.base64
+import simd
 
 // ============================================================
 // Parser
@@ -84,6 +84,7 @@ pub fn (mut self Parser) feed(c u8) ! {
 						self.state = .control_value
 					}
 				}
+
 				// This can be encountered if we have a sequence with no
 				// control data, only payload data (i.e. "\x1b_G;<data>").
 				//
@@ -98,7 +99,9 @@ pub fn (mut self Parser) feed(c u8) ! {
 		}
 		.control_key_ignore {
 			match c {
-				`=` { self.state = .control_value_ignore }
+				`=` {
+					self.state = .control_value_ignore
+				}
 				else {}
 			}
 		}
@@ -111,8 +114,12 @@ pub fn (mut self Parser) feed(c u8) ! {
 		}
 		.control_value_ignore {
 			match c {
-				`,` { self.state = .control_key_ignore }
-				`;` { self.state = .data }
+				`,` {
+					self.state = .control_key_ignore
+				}
+				`;` {
+					self.state = .data
+				}
 				else {}
 			}
 		}
@@ -131,6 +138,7 @@ pub fn (mut self Parser) complete() !Command {
 		.control_key, .control_key_ignore {
 			return error('InvalidFormat: ended in control key state')
 		}
+
 		// Some commands (i.e. placements) end without extra data so
 		// we end in the value state. i.e. "a=1,b=2"
 		.control_value {
@@ -166,7 +174,9 @@ pub fn (mut self Parser) complete() !Command {
 		`f` { Control(Control.transmit_animation_frame(AnimationFrameLoading.parse(self.kv)!)) }
 		`a` { Control(Control.control_animation(AnimationControl.parse(self.kv)!)) }
 		`c` { Control(Control.compose_animation(AnimationFrameComposition.parse(self.kv)!)) }
-		else { return error('InvalidFormat: unknown action ${action}') }
+		else {
+			return error('InvalidFormat: unknown action ${action}')
+		}
 	}
 
 	// Determine our quiet value
@@ -176,7 +186,9 @@ pub fn (mut self Parser) complete() !Command {
 			0 { Quiet.no }
 			1 { Quiet.ok }
 			2 { Quiet.failures }
-			else { return error('InvalidFormat: unknown quiet value ${v}') }
+			else {
+				return error('InvalidFormat: unknown quiet value ${v}')
+			}
 		}
 	} else {
 		Quiet.no
@@ -185,24 +197,26 @@ pub fn (mut self Parser) complete() !Command {
 	return Command{
 		control: control
 		quiet: quiet
-		data: self.decode_data()
+		data: self.decode_data()!
 	}
 }
 
 // Decodes the payload data from base64 and returns it as a slice.
-// The Kitty protocol transmits payload data as base64-encoded content.
-// Padding is added if necessary since the protocol uses unpadded base64.
-fn (self Parser) decode_data() []u8 {
+// This function destroys the contents of data_buf and must only be used after
+// all payload bytes have been collected.
+fn (mut self Parser) decode_data() ![]u8 {
 	if self.data_buf.len == 0 {
 		return []u8{}
 	}
-	mut raw := unsafe { self.data_buf[..].bytestr() }
-	// Add base64 padding if needed (Kitty protocol uses unpadded base64)
-	pad := (4 - raw.len % 4) % 4
-	for _ in 0 .. pad {
-		raw += '='
+
+	max_len := simd.base64_max_len(self.data_buf)
+	assert max_len <= self.data_buf.len
+	mut output := self.data_buf[..max_len]
+	decoded := simd.base64_decode(self.data_buf, mut output) or {
+		return error('InvalidData: failed to decode base64 payload')
 	}
-	return base64.decode(raw)
+	self.data_buf = decoded
+	return self.data_buf
 }
 
 fn (mut self Parser) accumulate_value(c u8, overflow_state ParserState) ! {
@@ -348,7 +362,13 @@ pub enum Quiet {
 	failures // 2
 }
 
-pub type Control = Transmission | TransmitAndDisplay | Display | FullDelete | AnimationFrameLoading | AnimationControl | AnimationFrameComposition
+pub type Control = Transmission
+	| TransmitAndDisplay
+	| Display
+	| FullDelete
+	| AnimationFrameLoading
+	| AnimationControl
+	| AnimationFrameComposition
 
 // Named constructors to distinguish query vs transmit (both use Transmission).
 pub fn Control.query(t Transmission) Control {
@@ -427,8 +447,8 @@ pub:
 
 pub struct Transmission {
 pub mut:
-	format_      TransmissionFormat      = .rgba // f
-	medium       TransmissionMedium      = .direct // t
+	format_      TransmissionFormat = .rgba // f
+	medium       TransmissionMedium = .direct // t
 	width        u32 // s
 	height       u32 // v
 	size         u32 // S
@@ -460,8 +480,9 @@ pub fn (self TransmissionFormat) bpp() u8 {
 		.gray_alpha { 2 }
 		.rgb { 3 }
 		.rgba { 4 }
-		.png { 0 } // Must be validated before
+		.png { 0 }
 	}
+	// Must be validated before
 }
 
 pub enum TransmissionMedium {
@@ -485,7 +506,9 @@ fn Transmission.parse(kv map[u8]u32) !Transmission {
 			24 { TransmissionFormat.rgb }
 			32 { TransmissionFormat.rgba }
 			100 { TransmissionFormat.png }
-			else { return error('InvalidFormat: unknown transmission format ${v}') }
+			else {
+				return error('InvalidFormat: unknown transmission format ${v}')
+			}
 		}
 	}
 
@@ -500,7 +523,9 @@ fn Transmission.parse(kv map[u8]u32) !Transmission {
 			`f` { TransmissionMedium.file }
 			`t` { TransmissionMedium.temporary_file }
 			`s` { TransmissionMedium.shared_memory }
-			else { return error('InvalidFormat: unknown medium ${c}') }
+			else {
+				return error('InvalidFormat: unknown medium ${c}')
+			}
 		}
 	}
 
@@ -534,7 +559,9 @@ fn Transmission.parse(kv map[u8]u32) !Transmission {
 		c := u8(v)
 		result.compression = match c {
 			`z` { TransmissionCompression.zlib_deflate }
-			else { return error('InvalidFormat: unknown compression ${c}') }
+			else {
+				return error('InvalidFormat: unknown compression ${c}')
+			}
 		}
 	}
 
@@ -563,24 +590,24 @@ fn Transmission.parse(kv map[u8]u32) !Transmission {
 
 pub struct Display {
 pub mut:
-	image_id          u32 // i
-	image_number      u32 // I
-	placement_id      u32 // p
-	x                 u32 // x
-	y                 u32 // y
-	width             u32 // w
-	height            u32 // h
-	x_offset          u32 // X
-	y_offset          u32 // Y
-	columns           u32 // c
-	rows              u32 // r
-	cursor_movement   CursorMovement = .after // C
-	virtual_placement bool // U
-	parent_id         u32 // P
+	image_id            u32 // i
+	image_number        u32 // I
+	placement_id        u32 // p
+	x                   u32 // x
+	y                   u32 // y
+	width               u32 // w
+	height              u32 // h
+	x_offset            u32 // X
+	y_offset            u32 // Y
+	columns             u32 // c
+	rows                u32 // r
+	cursor_movement     CursorMovement = .after // C
+	virtual_placement   bool // U
+	parent_id           u32 // P
 	parent_placement_id u32 // Q
-	horizontal_offset i32 // H
-	vertical_offset   i32 // V
-	z                 i32 // z
+	horizontal_offset   i32 // H
+	vertical_offset     i32 // V
+	z                   i32 // z
 }
 
 pub enum CursorMovement {
@@ -629,7 +656,9 @@ fn Display.parse(kv map[u8]u32) !Display {
 		result.cursor_movement = match v {
 			0 { CursorMovement.after }
 			1 { CursorMovement.none_ }
-			else { return error('InvalidFormat: unknown cursor movement ${v}') }
+			else {
+				return error('InvalidFormat: unknown cursor movement ${v}')
+			}
 		}
 	}
 	if `U` in kv {
@@ -637,7 +666,9 @@ fn Display.parse(kv map[u8]u32) !Display {
 		result.virtual_placement = match v {
 			0 { false }
 			1 { true }
-			else { return error('InvalidFormat: unknown virtual placement ${v}') }
+			else {
+				return error('InvalidFormat: unknown virtual placement ${v}')
+			}
 		}
 	}
 	if `z` in kv {
@@ -677,7 +708,7 @@ pub mut:
 	edit_frame       u32 // r
 	gap_ms           u32 // z
 	composition_mode CompositionMode = .alpha_blend // X
-	background       AnimBackground  // Y
+	background       AnimBackground // Y
 }
 
 pub struct AnimBackground {
@@ -711,7 +742,9 @@ fn AnimationFrameLoading.parse(kv map[u8]u32) !AnimationFrameLoading {
 		result.composition_mode = match v {
 			0 { CompositionMode.alpha_blend }
 			1 { CompositionMode.overwrite }
-			else { return error('InvalidFormat: unknown composition mode ${v}') }
+			else {
+				return error('InvalidFormat: unknown composition mode ${v}')
+			}
 		}
 	}
 	if `Y` in kv {
@@ -776,7 +809,9 @@ fn AnimationFrameComposition.parse(kv map[u8]u32) !AnimationFrameComposition {
 		result.composition_mode = match v {
 			0 { CompositionMode.alpha_blend }
 			1 { CompositionMode.overwrite }
-			else { return error('InvalidFormat: unknown composition mode ${v}') }
+			else {
+				return error('InvalidFormat: unknown composition mode ${v}')
+			}
 		}
 	}
 
@@ -813,7 +848,9 @@ fn AnimationControl.parse(kv map[u8]u32) !AnimationControl {
 			1 { AnimationAction.stop }
 			2 { AnimationAction.run_wait }
 			3 { AnimationAction.run }
-			else { return error('InvalidFormat: unknown animation action ${v}') }
+			else {
+				return error('InvalidFormat: unknown animation action ${v}')
+			}
 		}
 	}
 	if `r` in kv {

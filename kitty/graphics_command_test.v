@@ -79,6 +79,14 @@ fn test_no_control_data() {
 	assert command.data == 'AAAA'.bytes()
 }
 
+fn test_invalid_base64_payload() {
+	Parser.parse_string(';AA!A') or {
+		assert err.msg().contains('InvalidData')
+		return
+	}
+	assert false, 'expected invalid payload data'
+}
+
 fn test_ignore_unknown_keys_long() {
 	input := 'f=24,s=10,v=20,hello=world'
 	command := Parser.parse_string(input) or { panic(err) }
