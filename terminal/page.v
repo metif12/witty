@@ -1,5 +1,7 @@
 module terminal
 
+import datastruct
+
 // --- Original Ghostty Comments Start: src/terminal/page.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/terminal/page.zig
@@ -2151,121 +2153,9 @@ pub mut:
 // PageNodeList - doubly-linked list of PageNode
 // ============================================================
 
-pub struct PageNodeList {
-pub mut:
-	first ?&PageNode
-	last  ?&PageNode
-}
-
-// Append a node to the end of the list.
-pub fn (mut self PageNodeList) append(node &PageNode) {
-	unsafe {
-		mut n := node
-		n.prev = self.last
-		n.next = none
-	}
-	if mut l := self.last {
-		l.next = node
-	}
-	self.last = node
-	if self.first == none {
-		self.first = node
-	}
-}
-
-// Prepend a node to the beginning of the list.
-pub fn (mut self PageNodeList) prepend(node &PageNode) {
-	unsafe {
-		mut n := node
-		n.next = self.first
-		n.prev = none
-	}
-	if mut f := self.first {
-		f.prev = node
-	}
-	self.first = node
-	if self.last == none {
-		self.last = node
-	}
-}
-
-// Remove a node from the list.
-pub fn (mut self PageNodeList) remove(node &PageNode) {
-	if p := node.prev {
-		unsafe {
-			mut mp := p
-			mp.next = node.next
-		}
-	} else {
-		self.first = node.next
-	}
-	if n := node.next {
-		unsafe {
-			mut mn := n
-			mn.prev = node.prev
-		}
-	} else {
-		self.last = node.prev
-	}
-	unsafe {
-		mut mnode := node
-		mnode.prev = none
-		mnode.next = none
-	}
-}
-
-// Insert a node after an existing node.
-pub fn (mut self PageNodeList) insert_after(existing &PageNode, node &PageNode) {
-	unsafe {
-		mut n := node
-		n.prev = existing
-		n.next = existing.next
-	}
-	if next := existing.next {
-		unsafe {
-			mut mn := next
-			mn.prev = node
-		}
-	} else {
-		self.last = node
-	}
-	unsafe {
-		mut me := existing
-		me.next = node
-	}
-}
-
-// Insert a node before an existing node.
-pub fn (mut self PageNodeList) insert_before(existing &PageNode, node &PageNode) {
-	unsafe {
-		mut n := node
-		n.next = existing
-		n.prev = existing.prev
-	}
-	if prev := existing.prev {
-		unsafe {
-			mut mp := prev
-			mp.next = node
-		}
-	} else {
-		self.first = node
-	}
-	unsafe {
-		mut me := existing
-		me.prev = node
-	}
-}
-
-// Pop and return the first node.
-pub fn (mut self PageNodeList) pop_first() ?&PageNode {
-	f := self.first or { return none }
-	self.remove(f)
-	return f
-}
+pub type PageNodeList = datastruct.IntrusiveDoublyLinkedList[PageNode]
 
 // Pop and return the last node.
 pub fn (mut self PageNodeList) pop_last() ?&PageNode {
-	l := self.last or { return none }
-	self.remove(l)
-	return l
+	return self.pop()
 }
