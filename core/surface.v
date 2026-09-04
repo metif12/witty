@@ -2215,6 +2215,7 @@ pub mut:
 	clipboard_trim_trailing_spaces   bool
 	clipboard_paste_protection       bool
 	clipboard_paste_bracketed_safe   bool
+	clipboard_codepoint_map          []terminal.CodepointMap
 	copy_on_select                   CopyOnSelect
 	confirm_close_surface            ConfirmCloseSurface
 	cursor_click_to_move             bool
@@ -2293,7 +2294,6 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 			mods: link.mods
 		}
 	}
-	word_chars := ' \t\'"│`|:,()[]{}<>\$'.runes().map(u32(it))
 	return DerivedConfig{
 		original_font_size: config.font_size
 		keybind: config.keybind.clone()
@@ -2303,6 +2303,7 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 		clipboard_trim_trailing_spaces: config.clipboard_trim_trailing_spaces
 		clipboard_paste_protection: config.clipboard_paste_protection
 		clipboard_paste_bracketed_safe: config.clipboard_paste_bracketed_safe
+		clipboard_codepoint_map: config.clipboard_codepoint_map.map.clone()
 		copy_on_select: unsafe { CopyOnSelect(config.copy_on_select) }
 		confirm_close_surface: unsafe { ConfirmCloseSurface(config.confirm_close_surface) }
 		cursor_click_to_move: config.cursor_click_to_move
@@ -2313,7 +2314,7 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 		mouse_shift_capture: unsafe { MouseShiftCapture(config.mouse_shift_capture) }
 		selection_clear_on_copy: config.selection_clear_on_copy
 		selection_clear_on_typing: config.selection_clear_on_typing
-		selection_word_chars: word_chars
+		selection_word_chars: config.selection_word_chars.codepoints.clone()
 		vt_kam_allowed: config.vt_kam_allowed
 		wait_after_command: config.wait_after_command
 		window_padding_top: config.window_padding_top
@@ -2349,6 +2350,7 @@ pub fn (mut self DerivedConfig) deinit() {
 	// Cleanup compiled regexes and cloned keybinds.
 	self.links = []
 	self.selection_word_chars = []
+	self.clipboard_codepoint_map = []
 }
 
 fn (self &DerivedConfig) scaled_padding(x_dpi f32, y_dpi f32) Padding {
@@ -5278,6 +5280,7 @@ fn (mut self Surface) copy_selection_to_clipboards(sel TermSelection, clipboards
 		emit: .plain
 		unwrap: true
 		trim: self.config.clipboard_trim_trailing_spaces
+		codepoint_map: self.config.clipboard_codepoint_map
 		background: self.renderer_state.terminal.colors.background.get()
 		foreground: self.renderer_state.terminal.colors.foreground.get()
 		palette: self.renderer_state.terminal.colors.palette.entries[..]

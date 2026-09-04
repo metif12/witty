@@ -2,6 +2,7 @@ module configpkg
 
 import os
 import input
+import terminal
 
 fn test_load_file_applies_theme_colors() {
 	path := os.join_path(os.temp_dir(), 'witty-theme-test.conf')
@@ -1194,4 +1195,52 @@ fn test_default_config_initializes_url_link() {
 	cfg.finalize()
 	assert cfg.link.links.items.len == 1
 	assert cfg.link.links.items[0].pattern == 'issue-[0-9]+'
+}
+
+fn test_selection_word_chars_defaults_and_parse() {
+	mut chars := SelectionWordChars.defaults()
+	assert chars.codepoints[0] == 0
+	assert u32(`;`) in chars.codepoints
+	assert u32(0x2502) in chars.codepoints
+
+	chars.parse_cli('._')!
+	assert chars.codepoints == [u32(0), u32(`.`), u32(`_`)]
+}
+
+fn test_clipboard_codepoint_map_parse() {
+	mut mappings := RepeatableClipboardCodepointMap{}
+	mappings.parse_cli('U+2500=U+002D')!
+	mappings.parse_cli('U+0001 - U+0005, U+03A3=SUM')!
+	assert mappings.map.len == 3
+	assert mappings.map[0].range_start == 0x2500
+	assert mappings.map[0].range_end == 0x2500
+	match mappings.map[0].replacement {
+		terminal.CodepointRepl {
+			assert mappings.map[0].replacement.codepoint == u32(`-`)
+		}
+		terminal.StringRepl {
+			assert false, 'expected codepoint replacement'
+		}
+	}
+	assert mappings.map[1].range_start == 1
+	assert mappings.map[1].range_end == 5
+	match mappings.map[2].replacement {
+		terminal.StringRepl {
+			assert mappings.map[2].replacement.str == 'SUM'
+		}
+		terminal.CodepointRepl {
+			assert false, 'expected string replacement'
+		}
+	}
+}
+
+fn test_load_string_applies_selection_and_clipboard_maps() {
+	mut cfg := Config.default_config()
+	cfg.load_string('
+selection-word-chars = ._
+clipboard-codepoint-map = U+2500=U+002D
+')
+	assert cfg.selection_word_chars.codepoints == [u32(0), u32(`.`), u32(`_`)]
+	assert cfg.clipboard_codepoint_map.map.len == 1
+	assert cfg.diagnostics.len == 0
 }

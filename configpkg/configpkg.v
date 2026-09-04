@@ -2,6 +2,9 @@ module configpkg
 
 import os
 import input as inputpkg
+import terminal
+import encoding.utf8.validate
+import strconv
 
 // --- Original Ghostty Comments Start: src/config/Config.zig
 //
@@ -3951,6 +3954,7 @@ pub mut:
 	clipboard_trim_trailing_spaces bool = true
 	clipboard_paste_protection     bool = true
 	clipboard_paste_bracketed_safe bool = true
+	clipboard_codepoint_map        RepeatableClipboardCodepointMap
 	copy_on_select                 CopyOnSelect = .false_
 	confirm_close_surface          ConfirmCloseSurface = .true_
 	cursor_click_to_move           bool = true
@@ -3960,6 +3964,7 @@ pub mut:
 	mouse_shift_capture            MouseShiftCapture = .false_
 	selection_clear_on_copy        bool
 	selection_clear_on_typing      bool = true
+	selection_word_chars           SelectionWordChars
 	vt_kam_allowed                 bool
 	wait_after_command             bool
 	window_padding_top             u32
@@ -4798,6 +4803,8 @@ pub fn (c Config) clone() Config {
 	}
 	copy.diagnostics = c.diagnostics.clone()
 	copy.keybind = c.keybind.clone()
+	copy.selection_word_chars = c.selection_word_chars.clone()
+	copy.clipboard_codepoint_map = c.clipboard_codepoint_map.clone()
 	copy.link = LinkConfig{
 		links: LinkList{
 			items: c.link.links.items.clone()
@@ -4953,6 +4960,147 @@ pub:
 // the regular-expression syntax supported by V. It recognizes the same URL
 // schemes and relative/absolute path forms.
 pub const default_url_pattern = r'(https?://|mailto:|ftp://|file:|ssh:|git://|tel:|magnet:|ipfs://|ipns://|gemini://|gopher://|news:)[^\t\r\n "\x27<>]+|(\.\./|\./|/)[^\t\r\n "\x27<>]+|[A-Za-z0-9_][A-Za-z0-9_.-]*/[^\t\r\n "\x27<>]*\.[^\t\r\n "\x27<>]+'
+
+// SelectionWordChars stores parsed word-boundary codepoints. U+0000 is
+// always the first boundary, matching Config.zig.
+pub struct SelectionWordChars {
+pub mut:
+	codepoints []u32
+}
+
+pub fn SelectionWordChars.defaults() SelectionWordChars {
+	return SelectionWordChars{
+		codepoints: [u32(0), u32(` `), u32(`\t`), u32(`'`), u32(`"`), 0x2502, u32('`'[0]), u32(`|`),
+			u32(`:`), u32(`;`), u32(`,`), u32(`(`), u32(`)`), u32(`[`), u32(`]`), u32(`{`), u32(`}`),
+			u32(`<`), u32(`>`), u32(`$`)]
+	}
+}
+
+pub fn (mut s SelectionWordChars) parse_cli(value ?string) ! {
+	input_value := value or { return perr(ParseError.value_required) }
+	if !validate.utf8_string(input_value) {
+		// Ghostty retains only the mandatory null boundary for invalid UTF-8.
+		s.codepoints = [u32(0)]
+		return
+	}
+	mut result := []u32{cap: input_value.len + 1}
+	result << u32(0)
+	for cp in input_value.runes() {
+		result << u32(cp)
+	}
+	s.codepoints = result
+}
+
+pub fn (s SelectionWordChars) clone() SelectionWordChars {
+	return SelectionWordChars{
+		codepoints: s.codepoints.clone()
+	}
+}
+
+pub fn (s SelectionWordChars) equal(other SelectionWordChars) bool {
+	return s.codepoints == other.codepoints
+}
+
+// RepeatableClipboardCodepointMap maps Unicode ranges to formatter
+// replacements. Entries remain in insertion order because later entries take
+// priority during clipboard formatting.
+pub struct RepeatableClipboardCodepointMap {
+pub mut:
+	map []terminal.CodepointMap
+}
+
+pub fn (mut m RepeatableClipboardCodepointMap) parse_cli(value ?string) ! {
+	input_value := value or { return perr(ParseError.value_required) }
+	eq_idx := input_value.index_u8(`=`)
+	if eq_idx < 0 {
+		return perr(ParseError.invalid_value)
+	}
+	key := input_value[..eq_idx].trim(' \t')
+	replacement_value := input_value[eq_idx + 1..].trim(' \t')
+	replacement := if replacement_value.starts_with('U+') {
+		terminal.CodepointReplacement(terminal.CodepointRepl{
+			codepoint: parse_unicode_codepoint(replacement_value)!
+		})
+	} else {
+		if !validate.utf8_string(replacement_value) {
+			return perr(ParseError.invalid_value)
+		}
+		terminal.CodepointReplacement(terminal.StringRepl{
+			str: replacement_value
+		})
+	}
+	for range_ in parse_unicode_ranges(key)! {
+		m.map << terminal.CodepointMap{
+			range_start: range_[0]
+			range_end: range_[1]
+			replacement: replacement
+		}
+	}
+}
+
+pub fn (m RepeatableClipboardCodepointMap) clone() RepeatableClipboardCodepointMap {
+	return RepeatableClipboardCodepointMap{
+		map: m.map.clone()
+	}
+}
+
+pub fn (m RepeatableClipboardCodepointMap) equal(other RepeatableClipboardCodepointMap) bool {
+	return m.map == other.map
+}
+
+fn parse_unicode_ranges(value string) ![][2]u32 {
+	if value.trim(' \t').len == 0 {
+		return perr(ParseError.invalid_value)
+	}
+	mut result := [][2]u32{}
+	for raw_part in value.split(',') {
+		part := raw_part.trim(' \t')
+		if part.len == 0 {
+			return perr(ParseError.invalid_value)
+		}
+		body := if part.starts_with('U+') {
+			part[2..]
+		} else {
+			return perr(ParseError.invalid_value)
+		}
+		hyphen := body.index_u8(`-`)
+		if hyphen < 0 {
+			cp := parse_unicode_codepoint(part)!
+			result << [cp, cp]!
+			continue
+		}
+		start_text := body[..hyphen].trim(' \t')
+		mut end_text := body[hyphen + 1..].trim(' \t')
+		if end_text.starts_with('U+') {
+			end_text = end_text[2..]
+		}
+		start := parse_unicode_hex(start_text)!
+		end := parse_unicode_hex(end_text)!
+		if start > end {
+			return perr(ParseError.invalid_value)
+		}
+		result << [start, end]!
+	}
+	return result
+}
+
+fn parse_unicode_codepoint(value string) !u32 {
+	if !value.starts_with('U+') {
+		return perr(ParseError.invalid_value)
+	}
+	return parse_unicode_hex(value[2..].trim(' \t'))
+}
+
+fn parse_unicode_hex(value string) !u32 {
+	if value.len == 0 {
+		return perr(ParseError.invalid_value)
+	}
+	cp := strconv.parse_uint(value, 16, 32) or { return perr(ParseError.invalid_value) }
+	if cp > 0x10ffff {
+		return perr(ParseError.invalid_value)
+	}
+	return u32(cp)
+}
 
 // ============================================================
 // Existing types
@@ -5596,6 +5744,20 @@ fn (mut c Config) apply_kv(key string, value string) {
 		'abnormal-command-exit-runtime' {
 			c.abnormal_command_exit_runtime = value.u32()
 		}
+		'selection-word-chars' {
+			c.selection_word_chars.parse_cli(value) or {
+				c.diagnostics << Diagnostic{
+					message: 'invalid selection-word-chars "${value}": ${err.msg()}'
+				}
+			}
+		}
+		'clipboard-codepoint-map' {
+			c.clipboard_codepoint_map.parse_cli(value) or {
+				c.diagnostics << Diagnostic{
+					message: 'invalid clipboard-codepoint-map "${value}": ${err.msg()}'
+				}
+			}
+		}
 		'keybind' {
 			c.keybind.parse_cli(value) or {
 				c.diagnostics << Diagnostic{
@@ -5932,6 +6094,7 @@ fn clamp_f64(v f64, lo f64, hi f64) f64 {
 pub fn Config.default_config() Config {
 	mut result := Config{}
 	result.keybind.init()
+	result.selection_word_chars = SelectionWordChars.defaults()
 	result.link = LinkConfig{
 		links: LinkList{
 			items: [LinkEntry{

@@ -3,6 +3,7 @@ module core
 import input
 import apprt
 import terminal
+import configpkg
 
 // Test helper: sets up a 10x5 cell grid with 10x20px cells and 5px padding on all sides.
 fn make_test_size() Size {
@@ -21,6 +22,16 @@ fn make_test_surface() Surface {
 			terminal: &t
 		}
 	}
+}
+
+fn test_derived_config_uses_selection_and_clipboard_maps() {
+	mut cfg := configpkg.Config.default_config()
+	cfg.selection_word_chars.parse_cli('._')!
+	cfg.clipboard_codepoint_map.parse_cli('U+2500=U+002D')!
+	derived := DerivedConfig.from_config(&cfg)!
+	assert derived.selection_word_chars == [u32(0), u32(`.`), u32(`_`)]
+	assert derived.clipboard_codepoint_map.len == 1
+	assert derived.clipboard_codepoint_map[0].range_start == 0x2500
 }
 
 fn test_grid_size_basic() {

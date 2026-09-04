@@ -882,7 +882,14 @@ fn on_paste(userdata voidptr, text &u8, len int) {
 	if state.pty_fd < 0 || len <= 0 {
 		return
 	}
-	// TODO: wrap with bracketed paste escape sequences when mode is enabled
+	if state.term.modes.get(.bracketed_paste) {
+		start := '\x1b[200~'
+		finish := '\x1b[201~'
+		C.write(state.pty_fd, start.str, usize(start.len))
+		C.write(state.pty_fd, text, usize(len))
+		C.write(state.pty_fd, finish.str, usize(finish.len))
+		return
+	}
 	C.write(state.pty_fd, text, usize(len))
 }
 
