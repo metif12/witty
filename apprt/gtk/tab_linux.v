@@ -1,3 +1,4 @@
+@[has_globals]
 module gtk
 
 // tab_linux.v - The GObject Tab *widget* class for the GTK apprt.
@@ -47,6 +48,42 @@ fn C.adw_tab_view_select_previous_page(view AdwTabView) int
 fn C.adw_tab_view_close_page(view AdwTabView, page AdwTabPage)
 fn C.adw_tab_view_close_other_pages(view AdwTabView, page AdwTabPage)
 fn C.adw_tab_view_close_pages_after(view AdwTabView, page AdwTabPage)
+fn C.adw_tab_view_get_type() GType
+fn C.gtk_widget_get_ancestor(widget GtkWidget, widget_type GType) GtkWidget
+fn C.gtk_widget_set_hexpand(widget GtkWidget, expand int)
+fn C.gtk_widget_set_vexpand(widget GtkWidget, expand int)
+fn C.gtk_orientable_set_orientation(orientable voidptr, orientation int)
+
+__global g_tab_type = GType(0)
+
+fn tab_class_init(klass voidptr, class_data voidptr) {
+	_ = klass
+	_ = class_data
+}
+
+fn tab_instance_init(instance voidptr, klass voidptr) {
+	_ = instance
+	_ = klass
+	C.gtk_orientable_set_orientation(instance, 1)
+	C.gtk_widget_set_hexpand(GtkWidget(instance), 1)
+	C.gtk_widget_set_vexpand(GtkWidget(instance), 1)
+}
+
+pub fn tab_get_type() GType {
+	if g_tab_type == GType(0) {
+		parent := C.gtk_box_get_type()
+		mut query := C.GTypeQuery{}
+		C.g_type_query(parent, &query)
+		info := C.GTypeInfo{
+			class_size: u16(query.class_size)
+			instance_size: u16(query.instance_size)
+			class_init: voidptr(tab_class_init)
+			instance_init: voidptr(tab_instance_init)
+		}
+		g_tab_type = C.g_type_register_static(parent, c'GhosttyTab', &info, 0)
+	}
+	return g_tab_type
+}
 
 // --- CloseTabMode ---------------------------------------------------------
 
@@ -91,22 +128,15 @@ pub mut:
 // new_tab creates a new Tab. Mirrors the GObject `init`: it pulls the config
 // from the application if unset and creates the initial surface in the split
 // tree. Template/action wiring is stubbed.
-pub fn new_tab() &Tab {
-	mut self := &Tab{}
+pub fn new_tab(config &Config) &Tab {
+	obj := C.g_object_new(tab_get_type(), &char(unsafe { nil }))
+	mut self := &Tab{
+		widget: GtkWidget(obj)
+		config: config
+	}
 
 	// Init our actions.
 	self.init_action_map()
-
-	// If our config is null, get it from the application.
-	if isnil(self.config) {
-		// TODO(gtk): self.config = Application.default().get_config(). The
-		// Application GObject singleton isn't wired here.
-	}
-
-	// Create our initial surface in the split tree (split right, no parent).
-	if !isnil(self.split_tree) {
-		self.split_tree.new_split(.right, none)
-	}
 
 	return self
 }
@@ -174,10 +204,10 @@ pub fn (self &Tab) get_needs_confirm_quit() bool {
 // get_tab_view returns the AdwTabView holding this tab, if any. Mirrors
 // `getTabView`. Uses the widget ancestor lookup.
 fn (self &Tab) get_tab_view() AdwTabView {
-	// TODO(gtk): ext.get_ancestor(self.widget, AdwTabView.get_gobject_type())
-	// — the AdwTabView GType lookup helper isn't wired. Returns the raw
-	// ancestor pointer (nil-safe for callers).
-	return AdwTabView(unsafe { nil })
+	if isnil(self.widget) {
+		return AdwTabView(unsafe { nil })
+	}
+	return AdwTabView(C.gtk_widget_get_ancestor(self.widget, C.adw_tab_view_get_type()))
 }
 
 // get_tab_page returns the AdwTabPage holding this tab, if any. Mirrors

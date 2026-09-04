@@ -206,6 +206,9 @@ mut:
 	// Providers for user-defined custom stylesheets. Mirrors
 	// `Private.custom_css_providers`.
 	custom_css_providers []voidptr
+
+	// Stable V wrappers for the GhosttyWindow objects owned by GtkApplication.
+	windows []&Window
 }
 
 // default gets this application as the default GApplication, cast to our
@@ -343,6 +346,7 @@ pub fn (mut self Application) deinit() {
 	}
 	// TODO(gtk): unref CSS providers and remove style providers from display.
 	self.custom_css_providers = []voidptr{}
+	self.windows.clear()
 }
 
 // core returns the core app associated with this application. Not
@@ -1104,6 +1108,19 @@ fn application_style_manager_dark_cb(style voidptr, pspec &C.GParamSpec, user_da
 // are handled here; the rest are acknowledged as unhandled for now.
 pub fn (mut self Application) perform_action(target apprt.Target, action apprt.ActionKey, data apprt.ActionValue) !bool {
 	match action {
+		.new_window {
+			match target {
+				apprt.SurfaceTarget {
+					if isnil(target.surface) {
+						return self.new_window(none)
+					}
+					return self.new_window(unsafe { &core.Surface(target.surface) })
+				}
+				else {
+					return self.new_window(none)
+				}
+			}
+		}
 		.quit {
 			self.quit()
 			return true
@@ -1145,6 +1162,21 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			return false
 		}
 	}
+}
+
+// new_window translates Action.newWindow/initAndShowWindow: mark that window
+// creation has begun, construct the application-owned GhosttyWindow, seed its
+// first tab with window context, and present it.
+fn (mut self Application) new_window(parent ?&core.Surface) bool {
+	self.requested_window = true
+	mut window := Window.new(self)
+	if isnil(window.obj) {
+		return false
+	}
+	self.windows << window
+	window.new_tab_for_window(parent)
+	C.gtk_window_present(window.as_window())
+	return true
 }
 
 // dispatch_runtime_actions forwards the actions core.App emitted through its

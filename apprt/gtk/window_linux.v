@@ -1,3 +1,4 @@
+@[has_globals]
 module gtk
 
 // window_linux.v - The GObject Window class for the GTK apprt.
@@ -92,6 +93,29 @@ fn C.gtk_window_set_default_size(window GtkWindow, width int, height int)
 fn C.gtk_window_present(window GtkWindow)
 fn C.gtk_window_close(window GtkWindow)
 fn C.gtk_window_destroy(window GtkWindow)
+fn C.gtk_window_set_handle_menubar_accel(window GtkWindow, handle_menubar_accel int)
+
+fn C.adw_application_window_set_content(window AdwApplicationWindow, content GtkWidget)
+fn C.adw_tab_overview_new() AdwTabOverview
+fn C.adw_tab_overview_set_child(overview AdwTabOverview, child GtkWidget)
+fn C.adw_tab_overview_set_view(overview AdwTabOverview, view AdwTabView)
+fn C.adw_tab_overview_set_enable_new_tab(overview AdwTabOverview, enable_new_tab int)
+fn C.adw_toolbar_view_new() AdwToolbarView
+fn C.adw_toolbar_view_set_content(view AdwToolbarView, content GtkWidget)
+fn C.adw_toolbar_view_set_top_bar_style(view AdwToolbarView, style int)
+fn C.adw_toolbar_view_set_bottom_bar_style(view AdwToolbarView, style int)
+fn C.adw_tab_bar_new() AdwTabBar
+fn C.adw_tab_bar_set_view(tab_bar AdwTabBar, view AdwTabView)
+fn C.adw_tab_bar_set_autohide(tab_bar AdwTabBar, autohide int)
+fn C.adw_tab_bar_set_expand_tabs(tab_bar AdwTabBar, expand_tabs int)
+fn C.adw_toast_overlay_new() AdwToastOverlay
+fn C.adw_toast_overlay_set_child(overlay AdwToastOverlay, child GtkWidget)
+fn C.adw_tab_view_new() AdwTabView
+fn C.adw_toast_new(title &char) voidptr
+fn C.adw_toast_set_timeout(toast voidptr, timeout u32)
+fn C.adw_toast_overlay_add_toast(overlay AdwToastOverlay, toast voidptr)
+fn C.gtk_box_new(orientation int, spacing int) GtkWidget
+fn C.gtk_box_append(box GtkWidget, child GtkWidget)
 
 fn C.gtk_widget_add_css_class(widget GtkWidget, css_class &char)
 fn C.gtk_widget_remove_css_class(widget GtkWidget, css_class &char)
@@ -119,6 +143,36 @@ pub enum NewSurfaceContext {
 	window
 	tab
 	split
+}
+
+// Registered lazily on the GTK main thread, matching defineClass's generated
+// getGObjectType implementation in Ghostty.
+__global g_window_type = GType(0)
+
+fn window_class_init(klass voidptr, class_data voidptr) {
+	_ = klass
+	_ = class_data
+}
+
+fn window_instance_init(instance voidptr, klass voidptr) {
+	_ = instance
+	_ = klass
+}
+
+pub fn window_get_type() GType {
+	if g_window_type == GType(0) {
+		parent := C.adw_application_window_get_type()
+		mut query := C.GTypeQuery{}
+		C.g_type_query(parent, &query)
+		info := C.GTypeInfo{
+			class_size: u16(query.class_size)
+			instance_size: u16(query.instance_size)
+			class_init: voidptr(window_class_init)
+			instance_init: voidptr(window_instance_init)
+		}
+		g_window_type = C.g_type_register_static(parent, c'GhosttyWindow', &info, 0)
+	}
+	return g_window_type
 }
 
 // --- Config: GObject config wrapper (owned elsewhere) ---------------------
@@ -162,6 +216,9 @@ mut:
 	// (stubbed) GObject instance init.
 	obj AdwApplicationWindow = unsafe { nil }
 
+	// Stable owner used by signal callbacks that need application state.
+	app &Application = unsafe { nil }
+
 	// Whether this window is a quick terminal. If it is then it behaves
 	// slightly differently under certain scenarios.
 	quick_terminal bool
@@ -202,17 +259,57 @@ mut:
 	tab_view      AdwTabView      = unsafe { nil }
 	toolbar       AdwToolbarView  = unsafe { nil }
 	toast_overlay AdwToastOverlay = unsafe { nil }
+
+	// V-side owners for the GhosttyTab wrappers inserted in tab_view.
+	tabs []&Tab
 }
 
-// new creates a new Window GObject for the given application. Mirrors
-// `Window.new`.
-//
-// TODO(gtk): the Zig original uses `gobject.ext.newInstance(Self, ...)` which
-// constructs the GObject, runs the template init, and sets the `application`
-// property. That GObject machinery has no V equivalent; here we allocate the
-// struct and run the tractable parts of `init`.
+// new creates the GhosttyWindow GObject and the libadwaita widget graph from
+// window.blp. The custom type is registered as an AdwApplicationWindow
+// subclass; V-side state remains in this stable wrapper and signal user-data.
 pub fn Window.new(app &Application) &Window {
-	mut self := &Window{}
+	obj := C.g_object_new(window_get_type(), c'application', app.obj, unsafe { nil })
+	if isnil(obj) {
+		return &Window{}
+	}
+
+	tab_view := C.adw_tab_view_new()
+	toast_overlay := C.adw_toast_overlay_new()
+	C.adw_toast_overlay_set_child(toast_overlay, GtkWidget(tab_view))
+
+	content := C.gtk_box_new(1, 0)
+	C.gtk_box_append(content, GtkWidget(toast_overlay))
+
+	toolbar := C.adw_toolbar_view_new()
+	C.adw_toolbar_view_set_content(toolbar, content)
+	tab_bar := C.adw_tab_bar_new()
+	C.adw_tab_bar_set_view(tab_bar, tab_view)
+	C.adw_toolbar_view_add_top_bar(toolbar, GtkWidget(tab_bar))
+
+	tab_overview := C.adw_tab_overview_new()
+	C.adw_tab_overview_set_view(tab_overview, tab_view)
+	C.adw_tab_overview_set_enable_new_tab(tab_overview, 1)
+	C.adw_tab_overview_set_child(tab_overview, GtkWidget(toolbar))
+	C.adw_application_window_set_content(AdwApplicationWindow(obj), GtkWidget(tab_overview))
+
+	mut self := &Window{
+		obj: AdwApplicationWindow(obj)
+		app: app
+		config: app.config_object
+		tab_overview: tab_overview
+		tab_bar: tab_bar
+		tab_view: tab_view
+		toolbar: toolbar
+		toast_overlay: toast_overlay
+	}
+	C.gtk_window_set_default_size(self.as_window(), 800, 600)
+	C.gtk_window_set_handle_menubar_accel(self.as_window(), 0)
+	C.g_signal_connect_data(self.obj, c'close-request', GCallback(voidptr(window_close_request_cb)),
+		voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'realize', GCallback(voidptr(window_realize_cb)), voidptr(self),
+		unsafe { nil }, 0)
+	C.g_signal_connect_data(self.tab_view, c'notify::n-pages', GCallback(voidptr(window_n_pages_cb)),
+		voidptr(self), unsafe { nil }, 0)
 	self.init(app)
 	return self
 }
@@ -222,13 +319,9 @@ pub fn Window.new(app &Application) &Window {
 // intent, window icon, action map, initial config-driven state (maximize /
 // fullscreen / title), and the final appearance sync.
 fn (mut self Window) init(app &Application) {
-	// TODO(gtk): gtk.Widget.initTemplate(...) builds the widget tree from the
-	// blueprint `.ui` template (AdwTabOverview/TabBar/TabView/ToolbarView/
-	// ToastOverlay) and populates the template children. Out of scope.
-
 	// If our configuration is null then we get it from the application.
 	if self.config == unsafe { nil } {
-		self.config = config_new(app.get_config())
+		self.config = app.config_object
 	}
 
 	// We initialize our windowing protocol to none because we can't actually
@@ -279,6 +372,38 @@ fn (mut self Window) init(app &Application) {
 
 	// TODO(gtk): notifyByPspec("active-surface") to initialize the dynamic
 	// title getter. GObject property system out of scope.
+}
+
+fn window_close_request_cb(window GtkWindow, user_data voidptr) int {
+	_ = window
+	if isnil(user_data) {
+		return 0
+	}
+	mut self := unsafe { &Window(user_data) }
+	return b2i(self.window_close_request())
+}
+
+fn window_realize_cb(widget GtkWidget, user_data voidptr) {
+	_ = widget
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Window(user_data) }
+	if isnil(self.app) {
+		return
+	}
+	mut app := unsafe { self.app }
+	self.window_realize(mut app)
+}
+
+fn window_n_pages_cb(view AdwTabView, pspec voidptr, user_data voidptr) {
+	_ = view
+	_ = pspec
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Window(user_data) }
+	self.tab_view_n_pages()
 }
 
 // init_action_map sets up our action map. Mirrors `initActionMap`.
@@ -333,12 +458,12 @@ pub fn (mut self Window) winproto() &WinProtoWindow {
 // new_tab creates a new tab with the given parent, inserted at the position
 // dictated by `window-new-tab-position`. The new tab is selected. Mirrors
 // `newTab`.
-pub fn (mut self Window) new_tab(parent &core.Surface) {
+pub fn (mut self Window) new_tab(parent ?&core.Surface) {
 	self.new_tab_page(parent, .tab)
 }
 
 // new_tab_for_window mirrors `newTabForWindow`.
-pub fn (mut self Window) new_tab_for_window(parent &core.Surface) {
+pub fn (mut self Window) new_tab_for_window(parent ?&core.Surface) {
 	self.new_tab_page(parent, .window)
 }
 
@@ -350,20 +475,23 @@ pub fn (mut self Window) new_tab_for_window(parent &core.Surface) {
 // the SplitTree "changed" signal are out of scope. The tractable part — the
 // insert-position computation from `window-new-tab-position` — is translated
 // against the AdwTabView C API. Returns the (opaque) AdwTabPage.
-fn (mut self Window) new_tab_page(parent &core.Surface, context NewSurfaceContext) AdwTabPage {
-	_ = parent
+fn (mut self Window) new_tab_page(parent ?&core.Surface, context NewSurfaceContext) AdwTabPage {
 	_ = context
 	tab_view := self.tab_view
-
-	// TODO(gtk): create the Tab GObject (gobject.ext.newInstance(Tab, ...)),
-	// set its parent-with-context, bind title/tooltip, connect SplitTree
-	// "changed". Out of scope.
+	if isnil(tab_view) || isnil(self.config) {
+		return AdwTabPage(unsafe { nil })
+	}
+	mut tab := new_tab(self.config)
+	if p := parent {
+		tab.set_parent_with_context(p, context)
+	}
+	self.tabs << tab
 
 	// Compute the position to insert at.
 	if self.config == unsafe { nil } {
 		// If we don't have a config we just append at the end. This should
 		// never happen.
-		return adw_tab_view_append(tab_view, unsafe { GtkWidget(nil) })
+		return adw_tab_view_append(tab_view, tab.widget)
 	}
 	position := match self.config.window_new_tab_position() {
 		.current {
@@ -380,7 +508,7 @@ fn (mut self Window) new_tab_page(parent &core.Surface, context NewSurfaceContex
 	}
 
 	// Add the page and select it.
-	page := adw_tab_view_insert(tab_view, unsafe { GtkWidget(nil) }, position)
+	page := adw_tab_view_insert(tab_view, tab.widget, position)
 	adw_tab_view_set_selected_page(tab_view, page)
 	return page
 }
@@ -543,6 +671,12 @@ fn (mut self Window) sync_appearance() {
 		return
 	}
 	config := self.config.get()
+	C.adw_tab_bar_set_autohide(self.tab_bar, b2i(self.get_tabs_autohide()))
+	C.adw_tab_bar_set_expand_tabs(self.tab_bar, b2i(self.get_tabs_wide()))
+	C.gtk_widget_set_visible(self.as_tab_bar_widget(), b2i(self.get_tabs_visible()))
+	toolbar_style := int(self.get_toolbar_style())
+	C.adw_toolbar_view_set_top_bar_style(self.toolbar, toolbar_style)
+	C.adw_toolbar_view_set_bottom_bar_style(self.toolbar, toolbar_style)
 
 	// Only add a solid background if we're opaque.
 	self.toggle_css_class('background', config.background_opacity >= 1)
@@ -604,7 +738,15 @@ fn (mut self Window) perform_binding_action(action BindingActionTag) {
 // TODO(gtk): adw.Toast creation + toast_overlay.addToast are out of scope. Kept
 // as a stub with a faithful signature.
 fn (mut self Window) add_toast(title string) {
-	_ = title
+	if isnil(self.toast_overlay) {
+		return
+	}
+	toast := C.adw_toast_new(&char(title.str))
+	if isnil(toast) {
+		return
+	}
+	C.adw_toast_set_timeout(toast, 3)
+	C.adw_toast_overlay_add_toast(self.toast_overlay, toast)
 }
 
 // --- Properties -----------------------------------------------------------
@@ -696,6 +838,11 @@ fn (mut self Window) unset_window_decoration() {
 // TODO(gtk): iterating the tab pages and querying each Tab's
 // getNeedsConfirmQuit is out of scope (Tab not translated). Returns false.
 fn (self &Window) get_needs_confirm_quit() bool {
+	for tab in self.tabs {
+		if !isnil(tab) && tab.get_needs_confirm_quit() {
+			return true
+		}
+	}
 	return false
 }
 
@@ -960,13 +1107,23 @@ pub fn (mut self Window) prop_quick_terminal(mut app Application) {
 // Mirrors `windowCloseRequest`.
 pub fn (mut self Window) window_close_request() bool {
 	if self.get_needs_confirm_quit() {
-		// TODO(gtk): show a CloseConfirmationDialog and connect its
-		// "close-request" to close_confirmation_close. Out of scope; we
-		// conservatively keep the window open (return true).
+		mut dialog := close_confirmation_dialog_new(.window)
+		C.g_signal_connect_data(dialog.dialog.obj, c'close-request', GCallback(voidptr(window_close_confirmed_cb)),
+			voidptr(self), unsafe { nil }, 0)
+		dialog.present(self.as_widget())
 		return true
 	}
 	C.gtk_window_destroy(self.as_window())
 	return false
+}
+
+fn window_close_confirmed_cb(dialog GObject, user_data voidptr) {
+	_ = dialog
+	if isnil(user_data) {
+		return
+	}
+	self := unsafe { &Window(user_data) }
+	C.gtk_window_destroy(self.as_window())
 }
 
 // tab_view_n_pages reacts to the tab view's page count changing: if there are
