@@ -285,6 +285,8 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 		bool_string(c.desktop_notifications),
 	])
 	add_group(mut result, 'bell-features', [bell_features_string(c.bell_features)])
+	add_group(mut result, 'bell-audio-path', [optional_path_string(c.bell_audio_path)])
+	add_group(mut result, 'bell-audio-volume', ['${c.bell_audio_volume}'])
 	add_group(mut result, 'app-notifications', [
 		app_notifications_string(c.app_notifications),
 	])

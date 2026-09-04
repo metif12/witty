@@ -41,6 +41,7 @@ import terminal
 import osc
 import internal_os
 import datastruct
+import os
 
 // --- New C bindings unique to this file -----------------------------------
 //
@@ -106,6 +107,13 @@ pub type GNotification = voidptr
 
 pub type GIcon = voidptr
 
+// GtkMediaFile* / GtkMediaStream* and GFile* used for audio bells.
+pub type GtkMediaFile = voidptr
+
+pub type GtkMediaStream = voidptr
+
+pub type GFile = voidptr
+
 // GtkGLArea
 fn C.gtk_gl_area_queue_render(area GtkGLArea)
 
@@ -167,6 +175,21 @@ fn C.g_notification_set_icon(notification GNotification, icon GIcon)
 fn C.g_notification_set_default_action_and_target_value(notification GNotification, action &char, target GVariant)
 
 fn C.g_themed_icon_new(iconname &char) GIcon
+
+fn C.gtk_widget_activate_action_variant(widget GtkWidget, name &char, args GVariant) bool
+
+// GtkMediaFile / GtkMediaStream
+fn C.gtk_media_file_new_for_filename(filename &char) GtkMediaFile
+
+fn C.gtk_media_file_get_file(media_file GtkMediaFile) GFile
+
+fn C.gtk_media_stream_set_volume(stream GtkMediaStream, volume f64)
+
+fn C.gtk_media_stream_play(stream GtkMediaStream)
+
+fn C.gtk_media_stream_get_error(stream GtkMediaStream) GError
+
+fn C.g_file_get_path(file GFile) &char
 
 fn C.g_signal_group_new(target_type GType) GSignalGroup
 
@@ -1138,21 +1161,78 @@ fn surface_progress_bar_timer_cb(data voidptr) int {
 	return 0
 }
 
-// ring_bell handles bell features that happen on every BEL (audio/system).
-// Mirrors `Surface.ringBell` (audio playback and action activation are stubbed
-// because they need the config GObject + GtkMediaFile machinery).
+// ring_bell handles bell features that happen on every BEL. Mirrors
+// Surface.ringBell: emit the signal, activate ancestor bell actions, and play
+// the configured audio file.
 fn (self &SurfaceWidget) ring_bell() {
-	if isnil(self.split_tree) || isnil(self.split_tree.window) {
+	C.g_signal_emit_by_name(self.widget, c'bell')
+	_ = C.gtk_widget_activate_action_variant(self.widget, c'tab.ring-bell', unsafe { nil })
+	_ = C.gtk_widget_activate_action_variant(self.widget, c'win.ring-bell', unsafe { nil })
+
+	if isnil(self.config) {
 		return
 	}
-	mut window := unsafe { self.split_tree.window }
-	for mut tab in window.tabs {
-		if tab.split_tree == self.split_tree {
-			tab.action_ring_bell()
-			break
+	cfg := self.config.get()
+	if !cfg.bell_features.audio {
+		return
+	}
+	config_path := cfg.bell_audio_path or { return }
+	path := config_path.path
+	required := !config_path.optional
+	assert os.is_abs_path(path)
+	volume := if cfg.bell_audio_volume < 0.0 {
+		0.0
+	} else if cfg.bell_audio_volume > 1.0 {
+		1.0
+	} else {
+		cfg.bell_audio_volume
+	}
+
+	media_file := C.gtk_media_file_new_for_filename(&char(path.str))
+	if isnil(media_file) {
+		return
+	}
+	if required {
+		C.g_signal_connect_data(media_file, c'notify::error', GCallback(voidptr(surface_media_file_error_cb)), unsafe { nil }, unsafe { nil }, 0)
+	}
+	C.g_signal_connect_data(media_file, c'notify::ended', GCallback(voidptr(surface_media_file_ended_cb)), unsafe { nil }, unsafe { nil }, 0)
+	C.gtk_media_stream_set_volume(GtkMediaStream(media_file), volume)
+	C.gtk_media_stream_play(GtkMediaStream(media_file))
+}
+
+fn surface_media_file_error_cb(media_file GtkMediaFile, pspec voidptr, data voidptr) {
+	_ = pspec
+	_ = data
+	mut path := '<<unknown>>'
+	mut owned_path := &char(unsafe { nil })
+	file := C.gtk_media_file_get_file(media_file)
+	if !isnil(file) {
+		owned_path = C.g_file_get_path(file)
+		if !isnil(owned_path) {
+			path = unsafe { cstring_to_vstring(owned_path) }
 		}
 	}
-	window.action_ring_bell()
+	defer {
+		if !isnil(owned_path) {
+			C.g_free(owned_path)
+		}
+	}
+
+	err := C.gtk_media_stream_get_error(GtkMediaStream(media_file))
+	if isnil(err) {
+		return
+	}
+	c_err := unsafe { &C.GError(err) }
+	domain_ptr := C.g_quark_to_string(c_err.domain)
+	domain := if isnil(domain_ptr) { '' } else { unsafe { cstring_to_vstring(domain_ptr) } }
+	message := if isnil(c_err.message) { '' } else { unsafe { cstring_to_vstring(c_err.message) } }
+	eprintln('error playing bell from ${path}: ${domain} ${c_err.code} ${message}')
+}
+
+fn surface_media_file_ended_cb(media_file GtkMediaFile, pspec voidptr, data voidptr) {
+	_ = pspec
+	_ = data
+	object_unref(GObject(media_file))
 }
 
 // set_error sets the error state. Mirrors `Surface.setError`.

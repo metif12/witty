@@ -3966,6 +3966,8 @@ pub mut:
 	cursor_click_to_move           bool = true
 	desktop_notifications          bool = true
 	bell_features                  BellFeatures
+	bell_audio_path                ?Path
+	bell_audio_volume              f64 = 0.5
 	app_notifications              AppNotifications
 	mouse_hide_while_typing        bool
 	mouse_reporting                bool = true
@@ -6062,6 +6064,13 @@ fn (mut c Config) expand_paths(base string) {
 		}
 		c.background_image = background_image
 	}
+	if mut bell_audio_path := c.bell_audio_path {
+		bell_audio_path.expand(base) or {
+			c.add_diagnostic('error expanding bell-audio-path: ${err}')
+			return
+		}
+		c.bell_audio_path = bell_audio_path
+	}
 }
 
 fn (mut c Config) add_diagnostic(message string) {
@@ -6461,6 +6470,18 @@ fn (mut c Config) apply_kv(key string, value string) {
 					c.background_image = parsed
 				}
 			}
+		}
+		'bell-audio-path' {
+			if value.len == 0 {
+				c.bell_audio_path = none
+			} else if parsed := Path.parse(value) {
+				if parsed.path.len > 0 {
+					c.bell_audio_path = parsed
+				}
+			}
+		}
+		'bell-audio-volume' {
+			c.bell_audio_volume = c.parse_config_f64(key, value) or { return }
 		}
 		'bold-color' {
 			if value.len == 0 {

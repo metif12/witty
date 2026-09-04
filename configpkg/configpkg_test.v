@@ -858,6 +858,28 @@ fn test_bell_features_parse_format_and_defaults() {
 	assert cfg.diagnostics.len == 1
 }
 
+fn test_bell_audio_parse_format_and_path_expansion() {
+	mut cfg := Config.default_config()
+	assert cfg.bell_audio_path == none
+	assert cfg.bell_audio_volume == 0.5
+	cfg.load_string('bell-audio-path = ?sounds/bell.oga\nbell-audio-volume = 0.75')
+	assert cfg.diagnostics.len == 0
+	assert cfg.bell_audio_path? == Path{ path: 'sounds/bell.oga', optional: true }
+	assert cfg.bell_audio_volume == 0.75
+	cfg.expand_paths('/tmp/witty-config')
+	assert cfg.bell_audio_path? == Path{
+		path: '/tmp/witty-config/sounds/bell.oga'
+		optional: true
+	}
+	formatted := cfg.format_config(true)
+	assert formatted.contains('bell-audio-path = ?/tmp/witty-config/sounds/bell.oga\n')
+	assert formatted.contains('bell-audio-volume = 0.75\n')
+
+	cfg.load_string('bell-audio-path =\nbell-audio-volume = loud')
+	assert cfg.bell_audio_path == none
+	assert cfg.diagnostics.len == 1
+}
+
 fn test_gtk_css_config_parse_format_clone_and_clear() {
 	mut cfg := Config.default_config()
 	cfg.load_string('window-title-font-family = Cantarell\nwindow-titlebar-background = #123456\nwindow-titlebar-foreground = aliceblue\ngtk-custom-css = one.css\ngtk-custom-css = ?optional.css')

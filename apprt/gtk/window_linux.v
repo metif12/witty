@@ -112,6 +112,10 @@ fn C.gtk_window_destroy(window GtkWindow)
 
 fn C.gtk_window_set_handle_menubar_accel(window GtkWindow, handle_menubar_accel int)
 
+fn C.gtk_native_get_surface(native GtkNative) GdkSurface
+
+fn C.gdk_surface_beep(surface GdkSurface)
+
 fn C.gtk_show_about_dialog(parent GtkWindow, first_property_name &char, ...)
 
 fn C.adw_application_window_set_content(window AdwApplicationWindow, content GtkWidget)
@@ -1499,13 +1503,26 @@ pub fn (mut self Window) action_clear() {
 }
 
 pub fn (mut self Window) action_ring_bell() {
-	// TODO(gtk): bell-features config (system beep + attention urgency) is
-	// absent in witty's core config. Retained as intent.
-	if C.gtk_window_is_active(self.as_window()) != 0 {
+	if isnil(self.config) {
 		return
 	}
-	self.winproto.set_urgent(true) or {
-		// log.warn: winproto failed to set urgency
+	cfg := self.config.get()
+	if cfg.bell_features.system {
+		native_surface := C.gtk_native_get_surface(self.as_native())
+		if isnil(native_surface) {
+			eprintln('unable to get native surface from window')
+		} else {
+			C.gdk_surface_beep(native_surface)
+		}
+	}
+
+	if cfg.bell_features.attention {
+		if C.gtk_window_is_active(self.as_window()) != 0 {
+			return
+		}
+		self.winproto.set_urgent(true) or {
+			eprintln('winproto failed to set urgency=${err}')
+		}
 	}
 }
 
