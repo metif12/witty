@@ -130,6 +130,10 @@ pub const g_signal_run_first = int(1)
 // GType fundamentals we reference by their C constant expressions.
 fn C.g_object_get_type() GType
 
+fn C.g_object_ref_sink(object GObject) GObject
+
+fn C.g_object_weak_ref(object GObject, notify voidptr, data voidptr)
+
 // --- Instance creation -----------------------------------------------------
 
 fn C.g_object_new(object_type GType, first_property_name &char, ...) voidptr

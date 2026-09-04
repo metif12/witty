@@ -11,17 +11,18 @@ module gtk
 // this is a `GhosttySurface` GObject class defined with a `.ui`/blueprint
 // template, GObject property/signal registration and template-child bindings.
 //
-// V has no GObject class-registration or `.ui`-template machinery, and this
-// `gtk` submodule CANNOT import witty's root `module main` where the real core
-// `Surface` lives. Therefore:
+// This port registers the GObject subclass and builds the translated portion
+// of the blueprint programmatically. This `gtk` submodule CANNOT import
+// witty's root `module main` where the real core `Surface` lives. Therefore:
 //
 //   * The class is modeled as a plain V struct `SurfaceWidget` that wraps the
 //     GObject/GtkWidget pointer and holds the fields that were in the Zig
 //     `Private` struct. Methods are `pub fn` on that struct. (The name is
 //     `SurfaceWidget`, not `Surface`, to avoid colliding with the apprt
 //     adapter `Surface` in surface_linux.v.)
-//   * GObject type registration, signal wiring, and `.ui`/blueprint templates
-//     are STUBBED with `// TODO(gtk)` and minimal type-checking bodies.
+//   * Blueprint children and callbacks are created and connected explicitly;
+//     the remaining GObject properties and GtkScrollable interface plumbing
+//     are called out at their implementation sites.
 //   * Calls into the core surface dispatch to the real `core.Surface` (see
 //     core/surface.v). Signatures are kept faithful.
 //
@@ -79,6 +80,16 @@ pub type GdkContentFormats = voidptr
 // GtkAdjustment*.
 pub type GtkAdjustment = voidptr
 
+// GtkPopover* / GMenu* handles used by the surface context menu.
+pub type GtkPopover = voidptr
+
+pub type GMenu = voidptr
+
+pub type GMenuModel = voidptr
+
+// AdwStatusPage* used for the OpenGL initialization error page.
+pub type AdwStatusPage = voidptr
+
 // GtkGLArea
 fn C.gtk_gl_area_queue_render(area GtkGLArea)
 
@@ -104,6 +115,10 @@ fn C.gtk_widget_get_clipboard(widget GtkWidget) GdkClipboard
 fn C.gtk_widget_get_primary_clipboard(widget GtkWidget) GdkClipboard
 
 fn C.gtk_widget_add_controller(widget GtkWidget, controller voidptr)
+
+fn C.gtk_widget_set_halign(widget GtkWidget, align int)
+
+fn C.gtk_widget_set_valign(widget GtkWidget, align int)
 
 // GtkIMContext
 fn C.gtk_im_context_filter_keypress(context GtkIMContext, event GdkEvent) bool
@@ -198,6 +213,36 @@ fn C.gtk_overlay_new() GtkWidget
 
 fn C.gtk_overlay_set_child(overlay GtkWidget, child GtkWidget)
 
+fn C.gtk_overlay_add_overlay(overlay GtkWidget, widget GtkWidget)
+
+fn C.gtk_popover_menu_new_from_model_full(model GMenuModel, flags int) GtkWidget
+
+fn C.gtk_popover_set_has_arrow(popover GtkPopover, has_arrow int)
+
+fn C.gtk_popover_set_pointing_to(popover GtkPopover, rect &C.GdkRectangle)
+
+fn C.gtk_popover_popup(popover GtkPopover)
+
+fn C.g_menu_new() GMenu
+
+fn C.g_menu_append(menu GMenu, label &char, detailed_action &char)
+
+fn C.g_menu_append_section(menu GMenu, label &char, section GMenuModel)
+
+fn C.g_menu_append_submenu(menu GMenu, label &char, submenu GMenuModel)
+
+fn C.adw_status_page_new() AdwStatusPage
+
+fn C.adw_status_page_set_icon_name(page AdwStatusPage, icon_name &char)
+
+fn C.adw_status_page_set_title(page AdwStatusPage, title &char)
+
+fn C.adw_status_page_set_description(page AdwStatusPage, description &char)
+
+fn C.adw_status_page_set_child(page AdwStatusPage, child GtkWidget)
+
+fn C.gtk_link_button_new_with_label(uri &char, label &char) GtkWidget
+
 fn C.gtk_im_multicontext_new() GtkIMContext
 
 fn C.gtk_widget_set_focusable(widget GtkWidget, focusable int)
@@ -291,12 +336,19 @@ pub mut:
 	split_tree    &SplitTreeWidget = unsafe { nil }
 	context       NewSurfaceContext = .window
 	terminal_page GtkWidget = unsafe { nil }
+	error_page    GtkWidget = unsafe { nil }
 
 	// The GLArea that renders the actual surface (template child).
 	gl_area GtkGLArea = unsafe { nil }
 
 	// The input method context (template child).
 	im_context GtkIMContext = unsafe { nil }
+
+	// URL hover labels and the right-click context menu from the surface
+	// blueprint.
+	url_left     GtkLabel = unsafe { nil }
+	url_right    GtkLabel = unsafe { nil }
+	context_menu GtkPopover = unsafe { nil }
 
 	// The core surface backing this GTK surface. This starts out nil because it
 	// can't be initialized until there is a realized GLArea. In ghostty this is
@@ -365,7 +417,8 @@ pub mut:
 	bell_ringing bool
 
 	// True if this surface is in an error state (terminal non-functional).
-	error_state bool
+	error_state  bool
+	idle_rechild u32
 
 	// True if the current surface is a split (for unfocused-split-* options).
 	is_split bool
@@ -639,7 +692,14 @@ fn (self &SurfaceWidget) apply_mouse_shape() {
 // Mirrors `Surface.setMouseHoverUrl` + `propMouseHoverUrl`.
 pub fn (mut self SurfaceWidget) set_mouse_hover_url(url ?string) {
 	self.mouse_hover_url = url
-	// TODO(gtk): toggle the url_left label visibility (template child).
+	text := url or { '' }
+	if !isnil(self.url_left) {
+		C.gtk_label_set_label(self.url_left, &char(text.str))
+		C.gtk_widget_set_visible(GtkWidget(self.url_left), text.len > 0)
+	}
+	if !isnil(self.url_right) {
+		C.gtk_label_set_label(self.url_right, &char(text.str))
+	}
 }
 
 // --- Bell / error ---------------------------------------------------------
@@ -691,7 +751,22 @@ pub fn (mut self SurfaceWidget) set_error(v bool) {
 	} else {
 		C.gtk_widget_remove_css_class(self.widget, c'background')
 	}
-	// TODO(gtk): swap child between error_page and terminal_page on idle tick.
+	if self.idle_rechild == 0 {
+		self.idle_rechild = C.g_idle_add(voidptr(surface_idle_rechild_cb), voidptr(self))
+	}
+}
+
+fn surface_idle_rechild_cb(data voidptr) int {
+	if isnil(data) {
+		return 0
+	}
+	mut self := unsafe { &SurfaceWidget(data) }
+	self.idle_rechild = 0
+	child := if self.error_state { self.error_page } else { self.terminal_page }
+	if !isnil(self.widget) && !isnil(child) {
+		C.adw_bin_set_child(AdwBin(self.widget), child)
+	}
+	return 0
 }
 
 // --- Default / min size ----------------------------------------------------
@@ -1122,10 +1197,17 @@ pub fn (mut self SurfaceWidget) gc_mouse_down(event GdkEvent, button u32, x f64,
 
 	// If a right-click isn't consumed, open the context menu.
 	if !consumed && btn == .right {
-		// TODO(gtk): emit `menu` signal, then set_pointing_to + popup on the
-		// context_menu popover (template child) at (x, y).
-		_ = x
-		_ = y
+		C.g_signal_emit_by_name(self.widget, c'menu')
+		if !isnil(self.context_menu) {
+			rect := C.GdkRectangle{
+				x: int(x)
+				y: int(y)
+				width: 1
+				height: 1
+			}
+			C.gtk_popover_set_pointing_to(self.context_menu, &rect)
+			C.gtk_popover_popup(self.context_menu)
+		}
 	}
 }
 
@@ -2065,9 +2147,9 @@ pub fn (self &SurfaceWidget) redraw_inspector() {
 	// TODO(gtk): queue a render on the inspector window if present.
 }
 
-// --- GObject class registration (stub) ------------------------------------
+// --- GObject class registration -------------------------------------------
 //
-// TODO(gtk): In ghostty, the class is registered via
+// In ghostty, the class is registered via
 // gobject.ext.defineClass(...) with an instanceInit, classInit, a Private
 // struct, and the gtk.Scrollable interface. classInit loads the blueprint
 // `.ui` template (setTemplateFromResource), binds template children
@@ -2076,13 +2158,104 @@ pub fn (self &SurfaceWidget) redraw_inspector() {
 // overlays, child_exited_overlay), binds template callbacks (the ec_*/gc_*/
 // glarea_*/im_* handlers above), and registers properties/signals.
 //
-// V has no such machinery, so type registration, `.ui`/blueprint templates,
-// property/signal registration, and template-child binding are all stubbed.
-// The handlers above are plain methods rather than C template callbacks.
+// The V port registers the AdwBin subclass above, creates blueprint children
+// programmatically below, and wires callbacks with g_signal_connect_data.
+// Full property registration and the GtkScrollable interface remain to be
+// translated. The handlers above are plain methods rather than C template
+// callbacks.
 
 // new_surface_widget creates a new SurfaceWidget. Mirrors `Surface.new`
-// (gobject.ext.newInstance). Here it just returns a value-initialized struct
-// with the private-field defaults set (matching the Zig `init`).
+// (gobject.ext.newInstance). It builds the translated blueprint children and
+// returns a wrapper with the private-field defaults from the Zig `init`.
+fn surface_error_page_new() GtkWidget {
+	page := C.adw_status_page_new()
+	C.adw_status_page_set_icon_name(page, c'computer-fail-symbolic')
+	title := i18n_('Oh, no.')
+	description := i18n_('Unable to acquire an OpenGL context for rendering.')
+	C.adw_status_page_set_title(page, &char(title.str))
+	C.adw_status_page_set_description(page, &char(description.str))
+	link := C.gtk_link_button_new_with_label(c'https://ghostty.org/docs/help/gtk-opengl-context', c'https://ghostty.org/docs/help/gtk-opengl-context')
+	C.adw_status_page_set_child(page, link)
+	return GtkWidget(page)
+}
+
+fn surface_menu_section(root GMenu, section GMenu) {
+	C.g_menu_append_section(root, &char(unsafe { nil }), GMenuModel(section))
+	object_unref(GObject(section))
+}
+
+fn surface_menu_append(menu GMenu, label string, detailed_action &char) {
+	translated := i18n_(label)
+	C.g_menu_append(menu, &char(translated.str), detailed_action)
+}
+
+fn surface_menu_append_submenu(menu GMenu, label string, submenu GMenu) {
+	translated := i18n_(label)
+	C.g_menu_append_submenu(menu, &char(translated.str), GMenuModel(submenu))
+}
+
+fn surface_context_menu_new() GtkPopover {
+	root := C.g_menu_new()
+
+	mut section := C.g_menu_new()
+	surface_menu_append(section, 'Copy', c'win.copy')
+	surface_menu_append(section, 'Paste', c'win.paste')
+	surface_menu_append(section, 'Notify on Next Command Finish', c'surface.notify-on-next-command-finish')
+	surface_menu_section(root, section)
+
+	section = C.g_menu_new()
+	surface_menu_append(section, 'Clear', c'win.clear')
+	surface_menu_append(section, 'Reset', c'win.reset')
+	surface_menu_section(root, section)
+
+	section = C.g_menu_new()
+	mut submenu := C.g_menu_new()
+	surface_menu_append(submenu, 'Change Title…', c'surface.prompt-title')
+	surface_menu_append(submenu, 'Split Up', c'split-tree.new-split::up')
+	surface_menu_append(submenu, 'Split Down', c'split-tree.new-split::down')
+	surface_menu_append(submenu, 'Split Left', c'split-tree.new-split::left')
+	surface_menu_append(submenu, 'Split Right', c'split-tree.new-split::right')
+	surface_menu_append_submenu(section, 'Split', submenu)
+	object_unref(GObject(submenu))
+
+	submenu = C.g_menu_new()
+	surface_menu_append(submenu, 'New Tab', c'win.new-tab')
+	surface_menu_append(submenu, 'Close Tab', c'tab.close::this')
+	surface_menu_append_submenu(section, 'Tab', submenu)
+	object_unref(GObject(submenu))
+
+	submenu = C.g_menu_new()
+	surface_menu_append(submenu, 'New Window', c'win.new-window')
+	surface_menu_append(submenu, 'Close Window', c'win.close')
+	surface_menu_append_submenu(section, 'Window', submenu)
+	object_unref(GObject(submenu))
+	surface_menu_section(root, section)
+
+	section = C.g_menu_new()
+	submenu = C.g_menu_new()
+	surface_menu_append(submenu, 'Open Configuration', c'app.open-config')
+	surface_menu_append(submenu, 'Reload Configuration', c'app.reload-config')
+	surface_menu_append_submenu(section, 'Config', submenu)
+	object_unref(GObject(submenu))
+	surface_menu_section(root, section)
+
+	popover := C.gtk_popover_menu_new_from_model_full(GMenuModel(root), 1)
+	object_unref(GObject(root))
+	C.gtk_popover_set_has_arrow(GtkPopover(popover), 0)
+	C.gtk_widget_set_halign(popover, int(Align.start))
+	return GtkPopover(popover)
+}
+
+fn surface_url_label_new(halign Align) GtkLabel {
+	label := C.gtk_label_new(&char(unsafe { nil }))
+	C.gtk_widget_add_css_class(label, c'background')
+	C.gtk_widget_add_css_class(label, c'url-overlay')
+	C.gtk_widget_set_visible(label, false)
+	C.gtk_widget_set_halign(label, int(halign))
+	C.gtk_widget_set_valign(label, int(Align.end))
+	return GtkLabel(label)
+}
+
 pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &Config) &SurfaceWidget {
 	obj := C.g_object_new(terminal_surface_get_type(), &char(unsafe { nil }))
 	gl_area := C.gtk_gl_area_new()
@@ -2095,9 +2268,18 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 	C.gtk_gl_area_set_allowed_apis(gl_area, gdk_gl_api_gl)
 	box := C.gtk_box_new(0, 0)
 	C.gtk_box_append(box, GtkWidget(gl_area))
+	context_menu := surface_context_menu_new()
+	C.gtk_box_append(box, GtkWidget(context_menu))
 	terminal_page := C.gtk_overlay_new()
 	C.gtk_overlay_set_child(terminal_page, box)
+	url_left := surface_url_label_new(.start)
+	url_right := surface_url_label_new(.end)
+	C.gtk_overlay_add_overlay(terminal_page, GtkWidget(url_left))
+	C.gtk_overlay_add_overlay(terminal_page, GtkWidget(url_right))
+	C.g_object_ref_sink(GObject(terminal_page))
 	C.adw_bin_set_child(AdwBin(obj), terminal_page)
+	error_page := surface_error_page_new()
+	C.g_object_ref_sink(GObject(error_page))
 
 	mut w := &SurfaceWidget{
 		widget: GtkWidget(obj)
@@ -2107,6 +2289,10 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 		gl_area: gl_area
 		im_context: C.gtk_im_multicontext_new()
 		terminal_page: terminal_page
+		error_page: error_page
+		url_left: url_left
+		url_right: url_right
+		context_menu: context_menu
 	}
 	w.rt_surface = Surface{ surface: w }
 	w.mouse_shape = .text
@@ -2153,7 +2339,68 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 	C.g_signal_connect_data(w.im_context, c'preedit-changed', GCallback(voidptr(surface_im_preedit_changed_cb)), voidptr(w), unsafe { nil }, 0)
 	C.g_signal_connect_data(w.im_context, c'preedit-end', GCallback(voidptr(surface_im_preedit_end_cb)), voidptr(w), unsafe { nil }, 0)
 	C.g_signal_connect_data(w.im_context, c'commit', GCallback(voidptr(surface_im_commit_cb)), voidptr(w), unsafe { nil }, 0)
+	url_motion := C.gtk_event_controller_motion_new()
+	C.g_signal_connect_data(url_motion, c'enter', GCallback(voidptr(surface_url_enter_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(url_motion, c'leave', GCallback(voidptr(surface_url_leave_cb)), voidptr(w), unsafe { nil }, 0)
+	C.gtk_widget_add_controller(GtkWidget(w.url_left), url_motion)
+	C.g_signal_connect_data(w.context_menu, c'closed', GCallback(voidptr(surface_context_menu_closed_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_object_weak_ref(GObject(w.widget), voidptr(surface_widget_finalized_cb), voidptr(w))
 	return w
+}
+
+fn surface_widget_finalized_cb(data voidptr, object GObject) {
+	_ = object
+	if isnil(data) {
+		return
+	}
+	mut self := unsafe { &SurfaceWidget(data) }
+	if self.idle_rechild != 0 {
+		C.g_source_remove(self.idle_rechild)
+		self.idle_rechild = 0
+	}
+	if self.pending_horizontal_scroll_reset != 0 {
+		C.g_source_remove(self.pending_horizontal_scroll_reset)
+		self.pending_horizontal_scroll_reset = 0
+	}
+	if !isnil(self.terminal_page) {
+		object_unref(GObject(self.terminal_page))
+		self.terminal_page = unsafe { nil }
+	}
+	if !isnil(self.error_page) {
+		object_unref(GObject(self.error_page))
+		self.error_page = unsafe { nil }
+	}
+	if !isnil(self.im_context) {
+		object_unref(GObject(self.im_context))
+		self.im_context = unsafe { nil }
+	}
+	self.widget = unsafe { nil }
+}
+
+fn surface_url_enter_cb(controller GtkEventControllerMotion, x f64, y f64, data voidptr) {
+	_ = controller
+	_ = x
+	_ = y
+	if !isnil(data) {
+		self := unsafe { &SurfaceWidget(data) }
+		C.gtk_widget_set_visible(GtkWidget(self.url_right), true)
+	}
+}
+
+fn surface_url_leave_cb(controller GtkEventControllerMotion, data voidptr) {
+	_ = controller
+	if !isnil(data) {
+		self := unsafe { &SurfaceWidget(data) }
+		C.gtk_widget_set_visible(GtkWidget(self.url_right), false)
+	}
+}
+
+fn surface_context_menu_closed_cb(popover GtkPopover, data voidptr) {
+	_ = popover
+	if !isnil(data) {
+		self := unsafe { &SurfaceWidget(data) }
+		self.grab_focus()
+	}
 }
 
 fn surface_focus_enter_cb(controller GtkEventControllerFocus, data voidptr) {
