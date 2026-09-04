@@ -77,6 +77,8 @@ fn C.g_type_instance_get_private(instance voidptr, private_type GType) voidptr
 
 fn C.g_type_check_instance_cast(instance voidptr, iface_type GType) voidptr
 
+fn C.g_type_check_instance_is_a(instance voidptr, iface_type GType) int
+
 fn C.g_boxed_type_register_static(type_name &char, boxed_copy voidptr, boxed_free voidptr) GType
 
 // GEnumValue and g_enum_register_static back hand-expanded enum GTypes such
@@ -106,6 +108,8 @@ fn C.adw_window_get_type() GType
 fn C.gtk_box_get_type() GType
 
 fn C.gtk_widget_get_type() GType
+
+fn C.gtk_window_get_type() GType
 
 // --- Template (blueprint/.ui) loading --------------------------------------
 // ghostty uses setTemplateFromResource against a compiled gresource; witty

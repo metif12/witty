@@ -14,15 +14,9 @@ import internal_os
 // is dropped the abstraction can be removed entirely and `adw.AlertDialog` used
 // directly.
 //
-// V has no GObject class-registration / comptime machinery, so:
-//   * The class is modeled as a plain V struct `Dialog` wrapping the underlying
-//     GObject pointer (`obj`). The "parent" (AlertDialog vs MessageDialog) is
-//     resolved at RUNTIME via `adw_supports_dialogs()` instead of at comptime.
-//   * GObject type registration (`defineClass`), the forwarded `response`
-//     virtual method, and the `Common` ref helpers are STUBBED — see the
-//     "GObject class registration" section — with bodies that type-check.
-//   * The real `present`/`close` LOGIC (AlertDialog.present vs the
-//     MessageDialog transient-for/present dance) is translated directly.
+// The class is modeled as a V wrapper around a real GhosttyDialog GObject. The
+// parent (AlertDialog vs MessageDialog) is resolved at runtime from the linked
+// libadwaita version, and present/close follow the selected parent's API.
 
 // --- New opaque handle aliases --------------------------------------------
 // (Grep-verified: none of these aliases or `fn C.*` are declared elsewhere in
@@ -70,17 +64,8 @@ fn C.adw_alert_dialog_get_type() GType
 
 fn C.adw_message_dialog_get_type() GType
 
-// Shared helpers for the dialog subclasses' hand-expanded vfunc chaining.
-// g_type_check_instance_get_class returns the GTypeClass* of an instance; its
-// parent (g_type_class_peek_parent, declared in gobject_c_linux.v) is the
-// GObjectClass whose dispose/finalize vfuncs we chain to.
+// Shared helper for the dialog subclasses' hand-expanded registration.
 fn C.g_type_check_instance_get_class(instance voidptr) voidptr
-
-// DisposeFn / FinalizeFn are the GObjectClass dispose/finalize vfunc signatures
-// (a single GObject* argument). Used to call the parent-class vfunc pointer.
-pub type DisposeFn = fn (obj voidptr)
-
-pub type FinalizeFn = fn (obj voidptr)
 
 // --- GObject class registration -------------------------------------------
 // Hand-expansion of ghostty's `gobject.ext.defineClass(Self, .{ .name =
@@ -158,11 +143,8 @@ pub fn (mut self Dialog) present(parent GtkWidget) {
 	// transient-for property on the MessageDialog.
 	if !isnil(parent) {
 		root := C.gtk_widget_get_root(parent)
-		if !isnil(root) {
-			// TODO(gtk): ghostty casts the root to `gtk.Window` via
-			// `gobject.ext.cast` (a runtime type check). Without the GObject type
-			// system here we forward the root directly (it is a GtkWindow for a
-			// realized toplevel).
+		if !isnil(root)
+			&& C.g_type_check_instance_is_a(root, C.gtk_window_get_type()) != 0 {
 			C.gtk_window_set_transient_for(GtkWindow(self.obj), GtkWindow(root))
 		}
 	}
