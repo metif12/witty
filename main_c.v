@@ -156,6 +156,7 @@ pub fn run_cli_action(action global_state.Action, args []string) !int {
 		.edit_config { cli.run_edit_config(action_args(args, action))! }
 		.show_config { cli.run_show_config(action_args(args, action))! }
 		.show_face { cli.run_show_face(action_args(args, action))! }
+		.ssh_cache { cli.run_ssh_cache(action_args(args, action))! }
 		.list_actions {
 			for value in global_state.actions() {
 				if value != .none {

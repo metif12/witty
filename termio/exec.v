@@ -48,7 +48,7 @@ fn C.write(fd int, buf voidptr, count usize) int
 
 fn C.poll(fds voidptr, nfds u32, timeout int) int
 
-fn C.fcntl(fd int, cmd int, arg int) int
+fn C.fcntl(fd i32, cmd i32, arg ...voidptr) i32
 
 fn C.kill(pid int, sig int) int
 

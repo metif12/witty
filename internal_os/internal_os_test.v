@@ -45,3 +45,21 @@ fn test_i18n_unknown_message_falls_back_to_msgid() {
 	msgid := 'witty-i18n-test-message-that-is-not-in-a-catalog'
 	assert translate(msgid) == msgid
 }
+
+fn test_hostname_validation() {
+	for hostname in ['example', 'example.com', 'www.example.com', 'example.com.',
+		'host-name.example.com.', '123.example.com.', 'a-b.com', '127.0.0.1',
+		'a'.repeat(63) + '.com', 'a.'.repeat(126) + 'a'] {
+		assert hostname_is_valid(hostname), hostname
+	}
+	for hostname in ['', '.example.com', 'example.com..', 'host..domain', '-hostname', 'hostname-',
+		'a.-.b', 'host_name.com', '.', '..', 'a'.repeat(64) + '.com', 'a.'.repeat(126) + 'ab'] {
+		assert !hostname_is_valid(hostname), hostname
+	}
+}
+
+fn test_hostname_is_local() {
+	assert hostname_is_local('localhost')!
+	assert hostname_is_local(os.hostname()!)!
+	assert !hostname_is_local('not-the-local-hostname')!
+}

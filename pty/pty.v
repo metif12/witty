@@ -23,7 +23,7 @@ fn C.close(fd int) int
 
 fn C.setsid() int
 
-fn C.fcntl(fd int, cmd int, arg int) int
+fn C.fcntl(fd i32, cmd i32, arg ...voidptr) i32
 
 fn C.witty_pty_enable_utf8(fd int) int
 

@@ -11,7 +11,7 @@ import os
 
 fn C.pipe(fds &int) int
 
-fn C.fcntl(fd int, cmd int, arg int) int
+fn C.fcntl(fd i32, cmd i32, arg ...voidptr) i32
 
 fn C.getrlimit(resource int, rlp &C.rlimit) int
 
