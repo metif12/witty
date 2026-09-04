@@ -68,7 +68,7 @@ pub mut:
 pub struct RenderMouse {
 pub mut:
 	// The point on the viewport where the mouse currently is.
-	point ?terminal.ViewportPoint
+	point ?terminal.Coordinate
 	// The mods that are currently active for the last mouse event.
 	mods input.Mods
 }

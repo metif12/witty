@@ -131,6 +131,34 @@ fn test_app_present_surface_request_ignores_stale_address() ! {
 	assert app.pending_message_count() == 0
 }
 
+fn test_termio_surface_message_routes_core_pointer_to_live_surface() ! {
+	mut app := App{}
+	mut apprt_runtime := apprt.RuntimeApp{}
+	mut core_runtime := RuntimeApp{ actions_handled: true }
+	mut core_surface := Surface{ rt_app: &core_runtime }
+	mut surface := &SurfaceRef{ core_surface: &core_surface }
+	app.surfaces = SurfaceList([surface])
+	assert termio_surface_message_push(voidptr(&app), voidptr(&core_surface), apprt.SurfaceMessage{
+		kind: .set_mouse_shape
+		mouse_shape: .pointer
+	}) == 1
+	app.tick(mut apprt_runtime)!
+	assert core_runtime.actions.len == 1
+	assert core_runtime.actions[0].kind == .mouse_shape
+	assert core_runtime.actions[0].mouse_shape == .pointer
+}
+
+fn test_termio_surface_message_ignores_closed_surface() ! {
+	mut app := App{}
+	mut apprt_runtime := apprt.RuntimeApp{}
+	mut stale_surface := Surface{}
+	assert termio_surface_message_push(voidptr(&app), voidptr(&stale_surface), apprt.SurfaceMessage{
+		kind: .ring_bell
+	}) == 1
+	app.tick(mut apprt_runtime)!
+	assert app.pending_message_count() == 0
+}
+
 fn test_app_key_event_uses_runtime_config_binding() {
 	mut cfg := configpkg.Config.default_config()
 	cfg.keybind.set.put(input.Trigger{

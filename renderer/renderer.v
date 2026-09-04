@@ -2768,7 +2768,7 @@ pub type Message = RendererMessage
 
 pub type MouseState = RenderMouse
 
-pub type Coordinate = terminal.ViewportPoint
+pub type Coordinate = terminal.Coordinate
 
 pub type Preedit = RenderPreedit
 

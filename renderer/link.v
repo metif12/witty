@@ -63,7 +63,7 @@ pub fn (mut self LinkSet) deinit() {
 // 3. Run regex.search() on the string
 // 4. For hover links, check if mouse is over the match
 // 5. Record matching cells in the result CellSet
-pub fn (mut self LinkSet) render_cell_map(mut result terminal.CellSet, render_state &terminal.RenderState, mouse_viewport ?terminal.ViewportPoint, mouse_mods input.Mods) ! {
+pub fn (mut self LinkSet) render_cell_map(mut result terminal.CellSet, render_state &terminal.RenderState, mouse_viewport ?terminal.Coordinate, mouse_mods input.Mods) ! {
 	// Fast path, not very likely since we have default links.
 	if self.links.len == 0 {
 		return

@@ -2664,6 +2664,8 @@ fn (mut self SurfaceWidget) init_surface() ! {
 		set_clipboard_fn: surface_core_set_clipboard_cb
 		supports_selection_fn: surface_core_supports_selection_cb
 		clipboard_request_fn: surface_core_clipboard_request_cb
+		default_env_fn: surface_core_default_env_cb
+		linux_cgroup: self.cgroup_path
 	}
 
 	mut surface_config := self.config.get().clone()
@@ -2969,6 +2971,11 @@ fn surface_core_supports_selection_cb(data voidptr) bool {
 fn surface_core_clipboard_request_cb(data voidptr, clipboard apprt.Clipboard, request apprt.ClipboardRequest) !bool {
 	mut self := unsafe { &SurfaceWidget(data) }
 	return self.clipboard_request(clipboard, request)!
+}
+
+fn surface_core_default_env_cb(data voidptr) !map[string]string {
+	self := unsafe { &SurfaceWidget(data) }
+	return self.default_termio_env()!
 }
 
 // --- Clipboard ------------------------------------------------------------

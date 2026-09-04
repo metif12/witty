@@ -54,7 +54,7 @@ fn test_render_cell_map_hover() ! {
 	assert result[u64(1) << 32 | 1]
 
 	result = terminal.CellSet{}
-	links.render_cell_map(mut result, &state, terminal.ViewportPoint{ x: 1, y: 0 }, input.Mods{})!
+	links.render_cell_map(mut result, &state, terminal.Coordinate{ x: 1, y: 0 }, input.Mods{})!
 	assert result[u64(0) << 32 | 1]
 	assert result[u64(0) << 32 | 2]
 	assert result[u64(1) << 32 | 1]

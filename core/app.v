@@ -537,6 +537,14 @@ fn (mut self App) drain_mailbox(mut rt_app apprt.RuntimeApp) ! {
 			SurfaceAppMsg {
 				self.surface_message(msg.surface, msg.message)!
 			}
+			SurfaceCoreMsg {
+				for surface in self.surfaces {
+					if voidptr(surface.core_surface) == voidptr(msg.surface) {
+						self.surface_message(surface, msg.message)!
+						break
+					}
+				}
+			}
 			PresentSurfaceMsg {
 				for surface in self.surfaces {
 					if u64(usize(voidptr(surface.core_surface))) == msg.address {
@@ -896,6 +904,7 @@ pub type Message = OpenConfigMsg
 	| QuitMsg
 	| RedrawSurfaceMsg
 	| SurfaceAppMsg
+	| SurfaceCoreMsg
 	| PresentSurfaceMsg
 
 // OpenConfigMsg requests the configuration file to be opened.
@@ -931,6 +940,15 @@ pub:
 pub struct SurfaceAppMsg {
 pub:
 	surface &SurfaceRef
+	message SurfaceMessage
+}
+
+// SurfaceCoreMsg is the cross-thread form used by termio. The app thread
+// resolves the stable core pointer back to its live runtime surface before
+// dispatching, so messages for a surface that already closed are ignored.
+pub struct SurfaceCoreMsg {
+pub:
+	surface &Surface
 	message SurfaceMessage
 }
 

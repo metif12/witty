@@ -586,6 +586,11 @@ fn bridge_runtime_clipboard_request(ptr voidptr, loc apprt.Clipboard, req apprt.
 	return self.rt_surface.clipboard_request(loc, req)!
 }
 
+fn bridge_runtime_default_env(ptr voidptr) !map[string]string {
+	mut self := unsafe { &EmbeddedSurfaceCore(ptr) }
+	return self.rt_surface.default_termio_env()!
+}
+
 fn bridge_surface_init(config &configpkg.Config, core_app &apprt.CoreApp, app &apprt.App, surface_ptr voidptr) !voidptr {
 	if isnil(core_app.backend) || isnil(surface_ptr) {
 		return error('embedded core bridge is not initialized')
@@ -613,6 +618,7 @@ fn bridge_surface_init(config &configpkg.Config, core_app &apprt.CoreApp, app &a
 		set_clipboard_fn: bridge_runtime_set_clipboard
 		supports_selection_fn: bridge_runtime_supports_selection
 		clipboard_request_fn: bridge_runtime_clipboard_request
+		default_env_fn: bridge_runtime_default_env
 	}
 	self.surface_ref = SurfaceRef{
 		core_surface: &self.surface
@@ -792,7 +798,7 @@ fn bridge_surface_dump_text(ptr voidptr, selection voidptr) !apprt.DumpedText {
 
 fn bridge_surface_active_selection(ptr voidptr) ?voidptr {
 	mut self := unsafe { &EmbeddedSurfaceCore(ptr) }
-	sel := self.surface.renderer_state.terminal.screens.active.selection or { return none }
+	sel := self.surface.renderer_state.terminal_.screens.active.selection or { return none }
 	self.selection = sel
 	return voidptr(&self.selection)
 }
@@ -827,7 +833,7 @@ fn bridge_surface_pin(screen &terminal.Screen, tag_value int, coord_tag int, x u
 
 fn bridge_surface_resolve_selection(ptr voidptr, tl_tag int, tl_coord_tag int, tl_x u32, tl_y u32, br_tag int, br_coord_tag int, br_x u32, br_y u32, rectangle bool) ?voidptr {
 	mut self := unsafe { &EmbeddedSurfaceCore(ptr) }
-	screen := self.surface.renderer_state.terminal.screens.active
+	screen := self.surface.renderer_state.terminal_.screens.active
 	start := bridge_surface_pin(screen, tl_tag, tl_coord_tag, tl_x, tl_y) or { return none }
 	end := bridge_surface_pin(screen, br_tag, br_coord_tag, br_x, br_y) or { return none }
 	self.selection = terminal.Selection.init(start, end, rectangle)
@@ -910,7 +916,7 @@ fn bridge_surface_inspector_render(ptr voidptr, context_handle voidptr) {
 	}
 	mut hover_grid_x := u32(0)
 	mut hover_grid_y := u32(0)
-	pages := &self.surface.renderer_state.terminal.screens.active.pages
+	pages := &self.surface.renderer_state.terminal_.screens.active.pages
 	if point := insp.mouse.last_point {
 		active_y := int(point.y) - pages.active_start
 		if active_y >= 0 && active_y < int(pages.rows) {
@@ -934,7 +940,7 @@ fn bridge_surface_inspector_render(ptr voidptr, context_handle voidptr) {
 		click_pressed[index] = state == .press
 	}
 	grid := self.surface.size.grid()
-	mut term := self.surface.renderer_state.terminal
+	mut term := self.surface.renderer_state.terminal_
 	insp.render(context_handle, inspectorpkg.SurfaceInfo{
 		screen_width: self.surface.size.screen.width
 		screen_height: self.surface.size.screen.height
@@ -1001,14 +1007,14 @@ fn bridge_surface_quicklook_font(ptr voidptr) voidptr {
 
 fn bridge_surface_quicklook_selection(ptr voidptr, x f64, y f64) ?voidptr {
 	mut self := unsafe { &EmbeddedSurfaceCore(ptr) }
-	screen := self.surface.renderer_state.terminal.screens.active
+	screen := self.surface.renderer_state.terminal_.screens.active
 	point := self.surface.pos_to_viewport(x, y)
 	pin := screen.pages.pin(terminal.PinOpts{
 		tag: .viewport
 		x: point.x
 		y: point.y
 	}) or { return none }
-	self.selection = self.surface.io.terminal.screens.active.select_word(pin,
+	self.selection = self.surface.io.impl.terminal.screens.active.select_word(pin,
 		self.surface.config.selection_word_chars) or { return none }
 	return voidptr(&self.selection)
 }

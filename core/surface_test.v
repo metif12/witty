@@ -4,6 +4,7 @@ import input
 import apprt
 import terminal
 import configpkg
+import termio as termiopkg
 import time
 
 // Test helper: sets up a 10x5 cell grid with 10x20px cells and 5px padding on all sides.
@@ -20,7 +21,7 @@ fn make_test_surface() Surface {
 	mut t := terminal.Terminal.init(terminal.Options{ cols: 80, rows: 24 }) or { panic(err) }
 	return Surface{
 		renderer_state: RendererState{
-			terminal: &t
+			terminal_: &t
 		}
 	}
 }
@@ -320,6 +321,72 @@ fn test_pos_to_viewport_last_cell() {
 	assert coord.y == 4
 }
 
+fn test_pos_to_viewport_clamps_to_grid() {
+	surf := Surface{
+		size: make_test_size()
+	}
+	coord := surf.pos_to_viewport(10000.0, 10000.0)
+	assert coord.x == 9
+	assert coord.y == 4
+}
+
+fn test_renderer_size_preserves_surface_dimensions() {
+	size := make_test_size()
+	translated := renderer_size(size)
+	assert translated.screen.width == size.screen.width
+	assert translated.screen.height == size.screen.height
+	assert translated.cell.width == size.cell.width
+	assert translated.cell.height == size.cell.height
+	assert translated.padding.top == size.padding.top
+	assert translated.padding.bottom == size.padding.bottom
+	assert translated.padding.left == size.padding.left
+	assert translated.padding.right == size.padding.right
+}
+
+fn test_termio_message_translates_every_surface_message_variant() {
+	size := make_test_size()
+	mut config := configpkg.Config.default_config()
+	derived := termiopkg.DerivedConfig.init(&config)!
+	messages := [
+		IOMessage{ kind: .write_small, data: 'small'.bytes() },
+		IOMessage{ kind: .write_stable, data: 'stable'.bytes() },
+		IOMessage{ kind: .write_alloc, data: 'allocated'.bytes() },
+		IOMessage{ kind: .resize, size: size },
+		IOMessage{ kind: .inspector_, flag: true },
+		IOMessage{ kind: .change_config, config: derived },
+		IOMessage{ kind: .focused, flag: true },
+		IOMessage{ kind: .color_scheme_report, flag: true },
+		IOMessage{ kind: .selection_scroll, flag: true },
+		IOMessage{ kind: .visible, flag: true },
+		IOMessage{ kind: .clear_screen, flag: true },
+		IOMessage{ kind: .scroll_viewport, scroll_delta: -3 },
+		IOMessage{ kind: .scroll_to_top },
+		IOMessage{ kind: .scroll_to_bottom },
+		IOMessage{ kind: .jump_to_prompt, prompt_delta: -2 },
+		IOMessage{ kind: .crash },
+	]
+	translated := messages.map(termio_message(it))
+	assert translated.map(it.kind) == [termiopkg.MessageKind.write_small, .write_stable, .write_alloc,
+		.resize, .inspector, .change_config, .focused, .color_scheme_report, .selection_scroll,
+		.visible, .clear_screen, .scroll_viewport, .scroll_viewport, .scroll_viewport,
+		.jump_to_prompt, .crash]
+	assert translated[0].write_small_data.slice().bytestr() == 'small'
+	assert translated[1].write_stable_data == 'stable'
+	assert translated[2].write_alloc_data == 'allocated'
+	assert translated[3].resize_val.screen.width == size.screen.width
+	assert translated[4].flag_val
+	assert translated[6].flag_val
+	assert translated[7].force_val
+	assert translated[8].flag_val
+	assert translated[9].flag_val
+	assert translated[10].flag_val
+	assert translated[11].scroll_behavior == .delta
+	assert translated[11].scroll_delta == -3
+	assert translated[12].scroll_behavior == .top
+	assert translated[13].scroll_behavior == .bottom
+	assert translated[14].prompt_delta == -2
+}
+
 fn test_input_effect_values() {
 	assert apprt.InputEffect.ignored != apprt.InputEffect.consumed
 	assert apprt.InputEffect.consumed != apprt.InputEffect.closed
@@ -544,7 +611,7 @@ fn test_child_exited_abnormal_terminal_fallback() {
 		abnormal_command_exit_runtime_ms: 500
 	}
 	surf.child_exited_handler(100, 127)
-	mut terminal_state := surf.renderer_state.terminal
+	mut terminal_state := surf.renderer_state.terminal_
 	text := terminal_state.plain_string() or { panic(err) }
 	assert text.contains('Ghostty failed to launch the requested command:')
 	assert text.contains('missing-command --flag')
@@ -590,7 +657,7 @@ fn test_complete_clipboard_paste_encodes_non_bracketed_newlines() ! {
 
 fn test_complete_clipboard_paste_encodes_bracketed_fences() ! {
 	mut surf := make_test_surface()
-	surf.renderer_state.terminal.modes.set(.bracketed_paste, true)
+	surf.renderer_state.terminal_.modes.set(.bracketed_paste, true)
 	surf.complete_clipboard_paste('one\ntwo', true)!
 	assert surf.io.messages.len == 3
 	assert surf.io.messages.map(it.data.bytestr()).join('') == '\x1b[200~one\ntwo\x1b[201~'
@@ -771,7 +838,7 @@ fn test_has_selection() {
 	mut surf := make_test_surface()
 	assert surf.has_selection() == false
 
-	surf.renderer_state.terminal.screens.active.selection = TermSelection{
+	surf.renderer_state.terminal_.screens.active.selection = TermSelection{
 		start_pin: Pin{ x: 0, y: 0 }
 		end_pin: Pin{ x: 5, y: 0 }
 	}
@@ -843,7 +910,7 @@ fn test_scroll_callback_uses_precision_multiplier_and_accumulates_pixels() {
 fn test_scroll_callback_alternate_screen_emits_cursor_sequences() {
 	mut surf := make_test_surface()
 	surf.size.cell = CellSize{ width: 10, height: 10 }
-	mut term := surf.renderer_state.terminal
+	mut term := surf.renderer_state.terminal_
 	term.switch_screen(.alternate)!
 	term.modes.set(.cursor_keys, true)
 	surf.scroll_callback(0, 0.1, false)!
@@ -860,7 +927,7 @@ fn test_scroll_callback_reports_horizontal_wheel_buttons() {
 	surf.rt_surface = &runtime
 	surf.size = make_test_size()
 	surf.config.mouse_reporting = true
-	surf.renderer_state.terminal.flags.mouse_event = .normal
+	surf.renderer_state.terminal_.flags.mouse_event = .normal
 	surf.scroll_callback(2, 0, false)!
 	assert surf.io.messages.len == 2
 	for msg in surf.io.messages {
@@ -874,14 +941,14 @@ fn test_copy_selection_to_standard_clipboard() ! {
 	mut runtime := RuntimeSurface{}
 	surf.rt_surface = &runtime
 	for i, cp in 'hello'.runes() {
-		surf.renderer_state.terminal.screens.active.pages.screen_rows[0].cells[i] = terminal.CellData.init(u32(cp))
+		surf.renderer_state.terminal_.screens.active.pages.screen_rows[0].cells[i] = terminal.CellData.init(u32(cp))
 	}
-	start := surf.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+	start := surf.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
 		tag: .active
 		x: 0
 		y: 0
 	}) or { panic('no start pin') }
-	end := surf.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+	end := surf.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
 		tag: .active
 		x: 4
 		y: 0
@@ -900,14 +967,14 @@ fn test_copy_selection_mixed_to_requested_clipboards() ! {
 	mut runtime := RuntimeSurface{}
 	surf.rt_surface = &runtime
 	for i, cp in 'hello'.runes() {
-		surf.renderer_state.terminal.screens.active.pages.screen_rows[0].cells[i] = terminal.CellData.init(u32(cp))
+		surf.renderer_state.terminal_.screens.active.pages.screen_rows[0].cells[i] = terminal.CellData.init(u32(cp))
 	}
-	start := surf.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+	start := surf.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
 		tag: .active
 		x: 0
 		y: 0
 	}) or { panic('no start pin') }
-	end := surf.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+	end := surf.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
 		tag: .active
 		x: 4
 		y: 0
@@ -950,6 +1017,13 @@ fn runtime_scale_probe(data voidptr) !ContentScale {
 	return ContentScale{ x: 2, y: 3 }
 }
 
+fn runtime_env_probe(data voidptr) !map[string]string {
+	_ = data
+	return {
+		'WITTY_TEST_ENV': 'runtime'
+	}
+}
+
 fn test_runtime_callbacks_override_headless_storage() ! {
 	mut probe := RuntimeCallbackProbe{}
 	mut app := RuntimeApp{
@@ -964,12 +1038,25 @@ fn test_runtime_callbacks_override_headless_storage() ! {
 		user_data: &probe
 		close_fn: runtime_close_probe
 		content_scale_fn: runtime_scale_probe
+		default_env_fn: runtime_env_probe
 	}
 	surface.close(true)
 	assert probe.closed
 	assert probe.confirmed
 	assert !surface.closed
 	assert surface.get_content_scale()! == ContentScale{ x: 2, y: 3 }
+	assert surface.default_termio_env()!['WITTY_TEST_ENV'] == 'runtime'
+}
+
+fn test_runtime_surface_clones_configured_default_environment() ! {
+	surface := RuntimeSurface{
+		default_env: {
+			'WITTY_TEST_ENV': 'configured'
+		}
+	}
+	mut env := surface.default_termio_env()!
+	env['WITTY_TEST_ENV'] = 'changed'
+	assert surface.default_env['WITTY_TEST_ENV'] == 'configured'
 }
 
 fn test_open_url_preserves_content_kind_for_runtime() ! {

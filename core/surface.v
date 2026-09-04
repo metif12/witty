@@ -1460,6 +1460,9 @@ import osc
 import internal_os
 import terminal
 import inspector as inspectorpkg
+import global_state
+import renderer as rendererpkg
+import termio as termiopkg
 
 // Minimum window size in cells.
 const min_window_width_cells = u32(10)
@@ -1519,11 +1522,7 @@ enum ScrollDirection {
 }
 
 // Coordinate represents x/y in the viewport.
-pub struct Coordinate {
-pub mut:
-	x u32
-	y u32
-}
+pub type Coordinate = terminal.Coordinate
 
 fn (a Coordinate) eql(b Coordinate) bool {
 	return a.x == b.x && a.y == b.y
@@ -1883,6 +1882,8 @@ pub type RuntimeSurfaceSupportsSelectionFn = fn (voidptr) bool
 
 pub type RuntimeSurfaceClipboardRequestFn = fn (voidptr, apprt.Clipboard, apprt.ClipboardRequest) !bool
 
+pub type RuntimeSurfaceDefaultEnvFn = fn (voidptr) !map[string]string
+
 pub struct RuntimeClipboardRequest {
 pub:
 	clipboard apprt.Clipboard
@@ -1900,6 +1901,8 @@ pub mut:
 	closed                bool
 	close_confirm         bool
 	selection_clipboard   bool
+	default_env           map[string]string
+	linux_cgroup          ?string
 	user_data             voidptr = unsafe { nil }
 	close_fn              RuntimeSurfaceCloseFn = unsafe { nil }
 	content_scale_fn      RuntimeSurfaceContentScaleFn = unsafe { nil }
@@ -1909,6 +1912,7 @@ pub mut:
 	set_clipboard_fn      RuntimeSurfaceSetClipboardFn = unsafe { nil }
 	supports_selection_fn RuntimeSurfaceSupportsSelectionFn = unsafe { nil }
 	clipboard_request_fn  RuntimeSurfaceClipboardRequestFn = unsafe { nil }
+	default_env_fn        RuntimeSurfaceDefaultEnvFn = unsafe { nil }
 }
 
 fn (mut r RuntimeSurface) close(confirm bool) {
@@ -1961,6 +1965,19 @@ fn (r RuntimeSurface) get_title() ?string {
 		return r.title_fn(r.user_data)
 	}
 	return r.title
+}
+
+fn (r RuntimeSurface) default_termio_env() !map[string]string {
+	if unsafe { voidptr(&r) == nil } {
+		return os.environ()
+	}
+	if r.default_env_fn != unsafe { nil } {
+		return r.default_env_fn(r.user_data)!
+	}
+	if r.default_env.len > 0 {
+		return r.default_env.clone()
+	}
+	return os.environ()
 }
 
 fn (mut r RuntimeSurface) set_clipboard(contents string, confirm bool) ! {
@@ -2045,39 +2062,13 @@ pub fn (mut r Renderer) display_unrealized() {
 fn (r Renderer) thread_enter() ! {
 }
 
-pub struct RendererState {
-pub mut:
-	terminal  &terminal.Terminal = unsafe { nil }
-	preedit   ?Preedit
-	mouse     RendererMouseState
-	inspector ?&Inspector
-	mutex     &sync.Mutex = unsafe { nil }
-}
+pub type RendererState = rendererpkg.RenderState
 
-pub struct RendererMouseState {
-pub mut:
-	point ?Coordinate
-	mods  input.Mods
-}
+pub type RendererMouseState = rendererpkg.RenderMouse
 
-pub struct Preedit {
-pub:
-	codepoints []PreeditCodepoint
-}
+pub type Preedit = rendererpkg.RenderPreedit
 
-pub struct PreeditCodepoint {
-pub:
-	codepoint u32
-	wide      bool
-}
-
-pub fn (p Preedit) width() int {
-	mut w := 0
-	for cp in p.codepoints {
-		w += if cp.wide { 2 } else { 1 }
-	}
-	return w
-}
+pub type PreeditCodepoint = rendererpkg.RenderPreeditCodepoint
 
 pub struct RendererThread {
 pub mut:
@@ -2109,11 +2100,18 @@ pub type Pin = terminal.Pin
 
 pub struct TermIO {
 pub mut:
-	terminal terminal.Terminal
+	impl     termiopkg.Termio
 	messages []IOMessage
+	live     bool
 }
 
 fn (mut t TermIO) queue_message(msg IOMessage) {
+	if t.live {
+		t.impl.queue_message(termio_message(msg), .unlocked)
+		return
+	}
+	// Zero-initialized surfaces used by focused unit tests have no PTY. Retain
+	// their writes so the tests can inspect the exact encoded bytes.
 	t.messages << IOMessage{
 		...msg
 		data: msg.data.clone()
@@ -2121,15 +2119,21 @@ fn (mut t TermIO) queue_message(msg IOMessage) {
 }
 
 fn (mut t TermIO) deinit() {
-	t.terminal.deinit()
+	if t.live {
+		t.impl.deinit()
+	}
+	t.live = false
+	t.messages = []
 }
 
 pub struct IOThread {
 pub mut:
+	impl    termiopkg.Thread
 	running bool
 }
 
 fn (mut t IOThread) deinit() {
+	t.impl.deinit()
 	t.running = false
 }
 
@@ -2486,6 +2490,7 @@ pub:
 	prompt_delta int
 	flag         bool
 	size         Size
+	config       termiopkg.DerivedConfig
 }
 
 pub enum IOMessageKind {
@@ -2509,14 +2514,90 @@ pub enum IOMessageKind {
 	scroll_to_bottom
 	// jump_to_prompt jumps to a shell prompt by IOMessage.prompt_delta.
 	jump_to_prompt
-	// reset performs a full terminal reset.
-	reset
 	crash
+}
+
+fn renderer_size(size Size) rendererpkg.Size {
+	return rendererpkg.Size{
+		screen: rendererpkg.ScreenSize{
+			width: size.screen.width
+			height: size.screen.height
+		}
+		cell: rendererpkg.CellSize{
+			width: size.cell.width
+			height: size.cell.height
+		}
+		padding: rendererpkg.Padding{
+			top: size.padding.top
+			bottom: size.padding.bottom
+			left: size.padding.left
+			right: size.padding.right
+		}
+	}
+}
+
+fn termio_message(msg IOMessage) termiopkg.Message {
+	return match msg.kind {
+		.write_small { termiopkg.Message.write_small_msg(msg.data) }
+		.write_stable {
+			termiopkg.Message{
+				kind: .write_stable
+				write_stable_data: msg.data.bytestr().clone()
+			}
+		}
+		.write_alloc {
+			termiopkg.Message{
+				kind: .write_alloc
+				write_alloc_data: msg.data.bytestr().clone()
+			}
+		}
+		.resize { termiopkg.Message.resize_msg(renderer_size(msg.size)) }
+		.inspector_ { termiopkg.Message{ kind: .inspector, flag_val: msg.flag } }
+		.change_config { termiopkg.Message{ kind: .change_config, config_val: msg.config } }
+		.focused { termiopkg.Message{ kind: .focused, flag_val: msg.flag } }
+		.color_scheme_report {
+			termiopkg.Message{ kind: .color_scheme_report, force_val: msg.flag }
+		}
+		.selection_scroll {
+			termiopkg.Message{ kind: .selection_scroll, flag_val: msg.flag }
+		}
+		.visible { termiopkg.Message{ kind: .visible, flag_val: msg.flag } }
+		.clear_screen { termiopkg.Message{ kind: .clear_screen, flag_val: msg.flag } }
+		.scroll_viewport {
+			termiopkg.Message{
+				kind: .scroll_viewport
+				scroll_behavior: .delta
+				scroll_delta: int(msg.scroll_delta)
+			}
+		}
+		.scroll_to_top {
+			termiopkg.Message{ kind: .scroll_viewport, scroll_behavior: .top }
+		}
+		.scroll_to_bottom {
+			termiopkg.Message{ kind: .scroll_viewport, scroll_behavior: .bottom }
+		}
+		.jump_to_prompt {
+			termiopkg.Message{ kind: .jump_to_prompt, prompt_delta: msg.prompt_delta }
+		}
+		.crash { termiopkg.Message{ kind: .crash } }
+	}
 }
 
 pub type SurfaceMessage = apprt.SurfaceMessage
 
 pub type SurfaceMessageKind = apprt.SurfaceMessageKind
+
+fn termio_surface_message_push(app_ptr voidptr, surface_ptr voidptr, msg apprt.SurfaceMessage) int {
+	if isnil(app_ptr) || isnil(surface_ptr) {
+		return 0
+	}
+	mut app := unsafe { &App(app_ptr) }
+	surface := unsafe { &Surface(surface_ptr) }
+	return app.mailbox.push(Message(SurfaceCoreMsg{
+		surface: surface
+		message: msg
+	}))
+}
 
 // SearchNav is the navigation direction for navigate_search.
 pub enum SearchNav {
@@ -2639,8 +2720,10 @@ pub mut:
 	mouse    Mouse
 	keyboard Keyboard
 
-	io        TermIO
-	io_thread IOThread
+	io               TermIO
+	io_thread        IOThread
+	io_os_thread     ?thread
+	renderer_mailbox &rendererpkg.RendererMailbox = unsafe { nil }
 
 	inspector ?&Inspector
 
@@ -2667,7 +2750,7 @@ pub mut:
 
 // has_terminal returns true if the terminal pointer is initialized.
 fn (self &Surface) has_terminal() bool {
-	return unsafe { self.renderer_state.terminal != nil }
+	return unsafe { self.renderer_state.terminal_ != nil }
 }
 
 // ---- Surface methods ----
@@ -2728,17 +2811,44 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 	self.config = derived_config
 	self.config_conditional_state = app.config_conditional_state
 
-	// Initialize the terminal before publishing its stable address to the
-	// renderer. Both the surface and renderer now observe this same emulator.
-	grid_size := self.size.grid()
-	self.io.terminal = terminal.Terminal.init(terminal.Options{
-		cols: u16(math.max(u32(1), grid_size.columns))
-		rows: u16(math.max(u32(1), grid_size.rows))
-	})!
+	// Initialize the real termio implementation in its stable Surface storage.
+	// Termio publishes its terminal pointer into renderer_state and owns the PTY
+	// subprocess, stream parser, and writer mailbox from this point onward.
 	self.renderer_state = RendererState{
-		terminal: &self.io.terminal
 		mutex: sync.new_mutex()
 	}
+	self.renderer_mailbox = rendererpkg.RendererMailbox.create()
+	env := rt_surface.default_termio_env()!
+	resources_dir_value := global_state.get_state().resources_dir.app()
+	termio_config := termiopkg.DerivedConfig.init(config)!
+	self.io.impl.init(termiopkg.TermioOpts{
+		config: termio_config
+		full_config: unsafe { config }
+		size: renderer_size(self.size)
+		max_scrollback: int(config.scrollback_limit)
+		grapheme_cluster: config.grapheme_width_method == .unicode
+		backend_config: termiopkg.ExecConfig{
+			command: command
+			env: env
+			env_override: config.env
+			shell_integration: config.shell_integration
+			shell_integration_features: config.shell_integration_features
+			working_directory: config.working_directory
+			resources_dir: if resources_dir_value.len > 0 { resources_dir_value } else { none }
+			term: config.term
+			linux_cgroup: rt_surface.linux_cgroup
+		}
+		renderer_state: &self.renderer_state
+		renderer_wakeup: rendererpkg.Wakeup{}
+		renderer_mailbox: self.renderer_mailbox
+		surface_mailbox: apprt.SurfaceMailbox{
+			surface: voidptr(&self)
+			app: voidptr(&app)
+			push_fn: termio_surface_message_push
+		}
+	})!
+	self.io.live = true
+	self.io_thread.impl = termiopkg.Thread.init()!
 
 	// Initialize renderer
 	self.renderer = Renderer{ initialized: true }
@@ -2762,6 +2872,13 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 
 	// Call resize to finalize setup
 	self.resize(self.size.screen)!
+
+	// Start the PTY writer loop only after every pointer retained by Termio is
+	// stable and the initial resize has been queued.
+	self.io_thread.running = true
+	mut writer := unsafe { &self.io_thread.impl }
+	mut termio := unsafe { &self.io.impl }
+	self.io_os_thread = spawn writer.thread_main(mut termio)
 
 	// Compute initial window size if configured
 	self.recompute_initial_size() or {}
@@ -2827,9 +2944,22 @@ pub fn (mut self Surface) deinit() {
 	self.renderer_thread.deinit()
 	self.renderer.deinit()
 
-	// Stop IO thread
+	// Stop the IO event loop, which shuts down and joins its PTY reader and
+	// process watcher, before releasing any shared terminal state.
+	if self.io_thread.running {
+		self.io_thread.impl.stop.notify() or {}
+		if worker := self.io_os_thread {
+			worker.wait()
+		}
+		self.io_os_thread = none
+	}
 	self.io_thread.deinit()
 	self.io.deinit()
+	self.renderer_state.terminal_ = unsafe { nil }
+	if self.renderer_mailbox != unsafe { nil } {
+		self.renderer_mailbox.destroy()
+		self.renderer_mailbox = unsafe { nil }
+	}
 	if self.renderer_state.mutex != unsafe { nil } {
 		self.renderer_state.mutex.destroy()
 		self.renderer_state.mutex = unsafe { nil }
@@ -2877,7 +3007,7 @@ pub fn (self &Surface) needs_confirm_quit() bool {
 			if !self.has_terminal() {
 				true
 			} else {
-				!self.renderer_state.terminal.cursor_is_at_prompt()
+				!self.renderer_state.terminal_.cursor_is_at_prompt()
 			}
 		}
 	}
@@ -3048,7 +3178,7 @@ pub fn (mut self Surface) activate_inspector() ! {
 	self.inspector = insp
 
 	// Put the inspector onto the render state
-	self.renderer_state.inspector = self.inspector
+	self.renderer_state.inspector = voidptr(insp)
 
 	// Notify components that inspector is active
 	self.renderer_thread.wakeup.notify()!
@@ -3060,7 +3190,7 @@ pub fn (mut self Surface) deactivate_inspector() {
 	mut insp := self.inspector or { return }
 
 	// Remove from render state
-	self.renderer_state.inspector = none
+	self.renderer_state.inspector = unsafe { nil }
 
 	// Notify components
 	self.renderer_thread.wakeup.notify() or {}
@@ -3074,6 +3204,7 @@ pub fn (mut self Surface) deactivate_inspector() {
 // update_config updates the surface configuration at runtime.
 pub fn (mut self Surface) update_config(config &Config) ! {
 	derived := DerivedConfig.from_config(config)!
+	termio_config := termiopkg.DerivedConfig.init(config)!
 	self.config.deinit()
 	self.config = derived
 
@@ -3100,7 +3231,7 @@ pub fn (mut self Surface) update_config(config &Config) ! {
 
 	// Notify renderer and IO of config change
 	self.renderer_thread.wakeup.notify()!
-	self.queue_io(IOMessage{ kind: .change_config })
+	self.queue_io(IOMessage{ kind: .change_config, config: termio_config })
 
 	// Notify runtime of config change
 	if _ := self.config.title {
@@ -3118,13 +3249,13 @@ pub fn (mut self Surface) update_config(config &Config) ! {
 
 // has_selection returns true if the terminal has a selection.
 pub fn (self &Surface) has_selection() bool {
-	return self.renderer_state.terminal.screens.active.selection != none
+	return self.renderer_state.terminal_.screens.active.selection != none
 }
 
 // selection_string returns the selected text.
 pub fn (self &Surface) selection_string() ?string {
-	sel := self.renderer_state.terminal.screens.active.selection or { return none }
-	text := self.renderer_state.terminal.screens.active.selection_string(terminal.SelectionString{
+	sel := self.renderer_state.terminal_.screens.active.selection or { return none }
+	text := self.renderer_state.terminal_.screens.active.selection_string(terminal.SelectionString{
 		sel: sel
 	}) or { return none }
 	if text.len == 0 {
@@ -3135,12 +3266,12 @@ pub fn (self &Surface) selection_string() ?string {
 
 // pwd returns the current working directory of the terminal.
 pub fn (self &Surface) pwd() ?string {
-	return self.renderer_state.terminal.get_pwd()
+	return self.renderer_state.terminal_.get_pwd()
 }
 
 // ime_point returns the x/y coordinate of where the IME keyboard should be rendered.
 pub fn (self &Surface) ime_point() IMEPos {
-	cursor := self.renderer_state.terminal.screens.active.cursor
+	cursor := self.renderer_state.terminal_.screens.active.cursor
 	preedit_width := if p := self.renderer_state.preedit {
 		u32(p.width())
 	} else {
@@ -3267,7 +3398,7 @@ pub fn (mut self Surface) preedit_callback(preedit ?string) ! {
 	self.renderer_state.preedit = none
 
 	// Mark preedit dirty
-	self.renderer_state.terminal.flags.dirty.preedit = true
+	self.renderer_state.terminal_.flags.dirty.preedit = true
 
 	// If no text, just queue render to clear previous preedit display
 	text := preedit or {
@@ -3373,7 +3504,7 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 
 	// Check if KAM (keyboard action mode) is enabled
 	if self.config.vt_kam_allowed
-		&& self.renderer_state.terminal.modes.get(.disable_keyboard) {
+		&& self.renderer_state.terminal_.modes.get(.disable_keyboard) {
 		return .consumed
 	}
 
@@ -3470,7 +3601,7 @@ pub fn (mut self Surface) focus_callback(focused bool) ! {
 	}
 
 	// Update terminal focus flag
-	self.renderer_state.terminal.flags.focused = focused
+	self.renderer_state.terminal_.flags.focused = focused
 
 	// Notify IO thread
 	self.queue_io(IOMessage{ kind: .focused, flag: focused })
@@ -3529,7 +3660,7 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, precision bool) ! 
 		self.set_selection(none)!
 	}
 
-	mut t := self.renderer_state.terminal
+	mut t := self.renderer_state.terminal_
 	if t.screens.active_key == .alternate && t.flags.mouse_event == .none
 		&& t.modes.get(.mouse_alternate_scroll) {
 		if y.delta != 0 {
@@ -3649,13 +3780,13 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			if self.mouse.left_click_count == 2 && !self.is_mouse_reporting() {
 				pos := self.rt_surface.get_cursor_pos()!
 				vp := self.pos_to_viewport(pos.x, pos.y)
-				if pin := self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+				if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
 					tag: .viewport
 					x: vp.x
 					y: vp.y
 				}) {
-					if sel := self.renderer_state.terminal.screens.active.select_word(pin, self.config.selection_word_chars) {
-						self.renderer_state.terminal.screens.active.select(sel)!
+					if sel := self.renderer_state.terminal_.screens.active.select_word(pin, self.config.selection_word_chars) {
+						self.renderer_state.terminal_.screens.active.select(sel)!
 					}
 				}
 				self.mouse.left_click_time = time.now()
@@ -3667,15 +3798,15 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			if self.mouse.left_click_count >= 3 && !self.is_mouse_reporting() {
 				pos := self.rt_surface.get_cursor_pos()!
 				vp := self.pos_to_viewport(pos.x, pos.y)
-				if pin := self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+				if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
 					tag: .viewport
 					x: vp.x
 					y: vp.y
 				}) {
-					if sel := self.renderer_state.terminal.screens.active.select_line(terminal.SelectLine{
+					if sel := self.renderer_state.terminal_.screens.active.select_line(terminal.SelectLine{
 						pin: pin
 					}) {
-						self.renderer_state.terminal.screens.active.select(sel)!
+						self.renderer_state.terminal_.screens.active.select(sel)!
 					}
 				}
 				self.mouse.left_click_time = time.now()
@@ -3699,7 +3830,7 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			// when the left button is released. This avoids the clipboard
 			// being updated on every mouse move which would be noisy.
 			if self.config.copy_on_select != .false_ {
-				if sel := self.renderer_state.terminal.screens.active.selection {
+				if sel := self.renderer_state.terminal_.screens.active.selection {
 					self.set_selection(sel)!
 				}
 			}
@@ -3763,7 +3894,7 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 	if button == .left && is_press {
 		pos := self.rt_surface.get_cursor_pos()!
 		vp := self.pos_to_viewport(pos.x, pos.y)
-		if pin := self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+		if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
 			tag: .viewport
 			x: vp.x
 			y: vp.y
@@ -3830,7 +3961,7 @@ pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) !
 		}
 		insp.mouse.last_xpos = pos.x
 		insp.mouse.last_ypos = pos.y
-		insp.mouse.last_point = self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+		insp.mouse.last_point = self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
 			tag: .viewport
 			x: pos_vp.x
 			y: pos_vp.y
@@ -3848,7 +3979,7 @@ pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) !
 
 	// Handle mouse reporting for motion events
 	if self.is_mouse_reporting() {
-		report_motion := self.renderer_state.terminal.flags.mouse_event in [.button, .any]
+		report_motion := self.renderer_state.terminal_.flags.mouse_event in [.button, .any]
 		if report_motion {
 			self.mouse_report(none, .motion, self.mouse.mods, pos)!
 		}
@@ -3857,7 +3988,7 @@ pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) !
 	// Handle selection drag (left click held)
 	if self.mouse.click_state[int(input.MouseButton.left)] == .press
 		&& self.mouse.left_click_count > 0 {
-		if pin := self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+		if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
 			tag: .viewport
 			x: pos_vp.x
 			y: pos_vp.y
@@ -3891,13 +4022,13 @@ pub fn (mut self Surface) mouse_pressure_callback(stage MousePressureStage, pres
 		&& self.has_terminal() {
 		pos := self.rt_surface.get_cursor_pos()!
 		vp := self.pos_to_viewport(pos.x, pos.y)
-		if pin := self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+		if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
 			tag: .viewport
 			x: vp.x
 			y: vp.y
 		}) {
-			if sel := self.renderer_state.terminal.screens.active.select_word(pin, self.config.selection_word_chars) {
-				self.renderer_state.terminal.screens.active.select(sel)!
+			if sel := self.renderer_state.terminal_.screens.active.select_word(pin, self.config.selection_word_chars) {
+				self.renderer_state.terminal_.screens.active.select(sel)!
 				self.queue_render()!
 			}
 		}
@@ -3928,21 +4059,28 @@ pub fn (mut self Surface) color_scheme_callback(scheme ColorScheme) ! {
 pub fn (self &Surface) pos_to_viewport(xpos f64, ypos f64) Coordinate {
 	raw_x := xpos - f64(self.size.padding.left)
 	raw_y := ypos - f64(self.size.padding.top)
-	x := if raw_x < 0 {
+	grid := self.size.grid()
+	if grid.columns == 0 || grid.rows == 0 {
+		return Coordinate{}
+	}
+	column := if raw_x < 0 {
 		u32(0)
 	} else if self.size.cell.width > 0 {
 		u32(raw_x) / self.size.cell.width
 	} else {
 		u32(0)
 	}
-	y := if raw_y < 0 {
+	row := if raw_y < 0 {
 		u32(0)
 	} else if self.size.cell.height > 0 {
 		u32(raw_y) / self.size.cell.height
 	} else {
 		u32(0)
 	}
-	return Coordinate{ x: x, y: y }
+	return Coordinate{
+		x: u16(if column < grid.columns { column } else { grid.columns - 1 })
+		y: if row < grid.rows { row } else { grid.rows - 1 }
+	}
 }
 
 // perform_binding_action performs a binding action from a keybinding.
@@ -4022,7 +4160,11 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.queue_io(IOMessage{ kind: .write_stable, data: action.str_param.bytes() })
 		}
 		.reset {
-			self.renderer_state.terminal.full_reset()
+			self.renderer_state.mutex.lock()
+			defer {
+				self.renderer_state.mutex.unlock()
+			}
+			self.renderer_state.terminal_.full_reset()
 		}
 		.start_search {
 			// To save resources, we don't actually start a search here, we
@@ -4073,7 +4215,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				if text.len == 0 {
 					return false
 				}
-				mut s := SurfaceSearch.init(self.renderer_state.terminal, &self)!
+				mut s := SurfaceSearch.init(self.renderer_state.terminal_, &self)!
 				self.search = s
 				s.change_needle(text)
 			}
@@ -4086,7 +4228,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			}
 		}
 		.copy_to_clipboard {
-			if sel := self.renderer_state.terminal.screens.active.selection {
+			if sel := self.renderer_state.terminal_.screens.active.selection {
 				self.copy_selection_to_clipboards(sel, [.standard], unsafe {
 					input.CopyToClipboard(action.enum_param)
 				})!
@@ -4109,7 +4251,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			url_text := match link_info.action {
 				.open {
 					// For regex links, get the text from the selection.
-					self.renderer_state.terminal.screens.active.selection_string(terminal.SelectionString{
+					self.renderer_state.terminal_.screens.active.selection_string(terminal.SelectionString{
 						sel: link_info.selection
 					}) or { return false }
 				}
@@ -4193,7 +4335,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 		.clear_screen {
 			// If the active screen is the alternate screen then clear screen
 			// does nothing, so we return false so the keybind is unconsumed.
-			if self.renderer_state.terminal.screens.active_key == .alternate {
+			if self.renderer_state.terminal_.screens.active_key == .alternate {
 				return false
 			}
 			self.queue_io(IOMessage{ kind: .clear_screen })
@@ -4205,12 +4347,12 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.queue_io(IOMessage{ kind: .scroll_to_bottom })
 		}
 		.scroll_to_row {
-			self.renderer_state.terminal.screens.active.scroll_to_row(usize(action.uint_param))
+			self.renderer_state.terminal_.screens.active.scroll_to_row(usize(action.uint_param))
 			self.queue_render()!
 		}
 		.scroll_to_selection {
-			sel := self.renderer_state.terminal.screens.active.selection or { return false }
-			self.renderer_state.terminal.screens.active.scroll_to_row(usize(sel.top_left(self.renderer_state.terminal.screens.active).y))
+			sel := self.renderer_state.terminal_.screens.active.selection or { return false }
+			self.renderer_state.terminal_.screens.active.scroll_to_row(usize(sel.top_left(self.renderer_state.terminal_.screens.active).y))
 			self.queue_render()!
 		}
 		.scroll_page_up {
@@ -4405,7 +4547,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			})!
 		}
 		.select_all {
-			if sel := self.renderer_state.terminal.screens.active.select_all() {
+			if sel := self.renderer_state.terminal_.screens.active.select_all() {
 				self.set_selection(sel)!
 				self.queue_render()!
 			}
@@ -4459,7 +4601,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.end_key_sequence(.flush, .retain)
 		}
 		.adjust_selection {
-			mut screen := self.renderer_state.terminal.screens.active
+			mut screen := self.renderer_state.terminal_.screens.active
 			mut sel := screen.selection or { return false }
 			sel.adjust(screen, selection_adjustment_from_input(action.enum_param))
 			screen.selection = sel
@@ -4697,7 +4839,7 @@ fn (mut self Surface) mods_changed(mods input.Mods) {
 	self.renderer_state.mouse.mods = self.mouse_mods_with_capture(self.mouse.mods)
 
 	// Force screen rebuild to update link highlight state
-	self.renderer_state.terminal.flags.dirty.clear = true
+	self.renderer_state.terminal_.flags.dirty.clear = true
 
 	self.queue_render() or {}
 }
@@ -4719,7 +4861,7 @@ fn (mut self Surface) mouse_refresh_links(pos CursorPos, pos_vp Coordinate, over
 			self.rt_app.perform_action(AppAction{
 				kind: .mouse_shape
 				target: &self
-				mouse_shape: self.renderer_state.terminal.mouse_shape
+				mouse_shape: self.renderer_state.terminal_.mouse_shape
 			})!
 			self.rt_app.perform_action(AppAction{
 				kind: .mouse_over_link
@@ -4753,12 +4895,12 @@ fn (mut self Surface) mouse_refresh_links(pos CursorPos, pos_vp Coordinate, over
 
 fn (self &Surface) is_mouse_reporting() bool {
 	return self.config.mouse_reporting
-		&& self.renderer_state.terminal.flags.mouse_event != .none
+		&& self.renderer_state.terminal_.flags.mouse_event != .none
 }
 
 fn (mut self Surface) mouse_report(button ?input.MouseButton, action MouseReportAction, mods input.Mods, pos CursorPos) ! {
-	mouse_event := self.renderer_state.terminal.flags.mouse_event
-	mouse_format := self.renderer_state.terminal.flags.mouse_format
+	mouse_event := self.renderer_state.terminal_.flags.mouse_event
+	mouse_format := self.renderer_state.terminal_.flags.mouse_format
 
 	// Depending on the event, we may do nothing at all.
 	match mouse_event {
@@ -4947,19 +5089,19 @@ fn (self &Surface) mouse_shift_capture(do_lock bool) bool {
 		.false_ { false }
 		.true_ {
 			// Check terminal's mouse_shift_capture flag
-			self.renderer_state.terminal.flags.mouse_shift_capture == .true_
+			self.renderer_state.terminal_.flags.mouse_shift_capture == .true_
 		}
 	}
 }
 
 pub fn (mut self Surface) mouse_captured() bool {
-	return self.renderer_state.terminal.flags.mouse_event != .none
+	return self.renderer_state.terminal_.flags.mouse_event != .none
 }
 
 fn (self &Surface) mouse_mods_with_capture(mods input.Mods) input.Mods {
 	// If the terminal is reporting mouse events and shift is pressed,
 	// strip shift from mods if we're not capturing shift
-	if self.renderer_state.terminal.flags.mouse_event != .none {
+	if self.renderer_state.terminal_.flags.mouse_event != .none {
 		if mods.shift && !self.mouse_shift_capture(false) {
 			return input.Mods{
 				ctrl: mods.ctrl
@@ -4972,8 +5114,8 @@ fn (self &Surface) mouse_mods_with_capture(mods input.Mods) input.Mods {
 }
 
 fn (mut self Surface) set_selection(sel ?TermSelection) ! {
-	prev := self.renderer_state.terminal.screens.active.selection
-	self.renderer_state.terminal.screens.active.select(sel)!
+	prev := self.renderer_state.terminal_.screens.active.selection
+	self.renderer_state.terminal_.screens.active.select(sel)!
 
 	// If copy_on_select is enabled and selection changed, copy to clipboard
 	if self.config.copy_on_select == .false_ {
@@ -5054,7 +5196,7 @@ fn (mut self Surface) recompute_initial_size() ! {
 }
 
 fn (mut self Surface) scroll_to_bottom() ! {
-	self.renderer_state.terminal.scroll_viewport(.bottom, 0)!
+	self.renderer_state.terminal_.scroll_viewport(.bottom, 0)!
 	self.queue_render()!
 }
 
@@ -5128,7 +5270,7 @@ fn (mut self Surface) child_exited_handler(runtime_ms u32, exit_code u32) {
 		false
 	}
 	if !shown {
-		mut t := self.renderer_state.terminal
+		mut t := self.renderer_state.terminal_
 		if !isnil(t) {
 			t.carriage_return()
 			t.linefeed() or {}
@@ -5147,7 +5289,7 @@ fn (mut self Surface) child_exited_handler(runtime_ms u32, exit_code u32) {
 // child_exited_abnormally writes Ghostty's detailed launch-failure report into
 // the terminal when the application runtime cannot show a native banner.
 fn (mut self Surface) child_exited_abnormally(info apprt.ChildExited) ! {
-	mut t := self.renderer_state.terminal
+	mut t := self.renderer_state.terminal_
 	if isnil(t) {
 		return
 	}
@@ -5198,10 +5340,10 @@ fn (mut self Surface) child_exited_abnormally(info apprt.ChildExited) ! {
 
 fn (mut self Surface) password_input(v bool) ! {
 	// Check if state actually changed
-	if self.renderer_state.terminal.flags.password_input == v {
+	if self.renderer_state.terminal_.flags.password_input == v {
 		return
 	}
-	self.renderer_state.terminal.flags.password_input = v
+	self.renderer_state.terminal_.flags.password_input = v
 
 	// Notify runtime for secure input handling (e.g. macOS SecureInput)
 	self.rt_app.perform_action(AppAction{
@@ -5429,7 +5571,7 @@ fn (mut self Surface) handle_binding_entry(event KeyEvent, entry &input.SetEntry
 }
 
 fn (mut self Surface) encode_key(event KeyEvent) ?WriteReq {
-	t := self.renderer_state.terminal
+	t := self.renderer_state.terminal_
 	flags := t.screens.active.kitty_keyboard.current()
 	option_as_alt := self.config.macos_option_as_alt or {
 		if !self.mouse.mods.alt {
@@ -5471,10 +5613,10 @@ fn (mut self Surface) selection_scroll_tick() ! {
 	delta := if pos.y < 0 { i32(-1) } else { i32(1) }
 
 	// Scroll the viewport
-	self.renderer_state.terminal.scroll_viewport(.delta, int(delta))!
+	self.renderer_state.terminal_.scroll_viewport(.delta, int(delta))!
 
 	// Continue drag selection
-	if pin := self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+	if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
 		tag: .viewport
 		x: pos_vp.x
 		y: pos_vp.y
@@ -5489,7 +5631,7 @@ fn (mut self Surface) process_links(pos CursorPos) !bool {
 	link := self.link_at_pos(pos) or { return false }
 	match link.action {
 		.open {
-			url := self.renderer_state.terminal.screens.active.selection_string(terminal.SelectionString{
+			url := self.renderer_state.terminal_.screens.active.selection_string(terminal.SelectionString{
 				sel: link.selection
 			}) or { return false }
 			if url.len > 0 {
@@ -5530,7 +5672,7 @@ fn (mut self Surface) open_url(action apprt.OpenUrl) ! {
 }
 
 fn (self &Surface) osc8_uri(pin Pin) ?string {
-	rows := self.renderer_state.terminal.screens.active.pages.screen_rows
+	rows := self.renderer_state.terminal_.screens.active.pages.screen_rows
 	if int(pin.y) >= rows.len || int(pin.x) >= rows[int(pin.y)].cells.len {
 		return none
 	}
@@ -5542,13 +5684,13 @@ fn (self &Surface) osc8_uri(pin Pin) ?string {
 }
 
 fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen WriteScreenAction) ! {
-	screen := self.renderer_state.terminal.screens.active
+	screen := self.renderer_state.terminal_.screens.active
 	pages := &screen.pages
 	sel := match loc {
 		.history {
 			// We do not support this for alternate screens because they
 			// don't have scrollback anyways.
-			if self.renderer_state.terminal.screens.active_key == .alternate {
+			if self.renderer_state.terminal_.screens.active_key == .alternate {
 				return
 			}
 			terminal.Selection.init(pages.get_top_left(.history), pages.get_bottom_right(.history) or { return }, false)
@@ -5557,7 +5699,7 @@ fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen WriteSc
 			terminal.Selection.init(pages.get_top_left(.screen), pages.get_bottom_right(.screen) or { return }, false)
 		}
 		.selection {
-			self.renderer_state.terminal.screens.active.selection or {
+			self.renderer_state.terminal_.screens.active.selection or {
 				// If we have no selection we have no data, do nothing.
 				return
 			}
@@ -5580,9 +5722,9 @@ fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen WriteSc
 		emit: format
 		unwrap: true
 		trim: false
-		background: self.renderer_state.terminal.colors.background.get()
-		foreground: self.renderer_state.terminal.colors.foreground.get()
-		palette: self.renderer_state.terminal.colors.palette.entries[..]
+		background: self.renderer_state.terminal_.colors.background.get()
+		foreground: self.renderer_state.terminal_.colors.foreground.get()
+		palette: self.renderer_state.terminal_.colors.palette.entries[..]
 	})
 	formatter.content = terminal.ScreenContent(terminal.ScreenContentSelection{
 		sel: sel.ordered(screen, .forward)
@@ -5613,7 +5755,7 @@ fn (mut self Surface) complete_clipboard_paste(data string, allow_unsafe bool) !
 		return
 	}
 
-	bracketed := self.renderer_state.terminal.modes.get(.bracketed_paste)
+	bracketed := self.renderer_state.terminal_.modes.get(.bracketed_paste)
 	if self.config.clipboard_paste_protection && !allow_unsafe {
 		unsafe_paste := if bracketed {
 			data.contains('\x1b[201~')
@@ -5709,15 +5851,15 @@ fn (mut self Surface) show_desktop_notification(title string, body string) ! {
 }
 
 fn (mut self Surface) copy_selection_to_clipboards(sel TermSelection, clipboards []apprt.Clipboard, format input.CopyToClipboard) ! {
-	screen := self.renderer_state.terminal.screens.active
+	screen := self.renderer_state.terminal_.screens.active
 	base_opts := terminal.FormatOptions{
 		emit: .plain
 		unwrap: true
 		trim: self.config.clipboard_trim_trailing_spaces
 		codepoint_map: self.config.clipboard_codepoint_map
-		background: self.renderer_state.terminal.colors.background.get()
-		foreground: self.renderer_state.terminal.colors.foreground.get()
-		palette: self.renderer_state.terminal.colors.palette.entries[..]
+		background: self.renderer_state.terminal_.colors.background.get()
+		foreground: self.renderer_state.terminal_.colors.foreground.get()
+		palette: self.renderer_state.terminal_.colors.palette.entries[..]
 	}
 	mut contents := []apprt.ClipboardContent{}
 	if format in [.plain, .mixed] {
@@ -5781,7 +5923,7 @@ fn (self &Surface) link_at_pos(pos CursorPos) ?Link {
 	}
 
 	pos_vp := self.pos_to_viewport(pos.x, pos.y)
-	pin := self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+	pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
 		tag: .viewport
 		x: pos_vp.x
 		y: pos_vp.y
@@ -5814,7 +5956,7 @@ fn (self &Surface) link_at_pin(pin Pin, mouse_mods input.Mods) ?Link {
 	if self.config.links.len == 0 {
 		return none
 	}
-	screen := self.renderer_state.terminal.screens.active
+	screen := self.renderer_state.terminal_.screens.active
 	line := screen.select_line(terminal.SelectLine{
 		pin: pin
 		whitespace: none
@@ -5853,7 +5995,7 @@ fn (mut self Surface) maybe_prompt_click() !bool {
 	if !self.config.cursor_click_to_move {
 		return false
 	}
-	t := self.renderer_state.terminal
+	t := self.renderer_state.terminal_
 	screen := t.screens.active
 	if screen.semantic_prompt.click == .none || !t.cursor_is_at_prompt()
 		|| screen.selection != none {
@@ -5910,20 +6052,20 @@ fn (mut self Surface) drag_left_click_single(pin Pin, drag_x f64) ! {
 	click_pin := self.mouse.left_click_pin or { return }
 	// Compute selection between click pin and drag pin
 	if sel := mouse_selection(click_pin, pin, u32(self.mouse.left_click_xpos), u32(drag_x), self.mouse.mods, self.size) {
-		self.renderer_state.terminal.screens.active.select(sel)!
+		self.renderer_state.terminal_.screens.active.select(sel)!
 	}
 }
 
 fn (mut self Surface) drag_left_click_double(pin Pin) ! {
 	// Word-level drag selection
 	click_pin := self.mouse.left_click_pin or { return }
-	if sel := self.renderer_state.terminal.screens.active.select_word_between(click_pin, pin, self.config.selection_word_chars) {
-		self.renderer_state.terminal.screens.active.select(sel)!
+	if sel := self.renderer_state.terminal_.screens.active.select_word_between(click_pin, pin, self.config.selection_word_chars) {
+		self.renderer_state.terminal_.screens.active.select(sel)!
 	}
 }
 
 fn (mut self Surface) drag_left_click_triple(pin Pin) ! {
-	mut screen := self.renderer_state.terminal.screens.active
+	mut screen := self.renderer_state.terminal_.screens.active
 	click_pin := self.mouse.left_click_pin or { return }
 	line := screen.select_line(terminal.SelectLine{
 		pin: pin
@@ -5943,7 +6085,7 @@ fn (mut self Surface) drag_left_click_triple(pin Pin) ! {
 
 fn (self &Surface) resolve_path_for_opening(path string) ?string {
 	if !os.is_abs_path(path) {
-		terminal_pwd := self.renderer_state.terminal.get_pwd() or { return none }
+		terminal_pwd := self.renderer_state.terminal_.get_pwd() or { return none }
 		resolved := os.join_path(terminal_pwd, path)
 		if os.exists(resolved) {
 			return resolved
@@ -5958,7 +6100,7 @@ fn (mut self Surface) dump_text(sel TermSelection) !Text {
 }
 
 fn (mut self Surface) dump_text_locked(sel TermSelection) !Text {
-	text := self.renderer_state.terminal.screens.active.selection_string(terminal.SelectionString{
+	text := self.renderer_state.terminal_.screens.active.selection_string(terminal.SelectionString{
 		sel: sel
 	})!
 
@@ -5967,7 +6109,7 @@ fn (mut self Surface) dump_text_locked(sel TermSelection) !Text {
 		ContentScale{ x: 1.0, y: 1.0 }
 	}
 
-	tl := sel.top_left(self.renderer_state.terminal.screens.active)
+	tl := sel.top_left(self.renderer_state.terminal_.screens.active)
 	mut x := f64(tl.x * self.size.cell.width + self.size.padding.left)
 	x /= content_scale.x
 
@@ -5976,9 +6118,9 @@ fn (mut self Surface) dump_text_locked(sel TermSelection) !Text {
 	y -= f64(self.font_metrics.cell_baseline)
 	y /= content_scale.y
 
-	br := sel.bottom_right(self.renderer_state.terminal.screens.active)
-	start := tl.y * self.renderer_state.terminal.cols + tl.x
-	end_val := br.y * self.renderer_state.terminal.cols + br.x
+	br := sel.bottom_right(self.renderer_state.terminal_.screens.active)
+	start := tl.y * self.renderer_state.terminal_.cols + tl.x
+	end_val := br.y * self.renderer_state.terminal_.cols + br.x
 
 	return Text{
 		text: text

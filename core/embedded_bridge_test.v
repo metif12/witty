@@ -67,7 +67,7 @@ fn test_embedded_bridge_uses_canonical_core_surface() {
 	// Feed the canonical terminal emulator and read it back exclusively through
 	// the public embedded selection/text API.
 	mut backend := unsafe { &EmbeddedSurfaceCore(surface.core_surface.backend) }
-	mut stream := backend.surface.renderer_state.terminal.vt_stream()
+	mut stream := backend.surface.renderer_state.terminal_.vt_stream()
 	stream.next_slice('hello')!
 	apprt.ghostty_surface_mouse_pos(mut surface, 1, 1, 0)
 	mut word := apprt.CAPIText{}
@@ -128,7 +128,7 @@ fn test_embedded_bridge_inherits_focused_surface_working_directory() {
 	}
 
 	mut backend := unsafe { &EmbeddedSurfaceCore(surface.core_surface.backend) }
-	backend.surface.renderer_state.terminal.set_pwd('/focused/project')!
+	backend.surface.renderer_state.terminal_.set_pwd('/focused/project')!
 	// Surfaces begin focused, so exercise the same loss/gain transition that
 	// makes this surface the app's last focused surface in Ghostty.
 	apprt.ghostty_surface_set_focus(mut surface, false)
