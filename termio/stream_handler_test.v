@@ -4,6 +4,7 @@ import renderer
 import terminal
 import apprt
 import osc
+import tmux
 
 // ============================================================
 // StreamHandler tests
@@ -73,6 +74,44 @@ fn test_stream_handler_init_deinit() {
 	mut handler, mut ctx := make_test_handler()
 	handler.deinit()
 	ctx.t.deinit()
+}
+
+fn test_stream_handler_tmux_viewer_lifecycle_and_commands() {
+	mut handler, mut ctx := make_test_handler()
+	defer {
+		handler.deinit()
+		ctx.t.deinit()
+	}
+
+	mut enter := terminal.DcsCommand(terminal.DcsCommandTmux{
+		notification: tmux.Notification(tmux.NotifEnter{})
+	})
+	handler.dcs_command(mut enter)
+	assert handler.tmux_viewer != none
+
+	mut startup_done := terminal.DcsCommand(terminal.DcsCommandTmux{
+		notification: tmux.Notification(tmux.NotifBlockEnd{})
+	})
+	handler.dcs_command(mut startup_done)
+	assert ctx.mailbox.len() == 0
+
+	mut session := terminal.DcsCommand(terminal.DcsCommandTmux{
+		notification: tmux.Notification(tmux.NotifSessionChanged{
+			id: 7
+			name: 'main'
+		})
+	})
+	handler.dcs_command(mut session)
+	assert handler.termio_messaged
+	msg := ctx.mailbox.pop() or { panic('expected tmux command') }
+	assert msg.kind == .write_small
+	assert msg.write_small_data.slice().bytestr().starts_with('display-message')
+
+	mut exit := terminal.DcsCommand(terminal.DcsCommandTmux{
+		notification: tmux.Notification(tmux.NotifExit{})
+	})
+	handler.dcs_command(mut exit)
+	assert handler.tmux_viewer == none
 }
 
 // Test bell dispatches without crashing.

@@ -6,6 +6,7 @@ import os
 import osc
 import renderer
 import terminal
+import tmux
 
 // This is used as the handler for the terminal.Stream type. This is
 // stateful and is expected to live for the entire lifetime of the terminal.
@@ -61,6 +62,9 @@ pub mut:
 	// such as XTGETTCAP.
 	dcs DcsHandler
 
+	// Tmux control-mode viewer state, active between enter/exit notifications.
+	tmux_viewer ?&terminal.TmuxViewer
+
 	// This is set to true when a message was written to the termio
 	// mailbox. This can be used by callers to determine if they need
 	// to wake up the termio thread.
@@ -74,6 +78,10 @@ pub mut:
 pub fn (mut self StreamHandler) deinit() {
 	self.apc.deinit()
 	self.dcs.deinit()
+	if mut viewer := self.tmux_viewer {
+		viewer.deinit()
+		self.tmux_viewer = none
+	}
 }
 
 // This queues a render operation with the renderer thread. The render
@@ -489,10 +497,41 @@ fn (mut self StreamHandler) dcs_command(mut cmd terminal.DcsCommand) {
 			self.dcs_decrqss(cmd.decrqss)
 		}
 		terminal.DcsCommandTmux {
-			// Tmux control mode notifications. A full implementation would
-			// maintain a tmux viewer state machine that processes each
-			// notification type (enter, exit, output, layout changes, etc.).
-			// Currently a no-op until tmux control mode viewer is implemented.
+			match cmd.notification {
+				tmux.NotifEnter {
+					if mut old := self.tmux_viewer {
+						old.deinit()
+					}
+					viewer_value := terminal.TmuxViewer.init() or { return }
+					mut viewer := &terminal.TmuxViewer{}
+					unsafe {
+						*viewer = viewer_value
+					}
+					self.tmux_viewer = viewer
+					return
+				}
+				tmux.NotifExit {
+					if mut viewer := self.tmux_viewer {
+						viewer.deinit()
+						self.tmux_viewer = none
+					}
+					return
+				}
+				else {}
+			}
+
+			mut viewer := self.tmux_viewer or { return }
+			for action in viewer.next(cmd.notification) {
+				match action {
+					terminal.TmuxViewerActionExit {}
+					terminal.TmuxViewerActionCommand {
+						self.message_writer(Message.write_req(action.command))
+					}
+					terminal.TmuxViewerActionWindows {
+						// The pinned source also leaves GUI window diffing as a TODO.
+					}
+				}
+			}
 		}
 	}
 }
