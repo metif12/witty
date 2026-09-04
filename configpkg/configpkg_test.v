@@ -1012,6 +1012,26 @@ fn test_editable_config_path_creates_file_without_truncating() ! {
 	assert os.read_file(path)! == 'keep me'
 }
 
+fn test_preferred_config_path_prefers_nonempty_then_existing() ! {
+	dir := os.join_path(os.temp_dir(), 'witty-preferred-config-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	os.mkdir_all(dir)!
+	first := os.join_path(dir, 'first')
+	second := os.join_path(dir, 'second')
+	third := os.join_path(dir, 'third')
+
+	assert preferred_existing_config_path([first, second, third]) == first
+	os.write_file(first, '')!
+	assert preferred_existing_config_path([first, second, third]) == first
+	os.write_file(second, 'configured')!
+	assert preferred_existing_config_path([first, second, third]) == second
+	os.write_file(first, 'higher priority')!
+	assert preferred_existing_config_path([first, second, third]) == first
+}
+
 fn test_bell_features_parse_format_and_defaults() {
 	mut cfg := Config.default_config()
 	assert !cfg.bell_features.system

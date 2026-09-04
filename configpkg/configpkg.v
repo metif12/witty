@@ -4257,6 +4257,13 @@ pub mut:
 	// True while replay_steps are being evaluated; prevents recording a replay
 	// of the replay itself.
 	replaying bool
+	// Storage backing values borrowed through the C configuration API. Ghostty's
+	// arena keeps these values alive for the lifetime of Config; these caches give
+	// the V translation the same ownership guarantee for converted enum strings,
+	// color lists, and command records.
+	capi_strings  map[string]string
+	capi_colors   []ColorRGB
+	capi_commands []CConfigCommand
 }
 
 // MacOSDockDropBehavior controls behavior when dropping onto the macOS dock.
@@ -5060,6 +5067,11 @@ pub fn (c Config) clone() Config {
 	}
 	copy.conditional_set = c.conditional_set.clone()
 	copy.replay_steps = clone_replay_steps(c.replay_steps)
+	// C API caches contain pointers into the source configuration and must never
+	// be shared by a clone. They are rebuilt lazily on the first C getter call.
+	copy.capi_strings = map[string]string{}
+	copy.capi_colors = []ColorRGB{}
+	copy.capi_commands = []CConfigCommand{}
 	if cmd := c.command {
 		copy.command = cmd.clone()
 	}
@@ -6330,11 +6342,7 @@ pub fn Config.load() Config {
 // load_args is the explicit-argv form used by embedders and tests.
 pub fn Config.load_args(args []string) Config {
 	mut c := Config.default_config()
-	for path in default_file_paths() {
-		if os.is_file(path) {
-			c.load_file(path)
-		}
-	}
+	c.load_default_files()
 	c.load_cli_args(args)
 	if !c.config_default_files {
 		// config-default-files only has an effect on the CLI. Rebuild from
@@ -6346,6 +6354,16 @@ pub fn Config.load_args(args []string) Config {
 	c.load_recursive_files()
 	c.finalize()
 	return c
+}
+
+// load_default_files reads the platform's default configuration paths in the
+// same order as Ghostty's Config.loadDefaultFiles. Missing paths are ignored.
+pub fn (mut c Config) load_default_files() {
+	for path in default_file_paths() {
+		if os.is_file(path) {
+			c.load_file(path)
+		}
+	}
 }
 
 // load_cli_args applies Ghostty's `--key=value` configuration syntax and the
@@ -8042,7 +8060,7 @@ fn (mut c Config) reset_empty_config_value(key string) bool {
 		$if !field.is_map {
 			if field.name == normalized_key
 				&& field.name !in ['diagnostics', 'conditional_state', 'theme_pair', 'loading_theme',
-					'replay_steps', 'replaying', 'xdg_terminal_exec'] {
+					'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_colors', 'capi_commands'] {
 				c.$(field.name) = defaults.$(field.name)
 				return true
 			}
@@ -8945,21 +8963,38 @@ pub fn Config.default_config() Config {
 
 // preferred_default_file_path returns the location used for config editing.
 pub fn preferred_default_file_path() string {
-	$if macos {
-		app_support_new := app_support_config_path('config.ghostty')
-		if os.is_file(app_support_new) {
-			return app_support_new
+	paths := editable_config_path_candidates()
+	return preferred_existing_config_path(paths)
+}
+
+fn preferred_existing_config_path(paths []string) string {
+	mut first_existing := ''
+	for path in paths {
+		if !os.is_file(path) {
+			continue
 		}
-		app_support_legacy := app_support_config_path('config')
-		if os.is_file(app_support_legacy) {
-			return app_support_legacy
+		if first_existing.len == 0 {
+			first_existing = path
 		}
-		if os.is_file(default_xdg_config_path()) || os.is_file(legacy_xdg_config_path()) {
-			return preferred_xdg_config_path()
+		if os.file_size(path) > 0 {
+			return path
 		}
-		return app_support_new
 	}
-	return preferred_xdg_config_path()
+	if first_existing.len > 0 {
+		return first_existing
+	}
+	return paths[0]
+}
+
+fn editable_config_path_candidates() []string {
+	mut paths := []string{}
+	$if macos {
+		paths << app_support_config_path('config.ghostty')
+		paths << app_support_config_path('config')
+	}
+	paths << default_xdg_config_path()
+	paths << legacy_xdg_config_path()
+	return paths
 }
 
 // editable_config_path returns the main configuration path and ensures it can

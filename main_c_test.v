@@ -1,6 +1,8 @@
 module main
 
+import configpkg
 import global_state
+import os
 
 fn test_ghostty_info_exposes_stable_version_bytes() {
 	info := ghostty_info()
@@ -45,4 +47,128 @@ fn test_action_args_remove_only_selected_action() {
 fn test_all_declared_actions_are_dispatched() {
 	// Every Action enum value is explicitly covered by run_cli_action's match.
 	assert global_state.actions().len == 15
+}
+
+fn test_config_c_api_lifecycle_clone_and_primitive_getters() {
+	mut config := ghostty_config_new() or { panic('config allocation failed') }
+	defer {
+		ghostty_config_free(mut config)
+	}
+
+	mut font_size := f32(0)
+	assert ghostty_config_get(mut config, voidptr(&font_size), 'font-size')
+	assert font_size == configpkg.default_font_size
+
+	mut reporting := false
+	assert ghostty_config_get(mut config, voidptr(&reporting), 'mouse-reporting')
+	assert reporting
+
+	config.font_family << 'config-c-api-original'
+	mut cloned := ghostty_config_clone(config) or { panic('config clone failed') }
+	defer {
+		ghostty_config_free(mut cloned)
+	}
+	cloned.font_family << 'config-c-api-clone'
+	assert config.font_family == ['config-c-api-original']
+	assert cloned.font_family == ['config-c-api-original', 'config-c-api-clone']
+}
+
+fn test_config_c_api_gets_enum_color_duration_and_packed_values() {
+	mut config := ghostty_config_new() or { panic('config allocation failed') }
+	defer {
+		ghostty_config_free(mut config)
+	}
+
+	mut enum_value := &char(unsafe { nil })
+	assert ghostty_config_get(mut config, voidptr(&enum_value), 'osc-color-report-format')
+	assert unsafe { cstring_to_vstring(enum_value) } == '16-bit'
+
+	config.async_backend = .io_uring
+	assert ghostty_config_get(mut config, voidptr(&enum_value), 'async-backend')
+	assert unsafe { cstring_to_vstring(enum_value) } == 'io_uring'
+
+	config.class = 'com.example.Witty'
+	assert ghostty_config_get(mut config, voidptr(&enum_value), 'class')
+	assert unsafe { cstring_to_vstring(enum_value) } == 'com.example.Witty'
+
+	mut color := configpkg.CConfigColor{}
+	assert ghostty_config_get(mut config, voidptr(&color), 'background')
+	assert color.r == 0x28
+	assert color.g == 0x2c
+	assert color.b == 0x34
+
+	mut duration_ms := usize(0)
+	assert ghostty_config_get(mut config, voidptr(&duration_ms), 'undo-timeout')
+	assert duration_ms == 5000
+
+	mut feature_bits := u32(0)
+	assert ghostty_config_get(mut config, voidptr(&feature_bits), 'bell-features')
+	assert feature_bits == 0b01100
+
+	assert !ghostty_config_get(mut config, voidptr(&feature_bits), 'scrollback-limit')
+	assert !ghostty_config_get(mut config, voidptr(&feature_bits), 'not-a-config-key')
+	assert !ghostty_config_get(mut config, unsafe { nil }, 'font-size')
+}
+
+fn test_config_c_api_gets_composite_values() {
+	mut config := ghostty_config_new() or { panic('config allocation failed') }
+	defer {
+		ghostty_config_free(mut config)
+	}
+
+	mut palette := configpkg.CConfigPalette{}
+	assert ghostty_config_get(mut config, voidptr(&palette), 'palette')
+	assert palette.colors[0].r == 0
+	assert palette.colors[1].r == 0xaa
+	assert palette.colors[15].b == 0xff
+
+	config.quick_terminal_size.parse_cli('72%,480px')!
+	mut quick_size := configpkg.CConfigQuickTerminalSize{}
+	assert ghostty_config_get(mut config, voidptr(&quick_size), 'quick-terminal-size')
+	assert quick_size.primary.tag == 1
+	assert quick_size.secondary.tag == 2
+	assert quick_size.secondary.value == 480
+
+	mut commands := configpkg.CConfigCommandList{}
+	assert ghostty_config_get(mut config, voidptr(&commands), 'command-palette-entry')
+	assert commands.len > 0
+	assert !isnil(commands.commands)
+	unsafe {
+		assert cstring_to_vstring(commands.commands[0].action_key).len > 0
+		assert cstring_to_vstring(commands.commands[0].action).len > 0
+		assert cstring_to_vstring(commands.commands[0].title).len > 0
+	}
+}
+
+fn test_config_c_api_trigger_lookup() {
+	mut config := ghostty_config_new() or { panic('config allocation failed') }
+	defer {
+		ghostty_config_free(mut config)
+	}
+	config.keybind.parse_cli('ctrl+shift+u=text:config-c-api')!
+
+	trigger := ghostty_config_trigger(config, 'text:config-c-api')
+	assert trigger.tag == 1
+	assert trigger.key == u32(`u`)
+	assert trigger.mods == 0b0011
+	assert ghostty_config_trigger(config, 'not-an-action') == InputTrigger{}
+}
+
+fn test_config_c_api_file_loading_and_diagnostics() {
+	path := os.join_path(os.temp_dir(), 'witty-config-c-api-${os.getpid()}')
+	os.write_file(path, 'font-size = nope\n')!
+	defer {
+		os.rm(path) or {}
+	}
+
+	mut config := ghostty_config_new() or { panic('config allocation failed') }
+	defer {
+		ghostty_config_free(mut config)
+	}
+	ghostty_config_load_file(mut config, path)
+	assert ghostty_config_diagnostics_count(config) == 1
+	diagnostic := ghostty_config_get_diagnostic(config, 0)
+	assert !isnil(diagnostic.message)
+	assert unsafe { cstring_to_vstring(diagnostic.message) }.contains('font-size')
+	assert unsafe { cstring_to_vstring(ghostty_config_get_diagnostic(config, 99).message) } == ''
 }
