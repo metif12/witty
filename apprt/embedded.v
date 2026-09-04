@@ -13,6 +13,7 @@ import math
 import time
 import cimgui
 import font
+import os
 
 // log_warn logs a warning message.
 fn log_warn(msg string) {
@@ -518,12 +519,16 @@ pub fn (mut self Surface) init(mut app App, opts SurfaceOptions) ! {
 	// Add ourselves to the list of surfaces on the app.
 	app.core_app.add_surface(self)!
 
-	// Shallow copy the config so that we can modify it.
-	mut config := app.config
+	// Clone the config and inherit surface-scoped values from the previously
+	// focused surface, matching the shared apprt surface initializer.
+	mut config := new_config(app.core_app, &app.config, opts.context)
+	defer {
+		config.deinit()
+	}
 
 	// If we have a working directory from the options then we set it.
 	if wd := opts.working_directory {
-		if wd.len > 0 {
+		if wd.len > 0 && os.is_abs_path(wd) && os.is_dir(wd) {
 			config.working_directory = wd
 		}
 	}
@@ -538,9 +543,22 @@ pub fn (mut self Surface) init(mut app App, opts SurfaceOptions) ! {
 
 	// Apply any environment variables that were requested.
 	for env_var in opts.env_vars {
-		config.env.entries << configpkg.StringMapEntry{
-			key: env_var.key
-			value: env_var.value
+		mut replaced := false
+		for i, entry in config.env.entries {
+			if entry.key == env_var.key {
+				config.env.entries[i] = configpkg.StringMapEntry{
+					key: env_var.key
+					value: env_var.value
+				}
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			config.env.entries << configpkg.StringMapEntry{
+				key: env_var.key
+				value: env_var.value
+			}
 		}
 	}
 
@@ -548,6 +566,7 @@ pub fn (mut self Surface) init(mut app App, opts SurfaceOptions) ! {
 	// representation. Termio decodes this after cloning the startup state.
 	if initial := opts.initial_input {
 		if initial.len > 0 {
+			config.input.items.clear()
 			config.input.items << configpkg.ReadableIO{
 				kind: .raw
 				value: input.zig_escape(initial)
@@ -562,13 +581,20 @@ pub fn (mut self Surface) init(mut app App, opts SurfaceOptions) ! {
 
 	// Initialize our surface right away. We're given a view that is
 	// ready to use.
-	self.core_surface.init(&config, app.core_app, app, self)!
+	self.core_surface.init(&config, app.core_app, app, self) or {
+		app.core_app.delete_surface(self)
+		return err
+	}
 
 	// If our options requested a specific font-size, set that.
 	if opts.font_size != 0 {
 		mut font_size := self.core_surface.font_size
 		font_size.points = opts.font_size
-		self.core_surface.set_font_size(font_size)!
+		self.core_surface.set_font_size(font_size) or {
+			self.core_surface.deinit()
+			app.core_app.delete_surface(self)
+			return err
+		}
 	}
 }
 

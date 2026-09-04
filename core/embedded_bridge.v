@@ -54,6 +54,7 @@ pub fn install_embedded_bridge() {
 		app_needs_confirm: bridge_app_needs_confirm
 		app_color_scheme: bridge_app_color_scheme
 		app_update_config: bridge_app_update_config
+		app_focused_pwd: bridge_app_focused_pwd
 		surface_init: bridge_surface_init
 		surface_deinit: bridge_surface_deinit
 		surface_snapshot: bridge_surface_snapshot
@@ -229,6 +230,12 @@ fn bridge_app_update_config(ptr voidptr, app &apprt.App, config &configpkg.Confi
 	bridge_app_sync_runtime(mut self, app)
 	self.app.update_config(mut self.runtime, config)!
 	bridge_app_flush_actions(mut self, app)
+}
+
+fn bridge_app_focused_pwd(ptr voidptr) ?string {
+	self := unsafe { &EmbeddedAppCore(ptr) }
+	surface := self.app.focused_surface_valid() or { return none }
+	return surface.core().pwd()
 }
 
 fn bridge_surface_target(self &EmbeddedSurfaceCore) apprt.Target {

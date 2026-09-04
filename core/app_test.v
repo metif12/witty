@@ -190,3 +190,23 @@ fn test_app_surface_lifecycle_controls_quit_timer() {
 	app.delete_surface(surface)
 	assert runtime.quit_timer_running
 }
+
+fn test_app_focus_core_surface_resolves_runtime_wrapper() {
+	mut app := App{}
+	mut first_core := Surface{}
+	mut second_core := Surface{}
+	mut first := &SurfaceRef{ core_surface: &first_core }
+	mut second := &SurfaceRef{ core_surface: &second_core }
+	app.surfaces = SurfaceList([first, second])
+
+	app.focus_core_surface(&second_core)
+	focused := app.focused_surface_valid() or {
+		assert false, 'expected a focused surface'
+		return
+	}
+	assert voidptr(focused) == voidptr(second)
+
+	mut unknown := Surface{}
+	app.focus_core_surface(&unknown)
+	assert voidptr(app.focused_surface_valid()?) == voidptr(second)
+}

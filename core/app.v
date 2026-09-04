@@ -568,6 +568,18 @@ pub fn (mut self App) focus_surface(surface &SurfaceRef) {
 	self.focused_surface = surface
 }
 
+// focus_core_surface records focus for the runtime wrapper that owns a core
+// surface. V keeps the runtime boundary opaque, so this pointer lookup is the
+// equivalent of Ghostty passing `self.rt_surface` to App.focusSurface.
+pub fn (mut self App) focus_core_surface(surface &Surface) {
+	for candidate in self.surfaces {
+		if voidptr(candidate.core_surface) == voidptr(surface) {
+			self.focus_surface(candidate)
+			return
+		}
+	}
+}
+
 pub fn (mut self App) new_window(mut rt_app apprt.RuntimeApp, msg NewWindowMsg) ! {
 	target := if parent := msg.parent {
 		if self.has_surface(parent) {

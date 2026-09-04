@@ -110,6 +110,39 @@ fn test_embedded_bridge_uses_canonical_core_surface() {
 	assert capture.confirm == apprt.ghostty_surface_needs_confirm_quit(surface)
 }
 
+fn test_embedded_bridge_inherits_focused_surface_working_directory() {
+	install_embedded_bridge()
+	mut config := configpkg.Config.default_config()
+	config.tab_inherit_working_directory = true
+	mut app := apprt.ghostty_app_new(&apprt.AppOptions{}, &config) or {
+		panic('embedded app initialization failed')
+	}
+	mut surface := apprt.ghostty_surface_new(mut app, &apprt.SurfaceOptions{
+		platform_tag: int(apprt.PlatformTag.macos)
+		platform: apprt.PlatformC{ nsview: voidptr(1) }
+		scale_factor: 1
+	}) or { panic('embedded surface initialization failed') }
+	defer {
+		apprt.ghostty_surface_free(mut surface)
+		apprt.ghostty_app_free(mut app)
+	}
+
+	mut backend := unsafe { &EmbeddedSurfaceCore(surface.core_surface.backend) }
+	backend.surface.renderer_state.terminal.set_pwd('/focused/project')!
+	// Surfaces begin focused, so exercise the same loss/gain transition that
+	// makes this surface the app's last focused surface in Ghostty.
+	apprt.ghostty_surface_set_focus(mut surface, false)
+	apprt.ghostty_surface_set_focus(mut surface, true)
+
+	inherited := apprt.new_config(app.core_app, &app.config, .tab)
+	assert inherited.working_directory? == '/focused/project'
+
+	mut disabled := app.config.clone()
+	disabled.tab_inherit_working_directory = false
+	not_inherited := apprt.new_config(app.core_app, &disabled, .tab)
+	assert not_inherited.working_directory == none
+}
+
 fn test_embedded_bridge_app_destroy_deinitializes_live_surfaces() {
 	install_embedded_bridge()
 	mut config := configpkg.Config.default_config()

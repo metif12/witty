@@ -3410,7 +3410,8 @@ pub fn (mut self Surface) focus_callback(focused bool) ! {
 	self.renderer_thread.wakeup.notify()!
 
 	if focused {
-		// On focus gain, notify app
+		// On focus gain, notify app.
+		self.app.focus_core_surface(self)
 		self.rt_app.perform_action(AppAction{
 			kind: .mouse_shape
 			target: &self

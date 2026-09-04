@@ -304,6 +304,16 @@ pub fn (mut c CoreApp) update_config(app &App, config voidptr) ! {
 	}) or {}
 }
 
+// focused_surface_pwd returns the working directory reported by the last
+// focused surface. The concrete core app owns focus validation; keeping this
+// behind the bridge avoids an apprt -> core import cycle.
+pub fn (c &CoreApp) focused_surface_pwd() ?string {
+	if !isnil(c.backend) && g_core_bridge.app_focused_pwd != unsafe { nil } {
+		return g_core_bridge.app_focused_pwd(c.backend)
+	}
+	return none
+}
+
 // core_app_binding_leaf resolves a top-level app binding. App-level key
 // sequences are intentionally unsupported, matching Ghostty's CoreApp lookup.
 fn core_app_binding_leaf(entry &input.SetEntry) ?([]input.Action, input.Flags) {
@@ -817,6 +827,8 @@ pub type CoreAppColorSchemeFn = fn (voidptr, &App, ColorScheme) !
 
 pub type CoreAppUpdateConfigFn = fn (voidptr, &App, &configpkg.Config) !
 
+pub type CoreAppFocusedPwdFn = fn (voidptr) ?string
+
 pub type CoreSurfaceInitFn = fn (&configpkg.Config, &CoreApp, &App, voidptr) !voidptr
 
 pub type CoreSurfaceDeinitFn = fn (voidptr)
@@ -897,6 +909,7 @@ pub:
 	app_needs_confirm        CoreAppNeedsConfirmFn = unsafe { nil }
 	app_color_scheme         CoreAppColorSchemeFn = unsafe { nil }
 	app_update_config        CoreAppUpdateConfigFn = unsafe { nil }
+	app_focused_pwd          CoreAppFocusedPwdFn = unsafe { nil }
 	surface_init             CoreSurfaceInitFn = unsafe { nil }
 	surface_deinit           CoreSurfaceDeinitFn = unsafe { nil }
 	surface_snapshot         CoreSurfaceSnapshotFn = unsafe { nil }
