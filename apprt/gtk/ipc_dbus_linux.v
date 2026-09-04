@@ -25,7 +25,9 @@ import apprt
 // redeclared here.
 
 pub type GDBusConnection = voidptr
+
 pub type GVariantBuilder = voidptr
+
 pub type GBytes = voidptr
 
 // GBusType enumerates the well-known message bus types. Mirrors GLib's
@@ -43,18 +45,27 @@ pub enum GBusType {
 
 // GVariantType lifecycle.
 fn C.g_variant_type_new(type_string &char) GVariantType
+
 fn C.g_variant_type_free(vtype GVariantType)
 
 // GVariantBuilder lifecycle + payload construction.
 fn C.g_variant_builder_new(vtype GVariantType) GVariantBuilder
+
 fn C.g_variant_builder_unref(builder GVariantBuilder)
+
 fn C.g_variant_builder_add_value(builder GVariantBuilder, value GVariant)
+
 fn C.g_variant_builder_open(builder GVariantBuilder, vtype GVariantType)
+
 fn C.g_variant_builder_close(builder GVariantBuilder)
+
 fn C.g_variant_builder_end(builder GVariantBuilder) GVariant
+
+fn C.g_variant_new_variant(value GVariant) GVariant
 
 // GDBus session-bus connection + synchronous method call.
 fn C.g_bus_get_sync(bus_type int, cancellable voidptr, error &GError) GDBusConnection
+
 fn C.g_dbus_connection_call_sync(connection GDBusConnection, bus_name &char, object_path &char, interface_name &char, method_name &char, parameters GVariant, reply_type GVariantType, flags int, timeout_msec int, cancellable voidptr, error &GError) GVariant
 
 // GVariant unref.
@@ -62,11 +73,14 @@ fn C.g_variant_unref(value GVariant)
 
 // GBytes + GVariant-from-bytes.
 fn C.g_bytes_new(data voidptr, size usize) GBytes
+
 fn C.g_bytes_unref(bytes GBytes)
+
 fn C.g_variant_new_from_bytes(vtype GVariantType, bytes GBytes, trusted bool) GVariant
 
 // Bus name / object path validation.
 fn C.g_variant_is_object_path(str &char) bool
+
 fn C.g_application_id_is_valid(application_id &char) bool
 
 // GError free.
@@ -183,11 +197,11 @@ pub fn dbus_init(target apprt.IpcTarget, action string) !DBus {
 	parameters_builder := C.g_variant_builder_new(parameters_variant_type)
 
 	return DBus{
-		target:             target
-		dbus:               dbus
-		bus_name:           bus_name
-		object_path:        obj_path
-		payload_builder:    payload_builder
+		target: target
+		dbus: dbus
+		bus_name: bus_name
+		object_path: obj_path
+		payload_builder: payload_builder
 		parameters_builder: parameters_builder
 	}
 }
@@ -195,7 +209,10 @@ pub fn dbus_init(target apprt.IpcTarget, action string) !DBus {
 // add_parameter adds a parameter variant to the IPC call. Mirrors
 // `DBus.addParameter`.
 pub fn (mut self DBus) add_parameter(variant GVariant) {
-	C.g_variant_builder_add_value(self.parameters_builder, variant)
+	// The parameters builder is `av`, so each concrete parameter must be
+	// wrapped as a variant (`v`) before insertion. This is the non-variadic C
+	// equivalent of Ghostty's `parameters_builder.add("v", variant)` call.
+	C.g_variant_builder_add_value(self.parameters_builder, C.g_variant_new_variant(variant))
 }
 
 // send sends the IPC to the remote Ghostty. Once it completes, nothing further
@@ -220,9 +237,7 @@ pub fn (mut self DBus) send() ! {
 	payload := C.g_variant_builder_end(self.payload_builder)
 
 	mut err := GError(unsafe { nil })
-	result := C.g_dbus_connection_call_sync(self.dbus, self.bus_name.str, self.object_path.str,
-		c'org.gtk.Actions', c'Activate', payload, GVariantType(unsafe { nil }), 0, -1,
-		unsafe { nil }, &err)
+	result := C.g_dbus_connection_call_sync(self.dbus, self.bus_name.str, self.object_path.str, c'org.gtk.Actions', c'Activate', payload, GVariantType(unsafe { nil }), 0, -1, unsafe { nil }, &err)
 	if !isnil(result) {
 		C.g_variant_unref(result)
 	}

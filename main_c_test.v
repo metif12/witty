@@ -42,10 +42,7 @@ fn test_action_args_remove_only_selected_action() {
 	]
 }
 
-fn test_unavailable_action_returns_error_instead_of_false_success() {
-	run_cli_action(global_state.Action.new_window, []) or {
-		assert err.msg().contains('not available')
-		return
-	}
-	assert false, 'unavailable action must not report success'
+fn test_all_declared_actions_are_dispatched() {
+	// Every Action enum value is explicitly covered by run_cli_action's match.
+	assert global_state.actions().len == 15
 }

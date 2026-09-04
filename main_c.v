@@ -159,6 +159,7 @@ pub fn run_cli_action(action global_state.Action, args []string) !int {
 		.ssh_cache { cli.run_ssh_cache(action_args(args, action))! }
 		.crash_report { cli.run_crash_report(action_args(args, action))! }
 		.boo { cli.run_boo(action_args(args, action))! }
+		.new_window { cli.run_new_window(action_args(args, action))! }
 		.list_actions {
 			for value in global_state.actions() {
 				if value != .none {
@@ -166,9 +167,6 @@ pub fn run_cli_action(action global_state.Action, args []string) !int {
 				}
 			}
 			0
-		}
-		else {
-			return error('action ${action.cli_name()} is not available in this build')
 		}
 	}
 }
