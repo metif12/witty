@@ -322,10 +322,14 @@ pub enum ImageUploadState {
 	pending
 	// The image is uploaded and ready to be used.
 	ready
-	// The image is marked for unload (will be freed on next upload cycle).
-	unloading
 	// The image has been replaced - old texture exists, new data pending.
 	replace
+	// Pending data scheduled to be unloaded.
+	unload_pending
+	// An uploaded texture scheduled to be unloaded.
+	unload_ready
+	// A texture plus replacement data scheduled to be unloaded.
+	unload_replace
 }
 
 pub enum ImageTextureBackend {
@@ -354,28 +358,36 @@ pub mut:
 
 // Mark this image for unload whatever state it is in.
 pub fn (mut self Image) mark_for_unload() {
-	self.state = .unloading
+	self.state = match self.state {
+		.pending { .unload_pending }
+		.ready { .unload_ready }
+		.replace { .unload_replace }
+		.unload_pending, .unload_ready, .unload_replace {
+			return
+		}
+	}
 }
 
 // Mark the current image to be replaced with a pending one.
 pub fn (mut self Image) mark_for_replace(new_pending PendingImage) {
+	has_texture := self.has_texture()
 	self.pending = new_pending
-	self.state = .replace
+	self.state = if has_texture { .replace } else { .pending }
 }
 
 // Returns true if this image is pending upload.
 pub fn (self &Image) is_pending() bool {
-	return self.state == .pending || self.state == .replace
+	return self.state in [.pending, .replace, .unload_pending, .unload_replace]
 }
 
 // Returns true if this image is marked for unload.
 pub fn (self &Image) is_unloading() bool {
-	return self.state == .unloading
+	return self.state in [.unload_pending, .unload_ready, .unload_replace]
 }
 
 // Returns true if this image has a texture ready.
 pub fn (self &Image) has_texture() bool {
-	return self.state == .ready || self.state == .replace
+	return self.state in [.ready, .replace, .unload_ready, .unload_replace]
 }
 
 pub fn (mut self Image) deinit() {
@@ -795,7 +807,10 @@ fn (mut self ImageRenderState) kitty_sort_and_index() {
 		if a.image_id.z_less_than(b.image_id) {
 			return -1
 		}
-		return 1
+		if b.image_id.z_less_than(a.image_id) {
+			return 1
+		}
+		return 0
 	})
 
 	// Find our indices. The values are sorted by z so we can
@@ -1056,7 +1071,7 @@ pub fn (mut self ImageRenderState) draw(api &MetalAPI, pipeline MetalPipeline, m
 	}
 	for placement in placements {
 		entry := self.images[image_key(placement.image_id)] or { continue }
-		if entry.image.state != .ready || entry.image.texture_handle == unsafe { nil } {
+		if entry.image.state !in [.ready, .unload_ready] || entry.image.texture_handle == unsafe { nil } {
 			continue
 		}
 		vertex := MetalImageVertex{
@@ -1096,7 +1111,7 @@ pub fn (mut self ImageRenderState) draw_opengl(api &OpenGLAPI, pipeline GLPipeli
 	}
 	for placement in placements {
 		entry := self.images[image_key(placement.image_id)] or { continue }
-		if entry.image.state != .ready || entry.image.texture_backend != .opengl
+		if entry.image.state !in [.ready, .unload_ready] || entry.image.texture_backend != .opengl
 			|| entry.image.gl_texture.id == 0 {
 			continue
 		}

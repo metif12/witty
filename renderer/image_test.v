@@ -52,9 +52,27 @@ fn test_image_mark_for_unload() {
 	mut img := Image{}
 	img.state = .ready
 	img.mark_for_unload()
-	assert img.state == .unloading
+	assert img.state == .unload_ready
 	assert img.is_unloading()
 	assert !img.is_pending()
+	assert img.has_texture()
+}
+
+fn test_image_mark_for_unload_preserves_pending_and_replace_variants() {
+	mut pending := Image{ state: .pending }
+	pending.mark_for_unload()
+	assert pending.state == .unload_pending
+	assert pending.is_pending()
+	assert !pending.has_texture()
+
+	mut replace := Image{ state: .replace }
+	replace.mark_for_unload()
+	assert replace.state == .unload_replace
+	assert replace.is_pending()
+	assert replace.has_texture()
+
+	replace.mark_for_unload()
+	assert replace.state == .unload_replace
 }
 
 // Test Image has_texture.
@@ -66,6 +84,10 @@ fn test_image_has_texture() {
 	assert img.has_texture()
 	img.state = .pending
 	assert !img.has_texture()
+	img.state = .unload_ready
+	assert img.has_texture()
+	img.state = .unload_replace
+	assert img.has_texture()
 }
 
 // Test Image mark_for_replace.
@@ -83,6 +105,18 @@ fn test_image_mark_for_replace() {
 	assert img.state == .replace
 	assert img.is_pending()
 	assert img.has_texture()
+}
+
+fn test_image_mark_for_replace_without_texture_stays_pending() {
+	mut img := Image{ state: .unload_pending }
+	img.mark_for_replace(PendingImage{
+		width: 20
+		height: 20
+		pixel_format: .rgba
+	})
+	assert img.state == .pending
+	assert img.is_pending()
+	assert !img.has_texture()
 }
 
 // Test ImageId z ordering.
@@ -127,7 +161,7 @@ fn test_image_render_state_upload_removes_unloading() {
 	}
 	mut state := ImageRenderState.empty()
 	state.images[1] = ImageEntry{
-		image: Image{ state: .unloading }
+		image: Image{ state: .unload_pending }
 	}
 	state.images[2] = ImageEntry{
 		image: Image{ state: .ready }
@@ -190,7 +224,7 @@ fn test_overlay_update_replaces_then_unloads_image() {
 
 	state.overlay_update(none)
 	unloading := state.images[overlay_image_key] or { panic('missing unloading overlay') }
-	assert unloading.image.state == .unloading
+	assert unloading.image.state == .unload_replace
 	assert state.overlay_placements.len == 0
 	state.upload(&api)
 	assert overlay_image_key !in state.images
