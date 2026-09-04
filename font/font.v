@@ -1471,6 +1471,9 @@ pub:
 	offset     u32
 	cells      u32
 	grid       &SharedGrid = unsafe { nil }
+	// Set by the WebCanvas backend so multi-codepoint graphemes can reserve
+	// the private glyph ID that the same face will later render.
+	web_canvas_face &WebCanvasFace = unsafe { nil }
 }
 
 // ShapeCell represents a positioned glyph from shaping.

@@ -93,26 +93,6 @@ fn web_canvas_run_finalize(_ voidptr) {}
 // If there is not enough space in the cell buffer, an error is
 // returned.
 pub fn (mut self WebCanvasShaper) shape(run font.TextRun) ![]font.ShapeCell {
-	// XTODO: The full implementation requires:
-	// - Grapheme break detection using unicode tables
-	// - UTF-8 encoding of multi-codepoint grapheme clusters
-	// - Browser Canvas font face interaction (graphemeGlyphIndex)
-	// - Wasm allocator for temporary buffers
-	//
-	// The algorithm:
-	// 1. If 0 codepoints: return empty
-	// 2. If 1 codepoint: return it directly as a single cell
-	// 3. For 2+ codepoints: perform grapheme clustering
-	//    a. Walk codepoints checking for grapheme breaks
-	//    b. Single-codepoint clusters: use codepoint as glyph index directly
-	//    c. Multi-codepoint clusters: UTF-8 encode the cluster,
-	//       ask the font face for a grapheme glyph index
-	//
-	// Note that due to limitations of canvas, we can NOT support
-	// font ligatures. However, we do support grapheme clustering.
-	// This means we can render things like skin tone emoji but
-	// we can't render things like single glyph "=>".
-
 	codepoints := self.run_codepoints
 
 	if codepoints.len == 0 {
@@ -133,32 +113,41 @@ pub fn (mut self WebCanvasShaper) shape(run font.TextRun) ![]font.ShapeCell {
 		return self.cell_buf
 	}
 
-	// XTODO: For 2+ codepoints we need grapheme clustering.
-	// We know we have at least two codepoints, so we now go through
-	// each and perform grapheme clustering.
-	//
-	// var break_state = grapheme.BreakState.default
-	// var cp1 = u21(codepoints[0])
-	// var start = 0
-	// var i = 1
-	// var cur = 0
-	// while i <= codepoints.len : i += 1 {
-	//     // We loop to codepoints.len so that we can handle the end
-	//     // case. In the end case, we always assume it is a grapheme
-	//     // break. This isn't strictly true but its how terminals
-	//     // work today.
-	//     grapheme_break := i == codepoints.len || unicode.grapheme_break(cp1, cp2, &break_state)
-	//     if !grapheme_break { continue }
-	//     // ... render prior grapheme ...
-	// }
-
-	// Stub: pass codepoints through as individual glyphs.
-	self.cell_buf.clear()
-	for cp in codepoints {
-		self.cell_buf << font.ShapeCell{
-			x: cp.cluster
-			glyph_index: cp.codepoint
+	// V's string.graphemes() uses the Unicode grapheme-break property tables
+	// and state machine, providing the same UAX #29 boundary decisions as
+	// Ghostty's uucode.grapheme.BreakState.
+	mut encoded := ''
+	for entry in codepoints {
+		if entry.codepoint > 0x10ffff || (entry.codepoint >= 0xd800 && entry.codepoint <= 0xdfff) {
+			return error('invalid Unicode codepoint in WebCanvas run')
 		}
+		encoded += rune(entry.codepoint).str()
+	}
+	graphemes := encoded.graphemes()
+	self.cell_buf.clear()
+	mut start := 0
+	for grapheme in graphemes {
+		cluster_points := grapheme.runes()
+		if cluster_points.len == 0 || start + cluster_points.len > codepoints.len {
+			return error('invalid grapheme segmentation result')
+		}
+		glyph_index := if cluster_points.len == 1 {
+			codepoints[start].codepoint
+		} else {
+			if run.web_canvas_face == unsafe { nil } {
+				return error('WebCanvas run has no face for grapheme glyph allocation')
+			}
+			mut face := unsafe { run.web_canvas_face }
+			face.grapheme_glyph_index(grapheme.bytes())!
+		}
+		self.cell_buf << font.ShapeCell{
+			x: codepoints[start].cluster
+			glyph_index: glyph_index
+		}
+		start += cluster_points.len
+	}
+	if start != codepoints.len {
+		return error('WebCanvas grapheme segmentation did not consume the run')
 	}
 	return self.cell_buf
 }
@@ -188,14 +177,18 @@ pub fn (self WebCanvasRunIteratorHook) finalize() {
 	// nothing to do
 }
 
-// The wasm-compatible API.
-// XTODO: The Wasm struct provides exported functions for JavaScript interop:
-// - shaper_new(cap) -> creates a new WebCanvasShaper
-// - shaper_free(ptr) -> destroys a WebCanvasShaper
-// - shaper_test(self, group, str, len) -> runs a shaping test
-//
-// These require:
-// - os.wasm allocator
-// - terminal.Terminal for creating test terminal
-// - font.GroupCache for font resolution
-// - std.unicode.Utf8View for iterating over UTF-8 strings
+// wasm_shaper_new creates an owned shaper for browser hosts.
+pub fn wasm_shaper_new(_ usize) ?&WebCanvasShaper {
+	shaper := WebCanvasShaper.init(font.ShaperOptions{}) or { return none }
+	mut result := &WebCanvasShaper{}
+	unsafe { *result = shaper }
+	return result
+}
+
+// wasm_shaper_free releases a shaper returned by wasm_shaper_new.
+pub fn wasm_shaper_free(shaper ?&WebCanvasShaper) {
+	if mut value := shaper {
+		value.deinit()
+		unsafe { free(value) }
+	}
+}
