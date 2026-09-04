@@ -43,6 +43,66 @@ foreground = #abcdef
 	}
 }
 
+fn test_load_cli_args_applies_flags_paths_and_command_tail() {
+	mut cfg := Config.default_config()
+	cfg.font_family = ['From File']
+	cfg.load_cli_args([
+		'--font-family=From CLI',
+		'--window-vsync=false',
+		'--custom-shader=shader.glsl',
+		'-e',
+		'/bin/echo',
+		'hello world',
+	])
+
+	assert cfg.font_family == ['From CLI']
+	assert !cfg.window_vsync
+	assert cfg.custom_shader.items == [
+		Path{ path: os.join_path(os.getwd(), 'shader.glsl') },
+	]
+	command := cfg.initial_command or { panic('missing -e command') }
+	match command {
+		DirectCmd {
+			assert command.direct == ['/bin/echo', 'hello world']
+		}
+		ShellCmd {
+			assert false, '-e must produce a direct command'
+		}
+	}
+	assert cfg.gtk_single_instance == .false_
+	assert cfg.quit_after_last_window_closed
+}
+
+fn test_load_args_cli_can_discard_default_files_and_add_recursive_file() {
+	dir := os.join_path(os.temp_dir(), 'witty-config-cli-${os.getpid()}')
+	xdg_dir := os.join_path(dir, 'ghostty')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(xdg_dir)!
+	defer { os.rmdir_all(dir) or {} }
+	old_xdg := os.getenv_opt('XDG_CONFIG_HOME')
+	os.setenv('XDG_CONFIG_HOME', dir, true)
+	defer {
+		if value := old_xdg {
+			os.setenv('XDG_CONFIG_HOME', value, true)
+		} else {
+			os.unsetenv('XDG_CONFIG_HOME')
+		}
+	}
+	os.write_file(os.join_path(xdg_dir, 'config.ghostty'), 'font-size = 9\n')!
+	extra := os.join_path(dir, 'extra.conf')
+	os.write_file(extra, 'cursor-opacity = 0.25\n')!
+
+	cfg := Config.load_args([
+		'--config-default-files=false',
+		'--font-size=17',
+		'--config-file=${extra}',
+	])
+	assert cfg.font_size == 17
+	assert cfg.cursor_opacity == 0.25
+	assert !cfg.config_default_files
+	assert cfg.diagnostics.len == 0
+}
+
 fn test_load_file_records_diagnostics_for_invalid_lines() {
 	path := os.join_path(os.temp_dir(), 'witty-theme-invalid-test.conf')
 	os.write_file(path, '

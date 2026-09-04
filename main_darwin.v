@@ -6,6 +6,7 @@ import os
 import pty
 import terminal
 import time
+import global_state
 
 // C interop declarations needed in this module.
 #include <unistd.h>
@@ -437,6 +438,14 @@ fn spawn_terminal(cfg AppConfig) !&TermState {
 // ============================================================
 
 fn main() {
+	mut global := global_state.get_state_mut()
+	global.init() or {
+		eprintln('invalid CLI invocation: ${err}')
+		return
+	}
+	defer { global.deinit() }
+	ghostty_cli_try_action()
+
 	cfg := get_app_config()
 
 	// 1. Init macOS app

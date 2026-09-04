@@ -122,7 +122,6 @@ pub fn ghostty_cli_try_action() {
 	if state.action == .none {
 		return
 	}
-	eprintln('executing CLI action=${state.action}')
 	code := run_cli_action(state.action, state.cli_args) or {
 		eprintln('CLI action failed: ${err}')
 		exit(1)

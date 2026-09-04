@@ -38,31 +38,48 @@ import configpkg
 
 // GApplication lifecycle
 fn C.g_application_register(app GApplication, cancellable voidptr, error &GError) bool
+
 fn C.g_application_activate(app GApplication)
+
 fn C.g_application_get_is_remote(app GApplication) bool
+
 fn C.g_application_get_flags(app GApplication) int
+
 fn C.g_application_set_default(app GApplication)
+
 fn C.g_application_get_default() GApplication
+
 fn C.g_application_get_dbus_connection(app GApplication) GDBusConnection
+
 fn C.g_application_send_notification(app GApplication, id &char, notification voidptr)
 
 // GtkApplication
 fn C.gtk_application_get_windows(app GtkApplication) GList
+
 fn C.gtk_application_set_accels_for_action(app GtkApplication, detailed_action_name &char, accels &&char)
 
 // AdwApplication / AdwStyleManager
 fn C.adw_application_get_style_manager(app AdwApplication) voidptr
+
 fn C.adw_style_manager_set_color_scheme(style_manager voidptr, color_scheme int)
+
 fn C.adw_style_manager_get_dark(style_manager voidptr) bool
+
 fn C.adw_init()
 
 // GLib main loop + sources
 fn C.g_main_context_default() voidptr
+
 fn C.g_main_context_acquire(context voidptr) bool
+
 fn C.g_main_context_release(context voidptr)
+
 fn C.g_main_context_iteration(context voidptr, may_block bool) bool
+
 fn C.g_main_context_wakeup(context voidptr)
+
 fn C.g_timeout_add(interval u32, function voidptr, data voidptr) u32
+
 fn C.g_source_remove(tag u32) bool
 
 // GTK window helpers.
@@ -70,6 +87,7 @@ fn C.g_source_remove(tag u32) bool
 // declared in window_linux.v — reused here, NOT redeclared. `is_active` there
 // returns `int` (0/non-zero), which we honor below.
 fn C.gtk_window_list_toplevels() GList
+
 fn C.gtk_window_set_interactive_debugging(enable bool)
 
 // process env
@@ -79,11 +97,11 @@ fn C.setenv(name &char, value &char, overwrite int) int
 //
 // Mirrors `adw.ColorScheme`. Values match the AdwColorScheme C enum.
 pub enum AdwColorScheme {
-	default_       = 0
-	force_light    = 1
-	prefer_light   = 2
-	prefer_dark    = 3
-	force_dark     = 4
+	default_     = 0
+	force_light  = 1
+	prefer_light = 2
+	prefer_dark  = 3
+	force_dark   = 4
 }
 
 // --- GApplicationFlags ----------------------------------------------------
@@ -196,11 +214,9 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 	// Set the gettext global domain so unqualified translations resolve.
 	// TODO(gtk): internal_os.i18n.initGlobalDomain (i18n out of scope).
 
-	// Load our configuration. On failure ghostty falls back to defaults with a
-	// diagnostic attached. Since the core config loader lives in `main`, we
-	// start from the default config here.
-	// TODO(gtk): CoreConfig.load(alloc) — needs the real config loader.
-	mut config := configpkg.Config{}
+	// Load defaults, user files, command-line flags, recursive files, and theme
+	// replay before GTK reads any startup settings.
+	mut config := configpkg.Config.load()
 
 	// Setup our GTK init env vars. This must happen BEFORE GTK init.
 	set_gtk_env(&config)

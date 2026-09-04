@@ -7,8 +7,17 @@ module main
 
 import core
 import apprt.gtk
+import global_state
 
 fn main() {
+	mut state := global_state.get_state_mut()
+	state.init() or {
+		eprintln('invalid CLI invocation: ${err}')
+		return
+	}
+	defer { state.deinit() }
+	ghostty_cli_try_action()
+
 	// Create our app state.
 	mut app := core.App.create() or {
 		eprintln('failed to create app: ${err}')

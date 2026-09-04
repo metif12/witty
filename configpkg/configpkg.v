@@ -4794,7 +4794,7 @@ pub fn (c Config) clone() Config {
 		}
 	}
 	copy.conditional_set = c.conditional_set.clone()
-	copy.replay_steps = c.replay_steps.clone()
+	copy.replay_steps = clone_replay_steps(c.replay_steps)
 	if cmd := c.command {
 		copy.command = cmd.clone()
 	}
@@ -5620,6 +5620,7 @@ enum ReplayStepKind {
 	kv
 	expand
 	diagnostic
+	command
 }
 
 // ReplayStep records configuration input in source order. Ghostty rebuilds a
@@ -5630,24 +5631,122 @@ struct ReplayStep {
 	kind  ReplayStepKind
 	key   string
 	value string
+	args  []string
 }
 
 pub fn (d Diagnostic) str() string {
 	return d.message
 }
 
-// load loads configuration using Ghostty's default-file order, recursively
-// loads config-file entries, and finalizes the result.
+// load loads configuration using Ghostty's default-file order, command-line
+// arguments, recursively referenced files, and finalization order.
 pub fn Config.load() Config {
+	args := if os.args.len > 1 { os.args[1..] } else { []string{} }
+	return Config.load_args(args)
+}
+
+// load_args is the explicit-argv form used by embedders and tests.
+pub fn Config.load_args(args []string) Config {
 	mut c := Config.default_config()
 	for path in default_file_paths() {
 		if os.is_file(path) {
 			c.load_file(path)
 		}
 	}
+	c.load_cli_args(args)
+	if !c.config_default_files {
+		// config-default-files only has an effect on the CLI. Rebuild from
+		// defaults and CLI arguments, discarding all default-file steps.
+		mut cli_only := Config.default_config()
+		cli_only.load_cli_args(args)
+		c = cli_only
+	}
 	c.load_recursive_files()
 	c.finalize()
 	return c
+}
+
+// load_cli_args applies Ghostty's `--key=value` configuration syntax and the
+// special `-e command...` tail. Paths declared here resolve against cwd.
+pub fn (mut c Config) load_cli_args(args []string) {
+	c.config_default_files = true
+	if args.len == 0 {
+		return
+	}
+	mut overwritten_font_fields := map[string]bool{}
+	mut i := 0
+	for i < args.len {
+		arg := args[i]
+		if arg == '-e' {
+			command_args := if i + 1 < args.len { args[i + 1..].clone() } else { []string{} }
+			if command_args.len == 0 {
+				c.add_replay_diagnostic('missing command after -e')
+				return
+			}
+			c.initial_command = Command(DirectCmd{ direct: command_args.clone() })
+			c.gtk_single_instance = .false_
+			c.quit_after_last_window_closed = true
+			if c.shell_integration != .none_ {
+				c.shell_integration = .detect
+			}
+			if !c.replaying {
+				c.replay_steps << ReplayStep{
+					kind: .command
+					args: command_args.clone()
+				}
+			}
+			break
+		}
+		if arg.starts_with('+') {
+			// CLI actions are consumed before configuration loading.
+			i++
+			continue
+		}
+		if !arg.starts_with('--') {
+			c.add_replay_diagnostic('invalid field: ${arg}')
+			i++
+			continue
+		}
+		mut key := arg[2..]
+		mut value := ''
+		if eq := key.index('=') {
+			value = key[eq + 1..]
+			key = key[..eq]
+		} else if is_boolean_config_key(key) {
+			value = 'true'
+		} else {
+			c.add_replay_diagnostic('value required for --${key}')
+			i++
+			continue
+		}
+
+		if is_font_family_key(key) && key !in overwritten_font_fields {
+			overwritten_font_fields[key] = true
+			c.record_kv(key, '')
+			c.apply_kv(key, '')
+		}
+		c.record_kv(key, value)
+		c.apply_kv(key, value)
+		i++
+	}
+	c.expand_paths(os.getwd())
+}
+
+fn is_font_family_key(key string) bool {
+	return key == 'font-family' || key == 'font-family-bold' || key == 'font-family-italic'
+		|| key == 'font-family-bold-italic'
+}
+
+fn is_boolean_config_key(key string) bool {
+	return key in ['font-thicken', 'background-opacity-cells', 'background-image-repeat',
+		'window-vsync', 'clipboard-trim-trailing-spaces', 'clipboard-paste-protection',
+		'clipboard-paste-bracketed-safe', 'cursor-click-to-move', 'desktop-notifications',
+		'mouse-hide-while-typing', 'mouse-reporting', 'selection-clear-on-copy',
+		'selection-clear-on-typing', 'vt-kam-allowed', 'wait-after-command', 'window-padding-balance',
+		'title-report', 'link-url', 'maximize', 'fullscreen', 'focus-follows-mouse',
+		'window-inherit-working-directory', 'tab-inherit-working-directory',
+		'split-inherit-working-directory', 'window-inherit-font-size', 'initial-window',
+		'quit-after-last-window-closed', 'config-default-files']
 }
 
 // load_file loads a configuration file and merges it into this config.
@@ -5765,15 +5864,30 @@ pub fn (mut c Config) load_string(content string) {
 		}
 		key := line[..eq].trim_space()
 		value := line[eq + 1..].trim_space()
-		if !c.loading_theme && !c.replaying {
-			c.replay_steps << ReplayStep{
-				kind: .kv
-				key: key
-				value: value
-			}
-		}
+		c.record_kv(key, value)
 		c.apply_kv(key, value)
 	}
+}
+
+fn (mut c Config) record_kv(key string, value string) {
+	if !c.loading_theme && !c.replaying {
+		c.replay_steps << ReplayStep{
+			kind: .kv
+			key: key
+			value: value
+		}
+	}
+}
+
+fn clone_replay_steps(steps []ReplayStep) []ReplayStep {
+	mut result := []ReplayStep{cap: steps.len}
+	for step in steps {
+		result << ReplayStep{
+			...step
+			args: step.args.clone()
+		}
+	}
+	return result
 }
 
 // apply_kv applies a single `key = value` pair to the config. Keys use the
@@ -6987,7 +7101,7 @@ fn (mut c Config) load_theme() {
 	}
 
 	state := c.conditional_state
-	steps := c.replay_steps.clone()
+	steps := clone_replay_steps(c.replay_steps)
 	pair := c.theme_pair
 	path := if parsed_pair := pair {
 		match state.theme {
@@ -7015,6 +7129,14 @@ fn (mut c Config) load_theme() {
 			.diagnostic {
 				rebuilt.diagnostics << Diagnostic{
 					message: step.value
+				}
+			}
+			.command {
+				rebuilt.initial_command = Command(DirectCmd{ direct: step.args.clone() })
+				rebuilt.gtk_single_instance = .false_
+				rebuilt.quit_after_last_window_closed = true
+				if rebuilt.shell_integration != .none_ {
+					rebuilt.shell_integration = .detect
 				}
 			}
 		}
