@@ -38,6 +38,7 @@ import apprt
 import core
 import input
 import terminal
+import osc
 import internal_os
 import datastruct
 
@@ -246,6 +247,28 @@ fn C.gtk_overlay_new() GtkWidget
 fn C.gtk_overlay_set_child(overlay GtkWidget, child GtkWidget)
 
 fn C.gtk_overlay_add_overlay(overlay GtkWidget, widget GtkWidget)
+
+fn C.gtk_revealer_new() GtkWidget
+
+fn C.gtk_revealer_set_child(revealer GtkWidget, child GtkWidget)
+
+fn C.gtk_revealer_set_reveal_child(revealer GtkWidget, reveal_child bool)
+
+fn C.gtk_revealer_set_transition_type(revealer GtkWidget, transition int)
+
+fn C.gtk_revealer_set_transition_duration(revealer GtkWidget, duration u32)
+
+fn C.gtk_progress_bar_new() GtkWidget
+
+fn C.gtk_progress_bar_set_fraction(progress_bar GtkWidget, fraction f64)
+
+fn C.gtk_progress_bar_pulse(progress_bar GtkWidget)
+
+fn C.gtk_image_new_from_icon_name(icon_name &char) GtkWidget
+
+fn C.gtk_drawing_area_new() GtkWidget
+
+fn C.gtk_widget_set_can_target(widget GtkWidget, can_target bool)
 
 fn C.gtk_popover_menu_new_from_model_full(model GMenuModel, flags int) GtkWidget
 
@@ -460,10 +483,14 @@ pub mut:
 	url_left             GtkLabel = unsafe { nil }
 	url_right            GtkLabel = unsafe { nil }
 	context_menu         GtkPopover = unsafe { nil }
+	readonly_revealer    GtkWidget = unsafe { nil }
+	progress_bar_overlay GtkWidget = unsafe { nil }
+	bell_revealer        GtkWidget = unsafe { nil }
 	resize_overlay       &ResizeOverlay = unsafe { nil }
 	search_overlay       &SearchOverlay = unsafe { nil }
 	key_state_overlay    &KeyStateOverlay = unsafe { nil }
 	child_exited_overlay &SurfaceChildExited = unsafe { nil }
+	unfocused_revealer   GtkWidget = unsafe { nil }
 
 	// The core surface backing this GTK surface. This starts out nil because it
 	// can't be initialized until there is a realized GLArea. In ghostty this is
@@ -530,6 +557,12 @@ pub mut:
 
 	// True while the bell is ringing.
 	bell_ringing bool
+
+	// True while terminal input is disabled by the core surface.
+	readonly bool
+
+	// Removes stalled OSC progress reports after fifteen seconds.
+	progress_bar_timer u32
 
 	// True if this surface is in an error state (terminal non-functional).
 	error_state  bool
@@ -841,7 +874,101 @@ pub fn (mut self SurfaceWidget) set_bell_ringing(ringing bool) {
 		return
 	}
 	self.bell_ringing = ringing
+	self.sync_bell_border_overlay()
 	self.sync_tab()
+}
+
+fn (self &SurfaceWidget) sync_bell_border_overlay() {
+	if isnil(self.bell_revealer) {
+		return
+	}
+	show := self.bell_ringing && !isnil(self.config) && self.config.get().bell_features.border
+	C.gtk_revealer_set_reveal_child(self.bell_revealer, show)
+}
+
+// set_readonly mirrors the readonly property binding in surface.blp.
+pub fn (mut self SurfaceWidget) set_readonly(readonly bool) {
+	if self.readonly == readonly {
+		return
+	}
+	self.readonly = readonly
+	if !isnil(self.readonly_revealer) {
+		C.gtk_revealer_set_reveal_child(self.readonly_revealer, readonly)
+	}
+}
+
+// set_is_split mirrors the split-tree to surface property binding.
+pub fn (mut self SurfaceWidget) set_is_split(is_split bool) {
+	if self.is_split == is_split {
+		return
+	}
+	self.is_split = is_split
+	self.sync_unfocused_split_overlay()
+}
+
+fn (self &SurfaceWidget) sync_unfocused_split_overlay() {
+	if !isnil(self.unfocused_revealer) {
+		C.gtk_revealer_set_reveal_child(self.unfocused_revealer, !self.focused && self.is_split)
+	}
+}
+
+// set_progress_report mirrors Surface.setProgressReport. Every update resets
+// the bad-actor timeout; remove hides immediately while all other states show.
+pub fn (mut self SurfaceWidget) set_progress_report(value osc.ProgressReport) {
+	if self.progress_bar_timer != 0 {
+		if !C.g_source_remove(self.progress_bar_timer) {
+			eprintln('unable to remove progress bar timer')
+		}
+		self.progress_bar_timer = 0
+	}
+
+	if isnil(self.progress_bar_overlay) {
+		return
+	}
+
+	match value.state {
+		.remove {
+			C.gtk_widget_set_visible(self.progress_bar_overlay, false)
+			return
+		}
+		.set {
+			C.gtk_widget_remove_css_class(self.progress_bar_overlay, c'error')
+			if progress := value.progress {
+				C.gtk_progress_bar_set_fraction(self.progress_bar_overlay, f64(progress) / 100.0)
+			} else {
+				C.gtk_progress_bar_pulse(self.progress_bar_overlay)
+			}
+		}
+		.err_state {
+			C.gtk_widget_add_css_class(self.progress_bar_overlay, c'error')
+			if progress := value.progress {
+				C.gtk_progress_bar_set_fraction(self.progress_bar_overlay, f64(progress) / 100.0)
+			} else {
+				C.gtk_progress_bar_pulse(self.progress_bar_overlay)
+			}
+		}
+		.indeterminate {
+			C.gtk_progress_bar_pulse(self.progress_bar_overlay)
+		}
+		.pause {
+			if progress := value.progress {
+				C.gtk_progress_bar_set_fraction(self.progress_bar_overlay, f64(progress) / 100.0)
+			}
+		}
+	}
+
+	C.gtk_widget_set_visible(self.progress_bar_overlay, true)
+	self.progress_bar_timer = C.g_timeout_add(15_000, voidptr(surface_progress_bar_timer_cb), voidptr(self))
+}
+
+fn surface_progress_bar_timer_cb(data voidptr) int {
+	if isnil(data) {
+		return 0
+	}
+	mut self := unsafe { &SurfaceWidget(data) }
+	self.progress_bar_timer = 0
+	self.set_progress_report(osc.ProgressReport{ state: .remove })
+	return 0
 }
 
 // ring_bell handles bell features that happen on every BEL (audio/system).
@@ -1507,6 +1634,7 @@ fn surface_horizontal_scroll_reset_cb(data voidptr) int {
 // `ecFocusEnter`.
 pub fn (mut self SurfaceWidget) ec_focus_enter() {
 	self.focused = true
+	self.sync_unfocused_split_overlay()
 	C.gtk_im_context_focus_in(self.im_context)
 	self.notify_focus()
 	// TODO(gtk): notifyByPspec(properties.focused).
@@ -1518,6 +1646,7 @@ pub fn (mut self SurfaceWidget) ec_focus_enter() {
 // `ecFocusLeave`.
 pub fn (mut self SurfaceWidget) ec_focus_leave() {
 	self.focused = false
+	self.sync_unfocused_split_overlay()
 	C.gtk_im_context_focus_out(self.im_context)
 	self.notify_focus()
 	// TODO(gtk): notifyByPspec(properties.focused).
@@ -1891,6 +2020,14 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			self.set_scrollbar(action.scrollbar)
 			return true
 		}
+		.progress_report {
+			self.set_progress_report(action.progress)
+			return true
+		}
+		.readonly {
+			self.set_readonly(action.readonly_on)
+			return true
+		}
 		.start_search {
 			self.set_search_active(true, action.needle)
 			return true
@@ -1950,8 +2087,7 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			return true
 		}
 		.ring_bell {
-			mut window := unsafe { self.split_tree.window }
-			window.action_ring_bell()
+			self.set_bell_ringing(true)
 			return true
 		}
 		.inspector {
@@ -2653,6 +2789,56 @@ fn surface_url_label_new(halign Align) GtkLabel {
 	return GtkLabel(label)
 }
 
+const gtk_revealer_transition_crossfade = 1
+
+fn surface_revealer_new(child GtkWidget, duration u32, crossfade bool) GtkWidget {
+	revealer := C.gtk_revealer_new()
+	C.gtk_revealer_set_child(revealer, child)
+	C.gtk_revealer_set_transition_duration(revealer, duration)
+	if crossfade {
+		C.gtk_revealer_set_transition_type(revealer, gtk_revealer_transition_crossfade)
+	}
+	C.gtk_widget_set_can_target(revealer, false)
+	C.gtk_widget_set_focusable(revealer, 0)
+	return revealer
+}
+
+fn surface_readonly_revealer_new() GtkWidget {
+	box := C.gtk_box_new(0, 6)
+	C.gtk_widget_add_css_class(box, c'readonly_overlay')
+	tooltip := i18n_('This terminal is in read-only mode. You can still view, select, and scroll through the content, but no input events will be sent to the running application.')
+	C.gtk_widget_set_tooltip_text(box, &char(tooltip.str))
+	C.gtk_widget_set_halign(box, int(Align.end))
+	C.gtk_widget_set_valign(box, int(Align.start))
+	C.gtk_box_append(box, C.gtk_image_new_from_icon_name(c'changes-prevent-symbolic'))
+	label := i18n_('Read-only')
+	C.gtk_box_append(box, C.gtk_label_new(&char(label.str)))
+	return surface_revealer_new(box, 500, true)
+}
+
+fn surface_progress_bar_new() GtkWidget {
+	progress_bar := C.gtk_progress_bar_new()
+	C.gtk_widget_add_css_class(progress_bar, c'osd')
+	C.gtk_widget_set_visible(progress_bar, false)
+	C.gtk_widget_set_halign(progress_bar, int(Align.fill))
+	C.gtk_widget_set_valign(progress_bar, int(Align.start))
+	return progress_bar
+}
+
+fn surface_bell_revealer_new() GtkWidget {
+	box := C.gtk_box_new(0, 0)
+	C.gtk_widget_add_css_class(box, c'bell-overlay')
+	C.gtk_widget_set_halign(box, int(Align.fill))
+	C.gtk_widget_set_valign(box, int(Align.fill))
+	return surface_revealer_new(box, 500, true)
+}
+
+fn surface_unfocused_revealer_new() GtkWidget {
+	drawing_area := C.gtk_drawing_area_new()
+	C.gtk_widget_add_css_class(drawing_area, c'unfocused-split')
+	return surface_revealer_new(drawing_area, 0, false)
+}
+
 pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &Config) &SurfaceWidget {
 	obj := C.g_object_new(terminal_surface_get_type(), &char(unsafe { nil }))
 	gl_area := C.gtk_gl_area_new()
@@ -2669,19 +2855,27 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 	C.gtk_box_append(box, GtkWidget(context_menu))
 	terminal_page := C.gtk_overlay_new()
 	C.gtk_overlay_set_child(terminal_page, box)
+	readonly_revealer := surface_readonly_revealer_new()
+	progress_bar_overlay := surface_progress_bar_new()
+	bell_revealer := surface_bell_revealer_new()
 	url_left := surface_url_label_new(.start)
 	url_right := surface_url_label_new(.end)
 	resize_overlay := new_resize_overlay()
 	search_overlay := new_search_overlay()
 	key_state_overlay := new_key_state_overlay()
 	child_exited_overlay := new_surface_child_exited()
+	unfocused_revealer := surface_unfocused_revealer_new()
 	C.gtk_widget_set_visible(child_exited_overlay.widget, false)
+	C.gtk_overlay_add_overlay(terminal_page, readonly_revealer)
+	C.gtk_overlay_add_overlay(terminal_page, progress_bar_overlay)
+	C.gtk_overlay_add_overlay(terminal_page, bell_revealer)
 	C.gtk_overlay_add_overlay(terminal_page, child_exited_overlay.widget)
 	C.gtk_overlay_add_overlay(terminal_page, resize_overlay.widget)
 	C.gtk_overlay_add_overlay(terminal_page, GtkWidget(url_left))
 	C.gtk_overlay_add_overlay(terminal_page, GtkWidget(url_right))
 	C.gtk_overlay_add_overlay(terminal_page, search_overlay.widget)
 	C.gtk_overlay_add_overlay(terminal_page, key_state_overlay.widget)
+	C.gtk_overlay_add_overlay(terminal_page, unfocused_revealer)
 	C.g_object_ref_sink(GObject(terminal_page))
 	C.adw_bin_set_child(AdwBin(obj), terminal_page)
 	error_page := surface_error_page_new()
@@ -2699,16 +2893,22 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 		url_left: url_left
 		url_right: url_right
 		context_menu: context_menu
+		readonly_revealer: readonly_revealer
+		progress_bar_overlay: progress_bar_overlay
+		bell_revealer: bell_revealer
 		resize_overlay: resize_overlay
 		search_overlay: search_overlay
 		key_state_overlay: key_state_overlay
 		child_exited_overlay: child_exited_overlay
+		unfocused_revealer: unfocused_revealer
 	}
 	mut native_priv := terminal_surface_priv(obj)
 	native_priv.wrapper = voidptr(w)
 	w.rt_surface = Surface{ surface: w }
 	w.mouse_shape = .text
 	w.apply_resize_overlay_config()
+	w.sync_bell_border_overlay()
+	w.sync_unfocused_split_overlay()
 	w.focused = true
 	w.in_keyevent = .false_
 	w.gtk_enable_primary_paste = true
@@ -2787,6 +2987,10 @@ fn surface_widget_finalized_cb(data voidptr, object GObject) {
 	if self.pending_horizontal_scroll_reset != 0 {
 		C.g_source_remove(self.pending_horizontal_scroll_reset)
 		self.pending_horizontal_scroll_reset = 0
+	}
+	if self.progress_bar_timer != 0 {
+		C.g_source_remove(self.progress_bar_timer)
+		self.progress_bar_timer = 0
 	}
 	if !isnil(self.vadj_signal_group) {
 		C.g_signal_group_set_target(self.vadj_signal_group, unsafe { nil })

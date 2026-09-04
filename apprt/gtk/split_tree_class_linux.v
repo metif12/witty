@@ -213,6 +213,14 @@ pub fn (mut self SplitTreeWidget) set_tree(tree_ ?&datastruct.SplitTree[SurfaceW
 		self.connect_surface_handlers()
 	}
 
+	// Ghostty binds SplitTree.is-split to every Surface.is-split. Keep the
+	// programmatic widget graph synchronized whenever the immutable tree is
+	// replaced, including when the last split is closed.
+	is_split := self.get_is_split()
+	for mut surface in self.surfaces {
+		surface.set_is_split(is_split)
+	}
+
 	// TODO(gtk): notifyByPspec(properties.tree).
 	self.prop_tree()
 	self.sync_tab()
@@ -375,7 +383,7 @@ pub fn (mut self SplitTreeWidget) new_split(direction datastruct.Direction, pare
 			surface.set_parent(p.core(), .split)
 		}
 	}
-	surface.is_split = self.get_is_split()
+	surface.set_is_split(self.get_is_split())
 
 	// Create a single-node tree from the new surface.
 	single_tree := datastruct.SplitTree.new[SurfaceWidget](surface)
