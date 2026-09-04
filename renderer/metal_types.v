@@ -117,6 +117,25 @@ fn (opts MetalBufferOptions) resource_options() u64 {
 	return cache | storage
 }
 
+fn metal_command_buffer_status(raw u64) MetalCommandBufferStatus {
+	return match raw {
+		0 { .not_enqueued }
+		1 { .enqueued }
+		2 { .committed }
+		3 { .scheduled }
+		4 { .completed }
+		else { .error }
+	}
+}
+
+fn metal_sampler_address_mode(mode MetalSamplerAddressMode) u64 {
+	return match mode {
+		.clamp_to_edge { 0 }
+		.repeat { 2 }
+		.mirror_repeat { 3 }
+	}
+}
+
 // ============================================================
 // Metal Frame
 // ============================================================
@@ -128,16 +147,28 @@ pub mut:
 	command_buffer voidptr = unsafe { nil }
 }
 
-pub fn MetalFrame.begin() !MetalFrame {
-	// XTODO: Requires [commandQueue commandBuffer] and
-	// completion handler setup via addCompletedHandler:
-	return MetalFrame{}
+pub fn MetalFrame.begin(queue voidptr) !MetalFrame {
+	if queue == unsafe { nil } {
+		return error('Metal frame requires a command queue')
+	}
+	buffer := macos.metal_create_command_buffer(queue)
+	if buffer == unsafe { nil } {
+		return error('Metal command buffer allocation failed')
+	}
+	return MetalFrame{
+		command_buffer: buffer
+	}
 }
 
-pub fn (mut self MetalFrame) complete(sync_ bool) {
-	// XTODO: Requires [commandBuffer commit] and optionally
-	// [commandBuffer waitUntilCompleted] for sync
-	_ = sync_
+pub fn (mut self MetalFrame) complete(sync_ bool) MetalCommandBufferStatus {
+	if self.command_buffer == unsafe { nil } {
+		return .error
+	}
+	macos.metal_command_buffer_commit(self.command_buffer)
+	if sync_ {
+		macos.metal_command_buffer_wait(self.command_buffer)
+	}
+	return metal_command_buffer_status(macos.metal_command_buffer_status(self.command_buffer))
 }
 
 // ============================================================
@@ -156,25 +187,80 @@ pub struct MetalRenderStep {
 pub:
 	// The pipeline to use.
 	pipeline MetalPipeline
+	// Uniform buffer, bound at index 1 for both shader stages.
+	uniforms voidptr = unsafe { nil }
+	// Vertex and fragment buffers. Entry zero uses index zero; later entries
+	// start at index two so uniforms can remain at index one.
+	buffers []voidptr
+	// Textures bound to both stages by slice index.
+	textures []voidptr
+	// Fragment samplers bound by slice index.
+	samplers []voidptr
 	// Draw call configuration.
-	draw_type    MetalPrimitiveType = .triangle_strip
-	vertex_count u32 = 4
+	draw_type      MetalPrimitiveType = .triangle_strip
+	vertex_count   u32 = 4
+	instance_count u32 = 1
 }
 
-pub fn MetalRenderPass.begin() !MetalRenderPass {
-	// XTODO: Requires renderCommandEncoderWithDescriptor:
-	return MetalRenderPass{}
+pub struct MetalRenderPassAttachment {
+pub:
+	texture     voidptr = unsafe { nil }
+	clear_color ?[4]f64
+}
+
+pub fn MetalRenderPass.begin(command_buffer voidptr, attachments []MetalRenderPassAttachment) !MetalRenderPass {
+	if command_buffer == unsafe { nil } {
+		return error('Metal render pass requires a command buffer')
+	}
+	if attachments.len == 0 {
+		return error('Metal render pass requires an attachment')
+	}
+	descriptor := macos.metal_render_pass_descriptor()
+	if descriptor == unsafe { nil } {
+		return error('Metal render pass descriptor unavailable')
+	}
+	for index, attachment in attachments {
+		if attachment.texture == unsafe { nil } {
+			return error('Metal render pass attachment texture is null')
+		}
+		macos.metal_render_pass_set_attachment(descriptor, usize(index), attachment.texture, attachment.clear_color)
+	}
+	encoder := macos.metal_create_encoder(command_buffer, descriptor)
+	if encoder == unsafe { nil } {
+		return error('Metal render command encoder creation failed')
+	}
+	return MetalRenderPass{
+		encoder: encoder
+	}
 }
 
 pub fn (mut self MetalRenderPass) step(s MetalRenderStep) {
-	// XTODO: Requires setRenderPipelineState:, setVertexBuffer:,
-	// setFragmentTexture:, setFragmentSamplerState:,
-	// drawPrimitives:vertexStart:vertexCount:instanceCount:
-	_ = s
+	if s.instance_count == 0 || self.encoder == unsafe { nil }
+		|| s.pipeline.handle == unsafe { nil } {
+		return
+	}
+	macos.metal_encoder_set_pipeline(self.encoder, s.pipeline.handle)
+	if s.buffers.len > 0 {
+		macos.metal_encoder_set_buffer(self.encoder, s.buffers[0], 0)
+		for index in 1 .. s.buffers.len {
+			macos.metal_encoder_set_buffer(self.encoder, s.buffers[index], usize(index + 1))
+		}
+	}
+	if s.uniforms != unsafe { nil } {
+		macos.metal_encoder_set_buffer(self.encoder, s.uniforms, 1)
+	}
+	for index, texture in s.textures {
+		macos.metal_encoder_set_texture(self.encoder, texture, usize(index))
+	}
+	for index, sampler in s.samplers {
+		macos.metal_encoder_set_sampler(self.encoder, sampler, usize(index))
+	}
+	macos.metal_encoder_draw(self.encoder, u64(s.draw_type), usize(s.vertex_count), usize(s.instance_count))
 }
 
 pub fn (mut self MetalRenderPass) complete() {
-	// XTODO: Requires [encoder endEncoding]
+	macos.metal_end_encoding(self.encoder)
+	self.encoder = unsafe { nil }
 }
 
 // ============================================================
@@ -188,15 +274,60 @@ pub mut:
 	handle voidptr = unsafe { nil }
 }
 
-pub fn MetalPipeline.init() !MetalPipeline {
-	// XTODO: Requires MTLRenderPipelineDescriptor setup with
-	// vertex/fragment functions, vertex descriptor, color attachment
-	// pixel format, and blending configuration.
-	// Then [device newRenderPipelineStateWithDescriptor:error:]
-	return MetalPipeline{}
+pub struct MetalVertexAttribute {
+pub:
+	format MetalVertexFormat
+	offset usize
+}
+
+pub enum MetalVertexStepFunction {
+	constant
+	per_vertex
+	per_instance
+	per_patch
+	per_patch_control_point
+}
+
+pub struct MetalPipelineOptions {
+pub:
+	device           voidptr = unsafe { nil }
+	vertex_fn        string
+	fragment_fn      string
+	vertex_library   voidptr = unsafe { nil }
+	fragment_library voidptr = unsafe { nil }
+	attributes       []MetalVertexAttribute
+	vertex_stride    usize
+	step_fn          MetalVertexStepFunction = .per_vertex
+	pixel_format     MetalPixelFormat = .bgra8unorm
+	blending_enabled bool = true
+}
+
+pub fn MetalPipeline.init(opts MetalPipelineOptions) !MetalPipeline {
+	if opts.device == unsafe { nil } || opts.vertex_library == unsafe { nil }
+		|| opts.fragment_library == unsafe { nil } {
+		return error('Metal pipeline requires a device and shader libraries')
+	}
+	if opts.vertex_fn.len == 0 || opts.fragment_fn.len == 0 {
+		return error('Metal pipeline requires shader function names')
+	}
+	mut attributes := []macos.MetalVertexAttribute{cap: opts.attributes.len}
+	for attribute in opts.attributes {
+		attributes << macos.MetalVertexAttribute{
+			format: metal_vertex_format_value(attribute.format)
+			offset: attribute.offset
+		}
+	}
+	handle := macos.metal_new_pipeline(opts.device, opts.vertex_library, opts.fragment_library, opts.vertex_fn, opts.fragment_fn, attributes, opts.vertex_stride, u64(opts.step_fn), metal_pixel_format_value(opts.pixel_format), opts.blending_enabled)
+	if handle == unsafe { nil } {
+		return error('Metal render pipeline creation failed')
+	}
+	return MetalPipeline{
+		handle: handle
+	}
 }
 
 pub fn (mut self MetalPipeline) deinit() {
+	macos.metal_release(self.handle)
 	self.handle = unsafe { nil }
 }
 
@@ -213,6 +344,7 @@ pub mut:
 // MetalSamplerOptions configures sampler creation.
 pub struct MetalSamplerOptions {
 pub:
+	device         voidptr = unsafe { nil }
 	min_filter     MetalSamplerFilter = .linear
 	mag_filter     MetalSamplerFilter = .linear
 	s_address_mode MetalSamplerAddressMode = .clamp_to_edge
@@ -220,13 +352,20 @@ pub:
 }
 
 pub fn MetalSampler.init(opts MetalSamplerOptions) !MetalSampler {
-	// XTODO: Requires MTLSamplerDescriptor setup and
-	// [device newSamplerStateWithDescriptor:]
-	_ = opts
-	return MetalSampler{}
+	if opts.device == unsafe { nil } {
+		return error('Metal sampler requires a device')
+	}
+	handle := macos.metal_new_sampler(opts.device, u64(opts.min_filter), u64(opts.mag_filter), metal_sampler_address_mode(opts.s_address_mode), metal_sampler_address_mode(opts.t_address_mode))
+	if handle == unsafe { nil } {
+		return error('Metal sampler allocation failed')
+	}
+	return MetalSampler{
+		handle: handle
+	}
 }
 
 pub fn (mut self MetalSampler) deinit() {
+	macos.metal_release(self.handle)
 	self.handle = unsafe { nil }
 }
 
@@ -238,7 +377,7 @@ pub fn (mut self MetalSampler) deinit() {
 pub struct MetalTarget {
 pub mut:
 	// The IOSurface handle.
-	surface voidptr = unsafe { nil }
+	surface &macos.IOSurface = unsafe { nil }
 	// The texture handle.
 	texture voidptr = unsafe { nil }
 	// Width and height of the target.
@@ -246,16 +385,51 @@ pub mut:
 	height u32
 }
 
-pub fn MetalTarget.init(width u32, height u32) !MetalTarget {
-	// XTODO: Requires IOSurfaceCreate with Display P3 colorspace
-	// and [device newTextureWithDescriptor:iosurface:plane:]
+pub struct MetalTargetOptions {
+pub:
+	device       voidptr = unsafe { nil }
+	width        u32
+	height       u32
+	pixel_format MetalPixelFormat = .bgra8unorm
+	storage_mode MetalStorageMode = .shared
+}
+
+pub fn MetalTarget.init(opts MetalTargetOptions) !MetalTarget {
+	if opts.device == unsafe { nil } {
+		return error('Metal target requires a device')
+	}
+	if opts.width == 0 || opts.height == 0 {
+		return error('Metal target dimensions must be non-zero')
+	}
+	colorspace := macos.CGColorSpace.create_named(.display_p3)!
+	defer {
+		colorspace.release()
+	}
+	surface := macos.IOSurface.init(macos.IOSurfaceProperties{
+		width: int(opts.width)
+		height: int(opts.height)
+		pixel_format: .p32_bgra
+		bytes_per_element: 4
+		colorspace: colorspace
+	})!
+	texture := macos.metal_new_iosurface_texture(opts.device, voidptr(surface), metal_pixel_format_value(opts.pixel_format), usize(opts.width), usize(opts.height), metal_resource_options(.write_combined, opts.storage_mode))
+	if texture == unsafe { nil } {
+		surface.deinit()
+		return error('Metal target texture allocation failed')
+	}
 	return MetalTarget{
-		width: width
-		height: height
+		surface: surface
+		texture: texture
+		width: opts.width
+		height: opts.height
 	}
 }
 
 pub fn (mut self MetalTarget) deinit() {
+	if self.surface != unsafe { nil } {
+		self.surface.deinit()
+	}
+	macos.metal_release(self.texture)
 	self.surface = unsafe { nil }
 	self.texture = unsafe { nil }
 }
@@ -381,6 +555,22 @@ fn metal_pixel_format_value(format MetalPixelFormat) u64 {
 	}
 }
 
+fn metal_vertex_format_value(format MetalVertexFormat) u64 {
+	return match format {
+		.uchar4 { 3 }
+		.uchar4_normalized { 9 }
+		.ushort2 { 13 }
+		.short2 { 16 }
+		.float { 28 }
+		.float2 { 29 }
+		.float3 { 30 }
+		.float4 { 31 }
+		.uint { 36 }
+		.uint2 { 37 }
+		.uchar { 45 }
+	}
+}
+
 fn metal_texture_usage_value(usage MetalTextureUsage) u64 {
 	mut value := u64(0)
 	if usage.shader_read {
@@ -404,26 +594,36 @@ pub mut:
 }
 
 pub fn MetalIOSurfaceLayer.init() !MetalIOSurfaceLayer {
-	// XTODO: Requires creating a custom CALayer subclass that
-	// displays IOSurface contents and supports a display callback.
-	return MetalIOSurfaceLayer{}
+	layer := macos.metal_iosurface_layer_new()
+	if layer == unsafe { nil } {
+		return error('Metal IOSurface layer allocation failed')
+	}
+	return MetalIOSurfaceLayer{
+		layer: layer
+	}
 }
 
 pub fn (mut self MetalIOSurfaceLayer) release() {
+	macos.metal_release(self.layer)
 	self.layer = unsafe { nil }
 }
 
 // Set the surface to display (async, on main thread).
-pub fn (mut self MetalIOSurfaceLayer) set_surface(surface voidptr) ! {
-	// XTODO: Requires dispatch_async to main queue and
-	// setting layer.contents = surface
-	_ = surface
+pub fn (mut self MetalIOSurfaceLayer) set_surface(surface &macos.IOSurface) ! {
+	if !macos.metal_iosurface_layer_set_surface(self.layer, voidptr(surface)) {
+		return error('Metal IOSurface layer update failed')
+	}
 }
 
 // Set the surface to display synchronously.
-pub fn (mut self MetalIOSurfaceLayer) set_surface_sync(surface voidptr) {
-	// XTODO: Requires dispatch_sync to main queue
-	_ = surface
+pub fn (mut self MetalIOSurfaceLayer) set_surface_sync(surface &macos.IOSurface) {
+	macos.metal_iosurface_layer_set_surface_sync(self.layer, voidptr(surface))
+}
+
+pub type MetalLayerDisplayCallback = fn (context voidptr)
+
+pub fn (mut self MetalIOSurfaceLayer) set_display_callback(callback MetalLayerDisplayCallback, context voidptr) {
+	macos.metal_iosurface_layer_set_display_callback(self.layer, voidptr(callback), context)
 }
 
 // ============================================================
@@ -498,9 +698,27 @@ pub fn metal_text_cell(cell CellText) MetalTextCell {
 // Metal Shaders
 // ============================================================
 
+pub struct MetalImageVertex {
+pub:
+	grid_pos    [2]f32
+	cell_offset [2]f32
+	source_rect [4]f32
+	dest_size   [2]f32
+}
+
+pub struct MetalBgImageVertex {
+pub:
+	opacity f32
+	info    u8
+}
+
+const metal_shader_source = $embed_file('shaders.metal').to_string()
+
 // MetalShaders manages the Metal shader library and all pipelines.
 pub struct MetalShaders {
 pub mut:
+	// Library containing Ghostty's built-in Metal shader functions.
+	library voidptr = unsafe { nil }
 	// Pipeline for background color.
 	bg_color MetalPipeline
 	// Pipeline for cell backgrounds.
@@ -513,22 +731,130 @@ pub mut:
 	bg_image MetalPipeline
 	// Post-processing pipelines (custom shaders).
 	post_pipelines []MetalPipeline
+	// Protect against duplicate lifecycle teardown.
+	defunct bool
 }
 
-pub fn MetalShaders.init() !MetalShaders {
-	// XTODO: Requires loading Metal shader library from
-	// compiled .metallib or source, then creating each
-	// pipeline with the appropriate vertex/fragment functions.
-	return MetalShaders{
-		bg_color: MetalPipeline{}
-		cell_bg: MetalPipeline{}
-		cell_text: MetalPipeline{}
-		image: MetalPipeline{}
-		bg_image: MetalPipeline{}
+pub fn MetalShaders.init(device voidptr, post_shaders []string, pixel_format MetalPixelFormat) !MetalShaders {
+	if device == unsafe { nil } {
+		return error('Metal shaders require a device')
 	}
+	library := macos.metal_new_library_source(device, metal_shader_source)
+	if library == unsafe { nil } {
+		return error('Metal shader library compilation failed')
+	}
+	mut self := MetalShaders{
+		library: library
+	}
+
+	self.bg_color = MetalPipeline.init(MetalPipelineOptions{
+		device: device
+		vertex_fn: 'full_screen_vertex'
+		fragment_fn: 'bg_color_fragment'
+		vertex_library: library
+		fragment_library: library
+		pixel_format: pixel_format
+		blending_enabled: false
+	}) or {
+		self.deinit()
+		return err
+	}
+	self.cell_bg = MetalPipeline.init(MetalPipelineOptions{
+		device: device
+		vertex_fn: 'full_screen_vertex'
+		fragment_fn: 'cell_bg_fragment'
+		vertex_library: library
+		fragment_library: library
+		pixel_format: pixel_format
+		blending_enabled: true
+	}) or {
+		self.deinit()
+		return err
+	}
+	self.cell_text = MetalPipeline.init(MetalPipelineOptions{
+		device: device
+		vertex_fn: 'cell_text_vertex'
+		fragment_fn: 'cell_text_fragment'
+		vertex_library: library
+		fragment_library: library
+		attributes: metal_text_cell_attributes()
+		vertex_stride: $sizeof(MetalTextCell)
+		step_fn: .per_instance
+		pixel_format: pixel_format
+		blending_enabled: true
+	}) or {
+		self.deinit()
+		return err
+	}
+	self.image = MetalPipeline.init(MetalPipelineOptions{
+		device: device
+		vertex_fn: 'image_vertex'
+		fragment_fn: 'image_fragment'
+		vertex_library: library
+		fragment_library: library
+		attributes: metal_image_attributes()
+		vertex_stride: $sizeof(MetalImageVertex)
+		step_fn: .per_instance
+		pixel_format: pixel_format
+		blending_enabled: true
+	}) or {
+		self.deinit()
+		return err
+	}
+	self.bg_image = MetalPipeline.init(MetalPipelineOptions{
+		device: device
+		vertex_fn: 'bg_image_vertex'
+		fragment_fn: 'bg_image_fragment'
+		vertex_library: library
+		fragment_library: library
+		attributes: metal_bg_image_attributes()
+		vertex_stride: $sizeof(MetalBgImageVertex)
+		step_fn: .per_instance
+		pixel_format: pixel_format
+		blending_enabled: true
+	}) or {
+		self.deinit()
+		return err
+	}
+
+	mut post_failed := false
+	for source in post_shaders {
+		post_library := macos.metal_new_library_source(device, source)
+		if post_library == unsafe { nil } {
+			post_failed = true
+			break
+		}
+		pipeline := MetalPipeline.init(MetalPipelineOptions{
+			device: device
+			vertex_fn: 'full_screen_vertex'
+			fragment_fn: 'main0'
+			vertex_library: library
+			fragment_library: post_library
+			pixel_format: pixel_format
+			blending_enabled: false
+		}) or {
+			macos.metal_release(post_library)
+			post_failed = true
+			break
+		}
+		macos.metal_release(post_library)
+		self.post_pipelines << pipeline
+	}
+	if post_failed {
+		for mut pipeline in self.post_pipelines {
+			pipeline.deinit()
+		}
+		self.post_pipelines = []MetalPipeline{}
+	}
+
+	return self
 }
 
 pub fn (mut self MetalShaders) deinit() {
+	if self.defunct {
+		return
+	}
+	self.defunct = true
 	self.bg_color.deinit()
 	self.cell_bg.deinit()
 	self.cell_text.deinit()
@@ -537,4 +863,35 @@ pub fn (mut self MetalShaders) deinit() {
 	for mut p in self.post_pipelines {
 		p.deinit()
 	}
+	self.post_pipelines = []MetalPipeline{}
+	macos.metal_release(self.library)
+	self.library = unsafe { nil }
+}
+
+fn metal_text_cell_attributes() []MetalVertexAttribute {
+	return [
+		MetalVertexAttribute{ format: .uint2, offset: __offsetof(MetalTextCell, glyph_x) },
+		MetalVertexAttribute{ format: .uint2, offset: __offsetof(MetalTextCell, glyph_w) },
+		MetalVertexAttribute{ format: .short2, offset: __offsetof(MetalTextCell, bearing_x) },
+		MetalVertexAttribute{ format: .ushort2, offset: __offsetof(MetalTextCell, grid_x) },
+		MetalVertexAttribute{ format: .uchar4, offset: __offsetof(MetalTextCell, color) },
+		MetalVertexAttribute{ format: .uchar, offset: __offsetof(MetalTextCell, atlas) },
+		MetalVertexAttribute{ format: .uchar, offset: __offsetof(MetalTextCell, flags) },
+	]
+}
+
+fn metal_image_attributes() []MetalVertexAttribute {
+	return [
+		MetalVertexAttribute{ format: .float2, offset: __offsetof(MetalImageVertex, grid_pos) },
+		MetalVertexAttribute{ format: .float2, offset: __offsetof(MetalImageVertex, cell_offset) },
+		MetalVertexAttribute{ format: .float4, offset: __offsetof(MetalImageVertex, source_rect) },
+		MetalVertexAttribute{ format: .float2, offset: __offsetof(MetalImageVertex, dest_size) },
+	]
+}
+
+fn metal_bg_image_attributes() []MetalVertexAttribute {
+	return [
+		MetalVertexAttribute{ format: .float, offset: __offsetof(MetalBgImageVertex, opacity) },
+		MetalVertexAttribute{ format: .uchar, offset: __offsetof(MetalBgImageVertex, info) },
+	]
 }

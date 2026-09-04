@@ -196,10 +196,14 @@ pub enum MetalPrimitiveType {
 
 // Metal vertex format (subset).
 pub enum MetalVertexFormat {
+	float
 	float2
 	float3
 	float4
+	uchar
+	uchar4
 	uchar4_normalized
+	short2
 	uint
 	ushort2
 	uint2

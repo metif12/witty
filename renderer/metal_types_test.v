@@ -161,6 +161,94 @@ fn read_metal_texture(texture MetalTexture) []u8 {
 	return result
 }
 
+fn test_metal_sampler_target_and_empty_frame() ! {
+	mut api := MetalAPI.init()!
+	defer {
+		api.deinit()
+	}
+
+	mut sampler := MetalSampler.init(MetalSamplerOptions{
+		device: api.device
+	})!
+	defer {
+		sampler.deinit()
+	}
+	assert sampler.handle != unsafe { nil }
+
+	mut target := MetalTarget.init(MetalTargetOptions{
+		device: api.device
+		width: 8
+		height: 6
+		storage_mode: api.default_storage_mode
+	})!
+	defer {
+		target.deinit()
+	}
+	assert target.surface.get_width() == 8
+	assert target.surface.get_height() == 6
+	assert target.texture != unsafe { nil }
+
+	mut frame := MetalFrame.begin(api.queue)!
+	mut pass := MetalRenderPass.begin(frame.command_buffer, [MetalRenderPassAttachment{
+		texture: target.texture
+		clear_color: [f64(0.25), 0.5, 0.75, 1.0]!
+	}])!
+	pass.complete()
+	assert frame.complete(true) == .completed
+}
+
+fn test_metal_builtin_shader_pipelines_compile() ! {
+	mut api := MetalAPI.init()!
+	defer {
+		api.deinit()
+	}
+	mut shaders := MetalShaders.init(api.device, []string{}, .bgra8unorm)!
+	assert shaders.library != unsafe { nil }
+	assert shaders.bg_color.handle != unsafe { nil }
+	assert shaders.cell_bg.handle != unsafe { nil }
+	assert shaders.cell_text.handle != unsafe { nil }
+	assert shaders.image.handle != unsafe { nil }
+	assert shaders.bg_image.handle != unsafe { nil }
+	assert $sizeof(MetalTextCell) == 32
+
+	mut target := MetalTarget.init(MetalTargetOptions{
+		device: api.device
+		width: 4
+		height: 4
+		storage_mode: api.default_storage_mode
+	})!
+	defer {
+		target.deinit()
+	}
+	mut uniforms := MetalBuffer.init_fill(MetalBufferOptions{
+		device: api.device
+		storage_mode: api.default_storage_mode
+	}, []u8{len: int($sizeof(Uniforms))})!
+	defer {
+		uniforms.deinit()
+	}
+	mut frame := MetalFrame.begin(api.queue)!
+	mut pass := MetalRenderPass.begin(frame.command_buffer, [MetalRenderPassAttachment{
+		texture: target.texture
+		clear_color: [f64(0), 0, 0, 1]!
+	}])!
+	pass.step(MetalRenderStep{
+		pipeline: shaders.bg_color
+		uniforms: uniforms.handle
+		vertex_count: 3
+	})
+	pass.complete()
+	assert frame.complete(true) == .completed
+
+	mut layer := MetalIOSurfaceLayer.init()!
+	assert layer.layer != unsafe { nil }
+	layer.set_surface_sync(target.surface)
+	layer.release()
+	shaders.deinit()
+	// Ghostty deliberately makes shader teardown idempotent.
+	shaders.deinit()
+}
+
 fn test_metal_text_cell_grayscale_no_flags() {
 	cell := CellText{
 		atlas: .grayscale

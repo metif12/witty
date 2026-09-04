@@ -177,6 +177,42 @@ fn C.witty_metal_texture_replace_region(texture voidptr, x usize, y usize, width
 
 fn C.witty_metal_texture_get_bytes(texture voidptr, bytes voidptr, bytes_per_row usize, x usize, y usize, width usize, height usize)
 
+fn C.witty_metal_command_buffer_commit(command_buffer voidptr)
+
+fn C.witty_metal_command_buffer_wait(command_buffer voidptr)
+
+fn C.witty_metal_command_buffer_status(command_buffer voidptr) u64
+
+fn C.witty_metal_render_pass_descriptor() voidptr
+
+fn C.witty_metal_render_pass_set_attachment(descriptor voidptr, index usize, texture voidptr, has_clear_color bool, color MetalClearColor)
+
+fn C.witty_metal_encoder_set_pipeline(encoder voidptr, pipeline voidptr)
+
+fn C.witty_metal_encoder_set_buffer(encoder voidptr, buffer voidptr, index usize)
+
+fn C.witty_metal_encoder_set_texture(encoder voidptr, texture voidptr, index usize)
+
+fn C.witty_metal_encoder_set_sampler(encoder voidptr, sampler voidptr, index usize)
+
+fn C.witty_metal_encoder_draw(encoder voidptr, primitive u64, vertex_count usize, instance_count usize)
+
+fn C.witty_metal_new_sampler(device voidptr, min_filter u64, mag_filter u64, s_address_mode u64, t_address_mode u64) voidptr
+
+fn C.witty_metal_new_iosurface_texture(device voidptr, surface voidptr, pixel_format u64, width usize, height usize, resource_options u64) voidptr
+
+fn C.witty_metal_new_library_source(device voidptr, source &char, length usize) voidptr
+
+fn C.witty_metal_new_pipeline(device voidptr, vertex_library voidptr, fragment_library voidptr, vertex_name &char, vertex_name_length usize, fragment_name &char, fragment_name_length usize, attributes &C.witty_metal_vertex_attribute, attribute_count usize, vertex_stride usize, step_function u64, pixel_format u64, blending_enabled bool) voidptr
+
+fn C.witty_metal_iosurface_layer_new() voidptr
+
+fn C.witty_metal_iosurface_layer_set_display_callback(layer voidptr, callback voidptr, context voidptr)
+
+fn C.witty_metal_iosurface_layer_set_surface(layer voidptr, surface voidptr) bool
+
+fn C.witty_metal_iosurface_layer_set_surface_sync(layer voidptr, surface voidptr)
+
 fn C.witty_macos_is_main_thread() bool
 
 fn C.witty_macos_dispatch_main(fnptr voidptr, ctx voidptr)
@@ -188,6 +224,18 @@ fn C.witty_macos_string_task_free(task &C.witty_macos_string_task)
 struct C.witty_macos_string_task {
 	view voidptr
 	text &char
+}
+
+pub struct C.witty_metal_vertex_attribute {
+pub mut:
+	format u64
+	offset usize
+}
+
+pub struct MetalVertexAttribute {
+pub:
+	format u64
+	offset usize
 }
 
 fn C.MTLCreateSystemDefaultDevice() ObjId
@@ -1328,24 +1376,115 @@ pub fn metal_buffer_did_modify(buffer voidptr, length usize) {
 }
 
 pub fn metal_new_texture(device voidptr, pixel_format u64, width usize, height usize, resource_options u64, usage u64) voidptr {
-	return C.witty_metal_new_texture(device, pixel_format, width, height, resource_options,
-		usage)
+	return C.witty_metal_new_texture(device, pixel_format, width, height, resource_options, usage)
 }
 
 pub fn metal_texture_replace_region(texture voidptr, x usize, y usize, width usize, height usize, data []u8, bytes_per_row usize) {
 	if data.len == 0 {
 		return
 	}
-	C.witty_metal_texture_replace_region(texture, x, y, width, height, voidptr(data.data),
-		bytes_per_row)
+	C.witty_metal_texture_replace_region(texture, x, y, width, height, voidptr(data.data), bytes_per_row)
 }
 
 pub fn metal_texture_get_bytes(texture voidptr, mut data []u8, bytes_per_row usize, x usize, y usize, width usize, height usize) {
 	if data.len == 0 {
 		return
 	}
-	C.witty_metal_texture_get_bytes(texture, voidptr(data.data), bytes_per_row, x, y, width,
-		height)
+	C.witty_metal_texture_get_bytes(texture, voidptr(data.data), bytes_per_row, x, y, width, height)
+}
+
+pub fn metal_command_buffer_commit(command_buffer voidptr) {
+	C.witty_metal_command_buffer_commit(command_buffer)
+}
+
+pub fn metal_command_buffer_wait(command_buffer voidptr) {
+	C.witty_metal_command_buffer_wait(command_buffer)
+}
+
+pub fn metal_command_buffer_status(command_buffer voidptr) u64 {
+	return C.witty_metal_command_buffer_status(command_buffer)
+}
+
+pub fn metal_render_pass_descriptor() voidptr {
+	return C.witty_metal_render_pass_descriptor()
+}
+
+pub fn metal_render_pass_set_attachment(descriptor voidptr, index usize, texture voidptr, clear_color ?[4]f64) {
+	if color := clear_color {
+		C.witty_metal_render_pass_set_attachment(descriptor, index, texture, true, MetalClearColor{
+			red: color[0]
+			green: color[1]
+			blue: color[2]
+			alpha: color[3]
+		})
+	} else {
+		C.witty_metal_render_pass_set_attachment(descriptor, index, texture, false, MetalClearColor{})
+	}
+}
+
+pub fn metal_encoder_set_pipeline(encoder voidptr, pipeline voidptr) {
+	C.witty_metal_encoder_set_pipeline(encoder, pipeline)
+}
+
+pub fn metal_encoder_set_buffer(encoder voidptr, buffer voidptr, index usize) {
+	C.witty_metal_encoder_set_buffer(encoder, buffer, index)
+}
+
+pub fn metal_encoder_set_texture(encoder voidptr, texture voidptr, index usize) {
+	C.witty_metal_encoder_set_texture(encoder, texture, index)
+}
+
+pub fn metal_encoder_set_sampler(encoder voidptr, sampler voidptr, index usize) {
+	C.witty_metal_encoder_set_sampler(encoder, sampler, index)
+}
+
+pub fn metal_encoder_draw(encoder voidptr, primitive u64, vertex_count usize, instance_count usize) {
+	C.witty_metal_encoder_draw(encoder, primitive, vertex_count, instance_count)
+}
+
+pub fn metal_new_sampler(device voidptr, min_filter u64, mag_filter u64, s_address_mode u64, t_address_mode u64) voidptr {
+	return C.witty_metal_new_sampler(device, min_filter, mag_filter, s_address_mode, t_address_mode)
+}
+
+pub fn metal_new_iosurface_texture(device voidptr, surface voidptr, pixel_format u64, width usize, height usize, resource_options u64) voidptr {
+	return C.witty_metal_new_iosurface_texture(device, surface, pixel_format, width, height, resource_options)
+}
+
+pub fn metal_new_library_source(device voidptr, source string) voidptr {
+	return C.witty_metal_new_library_source(device, &char(source.str), usize(source.len))
+}
+
+pub fn metal_new_pipeline(device voidptr, vertex_library voidptr, fragment_library voidptr, vertex_name string, fragment_name string, attributes []MetalVertexAttribute, vertex_stride usize, step_function u64, pixel_format u64, blending_enabled bool) voidptr {
+	mut c_attributes := []C.witty_metal_vertex_attribute{cap: attributes.len}
+	for attribute in attributes {
+		c_attributes << C.witty_metal_vertex_attribute{
+			format: attribute.format
+			offset: attribute.offset
+		}
+	}
+	mut attrs := unsafe { &C.witty_metal_vertex_attribute(nil) }
+	if attributes.len > 0 {
+		unsafe {
+			attrs = &c_attributes[0]
+		}
+	}
+	return C.witty_metal_new_pipeline(device, vertex_library, fragment_library, &char(vertex_name.str), usize(vertex_name.len), &char(fragment_name.str), usize(fragment_name.len), attrs, usize(attributes.len), vertex_stride, step_function, pixel_format, blending_enabled)
+}
+
+pub fn metal_iosurface_layer_new() voidptr {
+	return C.witty_metal_iosurface_layer_new()
+}
+
+pub fn metal_iosurface_layer_set_display_callback(layer voidptr, callback voidptr, context voidptr) {
+	C.witty_metal_iosurface_layer_set_display_callback(layer, callback, context)
+}
+
+pub fn metal_iosurface_layer_set_surface(layer voidptr, surface voidptr) bool {
+	return C.witty_metal_iosurface_layer_set_surface(layer, surface)
+}
+
+pub fn metal_iosurface_layer_set_surface_sync(layer voidptr, surface voidptr) {
+	C.witty_metal_iosurface_layer_set_surface_sync(layer, surface)
 }
 
 pub fn metal_next_drawable(layer voidptr) voidptr {

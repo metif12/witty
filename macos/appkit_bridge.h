@@ -2,6 +2,8 @@
 #include <dispatch/dispatch.h>
 #include <objc/message.h>
 #include <Metal/Metal.h>
+#include <QuartzCore/QuartzCore.h>
+#include <IOSurface/IOSurface.h>
 #include <objc/runtime.h>
 #include <pthread.h>
 #include <stdlib.h>
@@ -28,6 +30,13 @@ typedef struct witty_macos_string_task {
 	void* view;
 	char* text;
 } witty_macos_string_task;
+
+typedef struct witty_metal_vertex_attribute {
+	unsigned long long format;
+	size_t offset;
+} witty_metal_vertex_attribute;
+
+typedef void (*witty_metal_layer_display_callback)(void*);
 
 static inline bool witty_macos_is_main_thread(void) {
 	return pthread_main_np() != 0;
@@ -185,4 +194,330 @@ static inline void witty_metal_texture_get_bytes(
 		region,
 		0
 	);
+}
+
+static inline void witty_metal_command_buffer_commit(void* command_buffer) {
+	if (!command_buffer) return;
+	((void (*)(void*, SEL))objc_msgSend)(command_buffer, sel_registerName("commit"));
+}
+
+static inline void witty_metal_command_buffer_wait(void* command_buffer) {
+	if (!command_buffer) return;
+	((void (*)(void*, SEL))objc_msgSend)(command_buffer, sel_registerName("waitUntilCompleted"));
+}
+
+static inline unsigned long long witty_metal_command_buffer_status(void* command_buffer) {
+	if (!command_buffer) return 5;
+	return ((unsigned long long (*)(void*, SEL))objc_msgSend)(command_buffer, sel_registerName("status"));
+}
+
+static inline void* witty_metal_render_pass_descriptor(void) {
+	Class cls = objc_getClass("MTLRenderPassDescriptor");
+	if (!cls) return NULL;
+	return ((void* (*)(void*, SEL))objc_msgSend)((void*)cls, sel_registerName("renderPassDescriptor"));
+}
+
+static inline void witty_metal_render_pass_set_attachment(
+	void* descriptor,
+	unsigned long index,
+	void* texture,
+	bool has_clear_color,
+	witty_macos_clear_color color
+) {
+	if (!descriptor || !texture) return;
+	void* attachments = ((void* (*)(void*, SEL))objc_msgSend)(descriptor, sel_registerName("colorAttachments"));
+	void* attachment = ((void* (*)(void*, SEL, unsigned long))objc_msgSend)(attachments, sel_registerName("objectAtIndexedSubscript:"), index);
+	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setLoadAction:"), has_clear_color ? 2ull : 1ull);
+	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setStoreAction:"), 1ull);
+	((void (*)(void*, SEL, void*))objc_msgSend)(attachment, sel_registerName("setTexture:"), texture);
+	if (has_clear_color) {
+		MTLClearColor clear = MTLClearColorMake(color.red, color.green, color.blue, color.alpha);
+		((void (*)(void*, SEL, MTLClearColor))objc_msgSend)(attachment, sel_registerName("setClearColor:"), clear);
+	}
+}
+
+static inline void witty_metal_encoder_set_pipeline(void* encoder, void* pipeline) {
+	if (!encoder || !pipeline) return;
+	((void (*)(void*, SEL, void*))objc_msgSend)(encoder, sel_registerName("setRenderPipelineState:"), pipeline);
+}
+
+static inline void witty_metal_encoder_set_buffer(void* encoder, void* buffer, unsigned long index) {
+	if (!encoder || !buffer) return;
+	((void (*)(void*, SEL, void*, unsigned long, unsigned long))objc_msgSend)(encoder, sel_registerName("setVertexBuffer:offset:atIndex:"), buffer, 0, index);
+	((void (*)(void*, SEL, void*, unsigned long, unsigned long))objc_msgSend)(encoder, sel_registerName("setFragmentBuffer:offset:atIndex:"), buffer, 0, index);
+}
+
+static inline void witty_metal_encoder_set_texture(void* encoder, void* texture, unsigned long index) {
+	if (!encoder || !texture) return;
+	((void (*)(void*, SEL, void*, unsigned long))objc_msgSend)(encoder, sel_registerName("setVertexTexture:atIndex:"), texture, index);
+	((void (*)(void*, SEL, void*, unsigned long))objc_msgSend)(encoder, sel_registerName("setFragmentTexture:atIndex:"), texture, index);
+}
+
+static inline void witty_metal_encoder_set_sampler(void* encoder, void* sampler, unsigned long index) {
+	if (!encoder || !sampler) return;
+	((void (*)(void*, SEL, void*, unsigned long))objc_msgSend)(encoder, sel_registerName("setFragmentSamplerState:atIndex:"), sampler, index);
+}
+
+static inline void witty_metal_encoder_draw(
+	void* encoder,
+	unsigned long long primitive,
+	unsigned long vertex_count,
+	unsigned long instance_count
+) {
+	if (!encoder || instance_count == 0) return;
+	((void (*)(void*, SEL, unsigned long long, unsigned long, unsigned long, unsigned long))objc_msgSend)(
+		encoder,
+		sel_registerName("drawPrimitives:vertexStart:vertexCount:instanceCount:"),
+		primitive,
+		0,
+		vertex_count,
+		instance_count
+	);
+}
+
+static inline void* witty_metal_new_sampler(
+	void* device,
+	unsigned long long min_filter,
+	unsigned long long mag_filter,
+	unsigned long long s_address_mode,
+	unsigned long long t_address_mode
+) {
+	if (!device) return NULL;
+	Class cls = objc_getClass("MTLSamplerDescriptor");
+	if (!cls) return NULL;
+	void* desc = ((void* (*)(void*, SEL))objc_msgSend)((void*)cls, sel_registerName("alloc"));
+	desc = ((void* (*)(void*, SEL))objc_msgSend)(desc, sel_registerName("init"));
+	if (!desc) return NULL;
+	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(desc, sel_registerName("setMinFilter:"), min_filter);
+	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(desc, sel_registerName("setMagFilter:"), mag_filter);
+	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(desc, sel_registerName("setSAddressMode:"), s_address_mode);
+	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(desc, sel_registerName("setTAddressMode:"), t_address_mode);
+	void* sampler = ((void* (*)(void*, SEL, void*))objc_msgSend)(device, sel_registerName("newSamplerStateWithDescriptor:"), desc);
+	((void (*)(void*, SEL))objc_msgSend)(desc, sel_registerName("release"));
+	return sampler;
+}
+
+static inline void* witty_metal_new_iosurface_texture(
+	void* device,
+	void* surface,
+	unsigned long long pixel_format,
+	size_t width,
+	size_t height,
+	unsigned long long resource_options
+) {
+	if (!device || !surface || width == 0 || height == 0) return NULL;
+	Class cls = objc_getClass("MTLTextureDescriptor");
+	if (!cls) return NULL;
+	void* desc = ((void* (*)(void*, SEL))objc_msgSend)((void*)cls, sel_registerName("alloc"));
+	desc = ((void* (*)(void*, SEL))objc_msgSend)(desc, sel_registerName("init"));
+	if (!desc) return NULL;
+	((void (*)(void*, SEL, unsigned long))objc_msgSend)(desc, sel_registerName("setWidth:"), (unsigned long)width);
+	((void (*)(void*, SEL, unsigned long))objc_msgSend)(desc, sel_registerName("setHeight:"), (unsigned long)height);
+	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(desc, sel_registerName("setPixelFormat:"), pixel_format);
+	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(desc, sel_registerName("setUsage:"), 4ull);
+	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(desc, sel_registerName("setResourceOptions:"), resource_options);
+	void* texture = ((void* (*)(void*, SEL, void*, void*, unsigned long))objc_msgSend)(device, sel_registerName("newTextureWithDescriptor:iosurface:plane:"), desc, surface, 0);
+	((void (*)(void*, SEL))objc_msgSend)(desc, sel_registerName("release"));
+	return texture;
+}
+
+static inline void* witty_metal_nsstring(const char* bytes, size_t length) {
+	if (!bytes) return NULL;
+	Class cls = objc_getClass("NSString");
+	if (!cls) return NULL;
+	void* value = ((void* (*)(void*, SEL))objc_msgSend)((void*)cls, sel_registerName("alloc"));
+	return ((void* (*)(void*, SEL, const void*, unsigned long, unsigned long))objc_msgSend)(
+		value,
+		sel_registerName("initWithBytes:length:encoding:"),
+		bytes,
+		(unsigned long)length,
+		4
+	);
+}
+
+static inline void* witty_metal_new_library_source(void* device, const char* source, size_t length) {
+	if (!device || !source) return NULL;
+	void* string = witty_metal_nsstring(source, length);
+	if (!string) return NULL;
+	void* error = NULL;
+	void* library = ((void* (*)(void*, SEL, void*, void*, void**))objc_msgSend)(device, sel_registerName("newLibraryWithSource:options:error:"), string, NULL, &error);
+	((void (*)(void*, SEL))objc_msgSend)(string, sel_registerName("release"));
+	return library;
+}
+
+static inline void* witty_metal_new_pipeline(
+	void* device,
+	void* vertex_library,
+	void* fragment_library,
+	const char* vertex_name,
+	size_t vertex_name_length,
+	const char* fragment_name,
+	size_t fragment_name_length,
+	const witty_metal_vertex_attribute* attributes,
+	size_t attribute_count,
+	size_t vertex_stride,
+	unsigned long long step_function,
+	unsigned long long pixel_format,
+	bool blending_enabled
+) {
+	if (!device || !vertex_library || !fragment_library || !vertex_name || !fragment_name) return NULL;
+	void* vertex_string = witty_metal_nsstring(vertex_name, vertex_name_length);
+	void* fragment_string = witty_metal_nsstring(fragment_name, fragment_name_length);
+	if (!vertex_string || !fragment_string) {
+		if (vertex_string) ((void (*)(void*, SEL))objc_msgSend)(vertex_string, sel_registerName("release"));
+		if (fragment_string) ((void (*)(void*, SEL))objc_msgSend)(fragment_string, sel_registerName("release"));
+		return NULL;
+	}
+	void* vertex_function = ((void* (*)(void*, SEL, void*))objc_msgSend)(vertex_library, sel_registerName("newFunctionWithName:"), vertex_string);
+	void* fragment_function = ((void* (*)(void*, SEL, void*))objc_msgSend)(fragment_library, sel_registerName("newFunctionWithName:"), fragment_string);
+	((void (*)(void*, SEL))objc_msgSend)(vertex_string, sel_registerName("release"));
+	((void (*)(void*, SEL))objc_msgSend)(fragment_string, sel_registerName("release"));
+	if (!vertex_function || !fragment_function) {
+		if (vertex_function) ((void (*)(void*, SEL))objc_msgSend)(vertex_function, sel_registerName("release"));
+		if (fragment_function) ((void (*)(void*, SEL))objc_msgSend)(fragment_function, sel_registerName("release"));
+		return NULL;
+	}
+
+	Class pipeline_cls = objc_getClass("MTLRenderPipelineDescriptor");
+	void* desc = ((void* (*)(void*, SEL))objc_msgSend)((void*)pipeline_cls, sel_registerName("alloc"));
+	desc = ((void* (*)(void*, SEL))objc_msgSend)(desc, sel_registerName("init"));
+	((void (*)(void*, SEL, void*))objc_msgSend)(desc, sel_registerName("setVertexFunction:"), vertex_function);
+	((void (*)(void*, SEL, void*))objc_msgSend)(desc, sel_registerName("setFragmentFunction:"), fragment_function);
+
+	void* vertex_desc = NULL;
+	if (attribute_count > 0) {
+		Class vertex_cls = objc_getClass("MTLVertexDescriptor");
+		vertex_desc = ((void* (*)(void*, SEL))objc_msgSend)((void*)vertex_cls, sel_registerName("alloc"));
+		vertex_desc = ((void* (*)(void*, SEL))objc_msgSend)(vertex_desc, sel_registerName("init"));
+		void* attrs = ((void* (*)(void*, SEL))objc_msgSend)(vertex_desc, sel_registerName("attributes"));
+		for (size_t i = 0; i < attribute_count; ++i) {
+			void* attr = ((void* (*)(void*, SEL, unsigned long))objc_msgSend)(attrs, sel_registerName("objectAtIndexedSubscript:"), (unsigned long)i);
+			((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attr, sel_registerName("setFormat:"), attributes[i].format);
+			((void (*)(void*, SEL, unsigned long))objc_msgSend)(attr, sel_registerName("setOffset:"), (unsigned long)attributes[i].offset);
+			((void (*)(void*, SEL, unsigned long))objc_msgSend)(attr, sel_registerName("setBufferIndex:"), 0);
+		}
+		void* layouts = ((void* (*)(void*, SEL))objc_msgSend)(vertex_desc, sel_registerName("layouts"));
+		void* layout = ((void* (*)(void*, SEL, unsigned long))objc_msgSend)(layouts, sel_registerName("objectAtIndexedSubscript:"), 0);
+		((void (*)(void*, SEL, unsigned long long))objc_msgSend)(layout, sel_registerName("setStepFunction:"), step_function);
+		((void (*)(void*, SEL, unsigned long))objc_msgSend)(layout, sel_registerName("setStride:"), (unsigned long)vertex_stride);
+		((void (*)(void*, SEL, void*))objc_msgSend)(desc, sel_registerName("setVertexDescriptor:"), vertex_desc);
+	}
+
+	void* color_attachments = ((void* (*)(void*, SEL))objc_msgSend)(desc, sel_registerName("colorAttachments"));
+	void* attachment = ((void* (*)(void*, SEL, unsigned long))objc_msgSend)(color_attachments, sel_registerName("objectAtIndexedSubscript:"), 0);
+	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setPixelFormat:"), pixel_format);
+	((void (*)(void*, SEL, bool))objc_msgSend)(attachment, sel_registerName("setBlendingEnabled:"), blending_enabled);
+	if (blending_enabled) {
+		((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setRgbBlendOperation:"), 0);
+		((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setAlphaBlendOperation:"), 0);
+		((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setSourceRGBBlendFactor:"), 1);
+		((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setSourceAlphaBlendFactor:"), 1);
+		((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setDestinationRGBBlendFactor:"), 5);
+		((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setDestinationAlphaBlendFactor:"), 5);
+	}
+
+	void* error = NULL;
+	void* state = ((void* (*)(void*, SEL, void*, void**))objc_msgSend)(device, sel_registerName("newRenderPipelineStateWithDescriptor:error:"), desc, &error);
+	if (vertex_desc) ((void (*)(void*, SEL))objc_msgSend)(vertex_desc, sel_registerName("release"));
+	((void (*)(void*, SEL))objc_msgSend)(desc, sel_registerName("release"));
+	((void (*)(void*, SEL))objc_msgSend)(vertex_function, sel_registerName("release"));
+	((void (*)(void*, SEL))objc_msgSend)(fragment_function, sel_registerName("release"));
+	return state;
+}
+
+static inline void witty_metal_iosurface_layer_display(void* target, SEL command) {
+	(void)command;
+	Ivar callback_ivar = class_getInstanceVariable(object_getClass(target), "display_cb");
+	Ivar context_ivar = class_getInstanceVariable(object_getClass(target), "display_ctx");
+	witty_metal_layer_display_callback callback = (witty_metal_layer_display_callback)object_getIvar(target, callback_ivar);
+	void* context = object_getIvar(target, context_ivar);
+	if (callback) callback(context);
+}
+
+static inline void* witty_metal_iosurface_layer_action(void* target, SEL command, void* key) {
+	(void)target;
+	(void)command;
+	(void)key;
+	Class cls = objc_getClass("NSNull");
+	return cls ? ((void* (*)(void*, SEL))objc_msgSend)((void*)cls, sel_registerName("null")) : NULL;
+}
+
+static inline Class witty_metal_iosurface_layer_class(void) {
+	static Class subclass = Nil;
+	static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+	if (subclass) return subclass;
+	pthread_mutex_lock(&lock);
+	if (!subclass) {
+		Class superclass = objc_getClass("CALayer");
+		subclass = objc_allocateClassPair(superclass, "WittyIOSurfaceLayer", 0);
+		if (!subclass) {
+			subclass = objc_getClass("WittyIOSurfaceLayer");
+		} else {
+			class_addIvar(subclass, "display_cb", sizeof(void*), 3, "^v");
+			class_addIvar(subclass, "display_ctx", sizeof(void*), 3, "^v");
+			class_addMethod(subclass, sel_registerName("display"), (IMP)witty_metal_iosurface_layer_display, "v@:");
+			class_addMethod(subclass, sel_registerName("actionForKey:"), (IMP)witty_metal_iosurface_layer_action, "@@:@");
+			objc_registerClassPair(subclass);
+		}
+	}
+	pthread_mutex_unlock(&lock);
+	return subclass;
+}
+
+static inline void* witty_metal_iosurface_layer_new(void) {
+	Class cls = witty_metal_iosurface_layer_class();
+	if (!cls) return NULL;
+	void* layer = ((void* (*)(void*, SEL))objc_msgSend)((void*)cls, sel_registerName("layer"));
+	if (!layer) return NULL;
+	((void (*)(void*, SEL))objc_msgSend)(layer, sel_registerName("retain"));
+	Class string_cls = objc_getClass("NSString");
+	void* gravity = ((void* (*)(void*, SEL, const char*))objc_msgSend)((void*)string_cls, sel_registerName("stringWithUTF8String:"), "topLeft");
+	((void (*)(void*, SEL, void*))objc_msgSend)(layer, sel_registerName("setContentsGravity:"), gravity);
+	return layer;
+}
+
+static inline void witty_metal_iosurface_layer_set_display_callback(void* layer, witty_metal_layer_display_callback callback, void* context) {
+	if (!layer) return;
+	Ivar callback_ivar = class_getInstanceVariable(object_getClass(layer), "display_cb");
+	Ivar context_ivar = class_getInstanceVariable(object_getClass(layer), "display_ctx");
+	object_setIvar(layer, callback_ivar, (void*)callback);
+	object_setIvar(layer, context_ivar, context);
+}
+
+static inline void witty_metal_iosurface_layer_set_surface_sync(void* layer, void* surface) {
+	if (!layer || !surface) return;
+	((void (*)(void*, SEL, void*))objc_msgSend)(layer, sel_registerName("setContents:"), surface);
+}
+
+typedef struct witty_metal_layer_surface_task {
+	void* layer;
+	IOSurfaceRef surface;
+} witty_metal_layer_surface_task;
+
+static inline void witty_metal_iosurface_layer_set_surface_task(void* context) {
+	witty_metal_layer_surface_task* task = (witty_metal_layer_surface_task*)context;
+	CGRect bounds = ((CGRect (*)(void*, SEL))objc_msgSend)(task->layer, sel_registerName("bounds"));
+	double scale = ((double (*)(void*, SEL))objc_msgSend)(task->layer, sel_registerName("contentsScale"));
+	size_t width = (size_t)(bounds.size.width * scale);
+	size_t height = (size_t)(bounds.size.height * scale);
+	if (width == IOSurfaceGetWidth(task->surface) && height == IOSurfaceGetHeight(task->surface)) {
+		witty_metal_iosurface_layer_set_surface_sync(task->layer, task->surface);
+	}
+	((void (*)(void*, SEL))objc_msgSend)(task->layer, sel_registerName("release"));
+	CFRelease(task->surface);
+	free(task);
+}
+
+static inline bool witty_metal_iosurface_layer_set_surface(void* layer, void* surface) {
+	if (!layer || !surface) return false;
+	witty_metal_layer_surface_task* task = (witty_metal_layer_surface_task*)calloc(1, sizeof(witty_metal_layer_surface_task));
+	if (!task) return false;
+	task->layer = ((void* (*)(void*, SEL))objc_msgSend)(layer, sel_registerName("retain"));
+	task->surface = (IOSurfaceRef)CFRetain(surface);
+	if (pthread_main_np() != 0) {
+		witty_metal_iosurface_layer_set_surface_task(task);
+	} else {
+		dispatch_async_f(dispatch_get_main_queue(), task, witty_metal_iosurface_layer_set_surface_task);
+	}
+	return true;
 }
