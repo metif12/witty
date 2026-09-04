@@ -1553,6 +1553,9 @@ fn (mut self StreamHandler) clipboard_contents(kind u8, data string) {
 	self.surface_message_writer(apprt.SurfaceMessage{
 		kind: .clipboard_write
 		clipboard_write_type: clipboard_type
+		clipboard_write_req: apprt.WriteReq{
+			data: data.bytes()
+		}
 	})
 }
 
@@ -1591,6 +1594,9 @@ fn (mut self StreamHandler) report_pwd(url string) {
 		// Report the change.
 		self.surface_message_writer(apprt.SurfaceMessage{
 			kind: .pwd_change
+			pwd_change: apprt.WriteReq{
+				data: []u8{}
+			}
 		})
 		return
 	}
@@ -1631,6 +1637,9 @@ fn (mut self StreamHandler) report_pwd(url string) {
 	// Report it to the surface.
 	self.surface_message_writer(apprt.SurfaceMessage{
 		kind: .pwd_change
+		pwd_change: apprt.WriteReq{
+			data: path.bytes()
+		}
 	})
 
 	// If we haven't seen a title, use our pwd as the title.

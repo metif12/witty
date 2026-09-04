@@ -625,7 +625,45 @@ fn test_stream_handler_report_pwd_empty() {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
 	handler.report_pwd('')
-	// Should not crash
+	assert ctx.messages.len == 2
+	assert ctx.messages[0].kind == .set_title
+	assert ctx.messages[1].kind == .pwd_change
+	assert ctx.messages[1].pwd_change.data.bytestr() == ''
+}
+
+fn test_stream_handler_clipboard_read_forwards_clipboard_type() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	handler.clipboard_contents(`p`, '?')
+
+	assert ctx.messages.len == 1
+	assert ctx.messages[0].kind == .clipboard_read
+	assert ctx.messages[0].clipboard_type == .primary
+}
+
+fn test_stream_handler_clipboard_write_forwards_contents_and_type() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	handler.clipboard_contents(`s`, 'translated clipboard data')
+
+	assert ctx.messages.len == 1
+	assert ctx.messages[0].kind == .clipboard_write
+	assert ctx.messages[0].clipboard_write_type == .selection
+	assert ctx.messages[0].clipboard_write_req.data.bytestr() == 'translated clipboard data'
+}
+
+fn test_stream_handler_report_pwd_forwards_decoded_path() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	handler.report_pwd('file://localhost/tmp/translated%20path')
+
+	assert ctx.messages.len == 2
+	assert ctx.messages[0].kind == .pwd_change
+	assert ctx.messages[0].pwd_change.data.bytestr() == '/tmp/translated path'
+	assert ctx.messages[1].kind == .set_title
 }
 
 // Test window_title with empty title.
