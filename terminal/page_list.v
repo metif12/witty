@@ -3828,6 +3828,17 @@ pub fn (self &PageList) get_bottom_right(tag PointTag) ?PagePin {
 	}
 }
 
+// Return the untracked page pin for a tagged point. The coordinate is
+// relative to the point's active, viewport, screen, or history origin.
+pub fn (self &PageList) pin(point Point) ?PagePin {
+	if u32(point.coord.x) >= u32(self.cols) {
+		return none
+	}
+	mut result := self.get_top_left(point.tag).down(point.coord.y) or { return none }
+	result.x = point.coord.x
+	return result
+}
+
 // Returns the debug diagram Ghostty uses to inspect page boundaries, the
 // active area, wraps, and tracked pins.
 pub fn (self &PageList) diagram() !string {
@@ -4606,12 +4617,12 @@ pub fn (mut self PageList) erase_row(p PagePin) {
 // ============================================================
 
 // Erase a range of rows from tl to bl (inclusive).
-pub fn (mut self PageList) erase_rows(tl PointTag, bl ?PointTag) {
-	tl_pin := self.get_top_left(tl)
-	bl_pin := if bt := bl {
-		self.get_bottom_right(bt) or { return }
+pub fn (mut self PageList) erase_rows(tl Point, bl ?Point) {
+	tl_pin := self.pin(tl) or { return }
+	bl_pin := if point := bl {
+		self.pin(point) or { return }
 	} else {
-		self.get_bottom_right(tl) or { return }
+		self.get_bottom_right(tl.tag) or { return }
 	}
 
 	// Count rows to erase
@@ -4680,7 +4691,7 @@ pub fn (mut self PageList) erase_rows(tl PointTag, bl ?PointTag) {
 
 	// If we deleted active, we need to regrow because one of our invariants
 	// is that we always have full active space.
-	if tl == .active {
+	if tl.tag == .active {
 		for _ in 0 .. erased {
 			self.grow() or { &PageNode(unsafe { nil }) }
 		}

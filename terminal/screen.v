@@ -2621,20 +2621,24 @@ fn (mut self Screen) clear_active_row(y u32) {
 }
 
 // Erase rows physically (reclaim memory).
-pub fn (mut self Screen) erase_rows(tl PointTag, bl ?PointTag) {
+pub fn (mut self Screen) erase_rows(tl Point, bl ?Point) {
 	self.pages.erase_rows(tl, bl)
 	self.cursor_reload()
 }
 
 // Clear rows (set to blank, preserving the row slots).
-pub fn (mut self Screen) clear_rows(tl PointTag, bl ?PointTag, protected bool) {
-	tl_pin := self.pages.get_top_left(tl)
-	bl_pin := if bt := bl {
-		self.pages.get_bottom_right(bt) or { return }
+pub fn (mut self Screen) clear_rows(tl Point, bl ?Point, protected bool) {
+	tl_pin := self.pages.pin_point(tl) or { return }
+	bl_pin := if point := bl {
+		self.pages.pin_point(point) or { return }
 	} else {
-		self.pages.get_bottom_right(tl) or { return }
+		self.pages.get_bottom_right(tl.tag) or { return }
+	}
+	if tl_pin.y > bl_pin.y {
+		return
 	}
 
+	blank := self.blank_cell()
 	for y in int(tl_pin.y) .. int(bl_pin.y) + 1 {
 		if y < self.pages.screen_rows.len {
 			unsafe {
@@ -2643,16 +2647,20 @@ pub fn (mut self Screen) clear_rows(tl PointTag, bl ?PointTag, protected bool) {
 					// Only clear unprotected cells
 					for mut cell in row.cells {
 						if !cell.is_protected {
-							cell = CellData{}
+							cell = blank
 						}
 					}
 				} else {
 					for i in 0 .. row.cells.len {
-						row.cells[i] = CellData{}
+						row.cells[i] = blank
 					}
+					row.wrap = false
+					row.wrap_continuation = false
 					row.styled = false
 					row.grapheme = false
 					row.hyperlink = false
+					row.semantic_prompt = .unknown
+					row.kitty_virtual_placeholder = false
 				}
 				row.dirty = true
 			}
@@ -2813,7 +2821,7 @@ pub fn (mut self Screen) resize(opts ScreenResize) ! {
 	// erase our history. PageList always keeps at least a page of history.
 	if self.no_scrollback {
 		erased := self.pages.active_start
-		self.pages.erase_rows(.history, ?PointTag(none))
+		self.pages.erase_rows(Point.new(.history, Coordinate{}), ?Point(none))
 		// eraseRows updates all PageList tracked pins. Mirror its behavior:
 		// surviving pins shift up, while pins in erased history move to the
 		// first remaining cell.

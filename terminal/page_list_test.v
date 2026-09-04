@@ -942,7 +942,7 @@ fn test_page_list_erase() {
 	assert s.total_rows > usize(s.rows)
 
 	// Erase entire history
-	s.erase_rows(.history, none)
+	s.erase_rows(Point.new(.history, Coordinate{}), none)
 	assert s.total_rows == usize(s.rows)
 	// Should be back to 1 page (or close)
 	assert s.total_pages() <= 2
@@ -955,7 +955,7 @@ fn test_page_list_erase_active_regrows_automatically() {
 	assert s.total_rows == usize(s.rows)
 
 	// Erase some active rows
-	s.erase_rows(.active, PointTag(.active))
+	s.erase_rows(Point.new(.active, Coordinate{}), none)
 	assert s.total_rows == usize(s.rows)
 }
 
@@ -971,7 +971,7 @@ fn test_page_list_erase_resets_viewport_to_active() {
 	assert s.viewport == .top
 
 	// Erase history
-	s.erase_rows(.history, none)
+	s.erase_rows(Point.new(.history, Coordinate{}), none)
 
 	// Viewport should be back to active since there's no history
 	assert s.viewport == .active || s.viewport == .top
@@ -994,7 +994,7 @@ fn test_page_list_erase_one_row_active() {
 	assert cell.cell.codepoint == u32(0x41)
 
 	// Erase active
-	s.erase_rows(.active, PointTag(.active))
+	s.erase_rows(Point.new(.active, Coordinate{}), none)
 	assert s.total_rows == usize(s.rows)
 
 	// Row should be empty
@@ -1003,6 +1003,34 @@ fn test_page_list_erase_one_row_active() {
 		return
 	}
 	assert cell2.cell.codepoint == 0 || cell2.cell.content_tag == .bg_color_palette
+}
+
+fn test_page_list_point_pin_and_partial_active_erase() {
+	mut s := PageList.init(8, 6, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	for y in 0 .. 6 {
+		set_active_cell(mut s, 0, u16(y), u32(`A`) + u32(y))
+	}
+	tracked_survivor := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 2, y: 4 })) or {
+		panic('missing survivor pin')
+	})
+	defer { s.untrack_pin(tracked_survivor) }
+	tracked_erased := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 3, y: 2 })) or {
+		panic('missing erased pin')
+	})
+	defer { s.untrack_pin(tracked_erased) }
+
+	s.erase_rows(Point.new(.active, Coordinate{}), Point.new(.active, Coordinate{ y: 3 }))
+	assert s.total_rows == usize(s.rows)
+	first := s.get_cell(.active, 0, 0) or { panic('missing first active cell') }
+	second := s.get_cell(.active, 0, 1) or { panic('missing second active cell') }
+	assert first.cell.codepoint == u32(`E`)
+	assert second.cell.codepoint == u32(`F`)
+	assert tracked_survivor.y == 0
+	assert tracked_survivor.x == 2
+	assert tracked_erased.y == 0
+	assert tracked_erased.x == 0
 }
 
 fn test_page_list_erase_history_preserves_managed_survivor() {
@@ -1038,7 +1066,7 @@ fn test_page_list_erase_history_preserves_managed_survivor() {
 	page.set_hyperlink(2, 3, hyperlink_id)
 
 	// The first two rows are history. Erasing them compacts old row 2 to row 0.
-	s.erase_rows(.history, none)
+	s.erase_rows(Point.new(.history, Coordinate{}), none)
 
 	assert s.total_rows == 4
 	cell := page.rows[0].cells[3]
@@ -5243,7 +5271,7 @@ fn test_page_list_erase_reaccounts_page_size() {
 	assert s.page_size > start_size
 
 	// Erase the entire history; we should be back to just our active set.
-	s.erase_rows(.history, none)
+	s.erase_rows(Point.new(.history, Coordinate{}), none)
 	assert s.page_size == start_size
 }
 
@@ -5260,7 +5288,7 @@ fn test_page_list_erase_row_with_tracked_pin_resets_to_top_left() {
 	p := s.track_pin(s.get_top_left(.history))
 
 	// Erase the entire history; we should be back to just our active set.
-	s.erase_rows(.history, none)
+	s.erase_rows(Point.new(.history, Coordinate{}), none)
 	assert s.total_rows == usize(s.rows)
 
 	// Our pin should move to the first page.
@@ -5287,7 +5315,7 @@ fn test_page_list_erase_resets_viewport_to_active_if_moves_within_active() {
 	assert s.viewport == .top
 
 	// Erase the entire history; we should be back to just our active set.
-	s.erase_rows(.history, none)
+	s.erase_rows(Point.new(.history, Coordinate{}), none)
 	assert s.viewport == .active
 }
 
@@ -5302,7 +5330,7 @@ fn test_page_list_erase_resets_viewport_to_active_if_top_is_inside_active() {
 	s.scroll(PageScrollTop{})
 
 	// Erase the entire history; we should be back to just our active set.
-	s.erase_rows(.history, none)
+	s.erase_rows(Point.new(.history, Coordinate{}), none)
 	assert s.viewport == .active
 }
 

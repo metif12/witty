@@ -232,7 +232,7 @@ fn test_screen_clear_rows_active_one_line() {
 	defer { s.deinit() }
 
 	s.test_write_string('hello, world') or { assert false }
-	s.clear_rows(.active, ?PointTag(none), false)
+	s.clear_rows(Point.new(.active, Coordinate{}), ?Point(none), false)
 	str := s.dump_string_alloc(.screen) or {
 		assert false
 		return
@@ -245,7 +245,7 @@ fn test_screen_clear_rows_active_multi_line() {
 	defer { s.deinit() }
 
 	s.test_write_string('hello\nworld') or { assert false }
-	s.clear_rows(.active, ?PointTag(none), false)
+	s.clear_rows(Point.new(.active, Coordinate{}), ?Point(none), false)
 	str := s.dump_string_alloc(.screen) or {
 		assert false
 		return
@@ -261,7 +261,7 @@ fn test_screen_clear_rows_active_styled_line() {
 	s.test_write_string('hello world') or { assert false }
 	s.set_attribute(SgrAttribute{ kind: .unset }) or { assert false }
 
-	s.clear_rows(.active, ?PointTag(none), false)
+	s.clear_rows(Point.new(.active, Coordinate{}), ?Point(none), false)
 	str := s.dump_string_alloc(.screen) or {
 		assert false
 		return
@@ -287,7 +287,7 @@ fn test_screen_clear_rows_protected() {
 	s.test_write_string('PROTECTED') or { assert false }
 	s.cursor.is_protected = false
 
-	s.clear_rows(.active, ?PointTag(none), true)
+	s.clear_rows(Point.new(.active, Coordinate{}), ?Point(none), true)
 
 	str := s.dump_string_alloc(.screen) or {
 		assert false
@@ -314,7 +314,7 @@ fn test_screen_erase_rows_history() {
 	}
 	assert str_screen == '1\n2\n3\n4\n5\n6'
 
-	s.erase_rows(.history, ?PointTag(none))
+	s.erase_rows(Point.new(.history, Coordinate{}), ?Point(none))
 
 	str_active2 := s.dump_string_alloc(.active) or {
 		assert false
@@ -347,7 +347,7 @@ fn test_screen_erase_rows_history_with_more_lines() {
 	}
 	assert str_screen == 'A\nB\nC\n1\n2\n3\n4\n5\n6'
 
-	s.erase_rows(.history, ?PointTag(none))
+	s.erase_rows(Point.new(.history, Coordinate{}), ?Point(none))
 
 	str_active2 := s.dump_string_alloc(.active) or {
 		assert false
@@ -360,6 +360,26 @@ fn test_screen_erase_rows_history_with_more_lines() {
 		return
 	}
 	assert str_screen2 == '2\n3\n4\n5\n6'
+}
+
+fn test_screen_erase_rows_active_partial() {
+	mut s := Screen.init(5, 5, 0)
+	defer { s.deinit() }
+
+	s.test_write_string('1\n2\n3') or { assert false }
+	s.erase_rows(Point.new(.active, Coordinate{}), Point.new(.active, Coordinate{ y: 1 }))
+
+	active := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
+	assert active == '3'
+	screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
+	assert screen == '3'
+	assert s.pages.screen_rows.len == 5
 }
 
 fn test_screen_scrolling() {
@@ -1134,7 +1154,7 @@ fn test_screen_clear_history_with_no_history() {
 	mut s := Screen.init(10, 3, 3)
 	defer { s.deinit() }
 	s.test_write_string('4ABCD\n5EFGH\n6IJKL') or { assert false }
-	s.erase_rows(.history, ?PointTag(none))
+	s.erase_rows(Point.new(.history, Coordinate{}), ?Point(none))
 	str_active := s.dump_string_alloc(.active) or {
 		assert false
 		return
@@ -1151,7 +1171,7 @@ fn test_screen_clear_history() {
 	mut s := Screen.init(10, 3, 3)
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL\n4ABCD\n5EFGH\n6IJKL') or { assert false }
-	s.erase_rows(.history, ?PointTag(none))
+	s.erase_rows(Point.new(.history, Coordinate{}), ?Point(none))
 	str_active := s.dump_string_alloc(.active) or {
 		assert false
 		return

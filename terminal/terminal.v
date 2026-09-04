@@ -3759,7 +3759,7 @@ pub fn (mut self Terminal) erase_display(mode EraseDisplay, protected_req bool) 
 			}
 
 			// All active area
-			self.screens.active.clear_rows(.active, ?PointTag(none), is_protected)
+			self.screens.active.clear_rows(Point.new(.active, Coordinate{}), ?Point(none), is_protected)
 			self.screens.active.cursor.pending_wrap = false
 			self.screens.active.clear_kitty_images()
 			self.flags.dirty.clear = true
@@ -3770,11 +3770,9 @@ pub fn (mut self Terminal) erase_display(mode EraseDisplay, protected_req bool) 
 
 			// All lines below
 			if self.screens.active.cursor.y + 1 < self.rows {
-				self.screens.active.clear_rows_range(
-					int(self.screens.active.cursor.y) + 1,
-					int(self.rows),
-					is_protected,
-				)
+				self.screens.active.clear_rows(Point.new(.active, Coordinate{
+					y: self.screens.active.cursor.y + 1
+				}), ?Point(none), is_protected)
 			}
 		}
 		.above {
@@ -3783,11 +3781,11 @@ pub fn (mut self Terminal) erase_display(mode EraseDisplay, protected_req bool) 
 
 			// All lines above
 			if self.screens.active.cursor.y > 0 {
-				self.screens.active.clear_rows_range(0, int(self.screens.active.cursor.y), is_protected)
+				self.screens.active.clear_rows(Point.new(.active, Coordinate{}), Point.new(.active, Coordinate{ y: self.screens.active.cursor.y - 1 }), is_protected)
 			}
 		}
 		.scrollback {
-			self.screens.active.erase_rows(.history, ?PointTag(none))
+			self.screens.active.erase_rows(Point.new(.history, Coordinate{}), ?Point(none))
 		}
 	}
 }
@@ -4371,35 +4369,6 @@ pub fn (self &Terminal) is_dirty(x u32, y u32) bool {
 pub fn (mut self Terminal) clear_dirty() {
 	for mut row in self.screens.active.pages.screen_rows {
 		row.dirty = false
-	}
-}
-
-// Helper to clear rows in a range (active-area-relative y coordinates).
-fn (mut self Screen) clear_rows_range(start_y int, end_y int, is_protected bool) {
-	active_start := self.pages.active_start
-	for y in start_y .. end_y {
-		idx := active_start + y
-		if idx >= self.pages.screen_rows.len {
-			break
-		}
-		unsafe {
-			mut row := &self.pages.screen_rows[idx]
-			if is_protected {
-				for mut cell in row.cells {
-					if !cell.is_protected {
-						cell = CellData{}
-					}
-				}
-			} else {
-				for i in 0 .. row.cells.len {
-					row.cells[i] = CellData{}
-				}
-				row.styled = false
-				row.grapheme = false
-				row.hyperlink = false
-			}
-			row.dirty = true
-		}
 	}
 }
 

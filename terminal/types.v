@@ -485,24 +485,55 @@ pub fn (mut self Pages) erase_row(opts PinOpts) ! {
 	}
 }
 
-// Erase rows in a region.
-pub fn (mut self Pages) erase_rows(tl PointTag, bl ?PointTag) {
-	match tl {
-		.history {
-			// Remove all history rows (before active_start)
-			for self.active_start > 0 {
-				self.screen_rows.delete(0)
-				self.active_start -= 1
-			}
-			if self.viewport == .active {
-				self.viewport_start = self.active_start
-			} else if self.viewport == .top {
-				self.viewport_start = 0
-			} else {
-				self.viewport_start = clamp_int(self.viewport_start, 0, self.active_start)
-			}
+// Erase an inclusive range of physical rows. Active rows are regrown at the
+// bottom so the addressable terminal area always remains exactly `rows` tall.
+pub fn (mut self Pages) erase_rows(tl Point, bl ?Point) {
+	top := self.pin_point(tl) or { return }
+	bottom := if point := bl {
+		self.pin_point(point) or { return }
+	} else {
+		self.get_bottom_right(tl.tag) or { return }
+	}
+	if top.y > bottom.y {
+		return
+	}
+
+	start := int(top.y)
+	end := int(bottom.y)
+	erased := end - start + 1
+	old_active_start := self.active_start
+	for _ in 0 .. erased {
+		self.screen_rows.delete(start)
+	}
+
+	// Only deleted history rows move the active-area origin. Deleting active
+	// rows shifts later active rows upward and the regrowth below fills the
+	// vacated tail.
+	if start < old_active_start {
+		history_end := if end < old_active_start { end } else { old_active_start - 1 }
+		self.active_start -= history_end - start + 1
+	}
+	if tl.tag == .active {
+		for _ in 0 .. erased {
+			self.screen_rows << RowData.init(self.cols)
 		}
-		else {}
+	}
+
+	match self.viewport {
+		.active {
+			self.viewport_start = self.active_start
+		}
+		.top {
+			self.viewport_start = 0
+		}
+		.pinned {
+			if self.viewport_start > end {
+				self.viewport_start -= erased
+			} else if self.viewport_start >= start {
+				self.viewport_start = start
+			}
+			self.viewport_start = clamp_int(self.viewport_start, 0, self.active_start)
+		}
 	}
 }
 
@@ -1373,6 +1404,15 @@ pub fn (self &Pages) pin(opts PinOpts) ?Pin {
 		x: opts.x
 		y: y
 	}
+}
+
+// Convert Ghostty's tagged Point representation to a flat-storage pin.
+pub fn (self &Pages) pin_point(point Point) ?Pin {
+	return self.pin(PinOpts{
+		tag: point.tag
+		x: u32(point.coord.x)
+		y: point.coord.y
+	})
 }
 
 // ============================================================
