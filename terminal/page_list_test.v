@@ -84,6 +84,62 @@ fn test_page_list_tracked_pin_accessors_and_diagram() {
 	assert diagram.contains('= PIN')
 }
 
+fn test_page_pin_row_cell_grapheme_and_style_accessors() {
+	mut s := PageList.init(4, 3, usize(0))
+	defer { s.deinit() }
+
+	mut pin := s.get_pin(.screen, 1, 1) or {
+		assert false
+		return
+	}
+	mut page := &pin.node.data
+	style := CellStyle{ flags: StyleFlags{ bold: true } }
+	style_id := page.styles.add(style) or {
+		assert false, err.msg()
+		return
+	}
+	page.rows[int(pin.y)].cells[int(pin.x)] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`a`)
+		style_id: style_id
+	}
+	page.set_graphemes(int(pin.y), int(pin.x), [u32(0x0301)])
+
+	rac := pin.row_and_cell()
+	assert voidptr(rac.row) == voidptr(pin.row_data())
+	assert voidptr(rac.cell) == voidptr(pin.cell_data())
+	assert pin.cells(.all).len == 4
+	assert pin.cells(.left).len == 2
+	assert pin.cells(.right).len == 3
+	assert pin.grapheme(rac.cell) or { []u32{} } == [u32(0x0301)]
+	assert pin.style(rac.cell).eql(&style)
+	assert pin.style(&CellData{}).default()
+}
+
+fn test_page_pin_left_right_wrap() {
+	mut s := PageList.init(4, 4, usize(0))
+	defer { s.deinit() }
+
+	pin := s.get_pin(.screen, 1, 2) or {
+		assert false
+		return
+	}
+	left := pin.left_wrap(3) or {
+		assert false
+		return
+	}
+	assert left.y == 1
+	assert left.x == 2
+	right := pin.right_wrap(5) or {
+		assert false
+		return
+	}
+	assert right.y == 3
+	assert right.x == 2
+	assert pin.left_wrap(10) == none
+	assert pin.right_wrap(7) == none
+}
+
 fn test_page_list_pause_integrity_checks_is_nested() {
 	mut s := PageList.init(3, 2, usize(0))
 	defer { s.deinit() }

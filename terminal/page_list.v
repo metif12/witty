@@ -2391,15 +2391,62 @@ pub mut:
 	garbage bool // Set true if tracked pin was pruned
 }
 
+// Selects which part of a pin's row is returned by cells. The left and
+// right subsets both include the cell at the pin.
+pub enum PagePinCellSubset {
+	all
+	left
+	right
+}
+
+// Returns the row and cell at this pin's position.
+pub fn (self &PagePin) row_and_cell() RowAndCell {
+	assert !isnil(self.node)
+	assert self.y < self.node.data.size.rows
+	assert self.x < self.node.data.size.cols
+	row := unsafe { &self.node.data.rows[int(self.y)] }
+	return RowAndCell{
+		row: row
+		cell: unsafe { &row.cells[int(self.x)] }
+	}
+}
+
+// Returns the cells for this pin's row. Left and right are inclusive of x.
+pub fn (self &PagePin) cells(subset PagePinCellSubset) []CellData {
+	rac := self.row_and_cell()
+	all := rac.row.cells[..int(self.node.data.size.cols)]
+	return match subset {
+		.all { all }
+		.left { all[..int(self.x) + 1] }
+		.right { all[int(self.x)..] }
+	}
+}
+
+// Returns the extra codepoints for a grapheme cell. The cell's first
+// codepoint remains stored directly on the cell and is not returned here.
+pub fn (self &PagePin) grapheme(cell &CellData) ?[]u32 {
+	if !cell.has_grapheme || cell.graphemes.len == 0 {
+		return none
+	}
+	return cell.graphemes
+}
+
+// Returns the resolved style for a cell on this pin's page.
+pub fn (self &PagePin) style(cell &CellData) CellStyle {
+	if cell.style_id == default_style_id {
+		return CellStyle{}
+	}
+	return self.node.data.styles.get(cell.style_id)
+}
+
 // Returns the row data at this pin's position.
 pub fn (self &PagePin) row_data() &RowData {
-	return &self.node.data.rows[int(self.y)]
+	return self.row_and_cell().row
 }
 
 // Returns the cell data at this pin's position.
 pub fn (self &PagePin) cell_data() &CellData {
-	row := self.node.data.rows[int(self.y)]
-	return &row.cells[int(self.x)]
+	return self.row_and_cell().cell
 }
 
 // Returns true if the row at this pin is dirty.
@@ -2499,6 +2546,38 @@ pub fn (self &PagePin) right_clamp(n u16) PagePin {
 		y: self.y
 		x: new_x
 	}
+}
+
+// Move left by n cells, wrapping to preceding rows as needed.
+// Returns none if the movement goes beyond the start of the page list.
+pub fn (self &PagePin) left_wrap(n u32) ?PagePin {
+	cols := u32(self.node.data.size.cols)
+	remaining_in_row := u32(self.x)
+	if n <= remaining_in_row {
+		return self.left(u16(n))
+	}
+
+	extra_after_remaining := n - remaining_in_row
+	rows_off := 1 + extra_after_remaining / cols
+	mut result := self.up(rows_off) or { return none }
+	result.x = u16(cols - extra_after_remaining % cols)
+	return result
+}
+
+// Move right by n cells, wrapping to following rows as needed.
+// Returns none if the movement goes beyond the end of the page list.
+pub fn (self &PagePin) right_wrap(n u32) ?PagePin {
+	cols := u32(self.node.data.size.cols)
+	remaining_in_row := cols - u32(self.x) - 1
+	if n <= remaining_in_row {
+		return self.right(u16(n))
+	}
+
+	extra_after_remaining := n - remaining_in_row
+	rows_off := 1 + extra_after_remaining / cols
+	mut result := self.down(rows_off) or { return none }
+	result.x = u16(extra_after_remaining % cols - 1)
+	return result
 }
 
 // Move down by n rows, crossing page boundaries. Returns none if overflow.
