@@ -149,6 +149,9 @@ pub fn run_cli_action(action global_state.Action, args []string) !int {
 			0
 		}
 		.list_themes { cli.run_list_themes(action_args(args, action)) }
+		.list_colors { cli.run_list_colors(action_args(args, action))! }
+		.list_keybinds { cli.run_list_keybinds(action_args(args, action))! }
+		.validate_config { cli.run_validate_config(action_args(args, action))! }
 		.list_actions {
 			for value in global_state.actions() {
 				if value != .none {

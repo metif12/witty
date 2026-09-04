@@ -1,5 +1,7 @@
 module input
 
+import strings
+
 // --- Original Ghostty Comments Start: src/input/Binding.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/input/Binding.zig
@@ -1631,7 +1633,7 @@ pub:
 	float_param f32
 	// Int parameter for jump_to_prompt, scroll_page_lines.
 	int_param i32
-	// Unsigned int parameter for scroll_to_row, goto_tab, move_tab.
+	// Unsigned int parameter for scroll_to_row and goto_tab.
 	uint_param u64
 	// Enum parameters stored as ints.
 	enum_param i32
@@ -1655,10 +1657,10 @@ pub fn (a Action) equal(b Action) bool {
 		.increase_font_size, .decrease_font_size, .set_font_size, .scroll_page_fractional {
 			a.float_param == b.float_param
 		}
-		.jump_to_prompt, .scroll_page_lines {
+		.jump_to_prompt, .scroll_page_lines, .move_tab {
 			a.int_param == b.int_param
 		}
-		.scroll_to_row, .goto_tab, .move_tab {
+		.scroll_to_row, .goto_tab {
 			a.uint_param == b.uint_param
 		}
 		.new_split, .goto_split, .goto_window, .navigate_search, .adjust_selection,
@@ -1693,10 +1695,10 @@ pub fn (a Action) hash() u64 {
 			bits := unsafe { *(&u32(&a.float_param)) }
 			h = h * 31 + u64(bits)
 		}
-		.jump_to_prompt, .scroll_page_lines {
+		.jump_to_prompt, .scroll_page_lines, .move_tab {
 			h = h * 31 + u64(u32(a.int_param))
 		}
-		.scroll_to_row, .goto_tab, .move_tab {
+		.scroll_to_row, .goto_tab {
 			h = h * 31 + a.uint_param
 		}
 		.new_split, .goto_split, .goto_window, .navigate_search, .adjust_selection,
@@ -1760,6 +1762,81 @@ pub fn Action.new_enum2(tag ActionTag, e1 i32, e2 i32) Action {
 		enum_param: e1
 		enum_param2: e2
 	}
+}
+
+// format returns the action in the same syntax accepted by Action.parse.
+// Ghostty uses std.zig.stringEscape for string payloads so that arbitrary
+// bytes, including UTF-8, can safely round-trip through a config file.
+pub fn (a Action) format() string {
+	name := a.tag.str()
+	return match a.tag {
+		.csi, .esc, .text, .search, .activate_key_table, .activate_key_table_once {
+			'${name}:${zig_escape(a.str_param)}'
+		}
+		.increase_font_size, .decrease_font_size, .set_font_size, .scroll_page_fractional {
+			'${name}:${a.float_param}'
+		}
+		.jump_to_prompt, .scroll_page_lines, .move_tab { '${name}:${a.int_param}' }
+		.scroll_to_row, .goto_tab { '${name}:${a.uint_param}' }
+		.new_split { '${name}:${split_direction_name(a.enum_param)}' }
+		.goto_split { '${name}:${split_focus_direction_name(a.enum_param)}' }
+		.goto_window { '${name}:${enum_name[GotoWindow](a.enum_param)}' }
+		.navigate_search { '${name}:${enum_name[NavigateSearch](a.enum_param)}' }
+		.adjust_selection { '${name}:${adjust_selection_name(a.enum_param)}' }
+		.copy_to_clipboard { '${name}:${enum_name[CopyToClipboard](a.enum_param)}' }
+		.inspector { '${name}:${enum_name[InspectorMode](a.enum_param)}' }
+		.close_tab { '${name}:${enum_name[CloseTabMode](a.enum_param)}' }
+		.crash { '${name}:${crash_thread_name(a.enum_param)}' }
+		.resize_split {
+			'${name}:${enum_name[SplitResizeDirection](a.enum_param)},${a.enum_param2}'
+		}
+		.write_scrollback_file, .write_screen_file, .write_selection_file {
+			'${name}:${enum_name[WriteScreenAction](a.enum_param)},${enum_name[WriteScreenFormat](a.enum_param2)}'
+		}
+		else { name }
+	}
+}
+
+fn enum_name[T](value i32) string {
+	return unsafe { T(value).str() }
+}
+
+fn split_direction_name(value i32) string {
+	return if unsafe { SplitDirection(value) } == .auto_ { 'auto' } else { enum_name[SplitDirection](value) }
+}
+
+fn split_focus_direction_name(value i32) string {
+	return enum_name[SplitFocusDirection](value)
+}
+
+fn adjust_selection_name(value i32) string {
+	return if unsafe { AdjustSelection(value) } == .end_ { 'end' } else { enum_name[AdjustSelection](value) }
+}
+
+fn crash_thread_name(value i32) string {
+	return if unsafe { CrashThread(value) } == .main_thread { 'main' } else { enum_name[CrashThread](value) }
+}
+
+fn zig_escape(value string) string {
+	mut result := strings.new_builder(value.len)
+	for ch in value.bytes() {
+		if ch == `\\` {
+			result.write_string('\\\\')
+		} else if ch == `\n` {
+			result.write_string('\\n')
+		} else if ch == `\r` {
+			result.write_string('\\r')
+		} else if ch == `\t` {
+			result.write_string('\\t')
+		} else if ch == `"` {
+			result.write_string('\\"')
+		} else if ch >= 0x20 && ch <= 0x7e {
+			result.write_u8(ch)
+		} else {
+			result.write_string('\\x${ch:02x}')
+		}
+	}
+	return result.str()
 }
 
 // SplitDirection values for new_split.
@@ -2181,7 +2258,7 @@ pub fn Action.parse(input_str string) !Action {
 		}
 		'move_tab' {
 			if !has_param { return error('InvalidFormat') }
-			Action.new_uint(.move_tab, strconv_parse_uint(param)!)
+			Action.new_int(.move_tab, strconv_parse_int(param)!)
 		}
 		// Enum actions with defaults
 		'copy_to_clipboard' {
@@ -2776,6 +2853,39 @@ pub struct ReverseEntry {
 pub mut:
 	action  Action
 	trigger Trigger
+}
+
+// format_entries serializes every binding into the value side of a Ghostty
+// `keybind = ...` config entry. Leaders are recursively flattened into `>`
+// sequences and chained actions become subsequent `chain=...` entries.
+pub fn (s &Set) format_entries() []string {
+	mut result := []string{}
+	for entry in s.bindings {
+		format_set_value(entry.value, entry.trigger.format(), mut result)
+	}
+	return result
+}
+
+fn format_set_value(value SetValue, prefix string, mut result []string) {
+	match value.typ {
+		.leader {
+			for entry in value.leader.bindings {
+				format_set_value(entry.value, '${prefix}>${entry.trigger.format()}', mut result)
+			}
+		}
+		.leaf {
+			result << '${prefix}=${value.leaf_action.format()}'
+		}
+		.leaf_chained {
+			for i, action in value.chain_actions {
+				if i == 0 {
+					result << '${prefix}=${action.format()}'
+				} else {
+					result << 'chain=${action.format()}'
+				}
+			}
+		}
+	}
 }
 
 // get returns a binding entry for a given trigger.

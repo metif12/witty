@@ -4008,7 +4008,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			return self.rt_app.perform_action(AppAction{
 				kind: .move_tab
 				target: &self
-				move_tab_amount: int(action.uint_param)
+				move_tab_amount: int(action.int_param)
 			})!
 		}
 		.new_split {

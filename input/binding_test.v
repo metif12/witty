@@ -915,6 +915,41 @@ fn test_parse_write_screen_file_format() {
 	assert b.action.enum_param2 == i32(WriteScreenFormat.html)
 }
 
+fn test_action_format_string_escapes_utf8() {
+	a := Action.new_str(.text, '👻')
+	assert a.format() == 'text:\\xf0\\x9f\\x91\\xbb'
+}
+
+fn test_action_format_all_parameter_shapes() {
+	assert Action.new(.new_window).format() == 'new_window'
+	assert Action.new_float(.increase_font_size, 1.5).format() == 'increase_font_size:1.5'
+	assert Action.new_int(.jump_to_prompt, -2).format() == 'jump_to_prompt:-2'
+	assert Action.new_uint(.goto_tab, 4).format() == 'goto_tab:4'
+	assert Action.new_enum(.new_split, i32(SplitDirection.auto_)).format() == 'new_split:auto'
+	assert Action.new_enum(.adjust_selection, i32(AdjustSelection.end_)).format() == 'adjust_selection:end'
+	assert Action.new_enum(.crash, i32(CrashThread.main_thread)).format() == 'crash:main'
+	assert Action.new_enum2(.resize_split, i32(SplitResizeDirection.up), 10).format() == 'resize_split:up,10'
+	assert Action.new_enum2(.write_screen_file, i32(WriteScreenAction.copy),
+		i32(WriteScreenFormat.html)).format() == 'write_screen_file:copy,html'
+}
+
+fn test_move_tab_is_signed_and_formats() {
+	b := parse_single('a=move_tab:-1') or { panic(err.msg()) }
+	assert b.action.tag == .move_tab
+	assert b.action.int_param == -1
+	assert b.action.format() == 'move_tab:-1'
+}
+
+fn test_set_format_entries_flattens_sequences_and_chains() {
+	mut set := Set{}
+	set.parse_and_put('ctrl+a>b=new_window') or { panic(err.msg()) }
+	set.parse_and_put('chain=text:👻') or { panic(err.msg()) }
+	assert set.format_entries() == [
+		'ctrl+a>b=new_window',
+		'chain=text:\\xf0\\x9f\\x91\\xbb',
+	]
+}
+
 fn test_parse_write_screen_file_invalid() {
 	parse_single('a=write_screen_file:') or {
 		assert err.msg() == 'InvalidFormat'

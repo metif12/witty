@@ -4260,6 +4260,31 @@ pub fn (k Keybinds) equal(other Keybinds) bool {
 	return true
 }
 
+// format_entries serializes all configured keybindings as complete config
+// lines. This is the V equivalent of Keybinds.formatEntryDocs without the
+// generated documentation layer. Root bindings are emitted first, followed
+// by named key-table bindings, matching Ghostty's formatter.
+pub fn (k Keybinds) format_entries() []string {
+	mut result := []string{}
+	root_entries := k.set.format_entries()
+	if root_entries.len == 0 && k.tables.len == 0 {
+		return ['keybind = ']
+	}
+	for value in root_entries {
+		result << 'keybind = ${value}'
+	}
+	for name, table in k.tables {
+		for value in table.format_entries() {
+			if value == 'chain=' || value.starts_with('chain=') {
+				result << 'keybind = ${value}'
+			} else {
+				result << 'keybind = ${name}/${value}'
+			}
+		}
+	}
+	return result
+}
+
 // keybinds_set_equal compares two binding sets by their primary bindings.
 // Faithful to Config.zig `Keybinds.equalSet`: equal iff the same triggers map
 // to the same values (recursing into leader sets). Reverse mappings are
@@ -6643,8 +6668,13 @@ fn (mut c Config) apply_kv(key string, value string) {
 			}
 		}
 		else {
-			// Unknown key: ignored, matching Ghostty's tolerance of options
-			// it doesn't recognize (e.g. options for other platforms).
+			// Config's reflected CLI parser reports unknown fields as a
+			// diagnostic. Platform-specific fields are still present in Config,
+			// so silently accepting a misspelling would diverge from Ghostty and
+			// make `+validate-config` incorrectly succeed.
+			c.diagnostics << Diagnostic{
+				message: '${key}: unknown field'
+			}
 		}
 	}
 }

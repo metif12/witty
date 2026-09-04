@@ -1775,3 +1775,15 @@ fn test_preferred_xdg_path_uses_new_then_legacy_name() {
 	os.write_file(new_path, 'font-size = 11\n')!
 	assert preferred_xdg_config_path() == new_path
 }
+
+fn test_keybinds_format_entries_includes_root_tables_and_chains() {
+	mut keybinds := Keybinds{}
+	keybinds.parse_cli('ctrl+a=new_window')!
+	keybinds.parse_cli('editing/x=text:hello')!
+	keybinds.parse_cli('editing/chain=new_tab')!
+	assert keybinds.format_entries() == [
+		'keybind = ctrl+a=new_window',
+		'keybind = editing/x=text:hello',
+		'keybind = chain=new_tab',
+	]
+}

@@ -10,26 +10,47 @@ module terminal
 
 const x11_rgb_data = $embed_file('@VMODROOT/terminal/res/rgb.txt').to_string()
 
+pub struct NamedRGB {
+pub:
+	name string
+	rgb  RGB
+}
+
+// x11_color_entries returns every entry in the embedded X.Org rgb.txt file.
+// Ghostty exposes this complete table through `+list-colors`.
+pub fn x11_color_entries() []NamedRGB {
+	mut result := []NamedRGB{}
+	for line in x11_rgb_data.split_into_lines() {
+		if line.len < 13 {
+			continue
+		}
+		name := line[12..].trim_space()
+		if name.len == 0 {
+			continue
+		}
+		result << NamedRGB{
+			name: name
+			rgb: RGB{
+				r: u8(line[0..3].trim_space().int())
+				g: u8(line[4..7].trim_space().int())
+				b: u8(line[8..11].trim_space().int())
+			}
+		}
+	}
+	return result
+}
+
 // x11_color_get looks up an X11 color name using ASCII-insensitive matching.
 pub fn x11_color_get(name string) ?RGB {
 	if name.len == 0 {
 		return none
 	}
 	wanted := name.to_lower()
-	for line in x11_rgb_data.split_into_lines() {
-		// rgb.txt has three fixed-width decimal components followed by a name.
-		if line.len < 13 {
+	for entry in x11_color_entries() {
+		if entry.name.to_lower() != wanted {
 			continue
 		}
-		candidate := line[12..].trim_space()
-		if candidate.to_lower() != wanted {
-			continue
-		}
-		return RGB{
-			r: u8(line[0..3].trim_space().int())
-			g: u8(line[4..7].trim_space().int())
-			b: u8(line[8..11].trim_space().int())
-		}
+		return entry.rgb
 	}
 	return none
 }
