@@ -710,7 +710,9 @@ pub fn (mut self ImageRenderState) kitty_update_storage(mut storage kitty.ImageS
 		for virtual_p in virtuals {
 			// For errors we log and continue. We try to place
 			// other placements even if one fails.
-			self.prep_kitty_virtual_placement(mut storage, virtual_p, cell_size) or { continue }
+			self.prep_kitty_virtual_placement(mut storage, virtual_p, top_y, cell_size) or {
+				continue
+			}
 		}
 	}
 
@@ -828,7 +830,7 @@ fn (mut self ImageRenderState) prep_kitty_placement(t &terminal.Terminal, top_y 
 
 // Prepare a virtual (unicode placeholder) placement. Faithful translation
 // of prepKittyVirtualPlacement.
-fn (mut self ImageRenderState) prep_kitty_virtual_placement(mut storage kitty.ImageStorage, p kitty.VirtualPlacement, cell_size CellSize) ! {
+fn (mut self ImageRenderState) prep_kitty_virtual_placement(mut storage kitty.ImageStorage, p kitty.VirtualPlacement, viewport_top_y u32, cell_size CellSize) ! {
 	image := storage.image_by_id(p.image_id) or {
 		// missing image for virtual placement, ignoring
 		return
@@ -844,10 +846,10 @@ fn (mut self ImageRenderState) prep_kitty_virtual_placement(mut storage kitty.Im
 		return
 	}
 
-	// The viewport-relative Y. In the V simplified model, the render
-	// placement top_left pin carries an absolute screen Y; virtual
-	// placements only ever take up one row within the viewport.
-	viewport_y := rp.top_left.y
+	// placement_iterator only produces virtual placements inside the
+	// viewport, so this subtraction is the flat-Pages equivalent of
+	// pages.pointFromPin(.viewport, rp.top_left).viewport.y.
+	viewport_y := rp.top_left.y - viewport_top_y
 
 	// Prepare the image for the GPU and store the placement.
 	self.prep_kitty_image(image)!

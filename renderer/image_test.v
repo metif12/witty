@@ -361,6 +361,56 @@ fn test_kitty_virtual_placement_keeps_renderer_updates_active_without_placeholde
 	assert state.kitty_requires_update(&t)
 }
 
+fn test_kitty_virtual_placement_uses_viewport_relative_row() ! {
+	mut t := terminal.Terminal.init(terminal.Options{
+		rows: 5
+		cols: 5
+	})!
+	t.width_px = 50
+	t.height_px = 100
+	defer {
+		t.deinit()
+	}
+
+	mut storage := kitty.ImageStorage{}
+	storage.add_image(kitty.Image{
+		id: 7
+		width: 1
+		height: 1
+		data: [u8(255), 255, 255]
+	})!
+	storage.add_placement(7, 9, kitty.Placement{
+		location: kitty.PlacementVirtual{}
+		columns: 1
+		rows: 1
+	})
+	defer {
+		storage.deinit(t.screens.active)
+	}
+
+	mut state := ImageRenderState.empty()
+	defer {
+		state.deinit()
+	}
+	state.kitty_update_storage(mut storage, &t, 3, 7, CellSize{
+		width: 10
+		height: 20
+	}, []KittyPinnedPlacement{}, [kitty.VirtualPlacement{
+		pin: terminal.Pin{
+			x: 2
+			y: 4
+		}
+		image_id: 7
+		placement_id: 9
+		width: 1
+		height: 1
+	}])
+
+	assert state.kitty_placements.len == 1
+	assert state.kitty_placements[0].x == 2
+	assert state.kitty_placements[0].y == 1
+}
+
 // Test DrawPlacements enum.
 fn test_draw_placements_enum() {
 	assert DrawPlacements.kitty_below_bg != DrawPlacements.kitty_below_text
