@@ -4,6 +4,7 @@ import input
 import apprt
 import terminal
 import configpkg
+import time
 
 // Test helper: sets up a 10x5 cell grid with 10x20px cells and 5px padding on all sides.
 fn make_test_size() Size {
@@ -776,4 +777,21 @@ fn test_runtime_callbacks_override_headless_storage() ! {
 	assert probe.confirmed
 	assert !surface.closed
 	assert surface.get_content_scale()! == ContentScale{ x: 2, y: 3 }
+}
+
+fn test_command_finished_preserves_duration_and_exit_code() ! {
+	mut runtime := RuntimeApp{ actions_handled: true }
+	mut surf := make_test_surface()
+	surf.rt_app = &runtime
+	surf.command_timer = time.now().add(-time.Duration(1_234_567))
+	surf.handle_message(apprt.SurfaceMessage{
+		kind: .stop_command
+		stop_command_exit_code: u8(7)
+	})!
+
+	assert surf.command_timer == none
+	assert runtime.actions.len == 1
+	assert runtime.actions[0].kind == .command_finished
+	assert runtime.actions[0].command_finished.exit_code? == 7
+	assert runtime.actions[0].command_finished.duration.duration >= 1_234_567
 }

@@ -4066,7 +4066,9 @@ pub mut:
 	// Control when the scrollbar is shown to scroll the scrollback buffer.
 	scrollbar Scrollbar = .system
 	// Enable or disable command-finished notifications. See docs above.
-	notify_on_command_finish NotifyOnCommandFinish = .never
+	notify_on_command_finish        NotifyOnCommandFinish = .never
+	notify_on_command_finish_action NotifyOnCommandFinishAction
+	notify_on_command_finish_after  Duration = Duration{ duration: 5_000_000_000 }
 	// The setting that will change the application class value (GTK only).
 	class ?string
 	// This controls the instance name field of the WM_CLASS X11 property.
@@ -5638,6 +5640,19 @@ pub:
 	duration u64
 }
 
+// round truncates this duration to a multiple of `to`. This mirrors
+// Config.Duration.round and is primarily used for human-facing durations.
+pub fn (d Duration) round(to u64) Duration {
+	return Duration{
+		duration: d.duration / to * to
+	}
+}
+
+// lte reports whether this duration is less than or equal to another.
+pub fn (d Duration) lte(other Duration) bool {
+	return d.duration <= other.duration
+}
+
 // as_milliseconds converts the nanosecond duration to the unsigned millisecond
 // range accepted by GLib, saturating on overflow.
 pub fn (d Duration) as_milliseconds() u32 {
@@ -5655,7 +5670,11 @@ pub enum NotifyOnCommandFinish {
 	always
 }
 
-pub struct NotifyOnCommandFinishAction {}
+pub struct NotifyOnCommandFinishAction {
+pub mut:
+	bell   bool = true
+	notify bool
+}
 
 // GraphemeWidthMethod for calculating the cell width of a grapheme cluster.
 pub enum GraphemeWidthMethod {
@@ -6745,6 +6764,18 @@ fn (mut c Config) apply_kv(key string, value string) {
 				}
 			}
 		}
+		'notify-on-command-finish-action' {
+			c.notify_on_command_finish_action = parse_notify_on_command_finish_action(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
+		'notify-on-command-finish-after' {
+			c.notify_on_command_finish_after = duration_parse_cli(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
 		'cursor-style' {
 			c.cursor_style = match value {
 				'block' { .block }
@@ -7269,6 +7300,34 @@ fn parse_app_notifications(value string) ?AppNotifications {
 			}
 			'config-reload' {
 				result.config_reload = enabled
+			}
+			else {
+				return none
+			}
+		}
+	}
+	return result
+}
+
+fn parse_notify_on_command_finish_action(value string) ?NotifyOnCommandFinishAction {
+	if b := parse_bool_opt(value) {
+		return NotifyOnCommandFinishAction{
+			bell: b
+			notify: b
+		}
+	}
+	mut result := NotifyOnCommandFinishAction{}
+	for raw in value.split(',') {
+		part := raw.trim_space()
+		negative := part.starts_with('no-')
+		name := if negative { part[3..] } else { part }
+		enabled := !negative
+		match name {
+			'bell' {
+				result.bell = enabled
+			}
+			'notify' {
+				result.notify = enabled
 			}
 			else {
 				return none

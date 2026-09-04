@@ -1776,8 +1776,7 @@ pub:
 	progress           osc.ProgressReport
 	scrollbar          terminal.Scrollbar
 	health             int
-	exit_code          ?u8
-	duration_ms        u64
+	command_finished   apprt.CommandFinished
 	min_size           ScreenSize
 	max_size           ScreenSize
 	secure_input_on    bool
@@ -2911,8 +2910,10 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 				self.rt_app.perform_action(AppAction{
 					kind: .command_finished
 					target: &self
-					exit_code: msg.stop_command_exit_code
-					duration_ms: u64(duration / time.millisecond)
+					command_finished: apprt.CommandFinished{
+						exit_code: msg.stop_command_exit_code
+						duration: configpkg.Duration{ duration: u64(duration) }
+					}
 				})!
 			}
 		}

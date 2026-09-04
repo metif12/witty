@@ -291,6 +291,12 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	add_group(mut result, 'notify-on-command-finish', [
 		c.notify_on_command_finish.str(),
 	])
+	add_group(mut result, 'notify-on-command-finish-action', [
+		notify_on_command_finish_action_string(c.notify_on_command_finish_action),
+	])
+	add_group(mut result, 'notify-on-command-finish-after', [
+		c.notify_on_command_finish_after.format(),
+	])
 	add_group(mut result, 'abnormal-command-exit-runtime', [
 		'${c.abnormal_command_exit_runtime}',
 	])
@@ -508,6 +514,11 @@ fn bell_features_string(value BellFeatures) string {
 fn app_notifications_string(value AppNotifications) string {
 	return [if value.clipboard_copy { 'clipboard-copy' } else { 'no-clipboard-copy' },
 		if value.config_reload { 'config-reload' } else { 'no-config-reload' }].join(',')
+}
+
+fn notify_on_command_finish_action_string(value NotifyOnCommandFinishAction) string {
+	return [if value.bell { 'bell' } else { 'no-bell' },
+		if value.notify { 'notify' } else { 'no-notify' }].join(',')
 }
 
 fn scroll_to_bottom_string(value ScrollToBottom) string {

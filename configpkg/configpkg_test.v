@@ -377,6 +377,15 @@ fn test_duration_as_milliseconds_saturates() {
 	assert Duration{ duration: u64_max }.as_milliseconds() == u32(0xffff_ffff)
 }
 
+fn test_duration_round_and_lte() {
+	assert Duration{ duration: 1_999_999 }.round(1_000_000) == Duration{
+		duration: 1_000_000
+	}
+	assert Duration{ duration: 5 }.lte(Duration{ duration: 5 })
+	assert Duration{ duration: 4 }.lte(Duration{ duration: 5 })
+	assert !Duration{ duration: 6 }.lte(Duration{ duration: 5 })
+}
+
 fn test_quit_after_last_window_closed_delay_parse_and_format() {
 	mut cfg := Config.default_config()
 	assert cfg.quit_after_last_window_closed == default_quit_after_last_window_closed
@@ -898,6 +907,34 @@ fn test_app_notifications_parse_format_and_defaults() {
 
 	cfg.load_string('app-notifications = sparkle')
 	assert cfg.diagnostics.len == 1
+}
+
+fn test_notify_on_command_finish_action_and_after() {
+	mut cfg := Config.default_config()
+	assert cfg.notify_on_command_finish == .never
+	assert cfg.notify_on_command_finish_action.bell
+	assert !cfg.notify_on_command_finish_action.notify
+	assert cfg.notify_on_command_finish_after == Duration{ duration: 5_000_000_000 }
+
+	cfg.load_string('notify-on-command-finish = unfocused\nnotify-on-command-finish-action = no-bell,notify\nnotify-on-command-finish-after = 1m 250ms')
+	assert cfg.diagnostics.len == 0
+	assert cfg.notify_on_command_finish == .unfocused
+	assert !cfg.notify_on_command_finish_action.bell
+	assert cfg.notify_on_command_finish_action.notify
+	assert cfg.notify_on_command_finish_after == Duration{ duration: 60_250_000_000 }
+	formatted := cfg.format_config(true)
+	assert formatted.contains('notify-on-command-finish-action = no-bell,notify\n')
+	assert formatted.contains('notify-on-command-finish-after = 1m 250ms\n')
+
+	cfg.load_string('notify-on-command-finish-action = false')
+	assert !cfg.notify_on_command_finish_action.bell
+	assert !cfg.notify_on_command_finish_action.notify
+	cfg.load_string('notify-on-command-finish-action = true')
+	assert cfg.notify_on_command_finish_action.bell
+	assert cfg.notify_on_command_finish_action.notify
+
+	cfg.load_string('notify-on-command-finish-action = sparkle\nnotify-on-command-finish-after = soon')
+	assert cfg.diagnostics.len == 2
 }
 
 // --- WindowDecoration ---

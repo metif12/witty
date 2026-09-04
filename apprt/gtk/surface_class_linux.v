@@ -101,6 +101,11 @@ pub type GMenuModel = voidptr
 // AdwStatusPage* used for the OpenGL initialization error page.
 pub type AdwStatusPage = voidptr
 
+// GNotification* / GIcon* used for desktop notifications.
+pub type GNotification = voidptr
+
+pub type GIcon = voidptr
+
 // GtkGLArea
 fn C.gtk_gl_area_queue_render(area GtkGLArea)
 
@@ -142,6 +147,26 @@ fn C.gtk_adjustment_get_page_size(adjustment GtkAdjustment) f64
 fn C.gtk_adjustment_configure(adjustment GtkAdjustment, value f64, lower f64, upper f64, step_increment f64, page_increment f64, page_size f64)
 
 fn C.gtk_scrollable_get_type() GType
+
+// GAction state used by the per-surface action group.
+fn C.g_action_get_state(action GAction) GVariant
+
+fn C.g_simple_action_set_state(action GSimpleAction, value GVariant)
+
+fn C.g_variant_get_boolean(value GVariant) bool
+
+fn C.g_variant_new_uint64(value u64) GVariant
+
+// GNotification
+fn C.g_notification_new(title &char) GNotification
+
+fn C.g_notification_set_body(notification GNotification, body &char)
+
+fn C.g_notification_set_icon(notification GNotification, icon GIcon)
+
+fn C.g_notification_set_default_action_and_target_value(notification GNotification, action &char, target GVariant)
+
+fn C.g_themed_icon_new(iconname &char) GIcon
 
 fn C.g_signal_group_new(target_type GType) GSignalGroup
 
@@ -578,6 +603,9 @@ pub mut:
 	key_sequence []string
 	key_tables   []string
 
+	// Stateful actions local to this surface.
+	action_group GSimpleActionGroup = unsafe { nil }
+
 	// Gtk.Scrollable interface adjustments.
 	hadj              GtkAdjustment = unsafe { nil }
 	vadj              GtkAdjustment = unsafe { nil }
@@ -734,6 +762,54 @@ pub fn (mut self SurfaceWidget) prompt_title() {
 	mut dialog := surface_title_dialog_new(initial_value)
 	C.g_signal_connect_data(dialog.obj, c'set', GCallback(voidptr(surface_title_dialog_set_cb)), voidptr(self), unsafe { nil }, 0)
 	dialog.present(self.widget)
+}
+
+// init_action_map registers the actions exposed by the surface context menu.
+// Mirrors Surface.initActionMap.
+fn (mut self SurfaceWidget) init_action_map() {
+	actions := [
+		Action.new('prompt-title', GCallback(voidptr(surface_action_prompt_title_cb)), unsafe { nil }),
+		Action.new_stateful('notify-on-next-command-finish', GCallback(voidptr(surface_action_notify_on_next_command_finish_cb)), unsafe { nil }, C.g_variant_new_boolean(0)),
+	]
+	self.action_group = add_as_group(voidptr(self), self.widget, 'surface', actions)
+}
+
+fn surface_action_prompt_title_cb(action GSimpleAction, parameter GVariant, data voidptr) {
+	_ = action
+	_ = parameter
+	if isnil(data) {
+		return
+	}
+	mut self := unsafe { &SurfaceWidget(data) }
+	if !self.has_core() {
+		return
+	}
+	mut surface := self.core_surface
+	surface.perform_binding_action(input.Action.new(.prompt_surface_title)) or {
+		eprintln('unable to perform prompt title action err=${err}')
+	}
+}
+
+fn surface_action_notify_on_next_command_finish_cb(action GSimpleAction, parameter GVariant, data voidptr) {
+	_ = parameter
+	_ = data
+	if isnil(action) {
+		return
+	}
+	state := C.g_action_get_state(GAction(action))
+	if isnil(state) {
+		return
+	}
+	defer {
+		C.g_variant_unref(state)
+	}
+	bool_type := C.g_variant_type_new(c'b')
+	is_bool := C.g_variant_is_of_type(state, bool_type)
+	C.g_variant_type_free(bool_type)
+	if !is_bool {
+		return
+	}
+	C.g_simple_action_set_state(action, C.g_variant_new_boolean(if C.g_variant_get_boolean(state) { 0 } else { 1 }))
 }
 
 fn surface_title_dialog_set_cb(dialog GObject, title_ptr &char, data voidptr) {
@@ -959,6 +1035,97 @@ pub fn (mut self SurfaceWidget) set_progress_report(value osc.ProgressReport) {
 
 	C.gtk_widget_set_visible(self.progress_bar_overlay, true)
 	self.progress_bar_timer = C.g_timeout_add(15_000, voidptr(surface_progress_bar_timer_cb), voidptr(self))
+}
+
+// command_finished applies the per-surface command notification policy.
+// Mirrors Surface.commandFinished, including the one-shot context-menu action.
+pub fn (mut self SurfaceWidget) command_finished(value apprt.CommandFinished) bool {
+	mut notify_next_command_finish := false
+	if !isnil(self.action_group) {
+		action := C.g_action_map_lookup_action(GActionMap(self.action_group), c'notify-on-next-command-finish')
+		if !isnil(action) {
+			state := C.g_action_get_state(action)
+			if !isnil(state) {
+				bool_type := C.g_variant_type_new(c'b')
+				is_bool := C.g_variant_is_of_type(state, bool_type)
+				C.g_variant_type_free(bool_type)
+				if is_bool {
+					notify_next_command_finish = C.g_variant_get_boolean(state)
+					C.g_simple_action_set_state(GSimpleAction(action), C.g_variant_new_boolean(0))
+				}
+				C.g_variant_unref(state)
+			}
+		}
+	}
+
+	if isnil(self.config) {
+		return false
+	}
+	cfg := self.config.get()
+	if !notify_next_command_finish {
+		if cfg.notify_on_command_finish == .never {
+			return true
+		}
+		if cfg.notify_on_command_finish == .unfocused && self.get_focused() {
+			return true
+		}
+	}
+	if value.duration.lte(cfg.notify_on_command_finish_after) {
+		return true
+	}
+
+	action := cfg.notify_on_command_finish_action
+	if action.bell {
+		self.set_bell_ringing(true)
+	}
+	if action.notify {
+		title := if exit_code := value.exit_code {
+			if exit_code == 0 { i18n_('Command Succeeded') } else { i18n_('Command Failed') }
+		} else {
+			i18n_('Command Finished')
+		}
+		duration := value.duration.round(1_000_000).format()
+		body := if exit_code := value.exit_code {
+			'Command took ${duration} and exited with code ${exit_code}.'
+		} else {
+			'Command took ${duration}.'
+		}
+		self.send_desktop_notification(title, body)
+	}
+
+	return true
+}
+
+// send_desktop_notification creates the native GNotification and makes
+// activating it present this exact core surface.
+pub fn (self &SurfaceWidget) send_desktop_notification(title string, body string) {
+	if !self.has_core() {
+		eprintln("can't send notification because there is no core surface")
+		return
+	}
+	if isnil(self.app) || isnil(self.app.obj) {
+		return
+	}
+
+	actual_title := if title.len == 0 { 'Ghostty' } else { title }
+	notification := C.g_notification_new(&char(actual_title.str))
+	if isnil(notification) {
+		return
+	}
+	defer {
+		object_unref(GObject(notification))
+	}
+	C.g_notification_set_body(notification, &char(body.str))
+
+	icon := C.g_themed_icon_new(c'com.mitchellh.ghostty')
+	if !isnil(icon) {
+		C.g_notification_set_icon(notification, icon)
+		object_unref(GObject(icon))
+	}
+
+	pointer := C.g_variant_new_uint64(u64(usize(voidptr(self.core_surface))))
+	C.g_notification_set_default_action_and_target_value(notification, c'app.present-surface', pointer)
+	C.g_application_send_notification(self.app.obj, &char(body.str), notification)
 }
 
 fn surface_progress_bar_timer_cb(data voidptr) int {
@@ -2031,6 +2198,13 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			self.set_progress_report(action.progress)
 			return true
 		}
+		.command_finished {
+			return self.command_finished(action.command_finished)
+		}
+		.desktop_notification {
+			self.send_desktop_notification(action.notification_title, action.notification_body)
+			return true
+		}
 		.readonly {
 			self.set_readonly(action.readonly_on)
 			return true
@@ -2913,6 +3087,7 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 	mut native_priv := terminal_surface_priv(obj)
 	native_priv.wrapper = voidptr(w)
 	w.rt_surface = Surface{ surface: w }
+	w.init_action_map()
 	w.mouse_shape = .text
 	w.apply_config()
 	w.sync_unfocused_split_overlay()
