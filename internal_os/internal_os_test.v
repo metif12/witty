@@ -270,6 +270,15 @@ fn test_i18n_unknown_message_falls_back_to_msgid() {
 	assert translate(msgid) == msgid
 }
 
+fn test_i18n_supported_locales_match_pinned_source() {
+	assert supported_locales.len == 25
+	assert supported_locales[0] == 'zh_CN.UTF-8'
+	assert supported_locales[1] == 'de_DE.UTF-8'
+	assert supported_locales[22] == 'zh_TW.UTF-8'
+	assert supported_locales[24] == 'lt_LT.UTF-8'
+	assert static_locale('ru_RU.UTF-8') == 'ru_RU.UTF-8'
+}
+
 fn test_systemd_detection_is_false_off_linux() {
 	$if !linux {
 		assert !launched_by_systemd()
