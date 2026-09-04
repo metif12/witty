@@ -62,3 +62,21 @@ static inline void witty_gapplication_call_parent_activate(gpointer instance) {
       g_type_class_peek_parent(G_OBJECT_GET_CLASS(instance)));
   if (parent->activate != NULL) parent->activate(G_APPLICATION(instance));
 }
+
+static inline const gchar *witty_glog_field_key(
+    const GLogField *fields,
+    gsize index) {
+  return fields[index].key;
+}
+
+static inline gconstpointer witty_glog_field_value(
+    const GLogField *fields,
+    gsize index) {
+  return fields[index].value;
+}
+
+static inline gssize witty_glog_field_length(
+    const GLogField *fields,
+    gsize index) {
+  return fields[index].length;
+}

@@ -57,6 +57,8 @@ fn C.g_application_send_notification(app GApplication, id &char, notification vo
 
 fn C.g_application_set_resource_base_path(app GApplication, resource_path &char)
 
+fn C.g_settings_sync()
+
 fn C.g_variant_is_of_type(value GVariant, vtype GVariantType) bool
 
 fn C.g_variant_get_uint64(value GVariant) u64
@@ -107,6 +109,14 @@ fn C.g_source_remove(tag u32) bool
 
 fn C.g_unix_signal_add(signum int, handler voidptr, user_data voidptr) u32
 
+fn C.g_log_set_writer_func(function voidptr, user_data voidptr, user_data_free voidptr)
+
+fn C.witty_glog_field_key(fields voidptr, index usize) &char
+
+fn C.witty_glog_field_value(fields voidptr, index usize) voidptr
+
+fn C.witty_glog_field_length(fields voidptr, index usize) isize
+
 // GTK window helpers.
 // NOTE: gtk_window_present / gtk_window_destroy / gtk_window_is_active are
 // declared in window_linux.v — reused here, NOT redeclared. `is_active` there
@@ -142,6 +152,70 @@ pub const g_application_non_unique = 0x20
 
 // Linux signal number used by Ghostty for on-demand configuration reloads.
 const sigusr2 = 12
+
+const g_log_level_error = u32(1 << 2)
+const g_log_level_critical = u32(1 << 3)
+const g_log_level_warning = u32(1 << 4)
+const g_log_level_message = u32(1 << 5)
+const g_log_level_info = u32(1 << 6)
+const g_log_level_debug = u32(1 << 7)
+const g_log_writer_handled = 1
+const g_log_writer_unhandled = 0
+
+fn glib_log_field_string(fields voidptr, index usize) ?string {
+	value := C.witty_glog_field_value(fields, index)
+	if isnil(value) {
+		return none
+	}
+	length := C.witty_glog_field_length(fields, index)
+	if length >= 0 {
+		return unsafe { tos(&u8(value), int(length)) }.clone()
+	}
+	return unsafe { cstring_to_vstring(&char(value)) }.clone()
+}
+
+// glib_log_writer_function funnels structured GLib/GObject/GTK messages into
+// the same severity buckets used by Witty. Mirrors glibLogWriterFunction.
+fn glib_log_writer_function(level u32, fields voidptr, n_fields usize, user_data voidptr) int {
+	_ = user_data
+	mut message := ?string(none)
+	mut domain := ?string(none)
+	for i in usize(0) .. n_fields {
+		key_ptr := C.witty_glog_field_key(fields, i)
+		if isnil(key_ptr) {
+			continue
+		}
+		key := unsafe { cstring_to_vstring(key_ptr) }
+		if key == 'MESSAGE' {
+			message = glib_log_field_string(fields, i)
+		} else if key == 'GLIB_DOMAIN' {
+			domain = glib_log_field_string(fields, i)
+		}
+	}
+
+	msg := message or { return g_log_writer_unhandled }
+	domain_name := domain or { '«unknown»' }
+	if level & g_log_level_error != 0 {
+		eprintln('[error] glib: ERROR: ${domain_name}: ${msg}')
+	} else if level & g_log_level_critical != 0 {
+		eprintln('[error] glib: CRITICAL: ${domain_name}: ${msg}')
+	} else if level & g_log_level_warning != 0 {
+		eprintln('[warn] glib: WARNING: ${domain_name}: ${msg}')
+	} else if level & g_log_level_message != 0 {
+		eprintln('[info] glib: MESSAGE: ${domain_name}: ${msg}')
+	} else if level & g_log_level_info != 0 {
+		eprintln('[info] glib: INFO: ${domain_name}: ${msg}')
+	} else if level & g_log_level_debug != 0 {
+		$if debug {
+			eprintln('[debug] glib: DEBUG: ${domain_name}: ${msg}')
+		}
+	} else {
+		$if debug {
+			eprintln('[debug] glib: UNKNOWN: ${domain_name}: ${msg}')
+		}
+	}
+	return g_log_writer_handled
+}
 
 // --- Quit timer state -----------------------------------------------------
 //
@@ -366,7 +440,7 @@ pub fn Application.default() ?&Application {
 // handled separately by the translated wrapper.
 pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 	// Capture GLib/GObject/GTK log messages via a writer func.
-	// TODO(gtk): glib.logSetWriterFunc — funnel GLib logs into witty logging.
+	C.g_log_set_writer_func(voidptr(glib_log_writer_function), unsafe { nil }, unsafe { nil })
 
 	// Log our GTK/libadwaita versions.
 	// gtk_version.logVersion(); adw_version.logVersion();
@@ -555,7 +629,8 @@ pub fn (mut self Application) run() ! {
 	defer {
 		// Ensure our timer source is removed.
 		self.stop_quit_timer()
-		// Sync any remaining settings. (gio.Settings.sync — out of scope.)
+		// Sync any remaining settings.
+		C.g_settings_sync()
 		// Clear out the event loop without blocking.
 		for C.g_main_context_iteration(ctx, false) {
 		}
