@@ -309,8 +309,11 @@ fn (mut self App) perform_pre_action(target_ Target, action ActionKey, data Acti
 				// For app updates, we update our core config. We need to
 				// clone it because the caller owns the param.
 				AppTarget {
-					self.config.deinit()
-					self.config = configpkg.Config{}
+					if !isnil(data.config_change_.config) {
+						updated := data.config_change_.config.clone()
+						self.config.deinit()
+						self.config = updated
+					}
 				}
 			}
 		}
@@ -1152,11 +1155,14 @@ pub fn ghostty_app_new(opts &AppOptions, config &configpkg.Config) ?&App {
 }
 
 fn app_new_(opts &AppOptions, config &configpkg.Config) !&App {
-	core_app := CoreApp.create()!
+	mut core_app := CoreApp.create()!
 
 	// Create our runtime app
 	mut app := &App{}
-	app.init(core_app, config, *opts)!
+	app.init(core_app, config, *opts) or {
+		core_app.destroy()
+		return err
+	}
 
 	return app
 }
@@ -1176,7 +1182,9 @@ pub fn ghostty_app_userdata(v &App) voidptr {
 
 // ghostty_app_free frees the app and its resources.
 pub fn ghostty_app_free(mut v App) {
+	mut core_app := v.core_app
 	v.terminate()
+	core_app.destroy()
 }
 
 // ghostty_app_set_focus updates the focused state of the app.
@@ -1248,7 +1256,10 @@ pub fn ghostty_app_has_global_keybinds(v &App) bool {
 
 // ghostty_app_set_color_scheme updates the color scheme of the app.
 pub fn ghostty_app_set_color_scheme(mut v App, scheme_raw int) {
-	scheme := unsafe { ColorScheme(scheme_raw) }
+	scheme := color_scheme_from_int(scheme_raw) or {
+		log_warn('invalid color scheme to ghostty_app_set_color_scheme value=${scheme_raw}')
+		return
+	}
 
 	v.core_app.color_scheme_event(v, scheme) or {
 		log_err('error setting color scheme err=${err}')
@@ -1432,8 +1443,19 @@ pub fn ghostty_surface_size(surface &Surface) CAPISurfaceSize {
 
 // ghostty_surface_set_color_scheme updates the color scheme of the surface.
 pub fn ghostty_surface_set_color_scheme(mut surface Surface, scheme_raw int) {
-	scheme := unsafe { ColorScheme(scheme_raw) }
+	scheme := color_scheme_from_int(scheme_raw) or {
+		log_warn('invalid color scheme to ghostty_surface_set_color_scheme value=${scheme_raw}')
+		return
+	}
 	surface.color_scheme_callback(scheme)
+}
+
+fn color_scheme_from_int(value int) ?ColorScheme {
+	return match value {
+		int(ColorScheme.light) { ColorScheme.light }
+		int(ColorScheme.dark) { ColorScheme.dark }
+		else { none }
+	}
 }
 
 // ghostty_surface_set_content_scale updates the content scale of the surface.
@@ -1540,7 +1562,15 @@ pub fn ghostty_surface_mouse_scroll(mut surface Surface, x f64, y f64, scroll_mo
 
 // ghostty_surface_mouse_pressure handles a mouse pressure event.
 pub fn ghostty_surface_mouse_pressure(mut surface Surface, stage_raw u32, pressure f64) {
-	stage := unsafe { input.PressureStage(int(stage_raw)) }
+	stage := match stage_raw {
+		u32(input.PressureStage.none_) { input.PressureStage.none_ }
+		u32(input.PressureStage.normal) { input.PressureStage.normal }
+		u32(input.PressureStage.deep) { input.PressureStage.deep }
+		else {
+			log_warn('invalid mouse pressure stage value=${stage_raw}')
+			return
+		}
+	}
 	surface.mouse_pressure_callback(stage, pressure)
 }
 

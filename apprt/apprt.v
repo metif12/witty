@@ -118,6 +118,14 @@ pub struct CoreApp {
 pub mut:
 	// Surfaces tracked by the app.
 	surfaces []voidptr
+
+	// Whether the containing application is focused. App-level key events are
+	// limited to global bindings while this is false.
+	focused bool = true
+
+	// Conditional configuration state used to suppress redundant system-theme
+	// reloads.
+	config_conditional_state configpkg.ConditionalState
 }
 
 pub fn CoreApp.create() !&CoreApp {
@@ -125,31 +133,78 @@ pub fn CoreApp.create() !&CoreApp {
 }
 
 pub fn (mut c CoreApp) destroy() {
-	// stub: release resources
+	// The embedded runtime owns and destroys surfaces individually. The core app
+	// only retains non-owning pointers to them.
+	c.surfaces.clear()
 }
 
 pub fn (mut c CoreApp) tick(app &App) ! {
-	// stub: process one tick of the event loop
+	// Embedded runtime actions are delivered synchronously through perform_action.
+	// There is no platform event queue to drain here; the host calls this entrypoint
+	// after its wakeup callback so queued surface work can be added without changing
+	// the ABI.
 	_ = app
 }
 
-pub fn (c CoreApp) focus_event(focused bool) {
-	// stub: handle app focus change
-	_ = focused
+pub fn (mut c CoreApp) focus_event(focused bool) {
+	// Prevent redundant focus events.
+	if c.focused == focused {
+		return
+	}
+	c.focused = focused
 }
 
-pub fn (c CoreApp) key_event(app &App, event voidptr) bool {
-	// stub: process a key event at the app level
-	_ = app
-	_ = event
-	return false
+pub fn (mut c CoreApp) key_event(app &App, event voidptr) bool {
+	if isnil(event) {
+		return false
+	}
+	input_event := unsafe { *&input.KeyEvent(event) }
+	if input_event.action == .release {
+		return false
+	}
+
+	entry := app.config.keybind.set.get_event(input_event) or { return false }
+	actions, flags := core_app_binding_leaf(entry) or { return false }
+	if actions.len == 0 {
+		return false
+	}
+
+	// When the application isn't focused, only global bindings are eligible.
+	if !c.focused && !flags.global {
+		return false
+	}
+
+	mut runtime_app := unsafe { &App(app) }
+	if flags.global {
+		for action in actions {
+			c.perform_all_action(mut runtime_app, action) or {}
+		}
+		return true
+	}
+
+	// Surface-scoped bindings are handled by Surface.key_event. An app key event
+	// is consumed only when every action in a chain is app-scoped.
+	for action in actions {
+		if action.scope() != .app {
+			return false
+		}
+	}
+	for action in actions {
+		c.perform_app_action(mut runtime_app, action) or {}
+	}
+	return true
 }
 
 pub fn (c CoreApp) key_event_is_binding(app &App, event voidptr) bool {
-	// stub: check if key event triggers a binding
-	_ = app
-	_ = event
-	return false
+	if isnil(event) {
+		return false
+	}
+	input_event := unsafe { *&input.KeyEvent(event) }
+	if input_event.action == .release {
+		return false
+	}
+	entry := app.config.keybind.set.get_event(input_event) or { return false }
+	return core_app_binding_leaf(entry) != none
 }
 
 pub fn (mut c CoreApp) add_surface(surface voidptr) ! {
@@ -161,19 +216,102 @@ pub fn (mut c CoreApp) delete_surface(surface voidptr) {
 }
 
 pub fn (c CoreApp) needs_confirm_quit() bool {
+	for surface_ptr in c.surfaces {
+		if isnil(surface_ptr) {
+			continue
+		}
+		surface := unsafe { &Surface(surface_ptr) }
+		if surface.core_surface.needs_confirm_quit() {
+			return true
+		}
+	}
 	return false
 }
 
 pub fn (mut c CoreApp) color_scheme_event(app &App, scheme ColorScheme) ! {
-	// stub: propagate color scheme to all surfaces
-	_ = app
-	_ = scheme
+	new_theme := match scheme {
+		.light { configpkg.Theme.light }
+		.dark { configpkg.Theme.dark }
+	}
+	if c.config_conditional_state.theme == new_theme {
+		return
+	}
+	c.config_conditional_state.theme = new_theme
+	mut runtime_app := unsafe { &App(app) }
+	runtime_app.perform_action(Target(AppTarget{}), .reload_config, ActionValue{}) or {}
 }
 
 pub fn (mut c CoreApp) update_config(app &App, config voidptr) ! {
-	// stub: update config and propagate
-	_ = app
-	_ = config
+	if isnil(config) {
+		return error('configuration pointer is null')
+	}
+	cfg := unsafe { &configpkg.Config(config) }
+	for surface_ptr in c.surfaces {
+		if isnil(surface_ptr) {
+			continue
+		}
+		mut surface := unsafe { &Surface(surface_ptr) }
+		surface.core_surface.update_config(cfg)!
+	}
+	mut runtime_app := unsafe { &App(app) }
+	runtime_app.perform_action(Target(AppTarget{}), .config_change, ActionValue{
+		config_change_: ConfigChange{
+			config: cfg
+		}
+	}) or {}
+}
+
+// core_app_binding_leaf resolves a top-level app binding. App-level key
+// sequences are intentionally unsupported, matching Ghostty's CoreApp lookup.
+fn core_app_binding_leaf(entry &input.SetEntry) ?([]input.Action, input.Flags) {
+	return match entry.value.typ {
+		.leader { none }
+		.leaf {
+			([entry.value.leaf_action]), entry.value.leaf_flags
+		}
+		.leaf_chained {
+			(entry.value.chain_actions.clone()), entry.value.chain_flags
+		}
+	}
+}
+
+// perform_app_action translates the app-scoped input action into the embedded
+// runtime action boundary. This is the same switch as CoreApp.performAction.
+fn (mut c CoreApp) perform_app_action(mut app App, action input.Action) ! {
+	target := Target(AppTarget{})
+	match action.tag {
+		.ignore, .unbind {}
+		.quit { app.perform_action(target, .quit, ActionValue{})! }
+		.new_window { app.perform_action(target, .new_window, ActionValue{})! }
+		.open_config { app.perform_action(target, .open_config, ActionValue{})! }
+		.reload_config { app.perform_action(target, .reload_config, ActionValue{})! }
+		.close_all_windows { app.perform_action(target, .close_all_windows, ActionValue{})! }
+		.toggle_quick_terminal {
+			app.perform_action(target, .toggle_quick_terminal, ActionValue{})!
+		}
+		.toggle_visibility { app.perform_action(target, .toggle_visibility, ActionValue{})! }
+		.check_for_updates { app.perform_action(target, .check_for_updates, ActionValue{})! }
+		.show_gtk_inspector { app.perform_action(target, .show_gtk_inspector, ActionValue{})! }
+		.undo { app.perform_action(target, .undo, ActionValue{})! }
+		.redo { app.perform_action(target, .redo, ActionValue{})! }
+		else {}
+	}
+}
+
+// perform_all_action applies app-scoped actions once and surface-scoped
+// actions to every live surface, matching CoreApp.performAllAction.
+fn (mut c CoreApp) perform_all_action(mut app App, action input.Action) ! {
+	if action.scope() == .app {
+		c.perform_app_action(mut app, action)!
+		return
+	}
+	for surface_ptr in c.surfaces {
+		if isnil(surface_ptr) {
+			continue
+		}
+		mut surface := unsafe { &Surface(surface_ptr) }
+		surface.core_surface.perform_binding_action(action) or {}
+	}
 }
 
 // CoreSurface represents the core terminal surface logic.
@@ -357,7 +495,12 @@ pub fn (mut s CoreSurface) perform_binding_action(action input.Action) !bool {
 }
 
 pub fn (mut s CoreSurface) update_config(config voidptr) ! {
-	_ = config
+	if isnil(config) {
+		return error('configuration pointer is null')
+	}
+	cfg := unsafe { &configpkg.Config(config) }
+	s.config.macos_option_as_alt = cfg.macos_option_as_alt
+	s.config.selection_word_chars = cfg.selection_word_chars.codepoints.map(rune(it).str()).join('')
 }
 
 pub fn (s CoreSurface) needs_confirm_quit() bool {

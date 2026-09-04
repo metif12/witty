@@ -67,6 +67,125 @@ fn test_embedded_action_callback_receives_target_tag_and_payload() {
 	assert action.data.resize_split_.amount == 42
 }
 
+fn test_core_app_key_event_dispatches_app_binding() {
+	mut capture := EmbeddedActionCapture{}
+	mut config := configpkg.Config.default_config()
+	trigger := input.Trigger{
+		key: input.TriggerKey.new_physical(.f25)
+		mods: input.Mods{ ctrl: true, alt: true }
+	}
+	config.keybind.set.put(trigger, input.Action.new(.open_config))
+	mut core_app := CoreApp{}
+	mut app := App{
+		core_app: &core_app
+		config: config
+		opts: AppOptions{
+			userdata: voidptr(&capture)
+			action_cb: embedded_action_test_callback
+		}
+	}
+	event := input.KeyEvent{
+		action: .press
+		key: .f25
+		mods: input.Mods{ ctrl: true, alt: true }
+	}
+	assert core_app.key_event_is_binding(&app, voidptr(&event))
+	assert core_app.key_event(&app, voidptr(&event))
+	assert capture.calls == 1
+	assert capture.action.action == .open_config
+
+	release := input.KeyEvent{
+		...event
+		action: .release
+	}
+	assert !core_app.key_event_is_binding(&app, voidptr(&release))
+	assert !core_app.key_event(&app, voidptr(&release))
+}
+
+fn test_core_app_focus_limits_non_global_bindings() {
+	mut capture := EmbeddedActionCapture{}
+	mut config := configpkg.Config.default_config()
+	local_trigger := input.Trigger{
+		key: input.TriggerKey.new_physical(.f24)
+	}
+	global_trigger := input.Trigger{
+		key: input.TriggerKey.new_physical(.f25)
+	}
+	config.keybind.set.put(local_trigger, input.Action.new(.open_config))
+	config.keybind.set.put_flags(global_trigger, input.Action.new(.open_config), input.Flags{
+		global: true
+	})
+	mut core_app := CoreApp{}
+	mut app := App{
+		core_app: &core_app
+		config: config
+		opts: AppOptions{
+			userdata: voidptr(&capture)
+			action_cb: embedded_action_test_callback
+		}
+	}
+	core_app.focus_event(false)
+	local_event := input.KeyEvent{ action: .press, key: .f24 }
+	assert !core_app.key_event(&app, voidptr(&local_event))
+	assert capture.calls == 0
+	global_event := input.KeyEvent{ action: .press, key: .f25 }
+	assert core_app.key_event(&app, voidptr(&global_event))
+	assert capture.calls == 1
+}
+
+fn test_core_app_color_scheme_reloads_only_on_change() {
+	mut capture := EmbeddedActionCapture{}
+	mut core_app := CoreApp{}
+	mut app := App{
+		core_app: &core_app
+		opts: AppOptions{
+			userdata: voidptr(&capture)
+			action_cb: embedded_action_test_callback
+		}
+	}
+	core_app.color_scheme_event(&app, .light)!
+	assert capture.calls == 0
+	core_app.color_scheme_event(&app, .dark)!
+	assert capture.calls == 1
+	assert capture.action.action == .reload_config
+	core_app.color_scheme_event(&app, .dark)!
+	assert capture.calls == 1
+}
+
+fn test_core_app_update_config_clones_and_propagates() {
+	mut capture := EmbeddedActionCapture{}
+	mut core_app := CoreApp{}
+	mut surface := Surface{}
+	core_app.add_surface(voidptr(&surface))!
+	mut app := App{
+		core_app: &core_app
+		config: configpkg.Config.default_config()
+		opts: AppOptions{
+			userdata: voidptr(&capture)
+			action_cb: embedded_action_test_callback
+		}
+	}
+	mut updated := configpkg.Config.default_config()
+	updated.font_size = 21
+	updated.macos_option_as_alt = .left
+	core_app.update_config(&app, voidptr(&updated))!
+	assert capture.action.action == .config_change
+	assert app.config.font_size == 21
+	assert surface.core_surface.config.macos_option_as_alt? == .left
+
+	// The runtime owns a clone; the caller can mutate or release its config as
+	// soon as update_config returns.
+	updated.font_size = 9
+	assert app.config.font_size == 21
+}
+
+fn test_embedded_capi_enum_validation() {
+	assert color_scheme_from_int(int(ColorScheme.light))? == .light
+	assert color_scheme_from_int(int(ColorScheme.dark))? == .dark
+	assert color_scheme_from_int(-1) == none
+	assert color_scheme_from_int(99) == none
+}
+
 fn test_embedded_split_helpers_dispatch_surface_actions() {
 	mut capture := EmbeddedActionCapture{}
 	mut app := App{
