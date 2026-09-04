@@ -233,6 +233,60 @@ pub fn run_validate_config(args []string) !int {
 	return result.code
 }
 
+// edit_config_target performs the non-exec portion of `+edit-config`: load the
+// config once, resolve Ghostty's preferred user file, and make sure its parent
+// directory exists so an editor can create a first configuration.
+pub fn edit_config_target(args []string) !string {
+	if args.len > 0 {
+		return error('unknown option for edit-config: ${args[0]}')
+	}
+	_ := configpkg.Config.load_args([])
+	path := configpkg.preferred_default_file_path()
+	ensure_config_parent(path)!
+	return path
+}
+
+fn ensure_config_parent(path string) ! {
+	os.mkdir_all(os.dir(path))!
+}
+
+pub fn choose_editor(visual string, editor string) string {
+	if visual.len > 0 {
+		return visual
+	}
+	return editor
+}
+
+pub fn run_edit_config(args []string) !int {
+	path := edit_config_target(args)!
+	$if windows {
+		eprintln('The `ghostty +edit-config` command is not supported on Windows.')
+		eprintln('Please edit the configuration file manually at the following path:\n')
+		eprintln(path)
+		return 1
+	} $else {
+		editor := choose_editor(os.getenv('VISUAL'), os.getenv('EDITOR'))
+		if editor.len == 0 {
+			eprintln('The $EDITOR or $VISUAL environment variable is not set or is empty.')
+			eprintln('This environment variable is required to edit the Ghostty configuration')
+			eprintln('via this CLI command.\n')
+			eprintln('Please set the environment variable to your preferred terminal')
+			eprintln('text editor and try again.\n')
+			eprintln('If you prefer to edit the configuration file another way,')
+			eprintln('you can find the configuration file at the following path:\n')
+			eprintln('\x1b]8;;file://${path}\x1b\\${path}\x1b]8;;\x1b\\')
+			return 1
+		}
+		os.execvp(editor, [path]) or {
+			eprintln('Failed to execute the editor. ${err.msg()}')
+			eprintln('Editor: ${editor}')
+			eprintln('Path: ${path}')
+			return 1
+		}
+		return 0
+	}
+}
+
 fn output_lines(lines []string) string {
 	if lines.len == 0 {
 		return ''

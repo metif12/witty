@@ -65,3 +65,20 @@ fn test_validate_config_specific_file() {
 	assert invalid.code == 1
 	assert invalid.output.contains('no-such-option: unknown field')
 }
+
+fn test_choose_editor_prefers_visual_and_ignores_empty_values() {
+	assert choose_editor('nvim', 'vim') == 'nvim'
+	assert choose_editor('', 'vim') == 'vim'
+	assert choose_editor('', '') == ''
+}
+
+fn test_edit_config_target_creates_parent_directory() {
+	dir := os.join_path(os.temp_dir(), 'witty-cli-edit-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	path := os.join_path(dir, 'ghostty', 'config.ghostty')
+	ensure_config_parent(path)!
+	assert os.is_dir(os.dir(path))
+}
