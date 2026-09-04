@@ -2072,12 +2072,6 @@ pub fn (mut self Terminal) print(c u32) ! {
 		// break or not. If we are NOT, then we are still combining the
 		// same grapheme. Otherwise, we can stay in this cell.
 		//
-		// NOTE: The full uucode grapheme.BreakState state machine isn't
-		// available here, so we approximate grapheme breaking with a
-		// pragmatic classifier (grapheme_break) that keeps zero-width
-		// combining marks, VS15/VS16, ZWJ, skin-tone modifiers and
-		// regional indicators attached to the previous cell. This covers
-		// the common emoji/combining cases the tests exercise.
 		mut left := u32(1)
 		// If we have wraparound, then we always use the prev col.
 		// If we do not have wraparound, the logic is trickier. If
@@ -2110,16 +2104,7 @@ pub fn (mut self Terminal) print(c u32) ! {
 		if prev.codepoint_val() == 0 {
 			// break out of grapheme handling; fall through to width path
 		} else {
-			// Gather the codepoints already in the prev cell to feed the
-			// break classifier.
-			mut cp1 := prev.codepoint
-			mut brk := false
-			if prev.has_grapheme {
-				for cp2 in prev.graphemes {
-					cp1 = cp2
-				}
-			}
-			brk = grapheme_break(cp1, c)
+			brk := grapheme_break_cell(prev, c)
 
 			// If we can NOT break, this means that "c" is part of a
 			// grapheme with the previous char.
@@ -4467,15 +4452,27 @@ fn (mut self Screen) clear_rows_range(start_y int, end_y int, is_protected bool)
 // Determine the display width (0, 1, or 2 cells) of a codepoint.
 // Precondition: control characters are filtered prior to calling this.
 fn codepoint_width(c u32) u16 {
-	// Zero-width: combining marks and format characters.
+	// Emoji modifiers are zero-width inside a valid emoji grapheme, but are
+	// double-width when displayed by themselves.
+	if c >= 0x1F3FB && c <= 0x1F3FF {
+		return 2
+	}
+	if is_emoji_presentation(c) {
+		return 2
+	}
 	if is_zero_width(c) {
 		return 0
 	}
-	// Wide (East Asian Wide/Fullwidth and emoji presentation ranges).
-	if is_wide(c) {
-		return 2
+	width := utf8_str_visible_length(rune(c).str())
+	if width > 0 {
+		return if width >= 2 { u16(2) } else { u16(1) }
 	}
-	return 1
+	// utf8_str_visible_length treats both Extend and SpacingMark/Prepend
+	// grapheme properties as zero. Ghostty's width table only makes Extend
+	// zero-width. Probe the standard library's table-driven grapheme state:
+	// only Extend preserves an Extended_Pictographic + Extend* + ZWJ chain.
+	probe := rune(0x1f469).str() + rune(c).str() + rune(0x200d).str() + rune(0x1f469).str()
+	return if probe.graphemes().len == 1 { u16(0) } else { u16(1) }
 }
 
 // Returns true if the codepoint has zero display width. This covers
@@ -4658,33 +4655,54 @@ fn is_extended_pictographic(c u32) bool {
 		|| (c >= 0x1F1E6 && c <= 0x1F1FF) // Regional indicators
 }
 
-// grapheme_break returns true if there is a grapheme cluster boundary
-// between cp1 and cp2 (i.e. they should NOT combine). This is a pragmatic
-// approximation of UAX #29 covering the cases the terminal cares about:
-// combining marks / Extend, ZWJ sequences, VS15/VS16, skin tones, and
-// regional indicator pairs. A break is the default (true).
-fn grapheme_break(cp1 u32, cp2 u32) bool {
+fn is_indic_conjunct_linker(c u32) bool {
+	return c == 0x094d || c == 0x09cd || c == 0x0acd || c == 0x0b4d || c == 0x0c4d
+		|| c == 0x0d4d
+}
+
+fn is_indic_conjunct_consonant(c u32) bool {
+	return (c >= 0x0915 && c <= 0x0939) || (c >= 0x0958 && c <= 0x095f)
+		|| (c >= 0x0978 && c <= 0x097f) || (c >= 0x0995 && c <= 0x09a8)
+		|| (c >= 0x09aa && c <= 0x09b0) || c == 0x09b2 || (c >= 0x09b6 && c <= 0x09b9)
+		|| (c >= 0x09dc && c <= 0x09dd) || c == 0x09df || (c >= 0x09f0 && c <= 0x09f1)
+		|| (c >= 0x0a95 && c <= 0x0aa8) || (c >= 0x0aaa && c <= 0x0ab0)
+		|| (c >= 0x0ab2 && c <= 0x0ab3) || (c >= 0x0ab5 && c <= 0x0ab9) || c == 0x0af9
+		|| (c >= 0x0b15 && c <= 0x0b28) || (c >= 0x0b2a && c <= 0x0b30)
+		|| (c >= 0x0b32 && c <= 0x0b33) || (c >= 0x0b35 && c <= 0x0b39)
+		|| (c >= 0x0b5c && c <= 0x0b5d) || c == 0x0b5f || c == 0x0b71
+		|| (c >= 0x0c15 && c <= 0x0c28) || (c >= 0x0c2a && c <= 0x0c39)
+		|| (c >= 0x0c58 && c <= 0x0c5a) || (c >= 0x0d15 && c <= 0x0d3a)
+}
+
+// Returns whether appending cp creates a new Unicode extended grapheme
+// cluster. The standard library implementation is generated from the
+// Unicode GraphemeBreakProperty and emoji data, just as Ghostty's uucode
+// BreakState is.
+fn grapheme_break_cell(prev CellData, cp u32) bool {
 	// Emoji modifiers (Fitzpatrick skin tones) are special: unlike generic
 	// Extend characters, they only combine with an emoji-modifier base
 	// (an emoji), NOT with arbitrary preceding characters. This matches
 	// uucode/UAX #29 which ghostty verifies:
 	//   graphemeBreak(0x261D, 0x1F3FF) == false  (emoji + modifier: join)
 	//   graphemeBreak(0x22,   0x1F3FF) == true   (non-emoji + modifier: break)
-	if cp2 >= 0x1F3FB && cp2 <= 0x1F3FF {
-		return !is_extended_pictographic(cp1)
+	if cp >= 0x1F3FB && cp <= 0x1F3FF {
+		return !is_extended_pictographic(prev.codepoint)
 	}
-	// GB9: Do not break before extending characters or ZWJ.
-	if is_zero_width(cp2) || cp2 == 0x200D {
-		return false
+	// Unicode 15.1 GB9c: Consonant [Extend Linker]* Linker [Extend Linker]*
+	// × Consonant. V's bundled Unicode 13 tables predate this rule.
+	if is_indic_conjunct_consonant(prev.codepoint) && is_indic_conjunct_consonant(cp) {
+		for part in prev.graphemes {
+			if is_indic_conjunct_linker(part) {
+				return false
+			}
+		}
 	}
-	// GB11: emoji ZWJ sequences: don't break after ZWJ if base was emoji.
-	if cp1 == 0x200D && is_extended_pictographic(cp2) {
-		return false
+	mut runes := []rune{cap: prev.graphemes.len + 2}
+	runes << rune(prev.codepoint)
+	for part in prev.graphemes {
+		runes << rune(part)
 	}
-	// GB12/GB13: keep regional indicator pairs together.
-	if (cp1 >= 0x1F1E6 && cp1 <= 0x1F1FF) && (cp2 >= 0x1F1E6 && cp2 <= 0x1F1FF) {
-		return false
-	}
-	// Otherwise, break.
-	return true
+	before := runes.string().graphemes().len
+	runes << rune(cp)
+	return runes.string().graphemes().len > before
 }

@@ -403,7 +403,9 @@ import terminal
 pub const default_dpi = f32(72.0)
 
 // Packed Collection.Index reserved for built-in sprites.
-pub const sprite_index = u32(8191)
+// Packed Index{style: regular, idx: Special.sprite}. Index stores the
+// three-bit style first and the 13-bit face index above it.
+pub const sprite_index = u32(8191 << 3)
 
 // ============================================================
 // Metrics
@@ -1666,12 +1668,13 @@ fn (mut it RunIterator) next_render_cells() ?TextRun {
 					break
 				}
 			}
-			if prev.raw.style_id != cell.raw.style_id {
-				comparable_base := comparable_style(base_style)
-				comparable_current := comparable_style(cell_style(cell))
-				if !comparable_base.eql(&comparable_current) {
-					break
-				}
+			// Witty carries the concrete style inline. Its nonzero style_id is
+			// only a presence discriminator, so compare the values directly;
+			// Ghostty gets the same result by comparing page-local style IDs.
+			comparable_base := comparable_style(base_style)
+			comparable_current := comparable_style(cell_style(cell))
+			if !comparable_base.eql(&comparable_current) {
+				break
 			}
 		}
 		if cell.raw.content_tag != .codepoint_grapheme {
