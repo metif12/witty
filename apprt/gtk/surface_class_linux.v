@@ -457,11 +457,12 @@ pub mut:
 
 	// URL hover labels and the right-click context menu from the surface
 	// blueprint.
-	url_left       GtkLabel = unsafe { nil }
-	url_right      GtkLabel = unsafe { nil }
-	context_menu   GtkPopover = unsafe { nil }
-	resize_overlay &ResizeOverlay = unsafe { nil }
-	search_overlay &SearchOverlay = unsafe { nil }
+	url_left          GtkLabel = unsafe { nil }
+	url_right         GtkLabel = unsafe { nil }
+	context_menu      GtkPopover = unsafe { nil }
+	resize_overlay    &ResizeOverlay = unsafe { nil }
+	search_overlay    &SearchOverlay = unsafe { nil }
+	key_state_overlay &KeyStateOverlay = unsafe { nil }
 
 	// The core surface backing this GTK surface. This starts out nil because it
 	// can't be initialized until there is a realized GLArea. In ghostty this is
@@ -1905,6 +1906,14 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			self.set_search_selected(action.search_selected)
 			return true
 		}
+		.key_sequence {
+			self.key_sequence_action(action.key_sequence)
+			return true
+		}
+		.key_table {
+			self.key_table_action(action.key_table)
+			return true
+		}
 		.pwd {
 			self.set_pwd(if action.pwd.len > 0 { action.pwd } else { none })
 			return true
@@ -2374,6 +2383,42 @@ pub fn (mut self SurfaceWidget) set_search_selected(selected ?usize) {
 	self.search_overlay.set_search_selected(value)
 }
 
+// key_sequence_action mirrors Surface.keySequenceAction. Each trigger is
+// converted to the same human-readable GTK label and appended until an end
+// action clears the pending sequence.
+pub fn (mut self SurfaceWidget) key_sequence_action(value apprt.KeySequence) {
+	if value.active {
+		label := label_from_trigger(value.trigger) or { return }
+		self.key_sequence << label.clone()
+	} else {
+		self.key_sequence.clear()
+	}
+
+	if !isnil(self.key_state_overlay) {
+		mut list := StringList.create(self.key_sequence)
+		self.key_state_overlay.set_sequence(list)
+	}
+}
+
+// key_table_action mirrors Surface.keyTableAction, maintaining the activation
+// stack displayed by the key-state overlay.
+pub fn (mut self SurfaceWidget) key_table_action(value apprt.KeyTable) {
+	match value.tag {
+		.activate { self.key_tables << value.name.clone() }
+		.deactivate {
+			if self.key_tables.len > 0 {
+				self.key_tables.delete_last()
+			}
+		}
+		.deactivate_all { self.key_tables.clear() }
+	}
+
+	if !isnil(self.key_state_overlay) {
+		mut list := StringList.create(self.key_tables)
+		self.key_state_overlay.set_tables(list)
+	}
+}
+
 fn surface_search_stop_cb(overlay GtkWidget, data voidptr) {
 	_ = overlay
 	if isnil(data) {
@@ -2612,10 +2657,12 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 	url_right := surface_url_label_new(.end)
 	resize_overlay := new_resize_overlay()
 	search_overlay := new_search_overlay()
+	key_state_overlay := new_key_state_overlay()
 	C.gtk_overlay_add_overlay(terminal_page, resize_overlay.widget)
 	C.gtk_overlay_add_overlay(terminal_page, GtkWidget(url_left))
 	C.gtk_overlay_add_overlay(terminal_page, GtkWidget(url_right))
 	C.gtk_overlay_add_overlay(terminal_page, search_overlay.widget)
+	C.gtk_overlay_add_overlay(terminal_page, key_state_overlay.widget)
 	C.g_object_ref_sink(GObject(terminal_page))
 	C.adw_bin_set_child(AdwBin(obj), terminal_page)
 	error_page := surface_error_page_new()
@@ -2635,6 +2682,7 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 		context_menu: context_menu
 		resize_overlay: resize_overlay
 		search_overlay: search_overlay
+		key_state_overlay: key_state_overlay
 	}
 	mut native_priv := terminal_surface_priv(obj)
 	native_priv.wrapper = voidptr(w)

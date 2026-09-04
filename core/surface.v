@@ -1758,7 +1758,8 @@ pub:
 	goto_tab           int
 	close_tab_mode     CloseTabModeKind
 	move_tab_amount    int
-	key_table_name     string
+	key_sequence       apprt.KeySequence
+	key_table          apprt.KeyTable
 	search_total       ?usize
 	search_selected    ?usize
 	title_value        string
@@ -4252,6 +4253,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.rt_app.perform_action(AppAction{
 				kind: .key_table
 				target: &self
+				key_table: apprt.KeyTable{ tag: .deactivate }
 			}) or {}
 		}
 		.deactivate_all_key_tables {
@@ -4480,7 +4482,10 @@ fn (mut self Surface) activate_key_table(name string, once bool) !bool {
 	self.rt_app.perform_action(AppAction{
 		kind: .key_table
 		target: &self
-		key_table_name: name
+		key_table: apprt.KeyTable{
+			tag: .activate
+			name: name
+		}
 	}) or {}
 
 	return true
@@ -4977,6 +4982,7 @@ fn (mut self Surface) end_key_sequence(action KeySequenceQueued, mem KeySequence
 	self.rt_app.perform_action(AppAction{
 		kind: .key_sequence
 		target: &self
+		key_sequence: apprt.KeySequence{ active: false }
 	}) or {}
 
 	if self.keyboard.sequence_queued.len == 0 {
@@ -5016,6 +5022,7 @@ fn (mut self Surface) deactivate_all_key_tables() !bool {
 	self.rt_app.perform_action(AppAction{
 		kind: .key_table
 		target: &self
+		key_table: apprt.KeyTable{ tag: .deactivate_all }
 	})!
 	return true
 }
@@ -5098,6 +5105,10 @@ fn (mut self Surface) handle_binding_entry(event KeyEvent, entry &input.SetEntry
 		self.rt_app.perform_action(AppAction{
 			kind: .key_sequence
 			target: &self
+			key_sequence: apprt.KeySequence{
+				active: true
+				trigger: entry.trigger
+			}
 		}) or {}
 		return .consumed
 	}

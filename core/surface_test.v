@@ -454,11 +454,15 @@ fn test_complete_clipboard_request_osc52_write() ! {
 }
 
 fn test_end_key_sequence_no_queued() {
-	mut surf := Surface{}
+	mut runtime := RuntimeApp{}
+	mut surf := Surface{ rt_app: &runtime }
 	// With no queued items, should just clear sequence_set
 	surf.keyboard.sequence_queued = []
 	surf.end_key_sequence(.flush, .retain)
 	assert surf.keyboard.sequence_set == none
+	assert runtime.actions.len == 1
+	assert runtime.actions[0].kind == .key_sequence
+	assert !runtime.actions[0].key_sequence.active
 }
 
 fn test_deactivate_all_key_tables_empty() ! {
@@ -466,6 +470,28 @@ fn test_deactivate_all_key_tables_empty() ! {
 	// Empty table stack should return false
 	result := surf.deactivate_all_key_tables()!
 	assert result == false
+}
+
+fn test_deactivate_all_key_tables_action_payload() ! {
+	mut runtime := RuntimeApp{ actions_handled: true }
+	mut surf := Surface{ rt_app: &runtime }
+	surf.keyboard.table_stack << KeyTableEntry{ name: 'copy-mode' }
+	assert surf.deactivate_all_key_tables()!
+	assert surf.keyboard.table_stack.len == 0
+	assert runtime.actions.len == 1
+	assert runtime.actions[0].kind == .key_table
+	assert runtime.actions[0].key_table.tag == .deactivate_all
+}
+
+fn test_deactivate_key_table_action_payload() ! {
+	mut runtime := RuntimeApp{ actions_handled: true }
+	mut surf := Surface{ rt_app: &runtime }
+	surf.keyboard.table_stack << KeyTableEntry{ name: 'copy-mode' }
+	assert surf.perform_binding_action(input.Action.new(.deactivate_key_table))!
+	assert surf.keyboard.table_stack.len == 0
+	assert runtime.actions.len == 1
+	assert runtime.actions[0].kind == .key_table
+	assert runtime.actions[0].key_table.tag == .deactivate
 }
 
 fn test_balance_padding_if_needed_disabled() {
