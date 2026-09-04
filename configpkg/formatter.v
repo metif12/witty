@@ -267,6 +267,9 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 		bool_string(c.desktop_notifications),
 	])
 	add_group(mut result, 'bell-features', [bell_features_string(c.bell_features)])
+	add_group(mut result, 'app-notifications', [
+		app_notifications_string(c.app_notifications),
+	])
 	add_group(mut result, 'notify-on-command-finish', [
 		c.notify_on_command_finish.str(),
 	])
@@ -481,6 +484,11 @@ fn bell_features_string(value BellFeatures) string {
 		if value.title { 'title' } else { 'no-title' },
 		if value.border { 'border' } else { 'no-border' },
 	].join(',')
+}
+
+fn app_notifications_string(value AppNotifications) string {
+	return [if value.clipboard_copy { 'clipboard-copy' } else { 'no-clipboard-copy' },
+		if value.config_reload { 'config-reload' } else { 'no-config-reload' }].join(',')
 }
 
 fn scroll_to_bottom_string(value ScrollToBottom) string {

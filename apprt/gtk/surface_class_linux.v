@@ -1744,6 +1744,10 @@ pub fn (mut self SurfaceWidget) set_clipboard(clipboard_type apprt.Clipboard, co
 			C.gdk_clipboard_set_text(clipboard, text.str)
 		}
 		C.g_signal_emit_by_name(self.widget, c'clipboard-write', int(clipboard_type), text.str)
+		if !isnil(self.split_tree) && !isnil(self.split_tree.window) {
+			mut window := unsafe { self.split_tree.window }
+			window.surface_clipboard_write(clipboard_type, text)
+		}
 		return
 	}
 

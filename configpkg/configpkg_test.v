@@ -829,6 +829,29 @@ fn test_bell_features_parse_format_and_defaults() {
 	assert cfg.diagnostics.len == 1
 }
 
+fn test_app_notifications_parse_format_and_defaults() {
+	mut cfg := Config.default_config()
+	assert cfg.app_notifications.clipboard_copy
+	assert cfg.app_notifications.config_reload
+
+	cfg.load_string('app-notifications = no-clipboard-copy,config-reload')
+	assert cfg.diagnostics.len == 0
+	assert !cfg.app_notifications.clipboard_copy
+	assert cfg.app_notifications.config_reload
+	assert cfg.format_config(true).contains('app-notifications = no-clipboard-copy,config-reload\n')
+
+	cfg.load_string('app-notifications = false')
+	assert !cfg.app_notifications.clipboard_copy
+	assert !cfg.app_notifications.config_reload
+
+	cfg.load_string('app-notifications = true')
+	assert cfg.app_notifications.clipboard_copy
+	assert cfg.app_notifications.config_reload
+
+	cfg.load_string('app-notifications = sparkle')
+	assert cfg.diagnostics.len == 1
+}
+
 // --- WindowDecoration ---
 
 // Config.zig: WindowDecoration "parse WindowDecoration"

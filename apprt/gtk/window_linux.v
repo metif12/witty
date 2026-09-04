@@ -46,6 +46,7 @@ module gtk
 import configpkg
 import core
 import input
+import apprt
 
 // --- New opaque handle aliases --------------------------------------------
 // (Grep-verified: none of these `fn C.*` or aliases are declared elsewhere in
@@ -1016,8 +1017,6 @@ fn (mut self Window) perform_input_action(action input.Action) {
 // add_toast queues a simple text-based toast. All text-based toasts share the
 // same timeout for consistency. Mirrors `addToast`.
 //
-// TODO(gtk): adw.Toast creation + toast_overlay.addToast are out of scope. Kept
-// as a stub with a faithful signature.
 fn (mut self Window) add_toast(title string) {
 	if isnil(self.toast_overlay) {
 		return
@@ -1315,10 +1314,21 @@ pub fn (mut self Window) window_realize(mut app Application) {
 // prop_config reacts to a config change: optionally toasts, then syncs
 // appearance. Mirrors `propConfig`.
 pub fn (mut self Window) prop_config() {
-	// TODO(gtk): toast on config-reload requires app_notifications config
-	// (absent in witty's core config) + add_toast (stubbed). Retained intent.
+	if !isnil(self.config) && self.config.get().app_notifications.config_reload {
+		self.add_toast('Reloaded the configuration')
+	}
 	self.sync_apprt_window()
 	self.sync_appearance()
+}
+
+// surface_clipboard_write shows the same standard-clipboard toast as
+// Ghostty's Surface clipboard-write signal handler.
+fn (mut self Window) surface_clipboard_write(clipboard_type apprt.Clipboard, text string) {
+	if clipboard_type != .standard || isnil(self.config)
+		|| !self.config.get().app_notifications.clipboard_copy {
+		return
+	}
+	self.add_toast(if text.len > 0 { 'Copied to clipboard' } else { 'Cleared clipboard' })
 }
 
 // prop_gdk_surface_resize reacts to a GdkSurface width/height change (X11 blur

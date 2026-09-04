@@ -680,6 +680,9 @@ fn (mut self Application) set_config(config configpkg.Config) {
 	}
 	// notify "config" pspec -> prop_config.
 	self.prop_config()
+	for mut window in self.windows {
+		window.prop_config()
+	}
 	// Show our errors if we have any.
 	self.show_config_errors_dialog()
 }

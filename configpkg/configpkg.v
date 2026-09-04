@@ -3966,6 +3966,7 @@ pub mut:
 	cursor_click_to_move           bool = true
 	desktop_notifications          bool = true
 	bell_features                  BellFeatures
+	app_notifications              AppNotifications
 	mouse_hide_while_typing        bool
 	mouse_reporting                bool = true
 	mouse_shift_capture            MouseShiftCapture = .false_
@@ -5554,6 +5555,14 @@ pub mut:
 	border    bool
 }
 
+// AppNotifications controls the two GTK in-app toast categories. Defaults
+// match Ghostty's packed struct, where both notification kinds are enabled.
+pub struct AppNotifications {
+pub mut:
+	clipboard_copy bool = true
+	config_reload  bool = true
+}
+
 pub enum ShellIntegration {
 	detect
 	none_
@@ -6444,6 +6453,12 @@ fn (mut c Config) apply_kv(key string, value string) {
 				return
 			}
 		}
+		'app-notifications' {
+			c.app_notifications = parse_app_notifications(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
 		'scroll-to-bottom' {
 			c.scroll_to_bottom = parse_scroll_to_bottom(value) or {
 				c.invalid_config_value(key, value)
@@ -7152,6 +7167,34 @@ fn parse_bell_features(value string) ?BellFeatures {
 			}
 			'border' {
 				result.border = enabled
+			}
+			else {
+				return none
+			}
+		}
+	}
+	return result
+}
+
+fn parse_app_notifications(value string) ?AppNotifications {
+	if b := parse_bool_opt(value) {
+		return AppNotifications{
+			clipboard_copy: b
+			config_reload: b
+		}
+	}
+	mut result := AppNotifications{}
+	for raw in value.split(',') {
+		part := raw.trim_space()
+		negative := part.starts_with('no-')
+		name := if negative { part[3..] } else { part }
+		enabled := !negative
+		match name {
+			'clipboard-copy' {
+				result.clipboard_copy = enabled
+			}
+			'config-reload' {
+				result.config_reload = enabled
 			}
 			else {
 				return none
