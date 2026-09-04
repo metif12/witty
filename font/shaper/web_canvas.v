@@ -62,8 +62,27 @@ pub fn (self &WebCanvasShaper) end_frame() {
 // given terminal row. Note that text runs are are only valid one at a time
 // for a Shaper struct since they share state.
 pub fn (mut self WebCanvasShaper) run_iterator(opts font.RunOptions) font.RunIterator {
-	return font.RunIterator.new(unsafe { &self })
+	return font.RunIterator.new_with_hooks(unsafe { &self }, opts, font.RunIteratorHooks{
+		prepare: web_canvas_run_prepare
+		add: web_canvas_run_add
+		finalize: web_canvas_run_finalize
+	})
 }
+
+fn web_canvas_run_prepare(shaper_ptr voidptr) {
+	mut shaper := unsafe { &WebCanvasShaper(shaper_ptr) }
+	shaper.run_codepoints.clear()
+}
+
+fn web_canvas_run_add(shaper_ptr voidptr, cp u32, cluster u32) {
+	mut shaper := unsafe { &WebCanvasShaper(shaper_ptr) }
+	shaper.run_codepoints << WebCanvasCodepoint{
+		codepoint: cp
+		cluster: cluster
+	}
+}
+
+fn web_canvas_run_finalize(_ voidptr) {}
 
 // Shape the given text run. The text run must be the immediately
 // previous text run that was iterated since the text run does share

@@ -525,3 +525,62 @@ fn test_special_font_skips_zero_codepoints() {
 	assert cells[0].x == 0
 	assert cells[0].glyph_index == 0x1FB70
 }
+
+fn coretext_test_grid() !font.SharedGrid {
+	mut collection := font.Collection.init()
+	collection.load_options = font.LoadOptions{
+		library: font.Library.init()!
+		size: font.DesiredSize{
+			points: 12
+			xdpi: 96
+			ydpi: 96
+		}
+	}
+	load_opts := collection.load_options or { return error('missing load options') }
+	collection.add(font.Face.init_mem(load_opts.library, font.embedded_regular, load_opts.face_options())!, font.AddOptions{
+		style: .regular
+		fallback: false
+		size_adjustment: .none_
+	})!
+	return font.SharedGrid.init(font.CodepointResolver{
+		collection: collection
+	})!
+}
+
+fn test_coretext_run_iterator_uses_coretext_hooks() {
+	mut shp := Shaper.init(font.ShaperOptions{}) or { panic(err) }
+	defer { shp.deinit() }
+	mut iterator := shp.run_iterator(font.RunOptions{
+		cells: [u8(`A`), `B`, `C`]
+	})
+	run := iterator.next() or { panic('expected a text run') }
+	assert run.cells == 3
+	assert shp.run_state.codepoints == [
+		Codepoint{ codepoint: u32(`A`), cluster: 0 },
+		Codepoint{ codepoint: u32(`B`), cluster: 1 },
+		Codepoint{ codepoint: u32(`C`), cluster: 2 },
+	]
+	assert shp.run_state.unichars == [u16(`A`), u16(`B`), u16(`C`)]
+}
+
+fn test_coretext_shapes_real_glyph_run() {
+	$if macos {
+		mut grid := coretext_test_grid() or { panic(err) }
+		defer { grid.deinit() }
+		mut shp := Shaper.init(font.ShaperOptions{}) or { panic(err) }
+		defer { shp.deinit() }
+		mut iterator := shp.run_iterator(font.RunOptions{
+			grid: &grid
+			cells: [u8(`A`), `B`, `C`]
+		})
+		run := iterator.next() or { panic('expected a text run') }
+		cells := shp.shape(run) or { panic(err) }
+		assert cells.len == 3
+		assert cells[0].x == 0
+		assert cells[1].x == 1
+		assert cells[2].x == 2
+		for cell in cells {
+			assert cell.glyph_index != 0
+		}
+	}
+}

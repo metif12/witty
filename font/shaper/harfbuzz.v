@@ -112,7 +112,34 @@ pub fn (self &HbShaper) end_frame() {
 // and assume the y value matches.
 pub fn (mut self HbShaper) run_iterator(opts font.RunOptions) font.RunIterator {
 	self.grid = opts.grid
-	return font.RunIterator.new(unsafe { &self })
+	return font.RunIterator.new_with_hooks(unsafe { &self }, opts, font.RunIteratorHooks{
+		prepare: harfbuzz_run_prepare
+		add: harfbuzz_run_add
+		finalize: harfbuzz_run_finalize
+	})
+}
+
+fn harfbuzz_run_prepare(shaper_ptr voidptr) {
+	mut shaper := unsafe { &HbShaper(shaper_ptr) }
+	shaper.hb_buf.reset()
+	shaper.hb_buf.set_content_type(.unicode)
+	shaper.hb_buf.set_cluster_level(.characters)
+	shaper.codepoints.clear()
+	shaper.hb_buf.set_direction(.ltr)
+}
+
+fn harfbuzz_run_add(shaper_ptr voidptr, cp u32, cluster u32) {
+	mut shaper := unsafe { &HbShaper(shaper_ptr) }
+	shaper.hb_buf.add(cp, u32(shaper.codepoints.len))
+	shaper.codepoints << HbCodepoint{
+		cluster: cluster
+		codepoint: cp
+	}
+}
+
+fn harfbuzz_run_finalize(shaper_ptr voidptr) {
+	mut shaper := unsafe { &HbShaper(shaper_ptr) }
+	shaper.hb_buf.guess_segment_properties()
 }
 
 // shape shapes the given text run. The text run must be the immediately previous
@@ -267,6 +294,7 @@ pub fn (mut self HbShaper) shape(run font.TextRun) ![]font.ShapeCell {
 		// const i = self.cell_buf.items.len - 1;
 		// log.warn("i={} info={} pos={} cell={}", .{ i, info_v, pos_v, self.cell_buf.items[i] });
 	}
+
 	// log.warn("----------------", .{});
 
 	return self.cell_buf

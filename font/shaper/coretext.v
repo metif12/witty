@@ -2,6 +2,7 @@ module shaper
 
 import font
 import macos
+import math
 
 // Shaper that uses CoreText.
 //
@@ -112,10 +113,6 @@ pub const ct_default_features = [
 // Create a CoreFoundation Dictionary suitable for setting the font features
 // of a CoreText font.
 fn make_features_dict(feats []Feature) !&macos.CFDictionary {
-	// XTODO: This function creates CF objects that require real CoreText APIs.
-	// The logic is: for each feature, create a CF dictionary with the tag and value,
-	// append it to a CF array, then wrap the array in an outer dictionary keyed by
-	// kCTFontFeatureSettingsAttribute.
 	mut list := macos.CFMutableArray.create()!
 	defer { list.release() }
 
@@ -128,7 +125,8 @@ fn make_features_dict(feats []Feature) !&macos.CFDictionary {
 		mut value := macos.CFNumber.create(.int_type, &value_num)!
 		defer { value.release() }
 
-		keys := [voidptr(macos.k_ct_font_open_type_feature_tag()), voidptr(macos.k_ct_font_open_type_feature_value())]
+		keys := [voidptr(macos.k_ct_font_open_type_feature_tag()),
+			voidptr(macos.k_ct_font_open_type_feature_value())]
 		vals := [voidptr(key), voidptr(value)]
 		dict := macos.CFDictionary.create(keys, vals)!
 		defer { dict.release() }
@@ -146,14 +144,15 @@ fn make_features_dict(feats []Feature) !&macos.CFDictionary {
 // init creates a new CoreText shaper.
 // The features parameter is a list of OpenType feature strings (e.g. "dlig").
 pub fn Shaper.init(opts font.ShaperOptions) !Shaper {
-	// XTODO: Full feature list parsing not implemented.
-	// We would parse opts.features strings into Feature structs,
-	// combine with default_features, and create CF dictionaries.
-
 	// Build feature list from user-specified strings.
 	mut feats := []Feature{}
-	// XTODO: parse opts.features strings into Feature structs
-	_ = feats
+	for feature_string in opts.features {
+		// Ghostty deliberately treats invalid settings as non-fatal: one bad
+		// user setting must not disable shaping for the entire terminal.
+		if feature := Feature.from_string(feature_string) {
+			feats << feature
+		}
+	}
 
 	// Combine default features with user features.
 	mut feats_df := []Feature{cap: feats.len + ct_default_features.len}
@@ -271,8 +270,38 @@ pub fn (mut self Shaper) end_frame() {
 
 // Create a run iterator for the given options.
 pub fn (mut self Shaper) run_iterator(opts font.RunOptions) font.RunIterator {
-	return font.RunIterator.new(unsafe { &self })
+	return font.RunIterator.new_with_hooks(unsafe { &self }, opts, font.RunIteratorHooks{
+		prepare: coretext_run_prepare
+		add: coretext_run_add
+		finalize: coretext_run_finalize
+	})
 }
+
+fn coretext_run_prepare(shaper_ptr voidptr) {
+	mut shaper := unsafe { &Shaper(shaper_ptr) }
+	shaper.run_state.reset()
+}
+
+fn coretext_run_add(shaper_ptr voidptr, cp u32, cluster u32) {
+	mut shaper := unsafe { &Shaper(shaper_ptr) }
+	sp := macos.get_surrogate_pair(cp)
+	shaper.run_state.unichars << sp.hi
+	if sp.is_pair {
+		shaper.run_state.unichars << sp.lo
+	}
+	shaper.run_state.codepoints << Codepoint{
+		codepoint: cp
+		cluster: cluster
+	}
+	if sp.is_pair {
+		shaper.run_state.codepoints << Codepoint{
+			codepoint: 0
+			cluster: cluster
+		}
+	}
+}
+
+fn coretext_run_finalize(_ voidptr) {}
 
 // Shape a text run into positioned glyphs.
 //
@@ -280,11 +309,6 @@ pub fn (mut self Shaper) run_iterator(opts font.RunOptions) font.RunIterator {
 // caller must ensure you're properly calling end_frame to release
 // all the objects.
 pub fn (mut self Shaper) shape(run font.TextRun) ![]font.ShapeCell {
-	// XTODO: The actual shaping requires CoreText APIs (CTTypesetter,
-	// CTLine, CTRun). The logic below preserves the structure of the
-	// original Zig implementation but cannot actually shape text without
-	// the real CoreText bindings.
-
 	state := &self.run_state
 
 	// {
@@ -331,8 +355,7 @@ pub fn (mut self Shaper) shape(run font.TextRun) ![]font.ShapeCell {
 
 	// Create a typesetter from the attributed string and the cached
 	// attr dict. (See comment in init for more info on the attr dict.)
-	typesetter := macos.CTTypesetter.create_with_attributed_string_and_options(attr_str,
-		self.typesetter_attr_dict)!
+	typesetter := macos.CTTypesetter.create_with_attributed_string_and_options(attr_str, self.typesetter_attr_dict)!
 	self.cf_release_pool << voidptr(typesetter)
 
 	// Create a line from the typesetter
@@ -341,12 +364,10 @@ pub fn (mut self Shaper) shape(run font.TextRun) ![]font.ShapeCell {
 
 	// This keeps track of the current x offset (sum of advance.width) and
 	// the furthest cluster we've seen so far (max).
-	// XTODO: used in the CoreText run iteration loop below (commented out)
-	// mut run_offset := Offset{}
+	mut run_offset := Offset{}
 
 	// This keeps track of the cell starting x and cluster.
-	// XTODO: used in the CoreText run iteration loop below (commented out)
-	// mut cell_offset := Offset{}
+	mut cell_offset := Offset{}
 
 	// For debugging positions, turn this on:
 	// mut run_offset_y := f64(0.0)
@@ -370,108 +391,67 @@ pub fn (mut self Shaper) shape(run font.TextRun) ![]font.ShapeCell {
 	// cell buffer.
 	runs := line.get_glyph_runs()
 	for run_i in 0 .. runs.get_count() {
-		_ = run_i
-		// XTODO: Need real CoreText API to get CTRun from CFArray.
-		// The code below shows the intended logic:
-		//
-		// ctrun := runs.get_value_at_index(run_i)
-		// status := ctrun.get_status()
-		// if status.non_monotonic || status.right_to_left { non_ltr = true }
-		//
-		// glyphs := ctrun.get_glyphs()
-		// advances := ctrun.get_advances()
-		// positions := ctrun.get_positions()
-		// indices := ctrun.get_string_indices()
-		//
-		// for idx in 0 .. glyphs.len {
-		//     glyph := glyphs[idx]
-		//     advance := advances[idx]
-		//     position := positions[idx]
-		//     index := indices[idx]
-		//
-		//     // Our cluster is also our cell X position. If the cluster changes
-		//     // then we need to reset our current cell offsets.
-		//     cluster := state.codepoints[index].cluster
-		//     if cell_offset.cluster != cluster {
-		//         // We previously asserted that the new cluster is greater
-		//         // than cell_offset.cluster, but this isn't always true.
-		//         // See e.g. the "shape Chakma vowel sign with ligature
-		//         // (vowel sign renders first)" test.
-		//
-		//         is_after_glyph_from_current_or_next_clusters :=
-		//             cluster <= run_offset.cluster
-		//
-		//         mut is_first_codepoint_in_cluster := true
-		//         mut i := index
-		//         for i > 0 {
-		//             i--
-		//             codepoint := state.codepoints[i]
-		//             // Skip surrogate pair padding
-		//             if codepoint.codepoint == 0 { continue }
-		//             is_first_codepoint_in_cluster = codepoint.cluster != cluster
-		//             break
-		//         }
-		//
-		//         // We need to reset the `cell_offset` at the start of a new
-		//         // cluster, but we do that conditionally if the codepoint
-		//         // `is_first_codepoint_in_cluster` and the cluster is not
-		//         // `is_after_glyph_from_current_or_next_clusters`, which is
-		//         // a heuristic to detect ligatures and avoid positioning
-		//         // glyphs that mark ligatures incorrectly. The idea is that
-		//         // if the first codepoint in a cluster doesn't appear in
-		//         // the stream, it's very likely that it combined with
-		//         // codepoints from a previous cluster into a ligature.
-		//         // Then, the subsequent codepoints are very likely marking
-		//         // glyphs that are placed relative to that ligature, so if
-		//         // we were to reset the `cell_offset` to align it with the
-		//         // grid, the positions would be off. The
-		//         // `!is_after_glyph_from_current_or_next_clusters` check is
-		//         // needed in case these marking glyphs come from a later
-		//         // cluster but are rendered first (see the Chakma and
-		//         // Bengali tests). In that case when we get to the
-		//         // codepoint that `is_first_codepoint_in_cluster`, but in a
-		//         // cluster that
-		//         // `is_after_glyph_from_current_or_next_clusters`, we don't
-		//         // want to reset to the grid and cause the positions to be
-		//         // off. (Note that we could go back and align the cells to
-		//         // the grid starting from the one from the cluster that
-		//         // rendered out of order, but that is more complicated so
-		//         // we don't do that for now. Also, it's TBD if there are
-		//         // exceptions to this heuristic for detecting ligatures,
-		//         // but using the logging below seems to show it works
-		//         // well.)
-		//         if is_first_codepoint_in_cluster &&
-		//             !is_after_glyph_from_current_or_next_clusters {
-		//             cell_offset = Offset{
-		//                 cluster: cluster
-		//                 x: run_offset.x
-		//             }
-		//             // For debugging positions, turn this on:
-		//             // cell_offset_y = run_offset_y
-		//         }
-		//     }
-		//
-		//     // For debugging positions, turn this on:
-		//     // self.debug_positions(run_offset, run_offset_y, cell_offset,
-		//     //     cell_offset_y, position, index)
-		//
-		//     x_offset := position.x - cell_offset.x
-		//
-		//     self.cell_buf << font.ShapeCell{
-		//         x: u32(cell_offset.cluster)
-		//         x_offset: int(math.round(x_offset))
-		//         y_offset: int(math.round(position.y))
-		//         glyph_index: glyph
-		//     }
-		//
-		//     // Add our advances to keep track of our run offsets.
-		//     // Advances apply to the NEXT cell.
-		//     run_offset.x += advance.width
-		//     if cluster > run_offset.cluster { run_offset.cluster = cluster }
-		//
-		//     // For debugging positions, turn this on:
-		//     // run_offset_y += advance.height
-		// }
+		run_ptr := runs.get_value_at_index(run_i)
+		if isnil(run_ptr) {
+			return error('CoreText returned a null glyph run')
+		}
+		ctrun := unsafe { &macos.CTRun(run_ptr) }
+		status := ctrun.get_status()
+		if status.non_monotonic || status.right_to_left {
+			non_ltr = true
+		}
+
+		glyphs := ctrun.get_glyphs()
+		advances := ctrun.get_advances()
+		positions := ctrun.get_positions()
+		indices := ctrun.get_string_indices()
+		if glyphs.len != advances.len || glyphs.len != positions.len || glyphs.len != indices.len {
+			return error('CoreText returned inconsistent glyph run lengths')
+		}
+
+		for idx in 0 .. glyphs.len {
+			index := indices[idx]
+			if index < 0 || index >= state.codepoints.len {
+				return error('CoreText returned an invalid string index')
+			}
+			cluster := state.codepoints[index].cluster
+			if cell_offset.cluster != cluster {
+				is_after_glyph_from_current_or_next_clusters := cluster <= run_offset.cluster
+
+				mut is_first_codepoint_in_cluster := true
+				mut i := index
+				for i > 0 {
+					i--
+					codepoint := state.codepoints[i]
+					if codepoint.codepoint == 0 {
+						continue
+					}
+					is_first_codepoint_in_cluster = codepoint.cluster != cluster
+					break
+				}
+
+				if is_first_codepoint_in_cluster
+					&& !is_after_glyph_from_current_or_next_clusters {
+					cell_offset = Offset{
+						cluster: cluster
+						x: run_offset.x
+					}
+				}
+			}
+
+			position := positions[idx]
+			self.cell_buf << font.ShapeCell{
+				x: cell_offset.cluster
+				x_offset: i32(math.round(position.x - cell_offset.x))
+				y_offset: i32(math.round(position.y))
+				glyph_index: glyphs[idx]
+			}
+
+			run_offset.x += advances[idx].width
+			if cluster > run_offset.cluster {
+				run_offset.cluster = cluster
+			}
+		}
 	}
 
 	// If our buffer contains some non-ltr sections we need to sort it :/
@@ -489,15 +469,14 @@ pub fn (mut self Shaper) shape(run font.TextRun) ![]font.ShapeCell {
 // Get an attr dict for a font from a specific index.
 // These items are cached, do not retain or release them.
 fn (mut self Shaper) get_font(run font.TextRun) !&macos.CFDictionary {
-	// XTODO: This function requires real CoreText API access to copy
-	// fonts with feature attributes. The logic below preserves the
-	// structure of the original Zig implementation.
-
 	// If this grid doesn't match the one we've cached fonts for,
 	// then we reset the cache list since it's no longer valid.
 	// We use an int rather than direct pointer comparison
 	// because we don't want anyone to inadvertently use the pointer.
-	grid_id := usize(0) // XTODO: would be derived from run.grid pointer
+	if run.grid == unsafe { nil } {
+		return error('CoreText shaper has no font grid')
+	}
+	grid_id := usize(voidptr(run.grid))
 	if grid_id != self.cached_font_grid {
 		if self.cached_font_grid > 0 {
 			// Put all the currently cached fonts in to
@@ -527,14 +506,6 @@ fn (mut self Shaper) get_font(run font.TextRun) !&macos.CFDictionary {
 		return cached
 	}
 
-	// Font descriptor, font
-	// XTODO: need real CoreText APIs to:
-	// 1. Acquire read lock on grid
-	// 2. Get face from collection by index
-	// 3. Create font descriptor with feature attributes
-	// 4. Copy font with descriptor
-	// 5. Create attr dict with font
-
 	// The CoreText shaper relies on CoreText and CoreText claims
 	// that CTFonts are threadsafe. See:
 	// https://developer.apple.com/documentation/coretext/
@@ -547,8 +518,34 @@ fn (mut self Shaper) get_font(run font.TextRun) !&macos.CFDictionary {
 	// CTFramesetter, CTRun, CTLine, CTFrame, and associated objects)
 	// should be used in a single operation, work queue, or thread.
 
-	// Placeholder: return a new empty dict
-	attr_dict := macos.CFDictionary.create([], [])!
+	mut grid := unsafe { run.grid }
+	grid.lock.rlock()
+	face := grid.resolver.collection.get_face(font.Index.from_int(run.font_index)) or {
+		grid.lock.runlock()
+		return err
+	}
+	mut name_buf := []u8{len: 1024}
+	font_name := face.name(mut name_buf) or {
+		grid.lock.runlock()
+		return err
+	}
+	font_size := face.size.pixels()
+	disable_defaults := face.quirks_disable_default_font_features
+	grid.lock.runlock()
+
+	name := macos.CFString.create_with_bytes(font_name.bytes(), .utf8, false)!
+	defer { name.release() }
+	base_desc := macos.CTFontDescriptor.create_with_name_and_size(name, font_size)!
+	defer { base_desc.release() }
+	feature_attrs := if disable_defaults { self.features_no_default } else { self.features }
+	desc := base_desc.copy_with_attributes(feature_attrs)!
+	defer { desc.release() }
+	run_font := macos.CTFont.create_with_descriptor(desc, font_size)!
+	defer { run_font.release() }
+
+	attr_keys := [macos.StringAttribute.font.key()]
+	attr_values := [voidptr(run_font)]
+	attr_dict := macos.CFDictionary.create(attr_keys, attr_values)!
 	self.cached_fonts[index_int] = attr_dict
 	return attr_dict
 }
@@ -583,6 +580,7 @@ pub fn (mut self RunIteratorHook) add_codepoint(cp u32, cluster u32) ! {
 		codepoint: cp
 		cluster: cluster
 	}
+
 	// log.warn("run cp={X}", .{cp});
 
 	// If the UTF-16 codepoint is a pair then we need to insert

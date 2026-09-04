@@ -1497,9 +1497,22 @@ pub:
 // RunIterator iterates over text runs for shaping.
 pub struct RunIterator {
 pub mut:
-	shaper_ptr voidptr = unsafe { nil }
-	opts       RunOptions
-	i          int
+	shaper_ptr  voidptr = unsafe { nil }
+	opts        RunOptions
+	i           int
+	prepare_fn  fn (voidptr) = unsafe { nil }
+	add_fn      fn (voidptr, u32, u32) = unsafe { nil }
+	finalize_fn fn (voidptr) = unsafe { nil }
+}
+
+// RunIteratorHooks lets each shaping backend receive the run's codepoints
+// without the iterator knowing the backend's concrete struct layout. This is
+// the V equivalent of Ghostty's comptime RunIteratorHook.
+pub struct RunIteratorHooks {
+pub:
+	prepare  fn (voidptr) = unsafe { nil }
+	add      fn (voidptr, u32, u32) = unsafe { nil }
+	finalize fn (voidptr) = unsafe { nil }
 }
 
 // Create a new RunIterator with an opaque pointer to the shaper.
@@ -1510,19 +1523,29 @@ pub fn RunIterator.new(shaper_ptr voidptr, opts ...RunOptions) RunIterator {
 	}
 }
 
+pub fn RunIterator.new_with_hooks(shaper_ptr voidptr, opts RunOptions, hooks RunIteratorHooks) RunIterator {
+	return RunIterator{
+		shaper_ptr: shaper_ptr
+		opts: opts
+		prepare_fn: hooks.prepare
+		add_fn: hooks.add
+		finalize_fn: hooks.finalize
+	}
+}
+
 // Get the next text run, or none if done.
 pub fn (mut it RunIterator) next() ?TextRun {
 	if it.shaper_ptr == unsafe { nil } {
 		return none
 	}
-	mut shaper := unsafe { &Shaper(it.shaper_ptr) }
 	if it.opts.render_cells.len == 0 {
-		return it.next_bytes(mut shaper)
+		return it.next_bytes()
 	}
-	return it.next_render_cells(mut shaper)
+	return it.next_render_cells()
 }
 
-fn (mut it RunIterator) prepare(mut shaper Shaper) {
+fn default_run_prepare(shaper_ptr voidptr) {
+	mut shaper := unsafe { &Shaper(shaper_ptr) }
 	shaper.hb_buf.reset()
 	shaper.hb_buf.set_content_type(.unicode)
 	shaper.hb_buf.set_cluster_level(.characters)
@@ -1533,14 +1556,44 @@ fn (mut it RunIterator) prepare(mut shaper Shaper) {
 	shaper.codepoints.clear()
 }
 
-fn add_shaper_codepoint(mut shaper Shaper, mut hasher ShaperRunHasher, cp u32, cluster u32) {
-	hasher.add(cp)
-	hasher.add(cluster)
+fn default_run_add(shaper_ptr voidptr, cp u32, cluster u32) {
+	mut shaper := unsafe { &Shaper(shaper_ptr) }
 	shaper.hb_buf.add(cp, u32(shaper.codepoints.len))
 	shaper.codepoints << ShaperCodepoint{ codepoint: cp, cluster: cluster }
 }
 
-fn (mut it RunIterator) next_bytes(mut shaper Shaper) ?TextRun {
+fn default_run_finalize(shaper_ptr voidptr) {
+	mut shaper := unsafe { &Shaper(shaper_ptr) }
+	shaper.hb_buf.guess_segment_properties()
+}
+
+fn (it &RunIterator) prepare() {
+	if it.prepare_fn != unsafe { nil } {
+		it.prepare_fn(it.shaper_ptr)
+	} else {
+		default_run_prepare(it.shaper_ptr)
+	}
+}
+
+fn (it &RunIterator) add_codepoint(mut hasher ShaperRunHasher, cp u32, cluster u32) {
+	hasher.add(cp)
+	hasher.add(cluster)
+	if it.add_fn != unsafe { nil } {
+		it.add_fn(it.shaper_ptr, cp, cluster)
+	} else {
+		default_run_add(it.shaper_ptr, cp, cluster)
+	}
+}
+
+fn (it &RunIterator) finalize() {
+	if it.finalize_fn != unsafe { nil } {
+		it.finalize_fn(it.shaper_ptr)
+	} else {
+		default_run_finalize(it.shaper_ptr)
+	}
+}
+
+fn (mut it RunIterator) next_bytes() ?TextRun {
 	mut max := it.opts.cells.len
 	for max > 0 && it.opts.cells[max - 1] == 0 {
 		max--
@@ -1548,15 +1601,15 @@ fn (mut it RunIterator) next_bytes(mut shaper Shaper) ?TextRun {
 	if it.i >= max {
 		return none
 	}
-	it.prepare(mut shaper)
+	it.prepare()
 	start := it.i
 	mut hasher := ShaperRunHasher{}
 	for it.i < max {
 		cp := if it.opts.cells[it.i] == 0 { u32(` `) } else { u32(it.opts.cells[it.i]) }
-		add_shaper_codepoint(mut shaper, mut hasher, cp, u32(it.i - start))
+		it.add_codepoint(mut hasher, cp, u32(it.i - start))
 		it.i++
 	}
-	shaper.hb_buf.guess_segment_properties()
+	it.finalize()
 	hasher.add(u32(it.i - start))
 	hasher.add(0)
 	return TextRun{
@@ -1568,7 +1621,7 @@ fn (mut it RunIterator) next_bytes(mut shaper Shaper) ?TextRun {
 	}
 }
 
-fn (mut it RunIterator) next_render_cells(mut shaper Shaper) ?TextRun {
+fn (mut it RunIterator) next_render_cells() ?TextRun {
 	cells := it.opts.render_cells
 	mut max := cells.len
 	for max > 0 && cells[max - 1].raw.is_empty() {
@@ -1580,7 +1633,7 @@ fn (mut it RunIterator) next_render_cells(mut shaper Shaper) ?TextRun {
 	if it.i >= max {
 		return none
 	}
-	it.prepare(mut shaper)
+	it.prepare()
 	start := it.i
 	base_style := cell_style(cells[start])
 	font_style := style_to_font_style(base_style)
@@ -1660,11 +1713,11 @@ fn (mut it RunIterator) next_render_cells(mut shaper Shaper) ?TextRun {
 		if resolved_cp == 0 || resolved_cp == 0x10eeee {
 			resolved_cp = u32(` `)
 		}
-		add_shaper_codepoint(mut shaper, mut hasher, resolved_cp, cluster)
+		it.add_codepoint(mut hasher, resolved_cp, cluster)
 		if resolved_cp == cell.raw.codepoint_val() && cell.raw.content_tag == .codepoint_grapheme {
 			for cp in cell.grapheme {
 				if cp != 0xfe0e && cp != 0xfe0f {
-					add_shaper_codepoint(mut shaper, mut hasher, cp, cluster)
+					it.add_codepoint(mut hasher, cp, cluster)
 				}
 			}
 		}
@@ -1673,7 +1726,7 @@ fn (mut it RunIterator) next_render_cells(mut shaper Shaper) ?TextRun {
 	if j == start {
 		return none
 	}
-	shaper.hb_buf.guess_segment_properties()
+	it.finalize()
 	hasher.add(u32(j - start))
 	hasher.add(u32(current_font.int_val()))
 	it.i = j

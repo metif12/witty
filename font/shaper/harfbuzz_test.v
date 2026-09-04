@@ -81,28 +81,24 @@ fn create_hb_shaper_with_discovered_font(font_req string) !HbTestShaper {
 // test "run iterator"
 // Verifies basic run iteration: plain text, text with spaces, and emoji splits.
 fn test_hb_run_iterator() {
-	// XTODO: Requires terminal.Terminal, terminal.RenderState, and vtStream
-	// which are not available in the shaper module.
-	//
-	// Original test scenarios:
-	//
-	// 1. "ABCD" in a 5-col terminal should be 1 run.
-	//    var t = try terminal.Terminal.init(alloc, .{ .cols = 5, .rows = 3 });
-	//    s.nextSlice("ABCD");
-	//    -> 1 run
-	//
-	// 2. Spaces should be part of a run.
-	//    "ABCD   EFG" in a 10-col terminal should be 1 run.
-	//    -> 1 run
-	//
-	// 3. Emoji should split runs.
-	//    "A😃D" in a 5-col terminal should be 3 runs.
-	//    Each run should be exactly length 1 in the hb_buf.
-	//    -> 3 runs
-
 	mut td := create_hb_shaper() or { return }
 	defer {
 		td.deinit()
+	}
+	mut iterator := td.shp.run_iterator(font.RunOptions{
+		cells: [u8(`A`), `B`, `C`, `D`]
+	})
+	run := iterator.next() or { panic('expected a text run') }
+	assert run.cells == 4
+	assert td.shp.codepoints == [
+		HbCodepoint{ codepoint: u32(`A`), cluster: 0 },
+		HbCodepoint{ codepoint: u32(`B`), cluster: 1 },
+		HbCodepoint{ codepoint: u32(`C`), cluster: 2 },
+		HbCodepoint{ codepoint: u32(`D`), cluster: 3 },
+	]
+	assert td.shp.hb_buf.get_length() == 4
+	if _ := iterator.next() {
+		panic('expected one byte-adapter run')
 	}
 }
 
