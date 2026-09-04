@@ -348,38 +348,27 @@ pub fn (mut self HbRunIteratorHook) finalize() {
 // debug_positions logs detailed position/advance debug info for a glyph.
 // Normally this is not called; enable it by uncommenting calls in shape().
 fn (self &HbShaper) debug_positions(run_offset HbRunOffset, cell_offset HbCellOffset, pos_v harfbuzz.GlyphPosition, index u32) {
-	// XTODO: Full debug logging requires unicode.table access for grapheme
-	// boundary class detection and formatted codepoint display.
-	//
-	// The original code:
-	// 1. Computes x_offset and y_offset from run_offset, cell_offset, and pos_v
-	// 2. Checks if positions differ from advances
-	// 3. Checks if run_offset.y differs from zero
-	// 4. Checks if cell_offset.cluster differs from the current cluster
-	//    (potential ligature detected)
-	// 5. For each discrepancy, formats the surrounding codepoints using
-	//    Python-style escape sequences and logs them
-	// 6. Optionally checks if the previous codepoint has grapheme_boundary_class
-	//    == .prepend (requires unicode tables)
-
 	x_offset := run_offset.x - cell_offset.x + ((pos_v.x_offset + 32) >> 6)
 	y_offset := run_offset.y + ((pos_v.y_offset + 32) >> 6)
 	advance_x_offset := run_offset.x - cell_offset.x
 	advance_y_offset := run_offset.y
 	x_offset_diff := x_offset - advance_x_offset
 	y_offset_diff := y_offset - advance_y_offset
-	_ = x_offset_diff
-	_ = y_offset_diff
-
-	cluster := self.codepoints[index].cluster
+	if int(index) >= self.codepoints.len {
+		return
+	}
+	cluster := self.codepoints[int(index)].cluster
 	cluster_differs := cluster != cell_offset.cluster
-	_ = cluster_differs
-
-	// To debug every loop, flip this to true:
-	// extra_debugging := false
-
-	// XTODO: would check is_previous_codepoint_prepend via unicode table
-	// XTODO: would format codepoints for display
-	// XTODO: would log position differences, y-offset differences,
-	//        and cluster differences (potential ligature detection)
+	if x_offset_diff == 0 && y_offset_diff == 0 && !cluster_differs {
+		return
+	}
+	idx := int(index)
+	start := if idx > 2 { idx - 2 } else { 0 }
+	end := if idx + 3 < self.codepoints.len { idx + 3 } else { self.codepoints.len }
+	mut context := []string{}
+	for i in start .. end {
+		entry := self.codepoints[i]
+		context << 'U+${entry.codepoint:04X}@${entry.cluster}'
+	}
+	eprintln('HarfBuzz position mismatch codepoints=${context.join(' ')} x_diff=${x_offset_diff} y_diff=${y_offset_diff} cluster=${cluster} cell_cluster=${cell_offset.cluster}')
 }

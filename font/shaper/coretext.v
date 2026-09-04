@@ -609,13 +609,21 @@ fn (self &Shaper) debug_positions(run_offset Offset, run_offset_y f64, cell_offs
 	x_offset_diff := x_offset - advance_x_offset
 	y_offset_diff := position.y - advance_y_offset
 
-	_ = state
-	_ = x_offset_diff
-	_ = y_offset_diff
-	_ = index
-
-	// XTODO: Full debug logging would require unicode.table access.
-	// The original code formats codepoints around the current position and
-	// checks for various position discrepancies (position vs advance,
-	// y-offset differences, cluster changes indicating potential ligatures).
+	if index < 0 || index >= state.codepoints.len {
+		return
+	}
+	cluster_differs := state.codepoints[index].cluster != cell_offset.cluster
+	if x_offset_diff == 0 && y_offset_diff == 0 && !cluster_differs {
+		return
+	}
+	mut context := []string{}
+	start := if index > 2 { index - 2 } else { 0 }
+	end := if index + 3 < state.codepoints.len { index + 3 } else { state.codepoints.len }
+	for i in start .. end {
+		entry := state.codepoints[i]
+		if entry.codepoint != 0 {
+			context << 'U+${entry.codepoint:04X}@${entry.cluster}'
+		}
+	}
+	eprintln('CoreText position mismatch codepoints=${context.join(' ')} x_diff=${x_offset_diff:.2f} y_diff=${y_offset_diff:.2f} cluster=${state.codepoints[index].cluster} cell_cluster=${cell_offset.cluster}')
 }
