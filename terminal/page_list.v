@@ -4648,7 +4648,7 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) {
 			p.y = self.y
 		}
 
-		result := self.write_cell(&cells[x], src_page, int(src_y), x)
+		result := self.write_cell(mut list, &cells[x], src_page, int(src_y), x)
 		match result {
 			.success {
 				// Wrote the cell, move to the next.
@@ -4698,7 +4698,7 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) {
 // Write a cell. On error, this will not unwrite the cell but the cell may
 // be incomplete (but valid). This guarantees the page is in a coherent
 // state even on error.
-fn (mut self ReflowCursor) write_cell(cell &CellData, src_page &Page, src_y int, src_x int) ReflowWriteResult {
+fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_page &Page, src_y int, src_x int) ReflowWriteResult {
 	mut page := &self.node.data
 	dst_cols := page.size.cols
 
@@ -4803,9 +4803,19 @@ fn (mut self ReflowCursor) write_cell(cell &CellData, src_page &Page, src_y int,
 	// Copy style data.
 	if cell.has_styling() {
 		style := src_page.styles.get(cell.style_id)
-		id := page.styles.add_with_id(style, cell.style_id) or { default_style_id }
-		page.rows[int(self.y)].cells[int(self.x)].style_id = id
-		page.rows[int(self.y)].styled = true
+		id := page.styles.add_with_id(style, cell.style_id) or {
+			new_node := list.increase_capacity(self.node, .styles) or {
+				return .out_of_space
+			}
+			self.node = new_node
+			mut grown_page := &self.node.data
+			grown_page.styles.add_with_id(style, cell.style_id) or {
+				panic('style insertion failed after PageList capacity increase')
+			}
+		}
+		mut current_page := &self.node.data
+		current_page.rows[int(self.y)].cells[int(self.x)].style_id = id
+		current_page.rows[int(self.y)].styled = true
 	}
 
 	self.cursor_forward()
@@ -5020,16 +5030,43 @@ fn (mut self PageList) fixup_viewport(removed usize) {
 	}
 }
 
-// Increase the capacity of the given page node. In Ghostty this doubles a
-// specific dimension (styles, grapheme_bytes, etc.) and reallocates the
-// backing memory. In the V model, managed memory grows dynamically so the
-// only meaningful capacity dimension is rows. We keep this so the reflow
-// engine can call it for API parity; it currently reclones the page with
-// the same capacity (the rehash/no-op case).
-fn (mut self PageList) increase_capacity(node &PageNode) &PageNode {
-	// In V we don't need to reallocate a backing buffer for managed memory
-	// since arrays/maps grow on demand. We simply return the same node.
-	return node
+enum PageCapacityAdjustment {
+	styles
+}
+
+// Increase one bounded capacity dimension by replacing and recloning the
+// page. The node replacement, pin fixup, and serial change mirror Ghostty's
+// increaseCapacity; V's grapheme and hyperlink stores are dynamic, leaving
+// the bounded StyleSet as the only dimension that can currently request it.
+fn (mut self PageList) increase_capacity(node &PageNode, adjustment PageCapacityAdjustment) ?&PageNode {
+	page := &node.data
+	mut cap := page.capacity
+	match adjustment {
+		.styles {
+			if cap.styles == max_u16 {
+				return none
+			}
+			doubled := if cap.styles > max_u16 / 2 { max_u16 } else { cap.styles * 2 }
+			minimum := StyleSet.capacity_for_count(1)
+			cap.styles = if doubled > minimum { doubled } else { minimum }
+		}
+	}
+
+	mut new_node := self.create_page(cap)
+	mut new_page := &new_node.data
+	new_page.size = page.size
+	new_page.clone_from(page, 0, page.size.rows)
+	new_page.dirty = page.dirty
+
+	for mut pin in self.tracked_pins {
+		if voidptr(pin.node) == voidptr(node) {
+			pin.node = new_node
+		}
+	}
+
+	self.pages.insert_before(node, new_node)
+	self.destroy_node(node)
+	return new_node
 }
 
 // Compact a page to use the minimum required memory for the contents it
