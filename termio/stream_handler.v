@@ -1,6 +1,7 @@
 module termio
 
 import apprt
+import build_meta
 import internal_os
 import kitty
 import osc
@@ -1462,8 +1463,7 @@ pub fn (mut self StreamHandler) query_kitty_keyboard() {
 // ============================================================
 
 pub fn (mut self StreamHandler) report_xtversion() {
-	// Report as ghostty (the upstream project we translated from)
-	resp := '\x1bP>|ghostty 0.0.0\x1b\\'
+	resp := '\x1bP>|ghostty ${build_meta.version_string}\x1b\\'
 	self.message_writer(Message.write_req(resp))
 }
 

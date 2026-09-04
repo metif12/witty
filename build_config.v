@@ -7,8 +7,10 @@
 
 module main
 
+import build_meta
+
 // The semantic version of this build as a string.
-pub const version_string = '0.1.0-dev'
+pub const version_string = build_meta.version_string
 
 // ReleaseChannel determines the release channel for this build.
 pub enum ReleaseChannel {

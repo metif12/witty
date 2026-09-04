@@ -1,5 +1,6 @@
 module termio
 
+import build_meta
 import configpkg
 import renderer
 
@@ -45,6 +46,7 @@ fn test_exec_command_darwin_shell() {
 		}
 		assert has_flp
 	} $else {
+
 		// On non-macOS, exec_command wraps with /bin/sh
 		result := exec_command(configpkg.ShellCmd{ shell: 'foo bar baz' })
 		assert result.len >= 3
@@ -64,6 +66,7 @@ fn test_exec_command_darwin_direct() {
 		assert result[result.len - 2] == 'foo'
 		assert result[result.len - 1] == 'bar baz'
 	} $else {
+
 		// On non-macOS, direct commands are returned as-is
 		result := exec_command(configpkg.DirectCmd{
 			direct: ['foo', 'bar baz']
@@ -91,6 +94,7 @@ fn test_subprocess_init_basic() {
 		assert env['TERM'] == 'xterm-256color'
 		assert env['COLORTERM'] == 'truecolor'
 		assert env['TERM_PROGRAM'] == 'ghostty'
+		assert env['TERM_PROGRAM_VERSION'] == build_meta.version_string
 	}
 }
 

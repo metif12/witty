@@ -5,6 +5,7 @@ module termio
 // pty and forward it to the Termio instance.
 
 import apprt
+import build_meta
 import configpkg
 import internal_os
 import os
@@ -84,9 +85,6 @@ mut:
 }
 
 const log_tag = 'io_exec'
-
-// The version string reported via TERM_PROGRAM_VERSION.
-const term_program_version = '0.1.0'
 
 // The termios poll rate in milliseconds.
 const termios_poll_ms = 200
@@ -472,7 +470,7 @@ pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
 	// Set environment variables used by some programs (such as neovim) to detect
 	// which terminal emulator and version they're running under.
 	env['TERM_PROGRAM'] = 'ghostty'
-	env['TERM_PROGRAM_VERSION'] = term_program_version
+	env['TERM_PROGRAM_VERSION'] = build_meta.version_string
 
 	// VTE_VERSION is set by gnome-terminal and other VTE-based terminals.
 	// We don't want our child processes to think we're running under VTE.

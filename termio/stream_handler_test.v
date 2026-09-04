@@ -3,6 +3,7 @@ module termio
 import renderer
 import terminal
 import apprt
+import build_meta
 import osc
 import tmux
 
@@ -147,6 +148,18 @@ fn test_stream_handler_xtgettcap_omits_unknown_and_formats_boolean() {
 	}
 	assert numeric_msg.kind == .write_small
 	assert numeric_msg.write_small_data.slice().bytestr() == '\x1bP1+r636F6C6F7273=323536\x1b\\'
+}
+
+fn test_stream_handler_xtversion_uses_build_version() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	handler.report_xtversion()
+
+	assert ctx.mailbox.len() == 1
+	msg := ctx.mailbox.pop() or { panic('expected XTVERSION response') }
+	assert msg.kind == .write_small
+	assert msg.write_small_data.slice().bytestr() == '\x1bP>|ghostty ${build_meta.version_string}\x1b\\'
 }
 
 // Test bell dispatches without crashing.
