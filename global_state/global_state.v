@@ -271,24 +271,43 @@ pub fn (r ResourcesDir) host() string {
 	return r.app_path or { '' }
 }
 
-// The sentinel values we look for in the path to know we've found the
-// resources directory. This mirrors ghostty's per-target sentinel list;
-// we include both the generic Linux/BSD sentinels and the macOS one so
-// detection works regardless of how resources were laid out.
+// The sentinel values are target-specific because each package layout uses
+// the exact terminfo database format selected by the pinned build.
 const resources_sentinels = $if windows { ['terminfo/ghostty.terminfo'] } $else $if macos { [
 	'terminfo/78/xterm-ghostty',
+] } $else $if freebsd { ['site-terminfo/g/ghostty', 'site-terminfo/x/xterm-ghostty'] } $else { [
 	'terminfo/g/ghostty',
 	'terminfo/x/xterm-ghostty',
-] } $else { ['terminfo/g/ghostty', 'terminfo/x/xterm-ghostty'] }
+] }
 
 // detect gets the directory to the bundled resources directory, if it
 // exists (not all platforms or packages have it). This is a faithful
 // translation of ghostty's resourcesDir().
 //
-// It uses the GHOSTTY_RESOURCES_DIR environment variable if set, otherwise
-// it climbs the tree from the running binary looking for a terminfo bundle.
+// Release builds prefer GHOSTTY_RESOURCES_DIR. Debug builds search beside the
+// current executable first so a newly built Witty does not inherit stale
+// resources from an older parent process.
 pub fn ResourcesDir.detect() ResourcesDir {
-	// Use the GHOSTTY_RESOURCES_DIR environment variable if set.
+	$if !debug {
+		if env := resources_dir_from_env() {
+			return env
+		}
+	}
+
+	detected := resources_dir_from_exe(os.executable())
+	if detected.app().len > 0 {
+		return detected
+	}
+
+	$if debug {
+		if env := resources_dir_from_env() {
+			return env
+		}
+	}
+	return ResourcesDir{}
+}
+
+fn resources_dir_from_env() ?ResourcesDir {
 	if dir := os.getenv_opt('GHOSTTY_RESOURCES_DIR') {
 		if dir.len > 0 {
 			return ResourcesDir{
@@ -296,10 +315,7 @@ pub fn ResourcesDir.detect() ResourcesDir {
 			}
 		}
 	}
-
-	// Get the path to our running binary and climb the tree.
-	exe := os.executable()
-	return resources_dir_from_exe(exe)
+	return none
 }
 
 // resources_dir_from_exe climbs the directory tree starting from the given
@@ -348,7 +364,7 @@ pub fn resources_dir_from_exe(exe_path string) ResourcesDir {
 // maybe_dir checks if the "base/sub/suffix" path exists and if so returns
 // the "base/sub" directory. The "suffix" is used to verify a directory
 // seems roughly right. Faithful translation of ghostty's maybeDir().
-fn maybe_dir(base string, sub string, suffix string) ?string {
+pub fn maybe_dir(base string, sub string, suffix string) ?string {
 	path := '${base}/${sub}/${suffix}'
 	if os.exists(path) {
 		// Return the path without the trailing "/suffix".

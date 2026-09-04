@@ -70,12 +70,24 @@ fn test_resources_dir_detects_share_layout() {
 	defer {
 		os.rmdir_all(tmp) or {}
 	}
-	sentinel_dir := os.join_path(tmp, 'share', 'terminfo', 'g')
+	sentinel := $if macos { 'terminfo/78/xterm-ghostty' } $else $if freebsd { 'site-terminfo/g/ghostty' } $else $if windows { 'terminfo/ghostty.terminfo' } $else { 'terminfo/g/ghostty' }
+	sentinel_path := os.join_path(tmp, 'share', sentinel)
+	sentinel_dir := os.dir(sentinel_path)
 	os.mkdir_all(sentinel_dir) or { panic(err) }
-	os.write_file(os.join_path(sentinel_dir, 'ghostty'), '') or { panic(err) }
+	os.write_file(sentinel_path, '') or { panic(err) }
 
 	res := resources_dir_from_exe(os.join_path(tmp, 'bin', 'witty'))
 	assert res.app() == os.join_path(tmp, 'share', 'ghostty')
+}
+
+fn test_resources_maybe_dir_returns_verified_parent() {
+	tmp := os.join_path(os.temp_dir(), 'witty-resources-maybe-${os.getpid()}')
+	defer { os.rmdir_all(tmp) or {} }
+	sentinel := os.join_path(tmp, 'share', 'terminfo', 'g', 'ghostty')
+	os.mkdir_all(os.dir(sentinel))!
+	os.write_file(sentinel, '')!
+	assert (maybe_dir(tmp, 'share', 'terminfo/g/ghostty') or { '' }) == os.join_path(tmp, 'share')
+	assert maybe_dir(tmp, 'share', 'terminfo/x/missing') == none
 }
 
 fn test_resources_dir_returns_empty_when_not_found() {
