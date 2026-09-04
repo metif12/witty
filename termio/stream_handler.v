@@ -1,8 +1,8 @@
 module termio
 
 import apprt
+import internal_os
 import kitty
-import os
 import osc
 import renderer
 import terminal
@@ -1601,15 +1601,17 @@ fn (mut self StreamHandler) report_pwd(url string) {
 		return
 	}
 
-	// Parse the file-style URI. OSC 7 uses "file://<host>/<path>" and
-	// kitty-shell-cwd uses "kitty-shell-cwd://<host>/<path>" where the
-	// path portion is the raw (already-unescaped) path.
-	scheme, host, mut path := parse_pwd_uri(url) or {
+	// Attempt to parse this file-style URI using options appropriate for
+	// this OSC 7 context. kitty-shell-cwd expects the full, unencoded path.
+	uri := internal_os.parse_uri(url, internal_os.UriParseOptions{
+		mac_address: $if macos { false } $else { true }
+		raw_path: url.starts_with('kitty-shell-cwd://')
+	}) or {
 		// invalid url in OSC 7
 		return
 	}
 
-	if scheme != 'file' && scheme != 'kitty-shell-cwd' {
+	if uri.scheme != 'file' && uri.scheme != 'kitty-shell-cwd' {
 		// OSC 7 scheme must be file or kitty-shell-cwd.
 		return
 	}
@@ -1617,100 +1619,30 @@ fn (mut self StreamHandler) report_pwd(url string) {
 	// OSC 7 is a little sketchy because anyone can send any value from
 	// any host (such as an SSH session). The best practice terminals follow
 	// is to validate the hostname to be local.
-	if host.len == 0 {
+	if uri.host.len == 0 {
 		// OSC 7 uri must contain a hostname.
 		return
 	}
-	if !hostname_is_local(host) {
+	if !(internal_os.hostname_is_local(uri.host) or { false }) {
 		// OSC 7 host must be local.
 		return
 	}
 
-	// For the "file" scheme we percent-decode the path. kitty-shell-cwd
-	// expects the raw, unencoded path so we leave it as-is.
-	if scheme == 'file' {
-		path = percent_decode(path)
-	}
-
-	self.terminal.set_pwd(path) or {}
+	self.terminal.set_pwd(uri.path) or {}
 
 	// Report it to the surface.
 	self.surface_message_writer(apprt.SurfaceMessage{
 		kind: .pwd_change
 		pwd_change: apprt.WriteReq{
-			data: path.bytes()
+			data: uri.path.bytes()
 		}
 	})
 
 	// If we haven't seen a title, use our pwd as the title.
 	if !self.seen_title {
-		self.window_title(path)
+		self.window_title(uri.path)
 		self.seen_title = false
 	}
-}
-
-// parse_pwd_uri does a minimal parse of a "scheme://host/path" URI as used
-// by OSC 7. It returns the scheme, host, and path. This is not a fully
-// general URI parser but is sufficient for the file:// and
-// kitty-shell-cwd:// schemes that OSC 7 uses.
-fn parse_pwd_uri(url string) ?(string, string, string) {
-	sep := url.index('://') or { return none }
-	scheme := url[..sep]
-	rest := url[sep + 3..]
-
-	// The host is everything up to the first '/'. The remainder (including
-	// the leading '/') is the path.
-	slash_idx := rest.index('/') or {
-		// No path component: host with an empty path.
-		return scheme, rest, ''
-	}
-	host := rest[..slash_idx]
-	path := rest[slash_idx..]
-	return scheme, host, path
-}
-
-// hostname_is_local checks if a hostname is local to the current machine.
-// This matches both "localhost" and the current hostname of the machine
-// (as returned by gethostname). Faithful to os/hostname.zig isLocal.
-fn hostname_is_local(host string) bool {
-	// A 'localhost' hostname is always considered local.
-	if host == 'localhost' {
-		return true
-	}
-
-	// If hostname is not "localhost" it must match our hostname.
-	our_hostname := os.hostname() or { return false }
-	return host == our_hostname
-}
-
-// percent_decode decodes a percent-encoded (%XX) string. Invalid escapes
-// are left as-is.
-fn percent_decode(s string) string {
-	if !s.contains('%') {
-		return s
-	}
-	mut result := []u8{cap: s.len}
-	mut i := 0
-	for i < s.len {
-		if s[i] == u8(`%`) && i + 2 < s.len {
-			hi := hex_nibble(s[i + 1]) or {
-				result << s[i]
-				i++
-				continue
-			}
-			lo := hex_nibble(s[i + 2]) or {
-				result << s[i]
-				i++
-				continue
-			}
-			result << (hi << 4) | lo
-			i += 3
-		} else {
-			result << s[i]
-			i++
-		}
-	}
-	return result.bytestr()
 }
 
 // ============================================================

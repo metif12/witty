@@ -666,6 +666,18 @@ fn test_stream_handler_report_pwd_forwards_decoded_path() {
 	assert ctx.messages[1].kind == .set_title
 }
 
+fn test_stream_handler_report_pwd_preserves_kitty_raw_path() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	handler.report_pwd('kitty-shell-cwd://localhost/tmp/raw%20path??#fragment')
+
+	assert ctx.messages.len == 2
+	assert ctx.messages[0].kind == .pwd_change
+	assert ctx.messages[0].pwd_change.data.bytestr() == '/tmp/raw%20path??#fragment'
+	assert ctx.messages[1].kind == .set_title
+}
+
 // Test window_title with empty title.
 fn test_stream_handler_window_title_empty() {
 	mut handler, mut ctx := make_test_handler()
