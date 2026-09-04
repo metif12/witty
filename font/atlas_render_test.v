@@ -1,5 +1,20 @@
 module font
 
+struct AtlasChunkWriter {
+	chunk int
+pub mut:
+	data []u8
+}
+
+fn (mut writer AtlasChunkWriter) write(data []u8) !int {
+	if data.len == 0 {
+		return 0
+	}
+	count := if data.len < writer.chunk { data.len } else { writer.chunk }
+	writer.data << data[..count]
+	return count
+}
+
 // ============================================================
 // Ghostty Atlas.zig tests, translated.
 // Source: /Users/alexander/code/3rd/ghostty/src/font/Atlas.zig
@@ -126,6 +141,40 @@ fn test_atlas_grow_bgr() {
 	second_row := int((atlas.size * 2 + 1) * depth)
 	assert atlas.data[first..first + 6] == [u8(10), 11, 12, 13, 14, 15]
 	assert atlas.data[second_row..second_row + 6] == [u8(20), 21, 22, 23, 24, 25]
+}
+
+fn test_atlas_dump_grayscale_with_partial_writer() {
+	mut atlas := Atlas.init(4, .grayscale)
+	atlas.data[5] = 0x7f
+	mut writer := AtlasChunkWriter{
+		chunk: 3
+	}
+	atlas.dump(mut writer)!
+
+	header := 'P5\n4 4\n255\n'.bytes()
+	assert writer.data[..header.len] == header
+	assert writer.data[header.len..] == atlas.data
+}
+
+fn test_atlas_dump_bgr_and_reject_bgra() {
+	mut bgr := Atlas.init(3, .bgr)
+	bgr.data[0] = 1
+	bgr.data[1] = 2
+	bgr.data[2] = 3
+	mut writer := AtlasChunkWriter{
+		chunk: 1024
+	}
+	bgr.dump(mut writer)!
+	assert writer.data[..11].bytestr() == 'P6\n3 3\n255\n'
+	assert writer.data[11..] == bgr.data
+
+	bgra := Atlas.init(3, .bgra)
+	mut rejected := AtlasChunkWriter{
+		chunk: 1024
+	}
+	if _ := bgra.dump(mut rejected) {
+		assert false, 'BGRA dump must be rejected'
+	}
 }
 
 fn test_atlas_grow() {

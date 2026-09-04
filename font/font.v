@@ -397,6 +397,7 @@ module font
 import datastruct
 import harfbuzz
 import hash
+import io
 import math
 import terminal
 
@@ -1123,6 +1124,35 @@ pub fn (mut a Atlas) clear() {
 		x: 1
 		y: 1
 		width: a.size - 2
+	}
+}
+
+// dump writes the atlas as a PPM image for debugging. As in Ghostty, BGR
+// data is written without swapping its red and blue channels.
+//
+// Only grayscale and BGR atlases are supported. BGRA cannot be represented
+// directly by either of the binary PPM encodings used here.
+pub fn (a &Atlas) dump(mut writer io.Writer) ! {
+	magic := match a.format {
+		.grayscale { '5' }
+		.bgr { '6' }
+		.bgra {
+			return error('Cannot dump this atlas format')
+		}
+	}
+	header := 'P${magic}\n${a.size} ${a.size}\n255\n'
+	atlas_write_all(mut writer, header.bytes())!
+	atlas_write_all(mut writer, a.data)!
+}
+
+fn atlas_write_all(mut writer io.Writer, data []u8) ! {
+	mut offset := 0
+	for offset < data.len {
+		written := writer.write(data[offset..])!
+		if written <= 0 || written > data.len - offset {
+			return error('atlas writer returned an invalid byte count')
+		}
+		offset += written
 	}
 }
 
