@@ -16,13 +16,13 @@ pub mut:
 	len      u32
 	capacity u32
 	target   GLBufferTarget = .array
-	usage    GLBufferUsage  = .dynamic_draw
+	usage    GLBufferUsage = .dynamic_draw
 }
 
 pub struct GLBufferOptions {
 pub:
 	target GLBufferTarget = .array
-	usage  GLBufferUsage  = .dynamic_draw
+	usage  GLBufferUsage = .dynamic_draw
 }
 
 fn gl_buffer_target(target GLBufferTarget) opengl.BufferTarget {
@@ -49,11 +49,11 @@ pub fn GLBuffer.init(opts GLBufferOptions, len u32) !GLBuffer {
 	}
 	binding.set_data_null(usize(len), gl_buffer_usage(opts.usage))!
 	return GLBuffer{
-		id:       buffer.id
-		len:      0
+		id: buffer.id
+		len: 0
 		capacity: len
-		target:   opts.target
-		usage:    opts.usage
+		target: opts.target
+		usage: opts.usage
 	}
 }
 
@@ -98,15 +98,29 @@ pub fn (mut self GLBuffer) sync(data []u8) {
 pub struct GLFrame {
 pub mut:
 	healthy bool = true
+	api     &OpenGLAPI = unsafe { nil }
+	target  &GLTarget = unsafe { nil }
 }
 
 pub fn GLFrame.begin() !GLFrame {
 	return GLFrame{}
 }
 
+pub fn GLFrame.begin_for_target(mut api OpenGLAPI, mut target GLTarget) !GLFrame {
+	return GLFrame{
+		api: unsafe { &api }
+		target: unsafe { &target }
+	}
+}
+
 pub fn (mut self GLFrame) complete() {
 	opengl.finish()
 	opengl.get_error() or { self.healthy = false }
+	if self.healthy && self.api != unsafe { nil } && self.target != unsafe { nil } {
+		mut api := unsafe { self.api }
+		target := unsafe { *self.target }
+		api.present(target) or { self.healthy = false }
+	}
 }
 
 // ============================================================
@@ -136,8 +150,8 @@ pub mut:
 pub struct GLDraw {
 pub:
 	primitive      opengl.Primitive = .triangle_strip
-	vertex_count   u32              = 4
-	instance_count u32              = 1
+	vertex_count   u32 = 4
+	instance_count u32 = 1
 }
 
 pub struct GLRenderStep {
@@ -148,7 +162,7 @@ pub:
 	textures     []GLTexture
 	samplers     []GLSampler
 	draw         GLDraw = GLDraw{}
-	vertex_count u32    = 4
+	vertex_count u32 = 4
 }
 
 pub fn GLRenderPass.begin() !GLRenderPass {
@@ -328,10 +342,10 @@ pub fn GLPipeline.init_with_sources(opts GLPipelineOptions) !GLPipeline {
 	vao := opengl.VertexArray.create()!
 	fbo := opengl.Framebuffer.create()!
 	return GLPipeline{
-		program:          program.id
-		vao:              vao.id
-		fbo:              fbo.id
-		stride:           opts.stride
+		program: program.id
+		vao: vao.id
+		fbo: fbo.id
+		stride: opts.stride
 		blending_enabled: opts.blending_enabled
 	}
 }
@@ -368,8 +382,8 @@ pub mut:
 
 pub struct GLSamplerOptions {
 pub:
-	min_filter GLFilter   = .linear
-	mag_filter GLFilter   = .linear
+	min_filter GLFilter = .linear
+	mag_filter GLFilter = .linear
 	wrap_s     GLWrapMode = .clamp_to_edge
 	wrap_t     GLWrapMode = .clamp_to_edge
 }
@@ -406,13 +420,27 @@ pub mut:
 	height u32
 }
 
+pub struct GLTargetOptions {
+pub:
+	width           u32
+	height          u32
+	internal_format GLInternalFormat = .rgba
+}
+
 pub fn GLTarget.init(width u32, height u32) !GLTarget {
+	return GLTarget.init_with_options(GLTargetOptions{
+		width: width
+		height: height
+	})
+}
+
+pub fn GLTarget.init_with_options(opts GLTargetOptions) !GLTarget {
 	rbo := opengl.Renderbuffer.create()!
 	rbo_bind := rbo.bind()!
 	defer {
 		rbo_bind.unbind()
 	}
-	rbo_bind.storage(.rgba, int(width), int(height))!
+	rbo_bind.storage(gl_internal_format(opts.internal_format), int(opts.width), int(opts.height))!
 
 	fbo := opengl.Framebuffer.create()!
 	fbo_bind := fbo.bind(.framebuffer)!
@@ -422,10 +450,10 @@ pub fn GLTarget.init(width u32, height u32) !GLTarget {
 	fbo_bind.renderbuffer(.color0, rbo)!
 
 	return GLTarget{
-		fbo:    fbo.id
-		rbo:    rbo.id
-		width:  width
-		height: height
+		fbo: fbo.id
+		rbo: rbo.id
+		width: opts.width
+		height: opts.height
 	}
 }
 
@@ -459,13 +487,13 @@ pub mut:
 
 pub struct GLTextureOptions {
 pub:
-	format          GLTextureFormat  = .rgba
+	format          GLTextureFormat = .rgba
 	internal_format GLInternalFormat = .rgba
-	target          GLTextureTarget  = .texture_2d
-	min_filter      GLFilter         = .nearest
-	mag_filter      GLFilter         = .nearest
-	wrap_s          GLWrapMode       = .clamp_to_edge
-	wrap_t          GLWrapMode       = .clamp_to_edge
+	target          GLTextureTarget = .texture_2d
+	min_filter      GLFilter = .nearest
+	mag_filter      GLFilter = .nearest
+	wrap_s          GLWrapMode = .clamp_to_edge
+	wrap_t          GLWrapMode = .clamp_to_edge
 }
 
 fn gl_texture_target(target GLTextureTarget) opengl.TextureTarget {
@@ -530,11 +558,10 @@ pub fn GLTexture.init(opts GLTextureOptions, width u32, height u32, data ?[]u8) 
 			ptr = voidptr(d.data)
 		}
 	}
-	binding.image_2d(0, gl_internal_format(opts.internal_format), int(width), int(height),
-		gl_texture_format(opts.format), .unsigned_byte, ptr)!
+	binding.image_2d(0, gl_internal_format(opts.internal_format), int(width), int(height), gl_texture_format(opts.format), .unsigned_byte, ptr)!
 	return GLTexture{
-		id:     texture.id
-		width:  width
+		id: texture.id
+		width: width
 		height: height
 		format: opts.format
 		target: opts.target
@@ -564,8 +591,7 @@ pub fn (mut self GLTexture) replace_region(x u32, y u32, width u32, height u32, 
 	defer {
 		binding.unbind()
 	}
-	binding.sub_image_2d(0, int(x), int(y), int(width), int(height),
-		gl_texture_format(self.format), .unsigned_byte, ptr) or { return }
+	binding.sub_image_2d(0, int(x), int(y), int(width), int(height), gl_texture_format(self.format), .unsigned_byte, ptr) or { return }
 }
 
 // ============================================================
@@ -580,19 +606,42 @@ pub mut:
 	image          GLPipeline
 	bg_image       GLPipeline
 	post_pipelines []GLPipeline
+	defunct        bool
 }
 
 pub fn GLShaders.init() !GLShaders {
 	return GLShaders{
-		bg_color:  GLPipeline{}
-		cell_bg:   GLPipeline{}
+		bg_color: GLPipeline{}
+		cell_bg: GLPipeline{}
 		cell_text: GLPipeline{}
-		image:     GLPipeline{}
-		bg_image:  GLPipeline{}
+		image: GLPipeline{}
+		bg_image: GLPipeline{}
 	}
 }
 
+pub fn GLShaders.init_with_sources(custom_shaders []string) !GLShaders {
+	mut shaders := GLShaders.init()!
+	for source in custom_shaders {
+		pipeline := GLPipeline.init_with_sources(GLPipelineOptions{
+			vertex_source: gl_full_screen_vertex_shader
+			fragment_source: source
+		}) or {
+			for mut initialized in shaders.post_pipelines {
+				initialized.deinit()
+			}
+			shaders.post_pipelines = []
+			return shaders
+		}
+		shaders.post_pipelines << pipeline
+	}
+	return shaders
+}
+
 pub fn (mut self GLShaders) deinit() {
+	if self.defunct {
+		return
+	}
+	self.defunct = true
 	self.bg_color.deinit()
 	self.cell_bg.deinit()
 	self.cell_text.deinit()
@@ -601,4 +650,7 @@ pub fn (mut self GLShaders) deinit() {
 	for mut p in self.post_pipelines {
 		p.deinit()
 	}
+	self.post_pipelines = []
 }
+
+const gl_full_screen_vertex_shader = $embed_file('shaders/glsl/full_screen.v.glsl').to_string()

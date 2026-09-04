@@ -19,100 +19,177 @@ module opengl
 // - ghostty/pkg/opengl/build.zig
 
 #flag darwin -framework OpenGL
+
 #flag linux -lGL
+
 #flag linux -ldl
+
 #insert "@VMODROOT/opengl/gl_headers.h"
 
 fn C.glGetError() u32
+
 fn C.glGetIntegerv(pname u32, data &int)
+
 fn C.glGetStringi(name u32, index u32) &u8
 
 fn C.glClearColor(red f32, green f32, blue f32, alpha f32)
+
 fn C.glClear(mask u32)
+
 fn C.glDrawArrays(mode u32, first int, count int)
+
 fn C.glDrawArraysInstanced(mode u32, first int, count int, primcount int)
+
 fn C.glDrawElements(mode u32, count int, typ u32, indices voidptr)
+
 fn C.glDrawElementsInstanced(mode u32, count int, typ u32, indices voidptr, primcount int)
+
 fn C.glEnable(cap u32)
+
 fn C.glDisable(cap u32)
+
 fn C.glFrontFace(mode u32)
+
 fn C.glBlendFunc(sfactor u32, dfactor u32)
+
 fn C.glViewport(x int, y int, width int, height int)
+
 fn C.glPixelStorei(mode u32, param int)
+
 fn C.glFinish()
+
 fn C.glFlush()
 
 fn C.glGenBuffers(n int, buffers &u32)
+
 fn C.glBindBuffer(target u32, buffer u32)
+
 fn C.glDeleteBuffers(n int, buffers &u32)
+
 fn C.glBindBufferBase(target u32, index u32, buffer u32)
+
 fn C.glBufferData(target u32, size isize, data voidptr, usage u32)
+
 fn C.glBufferSubData(target u32, offset isize, size isize, data voidptr)
+
 fn C.glVertexAttribPointer(index u32, size int, typ u32, normalized u8, stride int, pointer voidptr)
+
 fn C.glVertexAttribIPointer(index u32, size int, typ u32, stride int, pointer voidptr)
+
 fn C.glEnableVertexAttribArray(index u32)
+
 fn C.glVertexAttribDivisor(index u32, divisor u32)
+
 fn C.witty_glVertexBindingDivisor(bindingindex u32, divisor u32) int
+
 fn C.witty_glVertexAttribBinding(attribindex u32, bindingindex u32) int
+
 fn C.witty_glVertexAttribFormat(attribindex u32, size int, typ u32, normalized u8, relativeoffset u32) int
+
 fn C.witty_glVertexAttribIFormat(attribindex u32, size int, typ u32, relativeoffset u32) int
+
 fn C.witty_glVertexAttribLFormat(attribindex u32, size int, typ u32, relativeoffset u32) int
+
 fn C.witty_glBindVertexBuffer(bindingindex u32, buffer u32, offset isize, stride int) int
 
 fn C.glActiveTexture(texture u32)
+
 fn C.glGenTextures(n int, textures &u32)
+
 fn C.glBindTexture(target u32, texture u32)
+
 fn C.glDeleteTextures(n int, textures &u32)
+
 fn C.glGenerateMipmap(target u32)
+
 fn C.glTexParameteri(target u32, pname u32, param int)
+
 fn C.glTexImage2D(target u32, level int, internalformat int, width int, height int, border int, format u32, typ u32, pixels voidptr)
+
 fn C.glTexSubImage2D(target u32, level int, xoffset int, yoffset int, width int, height int, format u32, typ u32, pixels voidptr)
+
 fn C.glCopyTexSubImage2D(target u32, level int, xoffset int, yoffset int, x int, y int, width int, height int)
 
 fn C.glGenVertexArrays(n int, arrays &u32)
+
 fn C.glBindVertexArray(array u32)
+
 fn C.glDeleteVertexArrays(n int, arrays &u32)
 
 fn C.glCreateShader(typ u32) u32
+
 fn C.glShaderSource(shader u32, count int, string &&u8, length &int)
+
 fn C.glCompileShader(shader u32)
+
 fn C.glGetShaderiv(shader u32, pname u32, params &int)
+
 fn C.glGetShaderInfoLog(shader u32, max_length int, length &int, info_log &u8)
+
 fn C.glDeleteShader(shader u32)
 
 fn C.glCreateProgram() u32
+
 fn C.glDeleteProgram(program u32)
+
 fn C.glAttachShader(program u32, shader u32)
+
 fn C.glLinkProgram(program u32)
+
 fn C.glGetProgramiv(program u32, pname u32, params &int)
+
 fn C.glGetProgramInfoLog(program u32, max_length int, length &int, info_log &u8)
+
 fn C.glUseProgram(program u32)
+
 fn C.glUniformBlockBinding(program u32, index u32, binding u32)
+
 fn C.glGetUniformLocation(program u32, name &u8) int
+
 fn C.glUniform1i(location int, v0 int)
+
 fn C.glUniform1f(location int, v0 f32)
+
 fn C.glUniform2f(location int, v0 f32, v1 f32)
+
 fn C.glUniform3f(location int, v0 f32, v1 f32, v2 f32)
+
 fn C.glUniform4f(location int, v0 f32, v1 f32, v2 f32, v3 f32)
+
 fn C.glUniformMatrix4fv(location int, count int, transpose u8, value &f32)
 
 fn C.glGenFramebuffers(n int, ids &u32)
+
 fn C.glDeleteFramebuffers(n int, framebuffers &u32)
+
 fn C.glBindFramebuffer(target u32, framebuffer u32)
+
 fn C.glFramebufferTexture2D(target u32, attachment u32, textarget u32, texture u32, level int)
+
 fn C.glFramebufferRenderbuffer(target u32, attachment u32, renderbuffertarget u32, renderbuffer u32)
+
 fn C.glDrawBuffers(n int, bufs &u32)
+
 fn C.glCheckFramebufferStatus(target u32) u32
+
 fn C.witty_glBlitFramebuffer(src_x0 int, src_y0 int, src_x1 int, src_y1 int, dst_x0 int, dst_y0 int, dst_x1 int, dst_y1 int, mask u32, filter u32) int
 
+fn C.witty_glDebugMessageCallback(callback voidptr, user_param voidptr) int
+
 fn C.glGenRenderbuffers(n int, renderbuffers &u32)
+
 fn C.glDeleteRenderbuffers(n int, renderbuffers &u32)
+
 fn C.glBindRenderbuffer(target u32, renderbuffer u32)
+
 fn C.glRenderbufferStorage(target u32, internalformat u32, width int, height int)
 
 fn C.glGenSamplers(n int, samplers &u32)
+
 fn C.glBindSampler(unit u32, sampler u32)
+
 fn C.glSamplerParameteri(sampler u32, pname u32, param int)
+
 fn C.glDeleteSamplers(n int, samplers &u32)
 
 // ============================================================
@@ -148,12 +225,24 @@ pub fn get_error() ! {
 	code := int(C.glGetError())
 	match code {
 		C.GL_NO_ERROR {}
-		C.GL_INVALID_ENUM { return error('InvalidEnum') }
-		C.GL_INVALID_VALUE { return error('InvalidValue') }
-		C.GL_INVALID_OPERATION { return error('InvalidOperation') }
-		C.GL_INVALID_FRAMEBUFFER_OPERATION { return error('InvalidFramebufferOperation') }
-		C.GL_OUT_OF_MEMORY { return error('OutOfMemory') }
-		else { return error('Unknown') }
+		C.GL_INVALID_ENUM {
+			return error('InvalidEnum')
+		}
+		C.GL_INVALID_VALUE {
+			return error('InvalidValue')
+		}
+		C.GL_INVALID_OPERATION {
+			return error('InvalidOperation')
+		}
+		C.GL_INVALID_FRAMEBUFFER_OPERATION {
+			return error('InvalidFramebufferOperation')
+		}
+		C.GL_OUT_OF_MEMORY {
+			return error('OutOfMemory')
+		}
+		else {
+			return error('Unknown')
+		}
 	}
 }
 
@@ -185,7 +274,7 @@ pub mut:
 pub fn extensions_iterator() !ExtensionIterator {
 	return ExtensionIterator{
 		len: extensions_len()!
-		i:   0
+		i: 0
 	}
 }
 
@@ -298,6 +387,25 @@ pub fn flush() {
 pub const gl_blend = u32(C.GL_BLEND)
 pub const gl_color_buffer_bit = u32(C.GL_COLOR_BUFFER_BIT)
 pub const gl_debug_output = u32(C.GL_DEBUG_OUTPUT)
+pub const gl_debug_source_api = u32(C.GL_DEBUG_SOURCE_API)
+pub const gl_debug_source_window_system = u32(C.GL_DEBUG_SOURCE_WINDOW_SYSTEM)
+pub const gl_debug_source_shader_compiler = u32(C.GL_DEBUG_SOURCE_SHADER_COMPILER)
+pub const gl_debug_source_third_party = u32(C.GL_DEBUG_SOURCE_THIRD_PARTY)
+pub const gl_debug_source_application = u32(C.GL_DEBUG_SOURCE_APPLICATION)
+pub const gl_debug_source_other = u32(C.GL_DEBUG_SOURCE_OTHER)
+pub const gl_debug_type_error = u32(C.GL_DEBUG_TYPE_ERROR)
+pub const gl_debug_type_deprecated_behavior = u32(C.GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR)
+pub const gl_debug_type_undefined_behavior = u32(C.GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR)
+pub const gl_debug_type_portability = u32(C.GL_DEBUG_TYPE_PORTABILITY)
+pub const gl_debug_type_performance = u32(C.GL_DEBUG_TYPE_PERFORMANCE)
+pub const gl_debug_type_marker = u32(C.GL_DEBUG_TYPE_MARKER)
+pub const gl_debug_type_push_group = u32(C.GL_DEBUG_TYPE_PUSH_GROUP)
+pub const gl_debug_type_pop_group = u32(C.GL_DEBUG_TYPE_POP_GROUP)
+pub const gl_debug_type_other = u32(C.GL_DEBUG_TYPE_OTHER)
+pub const gl_debug_severity_high = u32(C.GL_DEBUG_SEVERITY_HIGH)
+pub const gl_debug_severity_medium = u32(C.GL_DEBUG_SEVERITY_MEDIUM)
+pub const gl_debug_severity_low = u32(C.GL_DEBUG_SEVERITY_LOW)
+pub const gl_debug_severity_notification = u32(C.GL_DEBUG_SEVERITY_NOTIFICATION)
 pub const gl_framebuffer_srgb = u32(C.GL_FRAMEBUFFER_SRGB)
 pub const gl_one = u32(C.GL_ONE)
 pub const gl_one_minus_src_alpha = u32(C.GL_ONE_MINUS_SRC_ALPHA)
@@ -310,6 +418,16 @@ pub const gl_float = u32(C.GL_FLOAT)
 pub const gl_double = u32(C.GL_DOUBLE)
 pub const gl_half_float = u32(C.GL_HALF_FLOAT)
 pub const gl_unsigned_byte = u32(C.GL_UNSIGNED_BYTE)
+
+// DebugMessageCallback matches GLDEBUGPROC.
+pub type DebugMessageCallback = fn (source u32, typ u32, id u32, severity u32, length int, message &u8, user_param voidptr)
+
+pub fn debug_message_callback(callback DebugMessageCallback, user_param voidptr) ! {
+	if C.witty_glDebugMessageCallback(voidptr(callback), user_param) == 0 {
+		return error('glDebugMessageCallback unavailable')
+	}
+	get_error()!
+}
 
 // ============================================================
 // Buffer.zig
@@ -358,7 +476,7 @@ pub fn (b Buffer) bind(target BufferTarget) !BufferBinding {
 	C.glBindBuffer(u32(target), b.id)
 	get_error()!
 	return BufferBinding{
-		id:     b.id
+		id: b.id
 		target: target
 	}
 }
@@ -413,8 +531,7 @@ pub fn (b BufferBinding) attribute_divisor(idx u32, divisor u32) ! {
 
 pub fn (b BufferBinding) attribute_advanced(idx u32, size int, typ u32, normalized bool, stride int, offset usize) ! {
 	_ = b
-	C.glVertexAttribPointer(idx, size, typ,
-		if normalized { u8(C.GL_TRUE) } else { u8(C.GL_FALSE) }, stride, voidptr(offset))
+	C.glVertexAttribPointer(idx, size, typ, if normalized { u8(C.GL_TRUE) } else { u8(C.GL_FALSE) }, stride, voidptr(offset))
 	get_error()!
 }
 
@@ -553,14 +670,12 @@ pub fn (b TextureBinding) parameter(name TextureParameter, value int) ! {
 }
 
 pub fn (b TextureBinding) image_2d(level int, internal_format TextureInternalFormat, width int, height int, format TextureFormat, typ TextureDataType, data voidptr) ! {
-	C.glTexImage2D(u32(b.target), level, int(internal_format), width, height, 0, u32(format),
-		u32(typ), data)
+	C.glTexImage2D(u32(b.target), level, int(internal_format), width, height, 0, u32(format), u32(typ), data)
 	get_error()!
 }
 
 pub fn (b TextureBinding) sub_image_2d(level int, xoffset int, yoffset int, width int, height int, format TextureFormat, typ TextureDataType, data voidptr) ! {
-	C.glTexSubImage2D(u32(b.target), level, xoffset, yoffset, width, height, u32(format), u32(typ),
-		data)
+	C.glTexSubImage2D(u32(b.target), level, xoffset, yoffset, width, height, u32(format), u32(typ), data)
 	get_error()!
 }
 
@@ -578,8 +693,7 @@ pub:
 	id u32
 }
 
-pub struct VertexArrayBinding {
-}
+pub struct VertexArrayBinding {}
 
 pub fn VertexArray.create() !VertexArray {
 	mut id := u32(0)
@@ -718,8 +832,7 @@ pub:
 	id u32
 }
 
-pub struct ProgramBinding {
-}
+pub struct ProgramBinding {}
 
 pub fn Program.create() !Program {
 	id := C.glCreateProgram()
@@ -928,7 +1041,7 @@ pub fn (f Framebuffer) bind(target FramebufferTarget) !FramebufferBinding {
 	C.glBindFramebuffer(u32(target), f.id)
 	get_error()!
 	return FramebufferBinding{
-		target:   target
+		target: target
 		previous: u32(current)
 	}
 }
@@ -966,8 +1079,7 @@ pub fn (b FramebufferBinding) check_status() FramebufferStatus {
 }
 
 pub fn blit_framebuffer(src_x0 int, src_y0 int, src_x1 int, src_y1 int, dst_x0 int, dst_y0 int, dst_x1 int, dst_y1 int, mask u32, filter TextureMagFilter) ! {
-	if C.witty_glBlitFramebuffer(src_x0, src_y0, src_x1, src_y1, dst_x0, dst_y0, dst_x1, dst_y1,
-		mask, u32(filter)) == 0 {
+	if C.witty_glBlitFramebuffer(src_x0, src_y0, src_x1, src_y1, dst_x0, dst_y0, dst_x1, dst_y1, mask, u32(filter)) == 0 {
 		return error('glBlitFramebuffer unavailable')
 	}
 	get_error()!
