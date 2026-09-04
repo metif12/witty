@@ -344,7 +344,11 @@ fn test_color_scheme_callback_change() ! {
 }
 
 fn test_child_exited_no_wait() {
+	mut app_runtime := RuntimeApp{ actions_handled: true }
+	mut surface_runtime := RuntimeSurface{}
 	mut surf := make_test_surface()
+	surf.rt_app = &app_runtime
+	surf.rt_surface = &surface_runtime
 	surf.config = DerivedConfig{
 		wait_after_command: false
 		abnormal_command_exit_runtime_ms: 500
@@ -352,6 +356,54 @@ fn test_child_exited_no_wait() {
 	assert surf.child_exited == false
 	surf.child_exited_handler(1000, 0)
 	assert surf.child_exited == true
+	assert app_runtime.actions.len == 1
+	assert app_runtime.actions[0].kind == .show_child_exited
+	assert app_runtime.actions[0].child_exit.runtime_ms == 1000
+	assert app_runtime.actions[0].child_exit.exit_code == 0
+	assert surface_runtime.closed
+}
+
+fn test_child_exited_abnormal_native_banner_stops_fallback() {
+	mut app_runtime := RuntimeApp{ actions_handled: true }
+	mut surface_runtime := RuntimeSurface{}
+	mut surf := make_test_surface()
+	surf.rt_app = &app_runtime
+	surf.rt_surface = &surface_runtime
+	surf.config = DerivedConfig{
+		wait_after_command: false
+		abnormal_command_exit_runtime_ms: 500
+	}
+	surf.child_exited_handler(100, 127)
+	assert app_runtime.actions.len == 1
+	assert app_runtime.actions[0].child_exit == apprt.ChildExited{
+		exit_code: 127
+		runtime_ms: 100
+	}
+	assert !surface_runtime.closed
+}
+
+fn test_child_exited_abnormal_terminal_fallback() {
+	mut app_runtime := RuntimeApp{}
+	mut surface_runtime := RuntimeSurface{}
+	mut surf := make_test_surface()
+	surf.rt_app = &app_runtime
+	surf.rt_surface = &surface_runtime
+	surf.config = DerivedConfig{
+		command: 'missing-command --flag'
+		abnormal_command_exit_runtime_ms: 500
+	}
+	surf.child_exited_handler(100, 127)
+	mut terminal_state := surf.renderer_state.terminal
+	text := terminal_state.plain_string() or { panic(err) }
+	assert text.contains('Ghostty failed to launch the requested command:')
+	assert text.contains('missing-command --flag')
+	assert text.contains('Runtime: 100 ms')
+	$if !macos {
+		assert text.contains('Exit Code: 127')
+	}
+	assert text.contains('Press any key to close the window.')
+	assert !terminal_state.modes.get(.cursor_visible)
+	assert !surface_runtime.closed
 }
 
 fn test_selection_scroll_tick_inactive() ! {

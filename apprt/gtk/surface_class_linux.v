@@ -457,12 +457,13 @@ pub mut:
 
 	// URL hover labels and the right-click context menu from the surface
 	// blueprint.
-	url_left          GtkLabel = unsafe { nil }
-	url_right         GtkLabel = unsafe { nil }
-	context_menu      GtkPopover = unsafe { nil }
-	resize_overlay    &ResizeOverlay = unsafe { nil }
-	search_overlay    &SearchOverlay = unsafe { nil }
-	key_state_overlay &KeyStateOverlay = unsafe { nil }
+	url_left             GtkLabel = unsafe { nil }
+	url_right            GtkLabel = unsafe { nil }
+	context_menu         GtkPopover = unsafe { nil }
+	resize_overlay       &ResizeOverlay = unsafe { nil }
+	search_overlay       &SearchOverlay = unsafe { nil }
+	key_state_overlay    &KeyStateOverlay = unsafe { nil }
+	child_exited_overlay &SurfaceChildExited = unsafe { nil }
 
 	// The core surface backing this GTK surface. This starts out nil because it
 	// can't be initialized until there is a realized GLArea. In ghostty this is
@@ -1906,6 +1907,9 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			self.set_search_selected(action.search_selected)
 			return true
 		}
+		.show_child_exited {
+			return self.child_exited_action(action.child_exit)
+		}
 		.key_sequence {
 			self.key_sequence_action(action.key_sequence)
 			return true
@@ -2419,6 +2423,18 @@ pub fn (mut self SurfaceWidget) key_table_action(value apprt.KeyTable) {
 	}
 }
 
+// child_exited_action mirrors Surface.childExited: keep the surface state in
+// sync and show the native banner with the full exit payload.
+pub fn (mut self SurfaceWidget) child_exited_action(data apprt.ChildExited) bool {
+	self.child_exited = true
+	if !adw_supports_banner() || isnil(self.child_exited_overlay) {
+		return false
+	}
+	self.child_exited_overlay.set_data(data)
+	C.gtk_widget_set_visible(self.child_exited_overlay.widget, true)
+	return true
+}
+
 fn surface_search_stop_cb(overlay GtkWidget, data voidptr) {
 	_ = overlay
 	if isnil(data) {
@@ -2658,6 +2674,9 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 	resize_overlay := new_resize_overlay()
 	search_overlay := new_search_overlay()
 	key_state_overlay := new_key_state_overlay()
+	child_exited_overlay := new_surface_child_exited()
+	C.gtk_widget_set_visible(child_exited_overlay.widget, false)
+	C.gtk_overlay_add_overlay(terminal_page, child_exited_overlay.widget)
 	C.gtk_overlay_add_overlay(terminal_page, resize_overlay.widget)
 	C.gtk_overlay_add_overlay(terminal_page, GtkWidget(url_left))
 	C.gtk_overlay_add_overlay(terminal_page, GtkWidget(url_right))
@@ -2683,6 +2702,7 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 		resize_overlay: resize_overlay
 		search_overlay: search_overlay
 		key_state_overlay: key_state_overlay
+		child_exited_overlay: child_exited_overlay
 	}
 	mut native_priv := terminal_surface_priv(obj)
 	native_priv.wrapper = voidptr(w)
@@ -2741,8 +2761,17 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 	C.g_signal_connect_data(w.search_overlay.widget, c'search-changed', GCallback(voidptr(surface_search_changed_cb)), voidptr(w), unsafe { nil }, 0)
 	C.g_signal_connect_data(w.search_overlay.widget, c'next-match', GCallback(voidptr(surface_search_next_cb)), voidptr(w), unsafe { nil }, 0)
 	C.g_signal_connect_data(w.search_overlay.widget, c'previous-match', GCallback(voidptr(surface_search_previous_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(w.child_exited_overlay.widget, c'close-request', GCallback(voidptr(surface_child_exited_close_cb)), voidptr(w), unsafe { nil }, 0)
 	C.g_object_weak_ref(GObject(w.widget), voidptr(surface_widget_finalized_cb), voidptr(w))
 	return w
+}
+
+fn surface_child_exited_close_cb(overlay GtkWidget, data voidptr) {
+	_ = overlay
+	if !isnil(data) {
+		self := unsafe { &SurfaceWidget(data) }
+		self.close()
+	}
 }
 
 fn surface_widget_finalized_cb(data voidptr, object GObject) {

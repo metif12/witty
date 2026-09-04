@@ -1760,6 +1760,7 @@ pub:
 	move_tab_amount    int
 	key_sequence       apprt.KeySequence
 	key_table          apprt.KeyTable
+	child_exit         apprt.ChildExited
 	search_total       ?usize
 	search_selected    ?usize
 	title_value        string
@@ -2291,6 +2292,7 @@ pub mut:
 	selection_word_chars             []u32
 	vt_kam_allowed                   bool
 	wait_after_command               bool
+	command                          string
 	window_padding_top               u32
 	window_padding_bottom            u32
 	window_padding_left              u32
@@ -2380,6 +2382,7 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 		selection_word_chars: config.selection_word_chars.codepoints.clone()
 		vt_kam_allowed: config.vt_kam_allowed
 		wait_after_command: config.wait_after_command
+		command: if command := config.command { command.string_val().clone() } else { '' }
 		window_padding_top: config.window_padding_top
 		window_padding_bottom: config.window_padding_bottom
 		window_padding_left: config.window_padding_left
@@ -4890,42 +4893,116 @@ fn (mut self Surface) show_mouse() {
 
 fn (mut self Surface) child_exited_handler(runtime_ms u32, exit_code u32) {
 	self.child_exited = true
+	info := apprt.ChildExited{
+		exit_code: exit_code
+		runtime_ms: runtime_ms
+	}
 
-	// Abnormal exit detection
-	if runtime_ms <= self.config.abnormal_command_exit_runtime_ms {
-		// Show native GUI error if available
-		self.rt_app.perform_action(AppAction{
+	// If our runtime was below the threshold then assume this was an abnormal
+	// exit. On non-Darwin platforms a successful exit remains a normal exit.
+	mut abnormal := runtime_ms <= self.config.abnormal_command_exit_runtime_ms
+	$if !macos {
+		if exit_code == 0 {
+			abnormal = false
+		}
+	}
+	if abnormal {
+		eprintln('abnormal process exit detected, showing error message')
+		shown := self.rt_app.perform_action(AppAction{
 			kind: .show_child_exited
 			target: &self
-		}) or {}
-
-		// Print error to terminal
-		self.renderer_state.terminal.carriage_return()
-		self.renderer_state.terminal.linefeed() or { return }
-		self.renderer_state.terminal.print_string('Process exited abnormally. Press any key to close.') or {
+			child_exit: info
+		}) or {
+			eprintln('error trying to show native child exited GUI err=${err}')
+			false
+		}
+		if shown {
 			return
 		}
-		self.renderer_state.terminal.modes.set(.cursor_visible, false)
+		self.child_exited_abnormally(info) or {
+			eprintln('error handling abnormal child exit err=${err}')
+		}
 		return
 	}
 
-	// Normal exit: show message in terminal
-	self.rt_app.perform_action(AppAction{
+	// Prefer the native GUI notification. When unavailable, leave the same
+	// explanatory text in the terminal so an immediately closed surface can be
+	// understood if restored through undo.
+	shown := self.rt_app.perform_action(AppAction{
 		kind: .show_child_exited
 		target: &self
-	}) or {}
-
-	self.renderer_state.terminal.carriage_return()
-	self.renderer_state.terminal.linefeed() or { return }
-	self.renderer_state.terminal.print_string('Process exited. Press any key to close the terminal.') or {
-		return
+		child_exit: info
+	}) or {
+		eprintln('error trying to show native child exited GUI err=${err}')
+		false
 	}
-	self.renderer_state.terminal.modes.set(.cursor_visible, false)
-	self.renderer_state.terminal.modes.set(.disable_keyboard, false)
+	if !shown {
+		mut t := self.renderer_state.terminal
+		if !isnil(t) {
+			t.carriage_return()
+			t.linefeed() or {}
+			t.print_string('Process exited. Press any key to close the terminal.') or {}
+			t.modes.set(.cursor_visible, false)
+			t.modes.set(.disable_keyboard, false)
+			t.screens.active.kitty_keyboard.set(.set_, 0)
+		}
+	}
 
 	if !self.config.wait_after_command {
 		self.close()
 	}
+}
+
+// child_exited_abnormally writes Ghostty's detailed launch-failure report into
+// the terminal when the application runtime cannot show a native banner.
+fn (mut self Surface) child_exited_abnormally(info apprt.ChildExited) ! {
+	mut t := self.renderer_state.terminal
+	if isnil(t) {
+		return
+	}
+
+	t.carriage_return()
+	t.set_attribute(terminal.SgrAttribute{ kind: .unset })!
+	viewport := t.plain_string()!
+	if viewport.len > 0 {
+		t.linefeed()!
+		for _ in 0 .. int(t.cols) {
+			t.print(0x2501)!
+		}
+		t.carriage_return()
+		t.linefeed()!
+		t.linefeed()!
+	}
+
+	t.set_attribute(terminal.SgrAttribute{ kind: .bright_fg_8, index: 1 })!
+	t.set_attribute(terminal.SgrAttribute{ kind: .bold })!
+	t.print_string('Ghostty failed to launch the requested command:')!
+	t.set_attribute(terminal.SgrAttribute{ kind: .unset })!
+	t.carriage_return()
+	t.linefeed()!
+	t.linefeed()!
+	t.print_string(self.config.command)!
+	t.set_attribute(terminal.SgrAttribute{ kind: .unset })!
+	t.carriage_return()
+	t.linefeed()!
+	t.linefeed()!
+	t.print_string('Runtime: ')!
+	t.set_attribute(terminal.SgrAttribute{ kind: .fg_8, index: 1 })!
+	t.print_string('${info.runtime_ms} ms')!
+	t.set_attribute(terminal.SgrAttribute{ kind: .unset })!
+	$if !macos {
+		t.carriage_return()
+		t.linefeed()!
+		t.print_string('Exit Code: ')!
+		t.set_attribute(terminal.SgrAttribute{ kind: .fg_8, index: 1 })!
+		t.print_string(info.exit_code.str())!
+		t.set_attribute(terminal.SgrAttribute{ kind: .unset })!
+	}
+	t.carriage_return()
+	t.linefeed()!
+	t.linefeed()!
+	t.print_string('Press any key to close the window.')!
+	t.modes.set(.cursor_visible, false)
 }
 
 fn (mut self Surface) password_input(v bool) ! {

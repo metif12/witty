@@ -16,11 +16,11 @@ module gtk
 // The GObject class registration (ghostty's `gobject.ext.defineClass`), the
 // blueprint template with its `banner` child + notify_data/clicked callbacks,
 // the `data` property, the `close-request` signal, and dispose/finalize are
-// hand-expanded onto the raw GObject/GTK C API below. Only the Adwaita >= 1.3
-// banner variant is translated (the pre-1.3 no-op fallback is not modeled).
-// The real logic (storing the ChildExited data, deriving the banner title +
-// css-class from the exit code) is translated. The class is additionally
-// modeled as a plain V struct wrapping the GObject/GtkWidget ptr for callers.
+// hand-expanded onto the raw GObject/GTK C API below, including the pre-1.3
+// no-op variant. The real logic (storing the ChildExited data, deriving the
+// banner title + css-class from the exit code) is translated. The class is
+// additionally modeled as a plain V struct wrapping the GObject/GtkWidget ptr
+// for callers.
 //
 // Reuses: `apprt.ChildExited` (apprt/surface.v), `gtk_widget_add_css_class` /
 // `gtk_widget_remove_css_class` (surface_class_linux.v). The adw.Banner title
@@ -37,6 +37,14 @@ fn C.adw_banner_set_title(banner AdwBanner, title &char)
 // adw_banner_get_type binds the `banner` template child.
 fn C.adw_banner_get_type() GType
 
+fn C.g_malloc0(n_bytes usize) voidptr
+
+struct C.GhosttyApprtChildExited {
+mut:
+	exit_code  u32
+	runtime_ms u64
+}
+
 // --- SurfaceChildExited ---------------------------------------------------
 
 // SurfaceChildExited is the V model of the `GhosttySurfaceChildExited` GObject
@@ -52,10 +60,6 @@ pub mut:
 
 	// The banner widget (template child).
 	banner AdwBanner = unsafe { nil }
-
-	// The child-exited data sent by the apprt, and whether it is set.
-	data     apprt.ChildExited
-	has_data bool
 }
 
 // new_surface_child_exited creates a new SurfaceChildExited. Mirrors
@@ -75,39 +79,44 @@ pub fn new_surface_child_exited() &SurfaceChildExited {
 // the banner. Mirrors `setData` (which copies into a glib-allocated boxed value
 // and notifies the `data` property, whose notify handler runs `propData`).
 pub fn (mut self SurfaceChildExited) set_data(data ?apprt.ChildExited) {
-	d := data or {
-		self.has_data = false
-		self.apply_data()
+	if isnil(self.widget) {
 		return
 	}
-	self.data = d
-	self.has_data = true
-	// notifyByPspec(properties.data). The notify fires the `notify::data`
-	// template callback (propData); we also apply directly since the wrapper
-	// holds the data.
-	if !isnil(self.widget) {
-		C.g_object_notify_by_pspec(self.widget, g_surface_child_exited_pspec_data)
+	if !adw_supports_banner() {
+		C.g_signal_emit_by_name(self.widget, c'close-request')
+		return
 	}
-	self.apply_data()
+	mut priv := surface_child_exited_priv(self.widget)
+	if !isnil(priv.data) {
+		child_exited_boxed_free(priv.data)
+		priv.data = unsafe { nil }
+	}
+	d := data or { return }
+	priv.data = child_exited_boxed_copy(voidptr(&d))
+	C.g_object_notify_by_pspec(self.widget, g_surface_child_exited_pspec_data)
 }
 
-// apply_data updates the banner title and CSS classes from the current data.
-// Mirrors `propData`.
-fn (self &SurfaceChildExited) apply_data() {
-	if !self.has_data {
+// child_exited_apply_data updates the banner title and CSS classes from the
+// native private data. Mirrors `propData`.
+fn child_exited_apply_data(obj voidptr) {
+	priv := surface_child_exited_priv(obj)
+	if isnil(priv.data) {
 		// Not localized on purpose (matches the Zig original).
-		C.adw_banner_set_title(self.banner, c'This is a bug in Ghostty. Please report it.')
+		C.adw_banner_set_title(priv.banner, c'This is a bug in Ghostty. Please report it.')
 		return
 	}
+	data := unsafe { &C.GhosttyApprtChildExited(priv.data) }
 
-	if self.data.exit_code == 0 {
-		C.adw_banner_set_title(self.banner, c'Command succeeded')
-		C.gtk_widget_add_css_class(self.widget, c'normal')
-		C.gtk_widget_remove_css_class(self.widget, c'abnormal')
+	if data.exit_code == 0 {
+		title := i18n_('Command succeeded')
+		C.adw_banner_set_title(priv.banner, &char(title.str))
+		C.gtk_widget_add_css_class(obj, c'normal')
+		C.gtk_widget_remove_css_class(obj, c'abnormal')
 	} else {
-		C.adw_banner_set_title(self.banner, c'Command failed')
-		C.gtk_widget_remove_css_class(self.widget, c'normal')
-		C.gtk_widget_add_css_class(self.widget, c'abnormal')
+		title := i18n_('Command failed')
+		C.adw_banner_set_title(priv.banner, &char(title.str))
+		C.gtk_widget_remove_css_class(obj, c'normal')
+		C.gtk_widget_add_css_class(obj, c'abnormal')
 	}
 }
 
@@ -168,6 +177,7 @@ mut:
 // The GObject type id and private-data offset, registered lazily.
 __global g_surface_child_exited_type = GType(0)
 __global g_surface_child_exited_priv_offset = int(0)
+__global g_child_exited_boxed_type = GType(0)
 
 // Registered GParamSpec* for the `data` property, captured for notify.
 __global g_surface_child_exited_pspec_data = &C.GParamSpec(unsafe { nil })
@@ -179,11 +189,39 @@ fn surface_child_exited_priv(obj voidptr) &C.GhosttySurfaceChildExitedPrivate {
 	return &C.GhosttySurfaceChildExitedPrivate(C.g_type_instance_get_private(obj, g_surface_child_exited_type))
 }
 
+fn child_exited_boxed_copy(value voidptr) voidptr {
+	if isnil(value) {
+		return unsafe { nil }
+	}
+	data := unsafe { &C.GhosttyApprtChildExited(value) }
+	ptr := C.g_malloc0(sizeof(C.GhosttyApprtChildExited))
+	if isnil(ptr) {
+		return unsafe { nil }
+	}
+	mut copy := unsafe { &C.GhosttyApprtChildExited(ptr) }
+	copy.exit_code = data.exit_code
+	copy.runtime_ms = data.runtime_ms
+	return ptr
+}
+
+fn child_exited_boxed_free(value voidptr) {
+	if !isnil(value) {
+		C.g_free(value)
+	}
+}
+
+fn child_exited_boxed_get_type() GType {
+	if g_child_exited_boxed_type == GType(0) {
+		g_child_exited_boxed_type = C.g_boxed_type_register_static(c'GhosttyApprtChildExited', voidptr(child_exited_boxed_copy), voidptr(child_exited_boxed_free))
+	}
+	return g_child_exited_boxed_type
+}
+
 // surface_child_exited_get_property implements get_property for `data`.
 fn surface_child_exited_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
 	if property_id == surface_child_exited_prop_data {
 		priv := surface_child_exited_priv(obj)
-		C.g_value_set_pointer(value, priv.data)
+		C.g_value_set_boxed(value, priv.data)
 	}
 }
 
@@ -191,15 +229,22 @@ fn surface_child_exited_get_property(obj voidptr, property_id u32, value voidptr
 fn surface_child_exited_set_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
 	if property_id == surface_child_exited_prop_data {
 		mut priv := surface_child_exited_priv(obj)
-		priv.data = C.g_value_get_pointer(value)
+		if !isnil(priv.data) {
+			child_exited_boxed_free(priv.data)
+		}
+		priv.data = C.g_value_dup_boxed(value)
 	}
 }
 
 // surface_child_exited_notify_data_cb is the `notify::data` template callback
-// (propData). In witty the banner title/css-class are driven from the V
-// wrapper's `apply_data`, so this trampoline is a no-op placeholder kept for
-// binding parity; the wrapper applies the change directly in `set_data`.
+// (`propData`). It drives the banner from the same native private state exposed
+// by the boxed property.
 fn surface_child_exited_notify_data_cb(obj voidptr, pspec voidptr, instance voidptr) {
+	_ = obj
+	_ = pspec
+	if !isnil(instance) {
+		child_exited_apply_data(instance)
+	}
 }
 
 // surface_child_exited_clicked_cb is the banner "button-clicked" callback. It
@@ -214,7 +259,9 @@ fn surface_child_exited_clicked_cb(banner voidptr, instance voidptr) {
 // surface_child_exited_dispose disposes the template and chains up. Mirrors
 // `dispose`.
 fn surface_child_exited_dispose(obj voidptr) {
-	C.gtk_widget_dispose_template(obj, g_surface_child_exited_type)
+	if adw_supports_banner() {
+		C.gtk_widget_dispose_template(obj, g_surface_child_exited_type)
+	}
 	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
 	if !isnil(parent_class.dispose) {
 		f := DisposeFn(parent_class.dispose)
@@ -222,9 +269,14 @@ fn surface_child_exited_dispose(obj voidptr) {
 	}
 }
 
-// surface_child_exited_finalize chains up. The boxed data is owned by the V
-// wrapper. Mirrors `finalize`.
+// surface_child_exited_finalize releases the private boxed data and chains up.
+// Mirrors `finalize`.
 fn surface_child_exited_finalize(obj voidptr) {
+	mut priv := surface_child_exited_priv(obj)
+	if !isnil(priv.data) {
+		child_exited_boxed_free(priv.data)
+		priv.data = unsafe { nil }
+	}
 	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
 	if !isnil(parent_class.finalize) {
 		f := FinalizeFn(parent_class.finalize)
@@ -237,39 +289,44 @@ fn surface_child_exited_finalize(obj voidptr) {
 // and `close-request` signal, and overrides the get/set/dispose/finalize
 // vfuncs. Mirrors the ghostty `Class.init`.
 fn surface_child_exited_class_init(klass voidptr, class_data voidptr) {
-	bytes := C.g_bytes_new_static(surface_child_exited_ui.str, usize(surface_child_exited_ui.len))
-	C.gtk_widget_class_set_template(klass, bytes)
-
-	// Binding: banner template child into the private struct.
-	banner_offset := g_surface_child_exited_priv_offset + int(__offsetof(C.GhosttySurfaceChildExitedPrivate, banner))
-	C.gtk_widget_class_bind_template_child_full(klass, c'banner', 0, banner_offset)
-
-	// Template callbacks.
-	C.gtk_widget_class_bind_template_callback_full(klass, c'clicked', voidptr(surface_child_exited_clicked_cb))
-	C.gtk_widget_class_bind_template_callback_full(klass, c'notify_data', voidptr(surface_child_exited_notify_data_cb))
-
-	// Property: data (boxed, modeled as an opaque pointer).
-	g_surface_child_exited_pspec_data = C.g_param_spec_pointer(c'data', c'data', c'The child-exited data', g_param_readwrite)
 	mut obj_class := &C.GObjectClass(klass)
-	obj_class.get_property = voidptr(surface_child_exited_get_property)
-	obj_class.set_property = voidptr(surface_child_exited_set_property)
 	obj_class.dispose = voidptr(surface_child_exited_dispose)
 	obj_class.finalize = voidptr(surface_child_exited_finalize)
-	C.g_object_class_install_property(klass, surface_child_exited_prop_data, g_surface_child_exited_pspec_data)
+
+	if adw_supports_banner() {
+		bytes := C.g_bytes_new_static(surface_child_exited_ui.str, usize(surface_child_exited_ui.len))
+		C.gtk_widget_class_set_template(klass, bytes)
+
+		// Binding: banner template child into the private struct.
+		banner_offset := g_surface_child_exited_priv_offset + int(__offsetof(C.GhosttySurfaceChildExitedPrivate, banner))
+		C.gtk_widget_class_bind_template_child_full(klass, c'banner', 0, banner_offset)
+
+		// Template callbacks.
+		C.gtk_widget_class_bind_template_callback_full(klass, c'clicked', voidptr(surface_child_exited_clicked_cb))
+		C.gtk_widget_class_bind_template_callback_full(klass, c'notify_data', voidptr(surface_child_exited_notify_data_cb))
+
+		// Property: data (the GhosttyApprtChildExited boxed type).
+		g_surface_child_exited_pspec_data = C.g_param_spec_boxed(c'data', c'data', c'The child-exited data', child_exited_boxed_get_type(), g_param_readwrite)
+		obj_class.get_property = voidptr(surface_child_exited_get_property)
+		obj_class.set_property = voidptr(surface_child_exited_set_property)
+		C.g_object_class_install_property(klass, surface_child_exited_prop_data, g_surface_child_exited_pspec_data)
+	}
 
 	// Signal: close-request (void).
 	C.g_signal_new(c'close-request', g_surface_child_exited_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 0)
 }
 
 fn surface_child_exited_instance_init(instance voidptr, klass voidptr) {
-	C.gtk_widget_init_template(instance)
+	if adw_supports_banner() {
+		C.gtk_widget_init_template(instance)
+	}
 }
 
 // surface_child_exited_get_type lazily registers the GhosttySurfaceChildExited
 // GObject type, parented to AdwBin, with instance-private data.
 pub fn surface_child_exited_get_type() GType {
 	if g_surface_child_exited_type == GType(0) {
-		parent := C.adw_bin_get_type()
+		parent := if adw_supports_banner() { C.adw_bin_get_type() } else { C.gtk_widget_get_type() }
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
