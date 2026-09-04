@@ -4224,15 +4224,12 @@ pub fn (mut self PageList) erase_rows(tl PointTag, bl ?PointTag) {
 		end := int(chunk.end)
 		scroll_amount := int(page.size.rows) - end
 
-		// Swap rows: move the surviving rows to the front, and swap the
-		// erased rows to the back so they can be reused if we grow.
+		// Move surviving rows to the front. Ghostty swaps row cell offsets;
+		// Witty's rows own their cell arrays and its managed maps use row/column
+		// keys, so Page's managed clone is the equivalent operation here.
 		for i in 0 .. scroll_amount {
-			if i + end < page.rows.len && i < page.rows.len {
-				old_dst := page.rows[i]
-				page.rows[i] = page.rows[i + end]
-				page.rows[i + end] = old_dst
-				page.rows[i].dirty = true
-			}
+			page.clone_row_from(page, u16(i), u16(i + end))
+			page.rows[i].dirty = true
 		}
 
 		// Clear our remaining cells that we didn't shift or swapped
@@ -5791,21 +5788,4 @@ pub fn (self &PageList) verify_integrity() bool {
 		}
 	}
 	return true
-}
-
-// ============================================================
-// RowData helper for cloning
-// ============================================================
-
-fn (self &RowData) clone_row(cols u32) RowData {
-	return RowData{
-		cells: self.cells.clone()
-		wrap: self.wrap
-		wrap_continuation: self.wrap_continuation
-		dirty: self.dirty
-		styled: self.styled
-		grapheme: self.grapheme
-		hyperlink: self.hyperlink
-		semantic_prompt: self.semantic_prompt
-	}
 }

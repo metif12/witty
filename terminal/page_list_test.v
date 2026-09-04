@@ -744,6 +744,57 @@ fn test_page_list_erase_one_row_active() {
 	assert cell2.cell.codepoint == 0 || cell2.cell.content_tag == .bg_color_palette
 }
 
+fn test_page_list_erase_history_preserves_managed_survivor() {
+	mut s := PageList.init(6, 4, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	s.grow_rows(2)
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	style_id := page.styles.add(CellStyle{
+		flags: StyleFlags{
+			bold: true
+		}
+	}) or {
+		assert false, 'style add failed'
+		return
+	}
+	page.rows[2].cells[3] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`S`)
+		style_id: style_id
+	}
+	page.rows[2].styled = true
+	page.set_graphemes(2, 3, [u32(0x0302)])
+	hyperlink_id := page.insert_hyperlink(Hyperlink{
+		id: HyperlinkExplicitId{
+			value: 'survivor'
+		}
+		uri: 'https://example.com/survivor'
+	})
+	page.set_hyperlink(2, 3, hyperlink_id)
+
+	// The first two rows are history. Erasing them compacts old row 2 to row 0.
+	s.erase_rows(.history, none)
+
+	assert s.total_rows == 4
+	cell := page.rows[0].cells[3]
+	assert cell.codepoint == u32(`S`)
+	assert cell.graphemes == [u32(0x0302)]
+	assert page.styles.get(cell.style_id).flags.bold
+	assert page.styles.ref_count(cell.style_id) == 1
+	moved_link_id := page.lookup_hyperlink(0, 3) or {
+		assert false, 'survivor hyperlink mapping missing'
+		return
+	}
+	assert page.hyperlink_set.get(moved_link_id).uri == 'https://example.com/survivor'
+	assert page.hyperlink_set.ref_count(moved_link_id) == 1
+	assert page.lookup_hyperlink(2, 3) == none
+	page.assert_integrity()
+}
+
 fn test_page_list_erase_row() {
 	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
