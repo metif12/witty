@@ -1219,6 +1219,38 @@ fn test_screen_resize_no_reflow_less_rows_keeps_bottom_and_cursor() {
 	assert s.cursor.y == 1
 }
 
+fn test_screen_resize_no_reflow_does_not_trim_cursor_row() {
+	mut s := Screen.init(3, 4, 10)
+	defer { s.deinit() }
+	s.cursor_absolute(1, 3)
+
+	s.resize(ScreenResize{ cols: 3, rows: 2, reflow: false }) or { assert false }
+
+	assert s.pages.screen_rows.len == 4
+	assert s.pages.active_start == 2
+	assert s.cursor.x == 1
+	assert s.cursor.y == 1
+}
+
+fn test_screen_resize_no_reflow_does_not_trim_selection_row() {
+	mut s := Screen.init(3, 4, 10)
+	defer { s.deinit() }
+	s.select(Selection.init(Pin{ x: 0, y: 0 }, Pin{ x: 2, y: 3 }, false)) or {
+		assert false
+	}
+
+	s.resize(ScreenResize{ cols: 3, rows: 2, reflow: false }) or { assert false }
+
+	assert s.pages.screen_rows.len == 4
+	assert s.pages.active_start == 2
+	if sel := s.selection {
+		assert sel.start_pin == Pin{ x: 0, y: 0 }
+		assert sel.end_pin == Pin{ x: 2, y: 3 }
+	} else {
+		assert false
+	}
+}
+
 fn test_screen_resize_no_reflow_less_cols_clamps_cursor() {
 	mut s := Screen.init(5, 2, 10)
 	defer { s.deinit() }
@@ -1247,6 +1279,21 @@ fn test_screen_resize_no_reflow_more_rows_pulls_cursor_with_history() {
 		return
 	}
 	assert str == '1\n2\n3\n4'
+}
+
+fn test_screen_resize_no_reflow_more_rows_contains_pinned_viewport() {
+	mut s := Screen.init(2, 2, 10)
+	defer { s.deinit() }
+	s.test_write_string('1\n2\n3\n4') or { assert false }
+	s.scroll_to_row(1)
+	assert s.pages.viewport == .pinned
+	assert s.pages.viewport_start == 1
+
+	s.resize(ScreenResize{ cols: 2, rows: 4, reflow: false }) or { assert false }
+
+	assert s.pages.active_start == 0
+	assert s.pages.viewport == .active
+	assert s.pages.viewport_start == 0
 }
 
 fn test_screen_resize_more_rows_no_scrollback() {
@@ -1902,6 +1949,42 @@ fn test_screen_resize_more_cols_reflows_saved_cursor() {
 	} else {
 		assert false
 	}
+}
+
+fn test_screen_resize_more_cols_reflows_selection() {
+	mut s := Screen.init(2, 3, 5)
+	defer { s.deinit() }
+	s.test_write_string('1A2B') or { assert false }
+	s.select(Selection.init(Pin{ x: 1, y: 1 }, Pin{ x: 0, y: 0 }, false)) or {
+		assert false
+	}
+
+	s.resize(ScreenResize{ cols: 5, rows: 3, reflow: true }) or { assert false }
+
+	if sel := s.selection {
+		// Preserve the backwards orientation while remapping B and 1.
+		assert sel.start_pin == Pin{ x: 3, y: 0 }
+		assert sel.end_pin == Pin{ x: 0, y: 0 }
+	} else {
+		assert false
+	}
+}
+
+fn test_screen_resize_more_cols_reflows_pinned_viewport() {
+	mut s := Screen.init(2, 2, 10)
+	defer { s.deinit() }
+	s.test_write_string('ABCD\nEF\nGH') or { assert false }
+	assert s.pages.active_start == 2
+	s.scroll_to_row(1)
+	assert s.pages.viewport == .pinned
+
+	s.resize(ScreenResize{ cols: 4, rows: 2, reflow: true }) or { assert false }
+
+	// The old row 1 was the continuation "CD". It was unwrapped into row 0,
+	// so the tracked viewport follows it instead of jumping to active row 1.
+	assert s.pages.active_start == 1
+	assert s.pages.viewport == .pinned
+	assert s.pages.viewport_start == 0
 }
 
 fn test_screen_resize_more_cols_reflow_ends_in_newline() {

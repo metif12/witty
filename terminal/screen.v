@@ -2729,28 +2729,42 @@ pub fn (self &Screen) blank_cell() CellData {
 //   - reload the cursor and fix up the saved cursor's pending wrap
 pub fn (mut self Screen) resize(opts ScreenResize) ! {
 	self.mark_kitty_images_dirty()
-	old_cols := self.pages.cols
-	cursor_abs := self.pages.active_start + int(self.cursor.y)
+	mut cursor_pin := Pin{
+		x: self.cursor.x
+		y: u32(self.pages.active_start) + self.cursor.y
+	}
+	mut tracked_pins := []&Pin{cap: 4}
+	tracked_pins << &cursor_pin
 	// Release the cursor style while resizing just in case the cursor ends
 	// up on a different page. We restore it at the end.
 	cursor_style := self.cursor.style
 	self.cursor.style = CellStyle{}
 	self.manual_style_update() or {}
 
-	// Remember the saved cursor position and ask the column reflow to track
-	// it, mirroring the tracked PageList pin used by Ghostty. The absolute
-	// fallback handles row-only and no-reflow resizes.
-	mut saved_abs := ?int(none)
-	self.pages.reflow_saved_track = false
+	// The saved cursor and selection are permanently tracked PageList pins in
+	// Ghostty. Build their flat absolute-pin equivalents so every resize
+	// operation can update them together.
+	mut has_saved_pin := false
+	mut saved_pin := Pin{}
 	if sc := self.saved_cursor {
 		if sc.x < self.pages.cols && sc.y < self.pages.rows {
-			saved_abs = self.pages.active_start + int(sc.y)
-			if opts.reflow && opts.cols != old_cols {
-				self.pages.reflow_saved_track = true
-				self.pages.reflow_saved_in_x = sc.x
-				self.pages.reflow_saved_in_y = sc.y
+			has_saved_pin = true
+			saved_pin = Pin{
+				x: sc.x
+				y: u32(self.pages.active_start) + sc.y
 			}
+			tracked_pins << &saved_pin
 		}
+	}
+	mut has_selection_pins := false
+	mut selection_start_pin := Pin{}
+	mut selection_end_pin := Pin{}
+	if sel := self.selection {
+		has_selection_pins = true
+		selection_start_pin = sel.start_pin
+		selection_end_pin = sel.end_pin
+		tracked_pins << &selection_start_pin
+		tracked_pins << &selection_end_pin
 	}
 
 	// If our cursor is on a prompt or input line, clear it so the shell can
@@ -2796,61 +2810,54 @@ pub fn (mut self Screen) resize(opts ScreenResize) ! {
 			x: self.cursor.x
 			y: self.cursor.y
 		}
+		tracked_pins: tracked_pins
 	})!
-
-	// If reflow moved the cursor (soft-wrapped content was re-laid-out),
-	// apply the tracked position the reflow computed for us.
-	if self.pages.reflow_did_reflow {
-		self.cursor.x = self.pages.reflow_cursor_x
-		self.cursor.y = self.pages.reflow_cursor_y
-		self.cursor.pending_wrap = false
-	} else {
-		// With no column reflow, the cursor's tracked cell remains on the
-		// same absolute row. Convert it back to an active coordinate after
-		// the active area has grown or shrunk, and clamp X like PageList's
-		// tracked pins do during a no-reflow column shrink.
-		new_y := cursor_abs - self.pages.active_start
-		if new_y >= 0 && new_y < int(self.pages.rows) {
-			self.cursor.y = u32(new_y)
-			if self.cursor.x >= self.pages.cols {
-				self.cursor.x = self.pages.cols - 1
-			}
-		} else {
-			self.cursor.x = 0
-			self.cursor.y = 0
-		}
-	}
 
 	// If we have no scrollback and we shrunk our rows, we must explicitly
 	// erase our history. PageList always keeps at least a page of history.
 	if self.no_scrollback {
+		erased := self.pages.active_start
 		self.pages.erase_rows(.history, ?PointTag(none))
+		// eraseRows updates all PageList tracked pins. Mirror its behavior:
+		// surviving pins shift up, while pins in erased history move to the
+		// first remaining cell.
+		if erased > 0 {
+			for mut pin in tracked_pins {
+				if int(pin.y) >= erased {
+					pin.y -= u32(erased)
+				} else {
+					pin.x = 0
+					pin.y = 0
+				}
+			}
+		}
+	}
+
+	// Reload the live cursor from its tracked pin. If it moved outside the
+	// active area, PageList's pointFromPin fallback places it at top-left.
+	cursor_y := int(cursor_pin.y) - self.pages.active_start
+	if cursor_y >= 0 && cursor_y < int(self.pages.rows) {
+		self.cursor.x = cursor_pin.x
+		self.cursor.y = u32(cursor_y)
+	} else {
+		self.cursor.x = 0
+		self.cursor.y = 0
+	}
+	if self.pages.reflow_did_reflow {
+		self.cursor.pending_wrap = false
 	}
 
 	// If our cursor was updated, we do a full reload so all our cursor
 	// state is correct.
 	self.cursor_reload()
 
-	// Update the saved cursor from the reflow pin, or from its unchanged
-	// absolute row when no column reflow occurred.
-	if abs := saved_abs {
+	// Update the saved cursor from its tracked pin.
+	if has_saved_pin {
 		if mut sc := self.saved_cursor {
-			mut valid := false
-			if self.pages.reflow_did_reflow && self.pages.reflow_saved_track {
-				sc.x = self.pages.reflow_saved_out_x
-				sc.y = self.pages.reflow_saved_out_y
-				valid = true
-			} else {
-				new_active := abs - self.pages.active_start
-				if new_active >= 0 && new_active < int(self.pages.rows) {
-					sc.y = u32(new_active)
-					valid = true
-				}
-			}
-			if valid {
-				if sc.x >= opts.cols {
-					sc.x = opts.cols - 1
-				}
+			new_active := int(saved_pin.y) - self.pages.active_start
+			if new_active >= 0 && new_active < int(self.pages.rows) {
+				sc.x = saved_pin.x
+				sc.y = u32(new_active)
 				// If we had pending wrap set and we're no longer at the end
 				// of the line, we unset the pending wrap and move the cursor
 				// to reflect the correct next position.
@@ -2868,7 +2875,16 @@ pub fn (mut self Screen) resize(opts ScreenResize) ! {
 			self.saved_cursor = sc
 		}
 	}
-	self.pages.reflow_saved_track = false
+
+	// Selection endpoints are tracked screen pins, so retain their original
+	// orientation while replacing both endpoints with their remapped values.
+	if has_selection_pins {
+		if mut sel := self.selection {
+			sel.start_pin = selection_start_pin
+			sel.end_pin = selection_end_pin
+			self.selection = sel
+		}
+	}
 
 	// Restore the cursor style. This should not fail; degrade gracefully.
 	self.cursor.style = cursor_style

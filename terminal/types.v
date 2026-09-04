@@ -326,17 +326,6 @@ pub mut:
 	reflow_cursor_y   u32
 	reflow_cursor_abs int
 	reflow_did_reflow bool
-	// Optional saved-cursor tracking through reflow. When
-	// reflow_saved_track is set before a resize, reflow_cols also tracks
-	// the saved cursor position (given by reflow_saved_in_*) and writes the
-	// remapped active-relative position into reflow_saved_out_*. This lets
-	// the terminal reflow the DECSC saved cursor (a tracked pin in ghostty).
-	reflow_saved_track bool
-	reflow_saved_in_x  u32
-	reflow_saved_in_y  u32
-	reflow_saved_out_x u32
-	reflow_saved_out_y u32
-	reflow_saved_abs   int
 }
 
 // ViewportState tracks where the viewport is positioned.
@@ -560,23 +549,38 @@ pub fn (self &Pages) get_bottom_right(tag PointTag) ?Pin {
 pub fn (mut self Pages) resize(opts ResizeOpts) ! {
 	self.reflow_did_reflow = false
 	old_cols := self.cols
+	cursor_abs := self.active_start + int(opts.cursor.y)
+
+	// The PageList viewport pin is permanently tracked. The flat storage
+	// model represents it as an absolute row, so include a temporary pin in
+	// the same resize remapper used by Screen-owned tracked state.
+	mut viewport_pin := Pin{}
+	track_viewport := self.viewport == .pinned
+	mut tracked_pins := opts.tracked_pins.clone()
+	if track_viewport {
+		viewport_pin = Pin{
+			x: 0
+			y: u32(clamp_int(self.viewport_start, 0, self.screen_rows.len - 1))
+		}
+		tracked_pins << &viewport_pin
+	}
 
 	if !opts.reflow || opts.cols == old_cols {
 		// No reflow: columns (if any) change in place, then rows.
 		if opts.cols != old_cols {
-			self.resize_cols_no_reflow(opts.cols)
+			self.resize_cols_no_reflow(opts.cols, mut tracked_pins)
 		}
-		self.resize_rows(opts.rows, opts.cursor.y, true)
+		self.resize_rows(opts.rows, opts.cursor.y, true, cursor_abs, tracked_pins)
 	} else if opts.cols > old_cols {
 		// Growing columns: reflow (unwrap) first, then grow rows.
-		self.reflow_cols(opts.cols, opts.cursor.x, opts.cursor.y)
+		self.reflow_cols(opts.cols, opts.cursor.x, opts.cursor.y, mut tracked_pins)
 		self.reflow_did_reflow = true
-		self.resize_rows(opts.rows, opts.cursor.y, false)
+		self.resize_rows(opts.rows, opts.cursor.y, false, self.reflow_cursor_abs, tracked_pins)
 	} else {
 		// Shrinking columns: change rows first so the reflow has the proper
 		// number of active rows to wrap into, then reflow.
-		self.resize_rows(opts.rows, opts.cursor.y, true)
-		self.reflow_cols(opts.cols, opts.cursor.x, opts.cursor.y)
+		self.resize_rows(opts.rows, opts.cursor.y, true, cursor_abs, tracked_pins)
+		self.reflow_cols(opts.cols, opts.cursor.x, opts.cursor.y, mut tracked_pins)
 		self.reflow_did_reflow = true
 	}
 
@@ -594,21 +598,6 @@ pub fn (mut self Pages) resize(opts ResizeOpts) ! {
 		if self.reflow_cursor_x >= self.cols {
 			self.reflow_cursor_x = self.cols - 1
 		}
-
-		// Finalize the reflowed saved-cursor position too, if tracked.
-		if self.reflow_saved_track {
-			mut sy := self.reflow_saved_abs - self.active_start
-			if sy < 0 {
-				sy = 0
-			}
-			if sy >= int(self.rows) {
-				sy = int(self.rows) - 1
-			}
-			self.reflow_saved_out_y = u32(sy)
-			if self.reflow_saved_out_x >= self.cols {
-				self.reflow_saved_out_x = self.cols - 1
-			}
-		}
 	}
 
 	// An active viewport follows the active area's new top through row and
@@ -618,11 +607,17 @@ pub fn (mut self Pages) resize(opts ResizeOpts) ! {
 		self.viewport_start = self.active_start
 	} else if self.viewport == .top {
 		self.viewport_start = 0
+	} else if track_viewport {
+		self.viewport_start = int(viewport_pin.y)
+		if self.viewport_start >= self.active_start {
+			self.viewport = .active
+			self.viewport_start = self.active_start
+		}
 	}
 }
 
 // Change columns in place without reflow: truncate/pad each row.
-fn (mut self Pages) resize_cols_no_reflow(new_cols u32) {
+fn (mut self Pages) resize_cols_no_reflow(new_cols u32, mut tracked_pins []&Pin) {
 	self.cols = new_cols
 	for mut row in self.screen_rows {
 		if row.cells.len < int(new_cols) {
@@ -631,6 +626,11 @@ fn (mut self Pages) resize_cols_no_reflow(new_cols u32) {
 			}
 		} else if row.cells.len > int(new_cols) {
 			row.cells = row.cells[..int(new_cols)]
+		}
+	}
+	for mut pin in tracked_pins {
+		if pin.x >= new_cols {
+			pin.x = new_cols - 1
 		}
 	}
 }
@@ -644,7 +644,7 @@ fn (mut self Pages) resize_cols_no_reflow(new_cols u32) {
 //     growing blank rows only if there isn't enough history. If the cursor is
 //     NOT at the bottom, just append blank rows so we don't drag scrollback
 //     down. `has_cursor` distinguishes the "no cursor" case (always pull down).
-fn (mut self Pages) resize_rows(new_rows u32, cursor_y u32, has_cursor bool) {
+fn (mut self Pages) resize_rows(new_rows u32, cursor_y u32, has_cursor bool, cursor_abs int, tracked_pins []&Pin) {
 	old_rows := self.rows
 	if old_rows == new_rows {
 		self.rows = new_rows
@@ -661,6 +661,22 @@ fn (mut self Pages) resize_rows(new_rows u32, cursor_y u32, has_cursor bool) {
 				break
 			}
 			if !has_text_any(self.screen_rows[last].cells) {
+				// Ghostty never trims a row containing a tracked pin. The live
+				// cursor is always tracked, as are the saved cursor, viewport,
+				// and selection supplied by Screen.
+				if last == cursor_abs {
+					break
+				}
+				mut tracked := false
+				for pin in tracked_pins {
+					if int(pin.y) == last {
+						tracked = true
+						break
+					}
+				}
+				if tracked {
+					break
+				}
 				self.screen_rows.delete(last)
 				want_trim--
 			} else {
@@ -923,7 +939,7 @@ fn (mut c FlatReflowCursor) reflow_row(src RowData, src_abs int) {
 // reflow_cols re-wraps all screen rows into new_cols columns, following the
 // cursor (in active coordinates) to its new position. Updates screen_rows,
 // cols, active_start, reflow_cursor_x and reflow_cursor_abs.
-fn (mut self Pages) reflow_cols(new_cols u32, cur_x u32, cur_y u32) {
+fn (mut self Pages) reflow_cols(new_cols u32, cur_x u32, cur_y u32, mut tracked_pins []&Pin) {
 	old_active_start := self.active_start
 	old_rows := int(self.rows)
 	cursor_abs := self.active_start + int(cur_y)
@@ -933,7 +949,7 @@ fn (mut self Pages) reflow_cols(new_cols u32, cur_x u32, cur_y u32) {
 	// (scrollClear) active area from jumping to the bottom and pulling down
 	// scrollback: we grow blank rows after the cursor so its distance from the
 	// bottom is preserved.
-	preserved_remaining := old_rows - int(cur_y) - 1
+	preserved_remaining := if int(cur_y) < old_rows { old_rows - int(cur_y) - 1 } else { 0 }
 
 	// Count how many wrap-continuation rows precede the cursor within the old
 	// active area, so we can offset any *additional* wraps introduced by the
@@ -950,20 +966,18 @@ fn (mut self Pages) reflow_cols(new_cols u32, cur_x u32, cur_y u32) {
 		src_col: int(cur_x)
 	}
 
-	// Optionally track the saved (DECSC) cursor as a second pin so it gets
-	// remapped through reflow just like the live cursor.
-	saved_abs := self.active_start + int(self.reflow_saved_in_y)
-	mut saved_pin := &FlatReflowPin{
-		src_row: saved_abs
-		src_col: int(self.reflow_saved_in_x)
-	}
-
 	mut rc := FlatReflowCursor{
 		cols: int(new_cols)
 	}
 	rc.pins << cursor_pin
-	if self.reflow_saved_track {
-		rc.pins << saved_pin
+	mut extra_pins := []&FlatReflowPin{cap: tracked_pins.len}
+	for pin in tracked_pins {
+		mapped := &FlatReflowPin{
+			src_row: int(pin.y)
+			src_col: int(pin.x)
+		}
+		extra_pins << mapped
+		rc.pins << mapped
 	}
 	// Start with a single row, mirroring PageList's first rewritten node.
 	rc.append_row()
@@ -1020,19 +1034,17 @@ fn (mut self Pages) reflow_cols(new_cols u32, cur_x u32, cur_y u32) {
 		cur_x
 	}
 
-	// Stash the remapped saved-cursor absolute row and column if we were
-	// tracking it. The active-relative Y is finalized in Pages.resize once
-	// active_start has settled (the grow path resizes rows afterward).
-	if self.reflow_saved_track {
-		self.reflow_saved_abs = if saved_pin.new_row >= 0 {
-			saved_pin.new_row
+	// Update every caller-owned pin in place. A valid tracked source pin is
+	// forced into the reflow stream even when it points into trailing blanks,
+	// so the fallback is only for defensive handling of an invalid input.
+	for i, mapped in extra_pins {
+		mut pin := tracked_pins[i]
+		if mapped.new_row >= 0 {
+			pin.x = u32(mapped.new_col)
+			pin.y = u32(mapped.new_row)
 		} else {
-			cur_abs_new
-		}
-		self.reflow_saved_out_x = if saved_pin.new_row >= 0 {
-			u32(saved_pin.new_col)
-		} else {
-			self.reflow_saved_in_x
+			pin.x = 0
+			pin.y = u32(cur_abs_new)
 		}
 	}
 }
@@ -1063,10 +1075,11 @@ pub fn (self &Pages) pin(opts PinOpts) ?Pin {
 
 pub struct ResizeOpts {
 pub:
-	cols   u32
-	rows   u32
-	reflow bool = true
-	cursor struct {
+	cols         u32
+	rows         u32
+	reflow       bool = true
+	tracked_pins []&Pin
+	cursor       struct {
 	pub:
 		x u32
 		y u32
