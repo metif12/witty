@@ -21,8 +21,8 @@ module gtk
 //     `SurfaceWidget`, not `Surface`, to avoid colliding with the apprt
 //     adapter `Surface` in surface_linux.v.)
 //   * Blueprint children and callbacks are created and connected explicitly;
-//     the remaining GObject properties and GtkScrollable interface plumbing
-//     are called out at their implementation sites.
+//     the remaining non-scrollable GObject properties are called out at their
+//     implementation sites.
 //   * Calls into the core surface dispatch to the real `core.Surface` (see
 //     core/surface.v). Signatures are kept faithful.
 //
@@ -80,6 +80,16 @@ pub type GdkContentFormats = voidptr
 // GtkAdjustment*.
 pub type GtkAdjustment = voidptr
 
+// GSignalGroup* used to reconnect the vertical adjustment callback whenever
+// GtkScrollable replaces its adjustment.
+pub type GSignalGroup = voidptr
+
+// GtkScrollablePolicy mirrors GTK_SCROLL_MINIMUM / GTK_SCROLL_NATURAL.
+pub enum GtkScrollablePolicy {
+	minimum
+	natural
+}
+
 // GtkPopover* / GMenu* handles used by the surface context menu.
 pub type GtkPopover = voidptr
 
@@ -119,6 +129,28 @@ fn C.gtk_widget_add_controller(widget GtkWidget, controller voidptr)
 fn C.gtk_widget_set_halign(widget GtkWidget, align int)
 
 fn C.gtk_widget_set_valign(widget GtkWidget, align int)
+
+fn C.gtk_adjustment_get_type() GType
+
+fn C.gtk_adjustment_get_value(adjustment GtkAdjustment) f64
+
+fn C.gtk_adjustment_get_upper(adjustment GtkAdjustment) f64
+
+fn C.gtk_adjustment_get_page_size(adjustment GtkAdjustment) f64
+
+fn C.gtk_adjustment_configure(adjustment GtkAdjustment, value f64, lower f64, upper f64, step_increment f64, page_increment f64, page_size f64)
+
+fn C.gtk_scrollable_get_type() GType
+
+fn C.g_signal_group_new(target_type GType) GSignalGroup
+
+fn C.g_signal_group_connect_data(self GSignalGroup, detailed_signal &char, c_handler GCallback, data voidptr, notify voidptr, flags int)
+
+fn C.g_signal_group_set_target(self GSignalGroup, target GObject)
+
+fn C.g_signal_group_block(self GSignalGroup)
+
+fn C.g_signal_group_unblock(self GSignalGroup)
 
 // GtkIMContext
 fn C.gtk_im_context_filter_keypress(context GtkIMContext, event GdkEvent) bool
@@ -256,9 +288,83 @@ const gdk_gl_api_gl = int(1)
 
 __global g_terminal_surface_type = GType(0)
 
+struct C.GhosttySurfacePrivate {
+mut:
+	wrapper voidptr
+}
+
+const surface_prop_hadjustment = u32(1)
+const surface_prop_vadjustment = u32(2)
+const surface_prop_hscroll_policy = u32(3)
+const surface_prop_vscroll_policy = u32(4)
+
+fn terminal_surface_priv(obj voidptr) &C.GhosttySurfacePrivate {
+	return &C.GhosttySurfacePrivate(C.g_type_instance_get_private(obj, g_terminal_surface_type))
+}
+
+fn terminal_surface_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	_ = pspec
+	priv := terminal_surface_priv(obj)
+	if isnil(priv.wrapper) {
+		match property_id {
+			surface_prop_hadjustment, surface_prop_vadjustment {
+				C.g_value_set_object(value, unsafe { nil })
+			}
+			surface_prop_hscroll_policy, surface_prop_vscroll_policy {
+				C.g_value_set_enum(value, int(GtkScrollablePolicy.natural))
+			}
+			else {}
+		}
+		return
+	}
+	self := unsafe { &SurfaceWidget(priv.wrapper) }
+	match property_id {
+		surface_prop_hadjustment { C.g_value_set_object(value, self.hadj) }
+		surface_prop_vadjustment { C.g_value_set_object(value, self.vadj) }
+		surface_prop_hscroll_policy { C.g_value_set_enum(value, int(self.hscroll_policy)) }
+		surface_prop_vscroll_policy { C.g_value_set_enum(value, int(self.vscroll_policy)) }
+		else {}
+	}
+}
+
+fn terminal_surface_set_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	_ = pspec
+	priv := terminal_surface_priv(obj)
+	if isnil(priv.wrapper) {
+		return
+	}
+	mut self := unsafe { &SurfaceWidget(priv.wrapper) }
+	match property_id {
+		surface_prop_hadjustment {
+			self.set_hadjustment(GtkAdjustment(C.g_value_get_object(value)))
+		}
+		surface_prop_vadjustment {
+			self.set_vadjustment(GtkAdjustment(C.g_value_get_object(value)))
+		}
+		surface_prop_hscroll_policy {
+			self.hscroll_policy = unsafe { GtkScrollablePolicy(C.g_value_get_enum(value)) }
+		}
+		surface_prop_vscroll_policy {
+			self.vscroll_policy = unsafe { GtkScrollablePolicy(C.g_value_get_enum(value)) }
+		}
+		else {}
+	}
+}
+
+fn terminal_surface_scrollable_init(iface voidptr, data voidptr) {
+	_ = iface
+	_ = data
+}
+
 fn terminal_surface_class_init(klass voidptr, class_data voidptr) {
-	_ = klass
 	_ = class_data
+	mut obj_class := &C.GObjectClass(klass)
+	obj_class.get_property = voidptr(terminal_surface_get_property)
+	obj_class.set_property = voidptr(terminal_surface_set_property)
+	C.g_object_class_override_property(klass, surface_prop_hadjustment, c'hadjustment')
+	C.g_object_class_override_property(klass, surface_prop_vadjustment, c'vadjustment')
+	C.g_object_class_override_property(klass, surface_prop_hscroll_policy, c'hscroll-policy')
+	C.g_object_class_override_property(klass, surface_prop_vscroll_policy, c'vscroll-policy')
 	for name in ['bell', 'close-request', 'clipboard-read', 'init', 'menu', 'present-request',
 		'toggle-fullscreen', 'toggle-maximize'] {
 		C.g_signal_new(&char(name.str), g_terminal_surface_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(4), 0)
@@ -285,6 +391,11 @@ pub fn terminal_surface_get_type() GType {
 			instance_init: voidptr(terminal_surface_instance_init)
 		}
 		g_terminal_surface_type = C.g_type_register_static(parent, c'GhosttySurface', &info, 0)
+		_ = C.g_type_add_instance_private(g_terminal_surface_type, sizeof(C.GhosttySurfacePrivate))
+		interface_info := C.GInterfaceInfo{
+			interface_init: voidptr(terminal_surface_scrollable_init)
+		}
+		C.g_type_add_interface_static(g_terminal_surface_type, C.gtk_scrollable_get_type(), &interface_info)
 	}
 	return g_terminal_surface_type
 }
@@ -322,8 +433,8 @@ mut:
 
 // SurfaceWidget is the V model of the `GhosttySurface` GObject class. It wraps
 // the GObject/GtkWidget pointer and carries the state that lived in the Zig
-// `Private` struct. The GObject/template machinery it would normally register
-// is stubbed (see the class-registration TODO block at the end).
+// `Private` struct. The GObject subclass and GtkScrollable interface are
+// registered above; the translated blueprint is assembled in the constructor.
 @[heap]
 pub struct SurfaceWidget {
 pub mut:
@@ -432,8 +543,11 @@ pub mut:
 	key_tables   []string
 
 	// Gtk.Scrollable interface adjustments.
-	hadj GtkAdjustment = unsafe { nil }
-	vadj GtkAdjustment = unsafe { nil }
+	hadj              GtkAdjustment = unsafe { nil }
+	vadj              GtkAdjustment = unsafe { nil }
+	hscroll_policy    GtkScrollablePolicy = .natural
+	vscroll_policy    GtkScrollablePolicy = .natural
+	vadj_signal_group GSignalGroup = unsafe { nil }
 
 	// How much pending horizontal scroll we have.
 	pending_horizontal_scroll       f64
@@ -1770,6 +1884,10 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			self.set_mouse_hover_url(if action.url.len > 0 { action.url } else { none })
 			return true
 		}
+		.scrollbar {
+			self.set_scrollbar(action.scrollbar)
+			return true
+		}
 		.pwd {
 			self.set_pwd(if action.pwd.len > 0 { action.pwd } else { none })
 			return true
@@ -2148,17 +2266,69 @@ pub fn (mut self SurfaceWidget) set_vadjustment(adj GtkAdjustment) {
 		self.vadj = unsafe { nil }
 	}
 	if isnil(adj) {
+		self.update_vadjustment_signal_target()
 		return
 	}
 	object_ref(adj)
 	self.vadj = adj
-	// TODO(gtk): lazily set up the "value-changed" signal group as in
-	// propVAdjustment, forwarding to scroll_to_row on the core surface.
+	self.update_vadjustment_signal_target()
 }
 
-// --- Signal emitters (stubs) ----------------------------------------------
-// These emit GObject signals in ghostty; here they are minimal stubs with
-// faithful names/signatures so callers type-check.
+fn (mut self SurfaceWidget) update_vadjustment_signal_target() {
+	if isnil(self.vadj_signal_group) {
+		self.vadj_signal_group = C.g_signal_group_new(C.gtk_adjustment_get_type())
+		C.g_signal_group_connect_data(self.vadj_signal_group, c'value-changed', GCallback(voidptr(surface_vadjustment_changed_cb)), voidptr(self), unsafe { nil }, 0)
+	}
+	target := if isnil(self.vadj) { GObject(unsafe { nil }) } else { GObject(self.vadj) }
+	C.g_signal_group_set_target(self.vadj_signal_group, target)
+}
+
+fn surface_vadjustment_changed_cb(adj GtkAdjustment, data voidptr) {
+	if isnil(adj) || isnil(data) {
+		return
+	}
+	mut self := unsafe { &SurfaceWidget(data) }
+	if !self.has_core() {
+		return
+	}
+	value := C.gtk_adjustment_get_value(adj)
+	row := if value <= 0 { u64(0) } else { u64(value + 0.5) }
+	mut surface := self.core_surface
+	surface.perform_binding_action(input.Action.new_uint(.scroll_to_row, row)) or {
+		eprintln('error performing scroll_to_row action err=${err}')
+	}
+}
+
+fn f64_approx_eq_abs(a f64, b f64, tolerance f64) bool {
+	delta := a - b
+	return (if delta < 0 { -delta } else { delta }) <= tolerance
+}
+
+// set_scrollbar updates the GtkScrollable adjustment without feeding the
+// resulting value-changed signal back into the core. Mirrors `setScrollbar`.
+pub fn (mut self SurfaceWidget) set_scrollbar(scrollbar terminal.Scrollbar) {
+	if isnil(self.vadj) {
+		return
+	}
+	value := f64(scrollbar.offset)
+	upper := f64(scrollbar.total)
+	page_size := f64(scrollbar.len)
+	if f64_approx_eq_abs(C.gtk_adjustment_get_value(self.vadj), value, 0.001)
+		&& f64_approx_eq_abs(C.gtk_adjustment_get_upper(self.vadj), upper, 0.001)
+		&& f64_approx_eq_abs(C.gtk_adjustment_get_page_size(self.vadj), page_size, 0.001) {
+		return
+	}
+	if isnil(self.vadj_signal_group) {
+		self.update_vadjustment_signal_target()
+	}
+	C.g_signal_group_block(self.vadj_signal_group)
+	C.gtk_adjustment_configure(self.vadj, value, 0, upper, 1, page_size, page_size)
+	C.g_signal_group_unblock(self.vadj_signal_group)
+}
+
+// --- Container requests ---------------------------------------------------
+// Ghostty emits GObject signals for these. The V wrapper routes each request
+// directly to the same owning split tree/window operation.
 
 // close requests the surface be closed. Mirrors `Surface.close` (emits
 // `close-request`).
@@ -2217,9 +2387,9 @@ pub fn (self &SurfaceWidget) redraw_inspector() {
 //
 // The V port registers the AdwBin subclass above, creates blueprint children
 // programmatically below, and wires callbacks with g_signal_connect_data.
-// Full property registration and the GtkScrollable interface remain to be
-// translated. The handlers above are plain methods rather than C template
-// callbacks.
+// The GtkScrollable interface is registered above. The remaining non-scroll
+// properties still need native registration; handlers are plain methods rather
+// than C template callbacks.
 
 // new_surface_widget creates a new SurfaceWidget. Mirrors `Surface.new`
 // (gobject.ext.newInstance). It builds the translated blueprint children and
@@ -2354,6 +2524,8 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 		context_menu: context_menu
 		resize_overlay: resize_overlay
 	}
+	mut native_priv := terminal_surface_priv(obj)
+	native_priv.wrapper = voidptr(w)
 	w.rt_surface = Surface{ surface: w }
 	w.mouse_shape = .text
 	w.apply_resize_overlay_config()
@@ -2422,6 +2594,19 @@ fn surface_widget_finalized_cb(data voidptr, object GObject) {
 	if self.pending_horizontal_scroll_reset != 0 {
 		C.g_source_remove(self.pending_horizontal_scroll_reset)
 		self.pending_horizontal_scroll_reset = 0
+	}
+	if !isnil(self.vadj_signal_group) {
+		C.g_signal_group_set_target(self.vadj_signal_group, unsafe { nil })
+		object_unref(GObject(self.vadj_signal_group))
+		self.vadj_signal_group = unsafe { nil }
+	}
+	if !isnil(self.hadj) {
+		object_unref(GObject(self.hadj))
+		self.hadj = unsafe { nil }
+	}
+	if !isnil(self.vadj) {
+		object_unref(GObject(self.vadj))
+		self.vadj = unsafe { nil }
 	}
 	if !isnil(self.terminal_page) {
 		object_unref(GObject(self.terminal_page))

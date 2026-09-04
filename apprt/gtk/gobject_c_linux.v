@@ -42,6 +42,14 @@ pub mut:
 	value_table    voidptr
 }
 
+// GInterfaceInfo describes an interface implementation attached to a type.
+pub struct C.GInterfaceInfo {
+pub mut:
+	interface_init     voidptr
+	interface_finalize voidptr
+	interface_data     voidptr
+}
+
 // GTypeQuery mirrors the C struct filled by g_type_query.
 pub struct C.GTypeQuery {
 pub mut:
@@ -58,6 +66,8 @@ fn C.g_type_register_static(parent_type GType, type_name &char, info &C.GTypeInf
 fn C.g_type_query(type GType, query &C.GTypeQuery)
 
 fn C.g_type_add_instance_private(type GType, private_size usize) int
+
+fn C.g_type_add_interface_static(instance_type GType, interface_type GType, info &C.GInterfaceInfo)
 
 fn C.g_type_class_peek_parent(g_class voidptr) voidptr
 
@@ -98,6 +108,8 @@ fn C.gtk_widget_class_bind_template_child_full(widget_class voidptr, name &char,
 // --- Property registration -------------------------------------------------
 
 fn C.g_object_class_install_property(oclass voidptr, property_id u32, pspec &C.GParamSpec)
+
+fn C.g_object_class_override_property(oclass voidptr, property_id u32, name &char)
 
 fn C.g_param_spec_boolean(name &char, nick &char, blurb &char, default_value int, flags int) &C.GParamSpec
 
