@@ -295,9 +295,12 @@ fn (mut self App) perform_pre_action(target_ Target, action ActionKey, data Acti
 					// Store a copy of the title on the surface so that
 					// getTitle works without the embedder needing to track it.
 					if target_.surface != unsafe { nil } {
-						surface_ptr := unsafe { &Surface(target_.surface) }
-						unsafe {
-							surface_ptr.title = data.set_title_.title.clone()
+						core_surface := unsafe { &CoreSurface(target_.surface) }
+						if !isnil(core_surface.runtime_surface) {
+							surface_ptr := unsafe { &Surface(core_surface.runtime_surface) }
+							unsafe {
+								surface_ptr.title = data.set_title_.title.clone()
+							}
 						}
 					}
 				}

@@ -2049,6 +2049,7 @@ pub mut:
 	preedit   ?Preedit
 	mouse     RendererMouseState
 	inspector ?&Inspector
+	mutex     &sync.Mutex = unsafe { nil }
 }
 
 pub struct RendererMouseState {
@@ -2740,6 +2741,7 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 	})!
 	self.renderer_state = RendererState{
 		terminal: &self.io.terminal
+		mutex: sync.new_mutex()
 	}
 
 	// Initialize renderer
@@ -2794,6 +2796,10 @@ pub fn (mut self Surface) deinit() {
 	// Stop IO thread
 	self.io_thread.deinit()
 	self.io.deinit()
+	if self.renderer_state.mutex != unsafe { nil } {
+		self.renderer_state.mutex.destroy()
+		self.renderer_state.mutex = unsafe { nil }
+	}
 
 	// Clean up inspector
 	if mut insp := self.inspector {

@@ -1,3 +1,4 @@
+@[has_globals]
 module apprt
 
 import configpkg
@@ -112,10 +113,14 @@ pub fn (r RuntimeSurface) default_termio_env() !map[string]string {
 	return r.default_env.clone()
 }
 
-// CoreApp represents the core application logic.
-// This is a stub; the full implementation lives in the main module.
+// CoreApp represents the core application logic. The concrete core.App is
+// reached through the bridge installed by the root artifact.
 pub struct CoreApp {
 pub mut:
+	// Opaque implementation supplied by the translated core module. This keeps
+	// the runtime interface independent and avoids an apprt -> core import cycle.
+	backend voidptr
+
 	// Surfaces tracked by the app.
 	surfaces []voidptr
 
@@ -129,16 +134,28 @@ pub mut:
 }
 
 pub fn CoreApp.create() !&CoreApp {
-	return &CoreApp{}
+	mut result := &CoreApp{}
+	if g_core_bridge.app_create != unsafe { nil } {
+		result.backend = g_core_bridge.app_create()!
+	}
+	return result
 }
 
 pub fn (mut c CoreApp) destroy() {
+	if !isnil(c.backend) && g_core_bridge.app_destroy != unsafe { nil } {
+		g_core_bridge.app_destroy(c.backend)
+		c.backend = unsafe { nil }
+	}
 	// The embedded runtime owns and destroys surfaces individually. The core app
 	// only retains non-owning pointers to them.
 	c.surfaces.clear()
 }
 
 pub fn (mut c CoreApp) tick(app &App) ! {
+	if !isnil(c.backend) && g_core_bridge.app_tick != unsafe { nil } {
+		g_core_bridge.app_tick(c.backend, app)!
+		return
+	}
 	// Embedded runtime actions are delivered synchronously through perform_action.
 	// There is no platform event queue to drain here; the host calls this entrypoint
 	// after its wakeup callback so queued surface work can be added without changing
@@ -152,6 +169,9 @@ pub fn (mut c CoreApp) focus_event(focused bool) {
 		return
 	}
 	c.focused = focused
+	if !isnil(c.backend) && g_core_bridge.app_focus != unsafe { nil } {
+		g_core_bridge.app_focus(c.backend, focused)
+	}
 }
 
 pub fn (mut c CoreApp) key_event(app &App, event voidptr) bool {
@@ -159,6 +179,9 @@ pub fn (mut c CoreApp) key_event(app &App, event voidptr) bool {
 		return false
 	}
 	input_event := unsafe { *&input.KeyEvent(event) }
+	if !isnil(c.backend) && g_core_bridge.app_key != unsafe { nil } {
+		return g_core_bridge.app_key(c.backend, app, &input_event)
+	}
 	if input_event.action == .release {
 		return false
 	}
@@ -200,6 +223,9 @@ pub fn (c CoreApp) key_event_is_binding(app &App, event voidptr) bool {
 		return false
 	}
 	input_event := unsafe { *&input.KeyEvent(event) }
+	if !isnil(c.backend) && g_core_bridge.app_key_is_binding != unsafe { nil } {
+		return g_core_bridge.app_key_is_binding(c.backend, app, &input_event)
+	}
 	if input_event.action == .release {
 		return false
 	}
@@ -209,13 +235,22 @@ pub fn (c CoreApp) key_event_is_binding(app &App, event voidptr) bool {
 
 pub fn (mut c CoreApp) add_surface(surface voidptr) ! {
 	c.surfaces << surface
+	if !isnil(c.backend) && g_core_bridge.app_add_surface != unsafe { nil } {
+		g_core_bridge.app_add_surface(c.backend, surface)!
+	}
 }
 
 pub fn (mut c CoreApp) delete_surface(surface voidptr) {
+	if !isnil(c.backend) && g_core_bridge.app_delete_surface != unsafe { nil } {
+		g_core_bridge.app_delete_surface(c.backend, surface)
+	}
 	c.surfaces = c.surfaces.filter(it != surface)
 }
 
 pub fn (c CoreApp) needs_confirm_quit() bool {
+	if !isnil(c.backend) && g_core_bridge.app_needs_confirm != unsafe { nil } {
+		return g_core_bridge.app_needs_confirm(c.backend)
+	}
 	for surface_ptr in c.surfaces {
 		if isnil(surface_ptr) {
 			continue
@@ -229,6 +264,10 @@ pub fn (c CoreApp) needs_confirm_quit() bool {
 }
 
 pub fn (mut c CoreApp) color_scheme_event(app &App, scheme ColorScheme) ! {
+	if !isnil(c.backend) && g_core_bridge.app_color_scheme != unsafe { nil } {
+		g_core_bridge.app_color_scheme(c.backend, app, scheme)!
+		return
+	}
 	new_theme := match scheme {
 		.light { configpkg.Theme.light }
 		.dark { configpkg.Theme.dark }
@@ -246,6 +285,10 @@ pub fn (mut c CoreApp) update_config(app &App, config voidptr) ! {
 		return error('configuration pointer is null')
 	}
 	cfg := unsafe { &configpkg.Config(config) }
+	if !isnil(c.backend) && g_core_bridge.app_update_config != unsafe { nil } {
+		g_core_bridge.app_update_config(c.backend, app, cfg)!
+		return
+	}
 	for surface_ptr in c.surfaces {
 		if isnil(surface_ptr) {
 			continue
@@ -314,16 +357,21 @@ fn (mut c CoreApp) perform_all_action(mut app App, action input.Action) ! {
 	}
 }
 
-// CoreSurface represents the core terminal surface logic.
-// This is a stub; the full implementation lives in the main module.
+// CoreSurface represents the core terminal surface logic. The concrete
+// core.Surface is reached through the bridge installed by the root artifact.
 pub struct CoreSurface {
 pub mut:
+	// Opaque implementation supplied by the translated core module.
+	backend voidptr
+	// Owning runtime surface. apprt.Target stores a core-surface pointer, while
+	// embedded pre-actions sometimes need to recover the runtime surface just as
+	// Ghostty follows CoreSurface.rt_surface.
+	runtime_surface voidptr
+
 	// Whether the child process has exited.
 	child_exited bool
 	// The current font size.
 	font_size FontSize
-	// The renderer state.
-	renderer_state RendererState
 	// Configuration.
 	config SurfaceConfig
 	// The surface size.
@@ -333,93 +381,143 @@ pub mut:
 }
 
 pub fn (mut s CoreSurface) init(config voidptr, core_app &CoreApp, app &App, surface voidptr) ! {
+	s.runtime_surface = surface
 	// Retain the surface-specific configuration used by the embedded ABI.
 	if !isnil(config) {
 		cfg := unsafe { &configpkg.Config(config) }
 		s.config.macos_option_as_alt = cfg.macos_option_as_alt
 		s.config.selection_word_chars = cfg.selection_word_chars.codepoints.map(rune(it).str()).join('')
+		if !isnil(core_app.backend) && g_core_bridge.surface_init != unsafe { nil } {
+			s.backend = g_core_bridge.surface_init(cfg, core_app, app, surface)!
+			s.sync_backend()
+		}
 	}
-	_ = core_app
-	_ = app
-	_ = surface
 }
 
 pub fn (mut s CoreSurface) deinit() {
-	// stub: cleanup core surface
+	if !isnil(s.backend) && g_core_bridge.surface_deinit != unsafe { nil } {
+		g_core_bridge.surface_deinit(s.backend)
+		s.backend = unsafe { nil }
+	}
+	s.runtime_surface = unsafe { nil }
 }
 
 pub fn (mut s CoreSurface) key_callback(event voidptr) !InputEffect {
-	// stub: handle key input
-	_ = event
+	if !isnil(s.backend) && !isnil(event) && g_core_bridge.surface_key != unsafe { nil } {
+		effect := g_core_bridge.surface_key(s.backend, unsafe { &input.KeyEvent(event) })!
+		s.sync_backend()
+		return effect
+	}
 	return .ignored
 }
 
 pub fn (mut s CoreSurface) refresh_callback() ! {
-	// stub: schedule a render
+	if !isnil(s.backend) && g_core_bridge.surface_refresh != unsafe { nil } {
+		g_core_bridge.surface_refresh(s.backend)!
+	}
 }
 
 pub fn (mut s CoreSurface) draw() ! {
-	// stub: draw the surface
+	if !isnil(s.backend) && g_core_bridge.surface_draw != unsafe { nil } {
+		g_core_bridge.surface_draw(s.backend)!
+	}
 }
 
 pub fn (mut s CoreSurface) content_scale_callback(scale ContentScale) ! {
-	_ = scale
+	if !isnil(s.backend) && g_core_bridge.surface_content_scale != unsafe { nil } {
+		g_core_bridge.surface_content_scale(s.backend, scale)!
+		s.sync_backend()
+	}
 }
 
 pub fn (mut s CoreSurface) size_callback(size SurfaceSize) ! {
-	_ = size
+	if !isnil(s.backend) && g_core_bridge.surface_size != unsafe { nil } {
+		g_core_bridge.surface_size(s.backend, size)!
+		s.sync_backend()
+		return
+	}
+	s.size.screen = ScreenSizeInfo{ width: size.width, height: size.height }
 }
 
 pub fn (mut s CoreSurface) color_scheme_callback(scheme ColorScheme) ! {
-	_ = scheme
+	if !isnil(s.backend) && g_core_bridge.surface_color_scheme != unsafe { nil } {
+		g_core_bridge.surface_color_scheme(s.backend, scheme)!
+		s.sync_backend()
+	}
 }
 
-pub fn (mut s CoreSurface) mouse_button_callback(action_ voidptr, button voidptr, mods voidptr) !bool {
-	_ = action_
-	_ = button
-	_ = mods
+pub fn (mut s CoreSurface) mouse_button_callback(action_ input.MouseButtonState, button input.MouseButton, mods input.Mods) !bool {
+	if !isnil(s.backend) && g_core_bridge.surface_mouse_button != unsafe { nil } {
+		result := g_core_bridge.surface_mouse_button(s.backend, action_, button, mods)!
+		s.sync_backend()
+		return result
+	}
 	return false
 }
 
-pub fn (mut s CoreSurface) mouse_pressure_callback(stage voidptr, pressure f64) ! {
-	_ = stage
-	_ = pressure
+pub fn (mut s CoreSurface) mouse_pressure_callback(stage input.PressureStage, pressure f64) ! {
+	if !isnil(s.backend) && g_core_bridge.surface_mouse_pressure != unsafe { nil } {
+		g_core_bridge.surface_mouse_pressure(s.backend, stage, pressure)!
+		s.sync_backend()
+	}
 }
 
-pub fn (mut s CoreSurface) scroll_callback(xoff f64, yoff f64, mods voidptr) ! {
-	_ = xoff
-	_ = yoff
-	_ = mods
+pub fn (mut s CoreSurface) scroll_callback(xoff f64, yoff f64, mods input.ScrollMods) ! {
+	if !isnil(s.backend) && g_core_bridge.surface_scroll != unsafe { nil } {
+		g_core_bridge.surface_scroll(s.backend, xoff, yoff, mods)!
+		s.sync_backend()
+	}
 }
 
-pub fn (mut s CoreSurface) cursor_pos_callback(pos CursorPos, mods voidptr) ! {
-	_ = pos
-	_ = mods
+pub fn (mut s CoreSurface) cursor_pos_callback(pos CursorPos, mods input.Mods) ! {
+	if !isnil(s.backend) && g_core_bridge.surface_cursor_pos != unsafe { nil } {
+		g_core_bridge.surface_cursor_pos(s.backend, pos, mods)!
+		s.sync_backend()
+	}
 }
 
 pub fn (mut s CoreSurface) preedit_callback(preedit ?string) !bool {
-	_ = preedit
+	if !isnil(s.backend) && g_core_bridge.surface_preedit != unsafe { nil } {
+		g_core_bridge.surface_preedit(s.backend, preedit)!
+		s.sync_backend()
+		return true
+	}
 	return false
 }
 
 pub fn (mut s CoreSurface) text_callback(text string) !bool {
-	_ = text
+	if !isnil(s.backend) && g_core_bridge.surface_text != unsafe { nil } {
+		g_core_bridge.surface_text(s.backend, text)!
+		s.sync_backend()
+		return true
+	}
 	return false
 }
 
 pub fn (mut s CoreSurface) focus_callback(focused bool) ! {
-	_ = focused
+	if !isnil(s.backend) && g_core_bridge.surface_focus != unsafe { nil } {
+		g_core_bridge.surface_focus(s.backend, focused)!
+		s.sync_backend()
+	}
 }
 
 pub fn (mut s CoreSurface) occlusion_callback(visible bool) ! {
-	_ = visible
+	if !isnil(s.backend) && g_core_bridge.surface_occlusion != unsafe { nil } {
+		g_core_bridge.surface_occlusion(s.backend, visible)!
+		s.sync_backend()
+	}
 }
 
 pub fn (s CoreSurface) close() {
-	// stub: request surface close
+	if !isnil(s.backend) && g_core_bridge.surface_close != unsafe { nil } {
+		g_core_bridge.surface_close(s.backend)
+	}
 }
 
 pub fn (s CoreSurface) has_selection() bool {
+	if !isnil(s.backend) && g_core_bridge.surface_has_selection != unsafe { nil } {
+		return g_core_bridge.surface_has_selection(s.backend)
+	}
 	return false
 }
 
@@ -427,10 +525,10 @@ pub fn (s CoreSurface) has_selection() bool {
 // The renderer state mutex is assumed to be held by the caller. The returned
 // DumpedText carries the text bytes along with viewport metadata (if any).
 //
-// This is currently a stub; the full implementation lives in the core
-// terminal package (terminal.Screen.selectionString + page pin math).
 pub fn (s CoreSurface) dump_text_locked(sel voidptr) !DumpedText {
-	_ = sel
+	if !isnil(s.backend) && g_core_bridge.surface_dump_text != unsafe { nil } {
+		return g_core_bridge.surface_dump_text(s.backend, sel)!
+	}
 	return DumpedText{}
 }
 
@@ -452,8 +550,10 @@ pub mut:
 }
 
 // active_selection returns the active selection on the surface, if any.
-// Currently a stub that always returns none.
 pub fn (s CoreSurface) active_selection() ?voidptr {
+	if !isnil(s.backend) && g_core_bridge.surface_active_sel != unsafe { nil } {
+		return g_core_bridge.surface_active_sel(s.backend)
+	}
 	return none
 }
 
@@ -461,6 +561,9 @@ pub fn (s CoreSurface) active_selection() ?voidptr {
 // pointer that can be passed back to `dump_text_locked`. Returns none if
 // the coordinates do not refer to a valid screen region.
 pub fn (s CoreSurface) resolve_selection(tl_tag int, tl_coord_tag int, tl_x u32, tl_y u32, br_tag int, br_coord_tag int, br_x u32, br_y u32, rectangle bool) ?voidptr {
+	if !isnil(s.backend) && g_core_bridge.surface_resolve_sel != unsafe { nil } {
+		return g_core_bridge.surface_resolve_sel(s.backend, tl_tag, tl_coord_tag, tl_x, tl_y, br_tag, br_coord_tag, br_x, br_y, rectangle)
+	}
 	_ = tl_tag
 	_ = tl_coord_tag
 	_ = tl_x
@@ -473,24 +576,34 @@ pub fn (s CoreSurface) resolve_selection(tl_tag int, tl_coord_tag int, tl_x u32,
 	return none
 }
 
-// renderer_state_lock acquires the renderer-state mutex protecting the
-// terminal/screen access. The current stub is a no-op; real locking is
-// added when the renderer thread is wired in.
+// renderer_state_lock acquires the renderer-state mutex protecting direct
+// terminal/screen access.
 pub fn (mut s CoreSurface) renderer_state_lock() {
-	// stub
+	if !isnil(s.backend) && g_core_bridge.surface_lock != unsafe { nil } {
+		g_core_bridge.surface_lock(s.backend)
+	}
 }
 
 // renderer_state_unlock releases the renderer-state mutex.
 pub fn (mut s CoreSurface) renderer_state_unlock() {
-	// stub
+	if !isnil(s.backend) && g_core_bridge.surface_unlock != unsafe { nil } {
+		g_core_bridge.surface_unlock(s.backend)
+	}
 }
 
 pub fn (s CoreSurface) mouse_captured() bool {
+	if !isnil(s.backend) && g_core_bridge.surface_mouse_captured != unsafe { nil } {
+		return g_core_bridge.surface_mouse_captured(s.backend)
+	}
 	return false
 }
 
 pub fn (mut s CoreSurface) perform_binding_action(action input.Action) !bool {
-	_ = action
+	if !isnil(s.backend) && g_core_bridge.surface_binding != unsafe { nil } {
+		result := g_core_bridge.surface_binding(s.backend, action)!
+		s.sync_backend()
+		return result
+	}
 	return false
 }
 
@@ -499,43 +612,83 @@ pub fn (mut s CoreSurface) update_config(config voidptr) ! {
 		return error('configuration pointer is null')
 	}
 	cfg := unsafe { &configpkg.Config(config) }
+	if !isnil(s.backend) && g_core_bridge.surface_update_config != unsafe { nil } {
+		g_core_bridge.surface_update_config(s.backend, cfg)!
+		s.sync_backend()
+		return
+	}
 	s.config.macos_option_as_alt = cfg.macos_option_as_alt
 	s.config.selection_word_chars = cfg.selection_word_chars.codepoints.map(rune(it).str()).join('')
 }
 
 pub fn (s CoreSurface) needs_confirm_quit() bool {
+	if !isnil(s.backend) && g_core_bridge.surface_needs_confirm != unsafe { nil } {
+		return g_core_bridge.surface_needs_confirm(s.backend)
+	}
 	return false
 }
 
 pub fn (s CoreSurface) ime_point() IMEPos {
+	if !isnil(s.backend) && g_core_bridge.surface_ime != unsafe { nil } {
+		return g_core_bridge.surface_ime(s.backend)
+	}
 	return IMEPos{}
 }
 
 pub fn (s CoreSurface) pwd() !string {
+	if !isnil(s.backend) && g_core_bridge.surface_pwd != unsafe { nil } {
+		return g_core_bridge.surface_pwd(s.backend)!
+	}
 	return ''
 }
 
 pub fn (mut s CoreSurface) complete_clipboard_request(state ClipboardRequest, str string, confirmed bool) ! {
-	_ = state
-	_ = str
-	_ = confirmed
+	if !isnil(s.backend) && g_core_bridge.surface_clipboard != unsafe { nil } {
+		g_core_bridge.surface_clipboard(s.backend, state, str, confirmed)!
+		s.sync_backend()
+	}
 }
 
 pub fn (mut s CoreSurface) set_font_size(size FontSize) ! {
-	_ = size
+	if !isnil(s.backend) && g_core_bridge.surface_font_size != unsafe { nil } {
+		g_core_bridge.surface_font_size(s.backend, size)!
+		s.sync_backend()
+		return
+	}
+	s.font_size = size
 }
 
 pub fn (mut s CoreSurface) activate_inspector() ! {
-	// stub: activate the inspector
+	if !isnil(s.backend) && g_core_bridge.surface_inspector_on != unsafe { nil } {
+		g_core_bridge.surface_inspector_on(s.backend)!
+		s.sync_backend()
+	}
 }
 
 pub fn (mut s CoreSurface) deactivate_inspector() {
-	// stub: deactivate the inspector
+	if !isnil(s.backend) && g_core_bridge.surface_inspector_off != unsafe { nil } {
+		g_core_bridge.surface_inspector_off(s.backend)
+		s.sync_backend()
+	}
 }
 
 pub fn (s CoreSurface) key_event_is_binding(event voidptr) ?voidptr {
-	_ = event
+	if !isnil(s.backend) && !isnil(event) && g_core_bridge.surface_key_binding != unsafe { nil } {
+		return g_core_bridge.surface_key_binding(s.backend, unsafe { &input.KeyEvent(event) })
+	}
 	return none
+}
+
+fn (mut s CoreSurface) sync_backend() {
+	if isnil(s.backend) || g_core_bridge.surface_snapshot == unsafe { nil } {
+		return
+	}
+	snapshot := g_core_bridge.surface_snapshot(s.backend)
+	s.child_exited = snapshot.child_exited
+	s.font_size = snapshot.font_size
+	s.size = snapshot.size
+	s.config = snapshot.config
+	s.inspector = snapshot.inspector
 }
 
 // InputEffect represents the effect of processing an input event.
@@ -552,13 +705,6 @@ pub enum InputEffect {
 pub struct FontSize {
 pub mut:
 	points f32
-}
-
-// RendererState holds the renderer's shared state.
-pub struct RendererState {
-pub mut:
-	// Stub fields; the real implementation is in the renderer module.
-	terminal voidptr
 }
 
 // SurfaceConfig holds surface-specific derived configuration.
@@ -605,4 +751,152 @@ pub fn (s SurfaceSizeInfo) grid() GridSizeInfo {
 		columns: u16(s.screen.width / s.cell.width)
 		rows: u16(s.screen.height / s.cell.height)
 	}
+}
+
+// CoreSurfaceSnapshot is the small set of core state exposed directly by the
+// libghostty ABI. The opaque bridge refreshes this after mutating operations.
+pub struct CoreSurfaceSnapshot {
+pub:
+	child_exited bool
+	font_size    FontSize
+	size         SurfaceSizeInfo
+	config       SurfaceConfig
+	inspector    ?&voidptr
+}
+
+pub type CoreAppCreateFn = fn () !voidptr
+
+pub type CoreAppDestroyFn = fn (voidptr)
+
+pub type CoreAppTickFn = fn (voidptr, &App) !
+
+pub type CoreAppFocusFn = fn (voidptr, bool)
+
+pub type CoreAppKeyFn = fn (voidptr, &App, &input.KeyEvent) bool
+
+pub type CoreAppAddSurfaceFn = fn (voidptr, voidptr) !
+
+pub type CoreAppDeleteSurfaceFn = fn (voidptr, voidptr)
+
+pub type CoreAppNeedsConfirmFn = fn (voidptr) bool
+
+pub type CoreAppColorSchemeFn = fn (voidptr, &App, ColorScheme) !
+
+pub type CoreAppUpdateConfigFn = fn (voidptr, &App, &configpkg.Config) !
+
+pub type CoreSurfaceInitFn = fn (&configpkg.Config, &CoreApp, &App, voidptr) !voidptr
+
+pub type CoreSurfaceDeinitFn = fn (voidptr)
+
+pub type CoreSurfaceSnapshotFn = fn (voidptr) CoreSurfaceSnapshot
+
+pub type CoreSurfaceKeyFn = fn (voidptr, &input.KeyEvent) !InputEffect
+
+pub type CoreSurfaceVoidFn = fn (voidptr) !
+
+pub type CoreSurfaceContentScaleFn = fn (voidptr, ContentScale) !
+
+pub type CoreSurfaceSizeFn = fn (voidptr, SurfaceSize) !
+
+pub type CoreSurfaceColorSchemeFn = fn (voidptr, ColorScheme) !
+
+pub type CoreSurfaceMouseButtonFn = fn (voidptr, input.MouseButtonState, input.MouseButton, input.Mods) !bool
+
+pub type CoreSurfaceMousePressureFn = fn (voidptr, input.PressureStage, f64) !
+
+pub type CoreSurfaceScrollFn = fn (voidptr, f64, f64, input.ScrollMods) !
+
+pub type CoreSurfaceCursorPosFn = fn (voidptr, CursorPos, input.Mods) !
+
+pub type CoreSurfacePreeditFn = fn (voidptr, ?string) !
+
+pub type CoreSurfaceTextFn = fn (voidptr, string) !
+
+pub type CoreSurfaceBoolFn = fn (voidptr, bool) !
+
+pub type CoreSurfaceCloseFn = fn (voidptr)
+
+pub type CoreSurfaceBoolQueryFn = fn (voidptr) bool
+
+pub type CoreSurfaceDumpTextFn = fn (voidptr, voidptr) !DumpedText
+
+pub type CoreSurfaceSelectionFn = fn (voidptr) ?voidptr
+
+pub type CoreSurfaceResolveSelectionFn = fn (voidptr, int, int, u32, u32, int, int, u32, u32, bool) ?voidptr
+
+pub type CoreSurfaceLockFn = fn (voidptr)
+
+pub type CoreSurfaceBindingFn = fn (voidptr, input.Action) !bool
+
+pub type CoreSurfaceUpdateConfigFn = fn (voidptr, &configpkg.Config) !
+
+pub type CoreSurfaceIMEFn = fn (voidptr) IMEPos
+
+pub type CoreSurfacePwdFn = fn (voidptr) !string
+
+pub type CoreSurfaceClipboardFn = fn (voidptr, ClipboardRequest, string, bool) !
+
+pub type CoreSurfaceFontSizeFn = fn (voidptr, FontSize) !
+
+pub type CoreSurfaceKeyBindingFn = fn (voidptr, &input.KeyEvent) ?voidptr
+
+// CoreBridge is installed by core.install_embedded_bridge from the root
+// artifact. Every callback delegates to the canonical core.App/core.Surface;
+// the fallback implementation remains useful for isolated apprt tests.
+pub struct CoreBridge {
+pub:
+	app_create             CoreAppCreateFn = unsafe { nil }
+	app_destroy            CoreAppDestroyFn = unsafe { nil }
+	app_tick               CoreAppTickFn = unsafe { nil }
+	app_focus              CoreAppFocusFn = unsafe { nil }
+	app_key                CoreAppKeyFn = unsafe { nil }
+	app_key_is_binding     CoreAppKeyFn = unsafe { nil }
+	app_add_surface        CoreAppAddSurfaceFn = unsafe { nil }
+	app_delete_surface     CoreAppDeleteSurfaceFn = unsafe { nil }
+	app_needs_confirm      CoreAppNeedsConfirmFn = unsafe { nil }
+	app_color_scheme       CoreAppColorSchemeFn = unsafe { nil }
+	app_update_config      CoreAppUpdateConfigFn = unsafe { nil }
+	surface_init           CoreSurfaceInitFn = unsafe { nil }
+	surface_deinit         CoreSurfaceDeinitFn = unsafe { nil }
+	surface_snapshot       CoreSurfaceSnapshotFn = unsafe { nil }
+	surface_key            CoreSurfaceKeyFn = unsafe { nil }
+	surface_refresh        CoreSurfaceVoidFn = unsafe { nil }
+	surface_draw           CoreSurfaceVoidFn = unsafe { nil }
+	surface_content_scale  CoreSurfaceContentScaleFn = unsafe { nil }
+	surface_size           CoreSurfaceSizeFn = unsafe { nil }
+	surface_color_scheme   CoreSurfaceColorSchemeFn = unsafe { nil }
+	surface_mouse_button   CoreSurfaceMouseButtonFn = unsafe { nil }
+	surface_mouse_pressure CoreSurfaceMousePressureFn = unsafe { nil }
+	surface_scroll         CoreSurfaceScrollFn = unsafe { nil }
+	surface_cursor_pos     CoreSurfaceCursorPosFn = unsafe { nil }
+	surface_preedit        CoreSurfacePreeditFn = unsafe { nil }
+	surface_text           CoreSurfaceTextFn = unsafe { nil }
+	surface_focus          CoreSurfaceBoolFn = unsafe { nil }
+	surface_occlusion      CoreSurfaceBoolFn = unsafe { nil }
+	surface_close          CoreSurfaceCloseFn = unsafe { nil }
+	surface_has_selection  CoreSurfaceBoolQueryFn = unsafe { nil }
+	surface_dump_text      CoreSurfaceDumpTextFn = unsafe { nil }
+	surface_active_sel     CoreSurfaceSelectionFn = unsafe { nil }
+	surface_resolve_sel    CoreSurfaceResolveSelectionFn = unsafe { nil }
+	surface_lock           CoreSurfaceLockFn = unsafe { nil }
+	surface_unlock         CoreSurfaceLockFn = unsafe { nil }
+	surface_mouse_captured CoreSurfaceBoolQueryFn = unsafe { nil }
+	surface_binding        CoreSurfaceBindingFn = unsafe { nil }
+	surface_update_config  CoreSurfaceUpdateConfigFn = unsafe { nil }
+	surface_needs_confirm  CoreSurfaceBoolQueryFn = unsafe { nil }
+	surface_ime            CoreSurfaceIMEFn = unsafe { nil }
+	surface_pwd            CoreSurfacePwdFn = unsafe { nil }
+	surface_clipboard      CoreSurfaceClipboardFn = unsafe { nil }
+	surface_font_size      CoreSurfaceFontSizeFn = unsafe { nil }
+	surface_inspector_on   CoreSurfaceVoidFn = unsafe { nil }
+	surface_inspector_off  CoreSurfaceCloseFn = unsafe { nil }
+	surface_key_binding    CoreSurfaceKeyBindingFn = unsafe { nil }
+}
+
+__global g_core_bridge CoreBridge
+
+// install_core_bridge connects the runtime-neutral embedded ABI to the
+// canonical core implementation. It is called once during root-module init.
+pub fn install_core_bridge(bridge CoreBridge) {
+	g_core_bridge = bridge
 }

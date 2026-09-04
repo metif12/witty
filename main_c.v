@@ -12,8 +12,16 @@
 module main
 
 import cli
+import core
 import global_state
 import internal_os
+
+// Install the runtime-neutral bridge used by the embedded/libghostty API.
+// This keeps apprt free of a circular dependency while ensuring its C-facing
+// CoreApp/CoreSurface wrappers use the canonical translated implementations.
+fn init() {
+	core.install_embedded_bridge()
+}
 
 // BuildMode mirrors the C enum ghostty_build_mode_e.
 pub enum BuildMode {
