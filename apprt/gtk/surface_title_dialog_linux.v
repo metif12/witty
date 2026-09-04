@@ -14,12 +14,9 @@ module gtk
 //
 // The GObject class registration (`defineClass`), the `initial-value` PROPERTY,
 // the `.ui` template + `entry` binding, and the `set` SIGNAL are hand-expanded
-// below onto the raw GObject/GTK C API. The V struct `SurfaceTitleDialog` keeps
-// the initial value + an optional V callback so the "ok" -> set(title) routing
-// stays observable from V; the async `choose`/`chooseFinish` response flow is
-// still simplified (present + explicit `alert_dialog_ready`).
-// The real LOGIC — parent ancestor resolution, seeding the entry with the
-// initial value, and the "ok" -> emit(title) routing — is translated.
+// below onto the raw GObject/GTK C API. Parent ancestor resolution, entry
+// seeding, the asynchronous choose/choose-finish flow, and the "ok" ->
+// emit(title) routing are translated directly.
 
 // --- New opaque handle aliases --------------------------------------------
 // (Grep-verified: not declared elsewhere in the module.)
@@ -37,8 +34,14 @@ pub type GtkEntryBuffer = voidptr
 // Only functions not already declared anywhere else in the module.
 
 fn C.gtk_entry_get_buffer(entry GtkEntry) GtkEntryBuffer
+
 fn C.gtk_entry_buffer_set_text(buffer GtkEntryBuffer, chars &char, n_chars int)
+
 fn C.gtk_entry_buffer_get_text(buffer GtkEntryBuffer) &char
+
+fn C.adw_alert_dialog_choose(dialog AdwAlertDialog, parent GtkWidget, cancellable voidptr, callback GCallback, user_data voidptr)
+
+fn C.adw_alert_dialog_choose_finish(dialog AdwAlertDialog, result GAsyncResult) &char
 
 // --- GObject class registration -------------------------------------------
 // Hand-expansion of ghostty's `gobject.ext.defineClass` for
@@ -157,16 +160,14 @@ fn surface_title_dialog_class_init(klass voidptr, class_data voidptr) {
 
 	// Signal: set (one [*:0]const u8 / string param, void return).
 	mut set_param_type := g_type_string
-	C.g_signal_new(c'set', g_surface_title_dialog_type, g_signal_run_last, 0, unsafe { nil },
-		unsafe { nil }, unsafe { nil }, GType(0), 1, set_param_type)
+	C.g_signal_new(c'set', g_surface_title_dialog_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 1, set_param_type)
 
 	// Binding: entry template child into the private struct.
 	entry_offset := g_surface_title_dialog_priv_offset + int(__offsetof(C.GhosttySurfaceTitleDialogPrivate, entry))
 	C.gtk_widget_class_bind_template_child_full(klass, c'entry', 0, entry_offset)
 
 	// Property: initial-value (string).
-	pspec := C.g_param_spec_string(c'initial-value', c'initial-value', c'The initial title',
-		&char(unsafe { nil }), g_param_readwrite)
+	pspec := C.g_param_spec_string(c'initial-value', c'initial-value', c'The initial title', &char(unsafe { nil }), g_param_readwrite)
 	mut obj_class := &C.GObjectClass(klass)
 	obj_class.get_property = voidptr(surface_title_dialog_get_property)
 	obj_class.set_property = voidptr(surface_title_dialog_set_property)
@@ -187,15 +188,13 @@ pub fn surface_title_dialog_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size:    u16(query.class_size)
+			class_size: u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init:    voidptr(surface_title_dialog_class_init)
+			class_init: voidptr(surface_title_dialog_class_init)
 			instance_init: voidptr(surface_title_dialog_instance_init)
 		}
-		g_surface_title_dialog_type = C.g_type_register_static(parent, c'GhosttySurfaceTitleDialog',
-			&info, 0)
-		g_surface_title_dialog_priv_offset = C.g_type_add_instance_private(g_surface_title_dialog_type,
-			sizeof(C.GhosttySurfaceTitleDialogPrivate))
+		g_surface_title_dialog_type = C.g_type_register_static(parent, c'GhosttySurfaceTitleDialog', &info, 0)
+		g_surface_title_dialog_priv_offset = C.g_type_add_instance_private(g_surface_title_dialog_type, sizeof(C.GhosttySurfaceTitleDialogPrivate))
 	}
 	return g_surface_title_dialog_type
 }
@@ -211,34 +210,19 @@ mut:
 	// The underlying AdwAlertDialog GObject instance pointer (an instance of the
 	// GhosttySurfaceTitleDialog type registered by `surface_title_dialog_get_type`).
 	obj GObject = unsafe { nil }
-
-	// The initial value of the entry field. Mirrors `Private.initial_value`
-	// (the `initial-value` property). Empty means unset.
-	initial_value string
-
-	// The entry widget template child (`Private.entry`), bound in the GObject
-	// private via `gtk_widget_class_bind_template_child_full` and read back into
-	// this wrapper by `surface_title_dialog_new`.
-	entry GtkEntry = unsafe { nil }
-
-	// Signal callback for the `set` signal. Ghostty emits a GObject `set`
-	// signal carrying the new title; modeled here as an optional V callback.
-	//
-	// TODO(gtk): GObject signal — registered via `gobject.ext.defineSignal`.
-	on_set ?fn (title string)
 }
 
-// surface_title_dialog_new creates a new surface title dialog. Mirrors
-// `gobject.ext.newInstance(Self, .{})`: it builds the GObject (running the
-// `.ui` template init, which binds the `entry` child). The `entry` template
-// child is read back from the GObject private into the V wrapper so the seeding
-// / read-back logic can use it.
-pub fn surface_title_dialog_new() &SurfaceTitleDialog {
-	obj := C.g_object_new(surface_title_dialog_get_type(), &char(unsafe { nil }))
-	priv := surface_title_dialog_priv(obj)
+// surface_title_dialog_new creates a new surface title dialog with the same
+// construct-time `initial-value` property used by Ghostty.
+pub fn surface_title_dialog_new(initial_value ?string) &SurfaceTitleDialog {
+	mut obj := GObject(unsafe { nil })
+	if value := initial_value {
+		obj = GObject(C.g_object_new(surface_title_dialog_get_type(), c'initial-value', &char(value.str), &char(unsafe { nil })))
+	} else {
+		obj = GObject(C.g_object_new(surface_title_dialog_get_type(), &char(unsafe { nil })))
+	}
 	return &SurfaceTitleDialog{
-		obj:   obj
-		entry: priv.entry
+		obj: obj
 	}
 }
 
@@ -246,78 +230,45 @@ pub fn surface_title_dialog_new() &SurfaceTitleDialog {
 // seeds the entry with the initial value. Mirrors `SurfaceTitleDialog.present`.
 pub fn (mut self SurfaceTitleDialog) present(parent GtkWidget) {
 	// If we have a window we can attach to, we prefer that.
-	//
-	// TODO(gtk): ghostty uses `ext.getAncestor(adw.ApplicationWindow, ...)`
-	// then `adw.Window` — these need the GObject types for the type check. Here
-	// we fall back to the given parent widget. The `get_ancestor` helper
-	// (ext_linux.v) takes an explicit GType which we don't have for these
-	// widget classes yet.
-	attach_to := parent
+	mut attach_to := get_ancestor(parent, C.adw_application_window_get_type())
+	if isnil(attach_to) {
+		attach_to = get_ancestor(parent, C.adw_window_get_type())
+	}
+	if isnil(attach_to) {
+		attach_to = parent
+	}
 
 	// Set our initial value.
-	if self.initial_value.len > 0 && !isnil(self.entry) {
-		buffer := C.gtk_entry_get_buffer(self.entry)
-		C.gtk_entry_buffer_set_text(buffer, &char(self.initial_value.str), -1)
+	priv := surface_title_dialog_priv(voidptr(self.obj))
+	if !isnil(priv.initial_value) && !isnil(priv.entry) {
+		buffer := C.gtk_entry_get_buffer(priv.entry)
+		C.gtk_entry_buffer_set_text(buffer, priv.initial_value, -1)
 	}
 
-	// Show it. In ghostty this uses `adw.AlertDialog.choose` with an async
-	// callback (`alertDialogReady`); we present via the (stubbed) dialog path.
-	//
-	// TODO(gtk): async `choose`/`chooseFinish` flow — replaced by presenting
-	// and (when wired) invoking `alert_dialog_ready` on the response.
-	self.present_widget(attach_to)
+	C.adw_alert_dialog_choose(AdwAlertDialog(self.obj), attach_to, unsafe { nil }, GCallback(voidptr(surface_title_dialog_ready_cb)), voidptr(self.obj))
 }
 
-// present_widget presents the underlying AdwAlertDialog against a parent
-// widget. Split out so the async `choose` flow can be wired later. In ghostty
-// this is `adw.AlertDialog.choose(parent, ...)`; here we present the dialog
-// (the async response is delivered via `alert_dialog_ready` when wired).
-fn (mut self SurfaceTitleDialog) present_widget(parent GtkWidget) {
-	if !isnil(self.obj) {
-		C.adw_dialog_present(AdwDialog(self.obj), parent)
+// surface_title_dialog_ready_cb completes the asynchronous choice and emits
+// `set` with the current entry contents when the response is "ok".
+fn surface_title_dialog_ready_cb(source GObject, result GAsyncResult, data voidptr) {
+	obj := if !isnil(data) { GObject(data) } else { source }
+	if isnil(obj) {
+		return
 	}
-}
-
-// alert_dialog_ready handles the async result of the AlertDialog. If the user
-// hit "ok" it emits the `set` signal with the current entry text. Mirrors
-// `alertDialogReady`.
-//
-// TODO(gtk): async callback — in ghostty this is a `gio.AsyncResult` callback
-// passed to `choose`. Here it is invoked directly by the (stubbed) response
-// wiring with the response id.
-fn (mut self SurfaceTitleDialog) alert_dialog_ready(response_id string) {
+	response_id := C.adw_alert_dialog_choose_finish(AdwAlertDialog(obj), result)
 	// If we didn't hit "ok" then we do nothing.
-	if response_id != 'ok' {
+	if isnil(response_id) || unsafe { cstring_to_vstring(response_id) } != 'ok' {
 		return
 	}
 
 	// Emit our signal with the new title.
-	if isnil(self.entry) {
+	priv := surface_title_dialog_priv(voidptr(obj))
+	if isnil(priv.entry) {
 		return
 	}
-	buffer := C.gtk_entry_get_buffer(self.entry)
+	buffer := C.gtk_entry_get_buffer(priv.entry)
 	title_ptr := C.gtk_entry_buffer_get_text(buffer)
-	if !isnil(self.obj) {
-		C.g_signal_emit_by_name(self.obj, c'set', title_ptr)
-	}
-	title := unsafe { cstring_to_vstring(title_ptr) }
-	if cb := self.on_set {
-		cb(title)
-	}
-}
-
-// dispose clears the V wrapper's entry handle. The GObject-side dispose
-// (gtk_widget_dispose_template + parent chain) is the `surface_title_dialog_dispose`
-// vfunc registered above.
-pub fn (mut self SurfaceTitleDialog) dispose() {
-	self.entry = unsafe { nil }
-}
-
-// finalize frees the owned initial value on the V wrapper. The GObject-side
-// finalize (g_free of the glib-owned initial value + parent chain) is the
-// `surface_title_dialog_finalize` vfunc registered above.
-pub fn (mut self SurfaceTitleDialog) finalize() {
-	self.initial_value = ''
+	C.g_signal_emit_by_name(obj, c'set', title_ptr)
 }
 
 // --- GObject reference counting -------------------------------------------

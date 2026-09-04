@@ -506,6 +506,30 @@ pub fn (mut self SurfaceWidget) set_title_override(title ?string) {
 	self.sync_tab()
 }
 
+// prompt_title asks for a manual surface-title override. GTK intentionally
+// does not support prompting for tab titles at this pinned Ghostty revision.
+pub fn (mut self SurfaceWidget) prompt_title() {
+	mut initial_value := ?string(none)
+	if title := self.title_override {
+		initial_value = title
+	} else if title := self.title {
+		initial_value = title
+	}
+	mut dialog := surface_title_dialog_new(initial_value)
+	C.g_signal_connect_data(dialog.obj, c'set', GCallback(voidptr(surface_title_dialog_set_cb)), voidptr(self), unsafe { nil }, 0)
+	dialog.present(self.widget)
+}
+
+fn surface_title_dialog_set_cb(dialog GObject, title_ptr &char, data voidptr) {
+	_ = dialog
+	if isnil(title_ptr) || isnil(data) {
+		return
+	}
+	mut self := unsafe { &SurfaceWidget(data) }
+	title := unsafe { cstring_to_vstring(title_ptr) }
+	self.set_title_override(if title.len == 0 { none } else { title })
+}
+
 // get_pwd returns the pwd, if any. Mirrors `Surface.getPwd`.
 pub fn (self &SurfaceWidget) get_pwd() ?string {
 	return self.pwd
@@ -1469,6 +1493,13 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 	}
 	mut self := unsafe { &SurfaceWidget(data) }
 	match action.kind {
+		.prompt_title {
+			if action.prompt_title != .surface {
+				return false
+			}
+			self.prompt_title()
+			return true
+		}
 		.new_window {
 			return self.app.new_window(self.core_surface)
 		}

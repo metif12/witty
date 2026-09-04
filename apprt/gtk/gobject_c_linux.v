@@ -75,6 +75,8 @@ fn C.adw_dialog_get_type() GType
 
 fn C.adw_application_window_get_type() GType
 
+fn C.adw_window_get_type() GType
+
 fn C.gtk_box_get_type() GType
 
 fn C.gtk_widget_get_type() GType
