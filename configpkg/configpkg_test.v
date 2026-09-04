@@ -1306,8 +1306,10 @@ font-thicken = true
 font-thicken-strength = 42
 font-shaping-break = no-cursor
 custom-shader = one.glsl
+custom-shader = ?"optional shader.glsl"
 config-file = extra.conf
-background-image = bg.png
+config-file = ?optional.conf
+background-image = ?bg.png
 background-image-opacity = 0.75
 background-image-position = center-center
 background-image-fit = cover
@@ -1377,9 +1379,16 @@ image-storage-limit = 0x100
 	assert cfg.font_thicken
 	assert cfg.font_thicken_strength == 42
 	assert !cfg.font_shaping_break.cursor
-	assert cfg.custom_shader.items == ['one.glsl']
-	assert cfg.config_file.items == ['extra.conf']
+	assert cfg.custom_shader.items == [
+		Path{ path: 'one.glsl' },
+		Path{ path: 'optional shader.glsl', optional: true },
+	]
+	assert cfg.config_file.items == [
+		Path{ path: 'extra.conf' },
+		Path{ path: 'optional.conf', optional: true },
+	]
 	assert cfg.background_image?.path == 'bg.png'
+	assert cfg.background_image?.optional
 	assert cfg.background_image_opacity == 0.75
 	assert cfg.background_image_position == .center_center
 	assert cfg.background_image_fit == .cover
@@ -1480,4 +1489,25 @@ palette = 17=DeepSkyBlue
 	assert cfg.foreground == ColorRGB{250, 250, 210}
 	assert cfg.palette.value[17] == ColorRGB{0, 191, 255}
 	assert cfg.diagnostics.len == 0
+}
+
+fn test_repeatable_path_parses_required_optional_quotes_and_reset() {
+	mut paths := RepeatablePath{}
+	paths.parse_cli('one.glsl')!
+	paths.parse_cli('?"optional shader.glsl"')!
+	paths.parse_cli('?')!
+	assert paths.items == [
+		Path{ path: 'one.glsl' },
+		Path{ path: 'optional shader.glsl', optional: true },
+	]
+	paths.parse_cli('')!
+	assert paths.items.len == 0
+}
+
+fn test_path_parse_distinguishes_quoted_question_mark() {
+	required := Path.parse('"?required.conf"') or { panic('missing required path') }
+	optional := Path.parse('?"optional.conf"') or { panic('missing optional path') }
+	assert required == Path{ path: '?required.conf' }
+	assert optional == Path{ path: 'optional.conf', optional: true }
+	assert !required.equal(&optional)
 }

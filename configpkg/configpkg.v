@@ -4932,7 +4932,7 @@ pub:
 // RepeatablePath holds a list of file paths.
 pub struct RepeatablePath {
 pub mut:
-	items []string
+	items []Path
 }
 
 pub fn (a &RepeatablePath) equal(b &RepeatablePath) bool {
@@ -4940,7 +4940,7 @@ pub fn (a &RepeatablePath) equal(b &RepeatablePath) bool {
 		return false
 	}
 	for i, item in a.items {
-		if item != b.items[i] {
+		if !item.equal(&b.items[i]) {
 			return false
 		}
 	}
@@ -4948,24 +4948,65 @@ pub fn (a &RepeatablePath) equal(b &RepeatablePath) bool {
 }
 
 pub fn (p RepeatablePath) clone() !RepeatablePath {
+	mut items := []Path{cap: p.items.len}
+	for item in p.items {
+		items << item.clone()!
+	}
 	return RepeatablePath{
-		items: p.items.clone()
+		items: items
+	}
+}
+
+// parse_cli appends one path, clears the list for an empty value, and ignores
+// values that become empty after removing the optional marker or quotes.
+pub fn (mut p RepeatablePath) parse_cli(input ?string) ! {
+	value := input or { return error('value required') }
+	item := Path.parse(value)
+	if item == none {
+		p.items.clear()
+		return
+	}
+	parsed := item
+	if parsed.path.len > 0 {
+		p.items << parsed
 	}
 }
 
 // Path represents a config file path.
 pub struct Path {
 pub:
-	path string
+	path     string
+	optional bool
+}
+
+// parse translates config.Path.parse. A leading question mark makes the path
+// optional, and one pair of surrounding quotes is removed.
+pub fn Path.parse(input string) ?Path {
+	mut value := input
+	if value.len == 0 {
+		return none
+	}
+	optional := value[0] == `?`
+	if optional {
+		value = value[1..]
+	}
+	if value.len >= 2 && value[0] == `"` && value[value.len - 1] == `"` {
+		value = value[1..value.len - 1]
+	}
+	return Path{
+		path: value
+		optional: optional
+	}
 }
 
 pub fn (a &Path) equal(b &Path) bool {
-	return a.path == b.path
+	return a.path == b.path && a.optional == b.optional
 }
 
 pub fn (p Path) clone() !Path {
 	return Path{
 		path: p.path
+		optional: p.optional
 	}
 }
 
@@ -5917,13 +5958,23 @@ fn (mut c Config) apply_kv(key string, value string) {
 			c.font_style_bold_italic = value
 		}
 		'custom-shader' {
-			apply_repeatable_string(mut c.custom_shader.items, value)
+			c.custom_shader.parse_cli(value) or {
+				c.invalid_config_value(key, value)
+			}
 		}
 		'config-file' {
-			apply_repeatable_string(mut c.config_file.items, value)
+			c.config_file.parse_cli(value) or {
+				c.invalid_config_value(key, value)
+			}
 		}
 		'background-image' {
-			c.background_image = if value.len == 0 { none } else { Path{ path: value } }
+			if value.len == 0 {
+				c.background_image = none
+			} else if parsed := Path.parse(value) {
+				if parsed.path.len > 0 {
+					c.background_image = parsed
+				}
+			}
 		}
 		'bold-color' {
 			if value.len == 0 {
