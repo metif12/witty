@@ -1,3 +1,4 @@
+@[has_globals]
 module gtk
 
 // global_shortcuts_linux.v - The GObject GlobalShortcuts class for the GTK
@@ -12,20 +13,10 @@ module gtk
 // activated by the desktop, it emits a `trigger` signal carrying the bound
 // `input.Action`.
 //
-// FOLLOWING THE ESTABLISHED PATTERN (see application_linux.v / window_linux.v):
-//   * The class is modeled as a plain V struct `GlobalShortcuts` wrapping the
-//     underlying `gobject.Object` pointer (`obj`) plus the fields ghostty keeps
-//     in its `Private` struct (config, dbus_connection, the id->action map, the
-//     portal session handle, and the two D-Bus signal subscription ids).
-//   * GObject type registration (`defineClass`), the `config` /
-//     `dbus-connection` PROPERTIES, the `trigger` SIGNAL emission, the
-//     `dispose` vfunc are represented directly on the V wrapper.
-//   * The TRACTABLE structural logic IS translated: the portal session
-//     create -> bind -> list flow (`Method`, `request`, `refresh`), the
-//     shortcut-id <-> trigger mapping (via `xdg_shortcut_from_trigger` in
-//     key_linux.v), the request-path construction (unique-name based, with the
-//     leading `:` stripped and `.` -> `_`), the response dispatch, the keybind
-//     activation handling, and the D-Bus signal subscription structure.
+// The class is a real GhosttyGlobalShortcuts GObject subclass backed by a
+// stable V wrapper. Its config/dbus properties, trigger signal, reference
+// ownership, and dispose chain use the native GObject contract; the portal
+// session create -> bind flow and shortcut mapping are translated directly.
 //
 // Cross-references / reuse:
 //   * `GDBusConnection` / `GVariant` / `GVariantType` / `GError` / `GCallback`
@@ -66,13 +57,19 @@ fn C.g_dbus_connection_call_finish(connection GDBusConnection, result GAsyncResu
 // Non-variadic GVariant construction and accessors used by the portal
 // payloads and signal callbacks.
 fn C.g_variant_new_object_path(path &char) GVariant
+
 fn C.g_variant_get_child_value(value GVariant, index usize) GVariant
+
 fn C.g_variant_get_uint32(value GVariant) u32
+
 fn C.g_variant_get_string(value GVariant, length &usize) &char
+
 fn C.g_variant_lookup_value(dictionary GVariant, key &char, expected_type GVariantType) GVariant
 
 // The bus-unique name of the connection (e.g. ":1.192"), or nil.
 fn C.g_dbus_connection_get_unique_name(connection GDBusConnection) &char
+
+fn C.g_dbus_connection_get_type() GType
 
 // --- Portal constants -----------------------------------------------------
 //
@@ -130,6 +127,154 @@ struct VariantStringEntry {
 	value string
 }
 
+// --- GObject class registration ------------------------------------------
+
+__global g_global_shortcuts_type = GType(0)
+__global g_global_shortcuts_pspec_config = &C.GParamSpec(unsafe { nil })
+__global g_global_shortcuts_pspec_dbus_connection = &C.GParamSpec(unsafe { nil })
+
+struct C.GhosttyGlobalShortcutsPrivate {
+mut:
+	wrapper voidptr
+}
+
+const global_shortcuts_prop_config = u32(1)
+const global_shortcuts_prop_dbus_connection = u32(2)
+const global_shortcuts_param_static_strings = int(32 | 64 | 128)
+
+fn global_shortcuts_priv(obj voidptr) &C.GhosttyGlobalShortcutsPrivate {
+	return &C.GhosttyGlobalShortcutsPrivate(C.g_type_instance_get_private(obj, g_global_shortcuts_type))
+}
+
+fn global_shortcuts_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	_ = pspec
+	priv := global_shortcuts_priv(obj)
+	if isnil(priv.wrapper) {
+		return
+	}
+	self := unsafe { &GlobalShortcuts(priv.wrapper) }
+	match property_id {
+		global_shortcuts_prop_config {
+			if isnil(self.config) {
+				C.g_value_set_object(value, unsafe { nil })
+			} else {
+				C.g_value_set_object(value, self.config.obj)
+			}
+		}
+		global_shortcuts_prop_dbus_connection {
+			C.g_value_set_object(value, self.dbus_connection)
+		}
+		else {}
+	}
+}
+
+fn global_shortcuts_set_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	_ = pspec
+	priv := global_shortcuts_priv(obj)
+	if isnil(priv.wrapper) {
+		return
+	}
+	mut self := unsafe { &GlobalShortcuts(priv.wrapper) }
+	match property_id {
+		global_shortcuts_prop_config {
+			config_obj := C.g_value_get_object(value)
+			if isnil(config_obj) {
+				self.set_config_reference(unsafe { nil })
+			} else {
+				config_private := config_priv(config_obj)
+				self.set_config_reference(if isnil(config_private.wrapper) {
+					unsafe { nil }
+				} else {
+					unsafe { &Config(config_private.wrapper) }
+				})
+			}
+		}
+		global_shortcuts_prop_dbus_connection {
+			self.set_dbus_reference(GDBusConnection(C.g_value_get_object(value)))
+		}
+		else {}
+	}
+}
+
+fn global_shortcuts_notify_config_cb(obj voidptr, pspec voidptr, data voidptr) {
+	_ = obj
+	_ = pspec
+	if !isnil(data) {
+		mut self := unsafe { &GlobalShortcuts(data) }
+		self.refresh()
+	}
+}
+
+fn global_shortcuts_parent_object_class(obj voidptr) &C.GObjectClass {
+	return &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
+}
+
+fn global_shortcuts_dispose_object(obj voidptr) {
+	priv := global_shortcuts_priv(obj)
+	if !isnil(priv.wrapper) {
+		mut self := unsafe { &GlobalShortcuts(priv.wrapper) }
+		self.dispose_resources()
+	}
+	parent_class := global_shortcuts_parent_object_class(obj)
+	if !isnil(parent_class.dispose) {
+		f := DisposeFn(parent_class.dispose)
+		f(obj)
+	}
+}
+
+fn global_shortcuts_finalize_object(obj voidptr) {
+	mut priv := global_shortcuts_priv(voidptr(obj))
+	if !isnil(priv.wrapper) {
+		mut self := unsafe { &GlobalShortcuts(priv.wrapper) }
+		self.obj = unsafe { nil }
+		priv.wrapper = unsafe { nil }
+	}
+	parent_class := global_shortcuts_parent_object_class(obj)
+	if !isnil(parent_class.finalize) {
+		f := FinalizeFn(parent_class.finalize)
+		f(obj)
+	}
+}
+
+fn global_shortcuts_class_init(klass voidptr, class_data voidptr) {
+	_ = class_data
+	_ = config_get_type()
+	mut obj_class := &C.GObjectClass(klass)
+	obj_class.get_property = voidptr(global_shortcuts_get_property)
+	obj_class.set_property = voidptr(global_shortcuts_set_property)
+	obj_class.dispose = voidptr(global_shortcuts_dispose_object)
+	obj_class.finalize = voidptr(global_shortcuts_finalize_object)
+	readwrite := g_param_readwrite | global_shortcuts_param_static_strings
+	nil_str := &char(unsafe { nil })
+	g_global_shortcuts_pspec_config = C.g_param_spec_object(c'config', nil_str, nil_str, config_get_type(), readwrite)
+	g_global_shortcuts_pspec_dbus_connection = C.g_param_spec_object(c'dbus-connection', nil_str, nil_str, C.g_dbus_connection_get_type(), readwrite)
+	C.g_object_class_install_property(klass, global_shortcuts_prop_config, g_global_shortcuts_pspec_config)
+	C.g_object_class_install_property(klass, global_shortcuts_prop_dbus_connection, g_global_shortcuts_pspec_dbus_connection)
+	C.g_signal_new(c'trigger', g_global_shortcuts_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(4), 1, g_type_pointer)
+}
+
+fn global_shortcuts_instance_init(instance voidptr, klass voidptr) {
+	_ = instance
+	_ = klass
+}
+
+pub fn global_shortcuts_get_type() GType {
+	if g_global_shortcuts_type == GType(0) {
+		parent := C.g_object_get_type()
+		mut query := C.GTypeQuery{}
+		C.g_type_query(parent, &query)
+		info := C.GTypeInfo{
+			class_size: u16(query.class_size)
+			instance_size: u16(query.instance_size)
+			class_init: voidptr(global_shortcuts_class_init)
+			instance_init: voidptr(global_shortcuts_instance_init)
+		}
+		g_global_shortcuts_type = C.g_type_register_static(parent, c'GhosttyGlobalShortcuts', &info, 0)
+		_ = C.g_type_add_instance_private(g_global_shortcuts_type, sizeof(C.GhosttyGlobalShortcutsPrivate))
+	}
+	return g_global_shortcuts_type
+}
+
 // --- GlobalShortcuts ------------------------------------------------------
 //
 // The GObject GlobalShortcuts class. In ghostty this is `GlobalShortcuts`, a
@@ -141,9 +286,6 @@ struct VariantStringEntry {
 pub struct GlobalShortcuts {
 mut:
 	// The underlying GObject instance pointer.
-	//
-	// TODO(gtk): GObject class registration — in ghostty this is created via
-	// `gobject.ext.newInstance`; here it is a stubbed handle.
 	obj GObject = unsafe { nil }
 
 	// The configuration this is using. Mirrors `Private.config`.
@@ -185,15 +327,29 @@ mut:
 	trigger_data    voidptr = unsafe { nil }
 }
 
-// global_shortcuts_new creates a new GlobalShortcuts. Mirrors the implicit
-// `gobject.ext.newInstance` constructor + `init`.
-//
-// TODO(gtk): GObject class registration — ghostty's `init` connects
-// "notify::config" -> propConfig. Here we allocate the plain wrapper and rely
-// on `set_config` / `set_dbus_connection` to drive refreshes.
+// global_shortcuts_new creates a native GhosttyGlobalShortcuts instance and
+// connects the pinned notify::config refresh handler.
 pub fn GlobalShortcuts.new() &GlobalShortcuts {
-	return &GlobalShortcuts{
-		obj: unsafe { nil }
+	obj := GObject(C.g_object_new(global_shortcuts_get_type(), &char(unsafe { nil })))
+	mut self := &GlobalShortcuts{
+		obj: obj
+	}
+	mut priv := global_shortcuts_priv(voidptr(obj))
+	priv.wrapper = voidptr(self)
+	C.g_signal_connect_data(obj, c'notify::config', GCallback(voidptr(global_shortcuts_notify_config_cb)), voidptr(self), unsafe { nil }, 0)
+	return self
+}
+
+pub fn (mut self GlobalShortcuts) ref() &GlobalShortcuts {
+	if !isnil(self.obj) {
+		object_ref(self.obj)
+	}
+	return self
+}
+
+pub fn (mut self GlobalShortcuts) unref() {
+	if !isnil(self.obj) {
+		object_unref(self.obj)
 	}
 }
 
@@ -220,9 +376,7 @@ fn (mut self GlobalShortcuts) close() {
 
 	if self.handle.len > 0 {
 		// Close the existing session.
-		C.g_dbus_connection_call(dbus, &char(portal_bus_name.str), &char(self.handle.str),
-			&char(portal_iface_session.str), c'Close', GVariant(unsafe { nil }), GVariantType(unsafe { nil }),
-			g_dbus_call_flags_none, -1, unsafe { nil }, GCallback(unsafe { nil }), unsafe { nil })
+		C.g_dbus_connection_call(dbus, &char(portal_bus_name.str), &char(self.handle.str), &char(portal_iface_session.str), c'Close', GVariant(unsafe { nil }), GVariantType(unsafe { nil }), g_dbus_call_flags_none, -1, unsafe { nil }, GCallback(unsafe { nil }), unsafe { nil })
 		self.handle = ''
 	}
 
@@ -354,17 +508,11 @@ fn (mut self GlobalShortcuts) request(method Method) {
 	}
 	self.pending_method = method
 	self.has_pending_method = true
-	self.response_subscription = C.g_dbus_connection_signal_subscribe(dbus, unsafe { nil },
-		&char(portal_iface_request.str), c'Response', &char(request_path.str), unsafe { nil },
-		g_dbus_signal_flags_none, GCallback(voidptr(global_shortcuts_responded_cb)), voidptr(self),
-		unsafe { nil })
+	self.response_subscription = C.g_dbus_connection_signal_subscribe(dbus, unsafe { nil }, &char(portal_iface_request.str), c'Response', &char(request_path.str), unsafe { nil }, g_dbus_signal_flags_none, GCallback(voidptr(global_shortcuts_responded_cb)), voidptr(self), unsafe { nil })
 
 	// Issue the actual portal call. The async reply only reports transport-level
 	// failure; the portal result arrives on the Response signal above.
-	C.g_dbus_connection_call(dbus, &char(portal_bus_name.str), &char(portal_object_path.str),
-		&char(portal_iface_global_shortcuts.str), &char(method.method_name().str), payload,
-		GVariantType(unsafe { nil }), g_dbus_call_flags_none, -1, unsafe { nil },
-		GCallback(voidptr(global_shortcuts_call_finished_cb)), unsafe { nil })
+	C.g_dbus_connection_call(dbus, &char(portal_bus_name.str), &char(portal_object_path.str), &char(portal_iface_global_shortcuts.str), &char(method.method_name().str), payload, GVariantType(unsafe { nil }), g_dbus_call_flags_none, -1, unsafe { nil }, GCallback(voidptr(global_shortcuts_call_finished_cb)), unsafe { nil })
 }
 
 // make_payload constructs the GVariant payload expected by the portal call for
@@ -480,10 +628,7 @@ fn (mut self GlobalShortcuts) on_response(method Method, vardict GVariant) {
 			// Subscribe to keybind activations, scoped (by arg0-path) to our
 			// session handle. Precondition: no existing activate subscription.
 			if self.activate_subscription == 0 {
-				self.activate_subscription = C.g_dbus_connection_signal_subscribe(dbus,
-					unsafe { nil }, &char(portal_iface_global_shortcuts.str), c'Activated',
-					&char(portal_object_path.str), &char(self.handle.str), g_dbus_signal_flags_match_arg0_path,
-					GCallback(voidptr(global_shortcuts_activated_cb)), voidptr(self), unsafe { nil })
+				self.activate_subscription = C.g_dbus_connection_signal_subscribe(dbus, unsafe { nil }, &char(portal_iface_global_shortcuts.str), c'Activated', &char(portal_object_path.str), &char(self.handle.str), g_dbus_signal_flags_match_arg0_path, GCallback(voidptr(global_shortcuts_activated_cb)), voidptr(self), unsafe { nil })
 			}
 
 			// Now that we have a session, bind our shortcuts.
@@ -644,20 +789,50 @@ fn global_shortcuts_activated_cb(dbus GDBusConnection, sender_name &char, object
 
 // --- Property handlers ----------------------------------------------------
 
-// set_config sets the configuration and re-refreshes the shortcut
-// registrations. Mirrors ghostty's `config` property setter + `propConfig`
-// (which calls `refresh` on a "notify::config").
-pub fn (mut self GlobalShortcuts) set_config(config &Config) {
+fn (mut self GlobalShortcuts) set_config_reference(config &Config) {
+	if self.config == config {
+		return
+	}
 	if !isnil(self.config) {
 		if !isnil(self.config.obj) {
 			object_unref(self.config.obj)
 		}
+		self.config = unsafe { nil }
 	}
-	self.config = unsafe { config }
-	if !isnil(config) && !isnil(config.obj) {
-		object_ref(config.obj)
+	if !isnil(config) {
+		if !isnil(config.obj) {
+			object_ref(config.obj)
+		}
+		self.config = unsafe { config }
 	}
-	self.refresh()
+}
+
+fn (mut self GlobalShortcuts) set_dbus_reference(dbus_connection GDBusConnection) {
+	if self.dbus_connection == dbus_connection {
+		return
+	}
+	if !isnil(self.dbus_connection) {
+		object_unref(self.dbus_connection)
+		self.dbus_connection = unsafe { nil }
+	}
+	if !isnil(dbus_connection) {
+		object_ref(dbus_connection)
+		self.dbus_connection = dbus_connection
+	}
+}
+
+// set_config sets the configuration and re-refreshes the shortcut
+// registrations. Mirrors ghostty's `config` property setter + `propConfig`
+// (which calls `refresh` on a "notify::config").
+pub fn (mut self GlobalShortcuts) set_config(config &Config) {
+	self.set_config_reference(config)
+	if !isnil(self.obj) {
+		C.g_object_notify_by_pspec(self.obj, g_global_shortcuts_pspec_config)
+	} else {
+		// Plain values are useful in unit tests; without a GObject there is no
+		// notify signal to invoke propConfig.
+		self.refresh()
+	}
 }
 
 // set_trigger_handler connects the V wrapper equivalent of Ghostty's
@@ -685,7 +860,9 @@ pub fn (mut self GlobalShortcuts) set_dbus_connection(dbus_connection GDBusConne
 		self.refresh()
 	}
 
-	// TODO(gtk): notify the "dbus-connection" property pspec.
+	if !isnil(self.obj) {
+		C.g_object_notify_by_pspec(self.obj, g_global_shortcuts_pspec_dbus_connection)
+	}
 }
 
 // --- Signal handlers ------------------------------------------------------
@@ -732,6 +909,10 @@ fn (self &GlobalShortcuts) emit_trigger(action input.Action) {
 // the `dispose` vfunc. Ghostty closes here (not in finalize) because dropping
 // references may take away access to the dbus connection.
 pub fn (mut self GlobalShortcuts) dispose() {
+	self.dispose_resources()
+}
+
+fn (mut self GlobalShortcuts) dispose_resources() {
 	self.close()
 
 	if !isnil(self.config) {
@@ -746,8 +927,6 @@ pub fn (mut self GlobalShortcuts) dispose() {
 	}
 	self.trigger_handler = none
 	self.trigger_data = unsafe { nil }
-
-	// TODO(gtk): chain up to gobject.Object dispose.
 }
 
 // --- Free helpers ---------------------------------------------------------
@@ -765,12 +944,3 @@ fn generate_token() string {
 fn action_to_string(action input.Action) string {
 	return action.format()
 }
-
-// --- GObject class registration (stub) ------------------------------------
-//
-// TODO(gtk): In ghostty `GhosttyGlobalShortcuts` is registered via
-// `gobject.ext.defineClass`. Its classInit registers the `config` and
-// `dbus-connection` properties, registers the `trigger` signal, and wires the
-// `dispose` vfunc; its instanceInit connects "notify::config" -> propConfig. V
-// has no such machinery, so all of that is stubbed; the handlers above are
-// plain methods driven directly by `set_config` / `set_dbus_connection`.

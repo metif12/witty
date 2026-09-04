@@ -362,6 +362,7 @@ pub fn (mut self Application) deinit() {
 	if !isnil(self.global_shortcuts) {
 		mut shortcuts := unsafe { self.global_shortcuts }
 		shortcuts.dispose()
+		shortcuts.unref()
 		self.global_shortcuts = unsafe { nil }
 	}
 	if !isnil(self.config_object) {
