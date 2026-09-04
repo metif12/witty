@@ -792,6 +792,107 @@ fn test_page_list_erase_row_with_tracked_pin() {
 	s.untrack_pin(tp)
 }
 
+fn test_page_list_erase_row_preserves_managed_cell_data() {
+	mut s := PageList.init(8, 4, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+
+	style_id := page.styles.add(CellStyle{
+		flags: StyleFlags{
+			bold: true
+		}
+	}) or {
+		assert false, 'style add failed'
+		return
+	}
+	page.rows[1].cells[2] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`M`)
+		style_id: style_id
+	}
+	page.rows[1].styled = true
+	page.set_graphemes(1, 2, [u32(0x0301)])
+	hyperlink_id := page.insert_hyperlink(Hyperlink{
+		id: HyperlinkExplicitId{
+			value: 'managed'
+		}
+		uri: 'https://example.com/managed'
+	})
+	page.set_hyperlink(1, 2, hyperlink_id)
+
+	s.erase_row(PagePin{ node: first, y: 0, x: 0 })
+
+	cell := page.rows[0].cells[2]
+	assert cell.codepoint == u32(`M`)
+	assert cell.has_grapheme
+	assert cell.graphemes == [u32(0x0301)]
+	assert cell.style_id == style_id
+	assert page.styles.get(cell.style_id).flags.bold
+	assert page.styles.ref_count(cell.style_id) == 1
+	assert cell.has_hyperlink
+	moved_link_id := page.lookup_hyperlink(0, 2) or {
+		assert false, 'moved hyperlink mapping missing'
+		return
+	}
+	assert moved_link_id == hyperlink_id
+	assert page.hyperlink_set.get(moved_link_id).uri == 'https://example.com/managed'
+	assert page.hyperlink_set.ref_count(moved_link_id) == 1
+	assert page.lookup_hyperlink(1, 2) == none
+	page.assert_integrity()
+}
+
+fn test_page_list_erase_row_moves_managed_cell_and_pin_across_page_boundary() {
+	mut s := PageList.init(4, 4, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	s.split(PagePin{ node: first, y: 2, x: 0 }) or {
+		assert false, 'split failed'
+		return
+	}
+	second := first.next or {
+		assert false, 'no second page'
+		return
+	}
+	mut second_page := &second.data
+	second_page.rows[0].cells[1] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`B`)
+	}
+	hyperlink_id := second_page.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{
+			offset: 7
+		}
+		uri: 'https://example.com/boundary'
+	})
+	second_page.set_hyperlink(0, 1, hyperlink_id)
+	tracked := s.track_pin(PagePin{ node: second, y: 0, x: 1 })
+
+	s.erase_row(PagePin{ node: first, y: 1, x: 0 })
+
+	assert voidptr(tracked.node) == voidptr(first)
+	assert tracked.y == 1
+	assert tracked.x == 1
+	mut first_page := &first.data
+	assert first_page.rows[1].cells[1].codepoint == u32(`B`)
+	moved_link_id := first_page.lookup_hyperlink(1, 1) or {
+		assert false, 'cross-page hyperlink mapping missing'
+		return
+	}
+	assert first_page.hyperlink_set.get(moved_link_id).uri == 'https://example.com/boundary'
+	assert first_page.hyperlink_set.ref_count(moved_link_id) == 1
+	assert second_page.lookup_hyperlink(0, 1) == none
+	first_page.assert_integrity()
+	second_page.assert_integrity()
+	s.untrack_pin(tracked)
+}
+
 // ============================================================
 // Split tests
 // ============================================================
@@ -2365,6 +2466,105 @@ fn test_page_list_erase_row_bounded_less_than_full_row() {
 	s.untrack_pin(p_top)
 	s.untrack_pin(p_bot)
 	s.untrack_pin(p_out)
+}
+
+fn test_page_list_erase_row_bounded_preserves_managed_cell_data() {
+	mut s := PageList.init(6, 4, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	mut page := &first.data
+	style_id := page.styles.add(CellStyle{
+		flags: StyleFlags{
+			italic: true
+		}
+	}) or {
+		assert false, 'style add failed'
+		return
+	}
+	page.rows[1].cells[1] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`M`)
+		style_id: style_id
+	}
+	page.rows[1].styled = true
+	page.set_graphemes(1, 1, [u32(0x0308)])
+	hyperlink_id := page.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{
+			offset: 9
+		}
+		uri: 'https://example.com/bounded'
+	})
+	page.set_hyperlink(1, 1, hyperlink_id)
+
+	s.erase_row_bounded(PagePin{ node: first, y: 0, x: 0 }, 1)
+
+	cell := page.rows[0].cells[1]
+	assert cell.codepoint == u32(`M`)
+	assert cell.graphemes == [u32(0x0308)]
+	assert page.styles.get(cell.style_id).flags.italic
+	assert page.styles.ref_count(cell.style_id) == 1
+	moved_link_id := page.lookup_hyperlink(0, 1) or {
+		assert false, 'bounded hyperlink mapping missing'
+		return
+	}
+	assert page.hyperlink_set.get(moved_link_id).uri == 'https://example.com/bounded'
+	assert page.hyperlink_set.ref_count(moved_link_id) == 1
+	assert page.rows[1].cells[1].is_zero()
+	page.assert_integrity()
+}
+
+fn test_page_list_erase_row_bounded_exact_page_boundary() {
+	mut s := PageList.init(4, 4, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	s.split(PagePin{ node: first, y: 2, x: 0 }) or {
+		assert false, 'split failed'
+		return
+	}
+	second := first.next or {
+		assert false, 'no second page'
+		return
+	}
+	mut second_page := &second.data
+	second_page.rows[0].cells[2] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`B`)
+	}
+	hyperlink_id := second_page.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{
+			offset: 10
+		}
+		uri: 'https://example.com/exact-boundary'
+	})
+	second_page.set_hyperlink(0, 2, hyperlink_id)
+	tracked := s.track_pin(PagePin{ node: second, y: 0, x: 2 })
+
+	// One row remains in the first page. A limit of one must pull the next
+	// page's first row across the boundary, then blank that source row.
+	s.erase_row_bounded(PagePin{ node: first, y: 1, x: 0 }, 1)
+
+	assert voidptr(tracked.node) == voidptr(first)
+	assert tracked.y == 1
+	assert tracked.x == 2
+	mut first_page := &first.data
+	assert first_page.rows[1].cells[2].codepoint == u32(`B`)
+	moved_link_id := first_page.lookup_hyperlink(1, 2) or {
+		assert false, 'exact-boundary hyperlink mapping missing'
+		return
+	}
+	assert first_page.hyperlink_set.get(moved_link_id).uri == 'https://example.com/exact-boundary'
+	assert first_page.hyperlink_set.ref_count(moved_link_id) == 1
+	assert second_page.rows[0].cells[2].is_zero()
+	assert second_page.lookup_hyperlink(0, 2) == none
+	first_page.assert_integrity()
+	second_page.assert_integrity()
+	s.untrack_pin(tracked)
 }
 
 fn test_page_list_erase_row_bounded_with_pin_at_top() {
