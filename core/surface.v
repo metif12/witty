@@ -1639,7 +1639,7 @@ pub type DesiredSize = font.DesiredSize
 pub struct Mouse {
 pub mut:
 	// Last tracked mouse button state by button.
-	click_state [10]MouseButtonState = [10]MouseButtonState{init: .release}
+	click_state [input.mouse_button_max]MouseButtonState = [input.mouse_button_max]MouseButtonState{init: .release}
 
 	// Last mods state when the last mouse button was pressed/released.
 	mods input.Mods
@@ -3560,7 +3560,7 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 	}
 
 	// Always record our latest mouse state.
-	self.mouse.click_state[int(button) % 10] = if button_action == .press {
+	self.mouse.click_state[int(button)] = if button_action == .press {
 		MouseButtonState.press
 	} else {
 		MouseButtonState.release
@@ -3779,6 +3779,26 @@ pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) !
 	// Convert to viewport coordinates
 	pos_vp := self.pos_to_viewport(pos.x, pos.y)
 
+	// If we have an inspector, always record position information. The
+	// inspector renderer reads this state while holding the same mutex.
+	if mut insp := self.inspector {
+		locked := self.renderer_state.mutex != unsafe { nil }
+		if locked {
+			self.renderer_state.mutex.lock()
+		}
+		insp.mouse.last_xpos = pos.x
+		insp.mouse.last_ypos = pos.y
+		insp.mouse.last_point = self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+			tag: .viewport
+			x: pos_vp.x
+			y: pos_vp.y
+		})
+		if locked {
+			self.renderer_state.mutex.unlock()
+		}
+		self.queue_render()!
+	}
+
 	// Check for link hover
 	if self.mouse.link_point == none || !(self.mouse.link_point or { Coordinate{} }).eql(pos_vp) {
 		self.mouse_refresh_links(pos, pos_vp, self.mouse.over_link)!
@@ -3793,7 +3813,8 @@ pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) !
 	}
 
 	// Handle selection drag (left click held)
-	if self.mouse.click_state[0] == .press && self.mouse.left_click_count > 0 {
+	if self.mouse.click_state[int(input.MouseButton.left)] == .press
+		&& self.mouse.left_click_count > 0 {
 		if pin := self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
 			tag: .viewport
 			x: pos_vp.x
@@ -3824,7 +3845,8 @@ pub fn (mut self Surface) mouse_pressure_callback(stage MousePressureStage, pres
 	self.mouse.pressure_stage = stage
 
 	// On deep press with left mouse button, select word under cursor
-	if stage == .deep && self.mouse.click_state[0] == .press && self.has_terminal() {
+	if stage == .deep && self.mouse.click_state[int(input.MouseButton.left)] == .press
+		&& self.has_terminal() {
 		pos := self.rt_surface.get_cursor_pos()!
 		vp := self.pos_to_viewport(pos.x, pos.y)
 		if pin := self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
@@ -5715,7 +5737,7 @@ fn (self &Surface) link_at_pos(pos CursorPos) ?Link {
 	mouse_mods := self.mouse_mods_with_capture(self.mouse.mods)
 
 	// Check if left click is held and mouse moved (cancel link hover during drag)
-	if self.mouse.click_state[0] == .press {
+	if self.mouse.click_state[int(input.MouseButton.left)] == .press {
 		if click_pin := self.mouse.left_click_pin {
 			if !click_pin.eql(pin) {
 				return none

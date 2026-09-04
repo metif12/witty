@@ -145,6 +145,44 @@ fn test_surface_inspector_records_triggered_binding() {
 	assert insp.key_events[0].pty.len == 0
 }
 
+fn test_surface_inspector_records_mouse_position() {
+	mut surf := make_test_surface()
+	surf.size = make_test_size()
+	surf.activate_inspector()!
+	defer {
+		surf.deactivate_inspector()
+	}
+	wakeups := surf.renderer_thread.wakeup.count
+
+	surf.cursor_pos_callback(CursorPos{ x: 25, y: 45 }, none)!
+
+	insp := surf.inspector or {
+		assert false, 'inspector unexpectedly inactive'
+		return
+	}
+	assert insp.mouse.last_xpos == 25
+	assert insp.mouse.last_ypos == 45
+	point := insp.mouse.last_point or {
+		assert false, 'inspector mouse point was not recorded'
+		return
+	}
+	assert point.x == 2
+	assert point.y == 2
+	assert surf.renderer_thread.wakeup.count > wakeups
+}
+
+fn test_surface_mouse_buttons_use_canonical_enum_indices() {
+	mut surf := make_test_surface()
+	assert surf.mouse.click_state.len == input.mouse_button_max
+
+	surf.mouse_button_callback(.press, .ten, input.Mods{})!
+	assert surf.mouse.click_state[int(input.MouseButton.unknown)] == .release
+	assert surf.mouse.click_state[int(input.MouseButton.ten)] == .press
+
+	surf.mouse_button_callback(.release, .ten, input.Mods{})!
+	assert surf.mouse.click_state[int(input.MouseButton.ten)] == .release
+}
+
 fn test_grid_size_basic() {
 	s := make_test_size()
 	g := s.grid()

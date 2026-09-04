@@ -2,6 +2,7 @@ module inspector
 
 import cimgui
 import input
+import terminal
 import encoding.utf8.validate
 
 const max_key_events = 50
@@ -93,6 +94,41 @@ pub fn (event &KeyEvent) pty_text() string {
 pub struct Inspector {
 pub mut:
 	key_events []KeyEvent
+	mouse      InspectorMouse
+}
+
+pub struct InspectorMouse {
+pub mut:
+	last_xpos  f64
+	last_ypos  f64
+	last_point ?terminal.Pin
+}
+
+// SurfaceInfo is the runtime-neutral projection consumed by Ghostty's Surface
+// inspector widget. Core creates it while holding the renderer-state mutex.
+pub struct SurfaceInfo {
+pub:
+	screen_width     u32
+	screen_height    u32
+	grid_columns     u32
+	grid_rows        u32
+	cell_width       u32
+	cell_height      u32
+	padding_top      u32
+	padding_bottom   u32
+	padding_left     u32
+	padding_right    u32
+	font_points      f32
+	font_pixels      f64
+	hover_grid_x     u32
+	hover_grid_y     u32
+	hover_terminal_x i64
+	hover_terminal_y i64
+	click_pressed    [input.mouse_button_max]bool
+	click_grid_x     u32
+	click_grid_y     u32
+	left_click_xpos  f64
+	left_click_ypos  f64
 }
 
 pub fn Inspector.init() !Inspector {
@@ -127,12 +163,16 @@ pub fn (mut self Inspector) record_key_event(event KeyEvent) bool {
 // render draws the inspector UI into the active Dear ImGui frame. The context
 // handle is passed across the apprt/core boundary to avoid reversing their
 // dependency direction.
-pub fn (mut self Inspector) render(context_handle voidptr) {
+pub fn (mut self Inspector) render(context_handle voidptr, surface_info SurfaceInfo) {
 	if isnil(context_handle) {
 		return
 	}
 	context := cimgui.Context{ handle: context_handle }
 	first_render := create_main_dockspace(context)
+
+	open_surface := context.begin_window('Surface')
+	draw_surface_info(context, open_surface, surface_info)
+	context.end_window()
 
 	open := context.begin_window('Keyboard')
 	self.draw_key_stream(context, open)
@@ -144,6 +184,85 @@ pub fn (mut self Inspector) render(context_handle voidptr) {
 		// panels are drawn later in this frame.
 		context.set_window_focus('Terminal')
 	}
+}
+
+fn draw_surface_info(context cimgui.Context, open bool, info SurfaceInfo) {
+	if !open {
+		return
+	}
+	if context.collapsing_header('Help') {
+		context.text_wrapped('This window displays information about the surface (window). A surface is the graphical area that displays the terminal content. It includes dimensions, font sizing, and mouse state information specific to this window instance.')
+	}
+
+	context.separator_text('Dimensions')
+	draw_dimensions_table(context, info)
+	context.separator_text('Font')
+	draw_font_table(context, info)
+	context.separator_text('Mouse')
+	draw_mouse_table(context, info)
+}
+
+fn draw_dimensions_table(context cimgui.Context, info SurfaceInfo) {
+	_ = context.begin_table('table_size', 2, 0)
+	defer {
+		context.end_table()
+	}
+	draw_info_row(context, 'Screen Size', '${info.screen_width}px x ${info.screen_height}px')
+	draw_info_row(context, 'Grid Size', '${info.grid_columns}c x ${info.grid_rows}r')
+	draw_info_row(context, 'Cell Size', '${info.cell_width}px x ${info.cell_height}px')
+	draw_info_row(context, 'Window Padding', 'T=${info.padding_top} B=${info.padding_bottom} L=${info.padding_left} R=${info.padding_right} px')
+}
+
+fn draw_font_table(context cimgui.Context, info SurfaceInfo) {
+	_ = context.begin_table('table_font', 2, 0)
+	defer {
+		context.end_table()
+	}
+	draw_info_row(context, 'Size (Points)', '${info.font_points:.2f} pt')
+	draw_info_row(context, 'Size (Pixels)', '${info.font_pixels:.2f} px')
+}
+
+fn draw_mouse_table(context cimgui.Context, info SurfaceInfo) {
+	_ = context.begin_table('table_mouse', 2, 0)
+	defer {
+		context.end_table()
+	}
+	draw_info_row(context, 'Hover Grid', 'row=${info.hover_grid_y}, col=${info.hover_grid_x}')
+	draw_info_row(context, 'Hover Point', '(${info.hover_terminal_x}px, ${info.hover_terminal_y}px)')
+
+	context.table_next_row()
+	context.table_set_column(0)
+	context.text('Click State')
+	context.table_set_column(1)
+	mut any_click := false
+	for pressed in info.click_pressed {
+		if pressed {
+			any_click = true
+			break
+		}
+	}
+	if !any_click {
+		context.text('none')
+	} else {
+		labels := ['?', 'L', 'R', 'M', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}']
+		for i, pressed in info.click_pressed {
+			if pressed {
+				context.same_line()
+				context.text(labels[i])
+			}
+		}
+	}
+
+	draw_info_row(context, 'Click Grid', 'row=${info.click_grid_y}, col=${info.click_grid_x}')
+	draw_info_row(context, 'Click Point', '(${u32(info.left_click_xpos)}px, ${u32(info.left_click_ypos)}px)')
+}
+
+fn draw_info_row(context cimgui.Context, label string, value string) {
+	context.table_next_row()
+	context.table_set_column(0)
+	context.text(label)
+	context.table_set_column(1)
+	context.text(value)
 }
 
 fn create_main_dockspace(context cimgui.Context) bool {

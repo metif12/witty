@@ -90,6 +90,12 @@ fn C.witty_cimgui_text(context voidptr, value &char)
 
 fn C.witty_cimgui_text_disabled(context voidptr, value &char)
 
+fn C.witty_cimgui_text_wrapped(context voidptr, value &char)
+
+fn C.witty_cimgui_collapsing_header(context voidptr, label &char) bool
+
+fn C.witty_cimgui_separator_text(context voidptr, label &char)
+
 fn C.witty_cimgui_text_colored(context voidptr, r f32, g f32, b f32, a f32, value &char)
 
 fn C.witty_cimgui_button(context voidptr, label &char) bool
@@ -267,6 +273,18 @@ pub fn (ctx Context) text(value string) {
 
 pub fn (ctx Context) text_disabled(value string) {
 	C.witty_cimgui_text_disabled(ctx.handle, value.str)
+}
+
+pub fn (ctx Context) text_wrapped(value string) {
+	C.witty_cimgui_text_wrapped(ctx.handle, value.str)
+}
+
+pub fn (ctx Context) collapsing_header(label string) bool {
+	return C.witty_cimgui_collapsing_header(ctx.handle, label.str)
+}
+
+pub fn (ctx Context) separator_text(label string) {
+	C.witty_cimgui_separator_text(ctx.handle, label.str)
 }
 
 pub fn (ctx Context) text_colored(color Color, value string) {

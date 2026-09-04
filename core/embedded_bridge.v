@@ -12,6 +12,7 @@ import apprt
 import configpkg
 import font
 import input
+import inspector as inspectorpkg
 import osc
 import renderer
 import terminal
@@ -900,7 +901,55 @@ fn bridge_surface_inspector_render(ptr voidptr, context_handle voidptr) {
 	if locked {
 		self.surface.renderer_state.mutex.lock()
 	}
-	insp.render(context_handle)
+	mut hover_grid_x := u32(0)
+	mut hover_grid_y := u32(0)
+	pages := &self.surface.renderer_state.terminal.screens.active.pages
+	if point := insp.mouse.last_point {
+		active_y := int(point.y) - pages.active_start
+		if active_y >= 0 && active_y < int(pages.rows) {
+			hover_grid_x = point.x
+			hover_grid_y = u32(active_y)
+		}
+	}
+
+	mut click_grid_x := u32(0)
+	mut click_grid_y := u32(0)
+	if point := self.surface.mouse.left_click_pin {
+		active_y := int(point.y) - pages.active_start
+		if active_y >= 0 && active_y < int(pages.rows) {
+			click_grid_x = point.x
+			click_grid_y = u32(active_y)
+		}
+	}
+
+	mut click_pressed := [input.mouse_button_max]bool{}
+	for index, state in self.surface.mouse.click_state {
+		click_pressed[index] = state == .press
+	}
+	grid := self.surface.size.grid()
+	insp.render(context_handle, inspectorpkg.SurfaceInfo{
+		screen_width: self.surface.size.screen.width
+		screen_height: self.surface.size.screen.height
+		grid_columns: grid.columns
+		grid_rows: grid.rows
+		cell_width: self.surface.size.cell.width
+		cell_height: self.surface.size.cell.height
+		padding_top: self.surface.size.padding.top
+		padding_bottom: self.surface.size.padding.bottom
+		padding_left: self.surface.size.padding.left
+		padding_right: self.surface.size.padding.right
+		font_points: self.surface.font_size.points
+		font_pixels: self.surface.font_size.pixels()
+		hover_grid_x: hover_grid_x
+		hover_grid_y: hover_grid_y
+		hover_terminal_x: i64(insp.mouse.last_xpos - f64(self.surface.size.padding.left))
+		hover_terminal_y: i64(insp.mouse.last_ypos - f64(self.surface.size.padding.top))
+		click_pressed: click_pressed
+		click_grid_x: click_grid_x
+		click_grid_y: click_grid_y
+		left_click_xpos: self.surface.mouse.left_click_xpos
+		left_click_ypos: self.surface.mouse.left_click_ypos
+	})
 	if locked {
 		self.surface.renderer_state.mutex.unlock()
 	}

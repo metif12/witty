@@ -131,6 +131,19 @@ pub fn (ctx Context) text_disabled(value string) {
 	_ = value
 }
 
+pub fn (ctx Context) text_wrapped(value string) {
+	_ = value
+}
+
+pub fn (ctx Context) collapsing_header(label string) bool {
+	_ = label
+	return false
+}
+
+pub fn (ctx Context) separator_text(label string) {
+	_ = label
+}
+
 pub fn (ctx Context) text_colored(color Color, value string) {
 	_ = color
 	_ = value

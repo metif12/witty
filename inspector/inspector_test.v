@@ -73,7 +73,24 @@ fn test_inspector_renders_key_stream_into_real_imgui_frame() {
 	value.record_key_event(event)
 
 	context.begin_frame(1.0 / 60.0)
-	value.render(context.handle)
+	value.render(context.handle, SurfaceInfo{
+		screen_width: 800
+		screen_height: 600
+		grid_columns: 80
+		grid_rows: 24
+		cell_width: 10
+		cell_height: 20
+		font_points: 13
+		font_pixels: 17.333
+		hover_grid_x: 4
+		hover_grid_y: 5
+		hover_terminal_x: 40
+		hover_terminal_y: 100
+		click_grid_x: 4
+		click_grid_y: 5
+		left_click_xpos: 40
+		left_click_ypos: 100
+	})
 	dockspace_id := context.get_id('Main Dockspace')
 	assert context.dock_node_exists(dockspace_id)
 	context.render_frame()

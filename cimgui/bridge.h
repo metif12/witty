@@ -201,6 +201,21 @@ static inline void witty_cimgui_text_disabled(ImGuiContext* context, const char*
     ImGui_TextDisabledUnformatted(value);
 }
 
+static inline void witty_cimgui_text_wrapped(ImGuiContext* context, const char* value) {
+    ImGui_SetCurrentContext(context);
+    ImGui_TextWrappedUnformatted(value);
+}
+
+static inline bool witty_cimgui_collapsing_header(ImGuiContext* context, const char* label) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_CollapsingHeader(label, 0);
+}
+
+static inline void witty_cimgui_separator_text(ImGuiContext* context, const char* label) {
+    ImGui_SetCurrentContext(context);
+    ImGui_SeparatorText(label);
+}
+
 static inline void witty_cimgui_text_colored(
     ImGuiContext* context,
     float r,
