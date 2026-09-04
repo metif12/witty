@@ -1,3 +1,4 @@
+@[has_globals]
 module gtk
 
 // surface_class_linux.v - The GObject Surface *widget* class for the GTK apprt.
@@ -36,6 +37,8 @@ import apprt
 import core
 import input
 import terminal
+import internal_os
+import datastruct
 
 // --- New C bindings unique to this file -----------------------------------
 //
@@ -110,6 +113,56 @@ fn C.gdk_event_get_modifier_state(event GdkEvent) u32
 // GdkClipboard
 fn C.gdk_clipboard_set_text(clipboard GdkClipboard, text &char)
 
+fn C.adw_bin_new() AdwBin
+
+fn C.gtk_gl_area_new() GtkGLArea
+
+fn C.gtk_gl_area_set_has_stencil_buffer(area GtkGLArea, has_stencil_buffer int)
+
+fn C.gtk_gl_area_set_has_depth_buffer(area GtkGLArea, has_depth_buffer int)
+
+fn C.gtk_overlay_new() GtkWidget
+
+fn C.gtk_overlay_set_child(overlay GtkWidget, child GtkWidget)
+
+fn C.gtk_im_multicontext_new() GtkIMContext
+
+fn C.gtk_widget_set_focusable(widget GtkWidget, focusable int)
+
+fn C.gtk_widget_set_focus_on_click(widget GtkWidget, focus_on_click int)
+
+__global g_terminal_surface_type = GType(0)
+
+fn terminal_surface_class_init(klass voidptr, class_data voidptr) {
+	_ = klass
+	_ = class_data
+	for name in ['bell', 'close-request', 'clipboard-read', 'init', 'menu', 'present-request',
+		'toggle-fullscreen', 'toggle-maximize'] {
+		C.g_signal_new(&char(name.str), g_terminal_surface_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(4), 0)
+	}
+}
+
+fn terminal_surface_instance_init(instance voidptr, klass voidptr) {
+	_ = instance
+	_ = klass
+}
+
+pub fn terminal_surface_get_type() GType {
+	if g_terminal_surface_type == GType(0) {
+		parent := C.adw_bin_get_type()
+		mut query := C.GTypeQuery{}
+		C.g_type_query(parent, &query)
+		info := C.GTypeInfo{
+			class_size: u16(query.class_size)
+			instance_size: u16(query.instance_size)
+			class_init: voidptr(terminal_surface_class_init)
+			instance_init: voidptr(terminal_surface_instance_init)
+		}
+		g_terminal_surface_type = C.g_type_register_static(parent, c'GhosttySurface', &info, 0)
+	}
+	return g_terminal_surface_type
+}
+
 // --- IMKeyEvent -----------------------------------------------------------
 
 // IMKeyEvent is the state of the key event while doing IM composition.
@@ -145,6 +198,12 @@ pub mut:
 	// GObject parent instance; here we just hold the widget handle.
 	widget GtkWidget = unsafe { nil }
 
+	// Owning GTK objects and containers.
+	app           &Application = unsafe { nil }
+	split_tree    &SplitTreeWidget = unsafe { nil }
+	context       NewSurfaceContext = .window
+	terminal_page GtkWidget = unsafe { nil }
+
 	// The GLArea that renders the actual surface (template child).
 	gl_area GtkGLArea = unsafe { nil }
 
@@ -154,7 +213,10 @@ pub mut:
 	// The core surface backing this GTK surface. This starts out nil because it
 	// can't be initialized until there is a realized GLArea. In ghostty this is
 	// `?*core.Surface`; we model "unset" with `unsafe { nil }`.
-	core_surface &core.Surface = unsafe { nil }
+	core_surface         &core.Surface = unsafe { nil }
+	core_runtime_app     core.RuntimeApp
+	core_runtime_surface core.RuntimeSurface
+	core_surface_ref     &core.SurfaceRef = unsafe { nil }
 
 	// The apprt Surface adapter (see surface_linux.v).
 	rt_surface Surface
@@ -250,6 +312,27 @@ pub fn (self &SurfaceWidget) has_core() bool {
 // rt returns the apprt Surface adapter. Mirrors `Surface.rt`.
 pub fn (mut self SurfaceWidget) rt() &Surface {
 	return &self.rt_surface
+}
+
+// set_parent captures inheritable state before the GLArea realizes. No parent
+// pointer is retained, matching Ghostty's Surface.setParent.
+pub fn (mut self SurfaceWidget) set_parent(parent &core.Surface, context NewSurfaceContext) {
+	if self.has_core() {
+		return
+	}
+	self.context = context
+	self.font_size_request = parent.font_size.points
+	if isnil(self.config) {
+		return
+	}
+	inherit_pwd := match context {
+		.window { self.config.get().window_inherit_working_directory }
+		.tab { self.config.get().tab_inherit_working_directory }
+		.split { self.config.get().split_inherit_working_directory }
+	}
+	if inherit_pwd {
+		self.pwd = parent.pwd()
+	}
 }
 
 // redraw forces the surface to redraw itself. Mirrors `Surface.redraw`.
@@ -1161,10 +1244,266 @@ fn (mut self SurfaceWidget) init_surface() ! {
 		return error('failed to make GL context current')
 	}
 
-	// TODO(gtk): initialize the cgroup, allocate + init a core.Surface via
-	// apprt.surface.newConfig / core.Surface.init, add it to the app surface
-	// list, store it in self.core_surface, and emit the `init` signal. This
-	// requires the Application GObject wiring which is out of scope here.
+	if isnil(self.app) || isnil(self.config) || isnil(self.app.core_app) {
+		return error('surface application state is unavailable')
+	}
+
+	mut surface := &core.Surface{}
+	mut surface_ref := &core.SurfaceRef{
+		core_surface: surface
+		rt_app: &self.app.runtime_bridge
+	}
+	self.core_surface = surface
+	self.core_surface_ref = surface_ref
+	self.core_runtime_app = core.RuntimeApp{
+		user_data: self
+		action_fn: surface_core_action_cb
+	}
+	self.core_runtime_surface = core.RuntimeSurface{
+		user_data: self
+		close_fn: surface_core_close_cb
+		content_scale_fn: surface_core_content_scale_cb
+		size_fn: surface_core_size_cb
+		cursor_pos_fn: surface_core_cursor_pos_cb
+		title_fn: surface_core_title_cb
+		set_clipboard_fn: surface_core_set_clipboard_cb
+		supports_selection_fn: surface_core_supports_selection_cb
+		clipboard_request_fn: surface_core_clipboard_request_cb
+	}
+
+	mut surface_config := self.config.get().clone()
+	if self.font_size_request > 0 {
+		surface_config.font_size = self.font_size_request
+	}
+	if pwd := self.pwd {
+		surface_config.working_directory = pwd
+	}
+	mut core_app := unsafe { self.app.core_app }
+	core_app.add_surface(surface_ref)
+	surface.init(&surface_config, mut core_app, &self.core_runtime_app, &self.core_runtime_surface) or {
+		core_app.delete_surface(surface_ref)
+		self.core_surface = unsafe { nil }
+		self.core_surface_ref = unsafe { nil }
+		return error('core surface initialization failed: ${err}')
+	}
+	C.g_signal_emit_by_name(self.widget, c'init')
+}
+
+fn surface_core_close_cb(data voidptr, confirm bool) {
+	_ = confirm
+	if isnil(data) {
+		return
+	}
+	self := unsafe { &SurfaceWidget(data) }
+	self.close()
+}
+
+fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
+	if isnil(data) {
+		return false
+	}
+	mut self := unsafe { &SurfaceWidget(data) }
+	match action.kind {
+		.new_window {
+			return self.app.new_window(self.core_surface)
+		}
+		.new_tab {
+			mut window := unsafe { self.split_tree.window }
+			window.new_tab(self.core_surface)
+			return true
+		}
+		.new_split {
+			direction := match action.split_dir {
+				.right, .auto { datastruct.Direction.right }
+				.left { datastruct.Direction.left }
+				.down { datastruct.Direction.down }
+				.up { datastruct.Direction.up }
+			}
+			mut tree := unsafe { self.split_tree }
+			tree.new_split(direction, self)
+			return true
+		}
+		.goto_split {
+			to := match action.goto_split {
+				.previous { datastruct.Goto(datastruct.GotoPrevious{}) }
+				.next { datastruct.Goto(datastruct.GotoNext{}) }
+				.up { datastruct.Goto(datastruct.GotoSpatial{ direction: .up }) }
+				.left { datastruct.Goto(datastruct.GotoSpatial{ direction: .left }) }
+				.down { datastruct.Goto(datastruct.GotoSpatial{ direction: .down }) }
+				.right { datastruct.Goto(datastruct.GotoSpatial{ direction: .right }) }
+			}
+			mut tree := unsafe { self.split_tree }
+			return tree.goto_(to)
+		}
+		.resize_split {
+			direction := match action.resize_dir {
+				.up { datastruct.Direction.up }
+				.down { datastruct.Direction.down }
+				.left { datastruct.Direction.left }
+				.right { datastruct.Direction.right }
+			}
+			mut tree := unsafe { self.split_tree }
+			return tree.resize(direction, action.resize_amount)
+		}
+		.equalize_splits {
+			mut tree := unsafe { self.split_tree }
+			tree.action_equalize()
+			return true
+		}
+		.toggle_split_zoom {
+			mut tree := unsafe { self.split_tree }
+			tree.action_zoom()
+			return true
+		}
+		.close_window {
+			mut window := unsafe { self.split_tree.window }
+			window.action_close()
+			return true
+		}
+		.close_tab {
+			mut window := unsafe { self.split_tree.window }
+			for mut tab in window.tabs {
+				if tab.split_tree == self.split_tree {
+					mode := match action.close_tab_mode {
+						.this { CloseTabMode.this }
+						.other { CloseTabMode.other }
+						.right { CloseTabMode.right }
+					}
+					tab.action_close(mode)
+					return true
+				}
+			}
+			return false
+		}
+		.set_title {
+			self.set_title(action.title_value)
+			return true
+		}
+		.initial_size {
+			self.set_default_size(Size{
+				width: action.initial_size.width
+				height: action.initial_size.height
+			})
+			return true
+		}
+		.size_limit {
+			self.set_min_size(Size{
+				width: action.min_size.width
+				height: action.min_size.height
+			})
+			return true
+		}
+		.mouse_shape {
+			self.set_mouse_shape(action.mouse_shape)
+			return true
+		}
+		.mouse_visibility {
+			self.set_mouse_hidden(!action.mouse_visible)
+			return true
+		}
+		.mouse_over_link {
+			self.set_mouse_hover_url(if action.url.len > 0 { action.url } else { none })
+			return true
+		}
+		.pwd {
+			self.set_pwd(if action.pwd.len > 0 { action.pwd } else { none })
+			return true
+		}
+		.present_terminal {
+			self.present()
+			return true
+		}
+		.toggle_fullscreen {
+			self.toggle_fullscreen()
+			return true
+		}
+		.toggle_maximize {
+			self.toggle_maximize()
+			return true
+		}
+		.toggle_window_decorations {
+			mut window := unsafe { self.split_tree.window }
+			window.toggle_window_decorations()
+			return true
+		}
+		.toggle_tab_overview {
+			mut window := unsafe { self.split_tree.window }
+			window.toggle_tab_overview()
+			return true
+		}
+		.ring_bell {
+			mut window := unsafe { self.split_tree.window }
+			window.action_ring_bell()
+			return true
+		}
+		.open_config {
+			return self.app.perform_action(apprt.Target(apprt.AppTarget{}), .open_config, apprt.ActionValue{})!
+		}
+		.reload_config {
+			return self.app.perform_action(apprt.Target(apprt.AppTarget{}), .reload_config, apprt.ActionValue{})!
+		}
+		.quit {
+			return self.app.perform_action(apprt.Target(apprt.AppTarget{}), .quit, apprt.ActionValue{})!
+		}
+		.show_gtk_inspector {
+			return self.app.perform_action(apprt.Target(apprt.AppTarget{}), .show_gtk_inspector, apprt.ActionValue{})!
+		}
+		.open_url {
+			return self.app.perform_action(apprt.Target(apprt.SurfaceTarget{
+				surface: self.core_surface
+			}), .open_url, apprt.ActionValue{
+				open_url_: apprt.OpenUrl{ url: action.url }
+			})!
+		}
+		else {
+			return false
+		}
+	}
+}
+
+fn surface_core_content_scale_cb(data voidptr) !core.ContentScale {
+	self := unsafe { &SurfaceWidget(data) }
+	scale := self.get_content_scale()!
+	return core.ContentScale{ x: scale.x, y: scale.y }
+}
+
+fn surface_core_size_cb(data voidptr) !core.ScreenSize {
+	self := unsafe { &SurfaceWidget(data) }
+	size := self.get_size()!
+	return core.ScreenSize{ width: size.width, height: size.height }
+}
+
+fn surface_core_cursor_pos_cb(data voidptr) !core.CursorPos {
+	self := unsafe { &SurfaceWidget(data) }
+	pos := self.get_cursor_pos()!
+	return core.CursorPos{ x: f64(pos.x), y: f64(pos.y) }
+}
+
+fn surface_core_title_cb(data voidptr) ?string {
+	self := unsafe { &SurfaceWidget(data) }
+	return self.get_title()
+}
+
+fn surface_core_set_clipboard_cb(data voidptr, clipboard apprt.Clipboard, contents []apprt.ClipboardContent, confirm bool) ! {
+	mut self := unsafe { &SurfaceWidget(data) }
+	self.set_clipboard(clipboard, contents, confirm)
+}
+
+fn surface_core_supports_selection_cb(data voidptr) bool {
+	_ = data
+	return true
+}
+
+fn surface_core_clipboard_request_cb(data voidptr, kind core.ClipboardRequestKind) ! {
+	mut self := unsafe { &SurfaceWidget(data) }
+	request_kind := match kind {
+		.paste { apprt.ClipboardRequestType.paste }
+		.osc_52_read { apprt.ClipboardRequestType.osc_52_read }
+	}
+	self.clipboard_request(.standard, apprt.ClipboardRequest{
+		kind: request_kind
+		clipboard: .standard
+	})!
 }
 
 // --- Clipboard ------------------------------------------------------------
@@ -1285,25 +1624,39 @@ pub fn (mut self SurfaceWidget) set_vadjustment(adj GtkAdjustment) {
 // close requests the surface be closed. Mirrors `Surface.close` (emits
 // `close-request`).
 pub fn (self &SurfaceWidget) close() {
-	// TODO(gtk): emit `close-request` signal.
+	if !isnil(self.split_tree) {
+		mut tree := unsafe { self.split_tree }
+		surface := unsafe { self }
+		tree.surface_close_request(surface)
+	}
 }
 
 // present requests this surface come to the front. Mirrors `Surface.present`
 // (emits `present-request`).
 pub fn (self &SurfaceWidget) present() {
-	// TODO(gtk): emit `present-request` signal.
+	if isnil(self.split_tree) || isnil(self.split_tree.window) {
+		return
+	}
+	C.gtk_window_present(self.split_tree.window.as_window())
+	self.grab_focus()
 }
 
 // toggle_fullscreen requests the container toggle fullscreen. Mirrors
 // `Surface.toggleFullscreen` (emits `toggle-fullscreen`).
 pub fn (self &SurfaceWidget) toggle_fullscreen() {
-	// TODO(gtk): emit `toggle-fullscreen` signal.
+	if !isnil(self.split_tree) && !isnil(self.split_tree.window) {
+		mut window := unsafe { self.split_tree.window }
+		window.toggle_fullscreen()
+	}
 }
 
 // toggle_maximize requests the container toggle maximize. Mirrors
 // `Surface.toggleMaximize` (emits `toggle-maximize`).
 pub fn (self &SurfaceWidget) toggle_maximize() {
-	// TODO(gtk): emit `toggle-maximize` signal.
+	if !isnil(self.split_tree) && !isnil(self.split_tree.window) {
+		mut window := unsafe { self.split_tree.window }
+		window.toggle_maximize()
+	}
 }
 
 // redraw_inspector redraws the inspector, if any. Mirrors
@@ -1330,14 +1683,84 @@ pub fn (self &SurfaceWidget) redraw_inspector() {
 // new_surface_widget creates a new SurfaceWidget. Mirrors `Surface.new`
 // (gobject.ext.newInstance). Here it just returns a value-initialized struct
 // with the private-field defaults set (matching the Zig `init`).
-pub fn new_surface_widget() &SurfaceWidget {
-	mut w := &SurfaceWidget{}
-	w.rt_surface = Surface{}
+pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &Config) &SurfaceWidget {
+	obj := C.g_object_new(terminal_surface_get_type(), &char(unsafe { nil }))
+	gl_area := C.gtk_gl_area_new()
+	C.gtk_widget_set_hexpand(GtkWidget(gl_area), 1)
+	C.gtk_widget_set_vexpand(GtkWidget(gl_area), 1)
+	C.gtk_widget_set_focusable(GtkWidget(gl_area), 1)
+	C.gtk_widget_set_focus_on_click(GtkWidget(gl_area), 1)
+	C.gtk_gl_area_set_has_stencil_buffer(gl_area, 0)
+	C.gtk_gl_area_set_has_depth_buffer(gl_area, 0)
+	box := C.gtk_box_new(0, 0)
+	C.gtk_box_append(box, GtkWidget(gl_area))
+	terminal_page := C.gtk_overlay_new()
+	C.gtk_overlay_set_child(terminal_page, box)
+	C.adw_bin_set_child(AdwBin(obj), terminal_page)
+
+	mut w := &SurfaceWidget{
+		widget: GtkWidget(obj)
+		app: window.app
+		split_tree: split_tree
+		config: config
+		gl_area: gl_area
+		im_context: C.gtk_im_multicontext_new()
+		terminal_page: terminal_page
+	}
+	w.rt_surface = Surface{ surface: w }
 	w.mouse_shape = .text
 	w.focused = true
 	w.in_keyevent = .false_
 	w.gtk_enable_primary_paste = true
+	C.g_signal_connect_data(w.gl_area, c'realize', GCallback(voidptr(surface_glarea_realize_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(w.gl_area, c'unrealize', GCallback(voidptr(surface_glarea_unrealize_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(w.gl_area, c'render', GCallback(voidptr(surface_glarea_render_cb)), voidptr(w), unsafe { nil }, 0)
+	C.g_signal_connect_data(w.gl_area, c'resize', GCallback(voidptr(surface_glarea_resize_cb)), voidptr(w), unsafe { nil }, 0)
 	return w
+}
+
+fn surface_glarea_realize_cb(area GtkGLArea, data voidptr) {
+	_ = area
+	if !isnil(data) {
+		mut self := unsafe { &SurfaceWidget(data) }
+		self.glarea_realize()
+	}
+}
+
+fn surface_glarea_unrealize_cb(area GtkGLArea, data voidptr) {
+	_ = area
+	if !isnil(data) {
+		mut self := unsafe { &SurfaceWidget(data) }
+		self.glarea_unrealize()
+	}
+}
+
+fn surface_glarea_render_cb(area GtkGLArea, context voidptr, data voidptr) int {
+	_ = area
+	_ = context
+	if isnil(data) {
+		return 0
+	}
+	mut self := unsafe { &SurfaceWidget(data) }
+	return b2i(self.glarea_render())
+}
+
+fn surface_glarea_resize_cb(area GtkGLArea, width int, height int, data voidptr) {
+	_ = area
+	if !isnil(data) {
+		mut self := unsafe { &SurfaceWidget(data) }
+		self.glarea_resize(width, height)
+	}
+}
+
+pub fn (self &SurfaceWidget) default_termio_env() !map[string]string {
+	mut env := internal_os.get_env_map()!
+	for key in ['GDK_DEBUG', 'GDK_DISABLE', 'GSK_RENDERER', 'GIO_LAUNCHED_DESKTOP_FILE',
+		'GIO_LAUNCHED_DESKTOP_FILE_PID', 'DBUS_STARTER_ADDRESS', 'DBUS_STARTER_BUS_TYPE',
+		'INVOCATION_ID', 'JOURNAL_STREAM', 'NOTIFY_SOCKET'] {
+		env.delete(key)
+	}
+	return env
 }
 
 // --- small numeric helpers ------------------------------------------------

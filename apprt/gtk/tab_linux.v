@@ -42,16 +42,27 @@ import datastruct
 // verified that none of these `fn C.` decls already exist in the module.
 
 fn C.adw_tab_page_get_selected(page AdwTabPage) int
+
 fn C.adw_tab_page_set_needs_attention(page AdwTabPage, needs_attention int)
+
 fn C.adw_tab_view_select_next_page(view AdwTabView) int
+
 fn C.adw_tab_view_select_previous_page(view AdwTabView) int
+
 fn C.adw_tab_view_close_page(view AdwTabView, page AdwTabPage)
+
 fn C.adw_tab_view_close_other_pages(view AdwTabView, page AdwTabPage)
+
 fn C.adw_tab_view_close_pages_after(view AdwTabView, page AdwTabPage)
+
 fn C.adw_tab_view_get_type() GType
+
 fn C.gtk_widget_get_ancestor(widget GtkWidget, widget_type GType) GtkWidget
+
 fn C.gtk_widget_set_hexpand(widget GtkWidget, expand int)
+
 fn C.gtk_widget_set_vexpand(widget GtkWidget, expand int)
+
 fn C.gtk_orientable_set_orientation(orientable voidptr, orientation int)
 
 __global g_tab_type = GType(0)
@@ -112,6 +123,7 @@ pub mut:
 
 	// The configuration this tab is using.
 	config &Config = unsafe { nil }
+	window &Window = unsafe { nil }
 
 	// The title of this tab. Usually bound to the active surface.
 	title ?string
@@ -128,15 +140,20 @@ pub mut:
 // new_tab creates a new Tab. Mirrors the GObject `init`: it pulls the config
 // from the application if unset and creates the initial surface in the split
 // tree. Template/action wiring is stubbed.
-pub fn new_tab(config &Config) &Tab {
+pub fn new_tab(window &Window, config &Config) &Tab {
 	obj := C.g_object_new(tab_get_type(), &char(unsafe { nil }))
+	split_tree := new_split_tree_widget(window, config)
+	C.gtk_box_append(GtkWidget(obj), split_tree.widget)
 	mut self := &Tab{
 		widget: GtkWidget(obj)
 		config: config
+		window: window
+		split_tree: split_tree
 	}
 
 	// Init our actions.
 	self.init_action_map()
+	self.split_tree.new_split(.right, none)
 
 	return self
 }
@@ -159,10 +176,7 @@ pub fn (mut self Tab) set_parent(parent &core.Surface) {
 // `setParentWithContext`. Reuses `NewSurfaceContext` from window_linux.v.
 pub fn (mut self Tab) set_parent_with_context(parent &core.Surface, context NewSurfaceContext) {
 	if mut surface := self.get_active_surface() {
-		_ = parent
-		_ = context
-		_ = surface
-		// TODO(gtk): surface.set_parent(parent, context).
+		surface.set_parent(parent, context)
 	}
 }
 

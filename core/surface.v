@@ -1714,6 +1714,8 @@ pub type FontGridKey = font.GridSetKey
 
 pub type FontGrid = font.SharedGrid
 
+pub type RuntimeAppActionFn = fn (voidptr, AppAction) !bool
+
 pub struct RuntimeApp {
 pub mut:
 	// Actions are retained until the runtime consumes them. This is the same
@@ -1721,11 +1723,16 @@ pub mut:
 	// headless runtime a useful implementation.
 	actions         []AppAction
 	actions_handled bool
+	user_data       voidptr = unsafe { nil }
+	action_fn       RuntimeAppActionFn = unsafe { nil }
 }
 
 fn (mut r RuntimeApp) perform_action(action AppAction) !bool {
 	if unsafe { voidptr(&r) == nil } {
 		return false
+	}
+	if r.action_fn != unsafe { nil } {
+		return r.action_fn(r.user_data, action)
 	}
 	r.actions << action
 	return r.actions_handled
@@ -1855,22 +1862,51 @@ pub enum AppActionKind {
 	show_gtk_inspector
 }
 
+pub type RuntimeSurfaceCloseFn = fn (voidptr, bool)
+
+pub type RuntimeSurfaceContentScaleFn = fn (voidptr) !ContentScale
+
+pub type RuntimeSurfaceSizeFn = fn (voidptr) !ScreenSize
+
+pub type RuntimeSurfaceCursorPosFn = fn (voidptr) !CursorPos
+
+pub type RuntimeSurfaceTitleFn = fn (voidptr) ?string
+
+pub type RuntimeSurfaceSetClipboardFn = fn (voidptr, apprt.Clipboard, []apprt.ClipboardContent, bool) !
+
+pub type RuntimeSurfaceSupportsSelectionFn = fn (voidptr) bool
+
+pub type RuntimeSurfaceClipboardRequestFn = fn (voidptr, ClipboardRequestKind) !
+
 pub struct RuntimeSurface {
 pub mut:
-	content_scale       ContentScale = ContentScale{ x: 1.0, y: 1.0 }
-	size                ScreenSize = ScreenSize{ width: 800, height: 600 }
-	cursor_pos          CursorPos
-	title               ?string
-	clipboard           map[ClipboardRequestKind]string
-	clipboards          map[apprt.Clipboard][]apprt.ClipboardContent
-	requests            []ClipboardRequestKind
-	closed              bool
-	close_confirm       bool
-	selection_clipboard bool
+	content_scale         ContentScale = ContentScale{ x: 1.0, y: 1.0 }
+	size                  ScreenSize = ScreenSize{ width: 800, height: 600 }
+	cursor_pos            CursorPos
+	title                 ?string
+	clipboard             map[ClipboardRequestKind]string
+	clipboards            map[apprt.Clipboard][]apprt.ClipboardContent
+	requests              []ClipboardRequestKind
+	closed                bool
+	close_confirm         bool
+	selection_clipboard   bool
+	user_data             voidptr = unsafe { nil }
+	close_fn              RuntimeSurfaceCloseFn = unsafe { nil }
+	content_scale_fn      RuntimeSurfaceContentScaleFn = unsafe { nil }
+	size_fn               RuntimeSurfaceSizeFn = unsafe { nil }
+	cursor_pos_fn         RuntimeSurfaceCursorPosFn = unsafe { nil }
+	title_fn              RuntimeSurfaceTitleFn = unsafe { nil }
+	set_clipboard_fn      RuntimeSurfaceSetClipboardFn = unsafe { nil }
+	supports_selection_fn RuntimeSurfaceSupportsSelectionFn = unsafe { nil }
+	clipboard_request_fn  RuntimeSurfaceClipboardRequestFn = unsafe { nil }
 }
 
 fn (mut r RuntimeSurface) close(confirm bool) {
 	if unsafe { voidptr(&r) == nil } {
+		return
+	}
+	if r.close_fn != unsafe { nil } {
+		r.close_fn(r.user_data, confirm)
 		return
 	}
 	r.closed = true
@@ -1881,12 +1917,18 @@ fn (r RuntimeSurface) get_content_scale() !ContentScale {
 	if unsafe { voidptr(&r) == nil } {
 		return ContentScale{ x: 1, y: 1 }
 	}
+	if r.content_scale_fn != unsafe { nil } {
+		return r.content_scale_fn(r.user_data)
+	}
 	return r.content_scale
 }
 
 fn (r RuntimeSurface) get_size() !ScreenSize {
 	if unsafe { voidptr(&r) == nil } {
 		return ScreenSize{ width: 800, height: 600 }
+	}
+	if r.size_fn != unsafe { nil } {
+		return r.size_fn(r.user_data)
 	}
 	return r.size
 }
@@ -1895,12 +1937,18 @@ fn (r RuntimeSurface) get_cursor_pos() !CursorPos {
 	if unsafe { voidptr(&r) == nil } {
 		return CursorPos{}
 	}
+	if r.cursor_pos_fn != unsafe { nil } {
+		return r.cursor_pos_fn(r.user_data)
+	}
 	return r.cursor_pos
 }
 
 fn (r RuntimeSurface) get_title() ?string {
 	if unsafe { voidptr(&r) == nil } {
 		return none
+	}
+	if r.title_fn != unsafe { nil } {
+		return r.title_fn(r.user_data)
 	}
 	return r.title
 }
@@ -1914,6 +1962,10 @@ fn (mut r RuntimeSurface) set_clipboard(contents string, confirm bool) ! {
 
 fn (mut r RuntimeSurface) set_clipboard_at(loc apprt.Clipboard, contents []apprt.ClipboardContent, confirm bool) ! {
 	if unsafe { voidptr(&r) == nil } {
+		return
+	}
+	if r.set_clipboard_fn != unsafe { nil } {
+		r.set_clipboard_fn(r.user_data, loc, contents, confirm)!
 		return
 	}
 	if confirm {
@@ -1932,11 +1984,18 @@ fn (r RuntimeSurface) supports_clipboard_selection() bool {
 	if unsafe { voidptr(&r) == nil } {
 		return false
 	}
+	if r.supports_selection_fn != unsafe { nil } {
+		return r.supports_selection_fn(r.user_data)
+	}
 	return r.selection_clipboard
 }
 
 fn (mut r RuntimeSurface) clipboard_request(kind ClipboardRequestKind) ! {
 	if unsafe { voidptr(&r) == nil } {
+		return
+	}
+	if r.clipboard_request_fn != unsafe { nil } {
+		r.clipboard_request_fn(r.user_data, kind)!
 		return
 	}
 	r.requests << kind

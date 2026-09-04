@@ -45,6 +45,7 @@ module gtk
 
 import configpkg
 import core
+import input
 
 // --- New opaque handle aliases --------------------------------------------
 // (Grep-verified: none of these `fn C.*` or aliases are declared elsewhere in
@@ -79,51 +80,91 @@ pub type GtkNative = voidptr
 // Only functions not already declared anywhere in the module.
 
 fn C.gtk_window_set_title(window GtkWindow, title &char)
+
 fn C.gtk_window_get_title(window GtkWindow) &char
+
 fn C.gtk_window_set_icon_name(window GtkWindow, name &char)
+
 fn C.gtk_window_maximize(window GtkWindow)
+
 fn C.gtk_window_unmaximize(window GtkWindow)
+
 fn C.gtk_window_is_maximized(window GtkWindow) int
+
 fn C.gtk_window_fullscreen(window GtkWindow)
+
 fn C.gtk_window_unfullscreen(window GtkWindow)
+
 fn C.gtk_window_is_fullscreen(window GtkWindow) int
+
 fn C.gtk_window_is_active(window GtkWindow) int
+
 fn C.gtk_window_set_decorated(window GtkWindow, decorated int)
+
 fn C.gtk_window_set_default_size(window GtkWindow, width int, height int)
+
 fn C.gtk_window_present(window GtkWindow)
+
 fn C.gtk_window_close(window GtkWindow)
+
 fn C.gtk_window_destroy(window GtkWindow)
+
 fn C.gtk_window_set_handle_menubar_accel(window GtkWindow, handle_menubar_accel int)
 
 fn C.adw_application_window_set_content(window AdwApplicationWindow, content GtkWidget)
+
 fn C.adw_tab_overview_new() AdwTabOverview
+
 fn C.adw_tab_overview_set_child(overview AdwTabOverview, child GtkWidget)
+
 fn C.adw_tab_overview_set_view(overview AdwTabOverview, view AdwTabView)
+
 fn C.adw_tab_overview_set_enable_new_tab(overview AdwTabOverview, enable_new_tab int)
+
 fn C.adw_toolbar_view_new() AdwToolbarView
+
 fn C.adw_toolbar_view_set_content(view AdwToolbarView, content GtkWidget)
+
 fn C.adw_toolbar_view_set_top_bar_style(view AdwToolbarView, style int)
+
 fn C.adw_toolbar_view_set_bottom_bar_style(view AdwToolbarView, style int)
+
 fn C.adw_tab_bar_new() AdwTabBar
+
 fn C.adw_tab_bar_set_view(tab_bar AdwTabBar, view AdwTabView)
+
 fn C.adw_tab_bar_set_autohide(tab_bar AdwTabBar, autohide int)
+
 fn C.adw_tab_bar_set_expand_tabs(tab_bar AdwTabBar, expand_tabs int)
+
 fn C.adw_toast_overlay_new() AdwToastOverlay
+
 fn C.adw_toast_overlay_set_child(overlay AdwToastOverlay, child GtkWidget)
+
 fn C.adw_tab_view_new() AdwTabView
+
 fn C.adw_toast_new(title &char) voidptr
+
 fn C.adw_toast_set_timeout(toast voidptr, timeout u32)
+
 fn C.adw_toast_overlay_add_toast(overlay AdwToastOverlay, toast voidptr)
+
 fn C.gtk_box_new(orientation int, spacing int) GtkWidget
+
 fn C.gtk_box_append(box GtkWidget, child GtkWidget)
 
 fn C.gtk_widget_add_css_class(widget GtkWidget, css_class &char)
+
 fn C.gtk_widget_remove_css_class(widget GtkWidget, css_class &char)
+
 fn C.gtk_widget_set_visible(widget GtkWidget, visible int)
+
 fn C.gtk_widget_get_visible(widget GtkWidget) int
+
 fn C.gtk_widget_set_size_request(widget GtkWidget, width int, height int)
 
 fn C.gdk_display_is_rgba(display GdkDisplay) int
+
 fn C.gdk_display_is_composited(display GdkDisplay) int
 
 // --- Toolbar style ---------------------------------------------------------
@@ -254,10 +295,10 @@ mut:
 
 	// Template children (out of scope widgets). Populated by the stubbed
 	// template init.
-	tab_overview  AdwTabOverview  = unsafe { nil }
-	tab_bar       AdwTabBar       = unsafe { nil }
-	tab_view      AdwTabView      = unsafe { nil }
-	toolbar       AdwToolbarView  = unsafe { nil }
+	tab_overview  AdwTabOverview = unsafe { nil }
+	tab_bar       AdwTabBar = unsafe { nil }
+	tab_view      AdwTabView = unsafe { nil }
+	toolbar       AdwToolbarView = unsafe { nil }
 	toast_overlay AdwToastOverlay = unsafe { nil }
 
 	// V-side owners for the GhosttyTab wrappers inserted in tab_view.
@@ -304,12 +345,9 @@ pub fn Window.new(app &Application) &Window {
 	}
 	C.gtk_window_set_default_size(self.as_window(), 800, 600)
 	C.gtk_window_set_handle_menubar_accel(self.as_window(), 0)
-	C.g_signal_connect_data(self.obj, c'close-request', GCallback(voidptr(window_close_request_cb)),
-		voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(self.obj, c'realize', GCallback(voidptr(window_realize_cb)), voidptr(self),
-		unsafe { nil }, 0)
-	C.g_signal_connect_data(self.tab_view, c'notify::n-pages', GCallback(voidptr(window_n_pages_cb)),
-		voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'close-request', GCallback(voidptr(window_close_request_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'realize', GCallback(voidptr(window_realize_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.tab_view, c'notify::n-pages', GCallback(voidptr(window_n_pages_cb)), voidptr(self), unsafe { nil }, 0)
 	self.init(app)
 	return self
 }
@@ -481,11 +519,10 @@ fn (mut self Window) new_tab_page(parent ?&core.Surface, context NewSurfaceConte
 	if isnil(tab_view) || isnil(self.config) {
 		return AdwTabPage(unsafe { nil })
 	}
-	mut tab := new_tab(self.config)
+	mut tab := new_tab(self, self.config)
 	if p := parent {
 		tab.set_parent_with_context(p, context)
 	}
-	self.tabs << tab
 
 	// Compute the position to insert at.
 	if self.config == unsafe { nil } {
@@ -505,6 +542,11 @@ fn (mut self Window) new_tab_page(parent ?&core.Surface, context NewSurfaceConte
 		.end {
 			adw_tab_view_get_n_pages(tab_view)
 		}
+	}
+	if position >= 0 && position <= self.tabs.len {
+		self.tabs.insert(position, tab)
+	} else {
+		self.tabs << tab
 	}
 
 	// Add the page and select it.
@@ -727,9 +769,26 @@ fn (mut self Window) toggle_css_class(class string, value bool) {
 // `core_surface.performBindingAction(action)` is out of scope (core types are
 // placeholders). Kept as a faithful stub. `action` is an opaque action tag.
 fn (mut self Window) perform_binding_action(action BindingActionTag) {
-	_ = action
-	// surface := self.get_active_surface() or { return }
-	// core := surface.core() ...
+	mut surface := self.get_active_surface() or { return }
+	if !surface.has_core() {
+		return
+	}
+	binding := match action {
+		.new_tab { input.Action.new(.new_tab) }
+		.new_window { input.Action.new(.new_window) }
+		.new_split_right { input.Action.new_enum(.new_split, i32(input.SplitDirection.right)) }
+		.new_split_left { input.Action.new_enum(.new_split, i32(input.SplitDirection.left)) }
+		.new_split_up { input.Action.new_enum(.new_split, i32(input.SplitDirection.up)) }
+		.new_split_down { input.Action.new_enum(.new_split, i32(input.SplitDirection.down)) }
+		.copy_to_clipboard {
+			input.Action.new_enum(.copy_to_clipboard, i32(input.CopyToClipboard.mixed))
+		}
+		.paste_from_clipboard { input.Action.new(.paste_from_clipboard) }
+		.reset { input.Action.new(.reset) }
+		.clear_screen { input.Action.new(.clear_screen) }
+	}
+	mut core_surface := surface.core()
+	core_surface.perform_binding_action(binding) or {}
 }
 
 // add_toast queues a simple text-based toast. All text-based toasts share the
@@ -763,8 +822,20 @@ pub fn (self &Window) is_quick_terminal() bool {
 //
 // TODO(gtk): resolving the selected Tab and its active surface is out of scope
 // (Tab is not translated). Returns none.
-pub fn (self &Window) get_active_surface() ?&Surface {
-	return none
+pub fn (self &Window) get_active_surface() ?&SurfaceWidget {
+	if isnil(self.tab_view) {
+		return none
+	}
+	page := adw_tab_view_get_selected_page(self.tab_view)
+	if isnil(page) {
+		return none
+	}
+	position := adw_tab_view_get_page_position(self.tab_view, page)
+	if position < 0 || position >= self.tabs.len {
+		return none
+	}
+	mut tab := self.tabs[position]
+	return tab.get_active_surface()
 }
 
 // get_config returns the configuration for this window. The reference count is
@@ -1108,8 +1179,7 @@ pub fn (mut self Window) prop_quick_terminal(mut app Application) {
 pub fn (mut self Window) window_close_request() bool {
 	if self.get_needs_confirm_quit() {
 		mut dialog := close_confirmation_dialog_new(.window)
-		C.g_signal_connect_data(dialog.dialog.obj, c'close-request', GCallback(voidptr(window_close_confirmed_cb)),
-			voidptr(self), unsafe { nil }, 0)
+		C.g_signal_connect_data(dialog.dialog.obj, c'close-request', GCallback(voidptr(window_close_confirmed_cb)), voidptr(self), unsafe { nil }, 0)
 		dialog.present(self.as_widget())
 		return true
 	}
@@ -1307,18 +1377,31 @@ fn b2i(b bool) int {
 // (grep-verified not declared elsewhere).
 
 fn C.adw_tab_view_get_n_pages(view AdwTabView) int
+
 fn C.adw_tab_view_get_selected_page(view AdwTabView) AdwTabPage
+
 fn C.adw_tab_view_set_selected_page(view AdwTabView, page AdwTabPage)
+
 fn C.adw_tab_view_get_page_position(view AdwTabView, page AdwTabPage) int
+
 fn C.adw_tab_view_get_nth_page(view AdwTabView, position int) AdwTabPage
+
 fn C.adw_tab_view_get_page(view AdwTabView, child GtkWidget) AdwTabPage
+
 fn C.adw_tab_view_append(view AdwTabView, child GtkWidget) AdwTabPage
+
 fn C.adw_tab_view_insert(view AdwTabView, child GtkWidget, position int) AdwTabPage
+
 fn C.adw_tab_view_reorder_page(view AdwTabView, page AdwTabPage, position int) int
+
 fn C.adw_tab_overview_get_open(overview AdwTabOverview) int
+
 fn C.adw_tab_overview_set_open(overview AdwTabOverview, open int)
+
 fn C.adw_toolbar_view_remove(view AdwToolbarView, child GtkWidget)
+
 fn C.adw_toolbar_view_add_top_bar(view AdwToolbarView, child GtkWidget)
+
 fn C.adw_toolbar_view_add_bottom_bar(view AdwToolbarView, child GtkWidget)
 
 fn adw_tab_view_get_n_pages(view AdwTabView) int {

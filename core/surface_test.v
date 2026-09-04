@@ -604,3 +604,49 @@ fn test_copy_selection_mixed_to_requested_clipboards() ! {
 		assert contents[1].data.contains('hello')
 	}
 }
+
+struct RuntimeCallbackProbe {
+mut:
+	action_kind AppActionKind
+	closed      bool
+	confirmed   bool
+}
+
+fn runtime_action_probe(data voidptr, action AppAction) !bool {
+	mut probe := unsafe { &RuntimeCallbackProbe(data) }
+	probe.action_kind = action.kind
+	return true
+}
+
+fn runtime_close_probe(data voidptr, confirm bool) {
+	mut probe := unsafe { &RuntimeCallbackProbe(data) }
+	probe.closed = true
+	probe.confirmed = confirm
+}
+
+fn runtime_scale_probe(data voidptr) !ContentScale {
+	_ = data
+	return ContentScale{ x: 2, y: 3 }
+}
+
+fn test_runtime_callbacks_override_headless_storage() ! {
+	mut probe := RuntimeCallbackProbe{}
+	mut app := RuntimeApp{
+		user_data: &probe
+		action_fn: runtime_action_probe
+	}
+	assert app.perform_action(AppAction{ kind: .ring_bell })!
+	assert probe.action_kind == .ring_bell
+	assert app.actions.len == 0
+
+	mut surface := RuntimeSurface{
+		user_data: &probe
+		close_fn: runtime_close_probe
+		content_scale_fn: runtime_scale_probe
+	}
+	surface.close(true)
+	assert probe.closed
+	assert probe.confirmed
+	assert !surface.closed
+	assert surface.get_content_scale()! == ContentScale{ x: 2, y: 3 }
+}

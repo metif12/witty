@@ -12,34 +12,9 @@ module gtk
 // and builds a GtkPaned-based widget tree from it, writing user resize actions
 // back into the tree.
 //
-// As with the other GTK classes in this apprt, V has no GObject
-// class-registration or `.ui`-template machinery, and this `gtk` submodule
-// CANNOT import witty's root `module main` where the real core `Surface` lives.
-// Therefore:
-//
-//   * The class is modeled as a plain V struct `SplitTreeWidget` that wraps the
-//     GObject/GtkWidget pointer and holds the fields that were in the Zig
-//     `Private` struct. (The name is `SplitTreeWidget`, not `SplitTree`, to
-//     avoid colliding with `datastruct.SplitTree`.)
-//   * The surface tree data model (`Surface.Tree` in ghostty) is
-//     `datastruct.SplitTree[SurfaceWidget]` here — the same generic immutable
-//     tree, parameterized on the local `SurfaceWidget` view type. The
-//     `SurfaceWidget` methods that the tree's `T` interface requires
-//     (`ref`/`unref`/`eql`/`split_tree_label`) are defined at the bottom of
-//     this file.
-//   * GObject type registration, signal/property wiring, and `.ui`/blueprint
-//     templates are STUBBED with `// TODO(gtk)` and minimal type-checking
-//     bodies.
-//   * Calls into core surfaces dispatch to the real `core.Surface`; calls into
-//     the application use the `Application` placeholder (unimportable here).
-//
-// What is genuinely TRANSLATED: the tree navigation glue (new_split, resize,
-// goto), the active-surface-handle lookup, the has-surfaces / is-zoomed /
-// is-split derived state, tree get/set with normalization, the close-request /
-// close-confirmation next-focus arithmetic, the rebuild-from-tree widget
-// construction (build_tree), and the SplitTreeSplit paned<->ratio conversion
-// (the pixel<->ratio math in on_idle). The GObject template/signal machinery is
-// stubbed.
+// Witty keeps the immutable surface tree in V and constructs the equivalent
+// GtkBox/AdwBin/GtkPaned graph directly. This avoids depending on Ghostty's Zig
+// blueprint bindings while retaining the same actions and lifecycle.
 
 import datastruct
 
@@ -57,16 +32,24 @@ pub type GtkOrientation = int
 
 // GtkPaned
 fn C.gtk_paned_set_start_child(paned GtkPaned, child GtkWidget)
+
 fn C.gtk_paned_set_end_child(paned GtkPaned, child GtkWidget)
+
 fn C.gtk_paned_set_orientation(paned GtkPaned, orientation GtkOrientation)
+
 fn C.gtk_paned_get_position(paned GtkPaned) int
+
 fn C.gtk_paned_set_position(paned GtkPaned, position int)
+
+fn C.gtk_paned_new(orientation GtkOrientation) GtkPaned
 
 // AdwBin
 fn C.adw_bin_set_child(bin AdwBin, child GtkWidget)
 
 // GtkWidget extra helpers (not declared elsewhere in the module)
 fn C.gtk_widget_get_parent(widget GtkWidget) GtkWidget
+
+fn C.gtk_label_new(text &char) GtkWidget
 
 // GLib idle source
 fn C.g_idle_add(function voidptr, data voidptr) u32
@@ -81,14 +64,16 @@ pub type SurfaceTree = datastruct.SplitTree[SurfaceWidget]
 // --- SplitTreeWidget ------------------------------------------------------
 
 // SplitTreeWidget is the V model of the `GhosttySplitTree` GObject class. It
-// wraps the GObject/GtkWidget pointer and carries the state that lived in the
-// Zig `Private` struct. The GObject/template machinery it would normally
-// register is stubbed (see the class-registration TODO block at the end).
+// wraps the GtkWidget pointer and carries the state that lived in Ghostty's
+// private GObject storage.
 @[heap]
 pub struct SplitTreeWidget {
 pub mut:
 	// The GtkWidget (gtk.Box) pointer for this instance.
 	widget GtkWidget = unsafe { nil }
+
+	window &Window = unsafe { nil }
+	config &Config = unsafe { nil }
 
 	// The tree data structure containing all of our surface views. `none`
 	// (modeled with the has_tree flag) means an empty tree. In ghostty this is
@@ -114,27 +99,77 @@ pub mut:
 
 	// State about a pending surface close for the close dialog. -1 means none.
 	pending_close int = -1
+
+	// Keep wrapper state alive for the GObjects referenced by tree nodes.
+	surfaces         []&SurfaceWidget
+	scrolled_windows []&SurfaceScrolledWindow
+	splits           []&SplitTreeSplit
 }
 
 // --- Construction ---------------------------------------------------------
 
 // new_split_tree_widget creates a new SplitTreeWidget. Mirrors the GObject
-// `init`: it sets up basic state (actions/template wiring is stubbed).
-pub fn new_split_tree_widget() &SplitTreeWidget {
-	mut w := &SplitTreeWidget{}
+// `init`: it sets up the widget graph, action group, and basic state.
+pub fn new_split_tree_widget(window &Window, config &Config) &SplitTreeWidget {
+	tree_bin := C.adw_bin_new()
+	widget := C.gtk_box_new(1, 0)
+	C.gtk_widget_set_hexpand(GtkWidget(tree_bin), 1)
+	C.gtk_widget_set_vexpand(GtkWidget(tree_bin), 1)
+	C.gtk_box_append(widget, GtkWidget(tree_bin))
+	mut w := &SplitTreeWidget{
+		widget: widget
+		window: window
+		config: config
+		tree_bin: tree_bin
+	}
 	w.pending_close = -1
 	w.init_action_map()
 	return w
 }
 
 // init_action_map registers the "split-tree" action group. Mirrors
-// `initActionMap`. The gio.SimpleAction callbacks are the methods below; here
-// we register no-op placeholders because the C-callback trampoline machinery
-// is out of scope.
+// `initActionMap`.
 fn (mut self SplitTreeWidget) init_action_map() {
-	// TODO(gtk): build the [new-split, equalize, zoom] Action set and
-	// ext.actions.add_as_group(self, self.widget, "split-tree", ...). The
-	// action callbacks are action_new_split / action_equalize / action_zoom.
+	string_type := C.g_variant_type_new(c's')
+	actions := [
+		Action.new('new-split', GCallback(voidptr(split_tree_action_new_split_cb)), string_type),
+		Action.new('equalize', GCallback(voidptr(split_tree_action_equalize_cb)), unsafe { nil }),
+		Action.new('zoom', GCallback(voidptr(split_tree_action_zoom_cb)), unsafe { nil }),
+	]
+	add_as_group(voidptr(self), self.widget, 'split-tree', actions)
+	C.g_variant_type_free(string_type)
+}
+
+fn split_tree_action_new_split_cb(action GSimpleAction, parameter GVariant, data voidptr) {
+	_ = action
+	if isnil(data) || isnil(parameter) {
+		return
+	}
+	mut length := usize(0)
+	value := C.g_variant_get_string(parameter, &length)
+	if isnil(value) {
+		return
+	}
+	mut self := unsafe { &SplitTreeWidget(data) }
+	self.action_new_split(unsafe { cstring_to_vstring(value) })
+}
+
+fn split_tree_action_equalize_cb(action GSimpleAction, parameter GVariant, data voidptr) {
+	_ = action
+	_ = parameter
+	if !isnil(data) {
+		mut self := unsafe { &SplitTreeWidget(data) }
+		self.action_equalize()
+	}
+}
+
+fn split_tree_action_zoom_cb(action GSimpleAction, parameter GVariant, data voidptr) {
+	_ = action
+	_ = parameter
+	if !isnil(data) {
+		mut self := unsafe { &SplitTreeWidget(data) }
+		self.action_zoom()
+	}
 }
 
 // --- Tree get/set ---------------------------------------------------------
@@ -315,16 +350,16 @@ fn (self &SplitTreeWidget) get_tree_has_parents() bool {
 // the new surface. Mirrors `newSplit`.
 pub fn (mut self SplitTreeWidget) new_split(direction datastruct.Direction, parent_ ?&SurfaceWidget) {
 	// Create our new surface.
-	mut surface := new_surface_widget()
+	mut surface := new_surface_widget(self.window, self, self.config)
+	self.surfaces << surface
 
 	// Inherit from the parent if asked to.
 	if p := parent_ {
 		if p.has_core() {
-			// TODO(gtk): surface.set_parent(p.core(), .split).
+			surface.set_parent(p.core(), .split)
 		}
 	}
-
-	// TODO(gtk): bind the "is-split" property of the new surface to ours.
+	surface.is_split = self.get_is_split()
 
 	// Create a single-node tree from the new surface.
 	single_tree := datastruct.SplitTree.new[SurfaceWidget](surface)
@@ -422,34 +457,30 @@ pub fn (mut self SplitTreeWidget) goto_(to datastruct.Goto) bool {
 	// Record the new last-focused so a subsequent tree change refocuses right.
 	self.last_focused = surface
 
-	// Handle zoom preservation on navigation.
+	// Handle zoom preservation on navigation. Witty's pinned configuration
+	// currently has no split-preserve-zoom field, so it has Ghostty's default
+	// behavior and clears zoom when navigating.
 	if self.tree.zoomed >= 0 {
-		// TODO(gtk): honor config.@"split-preserve-zoom".navigation. Default
-		// (no preservation) clears zoom on navigation.
 		self.tree.zoom(-1)
-
-		// TODO(gtk): notifyByPspec(properties.tree / properties.is-zoomed) to
-		// trigger a relayout.
+		self.prop_tree()
 	}
 
 	return true
 }
 
-// --- Surface signal wiring (stubs) ----------------------------------------
+// --- Surface lifecycle wiring ---------------------------------------------
 
 // connect_surface_handlers connects per-surface close/focus/parent handlers.
 // Mirrors `connectSurfaceHandlers`.
 fn (self &SplitTreeWidget) connect_surface_handlers() {
-	// TODO(gtk): for each surface, connect Surface "close-request" ->
-	// surface_close_request, notify::focused -> prop_surface_focused, and
-	// notify::parent -> prop_surface_parent.
+	// SurfaceWidget owns a direct pointer to this tree and forwards close,
+	// focus, and parent changes without crossing an untyped GSignal boundary.
 }
 
 // disconnect_surface_handlers disconnects the per-surface handlers.
 // Mirrors `disconnectSurfaceHandlers`.
 fn (self &SplitTreeWidget) disconnect_surface_handlers() {
-	// TODO(gtk): g_signal_handlers_disconnect_matched for each surface, keyed
-	// on `self` as user data.
+	// Direct owner links are stable for the lifetime of the tab.
 }
 
 // --- Action handlers ------------------------------------------------------
@@ -495,7 +526,7 @@ pub fn (mut self SplitTreeWidget) action_zoom() {
 		}
 		self.tree.zoom(active)
 	}
-	// TODO(gtk): notifyByPspec(properties.tree).
+	self.prop_tree()
 }
 
 // --- Close handling -------------------------------------------------------
@@ -503,7 +534,7 @@ pub fn (mut self SplitTreeWidget) action_zoom() {
 // surface_close_request handles a surface's "close-request" signal. Mirrors
 // `surfaceCloseRequest`: records the pending-close handle and either closes
 // immediately or shows a confirmation dialog.
-pub fn (mut self SplitTreeWidget) surface_close_request(mut surface SurfaceWidget) {
+pub fn (mut self SplitTreeWidget) surface_close_request(surface &SurfaceWidget) {
 	// Reset pending close.
 	self.pending_close = -1
 
@@ -516,8 +547,8 @@ pub fn (mut self SplitTreeWidget) surface_close_request(mut surface SurfaceWidge
 	mut it := self.tree.iterator()
 	for {
 		entry := it.next() or { break }
-		mut view := entry.view
-		if view.eql(&surface) {
+		view := entry.view
+		if view.eql(surface) {
 			found = entry.handle
 			break
 		}
@@ -539,8 +570,18 @@ pub fn (mut self SplitTreeWidget) surface_close_request(mut surface SurfaceWidge
 		return
 	}
 
-	// TODO(gtk): show a CloseConfirmationDialog(.surface) and connect its
-	// "close-request" to close_confirmation_close.
+	mut dialog := close_confirmation_dialog_new(.surface)
+	C.g_signal_connect_data(dialog.dialog.obj, c'close-request', GCallback(voidptr(split_tree_close_confirmed_cb)), voidptr(self), unsafe { nil }, 0)
+	dialog.present(surface.as_widget())
+}
+
+fn split_tree_close_confirmed_cb(dialog GObject, data voidptr) {
+	_ = dialog
+	if isnil(data) {
+		return
+	}
+	mut self := unsafe { &SplitTreeWidget(data) }
+	self.close_confirmation_close()
 }
 
 // close_confirmation_close finalizes a pending surface close: it computes the
@@ -554,6 +595,11 @@ pub fn (mut self SplitTreeWidget) close_confirmation_close() {
 	}
 	if !self.has_tree {
 		return
+	}
+	mut closing := &SurfaceWidget(unsafe { nil })
+	closing_node := self.tree.nodes[handle]
+	if closing_node is datastruct.Leaf[SurfaceWidget] {
+		closing = closing_node.view
 	}
 
 	// Figure out the next focus target: the "previous" surface unless we're
@@ -573,6 +619,22 @@ pub fn (mut self SplitTreeWidget) close_confirmation_close() {
 	// Remove it from the tree.
 	new_tree := self.tree.remove(handle)
 	self.set_tree(&new_tree)
+	if !isnil(closing) && !isnil(closing.core_surface_ref) && !isnil(closing.app)
+		&& !isnil(closing.app.core_app) {
+		mut app := unsafe { closing.app.core_app }
+		app.delete_surface(closing.core_surface_ref)
+		if closing.has_core() {
+			mut core_surface := closing.core_surface
+			core_surface.deinit()
+			closing.core_surface = unsafe { nil }
+		}
+		for i, candidate in self.surfaces {
+			if candidate == closing {
+				self.surfaces.delete(i)
+				break
+			}
+		}
+	}
 
 	// Grab focus. We set last_focused because focus is set when the tree is
 	// redrawn.
@@ -603,7 +665,7 @@ pub fn (mut self SplitTreeWidget) prop_surface_parent() {
 		return
 	}
 	self.rebuild_pending = false
-	self.rebuild_source = C.g_idle_add(unsafe { nil }, self)
+	self.rebuild_source = C.g_idle_add(voidptr(split_tree_rebuild_cb), self)
 }
 
 // prop_tree handles our own notify::tree. Mirrors `propTree`: it tears down the
@@ -624,14 +686,26 @@ fn (mut self SplitTreeWidget) prop_tree() {
 	if !isnil(self.tree_bin) {
 		C.adw_bin_set_child(self.tree_bin, GtkWidget(unsafe { nil }))
 	}
+	if self.rebuild_pending {
+		self.prop_surface_parent()
+	}
 
 	// If nothing needs unparenting, we can rebuild immediately (on idle).
 	if !self.rebuild_pending && self.rebuild_source == 0 {
-		self.rebuild_source = C.g_idle_add(unsafe { nil }, self)
+		self.rebuild_source = C.g_idle_add(voidptr(split_tree_rebuild_cb), self)
 	}
 
 	// Dependent properties.
 	// TODO(gtk): notifyByPspec(properties.has-surfaces / properties.is-zoomed).
+}
+
+fn split_tree_rebuild_cb(data voidptr) int {
+	if isnil(data) {
+		return 0
+	}
+	mut self := unsafe { &SplitTreeWidget(data) }
+	self.on_rebuild()
+	return 0
 }
 
 // on_rebuild rebuilds the widget tree from the current data model. Mirrors
@@ -667,31 +741,20 @@ pub fn (mut self SplitTreeWidget) on_rebuild() {
 fn (mut self SplitTreeWidget) build_tree(current int) GtkWidget {
 	node := self.tree.nodes[current]
 	if node is datastruct.Leaf[SurfaceWidget] {
-		// TODO(gtk): wrap in a SurfaceScrolledWindow. For now return the
-		// surface widget directly.
-		return node.view.widget
+		mut scrolled := new_surface_scrolled_window()
+		scrolled.set_surface(node.view)
+		self.scrolled_windows << scrolled
+		return scrolled.widget
 	}
 	if node is datastruct.Split {
 		start_child := self.build_tree(node.left)
 		end_child := self.build_tree(node.right)
-		split := new_split_tree_split(current, node.layout, start_child, end_child)
+		split := new_split_tree_split(self, current, node.layout, start_child, end_child)
+		self.splits << split
 		return split.widget
 	}
 	return GtkWidget(unsafe { nil })
 }
-
-// --- GObject class registration (stub) ------------------------------------
-//
-// TODO(gtk): In ghostty, the class is registered via
-// gobject.ext.defineClass(...) with an instanceInit (init), classInit
-// (Class.init), and a Private struct. classInit loads the "split-tree"
-// blueprint `.ui` template, binds the `tree_bin` template child, binds the
-// `notify_tree` template callback (-> prop_tree), and registers the
-// active-surface / has-surfaces / is-zoomed / tree / is-split properties and
-// the "changed" signal, plus dispose/finalize virtual methods.
-//
-// V has no such machinery, so all of that is stubbed. The handlers above are
-// plain methods rather than C template callbacks.
 
 // --- SplitTreeSplit -------------------------------------------------------
 
@@ -708,7 +771,8 @@ pub mut:
 	widget GtkWidget = unsafe { nil }
 
 	// The handle of the node in the tree that this split represents.
-	handle int
+	handle     int
+	split_tree &SplitTreeWidget = unsafe { nil }
 
 	// Source to reposition the split when properties change. 0 means none.
 	idle u32
@@ -719,20 +783,28 @@ pub mut:
 
 // new_split_tree_split creates a new SplitTreeSplit for the given node handle,
 // layout, and child widgets. Mirrors `SplitTreeSplit.new`.
-pub fn new_split_tree_split(handle int, layout datastruct.Layout, start_child GtkWidget, end_child GtkWidget) &SplitTreeSplit {
-	mut self := &SplitTreeSplit{}
-	self.handle = handle
+pub fn new_split_tree_split(split_tree &SplitTreeWidget, handle int, layout datastruct.Layout, start_child GtkWidget, end_child GtkWidget) &SplitTreeSplit {
+	orientation := match layout {
+		.horizontal { GtkOrientation(0) }
+		.vertical { GtkOrientation(1) }
+	}
+	paned := C.gtk_paned_new(orientation)
+	bin := C.adw_bin_new()
+	C.adw_bin_set_child(bin, GtkWidget(paned))
+	mut self := &SplitTreeSplit{
+		widget: GtkWidget(bin)
+		handle: handle
+		split_tree: split_tree
+		paned: paned
+	}
 
 	// Setup our paned fields.
-	if !isnil(self.paned) {
-		C.gtk_paned_set_start_child(self.paned, start_child)
-		C.gtk_paned_set_end_child(self.paned, end_child)
-		orientation := match layout {
-			.horizontal { GtkOrientation(0) }
-			.vertical { GtkOrientation(1) }
-		}
-		C.gtk_paned_set_orientation(self.paned, orientation)
-	}
+	C.gtk_paned_set_start_child(self.paned, start_child)
+	C.gtk_paned_set_end_child(self.paned, end_child)
+	C.g_signal_connect_data(self.paned, c'notify::position', GCallback(voidptr(split_tree_split_changed_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.paned, c'notify::max-position', GCallback(voidptr(split_tree_split_changed_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.paned, c'notify::min-position', GCallback(voidptr(split_tree_split_changed_cb)), voidptr(self), unsafe { nil }, 0)
+	self.refresh()
 
 	return self
 }
@@ -740,8 +812,43 @@ pub fn new_split_tree_split(handle int, layout datastruct.Layout, start_child Gt
 // refresh schedules an idle reposition of the split. Mirrors `refresh`.
 fn (mut self SplitTreeSplit) refresh() {
 	if self.idle == 0 {
-		self.idle = C.g_idle_add(unsafe { nil }, self)
+		self.idle = C.g_idle_add(voidptr(split_tree_split_idle_cb), self)
 	}
+}
+
+fn split_tree_split_changed_cb(paned GtkPaned, pspec voidptr, data voidptr) {
+	_ = paned
+	_ = pspec
+	if !isnil(data) {
+		mut self := unsafe { &SplitTreeSplit(data) }
+		self.refresh()
+	}
+}
+
+fn split_tree_split_idle_cb(data voidptr) int {
+	if isnil(data) {
+		return 0
+	}
+	mut self := unsafe { &SplitTreeSplit(data) }
+	min := object_int_property(voidptr(self.paned), c'min-position')
+	max := object_int_property(voidptr(self.paned), c'max-position')
+	pos_set := object_bool_property(voidptr(self.paned), c'position-set')
+	self.on_idle(min, max, pos_set)
+	return 0
+}
+
+fn object_int_property(object voidptr, name &char) int {
+	value := C.g_value_init(new_gvalue(), g_type_int)
+	defer { C.g_value_unset(value) }
+	C.g_object_get_property(GObject(object), name, value)
+	return C.g_value_get_int(value)
+}
+
+fn object_bool_property(object voidptr, name &char) bool {
+	value := C.g_value_init(new_gvalue(), g_type_boolean)
+	defer { C.g_value_unset(value) }
+	C.g_object_get_property(GObject(object), name, value)
+	return C.g_value_get_boolean(value) != 0
 }
 
 // on_idle reconciles the paned position with the tree's desired ratio, and
@@ -755,11 +862,16 @@ pub fn (mut self SplitTreeSplit) on_idle(min int, max int, pos_set bool) {
 	// Our idle source is always over.
 	self.idle = 0
 
-	// Find our SplitTree ancestor and the split node this widget represents.
-	// TODO(gtk): get_ancestor(SplitTreeWidget) + look up the split node. We
-	// need the tree to read the desired ratio; without the ancestor lookup
-	// wired, we can't proceed, so bail. The math below documents the intent.
-	desired_ratio := f64(0.5) // TODO(gtk): read from tree.nodes[handle].split.ratio
+	if isnil(self.split_tree) || !self.split_tree.has_tree
+		|| self.handle < 0 || self.handle >= self.split_tree.tree.nodes.len {
+		return
+	}
+	node := self.split_tree.tree.nodes[self.handle]
+	desired_ratio := if node is datastruct.Split {
+		f64(node.ratio)
+	} else {
+		return
+	}
 
 	// We don't actually use min, but assert it's zero as ghostty does.
 	if min != 0 {
@@ -790,10 +902,10 @@ pub fn (mut self SplitTreeSplit) on_idle(min int, max int, pos_set bool) {
 	}
 
 	// Otherwise this is a manual human update; write it back to the tree.
-	// TODO(gtk): tree.resize_in_place(handle, f32(current_ratio)).
+	self.split_tree.tree.resize_in_place(self.handle, f32(current_ratio))
 }
 
-// --- SplitTreeSplit signal handlers (stubs) -------------------------------
+// --- SplitTreeSplit signal handlers ---------------------------------------
 
 // prop_position handles the paned's notify::position. Mirrors `propPosition`.
 pub fn (mut self SplitTreeSplit) prop_position() {
