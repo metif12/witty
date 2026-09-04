@@ -4128,10 +4128,6 @@ pub mut:
 	// The current conditional state (e.g. light/dark theme). This is not a
 	// user-facing config option; it tracks runtime conditional evaluation.
 	conditional_state ConditionalState
-	// Tracks which config keys were explicitly set by the user. This is used to
-	// give user-set values priority over values loaded from a theme file, and
-	// to record conditional keys (e.g. `theme`). Not a user-facing option.
-	explicit_keys map[string]bool
 	// The parsed light/dark theme pair, if the `theme` value specified one.
 	theme_pair ?ThemePair
 	// Set of conditional keys (currently only "theme") that affect the config
@@ -4140,6 +4136,11 @@ pub mut:
 	// True while options from a theme file are being applied. Theme options
 	// have lower priority than explicit config options and cannot set `theme`.
 	loading_theme bool
+	// Ordered source inputs used to rebuild the config around a theme layer.
+	replay_steps []ReplayStep
+	// True while replay_steps are being evaluated; prevents recording a replay
+	// of the replay itself.
+	replaying bool
 }
 
 // MacOSDockDropBehavior controls behavior when dropping onto the macOS dock.
@@ -4757,31 +4758,8 @@ pub fn (c Config) change_conditional_state(state ConditionalState) ?Config {
 	}
 	mut copy := c.clone()
 	copy.conditional_state = state
-	// Reset any theme-derived colors to defaults so the new conditional theme
-	// is applied cleanly, preserving only explicitly-set values.
-	copy.reset_theme_derived()
 	copy.finalize()
 	return copy
-}
-
-// reset_theme_derived restores theme-derived color fields to their defaults
-// unless they were explicitly set by the user. This lets a re-finalize under a
-// new conditional state apply the correct theme colors.
-fn (mut c Config) reset_theme_derived() {
-	if 'background' !in c.explicit_keys {
-		c.background = ColorRGB{
-			r: 0x28
-			g: 0x2C
-			b: 0x34
-		}
-	}
-	if 'foreground' !in c.explicit_keys {
-		c.foreground = ColorRGB{
-			r: 0xff
-			g: 0xff
-			b: 0xff
-		}
-	}
 }
 
 pub fn (mut c Config) deinit() {
@@ -4815,8 +4793,8 @@ pub fn (c Config) clone() Config {
 			items: c.link.links.items.clone()
 		}
 	}
-	copy.explicit_keys = c.explicit_keys.clone()
 	copy.conditional_set = c.conditional_set.clone()
+	copy.replay_steps = c.replay_steps.clone()
 	if cmd := c.command {
 		copy.command = cmd.clone()
 	}
@@ -5638,6 +5616,22 @@ pub:
 	message string
 }
 
+enum ReplayStepKind {
+	kv
+	expand
+	diagnostic
+}
+
+// ReplayStep records configuration input in source order. Ghostty rebuilds a
+// configuration from these steps after loading a theme so that the theme is a
+// base layer and every user option—including repeatable options—retains its
+// normal parser semantics.
+struct ReplayStep {
+	kind  ReplayStepKind
+	key   string
+	value string
+}
+
 pub fn (d Diagnostic) str() string {
 	return d.message
 }
@@ -5664,11 +5658,11 @@ pub fn Config.load() Config {
 pub fn (mut c Config) load_file(path string) {
 	abs_path := if os.is_abs_path(path) { path } else { os.abs_path(path) }
 	if os.exists(abs_path) && !os.is_file(abs_path) {
-		c.add_diagnostic('config-file ${abs_path}: not reading because it is not a file')
+		c.add_replay_diagnostic('config-file ${abs_path}: not reading because it is not a file')
 		return
 	}
 	content := os.read_file(abs_path) or {
-		c.add_diagnostic('config-file ${abs_path}: unable to read file')
+		c.add_replay_diagnostic('config-file ${abs_path}: unable to read file')
 		return
 	}
 	c.load_string(content)
@@ -5691,22 +5685,22 @@ pub fn (mut c Config) load_recursive_files() {
 		}
 		path := if os.is_abs_path(item.path) { item.path } else { os.abs_path(item.path) }
 		if path in loaded {
-			c.add_diagnostic('config-file ${path}: cycle detected')
+			c.add_replay_diagnostic('config-file ${path}: cycle detected')
 			continue
 		}
 		loaded[path] = true
 		if !os.exists(path) {
 			if !item.optional {
-				c.add_diagnostic('error opening config-file ${path}: file not found')
+				c.add_replay_diagnostic('error opening config-file ${path}: file not found')
 			}
 			continue
 		}
 		if !os.is_file(path) {
-			c.add_diagnostic('config-file ${path}: not reading because it is not a file')
+			c.add_replay_diagnostic('config-file ${path}: not reading because it is not a file')
 			continue
 		}
 		content := os.read_file(path) or {
-			c.add_diagnostic('error opening config-file ${path}: ${err}')
+			c.add_replay_diagnostic('error opening config-file ${path}: ${err}')
 			continue
 		}
 		c.load_string(content)
@@ -5715,6 +5709,12 @@ pub fn (mut c Config) load_recursive_files() {
 }
 
 fn (mut c Config) expand_paths(base string) {
+	if !c.loading_theme && !c.replaying {
+		c.replay_steps << ReplayStep{
+			kind: .expand
+			value: base
+		}
+	}
 	c.custom_shader.expand(base) or { c.add_diagnostic('error expanding custom-shader path: ${err}') }
 	c.config_file.expand(base) or { c.add_diagnostic('error expanding config-file path: ${err}') }
 	if mut background_image := c.background_image {
@@ -5729,6 +5729,19 @@ fn (mut c Config) expand_paths(base string) {
 fn (mut c Config) add_diagnostic(message string) {
 	c.diagnostics << Diagnostic{
 		message: message
+	}
+}
+
+// add_replay_diagnostic records diagnostics that do not have an input step of
+// their own (for example, failure to open a config file). Parser and expansion
+// diagnostics are regenerated by replaying their kv/expand step.
+fn (mut c Config) add_replay_diagnostic(message string) {
+	c.add_diagnostic(message)
+	if !c.loading_theme && !c.replaying {
+		c.replay_steps << ReplayStep{
+			kind: .diagnostic
+			value: message
+		}
 	}
 }
 
@@ -5747,13 +5760,18 @@ pub fn (mut c Config) load_string(content string) {
 			continue
 		}
 		eq := line.index('=') or {
-			c.diagnostics << Diagnostic{
-				message: 'invalid config line (missing "="): ${line}'
-			}
+			c.add_replay_diagnostic('invalid config line (missing "="): ${line}')
 			continue
 		}
 		key := line[..eq].trim_space()
 		value := line[eq + 1..].trim_space()
+		if !c.loading_theme && !c.replaying {
+			c.replay_steps << ReplayStep{
+				kind: .kv
+				key: key
+				value: value
+			}
+		}
 		c.apply_kv(key, value)
 	}
 }
@@ -5765,10 +5783,6 @@ pub fn (mut c Config) load_string(content string) {
 fn (mut c Config) apply_kv(key string, value string) {
 	match key {
 		'background' {
-			// A theme-loaded value never overrides an explicitly-set one.
-			if c.loading_theme && ('background' in c.explicit_keys) {
-				return
-			}
 			if col := parse_color(value) {
 				c.background = col
 			} else {
@@ -5776,23 +5790,14 @@ fn (mut c Config) apply_kv(key string, value string) {
 					message: 'invalid color for "background": ${value}'
 				}
 			}
-			if !c.loading_theme {
-				c.explicit_keys['background'] = true
-			}
 		}
 		'foreground' {
-			if c.loading_theme && ('foreground' in c.explicit_keys) {
-				return
-			}
 			if col := parse_color(value) {
 				c.foreground = col
 			} else {
 				c.diagnostics << Diagnostic{
 					message: 'invalid color for "foreground": ${value}'
 				}
-			}
-			if !c.loading_theme {
-				c.explicit_keys['foreground'] = true
 			}
 		}
 		'cursor-color' {
@@ -5896,7 +5901,6 @@ fn (mut c Config) apply_kv(key string, value string) {
 			} else {
 				c.theme_pair = none
 			}
-			c.explicit_keys['theme'] = true
 		}
 		'window-theme' {
 			match value {
@@ -6053,6 +6057,10 @@ fn (mut c Config) apply_kv(key string, value string) {
 			}
 		}
 		'config-file' {
+			// Theme files cannot recursively load general configuration files.
+			if c.loading_theme {
+				return
+			}
 			c.config_file.parse_cli(value) or {
 				c.invalid_config_value(key, value)
 			}
@@ -6960,9 +6968,10 @@ pub fn (mut c Config) finalize() {
 	c.key_remap.finalize()
 }
 
-// load_theme resolves the configured `theme` and applies the theme file's
-// options as a lower-priority layer. This translates the portable subset of
-// Ghostty's theme handling in finalize:
+// load_theme resolves the configured `theme`, loads it into a fresh default
+// configuration, and replays every prior input over it. This is Ghostty's
+// replay model and preserves parser semantics for scalars and repeatable
+// values alike:
 //
 //   * A single theme name/path loads one file.
 //   * A `light:...,dark:...` pair chooses based on the conditional state.
@@ -6977,19 +6986,54 @@ fn (mut c Config) load_theme() {
 		return
 	}
 
-	if pair := c.theme_pair {
-		// A light/dark pair forces window-theme=auto to system.
-		if c.window_theme == .auto {
-			c.window_theme = .system
+	state := c.conditional_state
+	steps := c.replay_steps.clone()
+	pair := c.theme_pair
+	path := if parsed_pair := pair {
+		match state.theme {
+			.light { parsed_pair.light }
+			.dark { parsed_pair.dark }
 		}
-		path := match c.conditional_state.theme {
-			.light { pair.light }
-			.dark { pair.dark }
-		}
-		c.apply_theme_file(path)
 	} else {
-		c.apply_theme_file(theme_str)
+		theme_str
 	}
+
+	mut rebuilt := Config.default_config()
+	rebuilt.conditional_state = state
+	rebuilt.loading_theme = true
+	rebuilt.apply_theme_file(path)
+	rebuilt.loading_theme = false
+
+	// Replay user/default-file inputs in their original order. Expansion is a
+	// replay step because relative paths are resolved against the file that
+	// declared them, not against the theme directory.
+	rebuilt.replaying = true
+	for step in steps {
+		match step.kind {
+			.kv { rebuilt.apply_kv(step.key, step.value) }
+			.expand { rebuilt.expand_paths(step.value) }
+			.diagnostic {
+				rebuilt.diagnostics << Diagnostic{
+					message: step.value
+				}
+			}
+		}
+	}
+	rebuilt.replaying = false
+	rebuilt.replay_steps = steps
+
+	// A conditional theme makes window-theme=auto nonsensical because it
+	// would override the selected light/dark theme.
+	if parsed_pair := pair {
+		if parsed_pair.light != parsed_pair.dark {
+			if rebuilt.window_theme == .auto {
+				rebuilt.window_theme = .system
+			}
+			rebuilt.conditional_set['theme'] = true
+		}
+	}
+
+	c = rebuilt
 }
 
 // apply_theme_file loads the given theme file and applies its options with the
@@ -7000,10 +7044,11 @@ fn (mut c Config) apply_theme_file(path string) {
 		c.add_diagnostic('not reading theme from "${path}": ${err}')
 		return
 	}
+	was_loading := c.loading_theme
 	c.loading_theme = true
 	c.load_string(content)
-	c.loading_theme = false
 	c.expand_paths(os.dir(resolved))
+	c.loading_theme = was_loading
 }
 
 fn (mut c Config) resolve_theme_file(name string) ?string {

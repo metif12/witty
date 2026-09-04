@@ -769,6 +769,84 @@ fn test_theme_priority_lower_than_config() {
 	assert cfg.background == ColorRGB{0xAB, 0xCD, 0xEF}
 }
 
+fn test_theme_replay_preserves_all_user_overrides_and_repeatables() {
+	dir := os.join_path(os.temp_dir(), 'witty-theme-replay-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir)!
+	defer { os.rmdir_all(dir) or {} }
+	theme_path := os.join_path(dir, 'theme')
+	config_path := os.join_path(dir, 'config')
+	os.write_file(theme_path, '
+font-size = 9
+cursor-color = #010203
+palette = 1=#111111
+font-family = Theme Font
+custom-shader = theme.glsl
+keybind = ctrl+a=new_window
+config-file = ignored.conf
+')!
+	os.write_file(config_path, '
+theme = ${theme_path}
+font-size = 17
+cursor-color = #AABBCC
+palette = 2=#222222
+font-family = User Font
+custom-shader = user.glsl
+keybind = ctrl+b=new_tab
+')!
+
+	mut cfg := Config.default_config()
+	cfg.load_file(config_path)
+	cfg.finalize()
+
+	assert cfg.font_size == 17
+	assert cfg.cursor_color?.color == ColorRGB{0xAA, 0xBB, 0xCC}
+	assert cfg.palette.value[1] == ColorRGB{0x11, 0x11, 0x11}
+	assert cfg.palette.value[2] == ColorRGB{0x22, 0x22, 0x22}
+	assert cfg.font_family == ['Theme Font', 'User Font']
+	assert cfg.custom_shader.items == [
+		Path{ path: os.join_path(dir, 'theme.glsl') },
+		Path{ path: os.join_path(dir, 'user.glsl') },
+	]
+	assert cfg.config_file.items.len == 0
+	assert cfg.keybind.set.get(input.Trigger.parse('ctrl+a')!) or {
+		panic('theme keybind was not retained')
+	}.value.leaf_action.tag == .new_window
+	assert cfg.keybind.set.get(input.Trigger.parse('ctrl+b')!) or {
+		panic('user keybind was not retained')
+	}.value.leaf_action.tag == .new_tab
+	assert cfg.diagnostics.len == 0
+}
+
+fn test_conditional_theme_replay_replaces_theme_repeatables() {
+	dir := os.join_path(os.temp_dir(), 'witty-theme-replay-conditional-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir)!
+	defer { os.rmdir_all(dir) or {} }
+	light := os.join_path(dir, 'light')
+	dark := os.join_path(dir, 'dark')
+	os.write_file(light, 'font-family = Light Font\ncustom-shader = light.glsl\n')!
+	os.write_file(dark, 'font-family = Dark Font\ncustom-shader = dark.glsl\n')!
+
+	mut cfg := Config.default_config()
+	cfg.load_string('theme = light:${light},dark:${dark}\nfont-family = User Font\ncustom-shader = user.glsl\n')
+	cfg.finalize()
+	assert cfg.font_family == ['Light Font', 'User Font']
+	assert cfg.custom_shader.items == [
+		Path{ path: os.join_path(dir, 'light.glsl') },
+		Path{ path: 'user.glsl' },
+	]
+
+	dark_cfg := cfg.change_conditional_state(ConditionalState{ theme: .dark }) or {
+		panic('conditional theme was not marked relevant')
+	}
+	assert dark_cfg.font_family == ['Dark Font', 'User Font']
+	assert dark_cfg.custom_shader.items == [
+		Path{ path: os.join_path(dir, 'dark.glsl') },
+		Path{ path: 'user.glsl' },
+	]
+}
+
 // Config.zig: "theme loading correct light/dark"
 fn test_theme_loading_correct_light_dark() {
 	dir := os.join_path(os.temp_dir(), 'witty-theme-ld-${os.getpid()}')
