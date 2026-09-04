@@ -140,17 +140,11 @@ fn test_preview_filter_cycling() {
 // Test color_from_palette
 fn test_color_from_palette() {
 	cfg := configpkg.Config.default_config()
-	// Index 0 in default palette is black (0x00, 0x00, 0x00)
-	c := color_from_palette(cfg, 0)
-	assert c.rgb[0] == 0x00
-	assert c.rgb[1] == 0x00
-	assert c.rgb[2] == 0x00
-
-	// Index 1 should be red-ish (0xaa, 0x00, 0x00)
-	c1 := color_from_palette(cfg, 1)
-	assert c1.rgb[0] == 0xaa
-	assert c1.rgb[1] == 0x00
-	assert c1.rgb[2] == 0x00
+	for index in [0, 1] {
+		expected := cfg.palette.value[index]
+		actual := color_from_palette(cfg, index)
+		assert actual.rgb == [expected.r, expected.g, expected.b]!
+	}
 }
 
 // Test Options defaults

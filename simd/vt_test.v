@@ -30,9 +30,9 @@ fn test_vt_decode_immediate_escape() {
 fn test_vt_decode_incomplete_utf8() {
 	mut output := []u32{len: 64}
 	for input in [
-		[`h`, `e`, `l`, `l`, `o`, u8(0xc2)],
-		[`h`, `e`, `l`, `l`, `o`, u8(0xe0), u8(0x00)],
-		[`h`, `e`, `l`, `l`, `o`, u8(0xf0), u8(0x90)],
+		[u8(`h`), `e`, `l`, `l`, `o`, 0xc2],
+		[u8(`h`), `e`, `l`, `l`, `o`, 0xe0, 0x00],
+		[u8(`h`), `e`, `l`, `l`, `o`, 0xf0, 0x90],
 	] {
 		assert utf8_decode_until_control_seq(input, mut output) == DecodeResult{
 			consumed: 5
@@ -42,7 +42,7 @@ fn test_vt_decode_incomplete_utf8() {
 }
 
 fn test_vt_decode_invalid_utf8() {
-	input := [`h`, `e`, `l`, `l`, `o`, u8(0xc2), u8(0x01)]
+	input := [u8(`h`), `e`, `l`, `l`, `o`, 0xc2, 0x01]
 	mut output := []u32{len: 64}
 	result := utf8_decode_until_control_seq(input, mut output)
 	assert result == DecodeResult{
@@ -54,7 +54,7 @@ fn test_vt_decode_invalid_utf8() {
 }
 
 fn test_vt_decode_invalid_leading_byte_is_not_consumed() {
-	input := [`h`, `e`, `l`, `l`, `o`, u8(0xff)]
+	input := [u8(`h`), `e`, `l`, `l`, `o`, 0xff]
 	mut output := []u32{len: 64}
 	assert utf8_decode_until_control_seq(input, mut output) == DecodeResult{
 		consumed: 5

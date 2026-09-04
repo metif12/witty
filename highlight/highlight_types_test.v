@@ -5,11 +5,14 @@ import terminal
 fn test_flattened_highlight_from_pins_spans_pages() {
 	mut list := terminal.PageList.init(80, 24, usize(100_000_000))
 	defer { list.deinit() }
-	list.grow_rows(300)
 	start_node := list.pages.first or {
 		assert false, 'missing first page'
 		return
 	}
+	// Grow one row beyond the first page. The standard page capacity can
+	// change as Page's translated layout evolves, so don't hard-code it.
+	rows_to_next_page := usize(start_node.data.capacity.rows - start_node.data.size.rows) + 1
+	list.grow_rows(rows_to_next_page)
 	end_node := list.pages.last or {
 		assert false, 'missing last page'
 		return
