@@ -188,7 +188,6 @@ module core
 //
 // --- Original Ghostty Comments End: src/App.zig
 
-
 // App is the primary GUI application for ghostty. This builds the window,
 // sets up the renderer, etc. The primary run loop is started by calling
 // the "run" function.
@@ -219,6 +218,9 @@ pub mut:
 	id int
 	// The core Surface this runtime surface wraps.
 	core_surface &Surface = unsafe { nil }
+	// Runtime app owning this surface, used for lifecycle actions such as the
+	// delayed quit timer.
+	rt_app &apprt.RuntimeApp = unsafe { nil }
 }
 
 // core returns the core Surface this runtime surface wraps. Mirrors
@@ -267,14 +269,11 @@ pub fn (s &SurfaceRef) perform_binding_action(action input.Action) !bool {
 	return cs.perform_binding_action(action)!
 }
 
-// ChangeConfigMsg is a placeholder for config-change messages sent to a surface.
 pub struct ChangeConfigMsg {
 pub:
-	// TODO: Should hold a reference to the new config.
-	placeholder int
+	config &configpkg.Config = unsafe { nil }
 }
 
-// RedrawMsg is a placeholder for redraw messages sent to a surface.
 pub struct RedrawMsg {}
 
 // App is the primary application struct. It manages the list of surfaces,
@@ -389,7 +388,9 @@ pub fn (mut self App) update_config(mut rt_app apprt.RuntimeApp, config &configp
 	// derives its own config from the change_config message, applying its
 	// own conditional state.
 	for surface in self.surfaces {
-		surface.handle_message(SurfaceMessage{ kind: .change_config })!
+		surface.handle_message(unsafe {
+			SurfaceMessage{ kind: .change_config, config: config }
+		})!
 	}
 
 	// Apply our conditional state. If we fail to apply the conditional state
@@ -397,16 +398,17 @@ pub fn (mut self App) update_config(mut rt_app apprt.RuntimeApp, config &configp
 	// apply this to the app-level config because the surface config applies
 	// its own conditional state.
 	//
-	// The full implementation calls config.change_conditional_state(...) and
-	// passes the derived config to the apprt below. The config stub here does
-	// not yet expose that method, so we forward the caller's config as-is.
-	_ = config
+	mut applied := config.clone()
+	if conditional := config.change_conditional_state(self.config_conditional_state) {
+		applied = conditional
+	}
+	rt_app.config = applied.clone()
 
 	// Notify the apprt that the app has changed configuration. The config
 	// pointer is only valid for the duration of the action.
 	cfg_change := unsafe {
 		apprt.ConfigChange{
-			config: config
+			config: &rt_app.config
 		}
 	}
 	rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .config_change, apprt.ActionValue{
@@ -423,7 +425,12 @@ pub fn (mut self App) add_surface(surface &SurfaceRef) {
 	// Since we have non-zero surfaces, we can cancel the quit timer.
 	// It is up to the apprt if there is a quit timer at all and if it
 	// should be canceled.
-	// TODO: Notify apprt to stop quit timer.
+	if surface.rt_app != unsafe { nil } {
+		mut rt_app := unsafe { surface.rt_app }
+		rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .quit_timer, apprt.ActionValue{
+			quit_timer_: .stop
+		}) or {}
+	}
 }
 
 // delete_surface removes a surface from the known surface list.
@@ -451,7 +458,12 @@ pub fn (mut self App) delete_surface(surface &SurfaceRef) {
 
 	// If we have no surfaces, we can start the quit timer. It is up to the
 	// apprt to determine if this is necessary.
-	// TODO: Notify apprt to start quit timer when surfaces.len == 0.
+	if self.surfaces.len == 0 && surface.rt_app != unsafe { nil } {
+		mut rt_app := unsafe { surface.rt_app }
+		rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .quit_timer, apprt.ActionValue{
+			quit_timer_: .start
+		}) or {}
+	}
 }
 
 // focused_surface_valid returns the last focused surface if it is still
@@ -482,8 +494,7 @@ fn (mut self App) drain_mailbox(mut rt_app apprt.RuntimeApp) ! {
 		msg := self.mailbox.pop() or { break }
 		match msg {
 			OpenConfigMsg {
-				// TODO: Perform open_config action via rt_app.
-				_ = rt_app
+				self.perform_action(mut rt_app, input.Action.new(.open_config))!
 			}
 			NewWindowMsg {
 				self.new_window(mut rt_app, msg)!
@@ -500,7 +511,16 @@ fn (mut self App) drain_mailbox(mut rt_app apprt.RuntimeApp) ! {
 				return
 			}
 			RedrawSurfaceMsg {
-				// TODO: Perform redraw action via rt_app.
+				if surface := msg.surface {
+					if self.has_surface(surface) {
+						rt_app.perform_action(apprt.Target(apprt.SurfaceTarget{
+							surface: surface.core_surface
+						}), .render, apprt.ActionValue{})!
+					}
+				}
+			}
+			SurfaceAppMsg {
+				self.surface_message(msg.surface, msg.message)!
 			}
 		}
 	}
@@ -523,12 +543,17 @@ pub fn (mut self App) focus_surface(surface &SurfaceRef) {
 	self.focused_surface = surface
 }
 
-// new_window creates a new terminal window.
-// TODO: Full implementation requires apprt.performAction for new_window.
 pub fn (mut self App) new_window(mut rt_app apprt.RuntimeApp, msg NewWindowMsg) ! {
-	// TODO: Validate parent surface, determine target, call rt_app.perform_action.
-	_ = msg
-	rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .new_window, apprt.ActionValue{}) or {}
+	target := if parent := msg.parent {
+		if self.has_surface(parent) {
+			apprt.Target(apprt.SurfaceTarget{ surface: parent.core_surface })
+		} else {
+			apprt.Target(apprt.AppTarget{})
+		}
+	} else {
+		apprt.Target(apprt.AppTarget{})
+	}
+	rt_app.perform_action(target, .new_window, apprt.ActionValue{})!
 }
 
 // focus_event handles an app-level focus event. This should be called
@@ -576,14 +601,24 @@ struct BindingLeaf {
 // app-level binding set. Returns none if there is no binding, or if the entry
 // is a leader (key sequences aren't supported for app-scoped bindings).
 //
-// The full implementation reads `rt_app.config.keybind.set.get_event(event)`.
-// The apprt.RuntimeApp stub doesn't yet carry a config, so this returns none.
-// The dispatch logic below is written against the real return shape so that
-// wiring up the config is the only remaining step.
 fn (self &App) lookup_binding(mut rt_app apprt.RuntimeApp, event input.KeyEvent) ?BindingLeaf {
-	_ = rt_app
-	_ = event
-	return none
+	_ = self
+	entry := rt_app.config.keybind.set.get_event(event) or { return none }
+	return match entry.value.typ {
+		.leader { none }
+		.leaf {
+			BindingLeaf{
+				actions: [entry.value.leaf_action]
+				flags: entry.value.leaf_flags
+			}
+		}
+		.leaf_chained {
+			BindingLeaf{
+				actions: entry.value.chain_actions.clone()
+				flags: entry.value.chain_flags
+			}
+		}
+	}
 }
 
 // key_event_is_binding returns true if the given key event would trigger a
@@ -611,6 +646,7 @@ pub fn (mut self App) key_event(mut rt_app apprt.RuntimeApp, event input.KeyEven
 		.release {
 			return false
 		}
+
 		// Continue processing key press events.
 		.press, .repeat {}
 	}
@@ -727,6 +763,7 @@ pub fn (mut self App) perform_all_action(mut rt_app apprt.RuntimeApp, action inp
 		.app {
 			self.perform_action(mut rt_app, action)!
 		}
+
 		// Surface-scoped actions are performed on all surfaces. Errors are
 		// logged but processing continues.
 		.surface {
@@ -761,7 +798,12 @@ fn (self &App) has_surface(surface &SurfaceRef) bool {
 }
 
 // The message types that can be sent to the app thread.
-pub type Message = OpenConfigMsg | NewWindowMsg | CloseMsg | QuitMsg | RedrawSurfaceMsg
+pub type Message = OpenConfigMsg
+	| NewWindowMsg
+	| CloseMsg
+	| QuitMsg
+	| RedrawSurfaceMsg
+	| SurfaceAppMsg
 
 // OpenConfigMsg requests the configuration file to be opened.
 pub struct OpenConfigMsg {}
@@ -791,6 +833,12 @@ pub struct QuitMsg {}
 pub struct RedrawSurfaceMsg {
 pub:
 	surface ?&SurfaceRef
+}
+
+pub struct SurfaceAppMsg {
+pub:
+	surface &SurfaceRef
+	message SurfaceMessage
 }
 
 // Mailbox is the way that other threads send the app thread messages.

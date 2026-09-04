@@ -1,5 +1,7 @@
 module apprt
 
+import configpkg
+
 // "apprt" is the "application runtime" package. This abstracts the
 // application runtime and lifecycle management such as creating windows,
 // getting user input (mouse/keyboard), etc.
@@ -21,60 +23,92 @@ module apprt
 //   browser.v  - Browser (WASM) runtime stubs
 //   embedded.v - Embedded runtime (macOS / libghostty)
 
-// RuntimeApp represents the application runtime.
-pub struct RuntimeApp {}
+// RuntimeApp is the headless implementation of the application runtime used
+// by the translated core package and tests. Platform runtimes implement the
+// same action boundary; this implementation retains actions for its consumer.
+pub struct RuntimeApp {
+pub mut:
+	config             configpkg.Config
+	actions            []RuntimeAction
+	handled            map[ActionKey]bool
+	quit_timer_running bool
+}
 
-pub fn (r RuntimeApp) perform_action(target Target, action ActionKey, data ActionValue) !bool {
-	// stub: performs an apprt action, returns true if handled
-	_ = target
-	_ = action
-	_ = data
-	return false
+pub struct RuntimeAction {
+pub:
+	target Target
+	action ActionKey
+	data   ActionValue
+}
+
+pub fn (mut r RuntimeApp) perform_action(target Target, action ActionKey, data ActionValue) !bool {
+	r.actions << RuntimeAction{
+		target: target
+		action: action
+		data: data
+	}
+	if action == .quit_timer {
+		r.quit_timer_running = data.quit_timer_ == .start
+	}
+	return r.handled[action]
 }
 
 // RuntimeSurface represents a single surface in the runtime.
-pub struct RuntimeSurface {}
+pub struct RuntimeSurface {
+pub mut:
+	content_scale       ContentScale = ContentScale{ x: 1, y: 1 }
+	size                SurfaceSize = SurfaceSize{ width: 800, height: 600 }
+	cursor_pos          CursorPos
+	title               ?string
+	clipboards          map[Clipboard][]ClipboardContent
+	requests            []ClipboardRequest
+	closed              bool
+	close_confirm       bool
+	selection_clipboard bool
+	default_env         map[string]string
+}
 
-pub fn (r RuntimeSurface) close(confirm bool) {
-	// stub: close surface
-	_ = confirm
+pub fn (mut r RuntimeSurface) close(confirm bool) {
+	r.closed = true
+	r.close_confirm = confirm
 }
 
 pub fn (r RuntimeSurface) get_content_scale() !ContentScale {
-	return ContentScale{ x: 1.0, y: 1.0 }
+	return r.content_scale
 }
 
 pub fn (r RuntimeSurface) get_size() !SurfaceSize {
-	return SurfaceSize{ width: 800, height: 600 }
+	return r.size
 }
 
 pub fn (r RuntimeSurface) get_cursor_pos() !CursorPos {
-	return CursorPos{ x: 0.0, y: 0.0 }
+	return r.cursor_pos
 }
 
 pub fn (r RuntimeSurface) get_title() ?string {
-	return none
+	return r.title
 }
 
-pub fn (r RuntimeSurface) set_clipboard(loc Clipboard, contents []ClipboardContent, confirm bool) ! {
-	// stub: sets clipboard content
-	_ = loc
-	_ = contents
-	_ = confirm
+pub fn (mut r RuntimeSurface) set_clipboard(loc Clipboard, contents []ClipboardContent, confirm bool) ! {
+	if confirm {
+		return error('clipboard confirmation required')
+	}
+	r.clipboards[loc] = contents.clone()
 }
 
 pub fn (r RuntimeSurface) supports_clipboard(loc Clipboard) bool {
-	return loc == .standard
+	return loc == .standard || r.selection_clipboard
 }
 
-pub fn (r RuntimeSurface) clipboard_request(loc Clipboard, req ClipboardRequest) ! {
-	// stub: requests clipboard read
-	_ = loc
-	_ = req
+pub fn (mut r RuntimeSurface) clipboard_request(loc Clipboard, req ClipboardRequest) ! {
+	r.requests << ClipboardRequest{
+		...req
+		clipboard: loc
+	}
 }
 
 pub fn (r RuntimeSurface) default_termio_env() !map[string]string {
-	return map[string]string{}
+	return r.default_env.clone()
 }
 
 // CoreApp represents the core application logic.
