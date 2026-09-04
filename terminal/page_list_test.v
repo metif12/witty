@@ -224,6 +224,70 @@ fn test_page_list_reflow_grows_style_capacity_without_losing_styles() {
 	}
 }
 
+fn test_page_list_erase_row_grows_style_capacity_across_pages() {
+	mut list := PageList.init(60, 3, usize(0x7FFFFFFFFFFFFFFF))
+	defer { list.deinit() }
+	first := list.pages.first or {
+		assert false, 'missing first page'
+		return
+	}
+	list.split(PagePin{ node: first, y: 2 }) or {
+		assert false, 'failed to split source pages'
+		return
+	}
+	second := first.next or {
+		assert false, 'missing second page'
+		return
+	}
+
+	for page_index, row_ref in [
+		PagePin{ node: first, y: 1 },
+		PagePin{ node: second, y: 0 },
+	] {
+		mut page := &row_ref.node.data
+		page.rows[int(row_ref.y)].styled = true
+		for x in 0 .. 60 {
+			style := CellStyle{
+				fg_color: .rgb
+				fg_r: u8(x)
+				fg_g: u8(page_index + 1)
+			}
+			id := page.styles.add(style) or {
+				assert false, 'failed to populate source style ${page_index}:${x}'
+				return
+			}
+			page.rows[int(row_ref.y)].cells[x] = CellData{
+				content_tag: .codepoint
+				codepoint: u32(`a`) + u32(page_index)
+				style_id: id
+				style: style
+			}
+		}
+	}
+
+	list.erase_row(PagePin{ node: first, y: 0 })
+
+	dst_node := list.pages.first or {
+		assert false, 'missing erase destination page'
+		return
+	}
+	dst := &dst_node.data
+	assert dst.capacity.styles > std_capacity.styles
+	for y in 0 .. 2 {
+		assert dst.rows[y].styled
+		for x in 0 .. 60 {
+			cell := dst.rows[y].cells[x]
+			assert cell.style_id != default_style_id
+			style := dst.styles.get(cell.style_id)
+			assert style.fg_r == u8(x)
+			assert style.fg_g == u8(y + 1)
+		}
+	}
+	if integrity_error := dst.verify_integrity() {
+		assert false, 'erase destination failed integrity: ${integrity_error}'
+	}
+}
+
 // ============================================================
 // pointFromPin tests
 // ============================================================

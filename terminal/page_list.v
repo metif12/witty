@@ -4215,7 +4215,8 @@ pub fn (mut self PageList) erase_row(p PagePin) {
 	for {
 		mut next := node.next or { break }
 		mut next_page := &next.data
-		page.clone_row_from(next_page, page.size.rows - 1, 0)
+		node = self.clone_row_growing(node, next_page, page.size.rows - 1, 0)
+		page = &node.data
 
 		node = next
 		page = next_page
@@ -5069,6 +5070,24 @@ fn (mut self PageList) increase_capacity(node &PageNode, adjustment PageCapacity
 	return new_node
 }
 
+// Clone a row across pages, growing and replacing the destination node if its
+// bounded style set cannot represent the combined page contents.
+fn (mut self PageList) clone_row_growing(dst_node &PageNode, src_page &Page, dst_y u16, src_y u16) &PageNode {
+	mut node := unsafe { dst_node }
+	for {
+		mut page := &node.data
+		clone_error := page.try_clone_row_from(src_page, dst_y, src_y) or { return node }
+		match clone_error {
+			.style_set_out_of_memory {
+				node = self.increase_capacity(node, .styles) or {
+					panic('PageList row clone exhausted maximum style capacity')
+				}
+			}
+		}
+	}
+	return node
+}
+
 // Compact a page to use the minimum required memory for the contents it
 // stores. Returns the new node if compaction occurred, or none if the page
 // was already compact.
@@ -5204,7 +5223,8 @@ pub fn (mut self PageList) erase_row_bounded(p PagePin, limit usize) {
 		mut next_page := &next.data
 
 		// Bring the top row of this page up into the previous page.
-		page.clone_row_from(next_page, page.size.rows - 1, 0)
+		node = self.clone_row_growing(node, next_page, page.size.rows - 1, 0)
+		page = &node.data
 		node = next
 		page = next_page
 
@@ -5695,7 +5715,8 @@ fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk
 	// If this chunk isn't the last chunk in the page list, then we've
 	// created a page where we'll never reclaim capacity. To avoid this, we
 	// try to fill our previous page first if it has excess capacity.
-	if mut prev_node := chunk.node.prev {
+	if initial_prev_node := chunk.node.prev {
+		mut prev_node := unsafe { initial_prev_node }
 		mut prev_page := &prev_node.data
 		// We only want scenarios where we have excess capacity.
 		if prev_page.size.rows < prev_page.capacity.rows {
@@ -5712,7 +5733,8 @@ fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk
 					prev_page.rows << RowData.init(u32(prev_page.capacity.cols))
 				}
 				prev_page.size.rows += 1
-				prev_page.clone_row_from(page, u16(dst_idx), u16(i))
+				prev_node = self.clone_row_growing(prev_node, page, u16(dst_idx), u16(i))
+				prev_page = &prev_node.data
 				copied += 1
 			}
 

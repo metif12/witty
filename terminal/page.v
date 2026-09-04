@@ -963,6 +963,10 @@ pub enum IntegrityError {
 	unwrapped_spacer_head
 }
 
+enum PageCloneError {
+	style_set_out_of_memory
+}
+
 // ============================================================
 // PageCapacity - describes how many cols/rows a page can hold
 // ============================================================
@@ -1476,14 +1480,28 @@ pub fn (mut self Page) clone_from(other &Page, y_start u16, y_end u16) {
 
 // Clone a single row from another page into this page.
 pub fn (mut self Page) clone_row_from(other &Page, dst_row_idx u16, src_row_idx u16) {
-	self.clone_partial_row_from(other, dst_row_idx, src_row_idx, 0, self.size.cols)
+	if clone_error := self.try_clone_row_from(other, dst_row_idx, src_row_idx) {
+		panic('page row clone failed: ${clone_error}')
+	}
 }
 
 // Clone a single row from another page into this page, supporting
 // partial copy. clone_row_from calls this.
 pub fn (mut self Page) clone_partial_row_from(other &Page, dst_row_idx u16, src_row_idx u16, x_start u16, x_end_req u16) {
+	if clone_error := self.try_clone_partial_row_from(other, dst_row_idx, src_row_idx, x_start, x_end_req) {
+		panic('partial page row clone failed: ${clone_error}')
+	}
+}
+
+fn (mut self Page) try_clone_row_from(other &Page, dst_row_idx u16, src_row_idx u16) ?PageCloneError {
+	return self.try_clone_partial_row_from(other, dst_row_idx, src_row_idx, 0, self.size.cols)
+}
+
+// Failable core of clone_partial_row_from. PageList consumes this result to
+// grow a bounded style set and retry, matching Ghostty's cloneRowFrom callers.
+fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_row_idx u16, x_start u16, x_end_req u16) ?PageCloneError {
 	if int(src_row_idx) >= other.rows.len || int(dst_row_idx) >= self.rows.len {
-		return
+		return none
 	}
 
 	cell_len := if self.size.cols < other.size.cols { self.size.cols } else { other.size.cols }
@@ -1578,7 +1596,9 @@ pub fn (mut self Page) clone_partial_row_from(other &Page, dst_row_idx u16, src_
 			} else {
 				// Different page: add the style to our set.
 				src_style := other.styles.get(src_cell.style_id)
-				dst_cell.style_id = self.styles.add_with_id(src_style, src_cell.style_id) or { 0 }
+				dst_cell.style_id = self.styles.add_with_id(src_style, src_cell.style_id) or {
+					return .style_set_out_of_memory
+				}
 			}
 			dst_row.styled = true
 		}
@@ -1601,6 +1621,7 @@ pub fn (mut self Page) clone_partial_row_from(other &Page, dst_row_idx u16, src_
 			}
 		}
 	}
+	return none
 }
 
 // Get a single row. y must be valid.
