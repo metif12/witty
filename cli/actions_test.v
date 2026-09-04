@@ -38,8 +38,8 @@ fn test_format_font_list_sorts_unfiltered_and_preserves_filtered_priority() {
 }
 
 fn test_list_fonts_options() {
-	opts := parse_list_fonts_options(['--family=JetBrains Mono', '--style', 'Italic',
-		'--bold', '--italic'])!
+	opts := parse_list_fonts_options(['--family=JetBrains Mono', '--style', 'Italic', '--bold',
+		'--italic'])!
 	assert opts.family? == 'JetBrains Mono'
 	assert opts.style? == 'Italic'
 	assert opts.bold
@@ -81,4 +81,37 @@ fn test_edit_config_target_creates_parent_directory() {
 	path := os.join_path(dir, 'ghostty', 'config.ghostty')
 	ensure_config_parent(path)!
 	assert os.is_dir(os.dir(path))
+}
+
+fn test_show_config_changes_only_and_full_default() {
+	full := show_config_output(['--default'])!
+	assert full.contains('font-size = 13.0\n')
+	assert full.contains('background = #282c34\n')
+	assert full.contains('palette = 255=#eeeeee\n')
+	assert full.contains('keybind = ')
+
+	opts := parse_show_config_options(['--changes-only=false', '--docs'])!
+	assert !opts.changes_only
+	assert opts.docs
+}
+
+fn test_show_config_changes_only_false_outputs_every_field() {
+	output := show_config_output(['--changes-only=false'])!
+	assert output.contains('font-size = 13.0\n')
+	assert output.contains('config-default-files = true\n')
+}
+
+fn test_show_config_rejects_config_and_unknown_options() {
+	show_config_output(['--font-size=19']) or {
+		assert err.msg().contains('unknown option')
+		return
+	}
+	assert false
+}
+
+fn test_show_config_docs_comments_documented_fields() {
+	output := show_config_output(['--default', '--docs'])!
+	assert output.starts_with('# The font families to use.\n')
+	assert output.contains('# Font size in points. This value can be a non-integer')
+	assert output.contains('\nfont-size = 13.0\n\n')
 }

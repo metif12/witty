@@ -1787,3 +1787,35 @@ fn test_keybinds_format_entries_includes_root_tables_and_chains() {
 		'keybind = chain=new_tab',
 	]
 }
+
+fn test_format_config_default_formats_all_supported_values() {
+	formatted := Config.default_config().format_config(false)
+	assert formatted.contains('font-size = 13.0\n')
+	assert formatted.contains('background = #282c34\n')
+	assert formatted.contains('clipboard-codepoint-map = \n')
+	assert formatted.contains('keybind = ')
+	assert formatted.contains('palette = 255=#eeeeee\n')
+}
+
+fn test_format_config_changes_only_round_trips_supported_values() {
+	mut original := Config.default_config()
+	original.load_string('font-size = 17.5\nbackground = RebeccaPurple\ncommand = direct:echo hello\ncustom-shader = ?shader.glsl\nkeybind = ctrl+a>n=new_window\nkeybind = chain=move_tab:-1\n')
+	formatted := original.format_config(true)
+	assert formatted.contains('font-size = 17.5\n')
+	assert formatted.contains('background = #663399\n')
+	assert formatted.contains('command = direct:echo hello\n')
+	assert formatted.contains('custom-shader = ?shader.glsl\n')
+	assert formatted.contains('keybind = ctrl+a>n=new_window\n')
+	assert formatted.contains('keybind = chain=move_tab:-1\n')
+
+	mut parsed := Config.default_config()
+	parsed.load_string(formatted)
+	assert parsed.diagnostics.len == 0
+	assert parsed.font_size == original.font_size
+	assert parsed.background == original.background
+	assert parsed.command?.string_val() == original.command?.string_val()
+	assert parsed.custom_shader.equal(&original.custom_shader)
+	// Ghostty's binding formatter intentionally serializes triggers and
+	// actions but not the in-memory performable/consumed flags.
+	assert parsed.keybind.set.get_trigger(input.Action{ tag: .new_window }) != none
+}

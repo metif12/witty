@@ -154,6 +154,7 @@ pub fn run_cli_action(action global_state.Action, args []string) !int {
 		.list_keybinds { cli.run_list_keybinds(action_args(args, action))! }
 		.validate_config { cli.run_validate_config(action_args(args, action))! }
 		.edit_config { cli.run_edit_config(action_args(args, action))! }
+		.show_config { cli.run_show_config(action_args(args, action))! }
 		.list_actions {
 			for value in global_state.actions() {
 				if value != .none {

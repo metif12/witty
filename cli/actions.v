@@ -45,12 +45,20 @@ pub fn list_keybinds_output(args []string) !string {
 	mut defaults := false
 	for arg in args {
 		match arg {
-			'--default' { defaults = true }
+			'--default' {
+				defaults = true
+			}
 			'--docs', '--plain' {}
-			else { return error('unknown option for list-keybinds: ${arg}') }
+			else {
+				return error('unknown option for list-keybinds: ${arg}')
+			}
 		}
 	}
-	config := if defaults { configpkg.Config.default_config() } else { configpkg.Config.load_args([]) }
+	config := if defaults {
+		configpkg.Config.default_config()
+	} else {
+		configpkg.Config.load_args([])
+	}
 	return output_lines(config.keybind.format_entries())
 }
 
@@ -63,8 +71,8 @@ pub struct FontListOptions {
 pub mut:
 	family ?string
 	style  ?string
-	bold    bool
-	italic  bool
+	bold   bool
+	italic bool
 }
 
 pub struct FontListEntry {
@@ -267,7 +275,7 @@ pub fn run_edit_config(args []string) !int {
 	} $else {
 		editor := choose_editor(os.getenv('VISUAL'), os.getenv('EDITOR'))
 		if editor.len == 0 {
-			eprintln('The $EDITOR or $VISUAL environment variable is not set or is empty.')
+			eprintln('The \$EDITOR or \$VISUAL environment variable is not set or is empty.')
 			eprintln('This environment variable is required to edit the Ghostty configuration')
 			eprintln('via this CLI command.\n')
 			eprintln('Please set the environment variable to your preferred terminal')
@@ -285,6 +293,53 @@ pub fn run_edit_config(args []string) !int {
 		}
 		return 0
 	}
+}
+
+pub struct ShowConfigOptions {
+pub mut:
+	defaults     bool
+	changes_only bool = true
+	docs         bool
+}
+
+pub fn show_config_output(args []string) !string {
+	opts := parse_show_config_options(args)!
+	config := if opts.defaults {
+		configpkg.Config.default_config()
+	} else {
+		configpkg.Config.load_args([])
+	}
+	return config.format_config_with_docs(!opts.defaults && opts.changes_only, opts.docs)
+}
+
+pub fn run_show_config(args []string) !int {
+	print(show_config_output(args)!)
+	return 0
+}
+
+fn parse_show_config_options(args []string) !ShowConfigOptions {
+	mut opts := ShowConfigOptions{}
+	for arg in args {
+		if arg == '--default' {
+			opts.defaults = true
+		} else if arg == '--docs' {
+			opts.docs = true
+		} else if arg == '--changes-only' {
+			opts.changes_only = true
+		} else if arg.starts_with('--changes-only=') {
+			value := arg.all_after('=')
+			opts.changes_only = match value {
+				'true', 't', '1' { true }
+				'false', 'f', '0' { false }
+				else {
+					return error('invalid value for --changes-only: ${value}')
+				}
+			}
+		} else {
+			return error('unknown option for show-config: ${arg}')
+		}
+	}
+	return opts
 }
 
 fn output_lines(lines []string) string {
