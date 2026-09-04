@@ -1,10 +1,38 @@
 module font
 
-// Tests for Collection (translated from ghostty/src/font/Collection.zig)
-//
-// XTODO: Most tests require embedded font data and real FreeType
-// face initialization to function. They are preserved here for
-// completeness and future implementation.
+import math
+
+// Tests for Collection (translated from ghostty/src/font/Collection.zig).
+
+fn collection_test_options(lib Library, points f32) LoadOptions {
+	return LoadOptions{
+		library: lib
+		size: DesiredSize{
+			points: points
+			xdpi: 96
+			ydpi: 96
+		}
+	}
+}
+
+fn collection_test_add(mut c Collection, data []u8, style FontStyle, adjustment SizeAdjustment) Index {
+	load_options := c.load_options or { panic('missing collection load options') }
+	face := Face.init_mem(load_options.library, data, load_options.face_options()) or { panic(err) }
+	return c.add(face, AddOptions{
+		style: style
+		fallback: false
+		size_adjustment: adjustment
+	}) or { panic(err) }
+}
+
+fn assert_collection_close(expected f64, actual f64, tolerance f64) {
+	assert math.abs(expected - actual) <= tolerance, 'expected ${expected}, got ${actual}'
+}
+
+fn collection_test_metrics(mut c Collection, idx Index) FaceMetrics {
+	mut face := c.get_face(idx) or { panic(err) }
+	return face.get_metrics()
+}
 
 fn test_collection_init() {
 	mut c := Collection.init()
@@ -12,12 +40,24 @@ fn test_collection_init() {
 }
 
 fn test_collection_add_full() {
-	// XTODO: needs real font loading. This test is also very slow
-	// (fills all 8191 slots).
-	//
-	// Original test:
-	// 1. Fill the collection with index_special_start - 1 faces
-	// 2. Verify adding one more returns error.CollectionFull
+	mut lib := Library.init() or { panic(err) }
+	defer { lib.deinit() }
+	mut c := Collection.init()
+	defer { c.deinit() }
+	// The capacity check depends only on the number of entries. Populate the
+	// same 8190 slots without opening 8190 duplicate FreeType faces.
+	for _ in 0 .. int(index_special_start) - 1 {
+		c.regular_faces << EntryOrAlias.new_entry(Entry{})
+	}
+	mut face := Face.init_mem(lib, embedded_regular, FaceOptions{
+		size: DesiredSize{ points: 12 }
+	}) or { panic(err) }
+	c.add(face, AddOptions{ style: .regular }) or {
+		assert err.msg() == 'collection full'
+		face.deinit()
+		return
+	}
+	assert false, 'expected collection full'
 }
 
 fn test_add_deferred_without_loading_options() {
@@ -40,104 +80,161 @@ fn test_add_deferred_without_loading_options() {
 }
 
 fn test_get_face() {
-	// XTODO: needs real font loading.
-	//
-	// Original test:
-	// 1. Add a regular face to the collection
-	// 2. Call getFace twice with the same index
-	// 3. Verify both calls return the same pointer
+	mut lib := Library.init() or { panic(err) }
+	defer { lib.deinit() }
+	mut c := Collection.init()
+	defer { c.deinit() }
+	c.load_options = collection_test_options(lib, 12)
+	idx := collection_test_add(mut c, embedded_regular, .regular, .none_)
+	face1 := c.get_face(idx) or { panic(err) }
+	face2 := c.get_face(idx) or { panic(err) }
+	assert face1 == face2
 }
 
 fn test_get_index() {
-	// XTODO: needs real font loading.
-	//
-	// Original test:
-	// 1. Add a regular face to the collection
-	// 2. Verify all visible ASCII (32..127) can be found
-	// 3. Verify emoji (U+1F978) is not found
+	mut lib := Library.init() or { panic(err) }
+	defer { lib.deinit() }
+	mut c := Collection.init()
+	defer { c.deinit() }
+	c.load_options = collection_test_options(lib, 12)
+	collection_test_add(mut c, embedded_regular, .regular, .none_)
+	for cp := u32(32); cp < 127; cp++ {
+		assert c.get_index(cp, .regular, PresentationMode.any()) != none
+	}
+	assert c.get_index(0x1f978, .regular, PresentationMode.any()) == none
 }
 
 fn test_complete_styles() {
-	// XTODO: needs real font loading and synthetic face creation.
-	//
-	// Original test:
-	// 1. Add a regular face, set load_options
-	// 2. Verify bold/italic/bold_italic have no entries
-	// 3. Call completeStyles
-	// 4. Verify bold/italic/bold_italic now have entries for 'A'
+	mut lib := Library.init() or { panic(err) }
+	defer { lib.deinit() }
+	mut c := Collection.init()
+	defer { c.deinit() }
+	c.load_options = collection_test_options(lib, 12)
+	collection_test_add(mut c, embedded_regular, .regular, .none_)
+	assert c.get_index(u32(`A`), .bold, PresentationMode.any()) == none
+	assert c.get_index(u32(`A`), .italic, PresentationMode.any()) == none
+	assert c.get_index(u32(`A`), .bold_italic, PresentationMode.any()) == none
+	c.complete_styles(FontSyntheticStyle{}) or { panic(err) }
+	assert c.get_index(u32(`A`), .bold, PresentationMode.any()) != none
+	assert c.get_index(u32(`A`), .italic, PresentationMode.any()) != none
+	assert c.get_index(u32(`A`), .bold_italic, PresentationMode.any()) != none
 }
 
 fn test_set_size() {
-	// XTODO: needs real font loading.
-	//
-	// Original test:
-	// 1. Add a regular face with 12pt, set load_options
-	// 2. Verify load_options.size.points == 12
-	// 3. Call setSize(24pt)
-	// 4. Verify load_options.size.points == 24
+	mut lib := Library.init() or { panic(err) }
+	defer { lib.deinit() }
+	mut c := Collection.init()
+	defer { c.deinit() }
+	c.load_options = collection_test_options(lib, 12)
+	collection_test_add(mut c, embedded_regular, .regular, .none_)
+	assert (c.load_options or { panic('missing options') }).size.points == 12
+	c.set_collection_size(DesiredSize{ points: 24, xdpi: 96, ydpi: 96 }) or { panic(err) }
+	assert (c.load_options or { panic('missing options') }).size.points == 24
 }
 
 fn test_has_codepoint() {
-	// XTODO: needs real font loading.
-	//
-	// Original test:
-	// 1. Add a regular face
-	// 2. Verify hasCodepoint(idx, 'A', .any) == true
-	// 3. Verify hasCodepoint(idx, U+1F978, .any) == false
+	mut lib := Library.init() or { panic(err) }
+	defer { lib.deinit() }
+	mut c := Collection.init()
+	defer { c.deinit() }
+	c.load_options = collection_test_options(lib, 12)
+	idx := collection_test_add(mut c, embedded_regular, .regular, .none_)
+	assert c.has_codepoint(idx, u32(`A`), PresentationMode.any())
+	assert !c.has_codepoint(idx, 0x1f978, PresentationMode.any())
 }
 
 fn test_has_codepoint_emoji_default_graphical() {
-	// XTODO: needs real font loading with emoji font.
-	// Also requires fontconfig_freetype backend.
-	//
-	// Original test:
-	// 1. Add an emoji face
-	// 2. Verify hasCodepoint(idx, 'A', .any) == false
-	// 3. Verify hasCodepoint(idx, U+1F978, .any) == true
+	mut lib := Library.init() or { panic(err) }
+	defer { lib.deinit() }
+	mut c := Collection.init()
+	defer { c.deinit() }
+	c.load_options = collection_test_options(lib, 12)
+	idx := collection_test_add(mut c, embedded_emoji, .regular, .none_)
+	assert !c.has_codepoint(idx, u32(`A`), PresentationMode.any())
+	assert c.has_codepoint(idx, 0x1f978, PresentationMode.any())
 }
 
 fn test_metrics() {
-	// XTODO: needs real font loading with Inconsolata.
-	//
-	// Original test:
-	// 1. Add Inconsolata at 12pt 96dpi, call updateMetrics
-	// 2. Verify metrics match expected values:
-	//    cell_width=8, cell_height=17, cell_baseline=3,
-	//    underline_position=17, underline_thickness=1,
-	//    strikethrough_position=10, strikethrough_thickness=1,
-	//    overline_position=0, overline_thickness=1,
-	//    box_thickness=1, cursor_height=17,
-	//    icon_height=16.784, icon_height_single=12.24,
-	//    face_width=8.0, face_height=16.784, face_y=-0.04
-	// 3. Resize to 24pt, verify new metrics:
-	//    cell_width=16, cell_height=34, etc.
+	mut lib := Library.init() or { panic(err) }
+	defer { lib.deinit() }
+	mut c := Collection.init()
+	defer { c.deinit() }
+	c.load_options = collection_test_options(lib, 12)
+	collection_test_add(mut c, embedded_inconsolata, .regular, .none_)
+	c.update_metrics() or { panic(err) }
+	metrics := c.metrics or { panic('missing metrics') }
+	assert metrics.cell_width == 8
+	assert metrics.cell_height == 17
+	assert metrics.cell_baseline == 3
+	assert metrics.underline_position == 17
+	assert metrics.strikethrough_position == 10
+	assert_collection_close(16.784, metrics.icon_height, 0.001)
+	assert_collection_close(12.24, metrics.icon_height_single, 0.001)
+	assert_collection_close(-0.04, metrics.face_y, 0.001)
+	c.set_collection_size(DesiredSize{ points: 24, xdpi: 96, ydpi: 96 }) or { panic(err) }
+	resized := c.metrics or { panic('missing resized metrics') }
+	assert resized.cell_width == 16
+	assert resized.cell_height == 34
+	assert resized.cell_baseline == 6
+	assert resized.underline_thickness == 2
+	assert resized.strikethrough_position == 19
+	assert_collection_close(33.568, resized.icon_height, 0.001)
 }
 
 fn test_adjusted_sizes() {
-	// XTODO: needs real font loading with Inconsolata, Monaspace Neon,
-	// and Symbols Nerd Font.
-	//
-	// Original test:
-	// 1. Add primary face (Inconsolata)
-	// 2. Add fallback with ex_height and cap_height adjustments
-	// 3. Verify the chosen metric matches between primary and fallback
-	//    (within 0.5px tolerance)
-	// 4. Verify relationship holds after resize to 37pt
-	// 5. Verify "none" adjustment leaves size unchanged
-	// 6. Verify symbol font falls back to lineHeight matching
+	mut lib := Library.init() or { panic(err) }
+	defer { lib.deinit() }
+	mut c := Collection.init()
+	defer { c.deinit() }
+	c.load_options = collection_test_options(lib, 12)
+	collection_test_add(mut c, embedded_inconsolata, .regular, .none_)
+	c.update_metrics() or { panic(err) }
+	for adjustment in [SizeAdjustment.ex_height, .cap_height] {
+		idx := collection_test_add(mut c, embedded_monaspace_neon, .regular, adjustment)
+		primary := collection_test_metrics(mut c, Index{})
+		fallback := collection_test_metrics(mut c, idx)
+		if adjustment == .ex_height {
+			assert_collection_close(primary.ex_height_val(), fallback.ex_height_val(), 0.5)
+		} else {
+			assert_collection_close(primary.cap_height_val(), fallback.cap_height_val(), 0.5)
+		}
+		c.set_collection_size(DesiredSize{ points: 37, xdpi: 96, ydpi: 96 }) or { panic(err) }
+		primary_resized := collection_test_metrics(mut c, Index{})
+		fallback_resized := collection_test_metrics(mut c, idx)
+		if adjustment == .ex_height {
+			assert_collection_close(primary_resized.ex_height_val(), fallback_resized.ex_height_val(), 0.5)
+		} else {
+			assert_collection_close(primary_resized.cap_height_val(), fallback_resized.cap_height_val(), 0.5)
+		}
+		c.set_collection_size(DesiredSize{ points: 12, xdpi: 96, ydpi: 96 }) or { panic(err) }
+	}
+	none_idx := collection_test_add(mut c, embedded_monaspace_neon, .regular, .none_)
+	assert (c.get_face(Index{}) or { panic(err) }).size.points == (c.get_face(none_idx) or {
+		panic(err)
+	}).size.points
+	symbol_idx := collection_test_add(mut c, embedded_symbols_nerd_font, .regular, .ex_height)
+	primary_metrics := collection_test_metrics(mut c, Index{})
+	symbol_metrics := collection_test_metrics(mut c, symbol_idx)
+	assert_collection_close(primary_metrics.line_height(), symbol_metrics.line_height(), 0.5)
 }
 
 fn test_face_metrics() {
-	// XTODO: needs real font loading with Cozette and Geist Mono.
-	// Also requires non-web_canvas backend.
-	//
-	// Original test:
-	// 1. Add narrow font (Cozette) and wide font (Geist Mono)
-	// 2. Verify provided/measured metrics match expected values
-	//    (backend-dependent due to hinting)
-	// 3. Verify icWidth() estimation:
-	//    narrow: 2 * cell_width
-	//    wide: ascii_height
+	mut lib := Library.init() or { panic(err) }
+	defer { lib.deinit() }
+	mut c := Collection.init()
+	defer { c.deinit() }
+	c.load_options = collection_test_options(lib, 12)
+	narrow_idx := collection_test_add(mut c, embedded_cozette, .regular, .none_)
+	wide_idx := collection_test_add(mut c, embedded_geist_mono, .regular, .none_)
+	narrow := collection_test_metrics(mut c, narrow_idx)
+	wide := collection_test_metrics(mut c, wide_idx)
+	assert_collection_close(16.0, narrow.px_per_em, 0.001)
+	assert_collection_close(8.0, narrow.cell_width, 0.001)
+	assert_collection_close(12.3046875, narrow.ascent, 0.001)
+	assert_collection_close(10.0, wide.cell_width, 0.001)
+	assert_collection_close(14.72, wide.ascent, 0.001)
+	assert narrow.ic_width_val() == 2 * narrow.cell_width
+	assert wide.ic_width_val() == wide.ascii_height_val()
 }
 
 fn test_index_special() {
