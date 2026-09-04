@@ -33,6 +33,7 @@ import configpkg
 // GtkTextBuffer is aliased in dialog_linux.v — reused here, NOT redeclared.
 
 fn C.gtk_text_buffer_new(table voidptr) GtkTextBuffer
+
 fn C.gtk_text_buffer_insert_at_cursor(buffer GtkTextBuffer, text &char, len int)
 
 // --- Config ---------------------------------------------------------------
@@ -84,6 +85,13 @@ pub fn (self &Config) get() &configpkg.Config {
 // this object. Mirrors `Config.getMut`.
 pub fn (mut self Config) get_mut() &configpkg.Config {
 	return &self.inner
+}
+
+// replace swaps the owned core configuration. Application uses this to keep
+// the stable wrapper shared by windows/global shortcuts synchronized across a
+// reload, matching Ghostty's config GObject property replacement semantics.
+pub fn (mut self Config) replace(inner configpkg.Config) {
+	self.inner = inner
 }
 
 // has_diagnostics reports whether this configuration has any diagnostics.

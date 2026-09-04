@@ -154,6 +154,16 @@ mut:
 	// value directly.
 	config configpkg.Config
 
+	// Stable GTK config wrapper shared with child objects.
+	config_object &Config = unsafe { nil }
+
+	// Headless action boundary used by core.App. Actions emitted through it are
+	// immediately dispatched back into this GTK runtime after each core tick.
+	runtime_bridge apprt.RuntimeApp
+
+	// XDG desktop-portal global shortcut manager.
+	global_shortcuts &GlobalShortcuts = unsafe { nil }
+
 	// State and logic for the underlying windowing protocol. Mirrors
 	// `Private.winproto`.
 	winproto WinProtoApp
@@ -281,6 +291,11 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 		rt_app: unsafe { rt_app }
 		core_app: unsafe { core_app }
 		config: config
+		config_object: config_new(config.clone())
+		runtime_bridge: apprt.RuntimeApp{
+			config: config.clone()
+		}
+		global_shortcuts: GlobalShortcuts.new()
 		winproto: winproto
 	}
 	obj := C.adw_application_new(&char(app_id.str), GApplicationFlags(app_flags))
@@ -310,8 +325,17 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 // fully unreferenced, so this ensures cleanup happens.
 pub fn (mut self Application) deinit() {
 	self.winproto.deinit()
-	// TODO(gtk): unref config GObject, global_shortcuts, css providers, and
-	// remove style providers from the display (all GObject/CSS, out of scope).
+	if !isnil(self.global_shortcuts) {
+		mut shortcuts := unsafe { self.global_shortcuts }
+		shortcuts.dispose()
+		self.global_shortcuts = unsafe { nil }
+	}
+	if !isnil(self.config_object) {
+		mut config := unsafe { self.config_object }
+		config.unref()
+		self.config_object = unsafe { nil }
+	}
+	// TODO(gtk): unref CSS providers and remove style providers from display.
 	self.custom_css_providers = []voidptr{}
 }
 
@@ -404,7 +428,11 @@ pub fn (mut self Application) run() ! {
 		C.g_main_context_iteration(ctx, true)
 
 		// Tick the core Ghostty terminal app.
-		// TODO(gtk): core_app.tick(rt_app) — needs the real CoreApp.
+		if !isnil(self.core_app) {
+			mut core_app := unsafe { self.core_app }
+			core_app.tick(mut self.runtime_bridge)!
+			self.dispatch_runtime_actions()!
+		}
 
 		// Check if we must quit based on the current state.
 		must_quit := self.must_quit()
@@ -588,6 +616,17 @@ pub fn (self &Application) get_config() configpkg.Config {
 // Mirrors `Application.setConfig`.
 fn (mut self Application) set_config(config configpkg.Config) {
 	self.config = config
+	self.runtime_bridge.config = config.clone()
+	if isnil(self.config_object) {
+		self.config_object = config_new(config.clone())
+	} else {
+		mut object := unsafe { self.config_object }
+		object.replace(config.clone())
+	}
+	if !isnil(self.global_shortcuts) {
+		mut shortcuts := unsafe { self.global_shortcuts }
+		shortcuts.set_config(self.config_object)
+	}
 	// notify "config" pspec -> prop_config.
 	self.prop_config()
 	// Show our errors if we have any.
@@ -820,8 +859,39 @@ fn (mut self Application) reload_config(soft bool) ! {
 // startup_global_shortcuts sets up desktop-portal global shortcuts. Mirrors
 // `Application.startupGlobalShortcuts`.
 fn (mut self Application) startup_global_shortcuts() {
-	// TODO(gtk): GlobalShortcuts GObject (global_shortcuts.zig) + dbus binding
-	// + "config" property binding + trigger signal — all out of scope.
+	if isnil(self.global_shortcuts) {
+		return
+	}
+	mut shortcuts := unsafe { self.global_shortcuts }
+	shortcuts.set_trigger_handler(application_global_shortcut_trigger, voidptr(self))
+	if !isnil(self.obj) {
+		shortcuts.set_dbus_connection(C.g_application_get_dbus_connection(self.obj))
+	}
+	if !isnil(self.config_object) {
+		shortcuts.set_config(self.config_object)
+	}
+}
+
+fn application_global_shortcut_trigger(action input.Action, user_data voidptr) {
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Application(user_data) }
+	if isnil(self.core_app) {
+		return
+	}
+	mut core_app := unsafe { self.core_app }
+	if action.scope() == .surface {
+		core_app.perform_all_surface_action(action)
+		return
+	}
+	core_app.perform_action(mut self.runtime_bridge, action) or {
+		eprintln('failed to perform global shortcut action: ${err}')
+		return
+	}
+	self.dispatch_runtime_actions() or {
+		eprintln('failed to dispatch global shortcut action: ${err}')
+	}
 }
 
 // startup_cgroup sets up the systemd cgroup for the application, if enabled.
@@ -951,16 +1021,27 @@ fn (mut self Application) handle_style_manager_dark(style voidptr) {
 // which operates on the GObject `Surface`/`Window` classes (out of scope). The
 // app-level actions that live entirely on the application (quit, quit_timer)
 // are handled here; the rest are acknowledged as unhandled for now.
-pub fn (mut self Application) perform_action(target apprt.Target, action apprt.ActionKey) !bool {
+pub fn (mut self Application) perform_action(target apprt.Target, action apprt.ActionKey, data apprt.ActionValue) !bool {
 	match action {
 		.quit {
 			self.quit()
 			return true
 		}
 		.quit_timer {
-			// start/stop is carried in the action value; without the value we
-			// default to starting the timer (ghostty branches on .start/.stop).
-			self.start_quit_timer()
+			match data.quit_timer_ {
+				.start { self.start_quit_timer() }
+				.stop { self.stop_quit_timer() }
+			}
+			return true
+		}
+		.reload_config {
+			self.reload_config(data.reload_config_.soft)!
+			return true
+		}
+		.config_change {
+			if unsafe { data.config_change_.config != nil } {
+				self.set_config(data.config_change_.config.clone())
+			}
 			return true
 		}
 		.show_gtk_inspector {
@@ -973,6 +1054,16 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			_ = target
 			return false
 		}
+	}
+}
+
+// dispatch_runtime_actions forwards the actions core.App emitted through its
+// portable runtime boundary into the GTK implementation.
+fn (mut self Application) dispatch_runtime_actions() ! {
+	actions := self.runtime_bridge.actions.clone()
+	self.runtime_bridge.actions.clear()
+	for event in actions {
+		self.perform_action(event.target, event.action, event.data)!
 	}
 }
 

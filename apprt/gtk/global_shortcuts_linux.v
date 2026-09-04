@@ -178,6 +178,11 @@ mut:
 	// which request it belongs to here.
 	pending_method     Method
 	has_pending_method bool
+
+	// V-side equivalent of the GObject `trigger` signal connection. The real
+	// signal is still emitted when this wrapper owns a registered GObject.
+	trigger_handler ?fn (action input.Action, user_data voidptr)
+	trigger_data    voidptr = unsafe { nil }
 }
 
 // global_shortcuts_new creates a new GlobalShortcuts. Mirrors the implicit
@@ -644,13 +649,22 @@ fn global_shortcuts_activated_cb(dbus GDBusConnection, sender_name &char, object
 // (which calls `refresh` on a "notify::config").
 pub fn (mut self GlobalShortcuts) set_config(config &Config) {
 	if !isnil(self.config) {
-		object_unref(self.config.obj)
+		if !isnil(self.config.obj) {
+			object_unref(self.config.obj)
+		}
 	}
 	self.config = unsafe { config }
-	if !isnil(config) {
+	if !isnil(config) && !isnil(config.obj) {
 		object_ref(config.obj)
 	}
 	self.refresh()
+}
+
+// set_trigger_handler connects the V wrapper equivalent of Ghostty's
+// GlobalShortcuts.trigger signal.
+pub fn (mut self GlobalShortcuts) set_trigger_handler(handler fn (input.Action, voidptr), user_data voidptr) {
+	self.trigger_handler = handler
+	self.trigger_data = user_data
 }
 
 // set_dbus_connection sets (or clears) the D-Bus connection. Setting a new
@@ -704,6 +718,9 @@ fn (self &GlobalShortcuts) action_for_id(id string) ?input.Action {
 // emit_trigger emits the "trigger" signal carrying the activated action.
 // Mirrors `signals.trigger.impl.emit(self, null, .{&action}, null)`.
 fn (self &GlobalShortcuts) emit_trigger(action input.Action) {
+	if handler := self.trigger_handler {
+		handler(action, self.trigger_data)
+	}
 	if !isnil(self.obj) {
 		C.g_signal_emit_by_name(self.obj, c'trigger', &action)
 	}
@@ -718,13 +735,17 @@ pub fn (mut self GlobalShortcuts) dispose() {
 	self.close()
 
 	if !isnil(self.config) {
-		object_unref(self.config.obj)
+		if !isnil(self.config.obj) {
+			object_unref(self.config.obj)
+		}
 		self.config = unsafe { nil }
 	}
 	if !isnil(self.dbus_connection) {
 		object_unref(self.dbus_connection)
 		self.dbus_connection = unsafe { nil }
 	}
+	self.trigger_handler = none
+	self.trigger_data = unsafe { nil }
 
 	// TODO(gtk): chain up to gobject.Object dispose.
 }

@@ -78,8 +78,8 @@ pub fn (mut self App) wakeup() {
 }
 
 // perform_action performs an apprt action. Mirrors `App.performAction`.
-pub fn (mut self App) perform_action(target apprt.Target, action apprt.ActionKey) !bool {
-	return self.app.perform_action(target, action)
+pub fn (mut self App) perform_action(target apprt.Target, action apprt.ActionKey, data apprt.ActionValue) !bool {
+	return self.app.perform_action(target, action, data)
 }
 
 // perform_ipc sends the given IPC to a running Ghostty. Returns true if the

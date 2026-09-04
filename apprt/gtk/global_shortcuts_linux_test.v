@@ -68,3 +68,25 @@ fn test_global_shortcut_session_handle_lookup() {
 	assert shortcuts.lookup_session_handle(dict) or { '' } == path
 	C.g_variant_unref(dict)
 }
+
+fn record_global_shortcut(action input.Action, user_data voidptr) {
+	if !isnil(user_data) {
+		mut received := unsafe { &input.Action(user_data) }
+		unsafe {
+			*received = action
+		}
+	}
+}
+
+fn test_global_shortcut_trigger_handler_receives_action() {
+	mut received := input.Action{}
+	mut shortcuts := GlobalShortcuts{
+		map: [ShortcutMapEntry{
+			id: 'CTRL+n'
+			action: input.Action.new(.new_window)
+		}]
+	}
+	shortcuts.set_trigger_handler(record_global_shortcut, voidptr(&received))
+	shortcuts.shortcut_activated('CTRL+n')
+	assert received == input.Action.new(.new_window)
+}

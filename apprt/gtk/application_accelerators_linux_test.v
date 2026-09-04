@@ -1,5 +1,6 @@
 module gtk
 
+import apprt
 import configpkg
 import core
 import input
@@ -92,4 +93,32 @@ fn test_application_action_callbacks_queue_core_messages() {
 	application_action_new_window_cb(unsafe { nil }, unsafe { nil }, voidptr(&app))
 	application_action_open_config_cb(unsafe { nil }, unsafe { nil }, voidptr(&app))
 	assert core_app.pending_message_count() == 2
+}
+
+fn test_application_dispatches_core_runtime_actions() ! {
+	mut app := Application{
+		config: configpkg.Config{
+			quit_after_last_window_closed: true
+		}
+	}
+	app.runtime_bridge.actions << apprt.RuntimeAction{
+		target: apprt.Target(apprt.AppTarget{})
+		action: .quit_timer
+		data: apprt.ActionValue{
+			quit_timer_: .start
+		}
+	}
+	app.dispatch_runtime_actions()!
+	assert app.runtime_bridge.actions.len == 0
+	assert app.quit_timer_state == .expired
+
+	app.runtime_bridge.actions << apprt.RuntimeAction{
+		target: apprt.Target(apprt.AppTarget{})
+		action: .quit_timer
+		data: apprt.ActionValue{
+			quit_timer_: .stop
+		}
+	}
+	app.dispatch_runtime_actions()!
+	assert app.quit_timer_state == .off
 }

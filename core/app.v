@@ -829,6 +829,18 @@ pub fn (mut self App) perform_all_action(mut rt_app apprt.RuntimeApp, action inp
 	}
 }
 
+// perform_all_surface_action applies a surface-scoped action to every live
+// surface. Platform runtimes use this when an external facility (such as the
+// XDG global-shortcuts portal) produces a binding action directly.
+pub fn (mut self App) perform_all_surface_action(action input.Action) {
+	if action.scope() != .surface {
+		return
+	}
+	for surface in self.surfaces {
+		surface.perform_binding_action(action) or {}
+	}
+}
+
 // surface_message handles a message routed to a specific surface. We first
 // ensure the surface is still active (a simple linear search) since messages
 // are rare and windows are few.
