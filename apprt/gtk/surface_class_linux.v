@@ -832,7 +832,11 @@ fn surface_action_notify_on_next_command_finish_cb(action GSimpleAction, paramet
 	if !is_bool {
 		return
 	}
-	C.g_simple_action_set_state(action, C.g_variant_new_boolean(if C.g_variant_get_boolean(state) { 0 } else { 1 }))
+	C.g_simple_action_set_state(action, C.g_variant_new_boolean(if C.g_variant_get_boolean(state) {
+		0
+	} else {
+		1
+	}))
 }
 
 fn surface_title_dialog_set_cb(dialog GObject, title_ptr &char, data voidptr) {
@@ -1939,9 +1943,15 @@ pub fn (mut self SurfaceWidget) glarea_realize() {
 	// If we already have an initialized surface, notify it; otherwise we'll
 	// initialize on the first resize so we have proper initial dimensions.
 	if self.has_core() {
-		// TODO(gtk): core.Surface has no display_realized; the renderer's
-		// display-realized hook is not exposed as a public Surface method.
-		self.redraw()
+		mut surface := self.core_surface
+		mut realized := true
+		surface.renderer.display_realized() or {
+			eprintln('core display_realized failed err=${err}')
+			realized = false
+		}
+		if realized {
+			self.redraw()
+		}
 	}
 
 	// Setup our input method (strong ref back to us; released in unrealize).
@@ -1959,8 +1969,8 @@ pub fn (mut self SurfaceWidget) glarea_unrealize() {
 			eprintln('gl_area_make_current failed in unrealize; resources likely leaked')
 			return
 		}
-		// TODO(gtk): core.Surface has no display_unrealized; the renderer's
-		// display-unrealized hook is not exposed as a public Surface method.
+		mut surface := self.core_surface
+		surface.renderer.display_unrealized()
 	}
 
 	// Unset our input method.

@@ -255,7 +255,9 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 	// gtk_version.logVersion(); adw_version.logVersion();
 
 	// Set the gettext global domain so unqualified translations resolve.
-	// TODO(gtk): internal_os.i18n.initGlobalDomain (i18n out of scope).
+	internal_os.init_i18n_global_domain() or {
+		eprintln('i18n initialization failed error=${err}')
+	}
 
 	// Load defaults, user files, command-line flags, recursive files, and theme
 	// replay before GTK reads any startup settings.

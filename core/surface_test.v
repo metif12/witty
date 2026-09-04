@@ -795,3 +795,14 @@ fn test_command_finished_preserves_duration_and_exit_code() ! {
 	assert runtime.actions[0].command_finished.exit_code? == 7
 	assert runtime.actions[0].command_finished.duration.duration >= 1_234_567
 }
+
+fn test_renderer_display_lifecycle() {
+	mut renderer := Renderer{ initialized: true }
+	renderer.display_unrealized()
+	assert !renderer.initialized
+	renderer.display_realized() or { assert false, err.msg() }
+	assert renderer.initialized
+	if _ := renderer.display_realized() {
+		assert false, 'realizing initialized renderer resources must fail'
+	}
+}

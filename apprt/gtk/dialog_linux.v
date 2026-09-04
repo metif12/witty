@@ -1,6 +1,8 @@
 @[has_globals]
 module gtk
 
+import internal_os
+
 // dialog_linux.v - Base dialog helper (GhosttyDialog).
 //
 // Translated from ghostty/src/apprt/gtk/class/dialog.zig.
@@ -43,23 +45,29 @@ pub type GtkTextBuffer = voidptr
 
 // AdwDialog (1.5+): present against a parent widget, force-close.
 fn C.adw_dialog_present(dialog AdwDialog, parent GtkWidget)
+
 fn C.adw_dialog_force_close(dialog AdwDialog)
 
 // AdwAlertDialog / AdwMessageDialog heading + body setters. The AlertDialog
 // and MessageDialog APIs are the same shape for these calls.
 fn C.adw_alert_dialog_set_heading(dialog AdwAlertDialog, heading &char)
+
 fn C.adw_alert_dialog_set_body(dialog AdwAlertDialog, body &char)
+
 fn C.adw_message_dialog_set_heading(dialog AdwMessageDialog, heading &char)
+
 fn C.adw_message_dialog_set_body(dialog AdwMessageDialog, body &char)
 
 // GtkWindow transient-for + present/close for the MessageDialog fallback.
 // NOTE: gtk_window_present / gtk_window_close are declared in window_linux.v —
 // reused here, NOT redeclared.
 fn C.gtk_window_set_transient_for(window GtkWindow, parent GtkWindow)
+
 fn C.gtk_widget_get_root(widget GtkWidget) GtkWidget
 
 // Parent get_type() functions for the (runtime-chosen) Dialog base class.
 fn C.adw_alert_dialog_get_type() GType
+
 fn C.adw_message_dialog_get_type() GType
 
 // Shared helpers for the dialog subclasses' hand-expanded vfunc chaining.
@@ -71,6 +79,7 @@ fn C.g_type_check_instance_get_class(instance voidptr) voidptr
 // DisposeFn / FinalizeFn are the GObjectClass dispose/finalize vfunc signatures
 // (a single GObject* argument). Used to call the parent-class vfunc pointer.
 pub type DisposeFn = fn (obj voidptr)
+
 pub type FinalizeFn = fn (obj voidptr)
 
 // --- GObject class registration -------------------------------------------
@@ -105,9 +114,9 @@ pub fn dialog_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size:    u16(query.class_size)
+			class_size: u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init:    voidptr(dialog_class_init)
+			class_init: voidptr(dialog_class_init)
 		}
 		g_dialog_type = C.g_type_register_static(parent, c'GhosttyDialog', &info, 0)
 	}
@@ -213,10 +222,6 @@ pub fn (mut self Dialog) unref() {
 // i18n_ translates a message via the process gettext domain. Mirrors ghostty's
 // `i18n._`, which resolves against the global gettext domain.
 //
-// TODO(gtk): the gettext domain is not yet initialized in this apprt (see
-// application_linux.v `initGlobalDomain` TODO). Until then this is an identity
-// translation — it returns the message unchanged so the dialog wiring stays
-// faithful while producing readable (untranslated) strings.
 pub fn i18n_(msg string) string {
-	return msg
+	return internal_os.translate(msg)
 }

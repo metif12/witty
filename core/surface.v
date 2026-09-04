@@ -2023,6 +2023,21 @@ fn (mut r Renderer) deinit() {
 	r.initialized = false
 }
 
+// display_realized reinitializes renderer resources after GTK realizes a
+// surface whose display resources were released by display_unrealized.
+pub fn (mut r Renderer) display_realized() ! {
+	if r.initialized {
+		return error('renderer display resources are already initialized')
+	}
+	r.initialized = true
+}
+
+// display_unrealized releases renderer resources while keeping the renderer
+// value alive so GTK can realize the surface again later.
+pub fn (mut r Renderer) display_unrealized() {
+	r.initialized = false
+}
+
 fn (r Renderer) thread_enter() ! {
 }
 
