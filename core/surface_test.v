@@ -532,6 +532,23 @@ fn test_preedit_width_empty() {
 	assert p.width() == 0
 }
 
+fn test_preedit_callback_uses_unicode_width_table() {
+	mut surf := make_test_surface()
+	text := 'a' + rune(0x0301).str() + rune(0x4e16).str()
+	surf.preedit_callback(text)!
+	preedit := surf.renderer_state.preedit or {
+		assert false, 'preedit was not installed'
+		return
+	}
+	// The combining acute accent has width zero and is omitted. The CJK
+	// character width comes from the pinned generated Unicode table.
+	assert preedit.codepoints.len == 2
+	assert preedit.codepoints[0].codepoint == `a`
+	assert !preedit.codepoints[0].wide
+	assert preedit.codepoints[1].codepoint == 0x4e16
+	assert preedit.codepoints[1].wide
+}
+
 fn test_key_is_modifier() {
 	assert key_is_modifier(.shift_left) == true
 	assert key_is_modifier(.shift_right) == true

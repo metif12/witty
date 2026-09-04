@@ -1463,6 +1463,7 @@ import inspector as inspectorpkg
 import global_state
 import renderer as rendererpkg
 import termio as termiopkg
+import unicode
 
 // Minimum window size in cells.
 const min_window_width_cells = u32(10)
@@ -3450,6 +3451,16 @@ fn (mut self Surface) balance_padding_if_needed() {
 
 // preedit_callback sets the preedit state for character input (dead keys, IME).
 pub fn (mut self Surface) preedit_callback(preedit ?string) ! {
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
+	defer {
+		if locked {
+			self.renderer_state.mutex.unlock()
+		}
+	}
+
 	// Clear selection when preedit changes (if configured)
 	if self.renderer_state.preedit != none || preedit != none {
 		if self.config.selection_clear_on_typing {
@@ -3473,12 +3484,13 @@ pub fn (mut self Surface) preedit_callback(preedit ?string) ! {
 	mut codepoints := []PreeditCodepoint{}
 	for ch in text.runes() {
 		cp := u32(ch)
-		// Simple width detection: CJK ranges are wide
-		wide := (cp >= 0x1100 && cp <= 0x115f) || (cp >= 0x2e80 && cp <= 0x9fff)
-			|| (cp >= 0xac00 && cp <= 0xd7a3) || (cp >= 0xf900 && cp <= 0xfaff)
-			|| (cp >= 0xfe10 && cp <= 0xfe6f) || (cp >= 0xff01 && cp <= 0xff60)
-			|| (cp >= 0x20000 && cp <= 0x2fffd) || (cp >= 0x30000 && cp <= 0x3fffd)
-		codepoints << PreeditCodepoint{ codepoint: cp, wide: wide }
+		width := unicode.get(cp).width
+		// Ghostty cannot display zero-width preedit codepoints independently,
+		// so they are omitted from the renderer preedit buffer.
+		if width == 0 {
+			continue
+		}
+		codepoints << PreeditCodepoint{ codepoint: cp, wide: width >= 2 }
 	}
 
 	if codepoints.len == 0 {
