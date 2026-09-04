@@ -2,6 +2,7 @@ module renderer
 
 import font
 import terminal
+import configpkg
 
 // ============================================================
 // Renderer tests
@@ -24,6 +25,14 @@ fn test_derived_config_deinit() {
 	}
 	config.deinit()
 	assert config.font_features.len == 0
+}
+
+fn test_derived_config_compiles_default_links() {
+	cfg := configpkg.Config.default_config()
+	mut derived := DerivedConfig.init(&cfg)!
+	assert derived.links.links.len == 1
+	derived.deinit()
+	assert derived.links.links.len == 0
 }
 
 // Test CellContents resize and reset.

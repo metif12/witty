@@ -364,6 +364,23 @@ pub fn (mut self Pages) deinit() {
 	self.screen_rows = []
 }
 
+// scrollbar reports the total row count, viewport offset, and visible row
+// count. This is the flat-storage equivalent of PageList.scrollbar.
+pub fn (self &Pages) scrollbar() Scrollbar {
+	if self.max_scrollback == 0 {
+		return Scrollbar{
+			total: usize(self.rows)
+			offset: 0
+			len: usize(self.rows)
+		}
+	}
+	return Scrollbar{
+		total: usize(self.screen_rows.len)
+		offset: usize(clamp_int(self.viewport_start, 0, self.active_start))
+		len: usize(self.rows)
+	}
+}
+
 // Reset the pages: clear all rows, reset active_start.
 pub fn (mut self Pages) reset() {
 	self.screen_rows = []RowData{cap: int(self.rows)}

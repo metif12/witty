@@ -1,5 +1,24 @@
 module terminal
 
+fn test_flat_pages_scrollbar() {
+	mut no_scrollback := Pages.init(4, 2, 0)
+	no_scrollback.screen_rows << RowData.init(4)
+	no_scrollback.active_start = 1
+	no_scrollback.viewport_start = 1
+	assert no_scrollback.scrollbar() == Scrollbar{ total: 2, offset: 0, len: 2 }
+
+	mut pages := Pages.init(4, 2, 10)
+	assert pages.scrollbar() == Scrollbar{ total: 2, offset: 0, len: 2 }
+	pages.screen_rows << RowData.init(4)
+	pages.active_start = 1
+	pages.viewport = .active
+	pages.viewport_start = 1
+	assert pages.scrollbar() == Scrollbar{ total: 3, offset: 1, len: 2 }
+	pages.viewport = .top
+	pages.viewport_start = 0
+	assert pages.scrollbar() == Scrollbar{ total: 3, offset: 0, len: 2 }
+}
+
 // Tests translated from ghostty's Screen.zig
 
 fn test_screen_read_and_write() {

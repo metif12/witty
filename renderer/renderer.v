@@ -748,6 +748,7 @@ module renderer
 
 import terminal
 import font
+import input
 import time
 import configpkg
 import highlight
@@ -1117,18 +1118,9 @@ fn (mut self Renderer) update_font_grid_uniforms() {
 	]!
 }
 
-// Update the frame data. This translates the CPU-side of Ghostty's
-// updateFrame: the critical-section extraction (terminal state update,
-// sync-output pause, scrollbar read, OSC8 links, search highlights) plus
-// the cell rebuild and per-frame uniform updates.
-//
-// BOUNDARY: In Ghostty this takes a `*renderer.State` (holding a mutex,
-// mouse, preedit and inspector) and locks it around the critical section.
-// The V thread passes the terminal directly, so the mouse/preedit/inspector
-// (which live on the renderer RenderState, not passed here) and the OSC8
-// link cell matching that depends on the mouse point are boundaries; we
-// translate everything that is reachable from the terminal state.
-pub fn (mut self Renderer) update_frame(state &terminal.Terminal, cursor_blink_visible bool) ! {
+// Update the frame data. The caller holds state.mutex while this extracts its
+// terminal, mouse, and preedit state, matching Ghostty's critical section.
+pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible bool) ! {
 	// We fully deinit and reset the terminal state every so often
 	// so that a particularly large terminal state doesn't cause
 	// the renderer to hold on to retained memory.
@@ -1145,7 +1137,10 @@ pub fn (mut self Renderer) update_frame(state &terminal.Terminal, cursor_blink_v
 	// under the state mutex; here we alias the terminal mutably because
 	// the caller owns a mutable terminal and terminal_state.update mutates
 	// dirty flags.
-	mut t := unsafe { &terminal.Terminal(state) }
+	mut t := state.terminal_
+	if t == unsafe { nil } {
+		return
+	}
 
 	// If we're in a synchronized output state, we pause all rendering.
 	if t.modes.get(.synchronized_output) {
@@ -1158,21 +1153,20 @@ pub fn (mut self Renderer) update_frame(state &terminal.Terminal, cursor_blink_v
 		self.images.kitty_update(t, self.size.cell)
 	}
 
-	// Get our scrollbar out of the terminal. We synchronize the scrollbar
-	// read with frame data updates.
-	//
-	// BOUNDARY: In Ghostty the scrollbar comes from
-	// `screens.active.pages.scrollbar()` (a PageList method). The V
-	// simplified terminal `Pages` type does not implement `scrollbar()`,
-	// so we use a default (empty) scrollbar here.
-	scrollbar := terminal.Scrollbar{}
+	// Get our scrollbar out of the terminal while frame data is synchronized.
+	scrollbar := t.screens.active.pages.scrollbar()
 
 	// Get our OSC8 links we're hovering if we have a mouse.
-	//
-	// BOUNDARY: The mouse point/mods live on the renderer RenderState which
-	// isn't passed to this method, so we can't match hovered OSC8 links
-	// here. We use an empty link set.
-	links := terminal.CellSet(map[u64]bool{})
+	mut links := terminal.CellSet(map[u64]bool{})
+	if mouse := state.mouse.point {
+		if state.mouse.mods.equal(input.ctrl_or_super_mods(input.Mods{})) {
+			links = self.terminal_state.link_cells(terminal.Pin{
+				x: mouse.x
+				y: mouse.y
+			})
+		}
+	}
+	self.config.links.render_cell_map(mut links, &self.terminal_state, state.mouse.point, state.mouse.mods)!
 
 	// Clear our highlight state and update. The order matters: selected
 	// highlights are appended first and therefore take visual priority.
@@ -1207,12 +1201,13 @@ pub fn (mut self Renderer) update_frame(state &terminal.Terminal, cursor_blink_v
 	}
 
 	// Build our GPU cells.
+	preedit := if value := state.preedit { value.clone() } else { none }
 	cs := cursor_style(&self.terminal_state, StyleOptions{
-		preedit: false
+		preedit: preedit != none
 		focused: self.focused
 		blink_visible: cursor_blink_visible
 	})
-	self.rebuild_cells(none, cs, &links) or {
+	self.rebuild_cells(preedit, cs, &links) or {
 		// This means we weren't able to allocate our buffer to update the
 		// cells. In this case, we continue with our old buffer.
 	}

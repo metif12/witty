@@ -3,6 +3,7 @@ module renderer
 import terminal
 import configpkg
 import math
+import input
 
 // The configuration for this renderer that is derived from the main
 // configuration. This must be exported so that we don't need to
@@ -19,6 +20,8 @@ pub mut:
 	font_styles FontStyleStatus
 	// How to break font shaping runs.
 	font_shaping_break configpkg.FontShapingBreak
+	// Compiled regular-expression link matchers.
+	links LinkSet
 	// Cursor color, if set.
 	cursor_color ?configpkg.TerminalColor
 	// Cursor opacity (0.0 to 1.0).
@@ -111,6 +114,16 @@ pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
 		g: config.foreground.g
 		b: config.foreground.b
 	}
+	mut configured_links := []input.Link{cap: config.link.links.items.len}
+	for configured in config.link.links.items {
+		configured_links << input.Link{
+			regex: configured.pattern
+			action: configured.action
+			highlight: configured.highlight
+			mods: configured.mods
+		}
+	}
+	links := LinkSet.from_config(configured_links)!
 
 	return DerivedConfig{
 		background_opacity: clamp_f64(config.background_opacity, 0.0, 1.0)
@@ -120,6 +133,7 @@ pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
 		font_features: config.font_feature.clone()
 		font_styles: font_styles
 		font_shaping_break: config.font_shaping_break
+		links: links
 		cursor_color: config.cursor_color
 		cursor_text: config.cursor_text
 		cursor_opacity: clamp_f64(config.cursor_opacity, 0.0, 1.0)
@@ -150,6 +164,7 @@ pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
 
 pub fn (mut c DerivedConfig) deinit() {
 	c.font_features = []
+	c.links.deinit()
 }
 
 // Clamp a float64 between min and max.

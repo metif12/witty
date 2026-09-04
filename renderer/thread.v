@@ -558,10 +558,10 @@ fn (mut self RendererThread) render_callback() {
 	// Ghostty while rebuilding the renderer's immutable frame snapshot.
 	if self.state.mutex != unsafe { nil } {
 		self.state.mutex.lock()
-		self.renderer.update_frame(self.state.terminal_, self.flags.cursor_blink_visible) or {}
+		self.renderer.update_frame(self.state, self.flags.cursor_blink_visible) or {}
 		self.state.mutex.unlock()
 	} else {
-		self.renderer.update_frame(self.state.terminal_, self.flags.cursor_blink_visible) or {}
+		self.renderer.update_frame(self.state, self.flags.cursor_blink_visible) or {}
 	}
 
 	// Draw
