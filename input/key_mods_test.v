@@ -221,6 +221,9 @@ fn test_mods_empty() {
 
 	m2 := Mods{ shift: true }
 	assert !m2.empty()
+	assert !Mods{ caps_lock: true }.empty()
+	assert !Mods{ num_lock: true }.empty()
+	assert !Mods{ sides: SideInfo{ shift: .right } }.empty()
 }
 
 fn test_mods_equal() {
@@ -230,6 +233,19 @@ fn test_mods_equal() {
 
 	m3 := Mods{ shift: true }
 	assert !m1.equal(m3)
+
+	assert !Mods{ caps_lock: true }.equal(Mods{})
+	assert !Mods{ num_lock: true }.equal(Mods{})
+	assert !Mods{ shift: true, sides: SideInfo{ shift: .right } }.equal(Mods{
+		shift: true
+		sides: SideInfo{ shift: .left }
+	})
+	// V uses `none_` when no side information is available. Both `none_`
+	// and the source's default `left` encode as zero in the packed value.
+	assert Mods{ shift: true }.equal(Mods{
+		shift: true
+		sides: SideInfo{ shift: .left }
+	})
 }
 
 fn test_mods_binding() {

@@ -686,6 +686,41 @@ fn test_focus_callback_change() ! {
 	assert surf.focused == false
 }
 
+fn test_focus_callback_releases_pressed_key_and_modifiers() ! {
+	mut surf := make_test_surface()
+	surf.focused = true
+	surf.pressed_key = KeyEvent{
+		key: .key_a
+		action: .press
+		mods: input.Mods{ shift: true, ctrl: true }
+		utf8: ''
+	}
+	surf.focus_callback(false)!
+	assert surf.pressed_key == none
+	assert surf.mouse.mods.empty()
+}
+
+fn test_focus_callback_always_reveals_mouse() ! {
+	mut runtime := RuntimeApp{}
+	mut surf := make_test_surface()
+	surf.rt_app = &runtime
+	surf.focused = true
+	surf.mouse.hidden = true
+	surf.focus_callback(false)!
+	assert !surf.mouse.hidden
+	assert runtime.actions.len == 1
+	assert runtime.actions[0].kind == .mouse_visibility
+	assert runtime.actions[0].mouse_visible
+}
+
+fn test_content_scale_callback_unchanged_dpi_is_noop() ! {
+	mut surf := make_test_surface()
+	surf.font_size.xdpi = u16(default_dpi)
+	surf.font_size.ydpi = u16(default_dpi)
+	surf.content_scale_callback(ContentScale{ x: 1, y: 1 })!
+	assert surf.renderer_thread.wakeup.count == 0
+}
+
 fn test_size_callback_no_change() ! {
 	mut surf := make_test_surface()
 	surf.size = Size{

@@ -143,12 +143,12 @@ pub fn (m Mods) int() u16 {
 
 // empty returns true if no modifiers are set.
 pub fn (m Mods) empty() bool {
-	return !m.shift && !m.ctrl && !m.alt && !m.super_
+	return m.int() == 0
 }
 
 // equal returns true if two mods are equal.
 pub fn (a Mods) equal(b Mods) bool {
-	return a.shift == b.shift && a.ctrl == b.ctrl && a.alt == b.alt && a.super_ == b.super_
+	return a.int() == b.int()
 }
 
 // binding returns only the binding-relevant modifiers.

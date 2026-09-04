@@ -3698,18 +3698,46 @@ pub fn (mut self Surface) focus_callback(focused bool) ! {
 	if focused {
 		// On focus gain, notify app.
 		self.app.focus_core_surface(self)
-		self.rt_app.perform_action(AppAction{
-			kind: .mouse_shape
-			target: &self
-		})!
 	} else {
-		// On focus loss, release any pressed keys
-		if _ := self.pressed_key {
+		// A focus loss may be the last event we receive for a pressed key.
+		// Synthesize its release, followed by releases for both sides of every
+		// held modifier, so the terminal keyboard protocol cannot retain a
+		// logically pressed key.
+		if mut pressed_key := self.pressed_key {
 			self.pressed_key = none
+			pressed_key.action = .release
+
+			original_key := pressed_key.key
+			if original_key != .unidentified {
+				self.release_key_on_focus_loss(pressed_key)
+			}
+
+			if pressed_key.mods.shift {
+				pressed_key.mods.shift = false
+				self.release_modifier_on_focus_loss(pressed_key, original_key, .shift_right)
+				self.release_modifier_on_focus_loss(pressed_key, original_key, .shift_left)
+			}
+			if pressed_key.mods.ctrl {
+				pressed_key.mods.ctrl = false
+				self.release_modifier_on_focus_loss(pressed_key, original_key, .control_right)
+				self.release_modifier_on_focus_loss(pressed_key, original_key, .control_left)
+			}
+			if pressed_key.mods.alt {
+				pressed_key.mods.alt = false
+				self.release_modifier_on_focus_loss(pressed_key, original_key, .alt_right)
+				self.release_modifier_on_focus_loss(pressed_key, original_key, .alt_left)
+			}
+			if pressed_key.mods.super_ {
+				pressed_key.mods.super_ = false
+				self.release_modifier_on_focus_loss(pressed_key, original_key, .meta_right)
+				self.release_modifier_on_focus_loss(pressed_key, original_key, .meta_left)
+			}
 		}
-		// Show mouse cursor on focus loss
-		self.show_mouse()
 	}
+
+	// Focus changes always reveal the mouse. This also repairs cases where a
+	// platform loses the matching mouse-motion event while switching apps.
+	self.show_mouse()
 
 	// Update terminal focus flag
 	locked := self.renderer_state.mutex != unsafe { nil }
@@ -3725,6 +3753,20 @@ pub fn (mut self Surface) focus_callback(focused bool) ! {
 	self.queue_io(IOMessage{ kind: .focused, flag: focused })
 
 	self.queue_render()!
+}
+
+fn (mut self Surface) release_key_on_focus_loss(event KeyEvent) {
+	effect := self.key_callback(event) or { return }
+	assert effect != .closed
+}
+
+fn (mut self Surface) release_modifier_on_focus_loss(event KeyEvent, original_key input.Key, key input.Key) {
+	if key == original_key {
+		return
+	}
+	mut release := event
+	release.key = key
+	self.release_key_on_focus_loss(release)
 }
 
 // refresh_callback schedules a render.
@@ -3844,10 +3886,16 @@ pub fn (mut self Surface) content_scale_callback(content_scale ContentScale) ! {
 	mut new_size := self.font_size
 	new_size.xdpi = u16(x_dpi)
 	new_size.ydpi = u16(y_dpi)
+	if new_size.xdpi == self.font_size.xdpi && new_size.ydpi == self.font_size.ydpi {
+		return
+	}
 	self.set_font_size(new_size)!
 
-	// Recalculate padding with new DPI
-	self.balance_padding_if_needed()
+	// Balanced padding is derived from the remaining cell-space and is not
+	// DPI-sensitive. Explicit, unbalanced padding is scaled directly.
+	if !self.config.window_padding_balance {
+		self.size.padding = self.config.scaled_padding(x_dpi, y_dpi)
+	}
 
 	// Trigger resize to recalculate everything
 	self.resize(self.size.screen)!
