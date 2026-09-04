@@ -124,6 +124,80 @@ fn test_tmux_viewer_layout_change_syncs_panes_and_queue() {
 	assert tmux_viewer_command(actions)?.contains('-t %2')
 }
 
+fn test_tmux_viewer_layout_change_does_not_send_when_queue_is_busy() {
+	mut viewer := TmuxViewer.init()!
+	defer { viewer.deinit() }
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
+	viewer.next(tmux.Notification(tmux.NotifSessionChanged{ id: 1, name: 'test' }))
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{ data: '3.5a' }))
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{
+		data: '\$0 @0 83 44 b7dd,83x44,0,0,0'
+	}))
+	assert viewer.command_queue.len > 0
+
+	actions := viewer.next(tmux.Notification(tmux.NotifLayoutChange{
+		window_id: 0
+		layout: 'e07b,83x44,0,0[83x22,0,0,0,83x21,0,23,2]'
+		visible_layout: 'e07b,83x44,0,0[83x22,0,0,0,83x21,0,23,2]'
+		raw_flags: '*'
+	}))
+	assert viewer.panes.len == 2
+	assert tmux_viewer_windows_action(actions)?.len == 1
+	assert tmux_viewer_command(actions) == none
+}
+
+fn test_tmux_viewer_layout_change_sends_when_queue_was_empty() {
+	mut viewer := TmuxViewer.init()!
+	defer { viewer.deinit() }
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
+	viewer.next(tmux.Notification(tmux.NotifSessionChanged{ id: 1, name: 'test' }))
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{ data: '3.5a' }))
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{
+		data: '\$0 @0 83 44 b7dd,83x44,0,0,0'
+	}))
+	for _ in 0 .. 5 {
+		viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
+	}
+	assert viewer.command_queue.len == 0
+
+	actions := viewer.next(tmux.Notification(tmux.NotifLayoutChange{
+		window_id: 0
+		layout: 'e07b,83x44,0,0[83x22,0,0,0,83x21,0,23,2]'
+		visible_layout: 'e07b,83x44,0,0[83x22,0,0,0,83x21,0,23,2]'
+		raw_flags: '*'
+	}))
+	assert viewer.command_queue.len == 5
+	assert tmux_viewer_command(actions)?.contains('-t %2')
+}
+
+fn test_tmux_viewer_window_add_queues_refresh_with_correct_in_flight_behavior() {
+	mut viewer := TmuxViewer.init()!
+	defer { viewer.deinit() }
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
+	viewer.next(tmux.Notification(tmux.NotifSessionChanged{ id: 1, name: 'test' }))
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{ data: '3.5a' }))
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{
+		data: '\$0 @0 83 44 b7dd,83x44,0,0,0'
+	}))
+
+	// A refresh is queued behind the capture commands already in flight and
+	// must not be sent early.
+	queued_before := viewer.command_queue.len
+	mut actions := viewer.next(tmux.Notification(tmux.NotifWindowAdd{ id: 1 }))
+	assert viewer.command_queue.len == queued_before + 1
+	assert tmux_viewer_command(actions) == none
+
+	// Drain the capture commands and the queued refresh, then verify an idle
+	// viewer immediately sends a newly queued refresh.
+	for viewer.command_queue.len > 0 {
+		viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
+	}
+	assert viewer.command_queue.len == 0
+	actions = viewer.next(tmux.Notification(tmux.NotifWindowAdd{ id: 2 }))
+	assert viewer.command_queue.len == 1
+	assert tmux_viewer_command(actions)?.starts_with('list-windows')
+}
+
 fn test_tmux_viewer_session_change_resets_layout_and_preserves_version() {
 	mut viewer := TmuxViewer.init()!
 	defer { viewer.deinit() }
@@ -155,4 +229,59 @@ fn test_tmux_viewer_command_formatting() {
 	assert TmuxViewerCommand(TmuxViewerUserCommand{
 		command: 'select-pane -t %2\n'
 	}).format_command() == 'select-pane -t %2\n'
+}
+
+fn test_tmux_viewer_two_pane_state_restoration() {
+	mut viewer := TmuxViewer.init()!
+	defer { viewer.deinit() }
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
+	viewer.next(tmux.Notification(tmux.NotifSessionChanged{ id: 0, name: '0' }))
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{ data: '3.5a' }))
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{
+		data: '\$0 @0 165 79 ca97,165x79,0,0[165x40,0,0,0,165x38,0,41,4]'
+	}))
+	assert viewer.windows.len == 1
+	assert viewer.windows[0].width == 165
+	assert viewer.windows[0].height == 79
+	assert viewer.panes.len == 2
+
+	// Four captures per pane: primary history/visible, then alternate
+	// history/visible. The last response restores terminal state.
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{ data: 'prompt %\nprompt %' }))
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{ data: 'prompt %' }))
+	mut pane := viewer.panes[0] or { panic('missing pane zero') }
+	assert pane.terminal.screens.primary.dump_string_alloc(.history)!.count('prompt %') == 2
+	assert pane.terminal.screens.primary.dump_string_alloc(.active)! == 'prompt %'
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{ data: 'prompt %' }))
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{ data: 'prompt %' }))
+	pane = viewer.panes[4] or { panic('missing pane four') }
+	assert pane.terminal.screens.primary.dump_string_alloc(.history)! == 'prompt %'
+	assert pane.terminal.screens.primary.dump_string_alloc(.active)!.starts_with('prompt %')
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
+	viewer.next(tmux.Notification(tmux.NotifBlockEnd{
+		data: '%0;42;0;1;;;;0;4294967295;4294967295;0;1;0;0;0;0;0;0;0;0;0;;;0;39;8,16,24,32,40,48,56,64,72,80,88,96,104,112,120,128,136,144,152,160\n%4;10;5;1;;;;0;4294967295;4294967295;0;1;0;0;0;0;0;0;0;0;0;;;0;37;8,16,24,32,40,48,56,64,72,80,88,96,104,112,120,128,136,144,152,160'
+	}))
+
+	state_pane_zero := viewer.panes[0] or { panic('missing pane zero') }
+	assert state_pane_zero.terminal.screens.primary.cursor.x == 42
+	assert state_pane_zero.terminal.screens.primary.cursor.y == 0
+	assert state_pane_zero.terminal.modes.get(.cursor_visible)
+	assert state_pane_zero.terminal.modes.get(.wraparound)
+	assert !state_pane_zero.terminal.modes.get(.insert)
+	assert !state_pane_zero.terminal.modes.get(.origin)
+	assert !state_pane_zero.terminal.modes.get(.keypad_keys)
+	assert !state_pane_zero.terminal.modes.get(.cursor_keys)
+
+	state_pane_four := viewer.panes[4] or { panic('missing pane four') }
+	assert state_pane_four.terminal.screens.primary.cursor.x == 10
+	assert state_pane_four.terminal.screens.primary.cursor.y == 5
+	assert state_pane_four.terminal.modes.get(.cursor_visible)
+	assert state_pane_four.terminal.modes.get(.wraparound)
+	assert !state_pane_four.terminal.modes.get(.insert)
+	assert !state_pane_four.terminal.modes.get(.origin)
+	assert !state_pane_four.terminal.modes.get(.keypad_keys)
+	assert !state_pane_four.terminal.modes.get(.cursor_keys)
 }
