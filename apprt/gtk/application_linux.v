@@ -4,6 +4,7 @@ import apprt
 import core
 import configpkg
 import input
+import global_state
 
 // application_linux.v - The primary GTK application (AdwApplication subclass).
 //
@@ -859,10 +860,10 @@ fn set_gtk_env(config &configpkg.Config) {
 		gdk_disable << 'color-mgmt'
 	}
 
-	// gtk-opengl-debug dumps directly to stderr; only enable if requested.
-	// TODO(gtk): config.@"gtk-opengl-debug" + state.logging.stderr are not on
-	// the placeholder config; omitted.
-	_ = config
+	// gtk-opengl-debug dumps directly to stderr; both switches must be true.
+	if config.gtk_opengl_debug && global_state.get_state().logging.stderr {
+		gdk_debug << 'opengl'
+	}
 
 	if gdk_debug.len > 0 {
 		val := gdk_debug.join(',')

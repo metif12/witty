@@ -298,6 +298,7 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	add_group(mut result, 'gtk-single-instance', [
 		enum_config_string(c.gtk_single_instance.str()),
 	])
+	add_group(mut result, 'gtk-opengl-debug', [bool_string(c.gtk_opengl_debug)])
 	add_group(mut result, 'gtk-titlebar', [bool_string(c.gtk_titlebar)])
 	add_group(mut result, 'gtk-tabs-location', [
 		enum_config_string(c.gtk_tabs_location.str()),

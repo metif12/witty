@@ -8,6 +8,8 @@ import strconv
 import themepkg
 import cli_args
 
+const default_gtk_opengl_debug = $if debug { true } $else { false }
+
 // --- Original Ghostty Comments Start: src/config/Config.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/config/Config.zig
@@ -4132,6 +4134,8 @@ pub mut:
 	macos_dock_drop_behavior MacOSDockDropBehavior = .new_tab
 	// GTK single-instance behavior. `detect` chooses at finalize time.
 	gtk_single_instance GtkSingleInstance = .detect
+	// Enable GTK OpenGL diagnostics when stderr logging is active.
+	gtk_opengl_debug bool = default_gtk_opengl_debug
 	// GTK window chrome configuration.
 	gtk_titlebar                     bool = true
 	gtk_tabs_location                GtkTabsLocation = .top
@@ -5899,7 +5903,7 @@ fn is_boolean_config_key(key string) bool {
 		'title-report', 'link-url', 'maximize', 'fullscreen', 'focus-follows-mouse',
 		'window-inherit-working-directory', 'tab-inherit-working-directory',
 		'split-inherit-working-directory', 'window-inherit-font-size', 'initial-window',
-		'quit-after-last-window-closed', 'config-default-files', 'gtk-titlebar',
+		'quit-after-last-window-closed', 'config-default-files', 'gtk-opengl-debug', 'gtk-titlebar',
 		'gtk-titlebar-hide-when-maximized', 'gtk-wide-tabs']
 }
 
@@ -6401,7 +6405,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 				return
 			}
 		}
-		'font-thicken', 'background-opacity-cells', 'background-image-repeat', 'window-vsync', 'clipboard-trim-trailing-spaces', 'clipboard-paste-protection', 'clipboard-paste-bracketed-safe', 'cursor-click-to-move', 'desktop-notifications', 'mouse-hide-while-typing', 'mouse-reporting', 'selection-clear-on-copy', 'selection-clear-on-typing', 'vt-kam-allowed', 'wait-after-command', 'window-padding-balance', 'title-report', 'link-url', 'maximize', 'fullscreen', 'focus-follows-mouse', 'window-inherit-working-directory', 'tab-inherit-working-directory', 'split-inherit-working-directory', 'window-inherit-font-size', 'initial-window', 'quit-after-last-window-closed', 'config-default-files', 'gtk-titlebar', 'gtk-titlebar-hide-when-maximized', 'gtk-wide-tabs' {
+		'font-thicken', 'background-opacity-cells', 'background-image-repeat', 'window-vsync', 'clipboard-trim-trailing-spaces', 'clipboard-paste-protection', 'clipboard-paste-bracketed-safe', 'cursor-click-to-move', 'desktop-notifications', 'mouse-hide-while-typing', 'mouse-reporting', 'selection-clear-on-copy', 'selection-clear-on-typing', 'vt-kam-allowed', 'wait-after-command', 'window-padding-balance', 'title-report', 'link-url', 'maximize', 'fullscreen', 'focus-follows-mouse', 'window-inherit-working-directory', 'tab-inherit-working-directory', 'split-inherit-working-directory', 'window-inherit-font-size', 'initial-window', 'quit-after-last-window-closed', 'config-default-files', 'gtk-opengl-debug', 'gtk-titlebar', 'gtk-titlebar-hide-when-maximized', 'gtk-wide-tabs' {
 			parsed := c.parse_config_bool(key, value) or { return }
 			match key {
 				'font-thicken' {
@@ -6487,6 +6491,9 @@ fn (mut c Config) apply_kv(key string, value string) {
 				}
 				'config-default-files' {
 					c.config_default_files = parsed
+				}
+				'gtk-opengl-debug' {
+					c.gtk_opengl_debug = parsed
 				}
 				'gtk-titlebar' {
 					c.gtk_titlebar = parsed
