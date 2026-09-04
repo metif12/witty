@@ -4011,10 +4011,10 @@ pub mut:
 	bold_color                 ?BoldColor
 	selection_background       ?TerminalColor
 	selection_foreground       ?TerminalColor
-	search_background          TerminalColor
-	search_foreground          TerminalColor
-	search_selected_background TerminalColor
-	search_selected_foreground TerminalColor
+	search_background          TerminalColor = TerminalColor{ color: ColorRGB{ r: 0xff, g: 0xe0, b: 0x82 } }
+	search_foreground          TerminalColor = TerminalColor{ color: ColorRGB{ r: 0, g: 0, b: 0 } }
+	search_selected_background TerminalColor = TerminalColor{ color: ColorRGB{ r: 0xf2, g: 0xa5, b: 0x7e } }
+	search_selected_foreground TerminalColor = TerminalColor{ color: ColorRGB{ r: 0, g: 0, b: 0 } }
 	link                       LinkConfig
 	// Enable URL matching. URLs are matched on hover with control (Linux) or
 	// command (macOS) pressed and open using the default system application for
@@ -4831,11 +4831,19 @@ pub:
 	cursor bool = true
 }
 
-// TerminalColor can be an explicit color or derived from cell fg/bg.
-pub enum TerminalColor {
+// TerminalColorKind identifies whether a terminal color is explicit or is
+// derived from the cell foreground/background. TerminalColor carries the RGB
+// payload used by the explicit color variant.
+pub enum TerminalColorKind {
 	color
 	cell_foreground
 	cell_background
+}
+
+pub struct TerminalColor {
+pub:
+	kind  TerminalColorKind = .color
+	color ColorRGB
 }
 
 // WindowPaddingColor determines how the padding area is colored.
@@ -5644,6 +5652,86 @@ fn (mut c Config) apply_kv(key string, value string) {
 				c.explicit_keys['foreground'] = true
 			}
 		}
+		'cursor-color' {
+			if value.len == 0 {
+				c.cursor_color = none
+			} else {
+				c.cursor_color = terminal_color_parse_cli(value) or {
+					c.diagnostics << Diagnostic{
+						message: 'invalid terminal color for "cursor-color": ${value}'
+					}
+					return
+				}
+			}
+		}
+		'cursor-text' {
+			if value.len == 0 {
+				c.cursor_text = none
+			} else {
+				c.cursor_text = terminal_color_parse_cli(value) or {
+					c.diagnostics << Diagnostic{
+						message: 'invalid terminal color for "cursor-text": ${value}'
+					}
+					return
+				}
+			}
+		}
+		'selection-background' {
+			if value.len == 0 {
+				c.selection_background = none
+			} else {
+				c.selection_background = terminal_color_parse_cli(value) or {
+					c.diagnostics << Diagnostic{
+						message: 'invalid terminal color for "selection-background": ${value}'
+					}
+					return
+				}
+			}
+		}
+		'selection-foreground' {
+			if value.len == 0 {
+				c.selection_foreground = none
+			} else {
+				c.selection_foreground = terminal_color_parse_cli(value) or {
+					c.diagnostics << Diagnostic{
+						message: 'invalid terminal color for "selection-foreground": ${value}'
+					}
+					return
+				}
+			}
+		}
+		'search-background' {
+			c.search_background = terminal_color_parse_cli(value) or {
+				c.diagnostics << Diagnostic{
+					message: 'invalid terminal color for "search-background": ${value}'
+				}
+				return
+			}
+		}
+		'search-foreground' {
+			c.search_foreground = terminal_color_parse_cli(value) or {
+				c.diagnostics << Diagnostic{
+					message: 'invalid terminal color for "search-foreground": ${value}'
+				}
+				return
+			}
+		}
+		'search-selected-background' {
+			c.search_selected_background = terminal_color_parse_cli(value) or {
+				c.diagnostics << Diagnostic{
+					message: 'invalid terminal color for "search-selected-background": ${value}'
+				}
+				return
+			}
+		}
+		'search-selected-foreground' {
+			c.search_selected_foreground = terminal_color_parse_cli(value) or {
+				c.diagnostics << Diagnostic{
+					message: 'invalid terminal color for "search-selected-foreground": ${value}'
+				}
+				return
+			}
+		}
 		'palette' {
 			c.apply_palette(value)
 		}
@@ -5775,15 +5863,23 @@ fn (mut c Config) apply_kv(key string, value string) {
 			// cursor-color/cursor-text to the cell colors.
 			set := parse_bool_opt(if value.len == 0 { 't' } else { value }) or { false }
 			if set {
-				c.cursor_color = TerminalColor.cell_foreground
-				c.cursor_text = TerminalColor.cell_background
+				c.cursor_color = TerminalColor{
+					kind: .cell_foreground
+				}
+				c.cursor_text = TerminalColor{
+					kind: .cell_background
+				}
 			}
 		}
 		'selection-invert-fg-bg' {
 			set := parse_bool_opt(if value.len == 0 { 't' } else { value }) or { false }
 			if set {
-				c.selection_foreground = TerminalColor.cell_background
-				c.selection_background = TerminalColor.cell_foreground
+				c.selection_foreground = TerminalColor{
+					kind: .cell_background
+				}
+				c.selection_background = TerminalColor{
+					kind: .cell_foreground
+				}
 			}
 		}
 		'bold-is-bright' {
@@ -6209,32 +6305,24 @@ pub fn format_color(c ColorRGB) string {
 }
 
 // ------------------------------------------------------------
-// TerminalColorValue / BoldColorValue: sum types that carry a Color,
-// mirroring Ghostty's `TerminalColor` and `BoldColor` unions. The plain
-// `TerminalColor`/`BoldColor` enums/structs above are kept for the renderer's
-// DerivedConfig; these companions model the parseCLI behavior faithfully.
+// TerminalColor / BoldColorValue carry the payloads of Ghostty's tagged
+// unions while using an explicit tag in V.
 // ------------------------------------------------------------
 
-pub struct TerminalColorValue {
-pub:
-	kind  TerminalColor = .color
-	color ColorRGB
-}
-
 // terminal_color_parse_cli translates `TerminalColor.parseCLI`.
-pub fn terminal_color_parse_cli(input string) !TerminalColorValue {
+pub fn terminal_color_parse_cli(input string) !TerminalColor {
 	if input == 'cell-foreground' {
-		return TerminalColorValue{
+		return TerminalColor{
 			kind: .cell_foreground
 		}
 	}
 	if input == 'cell-background' {
-		return TerminalColorValue{
+		return TerminalColor{
 			kind: .cell_background
 		}
 	}
 	col := color_parse_cli(input)!
-	return TerminalColorValue{
+	return TerminalColor{
 		kind: .color
 		color: col
 	}

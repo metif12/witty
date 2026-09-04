@@ -49,13 +49,21 @@ pub mut:
 	// Selection foreground color override.
 	selection_foreground ?configpkg.TerminalColor
 	// Search match background color.
-	search_background configpkg.TerminalColor = .color
+	search_background configpkg.TerminalColor = configpkg.TerminalColor{
+		color: configpkg.ColorRGB{ r: 0xff, g: 0xe0, b: 0x82 }
+	}
 	// Search match foreground color.
-	search_foreground configpkg.TerminalColor = .color
+	search_foreground configpkg.TerminalColor = configpkg.TerminalColor{
+		color: configpkg.ColorRGB{ r: 0, g: 0, b: 0 }
+	}
 	// Selected search match background color.
-	search_selected_background configpkg.TerminalColor = .color
+	search_selected_background configpkg.TerminalColor = configpkg.TerminalColor{
+		color: configpkg.ColorRGB{ r: 0xf2, g: 0xa5, b: 0x7e }
+	}
 	// Selected search match foreground color.
-	search_selected_foreground configpkg.TerminalColor = .color
+	search_selected_foreground configpkg.TerminalColor = configpkg.TerminalColor{
+		color: configpkg.ColorRGB{ r: 0, g: 0, b: 0 }
+	}
 	// Bold color override.
 	bold_color ?configpkg.BoldColor
 	// Opacity for faint text (SGR 2), as a u8 (0-255).

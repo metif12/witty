@@ -35,6 +35,19 @@ fn test_derived_config_compiles_default_links() {
 	assert derived.links.links.len == 0
 }
 
+fn test_terminal_color_resolves_explicit_and_cell_colors() {
+	fg := terminal.RGB{ r: 10, g: 20, b: 30 }
+	bg := terminal.RGB{ r: 40, g: 50, b: 60 }
+	explicit := configpkg.TerminalColor{
+		color: configpkg.ColorRGB{ r: 1, g: 2, b: 3 }
+	}
+	assert resolve_terminal_color(explicit, false, fg, bg) == terminal.RGB{ r: 1, g: 2, b: 3 }
+	assert resolve_terminal_color(configpkg.TerminalColor{ kind: .cell_foreground }, false, fg, bg) == fg
+	assert resolve_terminal_color(configpkg.TerminalColor{ kind: .cell_foreground }, true, fg, bg) == bg
+	assert resolve_terminal_color(configpkg.TerminalColor{ kind: .cell_background }, false, fg, bg) == bg
+	assert resolve_terminal_color(configpkg.TerminalColor{ kind: .cell_background }, true, fg, bg) == fg
+}
+
 // Test CellContents resize and reset.
 fn test_cell_contents_resize() ! {
 	mut cells := CellContents{}

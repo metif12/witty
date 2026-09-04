@@ -1800,15 +1800,16 @@ fn cell_set_key(x u32, y u32) u64 {
 }
 
 // Resolve a config TerminalColor to an RGB, given the cell's style-derived
-// fg/bg colors and a fallback for the explicit `.color` variant.
-//
-// BOUNDARY: In Ghostty, TerminalColor's `.color` variant carries an
-// explicit RGB (via toTerminalRGB()). The V configpkg.TerminalColor enum
-// does not carry an attached color yet, so for `.color` we use the
-// provided fallback (the Ghostty default when no explicit color is set).
-fn resolve_terminal_color(tc configpkg.TerminalColor, inverse bool, fg_style terminal.RGB, bg_style terminal.RGB, fallback terminal.RGB) terminal.RGB {
-	return match tc {
-		.color { fallback }
+// foreground and background colors.
+fn resolve_terminal_color(tc configpkg.TerminalColor, inverse bool, fg_style terminal.RGB, bg_style terminal.RGB) terminal.RGB {
+	return match tc.kind {
+		.color {
+			terminal.RGB{
+				r: tc.color.r
+				g: tc.color.g
+				b: tc.color.b
+			}
+		}
 		.cell_foreground {
 			if inverse { bg_style } else { fg_style }
 		}
@@ -2026,9 +2027,7 @@ fn (self &Renderer) compute_cursor_color(cursor_style terminal.CellStyle) termin
 		bg_style := cursor_style.bg_rgb(&state.cursor.cell, state.colors.palette) or {
 			state.colors.background
 		}
-		// For the explicit `.color` variant we fall back to foreground
-		// (see resolve_terminal_color boundary note).
-		return resolve_terminal_color(v, cursor_style.flags.inverse, fg_style, bg_style, state.colors.foreground)
+		return resolve_terminal_color(v, cursor_style.flags.inverse, fg_style, bg_style)
 	}
 
 	return state.colors.foreground
@@ -2047,8 +2046,7 @@ fn (self &Renderer) compute_cursor_text_color(cursor_style terminal.CellStyle) t
 		bg_style := cursor_style.bg_rgb(&state.cursor.cell, state.colors.palette) or {
 			state.colors.background
 		}
-		// `.color` falls back to background (Ghostty uses cursor-text color).
-		return resolve_terminal_color(txt, cursor_style.flags.inverse, fg_style, bg_style, state.colors.background)
+		return resolve_terminal_color(txt, cursor_style.flags.inverse, fg_style, bg_style)
 	}
 
 	return state.colors.background
@@ -2266,16 +2264,16 @@ fn (self &Renderer) compute_cell_bg(selected CellSelected, style terminal.CellSt
 			// in the config, use that. If no configuration, then our
 			// selection background is our foreground color.
 			if v := self.config.selection_background {
-				resolve_terminal_color(v, inverse, fg_style, bg_style, state.colors.foreground)
+				resolve_terminal_color(v, inverse, fg_style, bg_style)
 			} else {
 				state.colors.foreground
 			}
 		}
 		.search {
-			resolve_terminal_color(self.config.search_background, inverse, fg_style, bg_style, state.colors.foreground)
+			resolve_terminal_color(self.config.search_background, inverse, fg_style, bg_style)
 		}
 		.search_selected {
-			resolve_terminal_color(self.config.search_selected_background, inverse, fg_style, bg_style, state.colors.foreground)
+			resolve_terminal_color(self.config.search_selected_background, inverse, fg_style, bg_style)
 		}
 		.false_ {
 			// Two cases cause us to invert (use the fg color as the bg):
@@ -2304,16 +2302,16 @@ fn (self &Renderer) compute_cell_fg(selected CellSelected, style terminal.CellSt
 	return match selected {
 		.selection {
 			if v := self.config.selection_foreground {
-				resolve_terminal_color(v, inverse, fg_style, final_bg, state.colors.background)
+				resolve_terminal_color(v, inverse, fg_style, final_bg)
 			} else {
 				state.colors.background
 			}
 		}
 		.search {
-			resolve_terminal_color(self.config.search_foreground, inverse, fg_style, final_bg, state.colors.background)
+			resolve_terminal_color(self.config.search_foreground, inverse, fg_style, final_bg)
 		}
 		.search_selected {
-			resolve_terminal_color(self.config.search_selected_foreground, inverse, fg_style, final_bg, state.colors.background)
+			resolve_terminal_color(self.config.search_selected_foreground, inverse, fg_style, final_bg)
 		}
 		.false_ {
 			if inverse { final_bg } else { fg_style }

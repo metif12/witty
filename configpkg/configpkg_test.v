@@ -806,8 +806,8 @@ fn test_compat_removed_cursor_invert_fg_bg() {
 	mut cfg := Config.default_config()
 	cfg.load_string('cursor-invert-fg-bg = true\n')
 	cfg.finalize()
-	assert cfg.cursor_color? == .cell_foreground
-	assert cfg.cursor_text? == .cell_background
+	assert cfg.cursor_color?.kind == .cell_foreground
+	assert cfg.cursor_text?.kind == .cell_background
 }
 
 // Config.zig: "compatibility: removed selection-invert-fg-bg"
@@ -815,8 +815,28 @@ fn test_compat_removed_selection_invert_fg_bg() {
 	mut cfg := Config.default_config()
 	cfg.load_string('selection-invert-fg-bg = true\n')
 	cfg.finalize()
-	assert cfg.selection_foreground? == .cell_background
-	assert cfg.selection_background? == .cell_foreground
+	assert cfg.selection_foreground?.kind == .cell_background
+	assert cfg.selection_background?.kind == .cell_foreground
+}
+
+fn test_terminal_color_config_fields() {
+	mut cfg := Config.default_config()
+	assert cfg.search_foreground.color == ColorRGB{0, 0, 0}
+	assert cfg.search_background.color == ColorRGB{0xff, 0xe0, 0x82}
+	assert cfg.search_selected_foreground.color == ColorRGB{0, 0, 0}
+	assert cfg.search_selected_background.color == ColorRGB{0xf2, 0xa5, 0x7e}
+
+	cfg.load_string('cursor-color = #4e2a84\ncursor-text = cell-background\nselection-background = cell-foreground\nsearch-background = #010203\n')
+	assert cfg.cursor_color?.kind == .color
+	assert cfg.cursor_color?.color == ColorRGB{78, 42, 132}
+	assert cfg.cursor_text?.kind == .cell_background
+	assert cfg.selection_background?.kind == .cell_foreground
+	assert cfg.search_background.color == ColorRGB{1, 2, 3}
+	assert cfg.diagnostics.len == 0
+
+	cfg.load_string('cursor-color =\nselection-background =\n')
+	assert cfg.cursor_color == none
+	assert cfg.selection_background == none
 }
 
 // Config.zig: "compatibility: removed bold-is-bright"
