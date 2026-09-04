@@ -1,5 +1,6 @@
 module tui
 
-// can_pretty_print is false on Apple platforms where terminal-style output is
-// not appropriate, and true everywhere else. This mirrors cli/tui.zig.
-pub const can_pretty_print = $if ios || tvos || watchos { false } $else { true }
+// can_pretty_print is false on Apple mobile targets where terminal-style
+// output is not appropriate, and true everywhere else. V currently exposes
+// iOS as its only mobile Apple target (there are no tvOS/watchOS targets).
+pub const can_pretty_print = $if ios { false } $else { true }

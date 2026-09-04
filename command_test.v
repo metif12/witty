@@ -91,6 +91,17 @@ fn test_command_defaults() {
 	assert cmd.stderr_fd == -1
 	assert cmd.pid == -1
 	assert cmd.data == unsafe { nil }
+	assert cmd.process_handle == unsafe { nil }
+	assert cmd.pseudo_console == unsafe { nil }
+}
+
+fn test_windows_create_env_block() {
+	block := create_windows_env_block({
+		'VALUE': 'hello'
+	})
+	assert block[..12] == [u16(`V`), u16(`A`), u16(`L`), u16(`U`), u16(`E`), u16(`=`), u16(`h`),
+		u16(`e`), u16(`l`), u16(`l`), u16(`o`), u16(0)]
+	assert block[block.len - 4..] == [u16(0), 0, 0, 0]
 }
 
 fn test_command_set_data() {

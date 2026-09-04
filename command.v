@@ -163,6 +163,10 @@ fn C.setsid() int
 
 fn C._exit(status int)
 
+fn C.witty_command_start_windows(application &u16, command_line &u16, environment &u16, cwd &u16, stdin_fd int, stdout_fd int, stderr_fd int, pseudo_console voidptr, process_handle &voidptr, process_id &u32) u32
+
+fn C.witty_command_wait_windows(process_handle voidptr, exit_code &u32) u32
+
 // WNOHANG flag for non-blocking waitpid.
 const wnohang = 1
 
@@ -212,7 +216,7 @@ pub type Exit = ExitNormal | ExitSignal | ExitStopped | ExitUnknown
 pub struct ExitNormal {
 pub:
 	// Exited by normal exit call, value is exit status.
-	status u8
+	status u32
 }
 
 pub struct ExitSignal {
@@ -238,7 +242,7 @@ pub:
 pub fn exit_from_status(status int) Exit {
 	if wifexited(status) {
 		return ExitNormal{
-			status: wexitstatus(status)
+			status: u32(wexitstatus(status))
 		}
 	} else if wifsignaled(status) {
 		return ExitSignal{
@@ -292,6 +296,13 @@ pub mut:
 
 	// Process ID is set after start is called.
 	pid int = -1
+
+	// Windows keeps a process HANDLE separately from the numeric process ID.
+	process_handle voidptr
+
+	// Optional Windows ConPTY pseudo-console handle. Standard descriptors are
+	// ignored when this is set, matching Ghostty's Command.pseudo_console.
+	pseudo_console voidptr
 }
 
 // start launches the subprocess. This returns immediately once the child
@@ -434,6 +445,20 @@ pub fn (self Command) wait(block bool) !Exit {
 	if self.pid < 0 {
 		return error('process not started')
 	}
+	$if windows {
+		_ = block
+		if self.process_handle == unsafe { nil } {
+			return error('process handle is unavailable')
+		}
+		mut exit_code := u32(0)
+		result := C.witty_command_wait_windows(self.process_handle, &exit_code)
+		if result != 0 {
+			return error('WaitForSingleObject failed with Windows error ${result}')
+		}
+		return Exit(ExitNormal{
+			status: exit_code
+		})
+	}
 
 	mut status := 0
 	if block {
@@ -504,10 +529,7 @@ fn create_null_delimited_env(env map[string]string) NullDelimitedEnv {
 // windows_create_command_line builds a Windows command line string from an
 // argv array following the standard Windows quoting/escaping rules. This is
 // the V translation of Zig `windowsCreateCommandLine` (copied from the Zig
-// stdlib) and is pure string logic, so it is fully portable even though the
-// rest of the Windows launch path is not implemented here.
-//
-// See start_windows for why the actual process launch remains a boundary.
+// stdlib) and is pure string logic, so it is fully portable.
 fn windows_create_command_line(argv []string) string {
 	mut buf := []u8{}
 	for arg_i, arg in argv {
@@ -565,15 +587,65 @@ fn arg_contains_special(arg string) bool {
 	return false
 }
 
-// start_windows launches the subprocess on Windows.
-//
-// BOUNDARY: This is intentionally left unimplemented. The Zig implementation
-// (`startWindows`, `createWindowsEnvBlock`) relies on win32 APIs
-// (CreateProcessW, STARTUPINFOW, PROC_THREAD_ATTRIBUTE_LIST for pty/conpty
-// handle inheritance, UTF-16 conversion, etc.) that are not bound in this V
-// codebase, which targets POSIX (macOS) exclusively. The command-line quoting
-// logic that is pure string manipulation IS translated above
-// (windows_create_command_line) so it is ready for a future Windows port.
+// create_windows_env_block builds the double-null-terminated UTF-16 block
+// consumed by CreateProcessW. The map contains the exact child environment;
+// it is not merged with the parent process environment.
+fn create_windows_env_block(env map[string]string) []u16 {
+	mut result := []u16{}
+	for key, value in env {
+		wide := '${key}=${value}'.to_wide()
+		mut i := 0
+		unsafe {
+			for wide[i] != 0 {
+				result << wide[i]
+				i++
+			}
+			free(wide)
+		}
+		result << u16(0)
+	}
+	// Windows requires an extra terminator after the final entry. Ghostty
+	// reserves four trailing null code units, which we preserve exactly.
+	result << [u16(0), 0, 0, 0]
+	return result
+}
+
+// start_windows launches the subprocess with CreateProcessW.
 fn (mut self Command) start_windows() ! {
-	return error('Windows subprocess launch is not implemented')
+	application_w := self.path.to_wide()
+	defer {
+		unsafe { free(application_w) }
+	}
+
+	mut command_line_w := &u16(unsafe { nil })
+	if self.args.len > 0 {
+		command_line_w = windows_create_command_line(self.args).to_wide()
+		defer {
+			unsafe { free(command_line_w) }
+		}
+	}
+
+	mut cwd_w := &u16(unsafe { nil })
+	if self.cwd.len > 0 {
+		cwd_w = self.cwd.to_wide()
+		defer {
+			unsafe { free(cwd_w) }
+		}
+	}
+
+	mut environment := []u16{}
+	mut environment_w := &u16(unsafe { nil })
+	if self.env.len > 0 {
+		environment = create_windows_env_block(self.env)
+		environment_w = environment.data
+	}
+
+	mut process_handle := voidptr(unsafe { nil })
+	mut process_id := u32(0)
+	result := C.witty_command_start_windows(application_w, command_line_w, environment_w, cwd_w, self.stdin_fd, self.stdout_fd, self.stderr_fd, self.pseudo_console, &process_handle, &process_id)
+	if result != 0 {
+		return error('CreateProcessW failed with Windows error ${result}')
+	}
+	self.process_handle = process_handle
+	self.pid = int(process_id)
 }
