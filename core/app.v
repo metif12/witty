@@ -569,6 +569,21 @@ pub fn (mut self App) new_window(mut rt_app apprt.RuntimeApp, msg NewWindowMsg) 
 	rt_app.perform_action(target, .new_window, apprt.ActionValue{})!
 }
 
+// request_new_window queues creation of a new window on the core mailbox.
+// This is the public runtime-facing half of the same mailbox push Ghostty's
+// GTK Application.activate performs.
+pub fn (mut self App) request_new_window(parent ?&SurfaceRef) {
+	self.mailbox.push(NewWindowMsg{
+		parent: parent
+	})
+}
+
+// pending_message_count exposes the bounded mailbox occupancy for runtime
+// integration and tests. It does not consume or otherwise mutate messages.
+pub fn (self &App) pending_message_count() int {
+	return self.mailbox.queue.len
+}
+
 // focus_event handles an app-level focus event. This should be called
 // whenever the focus state of the entire app containing Ghostty changes.
 // This is separate from surface focus events. See the `focused` field

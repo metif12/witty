@@ -1,6 +1,7 @@
 module gtk
 
 import configpkg
+import core
 import input
 
 fn test_application_accelerator_uses_reverse_keybind_lookup() {
@@ -52,4 +53,14 @@ fn test_application_cgroup_mode_gate() {
 	assert cgroup_isolation_enabled(.always, g_application_non_unique)
 	assert cgroup_isolation_enabled(.single_instance, g_application_default_flags)
 	assert !cgroup_isolation_enabled(.single_instance, g_application_non_unique)
+}
+
+fn test_application_activate_queues_new_window() {
+	mut core_app := &core.App{}
+	mut app := Application{
+		core_app: core_app
+	}
+	assert core_app.pending_message_count() == 0
+	application_activate_cb(unsafe { nil }, voidptr(&app))
+	assert core_app.pending_message_count() == 1
 }

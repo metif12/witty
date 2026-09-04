@@ -11,18 +11,16 @@ import global_state
 // Translated from ghostty/src/apprt/gtk/class/application.zig.
 //
 // In ghostty this is a GObject class (a subclass of adw.Application) created
-// with `gobject.ext.defineClass`, with signal vfunc overrides, GObject
-// properties, and a compiled `.ui`/blueprint resource bundle. V has none of
-// the GObject class-registration / comptime / template machinery, so:
+// with `gobject.ext.defineClass`, with signal vfunc overrides and GObject
+// properties. V models the private state in a stable heap wrapper, so:
 //
 //   * The class is modeled as a plain V struct `Application` that wraps the
 //     underlying GObject pointer (`obj`) plus the private state fields that
 //     ghostty keeps in its `Private` struct. Methods become ordinary
 //     `pub fn (self Application)` / `pub fn Application.new(...)`.
-//   * GObject type registration (`defineClass`), the `config` property, signal
-//     vfunc overrides (startup/activate/dispose/finalize), and the compiled
-//     resource bundle are STUBBED — see the "GObject class registration"
-//     section — with placeholder bodies that type-check.
+//   * A real AdwApplication is created and its startup/activate signals invoke
+//     the translated vfunc bodies. The custom `config` GObject property and
+//     dispose/finalize overrides remain represented by wrapper methods.
 //   * The core `App` (libghostty `CoreApp`) is the root `main.App`, which the
 //     gtk module cannot import, so calls into it go through the `CoreApp`
 //     placeholder (declared in app_linux.v). Method SIGNATURES are kept
@@ -55,6 +53,8 @@ fn C.g_application_get_dbus_connection(app GApplication) GDBusConnection
 
 fn C.g_application_send_notification(app GApplication, id &char, notification voidptr)
 
+fn C.g_application_set_resource_base_path(app GApplication, resource_path &char)
+
 // GtkApplication
 fn C.gtk_application_get_windows(app GtkApplication) GList
 
@@ -62,6 +62,8 @@ fn C.gtk_application_set_accels_for_action(app GtkApplication, detailed_action_n
 
 // AdwApplication / AdwStyleManager
 fn C.adw_application_get_style_manager(app AdwApplication) voidptr
+
+fn C.adw_application_new(application_id &char, flags GApplicationFlags) AdwApplication
 
 fn C.adw_style_manager_set_color_scheme(style_manager voidptr, color_scheme int)
 
@@ -134,9 +136,7 @@ pub enum QuitTimerState {
 @[heap]
 pub struct Application {
 mut:
-	// The underlying GObject (GtkApplication/AdwApplication) instance pointer.
-	// TODO(gtk): GObject class registration — this is created via
-	// `gobject.ext.newInstance` in ghostty; here it is a stubbed handle.
+	// The underlying GtkApplication/AdwApplication instance pointer.
 	obj GApplication = unsafe { nil }
 
 	// The apprt App. Mirrors `Private.rt_app`.
@@ -204,8 +204,8 @@ pub fn Application.default_app() GApplication {
 // This does far more than a normal constructor because it is the main program
 // entrypoint: it loads config, sets GTK env vars, resolves the app id and
 // single-instance flags, initializes libadwaita and the windowing protocol,
-// and (in ghostty) instantiates the GObject. The GObject instantiation, CSS
-// provider creation, and signal connections are stubbed.
+// and instantiates the AdwApplication. CSS provider/property integration is
+// handled separately by the translated wrapper.
 pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 	// Capture GLib/GObject/GTK log messages via a writer func.
 	// TODO(gtk): glib.logSetWriterFunc — funnel GLib logs into witty logging.
@@ -252,11 +252,13 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 		}
 	}
 
-	// Setup our windowing protocol logic. On failure we fall back to the no-op
-	// backend so we can still launch.
-	// TODO(gtk): gdk.Display.getDefault() — display retrieval is out of scope;
-	// pass a nil display to the winproto probe (falls back to noop).
-	display := GdkDisplay(unsafe { nil })
+	// Setup our windowing protocol logic. A GTK application requires a display;
+	// Ghostty exits when GTK cannot provide one, while this fallible constructor
+	// returns the error to its caller.
+	display := C.gdk_display_get_default()
+	if isnil(display) {
+		return error('GDK display is unavailable')
+	}
 	winproto := WinProtoApp.init(display, app_id, &config) or {
 		// log.warn("error initializing windowing protocol")
 		WinProtoApp{
@@ -268,17 +270,24 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 	// TODO(gtk): Config.new(alloc, &config) + gtk.CssProvider.new() +
 	// gtk.StyleContext.addProviderForDisplay — GObject/CSS out of scope.
 
-	// Instantiate the GObject application.
-	// TODO(gtk): GObject class registration — ghostty calls
-	// `gobject.ext.newInstance(Self, .{ .application_id, .flags,
-	// .resource_base_path })`. Here we allocate the plain wrapper.
+	// Instantiate the application object. The Zig implementation subclasses
+	// AdwApplication to install vfuncs; V connects the equivalent startup and
+	// activate signals to the stable heap wrapper below.
 	mut self := &Application{
-		obj: unsafe { nil }
 		rt_app: unsafe { rt_app }
 		core_app: unsafe { core_app }
 		config: config
 		winproto: winproto
 	}
+	obj := C.adw_application_new(&char(app_id.str), GApplicationFlags(app_flags))
+	if isnil(obj) {
+		self.winproto.deinit()
+		return error('failed to create AdwApplication')
+	}
+	self.obj = GApplication(obj)
+	C.g_application_set_resource_base_path(self.obj, c'/com/mitchellh/ghostty')
+	C.g_signal_connect_data(self.obj, c'startup', GCallback(voidptr(application_startup_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'activate', GCallback(voidptr(application_activate_cb)), voidptr(self), unsafe { nil }, 0)
 
 	// Signals: connect "notify::config" -> propConfig, and the CSS provider
 	// "parsing-error" -> signalCssParsingError.
@@ -361,7 +370,13 @@ pub fn (mut self Application) run() ! {
 	if !isnil(self.obj) {
 		mut err := GError(unsafe { nil })
 		if !C.g_application_register(self.obj, unsafe { nil }, &err) {
+			if !isnil(err) {
+				C.g_error_free(err)
+			}
 			return error('application register failed')
+		}
+		if !isnil(err) {
+			C.g_error_free(err)
 		}
 	}
 
@@ -607,10 +622,8 @@ pub fn (self &Application) wakeup() {
 
 // --- Virtual methods (GObject vfunc overrides) ----------------------------
 //
-// TODO(gtk): signal vfunc overrides — in ghostty these are registered via
-// `virtual_methods.*.implement(class, ...)` in `Class.init` and chained to the
-// parent. Here they are plain methods invoked directly by `new`/`run`; there is
-// no GObject class to register them on.
+// Ghostty installs these through subclass vfuncs. The V wrapper connects the
+// corresponding startup/activate GApplication signals and owns disposal.
 
 // startup performs application startup: set as default, setup the event loop
 // backend, style manager, signal handlers, action map, global shortcuts, and
@@ -772,10 +785,31 @@ fn cgroup_isolation_enabled(mode configpkg.LinuxCgroup, app_flags int) bool {
 // activate handles the GApplication "activate" signal: queue a new window.
 // Mirrors the `activate` vfunc.
 fn (mut self Application) activate() {
-	// log.debug("activate")
-	// Queue a new window on the core app mailbox.
-	// TODO(gtk): core_app.mailbox.push(.{ .new_window = .{} }) — needs the real
-	// CoreApp mailbox.
+	if isnil(self.core_app) {
+		return
+	}
+	mut core_app := unsafe { self.core_app }
+	core_app.request_new_window(none)
+}
+
+// Signal trampolines install the two Application vfunc bodies on the concrete
+// AdwApplication instance created by Application.new.
+fn application_startup_cb(obj GApplication, user_data voidptr) {
+	_ = obj
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Application(user_data) }
+	self.startup()
+}
+
+fn application_activate_cb(obj GApplication, user_data voidptr) {
+	_ = obj
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Application(user_data) }
+	self.activate()
 }
 
 // dispose releases the config errors dialog and signal source. Mirrors the

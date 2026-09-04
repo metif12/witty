@@ -16,8 +16,11 @@ module gtk
 
 #flag linux -DGTK_APPRT
 #pkgconfig gtk4
+#pkgconfig libadwaita-1
 
 #include <gtk/gtk.h>
+
+#include <adwaita.h>
 
 // --- Opaque handle type aliases -------------------------------------------
 //
@@ -84,6 +87,8 @@ fn C.gtk_widget_get_scale_factor(widget GtkWidget) int
 fn C.gtk_widget_show(widget GtkWidget)
 fn C.gtk_widget_get_width(widget GtkWidget) int
 fn C.gtk_widget_get_height(widget GtkWidget) int
+
+fn C.gdk_display_get_default() GdkDisplay
 
 // widget_get_display returns the GdkDisplay for a widget.
 pub fn widget_get_display(widget GtkWidget) GdkDisplay {
