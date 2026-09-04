@@ -109,8 +109,18 @@ pub fn (self &MetalAPI) present_and_commit(cmd_buf voidptr, drawable voidptr) {
 
 // Get the current size of the runtime surface.
 pub fn (self &MetalAPI) surface_size() (u32, u32) {
-	// XTODO: Requires reading drawableSize from CAMetalLayer
-	return 0, 0
+	width, height := macos.metal_layer_surface_size(self.layer)
+	return clamped_metal_surface_dimension(width, self.max_texture_size), clamped_metal_surface_dimension(height, self.max_texture_size)
+}
+
+fn clamped_metal_surface_dimension(value f64, maximum u32) u32 {
+	if value <= 0 || maximum == 0 {
+		return 0
+	}
+	if value >= f64(maximum) {
+		return maximum
+	}
+	return u32(value)
 }
 
 // Metal pixel format enum (subset).

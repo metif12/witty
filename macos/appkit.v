@@ -7,14 +7,23 @@ import os
 // Objective-C runtime bridge that ships with vlib.
 
 #flag darwin -framework AppKit
+
 #flag darwin -framework Foundation
+
 #flag darwin -framework CoreText
+
 #flag darwin -framework CoreFoundation
+
 #flag darwin -framework CoreGraphics
+
 #flag darwin -framework Metal
+
 #flag darwin -framework QuartzCore
+
 #flag darwin -lobjc
+
 #insert "@VEXEROOT/vlib/macos/objc_bridge.h"
+
 #insert "@VMODROOT/macos/appkit_bridge.h"
 
 // Callback types. Each callback receives the view's userdata pointer first.
@@ -33,10 +42,15 @@ pub type ActionCallback = fn (userdata voidptr, action_id int)
 pub type MouseCallback = fn (userdata voidptr, event_type int, x f64, y f64, modflags u64)
 
 type ObjId = voidptr
+
 type Sel = voidptr
+
 type ObjCRect = C.macos_rect
+
 type ObjCPoint = C.witty_macos_point
+
 type ObjCSize = C.witty_macos_size
+
 type MetalClearColor = C.witty_macos_clear_color
 
 pub struct C.macos_rect {
@@ -68,48 +82,91 @@ mut:
 }
 
 fn C.macos_objc_msg_id0(obj ObjId, selector Sel) ObjId
+
 fn C.macos_objc_msg_id1(obj ObjId, selector Sel, a0 voidptr) ObjId
+
 fn C.macos_objc_msg_id2(obj ObjId, selector Sel, a0 voidptr, a1 voidptr) ObjId
+
 fn C.macos_objc_msg_id3(obj ObjId, selector Sel, a0 voidptr, a1 voidptr, a2 voidptr) ObjId
+
 fn C.macos_objc_msg_id_rect(obj ObjId, selector Sel, rect ObjCRect) ObjId
+
 fn C.macos_objc_msg_id_rect_u64_u64_bool(obj ObjId, selector Sel, rect ObjCRect, a1 u64, a2 u64, a3 bool) ObjId
+
 fn C.macos_objc_msg_id_obj_sel_obj(obj ObjId, selector Sel, a0 voidptr, a1 voidptr, a2 voidptr) ObjId
+
 fn C.macos_objc_msg_id_f64(obj ObjId, selector Sel, a0 f64) ObjId
+
 fn C.macos_objc_msg_id_u64(obj ObjId, selector Sel, a0 u64) ObjId
+
 fn C.macos_objc_msg_void0(obj ObjId, selector Sel)
+
 fn C.macos_objc_msg_void1(obj ObjId, selector Sel, a0 voidptr)
+
 fn C.macos_objc_msg_void2(obj ObjId, selector Sel, a0 voidptr, a1 voidptr)
+
 fn C.macos_objc_msg_void_bool(obj ObjId, selector Sel, a0 bool)
+
 fn C.macos_objc_msg_void_u64(obj ObjId, selector Sel, a0 u64)
+
 fn C.macos_objc_msg_void_f64(obj ObjId, selector Sel, a0 f64)
+
 fn C.macos_objc_msg_void_rect(obj ObjId, selector Sel, rect ObjCRect)
+
 fn C.macos_objc_msg_bool0(obj ObjId, selector Sel) bool
+
 fn C.macos_objc_msg_bool1(obj ObjId, selector Sel, a0 voidptr) bool
+
 fn C.macos_objc_msg_i64(obj ObjId, selector Sel) i64
+
 fn C.macos_objc_msg_u64(obj ObjId, selector Sel) u64
+
 fn C.macos_objc_msg_f64(obj ObjId, selector Sel) f64
+
 fn C.macos_objc_msg_rect(obj ObjId, selector Sel) ObjCRect
+
 fn C.macos_objc_get_class(name &char) ObjId
+
 fn C.macos_objc_get_protocol(name &char) ObjId
+
 fn C.macos_sel_register_name(name &char) Sel
+
 fn C.macos_objc_allocate_class_pair(superclass ObjId, name &char, extra_bytes usize) ObjId
+
 fn C.macos_objc_register_class_pair(cls ObjId)
+
 fn C.macos_class_add_method(cls ObjId, name Sel, imp voidptr, types &char) bool
+
 fn C.macos_class_add_ivar(cls ObjId, name &char, size usize, alignment u8, types &char) bool
+
 fn C.macos_class_add_protocol(cls ObjId, protocol ObjId) bool
+
 fn C.macos_objc_set_ptr_ivar(obj ObjId, name &char, value voidptr)
+
 fn C.macos_objc_get_ptr_ivar(obj ObjId, name &char) voidptr
+
 fn C.macos_set_associated_object(obj ObjId, key voidptr, value ObjId, policy usize)
+
 fn C.macos_get_associated_object(obj ObjId, key voidptr) ObjId
+
 fn C.witty_macos_objc_msg_point0(obj ObjId, selector Sel) ObjCPoint
+
 fn C.witty_macos_objc_msg_point_point_obj(obj ObjId, selector Sel, point ObjCPoint, a1 voidptr) ObjCPoint
+
 fn C.witty_macos_objc_msg_bool2(obj ObjId, selector Sel, a0 voidptr, a1 voidptr) bool
+
 fn C.witty_macos_objc_msg_bool_u64(obj ObjId, selector Sel, a0 u64) bool
+
 fn C.witty_macos_objc_msg_void_size(obj ObjId, selector Sel, size ObjCSize)
+
 fn C.witty_macos_objc_msg_void_clear_color(obj ObjId, selector Sel, color MetalClearColor)
+
 fn C.witty_macos_is_main_thread() bool
+
 fn C.witty_macos_dispatch_main(fnptr voidptr, ctx voidptr)
+
 fn C.witty_macos_string_task_new(view voidptr, text &char) &C.witty_macos_string_task
+
 fn C.witty_macos_string_task_free(task &C.witty_macos_string_task)
 
 struct C.witty_macos_string_task {
@@ -120,7 +177,9 @@ struct C.witty_macos_string_task {
 fn C.MTLCreateSystemDefaultDevice() ObjId
 
 fn C.vt_ct_font_attribute_name() voidptr
+
 fn C.vt_create_font(name &char, size f64) voidptr
+
 fn C.vt_draw_text(ctx voidptr, text &u8, text_len int, font voidptr, x f64, y f64, fg_r f64, fg_g f64, fg_b f64)
 
 const vt_action_copy = 1
@@ -195,9 +254,9 @@ fn sel(name string) Sel {
 @[inline]
 fn objc_rect(x f64, y f64, width f64, height f64) ObjCRect {
 	return ObjCRect{
-		x:      x
-		y:      y
-		width:  width
+		x: x
+		y: y
+		width: width
 		height: height
 	}
 }
@@ -205,7 +264,7 @@ fn objc_rect(x f64, y f64, width f64, height f64) ObjCRect {
 @[inline]
 fn objc_size(width f64, height f64) ObjCSize {
 	return ObjCSize{
-		width:  width
+		width: width
 		height: height
 	}
 }
@@ -468,11 +527,9 @@ fn register_classes() {
 		add_ptr_ivar(view_cls, 'metalQueue')
 		add_ptr_ivar(view_cls, 'metalLayer')
 		add_method(view_cls, 'isFlipped', voidptr(vt_view_is_flipped), 'B@:')
-		add_method(view_cls, 'acceptsFirstResponder', voidptr(vt_view_accepts_first_responder),
-			'B@:')
+		add_method(view_cls, 'acceptsFirstResponder', voidptr(vt_view_accepts_first_responder), 'B@:')
 		add_method(view_cls, 'canBecomeKeyView', voidptr(vt_view_can_become_key_view), 'B@:')
-		add_method(view_cls, 'drawRect:', voidptr(vt_view_draw_rect),
-			'v@:{CGRect={CGPoint=dd}{CGSize=dd}}')
+		add_method(view_cls, 'drawRect:', voidptr(vt_view_draw_rect), 'v@:{CGRect={CGPoint=dd}{CGSize=dd}}')
 		add_method(view_cls, 'keyDown:', voidptr(vt_view_key_down), 'v@:@')
 		add_method(view_cls, 'flagsChanged:', voidptr(vt_view_flags_changed), 'v@:@')
 		add_method(view_cls, 'mouseDown:', voidptr(vt_view_mouse_down), 'v@:@')
@@ -491,20 +548,15 @@ fn register_classes() {
 
 	mut delegate_cls := get_class('VTAppDelegate')
 	if is_nil(delegate_cls) {
-		delegate_cls = C.macos_objc_allocate_class_pair(get_class('NSObject'),
-			cstr('VTAppDelegate'), 0)
+		delegate_cls = C.macos_objc_allocate_class_pair(get_class('NSObject'), cstr('VTAppDelegate'), 0)
 		proto := get_protocol('NSApplicationDelegate')
 		if !is_nil(proto) {
 			C.macos_class_add_protocol(delegate_cls, proto)
 		}
-		add_method(delegate_cls, 'applicationDidFinishLaunching:',
-			voidptr(vt_app_did_finish_launching), 'v@:@')
-		add_method(delegate_cls, 'applicationShouldTerminateAfterLastWindowClosed:',
-			voidptr(vt_app_should_terminate_after_last_window_closed), 'B@:@')
-		add_method(delegate_cls, 'applicationShouldTerminate:', voidptr(vt_app_should_terminate),
-			'Q@:@')
-		add_method(delegate_cls, 'applicationWillTerminate:', voidptr(vt_app_will_terminate),
-			'v@:@')
+		add_method(delegate_cls, 'applicationDidFinishLaunching:', voidptr(vt_app_did_finish_launching), 'v@:@')
+		add_method(delegate_cls, 'applicationShouldTerminateAfterLastWindowClosed:', voidptr(vt_app_should_terminate_after_last_window_closed), 'B@:@')
+		add_method(delegate_cls, 'applicationShouldTerminate:', voidptr(vt_app_should_terminate), 'Q@:@')
+		add_method(delegate_cls, 'applicationWillTerminate:', voidptr(vt_app_will_terminate), 'v@:@')
 		C.macos_objc_register_class_pair(delegate_cls)
 	}
 }
@@ -556,8 +608,7 @@ fn vt_view_key_down(self ObjId, _cmd Sel, event ObjId) {
 	}
 	chars := objc_utf8_string(msg_id(event, 'characters'))
 	uchars := objc_utf8_string(msg_id(event, 'charactersIgnoringModifiers'))
-	g_key_cb(userdata, keycode, flags, chars.str, chars.len, uchars.str, uchars.len, msg_bool(event,
-		'isARepeat'))
+	g_key_cb(userdata, keycode, flags, chars.str, chars.len, uchars.str, uchars.len, msg_bool(event, 'isARepeat'))
 }
 
 fn vt_view_flags_changed(_self ObjId, _cmd Sel, _event ObjId) {
@@ -726,8 +777,7 @@ fn set_base_title(window ObjId, base string) {
 	if is_nil(window) {
 		return
 	}
-	C.macos_set_associated_object(window, base_title_key(), nsstring(base),
-		objc_assoc_copy_nonatomic)
+	C.macos_set_associated_object(window, base_title_key(), nsstring(base), objc_assoc_copy_nonatomic)
 }
 
 fn get_base_title(window ObjId) string {
@@ -792,8 +842,7 @@ fn configure_window_common(window ObjId, base_title string) {
 	msg_void_size(window, 'setMinSize:', objc_size(200, 100))
 	msg_void_u64(window, 'setTabbingMode:', ns_window_tabbing_mode_automatic)
 	msg_void1(window, 'setTabbingIdentifier:', nsstring('Witty.tabs'))
-	msg_void_u64(window, 'setCollectionBehavior:',
-		ns_window_collection_behavior_full_screen_primary)
+	msg_void_u64(window, 'setCollectionBehavior:', ns_window_collection_behavior_full_screen_primary)
 	msg_void_bool(window, 'setTitlebarAppearsTransparent:', false)
 	msg_void_bool(window, 'setMovableByWindowBackground:', false)
 	set_base_title(window, base_title)
@@ -809,8 +858,7 @@ fn menu_item() ObjId {
 }
 
 fn menu_add_item(menu ObjId, title string, action string, key string) ObjId {
-	return msg_id_obj_sel_obj(menu, 'addItemWithTitle:action:keyEquivalent:', nsstring(title),
-		sel(action), nsstring(key))
+	return msg_id_obj_sel_obj(menu, 'addItemWithTitle:action:keyEquivalent:', nsstring(title), sel(action), nsstring(key))
 }
 
 fn menu_add_separator(menu ObjId) {
@@ -827,8 +875,7 @@ fn install_menu_bar() {
 	menu_add_separator(app_menu)
 	menu_add_item(app_menu, 'Hide Witty', 'hide:', 'h')
 	hide_others := menu_add_item(app_menu, 'Hide Others', 'hideOtherApplications:', 'h')
-	msg_void_u64(hide_others, 'setKeyEquivalentModifierMask:',
-		ns_event_modifier_flag_command | ns_event_modifier_flag_option)
+	msg_void_u64(hide_others, 'setKeyEquivalentModifierMask:', ns_event_modifier_flag_command | ns_event_modifier_flag_option)
 	menu_add_item(app_menu, 'Show All', 'unhideAllApplications:', '')
 	menu_add_separator(app_menu)
 	menu_add_item(app_menu, 'Quit Witty', 'terminate:', 'q')
@@ -853,8 +900,7 @@ fn install_menu_bar() {
 	msg_void1(menu_bar, 'addItem:', view_menu_item)
 	view_menu := menu_with_title('View')
 	fullscreen := menu_add_item(view_menu, 'Toggle Full Screen', 'toggleFullScreen:', 'f')
-	msg_void_u64(fullscreen, 'setKeyEquivalentModifierMask:',
-		ns_event_modifier_flag_command | ns_event_modifier_flag_control)
+	msg_void_u64(fullscreen, 'setKeyEquivalentModifierMask:', ns_event_modifier_flag_command | ns_event_modifier_flag_control)
 	msg_void1(view_menu_item, 'setSubmenu:', view_menu)
 
 	window_menu_item := menu_item()
@@ -879,8 +925,7 @@ fn install_menu_bar() {
 fn setup_view_notifications(view ObjId) {
 	msg_void_bool(view, 'setPostsFrameChangedNotifications:', true)
 	center := msg_id(get_class('NSNotificationCenter'), 'defaultCenter')
-	msg_id_obj_sel_obj(center, 'addObserver:selector:name:object:', view, sel('vtFrameDidChange:'),
-		nsstring('NSViewFrameDidChangeNotification'))
+	msg_id_obj_sel_obj(center, 'addObserver:selector:name:object:', view, sel('vtFrameDidChange:'), nsstring('NSViewFrameDidChangeNotification'))
 }
 
 fn setup_view_metal(view ObjId) {
@@ -943,9 +988,7 @@ pub fn create_window(w int, h int, title string) voidptr {
 	style := ns_window_style_titled | ns_window_style_closable | ns_window_style_miniaturizable | ns_window_style_resizable
 	base_title := display_title_for_input(title)
 
-	window := msg_id_rect_u64_u64_bool(alloc('NSWindow'),
-		'initWithContentRect:styleMask:backing:defer:', frame, style, ns_backing_store_buffered,
-		false)
+	window := msg_id_rect_u64_u64_bool(alloc('NSWindow'), 'initWithContentRect:styleMask:backing:defer:', frame, style, ns_backing_store_buffered, false)
 	g_window = window
 	configure_window_common(window, base_title)
 
@@ -1087,9 +1130,7 @@ pub fn new_tab(w int, h int, title string) voidptr {
 
 	style := ns_window_style_titled | ns_window_style_closable | ns_window_style_miniaturizable | ns_window_style_resizable
 	base_title := display_title_for_input(title)
-	window := msg_id_rect_u64_u64_bool(alloc('NSWindow'),
-		'initWithContentRect:styleMask:backing:defer:', frame, style, ns_backing_store_buffered,
-		false)
+	window := msg_id_rect_u64_u64_bool(alloc('NSWindow'), 'initWithContentRect:styleMask:backing:defer:', frame, style, ns_backing_store_buffered, false)
 	configure_window_common(window, base_title)
 
 	view := create_terminal_view(frame)
@@ -1226,6 +1267,18 @@ pub fn metal_layer(view voidptr) voidptr {
 	return C.macos_objc_get_ptr_ivar(ObjId(view), cstr('metalLayer'))
 }
 
+// metal_layer_surface_size returns the drawable dimensions derived from the
+// layer bounds and its backing scale. CAMetalLayer's drawableSize is updated
+// from these same values by update_metal_drawable_size.
+pub fn metal_layer_surface_size(layer voidptr) (f64, f64) {
+	if is_nil(layer) {
+		return 0, 0
+	}
+	bounds := msg_rect(ObjId(layer), 'bounds')
+	scale := msg_f64(ObjId(layer), 'contentsScale')
+	return bounds.width * scale, bounds.height * scale
+}
+
 pub fn metal_next_drawable(layer voidptr) voidptr {
 	return msg_id(ObjId(layer), 'nextDrawable')
 }
@@ -1249,9 +1302,9 @@ pub fn metal_create_render_pass(texture voidptr, r f64, g f64, b f64, a f64) voi
 	msg_void_u64(attachment, 'setLoadAction:', mtl_load_action_clear)
 	msg_void_u64(attachment, 'setStoreAction:', mtl_store_action_store)
 	C.witty_macos_objc_msg_void_clear_color(attachment, sel('setClearColor:'), MetalClearColor{
-		red:   r
+		red: r
 		green: g
-		blue:  b
+		blue: b
 		alpha: a
 	})
 	return desc
