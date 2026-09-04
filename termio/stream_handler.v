@@ -537,19 +537,18 @@ fn (mut self StreamHandler) dcs_command(mut cmd terminal.DcsCommand) {
 }
 
 // dcs_xtgettcap handles XTGETTCAP requests by iterating over requested
-// terminfo capability names and sending responses. Each response is a
-// DCS sequence: DCS 1 + r <hex-name> = <hex-value> ST for found caps,
-// or DCS 0 + r <hex-name> ST for unfound caps.
+// terminfo capability names and sending responses. Each found capability is
+// returned as DCS 1 + r <hex-name> [= <hex-value>] ST. Unknown capabilities
+// are omitted, matching Ghostty's generated XTGETTCAP map.
 fn (mut self StreamHandler) dcs_xtgettcap(mut xtgettcap terminal.DcsXtgettcap) {
 	for {
 		key := xtgettcap.next() or { break }
 		if val := xtgettcap_lookup(key) {
-			// Valid response: DCS 1 + r <key> = <hex-value> ST
-			resp := '\x1bP1+r${key}=${val}\x1b\\'
-			self.message_writer(Message.write_req(resp))
-		} else {
-			// Invalid/unknown: DCS 0 + r <key> ST
-			resp := '\x1bP0+r${key}\x1b\\'
+			resp := if val.len == 0 {
+				'\x1bP1+r${key}\x1b\\'
+			} else {
+				'\x1bP1+r${key}=${val}\x1b\\'
+			}
 			self.message_writer(Message.write_req(resp))
 		}
 	}
@@ -694,22 +693,294 @@ fn xtgettcap_lookup(hex_key string) ?string {
 	// Decode the hex key to get the capability name.
 	name := hex_decode(hex_key) or { return none }
 
-	// Look up common terminfo capabilities.
-	// This is a subset of what Ghostty supports.
-	val := match name {
+	val := xtgettcap_value(name) or { return none }
+	return hex_encode(val)
+}
+
+// Values generated from pinned Ghostty src/terminfo/ghostty.zig. Parameterized
+// strings remain in terminfo source notation; non-parameterized strings decode
+// the same escape and control forms as Source.xtgettcapMap.
+fn xtgettcap_value(name string) ?string {
+	return match name {
 		'TN' { 'xterm-ghostty' }
-		'Co', 'colors' { '256' }
-		'RGB' { '8/8/8' }
-		'Smulx' { '\x1b[4:%p1%dm' }
-		'Setulc' { '\x1b[58:2::%p1%{65536}%/%d:%p1%{256}%/%{255}%&%d:%p1%{255}%&%dm' }
-		'Smol' { '\x1b[53m' }
-		'Rmol' { '\x1b[55m' }
-		'Ms' { '\x1b]52;%p1%s;%p2%s\a' }
+		'Co' { '256' }
+		'RGB' { '8' }
+		'am' { '' }
+		'bce' { '' }
+		'ccc' { '' }
+		'hs' { '' }
+		'km' { '' }
+		'mc5i' { '' }
+		'mir' { '' }
+		'msgr' { '' }
+		'npc' { '' }
+		'xenl' { '' }
+		'AX' { '' }
+		'Tc' { '' }
+		'Su' { '' }
+		'XT' { '' }
+		'fullkbd' { '' }
+		'colors' { '256' }
+		'cols' { '80' }
+		'it' { '8' }
+		'lines' { '24' }
+		'pairs' { '32767' }
+		'acsc' { '++\\,\\,--..00``aaffgghhiijjkkllmmnnooppqqrrssttuuvvwwxxyyzz{{||}}~~' }
+		'Smulx' { '\\E[4:%p1%dm' }
+		'Setulc' { '\\E[58:2::%p1%{65536}%/%d:%p1%{256}%/%{255}%&%d:%p1%{255}%&%d%;m' }
+		'Ss' { '\\E[%p1%d q' }
+		'Se' { '\x1b[2 q' }
+		'Ms' { '\\E]52;%p1%s;%p2%s\\007' }
+		'Sync' { '\\E[?2026%?%p1%{1}%-%tl%eh%;' }
+		'BD' { '\x1b[?2004l' }
+		'BE' { '\x1b[?2004h' }
+		'PS' { '\x1b[200~' }
+		'PE' { '\x1b[201~' }
+		'XM' { '\\E[?1006;1000%?%p1%{1}%=%th%el%;' }
+		'xm' { '\\E[<%i%p3%d;%p1%d;%p2%d;%?%p4%tM%em%;' }
+		'RV' { '\x1b[>c' }
+		'rv' { '\x1b\\\\[[0-9]+;[0-9]+;[0-9]+c' }
+		'XR' { '\x1b[>0q' }
+		'xr' { '\x1bP>\\\\|[ -~]+a\x1b\\\\' }
+		'Enmg' { '\x1b[?69h' }
+		'Dsmg' { '\x1b[?69l' }
+		'Clmg' { '\x1b[s' }
+		'Cmg' { '\\E[%i%p1%d;%p2%ds' }
+		'clear' { '\x1b[H\x1b[2J' }
+		'E3' { '\x1b[3J' }
+		'fe' { '\x1b[?1004h' }
+		'fd' { '\x1b[?1004l' }
+		'kxIN' { '\x1b[I' }
+		'kxOUT' { '\x1b[O' }
+		'bel' { '\a' }
+		'blink' { '\x1b[5m' }
+		'bold' { '\x1b[1m' }
+		'cbt' { '\x1b[Z' }
+		'civis' { '\x1b[?25l' }
+		'cnorm' { '\x1b[?12l\x1b[?25h' }
+		'cr' { '\\r' }
+		'csr' { '\\E[%i%p1%d;%p2%dr' }
+		'cub' { '\\E[%p1%dD' }
+		'cub1' { '\b' }
+		'cud' { '\\E[%p1%dB' }
+		'cud1' { '\n' }
+		'cuf' { '\\E[%p1%dC' }
+		'cuf1' { '\x1b[C' }
+		'cup' { '\\E[%i%p1%d;%p2%dH' }
+		'cuu' { '\\E[%p1%dA' }
+		'cuu1' { '\x1b[A' }
+		'cvvis' { '\x1b[?12;25h' }
+		'dch' { '\\E[%p1%dP' }
+		'dch1' { '\x1b[P' }
+		'dim' { '\x1b[2m' }
+		'dl' { '\\E[%p1%dM' }
+		'dl1' { '\x1b[M' }
+		'dsl' { '\x1b]2;\\007' }
+		'ech' { '\\E[%p1%dX' }
+		'ed' { '\x1b[J' }
+		'el' { '\x1b[K' }
+		'el1' { '\x1b[1K' }
+		'flash' { '\x1b[?5h\$<100/>\x1b[?5l' }
+		'fsl' { '\a' }
+		'home' { '\x1b[H' }
+		'hpa' { '\\E[%i%p1%dG' }
+		'ht' { '\t' }
+		'hts' { '\x1bH' }
+		'ich' { '\\E[%p1%d@' }
+		'ich1' { '\x1b[@' }
+		'il' { '\\E[%p1%dL' }
+		'il1' { '\x1b[L' }
+		'ind' { '\\n' }
+		'indn' { '\\E[%p1%dS' }
+		'initc' {
+			'\\E]4;%p1%d;rgb\\:%p2%{255}%*%{1000}%/%2.2X/%p3%{255}%*%{1000}%/%2.2X/%p4%{255}%*%{1000}%/%2.2X\\E\\\\'
+		}
+		'invis' { '\x1b[8m' }
+		'oc' { '\x1b]104\\007' }
+		'op' { '\x1b[39;49m' }
+		'rc' { '\x1b8' }
+		'rep' { '%p1%c\\E[%p2%{1}%-%db' }
+		'rev' { '\x1b[7m' }
+		'ri' { '\x1bM' }
+		'rin' { '\\E[%p1%dT' }
+		'ritm' { '\x1b[23m' }
+		'rmacs' { '\x1b(B' }
+		'rmam' { '\x1b[?7l' }
+		'rmcup' { '\x1b[?1049l' }
+		'rmir' { '\x1b[4l' }
+		'rmkx' { '\x1b[?1l\x1b>' }
+		'rmso' { '\x1b[27m' }
+		'rmul' { '\x1b[24m' }
+		'rmxx' { '\x1b[29m' }
+		'setab' { '\\E[%?%p1%{8}%<%t4%p1%d%e%p1%{16}%<%t10%p1%{8}%-%d%e48;5;%p1%d%;m' }
+		'setaf' { '\\E[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e38;5;%p1%d%;m' }
+		'setrgbb' { '\\E[48:2:%p1%d:%p2%d:%p3%dm' }
+		'setrgbf' { '\\E[38:2:%p1%d:%p2%d:%p3%dm' }
+		'sgr' {
+			'%?%p9%t\\E(0%e\\E(B%;\\E[0%?%p6%t;1%;%?%p2%t;4%;%?%p1%p3%|%t;7%;%?%p4%t;5%;%?%p7%t;8%;m'
+		}
+		'sgr0' { '\x1b(B\x1b[m' }
+		'sitm' { '\x1b[3m' }
+		'smacs' { '\x1b(0' }
+		'smam' { '\x1b[?7h' }
+		'smcup' { '\x1b[?1049h' }
+		'smir' { '\x1b[4h' }
+		'smkx' { '\x1b[?1h\x1b=' }
+		'smso' { '\x1b[7m' }
+		'smul' { '\x1b[4m' }
+		'smxx' { '\x1b[9m' }
+		'tbc' { '\x1b[3g' }
+		'tsl' { '\x1b]2;' }
+		'u6' { '\\E[%i%d;%dR' }
+		'u7' { '\x1b[6n' }
+		'u8' { '\\E[?%[;0123456789]c' }
+		'u9' { '\x1b[c' }
+		'vpa' { '\\E[%i%p1%dd' }
+		'kDC' { '\x1b[3;2~' }
+		'kDC3' { '\x1b[3;3~' }
+		'kDC4' { '\x1b[3;4~' }
+		'kDC5' { '\x1b[3;5~' }
+		'kDC6' { '\x1b[3;6~' }
+		'kDC7' { '\x1b[3;7~' }
+		'kDN' { '\x1b[1;2B' }
+		'kDN3' { '\x1b[1;3B' }
+		'kDN4' { '\x1b[1;4B' }
+		'kDN5' { '\x1b[1;5B' }
+		'kDN6' { '\x1b[1;6B' }
+		'kDN7' { '\x1b[1;7B' }
+		'kEND' { '\x1b[1;2F' }
+		'kEND3' { '\x1b[1;3F' }
+		'kEND4' { '\x1b[1;4F' }
+		'kEND5' { '\x1b[1;5F' }
+		'kEND6' { '\x1b[1;6F' }
+		'kEND7' { '\x1b[1;7F' }
+		'kHOM' { '\x1b[1;2H' }
+		'kHOM3' { '\x1b[1;3H' }
+		'kHOM4' { '\x1b[1;4H' }
+		'kHOM5' { '\x1b[1;5H' }
+		'kHOM6' { '\x1b[1;6H' }
+		'kHOM7' { '\x1b[1;7H' }
+		'kIC' { '\x1b[2;2~' }
+		'kIC3' { '\x1b[2;3~' }
+		'kIC4' { '\x1b[2;4~' }
+		'kIC5' { '\x1b[2;5~' }
+		'kIC6' { '\x1b[2;6~' }
+		'kIC7' { '\x1b[2;7~' }
+		'kLFT' { '\x1b[1;2D' }
+		'kLFT3' { '\x1b[1;3D' }
+		'kLFT4' { '\x1b[1;4D' }
+		'kLFT5' { '\x1b[1;5D' }
+		'kLFT6' { '\x1b[1;6D' }
+		'kLFT7' { '\x1b[1;7D' }
+		'kNXT' { '\x1b[6;2~' }
+		'kNXT3' { '\x1b[6;3~' }
+		'kNXT4' { '\x1b[6;4~' }
+		'kNXT5' { '\x1b[6;5~' }
+		'kNXT6' { '\x1b[6;6~' }
+		'kNXT7' { '\x1b[6;7~' }
+		'kPRV' { '\x1b[5;2~' }
+		'kPRV3' { '\x1b[5;3~' }
+		'kPRV4' { '\x1b[5;4~' }
+		'kPRV5' { '\x1b[5;5~' }
+		'kPRV6' { '\x1b[5;6~' }
+		'kPRV7' { '\x1b[5;7~' }
+		'kRIT' { '\x1b[1;2C' }
+		'kRIT3' { '\x1b[1;3C' }
+		'kRIT4' { '\x1b[1;4C' }
+		'kRIT5' { '\x1b[1;5C' }
+		'kRIT6' { '\x1b[1;6C' }
+		'kRIT7' { '\x1b[1;7C' }
+		'kUP' { '\x1b[1;2A' }
+		'kUP3' { '\x1b[1;3A' }
+		'kUP4' { '\x1b[1;4A' }
+		'kUP5' { '\x1b[1;5A' }
+		'kUP6' { '\x1b[1;6A' }
+		'kUP7' { '\x1b[1;7A' }
+		'kbs' { '\x7f' }
+		'kcbt' { '\x1b[Z' }
+		'kcub1' { '\x1bOD' }
+		'kcud1' { '\x1bOB' }
+		'kcuf1' { '\x1bOC' }
+		'kcuu1' { '\x1bOA' }
+		'kdch1' { '\x1b[3~' }
+		'kend' { '\x1bOF' }
+		'kent' { '\x1bOM' }
+		'kf1' { '\x1bOP' }
+		'kf10' { '\x1b[21~' }
+		'kf11' { '\x1b[23~' }
+		'kf12' { '\x1b[24~' }
+		'kf13' { '\x1b[1;2P' }
+		'kf14' { '\x1b[1;2Q' }
+		'kf15' { '\x1b[1;2R' }
+		'kf16' { '\x1b[1;2S' }
+		'kf17' { '\x1b[15;2~' }
+		'kf18' { '\x1b[17;2~' }
+		'kf19' { '\x1b[18;2~' }
+		'kf2' { '\x1bOQ' }
+		'kf20' { '\x1b[19;2~' }
+		'kf21' { '\x1b[20;2~' }
+		'kf22' { '\x1b[21;2~' }
+		'kf23' { '\x1b[23;2~' }
+		'kf24' { '\x1b[24;2~' }
+		'kf25' { '\x1b[1;5P' }
+		'kf26' { '\x1b[1;5Q' }
+		'kf27' { '\x1b[1;5R' }
+		'kf28' { '\x1b[1;5S' }
+		'kf29' { '\x1b[15;5~' }
+		'kf3' { '\x1bOR' }
+		'kf30' { '\x1b[17;5~' }
+		'kf31' { '\x1b[18;5~' }
+		'kf32' { '\x1b[19;5~' }
+		'kf33' { '\x1b[20;5~' }
+		'kf34' { '\x1b[21;5~' }
+		'kf35' { '\x1b[23;5~' }
+		'kf36' { '\x1b[24;5~' }
+		'kf37' { '\x1b[1;6P' }
+		'kf38' { '\x1b[1;6Q' }
+		'kf39' { '\x1b[1;6R' }
+		'kf4' { '\x1bOS' }
+		'kf40' { '\x1b[1;6S' }
+		'kf41' { '\x1b[15;6~' }
+		'kf42' { '\x1b[17;6~' }
+		'kf43' { '\x1b[18;6~' }
+		'kf44' { '\x1b[19;6~' }
+		'kf45' { '\x1b[20;6~' }
+		'kf46' { '\x1b[21;6~' }
+		'kf47' { '\x1b[23;6~' }
+		'kf48' { '\x1b[24;6~' }
+		'kf49' { '\x1b[1;3P' }
+		'kf5' { '\x1b[15~' }
+		'kf50' { '\x1b[1;3Q' }
+		'kf51' { '\x1b[1;3R' }
+		'kf52' { '\x1b[1;3S' }
+		'kf53' { '\x1b[15;3~' }
+		'kf54' { '\x1b[17;3~' }
+		'kf55' { '\x1b[18;3~' }
+		'kf56' { '\x1b[19;3~' }
+		'kf57' { '\x1b[20;3~' }
+		'kf58' { '\x1b[21;3~' }
+		'kf59' { '\x1b[23;3~' }
+		'kf6' { '\x1b[17~' }
+		'kf60' { '\x1b[24;3~' }
+		'kf61' { '\x1b[1;4P' }
+		'kf62' { '\x1b[1;4Q' }
+		'kf63' { '\x1b[1;4R' }
+		'kf7' { '\x1b[18~' }
+		'kf8' { '\x1b[19~' }
+		'kf9' { '\x1b[20~' }
+		'khome' { '\x1bOH' }
+		'kich1' { '\x1b[2~' }
+		'kind' { '\x1b[1;2B' }
+		'kmous' { '\x1b[<' }
+		'knp' { '\x1b[6~' }
+		'kpp' { '\x1b[5~' }
+		'kri' { '\x1b[1;2A' }
+		'rs1' { '\x1b]\x1b\\\\\x1bc' }
+		'sc' { '\x1b7' }
 		else {
 			return none
 		}
 	}
-	return hex_encode(val)
 }
 
 // hex_decode decodes a hex string to a regular string.

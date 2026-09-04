@@ -114,6 +114,41 @@ fn test_stream_handler_tmux_viewer_lifecycle_and_commands() {
 	assert handler.tmux_viewer == none
 }
 
+fn test_xtgettcap_uses_complete_ghostty_capability_encoding() {
+	assert xtgettcap_lookup(hex_encode('am')) or { 'missing' } == ''
+	assert xtgettcap_lookup(hex_encode('colors')) or { '' } == '323536'
+	assert xtgettcap_lookup(hex_encode('RGB')) or { '' } == '38'
+	assert xtgettcap_lookup(hex_encode('Smulx')) or { '' } == '5C455B343A25703125646D'
+	assert xtgettcap_lookup(hex_encode('kbs')) or { '' } == '7F'
+	assert xtgettcap_lookup(hex_encode('kf1')) or { '' } == '1B4F50'
+	assert xtgettcap_lookup(hex_encode('kf63')) or { '' } == '1B5B313B3452'
+	assert xtgettcap_lookup(hex_encode('not-a-capability')) == none
+}
+
+fn test_stream_handler_xtgettcap_omits_unknown_and_formats_boolean() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	mut query := terminal.DcsXtgettcap{
+		data: '${hex_encode('am')};${hex_encode('unknown')};${hex_encode('colors')}'.bytes()
+	}
+	handler.dcs_xtgettcap(mut query)
+	assert ctx.mailbox.len() == 2
+
+	boolean_msg := ctx.mailbox.pop() or {
+		assert false
+		return
+	}
+	assert boolean_msg.kind == .write_small
+	assert boolean_msg.write_small_data.slice().bytestr() == '\x1bP1+r616D\x1b\\'
+
+	numeric_msg := ctx.mailbox.pop() or {
+		assert false
+		return
+	}
+	assert numeric_msg.kind == .write_small
+	assert numeric_msg.write_small_data.slice().bytestr() == '\x1bP1+r636F6C6F7273=323536\x1b\\'
+}
+
 // Test bell dispatches without crashing.
 fn test_stream_handler_bell() {
 	mut handler, mut ctx := make_test_handler()
