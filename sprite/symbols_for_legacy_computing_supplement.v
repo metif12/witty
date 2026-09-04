@@ -151,13 +151,12 @@ module sprite
 //
 // --- Original Ghostty Comments End: src/font/sprite/draw/symbols_for_legacy_computing_supplement.zig
 
-
 // Symbols for Legacy Computing Supplement | U+1CC00...U+1CEBF
 // https://en.wikipedia.org/wiki/Symbols_for_Legacy_Computing_Supplement
 //
 // Translated from ghostty/src/font/sprite/draw/symbols_for_legacy_computing_supplement.zig
 
-import font
+import sprite_types as font
 import math
 
 // ============================================================
@@ -596,16 +595,19 @@ pub fn draw_1cc1b_1cc1e(cp u32, mut canvas Canvas, width u32, height u32, metric
 			lines_char(metrics, mut canvas, Lines{ left: .light, right: .light })
 			canvas.draw_box(w - t, 0, w, h / 2, .on)
 		}
+
 		// BOX DRAWINGS LIGHT HORIZONTAL AND LOWER RIGHT
 		0x1cc1c {
 			lines_char(metrics, mut canvas, Lines{ left: .light, right: .light })
 			canvas.draw_box(w - t, h / 2, w, h, .on)
 		}
+
 		// BOX DRAWINGS LIGHT TOP AND UPPER LEFT
 		0x1cc1d {
 			canvas.draw_box(0, 0, w, t, .on)
 			canvas.draw_box(0, 0, t, h / 2, .on)
 		}
+
 		// BOX DRAWINGS LIGHT BOTTOM AND LOWER LEFT
 		0x1cc1e {
 			canvas.draw_box(0, h - t, w, h, .on)
@@ -666,16 +668,19 @@ pub fn draw_1ce16_1ce19(cp u32, mut canvas Canvas, width u32, height u32, metric
 			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light })
 			canvas.draw_box(w / 2, 0, w, t, .on)
 		}
+
 		// BOX DRAWINGS LIGHT VERTICAL AND BOTTOM RIGHT
 		0x1ce17 {
 			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light })
 			canvas.draw_box(w / 2, h - t, w, h, .on)
 		}
+
 		// BOX DRAWINGS LIGHT VERTICAL AND TOP LEFT
 		0x1ce18 {
 			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light })
 			canvas.draw_box(0, 0, w / 2, t, .on)
 		}
+
 		// BOX DRAWINGS LIGHT VERTICAL AND BOTTOM LEFT
 		0x1ce19 {
 			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light })
@@ -846,7 +851,6 @@ pub fn draw_1ce90_1ceaf(cp u32, mut canvas Canvas, width u32, height u32, metric
 		0x1ceae { fill(metrics, mut canvas, q[3], q[4], q[1], q[4]) }
 		// LOWER HALF RIGHT ONE QUARTER BLOCK
 		0x1ceaf { fill(metrics, mut canvas, q[3], q[4], q[2], q[4]) }
-
 		else {}
 	}
 }
@@ -887,28 +891,24 @@ fn circle_piece(mut canvas Canvas, width u32, height u32, metrics font.Metrics, 
 	match corner {
 		.tl {
 			path.move_to(wdth - xp, ht - yp)
-			path.curve_to(wdth - cw - xp, ht - yp, ht - xp, hght - ch - yp, ht - xp,
-				hght - yp)
+			path.curve_to(wdth - cw - xp, ht - yp, ht - xp, hght - ch - yp, ht - xp, hght - yp)
 		}
 		.tr {
 			path.move_to(wdth - xp, ht - yp)
-			path.curve_to(wdth + cw - xp, ht - yp, wdth * 2 - ht - xp, hght - ch - yp,
-				wdth * 2 - ht - xp, hght - yp)
+			path.curve_to(wdth + cw - xp, ht - yp, wdth * 2 - ht - xp, hght - ch - yp, wdth * 2 - ht - xp, hght - yp)
 		}
 		.bl {
 			path.move_to(ht - xp, hght - yp)
-			path.curve_to(ht - xp, hght + ch - yp, wdth - cw - xp, hght * 2 - ht - yp,
-				wdth - xp, hght * 2 - ht - yp)
+			path.curve_to(ht - xp, hght + ch - yp, wdth - cw - xp, hght * 2 - ht - yp, wdth - xp, hght * 2 - ht - yp)
 		}
 		.br {
 			path.move_to(wdth * 2 - ht - xp, hght - yp)
-			path.curve_to(wdth * 2 - ht - xp, hght + ch - yp, wdth + cw - xp, hght * 2 - ht - yp,
-				wdth - xp, hght * 2 - ht - yp)
+			path.curve_to(wdth * 2 - ht - xp, hght + ch - yp, wdth + cw - xp, hght * 2 - ht - yp, wdth - xp, hght * 2 - ht - yp)
 		}
 	}
 
 	canvas.stroke_path(path.wrapped_path, StrokeOptions{
 		line_cap_mode: .butt
-		line_width:    f64(metrics.box_thickness)
+		line_width: f64(metrics.box_thickness)
 	}, .on)!
 }

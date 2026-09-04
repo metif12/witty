@@ -238,7 +238,6 @@ module sprite
 //
 // --- Original Ghostty Comments End: src/font/sprite/draw/box.zig
 
-
 // Block Elements | U+2580...U+259F
 // https://en.wikipedia.org/wiki/Block_Elements
 //
@@ -247,7 +246,7 @@ module sprite
 //
 // Translated from ghostty/src/font/sprite/draw/block.zig
 
-import font
+import sprite_types as font
 import math
 
 // draw_2580_259f dispatches drawing for block element characters.
@@ -321,7 +320,6 @@ pub fn draw_2580_259f(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		0x259e { quadrant(metrics, mut canvas, Quads{ tr: true, bl: true }) }
 		// '▟'
 		0x259f { quadrant(metrics, mut canvas, Quads{ tr: true, bl: true, br: true }) }
-
 		else {}
 	}
 }
@@ -407,44 +405,44 @@ pub fn draw_2500_257f(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		0x2503 { lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .heavy }) }
 		// '┄'
 		0x2504 {
-			dash_horizontal(metrics, mut canvas, 3, Thickness.light.height(metrics.box_thickness),
-				max_u32(4, Thickness.light.height(metrics.box_thickness)))
+			dash_horizontal(metrics, mut canvas, 3, Thickness.light.height(metrics.box_thickness), max_u32(4, Thickness.light.height(metrics.box_thickness)))
 		}
+
 		// '┅'
 		0x2505 {
-			dash_horizontal(metrics, mut canvas, 3, Thickness.heavy.height(metrics.box_thickness),
-				max_u32(4, Thickness.light.height(metrics.box_thickness)))
+			dash_horizontal(metrics, mut canvas, 3, Thickness.heavy.height(metrics.box_thickness), max_u32(4, Thickness.light.height(metrics.box_thickness)))
 		}
+
 		// '┆'
 		0x2506 {
-			dash_vertical(metrics, mut canvas, 3, Thickness.light.height(metrics.box_thickness),
-				max_u32(4, Thickness.light.height(metrics.box_thickness)))
+			dash_vertical(metrics, mut canvas, 3, Thickness.light.height(metrics.box_thickness), max_u32(4, Thickness.light.height(metrics.box_thickness)))
 		}
+
 		// '┇'
 		0x2507 {
-			dash_vertical(metrics, mut canvas, 3, Thickness.heavy.height(metrics.box_thickness),
-				max_u32(4, Thickness.light.height(metrics.box_thickness)))
+			dash_vertical(metrics, mut canvas, 3, Thickness.heavy.height(metrics.box_thickness), max_u32(4, Thickness.light.height(metrics.box_thickness)))
 		}
+
 		// '┈'
 		0x2508 {
-			dash_horizontal(metrics, mut canvas, 4, Thickness.light.height(metrics.box_thickness),
-				max_u32(4, Thickness.light.height(metrics.box_thickness)))
+			dash_horizontal(metrics, mut canvas, 4, Thickness.light.height(metrics.box_thickness), max_u32(4, Thickness.light.height(metrics.box_thickness)))
 		}
+
 		// '┉'
 		0x2509 {
-			dash_horizontal(metrics, mut canvas, 4, Thickness.heavy.height(metrics.box_thickness),
-				max_u32(4, Thickness.light.height(metrics.box_thickness)))
+			dash_horizontal(metrics, mut canvas, 4, Thickness.heavy.height(metrics.box_thickness), max_u32(4, Thickness.light.height(metrics.box_thickness)))
 		}
+
 		// '┊'
 		0x250a {
-			dash_vertical(metrics, mut canvas, 4, Thickness.light.height(metrics.box_thickness),
-				max_u32(4, Thickness.light.height(metrics.box_thickness)))
+			dash_vertical(metrics, mut canvas, 4, Thickness.light.height(metrics.box_thickness), max_u32(4, Thickness.light.height(metrics.box_thickness)))
 		}
+
 		// '┋'
 		0x250b {
-			dash_vertical(metrics, mut canvas, 4, Thickness.heavy.height(metrics.box_thickness),
-				max_u32(4, Thickness.light.height(metrics.box_thickness)))
+			dash_vertical(metrics, mut canvas, 4, Thickness.heavy.height(metrics.box_thickness), max_u32(4, Thickness.light.height(metrics.box_thickness)))
 		}
+
 		// '┌'
 		0x250c { lines_char(metrics, mut canvas, Lines{ down: .light, right: .light }) }
 		// '┍'
@@ -512,22 +510,38 @@ pub fn draw_2500_257f(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		// '┫'
 		0x252b { lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .heavy, left: .heavy }) }
 		// '┬'
-		0x252c { lines_char(metrics, mut canvas, Lines{ down: .light, left: .light, right: .light }) }
+		0x252c {
+			lines_char(metrics, mut canvas, Lines{ down: .light, left: .light, right: .light })
+		}
 		// '┭'
-		0x252d { lines_char(metrics, mut canvas, Lines{ left: .heavy, right: .light, down: .light }) }
+		0x252d {
+			lines_char(metrics, mut canvas, Lines{ left: .heavy, right: .light, down: .light })
+		}
 		// '┮'
-		0x252e { lines_char(metrics, mut canvas, Lines{ right: .heavy, left: .light, down: .light }) }
+		0x252e {
+			lines_char(metrics, mut canvas, Lines{ right: .heavy, left: .light, down: .light })
+		}
 		// '┯'
-		0x252f { lines_char(metrics, mut canvas, Lines{ down: .light, left: .heavy, right: .heavy }) }
+		0x252f {
+			lines_char(metrics, mut canvas, Lines{ down: .light, left: .heavy, right: .heavy })
+		}
 
 		// '┰'
-		0x2530 { lines_char(metrics, mut canvas, Lines{ down: .heavy, left: .light, right: .light }) }
+		0x2530 {
+			lines_char(metrics, mut canvas, Lines{ down: .heavy, left: .light, right: .light })
+		}
 		// '┱'
-		0x2531 { lines_char(metrics, mut canvas, Lines{ right: .light, left: .heavy, down: .heavy }) }
+		0x2531 {
+			lines_char(metrics, mut canvas, Lines{ right: .light, left: .heavy, down: .heavy })
+		}
 		// '┲'
-		0x2532 { lines_char(metrics, mut canvas, Lines{ left: .light, right: .heavy, down: .heavy }) }
+		0x2532 {
+			lines_char(metrics, mut canvas, Lines{ left: .light, right: .heavy, down: .heavy })
+		}
 		// '┳'
-		0x2533 { lines_char(metrics, mut canvas, Lines{ down: .heavy, left: .heavy, right: .heavy }) }
+		0x2533 {
+			lines_char(metrics, mut canvas, Lines{ down: .heavy, left: .heavy, right: .heavy })
+		}
 		// '┴'
 		0x2534 { lines_char(metrics, mut canvas, Lines{ up: .light, left: .light, right: .light }) }
 		// '┵'
@@ -545,57 +559,88 @@ pub fn draw_2500_257f(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		// '┻'
 		0x253b { lines_char(metrics, mut canvas, Lines{ up: .heavy, left: .heavy, right: .heavy }) }
 		// '┼'
-		0x253c { lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, left: .light, right: .light }) }
+		0x253c {
+			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, left: .light, right: .light })
+		}
 		// '┽'
-		0x253d { lines_char(metrics, mut canvas, Lines{ left: .heavy, right: .light, up: .light, down: .light }) }
+		0x253d {
+			lines_char(metrics, mut canvas, Lines{ left: .heavy, right: .light, up: .light, down: .light })
+		}
 		// '┾'
-		0x253e { lines_char(metrics, mut canvas, Lines{ right: .heavy, left: .light, up: .light, down: .light }) }
+		0x253e {
+			lines_char(metrics, mut canvas, Lines{ right: .heavy, left: .light, up: .light, down: .light })
+		}
 		// '┿'
-		0x253f { lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, left: .heavy, right: .heavy }) }
+		0x253f {
+			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, left: .heavy, right: .heavy })
+		}
 
 		// '╀'
-		0x2540 { lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .light, left: .light, right: .light }) }
+		0x2540 {
+			lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .light, left: .light, right: .light })
+		}
 		// '╁'
-		0x2541 { lines_char(metrics, mut canvas, Lines{ down: .heavy, up: .light, left: .light, right: .light }) }
+		0x2541 {
+			lines_char(metrics, mut canvas, Lines{ down: .heavy, up: .light, left: .light, right: .light })
+		}
 		// '╂'
-		0x2542 { lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .heavy, left: .light, right: .light }) }
+		0x2542 {
+			lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .heavy, left: .light, right: .light })
+		}
 		// '╃'
-		0x2543 { lines_char(metrics, mut canvas, Lines{ left: .heavy, up: .heavy, right: .light, down: .light }) }
+		0x2543 {
+			lines_char(metrics, mut canvas, Lines{ left: .heavy, up: .heavy, right: .light, down: .light })
+		}
 		// '╄'
-		0x2544 { lines_char(metrics, mut canvas, Lines{ right: .heavy, up: .heavy, left: .light, down: .light }) }
+		0x2544 {
+			lines_char(metrics, mut canvas, Lines{ right: .heavy, up: .heavy, left: .light, down: .light })
+		}
 		// '╅'
-		0x2545 { lines_char(metrics, mut canvas, Lines{ left: .heavy, down: .heavy, right: .light, up: .light }) }
+		0x2545 {
+			lines_char(metrics, mut canvas, Lines{ left: .heavy, down: .heavy, right: .light, up: .light })
+		}
 		// '╆'
-		0x2546 { lines_char(metrics, mut canvas, Lines{ right: .heavy, down: .heavy, left: .light, up: .light }) }
+		0x2546 {
+			lines_char(metrics, mut canvas, Lines{ right: .heavy, down: .heavy, left: .light, up: .light })
+		}
 		// '╇'
-		0x2547 { lines_char(metrics, mut canvas, Lines{ down: .light, up: .heavy, left: .heavy, right: .heavy }) }
+		0x2547 {
+			lines_char(metrics, mut canvas, Lines{ down: .light, up: .heavy, left: .heavy, right: .heavy })
+		}
 		// '╈'
-		0x2548 { lines_char(metrics, mut canvas, Lines{ up: .light, down: .heavy, left: .heavy, right: .heavy }) }
+		0x2548 {
+			lines_char(metrics, mut canvas, Lines{ up: .light, down: .heavy, left: .heavy, right: .heavy })
+		}
 		// '╉'
-		0x2549 { lines_char(metrics, mut canvas, Lines{ right: .light, left: .heavy, up: .heavy, down: .heavy }) }
+		0x2549 {
+			lines_char(metrics, mut canvas, Lines{ right: .light, left: .heavy, up: .heavy, down: .heavy })
+		}
 		// '╊'
-		0x254a { lines_char(metrics, mut canvas, Lines{ left: .light, right: .heavy, up: .heavy, down: .heavy }) }
+		0x254a {
+			lines_char(metrics, mut canvas, Lines{ left: .light, right: .heavy, up: .heavy, down: .heavy })
+		}
 		// '╋'
-		0x254b { lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .heavy, left: .heavy, right: .heavy }) }
+		0x254b {
+			lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .heavy, left: .heavy, right: .heavy })
+		}
 		// '╌'
 		0x254c {
-			dash_horizontal(metrics, mut canvas, 2, Thickness.light.height(metrics.box_thickness),
-				Thickness.light.height(metrics.box_thickness))
+			dash_horizontal(metrics, mut canvas, 2, Thickness.light.height(metrics.box_thickness), Thickness.light.height(metrics.box_thickness))
 		}
+
 		// '╍'
 		0x254d {
-			dash_horizontal(metrics, mut canvas, 2, Thickness.heavy.height(metrics.box_thickness),
-				Thickness.heavy.height(metrics.box_thickness))
+			dash_horizontal(metrics, mut canvas, 2, Thickness.heavy.height(metrics.box_thickness), Thickness.heavy.height(metrics.box_thickness))
 		}
+
 		// '╎'
 		0x254e {
-			dash_vertical(metrics, mut canvas, 2, Thickness.light.height(metrics.box_thickness),
-				Thickness.heavy.height(metrics.box_thickness))
+			dash_vertical(metrics, mut canvas, 2, Thickness.light.height(metrics.box_thickness), Thickness.heavy.height(metrics.box_thickness))
 		}
+
 		// '╏'
 		0x254f {
-			dash_vertical(metrics, mut canvas, 2, Thickness.heavy.height(metrics.box_thickness),
-				Thickness.heavy.height(metrics.box_thickness))
+			dash_vertical(metrics, mut canvas, 2, Thickness.heavy.height(metrics.box_thickness), Thickness.heavy.height(metrics.box_thickness))
 		}
 
 		// '═'
@@ -627,36 +672,66 @@ pub fn draw_2500_257f(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		// '╝'
 		0x255d { lines_char(metrics, mut canvas, Lines{ up: .double_, left: .double_ }) }
 		// '╞'
-		0x255e { lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, right: .double_ }) }
+		0x255e {
+			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, right: .double_ })
+		}
 		// '╟'
-		0x255f { lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, right: .light }) }
+		0x255f {
+			lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, right: .light })
+		}
 
 		// '╠'
-		0x2560 { lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, right: .double_ }) }
+		0x2560 {
+			lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, right: .double_ })
+		}
 		// '╡'
-		0x2561 { lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, left: .double_ }) }
+		0x2561 {
+			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, left: .double_ })
+		}
 		// '╢'
-		0x2562 { lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, left: .light }) }
+		0x2562 {
+			lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, left: .light })
+		}
 		// '╣'
-		0x2563 { lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, left: .double_ }) }
+		0x2563 {
+			lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, left: .double_ })
+		}
 		// '╤'
-		0x2564 { lines_char(metrics, mut canvas, Lines{ down: .light, left: .double_, right: .double_ }) }
+		0x2564 {
+			lines_char(metrics, mut canvas, Lines{ down: .light, left: .double_, right: .double_ })
+		}
 		// '╥'
-		0x2565 { lines_char(metrics, mut canvas, Lines{ down: .double_, left: .light, right: .light }) }
+		0x2565 {
+			lines_char(metrics, mut canvas, Lines{ down: .double_, left: .light, right: .light })
+		}
 		// '╦'
-		0x2566 { lines_char(metrics, mut canvas, Lines{ down: .double_, left: .double_, right: .double_ }) }
+		0x2566 {
+			lines_char(metrics, mut canvas, Lines{ down: .double_, left: .double_, right: .double_ })
+		}
 		// '╧'
-		0x2567 { lines_char(metrics, mut canvas, Lines{ up: .light, left: .double_, right: .double_ }) }
+		0x2567 {
+			lines_char(metrics, mut canvas, Lines{ up: .light, left: .double_, right: .double_ })
+		}
 		// '╨'
-		0x2568 { lines_char(metrics, mut canvas, Lines{ up: .double_, left: .light, right: .light }) }
+		0x2568 {
+			lines_char(metrics, mut canvas, Lines{ up: .double_, left: .light, right: .light })
+		}
 		// '╩'
-		0x2569 { lines_char(metrics, mut canvas, Lines{ up: .double_, left: .double_, right: .double_ }) }
+		0x2569 {
+			lines_char(metrics, mut canvas, Lines{ up: .double_, left: .double_, right: .double_ })
+		}
 		// '╪'
-		0x256a { lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, left: .double_, right: .double_ }) }
+		0x256a {
+			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, left: .double_, right: .double_ })
+		}
 		// '╫'
-		0x256b { lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, left: .light, right: .light }) }
+		0x256b {
+			lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, left: .light, right: .light })
+		}
 		// '╬'
-		0x256c { lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, left: .double_, right: .double_ }) }
+		0x256c {
+			lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, left: .double_, right: .double_ })
+		}
 		// '╭'
 		0x256d { box_arc(metrics, mut canvas, .br, .light)! }
 		// '╮'
@@ -696,7 +771,6 @@ pub fn draw_2500_257f(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		0x257e { lines_char(metrics, mut canvas, Lines{ left: .heavy, right: .light }) }
 		// '╿'
 		0x257f { lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .light }) }
-
 		else {}
 	}
 }
@@ -895,36 +969,32 @@ pub fn box_arc(metrics font.Metrics, mut canvas Canvas, corner Corner, thickness
 		.tl {
 			path.move_to(center_x, 0)
 			path.line_to(center_x, center_y - r)
-			path.curve_to(center_x, center_y - s * r, center_x - s * r, center_y, center_x - r,
-				center_y)
+			path.curve_to(center_x, center_y - s * r, center_x - s * r, center_y, center_x - r, center_y)
 			path.line_to(0, center_y)
 		}
 		.tr {
 			path.move_to(center_x, 0)
 			path.line_to(center_x, center_y - r)
-			path.curve_to(center_x, center_y - s * r, center_x + s * r, center_y, center_x + r,
-				center_y)
+			path.curve_to(center_x, center_y - s * r, center_x + s * r, center_y, center_x + r, center_y)
 			path.line_to(float_width, center_y)
 		}
 		.bl {
 			path.move_to(center_x, float_height)
 			path.line_to(center_x, center_y + r)
-			path.curve_to(center_x, center_y + s * r, center_x - s * r, center_y, center_x - r,
-				center_y)
+			path.curve_to(center_x, center_y + s * r, center_x - s * r, center_y, center_x - r, center_y)
 			path.line_to(0, center_y)
 		}
 		.br {
 			path.move_to(center_x, float_height)
 			path.line_to(center_x, center_y + r)
-			path.curve_to(center_x, center_y + s * r, center_x + s * r, center_y, center_x + r,
-				center_y)
+			path.curve_to(center_x, center_y + s * r, center_x + s * r, center_y, center_x + r, center_y)
 			path.line_to(float_width, center_y)
 		}
 	}
 
 	canvas.stroke_path(path.wrapped_path, StrokeOptions{
 		line_cap_mode: .butt
-		line_width:    float_thick
+		line_width: float_thick
 	}, .on)!
 }
 

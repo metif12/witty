@@ -5,7 +5,7 @@ module sprite
 //
 // Translated from ghostty/src/font/sprite/draw/symbols_for_legacy_computing.zig
 
-import font
+import sprite_types as font
 import math
 
 // ============================================================
@@ -264,6 +264,7 @@ pub fn draw_1fb68_1fb6f(cp u32, mut canvas Canvas, width u32, height u32, metric
 			canvas.clip_top = canvas.padding_y
 			canvas.clip_bottom = canvas.padding_y
 		}
+
 		// '🭩'
 		0x1fb69 {
 			edge_triangle(metrics, mut canvas, .top)!
@@ -274,6 +275,7 @@ pub fn draw_1fb68_1fb6f(cp u32, mut canvas Canvas, width u32, height u32, metric
 			canvas.clip_top = canvas.padding_y
 			canvas.clip_bottom = canvas.padding_y
 		}
+
 		// '🭪'
 		0x1fb6a {
 			edge_triangle(metrics, mut canvas, .right)!
@@ -284,6 +286,7 @@ pub fn draw_1fb68_1fb6f(cp u32, mut canvas Canvas, width u32, height u32, metric
 			canvas.clip_top = canvas.padding_y
 			canvas.clip_bottom = canvas.padding_y
 		}
+
 		// '🭫'
 		0x1fb6b {
 			edge_triangle(metrics, mut canvas, .bottom)!
@@ -294,18 +297,22 @@ pub fn draw_1fb68_1fb6f(cp u32, mut canvas Canvas, width u32, height u32, metric
 			canvas.clip_top = canvas.padding_y
 			canvas.clip_bottom = canvas.padding_y
 		}
+
 		// '🭬'
 		0x1fb6c {
 			edge_triangle(metrics, mut canvas, .left)!
 		}
+
 		// '🭭'
 		0x1fb6d {
 			edge_triangle(metrics, mut canvas, .top)!
 		}
+
 		// '🭮'
 		0x1fb6e {
 			edge_triangle(metrics, mut canvas, .right)!
 		}
+
 		// '🭯'
 		0x1fb6f {
 			edge_triangle(metrics, mut canvas, .bottom)!
@@ -372,26 +379,31 @@ pub fn draw_1fb7c_1fb97(cp u32, mut canvas Canvas, width u32, height u32, metric
 			block_fill(metrics, mut canvas, align_left, one_eighth_f, 1)
 			block_fill(metrics, mut canvas, align_lower, 1, one_eighth_f)
 		}
+
 		// '🭽' LEFT AND UPPER ONE EIGHTH BLOCK
 		0x1fb7d {
 			block_fill(metrics, mut canvas, align_left, one_eighth_f, 1)
 			block_fill(metrics, mut canvas, align_upper, 1, one_eighth_f)
 		}
+
 		// '🭾' RIGHT AND UPPER ONE EIGHTH BLOCK
 		0x1fb7e {
 			block_fill(metrics, mut canvas, align_right, one_eighth_f, 1)
 			block_fill(metrics, mut canvas, align_upper, 1, one_eighth_f)
 		}
+
 		// '🭿' RIGHT AND LOWER ONE EIGHTH BLOCK
 		0x1fb7f {
 			block_fill(metrics, mut canvas, align_right, one_eighth_f, 1)
 			block_fill(metrics, mut canvas, align_lower, 1, one_eighth_f)
 		}
+
 		// '🮀' UPPER AND LOWER ONE EIGHTH BLOCK
 		0x1fb80 {
 			block_fill(metrics, mut canvas, align_upper, 1, one_eighth_f)
 			block_fill(metrics, mut canvas, align_lower, 1, one_eighth_f)
 		}
+
 		// '🮁' Horizontal One Eighth Block 1358
 		0x1fb81 {
 			// We just call the draw function for each of the relevant codepoints.
@@ -403,71 +415,88 @@ pub fn draw_1fb7c_1fb97(cp u32, mut canvas Canvas, width u32, height u32, metric
 			draw_1fb76_1fb7b(0x1fb74 + 5, mut canvas, width, height, metrics)!
 			draw_1fb76_1fb7b(0x1fb74 + 8, mut canvas, width, height, metrics)!
 		}
+
 		// '🮂' UPPER ONE QUARTER BLOCK
 		0x1fb82 {
 			block_fill(metrics, mut canvas, align_upper, 1, one_quarter_f)
 		}
+
 		// '🮃' UPPER THREE EIGHTHS BLOCK
 		0x1fb83 {
 			block_fill(metrics, mut canvas, align_upper, 1, three_eighths_f)
 		}
+
 		// '🮄' UPPER FIVE EIGHTHS BLOCK
 		0x1fb84 {
 			block_fill(metrics, mut canvas, align_upper, 1, five_eighths_f)
 		}
+
 		// '🮅' UPPER THREE QUARTERS BLOCK
 		0x1fb85 {
 			block_fill(metrics, mut canvas, align_upper, 1, three_quarters_f)
 		}
+
 		// '🮆' UPPER SEVEN EIGHTHS BLOCK
 		0x1fb86 {
 			block_fill(metrics, mut canvas, align_upper, 1, seven_eighths_f)
 		}
+
 		// '🮇' RIGHT ONE QUARTER BLOCK
 		0x1fb87 {
 			block_fill(metrics, mut canvas, align_right, one_quarter_f, 1)
 		}
+
 		// '🮈' RIGHT THREE EIGHTHS BLOCK
 		0x1fb88 {
 			block_fill(metrics, mut canvas, align_right, three_eighths_f, 1)
 		}
+
 		// '🮉' RIGHT FIVE EIGHTHS BLOCK
 		0x1fb89 {
 			block_fill(metrics, mut canvas, align_right, five_eighths_f, 1)
 		}
+
 		// '🮊' RIGHT THREE QUARTERS BLOCK
 		0x1fb8a {
 			block_fill(metrics, mut canvas, align_right, three_quarters_f, 1)
 		}
+
 		// '🮋' RIGHT SEVEN EIGHTHS BLOCK
 		0x1fb8b {
 			block_fill(metrics, mut canvas, align_right, seven_eighths_f, 1)
 		}
+
 		// '🮌'
 		0x1fb8c {
 			block_shade(metrics, mut canvas, align_left, half_f, 1, .medium)
 		}
+
 		// '🮍'
 		0x1fb8d {
 			block_shade(metrics, mut canvas, align_right, half_f, 1, .medium)
 		}
+
 		// '🮎'
 		0x1fb8e {
 			block_shade(metrics, mut canvas, align_upper, 1, half_f, .medium)
 		}
+
 		// '🮏'
 		0x1fb8f {
 			block_shade(metrics, mut canvas, align_lower, 1, half_f, .medium)
 		}
+
 		// '🮐'
 		0x1fb90 {
 			full_block_shade(metrics, mut canvas, .medium)
 		}
+
 		// '🮑'
 		0x1fb91 {
 			full_block_shade(metrics, mut canvas, .medium)
 			block_fill(metrics, mut canvas, align_upper, 1, half_f)
 		}
+
 		// '🮒'
 		0x1fb92 {
 			full_block_shade(metrics, mut canvas, .medium)
@@ -478,19 +507,23 @@ pub fn draw_1fb7c_1fb97(cp u32, mut canvas Canvas, width u32, height u32, metric
 			//       in the unicode block, so it's safe to just render it
 			//       as an empty glyph, probably.
 		}
+
 		// '🮔'
 		0x1fb94 {
 			full_block_shade(metrics, mut canvas, .medium)
 			block_fill(metrics, mut canvas, align_right, half_f, 1)
 		}
+
 		// '🮕'
 		0x1fb95 {
 			checkerboard_fill(metrics, mut canvas, 0)
 		}
+
 		// '🮖'
 		0x1fb96 {
 			checkerboard_fill(metrics, mut canvas, 1)
 		}
+
 		// '🮗'
 		0x1fb97 {
 			canvas.draw_box(
@@ -604,23 +637,28 @@ pub fn draw_1fb9a_1fb9f(cp u32, mut canvas Canvas, width u32, height u32, metric
 			edge_triangle(metrics, mut canvas, .top)!
 			edge_triangle(metrics, mut canvas, .bottom)!
 		}
+
 		// '🮛'
 		0x1fb9b {
 			edge_triangle(metrics, mut canvas, .left)!
 			edge_triangle(metrics, mut canvas, .right)!
 		}
+
 		// '🮜'
 		0x1fb9c {
 			corner_triangle_shade(metrics, mut canvas, .tl, .medium)!
 		}
+
 		// '🮝'
 		0x1fb9d {
 			corner_triangle_shade(metrics, mut canvas, .tr, .medium)!
 		}
+
 		// '🮞'
 		0x1fb9e {
 			corner_triangle_shade(metrics, mut canvas, .br, .medium)!
 		}
+
 		// '🮟'
 		0x1fb9f {
 			corner_triangle_shade(metrics, mut canvas, .bl, .medium)!
@@ -662,20 +700,30 @@ pub fn draw_1fba0_1fbae(cp u32, mut canvas Canvas, width u32, height u32, metric
 		// '🮩'
 		0x1fba9 { corner_diagonal_lines(metrics, mut canvas, Quads{ tr: true, bl: true }) }
 		// '🮪'
-		0x1fbaa { corner_diagonal_lines(metrics, mut canvas, Quads{ tr: true, bl: true, br: true }) }
+		0x1fbaa {
+			corner_diagonal_lines(metrics, mut canvas, Quads{ tr: true, bl: true, br: true })
+		}
 		// '🮫'
-		0x1fbab { corner_diagonal_lines(metrics, mut canvas, Quads{ tl: true, bl: true, br: true }) }
+		0x1fbab {
+			corner_diagonal_lines(metrics, mut canvas, Quads{ tl: true, bl: true, br: true })
+		}
 		// '🮬'
-		0x1fbac { corner_diagonal_lines(metrics, mut canvas, Quads{ tl: true, tr: true, br: true }) }
+		0x1fbac {
+			corner_diagonal_lines(metrics, mut canvas, Quads{ tl: true, tr: true, br: true })
+		}
 		// '🮭'
-		0x1fbad { corner_diagonal_lines(metrics, mut canvas, Quads{ tl: true, tr: true, bl: true }) }
+		0x1fbad {
+			corner_diagonal_lines(metrics, mut canvas, Quads{ tl: true, tr: true, bl: true })
+		}
 		// '🮮'
-		0x1fbae { corner_diagonal_lines(metrics, mut canvas, Quads{
-			tl: true
-			tr: true
-			bl: true
-			br: true
-		}) }
+		0x1fbae {
+			corner_diagonal_lines(metrics, mut canvas, Quads{
+				tl: true
+				tr: true
+				bl: true
+				br: true
+			})
+		}
 		else {}
 	}
 }
@@ -692,9 +740,9 @@ pub fn draw_1fbaf(cp u32, mut canvas Canvas, width u32, height u32, metrics font
 	_ = height
 
 	lines_char(metrics, mut canvas, Lines{
-		up:    .heavy
-		down:  .heavy
-		left:  .light
+		up: .heavy
+		down: .heavy
+		left: .light
 		right: .light
 	})
 }
@@ -807,36 +855,43 @@ pub fn draw_1fbd0_1fbdf(cp u32, mut canvas Canvas, width u32, height u32, metric
 			cell_diagonal(metrics, mut canvas, align_upper_left, align_middle_center)
 			cell_diagonal(metrics, mut canvas, align_middle_center, align_upper_right)
 		}
+
 		// '🯙'
 		0x1fbd9 {
 			cell_diagonal(metrics, mut canvas, align_upper_right, align_middle_center)
 			cell_diagonal(metrics, mut canvas, align_middle_center, align_lower_right)
 		}
+
 		// '🯚'
 		0x1fbda {
 			cell_diagonal(metrics, mut canvas, align_lower_left, align_middle_center)
 			cell_diagonal(metrics, mut canvas, align_middle_center, align_lower_right)
 		}
+
 		// '🯛'
 		0x1fbdb {
 			cell_diagonal(metrics, mut canvas, align_upper_left, align_middle_center)
 			cell_diagonal(metrics, mut canvas, align_middle_center, align_lower_left)
 		}
+
 		// '🯜'
 		0x1fbdc {
 			cell_diagonal(metrics, mut canvas, align_upper_left, align_lower_center)
 			cell_diagonal(metrics, mut canvas, align_lower_center, align_upper_right)
 		}
+
 		// '🯝'
 		0x1fbdd {
 			cell_diagonal(metrics, mut canvas, align_upper_right, align_middle_left)
 			cell_diagonal(metrics, mut canvas, align_middle_left, align_lower_right)
 		}
+
 		// '🯞'
 		0x1fbde {
 			cell_diagonal(metrics, mut canvas, align_lower_left, align_upper_center)
 			cell_diagonal(metrics, mut canvas, align_upper_center, align_lower_right)
 		}
+
 		// '🯟'
 		0x1fbdf {
 			cell_diagonal(metrics, mut canvas, align_upper_left, align_middle_right)
@@ -1015,9 +1070,9 @@ fn checkerboard_fill(metrics font.Metrics, mut canvas Canvas, parity u32) {
 			y1 := (metrics.cell_height * (y + 1)) / y_size
 			if (x + y) % 2 == parity {
 				canvas.rect(SpriteRect{
-					x:      i32(x0)
-					y:      i32(y0)
-					width:  i32(if x1 > x0 { x1 - x0 } else { 0 })
+					x: i32(x0)
+					y: i32(y0)
+					width: i32(if x1 > x0 { x1 - x0 } else { 0 })
 					height: i32(if y1 > y0 { y1 - y0 } else { 0 })
 				}, .on)
 			}

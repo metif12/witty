@@ -12,7 +12,7 @@ module sprite
 // so the V port is verified against ghostty's exact formulas and
 // worked-example comments.
 
-import font
+import sprite_types as font
 
 // ------------------------------------------------------------
 // Fraction.fraction_val -- exact float values per common.zig
@@ -610,35 +610,34 @@ fn test_canvas_trim_full_transparent() {
 }
 
 // ------------------------------------------------------------
-// Canvas.write_atlas -- writes the trimmed drawing to a grayscale atlas.
-// (Translated from canvas.zig `Canvas.writeAtlas`.)
+// Canvas.rasterize -- returns the trimmed drawing for the font atlas owner.
 // ------------------------------------------------------------
 
-fn test_write_atlas_region_is_trimmed() {
-	mut atlas := font.Atlas.init(32, font.AtlasFormat.grayscale)
+fn test_rasterized_region_is_trimmed() {
 	// Draw a 2x2 block in the middle of an 8x8 (no padding) canvas.
 	mut c := Canvas.init(8, 8, 0, 0)
 	c.rect(SpriteRect{ x: 3, y: 2, width: 2, height: 2 }, .on)
-	region := c.write_atlas(mut atlas) or { panic('write_atlas failed: ${err}') }
+	raster := c.rasterize()
 	// The region must be trimmed down to the 2x2 drawn content.
-	assert region.width == 2
-	assert region.height == 2
-	// The atlas must contain the copied 2x2 block at the region origin.
+	assert raster.width == 2
+	assert raster.height == 2
+	assert raster.source_x == 3
+	assert raster.source_y == 2
+	// The returned source rectangle contains the copied 2x2 block.
 	for ry in 0 .. 2 {
 		for rx in 0 .. 2 {
-			idx := (region.y + u32(ry)) * atlas.size + (region.x + u32(rx))
-			assert atlas.data[int(idx)] == 255
+			idx := (raster.source_y + u32(ry)) * raster.data_width + raster.source_x + u32(rx)
+			assert raster.data[int(idx)] == 255
 		}
 	}
 }
 
-fn test_write_atlas_empty_canvas() {
-	mut atlas := font.Atlas.init(32, font.AtlasFormat.grayscale)
+fn test_rasterized_empty_canvas() {
 	// Nothing drawn -> the region collapses to zero size.
 	mut c := Canvas.init(8, 8, 0, 0)
-	region := c.write_atlas(mut atlas) or { panic('write_atlas failed: ${err}') }
-	assert region.width == 0
-	assert region.height == 0
+	raster := c.rasterize()
+	assert raster.width == 0
+	assert raster.height == 0
 }
 
 // ------------------------------------------------------------
@@ -650,27 +649,23 @@ fn test_render_glyph_covered_codepoint() {
 	face := SpriteFace{
 		metrics: font.default_grid_metrics(8, 16)
 	}
-	mut atlas := font.Atlas.init(64, font.AtlasFormat.grayscale)
 	// U+2500 (light horizontal line) is covered and draws a horizontal
 	// line, so the resulting glyph must have a non-zero region.
-	glyph := face.render_glyph(mut atlas, 0x2500, font.RenderOptions{}) or {
+	glyph := face.render_glyph(0x2500, RenderOptions{}) or {
 		panic('render_glyph failed: ${err}')
 	}
-	assert glyph.width > 0
-	assert glyph.height > 0
+	assert glyph.raster.width > 0
+	assert glyph.raster.height > 0
 }
 
 fn test_render_glyph_uncovered_codepoint_is_blank() {
 	face := SpriteFace{
 		metrics: font.default_grid_metrics(8, 16)
 	}
-	mut atlas := font.Atlas.init(64, font.AtlasFormat.grayscale)
 	// 'A' is not a sprite codepoint, so render_glyph returns a blank glyph.
-	glyph := face.render_glyph(mut atlas, 0x0041, font.RenderOptions{}) or {
+	glyph := face.render_glyph(0x0041, RenderOptions{}) or {
 		panic('render_glyph failed: ${err}')
 	}
-	assert glyph.width == 0
-	assert glyph.height == 0
-	assert glyph.atlas_x == 0
-	assert glyph.atlas_y == 0
+	assert glyph.raster.width == 0
+	assert glyph.raster.height == 0
 }

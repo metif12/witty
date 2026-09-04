@@ -25,7 +25,7 @@ module sprite
 //
 // Translated from ghostty/src/font/sprite/draw/braille.zig
 
-import font
+import sprite_types as font
 
 // A braille pattern.
 //

@@ -107,7 +107,6 @@ module sprite
 //
 // --- Original Ghostty Comments End: src/font/sprite/draw/branch.zig
 
-
 // Branch Drawing Characters | U+F5D0...U+F60D
 //
 // Branch drawing character set, used for drawing git-like
@@ -121,7 +120,7 @@ module sprite
 //
 // Translated from ghostty/src/font/sprite/draw/branch.zig
 
-import font
+import sprite_types as font
 import math
 
 // Specification of a branch drawing node, which consists of a
@@ -166,26 +165,31 @@ pub fn draw_f5d0_f60d(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 			vline_middle(metrics, mut canvas, .light)
 			draw_arc(metrics, mut canvas, .tr, .light)!
 		}
+
 		// ''
 		0x0f5db {
 			vline_middle(metrics, mut canvas, .light)
 			draw_arc(metrics, mut canvas, .br, .light)!
 		}
+
 		// ''
 		0x0f5dc {
 			draw_arc(metrics, mut canvas, .tr, .light)!
 			draw_arc(metrics, mut canvas, .br, .light)!
 		}
+
 		// ''
 		0x0f5dd {
 			vline_middle(metrics, mut canvas, .light)
 			draw_arc(metrics, mut canvas, .tl, .light)!
 		}
+
 		// ''
 		0x0f5de {
 			vline_middle(metrics, mut canvas, .light)
 			draw_arc(metrics, mut canvas, .bl, .light)!
 		}
+
 		// ''
 		0x0f5df {
 			draw_arc(metrics, mut canvas, .tl, .light)!
@@ -197,79 +201,93 @@ pub fn draw_f5d0_f60d(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 			draw_arc(metrics, mut canvas, .bl, .light)!
 			hline_middle(metrics, mut canvas, .light)
 		}
+
 		// ''
 		0x0f5e1 {
 			draw_arc(metrics, mut canvas, .br, .light)!
 			hline_middle(metrics, mut canvas, .light)
 		}
+
 		// ''
 		0x0f5e2 {
 			draw_arc(metrics, mut canvas, .br, .light)!
 			draw_arc(metrics, mut canvas, .bl, .light)!
 		}
+
 		// ''
 		0x0f5e3 {
 			draw_arc(metrics, mut canvas, .tl, .light)!
 			hline_middle(metrics, mut canvas, .light)
 		}
+
 		// ''
 		0x0f5e4 {
 			draw_arc(metrics, mut canvas, .tr, .light)!
 			hline_middle(metrics, mut canvas, .light)
 		}
+
 		// ''
 		0x0f5e5 {
 			draw_arc(metrics, mut canvas, .tr, .light)!
 			draw_arc(metrics, mut canvas, .tl, .light)!
 		}
+
 		// ''
 		0x0f5e6 {
 			vline_middle(metrics, mut canvas, .light)
 			draw_arc(metrics, mut canvas, .tl, .light)!
 			draw_arc(metrics, mut canvas, .tr, .light)!
 		}
+
 		// ''
 		0x0f5e7 {
 			vline_middle(metrics, mut canvas, .light)
 			draw_arc(metrics, mut canvas, .bl, .light)!
 			draw_arc(metrics, mut canvas, .br, .light)!
 		}
+
 		// ''
 		0x0f5e8 {
 			hline_middle(metrics, mut canvas, .light)
 			draw_arc(metrics, mut canvas, .bl, .light)!
 			draw_arc(metrics, mut canvas, .tl, .light)!
 		}
+
 		// ''
 		0x0f5e9 {
 			hline_middle(metrics, mut canvas, .light)
 			draw_arc(metrics, mut canvas, .tr, .light)!
 			draw_arc(metrics, mut canvas, .br, .light)!
 		}
+
 		// ''
 		0x0f5ea {
 			vline_middle(metrics, mut canvas, .light)
 			draw_arc(metrics, mut canvas, .tl, .light)!
 			draw_arc(metrics, mut canvas, .br, .light)!
 		}
+
 		// ''
 		0x0f5eb {
 			vline_middle(metrics, mut canvas, .light)
 			draw_arc(metrics, mut canvas, .tr, .light)!
 			draw_arc(metrics, mut canvas, .bl, .light)!
 		}
+
 		// ''
 		0x0f5ec {
 			hline_middle(metrics, mut canvas, .light)
 			draw_arc(metrics, mut canvas, .tl, .light)!
 			draw_arc(metrics, mut canvas, .br, .light)!
 		}
+
 		// ''
 		0x0f5ed {
 			hline_middle(metrics, mut canvas, .light)
 			draw_arc(metrics, mut canvas, .tr, .light)!
 			draw_arc(metrics, mut canvas, .bl, .light)!
 		}
+
 		// ''
 		0x0f5ee { branch_node(metrics, mut canvas, BranchNode{ filled: true }, .light) }
 		// ''
@@ -278,108 +296,123 @@ pub fn draw_f5d0_f60d(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		// ''
 		0x0f5f0 {
 			branch_node(metrics, mut canvas, BranchNode{
-				right:  true
+				right: true
 				filled: true
 			}, .light)
 		}
+
 		// ''
 		0x0f5f1 {
 			branch_node(metrics, mut canvas, BranchNode{
 				right: true
 			}, .light)
 		}
+
 		// ''
 		0x0f5f2 {
 			branch_node(metrics, mut canvas, BranchNode{
-				left:   true
+				left: true
 				filled: true
 			}, .light)
 		}
+
 		// ''
 		0x0f5f3 {
 			branch_node(metrics, mut canvas, BranchNode{
 				left: true
 			}, .light)
 		}
+
 		// ''
 		0x0f5f4 {
 			branch_node(metrics, mut canvas, BranchNode{
-				left:   true
-				right:  true
+				left: true
+				right: true
 				filled: true
 			}, .light)
 		}
+
 		// ''
 		0x0f5f5 {
 			branch_node(metrics, mut canvas, BranchNode{
-				left:  true
+				left: true
 				right: true
 			}, .light)
 		}
+
 		// ''
 		0x0f5f6 {
 			branch_node(metrics, mut canvas, BranchNode{
-				down:   true
+				down: true
 				filled: true
 			}, .light)
 		}
+
 		// ''
 		0x0f5f7 {
 			branch_node(metrics, mut canvas, BranchNode{
 				down: true
 			}, .light)
 		}
+
 		// ''
 		0x0f5f8 {
 			branch_node(metrics, mut canvas, BranchNode{
-				up:     true
+				up: true
 				filled: true
 			}, .light)
 		}
+
 		// ''
 		0x0f5f9 {
 			branch_node(metrics, mut canvas, BranchNode{
 				up: true
 			}, .light)
 		}
+
 		// ''
 		0x0f5fa {
 			branch_node(metrics, mut canvas, BranchNode{
-				up:     true
-				down:   true
+				up: true
+				down: true
 				filled: true
 			}, .light)
 		}
+
 		// ''
 		0x0f5fb {
 			branch_node(metrics, mut canvas, BranchNode{
-				up:   true
+				up: true
 				down: true
 			}, .light)
 		}
+
 		// ''
 		0x0f5fc {
 			branch_node(metrics, mut canvas, BranchNode{
-				right:  true
-				down:   true
+				right: true
+				down: true
 				filled: true
 			}, .light)
 		}
+
 		// ''
 		0x0f5fd {
 			branch_node(metrics, mut canvas, BranchNode{
 				right: true
-				down:  true
+				down: true
 			}, .light)
 		}
+
 		// ''
 		0x0f5fe {
 			branch_node(metrics, mut canvas, BranchNode{
-				left:   true
-				down:   true
+				left: true
+				down: true
 				filled: true
 			}, .light)
 		}
+
 		// ''
 		0x0f5ff {
 			branch_node(metrics, mut canvas, BranchNode{
@@ -391,121 +424,133 @@ pub fn draw_f5d0_f60d(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		// ''
 		0x0f600 {
 			branch_node(metrics, mut canvas, BranchNode{
-				up:     true
-				right:  true
+				up: true
+				right: true
 				filled: true
 			}, .light)
 		}
+
 		// ''
 		0x0f601 {
 			branch_node(metrics, mut canvas, BranchNode{
-				up:    true
-				right: true
-			}, .light)
-		}
-		// ''
-		0x0f602 {
-			branch_node(metrics, mut canvas, BranchNode{
-				up:     true
-				left:   true
-				filled: true
-			}, .light)
-		}
-		// ''
-		0x0f603 {
-			branch_node(metrics, mut canvas, BranchNode{
-				up:   true
-				left: true
-			}, .light)
-		}
-		// ''
-		0x0f604 {
-			branch_node(metrics, mut canvas, BranchNode{
-				up:     true
-				down:   true
-				right:  true
-				filled: true
-			}, .light)
-		}
-		// ''
-		0x0f605 {
-			branch_node(metrics, mut canvas, BranchNode{
-				up:    true
-				down:  true
-				right: true
-			}, .light)
-		}
-		// ''
-		0x0f606 {
-			branch_node(metrics, mut canvas, BranchNode{
-				up:     true
-				down:   true
-				left:   true
-				filled: true
-			}, .light)
-		}
-		// ''
-		0x0f607 {
-			branch_node(metrics, mut canvas, BranchNode{
-				up:   true
-				down: true
-				left: true
-			}, .light)
-		}
-		// ''
-		0x0f608 {
-			branch_node(metrics, mut canvas, BranchNode{
-				down:   true
-				left:   true
-				right:  true
-				filled: true
-			}, .light)
-		}
-		// ''
-		0x0f609 {
-			branch_node(metrics, mut canvas, BranchNode{
-				down:  true
-				left:  true
-				right: true
-			}, .light)
-		}
-		// ''
-		0x0f60a {
-			branch_node(metrics, mut canvas, BranchNode{
-				up:     true
-				left:   true
-				right:  true
-				filled: true
-			}, .light)
-		}
-		// ''
-		0x0f60b {
-			branch_node(metrics, mut canvas, BranchNode{
-				up:    true
-				left:  true
-				right: true
-			}, .light)
-		}
-		// ''
-		0x0f60c {
-			branch_node(metrics, mut canvas, BranchNode{
-				up:     true
-				down:   true
-				left:   true
-				right:  true
-				filled: true
-			}, .light)
-		}
-		// ''
-		0x0f60d {
-			branch_node(metrics, mut canvas, BranchNode{
-				up:    true
-				down:  true
-				left:  true
+				up: true
 				right: true
 			}, .light)
 		}
 
+		// ''
+		0x0f602 {
+			branch_node(metrics, mut canvas, BranchNode{
+				up: true
+				left: true
+				filled: true
+			}, .light)
+		}
+
+		// ''
+		0x0f603 {
+			branch_node(metrics, mut canvas, BranchNode{
+				up: true
+				left: true
+			}, .light)
+		}
+
+		// ''
+		0x0f604 {
+			branch_node(metrics, mut canvas, BranchNode{
+				up: true
+				down: true
+				right: true
+				filled: true
+			}, .light)
+		}
+
+		// ''
+		0x0f605 {
+			branch_node(metrics, mut canvas, BranchNode{
+				up: true
+				down: true
+				right: true
+			}, .light)
+		}
+
+		// ''
+		0x0f606 {
+			branch_node(metrics, mut canvas, BranchNode{
+				up: true
+				down: true
+				left: true
+				filled: true
+			}, .light)
+		}
+
+		// ''
+		0x0f607 {
+			branch_node(metrics, mut canvas, BranchNode{
+				up: true
+				down: true
+				left: true
+			}, .light)
+		}
+
+		// ''
+		0x0f608 {
+			branch_node(metrics, mut canvas, BranchNode{
+				down: true
+				left: true
+				right: true
+				filled: true
+			}, .light)
+		}
+
+		// ''
+		0x0f609 {
+			branch_node(metrics, mut canvas, BranchNode{
+				down: true
+				left: true
+				right: true
+			}, .light)
+		}
+
+		// ''
+		0x0f60a {
+			branch_node(metrics, mut canvas, BranchNode{
+				up: true
+				left: true
+				right: true
+				filled: true
+			}, .light)
+		}
+
+		// ''
+		0x0f60b {
+			branch_node(metrics, mut canvas, BranchNode{
+				up: true
+				left: true
+				right: true
+			}, .light)
+		}
+
+		// ''
+		0x0f60c {
+			branch_node(metrics, mut canvas, BranchNode{
+				up: true
+				down: true
+				left: true
+				right: true
+				filled: true
+			}, .light)
+		}
+
+		// ''
+		0x0f60d {
+			branch_node(metrics, mut canvas, BranchNode{
+				up: true
+				down: true
+				left: true
+				right: true
+			}, .light)
+		}
 		else {}
 	}
 }

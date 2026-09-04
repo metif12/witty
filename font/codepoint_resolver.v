@@ -144,9 +144,8 @@ pub fn (sf &SpriteFace) has_codepoint(cp u32, p ?Presentation) bool {
 
 // render_glyph renders a sprite glyph into the given atlas.
 //
-// Faithful to ghostty's sprite Face.renderGlyph. The actual drawing is
-// delegated to sprite_face_render_glyph (in embedded.v) since the `font`
-// module cannot import the `sprite` module (import cycle).
+// Faithful to Ghostty's sprite Face.renderGlyph. The dependency-neutral
+// raster result is inserted into the font-owned atlas by the implementation.
 pub fn (sf &SpriteFace) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !GlyphInfo {
 	return sprite_face_render_glyph(mut atlas, glyph_index, sf.metrics, opts)
 }

@@ -15,7 +15,7 @@ module sprite
 //
 // Translated from ghostty/src/font/sprite/draw/geometric_shapes.zig
 
-import font
+import sprite_types as font
 
 // ◢ ◣ ◤ ◥
 pub fn draw_25e2_25e5(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
@@ -30,7 +30,6 @@ pub fn draw_25e2_25e5(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		0x25e4 { corner_triangle_shade(metrics, mut canvas, .tl, .on)! }
 		// ◥
 		0x25e5 { corner_triangle_shade(metrics, mut canvas, .tr, .on)! }
-
 		else {}
 	}
 }
@@ -46,7 +45,6 @@ pub fn draw_25f8_25fa(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		0x25f9 { corner_triangle_outline(metrics, mut canvas, .tr)! }
 		// ◺
 		0x25fa { corner_triangle_outline(metrics, mut canvas, .bl)! }
-
 		else {}
 	}
 }

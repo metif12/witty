@@ -19,7 +19,7 @@ module sprite
 // filling the union of per-segment quads), and cubic Bezier flattening
 // for `curveTo`/`arc`.
 
-import font
+import sprite_types as font
 import math
 
 // ============================================================
@@ -340,15 +340,10 @@ fn sat_sub(a u32, b u32) u32 {
 	return if a > b { a - b } else { u32(0) }
 }
 
-// write_atlas writes the data in this drawing to the atlas and returns
-// the resulting glyph region. Fully-transparent margins are trimmed
-// first so the atlas region is as tight as possible.
-//
-// The witty `font.Atlas` doesn't expose z2d's reserve/setFromLarger
-// allocator, so we perform a simple linear (shelf-free) reservation
-// directly into the atlas data buffer. This is sufficient for the
-// sprite face since these glyphs are relatively small and few.
-pub fn (mut c Canvas) write_atlas(mut atlas font.Atlas) !GlyphRegion {
+// rasterize trims transparent margins and returns the owned alpha surface plus
+// the source rectangle containing the glyph. Atlas allocation remains in the
+// font module, which is the owner of that resource.
+pub fn (mut c Canvas) rasterize() RasterizedGlyph {
 	c.trim()
 
 	sfc_width := c.sfc_width()
@@ -359,108 +354,24 @@ pub fn (mut c Canvas) write_atlas(mut atlas font.Atlas) !GlyphRegion {
 	region_width := sat_sub(sat_sub(sfc_width, c.clip_left), c.clip_right)
 	region_height := sat_sub(sat_sub(sfc_height, c.clip_top), c.clip_bottom)
 
-	region := atlas_reserve(mut atlas, region_width, region_height)!
-
-	if region.width > 0 && region.height > 0 {
-		// Copy the (trimmed) sub-rectangle of our surface in to the atlas.
-		set_from_larger(mut atlas, region, c.data, sfc_width, c.clip_left, c.clip_top)
+	return RasterizedGlyph{
+		data: c.data
+		data_width: sfc_width
+		source_x: c.clip_left
+		source_y: c.clip_top
+		width: region_width
+		height: region_height
 	}
-
-	return region
 }
 
-// ============================================================
-// GlyphRegion + minimal atlas allocation
-// ============================================================
-
-// A region within the texture atlas.
-pub struct GlyphRegion {
-pub mut:
-	x      u32
-	y      u32
-	width  u32
-	height u32
-}
-
-// atlas_reserve reserves a `width x height` region within the atlas,
-// growing the atlas if necessary.
-//
-// The witty `font.Atlas` doesn't expose z2d/ghostty's rectangle-node
-// allocator, so — to remain self-contained without module-level state —
-// we find a free region by scanning the (initially-zeroed) atlas data
-// for a rectangle (plus a 1px transparent border) that is entirely
-// empty. Sprite glyphs are small and few, so the scan cost is
-// negligible. If no free region is found the atlas is grown and the
-// scan retried.
-fn atlas_reserve(mut atlas font.Atlas, width u32, height u32) !GlyphRegion {
-	// If our width/height are 0, then we return the region as-is. This
-	// may seem like an error case but it simplifies downstream callers.
-	if width == 0 || height == 0 {
-		return GlyphRegion{
-			width: width
-			height: height
-		}
-	}
-
-	// We keep a 1px border on all sides to avoid sampling artifacts.
-	bordered_w := width + 1
-	bordered_h := height + 1
-
-	for {
-		size := atlas.size
-		if bordered_w + 1 <= size && bordered_h + 1 <= size {
-			mut y := u32(1)
-			for y + bordered_h <= size {
-				mut x := u32(1)
-				for x + bordered_w <= size {
-					if region_is_free(atlas, x, y, bordered_w, bordered_h) {
-						atlas.modified += 1
-						return GlyphRegion{
-							x: x
-							y: y
-							width: width
-							height: height
-						}
-					}
-					x += 1
-				}
-				y += 1
-			}
-		}
-		// No space; enlarge the atlas and retry.
-		atlas.grow(size * 2)
-	}
-	return GlyphRegion{}
-}
-
-// region_is_free returns true if every pixel in the `w x h` rectangle at
-// (x0, y0) in the atlas is currently zero (fully transparent).
-fn region_is_free(atlas font.Atlas, x0 u32, y0 u32, w u32, h u32) bool {
-	for y in y0 .. y0 + h {
-		base := y * atlas.size
-		for x in x0 .. x0 + w {
-			if atlas.data[base + x] != 0 {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-// set_from_larger copies a `region.width x region.height` sub-rectangle
-// out of `src` (which has stride `src_width`, starting at `src_x,src_y`)
-// in to the atlas at `region`.
-fn set_from_larger(mut atlas font.Atlas, region GlyphRegion, src []u8, src_width u32, src_x u32, src_y u32) {
-	bpp := u32(1) // sprite atlas is grayscale
-	for row in 0 .. region.height {
-		for col in 0 .. region.width {
-			s := (src_y + row) * src_width + (src_x + col)
-			d := ((region.y + row) * atlas.size + (region.x + col)) * bpp
-			if int(s) < src.len && int(d) < atlas.data.len {
-				atlas.data[d] = src[s]
-			}
-		}
-	}
+pub struct RasterizedGlyph {
+pub:
+	data       []u8
+	data_width u32
+	source_x   u32
+	source_y   u32
+	width      u32
+	height     u32
 }
 
 // ============================================================

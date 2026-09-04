@@ -12,7 +12,7 @@ module sprite
 // are already defined in sprite.v. This file contains additional
 // helpers from common.zig that weren't already present.
 
-import font
+import sprite_types as font
 import math
 
 // ============================================================

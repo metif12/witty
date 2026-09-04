@@ -9,7 +9,7 @@ module sprite
 //
 // Translated from ghostty/src/font/sprite/draw/special.zig
 
-import font
+import sprite_types as font
 import math
 
 // draw_underline draws a single underline decoration.

@@ -11,7 +11,7 @@ module sprite
 //
 // Translated from ghostty/src/font/sprite/draw/powerline.zig
 
-import font
+import sprite_types as font
 import math
 
 //

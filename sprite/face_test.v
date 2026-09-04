@@ -12,7 +12,7 @@ module sprite
 // function, and which codepoints are covered at all) that ghostty builds
 // at comptime from its `ranges` table and `Sprite` enum.
 
-import font
+import sprite_types as font
 
 fn new_face() SpriteFace {
 	return SpriteFace{
@@ -61,7 +61,7 @@ fn test_has_codepoint_covered_ranges() {
 		0x1ceaf, // sixteenth blocks (max)
 	]
 	for cp in covered {
-		assert f.has_codepoint(cp, none), 'expected codepoint 0x${cp:x} to be covered'
+		assert f.has_codepoint(cp), 'expected codepoint 0x${cp:x} to be covered'
 	}
 }
 
@@ -84,21 +84,19 @@ fn test_has_codepoint_uncovered() {
 		0x10ffff, // max unicode, below sprite.start, in no range
 	]
 	for cp in uncovered {
-		assert !f.has_codepoint(cp, none), 'expected codepoint 0x${cp:x} to be uncovered'
+		assert !f.has_codepoint(cp), 'expected codepoint 0x${cp:x} to be uncovered'
 	}
 }
 
 // ------------------------------------------------------------
-// has_codepoint ignores the presentation argument.
+// has_codepoint is independent of presentation; presentation filtering is
+// performed by the font resolver.
 // ------------------------------------------------------------
 
 fn test_has_codepoint_ignores_presentation() {
 	f := new_face()
-	// Whether presentation is none, text, or emoji, coverage is identical.
-	assert f.has_codepoint(0x2500, none)
-	assert f.has_codepoint(0x2500, font.Presentation.text)
-	assert f.has_codepoint(0x2500, font.Presentation.emoji)
-	assert !f.has_codepoint(0x0041, font.Presentation.emoji)
+	assert f.has_codepoint(0x2500)
+	assert !f.has_codepoint(0x0041)
 }
 
 // ------------------------------------------------------------
@@ -222,7 +220,7 @@ fn test_has_codepoint_special_sprites() {
 	f := new_face()
 	// The special cursor/underline sprites are all "covered".
 	for i in 0 .. 11 {
-		assert f.has_codepoint(special_start + u32(i), none)
+		assert f.has_codepoint(special_start + u32(i))
 	}
-	assert !f.has_codepoint(special_start + 11, none)
+	assert !f.has_codepoint(special_start + 11)
 }

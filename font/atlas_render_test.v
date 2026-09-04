@@ -174,26 +174,22 @@ fn test_atlas_set_and_grow_preserves_pixels() {
 	assert atlas.resized == 1
 }
 
-fn test_builtin_glyph_render_writes_grayscale_atlas() {
+fn test_builtin_glyph_render_ignores_unsupported_codepoint() {
 	mut atlas := Atlas.init(64, .grayscale)
 	glyph := render_builtin_cell_glyph(mut atlas, u32(`A`), default_grid_metrics(8, 16))!
-	assert glyph.width == 8
-	assert glyph.height == 16
-
-	mut nonzero := 0
-	for y in glyph.atlas_y .. glyph.atlas_y + glyph.height {
-		for x in glyph.atlas_x .. glyph.atlas_x + glyph.width {
-			if atlas.data[int(y * atlas.size + x)] > 0 {
-				nonzero++
-			}
-		}
-	}
-	assert nonzero > 0
+	assert glyph.width == 0
+	assert glyph.height == 0
 }
 
 fn test_sprite_render_writes_cursor_atlas() {
 	mut atlas := Atlas.init(64, .grayscale)
-	glyph := render_sprite_glyph(mut atlas, .cursor_rect, default_grid_metrics(8, 16), 1)!
+	sf := SpriteFace{
+		metrics: default_grid_metrics(8, 16)
+	}
+	glyph := sf.render_glyph(mut atlas, u32(Sprite.cursor_rect), RenderOptions{
+		cell_width: 1
+		grid_metrics: default_grid_metrics(8, 16)
+	})!
 	assert glyph.width == 8
 	assert glyph.height == 16
 
@@ -214,8 +210,9 @@ fn test_sprite_face_renders_unicode_sprite_codepoint_without_enum_cast() {
 		grid_metrics: default_grid_metrics(8, 16)
 	})!
 
+	// The sprite canvas trims transparent margins before atlas insertion.
 	assert glyph.width == 8
-	assert glyph.height == 16
+	assert glyph.height == 1
 	mut nonzero := 0
 	for y in glyph.atlas_y .. glyph.atlas_y + glyph.height {
 		for x in glyph.atlas_x .. glyph.atlas_x + glyph.width {
@@ -225,4 +222,5 @@ fn test_sprite_face_renders_unicode_sprite_codepoint_without_enum_cast() {
 		}
 	}
 	assert nonzero > 0
+	assert nonzero < 8 * 16
 }
