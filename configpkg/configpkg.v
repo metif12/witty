@@ -4295,12 +4295,10 @@ fn keybinds_set_equal(a inputpkg.Set, b inputpkg.Set) bool {
 	return true
 }
 
-// init resets this Keybinds to the default key bindings. This is a faithful
-// translation of the leading portion of Config.zig `Keybinds.init` using the
-// macOS (Darwin) modifier defaults, which is the platform witty targets. Only
-// the common cross-platform and Darwin bindings that precede the large
-// platform-specific windowing block are populated here; that is sufficient for
-// a non-empty default set.
+// init resets this Keybinds to the complete platform-default binding set.
+// This follows Config.zig `Keybinds.init` in source order because the reverse
+// action lookup intentionally prefers the last trigger registered for an
+// action (notably for menu shortcut labels).
 pub fn (mut k Keybinds) init() {
 	k.set = inputpkg.Set{}
 	k.tables = map[string]inputpkg.Set{}
@@ -4353,6 +4351,388 @@ pub fn (mut k Keybinds) init() {
 		key: inputpkg.TriggerKey.new_unicode(u32(`0`))
 		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{})
 	}, inputpkg.Action.new(.reset_font_size))
+
+	// Write the visible screen to a temporary file.
+	k.set.put(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_unicode(u32(`j`))
+		mods: inputpkg.Mods{ shift: true, ctrl: true, super_: true }
+	}, inputpkg.Action.new_enum2(.write_screen_file, i32(inputpkg.WriteScreenAction.copy), i32(inputpkg.WriteScreenFormat.plain)))
+	k.set.put(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_unicode(u32(`j`))
+		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{ shift: true })
+	}, inputpkg.Action.new_enum2(.write_screen_file, i32(inputpkg.WriteScreenAction.paste), i32(inputpkg.WriteScreenFormat.plain)))
+	k.set.put(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_unicode(u32(`j`))
+		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{ shift: true, alt: true })
+	}, inputpkg.Action.new_enum2(.write_screen_file, i32(inputpkg.WriteScreenAction.open), i32(inputpkg.WriteScreenFormat.plain)))
+
+	// Expand selection.
+	selection_keys := [inputpkg.Key.arrow_left, .arrow_right, .arrow_up, .arrow_down, .page_up,
+		.page_down, .home, .end]
+	selection_actions := [inputpkg.AdjustSelection.left, .right, .up, .down, .page_up, .page_down,
+		.home, .end_]
+	for i, key in selection_keys {
+		k.set.put_flags(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_physical(key)
+			mods: inputpkg.Mods{ shift: true }
+		}, inputpkg.Action.new_enum(.adjust_selection, i32(selection_actions[i])), inputpkg.Flags{
+			performable: true
+		})
+	}
+
+	// Tabs common to all platforms.
+	k.set.put(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_physical(.tab)
+		mods: inputpkg.Mods{ ctrl: true, shift: true }
+	}, inputpkg.Action.new(.previous_tab))
+	k.set.put(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_physical(.tab)
+		mods: inputpkg.Mods{ ctrl: true }
+	}, inputpkg.Action.new(.next_tab))
+
+	$if !macos {
+		// Non-Darwin windowing.
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`n`))
+			mods: inputpkg.Mods{ ctrl: true, shift: true }
+		}, inputpkg.Action.new(.new_window))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`w`))
+			mods: inputpkg.Mods{ ctrl: true, shift: true }
+		}, inputpkg.Action.new(.close_surface))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`q`))
+			mods: inputpkg.Mods{ ctrl: true, shift: true }
+		}, inputpkg.Action.new(.quit))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_physical(.f4)
+			mods: inputpkg.Mods{ alt: true }
+		}, inputpkg.Action.new(.close_window))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`t`))
+			mods: inputpkg.Mods{ ctrl: true, shift: true }
+		}, inputpkg.Action.new(.new_tab))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`w`))
+			mods: inputpkg.Mods{ ctrl: true, shift: true }
+		}, inputpkg.Action.new_enum(.close_tab, i32(inputpkg.CloseTabMode.this)))
+		for item in [
+			[inputpkg.Key.arrow_left, inputpkg.Key.arrow_right]!,
+			[inputpkg.Key.page_up, inputpkg.Key.page_down]!,
+		] {
+			mods := if item[0] == .page_up {
+				inputpkg.Mods{ ctrl: true }
+			} else {
+				inputpkg.Mods{
+					ctrl: true
+					shift: true
+				}
+			}
+			k.set.put_flags(inputpkg.Trigger{
+				key: inputpkg.TriggerKey.new_physical(item[0])
+				mods: mods
+			}, inputpkg.Action.new(.previous_tab), inputpkg.Flags{ performable: true })
+			k.set.put_flags(inputpkg.Trigger{
+				key: inputpkg.TriggerKey.new_physical(item[1])
+				mods: mods
+			}, inputpkg.Action.new(.next_tab), inputpkg.Flags{ performable: true })
+		}
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`o`))
+			mods: inputpkg.Mods{ ctrl: true, shift: true }
+		}, inputpkg.Action.new_enum(.new_split, i32(inputpkg.SplitDirection.right)))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`e`))
+			mods: inputpkg.Mods{ ctrl: true, shift: true }
+		}, inputpkg.Action.new_enum(.new_split, i32(inputpkg.SplitDirection.down)))
+		for direction, rune_ in [inputpkg.SplitFocusDirection.previous, .next] {
+			key := if direction == 0 { `[` } else { `]` }
+			k.set.put_flags(inputpkg.Trigger{
+				key: inputpkg.TriggerKey.new_unicode(u32(key))
+				mods: inputpkg.Mods{ ctrl: true, super_: true }
+			}, inputpkg.Action.new_enum(.goto_split, i32(rune_)), inputpkg.Flags{
+				performable: true
+			})
+		}
+		focus_keys := [inputpkg.Key.arrow_up, .arrow_down, .arrow_left, .arrow_right]
+		focus_dirs := [inputpkg.SplitFocusDirection.up, .down, .left, .right]
+		for i, key in focus_keys {
+			k.set.put_flags(inputpkg.Trigger{
+				key: inputpkg.TriggerKey.new_physical(key)
+				mods: inputpkg.Mods{ ctrl: true, alt: true }
+			}, inputpkg.Action.new_enum(.goto_split, i32(focus_dirs[i])), inputpkg.Flags{
+				performable: true
+			})
+		}
+		resize_dirs := [inputpkg.SplitResizeDirection.up, .down, .left, .right]
+		for i, key in focus_keys {
+			k.set.put_flags(inputpkg.Trigger{
+				key: inputpkg.TriggerKey.new_physical(key)
+				mods: inputpkg.Mods{ super_: true, ctrl: true, shift: true }
+			}, inputpkg.Action.new_enum2(.resize_split, i32(resize_dirs[i]), 10), inputpkg.Flags{
+				performable: true
+			})
+		}
+		viewport_keys := [inputpkg.Key.home, .end, .page_up, .page_down]
+		viewport_actions := [inputpkg.ActionTag.scroll_to_top, .scroll_to_bottom, .scroll_page_up,
+			.scroll_page_down]
+		for i, key in viewport_keys {
+			k.set.put(inputpkg.Trigger{
+				key: inputpkg.TriggerKey.new_physical(key)
+				mods: inputpkg.Mods{ shift: true }
+			}, inputpkg.Action.new(viewport_actions[i]))
+		}
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_physical(.page_up)
+			mods: inputpkg.Mods{ shift: true, ctrl: true }
+		}, inputpkg.Action.new_int(.jump_to_prompt, -1))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_physical(.page_down)
+			mods: inputpkg.Mods{ shift: true, ctrl: true }
+		}, inputpkg.Action.new_int(.jump_to_prompt, 1))
+		k.set.put_flags(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`f`))
+			mods: inputpkg.Mods{ ctrl: true, shift: true }
+		}, inputpkg.Action.new(.start_search), inputpkg.Flags{ performable: true })
+		k.set.put_flags(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_physical(.escape)
+		}, inputpkg.Action.new(.end_search), inputpkg.Flags{ performable: true })
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`i`))
+			mods: inputpkg.Mods{ shift: true, ctrl: true }
+		}, inputpkg.Action.new_enum(.inspector, i32(inputpkg.InspectorMode.toggle)))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`a`))
+			mods: inputpkg.Mods{ shift: true, ctrl: true }
+		}, inputpkg.Action.new(.select_all))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_physical(.insert)
+			mods: inputpkg.Mods{ shift: true }
+		}, inputpkg.Action.new(.paste_from_selection))
+	}
+
+	// Cmd/Alt+N selects tab N. Register both physical and Unicode forms so
+	// layouts such as AZERTY retain the shortcut.
+	index_mods := $if macos { inputpkg.Mods{ super_: true } } $else { inputpkg.Mods{
+		alt: true
+	} }
+	digit_keys := [inputpkg.Key.digit_1, .digit_2, .digit_3, .digit_4, .digit_5, .digit_6, .digit_7,
+		.digit_8]
+	for i, key in digit_keys {
+		performable := $if macos { false } $else { true }
+		flags := inputpkg.Flags{ performable: performable }
+		k.set.put_flags(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_physical(key)
+			mods: index_mods
+		}, inputpkg.Action.new_uint(.goto_tab, u64(i + 1)), flags)
+		k.set.put_flags(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`1`) + u32(i))
+			mods: index_mods
+		}, inputpkg.Action.new_uint(.goto_tab, u64(i + 1)), flags)
+	}
+	last_tab_performable := $if macos { false } $else { true }
+	k.set.put_flags(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_unicode(u32(`9`))
+		mods: index_mods
+	}, inputpkg.Action.new(.last_tab), inputpkg.Flags{ performable: last_tab_performable })
+
+	k.set.put(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_physical(.enter)
+		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{})
+	}, inputpkg.Action.new(.toggle_fullscreen))
+	k.set.put(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_physical(.enter)
+		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{ shift: true })
+	}, inputpkg.Action.new(.toggle_split_zoom))
+	k.set.put(inputpkg.Trigger{
+		key: inputpkg.TriggerKey.new_unicode(u32(`p`))
+		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{ shift: true })
+	}, inputpkg.Action.new(.toggle_command_palette))
+
+	$if macos {
+		// Darwin application and editing bindings.
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`q`))
+			mods: inputpkg.Mods{ super_: true }
+		}, inputpkg.Action.new(.quit))
+		k.set.put_flags(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`k`))
+			mods: inputpkg.Mods{ super_: true }
+		}, inputpkg.Action.new(.clear_screen), inputpkg.Flags{ performable: true })
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`a`))
+			mods: inputpkg.Mods{ super_: true }
+		}, inputpkg.Action.new(.select_all))
+		k.set.put_flags(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`t`))
+			mods: inputpkg.Mods{ super_: true, shift: true }
+		}, inputpkg.Action.new(.undo), inputpkg.Flags{ performable: true })
+		k.set.put_flags(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`z`))
+			mods: inputpkg.Mods{ super_: true }
+		}, inputpkg.Action.new(.undo), inputpkg.Flags{ performable: true })
+		k.set.put_flags(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`z`))
+			mods: inputpkg.Mods{ super_: true, shift: true }
+		}, inputpkg.Action.new(.redo), inputpkg.Flags{ performable: true })
+
+		viewport_keys := [inputpkg.Key.home, .end, .page_up, .page_down]
+		viewport_actions := [inputpkg.ActionTag.scroll_to_top, .scroll_to_bottom, .scroll_page_up,
+			.scroll_page_down]
+		for i, key in viewport_keys {
+			k.set.put(inputpkg.Trigger{
+				key: inputpkg.TriggerKey.new_physical(key)
+				mods: inputpkg.Mods{ super_: true }
+			}, inputpkg.Action.new(viewport_actions[i]))
+		}
+		k.set.put_flags(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`j`))
+			mods: inputpkg.Mods{ super_: true }
+		}, inputpkg.Action.new(.scroll_to_selection), inputpkg.Flags{ performable: true })
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_physical(.arrow_up)
+			mods: inputpkg.Mods{ super_: true, shift: true }
+		}, inputpkg.Action.new_int(.jump_to_prompt, -1))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_physical(.arrow_down)
+			mods: inputpkg.Mods{ super_: true, shift: true }
+		}, inputpkg.Action.new_int(.jump_to_prompt, 1))
+
+		window_bindings := [
+			[u32(`n`), u32(inputpkg.ActionTag.new_window)]!,
+			[u32(`w`), u32(inputpkg.ActionTag.close_surface)]!,
+			[u32(`t`), u32(inputpkg.ActionTag.new_tab)]!,
+		]
+		for binding in window_bindings {
+			k.set.put(inputpkg.Trigger{
+				key: inputpkg.TriggerKey.new_unicode(binding[0])
+				mods: inputpkg.Mods{ super_: true }
+			}, inputpkg.Action.new(unsafe { inputpkg.ActionTag(binding[1]) }))
+		}
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`w`))
+			mods: inputpkg.Mods{ super_: true, alt: true }
+		}, inputpkg.Action.new_enum(.close_tab, i32(inputpkg.CloseTabMode.this)))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`w`))
+			mods: inputpkg.Mods{ super_: true, shift: true }
+		}, inputpkg.Action.new(.close_window))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`w`))
+			mods: inputpkg.Mods{ super_: true, shift: true, alt: true }
+		}, inputpkg.Action.new(.close_all_windows))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`[`))
+			mods: inputpkg.Mods{ super_: true, shift: true }
+		}, inputpkg.Action.new(.previous_tab))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`]`))
+			mods: inputpkg.Mods{ super_: true, shift: true }
+		}, inputpkg.Action.new(.next_tab))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`d`))
+			mods: inputpkg.Mods{ super_: true }
+		}, inputpkg.Action.new_enum(.new_split, i32(inputpkg.SplitDirection.right)))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`d`))
+			mods: inputpkg.Mods{ super_: true, shift: true }
+		}, inputpkg.Action.new_enum(.new_split, i32(inputpkg.SplitDirection.down)))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`[`))
+			mods: inputpkg.Mods{ super_: true }
+		}, inputpkg.Action.new_enum(.goto_split, i32(inputpkg.SplitFocusDirection.previous)))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`]`))
+			mods: inputpkg.Mods{ super_: true }
+		}, inputpkg.Action.new_enum(.goto_split, i32(inputpkg.SplitFocusDirection.next)))
+		arrow_keys := [inputpkg.Key.arrow_up, .arrow_down, .arrow_left, .arrow_right]
+		focus_dirs := [inputpkg.SplitFocusDirection.up, .down, .left, .right]
+		resize_dirs := [inputpkg.SplitResizeDirection.up, .down, .left, .right]
+		for i, key in arrow_keys {
+			k.set.put(inputpkg.Trigger{
+				key: inputpkg.TriggerKey.new_physical(key)
+				mods: inputpkg.Mods{ super_: true, alt: true }
+			}, inputpkg.Action.new_enum(.goto_split, i32(focus_dirs[i])))
+			k.set.put(inputpkg.Trigger{
+				key: inputpkg.TriggerKey.new_physical(key)
+				mods: inputpkg.Mods{ super_: true, ctrl: true }
+			}, inputpkg.Action.new_enum2(.resize_split, i32(resize_dirs[i]), 10))
+		}
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`=`))
+			mods: inputpkg.Mods{ super_: true, ctrl: true }
+		}, inputpkg.Action.new(.equalize_splits))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_physical(.arrow_up)
+			mods: inputpkg.Mods{ super_: true }
+		}, inputpkg.Action.new_int(.jump_to_prompt, -1))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_physical(.arrow_down)
+			mods: inputpkg.Mods{ super_: true }
+		}, inputpkg.Action.new_int(.jump_to_prompt, 1))
+
+		k.set.put_flags(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`f`))
+			mods: inputpkg.Mods{ super_: true }
+		}, inputpkg.Action.new(.start_search), inputpkg.Flags{ performable: true })
+		k.set.put_flags(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`e`))
+			mods: inputpkg.Mods{ super_: true }
+		}, inputpkg.Action.new(.search_selection), inputpkg.Flags{ performable: true })
+		k.set.put_flags(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`f`))
+			mods: inputpkg.Mods{ super_: true, shift: true }
+		}, inputpkg.Action.new(.end_search), inputpkg.Flags{ performable: true })
+		k.set.put_flags(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_physical(.escape)
+		}, inputpkg.Action.new(.end_search), inputpkg.Flags{ performable: true })
+		k.set.put_flags(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`g`))
+			mods: inputpkg.Mods{ super_: true }
+		}, inputpkg.Action.new_enum(.navigate_search, i32(inputpkg.NavigateSearch.next)), inputpkg.Flags{
+			performable: true
+		})
+		k.set.put_flags(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`g`))
+			mods: inputpkg.Mods{ super_: true, shift: true }
+		}, inputpkg.Action.new_enum(.navigate_search, i32(inputpkg.NavigateSearch.previous)), inputpkg.Flags{
+			performable: true
+		})
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`i`))
+			mods: inputpkg.Mods{ alt: true, super_: true }
+		}, inputpkg.Action.new_enum(.inspector, i32(inputpkg.InspectorMode.toggle)))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`f`))
+			mods: inputpkg.Mods{ super_: true, ctrl: true }
+		}, inputpkg.Action.new(.toggle_fullscreen))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_unicode(u32(`v`))
+			mods: inputpkg.Mods{ super_: true, shift: true }
+		}, inputpkg.Action.new(.paste_from_selection))
+
+		// Natural text editing keys use legacy sequences on macOS.
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_physical(.arrow_right)
+			mods: inputpkg.Mods{ super_: true }
+		}, inputpkg.Action.new_str(.text, '\x05'))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_physical(.arrow_left)
+			mods: inputpkg.Mods{ super_: true }
+		}, inputpkg.Action.new_str(.text, '\x01'))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_physical(.backspace)
+			mods: inputpkg.Mods{ super_: true }
+		}, inputpkg.Action.new_str(.text, '\x15'))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_physical(.arrow_left)
+			mods: inputpkg.Mods{ alt: true }
+		}, inputpkg.Action.new_str(.esc, 'b'))
+		k.set.put(inputpkg.Trigger{
+			key: inputpkg.TriggerKey.new_physical(.arrow_right)
+			mods: inputpkg.Mods{ alt: true }
+		}, inputpkg.Action.new_str(.esc, 'f'))
+	}
 }
 
 // change_conditional_state returns a new Config with the given conditional
@@ -4418,6 +4798,11 @@ pub fn (c Config) clone() Config {
 	}
 	copy.diagnostics = c.diagnostics.clone()
 	copy.keybind = c.keybind.clone()
+	copy.link = LinkConfig{
+		links: LinkList{
+			items: c.link.links.items.clone()
+		}
+	}
 	copy.explicit_keys = c.explicit_keys.clone()
 	copy.conditional_set = c.conditional_set.clone()
 	if cmd := c.command {
@@ -4547,19 +4932,27 @@ pub fn (p Path) clone() !Path {
 
 // LinkConfig for configurable link detection.
 pub struct LinkConfig {
-pub:
+pub mut:
 	links LinkList
 }
 
 pub struct LinkList {
-pub:
+pub mut:
 	items []LinkEntry
 }
 
 pub struct LinkEntry {
 pub:
-	pattern string
+	pattern   string
+	action    inputpkg.LinkAction
+	highlight inputpkg.LinkHighlight
+	mods      inputpkg.Mods
 }
+
+// default_url_pattern is the default matcher from config/url.zig expressed in
+// the regular-expression syntax supported by V. It recognizes the same URL
+// schemes and relative/absolute path forms.
+pub const default_url_pattern = r'(https?://|mailto:|ftp://|file:|ssh:|git://|tel:|magnet:|ipfs://|ipns://|gemini://|gopher://|news:)[^\t\r\n "\x27<>]+|(\.\./|\./|/)[^\t\r\n "\x27<>]+|[A-Za-z0-9_][A-Za-z0-9_.-]*/[^\t\r\n "\x27<>]*\.[^\t\r\n "\x27<>]+'
 
 // ============================================================
 // Existing types
@@ -5455,6 +5848,16 @@ pub fn (mut c Config) finalize() {
 	// Clamp the contrast.
 	c.minimum_contrast = clamp_f64(c.minimum_contrast, 1.0, 21.0)
 
+	// The first default link is always the URL matcher.
+	if !c.link_url && c.link.links.items.len > 0
+		&& c.link.links.items[0].pattern == default_url_pattern {
+		c.link = LinkConfig{
+			links: LinkList{
+				items: c.link.links.items[1..].clone()
+			}
+		}
+	}
+
 	// Clamp opacities to [0, 1].
 	c.background_opacity = clamp_f64(c.background_opacity, 0.0, 1.0)
 	c.cursor_opacity = clamp_f64(c.cursor_opacity, 0.0, 1.0)
@@ -5527,7 +5930,19 @@ fn clamp_f64(v f64, lo f64, hi f64) f64 {
 
 // default_config creates a Config with default values.
 pub fn Config.default_config() Config {
-	return Config{}
+	mut result := Config{}
+	result.keybind.init()
+	result.link = LinkConfig{
+		links: LinkList{
+			items: [LinkEntry{
+				pattern: default_url_pattern
+				action: .open
+				highlight: .hover_mods
+				mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{})
+			}]
+		}
+	}
+	return result
 }
 
 // preferred_default_file_path returns the preferred default config file path,

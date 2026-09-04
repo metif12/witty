@@ -1,6 +1,7 @@
 module configpkg
 
 import os
+import input
 
 fn test_load_file_applies_theme_colors() {
 	path := os.join_path(os.temp_dir(), 'witty-theme-test.conf')
@@ -69,8 +70,7 @@ fn test_preferred_default_file_path_uses_xdg_config_home() {
 		}
 	}
 
-	assert preferred_default_file_path() == os.join_path('/tmp/witty-config-home', 'ghostty',
-		'config')
+	assert preferred_default_file_path() == os.join_path('/tmp/witty-config-home', 'ghostty', 'config')
 }
 
 // ============================================================
@@ -627,7 +627,7 @@ fn test_handle_bom_in_config_files() {
 	// With a UTF-8 BOM prefix.
 	{
 		mut cfg := Config.default_config()
-		cfg.load_string('\xef\xbb\xbfabnormal-command-exit-runtime = 2500\n')
+		cfg.load_string('﻿abnormal-command-exit-runtime = 2500\n')
 		cfg.finalize()
 		assert cfg.diagnostics.len == 0
 		assert cfg.abnormal_command_exit_runtime == 2500
@@ -1144,4 +1144,54 @@ fn test_default_values_match_ghostty() {
 	cfg2.term = ''
 	cfg2.finalize()
 	assert cfg2.term == 'xterm-ghostty'
+}
+
+fn test_default_config_initializes_complete_darwin_keybinds() {
+	cfg := Config.default_config()
+	$if macos {
+		assert cfg.keybind.set.bindings.len == 93
+
+		quit := cfg.keybind.set.get(input.Trigger{
+			key: input.TriggerKey.new_unicode(u32(`q`))
+			mods: input.Mods{ super_: true }
+		}) or { panic('missing default quit binding') }
+		assert quit.value.leaf_action.tag == .quit
+
+		resize := cfg.keybind.set.get(input.Trigger{
+			key: input.TriggerKey.new_physical(.arrow_left)
+			mods: input.Mods{ super_: true, ctrl: true }
+		}) or { panic('missing default split resize binding') }
+		assert resize.value.leaf_action == input.Action.new_enum2(.resize_split, i32(input.SplitResizeDirection.left), 10)
+
+		natural := cfg.keybind.set.get(input.Trigger{
+			key: input.TriggerKey.new_physical(.arrow_right)
+			mods: input.Mods{ alt: true }
+		}) or { panic('missing natural text editing binding') }
+		assert natural.value.leaf_action == input.Action.new_str(.esc, 'f')
+	} $else {
+		assert cfg.keybind.set.bindings.len > 60
+	}
+}
+
+fn test_default_config_initializes_url_link() {
+	mut cfg := Config.default_config()
+	assert cfg.link.links.items.len == 1
+	link := cfg.link.links.items[0]
+	assert link.pattern == default_url_pattern
+	assert link.action == .open
+	assert link.highlight == .hover_mods
+	assert link.mods == input.ctrl_or_super_mods(input.Mods{})
+
+	clone := cfg.clone()
+	cfg.link.links.items << LinkEntry{
+		pattern: 'issue-[0-9]+'
+		action: .open
+		highlight: .always
+	}
+	assert clone.link.links.items.len == 1
+
+	cfg.link_url = false
+	cfg.finalize()
+	assert cfg.link.links.items.len == 1
+	assert cfg.link.links.items[0].pattern == 'issue-[0-9]+'
 }

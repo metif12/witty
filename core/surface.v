@@ -2288,9 +2288,9 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 	for link in config.link.links.items {
 		links << DerivedConfigLink{
 			pattern: link.pattern
-			action: .open
-			highlight: .hover_mods
-			mods: input.ctrl_or_super_mods(input.Mods{})
+			action: unsafe { LinkAction(link.action) }
+			highlight: unsafe { LinkHighlight(link.highlight) }
+			mods: link.mods
 		}
 	}
 	word_chars := ' \t\'"│`|:,()[]{}<>\$'.runes().map(u32(it))
