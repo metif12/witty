@@ -2492,3 +2492,52 @@ fn test_screen_resize_more_cols_with_cursor_not_at_prompt() {
 	}
 	assert str_view1 == 'ABCDE\n> echo\noutput'
 }
+
+fn test_screen_test_write_string_wide_and_grapheme() {
+	mut s := Screen.init(4, 2, 0)
+	defer { s.deinit() }
+
+	s.test_write_string('A界́') or { assert false }
+	row := s.pages.screen_rows[s.pages.active_start]
+	assert row.cells[0].codepoint == u32(`A`)
+	assert row.cells[1].codepoint == u32(`界`)
+	assert row.cells[1].wide == .wide
+	assert row.cells[1].content_tag == .codepoint_grapheme
+	assert row.cells[1].graphemes == [u32(0x0301)]
+	assert row.cells[2].wide == .spacer_tail
+	assert row.grapheme
+	assert s.cursor.x == 3
+}
+
+fn test_screen_test_write_string_wide_wraps_with_spacer_head() {
+	mut s := Screen.init(3, 2, 0)
+	defer { s.deinit() }
+
+	s.test_write_string('AB界') or { assert false }
+	first := s.pages.screen_rows[s.pages.active_start]
+	second := s.pages.screen_rows[s.pages.active_start + 1]
+	assert first.cells[2].wide == .spacer_head
+	assert first.wrap
+	assert second.wrap_continuation
+	assert second.cells[0].codepoint == u32(`界`)
+	assert second.cells[0].wide == .wide
+	assert second.cells[1].wide == .spacer_tail
+	assert s.cursor.x == 2
+	assert s.cursor.y == 1
+}
+
+fn test_screen_test_write_string_preserves_style_and_hyperlink() {
+	mut s := Screen.init(4, 2, 0)
+	defer { s.deinit() }
+
+	s.cursor.style.flags.bold = true
+	s.manual_style_update() or { assert false }
+	s.start_hyperlink('https://example.com/', 'test') or { assert false }
+	s.test_write_string('界') or { assert false }
+	row := s.pages.screen_rows[s.pages.active_start]
+	assert row.styled
+	assert row.hyperlink
+	assert row.cells[0].style.flags.bold
+	assert row.cells[0].has_hyperlink
+	assert row.cells[1].has_hyperlink
+}

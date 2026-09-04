@@ -1,5 +1,7 @@
 module terminal
 
+import unicode
+
 // --- Original Ghostty Comments Start: src/terminal/Screen.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/terminal/Screen.zig
@@ -3943,7 +3945,9 @@ pub fn (mut self Screen) split_cell_boundary(x u32) {
 // ============================================================
 
 // Write a string to the screen at the cursor position.
-// This is a simplified version of Terminal.printString for testing.
+// This mirrors Ghostty's Screen.testWriteString test helper, including
+// Unicode cell widths, grapheme attachment, wide-cell spacers, styling,
+// hyperlinks, wrapping, and semantic prompt continuation state.
 pub fn (mut self Screen) test_write_string(text string) ! {
 	runes := text.runes()
 	for c in runes {
@@ -3971,8 +3975,20 @@ pub fn (mut self Screen) test_write_string(text string) ! {
 			continue
 		}
 
-		// Determine character width (simplified: all non-control = width 1)
-		width := u32(1)
+		width := if c <= 0xff { u32(1) } else { u32(unicode.get(u32(c)).width) }
+		if width == 0 {
+			assert self.cursor.x > 0
+			mut cell_x := self.cursor.x - 1
+			idx := self.pages.active_start + int(self.cursor.y)
+			if idx < self.pages.screen_rows.len
+				&& int(cell_x) < self.pages.screen_rows[idx].cells.len
+				&& self.pages.screen_rows[idx].cells[int(cell_x)].wide == .spacer_tail {
+				assert cell_x > 0
+				cell_x--
+			}
+			self.append_grapheme(cell_x, u32(c))!
+			continue
+		}
 
 		if self.cursor.pending_wrap {
 			assert self.cursor.x == self.pages.cols - 1
@@ -4009,26 +4025,95 @@ pub fn (mut self Screen) test_write_string(text string) ! {
 			}
 		}
 
-		// Write the character
-		assert width == 1
+		assert width == 1 || width == 2
+		match width {
+			1 {
+				row_idx := self.pages.active_start + int(self.cursor.y)
+				if row_idx < self.pages.screen_rows.len {
+					unsafe {
+						mut row := &self.pages.screen_rows[row_idx]
+						if int(self.cursor.x) < row.cells.len {
+							row.cells[int(self.cursor.x)] = CellData{
+								codepoint: u32(c)
+								content_tag: .codepoint
+								style_id: self.cursor.style_id
+								is_protected: self.cursor.is_protected
+								semantic_content: self.cursor.semantic_content
+								style: self.cursor.style
+							}
+							if self.cursor.style_id != default_style_id {
+								row.styled = true
+							}
+						}
+					}
+				}
+				if self.cursor.hyperlink_id > 0 {
+					self.cursor_set_hyperlink()!
+				}
+			}
+			2 {
+				// A wide character at the last column first writes the spacer
+				// head and wraps. The character and its tail are then written on
+				// the following row.
+				if self.cursor.x == self.pages.cols - 1 {
+					row_idx := self.pages.active_start + int(self.cursor.y)
+					unsafe {
+						mut row := &self.pages.screen_rows[row_idx]
+						row.cells[int(self.cursor.x)] = CellData{
+							content_tag: .codepoint
+							wide: .spacer_head
+							is_protected: self.cursor.is_protected
+							semantic_content: self.cursor.semantic_content
+						}
+						row.wrap = true
+					}
+					if self.cursor.hyperlink_id > 0 {
+						self.cursor_set_hyperlink()!
+					}
+					self.cursor_down_or_scroll()!
+					self.cursor_horizontal_absolute(0)
+					new_idx := self.pages.active_start + int(self.cursor.y)
+					unsafe {
+						mut row := &self.pages.screen_rows[new_idx]
+						row.wrap_continuation = true
+					}
+				}
 
-		row_idx := self.pages.active_start + int(self.cursor.y)
-		if row_idx < self.pages.screen_rows.len {
-			unsafe {
-				mut row := &self.pages.screen_rows[row_idx]
-				if int(self.cursor.x) < row.cells.len {
+				row_idx := self.pages.active_start + int(self.cursor.y)
+				unsafe {
+					mut row := &self.pages.screen_rows[row_idx]
 					row.cells[int(self.cursor.x)] = CellData{
 						codepoint: u32(c)
 						content_tag: .codepoint
 						style_id: self.cursor.style_id
+						wide: .wide
 						is_protected: self.cursor.is_protected
 						semantic_content: self.cursor.semantic_content
+						style: self.cursor.style
 					}
 					if self.cursor.style_id != default_style_id {
 						row.styled = true
 					}
 				}
+				if self.cursor.hyperlink_id > 0 {
+					self.cursor_set_hyperlink()!
+				}
+
+				self.cursor_right(1)
+				unsafe {
+					mut row := &self.pages.screen_rows[row_idx]
+					row.cells[int(self.cursor.x)] = CellData{
+						content_tag: .codepoint
+						wide: .spacer_tail
+						is_protected: self.cursor.is_protected
+						semantic_content: self.cursor.semantic_content
+					}
+				}
+				if self.cursor.hyperlink_id > 0 {
+					self.cursor_set_hyperlink()!
+				}
 			}
+			else { panic('invalid Unicode cell width') }
 		}
 
 		if self.cursor.x + 1 < self.pages.cols {
