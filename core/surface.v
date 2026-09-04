@@ -2397,10 +2397,10 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 		vt_kam_allowed: config.vt_kam_allowed
 		wait_after_command: config.wait_after_command
 		command: if command := config.command { command.string_val().clone() } else { '' }
-		window_padding_top: config.window_padding_top
-		window_padding_bottom: config.window_padding_bottom
-		window_padding_left: config.window_padding_left
-		window_padding_right: config.window_padding_right
+		window_padding_top: config.window_padding_y.top_left
+		window_padding_bottom: config.window_padding_y.bottom_right
+		window_padding_left: config.window_padding_x.top_left
+		window_padding_right: config.window_padding_x.bottom_right
 		window_padding_balance: config.window_padding_balance
 		window_height: config.window_height
 		window_width: config.window_width

@@ -210,10 +210,8 @@ fn test_needs_confirm_quit_config_false() {
 
 fn test_scaled_padding() {
 	cfg := DerivedConfig{
-		window_padding_top: 10
-		window_padding_bottom: 20
-		window_padding_left: 15
-		window_padding_right: 5
+		window_padding_y: configpkg.WindowPadding{10, 20}
+		window_padding_x: configpkg.WindowPadding{15, 5}
 	}
 	// At 72 DPI, scaling factor is 1.0 (72/72)
 	p := cfg.scaled_padding(72.0, 72.0)
@@ -225,10 +223,8 @@ fn test_scaled_padding() {
 
 fn test_scaled_padding_2x() {
 	cfg := DerivedConfig{
-		window_padding_top: 10
-		window_padding_bottom: 20
-		window_padding_left: 15
-		window_padding_right: 5
+		window_padding_y: configpkg.WindowPadding{10, 20}
+		window_padding_x: configpkg.WindowPadding{15, 5}
 	}
 	// At 144 DPI, scaling factor is 2.0 (144/72)
 	p := cfg.scaled_padding(144.0, 144.0)

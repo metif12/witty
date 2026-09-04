@@ -167,10 +167,15 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	add_group(mut result, 'split-divider-color', [
 		optional_color_string(c.split_divider_color),
 	])
-	add_group(mut result, 'window-padding-top', ['${c.window_padding_top}'])
-	add_group(mut result, 'window-padding-bottom', ['${c.window_padding_bottom}'])
-	add_group(mut result, 'window-padding-left', ['${c.window_padding_left}'])
-	add_group(mut result, 'window-padding-right', ['${c.window_padding_right}'])
+	add_group(mut result, 'split-preserve-zoom', [
+		split_preserve_zoom_string(c.split_preserve_zoom),
+	])
+	add_group(mut result, 'window-padding-x', [
+		window_padding_string(c.window_padding_x),
+	])
+	add_group(mut result, 'window-padding-y', [
+		window_padding_string(c.window_padding_y),
+	])
 	add_group(mut result, 'window-padding-balance', [
 		bool_string(c.window_padding_balance),
 	])
@@ -179,6 +184,16 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	])
 	add_group(mut result, 'window-width', ['${c.window_width}'])
 	add_group(mut result, 'window-height', ['${c.window_height}'])
+	add_group(mut result, 'window-position-x', [
+		optional_i16_string(c.window_position_x),
+	])
+	add_group(mut result, 'window-position-y', [
+		optional_i16_string(c.window_position_y),
+	])
+	add_group(mut result, 'window-save-state', [
+		enum_config_string(c.window_save_state.str()),
+	])
+	add_group(mut result, 'window-step-resize', [bool_string(c.window_step_resize)])
 	add_group(mut result, 'window-vsync', [bool_string(c.window_vsync)])
 	add_group(mut result, 'window-colorspace', [
 		enum_config_string(c.window_colorspace.str()),
@@ -237,6 +252,7 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 		bool_string(c.window_inherit_font_size),
 	])
 	add_group(mut result, 'initial-window', [bool_string(c.initial_window)])
+	add_group(mut result, 'undo-timeout', [c.undo_timeout.format()])
 	add_group(mut result, 'quick-terminal-position', [
 		enum_config_string(c.quick_terminal_position.str()),
 	])
@@ -389,6 +405,11 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	])
 	add_group(mut result, 'gtk-wide-tabs', [bool_string(c.gtk_wide_tabs)])
 	add_group(mut result, 'gtk-custom-css', repeat_paths(c.gtk_custom_css))
+	add_group(mut result, 'async-backend', [async_backend_string(c.async_backend)])
+	add_group(mut result, 'auto-update', [optional_auto_update_string(c.auto_update)])
+	add_group(mut result, 'auto-update-channel', [
+		optional_release_channel_string(c.auto_update_channel),
+	])
 	add_group(mut result, 'palette', palette_strings(c.palette))
 	return result
 }
@@ -418,6 +439,26 @@ fn optional_duration_string(value ?Duration) string {
 
 fn optional_u64_string(value ?u64) string {
 	return if actual := value { actual.str() } else { '' }
+}
+
+fn optional_i16_string(value ?i16) string {
+	return if actual := value { actual.str() } else { '' }
+}
+
+fn optional_auto_update_string(value ?AutoUpdate) string {
+	return if actual := value { enum_config_string(actual.str()) } else { '' }
+}
+
+fn optional_release_channel_string(value ?ReleaseChannel) string {
+	return if actual := value { enum_config_string(actual.str()) } else { '' }
+}
+
+fn async_backend_string(value AsyncBackend) string {
+	return match value {
+		.auto { 'auto' }
+		.epoll { 'epoll' }
+		.io_uring { 'io_uring' }
+	}
 }
 
 fn repeat_strings(values []string) []string {
@@ -538,6 +579,17 @@ fn env_strings(value RepeatableStringMap) []string {
 
 fn font_shaping_break_string(value FontShapingBreak) string {
 	return if value.cursor { 'cursor' } else { 'no-cursor' }
+}
+
+fn split_preserve_zoom_string(value SplitPreserveZoom) string {
+	return if value.navigation { 'navigation' } else { 'no-navigation' }
+}
+
+fn window_padding_string(value WindowPadding) string {
+	if value.top_left == value.bottom_right {
+		return value.top_left.str()
+	}
+	return '${value.top_left},${value.bottom_right}'
 }
 
 fn shell_integration_features_string(value ShellIntegrationFeatures) string {

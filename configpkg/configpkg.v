@@ -3978,10 +3978,8 @@ pub mut:
 	selection_word_chars           SelectionWordChars
 	vt_kam_allowed                 bool
 	wait_after_command             bool
-	window_padding_top             u32
-	window_padding_bottom          u32
-	window_padding_left            u32
-	window_padding_right           u32
+	window_padding_x               WindowPadding = WindowPadding{2, 2}
+	window_padding_y               WindowPadding = WindowPadding{2, 2}
 	window_padding_balance         bool
 	window_height                  u32
 	window_width                   u32
@@ -4096,6 +4094,8 @@ pub mut:
 	unfocused_split_fill ?ColorRGB
 	// The color of the split divider. If not set, a default is chosen.
 	split_divider_color ?ColorRGB
+	// Control which split-tree operations preserve a zoomed split.
+	split_preserve_zoom SplitPreserveZoom
 	// Enable URL matching by default. (link_url declared above.)
 	// Whether window decorations are enabled.
 	window_decoration WindowDecoration = .auto
@@ -4125,6 +4125,12 @@ pub mut:
 	split_inherit_working_directory  bool = true
 	// Whether a new terminal inherits the font size of the previous one.
 	window_inherit_font_size bool = true
+	// Initial window position (macOS only). Both axes must be set to take effect.
+	window_position_x ?i16
+	window_position_y ?i16
+	// Window restoration and cell-increment resizing behavior (macOS only).
+	window_save_state  WindowSaveState = .default
+	window_step_resize bool
 	// Whether to create the initial window when starting.
 	initial_window bool = true
 	// Quick-terminal placement and dimensions.
@@ -4141,6 +4147,8 @@ pub mut:
 	quick_terminal_autohide               bool = default_quick_terminal_autohide
 	quick_terminal_space_behavior         QuickTerminalSpaceBehavior = .move
 	quick_terminal_keyboard_interactivity QuickTerminalKeyboardInteractivity = .on_demand
+	// How long recently closed terminal operations remain undoable (macOS only).
+	undo_timeout Duration = Duration{ duration: 5_000_000_000 }
 	// Whether to enable OSC 133 based right-click actions.
 	right_click_action RightClickAction = .context_menu
 	// Interval in ms for detecting repeated clicks. 0 uses the system default.
@@ -4187,6 +4195,13 @@ pub mut:
 	gtk_wide_tabs                    bool = true
 	// User stylesheets loaded by the GTK application in declaration order.
 	gtk_custom_css RepeatablePath
+	// Low-level async backend preference (Linux only).
+	async_backend AsyncBackend = .auto
+	// Sparkle update policy and release channel (macOS only).
+	auto_update         ?AutoUpdate
+	auto_update_channel ?ReleaseChannel
+	// Internal marker set when invoked through xdg-terminal-exec.
+	xdg_terminal_exec bool
 	// The current conditional state (e.g. light/dark theme). This is not a
 	// user-facing config option; it tracks runtime conditional evaluation.
 	conditional_state ConditionalState
@@ -5578,6 +5593,12 @@ pub mut:
 	path         bool = true
 }
 
+// SplitPreserveZoom controls which split operations keep the zoomed state.
+pub struct SplitPreserveZoom {
+pub mut:
+	navigation bool
+}
+
 // BellFeatures controls the system, audio, attention, title, and border bell
 // effects. The defaults match Ghostty's packed struct.
 pub struct BellFeatures {
@@ -5806,6 +5827,19 @@ pub enum AsyncBackend {
 	io_uring
 }
 
+// AutoUpdate controls Sparkle's automatic update behavior on macOS.
+pub enum AutoUpdate {
+	off
+	check
+	download
+}
+
+// ReleaseChannel selects stable releases or per-commit tip builds.
+pub enum ReleaseChannel {
+	tip
+	stable
+}
+
 // ============================================================
 // Color types for theme preview
 // ============================================================
@@ -6001,7 +6035,8 @@ fn is_boolean_config_key(key string) bool {
 		'selection-clear-on-typing', 'vt-kam-allowed', 'wait-after-command', 'window-padding-balance',
 		'title-report', 'link-url', 'maximize', 'fullscreen', 'focus-follows-mouse',
 		'window-inherit-working-directory', 'tab-inherit-working-directory',
-		'split-inherit-working-directory', 'window-inherit-font-size', 'initial-window',
+		'split-inherit-working-directory', 'window-inherit-font-size', 'window-step-resize',
+		'initial-window', 'quick-terminal-autohide', '_xdg-terminal-exec',
 		'quit-after-last-window-closed', 'config-default-files', 'linux-cgroup-hard-fail',
 		'gtk-opengl-debug', 'gtk-titlebar', 'gtk-titlebar-hide-when-maximized', 'gtk-wide-tabs']
 }
@@ -6537,6 +6572,95 @@ fn (mut c Config) apply_kv(key string, value string) {
 				}
 			}
 		}
+		'split-preserve-zoom' {
+			c.split_preserve_zoom = parse_split_preserve_zoom(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
+		'window-padding-x' {
+			c.window_padding_x = window_padding_parse_cli(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
+		'window-padding-y' {
+			c.window_padding_y = window_padding_parse_cli(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
+		'window-position-x' {
+			c.window_position_x = if value.len == 0 {
+				none
+			} else {
+				c.parse_config_i16(key, value) or { return }
+			}
+		}
+		'window-position-y' {
+			c.window_position_y = if value.len == 0 {
+				none
+			} else {
+				c.parse_config_i16(key, value) or { return }
+			}
+		}
+		'window-save-state' {
+			c.window_save_state = match value {
+				'default' { .default }
+				'never' { .never }
+				'always' { .always }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'undo-timeout' {
+			c.undo_timeout = duration_parse_cli(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
+		'async-backend' {
+			c.async_backend = match value {
+				'auto' { .auto }
+				'epoll' { .epoll }
+				'io_uring' { .io_uring }
+				else {
+					c.invalid_config_value(key, value)
+					return
+				}
+			}
+		}
+		'auto-update' {
+			if value.len == 0 {
+				c.auto_update = none
+			} else {
+				c.auto_update = match value {
+					'off' { AutoUpdate.off }
+					'check' { AutoUpdate.check }
+					'download' { AutoUpdate.download }
+					else {
+						c.invalid_config_value(key, value)
+						return
+					}
+				}
+			}
+		}
+		'auto-update-channel' {
+			if value.len == 0 {
+				c.auto_update_channel = none
+			} else {
+				c.auto_update_channel = match value {
+					'tip' { ReleaseChannel.tip }
+					'stable' { ReleaseChannel.stable }
+					else {
+						c.invalid_config_value(key, value)
+						return
+					}
+				}
+			}
+		}
 		'font-shaping-break' {
 			c.font_shaping_break = parse_font_shaping_break(value) or {
 				c.invalid_config_value(key, value)
@@ -6567,7 +6691,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 				return
 			}
 		}
-		'font-thicken', 'background-opacity-cells', 'background-image-repeat', 'window-vsync', 'clipboard-trim-trailing-spaces', 'clipboard-paste-protection', 'clipboard-paste-bracketed-safe', 'cursor-click-to-move', 'desktop-notifications', 'mouse-hide-while-typing', 'mouse-reporting', 'selection-clear-on-copy', 'selection-clear-on-typing', 'vt-kam-allowed', 'wait-after-command', 'window-padding-balance', 'title-report', 'link-url', 'maximize', 'fullscreen', 'focus-follows-mouse', 'window-inherit-working-directory', 'tab-inherit-working-directory', 'split-inherit-working-directory', 'window-inherit-font-size', 'initial-window', 'quick-terminal-autohide', 'quit-after-last-window-closed', 'config-default-files', 'linux-cgroup-hard-fail', 'gtk-opengl-debug', 'gtk-titlebar', 'gtk-titlebar-hide-when-maximized', 'gtk-wide-tabs' {
+		'font-thicken', 'background-opacity-cells', 'background-image-repeat', 'window-vsync', 'clipboard-trim-trailing-spaces', 'clipboard-paste-protection', 'clipboard-paste-bracketed-safe', 'cursor-click-to-move', 'desktop-notifications', 'mouse-hide-while-typing', 'mouse-reporting', 'selection-clear-on-copy', 'selection-clear-on-typing', 'vt-kam-allowed', 'wait-after-command', 'window-padding-balance', 'title-report', 'link-url', 'maximize', 'fullscreen', 'focus-follows-mouse', 'window-inherit-working-directory', 'tab-inherit-working-directory', 'split-inherit-working-directory', 'window-inherit-font-size', 'window-step-resize', 'initial-window', 'quick-terminal-autohide', 'quit-after-last-window-closed', 'config-default-files', 'linux-cgroup-hard-fail', 'gtk-opengl-debug', 'gtk-titlebar', 'gtk-titlebar-hide-when-maximized', 'gtk-wide-tabs', '_xdg-terminal-exec' {
 			parsed := c.parse_config_bool(key, value) or { return }
 			match key {
 				'font-thicken' {
@@ -6645,6 +6769,9 @@ fn (mut c Config) apply_kv(key string, value string) {
 				'window-inherit-font-size' {
 					c.window_inherit_font_size = parsed
 				}
+				'window-step-resize' {
+					c.window_step_resize = parsed
+				}
 				'initial-window' {
 					c.initial_window = parsed
 				}
@@ -6672,24 +6799,15 @@ fn (mut c Config) apply_kv(key string, value string) {
 				'gtk-wide-tabs' {
 					c.gtk_wide_tabs = parsed
 				}
+				'_xdg-terminal-exec' {
+					c.xdg_terminal_exec = parsed
+				}
 				else {}
 			}
 		}
-		'window-padding-top', 'window-padding-bottom', 'window-padding-left', 'window-padding-right', 'click-repeat-interval', 'image-storage-limit' {
+		'click-repeat-interval', 'image-storage-limit' {
 			parsed := c.parse_config_u32(key, value) or { return }
 			match key {
-				'window-padding-top' {
-					c.window_padding_top = parsed
-				}
-				'window-padding-bottom' {
-					c.window_padding_bottom = parsed
-				}
-				'window-padding-left' {
-					c.window_padding_left = parsed
-				}
-				'window-padding-right' {
-					c.window_padding_right = parsed
-				}
 				'click-repeat-interval' {
 					c.click_repeat_interval = parsed
 				}
@@ -7293,6 +7411,14 @@ fn (mut c Config) parse_config_u8(key string, value string) ?u8 {
 	return u8(parsed)
 }
 
+fn (mut c Config) parse_config_i16(key string, value string) ?i16 {
+	parsed := strconv.parse_int(value, 0, 16) or {
+		c.invalid_config_value(key, value)
+		return none
+	}
+	return i16(parsed)
+}
+
 fn (mut c Config) parse_config_f64(key string, value string) ?f64 {
 	parsed := strconv.atof64(value) or {
 		c.invalid_config_value(key, value)
@@ -7317,6 +7443,23 @@ fn parse_font_shaping_break(value string) ?FontShapingBreak {
 			return none
 		}
 		result = FontShapingBreak{ cursor: !negative }
+	}
+	return result
+}
+
+fn parse_split_preserve_zoom(value string) ?SplitPreserveZoom {
+	if b := parse_bool_opt(value) {
+		return SplitPreserveZoom{ navigation: b }
+	}
+	mut result := SplitPreserveZoom{}
+	for raw in value.split(',') {
+		part := raw.trim_space()
+		negative := part.starts_with('no-')
+		name := if negative { part[3..] } else { part }
+		if name != 'navigation' {
+			return none
+		}
+		result.navigation = !negative
 	}
 	return result
 }
@@ -7732,6 +7875,13 @@ pub fn (mut c Config) finalize() {
 	}
 	if c.window_height > 0 && c.window_height < 4 {
 		c.window_height = 4
+	}
+
+	// The source cannot express the build channel as a struct initializer. This
+	// pinned translation tracks Ghostty's tip build, so apply that build value
+	// during finalization when the user did not select a channel.
+	if c.auto_update_channel == none {
+		c.auto_update_channel = .tip
 	}
 
 	// Sided mappings must be ordered before their unsided counterparts so

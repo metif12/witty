@@ -1908,12 +1908,15 @@ background-opacity-cells = true
 bold-color = RebeccaPurple
 unfocused-split-fill = LightGoldenrodYellow
 split-divider-color = #abc
-window-padding-top = 1
-window-padding-bottom = 2
-window-padding-left = 3
-window-padding-right = 4
+split-preserve-zoom = navigation
+window-padding-x = 3,4
+window-padding-y = 1,2
 window-padding-balance = true
 window-padding-color = extend-always
+window-position-x = -120
+window-position-y = 340
+window-save-state = always
+window-step-resize = true
 window-vsync = false
 window-colorspace = display-p3
 alpha-blending = linear
@@ -1937,6 +1940,10 @@ osc-color-report-format = 8-bit
 custom-shader-animation = always
 mouse-scroll-multiplier = 2.5
 image-storage-limit = 0x100
+undo-timeout = 1h30m
+async-backend = io_uring
+auto-update = download
+auto-update-channel = stable
 ')
 
 	assert cfg.diagnostics.len == 0
@@ -1988,12 +1995,15 @@ image-storage-limit = 0x100
 	assert cfg.bold_color?.color == ColorRGB{102, 51, 153}
 	assert cfg.unfocused_split_fill? == ColorRGB{250, 250, 210}
 	assert cfg.split_divider_color? == ColorRGB{170, 187, 204}
-	assert cfg.window_padding_top == 1
-	assert cfg.window_padding_bottom == 2
-	assert cfg.window_padding_left == 3
-	assert cfg.window_padding_right == 4
+	assert cfg.split_preserve_zoom.navigation
+	assert cfg.window_padding_x == WindowPadding{3, 4}
+	assert cfg.window_padding_y == WindowPadding{1, 2}
 	assert cfg.window_padding_balance
 	assert cfg.window_padding_color == .extend_always
+	assert cfg.window_position_x? == -120
+	assert cfg.window_position_y? == 340
+	assert cfg.window_save_state == .always
+	assert cfg.window_step_resize
 	assert !cfg.window_vsync
 	assert cfg.window_colorspace == .display_p3
 	assert cfg.alpha_blending == .linear
@@ -2022,6 +2032,10 @@ image-storage-limit = 0x100
 	assert cfg.custom_shader_animation == .always
 	assert cfg.mouse_scroll_multiplier == 2.5
 	assert cfg.image_storage_limit == 0x100
+	assert cfg.undo_timeout.duration == u64(5_400) * 1_000_000_000
+	assert cfg.async_backend == .io_uring
+	assert cfg.auto_update? == .download
+	assert cfg.auto_update_channel? == .stable
 }
 
 fn test_repeatable_config_values_reset_and_env_remove() {
@@ -2214,7 +2228,7 @@ fn test_format_config_default_formats_all_supported_values() {
 
 fn test_format_config_changes_only_round_trips_supported_values() {
 	mut original := Config.default_config()
-	original.load_string('font-size = 17.5\nbackground = RebeccaPurple\ncommand = direct:echo hello\ncustom-shader = ?shader.glsl\nkeybind = ctrl+a>n=new_window\nkeybind = chain=move_tab:-1\n')
+	original.load_string('font-size = 17.5\nbackground = RebeccaPurple\ncommand = direct:echo hello\ncustom-shader = ?shader.glsl\nkeybind = ctrl+a>n=new_window\nkeybind = chain=move_tab:-1\nsplit-preserve-zoom = navigation\nwindow-padding-x = 6,7\nwindow-padding-y = 8\nwindow-position-x = -9\nwindow-position-y = 10\nwindow-save-state = never\nwindow-step-resize = true\nundo-timeout = 45s\nasync-backend = io_uring\nauto-update = check\nauto-update-channel = stable\n')
 	formatted := original.format_config(true)
 	assert formatted.contains('font-size = 17.5\n')
 	assert formatted.contains('background = #663399\n')
@@ -2222,6 +2236,17 @@ fn test_format_config_changes_only_round_trips_supported_values() {
 	assert formatted.contains('custom-shader = ?shader.glsl\n')
 	assert formatted.contains('keybind = ctrl+a>n=new_window\n')
 	assert formatted.contains('keybind = chain=move_tab:-1\n')
+	assert formatted.contains('split-preserve-zoom = navigation\n')
+	assert formatted.contains('window-padding-x = 6,7\n')
+	assert formatted.contains('window-padding-y = 8\n')
+	assert formatted.contains('window-position-x = -9\n')
+	assert formatted.contains('window-position-y = 10\n')
+	assert formatted.contains('window-save-state = never\n')
+	assert formatted.contains('window-step-resize = true\n')
+	assert formatted.contains('undo-timeout = 45s\n')
+	assert formatted.contains('async-backend = io_uring\n')
+	assert formatted.contains('auto-update = check\n')
+	assert formatted.contains('auto-update-channel = stable\n')
 
 	mut parsed := Config.default_config()
 	parsed.load_string(formatted)
@@ -2230,6 +2255,17 @@ fn test_format_config_changes_only_round_trips_supported_values() {
 	assert parsed.background == original.background
 	assert parsed.command?.string_val() == original.command?.string_val()
 	assert parsed.custom_shader.equal(&original.custom_shader)
+	assert parsed.split_preserve_zoom.navigation
+	assert parsed.window_padding_x == original.window_padding_x
+	assert parsed.window_padding_y == original.window_padding_y
+	assert parsed.window_position_x == original.window_position_x
+	assert parsed.window_position_y == original.window_position_y
+	assert parsed.window_save_state == original.window_save_state
+	assert parsed.window_step_resize
+	assert parsed.undo_timeout == original.undo_timeout
+	assert parsed.async_backend == original.async_backend
+	assert parsed.auto_update == original.auto_update
+	assert parsed.auto_update_channel == original.auto_update_channel
 	// Ghostty's binding formatter intentionally serializes triggers and
 	// actions but not the in-memory performable/consumed flags.
 	assert parsed.keybind.set.get_trigger(input.Action{ tag: .new_window }) != none
