@@ -1453,8 +1453,12 @@ import input
 import math
 import time
 import os
-
-import terminal as _
+import encoding.base64
+import sync
+import search as searchpkg
+import osc
+import internal_os
+import terminal
 
 // Minimum window size in cells.
 const min_window_width_cells = u32(10)
@@ -1633,7 +1637,7 @@ pub type DesiredSize = font.DesiredSize
 pub struct Mouse {
 pub mut:
 	// Last tracked mouse button state by button.
-	click_state [10]MouseButtonState
+	click_state [10]MouseButtonState = [10]MouseButtonState{init: .release}
 
 	// Last mods state when the last mouse button was pressed/released.
 	mods input.Mods
@@ -1684,7 +1688,7 @@ pub enum MousePressureStage {
 pub struct Keyboard {
 pub mut:
 	// Currently active key sequence set.
-	sequence_set ?&BindingSet
+	sequence_set ?BindingSet
 
 	// Queued keys when in the middle of a sequenced binding.
 	sequence_queued []WriteReq
@@ -1697,27 +1701,34 @@ pub mut:
 }
 
 struct KeyTableEntry {
-	set  &BindingSet = unsafe { nil }
+	set  BindingSet
 	once bool
 	// name is the config name of the activated table.
 	name string
 }
 
-// ---- Placeholder dependency types (stub implementations) ----
-// These provide the interface surface.v needs. Full implementations
-// would live in separate modules (terminal/, renderer/, termio/, etc.).
-
-
 // FontGridSet, FontGridKey, FontGrid are aliases to the real font module types.
 pub type FontGridSet = font.SharedGridSet
+
 pub type FontGridKey = font.GridSetKey
+
 pub type FontGrid = font.SharedGrid
 
-pub struct RuntimeApp {}
+pub struct RuntimeApp {
+pub mut:
+	// Actions are retained until the runtime consumes them. This is the same
+	// producer/consumer boundary as apprt.performAction, while also giving the
+	// headless runtime a useful implementation.
+	actions         []AppAction
+	actions_handled bool
+}
 
-fn (r RuntimeApp) perform_action(action AppAction) !bool {
-	// Stub: in a real runtime, this dispatches to the windowing system.
-	return false
+fn (mut r RuntimeApp) perform_action(action AppAction) !bool {
+	if unsafe { voidptr(&r) == nil } {
+		return false
+	}
+	r.actions << action
+	return r.actions_handled
 }
 
 pub struct AppAction {
@@ -1727,20 +1738,40 @@ pub:
 	// Payload data for actions that carry values. Only the field matching
 	// the kind is meaningful. These let the surface forward the correct
 	// value to the runtime instead of dropping it.
-	needle          string
-	readonly_on     bool
-	prompt_title    PromptTitleKind
-	fullscreen_mode FullscreenMode
-	inspector_mode  InspectorMode
-	split_dir       SplitDir
-	goto_split      GotoSplitDir
-	goto_window     GotoWindowDir
-	resize_dir      ResizeDir
-	resize_amount   u16
-	goto_tab        int
-	close_tab_mode  CloseTabModeKind
-	move_tab_amount int
-	key_table_name  string
+	needle             string
+	readonly_on        bool
+	prompt_title       PromptTitleKind
+	fullscreen_mode    FullscreenMode
+	inspector_mode     InspectorMode
+	split_dir          SplitDir
+	goto_split         GotoSplitDir
+	goto_window        GotoWindowDir
+	resize_dir         ResizeDir
+	resize_amount      u16
+	goto_tab           int
+	close_tab_mode     CloseTabModeKind
+	move_tab_amount    int
+	key_table_name     string
+	search_total       ?usize
+	search_selected    ?usize
+	title_value        string
+	url                string
+	pwd                string
+	cell_size          CellSize
+	initial_size       ScreenSize
+	mouse_shape        terminal.MouseShape
+	mouse_visible      bool
+	notification_title string
+	notification_body  string
+	color_change       osc.ColoredTarget
+	progress           osc.ProgressReport
+	scrollbar          terminal.Scrollbar
+	health             int
+	exit_code          ?u8
+	duration_ms        u64
+	min_size           ScreenSize
+	max_size           ScreenSize
+	secure_input_on    bool
 }
 
 // PromptTitleKind mirrors apprt.PromptTitle.
@@ -1824,35 +1855,91 @@ pub enum AppActionKind {
 	show_gtk_inspector
 }
 
-pub struct RuntimeSurface {}
+pub struct RuntimeSurface {
+pub mut:
+	content_scale       ContentScale = ContentScale{ x: 1.0, y: 1.0 }
+	size                ScreenSize = ScreenSize{ width: 800, height: 600 }
+	cursor_pos          CursorPos
+	title               ?string
+	clipboard           map[ClipboardRequestKind]string
+	clipboards          map[apprt.Clipboard][]apprt.ClipboardContent
+	requests            []ClipboardRequestKind
+	closed              bool
+	close_confirm       bool
+	selection_clipboard bool
+}
 
-fn (r RuntimeSurface) close(confirm bool) {
+fn (mut r RuntimeSurface) close(confirm bool) {
+	if unsafe { voidptr(&r) == nil } {
+		return
+	}
+	r.closed = true
+	r.close_confirm = confirm
 }
 
 fn (r RuntimeSurface) get_content_scale() !ContentScale {
-	return ContentScale{ x: 1.0, y: 1.0 }
+	if unsafe { voidptr(&r) == nil } {
+		return ContentScale{ x: 1, y: 1 }
+	}
+	return r.content_scale
 }
 
 fn (r RuntimeSurface) get_size() !ScreenSize {
-	return ScreenSize{ width: 800, height: 600 }
+	if unsafe { voidptr(&r) == nil } {
+		return ScreenSize{ width: 800, height: 600 }
+	}
+	return r.size
 }
 
 fn (r RuntimeSurface) get_cursor_pos() !CursorPos {
-	return CursorPos{}
+	if unsafe { voidptr(&r) == nil } {
+		return CursorPos{}
+	}
+	return r.cursor_pos
 }
 
 fn (r RuntimeSurface) get_title() ?string {
-	return none
+	if unsafe { voidptr(&r) == nil } {
+		return none
+	}
+	return r.title
 }
 
-fn (r RuntimeSurface) set_clipboard(contents string, confirm bool) ! {
+fn (mut r RuntimeSurface) set_clipboard(contents string, confirm bool) ! {
+	r.set_clipboard_at(.standard, [apprt.ClipboardContent{
+		mime: 'text/plain'
+		data: contents
+	}], confirm)!
+}
+
+fn (mut r RuntimeSurface) set_clipboard_at(loc apprt.Clipboard, contents []apprt.ClipboardContent, confirm bool) ! {
+	if unsafe { voidptr(&r) == nil } {
+		return
+	}
+	if confirm {
+		return error('clipboard confirmation required')
+	}
+	r.clipboards[loc] = contents.clone()
+	for content in contents {
+		if content.mime == 'text/plain' && loc == .standard {
+			r.clipboard[.paste] = content.data
+			break
+		}
+	}
 }
 
 fn (r RuntimeSurface) supports_clipboard_selection() bool {
-	return false
+	if unsafe { voidptr(&r) == nil } {
+		return false
+	}
+	return r.selection_clipboard
 }
 
-fn (r RuntimeSurface) clipboard_request(kind ClipboardRequestKind) ! {
+fn (mut r RuntimeSurface) clipboard_request(kind ClipboardRequestKind) ! {
+	if unsafe { voidptr(&r) == nil } {
+		return
+	}
+	r.requests << kind
 }
 
 pub enum ClipboardRequestKind {
@@ -1863,10 +1950,16 @@ pub enum ClipboardRequestKind {
 pub struct Renderer {
 pub mut:
 	initialized bool
+	frame_count u64
+	last_force  bool
 }
 
 fn (mut r Renderer) draw_frame(force bool) ! {
-	// Stub: in gg-based rendering, this calls gg_ctx.begin()/end()
+	if !r.initialized {
+		return error('renderer is not initialized')
+	}
+	r.frame_count++
+	r.last_force = force
 }
 
 fn (mut r Renderer) deinit() {
@@ -1878,7 +1971,7 @@ fn (r Renderer) thread_enter() ! {
 
 pub struct RendererState {
 pub mut:
-	terminal  &SurfaceTerminal = unsafe { nil }
+	terminal  &terminal.Terminal = unsafe { nil }
 	preedit   ?Preedit
 	mouse     RendererMouseState
 	inspector ?&Inspector
@@ -1911,248 +2004,46 @@ pub fn (p Preedit) width() int {
 
 pub struct RendererThread {
 pub mut:
-	wakeup RendererWakeup
+	wakeup          RendererWakeup
+	stopped         bool
+	crash_requested bool
 }
 
 fn (mut t RendererThread) deinit() {
+	t.stopped = true
 }
 
-pub struct RendererWakeup {}
-
-fn (w RendererWakeup) notify() ! {
-}
-
-// SurfaceTerminal is a stub representing the terminal state as seen by
-// the surface. XTODO: Replace with terminal.Terminal when fully integrated.
-pub struct SurfaceTerminal {
+pub struct RendererWakeup {
 pub mut:
-	cols         u32
-	rows         u32
-	flags        TermFlags
-	modes        TermModes
-	mouse_shape  TermMouseShape
-	cursor       TermCursor
-	selection    ?TermSelection
-	pwd          ?string
-	kitty_keyboard KittyKeyboard
+	count u64
 }
 
-pub struct TermCursor {
-pub mut:
-	x u32
-	y u32
+fn (mut w RendererWakeup) notify() ! {
+	w.count++
 }
 
-pub struct TermFlags {
-pub mut:
-	mouse_event         TermMouseEvent = .none_
-	mouse_format        TermMouseFormat = .x10
-	mouse_shift_capture bool
-	focused             bool
-	password_input      bool
-	dirty               TermDirty
-}
+// Keep the public surface names while using the real emulator types.
+pub type SurfaceTerminal = terminal.Terminal
 
-pub struct TermDirty {
-pub mut:
-	clear   bool
-	preedit bool
-}
+pub type TermSelection = terminal.Selection
 
-pub enum TermMouseEvent {
-	none_
-	x10
-	normal
-	button
-	any
-}
-
-pub enum TermMouseFormat {
-	x10
-	utf8
-	sgr
-	urxvt
-	sgr_pixels
-}
-
-pub enum TermMouseShape {
-	default_
-	text
-	pointer
-}
-
-pub struct TermModes {
-pub mut:
-	cursor_visible   bool = true
-	disable_keyboard bool
-	bracketed_paste  bool
-	alternate_screen bool
-	alternate_scroll bool
-}
-
-pub struct KittyKeyboard {
-pub mut:
-	enabled bool
-}
-
-pub struct TermSelection {
-pub mut:
-	start_pin Pin
-	end_pin   Pin
-	rectangle bool
-}
-
-fn (a TermSelection) eql(b TermSelection) bool {
-	return a.start_pin.eql(b.start_pin) && a.end_pin.eql(b.end_pin) && a.rectangle == b.rectangle
-}
-
-fn (s TermSelection) start() Pin {
-	if s.start_pin.before(s.end_pin) {
-		return s.start_pin
-	}
-	return s.end_pin
-}
-
-fn (s TermSelection) top_left() Pin {
-	return s.start()
-}
-
-fn (s TermSelection) bottom_right() Pin {
-	if s.start_pin.before(s.end_pin) {
-		return s.end_pin
-	}
-	return s.start_pin
-}
-
-fn (mut t SurfaceTerminal) scroll_viewport_delta(delta i32) ! {
-	// Stub: adjusts viewport scroll position by delta lines.
-}
-
-fn (mut t SurfaceTerminal) scroll_viewport_bottom() ! {
-	// Stub: scrolls viewport to the bottom.
-}
-
-fn (t SurfaceTerminal) cursor_is_at_prompt() bool {
-	// Stub: checks shell-integration prompt markers.
-	return true
-}
-
-fn (t SurfaceTerminal) get_pwd() ?string {
-	return t.pwd
-}
-
-fn (mut t SurfaceTerminal) carriage_return() {
-	t.cursor.x = 0
-}
-
-fn (mut t SurfaceTerminal) linefeed() ! {
-	t.cursor.y += 1
-}
-
-fn (mut t SurfaceTerminal) print_string(s string) ! {
-	// Stub: writes string at cursor position.
-	t.cursor.x += u32(s.len)
-}
-
-fn (mut t SurfaceTerminal) select_at(sel ?TermSelection) ! {
-	t.selection = sel
-}
-
-fn (t SurfaceTerminal) selection_string() string {
-	// Stub: returns text covered by current selection.
-	return ''
-}
-
-fn (t SurfaceTerminal) select_word(pin Pin) ?TermSelection {
-	return TermSelection{
-		start_pin: pin
-		end_pin: pin
-	}
-}
-
-fn (t SurfaceTerminal) select_word_between(a Pin, b Pin) ?TermSelection {
-	return TermSelection{ start_pin: a, end_pin: b }
-}
-
-fn (t SurfaceTerminal) select_line(pin Pin) ?TermSelection {
-	return TermSelection{
-		start_pin: Pin{ x: 0, y: pin.y }
-		end_pin: Pin{ x: t.cols, y: pin.y }
-	}
-}
-
-fn (t SurfaceTerminal) viewport_pin(x u32, y u32) ?Pin {
-	if x >= t.cols || y >= t.rows {
-		return none
-	}
-	return Pin{ x: x, y: y }
-}
-
-// select_all returns a selection covering the entire scrollback + screen, or
-// none if there is no content to select.
-fn (t SurfaceTerminal) select_all() ?TermSelection {
-	if t.cols == 0 || t.rows == 0 {
-		return none
-	}
-	return TermSelection{
-		start_pin: Pin{ x: 0, y: 0 }
-		end_pin: Pin{ x: t.cols, y: t.rows }
-	}
-}
-
-// active_is_alternate returns true if the active screen is the alternate
-// screen (which has no scrollback).
-fn (t SurfaceTerminal) active_is_alternate() bool {
-	return t.modes.alternate_screen
-}
-
-// full_reset resets the terminal to its initial state.
-fn (mut t SurfaceTerminal) full_reset() {
-	// Stub: performs a full terminal reset (RIS). The real implementation
-	// resets modes, cursor, screen contents, etc.
-	t.cursor = TermCursor{}
-	t.selection = none
-}
-
-// scroll_to_pin scrolls the viewport so that the given pin is visible.
-fn (mut t SurfaceTerminal) scroll_to_pin(pin Pin) {
-	// Stub: scrolls the active screen so the pin is in view.
-	_ = pin
-}
-
-// scroll_to_row scrolls the active screen to the given row.
-fn (mut t SurfaceTerminal) scroll_to_row(row int) {
-	// Stub: scrolls the active screen to the given absolute row.
-	_ = row
-}
-
-pub struct Pin {
-pub mut:
-	x u32
-	y u32
-}
-
-fn (a Pin) eql(b Pin) bool {
-	return a.x == b.x && a.y == b.y
-}
-
-fn (a Pin) before(b Pin) bool {
-	if a.y < b.y {
-		return true
-	}
-	return a.y == b.y && a.x < b.x
-}
+pub type Pin = terminal.Pin
 
 pub struct TermIO {
 pub mut:
-	terminal SurfaceTerminal
+	terminal terminal.Terminal
+	messages []IOMessage
 }
 
-fn (t TermIO) queue_message(msg IOMessage) {
-	// Stub: queues a message for the IO thread.
+fn (mut t TermIO) queue_message(msg IOMessage) {
+	t.messages << IOMessage{
+		...msg
+		data: msg.data.clone()
+	}
 }
 
 fn (mut t TermIO) deinit() {
+	t.terminal.deinit()
 }
 
 pub struct IOThread {
@@ -2164,31 +2055,20 @@ fn (mut t IOThread) deinit() {
 	t.running = false
 }
 
-pub struct Inspector {}
+pub struct Inspector {
+pub mut:
+	key_events []KeyEvent
+}
 
 fn (mut i Inspector) deinit() {
 }
 
-fn (i Inspector) record_key_event(ev KeyEvent) bool {
-	return false
+fn (mut i Inspector) record_key_event(ev KeyEvent) bool {
+	i.key_events << ev
+	return true
 }
 
-pub struct BindingSet {}
-
-fn (s BindingSet) get_event(event KeyEvent) ?BindingEntry {
-	return none
-}
-
-pub struct BindingEntry {
-pub:
-	kind BindingEntryKind
-}
-
-pub enum BindingEntryKind {
-	leader
-	leaf
-	leaf_chained
-}
+pub type BindingSet = input.Set
 
 pub struct WriteReq {
 pub:
@@ -2198,45 +2078,89 @@ pub:
 fn (w WriteReq) deinit() {
 }
 
-// SurfaceSearch holds the search thread state for a surface. In the full
-// implementation this owns a background search.Thread; here it tracks the
-// active needle so that navigate/end search can be dispatched faithfully.
 @[heap]
 pub struct SurfaceSearch {
 pub mut:
 	needle string
+	state  searchpkg.SearchThread
+	mutex  &sync.Mutex = unsafe { nil }
 }
 
-// change_needle updates the search needle and (in the full implementation)
-// notifies the search thread to re-run the search.
+fn SurfaceSearch.init(t &terminal.Terminal, surface &Surface) !&SurfaceSearch {
+	mutex := sync.new_mutex()
+	state := searchpkg.SearchThread.init(searchpkg.ThreadOptions{
+		mutex: mutex
+		terminal: unsafe { t }
+		event_cb: surface_search_event
+		event_userdata: voidptr(surface)
+	})!
+	return &SurfaceSearch{
+		state: state
+		mutex: mutex
+	}
+}
+
 fn (mut s SurfaceSearch) change_needle(needle string) {
 	s.needle = needle
-	// Full implementation: push change_needle message to the search thread
-	// mailbox and notify its wakeup handle.
+	s.state.push(searchpkg.Message{
+		kind: .change_needle
+		needle: needle.bytes()
+	})
+	s.state.thread_main()
 }
 
-// navigate moves the search selection to the next/previous match.
 fn (mut s SurfaceSearch) navigate(nav SearchNav) {
-	// Full implementation: push a select(.next/.prev) message to the search
-	// thread mailbox and notify its wakeup handle.
-	_ = nav
+	s.state.push(searchpkg.Message{
+		kind: .select_result
+		select: if nav == .next { .next } else { .prev }
+	})
+	s.state.thread_main()
 }
 
-// deinit shuts down the search thread.
 fn (mut s SurfaceSearch) deinit() {
-	// Full implementation: notify the thread to stop and join it.
+	s.state.request_stop()
+	s.state.thread_main()
+	s.state.deinit()
+	if s.mutex != unsafe { nil } {
+		s.mutex.destroy()
+		s.mutex = unsafe { nil }
+	}
 }
 
-pub struct Config {}
+fn surface_search_event(event searchpkg.Event, userdata voidptr) {
+	if userdata == unsafe { nil } {
+		return
+	}
+	mut surface := unsafe { &Surface(userdata) }
+	match event.kind {
+		.total_matches {
+			surface.rt_app.perform_action(AppAction{
+				kind: .search_total
+				target: surface
+				search_total: usize(event.total)
+			}) or {}
+		}
+		.selected_match {
+			selected := if value := event.selected { ?usize(usize(value.idx + 1)) } else { none }
+			surface.rt_app.perform_action(AppAction{
+				kind: .search_selected
+				target: surface
+				search_selected: selected
+			}) or {}
+			surface.queue_render() or {}
+		}
+		.viewport_matches { surface.queue_render() or {} }
+		.complete, .quit {}
+	}
+}
+
+pub type Config = configpkg.Config
 
 pub type ConditionalState = configpkg.ConditionalState
 
 pub type Theme = configpkg.Theme
 
-pub enum ColorScheme {
-	light
-	dark
-}
+pub type ColorScheme = apprt.ColorScheme
 
 // IMEPos represents the position and size for the Input Method Editor.
 pub struct IMEPos {
@@ -2283,39 +2207,40 @@ pub enum LinkHighlight {
 // DerivedConfig holds the configuration derived from the main config.
 pub struct DerivedConfig {
 pub mut:
-	original_font_size             f32
+	original_font_size               f32
+	keybind                          configpkg.Keybinds
 	abnormal_command_exit_runtime_ms u32
-	clipboard_read                 ClipboardAccess
-	clipboard_write                ClipboardAccess
-	clipboard_trim_trailing_spaces bool
-	clipboard_paste_protection     bool
-	clipboard_paste_bracketed_safe bool
-	copy_on_select                 CopyOnSelect
-	confirm_close_surface          ConfirmCloseSurface
-	cursor_click_to_move           bool
-	desktop_notifications          bool
-	mouse_interval                 u64
-	mouse_hide_while_typing        bool
-	mouse_reporting                bool
-	mouse_shift_capture            MouseShiftCapture
-	selection_clear_on_copy        bool
-	selection_clear_on_typing      bool
-	selection_word_chars           []u32
-	vt_kam_allowed                 bool
-	wait_after_command             bool
-	window_padding_top             u32
-	window_padding_bottom          u32
-	window_padding_left            u32
-	window_padding_right           u32
-	window_padding_balance         bool
-	window_height                  u32
-	window_width                   u32
-	title                          ?string
-	title_report                   bool
-	links                          []DerivedConfigLink
-	link_previews                  LinkPreviews
-	scroll_to_bottom_keystroke     bool
-	font                           DerivedFontConfig
+	clipboard_read                   ClipboardAccess
+	clipboard_write                  ClipboardAccess
+	clipboard_trim_trailing_spaces   bool
+	clipboard_paste_protection       bool
+	clipboard_paste_bracketed_safe   bool
+	copy_on_select                   CopyOnSelect
+	confirm_close_surface            ConfirmCloseSurface
+	cursor_click_to_move             bool
+	desktop_notifications            bool
+	mouse_interval                   u64
+	mouse_hide_while_typing          bool
+	mouse_reporting                  bool
+	mouse_shift_capture              MouseShiftCapture
+	selection_clear_on_copy          bool
+	selection_clear_on_typing        bool
+	selection_word_chars             []u32
+	vt_kam_allowed                   bool
+	wait_after_command               bool
+	window_padding_top               u32
+	window_padding_bottom            u32
+	window_padding_left              u32
+	window_padding_right             u32
+	window_padding_balance           bool
+	window_height                    u32
+	window_width                     u32
+	title                            ?string
+	title_report                     bool
+	links                            []DerivedConfigLink
+	link_previews                    LinkPreviews
+	scroll_to_bottom_keystroke       bool
+	font                             DerivedFontConfig
 }
 
 pub enum LinkPreviews {
@@ -2327,8 +2252,10 @@ pub type DerivedFontConfig = font.GridSetDerivedConfig
 
 pub struct DerivedConfigLink {
 pub:
+	pattern   string
 	action    LinkAction
 	highlight LinkHighlight
+	mods      input.Mods
 }
 
 pub enum ClipboardAccess {
@@ -2357,23 +2284,64 @@ pub enum MouseShiftCapture {
 }
 
 pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
-	// Derives surface config from the main Config. In a full implementation
-	// this copies fields, compiles link regexes, clones keybinds, etc.
+	mut links := []DerivedConfigLink{cap: config.link.links.items.len}
+	for link in config.link.links.items {
+		links << DerivedConfigLink{
+			pattern: link.pattern
+			action: .open
+			highlight: .hover_mods
+			mods: input.ctrl_or_super_mods(input.Mods{})
+		}
+	}
+	word_chars := ' \t\'"│`|:,()[]{}<>\$'.runes().map(u32(it))
 	return DerivedConfig{
-		clipboard_read: .allow
-		clipboard_write: .allow
-		clipboard_paste_protection: true
-		clipboard_paste_bracketed_safe: true
-		copy_on_select: .false_
-		confirm_close_surface: .true_
-		desktop_notifications: true
-		mouse_hide_while_typing: true
-		mouse_reporting: true
-		mouse_shift_capture: .false_
-		selection_clear_on_copy: true
-		selection_clear_on_typing: true
-		title_report: true
-		scroll_to_bottom_keystroke: true
+		original_font_size: config.font_size
+		keybind: config.keybind.clone()
+		abnormal_command_exit_runtime_ms: config.abnormal_command_exit_runtime
+		clipboard_read: unsafe { ClipboardAccess(config.clipboard_read) }
+		clipboard_write: unsafe { ClipboardAccess(config.clipboard_write) }
+		clipboard_trim_trailing_spaces: config.clipboard_trim_trailing_spaces
+		clipboard_paste_protection: config.clipboard_paste_protection
+		clipboard_paste_bracketed_safe: config.clipboard_paste_bracketed_safe
+		copy_on_select: unsafe { CopyOnSelect(config.copy_on_select) }
+		confirm_close_surface: unsafe { ConfirmCloseSurface(config.confirm_close_surface) }
+		cursor_click_to_move: config.cursor_click_to_move
+		desktop_notifications: config.desktop_notifications
+		mouse_interval: u64(config.click_repeat_interval) * u64(time.millisecond)
+		mouse_hide_while_typing: config.mouse_hide_while_typing
+		mouse_reporting: config.mouse_reporting
+		mouse_shift_capture: unsafe { MouseShiftCapture(config.mouse_shift_capture) }
+		selection_clear_on_copy: config.selection_clear_on_copy
+		selection_clear_on_typing: config.selection_clear_on_typing
+		selection_word_chars: word_chars
+		vt_kam_allowed: config.vt_kam_allowed
+		wait_after_command: config.wait_after_command
+		window_padding_top: config.window_padding_top
+		window_padding_bottom: config.window_padding_bottom
+		window_padding_left: config.window_padding_left
+		window_padding_right: config.window_padding_right
+		window_padding_balance: config.window_padding_balance
+		window_height: config.window_height
+		window_width: config.window_width
+		title: config.title
+		title_report: config.title_report
+		links: links
+		link_previews: unsafe { LinkPreviews(config.link_previews) }
+		scroll_to_bottom_keystroke: config.scroll_to_bottom.keystroke
+		font: font.GridSetDerivedConfig{
+			font_family: config.font_family.clone()
+			font_family_bold: config.font_family_bold.clone()
+			font_family_italic: config.font_family_italic.clone()
+			font_family_bold_italic: config.font_family_bold_italic.clone()
+			font_style: if config.font_style == 'false' { .false_ } else { .default_ }
+			font_style_bold: if config.font_style_bold == 'false' { .false_ } else { .default_ }
+			font_style_italic: if config.font_style_italic == 'false' { .false_ } else { .default_ }
+			font_style_bold_italic: if config.font_style_bold_italic == 'false' {
+				.false_
+			} else {
+				.default_
+			}
+		}
 	}
 }
 
@@ -2408,6 +2376,8 @@ pub:
 	scroll_delta i64
 	// prompt_delta carries the delta for jump_to_prompt messages.
 	prompt_delta int
+	flag         bool
+	size         Size
 }
 
 pub enum IOMessageKind {
@@ -2433,37 +2403,12 @@ pub enum IOMessageKind {
 	jump_to_prompt
 	// reset performs a full terminal reset.
 	reset
+	crash
 }
 
-pub struct SurfaceMessage {
-pub:
-	kind SurfaceMessageKind
-}
+pub type SurfaceMessage = apprt.SurfaceMessage
 
-pub enum SurfaceMessageKind {
-	change_config
-	set_title
-	report_title
-	color_change
-	set_mouse_shape
-	clipboard_read
-	clipboard_write
-	pwd_change
-	close
-	child_exited
-	desktop_notification
-	renderer_health
-	scrollbar
-	present_surface
-	password_input
-	ring_bell
-	progress_report
-	selection_scroll_tick
-	start_command
-	stop_command
-	search_total
-	search_selected
-}
+pub type SurfaceMessageKind = apprt.SurfaceMessageKind
 
 // SearchNav is the navigation direction for navigate_search.
 pub enum SearchNav {
@@ -2547,34 +2492,12 @@ pub:
 	performable bool
 }
 
-pub struct KeyEvent {
-pub mut:
-	key    input.Key
-	action KeyAction
-	mods   input.Mods
-	utf8   string
-}
+pub type KeyEvent = input.KeyEvent
 
-pub fn (e KeyEvent) binding_hash() u64 {
-	mut h := u64(17)
-	h = h * 31 + u64(e.key)
-	h = h * 31 + u64(e.mods.int())
-	return h
-}
-
-pub enum KeyAction {
-	press
-	repeat
-	release
-}
+pub type KeyAction = input.KeyAction
 
 fn key_is_modifier(k input.Key) bool {
-	return k in [
-		.shift_left, .shift_right,
-		.control_left, .control_right,
-		.alt_left, .alt_right,
-		.meta_left, .meta_right,
-	]
+	return k.is_modifier()
 }
 
 // closing_action returns true if performing the given action results in
@@ -2588,8 +2511,8 @@ fn closing_action(action input.Action) bool {
 
 pub struct Surface {
 pub mut:
-	app        &App            = unsafe { nil }
-	rt_app     &RuntimeApp     = unsafe { nil }
+	app        &App = unsafe { nil }
+	rt_app     &RuntimeApp = unsafe { nil }
 	rt_surface &RuntimeSurface = unsafe { nil }
 
 	font_grid_key      FontGridKey
@@ -2618,7 +2541,7 @@ pub mut:
 	focused      bool = true
 
 	selection_scroll_active bool
-	readonly               bool
+	readonly                bool
 
 	// The search state for the surface. When none, no search is active.
 	search ?&SurfaceSearch
@@ -2687,7 +2610,13 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 	self.config = derived_config
 	self.config_conditional_state = app.config_conditional_state
 
-	// Initialize renderer state with terminal reference
+	// Initialize the terminal before publishing its stable address to the
+	// renderer. Both the surface and renderer now observe this same emulator.
+	grid_size := self.size.grid()
+	self.io.terminal = terminal.Terminal.init(terminal.Options{
+		cols: u16(math.max(u32(1), grid_size.columns))
+		rows: u16(math.max(u32(1), grid_size.rows))
+	})!
 	self.renderer_state = RendererState{
 		terminal: &self.io.terminal
 	}
@@ -2699,12 +2628,17 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 	self.rt_app.perform_action(AppAction{
 		kind: .cell_size
 		target: &self
+		cell_size: self.size.cell
 	})!
 
 	// Report size limits
 	self.rt_app.perform_action(AppAction{
 		kind: .size_limit
 		target: &self
+		min_size: ScreenSize{
+			width: self.size.cell.width * min_window_width_cells
+			height: self.size.cell.height * min_window_height_cells
+		}
 	})!
 
 	// Call resize to finalize setup
@@ -2718,6 +2652,7 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 		self.rt_app.perform_action(AppAction{
 			kind: .set_title
 			target: &self
+			title_value: self.config.title or { '' }
 		})!
 	}
 }
@@ -2783,7 +2718,9 @@ pub fn (self &Surface) needs_confirm_quit() bool {
 pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 	match msg.kind {
 		.change_config {
-			self.update_config(&Config{})!
+			if unsafe { msg.config != nil } {
+				self.update_config(msg.config)!
+			}
 		}
 		.set_title {
 			if self.config.title != none {
@@ -2792,6 +2729,7 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			self.rt_app.perform_action(AppAction{
 				kind: .set_title
 				target: &self
+				title_value: null_terminated_bytes(msg.title_buf[..])
 			})!
 		}
 		.report_title {
@@ -2800,19 +2738,20 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			}
 			title := self.rt_surface.get_title() or { '' }
 			data := '\x1b]l${title}\x1b\\'
-			self.queue_io(IOMessage{ kind: .write_alloc })
-			_ = data
+			self.queue_io(IOMessage{ kind: .write_alloc, data: data.bytes() })
 		}
 		.color_change {
 			self.rt_app.perform_action(AppAction{
 				kind: .color_change
 				target: &self
+				color_change: msg.color_change
 			})!
 		}
 		.set_mouse_shape {
 			self.rt_app.perform_action(AppAction{
 				kind: .mouse_shape
 				target: &self
+				mouse_shape: msg.mouse_shape
 			})!
 		}
 		.clipboard_read {
@@ -2822,37 +2761,38 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			self.start_clipboard_request(.osc_52_read)!
 		}
 		.clipboard_write {
-			self.clipboard_write('', .paste)!
+			self.clipboard_write(msg.clipboard_write_req.data.bytestr(), .paste)!
 		}
 		.pwd_change {
 			self.rt_app.perform_action(AppAction{
 				kind: .pwd
 				target: &self
+				pwd: msg.pwd_change.data.bytestr()
 			})!
 		}
 		.close {
 			self.close()
 		}
 		.child_exited {
-			self.child_exited_handler(0, 0)
+			self.child_exited_handler(u32(msg.child_exited.runtime_ms), msg.child_exited.exit_code)
 		}
 		.desktop_notification {
 			if !self.config.desktop_notifications {
 				return
 			}
-			self.show_desktop_notification('', '')!
+			self.show_desktop_notification(null_terminated_bytes(msg.notification_title[..]), null_terminated_bytes(msg.notification_body[..]))!
 		}
 		.renderer_health {
-			self.update_renderer_health(0)
+			self.update_renderer_health(int(msg.renderer_health))
 		}
 		.scrollbar {
-			self.update_scrollbar(0)
+			self.update_scrollbar_value(msg.scrollbar)
 		}
 		.present_surface {
 			self.present_surface()!
 		}
 		.password_input {
-			self.password_input(false)!
+			self.password_input(msg.password_input)!
 		}
 		.ring_bell {
 			now := time.now()
@@ -2872,20 +2812,25 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			self.rt_app.perform_action(AppAction{
 				kind: .progress_report
 				target: &self
+				progress: msg.progress_report
 			})!
 		}
 		.selection_scroll_tick {
+			self.selection_scroll_active = msg.selection_scroll_tick
 			self.selection_scroll_tick()!
 		}
 		.start_command {
 			self.command_timer = time.now()
 		}
 		.stop_command {
-			if _ := self.command_timer {
+			if started := self.command_timer {
+				duration := time.now() - started
 				self.command_timer = none
 				self.rt_app.perform_action(AppAction{
 					kind: .command_finished
 					target: &self
+					exit_code: msg.stop_command_exit_code
+					duration_ms: u64(duration / time.millisecond)
 				})!
 			}
 		}
@@ -2893,15 +2838,25 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			self.rt_app.perform_action(AppAction{
 				kind: .search_total
 				target: &self
+				search_total: msg.search_total
 			})!
 		}
 		.search_selected {
 			self.rt_app.perform_action(AppAction{
 				kind: .search_selected
 				target: &self
+				search_selected: msg.search_selected
 			})!
 		}
 	}
+}
+
+fn null_terminated_bytes(data []u8) string {
+	mut end := 0
+	for end < data.len && data[end] != 0 {
+		end++
+	}
+	return data[..end].bytestr()
 }
 
 // draw forces the surface to render a frame.
@@ -2922,7 +2877,7 @@ pub fn (mut self Surface) activate_inspector() ! {
 
 	// Notify components that inspector is active
 	self.renderer_thread.wakeup.notify()!
-	self.queue_io(IOMessage{ kind: .inspector_ })
+	self.queue_io(IOMessage{ kind: .inspector_, flag: true })
 }
 
 // deactivate_inspector stops collecting inspection data.
@@ -2934,7 +2889,7 @@ pub fn (mut self Surface) deactivate_inspector() {
 
 	// Notify components
 	self.renderer_thread.wakeup.notify() or {}
-	self.queue_io(IOMessage{ kind: .inspector_ })
+	self.queue_io(IOMessage{ kind: .inspector_, flag: false })
 
 	// Cleanup
 	insp.deinit()
@@ -2977,6 +2932,7 @@ pub fn (mut self Surface) update_config(config &Config) ! {
 		self.rt_app.perform_action(AppAction{
 			kind: .set_title
 			target: &self
+			title_value: self.config.title or { '' }
 		})!
 	}
 	self.rt_app.perform_action(AppAction{
@@ -2987,13 +2943,15 @@ pub fn (mut self Surface) update_config(config &Config) ! {
 
 // has_selection returns true if the terminal has a selection.
 pub fn (self &Surface) has_selection() bool {
-	return self.renderer_state.terminal.selection != none
+	return self.renderer_state.terminal.screens.active.selection != none
 }
 
 // selection_string returns the selected text.
 pub fn (self &Surface) selection_string() ?string {
-	_ := self.renderer_state.terminal.selection or { return none }
-	text := self.renderer_state.terminal.selection_string()
+	sel := self.renderer_state.terminal.screens.active.selection or { return none }
+	text := self.renderer_state.terminal.screens.active.selection_string(terminal.SelectionString{
+		sel: sel
+	}) or { return none }
 	if text.len == 0 {
 		return none
 	}
@@ -3007,7 +2965,7 @@ pub fn (self &Surface) pwd() ?string {
 
 // ime_point returns the x/y coordinate of where the IME keyboard should be rendered.
 pub fn (self &Surface) ime_point() IMEPos {
-	cursor := self.renderer_state.terminal.cursor
+	cursor := self.renderer_state.terminal.screens.active.cursor
 	preedit_width := if p := self.renderer_state.preedit {
 		u32(p.width())
 	} else {
@@ -3105,7 +3063,7 @@ fn (mut self Surface) resize(size ScreenSize) ! {
 	}
 
 	// Notify IO thread of resize
-	self.queue_io(IOMessage{ kind: .resize })
+	self.queue_io(IOMessage{ kind: .resize, size: self.size })
 }
 
 fn (mut self Surface) balance_padding_if_needed() {
@@ -3170,18 +3128,33 @@ pub fn (mut self Surface) key_event_is_binding(event KeyEvent) ?BindingFlags {
 
 	// Check active key sequence set
 	if seq_set := self.keyboard.sequence_set {
-		_ := seq_set.get_event(event) or { return none }
-		return BindingFlags{}
+		entry := seq_set.get_event(event) or { return none }
+		return binding_flags(entry)
 	}
 
 	// Check active key tables (inner to outer)
 	for i := self.keyboard.table_stack.len - 1; i >= 0; i-- {
-		if _ := self.keyboard.table_stack[i].set.get_event(event) {
-			return BindingFlags{}
+		if entry := self.keyboard.table_stack[i].set.get_event(event) {
+			return binding_flags(entry)
 		}
 	}
 
-	return none
+	entry := self.config.keybind.set.get_event(event) or { return none }
+	return binding_flags(entry)
+}
+
+fn binding_flags(entry &input.SetEntry) BindingFlags {
+	flags := match entry.value.typ {
+		.leader { input.Flags{} }
+		.leaf { entry.value.leaf_flags }
+		.leaf_chained { entry.value.chain_flags }
+	}
+	return BindingFlags{
+		consumed: flags.consumed
+		global: flags.global
+		all: flags.all
+		performable: flags.performable
+	}
 }
 
 // key_callback handles key events including keybindings, encoding, and sending to terminal.
@@ -3192,7 +3165,8 @@ pub fn (mut self Surface) key_callback(event KeyEvent) !apprt.InputEffect {
 	}
 
 	// Check if KAM (keyboard action mode) is enabled
-	if self.config.vt_kam_allowed && self.renderer_state.terminal.modes.disable_keyboard {
+	if self.config.vt_kam_allowed
+		&& self.renderer_state.terminal.modes.get(.disable_keyboard) {
 		return .consumed
 	}
 
@@ -3229,8 +3203,7 @@ pub fn (mut self Surface) key_callback(event KeyEvent) !apprt.InputEffect {
 		}
 
 		// Queue the encoded key for IO
-		self.queue_io(IOMessage{ kind: .write_small })
-		_ = write_req
+		self.queue_io(IOMessage{ kind: .write_small, data: write_req.data })
 	} else {
 		return .ignored
 	}
@@ -3256,8 +3229,7 @@ pub fn (mut self Surface) text_callback(text string) ! {
 
 // occlusion_callback is called when the surface visibility changes.
 pub fn (mut self Surface) occlusion_callback(visible bool) ! {
-	self.queue_io(IOMessage{ kind: .visible })
-	_ = visible
+	self.queue_io(IOMessage{ kind: .visible, flag: visible })
 	self.queue_render()!
 }
 
@@ -3290,7 +3262,7 @@ pub fn (mut self Surface) focus_callback(focused bool) ! {
 	self.renderer_state.terminal.flags.focused = focused
 
 	// Notify IO thread
-	self.queue_io(IOMessage{ kind: .focused })
+	self.queue_io(IOMessage{ kind: .focused, flag: focused })
 
 	self.queue_render()!
 }
@@ -3318,12 +3290,12 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, precision bool) ! 
 		// For non-precision, always scroll at least one line
 		if self.mouse.pending_scroll_y > 0 {
 			self.mouse.pending_scroll_y = 0
-			self.renderer_state.terminal.scroll_viewport_delta(-1)!
+			self.renderer_state.terminal.scroll_viewport(.delta, -1)!
 			self.queue_render()!
 			return
 		} else if self.mouse.pending_scroll_y < 0 {
 			self.mouse.pending_scroll_y = 0
-			self.renderer_state.terminal.scroll_viewport_delta(1)!
+			self.renderer_state.terminal.scroll_viewport(.delta, 1)!
 			self.queue_render()!
 			return
 		}
@@ -3334,12 +3306,12 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, precision bool) ! 
 		self.mouse.pending_scroll_y -= f64(y_lines) * cell_h
 
 		// Check if terminal is in mouse reporting mode
-		if self.renderer_state.terminal.flags.mouse_event != .none_ {
+		if self.renderer_state.terminal.flags.mouse_event != .none {
 			// Report scroll as mouse button events to the terminal
 			self.mouse_report(none, .press, self.mouse.mods, CursorPos{})!
 		} else {
 			// Scroll the viewport
-			self.renderer_state.terminal.scroll_viewport_delta(i32(-y_lines))!
+			self.renderer_state.terminal.scroll_viewport(.delta, int(-y_lines))!
 		}
 		self.queue_render()!
 	}
@@ -3420,9 +3392,13 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			if self.mouse.left_click_count == 2 && !self.is_mouse_reporting() {
 				pos := self.rt_surface.get_cursor_pos()!
 				vp := self.pos_to_viewport(pos.x, pos.y)
-				if pin := self.renderer_state.terminal.viewport_pin(vp.x, vp.y) {
-					if sel := self.renderer_state.terminal.select_word(pin) {
-						self.renderer_state.terminal.select_at(sel)!
+				if pin := self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+					tag: .viewport
+					x: vp.x
+					y: vp.y
+				}) {
+					if sel := self.renderer_state.terminal.screens.active.select_word(pin, self.config.selection_word_chars) {
+						self.renderer_state.terminal.screens.active.select(sel)!
 					}
 				}
 				self.mouse.left_click_time = time.now()
@@ -3434,9 +3410,15 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			if self.mouse.left_click_count >= 3 && !self.is_mouse_reporting() {
 				pos := self.rt_surface.get_cursor_pos()!
 				vp := self.pos_to_viewport(pos.x, pos.y)
-				if pin := self.renderer_state.terminal.viewport_pin(vp.x, vp.y) {
-					if sel := self.renderer_state.terminal.select_line(pin) {
-						self.renderer_state.terminal.select_at(sel)!
+				if pin := self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+					tag: .viewport
+					x: vp.x
+					y: vp.y
+				}) {
+					if sel := self.renderer_state.terminal.screens.active.select_line(terminal.SelectLine{
+						pin: pin
+					}) {
+						self.renderer_state.terminal.screens.active.select(sel)!
 					}
 				}
 				self.mouse.left_click_time = time.now()
@@ -3453,14 +3435,14 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			// only when selection scrolling is active.
 			if self.selection_scroll_active {
 				self.selection_scroll_active = false
-				self.queue_io(IOMessage{ kind: .selection_scroll })
+				self.queue_io(IOMessage{ kind: .selection_scroll, flag: false })
 			}
 
 			// The selection clipboard is only updated for left-click drag
 			// when the left button is released. This avoids the clipboard
 			// being updated on every mouse move which would be noisy.
 			if self.config.copy_on_select != .false_ {
-				if sel := self.renderer_state.terminal.selection {
+				if sel := self.renderer_state.terminal.screens.active.selection {
 					self.set_selection(sel)!
 				}
 			}
@@ -3524,7 +3506,11 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 	if button == .left && is_press {
 		pos := self.rt_surface.get_cursor_pos()!
 		vp := self.pos_to_viewport(pos.x, pos.y)
-		if pin := self.renderer_state.terminal.viewport_pin(vp.x, vp.y) {
+		if pin := self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+			tag: .viewport
+			x: vp.x
+			y: vp.y
+		}) {
 			// If we move our cursor too much between clicks then we reset the
 			// multi-click state.
 			if self.mouse.left_click_count > 0 {
@@ -3585,7 +3571,11 @@ pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) !
 
 	// Handle selection drag (left click held)
 	if self.mouse.click_state[0] == .press && self.mouse.left_click_count > 0 {
-		if pin := self.renderer_state.terminal.viewport_pin(pos_vp.x, pos_vp.y) {
+		if pin := self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+			tag: .viewport
+			x: pos_vp.x
+			y: pos_vp.y
+		}) {
 			match self.mouse.left_click_count {
 				1 { self.drag_left_click_single(pin, pos.x)! }
 				2 { self.drag_left_click_double(pin)! }
@@ -3596,7 +3586,7 @@ pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) !
 		// Start selection scrolling if cursor is outside viewport
 		if pos.y < 0 || pos.y > f64(self.size.screen.height) {
 			self.selection_scroll_active = true
-			self.queue_io(IOMessage{ kind: .selection_scroll })
+			self.queue_io(IOMessage{ kind: .selection_scroll, flag: true })
 		}
 
 		self.queue_render()!
@@ -3614,9 +3604,13 @@ pub fn (mut self Surface) mouse_pressure_callback(stage MousePressureStage, pres
 	if stage == .deep && self.mouse.click_state[0] == .press && self.has_terminal() {
 		pos := self.rt_surface.get_cursor_pos()!
 		vp := self.pos_to_viewport(pos.x, pos.y)
-		if pin := self.renderer_state.terminal.viewport_pin(vp.x, vp.y) {
-			if sel := self.renderer_state.terminal.select_word(pin) {
-				self.renderer_state.terminal.select_at(sel)!
+		if pin := self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+			tag: .viewport
+			x: vp.x
+			y: vp.y
+		}) {
+			if sel := self.renderer_state.terminal.screens.active.select_word(pin, self.config.selection_word_chars) {
+				self.renderer_state.terminal.screens.active.select(sel)!
 				self.queue_render()!
 			}
 		}
@@ -3629,6 +3623,9 @@ pub fn (mut self Surface) color_scheme_callback(scheme ColorScheme) ! {
 	new_scheme := match scheme {
 		.light { Theme.light }
 		.dark { Theme.dark }
+		else {
+			return
+		}
 	}
 	if self.config_conditional_state.theme == new_scheme {
 		return
@@ -3637,7 +3634,7 @@ pub fn (mut self Surface) color_scheme_callback(scheme ColorScheme) ! {
 	self.notify_config_conditional_state()
 
 	// Notify IO thread for mode 2031 DSR report
-	self.queue_io(IOMessage{ kind: .color_scheme_report })
+	self.queue_io(IOMessage{ kind: .color_scheme_report, flag: false })
 }
 
 // pos_to_viewport converts surface pixel coordinates to viewport cell coordinates.
@@ -3678,6 +3675,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 					target: &self
 				})!
 			}
+
 			// Undo and redo both support both surface and app targeting.
 			// If we are triggering on a surface then we perform the action
 			// with the surface target.
@@ -3788,7 +3786,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				if text.len == 0 {
 					return false
 				}
-				mut s := &SurfaceSearch{ needle: text }
+				mut s := SurfaceSearch.init(self.renderer_state.terminal, &self)!
 				self.search = s
 				s.change_needle(text)
 			}
@@ -3801,8 +3799,10 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			}
 		}
 		.copy_to_clipboard {
-			if sel := self.renderer_state.terminal.selection {
-				self.copy_selection_to_clipboards(sel, int(action.enum_param))!
+			if sel := self.renderer_state.terminal.screens.active.selection {
+				self.copy_selection_to_clipboards(sel, [.standard], unsafe {
+					input.CopyToClipboard(action.enum_param)
+				})!
 				// Clear the selection if configured to do so.
 				if self.config.selection_clear_on_copy {
 					self.set_selection(none)!
@@ -3822,7 +3822,9 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			url_text := match link_info.action {
 				.open {
 					// For regex links, get the text from the selection.
-					self.renderer_state.terminal.selection_string()
+					self.renderer_state.terminal.screens.active.selection_string(terminal.SelectionString{
+						sel: link_info.selection
+					}) or { return false }
 				}
 				.open_osc8 {
 					// For OSC8 links, get the URI from hyperlink data.
@@ -3898,7 +3900,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 		.clear_screen {
 			// If the active screen is the alternate screen then clear screen
 			// does nothing, so we return false so the keybind is unconsumed.
-			if self.renderer_state.terminal.active_is_alternate() {
+			if self.renderer_state.terminal.screens.active_key == .alternate {
 				return false
 			}
 			self.queue_io(IOMessage{ kind: .clear_screen })
@@ -3910,12 +3912,12 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.queue_io(IOMessage{ kind: .scroll_to_bottom })
 		}
 		.scroll_to_row {
-			self.renderer_state.terminal.scroll_to_row(int(action.uint_param))
+			self.renderer_state.terminal.screens.active.scroll_to_row(usize(action.uint_param))
 			self.queue_render()!
 		}
 		.scroll_to_selection {
-			sel := self.renderer_state.terminal.selection or { return false }
-			self.renderer_state.terminal.scroll_to_pin(sel.top_left())
+			sel := self.renderer_state.terminal.screens.active.selection or { return false }
+			self.renderer_state.terminal.screens.active.scroll_to_row(usize(sel.top_left(self.renderer_state.terminal.screens.active).y))
 			self.queue_render()!
 		}
 		.scroll_page_up {
@@ -4104,7 +4106,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			})!
 		}
 		.select_all {
-			if sel := self.renderer_state.terminal.select_all() {
+			if sel := self.renderer_state.terminal.screens.active.select_all() {
 				self.set_selection(sel)!
 				self.queue_render()!
 			}
@@ -4157,19 +4159,37 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.end_key_sequence(.flush, .retain)
 		}
 		.adjust_selection {
-			// ghostty adjusts the active screen's selection in the requested
-			// direction and scrolls the endpoint into view. witty's core
-			// selection abstraction (SurfaceTerminal/TermSelection) doesn't yet
-			// expose Selection.adjust here, so we fall through unperformed
-			// (matching ghostty's behavior when there is no selection).
-			// TODO: wire Selection.adjust once the core selection API exposes it.
-			return false
+			mut screen := self.renderer_state.terminal.screens.active
+			mut sel := screen.selection or { return false }
+			sel.adjust(screen, selection_adjustment_from_input(action.enum_param))
+			screen.selection = sel
+			viewport_tl := screen.pages.get_top_left(.viewport)
+			viewport_br := screen.pages.get_bottom_right(.viewport) or { return false }
+			end_pin := sel.end()
+			end_in_viewport := (end_pin.eql(viewport_tl) || viewport_tl.before(end_pin))
+				&& (end_pin.eql(viewport_br) || end_pin.before(viewport_br))
+			if !end_in_viewport {
+				target_row := if sel.end().before(viewport_tl) {
+					usize(sel.end().y)
+				} else if sel.end().y >= screen.pages.rows - 1 {
+					usize(sel.end().y - (screen.pages.rows - 1))
+				} else {
+					usize(0)
+				}
+				screen.scroll_to_row(target_row)
+			}
+			screen.dirty.selection = true
+			self.queue_render()!
 		}
 		.crash {
-			// ghostty intentionally crashes the requested thread (main/io/render)
-			// to test crash handling. witty has no crash-injection helper yet.
-			// TODO: implement crash injection per thread.
-			return false
+			match unsafe { input.CrashThread(action.enum_param) } {
+				.main_thread { panic('crash binding action, crashing intentionally') }
+				.render {
+					self.renderer_thread.crash_requested = true
+					self.queue_render() or {}
+				}
+				.io { self.queue_io(IOMessage{ kind: .crash }) }
+			}
 		}
 		else {
 			// Any remaining tags are app-scoped and were handled above, or are
@@ -4274,6 +4294,21 @@ fn inspector_mode_from_input(e i32) InspectorMode {
 	}
 }
 
+fn selection_adjustment_from_input(e i32) terminal.SelectionAdjustment {
+	return match unsafe { input.AdjustSelection(e) } {
+		.left { .left }
+		.right { .right }
+		.up { .up }
+		.down { .down }
+		.page_up { .page_up }
+		.page_down { .page_down }
+		.home { .home }
+		.end_ { .end_ }
+		.beginning_of_line { .beginning_of_line }
+		.end_of_line { .end_of_line }
+	}
+}
+
 // write_screen_from_input builds the core WriteScreenAction from an
 // input.Action's write_*_file parameters (enum_param = action, enum_param2 =
 // format).
@@ -4315,11 +4350,7 @@ fn (mut self Surface) goto_tab_action(idx int) !bool {
 // table stack. Returns false if the table is unknown, already active, or the
 // stack is full.
 fn (mut self Surface) activate_key_table(name string, once bool) !bool {
-	// Look up the table in our config. Key tables aren't wired up yet in the
-	// stub config, so treat an empty name as "not found".
-	if name.len == 0 {
-		return false
-	}
+	set := self.config.keybind.tables[name] or { return false }
 
 	// If this is the same table as is currently active, do nothing.
 	if self.keyboard.table_stack.len > 0 {
@@ -4336,6 +4367,7 @@ fn (mut self Surface) activate_key_table(name string, once bool) !bool {
 
 	// Add the table to the stack.
 	self.keyboard.table_stack << KeyTableEntry{
+		set: set
 		once: once
 		name: name
 	}
@@ -4384,6 +4416,7 @@ fn (mut self Surface) mouse_refresh_links(pos CursorPos, pos_vp Coordinate, over
 			self.rt_app.perform_action(AppAction{
 				kind: .mouse_shape
 				target: &self
+				mouse_shape: self.renderer_state.terminal.mouse_shape
 			})!
 			self.rt_app.perform_action(AppAction{
 				kind: .mouse_over_link
@@ -4402,6 +4435,7 @@ fn (mut self Surface) mouse_refresh_links(pos CursorPos, pos_vp Coordinate, over
 	self.rt_app.perform_action(AppAction{
 		kind: .mouse_shape
 		target: &self
+		mouse_shape: .pointer
 	})!
 
 	if self.config.link_previews == .true_ {
@@ -4416,7 +4450,7 @@ fn (mut self Surface) mouse_refresh_links(pos CursorPos, pos_vp Coordinate, over
 
 fn (self &Surface) is_mouse_reporting() bool {
 	return self.config.mouse_reporting
-		&& self.renderer_state.terminal.flags.mouse_event != .none_
+		&& self.renderer_state.terminal.flags.mouse_event != .none
 }
 
 fn (mut self Surface) mouse_report(button ?input.MouseButton, action MouseReportAction, mods input.Mods, pos CursorPos) ! {
@@ -4425,7 +4459,7 @@ fn (mut self Surface) mouse_report(button ?input.MouseButton, action MouseReport
 
 	// Depending on the event, we may do nothing at all.
 	match mouse_event {
-		.none_ {
+		.none {
 			return
 		}
 		.x10 {
@@ -4515,7 +4549,9 @@ fn (mut self Surface) mouse_report(button ?input.MouseButton, action MouseReport
 			.seven { u8(67) }
 			.eight { u8(128) }
 			.nine { u8(129) }
-			else { return } // unsupported
+			else {
+				return
+			} // unsupported
 		}
 	}
 
@@ -4608,19 +4644,19 @@ fn (self &Surface) mouse_shift_capture(do_lock bool) bool {
 		.false_ { false }
 		.true_ {
 			// Check terminal's mouse_shift_capture flag
-			self.renderer_state.terminal.flags.mouse_shift_capture
+			self.renderer_state.terminal.flags.mouse_shift_capture == .true_
 		}
 	}
 }
 
 pub fn (mut self Surface) mouse_captured() bool {
-	return self.renderer_state.terminal.flags.mouse_event != .none_
+	return self.renderer_state.terminal.flags.mouse_event != .none
 }
 
 fn (self &Surface) mouse_mods_with_capture(mods input.Mods) input.Mods {
 	// If the terminal is reporting mouse events and shift is pressed,
 	// strip shift from mods if we're not capturing shift
-	if self.renderer_state.terminal.flags.mouse_event != .none_ {
+	if self.renderer_state.terminal.flags.mouse_event != .none {
 		if mods.shift && !self.mouse_shift_capture(false) {
 			return input.Mods{
 				ctrl: mods.ctrl
@@ -4633,8 +4669,8 @@ fn (self &Surface) mouse_mods_with_capture(mods input.Mods) input.Mods {
 }
 
 fn (mut self Surface) set_selection(sel ?TermSelection) ! {
-	prev := self.renderer_state.terminal.selection
-	self.renderer_state.terminal.select_at(sel)!
+	prev := self.renderer_state.terminal.screens.active.selection
+	self.renderer_state.terminal.screens.active.select(sel)!
 
 	// If copy_on_select is enabled and selection changed, copy to clipboard
 	if self.config.copy_on_select == .false_ {
@@ -4646,7 +4682,20 @@ fn (mut self Surface) set_selection(sel ?TermSelection) ! {
 			return
 		}
 	}
-	self.copy_selection_to_clipboards(new_sel, 0)!
+	match self.config.copy_on_select {
+		.clipboard {
+			self.copy_selection_to_clipboards(new_sel, [.standard, .selection], .mixed)!
+		}
+		.true_ {
+			loc := if self.rt_surface.supports_clipboard_selection() {
+				apprt.Clipboard.selection
+			} else {
+				apprt.Clipboard.standard
+			}
+			self.copy_selection_to_clipboards(new_sel, [loc], .mixed)!
+		}
+		.false_ {}
+	}
 }
 
 fn (mut self Surface) set_cell_size(size CellSize) ! {
@@ -4654,7 +4703,7 @@ fn (mut self Surface) set_cell_size(size CellSize) ! {
 	self.balance_padding_if_needed()
 
 	// Notify IO thread of new size
-	self.queue_io(IOMessage{ kind: .resize })
+	self.queue_io(IOMessage{ kind: .resize, size: self.size })
 
 	// Recompute initial window size if configured
 	self.recompute_initial_size() or {}
@@ -4663,6 +4712,7 @@ fn (mut self Surface) set_cell_size(size CellSize) ! {
 	self.rt_app.perform_action(AppAction{
 		kind: .cell_size
 		target: &self
+		cell_size: size
 	})!
 }
 
@@ -4670,7 +4720,9 @@ fn (mut self Surface) queue_io(msg IOMessage) {
 	// In readonly mode, block write operations
 	if self.readonly {
 		match msg.kind {
-			.write_small, .write_stable, .write_alloc { return }
+			.write_small, .write_stable, .write_alloc {
+				return
+			}
 			else {}
 		}
 	}
@@ -4688,21 +4740,18 @@ fn (mut self Surface) recompute_initial_size() ! {
 	width := math.max(self.config.window_width, min_window_width_cells) * self.size.cell.width
 
 	// Scale and add padding
-	final_width := u32(math.ceil(f64(width) / content_scale.x)) +
-		self.size.padding.left + self.size.padding.right
-	final_height := u32(math.ceil(f64(height) / content_scale.y)) +
-		self.size.padding.top + self.size.padding.bottom
+	final_width := u32(math.ceil(f64(width) / content_scale.x)) + self.size.padding.left + self.size.padding.right
+	final_height := u32(math.ceil(f64(height) / content_scale.y)) + self.size.padding.top + self.size.padding.bottom
 
-	_ = final_width
-	_ = final_height
 	self.rt_app.perform_action(AppAction{
 		kind: .initial_size
 		target: &self
+		initial_size: ScreenSize{ width: final_width, height: final_height }
 	})!
 }
 
 fn (mut self Surface) scroll_to_bottom() ! {
-	self.renderer_state.terminal.scroll_viewport_bottom()!
+	self.renderer_state.terminal.scroll_viewport(.bottom, 0)!
 	self.queue_render()!
 }
 
@@ -4714,6 +4763,7 @@ fn (mut self Surface) hide_mouse() {
 	self.rt_app.perform_action(AppAction{
 		kind: .mouse_visibility
 		target: &self
+		mouse_visible: false
 	}) or {}
 }
 
@@ -4725,6 +4775,7 @@ fn (mut self Surface) show_mouse() {
 	self.rt_app.perform_action(AppAction{
 		kind: .mouse_visibility
 		target: &self
+		mouse_visible: true
 	}) or {}
 }
 
@@ -4745,7 +4796,7 @@ fn (mut self Surface) child_exited_handler(runtime_ms u32, exit_code u32) {
 		self.renderer_state.terminal.print_string('Process exited abnormally. Press any key to close.') or {
 			return
 		}
-		self.renderer_state.terminal.modes.cursor_visible = false
+		self.renderer_state.terminal.modes.set(.cursor_visible, false)
 		return
 	}
 
@@ -4760,8 +4811,8 @@ fn (mut self Surface) child_exited_handler(runtime_ms u32, exit_code u32) {
 	self.renderer_state.terminal.print_string('Process exited. Press any key to close the terminal.') or {
 		return
 	}
-	self.renderer_state.terminal.modes.cursor_visible = false
-	self.renderer_state.terminal.modes.disable_keyboard = false
+	self.renderer_state.terminal.modes.set(.cursor_visible, false)
+	self.renderer_state.terminal.modes.set(.disable_keyboard, false)
 
 	if !self.config.wait_after_command {
 		self.close()
@@ -4779,6 +4830,7 @@ fn (mut self Surface) password_input(v bool) ! {
 	self.rt_app.perform_action(AppAction{
 		kind: .secure_input
 		target: &self
+		secure_input_on: v
 	}) or {}
 
 	self.queue_render()!
@@ -4788,16 +4840,16 @@ fn (mut self Surface) update_renderer_health(health int) {
 	self.rt_app.perform_action(AppAction{
 		kind: .renderer_health
 		target: &self
+		health: health
 	}) or {}
-	_ = health
 }
 
-fn (mut self Surface) update_scrollbar(scrollbar int) {
+fn (mut self Surface) update_scrollbar_value(scrollbar terminal.Scrollbar) {
 	self.rt_app.perform_action(AppAction{
 		kind: .scrollbar
 		target: &self
+		scrollbar: scrollbar
 	}) or {}
-	_ = scrollbar
 }
 
 fn (mut self Surface) notify_config_conditional_state() {
@@ -4831,8 +4883,7 @@ fn (mut self Surface) end_key_sequence(action KeySequenceQueued, mem KeySequence
 		.flush {
 			// Send all queued keys to the IO thread
 			for write_req in self.keyboard.sequence_queued {
-				self.queue_io(IOMessage{ kind: .write_small })
-				_ = write_req
+				self.queue_io(IOMessage{ kind: .write_small, data: write_req.data })
 			}
 		}
 		.drop {
@@ -4844,7 +4895,9 @@ fn (mut self Surface) end_key_sequence(action KeySequenceQueued, mem KeySequence
 	}
 
 	match mem {
-		.free { self.keyboard.sequence_queued = [] }
+		.free {
+			self.keyboard.sequence_queued = []
+		}
 		.retain { self.keyboard.sequence_queued.clear() }
 	}
 }
@@ -4864,13 +4917,24 @@ fn (mut self Surface) deactivate_all_key_tables() !bool {
 }
 
 fn (self &Surface) catch_all_is_ignore() bool {
-	// Check if the innermost key table has a catch-all that maps to ignore.
-	// This is used during key sequence handling.
-	if self.keyboard.table_stack.len > 0 {
-		// Would check table_stack.last().set.catch_all == .ignore
-		return false
+	trigger := input.Trigger{
+		key: input.TriggerKey.new_catch_all()
 	}
-	return false
+	for i := self.keyboard.table_stack.len - 1; i >= 0; i-- {
+		if entry := self.keyboard.table_stack[i].set.get(trigger) {
+			return binding_entry_has_ignore(entry)
+		}
+	}
+	entry := self.config.keybind.set.get(trigger) or { return false }
+	return binding_entry_has_ignore(entry)
+}
+
+fn binding_entry_has_ignore(entry &input.SetEntry) bool {
+	return match entry.value.typ {
+		.leader { false }
+		.leaf { entry.value.leaf_action.tag == .ignore }
+		.leaf_chained { entry.value.chain_actions.any(it.tag == .ignore) }
+	}
 }
 
 fn (mut self Surface) maybe_handle_binding(event KeyEvent) ?apprt.InputEffect {
@@ -4902,58 +4966,102 @@ fn (mut self Surface) maybe_handle_binding(event KeyEvent) ?apprt.InputEffect {
 			self.end_key_sequence(.flush, .retain)
 			return none
 		}
-		_ = entry
-		// Entry found in sequence — this is a leaf/leader, handle it
-		return .consumed
+		return self.handle_binding_entry(event, entry)
 	}
 
 	// Check key tables (inner to outer)
 	for i := self.keyboard.table_stack.len - 1; i >= 0; i-- {
 		table := self.keyboard.table_stack[i]
-		if _ := table.set.get_event(event) {
+		if entry := table.set.get_event(event) {
 			// Found in table; if one-shot and topmost, deactivate
 			if table.once && i == self.keyboard.table_stack.len - 1 {
 				self.perform_binding_action(input.Action.new(.deactivate_key_table)) or {}
 			}
-			return .consumed
+			return self.handle_binding_entry(event, entry)
 		}
 	}
 
+	entry := self.config.keybind.set.get_event(event) or { return none }
+	return self.handle_binding_entry(event, entry)
+}
+
+fn (mut self Surface) handle_binding_entry(event KeyEvent, entry &input.SetEntry) ?apprt.InputEffect {
+	if entry.value.typ == .leader {
+		self.keyboard.sequence_set = *entry.value.leader
+		if req := self.encode_key(event) {
+			self.keyboard.sequence_queued << req
+		}
+		self.rt_app.perform_action(AppAction{
+			kind: .key_sequence
+			target: &self
+		}) or {}
+		return .consumed
+	}
+
+	flags := if entry.value.typ == .leaf {
+		entry.value.leaf_flags
+	} else {
+		entry.value.chain_flags
+	}
+	actions := if entry.value.typ == .leaf {
+		[entry.value.leaf_action]
+	} else {
+		entry.value.chain_actions
+	}
+	consumed := flags.consumed || flags.global || flags.all
+	self.keyboard.last_trigger = none
+	self.keyboard.sequence_set = none
+
+	mut performed := false
+	for action in actions {
+		if self.perform_binding_action(action) or { false } {
+			performed = true
+		}
+	}
+
+	if performed {
+		for action in actions {
+			if closing_action(action) {
+				return .closed
+			}
+			if action.tag == .ignore {
+				return .ignored
+			}
+		}
+	}
+	if flags.performable && !performed {
+		self.end_key_sequence(.flush, .retain)
+		return none
+	}
+	if consumed {
+		self.end_key_sequence(.drop, .retain)
+		self.keyboard.last_trigger = event.binding_hash()
+		return .consumed
+	}
+	self.end_key_sequence(.flush, .retain)
 	return none
 }
 
 fn (mut self Surface) encode_key(event KeyEvent) ?WriteReq {
-	// If the key produces UTF-8 text, send it as a write request
-	if event.utf8.len > 0 && event.action != .release {
-		return WriteReq{
-			data: event.utf8.bytes()
+	t := self.renderer_state.terminal
+	flags := t.screens.active.kitty_keyboard.current()
+	encoded := input.encode(event, input.Options{
+		cursor_key_application: t.modes.get(.cursor_keys)
+		keypad_key_application: t.modes.get(.keypad_keys)
+		alt_esc_prefix: t.modes.get(.alt_esc_prefix)
+		modify_other_keys_state_2: t.flags.modify_other_keys_2
+		kitty_flags: input.KittyFlags{
+			disambiguate: flags & 1 != 0
+			report_events: flags & 2 != 0
+			report_alternates: flags & 4 != 0
+			report_all: flags & 8 != 0
+			report_associated: flags & 16 != 0
 		}
+	})
+	if encoded.len == 0 {
+		return none
 	}
-
-	// Map special keys to escape sequences
-	esc := match event.key {
-		.escape { '\x1b' }
-		.enter { '\r' }
-		.backspace { '\x7f' }
-		.tab { '\t' }
-		.arrow_up { '\x1b[A' }
-		.arrow_down { '\x1b[B' }
-		.arrow_right { '\x1b[C' }
-		.arrow_left { '\x1b[D' }
-		.home { '\x1b[H' }
-		.end { '\x1b[F' }
-		.page_up { '\x1b[5~' }
-		.page_down { '\x1b[6~' }
-		.insert { '\x1b[2~' }
-		.delete { '\x1b[3~' }
-		else { '' }
-	}
-
-	if esc.len > 0 {
-		return WriteReq{ data: esc.bytes() }
-	}
-
-	return none
+	return WriteReq{ data: encoded.bytes() }
 }
 
 fn (mut self Surface) selection_scroll_tick() ! {
@@ -4969,10 +5077,14 @@ fn (mut self Surface) selection_scroll_tick() ! {
 	delta := if pos.y < 0 { i32(-1) } else { i32(1) }
 
 	// Scroll the viewport
-	self.renderer_state.terminal.scroll_viewport_delta(delta)!
+	self.renderer_state.terminal.scroll_viewport(.delta, int(delta))!
 
 	// Continue drag selection
-	if pin := self.renderer_state.terminal.viewport_pin(pos_vp.x, pos_vp.y) {
+	if pin := self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+		tag: .viewport
+		x: pos_vp.x
+		y: pos_vp.y
+	}) {
 		self.drag_left_click_single(pin, pos.x)!
 	}
 
@@ -4983,7 +5095,9 @@ fn (mut self Surface) process_links(pos CursorPos) !bool {
 	link := self.link_at_pos(pos) or { return false }
 	match link.action {
 		.open {
-			url := self.renderer_state.terminal.selection_string()
+			url := self.renderer_state.terminal.screens.active.selection_string(terminal.SelectionString{
+				sel: link.selection
+			}) or { return false }
 			if url.len > 0 {
 				// Try resolving as local path first
 				if resolved := self.resolve_path_for_opening(url) {
@@ -5005,41 +5119,45 @@ fn (mut self Surface) process_links(pos CursorPos) !bool {
 }
 
 fn (mut self Surface) open_url(url string) ! {
-	// Try runtime action first, fall back to OS open
-	self.rt_app.perform_action(AppAction{
+	handled := self.rt_app.perform_action(AppAction{
 		kind: .open_url
 		target: &self
-	}) or { return }
-	if url.len > 0 {
-		os.execute('open "${url}"')
+		url: url
+	})!
+	if !handled && url.len > 0 {
+		internal_os.open(url)!
 	}
 }
 
 fn (self &Surface) osc8_uri(pin Pin) ?string {
-	// Stub: looks up OSC 8 hyperlink URI at the given pin position.
-	// Would check pin's page data for hyperlink flag and look up the URI.
-	_ = pin
-	return none
+	rows := self.renderer_state.terminal.screens.active.pages.screen_rows
+	if int(pin.y) >= rows.len || int(pin.x) >= rows[int(pin.y)].cells.len {
+		return none
+	}
+	cell := rows[int(pin.y)].cells[int(pin.x)]
+	if !cell.has_hyperlink || cell.hyperlink.uri.len == 0 {
+		return none
+	}
+	return cell.hyperlink.uri
 }
 
 fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen WriteScreenAction) ! {
-	// Determine the selection to dump based on the location.
+	screen := self.renderer_state.terminal.screens.active
+	pages := &screen.pages
 	sel := match loc {
 		.history {
 			// We do not support this for alternate screens because they
 			// don't have scrollback anyways.
-			if self.renderer_state.terminal.active_is_alternate() {
+			if self.renderer_state.terminal.screens.active_key == .alternate {
 				return
 			}
-			// Full impl: pages.getTopLeft(.history)..getBottomRight(.history).
-			// With the stub screen, fall back to the full screen selection.
-			self.renderer_state.terminal.select_all() or { return }
+			terminal.Selection.init(pages.get_top_left(.history), pages.get_bottom_right(.history) or { return }, false)
 		}
 		.screen {
-			self.renderer_state.terminal.select_all() or { return }
+			terminal.Selection.init(pages.get_top_left(.screen), pages.get_bottom_right(.screen) or { return }, false)
 		}
 		.selection {
-			self.renderer_state.terminal.selection or {
+			self.renderer_state.terminal.screens.active.selection or {
 				// If we have no selection we have no data, do nothing.
 				return
 			}
@@ -5052,14 +5170,25 @@ fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen WriteSc
 		.plain, .vt { 'txt' }
 		.html { 'html' }
 	}
-	tmp_dir := os.temp_dir()
-	tmp_path := os.join_path(tmp_dir, '${loc}.${ext}')
-
-	// The full implementation uses terminal.formatter.ScreenFormatter to
-	// serialize the selection. Here we use the selection text directly.
-	content := self.renderer_state.terminal.selection_string()
+	tmp_path := os.join_path(os.temp_dir(), 'witty-${os.getpid()}-${time.sys_mono_now()}-${loc}.${ext}')
+	format := match write_screen.emit {
+		.plain { terminal.Format.plain }
+		.vt { terminal.Format.vt }
+		.html { terminal.Format.html }
+	}
+	mut formatter := terminal.ScreenFormatter.init(screen, terminal.FormatOptions{
+		emit: format
+		unwrap: true
+		trim: false
+		background: self.renderer_state.terminal.colors.background.get()
+		foreground: self.renderer_state.terminal.colors.foreground.get()
+		palette: self.renderer_state.terminal.colors.palette.entries[..]
+	})
+	formatter.content = terminal.ScreenContent(terminal.ScreenContentSelection{
+		sel: sel.ordered(screen, .forward)
+	})
+	content := formatter.format()
 	os.write_file(tmp_path, content)!
-	_ = sel
 
 	// Act on the written file per the action.
 	match write_screen.action {
@@ -5080,27 +5209,29 @@ fn (mut self Surface) complete_clipboard_paste(data string, allow_unsafe bool) !
 		return
 	}
 
-	// Check for paste safety (newlines in non-bracketed mode)
-	bracketed := self.renderer_state.terminal.modes.bracketed_paste
-	if !allow_unsafe && data.contains('\n') && !bracketed {
-		if self.config.clipboard_paste_protection {
-			// Potentially unsafe paste detected — in a full implementation
-			// this would prompt the user for confirmation
-			return
+	bracketed := self.renderer_state.terminal.modes.get(.bracketed_paste)
+	if self.config.clipboard_paste_protection && !allow_unsafe {
+		unsafe_paste := if bracketed {
+			data.contains('\x1b[201~')
+				|| (!self.config.clipboard_paste_bracketed_safe && !input.paste_is_safe(data))
+		} else {
+			!input.paste_is_safe(data)
+		}
+		if unsafe_paste {
+			return error('UnsafePaste')
 		}
 	}
 
 	// Scroll to bottom before pasting
 	self.scroll_to_bottom()!
 
-	// Apply bracketed paste mode wrapping
-	if bracketed {
-		self.queue_io(IOMessage{ kind: .write_small }) // ESC[200~
-		self.queue_io(IOMessage{ kind: .write_alloc }) // paste data
-		self.queue_io(IOMessage{ kind: .write_small }) // ESC[201~
-	} else {
-		// Send data directly, converting newlines if needed
-		self.queue_io(IOMessage{ kind: .write_alloc })
+	paste_opts := input.PasteOptions{
+		bracketed: bracketed
+	}
+	for encoded in input.paste_encode(data, paste_opts) {
+		if encoded.len > 0 {
+			self.queue_io(IOMessage{ kind: .write_alloc, data: encoded.bytes() })
+		}
 	}
 }
 
@@ -5136,35 +5267,65 @@ fn (mut self Surface) show_desktop_notification(title string, body string) ! {
 	self.rt_app.perform_action(AppAction{
 		kind: .desktop_notification
 		target: &self
+		notification_title: title
+		notification_body: body
 	})!
 }
 
-fn (mut self Surface) copy_selection_to_clipboards(sel TermSelection, format int) ! {
-	// Get selected text from terminal
-	text := self.renderer_state.terminal.selection_string()
-	if text.len == 0 {
+fn (mut self Surface) copy_selection_to_clipboards(sel TermSelection, clipboards []apprt.Clipboard, format input.CopyToClipboard) ! {
+	screen := self.renderer_state.terminal.screens.active
+	base_opts := terminal.FormatOptions{
+		emit: .plain
+		unwrap: true
+		trim: self.config.clipboard_trim_trailing_spaces
+		background: self.renderer_state.terminal.colors.background.get()
+		foreground: self.renderer_state.terminal.colors.foreground.get()
+		palette: self.renderer_state.terminal.colors.palette.entries[..]
+	}
+	mut contents := []apprt.ClipboardContent{}
+	if format in [.plain, .mixed] {
+		mut formatter := terminal.ScreenFormatter.init(screen, base_opts)
+		formatter.content = terminal.ScreenContent(terminal.ScreenContentSelection{ sel: sel })
+		contents << apprt.ClipboardContent{ mime: 'text/plain', data: formatter.format() }
+	}
+	if format == .vt {
+		mut formatter := terminal.ScreenFormatter.init(screen, terminal.FormatOptions{
+			...base_opts
+			emit: .vt
+		})
+		formatter.content = terminal.ScreenContent(terminal.ScreenContentSelection{ sel: sel })
+		contents << apprt.ClipboardContent{ mime: 'text/plain', data: formatter.format() }
+	}
+	if format in [.html, .mixed] {
+		mut opts := terminal.FormatOptions{
+			...base_opts
+			emit: .html
+		}
+		if format == .mixed {
+			opts = terminal.FormatOptions{
+				...opts
+				background: none
+				foreground: none
+			}
+		}
+		mut formatter := terminal.ScreenFormatter.init(screen, opts)
+		formatter.content = terminal.ScreenContent(terminal.ScreenContentSelection{ sel: sel })
+		contents << apprt.ClipboardContent{ mime: 'text/html', data: formatter.format() }
+	}
+	if contents.len == 0 {
 		return
 	}
-
-	// Trim trailing spaces if configured
-	final_text := if self.config.clipboard_trim_trailing_spaces {
-		text.trim_right(' ')
-	} else {
-		text
+	for loc in clipboards {
+		self.rt_surface.set_clipboard_at(loc, contents, false) or {}
 	}
-
-	// Set clipboard
-	self.rt_surface.set_clipboard(final_text, false)!
-	_ = sel
-	_ = format
 }
 
 fn (mut self Surface) clipboard_write(data string, loc ClipboardRequestKind) ! {
 	if self.config.clipboard_write == .deny {
 		return
 	}
-	// Decode base64 data and set clipboard
-	self.rt_surface.set_clipboard(data, self.config.clipboard_write == .ask)!
+	decoded := base64.decode(data)
+	self.rt_surface.set_clipboard(decoded.bytestr(), self.config.clipboard_write == .ask)!
 	_ = loc
 }
 
@@ -5182,71 +5343,164 @@ fn (self &Surface) link_at_pos(pos CursorPos) ?Link {
 	}
 
 	pos_vp := self.pos_to_viewport(pos.x, pos.y)
+	pin := self.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+		tag: .viewport
+		x: pos_vp.x
+		y: pos_vp.y
+	}) or { return none }
 	mouse_mods := self.mouse_mods_with_capture(self.mouse.mods)
 
 	// Check if left click is held and mouse moved (cancel link hover during drag)
 	if self.mouse.click_state[0] == .press {
-		if pin := self.mouse.left_click_pin {
-			if !pin.eql(Pin{ x: pos_vp.x, y: pos_vp.y }) {
+		if click_pin := self.mouse.left_click_pin {
+			if !click_pin.eql(pin) {
 				return none
 			}
 		}
 	}
 
-	return self.link_at_pin(Pin{ x: pos_vp.x, y: pos_vp.y }, mouse_mods)
+	if mouse_mods.equal(input.ctrl_or_super_mods(input.Mods{})) {
+		if uri := self.osc8_uri(pin) {
+			_ = uri
+			return Link{
+				action: .open_osc8
+				selection: terminal.Selection.init(pin, pin, false)
+			}
+		}
+	}
+
+	return self.link_at_pin(pin, mouse_mods)
 }
 
 fn (self &Surface) link_at_pin(pin Pin, mouse_mods input.Mods) ?Link {
-	// Check configured link patterns
-	for link_cfg in self.config.links {
-		// In a full implementation, this would:
-		// 1. Get the line text at the pin
-		// 2. Run the regex against it
-		// 3. Check if the pin falls within a match
-		// 4. Check highlight/mods requirements
-		_ = link_cfg
+	if self.config.links.len == 0 {
+		return none
 	}
-	_ = pin
-	_ = mouse_mods
+	screen := self.renderer_state.terminal.screens.active
+	line := screen.select_line(terminal.SelectLine{
+		pin: pin
+		whitespace: none
+		semantic_prompt_boundary: false
+	}) or { return none }
+	mut strmap := terminal.StringMap{}
+	_ := screen.selection_string(terminal.SelectionString{
+		sel: line
+		trim: false
+		map: &strmap
+	}) or { return none }
+	defer {
+		strmap.deinit()
+	}
+	for link_cfg in self.config.links {
+		if link_cfg.highlight in [.always_mods, .hover_mods]
+			&& !link_cfg.mods.equal(mouse_mods) {
+			continue
+		}
+		mut it := strmap.search_iterator(link_cfg.pattern) or { continue }
+		for {
+			matched := it.next() or { break }
+			sel := matched.selection()
+			if sel.contains(screen, pin) {
+				return Link{
+					action: link_cfg.action
+					selection: sel
+				}
+			}
+		}
+	}
 	return none
 }
 
 fn (mut self Surface) maybe_prompt_click() !bool {
-	// Check if cursor-click-to-move is enabled and cursor is at a prompt
 	if !self.config.cursor_click_to_move {
 		return false
 	}
-	if !self.renderer_state.terminal.cursor_is_at_prompt() {
+	t := self.renderer_state.terminal
+	screen := t.screens.active
+	if screen.semantic_prompt.click == .none || !t.cursor_is_at_prompt()
+		|| screen.selection != none {
 		return false
 	}
-	// Would send arrow key sequences to move cursor to click position
-	return false
+	pos := self.rt_surface.get_cursor_pos()!
+	pos_vp := self.pos_to_viewport(pos.x, pos.y)
+	click_pin := screen.pages.pin(terminal.PinOpts{
+		tag: .viewport
+		x: pos_vp.x
+		y: pos_vp.y
+	}) or { return false }
+
+	cursor_row := screen.pages.active_start + int(screen.cursor.y)
+	mut prompt_row := -1
+	for y := cursor_row; y >= 0; y-- {
+		if screen.pages.screen_rows[y].semantic_prompt == .prompt {
+			prompt_row = y
+			break
+		}
+	}
+	if prompt_row < 0 {
+		return false
+	}
+	prompt_pin := Pin{ x: 0, y: u32(prompt_row) }
+	if click_pin.before(prompt_pin) {
+		return false
+	}
+
+	match screen.semantic_prompt.click {
+		.none {
+			return false
+		}
+		.click_events {
+			data := '\x1b[<0;${pos_vp.x + 1};${pos_vp.y + 1}M'
+			self.queue_io(IOMessage{ kind: .write_small, data: data.bytes() })
+		}
+		else {
+			left_arrow := if t.modes.get(.cursor_keys) { '\x1bOD' } else { '\x1b[D' }
+			right_arrow := if t.modes.get(.cursor_keys) { '\x1bOC' } else { '\x1b[C' }
+			move := screen.prompt_click_move(click_pin)
+			for _ in 0 .. move.left {
+				self.queue_io(IOMessage{ kind: .write_stable, data: left_arrow.bytes() })
+			}
+			for _ in 0 .. move.right {
+				self.queue_io(IOMessage{ kind: .write_stable, data: right_arrow.bytes() })
+			}
+		}
+	}
+	return true
 }
 
 fn (mut self Surface) drag_left_click_single(pin Pin, drag_x f64) ! {
 	click_pin := self.mouse.left_click_pin or { return }
 	// Compute selection between click pin and drag pin
-	if sel := mouse_selection(click_pin, pin,
-		u32(self.mouse.left_click_xpos), u32(drag_x),
-		self.mouse.mods, self.size)
-	{
-		self.renderer_state.terminal.select_at(sel)!
+	if sel := mouse_selection(click_pin, pin, u32(self.mouse.left_click_xpos), u32(drag_x), self.mouse.mods, self.size) {
+		self.renderer_state.terminal.screens.active.select(sel)!
 	}
 }
 
 fn (mut self Surface) drag_left_click_double(pin Pin) ! {
 	// Word-level drag selection
 	click_pin := self.mouse.left_click_pin or { return }
-	if sel := self.renderer_state.terminal.select_word_between(click_pin, pin) {
-		self.renderer_state.terminal.select_at(sel)!
+	if sel := self.renderer_state.terminal.screens.active.select_word_between(click_pin, pin, self.config.selection_word_chars) {
+		self.renderer_state.terminal.screens.active.select(sel)!
 	}
 }
 
 fn (mut self Surface) drag_left_click_triple(pin Pin) ! {
-	// Line-level drag selection
-	if sel := self.renderer_state.terminal.select_line(pin) {
-		self.renderer_state.terminal.select_at(sel)!
+	mut screen := self.renderer_state.terminal.screens.active
+	click_pin := self.mouse.left_click_pin or { return }
+	line := screen.select_line(terminal.SelectLine{
+		pin: pin
+	}) or { return }
+	mut sel := screen.select_line(terminal.SelectLine{
+		pin: click_pin
+	}) or {
+		screen.select_line(terminal.SelectLine{ pin: click_pin, whitespace: none }) or { return }
 	}
+	if pin.before(click_pin) {
+		sel.start_pin = line.start()
+	} else {
+		sel.end_pin = line.end()
+	}
+	screen.select(sel)!
 }
 
 fn (self &Surface) resolve_path_for_opening(path string) ?string {
@@ -5266,14 +5520,16 @@ fn (mut self Surface) dump_text(sel TermSelection) !Text {
 }
 
 fn (mut self Surface) dump_text_locked(sel TermSelection) !Text {
-	text := self.renderer_state.terminal.selection_string()
+	text := self.renderer_state.terminal.screens.active.selection_string(terminal.SelectionString{
+		sel: sel
+	})!
 
 	// Calculate viewport info for the selection
 	content_scale := self.rt_surface.get_content_scale() or {
 		ContentScale{ x: 1.0, y: 1.0 }
 	}
 
-	tl := sel.top_left()
+	tl := sel.top_left(self.renderer_state.terminal.screens.active)
 	mut x := f64(tl.x * self.size.cell.width + self.size.padding.left)
 	x /= content_scale.x
 
@@ -5282,7 +5538,7 @@ fn (mut self Surface) dump_text_locked(sel TermSelection) !Text {
 	y -= f64(self.font_metrics.cell_baseline)
 	y /= content_scale.y
 
-	br := sel.bottom_right()
+	br := sel.bottom_right(self.renderer_state.terminal.screens.active)
 	start := tl.y * self.renderer_state.terminal.cols + tl.x
 	end_val := br.y * self.renderer_state.terminal.cols + br.x
 
@@ -5299,29 +5555,97 @@ fn (mut self Surface) dump_text_locked(sel TermSelection) !Text {
 
 // mouse_selection calculates the selection given click/drag pins and pixel positions.
 fn mouse_selection(click_pin Pin, drag_pin Pin, click_x u32, drag_x u32, mods input.Mods, size Size) ?TermSelection {
-	if click_pin.eql(drag_pin) && click_x == drag_x {
+	if size.cell.width == 0 || size.grid().columns == 0 {
 		return none
 	}
-
-	// Determine the 60% threshold for cell inclusion
-	threshold := if size.cell.width > 0 { size.cell.width * 6 / 10 } else { u32(0) }
-
-	// Determine start and end pins
-	// If drag is before click, swap
-	is_before := drag_pin.before(click_pin)
-
-	start := if is_before { drag_pin } else { click_pin }
-	end := if is_before { click_pin } else { drag_pin }
-
-	// Adjust based on threshold and fractional position within cells
-	_ = threshold
-	_ = click_x
-	_ = drag_x
-	_ = mods
-
-	return TermSelection{
-		start_pin: start
-		end_pin: end
-		rectangle: mods.alt
+	threshold := u32(math.round(f64(size.cell.width) * 0.6))
+	max_x := size.grid().columns * size.cell.width - 1
+	drag_relative := if drag_x > size.padding.left { drag_x - size.padding.left } else { u32(0) }
+	click_relative := if click_x > size.padding.left { click_x - size.padding.left } else { u32(0) }
+	drag_x_frac := math.min(max_x, drag_relative) % size.cell.width
+	click_x_frac := math.min(max_x, click_relative) % size.cell.width
+	rectangle := rectangle_select_mods(mods)
+	same_pin := drag_pin.eql(click_pin)
+	end_before_start := if same_pin {
+		drag_x_frac < click_x_frac
+	} else if rectangle {
+		if drag_pin.x == click_pin.x {
+			drag_x_frac < click_x_frac
+		} else {
+			drag_pin.x < click_pin.x
+		}
+	} else {
+		drag_pin.before(click_pin)
 	}
+	include_click := if end_before_start {
+		click_x_frac >= threshold
+	} else {
+		click_x_frac < threshold
+	}
+	include_drag := if end_before_start {
+		drag_x_frac < threshold
+	} else {
+		drag_x_frac >= threshold
+	}
+	cols := size.grid().columns
+	start_pin := if include_click {
+		click_pin
+	} else if end_before_start {
+		if rectangle { pin_left_clamp(click_pin) } else { pin_left_wrap(click_pin, cols) }
+	} else if rectangle {
+		pin_right_clamp(click_pin, cols)
+	} else {
+		pin_right_wrap(click_pin, cols)
+	}
+	end_pin := if include_drag {
+		drag_pin
+	} else if end_before_start {
+		if rectangle { pin_right_clamp(drag_pin, cols) } else { pin_right_wrap(drag_pin, cols) }
+	} else if rectangle {
+		pin_left_clamp(drag_pin)
+	} else {
+		pin_left_wrap(drag_pin, cols)
+	}
+	if (!include_click && same_pin)
+		|| (!include_click && rectangle && click_pin.x == drag_pin.x)
+		|| (!include_click && end_pin.eql(click_pin))
+		|| (!include_click && rectangle && end_pin.x == click_pin.x)
+		|| (!include_drag && start_pin.eql(drag_pin))
+		|| (!include_drag && rectangle && start_pin.x == drag_pin.x) {
+		return none
+	}
+	return TermSelection.init(start_pin, end_pin, rectangle)
+}
+
+fn rectangle_select_mods(mods input.Mods) bool {
+	$if macos {
+		return mods.alt
+	} $else {
+		return mods.ctrl_or_super() && mods.alt
+	}
+}
+
+fn pin_left_clamp(pin Pin) Pin {
+	return Pin{ x: if pin.x > 0 { pin.x - 1 } else { u32(0) }, y: pin.y }
+}
+
+fn pin_right_clamp(pin Pin, cols u32) Pin {
+	return Pin{ x: math.min(pin.x + 1, cols - 1), y: pin.y }
+}
+
+fn pin_left_wrap(pin Pin, cols u32) Pin {
+	if pin.x > 0 {
+		return Pin{ x: pin.x - 1, y: pin.y }
+	}
+	if pin.y > 0 {
+		return Pin{ x: cols - 1, y: pin.y - 1 }
+	}
+	return pin
+}
+
+fn pin_right_wrap(pin Pin, cols u32) Pin {
+	if pin.x + 1 < cols {
+		return Pin{ x: pin.x + 1, y: pin.y }
+	}
+	return Pin{ x: 0, y: pin.y + 1 }
 }

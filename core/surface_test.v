@@ -2,6 +2,7 @@ module core
 
 import input
 import apprt
+import terminal
 
 // Test helper: sets up a 10x5 cell grid with 10x20px cells and 5px padding on all sides.
 fn make_test_size() Size {
@@ -14,10 +15,7 @@ fn make_test_size() Size {
 
 // Test helper: creates a Surface with an initialized terminal (avoids nil deref).
 fn make_test_surface() Surface {
-	mut t := SurfaceTerminal{
-		cols: 80
-		rows: 24
-	}
+	mut t := terminal.Terminal.init(terminal.Options{ cols: 80, rows: 24 }) or { panic(err) }
 	return Surface{
 		renderer_state: RendererState{
 			terminal: &t
@@ -204,9 +202,9 @@ fn test_scaled_padding_2x() {
 fn test_preedit_width() {
 	p := Preedit{
 		codepoints: [
-			PreeditCodepoint{ codepoint: 0x3042, wide: true },  // あ (wide)
-			PreeditCodepoint{ codepoint: 0x61, wide: false },    // a (narrow)
-			PreeditCodepoint{ codepoint: 0x4e16, wide: true },  // 世 (wide)
+			PreeditCodepoint{ codepoint: 0x3042, wide: true }, // あ (wide)
+			PreeditCodepoint{ codepoint: 0x61, wide: false }, // a (narrow)
+			PreeditCodepoint{ codepoint: 0x4e16, wide: true }, // 世 (wide)
 		]
 	}
 	assert p.width() == 5 // 2 + 1 + 2
@@ -341,6 +339,33 @@ fn test_complete_clipboard_paste_empty() ! {
 	surf.complete_clipboard_paste('', true)!
 }
 
+fn test_complete_clipboard_paste_encodes_non_bracketed_newlines() ! {
+	mut surf := make_test_surface()
+	surf.complete_clipboard_paste('one\ntwo', true)!
+	assert surf.io.messages.len == 1
+	assert surf.io.messages[0].kind == .write_alloc
+	assert surf.io.messages[0].data.bytestr() == 'one\rtwo'
+}
+
+fn test_complete_clipboard_paste_encodes_bracketed_fences() ! {
+	mut surf := make_test_surface()
+	surf.renderer_state.terminal.modes.set(.bracketed_paste, true)
+	surf.complete_clipboard_paste('one\ntwo', true)!
+	assert surf.io.messages.len == 3
+	assert surf.io.messages.map(it.data.bytestr()).join('') == '\x1b[200~one\ntwo\x1b[201~'
+}
+
+fn test_complete_clipboard_paste_rejects_unsafe_text() {
+	mut surf := make_test_surface()
+	surf.config.clipboard_paste_protection = true
+	surf.complete_clipboard_paste('one\ntwo', false) or {
+		assert err.msg() == 'UnsafePaste'
+		assert surf.io.messages.len == 0
+		return
+	}
+	assert false, 'expected UnsafePaste'
+}
+
 fn test_end_key_sequence_no_queued() {
 	mut surf := Surface{}
 	// With no queued items, should just clear sequence_set
@@ -430,7 +455,7 @@ fn test_has_selection() {
 	mut surf := make_test_surface()
 	assert surf.has_selection() == false
 
-	surf.renderer_state.terminal.selection = TermSelection{
+	surf.renderer_state.terminal.screens.active.selection = TermSelection{
 		start_pin: Pin{ x: 0, y: 0 }
 		end_pin: Pin{ x: 5, y: 0 }
 	}
@@ -483,4 +508,61 @@ fn test_encode_key_no_output() {
 	}
 	req := surf.encode_key(ev)
 	assert req == none
+}
+
+fn test_copy_selection_to_standard_clipboard() ! {
+	mut surf := make_test_surface()
+	mut runtime := RuntimeSurface{}
+	surf.rt_surface = &runtime
+	for i, cp in 'hello'.runes() {
+		surf.renderer_state.terminal.screens.active.pages.screen_rows[0].cells[i] = terminal.CellData.init(u32(cp))
+	}
+	start := surf.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+		tag: .active
+		x: 0
+		y: 0
+	}) or { panic('no start pin') }
+	end := surf.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+		tag: .active
+		x: 4
+		y: 0
+	}) or { panic('no end pin') }
+	surf.copy_selection_to_clipboards(terminal.Selection.init(start, end, false), [
+		.standard,
+	], .plain)!
+	contents := runtime.clipboards[.standard]
+	assert contents.len == 1
+	assert contents[0].mime == 'text/plain'
+	assert contents[0].data == 'hello'
+}
+
+fn test_copy_selection_mixed_to_requested_clipboards() ! {
+	mut surf := make_test_surface()
+	mut runtime := RuntimeSurface{}
+	surf.rt_surface = &runtime
+	for i, cp in 'hello'.runes() {
+		surf.renderer_state.terminal.screens.active.pages.screen_rows[0].cells[i] = terminal.CellData.init(u32(cp))
+	}
+	start := surf.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+		tag: .active
+		x: 0
+		y: 0
+	}) or { panic('no start pin') }
+	end := surf.renderer_state.terminal.screens.active.pages.pin(terminal.PinOpts{
+		tag: .active
+		x: 4
+		y: 0
+	}) or { panic('no end pin') }
+	surf.copy_selection_to_clipboards(terminal.Selection.init(start, end, false), [
+		.standard,
+		.selection,
+	], .mixed)!
+	for loc in [apprt.Clipboard.standard, .selection] {
+		contents := runtime.clipboards[loc]
+		assert contents.len == 2
+		assert contents[0].mime == 'text/plain'
+		assert contents[0].data == 'hello'
+		assert contents[1].mime == 'text/html'
+		assert contents[1].data.contains('hello')
+	}
 }
