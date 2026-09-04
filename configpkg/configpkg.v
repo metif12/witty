@@ -4025,6 +4025,9 @@ pub mut:
 	// `keybind` handler in `apply_kv` for the full syntax. Backed by an
 	// `input.Set` (root bindings) plus named key tables.
 	keybind Keybinds
+	// One-way physical modifier remappings applied before keybinding lookup
+	// and terminal input encoding.
+	key_remap inputpkg.RemapSet
 	// The named font style to use for each of the requested terminal font
 	// styles. This looks up the style based on the font style string advertised
 	// by the font itself.
@@ -4803,6 +4806,7 @@ pub fn (c Config) clone() Config {
 	}
 	copy.diagnostics = c.diagnostics.clone()
 	copy.keybind = c.keybind.clone()
+	copy.key_remap = c.key_remap.clone()
 	copy.selection_word_chars = c.selection_word_chars.clone()
 	copy.clipboard_codepoint_map = c.clipboard_codepoint_map.clone()
 	copy.link = LinkConfig{
@@ -5350,20 +5354,6 @@ pub:
 	keystroke bool = true
 }
 
-pub struct KeyRemapSet {}
-
-pub fn (k KeyRemapSet) is_remapped(mods voidptr) bool {
-	return false
-}
-
-pub fn (k KeyRemapSet) apply(mods voidptr) voidptr {
-	return mods
-}
-
-pub fn (k KeyRemapSet) clone() !KeyRemapSet {
-	return k
-}
-
 pub struct Duration {
 pub:
 	duration u64
@@ -5853,6 +5843,13 @@ fn (mut c Config) apply_kv(key string, value string) {
 				}
 			}
 		}
+		'key-remap' {
+			c.key_remap.parse_cli(value) or {
+				c.diagnostics << Diagnostic{
+					message: 'invalid key-remap "${value}": ${err.msg()}'
+				}
+			}
+		}
 
 		// --- Compatibility handlers for removed/renamed options ---
 		// These faithfully translate the CompatibilityHandler entries in
@@ -6128,6 +6125,10 @@ pub fn (mut c Config) finalize() {
 	if c.window_height > 0 && c.window_height < 4 {
 		c.window_height = 4
 	}
+
+	// Sided mappings must be ordered before their unsided counterparts so
+	// matching produces the same first-match result as Ghostty.
+	c.key_remap.finalize()
 }
 
 // load_theme resolves the configured `theme` and applies the theme file's

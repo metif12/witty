@@ -34,6 +34,33 @@ fn test_derived_config_uses_selection_and_clipboard_maps() {
 	assert derived.clipboard_codepoint_map[0].range_start == 0x2500
 }
 
+fn test_surface_key_binding_applies_modifier_remap() {
+	mut cfg := configpkg.Config.default_config()
+	cfg.keybind.set = input.Set{}
+	cfg.keybind.set.put(input.Trigger{
+		key: input.TriggerKey.new_unicode(u32(`q`))
+		mods: input.Mods{ super_: true }
+	}, input.Action.new(.quit))
+	cfg.key_remap.parse('ctrl=super')!
+	cfg.key_remap.finalize()
+
+	mut surf := make_test_surface()
+	surf.config = DerivedConfig.from_config(&cfg)!
+	flags := surf.key_event_is_binding(input.KeyEvent{
+		key: .key_q
+		action: .press
+		mods: input.Mods{
+			ctrl: true
+			sides: input.SideInfo{ ctrl: .left }
+		}
+		utf8: 'q'
+	}) or {
+		assert false, 'remapped binding was not found'
+		return
+	}
+	assert !flags.global
+}
+
 fn test_grid_size_basic() {
 	s := make_test_size()
 	g := s.grid()

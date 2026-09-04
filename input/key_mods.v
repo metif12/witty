@@ -120,7 +120,6 @@ module input
 //
 // --- Original Ghostty Comments End: src/input/key_mods.zig
 
-
 // Modifier remapping. See key-remap in Config for detailed docs.
 
 // Mod represents a single modifier key.
@@ -230,6 +229,9 @@ pub fn (m Mods) sides_int() u8 {
 	if m.sides.alt == .right {
 		v |= 4
 	}
+	if m.sides.super == .right {
+		v |= 8
+	}
 	return v
 }
 
@@ -290,26 +292,34 @@ pub fn (mut s RemapSet) parse(inp string) ! {
 	if from_side := from_side_opt {
 		// Sided from: add single mapping
 		from_mods := init_mods(from_mod, from_side)
-		s.entries << RemapEntry{
-			from: from_mods
-			to: to_mods
-		}
-		s.mask.update(from_mods)
+		s.put_mapping(from_mods, to_mods)
 	} else {
 		// Unsided from: add both left and right mappings
 		from_left := init_mods(from_mod, .left)
 		from_right := init_mods(from_mod, .right)
-		s.entries << RemapEntry{
-			from: from_left
-			to: to_mods
-		}
-		s.entries << RemapEntry{
-			from: from_right
-			to: to_mods
-		}
-		s.mask.update(from_left)
-		s.mask.update(from_right)
+		s.put_mapping(from_left, to_mods)
+		s.put_mapping(from_right, to_mods)
 	}
+}
+
+// put_mapping matches AutoArrayHashMap.put in the source: parsing the same
+// physical modifier and side again replaces its destination in place.
+fn (mut s RemapSet) put_mapping(from Mods, to Mods) {
+	for i, entry in s.entries {
+		if entry.from.equal_sided(from) {
+			s.entries[i] = RemapEntry{
+				from: from
+				to: to
+			}
+			s.mask.update(from)
+			return
+		}
+	}
+	s.entries << RemapEntry{
+		from: from
+		to: to
+	}
+	s.mask.update(from)
 }
 
 // finalize must be called prior to any remappings so that the mapping
@@ -454,8 +464,7 @@ fn format_mod(mods Mods) string {
 		return side_prefix(mods.sides.alt) + 'alt'
 	}
 	if mods.super_ {
-		// SideInfo has no super field so super is always treated as left.
-		return 'left_super'
+		return side_prefix(mods.sides.super) + 'super'
 	}
 	return ''
 }
@@ -473,6 +482,7 @@ fn (a Mods) equal_sided(b Mods) bool {
 	return a.shift == b.shift && a.ctrl == b.ctrl && a.alt == b.alt
 		&& a.super_ == b.super_ && a.sides.shift == b.sides.shift
 		&& a.sides.ctrl == b.sides.ctrl && a.sides.alt == b.sides.alt
+		&& a.sides.super == b.sides.super
 }
 
 // parse_mod parses a single modifier string like "ctrl", "left_shift", "cmd".
@@ -535,7 +545,7 @@ fn init_mods(mod_val Mod, side Side) Mods {
 		}
 		.super_ {
 			m.super_ = true
-			// SideInfo doesn't have super field, store in a compatible way
+			m.sides.super = side
 		}
 	}
 	return m

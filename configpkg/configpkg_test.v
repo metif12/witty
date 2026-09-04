@@ -1264,3 +1264,24 @@ clipboard-codepoint-map = U+2500=U+002D
 	assert cfg.clipboard_codepoint_map.map.len == 1
 	assert cfg.diagnostics.len == 0
 }
+
+fn test_config_key_remap_is_parsed_cloned_and_finalized() {
+	mut cfg := Config.default_config()
+	cfg.load_string('key-remap = ctrl=super\nkey-remap = right_ctrl=alt\n')
+	assert cfg.diagnostics.len == 0
+	cfg.finalize()
+
+	left_ctrl := input.Mods{
+		ctrl: true
+		sides: input.SideInfo{ ctrl: .left }
+	}
+	right_ctrl := input.Mods{
+		ctrl: true
+		sides: input.SideInfo{ ctrl: .right }
+	}
+	assert cfg.key_remap.apply(left_ctrl).super_
+	assert cfg.key_remap.apply(right_ctrl).alt
+
+	cloned := cfg.clone()
+	assert cloned.key_remap.equal(cfg.key_remap)
+}

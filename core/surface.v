@@ -2209,6 +2209,7 @@ pub struct DerivedConfig {
 pub mut:
 	original_font_size               f32
 	keybind                          configpkg.Keybinds
+	key_remaps                       input.RemapSet
 	abnormal_command_exit_runtime_ms u32
 	clipboard_read                   ClipboardAccess
 	clipboard_write                  ClipboardAccess
@@ -2297,6 +2298,7 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 	return DerivedConfig{
 		original_font_size: config.font_size
 		keybind: config.keybind.clone()
+		key_remaps: config.key_remap.clone()
 		abnormal_command_exit_runtime_ms: config.abnormal_command_exit_runtime
 		clipboard_read: unsafe { ClipboardAccess(config.clipboard_read) }
 		clipboard_write: unsafe { ClipboardAccess(config.clipboard_write) }
@@ -2351,6 +2353,7 @@ pub fn (mut self DerivedConfig) deinit() {
 	self.links = []
 	self.selection_word_chars = []
 	self.clipboard_codepoint_map = []
+	self.key_remaps.deinit()
 }
 
 fn (self &DerivedConfig) scaled_padding(x_dpi f32, y_dpi f32) Padding {
@@ -3123,7 +3126,13 @@ pub fn (mut self Surface) preedit_callback(preedit ?string) ! {
 }
 
 // key_event_is_binding returns binding flags if the key event would trigger a keybinding.
-pub fn (mut self Surface) key_event_is_binding(event KeyEvent) ?BindingFlags {
+pub fn (mut self Surface) key_event_is_binding(event_orig KeyEvent) ?BindingFlags {
+	// Apply physical modifier remappings before any binding lookup.
+	mut event := event_orig
+	if self.config.key_remaps.is_remapped(event_orig.mods) {
+		event.mods = self.config.key_remaps.apply(event_orig.mods)
+	}
+
 	if event.action == .release {
 		return none
 	}
@@ -3160,7 +3169,13 @@ fn binding_flags(entry &input.SetEntry) BindingFlags {
 }
 
 // key_callback handles key events including keybindings, encoding, and sending to terminal.
-pub fn (mut self Surface) key_callback(event KeyEvent) !apprt.InputEffect {
+pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
+	// Modifier remaps affect both keybinding matching and terminal encoding.
+	mut event := event_orig
+	if self.config.key_remaps.is_remapped(event_orig.mods) {
+		event.mods = self.config.key_remaps.apply(event_orig.mods)
+	}
+
 	// Handle keybindings first (press, repeat, release all checked)
 	if v := self.maybe_handle_binding(event) {
 		return v

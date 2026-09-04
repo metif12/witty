@@ -15,6 +15,7 @@ fn test_remap_unsided_creates_both() {
 	result_l := set.apply(left_ctrl)
 	assert result_l.super_ == true
 	assert result_l.ctrl == false
+	assert result_l.sides.super == .left
 
 	// Right ctrl should also map to super
 	right_ctrl := Mods{
@@ -24,6 +25,7 @@ fn test_remap_unsided_creates_both() {
 	result_r := set.apply(right_ctrl)
 	assert result_r.super_ == true
 	assert result_r.ctrl == false
+	assert result_r.sides.super == .left
 }
 
 fn test_remap_sided_from_only_maps_that_side() {
@@ -60,6 +62,26 @@ fn test_remap_sided_to() {
 	result := set.apply(left_ctrl)
 	assert result.super_ == true
 	assert result.ctrl == false
+	assert result.sides.super == .right
+}
+
+fn test_remap_replaces_existing_physical_side() {
+	mut set := RemapSet{}
+	set.parse('ctrl=super')!
+	set.parse('right_ctrl=alt')!
+	set.finalize()
+
+	left := set.apply(Mods{
+		ctrl: true
+		sides: SideInfo{ ctrl: .left }
+	})
+	right := set.apply(Mods{
+		ctrl: true
+		sides: SideInfo{ ctrl: .right }
+	})
+	assert left.super_
+	assert right.alt
+	assert !right.super_
 }
 
 fn test_remap_both_sides_specified() {
@@ -159,7 +181,7 @@ fn test_remap_aliased_cmd() {
 
 	left_super := Mods{
 		super_: true
-		sides: SideInfo{ shift: .left }
+		sides: SideInfo{ super: .left }
 	}
 	result := set.apply(left_super)
 	assert result.ctrl == true
