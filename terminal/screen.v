@@ -1773,6 +1773,15 @@ pub mut:
 	semantic_content_clear_eol bool
 }
 
+// CursorCopyOptions controls which cursor-owned state is migrated when a
+// cursor is copied between screens.
+pub struct CursorCopyOptions {
+pub:
+	// Copy the hyperlink from the other cursor. When false, any current
+	// hyperlink is cleared and the source hyperlink is not activated.
+	hyperlink bool = true
+}
+
 // SavedCursor holds saved cursor state for save/restore operations.
 pub struct SavedCursor {
 pub mut:
@@ -2273,11 +2282,7 @@ pub fn (mut self Screen) cursor_row_up(n u32) &RowData {
 
 // Copy another cursor's state into this screen. The cursor can be on any
 // screen but the x/y must be within our screen bounds.
-//
-// This does NOT copy the hyperlink from the other cursor (matching the
-// `hyperlink = false` usage in Terminal.switchScreenMode). Full hyperlink
-// migration across pages is not modeled here.
-pub fn (mut self Screen) cursor_copy(other Cursor) ! {
+pub fn (mut self Screen) cursor_copy(other Cursor, opts CursorCopyOptions) ! {
 	assert other.x < self.pages.cols
 	assert other.y < self.pages.rows
 
@@ -2305,6 +2310,20 @@ pub fn (mut self Screen) cursor_copy(other Cursor) ! {
 
 	// Move to the correct location to match the other cursor.
 	self.cursor_absolute(other.x, other.y)
+
+	// If the other cursor had a hyperlink, add it to ours. Ghostty resolves
+	// the source page-table entry here; the flat Pages model already keeps the
+	// resolved hyperlink on the cursor. Explicit IDs are preserved, while an
+	// implicit link intentionally receives a fresh destination-screen ID.
+	if opts.hyperlink && other.hyperlink_id != 0 {
+		if link := other.hyperlink_state {
+			id_ := match link.id {
+				HyperlinkExplicitId { ?string(link.id.value) }
+				HyperlinkImplicitId { ?string(none) }
+			}
+			self.start_hyperlink(link.uri, id_)!
+		}
+	}
 }
 
 // Reset the wrap state of the cursor row.

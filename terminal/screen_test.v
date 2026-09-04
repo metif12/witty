@@ -110,7 +110,7 @@ fn test_screen_cursor_copy_xy() {
 
 	mut s2 := Screen.init(10, 10, 0)
 	defer { s2.deinit() }
-	s2.cursor_copy(s.cursor) or { assert false }
+	s2.cursor_copy(s.cursor, CursorCopyOptions{}) or { assert false }
 	assert s2.cursor.x == 2
 	assert s2.cursor.y == 3
 	s2.test_write_string('Hello') or { assert false }
@@ -810,8 +810,92 @@ fn test_screen_cursor_copy_style_copy() {
 
 	mut s2 := Screen.init(10, 10, 0)
 	defer { s2.deinit() }
-	s2.cursor_copy(s.cursor) or { assert false }
+	s2.cursor_copy(s.cursor, CursorCopyOptions{}) or { assert false }
 	assert s2.cursor.style.flags.bold
+}
+
+fn test_screen_cursor_copy_hyperlink_deref() {
+	mut s := Screen.init(10, 10, 0)
+	defer { s.deinit() }
+
+	mut s2 := Screen.init(10, 10, 0)
+	defer { s2.deinit() }
+	s2.start_hyperlink('https://example.com/', ?string(none)) or { assert false }
+	assert s2.cursor.hyperlink_id != 0
+	assert s2.cursor.hyperlink_state != none
+
+	// Copying a cursor without a hyperlink releases the active hyperlink.
+	s2.cursor_copy(s.cursor, CursorCopyOptions{}) or { assert false }
+	assert s2.cursor.hyperlink_id == 0
+	assert s2.cursor.hyperlink_state == none
+}
+
+fn test_screen_cursor_copy_hyperlink_copy() {
+	mut s := Screen.init(10, 10, 0)
+	defer { s.deinit() }
+	s.start_hyperlink('https://example.com/', ?string(none)) or { assert false }
+	source := s.cursor.hyperlink_state or {
+		assert false
+		return
+	}
+	source_id := match source.id {
+		HyperlinkImplicitId { source.id.offset }
+		HyperlinkExplicitId { u32(0) }
+	}
+
+	mut s2 := Screen.init(10, 10, 0)
+	defer { s2.deinit() }
+	s2.cursor_copy(s.cursor, CursorCopyOptions{}) or { assert false }
+	assert s2.cursor.hyperlink_id != 0
+	link := s2.cursor.hyperlink_state or {
+		assert false
+		return
+	}
+	assert link.uri == 'https://example.com/'
+	match link.id {
+		HyperlinkImplicitId {
+			assert link.id.offset > source_id
+		}
+		HyperlinkExplicitId {
+			assert false
+		}
+	}
+}
+
+fn test_screen_cursor_copy_explicit_hyperlink_id() {
+	mut s := Screen.init(10, 10, 0)
+	defer { s.deinit() }
+	s.start_hyperlink('https://example.com/', 'same-id') or { assert false }
+
+	mut s2 := Screen.init(10, 10, 0)
+	defer { s2.deinit() }
+	s2.cursor_copy(s.cursor, CursorCopyOptions{}) or { assert false }
+	link := s2.cursor.hyperlink_state or {
+		assert false
+		return
+	}
+	match link.id {
+		HyperlinkExplicitId {
+			assert link.id.value == 'same-id'
+		}
+		HyperlinkImplicitId {
+			assert false
+		}
+	}
+}
+
+fn test_screen_cursor_copy_hyperlink_copy_disabled() {
+	mut s := Screen.init(10, 10, 0)
+	defer { s.deinit() }
+	s.start_hyperlink('https://example.com/', ?string(none)) or { assert false }
+
+	mut s2 := Screen.init(10, 10, 0)
+	defer { s2.deinit() }
+	s2.cursor_copy(s.cursor, CursorCopyOptions{
+		hyperlink: false
+	}) or { assert false }
+	assert s2.cursor.hyperlink_id == 0
+	assert s2.cursor.hyperlink_state == none
 }
 
 // --- eraseRows / clear history ---

@@ -4176,7 +4176,9 @@ pub fn (mut self Terminal) switch_screen_mode(mode SwitchScreenMode, enabled boo
 		.mode_47, .mode_1047 {
 			if old_ != unsafe { nil } {
 				old_cursor := old_.cursor
-				self.screens.active.cursor_copy(old_cursor) or {
+				self.screens.active.cursor_copy(old_cursor, CursorCopyOptions{
+					hyperlink: false
+				}) or {
 					// cursor copy failed entering alt screen
 				}
 			}
@@ -4192,7 +4194,9 @@ pub fn (mut self Terminal) switch_screen_mode(mode SwitchScreenMode, enabled boo
 				// on it).
 				if old_ != unsafe { nil } {
 					old_cursor := old_.cursor
-					self.screens.active.cursor_copy(old_cursor) or {
+					self.screens.active.cursor_copy(old_cursor, CursorCopyOptions{
+						hyperlink: false
+					}) or {
 						// cursor copy failed entering alt screen
 					}
 				}
