@@ -247,6 +247,31 @@ fn test_surface_pwd_returns_an_owned_copy() {
 	assert surf.pwd()? == '/second'
 }
 
+fn test_text_binding_decodes_zig_escapes_before_writing() {
+	mut surf := make_test_surface()
+	assert surf.perform_binding_action(input.Action.new_str(.text, 'line\\n\\x41'))!
+	assert surf.io.messages.len == 1
+	assert surf.io.messages[0].kind == .write_alloc
+	assert surf.io.messages[0].data.bytestr() == 'line\nA'
+}
+
+fn test_invalid_text_binding_is_handled_without_writing() {
+	mut surf := make_test_surface()
+	assert surf.perform_binding_action(input.Action.new_str(.text, '\\q'))!
+	assert surf.io.messages.len == 0
+}
+
+fn test_cursor_key_binding_selects_sequence_from_terminal_mode() {
+	mut surf := make_test_surface()
+	action := input.Action.new_cursor_key('\x1b[A', '\x1bOA')
+	assert surf.perform_binding_action(action)!
+	assert surf.io.messages.last().data.bytestr() == '\x1b[A'
+
+	surf.renderer_state.terminal_.modes.set(.cursor_keys, true)
+	assert surf.perform_binding_action(action)!
+	assert surf.io.messages.last().data.bytestr() == '\x1bOA'
+}
+
 fn test_grid_size_basic() {
 	s := make_test_size()
 	g := s.grid()

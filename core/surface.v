@@ -4203,29 +4203,54 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.queue_io(IOMessage{ kind: .write_small, data: full_data })
 
 			// CSI/ESC triggers a scroll.
+			locked := self.renderer_state.mutex != unsafe { nil }
+			if locked {
+				self.renderer_state.mutex.lock()
+			}
 			self.scroll_to_bottom() or {}
+			if locked {
+				self.renderer_state.mutex.unlock()
+			}
 		}
 		.text {
-			// For text we always allocate. The Zig version parses the string
-			// literal escapes via configpkg.string.parse; here we send the
-			// bytes as-is.
-			self.queue_io(IOMessage{ kind: .write_alloc, data: action.str_param.bytes() })
+			// Text actions use Zig string literal escapes, matching the config
+			// representation used by Ghostty.
+			parsed := configpkg.parse_zig_string(action.str_param) or { return true }
+			self.queue_io(IOMessage{ kind: .write_alloc, data: parsed.bytes() })
 
 			// Text triggers a scroll.
+			locked := self.renderer_state.mutex != unsafe { nil }
+			if locked {
+				self.renderer_state.mutex.lock()
+			}
 			self.scroll_to_bottom() or {}
+			if locked {
+				self.renderer_state.mutex.unlock()
+			}
 		}
 		.cursor_key {
-			// We send a different sequence depending on if we're in cursor
-			// keys mode. cursor_key can't be set via config (see binding.v),
-			// so this is effectively unreachable, but we keep witty's prior
-			// behavior of scrolling and writing the (empty) sequence.
+			// DECCKM selects between the normal and application sequences.
+			locked := self.renderer_state.mutex != unsafe { nil }
+			if locked {
+				self.renderer_state.mutex.lock()
+			}
+			normal := !self.renderer_state.terminal_.modes.get(.cursor_keys)
 			self.scroll_to_bottom() or {}
-			self.queue_io(IOMessage{ kind: .write_stable, data: action.str_param.bytes() })
+			if locked {
+				self.renderer_state.mutex.unlock()
+			}
+			data := if normal { action.cursor_key.normal } else { action.cursor_key.application }
+			self.queue_io(IOMessage{ kind: .write_stable, data: data.bytes() })
 		}
 		.reset {
-			self.renderer_state.mutex.lock()
+			locked := self.renderer_state.mutex != unsafe { nil }
+			if locked {
+				self.renderer_state.mutex.lock()
+			}
 			defer {
-				self.renderer_state.mutex.unlock()
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
 			}
 			self.renderer_state.terminal_.full_reset()
 		}
@@ -4291,6 +4316,15 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			}
 		}
 		.copy_to_clipboard {
+			locked := self.renderer_state.mutex != unsafe { nil }
+			if locked {
+				self.renderer_state.mutex.lock()
+			}
+			defer {
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
+			}
 			if sel := self.renderer_state.terminal_.screens.active.selection {
 				self.copy_selection_to_clipboards(sel, [.standard], unsafe {
 					input.CopyToClipboard(action.enum_param)
@@ -4310,6 +4344,15 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				return false
 			}
 			pos := self.rt_surface.get_cursor_pos()!
+			locked := self.renderer_state.mutex != unsafe { nil }
+			if locked {
+				self.renderer_state.mutex.lock()
+			}
+			defer {
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
+			}
 			link_info := self.link_at_pos(pos) or { return false }
 			url_text := match link_info.action {
 				.open {
@@ -4398,7 +4441,15 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 		.clear_screen {
 			// If the active screen is the alternate screen then clear screen
 			// does nothing, so we return false so the keybind is unconsumed.
-			if self.renderer_state.terminal_.screens.active_key == .alternate {
+			locked := self.renderer_state.mutex != unsafe { nil }
+			if locked {
+				self.renderer_state.mutex.lock()
+			}
+			alternate := self.renderer_state.terminal_.screens.active_key == .alternate
+			if locked {
+				self.renderer_state.mutex.unlock()
+			}
+			if alternate {
 				return false
 			}
 			self.queue_io(IOMessage{ kind: .clear_screen })
@@ -4410,10 +4461,26 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.queue_io(IOMessage{ kind: .scroll_to_bottom })
 		}
 		.scroll_to_row {
+			locked := self.renderer_state.mutex != unsafe { nil }
+			if locked {
+				self.renderer_state.mutex.lock()
+			}
 			self.renderer_state.terminal_.screens.active.scroll_to_row(usize(action.uint_param))
+			if locked {
+				self.renderer_state.mutex.unlock()
+			}
 			self.queue_render()!
 		}
 		.scroll_to_selection {
+			locked := self.renderer_state.mutex != unsafe { nil }
+			if locked {
+				self.renderer_state.mutex.lock()
+			}
+			defer {
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
+			}
 			sel := self.renderer_state.terminal_.screens.active.selection or { return false }
 			self.renderer_state.terminal_.screens.active.scroll_to_row(usize(sel.top_left(self.renderer_state.terminal_.screens.active).y))
 			self.queue_render()!
@@ -4610,6 +4677,15 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			})!
 		}
 		.select_all {
+			locked := self.renderer_state.mutex != unsafe { nil }
+			if locked {
+				self.renderer_state.mutex.lock()
+			}
+			defer {
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
+			}
 			if sel := self.renderer_state.terminal_.screens.active.select_all() {
 				self.set_selection(sel)!
 				self.queue_render()!
@@ -4664,6 +4740,15 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.end_key_sequence(.flush, .retain)
 		}
 		.adjust_selection {
+			locked := self.renderer_state.mutex != unsafe { nil }
+			if locked {
+				self.renderer_state.mutex.lock()
+			}
+			defer {
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
+			}
 			mut screen := self.renderer_state.terminal_.screens.active
 			mut sel := screen.selection or { return false }
 			sel.adjust(screen, selection_adjustment_from_input(action.enum_param))

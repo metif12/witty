@@ -347,6 +347,16 @@ fn test_parse_action_with_string() {
 	assert b2.action.str_param == 'A'
 }
 
+fn test_cursor_key_action_preserves_both_mode_sequences() {
+	a := Action.new_cursor_key('\x1b[A', '\x1bOA')
+	assert a.tag == .cursor_key
+	assert a.cursor_key.normal == '\x1b[A'
+	assert a.cursor_key.application == '\x1bOA'
+	assert a == Action.new_cursor_key('\x1b[A', '\x1bOA')
+	assert a != Action.new_cursor_key('\x1b[B', '\x1bOB')
+	assert a.hash() == Action.new_cursor_key('\x1b[A', '\x1bOA').hash()
+}
+
 fn test_parse_action_with_enum() {
 	b := parse_single('a=new_split:right') or { panic(err.msg()) }
 	assert b.action.tag == .new_split
@@ -929,8 +939,7 @@ fn test_action_format_all_parameter_shapes() {
 	assert Action.new_enum(.adjust_selection, i32(AdjustSelection.end_)).format() == 'adjust_selection:end'
 	assert Action.new_enum(.crash, i32(CrashThread.main_thread)).format() == 'crash:main'
 	assert Action.new_enum2(.resize_split, i32(SplitResizeDirection.up), 10).format() == 'resize_split:up,10'
-	assert Action.new_enum2(.write_screen_file, i32(WriteScreenAction.copy),
-		i32(WriteScreenFormat.html)).format() == 'write_screen_file:copy,html'
+	assert Action.new_enum2(.write_screen_file, i32(WriteScreenAction.copy), i32(WriteScreenFormat.html)).format() == 'write_screen_file:copy,html'
 }
 
 fn test_move_tab_is_signed_and_formats() {

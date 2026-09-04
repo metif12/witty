@@ -1042,7 +1042,6 @@ import strings
 //
 // --- Original Ghostty Comments End: src/input/Binding.zig
 
-
 // A binding maps some input trigger to an action. When the trigger
 // occurs, the action is performed.
 
@@ -1057,7 +1056,7 @@ pub:
 	flags Flags
 }
 
-pub fn (a Binding) == (b Binding) bool {
+pub fn (a Binding) ==(b Binding) bool {
 	return a.trigger.equal(b.trigger) && a.action.equal(b.action) && a.flags == b.flags
 }
 
@@ -1110,8 +1109,8 @@ pub fn (f Flags) cval() u8 {
 pub struct TriggerKey {
 pub:
 	typ      TriggerKeyType
-	physical Key  // used when typ == .physical
-	unicode  u32  // used when typ == .unicode
+	physical Key // used when typ == .physical
+	unicode  u32 // used when typ == .unicode
 }
 
 pub enum TriggerKeyType {
@@ -1140,7 +1139,7 @@ pub fn TriggerKey.new_catch_all() TriggerKey {
 	}
 }
 
-pub fn (a TriggerKey) == (b TriggerKey) bool {
+pub fn (a TriggerKey) ==(b TriggerKey) bool {
 	if a.typ != b.typ {
 		return false
 	}
@@ -1160,7 +1159,7 @@ pub:
 	mods Mods
 }
 
-pub fn (a Trigger) == (b Trigger) bool {
+pub fn (a Trigger) ==(b Trigger) bool {
 	return a.equal(b)
 }
 
@@ -1212,8 +1211,12 @@ pub fn (t Trigger) hash() u64 {
 	mut h := u64(0)
 	h = h * 31 + u64(t.key.typ)
 	match t.key.typ {
-		.physical { h = h * 31 + u64(t.key.physical) }
-		.unicode { h = h * 31 + u64(folded_codepoint(t.key.unicode)) }
+		.physical {
+			h = h * 31 + u64(t.key.physical)
+		}
+		.unicode {
+			h = h * 31 + u64(folded_codepoint(t.key.unicode))
+		}
 		.catch_all {}
 	}
 	if t.mods.shift {
@@ -1624,6 +1627,12 @@ pub enum ActionTag {
 }
 
 // Action holds a binding action along with its parameter value.
+pub struct CursorKey {
+pub:
+	normal      string
+	application string
+}
+
 pub struct Action {
 pub:
 	tag ActionTag
@@ -1639,9 +1648,11 @@ pub:
 	enum_param i32
 	// Second parameter for tuple types (e.g. resize_split).
 	enum_param2 i32
+	// Cursor-key sequences selected by the terminal's DECCKM mode.
+	cursor_key CursorKey
 }
 
-pub fn (a Action) == (b Action) bool {
+pub fn (a Action) ==(b Action) bool {
 	return a.equal(b)
 }
 
@@ -1651,6 +1662,10 @@ pub fn (a Action) equal(b Action) bool {
 		return false
 	}
 	return match a.tag {
+		.cursor_key {
+			a.cursor_key.normal == b.cursor_key.normal
+				&& a.cursor_key.application == b.cursor_key.application
+		}
 		.csi, .esc, .text, .search, .activate_key_table, .activate_key_table_once {
 			a.str_param == b.str_param
 		}
@@ -1663,8 +1678,7 @@ pub fn (a Action) equal(b Action) bool {
 		.scroll_to_row, .goto_tab {
 			a.uint_param == b.uint_param
 		}
-		.new_split, .goto_split, .goto_window, .navigate_search, .adjust_selection,
-		.copy_to_clipboard, .inspector, .close_tab, .crash {
+		.new_split, .goto_split, .goto_window, .navigate_search, .adjust_selection, .copy_to_clipboard, .inspector, .close_tab, .crash {
 			a.enum_param == b.enum_param
 		}
 		.write_scrollback_file, .write_screen_file, .write_selection_file {
@@ -1685,6 +1699,14 @@ pub fn (a Action) hash() u64 {
 	mut h := u64(0)
 	h = h * 31 + u64(a.tag)
 	match a.tag {
+		.cursor_key {
+			for c in a.cursor_key.normal {
+				h = h * 31 + u64(c)
+			}
+			for c in a.cursor_key.application {
+				h = h * 31 + u64(c)
+			}
+		}
 		.csi, .esc, .text, .search, .activate_key_table, .activate_key_table_once {
 			for c in a.str_param {
 				h = h * 31 + u64(c)
@@ -1701,8 +1723,7 @@ pub fn (a Action) hash() u64 {
 		.scroll_to_row, .goto_tab {
 			h = h * 31 + a.uint_param
 		}
-		.new_split, .goto_split, .goto_window, .navigate_search, .adjust_selection,
-		.copy_to_clipboard, .inspector, .close_tab, .crash {
+		.new_split, .goto_split, .goto_window, .navigate_search, .adjust_selection, .copy_to_clipboard, .inspector, .close_tab, .crash {
 			h = h * 31 + u64(u32(a.enum_param))
 		}
 		.write_scrollback_file, .write_screen_file, .write_selection_file, .resize_split {
@@ -1725,6 +1746,16 @@ pub fn Action.new_str(tag ActionTag, s string) Action {
 	return Action{
 		tag: tag
 		str_param: s
+	}
+}
+
+pub fn Action.new_cursor_key(normal string, application string) Action {
+	return Action{
+		tag: .cursor_key
+		cursor_key: CursorKey{
+			normal: normal
+			application: application
+		}
 	}
 }
 
@@ -1802,7 +1833,11 @@ fn enum_name[T](value i32) string {
 }
 
 fn split_direction_name(value i32) string {
-	return if unsafe { SplitDirection(value) } == .auto_ { 'auto' } else { enum_name[SplitDirection](value) }
+	return if unsafe { SplitDirection(value) } == .auto_ {
+		'auto'
+	} else {
+		enum_name[SplitDirection](value)
+	}
 }
 
 fn split_focus_direction_name(value i32) string {
@@ -1810,11 +1845,19 @@ fn split_focus_direction_name(value i32) string {
 }
 
 fn adjust_selection_name(value i32) string {
-	return if unsafe { AdjustSelection(value) } == .end_ { 'end' } else { enum_name[AdjustSelection](value) }
+	return if unsafe { AdjustSelection(value) } == .end_ {
+		'end'
+	} else {
+		enum_name[AdjustSelection](value)
+	}
 }
 
 fn crash_thread_name(value i32) string {
-	return if unsafe { CrashThread(value) } == .main_thread { 'main' } else { enum_name[CrashThread](value) }
+	return if unsafe { CrashThread(value) } == .main_thread {
+		'main'
+	} else {
+		enum_name[CrashThread](value)
+	}
 }
 
 pub fn zig_escape(value string) string {
@@ -1956,9 +1999,9 @@ pub enum ActionScope {
 pub fn (a Action) scope() ActionScope {
 	return match a.tag {
 		.ignore, .unbind { .app }
-		.open_config, .reload_config, .close_all_windows, .quit,
-		.toggle_quick_terminal, .toggle_visibility, .check_for_updates,
-		.show_gtk_inspector { .app }
+		.open_config, .reload_config, .close_all_windows, .quit, .toggle_quick_terminal, .toggle_visibility, .check_for_updates, .show_gtk_inspector {
+			.app
+		}
 		.new_window, .undo, .redo { .app }
 		else { .surface }
 	}
@@ -1981,285 +2024,428 @@ pub fn Action.parse(input_str string) !Action {
 	return match action_name {
 		// Void actions (no parameter)
 		'ignore' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.ignore)
 		}
 		'unbind' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.unbind)
 		}
 		'reset' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.reset)
 		}
 		'paste_from_clipboard' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.paste_from_clipboard)
 		}
 		'paste_from_selection' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.paste_from_selection)
 		}
 		'copy_url_to_clipboard' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.copy_url_to_clipboard)
 		}
 		'copy_title_to_clipboard' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.copy_title_to_clipboard)
 		}
 		'reset_font_size' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.reset_font_size)
 		}
 		'search_selection' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.search_selection)
 		}
 		'start_search' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.start_search)
 		}
 		'end_search' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.end_search)
 		}
 		'clear_screen' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.clear_screen)
 		}
 		'select_all' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.select_all)
 		}
 		'scroll_to_top' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.scroll_to_top)
 		}
 		'scroll_to_bottom' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.scroll_to_bottom)
 		}
 		'scroll_to_selection' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.scroll_to_selection)
 		}
 		'scroll_page_up' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.scroll_page_up)
 		}
 		'scroll_page_down' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.scroll_page_down)
 		}
 		'new_window' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.new_window)
 		}
 		'new_tab' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.new_tab)
 		}
 		'previous_tab' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.previous_tab)
 		}
 		'next_tab' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.next_tab)
 		}
 		'last_tab' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.last_tab)
 		}
 		'toggle_tab_overview' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.toggle_tab_overview)
 		}
 		'prompt_surface_title' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.prompt_surface_title)
 		}
 		'prompt_tab_title' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.prompt_tab_title)
 		}
 		'toggle_split_zoom' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.toggle_split_zoom)
 		}
 		'toggle_readonly' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.toggle_readonly)
 		}
 		'equalize_splits' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.equalize_splits)
 		}
 		'reset_window_size' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.reset_window_size)
 		}
 		'show_gtk_inspector' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.show_gtk_inspector)
 		}
 		'show_on_screen_keyboard' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.show_on_screen_keyboard)
 		}
 		'open_config' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.open_config)
 		}
 		'reload_config' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.reload_config)
 		}
 		'close_surface' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.close_surface)
 		}
 		'close_window' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.close_window)
 		}
 		'close_all_windows' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.close_all_windows)
 		}
 		'toggle_maximize' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.toggle_maximize)
 		}
 		'toggle_fullscreen' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.toggle_fullscreen)
 		}
 		'toggle_window_decorations' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.toggle_window_decorations)
 		}
 		'toggle_window_float_on_top' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.toggle_window_float_on_top)
 		}
 		'toggle_secure_input' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.toggle_secure_input)
 		}
 		'toggle_mouse_reporting' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.toggle_mouse_reporting)
 		}
 		'toggle_command_palette' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.toggle_command_palette)
 		}
 		'toggle_quick_terminal' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.toggle_quick_terminal)
 		}
 		'toggle_visibility' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.toggle_visibility)
 		}
 		'toggle_background_opacity' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.toggle_background_opacity)
 		}
 		'check_for_updates' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.check_for_updates)
 		}
 		'undo' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.undo)
 		}
 		'redo' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.redo)
 		}
 		'end_key_sequence' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.end_key_sequence)
 		}
 		'deactivate_key_table' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.deactivate_key_table)
 		}
 		'deactivate_all_key_tables' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.deactivate_all_key_tables)
 		}
 		'quit' {
-			if has_param { return error('InvalidFormat') }
+			if has_param {
+				return error('InvalidFormat')
+			}
 			Action.new(.quit)
 		}
+
 		// String actions
 		'csi' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_str(.csi, param)
 		}
 		'esc' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_str(.esc, param)
 		}
 		'text' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_str(.text, param)
 		}
 		'search' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_str(.search, param)
 		}
 		'activate_key_table' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_str(.activate_key_table, param)
 		}
 		'activate_key_table_once' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_str(.activate_key_table_once, param)
 		}
+
 		// Float actions
 		'increase_font_size' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_float(.increase_font_size, strconv_parse_float(param)!)
 		}
 		'decrease_font_size' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_float(.decrease_font_size, strconv_parse_float(param)!)
 		}
 		'set_font_size' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_float(.set_font_size, strconv_parse_float(param)!)
 		}
 		'scroll_page_fractional' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_float(.scroll_page_fractional, strconv_parse_float(param)!)
 		}
+
 		// Int actions
 		'jump_to_prompt' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_int(.jump_to_prompt, strconv_parse_int(param)!)
 		}
 		'scroll_page_lines' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_int(.scroll_page_lines, strconv_parse_int(param)!)
 		}
+
 		// Unsigned int actions
 		'scroll_to_row' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_uint(.scroll_to_row, strconv_parse_uint(param)!)
 		}
 		'goto_tab' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_uint(.goto_tab, strconv_parse_uint(param)!)
 		}
 		'move_tab' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_int(.move_tab, strconv_parse_int(param)!)
 		}
+
 		// Enum actions with defaults
 		'copy_to_clipboard' {
 			if !has_param {
@@ -2282,49 +2468,73 @@ pub fn Action.parse(input_str string) !Action {
 				Action.new_enum(.close_tab, i32(parse_close_tab_mode(param)!))
 			}
 		}
+
 		// Enum actions (required parameter)
 		'navigate_search' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_enum(.navigate_search, i32(parse_navigate_search(param)!))
 		}
 		'adjust_selection' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_enum(.adjust_selection, i32(parse_adjust_selection(param)!))
 		}
 		'goto_split' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_enum(.goto_split, i32(parse_split_focus_direction(param)!))
 		}
 		'goto_window' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_enum(.goto_window, i32(parse_goto_window(param)!))
 		}
 		'inspector' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_enum(.inspector, i32(parse_inspector_mode(param)!))
 		}
 		'crash' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			Action.new_enum(.crash, i32(parse_crash_thread(param)!))
 		}
+
 		// Tuple actions (resize_split: direction,amount)
 		'resize_split' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			parse_resize_split(param)!
 		}
+
 		// WriteScreen actions
 		'write_scrollback_file' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			parse_write_screen(.write_scrollback_file, param)!
 		}
 		'write_screen_file' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			parse_write_screen(.write_screen_file, param)!
 		}
 		'write_selection_file' {
-			if !has_param { return error('InvalidFormat') }
+			if !has_param {
+				return error('InvalidFormat')
+			}
 			parse_write_screen(.write_selection_file, param)!
 		}
+
 		// cursor_key can't be set currently
 		'cursor_key' {
 			return error('InvalidAction')
@@ -2436,7 +2646,9 @@ fn parse_resize_split(s string) !Action {
 		'down' { SplitResizeDirection.down }
 		'left' { SplitResizeDirection.left }
 		'right' { SplitResizeDirection.right }
-		else { return error('InvalidFormat') }
+		else {
+			return error('InvalidFormat')
+		}
 	}
 	amount := amount_str.u16()
 	if amount == 0 && amount_str != '0' {
@@ -2456,7 +2668,9 @@ fn parse_write_screen(tag ActionTag, s string) !Action {
 			'copy' { WriteScreenAction.copy }
 			'paste' { WriteScreenAction.paste }
 			'open' { WriteScreenAction.open }
-			else { return error('InvalidFormat') }
+			else {
+				return error('InvalidFormat')
+			}
 		}
 		return Action.new_enum2(tag, i32(action_e), i32(WriteScreenFormat.plain))
 	}
@@ -2473,13 +2687,17 @@ fn parse_write_screen(tag ActionTag, s string) !Action {
 		'copy' { WriteScreenAction.copy }
 		'paste' { WriteScreenAction.paste }
 		'open' { WriteScreenAction.open }
-		else { return error('InvalidFormat') }
+		else {
+			return error('InvalidFormat')
+		}
 	}
 	format_e := match format_str {
 		'plain' { WriteScreenFormat.plain }
 		'vt' { WriteScreenFormat.vt }
 		'html' { WriteScreenFormat.html }
-		else { return error('InvalidFormat') }
+		else {
+			return error('InvalidFormat')
+		}
 	}
 	return Action.new_enum2(tag, i32(action_e), i32(format_e))
 }
@@ -2514,9 +2732,9 @@ fn strconv_parse_uint(s string) !u64 {
 pub struct ParserElem {
 pub:
 	typ     ParserElemType
-	trigger Trigger  // used for .leader and .binding
-	binding Binding  // used for .binding
-	action  Action   // used for .chain
+	trigger Trigger // used for .leader and .binding
+	binding Binding // used for .binding
+	action  Action // used for .chain
 }
 
 pub enum ParserElemType {
@@ -2797,12 +3015,12 @@ fn trigger_key_int(k TriggerKey) int {
 // SetValue is the entry type for the forward mapping of trigger to action.
 pub struct SetValue {
 pub mut:
-	typ          SetValueType
-	leader       &Set = unsafe { nil }  // used when typ == .leader
-	leaf_action  Action                 // used when typ == .leaf
-	leaf_flags   Flags                  // used when typ == .leaf
-	chain_actions []Action              // used when typ == .leaf_chained
-	chain_flags  Flags                  // used when typ == .leaf_chained
+	typ           SetValueType
+	leader        &Set = unsafe { nil } // used when typ == .leader
+	leaf_action   Action // used when typ == .leaf
+	leaf_flags    Flags // used when typ == .leaf
+	chain_actions []Action // used when typ == .leaf_chained
+	chain_flags   Flags // used when typ == .leaf_chained
 }
 
 pub enum SetValueType {
@@ -3181,14 +3399,17 @@ pub fn (mut s Set) parse_and_put(input_str string) ! {
 				s.chain_parent = none
 				return
 			}
+
 			// If our parser input was too short then the format is invalid.
 			'UnexpectedEndOfInput' {
 				return error('InvalidFormat')
 			}
+
 			// If we had a chain without a parent then the format is wrong.
 			'NoChainParent' {
 				return error('InvalidFormat')
 			}
+
 			// If we had an invalid action for a chain (e.g. unbind).
 			'InvalidChainAction' {
 				return error('InvalidFormat')
