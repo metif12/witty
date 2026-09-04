@@ -199,9 +199,9 @@ module core
 
 import apprt
 import configpkg
+import datastruct
 import font
 import input
-import sync
 import time
 
 // SurfaceList is a list of active surfaces managed by the app.
@@ -934,106 +934,57 @@ pub:
 // from any thread.
 pub struct Mailbox {
 mut:
-	data     [app_mailbox_capacity]Message
-	write    int
-	read     int
-	length   int
-	mutex    &sync.Mutex = unsafe { nil }
-	not_full &sync.Cond = unsafe { nil }
+	queue &datastruct.BlockingQueue[Message] = unsafe { nil }
 }
 
 const app_mailbox_capacity = 64
 
 pub fn Mailbox.init() Mailbox {
-	mutex := sync.new_mutex()
 	return Mailbox{
-		mutex: mutex
-		not_full: sync.new_cond(mutex)
+		queue: datastruct.BlockingQueue.create[Message](app_mailbox_capacity) or {
+			panic(err)
+		}
 	}
 }
 
 pub fn (mut self Mailbox) deinit() {
-	if self.mutex != unsafe { nil } {
-		self.mutex.destroy()
-		self.mutex = unsafe { nil }
-		self.not_full = unsafe { nil }
+	if self.queue != unsafe { nil } {
+		self.queue.destroy()
+		self.queue = unsafe { nil }
 	}
 }
 
-fn (mut self Mailbox) ensure_mutex() &sync.Mutex {
-	if self.mutex == unsafe { nil } {
-		self.mutex = sync.new_mutex()
+fn (mut self Mailbox) ensure_queue() &datastruct.BlockingQueue[Message] {
+	if self.queue == unsafe { nil } {
+		self.queue = datastruct.BlockingQueue.create[Message](app_mailbox_capacity) or {
+			panic(err)
+		}
 	}
-	if self.not_full == unsafe { nil } {
-		self.not_full = sync.new_cond(self.mutex)
-	}
-	return self.mutex
+	return self.queue
 }
 
 // try_push adds a message without blocking and returns the queue occupancy, or
 // zero when the fixed-capacity queue is full.
 pub fn (mut self Mailbox) try_push(msg Message) int {
-	mutex := self.ensure_mutex()
-	mutex.lock()
-	defer {
-		mutex.unlock()
-	}
-	if self.length == app_mailbox_capacity {
-		return 0
-	}
-	return self.push_locked(msg)
+	mut queue := self.ensure_queue()
+	return int(queue.push(msg, datastruct.blocking_queue_instant))
 }
 
 // push adds a message, waiting for the consumer if the queue is full. App
 // requests use Ghostty's `.forever` queue timeout, so no message is dropped.
 pub fn (mut self Mailbox) push(msg Message) int {
-	mutex := self.ensure_mutex()
-	mutex.lock()
-	for self.length == app_mailbox_capacity {
-		self.not_full.wait()
-	}
-	result := self.push_locked(msg)
-	mutex.unlock()
-	return result
-}
-
-fn (mut self Mailbox) push_locked(msg Message) int {
-	self.data[self.write] = msg
-	self.write += 1
-	if self.write == app_mailbox_capacity {
-		self.write = 0
-	}
-	self.length += 1
-	return self.length
+	mut queue := self.ensure_queue()
+	return int(queue.push(msg, datastruct.blocking_queue_forever))
 }
 
 // pop removes and returns the next message from the queue.
 // Returns none if the queue is empty.
 pub fn (mut self Mailbox) pop() ?Message {
-	mutex := self.ensure_mutex()
-	mutex.lock()
-	defer {
-		mutex.unlock()
-	}
-	if self.length == 0 {
-		return none
-	}
-	index := self.read
-	self.read += 1
-	if self.read == app_mailbox_capacity {
-		self.read = 0
-	}
-	self.length -= 1
-	self.not_full.signal()
-	msg := self.data[index]
-	return msg
+	mut queue := self.ensure_queue()
+	return queue.pop()
 }
 
 pub fn (mut self Mailbox) len() int {
-	mutex := self.ensure_mutex()
-	mutex.lock()
-	defer {
-		mutex.unlock()
-	}
-	return self.length
+	mut queue := self.ensure_queue()
+	return queue.len()
 }

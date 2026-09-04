@@ -173,6 +173,7 @@ module termio
 
 import apprt
 import configpkg
+import datastruct
 import kitty
 import os
 import renderer
@@ -1266,58 +1267,40 @@ const mailbox_capacity = 64
 // that a zero-valued Mailbox{} is immediately usable.
 pub struct Mailbox {
 mut:
-	// The ring buffer storage. Values are undefined until written.
-	data [mailbox_capacity]Message
-	// The next location to write (next empty loc) and next location to read
-	// (next non-empty loc).
-	write int
-	read  int
-	// The number of written (unread) elements.
-	length int
-	// Guards concurrent producer/consumer access to the ring buffer.
-	mutex &sync.Mutex = unsafe { nil }
-	// Wakes a producer blocked because the fixed-capacity queue is full.
-	not_full &sync.Cond = unsafe { nil }
+	queue &datastruct.BlockingQueue[Message] = unsafe { nil }
 	// Whether the wakeup signal has been raised for the consuming thread.
 	notified bool
 }
 
 // init creates a mailbox. The underlying mutex is allocated here.
 pub fn Mailbox.init() !Mailbox {
-	mutex := sync.new_mutex()
 	return Mailbox{
-		mutex: mutex
-		not_full: sync.new_cond(mutex)
+		queue: datastruct.BlockingQueue.create[Message](mailbox_capacity)!
 	}
 }
 
-pub fn (mut m Mailbox) deinit() {}
+pub fn (mut m Mailbox) deinit() {
+	if m.queue != unsafe { nil } {
+		m.queue.destroy()
+		m.queue = unsafe { nil }
+	}
+}
 
-// ensure_mutex lazily allocates the guard mutex so a zero-valued Mailbox{}
+// ensure_queue lazily allocates the queue so a zero-valued Mailbox{}
 // (e.g. an embedded field that wasn't built via Mailbox.init) is usable.
-fn (mut m Mailbox) ensure_mutex() &sync.Mutex {
-	if m.mutex == unsafe { nil } {
-		m.mutex = sync.new_mutex()
+fn (mut m Mailbox) ensure_queue() &datastruct.BlockingQueue[Message] {
+	if m.queue == unsafe { nil } {
+		m.queue = datastruct.BlockingQueue.create[Message](mailbox_capacity) or {
+			panic(err)
+		}
 	}
-	if m.not_full == unsafe { nil } {
-		m.not_full = sync.new_cond(m.mutex)
-	}
-	return m.mutex
-}
-
-// full returns true if the queue is full. The lock must be held.
-fn (m &Mailbox) full() bool {
-	return m.length == mailbox_capacity
+	return m.queue
 }
 
 // len returns the number of unread messages in the mailbox.
 pub fn (mut m Mailbox) len() int {
-	mtx := m.ensure_mutex()
-	mtx.lock()
-	defer {
-		mtx.unlock()
-	}
-	return m.length
+	mut queue := m.ensure_queue()
+	return queue.len()
 }
 
 // send pushes the given message without notifying that there are messages.
@@ -1329,7 +1312,8 @@ pub fn (mut m Mailbox) len() int {
 pub fn (mut m Mailbox) send(msg Message, mtx &sync.Mutex) {
 	// Try to write to the queue. This is the fast path because we can queue
 	// without unlocking the renderer state.
-	if m.push(msg) > 0 {
+	mut queue := m.ensure_queue()
+	if queue.push(msg, datastruct.blocking_queue_instant) > 0 {
 		return
 	}
 
@@ -1349,70 +1333,21 @@ pub fn (mut m Mailbox) send(msg Message, mtx &sync.Mutex) {
 			mtx.lock()
 		}
 	}
-	// Match BlockingQueue.push(.forever): sleep until the consumer frees a
-	// slot, then enqueue the message before returning.
-	queue_mutex := m.ensure_mutex()
-	queue_mutex.lock()
-	for m.full() {
-		m.not_full.wait()
-	}
-	m.push_locked(msg)
-	queue_mutex.unlock()
+	_ = queue.push(msg, datastruct.blocking_queue_forever)
 }
 
 // push attempts to push a message onto the queue without blocking. Returns the
 // number of items pushed (1 on success, 0 if the queue is full).
 pub fn (mut m Mailbox) push(msg Message) int {
-	mtx := m.ensure_mutex()
-	mtx.lock()
-	defer {
-		mtx.unlock()
-	}
-
-	// If we're full then we failed to write.
-	if m.full() {
-		return 0
-	}
-
-	m.push_locked(msg)
-	return 1
-}
-
-// push_locked adds one message. The caller must hold the queue mutex and must
-// have already established that the queue is not full.
-fn (mut m Mailbox) push_locked(msg Message) {
-	m.data[m.write] = msg
-	m.write += 1
-	if m.write >= mailbox_capacity {
-		m.write -= mailbox_capacity
-	}
-	m.length += 1
+	mut queue := m.ensure_queue()
+	return if queue.push(msg, datastruct.blocking_queue_instant) > 0 { 1 } else { 0 }
 }
 
 // pop removes and returns the next message from the queue without blocking.
 // Returns none if the queue is empty.
 pub fn (mut m Mailbox) pop() ?Message {
-	mtx := m.ensure_mutex()
-	mtx.lock()
-	defer {
-		mtx.unlock()
-	}
-
-	// If we're empty we have nothing.
-	if m.length == 0 {
-		return none
-	}
-
-	// Get the index we're going to read data from and do the accounting.
-	n := m.read
-	m.read += 1
-	if m.read >= mailbox_capacity {
-		m.read -= mailbox_capacity
-	}
-	m.length -= 1
-	m.not_full.signal()
-
-	return m.data[n]
+	mut queue := m.ensure_queue()
+	return queue.pop()
 }
 
 // notify wakes up the termio thread so it processes any queued messages. This
