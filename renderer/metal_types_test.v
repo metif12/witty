@@ -284,3 +284,46 @@ fn test_metal_text_cell_keeps_color_atlas_flag() {
 	assert metal_cell.grid_x == 3
 	assert metal_cell.grid_y == 4
 }
+
+fn test_metal_uniform_layout_matches_shader_abi() {
+	assert $sizeof(MetalUniforms) == 144
+	assert __offsetof(MetalUniforms, projection_matrix) == 0
+	assert __offsetof(MetalUniforms, screen_size) == 64
+	assert __offsetof(MetalUniforms, cell_size) == 72
+	assert __offsetof(MetalUniforms, grid_size) == 80
+	assert __offsetof(MetalUniforms, grid_padding) == 96
+	assert __offsetof(MetalUniforms, padding_extend) == 112
+	assert __offsetof(MetalUniforms, min_contrast) == 116
+	assert __offsetof(MetalUniforms, cursor_pos) == 120
+	assert __offsetof(MetalUniforms, cursor_color) == 124
+	assert __offsetof(MetalUniforms, bg_color) == 128
+	assert __offsetof(MetalUniforms, cursor_wide) == 132
+	assert __offsetof(MetalUniforms, use_linear_correction) == 135
+}
+
+fn test_metal_uniform_and_background_flags_are_packed() {
+	uniforms := metal_uniforms(Uniforms{
+		padding_extend: PaddingExtend{
+			left: true
+			up: true
+		}
+		bools: UniformBools{
+			cursor_wide: true
+			use_linear_correction: true
+		}
+	})
+	assert uniforms.padding_extend == 5
+	assert uniforms.cursor_wide == 1
+	assert uniforms.use_linear_correction == 1
+
+	background := metal_bg_image_vertex(BgImageBuffer{
+		opacity: 0.5
+		info: BgImageInfo{
+			position: .br
+			fit: .stretch
+			repeat: true
+		}
+	})
+	assert background.opacity == 0.5
+	assert background.info == u8(8 | (2 << 4) | (1 << 6))
+}

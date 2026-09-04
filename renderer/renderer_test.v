@@ -405,4 +405,16 @@ fn test_rebuild_row_shapes_and_renders_text() ! {
 		assert cell.glyph_size[1] > 0
 	}
 	assert grid.glyphs.len == 3
+
+	// Exercise the complete off-screen Metal frame path with the exact cells
+	// produced above. This compiles/binds all resources, draws the background
+	// and glyph instances, commits the command buffer, and waits for the GPU.
+	render.uniforms.grid_size = [u16(3), 1]!
+	render.update_screen_size_uniforms()
+	render.cells_rebuilt = true
+	render.draw_frame(true)!
+	assert render.health == .healthy
+	assert render.frame_index == 0
+	assert render.frames[0].target.width == 300
+	assert render.frames[0].target.height == 100
 }

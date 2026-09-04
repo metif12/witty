@@ -753,6 +753,7 @@ import font
 import time
 import configpkg
 import highlight
+import stbi
 
 // Create a renderer type with the provided graphics API wrapper.
 //
@@ -796,7 +797,17 @@ import highlight
 pub struct Renderer {
 pub mut:
 	// The Metal graphics API for rendering.
-	metal &MetalAPI = unsafe { nil }
+	metal MetalAPI
+
+	// GPU-side image state (Kitty graphics and debug overlays).
+	images ImageRenderState
+
+	// Compiled built-in and custom shader pipelines.
+	shaders MetalShaders
+
+	// Per-frame resources used for triple buffering.
+	frames      []MetalFrameState
+	frame_index int = -1
 
 	// The configuration we need derived from the main config.
 	config DerivedConfig
@@ -880,7 +891,7 @@ pub mut:
 	terminal_state_frame_count u64
 
 	// Background image data, if we have one.
-	bg_image ?MetalTexture
+	bg_image ?Image
 
 	// Set whenever the background image changes, signalling
 	// that the new background image needs to be uploaded to
@@ -891,7 +902,9 @@ pub mut:
 	bg_image_changed bool = true
 
 	// Background image vertex buffer.
-	bg_image_buffer BgImageBuffer
+	bg_image_buffer          BgImageBuffer
+	bg_image_buffer_modified u64
+	target_config_modified   u64
 
 	// Health of the most recently completed frame.
 	health Health = .healthy
@@ -902,6 +915,42 @@ pub fn Renderer.init(opts RendererOpts) !Renderer {
 	// Create the font shaper
 	mut font_shaper := font.Shaper.init(font.ShaperOptions{})!
 
+	mut metal := if opts.metal_view != unsafe { nil } {
+		MetalAPI.init_from_view(opts.metal_view) or {
+			font_shaper.deinit()
+			return err
+		}
+	} else {
+		MetalAPI.init() or {
+			font_shaper.deinit()
+			return err
+		}
+	}
+	metal.blending = match opts.config.blending {
+		.none_ { .none_ }
+		.linear { .linear }
+		.linear_corrected { .linear_corrected }
+	}
+
+	mut shaders := MetalShaders.init(metal.device, []string{}, metal.target_pixel_format()) or {
+		metal.deinit()
+		font_shaper.deinit()
+		return err
+	}
+	mut frames := []MetalFrameState{cap: metal_swap_chain_count}
+	for _ in 0 .. metal_swap_chain_count {
+		frame := MetalFrameState.init(&metal) or {
+			for mut initialized in frames {
+				initialized.deinit()
+			}
+			shaders.deinit()
+			metal.deinit()
+			font_shaper.deinit()
+			return err
+		}
+		frames << frame
+	}
+
 	// Get font metrics from the grid
 	grid := opts.font_grid
 	metrics := grid.metrics
@@ -909,6 +958,10 @@ pub fn Renderer.init(opts RendererOpts) !Renderer {
 	has_custom_shaders := false
 
 	mut result := Renderer{
+		metal: metal
+		images: ImageRenderState.empty()
+		shaders: shaders
+		frames: frames
 		config: opts.config
 		grid_metrics: metrics
 		size: opts.size
@@ -950,12 +1003,27 @@ pub fn Renderer.init(opts RendererOpts) !Renderer {
 	result.update_font_grid_uniforms()
 	result.update_screen_size_uniforms()
 	result.update_bg_image_buffer()
+	result.prep_background_image() or {
+		result.deinit()
+		return err
+	}
 
 	return result
 }
 
 // Deinitialize the renderer and free all resources.
 pub fn (mut self Renderer) deinit() {
+	for mut frame in self.frames {
+		frame.deinit()
+	}
+	self.frames = []MetalFrameState{}
+	self.shaders.deinit()
+	self.images.deinit()
+	if mut image := self.bg_image {
+		image.deinit()
+	}
+	self.bg_image = none
+	self.metal.deinit()
 	for mut match_ in self.search_matches {
 		match_.deinit()
 	}
@@ -1087,6 +1155,9 @@ pub fn (mut self Renderer) update_frame(state &terminal.Terminal, cursor_blink_v
 
 	// Update our terminal state.
 	self.terminal_state.update(mut t)
+	if self.images.kitty_requires_update(t) {
+		self.images.kitty_update(t, self.size.cell)
+	}
 
 	// Get our scrollbar out of the terminal. We synchronize the scrollbar
 	// read with frame data updates.
@@ -1194,56 +1265,182 @@ fn render_flattened_highlight(src highlight.FlattenedHighlight) terminal.RenderF
 // If `sync` is true, this will synchronously block until
 // the frame is finished drawing and has been presented.
 pub fn (mut self Renderer) draw_frame(sync_ bool) ! {
+	mut surface_width, mut surface_height := self.metal.surface_size()
+	// A MetalAPI created without a view is useful for off-screen rendering and
+	// tests. In that case the configured screen size is the render-target size.
+	if self.metal.layer == unsafe { nil } {
+		surface_width = self.size.screen.width
+		surface_height = self.size.screen.height
+	}
+
 	// If either of our surface dimensions is zero
 	// then drawing is absurd, so we just return.
-	if self.size.screen.width == 0 || self.size.screen.height == 0 {
+	if surface_width == 0 || surface_height == 0 {
 		return
 	}
+	size_changed := self.size.screen.width != surface_width
+		|| self.size.screen.height != surface_height
 
 	// Conditions under which we need to draw the frame, otherwise we
 	// don't need to since the previous frame should be identical.
-	needs_redraw := self.cells_rebuilt || self.has_animations() || sync_
+	needs_redraw := size_changed || self.cells_rebuilt || self.has_animations() || sync_
 
 	if !needs_redraw {
 		return
 	}
 	self.cells_rebuilt = false
+	if self.frames.len == 0 {
+		return error('Metal swap chain is unavailable')
+	}
 
-	// XTODO: Metal rendering pipeline:
-	// 1. metal.begin_frame() -> command buffer
-	// 2. Render pass 1: background color (full-screen quad)
-	// 3. Render pass 2: cell backgrounds (instanced, bg_cells buffer)
-	// 4. Render pass 3: text glyphs (instanced, fg_rows buffer + font atlas texture)
-	// 5. metal.complete_frame() -> present drawable, commit
+	if self.reinitialize_shaders {
+		self.reinitialize_shaders = false
+		mut replacement := MetalShaders.init(self.metal.device, []string{}, self.metal.target_pixel_format())!
+		self.shaders.deinit()
+		self.shaders = replacement
+	}
 
-	_ = sync_
+	if size_changed {
+		self.size.screen = ScreenSize{
+			width: surface_width
+			height: surface_height
+		}
+		self.update_screen_size_uniforms()
+	}
+
+	self.frame_index = (self.frame_index + 1) % self.frames.len
+	mut frame_state := &self.frames[self.frame_index]
+	if frame_state.target.width != surface_width || frame_state.target.height != surface_height
+		|| frame_state.target_config_modified != self.target_config_modified {
+		frame_state.resize_target(&self.metal, surface_width, surface_height)!
+		frame_state.target_config_modified = self.target_config_modified
+	}
+
+	_ = self.images.upload(&self.metal)
+	self.upload_background_image()!
+
+	gpu_uniforms := metal_uniforms(self.uniforms)
+	frame_state.uniforms.sync_values([gpu_uniforms])!
+	frame_state.cells_bg.sync_values(self.cells.bg_cells)!
+	foreground := self.metal_text_cells()
+	frame_state.cells.sync_values(foreground)!
+
+	if frame_state.bg_image_buffer_modified != self.bg_image_buffer_modified {
+		bg_vertex := metal_bg_image_vertex(self.bg_image_buffer)
+		frame_state.bg_image_buffer.sync_values([bg_vertex])!
+		frame_state.bg_image_buffer_modified = self.bg_image_buffer_modified
+	}
+
+	if self.font_grid.atlas_grayscale.modified > frame_state.grayscale_modified {
+		self.sync_atlas_texture(&self.font_grid.atlas_grayscale, mut frame_state.grayscale)!
+		frame_state.grayscale_modified = self.font_grid.atlas_grayscale.modified
+	}
+	if self.font_grid.atlas_color.modified > frame_state.color_modified {
+		self.sync_atlas_texture(&self.font_grid.atlas_color, mut frame_state.color)!
+		frame_state.color_modified = self.font_grid.atlas_color.modified
+	}
+
+	mut frame := MetalFrame.begin(self.metal.queue)!
+	mut pass := MetalRenderPass.begin(frame.command_buffer, [MetalRenderPassAttachment{
+		texture: frame_state.target.texture
+		clear_color: [f64(0), 0, 0, 0]!
+	}])!
+
+	if image := self.bg_image {
+		if image.state == .ready && image.texture_handle != unsafe { nil } {
+			pass.step(MetalRenderStep{
+				pipeline: self.shaders.bg_image
+				uniforms: frame_state.uniforms.handle
+				buffers: [frame_state.bg_image_buffer.handle]
+				textures: [image.texture_handle]
+				draw_type: .triangle
+				vertex_count: 3
+			})
+		}
+	} else {
+		pass.step(MetalRenderStep{
+			pipeline: self.shaders.bg_color
+			uniforms: frame_state.uniforms.handle
+			vertex_count: 3
+			draw_type: .triangle
+		})
+	}
+
+	self.images.draw(&self.metal, self.shaders.image, mut pass, .kitty_below_bg)
+	if self.cells.bg_cells.len > 0 && self.uniforms.grid_size[0] > 0
+		&& self.uniforms.grid_size[1] > 0 {
+		pass.step(MetalRenderStep{
+			pipeline: self.shaders.cell_bg
+			uniforms: frame_state.uniforms.handle
+			buffers: [voidptr(unsafe { nil }), frame_state.cells_bg.handle]
+			draw_type: .triangle
+			vertex_count: 3
+		})
+	}
+	self.images.draw(&self.metal, self.shaders.image, mut pass, .kitty_below_text)
+	pass.step(MetalRenderStep{
+		pipeline: self.shaders.cell_text
+		uniforms: frame_state.uniforms.handle
+		buffers: [frame_state.cells.handle, frame_state.cells_bg.handle]
+		textures: [frame_state.grayscale.handle, frame_state.color.handle]
+		draw_type: .triangle_strip
+		vertex_count: 4
+		instance_count: u32(foreground.len)
+	})
+	self.images.draw(&self.metal, self.shaders.image, mut pass, .kitty_above_text)
+	self.images.draw(&self.metal, self.shaders.image, mut pass, .overlay)
+	pass.complete()
+
+	// Ghostty presents from the command-buffer completion callback. The V
+	// bridge waits here before handing the IOSurface to Core Animation, which
+	// preserves the same ordering and resource-safety guarantees.
+	status := frame.complete(true)
+	health := if status == .error { Health.unhealthy } else { Health.healthy }
+	self.frame_completed(health)
+	if health == .healthy && self.metal.layer != unsafe { nil } {
+		self.metal.present(&frame_state.target, sync_)!
+	}
 }
 
-// Draw the background image via Metal.
-fn (self &Renderer) draw_background_image(img MetalTexture) {
-	// XTODO: Background image rendering via Metal render pass.
-	// Requires bg_image pipeline, texture binding, and instanced quad draw.
-	_ = img
+fn (self &Renderer) metal_text_cells() []MetalTextCell {
+	mut count := 0
+	for row in self.cells.fg_rows {
+		count += row.len
+	}
+	if self.cells.cursor != none {
+		count++
+	}
+	mut result := []MetalTextCell{cap: count}
+	cursor_first := if style := self.cells.cursor_style { style == .block } else { false }
+	if cursor_first {
+		if cursor := self.cells.cursor {
+			result << metal_text_cell(cursor)
+		}
+	}
+	for row in self.cells.fg_rows {
+		for cell in row {
+			result << metal_text_cell(cell)
+		}
+	}
+	if !cursor_first {
+		if cursor := self.cells.cursor {
+			result << metal_text_cell(cursor)
+		}
+	}
+	return result
 }
 
-// Draw all cell background colors via Metal.
-fn (self &Renderer) draw_cell_backgrounds() {
-	// XTODO: Cell background rendering via Metal instanced draw.
-	// Sync bg_cells buffer to GPU, bind cell_bg pipeline, draw instanced quads.
-}
-
-// Draw all foreground cells (text glyphs, underlines, etc) via Metal.
-fn (self &Renderer) draw_cell_foregrounds() {
-	// XTODO: Glyph rendering via Metal instanced draw.
-	// Sync fg cell buffer + font atlas texture, bind cell_text pipeline, draw.
-}
-
-// Draw the cursor via Metal.
-fn (self &Renderer) draw_cursor() {
-	// XTODO: Cursor rendering via Metal.
-	// Uses cursor sprite from font atlas, drawn as instanced quad.
-	_ = self.cells.cursor or { return }
-	_ = self.cells.cursor_style or { return }
+fn (self &Renderer) sync_atlas_texture(atlas &font.Atlas, mut texture MetalTexture) ! {
+	if atlas.format == .bgr {
+		return error('BGR font atlases are unsupported by Metal')
+	}
+	if atlas.size > texture.width {
+		format := if atlas.format == .grayscale { PixelFormat.gray } else { PixelFormat.bgra }
+		mut replacement := MetalTexture.init(self.metal.image_texture_options(format, atlas.format == .bgra), atlas.size, atlas.size, none)!
+		texture.deinit()
+		texture = replacement
+	}
+	texture.replace_region(0, 0, atlas.size, atlas.size, atlas.data)!
 }
 
 // Callback from the graphics API when a frame is completed.
@@ -1256,14 +1453,57 @@ pub fn (mut self Renderer) frame_completed(health Health) {
 
 // Call this any time the background image path changes.
 fn (mut self Renderer) prep_background_image() ! {
-	// XTODO: Background image loading requires file I/O and image
-	// decoding (PNG/JPEG), then creating a MetalTexture.
-	if self.config.bg_image != none {
-		// Would load and decode the image here
-		self.bg_image_changed = true
-	} else {
-		self.bg_image = none
+	if path_config := self.config.bg_image {
+		decoded := stbi.load(path_config.path, stbi.LoadParams{ desired_channels: 4 }) or {
+			eprintln('renderer: unable to decode background image "${path_config.path}": ${err}')
+			return
+		}
+		defer {
+			decoded.free()
+		}
+		if decoded.width <= 0 || decoded.height <= 0 {
+			return error('background image has invalid dimensions')
+		}
+		byte_len := decoded.width * decoded.height * 4
+		data := unsafe { decoded.data.vbytes(byte_len).clone() }
+		pending := PendingImage{
+			width: u32(decoded.width)
+			height: u32(decoded.height)
+			pixel_format: .rgba
+			data: data
+		}
+		if mut existing := self.bg_image {
+			existing.mark_for_replace(pending)
+			self.bg_image = existing
+		} else {
+			self.bg_image = Image{
+				state: .pending
+				pending: pending
+				width: pending.width
+				height: pending.height
+			}
+		}
+	} else if mut existing := self.bg_image {
+		existing.mark_for_unload()
+		self.bg_image = existing
 	}
+	self.bg_image_changed = true
+}
+
+fn (mut self Renderer) upload_background_image() ! {
+	if mut image := self.bg_image {
+		if image.is_unloading() {
+			image.deinit()
+			self.bg_image = none
+			self.bg_image_changed = false
+			return
+		}
+		if image.is_pending() {
+			image.upload(&self.metal)!
+			self.bg_image = image
+		}
+	}
+	self.bg_image_changed = false
 }
 
 // Update the configuration.
@@ -1291,17 +1531,31 @@ pub fn (mut self Renderer) change_config(config &DerivedConfig) ! {
 	self.uniforms.bools.use_linear_blending = config.blending.is_linear()
 	self.uniforms.bools.use_linear_correction = config.blending == .linear_corrected
 
+	bg_image_path_changed := !optional_path_equal(self.config.bg_image, config.bg_image)
 	bg_image_config_changed := self.config.bg_image_fit != config.bg_image_fit
 		|| self.config.bg_image_position != config.bg_image_position
 		|| self.config.bg_image_repeat != config.bg_image_repeat
 		|| self.config.bg_image_opacity != config.bg_image_opacity
+	blending_changed := self.config.blending != config.blending
 
 	self.config.deinit()
 	self.config = *config
+	if bg_image_path_changed {
+		self.prep_background_image()!
+	}
 
 	// If our background image config changed, update the vertex buffer
 	if bg_image_config_changed {
 		self.update_bg_image_buffer()
+	}
+	if blending_changed {
+		self.metal.blending = match config.blending {
+			.none_ { .none_ }
+			.linear { .linear }
+			.linear_corrected { .linear_corrected }
+		}
+		self.reinitialize_shaders = true
+		self.target_config_modified++
 	}
 
 	// Reset our viewport to force a rebuild, in case of a font change
@@ -1371,6 +1625,17 @@ fn (mut self Renderer) update_bg_image_buffer() {
 			repeat: self.config.bg_image_repeat
 		}
 	}
+	self.bg_image_buffer_modified++
+}
+
+fn optional_path_equal(left ?configpkg.Path, right ?configpkg.Path) bool {
+	if l := left {
+		if r := right {
+			return l.equal(&r)
+		}
+		return false
+	}
+	return right == none
 }
 
 // Update custom shader uniforms that depend on terminal state.
@@ -2299,6 +2564,9 @@ fn (mut self Renderer) add_preedit_cell(cp PreeditCodepoint, coord terminal.View
 // RendererOpts holds initialization options for the Renderer.
 pub struct RendererOpts {
 pub:
+	// Native NSView used for IOSurface presentation. Nil creates an off-screen
+	// Metal renderer, which is also used by focused renderer tests.
+	metal_view voidptr = unsafe { nil }
 	// Font grid to use.
 	font_grid &font.SharedGrid = unsafe { nil }
 	// Initial configuration.

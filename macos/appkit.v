@@ -1019,16 +1019,30 @@ fn create_terminal_view(frame ObjCRect) ObjId {
 }
 
 fn update_metal_drawable_size(view ObjId) {
-	layer := ObjId(C.macos_objc_get_ptr_ivar(view, cstr('metalLayer')))
-	if is_nil(layer) {
+	stored_layer := ObjId(C.macos_objc_get_ptr_ivar(view, cstr('metalLayer')))
+	active_layer := msg_id(view, 'layer')
+	if is_nil(stored_layer) && is_nil(active_layer) {
 		return
 	}
 	bounds := msg_rect(view, 'bounds')
-	mut scale := msg_f64(layer, 'contentsScale')
+	mut scale := if !is_nil(active_layer) {
+		msg_f64(active_layer, 'contentsScale')
+	} else {
+		msg_f64(stored_layer, 'contentsScale')
+	}
 	if scale <= 0 {
 		scale = 1
 	}
-	msg_void_size(layer, 'setDrawableSize:', objc_size(bounds.width * scale, bounds.height * scale))
+	if !is_nil(active_layer) {
+		msg_void_rect(active_layer, 'setFrame:', bounds)
+	}
+	// The original view-owned layer is a CAMetalLayer. Once the renderer
+	// installs Ghostty's IOSurface layer, the active layer intentionally has
+	// no drawableSize property and is sized through its frame instead.
+	if !is_nil(stored_layer)
+		&& msg_bool1(stored_layer, 'respondsToSelector:', sel('setDrawableSize:')) {
+		msg_void_size(stored_layer, 'setDrawableSize:', objc_size(bounds.width * scale, bounds.height * scale))
+	}
 }
 
 // V-friendly wrappers.
@@ -1308,6 +1322,21 @@ pub fn metal_activate_layer(view voidptr) {
 	msg_void_bool(ObjId(view), 'setWantsLayer:', true)
 	msg_void1(ObjId(view), 'setLayer:', ObjId(layer))
 	update_metal_drawable_size(ObjId(view))
+}
+
+pub fn metal_install_iosurface_layer(view voidptr, layer voidptr) {
+	if is_nil(view) || is_nil(layer) {
+		return
+	}
+	bounds := msg_rect(ObjId(view), 'bounds')
+	msg_void_rect(ObjId(layer), 'setFrame:', bounds)
+	msg_void1(ObjId(view), 'setLayer:', ObjId(layer))
+	msg_void_bool(ObjId(view), 'setWantsLayer:', true)
+	msg_void_bool(ObjId(view), 'setClipsToBounds:', true)
+	screen := msg_id(get_class('NSScreen'), 'mainScreen')
+	scale := msg_f64(screen, 'backingScaleFactor')
+	msg_void_f64(ObjId(layer), 'setContentsScale:', if scale > 0 { scale } else { 1.0 })
+	msg_void_bool(ObjId(layer), 'setNeedsDisplayOnBoundsChange:', true)
 }
 
 pub fn metal_device(view voidptr) voidptr {

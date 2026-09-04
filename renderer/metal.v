@@ -27,6 +27,8 @@ pub mut:
 
 	// True when this instance created and therefore owns device and queue.
 	owns_handles bool
+	// True when this instance owns its IOSurface presentation layer.
+	owns_layer bool
 }
 
 // Storage mode for Metal resources.
@@ -59,11 +61,13 @@ pub const metal_custom_shader_y_is_down = true
 pub fn MetalAPI.init_from_view(view voidptr) !MetalAPI {
 	device := macos.metal_device(view)
 	queue := macos.metal_queue(view)
-	layer := macos.metal_layer(view)
+	layer := macos.metal_iosurface_layer_new()
 
 	if device == unsafe { nil } || queue == unsafe { nil } || layer == unsafe { nil } {
+		macos.metal_release(layer)
 		return error('Metal not available')
 	}
+	macos.metal_install_iosurface_layer(view, layer)
 
 	unified := macos.metal_has_unified_memory(device)
 	storage := if unified { MetalStorageMode.shared } else { MetalStorageMode.managed }
@@ -76,6 +80,7 @@ pub fn MetalAPI.init_from_view(view voidptr) !MetalAPI {
 		blending: .none_
 		default_storage_mode: storage
 		max_texture_size: max_tex
+		owns_layer: true
 	}
 }
 
@@ -108,10 +113,14 @@ pub fn (mut self MetalAPI) deinit() {
 		macos.metal_release(self.queue)
 		macos.metal_release(self.device)
 	}
+	if self.owns_layer {
+		macos.metal_release(self.layer)
+	}
 	self.device = unsafe { nil }
 	self.queue = unsafe { nil }
 	self.layer = unsafe { nil }
 	self.owns_handles = false
+	self.owns_layer = false
 }
 
 // next_drawable gets the next drawable from the Metal layer.
@@ -155,9 +164,34 @@ pub fn (self &MetalAPI) image_texture_options(format PixelFormat, srgb bool) Met
 	}
 }
 
+pub fn (self &MetalAPI) target_pixel_format() MetalPixelFormat {
+	return if self.blending.is_linear() { .bgra8unorm_srgb } else { .bgra8unorm }
+}
+
+pub fn (self &MetalAPI) target_options(width u32, height u32) MetalTargetOptions {
+	return MetalTargetOptions{
+		device: self.device
+		width: width
+		height: height
+		pixel_format: self.target_pixel_format()
+		storage_mode: self.default_storage_mode
+	}
+}
+
 // present_and_commit presents the drawable and commits the command buffer.
 pub fn (self &MetalAPI) present_and_commit(cmd_buf voidptr, drawable voidptr) {
 	macos.metal_present_and_commit(cmd_buf, drawable)
+}
+
+pub fn (self &MetalAPI) present(target &MetalTarget, sync_ bool) ! {
+	if self.layer == unsafe { nil } || target.surface == unsafe { nil } {
+		return error('Metal presentation layer unavailable')
+	}
+	if sync_ {
+		macos.metal_iosurface_layer_set_surface_sync(self.layer, voidptr(target.surface))
+	} else if !macos.metal_iosurface_layer_set_surface(self.layer, voidptr(target.surface)) {
+		return error('Metal surface presentation failed')
+	}
 }
 
 // Get the current size of the runtime surface.

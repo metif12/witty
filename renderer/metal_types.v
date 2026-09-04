@@ -102,7 +102,22 @@ pub fn (mut self MetalBuffer) deinit() {
 // capacity, the buffer is reallocated to hold it. If the amount of data is
 // smaller than the buffer capacity, the remaining data is left untouched.
 pub fn (mut self MetalBuffer) sync(data []u8) ! {
-	req_bytes := usize(data.len)
+	mut ptr := voidptr(unsafe { nil })
+	if data.len > 0 {
+		ptr = voidptr(data.data)
+	}
+	self.sync_raw(ptr, usize(data.len))!
+}
+
+pub fn (mut self MetalBuffer) sync_values[T](values []T) ! {
+	mut ptr := voidptr(unsafe { nil })
+	if values.len > 0 {
+		ptr = voidptr(values.data)
+	}
+	self.sync_raw(ptr, usize(values.len) * usize($sizeof(T)))!
+}
+
+fn (mut self MetalBuffer) sync_raw(data voidptr, req_bytes usize) ! {
 	available_bytes := macos.metal_buffer_length(self.handle)
 	if req_bytes > available_bytes {
 		macos.metal_release(self.handle)
@@ -121,7 +136,7 @@ pub fn (mut self MetalBuffer) sync(data []u8) ! {
 	if dst == unsafe { nil } {
 		return error('Metal buffer contents pointer is null')
 	}
-	unsafe { vmemcpy(dst, data.data, data.len) }
+	unsafe { vmemcpy(dst, data, int(req_bytes)) }
 	if self.opts.storage_mode == .managed {
 		macos.metal_buffer_did_modify(self.handle, req_bytes)
 	}
@@ -646,6 +661,65 @@ pub fn (mut self MetalIOSurfaceLayer) set_display_callback(callback MetalLayerDi
 // Metal cell shader parameter (GPU-side text cell)
 // ============================================================
 
+// MetalUniforms is the ABI-stable representation consumed by shaders.metal.
+// V's logical Uniforms type contains nested boolean structs, so it cannot be
+// copied directly to a Metal constant buffer. The explicit padding below
+// mirrors the alignments in ghostty's extern shader Uniforms structure.
+pub struct MetalUniforms {
+pub mut:
+	projection_matrix     [16]f32
+	screen_size           [2]f32
+	cell_size             [2]f32
+	grid_size             [2]u16
+	reserved0             [12]u8
+	grid_padding          [4]f32
+	padding_extend        u8
+	reserved1             [3]u8
+	min_contrast          f32
+	cursor_pos            [2]u16
+	cursor_color          [4]u8
+	bg_color              [4]u8
+	cursor_wide           u8
+	use_display_p3        u8
+	use_linear_blending   u8
+	use_linear_correction u8
+	reserved2             [8]u8
+}
+
+// metal_uniforms converts the renderer's convenient logical representation
+// into the exact byte layout declared by the Metal shader.
+pub fn metal_uniforms(value Uniforms) MetalUniforms {
+	mut padding_extend := u8(0)
+	if value.padding_extend.left {
+		padding_extend |= 1
+	}
+	if value.padding_extend.right {
+		padding_extend |= 2
+	}
+	if value.padding_extend.up {
+		padding_extend |= 4
+	}
+	if value.padding_extend.down {
+		padding_extend |= 8
+	}
+	return MetalUniforms{
+		projection_matrix: value.projection_matrix
+		screen_size: value.screen_size
+		cell_size: value.cell_size
+		grid_size: value.grid_size
+		grid_padding: value.grid_padding
+		padding_extend: padding_extend
+		min_contrast: value.min_contrast
+		cursor_pos: value.cursor_pos
+		cursor_color: value.cursor_color
+		bg_color: value.bg_color
+		cursor_wide: u8(value.bools.cursor_wide)
+		use_display_p3: u8(value.bools.use_display_p3)
+		use_linear_blending: u8(value.bools.use_linear_blending)
+		use_linear_correction: u8(value.bools.use_linear_correction)
+	}
+}
+
 // MetalTextCell is a single parameter for the terminal cell text shader.
 //
 // Port of ghostty's src/renderer/metal/shaders.zig `CellText`. It is the
@@ -726,6 +800,123 @@ pub struct MetalBgImageVertex {
 pub:
 	opacity f32
 	info    u8
+}
+
+pub fn metal_bg_image_vertex(value BgImageBuffer) MetalBgImageVertex {
+	position := match value.info.position {
+		.tl { u8(0) }
+		.tc { u8(1) }
+		.tr { u8(2) }
+		.ml { u8(3) }
+		.mc { u8(4) }
+		.mr { u8(5) }
+		.bl { u8(6) }
+		.bc { u8(7) }
+		.br { u8(8) }
+	}
+	fit := match value.info.fit {
+		.contain { u8(0) }
+		.cover { u8(1) }
+		.stretch { u8(2) }
+		.none_ { u8(3) }
+	}
+	return MetalBgImageVertex{
+		opacity: value.opacity
+		info: position | (fit << 4) | (if value.info.repeat { u8(1 << 6) } else { u8(0) })
+	}
+}
+
+// MetalFrameState contains every resource that the CPU may update while a
+// frame is in flight. Renderer keeps one instance per swap-chain slot, just
+// like ghostty's generic renderer FrameState.
+pub struct MetalFrameState {
+pub mut:
+	uniforms                 MetalBuffer
+	cells                    MetalBuffer
+	cells_bg                 MetalBuffer
+	bg_image_buffer          MetalBuffer
+	grayscale                MetalTexture
+	grayscale_modified       u64
+	color                    MetalTexture
+	color_modified           u64
+	target                   MetalTarget
+	target_config_modified   u64
+	bg_image_buffer_modified u64
+}
+
+pub fn MetalFrameState.init(api &MetalAPI) !MetalFrameState {
+	mut uniforms := MetalBuffer.init(api.buffer_options(), u32($sizeof(MetalUniforms)))!
+	mut cells := MetalBuffer.init(api.buffer_options(), u32($sizeof(MetalTextCell))) or {
+		uniforms.deinit()
+		return err
+	}
+	mut cells_bg := MetalBuffer.init(api.buffer_options(), u32($sizeof(CellBg))) or {
+		cells.deinit()
+		uniforms.deinit()
+		return err
+	}
+	mut bg_image_buffer := MetalBuffer.init(api.buffer_options(), u32($sizeof(MetalBgImageVertex))) or {
+		cells_bg.deinit()
+		cells.deinit()
+		uniforms.deinit()
+		return err
+	}
+	mut grayscale := MetalTexture.init(api.image_texture_options(.gray, false), 1, 1, [
+		u8(0),
+	]) or {
+		bg_image_buffer.deinit()
+		cells_bg.deinit()
+		cells.deinit()
+		uniforms.deinit()
+		return err
+	}
+	mut color := MetalTexture.init(api.image_texture_options(.bgra, true), 1, 1, [
+		u8(0),
+		0,
+		0,
+		0,
+	]) or {
+		grayscale.deinit()
+		bg_image_buffer.deinit()
+		cells_bg.deinit()
+		cells.deinit()
+		uniforms.deinit()
+		return err
+	}
+	target := MetalTarget.init(api.target_options(1, 1)) or {
+		color.deinit()
+		grayscale.deinit()
+		bg_image_buffer.deinit()
+		cells_bg.deinit()
+		cells.deinit()
+		uniforms.deinit()
+		return err
+	}
+	return MetalFrameState{
+		uniforms: uniforms
+		cells: cells
+		cells_bg: cells_bg
+		bg_image_buffer: bg_image_buffer
+		grayscale: grayscale
+		color: color
+		target: target
+	}
+}
+
+pub fn (mut self MetalFrameState) deinit() {
+	self.target.deinit()
+	self.uniforms.deinit()
+	self.cells.deinit()
+	self.cells_bg.deinit()
+	self.grayscale.deinit()
+	self.color.deinit()
+	self.bg_image_buffer.deinit()
+}
+
+pub fn (mut self MetalFrameState) resize_target(api &MetalAPI, width u32, height u32) ! {
+	target := MetalTarget.init(api.target_options(width, height))!
+	self.target.deinit()
+	self.target = target
 }
 
 const metal_shader_source = $embed_file('shaders.metal').to_string()
