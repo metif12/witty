@@ -6294,6 +6294,7 @@ enum ReplayStepKind {
 	expand
 	diagnostic
 	command
+	xdg_command
 }
 
 // ReplayStep records configuration input in source order. Ghostty rebuilds a
@@ -6314,7 +6315,23 @@ pub fn (d Diagnostic) str() string {
 // load loads configuration using Ghostty's default-file order, command-line
 // arguments, recursively referenced files, and finalization order.
 pub fn Config.load() Config {
-	args := if os.args.len > 1 { os.args[1..] } else { []string{} }
+	return Config.load_argv(os.args)
+}
+
+// load_argv loads configuration from a complete process argv, including the
+// executable name. This preserves xdg-terminal-exec's argv[0] convention.
+pub fn Config.load_argv(argv []string) Config {
+	$if linux || freebsd {
+		if command_args := internal_os.parse_terminal_exec(argv) {
+			mut c := Config.default_config()
+			c.load_default_files()
+			c.load_xdg_terminal_exec_args(command_args)
+			c.load_recursive_files()
+			c.finalize()
+			return c
+		}
+	}
+	args := if argv.len > 1 { argv[1..] } else { []string{} }
 	return Config.load_args(args)
 }
 
@@ -6410,6 +6427,20 @@ pub fn (mut c Config) load_cli_args(args []string) {
 		i++
 	}
 	c.expand_paths(os.getwd())
+}
+
+// load_xdg_terminal_exec_args applies the special xdg-terminal-exec command
+// mode. Unlike the normal -e parser, this only sets the initial command and
+// marker; all other configuration remains as loaded from default files.
+fn (mut c Config) load_xdg_terminal_exec_args(args []string) {
+	c.xdg_terminal_exec = true
+	c.initial_command = Command(DirectCmd{ direct: args.clone() })
+	if !c.replaying {
+		c.replay_steps << ReplayStep{
+			kind: .xdg_command
+			args: args.clone()
+		}
+	}
 }
 
 fn is_font_family_key(key string) bool {
@@ -8833,6 +8864,10 @@ fn (mut c Config) load_theme() {
 				if rebuilt.shell_integration != .none_ {
 					rebuilt.shell_integration = .detect
 				}
+			}
+			.xdg_command {
+				rebuilt.xdg_terminal_exec = true
+				rebuilt.initial_command = Command(DirectCmd{ direct: step.args.clone() })
 			}
 		}
 	}

@@ -2358,6 +2358,20 @@ fn test_config_empty_link_uses_field_default_not_runtime_default_url() {
 	assert cfg.link.links.items.len == 0
 }
 
+fn test_xdg_terminal_exec_sets_only_initial_command_mode() {
+	mut cfg := Config.default_config()
+	default_single_instance := cfg.gtk_single_instance
+	default_quit := cfg.quit_after_last_window_closed
+	cfg.load_xdg_terminal_exec_args(['echo', 'hello world'])
+	assert cfg.xdg_terminal_exec
+	assert cfg.gtk_single_instance == default_single_instance
+	assert cfg.quit_after_last_window_closed == default_quit
+	command := cfg.initial_command or { panic('missing initial command') }
+	assert command.string_val() == 'echo hello world'
+	assert cfg.replay_steps.len == 1
+	assert cfg.replay_steps[0].kind == .xdg_command
+}
+
 fn test_config_enum_parser_rejects_values_not_present_in_source() {
 	mut cfg := Config.default_config()
 	cfg.load_string('

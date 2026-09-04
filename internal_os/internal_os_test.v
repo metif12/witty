@@ -255,3 +255,46 @@ fn test_ensure_locale_initializes_libc() {
 	ensure_locale()!
 	assert set_process_locale('') != none
 }
+
+fn test_xdg_directories_with_cached_home() {
+	assert xdg_config(XdgOptions{ home: '/Users/test' })! == '/Users/test/.config'
+	assert xdg_cache(XdgOptions{ home: '/Users/test', subdir: 'ghostty' })! == '/Users/test/.cache/ghostty'
+	assert xdg_state(XdgOptions{ home: '/Users/test', subdir: 'ghostty' })! == '/Users/test/.local/state/ghostty'
+}
+
+fn test_xdg_empty_environment_falls_back_to_home() {
+	old_home := os.getenv_opt('HOME')
+	old_cache := os.getenv_opt('XDG_CACHE_HOME')
+	defer {
+		if value := old_home {
+			os.setenv('HOME', value, true)
+		} else {
+			os.unsetenv('HOME')
+		}
+		if value := old_cache {
+			os.setenv('XDG_CACHE_HOME', value, true)
+		} else {
+			os.unsetenv('XDG_CACHE_HOME')
+		}
+	}
+	os.setenv('HOME', '/tmp/witty-test-home', true)
+	os.setenv('XDG_CACHE_HOME', '', true)
+	assert xdg_cache(XdgOptions{})! == '/tmp/witty-test-home/.cache'
+	assert xdg_cache(XdgOptions{ subdir: 'ghostty' })! == '/tmp/witty-test-home/.cache/ghostty'
+}
+
+fn test_parse_terminal_exec() {
+	assert parse_terminal_exec(['a', 'b', 'c']) == none
+	assert (parse_terminal_exec(['xdg-terminal-exec']) or { ['not-empty'] }).len == 0
+	assert (parse_terminal_exec(['/usr/bin/xdg-terminal-exec', 'a', 'b', 'c']) or { []string{} }) == [
+		'a',
+		'b',
+		'c',
+	]
+	assert (parse_terminal_exec(['xdg-terminal-exec', '-e', 'a', 'b', 'c']) or {
+		[]string{}
+	}) == ['a', 'b', 'c']
+	assert (parse_terminal_exec(['xdg-terminal-exec', 'a', '-e', 'b', 'c']) or {
+		[]string{}
+	}) == ['a', '-e', 'b', 'c']
+}

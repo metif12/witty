@@ -2679,8 +2679,13 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 		self.rt_surface = rt_surface
 	}
 
+	// The first surface may use initial-command; every later surface uses the
+	// regular command. This selection is shared by termio and initial titles.
+	command := surface_command(config, app.first)
+
 	// Derive our config
 	mut derived_config := DerivedConfig.from_config(config)!
+	derived_config.command = if value := command { value.string_val().clone() } else { '' }
 
 	// Get content scale for DPI
 	content_scale := rt_surface.get_content_scale()!
@@ -2760,16 +2765,54 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 	// Compute initial window size if configured
 	self.recompute_initial_size() or {}
 
-	// Set title if configured
-	if _ := self.config.title {
+	// Set the configured title, the complete xdg-terminal-exec command, or the
+	// argv[0] of a directly supplied command, in that priority order.
+	if title := surface_initial_title(config, command) {
 		self.rt_app.perform_action(AppAction{
 			kind: .set_title
 			target: &self
-			title_value: self.config.title or { '' }
+			title_value: title
 		})!
 	}
 
+	app.first = false
 	self.initialized = true
+}
+
+fn surface_command(config &Config, first bool) ?configpkg.Command {
+	if first {
+		if command := config.initial_command {
+			return command
+		}
+	}
+	return config.command
+}
+
+fn surface_initial_title(config &Config, command ?configpkg.Command) ?string {
+	if title := config.title {
+		return title
+	}
+
+	$if linux {
+		if config.xdg_terminal_exec {
+			if value := command {
+				return value.string_val()
+			}
+			return none
+		}
+	}
+
+	if value := command {
+		match value {
+			configpkg.DirectCmd {
+				if value.direct.len > 0 {
+					return value.direct[0]
+				}
+			}
+			configpkg.ShellCmd {}
+		}
+	}
+	return none
 }
 
 // deinit cleans up the surface and all its resources.

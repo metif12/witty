@@ -35,6 +35,35 @@ fn test_derived_config_uses_selection_and_clipboard_maps() {
 	assert derived.clipboard_codepoint_map[0].range_start == 0x2500
 }
 
+fn test_surface_command_uses_initial_command_only_for_first_surface() {
+	mut cfg := configpkg.Config.default_config()
+	cfg.command = configpkg.Command(configpkg.DirectCmd{ direct: ['regular'] })
+	cfg.initial_command = configpkg.Command(configpkg.DirectCmd{ direct: ['initial', 'arg'] })
+	first := surface_command(&cfg, true) or { panic('missing first command') }
+	later := surface_command(&cfg, false) or { panic('missing regular command') }
+	assert first.string_val() == 'initial arg'
+	assert later.string_val() == 'regular'
+}
+
+fn test_surface_initial_title_follows_command_kind() {
+	mut cfg := configpkg.Config.default_config()
+	direct := configpkg.Command(configpkg.DirectCmd{ direct: ['echo', 'hello'] })
+	shell := configpkg.Command(configpkg.ShellCmd{ shell: 'echo hello' })
+	assert (surface_initial_title(&cfg, direct) or { '' }) == 'echo'
+	assert surface_initial_title(&cfg, shell) == none
+	cfg.title = 'configured'
+	assert (surface_initial_title(&cfg, direct) or { '' }) == 'configured'
+}
+
+fn test_surface_initial_title_uses_full_xdg_command_on_linux() {
+	$if linux {
+		mut cfg := configpkg.Config.default_config()
+		cfg.xdg_terminal_exec = true
+		command := configpkg.Command(configpkg.DirectCmd{ direct: ['echo', 'hello world'] })
+		assert (surface_initial_title(&cfg, command) or { '' }) == 'echo hello world'
+	}
+}
+
 fn test_derived_config_preserves_complete_font_configuration() {
 	mut cfg := configpkg.Config.default_config()
 	cfg.load_string('font-style-bold = Heavy\nfont-variation = wght=350\nfont-codepoint-map = U+E000-U+E001=Symbols\nfont-synthetic-style = no-bold,italic,bold-italic\nadjust-cell-width = 10%\nfreetype-load-flags = no-hinting,force-autohint\n')
