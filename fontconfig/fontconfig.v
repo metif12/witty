@@ -171,7 +171,7 @@ pub fn (p &Pattern) destroy() {
 pub fn (p &Pattern) add(prop Property, val PatternValue, append bool) bool {
 	object := prop.cval()
 	return match prop {
-		.family, .style {
+		.family, .style, .fullname {
 			C.FcPatternAddString(p.handle, &char(object.str), &char(val.string.str)) != 0
 		}
 		.charset {
@@ -199,7 +199,7 @@ pub fn (p &Pattern) default_substitute() {
 pub fn (p &Pattern) get(prop Property, idx int) !PatternValue {
 	object := prop.cval()
 	return match prop {
-		.family, .style, .lang {
+		.family, .style, .fullname, .lang {
 			mut sptr := &char(unsafe { nil })
 			if C.FcPatternGetString(p.handle, &char(object.str), idx, &sptr) != fc_result_match {
 				return error('FcPatternGetString(${object}) failed')
@@ -341,6 +341,7 @@ pub struct LangSet {
 pub enum Property {
 	family
 	style
+	fullname
 	charset
 	size
 	weight
@@ -354,6 +355,7 @@ pub fn (p Property) cval() string {
 	return match p {
 		.family { 'family' }
 		.style { 'style' }
+		.fullname { 'fullname' }
 		.charset { 'charset' }
 		.size { 'size' }
 		.weight { 'weight' }

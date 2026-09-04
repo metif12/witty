@@ -27,6 +27,25 @@ fn test_list_keybinds_default_is_valid_config_syntax() {
 	assert output.contains('=new_window\n')
 }
 
+fn test_format_font_list_sorts_unfiltered_and_preserves_filtered_priority() {
+	entries := [
+		FontListEntry{ family: 'Zulu', name: 'Zulu Bold' },
+		FontListEntry{ family: 'Alpha', name: 'Alpha Italic' },
+		FontListEntry{ family: 'Alpha', name: 'Alpha Regular' },
+	]
+	assert format_font_list(entries, true) == 'Alpha\n  Alpha Italic\n  Alpha Regular\n\nZulu\n  Zulu Bold\n\n'
+	assert format_font_list(entries, false) == 'Zulu\n  Zulu Bold\n\nAlpha\n  Alpha Italic\n  Alpha Regular\n\n'
+}
+
+fn test_list_fonts_options() {
+	opts := parse_list_fonts_options(['--family=JetBrains Mono', '--style', 'Italic',
+		'--bold', '--italic'])!
+	assert opts.family? == 'JetBrains Mono'
+	assert opts.style? == 'Italic'
+	assert opts.bold
+	assert opts.italic
+}
+
 fn test_validate_config_specific_file() {
 	dir := os.join_path(os.temp_dir(), 'witty-cli-validate-${os.getpid()}')
 	os.rmdir_all(dir) or {}

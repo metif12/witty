@@ -1,6 +1,7 @@
 module cli
 
 import configpkg
+import font
 import os
 import terminal
 
@@ -56,6 +57,124 @@ pub fn list_keybinds_output(args []string) !string {
 pub fn run_list_keybinds(args []string) !int {
 	print(list_keybinds_output(args)!)
 	return 0
+}
+
+pub struct FontListOptions {
+pub mut:
+	family ?string
+	style  ?string
+	bold    bool
+	italic  bool
+}
+
+pub struct FontListEntry {
+pub:
+	family string
+	name   string
+}
+
+// list_fonts_output uses the same native discovery abstraction as the font
+// grid. With no family filter Ghostty sorts by family and full face name; a
+// family query deliberately preserves discovery priority.
+pub fn list_fonts_output(args []string) !string {
+	opts := parse_list_fonts_options(args)!
+	mut discovery := font.Discover.init()!
+	defer {
+		discovery.deinit()
+	}
+	mut iterator := discovery.discover(font.Descriptor{
+		family: opts.family
+		style: opts.style
+		bold: opts.bold
+		italic: opts.italic
+		monospace: opts.family == none
+	})!
+	defer {
+		iterator.deinit()
+	}
+	mut entries := []FontListEntry{}
+	for {
+		mut face := iterator.next() or { break }
+		family := face.family_name_value()
+		name := face.deferred_name()
+		if family.len > 0 && name.len > 0 {
+			entries << FontListEntry{
+				family: family
+				name: name
+			}
+		}
+		face.deinit()
+	}
+	return format_font_list(entries, opts.family == none)
+}
+
+pub fn run_list_fonts(args []string) !int {
+	print(list_fonts_output(args)!)
+	return 0
+}
+
+fn parse_list_fonts_options(args []string) !FontListOptions {
+	mut opts := FontListOptions{}
+	mut i := 0
+	for i < args.len {
+		arg := args[i]
+		if arg == '--bold' {
+			opts.bold = true
+		} else if arg == '--italic' {
+			opts.italic = true
+		} else if arg.starts_with('--family=') {
+			opts.family = arg.all_after('=')
+		} else if arg.starts_with('--style=') {
+			opts.style = arg.all_after('=')
+		} else if arg == '--family' || arg == '--style' {
+			if i + 1 >= args.len {
+				return error('value required for ${arg}')
+			}
+			i++
+			if arg == '--family' {
+				opts.family = args[i]
+			} else {
+				opts.style = args[i]
+			}
+		} else {
+			return error('unknown option for list-fonts: ${arg}')
+		}
+		i++
+	}
+	return opts
+}
+
+pub fn format_font_list(entries []FontListEntry, sort_results bool) string {
+	mut families := []string{}
+	mut grouped := map[string][]string{}
+	for entry in entries {
+		if entry.family !in grouped {
+			families << entry.family
+			grouped[entry.family] = []string{}
+		}
+		mut names := grouped[entry.family]
+		names << entry.name
+		grouped[entry.family] = names
+	}
+	if sort_results {
+		families.sort()
+	}
+	mut lines := []string{}
+	for family in families {
+		mut names := grouped[family]
+		if sort_results {
+			names.sort()
+		}
+		if names.len == 0 {
+			continue
+		}
+		lines << family
+		for name in names {
+			lines << '  ${name}'
+		}
+		lines << ''
+	}
+	return output_lines(lines)
 }
 
 pub struct ValidateResult {

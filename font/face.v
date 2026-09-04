@@ -743,6 +743,12 @@ pub fn (m FaceMetrics) strikethrough_position_val() f64 {
 // to search for fallback fonts without the overhead of full loading.
 pub struct DeferredFace {
 pub mut:
+	// Names retained by the discovery backend. Ghostty keeps the native
+	// descriptor alive and reads these lazily; the V representation owns the
+	// copied strings because it intentionally reduces a deferred face to
+	// portable data.
+	family_name string
+	full_name   string
 	// The path to the font file, if file-based.
 	path string
 	// The face index within the font file.
@@ -757,6 +763,16 @@ pub mut:
 	presentation ?Presentation
 	// Variation axes selected by discovery/configuration.
 	variations []Variation
+}
+
+// family_name_value returns the family name advertised by discovery.
+pub fn (d DeferredFace) family_name_value() string {
+	return d.family_name
+}
+
+// name returns the display/full name advertised by discovery.
+pub fn (d DeferredFace) deferred_name() string {
+	return d.full_name
 }
 
 // deinit releases deferred face resources.

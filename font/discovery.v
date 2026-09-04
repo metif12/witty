@@ -250,6 +250,10 @@ fn C.witty_ct_descriptor_path(desc voidptr, buf &u8, len usize) int
 
 fn C.witty_ct_font_from_descriptor(desc voidptr, size f64) voidptr
 
+fn C.witty_coretext_copy_family_name(font_ptr voidptr, buf &u8, len usize) int
+
+fn C.witty_coretext_copy_display_name(font_ptr voidptr, buf &u8, len usize) int
+
 fn C.witty_ct_font_for_string(orig_font voidptr, codepoint u32) voidptr
 
 fn C.witty_ct_descriptor_is_color(desc voidptr) int
@@ -520,6 +524,8 @@ pub fn (mut it FcDiscoverIterator) next() ?DeferredFace {
 			font_pattern.destroy()
 			continue
 		}
+		family := font_pattern.get(.family, 0) or { fontconfig.PatternValue{} }
+		full_name := font_pattern.get(.fullname, 0) or { fontconfig.PatternValue{} }
 		idx := font_pattern.index()
 		is_emoji := font_pattern.is_emoji()
 		has_requested := it.codepoint == 0 || font_pattern.has_char(it.codepoint)
@@ -530,6 +536,8 @@ pub fn (mut it FcDiscoverIterator) next() ?DeferredFace {
 			coverage[it.codepoint] = has_requested
 		}
 		return DeferredFace{
+			family_name: family.string
+			full_name: if full_name.string.len > 0 { full_name.string } else { family.string }
 			path: path
 			face_index: i32(idx)
 			codepoints: coverage
@@ -760,6 +768,7 @@ pub fn (mut it CtDiscoverIterator) next() ?DeferredFace {
 		}
 		path := unsafe { cstring_to_vstring(&char(buf.data)) }
 		is_color := C.witty_ct_descriptor_is_color(desc) != 0
+		family_name, full_name := coretext_descriptor_names(desc)
 		C.witty_ct_release(desc)
 
 		mut coverage := map[u32]bool{}
@@ -767,6 +776,8 @@ pub fn (mut it CtDiscoverIterator) next() ?DeferredFace {
 			coverage[it.codepoint] = true
 		}
 		return DeferredFace{
+			family_name: family_name
+			full_name: full_name
 			path: path
 			face_index: 0
 			codepoints: coverage
@@ -775,6 +786,29 @@ pub fn (mut it CtDiscoverIterator) next() ?DeferredFace {
 		}
 	}
 	return none
+}
+
+fn coretext_descriptor_names(desc voidptr) (string, string) {
+	font_ptr := C.witty_ct_font_from_descriptor(desc, 12.0)
+	if isnil(font_ptr) {
+		return '', ''
+	}
+	defer {
+		C.witty_ct_release(font_ptr)
+	}
+	mut family_buf := []u8{len: 1024}
+	mut display_buf := []u8{len: 1024}
+	family := if C.witty_coretext_copy_family_name(font_ptr, &u8(family_buf.data), usize(family_buf.len)) != 0 {
+		unsafe { cstring_to_vstring(&char(family_buf.data)) }
+	} else {
+		''
+	}
+	display := if C.witty_coretext_copy_display_name(font_ptr, &u8(display_buf.data), usize(display_buf.len)) != 0 {
+		unsafe { cstring_to_vstring(&char(display_buf.data)) }
+	} else {
+		family
+	}
+	return family, display
 }
 
 // Discover selects the native discovery backend used by the target build.
