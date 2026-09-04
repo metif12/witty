@@ -535,6 +535,16 @@ fn (mut self App) drain_mailbox(mut rt_app apprt.RuntimeApp) ! {
 			SurfaceAppMsg {
 				self.surface_message(msg.surface, msg.message)!
 			}
+			PresentSurfaceMsg {
+				for surface in self.surfaces {
+					if u64(usize(voidptr(surface.core_surface))) == msg.address {
+						self.surface_message(surface, SurfaceMessage{
+							kind: .present_surface
+						})!
+						break
+					}
+				}
+			}
 		}
 	}
 }
@@ -575,6 +585,21 @@ pub fn (mut self App) new_window(mut rt_app apprt.RuntimeApp, msg NewWindowMsg) 
 pub fn (mut self App) request_new_window(parent ?&SurfaceRef) {
 	self.mailbox.push(NewWindowMsg{
 		parent: parent
+	})
+}
+
+// request_open_config queues the same core mailbox message used by Ghostty's
+// app.open-config GAction.
+pub fn (mut self App) request_open_config() {
+	self.mailbox.push(OpenConfigMsg{})
+}
+
+// request_present_surface queues an address for validation on the app thread
+// before the present-surface message is delivered. Desktop notifications may
+// outlive their originating surface, so dereferencing here would be unsafe.
+pub fn (mut self App) request_present_surface(address u64) {
+	self.mailbox.push(PresentSurfaceMsg{
+		address: address
 	})
 }
 
@@ -832,6 +857,7 @@ pub type Message = OpenConfigMsg
 	| QuitMsg
 	| RedrawSurfaceMsg
 	| SurfaceAppMsg
+	| PresentSurfaceMsg
 
 // OpenConfigMsg requests the configuration file to be opened.
 pub struct OpenConfigMsg {}
@@ -867,6 +893,13 @@ pub struct SurfaceAppMsg {
 pub:
 	surface &SurfaceRef
 	message SurfaceMessage
+}
+
+// PresentSurfaceMsg retains the integer pointer carried by the GTK action
+// until the core mailbox can validate it against the live surface list.
+pub struct PresentSurfaceMsg {
+pub:
+	address u64
 }
 
 // Mailbox is the way that other threads send the app thread messages.

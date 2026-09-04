@@ -64,3 +64,32 @@ fn test_application_activate_queues_new_window() {
 	application_activate_cb(unsafe { nil }, voidptr(&app))
 	assert core_app.pending_message_count() == 1
 }
+
+fn test_application_action_table_matches_ghostty() {
+	string_array_type := C.g_variant_type_new(c'as')
+	u64_type := C.g_variant_type_new(c't')
+	actions := application_action_descriptors(string_array_type, u64_type)
+	assert actions.map(it.name) == [
+		'new-window',
+		'new-window-command',
+		'open-config',
+		'present-surface',
+		'quit',
+		'reload-config',
+	]
+	assert isnil(actions[0].parameter_type)
+	assert actions[1].parameter_type == string_array_type
+	assert actions[3].parameter_type == u64_type
+	C.g_variant_type_free(string_array_type)
+	C.g_variant_type_free(u64_type)
+}
+
+fn test_application_action_callbacks_queue_core_messages() {
+	mut core_app := &core.App{}
+	mut app := Application{
+		core_app: core_app
+	}
+	application_action_new_window_cb(unsafe { nil }, unsafe { nil }, voidptr(&app))
+	application_action_open_config_cb(unsafe { nil }, unsafe { nil }, voidptr(&app))
+	assert core_app.pending_message_count() == 2
+}

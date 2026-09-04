@@ -55,6 +55,10 @@ fn C.g_application_send_notification(app GApplication, id &char, notification vo
 
 fn C.g_application_set_resource_base_path(app GApplication, resource_path &char)
 
+fn C.g_variant_is_of_type(value GVariant, vtype GVariantType) bool
+
+fn C.g_variant_get_uint64(value GVariant) u64
+
 // GtkApplication
 fn C.gtk_application_get_windows(app GtkApplication) GList
 
@@ -713,18 +717,104 @@ fn (mut self Application) startup_signals() {
 // startup_action_map registers our GActions (new-window, open-config, quit,
 // reload-config, present-surface, ...). Mirrors `Application.startupActionMap`.
 fn (mut self Application) startup_action_map() {
-	// The action descriptors mirror ghostty's action table. Callbacks are C
-	// trampolines tied to the GObject, which is out of scope, so we build the
-	// descriptor list but do not register it against a live GActionMap.
-	//
-	// TODO(gtk): ext.actions.add(Self, self, &actions) — needs the GObject as a
-	// GActionMap and C callback trampolines.
-	_ = [
-		Action.new('new-window', unsafe { nil }, unsafe { nil }),
-		Action.new('open-config', unsafe { nil }, unsafe { nil }),
-		Action.new('quit', unsafe { nil }, unsafe { nil }),
-		Action.new('reload-config', unsafe { nil }, unsafe { nil }),
+	if isnil(self.obj) {
+		return
+	}
+	string_array_type := C.g_variant_type_new(c'as')
+	u64_type := C.g_variant_type_new(c't')
+	actions := application_action_descriptors(string_array_type, u64_type)
+	add_to_map(voidptr(self), GActionMap(self.obj), actions)
+	C.g_variant_type_free(string_array_type)
+	C.g_variant_type_free(u64_type)
+}
+
+// application_action_descriptors is the exact pinned application action table.
+fn application_action_descriptors(string_array_type GVariantType, u64_type GVariantType) []Action {
+	return [
+		Action.new('new-window', GCallback(voidptr(application_action_new_window_cb)), unsafe { nil }),
+		Action.new('new-window-command', GCallback(voidptr(application_action_new_window_cb)), string_array_type),
+		Action.new('open-config', GCallback(voidptr(application_action_open_config_cb)), unsafe { nil }),
+		Action.new('present-surface', GCallback(voidptr(application_action_present_surface_cb)), u64_type),
+		Action.new('quit', GCallback(voidptr(application_action_quit_cb)), unsafe { nil }),
+		Action.new('reload-config', GCallback(voidptr(application_action_reload_config_cb)), unsafe { nil }),
 	]
+}
+
+fn application_action_new_window_cb(action GSimpleAction, parameter GVariant, user_data voidptr) {
+	_ = action
+	_ = parameter // The pinned implementation validates/logs command argv only.
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Application(user_data) }
+	self.activate()
+}
+
+fn application_action_open_config_cb(action GSimpleAction, parameter GVariant, user_data voidptr) {
+	_ = action
+	_ = parameter
+	if isnil(user_data) {
+		return
+	}
+	self := unsafe { &Application(user_data) }
+	if isnil(self.core_app) {
+		return
+	}
+	mut core_app := unsafe { self.core_app }
+	core_app.request_open_config()
+}
+
+fn application_action_present_surface_cb(action GSimpleAction, parameter GVariant, user_data voidptr) {
+	_ = action
+	if isnil(user_data) || isnil(parameter) {
+		return
+	}
+	type_ := C.g_variant_type_new(c't')
+	is_u64 := C.g_variant_is_of_type(parameter, type_)
+	C.g_variant_type_free(type_)
+	if !is_u64 {
+		return
+	}
+	address := C.g_variant_get_uint64(parameter)
+	if address == 0 {
+		return
+	}
+	self := unsafe { &Application(user_data) }
+	if isnil(self.core_app) {
+		return
+	}
+	mut core_app := unsafe { self.core_app }
+	core_app.request_present_surface(address)
+}
+
+fn application_action_quit_cb(action GSimpleAction, parameter GVariant, user_data voidptr) {
+	_ = action
+	_ = parameter
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Application(user_data) }
+	self.quit()
+}
+
+fn application_action_reload_config_cb(action GSimpleAction, parameter GVariant, user_data voidptr) {
+	_ = action
+	_ = parameter
+	if isnil(user_data) {
+		return
+	}
+	mut self := unsafe { &Application(user_data) }
+	self.reload_config(false) or {
+		eprintln('error reloading config: ${err}')
+	}
+}
+
+// reload_config performs the hard/soft load used by the application action.
+// A soft reload reapplies the current loaded config; a hard reload reads it
+// again from Ghostty's normal config sources.
+fn (mut self Application) reload_config(soft bool) ! {
+	config := if soft { self.config.clone() } else { configpkg.Config.load() }
+	self.set_config(config)
 }
 
 // startup_global_shortcuts sets up desktop-portal global shortcuts. Mirrors

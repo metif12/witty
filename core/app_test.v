@@ -21,10 +21,19 @@ fn test_runtime_app_records_actions_and_quit_timer() ! {
 fn test_app_mailbox_dispatches_open_config() ! {
 	mut app := App{}
 	mut runtime := apprt.RuntimeApp{}
-	app.mailbox.push(Message(OpenConfigMsg{}))
+	app.request_open_config()
 	app.tick(mut runtime)!
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].action == .open_config
+}
+
+fn test_app_present_surface_request_ignores_stale_address() ! {
+	mut app := App{}
+	mut runtime := apprt.RuntimeApp{}
+	app.request_present_surface(0xdeadbeef)
+	assert app.pending_message_count() == 1
+	app.tick(mut runtime)!
+	assert app.pending_message_count() == 0
 }
 
 fn test_app_key_event_uses_runtime_config_binding() {
