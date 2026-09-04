@@ -13,6 +13,50 @@ fn test_pipe_returns_distinct_fds() {
 	assert fds[0] != fds[1]
 }
 
+fn test_temp_dir_is_unique_and_deletes_contents() {
+	mut first := TempDir.init()!
+	mut second := TempDir.init()!
+	assert first.name().len > 0
+	assert second.name().len > 0
+	assert first.path != second.path
+	assert os.is_dir(first.path)
+	assert os.is_dir(second.path)
+
+	nested := os.join_path(first.path, 'nested')
+	os.mkdir(nested)!
+	os.write_file(os.join_path(nested, 'data'), 'temporary')!
+	first_path := first.path
+	second_path := second.path
+	first.deinit()
+	second.deinit()
+	assert !os.exists(first_path)
+	assert !os.exists(second_path)
+
+	// Repeated cleanup is harmless and never broadens the deletion target.
+	first.deinit()
+}
+
+fn test_shell_command_builder_ignores_empty_arguments() {
+	mut command := ShellCommandBuilder.init()
+	defer { command.deinit() }
+	command.append_arg('bash')
+	command.append_arg('')
+	command.append_arg('--posix')
+	command.append_arg('-l')
+	assert command.to_owned_slice() == 'bash --posix -l'
+}
+
+fn test_shell_escape_writer() {
+	assert shell_escape('abc') == 'abc'
+	assert shell_escape('a c') == 'a\\ c'
+	assert shell_escape('a?c') == 'a\\?c'
+	assert shell_escape('a\\c') == 'a\\\\c'
+	assert shell_escape('a|c') == 'a\\|c'
+	assert shell_escape('a"c') == 'a\\"c'
+	assert shell_escape('a(1)') == 'a\\(1\\)'
+	assert shell_escape('line one\nline two') == 'line\\ one\nline\\ two'
+}
+
 fn test_fix_max_files_can_restore_when_available() {
 	lim := fix_max_files() or { return }
 	restore_max_files(lim)

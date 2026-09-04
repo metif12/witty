@@ -1,6 +1,8 @@
 module internal_os
 
 import os
+import crypto.rand as crypto_rand
+import encoding.base64
 
 // C interop declarations for pipes and resource limits.
 #include <unistd.h>
@@ -76,12 +78,36 @@ fn reap_open_process(mut process os.Process) {
 pub struct TempDir {
 pub:
 	path string
+mut:
+	parent    string
+	dir_name  string
+	destroyed bool
 }
 
 pub fn TempDir.init() !TempDir {
-	p := os.join_path(os.temp_dir(), 'Witty')
-	os.mkdir_all(p) or {}
-	return TempDir{ path: p }
+	parent := if os.temp_dir().len > 0 { os.temp_dir() } else { os.getwd() }
+	for {
+		random := crypto_rand.bytes(16)!
+		name := base64.url_encode(random)
+		path := os.join_path(parent, name)
+		os.mkdir(path) or {
+			if os.exists(path) {
+				continue
+			}
+			return err
+		}
+		return TempDir{
+			path: path
+			parent: parent
+			dir_name: name
+		}
+	}
+	return error('unable to create temporary directory')
+}
+
+// name returns the generated basename, not the full temporary path.
+pub fn (t &TempDir) name() string {
+	return t.dir_name
 }
 
 pub fn (t TempDir) create_file(name string) !os.File {
@@ -89,8 +115,15 @@ pub fn (t TempDir) create_file(name string) !os.File {
 	return os.create(full)
 }
 
-pub fn (t TempDir) deinit() {
-	os.rmdir_all(t.path) or {}
+pub fn (mut t TempDir) deinit() {
+	if t.destroyed || t.dir_name.len == 0 || t.path != os.join_path(t.parent, t.dir_name) {
+		return
+	}
+	os.rmdir_all(t.path) or {
+		eprintln('error deleting temp dir: ${err}')
+		return
+	}
+	t.destroyed = true
 }
 
 // get_env_map returns the current environment as a map.
@@ -306,6 +339,9 @@ pub fn ShellCommandBuilder.init() ShellCommandBuilder {
 
 // append_arg adds an argument to the command being built.
 pub fn (mut b ShellCommandBuilder) append_arg(arg string) {
+	if arg.len == 0 {
+		return
+	}
 	b.args << arg
 }
 
@@ -317,4 +353,39 @@ pub fn (b ShellCommandBuilder) to_owned_slice() string {
 // deinit cleans up the builder.
 pub fn (mut b ShellCommandBuilder) deinit() {
 	b.args = []string{}
+}
+
+// ShellEscapeWriter escapes the characters Ghostty treats specially when
+// constructing shell command text. Newlines deliberately remain unescaped so
+// callers can use them to delimit file lists.
+pub struct ShellEscapeWriter {
+mut:
+	buffer []u8
+}
+
+pub fn ShellEscapeWriter.init() ShellEscapeWriter {
+	return ShellEscapeWriter{}
+}
+
+pub fn (mut self ShellEscapeWriter) write(data string) {
+	for byte in data.bytes() {
+		if byte == 0x60 || byte in [`\\`, `"`, `'`, `$`, `*`, `?`, ` `, `|`, `(`, `)`] {
+			self.buffer << `\\`
+		}
+		self.buffer << byte
+	}
+}
+
+pub fn (self &ShellEscapeWriter) string() string {
+	return self.buffer.bytestr()
+}
+
+pub fn (mut self ShellEscapeWriter) deinit() {
+	self.buffer = []u8{}
+}
+
+pub fn shell_escape(data string) string {
+	mut writer := ShellEscapeWriter.init()
+	writer.write(data)
+	return writer.string()
 }
