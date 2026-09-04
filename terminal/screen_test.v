@@ -8,7 +8,10 @@ fn test_screen_read_and_write() {
 	assert s.cursor.style_id == u32(0)
 
 	s.test_write_string('hello, world') or { assert false }
-	str := s.dump_string_alloc(.screen) or { assert false; return }
+	str := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str == 'hello, world'
 }
 
@@ -18,7 +21,10 @@ fn test_screen_read_and_write_newline() {
 	assert s.cursor.style_id == u32(0)
 
 	s.test_write_string('hello\nworld') or { assert false }
-	str := s.dump_string_alloc(.screen) or { assert false; return }
+	str := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str == 'hello\nworld'
 }
 
@@ -28,10 +34,16 @@ fn test_screen_read_and_write_scrollback() {
 
 	s.test_write_string('hello\nworld\ntest') or { assert false }
 
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == 'hello\nworld\ntest'
 
-	str_active := s.dump_string_alloc(.active) or { assert false; return }
+	str_active := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str_active == 'world\ntest'
 }
 
@@ -41,10 +53,16 @@ fn test_screen_read_and_write_no_scrollback_small() {
 
 	s.test_write_string('hello\nworld\ntest') or { assert false }
 
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == 'world\ntest'
 
-	str_active := s.dump_string_alloc(.active) or { assert false; return }
+	str_active := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str_active == 'world\ntest'
 }
 
@@ -57,7 +75,10 @@ fn test_screen_read_and_write_no_scrollback_large() {
 	}
 	s.test_write_string('1000') or { assert false }
 
-	str := s.dump_string_alloc(.screen) or { assert false; return }
+	str := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str == '999\n1000'
 }
 
@@ -75,7 +96,10 @@ fn test_screen_cursor_copy_xy() {
 	assert s2.cursor.y == 3
 	s2.test_write_string('Hello') or { assert false }
 
-	str := s2.dump_string_alloc(.screen) or { assert false; return }
+	str := s2.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str == '\n\n\n  Hello'
 }
 
@@ -190,7 +214,10 @@ fn test_screen_clear_rows_active_one_line() {
 
 	s.test_write_string('hello, world') or { assert false }
 	s.clear_rows(.active, ?PointTag(none), false)
-	str := s.dump_string_alloc(.screen) or { assert false; return }
+	str := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str == ''
 }
 
@@ -200,7 +227,10 @@ fn test_screen_clear_rows_active_multi_line() {
 
 	s.test_write_string('hello\nworld') or { assert false }
 	s.clear_rows(.active, ?PointTag(none), false)
-	str := s.dump_string_alloc(.screen) or { assert false; return }
+	str := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str == ''
 }
 
@@ -213,7 +243,10 @@ fn test_screen_clear_rows_active_styled_line() {
 	s.set_attribute(SgrAttribute{ kind: .unset }) or { assert false }
 
 	s.clear_rows(.active, ?PointTag(none), false)
-	str := s.dump_string_alloc(.screen) or { assert false; return }
+	str := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str == ''
 }
 
@@ -237,7 +270,10 @@ fn test_screen_clear_rows_protected() {
 
 	s.clear_rows(.active, ?PointTag(none), true)
 
-	str := s.dump_string_alloc(.screen) or { assert false; return }
+	str := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str == '           PROTECTED\nPROTECTED           PROTECTED'
 }
 
@@ -247,18 +283,30 @@ fn test_screen_erase_rows_history() {
 
 	s.test_write_string('1\n2\n3\n4\n5\n6') or { assert false }
 
-	str_active := s.dump_string_alloc(.active) or { assert false; return }
+	str_active := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str_active == '2\n3\n4\n5\n6'
 
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == '1\n2\n3\n4\n5\n6'
 
 	s.erase_rows(.history, ?PointTag(none))
 
-	str_active2 := s.dump_string_alloc(.active) or { assert false; return }
+	str_active2 := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str_active2 == '2\n3\n4\n5\n6'
 
-	str_screen2 := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen2 := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen2 == '2\n3\n4\n5\n6'
 }
 
@@ -268,35 +316,65 @@ fn test_screen_erase_rows_history_with_more_lines() {
 
 	s.test_write_string('A\nB\nC\n1\n2\n3\n4\n5\n6') or { assert false }
 
-	str_active := s.dump_string_alloc(.active) or { assert false; return }
+	str_active := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str_active == '2\n3\n4\n5\n6'
 
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == 'A\nB\nC\n1\n2\n3\n4\n5\n6'
 
 	s.erase_rows(.history, ?PointTag(none))
 
-	str_active2 := s.dump_string_alloc(.active) or { assert false; return }
+	str_active2 := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str_active2 == '2\n3\n4\n5\n6'
 
-	str_screen2 := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen2 := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen2 == '2\n3\n4\n5\n6'
 }
 
 fn test_screen_scrolling() {
-	// XTODO: Full scrolling tests need PageList viewport management
-	// and multi-page support.
-	mut s := Screen.init(80, 5, 1000)
+	mut s := Screen.init(5, 3, 1000)
 	defer { s.deinit() }
 
-	s.test_write_string('1\n2\n3\n4\n5\n6') or { assert false }
+	s.test_write_string('1ABCD\n2EFGH\n3IJKL\n4ABCD\n5EFGH\n6IJKL') or { assert false }
 
-	str := s.dump_string_alloc(.active) or { assert false; return }
-	assert str == '2\n3\n4\n5\n6'
+	active := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
+	assert active == '4ABCD\n5EFGH\n6IJKL'
 
-	// Scroll to top
 	s.scroll(.top)
-	// Viewport change doesn't affect dump_string_alloc(.active)
+	top := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
+	assert top == '1ABCD\n2EFGH\n3IJKL'
+
+	s.scroll_delta_rows(2)
+	middle := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
+	assert middle == '3IJKL\n4ABCD\n5EFGH'
+
+	s.scroll(.active)
+	bottom := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
+	assert bottom == active
 }
 
 fn test_screen_scrollback_empty() {
@@ -305,10 +383,16 @@ fn test_screen_scrollback_empty() {
 
 	s.test_write_string('1\n2\n3\n4\n5') or { assert false }
 
-	str_active := s.dump_string_alloc(.active) or { assert false; return }
+	str_active := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str_active == '1\n2\n3\n4\n5'
 
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == '1\n2\n3\n4\n5'
 }
 
@@ -421,7 +505,10 @@ fn test_screen_selection_string_basic() {
 	end_pin := Pin{ x: 11, y: u32(s.pages.active_start) }
 	sel := Selection.init(start_pin, end_pin, false)
 
-	str := s.selection_string(SelectionString{ sel: sel }) or { assert false; return }
+	str := s.selection_string(SelectionString{ sel: sel }) or {
+		assert false
+		return
+	}
 	assert str == 'hello, world'
 }
 
@@ -468,8 +555,6 @@ fn test_screen_hyperlink_start_end() {
 }
 
 fn test_screen_resize_no_reflow_more_rows() {
-	// XTODO: Full resize with reflow tests need PageList.resize
-	// with proper soft-wrap reflow support.
 	mut s := Screen.init(5, 3, 0)
 	defer { s.deinit() }
 
@@ -478,7 +563,10 @@ fn test_screen_resize_no_reflow_more_rows() {
 	s.resize(ScreenResize{ cols: 5, rows: 5, reflow: false }) or { assert false }
 	assert s.pages.rows == 5
 
-	str := s.dump_string_alloc(.active) or { assert false; return }
+	str := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str == '1\n2\n3'
 }
 
@@ -491,7 +579,10 @@ fn test_screen_resize_no_reflow_more_cols() {
 	s.resize(ScreenResize{ cols: 10, rows: 3, reflow: false }) or { assert false }
 	assert s.pages.cols == 10
 
-	str := s.dump_string_alloc(.active) or { assert false; return }
+	str := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str == '1\n2\n3'
 }
 
@@ -508,7 +599,10 @@ fn test_screen_reset() {
 	s.test_write_string('hello') or { assert false }
 	s.reset()
 
-	str := s.dump_string_alloc(.screen) or { assert false; return }
+	str := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str == ''
 	assert s.cursor.x == 0
 	assert s.cursor.y == 0
@@ -559,7 +653,10 @@ fn test_screen_scroll_and_clear() {
 	s.test_write_string('1\n2\n3\n4\n5') or { assert false }
 	s.scroll_clear() or { assert false }
 
-	str := s.dump_string_alloc(.active) or { assert false; return }
+	str := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str == ''
 }
 
@@ -598,22 +695,36 @@ fn test_screen_cursor_down_scroll() {
 	// Should have scrolled, cursor still at bottom
 	assert s.cursor.y == 2
 
-	str := s.dump_string_alloc(.active) or { assert false; return }
+	str := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str == '2\n3'
 }
 
 fn test_screen_clone() {
-	// XTODO: Full clone with pin remapping is not implemented.
 	mut s := Screen.init(10, 5, 1000)
 	defer { s.deinit() }
 
 	s.test_write_string('hello\nworld') or { assert false }
 
-	mut cloned := s.clone(.screen, ?PointTag(none)) or { assert false; return }
+	mut cloned := s.clone(.screen, ?PointTag(none)) or {
+		assert false
+		return
+	}
 	defer { cloned.deinit() }
 
-	str := cloned.dump_string_alloc(.active) or { assert false; return }
+	str := cloned.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str == 'hello\nworld'
+	assert cloned.cursor.x == s.cursor.x
+	assert cloned.cursor.y == s.cursor.y
+
+	// The clone owns its rows; subsequent writes cannot affect it.
+	s.test_write_string('\nthird') or { assert false }
+	assert (cloned.dump_string_alloc(.active) or { panic(err) }) == 'hello\nworld'
 }
 
 fn test_screen_soft_wrap_write() {
@@ -622,7 +733,10 @@ fn test_screen_soft_wrap_write() {
 
 	s.test_write_string('helloworld') or { assert false }
 
-	str := s.dump_string_alloc(.active) or { assert false; return }
+	str := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str == 'hello\nworld'
 }
 
@@ -659,9 +773,9 @@ fn test_screen_semantic_content() {
 // ============================================================
 
 fn wsdef_all() []u32 {
-	return [u32(0), u32(` `), u32(`\t`), u32(`'`), u32(`"`), u32(`\``),
-		u32(`|`), u32(`:`), u32(`;`), u32(`,`), u32(`(`), u32(`)`),
-		u32(`[`), u32(`]`), u32(`{`), u32(`}`), u32(`<`), u32(`>`), u32(`$`)]
+	return [u32(0), u32(` `), u32(`\t`), u32(`'`), u32(`"`), u32(`\``), u32(`|`), u32(`:`), u32(`;`),
+		u32(`,`), u32(`(`), u32(`)`), u32(`[`), u32(`]`), u32(`{`), u32(`}`), u32(`<`), u32(`>`),
+		u32(`$`)]
 }
 
 fn wsdef_line() []u32 {
@@ -688,9 +802,15 @@ fn test_screen_clear_history_with_no_history() {
 	defer { s.deinit() }
 	s.test_write_string('4ABCD\n5EFGH\n6IJKL') or { assert false }
 	s.erase_rows(.history, ?PointTag(none))
-	str_active := s.dump_string_alloc(.active) or { assert false; return }
+	str_active := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str_active == '4ABCD\n5EFGH\n6IJKL'
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == '4ABCD\n5EFGH\n6IJKL'
 }
 
@@ -699,9 +819,15 @@ fn test_screen_clear_history() {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL\n4ABCD\n5EFGH\n6IJKL') or { assert false }
 	s.erase_rows(.history, ?PointTag(none))
-	str_active := s.dump_string_alloc(.active) or { assert false; return }
+	str_active := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str_active == '4ABCD\n5EFGH\n6IJKL'
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == '4ABCD\n5EFGH\n6IJKL'
 }
 
@@ -712,13 +838,22 @@ fn test_screen_scroll_and_clear_full_screen() {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
 
-	str0 := s.dump_string_alloc(.active) or { assert false; return }
+	str0 := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str0 == '1ABCD\n2EFGH\n3IJKL'
 
 	s.scroll_clear() or { assert false }
-	str_active := s.dump_string_alloc(.active) or { assert false; return }
+	str_active := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str_active == ''
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == '1ABCD\n2EFGH\n3IJKL'
 }
 
@@ -727,13 +862,22 @@ fn test_screen_scroll_and_clear_partial_screen() {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH') or { assert false }
 
-	str0 := s.dump_string_alloc(.active) or { assert false; return }
+	str0 := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str0 == '1ABCD\n2EFGH'
 
 	s.scroll_clear() or { assert false }
-	str_active := s.dump_string_alloc(.active) or { assert false; return }
+	str_active := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str_active == ''
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == '1ABCD\n2EFGH'
 }
 
@@ -741,9 +885,15 @@ fn test_screen_scroll_and_clear_empty_screen() {
 	mut s := Screen.init(10, 3, 5)
 	defer { s.deinit() }
 	s.scroll_clear() or { assert false }
-	str_active := s.dump_string_alloc(.active) or { assert false; return }
+	str_active := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str_active == ''
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == ''
 }
 
@@ -756,7 +906,10 @@ fn test_screen_scroll_down_from_0() {
 
 	// Scrolling up does nothing, but allows it.
 	s.scroll(.delta_row)
-	str := s.dump_string_alloc(.active) or { assert false; return }
+	str := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str == '1ABCD\n2EFGH\n3IJKL'
 }
 
@@ -769,7 +922,10 @@ fn test_screen_cursor_down_scroll_preserves_style() {
 
 	assert s.cursor.style.flags.bold
 
-	str := s.dump_string_alloc(.active) or { assert false; return }
+	str := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str == '2EFGH\n3IJKL'
 }
 
@@ -780,7 +936,10 @@ fn test_screen_resize_no_reflow_more_rows_full() {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
 	s.resize(ScreenResize{ cols: 10, rows: 10, reflow: false }) or { assert false }
-	str := s.dump_string_alloc(.active) or { assert false; return }
+	str := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str == '1ABCD\n2EFGH\n3IJKL'
 }
 
@@ -789,7 +948,10 @@ fn test_screen_resize_no_reflow_more_cols_full() {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
 	s.resize(ScreenResize{ cols: 20, rows: 3, reflow: false }) or { assert false }
-	str := s.dump_string_alloc(.active) or { assert false; return }
+	str := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str == '1ABCD\n2EFGH\n3IJKL'
 }
 
@@ -798,7 +960,10 @@ fn test_screen_resize_no_reflow_less_cols_full() {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
 	s.resize(ScreenResize{ cols: 4, rows: 3, reflow: false }) or { assert false }
-	str := s.dump_string_alloc(.active) or { assert false; return }
+	str := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str == '1ABC\n2EFG\n3IJK'
 }
 
@@ -809,7 +974,10 @@ fn test_screen_resize_more_rows_no_scrollback() {
 	s.resize(ScreenResize{ cols: 10, rows: 10, reflow: true }) or { assert false }
 	assert s.cursor.x == 5
 	assert s.cursor.y == 2
-	str := s.dump_string_alloc(.active) or { assert false; return }
+	str := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str == '1ABCD\n2EFGH\n3IJKL'
 }
 
@@ -992,7 +1160,10 @@ fn test_screen_select_word_across_soft_wrap() {
 	s.test_write_string(' 1234012\n 123') or { assert false }
 	b := wsdef_all()
 
-	str := s.dump_string_alloc(.screen) or { assert false; return }
+	str := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str == ' 1234\n012\n 123'
 
 	for xy in [[u32(1), u32(0)], [u32(1), u32(1)], [u32(3), u32(0)]] {
@@ -1014,7 +1185,10 @@ fn test_screen_selection_string_multiline() {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
 	sel := Selection.init(Pin{ x: 0, y: 1 }, Pin{ x: 2, y: 2 }, false)
-	str := s.selection_string(SelectionString{ sel: sel, trim: true }) or { assert false; return }
+	str := s.selection_string(SelectionString{ sel: sel, trim: true }) or {
+		assert false
+		return
+	}
 	assert str == '2EFGH\n3IJ'
 }
 
@@ -1023,7 +1197,10 @@ fn test_screen_selection_string_start_outside() {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
 	sel := Selection.init(Pin{ x: 0, y: 5 }, Pin{ x: 2, y: 6 }, false)
-	str := s.selection_string(SelectionString{ sel: sel, trim: true }) or { assert false; return }
+	str := s.selection_string(SelectionString{ sel: sel, trim: true }) or {
+		assert false
+		return
+	}
 	assert str == ''
 }
 
@@ -1032,7 +1209,10 @@ fn test_screen_selection_string_end_outside() {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
 	sel := Selection.init(Pin{ x: 0, y: 2 }, Pin{ x: 2, y: 6 }, false)
-	str := s.selection_string(SelectionString{ sel: sel, trim: true }) or { assert false; return }
+	str := s.selection_string(SelectionString{ sel: sel, trim: true }) or {
+		assert false
+		return
+	}
 	assert str == '3IJKL'
 }
 
@@ -1042,7 +1222,10 @@ fn test_screen_selection_string_trim_space() {
 	s.test_write_string('1AB  \n2EFGH\n3IJKL') or { assert false }
 	sel := Selection.init(Pin{ x: 0, y: 0 }, Pin{ x: 2, y: 1 }, false)
 
-	str_trim := s.selection_string(SelectionString{ sel: sel, trim: true }) or { assert false; return }
+	str_trim := s.selection_string(SelectionString{ sel: sel, trim: true }) or {
+		assert false
+		return
+	}
 	assert str_trim == '1AB\n2EF'
 
 	str_notrim := s.selection_string(SelectionString{ sel: sel, trim: false }) or {
@@ -1058,7 +1241,10 @@ fn test_screen_selection_string_trim_empty_line() {
 	s.test_write_string('1AB  \n\n2EFGH\n3IJKL') or { assert false }
 	sel := Selection.init(Pin{ x: 0, y: 0 }, Pin{ x: 2, y: 2 }, false)
 
-	str_trim := s.selection_string(SelectionString{ sel: sel, trim: true }) or { assert false; return }
+	str_trim := s.selection_string(SelectionString{ sel: sel, trim: true }) or {
+		assert false
+		return
+	}
 	assert str_trim == '1AB\n\n2EF'
 }
 
@@ -1067,7 +1253,10 @@ fn test_screen_selection_string_soft_wrap() {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD2EFGH3IJKL') or { assert false }
 	sel := Selection.init(Pin{ x: 0, y: 1 }, Pin{ x: 2, y: 2 }, false)
-	str := s.selection_string(SelectionString{ sel: sel, trim: true }) or { assert false; return }
+	str := s.selection_string(SelectionString{ sel: sel, trim: true }) or {
+		assert false
+		return
+	}
 	assert str == '2EFGH3IJ'
 }
 
@@ -1079,12 +1268,24 @@ fn test_screen_line_iterator_basic() {
 	s.test_write_string('1ABCD\n2EFGH') or { assert false }
 	mut it := s.line_iterator(Pin{ x: 0, y: u32(s.pages.active_start) })
 
-	sel1 := it.next() or { assert false; return }
-	str1 := s.selection_string(SelectionString{ sel: sel1, trim: false }) or { assert false; return }
+	sel1 := it.next() or {
+		assert false
+		return
+	}
+	str1 := s.selection_string(SelectionString{ sel: sel1, trim: false }) or {
+		assert false
+		return
+	}
 	assert str1 == '1ABCD'
 
-	sel2 := it.next() or { assert false; return }
-	str2 := s.selection_string(SelectionString{ sel: sel2, trim: false }) or { assert false; return }
+	sel2 := it.next() or {
+		assert false
+		return
+	}
+	str2 := s.selection_string(SelectionString{ sel: sel2, trim: false }) or {
+		assert false
+		return
+	}
 	assert str2 == '2EFGH'
 }
 
@@ -1094,12 +1295,24 @@ fn test_screen_line_iterator_soft_wrap() {
 	s.test_write_string('1ABCD2EFGH\n3ABCD') or { assert false }
 	mut it := s.line_iterator(Pin{ x: 0, y: u32(s.pages.active_start) })
 
-	sel1 := it.next() or { assert false; return }
-	str1 := s.selection_string(SelectionString{ sel: sel1, trim: false }) or { assert false; return }
+	sel1 := it.next() or {
+		assert false
+		return
+	}
+	str1 := s.selection_string(SelectionString{ sel: sel1, trim: false }) or {
+		assert false
+		return
+	}
 	assert str1 == '1ABCD2EFGH'
 
-	sel2 := it.next() or { assert false; return }
-	str2 := s.selection_string(SelectionString{ sel: sel2, trim: false }) or { assert false; return }
+	sel2 := it.next() or {
+		assert false
+		return
+	}
+	str2 := s.selection_string(SelectionString{ sel: sel2, trim: false }) or {
+		assert false
+		return
+	}
 	assert str2 == '3ABCD'
 }
 
@@ -1176,7 +1389,10 @@ fn test_screen_prompt_click_move_right_soft_wrapped() {
 	s.test_write_string('abcdefgh') or { assert false }
 	s.test_write_string('ij') or { assert false }
 
-	str := s.dump_string_alloc(.active) or { assert false; return }
+	str := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str == '> abcdefgh\nij'
 
 	s.cursor_absolute(2, 0)
@@ -1236,7 +1452,10 @@ fn test_screen_prompt_click_move_left_soft_wrapped() {
 	s.test_write_string('abcdefgh') or { assert false }
 	s.test_write_string('ij') or { assert false }
 
-	str := s.dump_string_alloc(.active) or { assert false; return }
+	str := s.dump_string_alloc(.active) or {
+		assert false
+		return
+	}
 	assert str == '> abcdefgh\nij'
 
 	s.cursor_absolute(1, 1)
@@ -1314,7 +1533,10 @@ fn test_screen_resize_more_cols_perfect_split() {
 	s.test_write_string('1ABCD2EFGH3IJKL') or { assert false }
 	s.resize(ScreenResize{ cols: 10, rows: 3, reflow: true }) or { assert false }
 
-	str := s.dump_string_alloc(.screen) or { assert false; return }
+	str := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str == '1ABCD2EFGH\n3IJKL'
 }
 
@@ -1333,9 +1555,15 @@ fn test_screen_resize_more_cols_no_reflow_preserves_semantic_prompt() {
 	s.resize(ScreenResize{ cols: 10, rows: 3, reflow: false }) or { assert false }
 
 	expected := '1ABCD\n2EFGH\n3IJKL'
-	str_view := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view == expected
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == expected
 
 	// Our one row should still be a semantic prompt, the others should not.
@@ -1351,7 +1579,10 @@ fn test_screen_resize_more_cols_reflow_fits_full_width() {
 	s.test_write_string(str) or { assert false }
 
 	// Verify we soft wrapped
-	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view0 := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view0 == '1ABCD\n2EFGH\n3IJKL'
 
 	// Put our cursor on row 2, where the soft wrap is
@@ -1360,7 +1591,10 @@ fn test_screen_resize_more_cols_reflow_fits_full_width() {
 
 	// Resize and verify we undid the soft wrap because we have space now
 	s.resize(ScreenResize{ cols: 10, rows: 3, reflow: true }) or { assert false }
-	str_view1 := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view1 := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view1 == str
 
 	// Our cursor should've moved
@@ -1375,7 +1609,10 @@ fn test_screen_resize_more_cols_reflow_ends_in_newline() {
 	s.test_write_string(str) or { assert false }
 
 	// Verify we soft wrapped
-	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view0 := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view0 == '1ABCD2\nEFGH\n3IJKL'
 
 	// Put our cursor on the last row
@@ -1384,7 +1621,10 @@ fn test_screen_resize_more_cols_reflow_ends_in_newline() {
 
 	// Resize and verify we undid the soft wrap because we have space now
 	s.resize(ScreenResize{ cols: 10, rows: 3, reflow: true }) or { assert false }
-	str_view1 := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view1 := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view1 == str
 
 	// Our cursor should still be on the 3
@@ -1401,12 +1641,18 @@ fn test_screen_resize_more_cols_reflow_forces_more_wrapping() {
 	assert active_codepoint(s, s.cursor.x, s.cursor.y) == u32(`2`)
 
 	// Verify we soft wrapped
-	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view0 := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view0 == '1ABCD\n2EFGH\n3IJKL'
 
 	// Resize
 	s.resize(ScreenResize{ cols: 7, rows: 3, reflow: true }) or { assert false }
-	str_view1 := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view1 := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view1 == '1ABCD2E\nFGH\n3IJKL'
 
 	// Our cursor should've moved
@@ -1424,12 +1670,18 @@ fn test_screen_resize_more_cols_reflow_unwraps_multiple_times() {
 	assert active_codepoint(s, s.cursor.x, s.cursor.y) == u32(`3`)
 
 	// Verify we soft wrapped
-	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view0 := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view0 == '1ABCD\n2EFGH\n3IJKL'
 
 	// Resize
 	s.resize(ScreenResize{ cols: 15, rows: 3, reflow: true }) or { assert false }
-	str_view1 := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view1 := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view1 == '1ABCD2EFGH3IJKL'
 
 	// Our cursor should've moved
@@ -1441,7 +1693,10 @@ fn test_screen_resize_more_cols_with_populated_scrollback() {
 	mut s := Screen.init(5, 3, 5)
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL\n4ABCD5EFGH') or { assert false }
-	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view0 := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view0 == '3IJKL\n4ABCD\n5EFGH'
 
 	// Set our cursor to be on the "5"
@@ -1450,7 +1705,10 @@ fn test_screen_resize_more_cols_with_populated_scrollback() {
 
 	// Resize
 	s.resize(ScreenResize{ cols: 10, rows: 3, reflow: true }) or { assert false }
-	str_view1 := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view1 := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view1 == '2EFGH\n3IJKL\n4ABCD5EFGH'
 
 	// Cursor should still be on the "5"
@@ -1467,12 +1725,18 @@ fn test_screen_resize_more_cols_with_reflow() {
 	assert active_codepoint(s, s.cursor.x, s.cursor.y) == u32(`E`)
 
 	// Verify we soft wrapped
-	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view0 := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view0 == 'BC\n4D\nEF'
 
 	// Resize
 	s.resize(ScreenResize{ cols: 7, rows: 3, reflow: true }) or { assert false }
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == '1ABC\n2DEF\n3ABC\n4DEF'
 
 	// Our cursor should've moved
@@ -1492,9 +1756,15 @@ fn test_screen_resize_less_cols_reflow_but_row_space() {
 	assert active_codepoint(s, s.cursor.x, s.cursor.y) == u32(`D`)
 
 	s.resize(ScreenResize{ cols: 3, rows: 3, reflow: true }) or { assert false }
-	str_view := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view == '1AB\nCD'
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == '1AB\nCD'
 
 	// Cursor should be on the last line
@@ -1508,9 +1778,15 @@ fn test_screen_resize_less_cols_reflow_with_trimmed_rows() {
 	s.test_write_string('3IJKL\n4ABCD\n5EFGH') or { assert false }
 	s.resize(ScreenResize{ cols: 3, rows: 3, reflow: true }) or { assert false }
 
-	str_view := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view == 'CD\n5EF\nGH'
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == 'CD\n5EF\nGH'
 }
 
@@ -1520,9 +1796,15 @@ fn test_screen_resize_less_cols_reflow_with_trimmed_rows_and_scrollback() {
 	s.test_write_string('3IJKL\n4ABCD\n5EFGH') or { assert false }
 	s.resize(ScreenResize{ cols: 3, rows: 3, reflow: true }) or { assert false }
 
-	str_view := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view == 'CD\n5EF\nGH'
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == '3IJ\nKL\n4AB\nCD\n5EF\nGH'
 }
 
@@ -1531,12 +1813,18 @@ fn test_screen_resize_less_cols_reflow_previously_wrapped() {
 	defer { s.deinit() }
 	s.test_write_string('3IJKL4ABCD5EFGH') or { assert false }
 
-	str_screen0 := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen0 := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen0 == '3IJKL\n4ABCD\n5EFGH'
 
 	s.resize(ScreenResize{ cols: 3, rows: 3, reflow: true }) or { assert false }
 
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == 'ABC\nD5E\nFGH'
 }
 
@@ -1551,7 +1839,10 @@ fn test_screen_resize_less_cols_reflow_and_scrollback() {
 
 	s.resize(ScreenResize{ cols: 3, rows: 3, reflow: true }) or { assert false }
 
-	str_view := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view == '3C\n4D\n5E'
 
 	// Cursor should be on the last line
@@ -1564,7 +1855,10 @@ fn test_screen_resize_less_cols_reflow_previously_wrapped_and_scrollback() {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD2EFGH3IJKL4ABCD5EFGH') or { assert false }
 
-	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view0 := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view0 == '3IJKL\n4ABCD\n5EFGH'
 
 	// Put our cursor on the end
@@ -1573,9 +1867,15 @@ fn test_screen_resize_less_cols_reflow_previously_wrapped_and_scrollback() {
 
 	s.resize(ScreenResize{ cols: 3, rows: 3, reflow: true }) or { assert false }
 
-	str_view := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view == 'CD5\nEFG\nH'
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == '1AB\nCD2\nEFG\nH3I\nJKL\n4AB\nCD5\nEFG\nH'
 
 	// Cursor should be on the last line
@@ -1597,7 +1897,10 @@ fn test_screen_resize_less_cols_with_scrollback_keeps_cursor_row() {
 
 	s.resize(ScreenResize{ cols: 3, rows: 3, reflow: true }) or { assert false }
 
-	str_view := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view == ''
 
 	// Cursor should be on the last line
@@ -1610,16 +1913,28 @@ fn test_screen_resize_more_rows_less_cols_reflow_with_scrollback() {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH3IJKL\n4MNOP') or { assert false }
 
-	str_screen0 := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen0 := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen0 == '1ABCD\n2EFGH\n3IJKL\n4MNOP'
-	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view0 := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view0 == '2EFGH\n3IJKL\n4MNOP'
 
 	s.resize(ScreenResize{ cols: 2, rows: 10, reflow: true }) or { assert false }
 
-	str_view := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view == 'BC\nD\n2E\nFG\nH3\nIJ\nKL\n4M\nNO\nP'
-	str_screen := s.dump_string_alloc(.screen) or { assert false; return }
+	str_screen := s.dump_string_alloc(.screen) or {
+		assert false
+		return
+	}
 	assert str_screen == '1A\nBC\nD\n2E\nFG\nH3\nIJ\nKL\n4M\nNO\nP'
 }
 
@@ -1635,7 +1950,10 @@ fn test_screen_resize_more_cols_with_cursor_at_prompt() {
 	s.cursor_set_semantic_content_input(true)
 	s.test_write_string('echo') or { assert false }
 
-	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view0 := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view0 == 'ABCDE\n> echo'
 
 	s.resize(ScreenResize{ cols: 20, rows: 3, reflow: true, prompt_redraw: .true_ }) or {
@@ -1646,7 +1964,10 @@ fn test_screen_resize_more_cols_with_cursor_at_prompt() {
 	assert s.cursor.x == 6
 	assert s.cursor.y == 1
 
-	str_view1 := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view1 := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view1 == 'ABCDE'
 }
 
@@ -1661,7 +1982,10 @@ fn test_screen_resize_more_cols_with_cursor_not_at_prompt() {
 	s.test_write_string('echo\n') or { assert false }
 	s.test_write_string('output') or { assert false }
 
-	str_view0 := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view0 := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view0 == 'ABCDE\n> echo\noutput'
 
 	s.resize(ScreenResize{ cols: 20, rows: 3, reflow: true, prompt_redraw: .true_ }) or {
@@ -1672,6 +1996,9 @@ fn test_screen_resize_more_cols_with_cursor_not_at_prompt() {
 	assert s.cursor.x == 6
 	assert s.cursor.y == 2
 
-	str_view1 := s.dump_string_alloc(.viewport) or { assert false; return }
+	str_view1 := s.dump_string_alloc(.viewport) or {
+		assert false
+		return
+	}
 	assert str_view1 == 'ABCDE\n> echo\noutput'
 }

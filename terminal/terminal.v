@@ -3584,10 +3584,11 @@ pub fn (mut self Terminal) delete_chars(count_req int) {
 			}
 		}
 
-		// Row's soft-wrap is always reset
-		row.wrap = false
 		row.dirty = true
 	}
+
+	// Reset both the row's soft-wrap metadata and pending-wrap cursor state.
+	self.screens.active.cursor_reset_wrap()
 }
 
 // Erase characters at the cursor position.

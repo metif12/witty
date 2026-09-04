@@ -475,6 +475,9 @@ pub fn (mut self Pages) erase_row(opts PinOpts) ! {
 		for self.screen_rows.len < active_end {
 			self.screen_rows << RowData.init(self.cols)
 		}
+		if self.viewport == .active {
+			self.viewport_start = self.active_start
+		}
 	}
 }
 
@@ -486,6 +489,13 @@ pub fn (mut self Pages) erase_rows(tl PointTag, bl ?PointTag) {
 			for self.active_start > 0 {
 				self.screen_rows.delete(0)
 				self.active_start -= 1
+			}
+			if self.viewport == .active {
+				self.viewport_start = self.active_start
+			} else if self.viewport == .top {
+				self.viewport_start = 0
+			} else {
+				self.viewport_start = clamp_int(self.viewport_start, 0, self.active_start)
 			}
 		}
 		else {}
@@ -582,6 +592,15 @@ pub fn (mut self Pages) resize(opts ResizeOpts) ! {
 				self.reflow_saved_out_x = self.cols - 1
 			}
 		}
+	}
+
+	// An active viewport follows the active area's new top through row and
+	// column reflow. Top remains anchored at zero; pinned viewports retain
+	// their independently tracked absolute row.
+	if self.viewport == .active {
+		self.viewport_start = self.active_start
+	} else if self.viewport == .top {
+		self.viewport_start = 0
 	}
 }
 
@@ -998,7 +1017,7 @@ pub fn (self &Pages) pin(opts PinOpts) ?Pin {
 	y := match opts.tag {
 		.screen { opts.y }
 		.active { u32(self.active_start) + opts.y }
-		.viewport { u32(self.active_start) + opts.y }
+		.viewport { u32(self.viewport_start) + opts.y }
 		.history { opts.y }
 	}
 	if y >= u32(self.screen_rows.len) {

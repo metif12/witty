@@ -1,5 +1,10 @@
 module terminal
 
+struct SizeTestWidget {
+	x u32
+	y u32
+}
+
 // Tests for size.v types.
 // Translated from Ghostty's terminal/size.zig tests.
 // Note: Zig pointer arithmetic tests are skipped as they are
@@ -79,6 +84,32 @@ fn test_size_constants() {
 	assert string_bytes_int_max == u32(0xFFFFFFFF)
 }
 
-// Zig pointer arithmetic tests (Offset.ptr, getOffset) are skipped.
-// XTODO: These tests rely on Zig's @intFromPtr and @ptrFromInt which
-// have no direct equivalent in V's safe memory model.
+fn test_offset_ptr_u8() {
+	buf := [64]u8{}
+	offset := Offset{ offset: 42 }
+	base := unsafe { &buf[0] }
+	assert u64(offset.ptr(base)) == u64(base) + 42
+}
+
+fn test_offset_ptr_structural_alignment() {
+	widgets := [5]SizeTestWidget{}
+	base := unsafe { &u8(&widgets[0]) }
+	expected := unsafe { &widgets[2] }
+	offset := Offset{ offset: u32(sizeof(SizeTestWidget) * 2) }
+	assert u64(offset.ptr(base)) == u64(expected)
+}
+
+fn test_get_offset_bytes() {
+	bytes := 'ABCD'.bytes()
+	actual := get_offset(&bytes[0], &bytes[2])
+	assert actual.offset == 2
+}
+
+fn test_get_offset_structs() {
+	widgets := [SizeTestWidget{ x: 1, y: 2 }, SizeTestWidget{ x: 3, y: 4 },
+		SizeTestWidget{ x: 5, y: 6 }, SizeTestWidget{ x: 7, y: 8 }, SizeTestWidget{ x: 9, y: 10 }]
+	base := unsafe { &u8(&widgets[0]) }
+	ptr := unsafe { &u8(&widgets[2]) }
+	actual := get_offset(base, ptr)
+	assert actual.offset == u32(sizeof(SizeTestWidget) * 2)
+}

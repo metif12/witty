@@ -70,6 +70,11 @@ pub mut:
 	offset u32
 }
 
+// Resolve this byte offset against the true base allocation.
+pub fn (self Offset) ptr(base &u8) &u8 {
+	return unsafe { base + self.offset }
+}
+
 // OffsetSlice represents a slice of data stored via a base offset and
 // length. In Zig this is Offset(T).Slice; here we simplify since V
 // does not have the same pointer arithmetic model.

@@ -48,14 +48,20 @@ fn row_semantic_prompt_at(t &Terminal, y int) SemanticPromptType {
 // ============================================================
 
 fn test_input_with_no_control_characters() {
-	mut t := create_test_terminal(40, 40) or { assert false; return }
+	mut t := create_test_terminal(40, 40) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// Basic grid writing
 	t.print_string('hello') or { assert false }
 	assert t.screens.active.cursor.y == 0
 	assert t.screens.active.cursor.x == 5
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'hello'
 
 	// The first row should be dirty
@@ -64,7 +70,10 @@ fn test_input_with_no_control_characters() {
 }
 
 fn test_input_with_basic_wraparound() {
-	mut t := create_test_terminal(5, 40) or { assert false; return }
+	mut t := create_test_terminal(5, 40) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// Basic grid writing
@@ -72,12 +81,18 @@ fn test_input_with_basic_wraparound() {
 	assert t.screens.active.cursor.y == 2
 	assert t.screens.active.cursor.x == 4
 	assert t.screens.active.cursor.pending_wrap
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'hello\nworld\nabc12'
 }
 
 fn test_input_with_basic_wraparound_dirty() {
-	mut t := create_test_terminal(5, 40) or { assert false; return }
+	mut t := create_test_terminal(5, 40) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('hello') or { assert false }
@@ -90,7 +105,10 @@ fn test_input_with_basic_wraparound_dirty() {
 }
 
 fn test_input_that_forces_scroll() {
-	mut t := create_test_terminal(1, 5) or { assert false; return }
+	mut t := create_test_terminal(1, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// Basic grid writing
@@ -99,7 +117,10 @@ fn test_input_that_forces_scroll() {
 	}
 	assert t.screens.active.cursor.y == 4
 	assert t.screens.active.cursor.x == 0
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'b\nc\nd\ne\nf'
 }
 
@@ -107,7 +128,10 @@ fn test_print_single_very_long_line() {
 	// https://github.com/mitchellh/ghostty/issues/1400
 	// This would crash for issue 1400. So the assertion here is
 	// that we simply do not crash.
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	for _ in 0 .. 1000 {
@@ -116,25 +140,14 @@ fn test_print_single_very_long_line() {
 }
 
 // ============================================================
-// Wide char tests
-// XTODO: Many wide character tests require unicode width detection
-// which our simplified implementation doesn't support. Wide chars
-// are treated as narrow (width=1) in this translation.
-// ============================================================
-
-// ============================================================
-// Grapheme clustering tests
-// XTODO: Grapheme clustering tests (mode 2027) require full
-// unicode grapheme break tables which are not available in
-// the V translation. These tests are skipped.
-// ============================================================
-
-// ============================================================
 // Linefeed and carriage return
 // ============================================================
 
 fn test_linefeed_and_carriage_return() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// Print and CR.
@@ -145,12 +158,18 @@ fn test_linefeed_and_carriage_return() {
 	t.print_string('world') or { assert false }
 	assert t.screens.active.cursor.y == 1
 	assert t.screens.active.cursor.x == 5
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'hello\nworld'
 }
 
 fn test_linefeed_unsets_pending_wrap() {
-	mut t := create_test_terminal(5, 80) or { assert false; return }
+	mut t := create_test_terminal(5, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// Basic grid writing
@@ -161,7 +180,10 @@ fn test_linefeed_unsets_pending_wrap() {
 }
 
 fn test_linefeed_mode_automatic_carriage_return() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// Basic grid writing
@@ -169,12 +191,18 @@ fn test_linefeed_mode_automatic_carriage_return() {
 	t.print_string('123456') or { assert false }
 	t.linefeed() or { assert false }
 	t.print(u32(`X`)) or { assert false }
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '123456\nX'
 }
 
 fn test_carriage_return_unsets_pending_wrap() {
-	mut t := create_test_terminal(5, 80) or { assert false; return }
+	mut t := create_test_terminal(5, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// Basic grid writing
@@ -185,7 +213,10 @@ fn test_carriage_return_unsets_pending_wrap() {
 }
 
 fn test_carriage_return_origin_mode_moves_to_left_margin() {
-	mut t := create_test_terminal(5, 80) or { assert false; return }
+	mut t := create_test_terminal(5, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.origin, true)
@@ -196,7 +227,10 @@ fn test_carriage_return_origin_mode_moves_to_left_margin() {
 }
 
 fn test_carriage_return_left_of_left_margin_moves_to_zero() {
-	mut t := create_test_terminal(5, 80) or { assert false; return }
+	mut t := create_test_terminal(5, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.screens.active.cursor.x = 1
@@ -206,7 +240,10 @@ fn test_carriage_return_left_of_left_margin_moves_to_zero() {
 }
 
 fn test_carriage_return_right_of_left_margin_moves_to_left_margin() {
-	mut t := create_test_terminal(5, 80) or { assert false; return }
+	mut t := create_test_terminal(5, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.screens.active.cursor.x = 3
@@ -216,7 +253,10 @@ fn test_carriage_return_right_of_left_margin_moves_to_left_margin() {
 }
 
 fn test_backspace() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// BS
@@ -225,7 +265,10 @@ fn test_backspace() {
 	t.print(u32(`y`)) or { assert false }
 	assert t.screens.active.cursor.y == 0
 	assert t.screens.active.cursor.x == 5
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'helly'
 }
 
@@ -234,7 +277,10 @@ fn test_backspace() {
 // ============================================================
 
 fn test_horizontal_tabs() {
-	mut t := create_test_terminal(20, 5) or { assert false; return }
+	mut t := create_test_terminal(20, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// HT
@@ -254,7 +300,10 @@ fn test_horizontal_tabs() {
 }
 
 fn test_horizontal_tabs_starting_on_tabstop() {
-	mut t := create_test_terminal(20, 5) or { assert false; return }
+	mut t := create_test_terminal(20, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_cursor_pos(int(t.screens.active.cursor.y), 9)
@@ -263,12 +312,18 @@ fn test_horizontal_tabs_starting_on_tabstop() {
 	t.horizontal_tab()
 	t.print(u32(`A`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '        X       A'
 }
 
 fn test_horizontal_tabs_with_right_margin() {
-	mut t := create_test_terminal(20, 5) or { assert false; return }
+	mut t := create_test_terminal(20, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.scrolling_region.left = 2
@@ -278,12 +333,18 @@ fn test_horizontal_tabs_with_right_margin() {
 	t.horizontal_tab()
 	t.print(u32(`A`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'X    A'
 }
 
 fn test_horizontal_tabs_back() {
-	mut t := create_test_terminal(20, 5) or { assert false; return }
+	mut t := create_test_terminal(20, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// Edge of screen
@@ -305,7 +366,10 @@ fn test_horizontal_tabs_back() {
 }
 
 fn test_horizontal_tabs_back_starting_on_tabstop() {
-	mut t := create_test_terminal(20, 5) or { assert false; return }
+	mut t := create_test_terminal(20, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_cursor_pos(int(t.screens.active.cursor.y), 9)
@@ -314,12 +378,18 @@ fn test_horizontal_tabs_back_starting_on_tabstop() {
 	t.horizontal_tab_back()
 	t.print(u32(`A`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'A       X'
 }
 
 fn test_tab_clear_single() {
-	mut t := create_test_terminal(20, 5) or { assert false; return }
+	mut t := create_test_terminal(20, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.screens.active.cursor.x = 8
@@ -331,7 +401,10 @@ fn test_tab_clear_single() {
 }
 
 fn test_tab_clear_all() {
-	mut t := create_test_terminal(20, 5) or { assert false; return }
+	mut t := create_test_terminal(20, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.tab_clear(.all)
@@ -345,7 +418,10 @@ fn test_tab_clear_all() {
 // ============================================================
 
 fn test_cursor_pos_resets_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE') or { assert false }
@@ -354,23 +430,35 @@ fn test_cursor_pos_resets_wrap() {
 	assert !t.screens.active.cursor.pending_wrap
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'XBCDE'
 }
 
 fn test_cursor_pos_off_the_screen() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_cursor_pos(500, 500)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\n\n\n\n    X'
 }
 
 fn test_cursor_pos_relative_to_origin() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.scrolling_region.top = 2
@@ -379,7 +467,10 @@ fn test_cursor_pos_relative_to_origin() {
 	t.set_cursor_pos(1, 1)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\n\nX'
 }
 
@@ -388,7 +479,10 @@ fn test_cursor_pos_relative_to_origin() {
 // ============================================================
 
 fn test_set_top_and_bottom_margin_simple() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -402,12 +496,18 @@ fn test_set_top_and_bottom_margin_simple() {
 
 	t.scroll_down(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\nABC\nDEF\nGHI'
 }
 
 fn test_set_top_and_bottom_margin_top_only() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -421,12 +521,18 @@ fn test_set_top_and_bottom_margin_top_only() {
 
 	t.scroll_down(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABC\n\nDEF\nGHI'
 }
 
 fn test_set_top_and_bottom_margin_top_and_bottom() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -440,12 +546,18 @@ fn test_set_top_and_bottom_margin_top_and_bottom() {
 
 	t.scroll_down(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\nABC\nGHI'
 }
 
 fn test_set_top_and_bottom_margin_top_equal_to_bottom() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -460,7 +572,10 @@ fn test_set_top_and_bottom_margin_top_equal_to_bottom() {
 
 	t.scroll_down(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\nABC\nDEF\nGHI'
 }
 
@@ -469,7 +584,10 @@ fn test_set_top_and_bottom_margin_top_equal_to_bottom() {
 // ============================================================
 
 fn test_insert_lines_simple() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -483,12 +601,18 @@ fn test_insert_lines_simple() {
 
 	t.insert_lines(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\nABC\nDEF\nGHI'
 }
 
 fn test_insert_lines_zero() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -497,7 +621,10 @@ fn test_insert_lines_zero() {
 }
 
 fn test_insert_lines_with_scroll_region() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -518,12 +645,18 @@ fn test_insert_lines_with_scroll_region() {
 
 	t.insert_lines(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABC\n\nDEF\nGHI\nMNO'
 }
 
 fn test_insert_lines_more_than_remaining() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -544,12 +677,18 @@ fn test_insert_lines_more_than_remaining() {
 
 	t.insert_lines(100)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABC\n\n\n\nMNO'
 }
 
 fn test_insert_lines_resets_pending_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE') or { assert false }
@@ -559,7 +698,10 @@ fn test_insert_lines_resets_pending_wrap() {
 }
 
 fn test_delete_lines_simple() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -573,12 +715,18 @@ fn test_delete_lines_simple() {
 
 	t.delete_lines(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'DEF\nGHI'
 }
 
 fn test_delete_lines_zero() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -587,7 +735,10 @@ fn test_delete_lines_zero() {
 }
 
 fn test_delete_lines_with_scroll_region() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -608,12 +759,18 @@ fn test_delete_lines_with_scroll_region() {
 
 	t.delete_lines(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABC\nGHI\nJKL\n\nMNO'
 }
 
 fn test_delete_lines_resets_pending_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE') or { assert false }
@@ -627,7 +784,10 @@ fn test_delete_lines_resets_pending_wrap() {
 // ============================================================
 
 fn test_scroll_up_simple() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -641,12 +801,18 @@ fn test_scroll_up_simple() {
 
 	t.scroll_up(1) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'DEF\nGHI'
 }
 
 fn test_scroll_down_simple() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -660,7 +826,10 @@ fn test_scroll_down_simple() {
 
 	t.scroll_down(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\nABC\nDEF\nGHI'
 }
 
@@ -669,7 +838,10 @@ fn test_scroll_down_simple() {
 // ============================================================
 
 fn test_insert_blanks() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('123456789') or { assert false }
@@ -677,12 +849,18 @@ fn test_insert_blanks() {
 
 	t.insert_blanks(2)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '123  45678'
 }
 
 fn test_insert_blanks_pushes_off_end() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('123456789A') or { assert false }
@@ -690,12 +868,18 @@ fn test_insert_blanks_pushes_off_end() {
 
 	t.insert_blanks(2)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '123  45678'
 }
 
 fn test_insert_blanks_more_than_size() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('123456789A') or { assert false }
@@ -703,12 +887,18 @@ fn test_insert_blanks_more_than_size() {
 
 	t.insert_blanks(100)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '123'
 }
 
 fn test_delete_chars() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('123456789') or { assert false }
@@ -716,12 +906,18 @@ fn test_delete_chars() {
 
 	t.delete_chars(2)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '1236789'
 }
 
 fn test_delete_chars_zero_count() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('123456789') or { assert false }
@@ -731,7 +927,10 @@ fn test_delete_chars_zero_count() {
 }
 
 fn test_delete_chars_more_than_line_width() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('123456789') or { assert false }
@@ -739,17 +938,33 @@ fn test_delete_chars_more_than_line_width() {
 
 	t.delete_chars(100)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '123'
 }
 
 fn test_delete_chars_resets_pending_wrap() {
-	// XTODO: deleteChars resets wrap state - this test depends on
-	// implementation details of how wrap is reset during delete.
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('ABCDE') or { assert false }
+	assert t.screens.active.cursor.pending_wrap
+	t.delete_chars(1)
+	assert !t.screens.active.cursor.pending_wrap
+	t.print(u32(`X`)) or { assert false }
+	assert (t.plain_string() or { panic(err) }) == 'ABCDX'
 }
 
 fn test_erase_chars_simple() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('123456789') or { assert false }
@@ -757,12 +972,18 @@ fn test_erase_chars_simple() {
 
 	t.erase_chars(2)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '123  6789'
 }
 
 fn test_erase_chars_minimum_one() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('123456789') or { assert false }
@@ -770,12 +991,18 @@ fn test_erase_chars_minimum_one() {
 
 	t.erase_chars(0) // Minimum 1
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '123 56789'
 }
 
 fn test_erase_chars_beyond_screen_edge() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('123456789A') or { assert false }
@@ -783,7 +1010,10 @@ fn test_erase_chars_beyond_screen_edge() {
 
 	t.erase_chars(100)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '1234567'
 }
 
@@ -792,7 +1022,10 @@ fn test_erase_chars_beyond_screen_edge() {
 // ============================================================
 
 fn test_erase_line_simple_erase_right() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('0123456789') or { assert false }
@@ -800,12 +1033,18 @@ fn test_erase_line_simple_erase_right() {
 
 	t.erase_line(.right, false)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '01234'
 }
 
 fn test_erase_line_resets_pending_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE') or { assert false }
@@ -815,7 +1054,10 @@ fn test_erase_line_resets_pending_wrap() {
 }
 
 fn test_erase_line_simple_erase_left() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('0123456789') or { assert false }
@@ -823,7 +1065,10 @@ fn test_erase_line_simple_erase_left() {
 
 	t.erase_line(.left, false)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '      6789'
 }
 
@@ -832,7 +1077,10 @@ fn test_erase_line_simple_erase_left() {
 // ============================================================
 
 fn test_erase_display_simple_erase_below() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -846,12 +1094,18 @@ fn test_erase_display_simple_erase_below() {
 
 	t.erase_display(.below, false)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABC'
 }
 
 fn test_erase_display_simple_erase_above() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -865,12 +1119,18 @@ fn test_erase_display_simple_erase_above() {
 
 	t.erase_display(.above, false)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\n  F\nGHI'
 }
 
 fn test_erase_display_complete_preserves_cursor() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -887,7 +1147,10 @@ fn test_erase_display_complete_preserves_cursor() {
 	assert t.screens.active.cursor.x == old_x
 	assert t.screens.active.cursor.y == old_y
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == ''
 }
 
@@ -896,7 +1159,10 @@ fn test_erase_display_complete_preserves_cursor() {
 // ============================================================
 
 fn test_index() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -905,7 +1171,10 @@ fn test_index() {
 }
 
 fn test_index_from_the_bottom() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -925,12 +1194,18 @@ fn test_index_from_the_bottom() {
 	// At bottom, index should scroll
 	t.index() or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'DEF\nGHI\nJKL\nMNO'
 }
 
 fn test_reverse_index() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -945,7 +1220,10 @@ fn test_reverse_index() {
 	// At top, reverse_index should scroll down
 	t.reverse_index()
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\nABC\nDEF\nGHI'
 }
 
@@ -954,7 +1232,10 @@ fn test_reverse_index() {
 // ============================================================
 
 fn test_cursor_up_basic() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_cursor_pos(3, 1)
@@ -963,7 +1244,10 @@ fn test_cursor_up_basic() {
 }
 
 fn test_cursor_up_below_top_scroll_margin() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.scrolling_region.top = 2
@@ -974,7 +1258,10 @@ fn test_cursor_up_below_top_scroll_margin() {
 }
 
 fn test_cursor_up_above_top_scroll_margin() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.scrolling_region.top = 2
@@ -985,7 +1272,10 @@ fn test_cursor_up_above_top_scroll_margin() {
 }
 
 fn test_cursor_up_resets_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE') or { assert false }
@@ -995,7 +1285,10 @@ fn test_cursor_up_resets_wrap() {
 }
 
 fn test_cursor_down_basic() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.cursor_down(2)
@@ -1003,7 +1296,10 @@ fn test_cursor_down_basic() {
 }
 
 fn test_cursor_down_above_bottom_scroll_margin() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.scrolling_region.bottom = 2
@@ -1013,7 +1309,10 @@ fn test_cursor_down_above_bottom_scroll_margin() {
 }
 
 fn test_cursor_down_below_bottom_scroll_margin() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.scrolling_region.bottom = 2
@@ -1024,7 +1323,10 @@ fn test_cursor_down_below_bottom_scroll_margin() {
 }
 
 fn test_cursor_down_resets_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE') or { assert false }
@@ -1034,7 +1336,10 @@ fn test_cursor_down_resets_wrap() {
 }
 
 fn test_cursor_right_resets_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE') or { assert false }
@@ -1044,7 +1349,10 @@ fn test_cursor_right_resets_wrap() {
 }
 
 fn test_cursor_right_to_the_edge_of_screen() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.cursor_right(10)
@@ -1052,7 +1360,10 @@ fn test_cursor_right_to_the_edge_of_screen() {
 }
 
 fn test_cursor_left_no_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_cursor_pos(1, 4)
@@ -1061,7 +1372,10 @@ fn test_cursor_left_no_wrap() {
 }
 
 fn test_cursor_left_unsets_pending_wrap_state() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE') or { assert false }
@@ -1078,7 +1392,10 @@ fn test_cursor_left_unsets_pending_wrap_state() {
 // ============================================================
 
 fn test_save_cursor() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_cursor_pos(2, 5)
@@ -1090,7 +1407,10 @@ fn test_save_cursor() {
 }
 
 fn test_save_cursor_pending_wrap_state() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE') or { assert false }
@@ -1103,7 +1423,10 @@ fn test_save_cursor_pending_wrap_state() {
 }
 
 fn test_save_cursor_origin_mode() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.origin, true)
@@ -1118,7 +1441,10 @@ fn test_save_cursor_origin_mode() {
 // ============================================================
 
 fn test_set_protected_mode() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_protected_mode(.iso)
@@ -1135,27 +1461,42 @@ fn test_set_protected_mode() {
 // ============================================================
 
 fn test_print_repeat_simple() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(u32(`A`)) or { assert false }
 	t.print_repeat(3) or { assert false }
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'AAAA'
 }
 
 fn test_print_repeat_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(u32(`A`)) or { assert false }
 	t.print_repeat(7) or { assert false }
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'AAAAA\nAAA'
 }
 
 fn test_print_repeat_no_previous_character() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_repeat(3) or { assert false }
@@ -1168,17 +1509,26 @@ fn test_print_repeat_no_previous_character() {
 // ============================================================
 
 fn test_decaln() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.decaln() or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'EEEEE\nEEEEE\nEEEEE\nEEEEE\nEEEEE'
 }
 
 fn test_decaln_reset_margins() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_top_and_bottom_margin(2, 5)
@@ -1196,7 +1546,10 @@ fn test_decaln_reset_margins() {
 // ============================================================
 
 fn test_deccolm_without_dec_mode_40() {
-	mut t := create_test_terminal(80, 24) or { assert false; return }
+	mut t := create_test_terminal(80, 24) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// Without mode 40, should be ignored
@@ -1205,7 +1558,10 @@ fn test_deccolm_without_dec_mode_40() {
 }
 
 fn test_deccolm_unset() {
-	mut t := create_test_terminal(132, 24) or { assert false; return }
+	mut t := create_test_terminal(132, 24) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.enable_mode_3, true)
@@ -1214,7 +1570,10 @@ fn test_deccolm_unset() {
 }
 
 fn test_deccolm_resets_scroll_region() {
-	mut t := create_test_terminal(80, 24) or { assert false; return }
+	mut t := create_test_terminal(80, 24) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.enable_mode_3, true)
@@ -1230,7 +1589,10 @@ fn test_deccolm_resets_scroll_region() {
 // ============================================================
 
 fn test_full_reset_with_a_non_empty_pen() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_attribute(SgrAttribute{ kind: .bold }) or { assert false }
@@ -1239,12 +1601,18 @@ fn test_full_reset_with_a_non_empty_pen() {
 
 	// Style should be reset
 	assert !t.screens.active.cursor.style.flags.bold
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == ''
 }
 
 fn test_full_reset_origin_mode() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.origin, true)
@@ -1253,7 +1621,10 @@ fn test_full_reset_origin_mode() {
 }
 
 fn test_full_reset_status_display() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.status_display = .status_line
@@ -1266,7 +1637,10 @@ fn test_full_reset_status_display() {
 // ============================================================
 
 fn test_resize_less_cols_with_print() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDEFGH') or { assert false }
@@ -1278,7 +1652,10 @@ fn test_resize_less_cols_with_print() {
 }
 
 fn test_resize_with_left_and_right_margin_set() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.enable_left_and_right_margin, true)
@@ -1295,7 +1672,10 @@ fn test_resize_with_left_and_right_margin_set() {
 // ------------------------------------------------------------
 
 fn test_resize_less_cols_with_wide_char_then_print() {
-	mut t := Terminal.init(Options{ cols: 3, rows: 3 }) or { assert false; return }
+	mut t := Terminal.init(Options{ cols: 3, rows: 3 }) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 	t.modes.set(.wraparound, true)
 
@@ -1314,7 +1694,10 @@ fn test_resize_less_cols_with_wide_char_then_print() {
 fn test_resize_with_left_and_right_margin_set_fuzz() {
 	cols := u16(70)
 	rows := u16(23)
-	mut t := Terminal.init(Options{ cols: cols, rows: rows }) or { assert false; return }
+	mut t := Terminal.init(Options{ cols: cols, rows: rows }) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 	t.modes.set(.wraparound, true)
 
@@ -1335,7 +1718,10 @@ fn test_resize_with_left_and_right_margin_set_fuzz() {
 fn test_resize_with_wraparound_off() {
 	cols := u16(4)
 	rows := u16(2)
-	mut t := Terminal.init(Options{ cols: cols, rows: rows }) or { assert false; return }
+	mut t := Terminal.init(Options{ cols: cols, rows: rows }) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.wraparound, false)
@@ -1346,14 +1732,20 @@ fn test_resize_with_wraparound_off() {
 	new_cols := u16(2)
 	t.resize(new_cols, rows) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '01'
 }
 
 fn test_resize_with_wraparound_on() {
 	cols := u16(4)
 	rows := u16(2)
-	mut t := Terminal.init(Options{ cols: cols, rows: rows }) or { assert false; return }
+	mut t := Terminal.init(Options{ cols: cols, rows: rows }) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.wraparound, true)
@@ -1364,12 +1756,18 @@ fn test_resize_with_wraparound_on() {
 	new_cols := u16(2)
 	t.resize(new_cols, rows) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '01\n23'
 }
 
 fn test_resize_with_high_unique_style_per_cell() {
-	mut t := Terminal.init(Options{ cols: 30, rows: 30 }) or { assert false; return }
+	mut t := Terminal.init(Options{ cols: 30, rows: 30 }) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 	t.modes.set(.wraparound, true)
 
@@ -1393,7 +1791,10 @@ fn test_resize_with_high_unique_style_per_cell() {
 }
 
 fn test_resize_with_high_unique_style_per_cell_with_wrapping() {
-	mut t := Terminal.init(Options{ cols: 30, rows: 30 }) or { assert false; return }
+	mut t := Terminal.init(Options{ cols: 30, rows: 30 }) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 	t.modes.set(.wraparound, true)
 
@@ -1417,7 +1818,10 @@ fn test_resize_with_high_unique_style_per_cell_with_wrapping() {
 }
 
 fn test_resize_with_reflow_and_saved_cursor() {
-	mut t := Terminal.init(Options{ cols: 2, rows: 3 }) or { assert false; return }
+	mut t := Terminal.init(Options{ cols: 2, rows: 3 }) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 	t.modes.set(.wraparound, true)
 
@@ -1428,7 +1832,10 @@ fn test_resize_with_reflow_and_saved_cursor() {
 		assert cell.codepoint == u32(`B`)
 	}
 	{
-		str := t.plain_string() or { assert false; return }
+		str := t.plain_string() or {
+			assert false
+			return
+		}
 		assert str == '1A\n2B'
 	}
 
@@ -1437,7 +1844,10 @@ fn test_resize_with_reflow_and_saved_cursor() {
 	t.restore_cursor()
 
 	{
-		str := t.plain_string() or { assert false; return }
+		str := t.plain_string() or {
+			assert false
+			return
+		}
 		assert str == '1A2B'
 	}
 
@@ -1449,7 +1859,10 @@ fn test_resize_with_reflow_and_saved_cursor() {
 }
 
 fn test_resize_with_reflow_and_saved_cursor_pending_wrap() {
-	mut t := Terminal.init(Options{ cols: 2, rows: 3 }) or { assert false; return }
+	mut t := Terminal.init(Options{ cols: 2, rows: 3 }) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 	t.modes.set(.wraparound, true)
 
@@ -1459,7 +1872,10 @@ fn test_resize_with_reflow_and_saved_cursor_pending_wrap() {
 		assert cell.codepoint == u32(`B`)
 	}
 	{
-		str := t.plain_string() or { assert false; return }
+		str := t.plain_string() or {
+			assert false
+			return
+		}
 		assert str == '1A\n2B'
 	}
 
@@ -1468,14 +1884,20 @@ fn test_resize_with_reflow_and_saved_cursor_pending_wrap() {
 	t.restore_cursor()
 
 	{
-		str := t.plain_string() or { assert false; return }
+		str := t.plain_string() or {
+			assert false
+			return
+		}
 		assert str == '1A2B'
 	}
 
 	// Pending wrap should be reset
 	t.print(u32(`X`)) or { assert false }
 	{
-		str := t.plain_string() or { assert false; return }
+		str := t.plain_string() or {
+			assert false
+			return
+		}
 		assert str == '1A2BX'
 	}
 }
@@ -1485,7 +1907,10 @@ fn test_resize_with_reflow_and_saved_cursor_pending_wrap() {
 // ============================================================
 
 fn test_mode_47_alt_screen_plain() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// Print on primary screen
@@ -1496,13 +1921,19 @@ fn test_mode_47_alt_screen_plain() {
 	assert t.screens.active_key == .alternate
 
 	// Screen should be empty
-	empty := t.plain_string() or { assert false; return }
+	empty := t.plain_string() or {
+		assert false
+		return
+	}
 	assert empty == ''
 
 	// Print on alt screen. This should be off center because we copy
 	// the cursor over from the primary screen (matches Ghostty / xterm).
 	t.print_string('2B') or { assert false }
-	alt_str := t.plain_string() or { assert false; return }
+	alt_str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert alt_str == '  2B'
 
 	// Switch back to primary
@@ -1510,18 +1941,27 @@ fn test_mode_47_alt_screen_plain() {
 	assert t.screens.active_key == .primary
 
 	// Primary screen should still have the original content
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '1A'
 
 	// Go back to alt screen with mode 47; it should retain content
 	t.switch_screen_mode(.mode_47, true) or { assert false }
 	assert t.screens.active_key == .alternate
-	retained := t.plain_string() or { assert false; return }
+	retained := t.plain_string() or {
+		assert false
+		return
+	}
 	assert retained == '  2B'
 }
 
 fn test_mode_1049_alt_screen_plain() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('Hello') or { assert false }
@@ -1540,7 +1980,10 @@ fn test_mode_1049_alt_screen_plain() {
 	t.switch_screen_mode(.mode_1049, false) or { assert false }
 	assert t.screens.active_key == .primary
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'Hello\nWorld'
 }
 
@@ -1549,12 +1992,18 @@ fn test_mode_1049_alt_screen_plain() {
 // ============================================================
 
 fn test_set_get_pwd() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	assert t.get_pwd() == none
 	t.set_pwd('/home/user') or { assert false }
-	pwd := t.get_pwd() or { assert false; return }
+	pwd := t.get_pwd() or {
+		assert false
+		return
+	}
 	assert pwd == '/home/user'
 }
 
@@ -1563,7 +2012,10 @@ fn test_set_get_pwd() {
 // ============================================================
 
 fn test_cursor_is_at_prompt() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// By default, cursor is at output
@@ -1583,7 +2035,10 @@ fn test_cursor_is_at_prompt() {
 }
 
 fn test_cursor_is_at_prompt_alternate_screen() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// On alternate screen, never at prompt
@@ -1597,7 +2052,10 @@ fn test_cursor_is_at_prompt_alternate_screen() {
 // ============================================================
 
 fn test_is_dirty_and_clear() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('Hello') or { assert false }
@@ -1611,21 +2069,33 @@ fn test_is_dirty_and_clear() {
 // ============================================================
 
 fn test_print_attributes() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// Default attributes
-	result := t.print_attributes() or { assert false; return }
+	result := t.print_attributes() or {
+		assert false
+		return
+	}
 	assert result == '0'
 
 	// Bold
 	t.set_attribute(SgrAttribute{ kind: .bold }) or { assert false }
-	result2 := t.print_attributes() or { assert false; return }
+	result2 := t.print_attributes() or {
+		assert false
+		return
+	}
 	assert result2 == '0;1'
 
 	// Bold + italic
 	t.set_attribute(SgrAttribute{ kind: .italic }) or { assert false }
-	result3 := t.print_attributes() or { assert false; return }
+	result3 := t.print_attributes() or {
+		assert false
+		return
+	}
 	assert result3 == '0;1;3'
 }
 
@@ -1634,17 +2104,26 @@ fn test_print_attributes() {
 // ============================================================
 
 fn test_soft_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('helloworld') or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'hello\nworld'
 }
 
 fn test_soft_wrap_with_semantic_prompt() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// Mark the cursor as prompt
@@ -1652,7 +2131,10 @@ fn test_soft_wrap_with_semantic_prompt() {
 
 	t.print_string('helloworld') or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'hello\nworld'
 }
 
@@ -1661,7 +2143,10 @@ fn test_soft_wrap_with_semantic_prompt() {
 // mode and we get a newline, assume the new row is a prompt continuation
 // (since Fish doesn't emit OSC133 k=s markers for continuation lines).
 fn test_index_in_prompt_mode_marks_new_row_as_prompt_continuation() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// Start a prompt.
@@ -1688,7 +2173,10 @@ fn test_index_in_prompt_mode_marks_new_row_as_prompt_continuation() {
 // row as prompt". Despite the ghostty test name, input mode DOES mark the new
 // row as a prompt continuation on newline (only output mode does not).
 fn test_index_in_input_mode_marks_new_row_as_prompt_continuation() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// Start a prompt then switch to input.
@@ -1715,7 +2203,10 @@ fn test_index_in_input_mode_marks_new_row_as_prompt_continuation() {
 // Translated from ghostty: "Terminal: index in output mode does not mark new
 // row as prompt". Output mode should NOT trigger prompt continuation.
 fn test_index_in_output_mode_does_not_mark_new_row_as_prompt() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// Complete prompt cycle: prompt -> input -> output.
@@ -1775,7 +2266,10 @@ fn test_mode_state_reset() {
 // ============================================================
 
 fn test_tabstops_init() {
-	ts := Tabstops.init(80, 8) or { assert false; return }
+	ts := Tabstops.init(80, 8) or {
+		assert false
+		return
+	}
 	assert !ts.get(0)
 	assert !ts.get(1)
 	assert !ts.get(7)
@@ -1785,7 +2279,10 @@ fn test_tabstops_init() {
 }
 
 fn test_tabstops_set_unset() {
-	mut ts := Tabstops.init(80, 8) or { assert false; return }
+	mut ts := Tabstops.init(80, 8) or {
+		assert false
+		return
+	}
 	assert !ts.get(0)
 	ts.set(0)
 	assert ts.get(0)
@@ -1796,7 +2293,10 @@ fn test_tabstops_set_unset() {
 }
 
 fn test_tabstops_reset() {
-	mut ts := Tabstops.init(80, 8) or { assert false; return }
+	mut ts := Tabstops.init(80, 8) or {
+		assert false
+		return
+	}
 	ts.unset(8)
 	ts.unset(16)
 	ts.reset(8)
@@ -1810,7 +2310,10 @@ fn test_tabstops_reset() {
 // ============================================================
 
 fn test_screen_set_init_and_switch() {
-	mut ss := ScreenSet.init(10, 10, 100) or { assert false; return }
+	mut ss := ScreenSet.init(10, 10, 100) or {
+		assert false
+		return
+	}
 	defer { ss.deinit() }
 
 	assert ss.active_key == .primary
@@ -1850,7 +2353,10 @@ fn test_dynamic_rgb() {
 // ============================================================
 
 fn test_print_wide_char() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(0x1F600) or { assert false } // Smiley face
@@ -1867,7 +2373,10 @@ fn test_print_wide_char() {
 }
 
 fn test_print_wide_char_in_single_width_terminal() {
-	mut t := create_test_terminal(1, 80) or { assert false; return }
+	mut t := create_test_terminal(1, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(0x1F600) or { assert false } // Smiley face
@@ -1883,7 +2392,10 @@ fn test_print_wide_char_in_single_width_terminal() {
 }
 
 fn test_print_over_wide_char_at_0_0() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(0x1F600) or { assert false } // Smiley face
@@ -1905,7 +2417,10 @@ fn test_print_over_wide_char_at_0_0() {
 }
 
 fn test_print_over_wide_spacer_tail() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(0x6A4B) or { assert false } // 橋 (wide)
@@ -1919,7 +2434,10 @@ fn test_print_over_wide_spacer_tail() {
 	assert c1.codepoint == u32(`X`)
 	assert c1.wide == .narrow
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == ' X'
 
 	assert t.is_dirty(0, 0)
@@ -1949,7 +2467,10 @@ fn active_grapheme_count(t &Terminal) int {
 // ============================================================
 
 fn test_zero_width_character_at_start() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// This used to crash the terminal. This is not allowed so we should
@@ -1964,7 +2485,10 @@ fn test_zero_width_character_at_start() {
 }
 
 fn test_print_wide_char_at_edge_creates_spacer_head() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_cursor_pos(1, 10)
@@ -1985,7 +2509,10 @@ fn test_print_wide_char_at_edge_creates_spacer_head() {
 }
 
 fn test_print_wide_char_with_1_column_width() {
-	mut t := create_test_terminal(1, 2) or { assert false; return }
+	mut t := create_test_terminal(1, 2) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(0x1F600) or { assert false }
@@ -1995,7 +2522,10 @@ fn test_print_wide_char_with_1_column_width() {
 }
 
 fn test_print_multicodepoint_grapheme_disabled_mode_2027() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// grapheme_cluster disabled by default. This is: 👨‍👩‍👧
@@ -2043,7 +2573,10 @@ fn test_print_multicodepoint_grapheme_disabled_mode_2027() {
 }
 
 fn test_vs16_doesnt_make_character_with_2027_disabled() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// grapheme clustering disabled (default)
@@ -2059,7 +2592,10 @@ fn test_vs16_doesnt_make_character_with_2027_disabled() {
 }
 
 fn test_ignored_vs16_doesnt_mark_dirty() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(0x2764) or { assert false } // Heart
@@ -2071,7 +2607,10 @@ fn test_ignored_vs16_doesnt_mark_dirty() {
 }
 
 fn test_print_invalid_vs16_non_grapheme() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	// grapheme clustering disabled (default). Issue 1482.
@@ -2091,7 +2630,10 @@ fn test_print_invalid_vs16_non_grapheme() {
 }
 
 fn test_invalid_vs16_doesnt_mark_dirty() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(u32(`x`)) or { assert false }
@@ -2103,7 +2645,10 @@ fn test_invalid_vs16_doesnt_mark_dirty() {
 }
 
 fn test_print_multicodepoint_grapheme_mode_2027() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2139,7 +2684,10 @@ fn test_print_multicodepoint_grapheme_mode_2027() {
 }
 
 fn test_keypad_sequence_vs15() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2161,7 +2709,10 @@ fn test_keypad_sequence_vs15() {
 }
 
 fn test_keypad_sequence_vs16() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2185,7 +2736,10 @@ fn test_keypad_sequence_vs16() {
 }
 
 fn test_fitzpatrick_skin_tone_next_valid_base() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2207,7 +2761,10 @@ fn test_fitzpatrick_skin_tone_next_valid_base() {
 }
 
 fn test_fitzpatrick_skin_tone_next_to_non_base() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2238,7 +2795,10 @@ fn test_fitzpatrick_skin_tone_next_to_non_base() {
 }
 
 fn test_multicodepoint_grapheme_marks_dirty_on_every_codepoint() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2263,7 +2823,10 @@ fn test_multicodepoint_grapheme_marks_dirty_on_every_codepoint() {
 }
 
 fn test_vs15_to_make_narrow_character() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2295,7 +2858,10 @@ fn test_vs15_to_make_narrow_character() {
 }
 
 fn test_vs15_on_already_narrow_emoji() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2319,7 +2885,10 @@ fn test_vs15_on_already_narrow_emoji() {
 }
 
 fn test_print_invalid_vs15_following_emoji_is_wide() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2341,7 +2910,10 @@ fn test_print_invalid_vs15_following_emoji_is_wide() {
 }
 
 fn test_print_invalid_vs15_in_emoji_zwj_sequence() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2369,7 +2941,10 @@ fn test_print_invalid_vs15_in_emoji_zwj_sequence() {
 }
 
 fn test_vs15_to_make_narrow_character_with_pending_wrap() {
-	mut t := create_test_terminal(2, 5) or { assert false; return }
+	mut t := create_test_terminal(2, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2400,7 +2975,10 @@ fn test_vs15_to_make_narrow_character_with_pending_wrap() {
 }
 
 fn test_vs16_to_make_wide_character_with_mode_2027() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2422,7 +3000,10 @@ fn test_vs16_to_make_wide_character_with_mode_2027() {
 }
 
 fn test_vs16_repeated_with_mode_2027() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2447,7 +3028,10 @@ fn test_vs16_repeated_with_mode_2027() {
 }
 
 fn test_print_invalid_vs16_grapheme() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2470,7 +3054,10 @@ fn test_print_invalid_vs16_grapheme() {
 }
 
 fn test_print_invalid_vs16_with_second_char() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2494,7 +3081,10 @@ fn test_print_invalid_vs16_with_second_char() {
 }
 
 fn test_print_invalid_vs16_with_second_char_combining() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2520,7 +3110,10 @@ fn test_print_invalid_vs16_with_second_char_combining() {
 }
 
 fn test_overwrite_grapheme_should_clear_grapheme_data() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2534,7 +3127,10 @@ fn test_overwrite_grapheme_should_clear_grapheme_data() {
 	t.print(u32(`A`)) or { assert false }
 	assert t.is_dirty(0, 0)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'A'
 
 	c0 := cell_at(&t, 0, 0)
@@ -2544,7 +3140,10 @@ fn test_overwrite_grapheme_should_clear_grapheme_data() {
 }
 
 fn test_overwrite_multicodepoint_grapheme_clears_grapheme_data() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2573,12 +3172,18 @@ fn test_overwrite_multicodepoint_grapheme_clears_grapheme_data() {
 	assert t.screens.active.cursor.x == 1
 	assert active_grapheme_count(&t) == 0
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'X'
 }
 
 fn test_overwrite_multicodepoint_grapheme_tail_clears_grapheme_data() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2598,7 +3203,10 @@ fn test_overwrite_multicodepoint_grapheme_tail_clears_grapheme_data() {
 	t.set_cursor_pos(1, 2)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == ' X'
 
 	assert t.screens.active.cursor.y == 0
@@ -2607,7 +3215,10 @@ fn test_overwrite_multicodepoint_grapheme_tail_clears_grapheme_data() {
 }
 
 fn test_print_breaks_valid_grapheme_cluster_with_prepend_ascii_for_speed() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.grapheme_cluster, true)
@@ -2640,7 +3251,10 @@ fn test_print_breaks_valid_grapheme_cluster_with_prepend_ascii_for_speed() {
 // ============================================================
 
 fn test_cursor_pos_relative_to_origin_with_left_right() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.scrolling_region.top = 2
@@ -2651,12 +3265,18 @@ fn test_cursor_pos_relative_to_origin_with_left_right() {
 	t.set_cursor_pos(1, 1)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\n\n  X'
 }
 
 fn test_cursor_pos_limits_with_full_scroll_region() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.scrolling_region.top = 2
@@ -2667,12 +3287,18 @@ fn test_cursor_pos_limits_with_full_scroll_region() {
 	t.set_cursor_pos(500, 500)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\n\n\n    X'
 }
 
 fn test_set_cursor_pos_original() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	assert t.screens.active.cursor.x == 0
@@ -2728,19 +3354,28 @@ fn test_set_cursor_pos_original() {
 // ============================================================
 
 fn test_cursor_right_left_of_right_margin() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.scrolling_region.right = 2
 	t.cursor_right(100)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '  X'
 }
 
 fn test_cursor_right_right_of_right_margin() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.scrolling_region.right = 2
@@ -2748,12 +3383,18 @@ fn test_cursor_right_right_of_right_margin() {
 	t.cursor_right(100)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '    X'
 }
 
 fn test_cursor_left_unsets_pending_wrap_state_with_longer_jump() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE') or { assert false }
@@ -2762,12 +3403,18 @@ fn test_cursor_left_unsets_pending_wrap_state_with_longer_jump() {
 	assert !t.screens.active.cursor.pending_wrap
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'AXCDE'
 }
 
 fn test_cursor_left_reverse_wrap_with_pending_wrap_state() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.wraparound, true)
@@ -2779,12 +3426,18 @@ fn test_cursor_left_reverse_wrap_with_pending_wrap_state() {
 	assert !t.screens.active.cursor.pending_wrap
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABCDX'
 }
 
 fn test_cursor_left_reverse_wrap_extended_with_pending_wrap_state() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.wraparound, true)
@@ -2796,12 +3449,18 @@ fn test_cursor_left_reverse_wrap_extended_with_pending_wrap_state() {
 	assert !t.screens.active.cursor.pending_wrap
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABCDX'
 }
 
 fn test_cursor_left_reverse_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.wraparound, true)
@@ -2812,12 +3471,18 @@ fn test_cursor_left_reverse_wrap() {
 	t.print(u32(`X`)) or { assert false }
 	assert t.screens.active.cursor.pending_wrap
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABCDX\n1'
 }
 
 fn test_cursor_left_reverse_wrap_with_no_soft_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.wraparound, true)
@@ -2830,12 +3495,18 @@ fn test_cursor_left_reverse_wrap_with_no_soft_wrap() {
 	t.cursor_left(2)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABCDE\nX'
 }
 
 fn test_cursor_left_reverse_wrap_before_left_margin() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.wraparound, true)
@@ -2844,12 +3515,18 @@ fn test_cursor_left_reverse_wrap_before_left_margin() {
 	t.cursor_left(1)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\n\nX'
 }
 
 fn test_cursor_left_extended_reverse_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.wraparound, true)
@@ -2862,12 +3539,18 @@ fn test_cursor_left_extended_reverse_wrap() {
 	t.cursor_left(2)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABCDX\n1'
 }
 
 fn test_cursor_left_extended_reverse_wrap_bottom_wraparound() {
-	mut t := create_test_terminal(5, 3) or { assert false; return }
+	mut t := create_test_terminal(5, 3) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.wraparound, true)
@@ -2880,12 +3563,18 @@ fn test_cursor_left_extended_reverse_wrap_bottom_wraparound() {
 	t.cursor_left(1 + int(t.cols) + 1)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABCDE\n1\n    X'
 }
 
 fn test_cursor_left_extended_reverse_wrap_is_priority_if_both_set() {
-	mut t := create_test_terminal(5, 3) or { assert false; return }
+	mut t := create_test_terminal(5, 3) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.wraparound, true)
@@ -2899,12 +3588,18 @@ fn test_cursor_left_extended_reverse_wrap_is_priority_if_both_set() {
 	t.cursor_left(1 + int(t.cols) + 1)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABCDE\n1\n    X'
 }
 
 fn test_cursor_left_extended_reverse_wrap_above_top_scroll_region() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.wraparound, true)
@@ -2919,7 +3614,10 @@ fn test_cursor_left_extended_reverse_wrap_above_top_scroll_region() {
 }
 
 fn test_cursor_left_reverse_wrap_on_first_row() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.wraparound, true)
@@ -2938,7 +3636,10 @@ fn test_cursor_left_reverse_wrap_on_first_row() {
 // ============================================================
 
 fn test_reverse_index_from_the_top() {
-	mut t := create_test_terminal(2, 5) or { assert false; return }
+	mut t := create_test_terminal(2, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(u32(`A`)) or { assert false }
@@ -2962,12 +3663,18 @@ fn test_reverse_index_from_the_top() {
 	t.carriage_return()
 	t.linefeed() or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'E\nD\nA\nB'
 }
 
 fn test_reverse_index_top_of_scrolling_region() {
-	mut t := create_test_terminal(2, 10) or { assert false; return }
+	mut t := create_test_terminal(2, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_cursor_pos(2, 1)
@@ -2989,12 +3696,18 @@ fn test_reverse_index_top_of_scrolling_region() {
 	t.reverse_index()
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\nX\nA\nB\nC'
 }
 
 fn test_reverse_index_top_of_screen() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(u32(`A`)) or { assert false }
@@ -3006,12 +3719,18 @@ fn test_reverse_index_top_of_screen() {
 	t.reverse_index()
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'X\nA\nB\nC'
 }
 
 fn test_reverse_index_not_top_of_screen() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(u32(`A`)) or { assert false }
@@ -3023,12 +3742,18 @@ fn test_reverse_index_not_top_of_screen() {
 	t.reverse_index()
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'X\nB\nC'
 }
 
 fn test_reverse_index_top_bottom_margins() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(u32(`A`)) or { assert false }
@@ -3040,12 +3765,18 @@ fn test_reverse_index_top_bottom_margins() {
 	t.set_cursor_pos(2, 1)
 	t.reverse_index()
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'A\n\nB'
 }
 
 fn test_reverse_index_outside_top_bottom_margins() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(u32(`A`)) or { assert false }
@@ -3057,7 +3788,10 @@ fn test_reverse_index_outside_top_bottom_margins() {
 	t.set_cursor_pos(1, 1)
 	t.reverse_index()
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'A\nB\nC'
 }
 
@@ -3066,7 +3800,10 @@ fn test_reverse_index_outside_top_bottom_margins() {
 // ============================================================
 
 fn test_index_outside_of_scrolling_region() {
-	mut t := create_test_terminal(2, 5) or { assert false; return }
+	mut t := create_test_terminal(2, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	assert t.screens.active.cursor.y == 0
@@ -3076,7 +3813,10 @@ fn test_index_outside_of_scrolling_region() {
 }
 
 fn test_index_from_the_bottom_outside_of_scroll_region() {
-	mut t := create_test_terminal(2, 5) or { assert false; return }
+	mut t := create_test_terminal(2, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_top_and_bottom_margin(1, 2)
@@ -3087,12 +3827,18 @@ fn test_index_from_the_bottom_outside_of_scroll_region() {
 	t.print(u32(`B`)) or { assert false }
 	assert t.is_dirty(0, 4)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\n\n\n\nAB'
 }
 
 fn test_index_no_scroll_region_top_of_screen() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(u32(`A`)) or { assert false }
@@ -3103,12 +3849,18 @@ fn test_index_no_scroll_region_top_of_screen() {
 	assert t.is_dirty(0, 0)
 	assert t.is_dirty(0, 1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'A\n X'
 }
 
 fn test_index_bottom_of_primary_screen() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_cursor_pos(5, 1)
@@ -3120,12 +3872,18 @@ fn test_index_bottom_of_primary_screen() {
 	assert t.is_dirty(0, 3)
 	assert t.is_dirty(0, 4)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\n\n\nA\n X'
 }
 
 fn test_index_inside_scroll_region() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_top_and_bottom_margin(1, 3)
@@ -3137,7 +3895,10 @@ fn test_index_inside_scroll_region() {
 	assert t.is_dirty(0, 0)
 	assert t.is_dirty(0, 1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'A\n X'
 }
 
@@ -3146,7 +3907,10 @@ fn test_index_inside_scroll_region() {
 // ============================================================
 
 fn test_delete_lines_legacy() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(u32(`A`)) or { assert false }
@@ -3170,12 +3934,18 @@ fn test_delete_lines_legacy() {
 	assert t.screens.active.cursor.x == 0
 	assert t.screens.active.cursor.y == 2
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'A\nE\nD'
 }
 
 fn test_delete_lines_with_scroll_region_legacy() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(u32(`A`)) or { assert false }
@@ -3204,12 +3974,18 @@ fn test_delete_lines_with_scroll_region_legacy() {
 	t.carriage_return()
 	t.linefeed() or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'E\nC\n\nD'
 }
 
 fn test_delete_lines_with_scroll_region_large_count() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(u32(`A`)) or { assert false }
@@ -3231,12 +4007,18 @@ fn test_delete_lines_with_scroll_region_large_count() {
 	t.carriage_return()
 	t.linefeed() or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'E\n\n\nD'
 }
 
 fn test_delete_lines_with_scroll_region_cursor_outside_of_region() {
-	mut t := create_test_terminal(80, 80) or { assert false; return }
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(u32(`A`)) or { assert false }
@@ -3254,12 +4036,18 @@ fn test_delete_lines_with_scroll_region_cursor_outside_of_region() {
 	t.set_cursor_pos(4, 1)
 	t.delete_lines(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'A\nB\nC\nD'
 }
 
 fn test_delete_lines_left_right_scroll_region() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC123') or { assert false }
@@ -3274,12 +4062,18 @@ fn test_delete_lines_left_right_scroll_region() {
 	t.set_cursor_pos(2, 2)
 	t.delete_lines(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABC123\nDHI756\nG   89'
 }
 
 fn test_delete_lines_left_right_scroll_region_from_top() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC123') or { assert false }
@@ -3294,12 +4088,18 @@ fn test_delete_lines_left_right_scroll_region_from_top() {
 	t.set_cursor_pos(1, 2)
 	t.delete_lines(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'AEF423\nDHI756\nG   89'
 }
 
 fn test_delete_lines_left_right_scroll_region_high_count() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC123') or { assert false }
@@ -3314,7 +4114,10 @@ fn test_delete_lines_left_right_scroll_region_high_count() {
 	t.set_cursor_pos(2, 2)
 	t.delete_lines(100)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABC123\nD   56\nG   89'
 }
 
@@ -3323,7 +4126,10 @@ fn test_delete_lines_left_right_scroll_region_high_count() {
 // ============================================================
 
 fn test_set_left_and_right_margin_simple() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -3342,12 +4148,18 @@ fn test_set_left_and_right_margin_simple() {
 	assert t.is_dirty(0, 0)
 	assert !t.is_dirty(0, 1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == ' BC\nDEF\nGHI'
 }
 
 fn test_set_left_and_right_margin_left_only() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -3364,12 +4176,18 @@ fn test_set_left_and_right_margin_left_only() {
 	t.set_cursor_pos(1, 2)
 	t.insert_lines(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'A\nDBC\nGEF\n HI'
 }
 
 fn test_set_left_and_right_margin_left_and_right() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -3384,12 +4202,18 @@ fn test_set_left_and_right_margin_left_and_right() {
 	t.set_cursor_pos(1, 2)
 	t.insert_lines(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '  C\nABF\nDEI\nGH'
 }
 
 fn test_set_left_and_right_margin_left_equal_right() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -3404,12 +4228,18 @@ fn test_set_left_and_right_margin_left_equal_right() {
 	t.set_cursor_pos(1, 2)
 	t.insert_lines(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\nABC\nDEF\nGHI'
 }
 
 fn test_set_left_and_right_margin_mode_69_unset() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -3424,7 +4254,10 @@ fn test_set_left_and_right_margin_mode_69_unset() {
 	t.set_cursor_pos(1, 2)
 	t.insert_lines(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\nABC\nDEF\nGHI'
 }
 
@@ -3433,7 +4266,10 @@ fn test_set_left_and_right_margin_mode_69_unset() {
 // ============================================================
 
 fn test_insert_lines_outside_of_scroll_region() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -3453,12 +4289,18 @@ fn test_insert_lines_outside_of_scroll_region() {
 	assert !t.is_dirty(0, 1)
 	assert !t.is_dirty(0, 2)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABC\nDEF\nGHI'
 }
 
 fn test_insert_lines_top_bottom_scroll_region() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -3475,12 +4317,18 @@ fn test_insert_lines_top_bottom_scroll_region() {
 	t.set_cursor_pos(2, 2)
 	t.insert_lines(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABC\n\nDEF\n123'
 }
 
 fn test_insert_lines_legacy() {
-	mut t := create_test_terminal(2, 5) or { assert false; return }
+	mut t := create_test_terminal(2, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(u32(`A`)) or { assert false }
@@ -3500,12 +4348,18 @@ fn test_insert_lines_legacy() {
 	t.set_cursor_pos(2, 1)
 	t.insert_lines(2)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'A\n\n\nB\nC'
 }
 
 fn test_insert_lines_with_scroll_region_legacy() {
-	mut t := create_test_terminal(2, 6) or { assert false; return }
+	mut t := create_test_terminal(2, 6) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(u32(`A`)) or { assert false }
@@ -3534,12 +4388,18 @@ fn test_insert_lines_with_scroll_region_legacy() {
 
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'X\nA\nC\nD\nE'
 }
 
 fn test_insert_lines_resets_wrap() {
-	mut t := create_test_terminal(3, 3) or { assert false; return }
+	mut t := create_test_terminal(3, 3) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(u32(`1`)) or { assert false }
@@ -3550,14 +4410,20 @@ fn test_insert_lines_resets_wrap() {
 	t.insert_lines(1)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'X\n1\nABC'
 
 	assert !row_wrap_at(&t, 2)
 }
 
 fn test_insert_lines_left_right_scroll_region() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC123') or { assert false }
@@ -3572,7 +4438,10 @@ fn test_insert_lines_left_right_scroll_region() {
 	t.set_cursor_pos(2, 2)
 	t.insert_lines(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABC123\nD   56\nGEF489\n HI7'
 }
 
@@ -3581,7 +4450,10 @@ fn test_insert_lines_left_right_scroll_region() {
 // ============================================================
 
 fn test_scroll_up_top_bottom_scroll_region() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -3601,12 +4473,18 @@ fn test_scroll_up_top_bottom_scroll_region() {
 	assert t.is_dirty(0, 1)
 	assert t.is_dirty(0, 2)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABC\nGHI'
 }
 
 fn test_scroll_up_left_right_scroll_region() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC123') or { assert false }
@@ -3626,12 +4504,18 @@ fn test_scroll_up_left_right_scroll_region() {
 	assert t.screens.active.cursor.x == cx
 	assert t.screens.active.cursor.y == cy
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'AEF423\nDHI756\nG   89'
 }
 
 fn test_scroll_up_preserves_pending_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_cursor_pos(1, 5)
@@ -3643,12 +4527,18 @@ fn test_scroll_up_preserves_pending_wrap() {
 	t.scroll_up(1) or { assert false }
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '    B\n    C\n\nX'
 }
 
 fn test_scroll_up_full_top_bottom_region() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('top') or { assert false }
@@ -3662,7 +4552,10 @@ fn test_scroll_up_full_top_bottom_region() {
 	assert t.is_dirty(0, 0)
 	assert t.is_dirty(0, 1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'top'
 }
 
@@ -3671,7 +4564,10 @@ fn test_scroll_up_full_top_bottom_region() {
 // ============================================================
 
 fn test_scroll_down_outside_of_scroll_region() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -3696,12 +4592,18 @@ fn test_scroll_down_outside_of_scroll_region() {
 	assert t.is_dirty(0, 2)
 	assert t.is_dirty(0, 3)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABC\nDEF\n\nGHI'
 }
 
 fn test_scroll_down_left_right_scroll_region() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC123') or { assert false }
@@ -3721,12 +4623,18 @@ fn test_scroll_down_left_right_scroll_region() {
 	assert t.screens.active.cursor.x == cx
 	assert t.screens.active.cursor.y == cy
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'A   23\nDBC156\nGEF489\n HI7'
 }
 
 fn test_scroll_down_outside_of_left_right_scroll_region() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC123') or { assert false }
@@ -3746,12 +4654,18 @@ fn test_scroll_down_outside_of_left_right_scroll_region() {
 	assert t.screens.active.cursor.x == cx
 	assert t.screens.active.cursor.y == cy
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'A   23\nDBC156\nGEF489\n HI7'
 }
 
 fn test_scroll_down_preserves_pending_wrap() {
-	mut t := create_test_terminal(5, 10) or { assert false; return }
+	mut t := create_test_terminal(5, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_cursor_pos(1, 5)
@@ -3763,7 +4677,10 @@ fn test_scroll_down_preserves_pending_wrap() {
 	t.scroll_down(1)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\n    A\n    B\nX   C'
 }
 
@@ -3772,7 +4689,10 @@ fn test_scroll_down_preserves_pending_wrap() {
 // ============================================================
 
 fn test_insert_blanks_no_scroll_region_fits() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -3782,12 +4702,18 @@ fn test_insert_blanks_no_scroll_region_fits() {
 	t.insert_blanks(2)
 	assert t.is_dirty(0, 0)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '  ABC'
 }
 
 fn test_insert_blanks_shift_off_screen() {
-	mut t := create_test_terminal(5, 10) or { assert false; return }
+	mut t := create_test_terminal(5, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('  ABC') or { assert false }
@@ -3797,12 +4723,18 @@ fn test_insert_blanks_shift_off_screen() {
 	assert t.is_dirty(0, 0)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '  X A'
 }
 
 fn test_insert_blanks_inside_left_right_scroll_region() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.scrolling_region.left = 2
@@ -3816,12 +4748,18 @@ fn test_insert_blanks_inside_left_right_scroll_region() {
 	assert t.is_dirty(0, 0)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '  X A'
 }
 
 fn test_insert_blanks_outside_left_right_scroll_region() {
-	mut t := create_test_terminal(6, 10) or { assert false; return }
+	mut t := create_test_terminal(6, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_cursor_pos(1, 4)
@@ -3835,12 +4773,18 @@ fn test_insert_blanks_outside_left_right_scroll_region() {
 	assert !t.screens.active.cursor.pending_wrap
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '   ABX'
 }
 
 fn test_insert_blanks_left_right_scroll_region_large_count() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.origin, true)
@@ -3852,7 +4796,10 @@ fn test_insert_blanks_left_right_scroll_region_large_count() {
 	assert t.is_dirty(0, 0)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '  X'
 }
 
@@ -3861,7 +4808,10 @@ fn test_insert_blanks_left_right_scroll_region_large_count() {
 // ============================================================
 
 fn test_delete_chars_more_than_half() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE') or { assert false }
@@ -3871,12 +4821,18 @@ fn test_delete_chars_more_than_half() {
 	t.delete_chars(3)
 	assert t.is_dirty(0, 0)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'AE'
 }
 
 fn test_delete_chars_should_shift_left() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE') or { assert false }
@@ -3886,12 +4842,18 @@ fn test_delete_chars_should_shift_left() {
 	t.delete_chars(1)
 	assert t.is_dirty(0, 0)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ACDE'
 }
 
 fn test_delete_chars_resets_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE123') or { assert false }
@@ -3901,12 +4863,18 @@ fn test_delete_chars_resets_wrap() {
 	assert !row_wrap_at(&t, 0)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'XCDE\n123'
 }
 
 fn test_delete_chars_simple_operation() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC123') or { assert false }
@@ -3916,12 +4884,18 @@ fn test_delete_chars_simple_operation() {
 	t.delete_chars(2)
 	assert t.is_dirty(0, 0)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'AB23'
 }
 
 fn test_delete_chars_outside_scroll_region() {
-	mut t := create_test_terminal(6, 10) or { assert false; return }
+	mut t := create_test_terminal(6, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC123') or { assert false }
@@ -3933,12 +4907,18 @@ fn test_delete_chars_outside_scroll_region() {
 	assert !t.is_dirty(0, 0)
 	assert t.screens.active.cursor.pending_wrap
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABC123'
 }
 
 fn test_delete_chars_inside_scroll_region() {
-	mut t := create_test_terminal(6, 10) or { assert false; return }
+	mut t := create_test_terminal(6, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC123') or { assert false }
@@ -3950,7 +4930,10 @@ fn test_delete_chars_inside_scroll_region() {
 	t.delete_chars(1)
 	assert t.is_dirty(0, 0)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABC2 3'
 }
 
@@ -3959,7 +4942,10 @@ fn test_delete_chars_inside_scroll_region() {
 // ============================================================
 
 fn test_insert_mode_with_space() {
-	mut t := create_test_terminal(10, 2) or { assert false; return }
+	mut t := create_test_terminal(10, 2) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('hello') or { assert false }
@@ -3967,12 +4953,18 @@ fn test_insert_mode_with_space() {
 	t.modes.set(.insert, true)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'hXello'
 }
 
 fn test_insert_mode_doesnt_wrap_pushed_characters() {
-	mut t := create_test_terminal(5, 2) or { assert false; return }
+	mut t := create_test_terminal(5, 2) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('hello') or { assert false }
@@ -3980,19 +4972,28 @@ fn test_insert_mode_doesnt_wrap_pushed_characters() {
 	t.modes.set(.insert, true)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'hXell'
 }
 
 fn test_insert_mode_does_nothing_at_the_end_of_the_line() {
-	mut t := create_test_terminal(5, 2) or { assert false; return }
+	mut t := create_test_terminal(5, 2) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('hello') or { assert false }
 	t.modes.set(.insert, true)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'hello\nX'
 }
 
@@ -4001,7 +5002,10 @@ fn test_insert_mode_does_nothing_at_the_end_of_the_line() {
 // ============================================================
 
 fn test_erase_line_resets_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE123') or { assert false }
@@ -4013,12 +5017,18 @@ fn test_erase_line_resets_wrap() {
 	assert !row_wrap_at(&t, 0)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'X\n123'
 }
 
 fn test_erase_line_left_resets_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE') or { assert false }
@@ -4029,12 +5039,18 @@ fn test_erase_line_left_resets_wrap() {
 	assert !t.screens.active.cursor.pending_wrap
 	t.print(u32(`B`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '    B'
 }
 
 fn test_erase_line_right_protected_attributes_respected_with_iso() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_protected_mode(.iso)
@@ -4044,12 +5060,18 @@ fn test_erase_line_right_protected_attributes_respected_with_iso() {
 	t.erase_line(.right, false)
 	assert t.is_dirty(0, 0)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABC'
 }
 
 fn test_erase_line_right_protected_attributes_ignored_with_dec_set() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_protected_mode(.dec)
@@ -4059,7 +5081,10 @@ fn test_erase_line_right_protected_attributes_ignored_with_dec_set() {
 	t.erase_line(.right, false)
 	assert t.is_dirty(0, 0)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'A'
 }
 
@@ -4068,7 +5093,10 @@ fn test_erase_line_right_protected_attributes_ignored_with_dec_set() {
 // ============================================================
 
 fn test_erase_display_below_protected_attributes_respected_with_iso() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_protected_mode(.iso)
@@ -4082,12 +5110,18 @@ fn test_erase_display_below_protected_attributes_respected_with_iso() {
 	t.set_cursor_pos(2, 2)
 	t.erase_display(.below, false)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABC\nDEF\nGHI'
 }
 
 fn test_erase_display_above_protected_attributes_respected_with_iso() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_protected_mode(.iso)
@@ -4101,7 +5135,10 @@ fn test_erase_display_above_protected_attributes_respected_with_iso() {
 	t.set_cursor_pos(2, 2)
 	t.erase_display(.above, false)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'ABC\nDEF\nGHI'
 }
 
@@ -4110,7 +5147,10 @@ fn test_erase_display_above_protected_attributes_respected_with_iso() {
 // ============================================================
 
 fn test_deccolm_resets_pending_wrap() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE') or { assert false }
@@ -4125,7 +5165,10 @@ fn test_deccolm_resets_pending_wrap() {
 // ============================================================
 
 fn test_save_cursor_position() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_cursor_pos(1, 5)
@@ -4136,7 +5179,10 @@ fn test_save_cursor_position() {
 	t.restore_cursor()
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'B   AX'
 }
 
@@ -4145,7 +5191,10 @@ fn test_save_cursor_position() {
 // ============================================================
 
 fn test_erase_display_scroll_complete() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(u32(`A`)) or { assert false }
@@ -4153,12 +5202,18 @@ fn test_erase_display_scroll_complete() {
 	t.linefeed() or { assert false }
 	t.erase_display(.scroll_complete, false)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == ''
 }
 
 fn test_erase_display_complete_preserves_cursor_style() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_attribute(SgrAttribute{ kind: .bold }) or { assert false }
@@ -4174,7 +5229,10 @@ fn test_erase_display_complete_preserves_cursor_style() {
 // ============================================================
 
 fn test_erase_chars_wide_character() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(0x6A4B) or { assert false } // 橋
@@ -4183,7 +5241,10 @@ fn test_erase_chars_wide_character() {
 	t.erase_chars(1)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'X BC'
 }
 
@@ -4192,7 +5253,10 @@ fn test_erase_chars_wide_character() {
 // ============================================================
 
 fn test_erase_line_left_wide_character() {
-	mut t := create_test_terminal(10, 5) or { assert false; return }
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('AB') or { assert false }
@@ -4203,7 +5267,10 @@ fn test_erase_line_left_wide_character() {
 	t.erase_line(.left, false)
 	assert t.is_dirty(0, 0)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '    DE'
 }
 
@@ -4212,7 +5279,10 @@ fn test_erase_line_left_wide_character() {
 // ============================================================
 
 fn test_delete_chars_split_wide_character_from_spacer_tail() {
-	mut t := create_test_terminal(6, 10) or { assert false; return }
+	mut t := create_test_terminal(6, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('A') or { assert false }
@@ -4221,12 +5291,18 @@ fn test_delete_chars_split_wide_character_from_spacer_tail() {
 	t.set_cursor_pos(1, 3)
 	t.delete_chars(1)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'A 123'
 }
 
 fn test_delete_chars_split_wide_character_from_wide() {
-	mut t := create_test_terminal(6, 10) or { assert false; return }
+	mut t := create_test_terminal(6, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print(0x6A4B) or { assert false } // 橋
@@ -4243,7 +5319,10 @@ fn test_delete_chars_split_wide_character_from_wide() {
 }
 
 fn test_delete_chars_split_wide_character_from_end() {
-	mut t := create_test_terminal(6, 10) or { assert false; return }
+	mut t := create_test_terminal(6, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('A') or { assert false }
@@ -4265,7 +5344,10 @@ fn test_delete_chars_split_wide_character_from_end() {
 // ============================================================
 
 fn test_horizontal_tabs_with_left_margin_in_origin_mode() {
-	mut t := create_test_terminal(20, 5) or { assert false; return }
+	mut t := create_test_terminal(20, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.origin, true)
@@ -4276,12 +5358,18 @@ fn test_horizontal_tabs_with_left_margin_in_origin_mode() {
 	t.horizontal_tab_back()
 	t.print(u32(`A`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '  AX'
 }
 
 fn test_horizontal_tab_back_with_cursor_before_left_margin() {
-	mut t := create_test_terminal(20, 5) or { assert false; return }
+	mut t := create_test_terminal(20, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.modes.set(.origin, true)
@@ -4292,7 +5380,10 @@ fn test_horizontal_tab_back_with_cursor_before_left_margin() {
 	t.horizontal_tab_back()
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'X'
 }
 
@@ -4304,7 +5395,10 @@ fn test_horizontal_tab_back_with_cursor_before_left_margin() {
 // as a space (the dump helper lives in screen.v which is out of scope).
 
 fn test_insert_mode_pushing_off_wide_character() {
-	mut t := create_test_terminal(5, 2) or { assert false; return }
+	mut t := create_test_terminal(5, 2) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('123') or { assert false }
@@ -4313,7 +5407,10 @@ fn test_insert_mode_pushing_off_wide_character() {
 	t.set_cursor_pos(1, 1)
 	t.print(u32(`X`)) or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'X123'
 }
 
@@ -4322,7 +5419,10 @@ fn test_insert_mode_pushing_off_wide_character() {
 // ============================================================
 
 fn test_insert_blanks_split_multi_cell_character() {
-	mut t := create_test_terminal(5, 10) or { assert false; return }
+	mut t := create_test_terminal(5, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('123') or { assert false }
@@ -4332,7 +5432,10 @@ fn test_insert_blanks_split_multi_cell_character() {
 	t.insert_blanks(1)
 	assert t.is_dirty(0, 0)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == ' 123'
 }
 
@@ -4356,7 +5459,10 @@ fn assert_bg_rgb(t &Terminal, x int, y int, r u8, g u8, b u8) {
 }
 
 fn test_erase_chars_preserves_background_sgr() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -4369,14 +5475,20 @@ fn test_erase_chars_preserves_background_sgr() {
 	}) or { assert false }
 	t.erase_chars(2)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '  C'
 	assert_bg_rgb(&t, 0, 0, 0xFF, 0, 0)
 	assert_bg_rgb(&t, 1, 0, 0xFF, 0, 0)
 }
 
 fn test_insert_blanks_preserves_background_sgr() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC') or { assert false }
@@ -4389,13 +5501,19 @@ fn test_insert_blanks_preserves_background_sgr() {
 	}) or { assert false }
 	t.insert_blanks(2)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '  ABC'
 	assert_bg_rgb(&t, 0, 0, 0xFF, 0, 0)
 }
 
 fn test_delete_chars_preserves_background_sgr() {
-	mut t := create_test_terminal(10, 10) or { assert false; return }
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABC123') or { assert false }
@@ -4408,7 +5526,10 @@ fn test_delete_chars_preserves_background_sgr() {
 	}) or { assert false }
 	t.delete_chars(2)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'AB23'
 	// The two right-most columns are the vacated blanks.
 	for x in int(t.cols) - 2 .. int(t.cols) {
@@ -4417,7 +5538,10 @@ fn test_delete_chars_preserves_background_sgr() {
 }
 
 fn test_erase_line_right_preserves_background_sgr() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE') or { assert false }
@@ -4430,7 +5554,10 @@ fn test_erase_line_right_preserves_background_sgr() {
 	}) or { assert false }
 	t.erase_line(.right, false)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == 'A'
 	for x in 1 .. 5 {
 		assert_bg_rgb(&t, x, 0, 0xFF, 0, 0)
@@ -4438,7 +5565,10 @@ fn test_erase_line_right_preserves_background_sgr() {
 }
 
 fn test_erase_line_left_preserves_background_sgr() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE') or { assert false }
@@ -4451,7 +5581,10 @@ fn test_erase_line_left_preserves_background_sgr() {
 	}) or { assert false }
 	t.erase_line(.left, false)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '  CDE'
 	for x in 0 .. 2 {
 		assert_bg_rgb(&t, x, 0, 0xFF, 0, 0)
@@ -4459,7 +5592,10 @@ fn test_erase_line_left_preserves_background_sgr() {
 }
 
 fn test_erase_line_complete_preserves_background_sgr() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.print_string('ABCDE') or { assert false }
@@ -4472,7 +5608,10 @@ fn test_erase_line_complete_preserves_background_sgr() {
 	}) or { assert false }
 	t.erase_line(.complete, false)
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == ''
 	for x in 0 .. 5 {
 		assert_bg_rgb(&t, x, 0, 0xFF, 0, 0)
@@ -4480,7 +5619,10 @@ fn test_erase_line_complete_preserves_background_sgr() {
 }
 
 fn test_index_bottom_of_primary_screen_background_sgr() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_cursor_pos(5, 1)
@@ -4493,7 +5635,10 @@ fn test_index_bottom_of_primary_screen_background_sgr() {
 	}) or { assert false }
 	t.index() or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\n\n\nA'
 	// The newly-exposed bottom row is filled with the active bg SGR.
 	for x in 0 .. 5 {
@@ -4502,7 +5647,10 @@ fn test_index_bottom_of_primary_screen_background_sgr() {
 }
 
 fn test_index_bottom_of_scroll_region_background_sgr() {
-	mut t := create_test_terminal(5, 5) or { assert false; return }
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
 	defer { t.deinit() }
 
 	t.set_top_and_bottom_margin(1, 3)
@@ -4518,7 +5666,10 @@ fn test_index_bottom_of_scroll_region_background_sgr() {
 	}) or { assert false }
 	t.index() or { assert false }
 
-	str := t.plain_string() or { assert false; return }
+	str := t.plain_string() or {
+		assert false
+		return
+	}
 	assert str == '\nA\n\nB'
 	// The newly-exposed blank row at the bottom of the region carries bg SGR.
 	for x in 0 .. int(t.cols) {

@@ -2411,6 +2411,9 @@ pub fn (mut self Screen) cursor_down_scroll() ! {
 		// With scrollback: grow by one row, moving old top row to scrollback
 		self.pages.grow() or {}
 		self.pages.active_start += 1
+		if self.pages.viewport == .active {
+			self.pages.viewport_start = self.pages.active_start
+		}
 		// Ensure we have a row at the new bottom
 		active_end := self.pages.active_start + int(self.pages.rows)
 		for self.pages.screen_rows.len < active_end {
@@ -2460,6 +2463,9 @@ pub fn (mut self Screen) cursor_scroll_above() ! {
 		// scrollback) and slide the active window down by one.
 		self.pages.grow() or {}
 		self.pages.active_start += 1
+		if self.pages.viewport == .active {
+			self.pages.viewport_start = self.pages.active_start
+		}
 		active_end := self.pages.active_start + int(self.pages.rows)
 		for self.pages.screen_rows.len < active_end {
 			self.pages.screen_rows << RowData.init(self.pages.cols)
@@ -3648,7 +3654,7 @@ pub fn (self &Screen) dump_string_alloc(tag PointTag) !string {
 			self.pages.active_start, self.pages.active_start + int(self.pages.rows)
 		}
 		.viewport {
-			self.pages.active_start, self.pages.active_start + int(self.pages.rows)
+			self.pages.viewport_start, self.pages.viewport_start + int(self.pages.rows)
 		}
 		.history {
 			0, self.pages.active_start
