@@ -3029,6 +3029,39 @@ pub enum SetValueType {
 	leaf_chained
 }
 
+// GenericLeaf is the common view of a single-action and chained-action leaf.
+// V represents Ghostty's tagged Set.Value union as SetValue plus a tag, so the
+// two source `generic` methods become this single checked conversion.
+pub struct GenericLeaf {
+pub:
+	flags   Flags
+	actions []Action
+}
+
+// generic returns a common leaf view, or none when this value is a leader.
+pub fn (value &SetValue) generic() ?GenericLeaf {
+	return match value.typ {
+		.leader { none }
+		.leaf {
+			GenericLeaf{
+				flags: value.leaf_flags
+				actions: [value.leaf_action]
+			}
+		}
+		.leaf_chained {
+			GenericLeaf{
+				flags: value.chain_flags
+				actions: value.chain_actions
+			}
+		}
+	}
+}
+
+// actions_slice returns every action represented by this leaf.
+pub fn (leaf &GenericLeaf) actions_slice() []Action {
+	return leaf.actions
+}
+
 // ChainParent is information about a chain parent entry, including which set
 // it belongs to. This is needed because reverse mappings are only maintained
 // in the root set, but the chain parent entry may be in a nested set (for

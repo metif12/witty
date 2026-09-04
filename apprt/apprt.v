@@ -317,15 +317,8 @@ pub fn (c &CoreApp) focused_surface_pwd() ?string {
 // core_app_binding_leaf resolves a top-level app binding. App-level key
 // sequences are intentionally unsupported, matching Ghostty's CoreApp lookup.
 fn core_app_binding_leaf(entry &input.SetEntry) ?([]input.Action, input.Flags) {
-	return match entry.value.typ {
-		.leader { none }
-		.leaf {
-			([entry.value.leaf_action]), entry.value.leaf_flags
-		}
-		.leaf_chained {
-			(entry.value.chain_actions.clone()), entry.value.chain_flags
-		}
-	}
+	leaf := entry.value.generic() or { return none }
+	return leaf.actions_slice(), leaf.flags
 }
 
 // perform_app_action translates the app-scoped input action into the embedded

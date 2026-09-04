@@ -1050,3 +1050,39 @@ fn test_set_put_overwrites_sequence() {
 	trigger := s.get_trigger(Action.new(.new_window)) or { panic('not found') }
 	assert trigger.key == TriggerKey.new_unicode(u32(`a`))
 }
+
+fn test_set_value_generic_leaf() {
+	action := Action.new(.new_window)
+	value := SetValue{
+		typ: .leaf
+		leaf_action: action
+		leaf_flags: Flags{
+			global: true
+		}
+	}
+	leaf := value.generic() or { panic('leaf must have a generic view') }
+	assert leaf.flags.global
+	assert leaf.actions_slice().len == 1
+	assert leaf.actions_slice()[0].equal(action)
+}
+
+fn test_set_value_generic_chained_leaf() {
+	actions := [Action.new(.new_window), Action.new(.new_tab)]
+	value := SetValue{
+		typ: .leaf_chained
+		chain_actions: actions
+		chain_flags: Flags{
+			performable: true
+		}
+	}
+	leaf := value.generic() or { panic('chained leaf must have a generic view') }
+	assert leaf.flags.performable
+	assert leaf.actions_slice().len == 2
+	assert leaf.actions_slice()[0].equal(actions[0])
+	assert leaf.actions_slice()[1].equal(actions[1])
+
+	leader := SetValue{
+		typ: .leader
+	}
+	assert leader.generic() == none
+}

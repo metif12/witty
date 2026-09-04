@@ -687,35 +687,14 @@ pub fn (mut self App) color_scheme_surfaces(scheme apprt.ColorScheme) {
 	}
 }
 
-// BindingLeaf is a resolved keybinding leaf (a single or chained action) along
-// with its flags. It mirrors ghostty's `input.Binding.Set.GenericLeaf`.
-struct BindingLeaf {
-	actions []input.Action
-	flags   input.Flags
-}
-
 // lookup_binding looks up the keybinding entry for the given event in the
 // app-level binding set. Returns none if there is no binding, or if the entry
 // is a leader (key sequences aren't supported for app-scoped bindings).
 //
-fn (self &App) lookup_binding(mut rt_app apprt.RuntimeApp, event input.KeyEvent) ?BindingLeaf {
+fn (self &App) lookup_binding(mut rt_app apprt.RuntimeApp, event input.KeyEvent) ?input.GenericLeaf {
 	_ = self
 	entry := rt_app.config.keybind.set.get_event(event) or { return none }
-	return match entry.value.typ {
-		.leader { none }
-		.leaf {
-			BindingLeaf{
-				actions: [entry.value.leaf_action]
-				flags: entry.value.leaf_flags
-			}
-		}
-		.leaf_chained {
-			BindingLeaf{
-				actions: entry.value.chain_actions.clone()
-				flags: entry.value.chain_flags
-			}
-		}
-	}
+	return entry.value.generic()
 }
 
 // key_event_is_binding returns true if the given key event would trigger a

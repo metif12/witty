@@ -6173,16 +6173,9 @@ fn (mut self Surface) handle_binding_entry(event KeyEvent, entry &input.SetEntry
 		return .consumed
 	}
 
-	flags := if entry.value.typ == .leaf {
-		entry.value.leaf_flags
-	} else {
-		entry.value.chain_flags
-	}
-	actions := if entry.value.typ == .leaf {
-		[entry.value.leaf_action]
-	} else {
-		entry.value.chain_actions
-	}
+	leaf := entry.value.generic() or { return none }
+	flags := leaf.flags
+	actions := leaf.actions_slice()
 	if inspecting {
 		inspector_event.binding = actions.clone()
 	}
