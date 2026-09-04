@@ -229,6 +229,17 @@ pub fn (s &SurfaceRef) core() &Surface {
 	return s.core_surface
 }
 
+// deinit releases the core state owned by this runtime surface reference.
+// A zero-valued Surface is permitted in lightweight runtime tests, so only a
+// surface whose initialization completed owns resources to release.
+pub fn (mut s SurfaceRef) deinit() {
+	if isnil(s.core_surface) || !s.core_surface.initialized {
+		return
+	}
+	mut core_surface := s.core_surface
+	core_surface.deinit()
+}
+
 // needs_confirm_quit returns whether this surface needs confirmation before
 // quitting (e.g. because it has a running process). Delegates to the core
 // surface (ghostty: `v.core().needsConfirmQuit()`).
@@ -355,7 +366,9 @@ pub fn (mut self App) init() ! {
 // deinit cleans up the app, destroying all surfaces and freeing resources.
 pub fn (mut self App) deinit() {
 	// Clean up all our surfaces.
-	// TODO: Call deinit on each surface when surface lifecycle is implemented.
+	for mut surface in self.surfaces {
+		surface.deinit()
+	}
 	self.surfaces = SurfaceList([]&SurfaceRef{})
 
 	// Clean up our font group cache.

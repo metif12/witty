@@ -49,11 +49,9 @@ pub const artifact = Artifact.exe
 // avoid it in V code as much as possible.
 pub const bundle_id = 'com.mitchellh.ghostty'
 
-// True if runtime safety checks are enabled.
-// In V, this maps to whether we're in a debug build.
-// V doesn't expose build mode as a comptime constant, so we default to true
-// for safety. Override this for release builds.
-pub const is_debug = true
+// True if runtime safety checks are enabled. V exposes the active build mode
+// through the `debug` compile-time condition.
+pub const is_debug = $if debug { true } $else { false }
 
 // True if we should have "slow" runtime safety checks. The initial motivation
 // for this was terminal page/pagelist integrity checks. These were VERY

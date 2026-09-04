@@ -2516,6 +2516,9 @@ fn closing_action(action input.Action) bool {
 
 pub struct Surface {
 pub mut:
+	// True only after init has completed and this value owns its resources.
+	initialized bool
+
 	app        &App = unsafe { nil }
 	rt_app     &RuntimeApp = unsafe { nil }
 	rt_surface &RuntimeSurface = unsafe { nil }
@@ -2660,10 +2663,17 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 			title_value: self.config.title or { '' }
 		})!
 	}
+
+	self.initialized = true
 }
 
 // deinit cleans up the surface and all its resources.
 pub fn (mut self Surface) deinit() {
+	if !self.initialized {
+		return
+	}
+	self.initialized = false
+
 	// Stop renderer thread
 	self.renderer_thread.deinit()
 	self.renderer.deinit()
