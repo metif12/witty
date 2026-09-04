@@ -213,6 +213,40 @@ fn test_surface_mouse_buttons_use_canonical_enum_indices() {
 	assert surf.mouse.click_state[int(input.MouseButton.ten)] == .release
 }
 
+fn test_mouse_shift_capture_uses_terminal_override_then_config_default() {
+	mut surf := make_test_surface()
+	surf.config.mouse_shift_capture = .false_
+	surf.renderer_state.terminal_.flags.mouse_shift_capture = .null_
+	assert !surf.mouse_shift_capture(false)
+
+	surf.config.mouse_shift_capture = .true_
+	assert surf.mouse_shift_capture(false)
+
+	surf.renderer_state.terminal_.flags.mouse_shift_capture = .false_
+	assert !surf.mouse_shift_capture(false)
+	surf.config.mouse_shift_capture = .false_
+	surf.renderer_state.terminal_.flags.mouse_shift_capture = .true_
+	assert surf.mouse_shift_capture(false)
+
+	surf.config.mouse_shift_capture = .never
+	assert !surf.mouse_shift_capture(false)
+	surf.config.mouse_shift_capture = .always
+	surf.renderer_state.terminal_.flags.mouse_shift_capture = .false_
+	assert surf.mouse_shift_capture(false)
+}
+
+fn test_surface_pwd_returns_an_owned_copy() {
+	mut surf := make_test_surface()
+	surf.renderer_state.terminal_.set_pwd('/first')!
+	pwd := surf.pwd() or {
+		assert false, 'surface pwd was missing'
+		return
+	}
+	surf.renderer_state.terminal_.set_pwd('/second')!
+	assert pwd == '/first'
+	assert surf.pwd()? == '/second'
+}
+
 fn test_grid_size_basic() {
 	s := make_test_size()
 	g := s.grid()

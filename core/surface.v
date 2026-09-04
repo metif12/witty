@@ -3275,11 +3275,29 @@ pub fn (mut self Surface) update_config(config &Config) ! {
 
 // has_selection returns true if the terminal has a selection.
 pub fn (self &Surface) has_selection() bool {
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
+	defer {
+		if locked {
+			self.renderer_state.mutex.unlock()
+		}
+	}
 	return self.renderer_state.terminal_.screens.active.selection != none
 }
 
 // selection_string returns the selected text.
 pub fn (self &Surface) selection_string() ?string {
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
+	defer {
+		if locked {
+			self.renderer_state.mutex.unlock()
+		}
+	}
 	sel := self.renderer_state.terminal_.screens.active.selection or { return none }
 	text := self.renderer_state.terminal_.screens.active.selection_string(terminal.SelectionString{
 		sel: sel
@@ -3292,16 +3310,35 @@ pub fn (self &Surface) selection_string() ?string {
 
 // pwd returns the current working directory of the terminal.
 pub fn (self &Surface) pwd() ?string {
-	return self.renderer_state.terminal_.get_pwd()
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
+	defer {
+		if locked {
+			self.renderer_state.mutex.unlock()
+		}
+	}
+	pwd := self.renderer_state.terminal_.get_pwd() or { return none }
+	// Termio can replace the terminal-owned value immediately after the lock is
+	// released, so callers must receive an independent copy.
+	return pwd.clone()
 }
 
 // ime_point returns the x/y coordinate of where the IME keyboard should be rendered.
 pub fn (self &Surface) ime_point() IMEPos {
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
 	cursor := self.renderer_state.terminal_.screens.active.cursor
 	preedit_width := if p := self.renderer_state.preedit {
 		u32(p.width())
 	} else {
 		u32(0)
+	}
+	if locked {
+		self.renderer_state.mutex.unlock()
 	}
 
 	content_scale := self.rt_surface.get_content_scale() or {
@@ -5109,18 +5146,51 @@ fn utf8_encode(cp u32) []u8 {
 }
 
 fn (self &Surface) mouse_shift_capture(do_lock bool) bool {
-	return match self.config.mouse_shift_capture {
-		.never { false }
-		.always { true }
-		.false_ { false }
-		.true_ {
-			// Check terminal's mouse_shift_capture flag
-			self.renderer_state.terminal_.flags.mouse_shift_capture == .true_
+	// Handle the unconditional cases without taking the renderer lock.
+	match self.config.mouse_shift_capture {
+		.never {
+			return false
+		}
+		.always {
+			return true
+		}
+		.false_, .true_ {}
+	}
+
+	locked := do_lock && self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
+	defer {
+		if locked {
+			self.renderer_state.mutex.unlock()
 		}
 	}
+
+	// An explicit terminal request wins over the user's conditional default.
+	match self.renderer_state.terminal_.flags.mouse_shift_capture {
+		.false_ {
+			return false
+		}
+		.true_ {
+			return true
+		}
+		.null_ {}
+	}
+
+	return self.config.mouse_shift_capture == .true_
 }
 
 pub fn (mut self Surface) mouse_captured() bool {
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
+	defer {
+		if locked {
+			self.renderer_state.mutex.unlock()
+		}
+	}
 	return self.renderer_state.terminal_.flags.mouse_event != .none
 }
 
