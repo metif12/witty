@@ -75,6 +75,138 @@ pub fn (ctx Context) is_key_down(key Key) bool {
 	return false
 }
 
+pub fn (ctx Context) build_font_atlas() bool {
+	return false
+}
+
+pub fn (ctx Context) get_id(value string) u32 {
+	_ = value
+	return 0
+}
+
+pub fn (ctx Context) dock_node_exists(id u32) bool {
+	_ = id
+	return false
+}
+
+pub fn (ctx Context) dock_node_add(id u32) bool {
+	_ = id
+	return false
+}
+
+pub fn (ctx Context) dock_node_set_main_viewport_size(id u32) {
+	_ = id
+}
+
+pub fn (ctx Context) dock_window(name string, id u32) {
+	_ = name
+	_ = id
+}
+
+pub fn (ctx Context) dock_finish(id u32) {
+	_ = id
+}
+
+pub fn (ctx Context) dock_space_over_main_viewport(id u32) bool {
+	_ = id
+	return false
+}
+
+pub fn (ctx Context) begin_window(name string) bool {
+	_ = name
+	return false
+}
+
+pub fn (ctx Context) end_window() {}
+
+pub fn (ctx Context) set_window_focus(name string) {
+	_ = name
+}
+
+pub fn (ctx Context) text(value string) {
+	_ = value
+}
+
+pub fn (ctx Context) text_disabled(value string) {
+	_ = value
+}
+
+pub fn (ctx Context) text_colored(color Color, value string) {
+	_ = color
+	_ = value
+}
+
+pub fn (ctx Context) button(label string) bool {
+	_ = label
+	return false
+}
+
+pub fn (ctx Context) small_button(label string) bool {
+	_ = label
+	return false
+}
+
+pub fn (ctx Context) separator() {}
+
+pub fn (ctx Context) begin_table(id string, columns int, flags int) bool {
+	_ = id
+	_ = columns
+	_ = flags
+	return false
+}
+
+pub fn (ctx Context) end_table() {}
+
+pub fn (ctx Context) table_setup_scroll_freeze(columns int, rows int) {
+	_ = columns
+	_ = rows
+}
+
+pub fn (ctx Context) table_setup_column(label string, flags int, width f32) {
+	_ = label
+	_ = flags
+	_ = width
+}
+
+pub fn (ctx Context) table_headers_row() {}
+
+pub fn (ctx Context) table_next_row() {}
+
+pub fn (ctx Context) table_set_column(column int) {
+	_ = column
+}
+
+pub fn (ctx Context) table_set_bg_color(target int, color u32) {
+	_ = target
+	_ = color
+}
+
+pub fn (ctx Context) push_id(value voidptr) {
+	_ = value
+}
+
+pub fn (ctx Context) pop_id() {}
+
+pub fn (ctx Context) same_line() {}
+
+pub fn (ctx Context) new_line() {}
+
+pub fn (ctx Context) item_hovered() bool {
+	return false
+}
+
+pub fn (ctx Context) tooltip(value string) {
+	_ = value
+}
+
+pub fn (ctx Context) cursor_screen_y() f32 {
+	return 0
+}
+
+pub fn (ctx Context) mouse_y() f32 {
+	return 0
+}
+
 pub fn (ctx Context) metal_init(device voidptr) bool {
 	_ = device
 	return false

@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "dcimgui.h"
+#include "dcimgui_internal.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -127,6 +128,202 @@ static inline float witty_cimgui_delta_time(ImGuiContext* context) {
 static inline bool witty_cimgui_is_key_down(ImGuiContext* context, int key) {
     ImGui_SetCurrentContext(context);
     return ImGui_IsKeyDown(key);
+}
+
+static inline bool witty_cimgui_build_font_atlas(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    cImFontAtlasBuildMain(ImGui_GetIO()->Fonts);
+    return true;
+}
+
+static inline unsigned int witty_cimgui_get_id(ImGuiContext* context, const char* value) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_GetID(value);
+}
+
+static inline bool witty_cimgui_dock_node_exists(ImGuiContext* context, unsigned int id) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_DockBuilderGetNode(id) != NULL;
+}
+
+static inline bool witty_cimgui_dock_node_add(ImGuiContext* context, unsigned int id) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_DockBuilderAddNodeEx(id, ImGuiDockNodeFlags_DockSpace) == id;
+}
+
+static inline void witty_cimgui_dock_node_set_main_viewport_size(ImGuiContext* context, unsigned int id) {
+    ImGui_SetCurrentContext(context);
+    ImGui_DockBuilderSetNodeSize(id, ImGui_GetMainViewport()->Size);
+}
+
+static inline void witty_cimgui_dock_window(ImGuiContext* context, const char* name, unsigned int id) {
+    ImGui_SetCurrentContext(context);
+    ImGui_DockBuilderDockWindow(name, id);
+}
+
+static inline void witty_cimgui_dock_finish(ImGuiContext* context, unsigned int id) {
+    ImGui_SetCurrentContext(context);
+    ImGui_DockBuilderFinish(id);
+}
+
+static inline bool witty_cimgui_dock_space_over_main_viewport(ImGuiContext* context, unsigned int id) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_DockSpaceOverViewportEx(
+        id,
+        ImGui_GetMainViewport(),
+        ImGuiDockNodeFlags_PassthruCentralNode,
+        NULL
+    ) == id;
+}
+
+static inline bool witty_cimgui_begin_window(ImGuiContext* context, const char* name) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_Begin(name, NULL, ImGuiWindowFlags_NoFocusOnAppearing);
+}
+
+static inline void witty_cimgui_end_window(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_End();
+}
+
+static inline void witty_cimgui_set_window_focus(ImGuiContext* context, const char* name) {
+    ImGui_SetCurrentContext(context);
+    ImGui_SetWindowFocusStr(name);
+}
+
+static inline void witty_cimgui_text(ImGuiContext* context, const char* value) {
+    ImGui_SetCurrentContext(context);
+    ImGui_TextUnformatted(value);
+}
+
+static inline void witty_cimgui_text_disabled(ImGuiContext* context, const char* value) {
+    ImGui_SetCurrentContext(context);
+    ImGui_TextDisabledUnformatted(value);
+}
+
+static inline void witty_cimgui_text_colored(
+    ImGuiContext* context,
+    float r,
+    float g,
+    float b,
+    float a,
+    const char* value
+) {
+    ImGui_SetCurrentContext(context);
+    ImGui_TextColoredUnformatted((ImVec4){r, g, b, a}, value);
+}
+
+static inline bool witty_cimgui_button(ImGuiContext* context, const char* label) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_Button(label);
+}
+
+static inline bool witty_cimgui_small_button(ImGuiContext* context, const char* label) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_SmallButton(label);
+}
+
+static inline void witty_cimgui_separator(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_Separator();
+}
+
+static inline bool witty_cimgui_begin_table(
+    ImGuiContext* context,
+    const char* id,
+    int columns,
+    int flags
+) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_BeginTable(id, columns, flags);
+}
+
+static inline void witty_cimgui_end_table(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_EndTable();
+}
+
+static inline void witty_cimgui_table_setup_scroll_freeze(
+    ImGuiContext* context,
+    int columns,
+    int rows
+) {
+    ImGui_SetCurrentContext(context);
+    ImGui_TableSetupScrollFreeze(columns, rows);
+}
+
+static inline void witty_cimgui_table_setup_column(
+    ImGuiContext* context,
+    const char* label,
+    int flags,
+    float width
+) {
+    ImGui_SetCurrentContext(context);
+    ImGui_TableSetupColumnEx(label, flags, width, 0);
+}
+
+static inline void witty_cimgui_table_headers_row(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_TableHeadersRow();
+}
+
+static inline void witty_cimgui_table_next_row(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_TableNextRow();
+}
+
+static inline void witty_cimgui_table_set_column(ImGuiContext* context, int column) {
+    ImGui_SetCurrentContext(context);
+    (void)ImGui_TableSetColumnIndex(column);
+}
+
+static inline void witty_cimgui_table_set_bg_color(
+    ImGuiContext* context,
+    int target,
+    unsigned int color
+) {
+    ImGui_SetCurrentContext(context);
+    ImGui_TableSetBgColor(target, color, -1);
+}
+
+static inline void witty_cimgui_push_id_ptr(ImGuiContext* context, const void* value) {
+    ImGui_SetCurrentContext(context);
+    ImGui_PushIDPtr(value);
+}
+
+static inline void witty_cimgui_pop_id(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_PopID();
+}
+
+static inline void witty_cimgui_same_line(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_SameLine();
+}
+
+static inline void witty_cimgui_new_line(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    ImGui_NewLine();
+}
+
+static inline bool witty_cimgui_item_hovered(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_IsItemHovered(0);
+}
+
+static inline void witty_cimgui_tooltip(ImGuiContext* context, const char* value) {
+    ImGui_SetCurrentContext(context);
+    ImGui_SetTooltipUnformatted(value);
+}
+
+static inline float witty_cimgui_cursor_screen_y(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_GetCursorScreenPos().y;
+}
+
+static inline float witty_cimgui_mouse_y(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_GetMousePos().y;
 }
 
 #ifdef __APPLE__

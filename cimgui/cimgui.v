@@ -130,6 +130,21 @@ pub enum MouseButton {
 	middle
 }
 
+// Color is Dear ImGui's normalized RGBA color representation.
+pub struct Color {
+pub:
+	r f32
+	g f32
+	b f32
+	a f32 = 1.0
+}
+
+// These flag values are part of the pinned Dear ImGui 1.92.5 ABI. They are
+// named for the exact combinations used by Ghostty's key-stream inspector.
+pub const table_flags_key_stream = (1 << 0) | (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10) | (1 << 13) | (1 << 25)
+pub const table_column_width_stretch = 1 << 3
+pub const table_column_width_fixed = 1 << 4
+
 // Context owns one Dear ImGui context. Ghostty creates one context per
 // terminal inspector and always makes it current before touching its state.
 pub struct Context {

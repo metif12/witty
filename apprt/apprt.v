@@ -672,6 +672,15 @@ pub fn (mut s CoreSurface) deactivate_inspector() {
 	}
 }
 
+// render_inspector draws the core-owned inspector state into the Dear ImGui
+// context identified by context_handle.
+pub fn (mut s CoreSurface) render_inspector(context_handle voidptr) {
+	if !isnil(s.backend) && !isnil(context_handle)
+		&& g_core_bridge.surface_inspector_render != unsafe { nil } {
+		g_core_bridge.surface_inspector_render(s.backend, context_handle)
+	}
+}
+
 pub fn (s CoreSurface) key_event_is_binding(event voidptr) ?voidptr {
 	if !isnil(s.backend) && !isnil(event) && g_core_bridge.surface_key_binding != unsafe { nil } {
 		return g_core_bridge.surface_key_binding(s.backend, unsafe { &input.KeyEvent(event) })
@@ -864,6 +873,8 @@ pub type CoreSurfaceFontSizeFn = fn (voidptr, FontSize) !
 
 pub type CoreSurfaceKeyBindingFn = fn (voidptr, &input.KeyEvent) ?voidptr
 
+pub type CoreSurfaceInspectorRenderFn = fn (voidptr, voidptr)
+
 pub type CoreSurfaceDisplayIdFn = fn (voidptr, u32)
 
 pub type CoreSurfaceQuicklookFontFn = fn (voidptr) voidptr
@@ -875,55 +886,56 @@ pub type CoreSurfaceQuicklookSelectionFn = fn (voidptr, f64, f64) ?voidptr
 // the fallback implementation remains useful for isolated apprt tests.
 pub struct CoreBridge {
 pub:
-	app_create             CoreAppCreateFn = unsafe { nil }
-	app_destroy            CoreAppDestroyFn = unsafe { nil }
-	app_tick               CoreAppTickFn = unsafe { nil }
-	app_focus              CoreAppFocusFn = unsafe { nil }
-	app_key                CoreAppKeyFn = unsafe { nil }
-	app_key_is_binding     CoreAppKeyFn = unsafe { nil }
-	app_add_surface        CoreAppAddSurfaceFn = unsafe { nil }
-	app_delete_surface     CoreAppDeleteSurfaceFn = unsafe { nil }
-	app_needs_confirm      CoreAppNeedsConfirmFn = unsafe { nil }
-	app_color_scheme       CoreAppColorSchemeFn = unsafe { nil }
-	app_update_config      CoreAppUpdateConfigFn = unsafe { nil }
-	surface_init           CoreSurfaceInitFn = unsafe { nil }
-	surface_deinit         CoreSurfaceDeinitFn = unsafe { nil }
-	surface_snapshot       CoreSurfaceSnapshotFn = unsafe { nil }
-	surface_key            CoreSurfaceKeyFn = unsafe { nil }
-	surface_refresh        CoreSurfaceVoidFn = unsafe { nil }
-	surface_draw           CoreSurfaceVoidFn = unsafe { nil }
-	surface_content_scale  CoreSurfaceContentScaleFn = unsafe { nil }
-	surface_size           CoreSurfaceSizeFn = unsafe { nil }
-	surface_color_scheme   CoreSurfaceColorSchemeFn = unsafe { nil }
-	surface_mouse_button   CoreSurfaceMouseButtonFn = unsafe { nil }
-	surface_mouse_pressure CoreSurfaceMousePressureFn = unsafe { nil }
-	surface_scroll         CoreSurfaceScrollFn = unsafe { nil }
-	surface_cursor_pos     CoreSurfaceCursorPosFn = unsafe { nil }
-	surface_preedit        CoreSurfacePreeditFn = unsafe { nil }
-	surface_text           CoreSurfaceTextFn = unsafe { nil }
-	surface_focus          CoreSurfaceBoolFn = unsafe { nil }
-	surface_occlusion      CoreSurfaceBoolFn = unsafe { nil }
-	surface_close          CoreSurfaceCloseFn = unsafe { nil }
-	surface_has_selection  CoreSurfaceBoolQueryFn = unsafe { nil }
-	surface_dump_text      CoreSurfaceDumpTextFn = unsafe { nil }
-	surface_active_sel     CoreSurfaceSelectionFn = unsafe { nil }
-	surface_resolve_sel    CoreSurfaceResolveSelectionFn = unsafe { nil }
-	surface_lock           CoreSurfaceLockFn = unsafe { nil }
-	surface_unlock         CoreSurfaceLockFn = unsafe { nil }
-	surface_mouse_captured CoreSurfaceBoolQueryFn = unsafe { nil }
-	surface_binding        CoreSurfaceBindingFn = unsafe { nil }
-	surface_update_config  CoreSurfaceUpdateConfigFn = unsafe { nil }
-	surface_needs_confirm  CoreSurfaceBoolQueryFn = unsafe { nil }
-	surface_ime            CoreSurfaceIMEFn = unsafe { nil }
-	surface_pwd            CoreSurfacePwdFn = unsafe { nil }
-	surface_clipboard      CoreSurfaceClipboardFn = unsafe { nil }
-	surface_font_size      CoreSurfaceFontSizeFn = unsafe { nil }
-	surface_inspector_on   CoreSurfaceVoidFn = unsafe { nil }
-	surface_inspector_off  CoreSurfaceCloseFn = unsafe { nil }
-	surface_key_binding    CoreSurfaceKeyBindingFn = unsafe { nil }
-	surface_display_id     CoreSurfaceDisplayIdFn = unsafe { nil }
-	surface_quicklook_font CoreSurfaceQuicklookFontFn = unsafe { nil }
-	surface_quicklook_sel  CoreSurfaceQuicklookSelectionFn = unsafe { nil }
+	app_create               CoreAppCreateFn = unsafe { nil }
+	app_destroy              CoreAppDestroyFn = unsafe { nil }
+	app_tick                 CoreAppTickFn = unsafe { nil }
+	app_focus                CoreAppFocusFn = unsafe { nil }
+	app_key                  CoreAppKeyFn = unsafe { nil }
+	app_key_is_binding       CoreAppKeyFn = unsafe { nil }
+	app_add_surface          CoreAppAddSurfaceFn = unsafe { nil }
+	app_delete_surface       CoreAppDeleteSurfaceFn = unsafe { nil }
+	app_needs_confirm        CoreAppNeedsConfirmFn = unsafe { nil }
+	app_color_scheme         CoreAppColorSchemeFn = unsafe { nil }
+	app_update_config        CoreAppUpdateConfigFn = unsafe { nil }
+	surface_init             CoreSurfaceInitFn = unsafe { nil }
+	surface_deinit           CoreSurfaceDeinitFn = unsafe { nil }
+	surface_snapshot         CoreSurfaceSnapshotFn = unsafe { nil }
+	surface_key              CoreSurfaceKeyFn = unsafe { nil }
+	surface_refresh          CoreSurfaceVoidFn = unsafe { nil }
+	surface_draw             CoreSurfaceVoidFn = unsafe { nil }
+	surface_content_scale    CoreSurfaceContentScaleFn = unsafe { nil }
+	surface_size             CoreSurfaceSizeFn = unsafe { nil }
+	surface_color_scheme     CoreSurfaceColorSchemeFn = unsafe { nil }
+	surface_mouse_button     CoreSurfaceMouseButtonFn = unsafe { nil }
+	surface_mouse_pressure   CoreSurfaceMousePressureFn = unsafe { nil }
+	surface_scroll           CoreSurfaceScrollFn = unsafe { nil }
+	surface_cursor_pos       CoreSurfaceCursorPosFn = unsafe { nil }
+	surface_preedit          CoreSurfacePreeditFn = unsafe { nil }
+	surface_text             CoreSurfaceTextFn = unsafe { nil }
+	surface_focus            CoreSurfaceBoolFn = unsafe { nil }
+	surface_occlusion        CoreSurfaceBoolFn = unsafe { nil }
+	surface_close            CoreSurfaceCloseFn = unsafe { nil }
+	surface_has_selection    CoreSurfaceBoolQueryFn = unsafe { nil }
+	surface_dump_text        CoreSurfaceDumpTextFn = unsafe { nil }
+	surface_active_sel       CoreSurfaceSelectionFn = unsafe { nil }
+	surface_resolve_sel      CoreSurfaceResolveSelectionFn = unsafe { nil }
+	surface_lock             CoreSurfaceLockFn = unsafe { nil }
+	surface_unlock           CoreSurfaceLockFn = unsafe { nil }
+	surface_mouse_captured   CoreSurfaceBoolQueryFn = unsafe { nil }
+	surface_binding          CoreSurfaceBindingFn = unsafe { nil }
+	surface_update_config    CoreSurfaceUpdateConfigFn = unsafe { nil }
+	surface_needs_confirm    CoreSurfaceBoolQueryFn = unsafe { nil }
+	surface_ime              CoreSurfaceIMEFn = unsafe { nil }
+	surface_pwd              CoreSurfacePwdFn = unsafe { nil }
+	surface_clipboard        CoreSurfaceClipboardFn = unsafe { nil }
+	surface_font_size        CoreSurfaceFontSizeFn = unsafe { nil }
+	surface_inspector_on     CoreSurfaceVoidFn = unsafe { nil }
+	surface_inspector_off    CoreSurfaceCloseFn = unsafe { nil }
+	surface_inspector_render CoreSurfaceInspectorRenderFn = unsafe { nil }
+	surface_key_binding      CoreSurfaceKeyBindingFn = unsafe { nil }
+	surface_display_id       CoreSurfaceDisplayIdFn = unsafe { nil }
+	surface_quicklook_font   CoreSurfaceQuicklookFontFn = unsafe { nil }
+	surface_quicklook_sel    CoreSurfaceQuicklookSelectionFn = unsafe { nil }
 }
 
 __global g_core_bridge CoreBridge

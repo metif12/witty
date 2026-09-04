@@ -87,6 +87,7 @@ pub fn install_embedded_bridge() {
 		surface_font_size: bridge_surface_font_size
 		surface_inspector_on: bridge_surface_inspector_on
 		surface_inspector_off: bridge_surface_inspector_off
+		surface_inspector_render: bridge_surface_inspector_render
 		surface_key_binding: bridge_surface_key_binding
 		surface_display_id: bridge_surface_display_id
 		surface_quicklook_font: bridge_surface_quicklook_font
@@ -890,6 +891,20 @@ fn bridge_surface_inspector_on(ptr voidptr) ! {
 fn bridge_surface_inspector_off(ptr voidptr) {
 	mut self := unsafe { &EmbeddedSurfaceCore(ptr) }
 	self.surface.deactivate_inspector()
+}
+
+fn bridge_surface_inspector_render(ptr voidptr, context_handle voidptr) {
+	mut self := unsafe { &EmbeddedSurfaceCore(ptr) }
+	mut insp := self.surface.inspector or { return }
+	locked := self.surface.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.surface.renderer_state.mutex.lock()
+	}
+	insp.render(context_handle)
+	if locked {
+		self.surface.renderer_state.mutex.unlock()
+	}
+	self.surface.renderer_thread.wakeup.notify() or {}
 }
 
 fn bridge_surface_key_binding(ptr voidptr, event &input.KeyEvent) ?voidptr {

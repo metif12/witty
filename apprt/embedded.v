@@ -1030,9 +1030,7 @@ pub fn (mut self TerminalInspector) render_metal(command_buffer voidptr, desc vo
 	for _ in 0 .. 2 {
 		self.context.metal_new_frame(desc)
 		self.new_frame()!
-
-		// The terminal inspector builds its widgets between NewFrame and Render.
-		// Core inspection data remains owned by the core surface.
+		self.surface.core_surface.render_inspector(self.context.handle)
 		self.context.render_frame()
 	}
 

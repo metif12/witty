@@ -1,5 +1,6 @@
 module inspector
 
+import cimgui
 import input
 import encoding.utf8.validate
 
@@ -121,4 +122,264 @@ pub fn (mut self Inspector) record_key_event(event KeyEvent) bool {
 	}
 	self.key_events << event
 	return true
+}
+
+// render draws the inspector UI into the active Dear ImGui frame. The context
+// handle is passed across the apprt/core boundary to avoid reversing their
+// dependency direction.
+pub fn (mut self Inspector) render(context_handle voidptr) {
+	if isnil(context_handle) {
+		return
+	}
+	context := cimgui.Context{ handle: context_handle }
+	first_render := create_main_dockspace(context)
+
+	open := context.begin_window('Keyboard')
+	self.draw_key_stream(context, open)
+	context.end_window()
+
+	if first_render {
+		// Ghostty focuses the terminal panel when the complete dockspace is first
+		// built. Keeping that exact target also preserves focus when the remaining
+		// panels are drawn later in this frame.
+		context.set_window_focus('Terminal')
+	}
+}
+
+fn create_main_dockspace(context cimgui.Context) bool {
+	dockspace_id := context.get_id('Main Dockspace')
+	setup := !context.dock_node_exists(dockspace_id)
+	if setup {
+		assert context.dock_node_add(dockspace_id)
+		context.dock_node_set_main_viewport_size(dockspace_id)
+		for name in ['Dear ImGui Demo', 'Terminal', 'Surface', 'Keyboard', 'Terminal IO', 'Renderer'] {
+			context.dock_window(name, dockspace_id)
+		}
+		context.dock_finish(dockspace_id)
+	}
+	assert context.dock_space_over_main_viewport(dockspace_id)
+	return setup
+}
+
+fn (mut self Inspector) draw_key_stream(context cimgui.Context, open bool) {
+	if !open {
+		return
+	}
+	if self.key_events.len == 0 {
+		context.text('No recorded key events. Press a key with the terminal focused to record it.')
+		return
+	}
+
+	if context.button('Clear') {
+		self.clear_key_events()
+	}
+	context.separator()
+
+	if !context.begin_table('table_key_events', 6, cimgui.table_flags_key_stream) {
+		return
+	}
+	defer {
+		context.end_table()
+	}
+	context.table_setup_scroll_freeze(0, 1)
+	context.table_setup_column('Action', cimgui.table_column_width_fixed, 80)
+	context.table_setup_column('Key', cimgui.table_column_width_fixed, 160)
+	context.table_setup_column('Mods', cimgui.table_column_width_fixed, 150)
+	context.table_setup_column('UTF-8', cimgui.table_column_width_fixed, 80)
+	context.table_setup_column('PTY Encoding', cimgui.table_column_width_stretch, 0)
+	context.table_setup_column('Binding', cimgui.table_column_width_stretch, 0)
+	context.table_headers_row()
+
+	for offset in 0 .. self.key_events.len {
+		index := self.key_events.len - offset - 1
+		mut event := &self.key_events[index]
+		context.push_id(voidptr(event))
+
+		context.table_next_row()
+		row_min_y := context.cursor_screen_y()
+		context.table_set_bg_color(1, action_color(event.event.action))
+
+		context.table_set_column(0)
+		context.text_colored(action_text_color(event.event.action), event.event.action.str())
+
+		context.table_set_column(1)
+		key_name := if event.event.key == .unidentified && event.event.utf8.len > 0 {
+			event.event.utf8
+		} else {
+			event.event.key.str()
+		}
+		context.text_colored(rgba_color(key_color(event.event.key)), key_name)
+		if event.event.composing {
+			context.same_line()
+			context.text_colored(cimgui.Color{ r: 1.0, g: 0.6, b: 0.0 }, '*')
+			if context.item_hovered() {
+				context.tooltip('Composing (dead key)')
+			}
+		}
+
+		context.table_set_column(2)
+		draw_modifiers(context, event.event.mods)
+
+		context.table_set_column(3)
+		if event.event.utf8.len == 0 {
+			context.text_disabled('-')
+		} else {
+			context.text(event.utf8_table_codepoints())
+		}
+
+		context.table_set_column(4)
+		if event.pty.len == 0 {
+			context.text_disabled('-')
+		} else {
+			context.text(event.pty_text())
+		}
+
+		context.table_set_column(5)
+		if event.binding.len == 0 {
+			context.text_disabled('-')
+		} else {
+			context.text(event.binding.map(it.tag.str()).join(', '))
+		}
+
+		row_max_y := context.cursor_screen_y()
+		mouse_y := context.mouse_y()
+		if mouse_y >= row_min_y && mouse_y < row_max_y {
+			context.table_set_bg_color(2, 0x1affffff)
+		}
+		context.pop_id()
+	}
+}
+
+fn draw_modifiers(context cimgui.Context, mods input.Mods) {
+	if mods.empty() {
+		context.text_disabled('-')
+		return
+	}
+	mut hovered := false
+	if mods.shift {
+		_ = context.small_button('S')
+		hovered = hovered || context.item_hovered()
+		context.same_line()
+	}
+	if mods.ctrl {
+		_ = context.small_button('C')
+		hovered = hovered || context.item_hovered()
+		context.same_line()
+	}
+	if mods.alt {
+		_ = context.small_button('A')
+		hovered = hovered || context.item_hovered()
+		context.same_line()
+	}
+	if mods.super_ {
+		_ = context.small_button('M')
+		hovered = hovered || context.item_hovered()
+		context.same_line()
+	}
+	context.new_line()
+	if hovered {
+		context.tooltip(modifiers_tooltip(mods))
+	}
+}
+
+fn modifiers_tooltip(mods input.Mods) string {
+	mut names := []string{cap: 4}
+	if mods.shift {
+		names << 'Shift'
+	}
+	if mods.ctrl {
+		names << 'Ctrl'
+	}
+	if mods.alt {
+		names << 'Alt'
+	}
+	if mods.super_ {
+		names << 'Super'
+	}
+	return names.join('+')
+}
+
+fn action_color(action input.KeyAction) u32 {
+	return match action {
+		.press { 0x1a4a6f4a }
+		.release { 0x1a6a5a5a }
+		.repeat { 0x1a4a5a6f }
+	}
+}
+
+fn action_text_color(action input.KeyAction) cimgui.Color {
+	return match action {
+		.press { cimgui.Color{ r: 0.4, g: 1.0, b: 0.4 } }
+		.release { cimgui.Color{ r: 0.6, g: 0.6, b: 1.0 } }
+		.repeat { cimgui.Color{ r: 1.0, g: 1.0, b: 0.4 } }
+	}
+}
+
+fn key_color(key input.Key) u32 {
+	hue := f32(u32(key) * 47) / 256.0
+	return hsv_to_rgba(hue, 0.5, 0.9, 1.0)
+}
+
+fn hsv_to_rgba(h f32, s f32, v f32, a f32) u32 {
+	i := u32(h * 6.0)
+	f := h * 6.0 - f32(i)
+	p := v * (1.0 - s)
+	q := v * (1.0 - f * s)
+	t := v * (1.0 - (1.0 - f) * s)
+	mut r := f32(0)
+	mut g := f32(0)
+	mut b := f32(0)
+	match i % 6 {
+		0 {
+			r = v
+			g = t
+			b = p
+		}
+		1 {
+			r = q
+			g = v
+			b = p
+		}
+		2 {
+			r = p
+			g = v
+			b = t
+		}
+		3 {
+			r = p
+			g = q
+			b = v
+		}
+		4 {
+			r = t
+			g = p
+			b = v
+		}
+		else {
+			r = v
+			g = p
+			b = q
+		}
+	}
+	return (u32(a * 255.0) << 24) | (u32(b * 255.0) << 16) | (u32(g * 255.0) << 8) | u32(r * 255.0)
+}
+
+fn rgba_color(value u32) cimgui.Color {
+	return cimgui.Color{
+		r: f32(value & 0xff) / 255.0
+		g: f32((value >> 8) & 0xff) / 255.0
+		b: f32((value >> 16) & 0xff) / 255.0
+		a: f32((value >> 24) & 0xff) / 255.0
+	}
+}
+
+fn (event &KeyEvent) utf8_table_codepoints() string {
+	if !validate.utf8_string(event.event.utf8) {
+		return '?'
+	}
+	mut result := ''
+	for codepoint in event.event.utf8.runes() {
+		result += 'U+${u32(codepoint):X} '
+	}
+	return result
 }
