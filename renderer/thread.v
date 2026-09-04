@@ -180,10 +180,13 @@ module renderer
 // --- Original Ghostty Comments End: src/renderer/Thread.zig
 
 import configpkg
+import sync
+import time
 
 // Constants for renderer thread timing.
 const draw_interval = 8 // 120 FPS (milliseconds)
 const cursor_blink_interval_ms = 600 // milliseconds
+const renderer_mailbox_capacity = 64
 
 // ThreadDerivedConfig holds configuration derived from the main config
 // that is needed by the renderer thread.
@@ -257,30 +260,62 @@ pub mut:
 	// we track the logical active state here to faithfully reproduce the
 	// focus-handler start/stop logic.
 	cursor_blink_active bool
+
+	// Monotonic deadlines for the two periodic xev timers used by Ghostty.
+	// V doesn't provide xev, so the event semaphore below drives an equivalent
+	// single-threaded loop and these fields preserve the timer semantics.
+	next_draw_at         u64
+	next_cursor_blink_at u64
+
+	// Cross-thread event state. Wakeups coalesce, draw-now requests do not,
+	// matching the two separate xev.Async handles in Ghostty.
+	event              &sync.Semaphore = unsafe { nil }
+	event_mutex        &sync.Mutex = unsafe { nil }
+	wakeup_requested   bool
+	draw_now_requested u32
+	stop_requested     bool
 }
 
 // The type used for sending messages to the renderer thread.
 pub struct RendererMailbox {
 pub mut:
 	queue []RendererMessage
+	mutex &sync.Mutex = unsafe { nil }
 }
 
 pub fn RendererMailbox.create() &RendererMailbox {
-	return &RendererMailbox{}
+	return &RendererMailbox{
+		queue: []RendererMessage{cap: renderer_mailbox_capacity}
+		mutex: sync.new_mutex()
+	}
 }
 
 pub fn (mut self RendererMailbox) destroy() {
+	self.mutex.lock()
 	self.queue.clear()
+	self.mutex.unlock()
+	self.mutex.destroy()
 }
 
 // Push a message to the mailbox.
 pub fn (mut self RendererMailbox) push(msg RendererMessage) int {
+	self.mutex.lock()
+	defer {
+		self.mutex.unlock()
+	}
+	if self.queue.len >= renderer_mailbox_capacity {
+		return 0
+	}
 	self.queue << msg
 	return 1
 }
 
 // Pop a message from the mailbox.
 pub fn (mut self RendererMailbox) pop() ?RendererMessage {
+	self.mutex.lock()
+	defer {
+		self.mutex.unlock()
+	}
 	if self.queue.len == 0 {
 		return none
 	}
@@ -299,6 +334,8 @@ pub fn RendererThread.init(config &configpkg.Config, renderer_impl &Renderer, st
 		renderer: unsafe { renderer_impl }
 		state: unsafe { state }
 		mailbox: mailbox
+		event: sync.new_semaphore()
+		event_mutex: sync.new_mutex()
 	}
 }
 
@@ -306,62 +343,93 @@ pub fn RendererThread.init(config &configpkg.Config, renderer_impl &Renderer, st
 pub fn (mut self RendererThread) deinit() {
 	unsafe {
 		self.mailbox.destroy()
+		self.event.destroy()
+		self.event_mutex.destroy()
 	}
 }
 
 // The main entrypoint for the thread.
 pub fn (mut self RendererThread) thread_main() {
-	// XTODO: Thread main loop requires xev event loop integration.
-	// The loop should:
-	// 1. Start async handlers (wakeup, stop, draw_now)
-	// 2. Start render timer (8ms interval = 120 FPS)
-	// 3. Start cursor blink timer (600ms interval)
-	// 4. Start draw timer if animations are enabled
-	// 5. Run the event loop until stopped
 	self.thread_main_inner() or {}
 }
 
 fn (mut self RendererThread) thread_main_inner() ! {
-	// Start blinking the cursor
+	// Start blinking the cursor and arm the animation timer exactly as the
+	// xev-backed renderer thread does.
+	now := time.sys_mono_now()
 	self.flags.cursor_blink_visible = true
 	self.cursor_blink_active = true
+	self.next_cursor_blink_at = now + cursor_blink_interval()
 
-	// Sync draw timer
 	self.sync_draw_timer()
 
-	// Send an initial wakeup so that we render right away
-	self.drain_mailbox()!
+	// Ghostty queues an initial async wakeup so the first iteration drains
+	// messages and renders immediately.
+	self.request_wakeup()
 
-	// Render immediately
-	self.render_callback()
+	for {
+		timeout := self.next_timer_timeout(time.sys_mono_now())
+		if timeout < 0 {
+			self.event.wait()
+		} else if timeout > 0 {
+			_ = self.event.timed_wait(timeout)
+		}
+
+		stop, wakeup, draw_now_count := self.take_pending_events()
+		if stop {
+			break
+		}
+		if wakeup {
+			self.drain_mailbox()!
+			self.render_callback()
+		}
+		for _ in 0 .. draw_now_count {
+			self.draw_frame(true)
+		}
+
+		current := time.sys_mono_now()
+		if self.cursor_blink_active && current >= self.next_cursor_blink_at {
+			self.next_cursor_blink_at = current + cursor_blink_interval()
+			self.cursor_timer_callback()
+		}
+		if self.draw_active && current >= self.next_draw_at {
+			self.next_draw_at = current + draw_interval_ns()
+			self.draw_frame(false)
+		}
+	}
+
+	self.draw_active = false
+	self.cursor_blink_active = false
 }
 
 // Sync the draw timer state based on configuration and focus.
 fn (mut self RendererThread) sync_draw_timer() {
+	was_active := self.draw_active
+	mut active := false
+
 	// If our renderer supports animations and has them, then we
 	// always have a draw timer.
 	if self.renderer.has_animations() {
-		self.draw_active = true
-		return
+		active = true
 	}
 
 	// If our config says to always animate, we do so.
-	match self.config.custom_shader_animation {
-		.always {
-			self.draw_active = true
-			return
-		}
-		.true_ {
-			if self.flags.focused {
-				self.draw_active = true
-				return
+	if !active {
+		match self.config.custom_shader_animation {
+			.always {
+				active = true
 			}
+			.true_ {
+				active = self.flags.focused
+			}
+			.false_ {}
 		}
-		.false_ {}
 	}
 
-	// We're skipping the draw timer.
-	self.draw_active = false
+	self.draw_active = active
+	if active && !was_active {
+		self.next_draw_at = time.sys_mono_now() + draw_interval_ns()
+	}
 }
 
 // Drain the mailbox.
@@ -394,9 +462,6 @@ fn (mut self RendererThread) drain_mailbox() ! {
 					self.sync_draw_timer()
 
 					if !msg.focused {
-						// If we're not focused, then we stop the cursor blink.
-						// The xev timer cancel is a boundary; here we just mark
-						// the blink timer as inactive so it stops toggling.
 						if self.cursor_blink_active {
 							self.cursor_blink_active = false
 						}
@@ -406,17 +471,15 @@ fn (mut self RendererThread) drain_mailbox() ! {
 						if !self.cursor_blink_active {
 							self.flags.cursor_blink_visible = true
 							self.cursor_blink_active = true
+							self.next_cursor_blink_at = time.sys_mono_now() + cursor_blink_interval()
 						}
 					}
 				}
 			}
 			ResetCursorBlinkMessage {
 				self.flags.cursor_blink_visible = true
-				// If the blink timer is active, reset it so the cursor stays
-				// visible for a full interval after the reset.
 				if self.cursor_blink_active {
-					// The xev timer reset is a boundary; the logical effect is
-					// that cursor_blink_visible is now true (set above).
+					self.next_cursor_blink_at = time.sys_mono_now() + cursor_blink_interval()
 				}
 			}
 			FontGridMessage {
@@ -486,9 +549,7 @@ fn (mut self RendererThread) render_callback() {
 }
 
 // Cursor blink timer callback. This is fired by the blink timer on each
-// interval. It toggles the cursor's visibility, wakes up the renderer so
-// the change is drawn, and (in Ghostty) re-arms the timer. The xev timer
-// re-arm is a boundary; here we just perform the toggle + wakeup.
+// interval. It toggles the cursor's visibility and wakes up the renderer.
 fn (mut self RendererThread) cursor_timer_callback() {
 	// If the blink timer isn't active (e.g. we lost focus), do nothing.
 	if !self.cursor_blink_active {
@@ -499,17 +560,83 @@ fn (mut self RendererThread) cursor_timer_callback() {
 	self.flags.cursor_blink_visible = !self.flags.cursor_blink_visible
 
 	// Wake up the renderer so it can redraw with the new blink state.
-	self.wakeup() or {}
+	self.request_wakeup()
 }
 
-// Wake up the renderer thread to force a render. The xev async wakeup is
-// a boundary; here we drain the mailbox and render immediately.
-fn (mut self RendererThread) wakeup() ! {
-	self.drain_mailbox()!
-	self.render_callback()
+// send publishes a mailbox message and wakes the render loop. A full mailbox
+// is reported to the producer, matching Ghostty's bounded BlockingQueue.
+pub fn (mut self RendererThread) send(msg RendererMessage) bool {
+	if self.mailbox.push(msg) == 0 {
+		return false
+	}
+	self.request_wakeup()
+	return true
 }
 
-// Returns the interval for the blinking cursor in milliseconds.
+// wakeup coalesces frame rebuilds until the render loop observes the request.
+pub fn (mut self RendererThread) wakeup() {
+	self.request_wakeup()
+}
+
+// draw_now queues a draw that does not rebuild terminal frame data.
+pub fn (mut self RendererThread) draw_now() {
+	self.event_mutex.lock()
+	self.draw_now_requested++
+	self.event_mutex.unlock()
+	self.event.post()
+}
+
+// stop ends the render loop on its next iteration.
+pub fn (mut self RendererThread) stop() {
+	self.event_mutex.lock()
+	self.stop_requested = true
+	self.event_mutex.unlock()
+	self.event.post()
+}
+
+fn (mut self RendererThread) request_wakeup() {
+	self.event_mutex.lock()
+	should_post := !self.wakeup_requested
+	self.wakeup_requested = true
+	self.event_mutex.unlock()
+	if should_post {
+		self.event.post()
+	}
+}
+
+fn (mut self RendererThread) take_pending_events() (bool, bool, u32) {
+	self.event_mutex.lock()
+	stop := self.stop_requested
+	wakeup := self.wakeup_requested
+	draw_now_count := self.draw_now_requested
+	self.wakeup_requested = false
+	self.draw_now_requested = 0
+	self.event_mutex.unlock()
+	return stop, wakeup, draw_now_count
+}
+
+fn (self &RendererThread) next_timer_timeout(now u64) i64 {
+	mut deadline := u64(0)
+	if self.cursor_blink_active {
+		deadline = self.next_cursor_blink_at
+	}
+	if self.draw_active && (deadline == 0 || self.next_draw_at < deadline) {
+		deadline = self.next_draw_at
+	}
+	if deadline == 0 {
+		return -1
+	}
+	if deadline <= now {
+		return 0
+	}
+	return i64(deadline - now)
+}
+
+// Returns the interval for the blinking cursor in nanoseconds.
 fn cursor_blink_interval() u64 {
-	return cursor_blink_interval_ms
+	return cursor_blink_interval_ms * u64(time.millisecond)
+}
+
+fn draw_interval_ns() u64 {
+	return draw_interval * u64(time.millisecond)
 }
