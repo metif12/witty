@@ -9059,7 +9059,13 @@ fn preferred_xdg_config_path() string {
 }
 
 fn app_support_config_path(name string) string {
-	return os.join_path(os.home_dir(), 'Library', 'Application Support', 'com.mitchellh.ghostty', name)
+	$if macos {
+		return internal_os.app_support_dir(name) or {
+			os.join_path(os.home_dir(), 'Library', 'Application Support', 'com.mitchellh.ghostty', name)
+		}
+	} $else {
+		return os.join_path(os.home_dir(), 'Library', 'Application Support', 'com.mitchellh.ghostty', name)
+	}
 }
 
 fn default_file_paths() []string {

@@ -38,6 +38,61 @@ typedef struct witty_metal_vertex_attribute {
 
 typedef void (*witty_metal_layer_display_callback)(void*);
 
+typedef struct witty_ns_operating_system_version {
+	long long major;
+	long long minor;
+	long long patch;
+} witty_ns_operating_system_version;
+
+static inline bool witty_macos_is_at_least_version(long long major, long long minor, long long patch) {
+	Class cls = objc_getClass("NSProcessInfo");
+	if (!cls) return false;
+	id info = ((id (*)(id, SEL))objc_msgSend)((id)cls, sel_registerName("processInfo"));
+	if (!info) return false;
+	witty_ns_operating_system_version version = { major, minor, patch };
+	return ((bool (*)(id, SEL, witty_ns_operating_system_version))objc_msgSend)(
+		info,
+		sel_registerName("isOperatingSystemAtLeastVersion:"),
+		version
+	);
+}
+
+// Returns an owned UTF-8 copy of NSFileManager's user-domain directory path.
+// The caller must release it with free().
+static inline char* witty_macos_user_directory(unsigned long directory) {
+	Class pool_cls = objc_getClass("NSAutoreleasePool");
+	id pool = pool_cls
+		? ((id (*)(id, SEL))objc_msgSend)(
+			((id (*)(id, SEL))objc_msgSend)((id)pool_cls, sel_registerName("alloc")),
+			sel_registerName("init")
+		)
+		: nil;
+	Class manager_cls = objc_getClass("NSFileManager");
+	id manager = manager_cls
+		? ((id (*)(id, SEL))objc_msgSend)((id)manager_cls, sel_registerName("defaultManager"))
+		: nil;
+	id url = manager
+		? ((id (*)(id, SEL, unsigned long, unsigned long, id, bool, id*))objc_msgSend)(
+			manager,
+			sel_registerName("URLForDirectory:inDomain:appropriateForURL:create:error:"),
+			directory,
+			1ul,
+			nil,
+			true,
+			nil
+		)
+		: nil;
+	id path = url
+		? ((id (*)(id, SEL))objc_msgSend)(url, sel_registerName("path"))
+		: nil;
+	const char* utf8 = path
+		? ((const char* (*)(id, SEL))objc_msgSend)(path, sel_registerName("UTF8String"))
+		: NULL;
+	char* result = utf8 ? strdup(utf8) : NULL;
+	if (pool) ((void (*)(id, SEL))objc_msgSend)(pool, sel_registerName("drain"));
+	return result;
+}
+
 // Private CoreGraphics APIs used by Terminal.app and other terminals to set
 // the blur radius behind a translucent NSWindow.
 extern void* CGSDefaultConnectionForThread(void);

@@ -217,6 +217,10 @@ fn C.witty_metal_iosurface_layer_set_surface_sync(layer voidptr, surface voidptr
 
 fn C.witty_macos_is_main_thread() bool
 
+fn C.witty_macos_is_at_least_version(major i64, minor i64, patch i64) bool
+
+fn C.witty_macos_user_directory(directory u64) &char
+
 fn C.witty_macos_dispatch_main(fnptr voidptr, ctx voidptr)
 
 fn C.witty_macos_string_task_new(view voidptr, text &char) &C.witty_macos_string_task
@@ -581,6 +585,22 @@ pub fn home_directory_for_current_user() ?string {
 		return none
 	}
 	return objc_utf8_string(home_path)
+}
+
+// is_at_least_version checks the running macOS version through NSProcessInfo.
+pub fn is_at_least_version(major i64, minor i64, patch i64) bool {
+	return C.witty_macos_is_at_least_version(major, minor, patch)
+}
+
+// user_directory returns an NSSearchPathDirectory in the user domain. The
+// Foundation lookup also creates the base directory, matching URLForDirectory.
+pub fn user_directory(directory u64) ?string {
+	path := C.witty_macos_user_directory(directory)
+	if path == unsafe { nil } {
+		return none
+	}
+	defer { C.free(path) }
+	return unsafe { path.vstring().clone() }
 }
 
 // SystemLocale contains the language and country components reported by

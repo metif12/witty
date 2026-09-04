@@ -180,6 +180,7 @@ module renderer
 // --- Original Ghostty Comments End: src/renderer/Thread.zig
 
 import configpkg
+import internal_os
 import sync
 import time
 
@@ -403,6 +404,11 @@ pub fn (mut self RendererThread) thread_main() {
 }
 
 fn (mut self RendererThread) thread_main_inner() ! {
+	$if macos {
+		internal_os.set_thread_name('renderer')
+		self.set_qos_class()
+	}
+
 	// Run the renderer lifecycle hooks on the renderer thread. The loop hook
 	// installs platform event sources such as macOS CVDisplayLink.
 	self.renderer.loop_enter(self)!
@@ -503,6 +509,9 @@ fn (mut self RendererThread) drain_mailbox() ! {
 			VisibleMessage {
 				if self.flags.visible != msg.visible {
 					self.flags.visible = msg.visible
+					$if macos {
+						self.set_qos_class()
+					}
 					if msg.visible {
 						self.draw_frame(false)
 					}
@@ -514,6 +523,9 @@ fn (mut self RendererThread) drain_mailbox() ! {
 				if self.flags.focused != msg.focused {
 					// Set our state
 					self.flags.focused = msg.focused
+					$if macos {
+						self.set_qos_class()
+					}
 
 					// Set it on the renderer
 					self.renderer.set_focus(msg.focused)!
@@ -578,6 +590,21 @@ fn (mut self RendererThread) drain_mailbox() ! {
 				self.renderer.set_macos_display_id(msg.display_id)
 			}
 		}
+	}
+}
+
+// Apply the same visibility/focus priority policy as Ghostty's renderer
+// thread. This only exists on Darwin at compile time.
+fn (self &RendererThread) set_qos_class() {
+	$if macos {
+		class := if !self.flags.visible {
+			internal_os.QosClass.utility
+		} else if !self.flags.focused {
+			internal_os.QosClass.user_initiated
+		} else {
+			internal_os.QosClass.user_interactive
+		}
+		internal_os.set_qos_class(class) or {}
 	}
 }
 

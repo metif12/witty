@@ -229,6 +229,7 @@ import time
 import terminal
 import highlight
 import datastruct
+import internal_os
 
 // The interval at which we refresh the terminal state to check if
 // there are any changes that require us to re-search. This should be
@@ -404,8 +405,11 @@ pub fn (mut self SearchThread) deinit() {
 //
 // Source: Thread.threadMain / threadMain_. V channels replace xev's async
 // wakeup and stop handles; a timed select replaces the repeating xev timer.
-// Platform thread naming and Darwin QoS are intentionally platform details.
 pub fn (mut self SearchThread) thread_main() {
+	$if macos {
+		internal_os.set_thread_name('search')
+		internal_os.set_qos_class(.utility) or {}
+	}
 	self.start_refresh_timer()
 	defer {
 		if cb := self.opts.event_cb {
