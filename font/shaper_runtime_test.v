@@ -9,7 +9,7 @@ fn test_public_shaper_cache_get_put() {
 	}
 
 	run := TextRun{
-		hash:  42
+		hash: 42
 		cells: 2
 	}
 	if _ := cache.get(run) {
@@ -18,17 +18,17 @@ fn test_public_shaper_cache_get_put() {
 
 	mut cells := [
 		ShapeCell{
-			x:           0
+			x: 0
 			glyph_index: 65
 		},
 		ShapeCell{
-			x:           1
+			x: 1
 			glyph_index: 66
 		},
 	]
 	cache.put(run, cells)!
 	cells[0] = ShapeCell{
-		x:           9
+		x: 9
 		glyph_index: 99
 	}
 
@@ -44,15 +44,33 @@ fn test_public_shaper_cache_get_put() {
 	assert cache.count() == 1
 }
 
+fn test_public_shaper_cache_evicts_least_recently_used_collision() {
+	mut cache := ShaperCache.init()
+	defer {
+		cache.deinit()
+	}
+
+	for i in 0 .. 8 {
+		cache.put(TextRun{ hash: u64(i * 256) }, [ShapeCell{ glyph_index: u32(i) }])!
+	}
+	assert cache.get(TextRun{ hash: 0 })?[0].glyph_index == 0
+	cache.put(TextRun{ hash: 8 * 256 }, [ShapeCell{ glyph_index: 8 }])!
+
+	assert cache.get(TextRun{ hash: 256 }) == none
+	assert cache.get(TextRun{ hash: 0 })?[0].glyph_index == 0
+	assert cache.get(TextRun{ hash: 8 * 256 })?[0].glyph_index == 8
+	assert cache.count() == 8
+}
+
 fn test_public_shaper_identity_shape() {
 	mut shaper := Shaper.init(ShaperOptions{})!
 	defer { shaper.deinit() }
 	shaper.codepoints = [
-		ShaperCodepoint{cluster: 0, codepoint: 65},
-		ShaperCodepoint{cluster: 1, codepoint: 66},
-		ShaperCodepoint{cluster: 2, codepoint: 67},
+		ShaperCodepoint{ cluster: 0, codepoint: 65 },
+		ShaperCodepoint{ cluster: 1, codepoint: 66 },
+		ShaperCodepoint{ cluster: 2, codepoint: 67 },
 	]
-	cells := shaper.shape(TextRun{hash: 1, font_index: sprite_index, cells: 3})!
+	cells := shaper.shape(TextRun{ hash: 1, font_index: sprite_index, cells: 3 })!
 
 	assert cells.len == 3
 	assert cells[0].x == 0
@@ -66,7 +84,7 @@ fn test_public_shaper_identity_shape() {
 fn test_public_run_iterator_yields_single_text_run() {
 	mut shaper := Shaper.init(ShaperOptions{})!
 	defer { shaper.deinit() }
-	mut it := shaper.run_iterator(RunOptions{cells: [u8(`A`), `B`, `C`]})
+	mut it := shaper.run_iterator(RunOptions{ cells: [u8(`A`), `B`, `C`] })
 	run := it.next() or {
 		assert false, 'expected one text run for non-empty cells'
 		return

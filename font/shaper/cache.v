@@ -1,5 +1,6 @@
 module shaper
 
+import datastruct
 import font
 
 // This structure caches the shaped cells for a given text run.
@@ -14,9 +15,6 @@ import font
 // the text run provides.
 
 // ShaperCache caches shaped text runs to avoid re-shaping.
-// Uses a simple V map[u64][]font.ShapeCell instead of the Zig CacheTable
-// which uses a fixed-size bucket cache with eviction. The V version is
-// simpler but functionally equivalent for most use cases.
 pub struct ShaperCache {
 mut:
 	// Cache table for run hash -> shaped cells.
@@ -26,12 +24,14 @@ mut:
 	//
 	// I'd expect then an average of 256 frequently cached runs is a
 	// safe guess most terminal screens.
-	entries map[u64][]font.ShapeCell
+	entries datastruct.U64CacheTable[[]font.ShapeCell]
 }
 
 // init creates a new ShaperCache.
 pub fn ShaperCache.init() ShaperCache {
-	return ShaperCache{}
+	return ShaperCache{
+		entries: datastruct.U64CacheTable.init[[]font.ShapeCell]()
+	}
 }
 
 // deinit releases all resources held by the cache.
@@ -41,11 +41,8 @@ pub fn (mut self ShaperCache) deinit() {
 
 // get returns the shaped cells for the given text run,
 // or none if they are not in the cache.
-pub fn (self &ShaperCache) get(run font.TextRun) ?[]font.ShapeCell {
-	if run.hash in self.entries {
-		return self.entries[run.hash]
-	}
-	return none
+pub fn (mut self ShaperCache) get(run font.TextRun) ?[]font.ShapeCell {
+	return self.entries.get(run.hash)
 }
 
 // put inserts the shaped cells for the given text run into the cache.
@@ -54,15 +51,15 @@ pub fn (self &ShaperCache) get(run font.TextRun) ?[]font.ShapeCell {
 pub fn (mut self ShaperCache) put(run font.TextRun, cells []font.ShapeCell) {
 	// Clone the cells so the cache owns its own copy.
 	copy := cells.clone()
-	self.entries[run.hash] = copy
+	self.entries.put(run.hash, copy)
 }
 
 // clear removes all entries from the cache and frees their memory.
 fn (mut self ShaperCache) clear() {
-	self.entries = map[u64][]font.ShapeCell{}
+	self.entries.clear()
 }
 
 // count returns the number of cached entries.
 pub fn (self &ShaperCache) count() int {
-	return self.entries.len
+	return self.entries.count()
 }

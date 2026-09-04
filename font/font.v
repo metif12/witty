@@ -394,6 +394,7 @@ module font
 //
 // --- Original Ghostty Comments End: src/font/Metrics.zig
 
+import datastruct
 import harfbuzz
 import hash
 import math
@@ -1429,33 +1430,32 @@ pub:
 // ShaperCache caches shaped text runs to avoid re-shaping.
 pub struct ShaperCache {
 mut:
-	entries map[u64][]ShapeCell
+	entries datastruct.U64CacheTable[[]ShapeCell]
 }
 
 pub fn ShaperCache.init() ShaperCache {
-	return ShaperCache{}
+	return ShaperCache{
+		entries: datastruct.U64CacheTable.init[[]ShapeCell]()
+	}
 }
 
 pub fn (mut c ShaperCache) deinit() {
-	c.entries = map[u64][]ShapeCell{}
+	c.entries.clear()
 }
 
 // Get cached shaping results for a run.
-pub fn (c &ShaperCache) get(run TextRun) ?[]ShapeCell {
-	if run.hash in c.entries {
-		return c.entries[run.hash]
-	}
-	return none
+pub fn (mut c ShaperCache) get(run TextRun) ?[]ShapeCell {
+	return c.entries.get(run.hash)
 }
 
 // Store shaping results for a run in the cache.
 pub fn (mut c ShaperCache) put(run TextRun, cells []ShapeCell) ! {
-	c.entries[run.hash] = cells.clone()
+	c.entries.put(run.hash, cells.clone())
 }
 
 // Return the number of cached entries.
 pub fn (c &ShaperCache) count() int {
-	return c.entries.len
+	return c.entries.count()
 }
 
 // ============================================================

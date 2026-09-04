@@ -44,7 +44,7 @@ fn test_cache_put_and_get() {
 	assert actual[1].glyph_index == 1
 }
 
-fn test_cache_put_overwrites() {
+fn test_cache_put_keeps_newest_duplicate() {
 	mut c := ShaperCache.init()
 	defer { c.deinit() }
 
@@ -65,7 +65,7 @@ fn test_cache_put_overwrites() {
 		font.ShapeCell{ x: 1, glyph_index: 21 },
 	]
 	c.put(run, cells2)
-	assert c.count() == 1
+	assert c.count() == 2
 
 	actual := c.get(run) or {
 		assert false, 'expected cache hit'
