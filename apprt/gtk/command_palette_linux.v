@@ -1,59 +1,93 @@
 module gtk
 
-// command_palette_linux.v - The GObject CommandPalette widget class for the GTK
-// apprt.
+// command_palette_linux.v - The GTK command palette.
 //
 // Translated from ghostty/src/apprt/gtk/class/command_palette.zig.
 //
-// A fuzzy command palette shown as an `adw.Dialog` modal over a window. It is
-// backed by a `gio.ListStore` of `Command` wrapper objects (a second GObject
-// class, `GhosttyCommand`, defined in the same Zig file), fed into a
-// `gtk.SingleSelection` -> `gtk.ListView`. The palette collects two kinds of
-// commands from the config:
+// A searchable command palette shown as an `adw.Dialog` modal over a window.
+// Ghostty builds the widget from a blueprint and GObject list model; Witty
+// constructs the same controls directly and keeps the command model in V. The
+// palette collects two kinds of commands from the config:
 //
 //   * "jump" commands (one per open surface, "Focus: <title>"), and
 //   * "regular" commands from `command-palette-entry`, filtered by
 //     `isActionSupportedOnGtk`.
 //
-// It sorts them (case-insensitive, colon-normalized), and on activation either
-// presents the jumped-to surface or emits a `trigger` signal carrying the
-// selected action.
-//
-// FOLLOWING THE ESTABLISHED PATTERN: GObject registration, `.ui`/blueprint
-// template, ListStore/SingleSelection/ListView model plumbing, and
-// property/signal machinery are stubbed with `// TODO(gtk)`. The real logic is
-// translated: the Command wrapper (regular/jump data), action-key / action /
-// title / description derivation, GTK-supported-action filtering, the
-// colon-normalized comparison, and the activation dispatch. Fuzzy filtering
-// reuses witty's `zf` matcher (the .zig template does GTK-side filtering; we
-// provide an equivalent `filter` that ranks visible commands by the search
-// text).
+// It sorts them (case-insensitive, colon-normalized), filters against either
+// title or action key, and on activation either presents the jumped-to surface
+// or dispatches the selected action to the owning window.
 //
 // Reuses: `input.Command` / `input.Action` (input/command.v, input/binding.v),
 // `Config` (window_linux.v), `SurfaceWidget` (surface_class_linux.v),
 // `Window` (window_linux.v), `WeakRef` (weak_ref_linux.v),
-// `accel_from_trigger` (key_linux.v), and the `zf` fuzzy matcher (zf/zf.v).
+// and `accel_from_trigger` (key_linux.v).
 
 import input
-import zf
 
 // --- New C bindings unique to this file -----------------------------------
 //
 // `AdwDialog` and `adw_dialog_present` are declared in dialog_linux.v and
 // reused here (grep-checked to avoid redeclaration).
 
-// GtkListView*.
-pub type GtkListView = voidptr
+pub type GtkListBox = voidptr
 
-// GtkSingleSelection*.
-pub type GtkSingleSelection = voidptr
+pub type GtkListBoxRow = voidptr
 
-// GioListStore*.
-pub type GioListStore = voidptr
+fn C.adw_dialog_new() AdwDialog
+
+fn C.adw_dialog_set_child(dialog AdwDialog, child GtkWidget)
+
+fn C.adw_dialog_set_content_width(dialog AdwDialog, width int)
+
+fn C.adw_header_bar_new() GtkWidget
+
+fn C.adw_header_bar_set_title_widget(header GtkWidget, title_widget GtkWidget)
+
+fn C.gtk_search_entry_new() GtkSearchEntry
+
+fn C.gtk_scrolled_window_new() GtkScrolledWindow
+
+fn C.gtk_scrolled_window_set_min_content_height(scrolled GtkScrolledWindow, height int)
+
+fn C.gtk_list_box_new() GtkListBox
+
+fn C.gtk_list_box_append(box GtkListBox, child GtkWidget)
+
+fn C.gtk_list_box_remove(box GtkListBox, child GtkWidget)
+
+fn C.gtk_list_box_set_activate_on_single_click(box GtkListBox, single bool)
+
+fn C.gtk_list_box_set_selection_mode(box GtkListBox, mode int)
+
+fn C.gtk_list_box_set_show_separators(box GtkListBox, show bool)
+
+fn C.gtk_list_box_get_row_at_index(box GtkListBox, index int) GtkListBoxRow
+
+fn C.gtk_list_box_get_selected_row(box GtkListBox) GtkListBoxRow
+
+fn C.gtk_list_box_select_row(box GtkListBox, row GtkListBoxRow)
+
+fn C.gtk_list_box_row_get_index(row GtkListBoxRow) int
+
+fn C.gtk_widget_get_first_child(widget GtkWidget) GtkWidget
+
+fn C.gtk_widget_set_tooltip_text(widget GtkWidget, text &char)
+
+fn C.gtk_label_set_xalign(label GtkWidget, xalign f32)
+
+fn C.gtk_label_set_ellipsize(label GtkWidget, mode int)
+
+fn C.gtk_label_set_single_line_mode(label GtkWidget, single_line_mode bool)
+
+fn C.gtk_shortcut_label_new(accelerator &char) GtkWidget
 
 fn C.adw_dialog_close(dialog AdwDialog) bool
 
 fn C.gtk_widget_get_realized(widget GtkWidget) bool
+
+fn C.g_object_ref_sink(obj GObject) GObject
+
+fn C.g_object_set(object GObject, first_property_name &char, ...)
 
 // --- CommandDataKind ------------------------------------------------------
 
@@ -66,11 +100,10 @@ pub enum CommandDataKind {
 
 // --- Command --------------------------------------------------------------
 
-// Command is the V model of the `GhosttyCommand` GObject wrapper class. GTK list
-// models only accept GObject-hierarchy objects, hence the wrapper. Fields mirror
-// the Zig `Private` struct, flattened (V has no tagged-union field ergonomics
-// matching the Zig union): `kind` selects which of the regular/jump fields are
-// live.
+// Command is the V model corresponding to Ghostty's `GhosttyCommand` GObject
+// wrapper. Fields mirror the Zig `Private` struct, flattened (V has no
+// tagged-union field ergonomics matching the Zig union): `kind` selects which
+// of the regular/jump fields are live.
 @[heap]
 pub struct Command {
 pub mut:
@@ -89,7 +122,8 @@ pub mut:
 
 	// --- jump data ---
 	// Weak reference to the target surface (so we don't keep it alive).
-	jump_surface WeakRef = weak_ref_empty()
+	jump_surface     WeakRef = weak_ref_empty()
+	jump_surface_ptr &SurfaceWidget = unsafe { nil }
 	// Cached lazily-computed jump title/description.
 	jump_title       string
 	jump_description string
@@ -120,11 +154,12 @@ pub fn command_new_jump(config &Config, surface &SurfaceWidget) &Command {
 		// TODO: replace with a surface id once witty adds one (matches ghostty's
 		// `@intFromPtr(surface)`).
 		sort_key: usize(voidptr(surface))
+		jump_surface_ptr: surface
 	}
 	if !isnil(config) {
 		self.config = config_ref(config)
 	}
-	self.jump_surface.set(GObject(voidptr(surface)))
+	self.jump_surface.set(GObject(surface.widget))
 	return self
 }
 
@@ -140,9 +175,7 @@ fn config_ref(config &Config) &Config {
 // --- Property getters -----------------------------------------------------
 
 // prop_get_action_key returns a stable string key for the action, or `none` for
-// jump commands. Mirrors `propGetActionKey`. Ghostty formats the action via its
-// `{f}` formatter; witty has no Action string formatter, so we use the action
-// tag name (which is stable and unique per action tag).
+// jump commands. Mirrors `propGetActionKey`.
 pub fn (mut self Command) prop_get_action_key() ?string {
 	if self.kind != .regular {
 		return none
@@ -150,7 +183,7 @@ pub fn (mut self Command) prop_get_action_key() ?string {
 	if self.action_key_str.len > 0 {
 		return self.action_key_str
 	}
-	self.action_key_str = self.command.action.tag.str()
+	self.action_key_str = self.command.action.format()
 	return self.action_key_str
 }
 
@@ -185,7 +218,17 @@ pub fn (mut self Command) prop_get_title() ?string {
 	if self.jump_title.len > 0 {
 		return self.jump_title
 	}
-	surface := self.jump_surface_get() or { return none }
+	obj := self.jump_surface.get()
+	if isnil(obj) {
+		return none
+	}
+	defer {
+		object_unref(obj)
+	}
+	if isnil(self.jump_surface_ptr) {
+		return none
+	}
+	surface := self.jump_surface_ptr
 	surface_title := surface.get_title() or { 'Untitled' }
 	self.jump_title = 'Focus: ${surface_title}'
 	return self.jump_title
@@ -203,7 +246,17 @@ pub fn (mut self Command) prop_get_description() ?string {
 	if self.jump_description.len > 0 {
 		return self.jump_description
 	}
-	surface := self.jump_surface_get() or { return none }
+	obj := self.jump_surface.get()
+	if isnil(obj) {
+		return none
+	}
+	defer {
+		object_unref(obj)
+	}
+	if isnil(self.jump_surface_ptr) {
+		return none
+	}
+	surface := self.jump_surface_ptr
 	title := surface.get_title() or { 'Untitled' }
 	if pwd := surface.get_pwd() {
 		if !title.contains(pwd) {
@@ -232,24 +285,25 @@ pub fn (self &Command) is_jump() bool {
 	return self.kind == .jump
 }
 
-// jump_surface_get resolves the weakly-referenced target surface, or `none` if
-// it has been destroyed. Mirrors `getJumpSurface` (minus the strong-ref
-// semantics, which the GObject WeakRef provides).
-fn (mut self Command) jump_surface_get() ?&SurfaceWidget {
+// present_jump_surface presents the jump target while holding the strong
+// GObject reference returned by the weak reference. Mirrors the caller-owned
+// reference returned by Ghostty's `getJumpSurface`.
+fn (mut self Command) present_jump_surface() bool {
+	if self.kind != .jump {
+		return false
+	}
 	obj := self.jump_surface.get()
 	if isnil(obj) {
-		return none
+		return false
 	}
-	return unsafe { &SurfaceWidget(obj) }
-}
-
-// get_jump_surface returns the jump target surface, or `none`. Mirrors
-// `getJumpSurface`.
-pub fn (mut self Command) get_jump_surface() ?&SurfaceWidget {
-	if self.kind != .jump {
-		return none
+	defer {
+		object_unref(obj)
 	}
-	return self.jump_surface_get()
+	if isnil(self.jump_surface_ptr) {
+		return false
+	}
+	self.jump_surface_ptr.present()
+	return true
 }
 
 // dispose releases the config reference and clears the weak surface ref.
@@ -261,50 +315,81 @@ pub fn (mut self Command) dispose() {
 	}
 	if self.kind == .jump {
 		self.jump_surface.set(unsafe { nil })
+		self.jump_surface_ptr = unsafe { nil }
 	}
 }
 
 // --- CommandPalette -------------------------------------------------------
 
-// CommandPalette is the V model of the `GhosttyCommandPalette` GObject class.
-// Fields mirror the Zig `Private` struct. The dialog / search / view / model /
-// source are GObject/template widgets that are out of scope; they are held as
-// opaque pointers so the translated logic can reference them.
+// CommandPalette is the V-owned model and GTK widget set corresponding to
+// Ghostty's `GhosttyCommandPalette` GObject class.
 @[heap]
 pub struct CommandPalette {
 pub mut:
-	// The GtkWidget (adw.Bin) pointer for this instance.
+	// The dialog widget used as this instance's root.
 	widget GtkWidget = unsafe { nil }
 
 	// The configuration this palette is using. nil means "unset".
 	config &Config = unsafe { nil }
 
-	// The dialog object containing the palette UI (template child).
+	// The dialog object containing the palette UI.
 	dialog AdwDialog = unsafe { nil }
 
-	// The search input text field (template child).
+	// The search input text field.
 	search GtkSearchEntry = unsafe { nil }
 
-	// The list view showing each result row (template child).
-	view GtkListView = unsafe { nil }
+	// Programmatic equivalent of the blueprint list view. GtkListBox preserves
+	// the same row activation and single-selection behavior while V owns the
+	// command wrappers directly.
+	list GtkListBox = unsafe { nil }
 
-	// The selection model feeding the view (template child).
-	model GtkSingleSelection = unsafe { nil }
-
-	// The backing data source list (template child). This is where all command
-	// data is ultimately stored.
-	source GioListStore = unsafe { nil }
-
-	// The V-side command list backing `source` (the GObject ListStore is
-	// out of scope). Rebuilt by refresh_commands.
-	commands []&Command
+	// The command list and indices currently visible after filtering.
+	commands         []&Command
+	visible_commands []int
+	window           &Window = unsafe { nil }
+	app              &Application = unsafe { nil }
 }
 
-// new_command_palette creates a new CommandPalette. Mirrors `CommandPalette.new`
-// (which also ref-sinks + refs for the caller; that refcounting is GObject
-// machinery and is stubbed).
+// new_command_palette creates a new CommandPalette. Mirrors
+// `CommandPalette.new`, including ownership of the initially-floating dialog.
 pub fn new_command_palette() &CommandPalette {
-	return &CommandPalette{}
+	dialog := C.adw_dialog_new()
+	C.g_object_ref_sink(GObject(dialog))
+	C.adw_dialog_set_content_width(dialog, 700)
+
+	toolbar := C.adw_toolbar_view_new()
+	C.adw_toolbar_view_set_top_bar_style(toolbar, int(AdwToolbarStyle.flat))
+	header := C.adw_header_bar_new()
+	search := C.gtk_search_entry_new()
+	C.gtk_widget_set_hexpand(search, 1)
+	C.g_object_set(GObject(search), c'placeholder-text', c'Execute a command…', unsafe { nil })
+	C.gtk_widget_add_css_class(search, c'command-palette-search')
+	C.adw_header_bar_set_title_widget(header, search)
+	C.adw_toolbar_view_add_top_bar(toolbar, header)
+
+	scrolled := C.gtk_scrolled_window_new()
+	C.gtk_scrolled_window_set_min_content_height(scrolled, 300)
+	list := C.gtk_list_box_new()
+	C.gtk_list_box_set_selection_mode(list, 1)
+	C.gtk_list_box_set_activate_on_single_click(list, true)
+	C.gtk_list_box_set_show_separators(list, true)
+	C.gtk_widget_add_css_class(GtkWidget(list), c'rich-list')
+	C.gtk_scrolled_window_set_child(scrolled, GtkWidget(list))
+	C.adw_toolbar_view_set_content(toolbar, GtkWidget(scrolled))
+	C.adw_dialog_set_child(dialog, GtkWidget(toolbar))
+
+	mut self := &CommandPalette{
+		widget: GtkWidget(dialog)
+		dialog: dialog
+		search: search
+		list: list
+	}
+	C.g_signal_connect_data(dialog, c'closed', GCallback(voidptr(command_palette_dialog_closed_cb)), self, unsafe { nil }, 0)
+	C.g_signal_connect_data(search, c'stop-search', GCallback(voidptr(command_palette_search_stopped_cb)), self, unsafe { nil }, 0)
+	C.g_signal_connect_data(search, c'activate', GCallback(voidptr(command_palette_search_activated_cb)), self, unsafe { nil }, 0)
+	C.g_signal_connect_data(search, c'search-changed', GCallback(voidptr(command_palette_search_changed_cb)), self, unsafe { nil }, 0)
+	C.g_signal_connect_data(list, c'row-activated', GCallback(voidptr(command_palette_row_activated_cb)), self, unsafe { nil }, 0)
+	return self
 }
 
 // prop_config is the config-changed handler: it clears and rebuilds the command
@@ -316,6 +401,9 @@ pub fn (mut self CommandPalette) prop_config() {
 	}
 
 	// Clear existing entries.
+	for mut command in self.commands {
+		command.dispose()
+	}
 	self.commands = []&Command{}
 
 	self.collect_jump_commands()
@@ -334,7 +422,7 @@ pub fn (mut self CommandPalette) prop_config() {
 		return 0
 	})
 
-	// TODO(gtk): append each command's GObject into priv.source (gio.ListStore).
+	self.refresh_visible_commands('')
 }
 
 // collect_regular_commands collects regular commands from the config's
@@ -353,11 +441,16 @@ fn (mut self CommandPalette) collect_regular_commands() {
 // collect_jump_commands collects one jump command per open surface across all
 // windows. Mirrors `collectJumpCommands`.
 fn (mut self CommandPalette) collect_jump_commands() {
-	// TODO(gtk): iterate `Application.default().core().surfaces.items`, and for
-	// each apprt surface build `Command.newJump(config, surface.gobj())`. The
-	// core App surface list is out of scope from this module (it lives on
-	// `main.App`), so no jump commands are collected here. The structure is
-	// preserved for when the app surface list is reachable.
+	if isnil(self.app) {
+		return
+	}
+	for window in self.app.windows {
+		for tab in window.tabs {
+			for surface in tab.split_tree.surfaces {
+				self.commands << command_new_jump(self.config, surface)
+			}
+		}
+	}
 }
 
 // is_action_supported_on_gtk reports whether an action makes sense / is
@@ -417,9 +510,11 @@ pub fn (mut self CommandPalette) toggle(window &Window) {
 		self.close()
 		return
 	}
+	self.window = unsafe { window }
+	self.prop_config()
+	C.gtk_editable_set_text(GtkWidget(self.search), c'')
 
-	// TODO(gtk): present modal over `window.as(gtk.Widget)`. window_linux.v's
-	// Window holds the AdwApplicationWindow in `obj`; we pass it as the parent.
+	// Window holds the AdwApplicationWindow in `obj`; present it as the parent.
 	C.adw_dialog_present(self.dialog, window.obj)
 
 	// Focus the search bar.
@@ -431,10 +526,13 @@ fn (self &CommandPalette) close() {
 	C.adw_dialog_close(self.dialog)
 }
 
-// dialog_closed is the dialog "closed" template callback. Mirrors `dialogClosed`
-// (which unrefs self; that refcounting is stubbed).
-pub fn (self &CommandPalette) dialog_closed() {
-	// TODO(gtk): self.unref().
+// dialog_closed resets the search for the next presentation. Ghostty releases
+// the dialog's self-reference here; Witty's wrapper instead remains owned by
+// the Window until window disposal.
+pub fn (mut self CommandPalette) dialog_closed() {
+	if !isnil(self.search) {
+		C.gtk_editable_set_text(GtkWidget(self.search), c'')
+	}
 }
 
 // search_stopped is the search "stop-search" template callback (ESC). Mirrors
@@ -464,15 +562,18 @@ fn (mut self CommandPalette) activated(pos u32) {
 	self.close()
 
 	// Resolve the command at `pos` from the visible list.
-	if pos >= u32(self.commands.len) {
+	if pos >= u32(self.visible_commands.len) {
 		return
 	}
-	mut cmd := self.commands[pos]
+	command_index := self.visible_commands[pos]
+	if command_index < 0 || command_index >= self.commands.len {
+		return
+	}
+	mut cmd := self.commands[command_index]
 
 	// Jump commands present their surface.
 	if cmd.is_jump() {
-		surface := cmd.get_jump_surface() or { return }
-		surface.present()
+		cmd.present_jump_surface()
 		return
 	}
 
@@ -484,87 +585,144 @@ fn (mut self CommandPalette) activated(pos u32) {
 // model_selected returns the currently selected position in the selection
 // model. Mirrors `priv.model.getSelected()`.
 fn (self &CommandPalette) model_selected() u32 {
-	// TODO(gtk): gtk_single_selection_get_selected(self.model).
-	return 0
+	if isnil(self.list) {
+		return u32(-1)
+	}
+	row := C.gtk_list_box_get_selected_row(self.list)
+	if isnil(row) {
+		return u32(-1)
+	}
+	return u32(C.gtk_list_box_row_get_index(row))
 }
 
 // emit_trigger emits the "trigger" signal with the selected action. Mirrors the
 // `signals.trigger.impl.emit(...)` call.
 fn (self &CommandPalette) emit_trigger(action input.Action) {
-	_ = action
-	// TODO(gtk): emit `trigger` signal with a pointer to the action.
+	if !isnil(self.window) {
+		mut window := unsafe { self.window }
+		window.perform_input_action(action)
+	}
 }
 
-// --- Fuzzy filtering (zf) -------------------------------------------------
-
-// filter ranks the palette's commands against the search `query` and returns
-// the matching command indices ordered best-first. Reuses witty's `zf` fuzzy
-// matcher. An empty query returns all commands in their current (sorted) order.
-//
-// NOTE: ghostty performs filtering GTK-side via the blueprint template (a
-// gtk.Filter over the model), which isn't part of the .zig class. This provides
-// an equivalent so the palette's core "type to narrow" behavior is available in
-// witty.
-pub fn (self &CommandPalette) filter(query string) []int {
-	if query.len == 0 {
-		mut all := []int{cap: self.commands.len}
-		for i in 0 .. self.commands.len {
-			all << i
+fn (mut self CommandPalette) refresh_visible_commands(query string) {
+	if isnil(self.list) {
+		return
+	}
+	for {
+		child := C.gtk_widget_get_first_child(GtkWidget(self.list))
+		if isnil(child) {
+			break
 		}
-		return all
+		C.gtk_list_box_remove(self.list, child)
 	}
 
-	// Split the query into whitespace-separated tokens (zf matches each token).
-	tokens := query.fields()
-	opts := zf.RankOptions{
-		to_lower: true
-		plain: false
+	self.visible_commands = self.filter(query)
+	for command_index in self.visible_commands {
+		mut command := self.commands[command_index]
+		row := C.gtk_box_new(0, 10)
+		labels := C.gtk_box_new(1, 0)
+		C.gtk_widget_set_hexpand(labels, 1)
+
+		title := command.prop_get_title() or { '' }
+		title_label := C.gtk_label_new(&char(title.str))
+		C.gtk_label_set_xalign(title_label, 0)
+		C.gtk_label_set_ellipsize(title_label, 3)
+		C.gtk_label_set_single_line_mode(title_label, true)
+		C.gtk_widget_add_css_class(title_label, c'title')
+		C.gtk_box_append(labels, title_label)
+
+		action_key := command.prop_get_action_key() or { '' }
+		if action_key.len > 0 {
+			action_label := C.gtk_label_new(&char(action_key.str))
+			C.gtk_label_set_xalign(action_label, 0)
+			C.gtk_label_set_ellipsize(action_label, 3)
+			C.gtk_label_set_single_line_mode(action_label, true)
+			C.gtk_widget_add_css_class(action_label, c'subtitle')
+			C.gtk_widget_add_css_class(action_label, c'monospace')
+			C.gtk_box_append(labels, action_label)
+		}
+		C.gtk_box_append(row, labels)
+
+		accelerator := command.prop_get_action() or { '' }
+		if accelerator.len > 0 {
+			shortcut := C.gtk_shortcut_label_new(&char(accelerator.str))
+			C.gtk_box_append(row, shortcut)
+		}
+		if description := command.prop_get_description() {
+			C.gtk_widget_set_tooltip_text(row, &char(description.str))
+		}
+		C.gtk_list_box_append(self.list, row)
 	}
-
-	// Collect (index, rank) for each command whose title matches all tokens.
-	mut scored := []Scored{}
-	for i, cmd in self.commands {
-		title := cmd.title_for_filter()
-		if r := zf.rank(title, tokens, opts) {
-			scored << Scored{
-				index: i
-				rank: r
-			}
-		}
+	if self.visible_commands.len > 0 {
+		first := C.gtk_list_box_get_row_at_index(self.list, 0)
+		C.gtk_list_box_select_row(self.list, first)
 	}
+}
 
-	// Lower rank = better match.
-	scored.sort_with_compare(fn (a &Scored, b &Scored) int {
-		if a.rank < b.rank {
-			return -1
-		}
-		if a.rank > b.rank {
-			return 1
-		}
-		return 0
-	})
+fn command_palette_dialog_closed_cb(dialog AdwDialog, data voidptr) {
+	_ = dialog
+	if !isnil(data) {
+		mut self := unsafe { &CommandPalette(data) }
+		self.dialog_closed()
+	}
+}
 
-	mut result := []int{cap: scored.len}
-	for s in scored {
-		result << s.index
+fn command_palette_search_stopped_cb(search GtkSearchEntry, data voidptr) {
+	_ = search
+	if !isnil(data) {
+		self := unsafe { &CommandPalette(data) }
+		self.search_stopped()
+	}
+}
+
+fn command_palette_search_activated_cb(search GtkSearchEntry, data voidptr) {
+	_ = search
+	if !isnil(data) {
+		mut self := unsafe { &CommandPalette(data) }
+		self.search_activated()
+	}
+}
+
+fn command_palette_search_changed_cb(search GtkSearchEntry, data voidptr) {
+	if isnil(search) || isnil(data) {
+		return
+	}
+	text_ptr := C.gtk_editable_get_text(GtkWidget(search))
+	mut query := ''
+	if !isnil(text_ptr) {
+		query = unsafe { cstring_to_vstring(text_ptr) }
+	}
+	mut self := unsafe { &CommandPalette(data) }
+	self.refresh_visible_commands(query)
+}
+
+fn command_palette_row_activated_cb(list GtkListBox, row GtkListBoxRow, data voidptr) {
+	_ = list
+	if isnil(row) || isnil(data) {
+		return
+	}
+	mut self := unsafe { &CommandPalette(data) }
+	self.row_activated(u32(C.gtk_list_box_row_get_index(row)))
+}
+
+// filter mirrors the blueprint's GtkAnyFilter of two default GtkStringFilters:
+// a command remains visible when the case-insensitive query occurs in either
+// its title or its serialized action key. Source ordering is preserved.
+pub fn (mut self CommandPalette) filter(query string) []int {
+	needle := query.to_lower()
+	mut result := []int{cap: self.commands.len}
+	for i, mut command in self.commands {
+		if needle.len == 0 {
+			result << i
+			continue
+		}
+		title := command.prop_get_title() or { '' }
+		action_key := command.prop_get_action_key() or { '' }
+		if title.to_lower().contains(needle) || action_key.to_lower().contains(needle) {
+			result << i
+		}
 	}
 	return result
-}
-
-// Scored pairs a command index with its fuzzy rank (for filter sorting).
-struct Scored {
-	index int
-	rank  f64
-}
-
-// title_for_filter returns a best-effort title for fuzzy matching without
-// mutating cached state. Regular commands use their command title directly;
-// jump commands use the cached title if present, else empty.
-fn (self &Command) title_for_filter() string {
-	if self.kind == .regular {
-		return self.command.title
-	}
-	return self.jump_title
 }
 
 // --- helpers --------------------------------------------------------------
@@ -577,15 +735,22 @@ fn ascii_to_lower(c u8) u8 {
 	return c
 }
 
-// --- GObject class registration (stub) ------------------------------------
-//
-// TODO(gtk): In ghostty both `GhosttyCommandPalette` and `GhosttyCommand` are
-// registered via gobject.ext.defineClass. The palette classInit ensures the
-// Command type, loads the `command-palette` blueprint `.ui` template, binds the
-// dialog/search/view/model/source template children, wires the closed /
-// notify_config / search_stopped / search_activated / row_activated template
-// callbacks, registers the `config` property and the `trigger` signal, and
-// wires dispose. The Command classInit registers the config / action-key /
-// action / title / description properties and dispose/finalize. V has no such
-// machinery, so all of that is stubbed; the handlers above are plain methods
-// and the ListStore is modeled by the `commands` slice.
+// dispose releases the command-owned config references and the palette's GTK
+// object. Signal connections are owned by the dialog and disappear with it.
+pub fn (mut self CommandPalette) dispose() {
+	for mut command in self.commands {
+		command.dispose()
+	}
+	self.commands.clear()
+	self.visible_commands.clear()
+	self.window = unsafe { nil }
+	self.app = unsafe { nil }
+	self.config = unsafe { nil }
+	if !isnil(self.dialog) {
+		object_unref(GObject(self.dialog))
+	}
+	self.widget = unsafe { nil }
+	self.dialog = unsafe { nil }
+	self.search = unsafe { nil }
+	self.list = unsafe { nil }
+}

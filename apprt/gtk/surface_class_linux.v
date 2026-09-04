@@ -763,9 +763,16 @@ pub fn (mut self SurfaceWidget) key_event(action input.KeyAction, event GdkEvent
 	// Get the unicode value for this keyval.
 	keyval_cp := keyval_unicode(keyval)
 
-	// Until the platform keycode table supplies a native match, the XKB-remapped
-	// keyval is the same fallback used by Ghostty for remappable keys.
-	physical_key := key_from_keyval(keyval) or { input.Key.unidentified }
+	// Start with the physical W3C key from the XKB native-code column. Then use
+	// the pre-remapped keysym when either side is eligible for OS remapping. This
+	// is Ghostty's workaround for XKB remaps while retaining correct physical
+	// keybindings on non-US layouts.
+	mut physical_key := input.xkb_keycode_to_key(keycode)
+	if remapped := key_from_keyval(keyval) {
+		if physical_key.should_be_remappable() || remapped.should_be_remappable() {
+			physical_key = remapped
+		}
+	}
 
 	// Get our modifiers for the event.
 	//
@@ -1587,6 +1594,11 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 		.toggle_tab_overview {
 			mut window := unsafe { self.split_tree.window }
 			window.toggle_tab_overview()
+			return true
+		}
+		.toggle_command_palette {
+			mut window := unsafe { self.split_tree.window }
+			window.toggle_command_palette()
 			return true
 		}
 		.ring_bell {

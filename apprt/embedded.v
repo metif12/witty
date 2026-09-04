@@ -121,13 +121,7 @@ pub fn (self EmbeddedKeyEvent) core() ?input.KeyEvent {
 	}
 
 	// We want to get the physical unmapped key to process keybinds.
-	mut physical_key := input.Key.unidentified
-	for entry in input.keycodes_entries {
-		if entry.native == self.keycode {
-			physical_key = entry.key
-			break
-		}
-	}
+	physical_key := input.native_keycode_to_key(self.keycode)
 
 	// Build our final key event
 	return input.KeyEvent{

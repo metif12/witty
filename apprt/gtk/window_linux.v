@@ -297,8 +297,8 @@ mut:
 	tab_overview_focus_timer u32
 	pending_close_page       AdwTabPage = unsafe { nil }
 
-	// A weak reference to a command palette.
-	command_palette WeakRef = weak_ref_empty()
+	// The lazily-created command palette owned by this window.
+	command_palette &CommandPalette = unsafe { nil }
 
 	// Template children (out of scope widgets). Populated by the stubbed
 	// template init.
@@ -599,11 +599,24 @@ fn window_action_cb(action GSimpleAction, parameter GVariant, data voidptr) {
 		'reset' { self.action_reset() }
 		'clear' { self.action_clear() }
 		'toggle-command-palette' {
-			self.perform_input_action(input.Action.new(.toggle_command_palette))
+			self.toggle_command_palette()
 		}
 		'toggle-inspector' { self.toggle_inspector() }
 		else {}
 	}
+}
+
+fn (mut self Window) toggle_command_palette() {
+	mut palette := self.command_palette
+	if isnil(palette) {
+		palette = new_command_palette()
+		palette.config = self.config
+		palette.app = self.app
+		self.command_palette = palette
+	}
+	palette.config = self.config
+	palette.app = self.app
+	palette.toggle(self)
 }
 
 // sync_apprt_window mirrors the winproto bridge into the current window state.
@@ -1502,7 +1515,11 @@ pub enum BindingActionTag {
 // dispose releases references held by the window. Mirrors `dispose` (minus the
 // GObject template disposal + parent chaining).
 pub fn (mut self Window) dispose() {
-	self.command_palette.set(unsafe { nil })
+	if !isnil(self.command_palette) {
+		mut palette := self.command_palette
+		palette.dispose()
+		self.command_palette = unsafe { nil }
+	}
 
 	if self.config != unsafe { nil } {
 		self.config.unref()

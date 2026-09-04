@@ -444,7 +444,7 @@ pub:
 	key Key
 }
 
-// keycodes_entries is defined in keycodes.v with the full macOS keycode table.
+// The OS-specific native-keycode mappings are defined in keycodes.v.
 
 // BindingFlags represents flags associated with a keybinding action.
 pub struct BindingFlags {
