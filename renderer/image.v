@@ -315,6 +315,16 @@ pub fn (p &PendingImage) data_len() u32 {
 	return p.width * p.height * p.pixel_format.bpp()
 }
 
+// Returns the expected data length as an array index.
+pub fn (p &PendingImage) len() usize {
+	return usize(p.data_len())
+}
+
+// Returns the pending pixel data at its dimension-derived length.
+pub fn (p &PendingImage) data_slice() []u8 {
+	return p.data[..p.len()]
+}
+
 // Image upload state tracks whether the image data is pending, ready (uploaded
 // to GPU), or unloading.
 pub enum ImageUploadState {
@@ -520,9 +530,10 @@ pub fn (mut self ImageRenderState) upload(api &MetalAPI) bool {
 }
 
 fn (mut self Image) upload(api &MetalAPI) ! {
+	self.prep_for_upload()!
 	pending := self.pending or { return error('image has no pending data') }
-	rgba := pending_to_rgba(pending)!
-	mut texture := MetalTexture.init(api.image_texture_options(.rgba, true), pending.width, pending.height, rgba)!
+	mut texture := MetalTexture.init(api.image_texture_options(.rgba, true), pending.width, pending.height,
+		pending.data_slice())!
 	self.release_texture()
 	self.texture_handle = texture.handle
 	self.texture_backend = .metal
@@ -558,9 +569,10 @@ pub fn (mut self ImageRenderState) upload_opengl(api &OpenGLAPI) bool {
 }
 
 fn (mut self Image) upload_opengl(api &OpenGLAPI) ! {
+	self.prep_for_upload()!
 	pending := self.pending or { return error('image has no pending data') }
-	rgba := pending_to_rgba(pending)!
-	mut texture := GLTexture.init(api.image_texture_options(.rgba, true), pending.width, pending.height, rgba)!
+	mut texture := GLTexture.init(api.image_texture_options(.rgba, true), pending.width, pending.height,
+		pending.data_slice())!
 	self.release_texture()
 	self.gl_texture = texture
 	texture.id = 0
@@ -569,6 +581,27 @@ fn (mut self Image) upload_opengl(api &OpenGLAPI) ! {
 	self.width = pending.width
 	self.height = pending.height
 	self.state = .ready
+}
+
+// Converts pending image data to the upload format in place. Images that are
+// already RGBA are left untouched.
+pub fn (mut self Image) convert() ! {
+	mut pending := self.pending or { return error('image has no pending data') }
+	if pending.data.len != int(pending.data_len()) {
+		return error('image data size does not match dimensions')
+	}
+	if pending.pixel_format == .rgba {
+		return
+	}
+	pending.data = pending_to_rgba(pending)!
+	pending.pixel_format = .rgba
+	self.pending = pending
+}
+
+// Prepare pending image data for a later GPU upload.
+pub fn (mut self Image) prep_for_upload() ! {
+	assert self.is_pending()
+	self.convert()!
 }
 
 fn pending_to_rgba(pending PendingImage) ![]u8 {

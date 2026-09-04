@@ -38,6 +38,37 @@ fn test_pending_image_data_len_rgb() {
 	assert p.data_len() == 5 * 5 * 3
 }
 
+fn test_pending_image_data_slice() {
+	p := PendingImage{
+		width: 2
+		height: 1
+		pixel_format: .rgb
+		data: [u8(1), 2, 3, 4, 5, 6]
+	}
+	assert p.len() == 6
+	assert p.data_slice() == [u8(1), 2, 3, 4, 5, 6]
+}
+
+fn test_image_prep_for_upload_converts_in_place() ! {
+	mut image := Image{
+		state: .pending
+		pending: PendingImage{
+			width: 2
+			height: 1
+			pixel_format: .bgr
+			data: [u8(1), 2, 3, 4, 5, 6]
+		}
+	}
+	image.prep_for_upload()!
+	pending := image.pending or { return error('missing converted image') }
+	assert pending.pixel_format == .rgba
+	assert pending.data == [u8(3), 2, 1, 255, 6, 5, 4, 255]
+
+	// Preparation is idempotent once the data is RGBA.
+	image.prep_for_upload()!
+	assert (image.pending or { return error('missing converted image') }).data == pending.data
+}
+
 // Test Image state transitions.
 fn test_image_state_pending() {
 	img := Image{}
