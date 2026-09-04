@@ -45,6 +45,10 @@ pub mut:
 	// The app resources directory, equivalent to zig-out/share when we build
 	// from source. This is empty if we can't detect it.
 	resources_dir ResourcesDir
+
+	// Process arguments after argv[0]. The embedded C entrypoint supplies
+	// these directly because its argv may differ from V's os.args.
+	cli_args []string
 }
 
 // Where logging should go.
@@ -87,6 +91,12 @@ pub fn (action Action) cli_name() string {
 	return action.str().replace('_', '-')
 }
 
+pub fn actions() []Action {
+	return [.version, .help, .list_fonts, .list_keybinds, .list_themes, .list_colors, .list_actions,
+		.ssh_cache, .edit_config, .show_config, .validate_config, .show_face, .crash_report, .boo,
+		.new_window]
+}
+
 // detect_action translates cli/action.zig's generic action detector and
 // cli/ghostty.zig's special-case handling.
 pub fn detect_action(args []string) !Action {
@@ -117,9 +127,7 @@ pub fn detect_action(args []string) !Action {
 }
 
 fn action_from_name(name string) ?Action {
-	for action in [Action.version, .help, .list_fonts, .list_keybinds, .list_themes, .list_colors,
-		.list_actions, .ssh_cache, .edit_config, .show_config, .validate_config, .show_face,
-		.crash_report, .boo, .new_window] {
+	for action in actions() {
 		if action.cli_name() == name {
 			return action
 		}
@@ -129,6 +137,11 @@ fn action_from_name(name string) ?Action {
 
 // Initialize the global state.
 pub fn (mut self GlobalState) init() ! {
+	self.init_args(if os.args.len > 1 { os.args[1..] } else { []string{} })!
+}
+
+// init_args initializes global state using an explicit argument vector.
+pub fn (mut self GlobalState) init_args(args []string) ! {
 	// Initialize ourself to nothing so we don't have any extra state.
 	// IMPORTANT: this MUST be initialized before any log output because
 	// the log function uses the global state.
@@ -136,8 +149,9 @@ pub fn (mut self GlobalState) init() ! {
 	self.logging = Logging{}
 	self.rlimits = ResourceLimits{}
 	self.resources_dir = ResourcesDir{}
+	self.cli_args = args.clone()
 
-	self.action = detect_action(if os.args.len > 1 { os.args[1..] } else { []string{} })!
+	self.action = detect_action(args)!
 
 	// If we have an action executing, we disable logging by default
 	// since we write to stderr we don't want logs messing up our
@@ -168,6 +182,12 @@ pub fn (mut self GlobalState) init() ! {
 	// Find our resources directory once for the app so every launch
 	// hereafter can use this cached value.
 	self.resources_dir = ResourcesDir.detect()
+	resources_dir := self.resources_dir.app()
+	if resources_dir.len > 0 {
+		internal_os.init_i18n(resources_dir) or {
+			eprintln('failed to initialize translations: ${err}')
+		}
+	}
 }
 
 // Cleans up the global state. This doesn't _need_ to be called but
@@ -175,6 +195,8 @@ pub fn (mut self GlobalState) init() ! {
 pub fn (mut self GlobalState) deinit() {
 	self.rlimits.restore()
 	self.resources_dir = ResourcesDir{}
+	self.cli_args.clear()
+	internal_os.shutdown_i18n()
 	crash.shutdown()
 }
 

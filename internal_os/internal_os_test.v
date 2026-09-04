@@ -30,3 +30,18 @@ fn test_fix_max_files_does_not_shrink_limit() {
 	assert old.max >= old.cur
 	restore_max_files(old)
 }
+
+fn test_i18n_locale_canonicalization() {
+	assert canonicalize_locale('en_US') == 'en_US'
+	assert canonicalize_locale('en-US') == 'en_US'
+	assert canonicalize_locale('zh-Hans') == 'zh_CN'
+	assert canonicalize_locale('zh-Hans-SG') == 'zh_SG'
+	assert canonicalize_locale('zh-Hant') == 'zh_TW'
+	assert canonicalize_locale('zh-Hant-HK') == 'zh_HK'
+	assert canonicalize_locale('zh-Hant-MO') == 'zh_MO'
+}
+
+fn test_i18n_unknown_message_falls_back_to_msgid() {
+	msgid := 'witty-i18n-test-message-that-is-not-in-a-catalog'
+	assert translate(msgid) == msgid
+}

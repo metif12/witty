@@ -11,9 +11,9 @@
 
 module main
 
-import os
+import cli
 import global_state
-
+import internal_os
 
 // BuildMode mirrors the C enum ghostty_build_mode_e.
 pub enum BuildMode {
@@ -28,44 +28,66 @@ pub enum BuildMode {
 pub struct Info {
 pub:
 	mode        BuildMode
-	version     string
-	version_len int
+	version     &u8 = unsafe { nil }
+	version_len usize
 }
 
 // GhosttyString corresponds to ghostty_string_s. A string type used
 // across the C API boundary with explicit length and sentinel tracking.
 pub struct GhosttyString {
 pub:
-	ptr      voidptr
-	len      int
+	ptr      &u8 = unsafe { nil }
+	len      usize
 	sentinel bool
 }
 
 // empty returns an empty GhosttyString with null pointer.
 pub fn GhosttyString.empty() GhosttyString {
 	return GhosttyString{
-		ptr:      unsafe { nil }
-		len:      0
+		ptr: unsafe { nil }
+		len: 0
 		sentinel: false
 	}
 }
 
 // from_string creates a GhosttyString from a V string.
 pub fn GhosttyString.from_string(s string) GhosttyString {
+	if s.len == 0 {
+		return GhosttyString.empty()
+	}
+	ptr := unsafe { malloc(s.len + 1) }
+	unsafe {
+		vmemcpy(ptr, s.str, s.len)
+		(&u8(ptr))[s.len] = 0
+	}
 	return GhosttyString{
-		ptr:      s.str
-		len:      s.len
+		ptr: &u8(ptr)
+		len: usize(s.len)
 		sentinel: true
 	}
 }
 
 // from_bytes creates a GhosttyString from a byte slice.
 pub fn GhosttyString.from_bytes(b []u8) GhosttyString {
+	if b.len == 0 {
+		return GhosttyString.empty()
+	}
+	ptr := unsafe { malloc(b.len) }
+	unsafe {
+		vmemcpy(ptr, b.data, b.len)
+	}
 	return GhosttyString{
-		ptr:      b.data
-		len:      b.len
+		ptr: &u8(ptr)
+		len: usize(b.len)
 		sentinel: false
 	}
+}
+
+pub fn (str GhosttyString) bytes() []u8 {
+	if isnil(str.ptr) || str.len == 0 {
+		return []u8{}
+	}
+	return unsafe { str.ptr.vbytes(int(str.len)) }
 }
 
 // ghostty_init initializes ghostty global state. In Ghostty's C API this
@@ -79,11 +101,13 @@ pub fn ghostty_init(argc int, argv []string) int {
 	// from libc and exposed as an immutable const, so we don't reassign it;
 	// any embedder that needs a different argv should set it through env
 	// inheritance instead.
-	_ = argc
-	_ = argv
-
 	mut state := global_state.get_state_mut()
-	state.init() or {
+	args := if argc > 1 && argv.len > 1 {
+		argv[1..min_int(argc, argv.len)]
+	} else {
+		[]string{}
+	}
+	state.init_args(args) or {
 		eprintln('failed to initialize ghostty error=${err}')
 		return 1
 	}
@@ -99,17 +123,69 @@ pub fn ghostty_cli_try_action() {
 		return
 	}
 	eprintln('executing CLI action=${state.action}')
-	// XTODO: action.run(state.alloc) once cli module is translated.
-	// For now we treat any non-none action as a no-op that exits 0.
-	exit(0)
+	code := run_cli_action(state.action, state.cli_args) or {
+		eprintln('CLI action failed: ${err}')
+		exit(1)
+	}
+	exit(code)
+}
+
+pub fn run_cli_action(action global_state.Action, args []string) !int {
+	return match action {
+		.none { 0 }
+		.version {
+			println('Ghostty ${version_string}')
+			println('')
+			println('Version')
+			println('  - version: ${version_string}')
+			println('  - channel: ${release_channel}')
+			println('Build Config')
+			println('  - V version     : ${@VEXE}')
+			println('  - build mode    : ${if is_debug { 'debug' } else { 'release' }}')
+			println('  - app runtime   : ${artifact}')
+			0
+		}
+		.help {
+			print_cli_help()
+			0
+		}
+		.list_themes { cli.run_list_themes(action_args(args, action)) }
+		.list_actions {
+			for value in global_state.actions() {
+				if value != .none {
+					println(value.cli_name())
+				}
+			}
+			0
+		}
+		else {
+			return error('action ${action.cli_name()} is not available in this build')
+		}
+	}
+}
+
+fn action_args(args []string, action global_state.Action) []string {
+	needle := '+${action.cli_name()}'
+	return args.filter(it != needle)
+}
+
+fn print_cli_help() {
+	println('Usage: ghostty [options] [+action]')
+	println('')
+	println('Actions:')
+	for action in global_state.actions() {
+		if action != .none {
+			println('  +${action.cli_name()}')
+		}
+	}
 }
 
 // ghostty_info: Return metadata about Ghostty, such as version, build mode, etc.
 pub fn ghostty_info() Info {
 	return Info{
-		mode:        if is_debug { .debug } else { .release_fast }
-		version:     version_string
-		version_len: version_string.len
+		mode: if is_debug { .debug } else { .release_fast }
+		version: version_string.str
+		version_len: usize(version_string.len)
 	}
 }
 
@@ -119,20 +195,53 @@ pub fn ghostty_info() Info {
 // the function call.
 //
 // This should only be used for singular strings maintained by Ghostty.
-// XTODO: Needs i18n/translation infrastructure.
 pub fn ghostty_translate(msgid string) string {
-	return msgid
+	return internal_os.translate(msgid)
 }
 
 // ghostty_string_free: Free a string allocated by Ghostty.
-// XTODO: Needs allocator integration for proper deallocation.
 pub fn ghostty_string_free(str GhosttyString) {
-	_ = str
-	// In V, memory management is handled differently.
-	// The GC or manual free would be used here.
+	if !isnil(str.ptr) {
+		unsafe {
+			free(str.ptr)
+		}
+	}
 }
 
-// XTODO: Additional C API exports that need implementation:
-// - Config API (@import("config.zig").CApi)
-// - Apprt-specific C API (apprt.runtime.CAPI for embedded runtime)
-// - Benchmark API (@import("benchmark/main.zig").CApi)
+fn min_int(a int, b int) int {
+	return if a < b { a } else { b }
+}
+
+// C ABI entrypoints. The V-facing helpers above remain convenient for tests
+// and native callers while these wrappers preserve Ghostty's public symbols.
+@[export: 'ghostty_init']
+fn ghostty_init_export(argc usize, argv &&char) int {
+	mut args := []string{cap: int(argc)}
+	unsafe {
+		for i in 0 .. int(argc) {
+			value := argv[i]
+			args << if isnil(value) { '' } else { cstring_to_vstring(value) }
+		}
+	}
+	return ghostty_init(int(argc), args)
+}
+
+@[export: 'ghostty_cli_try_action']
+fn ghostty_cli_try_action_export() {
+	ghostty_cli_try_action()
+}
+
+@[export: 'ghostty_info']
+fn ghostty_info_export() Info {
+	return ghostty_info()
+}
+
+@[export: 'ghostty_translate']
+fn ghostty_translate_export(msgid &char) &char {
+	return internal_os.translate_c(msgid)
+}
+
+@[export: 'ghostty_string_free']
+fn ghostty_string_free_export(str GhosttyString) {
+	ghostty_string_free(str)
+}
