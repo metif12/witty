@@ -5,6 +5,7 @@ import core
 import configpkg
 import input
 import global_state
+import internal_os
 
 // application_linux.v - The primary GTK application (AdwApplication subclass).
 //
@@ -1081,6 +1082,15 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			if unsafe { data.config_change_.config != nil } {
 				self.set_config(data.config_change_.config.clone())
 			}
+			return true
+		}
+		.open_config {
+			path := configpkg.editable_config_path() or { return false }
+			internal_os.open(path) or { return false }
+			return true
+		}
+		.open_url {
+			internal_os.open(data.open_url_.url) or { return false }
 			return true
 		}
 		.show_gtk_inspector {

@@ -7621,6 +7621,27 @@ pub fn preferred_default_file_path() string {
 	return preferred_xdg_config_path()
 }
 
+// editable_config_path returns the main configuration path and ensures it can
+// be opened by an editor. It mirrors config/edit.zig openPath: choose the
+// preferred existing path, create its parent directory, and create a missing
+// file without changing the contents of an existing one.
+pub fn editable_config_path() !string {
+	path := preferred_default_file_path()
+	ensure_editable_config_path(path)!
+	return path
+}
+
+fn ensure_editable_config_path(path string) ! {
+	directory := os.dir(path)
+	if directory.len > 0 {
+		os.mkdir_all(directory)!
+	}
+	if !os.exists(path) {
+		mut file := os.create(path)!
+		file.close()
+	}
+}
+
 pub fn default_xdg_config_path() string {
 	xdg := os.getenv('XDG_CONFIG_HOME')
 	base := if xdg.len > 0 {

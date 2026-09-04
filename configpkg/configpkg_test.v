@@ -787,6 +787,20 @@ linux-cgroup-hard-fail = true')
 	assert cfg.diagnostics.len == 1
 }
 
+fn test_editable_config_path_creates_file_without_truncating() ! {
+	dir := os.join_path(os.temp_dir(), 'witty-edit-config-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	path := os.join_path(dir, 'ghostty', 'config.ghostty')
+	ensure_editable_config_path(path)!
+	assert os.is_file(path)
+	os.write_file(path, 'keep me')!
+	ensure_editable_config_path(path)!
+	assert os.read_file(path)! == 'keep me'
+}
+
 fn test_bell_features_parse_format_and_defaults() {
 	mut cfg := Config.default_config()
 	assert !cfg.bell_features.system
