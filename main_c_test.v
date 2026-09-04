@@ -43,7 +43,7 @@ fn test_action_args_remove_only_selected_action() {
 }
 
 fn test_unavailable_action_returns_error_instead_of_false_success() {
-	run_cli_action(global_state.Action.boo, []) or {
+	run_cli_action(global_state.Action.new_window, []) or {
 		assert err.msg().contains('not available')
 		return
 	}
