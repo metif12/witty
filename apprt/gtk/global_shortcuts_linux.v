@@ -19,9 +19,7 @@ module gtk
 //     portal session handle, and the two D-Bus signal subscription ids).
 //   * GObject type registration (`defineClass`), the `config` /
 //     `dbus-connection` PROPERTIES, the `trigger` SIGNAL emission, the
-//     `dispose` vfunc, and the async D-Bus reply callbacks / variadic
-//     `g_variant_new_parsed` payload construction are STUBBED with `// TODO(gtk)`
-//     and minimal type-checking bodies.
+//     `dispose` vfunc are represented directly on the V wrapper.
 //   * The TRACTABLE structural logic IS translated: the portal session
 //     create -> bind -> list flow (`Method`, `request`, `refresh`), the
 //     shortcut-id <-> trigger mapping (via `xdg_shortcut_from_trigger` in
@@ -59,6 +57,21 @@ fn C.g_dbus_connection_signal_unsubscribe(connection GDBusConnection, subscripti
 // Asynchronous method call (fire-and-forget / with async callback). Mirrors
 // `dbus.call(...)` in the Zig original.
 fn C.g_dbus_connection_call(connection GDBusConnection, bus_name &char, object_path &char, interface_name &char, method_name &char, parameters GVariant, reply_type GVariantType, flags int, timeout_msec int, cancellable voidptr, callback GCallback, user_data voidptr)
+
+// Complete an asynchronous D-Bus call.
+pub type GAsyncResult = voidptr
+
+fn C.g_dbus_connection_call_finish(connection GDBusConnection, result GAsyncResult, error &GError) GVariant
+
+// Non-variadic GVariant construction and accessors used by the portal
+// payloads and signal callbacks.
+fn C.g_variant_new_object_path(path &char) GVariant
+fn C.g_variant_new_tuple(children &GVariant, n_children usize) GVariant
+fn C.g_variant_get_child_value(value GVariant, index usize) GVariant
+fn C.g_variant_get_uint32(value GVariant) u32
+fn C.g_variant_get_string(value GVariant, length &usize) &char
+fn C.g_variant_get_type_string(value GVariant) &char
+fn C.g_variant_lookup_value(dictionary GVariant, key &char, expected_type GVariantType) GVariant
 
 // The bus-unique name of the connection (e.g. ":1.192"), or nil.
 fn C.g_dbus_connection_get_unique_name(connection GDBusConnection) &char
@@ -112,6 +125,13 @@ struct ShortcutMapEntry {
 	action input.Action
 }
 
+// A string-valued a{sv} entry. Portal option dictionaries only need string
+// values in this class.
+struct VariantStringEntry {
+	key   string
+	value string
+}
+
 // --- GlobalShortcuts ------------------------------------------------------
 //
 // The GObject GlobalShortcuts class. In ghostty this is `GlobalShortcuts`, a
@@ -154,6 +174,12 @@ mut:
 	// The D-Bus signal subscription for the keybind activate signal. Mirrors
 	// `Private.activate_subscription`.
 	activate_subscription u32
+
+	// The response subscription is method-specific in Ghostty because the Zig
+	// callback is instantiated at comptime. V uses one C trampoline and records
+	// which request it belongs to here.
+	pending_method     Method
+	has_pending_method bool
 }
 
 // global_shortcuts_new creates a new GlobalShortcuts. Mirrors the implicit
@@ -182,6 +208,7 @@ fn (mut self GlobalShortcuts) close() {
 		C.g_dbus_connection_signal_unsubscribe(dbus, self.response_subscription)
 		self.response_subscription = 0
 	}
+	self.has_pending_method = false
 
 	if self.activate_subscription != 0 {
 		C.g_dbus_connection_signal_unsubscribe(dbus, self.activate_subscription)
@@ -317,30 +344,24 @@ fn (mut self GlobalShortcuts) request(method Method) {
 	request_path := self.get_request_path(request_token) or { return }
 
 	// Subscribe to the response signal BEFORE issuing the call (see NOTE above).
-	// The Zig callback `responded` handles the reply; wiring that C trampoline
-	// is out of scope, so we register a nil callback placeholder.
-	//
-	// TODO(gtk): pass the `responded` C callback that: unsubscribes the response
-	// signal, unpacks `(u@a{sv})`, and on success dispatches
-	// `on_response(method, vardict)`.
 	if self.response_subscription != 0 {
 		// Precondition in ghostty is that this is 0; defensively clear a stale one.
 		C.g_dbus_connection_signal_unsubscribe(dbus, self.response_subscription)
 		self.response_subscription = 0
 	}
+	self.pending_method = method
+	self.has_pending_method = true
 	self.response_subscription = C.g_dbus_connection_signal_subscribe(dbus, unsafe { nil },
 		&char(portal_iface_request.str), c'Response', &char(request_path.str), unsafe { nil },
-		g_dbus_signal_flags_none, GCallback(unsafe { nil }), voidptr(self), unsafe { nil })
+		g_dbus_signal_flags_none, GCallback(voidptr(global_shortcuts_responded_cb)), voidptr(self),
+		unsafe { nil })
 
-	// Issue the actual portal call. The async reply callback `gotResponseHandle`
-	// only logs errors / would reconcile the request path; stubbed as nil.
-	//
-	// TODO(gtk): pass the `got_response_handle` C callback (calls
-	// `g_dbus_connection_call_finish`, logs failures).
+	// Issue the actual portal call. The async reply only reports transport-level
+	// failure; the portal result arrives on the Response signal above.
 	C.g_dbus_connection_call(dbus, &char(portal_bus_name.str), &char(portal_object_path.str),
 		&char(portal_iface_global_shortcuts.str), &char(method.method_name().str), payload,
-		GVariantType(unsafe { nil }), g_dbus_call_flags_none, -1, unsafe { nil }, GCallback(unsafe { nil }),
-		voidptr(self))
+		GVariantType(unsafe { nil }), g_dbus_call_flags_none, -1, unsafe { nil },
+		GCallback(voidptr(global_shortcuts_call_finished_cb)), unsafe { nil })
 }
 
 // make_payload constructs the GVariant payload expected by the portal call for
@@ -349,17 +370,22 @@ fn (mut self GlobalShortcuts) request(method Method) {
 fn (mut self GlobalShortcuts) make_payload(method Method, request_token string) ?GVariant {
 	match method {
 		.create_session {
-			// See the CreateSession portal docs. The real payload is:
+			// See the CreateSession portal docs. The payload is:
 			//   ({'handle_token': <request_token>,
 			//     'session_handle_token': <session_token>},)
-			// built via `glib.Variant.newParsed(...)`.
 			session_token := generate_token()
-			_ = session_token
-			// TODO(gtk): g_variant_new_parsed is variadic and is not yet bound in
-			// the module; build the "({'handle_token': <%s>, 'session_handle_token':
-			// <%s>},)" variant with `request_token` and `session_token`.
-			_ = request_token
-			return GVariant(unsafe { nil })
+			options := variant_string_dict([
+				VariantStringEntry{
+					key: 'handle_token'
+					value: request_token
+				},
+				VariantStringEntry{
+					key: 'session_handle_token'
+					value: session_token
+				},
+			])
+			mut children := [options]
+			return C.g_variant_new_tuple(unsafe { &children[0] }, usize(children.len))
 		}
 		.bind_shortcuts {
 			// Requires an existing session handle.
@@ -373,24 +399,61 @@ fn (mut self GlobalShortcuts) make_payload(method Method, request_token string) 
 			//   (trigger_id, {'description': <action_str>,
 			//                 'preferred_trigger': <trigger_id>})
 			//
-			// The bind array is built here from `self.map`; the action
-			// description is the action's stringified form.
-			for entry in self.map {
-				trigger_id := entry.id
-				description := action_to_string(entry.action)
-				// TODO(gtk): binds.addParsed("(%s, {'description': <%s>,
-				// 'preferred_trigger': <%s>})", trigger_id, description, trigger_id)
-				// via a GVariantBuilder over type "a(sa{sv})".
-				_ = trigger_id
-				_ = description
-			}
+			bind_type := C.g_variant_type_new(c'a(sa{sv})')
+			binds := C.g_variant_builder_new(bind_type)
+			C.g_variant_type_free(bind_type)
 
-			// TODO(gtk): g_variant_new_parsed("(%o, %*, '', {'handle_token': <%s>})",
-			// self.handle, binds.end(), request_token).
-			_ = request_token
-			return GVariant(unsafe { nil })
+			// The bind array is built from `self.map`; the action description is
+			// the action's full serialized form.
+			for entry in self.map {
+				details := variant_string_dict([
+					VariantStringEntry{
+						key: 'description'
+						value: action_to_string(entry.action)
+					},
+					VariantStringEntry{
+						key: 'preferred_trigger'
+						value: entry.id
+					},
+				])
+				mut bind_children := [C.g_variant_new_string(&char(entry.id.str)), details]
+				bind := C.g_variant_new_tuple(unsafe { &bind_children[0] }, usize(bind_children.len))
+				C.g_variant_builder_add_value(binds, bind)
+			}
+			bind_values := C.g_variant_builder_end(binds)
+			C.g_variant_builder_unref(binds)
+
+			options := variant_string_dict([
+				VariantStringEntry{
+					key: 'handle_token'
+					value: request_token
+				},
+			])
+			mut children := [
+				C.g_variant_new_object_path(&char(self.handle.str)),
+				bind_values,
+				C.g_variant_new_string(c''),
+				options,
+			]
+			return C.g_variant_new_tuple(unsafe { &children[0] }, usize(children.len))
 		}
 	}
+}
+
+// variant_string_dict builds an a{sv} with concrete string values wrapped in
+// variants, matching glib.Variant.newParsed's `<%s>` behavior.
+fn variant_string_dict(entries []VariantStringEntry) GVariant {
+	dict_type := C.g_variant_type_new(c'a{sv}')
+	dict := C.g_variant_builder_new(dict_type)
+	C.g_variant_type_free(dict_type)
+	for entry in entries {
+		key := C.g_variant_new_string(&char(entry.key.str))
+		value := C.g_variant_new_variant(C.g_variant_new_string(&char(entry.value.str)))
+		C.g_variant_builder_add_value(dict, C.g_variant_new_dict_entry(key, value))
+	}
+	result := C.g_variant_builder_end(dict)
+	C.g_variant_builder_unref(dict)
+	return result
 }
 
 // on_response dispatches a successful portal response for `method`. Mirrors
@@ -414,12 +477,10 @@ fn (mut self GlobalShortcuts) on_response(method Method, vardict GVariant) {
 			// Subscribe to keybind activations, scoped (by arg0-path) to our
 			// session handle. Precondition: no existing activate subscription.
 			if self.activate_subscription == 0 {
-				// TODO(gtk): pass the `shortcut_activated` C callback (see
-				// `shortcut_activated` below).
 				self.activate_subscription = C.g_dbus_connection_signal_subscribe(dbus,
 					unsafe { nil }, &char(portal_iface_global_shortcuts.str), c'Activated',
 					&char(portal_object_path.str), &char(self.handle.str), g_dbus_signal_flags_match_arg0_path,
-					GCallback(unsafe { nil }), voidptr(self), unsafe { nil })
+					GCallback(voidptr(global_shortcuts_activated_cb)), voidptr(self), unsafe { nil })
 			}
 
 			// Now that we have a session, bind our shortcuts.
@@ -434,10 +495,24 @@ fn (mut self GlobalShortcuts) on_response(method Method, vardict GVariant) {
 // lookup_session_handle extracts the "session_handle" object-path string from a
 // CreateSession response vardict. Mirrors the `vardict.lookup(...)` call.
 fn (self &GlobalShortcuts) lookup_session_handle(vardict GVariant) ?string {
-	_ = vardict
-	// TODO(gtk): g_variant_lookup(vardict, "session_handle", "&s", &handle) and
-	// dup the returned C string. Returns `none` when the key is absent.
-	return none
+	if isnil(vardict) {
+		return none
+	}
+	object_path_type := C.g_variant_type_new(c'o')
+	value := C.g_variant_lookup_value(vardict, c'session_handle', object_path_type)
+	C.g_variant_type_free(object_path_type)
+	if isnil(value) {
+		return none
+	}
+	defer {
+		C.g_variant_unref(value)
+	}
+	mut length := usize(0)
+	handle := C.g_variant_get_string(value, &length)
+	if isnil(handle) || length == 0 {
+		return none
+	}
+	return unsafe { cstring_to_vstring(handle) }
 }
 
 // get_request_path computes the XDG portal Request object path for this
@@ -473,6 +548,95 @@ fn (self &GlobalShortcuts) get_request_path(token string) ?string {
 	sanitized := unique_name[1..].replace('.', '_')
 
 	return '/org/freedesktop/portal/desktop/request/${sanitized}/${token}'
+}
+
+// global_shortcuts_call_finished_cb handles the transport-level completion of
+// a portal method call. The meaningful result is delivered separately through
+// the Request.Response signal.
+fn global_shortcuts_call_finished_cb(source GObject, result GAsyncResult, user_data voidptr) {
+	_ = user_data
+	mut call_error := GError(unsafe { nil })
+	params := C.g_dbus_connection_call_finish(GDBusConnection(source), result, &call_error)
+	if !isnil(params) {
+		C.g_variant_unref(params)
+	}
+	if !isnil(call_error) {
+		eprintln('global shortcuts portal request failed: ${error_message(call_error)}')
+		C.g_error_free(call_error)
+	}
+}
+
+// global_shortcuts_responded_cb receives `(u a{sv})` from the portal request,
+// clears the one-shot subscription, and dispatches a successful response to
+// the method that created it.
+fn global_shortcuts_responded_cb(dbus GDBusConnection, sender_name &char, object_path_ &char, interface_name &char, signal_name &char, parameters GVariant, user_data voidptr) {
+	_ = sender_name
+	_ = object_path_
+	_ = interface_name
+	_ = signal_name
+	if isnil(user_data) || isnil(parameters) {
+		return
+	}
+	mut self := unsafe { &GlobalShortcuts(user_data) }
+	if self.response_subscription != 0 {
+		C.g_dbus_connection_signal_unsubscribe(dbus, self.response_subscription)
+		self.response_subscription = 0
+	}
+
+	response_value := C.g_variant_get_child_value(parameters, 0)
+	if isnil(response_value) {
+		self.has_pending_method = false
+		return
+	}
+	response := C.g_variant_get_uint32(response_value)
+	C.g_variant_unref(response_value)
+
+	vardict := C.g_variant_get_child_value(parameters, 1)
+	defer {
+		if !isnil(vardict) {
+			C.g_variant_unref(vardict)
+		}
+	}
+	if response == 0 && self.has_pending_method && !isnil(vardict) {
+		method := self.pending_method
+		self.has_pending_method = false
+		self.on_response(method, vardict)
+		return
+	}
+	self.has_pending_method = false
+	match response {
+		1 {}
+		2 { eprintln('global shortcuts portal request ended unexpectedly') }
+		else { eprintln('global shortcuts portal returned unknown response code ${response}') }
+	}
+}
+
+// global_shortcuts_activated_cb extracts the shortcut id (the second tuple
+// element) and routes it through the same map lookup used by Ghostty.
+fn global_shortcuts_activated_cb(dbus GDBusConnection, sender_name &char, object_path_ &char, interface_name &char, signal_name &char, parameters GVariant, user_data voidptr) {
+	_ = dbus
+	_ = sender_name
+	_ = object_path_
+	_ = interface_name
+	_ = signal_name
+	if isnil(user_data) || isnil(parameters) {
+		return
+	}
+	id_value := C.g_variant_get_child_value(parameters, 1)
+	if isnil(id_value) {
+		return
+	}
+	defer {
+		C.g_variant_unref(id_value)
+	}
+	mut length := usize(0)
+	id_c := C.g_variant_get_string(id_value, &length)
+	if isnil(id_c) || length == 0 {
+		return
+	}
+	shortcut_id := unsafe { cstring_to_vstring(id_c) }
+	mut self := unsafe { &GlobalShortcuts(user_data) }
+	self.shortcut_activated(shortcut_id)
 }
 
 // --- Property handlers ----------------------------------------------------
@@ -518,9 +682,8 @@ pub fn (mut self GlobalShortcuts) set_dbus_connection(dbus_connection GDBusConne
 // the signal tuple is the activated shortcut id; we look up its action and emit
 // our `trigger` signal. Mirrors `GlobalShortcuts.shortcutActivated`.
 //
-// TODO(gtk): in ghostty this is a C signal-subscription callback with the full
-// (dbus, sender, path, iface, signal, params, user_data) signature. Here we
-// model just the payload-processing core keyed on the extracted shortcut id.
+// The C signal-subscription trampoline above extracts the tuple value and
+// forwards the shortcut id to this payload-processing core.
 fn (mut self GlobalShortcuts) shortcut_activated(shortcut_id string) {
 	// Look up the action bound to this shortcut id.
 	action := self.action_for_id(shortcut_id) or { return }
@@ -543,9 +706,9 @@ fn (self &GlobalShortcuts) action_for_id(id string) ?input.Action {
 // emit_trigger emits the "trigger" signal carrying the activated action.
 // Mirrors `signals.trigger.impl.emit(self, null, .{&action}, null)`.
 fn (self &GlobalShortcuts) emit_trigger(action input.Action) {
-	_ = action
-	// TODO(gtk): emit the `trigger` signal with a pointer to the action. The
-	// GObject signal machinery is out of scope.
+	if !isnil(self.obj) {
+		C.g_signal_emit_by_name(self.obj, c'trigger', &action)
+	}
 }
 
 // --- Virtual methods ------------------------------------------------------
