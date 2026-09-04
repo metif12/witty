@@ -13,6 +13,28 @@ fn test_pipe_returns_distinct_fds() {
 	assert fds[0] != fds[1]
 }
 
+fn test_open_command_platform_selection() {
+	executable_linux, args_linux := open_command_for_os('linux', .text, '/tmp/readme')!
+	assert executable_linux == 'xdg-open'
+	assert args_linux == ['/tmp/readme']
+
+	executable_freebsd, args_freebsd := open_command_for_os('freebsd', .html, 'file:///tmp/a.html')!
+	assert executable_freebsd == 'xdg-open'
+	assert args_freebsd == ['file:///tmp/a.html']
+
+	executable_windows, args_windows := open_command_for_os('windows', .unknown, 'https://example.com')!
+	assert executable_windows == 'rundll32'
+	assert args_windows == ['url.dll,FileProtocolHandler', 'https://example.com']
+
+	executable_text, args_text := open_command_for_os('macos', .text, '/tmp/readme')!
+	assert executable_text == 'open'
+	assert args_text == ['-t', '/tmp/readme']
+
+	executable_html, args_html := open_command_for_os('macos', .html, '/tmp/index.html')!
+	assert executable_html == 'open'
+	assert args_html == ['/tmp/index.html']
+}
+
 fn test_temp_dir_is_unique_and_deletes_contents() {
 	mut first := TempDir.init()!
 	mut second := TempDir.init()!

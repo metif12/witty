@@ -972,6 +972,21 @@ fn test_runtime_callbacks_override_headless_storage() ! {
 	assert surface.get_content_scale()! == ContentScale{ x: 2, y: 3 }
 }
 
+fn test_open_url_preserves_content_kind_for_runtime() ! {
+	mut runtime := RuntimeApp{ actions_handled: true }
+	mut surface := make_test_surface()
+	surface.rt_app = &runtime
+	surface.open_url(apprt.OpenUrl{
+		kind: .html
+		url: '/tmp/export.html'
+	})!
+
+	assert runtime.actions.len == 1
+	assert runtime.actions[0].kind == .open_url
+	assert runtime.actions[0].url_kind == .html
+	assert runtime.actions[0].url == '/tmp/export.html'
+}
+
 fn test_command_finished_preserves_duration_and_exit_code() ! {
 	mut runtime := RuntimeApp{ actions_handled: true }
 	mut surf := make_test_surface()

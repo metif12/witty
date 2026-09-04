@@ -1768,6 +1768,7 @@ pub:
 	search_selected    ?usize
 	title_value        string
 	url                string
+	url_kind           apprt.OpenUrlKind
 	pwd                string
 	cell_size          CellSize
 	initial_size       ScreenSize
@@ -5494,16 +5495,16 @@ fn (mut self Surface) process_links(pos CursorPos) !bool {
 			if url.len > 0 {
 				// Try resolving as local path first
 				if resolved := self.resolve_path_for_opening(url) {
-					self.open_url(resolved)!
+					self.open_url(apprt.OpenUrl{ kind: .unknown, url: resolved })!
 				} else {
-					self.open_url(url)!
+					self.open_url(apprt.OpenUrl{ kind: .unknown, url: url })!
 				}
 			}
 			return true
 		}
 		.open_osc8 {
 			if uri := self.osc8_uri(link.selection.start()) {
-				self.open_url(uri)!
+				self.open_url(apprt.OpenUrl{ kind: .unknown, url: uri })!
 				return true
 			}
 		}
@@ -5511,14 +5512,20 @@ fn (mut self Surface) process_links(pos CursorPos) !bool {
 	return false
 }
 
-fn (mut self Surface) open_url(url string) ! {
+fn (mut self Surface) open_url(action apprt.OpenUrl) ! {
 	handled := self.rt_app.perform_action(AppAction{
 		kind: .open_url
 		target: &self
-		url: url
+		url: action.url
+		url_kind: action.kind
 	})!
-	if !handled && url.len > 0 {
-		internal_os.open(url)!
+	if !handled && action.url.len > 0 {
+		kind := match action.kind {
+			.unknown { internal_os.OpenKind.unknown }
+			.text { internal_os.OpenKind.text }
+			.html { internal_os.OpenKind.html }
+		}
+		internal_os.open_kind(kind, action.url)!
 	}
 }
 
@@ -5589,7 +5596,11 @@ fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen WriteSc
 			self.rt_surface.set_clipboard(tmp_path, false)!
 		}
 		.open {
-			self.open_url(tmp_path)!
+			kind := match write_screen.emit {
+				.plain, .vt { apprt.OpenUrlKind.text }
+				.html { apprt.OpenUrlKind.html }
+			}
+			self.open_url(apprt.OpenUrl{ kind: kind, url: tmp_path })!
 		}
 		.paste {
 			self.queue_io(IOMessage{ kind: .write_alloc, data: tmp_path.bytes() })

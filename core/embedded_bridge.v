@@ -370,7 +370,7 @@ fn bridge_surface_runtime_action(ptr voidptr, action AppAction) !bool {
 		}
 		.open_url {
 			app.perform_action(target, .open_url, apprt.ActionValue{
-				open_url_: apprt.OpenUrl{ url: action.url }
+				open_url_: apprt.OpenUrl{ kind: action.url_kind, url: action.url }
 			})!
 		}
 		.show_child_exited {

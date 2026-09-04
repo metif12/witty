@@ -2924,7 +2924,7 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			return self.app.perform_action(apprt.Target(apprt.SurfaceTarget{
 				surface: self.core_surface
 			}), .open_url, apprt.ActionValue{
-				open_url_: apprt.OpenUrl{ url: action.url }
+				open_url_: apprt.OpenUrl{ kind: action.url_kind, url: action.url }
 			})!
 		}
 		else {

@@ -3,6 +3,7 @@ module internal_os
 import os
 import crypto.rand as crypto_rand
 import encoding.base64
+import log
 
 // C interop declarations for pipes and resource limits.
 #include <unistd.h>
@@ -43,23 +44,45 @@ mut:
 	rlim_max u64
 }
 
-// open opens a URL or file path using the system default handler.
+// OpenKind is the content hint supplied to the platform URL opener.
+pub enum OpenKind {
+	unknown
+	text
+	html
+}
+
+// open_command_for_os translates the platform switch in os/open.zig. Keeping
+// the selection separate also makes every target's exact argv testable on one
+// host.
+fn open_command_for_os(os_name string, kind OpenKind, url string) !(string, []string) {
+	return match os_name {
+		'linux', 'freebsd' { 'xdg-open', [url] }
+		'windows' { 'rundll32', ['url.dll,FileProtocolHandler', url] }
+		'macos' {
+			if kind == .text {
+				'open', ['-t', url]
+			} else {
+				'open', [url]
+			}
+		}
+		else { error('URL opening is unsupported on this platform') }
+	}
+}
+
+// open opens a URL or file path using the most generic system handler.
 pub fn open(url string) ! {
-	mut process := os.new_process('')
-	$if macos {
-		process = os.new_process('/usr/bin/open')
-	} $else $if linux || freebsd {
-		process = os.new_process('xdg-open')
-	} $else $if windows {
-		process = os.new_process('rundll32')
-	} $else {
-		return error('URL opening is unsupported on this platform')
-	}
-	$if windows {
-		process.set_args(['url.dll,FileProtocolHandler', url])
-	} $else {
-		process.set_args([url])
-	}
+	open_kind(.unknown, url)!
+}
+
+// open_kind opens a URL or path with the source content-type hint.
+pub fn open_kind(kind OpenKind, url string) ! {
+	os_name := $if macos { 'macos' } $else $if linux { 'linux' } $else $if freebsd { 'freebsd' } $else $if windows { 'windows' } $else { 'unsupported' }
+	executable, args := open_command_for_os(os_name, kind, url)!
+	mut process := os.new_process(executable)
+	process.set_args(args)
+	// Ghostty pipes both streams so platform helpers never write into the
+	// terminal and their diagnostic output can be captured by the reaper.
+	process.set_redirect_stdio()
 	process.run()
 	if process.status == .aborted {
 		return error('failed to start URL handler: ${process.err}')
@@ -70,7 +93,12 @@ pub fn open(url string) ! {
 // The platform URL opener may block until the target application exits. Reap
 // it away from the caller so opening a link never stalls terminal input.
 fn reap_open_process(mut process os.Process) {
+	_ = process.stdout_slurp()
+	stderr := process.stderr_slurp()
 	process.wait()
+	if stderr.len > 0 {
+		log.warn('URL opener stderr: ${stderr}')
+	}
 	process.close()
 }
 

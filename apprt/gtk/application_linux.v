@@ -1721,11 +1721,16 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		}
 		.open_config {
 			path := configpkg.editable_config_path() or { return false }
-			internal_os.open(path) or { return false }
+			internal_os.open_kind(.text, path) or { return false }
 			return true
 		}
 		.open_url {
-			internal_os.open(data.open_url_.url) or { return false }
+			kind := match data.open_url_.kind {
+				.unknown { internal_os.OpenKind.unknown }
+				.text { internal_os.OpenKind.text }
+				.html { internal_os.OpenKind.html }
+			}
+			internal_os.open_kind(kind, data.open_url_.url) or { return false }
 			return true
 		}
 		.pwd {
