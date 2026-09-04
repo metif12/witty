@@ -5,6 +5,7 @@ import input as inputpkg
 import terminal
 import encoding.utf8.validate
 import strconv
+import themepkg
 
 // --- Original Ghostty Comments Start: src/config/Config.zig
 //
@@ -4957,6 +4958,14 @@ pub fn (p RepeatablePath) clone() !RepeatablePath {
 	}
 }
 
+// expand resolves every relative entry against an absolute configuration-file
+// directory. Existing absolute paths and empty values are unchanged.
+pub fn (mut p RepeatablePath) expand(base string) ! {
+	for mut item in p.items {
+		item.expand(base)!
+	}
+}
+
 // parse_cli appends one path, clears the list for an empty value, and ignores
 // values that become empty after removing the optional marker or quotes.
 pub fn (mut p RepeatablePath) parse_cli(input ?string) ! {
@@ -4974,7 +4983,7 @@ pub fn (mut p RepeatablePath) parse_cli(input ?string) ! {
 
 // Path represents a config file path.
 pub struct Path {
-pub:
+pub mut:
 	path     string
 	optional bool
 }
@@ -5008,6 +5017,28 @@ pub fn (p Path) clone() !Path {
 		path: p.path
 		optional: p.optional
 	}
+}
+
+// expand resolves this path exactly when a configuration reader finishes a
+// file, so paths in nested files remain relative to the file that declared
+// them.
+pub fn (mut p Path) expand(base string) ! {
+	if p.path.len == 0 || os.is_abs_path(p.path) {
+		return
+	}
+	if p.path.starts_with('~/') {
+		home := os.home_dir()
+		if home.len == 0 {
+			p.path = ''
+			return error('unable to expand home directory')
+		}
+		p.path = os.abs_path(os.join_path(home, p.path[2..]))
+		return
+	}
+	if !os.is_abs_path(base) {
+		return error('path expansion base must be absolute: ${base}')
+	}
+	p.path = os.abs_path(os.join_path(base, p.path))
 }
 
 // LinkConfig for configurable link detection.
@@ -5611,18 +5642,16 @@ pub fn (d Diagnostic) str() string {
 	return d.message
 }
 
-// load loads the configuration from the default files and finalizes it.
-// This mirrors Ghostty's `Config.load`, which layers:
-//   1. Defaults
-//   2. The default (XDG / app-support) config files
-//   3. finalize()
-// CLI-arg parsing and recursive config-file loading are not yet modeled.
+// load loads configuration using Ghostty's default-file order, recursively
+// loads config-file entries, and finalizes the result.
 pub fn Config.load() Config {
 	mut c := Config.default_config()
-	path := preferred_default_file_path()
-	if path.len > 0 && os.exists(path) {
-		c.load_file(path)
+	for path in default_file_paths() {
+		if os.is_file(path) {
+			c.load_file(path)
+		}
 	}
+	c.load_recursive_files()
 	c.finalize()
 	return c
 }
@@ -5633,13 +5662,74 @@ pub fn Config.load() Config {
 // ignored. Malformed lines (missing `=`, invalid values, out-of-range
 // indices) are recorded as diagnostics.
 pub fn (mut c Config) load_file(path string) {
-	content := os.read_file(path) or {
-		c.diagnostics << Diagnostic{
-			message: 'config-file ${path}: unable to read file'
-		}
+	abs_path := if os.is_abs_path(path) { path } else { os.abs_path(path) }
+	if os.exists(abs_path) && !os.is_file(abs_path) {
+		c.add_diagnostic('config-file ${abs_path}: not reading because it is not a file')
+		return
+	}
+	content := os.read_file(abs_path) or {
+		c.add_diagnostic('config-file ${abs_path}: unable to read file')
 		return
 	}
 	c.load_string(content)
+	c.expand_paths(os.dir(abs_path))
+}
+
+// load_recursive_files loads each config-file entry once, expanding paths
+// relative to the file that declared them. The list may grow while it is read.
+pub fn (mut c Config) load_recursive_files() {
+	if c.config_file.items.len == 0 {
+		return
+	}
+	mut loaded := map[string]bool{}
+	mut index := 0
+	for index < c.config_file.items.len {
+		item := c.config_file.items[index]
+		index++
+		if item.path.len == 0 {
+			continue
+		}
+		path := if os.is_abs_path(item.path) { item.path } else { os.abs_path(item.path) }
+		if path in loaded {
+			c.add_diagnostic('config-file ${path}: cycle detected')
+			continue
+		}
+		loaded[path] = true
+		if !os.exists(path) {
+			if !item.optional {
+				c.add_diagnostic('error opening config-file ${path}: file not found')
+			}
+			continue
+		}
+		if !os.is_file(path) {
+			c.add_diagnostic('config-file ${path}: not reading because it is not a file')
+			continue
+		}
+		content := os.read_file(path) or {
+			c.add_diagnostic('error opening config-file ${path}: ${err}')
+			continue
+		}
+		c.load_string(content)
+		c.expand_paths(os.dir(path))
+	}
+}
+
+fn (mut c Config) expand_paths(base string) {
+	c.custom_shader.expand(base) or { c.add_diagnostic('error expanding custom-shader path: ${err}') }
+	c.config_file.expand(base) or { c.add_diagnostic('error expanding config-file path: ${err}') }
+	if mut background_image := c.background_image {
+		background_image.expand(base) or {
+			c.add_diagnostic('error expanding background-image path: ${err}')
+			return
+		}
+		c.background_image = background_image
+	}
+}
+
+fn (mut c Config) add_diagnostic(message string) {
+	c.diagnostics << Diagnostic{
+		message: message
+	}
 }
 
 // load_string parses config file contents from an in-memory string. This is
@@ -6905,14 +6995,51 @@ fn (mut c Config) load_theme() {
 // apply_theme_file loads the given theme file and applies its options with the
 // theme-loading flag set so they don't override explicit config values.
 fn (mut c Config) apply_theme_file(path string) {
-	// Only absolute, existing paths are loaded (matching the test setups).
-	if !os.is_abs_path(path) || !os.exists(path) {
+	resolved := c.resolve_theme_file(path) or { return }
+	content := os.read_file(resolved) or {
+		c.add_diagnostic('not reading theme from "${path}": ${err}')
 		return
 	}
-	content := os.read_file(path) or { return }
 	c.loading_theme = true
 	c.load_string(content)
 	c.loading_theme = false
+	c.expand_paths(os.dir(resolved))
+}
+
+fn (mut c Config) resolve_theme_file(name string) ?string {
+	if os.is_abs_path(name) {
+		if !os.exists(name) {
+			c.add_diagnostic('theme "${name}" not found')
+			return none
+		}
+		if !os.is_file(name) {
+			c.add_diagnostic('not reading theme from "${name}": it is not a file')
+			return none
+		}
+		return name
+	}
+	if os.base(name) != name {
+		c.add_diagnostic('theme "${name}" cannot include path separators unless it is an absolute path')
+		return none
+	}
+	mut locations := themepkg.LocationIterator.new()
+	mut tried := []string{}
+	for {
+		location := locations.next() or { break }
+		path := os.join_path(location.dir, name)
+		tried << path
+		if os.exists(path) {
+			if !os.is_file(path) {
+				c.add_diagnostic('not reading theme from "${name}": it is not a file')
+				return none
+			}
+			return path
+		}
+	}
+	for path in tried {
+		c.add_diagnostic('theme "${name}" not found, tried path "${path}"')
+	}
+	return none
 }
 
 // clamp_f64 clamps v to the inclusive range [lo, hi].
@@ -6950,17 +7077,62 @@ pub fn Config.default_config() Config {
 	return result
 }
 
-// preferred_default_file_path returns the preferred default config file path,
-// which is `$XDG_CONFIG_HOME/ghostty/config` (falling back to
-// `$HOME/.config/ghostty/config`).
+// preferred_default_file_path returns the location used for config editing.
 pub fn preferred_default_file_path() string {
+	$if macos {
+		app_support_new := app_support_config_path('config.ghostty')
+		if os.is_file(app_support_new) {
+			return app_support_new
+		}
+		app_support_legacy := app_support_config_path('config')
+		if os.is_file(app_support_legacy) {
+			return app_support_legacy
+		}
+		if os.is_file(default_xdg_config_path()) || os.is_file(legacy_xdg_config_path()) {
+			return preferred_xdg_config_path()
+		}
+		return app_support_new
+	}
+	return preferred_xdg_config_path()
+}
+
+pub fn default_xdg_config_path() string {
 	xdg := os.getenv('XDG_CONFIG_HOME')
 	base := if xdg.len > 0 {
 		xdg
 	} else {
 		os.join_path(os.home_dir(), '.config')
 	}
-	return os.join_path(base, 'ghostty', 'config')
+	return os.join_path(base, 'ghostty', 'config.ghostty')
+}
+
+pub fn legacy_xdg_config_path() string {
+	return os.join_path(os.dir(default_xdg_config_path()), 'config')
+}
+
+fn preferred_xdg_config_path() string {
+	path := default_xdg_config_path()
+	if os.is_file(path) {
+		return path
+	}
+	legacy := legacy_xdg_config_path()
+	if os.is_file(legacy) {
+		return legacy
+	}
+	return path
+}
+
+fn app_support_config_path(name string) string {
+	return os.join_path(os.home_dir(), 'Library', 'Application Support', 'com.mitchellh.ghostty', name)
+}
+
+fn default_file_paths() []string {
+	mut paths := [legacy_xdg_config_path(), default_xdg_config_path()]
+	$if macos {
+		paths << app_support_config_path('config')
+		paths << app_support_config_path('config.ghostty')
+	}
+	return paths
 }
 
 // ============================================================

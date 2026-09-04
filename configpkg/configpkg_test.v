@@ -60,7 +60,7 @@ palette = 300=#ffffff
 	assert cfg.diagnostics.len == 3
 }
 
-fn test_preferred_default_file_path_uses_xdg_config_home() {
+fn test_preferred_default_file_path_uses_platform_location() {
 	old := os.getenv_opt('XDG_CONFIG_HOME')
 	os.setenv('XDG_CONFIG_HOME', '/tmp/witty-config-home', true)
 	defer {
@@ -71,7 +71,8 @@ fn test_preferred_default_file_path_uses_xdg_config_home() {
 		}
 	}
 
-	assert preferred_default_file_path() == os.join_path('/tmp/witty-config-home', 'ghostty', 'config')
+	expected := $if macos { app_support_config_path('config.ghostty') } $else { os.join_path('/tmp/witty-config-home', 'ghostty', 'config.ghostty') }
+	assert preferred_default_file_path() == expected
 }
 
 // ============================================================
@@ -712,6 +713,42 @@ fn test_theme_loading() {
 	assert cfg.background == ColorRGB{0x12, 0x3A, 0xBC}
 	// Not a conditional theme.
 	assert 'theme' !in cfg.conditional_set
+}
+
+fn test_theme_loading_resolves_user_theme_name() {
+	dir := os.join_path(os.temp_dir(), 'witty-theme-name-${os.getpid()}')
+	theme_dir := os.join_path(dir, 'ghostty', 'themes')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(theme_dir)!
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	old_xdg := os.getenv_opt('XDG_CONFIG_HOME')
+	os.setenv('XDG_CONFIG_HOME', dir, true)
+	defer {
+		if value := old_xdg {
+			os.setenv('XDG_CONFIG_HOME', value, true)
+		} else {
+			os.unsetenv('XDG_CONFIG_HOME')
+		}
+	}
+	os.write_file(os.join_path(theme_dir, 'named-theme'), 'background = #123456\ncustom-shader = shader.glsl\n')!
+	mut cfg := Config.default_config()
+	cfg.load_string('theme = named-theme\n')
+	cfg.finalize()
+	assert cfg.background == ColorRGB{0x12, 0x34, 0x56}
+	assert cfg.custom_shader.items == [
+		Path{ path: os.join_path(theme_dir, 'shader.glsl') },
+	]
+	assert cfg.diagnostics.len == 0
+}
+
+fn test_theme_rejects_relative_path_with_separator() {
+	mut cfg := Config.default_config()
+	cfg.load_string('theme = nested/theme\n')
+	cfg.finalize()
+	assert cfg.diagnostics.len == 1
+	assert cfg.diagnostics[0].message.contains('cannot include path separators')
 }
 
 // Config.zig: "theme priority is lower than config"
@@ -1510,4 +1547,93 @@ fn test_path_parse_distinguishes_quoted_question_mark() {
 	assert required == Path{ path: '?required.conf' }
 	assert optional == Path{ path: 'optional.conf', optional: true }
 	assert !required.equal(&optional)
+}
+
+fn test_load_file_expands_paths_relative_to_declaring_file() {
+	dir := os.join_path(os.temp_dir(), 'witty-config-paths-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir)!
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	path := os.join_path(dir, 'config.ghostty')
+	os.write_file(path, 'custom-shader = shader.glsl\nbackground-image = images/bg.png\n')!
+	mut cfg := Config.default_config()
+	cfg.load_file(path)
+	assert cfg.custom_shader.items == [Path{ path: os.join_path(dir, 'shader.glsl') }]
+	assert cfg.background_image? == Path{ path: os.join_path(dir, 'images', 'bg.png') }
+	assert cfg.diagnostics.len == 0
+}
+
+fn test_load_recursive_files_preserves_order_and_nested_bases() {
+	dir := os.join_path(os.temp_dir(), 'witty-config-recursive-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(os.join_path(dir, 'nested'))!
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	root := os.join_path(dir, 'config.ghostty')
+	first := os.join_path(dir, 'first.conf')
+	second := os.join_path(dir, 'nested', 'second.conf')
+	os.write_file(root, 'font-size = 10\nconfig-file = first.conf\n')!
+	os.write_file(first, 'font-size = 11\nconfig-file = nested/second.conf\n')!
+	os.write_file(second, 'font-size = 12\ncustom-shader = effect.glsl\n')!
+
+	mut cfg := Config.default_config()
+	cfg.load_file(root)
+	cfg.load_recursive_files()
+	assert cfg.font_size == 12
+	assert cfg.config_file.items == [
+		Path{ path: first },
+		Path{ path: second },
+	]
+	assert cfg.custom_shader.items == [
+		Path{ path: os.join_path(dir, 'nested', 'effect.glsl') },
+	]
+	assert cfg.diagnostics.len == 0
+}
+
+fn test_recursive_files_skip_optional_missing_and_report_required_and_cycles() {
+	dir := os.join_path(os.temp_dir(), 'witty-config-recursive-errors-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir)!
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	root := os.join_path(dir, 'config.ghostty')
+	child := os.join_path(dir, 'child.conf')
+	os.write_file(root, 'config-file = ?missing.conf\nconfig-file = required.conf\nconfig-file = child.conf\n')!
+	os.write_file(child, 'config-file = child.conf\n')!
+
+	mut cfg := Config.default_config()
+	cfg.load_file(root)
+	cfg.load_recursive_files()
+	assert cfg.diagnostics.len == 2
+	assert cfg.diagnostics[0].message == 'error opening config-file ${os.join_path(dir, 'required.conf')}: file not found'
+	assert cfg.diagnostics[1].message == 'config-file ${child}: cycle detected'
+}
+
+fn test_preferred_xdg_path_uses_new_then_legacy_name() {
+	dir := os.join_path(os.temp_dir(), 'witty-config-default-path-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(os.join_path(dir, 'ghostty'))!
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	old_xdg := os.getenv_opt('XDG_CONFIG_HOME')
+	os.setenv('XDG_CONFIG_HOME', dir, true)
+	defer {
+		if value := old_xdg {
+			os.setenv('XDG_CONFIG_HOME', value, true)
+		} else {
+			os.unsetenv('XDG_CONFIG_HOME')
+		}
+	}
+	new_path := os.join_path(dir, 'ghostty', 'config.ghostty')
+	legacy_path := os.join_path(dir, 'ghostty', 'config')
+	assert preferred_xdg_config_path() == new_path
+	os.write_file(legacy_path, 'font-size = 10\n')!
+	assert preferred_xdg_config_path() == legacy_path
+	os.write_file(new_path, 'font-size = 11\n')!
+	assert preferred_xdg_config_path() == new_path
 }

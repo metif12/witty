@@ -6,7 +6,7 @@ import global_state
 // Location of possible themes. The order of this enum matters because it
 // defines the priority of theme search (from top to bottom).
 pub enum Location {
-	user      // XDG config dir
+	user // XDG config dir
 	resources // Ghostty resources dir
 }
 
@@ -18,7 +18,8 @@ pub enum Location {
 pub fn (l Location) dir() string {
 	match l {
 		.user {
-			config_dir := os.config_dir() or { return '' }
+			xdg := os.getenv('XDG_CONFIG_HOME')
+			config_dir := if xdg.len > 0 { xdg } else { os.join_path(os.home_dir(), '.config') }
 			return os.join_path(config_dir, 'ghostty', 'themes')
 		}
 		.resources {
@@ -67,7 +68,7 @@ pub fn (mut self LocationIterator) next() ?LocationEntry {
 		if d.len > 0 {
 			return LocationEntry{
 				location: loc
-				dir:      d
+				dir: d
 			}
 		}
 	}
