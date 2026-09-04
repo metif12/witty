@@ -2561,3 +2561,19 @@ fn test_screen_test_write_string_preserves_style_and_hyperlink() {
 	assert row.cells[0].has_hyperlink
 	assert row.cells[1].has_hyperlink
 }
+
+fn test_screen_dump_string_bounded_region() {
+	mut s := Screen.init(5, 3, 0)
+	defer { s.deinit() }
+
+	s.test_write_string('ABCDE\nFGHIJ\nKLMNO') or { assert false }
+	result := s.dump_string(DumpStringOptions{
+		tl: Pin{ x: 1, y: 0 }
+		br: Pin{ x: 2, y: 1 }
+		unwrap: false
+	}) or {
+		assert false
+		return
+	}
+	assert result == 'BCDE\nFGH'
+}

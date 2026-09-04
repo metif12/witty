@@ -1725,8 +1725,6 @@ import unicode
 //
 // --- Original Ghostty Comments End: src/terminal/Screen.zig
 
-import strings
-
 // Screen represents a single terminal screen with cursor, selection,
 // and cell data. Translated from ghostty's Screen.zig.
 
@@ -3702,104 +3700,58 @@ fn (self &Screen) prompt_click_line(click_pin Pin) PromptClickMove {
 // Dump / Format
 // ============================================================
 
-// Dump screen contents to a string.
+// Options for dumping an inclusive screen region.
+pub struct DumpStringOptions {
+pub:
+	tl     Pin
+	br     ?Pin
+	unwrap bool = true
+}
+
+// Dump the screen through the shared formatter. The supplied pins are
+// absolute flat-storage pins; when br is omitted the screen's final written
+// cell is used. This is the writer-independent V equivalent of Ghostty's
+// Screen.dumpString.
+pub fn (self &Screen) dump_string(opts DumpStringOptions) !string {
+	if int(opts.tl.y) >= self.pages.screen_rows.len || opts.tl.x >= self.pages.cols {
+		return error('UnknownPoint')
+	}
+	br := opts.br or { self.pages.get_bottom_right(.screen) or { return error('UnknownPoint') } }
+	if int(br.y) >= self.pages.screen_rows.len || br.x >= self.pages.cols {
+		return error('UnknownPoint')
+	}
+	mut formatter := PageFormatter.init(&self.pages, FormatOptions{
+		emit: .plain
+		unwrap: opts.unwrap
+		trim: false
+	})
+	formatter.start_x = opts.tl.x
+	formatter.start_y = opts.tl.y
+	formatter.end_x = br.x
+	formatter.end_y = br.y
+	return formatter.format()
+}
+
+// Dump screen contents to an allocated string without joining soft wraps.
 pub fn (self &Screen) dump_string_alloc(tag PointTag) !string {
-	start_y, end_y := match tag {
-		.screen {
-			0, self.pages.screen_rows.len
-		}
-		.active {
-			self.pages.active_start, self.pages.active_start + int(self.pages.rows)
-		}
-		.viewport {
-			self.pages.viewport_start, self.pages.viewport_start + int(self.pages.rows)
-		}
-		.history {
-			0, self.pages.active_start
-		}
-	}
-
-	// Find the last row with content
-	mut last_content_y := start_y - 1
-	for y in start_y .. end_y {
-		if y >= self.pages.screen_rows.len {
-			break
-		}
-		row := self.pages.screen_rows[y]
-		for x in 0 .. int(self.pages.cols) {
-			if x < row.cells.len && row.cells[x].codepoint != 0 {
-				last_content_y = y
-				break
-			}
-		}
-	}
-
-	if last_content_y < start_y {
-		return ''
-	}
-
-	mut result := strings.new_builder(256)
-	for y in start_y .. last_content_y + 1 {
-		if y >= self.pages.screen_rows.len {
-			break
-		}
-		if y > start_y {
-			result.write_string('\n')
-		}
-		row := self.pages.screen_rows[y]
-		// Find last non-empty cell
-		mut last_x := -1
-		for x := int(self.pages.cols) - 1; x >= 0; x-- {
-			if x < row.cells.len && row.cells[x].codepoint != 0 {
-				last_x = x
-				break
-			}
-		}
-		for x in 0 .. last_x + 1 {
-			if x < row.cells.len {
-				cp := row.cells[x].codepoint
-				if cp == 0 {
-					result.write_string(' ')
-				} else {
-					result.write_rune(rune(cp))
-				}
-			}
-		}
-	}
-
-	return result.str()
+	tl := self.pages.get_top_left(tag)
+	br := self.pages.get_bottom_right(tag) or { return error('UnknownPoint') }
+	return self.dump_string(DumpStringOptions{
+		tl: tl
+		br: br
+		unwrap: false
+	})
 }
 
 // Dump unwrapped (soft-wraps joined) contents to a string.
 pub fn (self &Screen) dump_string_alloc_unwrapped(tag PointTag) !string {
-	start_y, end_y := self.dump_row_range(tag)
-	if end_y <= start_y || self.pages.cols == 0 {
-		return ''
-	}
-	mut formatter := PageFormatter.init(&self.pages, FormatOptions{
-		emit: .plain
+	tl := self.pages.get_top_left(tag)
+	br := self.pages.get_bottom_right(tag) or { return error('UnknownPoint') }
+	return self.dump_string(DumpStringOptions{
+		tl: tl
+		br: br
 		unwrap: true
-		trim: false
 	})
-	formatter.start_y = u32(start_y)
-	formatter.end_y = u32(end_y - 1)
-	formatter.end_x = self.pages.cols - 1
-	return formatter.format()
-}
-
-fn (self &Screen) dump_row_range(tag PointTag) (int, int) {
-	return match tag {
-		.screen { 0, self.pages.screen_rows.len }
-		.active, .viewport {
-			end := if self.pages.active_start + int(self.pages.rows) < self.pages.screen_rows.len {
-				self.pages.active_start + int(self.pages.rows)
-			} else {
-				self.pages.screen_rows.len
-			}
-			self.pages.active_start, end
-		}
-		.history { 0, self.pages.active_start }
-	}
 }
 
 // ============================================================
