@@ -2321,6 +2321,11 @@ fn test_screen_resize_more_rows_less_cols_reflow_with_scrollback() {
 		return
 	}
 	assert str_screen == '1A\nBC\nD\n2E\nFG\nH3\nIJ\nKL\n4M\nNO\nP'
+	// The live cursor is a tracked pin independent from the resize helper's
+	// active-relative cursor hint, so it must continue to point at P.
+	assert s.cursor.x == 0
+	assert s.cursor.y == 9
+	assert active_codepoint(s, s.cursor.x, s.cursor.y) == u32(`P`)
 }
 
 // --- resize more cols with cursor at/not at prompt ---

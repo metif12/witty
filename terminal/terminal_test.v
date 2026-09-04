@@ -1689,6 +1689,102 @@ fn test_resize_less_cols_with_wide_char_then_print() {
 	assert t.cols == 2
 }
 
+fn test_resize_less_cols_eliminates_wide_char_that_cannot_fit() {
+	mut t := Terminal.init(Options{ cols: 2, rows: 1, max_scrollback: 0 }) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+	t.modes.set(.wraparound, true)
+	t.print(u32(`😀`)) or { assert false }
+	assert (t.plain_string() or { '' }) == '😀'
+	assert cell_at(&t, 0, 0).wide == .wide
+
+	t.resize(1, 1) or { assert false }
+
+	assert (t.plain_string() or { 'unexpected' }) == ''
+	cell := cell_at(&t, 0, 0)
+	assert cell.codepoint == 0
+	assert cell.wide == .narrow
+}
+
+fn test_resize_less_cols_wraps_wide_char() {
+	mut t := Terminal.init(Options{ cols: 3, rows: 3, max_scrollback: 0 }) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+	t.modes.set(.wraparound, true)
+	t.print(u32(`x`)) or { assert false }
+	t.print(u32(`😀`)) or { assert false }
+	assert (t.plain_string() or { '' }) == 'x😀'
+
+	t.resize(2, 3) or { assert false }
+
+	assert (t.plain_string() or { '' }) == 'x\n😀'
+	assert cell_at(&t, 1, 0).wide == .spacer_head
+	assert t.screens.active.pages.get_active_row(0).wrap
+	assert cell_at(&t, 0, 1).wide == .wide
+	assert cell_at(&t, 1, 1).wide == .spacer_tail
+}
+
+fn test_resize_more_cols_unwraps_wide_spacer_head() {
+	mut t := Terminal.init(Options{ cols: 3, rows: 2, max_scrollback: 0 }) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+	t.modes.set(.wraparound, true)
+	t.print_string('  ') or { assert false }
+	t.print(u32(`😀`)) or { assert false }
+	assert (t.plain_string() or { '' }) == '  \n😀'
+	assert cell_at(&t, 2, 0).wide == .spacer_head
+
+	t.resize(4, 2) or { assert false }
+
+	assert (t.plain_string() or { '' }) == '  😀'
+	assert cell_at(&t, 2, 0).wide == .wide
+	assert cell_at(&t, 3, 0).wide == .spacer_tail
+}
+
+fn test_resize_more_cols_unwraps_wide_spacer_head_multiple_lines() {
+	mut t := Terminal.init(Options{ cols: 3, rows: 3, max_scrollback: 0 }) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+	t.modes.set(.wraparound, true)
+	t.print_string('xxxyy') or { assert false }
+	t.print(u32(`😀`)) or { assert false }
+	assert (t.plain_string() or { '' }) == 'xxx\nyy\n😀'
+	assert cell_at(&t, 2, 1).wide == .spacer_head
+
+	t.resize(8, 2) or { assert false }
+
+	assert (t.plain_string() or { '' }) == 'xxxyy😀'
+	assert cell_at(&t, 5, 0).wide == .wide
+	assert cell_at(&t, 6, 0).wide == .spacer_tail
+}
+
+fn test_resize_more_cols_preserves_required_wide_spacer_head() {
+	mut t := Terminal.init(Options{ cols: 2, rows: 2, max_scrollback: 0 }) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+	t.modes.set(.wraparound, true)
+	t.print_string('xx') or { assert false }
+	t.print(u32(`😀`)) or { assert false }
+	assert (t.plain_string() or { '' }) == 'xx\n😀'
+
+	t.resize(3, 2) or { assert false }
+
+	assert (t.plain_string() or { '' }) == 'xx\n😀'
+	assert cell_at(&t, 2, 0).wide == .spacer_head
+	assert cell_at(&t, 0, 1).wide == .wide
+	assert cell_at(&t, 1, 1).wide == .spacer_tail
+}
+
 // https://github.com/mitchellh/ghostty/issues/723
 // This was found via fuzzing so its highly specific.
 fn test_resize_with_left_and_right_margin_set_fuzz() {
