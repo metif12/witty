@@ -2209,12 +2209,29 @@ auto-update-channel = stable
 	assert cfg.right_click_action == .copy_or_paste
 	assert cfg.osc_color_report_format == .format_8_bit
 	assert cfg.custom_shader_animation == .always
-	assert cfg.mouse_scroll_multiplier == 2.5
+	assert cfg.mouse_scroll_multiplier.precision == 2.5
+	assert cfg.mouse_scroll_multiplier.discrete == 2.5
 	assert cfg.image_storage_limit == 0x100
 	assert cfg.undo_timeout.duration == u64(5_400) * 1_000_000_000
 	assert cfg.async_backend == .io_uring
 	assert cfg.auto_update? == .download
 	assert cfg.auto_update_channel? == .stable
+}
+
+fn test_config_mouse_scroll_multiplier_struct_and_finalize() {
+	mut cfg := Config.default_config()
+	assert cfg.mouse_scroll_multiplier == MouseScrollMultiplier{
+		precision: 1
+		discrete: 3
+	}
+	cfg.load_string('mouse-scroll-multiplier = precision:0.001,discrete:20000\n')
+	assert cfg.diagnostics.len == 0
+	assert cfg.mouse_scroll_multiplier.precision == 0.001
+	assert cfg.mouse_scroll_multiplier.discrete == 20_000
+	cfg.finalize()
+	assert cfg.mouse_scroll_multiplier.precision == 0.01
+	assert cfg.mouse_scroll_multiplier.discrete == 10_000
+	assert cfg.format_config(true).contains('mouse-scroll-multiplier = precision:0.01,discrete:10000\n')
 }
 
 fn test_repeatable_config_values_reset_and_env_remove() {

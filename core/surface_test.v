@@ -714,6 +714,49 @@ fn test_encode_key_no_output() {
 	assert req == none
 }
 
+fn test_scroll_callback_uses_precision_multiplier_and_accumulates_pixels() {
+	mut surf := make_test_surface()
+	surf.size.cell = CellSize{ width: 10, height: 10 }
+	surf.config.mouse_scroll_multiplier = configpkg.MouseScrollMultiplier{
+		precision: 2
+		discrete: 3
+	}
+	surf.scroll_callback(0, 2, true)!
+	assert surf.mouse.pending_scroll_y == 4
+	surf.scroll_callback(0, 3, true)!
+	assert surf.mouse.pending_scroll_y == 0
+	assert surf.renderer_thread.wakeup.count == 2
+}
+
+fn test_scroll_callback_alternate_screen_emits_cursor_sequences() {
+	mut surf := make_test_surface()
+	surf.size.cell = CellSize{ width: 10, height: 10 }
+	mut term := surf.renderer_state.terminal
+	term.switch_screen(.alternate)!
+	term.modes.set(.cursor_keys, true)
+	surf.scroll_callback(0, 0.1, false)!
+	assert surf.io.messages.len == 3
+	for msg in surf.io.messages {
+		assert msg.kind == .write_stable
+		assert msg.data.bytestr() == '\x1bOA'
+	}
+}
+
+fn test_scroll_callback_reports_horizontal_wheel_buttons() {
+	mut runtime := RuntimeSurface{}
+	mut surf := make_test_surface()
+	surf.rt_surface = &runtime
+	surf.size = make_test_size()
+	surf.config.mouse_reporting = true
+	surf.renderer_state.terminal.flags.mouse_event = .normal
+	surf.scroll_callback(2, 0, false)!
+	assert surf.io.messages.len == 2
+	for msg in surf.io.messages {
+		assert msg.kind in [.write_small, .write_alloc]
+		assert msg.data.len > 0
+	}
+}
+
 fn test_copy_selection_to_standard_clipboard() ! {
 	mut surf := make_test_surface()
 	mut runtime := RuntimeSurface{}

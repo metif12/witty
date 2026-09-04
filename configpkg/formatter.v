@@ -379,7 +379,9 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	add_group(mut result, 'mouse-shift-capture', [
 		enum_config_string(c.mouse_shift_capture.str()),
 	])
-	add_group(mut result, 'mouse-scroll-multiplier', ['${c.mouse_scroll_multiplier}'])
+	add_group(mut result, 'mouse-scroll-multiplier', [
+		c.mouse_scroll_multiplier.format(),
+	])
 	add_group(mut result, 'right-click-action', [
 		enum_config_string(c.right_click_action.str()),
 	])

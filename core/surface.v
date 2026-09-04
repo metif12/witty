@@ -1500,6 +1500,7 @@ enum KeySequenceMemory {
 // ScrollAmount keeps track of the scroll delta, normalized so that
 // negative is down/left and positive is up/right.
 struct ScrollAmount {
+mut:
 	delta i64
 }
 
@@ -2301,6 +2302,7 @@ pub mut:
 	mouse_interval                   u64
 	mouse_hide_while_typing          bool
 	mouse_reporting                  bool
+	mouse_scroll_multiplier          configpkg.MouseScrollMultiplier
 	mouse_shift_capture              MouseShiftCapture
 	macos_non_native_fullscreen      configpkg.NonNativeFullscreen
 	macos_option_as_alt              ?input.OptionAsAlt
@@ -2404,6 +2406,7 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 		mouse_interval: u64(config.click_repeat_interval) * u64(time.millisecond)
 		mouse_hide_while_typing: config.mouse_hide_while_typing
 		mouse_reporting: config.mouse_reporting
+		mouse_scroll_multiplier: config.mouse_scroll_multiplier
 		mouse_shift_capture: unsafe { MouseShiftCapture(config.mouse_shift_capture) }
 		macos_non_native_fullscreen: config.macos_non_native_fullscreen
 		macos_option_as_alt: config.macos_option_as_alt
@@ -3416,47 +3419,93 @@ pub fn (mut self Surface) refresh_callback() ! {
 
 // scroll_callback handles mouse scroll events.
 pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, precision bool) ! {
-	// Accumulate scroll deltas for high-precision (trackpad) scrolling
-	if precision {
-		self.mouse.pending_scroll_x += xoff
-		self.mouse.pending_scroll_y += yoff
-	} else {
-		self.mouse.pending_scroll_x = xoff
-		self.mouse.pending_scroll_y = yoff
+	if self.mouse.hidden {
+		self.show_mouse()
 	}
 
-	// Convert pixel scroll to line scroll using cell height
-	cell_h := if self.size.cell.height > 0 { f64(self.size.cell.height) } else { 1.0 }
-	y_lines := i64(self.mouse.pending_scroll_y / cell_h)
-	if y_lines == 0 && !precision {
-		// For non-precision, always scroll at least one line
-		if self.mouse.pending_scroll_y > 0 {
-			self.mouse.pending_scroll_y = 0
-			self.renderer_state.terminal.scroll_viewport(.delta, -1)!
-			self.queue_render()!
-			return
-		} else if self.mouse.pending_scroll_y < 0 {
-			self.mouse.pending_scroll_y = 0
-			self.renderer_state.terminal.scroll_viewport(.delta, 1)!
-			self.queue_render()!
-			return
-		}
-	}
-
-	if y_lines != 0 {
-		// Consume the scroll amount that produced these lines
-		self.mouse.pending_scroll_y -= f64(y_lines) * cell_h
-
-		// Check if terminal is in mouse reporting mode
-		if self.renderer_state.terminal.flags.mouse_event != .none {
-			// Report scroll as mouse button events to the terminal
-			self.mouse_report(none, .press, self.mouse.mods, CursorPos{})!
+	mut y := ScrollAmount{}
+	if yoff != 0 {
+		cell_size := f64(self.size.cell.height)
+		yoff_adjusted := if precision {
+			yoff * self.config.mouse_scroll_multiplier.precision
 		} else {
-			// Scroll the viewport
-			self.renderer_state.terminal.scroll_viewport(.delta, int(-y_lines))!
+			yoff_max := if yoff > 0 { math.max(yoff, 1) } else { math.min(yoff, -1) }
+			yoff_max * cell_size * self.config.mouse_scroll_multiplier.discrete
 		}
-		self.queue_render()!
+		poff := self.mouse.pending_scroll_y + yoff_adjusted
+		if math.abs(poff) < cell_size {
+			self.mouse.pending_scroll_y = poff
+		} else {
+			amount := poff / cell_size
+			self.mouse.pending_scroll_y = poff - (amount * cell_size)
+			y.delta = i64(amount)
+		}
 	}
+
+	mut x := ScrollAmount{}
+	if xoff != 0 {
+		if !precision {
+			x.delta = i64(math.round(xoff))
+		} else {
+			poff := self.mouse.pending_scroll_x + xoff
+			cell_size := f64(self.size.cell.width)
+			if math.abs(poff) < cell_size {
+				self.mouse.pending_scroll_x = poff
+			} else {
+				amount := poff / cell_size
+				self.mouse.pending_scroll_x = poff - (amount * cell_size)
+				x.delta = i64(amount)
+			}
+		}
+	}
+
+	if self.is_mouse_reporting() {
+		self.set_selection(none)!
+	}
+
+	mut t := self.renderer_state.terminal
+	if t.screens.active_key == .alternate && t.flags.mouse_event == .none
+		&& t.modes.get(.mouse_alternate_scroll) {
+		if y.delta != 0 {
+			self.set_selection(none)!
+			seq := if t.modes.get(.cursor_keys) {
+				if y.direction() == .up_right { '\x1bOA' } else { '\x1bOB' }
+			} else {
+				if y.direction() == .up_right { '\x1b[A' } else { '\x1b[B' }
+			}
+			for _ in 0 .. int(y.magnitude()) {
+				self.queue_io(IOMessage{ kind: .write_stable, data: seq.bytes() })
+			}
+		}
+		return
+	}
+
+	if self.is_mouse_reporting() {
+		for _ in 0 .. int(y.magnitude()) {
+			pos := self.rt_surface.get_cursor_pos()!
+			button := if y.direction() == .up_right {
+				input.MouseButton.four
+			} else {
+				input.MouseButton.five
+			}
+			self.mouse_report(button, .press, self.mouse.mods, pos)!
+		}
+		for _ in 0 .. int(x.magnitude()) {
+			pos := self.rt_surface.get_cursor_pos()!
+			button := if x.direction() == .up_right {
+				input.MouseButton.six
+			} else {
+				input.MouseButton.seven
+			}
+			self.mouse_report(button, .press, self.mouse.mods, pos)!
+		}
+		return
+	}
+
+	if y.delta != 0 {
+		t.scroll_viewport(.delta, int(-y.delta))!
+	}
+	self.queue_render()!
 }
 
 // content_scale_callback is called when the DPI content scale changes.

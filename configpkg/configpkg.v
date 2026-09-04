@@ -4189,7 +4189,7 @@ pub mut:
 	// Whether a custom shader animates.
 	custom_shader_animation CustomShaderAnimation = .true_
 	// The multiplier applied to the scroll distance with the mouse wheel.
-	mouse_scroll_multiplier f64 = 1.0
+	mouse_scroll_multiplier MouseScrollMultiplier
 	// Theme color fields used by list-themes preview
 	foreground  ColorRGB = ColorRGB{ r: 0xff, g: 0xff, b: 0xff }
 	background  ColorRGB = ColorRGB{ r: 0x28, g: 0x2C, b: 0x34 }
@@ -7315,19 +7315,26 @@ fn (mut c Config) apply_kv(key string, value string) {
 		'font-thicken-strength' {
 			c.font_thicken_strength = c.parse_config_u8(key, value) or { return }
 		}
-		'background-image-opacity', 'mouse-scroll-multiplier', 'quick-terminal-animation-duration' {
+		'background-image-opacity', 'quick-terminal-animation-duration' {
 			parsed := c.parse_config_f64(key, value) or { return }
 			match key {
 				'background-image-opacity' {
 					c.background_image_opacity = f32(parsed)
 				}
-				'mouse-scroll-multiplier' {
-					c.mouse_scroll_multiplier = parsed
-				}
 				'quick-terminal-animation-duration' {
 					c.quick_terminal_animation_duration = parsed
 				}
 				else {}
+			}
+		}
+		'mouse-scroll-multiplier' {
+			if value.len == 0 {
+				c.mouse_scroll_multiplier = MouseScrollMultiplier{}
+			} else {
+				c.mouse_scroll_multiplier.parse_cli(value) or {
+					c.invalid_config_value(key, value)
+					return
+				}
 			}
 		}
 		'clipboard-read', 'clipboard-write' {
@@ -8601,8 +8608,9 @@ pub fn (mut c Config) finalize() {
 		c.term = 'xterm-ghostty'
 	}
 
-	// Clamp the mouse scroll multiplier to [0.01, 10000].
-	c.mouse_scroll_multiplier = clamp_f64(c.mouse_scroll_multiplier, 0.01, 10_000.0)
+	// Clamp both mouse scroll multipliers to [0.01, 10000].
+	c.mouse_scroll_multiplier.precision = clamp_f64(c.mouse_scroll_multiplier.precision, 0.01, 10_000.0)
+	c.mouse_scroll_multiplier.discrete = clamp_f64(c.mouse_scroll_multiplier.discrete, 0.01, 10_000.0)
 
 	// Clamp the split opacity.
 	c.unfocused_split_opacity = clamp_f64(c.unfocused_split_opacity, 0.15, 1.0)
