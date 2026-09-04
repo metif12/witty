@@ -683,7 +683,7 @@ module terminal
   The V translation is significantly more compact because:
   - Zig's comptime patterns, explicit allocator passing, and Writer generics are replaced by V's strings.Builder
   - Zig's verbose test infrastructure (custom allocators, errdefer, error unions) becomes simple V test functions
-  - The PageListFormatter was merged into PageFormatter since V uses a simpler Pages array model
+  - Zig's writer API is represented by returned strings
 
 */
 
@@ -1117,6 +1117,102 @@ pub fn ScreenFormatter.init(screen &Screen, opts FormatOptions) ScreenFormatter 
 	}
 }
 
+// PageList formatter formats multiple linked pages as represented by a
+// PageList. Trailing state is carried from one page to the next so blank rows
+// and soft-wrapped lines spanning page boundaries are emitted exactly once.
+pub struct PageListFormatter {
+pub:
+	// The linked page list to format.
+	list &PageList
+	// Common formatting options.
+	opts FormatOptions
+pub mut:
+	// Inclusive ordered bounds. If absent, the complete page list is used.
+	top_left     ?PagePin
+	bottom_right ?PagePin
+	// Apply the X bounds to every row rather than only the first and last.
+	rectangle bool
+	// Optional mapping from every output byte to its linked-page pin.
+	pin_map &PagePinMap = unsafe { nil }
+}
+
+// PagePinMap maps every output byte to its source position in a PageList.
+pub struct PagePinMap {
+pub mut:
+	pins []PagePin
+}
+
+pub fn PageListFormatter.init(list &PageList, opts FormatOptions) PageListFormatter {
+	return PageListFormatter{
+		list: unsafe { list }
+		opts: opts
+	}
+}
+
+pub fn (self PageListFormatter) format() string {
+	tl := self.top_left or { self.list.get_top_left(.screen) }
+	br := self.bottom_right or { self.list.get_bottom_right(.screen) or { return '' } }
+
+	mut output := strings.new_builder(1024)
+	mut point_map := PointMap{}
+	mut trailing := ?TrailingState(none)
+	mut iter := tl.page_iterator(.right_down, br)
+	for {
+		chunk := iter.next() or { break }
+		assert chunk.start < chunk.end
+
+		// PageFormatter is shared with the flat Screen representation. A linked
+		// Page already uses the same RowData/CellData values, so this is a
+		// read-only view over the current node rather than a data conversion.
+		page := &chunk.node.data
+		view := Pages{
+			screen_rows: page.rows[..int(page.size.rows)]
+			cols: u32(page.size.cols)
+			rows: u32(page.size.rows)
+		}
+		mut formatter := PageFormatter.init(&view, self.opts)
+		formatter.linked_page = page
+		formatter.start_y = u32(chunk.start)
+		formatter.end_y = u32(chunk.end - 1)
+		formatter.trailing_state = trailing
+		formatter.rectangle = self.rectangle
+
+		if self.rectangle {
+			formatter.start_x = u32(tl.x)
+			formatter.end_x = u32(br.x)
+		} else {
+			if voidptr(chunk.node) == voidptr(tl.node) {
+				formatter.start_x = u32(tl.x)
+			}
+			if voidptr(chunk.node) == voidptr(br.node) {
+				formatter.end_x = u32(br.x)
+			}
+		}
+
+		if self.pin_map != unsafe { nil } {
+			point_map.points.clear()
+			formatter.point_map = &point_map
+		}
+
+		result := formatter.format_with_state()
+		output.write_string(result.output)
+		trailing = result.state
+
+		if self.pin_map != unsafe { nil } {
+			unsafe {
+				for point in point_map.points {
+					self.pin_map.pins << PagePin{
+						node: chunk.node
+						x: u16(point.x)
+						y: u16(point.y)
+					}
+				}
+			}
+		}
+	}
+	return output.str()
+}
+
 pub fn (self ScreenFormatter) format() string {
 	mut sb := strings.new_builder(1024)
 
@@ -1299,6 +1395,9 @@ pub mut:
 	// The previous trailing state from the prior page.
 	trailing_state ?TrailingState
 	point_map      &PointMap = unsafe { nil }
+	// The owning linked Page, when formatting through PageListFormatter. Its
+	// style table is authoritative; flat Screen pages store styles inline.
+	linked_page &Page = unsafe { nil }
 }
 
 // Trailing state for cross-page continuation.
@@ -1744,7 +1843,13 @@ fn (self PageFormatter) write_codepoint(mut sb strings.Builder, codepoint u32) {
 fn (self PageFormatter) cell_style(cell CellData) CellStyle {
 	return match cell.content_tag {
 		.codepoint, .codepoint_grapheme {
-			if cell_has_styling(cell) { cell.style } else { CellStyle{} }
+			if !cell_has_styling(cell) {
+				CellStyle{}
+			} else if self.linked_page != unsafe { nil } {
+				self.linked_page.styles.get(cell.style_id)
+			} else {
+				cell.style
+			}
 		}
 		.bg_color_palette {
 			CellStyle{

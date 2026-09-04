@@ -1327,11 +1327,6 @@ fn test_page_plain_single_line_soft_wrapped_unwrapped() {
 }
 
 // Page plain single wide char.
-//
-// Note: the ghostty test also asserts state.cells == cols - 4 (⚡ occupies a
-// wide cell + spacer_tail). This port's simplified wide-char cell model does
-// not emit a spacer_tail, so we assert only the formatted output which is the
-// core behavior.
 fn test_page_plain_single_wide_char() {
 	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
 	mut s := ReadonlyStream.init(mut t)
@@ -1340,14 +1335,153 @@ fn test_page_plain_single_wide_char() {
 	}
 	s.next_slice('1A⚡') or { panic(err) }
 
-	// Full string
-	mut f := PageFormatter.init(&t.screens.active.pages, format_plain)
-	assert f.format() == '1A⚡'
+	mut points := PointMap{}
 
-	// Wide only (from start of the wide char)
+	// Full string.
+	mut f := PageFormatter.init(&t.screens.active.pages, format_plain)
+	f.point_map = &points
+	result := f.format_with_state()
+	assert result.output == '1A⚡'
+	assert result.state.rows == int(t.screens.active.pages.screen_rows.len)
+	assert result.state.cells == int(t.screens.active.pages.cols) - 4
+	assert points.points.len == result.output.len
+	for i in 2 .. result.output.len {
+		assert points.points[i] == Coordinate{ x: 2, y: 0 }
+	}
+
+	// Wide only (from start of the wide char).
+	points.points.clear()
 	mut f2 := PageFormatter.init(&t.screens.active.pages, format_plain)
 	f2.start_x = 2
-	assert f2.format() == '⚡'
+	f2.point_map = &points
+	result2 := f2.format_with_state()
+	assert result2.output == '⚡'
+	assert result2.state.rows == int(t.screens.active.pages.screen_rows.len)
+	assert result2.state.cells == int(t.screens.active.pages.cols) - 4
+	assert points.points.len == result2.output.len
+	for point in points.points {
+		assert point == Coordinate{ x: 2, y: 0 }
+	}
+
+	// Starting from the spacer tail must include the owning wide cell.
+	points.points.clear()
+	mut f3 := PageFormatter.init(&t.screens.active.pages, format_plain)
+	f3.start_x = 3
+	f3.point_map = &points
+	result3 := f3.format_with_state()
+	assert result3.output == '⚡'
+	assert result3.state.rows == int(t.screens.active.pages.screen_rows.len)
+	assert result3.state.cells == int(t.screens.active.pages.cols) - 4
+	assert points.points.len == result3.output.len
+	for point in points.points {
+		assert point == Coordinate{ x: 2, y: 0 }
+	}
+}
+
+fn test_page_list_plain_spanning_two_pages_with_pin_map() {
+	mut list := PageList.init(8, 2, none)
+	defer {
+		list.deinit()
+	}
+	mut first := list.pages.first or {
+		assert false, 'expected first page'
+		return
+	}
+	first.data.rows[1].cells[0] = CellData.init(u32(`o`))
+	first.data.rows[1].cells[1] = CellData.init(u32(`n`))
+	first.data.rows[1].cells[2] = CellData.init(u32(`e`))
+
+	mut second := &PageNode{
+		data: Page.init(first.data.capacity)
+		serial: list.page_serial
+	}
+	list.page_serial++
+	second.data.size.rows = 2
+	second.data.rows[0].cells[0] = CellData.init(u32(`t`))
+	second.data.rows[0].cells[1] = CellData.init(u32(`w`))
+	second.data.rows[0].cells[2] = CellData.init(u32(`o`))
+	list.pages.append(second)
+	list.total_rows += 2
+
+	mut pins := PagePinMap{}
+	mut formatter := PageListFormatter.init(&list, format_plain)
+	formatter.top_left = PagePin{
+		node: first
+		x: 0
+		y: 1
+	}
+	formatter.bottom_right = PagePin{
+		node: second
+		x: 2
+		y: 0
+	}
+	formatter.pin_map = &pins
+	output := formatter.format()
+	assert output == 'one\ntwo'
+	assert pins.pins.len == output.len
+	for i in 0 .. 3 {
+		assert voidptr(pins.pins[i].node) == voidptr(first)
+		assert pins.pins[i].x == i
+		assert pins.pins[i].y == 1
+	}
+	// The newline is deferred as trailing state and emitted by the second
+	// page, so it maps to that page just like Ghostty's formatter.
+	assert voidptr(pins.pins[3].node) == voidptr(second)
+	for i in 4 .. output.len {
+		assert voidptr(pins.pins[i].node) == voidptr(second)
+		assert pins.pins[i].x == i - 4
+		assert pins.pins[i].y == 0
+	}
+}
+
+fn test_page_list_vt_uses_each_pages_style_table() {
+	mut list := PageList.init(4, 1, none)
+	defer {
+		list.deinit()
+	}
+	mut first := list.pages.first or {
+		assert false, 'expected first page'
+		return
+	}
+	bold := CellStyle{
+		flags: StyleFlags{
+			bold: true
+		}
+	}
+	first_style_id := first.data.styles.add(bold)!
+	first.data.rows[0].cells[0] = CellData{
+		codepoint: u32(`A`)
+		style_id: first_style_id
+	}
+
+	mut second := &PageNode{
+		data: Page.init(first.data.capacity)
+		serial: list.page_serial
+	}
+	list.page_serial++
+	second.data.size.rows = 1
+	italic := CellStyle{
+		flags: StyleFlags{
+			italic: true
+		}
+	}
+	second_style_id := second.data.styles.add(italic)!
+	second.data.rows[0].cells[0] = CellData{
+		codepoint: u32(`B`)
+		style_id: second_style_id
+	}
+	list.pages.append(second)
+	list.total_rows++
+
+	mut formatter := PageListFormatter.init(&list, format_vt)
+	formatter.top_left = PagePin{
+		node: first
+	}
+	formatter.bottom_right = PagePin{
+		node: second
+	}
+	output := formatter.format()
+	assert output == '\x1b[0m\x1b[1mA\x1b[0m\r\n\x1b[0m\x1b[3mB\x1b[0m'
 }
 
 // Page plain start_y and start_x zero uses trailing state.
