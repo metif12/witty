@@ -2081,9 +2081,10 @@ fn (w WriteReq) deinit() {
 @[heap]
 pub struct SurfaceSearch {
 pub mut:
-	needle string
-	state  searchpkg.SearchThread
-	mutex  &sync.Mutex = unsafe { nil }
+	needle  string
+	state   &searchpkg.SearchThread = unsafe { nil }
+	mutex   &sync.Mutex = unsafe { nil }
+	thread_ ?thread
 }
 
 fn SurfaceSearch.init(t &terminal.Terminal, surface &Surface) !&SurfaceSearch {
@@ -2094,10 +2095,12 @@ fn SurfaceSearch.init(t &terminal.Terminal, surface &Surface) !&SurfaceSearch {
 		event_cb: surface_search_event
 		event_userdata: voidptr(surface)
 	})!
-	return &SurfaceSearch{
+	mut result := &SurfaceSearch{
 		state: state
 		mutex: mutex
 	}
+	result.thread_ = spawn result.state.thread_main()
+	return result
 }
 
 fn (mut s SurfaceSearch) change_needle(needle string) {
@@ -2106,7 +2109,6 @@ fn (mut s SurfaceSearch) change_needle(needle string) {
 		kind: .change_needle
 		needle: needle.bytes()
 	})
-	s.state.thread_main()
 }
 
 fn (mut s SurfaceSearch) navigate(nav SearchNav) {
@@ -2114,12 +2116,14 @@ fn (mut s SurfaceSearch) navigate(nav SearchNav) {
 		kind: .select_result
 		select: if nav == .next { .next } else { .prev }
 	})
-	s.state.thread_main()
 }
 
 fn (mut s SurfaceSearch) deinit() {
 	s.state.request_stop()
-	s.state.thread_main()
+	if worker := s.thread_ {
+		worker.wait()
+	}
+	s.thread_ = none
 	s.state.deinit()
 	if s.mutex != unsafe { nil } {
 		s.mutex.destroy()

@@ -225,6 +225,7 @@ module search
 //   amount of events if the terminal is changing rapidly.
 
 import sync
+import time
 import terminal
 import highlight
 
@@ -339,21 +340,16 @@ pub enum Tick {
 //
 // Source: Thread (@This()).
 //
-// Boundary: the Zig implementation is driven by an xev event loop with a
-// BlockingQueue mailbox and async wakeup/stop/refresh handles. This
-// codebase has no xev/BlockingQueue bindings, so the event-loop plumbing
-// (loop, wakeup, stop, refresh timer, async completions) is not modeled.
-// Instead we expose a synchronous mailbox (a slice) plus the real search
-// state machine, and `thread_main` drives it in a plain loop. The
-// translated Search/tick/feed/notify logic is faithful; only the I/O
-// scheduling around it is simplified.
+// V channels provide the same bounded-mailbox, wakeup, and stop semantics
+// that Ghostty implements with BlockingQueue and xev async handles. The
+// search state itself remains owned exclusively by this thread.
 pub struct SearchThread {
 mut:
 	// The mailbox of pending messages for this thread.
-	mailbox []Message
+	mailbox chan Message
 
-	// Set true to request the loop stop on its next iteration.
-	stop_requested bool
+	// Stop notification for the worker.
+	stop chan bool
 
 	// The timer-active flag, see startRefreshTimer/stopRefreshTimer.
 	refresh_active bool
@@ -372,9 +368,14 @@ mut:
 //
 // Source: Thread.init (minus xev loop/async/timer setup, see boundary
 // note on SearchThread).
-pub fn SearchThread.init(opts ThreadOptions) !SearchThread {
-	return SearchThread{
+pub fn SearchThread.init(opts ThreadOptions) !&SearchThread {
+	if opts.mutex == unsafe { nil } || opts.terminal == unsafe { nil } {
+		return error('search thread requires a terminal and mutex')
+	}
+	return &SearchThread{
 		opts: opts
+		mailbox: chan Message{ cap: 64 }
+		stop: chan bool{ cap: 1 }
 	}
 }
 
@@ -387,33 +388,31 @@ pub fn (mut self SearchThread) deinit() {
 		s.deinit()
 		self.search = none
 	}
-	self.mailbox = []
+	self.mailbox.close()
+	self.stop.close()
 }
 
 // The main entrypoint for the thread.
 //
-// Source: Thread.threadMain / threadMain_. The xev loop is replaced by a
-// synchronous drain-tick-feed loop. Platform thread naming and QoS class
-// (Darwin pthread_setname_np / setQosClass) are omitted as they are not
-// wired in this environment.
+// Source: Thread.threadMain / threadMain_. V channels replace xev's async
+// wakeup and stop handles; a timed select replaces the repeating xev timer.
+// Platform thread naming and Darwin QoS are intentionally platform details.
 pub fn (mut self SearchThread) thread_main() {
-	self.refresh_active = true
+	self.start_refresh_timer()
+	defer {
+		if cb := self.opts.event_cb {
+			cb(Event{ kind: .quit }, self.opts.event_userdata)
+		}
+	}
 
 	for {
-		// If a stop was requested we drain our messages and quit.
-		if self.stop_requested {
-			self.mailbox = []
-			break
-		}
-
-		// Drain the mailbox (equivalent to the xev wakeup callback).
-		self.drain_mailbox()
-
 		mut s := self.search or {
-			// If we're not actively searching, there's no work to do. In
-			// the xev version we'd block the loop until an action arrives;
-			// here we simply break out since nothing can make progress.
-			break
+			// With no search active, block until a producer wakes us or the
+			// worker is stopped.
+			if self.wait_for_work() {
+				return
+			}
+			continue
 		}
 
 		// If we have an active search, we always send any pending
@@ -424,9 +423,13 @@ pub fn (mut self SearchThread) thread_main() {
 		}
 
 		if s.is_complete() {
-			// If our search is complete, there's no more work to do.
+			// A completed search sleeps until a new message or the refresh
+			// timer fires. Refreshing feeds terminal changes back into it.
 			self.search = s
-			break
+			if self.wait_for_work() {
+				return
+			}
+			continue
 		}
 
 		// Tick the search. This will trigger any event callbacks, lock
@@ -445,43 +448,106 @@ pub fn (mut self SearchThread) thread_main() {
 		}
 
 		self.search = s
-	}
 
-	// Send the quit message on shutdown.
-	if cb := self.opts.event_cb {
-		cb(Event{ kind: .quit }, self.opts.event_userdata)
+		// While a search is making progress we never block, but still check
+		// all pending control messages between ticks.
+		if self.poll_control() {
+			return
+		}
 	}
 }
 
-// Drain the mailbox.
-//
-// Source: Thread.drainMailbox
-fn (mut self SearchThread) drain_mailbox() {
-	msgs := self.mailbox.clone()
-	self.mailbox = []
-	for msg in msgs {
-		match msg.kind {
-			.change_needle {
-				self.change_needle(msg.needle)
+// Handle one mailbox message.
+fn (mut self SearchThread) handle_message(msg Message) {
+	match msg.kind {
+		.change_needle {
+			self.change_needle(msg.needle)
+		}
+		.select_result {
+			self.do_select(msg.select)
+		}
+	}
+}
+
+// Wait for a message, stop request, or refresh tick. Returns true when the
+// worker should exit.
+fn (mut self SearchThread) wait_for_work() bool {
+	select {
+		msg := <-self.mailbox {
+			self.handle_message(msg)
+		}
+		_ := <-self.stop {
+			return true
+		}
+		refresh_interval * time.millisecond {
+			self.refresh_search()
+		}
+	}
+	return false
+}
+
+// Process all currently available messages without blocking. Returns true
+// when a stop request was observed.
+fn (mut self SearchThread) poll_control() bool {
+	for {
+		mut handled := false
+		select {
+			msg := <-self.mailbox {
+				self.handle_message(msg)
+				handled = true
 			}
-			.select_result {
-				self.do_select(msg.select)
+			_ := <-self.stop {
+				return true
+			}
+			else {
 			}
 		}
+		if !handled {
+			return false
+		}
+	}
+	return false
+}
+
+// Feed changed terminal state into the active search on each refresh tick.
+fn (mut self SearchThread) refresh_search() {
+	if !self.refresh_active {
+		return
+	}
+	if mut s := self.search {
+		self.opts.mutex.lock()
+		s.feed(mut self.opts.terminal)
+		self.opts.mutex.unlock()
+		self.search = s
 	}
 }
 
 // Post a message to this thread's mailbox. Producers should call
 // thread_main (or resume the loop) after publishing.
 pub fn (mut self SearchThread) push(msg Message) {
-	self.mailbox << msg
+	// change_needle messages own their bytes in Ghostty. Clone here so a
+	// producer may immediately reuse or release its input buffer.
+	owned := if msg.kind == .change_needle {
+		Message{
+			...msg
+			needle: msg.needle.clone()
+		}
+	} else {
+		msg
+	}
+	self.mailbox <- owned
 }
 
 // Request the loop to stop on its next iteration.
 //
 // Source: Thread.stopCallback (loop.stop()).
 pub fn (mut self SearchThread) request_stop() {
-	self.stop_requested = true
+	select {
+		self.stop <- true {
+		}
+		else {
+		}
+	}
 }
 
 // Select a search result and scroll it into view when necessary.
@@ -581,14 +647,14 @@ fn (mut self SearchThread) change_needle(needle []u8) {
 
 // Set our active state so it knows we're running.
 //
-// Source: Thread.startRefreshTimer (the xev timer scheduling is omitted).
+// Source: Thread.startRefreshTimer.
 fn (mut self SearchThread) start_refresh_timer() {
 	self.refresh_active = true
 }
 
 // This will stop the refresh on the next iteration.
 //
-// Source: Thread.stopRefreshTimer
+// Source: Thread.stopRefreshTimer.
 fn (mut self SearchThread) stop_refresh_timer() {
 	self.refresh_active = false
 }
