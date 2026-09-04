@@ -1461,6 +1461,7 @@ import internal_os
 import terminal
 import inspector as inspectorpkg
 import global_state
+import highlight
 import renderer as rendererpkg
 import termio as termiopkg
 import unicode
@@ -1896,17 +1897,20 @@ pub:
 
 pub struct RuntimeSurface {
 pub mut:
-	content_scale         ContentScale = ContentScale{ x: 1.0, y: 1.0 }
-	size                  ScreenSize = ScreenSize{ width: 800, height: 600 }
-	cursor_pos            CursorPos
-	title                 ?string
-	clipboards            map[apprt.Clipboard][]apprt.ClipboardContent
-	requests              []RuntimeClipboardRequest
-	closed                bool
-	close_confirm         bool
-	selection_clipboard   bool
-	default_env           map[string]string
-	linux_cgroup          ?string
+	content_scale       ContentScale = ContentScale{ x: 1.0, y: 1.0 }
+	size                ScreenSize = ScreenSize{ width: 800, height: 600 }
+	cursor_pos          CursorPos
+	title               ?string
+	clipboards          map[apprt.Clipboard][]apprt.ClipboardContent
+	requests            []RuntimeClipboardRequest
+	closed              bool
+	close_confirm       bool
+	selection_clipboard bool
+	default_env         map[string]string
+	linux_cgroup        ?string
+	// Native NSView/UIView used by the Metal renderer. GTK leaves this nil
+	// because its current GL context is the rendering surface.
+	renderer_view         voidptr = unsafe { nil }
 	user_data             voidptr = unsafe { nil }
 	close_fn              RuntimeSurfaceCloseFn = unsafe { nil }
 	content_scale_fn      RuntimeSurfaceContentScaleFn = unsafe { nil }
@@ -2029,42 +2033,7 @@ fn (mut r RuntimeSurface) clipboard_request(loc apprt.Clipboard, req apprt.Clipb
 	return true
 }
 
-pub struct Renderer {
-pub mut:
-	initialized bool
-	frame_count u64
-	last_force  bool
-}
-
-fn (mut r Renderer) draw_frame(force bool) ! {
-	if !r.initialized {
-		return error('renderer is not initialized')
-	}
-	r.frame_count++
-	r.last_force = force
-}
-
-fn (mut r Renderer) deinit() {
-	r.initialized = false
-}
-
-// display_realized reinitializes renderer resources after GTK realizes a
-// surface whose display resources were released by display_unrealized.
-pub fn (mut r Renderer) display_realized() ! {
-	if r.initialized {
-		return error('renderer display resources are already initialized')
-	}
-	r.initialized = true
-}
-
-// display_unrealized releases renderer resources while keeping the renderer
-// value alive so GTK can realize the surface again later.
-pub fn (mut r Renderer) display_unrealized() {
-	r.initialized = false
-}
-
-fn (r Renderer) thread_enter() ! {
-}
+pub type Renderer = rendererpkg.Renderer
 
 pub type RendererState = rendererpkg.RenderState
 
@@ -2074,31 +2043,7 @@ pub type Preedit = rendererpkg.RenderPreedit
 
 pub type PreeditCodepoint = rendererpkg.RenderPreeditCodepoint
 
-pub struct RendererThread {
-pub mut:
-	wakeup           RendererWakeup
-	stopped          bool
-	crash_requested  bool
-	macos_display_id u32
-}
-
-fn (mut t RendererThread) deinit() {
-	t.stopped = true
-}
-
-pub struct RendererWakeup {
-pub mut:
-	count     u64
-	user_data voidptr = unsafe { nil }
-	notify_fn rendererpkg.WakeupFn = unsafe { nil }
-}
-
-fn (mut w RendererWakeup) notify() ! {
-	w.count++
-	if w.notify_fn != unsafe { nil } {
-		w.notify_fn(w.user_data)
-	}
-}
+pub type RendererThread = rendererpkg.RendererThread
 
 // Keep the public surface names while using the real emulator types.
 pub type SurfaceTerminal = terminal.Terminal
@@ -2214,24 +2159,54 @@ fn surface_search_event(event searchpkg.Event, userdata voidptr) {
 	}
 	mut surface := unsafe { &Surface(userdata) }
 	match event.kind {
-		.total_matches {
-			surface.rt_app.perform_action(AppAction{
-				kind: .search_total
-				target: surface
-				search_total: usize(event.total)
-			}) or {}
+		.viewport_matches {
+			mut matches := []highlight.FlattenedHighlight{cap: event.viewport_matches.len}
+			for match_ in event.viewport_matches {
+				matches << match_.clone()
+			}
+			surface.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.SearchViewportMatchesMessage{
+				matches: matches
+			})) or {}
 		}
 		.selected_match {
-			selected := if value := event.selected { ?usize(usize(value.idx + 1)) } else { none }
-			surface.rt_app.perform_action(AppAction{
+			selected := if value := event.selected { ?usize(usize(value.idx)) } else { none }
+			match_ := if value := event.selected {
+				?highlight.FlattenedHighlight(value.highlight.clone())
+			} else {
+				none
+			}
+			surface.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.SearchSelectedMatchMessage{
+				match_: match_
+			})) or {}
+			surface.surface_mailbox().push(apprt.SurfaceMessage{
 				kind: .search_selected
-				target: surface
 				search_selected: selected
-			}) or {}
-			surface.queue_render() or {}
+			})
 		}
-		.viewport_matches { surface.queue_render() or {} }
-		.complete, .quit {}
+		.total_matches {
+			surface.surface_mailbox().push(apprt.SurfaceMessage{
+				kind: .search_total
+				search_total: usize(event.total)
+			})
+		}
+		.quit {
+			surface.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.SearchSelectedMatchMessage{
+				match_: none
+			})) or {}
+			surface.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.SearchViewportMatchesMessage{
+				matches: []highlight.FlattenedHighlight{}
+			})) or {}
+			mailbox := surface.surface_mailbox()
+			mailbox.push(apprt.SurfaceMessage{
+				kind: .search_total
+				search_total: none
+			})
+			mailbox.push(apprt.SurfaceMessage{
+				kind: .search_selected
+				search_selected: none
+			})
+		}
+		.complete {}
 	}
 }
 
@@ -2610,6 +2585,14 @@ fn termio_surface_message_push(app_ptr voidptr, surface_ptr voidptr, msg apprt.S
 	}))
 }
 
+fn (self &Surface) surface_mailbox() apprt.SurfaceMailbox {
+	return apprt.SurfaceMailbox{
+		surface: voidptr(self)
+		app: voidptr(self.app)
+		push_fn: termio_surface_message_push
+	}
+}
+
 fn surface_renderer_wakeup(surface_ptr voidptr) {
 	if isnil(surface_ptr) {
 		return
@@ -2621,6 +2604,35 @@ fn surface_renderer_wakeup(surface_ptr voidptr) {
 	mut app := unsafe { surface.app }
 	app.mailbox.try_push(Message(RedrawSurfaceMsg{
 		core_surface: surface
+	}))
+}
+
+fn renderer_surface_event_push(surface_ptr voidptr, event rendererpkg.SurfaceEvent) int {
+	if isnil(surface_ptr) {
+		return 0
+	}
+	surface := unsafe { &Surface(surface_ptr) }
+	if isnil(surface.app) {
+		return 0
+	}
+	message := match event {
+		rendererpkg.RendererHealthEvent {
+			apprt.SurfaceMessage{
+				kind: .renderer_health
+				renderer_health: event.health
+			}
+		}
+		rendererpkg.ScrollbarEvent {
+			apprt.SurfaceMessage{
+				kind: .scrollbar
+				scrollbar: event.scrollbar
+			}
+		}
+	}
+	mut app := unsafe { surface.app }
+	return app.mailbox.push(Message(SurfaceCoreMsg{
+		surface: surface
+		message: message
 	}))
 }
 
@@ -2738,17 +2750,17 @@ pub mut:
 	font_size_adjusted bool
 	font_metrics       FontMetrics
 
-	renderer        Renderer
-	renderer_state  RendererState
-	renderer_thread RendererThread
+	renderer           Renderer
+	renderer_state     RendererState
+	renderer_thread    RendererThread
+	renderer_os_thread ?thread
 
 	mouse    Mouse
 	keyboard Keyboard
 
-	io               TermIO
-	io_thread        IOThread
-	io_os_thread     ?thread
-	renderer_mailbox &rendererpkg.RendererMailbox = unsafe { nil }
+	io           TermIO
+	io_thread    IOThread
+	io_os_thread ?thread
 
 	inspector ?&Inspector
 
@@ -2796,6 +2808,9 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 	mut derived_config := DerivedConfig.from_config(config)!
 	derived_config.command = if value := command { value.string_val().clone() } else { '' }
 
+	// Initialize the graphics API while the runtime surface's context is current.
+	rendererpkg.surface_init()!
+
 	// Get content scale for DPI
 	content_scale := rt_surface.get_content_scale()!
 	x_dpi := content_scale.x * default_dpi
@@ -2836,17 +2851,31 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 	self.config = derived_config
 	self.config_conditional_state = app.config_conditional_state
 
-	// Initialize the real termio implementation in its stable Surface storage.
-	// Termio publishes its terminal pointer into renderer_state and owns the PTY
-	// subprocess, stream parser, and writer mailbox from this point onward.
+	// Create the renderer and its shared state before termio so the renderer
+	// mailbox/wakeup passed to termio are the ones owned by the live thread.
 	self.renderer_state = RendererState{
 		mutex: sync.new_mutex()
 	}
-	self.renderer_thread.wakeup = RendererWakeup{
-		user_data: unsafe { voidptr(&self) }
+	renderer_config := rendererpkg.DerivedConfig.init(config)!
+	self.renderer = Renderer.init(rendererpkg.RendererOpts{
+		metal_view: rt_surface.renderer_view
+		content_scale: f64(content_scale.x)
+		font_grid: font_grid
+		config: renderer_config
+		size: renderer_size(self.size)
+		surface_mailbox: rendererpkg.SurfaceMailbox{
+			user_data: voidptr(&self)
+			push_fn: renderer_surface_event_push
+		}
+	})!
+	self.renderer_thread = RendererThread.init(config, &self.renderer, &self.renderer_state, rendererpkg.Wakeup{
+		user_data: voidptr(&self)
 		notify_fn: surface_renderer_wakeup
-	}
-	self.renderer_mailbox = rendererpkg.RendererMailbox.create()
+	})!
+
+	// Initialize the real termio implementation in its stable Surface storage.
+	// Termio publishes its terminal pointer into renderer_state and owns the PTY
+	// subprocess, stream parser, and writer mailbox from this point onward.
 	env := rt_surface.default_termio_env()!
 	resources_dir_value := global_state.get_state().resources_dir.app()
 	termio_config := termiopkg.DerivedConfig.init(config)!
@@ -2869,10 +2898,9 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 		}
 		renderer_state: &self.renderer_state
 		renderer_wakeup: rendererpkg.Wakeup{
-			user_data: voidptr(&self)
-			notify_fn: surface_renderer_wakeup
+			thread: &self.renderer_thread
 		}
-		renderer_mailbox: self.renderer_mailbox
+		renderer_mailbox: self.renderer_thread.mailbox
 		surface_mailbox: apprt.SurfaceMailbox{
 			surface: voidptr(&self)
 			app: voidptr(&app)
@@ -2881,9 +2909,6 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 	})!
 	self.io.live = true
 	self.io_thread.impl = termiopkg.Thread.init()!
-
-	// Initialize renderer
-	self.renderer = Renderer{ initialized: true }
 
 	// Report initial cell size
 	self.rt_app.perform_action(AppAction{
@@ -2904,6 +2929,12 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 
 	// Call resize to finalize setup
 	self.resize(self.size.screen)!
+
+	// Give the renderer its final main-thread initialization opportunity before
+	// the renderer worker begins touching it.
+	self.renderer.finalize_surface_init()!
+	mut render_thread := unsafe { &self.renderer_thread }
+	self.renderer_os_thread = spawn render_thread.thread_main()
 
 	// Start the PTY writer loop only after every pointer retained by Termio is
 	// stable and the initial resize has been queued.
@@ -2972,9 +3003,20 @@ pub fn (mut self Surface) deinit() {
 	}
 	self.initialized = false
 
-	// Stop renderer thread
-	self.renderer_thread.deinit()
-	self.renderer.deinit()
+	// Stop search before either consumer of terminal state is torn down.
+	if mut search := self.search {
+		search.deinit()
+		self.search = none
+	}
+
+	// Stop and join the renderer worker. The app thread becomes the active
+	// rendering thread again before GPU resources are released.
+	if worker := self.renderer_os_thread {
+		self.renderer_thread.stop()
+		worker.wait()
+		self.renderer_os_thread = none
+		self.renderer.thread_enter() or {}
+	}
 
 	// Stop the IO event loop, which shuts down and joins its PTY reader and
 	// process watcher, before releasing any shared terminal state.
@@ -2985,13 +3027,13 @@ pub fn (mut self Surface) deinit() {
 		}
 		self.io_os_thread = none
 	}
+
+	// No thread can access shared renderer/terminal state after both joins.
+	self.renderer_thread.deinit()
+	self.renderer.deinit()
 	self.io_thread.deinit()
 	self.io.deinit()
 	self.renderer_state.terminal_ = unsafe { nil }
-	if self.renderer_mailbox != unsafe { nil } {
-		self.renderer_mailbox.destroy()
-		self.renderer_mailbox = unsafe { nil }
-	}
 	if self.renderer_state.mutex != unsafe { nil } {
 		self.renderer_state.mutex.destroy()
 		self.renderer_state.mutex = unsafe { nil }
@@ -3213,7 +3255,9 @@ pub fn (mut self Surface) activate_inspector() ! {
 	self.renderer_state.inspector = voidptr(insp)
 
 	// Notify components that inspector is active
-	self.renderer_thread.wakeup.notify()!
+	self.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.InspectorMessage{
+		active: true
+	}))!
 	self.queue_io(IOMessage{ kind: .inspector_, flag: true })
 }
 
@@ -3225,7 +3269,9 @@ pub fn (mut self Surface) deactivate_inspector() {
 	self.renderer_state.inspector = unsafe { nil }
 
 	// Notify components
-	self.renderer_thread.wakeup.notify() or {}
+	self.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.InspectorMessage{
+		active: false
+	})) or {}
 	self.queue_io(IOMessage{ kind: .inspector_, flag: false })
 
 	// Cleanup
@@ -3262,7 +3308,8 @@ pub fn (mut self Surface) update_config(config &Config) ! {
 	self.set_font_size(font_size)!
 
 	// Notify renderer and IO of config change
-	self.renderer_thread.wakeup.notify()!
+	renderer_message := rendererpkg.RendererMessage.init_change_config(config)!
+	self.queue_renderer_message(renderer_message)!
 	self.queue_io(IOMessage{ kind: .change_config, config: termio_config })
 
 	// Notify runtime of config change
@@ -3392,7 +3439,14 @@ pub fn (mut self Surface) set_font_size(size DesiredSize) ! {
 	self.set_cell_size(font_grid.cell_size())!
 
 	// Notify renderer of new font grid
-	self.renderer_thread.wakeup.notify()!
+	if self.renderer_thread.mailbox != unsafe { nil } {
+		self.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.FontGridMessage{
+			grid: font_grid
+			set: &self.app.font_grid_set
+			new_key: font_grid_key
+			old_key: self.font_grid_key
+		}))!
+	}
 
 	// Swap our font grid key
 	old_key := self.font_grid_key
@@ -3400,8 +3454,11 @@ pub fn (mut self Surface) set_font_size(size DesiredSize) ! {
 	self.font_grid = font_grid
 	self.font_metrics = font_grid.metrics
 
-	// Release old grid
-	self.app.font_grid_set.deref(old_key)
+	// The renderer thread dereferences the old grid after atomically adopting
+	// the replacement. Zero-initialized test surfaces have no renderer worker.
+	if self.renderer_thread.mailbox == unsafe { nil } {
+		self.app.font_grid_set.deref(old_key)
+	}
 
 	// Schedule render
 	self.queue_render()!
@@ -3409,7 +3466,19 @@ pub fn (mut self Surface) set_font_size(size DesiredSize) ! {
 
 // queue_render queues a render operation with the renderer thread.
 fn (mut self Surface) queue_render() ! {
-	self.renderer_thread.wakeup.notify()!
+	if self.renderer_thread.event_mutex == unsafe { nil }
+		|| self.renderer_thread.event == unsafe { nil } {
+		return
+	}
+	self.renderer_thread.wakeup()
+}
+
+fn (mut self Surface) queue_renderer_message(msg rendererpkg.RendererMessage) ! {
+	if self.renderer_thread.mailbox == unsafe { nil } {
+		msg.deinit()
+		return
+	}
+	self.renderer_thread.send_wait(msg)
 }
 
 // size_callback is called when the surface size changes.
@@ -3681,6 +3750,9 @@ pub fn (mut self Surface) text_callback(text string) ! {
 
 // occlusion_callback is called when the surface visibility changes.
 pub fn (mut self Surface) occlusion_callback(visible bool) ! {
+	self.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.VisibleMessage{
+		visible: visible
+	}))!
 	self.queue_io(IOMessage{ kind: .visible, flag: visible })
 	self.queue_render()!
 }
@@ -3693,7 +3765,9 @@ pub fn (mut self Surface) focus_callback(focused bool) ! {
 	self.focused = focused
 
 	// Notify renderer of focus state
-	self.renderer_thread.wakeup.notify()!
+	self.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.FocusMessage{
+		focused: focused
+	}))!
 
 	if focused {
 		// On focus gain, notify app.
@@ -5138,8 +5212,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			match unsafe { input.CrashThread(action.enum_param) } {
 				.main_thread { panic('crash binding action, crashing intentionally') }
 				.render {
-					self.renderer_thread.crash_requested = true
-					self.queue_render() or {}
+					self.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.CrashMessage{})) or {}
 				}
 				.io { self.queue_io(IOMessage{ kind: .crash }) }
 			}

@@ -889,7 +889,7 @@ pub fn (mut t Thread) deinit() {
 // machine with libxev; V's implementation uses a short monotonic polling wait
 // so mailbox and timer behavior remains identical without tying Termio to a
 // particular event-loop implementation.
-pub fn (mut t Thread) thread_main(mut io &Termio) {
+pub fn (mut t Thread) thread_main(mut io Termio) {
 	io.thread_enter() or {
 		t.show_start_error(mut io, err.msg())
 		t.drain = true

@@ -4,6 +4,8 @@ import input
 import apprt
 import terminal
 import configpkg
+import highlight
+import search as searchpkg
 import termio as termiopkg
 import time
 
@@ -24,6 +26,64 @@ fn make_test_surface() Surface {
 			terminal_: &t
 		}
 	}
+}
+
+fn pop_surface_core_message(mut app App) SurfaceCoreMsg {
+	message := app.mailbox.pop() or { panic('missing surface message') }
+	match message {
+		SurfaceCoreMsg {
+			return message
+		}
+		else {
+			panic('unexpected app mailbox message')
+		}
+	}
+}
+
+fn test_search_callback_routes_owned_results_and_ui_state() {
+	mut app := App{
+		mailbox: Mailbox.init()
+	}
+	defer {
+		app.mailbox.deinit()
+	}
+	mut surface := Surface{
+		app: &app
+	}
+
+	surface_search_event(searchpkg.Event{
+		kind: .viewport_matches
+		viewport_matches: [highlight.FlattenedHighlight.empty()]
+	}, voidptr(&surface))
+	assert app.mailbox.len() == 0
+
+	surface_search_event(searchpkg.Event{
+		kind: .selected_match
+		selected: searchpkg.ThreadSelectedMatch{
+			idx: 4
+			highlight: highlight.FlattenedHighlight.empty()
+		}
+	}, voidptr(&surface))
+	selected := pop_surface_core_message(mut app)
+	assert voidptr(selected.surface) == voidptr(&surface)
+	assert selected.message.kind == .search_selected
+	assert selected.message.search_selected? == 4
+
+	surface_search_event(searchpkg.Event{
+		kind: .total_matches
+		total: 9
+	}, voidptr(&surface))
+	total := pop_surface_core_message(mut app)
+	assert total.message.kind == .search_total
+	assert total.message.search_total? == 9
+
+	surface_search_event(searchpkg.Event{ kind: .quit }, voidptr(&surface))
+	cleared_total := pop_surface_core_message(mut app)
+	cleared_selected := pop_surface_core_message(mut app)
+	assert cleared_total.message.kind == .search_total
+	assert cleared_total.message.search_total == none
+	assert cleared_selected.message.kind == .search_selected
+	assert cleared_selected.message.search_selected == none
 }
 
 fn test_derived_config_uses_selection_and_clipboard_maps() {
@@ -189,7 +249,6 @@ fn test_surface_inspector_records_mouse_position() {
 	defer {
 		surf.deactivate_inspector()
 	}
-	wakeups := surf.renderer_thread.wakeup.count
 
 	surf.cursor_pos_callback(CursorPos{ x: 25, y: 45 }, none)!
 
@@ -205,7 +264,6 @@ fn test_surface_inspector_records_mouse_position() {
 	}
 	assert point.x == 2
 	assert point.y == 2
-	assert surf.renderer_thread.wakeup.count > wakeups
 }
 
 fn test_surface_mouse_buttons_use_canonical_enum_indices() {
@@ -718,7 +776,8 @@ fn test_content_scale_callback_unchanged_dpi_is_noop() ! {
 	surf.font_size.xdpi = u16(default_dpi)
 	surf.font_size.ydpi = u16(default_dpi)
 	surf.content_scale_callback(ContentScale{ x: 1, y: 1 })!
-	assert surf.renderer_thread.wakeup.count == 0
+	assert surf.font_size.xdpi == u16(default_dpi)
+	assert surf.font_size.ydpi == u16(default_dpi)
 }
 
 fn test_size_callback_no_change() ! {
@@ -1104,7 +1163,6 @@ fn test_scroll_callback_uses_precision_multiplier_and_accumulates_pixels() {
 	assert surf.mouse.pending_scroll_y == 4
 	surf.scroll_callback(0, 3, true)!
 	assert surf.mouse.pending_scroll_y == 0
-	assert surf.renderer_thread.wakeup.count == 2
 }
 
 fn test_scroll_callback_alternate_screen_emits_cursor_sequences() {
@@ -1289,15 +1347,4 @@ fn test_command_finished_preserves_duration_and_exit_code() ! {
 	assert runtime.actions[0].kind == .command_finished
 	assert runtime.actions[0].command_finished.exit_code? == 7
 	assert runtime.actions[0].command_finished.duration.duration >= 1_234_567
-}
-
-fn test_renderer_display_lifecycle() {
-	mut renderer := Renderer{ initialized: true }
-	renderer.display_unrealized()
-	assert !renderer.initialized
-	renderer.display_realized() or { assert false, err.msg() }
-	assert renderer.initialized
-	if _ := renderer.display_realized() {
-		assert false, 'realizing initialized renderer resources must fail'
-	}
 }

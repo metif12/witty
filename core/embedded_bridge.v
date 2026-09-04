@@ -518,7 +518,7 @@ fn bridge_surface_runtime_action(ptr voidptr, action AppAction) !bool {
 fn bridge_surface_color_action(mut app apprt.App, target apprt.Target, value osc.ColoredTarget) !bool {
 	rgb := value.color
 	kind := match value.target {
-		osc.ColorTargetPalette { unsafe { apprt.ColorKind(value.target.index) } }
+		osc.ColorTargetPalette { palette_color_kind(value.target.index) }
 		osc.ColorTargetDynamic {
 			match value.target.color {
 				.foreground { apprt.ColorKind.foreground }
@@ -541,6 +541,10 @@ fn bridge_surface_color_action(mut app apprt.App, target apprt.Target, value osc
 			b: rgb.b
 		}
 	})!
+}
+
+fn palette_color_kind(index u8) apprt.ColorKind {
+	return unsafe { apprt.ColorKind(index) }
 }
 
 fn bridge_runtime_close(ptr voidptr, confirm bool) {
@@ -591,6 +595,17 @@ fn bridge_runtime_default_env(ptr voidptr) !map[string]string {
 	return self.rt_surface.default_termio_env()!
 }
 
+fn embedded_renderer_view(surface &apprt.Surface) voidptr {
+	match surface.platform {
+		apprt.MacOSPlatform {
+			return surface.platform.nsview
+		}
+		apprt.IOSPlatform {
+			return surface.platform.uiview
+		}
+	}
+}
+
 fn bridge_surface_init(config &configpkg.Config, core_app &apprt.CoreApp, app &apprt.App, surface_ptr voidptr) !voidptr {
 	if isnil(core_app.backend) || isnil(surface_ptr) {
 		return error('embedded core bridge is not initialized')
@@ -610,6 +625,7 @@ fn bridge_surface_init(config &configpkg.Config, core_app &apprt.CoreApp, app &a
 	}
 	self.runtime_surface = RuntimeSurface{
 		user_data: voidptr(self)
+		renderer_view: embedded_renderer_view(rt_surface)
 		close_fn: bridge_runtime_close
 		content_scale_fn: bridge_runtime_content_scale
 		size_fn: bridge_runtime_size
@@ -967,7 +983,7 @@ fn bridge_surface_inspector_render(ptr voidptr, context_handle voidptr) {
 	if locked {
 		self.surface.renderer_state.mutex.unlock()
 	}
-	self.surface.renderer_thread.wakeup.notify() or {}
+	self.surface.queue_render() or {}
 }
 
 fn bridge_surface_key_binding(ptr voidptr, event &input.KeyEvent) ?voidptr {
@@ -979,8 +995,9 @@ fn bridge_surface_key_binding(ptr voidptr, event &input.KeyEvent) ?voidptr {
 
 fn bridge_surface_display_id(ptr voidptr, display_id u32) {
 	mut self := unsafe { &EmbeddedSurfaceCore(ptr) }
-	self.surface.renderer_thread.macos_display_id = display_id
-	self.surface.renderer_thread.wakeup.notify() or {}
+	self.surface.queue_renderer_message(renderer.RendererMessage(renderer.MacosDisplayIdMessage{
+		display_id: display_id
+	})) or {}
 }
 
 fn bridge_surface_quicklook_font(ptr voidptr) voidptr {
@@ -1014,8 +1031,7 @@ fn bridge_surface_quicklook_selection(ptr voidptr, x f64, y f64) ?voidptr {
 		x: point.x
 		y: point.y
 	}) or { return none }
-	self.selection = self.surface.io.impl.terminal.screens.active.select_word(pin,
-		self.surface.config.selection_word_chars) or { return none }
+	self.selection = self.surface.io.impl.terminal.screens.active.select_word(pin, self.surface.config.selection_word_chars) or { return none }
 	return voidptr(&self.selection)
 }
 

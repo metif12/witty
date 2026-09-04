@@ -1092,6 +1092,20 @@ fn create_terminal_view(frame ObjCRect) ObjId {
 	return view
 }
 
+// create_offscreen_terminal_view constructs the same native view used by a
+// window without attaching it to an NSWindow. Renderer integration tests use
+// this to exercise the real Metal surface lifecycle without showing UI.
+pub fn create_offscreen_terminal_view(w int, h int) voidptr {
+	register_classes()
+	return voidptr(create_terminal_view(objc_rect(0, 0, f64(w), f64(h))))
+}
+
+pub fn release_offscreen_terminal_view(view voidptr) {
+	if !is_nil(view) {
+		msg_void(ObjId(view), 'release')
+	}
+}
+
 fn update_metal_drawable_size(view ObjId) {
 	stored_layer := ObjId(C.macos_objc_get_ptr_ivar(view, cstr('metalLayer')))
 	active_layer := msg_id(view, 'layer')
@@ -1398,7 +1412,7 @@ pub fn metal_activate_layer(view voidptr) {
 	update_metal_drawable_size(ObjId(view))
 }
 
-pub fn metal_install_iosurface_layer(view voidptr, layer voidptr) {
+pub fn metal_install_iosurface_layer(view voidptr, layer voidptr, content_scale f64) {
 	if is_nil(view) || is_nil(layer) {
 		return
 	}
@@ -1407,9 +1421,11 @@ pub fn metal_install_iosurface_layer(view voidptr, layer voidptr) {
 	msg_void1(ObjId(view), 'setLayer:', ObjId(layer))
 	msg_void_bool(ObjId(view), 'setWantsLayer:', true)
 	msg_void_bool(ObjId(view), 'setClipsToBounds:', true)
-	screen := msg_id(get_class('NSScreen'), 'mainScreen')
-	scale := msg_f64(screen, 'backingScaleFactor')
-	msg_void_f64(ObjId(layer), 'setContentsScale:', if scale > 0 { scale } else { 1.0 })
+	msg_void_f64(ObjId(layer), 'setContentsScale:', if content_scale > 0 {
+		content_scale
+	} else {
+		1.0
+	})
 	msg_void_bool(ObjId(layer), 'setNeedsDisplayOnBoundsChange:', true)
 }
 

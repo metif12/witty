@@ -56,18 +56,29 @@ pub const metal_swap_chain_count = 3
 // The fragCoord for Metal shaders is +Y = down.
 pub const metal_custom_shader_y_is_down = true
 
-// init_from_view initializes the Metal API using a view that already
-// has a CAMetalLayer set up (done in appkit.m's initWithFrame).
-pub fn MetalAPI.init_from_view(view voidptr) !MetalAPI {
-	device := macos.metal_device(view)
-	queue := macos.metal_queue(view)
-	layer := macos.metal_iosurface_layer_new()
-
-	if device == unsafe { nil } || queue == unsafe { nil } || layer == unsafe { nil } {
-		macos.metal_release(layer)
+// init_from_view initializes the Metal API and installs Ghostty's
+// IOSurface-backed presentation layer on the runtime-provided view.
+pub fn MetalAPI.init_from_view(view voidptr, content_scale f64) !MetalAPI {
+	if view == unsafe { nil } {
+		return error('Metal view is unavailable')
+	}
+	device := macos.metal_system_default_device()
+	if device == unsafe { nil } {
 		return error('Metal not available')
 	}
-	macos.metal_install_iosurface_layer(view, layer)
+	queue := macos.metal_new_command_queue(device)
+	if queue == unsafe { nil } {
+		macos.metal_release(device)
+		return error('Metal command queue unavailable')
+	}
+	layer := macos.metal_iosurface_layer_new()
+
+	if layer == unsafe { nil } {
+		macos.metal_release(queue)
+		macos.metal_release(device)
+		return error('Metal presentation layer unavailable')
+	}
+	macos.metal_install_iosurface_layer(view, layer, content_scale)
 
 	unified := macos.metal_has_unified_memory(device)
 	storage := if unified { MetalStorageMode.shared } else { MetalStorageMode.managed }
@@ -80,6 +91,7 @@ pub fn MetalAPI.init_from_view(view voidptr) !MetalAPI {
 		blending: .none_
 		default_storage_mode: storage
 		max_texture_size: max_tex
+		owns_handles: true
 		owns_layer: true
 	}
 }

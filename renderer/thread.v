@@ -286,12 +286,15 @@ pub struct RendererMailbox {
 pub mut:
 	queue []RendererMessage
 	mutex &sync.Mutex = unsafe { nil }
+	space &sync.Cond = unsafe { nil }
 }
 
 pub fn RendererMailbox.create() &RendererMailbox {
+	mutex := sync.new_mutex()
 	return &RendererMailbox{
 		queue: []RendererMessage{cap: renderer_mailbox_capacity}
-		mutex: sync.new_mutex()
+		mutex: mutex
+		space: sync.new_cond(mutex)
 	}
 }
 
@@ -342,7 +345,27 @@ pub fn (mut self RendererMailbox) pop() ?RendererMessage {
 	}
 	msg := self.queue[0]
 	self.queue.delete(0)
+	if self.space != unsafe { nil } {
+		self.space.signal()
+	}
 	return msg
+}
+
+// Push a message, waiting until the renderer consumes queue space. Surface
+// control messages use Ghostty's forever timeout and therefore cannot drop.
+pub fn (mut self RendererMailbox) push_wait(msg RendererMessage) {
+	if self.mutex == unsafe { nil } {
+		self.mutex = sync.new_mutex()
+		self.space = sync.new_cond(self.mutex)
+	}
+	self.mutex.lock()
+	defer {
+		self.mutex.unlock()
+	}
+	for self.queue.len >= renderer_mailbox_capacity {
+		self.space.wait()
+	}
+	self.queue << msg
 }
 
 // Initialize the thread. This does not START the thread. This only sets
@@ -625,6 +648,13 @@ pub fn (mut self RendererThread) send(msg RendererMessage) bool {
 	}
 	self.request_wakeup()
 	return true
+}
+
+// send_wait publishes an undroppable surface-control message and wakes the
+// render loop after it has been enqueued.
+pub fn (mut self RendererThread) send_wait(msg RendererMessage) {
+	self.mailbox.push_wait(msg)
+	self.request_wakeup()
 }
 
 // wakeup coalesces frame rebuilds until the render loop observes the request.

@@ -945,7 +945,7 @@ fn Renderer.init_metal(opts RendererOpts) !Renderer {
 	mut font_shaper := font.Shaper.init(font.ShaperOptions{})!
 
 	mut metal := if opts.metal_view != unsafe { nil } {
-		MetalAPI.init_from_view(opts.metal_view) or {
+		MetalAPI.init_from_view(opts.metal_view, opts.content_scale) or {
 			font_shaper.deinit()
 			return err
 		}
@@ -3191,6 +3191,8 @@ pub:
 	// Native NSView used for IOSurface presentation. Nil creates an off-screen
 	// Metal renderer, which is also used by focused renderer tests.
 	metal_view voidptr = unsafe { nil }
+	// Horizontal scale factor of the surface that owns metal_view.
+	content_scale f64 = 1.0
 	// Font grid to use.
 	font_grid &font.SharedGrid = unsafe { nil }
 	// Initial configuration.
@@ -3447,11 +3449,24 @@ pub fn (mut r Renderer) loop_enter(render_thread &RendererThread) ! {
 	if r.backend != .metal {
 		return
 	}
+	if r.metal.layer != unsafe { nil } {
+		macos.metal_iosurface_layer_set_display_callback(r.metal.layer, voidptr(renderer_metal_layer_display_callback), voidptr(&r))
+	}
 	if r.display_link == unsafe { nil } {
 		return
 	}
 	r.display_link.set_output_callback(voidptr(renderer_display_link_callback), voidptr(render_thread))!
 	r.display_link.start() or {}
+}
+
+fn renderer_metal_layer_display_callback(context voidptr) {
+	if context == unsafe { nil } {
+		return
+	}
+	mut render := unsafe { &Renderer(context) }
+	render.draw_frame(true) or {
+		eprintln('renderer: error drawing frame from Metal layer callback: ${err}')
+	}
 }
 
 // Called by renderer.Thread when it exits the main loop.
