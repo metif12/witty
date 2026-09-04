@@ -14,11 +14,9 @@ module gtk
 //
 // The GObject class registration (ghostty's `gobject.ext.defineClass`), the
 // blueprint template with its scrollbar_policy/notify_surface callbacks, and
-// the `config` / `surface` properties are hand-expanded onto the raw GObject/
-// GTK C API below (there are no signals). The real logic (swapping the
-// scrolled-window child, the config->scrollbar-policy mapping, config
-// refcounting) is translated. The class is additionally modeled as a plain V
-// struct wrapping the GObject/GtkWidget ptr for callers in V.
+// the `config` / `surface` object properties are hand-expanded onto the raw
+// GObject/GTK C API below (there are no signals). The class is additionally
+// modeled as a stable V wrapper around the native instance.
 //
 // Reuses: `Config` (config_class_linux.v), `SurfaceWidget`
 // (surface_class_linux.v — the GObject `Surface` in Zig), `GtkWidget`
@@ -33,6 +31,8 @@ pub type GtkScrolledWindow = voidptr
 
 fn C.gtk_scrolled_window_set_child(sw GtkScrolledWindow, child GtkWidget)
 
+const g_binding_sync_create = int(1 << 1)
+
 // --- PolicyType -----------------------------------------------------------
 
 // PolicyType mirrors gtk.PolicyType (the scrollbar display policy).
@@ -46,9 +46,7 @@ pub enum PolicyType {
 // --- SurfaceScrolledWindow ------------------------------------------------
 
 // SurfaceScrolledWindow is the V model of the `GhostttySurfaceScrolledWindow`
-// GObject class. Fields mirror the Zig `Private` struct. The GObject binding
-// object is out of scope, so `config_binding` is not modeled; config is bound
-// eagerly instead (see set_surface).
+// GObject class. Fields mirror the Zig `Private` struct.
 @[heap]
 pub struct SurfaceScrolledWindow {
 
@@ -59,6 +57,9 @@ pub mut:
 	// The configuration this widget uses. nil means "unset".
 	config &Config = unsafe { nil }
 
+	// Binding from the embedded Surface's config property to ours.
+	config_binding GObject = unsafe { nil }
+
 	// The embedded surface widget. nil means "unset".
 	surface &SurfaceWidget = unsafe { nil }
 }
@@ -68,9 +69,12 @@ pub mut:
 // template).
 pub fn new_surface_scrolled_window() &SurfaceScrolledWindow {
 	obj := C.g_object_new(surface_scrolled_window_get_type(), &char(unsafe { nil }))
-	return &SurfaceScrolledWindow{
+	mut self := &SurfaceScrolledWindow{
 		widget: obj
 	}
+	mut priv := surface_scrolled_window_priv(obj)
+	priv.wrapper = voidptr(self)
+	return self
 }
 
 // get_surface returns the embedded surface widget. Mirrors `getSurface`.
@@ -85,41 +89,24 @@ pub fn (mut self SurfaceScrolledWindow) set_surface(surface &SurfaceWidget) {
 		return
 	}
 
-	// freezeNotify / notifyByPspec(properties.surface) / thawNotify.
+	// The notification is queued while frozen and delivered after the field is
+	// replaced, matching Ghostty's setSurface ordering.
 	if !isnil(self.widget) {
 		C.g_object_freeze_notify(self.widget)
 		C.g_object_notify_by_pspec(self.widget, g_surface_scrolled_window_pspec_surface)
 	}
 	self.surface = surface
-
-	// Re-parent: put the new surface's widget into the scrolled window, which is
-	// this widget's (AdwBin's) single template child. Mirrors
-	// `self.as(Parent).getChild()` cast to a gtk.ScrolledWindow, then setChild.
-	scrolled_window := if !isnil(self.widget) {
-		C.adw_bin_get_child(self.widget)
-	} else {
-		GtkWidget(unsafe { nil })
-	}
-	child := if !isnil(self.surface) { self.surface.as_widget() } else { GtkWidget(unsafe { nil }) }
-	if !isnil(scrolled_window) {
-		C.gtk_scrolled_window_set_child(scrolled_window, child)
-	}
-
-	// Bind config from the surface to our config property. In ghostty this is a
-	// gobject.Object.bindProperty; here we just copy the surface's config
-	// pointer (with refcounting) so the scrollbar policy can be derived.
-	if !isnil(self.surface) && !isnil(self.surface.config) {
-		self.set_config(self.surface.config)
-	}
-
 	if !isnil(self.widget) {
 		C.g_object_thaw_notify(self.widget)
 	}
 }
 
-// set_config replaces the config (with refcounting). Mirrors the config
-// property accessor's refcounting behavior in dispose/propSurface.
-fn (mut self SurfaceScrolledWindow) set_config(config &Config) {
+// set_config_reference is the object-field accessor for the native config
+// property. The binding created by prop_surface drives this setter.
+fn (mut self SurfaceScrolledWindow) set_config_reference(config &Config) {
+	if self.config == config {
+		return
+	}
 	if !isnil(self.config) {
 		self.config.unref()
 		self.config = unsafe { nil }
@@ -150,15 +137,42 @@ pub fn (self &SurfaceScrolledWindow) scrollbar_policy() PolicyType {
 	}
 }
 
-// dispose releases the config reference. Mirrors the `dispose` virtual method
-// (the config_binding unref is omitted since we don't model the binding).
+// prop_surface reparents the selected Surface and replaces the config binding.
+// Mirrors `propSurface`, including SYNC_CREATE so scrollbar policy is correct
+// immediately after a surface is installed.
+fn (mut self SurfaceScrolledWindow) prop_surface() {
+	if isnil(self.widget) {
+		return
+	}
+	scrolled_window := C.adw_bin_get_child(self.widget)
+	child := if isnil(self.surface) {
+		GtkWidget(unsafe { nil })
+	} else {
+		self.surface.as_widget()
+	}
+	if !isnil(scrolled_window) {
+		C.gtk_scrolled_window_set_child(scrolled_window, child)
+	}
+
+	if !isnil(self.config_binding) {
+		object_unref(self.config_binding)
+		self.config_binding = unsafe { nil }
+	}
+	if !isnil(self.surface) && !isnil(self.surface.widget) {
+		self.config_binding = GObject(C.g_object_bind_property(self.surface.widget, c'config', self.widget, c'config', g_binding_sync_create))
+	}
+}
+
+// dispose releases the binding and config reference. The native dispose vfunc
+// calls this cleanup before disposing the template and chaining to AdwBin.
 pub fn (mut self SurfaceScrolledWindow) dispose() {
+	if !isnil(self.config_binding) {
+		object_unref(self.config_binding)
+		self.config_binding = unsafe { nil }
+	}
 	if !isnil(self.config) {
 		self.config.unref()
 		self.config = unsafe { nil }
-	}
-	if !isnil(self.widget) {
-		surface_scrolled_window_dispose(voidptr(self.widget))
 	}
 }
 
@@ -207,14 +221,11 @@ const surface_scrolled_window_ui = '<?xml version="1.0" encoding="UTF-8"?>
 </interface>
 '
 
-// The C-layout private struct mirroring ghostty\'s `Private`: the config /
-// surface pointers. The config_binding (a gobject.Binding) is not modeled; the
-// config is bound eagerly by the wrapper. These are served as opaque pointer
-// properties (Config / SurfaceWidget are V structs, not registered GObjects).
+// The native private storage points at the stable V wrapper that carries the
+// translated Zig private fields.
 struct C.GhostttySurfaceScrolledWindowPrivate {
 mut:
-	config  voidptr
-	surface voidptr
+	wrapper voidptr
 }
 
 // The GObject type id and private-data offset, registered lazily.
@@ -235,23 +246,66 @@ fn surface_scrolled_window_priv(obj voidptr) &C.GhostttySurfaceScrolledWindowPri
 
 // surface_scrolled_window_get_property implements get_property for config/surface.
 fn surface_scrolled_window_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
+	_ = pspec
 	priv := surface_scrolled_window_priv(obj)
+	if isnil(priv.wrapper) {
+		C.g_value_set_object(value, unsafe { nil })
+		return
+	}
+	self := unsafe { &SurfaceScrolledWindow(priv.wrapper) }
 	match property_id {
-		surface_scrolled_window_prop_config { C.g_value_set_pointer(value, priv.config) }
-		surface_scrolled_window_prop_surface { C.g_value_set_pointer(value, priv.surface) }
+		surface_scrolled_window_prop_config {
+			C.g_value_set_object(value, if isnil(self.config) {
+				unsafe { nil }
+			} else {
+				self.config.obj
+			})
+		}
+		surface_scrolled_window_prop_surface {
+			C.g_value_set_object(value, if isnil(self.surface) {
+				unsafe { nil }
+			} else {
+				self.surface.widget
+			})
+		}
 		else {}
 	}
 }
 
 // surface_scrolled_window_set_property implements set_property for config/surface.
 fn surface_scrolled_window_set_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
-	mut priv := surface_scrolled_window_priv(obj)
+	_ = pspec
+	priv := surface_scrolled_window_priv(obj)
+	if isnil(priv.wrapper) {
+		return
+	}
+	mut self := unsafe { &SurfaceScrolledWindow(priv.wrapper) }
 	match property_id {
 		surface_scrolled_window_prop_config {
-			priv.config = C.g_value_get_pointer(value)
+			config_obj := C.g_value_get_object(value)
+			if isnil(config_obj) {
+				self.set_config_reference(unsafe { nil })
+			} else {
+				config_private := config_priv(config_obj)
+				self.set_config_reference(if isnil(config_private.wrapper) {
+					unsafe { nil }
+				} else {
+					unsafe { &Config(config_private.wrapper) }
+				})
+			}
 		}
 		surface_scrolled_window_prop_surface {
-			priv.surface = C.g_value_get_pointer(value)
+			surface_obj := C.g_value_get_object(value)
+			if isnil(surface_obj) {
+				self.set_surface(unsafe { nil })
+			} else {
+				surface_private := terminal_surface_priv(surface_obj)
+				self.set_surface(if isnil(surface_private.wrapper) {
+					unsafe { nil }
+				} else {
+					unsafe { &SurfaceWidget(surface_private.wrapper) }
+				})
+			}
 		}
 		else {}
 	}
@@ -262,10 +316,15 @@ fn surface_scrolled_window_set_property(obj voidptr, property_id u32, value void
 // the opaque `config` property value; here the wrapper drives the policy so
 // this returns .automatic when unset.
 fn surface_scrolled_window_scrollbar_policy_cb(instance voidptr, config_ voidptr) int {
+	_ = instance
 	if isnil(config_) {
 		return int(PolicyType.automatic)
 	}
-	cfg := unsafe { &Config(config_) }.get()
+	priv := config_priv(config_)
+	if isnil(priv.wrapper) {
+		return int(PolicyType.automatic)
+	}
+	cfg := unsafe { &Config(priv.wrapper) }.get()
 	return match cfg.scrollbar {
 		.never { int(PolicyType.never) }
 		.system { int(PolicyType.automatic) }
@@ -273,14 +332,25 @@ fn surface_scrolled_window_scrollbar_policy_cb(instance voidptr, config_ voidptr
 }
 
 // surface_scrolled_window_notify_surface_cb is the `notify::surface` callback
-// (propSurface). The wrapper's `set_surface` performs the re-parent + config
-// bind directly, so this trampoline is a no-op placeholder kept for parity.
+// (propSurface).
 fn surface_scrolled_window_notify_surface_cb(obj voidptr, pspec voidptr, instance voidptr) {
+	_ = pspec
+	_ = instance
+	priv := surface_scrolled_window_priv(obj)
+	if !isnil(priv.wrapper) {
+		mut self := unsafe { &SurfaceScrolledWindow(priv.wrapper) }
+		self.prop_surface()
+	}
 }
 
 // surface_scrolled_window_dispose disposes the template and chains up. Mirrors
-// `dispose` (the config unref is done by the wrapper).
+// `dispose`.
 fn surface_scrolled_window_dispose(obj voidptr) {
+	priv := surface_scrolled_window_priv(obj)
+	if !isnil(priv.wrapper) {
+		mut self := unsafe { &SurfaceScrolledWindow(priv.wrapper) }
+		self.dispose()
+	}
 	C.gtk_widget_dispose_template(obj, g_surface_scrolled_window_type)
 	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
 	if !isnil(parent_class.dispose) {
@@ -291,6 +361,13 @@ fn surface_scrolled_window_dispose(obj voidptr) {
 
 // surface_scrolled_window_finalize chains up. Mirrors `finalize`.
 fn surface_scrolled_window_finalize(obj voidptr) {
+	mut priv := surface_scrolled_window_priv(obj)
+	if !isnil(priv.wrapper) {
+		mut self := unsafe { &SurfaceScrolledWindow(priv.wrapper) }
+		self.widget = unsafe { nil }
+		self.surface = unsafe { nil }
+		priv.wrapper = unsafe { nil }
+	}
 	parent_class := &C.GObjectClass(C.g_type_class_peek_parent(C.g_type_check_instance_get_class(obj)))
 	if !isnil(parent_class.finalize) {
 		f := FinalizeFn(parent_class.finalize)
@@ -310,9 +387,9 @@ fn surface_scrolled_window_class_init(klass voidptr, class_data voidptr) {
 	C.gtk_widget_class_bind_template_callback_full(klass, c'scrollbar_policy', voidptr(surface_scrolled_window_scrollbar_policy_cb))
 	C.gtk_widget_class_bind_template_callback_full(klass, c'notify_surface', voidptr(surface_scrolled_window_notify_surface_cb))
 
-	// Properties (config/surface as opaque pointers).
-	g_surface_scrolled_window_pspec_config = C.g_param_spec_pointer(c'config', c'config', c'The configuration', g_param_readwrite)
-	g_surface_scrolled_window_pspec_surface = C.g_param_spec_pointer(c'surface', c'surface', c'The embedded surface', g_param_readwrite)
+	// Object properties.
+	g_surface_scrolled_window_pspec_config = C.g_param_spec_object(c'config', c'config', c'The configuration', config_get_type(), g_param_readwrite)
+	g_surface_scrolled_window_pspec_surface = C.g_param_spec_object(c'surface', c'surface', c'The embedded surface', terminal_surface_get_type(), g_param_readwrite)
 	mut obj_class := &C.GObjectClass(klass)
 	obj_class.get_property = voidptr(surface_scrolled_window_get_property)
 	obj_class.set_property = voidptr(surface_scrolled_window_set_property)
