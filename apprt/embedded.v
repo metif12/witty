@@ -1758,20 +1758,14 @@ pub fn ghostty_set_window_background_blur(app &App, window voidptr) {
 
 // ghostty_surface_set_display_id sets the display ID for macOS rendering.
 pub fn ghostty_surface_set_display_id(mut surface Surface, display_id u32) {
-	// Renderer thread mailbox not yet available. When implemented, this
-	// would send a macos_display_id message to the renderer thread.
-	_ = surface
-	_ = display_id
+	surface.core_surface.set_display_id(display_id)
 }
 
 // ghostty_surface_quicklook_font returns a CTFontRef that should be used
 // for quicklook highlighted text. This is always the primary font in use
 // regardless of the selected text.
 pub fn ghostty_surface_quicklook_font(surface &Surface) voidptr {
-	// Requires CoreText font backend and font grid access, which are
-	// not yet available. Would return a CTFontRef for the primary face.
-	_ = surface
-	return unsafe { nil }
+	return surface.core_surface.quicklook_font()
 }
 
 // ghostty_surface_quicklook_word returns the selected word for quicklook.
@@ -1779,13 +1773,16 @@ pub fn ghostty_surface_quicklook_font(surface &Surface) voidptr {
 // selection info so that quicklook can be rendered.
 //
 // This does not modify the selection active on the surface (if any).
-pub fn ghostty_surface_quicklook_word(mut surface Surface, result &CAPIText) bool {
-	// Requires terminal screen word selection and text dumping, which
-	// are not yet fully integrated. Would lock renderer state, get word
-	// selection at cursor position, and read the text.
-	_ = surface
-	_ = result
-	return false
+pub fn ghostty_surface_quicklook_word(mut surface Surface, mut result CAPIText) bool {
+	mut core := &surface.core_surface
+	core.renderer_state_lock()
+	defer {
+		core.renderer_state_unlock()
+	}
+
+	pos := surface.get_cursor_pos() or { return false }
+	selection := core.quicklook_selection(pos.x, pos.y) or { return false }
+	return read_text_locked(mut surface, selection, mut result)
 }
 
 // ghostty_inspector_metal_init initializes the inspector Metal backend.

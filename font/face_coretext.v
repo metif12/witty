@@ -60,6 +60,23 @@ fn C.witty_ct_release(ptr voidptr)
 
 fn C.witty_coretext_copy_display_name(font_ptr voidptr, buf &u8, len usize) int
 
+// copy_coretext_font_with_size returns a retained copy of a native CoreText
+// font. It returns nil on non-Darwin targets or for a non-CoreText face.
+pub fn copy_coretext_font_with_size(font_ptr voidptr, size f64) voidptr {
+	if isnil(font_ptr) {
+		return unsafe { nil }
+	}
+	return C.witty_coretext_copy_font_with_size(font_ptr, size)
+}
+
+// release_coretext_font releases a font returned by
+// copy_coretext_font_with_size.
+pub fn release_coretext_font(font_ptr voidptr) {
+	if !isnil(font_ptr) {
+		C.witty_coretext_release(font_ptr)
+	}
+}
+
 // ============================================================
 // CoreTextFace
 // ============================================================

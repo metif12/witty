@@ -2079,9 +2079,10 @@ pub fn (p Preedit) width() int {
 
 pub struct RendererThread {
 pub mut:
-	wakeup          RendererWakeup
-	stopped         bool
-	crash_requested bool
+	wakeup           RendererWakeup
+	stopped          bool
+	crash_requested  bool
+	macos_display_id u32
 }
 
 fn (mut t RendererThread) deinit() {
@@ -2638,6 +2639,7 @@ pub mut:
 	rt_surface &RuntimeSurface = unsafe { nil }
 
 	font_grid_key      FontGridKey
+	font_grid          &font.SharedGrid = unsafe { nil }
 	font_size          DesiredSize
 	font_size_adjusted bool
 	font_metrics       FontMetrics
@@ -2708,6 +2710,7 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 	// Get font grid (shared across surfaces with same config)
 	font_grid_key, font_grid := app.font_grid_set.ref(&derived_config.font, self.font_size)!
 	self.font_grid_key = font_grid_key
+	self.font_grid = font_grid
 	self.font_metrics = font_grid.metrics
 
 	// Build our size struct with screen size, cell size, and padding
@@ -2816,6 +2819,7 @@ pub fn (mut self Surface) deinit() {
 
 	// Release font grid
 	self.app.font_grid_set.deref(self.font_grid_key)
+	self.font_grid = unsafe { nil }
 
 	// Clean up config
 	self.config.deinit()
@@ -3161,6 +3165,7 @@ pub fn (mut self Surface) set_font_size(size DesiredSize) ! {
 	// Swap our font grid key
 	old_key := self.font_grid_key
 	self.font_grid_key = font_grid_key
+	self.font_grid = font_grid
 	self.font_metrics = font_grid.metrics
 
 	// Release old grid

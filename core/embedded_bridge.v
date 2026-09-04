@@ -10,6 +10,7 @@ module core
 
 import apprt
 import configpkg
+import font
 import input
 import osc
 import renderer
@@ -87,6 +88,9 @@ pub fn install_embedded_bridge() {
 		surface_inspector_on: bridge_surface_inspector_on
 		surface_inspector_off: bridge_surface_inspector_off
 		surface_key_binding: bridge_surface_key_binding
+		surface_display_id: bridge_surface_display_id
+		surface_quicklook_font: bridge_surface_quicklook_font
+		surface_quicklook_sel: bridge_surface_quicklook_selection
 	})
 }
 
@@ -893,6 +897,48 @@ fn bridge_surface_key_binding(ptr voidptr, event &input.KeyEvent) ?voidptr {
 	flags := self.surface.key_event_is_binding(*event) or { return none }
 	self.binding_flags = flags
 	return voidptr(&self.binding_flags)
+}
+
+fn bridge_surface_display_id(ptr voidptr, display_id u32) {
+	mut self := unsafe { &EmbeddedSurfaceCore(ptr) }
+	self.surface.renderer_thread.macos_display_id = display_id
+	self.surface.renderer_thread.wakeup.notify() or {}
+}
+
+fn bridge_surface_quicklook_font(ptr voidptr) voidptr {
+	self := unsafe { &EmbeddedSurfaceCore(ptr) }
+	grid := self.surface.font_grid
+	if isnil(grid) {
+		return unsafe { nil }
+	}
+	content_scale := self.rt_surface.get_content_scale() or { return unsafe { nil } }
+	if content_scale.y <= 0 {
+		return unsafe { nil }
+	}
+	grid.lock.rlock()
+	defer {
+		grid.lock.runlock()
+	}
+	mut collection := &grid.resolver.collection
+	face := collection.get_face(font.Index{}) or { return unsafe { nil } }
+	if isnil(face.ct_font) {
+		return unsafe { nil }
+	}
+	return font.copy_coretext_font_with_size(face.ct_font, face.size.pixels() / f64(content_scale.y))
+}
+
+fn bridge_surface_quicklook_selection(ptr voidptr, x f64, y f64) ?voidptr {
+	mut self := unsafe { &EmbeddedSurfaceCore(ptr) }
+	screen := self.surface.renderer_state.terminal.screens.active
+	point := self.surface.pos_to_viewport(x, y)
+	pin := screen.pages.pin(terminal.PinOpts{
+		tag: .viewport
+		x: point.x
+		y: point.y
+	}) or { return none }
+	self.selection = self.surface.io.terminal.screens.active.select_word(pin,
+		self.surface.config.selection_word_chars) or { return none }
+	return voidptr(&self.selection)
 }
 
 fn min_u32(a u32, b u32) u32 {

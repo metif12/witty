@@ -679,6 +679,30 @@ pub fn (s CoreSurface) key_event_is_binding(event voidptr) ?voidptr {
 	return none
 }
 
+// set_display_id moves macOS rendering to the display hosting the surface.
+pub fn (mut s CoreSurface) set_display_id(display_id u32) {
+	if !isnil(s.backend) && g_core_bridge.surface_display_id != unsafe { nil } {
+		g_core_bridge.surface_display_id(s.backend, display_id)
+	}
+}
+
+// quicklook_font returns a retained native font at the host coordinate scale.
+pub fn (s CoreSurface) quicklook_font() voidptr {
+	if !isnil(s.backend) && g_core_bridge.surface_quicklook_font != unsafe { nil } {
+		return g_core_bridge.surface_quicklook_font(s.backend)
+	}
+	return unsafe { nil }
+}
+
+// quicklook_selection resolves the word under the supplied surface position
+// without modifying the terminal's active selection.
+pub fn (s CoreSurface) quicklook_selection(x f64, y f64) ?voidptr {
+	if !isnil(s.backend) && g_core_bridge.surface_quicklook_sel != unsafe { nil } {
+		return g_core_bridge.surface_quicklook_sel(s.backend, x, y)
+	}
+	return none
+}
+
 fn (mut s CoreSurface) sync_backend() {
 	if isnil(s.backend) || g_core_bridge.surface_snapshot == unsafe { nil } {
 		return
@@ -840,6 +864,12 @@ pub type CoreSurfaceFontSizeFn = fn (voidptr, FontSize) !
 
 pub type CoreSurfaceKeyBindingFn = fn (voidptr, &input.KeyEvent) ?voidptr
 
+pub type CoreSurfaceDisplayIdFn = fn (voidptr, u32)
+
+pub type CoreSurfaceQuicklookFontFn = fn (voidptr) voidptr
+
+pub type CoreSurfaceQuicklookSelectionFn = fn (voidptr, f64, f64) ?voidptr
+
 // CoreBridge is installed by core.install_embedded_bridge from the root
 // artifact. Every callback delegates to the canonical core.App/core.Surface;
 // the fallback implementation remains useful for isolated apprt tests.
@@ -891,6 +921,9 @@ pub:
 	surface_inspector_on   CoreSurfaceVoidFn = unsafe { nil }
 	surface_inspector_off  CoreSurfaceCloseFn = unsafe { nil }
 	surface_key_binding    CoreSurfaceKeyBindingFn = unsafe { nil }
+	surface_display_id     CoreSurfaceDisplayIdFn = unsafe { nil }
+	surface_quicklook_font CoreSurfaceQuicklookFontFn = unsafe { nil }
+	surface_quicklook_sel  CoreSurfaceQuicklookSelectionFn = unsafe { nil }
 }
 
 __global g_core_bridge CoreBridge

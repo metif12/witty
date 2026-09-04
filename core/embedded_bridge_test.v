@@ -2,6 +2,7 @@ module core
 
 import apprt
 import configpkg
+import font
 
 struct EmbeddedBridgeCapture {
 mut:
@@ -68,6 +69,22 @@ fn test_embedded_bridge_uses_canonical_core_surface() {
 	mut backend := unsafe { &EmbeddedSurfaceCore(surface.core_surface.backend) }
 	mut stream := backend.surface.renderer_state.terminal.vt_stream()
 	stream.next_slice('hello')!
+	apprt.ghostty_surface_mouse_pos(mut surface, 1, 1, 0)
+	mut word := apprt.CAPIText{}
+	assert apprt.ghostty_surface_quicklook_word(mut surface, mut word)
+	assert word.text? == 'hello'
+	assert !apprt.ghostty_surface_has_selection(surface)
+	apprt.ghostty_surface_free_text(mut word)
+
+	apprt.ghostty_surface_set_display_id(mut surface, 42)
+	assert backend.surface.renderer_thread.macos_display_id == 42
+	assert backend.surface.renderer_thread.wakeup.count > 0
+	$if macos {
+		quicklook_font := apprt.ghostty_surface_quicklook_font(surface)
+		assert !isnil(quicklook_font)
+		font.release_coretext_font(quicklook_font)
+	}
+
 	mut text := apprt.CAPIText{}
 	assert apprt.ghostty_surface_read_text(mut surface, apprt.CAPISelection{
 		tl: apprt.CAPIPoint{
