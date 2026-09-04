@@ -4,6 +4,12 @@ import apprt
 import configpkg
 import input
 
+fn app_mailbox_push_forever_for_test(mailbox_ptr voidptr, done chan bool) {
+	mut mailbox := unsafe { &Mailbox(mailbox_ptr) }
+	assert mailbox.push(Message(PresentSurfaceMsg{ address: 999 })) == app_mailbox_capacity
+	done <- true
+}
+
 fn test_runtime_app_records_actions_and_quit_timer() ! {
 	mut runtime := apprt.RuntimeApp{}
 	runtime.perform_action(apprt.Target(apprt.AppTarget{}), .quit_timer, apprt.ActionValue{
@@ -25,6 +31,95 @@ fn test_app_mailbox_dispatches_open_config() ! {
 	app.tick(mut runtime)!
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].action == .open_config
+}
+
+fn test_app_mailbox_is_bounded_fifo_and_reusable() {
+	mut mailbox := Mailbox.init()
+	defer {
+		mailbox.deinit()
+	}
+
+	assert mailbox.pop() == none
+	for i in 0 .. app_mailbox_capacity {
+		assert mailbox.try_push(Message(PresentSurfaceMsg{ address: u64(i) })) == i + 1
+	}
+	assert mailbox.try_push(Message(PresentSurfaceMsg{ address: 999 })) == 0
+	assert mailbox.len() == app_mailbox_capacity
+
+	for i in 0 .. app_mailbox_capacity {
+		msg := mailbox.pop() or {
+			assert false, 'message ${i} missing'
+			return
+		}
+		match msg {
+			PresentSurfaceMsg {
+				assert msg.address == u64(i)
+			}
+			else {
+				assert false, 'unexpected app mailbox message'
+			}
+		}
+	}
+	assert mailbox.pop() == none
+	assert mailbox.try_push(Message(PresentSurfaceMsg{ address: 64 })) == 1
+	msg := mailbox.pop() or {
+		assert false
+		return
+	}
+	match msg {
+		PresentSurfaceMsg {
+			assert msg.address == 64
+		}
+		else {
+			assert false
+		}
+	}
+}
+
+fn test_app_mailbox_blocking_push_waits_for_capacity() {
+	mut mailbox := Mailbox.init()
+	defer {
+		mailbox.deinit()
+	}
+	for i in 0 .. app_mailbox_capacity {
+		assert mailbox.try_push(Message(PresentSurfaceMsg{ address: u64(i) })) == i + 1
+	}
+
+	done := chan bool{ cap: 1 }
+	worker := spawn app_mailbox_push_forever_for_test(voidptr(&mailbox), done)
+	first := mailbox.pop() or {
+		assert false
+		return
+	}
+	match first {
+		PresentSurfaceMsg {
+			assert first.address == 0
+		}
+		else {
+			assert false
+		}
+	}
+	worker.wait()
+	assert <-done
+	assert mailbox.len() == app_mailbox_capacity
+	for _ in 1 .. app_mailbox_capacity {
+		_ = mailbox.pop() or {
+			assert false
+			return
+		}
+	}
+	last := mailbox.pop() or {
+		assert false
+		return
+	}
+	match last {
+		PresentSurfaceMsg {
+			assert last.address == 999
+		}
+		else {
+			assert false
+		}
+	}
 }
 
 fn test_app_present_surface_request_ignores_stale_address() ! {

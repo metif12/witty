@@ -201,6 +201,7 @@ import apprt
 import configpkg
 import font
 import input
+import sync
 import time
 
 // SurfaceList is a list of active surfaces managed by the app.
@@ -357,7 +358,7 @@ pub fn App.create() !&App {
 pub fn (mut self App) init() ! {
 	self.font_grid_set = font.SharedGridSet.init() or { return err }
 	self.surfaces = SurfaceList([]&SurfaceRef{})
-	self.mailbox = Mailbox{}
+	self.mailbox = Mailbox.init()
 	self.config_conditional_state = configpkg.ConditionalState{}
 	self.focused = true
 	self.first = true
@@ -370,6 +371,7 @@ pub fn (mut self App) deinit() {
 		surface.deinit()
 	}
 	self.surfaces = SurfaceList([]&SurfaceRef{})
+	self.mailbox.deinit()
 
 	// Clean up our font group cache.
 	// We should have zero items in the grid set at this point because
@@ -605,8 +607,8 @@ pub fn (mut self App) request_present_surface(address u64) {
 
 // pending_message_count exposes the bounded mailbox occupancy for runtime
 // integration and tests. It does not consume or otherwise mutate messages.
-pub fn (self &App) pending_message_count() int {
-	return self.mailbox.queue.len
+pub fn (mut self App) pending_message_count() int {
+	return self.mailbox.len()
 }
 
 // focus_event handles an app-level focus event. This should be called
@@ -932,23 +934,106 @@ pub:
 // from any thread.
 pub struct Mailbox {
 mut:
-	// Internal message queue. This is a simple bounded buffer.
-	// TODO: Replace with a proper BlockingQueue/channel when available.
-	queue []Message
+	data     [app_mailbox_capacity]Message
+	write    int
+	read     int
+	length   int
+	mutex    &sync.Mutex = unsafe { nil }
+	not_full &sync.Cond = unsafe { nil }
 }
 
-// push adds a message to the mailbox queue.
-pub fn (mut self Mailbox) push(msg Message) {
-	self.queue << msg
+const app_mailbox_capacity = 64
+
+pub fn Mailbox.init() Mailbox {
+	mutex := sync.new_mutex()
+	return Mailbox{
+		mutex: mutex
+		not_full: sync.new_cond(mutex)
+	}
+}
+
+pub fn (mut self Mailbox) deinit() {
+	if self.mutex != unsafe { nil } {
+		self.mutex.destroy()
+		self.mutex = unsafe { nil }
+		self.not_full = unsafe { nil }
+	}
+}
+
+fn (mut self Mailbox) ensure_mutex() &sync.Mutex {
+	if self.mutex == unsafe { nil } {
+		self.mutex = sync.new_mutex()
+	}
+	if self.not_full == unsafe { nil } {
+		self.not_full = sync.new_cond(self.mutex)
+	}
+	return self.mutex
+}
+
+// try_push adds a message without blocking and returns the queue occupancy, or
+// zero when the fixed-capacity queue is full.
+pub fn (mut self Mailbox) try_push(msg Message) int {
+	mutex := self.ensure_mutex()
+	mutex.lock()
+	defer {
+		mutex.unlock()
+	}
+	if self.length == app_mailbox_capacity {
+		return 0
+	}
+	return self.push_locked(msg)
+}
+
+// push adds a message, waiting for the consumer if the queue is full. App
+// requests use Ghostty's `.forever` queue timeout, so no message is dropped.
+pub fn (mut self Mailbox) push(msg Message) int {
+	mutex := self.ensure_mutex()
+	mutex.lock()
+	for self.length == app_mailbox_capacity {
+		self.not_full.wait()
+	}
+	result := self.push_locked(msg)
+	mutex.unlock()
+	return result
+}
+
+fn (mut self Mailbox) push_locked(msg Message) int {
+	self.data[self.write] = msg
+	self.write += 1
+	if self.write == app_mailbox_capacity {
+		self.write = 0
+	}
+	self.length += 1
+	return self.length
 }
 
 // pop removes and returns the next message from the queue.
 // Returns none if the queue is empty.
 pub fn (mut self Mailbox) pop() ?Message {
-	if self.queue.len == 0 {
+	mutex := self.ensure_mutex()
+	mutex.lock()
+	defer {
+		mutex.unlock()
+	}
+	if self.length == 0 {
 		return none
 	}
-	msg := self.queue[0]
-	self.queue.delete(0)
+	index := self.read
+	self.read += 1
+	if self.read == app_mailbox_capacity {
+		self.read = 0
+	}
+	self.length -= 1
+	self.not_full.signal()
+	msg := self.data[index]
 	return msg
+}
+
+pub fn (mut self Mailbox) len() int {
+	mutex := self.ensure_mutex()
+	mutex.lock()
+	defer {
+		mutex.unlock()
+	}
+	return self.length
 }
