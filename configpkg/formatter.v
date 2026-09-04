@@ -266,6 +266,7 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	add_group(mut result, 'desktop-notifications', [
 		bool_string(c.desktop_notifications),
 	])
+	add_group(mut result, 'bell-features', [bell_features_string(c.bell_features)])
 	add_group(mut result, 'notify-on-command-finish', [
 		c.notify_on_command_finish.str(),
 	])
@@ -448,6 +449,16 @@ fn shell_integration_features_string(value ShellIntegrationFeatures) string {
 		if value.ssh_env { 'ssh-env' } else { 'no-ssh-env' },
 		if value.ssh_terminfo { 'ssh-terminfo' } else { 'no-ssh-terminfo' },
 		if value.path { 'path' } else { 'no-path' },
+	].join(',')
+}
+
+fn bell_features_string(value BellFeatures) string {
+	return [
+		if value.system { 'system' } else { 'no-system' },
+		if value.audio { 'audio' } else { 'no-audio' },
+		if value.attention { 'attention' } else { 'no-attention' },
+		if value.title { 'title' } else { 'no-title' },
+		if value.border { 'border' } else { 'no-border' },
 	].join(',')
 }
 

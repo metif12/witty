@@ -734,6 +734,34 @@ fn test_gtk_window_config_rejects_invalid_enum() {
 	assert cfg.diagnostics.len == 1
 }
 
+fn test_bell_features_parse_format_and_defaults() {
+	mut cfg := Config.default_config()
+	assert !cfg.bell_features.system
+	assert !cfg.bell_features.audio
+	assert cfg.bell_features.attention
+	assert cfg.bell_features.title
+	assert !cfg.bell_features.border
+
+	cfg.load_string('bell-features = audio,no-attention,no-title,border')
+	assert cfg.diagnostics.len == 0
+	assert !cfg.bell_features.system
+	assert cfg.bell_features.audio
+	assert !cfg.bell_features.attention
+	assert !cfg.bell_features.title
+	assert cfg.bell_features.border
+	assert cfg.format_config(true).contains('bell-features = no-system,audio,no-attention,no-title,border\n')
+
+	cfg.load_string('bell-features = true')
+	assert cfg.bell_features.system
+	assert cfg.bell_features.audio
+	assert cfg.bell_features.attention
+	assert cfg.bell_features.title
+	assert cfg.bell_features.border
+
+	cfg.load_string('bell-features = sparkle')
+	assert cfg.diagnostics.len == 1
+}
+
 // --- WindowDecoration ---
 
 // Config.zig: WindowDecoration "parse WindowDecoration"

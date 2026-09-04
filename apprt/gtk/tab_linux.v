@@ -297,9 +297,7 @@ pub fn (mut self Tab) action_previous_page() {
 // computed_title builds the display title for this tab. Faithful translation of
 // `closureComputedTitle`: the plain title is the override, else the terminal
 // title, else the config title, else a default; a zoom/bell prefix is added
-// per config. The config-gated bell/zoom emoji prefixes are honored; where the
-// GTK-only "bell-features.title" config field isn't yet in witty's config we
-// default to enabled (matching ghostty's documented default).
+// per config.
 pub fn (self &Tab) computed_title(config_ &Config, terminal_ ?string, override_ ?string, zoomed bool, bell_ringing bool) string {
 	default_title := 'Witty'
 
@@ -311,13 +309,16 @@ pub fn (self &Tab) computed_title(config_ &Config, terminal_ ?string, override_ 
 	} else {
 		config_title(config_) or { default_title }
 	}
+	if isnil(config_) {
+		return plain
+	}
+	cfg := config_.get()
 
 	// Build the final title with any prefixes.
 	mut result := ''
 
-	// Bell prefix. TODO(gtk): gate on config.@"bell-features".title once witty's
-	// config carries it; default (enabled) matches ghostty.
-	if bell_ringing {
+	// Bell prefix.
+	if bell_ringing && cfg.bell_features.title {
 		result += '🔔 ' // bell emoji (U+1F514)
 	}
 
@@ -336,9 +337,7 @@ fn config_title(config_ &Config) ?string {
 	if isnil(config_) {
 		return none
 	}
-	// TODO(gtk): return config_.get().title once witty's configpkg.Config
-	// carries a `title` field. For now there is no static title.
-	return none
+	return config_.get().title
 }
 
 // --- GObject class registration (stub) ------------------------------------

@@ -3963,6 +3963,7 @@ pub mut:
 	confirm_close_surface          ConfirmCloseSurface = .true_
 	cursor_click_to_move           bool = true
 	desktop_notifications          bool = true
+	bell_features                  BellFeatures
 	mouse_hide_while_typing        bool
 	mouse_reporting                bool = true
 	mouse_shift_capture            MouseShiftCapture = .false_
@@ -5526,6 +5527,17 @@ pub mut:
 	path         bool = true
 }
 
+// BellFeatures controls the system, audio, attention, title, and border bell
+// effects. The defaults match Ghostty's packed struct.
+pub struct BellFeatures {
+pub mut:
+	system    bool
+	audio     bool
+	attention bool = true
+	title     bool = true
+	border    bool
+}
+
 pub enum ShellIntegration {
 	detect
 	none_
@@ -6399,6 +6411,12 @@ fn (mut c Config) apply_kv(key string, value string) {
 				return
 			}
 		}
+		'bell-features' {
+			c.bell_features = parse_bell_features(value) or {
+				c.invalid_config_value(key, value)
+				return
+			}
+		}
 		'scroll-to-bottom' {
 			c.scroll_to_bottom = parse_scroll_to_bottom(value) or {
 				c.invalid_config_value(key, value)
@@ -7029,6 +7047,46 @@ fn parse_shell_integration_features(value string) ?ShellIntegrationFeatures {
 			}
 			'path' {
 				result.path = enabled
+			}
+			else {
+				return none
+			}
+		}
+	}
+	return result
+}
+
+fn parse_bell_features(value string) ?BellFeatures {
+	if b := parse_bool_opt(value) {
+		return BellFeatures{
+			system: b
+			audio: b
+			attention: b
+			title: b
+			border: b
+		}
+	}
+	mut result := BellFeatures{}
+	for raw in value.split(',') {
+		part := raw.trim_space()
+		negative := part.starts_with('no-')
+		name := if negative { part[3..] } else { part }
+		enabled := !negative
+		match name {
+			'system' {
+				result.system = enabled
+			}
+			'audio' {
+				result.audio = enabled
+			}
+			'attention' {
+				result.attention = enabled
+			}
+			'title' {
+				result.title = enabled
+			}
+			'border' {
+				result.border = enabled
 			}
 			else {
 				return none
