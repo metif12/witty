@@ -985,6 +985,14 @@ fn (mut self Pages) resize_rows(new_rows u32, cursor_y u32, has_cursor bool, cur
 	old_rows := self.rows
 	if old_rows == new_rows {
 		self.rows = new_rows
+		// Column reflow can unwrap several physical rows even when the visible
+		// row count itself is unchanged. PageList.resizeWithoutReflow grows
+		// fresh rows until the active area is full in this case; the flat model
+		// must do the same or active-row lookups fall beyond screen_rows.
+		required := self.active_start + int(new_rows)
+		for self.screen_rows.len < required {
+			self.screen_rows << RowData.init(self.cols)
+		}
 		return
 	}
 
@@ -1029,6 +1037,12 @@ fn (mut self Pages) resize_rows(new_rows u32, cursor_y u32, has_cursor bool, cur
 			new_active = 0
 		}
 		self.active_start = new_active
+		// Reflow may already have unwrapped more rows than the height shrink
+		// removes. PageList still guarantees a complete active area by growing
+		// blank rows after the rewritten content.
+		for self.screen_rows.len < self.active_start + int(new_rows) {
+			self.screen_rows << RowData.init(self.cols)
+		}
 		return
 	}
 
