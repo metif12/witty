@@ -563,6 +563,117 @@ fn test_page_vt_multiline_crlf() {
 	assert output == 'hello\r\nworld', 'VT multiline should use \\r\\n'
 }
 
+fn test_page_vt_single_line_with_bold() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer { s.deinit() }
+	s.next_slice('\x1b[1mhello\x1b[0m') or { panic(err) }
+
+	f := PageFormatter.init(&t.screens.active.pages, format_vt)
+	assert f.format() == '\x1b[0m\x1b[1mhello\x1b[0m'
+}
+
+fn test_page_vt_multiple_styles() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer { s.deinit() }
+	s.next_slice('\x1b[1mhello \x1b[3mworld\x1b[0m') or { panic(err) }
+
+	f := PageFormatter.init(&t.screens.active.pages, format_vt)
+	assert f.format() == '\x1b[0m\x1b[1mhello \x1b[0m\x1b[1m\x1b[3mworld\x1b[0m'
+}
+
+fn test_page_vt_with_foreground_color() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer { s.deinit() }
+	s.next_slice('\x1b[31mred\x1b[0m') or { panic(err) }
+
+	f := PageFormatter.init(&t.screens.active.pages, format_vt)
+	assert f.format() == '\x1b[0m\x1b[38;5;1mred\x1b[0m'
+}
+
+fn test_page_vt_multiline_with_styles() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer { s.deinit() }
+	s.next_slice('\x1b[1mfirst\x1b[0m\r\n\x1b[3msecond\x1b[0m') or { panic(err) }
+
+	f := PageFormatter.init(&t.screens.active.pages, format_vt)
+	assert f.format() == '\x1b[0m\x1b[1mfirst\x1b[0m\r\n\x1b[0m\x1b[3msecond\x1b[0m'
+}
+
+fn test_page_vt_duplicate_style_not_emitted_twice() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer { s.deinit() }
+	s.next_slice('\x1b[1mhel\x1b[1mlo\x1b[0m') or { panic(err) }
+
+	f := PageFormatter.init(&t.screens.active.pages, format_vt)
+	assert f.format() == '\x1b[0m\x1b[1mhello\x1b[0m'
+}
+
+fn test_page_vt_palette_option_emits_rgb() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer { s.deinit() }
+	s.next_slice('\x1b]4;1;rgb:ab/cd/ef\x1b\\\x1b[31mred') or { panic(err) }
+
+	deferred := PageFormatter.init(&t.screens.active.pages, format_vt)
+	assert deferred.format() == '\x1b[0m\x1b[38;5;1mred\x1b[0m'
+
+	resolved := PageFormatter.init(&t.screens.active.pages, FormatOptions{
+		emit: .vt
+		palette: t.colors.palette.entries[..]
+	})
+	assert resolved.format() == '\x1b[0m\x1b[38;2;171;205;239mred\x1b[0m'
+}
+
+fn test_page_html_palette_option_emits_rgb() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer { s.deinit() }
+	s.next_slice('\x1b]4;1;rgb:ab/cd/ef\x1b\\\x1b[31mred') or { panic(err) }
+
+	deferred := PageFormatter.init(&t.screens.active.pages, format_html)
+	assert deferred.format() == '<div style="font-family: monospace; white-space: pre;"><div style="display: inline;color: var(--vt-palette-1);">red</div></div>'
+
+	resolved := PageFormatter.init(&t.screens.active.pages, FormatOptions{
+		emit: .html
+		palette: t.colors.palette.entries[..]
+	})
+	assert resolved.format() == '<div style="font-family: monospace; white-space: pre;"><div style="display: inline;color: rgb(171, 205, 239);">red</div></div>'
+}
+
+fn test_page_vt_style_reset_properly_closes_styles() {
+	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer { s.deinit() }
+	s.next_slice('\x1b[1mbold\x1b[0mnormal') or { panic(err) }
+
+	f := PageFormatter.init(&t.screens.active.pages, format_vt)
+	assert f.format() == '\x1b[0m\x1b[1mbold\x1b[0mnormal'
+}
+
+fn test_page_vt_background_color_on_trailing_blank_cells() {
+	mut t := Terminal.init(Options{ cols: 20, rows: 5 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer { s.deinit() }
+	s.next_slice('CPU:\x1b[41m\x1b[K\x1b[0m\r\nline2') or { panic(err) }
+
+	f := PageFormatter.init(&t.screens.active.pages, FormatOptions{
+		emit: .vt
+		trim: false
+	})
+	output := f.format()
+	crlf := output.index('\r\n') or {
+		assert false, 'expected CRLF in VT output'
+		return
+	}
+	line1 := output[..crlf]
+	assert line1.contains('\x1b[41m') || line1.contains('\x1b[48;5;1m')
+}
+
 // ============================================================
 // Page HTML plain text
 // ============================================================
