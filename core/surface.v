@@ -1789,6 +1789,7 @@ pub:
 	max_size           ScreenSize
 	secure_input_mode  apprt.SecureInput
 	reload_config_soft bool
+	config_change      &Config = unsafe { nil }
 }
 
 // PromptTitleKind mirrors apprt.PromptTitle.
@@ -3350,8 +3351,19 @@ pub fn (mut self Surface) render_inspector(context_handle voidptr) {
 
 // update_config updates the surface configuration at runtime.
 pub fn (mut self Surface) update_config(config &Config) ! {
-	derived := DerivedConfig.from_config(config)!
-	termio_config := termiopkg.DerivedConfig.init(config)!
+	// Each surface evaluates the original configuration using its own
+	// conditional state. Keep the resolved value alive through the synchronous
+	// runtime notification below; consumers must not retain its pointer.
+	mut resolved := config.clone()
+	if conditional := config.change_conditional_state(self.config_conditional_state) {
+		resolved = conditional
+	}
+	defer {
+		resolved.deinit()
+	}
+
+	derived := DerivedConfig.from_config(&resolved)!
+	termio_config := termiopkg.DerivedConfig.init(&resolved)!
 	self.config.deinit()
 	self.config = derived
 
@@ -3377,7 +3389,7 @@ pub fn (mut self Surface) update_config(config &Config) ! {
 	self.set_font_size(font_size)!
 
 	// Notify renderer and IO of config change
-	renderer_message := rendererpkg.RendererMessage.init_change_config(config)!
+	renderer_message := rendererpkg.RendererMessage.init_change_config(&resolved)!
 	self.queue_renderer_message(renderer_message)!
 	self.queue_io(IOMessage{ kind: .change_config, config: termio_config })
 
@@ -3392,6 +3404,7 @@ pub fn (mut self Surface) update_config(config &Config) ! {
 	self.rt_app.perform_action(AppAction{
 		kind: .config_change
 		target: &self
+		config_change: &resolved
 	})!
 }
 

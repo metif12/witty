@@ -289,7 +289,15 @@ pub fn (mut self App) perform_action(target_ Target, action ActionKey, data Acti
 	// embedded apprt.
 	self.perform_pre_action(target_, action, data)
 
-	log_debug('dispatching action target=${target_} action=${action} data=${data}')
+	// ActionValue is represented as a struct in V, so formatting the whole
+	// value also walks every inactive payload. A config-change contains a
+	// borrowed Config pointer; log that active value as a pointer rather than
+	// recursively formatting the configuration through the inactive fields.
+	if action == .config_change {
+		log_debug('dispatching action target=${target_} action=${action} config=${voidptr(data.config_change_.config)}')
+	} else {
+		log_debug('dispatching action target=${target_} action=${action} data=${data}')
+	}
 
 	if self.opts.action_cb != unsafe { nil } {
 		return self.opts.action_cb(self, target_, RuntimeAction{

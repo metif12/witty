@@ -357,7 +357,11 @@ fn bridge_surface_runtime_action(ptr voidptr, action AppAction) !bool {
 				reload_config_: apprt.ReloadConfig{ soft: action.reload_config_soft }
 			})!
 		}
-		.config_change { app.perform_action(target, .config_change, apprt.ActionValue{})! }
+		.config_change {
+			app.perform_action(target, .config_change, apprt.ActionValue{
+				config_change_: apprt.ConfigChange{ config: action.config_change }
+			})!
+		}
 		.pwd {
 			app.perform_action(target, .pwd, apprt.ActionValue{
 				pwd_: apprt.PwdValue{ pwd: action.pwd }

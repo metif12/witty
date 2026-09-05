@@ -5,6 +5,7 @@ import configpkg
 import font
 import input
 import macos
+import os
 
 fn embedded_bridge_test_view() voidptr {
 	$if macos {
@@ -25,6 +26,7 @@ mut:
 	actions      []apprt.ActionKey
 	reload_soft  []bool
 	secure_input []apprt.SecureInput
+	config_sizes []f32
 	closed       bool
 	confirm      bool
 }
@@ -38,6 +40,9 @@ fn embedded_bridge_action(app &apprt.App, target apprt.Target, action apprt.Runt
 	}
 	if action.action == .secure_input {
 		capture.secure_input << action.data.secure_input_
+	}
+	if action.action == .config_change && !isnil(action.data.config_change_.config) {
+		capture.config_sizes << action.data.config_change_.config.font_size
 	}
 	return true
 }
@@ -98,6 +103,7 @@ fn test_embedded_bridge_uses_canonical_core_surface() {
 	assert capture.reload_soft[0]
 	assert backend.surface.perform_binding_action(input.Action.new(.toggle_secure_input))!
 	assert capture.secure_input.last() == .toggle
+
 	mut stream := backend.surface.renderer_state.terminal_.vt_stream()
 	stream.next_slice('hello')!
 	apprt.ghostty_surface_mouse_pos(mut surface, 1, 1, 0)
@@ -134,6 +140,26 @@ fn test_embedded_bridge_uses_canonical_core_surface() {
 
 	assert apprt.ghostty_surface_binding_action(mut surface, 'select_all')
 	assert apprt.ghostty_surface_has_selection(surface)
+
+	// Surface reloads resolve conditional configuration before forwarding the
+	// same value through the embedded runtime action.
+	theme_dir := os.join_path(os.temp_dir(), 'witty-surface-config-${os.getpid()}')
+	os.rmdir_all(theme_dir) or {}
+	os.mkdir_all(theme_dir)!
+	defer {
+		os.rmdir_all(theme_dir) or {}
+	}
+	light_theme := os.join_path(theme_dir, 'light')
+	dark_theme := os.join_path(theme_dir, 'dark')
+	os.write_file(light_theme, 'font-size = 17\n')!
+	os.write_file(dark_theme, 'font-size = 19\n')!
+	mut updated := configpkg.Config.default_config()
+	updated.load_string('theme = light:${light_theme},dark:${dark_theme}\n')
+	updated.finalize()
+	apprt.ghostty_surface_update_config(mut surface, &updated)
+	assert backend.surface.config.original_font_size == 19
+	assert capture.config_sizes.last() == f32(19)
+
 	apprt.ghostty_surface_request_close(mut surface)
 	assert capture.closed
 	assert capture.confirm == apprt.ghostty_surface_needs_confirm_quit(surface)
