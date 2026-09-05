@@ -497,7 +497,8 @@ fn bridge_surface_runtime_action(ptr voidptr, action AppAction) !bool {
 				inspector_: unsafe { apprt.InspectorAction(action.inspector_mode) }
 			})!
 		}
-		.ignore, .unbind { true }
+		.unbind { panic('unbind action reached embedded runtime dispatch') }
+		.ignore { true }
 		.open_config { app.perform_action(target, .open_config, apprt.ActionValue{})! }
 		.close_all_windows { app.perform_action(target, .close_all_windows, apprt.ActionValue{})! }
 		.quit { app.perform_action(target, .quit, apprt.ActionValue{})! }

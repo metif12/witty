@@ -343,7 +343,8 @@ fn core_app_binding_leaf(entry &input.SetEntry) ?([]input.Action, input.Flags) {
 fn (mut c CoreApp) perform_app_action(mut app App, action input.Action) ! {
 	target := Target(AppTarget{})
 	match action.tag {
-		.ignore, .unbind {}
+		.unbind { panic('unbind action reached app dispatch') }
+		.ignore {}
 		.quit { app.perform_action(target, .quit, ActionValue{})! }
 		.new_window { app.perform_action(target, .new_window, ActionValue{})! }
 		.open_config { app.perform_action(target, .open_config, ActionValue{})! }

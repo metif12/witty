@@ -4702,7 +4702,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				})!
 			}
 			else {
-				// All other app-scoped actions (ignore, unbind, open_config,
+				// All other app-scoped actions (open_config,
 				// reload_config, close_all_windows, quit, toggle_quick_terminal,
 				// toggle_visibility, check_for_updates, show_gtk_inspector) are
 				// forwarded to the app.

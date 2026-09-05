@@ -777,7 +777,7 @@ pub fn (mut self App) perform_action(mut rt_app apprt.RuntimeApp, action input.A
 	app_target := apprt.Target(apprt.AppTarget{})
 	match action.tag {
 		.unbind {
-			// unreachable in ghostty; unbind is handled before reaching here.
+			panic('unbind action reached app dispatch')
 		}
 		.ignore {}
 		.quit {
