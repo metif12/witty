@@ -5989,6 +5989,62 @@ fn test_page_list_resize_reflow_preserves_hyperlinks_across_source_pages() {
 	assert found[u32(`B`)] == 'https://example.com/second'
 }
 
+fn test_page_list_resize_reflow_exceeds_hyperlink_memory_forcing_capacity_increase() {
+	mut s := PageList.init(2, 10, usize(0))
+	defer { s.deinit() }
+	grow_page_list_to_second_page(mut s, 1)
+	uri := 'a'.repeat(int(string_bytes_default) - 1)
+
+	mut first := s.pages.first or { return }
+	mut page0 := &first.data
+	y0 := int(page0.size.rows) - 1
+	x0 := int(page0.size.cols) - 1
+	first_id := page0.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{ offset: 0 }
+		uri: uri
+	}) or { panic(err) }
+	page0.rows[y0].wrap = true
+	page0.rows[y0].cells[x0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`X`)
+	}
+	page0.set_hyperlink(y0, x0, first_id) or { panic(err) }
+	mut first_error := ''
+	_ := page0.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{ offset: 1 }
+		uri: 'AAAAAAAAAAAAAAAAAAAAAAAAAA'
+	}) or {
+		first_error = err.msg()
+		u32(0)
+	}
+	assert first_error == 'strings out of memory'
+
+	mut last := s.pages.last or { return }
+	mut page1 := &last.data
+	second_id := page1.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{ offset: 1 }
+		uri: uri
+	}) or { panic(err) }
+	page1.rows[0].wrap_continuation = true
+	page1.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`X`)
+	}
+	page1.set_hyperlink(0, 0, second_id) or { panic(err) }
+	mut second_error := ''
+	_ := page1.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{ offset: 2 }
+		uri: 'AAAAAAAAAAAAAAAAAAAAAAAAAA'
+	}) or {
+		second_error = err.msg()
+		u32(0)
+	}
+	assert second_error == 'strings out of memory'
+
+	s.resize(PageResizeOpts{ cols: s.cols + 1, reflow: true })
+	assert s.cols == 3
+}
+
 fn test_page_list_resize_reflow_less_cols_cursor_in_wrapped_row() {
 	mut s := PageList.init(4, 2, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
