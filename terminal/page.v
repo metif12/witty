@@ -2118,6 +2118,21 @@ pub fn (mut self Page) clear_cells(row_idx u16, left u16, end u16) {
 		}
 	}
 
+	// Kitty placeholder row flags may be false positives. Ghostty clears a
+	// false-positive flag when a full-row clear finds no placeholder cells.
+	if row.kitty_virtual_placeholder && int(end) - int(left) >= cols {
+		mut has_placeholder := false
+		for x in int(left) .. int(end) {
+			if row.cells[x].codepoint_val() == kitty_unicode_placeholder {
+				has_placeholder = true
+				break
+			}
+		}
+		if !has_placeholder {
+			row.kitty_virtual_placeholder = false
+		}
+	}
+
 	// Zero the cells.
 	for x in int(left) .. int(end) {
 		row.cells[x] = CellData{}

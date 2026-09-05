@@ -1910,6 +1910,22 @@ fn test_page_clear_cells() {
 	assert page.grapheme_count() == 0
 }
 
+fn test_page_clear_cells_clears_false_positive_kitty_placeholder_flag() {
+	mut page := Page.init(PageCapacity{
+		cols: 4
+		rows: 1
+	})
+	defer { page.deinit() }
+	page.size.rows = 1
+
+	// The row aggregate is allowed to remain a false positive after some
+	// operations; a full clear repairs it when no placeholder cell exists.
+	page.rows[0].kitty_virtual_placeholder = true
+	page.rows[0].cells[0] = CellData.init(u32(`x`))
+	page.clear_cells(0, 0, page.size.cols)
+	assert !page.rows[0].kitty_virtual_placeholder
+}
+
 // Test swap_cells.
 fn test_page_swap_cells() {
 	mut page := Page.init(PageCapacity{
