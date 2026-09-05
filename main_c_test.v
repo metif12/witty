@@ -50,6 +50,14 @@ fn test_all_declared_actions_are_dispatched() {
 	assert global_state.actions().len == 15
 }
 
+fn test_cli_help_matches_translated_command() {
+	help := cli_help_output()
+	assert help.starts_with('Usage: ghostty [+action] [options]\n\n')
+	assert help.contains('Run the Ghostty terminal emulator or a specific helper action.\n')
+	assert help.contains('  +list-actions\n')
+	assert help.ends_with('where `<action>` is one of actions listed above.\n')
+}
+
 fn test_config_c_api_lifecycle_clone_and_primitive_getters() {
 	mut config := ghostty_config_new() or { panic('config allocation failed') }
 	defer {
