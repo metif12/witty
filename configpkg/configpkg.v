@@ -5014,8 +5014,10 @@ pub fn (mut k Keybinds) init() {
 // the new conditional state. We re-run finalize with the new conditional state
 // so conditional (light/dark) theme loading is re-applied.
 pub fn (c Config) change_conditional_state(state ConditionalState) ?Config {
-	// If nothing is conditional, the state change has no effect.
-	if c.conditional_set.len == 0 {
+	// A state change is relevant only when the configuration uses that
+	// conditional key and its value actually changed. ConditionalState only
+	// contains theme today; keep this explicit in step with the source enum.
+	if !c.conditional_set['theme'] || c.conditional_state.theme == state.theme {
 		return none
 	}
 	mut copy := c.clone()

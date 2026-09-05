@@ -1339,6 +1339,16 @@ fn test_change_conditional_state_applies_relevant() {
 	assert 'theme' in cfg2.conditional_set
 }
 
+fn test_change_conditional_state_ignores_unchanged_relevant_value() {
+	mut cfg := Config.default_config()
+	cfg.load_string('theme = light:foo,dark:bar\n')
+	cfg.finalize()
+
+	if _ := cfg.change_conditional_state(cfg.conditional_state) {
+		assert false, 'expected none when conditional state is unchanged'
+	}
+}
+
 // Config.zig: "theme loading"
 fn test_theme_loading() {
 	dir := os.join_path(os.temp_dir(), 'witty-theme-load-${os.getpid()}')
