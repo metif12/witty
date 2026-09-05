@@ -373,7 +373,7 @@ fn exec_transmit(mut t terminal.Terminal, cmd &Command) Response {
 			control: Display(d_copy)
 			quiet: cmd.quiet
 		}
-		return exec_display(mut t, &disp_cmd)
+		result = exec_display(mut t, &disp_cmd)
 	}
 
 	// If there are more chunks expected we do not respond.

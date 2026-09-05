@@ -52,6 +52,82 @@ fn test_graphics_execute_chunked_quiet_inheritance() ! {
 	assert image.data.len == 6
 }
 
+fn test_graphics_execute_chunked_q0_responds_on_final_chunk() ! {
+	mut t := make_graphics_terminal()!
+	defer {
+		deinit_terminal_storage(mut t)
+		t.deinit()
+	}
+
+	first := Parser.parse_string('a=t,f=24,t=d,s=1,v=2,c=10,r=1,m=1,i=1,q=0;////')!
+	assert execute(mut t, &first) == none
+
+	last := Parser.parse_string('m=0;////')!
+	response := execute(mut t, &last) or { panic('expected final response') }
+	assert response.ok()
+}
+
+fn test_graphics_execute_chunk_can_increase_quiet_level() ! {
+	mut t := make_graphics_terminal()!
+	defer {
+		deinit_terminal_storage(mut t)
+		t.deinit()
+	}
+
+	first := Parser.parse_string('a=t,f=24,t=d,s=1,v=2,c=10,r=1,m=1,i=1,q=0;////')!
+	assert execute(mut t, &first) == none
+
+	last := Parser.parse_string('m=0,q=1;////')!
+	assert execute(mut t, &last) == none
+}
+
+fn test_graphics_execute_defaults_to_rgba() ! {
+	mut t := make_graphics_terminal()!
+	defer {
+		deinit_terminal_storage(mut t)
+		t.deinit()
+	}
+
+	cmd := Parser.parse_string('a=t,t=d,i=1,s=1,v=2,c=10,r=1;///////////')!
+	response := execute(mut t, &cmd) or { panic('expected transmit response') }
+	assert response.ok()
+	storage := terminal_storage(&t) or { panic('expected image storage') }
+	image := storage.image_by_id(1) or { panic('expected transmitted image') }
+	assert image.format == .rgba
+}
+
+fn test_graphics_execute_accepts_extreme_protocol_integers() ! {
+	mut t := make_graphics_terminal()!
+	defer {
+		deinit_terminal_storage(mut t)
+		t.deinit()
+	}
+
+	max_id := Parser.parse_string('a=p,i=4294967295')!
+	max_id_response := execute(mut t, &max_id) or { panic('expected display error') }
+	assert !max_id_response.ok()
+	assert max_id_response.message == 'ENOENT: image not found'
+
+	min_z := Parser.parse_string('a=p,i=1,z=-2147483648')!
+	min_z_response := execute(mut t, &min_z) or { panic('expected display error') }
+	assert !min_z_response.ok()
+	assert min_z_response.message == 'ENOENT: image not found'
+}
+
+fn test_graphics_execute_implicit_transmits_do_not_respond() ! {
+	mut t := make_graphics_terminal()!
+	defer {
+		deinit_terminal_storage(mut t)
+		t.deinit()
+	}
+
+	transmit := Parser.parse_string('a=t,f=24,t=d,s=1,v=2,c=10,r=1,i=0,I=0;////////')!
+	assert execute(mut t, &transmit) == none
+
+	transmit_display := Parser.parse_string('a=T,f=24,t=d,s=1,v=2,c=10,r=1,i=0,I=0;////////')!
+	assert execute(mut t, &transmit_display) == none
+}
+
 fn test_graphics_quiet_inheritance_only_applies_to_transmissions() ! {
 	mut t := make_graphics_terminal()!
 	defer {
