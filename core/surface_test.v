@@ -577,7 +577,6 @@ fn test_termio_message_translates_every_surface_message_variant() {
 		IOMessage{ kind: .focused, flag: true },
 		IOMessage{ kind: .color_scheme_report, flag: true },
 		IOMessage{ kind: .selection_scroll, flag: true },
-		IOMessage{ kind: .visible, flag: true },
 		IOMessage{ kind: .clear_screen, flag: true },
 		IOMessage{ kind: .scroll_viewport, scroll_delta: -3 },
 		IOMessage{ kind: .scroll_to_top },
@@ -588,8 +587,7 @@ fn test_termio_message_translates_every_surface_message_variant() {
 	translated := messages.map(termio_message(it))
 	assert translated.map(it.kind) == [termiopkg.MessageKind.write_small, .write_stable, .write_alloc,
 		.resize, .inspector, .change_config, .focused, .color_scheme_report, .selection_scroll,
-		.visible, .clear_screen, .scroll_viewport, .scroll_viewport, .scroll_viewport,
-		.jump_to_prompt, .crash]
+		.clear_screen, .scroll_viewport, .scroll_viewport, .scroll_viewport, .jump_to_prompt, .crash]
 	assert translated[0].write_small_data.slice().bytestr() == 'small'
 	assert translated[1].write_stable_data == 'stable'
 	assert translated[2].write_alloc_data == 'allocated'
@@ -599,12 +597,11 @@ fn test_termio_message_translates_every_surface_message_variant() {
 	assert translated[7].force_val
 	assert translated[8].flag_val
 	assert translated[9].flag_val
-	assert translated[10].flag_val
-	assert translated[11].scroll_behavior == .delta
-	assert translated[11].scroll_delta == -3
-	assert translated[12].scroll_behavior == .top
-	assert translated[13].scroll_behavior == .bottom
-	assert translated[14].prompt_delta == -2
+	assert translated[10].scroll_behavior == .delta
+	assert translated[10].scroll_delta == -3
+	assert translated[11].scroll_behavior == .top
+	assert translated[12].scroll_behavior == .bottom
+	assert translated[13].prompt_delta == -2
 }
 
 fn test_input_effect_values() {

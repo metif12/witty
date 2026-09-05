@@ -2489,7 +2489,6 @@ pub enum IOMessageKind {
 	focused
 	color_scheme_report
 	selection_scroll
-	visible
 	// clear_screen clears the terminal screen (and optionally history).
 	clear_screen
 	// scroll_viewport scrolls the viewport by IOMessage.scroll_delta.
@@ -2547,7 +2546,6 @@ fn termio_message(msg IOMessage) termiopkg.Message {
 		.selection_scroll {
 			termiopkg.Message{ kind: .selection_scroll, flag_val: msg.flag }
 		}
-		.visible { termiopkg.Message{ kind: .visible, flag_val: msg.flag } }
 		.clear_screen { termiopkg.Message{ kind: .clear_screen, flag_val: msg.flag } }
 		.scroll_viewport {
 			termiopkg.Message{
@@ -3823,7 +3821,6 @@ pub fn (mut self Surface) occlusion_callback(visible bool) ! {
 	self.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.VisibleMessage{
 		visible: visible
 	}))!
-	self.queue_io(IOMessage{ kind: .visible, flag: visible })
 	self.queue_render()!
 }
 

@@ -1055,10 +1055,6 @@ fn (mut t Thread) drain_mailbox(mut io Termio) bool {
 			.write_small { io.queue_write(msg.write_small_data.slice(), t.linefeed_mode) or {} }
 			.write_stable { io.queue_write(msg.write_stable_data.bytes(), t.linefeed_mode) or {} }
 			.write_alloc { io.queue_write(msg.write_alloc_data.bytes(), t.linefeed_mode) or {} }
-			.visible {
-				// Visibility is a renderer-thread concern. Kept for compatibility
-				// with older Witty producers; consuming it still triggers redraw.
-			}
 		}
 	}
 	if redraw {
@@ -1174,7 +1170,6 @@ pub enum MessageKind {
 	focused
 	color_scheme_report
 	selection_scroll
-	visible
 	start_synchronized_output
 	linefeed_mode
 	size_report
@@ -1288,13 +1283,6 @@ pub fn Message.selection_scroll_msg(active bool) Message {
 	return Message{
 		kind: .selection_scroll
 		flag_val: active
-	}
-}
-
-pub fn Message.visible_msg(vis bool) Message {
-	return Message{
-		kind: .visible
-		flag_val: vis
 	}
 }
 

@@ -53,7 +53,7 @@ fn test_termio_queue_message_uses_mailbox() {
 		tio.deinit()
 	}
 
-	tio.queue_message(Message.visible_msg(true), .unlocked)
+	tio.queue_message(Message.focused_msg(true), .unlocked)
 
 	assert tio.mailbox.len() == 1
 	assert tio.mailbox.notified
@@ -61,7 +61,7 @@ fn test_termio_queue_message_uses_mailbox() {
 		assert false, 'expected queued message'
 		return
 	}
-	assert msg.kind == .visible
+	assert msg.kind == .focused
 	assert msg.flag_val
 }
 
@@ -188,14 +188,14 @@ fn test_mailbox_send_enqueues() {
 		mailbox.deinit()
 	}
 
-	mailbox.send(Message.visible_msg(true), unsafe { nil })
+	mailbox.send(Message.focused_msg(true), unsafe { nil })
 	assert mailbox.len() == 1
 
 	msg := mailbox.pop() or {
 		assert false, 'expected sent message'
 		return
 	}
-	assert msg.kind == .visible
+	assert msg.kind == .focused
 	assert msg.flag_val
 }
 
