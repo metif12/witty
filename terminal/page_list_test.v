@@ -6234,6 +6234,99 @@ fn test_page_list_resize_reflow_less_cols_to_wrap_a_multicodepoint_grapheme_with
 	assert second_cps == graphemes
 }
 
+fn test_page_list_resize_reflow_more_cols_unwrap_wide_spacer_head() {
+	mut s := PageList.init(2, 2, usize(0))
+	defer { s.deinit() }
+	mut node := s.pages.first or { return }
+	mut page := &node.data
+	page.rows[0].wrap = true
+	page.rows[0].cells[0] = CellData{ content_tag: .codepoint, codepoint: u32(`x`) }
+	page.rows[0].cells[1] = CellData{ content_tag: .codepoint, wide: .spacer_head }
+	page.rows[1].wrap_continuation = true
+	page.rows[1].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(0x1F600)
+		wide: .wide
+	}
+	page.rows[1].cells[1] = CellData{ content_tag: .codepoint, wide: .spacer_tail }
+
+	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	assert s.cols == 4
+	assert s.total_rows == 2
+	new_node := s.pages.first or { return }
+	assert voidptr(new_node) == voidptr(s.pages.last or { return })
+	new_page := &new_node.data
+	assert new_page.rows[0].cells[0].codepoint == u32(`x`)
+	assert new_page.rows[0].cells[0].wide == .narrow
+	assert !new_page.rows[0].wrap
+	assert new_page.rows[0].cells[1].codepoint == u32(0x1F600)
+	assert new_page.rows[0].cells[1].wide == .wide
+	assert new_page.rows[0].cells[2].wide == .spacer_tail
+}
+
+fn test_page_list_resize_reflow_more_cols_unwrap_wide_spacer_head_across_two_rows() {
+	mut s := PageList.init(2, 3, usize(0))
+	defer { s.deinit() }
+	mut node := s.pages.first or { return }
+	mut page := &node.data
+	page.rows[0].wrap = true
+	page.rows[0].cells[0] = CellData{ content_tag: .codepoint, codepoint: u32(`x`) }
+	page.rows[0].cells[1] = CellData{ content_tag: .codepoint, codepoint: u32(`x`) }
+	page.rows[1].wrap_continuation = true
+	page.rows[1].wrap = true
+	page.rows[1].cells[0] = CellData{ content_tag: .codepoint, codepoint: u32(`x`) }
+	page.rows[1].cells[1] = CellData{ content_tag: .codepoint, wide: .spacer_head }
+	page.rows[2].wrap_continuation = true
+	page.rows[2].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(0x1F600)
+		wide: .wide
+	}
+	page.rows[2].cells[1] = CellData{ content_tag: .codepoint, wide: .spacer_tail }
+
+	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	assert s.cols == 4
+	assert s.total_rows == 3
+	new_page := &(s.pages.first or { return }).data
+	assert new_page.rows[0].wrap
+	assert new_page.rows[0].cells[0].codepoint == u32(`x`)
+	assert new_page.rows[0].cells[1].codepoint == u32(`x`)
+	assert new_page.rows[0].cells[2].codepoint == u32(`x`)
+	assert new_page.rows[0].cells[3].wide == .spacer_head
+	assert new_page.rows[1].cells[0].codepoint == u32(0x1F600)
+	assert new_page.rows[1].cells[0].wide == .wide
+	assert new_page.rows[1].cells[1].wide == .spacer_tail
+}
+
+fn test_page_list_resize_reflow_more_cols_unwrap_still_requires_wide_spacer_head() {
+	mut s := PageList.init(2, 2, usize(0))
+	defer { s.deinit() }
+	mut node := s.pages.first or { return }
+	mut page := &node.data
+	page.rows[0].wrap = true
+	page.rows[0].cells[0] = CellData{ content_tag: .codepoint, codepoint: u32(`x`) }
+	page.rows[0].cells[1] = CellData{ content_tag: .codepoint, codepoint: u32(`x`) }
+	page.rows[1].wrap_continuation = true
+	page.rows[1].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(0x1F600)
+		wide: .wide
+	}
+	page.rows[1].cells[1] = CellData{ content_tag: .codepoint, wide: .spacer_tail }
+
+	s.resize(PageResizeOpts{ cols: 3, reflow: true })
+	assert s.cols == 3
+	assert s.total_rows == 2
+	new_page := &(s.pages.first or { return }).data
+	assert new_page.rows[0].wrap
+	assert new_page.rows[0].cells[0].codepoint == u32(`x`)
+	assert new_page.rows[0].cells[1].codepoint == u32(`x`)
+	assert new_page.rows[0].cells[2].wide == .spacer_head
+	assert new_page.rows[1].cells[0].codepoint == u32(0x1F600)
+	assert new_page.rows[1].cells[0].wide == .wide
+	assert new_page.rows[1].cells[1].wide == .spacer_tail
+}
+
 fn test_page_list_resize_reflow_less_cols_copy_kitty_placeholder() {
 	mut s := PageList.init(4, 2, usize(0))
 	defer { s.deinit() }
