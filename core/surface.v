@@ -6600,12 +6600,7 @@ fn (mut self Surface) complete_clipboard_paste(data string, allow_unsafe bool) !
 	}
 
 	// Scroll to bottom before pasting
-	self.scroll_to_bottom() or {
-		if locked {
-			self.renderer_state.mutex.unlock()
-		}
-		return err
-	}
+	self.scroll_to_bottom() or {}
 	if locked {
 		self.renderer_state.mutex.unlock()
 	}
