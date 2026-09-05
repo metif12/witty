@@ -1703,32 +1703,33 @@ pub fn (self &Page) exact_row_capacity(y_start int, y_end int) PageCapacity {
 // If the other page has more columns, the extra columns will be
 // truncated. If the other page has fewer columns, the extra columns
 // will be zeroed.
-pub fn (mut self Page) clone_from(other &Page, y_start u16, y_end u16) {
+pub fn (mut self Page) clone_from(other &Page, y_start u16, y_end u16) ! {
 	assert y_start <= y_end
 	assert y_end <= other.size.rows
+	assert y_end - y_start <= self.size.rows
+	assert int(y_end) <= other.rows.len
+	assert int(y_end) - int(y_start) <= self.rows.len
 
 	count := int(y_end) - int(y_start)
 	for i in 0 .. count {
 		src_idx := int(y_start) + i
-		if src_idx >= other.rows.len || i >= self.rows.len {
-			break
-		}
-		self.clone_row_from(other, u16(i), u16(src_idx))
+		self.clone_row_from(other, u16(i), u16(src_idx))!
 	}
+	self.assert_integrity()
 }
 
 // Clone a single row from another page into this page.
-pub fn (mut self Page) clone_row_from(other &Page, dst_row_idx u16, src_row_idx u16) {
+pub fn (mut self Page) clone_row_from(other &Page, dst_row_idx u16, src_row_idx u16) ! {
 	if clone_error := self.try_clone_row_from(other, dst_row_idx, src_row_idx) {
-		panic('page row clone failed: ${clone_error}')
+		return error('${clone_error}')
 	}
 }
 
 // Clone a single row from another page into this page, supporting
 // partial copy. clone_row_from calls this.
-pub fn (mut self Page) clone_partial_row_from(other &Page, dst_row_idx u16, src_row_idx u16, x_start u16, x_end_req u16) {
+pub fn (mut self Page) clone_partial_row_from(other &Page, dst_row_idx u16, src_row_idx u16, x_start u16, x_end_req u16) ! {
 	if clone_error := self.try_clone_partial_row_from(other, dst_row_idx, src_row_idx, x_start, x_end_req) {
-		panic('partial page row clone failed: ${clone_error}')
+		return error('${clone_error}')
 	}
 }
 
@@ -1739,12 +1740,21 @@ fn (mut self Page) try_clone_row_from(other &Page, dst_row_idx u16, src_row_idx 
 // Failable core of clone_partial_row_from. PageList consumes this result to
 // grow a bounded style set and retry, matching Ghostty's cloneRowFrom callers.
 fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_row_idx u16, x_start u16, x_end_req u16) ?PageCloneError {
-	if int(src_row_idx) >= other.rows.len || int(dst_row_idx) >= self.rows.len {
-		return none
+	// Cloning updates row flags, managed maps, allocators, and cell markers in
+	// stages. Match Page.clonePartialRowFrom by suspending checks until every
+	// stage (including an error return) has left the page consistent.
+	self.pause_integrity_checks_set(true)
+	defer {
+		self.pause_integrity_checks_set(false)
+		self.assert_integrity()
 	}
+
+	assert int(src_row_idx) < other.rows.len
+	assert int(dst_row_idx) < self.rows.len
 
 	cell_len := if self.size.cols < other.size.cols { self.size.cols } else { other.size.cols }
 	x_end := if x_end_req < cell_len { x_end_req } else { cell_len }
+	assert x_start <= x_end
 
 	src_row := other.rows[int(src_row_idx)]
 	mut dst_row := &self.rows[int(dst_row_idx)]

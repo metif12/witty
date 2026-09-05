@@ -419,7 +419,7 @@ fn test_page_clone_from() {
 	defer {
 		page2.deinit()
 	}
-	page2.clone_from(&page, 0, page.size.rows)
+	page2.clone_from(&page, 0, page.size.rows) or { panic(err) }
 	page2.size.rows = page.size.rows
 
 	// Read it again.
@@ -480,7 +480,7 @@ fn test_page_clone_from_shrink_columns() {
 	defer {
 		page2.deinit()
 	}
-	page2.clone_from(&page, 0, page.size.rows)
+	page2.clone_from(&page, 0, page.size.rows) or { panic(err) }
 	page2.size.rows = page.size.rows
 	assert page2.size.cols == 5
 
@@ -522,7 +522,7 @@ fn test_page_clone_from_partial() {
 		page2.deinit()
 	}
 	page2.size.rows = u16(page2.capacity.rows)
-	page2.clone_from(&page, 0, 5)
+	page2.clone_from(&page, 0, 5) or { panic(err) }
 
 	// Read first 5 rows - should have data.
 	for y in 0 .. 5 {
@@ -567,7 +567,7 @@ fn test_page_clone_from_graphemes() {
 	defer {
 		page2.deinit()
 	}
-	page2.clone_from(&page, 0, page.size.rows)
+	page2.clone_from(&page, 0, page.size.rows) or { panic(err) }
 	page2.size.rows = page.size.rows
 
 	// Read it again.
@@ -653,7 +653,7 @@ fn test_page_clone_from_frees_dst_graphemes() {
 	}
 
 	// Clone from page which has no graphemes.
-	page2.clone_from(&page, 0, page.size.rows)
+	page2.clone_from(&page, 0, page.size.rows) or { panic(err) }
 
 	// Read it again.
 	for y in 0 .. int(page2.capacity.rows) {
@@ -698,7 +698,7 @@ fn test_page_clone_row_from_partial() {
 		page2.deinit()
 	}
 	page2.size.rows = u16(page2.capacity.rows)
-	page2.clone_partial_row_from(&page, 0, 0, 2, 8)
+	page2.clone_partial_row_from(&page, 0, 0, 2, 8) or { panic(err) }
 
 	// Read it again.
 	{
@@ -747,7 +747,7 @@ fn test_page_clone_row_from_partial_grapheme_in_non_copied_source_region() {
 		page2.deinit()
 	}
 	page2.size.rows = u16(page2.capacity.rows)
-	page2.clone_partial_row_from(&page, 0, 0, 2, 8)
+	page2.clone_partial_row_from(&page, 0, 0, 2, 8) or { panic(err) }
 
 	// Read it again.
 	{
@@ -809,7 +809,7 @@ fn test_page_clone_row_from_partial_grapheme_in_non_copied_dest_region() {
 	}
 
 	// Clone partial row (cols 2..8) from page into page2.
-	page2.clone_partial_row_from(&page, 0, 0, 2, 8)
+	page2.clone_partial_row_from(&page, 0, 0, 2, 8) or { panic(err) }
 
 	// Read it again.
 	{
@@ -926,7 +926,7 @@ fn test_page_clone_partial_row_marks_kitty_virtual_placeholder() {
 	})
 	defer { dst.deinit() }
 	dst.size.rows = 2
-	dst.clone_partial_row_from(&src, 0, 0, 1, 3)
+	dst.clone_partial_row_from(&src, 0, 0, 1, 3) or { panic(err) }
 
 	assert dst.rows[0].cells[2].codepoint == kitty_unicode_placeholder
 	assert dst.rows[0].kitty_virtual_placeholder
@@ -1658,7 +1658,7 @@ fn test_page_clone_from_hyperlinks_exact_capacity() {
 	mut cloned := Page.init(page.capacity)
 	defer { cloned.deinit() }
 	cloned.size.rows = page.size.rows
-	cloned.clone_from(&page, 0, page.size.rows)
+	cloned.clone_from(&page, 0, page.size.rows) or { panic(err) }
 	assert cloned.hyperlink_count() == page.hyperlink_count()
 }
 
@@ -2066,7 +2066,7 @@ fn test_page_clone_row_from_partial_hyperlink_in_same_page_copy() {
 	assert page.hyperlink_count() == 1
 
 	// Clone into the same page (cols 2..8, so cell 7 IS copied).
-	page.clone_partial_row_from(&page, 1, 0, 2, 8)
+	page.clone_partial_row_from(&page, 1, 0, 2, 8) or { panic(err) }
 
 	// Read it again.
 	{
@@ -2121,7 +2121,7 @@ fn test_page_clone_row_from_partial_hyperlink_in_same_page_omit() {
 	assert page.hyperlink_count() == 1
 
 	// Clone into the same page (cols 2..6, so cell 7 is NOT copied).
-	page.clone_partial_row_from(&page, 1, 0, 2, 6)
+	page.clone_partial_row_from(&page, 1, 0, 2, 6) or { panic(err) }
 
 	// Read it again.
 	{
@@ -2181,10 +2181,40 @@ fn test_page_exact_row_capacity_single_style_clone() {
 	cloned.size.rows = u16(cloned.capacity.rows)
 
 	// This must not fail with a style capacity error.
-	cloned.clone_row_from(&page, 0, 0)
+	cloned.clone_row_from(&page, 0, 0) or { panic(err) }
 
 	// Verify the style was cloned correctly.
 	assert cloned.rows[0].cells[0].style_id != default_style_id
+}
+
+fn test_page_clone_row_reports_bounded_style_failure() {
+	mut src := Page.init(PageCapacity{
+		cols: 1
+		rows: 1
+		styles: StyleSet.capacity_for_count(1)
+	})
+	defer { src.deinit() }
+	style_id := src.styles.add(CellStyle{ flags: StyleFlags{ bold: true } }) or {
+		panic(err)
+	}
+	src.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`a`)
+		style_id: style_id
+	}
+	src.rows[0].styled = true
+
+	mut dst := Page.init(PageCapacity{
+		cols: 1
+		rows: 1
+		styles: 0
+	})
+	defer { dst.deinit() }
+	mut reported := false
+	dst.clone_row_from(&src, 0, 0) or {
+		reported = err.msg() == PageCloneError.style_set_out_of_memory.str()
+	}
+	assert reported
 }
 
 // Test exactRowCapacity styles with a maxed-out single row.
@@ -2292,7 +2322,7 @@ fn test_page_exact_row_capacity_hyperlinks() {
 	defer { cloned.deinit() }
 	cloned.size.rows = cap_two.rows
 	for y in 0 .. 5 {
-		cloned.clone_row_from(&page, u16(y), u16(y))
+		cloned.clone_row_from(&page, u16(y), u16(y)) or { panic(err) }
 	}
 	cloned_cap := cloned.exact_row_capacity(0, 5)
 	assert cloned_cap == cap_two
@@ -2322,7 +2352,7 @@ fn test_page_exact_row_capacity_single_hyperlink_clone() {
 	mut cloned := Page.init(cap)
 	defer { cloned.deinit() }
 	cloned.size.rows = cap.rows
-	cloned.clone_row_from(&page, 0, 0)
+	cloned.clone_row_from(&page, 0, 0) or { panic(err) }
 	assert cloned.rows[0].cells[0].has_hyperlink
 }
 
@@ -2357,7 +2387,7 @@ fn test_page_exact_row_capacity_hyperlink_map_for_many_cells() {
 	mut cloned := Page.init(cap)
 	defer { cloned.deinit() }
 	cloned.size.rows = cap.rows
-	cloned.clone_row_from(&page, 0, 0)
+	cloned.clone_row_from(&page, 0, 0) or { panic(err) }
 	for x in 0 .. int(cols) {
 		assert cloned.rows[0].cells[x].has_hyperlink
 	}

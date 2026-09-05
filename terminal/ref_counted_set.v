@@ -375,6 +375,12 @@ pub fn (self &RefCountedSet) count() int {
 // Find an item in the table and return its ID.
 // If the item does not exist in the table, none is returned.
 pub fn (self &RefCountedSet) lookup(value CellStyle) ?u16 {
+	// A zero-capacity set is valid. Zig's offset-backed empty table aliases
+	// zeroed page memory, while V represents it as a genuinely empty slice.
+	// Either representation must report that no value is present.
+	if self.layout.table_cap == 0 {
+		return none
+	}
 	hash := rcs_hash_style(value)
 
 	for i in 0 .. int(self.max_psl) + 1 {

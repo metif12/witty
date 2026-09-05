@@ -1790,7 +1790,7 @@ fn test_page_list_clone() {
 	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
 
-	mut c := s.clone(PageCloneOpts{})
+	mut c := s.clone(PageCloneOpts{}) or { panic(err) }
 	defer { c.deinit() }
 
 	assert c.total_rows == s.total_rows
@@ -1804,7 +1804,7 @@ fn test_page_list_clone_with_history() {
 
 	s.grow_rows(100)
 
-	mut c := s.clone(PageCloneOpts{})
+	mut c := s.clone(PageCloneOpts{}) or { panic(err) }
 	defer { c.deinit() }
 
 	assert c.total_rows == s.total_rows
@@ -1818,7 +1818,7 @@ fn test_page_list_clone_active_only() {
 
 	mut c := s.clone(PageCloneOpts{
 		top: .active
-	})
+	}) or { panic(err) }
 	defer { c.deinit() }
 
 	// Clone of active should have at least 24 rows
@@ -1834,7 +1834,7 @@ fn test_page_list_clone_less_than_active() {
 	// Clone just active area, should be regrown to full active size
 	mut c := s.clone(PageCloneOpts{
 		top: .active
-	})
+	}) or { panic(err) }
 	defer { c.deinit() }
 
 	assert c.total_rows >= usize(s.rows)
@@ -5590,11 +5590,10 @@ fn test_page_list_split_single_row_page_returns_out_of_space() {
 		return
 	}
 	split_pin := PagePin{ node: first, y: 0, x: 0 }
-	// Splitting a single-row page is impossible (analogous to ghostty's
-	// error.OutOfSpace). witty returns an error for a page with <= 1 row.
-	mut errored := false
-	s.split(split_pin) or { errored = true }
-	assert errored
+	// Splitting a single-row page is impossible.
+	mut error_message := ''
+	s.split(split_pin) or { error_message = err.msg() }
+	assert error_message == 'OutOfSpace'
 
 	// The page is unchanged.
 	assert s.total_pages() == 1

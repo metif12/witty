@@ -4683,7 +4683,9 @@ pub fn (mut self PageList) erase_row(p PagePin) {
 	// than copying RowData directly so grapheme/style/hyperlink ownership and
 	// coordinate-indexed maps move with the cells.
 	for i in y .. int(page.size.rows) - 1 {
-		page.clone_row_from(page, u16(i), u16(i + 1))
+		page.clone_row_from(page, u16(i), u16(i + 1)) or {
+			panic('same-page row shift failed: ${err}')
+		}
 	}
 
 	// Pins below the erased row in the first page move up one row.
@@ -4707,7 +4709,9 @@ pub fn (mut self PageList) erase_row(p PagePin) {
 		node = next
 		page = next_page
 		for i in 0 .. int(page.size.rows) - 1 {
-			page.clone_row_from(page, u16(i), u16(i + 1))
+			page.clone_row_from(page, u16(i), u16(i + 1)) or {
+				panic('same-page row shift failed: ${err}')
+			}
 		}
 		page.dirty = true
 
@@ -4775,7 +4779,9 @@ pub fn (mut self PageList) erase_rows(tl Point, bl ?Point) {
 		// Witty's rows own their cell arrays and its managed maps use row/column
 		// keys, so Page's managed clone is the equivalent operation here.
 		for i in 0 .. scroll_amount {
-			page.clone_row_from(page, u16(i), u16(i + end))
+			page.clone_row_from(page, u16(i), u16(i + end)) or {
+				panic('same-page row erase shift failed: ${err}')
+			}
 			page.rows[i].dirty = true
 		}
 
@@ -4825,7 +4831,7 @@ pub fn (mut self PageList) erase_rows(tl Point, bl ?Point) {
 pub fn (mut self PageList) split(p PagePin) ! {
 	mut page := unsafe { &p.node.data }
 	if page.size.rows <= 1 {
-		return error('cannot split page with <= 1 row')
+		return error('OutOfSpace')
 	}
 	if p.y == 0 {
 		return
@@ -4839,7 +4845,13 @@ pub fn (mut self PageList) split(p PagePin) ! {
 	y_end := page.size.rows
 	new_page.size.rows = y_end - y_start
 	new_page.size.cols = page.size.cols
-	new_page.clone_from(page, y_start, y_end)
+	new_page.clone_from(page, y_start, y_end) or {
+		// The source destroys the speculative page and translates every clone
+		// failure to OutOfSpace so callers can recover from a failed split.
+		self.page_size -= page_backing_size(new_page.capacity)
+		new_page.deinit()
+		return error('OutOfSpace')
+	}
 
 	// Update tracked pins
 	for mut tp in self.tracked_pins {
@@ -4868,7 +4880,7 @@ pub fn (mut self PageList) split(p PagePin) ! {
 // Clone
 // ============================================================
 
-pub fn (self &PageList) clone(opts PageCloneOpts) PageList {
+pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 	tl_pin := self.get_top_left(opts.top)
 	bl_pin := if bt := opts.bot {
 		self.get_bottom_right(bt) or { return PageList.init(self.cols, self.rows, self.explicit_max_size) }
@@ -4891,7 +4903,7 @@ pub fn (self &PageList) clone(opts PageCloneOpts) PageList {
 		mut new_page := &new_node.data
 		new_page.size.rows = chunk.end - chunk.start
 		new_page.size.cols = chunk.node.data.size.cols
-		new_page.clone_from(&chunk.node.data, chunk.start, chunk.end)
+		new_page.clone_from(&chunk.node.data, chunk.start, chunk.end)!
 		new_page.dirty = chunk.node.data.dirty
 
 		result.pages.append(new_node)
@@ -5393,7 +5405,9 @@ fn (mut self ReflowCursor) move_last_row_to_new_page(mut list PageList, cap Page
 	// Copy our old data.
 	old_row_idx := old_page.size.rows - 1
 	mut new_page := &self.node.data
-	new_page.clone_row_from(old_page, self.y, old_row_idx)
+	new_page.clone_row_from(old_page, self.y, old_row_idx) or {
+		panic('unexpected last-row copy failure: ${err}')
+	}
 
 	// Move any tracked pins from that last row into this new node.
 	for mut p in list.tracked_pins {
@@ -5641,7 +5655,9 @@ fn (mut self PageList) increase_capacity(node &PageNode, adjustment PageCapacity
 	mut new_node := self.create_page(cap)
 	mut new_page := &new_node.data
 	new_page.size = page.size
-	new_page.clone_from(page, 0, page.size.rows)
+	new_page.clone_from(page, 0, page.size.rows) or {
+		panic('capacity-increased page clone failed: ${err}')
+	}
 	new_page.dirty = page.dirty
 
 	for mut pin in self.tracked_pins {
@@ -5732,7 +5748,13 @@ pub fn (mut self PageList) compact(node &PageNode) ?&PageNode {
 	for new_page.rows.len < int(page.size.rows) {
 		new_page.rows << RowData.init(u32(req_cap.cols))
 	}
-	new_page.clone_from(page, 0, page.size.rows)
+	new_page.clone_from(page, 0, page.size.rows) or {
+		// The requested capacity was computed from this exact content. Preserve
+		// the original page if a bounded clone nevertheless rejects it.
+		self.page_size -= page_backing_size(new_node.data.capacity)
+		new_page.deinit()
+		return none
+	}
 
 	// Fix up all tracked pins to point to the new page.
 	for mut p in self.tracked_pins {
@@ -5764,7 +5786,9 @@ pub fn (mut self PageList) erase_row_bounded(p PagePin, limit usize) {
 	if int(page.size.rows) - y > int(limit) {
 		// Shift within the page over the bounded region.
 		for i in 0 .. int(limit) {
-			page.clone_row_from(page, u16(y + i), u16(y + i + 1))
+			page.clone_row_from(page, u16(y + i), u16(y + i + 1)) or {
+				panic('same-page bounded row shift failed: ${err}')
+			}
 		}
 		page.clear_row(u16(y + int(limit)))
 
@@ -5800,7 +5824,9 @@ pub fn (mut self PageList) erase_row_bounded(p PagePin, limit usize) {
 	// ghostty rotates rows[pn.y..size.rows] which processes size.rows - pn.y
 	// rows, leaving the bottom slot to be filled by the next page's top row.
 	for i in y .. int(page.size.rows) - 1 {
-		page.clone_row_from(page, u16(i), u16(i + 1))
+		page.clone_row_from(page, u16(i), u16(i + 1)) or {
+			panic('same-page bounded row shift failed: ${err}')
+		}
 	}
 	mut shifted := usize(int(page.size.rows) - y)
 
@@ -5843,7 +5869,9 @@ pub fn (mut self PageList) erase_row_bounded(p PagePin, limit usize) {
 		shifted_limit := limit - shifted
 		if usize(page.size.rows) > shifted_limit {
 			for i in 0 .. shifted_limit {
-				page.clone_row_from(page, u16(i), u16(i + 1))
+				page.clone_row_from(page, u16(i), u16(i + 1)) or {
+					panic('same-page bounded row shift failed: ${err}')
+				}
 			}
 			page.clear_row(u16(shifted_limit))
 			page.dirty = true
@@ -5874,7 +5902,9 @@ pub fn (mut self PageList) erase_row_bounded(p PagePin, limit usize) {
 
 		// Otherwise shift the whole page up and continue.
 		for i in 0 .. int(page.size.rows) - 1 {
-			page.clone_row_from(page, u16(i), u16(i + 1))
+			page.clone_row_from(page, u16(i), u16(i + 1)) or {
+				panic('same-page bounded row shift failed: ${err}')
+			}
 		}
 
 		if self.viewport == .pin {
@@ -6375,7 +6405,12 @@ fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk
 				new_page.rows << RowData.init(u32(cap.cols))
 			}
 			new_page.size.rows += 1
-			new_page.clone_row_from(page, u16(i), u16(int(y_start) + i))
+			new_page.clone_row_from(page, u16(i), u16(int(y_start) + i)) or {
+				// Ghostty safely cuts this page copy short. The next page gets a
+				// chance to hold the row when the combined managed data did not fit.
+				new_page.size.rows -= 1
+				break
+			}
 			copied += 1
 		}
 		y_end := copied

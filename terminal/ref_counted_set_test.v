@@ -15,6 +15,16 @@ fn test_rcs_layout_zero() {
 	assert l.total_size == 0
 }
 
+fn test_rcs_zero_capacity_add_reports_out_of_memory() {
+	mut set := RefCountedSet.init(RefCountedSetLayout.init(0))
+	assert set.lookup(CellStyle{}) == none
+	set.add(CellStyle{}) or {
+		assert err.msg() == 'out of memory'
+		return
+	}
+	assert false, 'zero-capacity add unexpectedly succeeded'
+}
+
 // Test creating a layout with a small capacity.
 fn test_rcs_layout_small() {
 	l := RefCountedSetLayout.init(8)
