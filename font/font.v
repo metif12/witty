@@ -1190,7 +1190,9 @@ pub:
 // RenderOptions for glyph rendering.
 pub struct RenderOptions {
 pub mut:
-	cell_width       u32 = 1
+	// Ghostty stores this as ?u2 and packs null as zero in glyph cache keys.
+	// V uses zero as the equivalent sentinel; render call sites set 1 or 2.
+	cell_width       u32
 	grid_metrics     Metrics
 	thicken          bool
 	thicken_strength u8 = 255

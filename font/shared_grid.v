@@ -1,6 +1,7 @@
 module font
 
 import sync
+import internal_hash
 
 // This structure represents the state required to render a terminal
 // grid using the font subsystem. It is "shared" because it is able to
@@ -32,13 +33,13 @@ import sync
 @[heap]
 pub struct SharedGrid {
 pub mut:
-	// Cache for codepoints to font indexes in a group.
-	// Key is CodepointKey.hash(), value is CodepointValue.
-	codepoints map[u64]CodepointValue
+	// Cache for codepoints to font indexes in a group. V maps cannot use this
+	// struct key directly, so each source hash points to a collision-safe bucket.
+	codepoints map[u64][]CodepointCacheEntry
 
-	// Cache for glyph renders into the atlas.
-	// Key is GlyphKey.hash(), value is RenderResult.
-	glyphs map[u64]RenderResult
+	// Cache for glyph renders into the atlas. As above, retain the complete key
+	// in each bucket so equal hashes never alias unrelated glyphs.
+	glyphs map[u64][]GlyphCacheEntry
 
 	// The texture atlas to store renders in. The Glyph data in the glyphs
 	// cache is dependent on the atlas matching.
@@ -92,8 +93,8 @@ pub fn SharedGrid.init(resolver CodepointResolver) !SharedGrid {
 
 // Deinit. Assumes no concurrent access so no lock is taken.
 pub fn (mut self SharedGrid) deinit() {
-	self.codepoints = map[u64]CodepointValue{}
-	self.glyphs = map[u64]RenderResult{}
+	self.codepoints = map[u64][]CodepointCacheEntry{}
+	self.glyphs = map[u64][]GlyphCacheEntry{}
 	self.atlas_grayscale.deinit()
 	self.atlas_color.deinit()
 	self.resolver.deinit()
@@ -146,8 +147,7 @@ pub fn (mut self SharedGrid) get_index(cp u32, style FontStyle, p ?Presentation)
 	// Fast path: the cache has the value. This is almost always true and
 	// only requires a read lock.
 	self.lock.rlock()
-	if h in self.codepoints {
-		value := self.codepoints[h]
+	if value := codepoint_cache_get(self.codepoints, h, key) {
 		self.lock.runlock()
 		return value
 	}
@@ -159,18 +159,19 @@ pub fn (mut self SharedGrid) get_index(cp u32, style FontStyle, p ?Presentation)
 
 	// Another thread may have filled the cache while we waited for the write
 	// lock, so check again before performing discovery or loading a face.
-	if h in self.codepoints {
-		return self.codepoints[h]
+	if value := codepoint_cache_get(self.codepoints, h, key) {
+		return value
 	}
 
 	// Load a value and cache it. This even caches negative matches.
 	value := self.resolver.get_index(cp, style, p)
 
 	if idx := value {
-		self.codepoints[h] = CodepointValue{
+		result := CodepointValue{
 			has_value: true
 			index: idx
 		}
+		codepoint_cache_put(mut self.codepoints, h, key, result)
 
 		// If the font is a sprite font then we don't need to preload
 		// because getFace doesn't work with special fonts.
@@ -179,22 +180,19 @@ pub fn (mut self SharedGrid) get_index(cp u32, style FontStyle, p ?Presentation)
 			// failed to load it in the future anyways so we want to undo all
 			// the caching we did.
 			self.resolver.collection.get_face(idx) or {
-				self.codepoints.delete(h)
+				codepoint_cache_delete(mut self.codepoints, h, key)
 				return err
 			}
 		}
 
-		return CodepointValue{
-			has_value: true
-			index: idx
-		}
+		return result
 	}
 
 	// Cache negative result
 	result := CodepointValue{
 		has_value: false
 	}
-	self.codepoints[h] = result
+	codepoint_cache_put(mut self.codepoints, h, key, result)
 	return result
 }
 
@@ -254,8 +252,7 @@ pub fn (mut self SharedGrid) render_glyph(index Index, glyph_index u32, opts Ren
 	// Fast path: the cache has the value. This is almost always true and
 	// only requires a read lock.
 	self.lock.rlock()
-	if h in self.glyphs {
-		value := self.glyphs[h]
+	if value := glyph_cache_get(self.glyphs, h, key) {
 		self.lock.runlock()
 		return value
 	}
@@ -266,8 +263,8 @@ pub fn (mut self SharedGrid) render_glyph(index Index, glyph_index u32, opts Ren
 	defer { self.lock.unlock() }
 
 	// Check again in case another thread beat us to it.
-	if h in self.glyphs {
-		return self.glyphs[h]
+	if value := glyph_cache_get(self.glyphs, h, key) {
+		return value
 	}
 
 	// Get the presentation to determine what atlas to use
@@ -311,7 +308,7 @@ pub fn (mut self SharedGrid) render_glyph(index Index, glyph_index u32, opts Ren
 		glyph: glyph
 		presentation: p
 	}
-	self.glyphs[h] = result
+	glyph_cache_put(mut self.glyphs, h, key, result)
 
 	return result
 }
@@ -327,14 +324,81 @@ struct CodepointKey {
 	presentation ?Presentation
 }
 
-// hash_key returns a u64 hash for use as a map key.
-fn (k CodepointKey) hash_key() u64 {
-	mut state := u64(int(k.style))
-	state = state * 31 + u64(k.codepoint)
-	if p := k.presentation {
-		state = state * 31 + u64(int(p)) + 1
+struct CodepointCacheEntry {
+	key   CodepointKey
+	value CodepointValue
+}
+
+fn codepoint_key_equal(a CodepointKey, b CodepointKey) bool {
+	if a.style != b.style || a.codepoint != b.codepoint {
+		return false
 	}
-	return state
+	if ap := a.presentation {
+		if bp := b.presentation {
+			return ap == bp
+		}
+		return false
+	}
+	if _ := b.presentation {
+		return false
+	}
+	return true
+}
+
+fn codepoint_cache_get(cache map[u64][]CodepointCacheEntry, hash u64, key CodepointKey) ?CodepointValue {
+	if hash !in cache {
+		return none
+	}
+	for entry in cache[hash] {
+		if codepoint_key_equal(entry.key, key) {
+			return entry.value
+		}
+	}
+	return none
+}
+
+fn codepoint_cache_put(mut cache map[u64][]CodepointCacheEntry, hash u64, key CodepointKey, value CodepointValue) {
+	mut bucket := cache[hash]
+	for index, entry in bucket {
+		if codepoint_key_equal(entry.key, key) {
+			bucket[index] = CodepointCacheEntry{key, value}
+			cache[hash] = bucket
+			return
+		}
+	}
+	bucket << CodepointCacheEntry{key, value}
+	cache[hash] = bucket
+}
+
+fn codepoint_cache_delete(mut cache map[u64][]CodepointCacheEntry, hash u64, key CodepointKey) {
+	if hash !in cache {
+		return
+	}
+	mut bucket := cache[hash]
+	for index, entry in bucket {
+		if codepoint_key_equal(entry.key, key) {
+			bucket.delete(index)
+			if bucket.len == 0 {
+				cache.delete(hash)
+			} else {
+				cache[hash] = bucket
+			}
+			return
+		}
+	}
+}
+
+// hash_key mirrors std.hash.autoHash for Ghostty's CodepointKey. Zig hashes
+// the u3 enum in one byte, the u32 in little-endian order, and an optional
+// enum's payload only when it is present.
+fn (k CodepointKey) hash_key() u64 {
+	mut h := SourceHash{}
+	h.put_u8(u8(k.style))
+	h.put_u32(k.codepoint)
+	if p := k.presentation {
+		h.put_u8(u8(p))
+	}
+	return h.final()
 }
 
 // ============================================================
@@ -361,16 +425,54 @@ struct GlyphKey {
 	opts  RenderOptions
 }
 
-// hash_key returns a u64 hash for use as a map key.
-// This packs the index, glyph, and key render option fields.
+struct GlyphCacheEntry {
+	key   GlyphKey
+	value RenderResult
+}
+
+fn (k GlyphKey) packed_key() u64 {
+	assert k.opts.cell_width <= 3
+	assert k.opts.constraint_width <= 3
+	mut packed_opts := u16(k.opts.cell_width)
+	if k.opts.thicken {
+		packed_opts |= u16(1) << 2
+	}
+	packed_opts |= u16(k.opts.thicken_strength) << 3
+	packed_opts |= u16(k.opts.constraint_width) << 11
+	return u64(k.index.int_val()) | (u64(k.glyph) << 16) | (u64(packed_opts) << 48)
+}
+
+fn glyph_key_equal(a GlyphKey, b GlyphKey) bool {
+	return a.glyph == b.glyph && a.packed_key() == b.packed_key()
+}
+
+fn glyph_cache_get(cache map[u64][]GlyphCacheEntry, hash u64, key GlyphKey) ?RenderResult {
+	if hash !in cache {
+		return none
+	}
+	for entry in cache[hash] {
+		if glyph_key_equal(entry.key, key) {
+			return entry.value
+		}
+	}
+	return none
+}
+
+fn glyph_cache_put(mut cache map[u64][]GlyphCacheEntry, hash u64, key GlyphKey, value RenderResult) {
+	mut bucket := cache[hash]
+	for index, entry in bucket {
+		if glyph_key_equal(entry.key, key) {
+			bucket[index] = GlyphCacheEntry{key, value}
+			cache[hash] = bucket
+			return
+		}
+	}
+	bucket << GlyphCacheEntry{key, value}
+	cache[hash] = bucket
+}
+
+// hash_key reproduces GlyphKey.Context.hash: bit-cast the packed 64-bit key,
+// then apply Zig 0.15.2's std.hash.int mixer.
 fn (k GlyphKey) hash_key() u64 {
-	// Pack index style + idx into 16 bits, glyph into 32 bits,
-	// and render option fields into remaining bits.
-	mut state := u64(k.index.int_val())
-	state = state * 2654435761 + u64(k.glyph)
-	state = state * 31 + u64(k.opts.cell_width)
-	state = state * 31 + u64(if k.opts.thicken { 1 } else { 0 })
-	state = state * 31 + u64(k.opts.thicken_strength)
-	state = state * 31 + u64(k.opts.constraint_width)
-	return state
+	return internal_hash.int_u64(k.packed_key())
 }
