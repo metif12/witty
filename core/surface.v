@@ -3279,6 +3279,76 @@ pub fn (mut self Surface) deactivate_inspector() {
 	self.inspector = none
 }
 
+// render_inspector draws the inspector into the active Dear ImGui context.
+// The GTK inspector calls this directly; embedded runtimes reach the same
+// implementation through the C bridge. Mirrors the state projection and
+// locking performed by Ghostty's inspector widget.
+pub fn (mut self Surface) render_inspector(context_handle voidptr) {
+	if isnil(context_handle) {
+		return
+	}
+	mut insp := self.inspector or { return }
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
+
+	mut hover_grid_x := u32(0)
+	mut hover_grid_y := u32(0)
+	pages := &self.renderer_state.terminal_.screens.active.pages
+	if point := insp.mouse.last_point {
+		active_y := int(point.y) - pages.active_start
+		if active_y >= 0 && active_y < int(pages.rows) {
+			hover_grid_x = point.x
+			hover_grid_y = u32(active_y)
+		}
+	}
+
+	mut click_grid_x := u32(0)
+	mut click_grid_y := u32(0)
+	if point := self.mouse.left_click_pin {
+		active_y := int(point.y) - pages.active_start
+		if active_y >= 0 && active_y < int(pages.rows) {
+			click_grid_x = point.x
+			click_grid_y = u32(active_y)
+		}
+	}
+
+	mut click_pressed := [input.mouse_button_max]bool{}
+	for index, state in self.mouse.click_state {
+		click_pressed[index] = state == .press
+	}
+	grid := self.size.grid()
+	mut term := self.renderer_state.terminal_
+	insp.render(context_handle, inspectorpkg.SurfaceInfo{
+		screen_width: self.size.screen.width
+		screen_height: self.size.screen.height
+		grid_columns: grid.columns
+		grid_rows: grid.rows
+		cell_width: self.size.cell.width
+		cell_height: self.size.cell.height
+		padding_top: self.size.padding.top
+		padding_bottom: self.size.padding.bottom
+		padding_left: self.size.padding.left
+		padding_right: self.size.padding.right
+		font_points: self.font_size.points
+		font_pixels: self.font_size.pixels()
+		hover_grid_x: hover_grid_x
+		hover_grid_y: hover_grid_y
+		hover_terminal_x: i64(insp.mouse.last_xpos - f64(self.size.padding.left))
+		hover_terminal_y: i64(insp.mouse.last_ypos - f64(self.size.padding.top))
+		click_pressed: click_pressed
+		click_grid_x: click_grid_x
+		click_grid_y: click_grid_y
+		left_click_xpos: self.mouse.left_click_xpos
+		left_click_ypos: self.mouse.left_click_ypos
+	}, mut term)
+	if locked {
+		self.renderer_state.mutex.unlock()
+	}
+	self.queue_render() or {}
+}
+
 // update_config updates the surface configuration at runtime.
 pub fn (mut self Surface) update_config(config &Config) ! {
 	derived := DerivedConfig.from_config(config)!
