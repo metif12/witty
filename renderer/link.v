@@ -27,14 +27,11 @@ pub mut:
 }
 
 // Returns the slice of links from the configuration.
-// The full implementation would use oniguruma regex compilation from the
-// input link's pattern. V's built-in regex module is used as a basic
-// alternative where possible.
 pub fn LinkSet.from_config(config []input.Link) !LinkSet {
 	mut links := []Link{}
 	for link in config {
 		links << Link{
-			regex: regex.regex_opt(link.regex)!
+			regex: link.oni_regex()!
 			highlight: link.highlight
 			mods: link.mods
 		}

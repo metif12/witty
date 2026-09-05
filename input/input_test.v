@@ -2,6 +2,32 @@ module input
 
 // Tests for KeyEvent.
 
+fn test_link_clone_equal_and_regex() {
+	original := Link{
+		regex: 'https?://[^ ]+'
+		action: .open
+		highlight: .hover_mods
+		mods: Mods{ ctrl: true, shift: true }
+	}
+	cloned := original.clone()
+	assert original.equal(&cloned)
+	assert cloned.regex == original.regex
+	assert cloned.mods.equal(original.mods)
+
+	mut compiled := original.oni_regex()!
+	start, end := compiled.find('open https://ghostty.org now')
+	assert start == 5
+	assert end == 24
+
+	different := Link{
+		regex: original.regex
+		action: .open_osc8
+		highlight: original.highlight
+		mods: original.mods
+	}
+	assert !original.equal(&different)
+}
+
 fn test_key_event_effective_mods_no_utf8() {
 	e := KeyEvent{
 		mods: Mods{ shift: true, ctrl: true }

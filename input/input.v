@@ -1,5 +1,7 @@
 module input
 
+import regex
+
 #include "keymap_shims.h"
 
 #flag darwin -framework Carbon
@@ -232,6 +234,29 @@ pub:
 	// Used by the *_mods highlight variants. Zig represents these variants as
 	// tagged-union payloads; V keeps the payload beside the enum tag.
 	mods Mods
+}
+
+// oni_regex compiles the configured expression for renderer link matching.
+// Ghostty returns an Oniguruma regex; Witty's renderer backend uses V's
+// equivalent owned regex value.
+pub fn (self &Link) oni_regex() !regex.RE {
+	return regex.regex_opt(self.regex)
+}
+
+// clone returns an independently owned copy of the link configuration.
+pub fn (self &Link) clone() Link {
+	return Link{
+		regex: self.regex.clone()
+		action: self.action
+		highlight: self.highlight
+		mods: self.mods
+	}
+}
+
+// equal compares the action, highlight payload, and regular expression.
+pub fn (self &Link) equal(other &Link) bool {
+	return self.action == other.action && self.highlight == other.highlight
+		&& self.mods.equal(other.mods) && self.regex == other.regex
 }
 
 pub enum LinkAction {
