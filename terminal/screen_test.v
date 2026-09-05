@@ -1053,6 +1053,45 @@ fn test_screen_semantic_content() {
 	assert s.cursor.semantic_content == .output
 }
 
+fn test_screen_cursor_set_semantic_content_union() {
+	mut s := Screen.init(10, 10, 0)
+	defer { s.deinit() }
+
+	s.cursor_set_semantic_content(CursorSemanticPrompt{ kind: .continuation })
+	assert s.semantic_prompt.seen
+	assert s.cursor.semantic_content == .prompt
+	assert s.pages.get_active_row(0).semantic_prompt == .prompt_continuation
+
+	s.cursor_set_semantic_content(CursorSemanticInput{ clear: .clear_eol })
+	assert s.cursor.semantic_content == .input
+	assert s.cursor.semantic_content_clear_eol
+
+	s.cursor_set_semantic_content(CursorSemanticInput{ clear: .clear_explicit })
+	assert !s.cursor.semantic_content_clear_eol
+	s.cursor_set_semantic_content(CursorSemanticOutput{})
+	assert s.cursor.semantic_content == .output
+}
+
+fn test_screen_first_implicit_hyperlink_uses_zero_offset() {
+	mut s := Screen.init(10, 10, 0)
+	defer { s.deinit() }
+
+	s.start_hyperlink('https://example.com/', none) or { panic(err) }
+	link := s.cursor.hyperlink_state or {
+		assert false
+		return
+	}
+	match link.id {
+		HyperlinkImplicitId {
+			assert link.id.offset == 0
+		}
+		HyperlinkExplicitId {
+			assert false
+		}
+	}
+	assert s.cursor.hyperlink_implicit_id == 1
+}
+
 // ============================================================
 // Additional tests translated from ghostty Screen.zig
 // ============================================================

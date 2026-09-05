@@ -3054,30 +3054,47 @@ pub fn (mut self Screen) manual_style_update() ! {
 // Hyperlink management
 // ============================================================
 
+fn (mut self Screen) start_hyperlink_once(source Hyperlink) ! {
+	// End any prior hyperlink before installing the duplicated pending state.
+	self.end_hyperlink()
+	link := source.dupe()
+	self.cursor.hyperlink_state = link
+	// Flat Pages does not yet expose Page's ref-counted ID. Preserve the same
+	// nonzero active-state invariant while retaining the exact hyperlink value.
+	self.cursor.hyperlink_id = match link.id {
+		HyperlinkImplicitId { link.id.offset + 1 }
+		HyperlinkExplicitId { self.cursor.hyperlink_implicit_id + 1 }
+	}
+}
+
 // Start a hyperlink on the cursor.
 pub fn (mut self Screen) start_hyperlink(uri string, id_ ?string) ! {
-	self.end_hyperlink()
 	link_id := if explicit := id_ {
 		HyperlinkIdKind(HyperlinkExplicitId{
 			value: explicit.clone()
 		})
 	} else {
+		offset := self.cursor.hyperlink_implicit_id
 		self.cursor.hyperlink_implicit_id += 1
 		HyperlinkIdKind(HyperlinkImplicitId{
-			offset: self.cursor.hyperlink_implicit_id
+			offset: offset
 		})
 	}
-	// This is a non-zero active-state discriminator in the flat Pages model.
-	self.cursor.hyperlink_id = self.cursor.hyperlink_implicit_id + 1
-	self.cursor.hyperlink_state = Hyperlink{
+	self.start_hyperlink_once(Hyperlink{
 		id: link_id
 		uri: uri.clone()
+	}) or {
+		if id_ == none {
+			self.cursor.hyperlink_implicit_id -= 1
+		}
+		return err
 	}
 }
 
 // End the current hyperlink.
 pub fn (mut self Screen) end_hyperlink() {
 	if self.cursor.hyperlink_id == 0 {
+		assert self.cursor.hyperlink_state == none
 		return
 	}
 	self.cursor.hyperlink_id = 0
@@ -3105,31 +3122,66 @@ pub fn (mut self Screen) cursor_set_hyperlink() ! {
 // Semantic content
 // ============================================================
 
+pub enum SemanticInputClear {
+	clear_explicit
+	clear_eol
+}
+
+pub struct CursorSemanticPrompt {
+pub:
+	kind PromptKind
+}
+
+pub struct CursorSemanticOutput {}
+
+pub struct CursorSemanticInput {
+pub:
+	clear SemanticInputClear
+}
+
+pub type CursorSemanticContent = CursorSemanticInput | CursorSemanticOutput | CursorSemanticPrompt
+
 // Set the semantic content type of the cursor.
-pub fn (mut self Screen) cursor_set_semantic_content_prompt(kind PromptKind) {
-	self.semantic_prompt.seen = true
-	self.cursor.semantic_content = .prompt
-	self.cursor.semantic_content_clear_eol = false
-	idx := self.pages.active_start + int(self.cursor.y)
-	if idx < self.pages.screen_rows.len {
-		unsafe {
-			mut row := &self.pages.screen_rows[idx]
-			row.semantic_prompt = match kind {
-				.initial, .right { SemanticPromptType.prompt }
-				.continuation, .secondary { SemanticPromptType.prompt_continuation }
+pub fn (mut self Screen) cursor_set_semantic_content(value CursorSemanticContent) {
+	match value {
+		CursorSemanticOutput {
+			self.cursor.semantic_content = .output
+			self.cursor.semantic_content_clear_eol = false
+		}
+		CursorSemanticInput {
+			self.cursor.semantic_content = .input
+			self.cursor.semantic_content_clear_eol = value.clear == .clear_eol
+		}
+		CursorSemanticPrompt {
+			self.semantic_prompt.seen = true
+			self.cursor.semantic_content = .prompt
+			self.cursor.semantic_content_clear_eol = false
+			idx := self.pages.active_start + int(self.cursor.y)
+			if idx < self.pages.screen_rows.len {
+				unsafe {
+					mut row := &self.pages.screen_rows[idx]
+					row.semantic_prompt = match value.kind {
+						.initial, .right { SemanticPromptType.prompt }
+						.continuation, .secondary { SemanticPromptType.prompt_continuation }
+					}
+				}
 			}
 		}
 	}
 }
 
+pub fn (mut self Screen) cursor_set_semantic_content_prompt(kind PromptKind) {
+	self.cursor_set_semantic_content(CursorSemanticPrompt{ kind: kind })
+}
+
 pub fn (mut self Screen) cursor_set_semantic_content_output() {
-	self.cursor.semantic_content = .output
-	self.cursor.semantic_content_clear_eol = false
+	self.cursor_set_semantic_content(CursorSemanticOutput{})
 }
 
 pub fn (mut self Screen) cursor_set_semantic_content_input(clear_eol bool) {
-	self.cursor.semantic_content = .input
-	self.cursor.semantic_content_clear_eol = clear_eol
+	self.cursor_set_semantic_content(CursorSemanticInput{
+		clear: if clear_eol { .clear_eol } else { .clear_explicit }
+	})
 }
 
 // ============================================================
