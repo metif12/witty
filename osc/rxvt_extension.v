@@ -35,10 +35,12 @@ fn parse_rxvt_extension(mut parser Parser, terminator_ch u8) ?Command {
 	body := rest[t + 1..]
 
 	parser.command = Command{
-		cmd_type:   .show_desktop_notification
+		cmd_type: .show_desktop_notification
 		terminator: init_terminator(terminator_ch)
-		str_value:  title
-		str_value2: body
+		desktop_notification: DesktopNotification{
+			title: title
+			body: body
+		}
 	}
 	return parser.command
 }

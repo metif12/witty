@@ -115,6 +115,22 @@ fn test_stream_carries_typed_semantic_and_progress_actions() {
 	assert progress.payload.progress_report.progress? == 100
 }
 
+fn test_stream_carries_typed_desktop_notifications() {
+	mut s := Stream.init()
+	defer { s.deinit() }
+
+	s.next_slice('\x1b]9;Build complete\a'.bytes())
+	iterm := get_last_event(s.events, .show_desktop_notification)
+	assert iterm.payload.desktop_notification.title == ''
+	assert iterm.payload.desktop_notification.body == 'Build complete'
+
+	s.clear_events()
+	s.next_slice('\x1b]777;notify;Compiler;Build failed\x1b\\'.bytes())
+	rxvt := get_last_event(s.events, .show_desktop_notification)
+	assert rxvt.payload.desktop_notification.title == 'Compiler'
+	assert rxvt.payload.desktop_notification.body == 'Build failed'
+}
+
 // Test that invalid UTF-8 byte 0xFF produces replacement character U+FFFD.
 fn test_simd_print_invalid_utf8() {
 	mut s := Stream.init()

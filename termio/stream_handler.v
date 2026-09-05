@@ -402,7 +402,7 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.report_pwd(event.payload.str1)
 		}
 		.show_desktop_notification {
-			self.show_desktop_notification(event.payload.str1, event.payload.str2)
+			self.show_desktop_notification(event.payload.desktop_notification)
 		}
 		.progress_report {
 			self.progress_report(event.payload.progress_report)
@@ -1952,28 +1952,28 @@ fn hex4(v u8) string {
 	return '${digits[int((scaled >> 12) & 0x0F)]:c}${digits[int((scaled >> 8) & 0x0F)]:c}${digits[int((scaled >> 4) & 0x0F)]:c}${digits[int(scaled & 0x0F)]:c}'
 }
 
-fn (mut self StreamHandler) show_desktop_notification(title string, body string) {
+fn (mut self StreamHandler) show_desktop_notification(notification osc.DesktopNotification) {
 	mut msg := apprt.SurfaceMessage{
 		kind: .desktop_notification
 	}
 
-	title_len := if title.len < msg.notification_title.len {
-		title.len
+	title_len := if notification.title.len < msg.notification_title.len {
+		notification.title.len
 	} else {
 		msg.notification_title.len - 1
 	}
 	for i in 0 .. title_len {
-		msg.notification_title[i] = title[i]
+		msg.notification_title[i] = notification.title[i]
 	}
 	msg.notification_title[title_len] = 0
 
-	body_len := if body.len < msg.notification_body.len {
-		body.len
+	body_len := if notification.body.len < msg.notification_body.len {
+		notification.body.len
 	} else {
 		msg.notification_body.len - 1
 	}
 	for i in 0 .. body_len {
-		msg.notification_body[i] = body[i]
+		msg.notification_body[i] = notification.body[i]
 	}
 	msg.notification_body[body_len] = 0
 

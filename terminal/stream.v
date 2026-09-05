@@ -494,6 +494,8 @@ pub:
 	semantic_prompt_opts string
 	// Parsed ConEmu progress report.
 	progress_report osc.ProgressReport
+	// Parsed OSC 9 / OSC 777 desktop notification.
+	desktop_notification osc.DesktopNotification
 	// DCS data (for .dcs_hook)
 	dcs_intermediates []u8
 	dcs_params        []u16
@@ -1715,8 +1717,7 @@ fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 		}
 		.show_desktop_notification {
 			self.dispatch(.show_desktop_notification, ActionPayload{
-				str1: cmd.data
-				str2: cmd.data2
+				desktop_notification: cmd.desktop_notification
 			})
 		}
 		.semantic_prompt {

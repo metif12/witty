@@ -11,6 +11,6 @@ fn test_osc777_show_desktop_notification_with_title() {
 		return
 	}
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == 'Title'
-	assert cmd.str_value2 == 'Body'
+	assert cmd.desktop_notification.title == 'Title'
+	assert cmd.desktop_notification.body == 'Body'
 }

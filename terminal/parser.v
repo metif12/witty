@@ -211,12 +211,13 @@ pub:
 	// Terminator used by the request. Response-producing commands mirror it.
 	terminator osc.Terminator
 	// Parsed color operations are carried through the stream without reparsing.
-	color_op          osc.ColorOperation
-	color_requests    []osc.ColorRequest
-	kitty_color_items []osc.KittyColorItem
-	semantic_action   osc.SemanticAction
-	semantic_options  string
-	progress_report   osc.ProgressReport
+	color_op             osc.ColorOperation
+	color_requests       []osc.ColorRequest
+	kitty_color_items    []osc.KittyColorItem
+	semantic_action      osc.SemanticAction
+	semantic_options     string
+	progress_report      osc.ProgressReport
+	desktop_notification osc.DesktopNotification
 }
 
 // OscCommandType identifies the type of OSC command.
@@ -615,18 +616,9 @@ fn parse_osc_command(data string, terminator_ch u8) OscCommand {
 			}
 		}
 		.show_desktop_notification {
-			// OSC 9 carries only a body; OSC 777 carries title and body.
-			if data.starts_with('777;') {
-				OscCommand{
-					cmd_type: .show_desktop_notification
-					data: cmd.str_value
-					data2: cmd.str_value2
-				}
-			} else {
-				OscCommand{
-					cmd_type: .show_desktop_notification
-					data2: cmd.str_value
-				}
+			OscCommand{
+				cmd_type: .show_desktop_notification
+				desktop_notification: cmd.desktop_notification
 			}
 		}
 		.hyperlink_start {

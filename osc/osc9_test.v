@@ -13,13 +13,15 @@ fn parse_osc_input(input string) Command {
 fn test_osc9_show_desktop_notification() {
 	cmd := parse_osc_input('9;Hello world')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == 'Hello world'
+	assert cmd.desktop_notification.title == ''
+	assert cmd.desktop_notification.body == 'Hello world'
 }
 
 fn test_osc9_show_single_character_desktop_notification() {
 	cmd := parse_osc_input('9;H')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == 'H'
+	assert cmd.desktop_notification.title == ''
+	assert cmd.desktop_notification.body == 'H'
 }
 
 fn test_osc9_conemu_sleep() {
@@ -50,13 +52,13 @@ fn test_osc9_conemu_sleep_desktop_notification_1() {
 	// "9;1" without semicolon -> desktop notification
 	cmd := parse_osc_input('9;1')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '1'
+	assert cmd.desktop_notification.body == '1'
 }
 
 fn test_osc9_conemu_sleep_desktop_notification_2() {
 	cmd := parse_osc_input('9;1a')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '1a'
+	assert cmd.desktop_notification.body == '1a'
 }
 
 fn test_osc9_conemu_message_box() {
@@ -68,7 +70,7 @@ fn test_osc9_conemu_message_box() {
 fn test_osc9_conemu_message_box_invalid_input() {
 	cmd := parse_osc_input('9;2')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '2'
+	assert cmd.desktop_notification.body == '2'
 }
 
 fn test_osc9_conemu_message_box_empty() {
@@ -86,13 +88,13 @@ fn test_osc9_conemu_message_box_spaces() {
 fn test_osc9_message_box_desktop_notification_1() {
 	cmd := parse_osc_input('9;2')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '2'
+	assert cmd.desktop_notification.body == '2'
 }
 
 fn test_osc9_message_box_desktop_notification_2() {
 	cmd := parse_osc_input('9;2a')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '2a'
+	assert cmd.desktop_notification.body == '2a'
 }
 
 fn test_osc9_conemu_change_tab_title() {
@@ -118,13 +120,13 @@ fn test_osc9_conemu_change_tab_title_spaces() {
 fn test_osc9_change_tab_title_desktop_notification_1() {
 	cmd := parse_osc_input('9;3')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '3'
+	assert cmd.desktop_notification.body == '3'
 }
 
 fn test_osc9_change_tab_title_desktop_notification_2() {
 	cmd := parse_osc_input('9;3a')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '3a'
+	assert cmd.desktop_notification.body == '3a'
 }
 
 fn test_osc9_conemu_progress_set() {
@@ -213,25 +215,25 @@ fn test_osc9_conemu_progress_pause_with_progress() {
 fn test_osc9_progress_desktop_notification_1() {
 	cmd := parse_osc_input('9;4')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '4'
+	assert cmd.desktop_notification.body == '4'
 }
 
 fn test_osc9_progress_desktop_notification_2() {
 	cmd := parse_osc_input('9;4;')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '4;'
+	assert cmd.desktop_notification.body == '4;'
 }
 
 fn test_osc9_progress_desktop_notification_3() {
 	cmd := parse_osc_input('9;4;5')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '4;5'
+	assert cmd.desktop_notification.body == '4;5'
 }
 
 fn test_osc9_progress_desktop_notification_4() {
 	cmd := parse_osc_input('9;4;5a')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '4;5a'
+	assert cmd.desktop_notification.body == '4;5a'
 }
 
 fn test_osc9_conemu_wait_input() {
@@ -259,7 +261,7 @@ fn test_osc9_conemu_guimacro_2() {
 fn test_osc9_conemu_guimacro_incomplete_desktop_notification() {
 	cmd := parse_osc_input('9;6')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '6'
+	assert cmd.desktop_notification.body == '6'
 }
 
 fn test_osc9_conemu_run_process_1() {
@@ -277,7 +279,7 @@ fn test_osc9_conemu_run_process_2() {
 fn test_osc9_conemu_run_process_incomplete_desktop_notification() {
 	cmd := parse_osc_input('9;7')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '7'
+	assert cmd.desktop_notification.body == '7'
 }
 
 fn test_osc9_conemu_output_env_var_1() {
@@ -295,7 +297,7 @@ fn test_osc9_conemu_output_env_var_2() {
 fn test_osc9_conemu_output_env_var_incomplete_desktop_notification() {
 	cmd := parse_osc_input('9;8')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '8'
+	assert cmd.desktop_notification.body == '8'
 }
 
 fn test_osc9_conemu_set_cwd() {
@@ -307,7 +309,7 @@ fn test_osc9_conemu_set_cwd() {
 fn test_osc9_conemu_set_cwd_incomplete_desktop_notification() {
 	cmd := parse_osc_input('9;9')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '9'
+	assert cmd.desktop_notification.body == '9'
 }
 
 fn test_osc9_conemu_xterm_emulation_1() {
@@ -348,19 +350,19 @@ fn test_osc9_conemu_xterm_emulation_5() {
 fn test_osc9_conemu_xterm_emulation_6() {
 	cmd := parse_osc_input('9;10;4')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '10;4'
+	assert cmd.desktop_notification.body == '10;4'
 }
 
 fn test_osc9_conemu_xterm_emulation_7() {
 	cmd := parse_osc_input('9;10;')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '10;'
+	assert cmd.desktop_notification.body == '10;'
 }
 
 fn test_osc9_conemu_xterm_emulation_8() {
 	cmd := parse_osc_input('9;10;abc')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '10;abc'
+	assert cmd.desktop_notification.body == '10;abc'
 }
 
 fn test_osc9_conemu_comment() {
@@ -372,7 +374,7 @@ fn test_osc9_conemu_comment() {
 fn test_osc9_conemu_comment_incomplete_desktop_notification() {
 	cmd := parse_osc_input('9;11')
 	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.str_value == '11'
+	assert cmd.desktop_notification.body == '11'
 }
 
 fn test_osc9_conemu_mark_prompt_start_1() {

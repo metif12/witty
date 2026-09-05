@@ -132,7 +132,6 @@ module osc
 //
 // --- Original Ghostty Comments End: src/terminal/osc.zig
 
-
 // OSC (Operating System Command) related functions and types.
 //
 // OSC is another set of control sequences for terminal programs that start with
@@ -173,6 +172,13 @@ pub struct ProgressReport {
 pub:
 	state    ProgressState
 	progress ?u8
+}
+
+// DesktopNotification is the parsed payload for OSC 9 and OSC 777.
+pub struct DesktopNotification {
+pub:
+	title string
+	body  string
 }
 
 // ConEmuTabTitle represents a ConEmu tab title value (reset or set to a string).
@@ -227,6 +233,8 @@ pub:
 	// ConEmu progress report
 	progress_state ProgressState
 	progress       ?u8
+	// OSC 9 / OSC 777 desktop notification.
+	desktop_notification DesktopNotification
 	// ConEmu xterm emulation
 	xterm_keyboard ?bool
 	xterm_output   ?bool
@@ -350,118 +358,220 @@ pub fn (mut self Parser) next(c u8) {
 		}
 		.start {
 			match c {
-				`0` { self.state = .s_0 }
-				`1` { self.state = .s_1 }
-				`2` { self.state = .s_2 }
-				`4` { self.state = .s_4 }
-				`5` { self.state = .s_5 }
-				`6` { self.state = .s_6 }
-				`7` { self.state = .s_7 }
-				`8` { self.state = .s_8 }
-				`9` { self.state = .s_9 }
-				else { self.state = .invalid }
+				`0` {
+					self.state = .s_0
+				}
+				`1` {
+					self.state = .s_1
+				}
+				`2` {
+					self.state = .s_2
+				}
+				`4` {
+					self.state = .s_4
+				}
+				`5` {
+					self.state = .s_5
+				}
+				`6` {
+					self.state = .s_6
+				}
+				`7` {
+					self.state = .s_7
+				}
+				`8` {
+					self.state = .s_8
+				}
+				`9` {
+					self.state = .s_9
+				}
+				else {
+					self.state = .invalid
+				}
 			}
 		}
 		.s_1 {
 			match c {
 				`;` { self.start_writing() }
-				`0` { self.state = .s_10 }
-				`1` { self.state = .s_11 }
-				`2` { self.state = .s_12 }
-				`3` { self.state = .s_13 }
-				`4` { self.state = .s_14 }
-				`5` { self.state = .s_15 }
-				`6` { self.state = .s_16 }
-				`7` { self.state = .s_17 }
-				`8` { self.state = .s_18 }
-				`9` { self.state = .s_19 }
-				else { self.state = .invalid }
+				`0` {
+					self.state = .s_10
+				}
+				`1` {
+					self.state = .s_11
+				}
+				`2` {
+					self.state = .s_12
+				}
+				`3` {
+					self.state = .s_13
+				}
+				`4` {
+					self.state = .s_14
+				}
+				`5` {
+					self.state = .s_15
+				}
+				`6` {
+					self.state = .s_16
+				}
+				`7` {
+					self.state = .s_17
+				}
+				`8` {
+					self.state = .s_18
+				}
+				`9` {
+					self.state = .s_19
+				}
+				else {
+					self.state = .invalid
+				}
 			}
 		}
 		.s_10 {
 			match c {
 				`;` { self.start_writing() }
-				`4` { self.state = .s_104 }
-				`5` { self.state = .s_105 }
-				else { self.state = .invalid }
+				`4` {
+					self.state = .s_104
+				}
+				`5` {
+					self.state = .s_105
+				}
+				else {
+					self.state = .invalid
+				}
 			}
 		}
 		.s_11 {
 			match c {
 				`;` { self.start_writing() }
-				`0` { self.state = .s_110 }
-				`1` { self.state = .s_111 }
-				`2` { self.state = .s_112 }
-				`3` { self.state = .s_113 }
-				`4` { self.state = .s_114 }
-				`5` { self.state = .s_115 }
-				`6` { self.state = .s_116 }
-				`7` { self.state = .s_117 }
-				`8` { self.state = .s_118 }
-				`9` { self.state = .s_119 }
-				else { self.state = .invalid }
+				`0` {
+					self.state = .s_110
+				}
+				`1` {
+					self.state = .s_111
+				}
+				`2` {
+					self.state = .s_112
+				}
+				`3` {
+					self.state = .s_113
+				}
+				`4` {
+					self.state = .s_114
+				}
+				`5` {
+					self.state = .s_115
+				}
+				`6` {
+					self.state = .s_116
+				}
+				`7` {
+					self.state = .s_117
+				}
+				`8` {
+					self.state = .s_118
+				}
+				`9` {
+					self.state = .s_119
+				}
+				else {
+					self.state = .invalid
+				}
 			}
 		}
 		.s_13 {
 			match c {
 				`;` { self.start_writing() }
-				`3` { self.state = .s_133 }
-				else { self.state = .invalid }
+				`3` {
+					self.state = .s_133
+				}
+				else {
+					self.state = .invalid
+				}
 			}
 		}
 		.s_2 {
 			match c {
 				`;` { self.start_writing() }
-				`1` { self.state = .s_21 }
-				`2` { self.state = .s_22 }
-				else { self.state = .invalid }
+				`1` {
+					self.state = .s_21
+				}
+				`2` {
+					self.state = .s_22
+				}
+				else {
+					self.state = .invalid
+				}
 			}
 		}
 		.s_5 {
 			match c {
 				`;` { self.start_writing() }
-				`2` { self.state = .s_52 }
-				else { self.state = .invalid }
+				`2` {
+					self.state = .s_52
+				}
+				else {
+					self.state = .invalid
+				}
 			}
 		}
 		.s_6 {
 			match c {
-				`6` { self.state = .s_66 }
-				else { self.state = .invalid }
+				`6` {
+					self.state = .s_66
+				}
+				else {
+					self.state = .invalid
+				}
 			}
 		}
 		.s_7 {
 			match c {
 				`;` { self.start_writing() }
-				`7` { self.state = .s_77 }
-				else { self.state = .invalid }
+				`7` {
+					self.state = .s_77
+				}
+				else {
+					self.state = .invalid
+				}
 			}
 		}
 		.s_77 {
 			match c {
-				`7` { self.state = .s_777 }
-				else { self.state = .invalid }
+				`7` {
+					self.state = .s_777
+				}
+				else {
+					self.state = .invalid
+				}
 			}
 		}
 		.s_133 {
 			match c {
 				`;` { self.start_writing() }
-				`7` { self.state = .s_1337 }
-				else { self.state = .invalid }
+				`7` {
+					self.state = .s_1337
+				}
+				else {
+					self.state = .invalid
+				}
 			}
 		}
 		.s_0, .s_22, .s_777, .s_8, .s_9 {
 			match c {
 				`;` { self.start_writing() }
-				else { self.state = .invalid }
+				else {
+					self.state = .invalid
+				}
 			}
 		}
-		.s_4, .s_12, .s_14, .s_15, .s_16, .s_17, .s_18, .s_19,
-		.s_21, .s_52, .s_66, .s_104, .s_105, .s_110, .s_111, .s_112, .s_113,
-		.s_114, .s_115, .s_116, .s_117, .s_118, .s_119, .s_1337 {
+		.s_4, .s_12, .s_14, .s_15, .s_16, .s_17, .s_18, .s_19, .s_21, .s_52, .s_66, .s_104, .s_105, .s_110, .s_111, .s_112, .s_113, .s_114, .s_115, .s_116, .s_117, .s_118, .s_119, .s_1337 {
 			match c {
 				`;` { self.start_writing() }
-				else { self.state = .invalid }
+				else {
+					self.state = .invalid
+				}
 			}
 		}
 	}
@@ -496,10 +606,7 @@ pub fn (mut self Parser) end(terminator_ch u8) ?Command {
 		.s_1 {
 			return parse_change_window_icon(mut self, terminator_ch)
 		}
-		.s_4, .s_5, .s_10, .s_11, .s_12, .s_13, .s_14, .s_15,
-		.s_16, .s_17, .s_18, .s_19, .s_104, .s_105, .s_110, .s_111,
-		.s_112, .s_113, .s_114, .s_115, .s_116, .s_117, .s_118,
-		.s_119 {
+		.s_4, .s_5, .s_10, .s_11, .s_12, .s_13, .s_14, .s_15, .s_16, .s_17, .s_18, .s_19, .s_104, .s_105, .s_110, .s_111, .s_112, .s_113, .s_114, .s_115, .s_116, .s_117, .s_118, .s_119 {
 			return parse_color_operation(mut self, terminator_ch)
 		}
 		.s_7 {

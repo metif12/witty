@@ -75,6 +75,21 @@ fn test_progress_report_forwards_payload() {
 	assert ctx.messages[1].progress_report.progress == none
 }
 
+fn test_desktop_notification_forwards_typed_payload() {
+	mut handler, mut ctx := make_test_handler()
+	defer {
+		ctx.t.deinit()
+	}
+	handler.show_desktop_notification(osc.DesktopNotification{
+		title: 'Compiler'
+		body: 'Build failed'
+	})
+	assert ctx.messages.len == 1
+	assert ctx.messages[0].kind == .desktop_notification
+	assert ctx.messages[0].notification_title[..8].bytestr() == 'Compiler'
+	assert ctx.messages[0].notification_body[..12].bytestr() == 'Build failed'
+}
+
 // Test that the StreamHandler can be created and deinitialized.
 fn test_stream_handler_init_deinit() {
 	mut handler, mut ctx := make_test_handler()
