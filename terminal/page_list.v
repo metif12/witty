@@ -6191,7 +6191,7 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) {
 
 	// We need to grab our row iterator now before we rewrite our
 	// linked list below.
-	mut it := self.row_iterator(.right_down, .screen, none)
+	mut it := self.row_iterator(.right_down, Point{ tag: .screen }, none)
 
 	// Set our new page as the only page. This orphans the existing pages
 	// in the list, but that's fine since we're gonna delete them anyway.
@@ -6307,7 +6307,7 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) {
 			// in existing pages so we need to go through the pages,
 			// resize the columns, and clear any cells that are beyond
 			// the new size.
-			mut it := self.page_iterator(.right_down, .screen, none)
+			mut it := self.page_iterator(.right_down, Point{ tag: .screen }, none)
 			for {
 				chunk := it.next() or { break }
 				mut page := &chunk.node.data
@@ -6335,7 +6335,7 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) {
 			// We must gather the chunks up front because
 			// resize_without_reflow_grow_cols rewrites the linked list.
 			mut chunks := []PageChunk{}
-			mut it := self.page_iterator(.right_down, .screen, none)
+			mut it := self.page_iterator(.right_down, Point{ tag: .screen }, none)
 			for {
 				chunk := it.next() or { break }
 				chunks << chunk
@@ -6597,13 +6597,15 @@ pub fn (self &PageList) is_dirty() bool {
 // Iterator factory methods on PageList
 // ============================================================
 
-pub fn (self &PageList) page_iterator(direction IterDirection, tl PointTag, bl ?PointTag) PageIterator {
-	tl_pin := self.get_top_left(tl)
-	bl_pin := if bt := bl {
-		self.get_bottom_right(bt) or { return PageIterator{} }
+pub fn (self &PageList) page_iterator(direction IterDirection, tl Point, bl ?Point) PageIterator {
+	tl_pin := self.pin(tl) or { return PageIterator{} }
+	bl_pin := if bottom := bl {
+		assert bottom.tag == tl.tag
+		self.pin(bottom) or { return PageIterator{} }
 	} else {
-		self.get_bottom_right(tl) or { return PageIterator{} }
+		self.get_bottom_right(tl.tag) or { return PageIterator{} }
 	}
+	assert tl_pin.eql(bl_pin) || tl_pin.before(bl_pin)
 
 	return match direction {
 		.right_down {
@@ -6615,13 +6617,15 @@ pub fn (self &PageList) page_iterator(direction IterDirection, tl PointTag, bl ?
 	}
 }
 
-pub fn (self &PageList) row_iterator(direction IterDirection, tl PointTag, bl ?PointTag) RowIterator {
-	tl_pin := self.get_top_left(tl)
-	bl_pin := if bt := bl {
-		self.get_bottom_right(bt) or { return RowIterator{} }
+pub fn (self &PageList) row_iterator(direction IterDirection, tl Point, bl ?Point) RowIterator {
+	tl_pin := self.pin(tl) or { return RowIterator{} }
+	bl_pin := if bottom := bl {
+		assert bottom.tag == tl.tag
+		self.pin(bottom) or { return RowIterator{} }
 	} else {
-		self.get_bottom_right(tl) or { return RowIterator{} }
+		self.get_bottom_right(tl.tag) or { return RowIterator{} }
 	}
+	assert tl_pin.eql(bl_pin) || tl_pin.before(bl_pin)
 
 	return match direction {
 		.right_down {
@@ -6633,13 +6637,15 @@ pub fn (self &PageList) row_iterator(direction IterDirection, tl PointTag, bl ?P
 	}
 }
 
-pub fn (self &PageList) cell_iterator(direction IterDirection, tl PointTag, bl ?PointTag) CellIterator {
-	tl_pin := self.get_top_left(tl)
-	bl_pin := if bt := bl {
-		self.get_bottom_right(bt) or { return CellIterator{} }
+pub fn (self &PageList) cell_iterator(direction IterDirection, tl Point, bl ?Point) CellIterator {
+	tl_pin := self.pin(tl) or { return CellIterator{} }
+	bl_pin := if bottom := bl {
+		assert bottom.tag == tl.tag
+		self.pin(bottom) or { return CellIterator{} }
 	} else {
-		self.get_bottom_right(tl) or { return CellIterator{} }
+		self.get_bottom_right(tl.tag) or { return CellIterator{} }
 	}
+	assert tl_pin.eql(bl_pin) || tl_pin.before(bl_pin)
 
 	return match direction {
 		.right_down {
@@ -6647,6 +6653,26 @@ pub fn (self &PageList) cell_iterator(direction IterDirection, tl PointTag, bl ?
 		}
 		.left_up {
 			bl_pin.cell_iterator(.left_up, tl_pin)
+		}
+	}
+}
+
+pub fn (self &PageList) prompt_iterator(direction IterDirection, tl Point, bl ?Point) PromptIterator {
+	tl_pin := self.pin(tl) or { return PromptIterator{} }
+	bl_pin := if bottom := bl {
+		assert bottom.tag == tl.tag
+		self.pin(bottom) or { return PromptIterator{} }
+	} else {
+		self.get_bottom_right(tl.tag) or { return PromptIterator{} }
+	}
+	assert tl_pin.eql(bl_pin) || tl_pin.before(bl_pin)
+
+	return match direction {
+		.right_down {
+			tl_pin.prompt_iterator(.right_down, bl_pin)
+		}
+		.left_up {
+			bl_pin.prompt_iterator(.left_up, tl_pin)
 		}
 	}
 }

@@ -2799,7 +2799,7 @@ fn test_page_list_page_iterator_single_page() {
 	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
 
-	mut it := s.page_iterator(.right_down, .active, none)
+	mut it := s.page_iterator(.right_down, Point{ tag: .active }, none)
 	mut count := 0
 	for {
 		_ := it.next() or { break }
@@ -2816,7 +2816,7 @@ fn test_page_list_page_iterator_two_pages() {
 	cap := initial_capacity(80)
 	s.grow_rows(usize(cap.rows) * 2)
 
-	mut it := s.page_iterator(.right_down, .screen, none)
+	mut it := s.page_iterator(.right_down, Point{ tag: .screen }, none)
 	mut count := 0
 	for {
 		_ := it.next() or { break }
@@ -2832,7 +2832,7 @@ fn test_page_list_page_iterator_reverse() {
 	cap := initial_capacity(80)
 	s.grow_rows(usize(cap.rows) * 2)
 
-	mut it := s.page_iterator(.left_up, .screen, none)
+	mut it := s.page_iterator(.left_up, Point{ tag: .screen }, none)
 	mut count := 0
 	for {
 		_ := it.next() or { break }
@@ -2845,7 +2845,7 @@ fn test_page_list_row_iterator() {
 	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
 
-	mut it := s.row_iterator(.right_down, .active, none)
+	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
 	mut count := usize(0)
 	for {
 		_ := it.next() or { break }
@@ -2861,7 +2861,7 @@ fn test_page_list_row_iterator_with_history() {
 	s.grow_rows(50)
 
 	// Active iterator should still give rows count
-	mut it := s.row_iterator(.right_down, .active, none)
+	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
 	mut count := usize(0)
 	for {
 		_ := it.next() or { break }
@@ -2870,7 +2870,7 @@ fn test_page_list_row_iterator_with_history() {
 	assert count == usize(s.rows)
 
 	// Screen iterator should give total_rows
-	mut it2 := s.row_iterator(.right_down, .screen, none)
+	mut it2 := s.row_iterator(.right_down, Point{ tag: .screen }, none)
 	mut count2 := usize(0)
 	for {
 		_ := it2.next() or { break }
@@ -2883,7 +2883,7 @@ fn test_page_list_cell_iterator() {
 	mut s := PageList.init(10, 5, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
 
-	mut it := s.cell_iterator(.right_down, .active, none)
+	mut it := s.cell_iterator(.right_down, Point{ tag: .active }, none)
 	mut count := usize(0)
 	for {
 		_ := it.next() or { break }
@@ -2897,7 +2897,7 @@ fn test_page_list_cell_iterator_reverse() {
 	mut s := PageList.init(10, 5, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
 
-	mut it := s.cell_iterator(.left_up, .active, none)
+	mut it := s.cell_iterator(.left_up, Point{ tag: .active }, none)
 	mut count := usize(0)
 	for {
 		_ := it.next() or { break }
@@ -2983,6 +2983,170 @@ fn test_page_list_prompt_iterator_reverse() {
 		count += 1
 	}
 	assert count == 2
+}
+
+fn test_page_list_prompt_iterator_left_up() {
+	mut s := PageList.init(2, 20, usize(0))
+	defer { s.deinit() }
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	first.data.rows[3].semantic_prompt = .prompt
+	first.data.rows[6].semantic_prompt = .prompt
+	first.data.rows[7].semantic_prompt = .prompt_continuation
+	first.data.rows[8].semantic_prompt = .prompt_continuation
+	first.data.rows[12].semantic_prompt = .prompt_continuation
+
+	mut it := s.prompt_iterator(.left_up, Point{ tag: .screen }, none)
+	for expected in [u32(12), 6, 3] {
+		pin := it.next() or {
+			assert false
+			return
+		}
+		point := s.point_from_pin(.screen, pin) or {
+			assert false
+			return
+		}
+		assert point == Pin{ x: 0, y: expected }
+	}
+	assert it.next() == none
+}
+
+fn test_page_list_prompt_iterator_right_down() {
+	mut s := PageList.init(2, 20, usize(0))
+	defer { s.deinit() }
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	first.data.rows[3].semantic_prompt = .prompt
+	first.data.rows[6].semantic_prompt = .prompt
+	first.data.rows[7].semantic_prompt = .prompt_continuation
+	first.data.rows[8].semantic_prompt = .prompt_continuation
+	first.data.rows[12].semantic_prompt = .prompt_continuation
+
+	mut it := s.prompt_iterator(.right_down, Point{ tag: .screen }, none)
+	for expected in [u32(3), 6, 12] {
+		pin := it.next() or {
+			assert false
+			return
+		}
+		point := s.point_from_pin(.screen, pin) or {
+			assert false
+			return
+		}
+		assert point == Pin{ x: 0, y: expected }
+	}
+	assert it.next() == none
+}
+
+fn test_page_list_prompt_iterator_right_down_continuation_at_start() {
+	mut s := PageList.init(2, 20, usize(0))
+	defer { s.deinit() }
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	first.data.rows[0].semantic_prompt = .prompt_continuation
+	first.data.rows[1].semantic_prompt = .prompt_continuation
+	first.data.rows[5].semantic_prompt = .prompt
+
+	mut it := s.prompt_iterator(.right_down, Point{ tag: .screen }, none)
+	for expected in [u32(0), 5] {
+		pin := it.next() or {
+			assert false
+			return
+		}
+		point := s.point_from_pin(.screen, pin) or {
+			assert false
+			return
+		}
+		assert point == Pin{ x: 0, y: expected }
+	}
+	assert it.next() == none
+}
+
+fn test_page_list_prompt_iterator_right_down_with_prompt_before_continuation() {
+	mut s := PageList.init(2, 20, usize(0))
+	defer { s.deinit() }
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	first.data.rows[2].semantic_prompt = .prompt
+	first.data.rows[3].semantic_prompt = .prompt_continuation
+	first.data.rows[4].semantic_prompt = .prompt_continuation
+
+	mut it := s.prompt_iterator(.right_down, Point{
+		tag: .screen
+		coord: Coordinate{ y: 3 }
+	}, none)
+	pin := it.next() or {
+		assert false
+		return
+	}
+	point := s.point_from_pin(.screen, pin) or {
+		assert false
+		return
+	}
+	assert point == Pin{ x: 0, y: 3 }
+	assert it.next() == none
+}
+
+fn test_page_list_prompt_iterator_right_down_limit_inclusive() {
+	mut s := PageList.init(2, 20, usize(0))
+	defer { s.deinit() }
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	first.data.rows[5].semantic_prompt = .prompt
+	first.data.rows[10].semantic_prompt = .prompt
+
+	mut it := s.prompt_iterator(.right_down, Point{ tag: .screen }, Point{
+		tag: .screen
+		coord: Coordinate{ y: 5 }
+	})
+	pin := it.next() or {
+		assert false
+		return
+	}
+	point := s.point_from_pin(.screen, pin) or {
+		assert false
+		return
+	}
+	assert point == Pin{ x: 0, y: 5 }
+	assert it.next() == none
+}
+
+fn test_page_list_prompt_iterator_left_up_limit_inclusive() {
+	mut s := PageList.init(2, 20, usize(0))
+	defer { s.deinit() }
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	first.data.rows[5].semantic_prompt = .prompt
+	first.data.rows[10].semantic_prompt = .prompt
+
+	mut it := s.prompt_iterator(.left_up, Point{
+		tag: .screen
+		coord: Coordinate{ y: 10 }
+	}, Point{
+		tag: .screen
+		coord: Coordinate{ y: 15 }
+	})
+	pin := it.next() or {
+		assert false
+		return
+	}
+	point := s.point_from_pin(.screen, pin) or {
+		assert false
+		return
+	}
+	assert point == Pin{ x: 0, y: 10 }
+	assert it.next() == none
 }
 
 fn test_page_list_highlight_semantic_content() {
@@ -4319,7 +4483,7 @@ fn test_page_list_resize_no_reflow_less_cols_clears_graphemes() {
 	assert s.cols == 5
 	assert s.total_rows == 10
 
-	mut it := s.page_iterator(.right_down, .screen, none)
+	mut it := s.page_iterator(.right_down, Point{ tag: .screen }, none)
 	for {
 		chunk := it.next() or { break }
 		assert chunk.node.data.grapheme_count() == 0
@@ -4536,7 +4700,7 @@ fn test_page_list_resize_no_reflow_more_cols_forces_smaller_cap() {
 	s.resize(PageResizeOpts{ cols: cap2.cols, reflow: false })
 	assert s.total_rows == rows
 
-	mut it := s.row_iterator(.right_down, .screen, none)
+	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
 	for {
 		row := it.next() or { break }
 		mut rp := &row.node.data
@@ -4639,7 +4803,7 @@ fn test_page_list_resize_reflow_more_cols_no_wrapped_rows() {
 	assert s.cols == 10
 	assert s.total_rows == 3
 
-	mut it := s.row_iterator(.right_down, .screen, none)
+	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
 	for {
 		row := it.next() or { break }
 		mut rp := &row.node.data
@@ -4685,7 +4849,7 @@ fn test_page_list_resize_reflow_more_cols_wrapped_rows() {
 	assert sp.y == 0
 
 	// First row should be unwrapped and hold the reflowed content.
-	mut it := s.row_iterator(.right_down, .screen, none)
+	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
 	row := it.next() or {
 		assert false, 'no row'
 		return
@@ -4805,7 +4969,7 @@ fn test_page_list_resize_grow_cols_with_unwrap_fixes_viewport_pin() {
 	assert s.total_rows == 40
 
 	// Fill all rows with wrapped content.
-	mut pit := s.page_iterator(.right_down, .screen, none)
+	mut pit := s.page_iterator(.right_down, Point{ tag: .screen }, none)
 	for {
 		chunk := pit.next() or { break }
 		mut page := &chunk.node.data
@@ -5124,7 +5288,7 @@ fn test_page_list_resize_reflow_less_cols_no_wrapped_rows() {
 	assert s.cols == 5
 	assert s.total_rows == 3
 
-	mut it := s.row_iterator(.right_down, .screen, none)
+	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
 	for {
 		row := it.next() or { break }
 		mut rp := &row.node.data
@@ -5164,7 +5328,7 @@ fn test_page_list_resize_reflow_less_cols_wrapped_rows() {
 	}
 	assert pc.screen_point().y == 2
 
-	mut it := s.row_iterator(.right_down, .screen, none)
+	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
 	// Row 0: wrapped, cells[0]=0.
 	r0 := it.next() or {
 		assert false, 'no row'
@@ -5219,7 +5383,7 @@ fn test_page_list_resize_reflow_preserves_hyperlink_mapping() {
 	s.resize(PageResizeOpts{ cols: 2, reflow: true })
 
 	mut found := false
-	mut it := s.row_iterator(.right_down, .screen, none)
+	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
 	for {
 		pin := it.next() or { break }
 		mut reflowed := &pin.node.data
@@ -5298,7 +5462,7 @@ fn test_page_list_resize_reflow_preserves_hyperlinks_across_source_pages() {
 	s.resize(PageResizeOpts{ cols: 3, reflow: true })
 
 	mut found := map[u32]string{}
-	mut it := s.row_iterator(.right_down, .screen, none)
+	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
 	for {
 		pin := it.next() or { break }
 		mut reflowed := &pin.node.data
@@ -5421,7 +5585,7 @@ fn test_page_list_resize_reflow_less_cols_blank_lines() {
 	assert s.cols == 2
 	assert s.total_rows == 3
 
-	mut it := s.row_iterator(.right_down, .active, none)
+	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
 	r0 := it.next() or {
 		assert false, 'no row'
 		return
@@ -5471,7 +5635,7 @@ fn test_page_list_resize_reflow_less_cols_wrapped_rows_with_graphemes() {
 	}
 	assert voidptr(np) == voidptr(s.pages.last or { return })
 
-	mut it := s.row_iterator(.right_down, .screen, none)
+	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
 	// Row 0: wrapped, cells[0]=0.
 	r0 := it.next() or {
 		assert false, 'no row'
@@ -5562,7 +5726,7 @@ fn test_page_list_resize_reflow_less_cols_copy_style() {
 	assert s.cols == 2
 	assert s.total_rows == 2
 
-	mut it := s.row_iterator(.right_down, .active, none)
+	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
 	for {
 		row := it.next() or { break }
 		mut rp := &row.node.data
@@ -5682,7 +5846,7 @@ fn test_page_list_resize_reflow_less_cols_blank_lines_between() {
 	assert s.cols == 2
 	assert s.total_rows == 5
 
-	mut it := s.row_iterator(.right_down, .active, none)
+	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
 	r0 := it.next() or {
 		assert false, 'no row'
 		return
@@ -5724,7 +5888,7 @@ fn test_page_list_resize_reflow_less_cols_blank_lines_between_no_scrollback() {
 	assert s.cols == 2
 	assert s.total_rows == 3
 
-	mut it := s.row_iterator(.right_down, .active, none)
+	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
 	r0 := it.next() or {
 		assert false, 'no row'
 		return
@@ -5870,7 +6034,7 @@ fn test_page_list_page_iterator_single_page_precise() {
 	}
 	assert first.next == none
 
-	mut it := s.page_iterator(.right_down, .active, none)
+	mut it := s.page_iterator(.right_down, Point{ tag: .active }, none)
 	chunk := it.next() or {
 		assert false, 'no chunk'
 		return
@@ -5901,7 +6065,7 @@ fn test_page_list_page_iterator_two_pages_precise() {
 		return
 	}
 
-	mut it := s.page_iterator(.right_down, .active, none)
+	mut it := s.page_iterator(.right_down, Point{ tag: .active }, none)
 	chunk1 := it.next() or {
 		assert false, 'no chunk1'
 		return
@@ -5935,7 +6099,7 @@ fn test_page_list_page_iterator_history_two_pages() {
 	assert s.total_pages() == 2
 
 	active_tl := s.get_top_left(.active)
-	mut it := s.page_iterator(.right_down, .history, none)
+	mut it := s.page_iterator(.right_down, Point{ tag: .history }, none)
 	chunk := it.next() or {
 		assert false, 'no chunk'
 		return
@@ -5957,7 +6121,7 @@ fn test_page_list_page_iterator_reverse_single_page() {
 	}
 	assert first.next == none
 
-	mut it := s.page_iterator(.left_up, .active, none)
+	mut it := s.page_iterator(.left_up, Point{ tag: .active }, none)
 	chunk := it.next() or {
 		assert false, 'no chunk'
 		return
@@ -5987,7 +6151,7 @@ fn test_page_list_page_iterator_reverse_two_pages() {
 		return
 	}
 
-	mut it := s.page_iterator(.left_up, .active, none)
+	mut it := s.page_iterator(.left_up, Point{ tag: .active }, none)
 	mut count := u16(0)
 
 	chunk1 := it.next() or {
@@ -6026,7 +6190,7 @@ fn test_page_list_page_iterator_reverse_history_two_pages() {
 	assert s.total_pages() == 2
 
 	active_tl := s.get_top_left(.active)
-	mut it := s.page_iterator(.left_up, .history, none)
+	mut it := s.page_iterator(.left_up, Point{ tag: .history }, none)
 	chunk := it.next() or {
 		assert false, 'no chunk'
 		return
@@ -6057,7 +6221,7 @@ fn test_page_list_cell_iterator_precise() {
 		}
 	}
 
-	mut it := s.cell_iterator(.right_down, .screen, none)
+	mut it := s.cell_iterator(.right_down, Point{ tag: .screen }, none)
 	expected := [[u32(0), 0], [u32(1), 0], [u32(0), 1], [u32(1), 1]]
 	for exp in expected {
 		p := it.next() or {
@@ -6092,7 +6256,7 @@ fn test_page_list_cell_iterator_reverse_precise() {
 		}
 	}
 
-	mut it := s.cell_iterator(.left_up, .screen, none)
+	mut it := s.cell_iterator(.left_up, Point{ tag: .screen }, none)
 	expected := [[u32(1), 1], [u32(0), 1], [u32(1), 0], [u32(0), 0]]
 	for exp in expected {
 		p := it.next() or {
