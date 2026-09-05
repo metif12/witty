@@ -2946,8 +2946,50 @@ pub fn (self Scrollbar) eql(other Scrollbar) bool {
 
 pub struct PageCloneOpts {
 pub:
-	top PointTag = .screen
-	bot ?PointTag
+	// Top and bottom are inclusive. Their x coordinate is ignored; cloning
+	// always copies complete rows.
+	top Point = Point{
+		tag: .screen
+	}
+	bot ?Point
+	// When set, tracked pins inside the cloned region are recreated and the
+	// old-to-new pointer mapping is recorded here.
+	tracked_pins &PageTrackedPinsRemap = unsafe { nil }
+}
+
+struct PageTrackedPinPair {
+	old_pin &PagePin = unsafe { nil }
+	new_pin &PagePin = unsafe { nil }
+}
+
+pub struct PageTrackedPinsRemap {
+mut:
+	entries []PageTrackedPinPair
+}
+
+pub fn PageTrackedPinsRemap.init() PageTrackedPinsRemap {
+	return PageTrackedPinsRemap{}
+}
+
+pub fn (mut self PageTrackedPinsRemap) deinit() {
+	self.entries = []
+}
+
+pub fn (self &PageTrackedPinsRemap) get(old_pin &PagePin) ?&PagePin {
+	for entry in self.entries {
+		if voidptr(entry.old_pin) == voidptr(old_pin) {
+			return entry.new_pin
+		}
+	}
+	return none
+}
+
+fn (mut self PageTrackedPinsRemap) put_no_clobber(old_pin &PagePin, new_pin &PagePin) {
+	assert self.get(old_pin) == none
+	self.entries << PageTrackedPinPair{
+		old_pin: old_pin
+		new_pin: new_pin
+	}
 }
 
 // ============================================================
@@ -4901,11 +4943,17 @@ pub fn (mut self PageList) split(p PagePin) ! {
 // ============================================================
 
 pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
-	tl_pin := self.get_top_left(opts.top)
+	mut top := opts.top
+	top.coord.x = 0
+	tl_pin := self.pin(top) or {
+		return PageList.init(self.cols, self.rows, self.explicit_max_size)
+	}
 	bl_pin := if bt := opts.bot {
-		self.get_bottom_right(bt) or { return PageList.init(self.cols, self.rows, self.explicit_max_size) }
+		mut bot := bt
+		bot.coord.x = 0
+		self.pin(bot) or { return PageList.init(self.cols, self.rows, self.explicit_max_size) }
 	} else {
-		self.get_bottom_right(opts.top) or {
+		self.get_bottom_right(top.tag) or {
 			return PageList.init(self.cols, self.rows, self.explicit_max_size)
 		}
 	}
@@ -4928,6 +4976,27 @@ pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 
 		result.pages.append(new_node)
 		result.total_rows += usize(new_page.size.rows)
+
+		// Recreate every tracked pin that falls within this cloned chunk.
+		if opts.tracked_pins != unsafe { nil } {
+			for old_pin in self.tracked_pins {
+				if voidptr(old_pin.node) != voidptr(chunk.node) || old_pin.y < chunk.start
+					|| old_pin.y >= chunk.end {
+					continue
+				}
+				new_pin := &PagePin{
+					node: new_node
+					y: old_pin.y - chunk.start
+					x: old_pin.x
+					garbage: old_pin.garbage
+				}
+				result.tracked_pins << new_pin
+				unsafe {
+					mut remap := opts.tracked_pins
+					remap.put_no_clobber(old_pin, new_pin)
+				}
+			}
+		}
 	}
 
 	// Ensure viewport pin points to valid node

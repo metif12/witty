@@ -2238,6 +2238,187 @@ fn test_page_list_clone_with_history() {
 	assert c.total_rows == s.total_rows
 }
 
+fn test_page_list_clone_partial_trimmed_right() {
+	mut s := PageList.init(80, 20, none)
+	defer { s.deinit() }
+	s.grow_rows(30)
+
+	mut c := s.clone(PageCloneOpts{
+		top: Point{ tag: .screen }
+		bot: Point{
+			tag: .screen
+			coord: Coordinate{ y: 39 }
+		}
+	}) or { panic(err) }
+	defer { c.deinit() }
+	assert c.count_total_rows() == 40
+}
+
+fn test_page_list_clone_partial_trimmed_left() {
+	mut s := PageList.init(80, 20, none)
+	defer { s.deinit() }
+	s.grow_rows(30)
+
+	mut c := s.clone(PageCloneOpts{
+		top: Point{
+			tag: .screen
+			coord: Coordinate{ y: 10 }
+		}
+	}) or { panic(err) }
+	defer { c.deinit() }
+	assert c.count_total_rows() == 40
+}
+
+fn test_page_list_clone_partial_trimmed_left_reclaims_styles() {
+	mut s := PageList.init(80, 20, none)
+	defer { s.deinit() }
+	s.grow_rows(30)
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	style_id := first.data.styles.add(CellStyle{
+		flags: StyleFlags{ bold: true }
+	}) or { panic(err) }
+	for y in 0 .. 10 {
+		first.data.rows[y].styled = true
+		first.data.rows[y].cells[0] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(`A`)
+			style_id: style_id
+		}
+		first.data.styles.use_style(style_id)
+	}
+	first.data.styles.release(style_id)
+	assert first.data.styles.set.count() == 1
+
+	mut c := s.clone(PageCloneOpts{
+		top: Point{
+			tag: .screen
+			coord: Coordinate{ y: 10 }
+		}
+	}) or { panic(err) }
+	defer { c.deinit() }
+	assert c.count_total_rows() == 40
+	cloned_first := c.pages.first or {
+		assert false
+		return
+	}
+	assert cloned_first.data.styles.set.count() == 0
+}
+
+fn test_page_list_clone_partial_trimmed_both() {
+	mut s := PageList.init(80, 20, none)
+	defer { s.deinit() }
+	s.grow_rows(30)
+
+	mut c := s.clone(PageCloneOpts{
+		top: Point{
+			tag: .screen
+			coord: Coordinate{ y: 10 }
+		}
+		bot: Point{
+			tag: .screen
+			coord: Coordinate{ y: 35 }
+		}
+	}) or { panic(err) }
+	defer { c.deinit() }
+	assert c.count_total_rows() == 26
+}
+
+fn test_page_list_clone_ignores_horizontal_coordinates() {
+	mut s := PageList.init(10, 20, none)
+	defer { s.deinit() }
+	s.grow_rows(30)
+
+	mut c := s.clone(PageCloneOpts{
+		top: Point{
+			tag: .screen
+			coord: Coordinate{ x: max_u16, y: 10 }
+		}
+		bot: Point{
+			tag: .screen
+			coord: Coordinate{ x: max_u16, y: 35 }
+		}
+	}) or { panic(err) }
+	defer { c.deinit() }
+	assert c.count_total_rows() == 26
+}
+
+fn test_page_list_clone_remap_tracked_pin() {
+	mut s := PageList.init(80, 24, none)
+	defer { s.deinit() }
+	tracked := s.track_pin(s.get_pin(.active, 0, 6) or {
+		assert false
+		return
+	})
+
+	mut remap := PageTrackedPinsRemap.init()
+	defer { remap.deinit() }
+	mut c := s.clone(PageCloneOpts{
+		top: Point{
+			tag: .active
+			coord: Coordinate{ y: 5 }
+		}
+		tracked_pins: &remap
+	}) or { panic(err) }
+	defer { c.deinit() }
+
+	new_pin := remap.get(tracked) or {
+		assert false
+		return
+	}
+	point := c.point_from_pin(.active, *new_pin) or {
+		assert false
+		return
+	}
+	assert point.x == 0
+	assert point.y == 1
+}
+
+fn test_page_list_clone_remap_tracked_pin_not_in_cloned_area() {
+	mut s := PageList.init(80, 24, none)
+	defer { s.deinit() }
+	tracked := s.track_pin(s.get_pin(.active, 0, 3) or {
+		assert false
+		return
+	})
+
+	mut remap := PageTrackedPinsRemap.init()
+	defer { remap.deinit() }
+	mut c := s.clone(PageCloneOpts{
+		top: Point{
+			tag: .active
+			coord: Coordinate{ y: 5 }
+		}
+		tracked_pins: &remap
+	}) or { panic(err) }
+	defer { c.deinit() }
+	assert remap.get(tracked) == none
+}
+
+fn test_page_list_clone_full_dirty() {
+	mut s := PageList.init(80, 24, none)
+	defer { s.deinit() }
+	for y in [u16(0), 12, 23] {
+		mut pin := s.get_pin(.active, 0, y) or {
+			assert false
+			return
+		}
+		pin.mark_dirty()
+	}
+
+	mut c := s.clone(PageCloneOpts{}) or { panic(err) }
+	defer { c.deinit() }
+	for y in 0 .. 24 {
+		pin := c.get_pin(.active, 0, u16(y)) or {
+			assert false
+			return
+		}
+		assert pin.is_dirty() == (y in [0, 12, 23])
+	}
+}
+
 fn test_page_list_clone_active_only() {
 	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
@@ -2245,7 +2426,7 @@ fn test_page_list_clone_active_only() {
 	s.grow_rows(100)
 
 	mut c := s.clone(PageCloneOpts{
-		top: .active
+		top: Point{ tag: .active }
 	}) or { panic(err) }
 	defer { c.deinit() }
 
@@ -2261,7 +2442,7 @@ fn test_page_list_clone_less_than_active() {
 
 	// Clone just active area, should be regrown to full active size
 	mut c := s.clone(PageCloneOpts{
-		top: .active
+		top: Point{ tag: .active }
 	}) or { panic(err) }
 	defer { c.deinit() }
 
