@@ -779,6 +779,34 @@ fn test_delete_lines_resets_pending_wrap() {
 	assert !t.screens.active.cursor.pending_wrap
 }
 
+// Translated from ghostty: "Terminal: deleteLines resets wrap".
+fn test_delete_lines_resets_soft_wrap_rows() {
+	mut t := create_test_terminal(3, 3) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print(u32(`1`)) or { assert false }
+	t.carriage_return()
+	t.linefeed() or { assert false }
+	t.print_string('ABCDEF') or { assert false }
+
+	t.set_top_and_bottom_margin(1, 2)
+	t.set_cursor_pos(1, 1)
+	t.delete_lines(1)
+	t.print(u32(`X`)) or { assert false }
+
+	assert (t.plain_string() or { '' }) == 'XBC\n\nDEF'
+	for y in 0 .. int(t.rows) {
+		row := t.screens.active.pages.get_active_row(y)
+		assert !row.wrap
+		if y < 2 {
+			assert !row.wrap_continuation
+		}
+	}
+}
+
 // ============================================================
 // Scroll up / down
 // ============================================================

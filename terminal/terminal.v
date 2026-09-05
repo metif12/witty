@@ -3439,10 +3439,14 @@ pub fn (mut self Terminal) delete_lines(count int) {
 			if !left_right {
 				unsafe {
 					mut dst_row := &self.screens.active.pages.screen_rows[dst_idx]
-					src_row := self.screens.active.pages.screen_rows[src_idx]
+					mut src_row := &self.screens.active.pages.screen_rows[src_idx]
+					// Full-width line movement breaks soft-wrap relationships on
+					// both sides of the move.
+					src_row.wrap = false
+					src_row.wrap_continuation = false
 					dst_row.cells = src_row.cells.clone()
-					dst_row.wrap = src_row.wrap
-					dst_row.wrap_continuation = src_row.wrap_continuation
+					dst_row.wrap = false
+					dst_row.wrap_continuation = false
 					dst_row.styled = src_row.styled
 					dst_row.grapheme = src_row.grapheme
 					dst_row.hyperlink = src_row.hyperlink
