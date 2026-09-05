@@ -396,7 +396,6 @@ module font
 
 import datastruct
 import harfbuzz
-import hash
 import io
 import math
 import terminal
@@ -1620,9 +1619,9 @@ fn (it &RunIterator) prepare() {
 	}
 }
 
-fn (it &RunIterator) add_codepoint(mut hasher ShaperRunHasher, cp u32, cluster u32) {
-	hasher.add(cp)
-	hasher.add(cluster)
+fn (it &RunIterator) add_codepoint(mut hasher SourceHash, cp u32, cluster u32) {
+	hasher.put_u32(cp)
+	hasher.put_u32(cluster)
 	if it.add_fn != unsafe { nil } {
 		it.add_fn(it.shaper_ptr, cp, cluster)
 	} else {
@@ -1648,15 +1647,15 @@ fn (mut it RunIterator) next_bytes() ?TextRun {
 	}
 	it.prepare()
 	start := it.i
-	mut hasher := ShaperRunHasher{}
+	mut hasher := SourceHash{}
 	for it.i < max {
 		cp := if it.opts.cells[it.i] == 0 { u32(` `) } else { u32(it.opts.cells[it.i]) }
 		it.add_codepoint(mut hasher, cp, u32(it.i - start))
 		it.i++
 	}
 	it.finalize()
-	hasher.add(u32(it.i - start))
-	hasher.add(0)
+	hasher.put_u64(u64(it.i - start))
+	hasher.put_u16(0)
 	return TextRun{
 		hash: hasher.final()
 		font_index: 0
@@ -1684,7 +1683,7 @@ fn (mut it RunIterator) next_render_cells() ?TextRun {
 	font_style := style_to_font_style(base_style)
 	mut current_font := Index{}
 	mut has_font := false
-	mut hasher := ShaperRunHasher{}
+	mut hasher := SourceHash{}
 	mut j := start
 	for j < max {
 		cell := cells[j]
@@ -1773,8 +1772,8 @@ fn (mut it RunIterator) next_render_cells() ?TextRun {
 		return none
 	}
 	it.finalize()
-	hasher.add(u32(j - start))
-	hasher.add(u32(current_font.int_val()))
+	hasher.put_u64(u64(j - start))
+	hasher.put_u16(current_font.int_val())
 	it.i = j
 	return TextRun{
 		hash: hasher.final()
@@ -1855,23 +1854,6 @@ fn index_for_render_cell(grid_ptr &SharedGrid, cell &terminal.RenderCell, style 
 		}
 	}
 	return none
-}
-
-struct ShaperRunHasher {
-mut:
-	seed u64
-}
-
-fn (mut h ShaperRunHasher) add(value u32) {
-	mut bytes := [4]u8{}
-	for i in 0 .. 4 {
-		bytes[i] = u8(value >> (i * 8))
-	}
-	h.seed = hash.sum64(bytes[..], h.seed)
-}
-
-fn (h ShaperRunHasher) final() u64 {
-	return hash.sum64_string('witty.font.run', h.seed)
 }
 
 // ============================================================
