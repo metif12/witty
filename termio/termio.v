@@ -239,23 +239,15 @@ pub mut:
 }
 
 pub fn (mut t Termio) init(opts TermioOpts) ! {
-	mut size := opts.size
-	if size.grid().columns == 0 || size.grid().rows == 0 {
-		size = renderer.Size{
-			screen: renderer.ScreenSize{ width: 640, height: 384 }
-			cell: renderer.CellSize{ width: 8, height: 16 }
-		}
-	}
+	size := opts.size
 	grid := size.grid()
-	bg := opts.config.background or { terminal.RGB{ r: 0x28, g: 0x2c, b: 0x34 } }
-	fg := opts.config.foreground or { terminal.RGB{ r: 0xff, g: 0xff, b: 0xff } }
 	mut term := terminal.Terminal.init(terminal.Options{
 		cols: u16(grid.columns)
 		rows: u16(grid.rows)
 		max_scrollback: opts.max_scrollback
 		colors: terminal.Colors{
-			background: terminal.DynamicRGB.init(bg)
-			foreground: terminal.DynamicRGB.init(fg)
+			background: terminal.DynamicRGB.init(opts.config.background)
+			foreground: terminal.DynamicRGB.init(opts.config.foreground)
 			cursor: if cursor := opts.config.cursor_color {
 				terminal.DynamicRGB.init(cursor)
 			} else {
@@ -272,14 +264,7 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 	term.height_px = grid.rows * size.cell.height
 	term.kitty_image_limit = usize(opts.config.image_storage_limit)
 
-	mut backend_config := opts.backend_config
-	if backend_config.env.len == 0 {
-		backend_config = ExecConfig{
-			...backend_config
-			env: os.environ()
-		}
-	}
-	mut backend := Exec.init(backend_config)!
+	mut backend := Exec.init(opts.backend_config)!
 	backend.init_terminal(mut term)
 
 	mut renderer_state := opts.renderer_state
@@ -386,9 +371,9 @@ pub mut:
 	// The default 256-color palette.
 	palette terminal.DynamicPalette = terminal.dynamic_palette_default_val
 
-	// The default foreground/background/cursor colors. none means unset.
-	foreground   ?terminal.RGB
-	background   ?terminal.RGB
+	// The default foreground/background colors and optional cursor color.
+	foreground   terminal.RGB = terminal.RGB{ r: 0xff, g: 0xff, b: 0xff }
+	background   terminal.RGB = terminal.RGB{ r: 0x28, g: 0x2c, b: 0x34 }
 	cursor_color ?terminal.RGB
 
 	// The image storage limit in bytes.

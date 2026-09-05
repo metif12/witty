@@ -24,6 +24,15 @@ fn termio_wakeup_probe(data voidptr) {
 	probe.count++
 }
 
+fn make_termio_opts() TermioOpts {
+	return TermioOpts{
+		size: renderer.Size{
+			screen: renderer.ScreenSize{ width: 640, height: 384 }
+			cell: renderer.CellSize{ width: 8, height: 16 }
+		}
+	}
+}
+
 fn test_mailbox_push_pop_fifo() {
 	mut mailbox := Mailbox.init()!
 	defer {
@@ -67,7 +76,7 @@ fn test_derived_config_converts_only_explicit_cursor_color() {
 
 fn test_termio_queue_message_uses_mailbox() {
 	mut tio := Termio{}
-	tio.init(TermioOpts{})!
+	tio.init(make_termio_opts())!
 	defer {
 		tio.deinit()
 	}
@@ -86,7 +95,7 @@ fn test_termio_queue_message_uses_mailbox() {
 
 fn test_termio_clear_screen_preserves_and_moves_cursor_row() {
 	mut tio := Termio{}
-	tio.init(TermioOpts{})!
+	tio.init(make_termio_opts())!
 	defer {
 		tio.deinit()
 	}
@@ -109,6 +118,7 @@ fn test_termio_clones_and_decodes_startup_input() {
 
 	mut tio := Termio{}
 	tio.init(TermioOpts{
+		size: make_termio_opts().size
 		full_config: &config
 	})!
 	defer {
@@ -266,7 +276,7 @@ fn test_stopwatch_reset_clears() {
 
 fn test_thread_drain_mailbox_updates_writer_state() {
 	mut tio := Termio{}
-	tio.init(TermioOpts{})!
+	tio.init(make_termio_opts())!
 	defer { tio.deinit() }
 	mut writer := Thread.init()!
 	defer { writer.deinit() }
@@ -309,6 +319,7 @@ fn test_thread_selection_scroll_timer_reports_final_stop() {
 	mut probe := SelectionScrollProbe{}
 	mut tio := Termio{}
 	tio.init(TermioOpts{
+		size: make_termio_opts().size
 		surface_mailbox: apprt.SurfaceMailbox{
 			surface: &probe
 			push_fn: selection_scroll_probe_push
@@ -356,6 +367,7 @@ fn test_thread_termios_mode_reports_password_input_transitions() {
 	mut probe := PasswordInputProbe{}
 	mut tio := Termio{}
 	tio.init(TermioOpts{
+		size: make_termio_opts().size
 		surface_mailbox: apprt.SurfaceMailbox{
 			surface: &probe
 			push_fn: password_input_probe_push
@@ -380,7 +392,7 @@ fn test_thread_termios_mode_reports_password_input_transitions() {
 
 fn test_thread_termios_timer_stops_unfocused_and_restarts_on_focus() {
 	mut tio := Termio{}
-	tio.init(TermioOpts{})!
+	tio.init(make_termio_opts())!
 	defer { tio.deinit() }
 	mut writer := Thread.init()!
 	defer { writer.deinit() }
@@ -398,7 +410,7 @@ fn test_thread_termios_timer_stops_unfocused_and_restarts_on_focus() {
 
 fn test_thread_start_error_explains_pty_exhaustion() {
 	mut tio := Termio{}
-	tio.init(TermioOpts{})!
+	tio.init(make_termio_opts())!
 	defer { tio.deinit() }
 	mut writer := Thread.init()!
 	defer { writer.deinit() }
@@ -412,7 +424,7 @@ fn test_thread_start_error_explains_pty_exhaustion() {
 
 fn test_thread_start_error_explains_invalid_input() {
 	mut tio := Termio{}
-	tio.init(TermioOpts{})!
+	tio.init(make_termio_opts())!
 	defer { tio.deinit() }
 	mut writer := Thread.init()!
 	defer { writer.deinit() }
@@ -427,6 +439,7 @@ fn test_process_output_notifies_callback_renderer_wakeup() {
 	mut probe := TermioWakeupProbe{}
 	mut tio := Termio{}
 	tio.init(TermioOpts{
+		size: make_termio_opts().size
 		renderer_wakeup: renderer.Wakeup{
 			user_data: &probe
 			notify_fn: termio_wakeup_probe
