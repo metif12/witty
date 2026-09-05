@@ -4674,6 +4674,10 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 	// from the surface. In ghostty this is `action.scoped(.app)`.
 	if action.scope() == .app {
 		match action.tag {
+			.unbind {
+				panic('unbind action reached surface dispatch')
+			}
+			.ignore {}
 			.new_window {
 				// ghostty: self.app.newWindow(self.rt_app, .{ .parent = self }).
 				self.rt_app.perform_action(AppAction{
@@ -4704,7 +4708,6 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				// forwarded to the app.
 				self.rt_app.perform_action(AppAction{
 					kind: app_action_kind(action.tag)
-					target: &self
 				})!
 			}
 		}

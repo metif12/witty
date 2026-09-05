@@ -23,18 +23,23 @@ fn release_embedded_bridge_test_view(view voidptr) {
 
 struct EmbeddedBridgeCapture {
 mut:
-	actions      []apprt.ActionKey
-	reload_soft  []bool
-	secure_input []apprt.SecureInput
-	config_sizes []f32
-	closed       bool
-	confirm      bool
+	actions         []apprt.ActionKey
+	reload_soft     []bool
+	secure_input    []apprt.SecureInput
+	config_sizes    []f32
+	surface_targets []bool
+	closed          bool
+	confirm         bool
 }
 
 fn embedded_bridge_action(app &apprt.App, target apprt.Target, action apprt.RuntimeAction) bool {
 	_ = target
 	mut capture := unsafe { &EmbeddedBridgeCapture(app.opts.userdata) }
 	capture.actions << action.action
+	capture.surface_targets << match target {
+		apprt.AppTarget { false }
+		apprt.SurfaceTarget { true }
+	}
 	if action.action == .reload_config {
 		capture.reload_soft << action.data.reload_config_.soft
 	}
@@ -103,6 +108,12 @@ fn test_embedded_bridge_uses_canonical_core_surface() {
 	assert capture.reload_soft[0]
 	assert backend.surface.perform_binding_action(input.Action.new(.toggle_secure_input))!
 	assert capture.secure_input.last() == .toggle
+	assert backend.surface.perform_binding_action(input.Action.new(.open_config))!
+	assert capture.actions.last() == .open_config
+	assert !capture.surface_targets.last()
+	assert backend.surface.perform_binding_action(input.Action.new(.new_window))!
+	assert capture.actions.last() == .new_window
+	assert capture.surface_targets.last()
 
 	mut stream := backend.surface.renderer_state.terminal_.vt_stream()
 	stream.next_slice('hello')!
