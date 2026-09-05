@@ -212,6 +212,26 @@ fn test_app_key_event_uses_runtime_config_binding() {
 	assert runtime.actions[0].action == .quit
 }
 
+fn test_app_key_event_is_binding_includes_leader_entries() {
+	mut cfg := configpkg.Config.default_config()
+	cfg.keybind.set.parse_and_put('ctrl+a>b=new_window') or { panic(err.msg()) }
+	mut runtime := apprt.RuntimeApp{
+		config: cfg
+	}
+	mut app := App{}
+	event := input.KeyEvent{
+		key: .key_a
+		action: .press
+		mods: input.Mods{ ctrl: true }
+		utf8: 'a'
+	}
+
+	// The app scope cannot execute leader sequences, but the top-level leader
+	// is still a binding and must not be forwarded as terminal input.
+	assert app.key_event_is_binding(mut runtime, event)
+	assert !app.key_event(mut runtime, event)
+}
+
 fn test_app_new_window_targets_valid_parent() ! {
 	mut runtime := apprt.RuntimeApp{}
 	mut app := App{}

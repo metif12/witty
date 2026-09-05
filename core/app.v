@@ -708,7 +708,7 @@ pub fn (mut self App) key_event_is_binding(mut rt_app apprt.RuntimeApp, event in
 	}
 
 	// If we have a keybinding for this event then we return true.
-	return self.lookup_binding(mut rt_app, event) != none
+	return rt_app.config.keybind.set.get_event(event) != none
 }
 
 // key_event handles a key event at the app-scope. If this key event is used,
