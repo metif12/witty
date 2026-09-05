@@ -1,5 +1,6 @@
 module termio
 
+import apprt
 import configpkg
 import os
 import renderer
@@ -249,6 +250,53 @@ fn test_thread_drain_mailbox_updates_writer_state() {
 	assert writer.pending_resize or { panic('missing coalesced resize') } == resize
 	assert writer.resize_deadline > 0
 	assert tio.mailbox.len() == 0
+}
+
+struct SelectionScrollProbe {
+mut:
+	values []bool
+}
+
+fn selection_scroll_probe_push(_ voidptr, surface voidptr, msg apprt.SurfaceMessage) int {
+	if msg.kind == .selection_scroll_tick {
+		mut probe := unsafe { &SelectionScrollProbe(surface) }
+		probe.values << msg.selection_scroll_tick
+	}
+	return 1
+}
+
+fn test_thread_selection_scroll_timer_reports_final_stop() {
+	mut probe := SelectionScrollProbe{}
+	mut tio := Termio{}
+	tio.init(TermioOpts{
+		surface_mailbox: apprt.SurfaceMailbox{
+			surface: &probe
+			push_fn: selection_scroll_probe_push
+		}
+	})!
+	defer { tio.deinit() }
+	mut writer := Thread.init()!
+	defer { writer.deinit() }
+
+	tio.mailbox.push(Message.selection_scroll_msg(true))
+	assert writer.drain_mailbox(mut tio)
+	deadline := writer.scroll_deadline
+	assert deadline > 0
+
+	// Repeated starts leave the currently armed completion untouched.
+	tio.mailbox.push(Message.selection_scroll_msg(true))
+	assert writer.drain_mailbox(mut tio)
+	assert writer.scroll_deadline == deadline
+
+	// Stopping does not cancel the completion. It fires once with false and
+	// then disarms, matching selectionScrollCallback.
+	tio.mailbox.push(Message.selection_scroll_msg(false))
+	assert writer.drain_mailbox(mut tio)
+	assert !writer.scroll_active
+	assert writer.scroll_deadline == deadline
+	assert writer.run_timers(mut tio, deadline)
+	assert probe.values == [false]
+	assert writer.scroll_deadline == 0
 }
 
 fn test_process_output_notifies_callback_renderer_wakeup() {

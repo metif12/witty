@@ -902,27 +902,7 @@ pub fn (mut t Thread) thread_main(mut io Termio) {
 
 	for !t.stop.is_notified() {
 		mut did_work := t.drain_mailbox(mut io)
-		now := i64(time.sys_mono_now())
-
-		if resize := t.pending_resize {
-			if now >= t.resize_deadline {
-				io.resize(resize) or {}
-				t.pending_resize = none
-				t.resize_deadline = 0
-				did_work = true
-			}
-		}
-		if t.sync_deadline > 0 && now >= t.sync_deadline {
-			io.reset_synchronized_output()
-			t.sync_deadline = 0
-			did_work = true
-		}
-		if t.scroll_active && now >= t.scroll_deadline {
-			io.surface_mailbox.push(apprt.SurfaceMessage{
-				kind: .selection_scroll_tick
-				selection_scroll_tick: true
-			})
-			t.scroll_deadline = now + 15 * i64(time.millisecond)
+		if t.run_timers(mut io, i64(time.sys_mono_now())) {
 			did_work = true
 		}
 
@@ -937,6 +917,40 @@ pub fn (mut t Thread) thread_main(mut io Termio) {
 		for io.mailbox.pop() != none {
 		}
 	}
+}
+
+// Run callbacks whose deadlines have expired. This is the polling-loop
+// equivalent of Ghostty's libxev timer callbacks.
+fn (mut t Thread) run_timers(mut io Termio, now i64) bool {
+	mut did_work := false
+	if resize := t.pending_resize {
+		if now >= t.resize_deadline {
+			io.resize(resize) or {}
+			t.pending_resize = none
+			t.resize_deadline = 0
+			did_work = true
+		}
+	}
+	if t.sync_deadline > 0 && now >= t.sync_deadline {
+		io.reset_synchronized_output()
+		t.sync_deadline = 0
+		did_work = true
+	}
+	if t.scroll_deadline > 0 && now >= t.scroll_deadline {
+		// A stopped timer still completes once and reports false. The surface
+		// uses that final callback to stop selection scrolling immediately.
+		io.surface_mailbox.push(apprt.SurfaceMessage{
+			kind: .selection_scroll_tick
+			selection_scroll_tick: t.scroll_active
+		})
+		if t.scroll_active {
+			t.scroll_deadline = now + 15 * i64(time.millisecond)
+		} else {
+			t.scroll_deadline = 0
+		}
+		did_work = true
+	}
+	return did_work
 }
 
 // drain_mailbox dispatches every currently queued writer message. Returning
@@ -968,11 +982,16 @@ fn (mut t Thread) drain_mailbox(mut io Termio) bool {
 				io.scroll_viewport(msg.scroll_behavior, msg.scroll_delta) or {}
 			}
 			.selection_scroll {
-				t.scroll_active = msg.flag_val
-				if t.scroll_active {
-					t.scroll_deadline = i64(time.sys_mono_now()) + 15 * i64(time.millisecond)
+				if msg.flag_val {
+					t.scroll_active = true
+					// An already armed timer is not restarted.
+					if t.scroll_deadline == 0 {
+						t.scroll_deadline = i64(time.sys_mono_now()) + 15 * i64(time.millisecond)
+					}
 				} else {
-					t.scroll_deadline = 0
+					// stopScrollTimer only changes the active flag. The armed
+					// callback is allowed to fire once with a false value.
+					t.scroll_active = false
 				}
 			}
 			.jump_to_prompt { io.jump_to_prompt(msg.prompt_delta) or {} }
