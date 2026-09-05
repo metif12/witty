@@ -3202,107 +3202,28 @@ pub fn (mut self Screen) clear_selection() {
 
 // Get the string for a selection.
 pub fn (mut self Screen) selection_string(opts SelectionString) !string {
-	sel := opts.sel
-	// Order the selection for iteration (start before end)
-	start := if sel.start_pin.before(sel.end_pin) { sel.start_pin } else { sel.end_pin }
-	end := if sel.start_pin.before(sel.end_pin) { sel.end_pin } else { sel.start_pin }
-
-	mut result := []u8{cap: 256}
-	mut pin_map := []Pin{cap: 256}
-	mut first_row := true
-
-	for y in int(start.y) .. int(end.y) + 1 {
-		if y >= self.pages.screen_rows.len {
-			break
-		}
-		row := self.pages.screen_rows[y]
-		start_x := if y == int(start.y) { int(start.x) } else { 0 }
-		end_x := if y == int(end.y) { int(end.x) + 1 } else { int(self.pages.cols) }
-
-		if !first_row {
-			// Check if previous row was soft-wrapped
-			if y > 0 && self.pages.screen_rows[y - 1].wrap {
-				// Soft wrap: no newline
-			} else {
-				result << `\n`
-				pin_map << Pin{ x: 0, y: u32(y) }
-			}
-		}
-
-		for x in start_x .. end_x {
-			if x < row.cells.len {
-				cp := row.cells[x].codepoint
-				cell_bytes := if cp == 0 { [u8(` `)] } else { rune(cp).str().bytes() }
-				result << cell_bytes
-				for _ in 0 .. cell_bytes.len {
-					pin_map << Pin{ x: u32(x), y: u32(y) }
-				}
-			}
-		}
-		first_row = false
+	mut formatter := ScreenFormatter.init(&self, FormatOptions{
+		emit: .plain
+		unwrap: true
+		trim: opts.trim
+	})
+	formatter.content = ScreenContent(ScreenContentSelection{
+		sel: opts.sel
+	})
+	mut pin_map := PinMap{}
+	if !isnil(opts.map) {
+		formatter.pin_map = &pin_map
 	}
 
-	if opts.trim {
-		result, pin_map = trim_selection_bytes(result, pin_map)
-	}
+	result := formatter.format()
 	if !isnil(opts.map) {
 		unsafe {
 			mut output_map := opts.map
-			output_map.str = result.bytestr()
-			output_map.map_pin = pin_map.clone()
+			output_map.str = result
+			output_map.map_pin = pin_map.pins.clone()
 		}
 	}
-	return result.bytestr()
-}
-
-// trim_selection_bytes applies the same trimming rules as selectionString:
-// trailing spaces/tabs are removed from each logical line and trailing empty
-// lines are removed. The byte-to-pin map is transformed in lockstep.
-fn trim_selection_bytes(input []u8, pins []Pin) ([]u8, []Pin) {
-	assert input.len == pins.len
-	mut line_ranges := [][2]int{}
-	mut line_start := 0
-	for i, ch in input {
-		if ch == `\n` {
-			mut line_end := i
-			for line_end > line_start && input[line_end - 1] in [` `, `\t`] {
-				line_end--
-			}
-			line_ranges << [line_start, line_end]!
-			line_start = i + 1
-		}
-	}
-	mut final_end := input.len
-	for final_end > line_start && input[final_end - 1] in [` `, `\t`] {
-		final_end--
-	}
-	line_ranges << [line_start, final_end]!
-
-	mut last := line_ranges.len - 1
-	for last >= 0 && line_ranges[last][0] == line_ranges[last][1] {
-		last--
-	}
-	if last < 0 {
-		return []u8{}, []Pin{}
-	}
-
-	mut out := []u8{cap: input.len}
-	mut out_pins := []Pin{cap: pins.len}
-	for line_idx in 0 .. last + 1 {
-		range_ := line_ranges[line_idx]
-		out << input[range_[0]..range_[1]]
-		out_pins << pins[range_[0]..range_[1]]
-		if line_idx < last {
-			out << `\n`
-			// The source newline immediately follows the untrimmed line.
-			mut newline_idx := range_[1]
-			for newline_idx < input.len && input[newline_idx] != `\n` {
-				newline_idx++
-			}
-			out_pins << if newline_idx < pins.len { pins[newline_idx] } else { Pin{} }
-		}
-	}
-	return out, out_pins
+	return result
 }
 
 // Select a line around the given pin.

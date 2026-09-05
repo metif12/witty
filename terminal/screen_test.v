@@ -1935,6 +1935,74 @@ fn test_screen_selection_string_soft_wrap() {
 	assert str == '2EFGH3IJ'
 }
 
+fn test_screen_selection_string_wide_char() {
+	mut s := Screen.init(5, 3, 0)
+	defer { s.deinit() }
+	s.test_write_string('1A⚡') or { assert false }
+
+	full := Selection.init(Pin{ x: 0, y: 0 }, Pin{ x: 3, y: 0 }, false)
+	assert s.selection_string(SelectionString{ sel: full }) or { panic(err) } == '1A⚡'
+	head := Selection.init(Pin{ x: 0, y: 0 }, Pin{ x: 2, y: 0 }, false)
+	assert s.selection_string(SelectionString{ sel: head }) or { panic(err) } == '1A⚡'
+	tail := Selection.init(Pin{ x: 3, y: 0 }, Pin{ x: 3, y: 0 }, false)
+	assert s.selection_string(SelectionString{ sel: tail }) or { panic(err) } == '⚡'
+}
+
+fn test_screen_selection_string_wide_char_with_spacer_head() {
+	mut s := Screen.init(5, 3, 0)
+	defer { s.deinit() }
+	s.test_write_string('1ABC⚡') or { assert false }
+	sel := Selection.init(Pin{ x: 0, y: 0 }, Pin{ x: 4, y: 0 }, false)
+	assert s.selection_string(SelectionString{ sel: sel }) or { panic(err) } == '1ABC⚡'
+}
+
+fn test_screen_selection_string_empty_with_soft_wrap() {
+	mut s := Screen.init(5, 2, 0)
+	defer { s.deinit() }
+	s.test_write_string('👨      ') or { assert false }
+	sel := Selection.init(Pin{ x: 1, y: 0 }, Pin{ x: 2, y: 0 }, false)
+	assert s.selection_string(SelectionString{ sel: sel }) or { panic(err) } == '👨'
+}
+
+fn test_screen_selection_string_with_zero_width_joiner() {
+	mut s := Screen.init(10, 1, 0)
+	defer { s.deinit() }
+	s.test_write_string('👨‍') or { assert false }
+	assert s.pages.screen_rows[0].cells[0].graphemes == [u32(0x200d)]
+	sel := Selection.init(Pin{ x: 0, y: 0 }, Pin{ x: 1, y: 0 }, false)
+	assert s.selection_string(SelectionString{ sel: sel }) or { panic(err) } == '👨‍'
+}
+
+fn test_screen_selection_string_rectangle_basic() {
+	mut s := Screen.init(30, 5, 0)
+	defer { s.deinit() }
+	s.test_write_string('Lorem ipsum dolor\nsit amet, consectetur\nadipiscing elit, sed do\neiusmod tempor incididunt\nut labore et dolore') or {
+		assert false
+	}
+	sel := Selection.init(Pin{ x: 2, y: 1 }, Pin{ x: 6, y: 3 }, true)
+	assert s.selection_string(SelectionString{ sel: sel }) or { panic(err) } == 't ame\nipisc\nusmod'
+}
+
+fn test_screen_selection_string_rectangle_with_eol() {
+	mut s := Screen.init(30, 5, 0)
+	defer { s.deinit() }
+	s.test_write_string('Lorem ipsum dolor\nsit amet, consectetur\nadipiscing elit, sed do\neiusmod tempor incididunt\nut labore et dolore') or {
+		assert false
+	}
+	sel := Selection.init(Pin{ x: 12, y: 0 }, Pin{ x: 26, y: 4 }, true)
+	assert s.selection_string(SelectionString{ sel: sel }) or { panic(err) } == 'dolor\nnsectetur\nlit, sed do\nor incididunt\n dolore'
+}
+
+fn test_screen_selection_string_rectangle_more_complex_with_breaks() {
+	mut s := Screen.init(30, 8, 0)
+	defer { s.deinit() }
+	s.test_write_string('Lorem ipsum dolor\nsit amet, consectetur\nadipiscing elit, sed do\neiusmod tempor incididunt\nut labore et dolore\n\nmagna aliqua. Ut enim\nad minim veniam, quis') or {
+		assert false
+	}
+	sel := Selection.init(Pin{ x: 11, y: 2 }, Pin{ x: 26, y: 7 }, true)
+	assert s.selection_string(SelectionString{ sel: sel }) or { panic(err) } == 'elit, sed do\npor incididunt\nt dolore\n\na. Ut enim\nniam, quis'
+}
+
 // --- lineIterator ---
 
 fn test_screen_line_iterator_basic() {

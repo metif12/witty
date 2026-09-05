@@ -1728,22 +1728,24 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 			// Write the cell content. Every output byte, including every byte
 			// of UTF-8 and replacement strings, maps to this source cell.
 			before_content := sb.len
-			if cell.content_tag == .codepoint {
-				if !cell.has_text() {
-					// Blank cells get an empty space for formatting preservation
-					sb.write_u8(` `)
-				} else {
-					self.write_codepoint_with_replacement(mut sb, cell.codepoint)
-					// Write grapheme continuation codepoints
-					if cell.has_grapheme {
-						for cp in cell.graphemes {
-							self.write_codepoint_with_replacement(mut sb, cp)
+			match cell.content_tag {
+				.codepoint, .codepoint_grapheme {
+					if !cell.has_text() {
+						// Blank cells get an empty space for formatting preservation
+						sb.write_u8(` `)
+					} else {
+						self.write_codepoint_with_replacement(mut sb, cell.codepoint)
+						if cell.content_tag == .codepoint_grapheme {
+							for cp in cell.graphemes {
+								self.write_codepoint_with_replacement(mut sb, cp)
+							}
 						}
 					}
 				}
-			} else {
-				// bg_color_only: emit a space with the appropriate background
-				sb.write_u8(` `)
+				.bg_color_palette, .bg_color_rgb {
+					// Cells with only a background color still emit a space.
+					sb.write_u8(` `)
+				}
 			}
 			append_point_bytes(self.point_map, Coordinate{
 				x: u16(x)
