@@ -146,14 +146,24 @@ pub fn (self &CellStyle) eql(other &CellStyle) bool {
 		&& self.flags.inverse == other.flags.inverse
 		&& self.flags.invisible == other.flags.invisible
 		&& self.flags.strikethrough == other.flags.strikethrough
-		&& self.fg_color == other.fg_color && self.bg_color == other.bg_color
-		&& self.underline_color == other.underline_color && self.fg_r == other.fg_r
-		&& self.fg_g == other.fg_g && self.fg_b == other.fg_b && self.bg_r == other.bg_r
-		&& self.bg_g == other.bg_g && self.bg_b == other.bg_b
-		&& self.fg_palette == other.fg_palette && self.bg_palette == other.bg_palette
-		&& self.underline_r == other.underline_r && self.underline_g == other.underline_g
-		&& self.underline_b == other.underline_b
-		&& self.underline_palette == other.underline_palette
+		&& style_color_eql(self.fg_color, self.fg_r, self.fg_g, self.fg_b, self.fg_palette,
+			other.fg_color, other.fg_r, other.fg_g, other.fg_b, other.fg_palette)
+		&& style_color_eql(self.bg_color, self.bg_r, self.bg_g, self.bg_b, self.bg_palette,
+			other.bg_color, other.bg_r, other.bg_g, other.bg_b, other.bg_palette)
+		&& style_color_eql(self.underline_color, self.underline_r, self.underline_g,
+			self.underline_b, self.underline_palette, other.underline_color, other.underline_r,
+			other.underline_g, other.underline_b, other.underline_palette)
+}
+
+fn style_color_eql(tag ColorType, r u8, g u8, b u8, palette u8, other_tag ColorType, other_r u8, other_g u8, other_b u8, other_palette u8) bool {
+	if tag != other_tag {
+		return false
+	}
+	return match tag {
+		.none { true }
+		.palette { palette == other_palette }
+		.rgb { r == other_r && g == other_g && b == other_b }
+	}
 }
 
 // Returns the bg color for a cell with this style given the cell
@@ -284,59 +294,51 @@ pub fn (self &CellStyle) bg_cell_from_style() ?CellData {
 // Style hashing
 // ============================================================
 
-// Hash the style for use in hash maps.
-// We combine all fields into a single hash value.
+// Hash the style for use in hash maps. Ghostty packs the three color tags,
+// their active 24-bit payloads, and the flags into a padding-free u128, folds
+// its two u64 halves, and applies an integer hash. Constructing those halves
+// explicitly preserves the same field layout without relying on V struct
+// padding or inactive tagged-union storage.
 pub fn (self &CellStyle) hash() u64 {
-	mut h := u64(0)
+	fg_data := style_color_data(self.fg_color, self.fg_r, self.fg_g, self.fg_b,
+		self.fg_palette)
+	bg_data := style_color_data(self.bg_color, self.bg_r, self.bg_g, self.bg_b,
+		self.bg_palette)
+	underline_data := style_color_data(self.underline_color, self.underline_r,
+		self.underline_g, self.underline_b, self.underline_palette)
 
-	// Mix in flags
+	mut flags := u16(0)
 	if self.flags.bold {
-		h ^= 0x01
+		flags |= 1 << 0
 	}
 	if self.flags.italic {
-		h ^= 0x02
+		flags |= 1 << 1
 	}
 	if self.flags.faint {
-		h ^= 0x04
+		flags |= 1 << 2
 	}
 	if self.flags.blink {
-		h ^= 0x08
+		flags |= 1 << 3
 	}
 	if self.flags.inverse {
-		h ^= 0x10
+		flags |= 1 << 4
 	}
 	if self.flags.invisible {
-		h ^= 0x20
+		flags |= 1 << 5
 	}
 	if self.flags.strikethrough {
-		h ^= 0x40
+		flags |= 1 << 6
 	}
 	if self.flags.overline {
-		h ^= 0x80
+		flags |= 1 << 7
 	}
-	h |= u64(int(self.flags.underline)) << 8
+	flags |= u16(int(self.flags.underline)) << 8
 
-	// Mix in color types
-	h |= u64(int(self.fg_color)) << 16
-	h |= u64(int(self.bg_color)) << 18
-	h |= u64(int(self.underline_color)) << 20
-
-	// Mix in color values
-	h ^= u64(self.fg_r) << 24
-	h ^= u64(self.fg_g) << 32
-	h ^= u64(self.fg_b) << 40
-	h ^= u64(self.bg_r) << 28
-	h ^= u64(self.bg_g) << 36
-	h ^= u64(self.bg_b) << 44
-	h ^= u64(self.fg_palette) << 48
-	h ^= u64(self.bg_palette) << 56
-
-	// Mix in the dedicated underline color values so styles differing only
-	// in underline color hash differently.
-	h ^= u64(self.underline_r) << 3
-	h ^= u64(self.underline_g) << 11
-	h ^= u64(self.underline_b) << 19
-	h ^= u64(self.underline_palette) << 27
+	low := u64(int(self.fg_color)) | (u64(int(self.bg_color)) << 8)
+		| (u64(int(self.underline_color)) << 16) | (fg_data << 24)
+		| ((bg_data & 0xffff) << 48)
+	high := (bg_data >> 16) | (underline_data << 8) | (u64(flags) << 32)
+	mut h := low ^ high
 
 	// Use integer hash to make it sufficiently uniform
 	h ^= h >> 33
@@ -346,6 +348,14 @@ pub fn (self &CellStyle) hash() u64 {
 	h ^= h >> 33
 
 	return h
+}
+
+fn style_color_data(tag ColorType, r u8, g u8, b u8, palette u8) u64 {
+	return match tag {
+		.none { u64(0) }
+		.palette { u64(palette) }
+		.rgb { u64(r) | (u64(g) << 8) | (u64(b) << 16) }
+	}
 }
 
 // ============================================================

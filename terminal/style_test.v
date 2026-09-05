@@ -1,5 +1,44 @@
 module terminal
 
+fn test_style_equality_ignores_inactive_color_storage() {
+	base := CellStyle{}
+	stale := CellStyle{
+		fg_r: 1
+		fg_g: 2
+		fg_b: 3
+		fg_palette: 4
+		bg_r: 5
+		bg_g: 6
+		bg_b: 7
+		bg_palette: 8
+		underline_r: 9
+		underline_g: 10
+		underline_b: 11
+		underline_palette: 12
+	}
+	assert base.eql(&stale)
+	assert base.hash() == stale.hash()
+}
+
+fn test_style_equality_uses_only_active_color_payload() {
+	palette_a := CellStyle{ fg_color: .palette, fg_palette: 3, fg_r: 10 }
+	palette_b := CellStyle{ fg_color: .palette, fg_palette: 3, fg_r: 20 }
+	palette_c := CellStyle{ fg_color: .palette, fg_palette: 4, fg_r: 10 }
+	assert palette_a.eql(&palette_b)
+	assert palette_a.hash() == palette_b.hash()
+	assert !palette_a.eql(&palette_c)
+
+	rgb_a := CellStyle{ underline_color: .rgb, underline_r: 1, underline_g: 2,
+		underline_b: 3, underline_palette: 4 }
+	rgb_b := CellStyle{ underline_color: .rgb, underline_r: 1, underline_g: 2,
+		underline_b: 3, underline_palette: 9 }
+	rgb_c := CellStyle{ underline_color: .rgb, underline_r: 1, underline_g: 2,
+		underline_b: 4, underline_palette: 4 }
+	assert rgb_a.eql(&rgb_b)
+	assert rgb_a.hash() == rgb_b.hash()
+	assert !rgb_a.eql(&rgb_c)
+}
+
 // Tests for Style VT and HTML formatting.
 // Source: style.zig tests
 
