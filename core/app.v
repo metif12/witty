@@ -465,7 +465,8 @@ pub fn (mut self App) delete_surface(surface &SurfaceRef) {
 	mut i := 0
 	for i < self.surfaces.len {
 		if voidptr(self.surfaces[i]) == voidptr(surface) {
-			self.surfaces.delete(i)
+			self.surfaces[i] = self.surfaces[self.surfaces.len - 1]
+			self.surfaces.delete_last()
 			continue
 		}
 		i++

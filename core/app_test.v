@@ -283,6 +283,19 @@ fn test_app_surface_lifecycle_controls_quit_timer() {
 	assert runtime.quit_timer_running
 }
 
+fn test_app_delete_surface_uses_swap_remove() {
+	mut app := App{}
+	mut first := &SurfaceRef{}
+	mut second := &SurfaceRef{}
+	mut third := &SurfaceRef{}
+	app.surfaces = SurfaceList([first, second, third])
+
+	app.delete_surface(first)
+	assert app.surfaces.len == 2
+	assert voidptr(app.surfaces[0]) == voidptr(third)
+	assert voidptr(app.surfaces[1]) == voidptr(second)
+}
+
 fn test_app_focus_core_surface_resolves_runtime_wrapper() {
 	mut app := App{}
 	mut first_core := Surface{}
