@@ -44,18 +44,18 @@ pub fn (v SemVer) str() string {
 // --- GTK version C bindings -----------------------------------------------
 
 fn C.gtk_get_major_version() u32
+
 fn C.gtk_get_minor_version() u32
+
 fn C.gtk_get_micro_version() u32
 
 // --- GTK version API ------------------------------------------------------
 
 // gtk_comptime_version is the version of GTK the headers were built against.
-// (Best-effort: we assume gtk4. The runtime version is authoritative for all
-// the `atLeast`-style checks below.)
 pub const gtk_comptime_version = SemVer{
-	major: 4
-	minor: 0
-	patch: 0
+	major: u16(C.GTK_MAJOR_VERSION)
+	minor: u16(C.GTK_MINOR_VERSION)
+	patch: u16(C.GTK_MICRO_VERSION)
 }
 
 // gtk_runtime_version returns the version of the GTK library we are linked
@@ -66,6 +66,12 @@ pub fn gtk_runtime_version() SemVer {
 		minor: u16(C.gtk_get_minor_version())
 		patch: u16(C.gtk_get_micro_version())
 	}
+}
+
+// gtk_log_version reports the build and runtime versions during application
+// construction. Mirrors `gtk_version.logVersion`.
+pub fn gtk_log_version() {
+	eprintln('[info] gtk: GTK version build=${gtk_comptime_version} runtime=${gtk_runtime_version()}')
 }
 
 // gtk_at_least verifies that the GTK version is at least the given version.
@@ -94,15 +100,17 @@ pub fn gtk_runtime_until(major u16, minor u16, patch u16) bool {
 // --- libadwaita version C bindings ----------------------------------------
 
 fn C.adw_get_major_version() u32
+
 fn C.adw_get_minor_version() u32
+
 fn C.adw_get_micro_version() u32
 
 // adw_comptime_version is the libadwaita version the headers were built
-// against (best-effort baseline; runtime version is authoritative).
+// against.
 pub const adw_comptime_version = SemVer{
-	major: 1
-	minor: 0
-	patch: 0
+	major: u16(C.ADW_MAJOR_VERSION)
+	minor: u16(C.ADW_MINOR_VERSION)
+	patch: u16(C.ADW_MICRO_VERSION)
 }
 
 // adw_runtime_version returns the version of libadwaita we are linked against.
@@ -112,6 +120,12 @@ pub fn adw_runtime_version() SemVer {
 		minor: u16(C.adw_get_minor_version())
 		patch: u16(C.adw_get_micro_version())
 	}
+}
+
+// adw_log_version reports the build and runtime versions during application
+// construction. Mirrors `adw_version.logVersion`.
+pub fn adw_log_version() {
+	eprintln('[info] gtk: libadwaita version build=${adw_comptime_version} runtime=${adw_runtime_version()}')
 }
 
 // adw_at_least verifies that the running libadwaita version is at least the

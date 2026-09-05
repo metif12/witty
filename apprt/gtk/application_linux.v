@@ -443,7 +443,8 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 	C.g_log_set_writer_func(voidptr(glib_log_writer_function), unsafe { nil }, unsafe { nil })
 
 	// Log our GTK/libadwaita versions.
-	// gtk_version.logVersion(); adw_version.logVersion();
+	gtk_log_version()
+	adw_log_version()
 
 	// Set the gettext global domain so unqualified translations resolve.
 	internal_os.init_i18n_global_domain() or {
@@ -1162,8 +1163,14 @@ fn (mut self Application) startup() {
 // startup_xev configures libxev to use a specific backend. Mirrors
 // `Application.startupXev`.
 fn (mut self Application) startup_xev() {
-	// TODO(gtk): xev backend preference (async-backend config + xev.prefer)
-	// needs the libxev binding; out of scope.
+	// Witty's V semaphore/channel event loops are a statically selected native
+	// backend, equivalent to Ghostty's `xev.dynamic == false` build. In that
+	// source branch an explicit preference cannot be applied and startup warns
+	// before retaining the compiled-in default.
+	if self.config.async_backend == .auto {
+		return
+	}
+	eprintln('[warn] gtk: libxev manual backend failed, using default=native')
 }
 
 // startup_style_manager sets up the initial light/dark mode from config and
