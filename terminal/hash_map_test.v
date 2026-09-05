@@ -36,6 +36,54 @@ fn test_hash_map_basic_usage() {
 	assert sum == total
 }
 
+fn test_hash_map_key_and_value_iterators() {
+	mut hm := HashMapUnmanaged.init(16)
+	for i in u64(0) .. u64(5) {
+		hm.put(i, i * 10)!
+	}
+	hm.remove(2)
+
+	mut key_sum := u64(0)
+	mut keys := hm.key_iterator()
+	for {
+		key_sum += keys.next() or { break }
+	}
+	assert key_sum == 8
+
+	mut value_sum := u64(0)
+	mut values := hm.value_iterator()
+	for {
+		value_sum += values.next() or { break }
+	}
+	assert value_sum == 80
+}
+
+fn test_hash_map_get_key_ptr_and_remove_by_ptr() {
+	mut hm := HashMapUnmanaged.init(16)
+	hm.put(42, 84)!
+
+	key_ptr := hm.get_key_ptr(42) or {
+		assert false, 'expected key pointer'
+		return
+	}
+	assert hm.keys[key_ptr] == 42
+	hm.remove_by_ptr(key_ptr)
+	assert !hm.contains(42)
+	assert hm.count() == 0
+}
+
+fn test_hash_map_get_or_put_assume_capacity_public() {
+	mut hm := HashMapUnmanaged.init(16)
+	first := hm.get_or_put_assume_capacity(7)
+	assert !first.found_existing
+	hm.values[first.idx] = 9
+
+	second := hm.get_or_put_assume_capacity(7)
+	assert second.found_existing
+	assert second.idx == first.idx
+	assert hm.values[second.idx] == 9
+}
+
 fn test_hash_map_ensure_total_capacity() {
 	mut hm := HashMapUnmanaged.init(32)
 

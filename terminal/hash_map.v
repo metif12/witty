@@ -415,6 +415,46 @@ pub fn (mut it HashMapIter) next() ?HashMapIterEntry {
 	return none
 }
 
+// HashMapKeyIter iterates over the keys in used slots.
+pub struct HashMapKeyIter {
+	metadata []HashSlotMetadata
+	keys     []u64
+mut:
+	index int
+}
+
+// next returns the next key, or none if iteration is complete.
+pub fn (mut it HashMapKeyIter) next() ?u64 {
+	for it.index < it.metadata.len {
+		idx := it.index
+		it.index++
+		if it.metadata[idx].is_used() {
+			return it.keys[idx]
+		}
+	}
+	return none
+}
+
+// HashMapValueIter iterates over the values in used slots.
+pub struct HashMapValueIter {
+	metadata []HashSlotMetadata
+	values   []u64
+mut:
+	index int
+}
+
+// next returns the next value, or none if iteration is complete.
+pub fn (mut it HashMapValueIter) next() ?u64 {
+	for it.index < it.metadata.len {
+		idx := it.index
+		it.index++
+		if it.metadata[idx].is_used() {
+			return it.values[idx]
+		}
+	}
+	return none
+}
+
 // HashMapUnmanaged is an open-addressing hash map with linear probing
 // and 7-bit fingerprint-based collision resolution.
 //
@@ -506,6 +546,12 @@ pub fn (self &HashMapUnmanaged) get(key u64) ?u64 {
 pub fn (self &HashMapUnmanaged) get_key(key u64) ?u64 {
 	idx := self.get_index(key) or { return none }
 	return self.keys[idx]
+}
+
+// get_key_ptr returns the slot index for the stored key, or none. Slot indices
+// are the stable V representation used in place of pointers into backing arrays.
+pub fn (self &HashMapUnmanaged) get_key_ptr(key u64) ?int {
+	return self.get_index(key)
 }
 
 // get_key_index returns the slot index for a key, or none.
@@ -617,6 +663,13 @@ pub fn (mut self HashMapUnmanaged) remove_by_index(idx int) {
 	self.size_--
 }
 
+// remove_by_ptr removes the key at a slot returned by get_key_ptr.
+pub fn (mut self HashMapUnmanaged) remove_by_ptr(key_ptr int) {
+	assert key_ptr >= 0 && key_ptr < int(self.cap_)
+	assert self.metadata[key_ptr].is_used()
+	self.remove_by_index(key_ptr)
+}
+
 // clear_retaining_capacity removes all entries but keeps allocated capacity.
 pub fn (mut self HashMapUnmanaged) clear_retaining_capacity() {
 	if self.cap_ > 0 {
@@ -644,6 +697,22 @@ pub fn (self &HashMapUnmanaged) iterator() HashMapIter {
 		keys: self.keys
 		values: self.values
 		cap_: int(self.cap_)
+	}
+}
+
+// key_iterator returns an iterator over all stored keys.
+pub fn (self &HashMapUnmanaged) key_iterator() HashMapKeyIter {
+	return HashMapKeyIter{
+		metadata: self.metadata
+		keys: self.keys
+	}
+}
+
+// value_iterator returns an iterator over all stored values.
+pub fn (self &HashMapUnmanaged) value_iterator() HashMapValueIter {
+	return HashMapValueIter{
+		metadata: self.metadata
+		values: self.values
 	}
 }
 
@@ -692,7 +761,7 @@ fn (mut self HashMapUnmanaged) get_or_put_internal(key u64) !GetOrPutResult {
 }
 
 // get_or_put_assume_capacity finds or creates a slot for key.
-fn (mut self HashMapUnmanaged) get_or_put_assume_capacity(key u64) GetOrPutResult {
+pub fn (mut self HashMapUnmanaged) get_or_put_assume_capacity(key u64) GetOrPutResult {
 	hash := hash_key(key)
 	mask := u64(self.cap_ - 1)
 	fp := take_fingerprint(hash)
