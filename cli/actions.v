@@ -3,9 +3,33 @@ module cli
 import configpkg
 import encoding.utf8.validate
 import font
+import input
 import os
 import strconv
 import terminal
+
+// list_actions_output lists every keybinding action, not the CLI actions.
+// This is the translated `cli/list_actions.zig` output path; `--docs` asks
+// the shared input help generator to include each action's documentation.
+pub fn list_actions_output(args []string) !string {
+	mut docs := false
+	for arg in args {
+		match arg {
+			'--docs' {
+				docs = true
+			}
+			else {
+				return error('unknown option for list-actions: ${arg}')
+			}
+		}
+	}
+	return input.generate_help(.plaintext, docs)
+}
+
+pub fn run_list_actions(args []string) !int {
+	print(list_actions_output(args)!)
+	return 0
+}
 
 // list_colors_output implements the deterministic plain output of
 // `+list-colors`. Pretty terminal rendering is only presentation; the source

@@ -2,6 +2,26 @@ module cli
 
 import os
 
+fn test_list_actions_lists_keybinding_actions() {
+	output := list_actions_output([])!
+	assert output.starts_with('ignore\nunbind\ncsi\n')
+	assert output.contains('toggle_command_palette\n')
+	assert output.ends_with('crash\n')
+	assert !output.contains('list-fonts\n')
+}
+
+fn test_list_actions_docs_and_unknown_option() {
+	output := list_actions_output(['--docs'])!
+	assert output.starts_with('ignore:\n  Ignore this key combination.\n')
+	assert output.contains('new_window:\n  Open a new window.\n')
+
+	list_actions_output(['--plain']) or {
+		assert err.msg().contains('unknown option')
+		return
+	}
+	assert false
+}
+
 fn test_list_colors_plain_contains_complete_sorted_x11_data() {
 	output := list_colors_output(['--plain'])!
 	lines := output.trim_space().split_into_lines()

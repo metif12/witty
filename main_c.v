@@ -173,14 +173,7 @@ pub fn run_cli_action(action global_state.Action, args []string) !int {
 		.crash_report { cli.run_crash_report(action_args(args, action))! }
 		.boo { cli.run_boo(action_args(args, action))! }
 		.new_window { cli.run_new_window(action_args(args, action))! }
-		.list_actions {
-			for value in global_state.actions() {
-				if value != .none {
-					println(value.cli_name())
-				}
-			}
-			0
-		}
+		.list_actions { cli.run_list_actions(action_args(args, action))! }
 	}
 }
 
