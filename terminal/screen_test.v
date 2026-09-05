@@ -1652,6 +1652,132 @@ fn test_screen_select_line_disabled_whitespace_trimming() {
 	}
 }
 
+fn test_screen_select_line_semantic_prompt_to_input_boundary() {
+	mut s := Screen.init(10, 5, 0)
+	defer { s.deinit() }
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('\$>') or { assert false }
+	s.cursor_set_semantic_content_input(false)
+	s.test_write_string('command') or { assert false }
+
+	prompt := s.select_line(SelectLine{ pin: Pin{ x: 0, y: 0 } }) or { panic('no prompt selection') }
+	assert prompt.start() == Pin{ x: 0, y: 0 }
+	assert prompt.end() == Pin{ x: 1, y: 0 }
+	input := s.select_line(SelectLine{ pin: Pin{ x: 5, y: 0 } }) or { panic('no input selection') }
+	assert input.start() == Pin{ x: 2, y: 0 }
+	assert input.end() == Pin{ x: 8, y: 0 }
+}
+
+fn test_screen_select_line_semantic_prompt_boundary() {
+	mut s := Screen.init(5, 10, 0)
+	defer { s.deinit() }
+	s.test_write_string('ABCDE\n') or { assert false }
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('A    ') or { assert false }
+	s.cursor_set_semantic_content_output()
+	s.test_write_string('> ') or { assert false }
+
+	prompt := s.select_line(SelectLine{ pin: Pin{ x: 1, y: 1 } }) or { panic('no prompt selection') }
+	assert s.selection_string(SelectionString{ sel: prompt, trim: false }) or { panic(err) } == 'A'
+	output := s.select_line(SelectLine{ pin: Pin{ x: 1, y: 2 } }) or { panic('no output selection') }
+	assert output.start() == Pin{ x: 0, y: 2 }
+	assert output.end() == Pin{ x: 0, y: 2 }
+}
+
+fn test_screen_select_line_semantic_input_to_output_boundary() {
+	mut s := Screen.init(10, 5, 0)
+	defer { s.deinit() }
+	s.cursor_set_semantic_content_input(false)
+	s.test_write_string('ls -la\n') or { assert false }
+	s.cursor_set_semantic_content_output()
+	s.test_write_string('file.txt') or { assert false }
+
+	input := s.select_line(SelectLine{ pin: Pin{ x: 2, y: 0 } }) or { panic('no input selection') }
+	assert s.selection_string(SelectionString{ sel: input, trim: false }) or { panic(err) } == 'ls -la'
+	output := s.select_line(SelectLine{ pin: Pin{ x: 2, y: 1 } }) or { panic('no output selection') }
+	assert s.selection_string(SelectionString{ sel: output, trim: false }) or { panic(err) } == 'file.txt'
+}
+
+fn test_screen_select_line_semantic_mid_row_boundary() {
+	mut s := Screen.init(10, 5, 0)
+	defer { s.deinit() }
+	s.cursor_set_semantic_content_output()
+	s.test_write_string('out') or { assert false }
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('\$>') or { assert false }
+	s.cursor_set_semantic_content_input(false)
+	s.test_write_string('cmd') or { assert false }
+
+	output := s.select_line(SelectLine{ pin: Pin{ x: 1, y: 0 } }) or { panic('no output selection') }
+	assert output.start() == Pin{ x: 0, y: 0 }
+	assert output.end() == Pin{ x: 2, y: 0 }
+	prompt := s.select_line(SelectLine{ pin: Pin{ x: 3, y: 0 } }) or { panic('no prompt selection') }
+	assert prompt.start() == Pin{ x: 3, y: 0 }
+	assert prompt.end() == Pin{ x: 4, y: 0 }
+	input := s.select_line(SelectLine{ pin: Pin{ x: 6, y: 0 } }) or { panic('no input selection') }
+	assert input.start() == Pin{ x: 5, y: 0 }
+	assert input.end() == Pin{ x: 7, y: 0 }
+}
+
+fn test_screen_select_line_semantic_boundary_soft_wrap_with_mid_row_transition() {
+	mut s := Screen.init(5, 5, 0)
+	defer { s.deinit() }
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('\$ ') or { assert false }
+	s.cursor_set_semantic_content_input(false)
+	s.test_write_string('cmd12') or { assert false }
+	s.cursor_set_semantic_content_output()
+	s.test_write_string('out') or { assert false }
+
+	for pin in [Pin{ x: 3, y: 0 }, Pin{ x: 0, y: 1 }] {
+		sel := s.select_line(SelectLine{ pin: pin }) or { panic('no input selection') }
+		assert s.selection_string(SelectionString{ sel: sel, trim: false }) or { panic(err) } == 'cmd12'
+	}
+	output := s.select_line(SelectLine{ pin: Pin{ x: 3, y: 1 } }) or { panic('no output selection') }
+	assert s.selection_string(SelectionString{ sel: output, trim: false }) or { panic(err) } == 'out'
+}
+
+fn test_screen_select_line_semantic_boundary_disabled() {
+	mut s := Screen.init(10, 5, 0)
+	defer { s.deinit() }
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('\$ ') or { assert false }
+	s.cursor_set_semantic_content_input(false)
+	s.test_write_string('command') or { assert false }
+
+	sel := s.select_line(SelectLine{
+		pin: Pin{ x: 0, y: 0 }
+		semantic_prompt_boundary: false
+	}) or { panic('no line selection') }
+	assert s.selection_string(SelectionString{ sel: sel, trim: false }) or { panic(err) } == '\$ command'
+}
+
+fn test_screen_select_line_semantic_boundary_first_cell_of_row() {
+	mut s := Screen.init(5, 5, 0)
+	defer { s.deinit() }
+	s.cursor_set_semantic_content_input(false)
+	s.test_write_string('12345') or { assert false }
+	s.cursor_set_semantic_content_output()
+	s.test_write_string('ABCDE') or { assert false }
+
+	input := s.select_line(SelectLine{ pin: Pin{ x: 2, y: 0 } }) or { panic('no input selection') }
+	assert input.start() == Pin{ x: 0, y: 0 }
+	assert input.end() == Pin{ x: 4, y: 0 }
+	output := s.select_line(SelectLine{ pin: Pin{ x: 2, y: 1 } }) or { panic('no output selection') }
+	assert output.start() == Pin{ x: 0, y: 1 }
+	assert output.end() == Pin{ x: 4, y: 1 }
+}
+
+fn test_screen_select_line_semantic_all_same_content() {
+	mut s := Screen.init(5, 5, 0)
+	defer { s.deinit() }
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('prompt text') or { assert false }
+
+	sel := s.select_line(SelectLine{ pin: Pin{ x: 2, y: 1 } }) or { panic('no prompt selection') }
+	assert s.selection_string(SelectionString{ sel: sel, trim: false }) or { panic(err) } == 'prompt text'
+}
+
 // --- selectWord ---
 
 fn test_screen_select_word_full() {

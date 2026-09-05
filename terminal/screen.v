@@ -1879,7 +1879,7 @@ pub:
 pub struct SelectLine {
 pub:
 	pin                      Pin
-	whitespace               ?[]u32
+	whitespace               ?[]u32 = [u32(0), u32(` `), u32(`\t`)]
 	semantic_prompt_boundary bool = true
 }
 
@@ -3307,102 +3307,125 @@ fn trim_selection_bytes(input []u8, pins []Pin) ([]u8, []Pin) {
 
 // Select a line around the given pin.
 pub fn (self &Screen) select_line(opts SelectLine) ?Selection {
-	if int(opts.pin.y) >= self.pages.screen_rows.len {
+	if int(opts.pin.y) >= self.pages.screen_rows.len || opts.pin.x >= self.pages.cols {
 		return none
 	}
 
-	// Find the start of the soft-wrapped line
-	mut start_y := int(opts.pin.y)
-	for start_y > 0 {
-		prev_row := self.pages.screen_rows[start_y - 1]
-		if !prev_row.wrap {
-			break
-		}
-		if opts.semantic_prompt_boundary {
-			cur_row := self.pages.screen_rows[start_y]
-			if cur_row.semantic_prompt != self.pages.screen_rows[start_y - 1].semantic_prompt {
+	semantic_state := self.pages.screen_rows[int(opts.pin.y)].cells[int(opts.pin.x)].semantic_content
+
+	mut start_pin := Pin{ x: 0, y: opts.pin.y }
+	mut found_start_boundary := false
+	if opts.semantic_prompt_boundary {
+		cells := self.pages.screen_rows[int(opts.pin.y)].cells
+		for offset in u32(0) .. opts.pin.x + 1 {
+			x := opts.pin.x - offset
+			if cells[int(x)].semantic_content != semantic_state {
+				start_pin = Pin{ x: x + 1, y: opts.pin.y }
+				found_start_boundary = true
 				break
 			}
 		}
-		start_y -= 1
 	}
 
-	// Find the end of the soft-wrapped line
-	mut end_y := int(opts.pin.y)
-	for end_y < self.pages.screen_rows.len - 1 {
-		cur_row := self.pages.screen_rows[end_y]
-		if !cur_row.wrap {
-			break
+	if !found_start_boundary {
+		mut prior_y := int(opts.pin.y) - 1
+		mut previous := Pin{ x: 0, y: opts.pin.y }
+		for prior_y >= 0 {
+			row := self.pages.screen_rows[prior_y]
+			if !row.wrap {
+				previous.x = 0
+				start_pin = previous
+				found_start_boundary = true
+				break
+			}
+
+			if opts.semantic_prompt_boundary {
+				mut semantic_boundary := false
+				for reverse_x := int(self.pages.cols) - 1; reverse_x >= 0; reverse_x-- {
+					if row.cells[reverse_x].semantic_content != semantic_state {
+						semantic_boundary = true
+						break
+					}
+					previous = Pin{ x: u32(reverse_x), y: u32(prior_y) }
+				}
+				if semantic_boundary {
+					start_pin = previous
+					found_start_boundary = true
+					break
+				}
+			} else {
+				previous = Pin{ x: 0, y: u32(prior_y) }
+			}
+			prior_y--
 		}
+		if !found_start_boundary {
+			previous.x = 0
+			start_pin = previous
+		}
+	}
+
+	mut end_pin := Pin{}
+	mut found_end_boundary := false
+	mut y := int(opts.pin.y)
+	for y < self.pages.screen_rows.len {
+		row := self.pages.screen_rows[y]
 		if opts.semantic_prompt_boundary {
-			next_row := self.pages.screen_rows[end_y + 1]
-			if next_row.semantic_prompt != cur_row.semantic_prompt {
+			start_x := if y == int(opts.pin.y) { int(opts.pin.x) } else { 0 }
+			if start_x == 0 && row.cells[0].semantic_content != semantic_state {
+				if y == 0 {
+					return none
+				}
+				end_pin = Pin{ x: self.pages.cols - 1, y: u32(y - 1) }
+				found_end_boundary = true
+				break
+			}
+			for x in start_x .. int(self.pages.cols) {
+				if row.cells[x].semantic_content != semantic_state {
+					end_pin = Pin{ x: u32(x - 1), y: u32(y) }
+					found_end_boundary = true
+					break
+				}
+			}
+			if found_end_boundary {
 				break
 			}
 		}
-		end_y += 1
+		if !row.wrap {
+			end_pin = Pin{ x: self.pages.cols - 1, y: u32(y) }
+			found_end_boundary = true
+			break
+		}
+		y++
 	}
-
-	start_pin := Pin{ x: 0, y: u32(start_y) }
-	end_pin := Pin{ x: self.pages.cols - 1, y: u32(end_y) }
+	if !found_end_boundary {
+		return none
+	}
 
 	// Trim whitespace if requested
 	if ws := opts.whitespace {
-		// Trim from start
-		mut trimmed_start := start_pin
-		mut found_start := false
-		for y in start_y .. end_y + 1 {
-			if y >= self.pages.screen_rows.len {
+		mut start_it := self.pages.cell_iterator(start_pin, .right_down, end_pin)
+		mut trimmed_start := ?Pin(none)
+		for {
+			pin := start_it.next() or { break }
+			cell := self.pages.screen_rows[int(pin.y)].cells[int(pin.x)]
+			if cell.has_text() && !is_codepoint_in(cell.codepoint_val(), ws) {
+				trimmed_start = pin
 				break
 			}
-			row := self.pages.screen_rows[y]
-			for x in 0 .. int(self.pages.cols) {
-				if x < row.cells.len {
-					cp := row.cells[x].codepoint
-					is_ws := cp == 0 || is_codepoint_in(cp, ws)
-					if !is_ws {
-						trimmed_start = Pin{ x: u32(x), y: u32(y) }
-						found_start = true
-						break
-					}
-				}
-			}
-			if found_start {
-				break
-			}
-		}
-		if !found_start {
-			return none
 		}
 
-		// Trim from end
-		mut trimmed_end := end_pin
-		mut found_end := false
-		for rev_y := end_y; rev_y >= start_y; rev_y-- {
-			if rev_y >= self.pages.screen_rows.len {
-				continue
-			}
-			row := self.pages.screen_rows[rev_y]
-			for rev_x := int(self.pages.cols) - 1; rev_x >= 0; rev_x-- {
-				if rev_x < row.cells.len {
-					cp := row.cells[rev_x].codepoint
-					is_ws := cp == 0 || is_codepoint_in(cp, ws)
-					if !is_ws {
-						trimmed_end = Pin{ x: u32(rev_x), y: u32(rev_y) }
-						found_end = true
-						break
-					}
-				}
-			}
-			if found_end {
+		mut end_it := self.pages.cell_iterator(end_pin, .left_up, start_pin)
+		mut trimmed_end := ?Pin(none)
+		for {
+			pin := end_it.next() or { break }
+			cell := self.pages.screen_rows[int(pin.y)].cells[int(pin.x)]
+			if cell.has_text() && !is_codepoint_in(cell.codepoint_val(), ws) {
+				trimmed_end = pin
 				break
 			}
 		}
-		if !found_end {
-			return none
-		}
 
-		return Selection.init(trimmed_start, trimmed_end, false)
+		return Selection.init(trimmed_start or { return none }, trimmed_end or { return none }, false)
 	}
 
 	return Selection.init(start_pin, end_pin, false)
