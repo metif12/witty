@@ -797,7 +797,7 @@ const ns_ctrl_mask = u64(1 << 18)
 const ns_alt_mask = u64(1 << 19)
 const ns_cmd_mask = u64(1 << 20)
 
-fn on_key(userdata voidptr, keycode u16, modflags u64, chars &u8, len int, uchars &u8, ulen int, is_repeat bool) {
+fn on_key(userdata voidptr, key_action macos.KeyEventAction, keycode u16, modflags u64, chars &u8, len int, uchars &u8, ulen int) {
 	if userdata == unsafe { nil } {
 		return
 	}
@@ -846,7 +846,11 @@ fn on_key(userdata voidptr, keycode u16, modflags u64, chars &u8, len int, uchar
 		shift: mods.shift && utf8_text != unshifted_text
 	}
 
-	action := if is_repeat { input.KeyAction.repeat } else { input.KeyAction.press }
+	action := match key_action {
+		.press { input.KeyAction.press }
+		.repeat { input.KeyAction.repeat }
+		.release { input.KeyAction.release }
+	}
 
 	event := input.KeyEvent{
 		action: action

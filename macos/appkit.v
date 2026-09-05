@@ -29,7 +29,14 @@ import os
 // Callback types. Each callback receives the view's userdata pointer first.
 pub type DrawCallback = fn (userdata voidptr, ctx voidptr, width f64, height f64)
 
-pub type KeyCallback = fn (userdata voidptr, keycode u16, modflags u64, chars &u8, len int, uchars &u8, ulen int, is_repeat bool)
+pub type KeyCallback = fn (userdata voidptr, action KeyEventAction, keycode u16, modflags u64, chars &u8, len int, uchars &u8, ulen int)
+
+// KeyEventAction is the AppKit-side key action passed to the terminal frontend.
+pub enum KeyEventAction {
+	press
+	repeat
+	release
+}
 
 pub type ResizeCallback = fn (userdata voidptr, width f64, height f64)
 
@@ -269,7 +276,13 @@ const ns_window_collection_behavior_full_screen_primary = u64(1 << 7)
 const ns_event_modifier_flag_control = u64(1 << 18)
 const ns_event_modifier_flag_option = u64(1 << 19)
 const ns_event_modifier_flag_command = u64(1 << 20)
+const ns_event_modifier_flag_caps_lock = u64(1 << 16)
+const ns_event_modifier_flag_shift = u64(1 << 17)
 const ns_event_modifier_flag_device_independent_mask = u64(0xffff0000)
+const nx_device_rshift_key_mask = u64(0x00000004)
+const nx_device_rcmd_key_mask = u64(0x00000010)
+const nx_device_ralt_key_mask = u64(0x00000040)
+const nx_device_rctl_key_mask = u64(0x00002000)
 const objc_assoc_copy_nonatomic = usize(3)
 const mtl_pixel_format_bgra8unorm = u64(80)
 const mtl_load_action_clear = u64(2)
@@ -689,6 +702,7 @@ fn register_classes() {
 		add_method(view_cls, 'canBecomeKeyView', voidptr(vt_view_can_become_key_view), 'B@:')
 		add_method(view_cls, 'drawRect:', voidptr(vt_view_draw_rect), 'v@:{CGRect={CGPoint=dd}{CGSize=dd}}')
 		add_method(view_cls, 'keyDown:', voidptr(vt_view_key_down), 'v@:@')
+		add_method(view_cls, 'keyUp:', voidptr(vt_view_key_up), 'v@:@')
 		add_method(view_cls, 'flagsChanged:', voidptr(vt_view_flags_changed), 'v@:@')
 		add_method(view_cls, 'mouseDown:', voidptr(vt_view_mouse_down), 'v@:@')
 		add_method(view_cls, 'mouseUp:', voidptr(vt_view_mouse_up), 'v@:@')
@@ -757,6 +771,50 @@ fn vt_view_key_down(self ObjId, _cmd Sel, event ObjId) {
 		return
 	}
 
+	action := if msg_bool(event, 'isARepeat') { KeyEventAction.repeat } else { KeyEventAction.press }
+	dispatch_key(self, event, action)
+}
+
+fn vt_view_key_up(self ObjId, _cmd Sel, event ObjId) {
+	dispatch_key(self, event, .release)
+}
+
+fn vt_view_flags_changed(self ObjId, _cmd Sel, event ObjId) {
+	keycode := u16(msg_u64(event, 'keyCode'))
+	flags := msg_u64(event, 'modifierFlags')
+	action := modifier_key_action(keycode, flags) or { return }
+	dispatch_key(self, event, action)
+}
+
+// modifier_key_action translates AppKit's flagsChanged event into a press or
+// release. The logical modifier bit alone is insufficient for right-side keys:
+// it stays set while the opposite side remains held, so consult the legacy
+// device-specific mask for those keycodes as the AppKit frontend does.
+fn modifier_key_action(keycode u16, flags u64) ?KeyEventAction {
+	logical_mask := match keycode {
+		0x39 { ns_event_modifier_flag_caps_lock }
+		0x38, 0x3c { ns_event_modifier_flag_shift }
+		0x3b, 0x3e { ns_event_modifier_flag_control }
+		0x3a, 0x3d { ns_event_modifier_flag_option }
+		0x37, 0x36 { ns_event_modifier_flag_command }
+		else { return none }
+	}
+
+	if flags & logical_mask == 0 {
+		return .release
+	}
+
+	side_pressed := match keycode {
+		0x3c { flags & nx_device_rshift_key_mask != 0 }
+		0x3e { flags & nx_device_rctl_key_mask != 0 }
+		0x3d { flags & nx_device_ralt_key_mask != 0 }
+		0x36 { flags & nx_device_rcmd_key_mask != 0 }
+		else { true }
+	}
+	return if side_pressed { KeyEventAction.press } else { KeyEventAction.release }
+}
+
+fn dispatch_key(self ObjId, event ObjId, action KeyEventAction) {
 	if g_key_cb == unsafe { nil } {
 		return
 	}
@@ -764,12 +822,11 @@ fn vt_view_key_down(self ObjId, _cmd Sel, event ObjId) {
 	if is_nil(userdata) {
 		return
 	}
+	keycode := u16(msg_u64(event, 'keyCode'))
+	flags := msg_u64(event, 'modifierFlags')
 	chars := objc_utf8_string(msg_id(event, 'characters'))
 	uchars := objc_utf8_string(msg_id(event, 'charactersIgnoringModifiers'))
-	g_key_cb(userdata, keycode, flags, chars.str, chars.len, uchars.str, uchars.len, msg_bool(event, 'isARepeat'))
-}
-
-fn vt_view_flags_changed(_self ObjId, _cmd Sel, _event ObjId) {
+	g_key_cb(userdata, action, keycode, flags, chars.str, chars.len, uchars.str, uchars.len)
 }
 
 fn vt_view_mouse_down(self ObjId, _cmd Sel, event ObjId) {
