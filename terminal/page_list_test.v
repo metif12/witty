@@ -66,6 +66,15 @@ fn assert_page_list_semantic_highlight(pl &PageList, at Pin, content SemanticCon
 	assert (pl.point_from_pin(.screen, hl.end) or { Pin{} }) == end
 }
 
+fn grow_page_list_to_second_page(mut pl PageList, extra_rows usize) {
+	first := pl.pages.first or { return }
+	remaining := usize(first.data.capacity.rows - first.data.size.rows)
+	pl.grow_rows(remaining)
+	assert pl.total_pages() == 1
+	pl.grow_rows(extra_rows)
+	assert pl.total_pages() == 2
+}
+
 // ============================================================
 // Init tests
 // ============================================================
@@ -5315,6 +5324,147 @@ fn test_page_list_resize_reflow_more_cols_creates_multiple_pages() {
 	}
 	// We should have created at least one additional page.
 	assert count > 1
+}
+
+fn test_page_list_resize_reflow_more_cols_wrap_across_page_boundary() {
+	mut s := PageList.init(2, 10, usize(0))
+	defer { s.deinit() }
+	grow_page_list_to_second_page(mut s, 1)
+
+	mut first := s.pages.first or { return }
+	y0 := int(first.data.size.rows) - 1
+	first.data.rows[y0].wrap = true
+	for x in 0 .. int(s.cols) {
+		first.data.rows[y0].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+		}
+	}
+	mut last := s.pages.last or { return }
+	last.data.rows[0].wrap_continuation = true
+	for x in 0 .. int(s.cols) {
+		last.data.rows[0].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+		}
+	}
+	end_rows := s.total_rows - 1
+
+	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	assert s.cols == 4
+	assert s.total_rows == end_rows
+	p8 := s.get_pin(.active, 0, 8) or { return }
+	assert !p8.row_data().wrap
+	assert !p8.row_data().wrap_continuation
+	for cell in p8.row_data().cells[..4] {
+		assert !cell.has_text()
+	}
+	p9 := s.get_pin(.active, 0, 9) or { return }
+	assert !p9.row_data().wrap
+	assert !p9.row_data().wrap_continuation
+	assert p9.row_data().cells[0].codepoint == 0
+	assert p9.row_data().cells[1].codepoint == 1
+	assert p9.row_data().cells[2].codepoint == 0
+	assert p9.row_data().cells[3].codepoint == 1
+}
+
+fn test_page_list_resize_reflow_more_cols_wrap_across_page_boundary_cursor_in_second_page() {
+	mut s := PageList.init(2, 10, usize(0))
+	defer { s.deinit() }
+	grow_page_list_to_second_page(mut s, 1)
+
+	mut first := s.pages.first or { return }
+	y0 := int(first.data.size.rows) - 1
+	first.data.rows[y0].wrap = true
+	for x in 0 .. int(s.cols) {
+		first.data.rows[y0].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+		}
+	}
+	mut last := s.pages.last or { return }
+	last.data.rows[0].wrap_continuation = true
+	for x in 0 .. int(s.cols) {
+		last.data.rows[0].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+		}
+	}
+	tracked := s.track_pin(s.get_pin(.active, 1, 9) or { return })
+	assert voidptr(tracked.node) == voidptr(last)
+	end_rows := s.total_rows - 1
+
+	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	assert s.cols == 4
+	assert s.total_rows == end_rows
+	point := s.point_from_pin(.active, *tracked) or { return }
+	assert point == Pin{ x: 3, y: 9 }
+	p9 := s.get_pin(.active, 0, 9) or { return }
+	assert !p9.row_data().wrap
+	assert p9.row_data().cells[0].codepoint == 0
+	assert p9.row_data().cells[1].codepoint == 1
+	assert p9.row_data().cells[2].codepoint == 0
+	assert p9.row_data().cells[3].codepoint == 1
+	s.untrack_pin(tracked)
+}
+
+fn test_page_list_resize_reflow_less_cols_wrap_across_page_boundary_cursor_in_second_page() {
+	mut s := PageList.init(5, 10, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	grow_page_list_to_second_page(mut s, 5)
+
+	mut first := s.pages.first or { return }
+	y0 := int(first.data.size.rows) - 1
+	first.data.rows[y0].wrap = true
+	for x in 0 .. int(s.cols) {
+		first.data.rows[y0].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+		}
+	}
+	mut last := s.pages.last or { return }
+	last.data.rows[0].wrap_continuation = true
+	for x in 0 .. int(s.cols) {
+		last.data.rows[0].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(x)
+		}
+	}
+	tracked := s.track_pin(s.get_pin(.active, 2, 5) or { return })
+	assert voidptr(tracked.node) == voidptr(last)
+	assert tracked.y == 0
+
+	s.resize(PageResizeOpts{
+		cols: 4
+		reflow: true
+		cursor: PageResizeCursor{ x: 2, y: 5 }
+	})
+	assert s.cols == 4
+	point := s.point_from_pin(.active, *tracked) or { return }
+	assert point == Pin{ x: 3, y: 5 }
+	p3 := s.get_pin(.active, 0, 3) or { return }
+	assert !p3.row_data().wrap
+	assert !p3.row_data().wrap_continuation
+	p4 := s.get_pin(.active, 0, 4) or { return }
+	assert p4.row_data().wrap
+	assert !p4.row_data().wrap_continuation
+	assert p4.row_data().cells[0].codepoint == 0
+	assert p4.row_data().cells[1].codepoint == 1
+	assert p4.row_data().cells[2].codepoint == 2
+	assert p4.row_data().cells[3].codepoint == 3
+	p5 := s.get_pin(.active, 0, 5) or { return }
+	assert p5.row_data().wrap
+	assert p5.row_data().wrap_continuation
+	assert p5.row_data().cells[0].codepoint == 4
+	assert p5.row_data().cells[1].codepoint == 0
+	assert p5.row_data().cells[2].codepoint == 1
+	assert p5.row_data().cells[3].codepoint == 2
+	p6 := s.get_pin(.active, 0, 6) or { return }
+	assert !p6.row_data().wrap
+	assert p6.row_data().wrap_continuation
+	assert p6.row_data().cells[0].codepoint == 3
+	assert p6.row_data().cells[1].codepoint == 4
+	s.untrack_pin(tracked)
 }
 
 fn test_page_list_resize_grow_cols_with_unwrap_fixes_viewport_pin() {
