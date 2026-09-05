@@ -5412,6 +5412,53 @@ fn test_erase_chars_wide_character() {
 	assert str == 'X BC'
 }
 
+fn test_erase_chars_wide_boundary_conditions() {
+	mut t := create_test_terminal(8, 1) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('😀a😀b😀') or { assert false }
+	assert (t.plain_string() or { '' }) == '😀a😀b😀'
+	t.set_cursor_pos(1, 2)
+	t.erase_chars(3)
+	t.screens.active.assert_integrity()
+	assert (t.plain_string() or { '' }) == '     b😀'
+}
+
+fn test_erase_chars_splits_requested_wide_boundaries() {
+	mut t := create_test_terminal(30, 1) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('x食べて下さい') or { assert false }
+	assert (t.plain_string() or { '' }) == 'x食べて下さい'
+	t.set_cursor_pos(1, 6)
+	t.erase_chars(4)
+	t.screens.active.assert_integrity()
+	assert (t.plain_string() or { '' }) == 'x食べ    さい'
+}
+
+fn test_erase_chars_repairs_wrapped_wide_boundaries() {
+	mut t := create_test_terminal(8, 3) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('.......😀abcde😀......') or { assert false }
+	assert (t.plain_string() or { '' }) == '.......\n😀abcde\n😀......'
+	assert (t.plain_string_unwrapped() or { '' }) == '.......😀abcde😀......'
+	t.set_cursor_pos(2, 2)
+	t.erase_chars(3)
+	t.screens.active.assert_integrity()
+	assert (t.plain_string() or { '' }) == '.......\n    cde\n😀......'
+	assert (t.plain_string_unwrapped() or { '' }) == '.......     cde\n😀......'
+}
+
 // ============================================================
 // eraseLine (left wide)
 // ============================================================
