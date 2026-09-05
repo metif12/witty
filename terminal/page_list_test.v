@@ -32,6 +32,40 @@ fn set_screen_cell(mut pl PageList, x u16, y u16, cp u32) {
 	}
 }
 
+fn set_screen_semantic_cell(mut pl PageList, x u16, y u16, cp u32, semantic SemanticContent) {
+	p := pl.get_pin(.screen, x, y) or { return }
+	mut row := &p.node.data.rows[int(p.y)]
+	row.cells[int(p.x)] = CellData{
+		content_tag: .codepoint
+		codepoint: cp
+		semantic_content: semantic
+	}
+}
+
+fn set_screen_semantic_range(mut pl PageList, y u16, start u16, end u16, cp u32, semantic SemanticContent) {
+	for x in start .. end {
+		set_screen_semantic_cell(mut pl, x, y, cp, semantic)
+	}
+}
+
+fn mark_screen_prompt(mut pl PageList, y u16) {
+	mut p := pl.get_pin(.screen, 0, y) or { return }
+	p.node.data.rows[int(p.y)].semantic_prompt = .prompt
+}
+
+fn assert_page_list_semantic_highlight(pl &PageList, at Pin, content SemanticContent, start Pin, end Pin) {
+	at_pin := pl.get_pin(.screen, u16(at.x), u16(at.y)) or {
+		assert false, 'highlight start pin missing'
+		return
+	}
+	hl := pl.highlight_semantic_content(at_pin, content) or {
+		assert false, 'semantic highlight missing'
+		return
+	}
+	assert (pl.point_from_pin(.screen, hl.start) or { Pin{} }) == start
+	assert (pl.point_from_pin(.screen, hl.end) or { Pin{} }) == end
+}
+
 // ============================================================
 // Init tests
 // ============================================================
@@ -3232,6 +3266,208 @@ fn test_page_list_highlight_semantic_content_missing_input_and_output() {
 	}
 	assert s.highlight_semantic_content(at, .input) == none
 	assert s.highlight_semantic_content(at, .output) == none
+}
+
+fn test_page_list_highlight_semantic_content_prompt() {
+	mut s := PageList.init(10, 20, usize(0))
+	defer { s.deinit() }
+	mark_screen_prompt(mut s, 5)
+	set_screen_semantic_range(mut s, 5, 0, 5, u32(`A`), .prompt)
+	set_screen_semantic_range(mut s, 5, 5, 8, u32(`B`), .input)
+	mark_screen_prompt(mut s, 10)
+	assert_page_list_semantic_highlight(&s, Pin{ x: 2, y: 5 }, .prompt, Pin{ x: 0, y: 5 }, Pin{ x: 7, y: 5 })
+}
+
+fn test_page_list_highlight_semantic_content_prompt_with_output() {
+	mut s := PageList.init(10, 20, usize(0))
+	defer { s.deinit() }
+	mark_screen_prompt(mut s, 5)
+	set_screen_semantic_range(mut s, 5, 0, 3, u32(`$`), .prompt)
+	set_screen_semantic_range(mut s, 5, 3, 7, u32(`l`), .input)
+	set_screen_semantic_range(mut s, 5, 7, 10, u32(`o`), .output)
+	mark_screen_prompt(mut s, 10)
+	assert_page_list_semantic_highlight(&s, Pin{ x: 0, y: 5 }, .prompt, Pin{ x: 0, y: 5 }, Pin{ x: 6, y: 5 })
+}
+
+fn test_page_list_highlight_semantic_content_prompt_multiline() {
+	mut s := PageList.init(10, 20, usize(0))
+	defer { s.deinit() }
+	mark_screen_prompt(mut s, 5)
+	set_screen_semantic_range(mut s, 5, 0, 10, u32(`$`), .prompt)
+	set_screen_semantic_range(mut s, 6, 0, 5, u32(`c`), .input)
+	mark_screen_prompt(mut s, 10)
+	assert_page_list_semantic_highlight(&s, Pin{ x: 2, y: 5 }, .prompt, Pin{ x: 0, y: 5 }, Pin{ x: 4, y: 6 })
+}
+
+fn test_page_list_highlight_semantic_content_prompt_only() {
+	mut s := PageList.init(10, 20, usize(0))
+	defer { s.deinit() }
+	mark_screen_prompt(mut s, 5)
+	set_screen_semantic_range(mut s, 5, 0, 5, u32(`$`), .prompt)
+	mark_screen_prompt(mut s, 10)
+	assert_page_list_semantic_highlight(&s, Pin{ x: 0, y: 5 }, .prompt, Pin{ x: 0, y: 5 }, Pin{ x: 4, y: 5 })
+}
+
+fn test_page_list_highlight_semantic_content_prompt_to_end_of_screen() {
+	mut s := PageList.init(10, 20, usize(0))
+	defer { s.deinit() }
+	mark_screen_prompt(mut s, 15)
+	set_screen_semantic_range(mut s, 15, 0, 3, u32(`$`), .prompt)
+	set_screen_semantic_range(mut s, 15, 3, 8, u32(`c`), .input)
+	assert_page_list_semantic_highlight(&s, Pin{ x: 0, y: 15 }, .prompt, Pin{ x: 0, y: 15 }, Pin{ x: 7, y: 15 })
+}
+
+fn test_page_list_highlight_semantic_content_input_basic() {
+	mut s := PageList.init(10, 20, usize(0))
+	defer { s.deinit() }
+	mark_screen_prompt(mut s, 5)
+	set_screen_semantic_range(mut s, 5, 0, 3, u32(`$`), .prompt)
+	set_screen_semantic_range(mut s, 5, 3, 8, u32(`l`), .input)
+	mark_screen_prompt(mut s, 10)
+	assert_page_list_semantic_highlight(&s, Pin{ x: 0, y: 5 }, .input, Pin{ x: 3, y: 5 }, Pin{ x: 7, y: 5 })
+}
+
+fn test_page_list_highlight_semantic_content_input_with_output() {
+	mut s := PageList.init(10, 20, usize(0))
+	defer { s.deinit() }
+	mark_screen_prompt(mut s, 5)
+	set_screen_semantic_range(mut s, 5, 0, 2, u32(`$`), .prompt)
+	set_screen_semantic_range(mut s, 5, 2, 5, u32(`c`), .input)
+	set_screen_semantic_range(mut s, 5, 5, 10, u32(`o`), .output)
+	mark_screen_prompt(mut s, 10)
+	assert_page_list_semantic_highlight(&s, Pin{ x: 0, y: 5 }, .input, Pin{ x: 2, y: 5 }, Pin{ x: 4, y: 5 })
+}
+
+fn test_page_list_highlight_semantic_content_input_multiline_with_continuation() {
+	mut s := PageList.init(10, 20, usize(0))
+	defer { s.deinit() }
+	mark_screen_prompt(mut s, 5)
+	set_screen_semantic_range(mut s, 5, 0, 2, u32(`$`), .prompt)
+	set_screen_semantic_range(mut s, 5, 2, 10, u32(`c`), .input)
+	set_screen_semantic_range(mut s, 6, 0, 2, u32(`>`), .prompt)
+	set_screen_semantic_range(mut s, 6, 2, 6, u32(`d`), .input)
+	mark_screen_prompt(mut s, 10)
+	assert_page_list_semantic_highlight(&s, Pin{ x: 0, y: 5 }, .input, Pin{ x: 2, y: 5 }, Pin{ x: 5, y: 6 })
+}
+
+fn test_page_list_highlight_semantic_content_input_no_input_returns_none() {
+	mut s := PageList.init(10, 20, usize(0))
+	defer { s.deinit() }
+	mark_screen_prompt(mut s, 5)
+	set_screen_semantic_range(mut s, 5, 0, 3, u32(`$`), .prompt)
+	set_screen_semantic_range(mut s, 5, 3, 10, u32(`o`), .output)
+	mark_screen_prompt(mut s, 10)
+	at := s.get_pin(.screen, 0, 5) or {
+		assert false
+		return
+	}
+	assert s.highlight_semantic_content(at, .input) == none
+}
+
+fn test_page_list_highlight_semantic_content_input_to_end_of_screen() {
+	mut s := PageList.init(10, 20, usize(0))
+	defer { s.deinit() }
+	mark_screen_prompt(mut s, 15)
+	set_screen_semantic_range(mut s, 15, 0, 2, u32(`$`), .prompt)
+	set_screen_semantic_range(mut s, 15, 2, 7, u32(`c`), .input)
+	assert_page_list_semantic_highlight(&s, Pin{ x: 0, y: 15 }, .input, Pin{ x: 2, y: 15 }, Pin{ x: 6, y: 15 })
+}
+
+fn test_page_list_highlight_semantic_content_input_prompt_only_returns_none() {
+	mut s := PageList.init(10, 20, usize(0))
+	defer { s.deinit() }
+	mark_screen_prompt(mut s, 5)
+	set_screen_semantic_range(mut s, 5, 0, 10, u32(`$`), .prompt)
+	for y in u16(6) .. u16(10) {
+		set_screen_semantic_range(mut s, y, 0, 10, 0, .prompt)
+	}
+	mark_screen_prompt(mut s, 10)
+	at := s.get_pin(.screen, 0, 5) or {
+		assert false
+		return
+	}
+	assert s.highlight_semantic_content(at, .input) == none
+}
+
+fn test_page_list_highlight_semantic_content_output_basic() {
+	mut s := PageList.init(10, 20, usize(0))
+	defer { s.deinit() }
+	mark_screen_prompt(mut s, 5)
+	set_screen_semantic_range(mut s, 5, 0, 2, u32(`$`), .prompt)
+	set_screen_semantic_range(mut s, 5, 2, 5, u32(`l`), .input)
+	set_screen_semantic_range(mut s, 5, 5, 8, u32(`o`), .output)
+	set_screen_semantic_range(mut s, 5, 8, 10, 0, .prompt)
+	mark_screen_prompt(mut s, 10)
+	assert_page_list_semantic_highlight(&s, Pin{ x: 0, y: 5 }, .output, Pin{ x: 5, y: 5 }, Pin{ x: 7, y: 5 })
+}
+
+fn test_page_list_highlight_semantic_content_output_multiline() {
+	mut s := PageList.init(10, 20, usize(0))
+	defer { s.deinit() }
+	mark_screen_prompt(mut s, 5)
+	set_screen_semantic_range(mut s, 5, 0, 2, u32(`$`), .prompt)
+	set_screen_semantic_range(mut s, 5, 2, 4, u32(`l`), .input)
+	set_screen_semantic_range(mut s, 5, 4, 10, u32(`o`), .output)
+	set_screen_semantic_range(mut s, 6, 0, 10, u32(`o`), .output)
+	set_screen_semantic_range(mut s, 7, 0, 5, u32(`o`), .output)
+	set_screen_semantic_range(mut s, 7, 5, 10, 0, .input)
+	mark_screen_prompt(mut s, 10)
+	assert_page_list_semantic_highlight(&s, Pin{ x: 0, y: 5 }, .output, Pin{ x: 4, y: 5 }, Pin{ x: 4, y: 7 })
+}
+
+fn test_page_list_highlight_semantic_content_output_stops_at_next_prompt() {
+	mut s := PageList.init(10, 20, usize(0))
+	defer { s.deinit() }
+	mark_screen_prompt(mut s, 5)
+	set_screen_semantic_range(mut s, 5, 0, 2, u32(`$`), .prompt)
+	set_screen_semantic_range(mut s, 5, 2, 4, u32(`l`), .input)
+	set_screen_semantic_range(mut s, 5, 4, 10, u32(`o`), .output)
+	set_screen_semantic_range(mut s, 6, 0, 3, u32(`o`), .output)
+	set_screen_semantic_range(mut s, 6, 3, 6, u32(`$`), .prompt)
+	mark_screen_prompt(mut s, 10)
+	assert_page_list_semantic_highlight(&s, Pin{ x: 0, y: 5 }, .output, Pin{ x: 4, y: 5 }, Pin{ x: 2, y: 6 })
+}
+
+fn test_page_list_highlight_semantic_content_output_to_end_of_screen() {
+	mut s := PageList.init(10, 20, usize(0))
+	defer { s.deinit() }
+	mark_screen_prompt(mut s, 15)
+	set_screen_semantic_range(mut s, 15, 0, 2, u32(`$`), .prompt)
+	set_screen_semantic_range(mut s, 15, 2, 4, u32(`c`), .input)
+	set_screen_semantic_range(mut s, 15, 4, 10, u32(`o`), .output)
+	set_screen_semantic_range(mut s, 16, 0, 8, u32(`o`), .output)
+	set_screen_semantic_range(mut s, 16, 8, 10, 0, .prompt)
+	assert_page_list_semantic_highlight(&s, Pin{ x: 0, y: 15 }, .output, Pin{ x: 4, y: 15 }, Pin{ x: 7, y: 16 })
+}
+
+fn test_page_list_highlight_semantic_content_output_no_output_returns_none() {
+	mut s := PageList.init(10, 20, usize(0))
+	defer { s.deinit() }
+	mark_screen_prompt(mut s, 5)
+	set_screen_semantic_range(mut s, 5, 0, 3, u32(`$`), .prompt)
+	set_screen_semantic_range(mut s, 5, 3, 10, u32(`c`), .input)
+	for y in u16(6) .. u16(10) {
+		set_screen_semantic_range(mut s, y, 0, 10, 0, .input)
+	}
+	mark_screen_prompt(mut s, 10)
+	at := s.get_pin(.screen, 0, 5) or {
+		assert false
+		return
+	}
+	assert s.highlight_semantic_content(at, .output) == none
+}
+
+fn test_page_list_highlight_semantic_content_output_skips_empty_cells() {
+	mut s := PageList.init(10, 20, usize(0))
+	defer { s.deinit() }
+	mark_screen_prompt(mut s, 5)
+	set_screen_semantic_range(mut s, 5, 0, 3, u32(`$`), .prompt)
+	set_screen_semantic_range(mut s, 6, 0, 4, u32(`l`), .input)
+	for y in u16(7) .. u16(9) {
+		set_screen_semantic_range(mut s, y, 0, 5, u32(`o`), .output)
+	}
+	mark_screen_prompt(mut s, 10)
+	assert_page_list_semantic_highlight(&s, Pin{ x: 0, y: 5 }, .output, Pin{ x: 0, y: 7 }, Pin{ x: 4, y: 8 })
 }
 
 // ============================================================
