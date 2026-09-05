@@ -796,6 +796,11 @@ fn terminal_surface_finalize(obj voidptr) {
 	mut priv := terminal_surface_priv(obj)
 	if !isnil(priv.wrapper) {
 		mut self := unsafe { &SurfaceWidget(priv.wrapper) }
+		if !isnil(self.inspector) {
+			mut inspector_window := unsafe { self.inspector }
+			inspector_window.close()
+			self.inspector = unsafe { nil }
+		}
 		if self.has_core() {
 			if !isnil(self.core_surface_ref) && !isnil(self.app) && !isnil(self.app.core_app) {
 				mut app := unsafe { self.app.core_app }
@@ -988,6 +993,10 @@ pub mut:
 	core_runtime_app     core.RuntimeApp
 	core_runtime_surface core.RuntimeSurface
 	core_surface_ref     &core.SurfaceRef = unsafe { nil }
+
+	// Weakly-owned terminal inspector window. The window clears this pointer
+	// when it closes, matching Ghostty's InspectorWindow weak notification.
+	inspector &InspectorWindow = unsafe { nil }
 
 	// The apprt Surface adapter (see surface_linux.v).
 	rt_surface Surface
@@ -2896,19 +2905,7 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			return true
 		}
 		.inspector {
-			mut core_surface := self.core_surface
-			match action.inspector_mode {
-				.show { core_surface.activate_inspector()! }
-				.hide { core_surface.deactivate_inspector() }
-				.toggle {
-					if core_surface.inspector == none {
-						core_surface.activate_inspector()!
-					} else {
-						core_surface.deactivate_inspector()
-					}
-				}
-			}
-			return true
+			return self.control_core_inspector(action.inspector_mode)!
 		}
 		.open_config {
 			return self.app.perform_action(apprt.Target(apprt.AppTarget{}), .open_config, apprt.ActionValue{})!
@@ -3493,10 +3490,61 @@ pub fn (self &SurfaceWidget) toggle_maximize() {
 	}
 }
 
+enum InspectorControlMode {
+	toggle
+	show
+	hide
+}
+
+// control_inspector controls the terminal inspector window. Mirrors
+// Surface.controlInspector.
+pub fn (mut self SurfaceWidget) control_inspector(value apprt.InspectorAction) !bool {
+	mode := match value {
+		.toggle { InspectorControlMode.toggle }
+		.show { InspectorControlMode.show }
+		.hide { InspectorControlMode.hide }
+	}
+	return self.control_inspector_mode(mode)
+}
+
+fn (mut self SurfaceWidget) control_core_inspector(value core.InspectorMode) !bool {
+	mode := match value {
+		.toggle { InspectorControlMode.toggle }
+		.show { InspectorControlMode.show }
+		.hide { InspectorControlMode.hide }
+	}
+	return self.control_inspector_mode(mode)
+}
+
+fn (mut self SurfaceWidget) control_inspector_mode(value InspectorControlMode) !bool {
+	if !isnil(self.inspector) {
+		match value {
+			.show {}
+			.toggle, .hide {
+				mut inspector_window := unsafe { self.inspector }
+				inspector_window.close()
+			}
+		}
+		return true
+	}
+
+	match value {
+		.toggle, .show {
+			inspector_window := new_inspector_window(mut self)!
+			self.inspector = inspector_window
+			inspector_window.present()
+		}
+		.hide {}
+	}
+	return true
+}
+
 // redraw_inspector redraws the inspector, if any. Mirrors
 // `Surface.redrawInspector`.
 pub fn (self &SurfaceWidget) redraw_inspector() {
-	// TODO(gtk): queue a render on the inspector window if present.
+	if !isnil(self.inspector) {
+		self.inspector.queue_render()
+	}
 }
 
 // --- GObject class registration -------------------------------------------

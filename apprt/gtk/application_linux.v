@@ -1615,22 +1615,7 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		}
 		.inspector {
 			mut surface := surface_from_target(target) or { return false }
-			if !surface.has_core() {
-				return false
-			}
-			mut core_surface := surface.core_surface
-			match data.inspector_ {
-				.show { core_surface.activate_inspector()! }
-				.hide { core_surface.deactivate_inspector() }
-				.toggle {
-					if core_surface.inspector == none {
-						core_surface.activate_inspector()!
-					} else {
-						core_surface.deactivate_inspector()
-					}
-				}
-			}
-			return true
+			return surface.control_inspector(data.inspector_)!
 		}
 		.key_sequence {
 			mut surface := surface_from_target(target) or { return false }

@@ -3,6 +3,7 @@
 
 extern "C" bool witty_cimgui_opengl_init(ImGuiContext* context) {
     ImGui::SetCurrentContext(context);
+    ImGui::GetIO().BackendPlatformName = "ghostty_gtk";
     return ImGui_ImplOpenGL3_Init(nullptr);
 }
 
