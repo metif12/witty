@@ -3231,6 +3231,7 @@ fn (mut self Terminal) row_will_be_shifted(row_idx int) {
 	unsafe {
 		mut row := &self.screens.active.pages.screen_rows[row_idx]
 		cols := int(self.screens.active.pages.cols)
+		mut cleared_grapheme := false
 
 		// If our scrolling region includes the rightmost column then we
 		// need to turn any spacer heads in to normal empty cells, since
@@ -3259,6 +3260,7 @@ fn (mut self Terminal) row_will_be_shifted(row_idx int) {
 		if left_i < row.cells.len && row.cells[left_i].wide == .spacer_tail {
 			wide_i := left_i - 1
 			if wide_i >= 0 && wide_i < row.cells.len {
+				cleared_grapheme = row.cells[wide_i].has_grapheme
 				row.cells[wide_i].graphemes = []
 				row.cells[wide_i].has_grapheme = false
 				row.cells[wide_i].content_tag = .codepoint
@@ -3270,6 +3272,7 @@ fn (mut self Terminal) row_will_be_shifted(row_idx int) {
 
 		if right_i < row.cells.len && row.cells[right_i].wide == .wide {
 			tail_i := right_i + 1
+			cleared_grapheme = cleared_grapheme || row.cells[right_i].has_grapheme
 			row.cells[right_i].graphemes = []
 			row.cells[right_i].has_grapheme = false
 			row.cells[right_i].content_tag = .codepoint
@@ -3277,6 +3280,18 @@ fn (mut self Terminal) row_will_be_shifted(row_idx int) {
 			row.cells[right_i].wide = .narrow
 			if tail_i < row.cells.len {
 				row.cells[tail_i].wide = .narrow
+			}
+		}
+
+		// Page.clearGrapheme updates this aggregate after removing a boundary
+		// grapheme. Flat row storage must perform the same scan explicitly.
+		if cleared_grapheme {
+			row.grapheme = false
+			for cell in row.cells {
+				if cell.has_grapheme {
+					row.grapheme = true
+					break
+				}
 			}
 		}
 	}

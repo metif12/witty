@@ -4766,6 +4766,37 @@ fn test_insert_delete_lines_preserve_full_row_metadata() {
 	assert moved_up.kitty_virtual_placeholder
 }
 
+fn test_line_shift_recomputes_grapheme_flag_after_wide_boundary_split() {
+	mut t := create_test_terminal(5, 2) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+	t.print_string('AA') or { assert false }
+	t.print(0x1f468) or { assert false }
+	t.print(0x200d) or { assert false }
+	t.print(0x1f469) or { assert false }
+	row_before := t.screens.active.pages.get_active_row(0)
+	assert row_before.cells[2].wide == .wide
+	assert row_before.cells[2].has_grapheme
+	assert row_before.cells[3].wide == .spacer_tail
+	assert row_before.grapheme
+
+	// Splitting the left boundary at the wide tail clears the only grapheme.
+	t.scrolling_region.left = 3
+	t.scrolling_region.right = 4
+	t.screens.active.cursor_absolute(3, 0)
+	t.delete_lines(1)
+
+	row_after := t.screens.active.pages.get_active_row(0)
+	assert !row_after.cells[2].has_grapheme
+	assert row_after.cells[2].wide == .narrow
+	assert row_after.cells[3].wide == .narrow
+	assert !row_after.grapheme
+}
+
 fn test_scroll_up_preserves_pending_wrap() {
 	mut t := create_test_terminal(5, 5) or {
 		assert false
