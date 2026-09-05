@@ -5,6 +5,7 @@ import configpkg
 import os
 import pty
 import renderer
+import terminal
 import time
 
 fn mailbox_send_forever_for_test(mailbox_ptr voidptr, done chan bool) {
@@ -44,6 +45,24 @@ fn test_mailbox_push_pop_fifo() {
 	assert first.write_stable_data == 'one'
 	assert second.write_stable_data == 'two'
 	assert mailbox.pop() == none
+}
+
+fn test_derived_config_converts_only_explicit_cursor_color() {
+	mut config := configpkg.Config.default_config()
+	config.cursor_color = configpkg.TerminalColor{
+		color: configpkg.ColorRGB{ r: 0x12, g: 0x34, b: 0x56 }
+	}
+	derived := DerivedConfig.init(&config)!
+	cursor_color := derived.cursor_color or { panic('explicit cursor color was discarded') }
+	assert cursor_color == terminal.RGB{ r: 0x12, g: 0x34, b: 0x56 }
+
+	config.cursor_color = configpkg.TerminalColor{ kind: .cell_foreground }
+	cell_relative := DerivedConfig.init(&config)!
+	assert cell_relative.cursor_color == none
+
+	config.cursor_color = none
+	unset := DerivedConfig.init(&config)!
+	assert unset.cursor_color == none
 }
 
 fn test_termio_queue_message_uses_mailbox() {

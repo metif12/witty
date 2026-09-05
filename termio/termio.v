@@ -415,7 +415,19 @@ pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
 			g: config.background.g
 			b: config.background.b
 		}
-		cursor_color: none
+		cursor_color: if cursor_color := config.cursor_color {
+			if cursor_color.kind == .color {
+				terminal.RGB{
+					r: cursor_color.color.r
+					g: cursor_color.color.g
+					b: cursor_color.color.b
+				}
+			} else {
+				none
+			}
+		} else {
+			none
+		}
 		image_storage_limit: int(config.image_storage_limit)
 		cursor_style: match config.cursor_style {
 			.block { .block }
