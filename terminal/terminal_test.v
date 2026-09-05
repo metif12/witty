@@ -6306,3 +6306,130 @@ fn test_print_wide_char_at_right_margin_has_no_spacer_head() {
 	assert wide.wide == .wide
 	assert cell_at(&t, 3, 1).wide == .spacer_tail
 }
+
+fn test_print_writes_to_active_bottom_while_viewport_is_scrolled() {
+	mut t := create_test_terminal(5, 2) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('hello') or { assert false }
+	t.set_cursor_pos(0, 0)
+	t.index() or { assert false }
+	t.index() or { assert false }
+	t.index() or { assert false }
+	assert (t.plain_string() or { '' }) == ''
+
+	t.screens.active.scroll(ScrollTop{})
+	assert (t.plain_string() or { '' }) == 'hello'
+
+	t.print(u32(`A`)) or { assert false }
+	t.screens.active.scroll(ScrollActive{})
+	assert (t.plain_string() or { '' }) == '\nA'
+	assert t.is_dirty(u32(t.screens.active.cursor.x), u32(t.screens.active.cursor.y))
+}
+
+fn test_print_with_hyperlink() {
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.screens.active.start_hyperlink('http://example.com', none) or { assert false }
+	t.print_string('123456') or { assert false }
+	row := t.screens.active.pages.get_active_row(0)
+	assert row.hyperlink
+	for x in 0 .. 6 {
+		assert row.cells[x].has_hyperlink
+		assert row.cells[x].hyperlink.uri == 'http://example.com'
+		assert row.cells[x].hyperlink.id is HyperlinkImplicitId
+		assert (row.cells[x].hyperlink.id as HyperlinkImplicitId).offset == 0
+	}
+}
+
+fn test_print_over_cell_with_same_hyperlink() {
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.screens.active.start_hyperlink('http://example.com', none) or { assert false }
+	t.print_string('123456') or { assert false }
+	t.set_cursor_pos(1, 1)
+	t.print_string('123456') or { assert false }
+	row := t.screens.active.pages.get_active_row(0)
+	assert row.hyperlink
+	for x in 0 .. 6 {
+		assert row.cells[x].has_hyperlink
+		assert row.cells[x].hyperlink.uri == 'http://example.com'
+		assert (row.cells[x].hyperlink.id as HyperlinkImplicitId).offset == 0
+	}
+}
+
+fn test_print_and_end_hyperlink() {
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.screens.active.start_hyperlink('http://example.com', none) or { assert false }
+	t.print_string('123') or { assert false }
+	t.screens.active.end_hyperlink()
+	t.print_string('456') or { assert false }
+	row := t.screens.active.pages.get_active_row(0)
+	assert row.hyperlink
+	for x in 0 .. 3 {
+		assert row.cells[x].has_hyperlink
+		assert row.cells[x].hyperlink.uri == 'http://example.com'
+	}
+	for x in 3 .. 6 {
+		assert !row.cells[x].has_hyperlink
+	}
+}
+
+fn test_print_and_change_hyperlink() {
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.screens.active.start_hyperlink('http://one.example.com', none) or { assert false }
+	t.print_string('123') or { assert false }
+	t.screens.active.start_hyperlink('http://two.example.com', none) or { assert false }
+	t.print_string('456') or { assert false }
+	row := t.screens.active.pages.get_active_row(0)
+	for x in 0 .. 3 {
+		assert row.cells[x].has_hyperlink
+		assert row.cells[x].hyperlink.uri == 'http://one.example.com'
+		assert (row.cells[x].hyperlink.id as HyperlinkImplicitId).offset == 0
+	}
+	for x in 3 .. 6 {
+		assert row.cells[x].has_hyperlink
+		assert row.cells[x].hyperlink.uri == 'http://two.example.com'
+		assert (row.cells[x].hyperlink.id as HyperlinkImplicitId).offset == 1
+	}
+}
+
+fn test_overwrite_hyperlink_clears_row_flag() {
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.screens.active.start_hyperlink('http://one.example.com', none) or { assert false }
+	t.print_string('123') or { assert false }
+	t.set_cursor_pos(1, 1)
+	t.screens.active.end_hyperlink()
+	t.print_string('456') or { assert false }
+	row := t.screens.active.pages.get_active_row(0)
+	assert !row.hyperlink
+	for x in 0 .. 3 {
+		assert !row.cells[x].has_hyperlink
+	}
+}

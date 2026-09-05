@@ -4227,12 +4227,12 @@ pub fn (mut self Terminal) switch_screen_mode(mode SwitchScreenMode, enabled boo
 // Return the current string value of the terminal. Newlines are
 // encoded as "\n". This omits any formatting such as fg/bg.
 pub fn (mut self Terminal) plain_string() !string {
-	return self.screens.active.dump_string_alloc(.active)!
+	return self.screens.active.dump_string_alloc(.viewport)!
 }
 
 // Same as plain_string, but respects row wrap state when building the string.
 pub fn (mut self Terminal) plain_string_unwrapped() !string {
-	return self.screens.active.dump_string_alloc_unwrapped(.active)!
+	return self.screens.active.dump_string_alloc_unwrapped(.viewport)!
 }
 
 // ============================================================
