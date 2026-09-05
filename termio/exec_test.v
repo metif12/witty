@@ -2,6 +2,7 @@ module termio
 
 import build_meta
 import configpkg
+import os
 import renderer
 
 // ============================================================
@@ -96,6 +97,27 @@ fn test_subprocess_init_basic() {
 		assert env['TERM_PROGRAM'] == 'ghostty'
 		assert env['TERM_PROGRAM_VERSION'] == build_meta.version_string
 	}
+}
+
+fn test_add_executable_to_path_appends_once() {
+	mut env := {
+		'PATH': ['/usr/bin', '/bin'].join(os.path_delimiter)
+	}
+	add_executable_to_path(mut env, '/opt/ghostty/bin/ghostty', false)
+	assert env['GHOSTTY_BIN_DIR'] == '/opt/ghostty/bin'
+	assert env['PATH'] == ['/usr/bin', '/bin', '/opt/ghostty/bin'].join(os.path_delimiter)
+
+	add_executable_to_path(mut env, '/opt/ghostty/bin/ghostty', false)
+	assert env['PATH'] == ['/usr/bin', '/bin', '/opt/ghostty/bin'].join(os.path_delimiter)
+}
+
+fn test_add_executable_to_path_skips_flatpak_sandbox_binary() {
+	mut env := {
+		'PATH': ['/usr/bin', '/bin'].join(os.path_delimiter)
+	}
+	add_executable_to_path(mut env, '/app/bin/ghostty', true)
+	assert 'GHOSTTY_BIN_DIR' !in env
+	assert env['PATH'] == ['/usr/bin', '/bin'].join(os.path_delimiter)
 }
 
 fn test_subprocess_init_with_resources() {

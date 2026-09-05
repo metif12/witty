@@ -169,6 +169,13 @@ fn (mut self Exec) thread_enter_common(io &Termio) ! {
 	// pipe_fds[0] is the read end, pipe_fds[1] is the write end.
 	mut pipe_fds := [2]int{}
 	if C.pipe(&pipe_fds[0]) != 0 {
+		// The subprocess is already running at this point. Ghostty installs an
+		// errdefer immediately after start so every later setup failure stops it.
+		self.subprocess.stop()
+		if !isnil(self.subprocess.flatpak_command) {
+			mut command := unsafe { self.subprocess.flatpak_command }
+			command.wait() or {}
+		}
 		return error('failed to create quit pipe')
 	}
 
@@ -395,6 +402,36 @@ fn null_delimited_env(env map[string]string) NullDelimitedEnv {
 	}
 }
 
+// Add our executable directory to the child environment. Flatpak commands run
+// on the host, where a binary inside the sandbox cannot be reached.
+fn add_executable_to_path(mut env map[string]string, executable string, flatpak bool) {
+	if flatpak || executable.len == 0 {
+		return
+	}
+
+	exe_dir := os.dir(executable)
+	if exe_dir.len == 0 {
+		return
+	}
+
+	// We always set this so that if the shell overwrites the path scripts
+	// still have a way to find the Ghostty binary when running in Ghostty.
+	env['GHOSTTY_BIN_DIR'] = exe_dir
+
+	// Append so that Ghostty is the last priority in PATH, avoiding a duplicate
+	// entry when the executable directory is already present.
+	if existing_path := env['PATH'] {
+		for entry in existing_path.split(os.path_delimiter) {
+			if entry == exe_dir {
+				return
+			}
+		}
+		env['PATH'] = internal_os.append_env(existing_path, exe_dir)
+	} else {
+		env['PATH'] = exe_dir
+	}
+}
+
 // init initializes the subprocess configuration. This will NOT start it,
 // this only sets up the internal state necessary to start it later.
 pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
@@ -429,36 +466,9 @@ pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
 		env['COLORTERM'] = 'truecolor'
 	}
 
-	// Add our binary to the path if we can find it.
-	exe_path := os.executable()
-	if exe_path.len > 0 {
-		exe_dir := os.dir(exe_path)
-		if exe_dir.len > 0 {
-			// We always set this so that if the shell overwrites the path
-			// scripts still have a way to find the Ghostty binary when
-			// running in Ghostty.
-			env['GHOSTTY_BIN_DIR'] = exe_dir
-
-			// Append if we have a path. We want to append so that ghostty is
-			// the last priority in the path.
-			if existing_path := env['PATH'] {
-				// Verify that our path doesn't already contain this entry
-				mut found := false
-				parts := existing_path.split(':')
-				for entry in parts {
-					if entry == exe_dir {
-						found = true
-						break
-					}
-				}
-				if !found {
-					env['PATH'] = internal_os.append_env(existing_path, exe_dir)
-				}
-			} else {
-				env['PATH'] = exe_dir
-			}
-		}
-	}
+	// Add our binary to the path if we can find it. Skip this for Flatpak
+	// because the command runs on the host and cannot reach sandbox binaries.
+	add_executable_to_path(mut env, os.executable(), internal_os.is_flatpak())
 
 	// On macOS, export additional data directories from our
 	// application bundle.
