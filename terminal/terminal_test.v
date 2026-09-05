@@ -1636,6 +1636,43 @@ fn test_full_reset_with_a_non_empty_pen() {
 	assert str == ''
 }
 
+fn test_full_reset_hyperlink() {
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.screens.active.start_hyperlink('http://example.com', none) or { assert false }
+	assert t.screens.active.cursor.hyperlink_id != 0
+	t.full_reset()
+	assert t.screens.active.cursor.hyperlink_id == 0
+}
+
+fn test_full_reset_with_a_non_empty_saved_cursor() {
+	mut t := create_test_terminal(80, 80) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.set_attribute(SgrAttribute{
+		kind: .direct_color_fg
+		r: 255
+		b: 127
+	}) or { assert false }
+	t.set_attribute(SgrAttribute{
+		kind: .direct_color_bg
+		r: 255
+		b: 127
+	}) or { assert false }
+	t.save_cursor()
+	assert t.screens.active.saved_cursor != none
+	t.full_reset()
+	assert t.screens.active.saved_cursor == none
+	assert t.screens.active.cursor.style_id == default_style_id
+}
+
 fn test_full_reset_origin_mode() {
 	mut t := create_test_terminal(80, 80) or {
 		assert false
@@ -1658,6 +1695,41 @@ fn test_full_reset_status_display() {
 	t.status_display = .status_line
 	t.full_reset()
 	assert t.status_display == .main
+}
+
+fn test_full_reset_clears_alternate_screen_kitty_keyboard_state() {
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.switch_screen_mode(.mode_1049, true) or { assert false }
+	t.screens.active.kitty_keyboard.push(0b1_1111)
+	assert t.screens.active.kitty_keyboard.current() == 0b1_1111
+	t.switch_screen_mode(.mode_1049, false) or { assert false }
+
+	t.full_reset()
+	assert t.screens.alternate_ptr == unsafe { nil }
+}
+
+fn test_full_reset_default_modes() {
+	mut defaults := build_default_modes()
+	defaults.data |= u64(1) << int(Mode.grapheme_cluster)
+	mut t := Terminal.init(Options{
+		cols: 10
+		rows: 10
+		default_modes: defaults
+	}) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	assert t.modes.get(.grapheme_cluster)
+	t.modes.set(.grapheme_cluster, false)
+	t.full_reset()
+	assert t.modes.get(.grapheme_cluster)
 }
 
 // ============================================================
@@ -2098,6 +2170,79 @@ fn test_mode_47_alt_screen_plain() {
 	assert retained == '  2B'
 }
 
+fn test_mode_47_copies_cursor_style_both_directions() {
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.set_attribute(SgrAttribute{ kind: .direct_color_fg, r: 255, b: 127 }) or {
+		assert false
+	}
+	t.switch_screen_mode(.mode_47, true) or { assert false }
+	assert t.screens.active_key == .alternate
+	assert t.screens.active.cursor.style_id != default_style_id
+	assert t.screens.active.cursor.style.fg_color == .rgb
+	assert t.screens.active.cursor.style.fg_r == 255
+	assert t.screens.active.cursor.style.fg_b == 127
+
+	t.set_attribute(SgrAttribute{ kind: .direct_color_fg, g: 255 }) or { assert false }
+	t.switch_screen_mode(.mode_47, false) or { assert false }
+	assert t.screens.active_key == .primary
+	assert t.screens.active.cursor.style_id != default_style_id
+	assert t.screens.active.cursor.style.fg_color == .rgb
+	assert t.screens.active.cursor.style.fg_r == 0
+	assert t.screens.active.cursor.style.fg_g == 255
+}
+
+fn test_mode_1047_alt_screen_plain() {
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('1A') or { assert false }
+	t.switch_screen_mode(.mode_1047, true) or { assert false }
+	assert t.screens.active_key == .alternate
+	assert t.plain_string() or { '' } == ''
+
+	t.print_string('2B') or { assert false }
+	assert t.plain_string() or { '' } == '  2B'
+
+	t.switch_screen_mode(.mode_1047, false) or { assert false }
+	assert t.screens.active_key == .primary
+	assert t.plain_string() or { '' } == '1A'
+
+	// Unlike mode 47, mode 1047 clears the alternate screen on exit.
+	t.switch_screen_mode(.mode_1047, true) or { assert false }
+	assert t.screens.active_key == .alternate
+	assert t.plain_string() or { 'not empty' } == ''
+}
+
+fn test_mode_1047_copies_cursor_style_both_directions() {
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.set_attribute(SgrAttribute{ kind: .direct_color_fg, r: 255, b: 127 }) or {
+		assert false
+	}
+	t.switch_screen_mode(.mode_1047, true) or { assert false }
+	assert t.screens.active.cursor.style.fg_r == 255
+	assert t.screens.active.cursor.style.fg_b == 127
+
+	t.set_attribute(SgrAttribute{ kind: .direct_color_fg, g: 255 }) or { assert false }
+	t.switch_screen_mode(.mode_1047, false) or { assert false }
+	assert t.screens.active_key == .primary
+	assert t.screens.active.cursor.style.fg_color == .rgb
+	assert t.screens.active.cursor.style.fg_r == 0
+	assert t.screens.active.cursor.style.fg_g == 255
+}
+
 fn test_mode_1049_alt_screen_plain() {
 	mut t := create_test_terminal(5, 5) or {
 		assert false
@@ -2126,6 +2271,34 @@ fn test_mode_1049_alt_screen_plain() {
 		return
 	}
 	assert str == 'Hello\nWorld'
+}
+
+fn test_mode_1049_restores_primary_cursor_and_clears_on_entry() {
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('1A') or { assert false }
+	t.switch_screen_mode(.mode_1049, true) or { assert false }
+	assert t.screens.active_key == .alternate
+	assert t.plain_string() or { 'not empty' } == ''
+
+	t.print_string('2B') or { assert false }
+	assert t.plain_string() or { '' } == '  2B'
+	t.switch_screen_mode(.mode_1049, false) or { assert false }
+	assert t.screens.active_key == .primary
+	assert t.plain_string() or { '' } == '1A'
+
+	// The primary cursor was saved before entry and restored on exit.
+	t.print_string('C') or { assert false }
+	assert t.plain_string() or { '' } == '1AC'
+
+	// Every mode 1049 entry clears the alternate screen.
+	t.switch_screen_mode(.mode_1049, true) or { assert false }
+	assert t.screens.active_key == .alternate
+	assert t.plain_string() or { 'not empty' } == ''
 }
 
 // ============================================================
