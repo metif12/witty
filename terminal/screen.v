@@ -2246,6 +2246,13 @@ pub fn (mut self Screen) cursor_left(n u32) {
 // Move the cursor up by n rows.
 pub fn (mut self Screen) cursor_up(n u32) {
 	assert self.cursor.y >= n
+	if n == 0 {
+		return
+	}
+	// cursorChangePin marks both sides of a move because cursor placement
+	// changes where text runs split. Flat storage has no page-local state to
+	// migrate, but it retains the same dirty-row contract.
+	self.cursor_mark_dirty()
 	self.cursor.y -= n
 	self.cursor_mark_dirty()
 }
@@ -2253,6 +2260,10 @@ pub fn (mut self Screen) cursor_up(n u32) {
 // Move the cursor down by n rows.
 pub fn (mut self Screen) cursor_down(n u32) {
 	assert self.cursor.y + n < self.pages.rows
+	if n == 0 {
+		return
+	}
+	self.cursor_mark_dirty()
 	self.cursor.y += n
 	self.cursor_mark_dirty()
 }
@@ -2267,9 +2278,10 @@ pub fn (mut self Screen) cursor_horizontal_absolute(x u32) {
 pub fn (mut self Screen) cursor_absolute(x u32, y u32) {
 	assert x < self.pages.cols
 	assert y < self.pages.rows
-	if self.cursor.x != x || self.cursor.y != y {
-		self.cursor_mark_dirty()
+	if self.cursor.x == x && self.cursor.y == y {
+		return
 	}
+	self.cursor_mark_dirty()
 	self.cursor.x = x
 	self.cursor.y = y
 	self.cursor_mark_dirty()

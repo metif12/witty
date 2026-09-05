@@ -847,6 +847,44 @@ fn test_screen_cursor_movement() {
 	assert s.cursor.y == 5
 }
 
+fn test_screen_cursor_vertical_movement_marks_old_and_new_rows_dirty() {
+	mut s := Screen.init(10, 4, 0)
+	defer { s.deinit() }
+	s.cursor_absolute(2, 1)
+	for mut row in s.pages.screen_rows {
+		row.dirty = false
+	}
+
+	s.cursor_down(2)
+	assert s.pages.get_active_row(1).dirty
+	assert !s.pages.get_active_row(2).dirty
+	assert s.pages.get_active_row(3).dirty
+
+	for mut row in s.pages.screen_rows {
+		row.dirty = false
+	}
+	s.cursor_up(1)
+	assert !s.pages.get_active_row(1).dirty
+	assert s.pages.get_active_row(2).dirty
+	assert s.pages.get_active_row(3).dirty
+}
+
+fn test_screen_zero_distance_cursor_movement_stays_clean() {
+	mut s := Screen.init(10, 3, 0)
+	defer { s.deinit() }
+	s.cursor_absolute(2, 1)
+	for mut row in s.pages.screen_rows {
+		row.dirty = false
+	}
+
+	s.cursor_up(0)
+	s.cursor_down(0)
+	s.cursor_absolute(2, 1)
+	for row in s.pages.screen_rows {
+		assert !row.dirty
+	}
+}
+
 fn test_screen_cursor_cell_left_right() {
 	mut s := Screen.init(10, 3, 0)
 	defer { s.deinit() }
