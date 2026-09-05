@@ -6297,6 +6297,91 @@ fn test_page_list_resize_reflow_wrap_moves_kitty_placeholder() {
 	assert it.next() == none
 }
 
+fn test_page_list_resize_reflow_grapheme_map_capacity_exceeded() {
+	mut s := PageList.init(4, 10, usize(0))
+	defer { s.deinit() }
+	assert s.total_pages() == 1
+
+	first := s.pages.first or { return }
+	grapheme_capacity := first.data.grapheme_capacity()
+	graphemes_per_page := grapheme_capacity / 2 + grapheme_capacity / 4
+	remaining := int(first.data.capacity.rows - first.data.size.rows)
+	for _ in 0 .. remaining {
+		assert s.grow() == none
+	}
+	assert s.total_pages() == 1
+	s.grow_rows(usize(graphemes_per_page))
+	assert s.total_pages() == 2
+
+	mut page0_node := s.pages.first or { return }
+	mut page0 := &page0_node.data
+	start_row := int(page0.size.rows) - graphemes_per_page
+	for i in 0 .. graphemes_per_page {
+		y := start_row + i
+		page0.rows[y].cells[0] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(`A`)
+		}
+		page0.append_grapheme(y, 0, u32(0x0301)) or { panic(err) }
+	}
+
+	mut page1_node := s.pages.last or { return }
+	mut page1 := &page1_node.data
+	count := if graphemes_per_page < int(page1.size.rows) {
+		graphemes_per_page
+	} else {
+		int(page1.size.rows)
+	}
+	for y in 0 .. count {
+		page1.rows[y].cells[0] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(`B`)
+		}
+		page1.append_grapheme(y, 0, u32(0x0302)) or { panic(err) }
+	}
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	assert s.cols == 2
+}
+
+fn test_page_list_resize_reflow_exceeds_grapheme_memory_forcing_capacity_increase() {
+	mut s := PageList.init(2, 10, usize(0))
+	defer { s.deinit() }
+	assert s.total_pages() == 1
+
+	first := s.pages.first or { return }
+	remaining := int(first.data.capacity.rows - first.data.size.rows)
+	for _ in 0 .. remaining {
+		assert s.grow() == none
+	}
+	s.grow_rows(1)
+	assert s.total_pages() == 2
+
+	cps := []u32{len: int(grapheme_bytes_default / sizeof(u32)) - 1, init: u32(`a`)}
+	mut page0_node := s.pages.first or { return }
+	mut page0 := &page0_node.data
+	y0 := int(page0.size.rows) - 1
+	x0 := int(page0.size.cols) - 1
+	page0.rows[y0].wrap = true
+	page0.rows[y0].cells[x0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`X`)
+	}
+	page0.set_graphemes(y0, x0, cps) or { panic(err) }
+
+	mut page1_node := s.pages.last or { return }
+	mut page1 := &page1_node.data
+	page1.rows[0].wrap = true
+	page1.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`X`)
+	}
+	page1.set_graphemes(0, 0, cps) or { panic(err) }
+
+	s.resize(PageResizeOpts{ cols: s.cols + 1, reflow: true })
+	assert s.cols == 3
+}
+
 fn test_page_list_resize_reflow_less_cols_blank_lines_between() {
 	mut s := PageList.init(4, 3, usize(0))
 	defer { s.deinit() }
