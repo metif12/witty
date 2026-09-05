@@ -176,6 +176,7 @@ import configpkg
 import datastruct
 import kitty
 import os
+import pty
 import renderer
 import sync
 import terminal
@@ -949,7 +950,57 @@ fn (mut t Thread) run_timers(mut io Termio, now i64) bool {
 		}
 		did_work = true
 	}
+	if t.run_termios_timer(mut io, now) {
+		did_work = true
+	}
 	return did_work
+}
+
+// Poll the pty mode while the surface is focused. Canonical input with echo
+// disabled is Ghostty's password-entry heuristic; mode transitions are sent
+// to the surface so it can disable unsafe conveniences while a password is
+// being entered.
+fn (mut t Thread) run_termios_timer(mut io Termio, now i64) bool {
+	deadline := io.backend.thread_data.termios_deadline
+	if deadline <= 0 || now < deadline {
+		return false
+	}
+	io.backend.thread_data.termios_deadline = 0
+
+	$if !windows {
+		// The read descriptor is the pty master. Rebuild the lightweight Pty
+		// view exactly as Ghostty does so polling remains valid for the full
+		// backend-thread lifetime.
+		mode := pty.Pty{ master: io.backend.thread_data.read_thread_fd }.get_mode() or {
+			pty.Mode{}
+		}
+		t.apply_termios_mode(mut io, mode)
+	}
+
+	if io.backend.thread_data.termios_timer_running {
+		io.backend.thread_data.termios_deadline = now + termios_poll_ms * i64(time.millisecond)
+	}
+	return true
+}
+
+fn (mut t Thread) apply_termios_mode(mut io Termio, mode pty.Mode) {
+	if mode == io.backend.thread_data.termios_mode {
+		return
+	}
+	io.backend.thread_data.termios_mode = mode
+	password_input := mode.canonical && !mode.echo
+
+	io.renderer_state.mutex.lock()
+	unchanged := io.terminal.flags.password_input == password_input
+	io.renderer_state.mutex.unlock()
+	if unchanged {
+		return
+	}
+
+	io.surface_mailbox.push(apprt.SurfaceMessage{
+		kind: .password_input
+		password_input: password_input
+	})
 }
 
 // drain_mailbox dispatches every currently queued writer message. Returning

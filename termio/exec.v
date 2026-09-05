@@ -180,6 +180,7 @@ fn (mut self Exec) thread_enter_common(io &Termio) ! {
 		start_ns: start_ns
 		read_thread_pipe: pipe_fds[1] // write end - we write to signal quit
 		read_thread_fd: pty_fds.read
+		termios_deadline: i64(time.sys_mono_now()) + termios_poll_ms * i64(time.millisecond)
 	}
 
 	// Spawn the read thread. The read thread gets the pty read fd, the read
@@ -244,6 +245,11 @@ pub fn (mut self Exec) focus_gained(focused bool) ! {
 		// if we don't set this unconditionally the timer will end on
 		// the next iteration.
 		self.thread_data.termios_timer_running = true
+		// If the prior timer already stopped, trigger an immediate mode check.
+		// The polling thread will arm the next interval after processing it.
+		if self.thread_data.termios_deadline == 0 {
+			self.thread_data.termios_deadline = 1
+		}
 	}
 }
 
@@ -322,6 +328,7 @@ pub mut:
 	// Whether the termios polling timer is running.
 	// When focus is lost, this is set to false to stop polling.
 	termios_timer_running bool = true
+	termios_deadline      i64
 
 	// The last known termios mode. Used for change detection
 	// to prevent unnecessary locking of expensive mutexes.

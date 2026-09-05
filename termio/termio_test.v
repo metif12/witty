@@ -3,7 +3,9 @@ module termio
 import apprt
 import configpkg
 import os
+import pty
 import renderer
+import time
 
 fn mailbox_send_forever_for_test(mailbox_ptr voidptr, done chan bool) {
 	mut mailbox := unsafe { &Mailbox(mailbox_ptr) }
@@ -316,6 +318,63 @@ fn test_thread_selection_scroll_timer_reports_final_stop() {
 	assert writer.run_timers(mut tio, deadline)
 	assert probe.values == [false]
 	assert writer.scroll_deadline == 0
+}
+
+struct PasswordInputProbe {
+mut:
+	values []bool
+}
+
+fn password_input_probe_push(_ voidptr, surface voidptr, msg apprt.SurfaceMessage) int {
+	if msg.kind == .password_input {
+		mut probe := unsafe { &PasswordInputProbe(surface) }
+		probe.values << msg.password_input
+	}
+	return 1
+}
+
+fn test_thread_termios_mode_reports_password_input_transitions() {
+	mut probe := PasswordInputProbe{}
+	mut tio := Termio{}
+	tio.init(TermioOpts{
+		surface_mailbox: apprt.SurfaceMailbox{
+			surface: &probe
+			push_fn: password_input_probe_push
+		}
+	})!
+	defer { tio.deinit() }
+	mut writer := Thread.init()!
+	defer { writer.deinit() }
+
+	writer.apply_termios_mode(mut tio, pty.Mode{
+		canonical: true
+		echo: false
+	})
+	assert probe.values == [true]
+
+	// The surface owns the shared password-input flag after consuming the
+	// notification. Moving back to normal canonical+echo mode reports false.
+	tio.terminal.flags.password_input = true
+	writer.apply_termios_mode(mut tio, pty.Mode{})
+	assert probe.values == [true, false]
+}
+
+fn test_thread_termios_timer_stops_unfocused_and_restarts_on_focus() {
+	mut tio := Termio{}
+	tio.init(TermioOpts{})!
+	defer { tio.deinit() }
+	mut writer := Thread.init()!
+	defer { writer.deinit() }
+
+	tio.backend.thread_data.termios_deadline = 1
+	tio.backend.focus_gained(false)!
+	assert writer.run_termios_timer(mut tio, 1)
+	assert tio.backend.thread_data.termios_deadline == 0
+
+	tio.backend.focus_gained(true)!
+	assert tio.backend.thread_data.termios_deadline == 1
+	assert writer.run_termios_timer(mut tio, 1)
+	assert tio.backend.thread_data.termios_deadline == 1 + termios_poll_ms * i64(time.millisecond)
 }
 
 fn test_thread_start_error_explains_pty_exhaustion() {
