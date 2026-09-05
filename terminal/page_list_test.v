@@ -372,6 +372,90 @@ fn test_page_list_grow_prune_required_with_a_single_page() {
 	})
 }
 
+fn test_page_list_compact_standard_size_page_returns_none() {
+	mut s := PageList.init(80, 24, usize(0))
+	defer { s.deinit() }
+
+	node := s.pages.first or {
+		assert false
+		return
+	}
+	assert page_backing_size(node.data.capacity) <= standard_page_size()
+	assert s.compact(node) == none
+	current := s.pages.first or {
+		assert false
+		return
+	}
+	assert voidptr(current) == voidptr(node)
+}
+
+fn test_page_list_compact_oversized_page() {
+	mut s := PageList.init(80, 24, none)
+	defer { s.deinit() }
+
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	for s.total_pages() == 1 {
+		s.grow() or {}
+	}
+	for y in 0 .. int(first.data.size.rows) {
+		for x in 0 .. int(s.cols) {
+			first.data.rows[y].cells[x].codepoint = u32(x + y * int(s.cols))
+		}
+	}
+	tracked := s.track_pin(PagePin{
+		node: first
+		x: 5
+		y: 10
+	})
+
+	mut node := first
+	for page_backing_size(node.data.capacity) <= standard_page_size() {
+		node = s.increase_capacity(node, .grapheme_bytes) or { panic(err) }
+	}
+	oversized_size := page_backing_size(node.data.capacity)
+	original_rows := node.data.size.rows
+	original_cols := node.data.size.cols
+	second := node.next or {
+		assert false
+		return
+	}
+	node.data.dirty = true
+
+	new_node := s.compact(node) or {
+		assert false
+		return
+	}
+	assert page_backing_size(new_node.data.capacity) < oversized_size
+	assert new_node.data.size.rows == original_rows
+	assert new_node.data.size.cols == original_cols
+	assert new_node.data.dirty
+	current_first := s.pages.first or {
+		assert false
+		return
+	}
+	assert voidptr(new_node) == voidptr(current_first)
+	assert new_node.prev == none
+	assert voidptr(new_node.next or {
+		assert false
+		return
+	}) == voidptr(second)
+	assert voidptr(second.prev or {
+		assert false
+		return
+	}) == voidptr(new_node)
+	assert voidptr(tracked.node) == voidptr(new_node)
+	assert tracked.x == 5
+	assert tracked.y == 10
+	for y in 0 .. int(new_node.data.size.rows) {
+		for x in 0 .. int(s.cols) {
+			assert new_node.data.rows[y].cells[x].codepoint == u32(x + y * int(s.cols))
+		}
+	}
+}
+
 fn test_page_chunk_rows_full_page_and_overlap() {
 	mut s := PageList.init(3, 3, usize(0))
 	defer { s.deinit() }

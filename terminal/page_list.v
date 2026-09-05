@@ -5404,9 +5404,13 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 			dst_id = page.hyperlink_set.add_with_id(src_link, src_id) or {
 				mut adjustment := ?PageCapacityAdjustment(none)
 				match err.msg() {
-					'strings out of memory' { adjustment = .string_bytes }
+					'strings out of memory' {
+						adjustment = .string_bytes
+					}
 					'set needs rehash' {}
-					else { adjustment = .hyperlink_bytes }
+					else {
+						adjustment = .hyperlink_bytes
+					}
 				}
 				self.increase_capacity(mut list, adjustment) or {
 					return .out_of_space
@@ -5792,16 +5796,16 @@ pub fn (mut self PageList) compact(node &PageNode) ?&PageNode {
 	assert page.size.rows > 0
 
 	// We never compact standard size or smaller pages because changing the
-	// capacity to something smaller won't save memory. Our proxy for
-	// "standard size" is the capacity row count of a std page for our cols.
-	std_cap := initial_capacity(page.size.cols)
-	if page.capacity.rows <= std_cap.rows {
+	// capacity to something smaller won't save memory.
+	old_size := page_backing_size(page.capacity)
+	if old_size <= standard_page_size() {
 		return none
 	}
 
 	// Compute the minimum capacity required for this page's content.
 	req_cap := page.exact_row_capacity(0, int(page.size.rows))
-	if req_cap.rows >= page.capacity.rows {
+	new_size := Page.layout(req_cap).total_size
+	if new_size >= old_size {
 		return none
 	}
 
