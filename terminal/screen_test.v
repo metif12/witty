@@ -1964,6 +1964,43 @@ fn test_screen_prompt_click_move_disabled_when_click_none() {
 	assert r.left == 0
 }
 
+fn test_screen_prompt_click_move_line_right_stops_at_hard_wrap() {
+	mut s := Screen.init(20, 5, 0)
+	defer { s.deinit() }
+	s.semantic_prompt.click = .cl_line
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('> ') or { assert false }
+	s.cursor_set_semantic_content_input(false)
+	s.test_write_string('hello\nworld') or { assert false }
+
+	s.cursor_absolute(2, 0)
+	r := s.prompt_click_move(Pin{ x: 0, y: u32(s.pages.active_start) + 1 })
+	assert r.right == 5
+	assert r.left == 0
+}
+
+fn test_screen_prompt_click_move_line_right_stops_at_non_continuation_row() {
+	mut s := Screen.init(20, 5, 0)
+	defer { s.deinit() }
+	s.semantic_prompt.click = .cl_line
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('> ') or { assert false }
+	s.cursor_set_semantic_content_input(false)
+	s.test_write_string('hello\n') or { assert false }
+	s.cursor_set_semantic_content_prompt(.continuation)
+	s.cursor_set_semantic_content_input(false)
+	s.test_write_string('world\n') or { assert false }
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('> ') or { assert false }
+	s.cursor_set_semantic_content_input(false)
+	s.test_write_string('again') or { assert false }
+
+	s.cursor_absolute(0, 1)
+	r := s.prompt_click_move(Pin{ x: 2, y: u32(s.pages.active_start) + 2 })
+	assert r.right == 5
+	assert r.left == 0
+}
+
 fn test_screen_prompt_click_move_line_left_basic() {
 	mut s := pcm_setup()
 	defer { s.deinit() }
@@ -2010,6 +2047,21 @@ fn test_screen_prompt_click_move_left_soft_wrapped() {
 	s.cursor_absolute(1, 1)
 	r := s.prompt_click_move(Pin{ x: 2, y: u32(s.pages.active_start) })
 	assert r.left == 9
+	assert r.right == 0
+}
+
+fn test_screen_prompt_click_move_line_left_stops_at_hard_wrap() {
+	mut s := Screen.init(20, 5, 0)
+	defer { s.deinit() }
+	s.semantic_prompt.click = .cl_line
+	s.cursor_set_semantic_content_prompt(.initial)
+	s.test_write_string('> ') or { assert false }
+	s.cursor_set_semantic_content_input(false)
+	s.test_write_string('hello\nworld') or { assert false }
+
+	s.cursor_absolute(4, 1)
+	r := s.prompt_click_move(Pin{ x: 2, y: u32(s.pages.active_start) })
+	assert r.left == 4
 	assert r.right == 0
 }
 
