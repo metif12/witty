@@ -1059,6 +1059,7 @@ fn test_screen_scroll_above_same_page() {
 	assert blank.color_rgb_r == 155
 	assert blank.color_rgb_g == 0
 	assert blank.color_rgb_b == 0
+	assert !s.pages.get_active_row(1).styled
 	for y in u32(0) .. s.pages.rows {
 		assert s.pages.get_active_row(y).dirty
 	}

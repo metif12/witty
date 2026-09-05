@@ -2647,7 +2647,9 @@ fn (mut self Screen) cursor_scroll_above_rotate() {
 			}
 			row.wrap = false
 			row.wrap_continuation = false
-			row.styled = self.cursor.style_id != default_style_id
+			// blank_cell encodes a background directly on the cell and never uses
+			// a ref-counted style ID, so this row has no managed styles.
+			row.styled = false
 			row.grapheme = false
 			row.hyperlink = false
 		}
