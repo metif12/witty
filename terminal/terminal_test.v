@@ -6141,3 +6141,168 @@ fn test_delete_lines_clears_wide_characters_split_by_both_margins() {
 
 	assert (t.plain_string() or { '' }) == 'A B A'
 }
+
+fn test_disabled_wraparound_rejects_wide_char_with_one_space() {
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.modes.set(.wraparound, false)
+	t.print_string('AAAA') or { assert false }
+	t.clear_dirty()
+	t.print(0x1f6a8) or { assert false }
+
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 4
+	assert (t.plain_string() or { '' }) == 'AAAA'
+	cell := cell_at(&t, 4, 0)
+	assert cell.codepoint == 0
+	assert cell.wide == .narrow
+	assert !t.is_dirty(0, 0)
+}
+
+fn test_disabled_wraparound_rejects_wide_char_with_no_space() {
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.modes.set(.wraparound, false)
+	t.print_string('AAAAA') or { assert false }
+	t.clear_dirty()
+	t.print(0x1f6a8) or { assert false }
+
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 4
+	assert (t.plain_string() or { '' }) == 'AAAAA'
+	cell := cell_at(&t, 4, 0)
+	assert cell.codepoint == `A`
+	assert cell.wide == .narrow
+	assert !t.is_dirty(0, 0)
+}
+
+fn test_disabled_wraparound_rejects_wide_grapheme_with_half_space() {
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.modes.set(.grapheme_cluster, true)
+	t.modes.set(.wraparound, false)
+	t.print_string('AAAA') or { assert false }
+	t.print(0x2764) or { assert false }
+	t.clear_dirty()
+	t.print(0xfe0f) or { assert false }
+
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 4
+	assert (t.plain_string() or { '' }) == 'AAAA❤'
+	cell := cell_at(&t, 4, 0)
+	assert cell.codepoint == 0x2764
+	assert cell.wide == .narrow
+	assert !t.is_dirty(0, 0)
+}
+
+fn test_print_wraps_at_right_margin() {
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('123456789') or { assert false }
+	t.modes.set(.enable_left_and_right_margin, true)
+	t.set_left_and_right_margin(3, 5)
+	t.set_cursor_pos(1, 5)
+	t.print_string('XY') or { assert false }
+
+	assert (t.plain_string() or { '' }) == '1234X6789\n  Y'
+	assert !t.screens.active.pages.get_active_row(0).wrap
+}
+
+fn test_print_right_margin_wrap_dirty_tracking() {
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('123456789') or { assert false }
+	t.modes.set(.enable_left_and_right_margin, true)
+	t.set_left_and_right_margin(3, 5)
+	t.set_cursor_pos(1, 5)
+	t.clear_dirty()
+	t.print(u32(`X`)) or { assert false }
+	assert t.is_dirty(4, 0)
+	assert !t.is_dirty(2, 1)
+
+	t.clear_dirty()
+	t.print(u32(`Y`)) or { assert false }
+	assert t.is_dirty(4, 0)
+	assert t.is_dirty(2, 1)
+	assert (t.plain_string() or { '' }) == '1234X6789\n  Y'
+}
+
+fn test_print_outside_right_margin() {
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('123456789') or { assert false }
+	t.modes.set(.enable_left_and_right_margin, true)
+	t.set_left_and_right_margin(3, 5)
+	t.set_cursor_pos(1, 6)
+	t.clear_dirty()
+	t.print_string('XY') or { assert false }
+
+	assert (t.plain_string() or { '' }) == '12345XY89'
+	assert t.is_dirty(5, 0)
+}
+
+fn test_print_outside_right_margin_wraps_to_left_margin() {
+	mut t := create_test_terminal(10, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('123456789') or { assert false }
+	t.modes.set(.enable_left_and_right_margin, true)
+	t.set_left_and_right_margin(3, 5)
+	t.set_cursor_pos(1, 10)
+	t.print_string('XY') or { assert false }
+
+	assert (t.plain_string() or { '' }) == '123456789X\n  Y'
+}
+
+fn test_print_wide_char_at_right_margin_has_no_spacer_head() {
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.modes.set(.enable_left_and_right_margin, true)
+	t.set_left_and_right_margin(3, 5)
+	t.set_cursor_pos(1, 5)
+	t.print(0x1f600) or { assert false }
+
+	assert t.screens.active.cursor.y == 1
+	assert t.screens.active.cursor.x == 4
+	assert t.is_dirty(4, 0)
+	assert t.is_dirty(4, 1)
+	old_margin := cell_at(&t, 4, 0)
+	assert old_margin.codepoint == 0
+	assert old_margin.wide == .narrow
+	assert !t.screens.active.pages.get_active_row(0).wrap
+	wide := cell_at(&t, 2, 1)
+	assert wide.codepoint == 0x1f600
+	assert wide.wide == .wide
+	assert cell_at(&t, 3, 1).wide == .spacer_tail
+}
