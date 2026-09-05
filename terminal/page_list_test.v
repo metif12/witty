@@ -53,6 +53,28 @@ fn test_page_list_init() {
 	assert cell.cell.codepoint == 0
 }
 
+fn test_page_list_increase_capacity_rejects_layout_over_max_page_size() {
+	mut s := PageList.init(2, 2, usize(0))
+	defer { s.deinit() }
+
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	// Only the capacity metadata needs to be large to exercise the guard; the
+	// rejected path must not attempt to allocate or clone this layout.
+	first.data.capacity.cols = max_u16
+	first.data.capacity.rows = max_u16
+	old_serial := s.page_serial
+	assert s.increase_capacity(first, .styles) == none
+	current := s.pages.first or {
+		assert false
+		return
+	}
+	assert voidptr(current) == voidptr(first)
+	assert s.page_serial == old_serial
+}
+
 fn test_page_list_tracked_pin_accessors_and_diagram() {
 	mut s := PageList.init(3, 2, usize(0))
 	defer { s.deinit() }

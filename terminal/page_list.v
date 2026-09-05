@@ -3749,6 +3749,10 @@ fn (mut self PageList) create_page(cap PageCapacity) &PageNode {
 		data: Page.init(cap)
 		serial: self.page_serial
 	}
+	// Page itself initializes at full size. PageList's createPageExt source
+	// specialization resets a newly allocated node to empty so callers can
+	// append or clone the exact live row range.
+	node.data.size.rows = 0
 	self.page_serial += 1
 	self.page_size += page_backing_size(cap)
 	return node
@@ -5624,6 +5628,13 @@ fn (mut self PageList) increase_capacity(node &PageNode, adjustment PageCapacity
 				cap.string_bytes * 2
 			}
 		}
+	}
+
+	// Ghostty rejects an adjusted capacity whose exact backing layout exceeds
+	// the largest representable page. Rehashing keeps the same capacity, so it
+	// is the one adjustment that does not need this check.
+	if adjustment != .rehash && Page.layout(cap).total_size > usize(max_page_size) {
+		return none
 	}
 
 	mut new_node := self.create_page(cap)

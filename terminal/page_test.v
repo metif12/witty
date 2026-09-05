@@ -13,7 +13,7 @@ fn test_page_init() {
 		page.deinit()
 	}
 	assert page.size.cols == 120
-	assert page.size.rows == 0
+	assert page.size.rows == 80
 	assert page.rows.len == 80
 }
 
@@ -26,6 +26,7 @@ fn test_page_pause_integrity_checks_is_nested() {
 	defer {
 		page.deinit()
 	}
+	page.size.rows = 0
 	assert page.verify_integrity() != none
 	page.pause_integrity_checks_set(true)
 	page.pause_integrity_checks_set(true)
@@ -1972,7 +1973,10 @@ fn test_page_reinit() {
 		cols: 10
 		rows: 10
 	})
-	page.size.rows = u16(page.capacity.rows)
+	assert page.size == PageSize{
+		cols: 10
+		rows: 10
+	}
 
 	// Should be blank now.
 	{

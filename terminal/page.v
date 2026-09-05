@@ -1314,7 +1314,7 @@ pub fn Page.init(cap PageCapacity) Page {
 		capacity: cap
 		size: PageSize{
 			cols: cap.cols
-			rows: 0
+			rows: cap.rows
 		}
 		dirty: false
 		styles: StyleSet.init(cap.styles)
@@ -1341,7 +1341,7 @@ pub fn (mut self Page) reinit(cap PageCapacity) {
 	self.capacity = cap
 	self.size = PageSize{
 		cols: cap.cols
-		rows: 0
+		rows: cap.rows
 	}
 	self.rows = []RowData{cap: int(cap.rows)}
 	for _ in 0 .. int(cap.rows) {
