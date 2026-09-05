@@ -4886,6 +4886,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 					// For regex links, get the text from the selection.
 					self.renderer_state.terminal_.screens.active.selection_string(terminal.SelectionString{
 						sel: link_info.selection
+						trim: self.config.clipboard_trim_trailing_spaces
 					}) or { return false }
 				}
 				.open_osc8 {
@@ -6404,6 +6405,7 @@ fn (mut self Surface) process_links(pos CursorPos) !bool {
 		.open {
 			url := self.renderer_state.terminal_.screens.active.selection_string(terminal.SelectionString{
 				sel: link.selection
+				trim: self.config.clipboard_trim_trailing_spaces
 			}) or { return false }
 			if url.len > 0 {
 				// Try resolving as local path first

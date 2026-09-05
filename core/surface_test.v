@@ -1297,6 +1297,29 @@ fn test_copy_selection_mixed_to_requested_clipboards() ! {
 	}
 }
 
+fn test_copy_url_to_clipboard_uses_configured_trailing_space_policy() ! {
+	mut surf := make_test_surface()
+	surf.size = make_test_size()
+	surf.config.clipboard_trim_trailing_spaces = false
+	surf.config.links = [DerivedConfigLink{
+		pattern: r'http://a   '
+		action: .open
+		highlight: .hover
+	}]
+	surf.mouse.over_link = true
+	mut runtime := RuntimeSurface{
+		cursor_pos: CursorPos{ x: 6, y: 6 }
+	}
+	surf.rt_surface = &runtime
+	mut stream := surf.renderer_state.terminal_.vt_stream()
+	stream.next_slice('http://a   ')!
+
+	assert surf.perform_binding_action(input.Action.new(.copy_url_to_clipboard))!
+	contents := runtime.clipboards[.standard]
+	assert contents.len == 1
+	assert contents[0].data == 'http://a   '
+}
+
 struct RuntimeCallbackProbe {
 mut:
 	action_kind AppActionKind
