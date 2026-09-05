@@ -6045,6 +6045,56 @@ fn test_page_list_resize_reflow_exceeds_hyperlink_memory_forcing_capacity_increa
 	assert s.cols == 3
 }
 
+fn test_page_list_resize_reflow_exceeds_style_memory_forcing_capacity_increase() {
+	mut s := PageList.init(std_capacity.styles - 1, 10, usize(0))
+	defer { s.deinit() }
+	grow_page_list_to_second_page(mut s, 1)
+
+	mut first := s.pages.first or { return }
+	mut page0 := &first.data
+	y0 := int(page0.size.rows) - 1
+	page0.rows[y0].wrap = true
+	page0.rows[y0].styled = true
+	for x in 0 .. int(s.cols) {
+		style := CellStyle{
+			bg_color: .rgb
+			bg_r: u8(x)
+			bg_g: u8(x >> 8)
+			bg_b: u8(x >> 16)
+		}
+		id := page0.styles.add(style) or { break }
+		page0.rows[y0].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(`X`)
+			style_id: id
+			style: style
+		}
+	}
+
+	mut last := s.pages.last or { return }
+	mut page1 := &last.data
+	page1.rows[0].wrap_continuation = true
+	page1.rows[0].styled = true
+	for x in 0 .. int(s.cols) {
+		style := CellStyle{
+			fg_color: .rgb
+			fg_r: u8(x)
+			fg_g: u8(x >> 8)
+			fg_b: u8(x >> 16)
+		}
+		id := page1.styles.add(style) or { break }
+		page1.rows[0].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(`X`)
+			style_id: id
+			style: style
+		}
+	}
+
+	s.resize(PageResizeOpts{ cols: s.cols * 2, reflow: true })
+	assert s.cols == (std_capacity.styles - 1) * 2
+}
+
 fn test_page_list_resize_reflow_less_cols_cursor_in_wrapped_row() {
 	mut s := PageList.init(4, 2, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
