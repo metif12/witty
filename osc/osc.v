@@ -240,8 +240,7 @@ pub:
 	cmd_type   CommandType
 	terminator Terminator
 	// String data fields (used by various commands)
-	str_value  string
-	str_value2 string
+	str_value string
 	// ConEmu sleep duration
 	duration_ms u16
 	// ConEmu progress report
@@ -253,6 +252,8 @@ pub:
 	clipboard ClipboardContents
 	// OSC 8 hyperlink payload.
 	hyperlink HyperlinkStart
+	// OSC 66 Kitty text-sizing payload.
+	kitty_text_sizing KittyTextSizing
 	// ConEmu xterm emulation
 	xterm_keyboard ?bool
 	xterm_output   ?bool

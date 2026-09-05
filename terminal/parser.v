@@ -602,7 +602,6 @@ fn parse_osc_command(data string, terminator_ch u8) OscCommand {
 		.color_operation {
 			OscCommand{
 				cmd_type: .color_operation
-				data: data
 				color_op: cmd.color_op
 				color_requests: cmd.color_requests
 			}
@@ -610,7 +609,6 @@ fn parse_osc_command(data string, terminator_ch u8) OscCommand {
 		.kitty_color_protocol {
 			OscCommand{
 				cmd_type: .kitty_color_protocol
-				data: cmd.str_value
 				kitty_color_items: cmd.kitty_color_items
 			}
 		}

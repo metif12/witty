@@ -11,7 +11,8 @@ fn test_osc66_empty_parameters() {
 		return
 	}
 	assert cmd.cmd_type == .kitty_text_sizing
-	assert cmd.str_value == 'bobr'
+	assert cmd.kitty_text_sizing.text == 'bobr'
+	assert cmd.kitty_text_sizing.scale == 1
 }
 
 fn test_osc66_single_parameter() {
@@ -25,9 +26,25 @@ fn test_osc66_single_parameter() {
 		return
 	}
 	assert cmd.cmd_type == .kitty_text_sizing
-	assert cmd.str_value == 'kurwa'
-	// scale=2 should be encoded in str_value2
-	assert cmd.str_value2.starts_with('2,')
+	assert cmd.kitty_text_sizing.text == 'kurwa'
+	assert cmd.kitty_text_sizing.scale == 2
+}
+
+fn test_osc66_multiple_parameters() {
+	mut p := Parser.init(unsafe { nil })
+	input := '66;s=2:w=7:n=13:d=15:v=1:h=2;long'
+	for ch in input.bytes() {
+		p.next(ch)
+	}
+	cmd := p.end(0x1b) or { panic('expected command') }
+	assert cmd.cmd_type == .kitty_text_sizing
+	assert cmd.kitty_text_sizing.scale == 2
+	assert cmd.kitty_text_sizing.width == 7
+	assert cmd.kitty_text_sizing.numerator == 13
+	assert cmd.kitty_text_sizing.denominator == 15
+	assert cmd.kitty_text_sizing.valign == .bottom
+	assert cmd.kitty_text_sizing.halign == .center
+	assert cmd.kitty_text_sizing.text == 'long'
 }
 
 fn test_osc66_scale_is_zero() {
@@ -42,7 +59,39 @@ fn test_osc66_scale_is_zero() {
 	}
 	assert cmd.cmd_type == .kitty_text_sizing
 	// scale=0 is invalid, should remain default (1)
-	assert cmd.str_value2.starts_with('1,')
+	assert cmd.kitty_text_sizing.scale == 1
+}
+
+fn test_osc66_invalid_parameters_keep_defaults() {
+	mut p := Parser.init(unsafe { nil })
+	for ch in '66;w=8:v=3:n=16;'.bytes() {
+		p.next(ch)
+	}
+	cmd := p.end(0x1b) or { panic('expected command') }
+	assert cmd.cmd_type == .kitty_text_sizing
+	assert cmd.kitty_text_sizing.width == 0
+	assert cmd.kitty_text_sizing.valign == .top
+	assert cmd.kitty_text_sizing.numerator == 0
+}
+
+fn test_osc66_zero_with_leading_zero_is_valid() {
+	mut p := Parser.init(unsafe { nil })
+	for ch in '66;w=3:w=00;reset'.bytes() {
+		p.next(ch)
+	}
+	cmd := p.end(0x1b) or { panic('expected command') }
+	assert cmd.kitty_text_sizing.width == 0
+}
+
+fn test_osc66_utf8() {
+	mut p := Parser.init(unsafe { nil })
+	input := '66;;👻魑魅魍魉ゴースッティ'
+	for ch in input.bytes() {
+		p.next(ch)
+	}
+	cmd := p.end(0x1b) or { panic('expected command') }
+	assert cmd.cmd_type == .kitty_text_sizing
+	assert cmd.kitty_text_sizing.text == '👻魑魅魍魉ゴースッティ'
 }
 
 fn test_osc66_unsafe_utf8() {

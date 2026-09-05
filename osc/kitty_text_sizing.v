@@ -1,5 +1,7 @@
 module osc
 
+import strconv
+
 // Kitty's text sizing protocol (OSC 66)
 // Specification: https://sw.kovidgoyal.net/kitty/text-sizing-protocol/
 
@@ -7,15 +9,15 @@ const kitty_text_sizing_max_payload = 4096
 
 // KittyTextSizingVAlign represents vertical alignment for text sizing.
 pub enum KittyTextSizingVAlign {
-	top    // 0
+	top // 0
 	bottom // 1
 	center // 2
 }
 
 // KittyTextSizingHAlign represents horizontal alignment for text sizing.
 pub enum KittyTextSizingHAlign {
-	left   // 0
-	right  // 1
+	left // 0
+	right // 1
 	center // 2
 }
 
@@ -23,9 +25,9 @@ pub enum KittyTextSizingHAlign {
 pub struct KittyTextSizing {
 pub mut:
 	scale       u8 = 1 // 1 - 7
-	width       u8     // 0 - 7 (0 means default)
-	numerator   u8     // 0 - 15
-	denominator u8     // 0 - 15
+	width       u8 // 0 - 7 (0 means default)
+	numerator   u8 // 0 - 15
+	denominator u8 // 0 - 15
 	valign      KittyTextSizingVAlign = .top
 	halign      KittyTextSizingHAlign = .left
 	text        string
@@ -34,8 +36,8 @@ pub mut:
 // update sets a key-value pair on the KittyTextSizing.
 fn (mut self KittyTextSizing) update(key u8, value string) bool {
 	// All values are numeric, so we can do a small hack here
-	v := value.int()
-	if v < 0 || (v == 0 && value != '0') {
+	v := strconv.atoi(value) or { return false }
+	if v < 0 || v > 15 {
 		return false
 	}
 
@@ -66,18 +68,34 @@ fn (mut self KittyTextSizing) update(key u8, value string) bool {
 		}
 		`v` {
 			match v {
-				0 { self.valign = .top }
-				1 { self.valign = .bottom }
-				2 { self.valign = .center }
-				else { return false }
+				0 {
+					self.valign = .top
+				}
+				1 {
+					self.valign = .bottom
+				}
+				2 {
+					self.valign = .center
+				}
+				else {
+					return false
+				}
 			}
 		}
 		`h` {
 			match v {
-				0 { self.halign = .left }
-				1 { self.halign = .right }
-				2 { self.halign = .center }
-				else { return false }
+				0 {
+					self.halign = .left
+				}
+				1 {
+					self.halign = .right
+				}
+				2 {
+					self.halign = .center
+				}
+				else {
+					return false
+				}
 			}
 		}
 		else {
@@ -135,11 +153,9 @@ fn parse_kitty_text_sizing(mut parser Parser, terminator_ch u8) ?Command {
 	}
 
 	parser.command = Command{
-		cmd_type:   .kitty_text_sizing
+		cmd_type: .kitty_text_sizing
 		terminator: init_terminator(terminator_ch)
-		str_value:  result.text
-		// Store parameters in a parseable format
-		str_value2: '${result.scale},${result.width},${result.numerator},${result.denominator},${int(result.valign)},${int(result.halign)}'
+		kitty_text_sizing: result
 	}
 	return parser.command
 }
