@@ -216,13 +216,74 @@ fn vt_action_metadata(action terminal.ParserAction) map[string]string {
 	if action.action_type != .osc_dispatch_action {
 		return result
 	}
-	if action.osc.data.len > 0 {
-		result['data'] = action.osc.data.clone()
-	}
-	if action.osc.data2.len > 0 {
-		result['data2'] = action.osc.data2.clone()
+	cmd := action.osc
+	match cmd.cmd_type {
+		.change_window_title, .change_window_icon, .report_pwd, .mouse_shape, .conemu_show_message_box, .conemu_guimacro, .conemu_run_process, .conemu_output_environment_variable, .conemu_comment {
+			result['data'] = cmd.str_value.clone()
+		}
+		.semantic_prompt {
+			result['action'] = cmd.semantic_prompt_action.str()
+			result['options_unvalidated'] = cmd.semantic_prompt_options.clone()
+		}
+		.clipboard_contents {
+			result['kind'] = cmd.clipboard.kind.str()
+			result['data'] = cmd.clipboard.data.clone()
+		}
+		.color_operation {
+			result['op'] = cmd.color_op.str()
+			result['requests'] = cmd.color_requests.len.str()
+			result['terminator'] = cmd.terminator.str()
+		}
+		.kitty_color_protocol {
+			result['list'] = cmd.kitty_color_items.len.str()
+			result['terminator'] = cmd.terminator.str()
+		}
+		.show_desktop_notification {
+			result['title'] = cmd.desktop_notification.title.clone()
+			result['body'] = cmd.desktop_notification.body.clone()
+		}
+		.hyperlink_start {
+			result['id'] = cmd.hyperlink.id or { '(unset)' }
+			result['uri'] = cmd.hyperlink.uri.clone()
+		}
+		.conemu_sleep {
+			result['duration_ms'] = cmd.duration_ms.str()
+		}
+		.conemu_change_tab_title {
+			result['data'] = if cmd.tab_title.kind == .reset {
+				'reset'
+			} else {
+				'value=${cmd.tab_title.value}'
+			}
+		}
+		.conemu_progress_report {
+			result['state'] = cmd.progress_state.str()
+			result['progress'] = if progress := cmd.progress { progress.str() } else { '(unset)' }
+		}
+		.conemu_xterm_emulation {
+			result['keyboard'] = optional_bool_string(cmd.xterm_keyboard)
+			result['output'] = optional_bool_string(cmd.xterm_output)
+		}
+		.kitty_text_sizing {
+			value := cmd.kitty_text_sizing
+			result['scale'] = value.scale.str()
+			result['width'] = value.width.str()
+			result['numerator'] = value.numerator.str()
+			result['denominator'] = value.denominator.str()
+			result['valign'] = value.valign.str()
+			result['halign'] = value.halign.str()
+			result['text'] = value.text.clone()
+		}
+		.invalid, .hyperlink_end, .conemu_wait_input {}
 	}
 	return result
+}
+
+fn optional_bool_string(value ?bool) string {
+	if unwrapped := value {
+		return unwrapped.str()
+	}
+	return '(unset)'
 }
 
 fn (self &VTEvent) pass_filter(filter string) bool {

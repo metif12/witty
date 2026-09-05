@@ -65,7 +65,7 @@ fn test_stream_collects_raw_parser_actions() {
 	assert s.raw_events[2].csi.final_byte == u8(`C`)
 	assert s.raw_events[3].action_type == .osc_dispatch_action
 	assert s.raw_events[3].osc.cmd_type == .change_window_title
-	assert s.raw_events[3].osc.data == 'title'
+	assert s.raw_events[3].osc.str_value == 'title'
 	s.clear_events()
 	assert s.events.len == 0
 	assert s.raw_events.len == 0

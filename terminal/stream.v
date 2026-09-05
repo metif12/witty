@@ -1682,10 +1682,10 @@ fn (mut self Stream) csi_u(input CSIAction) {
 fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 	match cmd.cmd_type {
 		.change_window_title {
-			if !is_valid_utf8(cmd.data) {
+			if !is_valid_utf8(cmd.str_value) {
 				return
 			}
-			self.dispatch(.window_title, ActionPayload{ str1: cmd.data })
+			self.dispatch(.window_title, ActionPayload{ str1: cmd.str_value })
 		}
 		.change_window_icon {
 			// Ignored (icon not supported)
@@ -1696,10 +1696,10 @@ fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 			})
 		}
 		.report_pwd {
-			self.dispatch(.report_pwd, ActionPayload{ str1: cmd.data })
+			self.dispatch(.report_pwd, ActionPayload{ str1: cmd.str_value })
 		}
 		.mouse_shape {
-			if ms := mouse_shape_from_string(cmd.data) {
+			if ms := mouse_shape_from_string(cmd.str_value) {
 				self.dispatch(.mouse_shape_action, ActionPayload{
 					mouse_shape_val: ms
 				})
@@ -1720,8 +1720,8 @@ fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 		}
 		.semantic_prompt {
 			self.dispatch(.semantic_prompt, ActionPayload{
-				semantic_prompt_action: cmd.semantic_action
-				semantic_prompt_opts: cmd.semantic_options
+				semantic_prompt_action: cmd.semantic_prompt_action
+				semantic_prompt_opts: cmd.semantic_prompt_options
 			})
 		}
 		.color_operation {
@@ -1739,10 +1739,13 @@ fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 		}
 		.conemu_progress_report {
 			self.dispatch(.progress_report, ActionPayload{
-				progress_report: cmd.progress_report
+				progress_report: osc.ProgressReport{
+					state: cmd.progress_state
+					progress: cmd.progress
+				}
 			})
 		}
-		.conemu_ignored, .kitty_text_sizing {
+		.conemu_sleep, .conemu_show_message_box, .conemu_change_tab_title, .conemu_wait_input, .conemu_guimacro, .conemu_run_process, .conemu_output_environment_variable, .conemu_xterm_emulation, .conemu_comment, .kitty_text_sizing {
 			// Ignored
 		}
 		.invalid {}

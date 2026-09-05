@@ -672,7 +672,7 @@ fn parse_reset_dynamic_color(color DynamicColor, data string) []ColorRequest {
 }
 
 // str returns the string representation of a ColorOperation.
-fn (op ColorOperation) str() string {
+pub fn (op ColorOperation) str() string {
 	return match op {
 		.osc_4 { 'osc_4' }
 		.osc_5 { 'osc_5' }

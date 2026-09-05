@@ -200,44 +200,9 @@ pub:
 	final_byte    u8
 }
 
-// OscCommand represents a parsed OSC (Operating System Command).
-pub struct OscCommand {
-pub:
-	cmd_type OscCommandType
-	// Primary string data (title, icon, pwd, uri, etc.)
-	data string
-	// Terminator used by the request. Response-producing commands mirror it.
-	terminator osc.Terminator
-	// Parsed color operations are carried through the stream without reparsing.
-	color_op             osc.ColorOperation
-	color_requests       []osc.ColorRequest
-	kitty_color_items    []osc.KittyColorItem
-	semantic_action      osc.SemanticAction
-	semantic_options     string
-	progress_report      osc.ProgressReport
-	desktop_notification osc.DesktopNotification
-	clipboard            osc.ClipboardContents
-	hyperlink            osc.HyperlinkStart
-}
-
-// OscCommandType identifies the type of OSC command.
-pub enum OscCommandType {
-	invalid
-	change_window_title
-	change_window_icon
-	semantic_prompt
-	clipboard_contents
-	report_pwd
-	mouse_shape
-	color_operation
-	kitty_color_protocol
-	show_desktop_notification
-	hyperlink_start
-	hyperlink_end
-	conemu_progress_report
-	conemu_ignored
-	kitty_text_sizing
-}
+// OscCommand is the parsed OSC command itself. Keeping the canonical OSC type
+// here preserves every payload for raw parser consumers such as the inspector.
+pub type OscCommand = osc.Command
 
 // ============================================================
 // Parser action
@@ -581,73 +546,5 @@ fn parse_osc_command(data string, terminator_ch u8) OscCommand {
 	for byte_val in data.bytes() {
 		parser.next(byte_val)
 	}
-	cmd := parser.end(terminator_ch) or { return OscCommand{ cmd_type: .invalid } }
-
-	result := match cmd.cmd_type {
-		.invalid { OscCommand{ cmd_type: .invalid } }
-		.change_window_title {
-			OscCommand{ cmd_type: .change_window_title, data: cmd.str_value }
-		}
-		.change_window_icon {
-			OscCommand{ cmd_type: .change_window_icon, data: cmd.str_value }
-		}
-		.clipboard_contents {
-			OscCommand{
-				cmd_type: .clipboard_contents
-				clipboard: cmd.clipboard
-			}
-		}
-		.report_pwd { OscCommand{ cmd_type: .report_pwd, data: cmd.str_value } }
-		.mouse_shape { OscCommand{ cmd_type: .mouse_shape, data: cmd.str_value } }
-		.color_operation {
-			OscCommand{
-				cmd_type: .color_operation
-				color_op: cmd.color_op
-				color_requests: cmd.color_requests
-			}
-		}
-		.kitty_color_protocol {
-			OscCommand{
-				cmd_type: .kitty_color_protocol
-				kitty_color_items: cmd.kitty_color_items
-			}
-		}
-		.show_desktop_notification {
-			OscCommand{
-				cmd_type: .show_desktop_notification
-				desktop_notification: cmd.desktop_notification
-			}
-		}
-		.hyperlink_start {
-			OscCommand{
-				cmd_type: .hyperlink_start
-				hyperlink: cmd.hyperlink
-			}
-		}
-		.hyperlink_end { OscCommand{ cmd_type: .hyperlink_end } }
-		.semantic_prompt {
-			OscCommand{
-				cmd_type: .semantic_prompt
-				semantic_action: cmd.semantic_prompt_action
-				semantic_options: cmd.semantic_prompt_options
-			}
-		}
-		.conemu_progress_report {
-			OscCommand{
-				cmd_type: .conemu_progress_report
-				progress_report: osc.ProgressReport{
-					state: cmd.progress_state
-					progress: cmd.progress
-				}
-			}
-		}
-		.kitty_text_sizing { OscCommand{ cmd_type: .kitty_text_sizing } }
-		.conemu_sleep, .conemu_show_message_box, .conemu_change_tab_title, .conemu_wait_input, .conemu_guimacro, .conemu_run_process, .conemu_output_environment_variable, .conemu_xterm_emulation, .conemu_comment {
-			OscCommand{ cmd_type: .conemu_ignored }
-		}
-	}
-	return OscCommand{
-		...result
-		terminator: cmd.terminator
-	}
+	return parser.end(terminator_ch) or { OscCommand{ cmd_type: .invalid } }
 }

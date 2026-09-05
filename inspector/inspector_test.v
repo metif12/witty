@@ -2,6 +2,7 @@ module inspector
 
 import cimgui
 import input
+import osc
 import terminal
 
 const test_font = $embed_file('@VMODROOT/font/res/JetBrainsMono-Regular.ttf').to_bytes()
@@ -187,18 +188,41 @@ fn test_vt_event_encodings_match_pinned_ghostty() {
 			final_byte: u8(`B`)
 		}
 	}) == '( B'
-	osc := terminal.ParserAction{
+	osc_action := terminal.ParserAction{
 		action_type: .osc_dispatch_action
 		osc: terminal.OscCommand{
 			cmd_type: .hyperlink_start
-			data: 'https://example.com'
-			data2: 'link-id'
+			hyperlink: osc.HyperlinkStart{
+				uri: 'https://example.com'
+				id: 'link-id'
+			}
 		}
 	}
-	assert encode_vt_action(osc) == 'hyperlink_start '
-	assert vt_action_metadata(osc) == {
-		'data':  'https://example.com'
-		'data2': 'link-id'
+	assert encode_vt_action(osc_action) == 'hyperlink_start '
+	assert vt_action_metadata(osc_action) == {
+		'id':  'link-id'
+		'uri': 'https://example.com'
+	}
+	kitty_sizing := terminal.ParserAction{
+		action_type: .osc_dispatch_action
+		osc: terminal.OscCommand{
+			cmd_type: .kitty_text_sizing
+			kitty_text_sizing: osc.KittyTextSizing{
+				scale: 2
+				width: 3
+				valign: .bottom
+				text: 'hello'
+			}
+		}
+	}
+	assert vt_action_metadata(kitty_sizing) == {
+		'scale':       '2'
+		'width':       '3'
+		'numerator':   '0'
+		'denominator': '0'
+		'valign':      'bottom'
+		'halign':      'left'
+		'text':        'hello'
 	}
 }
 
