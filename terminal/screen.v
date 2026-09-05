@@ -1847,14 +1847,36 @@ pub:
 }
 
 // Scroll controls viewport scrolling behavior.
-pub enum Scroll {
-	active
-	top
-	pin_scroll
-	row
-	delta_row
-	delta_prompt
+pub struct ScrollActive {}
+
+pub struct ScrollTop {}
+
+pub struct ScrollPin {
+pub:
+	pin Pin
 }
+
+pub struct ScrollRow {
+pub:
+	n usize
+}
+
+pub struct ScrollDeltaRow {
+pub:
+	delta int
+}
+
+pub struct ScrollDeltaPrompt {
+pub:
+	delta int
+}
+
+pub type Scroll = ScrollActive
+	| ScrollTop
+	| ScrollPin
+	| ScrollRow
+	| ScrollDeltaRow
+	| ScrollDeltaPrompt
 
 // Resize options for resizing the screen.
 pub struct ScreenResize {
@@ -2395,21 +2417,42 @@ pub fn (mut self Screen) cursor_reset_wrap() {
 // Scroll the viewport.
 pub fn (mut self Screen) scroll(behavior Scroll) {
 	self.mark_kitty_images_dirty()
+	if self.no_scrollback {
+		self.pages.scroll(.active)
+		return
+	}
 	match behavior {
-		.active { self.pages.scroll(.active) }
-		.top { self.pages.scroll(.top) }
-		.pin_scroll, .row, .delta_row, .delta_prompt {}
+		ScrollActive {
+			self.pages.scroll(.active)
+		}
+		ScrollTop {
+			self.pages.scroll(.top)
+		}
+		ScrollPin {
+			self.scroll_to_absolute_row(int(behavior.pin.y))
+		}
+		ScrollRow {
+			self.scroll_to_absolute_row(int(behavior.n))
+		}
+		ScrollDeltaRow {
+			self.pages.scroll_delta(behavior.delta)
+		}
+		ScrollDeltaPrompt {
+			self.scroll_prompts(behavior.delta)
+		}
 	}
 }
 
 pub fn (mut self Screen) scroll_delta_rows(delta int) {
-	self.mark_kitty_images_dirty()
-	self.pages.scroll_delta(delta)
+	self.scroll(ScrollDeltaRow{ delta: delta })
 }
 
 pub fn (mut self Screen) scroll_to_row(row usize) {
-	self.mark_kitty_images_dirty()
-	self.pages.viewport_start = clamp_int(int(row), 0, self.pages.active_start)
+	self.scroll(ScrollRow{ n: row })
+}
+
+fn (mut self Screen) scroll_to_absolute_row(row int) {
+	self.pages.viewport_start = clamp_int(row, 0, self.pages.active_start)
 	self.pages.viewport = if self.pages.viewport_start == 0 {
 		.top
 	} else if self.pages.viewport_start == self.pages.active_start {
@@ -2420,10 +2463,13 @@ pub fn (mut self Screen) scroll_to_row(row usize) {
 }
 
 pub fn (mut self Screen) scroll_delta_prompts(delta int) {
+	self.scroll(ScrollDeltaPrompt{ delta: delta })
+}
+
+fn (mut self Screen) scroll_prompts(delta int) {
 	if delta == 0 {
 		return
 	}
-	self.mark_kitty_images_dirty()
 	mut remaining := if delta < 0 { -delta } else { delta }
 	current := match self.pages.viewport {
 		.active { self.pages.active_start }
@@ -2431,23 +2477,50 @@ pub fn (mut self Screen) scroll_delta_prompts(delta int) {
 		.pinned { self.pages.viewport_start }
 	}
 	mut y := current + if delta > 0 { 1 } else { -1 }
+	mut prompt_y := ?int(none)
 	for y >= 0 && y < self.pages.screen_rows.len {
 		if self.pages.screen_rows[y].semantic_prompt == .prompt {
+			prompt_y = y
 			remaining -= 1
 			if remaining == 0 {
-				self.scroll_to_row(usize(y))
-				return
+				break
 			}
 		}
 		y += if delta > 0 { 1 } else { -1 }
+	}
+	if target := prompt_y {
+		self.scroll_to_absolute_row(target)
 	}
 }
 
 // Scroll and clear the screen, moving content to scrollback.
 pub fn (mut self Screen) scroll_clear() ! {
 	self.mark_kitty_images_dirty()
-	self.pages.scroll_clear()!
+	pruned := self.pages.scroll_clear()!
+	self.shift_selection_after_top_prune(pruned)
 	self.cursor_reload()
+}
+
+// PageList tracked pins move upward when whole rows are pruned from the top.
+// Selection pins are the only persistent absolute pins in the flat storage
+// representation, so apply the same adjustment explicitly.
+fn (mut self Screen) shift_selection_after_top_prune(pruned int) {
+	if pruned <= 0 {
+		return
+	}
+	if mut sel := self.selection {
+		sel.start_pin.y = if int(sel.start_pin.y) >= pruned {
+			sel.start_pin.y - u32(pruned)
+		} else {
+			0
+		}
+		sel.end_pin.y = if int(sel.end_pin.y) >= pruned {
+			sel.end_pin.y - u32(pruned)
+		} else {
+			0
+		}
+		self.selection = sel
+	}
 }
 
 // Scroll down when cursor is at the bottom of the screen.
@@ -2463,6 +2536,7 @@ pub fn (mut self Screen) cursor_down_scroll() ! {
 		} else {
 			// Shift everything up: remove first active row, add blank at bottom
 			self.pages.erase_row(PinOpts{ tag: .active, x: 0, y: 0 })!
+			self.shift_selection_after_top_prune(1)
 			// The newly-vacated bottom row must preserve the current bg SGR,
 			// matching Ghostty's cursorDownScroll which memsets the new row
 			// with blankCell() when a background color is active.
@@ -2470,7 +2544,8 @@ pub fn (mut self Screen) cursor_down_scroll() ! {
 		}
 	} else {
 		// With scrollback: grow by one row, moving old top row to scrollback
-		self.pages.grow() or {}
+		pruned := self.pages.grow() or { 0 }
+		self.shift_selection_after_top_prune(pruned)
 		self.pages.active_start += 1
 		if self.pages.viewport == .active {
 			self.pages.viewport_start = self.pages.active_start
@@ -2511,6 +2586,7 @@ pub fn (mut self Screen) cursor_scroll_above() ! {
 		// at/below the cursor down by one relative to the moved window.
 		if self.pages.active_start < self.pages.screen_rows.len {
 			self.pages.screen_rows.delete(self.pages.active_start)
+			self.shift_selection_after_top_prune(1)
 		}
 		// A new active window starts one row earlier now; append a blank row
 		// at the bottom so the window keeps its size.
@@ -2518,7 +2594,8 @@ pub fn (mut self Screen) cursor_scroll_above() ! {
 	} else {
 		// With scrollback: grow by one row (moving the old top active row into
 		// scrollback) and slide the active window down by one.
-		self.pages.grow() or {}
+		pruned := self.pages.grow() or { 0 }
+		self.shift_selection_after_top_prune(pruned)
 		self.pages.active_start += 1
 		if self.pages.viewport == .active {
 			self.pages.viewport_start = self.pages.active_start
@@ -3207,8 +3284,8 @@ pub fn (mut self Screen) clear_selection() {
 }
 
 // Get the string for a selection.
-pub fn (mut self Screen) selection_string(opts SelectionString) !string {
-	mut formatter := ScreenFormatter.init(&self, FormatOptions{
+pub fn (self &Screen) selection_string(opts SelectionString) !string {
+	mut formatter := ScreenFormatter.init(self, FormatOptions{
 		emit: .plain
 		unwrap: true
 		trim: opts.trim

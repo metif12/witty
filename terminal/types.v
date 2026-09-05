@@ -429,31 +429,51 @@ fn clamp_int(value int, lower int, upper int) int {
 }
 
 // Scroll and clear - move all active content to scrollback.
-pub fn (mut self Pages) scroll_clear() ! {
-	// Move active_start past all current rows
-	self.active_start += int(self.rows)
-	// Add new blank rows
-	for _ in 0 .. int(self.rows) {
-		self.screen_rows << RowData.init(self.cols)
+pub fn (mut self Pages) scroll_clear() !int {
+	// Only scroll through the final non-empty active row. Trailing blank rows
+	// stay out of history, matching PageList.scrollClear.
+	non_empty := self.count_non_empty_active_rows()
+	mut pruned := 0
+	for _ in 0 .. non_empty {
+		pruned += self.grow()!
+		self.active_start++
 	}
-	// Enforce max scrollback
-	self.trim_scrollback()
-	self.viewport = .active
-	self.viewport_start = self.active_start
+	if self.viewport == .active {
+		self.viewport_start = self.active_start
+	}
+	return pruned
+}
+
+fn (self &Pages) count_non_empty_active_rows() int {
+	for offset in 0 .. int(self.rows) {
+		active_y := int(self.rows) - offset - 1
+		absolute_y := self.active_start + active_y
+		if absolute_y < 0 || absolute_y >= self.screen_rows.len {
+			continue
+		}
+		for cell in self.screen_rows[absolute_y].cells {
+			if !cell.is_empty() {
+				return active_y + 1
+			}
+		}
+	}
+	return 0
 }
 
 // Grow the screen by one row (for scrollback).
-pub fn (mut self Pages) grow() ! {
+pub fn (mut self Pages) grow() !int {
 	self.screen_rows << RowData.init(self.cols)
-	self.trim_scrollback()
+	return self.trim_scrollback()
 }
 
 // Trim scrollback to max_scrollback limit.
-fn (mut self Pages) trim_scrollback() {
+fn (mut self Pages) trim_scrollback() int {
 	max := int(self.max_scrollback) + int(self.rows)
+	mut pruned := 0
 	for self.screen_rows.len > max && self.active_start > 0 {
 		self.screen_rows.delete(0)
 		self.active_start -= 1
+		pruned++
 		if self.viewport == .pinned && self.viewport_start > 0 {
 			self.viewport_start -= 1
 		}
@@ -461,6 +481,7 @@ fn (mut self Pages) trim_scrollback() {
 	if self.viewport == .active {
 		self.viewport_start = self.active_start
 	}
+	return pruned
 }
 
 // Erase a specific row.

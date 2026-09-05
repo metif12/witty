@@ -4664,27 +4664,16 @@ pub fn (mut self PageList) scroll_clear() {
 }
 
 fn (self &PageList) count_non_empty_active_rows() usize {
-	tl := self.get_top_left(.active)
-	mut count := usize(0)
-	mut pin := ?PagePin(PagePin{
-		node: tl.node
-		y: tl.y
-		x: 0
-	})
-	for {
-		p := pin or { break }
-		if int(p.y) < p.node.data.rows.len {
-			row := p.node.data.rows[int(p.y)]
-			for cell in row.cells {
-				if cell.content_tag == .codepoint && cell.codepoint != 0 {
-					count += 1
-					break
-				}
+	mut pin := self.get_bottom_right(.active) or { return 0 }
+	for offset in 0 .. usize(self.rows) {
+		for cell in pin.cells(.all) {
+			if !cell.is_empty() {
+				return usize(self.rows) - offset
 			}
 		}
-		pin = p.down(1)
+		pin = pin.up(1) or { return 0 }
 	}
-	return count
+	return 0
 }
 
 // ============================================================

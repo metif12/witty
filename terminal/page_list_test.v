@@ -1647,6 +1647,18 @@ fn test_page_list_scroll_clear() {
 	assert s.total_rows > initial_rows
 }
 
+fn test_page_list_scroll_clear_includes_internal_blank_rows() {
+	mut s := PageList.init(5, 5, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	set_active_cell(mut s, 0, 0, u32(`A`))
+	set_active_cell(mut s, 0, 4, u32(`B`))
+	initial_rows := s.total_rows
+
+	s.scroll_clear()
+
+	assert s.total_rows == initial_rows + 5
+}
+
 // ============================================================
 // Total pages / rows tests
 // ============================================================

@@ -154,7 +154,7 @@ fn test_graphics_storage_follows_terminal_clear_and_scroll_lifecycle() ! {
 	assert storage.placement_count() == 1
 
 	storage.dirty = false
-	t.screens.active.scroll(.top)
+	t.screens.active.scroll(terminal.ScrollTop{})
 	assert storage.dirty
 
 	t.erase_display(.complete, false)

@@ -3183,8 +3183,8 @@ pub fn (mut self Terminal) scroll_up(count int) ! {
 // Scroll the viewport of the terminal grid.
 pub fn (mut self Terminal) scroll_viewport(behavior ScrollViewport, delta int) ! {
 	match behavior {
-		.top { self.screens.active.scroll(.top) }
-		.bottom { self.screens.active.scroll(.active) }
+		.top { self.screens.active.scroll(ScrollTop{}) }
+		.bottom { self.screens.active.scroll(ScrollActive{}) }
 		.delta {
 			self.screens.active.scroll_delta_rows(delta)
 		}
