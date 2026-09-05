@@ -91,10 +91,11 @@ fn test_page_append_grapheme_small() {
 	}
 
 	// One
-	page.append_grapheme(0, 0, 0x0A)
+	page.append_grapheme(0, 0, 0x0A) or { panic(err) }
 	row0 := page.get_row(0)
 	assert row0.grapheme
 	assert page.rows[0].cells[0].has_grapheme
+	assert page.grapheme_alloc.used_bytes() == grapheme_chunk
 	cps1 := page.lookup_grapheme(0, 0) or {
 		assert false, 'expected grapheme data'
 		return
@@ -102,18 +103,20 @@ fn test_page_append_grapheme_small() {
 	assert cps1 == [u32(0x0A)]
 
 	// Two
-	page.append_grapheme(0, 0, 0x0B)
+	page.append_grapheme(0, 0, 0x0B) or { panic(err) }
 	cps2 := page.lookup_grapheme(0, 0) or {
 		assert false, 'expected grapheme data'
 		return
 	}
 	assert cps2 == [u32(0x0A), u32(0x0B)]
+	assert page.grapheme_alloc.used_bytes() == grapheme_chunk
 
 	// Clear it
 	page.clear_grapheme(0, 0)
 	page.update_row_grapheme_flag(page.get_row(0))
 	assert !page.rows[0].grapheme
 	assert !page.rows[0].cells[0].has_grapheme
+	assert page.grapheme_alloc.used_bytes() == 0
 }
 
 // Test appending graphemes larger than chunk.
@@ -136,7 +139,7 @@ fn test_page_append_grapheme_larger_than_chunk() {
 
 	count := grapheme_chunk_len * 10
 	for i in 0 .. count {
-		page.append_grapheme(0, 0, u32(0x0A + i))
+		page.append_grapheme(0, 0, u32(0x0A + i)) or { panic(err) }
 	}
 
 	cps := page.lookup_grapheme(0, 0) or {
@@ -147,6 +150,7 @@ fn test_page_append_grapheme_larger_than_chunk() {
 	for i in 0 .. count {
 		assert cps[i] == u32(0x0A + i)
 	}
+	assert page.grapheme_alloc.used_bytes() == count * int(sizeof(u32))
 }
 
 // Test clearing graphemes when not all cells have them.
@@ -167,7 +171,7 @@ fn test_page_clear_grapheme_not_all_cells() {
 		rac.cell.content_tag = .codepoint
 		rac.cell.codepoint = 0x09
 	}
-	page.append_grapheme(0, 0, 0x0A)
+	page.append_grapheme(0, 0, 0x0A) or { panic(err) }
 
 	// Set up second cell with grapheme.
 	mut rac2 := page.get_row_and_cell(1, 0)
@@ -175,7 +179,7 @@ fn test_page_clear_grapheme_not_all_cells() {
 		rac2.cell.content_tag = .codepoint
 		rac2.cell.codepoint = 0x09
 	}
-	page.append_grapheme(0, 1, 0x0A)
+	page.append_grapheme(0, 1, 0x0A) or { panic(err) }
 
 	// Clear only the first cell's grapheme.
 	page.clear_grapheme(0, 0)
@@ -262,8 +266,8 @@ fn test_page_clone_graphemes() {
 			rac.cell.content_tag = .codepoint
 			rac.cell.codepoint = 0x09
 		}
-		page.append_grapheme(0, 0, 0x0A)
-		page.append_grapheme(0, 0, 0x0B)
+		page.append_grapheme(0, 0, 0x0A) or { panic(err) }
+		page.append_grapheme(0, 0, 0x0B) or { panic(err) }
 	}
 
 	// Clone it.
@@ -550,7 +554,7 @@ fn test_page_clone_from_graphemes() {
 			rac.cell.content_tag = .codepoint
 			rac.cell.codepoint = u32(y + 1)
 		}
-		page.append_grapheme(y, 1, 0x0A)
+		page.append_grapheme(y, 1, 0x0A) or { panic(err) }
 	}
 
 	// Clone.
@@ -644,7 +648,7 @@ fn test_page_clone_from_frees_dst_graphemes() {
 			rac.cell.content_tag = .codepoint
 			rac.cell.codepoint = u32(y + 1)
 		}
-		page2.append_grapheme(y, 1, 0x0A)
+		page2.append_grapheme(y, 1, 0x0A) or { panic(err) }
 	}
 
 	// Clone from page which has no graphemes.
@@ -727,8 +731,8 @@ fn test_page_clone_row_from_partial_grapheme_in_non_copied_source_region() {
 			}
 		}
 		// Add grapheme at col 0 and col 9 (outside the copy range 2..8).
-		page.append_grapheme(0, 0, 0x0A)
-		page.append_grapheme(0, 9, 0x0A)
+		page.append_grapheme(0, 0, 0x0A) or { panic(err) }
+		page.append_grapheme(0, 9, 0x0A) or { panic(err) }
 	}
 	assert page.grapheme_count() == 2
 
@@ -799,8 +803,8 @@ fn test_page_clone_row_from_partial_grapheme_in_non_copied_dest_region() {
 				rac.cell.codepoint = 0xBB
 			}
 		}
-		page2.append_grapheme(0, 0, 0x0A)
-		page2.append_grapheme(0, 9, 0x0A)
+		page2.append_grapheme(0, 0, 0x0A) or { panic(err) }
+		page2.append_grapheme(0, 9, 0x0A) or { panic(err) }
 	}
 
 	// Clone partial row (cols 2..8) from page into page2.
@@ -874,7 +878,7 @@ fn test_page_move_cells_graphemes() {
 			rac.cell.content_tag = .codepoint
 			rac.cell.codepoint = u32(x + 1)
 		}
-		page.append_grapheme(0, x, 0x0A)
+		page.append_grapheme(0, x, 0x0A) or { panic(err) }
 	}
 	original_count := page.grapheme_count()
 
@@ -911,7 +915,7 @@ fn test_page_clone_partial_row_marks_kitty_virtual_placeholder() {
 		content_tag: .codepoint
 		codepoint: kitty_unicode_placeholder
 	}
-	src.set_graphemes(0, 2, [u32(0x0305)])
+	src.set_graphemes(0, 2, [u32(0x0305)]) or { panic(err) }
 	src.rows[0].kitty_virtual_placeholder = true
 
 	mut dst := Page.init(PageCapacity{
@@ -939,7 +943,7 @@ fn test_page_move_cells_marks_kitty_virtual_placeholder() {
 		content_tag: .codepoint
 		codepoint: kitty_unicode_placeholder
 	}
-	page.set_graphemes(0, 1, [u32(0x0305)])
+	page.set_graphemes(0, 1, [u32(0x0305)]) or { panic(err) }
 	page.rows[0].kitty_virtual_placeholder = true
 
 	page.move_cells(0, 0, 1, 0, int(page.size.cols))
@@ -968,7 +972,7 @@ fn test_page_verify_integrity_graphemes_good() {
 			rac.cell.content_tag = .codepoint
 			rac.cell.codepoint = u32(x + 1)
 		}
-		page.append_grapheme(0, x, 0x0A)
+		page.append_grapheme(0, x, 0x0A) or { panic(err) }
 	}
 
 	// Should not return an integrity error.
@@ -998,7 +1002,7 @@ fn test_page_verify_integrity_grapheme_row_not_marked() {
 			rac.cell.content_tag = .codepoint
 			rac.cell.codepoint = u32(x + 1)
 		}
-		page.append_grapheme(0, x, 0x0A)
+		page.append_grapheme(0, x, 0x0A) or { panic(err) }
 	}
 
 	// Make invalid by unmarking the row.
@@ -1305,7 +1309,7 @@ fn test_page_exact_row_capacity_grapheme_bytes() {
 			rac.cell.content_tag = .codepoint
 			rac.cell.codepoint = u32(`a`)
 		}
-		page.append_grapheme(0, 0, 0x0301) // combining acute accent
+		page.append_grapheme(0, 0, 0x0301) or { panic(err) } // combining acute accent
 	}
 	{
 		cap := page.exact_row_capacity(0, 5)
@@ -1320,7 +1324,7 @@ fn test_page_exact_row_capacity_grapheme_bytes() {
 			rac.cell.content_tag = .codepoint
 			rac.cell.codepoint = u32(`e`)
 		}
-		page.append_grapheme(0, 1, 0x0300) // combining grave accent
+		page.append_grapheme(0, 1, 0x0300) or { panic(err) } // combining grave accent
 	}
 	{
 		cap := page.exact_row_capacity(0, 5)
@@ -1335,9 +1339,9 @@ fn test_page_exact_row_capacity_grapheme_bytes() {
 			rac.cell.content_tag = .codepoint
 			rac.cell.codepoint = u32(`o`)
 		}
-		page.append_grapheme(0, 2, 0x0301)
-		page.append_grapheme(0, 2, 0x0302)
-		page.append_grapheme(0, 2, 0x0303)
+		page.append_grapheme(0, 2, 0x0301) or { panic(err) }
+		page.append_grapheme(0, 2, 0x0302) or { panic(err) }
+		page.append_grapheme(0, 2, 0x0303) or { panic(err) }
 	}
 	{
 		cap := page.exact_row_capacity(0, 5)
@@ -1353,7 +1357,7 @@ fn test_page_exact_row_capacity_grapheme_bytes() {
 			rac.cell.content_tag = .codepoint
 			rac.cell.codepoint = u32(`x`)
 		}
-		page.append_grapheme(7, 0, 0x0304)
+		page.append_grapheme(7, 0, 0x0304) or { panic(err) }
 	}
 	{
 		cap := page.exact_row_capacity(0, 5)
@@ -1388,7 +1392,7 @@ fn test_page_exact_row_capacity_grapheme_bytes_larger_than_chunk() {
 
 	// Add 6 codepoints - requires 2 chunks (6 * 4 = 24 bytes, rounds up to 32).
 	for i in 0 .. 6 {
-		page.append_grapheme(0, 0, u32(0x0300 + i))
+		page.append_grapheme(0, 0, u32(0x0300 + i)) or { panic(err) }
 	}
 
 	cap := page.exact_row_capacity(0, 1)
@@ -1527,6 +1531,61 @@ fn test_page_managed_map_capacities_follow_layout() {
 	defer { empty.deinit() }
 	assert empty.grapheme_capacity() == 0
 	assert empty.hyperlink_capacity() == 0
+}
+
+fn test_page_set_graphemes_enforces_map_capacity_and_rolls_back_allocation() {
+	mut page := Page.init(PageCapacity{
+		cols: 2
+		rows: 1
+		grapheme_bytes: 16
+	})
+	defer { page.deinit() }
+	page.size.rows = 1
+	page.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`a`)
+	}
+	page.rows[0].cells[1] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`b`)
+	}
+	assert page.grapheme_capacity() == 1
+	page.set_graphemes(0, 0, [u32(0x0301)]) or { panic(err) }
+	assert page.grapheme_alloc.used_bytes() == grapheme_chunk
+
+	mut error_message := ''
+	page.set_graphemes(0, 1, [u32(0x0302)]) or { error_message = err.msg() }
+	assert error_message == 'GraphemeMapOutOfMemory'
+	assert page.grapheme_count() == 1
+	assert page.grapheme_alloc.used_bytes() == grapheme_chunk
+	assert !page.rows[0].cells[1].has_grapheme
+}
+
+fn test_page_set_graphemes_enforces_allocator_capacity() {
+	mut page := Page.init(PageCapacity{
+		cols: 2
+		rows: 1
+	})
+	defer { page.deinit() }
+	page.size.rows = 1
+	page.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`a`)
+	}
+	page.rows[0].cells[1] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`b`)
+	}
+	page.set_graphemes(0, 0, []u32{len: int(grapheme_bytes_default / 4) - 1, init: u32(`x`)}) or {
+		panic(err)
+	}
+	assert page.grapheme_alloc.used_bytes() == int(grapheme_bytes_default)
+
+	mut error_message := ''
+	page.append_grapheme(0, 1, 0x0301) or { error_message = err.msg() }
+	assert error_message == 'GraphemeAllocOutOfMemory'
+	assert page.grapheme_count() == 1
+	assert !page.rows[0].cells[1].has_grapheme
 }
 
 fn test_page_set_hyperlink_reports_full_map_without_mutating_cell() {
@@ -1832,7 +1891,7 @@ fn test_page_clear_cells() {
 			rac.cell.style_id = id
 		}
 		page.styles.use_style(id)
-		page.append_grapheme(0, x, 0x0A)
+		page.append_grapheme(0, x, 0x0A) or { panic(err) }
 	}
 	page.styles.release(id) // balance the initial add
 

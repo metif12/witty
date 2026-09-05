@@ -3615,7 +3615,11 @@ fn clone_row_for_page_list(mut dst Page, dst_y int, src &RowData, cols u32) {
 	for x in 0 .. limit {
 		src_cell := &src.cells[x]
 		mut cell := *src_cell
-		cell.graphemes = src.cells[x].graphemes.clone()
+		cell.graphemes = []
+		cell.has_grapheme = false
+		if cell.content_tag == .codepoint_grapheme {
+			cell.content_tag = .codepoint
+		}
 
 		// The flat ID is only a discriminator. Allocate the concrete inline
 		// value in this page and replace it with the resulting page-local ID.
@@ -3629,6 +3633,11 @@ fn clone_row_for_page_list(mut dst Page, dst_y int, src &RowData, cols u32) {
 		// set_hyperlink installs the page mapping after the base cell is copied.
 		cell.has_hyperlink = false
 		dst.rows[dst_y].cells[x] = cell
+		if src_cell.has_grapheme {
+			dst.set_graphemes(dst_y, x, src_cell.graphemes) or {
+				panic('PageList snapshot grapheme capacity was undersized: ${err}')
+			}
+		}
 		if src_cell.has_hyperlink {
 			id := dst.insert_hyperlink(src_cell.hyperlink) or {
 				panic('PageList snapshot hyperlink capacity was undersized: ${err}')
@@ -5259,7 +5268,28 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 	// Copy grapheme data. This remains directly stored on the V cell; grapheme
 	// capacity is handled separately from the hyperlink stores below.
 	if cell.content_tag == .codepoint_grapheme && cell.graphemes.len > 0 {
-		page.set_graphemes(int(self.y), int(self.x), cell.graphemes)
+		if page.grapheme_count() >= page.grapheme_capacity() {
+			new_node := list.increase_capacity(self.node, .grapheme_bytes) or {
+				return .out_of_space
+			}
+			self.node = new_node
+			page = &self.node.data
+		}
+		for {
+			offset := page.grapheme_alloc.alloc(cell.graphemes.len * int(sizeof(u32))) or {
+				new_node := list.increase_capacity(self.node, .grapheme_bytes) or {
+					return .out_of_space
+				}
+				self.node = new_node
+				page = &self.node.data
+				continue
+			}
+			page.grapheme_alloc.release(offset, cell.graphemes.len * int(sizeof(u32)))
+			break
+		}
+		page.set_graphemes(int(self.y), int(self.x), cell.graphemes) or {
+			return .out_of_space
+		}
 	}
 
 	// Copy hyperlink data.
@@ -5543,6 +5573,7 @@ fn (mut self PageList) fixup_viewport(removed usize) {
 enum PageCapacityAdjustment {
 	rehash
 	styles
+	grapheme_bytes
 	hyperlink_bytes
 	string_bytes
 }
@@ -5562,6 +5593,16 @@ fn (mut self PageList) increase_capacity(node &PageNode, adjustment PageCapacity
 			doubled := if cap.styles > max_u16 / 2 { max_u16 } else { cap.styles * 2 }
 			minimum := StyleSet.capacity_for_count(1)
 			cap.styles = if doubled > minimum { doubled } else { minimum }
+		}
+		.grapheme_bytes {
+			if cap.grapheme_bytes == max_u32 {
+				return none
+			}
+			cap.grapheme_bytes = if cap.grapheme_bytes > max_u32 / 2 {
+				max_u32
+			} else {
+				cap.grapheme_bytes * 2
+			}
 		}
 		.hyperlink_bytes {
 			if cap.hyperlink_bytes == max_u16 {
@@ -5614,6 +5655,11 @@ fn (mut self PageList) clone_row_growing(dst_node &PageNode, src_page &Page, dst
 			.style_set_out_of_memory {
 				node = self.increase_capacity(node, .styles) or {
 					panic('PageList row clone exhausted maximum style capacity')
+				}
+			}
+			.grapheme_map_out_of_memory, .grapheme_alloc_out_of_memory {
+				node = self.increase_capacity(node, .grapheme_bytes) or {
+					panic('PageList row clone exhausted maximum grapheme capacity')
 				}
 			}
 			.hyperlink_map_out_of_memory {

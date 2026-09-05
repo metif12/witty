@@ -974,6 +974,8 @@ pub enum IntegrityError {
 
 enum PageCloneError {
 	style_set_out_of_memory
+	grapheme_map_out_of_memory
+	grapheme_alloc_out_of_memory
 	string_alloc_out_of_memory
 	hyperlink_set_out_of_memory
 	hyperlink_set_needs_rehash
@@ -1245,6 +1247,12 @@ pub mut:
 	rows u16
 }
 
+struct GraphemeAllocation {
+mut:
+	offset int
+	len    int
+}
+
 // ============================================================
 // Page - a page of terminal rows
 // ============================================================
@@ -1277,6 +1285,11 @@ pub mut:
 	// The available set of styles in use on this page.
 	styles StyleSet
 
+	// Multi-codepoint graphemes use a bounded bitmap allocator and a sparse
+	// cell-offset map, matching the two page-owned source structures.
+	grapheme_alloc BitmapAllocator
+	grapheme_map   map[u64]GraphemeAllocation
+
 	// The structures used for tracking hyperlinks within the page.
 	// The map maps cell positions to hyperlink IDs and the IDs are in
 	// the ref counted set.
@@ -1305,6 +1318,7 @@ pub fn Page.init(cap PageCapacity) Page {
 		}
 		dirty: false
 		styles: StyleSet.init(cap.styles)
+		grapheme_alloc: BitmapAllocator.init(grapheme_chunk, layout.grapheme_alloc_layout)
 		hyperlink_set: HyperlinkSet.init_bounded(layout.hyperlink_set_layout, layout.string_alloc_layout)
 	}
 }
@@ -1316,6 +1330,8 @@ pub fn (mut self Page) deinit() {
 	self.rows = []
 	self.hyperlink_map = map[u64]u32{}
 	self.styles = StyleSet.init(self.capacity.styles)
+	self.grapheme_alloc = BitmapAllocator.init(grapheme_chunk, layout.grapheme_alloc_layout)
+	self.grapheme_map = map[u64]GraphemeAllocation{}
 	self.hyperlink_set = HyperlinkSet.init_bounded(layout.hyperlink_set_layout, layout.string_alloc_layout)
 }
 
@@ -1333,6 +1349,8 @@ pub fn (mut self Page) reinit(cap PageCapacity) {
 	}
 	self.dirty = false
 	self.styles = StyleSet.init(cap.styles)
+	self.grapheme_alloc = BitmapAllocator.init(grapheme_chunk, layout.grapheme_alloc_layout)
+	self.grapheme_map = map[u64]GraphemeAllocation{}
 	self.hyperlink_set = HyperlinkSet.init_bounded(layout.hyperlink_set_layout, layout.string_alloc_layout)
 	self.hyperlink_map = map[u64]u32{}
 }
@@ -1381,14 +1399,17 @@ pub fn (self &Page) verify_integrity() ?IntegrityError {
 			cell := row.cells[x]
 
 			if cell.has_grapheme {
-				// If a cell has grapheme data, it must actually have graphemes.
-				if cell.graphemes.len == 0 {
+				key := cell_key(y, x, int(self.capacity.cols))
+				// If a cell has grapheme data, it must have both the page map
+				// entry and the translated codepoint slice.
+				if key !in self.grapheme_map || cell.graphemes.len == 0 {
 					return IntegrityError.missing_grapheme_data
 				}
 				graphemes_seen++
 			} else if total_graphemes > 0 {
+				key := cell_key(y, x, int(self.capacity.cols))
 				// It should not have grapheme data if it isn't marked.
-				if cell.graphemes.len > 0 {
+				if key in self.grapheme_map || cell.graphemes.len > 0 {
 					return IntegrityError.unmarked_grapheme_cell
 				}
 			}
@@ -1544,6 +1565,15 @@ pub fn (self &Page) clone() Page {
 
 	// Deep copy hyperlink set.
 	new_hl_set := self.hyperlink_set.clone()
+	new_grapheme_alloc := BitmapAllocator{
+		chunk_size: self.grapheme_alloc.chunk_size
+		bitmaps: self.grapheme_alloc.bitmaps.clone()
+		chunks: self.grapheme_alloc.chunks.clone()
+	}
+	mut new_grapheme_map := map[u64]GraphemeAllocation{}
+	for k, v in self.grapheme_map {
+		new_grapheme_map[k] = v
+	}
 
 	// Clone hyperlink map.
 	mut new_hl_map := map[u64]u32{}
@@ -1557,6 +1587,8 @@ pub fn (self &Page) clone() Page {
 		size: self.size
 		capacity: self.capacity
 		styles: new_styles
+		grapheme_alloc: new_grapheme_alloc
+		grapheme_map: new_grapheme_map
 		hyperlink_set: new_hl_set
 		hyperlink_map: new_hl_map
 	}
@@ -1765,6 +1797,17 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_
 
 		// Copy graphemes.
 		if src_cell.has_grapheme && src_cell.graphemes.len > 0 {
+			dst_key := cell_key(int(dst_row_idx), xi, int(self.capacity.cols))
+			if dst_key !in self.grapheme_map && self.grapheme_count() >= self.grapheme_capacity() {
+				return .grapheme_map_out_of_memory
+			}
+			offset := self.grapheme_alloc.alloc(src_cell.graphemes.len * int(sizeof(u32))) or {
+				return .grapheme_alloc_out_of_memory
+			}
+			self.grapheme_map[dst_key] = GraphemeAllocation{
+				offset: offset
+				len: src_cell.graphemes.len
+			}
 			dst_cell.graphemes = src_cell.graphemes.clone()
 			dst_cell.has_grapheme = true
 			dst_cell.content_tag = .codepoint_grapheme
@@ -1897,10 +1940,7 @@ pub fn (mut self Page) move_cells(src_row_idx int, src_left int, dst_row_idx int
 			dst_row.cells[di] = src_cell
 
 			if src_cell.has_grapheme {
-				// Move grapheme data.
-				dst_row.cells[di].graphemes = src_cell.graphemes.clone()
-				dst_row.cells[di].has_grapheme = true
-				dst_row.cells[di].content_tag = .codepoint_grapheme
+				self.move_grapheme(src_row_idx, si, dst_row_idx, di)
 				dst_row.grapheme = true
 			}
 			if src_cell.has_hyperlink {
@@ -1952,7 +1992,17 @@ pub fn (mut self Page) swap_cells(row_idx int, src_x int, dst_x int) {
 	src_has_grapheme := row.cells[src_x].has_grapheme
 	dst_has_grapheme := row.cells[dst_x].has_grapheme
 	if src_has_grapheme || dst_has_grapheme {
-		// Just swap the grapheme data in place since it's on the cells.
+		src_key := cell_key(row_idx, src_x, int(self.capacity.cols))
+		dst_key := cell_key(row_idx, dst_x, int(self.capacity.cols))
+		if src_has_grapheme && dst_has_grapheme {
+			src_allocation := self.grapheme_map[src_key]
+			self.grapheme_map[src_key] = self.grapheme_map[dst_key]
+			self.grapheme_map[dst_key] = src_allocation
+		} else if src_has_grapheme {
+			self.move_grapheme(row_idx, src_x, row_idx, dst_x)
+		} else {
+			self.move_grapheme(row_idx, dst_x, row_idx, src_x)
+		}
 	}
 
 	// Hyperlinks are keyed by cell position, so swap map entries.
@@ -1998,9 +2048,7 @@ pub fn (mut self Page) clear_cells(row_idx u16, left u16, end u16) {
 	if row.grapheme {
 		for x in int(left) .. int(end) {
 			if x < row.cells.len && row.cells[x].has_grapheme {
-				row.cells[x].graphemes = []
-				row.cells[x].has_grapheme = false
-				row.cells[x].content_tag = .codepoint
+				self.clear_grapheme(int(row_idx), x)
 			}
 		}
 		// If we cleared the full row width, clear the flag.
@@ -2163,11 +2211,25 @@ pub fn (self &Page) hyperlink_capacity() int {
 
 // Set the graphemes for the given cell. This asserts that the cell
 // has no graphemes set, and only contains a single codepoint.
-pub fn (mut self Page) set_graphemes(row_idx int, col_idx int, cps []u32) {
+pub fn (mut self Page) set_graphemes(row_idx int, col_idx int, cps []u32) ! {
 	mut row := &self.rows[row_idx]
 	mut cell := &row.cells[col_idx]
 	assert cell.codepoint > 0
 	assert cell.content_tag == .codepoint
+	assert cps.len > 0
+
+	offset := self.grapheme_alloc.alloc(cps.len * int(sizeof(u32))) or {
+		return error('GraphemeAllocOutOfMemory')
+	}
+	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
+	if key in self.grapheme_map || self.grapheme_count() >= self.grapheme_capacity() {
+		self.grapheme_alloc.release(offset, cps.len * int(sizeof(u32)))
+		return error('GraphemeMapOutOfMemory')
+	}
+	self.grapheme_map[key] = GraphemeAllocation{
+		offset: offset
+		len: cps.len
+	}
 
 	cell.graphemes = cps.clone()
 	cell.content_tag = .codepoint_grapheme
@@ -2176,16 +2238,51 @@ pub fn (mut self Page) set_graphemes(row_idx int, col_idx int, cps []u32) {
 }
 
 // Append a codepoint to the given cell as a grapheme.
-pub fn (mut self Page) append_grapheme(row_idx int, col_idx int, cp u32) {
+pub fn (mut self Page) append_grapheme(row_idx int, col_idx int, cp u32) ! {
 	mut row := &self.rows[row_idx]
 	mut cell := &row.cells[col_idx]
+	assert cell.codepoint != 0
+	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
 
-	cell.graphemes << cp
 	if cell.content_tag != .codepoint_grapheme {
+		offset := self.grapheme_alloc.alloc(int(sizeof(u32))) or {
+			return error('GraphemeAllocOutOfMemory')
+		}
+		if self.grapheme_count() >= self.grapheme_capacity() {
+			self.grapheme_alloc.release(offset, int(sizeof(u32)))
+			return error('GraphemeMapOutOfMemory')
+		}
+		self.grapheme_map[key] = GraphemeAllocation{
+			offset: offset
+			len: 1
+		}
+		cell.graphemes << cp
 		cell.content_tag = .codepoint_grapheme
 		cell.has_grapheme = true
 		row.grapheme = true
+		return
 	}
+
+	mut allocation := self.grapheme_map[key] or {
+		panic('grapheme cell is missing its page mapping')
+	}
+	if allocation.len % grapheme_chunk_len != 0 {
+		allocation.len++
+		self.grapheme_map[key] = allocation
+		cell.graphemes << cp
+		return
+	}
+
+	new_len := allocation.len + 1
+	new_offset := self.grapheme_alloc.alloc(new_len * int(sizeof(u32))) or {
+		return error('GraphemeAllocOutOfMemory')
+	}
+	self.grapheme_alloc.release(allocation.offset, allocation.len * int(sizeof(u32)))
+	self.grapheme_map[key] = GraphemeAllocation{
+		offset: new_offset
+		len: new_len
+	}
+	cell.graphemes << cp
 }
 
 // Returns the codepoints for the given cell. These are the codepoints
@@ -2199,9 +2296,9 @@ pub fn (self &Page) lookup_grapheme(row_idx int, col_idx int) ?[]u32 {
 	if col_idx >= row.cells.len {
 		return none
 	}
-	cell := row.cells[col_idx]
-	if cell.has_grapheme && cell.graphemes.len > 0 {
-		return cell.graphemes
+	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
+	if key in self.grapheme_map {
+		return row.cells[col_idx].graphemes
 	}
 	return none
 }
@@ -2213,17 +2310,13 @@ pub fn (self &Page) lookup_grapheme(row_idx int, col_idx int) ?[]u32 {
 // there are scenarios where we want to move graphemes without changing
 // the content tag. Callers beware but assert_integrity should catch this.
 fn (mut self Page) move_grapheme(src_row int, src_col int, dst_row int, dst_col int) {
-	if src_row < self.rows.len && src_col < self.rows[src_row].cells.len {
-		graphemes := self.rows[src_row].cells[src_col].graphemes.clone()
-		self.rows[src_row].cells[src_col].graphemes = []
-		self.rows[src_row].cells[src_col].has_grapheme = false
-		self.rows[src_row].cells[src_col].content_tag = .codepoint
-		if dst_row < self.rows.len && dst_col < self.rows[dst_row].cells.len {
-			self.rows[dst_row].cells[dst_col].graphemes = graphemes
-			self.rows[dst_row].cells[dst_col].has_grapheme = true
-			self.rows[dst_row].cells[dst_col].content_tag = .codepoint_grapheme
-		}
+	src_key := cell_key(src_row, src_col, int(self.capacity.cols))
+	dst_key := cell_key(dst_row, dst_col, int(self.capacity.cols))
+	allocation := self.grapheme_map[src_key] or {
+		panic('moved grapheme cell is missing its page mapping')
 	}
+	self.grapheme_map.delete(src_key)
+	self.grapheme_map[dst_key] = allocation
 }
 
 // Clear the graphemes for a given cell.
@@ -2233,6 +2326,12 @@ fn (mut self Page) move_grapheme(src_row int, src_col int, dst_row int, dst_col 
 // graphemes in the row.
 pub fn (mut self Page) clear_grapheme(row_idx int, col_idx int) {
 	if row_idx < self.rows.len && col_idx < self.rows[row_idx].cells.len {
+		key := cell_key(row_idx, col_idx, int(self.capacity.cols))
+		allocation := self.grapheme_map[key] or {
+			panic('cleared grapheme cell is missing its page mapping')
+		}
+		self.grapheme_alloc.release(allocation.offset, allocation.len * int(sizeof(u32)))
+		self.grapheme_map.delete(key)
 		self.rows[row_idx].cells[col_idx].graphemes = []
 		self.rows[row_idx].cells[col_idx].has_grapheme = false
 		// Mark that we no longer have graphemes by changing the content tag.
@@ -2259,18 +2358,7 @@ pub fn (mut self Page) update_row_grapheme_flag(row &RowData) {
 // Returns the number of graphemes in the page. This isn't the byte
 // size but the total number of unique cells that have grapheme data.
 pub fn (self &Page) grapheme_count() int {
-	mut count := 0
-	for row in self.rows {
-		if !row.grapheme {
-			continue
-		}
-		for cell in row.cells {
-			if cell.has_grapheme {
-				count++
-			}
-		}
-	}
-	return count
+	return self.grapheme_map.len
 }
 
 // Returns the number of unique cells that the pinned page's grapheme map can

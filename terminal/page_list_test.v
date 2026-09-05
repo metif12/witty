@@ -103,7 +103,7 @@ fn test_page_pin_row_cell_grapheme_and_style_accessors() {
 		codepoint: u32(`a`)
 		style_id: style_id
 	}
-	page.set_graphemes(int(pin.y), int(pin.x), [u32(0x0301)])
+	page.set_graphemes(int(pin.y), int(pin.x), [u32(0x0301)]) or { panic(err) }
 
 	rac := pin.row_and_cell()
 	assert voidptr(rac.row) == voidptr(pin.row_data())
@@ -458,6 +458,31 @@ fn test_page_list_clone_row_grows_string_capacity() {
 	assert new_first.data.capacity.string_bytes == old_capacity * 2
 	assert new_first.data.hyperlink_set.string_used() == int(old_capacity * 2)
 	assert new_first.data.lookup_hyperlink(1, 0) != none
+}
+
+fn test_page_list_clone_row_grows_grapheme_allocator_capacity() {
+	mut list := PageList.init(2, 3, usize(0x7FFFFFFFFFFFFFFF))
+	defer { list.deinit() }
+	first := list.pages.first or { return }
+	list.split(PagePin{ node: first, y: 2 }) or { return }
+	second := first.next or { return }
+	cps := []u32{len: int(std_capacity.grapheme_bytes / 4) - 1, init: u32(`x`)}
+
+	for page_index, node in [first, second] {
+		mut page := &node.data
+		page.rows[0].cells[0] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(`a`) + u32(page_index)
+		}
+		page.set_graphemes(0, 0, cps) or { panic(err) }
+		assert page.grapheme_alloc.used_bytes() == int(std_capacity.grapheme_bytes)
+	}
+
+	old_capacity := first.data.capacity.grapheme_bytes
+	new_first := list.clone_row_growing(first, &second.data, 1, 0)
+	assert new_first.data.capacity.grapheme_bytes == old_capacity * 2
+	assert new_first.data.grapheme_alloc.used_bytes() == int(old_capacity * 2)
+	assert new_first.data.lookup_grapheme(1, 0) or { []u32{} } == cps
 }
 
 fn test_page_list_erase_row_grows_style_capacity_across_pages() {
@@ -1245,7 +1270,7 @@ fn test_page_list_erase_history_preserves_managed_survivor() {
 		style_id: style_id
 	}
 	page.rows[2].styled = true
-	page.set_graphemes(2, 3, [u32(0x0302)])
+	page.set_graphemes(2, 3, [u32(0x0302)]) or { panic(err) }
 	hyperlink_id := page.insert_hyperlink(Hyperlink{
 		id: HyperlinkExplicitId{
 			value: 'survivor'
@@ -1344,7 +1369,7 @@ fn test_page_list_erase_row_preserves_managed_cell_data() {
 		style_id: style_id
 	}
 	page.rows[1].styled = true
-	page.set_graphemes(1, 2, [u32(0x0301)])
+	page.set_graphemes(1, 2, [u32(0x0301)]) or { panic(err) }
 	hyperlink_id := page.insert_hyperlink(Hyperlink{
 		id: HyperlinkExplicitId{
 			value: 'managed'
@@ -3174,7 +3199,7 @@ fn test_page_list_erase_row_bounded_preserves_managed_cell_data() {
 		style_id: style_id
 	}
 	page.rows[1].styled = true
-	page.set_graphemes(1, 1, [u32(0x0308)])
+	page.set_graphemes(1, 1, [u32(0x0308)]) or { panic(err) }
 	hyperlink_id := page.insert_hyperlink(Hyperlink{
 		id: HyperlinkImplicitId{
 			offset: 9
@@ -3648,7 +3673,7 @@ fn test_page_list_resize_no_reflow_less_cols_clears_graphemes() {
 		content_tag: .codepoint
 		codepoint: u32(`A`)
 	}
-	page.append_grapheme(0, 9, u32(`A`))
+	page.append_grapheme(0, 9, u32(`A`)) or { panic(err) }
 	assert page.grapheme_count() == 1
 
 	s.resize(PageResizeOpts{ cols: 5, reflow: false })
@@ -4788,7 +4813,7 @@ fn test_page_list_resize_reflow_less_cols_wrapped_rows_with_graphemes() {
 				codepoint: u32(x)
 			}
 		}
-		page.append_grapheme(y, 2, u32(`A`))
+		page.append_grapheme(y, 2, u32(`A`)) or { panic(err) }
 	}
 
 	s.resize(PageResizeOpts{ cols: 2, reflow: true })
@@ -5768,7 +5793,7 @@ fn test_page_list_split_preserves_grapheme_clusters() {
 		content_tag: .codepoint
 		codepoint: u32(0x1F468) // Man emoji
 	}
-	page.set_graphemes(6, 0, [u32(0x200D), u32(0x1F469)])
+	page.set_graphemes(6, 0, [u32(0x200D), u32(0x1F469)]) or { panic(err) }
 
 	assert page.grapheme_count() == 1
 
