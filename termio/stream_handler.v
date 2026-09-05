@@ -569,10 +569,15 @@ fn (mut self StreamHandler) dcs_decrqss(setting terminal.DcsDecrqss) {
 			'\x1bP1\$r${top};${bottom}r\x1b\\'
 		}
 		.decslrm {
-			// Report left and right margins.
-			left := int(self.terminal.scrolling_region.left) + 1
-			right := int(self.terminal.scrolling_region.right) + 1
-			'\x1bP1\$r${left};${right}s\x1b\\'
+			// We only send a valid response when left and right margin mode
+			// (DECLRMM) is enabled.
+			if self.terminal.modes.get(.enable_left_and_right_margin) {
+				left := int(self.terminal.scrolling_region.left) + 1
+				right := int(self.terminal.scrolling_region.right) + 1
+				'\x1bP1\$r${left};${right}s\x1b\\'
+			} else {
+				'\x1bP0\$r\x1b\\'
+			}
 		}
 		.none_val {
 			// Unknown setting, report invalid.
@@ -583,81 +588,8 @@ fn (mut self StreamHandler) dcs_decrqss(setting terminal.DcsDecrqss) {
 }
 
 // format_sgr builds the SGR parameter string from the current cursor style.
-fn (self &StreamHandler) format_sgr() string {
-	style := self.terminal.screens.active.cursor.style
-	mut parts := []string{}
-
-	if style.flags.bold {
-		parts << '1'
-	}
-	if style.flags.faint {
-		parts << '2'
-	}
-	if style.flags.italic {
-		parts << '3'
-	}
-	match style.flags.underline {
-		.single { parts << '4' }
-		.double { parts << '4:2' }
-		.curly { parts << '4:3' }
-		.dotted { parts << '4:4' }
-		.dashed { parts << '4:5' }
-		.none {}
-	}
-	if style.flags.blink {
-		parts << '5'
-	}
-	if style.flags.inverse {
-		parts << '7'
-	}
-	if style.flags.invisible {
-		parts << '8'
-	}
-	if style.flags.strikethrough {
-		parts << '9'
-	}
-	if style.flags.overline {
-		parts << '53'
-	}
-
-	// Foreground color
-	match style.fg_color {
-		.palette {
-			if style.fg_palette < 8 {
-				parts << '${30 + int(style.fg_palette)}'
-			} else if style.fg_palette < 16 {
-				parts << '${90 + int(style.fg_palette) - 8}'
-			} else {
-				parts << '38:5:${style.fg_palette}'
-			}
-		}
-		.rgb {
-			parts << '38:2::${style.fg_r}:${style.fg_g}:${style.fg_b}'
-		}
-		.none {}
-	}
-
-	// Background color
-	match style.bg_color {
-		.palette {
-			if style.bg_palette < 8 {
-				parts << '${40 + int(style.bg_palette)}'
-			} else if style.bg_palette < 16 {
-				parts << '${100 + int(style.bg_palette) - 8}'
-			} else {
-				parts << '48:5:${style.bg_palette}'
-			}
-		}
-		.rgb {
-			parts << '48:2::${style.bg_r}:${style.bg_g}:${style.bg_b}'
-		}
-		.none {}
-	}
-
-	if parts.len == 0 {
-		return '0'
-	}
-	return parts.join(';')
+fn (mut self StreamHandler) format_sgr() string {
+	return self.terminal.print_attributes() or { '0' }
 }
 
 // format_decscusr returns the DECSCUSR value for the current cursor state.
@@ -673,9 +605,10 @@ fn (self &StreamHandler) format_decscusr() int {
 		.bar {
 			if blinking { 5 } else { 6 }
 		}
-		.block_hollow { 2 }
+		.block_hollow {
+			if blinking { 1 } else { 2 }
+		}
 	}
-	// No standard DECSCUSR for hollow, report as steady block
 }
 
 // xtgettcap_lookup looks up a hex-encoded terminfo capability name

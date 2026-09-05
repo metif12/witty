@@ -182,6 +182,50 @@ fn test_stream_handler_xtversion_uses_build_version() {
 	assert msg.write_small_data.slice().bytestr() == '\x1bP>|ghostty ${build_meta.version_string}\x1b\\'
 }
 
+fn test_stream_handler_decrqss_requires_declrmm_for_horizontal_margins() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	handler.dcs_decrqss(.decslrm)
+	disabled := ctx.mailbox.pop() or { panic('expected invalid DECRPSS response') }
+	assert disabled.write_small_data.slice().bytestr() == '\x1bP0\$r\x1b\\'
+
+	handler.terminal.modes.set(.enable_left_and_right_margin, true)
+	handler.dcs_decrqss(.decslrm)
+	enabled := ctx.mailbox.pop() or { panic('expected valid DECRPSS response') }
+	assert enabled.write_small_data.slice().bytestr() == '\x1bP1\$r1;80s\x1b\\'
+}
+
+fn test_stream_handler_decrqss_hollow_cursor_uses_blink_mode() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.terminal.screens.active.cursor.cursor_style = .block_hollow
+
+	handler.terminal.modes.set(.cursor_blinking, true)
+	handler.dcs_decrqss(.decscusr)
+	blinking := ctx.mailbox.pop() or { panic('expected blinking cursor DECRPSS response') }
+	assert blinking.write_small_data.slice().bytestr() == '\x1bP1\$r1 q\x1b\\'
+
+	handler.terminal.modes.set(.cursor_blinking, false)
+	handler.dcs_decrqss(.decscusr)
+	steady := ctx.mailbox.pop() or { panic('expected steady cursor DECRPSS response') }
+	assert steady.write_small_data.slice().bytestr() == '\x1bP1\$r2 q\x1b\\'
+}
+
+fn test_stream_handler_decrqss_uses_terminal_sgr_serialization() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.terminal.set_attribute(terminal.SgrAttribute{
+		kind: .underline_set
+		underline: .double
+	})!
+	handler.terminal.set_attribute(terminal.SgrAttribute{ kind: .overline })!
+
+	handler.dcs_decrqss(.sgr)
+	msg := ctx.mailbox.pop() or { panic('expected SGR DECRPSS response') }
+	assert msg.write_small_data.slice().bytestr() == '\x1bP1\$r0;4m\x1b\\'
+}
+
 // Test bell dispatches without crashing.
 fn test_stream_handler_bell() {
 	mut handler, mut ctx := make_test_handler()
