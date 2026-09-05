@@ -140,6 +140,94 @@ pub fn (self &KeyEvent) get_unshifted_codepoint() u32 {
 }
 
 // ============================================================
+// Key encoder (from c/key_encode.zig)
+// ============================================================
+
+@[heap]
+pub struct KeyEncoder {
+pub mut:
+	opts input.Options
+}
+
+pub enum KeyEncoderOption as i32 {
+	cursor_key_application     = 0
+	keypad_key_application     = 1
+	ignore_keypad_with_numlock = 2
+	alt_esc_prefix             = 3
+	modify_other_keys_state_2  = 4
+	kitty_flags                = 5
+	macos_option_as_alt        = 6
+}
+
+// V's sum type is the typed equivalent of the C API's option-specific void
+// pointer. Values with the wrong type for an option are ignored just as an
+// invalid C option is rejected before mutating the encoder.
+pub type KeyEncoderOptionValue = bool | input.OptionAsAlt | u8
+
+pub fn key_encoder_new() &KeyEncoder {
+	return &KeyEncoder{}
+}
+
+pub fn key_encoder_free(mut encoder KeyEncoder) {
+	encoder.opts = input.Options{}
+}
+
+pub fn (mut self KeyEncoder) setopt(option KeyEncoderOption, value KeyEncoderOptionValue) {
+	match value {
+		bool {
+			match option {
+				.cursor_key_application {
+					self.opts.cursor_key_application = value
+				}
+				.keypad_key_application {
+					self.opts.keypad_key_application = value
+				}
+				.ignore_keypad_with_numlock {
+					self.opts.ignore_keypad_with_numlock = value
+				}
+				.alt_esc_prefix {
+					self.opts.alt_esc_prefix = value
+				}
+				.modify_other_keys_state_2 {
+					self.opts.modify_other_keys_state_2 = value
+				}
+				else {}
+			}
+		}
+		u8 {
+			if option == .kitty_flags {
+				self.opts.kitty_flags = input.KittyFlags{
+					disambiguate: value & 1 != 0
+					report_events: value & 2 != 0
+					report_alternates: value & 4 != 0
+					report_all: value & 8 != 0
+					report_associated: value & 16 != 0
+				}
+			}
+		}
+		input.OptionAsAlt {
+			if option == .macos_option_as_alt {
+				self.opts.macos_option_as_alt = value
+			}
+		}
+	}
+}
+
+// encode writes into the caller's fixed buffer. The returned byte count is
+// the bytes written on success or the required size when the buffer is too
+// small, matching ghostty_key_encoder_encode.
+pub fn (self &KeyEncoder) encode(event &KeyEvent, mut out []u8) (Result, usize) {
+	encoded := input.encode(event.event, self.opts)
+	if encoded.len > out.len {
+		return Result.out_of_memory, usize(encoded.len)
+	}
+	for i, byte in encoded.bytes() {
+		out[i] = byte
+	}
+	return Result.success, usize(encoded.len)
+}
+
+// ============================================================
 // OSC (from c/osc.zig)
 // ============================================================
 

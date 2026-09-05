@@ -39,7 +39,7 @@ pub fn (f KittyFlags) int() u8 {
 // Options that affect key encoding behavior. This is a mix of behavior
 // from terminal state as well as application configuration.
 pub struct Options {
-pub:
+pub mut:
 	// Terminal DEC mode 1
 	cursor_key_application bool
 	// Terminal DEC mode 66
@@ -88,7 +88,9 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 		// all" is set
 		if !opts.kitty_flags.report_all {
 			match event.key {
-				.enter, .backspace, .tab { return '' }
+				.enter, .backspace, .tab {
+					return ''
+				}
 				else {}
 			}
 		}
@@ -161,9 +163,15 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 			// the same bytes as in legacy mode
 			if binding_mods.empty() {
 				match event.key {
-					.enter { return '\r' }
-					.tab { return '\t' }
-					.backspace { return '\x7f' }
+					.enter {
+						return '\r'
+					}
+					.tab {
+						return '\t'
+					}
+					.backspace {
+						return '\x7f'
+					}
 					else {}
 				}
 			}
@@ -284,9 +292,7 @@ fn legacy_encode(event KeyEvent, opts Options) string {
 	}
 
 	// If we match a PC style function key then that is our result.
-	if sequence := pc_style_function_key(event.key, all_mods, opts.cursor_key_application,
-		opts.keypad_key_application, opts.ignore_keypad_with_numlock, opts.modify_other_keys_state_2)
-	{
+	if sequence := pc_style_function_key(event.key, all_mods, opts.cursor_key_application, opts.keypad_key_application, opts.ignore_keypad_with_numlock, opts.modify_other_keys_state_2) {
 		// If we have UTF-8 text, then we never emit PC style function
 		// keys. Many function keys (escape, enter, backspace) have
 		// a specific meaning when dead keys are active.
@@ -459,7 +465,9 @@ fn legacy_alt_prefix(event KeyEvent, binding_mods Mods, mods Mods, opts Options)
 	// On macOS, we only handle option like alt in certain circumstances.
 	$if macos {
 		match opts.macos_option_as_alt {
-			.false_ { return none }
+			.false_ {
+				return none
+			}
 			.left {
 				if mods.sides.alt == .right {
 					return none
@@ -717,7 +725,9 @@ fn ctrl_seq(logical_key Key, utf8 string, unshifted_codepoint u32, mods Mods) ?u
 		// 'i' => 0x09,
 		// 'm' => 0x0D,
 		// '[' => 0x1B,
-		else { return none }
+		else {
+			return none
+		}
 	}
 }
 
@@ -858,8 +868,8 @@ mut:
 	key_code   u32
 	final_byte u8
 	mods       KittyMods
-	event      KittyEvent   = .none_
-	alternates [2]u32       // 0 = no alternate set
+	event      KittyEvent = .none_
+	alternates [2]u32 // 0 = no alternate set
 	text       string
 }
 

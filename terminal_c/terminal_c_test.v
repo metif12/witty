@@ -103,6 +103,47 @@ fn test_key_event_utf8_can_be_cleared() {
 }
 
 // ============================================================
+// Key encoder tests (from c/key_encode.zig)
+// ============================================================
+
+fn test_key_encoder_options() {
+	mut encoder := key_encoder_new()
+	defer { key_encoder_free(mut encoder) }
+	encoder.setopt(.cursor_key_application, KeyEncoderOptionValue(true))
+	encoder.setopt(.keypad_key_application, KeyEncoderOptionValue(true))
+	encoder.setopt(.kitty_flags, KeyEncoderOptionValue(u8(3)))
+	encoder.setopt(.macos_option_as_alt, KeyEncoderOptionValue(input.OptionAsAlt.left))
+	assert encoder.opts.cursor_key_application
+	assert encoder.opts.keypad_key_application
+	assert encoder.opts.kitty_flags.disambiguate
+	assert encoder.opts.kitty_flags.report_events
+	assert !encoder.opts.kitty_flags.report_alternates
+	assert encoder.opts.macos_option_as_alt == .left
+}
+
+fn test_key_encoder_fixed_buffer_and_required_size() {
+	mut encoder := key_encoder_new()
+	defer { key_encoder_free(mut encoder) }
+	mut event := key_event_new()
+	defer { key_event_free(mut event) }
+	event.set_action(.press)
+	event.set_key(.key_a)
+	event.set_utf8('a')
+	event.set_unshifted_codepoint(u32(`a`))
+
+	mut too_small := []u8{}
+	status_small, required := encoder.encode(event, mut too_small)
+	assert status_small == .out_of_memory
+	assert required == 1
+
+	mut out := []u8{len: int(required)}
+	status, written := encoder.encode(event, mut out)
+	assert status == .success
+	assert written == 1
+	assert out[..int(written)].bytestr() == 'a'
+}
+
+// ============================================================
 // OSC parser tests (from c/osc.zig)
 // ============================================================
 
