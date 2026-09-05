@@ -6180,6 +6180,123 @@ fn test_page_list_resize_reflow_less_cols_to_wrap_a_wide_char() {
 	assert new_page.rows[1].cells[1].wide == .spacer_tail
 }
 
+fn test_page_list_resize_reflow_less_cols_to_wrap_a_multicodepoint_grapheme_with_a_spacer_head() {
+	mut s := PageList.init(4, 2, usize(0))
+	defer { s.deinit() }
+
+	mut first := s.pages.first or { return }
+	mut page := &first.data
+	graphemes := [u32(0x200D), u32(0x1F468), u32(0x200D), u32(0x1F466), u32(0x200D), u32(0x1F466)]
+	page.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(0x1F468)
+		wide: .wide
+	}
+	page.set_graphemes(0, 0, graphemes) or { panic(err) }
+	page.rows[0].cells[1] = CellData{
+		content_tag: .codepoint
+		wide: .spacer_tail
+	}
+	page.rows[0].cells[2] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(0x1F468)
+		wide: .wide
+	}
+	page.set_graphemes(0, 2, graphemes) or { panic(err) }
+	page.rows[0].cells[3] = CellData{
+		content_tag: .codepoint
+		wide: .spacer_tail
+	}
+
+	s.resize(PageResizeOpts{ cols: 3, reflow: true })
+	assert s.cols == 3
+	assert s.total_rows == 2
+	new_node := s.pages.first or { return }
+	assert voidptr(new_node) == voidptr(s.pages.last or { return })
+	mut new_page := &new_node.data
+	assert new_page.rows[0].cells[0].codepoint == u32(0x1F468)
+	assert new_page.rows[0].cells[0].wide == .wide
+	assert new_page.rows[0].wrap
+	assert new_page.rows[0].cells[1].wide == .spacer_tail
+	assert new_page.rows[0].cells[2].wide == .spacer_head
+	first_cps := new_page.lookup_grapheme_at(0, 0) or {
+		assert false, 'first grapheme missing'
+		return
+	}
+	assert first_cps == graphemes
+	assert new_page.rows[1].cells[0].codepoint == u32(0x1F468)
+	assert new_page.rows[1].cells[0].wide == .wide
+	assert new_page.rows[1].cells[1].wide == .spacer_tail
+	second_cps := new_page.lookup_grapheme_at(1, 0) or {
+		assert false, 'second grapheme missing'
+		return
+	}
+	assert second_cps == graphemes
+}
+
+fn test_page_list_resize_reflow_less_cols_copy_kitty_placeholder() {
+	mut s := PageList.init(4, 2, usize(0))
+	defer { s.deinit() }
+
+	mut first := s.pages.first or { return }
+	for x in u16(0) .. s.cols - 1 {
+		set_screen_semantic_cell(mut s, x, 0, kitty_unicode_placeholder, .output)
+	}
+	first.data.rows[0].kitty_virtual_placeholder = true
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	assert s.cols == 2
+	assert s.total_rows == 2
+	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
+	for {
+		row := it.next() or { break }
+		assert row.row_data().kitty_virtual_placeholder
+	}
+}
+
+fn test_page_list_resize_reflow_more_cols_clears_kitty_placeholder() {
+	mut s := PageList.init(4, 2, usize(0))
+	defer { s.deinit() }
+
+	mut first := s.pages.first or { return }
+	for x in u16(0) .. s.cols - 1 {
+		set_screen_semantic_cell(mut s, x, 0, kitty_unicode_placeholder, .output)
+	}
+	first.data.rows[0].kitty_virtual_placeholder = true
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	assert s.cols == 4
+	assert s.total_rows == 2
+	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
+	row0 := it.next() or { return }
+	assert row0.row_data().kitty_virtual_placeholder
+	row1 := it.next() or { return }
+	assert !row1.row_data().kitty_virtual_placeholder
+	assert it.next() == none
+}
+
+fn test_page_list_resize_reflow_wrap_moves_kitty_placeholder() {
+	mut s := PageList.init(4, 2, usize(0))
+	defer { s.deinit() }
+
+	mut first := s.pages.first or { return }
+	for x in u16(2) .. s.cols - 1 {
+		set_screen_semantic_cell(mut s, x, 0, kitty_unicode_placeholder, .output)
+	}
+	first.data.rows[0].kitty_virtual_placeholder = true
+
+	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	assert s.cols == 2
+	assert s.total_rows == 2
+	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
+	row0 := it.next() or { return }
+	assert !row0.row_data().kitty_virtual_placeholder
+	row1 := it.next() or { return }
+	assert row1.row_data().kitty_virtual_placeholder
+	assert it.next() == none
+}
+
 fn test_page_list_resize_reflow_less_cols_blank_lines_between() {
 	mut s := PageList.init(4, 3, usize(0))
 	defer { s.deinit() }
