@@ -8,7 +8,7 @@ fn test_web_canvas_iterator_routes_to_web_canvas_state() {
 	mut iterator := shaper.run_iterator(font.RunOptions{
 		cells: [u8(`A`), `B`]
 	})
-	run := iterator.next() or { panic('expected a run') }
+	run := (iterator.next()!).get() or { panic('expected a run') }
 	assert run.cells == 2
 	assert shaper.run_codepoints == [
 		WebCanvasCodepoint{ codepoint: u32(`A`), cluster: 0 },

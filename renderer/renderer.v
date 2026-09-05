@@ -2741,7 +2741,11 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 	})
 	mut run_iter := self.font_shaper.run_iterator(run_opts)
 	for {
-		run := run_iter.next() or { break }
+		next_run := run_iter.next()!
+		if !next_run.has_value {
+			break
+		}
+		run := next_run.value
 		shaped_cells := self.font_shaper_cache.get(run) or {
 			new_cells := self.font_shaper.shape(run)!
 			self.font_shaper_cache.put(run, new_cells) or {}

@@ -1519,6 +1519,22 @@ pub:
 	web_canvas_face &WebCanvasFace = unsafe { nil }
 }
 
+// TextRunValue preserves Ghostty's !?TextRun return contract. V cannot nest
+// an Option inside a Result, so has_value represents the optional layer while
+// the containing Result represents iterator errors.
+pub struct TextRunValue {
+pub:
+	has_value bool
+	value     TextRun
+}
+
+pub fn (value TextRunValue) get() ?TextRun {
+	if !value.has_value {
+		return none
+	}
+	return value.value
+}
+
 // ShapeCell represents a positioned glyph from shaping.
 pub struct ShapeCell {
 pub:
@@ -1563,7 +1579,7 @@ pub mut:
 	opts        RunOptions
 	i           int
 	prepare_fn  fn (voidptr) = unsafe { nil }
-	add_fn      fn (voidptr, u32, u32) = unsafe { nil }
+	add_fn      fn (voidptr, u32, u32) !void = unsafe { nil }
 	finalize_fn fn (voidptr) = unsafe { nil }
 }
 
@@ -1573,7 +1589,7 @@ pub mut:
 pub struct RunIteratorHooks {
 pub:
 	prepare  fn (voidptr) = unsafe { nil }
-	add      fn (voidptr, u32, u32) = unsafe { nil }
+	add      fn (voidptr, u32, u32) !void = unsafe { nil }
 	finalize fn (voidptr) = unsafe { nil }
 }
 
@@ -1595,10 +1611,11 @@ pub fn RunIterator.new_with_hooks(shaper_ptr voidptr, opts RunOptions, hooks Run
 	}
 }
 
-// Get the next text run, or none if done.
-pub fn (mut it RunIterator) next() ?TextRun {
+// Get the next text run. A value with has_value=false means the iterator is
+// exhausted; errors from font lookup or the shaping hook are propagated.
+pub fn (mut it RunIterator) next() !TextRunValue {
 	if it.shaper_ptr == unsafe { nil } {
-		return none
+		return TextRunValue{}
 	}
 	if it.opts.render_cells.len == 0 {
 		return it.next_bytes()
@@ -1637,11 +1654,11 @@ fn (it &RunIterator) prepare() {
 	}
 }
 
-fn (it &RunIterator) add_codepoint(mut hasher SourceHash, cp u32, cluster u32) {
+fn (it &RunIterator) add_codepoint(mut hasher SourceHash, cp u32, cluster u32) ! {
 	hasher.put_u32(cp)
 	hasher.put_u32(cluster)
 	if it.add_fn != unsafe { nil } {
-		it.add_fn(it.shaper_ptr, cp, cluster)
+		it.add_fn(it.shaper_ptr, cp, cluster)!
 	} else {
 		default_run_add(it.shaper_ptr, cp, cluster)
 	}
@@ -1655,35 +1672,38 @@ fn (it &RunIterator) finalize() {
 	}
 }
 
-fn (mut it RunIterator) next_bytes() ?TextRun {
+fn (mut it RunIterator) next_bytes() !TextRunValue {
 	mut max := it.opts.cells.len
 	for max > 0 && it.opts.cells[max - 1] == 0 {
 		max--
 	}
 	if it.i >= max {
-		return none
+		return TextRunValue{}
 	}
 	it.prepare()
 	start := it.i
 	mut hasher := SourceHash{}
 	for it.i < max {
 		cp := if it.opts.cells[it.i] == 0 { u32(` `) } else { u32(it.opts.cells[it.i]) }
-		it.add_codepoint(mut hasher, cp, u32(it.i - start))
+		it.add_codepoint(mut hasher, cp, u32(it.i - start))!
 		it.i++
 	}
 	it.finalize()
 	hasher.put_u64(u64(it.i - start))
 	hasher.put_u16(0)
-	return TextRun{
-		hash: hasher.final()
-		font_index: 0
-		offset: u32(start)
-		cells: u32(it.i - start)
-		grid: it.opts.grid
+	return TextRunValue{
+		has_value: true
+		value: TextRun{
+			hash: hasher.final()
+			font_index: 0
+			offset: u32(start)
+			cells: u32(it.i - start)
+			grid: it.opts.grid
+		}
 	}
 }
 
-fn (mut it RunIterator) next_render_cells() ?TextRun {
+fn (mut it RunIterator) next_render_cells() !TextRunValue {
 	cells := it.opts.render_cells
 	mut max := cells.len
 	for max > 0 && cells[max - 1].raw.is_empty() {
@@ -1693,7 +1713,7 @@ fn (mut it RunIterator) next_render_cells() ?TextRun {
 		it.i++
 	}
 	if it.i >= max {
-		return none
+		return TextRunValue{}
 	}
 	it.prepare()
 	start := it.i
@@ -1751,21 +1771,21 @@ fn (mut it RunIterator) next_render_cells() ?TextRun {
 			}
 		}
 		mut resolved_cp := cell.raw.codepoint_val()
-		idx := index_for_render_cell(it.opts.grid, &cell, font_style, presentation) or {
+		mut index_value := index_for_render_cell(it.opts.grid, &cell, font_style, presentation)!
+		if !index_value.has_value {
 			mut grid := unsafe { it.opts.grid }
-			fallback := grid.get_index(0xfffd, font_style, presentation) or { return none }
-			if fallback.has_value {
+			index_value = grid.get_index(0xfffd, font_style, presentation)!
+			if index_value.has_value {
 				resolved_cp = 0xfffd
-				fallback.index
 			} else {
-				space := grid.get_index(u32(` `), font_style, presentation) or { return none }
-				if !space.has_value {
-					return none
+				index_value = grid.get_index(u32(` `), font_style, presentation)!
+				if !index_value.has_value {
+					panic('font grid cannot render a space')
 				}
 				resolved_cp = u32(` `)
-				space.index
 			}
 		}
+		idx := index_value.index
 		if !has_font {
 			current_font = idx
 			has_font = true
@@ -1776,29 +1796,32 @@ fn (mut it RunIterator) next_render_cells() ?TextRun {
 		if resolved_cp == 0 || resolved_cp == 0x10eeee {
 			resolved_cp = u32(` `)
 		}
-		it.add_codepoint(mut hasher, resolved_cp, cluster)
+		it.add_codepoint(mut hasher, resolved_cp, cluster)!
 		if resolved_cp == cell.raw.codepoint_val() && cell.raw.content_tag == .codepoint_grapheme {
 			for cp in cell.grapheme {
 				if cp != 0xfe0e && cp != 0xfe0f {
-					it.add_codepoint(mut hasher, cp, cluster)
+					it.add_codepoint(mut hasher, cp, cluster)!
 				}
 			}
 		}
 		j++
 	}
 	if j == start {
-		return none
+		return TextRunValue{}
 	}
 	it.finalize()
 	hasher.put_u64(u64(j - start))
 	hasher.put_u16(current_font.int_val())
 	it.i = j
-	return TextRun{
-		hash: hasher.final()
-		font_index: u32(current_font.int_val())
-		offset: u32(start)
-		cells: u32(j - start)
-		grid: it.opts.grid
+	return TextRunValue{
+		has_value: true
+		value: TextRun{
+			hash: hasher.final()
+			font_index: u32(current_font.int_val())
+			offset: u32(start)
+			cells: u32(j - start)
+			grid: it.opts.grid
+		}
 	}
 }
 
@@ -1826,32 +1849,34 @@ fn comparable_style(style terminal.CellStyle) terminal.CellStyle {
 	return result
 }
 
-fn index_for_render_cell(grid_ptr &SharedGrid, cell &terminal.RenderCell, style FontStyle, presentation ?Presentation) ?Index {
+fn index_for_render_cell(grid_ptr &SharedGrid, cell &terminal.RenderCell, style FontStyle, presentation ?Presentation) !CodepointValue {
 	if grid_ptr == unsafe { nil } {
-		return none
+		return CodepointValue{}
 	}
 	mut grid := unsafe { grid_ptr }
 	primary_cp := cell.raw.codepoint_val()
 	if cell.raw.is_empty() || primary_cp == 0 || primary_cp == 0x10eeee {
-		space := grid.get_index(u32(` `), style, presentation) or { return none }
-		return if space.has_value { space.index } else { none }
+		return grid.get_index(u32(` `), style, presentation)!
 	}
-	primary_value := grid.get_index(primary_cp, style, presentation) or { return none }
+	primary_value := grid.get_index(primary_cp, style, presentation)!
 	if !primary_value.has_value {
-		return none
+		return CodepointValue{}
 	}
 	primary := primary_value.index
 	if cell.raw.content_tag != .codepoint_grapheme {
-		return primary
+		return CodepointValue{
+			has_value: true
+			index: primary
+		}
 	}
 	mut candidates := [primary]
 	for cp in cell.grapheme {
 		if cp == 0xfe0e || cp == 0xfe0f || cp == 0x200d {
 			continue
 		}
-		value := grid.get_index(cp, style, none) or { return none }
+		value := grid.get_index(cp, style, none)!
 		if !value.has_value {
-			return none
+			return CodepointValue{}
 		}
 		candidates << value.index
 	}
@@ -1868,10 +1893,13 @@ fn index_for_render_cell(grid_ptr &SharedGrid, cell &terminal.RenderCell, style 
 			}
 		}
 		if all {
-			return idx
+			return CodepointValue{
+				has_value: true
+				index: idx
+			}
 		}
 	}
-	return none
+	return CodepointValue{}
 }
 
 // ============================================================

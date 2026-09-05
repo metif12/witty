@@ -284,7 +284,7 @@ fn coretext_run_prepare(shaper_ptr voidptr) {
 	shaper.run_state.reset()
 }
 
-fn coretext_run_add(shaper_ptr voidptr, cp u32, cluster u32) {
+fn coretext_run_add(shaper_ptr voidptr, cp u32, cluster u32) ! {
 	mut shaper := unsafe { &Shaper(shaper_ptr) }
 	sp := macos.get_surrogate_pair(cp)
 	shaper.run_state.unichars << sp.hi

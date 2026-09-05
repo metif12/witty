@@ -10,7 +10,7 @@ pub mut:
 	run_state NoopRunState
 	// The shared memory used for shaping results.
 	cell_buf []font.ShapeCell
-	grid &font.SharedGrid = unsafe { nil }
+	grid     &font.SharedGrid = unsafe { nil }
 }
 
 // NoopCodepoint associates a Unicode codepoint with a cluster (cell) index.
@@ -55,8 +55,27 @@ pub fn (self &NoopShaper) end_frame() {
 
 pub fn (mut self NoopShaper) run_iterator(opts font.RunOptions) font.RunIterator {
 	self.grid = opts.grid
-	return font.RunIterator.new(unsafe { &self })
+	return font.RunIterator.new_with_hooks(unsafe { &self }, opts, font.RunIteratorHooks{
+		prepare: noop_run_prepare
+		add: noop_run_add
+		finalize: noop_run_finalize
+	})
 }
+
+fn noop_run_prepare(shaper_ptr voidptr) {
+	mut shaper := unsafe { &NoopShaper(shaper_ptr) }
+	shaper.run_state.reset()
+}
+
+fn noop_run_add(shaper_ptr voidptr, cp u32, cluster u32) ! {
+	mut shaper := unsafe { &NoopShaper(shaper_ptr) }
+	shaper.run_state.codepoints << NoopCodepoint{
+		codepoint: cp
+		cluster: cluster
+	}
+}
+
+fn noop_run_finalize(_ voidptr) {}
 
 // shape shapes the given text run. The text run must be the immediately
 // previous text run that was iterated since the text run does share

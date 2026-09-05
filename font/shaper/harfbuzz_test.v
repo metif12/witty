@@ -151,7 +151,7 @@ fn (mut td HbTestShaper) shape_render_cells(cells []terminal.RenderCell, selecti
 		cursor_x: cursor_x
 	})
 	for {
-		run := iterator.next() or { break }
+		run := (iterator.next()!).get() or { break }
 		result.runs << run
 		result.buffer_lengths << td.shp.hb_buf.get_length()
 		result.glyphs << td.shp.shape(run)!.clone()

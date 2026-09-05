@@ -74,7 +74,7 @@ fn web_canvas_run_prepare(shaper_ptr voidptr) {
 	shaper.run_codepoints.clear()
 }
 
-fn web_canvas_run_add(shaper_ptr voidptr, cp u32, cluster u32) {
+fn web_canvas_run_add(shaper_ptr voidptr, cp u32, cluster u32) ! {
 	mut shaper := unsafe { &WebCanvasShaper(shaper_ptr) }
 	shaper.run_codepoints << WebCanvasCodepoint{
 		codepoint: cp

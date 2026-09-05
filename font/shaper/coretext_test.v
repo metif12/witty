@@ -173,7 +173,7 @@ fn (mut td TestShaper) shape_render_cells(cells []terminal.RenderCell, selection
 		cursor_x: cursor_x
 	})
 	for {
-		run := iterator.next() or { break }
+		run := (iterator.next()!).get() or { break }
 		result.runs << run
 		result.glyphs << td.shp.shape(run)!.clone()
 	}
@@ -728,7 +728,7 @@ fn test_coretext_run_iterator_uses_coretext_hooks() {
 	mut iterator := shp.run_iterator(font.RunOptions{
 		cells: [u8(`A`), `B`, `C`]
 	})
-	run := iterator.next() or { panic('expected a text run') }
+	run := (iterator.next()!).get() or { panic('expected a text run') }
 	assert run.cells == 3
 	assert shp.run_state.codepoints == [
 		Codepoint{ codepoint: u32(`A`), cluster: 0 },
@@ -748,7 +748,7 @@ fn test_coretext_shapes_real_glyph_run() {
 			grid: &grid
 			cells: [u8(`A`), `B`, `C`]
 		})
-		run := iterator.next() or { panic('expected a text run') }
+		run := (iterator.next()!).get() or { panic('expected a text run') }
 		cells := shp.shape(run) or { panic(err) }
 		assert cells.len == 3
 		assert cells[0].x == 0

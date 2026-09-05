@@ -128,7 +128,7 @@ fn harfbuzz_run_prepare(shaper_ptr voidptr) {
 	shaper.hb_buf.set_direction(.ltr)
 }
 
-fn harfbuzz_run_add(shaper_ptr voidptr, cp u32, cluster u32) {
+fn harfbuzz_run_add(shaper_ptr voidptr, cp u32, cluster u32) ! {
 	mut shaper := unsafe { &HbShaper(shaper_ptr) }
 	shaper.hb_buf.add(cp, u32(shaper.codepoints.len))
 	shaper.codepoints << HbCodepoint{

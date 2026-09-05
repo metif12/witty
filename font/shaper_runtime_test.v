@@ -93,7 +93,7 @@ fn test_public_run_iterator_yields_single_text_run() {
 	mut shaper := Shaper.init(ShaperOptions{})!
 	defer { shaper.deinit() }
 	mut it := shaper.run_iterator(RunOptions{ cells: [u8(`A`), `B`, `C`] })
-	run := it.next() or {
+	run := (it.next()!).get() or {
 		assert false, 'expected one text run for non-empty cells'
 		return
 	}
@@ -102,7 +102,7 @@ fn test_public_run_iterator_yields_single_text_run() {
 	assert run.offset == 0
 	assert run.font_index == 0
 	assert run.hash != 0
-	if _ := it.next() {
+	if _ := (it.next()!).get() {
 		assert false, 'expected iterator to stop after one fallback run'
 	}
 }
@@ -112,11 +112,11 @@ fn test_public_run_iterator_hash_is_position_independent() {
 	defer { shaper.deinit() }
 
 	mut first := shaper.run_iterator(RunOptions{ cells: [u8(`A`), `B`, `C`] })
-	run1 := first.next() or { panic('expected first text run') }
+	run1 := (first.next()!).get() or { panic('expected first text run') }
 
 	mut second := shaper.run_iterator(RunOptions{ cells: [u8(`X`), `A`, `B`, `C`] })
 	second.i = 1
-	run2 := second.next() or { panic('expected offset text run') }
+	run2 := (second.next()!).get() or { panic('expected offset text run') }
 
 	assert run1.offset == 0
 	assert run2.offset == 1
@@ -129,9 +129,30 @@ fn test_public_run_iterator_hash_includes_length() {
 	defer { shaper.deinit() }
 
 	mut short := shaper.run_iterator(RunOptions{ cells: [u8(`A`)] })
-	short_run := short.next() or { panic('expected short text run') }
+	short_run := (short.next()!).get() or { panic('expected short text run') }
 	mut long := shaper.run_iterator(RunOptions{ cells: [u8(`A`), `B`] })
-	long_run := long.next() or { panic('expected long text run') }
+	long_run := (long.next()!).get() or { panic('expected long text run') }
 
 	assert short_run.hash != long_run.hash
+}
+
+fn failing_run_add(_ voidptr, _ u32, _ u32) ! {
+	return error('run hook failed')
+}
+
+fn test_public_run_iterator_propagates_hook_errors() {
+	mut shaper := Shaper.init(ShaperOptions{})!
+	defer { shaper.deinit() }
+	mut it := RunIterator.new_with_hooks(voidptr(&shaper), RunOptions{
+		cells: [u8(`A`)]
+	}, RunIteratorHooks{
+		add: failing_run_add
+	})
+
+	it.next() or {
+		assert err.msg() == 'run hook failed'
+		assert it.i == 0
+		return
+	}
+	assert false, 'expected the shaping hook error'
 }
