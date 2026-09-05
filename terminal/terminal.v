@@ -2325,11 +2325,32 @@ fn (mut self Terminal) print_cell(unmapped_c u32, wide CellWide) {
 					if cell_x + 1 < row.cells.len {
 						row.cells[cell_x + 1] = CellData{}
 					}
+					// A wide character wrapped from the preceding row has a
+					// spacer head at the end of that row. It is no longer part
+					// of a valid wide-cell sequence after this overwrite.
+					if self.screens.active.cursor.y > 0 && cell_x <= 1 {
+						prev_row_idx := row_idx - 1
+						if prev_row_idx >= 0 {
+							mut prev_row := &self.screens.active.pages.screen_rows[prev_row_idx]
+							if prev_row.cells.len > 0 {
+								prev_row.cells[prev_row.cells.len - 1].wide = .narrow
+							}
+						}
+					}
 				}
 				.spacer_tail {
 					// Previous cell was spacer_tail. Clear the wide cell before it.
 					if cell_x > 0 {
 						row.cells[cell_x - 1] = CellData{}
+					}
+					if self.screens.active.cursor.y > 0 && cell_x <= 1 {
+						prev_row_idx := row_idx - 1
+						if prev_row_idx >= 0 {
+							mut prev_row := &self.screens.active.pages.screen_rows[prev_row_idx]
+							if prev_row.cells.len > 0 {
+								prev_row.cells[prev_row.cells.len - 1].wide = .narrow
+							}
+						}
 					}
 				}
 				.spacer_head {}
@@ -2366,6 +2387,9 @@ fn (mut self Terminal) print_cell(unmapped_c u32, wide CellWide) {
 		// Update row flags
 		if self.screens.active.cursor.style_id != terminal.default_style_id {
 			row.styled = true
+		}
+		if c == kitty_unicode_placeholder {
+			row.kitty_virtual_placeholder = true
 		}
 
 		// Handle hyperlink

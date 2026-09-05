@@ -861,7 +861,10 @@ const hyperlink_set_item_size = usize(48)
 const hyperlink_bytes_default = u16(hyperlink_count_default * hyperlink_set_item_size)
 
 // Kitty graphics protocol Unicode placeholder / virtual placement codepoint.
-const kitty_unicode_placeholder = u32(0x10EEEE)
+// Codepoint reserved by the Kitty graphics protocol for virtual image
+// placements. This lives in terminal because kitty imports terminal in the V
+// module graph, while Terminal.printCell must recognize the value.
+pub const kitty_unicode_placeholder = u32(0x10EEEE)
 
 // Standard capacity for a new page.
 const std_capacity = PageCapacity{

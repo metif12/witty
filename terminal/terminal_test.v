@@ -2487,6 +2487,57 @@ fn test_print_wide_char_in_single_width_terminal() {
 	assert t.is_dirty(0, 0)
 }
 
+fn test_print_kitty_unicode_placeholder_marks_row() {
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print(kitty_unicode_placeholder) or { assert false }
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 1
+	assert cell_at(&t, 0, 0).codepoint == kitty_unicode_placeholder
+	assert t.screens.active.pages.screen_rows[0].kitty_virtual_placeholder
+	assert t.is_dirty(0, 0)
+}
+
+fn test_print_over_wrapped_wide_char_clears_previous_spacer_head() {
+	mut t := create_test_terminal(2, 2) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print(u32(`A`)) or { assert false }
+	t.print(0x6A4B) or { assert false } // 橋
+	assert cell_at(&t, 1, 0).wide == .spacer_head
+	assert cell_at(&t, 0, 1).wide == .wide
+	assert cell_at(&t, 1, 1).wide == .spacer_tail
+
+	t.set_cursor_pos(2, 1)
+	t.print(u32(`X`)) or { assert false }
+	assert cell_at(&t, 1, 0).wide == .narrow
+	assert cell_at(&t, 0, 1).codepoint == u32(`X`)
+	assert cell_at(&t, 1, 1).wide == .narrow
+}
+
+fn test_print_over_wrapped_wide_tail_clears_previous_spacer_head() {
+	mut t := create_test_terminal(2, 2) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print(u32(`A`)) or { assert false }
+	t.print(0x6A4B) or { assert false } // 橋
+	t.set_cursor_pos(2, 2)
+	t.print(u32(`X`)) or { assert false }
+	assert cell_at(&t, 1, 0).wide == .narrow
+	assert cell_at(&t, 0, 1).wide == .narrow
+	assert cell_at(&t, 1, 1).codepoint == u32(`X`)
+}
+
 fn test_print_over_wide_char_at_0_0() {
 	mut t := create_test_terminal(80, 80) or {
 		assert false

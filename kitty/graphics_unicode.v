@@ -11,7 +11,7 @@ import math
 import terminal
 
 // Codepoint for the unicode placeholder character.
-pub const placeholder = u32(0x10EEEE)
+pub const placeholder = terminal.kitty_unicode_placeholder
 
 // ============================================================
 // VirtualPlacement - a virtual placement in the terminal
