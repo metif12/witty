@@ -4159,6 +4159,54 @@ fn test_page_list_scroll_delta_row_back_without_space_preserves_active() {
 	assert sb.len == usize(s.rows)
 }
 
+fn test_page_list_jump_zero_prompts() {
+	mut s := PageList.init(5, 3, none)
+	defer { s.deinit() }
+	s.grow_rows(3)
+	mut first := s.pages.first or { return }
+	assert voidptr(first) == voidptr(s.pages.last or { return })
+	first.data.rows[1].semantic_prompt = .prompt
+	first.data.rows[5].semantic_prompt = .prompt
+
+	s.scroll(PageScrollDeltaPrompt{})
+	assert s.viewport == .active
+	assert s.scrollbar() == Scrollbar{
+		total: s.total_rows
+		offset: s.total_rows - usize(s.rows)
+		len: usize(s.rows)
+	}
+}
+
+fn test_page_list_jump_back_one_prompt() {
+	mut s := PageList.init(5, 3, none)
+	defer { s.deinit() }
+	s.grow_rows(3)
+	mut first := s.pages.first or { return }
+	assert voidptr(first) == voidptr(s.pages.last or { return })
+	first.data.rows[1].semantic_prompt = .prompt
+	first.data.rows[5].semantic_prompt = .prompt
+
+	s.scroll(PageScrollDeltaPrompt{ delta: -1 })
+	assert s.viewport == .pin
+	viewport := s.get_top_left(.viewport)
+	assert s.point_from_pin(.screen, viewport) or { return } == Pin{ x: 0, y: 1 }
+	assert s.scrollbar() == Scrollbar{ total: s.total_rows, offset: 1, len: usize(s.rows) }
+
+	s.scroll(PageScrollDeltaPrompt{ delta: -1 })
+	assert s.viewport == .pin
+	assert s.point_from_pin(.screen, s.get_top_left(.viewport)) or { return } == Pin{
+		x: 0
+		y: 1
+	}
+	assert s.scrollbar().offset == 1
+
+	s.scroll(PageScrollDeltaPrompt{ delta: 1 })
+	assert s.viewport == .active
+	assert s.scrollbar().offset == s.total_rows - usize(s.rows)
+	s.scroll(PageScrollDeltaPrompt{ delta: 1 })
+	assert s.viewport == .active
+}
+
 fn test_page_list_scroll_to_row_with_cache_fast_path_down() {
 	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
