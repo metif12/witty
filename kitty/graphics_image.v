@@ -104,7 +104,6 @@ module kitty
 //
 // --- Original Ghostty Comments End: src/terminal/kitty/graphics_image.zig
 
-
 // Kitty graphics protocol image types.
 //
 // Source: kitty/graphics_image.zig, kitty/graphics_render.zig
@@ -123,16 +122,25 @@ import terminal
 // medium (t=s). shm_open needs libc; these map directly to the Zig
 // std.c.shm_open / posix.fstat / posix.mmap calls.
 #include <sys/mman.h>
+
 #include <sys/stat.h>
+
 #include <fcntl.h>
+
 #include <unistd.h>
 
 fn C.shm_open(name &char, oflag int, mode u32) int
+
 fn C.shm_unlink(name &char) int
+
 fn C.close(fd int) int
+
 fn C.fstat(fd int, buf &C.stat) int
+
 fn C.mmap(addr voidptr, length usize, prot int, flags int, fd int, offset i64) voidptr
+
 fn C.munmap(addr voidptr, length usize) int
+
 fn C.memcpy(dest voidptr, src voidptr, n usize) voidptr
 
 // mmap protection / flag constants from <sys/mman.h> and <fcntl.h>.
@@ -217,9 +225,13 @@ pub mut:
 }
 
 // Free the loading image data.
-pub fn (mut self LoadingImage) destroy() {
+pub fn (mut self LoadingImage) deinit() {
 	self.data = []
 	self.image.deinit()
+}
+
+pub fn (mut self LoadingImage) destroy() {
+	self.deinit()
 }
 
 // Initialize a chunked image from the first image transmission.
@@ -324,6 +336,7 @@ fn (mut self LoadingImage) read_shared_memory(t Transmission, path string) ! {
 		.png {
 			stat_size
 		}
+
 		// For these formats we have a size we must have.
 		.gray, .gray_alpha, .rgb, .rgba {
 			bpp := usize(self.image.format.bpp())
@@ -338,8 +351,7 @@ fn (mut self LoadingImage) read_shared_memory(t Transmission, path string) ! {
 	}
 
 	// mmap always uses the stat size.
-	map_ptr := C.mmap(unsafe { nil }, stat_size, C.PROT_READ, C.MAP_SHARED, fd,
-		0)
+	map_ptr := C.mmap(unsafe { nil }, stat_size, C.PROT_READ, C.MAP_SHARED, fd, 0)
 	if map_ptr == C.MAP_FAILED || map_ptr == unsafe { nil } {
 		return error('invalid data: unable to mmap shared memory ${path}')
 	}
@@ -441,13 +453,7 @@ pub fn (mut self LoadingImage) add_data(data []u8) ! {
 // Complete the chunked image, returning a completed image.
 pub fn (mut self LoadingImage) complete() !Image {
 	// Decompress the data if it is compressed.
-	if self.image.compression == .zlib_deflate {
-		decompressed := zlib.decompress(self.data) or {
-			return error('decompression failed: ${err.msg()}')
-		}
-		self.data = decompressed
-		self.image.compression = .none_
-	}
+	self.decompress()!
 
 	// Decode the PNG if we have to. PNG decoding produces raw pixel data
 	// and sets the width/height/format from the PNG header.
@@ -482,6 +488,41 @@ pub fn (mut self LoadingImage) complete() !Image {
 	return result
 }
 
+// Debug function to write the data to a file. This is useful for
+// capturing test data for unit tests.
+pub fn (self LoadingImage) debug_dump() ! {
+	compression := if self.image.compression == .none_ {
+		'none'
+	} else {
+		self.image.compression.str()
+	}
+	filename := 'image-${self.image.format.str()}-${compression}-${self.image.width}x${self.image.height}-${self.image.id}.data'
+	mut file := os.create(filename)!
+	defer {
+		file.close()
+	}
+	file.write(self.data)!
+}
+
+// Decompress the data in-place.
+fn (mut self LoadingImage) decompress() ! {
+	match self.image.compression {
+		.none_ {}
+		.zlib_deflate { self.decompress_zlib()! }
+	}
+}
+
+fn (mut self LoadingImage) decompress_zlib() ! {
+	decompressed := zlib.decompress(self.data) or {
+		return error('decompression failed: ${err.msg()}')
+	}
+	if decompressed.len > max_image_size {
+		return error('decompression failed: image data too large')
+	}
+	self.data = decompressed
+	self.image.compression = .none_
+}
+
 // Decode the data as PNG. This will also update the image dimensions.
 //
 // In Zig this uses the `wuffs` PNG decoder. Here we use stb_image
@@ -494,8 +535,7 @@ fn (mut self LoadingImage) decode_png() ! {
 
 	// desired_channels = 4 forces RGBA output regardless of the source
 	// channel count, matching the Zig code's final format of .rgba.
-	img := stbi.load_from_memory(self.data.data, self.data.len,
-		stbi.LoadParams{ desired_channels: 4 }) or {
+	img := stbi.load_from_memory(self.data.data, self.data.len, stbi.LoadParams{ desired_channels: 4 }) or {
 		return error('invalid data: png decode failed')
 	}
 	defer {
