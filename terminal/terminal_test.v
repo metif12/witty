@@ -6043,3 +6043,101 @@ fn test_index_bottom_of_scroll_region_background_sgr() {
 		assert_bg_rgb(&t, x, 2, 0xFF, 0, 0)
 	}
 }
+
+fn test_delete_lines_wide_character_spacer_head() {
+	mut t := create_test_terminal(5, 3) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	// The wide character wraps through a spacer head at the end of row 1.
+	t.print_string('AAAAABBBB😀CCC') or { assert false }
+	t.set_cursor_pos(1, 1)
+	t.delete_lines(1)
+
+	assert (t.plain_string() or { '' }) == 'BBBB\n😀CCC'
+	assert (t.plain_string_unwrapped() or { '' }) == 'BBBB\n😀CCC'
+}
+
+fn test_delete_lines_wide_spacer_head_with_left_margin() {
+	mut t := create_test_terminal(5, 3) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('AAAAABBBB😀CCC') or { assert false }
+	t.scrolling_region.left = 2
+	t.set_cursor_pos(1, 3)
+	t.delete_lines(1)
+
+	assert (t.plain_string() or { '' }) == 'AABB\nBBCCC\n😀'
+	assert (t.plain_string_unwrapped() or { '' }) == 'AABB BBCCC😀'
+}
+
+fn test_delete_lines_wide_spacer_head_with_right_margin() {
+	mut t := create_test_terminal(5, 3) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('AAAAABBBB😀CCC') or { assert false }
+	t.scrolling_region.right = 3
+	t.set_cursor_pos(1, 1)
+	t.delete_lines(1)
+
+	assert (t.plain_string() or { '' }) == 'BBBBA\n😀CC\n    C'
+	assert (t.plain_string_unwrapped() or { '' }) == 'BBBBA😀CC     C'
+}
+
+fn test_delete_lines_wide_spacer_head_with_both_margins() {
+	mut t := create_test_terminal(5, 3) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('AAAAABBBB😀CCC') or { assert false }
+	t.scrolling_region.left = 2
+	t.scrolling_region.right = 3
+	t.set_cursor_pos(1, 3)
+	t.delete_lines(1)
+
+	assert (t.plain_string() or { '' }) == 'AABBA\nBBCC\n😀  C'
+	assert (t.plain_string_unwrapped() or { '' }) == 'AABBABBCC😀  C'
+}
+
+fn test_delete_lines_wide_spacer_head_with_left_margin_below_two() {
+	mut t := create_test_terminal(5, 3) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('AAAAABBBB😀CCC') or { assert false }
+	t.scrolling_region.left = 1
+	t.scrolling_region.right = 3
+	t.set_cursor_pos(1, 2)
+	t.delete_lines(1)
+
+	assert (t.plain_string() or { '' }) == 'ABBBA\nB CC\n    C'
+	assert (t.plain_string_unwrapped() or { '' }) == 'ABBBAB CC     C'
+}
+
+fn test_delete_lines_clears_wide_characters_split_by_both_margins() {
+	mut t := create_test_terminal(5, 2) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('AAAAA\n😀B😀') or { assert false }
+	t.scrolling_region.left = 1
+	t.scrolling_region.right = 3
+	t.set_cursor_pos(1, 2)
+	t.delete_lines(1)
+
+	assert (t.plain_string() or { '' }) == 'A B A'
+}
