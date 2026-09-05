@@ -17,7 +17,6 @@ module gtk
 // host-path derivation logic.
 
 import internal_os
-import global_state
 
 // --- GKeyFile C bindings --------------------------------------------------
 //
@@ -26,17 +25,20 @@ import global_state
 // we copy it into a V string and free the original with `g_free_mem`.
 
 fn C.g_key_file_new() voidptr
+
 fn C.g_key_file_free(key_file voidptr)
+
 fn C.g_key_file_load_from_file(key_file voidptr, file &char, flags int, error voidptr) int
+
 fn C.g_key_file_get_string(key_file voidptr, group_name &char, key &char, error voidptr) &char
 
 // resources_dir returns the resources directory, consulting the Flatpak
 // runtime data when running inside a sandbox. Mirrors `flatpak.resourcesDir`.
-pub fn resources_dir() global_state.ResourcesDir {
+pub fn resources_dir() internal_os.ResourcesDir {
 	// Only consult Flatpak runtime data for the host case.
 	if internal_os.is_flatpak() {
 		// Inside the sandbox the app resources live at a fixed path.
-		mut result := global_state.ResourcesDir{
+		mut result := internal_os.ResourcesDir{
 			app_path: '/app/share/ghostty'
 		}
 
@@ -64,5 +66,5 @@ pub fn resources_dir() global_state.ResourcesDir {
 	}
 
 	// Not sandboxed: use the normal detection.
-	return global_state.ResourcesDir.detect()
+	return internal_os.resources_dir()
 }

@@ -44,7 +44,7 @@ pub mut:
 
 	// The app resources directory, equivalent to zig-out/share when we build
 	// from source. This is empty if we can't detect it.
-	resources_dir ResourcesDir
+	resources_dir internal_os.ResourcesDir
 
 	// Process arguments after argv[0]. The embedded C entrypoint supplies
 	// these directly because its argv may differ from V's os.args.
@@ -148,7 +148,7 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 	self.action = .none
 	self.logging = Logging{}
 	self.rlimits = ResourceLimits{}
-	self.resources_dir = ResourcesDir{}
+	self.resources_dir = internal_os.ResourcesDir{}
 	self.cli_args = args.clone()
 
 	self.action = detect_action(args)!
@@ -185,7 +185,7 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 
 	// Find our resources directory once for the app so every launch
 	// hereafter can use this cached value.
-	self.resources_dir = ResourcesDir.detect()
+	self.resources_dir = internal_os.resources_dir()
 	resources_dir := self.resources_dir.app()
 	if resources_dir.len > 0 {
 		internal_os.init_i18n(resources_dir) or {
@@ -198,7 +198,7 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 // doing so in dev modes will check for memory leaks.
 pub fn (mut self GlobalState) deinit() {
 	self.rlimits.restore()
-	self.resources_dir = ResourcesDir{}
+	self.resources_dir = internal_os.ResourcesDir{}
 	self.cli_args.clear()
 	internal_os.shutdown_i18n()
 	crash.shutdown()
@@ -242,135 +242,6 @@ pub fn (self &ResourceLimits) restore() {
 	if lim := self.nofile {
 		internal_os.restore_max_files(lim)
 	}
-}
-
-// ResourcesDir holds the application resources directory path. This is a
-// faithful translation of ghostty's src/os/resourcesdir.zig ResourcesDir.
-pub struct ResourcesDir {
-pub mut:
-	// Avoid accessing these directly, use the app() and host() methods instead.
-	app_path  ?string
-	host_path ?string
-}
-
-// app returns the directory to the bundled resources directory accessible
-// by the application, or an empty string if not detected.
-pub fn (r ResourcesDir) app() string {
-	return r.app_path or { '' }
-}
-
-// host returns the directory to the bundled resources directory accessible
-// by the host environment (i.e. for sandboxed applications). The returned
-// directory might not be accessible from the application itself.
-//
-// In a non-sandboxed environment this is the same as app().
-pub fn (r ResourcesDir) host() string {
-	if p := r.host_path {
-		return p
-	}
-	return r.app_path or { '' }
-}
-
-// The sentinel values are target-specific because each package layout uses
-// the exact terminfo database format selected by the pinned build.
-const resources_sentinels = $if windows { ['terminfo/ghostty.terminfo'] } $else $if macos { [
-	'terminfo/78/xterm-ghostty',
-] } $else $if freebsd { ['site-terminfo/g/ghostty', 'site-terminfo/x/xterm-ghostty'] } $else { [
-	'terminfo/g/ghostty',
-	'terminfo/x/xterm-ghostty',
-] }
-
-// detect gets the directory to the bundled resources directory, if it
-// exists (not all platforms or packages have it). This is a faithful
-// translation of ghostty's resourcesDir().
-//
-// Release builds prefer GHOSTTY_RESOURCES_DIR. Debug builds search beside the
-// current executable first so a newly built Witty does not inherit stale
-// resources from an older parent process.
-pub fn ResourcesDir.detect() ResourcesDir {
-	$if !debug {
-		if env := resources_dir_from_env() {
-			return env
-		}
-	}
-
-	detected := resources_dir_from_exe(os.executable())
-	if detected.app().len > 0 {
-		return detected
-	}
-
-	$if debug {
-		if env := resources_dir_from_env() {
-			return env
-		}
-	}
-	return ResourcesDir{}
-}
-
-fn resources_dir_from_env() ?ResourcesDir {
-	if dir := os.getenv_opt('GHOSTTY_RESOURCES_DIR') {
-		if dir.len > 0 {
-			return ResourcesDir{
-				app_path: dir
-			}
-		}
-	}
-	return none
-}
-
-// resources_dir_from_exe climbs the directory tree starting from the given
-// executable path, looking for the terminfo bundle as we expect it. This is
-// the core loop of ghostty's resourcesDir().
-pub fn resources_dir_from_exe(exe_path string) ResourcesDir {
-	mut exe := exe_path
-
-	// We have an exe path! Climb the tree looking for the terminfo bundle
-	// as we expect it.
-	for {
-		dir := os.dir(exe)
-		// os.dir returns the same path (or ".") when there is no parent.
-		if dir == exe || dir == '.' || dir.len == 0 {
-			break
-		}
-		exe = dir
-
-		// On macOS, we look for the app bundle path.
-		$if macos {
-			for sentinel in resources_sentinels {
-				if v := maybe_dir(dir, 'Contents/Resources', sentinel) {
-					return ResourcesDir{
-						app_path: os.join_path(v, 'ghostty')
-					}
-				}
-			}
-		}
-
-		// On all platforms (except BSD), we look for a /usr/share style
-		// path. This is valid even on Mac since there is nothing that
-		// requires Ghostty to be in an app bundle.
-		sub := $if freebsd { 'local/share' } $else { 'share' }
-		for sentinel in resources_sentinels {
-			if v := maybe_dir(dir, sub, sentinel) {
-				return ResourcesDir{
-					app_path: os.join_path(v, 'ghostty')
-				}
-			}
-		}
-	}
-
-	return ResourcesDir{}
-}
-
-// maybe_dir checks if the "base/sub/suffix" path exists and if so returns
-// the "base/sub" directory. The "suffix" is used to verify a directory
-// seems roughly right. Faithful translation of ghostty's maybeDir().
-pub fn maybe_dir(base string, sub string, suffix string) ?string {
-	path := '${base}/${sub}/${suffix}'
-	if os.exists(path) {
-		// Return the path without the trailing "/suffix".
-		return '${base}/${sub}'
-	}
-	return none
 }
 
 // C interop declarations for signal handling.
