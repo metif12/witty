@@ -81,7 +81,7 @@ fn test_page_list_increase_capacity_rehashes_without_growing() {
 	mut s := PageList.init(2, 2, usize(0))
 	defer { s.deinit() }
 
-	first := s.pages.first or {
+	mut first := s.pages.first or {
 		assert false
 		return
 	}
@@ -96,6 +96,280 @@ fn test_page_list_increase_capacity_rehashes_without_growing() {
 	assert voidptr(tracked.node) == voidptr(new_node)
 	assert tracked.y == 1
 	assert tracked.x == 1
+}
+
+fn test_page_list_increase_capacity_to_increase_styles() {
+	mut s := PageList.init(2, 2, usize(0))
+	defer { s.deinit() }
+
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	original_capacity := first.data.capacity.styles
+	for y in 0 .. int(s.rows) {
+		for x in 0 .. int(s.cols) {
+			first.data.rows[y].cells[x].codepoint = u32(x)
+		}
+	}
+
+	new_node := s.increase_capacity(first, .styles) or { panic(err) }
+	assert s.total_pages() == 1
+	assert new_node.data.capacity.styles == original_capacity * 2
+	for y in 0 .. int(s.rows) {
+		for x in 0 .. int(s.cols) {
+			assert new_node.data.rows[y].cells[x].codepoint == u32(x)
+		}
+	}
+}
+
+fn test_page_list_increase_capacity_to_increase_graphemes() {
+	mut s := PageList.init(2, 2, usize(0))
+	defer { s.deinit() }
+
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	original_capacity := first.data.capacity.grapheme_bytes
+	for y in 0 .. int(s.rows) {
+		for x in 0 .. int(s.cols) {
+			first.data.rows[y].cells[x].codepoint = u32(x)
+		}
+	}
+
+	new_node := s.increase_capacity(first, .grapheme_bytes) or { panic(err) }
+	assert s.total_pages() == 1
+	assert new_node.data.capacity.grapheme_bytes == original_capacity * 2
+	for y in 0 .. int(s.rows) {
+		for x in 0 .. int(s.cols) {
+			assert new_node.data.rows[y].cells[x].codepoint == u32(x)
+		}
+	}
+}
+
+fn test_page_list_increase_capacity_to_increase_hyperlinks() {
+	mut s := PageList.init(2, 2, usize(0))
+	defer { s.deinit() }
+
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	original_capacity := first.data.capacity.hyperlink_bytes
+	for y in 0 .. int(s.rows) {
+		for x in 0 .. int(s.cols) {
+			first.data.rows[y].cells[x].codepoint = u32(x)
+		}
+	}
+
+	new_node := s.increase_capacity(first, .hyperlink_bytes) or { panic(err) }
+	assert s.total_pages() == 1
+	assert new_node.data.capacity.hyperlink_bytes == original_capacity * 2
+	for y in 0 .. int(s.rows) {
+		for x in 0 .. int(s.cols) {
+			assert new_node.data.rows[y].cells[x].codepoint == u32(x)
+		}
+	}
+}
+
+fn test_page_list_increase_capacity_to_increase_string_bytes() {
+	mut s := PageList.init(2, 2, usize(0))
+	defer { s.deinit() }
+
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	original_capacity := first.data.capacity.string_bytes
+	for y in 0 .. int(s.rows) {
+		for x in 0 .. int(s.cols) {
+			first.data.rows[y].cells[x].codepoint = u32(x)
+		}
+	}
+
+	new_node := s.increase_capacity(first, .string_bytes) or { panic(err) }
+	assert s.total_pages() == 1
+	assert new_node.data.capacity.string_bytes == original_capacity * 2
+	for y in 0 .. int(s.rows) {
+		for x in 0 .. int(s.cols) {
+			assert new_node.data.rows[y].cells[x].codepoint == u32(x)
+		}
+	}
+}
+
+fn test_page_list_increase_capacity_tracked_pins() {
+	mut s := PageList.init(2, 2, usize(0))
+	defer { s.deinit() }
+
+	old_node := s.pages.first or {
+		assert false
+		return
+	}
+	tracked := s.track_pin(s.get_pin(.active, 1, 1) or {
+		assert false
+		return
+	})
+	assert voidptr(old_node) == voidptr(tracked.node)
+
+	new_node := s.increase_capacity(old_node, .styles) or { panic(err) }
+	assert voidptr(new_node) == voidptr(tracked.node)
+	assert tracked.x == 1
+	assert tracked.y == 1
+}
+
+fn test_page_list_increase_capacity_returns_out_of_space_at_max_capacity() {
+	mut s := PageList.init(2, 2, usize(0))
+	defer { s.deinit() }
+
+	for {
+		first := s.pages.first or {
+			assert false
+			return
+		}
+		s.increase_capacity(first, .styles) or {
+			assert err.msg() == 'OutOfSpace'
+			current := s.pages.first or {
+				assert false
+				return
+			}
+			assert current.data.capacity.styles == max_u16
+			break
+		}
+	}
+}
+
+fn test_page_list_increase_capacity_after_col_shrink() {
+	mut s := PageList.init(10, 2, usize(0))
+	defer { s.deinit() }
+
+	s.resize(PageResizeOpts{
+		cols: 5
+		reflow: false
+	})
+	assert s.cols == 5
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	assert first.data.size.cols == 5
+	assert first.data.capacity.cols >= 10
+
+	new_node := s.increase_capacity(first, .styles) or { panic(err) }
+	assert new_node.data.size.cols == 5
+	assert s.cols == 5
+}
+
+fn test_page_list_increase_capacity_multi_page() {
+	mut s := PageList.init(80, 24, none)
+	defer { s.deinit() }
+
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	for s.pages.first == s.pages.last {
+		s.grow() or {}
+	}
+	second := s.pages.last or {
+		assert false
+		return
+	}
+	first_styles_capacity := first.data.capacity.styles
+	second_styles_capacity := second.data.capacity.styles
+
+	new_first := s.increase_capacity(first, .styles) or { panic(err) }
+	assert new_first.data.capacity.styles == first_styles_capacity * 2
+	last := s.pages.last or {
+		assert false
+		return
+	}
+	assert last.data.capacity.styles == second_styles_capacity
+}
+
+fn test_page_list_increase_capacity_preserves_dirty_flag() {
+	mut s := PageList.init(2, 4, usize(0))
+	defer { s.deinit() }
+
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	first.data.dirty = true
+	first.data.rows[0].dirty = true
+	first.data.rows[1].dirty = false
+	first.data.rows[2].dirty = true
+	first.data.rows[3].dirty = false
+
+	new_node := s.increase_capacity(first, .styles) or { panic(err) }
+	assert new_node.data.dirty
+	assert new_node.data.rows[0].dirty
+	assert !new_node.data.rows[1].dirty
+	assert new_node.data.rows[2].dirty
+	assert !new_node.data.rows[3].dirty
+}
+
+fn test_page_list_grow_allows_exceeding_max_size_for_active_area() {
+	cap := initial_capacity(5)
+	mut s := PageList.init(5, cap.rows, usize(0))
+	defer { s.deinit() }
+	assert s.count_total_rows() == usize(s.rows)
+
+	s.grow() or {}
+	start_pages := s.total_pages()
+	assert start_pages >= 2
+
+	mut node := s.pages.first
+	for {
+		mut page_node := node or { break }
+		page_node.data.size.rows = 1
+		page_node.data.capacity.rows = 1
+		node = page_node.next
+	}
+	s.total_rows = s.count_total_rows()
+
+	s.grow() or {}
+	assert s.total_pages() == start_pages + 1
+}
+
+fn test_page_list_grow_prune_required_with_a_single_page() {
+	mut s := PageList.init(80, 24, none)
+	defer { s.deinit() }
+
+	for {
+		first := s.pages.first or {
+			assert false
+			return
+		}
+		if Page.layout(first.data.capacity).total_size > standard_page_size() {
+			break
+		}
+		s.increase_capacity(first, .grapheme_bytes) or { panic(err) }
+	}
+	assert s.total_pages() == 1
+
+	first := s.pages.first or {
+		assert false
+		return
+	}
+	remaining := first.data.capacity.rows - first.data.size.rows
+	for _ in 0 .. int(remaining) {
+		assert s.grow() == none
+	}
+	new_node := s.grow() or {
+		assert false
+		return
+	}
+	current_first := s.pages.first or {
+		assert false
+		return
+	}
+	assert voidptr(new_node) != voidptr(current_first)
+	assert s.scrollbar().eql(Scrollbar{
+		total: s.count_total_rows()
+		offset: s.total_rows - usize(s.rows)
+		len: usize(s.rows)
+	})
 }
 
 fn test_page_chunk_rows_full_page_and_overlap() {
