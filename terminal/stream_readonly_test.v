@@ -485,3 +485,76 @@ fn test_readonly_semantic_prompt_end_of_input_then_start_output() {
 	s.next_slice('\x1b]133;C\a') or { panic(err) }
 	assert t.screens.active.cursor.semantic_content == .output
 }
+
+fn test_readonly_semantic_prompt_fresh_line() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer { s.deinit() }
+
+	s.next_slice('Hello') or { panic(err) }
+	s.next_slice('\x1b]133;L\a') or { panic(err) }
+	assert t.screens.active.cursor.x == 0
+	assert t.screens.active.cursor.y == 1
+}
+
+fn test_readonly_semantic_prompt_fresh_line_new_prompt() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer { s.deinit() }
+
+	s.next_slice('Hello') or { panic(err) }
+	s.next_slice('\x1b]133;A\a') or { panic(err) }
+	assert t.screens.active.cursor.x == 0
+	assert t.screens.active.cursor.y == 1
+	assert t.screens.active.cursor.semantic_content == .prompt
+
+	s.next_slice('prompt\$ ') or { panic(err) }
+	s.next_slice('\x1b]133;A;redraw=1\a') or { panic(err) }
+	assert t.flags.shell_redraws_prompt == .true_
+}
+
+fn test_readonly_semantic_prompt_prompt_start() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer { s.deinit() }
+
+	s.next_slice('Hello') or { panic(err) }
+	s.next_slice('\x1b]133;P\a') or { panic(err) }
+	assert t.screens.active.cursor.semantic_content == .prompt
+	assert t.screens.active.cursor.x == 5
+	assert t.screens.active.cursor.y == 0
+}
+
+fn test_readonly_semantic_prompt_new_command() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer { s.deinit() }
+
+	s.next_slice('Hello') or { panic(err) }
+	s.next_slice('\x1b]133;N\a') or { panic(err) }
+	assert t.screens.active.cursor.x == 0
+	assert t.screens.active.cursor.y == 1
+	assert t.screens.active.cursor.semantic_content == .prompt
+}
+
+fn test_readonly_semantic_prompt_new_command_at_column_zero() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer { s.deinit() }
+
+	s.next_slice('\x1b]133;N\a') or { panic(err) }
+	assert t.screens.active.cursor.x == 0
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.semantic_content == .prompt
+}
+
+fn test_readonly_semantic_prompt_input_terminate_eol_clears_on_linefeed() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	mut s := ReadonlyStream.init(mut t)
+	defer { s.deinit() }
+
+	s.next_slice('\x1b]133;I\a') or { panic(err) }
+	assert t.screens.active.cursor.semantic_content == .input
+	s.next_slice('\n') or { panic(err) }
+	assert t.screens.active.cursor.semantic_content == .output
+}
