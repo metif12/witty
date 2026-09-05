@@ -98,6 +98,11 @@ pub fn Pty.open(size Winsize) !Pty {
 		return error('openpty failed')
 	}
 
+	// From this point until ownership is returned, both descriptors belong to
+	// this function. Ghostty's errdefer closes the pair if termios setup fails.
+	// Keep that failure atomic here as well so callers never receive a PTY whose
+	// required UTF-8 mode was not installed.
+
 	// Set CLOEXEC on the master fd, only the slave fd should be inherited
 	// by the child process (shell/command).
 	flags := C.fcntl(master_fd, f_getfd, 0)
@@ -107,7 +112,11 @@ pub fn Pty.open(size Winsize) !Pty {
 
 	// Enable UTF-8 mode. This is on by default on Linux but it
 	// is NOT on by default on macOS so we ensure that it is always set.
-	C.witty_pty_enable_utf8(master_fd)
+	if C.witty_pty_enable_utf8(master_fd) != 0 {
+		C.close(slave_fd)
+		C.close(master_fd)
+		return error('openpty failed')
+	}
 
 	return Pty{
 		master: master_fd
