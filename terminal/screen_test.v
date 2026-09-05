@@ -903,12 +903,12 @@ fn test_screen_scroll_above_no_scrollback_bottom_of_page() {
 }
 
 fn test_screen_clone() {
-	mut s := Screen.init(10, 5, 1000)
+	mut s := Screen.init(10, 3, 10)
 	defer { s.deinit() }
 
-	s.test_write_string('hello\nworld') or { assert false }
+	s.test_write_string('1ABCD\n2EFGH') or { assert false }
 
-	mut cloned := s.clone(.screen, ?PointTag(none)) or {
+	mut cloned := s.clone(Point.new(.screen, Coordinate{}), ?Point(none)) or {
 		assert false
 		return
 	}
@@ -918,13 +918,148 @@ fn test_screen_clone() {
 		assert false
 		return
 	}
-	assert str == 'hello\nworld'
+	assert str == '1ABCD\n2EFGH'
 	assert cloned.cursor.x == s.cursor.x
 	assert cloned.cursor.y == s.cursor.y
 
 	// The clone owns its rows; subsequent writes cannot affect it.
-	s.test_write_string('\nthird') or { assert false }
-	assert (cloned.dump_string_alloc(.active) or { panic(err) }) == 'hello\nworld'
+	s.test_write_string('\n34567') or { assert false }
+	assert (cloned.dump_string_alloc(.active) or { panic(err) }) == '1ABCD\n2EFGH'
+}
+
+fn test_screen_clone_partial() {
+	mut s := Screen.init(10, 3, 10)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH') or { assert false }
+
+	mut cloned := s.clone(Point.new(.active, Coordinate{ y: 1 }), ?Point(none)) or {
+		panic(err)
+	}
+	defer { cloned.deinit() }
+	assert cloned.dump_string_alloc(.active) or { panic(err) } == '2EFGH'
+	assert cloned.cursor.x == 5
+	assert cloned.cursor.y == 0
+}
+
+fn test_screen_clone_partial_cursor_out_of_bounds() {
+	mut s := Screen.init(10, 3, 10)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH') or { assert false }
+
+	mut cloned := s.clone(Point.new(.active, Coordinate{}), Point.new(.active, Coordinate{})) or { panic(err) }
+	defer { cloned.deinit() }
+	assert cloned.dump_string_alloc(.active) or { panic(err) } == '1ABCD'
+	assert cloned.cursor.x == 0
+	assert cloned.cursor.y == 0
+}
+
+fn test_screen_clone_selection_source_boundaries() {
+	// A selection fully inside the cloned range is remapped without clipping.
+	mut full := Screen.init(5, 3, 1)
+	defer { full.deinit() }
+	full.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
+	full.selection = Selection.init(Pin{ x: 0, y: 1 }, Pin{ x: 4, y: 1 }, false)
+	mut full_clone := full.clone(Point.new(.active, Coordinate{}), ?Point(none)) or {
+		panic(err)
+	}
+	defer { full_clone.deinit() }
+	full_sel := full_clone.selection or { panic('selection was dropped') }
+	assert full_sel.start_pin.eql(Pin{ x: 0, y: 1 })
+	assert full_sel.end_pin.eql(Pin{ x: 4, y: 1 })
+
+	// A selection wholly above the cloned range is removed.
+	full.selection = Selection.init(Pin{ x: 0, y: 0 }, Pin{ x: 4, y: 0 }, false)
+	mut none_clone := full.clone(Point.new(.active, Coordinate{ y: 1 }), ?Point(none)) or {
+		panic(err)
+	}
+	defer { none_clone.deinit() }
+	assert none_clone.selection == none
+
+	// A clipped start moves to the first cell in the clone.
+	full.selection = Selection.init(Pin{ x: 0, y: 0 }, Pin{ x: 4, y: 1 }, false)
+	mut start_clone := full.clone(Point.new(.active, Coordinate{ y: 1 }), ?Point(none)) or {
+		panic(err)
+	}
+	defer { start_clone.deinit() }
+	start_sel := start_clone.selection or { panic('selection was dropped') }
+	assert start_sel.start_pin.eql(Pin{ x: 0, y: 0 })
+	assert start_sel.end_pin.eql(Pin{ x: 4, y: 0 })
+
+	// A clipped end extends through the blank rows added to fill the viewport.
+	full.selection = Selection.init(Pin{ x: 0, y: 1 }, Pin{ x: 2, y: 2 }, false)
+	mut end_clone := full.clone(Point.new(.active, Coordinate{}), Point.new(.active, Coordinate{ y: 1 })) or { panic(err) }
+	defer { end_clone.deinit() }
+	end_sel := end_clone.selection or { panic('selection was dropped') }
+	assert end_sel.start_pin.eql(Pin{ x: 0, y: 1 })
+	assert end_sel.end_pin.eql(Pin{ x: 4, y: 2 })
+
+	// Reverse selections are ordered while being remapped.
+	full.selection = Selection.init(Pin{ x: 2, y: 2 }, Pin{ x: 0, y: 1 }, false)
+	mut reverse_clone := full.clone(Point.new(.active, Coordinate{}), Point.new(.active, Coordinate{ y: 1 })) or { panic(err) }
+	defer { reverse_clone.deinit() }
+	reverse_sel := reverse_clone.selection or { panic('selection was dropped') }
+	assert reverse_sel.start_pin.eql(Pin{ x: 0, y: 1 })
+	assert reverse_sel.end_pin.eql(Pin{ x: 4, y: 2 })
+}
+
+fn test_screen_clone_selection_contains_subset() {
+	mut s := Screen.init(5, 4, 1)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH\n3IJKL\n4ABCD') or { assert false }
+
+	s.selection = Selection.init(Pin{ x: 0, y: 0 }, Pin{ x: 0, y: 3 }, false)
+	mut cloned := s.clone(Point.new(.active, Coordinate{ y: 1 }), Point.new(.active, Coordinate{ y: 2 })) or { panic(err) }
+	defer { cloned.deinit() }
+	sel := cloned.selection or { panic('selection was dropped') }
+	assert sel.start_pin.eql(Pin{ x: 0, y: 0 })
+	assert sel.end_pin.eql(Pin{ x: 4, y: 3 })
+
+	s.selection = Selection.init(Pin{ x: 1, y: 0 }, Pin{ x: 3, y: 3 }, true)
+	mut rectangle := s.clone(Point.new(.active, Coordinate{ y: 1 }), Point.new(.active, Coordinate{ y: 2 })) or { panic(err) }
+	defer { rectangle.deinit() }
+	rect_sel := rectangle.selection or { panic('selection was dropped') }
+	assert rect_sel.rectangle
+	assert rect_sel.start_pin.eql(Pin{ x: 1, y: 0 })
+	assert rect_sel.end_pin.eql(Pin{ x: 3, y: 3 })
+}
+
+fn test_screen_clone_basic_regions() {
+	mut s := Screen.init(10, 3, 0)
+	defer { s.deinit() }
+	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
+
+	mut one := s.clone(Point.new(.active, Coordinate{ y: 1 }), Point.new(.active, Coordinate{ y: 1 })) or { panic(err) }
+	defer { one.deinit() }
+	assert one.dump_string_alloc(.active) or { panic(err) } == '2EFGH'
+
+	mut two := s.clone(Point.new(.active, Coordinate{ y: 1 }), Point.new(.active, Coordinate{ y: 2 })) or { panic(err) }
+	defer { two.deinit() }
+	assert two.dump_string_alloc(.active) or { panic(err) } == '2EFGH\n3IJKL'
+}
+
+fn test_screen_clone_empty_and_one_line_regions() {
+	mut empty := Screen.init(10, 3, 0)
+	defer { empty.deinit() }
+	mut empty_viewport := empty.clone(Point.new(.viewport, Coordinate{}), Point.new(.viewport, Coordinate{})) or { panic(err) }
+	defer { empty_viewport.deinit() }
+	assert empty_viewport.dump_string_alloc(.viewport) or { panic(err) } == ''
+
+	mut empty_active := empty.clone(Point.new(.active, Coordinate{}), Point.new(.active, Coordinate{})) or { panic(err) }
+	defer { empty_active.deinit() }
+	assert empty_active.dump_string_alloc(.active) or { panic(err) } == ''
+
+	mut one := Screen.init(10, 3, 0)
+	defer { one.deinit() }
+	one.test_write_string('1ABC') or { assert false }
+	mut one_viewport := one.clone(Point.new(.viewport, Coordinate{}), Point.new(.viewport, Coordinate{})) or { panic(err) }
+	defer { one_viewport.deinit() }
+	assert one_viewport.dump_string_alloc(.viewport) or { panic(err) } == '1ABC'
+
+	mut one_active := one.clone(Point.new(.active, Coordinate{}), ?Point(none)) or {
+		panic(err)
+	}
+	defer { one_active.deinit() }
+	assert one_active.dump_string_alloc(.active) or { panic(err) } == '1ABC'
 }
 
 fn test_screen_clone_deep_copies_managed_cells_and_resets_cursor_state() {
@@ -968,7 +1103,7 @@ fn test_screen_clone_deep_copies_managed_cells_and_resets_cursor_state() {
 		semantic_content_clear_eol: true
 	}
 
-	mut cloned := s.clone(.screen, ?PointTag(none)) or {
+	mut cloned := s.clone(Point.new(.screen, Coordinate{}), ?Point(none)) or {
 		assert false, 'screen clone failed'
 		return
 	}
@@ -1008,7 +1143,7 @@ fn test_screen_clone_clips_and_orders_selection() {
 	s.pages.viewport_start = 3
 	s.selection = Selection.init(Pin{ x: 1, y: 5 }, Pin{ x: 2, y: 0 }, false)
 
-	mut active_clone := s.clone(.active, ?PointTag(none)) or {
+	mut active_clone := s.clone(Point.new(.active, Coordinate{}), ?Point(none)) or {
 		assert false, 'active clone failed'
 		return
 	}
@@ -1020,7 +1155,7 @@ fn test_screen_clone_clips_and_orders_selection() {
 	assert active_selection.start_pin.eql(Pin{ x: 0, y: 0 })
 	assert active_selection.end_pin.eql(Pin{ x: 1, y: 2 })
 
-	mut history_clone := s.clone(.history, ?PointTag(none)) or {
+	mut history_clone := s.clone(Point.new(.history, Coordinate{}), ?Point(none)) or {
 		assert false, 'history clone failed'
 		return
 	}
@@ -1043,7 +1178,7 @@ fn test_screen_clone_preserves_rectangle_selection_edges() {
 	s.pages.viewport_start = 3
 	s.selection = Selection.init(Pin{ x: 2, y: 0 }, Pin{ x: 1, y: 5 }, true)
 
-	mut cloned := s.clone(.active, ?PointTag(none)) or {
+	mut cloned := s.clone(Point.new(.active, Coordinate{}), ?Point(none)) or {
 		assert false, 'rectangle clone failed'
 		return
 	}

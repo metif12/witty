@@ -2046,16 +2046,28 @@ pub fn (self &Screen) clear_kitty_images() {
 // this port, rows are a flat array so "remapping" is arithmetic: we clone
 // the requested absolute row range and shift the cursor/selection y values
 // by the top of that range.
-pub fn (self &Screen) clone(top PointTag, bot ?PointTag) !Screen {
-	// Resolve the absolute row range [top_y, bot_y] we are cloning.
-	tl := self.pages.get_top_left(top)
-	bot_tag := bot or { top }
-	br := self.pages.get_bottom_right(bot_tag) or {
-		// Nothing to clone; fall back to top-left row only.
-		Pin{ x: self.pages.cols - 1, y: tl.y }
-	}
+pub fn (self &Screen) clone(top Point, bot ?Point) !Screen {
+	// Resolve the absolute row range [top_y, bot_y] we are cloning. Clone
+	// always copies whole rows, so the point x coordinates are ignored.
+	mut top_row := top
+	top_row.coord.x = 0
+	tl := self.pages.pin_point(top_row) or { return error('UnknownPoint') }
 	top_y := int(tl.y)
-	bot_y := int(br.y)
+	mut bot_y := top_y - 1
+	if bottom := bot {
+		if bottom.tag != top.tag {
+			return error('Point tags must match')
+		}
+		mut bottom_row := bottom
+		bottom_row.coord.x = 0
+		br := self.pages.pin_point(bottom_row) or { return error('UnknownPoint') }
+		bot_y = int(br.y)
+	} else if br := self.pages.get_bottom_right(top.tag) {
+		bot_y = int(br.y)
+	}
+	if bot_y >= top_y && bot_y >= self.pages.screen_rows.len {
+		return error('UnknownPoint')
+	}
 	row_count := if bot_y >= top_y { bot_y - top_y + 1 } else { 0 }
 
 	mut new_screen := Screen.init(self.pages.cols, self.pages.rows, self.pages.max_scrollback)
@@ -2105,6 +2117,8 @@ pub fn (self &Screen) clone(top PointTag, bot ?PointTag) !Screen {
 	if new_screen.pages.active_start < 0 {
 		new_screen.pages.active_start = 0
 	}
+	new_screen.pages.viewport = .active
+	new_screen.pages.viewport_start = new_screen.pages.active_start
 
 	// Remap our cursor. If the cursor isn't in the cloned area, move it to
 	// the top-left arbitrarily because a screen must have SOME cursor.
@@ -2114,7 +2128,7 @@ pub fn (self &Screen) clone(top PointTag, bot ?PointTag) !Screen {
 		y: 0
 	}
 	if cursor_abs >= top_y && cursor_abs <= bot_y {
-		new_active := cursor_abs - new_screen_top(top_y, cloned.len, int(self.pages.rows))
+		new_active := cursor_abs - top_y - new_screen.pages.active_start
 		if new_active >= 0 && new_active < int(new_screen.pages.rows) {
 			new_screen.cursor.y = u32(new_active)
 		} else {
@@ -2162,7 +2176,7 @@ pub fn (self &Screen) clone(top PointTag, bot ?PointTag) !Screen {
 					} else {
 						self.pages.cols - 1
 					}
-					y: u32(bot_y - top_y)
+					y: u32(cloned.len - 1)
 				}
 			} else {
 				Pin{
@@ -2175,14 +2189,6 @@ pub fn (self &Screen) clone(top PointTag, bot ?PointTag) !Screen {
 	}
 
 	return new_screen
-}
-
-// Helper: the absolute row index that becomes row 0 of the cloned screen's
-// active area, used to remap the cursor. The cloned region starts at
-// clone_top and has clone_len rows; the active area is the last `rows` rows.
-fn new_screen_top(clone_top int, clone_len int, rows int) int {
-	active_offset := if clone_len > rows { clone_len - rows } else { 0 }
-	return clone_top + active_offset
 }
 
 // ============================================================
