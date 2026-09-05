@@ -276,7 +276,7 @@ pub fn (mut c CoreApp) color_scheme_event(app &App, scheme ColorScheme) ! {
 	}
 	c.config_conditional_state.theme = new_theme
 	mut runtime_app := unsafe { &App(app) }
-	runtime_app.perform_action(Target(AppTarget{}), .reload_config, ActionValue{}) or {}
+	runtime_app.perform_action(Target(AppTarget{}), .reload_config, ActionValue{})!
 }
 
 pub fn (mut c CoreApp) update_config(app &App, config voidptr) ! {
@@ -300,7 +300,7 @@ pub fn (mut c CoreApp) update_config(app &App, config voidptr) ! {
 		config_change_: ConfigChange{
 			config: cfg
 		}
-	}) or {}
+	})!
 }
 
 // focused_surface_pwd returns the working directory reported by the last

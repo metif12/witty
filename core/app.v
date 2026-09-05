@@ -428,7 +428,7 @@ pub fn (mut self App) update_config(mut rt_app apprt.RuntimeApp, config &configp
 	}
 	rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .config_change, apprt.ActionValue{
 		config_change_: cfg_change
-	}) or {}
+	})!
 }
 
 // add_surface adds an initialized surface to the app's surface list.
@@ -522,7 +522,7 @@ fn (mut self App) drain_mailbox(mut rt_app apprt.RuntimeApp) ! {
 				// immediately. This lets us defer mailbox processing to
 				// the next tick so that the apprt can try to quit as
 				// quickly as possible.
-				rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .quit, apprt.ActionValue{}) or {}
+				rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .quit, apprt.ActionValue{})!
 				return
 			}
 			RedrawSurfaceMsg {
@@ -671,7 +671,7 @@ pub fn (mut self App) color_scheme_event(mut rt_app apprt.RuntimeApp, scheme app
 
 	// Request our configuration be reloaded because the new scheme may
 	// impact the colors of the app.
-	rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .reload_config, apprt.ActionValue{}) or {}
+	rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .reload_config, apprt.ActionValue{})!
 }
 
 // color_scheme_surfaces notifies every live terminal surface after the app's
