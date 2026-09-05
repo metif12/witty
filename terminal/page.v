@@ -1930,6 +1930,13 @@ pub fn (mut self Page) get_row_and_cell(x int, y int) RowAndCell {
 // previous contents with a blank cell. Because this is a move, this
 // doesn't allocate and can't fail.
 pub fn (mut self Page) move_cells(src_row_idx int, src_left int, dst_row_idx int, dst_left int, len int) {
+	defer { self.assert_integrity() }
+	assert len >= 0
+	assert src_row_idx >= 0 && src_row_idx < int(self.size.rows)
+	assert dst_row_idx >= 0 && dst_row_idx < int(self.size.rows)
+	assert src_left >= 0 && src_left + len <= int(self.size.cols)
+	assert dst_left >= 0 && dst_left + len <= int(self.size.cols)
+
 	// Clear our destination no matter what.
 	self.clear_cells(u16(dst_row_idx), u16(dst_left), u16(dst_left + len))
 
@@ -1950,19 +1957,21 @@ pub fn (mut self Page) move_cells(src_row_idx int, src_left int, dst_row_idx int
 			dst_row.cells[di] = src_cell
 
 			if src_cell.has_grapheme {
+				dst_row.cells[di].content_tag = .codepoint
+				dst_row.cells[di].has_grapheme = false
 				self.move_grapheme(src_row_idx, si, dst_row_idx, di)
+				src_row.cells[si].content_tag = .codepoint
+				src_row.cells[si].has_grapheme = false
+				dst_row.cells[di].content_tag = .codepoint_grapheme
+				dst_row.cells[di].has_grapheme = true
 				dst_row.grapheme = true
 			}
 			if src_cell.has_hyperlink {
-				src_key := cell_key(src_row_idx, si, int(self.capacity.cols))
-				if src_key in self.hyperlink_map {
-					hl_id := self.hyperlink_map[src_key]
-					self.hyperlink_map.delete(src_key)
-					dst_key := cell_key(dst_row_idx, di, int(self.capacity.cols))
-					self.hyperlink_map[dst_key] = hl_id
-					dst_row.cells[di].has_hyperlink = true
-					dst_row.hyperlink = true
-				}
+				dst_row.cells[di].has_hyperlink = false
+				self.move_hyperlink(src_row_idx, si, dst_row_idx, di)
+				src_row.cells[si].has_hyperlink = false
+				dst_row.cells[di].has_hyperlink = true
+				dst_row.hyperlink = true
 			}
 			if src_cell.codepoint_val() == kitty_unicode_placeholder {
 				dst_row.kitty_virtual_placeholder = true
@@ -1996,6 +2005,10 @@ pub fn (mut self Page) move_cells(src_row_idx int, src_left int, dst_row_idx int
 
 // Swap two cells within the same row as quickly as possible.
 pub fn (mut self Page) swap_cells(row_idx int, src_x int, dst_x int) {
+	defer { self.assert_integrity() }
+	assert row_idx >= 0 && row_idx < int(self.size.rows)
+	assert src_x >= 0 && src_x < int(self.size.cols)
+	assert dst_x >= 0 && dst_x < int(self.size.cols)
 	mut row := &self.rows[row_idx]
 
 	// Graphemes are keyed by cell, so we do have to move them.
@@ -2047,9 +2060,10 @@ pub fn (mut self Page) swap_cells(row_idx int, src_x int, dst_x int) {
 // The best solution for this is to artificially increment the ref count
 // prior to calling this function.
 pub fn (mut self Page) clear_cells(row_idx u16, left u16, end u16) {
-	if int(row_idx) >= self.rows.len {
-		return
-	}
+	defer { self.assert_integrity() }
+	assert row_idx < self.size.rows
+	assert left <= end
+	assert end <= self.size.cols
 	mut row := &self.rows[int(row_idx)]
 	cols := int(self.size.cols)
 
@@ -2057,7 +2071,7 @@ pub fn (mut self Page) clear_cells(row_idx u16, left u16, end u16) {
 	// in this row then we go cell by cell and clear them if present.
 	if row.grapheme {
 		for x in int(left) .. int(end) {
-			if x < row.cells.len && row.cells[x].has_grapheme {
+			if row.cells[x].has_grapheme {
 				self.clear_grapheme(int(row_idx), x)
 			}
 		}
@@ -2071,7 +2085,7 @@ pub fn (mut self Page) clear_cells(row_idx u16, left u16, end u16) {
 
 	if row.hyperlink {
 		for x in int(left) .. int(end) {
-			if x < row.cells.len && row.cells[x].has_hyperlink {
+			if row.cells[x].has_hyperlink {
 				key := cell_key(int(row_idx), x, int(self.capacity.cols))
 				if key in self.hyperlink_map {
 					hl_id := self.hyperlink_map[key]
@@ -2090,7 +2104,7 @@ pub fn (mut self Page) clear_cells(row_idx u16, left u16, end u16) {
 
 	if row.styled {
 		for x in int(left) .. int(end) {
-			if x < row.cells.len && row.cells[x].has_styling() {
+			if row.cells[x].has_styling() {
 				self.styles.release(row.cells[x].style_id)
 			}
 		}
@@ -2103,26 +2117,23 @@ pub fn (mut self Page) clear_cells(row_idx u16, left u16, end u16) {
 
 	// Zero the cells.
 	for x in int(left) .. int(end) {
-		if x < row.cells.len {
-			row.cells[x] = CellData{}
-		}
+		row.cells[x] = CellData{}
 	}
 	row.dirty = true
 }
 
 // Clear an entire row.
 pub fn (mut self Page) clear_row(row_idx u16) {
+	assert row_idx < self.size.rows
 	self.clear_cells(row_idx, 0, self.size.cols)
-	if int(row_idx) < self.rows.len {
-		mut row := &self.rows[int(row_idx)]
-		row.wrap = false
-		row.wrap_continuation = false
-		row.styled = false
-		row.grapheme = false
-		row.hyperlink = false
-		row.semantic_prompt = .unknown
-		row.kitty_virtual_placeholder = false
-	}
+	mut row := &self.rows[int(row_idx)]
+	row.wrap = false
+	row.wrap_continuation = false
+	row.styled = false
+	row.grapheme = false
+	row.hyperlink = false
+	row.semantic_prompt = .unknown
+	row.kitty_virtual_placeholder = false
 }
 
 // Translate Ghostty's pointer-to-offset lookup for V's per-row cell arrays.
@@ -2171,15 +2182,16 @@ pub fn (self &Page) lookup_hyperlink(row_idx int, col_idx int) ?u32 {
 // update_row_hyperlink_flag after you finish clearing any
 // hyperlinks in the row.
 pub fn (mut self Page) clear_hyperlink(row_idx int, col_idx int) {
+	defer { self.assert_integrity() }
+	assert row_idx >= 0 && row_idx < int(self.size.rows)
+	assert col_idx >= 0 && col_idx < int(self.size.cols)
 	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
 	if key in self.hyperlink_map {
 		hl_id := self.hyperlink_map[key]
 		self.hyperlink_set.release(hl_id)
 		self.hyperlink_map.delete(key)
 	}
-	if row_idx < self.rows.len && col_idx < self.rows[row_idx].cells.len {
-		self.rows[row_idx].cells[col_idx].has_hyperlink = false
-	}
+	self.rows[row_idx].cells[col_idx].has_hyperlink = false
 }
 
 // Convert a hyperlink into a page entry, returning the ID.
@@ -2201,6 +2213,9 @@ pub fn (mut self Page) insert_hyperlink(link Hyperlink) !u32 {
 // set as necessary by calling use_link if the id was not acquired with
 // add.
 pub fn (mut self Page) set_hyperlink(row_idx int, col_idx int, id u32) ! {
+	defer { self.assert_integrity() }
+	assert row_idx >= 0 && row_idx < int(self.size.rows)
+	assert col_idx >= 0 && col_idx < int(self.size.cols)
 	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
 
 	if key in self.hyperlink_map {
@@ -2214,18 +2229,16 @@ pub fn (mut self Page) set_hyperlink(row_idx int, col_idx int, id u32) ! {
 		}
 		self.hyperlink_map[key] = id
 	}
-	if row_idx < self.rows.len && col_idx < self.rows[row_idx].cells.len {
-		self.rows[row_idx].cells[col_idx].has_hyperlink = true
-	}
-	if row_idx < self.rows.len {
-		self.rows[row_idx].hyperlink = true
-	}
+	self.rows[row_idx].cells[col_idx].has_hyperlink = true
+	self.rows[row_idx].hyperlink = true
 }
 
 // Move the hyperlink from one cell to another. This can't fail
 // because we avoid any allocations since we're just moving data.
 // Destination must NOT have a hyperlink.
 fn (mut self Page) move_hyperlink(src_row int, src_col int, dst_row int, dst_col int) {
+	assert self.rows[src_row].cells[src_col].has_hyperlink
+	assert !self.rows[dst_row].cells[dst_col].has_hyperlink
 	src_key := cell_key(src_row, src_col, int(self.capacity.cols))
 	dst_key := cell_key(dst_row, dst_col, int(self.capacity.cols))
 	if src_key in self.hyperlink_map {
@@ -2253,6 +2266,9 @@ pub fn (self &Page) hyperlink_capacity() int {
 // Set the graphemes for the given cell. This asserts that the cell
 // has no graphemes set, and only contains a single codepoint.
 pub fn (mut self Page) set_graphemes(row_idx int, col_idx int, cps []u32) ! {
+	defer { self.assert_integrity() }
+	assert row_idx >= 0 && row_idx < int(self.size.rows)
+	assert col_idx >= 0 && col_idx < int(self.size.cols)
 	mut row := &self.rows[row_idx]
 	mut cell := &row.cells[col_idx]
 	assert cell.codepoint > 0
@@ -2280,6 +2296,9 @@ pub fn (mut self Page) set_graphemes(row_idx int, col_idx int, cps []u32) ! {
 
 // Append a codepoint to the given cell as a grapheme.
 pub fn (mut self Page) append_grapheme(row_idx int, col_idx int, cp u32) ! {
+	defer { self.assert_integrity() }
+	assert row_idx >= 0 && row_idx < int(self.size.rows)
+	assert col_idx >= 0 && col_idx < int(self.size.cols)
 	mut row := &self.rows[row_idx]
 	mut cell := &row.cells[col_idx]
 	assert cell.codepoint != 0
@@ -2360,6 +2379,8 @@ pub fn (self &Page) lookup_grapheme_at(row_idx int, col_idx int) ?[]u32 {
 // there are scenarios where we want to move graphemes without changing
 // the content tag. Callers beware but assert_integrity should catch this.
 fn (mut self Page) move_grapheme(src_row int, src_col int, dst_row int, dst_col int) {
+	assert self.rows[src_row].cells[src_col].has_grapheme
+	assert !self.rows[dst_row].cells[dst_col].has_grapheme
 	src_key := cell_key(src_row, src_col, int(self.capacity.cols))
 	dst_key := cell_key(dst_row, dst_col, int(self.capacity.cols))
 	allocation := self.grapheme_map[src_key] or {
@@ -2375,18 +2396,20 @@ fn (mut self Page) move_grapheme(src_row int, src_col int, dst_row int, dst_col 
 // update_row_grapheme_flag after you finish clearing any
 // graphemes in the row.
 pub fn (mut self Page) clear_grapheme(row_idx int, col_idx int) {
-	if row_idx < self.rows.len && col_idx < self.rows[row_idx].cells.len {
-		key := cell_key(row_idx, col_idx, int(self.capacity.cols))
-		allocation := self.grapheme_map[key] or {
-			panic('cleared grapheme cell is missing its page mapping')
-		}
-		self.grapheme_alloc.release(allocation.offset, allocation.len * int(sizeof(u32)))
-		self.grapheme_map.delete(key)
-		self.rows[row_idx].cells[col_idx].graphemes = []
-		self.rows[row_idx].cells[col_idx].has_grapheme = false
-		// Mark that we no longer have graphemes by changing the content tag.
-		self.rows[row_idx].cells[col_idx].content_tag = .codepoint
+	defer { self.assert_integrity() }
+	assert row_idx >= 0 && row_idx < int(self.size.rows)
+	assert col_idx >= 0 && col_idx < int(self.size.cols)
+	assert self.rows[row_idx].cells[col_idx].has_grapheme
+	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
+	allocation := self.grapheme_map[key] or {
+		panic('cleared grapheme cell is missing its page mapping')
 	}
+	self.grapheme_alloc.release(allocation.offset, allocation.len * int(sizeof(u32)))
+	self.grapheme_map.delete(key)
+	self.rows[row_idx].cells[col_idx].graphemes = []
+	self.rows[row_idx].cells[col_idx].has_grapheme = false
+	// Mark that we no longer have graphemes by changing the content tag.
+	self.rows[row_idx].cells[col_idx].content_tag = .codepoint
 }
 
 // Checks if the row contains any graphemes and sets
@@ -2394,7 +2417,7 @@ pub fn (mut self Page) clear_grapheme(row_idx int, col_idx int) {
 //
 // Call after removing graphemes in a row.
 pub fn (mut self Page) update_row_grapheme_flag(row &RowData) {
-	for cell in row.cells {
+	for cell in row.cells[..int(self.size.cols)] {
 		if cell.has_grapheme {
 			return
 		}
@@ -2422,7 +2445,7 @@ pub fn (self &Page) grapheme_capacity() int {
 //
 // Call after removing hyperlinks in a row.
 pub fn (mut self Page) update_row_hyperlink_flag(row &RowData) {
-	for cell in row.cells {
+	for cell in row.cells[..int(self.size.cols)] {
 		if cell.has_hyperlink {
 			return
 		}
@@ -2438,7 +2461,7 @@ pub fn (mut self Page) update_row_hyperlink_flag(row &RowData) {
 //
 // Call after removing styles in a row.
 pub fn (mut self Page) update_row_styled_flag(row &RowData) {
-	for cell in row.cells {
+	for cell in row.cells[..int(self.size.cols)] {
 		if cell.has_styling() {
 			return
 		}

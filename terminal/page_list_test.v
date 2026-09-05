@@ -194,6 +194,7 @@ fn test_page_pin_row_cell_grapheme_and_style_accessors() {
 		codepoint: u32(`a`)
 		style_id: style_id
 	}
+	page.rows[int(pin.y)].styled = true
 	page.set_graphemes(int(pin.y), int(pin.x), [u32(0x0301)]) or { panic(err) }
 
 	rac := pin.row_and_cell()
@@ -1996,12 +1997,13 @@ fn test_page_list_resize_no_reflow_less_cols() {
 
 	assert s.cols == 5
 
-	// Verify all rows have 5 cells
+	// Resizing changes the live column count but preserves the fixed backing
+	// capacity of every row, matching Page's packed allocation.
 	mut node := s.pages.first
 	for {
 		n := node or { break }
 		for row in n.data.rows {
-			assert row.cells.len == 5
+			assert row.cells.len == int(n.data.capacity.cols)
 		}
 		node = n.next
 	}

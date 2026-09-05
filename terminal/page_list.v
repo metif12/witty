@@ -6238,19 +6238,8 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) {
 			for {
 				chunk := it.next() or { break }
 				mut page := &chunk.node.data
-				for i in 0 .. page.rows.len {
+				for i in 0 .. int(page.size.rows) {
 					page.clear_cells(u16(i), cols, self.cols)
-					// Physically resize this row's cell array to the new width
-					// so backing storage matches size.cols (witty stores rows as
-					// plain V arrays, not a fixed mmap block).
-					mut row := &page.rows[i]
-					if row.cells.len > int(cols) {
-						row.cells = row.cells[..int(cols)]
-					} else {
-						for _ in row.cells.len .. int(cols) {
-							row.cells << CellData{}
-						}
-					}
 				}
 				page.size.cols = cols
 			}
