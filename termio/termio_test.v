@@ -74,6 +74,18 @@ fn test_derived_config_converts_only_explicit_cursor_color() {
 	assert unset.cursor_color == none
 }
 
+fn test_message_write_req_uses_pinned_inline_capacity() {
+	inline_data := 'x'.repeat(38)
+	inline_msg := Message.write_req(inline_data)
+	assert inline_msg.kind == .write_small
+	assert inline_msg.write_small_data.slice().bytestr() == inline_data
+
+	allocated_data := 'x'.repeat(39)
+	allocated_msg := Message.write_req(allocated_data)
+	assert allocated_msg.kind == .write_alloc
+	assert allocated_msg.write_alloc_data == allocated_data
+}
+
 fn test_termio_queue_message_uses_mailbox() {
 	mut tio := Termio{}
 	tio.init(make_termio_opts())!

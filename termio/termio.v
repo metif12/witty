@@ -1187,13 +1187,13 @@ pub enum SizeReportKind {
 
 pub struct WriteSmall {
 pub mut:
-	data [128]u8
+	data [38]u8
 	len  u8
 }
 
 pub fn WriteSmall.from_slice(s []u8) WriteSmall {
 	mut w := WriteSmall{}
-	length := if s.len < 128 { u8(s.len) } else { u8(128) }
+	length := if s.len < 38 { u8(s.len) } else { u8(38) }
 	for i in 0 .. int(length) {
 		w.data[i] = s[i]
 	}
@@ -1213,7 +1213,7 @@ pub fn (w &WriteSmall) slice() []u8 {
 // dynamically sized slice. The data is copied.
 pub fn Message.write_req(data string) Message {
 	// If the data fits in a small write, use that
-	if data.len <= 128 {
+	if data.len <= 38 {
 		mut msg := Message{
 			kind: .write_small
 		}
@@ -1234,7 +1234,7 @@ pub fn Message.write_small_msg(data []u8) Message {
 	mut msg := Message{
 		kind: .write_small
 	}
-	length := if data.len < 128 { u8(data.len) } else { u8(128) }
+	length := if data.len < 38 { u8(data.len) } else { u8(38) }
 	for i in 0 .. int(length) {
 		msg.write_small_data.data[i] = data[i]
 	}
