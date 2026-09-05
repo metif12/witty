@@ -1321,6 +1321,29 @@ fn test_copy_url_to_clipboard_uses_configured_trailing_space_policy() ! {
 	assert contents[0].data == 'http://a   '
 }
 
+fn test_mouse_link_preview_forwards_untrimmed_url() ! {
+	mut surf := make_test_surface()
+	surf.size = make_test_size()
+	surf.config.link_previews = .true_
+	surf.config.links = [DerivedConfigLink{
+		pattern: r'http://a   '
+		action: .open
+		highlight: .hover
+	}]
+	mut runtime := RuntimeApp{}
+	surf.rt_app = &runtime
+	mut stream := surf.renderer_state.terminal_.vt_stream()
+	stream.next_slice('http://a   ')!
+
+	surf.mouse_refresh_links(CursorPos{ x: 6, y: 6 }, Coordinate{ x: 0, y: 0 }, false)!
+	assert surf.mouse.over_link
+	assert surf.renderer_state.terminal_.screens.active.dirty.hyperlink_hover
+	assert runtime.actions.len == 2
+	assert runtime.actions[0].kind == .mouse_shape
+	assert runtime.actions[1].kind == .mouse_over_link
+	assert runtime.actions[1].url == 'http://a   '
+}
+
 struct RuntimeCallbackProbe {
 mut:
 	action_kind AppActionKind

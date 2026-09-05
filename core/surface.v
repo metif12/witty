@@ -5537,28 +5537,36 @@ fn (mut self Surface) mouse_refresh_links(pos CursorPos, pos_vp Coordinate, over
 
 	// Check for link at current position
 	link := self.link_at_pos(pos) or {
-		// No link found. If we were previously over a link, reset state
-		if over_link {
-			self.mouse.over_link = false
-			self.renderer_state.mouse.point = none
-			self.rt_app.perform_action(AppAction{
-				kind: .mouse_shape
-				target: &self
-				mouse_shape: self.renderer_state.terminal_.mouse_shape
-			})!
-			self.rt_app.perform_action(AppAction{
-				kind: .mouse_over_link
-				target: &self
-			})!
-			self.queue_render()!
-		}
+		self.clear_link_hover(over_link)!
 		return
 	}
 
-	// Found a link — update state and notify runtime
+	mut url := ''
+	mut preview := false
+	match link.action {
+		.open {
+			url = self.renderer_state.terminal_.screens.active.selection_string(terminal.SelectionString{
+				sel: link.selection
+				trim: false
+			}) or {
+				self.clear_link_hover(over_link)!
+				return
+			}
+			preview = self.config.link_previews == .true_
+		}
+		.open_osc8 {
+			url = self.osc8_uri(link.selection.start()) or {
+				self.clear_link_hover(over_link)!
+				return
+			}
+			preview = self.config.link_previews != .false_
+		}
+	}
+
+	// Found a link — update state and notify runtime.
 	self.renderer_state.mouse.point = pos_vp
 	self.mouse.over_link = true
-	_ = link
+	self.renderer_state.terminal_.screens.active.dirty.hyperlink_hover = true
 
 	self.rt_app.perform_action(AppAction{
 		kind: .mouse_shape
@@ -5566,13 +5574,33 @@ fn (mut self Surface) mouse_refresh_links(pos CursorPos, pos_vp Coordinate, over
 		mouse_shape: .pointer
 	})!
 
-	if self.config.link_previews == .true_ {
+	if preview {
 		self.rt_app.perform_action(AppAction{
 			kind: .mouse_over_link
 			target: &self
+			url: url
 		})!
 	}
 
+	self.queue_render()!
+}
+
+fn (mut self Surface) clear_link_hover(over_link bool) ! {
+	if !over_link {
+		return
+	}
+	self.mouse.over_link = false
+	self.renderer_state.mouse.point = none
+	self.rt_app.perform_action(AppAction{
+		kind: .mouse_shape
+		target: &self
+		mouse_shape: self.renderer_state.terminal_.mouse_shape
+	})!
+	self.rt_app.perform_action(AppAction{
+		kind: .mouse_over_link
+		target: &self
+		url: ''
+	})!
 	self.queue_render()!
 }
 
