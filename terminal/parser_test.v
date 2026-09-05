@@ -389,7 +389,7 @@ fn test_csi_colon_for_non_m_final() {
 fn test_csi_request_mode_decrqm() {
 	mut p := VTParser{}
 	p.next(0x1B)
-	for c in '[?2026$'.bytes() {
+	for c in '[?2026\$'.bytes() {
 		a := p.next(c)
 		assert dispatch_actions(a).len == 0
 	}
@@ -473,6 +473,29 @@ fn test_osc_change_window_title_end_in_esc() {
 	cmd := a[0].osc
 	assert cmd.cmd_type == .change_window_title
 	assert cmd.data == 'abc'
+}
+
+fn test_osc_color_operation_preserves_bel_terminator() {
+	mut p := VTParser{}
+	for byte_val in '\x1b]10;?'.bytes() {
+		p.next(byte_val)
+	}
+	a := dispatch_actions(p.next(0x07))
+	assert a.len == 1
+	assert a[0].osc.cmd_type == .color_operation
+	assert a[0].osc.terminator == .bel
+}
+
+fn test_osc_kitty_color_preserves_st_terminator() {
+	mut p := VTParser{}
+	for byte_val in '\x1b]21;foreground=?'.bytes() {
+		p.next(byte_val)
+	}
+	a := dispatch_actions(p.next(0x1b))
+	p.next(u8(`\\`))
+	assert a.len == 1
+	assert a[0].osc.cmd_type == .kitty_color_protocol
+	assert a[0].osc.terminator == .st
 }
 
 // ============================================================

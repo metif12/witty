@@ -381,14 +381,14 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 		.kitty_color_report {
 			// Kitty color protocol: query/set/reset colors (OSC 21). The
 			// stream dispatches the raw OSC body (after "21;") in str1.
-			self.kitty_color_report(event.payload.str1)
+			self.kitty_color_report(event.payload.str1, event.payload.osc_terminator)
 		}
 		.color_operation {
 			// OSC color operations: set/query/reset palette colors (OSC 4)
 			// and dynamic colors (OSC 10/11/12 for fg/bg/cursor). The stream
 			// dispatches the raw OSC body (including the operation number,
 			// e.g. "4;0;red" or "10;red") in str1.
-			self.color_operation(event.payload.str1)
+			self.color_operation(event.payload.str1, event.payload.osc_terminator)
 		}
 		.end_hyperlink {
 			self.terminal.screens.active.end_hyperlink()
@@ -1650,20 +1650,20 @@ fn (mut self StreamHandler) report_pwd(url string) {
 // This is faithful to the logic in stream_handler.zig colorOperation and
 // terminal/osc/parsers/color.zig, but does the parsing inline since the
 // V terminal stream currently delivers only the raw OSC body.
-fn (mut self StreamHandler) color_operation(data string) {
+fn (mut self StreamHandler) color_operation(data string, terminator osc.Terminator) {
 	// Split the operation number from the body.
 	sep := data.index(';') or {
 		// Some resets (OSC 104/110-119) may have no body. Treat the whole
 		// string as the operation number.
-		self.color_operation_op(data, '')
+		self.color_operation_op(data, '', terminator)
 		return
 	}
 	op_str := data[..sep]
 	body := data[sep + 1..]
-	self.color_operation_op(op_str, body)
+	self.color_operation_op(op_str, body, terminator)
 }
 
-fn (mut self StreamHandler) color_operation_op(op_str string, body string) {
+fn (mut self StreamHandler) color_operation_op(op_str string, body string, terminator osc.Terminator) {
 	op := op_str.int()
 
 	// Accumulated query response, if any.
@@ -1683,7 +1683,7 @@ fn (mut self StreamHandler) color_operation_op(op_str string, body string) {
 				idx := parse_palette_index(idx_str) or { break }
 
 				if spec == '?' {
-					if r := self.color_query_response_palette(idx) {
+					if r := self.color_query_response_palette(idx, terminator) {
 						response += r
 					}
 					continue
@@ -1738,7 +1738,7 @@ fn (mut self StreamHandler) color_operation_op(op_str string, body string) {
 				dyn += 1
 
 				if spec == '?' {
-					if r := self.color_query_response_dynamic(current) {
+					if r := self.color_query_response_dynamic(current, terminator) {
 						response += r
 					}
 					continue
@@ -1810,12 +1810,12 @@ fn (mut self StreamHandler) reset_dynamic_color(dyn int) {
 
 // color_query_response_palette builds an OSC 4 query response for a palette
 // index in the currently-configured report format.
-fn (self &StreamHandler) color_query_response_palette(idx u8) ?string {
+fn (self &StreamHandler) color_query_response_palette(idx u8, terminator osc.Terminator) ?string {
 	if self.osc_color_report_format == .none_ {
 		return none
 	}
 	color := self.terminal.colors.palette.entries[int(idx)]
-	term := self.osc_terminator()
+	term := osc_terminator(terminator)
 	return match self.osc_color_report_format {
 		.bits_16 {
 			'\x1b]4;${idx};rgb:${hex4(color.r)}/${hex4(color.g)}/${hex4(color.b)}${term}'
@@ -1831,7 +1831,7 @@ fn (self &StreamHandler) color_query_response_palette(idx u8) ?string {
 
 // color_query_response_dynamic builds an OSC 10-19 query response for a
 // dynamic color in the currently-configured report format.
-fn (self &StreamHandler) color_query_response_dynamic(dyn int) ?string {
+fn (self &StreamHandler) color_query_response_dynamic(dyn int, terminator osc.Terminator) ?string {
 	if self.osc_color_report_format == .none_ {
 		return none
 	}
@@ -1847,7 +1847,7 @@ fn (self &StreamHandler) color_query_response_dynamic(dyn int) ?string {
 			return none
 		}
 	}
-	term := self.osc_terminator()
+	term := osc_terminator(terminator)
 	return match self.osc_color_report_format {
 		.bits_16 {
 			'\x1b]${dyn};rgb:${hex4(color.r)}/${hex4(color.g)}/${hex4(color.b)}${term}'
@@ -1861,10 +1861,12 @@ fn (self &StreamHandler) color_query_response_dynamic(dyn int) ?string {
 	}
 }
 
-// osc_terminator returns the string terminator (BEL or ST) to use for OSC
-// responses. We use ST (ESC \) as the preferred terminator.
-fn (self &StreamHandler) osc_terminator() string {
-	return '\x1b\\'
+// osc_terminator returns the wire representation of an OSC terminator.
+fn osc_terminator(terminator osc.Terminator) string {
+	return match terminator {
+		.st { '\x1b\\' }
+		.bel { '\a' }
+	}
 }
 
 // notify_color_change_palette notifies the surface of a palette color change.
@@ -1921,7 +1923,7 @@ fn (mut self StreamHandler) notify_color_change_dynamic(dyn int, color terminal.
 // where key is a palette index, "foreground", "background", or "cursor".
 //
 // Faithful to stream_handler.zig kittyColorReport.
-fn (mut self StreamHandler) kitty_color_report(data string) {
+fn (mut self StreamHandler) kitty_color_report(data string, terminator osc.Terminator) {
 	mut response := ''
 
 	for item in data.split(';') {
@@ -1969,7 +1971,7 @@ fn (mut self StreamHandler) kitty_color_report(data string) {
 
 	// If we had any query writes, terminate and send them.
 	if response.len > 0 {
-		response += self.osc_terminator()
+		response += osc_terminator(terminator)
 		self.message_writer(Message.write_req(response))
 	}
 }

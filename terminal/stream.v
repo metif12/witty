@@ -1,5 +1,6 @@
 module terminal
 
+import osc
 import simd
 
 // --- Original Ghostty Comments Start: src/terminal/stream.zig
@@ -477,6 +478,8 @@ pub:
 	// String values (for .window_title, .report_pwd, .start_hyperlink, etc.)
 	str1 string
 	str2 string
+	// OSC request terminator, mirrored by response-producing operations.
+	osc_terminator osc.Terminator
 	// Byte value (for .dcs_put, .apc_put)
 	byte_val u8
 	// Clipboard kind (for .clipboard_contents)
@@ -1764,10 +1767,16 @@ fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 			})
 		}
 		.color_operation {
-			self.dispatch(.color_operation, ActionPayload{ str1: cmd.data })
+			self.dispatch(.color_operation, ActionPayload{
+				str1: cmd.data
+				osc_terminator: cmd.terminator
+			})
 		}
 		.kitty_color_protocol {
-			self.dispatch(.kitty_color_report, ActionPayload{ str1: cmd.data })
+			self.dispatch(.kitty_color_report, ActionPayload{
+				str1: cmd.data
+				osc_terminator: cmd.terminator
+			})
 		}
 		.conemu_progress_report {
 			// ConEmu progress format: state;progress

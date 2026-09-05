@@ -69,6 +69,20 @@ fn test_stream_collects_raw_parser_actions() {
 	assert s.raw_events.len == 0
 }
 
+fn test_stream_preserves_osc_terminator_for_color_responses() {
+	mut s := Stream.init()
+	defer { s.deinit() }
+
+	s.next_slice('\x1b]10;?\a'.bytes())
+	color := get_last_event(s.events, .color_operation)
+	assert color.payload.osc_terminator == .bel
+
+	s.clear_events()
+	s.next_slice('\x1b]21;foreground=?\x1b\\'.bytes())
+	kitty := get_last_event(s.events, .kitty_color_report)
+	assert kitty.payload.osc_terminator == .st
+}
+
 // Test that invalid UTF-8 byte 0xFF produces replacement character U+FFFD.
 fn test_simd_print_invalid_utf8() {
 	mut s := Stream.init()

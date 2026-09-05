@@ -619,6 +619,52 @@ fn test_stream_handler_change_config() {
 	assert handler.default_cursor_style == .underline
 }
 
+fn test_color_query_response_mirrors_osc_terminator() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.osc_color_report_format = .bits_8
+
+	handler.vt(terminal.StreamEvent{
+		key: .color_operation
+		payload: terminal.ActionPayload{
+			str1: '4;1;?'
+			osc_terminator: .bel
+		}
+	})
+	bel := ctx.mailbox.pop() or { panic('expected BEL-terminated color response') }
+	assert bel.kind == .write_small
+	assert bel.write_small_data.slice().bytestr().ends_with('\a')
+
+	handler.vt(terminal.StreamEvent{
+		key: .color_operation
+		payload: terminal.ActionPayload{
+			str1: '4;1;?'
+			osc_terminator: .st
+		}
+	})
+	st := ctx.mailbox.pop() or { panic('expected ST-terminated color response') }
+	assert st.kind == .write_small
+	assert st.write_small_data.slice().bytestr().ends_with('\x1b\\')
+}
+
+fn test_kitty_color_query_response_mirrors_osc_terminator() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	handler.vt(terminal.StreamEvent{
+		key: .kitty_color_report
+		payload: terminal.ActionPayload{
+			str1: '1=?'
+			osc_terminator: .bel
+		}
+	})
+	msg := ctx.mailbox.pop() or { panic('expected Kitty color response') }
+	assert msg.kind == .write_small
+	response := msg.write_small_data.slice().bytestr()
+	assert response.starts_with('\x1b]21;1=rgb:')
+	assert response.ends_with('\a')
+}
+
 // Test cursor_blinking mode is ignored when default_cursor_blink is set.
 fn test_stream_handler_cursor_blinking_override() {
 	mut handler, mut ctx := make_test_handler()

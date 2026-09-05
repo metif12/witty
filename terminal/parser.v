@@ -94,7 +94,6 @@ import osc
 //
 // --- Original Ghostty Comments End: src/terminal/Parser.zig
 
-
 // VT Parser state machine based on Paul Williams' DEC-compatible parser.
 // https://vt100.net/emu/dec_ansi_parser
 //
@@ -209,6 +208,8 @@ pub:
 	data string
 	// Secondary string data (notification body, hyperlink id, etc.)
 	data2 string
+	// Terminator used by the request. Response-producing commands mirror it.
+	terminator osc.Terminator
 }
 
 // OscCommandType identifies the type of OSC command.
@@ -254,12 +255,12 @@ pub enum ParserActionType {
 pub struct ParserAction {
 pub:
 	action_type ParserActionType
-	char        u32        // for print
-	byte_val    u8         // for execute, dcs_put, apc_put
-	csi         CSIAction  // for csi_dispatch
-	esc         ESCAction  // for esc_dispatch
+	char        u32 // for print
+	byte_val    u8 // for execute, dcs_put, apc_put
+	csi         CSIAction // for csi_dispatch
+	esc         ESCAction // for esc_dispatch
 	osc         OscCommand // for osc_dispatch
-	dcs         DCSAction  // for dcs_hook
+	dcs         DCSAction // for dcs_hook
 }
 
 // ============================================================
@@ -273,11 +274,11 @@ pub mut:
 	state ParserState = .ground
 
 	// CSI/ESC/DCS parameter tracking
-	params            [max_params]u16
-	params_idx        u8
-	param_acc         u16
-	param_acc_idx     u8
-	params_sep        SepList
+	params        [max_params]u16
+	params_idx    u8
+	param_acc     u16
+	param_acc_idx u8
+	params_sep    SepList
 
 	intermediates     [max_intermediates]u8
 	intermediates_idx u8
@@ -324,7 +325,7 @@ pub fn (mut self VTParser) next(c u8) []ParserAction {
 	if self.state != next_state {
 		match self.state {
 			.osc_string {
-				actions << self.build_osc_action()
+				actions << self.build_osc_action(c)
 			}
 			.dcs_passthrough {
 				actions << ParserAction{
@@ -525,11 +526,11 @@ fn (self &VTParser) build_esc_action(final_byte u8) ParserAction {
 }
 
 // build_osc_action creates an OSC dispatch action from the accumulated buffer.
-fn (mut self VTParser) build_osc_action() ParserAction {
+fn (mut self VTParser) build_osc_action(terminator_ch u8) ParserAction {
 	osc_data := self.osc_buf.bytestr()
 	self.osc_buf = []
 
-	cmd := parse_osc_command(osc_data)
+	cmd := parse_osc_command(osc_data, terminator_ch)
 
 	return ParserAction{
 		action_type: .osc_dispatch_action
@@ -567,14 +568,14 @@ fn (mut self VTParser) build_dcs_hook_action(final_byte u8) ParserAction {
 // parse_osc_command parses an OSC string into a command.
 // The format is: <number>[;<data>]. Some OSCs (e.g. 104, 110-119, 133)
 // may legitimately arrive without a trailing semicolon.
-fn parse_osc_command(data string) OscCommand {
+fn parse_osc_command(data string, terminator_ch u8) OscCommand {
 	mut parser := osc.Parser.init(unsafe { nil })
 	for byte_val in data.bytes() {
 		parser.next(byte_val)
 	}
-	cmd := parser.end(0x1b) or { return OscCommand{ cmd_type: .invalid } }
+	cmd := parser.end(terminator_ch) or { return OscCommand{ cmd_type: .invalid } }
 
-	return match cmd.cmd_type {
+	result := match cmd.cmd_type {
 		.invalid { OscCommand{ cmd_type: .invalid } }
 		.change_window_title {
 			OscCommand{ cmd_type: .change_window_title, data: cmd.str_value }
@@ -652,11 +653,12 @@ fn parse_osc_command(data string) OscCommand {
 			}
 		}
 		.kitty_text_sizing { OscCommand{ cmd_type: .kitty_text_sizing } }
-		.conemu_sleep, .conemu_show_message_box, .conemu_change_tab_title,
-		.conemu_wait_input, .conemu_guimacro, .conemu_run_process,
-		.conemu_output_environment_variable, .conemu_xterm_emulation,
-		.conemu_comment {
+		.conemu_sleep, .conemu_show_message_box, .conemu_change_tab_title, .conemu_wait_input, .conemu_guimacro, .conemu_run_process, .conemu_output_environment_variable, .conemu_xterm_emulation, .conemu_comment {
 			OscCommand{ cmd_type: .conemu_ignored }
 		}
+	}
+	return OscCommand{
+		...result
+		terminator: cmd.terminator
 	}
 }
