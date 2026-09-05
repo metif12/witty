@@ -276,7 +276,9 @@ pub fn (mut c CoreApp) color_scheme_event(app &App, scheme ColorScheme) ! {
 	}
 	c.config_conditional_state.theme = new_theme
 	mut runtime_app := unsafe { &App(app) }
-	runtime_app.perform_action(Target(AppTarget{}), .reload_config, ActionValue{})!
+	runtime_app.perform_action(Target(AppTarget{}), .reload_config, ActionValue{
+		reload_config_: ReloadConfig{ soft: true }
+	})!
 }
 
 pub fn (mut c CoreApp) update_config(app &App, config voidptr) ! {

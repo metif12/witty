@@ -671,7 +671,9 @@ pub fn (mut self App) color_scheme_event(mut rt_app apprt.RuntimeApp, scheme app
 
 	// Request our configuration be reloaded because the new scheme may
 	// impact the colors of the app.
-	rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .reload_config, apprt.ActionValue{})!
+	rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .reload_config, apprt.ActionValue{
+		reload_config_: apprt.ReloadConfig{ soft: true }
+	})!
 }
 
 // color_scheme_surfaces notifies every live terminal surface after the app's

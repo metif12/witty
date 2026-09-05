@@ -33,6 +33,18 @@ fn test_app_mailbox_dispatches_open_config() ! {
 	assert runtime.actions[0].action == .open_config
 }
 
+fn test_app_color_scheme_change_requests_soft_reload() ! {
+	mut app := App{}
+	mut runtime := apprt.RuntimeApp{}
+	app.color_scheme_event(mut runtime, .dark)!
+
+	assert runtime.actions.len == 1
+	assert runtime.actions[0].action == .reload_config
+	assert runtime.actions[0].data.reload_config_.soft
+	app.color_scheme_event(mut runtime, .dark)!
+	assert runtime.actions.len == 1
+}
+
 fn test_app_mailbox_is_bounded_fifo_and_reusable() {
 	mut mailbox := Mailbox.init()
 	defer {

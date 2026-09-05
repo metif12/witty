@@ -224,6 +224,7 @@ fn test_core_app_color_scheme_reloads_only_on_change() {
 	core_app.color_scheme_event(&app, .dark)!
 	assert capture.calls == 1
 	assert capture.action.action == .reload_config
+	assert capture.action.data.reload_config_.soft
 	core_app.color_scheme_event(&app, .dark)!
 	assert capture.calls == 1
 }
