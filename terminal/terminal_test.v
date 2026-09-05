@@ -1785,6 +1785,23 @@ fn test_resize_more_cols_preserves_required_wide_spacer_head() {
 	assert cell_at(&t, 1, 1).wide == .spacer_tail
 }
 
+fn test_resize_reflow_preserves_kitty_unicode_placeholder_row_flag() {
+	mut t := Terminal.init(Options{ cols: 3, rows: 2, max_scrollback: 0 }) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+	t.modes.set(.wraparound, true)
+	t.print(kitty_unicode_placeholder) or { assert false }
+	t.print_string('ab') or { assert false }
+	assert t.screens.active.pages.screen_rows[0].kitty_virtual_placeholder
+
+	t.resize(2, 2) or { assert false }
+
+	assert cell_at(&t, 0, 0).codepoint == kitty_unicode_placeholder
+	assert t.screens.active.pages.get_active_row(0).kitty_virtual_placeholder
+}
+
 // https://github.com/mitchellh/ghostty/issues/723
 // This was found via fuzzing so its highly specific.
 fn test_resize_with_left_and_right_margin_set_fuzz() {

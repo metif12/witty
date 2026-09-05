@@ -1205,6 +1205,9 @@ fn (mut c FlatReflowCursor) write_cell(cell CellData) ReflowWriteResult {
 	if cell.style_id != default_style_id {
 		row.styled = true
 	}
+	if cell.codepoint_val() == kitty_unicode_placeholder {
+		row.kitty_virtual_placeholder = true
+	}
 	c.cursor_forward()
 	return .success
 }
