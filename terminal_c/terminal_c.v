@@ -244,6 +244,10 @@ pub fn osc_new() OscParser {
 	}
 }
 
+pub fn osc_free(mut parser OscParser) {
+	parser.parser.deinit()
+}
+
 // Reset the OSC parser state.
 pub fn (mut self OscParser) reset() {
 	self.parser.reset()
@@ -257,6 +261,11 @@ pub fn (mut self OscParser) next(byte u8) {
 // Finalize parsing and return the command, if any.
 pub fn (mut self OscParser) end(terminator u8) ?osc.Command {
 	return self.parser.end(terminator)
+}
+
+pub fn osc_command_type(cmd ?osc.Command) osc.CommandType {
+	command := cmd or { return .invalid }
+	return command.cmd_type
 }
 
 // CommandData enumerates the types of data that can be extracted

@@ -148,9 +148,8 @@ fn test_key_encoder_fixed_buffer_and_required_size() {
 // ============================================================
 
 fn test_osc_new() {
-	p := osc_new()
-	// Just verify it can be created without panicking.
-	_ = p
+	mut p := osc_new()
+	osc_free(mut p)
 }
 
 fn test_command_data_invalid() {
@@ -162,6 +161,18 @@ fn test_command_data_invalid() {
 fn test_command_data_no_command() {
 	result := command_data(none, .change_window_title_str)
 	assert result == none
+}
+
+fn test_osc_change_window_title() {
+	mut parser := osc_new()
+	defer { osc_free(mut parser) }
+	parser.next(`0`)
+	parser.next(`;`)
+	parser.next(`a`)
+	cmd := parser.end(0)
+	assert osc_command_type(cmd) == .change_window_title
+	assert (command_data(cmd, .change_window_title_str) or { '' }) == 'a'
+	assert osc_command_type(none) == .invalid
 }
 
 // ============================================================
