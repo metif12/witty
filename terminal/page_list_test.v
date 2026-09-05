@@ -6966,6 +6966,123 @@ fn test_page_list_erase_resets_viewport_to_active_if_top_is_inside_active() {
 	assert s.viewport == .active
 }
 
+fn test_page_list_erase_rows_invalidates_viewport_offset_cache() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	cap := initial_capacity(80)
+	s.grow_rows(usize(cap.rows) * 3)
+	pin_y := cap.rows
+	viewport_pin := s.get_pin(.screen, 0, pin_y) or { return }
+	s.scroll(PageScrollPin{ pin: viewport_pin })
+	assert s.scrollbar().offset == usize(pin_y)
+
+	rows_to_erase := cap.rows / 2
+	s.erase_rows(Point.new(.history, Coordinate{}), Point.new(.history, Coordinate{
+		y: u32(rows_to_erase - 1)
+	}))
+	assert s.scrollbar() == Scrollbar{
+		total: s.total_rows
+		offset: usize(pin_y - rows_to_erase)
+		len: usize(s.rows)
+	}
+}
+
+fn test_page_list_erase_row_invalidates_viewport_offset_cache() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	cap := initial_capacity(80)
+	s.grow_rows(usize(cap.rows) * 3)
+	pin_y := cap.rows
+	viewport_pin := s.get_pin(.screen, 0, pin_y) or { return }
+	s.scroll(PageScrollPin{ pin: viewport_pin })
+	assert s.scrollbar().offset == usize(pin_y)
+
+	erase_pin := s.get_pin(.history, 0, 0) or { return }
+	s.erase_row(erase_pin)
+	assert s.scrollbar() == Scrollbar{
+		total: s.total_rows
+		offset: usize(pin_y - 1)
+		len: usize(s.rows)
+	}
+}
+
+fn test_page_list_erase_row_bounded_invalidates_viewport_offset_cache() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	cap := initial_capacity(80)
+	s.grow_rows(usize(cap.rows) * 3)
+	pin_y := u16(4)
+	viewport_pin := s.get_pin(.screen, 0, pin_y) or { return }
+	s.scroll(PageScrollPin{ pin: viewport_pin })
+	assert s.scrollbar().offset == usize(pin_y)
+
+	erase_pin := s.get_pin(.history, 0, 0) or { return }
+	s.erase_row_bounded(erase_pin, 10)
+	assert s.scrollbar() == Scrollbar{
+		total: s.total_rows
+		offset: usize(pin_y - 1)
+		len: usize(s.rows)
+	}
+}
+
+fn test_page_list_erase_row_bounded_multi_page_invalidates_viewport_offset_cache() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	cap := initial_capacity(80)
+	s.grow_rows(usize(cap.rows) * 3)
+	pin_y := u16(cap.rows + 1)
+	viewport_pin := s.get_pin(.screen, 0, pin_y) or { return }
+	s.scroll(PageScrollPin{ pin: viewport_pin })
+	assert s.scrollbar().offset == usize(pin_y)
+
+	erase_pin := s.get_pin(.history, 0, 0) or { return }
+	s.erase_row_bounded(erase_pin, usize(cap.rows) + 10)
+	assert s.scrollbar() == Scrollbar{
+		total: s.total_rows
+		offset: usize(pin_y - 1)
+		len: usize(s.rows)
+	}
+}
+
+fn test_page_list_erase_row_bounded_full_page_shift_invalidates_viewport_offset_cache() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	cap := initial_capacity(80)
+	s.grow_rows(usize(cap.rows) * 4)
+	pin_y := u16(5)
+	viewport_pin := s.get_pin(.screen, 0, pin_y) or { return }
+	s.scroll(PageScrollPin{ pin: viewport_pin })
+	assert s.scrollbar().offset == usize(pin_y)
+
+	erase_pin := s.get_pin(.history, 0, 0) or { return }
+	s.erase_row_bounded(erase_pin, usize(cap.rows) * 2 + 10)
+	assert s.scrollbar() == Scrollbar{
+		total: s.total_rows
+		offset: usize(pin_y - 1)
+		len: usize(s.rows)
+	}
+}
+
+fn test_page_list_erase_row_bounded_exhausts_pages_invalidates_viewport_offset_cache() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	cap := initial_capacity(80)
+	s.grow_rows(usize(cap.rows) * 3)
+	total_rows_before := s.total_rows
+	pin_y := u16(usize(cap.rows) * 2 + 10)
+	viewport_pin := s.get_pin(.screen, 0, pin_y) or { return }
+	s.scroll(PageScrollPin{ pin: viewport_pin })
+	assert s.scrollbar().offset == usize(pin_y)
+
+	erase_pin := s.get_pin(.history, 0, 0) or { return }
+	s.erase_row_bounded(erase_pin, total_rows_before * 2)
+	assert s.scrollbar() == Scrollbar{
+		total: s.total_rows
+		offset: usize(pin_y - 1)
+		len: usize(s.rows)
+	}
+}
+
 // ============================================================
 // Split tests
 // ============================================================
