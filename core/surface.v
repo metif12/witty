@@ -1787,7 +1787,7 @@ pub:
 	command_finished   apprt.CommandFinished
 	min_size           ScreenSize
 	max_size           ScreenSize
-	secure_input_on    bool
+	secure_input_mode  apprt.SecureInput
 	reload_config_soft bool
 }
 
@@ -5164,6 +5164,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			return self.rt_app.perform_action(AppAction{
 				kind: .secure_input
 				target: &self
+				secure_input_mode: .toggle
 			})!
 		}
 		.toggle_mouse_reporting {
@@ -6083,7 +6084,7 @@ fn (mut self Surface) password_input(v bool) ! {
 	self.rt_app.perform_action(AppAction{
 		kind: .secure_input
 		target: &self
-		secure_input_on: v
+		secure_input_mode: if v { .on } else { .off }
 	}) or {}
 
 	self.queue_render()!

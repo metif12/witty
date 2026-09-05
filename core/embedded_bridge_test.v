@@ -3,6 +3,7 @@ module core
 import apprt
 import configpkg
 import font
+import input
 import macos
 
 fn embedded_bridge_test_view() voidptr {
@@ -21,10 +22,11 @@ fn release_embedded_bridge_test_view(view voidptr) {
 
 struct EmbeddedBridgeCapture {
 mut:
-	actions     []apprt.ActionKey
-	reload_soft []bool
-	closed      bool
-	confirm     bool
+	actions      []apprt.ActionKey
+	reload_soft  []bool
+	secure_input []apprt.SecureInput
+	closed       bool
+	confirm      bool
 }
 
 fn embedded_bridge_action(app &apprt.App, target apprt.Target, action apprt.RuntimeAction) bool {
@@ -33,6 +35,9 @@ fn embedded_bridge_action(app &apprt.App, target apprt.Target, action apprt.Runt
 	capture.actions << action.action
 	if action.action == .reload_config {
 		capture.reload_soft << action.data.reload_config_.soft
+	}
+	if action.action == .secure_input {
+		capture.secure_input << action.data.secure_input_
 	}
 	return true
 }
@@ -91,6 +96,8 @@ fn test_embedded_bridge_uses_canonical_core_surface() {
 	backend.surface.color_scheme_callback(.dark)!
 	assert capture.reload_soft.len == 1
 	assert capture.reload_soft[0]
+	assert backend.surface.perform_binding_action(input.Action.new(.toggle_secure_input))!
+	assert capture.secure_input.last() == .toggle
 	mut stream := backend.surface.renderer_state.terminal_.vt_stream()
 	stream.next_slice('hello')!
 	apprt.ghostty_surface_mouse_pos(mut surface, 1, 1, 0)

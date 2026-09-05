@@ -836,6 +836,21 @@ fn test_color_scheme_callback_change() ! {
 	assert runtime.actions[0].reload_config_soft
 }
 
+fn test_secure_input_actions_preserve_on_off_and_toggle() ! {
+	mut runtime := RuntimeApp{ actions_handled: true }
+	mut surf := make_test_surface()
+	surf.rt_app = &runtime
+
+	assert surf.perform_binding_action(input.Action.new(.toggle_secure_input))!
+	assert runtime.actions.last().secure_input_mode == .toggle
+	runtime.actions.clear()
+
+	surf.password_input(true)!
+	assert runtime.actions.last().secure_input_mode == .on
+	surf.password_input(false)!
+	assert runtime.actions.last().secure_input_mode == .off
+}
+
 fn test_child_exited_no_wait() {
 	mut app_runtime := RuntimeApp{ actions_handled: true }
 	mut surface_runtime := RuntimeSurface{}

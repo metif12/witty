@@ -330,11 +330,7 @@ fn bridge_surface_runtime_action(ptr voidptr, action AppAction) !bool {
 		.present_terminal { app.perform_action(target, .present_terminal, apprt.ActionValue{})! }
 		.secure_input {
 			app.perform_action(target, .secure_input, apprt.ActionValue{
-				secure_input_: if action.secure_input_on {
-					apprt.SecureInput.on
-				} else {
-					apprt.SecureInput.off
-				}
+				secure_input_: action.secure_input_mode
 			})!
 		}
 		.ring_bell { app.perform_action(target, .ring_bell, apprt.ActionValue{})! }
