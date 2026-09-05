@@ -134,6 +134,13 @@ fn test_page_pin_row_cell_grapheme_and_style_accessors() {
 	assert pin.cells(.left).len == 2
 	assert pin.cells(.right).len == 3
 	assert pin.grapheme(rac.cell) or { []u32{} } == [u32(0x0301)]
+	foreign := CellData{
+		content_tag: .codepoint_grapheme
+		codepoint: u32(`z`)
+		has_grapheme: true
+		graphemes: [u32(0x0302)]
+	}
+	assert pin.grapheme(&foreign) == none
 	assert pin.style(rac.cell).eql(&style)
 	assert pin.style(&CellData{}).default()
 }
@@ -504,7 +511,7 @@ fn test_page_list_clone_row_grows_grapheme_allocator_capacity() {
 	new_first := list.clone_row_growing(first, &second.data, 1, 0)
 	assert new_first.data.capacity.grapheme_bytes == old_capacity * 2
 	assert new_first.data.grapheme_alloc.used_bytes() == int(old_capacity * 2)
-	assert new_first.data.lookup_grapheme(1, 0) or { []u32{} } == cps
+	assert new_first.data.lookup_grapheme_at(1, 0) or { []u32{} } == cps
 }
 
 fn test_page_list_erase_row_grows_style_capacity_across_pages() {
@@ -4870,7 +4877,7 @@ fn test_page_list_resize_reflow_less_cols_wrapped_rows_with_graphemes() {
 	assert !r1.row_data().wrap
 	assert r1.row_data().grapheme
 	assert r1.node.data.rows[int(r1.y)].cells[0].codepoint == 2
-	cps := r1.node.data.lookup_grapheme(int(r1.y), 0) or {
+	cps := r1.node.data.lookup_grapheme_at(int(r1.y), 0) or {
 		assert false, 'lookup_grapheme failed'
 		return
 	}
@@ -5837,7 +5844,7 @@ fn test_page_list_split_preserves_grapheme_clusters() {
 	assert c.codepoint == u32(0x1F468)
 	assert second_page.rows[1].grapheme
 
-	cps := second_page.lookup_grapheme(1, 0) or {
+	cps := second_page.lookup_grapheme_at(1, 0) or {
 		assert false, 'lookup_grapheme failed'
 		return
 	}

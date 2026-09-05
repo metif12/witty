@@ -2425,10 +2425,7 @@ pub fn (self &PagePin) cells(subset PagePinCellSubset) []CellData {
 // Returns the extra codepoints for a grapheme cell. The cell's first
 // codepoint remains stored directly on the cell and is not returned here.
 pub fn (self &PagePin) grapheme(cell &CellData) ?[]u32 {
-	if !cell.has_grapheme || cell.graphemes.len == 0 {
-		return none
-	}
-	return cell.graphemes
+	return self.node.data.lookup_grapheme(cell)
 }
 
 // Returns the resolved style for a cell on this pin's page.
@@ -5269,9 +5266,13 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 		page.rows[int(self.y)].kitty_virtual_placeholder = true
 	}
 
-	// Copy grapheme data. This remains directly stored on the V cell; grapheme
-	// capacity is handled separately from the hyperlink stores below.
-	if cell.content_tag == .codepoint_grapheme && cell.graphemes.len > 0 {
+	// Copy grapheme data through the page mapping. The inline slice carries the
+	// translated allocation bytes, but the mapping determines whether those
+	// bytes belong to this source cell.
+	if cell.content_tag == .codepoint_grapheme {
+		cps := src_page.lookup_grapheme(cell) or {
+			panic('grapheme source cell is missing its page mapping')
+		}
 		if page.grapheme_count() >= page.grapheme_capacity() {
 			new_node := list.increase_capacity(self.node, .grapheme_bytes) or {
 				return .out_of_space
@@ -5280,7 +5281,7 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 			page = &self.node.data
 		}
 		for {
-			offset := page.grapheme_alloc.alloc(cell.graphemes.len * int(sizeof(u32))) or {
+			offset := page.grapheme_alloc.alloc(cps.len * int(sizeof(u32))) or {
 				new_node := list.increase_capacity(self.node, .grapheme_bytes) or {
 					return .out_of_space
 				}
@@ -5288,10 +5289,10 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 				page = &self.node.data
 				continue
 			}
-			page.grapheme_alloc.release(offset, cell.graphemes.len * int(sizeof(u32)))
+			page.grapheme_alloc.release(offset, cps.len * int(sizeof(u32)))
 			break
 		}
-		page.set_graphemes(int(self.y), int(self.x), cell.graphemes) or {
+		page.set_graphemes(int(self.y), int(self.x), cps) or {
 			return .out_of_space
 		}
 	}

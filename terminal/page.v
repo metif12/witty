@@ -2115,7 +2115,38 @@ pub fn (mut self Page) clear_row(row_idx u16) {
 	}
 }
 
-// Returns the hyperlink ID for the given cell.
+// Translate Ghostty's pointer-to-offset lookup for V's per-row cell arrays.
+// The source page has one contiguous cell allocation and can subtract its
+// base pointer directly; V stores a separate cell slice on every row, so the
+// equivalent operation locates the borrowed cell by identity.
+fn (self &Page) key_for_cell(cell &CellData) ?u64 {
+	target := voidptr(cell)
+	for y in 0 .. self.rows.len {
+		row := &self.rows[y]
+		limit := if row.cells.len < int(self.capacity.cols) {
+			row.cells.len
+		} else {
+			int(self.capacity.cols)
+		}
+		for x in 0 .. limit {
+			if voidptr(&row.cells[x]) == target {
+				return cell_key(y, x, int(self.capacity.cols))
+			}
+		}
+	}
+	return none
+}
+
+// Returns the hyperlink ID for the given page-owned cell.
+pub fn (self &Page) lookup_hyperlink_cell(cell &CellData) ?u32 {
+	key := self.key_for_cell(cell) or { return none }
+	if key in self.hyperlink_map {
+		return self.hyperlink_map[key]
+	}
+	return none
+}
+
+// Index-addressed helper for code that already has a page row and column.
 pub fn (self &Page) lookup_hyperlink(row_idx int, col_idx int) ?u32 {
 	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
 	if key in self.hyperlink_map {
@@ -2285,10 +2316,19 @@ pub fn (mut self Page) append_grapheme(row_idx int, col_idx int, cp u32) ! {
 	cell.graphemes << cp
 }
 
-// Returns the codepoints for the given cell. These are the codepoints
-// in addition to the first codepoint. The first codepoint is NOT
+// Returns the codepoints for the given page-owned cell. These are the
+// codepoints in addition to the first codepoint. The first codepoint is NOT
 // included since it is on the cell itself.
-pub fn (self &Page) lookup_grapheme(row_idx int, col_idx int) ?[]u32 {
+pub fn (self &Page) lookup_grapheme(cell &CellData) ?[]u32 {
+	key := self.key_for_cell(cell) or { return none }
+	if key in self.grapheme_map {
+		return cell.graphemes
+	}
+	return none
+}
+
+// Index-addressed helper for code that already has a page row and column.
+pub fn (self &Page) lookup_grapheme_at(row_idx int, col_idx int) ?[]u32 {
 	if row_idx >= self.rows.len {
 		return none
 	}

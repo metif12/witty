@@ -97,7 +97,7 @@ fn test_page_append_grapheme_small() {
 	assert row0.grapheme
 	assert page.rows[0].cells[0].has_grapheme
 	assert page.grapheme_alloc.used_bytes() == grapheme_chunk
-	cps1 := page.lookup_grapheme(0, 0) or {
+	cps1 := page.lookup_grapheme_at(0, 0) or {
 		assert false, 'expected grapheme data'
 		return
 	}
@@ -105,7 +105,7 @@ fn test_page_append_grapheme_small() {
 
 	// Two
 	page.append_grapheme(0, 0, 0x0B) or { panic(err) }
-	cps2 := page.lookup_grapheme(0, 0) or {
+	cps2 := page.lookup_grapheme_at(0, 0) or {
 		assert false, 'expected grapheme data'
 		return
 	}
@@ -143,7 +143,7 @@ fn test_page_append_grapheme_larger_than_chunk() {
 		page.append_grapheme(0, 0, u32(0x0A + i)) or { panic(err) }
 	}
 
-	cps := page.lookup_grapheme(0, 0) or {
+	cps := page.lookup_grapheme_at(0, 0) or {
 		assert false, 'expected grapheme data'
 		return
 	}
@@ -279,7 +279,7 @@ fn test_page_clone_graphemes() {
 	{
 		assert page2.rows[0].grapheme
 		assert page2.rows[0].cells[0].has_grapheme
-		cps := page2.lookup_grapheme(0, 0) or {
+		cps := page2.lookup_grapheme_at(0, 0) or {
 			assert false, 'expected grapheme data'
 			return
 		}
@@ -576,7 +576,7 @@ fn test_page_clone_from_graphemes() {
 		assert rac.cell.codepoint == u32(y + 1)
 		assert page2.rows[y].grapheme
 		assert page2.rows[y].cells[1].has_grapheme
-		cps := page2.lookup_grapheme(y, 1) or {
+		cps := page2.lookup_grapheme_at(y, 1) or {
 			assert false, 'expected grapheme data'
 			return
 		}
@@ -600,7 +600,7 @@ fn test_page_clone_from_graphemes() {
 		assert rac.cell.codepoint == u32(y + 1)
 		assert page2.rows[y].grapheme
 		assert page2.rows[y].cells[1].has_grapheme
-		cps := page2.lookup_grapheme(y, 1) or {
+		cps := page2.lookup_grapheme_at(y, 1) or {
 			assert false, 'expected grapheme data'
 			return
 		}
@@ -890,7 +890,7 @@ fn test_page_move_cells_graphemes() {
 	for x in 0 .. int(page.size.cols) {
 		rac := page.get_row_and_cell(x, 1)
 		assert rac.cell.codepoint == u32(x + 1)
-		cps := page.lookup_grapheme(1, x) or {
+		cps := page.lookup_grapheme_at(1, x) or {
 			assert false, 'expected grapheme data at x=${x}'
 			return
 		}
