@@ -349,6 +349,7 @@ pub fn (mut t Termio) queue_message(msg Message, mutex_state MutexState) {
 			t.mailbox.send(msg, unsafe { nil })
 		}
 	}
+	t.mailbox.notify()
 }
 
 // Queue a write directly to the pty. If linefeed is true, carriage returns

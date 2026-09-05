@@ -54,6 +54,7 @@ fn test_termio_queue_message_uses_mailbox() {
 	tio.queue_message(Message.visible_msg(true), .unlocked)
 
 	assert tio.mailbox.len() == 1
+	assert tio.mailbox.notified
 	msg := tio.mailbox.pop() or {
 		assert false, 'expected queued message'
 		return
