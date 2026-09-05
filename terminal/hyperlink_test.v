@@ -81,10 +81,10 @@ fn test_hyperlink_page_entry_hashes_semantic_data() {
 
 fn test_hyperlink_set_deduplicates_full_identity() {
 	mut set := HyperlinkSet.init()
-	first := set.add(explicit_link('one', 'https://example.com'))
-	again := set.add(explicit_link('one', 'https://example.com'))
-	different_id := set.add(explicit_link('two', 'https://example.com'))
-	implicit := set.add(implicit_link(1, 'https://example.com'))
+	first := set.add(explicit_link('one', 'https://example.com')) or { panic(err) }
+	again := set.add(explicit_link('one', 'https://example.com')) or { panic(err) }
+	different_id := set.add(explicit_link('two', 'https://example.com')) or { panic(err) }
+	implicit := set.add(implicit_link(1, 'https://example.com')) or { panic(err) }
 
 	assert first == again
 	assert set.ref_count(first) == 2
@@ -95,7 +95,8 @@ fn test_hyperlink_set_deduplicates_full_identity() {
 
 fn test_hyperlink_set_release_and_reuse() {
 	mut set := HyperlinkSet.init()
-	first := set.add(implicit_link(1, 'https://one.example'))
+	first := set.add(implicit_link(1, 'https://one.example')) or { panic(err) }
+	used := set.string_used()
 	set.use_link(first)
 	assert set.ref_count(first) == 2
 	set.release(first)
@@ -103,16 +104,42 @@ fn test_hyperlink_set_release_and_reuse() {
 	set.release(first)
 	assert set.ref_count(first) == 0
 	assert set.count() == 0
+	// Dead entries retain their strings until the slot is reaped.
+	assert set.string_used() == used
 
-	reused := set.add(implicit_link(2, 'https://two.example'))
+	reused := set.add(implicit_link(2, 'https://two.example')) or { panic(err) }
 	assert reused == first
 	assert set.get(reused).uri == 'https://two.example'
+	assert set.string_used() == used
+}
+
+fn test_hyperlink_set_reports_out_of_memory_and_needs_rehash() {
+	layout := page_set_layout(4, hyperlink_set_item_size, 8)
+	mut full := HyperlinkSet.init_bounded(layout, bitmap_allocator_layout(int(string_bytes_default), string_chunk))
+	assert full.capacity() == 2
+	first := full.add(implicit_link(1, 'https://one.example')) or { panic(err) }
+	_ := full.add(implicit_link(2, 'https://two.example')) or { panic(err) }
+
+	mut full_error := ''
+	_ := full.add(implicit_link(3, 'https://three.example')) or {
+		full_error = err.msg()
+		u32(0)
+	}
+	assert full_error == 'set out of memory'
+
+	full.release(first)
+	mut rehash_error := ''
+	_ := full.add(implicit_link(3, 'https://three.example')) or {
+		rehash_error = err.msg()
+		u32(0)
+	}
+	assert rehash_error == 'set needs rehash'
 }
 
 fn test_hyperlink_set_lookup() {
 	mut set := HyperlinkSet.init()
 	link := explicit_link('id', 'https://example.com')
-	id := set.add(link)
+	id := set.add(link) or { panic(err) }
 	assert set.lookup(&link)? == id
 	other := explicit_link('other', 'https://example.com')
 	assert set.lookup(&other) == none
@@ -120,13 +147,15 @@ fn test_hyperlink_set_lookup() {
 
 fn test_hyperlink_set_add_with_id_reuses_requested_slot() {
 	mut set := HyperlinkSet.init()
-	first := set.add(implicit_link(1, 'https://one.example'))
-	second := set.add(implicit_link(2, 'https://two.example'))
+	first := set.add(implicit_link(1, 'https://one.example')) or { panic(err) }
+	second := set.add(implicit_link(2, 'https://two.example')) or { panic(err) }
 	assert first == 1
 	assert second == 2
 	set.release(first)
 
-	reused := set.add_with_id(explicit_link('replacement', 'https://three.example'), first)
+	reused := set.add_with_id(explicit_link('replacement', 'https://three.example'), first) or {
+		panic(err)
+	}
 	assert reused == first
 	assert set.get(reused).uri == 'https://three.example'
 	assert set.ref_count(reused) == 1
@@ -134,8 +163,8 @@ fn test_hyperlink_set_add_with_id_reuses_requested_slot() {
 
 fn test_hyperlink_set_add_with_id_falls_back_for_live_slot() {
 	mut set := HyperlinkSet.init()
-	first := set.add(implicit_link(1, 'https://one.example'))
-	second := set.add_with_id(implicit_link(2, 'https://two.example'), first)
+	first := set.add(implicit_link(1, 'https://one.example')) or { panic(err) }
+	second := set.add_with_id(implicit_link(2, 'https://two.example'), first) or { panic(err) }
 	assert second != first
 	assert set.get(first).uri == 'https://one.example'
 	assert set.get(second).uri == 'https://two.example'
@@ -143,12 +172,14 @@ fn test_hyperlink_set_add_with_id_falls_back_for_live_slot() {
 
 fn test_hyperlink_set_add_with_id_deduplicates_before_reusing_slot() {
 	mut set := HyperlinkSet.init()
-	first := set.add(implicit_link(1, 'https://one.example'))
-	second := set.add(implicit_link(2, 'https://two.example'))
+	first := set.add(implicit_link(1, 'https://one.example')) or { panic(err) }
+	second := set.add(implicit_link(2, 'https://two.example')) or { panic(err) }
 	set.release(first)
 
-	reused := set.add_with_id(implicit_link(2, 'https://two.example'), first)
+	reused := set.add_with_id(implicit_link(2, 'https://two.example'), first) or { panic(err) }
 	assert reused == second
 	assert set.ref_count(second) == 2
-	assert set.count() == 1
+	// The pinned RefCountedSet increments living on this addWithId path even
+	// when upsert selects an already-live semantic duplicate.
+	assert set.count() == 2
 }

@@ -974,6 +974,9 @@ pub enum IntegrityError {
 
 enum PageCloneError {
 	style_set_out_of_memory
+	string_alloc_out_of_memory
+	hyperlink_set_out_of_memory
+	hyperlink_set_needs_rehash
 	hyperlink_map_out_of_memory
 }
 
@@ -1288,6 +1291,7 @@ pub mut:
 // Initialize a new page, allocating the required backing memory.
 // The size of the initialized page defaults to the full capacity.
 pub fn Page.init(cap PageCapacity) Page {
+	layout := Page.layout(cap)
 	mut rows := []RowData{cap: int(cap.rows)}
 	for _ in 0 .. int(cap.rows) {
 		rows << RowData.init(u32(cap.cols))
@@ -1301,21 +1305,23 @@ pub fn Page.init(cap PageCapacity) Page {
 		}
 		dirty: false
 		styles: StyleSet.init(cap.styles)
-		hyperlink_set: HyperlinkSet.init()
+		hyperlink_set: HyperlinkSet.init_bounded(layout.hyperlink_set_layout, layout.string_alloc_layout)
 	}
 }
 
 // Deinitialize the page, freeing any backing memory.
 // In V, the GC handles memory, but we clear the data.
 pub fn (mut self Page) deinit() {
+	layout := Page.layout(self.capacity)
 	self.rows = []
 	self.hyperlink_map = map[u64]u32{}
 	self.styles = StyleSet.init(self.capacity.styles)
-	self.hyperlink_set = HyperlinkSet.init()
+	self.hyperlink_set = HyperlinkSet.init_bounded(layout.hyperlink_set_layout, layout.string_alloc_layout)
 }
 
 // Reinitialize the page with the same capacity.
 pub fn (mut self Page) reinit(cap PageCapacity) {
+	layout := Page.layout(cap)
 	self.capacity = cap
 	self.size = PageSize{
 		cols: cap.cols
@@ -1327,7 +1333,7 @@ pub fn (mut self Page) reinit(cap PageCapacity) {
 	}
 	self.dirty = false
 	self.styles = StyleSet.init(cap.styles)
-	self.hyperlink_set = HyperlinkSet.init()
+	self.hyperlink_set = HyperlinkSet.init_bounded(layout.hyperlink_set_layout, layout.string_alloc_layout)
 	self.hyperlink_map = map[u64]u32{}
 }
 
@@ -1537,9 +1543,7 @@ pub fn (self &Page) clone() Page {
 	new_styles := self.styles.clone()
 
 	// Deep copy hyperlink set.
-	mut new_hl_set := HyperlinkSet{
-		entries: self.hyperlink_set.entries.clone()
-	}
+	new_hl_set := self.hyperlink_set.clone()
 
 	// Clone hyperlink map.
 	mut new_hl_map := map[u64]u32{}
@@ -1785,7 +1789,19 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_
 					// Different page: clone the hyperlink, preferring the
 					// source ID just like Ghostty's addWithIdContext path.
 					src_link := other.hyperlink_set.get(src_hl_id)
-					self.hyperlink_set.add_with_id(src_link, src_hl_id)
+					self.hyperlink_set.add_with_id(src_link, src_hl_id) or {
+						match err.msg() {
+							'strings out of memory' {
+								return .string_alloc_out_of_memory
+							}
+							'set needs rehash' {
+								return .hyperlink_set_needs_rehash
+							}
+							else {
+								return .hyperlink_set_out_of_memory
+							}
+						}
+					}
 				}
 				self.hyperlink_map[dst_key] = hl_id
 				dst_cell.has_hyperlink = true
@@ -2082,7 +2098,7 @@ pub fn (mut self Page) clear_hyperlink(row_idx int, col_idx int) {
 // To release the memory associated with the given hyperlink,
 // release the ID from the hyperlink_set. If the refcount reaches
 // zero the slot is freed.
-pub fn (mut self Page) insert_hyperlink(link Hyperlink) u32 {
+pub fn (mut self Page) insert_hyperlink(link Hyperlink) !u32 {
 	return self.hyperlink_set.add(link)
 }
 

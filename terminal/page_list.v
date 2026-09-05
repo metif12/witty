@@ -3630,7 +3630,9 @@ fn clone_row_for_page_list(mut dst Page, dst_y int, src &RowData, cols u32) {
 		cell.has_hyperlink = false
 		dst.rows[dst_y].cells[x] = cell
 		if src_cell.has_hyperlink {
-			id := dst.insert_hyperlink(src_cell.hyperlink)
+			id := dst.insert_hyperlink(src_cell.hyperlink) or {
+				panic('PageList snapshot hyperlink capacity was undersized: ${err}')
+			}
 			dst.set_hyperlink(dst_y, x, id) or {
 				panic('PageList snapshot hyperlink map capacity was undersized')
 			}
@@ -5147,11 +5149,9 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) {
 				// Didn't write the cell, repeat writing this same cell.
 			}
 			.out_of_space {
-				// We reached the capacity of a single page. In the V model
-				// managed memory grows dynamically so the only capacity we
-				// can exhaust is rows, which cursor_scroll_or_new_page
-				// handles. If we're on the first row we can't split further,
-				// so we just take the cell.
+				// We reached the managed-memory capacity of a single page. If
+				// we're on the first row we can't split further, so we take the
+				// valid base cell without the managed value.
 				if self.y == 0 {
 					x += 1
 					self.cursor_forward()
@@ -5256,9 +5256,8 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 		page.rows[int(self.y)].kitty_virtual_placeholder = true
 	}
 
-	// Copy grapheme data. In the V model, graphemes are stored directly on
-	// the cell, so we copy them from the source cell. Managed memory grows
-	// dynamically so we never hit an out-of-space condition here.
+	// Copy grapheme data. This remains directly stored on the V cell; grapheme
+	// capacity is handled separately from the hyperlink stores below.
 	if cell.content_tag == .codepoint_grapheme && cell.graphemes.len > 0 {
 		page.set_graphemes(int(self.y), int(self.x), cell.graphemes)
 	}
@@ -5276,7 +5275,35 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 			self.node = new_node
 			page = &self.node.data
 		}
-		dst_id := page.hyperlink_set.add_with_id(src_link, src_id)
+		additional_string_bytes := src_link.uri.len + match src_link.id {
+			HyperlinkExplicitId { src_link.id.value.len }
+			else { 0 }
+		}
+		for !page.hyperlink_set.can_allocate_string_bytes(additional_string_bytes) {
+			new_node := list.increase_capacity(self.node, .string_bytes) or {
+				return .out_of_space
+			}
+			self.node = new_node
+			page = &self.node.data
+		}
+
+		mut dst_id := u32(0)
+		for {
+			dst_id = page.hyperlink_set.add_with_id(src_link, src_id) or {
+				adjustment := match err.msg() {
+					'strings out of memory' { PageCapacityAdjustment.string_bytes }
+					'set needs rehash' { PageCapacityAdjustment.rehash }
+					else { PageCapacityAdjustment.hyperlink_bytes }
+				}
+				new_node := list.increase_capacity(self.node, adjustment) or {
+					return .out_of_space
+				}
+				self.node = new_node
+				page = &self.node.data
+				continue
+			}
+			break
+		}
 		page.set_hyperlink(int(self.y), int(self.x), dst_id) or {
 			page.hyperlink_set.release(dst_id)
 			return .out_of_space
@@ -5514,8 +5541,10 @@ fn (mut self PageList) fixup_viewport(removed usize) {
 }
 
 enum PageCapacityAdjustment {
+	rehash
 	styles
 	hyperlink_bytes
+	string_bytes
 }
 
 // Increase one bounded capacity dimension by replacing and recloning the
@@ -5525,6 +5554,7 @@ fn (mut self PageList) increase_capacity(node &PageNode, adjustment PageCapacity
 	page := &node.data
 	mut cap := page.capacity
 	match adjustment {
+		.rehash {}
 		.styles {
 			if cap.styles == max_u16 {
 				return none
@@ -5541,6 +5571,16 @@ fn (mut self PageList) increase_capacity(node &PageNode, adjustment PageCapacity
 				max_u16
 			} else {
 				cap.hyperlink_bytes * 2
+			}
+		}
+		.string_bytes {
+			if cap.string_bytes == max_u32 {
+				return none
+			}
+			cap.string_bytes = if cap.string_bytes > max_u32 / 2 {
+				max_u32
+			} else {
+				cap.string_bytes * 2
 			}
 		}
 	}
@@ -5579,6 +5619,21 @@ fn (mut self PageList) clone_row_growing(dst_node &PageNode, src_page &Page, dst
 			.hyperlink_map_out_of_memory {
 				node = self.increase_capacity(node, .hyperlink_bytes) or {
 					panic('PageList row clone exhausted maximum hyperlink capacity')
+				}
+			}
+			.string_alloc_out_of_memory {
+				node = self.increase_capacity(node, .string_bytes) or {
+					panic('PageList row clone exhausted maximum string capacity')
+				}
+			}
+			.hyperlink_set_out_of_memory {
+				node = self.increase_capacity(node, .hyperlink_bytes) or {
+					panic('PageList row clone exhausted maximum hyperlink set capacity')
+				}
+			}
+			.hyperlink_set_needs_rehash {
+				node = self.increase_capacity(node, .rehash) or {
+					panic('PageList row clone could not rehash hyperlink set')
 				}
 			}
 		}

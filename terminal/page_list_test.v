@@ -361,7 +361,7 @@ fn test_page_list_clone_row_grows_hyperlink_map_capacity() {
 		id := page.insert_hyperlink(Hyperlink{
 			id: HyperlinkImplicitId{ offset: u32(page_index) }
 			uri: 'https://example.com/${page_index}'
-		})
+		}) or { panic(err) }
 		for x in 0 .. 60 {
 			page.rows[int(row_ref.y)].cells[x] = CellData{
 				content_tag: .codepoint
@@ -392,6 +392,72 @@ fn test_page_list_clone_row_grows_hyperlink_map_capacity() {
 	if integrity_error := new_first.data.verify_integrity() {
 		assert false, 'grown hyperlink page failed integrity: ${integrity_error}'
 	}
+}
+
+fn test_page_list_clone_row_grows_hyperlink_set_capacity() {
+	mut list := PageList.init(3, 3, usize(0x7FFFFFFFFFFFFFFF))
+	defer { list.deinit() }
+	first := list.pages.first or { return }
+	list.split(PagePin{ node: first, y: 2 }) or { return }
+	second := first.next or { return }
+
+	mut first_page := &first.data
+	for x in 0 .. 2 {
+		id := first_page.insert_hyperlink(Hyperlink{
+			id: HyperlinkImplicitId{ offset: u32(x) }
+			uri: 'https://first.example/${x}'
+		}) or { panic(err) }
+		first_page.rows[0].cells[x] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(`a`) + u32(x)
+		}
+		first_page.set_hyperlink(0, x, id) or { panic(err) }
+	}
+	mut second_page := &second.data
+	source_id := second_page.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{ offset: 2 }
+		uri: 'https://second.example'
+	}) or { panic(err) }
+	second_page.rows[0].cells[0] = CellData{
+		content_tag: .codepoint
+		codepoint: u32(`z`)
+	}
+	second_page.set_hyperlink(0, 0, source_id) or { panic(err) }
+
+	assert first_page.hyperlink_set.count() == first_page.hyperlink_set.capacity()
+	old_capacity := first_page.capacity.hyperlink_bytes
+	new_first := list.clone_row_growing(first, second_page, 1, 0)
+	assert new_first.data.capacity.hyperlink_bytes == old_capacity * 2
+	assert new_first.data.hyperlink_set.count() == 3
+	assert new_first.data.lookup_hyperlink(1, 0) != none
+}
+
+fn test_page_list_clone_row_grows_string_capacity() {
+	mut list := PageList.init(2, 3, usize(0x7FFFFFFFFFFFFFFF))
+	defer { list.deinit() }
+	first := list.pages.first or { return }
+	list.split(PagePin{ node: first, y: 2 }) or { return }
+	second := first.next or { return }
+
+	for page_index, node in [first, second] {
+		mut page := &node.data
+		id := page.insert_hyperlink(Hyperlink{
+			id: HyperlinkImplicitId{ offset: u32(page_index) }
+			uri: 'a'.repeat(int(string_bytes_default) - 1)
+		}) or { panic(err) }
+		page.rows[0].cells[0] = CellData{
+			content_tag: .codepoint
+			codepoint: u32(`a`) + u32(page_index)
+		}
+		page.set_hyperlink(0, 0, id) or { panic(err) }
+		assert page.hyperlink_set.string_used() == int(string_bytes_default)
+	}
+
+	old_capacity := first.data.capacity.string_bytes
+	new_first := list.clone_row_growing(first, &second.data, 1, 0)
+	assert new_first.data.capacity.string_bytes == old_capacity * 2
+	assert new_first.data.hyperlink_set.string_used() == int(old_capacity * 2)
+	assert new_first.data.lookup_hyperlink(1, 0) != none
 }
 
 fn test_page_list_erase_row_grows_style_capacity_across_pages() {
@@ -1185,7 +1251,7 @@ fn test_page_list_erase_history_preserves_managed_survivor() {
 			value: 'survivor'
 		}
 		uri: 'https://example.com/survivor'
-	})
+	}) or { panic(err) }
 	page.set_hyperlink(2, 3, hyperlink_id) or { panic(err) }
 
 	// The first two rows are history. Erasing them compacts old row 2 to row 0.
@@ -1284,7 +1350,7 @@ fn test_page_list_erase_row_preserves_managed_cell_data() {
 			value: 'managed'
 		}
 		uri: 'https://example.com/managed'
-	})
+	}) or { panic(err) }
 	page.set_hyperlink(1, 2, hyperlink_id) or { panic(err) }
 
 	s.erase_row(PagePin{ node: first, y: 0, x: 0 })
@@ -1333,7 +1399,7 @@ fn test_page_list_erase_row_moves_managed_cell_and_pin_across_page_boundary() {
 			offset: 7
 		}
 		uri: 'https://example.com/boundary'
-	})
+	}) or { panic(err) }
 	second_page.set_hyperlink(0, 1, hyperlink_id) or { panic(err) }
 	tracked := s.track_pin(PagePin{ node: second, y: 0, x: 1 })
 
@@ -3114,7 +3180,7 @@ fn test_page_list_erase_row_bounded_preserves_managed_cell_data() {
 			offset: 9
 		}
 		uri: 'https://example.com/bounded'
-	})
+	}) or { panic(err) }
 	page.set_hyperlink(1, 1, hyperlink_id) or { panic(err) }
 
 	s.erase_row_bounded(PagePin{ node: first, y: 0, x: 0 }, 1)
@@ -3159,7 +3225,7 @@ fn test_page_list_erase_row_bounded_exact_page_boundary() {
 			offset: 10
 		}
 		uri: 'https://example.com/exact-boundary'
-	})
+	}) or { panic(err) }
 	second_page.set_hyperlink(0, 2, hyperlink_id) or { panic(err) }
 	tracked := s.track_pin(PagePin{ node: second, y: 0, x: 2 })
 
@@ -3611,7 +3677,7 @@ fn test_page_list_resize_no_reflow_preserves_hyperlink_key_stride() {
 		}
 		uri: 'https://example.com/resize-link'
 	}
-	link_id := page.insert_hyperlink(link)
+	link_id := page.insert_hyperlink(link) or { panic(err) }
 	page.rows[1].cells[1] = CellData{
 		content_tag: .codepoint
 		codepoint: u32(`a`)
@@ -4483,7 +4549,7 @@ fn test_page_list_resize_reflow_preserves_hyperlink_mapping() {
 			value: 'link-id'
 		}
 		uri: 'https://example.com/reflow'
-	})
+	}) or { panic(err) }
 	page.set_hyperlink(0, 3, source_id) or { panic(err) }
 
 	s.resize(PageResizeOpts{ cols: 2, reflow: true })
@@ -4546,7 +4612,7 @@ fn test_page_list_resize_reflow_preserves_hyperlinks_across_source_pages() {
 			offset: 1
 		}
 		uri: 'https://example.com/first'
-	})
+	}) or { panic(err) }
 	first_page.set_hyperlink(1, 1, first_id) or { panic(err) }
 
 	mut second_page := &second.data
@@ -4560,7 +4626,7 @@ fn test_page_list_resize_reflow_preserves_hyperlinks_across_source_pages() {
 			offset: 2
 		}
 		uri: 'https://example.com/second'
-	})
+	}) or { panic(err) }
 	second_page.set_hyperlink(0, 0, second_id) or { panic(err) }
 
 	// The wrapped logical line crosses the old page boundary and is unwrapped
@@ -5749,7 +5815,7 @@ fn test_page_list_split_preserves_hyperlinks() {
 			offset: 0
 		}
 		uri: 'https://example.com'
-	})
+	}) or { panic(err) }
 	mut row7 := &page.rows[7]
 	row7.cells[0] = CellData{
 		content_tag: .codepoint
