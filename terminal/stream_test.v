@@ -99,6 +99,22 @@ fn test_stream_preserves_osc_terminator_for_color_responses() {
 	assert kitty.payload.kitty_color_items[0].key.special == .foreground
 }
 
+fn test_stream_carries_typed_semantic_and_progress_actions() {
+	mut s := Stream.init()
+	defer { s.deinit() }
+
+	s.next_slice('\x1b]133;D;err=23\a'.bytes())
+	semantic := get_last_event(s.events, .semantic_prompt)
+	assert semantic.payload.semantic_prompt_action == .end_command
+	assert semantic.payload.semantic_prompt_opts == 'err=23'
+
+	s.clear_events()
+	s.next_slice('\x1b]9;4;1;900\a'.bytes())
+	progress := get_last_event(s.events, .progress_report)
+	assert progress.payload.progress_report.state == .set
+	assert progress.payload.progress_report.progress? == 100
+}
+
 // Test that invalid UTF-8 byte 0xFF produces replacement character U+FFFD.
 fn test_simd_print_invalid_utf8() {
 	mut s := Stream.init()

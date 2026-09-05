@@ -489,13 +489,11 @@ pub:
 	// Clipboard kind (for .clipboard_contents)
 	clipboard_kind u8
 	// Semantic prompt action (for .semantic_prompt)
-	semantic_prompt_action SemanticPromptAction
+	semantic_prompt_action osc.SemanticAction
 	// Semantic prompt options string (for .semantic_prompt, raw ;k=v pairs)
 	semantic_prompt_opts string
-	// Progress state (for .progress_report)
-	progress_state ProgressState
-	// Progress percentage 0-100, -1 if not set (for .progress_report)
-	progress_percent i8 = -1
+	// Parsed ConEmu progress report.
+	progress_report osc.ProgressReport
 	// DCS data (for .dcs_hook)
 	dcs_intermediates []u8
 	dcs_params        []u16
@@ -514,27 +512,6 @@ pub:
 // ============================================================
 
 // DeviceStatusRequest is defined in device_status.v.
-
-// SemanticPromptAction identifies a semantic prompt action (OSC 133).
-pub enum SemanticPromptAction {
-	fresh_line
-	fresh_line_new_prompt
-	new_command
-	prompt_start
-	end_prompt_start_input
-	end_prompt_start_input_terminate_eol
-	end_input_start_output
-	end_command
-}
-
-// ProgressState for ConEmu progress reports.
-pub enum ProgressState {
-	remove
-	set
-	error_state
-	indeterminate
-	pause
-}
 
 // ============================================================
 // Stream
@@ -1743,31 +1720,9 @@ fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 			})
 		}
 		.semantic_prompt {
-			if cmd.data.len == 0 {
-				return
-			}
-			action_char := cmd.data[0]
-			action := match action_char {
-				u8(`L`) { SemanticPromptAction.fresh_line }
-				u8(`A`) { SemanticPromptAction.fresh_line_new_prompt }
-				u8(`N`) { SemanticPromptAction.new_command }
-				u8(`P`) { SemanticPromptAction.prompt_start }
-				u8(`B`) { SemanticPromptAction.end_prompt_start_input }
-				u8(`I`) { SemanticPromptAction.end_prompt_start_input_terminate_eol }
-				u8(`C`) { SemanticPromptAction.end_input_start_output }
-				u8(`D`) { SemanticPromptAction.end_command }
-				else {
-					return
-				}
-			}
-			// Parse any ;k=v options after the action letter
-			mut opts := ''
-			if cmd.data.len > 1 && cmd.data[1] == u8(`;`) {
-				opts = cmd.data[2..]
-			}
 			self.dispatch(.semantic_prompt, ActionPayload{
-				semantic_prompt_action: action
-				semantic_prompt_opts: opts
+				semantic_prompt_action: cmd.semantic_action
+				semantic_prompt_opts: cmd.semantic_options
 			})
 		}
 		.color_operation {
@@ -1784,51 +1739,8 @@ fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 			})
 		}
 		.conemu_progress_report {
-			// ConEmu progress format: state;progress
-			// state: 0=remove, 1=set, 2=error, 3=indeterminate, 4=pause
-			// progress: 0-100
-			if cmd.data.len == 0 {
-				return
-			}
-			mut state_val := 0
-			mut progress_val := i8(-1)
-			sep := cmd.data.index_u8(u8(`;`))
-			state_str := if sep >= 0 { cmd.data[..sep] } else { cmd.data }
-			// Parse state digit
-			if state_str.len == 1 && state_str[0] >= u8(`0`) && state_str[0] <= u8(`4`) {
-				state_val = int(state_str[0] - u8(`0`))
-			} else {
-				return
-			}
-			// Parse progress if present
-			if sep >= 0 && sep + 1 < cmd.data.len {
-				prog_str := cmd.data[sep + 1..]
-				mut pval := 0
-				mut valid := prog_str.len > 0
-				for b in prog_str {
-					if b < u8(`0`) || b > u8(`9`) {
-						valid = false
-						break
-					}
-					pval = pval * 10 + int(b - u8(`0`))
-				}
-				if valid && pval <= 100 {
-					progress_val = i8(pval)
-				}
-			}
-			state := match state_val {
-				0 { ProgressState.remove }
-				1 { ProgressState.set }
-				2 { ProgressState.error_state }
-				3 { ProgressState.indeterminate }
-				4 { ProgressState.pause }
-				else {
-					return
-				}
-			}
 			self.dispatch(.progress_report, ActionPayload{
-				progress_state: state
-				progress_percent: progress_val
+				progress_report: cmd.progress_report
 			})
 		}
 		.conemu_ignored, .kitty_text_sizing {

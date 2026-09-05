@@ -58,13 +58,18 @@ fn test_progress_report_forwards_payload() {
 	defer {
 		ctx.t.deinit()
 	}
-	handler.progress_report(.set, 42)
+	handler.progress_report(osc.ProgressReport{
+		state: .set
+		progress: 42
+	})
 	assert ctx.messages.len == 1
 	assert ctx.messages[0].kind == .progress_report
 	assert ctx.messages[0].progress_report.state == osc.ProgressState.set
 	assert ctx.messages[0].progress_report.progress or { 0 } == 42
 
-	handler.progress_report(.indeterminate, -1)
+	handler.progress_report(osc.ProgressReport{
+		state: .indeterminate
+	})
 	assert ctx.messages.len == 2
 	assert ctx.messages[1].progress_report.state == .indeterminate
 	assert ctx.messages[1].progress_report.progress == none

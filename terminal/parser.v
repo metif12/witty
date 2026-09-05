@@ -214,6 +214,9 @@ pub:
 	color_op          osc.ColorOperation
 	color_requests    []osc.ColorRequest
 	kitty_color_items []osc.KittyColorItem
+	semantic_action   osc.SemanticAction
+	semantic_options  string
+	progress_report   osc.ProgressReport
 }
 
 // OscCommandType identifies the type of OSC command.
@@ -635,36 +638,19 @@ fn parse_osc_command(data string, terminator_ch u8) OscCommand {
 		}
 		.hyperlink_end { OscCommand{ cmd_type: .hyperlink_end } }
 		.semantic_prompt {
-			action := match cmd.semantic_prompt_action {
-				.fresh_line { 'L' }
-				.fresh_line_new_prompt { 'A' }
-				.new_command { 'N' }
-				.prompt_start { 'P' }
-				.end_prompt_start_input { 'B' }
-				.end_prompt_start_input_terminate_eol { 'I' }
-				.end_input_start_output { 'C' }
-				.end_command { 'D' }
-			}
 			OscCommand{
 				cmd_type: .semantic_prompt
-				data: if cmd.semantic_prompt_options.len > 0 {
-					'${action};${cmd.semantic_prompt_options}'
-				} else {
-					action
-				}
+				semantic_action: cmd.semantic_prompt_action
+				semantic_options: cmd.semantic_prompt_options
 			}
 		}
 		.conemu_progress_report {
-			state := match cmd.progress_state {
-				.remove { '0' }
-				.set { '1' }
-				.err_state { '2' }
-				.indeterminate { '3' }
-				.pause { '4' }
-			}
 			OscCommand{
 				cmd_type: .conemu_progress_report
-				data: if progress := cmd.progress { '${state};${progress}' } else { state }
+				progress_report: osc.ProgressReport{
+					state: cmd.progress_state
+					progress: cmd.progress
+				}
 			}
 		}
 		.kitty_text_sizing { OscCommand{ cmd_type: .kitty_text_sizing } }

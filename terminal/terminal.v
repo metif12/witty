@@ -4247,14 +4247,14 @@ pub fn (mut self Terminal) full_reset() {
 // coherent state, since callers typically can't handle errors (since
 // they're sending sequences via the pty).
 //
-pub fn (mut self Terminal) semantic_prompt(action SemanticPromptAction, exit_code ?i32) {
+pub fn (mut self Terminal) semantic_prompt(action osc.SemanticAction, exit_code ?i32) {
 	options := if code := exit_code { '${code}' } else { '' }
 	self.semantic_prompt_options(action, options)
 }
 
 // Perform a semantic prompt command with its raw semicolon-separated options.
 // Malformed and unknown options are ignored as required by the OSC 133 spec.
-pub fn (mut self Terminal) semantic_prompt_options(action SemanticPromptAction, options string) {
+pub fn (mut self Terminal) semantic_prompt_options(action osc.SemanticAction, options string) {
 	match action {
 		.fresh_line {
 			self.semantic_prompt_fresh_line()

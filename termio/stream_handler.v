@@ -405,7 +405,7 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.show_desktop_notification(event.payload.str1, event.payload.str2)
 		}
 		.progress_report {
-			self.progress_report(event.payload.progress_state, event.payload.progress_percent)
+			self.progress_report(event.payload.progress_report)
 		}
 		.start_hyperlink {
 			id_val := if event.payload.str2.len > 0 {
@@ -2011,20 +2011,10 @@ pub fn (mut self StreamHandler) send_size_report(style terminal.SizeReportStyle)
 }
 
 // Display a GUI progress report.
-fn (mut self StreamHandler) progress_report(state terminal.ProgressState, progress i8) {
-	report_state := match state {
-		.remove { osc.ProgressState.remove }
-		.set { osc.ProgressState.set }
-		.error_state { osc.ProgressState.err_state }
-		.indeterminate { osc.ProgressState.indeterminate }
-		.pause { osc.ProgressState.pause }
-	}
+fn (mut self StreamHandler) progress_report(report osc.ProgressReport) {
 	self.surface_message_writer(apprt.SurfaceMessage{
 		kind: .progress_report
-		progress_report: osc.ProgressReport{
-			state: report_state
-			progress: if progress >= 0 { ?u8(u8(progress)) } else { none }
-		}
+		progress_report: report
 	})
 }
 
