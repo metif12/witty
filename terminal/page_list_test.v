@@ -5124,6 +5124,63 @@ fn test_page_list_resize_no_reflow_more_cols_forces_smaller_cap() {
 	}
 }
 
+fn test_page_list_resize_no_reflow_more_cols_remaps_pins_in_backfill_path() {
+	cols := u16(5)
+	cap := initial_capacity(cols)
+	mut s := PageList.init(cols, cap.rows, none)
+	defer { s.deinit() }
+
+	// Grow until we have two pages.
+	for voidptr(s.pages.first or { return }) == voidptr(s.pages.last or { return }) {
+		s.grow() or { panic(err) }
+	}
+	first_page := s.pages.first or { return }
+	second_page := s.pages.last or { return }
+	assert voidptr(first_page) != voidptr(second_page)
+
+	// Trim a history row so the first page has spare capacity. This triggers
+	// the backfill path in resize_without_reflow_grow_cols.
+	s.erase_rows(Point.new(.history, Coordinate{}), Point.new(.history, Coordinate{ y: 0 }))
+	assert first_page.data.size.rows < first_page.data.capacity.rows
+
+	// Ensure the resize takes the slow path (new capacity > current capacity).
+	new_cols := cols + 1
+	adjusted := second_page.data.capacity.adjust_checked(new_cols) or { panic(err) }
+	assert second_page.data.capacity.cols < adjusted.cols
+
+	// Track row zero of the second page. Backfill copies this row into the
+	// first page, so the tracked pin must move before the old page is destroyed.
+	tracked := s.track_pin(PagePin{
+		node: second_page
+		x: 0
+		y: 0
+	})
+	marker := u32(`X`)
+	mut rac := tracked.row_and_cell()
+	rac.cell.content_tag = .codepoint
+	rac.cell.codepoint = marker
+
+	s.resize(PageResizeOpts{ cols: new_cols, reflow: false })
+
+	mut found := false
+	mut node := s.pages.first
+	for {
+		current := node or { break }
+		if voidptr(current) == voidptr(tracked.node) {
+			found = true
+			break
+		}
+		node = current.next
+	}
+	assert found
+	assert tracked.y < tracked.node.data.size.rows
+	cell := tracked.row_and_cell().cell
+	assert cell.content_tag == .codepoint
+	assert cell.codepoint == marker
+
+	s.untrack_pin(tracked)
+}
+
 fn test_page_list_resize_no_reflow_more_rows_adds_blank_rows_if_cursor_at_bottom() {
 	mut s := PageList.init(5, 3, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
