@@ -13,7 +13,7 @@ fn test_codepointmap_exact_range() {
 
 	// Add an exact single-codepoint range.
 	m.add(CodepointMapEntry{
-		range:      [u32(1), 1]!
+		range: [u32(1), 1]!
 		descriptor: Descriptor{ family: 'A' }
 	})
 
@@ -32,13 +32,13 @@ fn test_codepointmap_later_entry_priority() {
 
 	// Add first entry.
 	m.add(CodepointMapEntry{
-		range:      [u32(1), 1]!
+		range: [u32(1), 1]!
 		descriptor: Descriptor{ family: 'A' }
 	})
 
 	// Later entry takes priority for overlapping range.
 	m.add(CodepointMapEntry{
-		range:      [u32(1), 2]!
+		range: [u32(1), 2]!
 		descriptor: Descriptor{ family: 'B' }
 	})
 
@@ -56,7 +56,7 @@ fn test_codepointmap_non_matching() {
 	}
 
 	m.add(CodepointMapEntry{
-		range:      [u32(1), 2]!
+		range: [u32(1), 2]!
 		descriptor: Descriptor{ family: 'B' }
 	})
 
@@ -72,19 +72,19 @@ fn test_codepointmap_multiple_ranges() {
 	}
 
 	m.add(CodepointMapEntry{
-		range:      [u32(1), 1]!
+		range: [u32(1), 1]!
 		descriptor: Descriptor{ family: 'A' }
 	})
 	m.add(CodepointMapEntry{
-		range:      [u32(1), 2]!
+		range: [u32(1), 2]!
 		descriptor: Descriptor{ family: 'B' }
 	})
 	m.add(CodepointMapEntry{
-		range:      [u32(3), 4]!
+		range: [u32(3), 4]!
 		descriptor: Descriptor{ family: 'C' }
 	})
 	m.add(CodepointMapEntry{
-		range:      [u32(5), 6]!
+		range: [u32(5), 6]!
 		descriptor: Descriptor{ family: 'D' }
 	})
 
@@ -110,11 +110,11 @@ fn test_codepointmap_clone() {
 	}
 
 	m.add(CodepointMapEntry{
-		range:      [u32(1), 1]!
+		range: [u32(1), 1]!
 		descriptor: Descriptor{ family: 'A' }
 	})
 	m.add(CodepointMapEntry{
-		range:      [u32(10), 20]!
+		range: [u32(10), 20]!
 		descriptor: Descriptor{ family: 'B' }
 	})
 
@@ -146,7 +146,7 @@ fn test_codepointmap_hashcode() {
 	}
 
 	m.add(CodepointMapEntry{
-		range:      [u32(1), 1]!
+		range: [u32(1), 1]!
 		descriptor: Descriptor{ family: 'A' }
 	})
 
@@ -157,9 +157,20 @@ fn test_codepointmap_hashcode() {
 
 	// Adding an entry should change the hashcode.
 	m.add(CodepointMapEntry{
-		range:      [u32(2), 2]!
+		range: [u32(2), 2]!
 		descriptor: Descriptor{ family: 'B' }
 	})
 	h3 := m.hashcode()
 	assert h1 != h3
+}
+
+fn test_codepointmap_hashcode_matches_source_u21_layout() {
+	mut m := CodepointMap{}
+	m.add(CodepointMapEntry{
+		range: [u32(1), 0x10ffff]!
+		descriptor: Descriptor{ family: 'A' }
+	})
+	// Reference value from CodepointMap.hash under Zig 0.15.2. In
+	// particular, each u21 range endpoint occupies three bytes.
+	assert m.hashcode() == u64(0xcf23075fb01be901)
 }

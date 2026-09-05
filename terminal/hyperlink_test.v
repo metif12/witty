@@ -74,6 +74,9 @@ fn test_hyperlink_page_entry_hashes_semantic_data() {
 	assert a.hash() != b.hash()
 	assert a.hash() != c.hash()
 	assert c.hash() != d.hash()
+	// Values produced by Ghostty's source algorithm with Zig 0.15.2.
+	assert a.hash() == u64(0x605bb8addff95e18)
+	assert c.hash() == u64(0x946408359003474a)
 }
 
 fn test_hyperlink_set_deduplicates_full_identity() {

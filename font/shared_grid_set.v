@@ -622,8 +622,8 @@ pub fn (self &GridSetKey) hashcode() u64 {
 	if self.metric_modifiers.count() > 0 {
 		for mk in [MetricsKey.cell_width, .cell_height, .cell_baseline, .underline_position,
 			.underline_thickness, .strikethrough_position, .strikethrough_thickness,
-			.overline_position, .overline_thickness, .box_thickness, .cursor_height, .icon_height,
-			.cursor_thickness] {
+			.overline_position, .overline_thickness, .box_thickness, .cursor_thickness,
+			.cursor_height, .icon_height] {
 			if m := self.metric_modifiers.get(mk) {
 				hasher.put_u8(u8(mk))
 				m.hash_into(mut hasher)
@@ -651,8 +651,8 @@ pub enum MetricsKey {
 	overline_position
 	overline_thickness
 	box_thickness
-	cursor_height
 	cursor_thickness
+	cursor_height
 	icon_height
 }
 

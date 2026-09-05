@@ -9,7 +9,8 @@ import os
 // a non-zero hash.
 fn test_descriptor_hash() {
 	d := Descriptor{}
-	assert d.hashcode() != 0
+	// Reference value from Descriptor.hash under Zig 0.15.2.
+	assert d.hashcode() == u64(0x96ab7b8f4eaa5424)
 }
 
 // test_descriptor_hash_family_names tests that descriptors with
@@ -17,6 +18,7 @@ fn test_descriptor_hash() {
 fn test_descriptor_hash_family_names() {
 	d1 := Descriptor{ family: 'A' }
 	d2 := Descriptor{ family: 'B' }
+	assert d1.hashcode() == u64(0xbe9ee1e426d783d7)
 	assert d1.hashcode() != d2.hashcode()
 }
 

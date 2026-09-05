@@ -1,5 +1,7 @@
 module terminal
 
+import internal_hash
+
 // Hyperlink types translated from Ghostty's terminal/hyperlink.zig.
 //
 // Ghostty stores page-entry strings as offsets into a page-owned allocation.
@@ -128,23 +130,25 @@ pub fn (self &HyperlinkPageEntry) dupe() HyperlinkPageEntry {
 	return HyperlinkPageEntry.from_hyperlink(&link)
 }
 
-// hash uses FNV-1a over the active ID tag/value and URI. Ghostty uses Wyhash;
-// hash-table correctness requires stable equal hashes, not the same algorithm.
+// hash mirrors PageEntry.hash: active union tag, active payload, and URI are
+// serialized exactly as Zig 0.15.2's autoHash/autoHashStrat(.Deep), then
+// finalized with that Zig release's Wyhash implementation.
 pub fn (self &HyperlinkPageEntry) hash() u64 {
-	mut result := u64(0xcbf29ce484222325)
+	mut data := []u8{}
 	match self.id {
 		HyperlinkPageEntryImplicitId {
-			result = hyperlink_hash_byte(result, 0)
-			for shift in [u32(0), 8, 16, 24] {
-				result = hyperlink_hash_byte(result, u8(self.id.offset >> shift))
-			}
+			// PageEntry.Id declares explicit first and implicit second, so the
+			// synthesized u1 enum tag for implicit is one.
+			data << u8(1)
+			hyperlink_hash_put_u32(mut data, self.id.offset)
 		}
 		HyperlinkPageEntryExplicitId {
-			result = hyperlink_hash_byte(result, 1)
-			result = hyperlink_hash_string(result, self.id.value)
+			data << u8(0)
+			hyperlink_hash_put_slice(mut data, self.id.value)
 		}
 	}
-	return hyperlink_hash_string(result, self.uri)
+	hyperlink_hash_put_slice(mut data, self.uri)
+	return internal_hash.wyhash(data, 0)
 }
 
 pub fn (self &HyperlinkPageEntry) eql(other &HyperlinkPageEntry) bool {
@@ -170,16 +174,18 @@ pub fn (self &HyperlinkPageEntry) eql(other &HyperlinkPageEntry) bool {
 // V owns entry strings, so dropping the last reference is sufficient.
 pub fn (self &HyperlinkPageEntry) free() {}
 
-fn hyperlink_hash_byte(current u64, value u8) u64 {
-	return (current ^ u64(value)) * u64(0x100000001b3)
+fn hyperlink_hash_put_u32(mut data []u8, value u32) {
+	for shift in [u32(0), 8, 16, 24] {
+		data << u8(value >> shift)
+	}
 }
 
-fn hyperlink_hash_string(current u64, value string) u64 {
-	mut result := current
-	for byte in value.bytes() {
-		result = hyperlink_hash_byte(result, byte)
+fn hyperlink_hash_put_slice(mut data []u8, value string) {
+	data << value.bytes()
+	length := u64(value.len)
+	for shift in [u32(0), 8, 16, 24, 32, 40, 48, 56] {
+		data << u8(length >> shift)
 	}
-	return result
 }
 
 struct HyperlinkSetEntry {

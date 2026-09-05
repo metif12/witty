@@ -15,6 +15,44 @@ fn test_gridset_key_init() {
 	assert k.hashcode() == k2.hashcode()
 }
 
+fn test_gridset_key_hash_matches_source() {
+	cfg := GridSetDerivedConfig{}
+	mut key := GridSetKey.init(&cfg, DesiredSize{ points: 12 })
+	defer { key.deinit() }
+
+	// Independently calculated with Zig 0.15.2 for the source's FreeType key
+	// layout. DesiredSize defaults to 72 DPI on macOS and 96 elsewhere.
+	$if macos {
+		assert key.hashcode() == u64(0x3a322c8692e38d75)
+	} $else {
+		assert key.hashcode() == u64(0xc78b44b38c1a7e47)
+	}
+}
+
+fn test_gridset_key_metric_key_tags_match_source() {
+	mut modifiers := MetricsModifierSet{}
+	modifiers.put(.cursor_thickness, MetricsModifier{
+		is_percent: true
+		percent: 1.25
+	})
+	modifiers.put(.cursor_height, MetricsModifier{
+		absolute: -3
+	})
+	mut key := GridSetKey{
+		metric_modifiers: modifiers
+		font_size: DesiredSize{ points: 12 }
+	}
+	defer { key.deinit() }
+
+	// Metrics.Key is generated from source declaration order: thickness is
+	// tag 10 and height is tag 11. The values were calculated by Zig 0.15.2.
+	$if macos {
+		assert key.hashcode() == u64(0x7ed58b28da079a17)
+	} $else {
+		assert key.hashcode() == u64(0x0626e065a30c30bb)
+	}
+}
+
 fn test_gridset_key_different_font_points() {
 	cfg := GridSetDerivedConfig{}
 	mut k := GridSetKey.init(&cfg, DesiredSize{ points: 12 })

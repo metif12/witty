@@ -46,7 +46,7 @@ pub fn (self &CodepointMap) clone() CodepointMap {
 	mut new_entries := []CodepointMapEntry{cap: self.entries.len}
 	for entry in self.entries {
 		new_entries << CodepointMapEntry{
-			range:      entry.range
+			range: entry.range
 			descriptor: entry.descriptor.clone()
 		}
 	}
@@ -90,8 +90,8 @@ pub fn (self &CodepointMap) hashcode() u64 {
 fn (self &CodepointMap) hash_into(mut hasher SourceHash) {
 	hasher.put_u64(u64(self.entries.len))
 	for entry in self.entries {
-		hasher.put_u32(entry.range[0])
-		hasher.put_u32(entry.range[1])
+		hasher.put_u21(entry.range[0])
+		hasher.put_u21(entry.range[1])
 		entry.descriptor.hash_into(mut hasher)
 	}
 }
