@@ -3852,6 +3852,27 @@ fn (self &Terminal) check_at_prompt_for_clear() bool {
 // Resets all margins and fills the whole screen with the character 'E'.
 // Sets the cursor to the top left corner.
 pub fn (mut self Terminal) decaln() ! {
+	// Clear all stylistic attributes except the foreground and background
+	// colors. Ghostty does this before any other mutation because updating the
+	// page-local cursor style is the only fallible part of DECALN.
+	old_style := self.screens.active.cursor.style
+	self.screens.active.cursor.style = CellStyle{
+		fg_color: old_style.fg_color
+		fg_r: old_style.fg_r
+		fg_g: old_style.fg_g
+		fg_b: old_style.fg_b
+		fg_palette: old_style.fg_palette
+		bg_color: old_style.bg_color
+		bg_r: old_style.bg_r
+		bg_g: old_style.bg_g
+		bg_b: old_style.bg_b
+		bg_palette: old_style.bg_palette
+	}
+	self.screens.active.manual_style_update() or {
+		self.screens.active.cursor.style = old_style
+		return err
+	}
+
 	// Reset margins, also sets cursor to top-left
 	self.scrolling_region = ScrollingRegion{
 		top: 0
@@ -3866,7 +3887,13 @@ pub fn (mut self Terminal) decaln() ! {
 	// Move our cursor to the top-left
 	self.set_cursor_pos(1, 1)
 
-	// Clear and fill with Es
+	// Clear first rather than overwriting the cells directly. DECALN ignores
+	// protected attributes, and clearing releases all managed cell state and
+	// resets row metadata before the alignment pattern is installed.
+	self.screens.active.clear_rows(Point.new(.active, Coordinate{}), none, false)
+
+	// Fill with Es. The flat Pages representation stores the concrete style on
+	// each cell in addition to its style discriminator.
 	active_start := self.screens.active.pages.active_start
 	for y in 0 .. int(self.rows) {
 		idx := active_start + y
@@ -3879,7 +3906,9 @@ pub fn (mut self Terminal) decaln() ! {
 							codepoint: u32(`E`)
 							content_tag: .codepoint
 							style_id: self.screens.active.cursor.style_id
-							is_protected: false // DECALN does not respect protected state
+							style: self.screens.active.cursor.style
+							// DECALN does not respect protected state. Verified with xterm.
+							is_protected: false
 						}
 					}
 				}

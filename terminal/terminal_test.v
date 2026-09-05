@@ -1652,6 +1652,96 @@ fn test_decaln_reset_margins() {
 	assert t.scrolling_region.right == t.cols - 1
 }
 
+fn test_decaln_preserves_color() {
+	mut t := create_test_terminal(3, 3) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.set_attribute(SgrAttribute{
+		kind: .direct_color_bg
+		r: 0xff
+	}) or { assert false }
+	t.modes.set(.origin, true)
+	t.set_top_and_bottom_margin(2, 3)
+	t.decaln() or { assert false }
+	t.scroll_down(1)
+
+	str := t.plain_string() or {
+		assert false
+		return
+	}
+	assert str == '\nEEE\nEEE'
+	cell := cell_at(&t, 0, 0)
+	assert cell.content_tag == .bg_color_rgb
+	assert cell.color_rgb_r == 0xff
+	assert cell.color_rgb_g == 0
+	assert cell.color_rgb_b == 0
+}
+
+fn test_decaln_resets_graphemes_with_protected_mode() {
+	mut t := create_test_terminal(3, 3) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	// Add protected mode. DECALN must ignore protection while retaining the
+	// cursor's protected state for subsequent writes.
+	t.set_protected_mode(.iso)
+	t.modes.set(.grapheme_cluster, true)
+	for cp in [u32(0x1f468), 0x200d, 0x1f469, 0x200d, 0x1f467] {
+		t.print(cp) or { assert false }
+	}
+	assert t.screens.active.pages.screen_rows[0].grapheme
+
+	t.decaln() or { assert false }
+
+	assert t.screens.active.cursor.y == 0
+	assert t.screens.active.cursor.x == 0
+	assert t.screens.active.cursor.is_protected
+	assert t.screens.active.protected_mode == .iso
+	for y in 0 .. int(t.rows) {
+		row := t.screens.active.pages.screen_rows[t.screens.active.pages.active_start + y]
+		assert row.dirty
+		assert !row.grapheme
+		for cell in row.cells {
+			assert cell.codepoint_val() == u32(`E`)
+			assert !cell.has_grapheme
+			assert !cell.is_protected
+		}
+	}
+}
+
+fn test_decaln_clears_non_color_attributes() {
+	mut t := create_test_terminal(2, 2) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.set_attribute(SgrAttribute{ kind: .bold }) or { assert false }
+	t.set_attribute(SgrAttribute{ kind: .underline_set, underline: .single }) or { assert false }
+	t.set_attribute(SgrAttribute{
+		kind: .direct_color_fg
+		r: 0x12
+		g: 0x34
+		b: 0x56
+	}) or { assert false }
+	t.decaln() or { assert false }
+
+	assert !t.screens.active.cursor.style.flags.bold
+	assert t.screens.active.cursor.style.flags.underline == .none
+	cell := cell_at(&t, 0, 0)
+	assert cell.style.fg_color == .rgb
+	assert cell.style.fg_r == 0x12
+	assert cell.style.fg_g == 0x34
+	assert cell.style.fg_b == 0x56
+	assert !cell.style.flags.bold
+	assert cell.style.flags.underline == .none
+}
+
 // ============================================================
 // DECCOLM
 // ============================================================
