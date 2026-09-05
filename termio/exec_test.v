@@ -200,6 +200,33 @@ fn test_clamp_u16() {
 	assert clamp_u16(100000) == u16(65535)
 }
 
+fn test_read_error_classifies_would_block() {
+	mut pipe_fds := [2]int{}
+	assert C.pipe(&pipe_fds[0]) == 0
+	defer {
+		C.close(pipe_fds[0])
+		C.close(pipe_fds[1])
+	}
+	flags := C.fcntl(pipe_fds[0], f_getfl, 0)
+	assert flags >= 0
+	assert C.fcntl(pipe_fds[0], f_setfl, flags | o_nonblock) >= 0
+
+	mut byte_val := u8(0)
+	assert C.witty_read_retry(pipe_fds[0], &byte_val, 1) < 0
+	assert C.witty_read_error_kind() == 1
+}
+
+fn test_read_error_classifies_closed_pty() {
+	mut pipe_fds := [2]int{}
+	assert C.pipe(&pipe_fds[0]) == 0
+	C.close(pipe_fds[0])
+	defer { C.close(pipe_fds[1]) }
+
+	mut byte_val := u8(0)
+	assert C.witty_read_retry(pipe_fds[0], &byte_val, 1) < 0
+	assert C.witty_read_error_kind() == 2
+}
+
 // ============================================================
 // ArgIterator tests (from configpkg.Command)
 // ============================================================

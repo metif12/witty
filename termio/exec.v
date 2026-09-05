@@ -44,7 +44,9 @@ fn C.chdir(path &char) int
 
 fn C.close(fd int) int
 
-fn C.read(fd int, buf voidptr, count usize) int
+fn C.witty_read_retry(fd int, buf voidptr, count usize) int
+
+fn C.witty_read_error_kind() int
 
 fn C.write(fd int, buf voidptr, count usize) int
 
@@ -871,12 +873,24 @@ pub fn thread_main_posix(fd int, quit int, io &Termio) {
 		// for the realistic scenario that data will eventually stop while
 		// we're trying to quit.
 		for {
-			n := C.read(fd, &buf[0], usize(1024))
+			n := C.witty_read_retry(fd, &buf[0], usize(1024))
 			if n < 0 {
-				// Check errno - on macOS, EAGAIN is 35
-				// For WouldBlock / EAGAIN, break to poll.
-				// For other errors (EIO, EBADF), the pty is closed.
-				break
+				match C.witty_read_error_kind() {
+					// No more data, fall back to poll and check for exit
+					// conditions.
+					1 {
+						break
+					}
+
+					// The pty is closed. We're probably gracefully shutting down.
+					2 {
+						return
+					}
+
+					// The pinned implementation treats all other read errors as
+					// unreachable because continuing would hide an IO failure.
+					else { panic('unexpected pty read error') }
+				}
 			}
 			if n == 0 {
 				// EOF - this happens on macOS when the child process dies.

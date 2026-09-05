@@ -152,7 +152,27 @@ static inline DWORD witty_command_wait_windows(
 
 #else
 
+#include <errno.h>
 #include <unistd.h>
+
+/* Match std.posix.read: interrupted reads are retried before exposing errno. */
+static inline ssize_t witty_read_retry(int fd, void *buf, size_t count) {
+    ssize_t result;
+    do {
+        result = read(fd, buf, count);
+    } while (result < 0 && errno == EINTR);
+    return result;
+}
+
+/*
+ * Classify the errno left by witty_read_retry. Ghostty handles WouldBlock by
+ * polling again and treats EIO/EBADF as a closed PTY.
+ */
+static inline int witty_read_error_kind(void) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK) return 1;
+    if (errno == EIO || errno == EBADF) return 2;
+    return 0;
+}
 
 /*
  * POSIX only standardizes execvp (PATH search with the process environment)
