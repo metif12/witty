@@ -15,3 +15,14 @@ module input
 fn test_command_defaults() {
 	assert command_defaults.len > 0
 }
+
+fn test_command_defaults_preserve_signed_move_tab_offsets() {
+	left := command_defaults.filter(it.title == 'Move Tab Left')
+	right := command_defaults.filter(it.title == 'Move Tab Right')
+	assert left.len == 1
+	assert right.len == 1
+	assert left[0].action.int_param == -1
+	assert right[0].action.int_param == 1
+	assert left[0].action.format() == 'move_tab:-1'
+	assert right[0].action.format() == 'move_tab:1'
+}
