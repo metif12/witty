@@ -3575,16 +3575,13 @@ pub fn (mut self Terminal) insert_blanks(count int) {
 			}
 		}
 
-		// Insert blanks. The blanks preserve the background color.
-		blank := self.screens.active.blank_cell()
-		for x in cursor_x .. cursor_x + adjusted_count {
-			if x < row.cells.len {
-				row.cells[x] = blank
-			}
-		}
-
 		row.dirty = true
 	}
+
+	// Insert blanks through the managed clearing path. Besides preserving the
+	// background color, this releases/recomputes grapheme, style, and hyperlink
+	// state just like Ghostty's clearCells after its cell swaps.
+	self.screens.active.clear_cells(row_idx, cursor_x, cursor_x + adjusted_count)
 }
 
 // Removes amount characters from the current cursor position to the right.
@@ -3633,16 +3630,12 @@ pub fn (mut self Terminal) delete_chars(count_req int) {
 			}
 		}
 
-		// Clear the vacated cells at the right. The blanks preserve bg color.
-		blank := self.screens.active.blank_cell()
-		for x in cursor_x + scroll_amount .. cursor_x + rem {
-			if x < row.cells.len {
-				row.cells[x] = blank
-			}
-		}
-
 		row.dirty = true
 	}
+
+	// Clear the vacated cells through the same managed-memory path as the
+	// source so row aggregate flags cannot retain values shifted off the line.
+	self.screens.active.clear_cells(row_idx, cursor_x + scroll_amount, cursor_x + rem)
 
 	// Reset both the row's soft-wrap metadata and pending-wrap cursor state.
 	self.screens.active.cursor_reset_wrap()

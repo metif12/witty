@@ -6145,6 +6145,108 @@ fn test_insert_blanks_split_multi_cell_character() {
 	assert str == ' 123'
 }
 
+fn test_insert_blanks_deleting_graphemes() {
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+	t.modes.set(.grapheme_cluster, true)
+
+	t.print_string('ABC') or { assert false }
+	for cp in [u32(0x1F468), 0x200D, 0x1F469, 0x200D, 0x1F467] {
+		t.print(cp) or { assert false }
+	}
+	assert t.screens.active.pages.get_active_row(0).grapheme
+
+	t.set_cursor_pos(1, 1)
+	t.insert_blanks(4)
+	assert t.plain_string() or { '' } == '    A'
+	row := t.screens.active.pages.get_active_row(0)
+	assert !row.grapheme
+	for cell in row.cells {
+		assert !cell.has_grapheme
+	}
+}
+
+fn test_insert_blanks_shifts_graphemes() {
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+	t.modes.set(.grapheme_cluster, true)
+
+	t.print(u32(`A`)) or { assert false }
+	for cp in [u32(0x1F468), 0x200D, 0x1F469, 0x200D, 0x1F467] {
+		t.print(cp) or { assert false }
+	}
+	t.set_cursor_pos(1, 1)
+	t.insert_blanks(1)
+
+	assert t.plain_string() or { '' } == ' A👨‍👩‍👧'
+	row := t.screens.active.pages.get_active_row(0)
+	assert row.grapheme
+	assert row.cells[2].has_grapheme
+}
+
+fn test_insert_blanks_split_multi_cell_character_from_tail() {
+	mut t := create_test_terminal(5, 10) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('橋123') or { assert false }
+	t.set_cursor_pos(1, 2)
+	t.insert_blanks(1)
+	assert t.plain_string() or { '' } == '   12'
+}
+
+fn test_insert_blanks_shifts_hyperlinks() {
+	mut t := create_test_terminal(10, 2) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.screens.active.start_hyperlink('http://example.com', none) or { assert false }
+	t.print_string('ABC') or { assert false }
+	t.set_cursor_pos(1, 1)
+	t.insert_blanks(2)
+	assert t.plain_string() or { '' } == '  ABC'
+
+	row := t.screens.active.pages.get_active_row(0)
+	assert row.hyperlink
+	for x in 0 .. 2 {
+		assert !row.cells[x].has_hyperlink
+	}
+	for x in 2 .. 5 {
+		assert row.cells[x].has_hyperlink
+		assert row.cells[x].hyperlink.uri == 'http://example.com'
+	}
+}
+
+fn test_insert_blanks_pushes_hyperlink_off_end_completely() {
+	mut t := create_test_terminal(3, 2) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.screens.active.start_hyperlink('http://example.com', none) or { assert false }
+	t.print_string('ABC') or { assert false }
+	t.set_cursor_pos(1, 1)
+	t.insert_blanks(3)
+	assert t.plain_string() or { 'not empty' } == ''
+
+	row := t.screens.active.pages.get_active_row(0)
+	assert !row.hyperlink
+	for cell in row.cells {
+		assert !cell.has_hyperlink
+	}
+}
+
 // ============================================================
 // Background SGR preservation on erase / scroll paths
 // ============================================================
