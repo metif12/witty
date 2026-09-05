@@ -227,6 +227,17 @@ fn test_read_error_classifies_closed_pty() {
 	assert C.witty_read_error_kind() == 2
 }
 
+fn test_process_exit_code_matches_libxev() {
+	assert C.witty_process_exit_code(42 << 8) == 42
+
+	// A wait status with only its low signal bits set represents SIGTERM.
+	$if linux {
+		assert C.witty_process_exit_code(15) == 15
+	} $else {
+		assert C.witty_process_exit_code(15) == 0
+	}
+}
+
 // ============================================================
 // ArgIterator tests (from configpkg.Command)
 // ============================================================

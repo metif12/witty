@@ -559,6 +559,7 @@ pub fn (mut t Termio) change_config(config &DerivedConfig) ! {
 	// Update our stream handler. The stream handler uses the same renderer
 	// mutex so this is safe to do despite being executed from another thread.
 	t.stream_handler.change_config(&t.config)
+	t.backend.thread_data.change_config(&t.config)
 
 	// Update the configuration that we know about.
 	//

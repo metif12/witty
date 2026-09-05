@@ -48,6 +48,10 @@ fn C.witty_read_retry(fd int, buf voidptr, count usize) int
 
 fn C.witty_read_error_kind() int
 
+fn C.witty_waitpid_retry(pid int, status &int) int
+
+fn C.witty_process_exit_code(status int) u32
+
 fn C.write(fd int, buf voidptr, count usize) int
 
 fn C.poll(fds voidptr, nfds u32, timeout int) int
@@ -351,6 +355,12 @@ pub fn (mut self ExecThreadData) deinit() {
 		self.read_thread_pipe = -1
 	}
 	self.read_thread_fd = -1
+}
+
+// change_config mirrors backend.ThreadData.changeConfig. The pinned exec
+// backend currently has no thread-local configuration to update.
+pub fn (mut self ExecThreadData) change_config(config &DerivedConfig) {
+	_ = config
 }
 
 // ExecConfig holds the configuration for starting a subprocess.
@@ -933,33 +943,20 @@ pub fn thread_main_posix(fd int, quit int, io &Termio) {
 fn process_exit_watcher(pid int, start_ns u64, io &Termio) {
 	// Blocking wait for the child to exit.
 	mut status := 0
-	for {
-		res := C.waitpid(pid, &status, 0)
-		if res == pid {
-			break
-		}
-		if res < 0 {
-			// waitpid failed (e.g. child already reaped elsewhere). We
-			// still report exit with a zero code.
-			break
-		}
-		// res == 0 shouldn't happen without WNOHANG, but loop to be safe.
+	if C.witty_waitpid_retry(pid, &status) != pid {
+		// Exec.processExit treats a watcher failure as unreachable.
+		panic('process wait failed')
 	}
 
-	// Extract the exit code. WIFEXITED/WEXITSTATUS: on POSIX the low 8 bits
-	// hold signal/exit info. If the process exited normally, the exit code
-	// is in bits 8-15.
-	exit_code := u32((status >> 8) & 0xFF)
-
-	process_exit_common(pid, start_ns, exit_code, io)
+	process_exit_common(start_ns, C.witty_process_exit_code(status), io)
 }
 
 // flatpak_process_exit_watcher mirrors the asynchronous Flatpak wait in the
 // source using Witty's dedicated process watcher thread.
 fn flatpak_process_exit_watcher(command &internal_os.FlatpakHostCommand, start_ns u64, io &Termio) {
 	mut host_command := unsafe { command }
-	exit_code := host_command.wait() or { u8(0) }
-	process_exit_common(-1, start_ns, u32(exit_code), io)
+	exit_code := host_command.wait() or { panic('flatpak process wait failed') }
+	process_exit_common(start_ns, u32(exit_code), io)
 }
 
 fn flatpak_cwd_accessible(cwd string) bool {
@@ -984,7 +981,7 @@ fn flatpak_cwd_accessible(cwd string) bool {
 // process_exit_common is called when the child process exits. It records
 // the exit on the backend thread data and notifies the surface with the
 // exit metadata. Faithful to Exec.zig processExitCommon.
-fn process_exit_common(pid int, start_ns u64, exit_code u32, io &Termio) {
+fn process_exit_common(start_ns u64, exit_code u32, io &Termio) {
 	if io != unsafe { nil } {
 		mut tio := unsafe { io }
 		tio.backend.thread_data.exited = true
