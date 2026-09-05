@@ -137,8 +137,8 @@ fn test_osc1337_copy_valid_base64() {
 		return
 	}
 	assert cmd.cmd_type == .clipboard_contents
-	assert cmd.str_value2 == 'c'
-	assert cmd.str_value == 'YWJjMTIz'
+	assert cmd.clipboard.kind == `c`
+	assert cmd.clipboard.data == 'YWJjMTIz'
 }
 
 fn test_osc1337_currentdir_no_value() {

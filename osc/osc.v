@@ -181,6 +181,20 @@ pub:
 	body  string
 }
 
+// ClipboardContents is the parsed payload for OSC 52 and iTerm2 Copy.
+pub struct ClipboardContents {
+pub:
+	kind u8
+	data string
+}
+
+// HyperlinkStart is the parsed payload for OSC 8.
+pub struct HyperlinkStart {
+pub:
+	uri string
+	id  ?string
+}
+
 // ConEmuTabTitle represents a ConEmu tab title value (reset or set to a string).
 pub enum ConEmuTabTitleKind {
 	reset
@@ -235,6 +249,10 @@ pub:
 	progress       ?u8
 	// OSC 9 / OSC 777 desktop notification.
 	desktop_notification DesktopNotification
+	// OSC 52 / iTerm2 clipboard payload.
+	clipboard ClipboardContents
+	// OSC 8 hyperlink payload.
+	hyperlink HyperlinkStart
 	// ConEmu xterm emulation
 	xterm_keyboard ?bool
 	xterm_output   ?bool

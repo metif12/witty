@@ -22,10 +22,12 @@ fn parse_clipboard_operation(mut parser Parser, terminator_ch u8) ?Command {
 	if data_str[0] == `;` {
 		// No explicit kind, default to 'c'
 		parser.command = Command{
-			cmd_type:   .clipboard_contents
+			cmd_type: .clipboard_contents
 			terminator: init_terminator(terminator_ch)
-			str_value:  data_str[1..] // the data after ';'
-			str_value2: 'c' // clipboard kind
+			clipboard: ClipboardContents{
+				kind: `c`
+				data: data_str[1..]
+			}
 		}
 		return parser.command
 	}
@@ -44,10 +46,12 @@ fn parse_clipboard_operation(mut parser Parser, terminator_ch u8) ?Command {
 	clipboard_data := data_str[2..]
 
 	parser.command = Command{
-		cmd_type:   .clipboard_contents
+		cmd_type: .clipboard_contents
 		terminator: init_terminator(terminator_ch)
-		str_value:  clipboard_data
-		str_value2: [kind].bytestr() // clipboard kind as string
+		clipboard: ClipboardContents{
+			kind: kind
+			data: clipboard_data
+		}
 	}
 	return parser.command
 }

@@ -408,15 +408,10 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.progress_report(event.payload.progress_report)
 		}
 		.start_hyperlink {
-			id_val := if event.payload.str2.len > 0 {
-				?string(event.payload.str2)
-			} else {
-				?string(none)
-			}
-			self.terminal.screens.active.start_hyperlink(event.payload.str1, id_val) or {}
+			self.start_hyperlink(event.payload.hyperlink.uri, event.payload.hyperlink.id)
 		}
 		.clipboard_contents {
-			self.clipboard_contents(event.payload.clipboard_kind, event.payload.str1)
+			self.clipboard_contents(event.payload.clipboard.kind, event.payload.clipboard.data)
 		}
 		.semantic_prompt {
 			self.semantic_prompt(event.payload)

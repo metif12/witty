@@ -11,8 +11,8 @@ fn test_osc52_get_set_clipboard() {
 		return
 	}
 	assert cmd.cmd_type == .clipboard_contents
-	assert cmd.str_value2 == 's'
-	assert cmd.str_value == '?'
+	assert cmd.clipboard.kind == `s`
+	assert cmd.clipboard.data == '?'
 }
 
 fn test_osc52_get_set_clipboard_optional_parameter() {
@@ -26,8 +26,8 @@ fn test_osc52_get_set_clipboard_optional_parameter() {
 		return
 	}
 	assert cmd.cmd_type == .clipboard_contents
-	assert cmd.str_value2 == 'c'
-	assert cmd.str_value == '?'
+	assert cmd.clipboard.kind == `c`
+	assert cmd.clipboard.data == '?'
 }
 
 fn test_osc52_clear_clipboard() {
@@ -41,6 +41,6 @@ fn test_osc52_clear_clipboard() {
 		return
 	}
 	assert cmd.cmd_type == .clipboard_contents
-	assert cmd.str_value2 == 'c'
-	assert cmd.str_value == ''
+	assert cmd.clipboard.kind == `c`
+	assert cmd.clipboard.data == ''
 }

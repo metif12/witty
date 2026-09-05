@@ -396,7 +396,7 @@ pub fn (mut self ReadonlyHandler) vt(event StreamEvent) ! {
 			self.terminal.full_reset()
 		}
 		.start_hyperlink {
-			self.terminal.screens.active.start_hyperlink(event.payload.str1, event.payload.str2)!
+			self.terminal.screens.active.start_hyperlink(event.payload.hyperlink.uri, event.payload.hyperlink.id)!
 		}
 		.end_hyperlink {
 			self.terminal.screens.active.end_hyperlink()

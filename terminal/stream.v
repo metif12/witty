@@ -475,9 +475,8 @@ pub:
 	// Raw mode + ansi flag (for .request_mode_unknown)
 	raw_mode u16
 	raw_ansi bool
-	// String values (for .window_title, .report_pwd, .start_hyperlink, etc.)
+	// String value (for .window_title and .report_pwd).
 	str1 string
-	str2 string
 	// OSC request terminator, mirrored by response-producing operations.
 	osc_terminator osc.Terminator
 	// Parsed OSC color data, carried through without reinterpreting raw strings.
@@ -487,7 +486,9 @@ pub:
 	// Byte value (for .dcs_put, .apc_put)
 	byte_val u8
 	// Clipboard kind (for .clipboard_contents)
-	clipboard_kind u8
+	clipboard osc.ClipboardContents
+	// Parsed OSC 8 hyperlink payload.
+	hyperlink osc.HyperlinkStart
 	// Semantic prompt action (for .semantic_prompt)
 	semantic_prompt_action osc.SemanticAction
 	// Semantic prompt options string (for .semantic_prompt, raw ;k=v pairs)
@@ -1690,10 +1691,8 @@ fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 			// Ignored (icon not supported)
 		}
 		.clipboard_contents {
-			clip_kind := if cmd.data2.len > 0 { cmd.data2[0] } else { u8(`c`) }
 			self.dispatch(.clipboard_contents, ActionPayload{
-				clipboard_kind: clip_kind
-				str1: cmd.data
+				clipboard: cmd.clipboard
 			})
 		}
 		.report_pwd {
@@ -1708,8 +1707,7 @@ fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 		}
 		.hyperlink_start {
 			self.dispatch(.start_hyperlink, ActionPayload{
-				str1: cmd.data
-				str2: cmd.data2
+				hyperlink: cmd.hyperlink
 			})
 		}
 		.hyperlink_end {

@@ -150,8 +150,10 @@ fn parse_iterm2(mut parser Parser, terminator_ch u8) ?Command {
 			parser.command = Command{
 				cmd_type: .clipboard_contents
 				terminator: init_terminator(terminator_ch)
-				str_value: b64_data
-				str_value2: 'c' // clipboard kind
+				clipboard: ClipboardContents{
+					kind: `c`
+					data: b64_data
+				}
 			}
 			return parser.command
 		}

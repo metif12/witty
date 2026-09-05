@@ -131,6 +131,27 @@ fn test_stream_carries_typed_desktop_notifications() {
 	assert rxvt.payload.desktop_notification.body == 'Build failed'
 }
 
+fn test_stream_carries_typed_clipboard_and_hyperlink_actions() {
+	mut s := Stream.init()
+	defer { s.deinit() }
+
+	s.next_slice('\x1b]52;s;?\a'.bytes())
+	clipboard := get_last_event(s.events, .clipboard_contents)
+	assert clipboard.payload.clipboard.kind == `s`
+	assert clipboard.payload.clipboard.data == '?'
+
+	s.clear_events()
+	s.next_slice('\x1b]8;id=build;https://example.com\x1b\\'.bytes())
+	hyperlink := get_last_event(s.events, .start_hyperlink)
+	assert hyperlink.payload.hyperlink.uri == 'https://example.com'
+	assert hyperlink.payload.hyperlink.id? == 'build'
+
+	s.clear_events()
+	s.next_slice('\x1b]8;;https://example.com\x1b\\'.bytes())
+	without_id := get_last_event(s.events, .start_hyperlink)
+	assert without_id.payload.hyperlink.id == none
+}
+
 // Test that invalid UTF-8 byte 0xFF produces replacement character U+FFFD.
 fn test_simd_print_invalid_utf8() {
 	mut s := Stream.init()

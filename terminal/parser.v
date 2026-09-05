@@ -206,8 +206,6 @@ pub:
 	cmd_type OscCommandType
 	// Primary string data (title, icon, pwd, uri, etc.)
 	data string
-	// Secondary string data (notification body, hyperlink id, etc.)
-	data2 string
 	// Terminator used by the request. Response-producing commands mirror it.
 	terminator osc.Terminator
 	// Parsed color operations are carried through the stream without reparsing.
@@ -218,6 +216,8 @@ pub:
 	semantic_options     string
 	progress_report      osc.ProgressReport
 	desktop_notification osc.DesktopNotification
+	clipboard            osc.ClipboardContents
+	hyperlink            osc.HyperlinkStart
 }
 
 // OscCommandType identifies the type of OSC command.
@@ -594,8 +594,7 @@ fn parse_osc_command(data string, terminator_ch u8) OscCommand {
 		.clipboard_contents {
 			OscCommand{
 				cmd_type: .clipboard_contents
-				data: cmd.str_value
-				data2: cmd.str_value2
+				clipboard: cmd.clipboard
 			}
 		}
 		.report_pwd { OscCommand{ cmd_type: .report_pwd, data: cmd.str_value } }
@@ -624,8 +623,7 @@ fn parse_osc_command(data string, terminator_ch u8) OscCommand {
 		.hyperlink_start {
 			OscCommand{
 				cmd_type: .hyperlink_start
-				data: cmd.str_value
-				data2: cmd.str_value2
+				hyperlink: cmd.hyperlink
 			}
 		}
 		.hyperlink_end { OscCommand{ cmd_type: .hyperlink_end } }

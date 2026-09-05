@@ -50,17 +50,19 @@ fn parse_hyperlink(mut parser Parser, terminator_ch u8) ?Command {
 			return none
 		}
 		parser.command = Command{
-			cmd_type:   .hyperlink_end
+			cmd_type: .hyperlink_end
 			terminator: init_terminator(terminator_ch)
 		}
 		return parser.command
 	}
 
 	parser.command = Command{
-		cmd_type:   .hyperlink_start
+		cmd_type: .hyperlink_start
 		terminator: init_terminator(terminator_ch)
-		str_value:  uri
-		str_value2: id or { '' }
+		hyperlink: HyperlinkStart{
+			uri: uri
+			id: id
+		}
 	}
 	return parser.command
 }

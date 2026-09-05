@@ -11,7 +11,8 @@ fn test_osc8_hyperlink() {
 		return
 	}
 	assert cmd.cmd_type == .hyperlink_start
-	assert cmd.str_value == 'http://example.com'
+	assert cmd.hyperlink.uri == 'http://example.com'
+	assert cmd.hyperlink.id == none
 }
 
 fn test_osc8_hyperlink_with_id() {
@@ -25,8 +26,8 @@ fn test_osc8_hyperlink_with_id() {
 		return
 	}
 	assert cmd.cmd_type == .hyperlink_start
-	assert cmd.str_value2 == 'foo'
-	assert cmd.str_value == 'http://example.com'
+	assert cmd.hyperlink.id? == 'foo'
+	assert cmd.hyperlink.uri == 'http://example.com'
 }
 
 fn test_osc8_hyperlink_with_empty_id() {
@@ -41,8 +42,8 @@ fn test_osc8_hyperlink_with_empty_id() {
 	}
 	assert cmd.cmd_type == .hyperlink_start
 	// Empty id is treated as no id
-	assert cmd.str_value2 == ''
-	assert cmd.str_value == 'http://example.com'
+	assert cmd.hyperlink.id == none
+	assert cmd.hyperlink.uri == 'http://example.com'
 }
 
 fn test_osc8_hyperlink_with_incomplete_key() {
@@ -56,8 +57,8 @@ fn test_osc8_hyperlink_with_incomplete_key() {
 		return
 	}
 	assert cmd.cmd_type == .hyperlink_start
-	assert cmd.str_value2 == ''
-	assert cmd.str_value == 'http://example.com'
+	assert cmd.hyperlink.id == none
+	assert cmd.hyperlink.uri == 'http://example.com'
 }
 
 fn test_osc8_hyperlink_with_empty_key() {
@@ -71,8 +72,8 @@ fn test_osc8_hyperlink_with_empty_key() {
 		return
 	}
 	assert cmd.cmd_type == .hyperlink_start
-	assert cmd.str_value2 == ''
-	assert cmd.str_value == 'http://example.com'
+	assert cmd.hyperlink.id == none
+	assert cmd.hyperlink.uri == 'http://example.com'
 }
 
 fn test_osc8_hyperlink_with_empty_key_and_id() {
@@ -86,8 +87,8 @@ fn test_osc8_hyperlink_with_empty_key_and_id() {
 		return
 	}
 	assert cmd.cmd_type == .hyperlink_start
-	assert cmd.str_value2 == 'foo'
-	assert cmd.str_value == 'http://example.com'
+	assert cmd.hyperlink.id? == 'foo'
+	assert cmd.hyperlink.uri == 'http://example.com'
 }
 
 fn test_osc8_hyperlink_with_empty_uri_and_id() {
