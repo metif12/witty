@@ -193,9 +193,7 @@ fn setup_bash(command configpkg.Command, resource_dir string, mut env map[string
 
 	// Preserve an existing ENV value. We're about to overwrite it.
 	if v := env['ENV'] {
-		if v.len > 0 {
-			env['GHOSTTY_BASH_ENV'] = v
-		}
+		env['GHOSTTY_BASH_ENV'] = v
 	}
 
 	// Set our new ENV to point to our integration script.
@@ -330,9 +328,7 @@ fn setup_nushell(command configpkg.Command, resource_dir string, mut env map[str
 fn setup_zsh(command configpkg.Command, resource_dir string, mut env map[string]string) ?configpkg.Command {
 	// Preserve an existing ZDOTDIR value. We're about to overwrite it.
 	if old := env['ZDOTDIR'] {
-		if old.len > 0 {
-			env['GHOSTTY_ZSH_ZDOTDIR'] = old
-		}
+		env['GHOSTTY_ZSH_ZDOTDIR'] = old
 	}
 
 	// Set our new ZDOTDIR to point to our shell resource directory.

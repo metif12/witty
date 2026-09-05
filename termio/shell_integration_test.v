@@ -114,6 +114,7 @@ fn test_detect_shell_bin_bash_on_darwin() {
 	$if macos {
 		assert detect_shell(configpkg.ShellCmd{ shell: '/bin/bash' }) == none
 	} $else {
+
 		// On non-macOS, /bin/bash is just bash
 		result := detect_shell(configpkg.ShellCmd{ shell: '/bin/bash' }) or { return }
 		assert result == .bash
@@ -209,8 +210,7 @@ fn test_bash_unsupported_c_flag() {
 	}
 
 	mut env := map[string]string{}
-	assert setup_bash(configpkg.ShellCmd{ shell: 'bash -c script.sh' }, res.path, mut
-		env) == none
+	assert setup_bash(configpkg.ShellCmd{ shell: 'bash -c script.sh' }, res.path, mut env) == none
 	assert env.len == 0
 }
 
@@ -221,8 +221,7 @@ fn test_bash_unsupported_ic_flag() {
 	}
 
 	mut env := map[string]string{}
-	assert setup_bash(configpkg.ShellCmd{ shell: 'bash -ic script.sh' }, res.path, mut
-		env) == none
+	assert setup_bash(configpkg.ShellCmd{ shell: 'bash -ic script.sh' }, res.path, mut env) == none
 	assert env.len == 0
 }
 
@@ -250,8 +249,7 @@ fn test_bash_inject_noprofile() {
 	}
 
 	mut env := map[string]string{}
-	cmd := setup_bash(configpkg.ShellCmd{ shell: 'bash --noprofile' }, res.path, mut
-		env) or {
+	cmd := setup_bash(configpkg.ShellCmd{ shell: 'bash --noprofile' }, res.path, mut env) or {
 		assert false, 'should succeed'
 		return
 	}
@@ -270,8 +268,7 @@ fn test_bash_rcfile() {
 	mut env := map[string]string{}
 
 	// bash --rcfile
-	cmd := setup_bash(configpkg.ShellCmd{ shell: 'bash --rcfile profile.sh' }, res.path, mut
-		env) or {
+	cmd := setup_bash(configpkg.ShellCmd{ shell: 'bash --rcfile profile.sh' }, res.path, mut env) or {
 		assert false, 'should succeed'
 		return
 	}
@@ -290,8 +287,7 @@ fn test_bash_init_file() {
 	mut env := map[string]string{}
 
 	// bash --init-file
-	cmd := setup_bash(configpkg.ShellCmd{ shell: 'bash --init-file profile.sh' }, res.path, mut
-		env) or {
+	cmd := setup_bash(configpkg.ShellCmd{ shell: 'bash --init-file profile.sh' }, res.path, mut env) or {
 		assert false, 'should succeed'
 		return
 	}
@@ -342,6 +338,21 @@ fn test_bash_env_preserved() {
 	assert env['ENV'] == '${res.shell_path}/ghostty.bash'
 }
 
+fn test_bash_empty_env_preserved() {
+	mut res := TmpResourcesDir.init(.bash) or { return }
+	defer {
+		res.deinit()
+	}
+
+	mut env := map[string]string{}
+	env['ENV'] = ''
+
+	_ := setup_bash(configpkg.ShellCmd{ shell: 'bash' }, res.path, mut env) or { return }
+	assert 'GHOSTTY_BASH_ENV' in env
+	assert env['GHOSTTY_BASH_ENV'] == ''
+	assert env['ENV'] == '${res.shell_path}/ghostty.bash'
+}
+
 fn test_bash_additional_args_dash() {
 	mut res := TmpResourcesDir.init(.bash) or { return }
 	defer {
@@ -351,8 +362,7 @@ fn test_bash_additional_args_dash() {
 	mut env := map[string]string{}
 
 	// "-" argument separator
-	cmd := setup_bash(configpkg.ShellCmd{ shell: 'bash - --arg file1 file2' }, res.path, mut
-		env) or {
+	cmd := setup_bash(configpkg.ShellCmd{ shell: 'bash - --arg file1 file2' }, res.path, mut env) or {
 		assert false, 'should succeed'
 		return
 	}
@@ -370,8 +380,7 @@ fn test_bash_additional_args_double_dash() {
 	mut env := map[string]string{}
 
 	// "--" argument separator
-	cmd := setup_bash(configpkg.ShellCmd{ shell: 'bash -- --arg file1 file2' }, res.path, mut
-		env) or {
+	cmd := setup_bash(configpkg.ShellCmd{ shell: 'bash -- --arg file1 file2' }, res.path, mut env) or {
 		assert false, 'should succeed'
 		return
 	}
@@ -465,8 +474,7 @@ fn test_nushell_unsupported_command() {
 	}
 
 	mut env := map[string]string{}
-	assert setup_nushell(configpkg.ShellCmd{ shell: 'nu --command exit' }, res.path, mut
-		env) == none
+	assert setup_nushell(configpkg.ShellCmd{ shell: 'nu --command exit' }, res.path, mut env) == none
 	assert 'XDG_DATA_DIRS' in env
 	assert 'GHOSTTY_SHELL_INTEGRATION_XDG_DIR' in env
 }
@@ -489,8 +497,7 @@ fn test_nushell_unsupported_c_flag() {
 	}
 
 	mut env := map[string]string{}
-	assert setup_nushell(configpkg.ShellCmd{ shell: 'nu -c script.sh' }, res.path, mut
-		env) == none
+	assert setup_nushell(configpkg.ShellCmd{ shell: 'nu -c script.sh' }, res.path, mut env) == none
 }
 
 fn test_nushell_missing_resources() {
@@ -547,6 +554,27 @@ fn test_zsh_zdotdir_preserved() {
 	assert env['GHOSTTY_ZSH_ZDOTDIR'] == '\$HOME/.config/zsh'
 }
 
+fn test_zsh_empty_zdotdir_preserved() {
+	mut res := TmpResourcesDir.init(.zsh) or { return }
+	defer {
+		res.deinit()
+	}
+
+	mut env := map[string]string{}
+	env['ZDOTDIR'] = ''
+
+	cmd := setup_zsh(configpkg.ShellCmd{ shell: 'zsh' }, res.path, mut env) or {
+		assert false, 'should succeed'
+		return
+	}
+	if cmd is configpkg.ShellCmd {
+		assert cmd.shell == 'zsh'
+	}
+	assert env['ZDOTDIR'] == res.shell_path
+	assert 'GHOSTTY_ZSH_ZDOTDIR' in env
+	assert env['GHOSTTY_ZSH_ZDOTDIR'] == ''
+}
+
 fn test_zsh_missing_resources() {
 	tmp_path := os.join_path(os.temp_dir(), 'Witty_test_zsh_missing_${os.getpid()}')
 	os.mkdir_all(tmp_path) or { return }
@@ -570,8 +598,7 @@ fn test_force_shell_bash() {
 	}
 
 	mut env := map[string]string{}
-	result := setup_shell_integration(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut
-		env, Shell.bash)
+	result := setup_shell_integration(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.bash)
 	if r := result {
 		assert r.shell == .bash
 	} else {
@@ -586,8 +613,7 @@ fn test_force_shell_zsh() {
 	}
 
 	mut env := map[string]string{}
-	result := setup_shell_integration(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut
-		env, Shell.zsh)
+	result := setup_shell_integration(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.zsh)
 	if r := result {
 		assert r.shell == .zsh
 	} else {
@@ -602,8 +628,7 @@ fn test_force_shell_fish() {
 	}
 
 	mut env := map[string]string{}
-	result := setup_shell_integration(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut
-		env, Shell.fish)
+	result := setup_shell_integration(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.fish)
 	if r := result {
 		assert r.shell == .fish
 	} else {
@@ -618,8 +643,7 @@ fn test_force_shell_elvish() {
 	}
 
 	mut env := map[string]string{}
-	result := setup_shell_integration(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut
-		env, Shell.elvish)
+	result := setup_shell_integration(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.elvish)
 	if r := result {
 		assert r.shell == .elvish
 	} else {
@@ -634,8 +658,7 @@ fn test_force_shell_nushell() {
 	}
 
 	mut env := map[string]string{}
-	result := setup_shell_integration(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut
-		env, Shell.nushell)
+	result := setup_shell_integration(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.nushell)
 	if r := result {
 		assert r.shell == .nushell
 	} else {
@@ -645,8 +668,7 @@ fn test_force_shell_nushell() {
 
 fn test_shell_integration_failure() {
 	mut env := map[string]string{}
-	result := setup_shell_integration('/nonexistent', configpkg.ShellCmd{ shell: 'sh' }, mut
-		env, none)
+	result := setup_shell_integration('/nonexistent', configpkg.ShellCmd{ shell: 'sh' }, mut env, none)
 	assert result == none
 	assert env.len == 0
 }
