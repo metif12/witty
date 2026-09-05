@@ -4046,6 +4046,11 @@ pub fn (mut self Terminal) resize(cols u16, rows u16) ! {
 
 	// Whether the active screen will reflow on this resize.
 	active_reflow := self.screens.active_key == .primary && self.modes.get(.wraparound)
+	active_prompt_redraw := if self.screens.active_key == .primary {
+		self.flags.shell_redraws_prompt
+	} else {
+		PromptRedraw.false_
+	}
 
 	// Resize the active screen. All terminal state is read/written through
 	// `screens.active`, so this is the screen we must resize to keep content
@@ -4055,6 +4060,7 @@ pub fn (mut self Terminal) resize(cols u16, rows u16) ! {
 		cols: u32(cols)
 		rows: u32(rows)
 		reflow: active_reflow
+		prompt_redraw: active_prompt_redraw
 	})!
 
 	// Resize the inactive screen too so both stay in sync. When the primary
@@ -4076,6 +4082,7 @@ pub fn (mut self Terminal) resize(cols u16, rows u16) ! {
 			cols: u32(cols)
 			rows: u32(rows)
 			reflow: self.modes.get(.wraparound)
+			prompt_redraw: self.flags.shell_redraws_prompt
 		})!
 	}
 

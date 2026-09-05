@@ -1940,6 +1940,52 @@ fn test_resize_with_left_and_right_margin_set() {
 	assert t.scrolling_region.right == 4
 }
 
+fn test_resize_clears_redrawable_prompt_on_primary_screen() {
+	mut t := create_test_terminal(10, 3) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('ABCDE\n') or { assert false }
+	t.screens.primary.cursor_set_semantic_content_prompt(.initial)
+	t.print_string('> ') or { assert false }
+	t.screens.primary.cursor_set_semantic_content_input(true)
+	t.print_string('echo') or { assert false }
+	assert t.plain_string() or { '' } == 'ABCDE\n> echo'
+
+	t.flags.shell_redraws_prompt = .true_
+	t.resize(20, 3) or { assert false }
+
+	assert t.screens.primary.cursor.x == 6
+	assert t.screens.primary.cursor.y == 1
+	assert t.plain_string() or { '' } == 'ABCDE'
+}
+
+fn test_resize_clears_redrawable_prompt_on_inactive_primary_screen() {
+	mut t := create_test_terminal(10, 3) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('ABCDE\n') or { assert false }
+	t.screens.primary.cursor_set_semantic_content_prompt(.initial)
+	t.print_string('> ') or { assert false }
+	t.screens.primary.cursor_set_semantic_content_input(true)
+	t.print_string('echo') or { assert false }
+	assert t.plain_string() or { '' } == 'ABCDE\n> echo'
+
+	t.switch_screen_mode(.mode_47, true) or { assert false }
+	assert t.screens.active_key == .alternate
+	t.flags.shell_redraws_prompt = .true_
+	t.resize(20, 3) or { assert false }
+	t.switch_screen_mode(.mode_47, false) or { assert false }
+
+	assert t.screens.active_key == .primary
+	assert t.plain_string() or { '' } == 'ABCDE'
+}
+
 // ------------------------------------------------------------
 // resize-with-reflow tests (from ghostty Terminal.zig)
 // ------------------------------------------------------------
