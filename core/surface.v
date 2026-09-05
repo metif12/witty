@@ -6345,6 +6345,15 @@ fn (mut self Surface) handle_binding_entry(event KeyEvent, entry &input.SetEntry
 }
 
 fn (mut self Surface) encode_key(event KeyEvent) ?WriteReq {
+	opts := self.encode_key_opts()
+	encoded := input.encode(event, opts)
+	if encoded.len == 0 {
+		return none
+	}
+	return WriteReq{ data: encoded.bytes() }
+}
+
+fn (mut self Surface) encode_key_opts() input.Options {
 	locked := self.renderer_state.mutex != unsafe { nil }
 	if locked {
 		self.renderer_state.mutex.lock()
@@ -6356,16 +6365,10 @@ fn (mut self Surface) encode_key(event KeyEvent) ?WriteReq {
 	}
 	t := self.renderer_state.terminal_
 	flags := t.screens.active.kitty_keyboard.current()
-	option_as_alt := self.config.macos_option_as_alt or {
-		if !self.mouse.mods.alt {
-			input.OptionAsAlt.false_
-		} else {
-			self.rt_app.keyboard_layout.detect_option_as_alt()
-		}
-	}
-	encoded := input.encode(event, input.Options{
+	mut opts := input.Options{
 		cursor_key_application: t.modes.get(.cursor_keys)
 		keypad_key_application: t.modes.get(.keypad_keys)
+		ignore_keypad_with_numlock: t.modes.get(.ignore_keypad_with_numlock)
 		alt_esc_prefix: t.modes.get(.alt_esc_prefix)
 		modify_other_keys_state_2: t.flags.modify_other_keys_2
 		kitty_flags: input.KittyFlags{
@@ -6375,12 +6378,17 @@ fn (mut self Surface) encode_key(event KeyEvent) ?WriteReq {
 			report_all: flags & 8 != 0
 			report_associated: flags & 16 != 0
 		}
-		macos_option_as_alt: option_as_alt
-	})
-	if encoded.len == 0 {
-		return none
 	}
-	return WriteReq{ data: encoded.bytes() }
+	$if macos {
+		opts.macos_option_as_alt = self.config.macos_option_as_alt or {
+			if !self.mouse.mods.alt {
+				input.OptionAsAlt.false_
+			} else {
+				self.rt_app.keyboard_layout.detect_option_as_alt()
+			}
+		}
+	}
+	return opts
 }
 
 fn (mut self Surface) selection_scroll_tick() ! {

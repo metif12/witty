@@ -1199,6 +1199,20 @@ fn test_encode_key_no_output() {
 	assert req == none
 }
 
+fn test_encode_key_honors_ignore_keypad_with_numlock_mode() {
+	mut surf := make_test_surface()
+	surf.renderer_state.terminal_.modes.set(.keypad_keys, true)
+	surf.renderer_state.terminal_.modes.set(.ignore_keypad_with_numlock, true)
+	req := surf.encode_key(KeyEvent{
+		key: .numpad_1
+		utf8: '1'
+	}) or {
+		assert false, 'expected write req'
+		return
+	}
+	assert req.data.bytestr() == '1'
+}
+
 fn test_scroll_callback_uses_precision_multiplier_and_accumulates_pixels() {
 	mut surf := make_test_surface()
 	surf.size.cell = CellSize{ width: 10, height: 10 }
