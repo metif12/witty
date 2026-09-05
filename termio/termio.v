@@ -518,11 +518,23 @@ fn (t &Termio) prepare_initial_input() ![]PreparedInput {
 
 fn read_initial_input_file(mut file os.File) ![]u8 {
 	mut data := []u8{len: initial_input_max_bytes + 1}
-	read := file.read_from(0, mut data)!
-	if read > initial_input_max_bytes {
+	mut total := 0
+	for total < data.len {
+		read := file.read_from(u64(total), mut data[total..]) or {
+			if err is os.Eof {
+				break
+			}
+			return err
+		}
+		if read == 0 {
+			break
+		}
+		total += read
+	}
+	if total > initial_input_max_bytes {
 		return error('input failed')
 	}
-	data.trim(read)
+	data.trim(total)
 	return data
 }
 
