@@ -3002,8 +3002,28 @@ pub:
 	end   u16 // Exclusive
 }
 
-pub fn (self &PageChunk) is_full_page() bool {
+// Return the rows represented by this contiguous page chunk.
+pub fn (self PageChunk) rows() []RowData {
+	return self.node.data.rows[int(self.start)..int(self.end)]
+}
+
+// Return true when this chunk represents every live row in its page.
+pub fn (self PageChunk) full_page() bool {
 	return self.start == 0 && self.end == self.node.data.size.rows
+}
+
+// Return true when two chunks cover any of the same rows.
+pub fn (self PageChunk) overlaps(other PageChunk) bool {
+	if voidptr(self.node) != voidptr(other.node) {
+		return false
+	}
+	if self.end <= other.start {
+		return false
+	}
+	if self.start >= other.end {
+		return false
+	}
+	return true
 }
 
 pub fn (mut self PageIterator) next() ?PageChunk {
@@ -4751,7 +4771,7 @@ pub fn (mut self PageList) erase_rows(tl Point, bl ?Point) {
 	for {
 		chunk := it.next() or { break }
 
-		if chunk.is_full_page() {
+		if chunk.full_page() {
 			// A rare special case is that we're deleting everything in
 			// our linked list. erase_page requires at least one other
 			// page so to handle this we reinit this page, set it to zero
@@ -5046,6 +5066,55 @@ fn (mut self ReflowCursor) cursor_absolute(x u16, y u16) {
 	self.y = y
 }
 
+// Increase the capacity of the cursor's page and reload cursor state after
+// PageList replaces the underlying node.
+fn (mut self ReflowCursor) increase_capacity(mut list PageList, adjustment ?PageCapacityAdjustment) ! {
+	old_x := self.x
+	old_y := self.y
+	old_total_rows := self.total_rows
+
+	// During reflow the list's cached total is intentionally transient.
+	list.pause_integrity_checks_set(true)
+	node := list.increase_capacity(self.node, adjustment) or {
+		list.pause_integrity_checks_set(false)
+		return err
+	}
+	list.pause_integrity_checks_set(false)
+
+	mut reloaded := ReflowCursor.init(node)
+	reloaded.cursor_absolute(old_x, old_y)
+	reloaded.total_rows = old_total_rows
+	self.x = reloaded.x
+	self.y = reloaded.y
+	self.pending_wrap = reloaded.pending_wrap
+	self.node = reloaded.node
+	self.new_rows = reloaded.new_rows
+	self.total_rows = reloaded.total_rows
+}
+
+fn (self &ReflowCursor) count_trailing_empty_cells() usize {
+	row := &self.node.data.rows[int(self.y)]
+	// If the row is wrapped, all empty cells are meaningful.
+	if row.wrap {
+		return 0
+	}
+
+	len := usize(self.node.data.size.cols - self.x)
+	for i in 0 .. len {
+		rev_i := len - i - 1
+		if !row.cells[int(self.x) + int(rev_i)].is_empty() {
+			return i
+		}
+	}
+
+	// A semantic prompt makes an otherwise blank row meaningful, so retain
+	// one cell and report every other trailing cell as empty.
+	if row.semantic_prompt != .unknown {
+		return len - 1
+	}
+	return len
+}
+
 fn (mut self ReflowCursor) copy_row_metadata(other &RowData) {
 	mut page := &self.node.data
 	page.rows[int(self.y)].semantic_prompt = other.semantic_prompt
@@ -5286,18 +5355,16 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 			panic('grapheme source cell is missing its page mapping')
 		}
 		if page.grapheme_count() >= page.grapheme_capacity() {
-			new_node := list.increase_capacity(self.node, .grapheme_bytes) or {
+			self.increase_capacity(mut list, .grapheme_bytes) or {
 				return .out_of_space
 			}
-			self.node = new_node
 			page = &self.node.data
 		}
 		for {
 			offset := page.grapheme_alloc.alloc(cps.len * int(sizeof(u32))) or {
-				new_node := list.increase_capacity(self.node, .grapheme_bytes) or {
+				self.increase_capacity(mut list, .grapheme_bytes) or {
 					return .out_of_space
 				}
-				self.node = new_node
 				page = &self.node.data
 				continue
 			}
@@ -5316,10 +5383,9 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 		}
 		src_link := src_page.hyperlink_set.get(src_id)
 		if page.hyperlink_count() >= page.hyperlink_capacity() {
-			new_node := list.increase_capacity(self.node, .hyperlink_bytes) or {
+			self.increase_capacity(mut list, .hyperlink_bytes) or {
 				return .out_of_space
 			}
-			self.node = new_node
 			page = &self.node.data
 		}
 		additional_string_bytes := src_link.uri.len + match src_link.id {
@@ -5327,25 +5393,24 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 			else { 0 }
 		}
 		for !page.hyperlink_set.can_allocate_string_bytes(additional_string_bytes) {
-			new_node := list.increase_capacity(self.node, .string_bytes) or {
+			self.increase_capacity(mut list, .string_bytes) or {
 				return .out_of_space
 			}
-			self.node = new_node
 			page = &self.node.data
 		}
 
 		mut dst_id := u32(0)
 		for {
 			dst_id = page.hyperlink_set.add_with_id(src_link, src_id) or {
-				adjustment := match err.msg() {
-					'strings out of memory' { PageCapacityAdjustment.string_bytes }
-					'set needs rehash' { PageCapacityAdjustment.rehash }
-					else { PageCapacityAdjustment.hyperlink_bytes }
+				mut adjustment := ?PageCapacityAdjustment(none)
+				match err.msg() {
+					'strings out of memory' { adjustment = .string_bytes }
+					'set needs rehash' {}
+					else { adjustment = .hyperlink_bytes }
 				}
-				new_node := list.increase_capacity(self.node, adjustment) or {
+				self.increase_capacity(mut list, adjustment) or {
 					return .out_of_space
 				}
-				self.node = new_node
 				page = &self.node.data
 				continue
 			}
@@ -5361,10 +5426,9 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 	if cell.has_styling() {
 		style := src_page.styles.get(cell.style_id)
 		id := page.styles.add_with_id(style, cell.style_id) or {
-			new_node := list.increase_capacity(self.node, .styles) or {
+			self.increase_capacity(mut list, .styles) or {
 				return .out_of_space
 			}
-			self.node = new_node
 			mut grown_page := &self.node.data
 			grown_page.styles.add_with_id(style, cell.style_id) or {
 				panic('style insertion failed after PageList capacity increase')
@@ -5589,8 +5653,7 @@ fn (mut self PageList) fixup_viewport(removed usize) {
 	}
 }
 
-enum PageCapacityAdjustment {
-	rehash
+pub enum PageCapacityAdjustment {
 	styles
 	grapheme_bytes
 	hyperlink_bytes
@@ -5600,47 +5663,47 @@ enum PageCapacityAdjustment {
 // Increase one bounded capacity dimension by replacing and recloning the
 // page. The node replacement, pin fixup, and serial change mirror Ghostty's
 // increaseCapacity.
-fn (mut self PageList) increase_capacity(node &PageNode, adjustment PageCapacityAdjustment) ?&PageNode {
+pub fn (mut self PageList) increase_capacity(node &PageNode, adjustment ?PageCapacityAdjustment) !&PageNode {
+	defer { self.assert_integrity() }
 	page := &node.data
 	mut cap := page.capacity
-	match adjustment {
-		.rehash {}
-		.styles {
-			if cap.styles == max_u16 {
-				return none
+	if value := adjustment {
+		match value {
+			.styles {
+				if cap.styles == max_u16 {
+					return error('OutOfSpace')
+				}
+				cap.styles = if cap.styles > max_u16 / 2 { max_u16 } else { cap.styles * 2 }
 			}
-			doubled := if cap.styles > max_u16 / 2 { max_u16 } else { cap.styles * 2 }
-			minimum := StyleSet.capacity_for_count(1)
-			cap.styles = if doubled > minimum { doubled } else { minimum }
-		}
-		.grapheme_bytes {
-			if cap.grapheme_bytes == max_u32 {
-				return none
+			.grapheme_bytes {
+				if cap.grapheme_bytes == max_u32 {
+					return error('OutOfSpace')
+				}
+				cap.grapheme_bytes = if cap.grapheme_bytes > max_u32 / 2 {
+					max_u32
+				} else {
+					cap.grapheme_bytes * 2
+				}
 			}
-			cap.grapheme_bytes = if cap.grapheme_bytes > max_u32 / 2 {
-				max_u32
-			} else {
-				cap.grapheme_bytes * 2
+			.hyperlink_bytes {
+				if cap.hyperlink_bytes == max_u16 {
+					return error('OutOfSpace')
+				}
+				cap.hyperlink_bytes = if cap.hyperlink_bytes > max_u16 / 2 {
+					max_u16
+				} else {
+					cap.hyperlink_bytes * 2
+				}
 			}
-		}
-		.hyperlink_bytes {
-			if cap.hyperlink_bytes == max_u16 {
-				return none
-			}
-			cap.hyperlink_bytes = if cap.hyperlink_bytes > max_u16 / 2 {
-				max_u16
-			} else {
-				cap.hyperlink_bytes * 2
-			}
-		}
-		.string_bytes {
-			if cap.string_bytes == max_u32 {
-				return none
-			}
-			cap.string_bytes = if cap.string_bytes > max_u32 / 2 {
-				max_u32
-			} else {
-				cap.string_bytes * 2
+			.string_bytes {
+				if cap.string_bytes == max_u32 {
+					return error('OutOfSpace')
+				}
+				cap.string_bytes = if cap.string_bytes > max_u32 / 2 {
+					max_u32
+				} else {
+					cap.string_bytes * 2
+				}
 			}
 		}
 	}
@@ -5648,12 +5711,14 @@ fn (mut self PageList) increase_capacity(node &PageNode, adjustment PageCapacity
 	// Ghostty rejects an adjusted capacity whose exact backing layout exceeds
 	// the largest representable page. Rehashing keeps the same capacity, so it
 	// is the one adjustment that does not need this check.
-	if adjustment != .rehash && Page.layout(cap).total_size > usize(max_page_size) {
-		return none
+	if adjustment != none && Page.layout(cap).total_size > usize(max_page_size) {
+		return error('OutOfSpace')
 	}
 
 	mut new_node := self.create_page(cap)
 	mut new_page := &new_node.data
+	assert new_page.capacity.rows >= page.capacity.rows
+	assert new_page.capacity.cols >= page.capacity.cols
 	new_page.size = page.size
 	new_page.clone_from(page, 0, page.size.rows) or {
 		panic('capacity-increased page clone failed: ${err}')
@@ -5668,6 +5733,7 @@ fn (mut self PageList) increase_capacity(node &PageNode, adjustment PageCapacity
 
 	self.pages.insert_before(node, new_node)
 	self.destroy_node(node)
+	new_page.assert_integrity()
 	return new_node
 }
 
@@ -5706,7 +5772,7 @@ fn (mut self PageList) clone_row_growing(dst_node &PageNode, src_page &Page, dst
 				}
 			}
 			.hyperlink_set_needs_rehash {
-				node = self.increase_capacity(node, .rehash) or {
+				node = self.increase_capacity(node, none) or {
 					panic('PageList row clone could not rehash hyperlink set')
 				}
 			}

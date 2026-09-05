@@ -66,13 +66,82 @@ fn test_page_list_increase_capacity_rejects_layout_over_max_page_size() {
 	first.data.capacity.cols = max_u16
 	first.data.capacity.rows = max_u16
 	old_serial := s.page_serial
-	assert s.increase_capacity(first, .styles) == none
+	mut error_message := ''
+	s.increase_capacity(first, .styles) or { error_message = err.msg() }
+	assert error_message == 'OutOfSpace'
 	current := s.pages.first or {
 		assert false
 		return
 	}
 	assert voidptr(current) == voidptr(first)
 	assert s.page_serial == old_serial
+}
+
+fn test_page_list_increase_capacity_rehashes_without_growing() {
+	mut s := PageList.init(2, 2, usize(0))
+	defer { s.deinit() }
+
+	first := s.pages.first or {
+		assert false
+		return
+	}
+	old_capacity := first.data.capacity
+	tracked := s.track_pin(PagePin{ node: first, y: 1, x: 1 })
+	new_node := s.increase_capacity(first, none) or {
+		assert false, err.msg()
+		return
+	}
+	assert voidptr(new_node) != voidptr(first)
+	assert new_node.data.capacity == old_capacity
+	assert voidptr(tracked.node) == voidptr(new_node)
+	assert tracked.y == 1
+	assert tracked.x == 1
+}
+
+fn test_page_chunk_rows_full_page_and_overlap() {
+	mut s := PageList.init(3, 3, usize(0))
+	defer { s.deinit() }
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	mut marked_row := &first.data.rows[1]
+	marked_row.cells[0].codepoint = u32(`x`)
+
+	full := PageChunk{ node: first, start: 0, end: 3 }
+	middle := PageChunk{ node: first, start: 1, end: 2 }
+	tail := PageChunk{ node: first, start: 2, end: 3 }
+	assert full.full_page()
+	assert !middle.full_page()
+	assert middle.rows().len == 1
+	assert middle.rows()[0].cells[0].codepoint == u32(`x`)
+	assert full.overlaps(middle)
+	assert !middle.overlaps(tail)
+
+	mut other := &PageNode{ data: Page.init(first.data.capacity) }
+	defer { other.data.deinit() }
+	assert !full.overlaps(PageChunk{ node: other, start: 0, end: 1 })
+}
+
+fn test_reflow_cursor_count_trailing_empty_cells() {
+	mut s := PageList.init(5, 1, usize(0))
+	defer { s.deinit() }
+	mut first := s.pages.first or {
+		assert false
+		return
+	}
+	mut cursor := ReflowCursor.init(first)
+	assert cursor.count_trailing_empty_cells() == 5
+
+	mut row := &first.data.rows[0]
+	row.cells[2].codepoint = u32(`x`)
+	assert cursor.count_trailing_empty_cells() == 2
+	row.wrap = true
+	assert cursor.count_trailing_empty_cells() == 0
+	row.wrap = false
+	row.cells[2] = CellData{}
+	row.semantic_prompt = .prompt
+	assert cursor.count_trailing_empty_cells() == 4
 }
 
 fn test_page_list_tracked_pin_accessors_and_diagram() {
