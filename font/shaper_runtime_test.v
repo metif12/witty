@@ -1,5 +1,13 @@
 module font
 
+fn test_run_options_apply_break_config() {
+	mut opts := RunOptions{ cursor_x: u16(7) }
+	opts.apply_break_config(RunBreakConfig{ cursor: true })
+	assert opts.cursor_x or { 0 } == u16(7)
+	opts.apply_break_config(RunBreakConfig{ cursor: false })
+	assert opts.cursor_x == none
+}
+
 // Runtime coverage for the production shaper, cache, and byte-row adapter.
 
 fn test_public_shaper_cache_get_put() {

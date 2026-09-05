@@ -1530,7 +1530,7 @@ pub:
 
 // RunOptions configures the run iterator.
 pub struct RunOptions {
-pub:
+pub mut:
 	grid &SharedGrid = unsafe { nil }
 	// Render cells are the production representation. `cells` retains the
 	// byte-row adapter used by small standalone shaper tests.
@@ -1538,6 +1538,22 @@ pub:
 	cells        []u8
 	selection    ?[2]u16
 	cursor_x     ?u16
+}
+
+// RunBreakConfig is the font-side projection of configpkg.FontShapingBreak.
+// Keeping this one-field value in font avoids a V module cycle while retaining
+// Ghostty's RunOptions.applyBreakConfig behavior at the same ownership layer.
+pub struct RunBreakConfig {
+pub:
+	cursor bool
+}
+
+// apply_break_config removes cursor shaping boundaries when the corresponding
+// configuration is disabled.
+pub fn (mut self RunOptions) apply_break_config(config RunBreakConfig) {
+	if !config.cursor {
+		self.cursor_x = none
+	}
 }
 
 // RunIterator iterates over text runs for shaping.

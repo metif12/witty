@@ -2722,7 +2722,7 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 	// may share one cell for ligatures and combining marks.
 	mut shaped := [][]RowShapedGlyph{len: cells_len}
 	cursor_x := if viewport := state.cursor.viewport {
-		if self.config.font_shaping_break.cursor && viewport.y == y {
+		if viewport.y == y {
 			?u16(viewport.x)
 		} else {
 			?u16(none)
@@ -2730,12 +2730,16 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 	} else {
 		?u16(none)
 	}
-	mut run_iter := self.font_shaper.run_iterator(font.RunOptions{
+	mut run_opts := font.RunOptions{
 		grid: self.font_grid
 		render_cells: row.cells[..cells_len]
 		selection: row.selection
 		cursor_x: cursor_x
+	}
+	run_opts.apply_break_config(font.RunBreakConfig{
+		cursor: self.config.font_shaping_break.cursor
 	})
+	mut run_iter := self.font_shaper.run_iterator(run_opts)
 	for {
 		run := run_iter.next() or { break }
 		shaped_cells := self.font_shaper_cache.get(run) or {
