@@ -1,5 +1,7 @@
 module shaper
 
+import strconv
+
 // Represents an OpenType font feature setting, which consists of a tag and
 // a numeric parameter >= 0. Most features are boolean, so only parameters
 // of 0 and 1 make sense for them, but some (e.g. 'cv01'..'cv99') can take
@@ -37,135 +39,109 @@ pub:
 //
 // Ref: https://harfbuzz.github.io/harfbuzz-hb-common.html#hb-feature-from-string
 pub fn Feature.from_string(str string) ?Feature {
-	// Trim the input to just the first feature (up to comma or end).
-	mut s := str
-	comma_idx := s.index_u8(`,`)
-	if comma_idx >= 0 {
-		s = s[..comma_idx]
+	// Feature.fromReader in the source stops at the first comma. Keeping the
+	// boundary separate also lets this parser preserve its exact whitespace
+	// rules: only spaces and tabs are ignored.
+	comma_idx := str.index_u8(`,`)
+	end := if comma_idx >= 0 { comma_idx } else { str.len }
+	mut pos := 0
+	for pos < end && (str[pos] == ` ` || str[pos] == `\t`) {
+		pos++
 	}
-	// Trim whitespace
-	s = s.trim_space()
-	if s.len == 0 {
+	if pos == end {
 		return none
 	}
 
-	mut pos := 0
-	mut prefix_value := ?u32(none)
-
-	// Check for '+' or '-' prefix to explicitly enable/disable feature.
-	if s[pos] == `+` {
-		prefix_value = 1
-		pos++
-	} else if s[pos] == `-` {
-		prefix_value = 0
+	mut value_set := false
+	mut value := u32(0)
+	if str[pos] == `+` || str[pos] == `-` {
+		value_set = true
+		value = if str[pos] == `+` { u32(1) } else { u32(0) }
 		pos++
 	}
 
-	// Strip quote marks from the tag portion.
-	// Collect exactly 4 tag bytes, skipping any quote characters.
 	mut tag_buf := [4]u8{}
 	mut tag_len := 0
-
-	for pos < s.len && tag_len < 4 {
-		ch := s[pos]
-		pos++
-		// Ignore quote marks. This does technically ignore cases like
-		// "'k'e'r'n' = 0", but it's unambiguous so if someone really
-		// wants to do that in their config then... sure why not.
-		if ch == `"` || ch == `'` {
-			continue
-		}
-		// If the tag is interrupted by a comma it's invalid.
-		if ch == `,` {
+	for tag_len < 4 {
+		if pos == end {
 			return none
 		}
-		tag_buf[tag_len] = ch
+		byte := str[pos]
+		pos++
+		// The source deliberately ignores quote marks anywhere in the tag.
+		if byte == `"` || byte == `'` {
+			continue
+		}
+		tag_buf[tag_len] = byte
 		tag_len++
 	}
 
-	// Tag must be exactly 4 characters.
-	if tag_len != 4 {
+	// This is the source's `space` state. Multiple '=' bytes are accepted when
+	// no +/- prefix supplied a value, because every '=' remains in this state.
+	for pos < end {
+		byte := str[pos]
+		if byte == ` ` || byte == `\t` || byte == `"` || byte == `'` {
+			pos++
+			continue
+		}
+		if byte == `=` {
+			if value_set {
+				return none
+			}
+			pos++
+			continue
+		}
+		if byte >= `0` && byte <= `9` {
+			if value_set {
+				return none
+			}
+			start := pos
+			for pos < end && str[pos] >= `0` && str[pos] <= `9` {
+				pos++
+			}
+			if pos != end {
+				return none
+			}
+			parsed := strconv.parse_uint(str[start..pos], 10, 32) or { return none }
+			value = u32(parsed)
+			value_set = true
+			break
+		}
+		if byte == `o` || byte == `O` {
+			if value_set {
+				return none
+			}
+			pos++
+			bool_start := pos
+			for pos < end && str[pos] != ` ` && str[pos] != `\t` {
+				pos++
+			}
+			keyword := str[bool_start..pos].to_lower()
+			if keyword == 'n' {
+				value = 1
+			} else if keyword == 'ff' {
+				value = 0
+			} else {
+				return none
+			}
+			value_set = true
+			for pos < end && (str[pos] == ` ` || str[pos] == `\t`) {
+				pos++
+			}
+			if pos != end {
+				return none
+			}
+			break
+		}
 		return none
 	}
 
-	// Skip any trailing quote marks after the tag.
-	for pos < s.len && (s[pos] == `"` || s[pos] == `'`) {
-		pos++
+	if !value_set {
+		value = 1
 	}
-
-	// Now parse what remains after the tag.
-	remaining := s[pos..].trim_space()
-
-	if remaining.len == 0 {
-		// Specifying only a tag turns a feature on.
-		val := prefix_value or { 1 }
-		return Feature{
-			tag: tag_buf
-			value: val
-		}
-	}
-
-	// If we have a prefix (+/-) then having additional value is an error
-	// (redundant/conflicting).
-	// Exception: '=' is allowed to separate tag from value.
-	mut value_str := remaining
-
-	if value_str[0] == `=` {
-		// Allow an '=' only if we don't already have a value due
-		// to a '+' or '-' prefix.
-		if prefix_value != none {
-			return none
-		}
-		value_str = value_str[1..].trim_space()
-	}
-
-	if value_str.len == 0 {
-		val := prefix_value or { 1 }
-		return Feature{
-			tag: tag_buf
-			value: val
-		}
-	}
-
-	// Try parsing a boolean keyword parameter ("on"/"off").
-	lower := value_str.to_lower()
-	if lower == 'on' {
-		if prefix_value != none {
-			return none
-		}
-		return Feature{
-			tag: tag_buf
-			value: 1
-		}
-	}
-	if lower == 'off' {
-		if prefix_value != none {
-			return none
-		}
-		return Feature{
-			tag: tag_buf
-			value: 0
-		}
-	}
-
-	// Try parsing an integer parameter directly.
-	if prefix_value != none {
-		// If we already have value because of a '+' or '-' prefix
-		// then this is an error.
-		return none
-	}
-
-	// Validate that all characters are digits.
-	for ch in value_str {
-		if ch < `0` || ch > `9` {
-			return none
-		}
-	}
-	// Parse the integer value.
-	parsed := value_str.u32()
 	return Feature{
 		tag: tag_buf
-		value: parsed
+		value: value
 	}
 }
 
@@ -203,11 +179,7 @@ pub fn FeatureList.from_string(str string) FeatureList {
 pub fn (mut self FeatureList) append_from_string(str string) {
 	parts := str.split(',')
 	for part in parts {
-		trimmed := part.trim_space()
-		if trimmed.len == 0 {
-			continue
-		}
-		if feat := Feature.from_string(trimmed) {
+		if feat := Feature.from_string(part) {
 			self.features << feat
 		}
 	}

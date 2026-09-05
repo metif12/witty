@@ -14,7 +14,7 @@ fn test_feature_from_string_tag_only() {
 		assert false, 'expected valid feature for "kern"'
 		return
 	}
-	assert check_tag(feat.tag,'kern')
+	assert check_tag(feat.tag, 'kern')
 	assert feat.value == 1
 }
 
@@ -23,7 +23,7 @@ fn test_feature_from_string_tag_only_with_trailing_comma() {
 		assert false, 'expected valid feature for "kern, "'
 		return
 	}
-	assert check_tag(feat.tag,'kern')
+	assert check_tag(feat.tag, 'kern')
 	assert feat.value == 1
 }
 
@@ -32,7 +32,7 @@ fn test_feature_from_string_tag_on() {
 		assert false, 'expected valid feature for "kern on"'
 		return
 	}
-	assert check_tag(feat.tag,'kern')
+	assert check_tag(feat.tag, 'kern')
 	assert feat.value == 1
 }
 
@@ -41,7 +41,7 @@ fn test_feature_from_string_tag_on_trailing_comma() {
 		assert false, 'expected valid feature for "kern on, "'
 		return
 	}
-	assert check_tag(feat.tag,'kern')
+	assert check_tag(feat.tag, 'kern')
 	assert feat.value == 1
 }
 
@@ -51,7 +51,7 @@ fn test_feature_from_string_plus_prefix() {
 		assert false, 'expected valid feature for "+kern"'
 		return
 	}
-	assert check_tag(feat.tag,'kern')
+	assert check_tag(feat.tag, 'kern')
 	assert feat.value == 1
 }
 
@@ -60,7 +60,7 @@ fn test_feature_from_string_plus_prefix_trailing_comma() {
 		assert false, 'expected valid feature for "+kern, "'
 		return
 	}
-	assert check_tag(feat.tag,'kern')
+	assert check_tag(feat.tag, 'kern')
 	assert feat.value == 1
 }
 
@@ -69,7 +69,7 @@ fn test_feature_from_string_quoted_equals_one() {
 		assert false, 'expected valid feature for quoted kern=1'
 		return
 	}
-	assert check_tag(feat.tag,'kern')
+	assert check_tag(feat.tag, 'kern')
 	assert feat.value == 1
 }
 
@@ -78,7 +78,7 @@ fn test_feature_from_string_quoted_equals_one_trailing_comma() {
 		assert false, 'expected valid feature for quoted kern=1 with comma'
 		return
 	}
-	assert check_tag(feat.tag,'kern')
+	assert check_tag(feat.tag, 'kern')
 	assert feat.value == 1
 }
 
@@ -89,7 +89,7 @@ fn test_feature_from_string_off() {
 		assert false, 'expected valid feature for "kern off"'
 		return
 	}
-	assert check_tag(feat.tag,'kern')
+	assert check_tag(feat.tag, 'kern')
 	assert feat.value == 0
 }
 
@@ -98,26 +98,26 @@ fn test_feature_from_string_off_trailing_comma() {
 		assert false, 'expected valid feature for "kern off, "'
 		return
 	}
-	assert check_tag(feat.tag,'kern')
+	assert check_tag(feat.tag, 'kern')
 	assert feat.value == 0
 }
 
 fn test_feature_from_string_minus_prefix() {
 	// '-' prefix to explicitly disable feature.
 	feat := Feature.from_string("-'kern'") or {
-		assert false, "expected valid feature for \"-'kern'\""
+		assert false, 'expected valid feature for "-\'kern\'"'
 		return
 	}
-	assert check_tag(feat.tag,'kern')
+	assert check_tag(feat.tag, 'kern')
 	assert feat.value == 0
 }
 
 fn test_feature_from_string_minus_prefix_trailing_comma() {
 	feat := Feature.from_string("-'kern', ") or {
-		assert false, "expected valid feature for \"-'kern', \""
+		assert false, 'expected valid feature for "-\'kern\', "'
 		return
 	}
-	assert check_tag(feat.tag,'kern')
+	assert check_tag(feat.tag, 'kern')
 	assert feat.value == 0
 }
 
@@ -126,7 +126,7 @@ fn test_feature_from_string_quoted_equals_zero() {
 		assert false, 'expected valid feature for quoted kern=0'
 		return
 	}
-	assert check_tag(feat.tag,'kern')
+	assert check_tag(feat.tag, 'kern')
 	assert feat.value == 0
 }
 
@@ -135,7 +135,7 @@ fn test_feature_from_string_quoted_equals_zero_trailing_comma() {
 		assert false, 'expected valid feature for quoted kern=0 with comma'
 		return
 	}
-	assert check_tag(feat.tag,'kern')
+	assert check_tag(feat.tag, 'kern')
 	assert feat.value == 0
 }
 
@@ -146,7 +146,7 @@ fn test_feature_from_string_integer_value() {
 		assert false, 'expected valid feature for "aalt=2"'
 		return
 	}
-	assert check_tag(feat.tag,'aalt')
+	assert check_tag(feat.tag, 'aalt')
 	assert feat.value == 2
 }
 
@@ -155,25 +155,25 @@ fn test_feature_from_string_integer_value_trailing_comma() {
 		assert false, 'expected valid feature for "aalt=2, "'
 		return
 	}
-	assert check_tag(feat.tag,'aalt')
+	assert check_tag(feat.tag, 'aalt')
 	assert feat.value == 2
 }
 
 fn test_feature_from_string_quoted_space_integer() {
 	feat := Feature.from_string("'aalt' 2") or {
-		assert false, "expected valid feature for \"'aalt' 2\""
+		assert false, 'expected valid feature for "\'aalt\' 2"'
 		return
 	}
-	assert check_tag(feat.tag,'aalt')
+	assert check_tag(feat.tag, 'aalt')
 	assert feat.value == 2
 }
 
 fn test_feature_from_string_quoted_space_integer_trailing_comma() {
 	feat := Feature.from_string("'aalt' 2, ") or {
-		assert false, "expected valid feature for \"'aalt' 2, \""
+		assert false, 'expected valid feature for "\'aalt\' 2, "'
 		return
 	}
-	assert check_tag(feat.tag,'aalt')
+	assert check_tag(feat.tag, 'aalt')
 	assert feat.value == 2
 }
 
@@ -209,6 +209,21 @@ fn test_feature_from_string_minus_prefix_with_on() {
 	assert result == none
 }
 
+fn test_feature_from_string_bad_boolean_keywords() {
+	assert Feature.from_string('aalt=o,') == none
+	assert Feature.from_string('aalt=ofn,') == none
+}
+
+fn test_feature_from_string_preserves_source_state_rules() {
+	// '=' remains in the source parser's space state, while newlines are not
+	// among the two whitespace bytes that state ignores.
+	feat := Feature.from_string('kern===2') or { panic('expected valid feature') }
+	assert feat.value == 2
+	assert Feature.from_string('\nkern') == none
+	assert Feature.from_string('kern\n') == none
+	assert Feature.from_string('aalt=4294967296') == none
+}
+
 fn test_feature_from_string_empty() {
 	result := Feature.from_string('')
 	assert result == none
@@ -225,17 +240,37 @@ fn test_feature_list_from_string() {
 	feats := FeatureList.from_string('kern, +liga, -calt, aalt=2')
 	assert feats.features.len == 4
 
-	assert check_tag(feats.features[0].tag,'kern')
+	assert check_tag(feats.features[0].tag, 'kern')
 	assert feats.features[0].value == 1
 
-	assert check_tag(feats.features[1].tag,'liga')
+	assert check_tag(feats.features[1].tag, 'liga')
 	assert feats.features[1].value == 1
 
-	assert check_tag(feats.features[2].tag,'calt')
+	assert check_tag(feats.features[2].tag, 'calt')
 	assert feats.features[2].value == 0
 
-	assert check_tag(feats.features[3].tag,'aalt')
+	assert check_tag(feats.features[3].tag, 'aalt')
 	assert feats.features[3].value == 2
+}
+
+fn test_feature_list_from_string_source_vector() {
+	str := '  kern, kern on , +kern, "kern"  = 1,' + 'kern    off, -\'kern\' , "kern"=0,' + "aalt=2,  'aalt'\t2," + 'aalt=2x, toolong, sht, -kern 1, -kern on, aalt=o, aalt=ofn,' + 'last'
+	feats := FeatureList.from_string(str)
+	assert feats.features.len == 10
+	for i in 0 .. 4 {
+		assert check_tag(feats.features[i].tag, 'kern')
+		assert feats.features[i].value == 1
+	}
+	for i in 4 .. 7 {
+		assert check_tag(feats.features[i].tag, 'kern')
+		assert feats.features[i].value == 0
+	}
+	for i in 7 .. 9 {
+		assert check_tag(feats.features[i].tag, 'aalt')
+		assert feats.features[i].value == 2
+	}
+	assert check_tag(feats.features[9].tag, 'last')
+	assert feats.features[9].value == 1
 }
 
 fn test_feature_list_from_string_with_errors() {
@@ -244,9 +279,9 @@ fn test_feature_list_from_string_with_errors() {
 	// "bad" is only 3 chars (too short), "sht" is 3 chars (too short)
 	assert feats.features.len == 3
 
-	assert check_tag(feats.features[0].tag,'kern')
-	assert check_tag(feats.features[1].tag,'liga')
-	assert check_tag(feats.features[2].tag,'aalt')
+	assert check_tag(feats.features[0].tag, 'kern')
+	assert check_tag(feats.features[1].tag, 'liga')
+	assert check_tag(feats.features[2].tag, 'aalt')
 }
 
 fn test_feature_list_append_from_string() {
@@ -259,6 +294,12 @@ fn test_feature_list_append_from_string() {
 fn test_feature_list_empty_string() {
 	feats := FeatureList.from_string('')
 	assert feats.features.len == 0
+}
+
+fn test_feature_list_preserves_source_whitespace_rules() {
+	feats := FeatureList.from_string('\nkern, liga\n,\tkern\t')
+	assert feats.features.len == 1
+	assert check_tag(feats.features[0].tag, 'kern')
 }
 
 fn test_feature_str_boolean_on() {
@@ -287,6 +328,6 @@ fn test_feature_str_integer_value() {
 
 fn test_default_features() {
 	assert default_features.len == 1
-	assert check_tag(default_features[0].tag,'liga')
+	assert check_tag(default_features[0].tag, 'liga')
 	assert default_features[0].value == 1
 }
