@@ -2498,10 +2498,6 @@ pub fn (mut self Screen) cursor_scroll_above() ! {
 		return self.cursor_down_scroll()
 	}
 
-	// The absolute index of the cursor row before we scroll.
-	cursor_abs := self.pages.active_start + int(self.cursor.y)
-	old_active_end := self.pages.active_start + int(self.pages.rows)
-
 	if self.no_scrollback {
 		// Without scrollback we can't push a row into history, so we drop the
 		// top-most active row and rotate a fresh blank row in at the cursor.
@@ -2527,14 +2523,16 @@ pub fn (mut self Screen) cursor_scroll_above() ! {
 		}
 	}
 
-	// Rotate the region from the (new) cursor row to the bottom of the active
-	// window one step to the right, moving the freshly-created blank bottom
-	// row up to the cursor position and shifting the rows below the cursor
-	// down by one. This mirrors Ghostty's fastmem.rotateOnceR.
+	self.cursor_scroll_above_rotate()
+}
+
+// Rotate all rows below the cursor down by one and clear the cursor row.
+// This is the flat-storage translation of Ghostty's
+// Screen.cursorScrollAboveRotate; page-boundary copies collapse into one
+// contiguous rotation because Pages stores the same logical rows in one slice.
+fn (mut self Screen) cursor_scroll_above_rotate() {
 	new_cursor_abs := self.pages.active_start + int(self.cursor.y)
 	new_active_end := self.pages.active_start + int(self.pages.rows)
-	_ = cursor_abs
-	_ = old_active_end
 	if new_cursor_abs < new_active_end && new_active_end <= self.pages.screen_rows.len {
 		last := self.pages.screen_rows[new_active_end - 1]
 		for i := new_active_end - 1; i > new_cursor_abs; i-- {

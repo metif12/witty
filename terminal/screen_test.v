@@ -857,6 +857,51 @@ fn test_screen_cursor_down_scroll() {
 	assert str == '2\n3'
 }
 
+fn test_screen_scroll_above_same_page() {
+	mut s := Screen.init(10, 3, 10)
+	defer { s.deinit() }
+	s.set_attribute(SgrAttribute{ kind: .direct_color_bg, r: 155 }) or { panic(err) }
+	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { panic(err) }
+	s.cursor_absolute(0, 1)
+	for i in 0 .. s.pages.screen_rows.len {
+		s.pages.screen_rows[i].dirty = false
+	}
+
+	s.cursor_scroll_above() or { panic(err) }
+	contents := s.dump_string_alloc(.viewport) or { panic(err) }
+	assert contents == '2EFGH\n\n3IJKL'
+	blank := s.pages.get_active_row(1).cells[0]
+	assert blank.content_tag == .bg_color_rgb
+	assert blank.color_rgb_r == 155
+	assert blank.color_rgb_g == 0
+	assert blank.color_rgb_b == 0
+	for y in u32(0) .. s.pages.rows {
+		assert s.pages.get_active_row(y).dirty
+	}
+}
+
+fn test_screen_scroll_above_no_scrollback_bottom_of_page() {
+	mut s := Screen.init(10, 3, 0)
+	defer { s.deinit() }
+	s.set_attribute(SgrAttribute{ kind: .direct_color_bg, r: 155 }) or { panic(err) }
+	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { panic(err) }
+	s.cursor_absolute(0, 1)
+	for i in 0 .. s.pages.screen_rows.len {
+		s.pages.screen_rows[i].dirty = false
+	}
+
+	s.cursor_scroll_above() or { panic(err) }
+	contents := s.dump_string_alloc(.viewport) or { panic(err) }
+	assert contents == '2EFGH\n\n3IJKL'
+	assert s.dump_string_alloc(.screen) or { panic(err) } == contents
+	blank := s.pages.get_active_row(1).cells[0]
+	assert blank.content_tag == .bg_color_rgb
+	assert blank.color_rgb_r == 155
+	for y in u32(0) .. s.pages.rows {
+		assert s.pages.get_active_row(y).dirty
+	}
+}
+
 fn test_screen_clone() {
 	mut s := Screen.init(10, 5, 1000)
 	defer { s.deinit() }
