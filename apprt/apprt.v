@@ -229,8 +229,7 @@ pub fn (c CoreApp) key_event_is_binding(app &App, event voidptr) bool {
 	if input_event.action == .release {
 		return false
 	}
-	entry := app.config.keybind.set.get_event(input_event) or { return false }
-	return core_app_binding_leaf(entry) != none
+	return app.config.keybind.set.get_event(input_event) != none
 }
 
 pub fn (mut c CoreApp) add_surface(surface voidptr) ! {

@@ -159,6 +159,25 @@ fn test_core_app_key_event_dispatches_app_binding() {
 	assert !core_app.key_event(&app, voidptr(&release))
 }
 
+fn test_core_app_key_event_is_binding_includes_leader_entries() {
+	mut config := configpkg.Config.default_config()
+	config.keybind.set.parse_and_put('ctrl+a>b=new_window') or { panic(err.msg()) }
+	mut core_app := CoreApp{}
+	app := App{
+		core_app: &core_app
+		config: config
+	}
+	event := input.KeyEvent{
+		action: .press
+		key: .key_a
+		mods: input.Mods{ ctrl: true }
+		utf8: 'a'
+	}
+
+	assert core_app.key_event_is_binding(&app, voidptr(&event))
+	assert !core_app.key_event(&app, voidptr(&event))
+}
+
 fn test_core_app_focus_limits_non_global_bindings() {
 	mut capture := EmbeddedActionCapture{}
 	mut config := configpkg.Config.default_config()
