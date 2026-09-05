@@ -243,7 +243,13 @@ pub fn (mut c CoreApp) delete_surface(surface voidptr) {
 	if !isnil(c.backend) && g_core_bridge.app_delete_surface != unsafe { nil } {
 		g_core_bridge.app_delete_surface(c.backend, surface)
 	}
-	c.surfaces = c.surfaces.filter(it != surface)
+	for i, candidate in c.surfaces {
+		if candidate == surface {
+			c.surfaces[i] = c.surfaces.last()
+			c.surfaces.delete_last()
+			break
+		}
+	}
 }
 
 pub fn (c CoreApp) needs_confirm_quit() bool {
@@ -297,10 +303,20 @@ pub fn (mut c CoreApp) update_config(app &App, config voidptr) ! {
 		mut surface := unsafe { &Surface(surface_ptr) }
 		surface.core_surface.update_config(cfg)!
 	}
+	// The app-level runtime receives the configuration with the app's own
+	// conditional state applied. Surface updates above intentionally receive
+	// the original so each surface can resolve its own state.
+	mut applied := cfg.clone()
+	if conditional := cfg.change_conditional_state(c.config_conditional_state) {
+		applied = conditional
+	}
+	defer {
+		applied.deinit()
+	}
 	mut runtime_app := unsafe { &App(app) }
 	runtime_app.perform_action(Target(AppTarget{}), .config_change, ActionValue{
 		config_change_: ConfigChange{
-			config: cfg
+			config: &applied
 		}
 	})!
 }

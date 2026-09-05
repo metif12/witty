@@ -3,6 +3,7 @@ module apprt
 import configpkg
 import input
 import cimgui
+import os
 
 struct EmbeddedActionCapture {
 mut:
@@ -254,6 +255,47 @@ fn test_core_app_update_config_clones_and_propagates() {
 	// soon as update_config returns.
 	updated.font_size = 9
 	assert app.config.font_size == 21
+}
+
+fn test_core_app_fallback_delete_surface_uses_swap_remove() {
+	mut first := Surface{}
+	mut second := Surface{}
+	mut third := Surface{}
+	mut core_app := CoreApp{}
+	core_app.add_surface(voidptr(&first))!
+	core_app.add_surface(voidptr(&second))!
+	core_app.add_surface(voidptr(&third))!
+
+	core_app.delete_surface(voidptr(&first))
+	assert core_app.surfaces.len == 2
+	assert core_app.surfaces[0] == voidptr(&third)
+	assert core_app.surfaces[1] == voidptr(&second)
+}
+
+fn test_core_app_fallback_update_config_applies_conditional_state() {
+	theme_dir := os.join_path(os.temp_dir(), 'witty-apprt-config-${os.getpid()}')
+	os.rmdir_all(theme_dir) or {}
+	os.mkdir_all(theme_dir)!
+	defer {
+		os.rmdir_all(theme_dir) or {}
+	}
+	light_theme := os.join_path(theme_dir, 'light')
+	dark_theme := os.join_path(theme_dir, 'dark')
+	os.write_file(light_theme, 'font-size = 17\n')!
+	os.write_file(dark_theme, 'font-size = 19\n')!
+	mut updated := configpkg.Config.default_config()
+	updated.load_string('theme = light:${light_theme},dark:${dark_theme}\n')
+	updated.finalize()
+
+	mut core_app := CoreApp{
+		config_conditional_state: configpkg.ConditionalState{ theme: .dark }
+	}
+	mut app := App{
+		core_app: &core_app
+		config: configpkg.Config.default_config()
+	}
+	core_app.update_config(&app, voidptr(&updated))!
+	assert app.config.font_size == f32(19)
 }
 
 fn test_embedded_capi_enum_validation() {
