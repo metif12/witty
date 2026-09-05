@@ -3182,14 +3182,14 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			self.rt_app.perform_action(AppAction{
 				kind: .ring_bell
 				target: &self
-			})!
+			}) or {}
 		}
 		.progress_report {
 			self.rt_app.perform_action(AppAction{
 				kind: .progress_report
 				target: &self
 				progress: msg.progress_report
-			})!
+			}) or {}
 		}
 		.selection_scroll_tick {
 			self.selection_scroll_active = msg.selection_scroll_tick
@@ -3620,7 +3620,7 @@ pub fn (mut self Surface) preedit_callback(preedit ?string) ! {
 	// Clear selection when preedit changes (if configured)
 	if self.renderer_state.preedit != none || preedit != none {
 		if self.config.selection_clear_on_typing {
-			self.set_selection(none)!
+			self.set_selection(none) or {}
 		}
 	}
 

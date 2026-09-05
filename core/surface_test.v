@@ -8,6 +8,7 @@ import highlight
 import search as searchpkg
 import termio as termiopkg
 import time
+import osc
 
 // Test helper: sets up a 10x5 cell grid with 10x20px cells and 5px padding on all sides.
 fn make_test_size() Size {
@@ -1331,6 +1332,27 @@ fn runtime_action_probe(data voidptr, action AppAction) !bool {
 	mut probe := unsafe { &RuntimeCallbackProbe(data) }
 	probe.action_kind = action.kind
 	return true
+}
+
+fn runtime_action_failure(_ voidptr, _ AppAction) !bool {
+	return error('runtime action failed')
+}
+
+fn test_surface_best_effort_notifications_ignore_runtime_errors() {
+	mut runtime := RuntimeApp{
+		action_fn: runtime_action_failure
+	}
+	mut surf := Surface{
+		rt_app: &runtime
+	}
+	mut failed := false
+	surf.handle_message(SurfaceMessage{ kind: .ring_bell }) or { failed = true }
+	assert !failed
+	surf.handle_message(SurfaceMessage{
+		kind: .progress_report
+		progress_report: osc.ProgressReport{}
+	}) or { failed = true }
+	assert !failed
 }
 
 fn runtime_close_probe(data voidptr, confirm bool) {
