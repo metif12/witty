@@ -210,6 +210,10 @@ pub:
 	data2 string
 	// Terminator used by the request. Response-producing commands mirror it.
 	terminator osc.Terminator
+	// Parsed color operations are carried through the stream without reparsing.
+	color_op          osc.ColorOperation
+	color_requests    []osc.ColorRequest
+	kitty_color_items []osc.KittyColorItem
 }
 
 // OscCommandType identifies the type of OSC command.
@@ -592,9 +596,20 @@ fn parse_osc_command(data string, terminator_ch u8) OscCommand {
 		}
 		.report_pwd { OscCommand{ cmd_type: .report_pwd, data: cmd.str_value } }
 		.mouse_shape { OscCommand{ cmd_type: .mouse_shape, data: cmd.str_value } }
-		.color_operation { OscCommand{ cmd_type: .color_operation, data: data } }
+		.color_operation {
+			OscCommand{
+				cmd_type: .color_operation
+				data: data
+				color_op: cmd.color_op
+				color_requests: cmd.color_requests
+			}
+		}
 		.kitty_color_protocol {
-			OscCommand{ cmd_type: .kitty_color_protocol, data: cmd.str_value }
+			OscCommand{
+				cmd_type: .kitty_color_protocol
+				data: cmd.str_value
+				kitty_color_items: cmd.kitty_color_items
+			}
 		}
 		.show_desktop_notification {
 			// OSC 9 carries only a body; OSC 777 carries title and body.

@@ -1,5 +1,7 @@
 module terminal
 
+import osc
+
 // Tests for the Stream VT escape sequence processor.
 // Translated from Ghostty's stream.zig test suite.
 
@@ -76,11 +78,25 @@ fn test_stream_preserves_osc_terminator_for_color_responses() {
 	s.next_slice('\x1b]10;?\a'.bytes())
 	color := get_last_event(s.events, .color_operation)
 	assert color.payload.osc_terminator == .bel
+	assert color.payload.color_op == .osc_10
+	assert color.payload.color_requests.len == 1
+	request := color.payload.color_requests[0]
+	assert request is osc.ColorRequestQuery
+	if request is osc.ColorRequestQuery {
+		assert request.target is osc.ColorTargetDynamic
+		if request.target is osc.ColorTargetDynamic {
+			assert request.target.color == .foreground
+		}
+	}
 
 	s.clear_events()
 	s.next_slice('\x1b]21;foreground=?\x1b\\'.bytes())
 	kitty := get_last_event(s.events, .kitty_color_report)
 	assert kitty.payload.osc_terminator == .st
+	assert kitty.payload.kitty_color_items.len == 1
+	assert kitty.payload.kitty_color_items[0].item_type == .query
+	assert kitty.payload.kitty_color_items[0].key.kind == .special
+	assert kitty.payload.kitty_color_items[0].key.special == .foreground
 }
 
 // Test that invalid UTF-8 byte 0xFF produces replacement character U+FFFD.

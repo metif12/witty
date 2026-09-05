@@ -480,6 +480,10 @@ pub:
 	str2 string
 	// OSC request terminator, mirrored by response-producing operations.
 	osc_terminator osc.Terminator
+	// Parsed OSC color data, carried through without reinterpreting raw strings.
+	color_op          osc.ColorOperation
+	color_requests    []osc.ColorRequest
+	kitty_color_items []osc.KittyColorItem
 	// Byte value (for .dcs_put, .apc_put)
 	byte_val u8
 	// Clipboard kind (for .clipboard_contents)
@@ -1768,14 +1772,15 @@ fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 		}
 		.color_operation {
 			self.dispatch(.color_operation, ActionPayload{
-				str1: cmd.data
 				osc_terminator: cmd.terminator
+				color_op: cmd.color_op
+				color_requests: cmd.color_requests
 			})
 		}
 		.kitty_color_protocol {
 			self.dispatch(.kitty_color_report, ActionPayload{
-				str1: cmd.data
 				osc_terminator: cmd.terminator
+				kitty_color_items: cmd.kitty_color_items
 			})
 		}
 		.conemu_progress_report {

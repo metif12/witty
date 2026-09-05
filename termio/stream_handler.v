@@ -379,16 +379,12 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.terminal.screens.active.kitty_keyboard.set(.not_, u32(event.payload.kitty_flags))
 		}
 		.kitty_color_report {
-			// Kitty color protocol: query/set/reset colors (OSC 21). The
-			// stream dispatches the raw OSC body (after "21;") in str1.
-			self.kitty_color_report(event.payload.str1, event.payload.osc_terminator)
+			// Kitty color protocol: query/set/reset colors (OSC 21).
+			self.kitty_color_report(event.payload.kitty_color_items, event.payload.osc_terminator)
 		}
 		.color_operation {
-			// OSC color operations: set/query/reset palette colors (OSC 4)
-			// and dynamic colors (OSC 10/11/12 for fg/bg/cursor). The stream
-			// dispatches the raw OSC body (including the operation number,
-			// e.g. "4;0;red" or "10;red") in str1.
-			self.color_operation(event.payload.str1, event.payload.osc_terminator)
+			// OSC color operations: set/query/reset palette and dynamic colors.
+			self.color_operation(event.payload.color_op, event.payload.color_requests, event.payload.osc_terminator)
 		}
 		.end_hyperlink {
 			self.terminal.screens.active.end_hyperlink()
@@ -1643,221 +1639,165 @@ fn (mut self StreamHandler) report_pwd(url string) {
 // OSC color operations (OSC 4, 10-19, 104, 110-119)
 // ============================================================
 
-// color_operation handles OSC color set/query/reset operations. The data
-// string is the full OSC body starting with the operation number, e.g.
-// "4;0;red", "10;red", "104", "110".
-//
-// This is faithful to the logic in stream_handler.zig colorOperation and
-// terminal/osc/parsers/color.zig, but does the parsing inline since the
-// V terminal stream currently delivers only the raw OSC body.
-fn (mut self StreamHandler) color_operation(data string, terminator osc.Terminator) {
-	// Split the operation number from the body.
-	sep := data.index(';') or {
-		// Some resets (OSC 104/110-119) may have no body. Treat the whole
-		// string as the operation number.
-		self.color_operation_op(data, '', terminator)
+// color_operation applies the already-parsed OSC color requests. Parsing is
+// performed once by osc.Parser, matching Ghostty's typed stream action.
+fn (mut self StreamHandler) color_operation(op osc.ColorOperation, requests []osc.ColorRequest, terminator osc.Terminator) {
+	_ = op
+	if requests.len == 0 {
 		return
 	}
-	op_str := data[..sep]
-	body := data[sep + 1..]
-	self.color_operation_op(op_str, body, terminator)
-}
 
-fn (mut self StreamHandler) color_operation_op(op_str string, body string, terminator osc.Terminator) {
-	op := op_str.int()
-
-	// Accumulated query response, if any.
 	mut response := ''
-
-	match true {
-		// OSC 4: get/set/reset ANSI palette colors. Body is
-		// "index;spec;index;spec;..." where spec of "?" is a query.
-		op == 4 {
-			mut it := body.split(';')
-			mut i := 0
-			for i + 1 < it.len {
-				idx_str := it[i]
-				spec := it[i + 1]
-				i += 2
-
-				idx := parse_palette_index(idx_str) or { break }
-
-				if spec == '?' {
-					if r := self.color_query_response_palette(idx, terminator) {
-						response += r
-					}
-					continue
-				}
-
-				color := osc.parse_rgb(spec) or { break }
-				trgb := terminal.RGB{
-					r: color.r
-					g: color.g
-					b: color.b
-				}
-				self.terminal.flags.dirty.palette = true
-				self.terminal.colors.palette.set(idx, trgb)
-				self.notify_color_change_palette(idx, trgb)
-			}
-		}
-
-		// OSC 104: reset ANSI palette colors. Body is
-		// "index;index;..." or empty to reset the whole table.
-		op == 104 {
-			if body.len == 0 {
-				// Reset the full table (only the ones that were changed).
-				for j in 0 .. 256 {
-					if self.terminal.colors.palette.mask_is_set(u8(j)) {
+	for request in requests {
+		match request {
+			osc.ColorRequestSet {
+				color := terminal_rgb(request.color)
+				match request.target {
+					osc.ColorTargetPalette {
 						self.terminal.flags.dirty.palette = true
-						self.terminal.colors.palette.reset(u8(j))
-						self.notify_color_change_palette(u8(j), self.terminal.colors.palette.entries[j])
+						self.terminal.colors.palette.set(request.target.index, color)
 					}
+					osc.ColorTargetDynamic {
+						self.set_dynamic_color(request.target.color, color)
+					}
+					osc.ColorTargetSpecial {}
 				}
-			} else {
-				for idx_str in body.split(';') {
-					if idx_str.len == 0 {
-						continue
+				self.notify_color_change(request.target, color)
+			}
+			osc.ColorRequestReset {
+				match request.target {
+					osc.ColorTargetPalette {
+						idx := request.target.index
+						self.terminal.flags.dirty.palette = true
+						self.terminal.colors.palette.reset(idx)
+						self.notify_color_change(request.target, self.terminal.colors.palette.entries[int(idx)])
 					}
-					idx := parse_palette_index(idx_str) or { continue }
-					self.terminal.flags.dirty.palette = true
-					self.terminal.colors.palette.reset(idx)
-					self.notify_color_change_palette(idx, self.terminal.colors.palette.entries[int(idx)])
+					osc.ColorTargetDynamic {
+						self.reset_dynamic_color(request.target.color, request.target)
+					}
+					osc.ColorTargetSpecial {}
 				}
 			}
-		}
-
-		// OSC 10-19: get/set dynamic colors. Each successive value uses the
-		// next dynamic color. We support fg (10), bg (11), cursor (12).
-		op >= 10 && op <= 19 {
-			mut dyn := op
-			for spec in body.split(';') {
-				if dyn > 19 {
-					break
-				}
-				current := dyn
-				dyn += 1
-
-				if spec == '?' {
-					if r := self.color_query_response_dynamic(current, terminator) {
-						response += r
+			osc.ColorRequestResetPalette {
+				for i in 0 .. 256 {
+					idx := u8(i)
+					if self.terminal.colors.palette.mask_is_set(idx) {
+						self.terminal.flags.dirty.palette = true
+						self.terminal.colors.palette.reset(idx)
+						self.notify_color_change(osc.ColorTarget(osc.ColorTargetPalette{
+							index: idx
+						}), self.terminal.colors.palette.entries[i])
 					}
-					continue
 				}
-
-				color := osc.parse_rgb(spec) or { break }
-				trgb := terminal.RGB{
-					r: color.r
-					g: color.g
-					b: color.b
-				}
-				self.set_dynamic_color(current, trgb)
-				self.notify_color_change_dynamic(current, trgb)
 			}
-		}
-
-		// OSC 110-119: reset dynamic colors. 110=fg, 111=bg, 112=cursor.
-		op >= 110 && op <= 119 {
-			self.reset_dynamic_color(op - 100)
-		}
-		else {
-			// Unsupported color operation; ignore.
+			osc.ColorRequestResetSpecial {}
+			osc.ColorRequestQuery {
+				if report := self.color_query_response(request.target, terminator) {
+					response += report
+				}
+			}
 		}
 	}
 
-	// If we accumulated any query responses, send them to the pty.
 	if response.len > 0 {
 		self.message_writer(Message.write_req(response))
 	}
 }
 
-// set_dynamic_color sets an OSC 10-19 dynamic color. dyn is the OSC number.
-fn (mut self StreamHandler) set_dynamic_color(dyn int, color terminal.RGB) {
-	match dyn {
-		10 { self.terminal.colors.foreground.set_override(color) }
-		11 { self.terminal.colors.background.set_override(color) }
-		12 { self.terminal.colors.cursor.set_override(color) }
-		// Other dynamic colors (pointer/tektronix/highlight) are not
-		// implemented, matching upstream.
+fn terminal_rgb(color osc.RGB) terminal.RGB {
+	return terminal.RGB{
+		r: color.r
+		g: color.g
+		b: color.b
+	}
+}
+
+fn (mut self StreamHandler) set_dynamic_color(dynamic osc.DynamicColor, color terminal.RGB) {
+	match dynamic {
+		.foreground { self.terminal.colors.foreground.set_override(color) }
+		.background { self.terminal.colors.background.set_override(color) }
+		.cursor { self.terminal.colors.cursor.set_override(color) }
 		else {}
 	}
 }
 
-// reset_dynamic_color resets an OSC 10-19 dynamic color. dyn is the OSC 10-19
-// number (i.e. OSC 110 maps to 10).
-fn (mut self StreamHandler) reset_dynamic_color(dyn int) {
-	match dyn {
-		10 {
+fn (mut self StreamHandler) reset_dynamic_color(dynamic osc.DynamicColor, target osc.ColorTarget) {
+	match dynamic {
+		.foreground {
 			self.terminal.colors.foreground.reset_override()
-			if c := self.terminal.colors.foreground.default_color {
-				self.notify_color_change_dynamic(10, c)
+			if color := self.terminal.colors.foreground.default_color {
+				self.notify_color_change(target, color)
 			}
 		}
-		11 {
+		.background {
 			self.terminal.colors.background.reset_override()
-			if c := self.terminal.colors.background.default_color {
-				self.notify_color_change_dynamic(11, c)
+			if color := self.terminal.colors.background.default_color {
+				self.notify_color_change(target, color)
 			}
 		}
-		12 {
+		.cursor {
 			self.terminal.colors.cursor.reset_override()
-			if c := self.terminal.colors.cursor.default_color {
-				self.notify_color_change_dynamic(12, c)
+			if color := self.terminal.colors.cursor.default_color {
+				self.notify_color_change(target, color)
 			}
 		}
 		else {}
 	}
 }
 
-// color_query_response_palette builds an OSC 4 query response for a palette
-// index in the currently-configured report format.
-fn (self &StreamHandler) color_query_response_palette(idx u8, terminator osc.Terminator) ?string {
+fn (self &StreamHandler) color_query_response(target osc.ColorTarget, terminator osc.Terminator) ?string {
 	if self.osc_color_report_format == .none_ {
 		return none
 	}
-	color := self.terminal.colors.palette.entries[int(idx)]
-	term := osc_terminator(terminator)
-	return match self.osc_color_report_format {
-		.bits_16 {
-			'\x1b]4;${idx};rgb:${hex4(color.r)}/${hex4(color.g)}/${hex4(color.b)}${term}'
+	mut prefix := ''
+	color := match target {
+		osc.ColorTargetPalette {
+			prefix = '\x1b]4;${target.index};rgb:'
+			self.terminal.colors.palette.entries[int(target.index)]
 		}
-		.bits_8 {
-			'\x1b]4;${idx};rgb:${hex2(color.r)}/${hex2(color.g)}/${hex2(color.b)}${term}'
-		}
-		.none_ {
-			''
-		}
-	}
-}
-
-// color_query_response_dynamic builds an OSC 10-19 query response for a
-// dynamic color in the currently-configured report format.
-fn (self &StreamHandler) color_query_response_dynamic(dyn int, terminator osc.Terminator) ?string {
-	if self.osc_color_report_format == .none_ {
-		return none
-	}
-	color := match dyn {
-		10 { self.terminal.colors.foreground.get() or { return none } }
-		11 { self.terminal.colors.background.get() or { return none } }
-		12 {
-			self.terminal.colors.cursor.get() or {
-				self.terminal.colors.foreground.get() or { return none }
+		osc.ColorTargetDynamic {
+			prefix = '\x1b]${dynamic_color_osc_number(target.color)};rgb:'
+			match target.color {
+				.foreground { self.terminal.colors.foreground.get() or { return none } }
+				.background { self.terminal.colors.background.get() or { return none } }
+				.cursor {
+					self.terminal.colors.cursor.get() or {
+						self.terminal.colors.foreground.get() or { return none }
+					}
+				}
+				else {
+					return none
+				}
 			}
 		}
-		else {
+		osc.ColorTargetSpecial {
 			return none
 		}
 	}
 	term := osc_terminator(terminator)
 	return match self.osc_color_report_format {
 		.bits_16 {
-			'\x1b]${dyn};rgb:${hex4(color.r)}/${hex4(color.g)}/${hex4(color.b)}${term}'
+			'${prefix}${hex4(color.r)}/${hex4(color.g)}/${hex4(color.b)}${term}'
 		}
 		.bits_8 {
-			'\x1b]${dyn};rgb:${hex2(color.r)}/${hex2(color.g)}/${hex2(color.b)}${term}'
+			'${prefix}${hex2(color.r)}/${hex2(color.g)}/${hex2(color.b)}${term}'
 		}
-		.none_ {
-			''
-		}
+		.none_ { '' }
+	}
+}
+
+fn dynamic_color_osc_number(color osc.DynamicColor) int {
+	return match color {
+		.foreground { 10 }
+		.background { 11 }
+		.cursor { 12 }
+		.pointer_foreground { 13 }
+		.pointer_background { 14 }
+		.tektronix_foreground { 15 }
+		.tektronix_background { 16 }
+		.highlight_background { 17 }
+		.tektronix_cursor { 18 }
+		.highlight_foreground { 19 }
 	}
 }
 
@@ -1869,39 +1809,12 @@ fn osc_terminator(terminator osc.Terminator) string {
 	}
 }
 
-// notify_color_change_palette notifies the surface of a palette color change.
-fn (mut self StreamHandler) notify_color_change_palette(idx u8, color terminal.RGB) {
+// notify_color_change forwards an OSC color mutation to the surface.
+fn (mut self StreamHandler) notify_color_change(target osc.ColorTarget, color terminal.RGB) {
 	self.surface_message_writer(apprt.SurfaceMessage{
 		kind: .color_change
 		color_change: osc.ColoredTarget{
-			target: osc.ColorTarget(osc.ColorTargetPalette{
-				index: idx
-			})
-			color: osc.RGB{
-				r: color.r
-				g: color.g
-				b: color.b
-			}
-		}
-	})
-}
-
-// notify_color_change_dynamic notifies the surface of a dynamic color change.
-fn (mut self StreamHandler) notify_color_change_dynamic(dyn int, color terminal.RGB) {
-	dc := match dyn {
-		10 { osc.DynamicColor.foreground }
-		11 { osc.DynamicColor.background }
-		12 { osc.DynamicColor.cursor }
-		else {
-			return
-		}
-	}
-	self.surface_message_writer(apprt.SurfaceMessage{
-		kind: .color_change
-		color_change: osc.ColoredTarget{
-			target: osc.ColorTarget(osc.ColorTargetDynamic{
-				color: dc
-			})
+			target: target
 			color: osc.RGB{
 				r: color.r
 				g: color.g
@@ -1915,144 +1828,114 @@ fn (mut self StreamHandler) notify_color_change_dynamic(dyn int, color terminal.
 // Kitty color protocol (OSC 21)
 // ============================================================
 
-// kitty_color_report handles the kitty color protocol (OSC 21). The data
-// string is the raw OSC body after "21;", a semicolon-separated list of:
-//   - "key=?"       -> query
-//   - "key=spec"    -> set
-//   - "key="        -> reset
-// where key is a palette index, "foreground", "background", or "cursor".
-//
-// Faithful to stream_handler.zig kittyColorReport.
-fn (mut self StreamHandler) kitty_color_report(data string, terminator osc.Terminator) {
+// kitty_color_report applies the parsed Kitty OSC 21 operations.
+fn (mut self StreamHandler) kitty_color_report(items []osc.KittyColorItem, terminator osc.Terminator) {
 	mut response := ''
 
-	for item in data.split(';') {
-		trimmed := item.trim_space()
-		if trimmed.len == 0 {
-			continue
-		}
-
-		eq := trimmed.index('=') or {
-			// No '=': not a valid key/value; skip.
-			continue
-		}
-		key := trimmed[..eq]
-		val := trimmed[eq + 1..]
-
-		if val == '?' {
-			// Query.
-			if response.len == 0 {
-				response += '\x1b]21'
+	for item in items {
+		match item.item_type {
+			.query {
+				key := kitty_color_key_string(item.key)
+				if response.len == 0 {
+					response += '\x1b]21'
+				}
+				if !kitty_color_supported(item.key) {
+					continue
+				}
+				if color := self.kitty_color_get(item.key) {
+					response += ';${key}=rgb:${hex2(color.r)}/${hex2(color.g)}/${hex2(color.b)}'
+				} else {
+					response += ';${key}='
+				}
 			}
-			if color := self.kitty_color_get(key) {
-				response += ';${key}=rgb:${hex2(color.r)}/${hex2(color.g)}/${hex2(color.b)}'
-			} else {
-				// Unset color: report the key with an empty value.
-				response += ';${key}='
+			.set {
+				self.kitty_color_set(item.key, terminal_rgb(item.color))
 			}
-			continue
+			.reset {
+				self.kitty_color_reset(item.key)
+			}
 		}
-
-		if val.len == 0 {
-			// Reset.
-			self.kitty_color_reset(key)
-			continue
-		}
-
-		// Set.
-		rgb := osc.parse_rgb(val) or { continue }
-		trgb := terminal.RGB{
-			r: rgb.r
-			g: rgb.g
-			b: rgb.b
-		}
-		self.kitty_color_set(key, trgb)
 	}
 
-	// If we had any query writes, terminate and send them.
 	if response.len > 0 {
 		response += osc_terminator(terminator)
 		self.message_writer(Message.write_req(response))
 	}
 }
 
-// kitty_color_get returns the current color for a kitty color protocol key,
-// or none if unset.
-fn (self &StreamHandler) kitty_color_get(key string) ?terminal.RGB {
-	match key {
-		'foreground' {
-			return self.terminal.colors.foreground.get()
-		}
-		'background' {
-			return self.terminal.colors.background.get()
-		}
-		'cursor' {
-			return self.terminal.colors.cursor.get()
-		}
-		else {
-			idx := parse_palette_index(key) or { return none }
-			return self.terminal.colors.palette.entries[int(idx)]
+fn kitty_color_supported(key osc.KittyColorKind) bool {
+	return match key.kind {
+		.palette { true }
+		.special {
+			key.special in [.foreground, .background, .cursor]
 		}
 	}
 }
 
-// kitty_color_set sets the color for a kitty color protocol key.
-fn (mut self StreamHandler) kitty_color_set(key string, color terminal.RGB) {
-	match key {
-		'foreground' {
-			self.terminal.colors.foreground.set_override(color)
+fn (self &StreamHandler) kitty_color_get(key osc.KittyColorKind) ?terminal.RGB {
+	return match key.kind {
+		.palette { self.terminal.colors.palette.entries[int(key.palette)] }
+		.special {
+			match key.special {
+				.foreground { self.terminal.colors.foreground.get() }
+				.background { self.terminal.colors.background.get() }
+				.cursor { self.terminal.colors.cursor.get() }
+				else { none }
+			}
 		}
-		'background' {
-			self.terminal.colors.background.set_override(color)
-		}
-		'cursor' {
-			self.terminal.colors.cursor.set_override(color)
-		}
-		else {
-			idx := parse_palette_index(key) or { return }
+	}
+}
+
+fn (mut self StreamHandler) kitty_color_set(key osc.KittyColorKind, color terminal.RGB) {
+	match key.kind {
+		.palette {
 			self.terminal.flags.dirty.palette = true
-			self.terminal.colors.palette.set(idx, color)
+			self.terminal.colors.palette.set(key.palette, color)
+		}
+		.special {
+			match key.special {
+				.foreground { self.terminal.colors.foreground.set_override(color) }
+				.background { self.terminal.colors.background.set_override(color) }
+				.cursor { self.terminal.colors.cursor.set_override(color) }
+				else {}
+			}
 		}
 	}
 }
 
-// kitty_color_reset resets the color for a kitty color protocol key.
-fn (mut self StreamHandler) kitty_color_reset(key string) {
-	match key {
-		'foreground' {
-			self.terminal.colors.foreground.reset_override()
-		}
-		'background' {
-			self.terminal.colors.background.reset_override()
-		}
-		'cursor' {
-			self.terminal.colors.cursor.reset_override()
-		}
-		else {
-			idx := parse_palette_index(key) or { return }
+fn (mut self StreamHandler) kitty_color_reset(key osc.KittyColorKind) {
+	match key.kind {
+		.palette {
 			self.terminal.flags.dirty.palette = true
-			self.terminal.colors.palette.reset(idx)
+			self.terminal.colors.palette.reset(key.palette)
+		}
+		.special {
+			match key.special {
+				.foreground { self.terminal.colors.foreground.reset_override() }
+				.background { self.terminal.colors.background.reset_override() }
+				.cursor { self.terminal.colors.cursor.reset_override() }
+				else {}
+			}
 		}
 	}
 }
 
-// parse_palette_index parses a decimal palette index (0-255) from a string.
-fn parse_palette_index(s string) ?u8 {
-	trimmed := s.trim_space()
-	if trimmed.len == 0 {
-		return none
-	}
-	mut val := 0
-	for c in trimmed {
-		if c < u8(`0`) || c > u8(`9`) {
-			return none
+fn kitty_color_key_string(key osc.KittyColorKind) string {
+	return match key.kind {
+		.palette { '${key.palette}' }
+		.special {
+			match key.special {
+				.foreground { 'foreground' }
+				.background { 'background' }
+				.selection_foreground { 'selection_foreground' }
+				.selection_background { 'selection_background' }
+				.cursor { 'cursor' }
+				.cursor_text { 'cursor_text' }
+				.visual_bell { 'visual_bell' }
+				.second_transparent_background { 'second_transparent_background' }
+			}
 		}
-		val = val * 10 + int(c - u8(`0`))
-		if val > 255 {
-			return none
-		}
 	}
-	return u8(val)
 }
 
 // hex2 formats a byte as a 2-digit lowercase hex string.
