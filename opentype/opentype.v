@@ -86,6 +86,15 @@ pub fn fixed_from(float f64) Fixed {
 	}
 }
 
+// round returns the fixed-point value rounded using the high fractional bit,
+// matching SFNT.FixedPoint.round.
+pub fn (f Fixed) round() i32 {
+	if f.frac & 0x8000 != 0 {
+		return i32(f.int_part) + 1
+	}
+	return i32(f.int_part)
+}
+
 // read_fixed_be reads a big-endian Fixed from data at offset.
 fn read_fixed_be(data []u8, offset int) Fixed {
 	raw := read_u32_be(data, offset)
@@ -151,6 +160,24 @@ pub fn (f F2Dot14) to_f64() f64 {
 	return f64(raw) / 16384.0
 }
 
+// f2dot14_from creates an F2Dot14 value from a float.
+pub fn f2dot14_from(float f64) F2Dot14 {
+	raw := i16(float * 16384.0 + if float >= 0 { 0.5 } else { -0.5 })
+	return F2Dot14{
+		frac: u16(raw) & 0x3fff
+		int_part: i8(raw >> 14)
+	}
+}
+
+// round returns the fixed-point value rounded using the high fractional bit,
+// matching SFNT.FixedPoint.round.
+pub fn (f F2Dot14) round() i16 {
+	if f.frac & 0x2000 != 0 {
+		return i16(f.int_part) + 1
+	}
+	return i16(f.int_part)
+}
+
 // read_version16dot16_be reads a big-endian Version16Dot16 from data at offset.
 fn read_version16dot16_be(data []u8, offset int) Version16Dot16 {
 	raw := read_u32_be(data, offset)
@@ -183,7 +210,7 @@ pub:
 	//   - 0x74_79_70_31  'typ1'  PostScript
 	sfnt_version u32
 	// Number of tables.
-	num_tables   u16
+	num_tables u16
 	// Maximum power of 2 less than or equal to numTables, times 16
 	// ((2**floor(log2(numTables))) * 16, where "**" is an exponentiation operator).
 	search_range u16
@@ -198,13 +225,13 @@ pub:
 pub struct TableRecord {
 pub:
 	// Table identifier.
-	tag      Tag
+	tag Tag
 	// Checksum for this table.
 	checksum u32
 	// Offset from beginning of font file.
-	offset   u32
+	offset u32
 	// Length of this table.
-	length   u32
+	length u32
 }
 
 // SFNT is a wrapper for parsing an SFNT font and accessing its tables.
@@ -539,28 +566,28 @@ pub fn Hhea.init(data []u8) !Hhea {
 pub struct FSSelection {
 pub:
 	// Font contains italic or oblique glyphs, otherwise they are upright.
-	italic          bool
+	italic bool
 	// Glyphs are underscored.
-	underscore      bool
+	underscore bool
 	// Glyphs have their foreground and background reversed.
-	negative        bool
+	negative bool
 	// Outline (hollow) glyphs, otherwise they are solid.
-	outlined        bool
+	outlined bool
 	// Glyphs are overstruck.
-	strikeout       bool
+	strikeout bool
 	// Glyphs are emboldened.
-	bold            bool
+	bold bool
 	// Glyphs are in the standard weight/style for the font.
-	regular         bool
+	regular bool
 	// If set, it is strongly recommended that applications use
 	// OS/2.sTypoAscender - OS/2.sTypoDescender + OS/2.sTypoLineGap
 	// as the default line spacing for this font.
 	use_typo_metrics bool
 	// The font has 'name' table strings consistent with a weight/width/slope
 	// family without requiring use of name IDs 21 and 22.
-	wws             bool
+	wws bool
 	// Font contains oblique glyphs.
-	oblique         bool
+	oblique bool
 }
 
 // fs_selection_from_u16 parses FSSelection flags from a u16 value.
@@ -1042,13 +1069,13 @@ pub:
 	// This is used to very quickly include/exclude a glyph from the table.
 	start_glyph_id u16
 	// The end glyph ID (inclusive) that is present in the table.
-	end_glyph_id   u16
+	end_glyph_id u16
 	// The raw data for the SVG document records.
 	// Each record is 12 bytes: startGlyphID(u16) + endGlyphID(u16) +
 	// svgDocOffset(u32) + svgDocLength(u32).
-	data           []u8
+	data []u8
 	// The number of SVG document records.
-	num_records    u16
+	num_records u16
 	// The offset within data where the records start.
 	records_offset int
 }

@@ -27,6 +27,13 @@ fn test_fixed_negative() {
 	assert result == -1.5
 }
 
+fn test_fixed_round() {
+	assert fixed_from(1.5).round() == 2
+	assert fixed_from(1.25).round() == 1
+	assert fixed_from(-1.5).round() == -1
+	assert fixed_from(-1.25).round() == -1
+}
+
 fn test_f26dot6_from_and_to_f64() {
 	// Test positive value: 26.6
 	p := f26dot6_from(26.6)
@@ -56,6 +63,26 @@ fn test_f26dot6_round_half() {
 
 	// 0.25 should round to 0 (bit 5 not set = 16 & 0x20 == 0)
 	quarter := f26dot6_from(0.25)
+	assert quarter.round() == 0
+}
+
+fn test_f2dot14_from_to_and_round() {
+	positive := f2dot14_from(1.5)
+	assert positive.int_part == 1
+	assert positive.frac == 8192
+	assert positive.to_f64() == 1.5
+	assert positive.round() == 2
+
+	negative := f2dot14_from(-1.5)
+	assert negative.int_part == -2
+	assert negative.frac == 8192
+	assert negative.to_f64() == -1.5
+	assert negative.round() == -1
+
+	quarter := f2dot14_from(0.25)
+	assert quarter.int_part == 0
+	assert quarter.frac == 4096
+	assert quarter.to_f64() == 0.25
 	assert quarter.round() == 0
 }
 
@@ -875,6 +902,7 @@ fn test_post_parse() {
 	data[13] = 0x00
 	data[14] = 0x00
 	data[15] = 0x01
+
 	// minMemType42 = 0 (offset 16)
 	// maxMemType42 = 0 (offset 20)
 	// minMemType1 = 0 (offset 24)
@@ -969,6 +997,7 @@ fn test_svg_parse_single_record() {
 	// endGlyphID = 105 (offset 10)
 	data[10] = 0x00
 	data[11] = 0x69
+
 	// svgDocOffset = 0 (offset 12, 4 bytes)
 	// svgDocLength = 0 (offset 16, 4 bytes)
 
@@ -998,6 +1027,7 @@ fn test_svg_has_glyph_single_range() {
 	data[9] = 0x64
 	data[10] = 0x00
 	data[11] = 0x69
+
 	// svgDocOffset and svgDocLength = 0
 
 	svg := SVG.init(data) or {
@@ -1037,6 +1067,7 @@ fn test_svg_has_glyph_multiple_ranges() {
 	data[9] = 0x0A
 	data[10] = 0x00
 	data[11] = 0x14
+
 	// svgDocOffset = 0, svgDocLength = 0 (8 bytes padding)
 
 	// Record 1 (offset 20): startGlyphID=50, endGlyphID=60
