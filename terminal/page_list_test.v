@@ -6556,6 +6556,48 @@ fn test_page_list_erase_row_with_tracked_pin_resets_to_top_left() {
 	s.untrack_pin(p)
 }
 
+fn test_page_list_erase_row_with_tracked_pin_shifts() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	pin := s.get_pin(.active, 2, 4) or {
+		assert false, 'active pin missing'
+		return
+	}
+	p := s.track_pin(pin)
+	s.erase_rows(Point.new(.active, Coordinate{}), Point.new(.active, Coordinate{ y: 3 }))
+	assert s.total_rows == usize(s.rows)
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(p.node) == voidptr(first)
+	assert p.y == 0
+	assert p.x == 2
+	s.untrack_pin(p)
+}
+
+fn test_page_list_erase_row_with_tracked_pin_is_erased() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	pin := s.get_pin(.active, 2, 2) or {
+		assert false, 'active pin missing'
+		return
+	}
+	p := s.track_pin(pin)
+	s.erase_rows(Point.new(.active, Coordinate{}), Point.new(.active, Coordinate{ y: 3 }))
+	assert s.total_rows == usize(s.rows)
+	first := s.pages.first or {
+		assert false, 'no first page'
+		return
+	}
+	assert voidptr(p.node) == voidptr(first)
+	assert p.y == 0
+	assert p.x == 0
+	s.untrack_pin(p)
+}
+
 fn test_page_list_erase_resets_viewport_to_active_if_moves_within_active() {
 	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
@@ -6570,6 +6612,19 @@ fn test_page_list_erase_resets_viewport_to_active_if_moves_within_active() {
 	// Erase the entire history; we should be back to just our active set.
 	s.erase_rows(Point.new(.history, Coordinate{}), none)
 	assert s.viewport == .active
+}
+
+fn test_page_list_erase_resets_viewport_if_inside_erased_page_but_not_active() {
+	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	cap := initial_capacity(80)
+	s.grow_rows(usize(cap.rows) * 5)
+	s.scroll(PageScrollDeltaRow{ delta: -int(s.total_rows) })
+	assert s.viewport == .top
+
+	s.erase_rows(Point.new(.history, Coordinate{}), Point.new(.history, Coordinate{ y: 2 }))
+	assert s.viewport == .top
 }
 
 fn test_page_list_erase_resets_viewport_to_active_if_top_is_inside_active() {

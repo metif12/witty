@@ -5683,7 +5683,7 @@ fn (mut self PageList) trim_trailing_blank_rows(max u16) u16 {
 // IMPORTANT: This does NOT update total_rows. The caller is responsible.
 fn (mut self PageList) erase_page(node &PageNode) {
 	// Update any tracked pins to move to the previous or next page.
-	next := node.next or { node.prev or { node } }
+	next := node.prev or { node.next or { node } }
 	for mut p in self.tracked_pins {
 		if voidptr(p.node) == voidptr(node) {
 			p.node = next
