@@ -1216,6 +1216,128 @@ fn test_page_list_grow_prune_with_viewport_pin() {
 	s.assert_integrity()
 }
 
+fn test_page_list_grow_prune_scrollback_with_viewport_pin_not_in_pruned_page() {
+	mut s := PageList.init(80, 24, standard_page_size())
+	defer { s.deinit() }
+
+	page1_node := s.pages.last or {
+		assert false, 'first page missing'
+		return
+	}
+	page1_rows := page1_node.data.capacity.rows
+	page1_remaining := int(page1_rows - page1_node.data.size.rows)
+	for _ in 0 .. page1_remaining {
+		assert s.grow() == none
+	}
+	assert page1_node.data.size.rows == page1_rows
+
+	page2_node := s.grow() or {
+		assert false, 'second page was not allocated'
+		return
+	}
+	page2_remaining := int(page2_node.data.capacity.rows - page2_node.data.size.rows)
+	for _ in 0 .. page2_remaining {
+		assert s.grow() == none
+	}
+	old_page_size := s.page_size
+
+	pin_y := u16(page1_rows + 5)
+	viewport_pin := s.get_pin(.screen, 0, pin_y) or {
+		assert false, 'viewport pin missing'
+		return
+	}
+	s.scroll(PageScrollPin{ pin: viewport_pin })
+	assert s.viewport == .pin
+	assert voidptr(s.viewport_pin.node) == voidptr(page2_node)
+	assert s.scrollbar().offset == usize(pin_y)
+
+	new_node := s.grow() or {
+		assert false, 'pruned page was not reused'
+		return
+	}
+	assert voidptr(s.pages.last or { return }) == voidptr(new_node)
+	assert s.page_size == old_page_size
+	assert voidptr(s.pages.first or { return }) == voidptr(page2_node)
+	assert voidptr(s.viewport_pin.node) == voidptr(page2_node)
+	assert s.scrollbar().offset == usize(pin_y - page1_rows)
+}
+
+fn test_page_list_grow_reuses_non_standard_page_without_leak() {
+	mut s := PageList.init(80, 24, 3 * standard_page_size())
+	defer { s.deinit() }
+
+	for {
+		first := s.pages.first or { return }
+		if page_backing_size(first.data.capacity) > standard_page_size() {
+			break
+		}
+		s.increase_capacity(first, .grapheme_bytes) or { panic(err) }
+	}
+	first_page := s.pages.first or {
+		assert false, 'first page missing'
+		return
+	}
+	assert page_backing_size(first_page.data.capacity) > standard_page_size()
+
+	for first_page.data.size.rows < first_page.data.capacity.rows {
+		s.grow() or {}
+	}
+	s.grow() or {
+		assert false, 'second page was not allocated'
+		return
+	}
+	for s.page_size + standard_page_size() <= s.max_size()
+		|| (s.pages.last or { return }).data.size.rows < (s.pages.last or { return }).data.capacity.rows {
+		s.grow() or {}
+	}
+	assert voidptr(s.pages.first or { return }) == voidptr(first_page)
+	assert s.total_rows >= usize(s.rows)
+	last := s.pages.last or { return }
+	assert last.data.size.rows == last.data.capacity.rows
+
+	tracked := s.track_pin(PagePin{ node: first_page })
+	s.grow() or {}
+	assert voidptr(s.pages.first or { return }) != voidptr(first_page)
+	assert voidptr(s.pages.last or { return }) != voidptr(first_page)
+	assert voidptr(tracked.node) == voidptr(s.pages.first or { return })
+	assert tracked.x == 0
+	assert tracked.y == 0
+	assert tracked.garbage
+	s.untrack_pin(tracked)
+}
+
+fn test_page_list_grow_non_standard_page_prune_protection() {
+	mut s := PageList.init(80, 600, standard_page_size())
+	defer { s.deinit() }
+
+	for {
+		first := s.pages.first or { return }
+		if page_backing_size(first.data.capacity) > standard_page_size() {
+			break
+		}
+		s.increase_capacity(first, .grapheme_bytes) or { panic(err) }
+	}
+	first_page := s.pages.first or { return }
+	first_page_rows := first_page.data.capacity.rows
+	for first_page.data.size.rows < first_page_rows {
+		s.grow() or {}
+	}
+	for voidptr(s.pages.first or { return }) == voidptr(s.pages.last or { return }) {
+		s.grow() or {}
+	}
+	last := s.pages.last or { return }
+	second_rows := last.data.capacity.rows
+	for last.data.size.rows < second_rows {
+		s.grow() or {}
+	}
+
+	would_remain := s.total_rows - usize(first_page_rows) + 1
+	assert would_remain < usize(s.rows)
+	assert s.page_size + standard_page_size() > s.max_size()
+	s.grow() or {}
+	assert s.total_rows >= usize(s.rows)
+}
+
 fn test_page_list_scrollbar_with_max_size_0_after_grow() {
 	mut s := PageList.init(80, 24, usize(0))
 	defer { s.deinit() }
