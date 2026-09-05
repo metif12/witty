@@ -2729,8 +2729,59 @@ fn (mut self Screen) clear_active_row(y u32) {
 
 // Erase rows physically (reclaim memory).
 pub fn (mut self Screen) erase_rows(tl Point, bl ?Point) {
+	top := self.pages.pin_point(tl) or { return }
+	bottom := if point := bl {
+		self.pages.pin_point(point) or { return }
+	} else {
+		self.pages.get_bottom_right(tl.tag) or { return }
+	}
+	if top.y > bottom.y {
+		return
+	}
+
+	// PageList keeps the cursor and selection as tracked pins,
+	// so eraseRows moves them with the surviving rows and collapses pins in an
+	// erased row to the first erased row. Reproduce that tracking around the
+	// flat row-array mutation.
+	mut cursor_pin := Pin{
+		x: self.cursor.x
+		y: u32(self.pages.active_start) + self.cursor.y
+	}
+	mut selection := self.selection
+
+	cursor_pin = pin_after_row_erase(cursor_pin, top, bottom)
+	if mut value := selection {
+		value.start_pin = pin_after_row_erase(value.start_pin, top, bottom)
+		value.end_pin = pin_after_row_erase(value.end_pin, top, bottom)
+		selection = value
+	}
+
 	self.pages.erase_rows(tl, bl)
+	active_start := u32(self.pages.active_start)
+	self.cursor.x = if cursor_pin.x < self.pages.cols { cursor_pin.x } else { self.pages.cols - 1 }
+	self.cursor.y = if cursor_pin.y >= active_start {
+		cursor_pin.y - active_start
+	} else {
+		u32(0)
+	}
+	self.selection = selection
 	self.cursor_reload()
+}
+
+fn pin_after_row_erase(pin Pin, top Pin, bottom Pin) Pin {
+	if pin.y > bottom.y {
+		return Pin{
+			...pin
+			y: pin.y - (bottom.y - top.y + 1)
+		}
+	}
+	if pin.y >= top.y {
+		return Pin{
+			x: 0
+			y: top.y
+		}
+	}
+	return pin
 }
 
 // Clear rows (set to blank, preserving the row slots).

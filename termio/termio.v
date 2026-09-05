@@ -686,13 +686,11 @@ pub fn (mut t Termio) clear_screen(history bool) ! {
 		}
 
 		// If we're not at a prompt, we just delete above the cursor.
-		//
-		// NOTE: Ghostty erases the exact rows above the cursor (y=0 to
-		// cursor.y-1). The flat V terminal exposes the equivalent display
-		// operation for this range.
 		if !t.terminal.cursor_is_at_prompt() {
 			if t.terminal.screens.active.cursor.y > 0 {
-				t.terminal.erase_display(.above, false)
+				t.terminal.screens.active.erase_rows(terminal.Point.new(.active, terminal.Coordinate{}), terminal.Point.new(.active, terminal.Coordinate{
+					y: t.terminal.screens.active.cursor.y - 1
+				}))
 			}
 			kitty.clear_active_images(mut t.terminal)
 			return

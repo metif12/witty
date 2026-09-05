@@ -63,6 +63,24 @@ fn test_termio_queue_message_uses_mailbox() {
 	assert msg.flag_val
 }
 
+fn test_termio_clear_screen_preserves_and_moves_cursor_row() {
+	mut tio := Termio{}
+	tio.init(TermioOpts{})!
+	defer {
+		tio.deinit()
+	}
+
+	tio.terminal.print_string('first\nsecond\nkeep')!
+	assert tio.terminal.screens.active.cursor.x == 4
+	assert tio.terminal.screens.active.cursor.y == 2
+
+	tio.clear_screen(false)!
+
+	assert tio.terminal.plain_string()! == 'keep'
+	assert tio.terminal.screens.active.cursor.x == 4
+	assert tio.terminal.screens.active.cursor.y == 0
+}
+
 fn test_termio_clones_and_decodes_startup_input() {
 	mut config := configpkg.Config.default_config()
 	config.load_string('input = raw:hello\\nworld\ninput = path:startup\\x2etxt\n')

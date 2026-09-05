@@ -441,6 +441,9 @@ fn test_screen_erase_rows_active_partial() {
 	defer { s.deinit() }
 
 	s.test_write_string('1\n2\n3') or { assert false }
+	assert s.cursor.x == 1
+	assert s.cursor.y == 2
+	s.selection = Selection.init(Pin{ x: 2, y: 0 }, Pin{ x: 3, y: 2 }, false)
 	s.erase_rows(Point.new(.active, Coordinate{}), Point.new(.active, Coordinate{ y: 1 }))
 
 	active := s.dump_string_alloc(.active) or {
@@ -454,6 +457,11 @@ fn test_screen_erase_rows_active_partial() {
 	}
 	assert screen == '3'
 	assert s.pages.screen_rows.len == 5
+	assert s.cursor.x == 1
+	assert s.cursor.y == 0
+	selection := s.selection or { panic('missing selection') }
+	assert selection.start_pin == Pin{ x: 0, y: 0 }
+	assert selection.end_pin == Pin{ x: 3, y: 0 }
 }
 
 fn test_screen_scrolling() {
