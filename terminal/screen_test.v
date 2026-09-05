@@ -296,6 +296,80 @@ fn test_screen_clear_rows_protected() {
 	assert str == '           PROTECTED\nPROTECTED           PROTECTED'
 }
 
+fn test_screen_clear_cells_updates_managed_row_flags() {
+	mut s := Screen.init(5, 1, 0)
+	defer { s.deinit() }
+
+	mut row := &s.pages.screen_rows[0]
+	row.grapheme = true
+	row.styled = true
+	row.hyperlink = true
+	for x in [0, 4] {
+		row.cells[x] = CellData{
+			content_tag: .codepoint_grapheme
+			codepoint: u32(`x`)
+			has_grapheme: true
+			graphemes: [u32(0x0301)]
+			style_id: 1
+			has_hyperlink: true
+		}
+	}
+
+	// A partial clear must retain each aggregate flag while another matching
+	// cell remains in the row.
+	s.clear_cells(0, 0, 1)
+	assert row.grapheme
+	assert row.styled
+	assert row.hyperlink
+
+	// Clearing the final matching cell must update all three flags.
+	s.clear_cells(0, 4, 5)
+	assert !row.grapheme
+	assert !row.styled
+	assert !row.hyperlink
+}
+
+fn test_screen_clear_rows_protected_preserves_managed_flags() {
+	mut s := Screen.init(5, 1, 0)
+	defer { s.deinit() }
+
+	mut row := &s.pages.screen_rows[0]
+	row.wrap = true
+	row.wrap_continuation = true
+	row.semantic_prompt = .prompt
+	row.grapheme = true
+	row.styled = true
+	row.hyperlink = true
+	row.cells[0] = CellData{
+		content_tag: .codepoint_grapheme
+		codepoint: u32(`u`)
+		has_grapheme: true
+		graphemes: [u32(0x0301)]
+		style_id: 1
+		has_hyperlink: true
+	}
+	row.cells[1] = CellData{
+		content_tag: .codepoint_grapheme
+		codepoint: u32(`p`)
+		is_protected: true
+		has_grapheme: true
+		graphemes: [u32(0x0301)]
+		style_id: 1
+		has_hyperlink: true
+	}
+
+	s.clear_rows(Point.new(.active, Coordinate{}), ?Point(none), true)
+
+	assert row.cells[0].is_zero()
+	assert row.cells[1].codepoint == `p`
+	assert row.grapheme
+	assert row.styled
+	assert row.hyperlink
+	assert row.wrap
+	assert row.wrap_continuation
+	assert row.semantic_prompt == .prompt
+}
+
 fn test_screen_erase_rows_history() {
 	mut s := Screen.init(5, 5, 1000)
 	defer { s.deinit() }

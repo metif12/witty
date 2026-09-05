@@ -2743,39 +2743,34 @@ pub fn (mut self Screen) clear_rows(tl Point, bl ?Point, protected bool) {
 		return
 	}
 
-	blank := self.blank_cell()
 	for y in int(tl_pin.y) .. int(bl_pin.y) + 1 {
-		if y < self.pages.screen_rows.len {
+		if y >= self.pages.screen_rows.len {
+			continue
+		}
+		if protected {
+			// Ghostty clears each unprotected run through clearCells so managed
+			// row flags are updated while protected cells retain their metadata.
+			self.clear_unprotected_cells(y, 0, int(self.pages.cols))
+		} else {
+			self.clear_cells(y, 0, int(self.pages.cols))
 			unsafe {
 				mut row := &self.pages.screen_rows[y]
-				if protected {
-					// Only clear unprotected cells
-					for mut cell in row.cells {
-						if !cell.is_protected {
-							cell = blank
-						}
-					}
-				} else {
-					for i in 0 .. row.cells.len {
-						row.cells[i] = blank
-					}
-					row.wrap = false
-					row.wrap_continuation = false
-					row.styled = false
-					row.grapheme = false
-					row.hyperlink = false
-					row.semantic_prompt = .unknown
-					row.kitty_virtual_placeholder = false
-				}
-				row.dirty = true
+				row.wrap = false
+				row.wrap_continuation = false
+				row.styled = false
+				row.grapheme = false
+				row.hyperlink = false
+				row.semantic_prompt = .unknown
+				row.kitty_virtual_placeholder = false
 			}
 		}
+		self.pages.screen_rows[y].dirty = true
 	}
 }
 
 // Clear specific cells in a row.
 pub fn (mut self Screen) clear_cells(row_idx int, start int, end int) {
-	if row_idx >= self.pages.screen_rows.len {
+	if row_idx < 0 || row_idx >= self.pages.screen_rows.len {
 		return
 	}
 	// Cleared cells are filled with the current cursor's blank cell so that
@@ -2784,9 +2779,60 @@ pub fn (mut self Screen) clear_cells(row_idx int, start int, end int) {
 	blank := self.blank_cell()
 	unsafe {
 		mut row := &self.pages.screen_rows[row_idx]
-		for i in start .. end {
-			if i < row.cells.len {
-				row.cells[i] = blank
+		lo := if start > 0 { start } else { 0 }
+		hi := if end < row.cells.len { end } else { row.cells.len }
+		if lo >= hi {
+			return
+		}
+
+		had_grapheme := row.grapheme
+		had_hyperlink := row.hyperlink
+		had_style := row.styled
+		if row.kitty_virtual_placeholder && hi - lo == int(self.pages.cols) {
+			mut has_placeholder := false
+			for cell in row.cells[lo..hi] {
+				if cell.codepoint_val() == kitty_unicode_placeholder {
+					has_placeholder = true
+					break
+				}
+			}
+			if !has_placeholder {
+				row.kitty_virtual_placeholder = false
+			}
+		}
+
+		for i in lo .. hi {
+			row.cells[i] = blank
+		}
+
+		// Ghostty's Page update helpers rescan the row after a partial clear.
+		// Flat Pages stores the managed values inline, but must maintain the
+		// same aggregate flags because later fast paths depend on them.
+		if had_grapheme {
+			row.grapheme = false
+			for cell in row.cells {
+				if cell.has_grapheme {
+					row.grapheme = true
+					break
+				}
+			}
+		}
+		if had_hyperlink {
+			row.hyperlink = false
+			for cell in row.cells {
+				if cell.has_hyperlink {
+					row.hyperlink = true
+					break
+				}
+			}
+		}
+		if had_style {
+			row.styled = false
+			for cell in row.cells {
+				if cell.has_styling() {
+					row.styled = true
+					break
+				}
 			}
 		}
 		row.dirty = true
