@@ -3,6 +3,12 @@ module terminal
 // Tests for hash_hm.v
 // Translated from Ghostty's terminal/hash_hm.zig test cases.
 
+fn test_hash_map_hash_matches_zig_auto_context_u64() {
+	assert hash_key(0) == 0xe6b7875d0487a132
+	assert hash_key(1) == 0xac3608194ddc6751
+	assert hash_key(42) == 0xca6b1af451592f24
+}
+
 fn test_hash_map_basic_usage() {
 	mut hm := HashMapUnmanaged.init(16)
 

@@ -28,15 +28,52 @@ fn test_style_equality_uses_only_active_color_payload() {
 	assert palette_a.hash() == palette_b.hash()
 	assert !palette_a.eql(&palette_c)
 
-	rgb_a := CellStyle{ underline_color: .rgb, underline_r: 1, underline_g: 2,
-		underline_b: 3, underline_palette: 4 }
-	rgb_b := CellStyle{ underline_color: .rgb, underline_r: 1, underline_g: 2,
-		underline_b: 3, underline_palette: 9 }
-	rgb_c := CellStyle{ underline_color: .rgb, underline_r: 1, underline_g: 2,
-		underline_b: 4, underline_palette: 4 }
+	rgb_a := CellStyle{
+		underline_color: .rgb
+		underline_r: 1
+		underline_g: 2
+		underline_b: 3
+		underline_palette: 4
+	}
+	rgb_b := CellStyle{
+		underline_color: .rgb
+		underline_r: 1
+		underline_g: 2
+		underline_b: 3
+		underline_palette: 9
+	}
+	rgb_c := CellStyle{
+		underline_color: .rgb
+		underline_r: 1
+		underline_g: 2
+		underline_b: 4
+		underline_palette: 4
+	}
 	assert rgb_a.eql(&rgb_b)
 	assert rgb_a.hash() == rgb_b.hash()
 	assert !rgb_a.eql(&rgb_c)
+}
+
+fn test_style_hash_matches_zig_source() {
+	assert CellStyle{}.hash() == 0
+	assert CellStyle{
+		flags: StyleFlags{ bold: true }
+	}.hash() == 0xd0fc3c4cfdcbcf4e
+	assert CellStyle{
+		fg_color: .palette
+		fg_palette: 7
+		bg_color: .rgb
+		bg_r: 1
+		bg_g: 2
+		bg_b: 3
+		underline_color: .palette
+		underline_palette: 9
+		flags: StyleFlags{
+			bold: true
+			italic: true
+			underline: .curly
+		}
+	}.hash() == 0x50c324342b82c60f
 }
 
 // Tests for Style VT and HTML formatting.

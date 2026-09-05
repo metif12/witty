@@ -1,5 +1,7 @@
 module terminal
 
+import internal_hash
+
 // --- Original Ghostty Comments Start: src/terminal/hash_map.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/terminal/hash_map.zig
@@ -190,15 +192,9 @@ module terminal
 // Hash function
 // ============================================================
 
-// hash_key computes a 64-bit hash for integer keys using splitmix64 mixing.
+// hash_key reproduces the AutoContext(u64) hash used by the source map.
 fn hash_key(key u64) u64 {
-	mut h := key
-	h ^= h >> 30
-	h *= u64(0xbf58476d1ce4e5b9)
-	h ^= h >> 27
-	h *= u64(0x94d049bb133111eb)
-	h ^= h >> 31
-	return h
+	return internal_hash.auto_hash_u64(key)
 }
 
 // ============================================================

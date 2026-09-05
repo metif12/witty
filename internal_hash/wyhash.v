@@ -72,3 +72,12 @@ fn wyhash_mix(a u64, b u64) u64 {
 	low, high := wyhash_mum(a, b)
 	return low ^ high
 }
+
+// auto_hash_u64 is Zig 0.15.2's std.hash_map.AutoContext(u64).hash. u64 has
+// a unique representation, so AutoContext hashes its eight little-endian
+// bytes directly with Wyhash.
+pub fn auto_hash_u64(value u64) u64 {
+	data := [u8(value), u8(value >> 8), u8(value >> 16), u8(value >> 24), u8(value >> 32),
+		u8(value >> 40), u8(value >> 48), u8(value >> 56)]
+	return wyhash(data, 0)
+}

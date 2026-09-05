@@ -20,3 +20,9 @@ fn test_zig_0_15_2_wyhash_vectors() {
 		assert wyhash(vector.input.bytes(), vector.seed) == vector.expected
 	}
 }
+
+fn test_zig_0_15_2_auto_context_u64_vectors() {
+	assert auto_hash_u64(0) == 0xe6b7875d0487a132
+	assert auto_hash_u64(1) == 0xac3608194ddc6751
+	assert auto_hash_u64(42) == 0xca6b1af451592f24
+}
