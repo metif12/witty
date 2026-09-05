@@ -63,6 +63,83 @@ pub fn paste_is_safe(data string) bool {
 }
 
 // ============================================================
+// Key event (from c/key_event.zig)
+// ============================================================
+
+// KeyEvent wraps input.KeyEvent for the C-facing lifecycle API. V-managed
+// strings are owned, so UTF-8 set through this wrapper remains valid without
+// imposing the C API's borrowed-buffer lifetime on V callers.
+@[heap]
+pub struct KeyEvent {
+pub mut:
+	event input.KeyEvent
+}
+
+pub fn key_event_new() &KeyEvent {
+	return &KeyEvent{}
+}
+
+pub fn key_event_free(mut event KeyEvent) {
+	event.event = input.KeyEvent{}
+}
+
+pub fn (mut self KeyEvent) set_action(action input.KeyAction) {
+	self.event.action = action
+}
+
+pub fn (self &KeyEvent) get_action() input.KeyAction {
+	return self.event.action
+}
+
+pub fn (mut self KeyEvent) set_key(key input.Key) {
+	self.event.key = key
+}
+
+pub fn (self &KeyEvent) get_key() input.Key {
+	return self.event.key
+}
+
+pub fn (mut self KeyEvent) set_mods(mods input.Mods) {
+	self.event.mods = mods
+}
+
+pub fn (self &KeyEvent) get_mods() input.Mods {
+	return self.event.mods
+}
+
+pub fn (mut self KeyEvent) set_consumed_mods(mods input.Mods) {
+	self.event.consumed_mods = mods
+}
+
+pub fn (self &KeyEvent) get_consumed_mods() input.Mods {
+	return self.event.consumed_mods
+}
+
+pub fn (mut self KeyEvent) set_composing(composing bool) {
+	self.event.composing = composing
+}
+
+pub fn (self &KeyEvent) get_composing() bool {
+	return self.event.composing
+}
+
+pub fn (mut self KeyEvent) set_utf8(utf8 string) {
+	self.event.utf8 = utf8
+}
+
+pub fn (self &KeyEvent) get_utf8() string {
+	return self.event.utf8
+}
+
+pub fn (mut self KeyEvent) set_unshifted_codepoint(codepoint u32) {
+	self.event.unshifted_codepoint = codepoint
+}
+
+pub fn (self &KeyEvent) get_unshifted_codepoint() u32 {
+	return self.event.unshifted_codepoint
+}
+
+// ============================================================
 // OSC (from c/osc.zig)
 // ============================================================
 

@@ -1,5 +1,7 @@
 module terminal_c
 
+import input
+
 // Tests for terminal_c.v
 // Translated from ghostty/src/terminal/c/ test cases.
 
@@ -62,6 +64,42 @@ fn test_paste_is_safe_with_bracketed_paste_end() {
 
 fn test_paste_is_safe_with_empty_data() {
 	assert paste_is_safe('') == true
+}
+
+// ============================================================
+// Key event tests (from c/key_event.zig)
+// ============================================================
+
+fn test_key_event_set_and_get() {
+	mut event := key_event_new()
+	defer { key_event_free(mut event) }
+
+	event.set_action(.repeat)
+	event.set_key(.key_z)
+	event.set_mods(input.Mods{ alt: true, super_: true })
+	event.set_consumed_mods(input.Mods{ alt: true })
+	event.set_composing(true)
+	event.set_utf8('test')
+	event.set_unshifted_codepoint(u32(`z`))
+
+	assert event.get_action() == .repeat
+	assert event.get_key() == .key_z
+	assert event.get_mods().alt
+	assert event.get_mods().super_
+	assert event.get_consumed_mods().alt
+	assert !event.get_consumed_mods().super_
+	assert event.get_composing()
+	assert event.get_utf8() == 'test'
+	assert event.get_unshifted_codepoint() == u32(`z`)
+}
+
+fn test_key_event_utf8_can_be_cleared() {
+	mut event := key_event_new()
+	defer { key_event_free(mut event) }
+	event.set_utf8('hello')
+	assert event.get_utf8() == 'hello'
+	event.set_utf8('')
+	assert event.get_utf8() == ''
 }
 
 // ============================================================
