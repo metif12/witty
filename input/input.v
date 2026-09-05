@@ -43,25 +43,12 @@ pub fn (e KeyEvent) effective_mods() Mods {
 
 // binding_hash returns a unique hash for this key event for binding tracking.
 pub fn (e KeyEvent) binding_hash() u64 {
-	mut h := u64(0)
-	h = h * 31 + u64(e.key)
-	h = h * 31 + u64(e.unshifted_codepoint)
-	bm := e.mods.binding()
-	mut mi := u64(0)
-	if bm.shift {
-		mi |= 1
-	}
-	if bm.ctrl {
-		mi |= 2
-	}
-	if bm.alt {
-		mi |= 4
-	}
-	if bm.super_ {
-		mi |= 8
-	}
-	h = h * 31 + mi
-	return h
+	mut hasher := SourceHash{}
+	// Key is enum(c_int), the codepoint is u21, and Mods is packed u16.
+	hasher.put_i32(i32(e.key))
+	hasher.put_u21(e.unshifted_codepoint)
+	hasher.put_u16(e.mods.binding().int())
+	return hasher.final()
 }
 
 // KeyAction represents the action type of a key event.

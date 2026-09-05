@@ -255,15 +255,15 @@ pub enum ResizeSplitDirection {
 // MoveTab holds the relative offset to move a tab by.
 pub struct MoveTab {
 pub:
-	amount int
+	amount i64
 }
 
 // GotoTab is the tab to jump to. Positive values represent the index
 // (zero-based) of the tab to jump to. Negative values are special values.
 pub enum GotoTab {
-	previous  = -1
-	next      = -2
-	last      = -3
+	previous = -1
+	next     = -2
+	last     = -3
 }
 
 // Fullscreen is the fullscreen mode to toggle to if we're moving to fullscreen.

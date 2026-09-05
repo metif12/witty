@@ -357,6 +357,47 @@ fn test_cursor_key_action_preserves_both_mode_sequences() {
 	assert a.hash() == Action.new_cursor_key('\x1b[A', '\x1bOA').hash()
 }
 
+fn test_action_hash_matches_source() {
+	assert Action.new(.ignore).hash() == u64(0xfbe5af10e5f8bd85)
+	assert Action.new_str(.text, 'abc').hash() == u64(0x446a0ccfa67b40b6)
+	assert Action.new_cursor_key('n', 'app').hash() == u64(0x83c43b380350b294)
+	assert Action.new_float(.increase_font_size, 1.5).hash() == u64(0x5df7f994230ca39e)
+	assert Action.new_int(.jump_to_prompt, -2).hash() == u64(0x58fdaa6fac1852cd)
+	assert Action.new_int(.move_tab, -2).hash() == u64(0xc553742d08889d48)
+	assert Action.new_enum2(.resize_split, i32(SplitResizeDirection.right), 250).hash() == u64(0xd6c681ebcbe9b6f0)
+}
+
+fn test_trigger_hash_matches_source() {
+	physical := Trigger{
+		key: TriggerKey.new_physical(.key_a)
+		mods: Mods{ ctrl: true }
+	}
+	upper := Trigger{
+		key: TriggerKey.new_unicode(`A`)
+		mods: Mods{ ctrl: true }
+	}
+	lower := Trigger{
+		key: TriggerKey.new_unicode(`a`)
+		mods: Mods{ ctrl: true }
+	}
+	catch_all := Trigger{ key: TriggerKey.new_catch_all() }
+	assert physical.hash() == u64(0x2ee14028a2f3cedb)
+	assert upper.hash() == u64(0x56ae7c44db90aaf3)
+	assert upper.hash() == lower.hash()
+	assert catch_all.hash() == u64(0x938f13b1d9e2b68f)
+}
+
+fn test_trigger_full_unicode_case_folding() {
+	assert full_case_fold_entries.len == 1557
+	// Unicode 16 full case folding expands sharp S to two codepoints.
+	assert folded_codepoint(0x00df) == [u32(`s`), `s`, 0]!
+	// Capital dotted I expands to i + combining dot above in non-Turkic mode.
+	assert folded_codepoint(0x0130) == [u32(`i`), 0x0307, 0]!
+	// Common one-to-one mappings and unmapped values retain fixed width.
+	assert folded_codepoint(0x03a3) == [u32(0x03c3), 0, 0]!
+	assert folded_codepoint(0x1f642) == [u32(0x1f642), 0, 0]!
+}
+
 fn test_parse_action_with_enum() {
 	b := parse_single('a=new_split:right') or { panic(err.msg()) }
 	assert b.action.tag == .new_split
@@ -372,10 +413,30 @@ fn test_parse_action_with_enum_default() {
 fn test_parse_action_with_int() {
 	b := parse_single('a=jump_to_prompt:-1') or { panic(err.msg()) }
 	assert b.action.tag == .jump_to_prompt
-	assert b.action.int_param == i32(-1)
+	assert b.action.int_param == i64(-1)
 
 	b2 := parse_single('a=jump_to_prompt:10') or { panic(err.msg()) }
-	assert b2.action.int_param == i32(10)
+	assert b2.action.int_param == i64(10)
+}
+
+fn test_parse_action_integer_widths_match_source() {
+	assert parse_single('a=jump_to_prompt:-32768')!.action.int_param == -32768
+	assert parse_single('a=scroll_page_lines:32_767')!.action.int_param == 32767
+	parse_single('a=jump_to_prompt:-32769') or {
+		assert err.msg() == 'InvalidFormat'
+		return
+	}
+	assert false
+}
+
+fn test_parse_action_isize_width_matches_source() {
+	assert parse_single('a=move_tab:-9223372036854775808')!.action.int_param == i64(-9223372036854775807) - 1
+	assert parse_single('a=move_tab:+9_223_372_036_854_775_807')!.action.int_param == i64(9223372036854775807)
+	parse_single('a=move_tab:9223372036854775808') or {
+		assert err.msg() == 'InvalidFormat'
+		return
+	}
+	assert false
 }
 
 fn test_parse_action_with_float() {
@@ -385,6 +446,14 @@ fn test_parse_action_with_float() {
 
 	b2 := parse_single('a=scroll_page_fractional:+0.5') or { panic(err.msg()) }
 	assert b2.action.float_param == f32(0.5)
+
+	b3 := parse_single('a=scroll_page_fractional:1_2.5') or { panic(err.msg()) }
+	assert b3.action.float_param == f32(12.5)
+	parse_single('a=scroll_page_fractional:1_.5') or {
+		assert err.msg() == 'InvalidFormat'
+		return
+	}
+	assert false
 }
 
 fn test_parse_action_with_tuple() {
@@ -392,6 +461,25 @@ fn test_parse_action_with_tuple() {
 	assert b.action.tag == .resize_split
 	assert b.action.enum_param == i32(SplitResizeDirection.up)
 	assert b.action.enum_param2 == i32(10)
+}
+
+fn test_parse_action_unsigned_widths_match_source() {
+	assert parse_single('a=goto_tab:+18_446_744_073_709_551_615')!.action.uint_param == u64(0xffffffffffffffff)
+	assert parse_single('a=scroll_to_row:-0')!.action.uint_param == 0
+	parse_single('a=goto_tab:18446744073709551616') or {
+		assert err.msg() == 'InvalidFormat'
+		return
+	}
+	assert false
+}
+
+fn test_parse_resize_split_u16_width_matches_source() {
+	assert parse_single('a=resize_split:right,65_535')!.action.enum_param2 == 65535
+	parse_single('a=resize_split:right,65536') or {
+		assert err.msg() == 'InvalidFormat'
+		return
+	}
+	assert false
 }
 
 fn test_parse_action_tuple_missing_param() {

@@ -1,5 +1,6 @@
 module input
 
+import strconv
 import strings
 
 // --- Original Ghostty Comments Start: src/input/Binding.zig
@@ -1197,41 +1198,34 @@ pub fn (self Trigger) folded_equal(other Trigger) bool {
 	}
 }
 
-// folded_codepoint returns the case-folded version of a codepoint.
-// For ASCII alphabetic characters, returns lowercase.
-fn folded_codepoint(cp u32) u32 {
+// folded_codepoint returns the source's fixed-width case-folded key. Full
+// Unicode folding can expand one codepoint into as many as three codepoints.
+fn folded_codepoint(cp u32) [3]u32 {
 	if cp >= u32(`A`) && cp <= u32(`Z`) {
-		return cp + 32
+		return [cp + 32, u32(0), 0]!
 	}
-	return cp
+	return unicode_case_fold(cp)
 }
 
 // hash returns a hash code for the trigger.
 pub fn (t Trigger) hash() u64 {
-	mut h := u64(0)
-	h = h * 31 + u64(t.key.typ)
+	mut hasher := SourceHash{}
+	// Trigger.Key is union(C.Tag), and C.Tag is enum(c_int).
+	hasher.put_i32(i32(t.key.typ))
 	match t.key.typ {
 		.physical {
-			h = h * 31 + u64(t.key.physical)
+			// input.Key is also enum(c_int).
+			hasher.put_i32(i32(t.key.physical))
 		}
 		.unicode {
-			h = h * 31 + u64(folded_codepoint(t.key.unicode))
+			for cp in folded_codepoint(t.key.unicode) {
+				hasher.put_u21(cp)
+			}
 		}
 		.catch_all {}
 	}
-	if t.mods.shift {
-		h = h * 31 + 1
-	}
-	if t.mods.ctrl {
-		h = h * 31 + 2
-	}
-	if t.mods.alt {
-		h = h * 31 + 3
-	}
-	if t.mods.super_ {
-		h = h * 31 + 4
-	}
-	return h
+	hasher.put_u16(t.mods.binding().int())
+	return hasher.final()
 }
 
 // format returns the trigger as a string (e.g. "ctrl+a", "shift+key_a").
@@ -1640,8 +1634,8 @@ pub:
 	str_param string
 	// Float parameter for increase_font_size, decrease_font_size, set_font_size, scroll_page_fractional.
 	float_param f32
-	// Int parameter for jump_to_prompt, scroll_page_lines.
-	int_param i32
+	// Signed parameter for jump_to_prompt, scroll_page_lines, and move_tab.
+	int_param i64
 	// Unsigned int parameter for scroll_to_row and goto_tab.
 	uint_param u64
 	// Enum parameters stored as ints.
@@ -1696,43 +1690,45 @@ pub fn (a Action) equal(b Action) bool {
 
 // hash returns a hash code for the action.
 pub fn (a Action) hash() u64 {
-	mut h := u64(0)
-	h = h * 31 + u64(a.tag)
+	mut hasher := SourceHash{}
+	// Action's inferred tag type is u7 at the pinned source revision.
+	hasher.put_u8(u8(a.tag))
 	match a.tag {
 		.cursor_key {
-			for c in a.cursor_key.normal {
-				h = h * 31 + u64(c)
-			}
-			for c in a.cursor_key.application {
-				h = h * 31 + u64(c)
-			}
+			hasher.put_deep_string(a.cursor_key.normal)
+			hasher.put_deep_string(a.cursor_key.application)
 		}
 		.csi, .esc, .text, .search, .activate_key_table, .activate_key_table_once {
-			for c in a.str_param {
-				h = h * 31 + u64(c)
-			}
+			hasher.put_deep_string(a.str_param)
 		}
 		.increase_font_size, .decrease_font_size, .set_font_size, .scroll_page_fractional {
-			// Hash the float bits
-			bits := unsafe { *(&u32(&a.float_param)) }
-			h = h * 31 + u64(bits)
+			hasher.put_f32(a.float_param)
 		}
-		.jump_to_prompt, .scroll_page_lines, .move_tab {
-			h = h * 31 + u64(u32(a.int_param))
+		.jump_to_prompt, .scroll_page_lines {
+			hasher.put_i16(i16(a.int_param))
+		}
+		.move_tab {
+			// isize is eight bytes on Ghostty's supported 64-bit targets.
+			hasher.put_i64(a.int_param)
 		}
 		.scroll_to_row, .goto_tab {
-			h = h * 31 + a.uint_param
+			// usize is eight bytes on Ghostty's supported 64-bit targets.
+			hasher.put_u64(a.uint_param)
 		}
 		.new_split, .goto_split, .goto_window, .navigate_search, .adjust_selection, .copy_to_clipboard, .inspector, .close_tab, .crash {
-			h = h * 31 + u64(u32(a.enum_param))
+			hasher.put_u8(u8(a.enum_param))
 		}
-		.write_scrollback_file, .write_screen_file, .write_selection_file, .resize_split {
-			h = h * 31 + u64(u32(a.enum_param))
-			h = h * 31 + u64(u32(a.enum_param2))
+		.write_scrollback_file, .write_screen_file, .write_selection_file {
+			hasher.put_u8(u8(a.enum_param))
+			hasher.put_u8(u8(a.enum_param2))
+		}
+		.resize_split {
+			hasher.put_u8(u8(a.enum_param))
+			hasher.put_u16(u16(a.enum_param2))
 		}
 		else {}
 	}
-	return h
+	return hasher.final()
 }
 
 // Convenience constructors for common actions.
@@ -1766,7 +1762,7 @@ pub fn Action.new_float(tag ActionTag, f f32) Action {
 	}
 }
 
-pub fn Action.new_int(tag ActionTag, i i32) Action {
+pub fn Action.new_int(tag ActionTag, i i64) Action {
 	return Action{
 		tag: tag
 		int_param: i
@@ -2417,13 +2413,13 @@ pub fn Action.parse(input_str string) !Action {
 			if !has_param {
 				return error('InvalidFormat')
 			}
-			Action.new_int(.jump_to_prompt, strconv_parse_int(param)!)
+			Action.new_int(.jump_to_prompt, strconv_parse_i16(param)!)
 		}
 		'scroll_page_lines' {
 			if !has_param {
 				return error('InvalidFormat')
 			}
-			Action.new_int(.scroll_page_lines, strconv_parse_int(param)!)
+			Action.new_int(.scroll_page_lines, strconv_parse_i16(param)!)
 		}
 
 		// Unsigned int actions
@@ -2431,19 +2427,19 @@ pub fn Action.parse(input_str string) !Action {
 			if !has_param {
 				return error('InvalidFormat')
 			}
-			Action.new_uint(.scroll_to_row, strconv_parse_uint(param)!)
+			Action.new_uint(.scroll_to_row, strconv_parse_usize(param)!)
 		}
 		'goto_tab' {
 			if !has_param {
 				return error('InvalidFormat')
 			}
-			Action.new_uint(.goto_tab, strconv_parse_uint(param)!)
+			Action.new_uint(.goto_tab, strconv_parse_usize(param)!)
 		}
 		'move_tab' {
 			if !has_param {
 				return error('InvalidFormat')
 			}
-			Action.new_int(.move_tab, strconv_parse_int(param)!)
+			Action.new_int(.move_tab, strconv_parse_isize(param)!)
 		}
 
 		// Enum actions with defaults
@@ -2650,10 +2646,7 @@ fn parse_resize_split(s string) !Action {
 			return error('InvalidFormat')
 		}
 	}
-	amount := amount_str.u16()
-	if amount == 0 && amount_str != '0' {
-		return error('InvalidFormat')
-	}
+	amount := parse_unsigned_decimal(amount_str, 65535)!
 	return Action.new_enum2(.resize_split, i32(dir), i32(amount))
 }
 
@@ -2705,24 +2698,115 @@ fn parse_write_screen(tag ActionTag, s string) !Action {
 // --- String/number parsers ---
 
 fn strconv_parse_float(s string) !f32 {
-	return f32(s.f64())
+	clean := strip_float_underscores(s)!
+	return f32(strconv.atof64(clean) or { return error('InvalidFormat') })
 }
 
-fn strconv_parse_int(s string) !i32 {
-	v := s.int()
-	// int() returns 0 on failure, disambiguate
-	if v == 0 && s != '0' && s != '+0' && s != '-0' {
-		return error('InvalidFormat')
+fn strip_float_underscores(s string) !string {
+	if !s.contains('_') {
+		return s
 	}
-	return i32(v)
+	mut result := []u8{cap: s.len}
+	for index, ch in s.bytes() {
+		if ch != `_` {
+			result << ch
+			continue
+		}
+		// Zig permits separators only between decimal digits.
+		if index == 0 || index + 1 >= s.len || s[index - 1] < `0` || s[index - 1] > `9`
+			|| s[index + 1] < `0` || s[index + 1] > `9` {
+			return error('InvalidFormat')
+		}
+	}
+	return result.bytestr()
 }
 
-fn strconv_parse_uint(s string) !u64 {
-	v := s.u64()
-	if v == 0 && s != '0' {
+fn strconv_parse_i16(s string) !i64 {
+	return parse_signed_decimal(s, -32768, 32767)
+}
+
+fn strconv_parse_isize(s string) !i64 {
+	// Ghostty supports only 64-bit application targets, where isize is i64.
+	return parse_signed_decimal(s, i64(-9223372036854775807) - 1, 9223372036854775807)
+}
+
+fn parse_signed_decimal(s string, minimum i64, maximum i64) !i64 {
+	if s.len == 0 {
 		return error('InvalidFormat')
 	}
-	return v
+	mut index := 0
+	mut negative := false
+	if s[0] == `+` || s[0] == `-` {
+		negative = s[0] == `-`
+		index++
+	}
+	if index == s.len || s[index] == `_` || s[s.len - 1] == `_` {
+		return error('InvalidFormat')
+	}
+	limit := if negative { u64(-(minimum + 1)) + 1 } else { u64(maximum) }
+	mut magnitude := u64(0)
+	for index < s.len {
+		ch := s[index]
+		index++
+		if ch == `_` {
+			continue
+		}
+		if ch < `0` || ch > `9` {
+			return error('InvalidFormat')
+		}
+		digit := u64(ch - `0`)
+		if magnitude > (limit - digit) / 10 {
+			return error('InvalidFormat')
+		}
+		magnitude = magnitude * 10 + digit
+	}
+	if negative {
+		if magnitude == u64(9223372036854775807) + 1 {
+			return i64(-9223372036854775807) - 1
+		}
+		return -i64(magnitude)
+	}
+	return i64(magnitude)
+}
+
+fn strconv_parse_usize(s string) !u64 {
+	// Ghostty supports only 64-bit application targets, where usize is u64.
+	return parse_unsigned_decimal(s, 0xffffffffffffffff)
+}
+
+fn parse_unsigned_decimal(s string, maximum u64) !u64 {
+	if s.len == 0 {
+		return error('InvalidFormat')
+	}
+	mut index := 0
+	mut negative := false
+	if s[0] == `+` || s[0] == `-` {
+		negative = s[0] == `-`
+		index++
+	}
+	if index == s.len || s[index] == `_` || s[s.len - 1] == `_` {
+		return error('InvalidFormat')
+	}
+	mut result := u64(0)
+	for index < s.len {
+		ch := s[index]
+		index++
+		if ch == `_` {
+			continue
+		}
+		if ch < `0` || ch > `9` {
+			return error('InvalidFormat')
+		}
+		digit := u64(ch - `0`)
+		if result > (maximum - digit) / 10 {
+			return error('InvalidFormat')
+		}
+		result = result * 10 + digit
+	}
+	if negative && result != 0 {
+		return error('InvalidFormat')
+	}
+	return result
 }
 
 // --- Parser ---

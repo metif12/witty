@@ -34,6 +34,16 @@ fn test_key_event_binding_hash_same_key() {
 	assert e1.binding_hash() == e2.binding_hash()
 }
 
+fn test_key_event_binding_hash_matches_source() {
+	e := KeyEvent{
+		key: .key_a
+		unshifted_codepoint: u32(`A`)
+		mods: Mods{ ctrl: true }
+	}
+	// Reference value from KeyEvent.bindingHash under Zig 0.15.2.
+	assert e.binding_hash() == u64(0x65a4726ba67fc9ce)
+}
+
 // test "translation macos-option-as-alt"
 // Translated from ghostty src/input/key_mods.zig. The whole test is
 // Darwin-only there (`if (!isDarwin) return SkipZigTest`) because the
