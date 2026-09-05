@@ -157,10 +157,33 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 			// If the value is empty string (set but empty string),
 			// then we reset the value to the default.
 			if has_value && raw.len == 0 {
-				// Assign from a zero-argument instance to preserve V field
-				// defaults, matching Zig's field.default_value_ptr behavior.
-				dst.$(field.name) = defaults.$(field.name)
-				return
+				// Composite values may define initialization logic instead of a
+				// field default. This is the V equivalent of Ghostty's `init`
+				// declaration check. It intentionally takes precedence over the
+				// ordinary field default.
+				$if field.is_struct && !field.is_option {
+					$for method in field.methods {
+						$if method.name == 'init' {
+							mut initialized := defaults.$(field.name)
+							initialized.$method() or { return error('invalid value') }
+							dst.$(field.name) = initialized
+							return
+						}
+					}
+				}
+
+				// V's generic field metadata does not expose whether a field has
+				// an explicit default expression. Translated auto-struct fields
+				// without a Zig default carry `cli_required`; an empty value for
+				// those fields must be parsed normally and rejected when invalid.
+				if field.attrs.contains('cli_required') {
+					// Continue into the type-specific parser below.
+				} else {
+					// Assign from a zero-argument instance to preserve V field
+					// defaults, matching Zig's field.default_value_ptr behavior.
+					dst.$(field.name) = defaults.$(field.name)
+					return
+				}
 			}
 
 			// Composite field types can provide their own mutating parser. V's
@@ -178,6 +201,12 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 						return
 					}
 				}
+			}
+			$if field.is_option && field.is_struct {
+				dst.$(field.name) = parse_optional_custom(dst.$(field.name), value) or {
+					return error('invalid value')
+				}
+				return
 			}
 
 			// No type-specific parser: derive parsing from the field type.
@@ -206,34 +235,30 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 				if !has_value {
 					return error('value required')
 				}
-				n := strconv.atoi(raw) or { return error('invalid value') }
-				if n < 0 || n > 0xff {
+				dst.$(field.name) = u8(strconv.parse_uint(raw, 0, 8) or {
 					return error('invalid value')
-				}
-				dst.$(field.name) = u8(n)
+				})
 				return
 			} $else $if field.unaliased_typ is u16 || field.unaliased_typ is ?u16 {
 				if !has_value {
 					return error('value required')
 				}
-				n := strconv.atoi(raw) or { return error('invalid value') }
-				if n < 0 || n > 0xffff {
+				dst.$(field.name) = u16(strconv.parse_uint(raw, 0, 16) or {
 					return error('invalid value')
-				}
-				dst.$(field.name) = u16(n)
+				})
 				return
 			} $else $if field.unaliased_typ is u32 || field.unaliased_typ is ?u32 {
 				if !has_value {
 					return error('value required')
 				}
-				n := strconv.parse_uint(raw, 10, 32) or { return error('invalid value') }
+				n := strconv.parse_uint(raw, 0, 32) or { return error('invalid value') }
 				dst.$(field.name) = u32(n)
 				return
-			} $else $if field.unaliased_typ is u64 || field.unaliased_typ is ?u64 {
+			} $else $if field.unaliased_typ is u64 || field.unaliased_typ is ?u64 || field.unaliased_typ is usize || field.unaliased_typ is ?usize {
 				if !has_value {
 					return error('value required')
 				}
-				dst.$(field.name) = strconv.parse_uint(raw, 10, 64) or {
+				dst.$(field.name) = strconv.parse_uint(raw, 0, 64) or {
 					return error('invalid value')
 				}
 				return
@@ -241,35 +266,47 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 				if !has_value {
 					return error('value required')
 				}
-				dst.$(field.name) = strconv.atoi(raw) or {
+				dst.$(field.name) = int(parse_signed_int(raw, int(sizeof(int) * 8)) or {
 					return error('invalid value')
-				}
+				})
 				return
 			} $else $if field.unaliased_typ is i8 || field.unaliased_typ is ?i8 {
 				if !has_value {
 					return error('value required')
 				}
-				n := strconv.atoi(raw) or { return error('invalid value') }
-				if n < -128 || n > 127 {
+				dst.$(field.name) = i8(parse_signed_int(raw, 8) or {
 					return error('invalid value')
-				}
-				dst.$(field.name) = i8(n)
+				})
 				return
 			} $else $if field.unaliased_typ is i16 || field.unaliased_typ is ?i16 {
 				if !has_value {
 					return error('value required')
 				}
-				n := strconv.atoi(raw) or { return error('invalid value') }
-				if n < -32768 || n > 32767 {
+				dst.$(field.name) = i16(parse_signed_int(raw, 16) or {
 					return error('invalid value')
+				})
+				return
+			} $else $if field.unaliased_typ is i32 || field.unaliased_typ is ?i32 {
+				if !has_value {
+					return error('value required')
 				}
-				dst.$(field.name) = i16(n)
+				dst.$(field.name) = i32(parse_signed_int(raw, 32) or {
+					return error('invalid value')
+				})
 				return
 			} $else $if field.unaliased_typ is i64 || field.unaliased_typ is ?i64 {
 				if !has_value {
 					return error('value required')
 				}
-				dst.$(field.name) = strconv.parse_int(raw, 10, 64) or {
+				dst.$(field.name) = parse_signed_int(raw, 64) or {
+					return error('invalid value')
+				}
+				return
+			} $else $if field.unaliased_typ is isize || field.unaliased_typ is ?isize {
+				if !has_value {
+					return error('value required')
+				}
+				dst.$(field.name) = parse_signed_int(raw, int(sizeof(isize) * 8)) or {
 					return error('invalid value')
 				}
 				return
@@ -308,6 +345,49 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 	return error('invalid field')
 }
 
+fn parse_optional_custom[T](current ?T, value ?string) !T {
+	mut parsed := current or { T{} }
+	$for method in T.methods {
+		$if method.name == 'parse_cli' {
+			raw := if v := value {
+				v
+			} else {
+				return error('value required')
+			}
+			parsed.$method(raw) or { return error('invalid value') }
+			return parsed
+		}
+	}
+	return error('unsupported field type')
+}
+
+// strconv.parse_int clamps signed overflow, while Zig's std.fmt.parseInt
+// rejects it. Parse the magnitude as unsigned so CLI integer semantics retain
+// the source's exact range checks for every signed width.
+fn parse_signed_int(raw string, bits int) !i64 {
+	if raw.len == 0 || bits < 1 || bits > 64 {
+		return error('invalid value')
+	}
+	negative := raw[0] == `-`
+	start := if negative || raw[0] == `+` { 1 } else { 0 }
+	if start == raw.len {
+		return error('invalid value')
+	}
+	magnitude := strconv.parse_uint(raw[start..], 0, 64) or { return error('invalid value') }
+	max_positive := if bits == 64 { u64(max_i64) } else { (u64(1) << u32(bits - 1)) - 1 }
+	max_magnitude := max_positive + if negative { u64(1) } else { u64(0) }
+	if magnitude > max_magnitude {
+		return error('invalid value')
+	}
+	if !negative {
+		return i64(magnitude)
+	}
+	if bits == 64 && magnitude == u64(1) << 63 {
+		return min_i64
+	}
+	return -i64(magnitude)
+}
+
 fn parse_enum_value[T](mut out T, raw string) ! {
 	normalized := raw.replace('-', '_')
 	$for enum_value in T.values {
@@ -324,6 +404,7 @@ fn parse_enum_value[T](mut out T, raw string) ! {
 // direct equivalent of Zig's explicit default-field pass.
 pub fn parse_auto_struct[T](value string, default_value T) !T {
 	mut result := default_value
+	mut fields_set := map[string]bool{}
 	mut splitter := CommaSplitter.new(value)
 	for splitter.has_next() {
 		entry := splitter.next() or { return error('invalid value') }
@@ -338,6 +419,17 @@ pub fn parse_auto_struct[T](value string, default_value T) !T {
 			field_value = decode_quoted_value(field_value) or { return error('invalid value') }
 		}
 		parse_into_field[T](mut result, key, field_value) or { return error('invalid value') }
+		fields_set[key.replace('-', '_')] = true
+	}
+
+	// Zig distinguishes fields without a default expression from fields whose
+	// default happens to be the type's zero value. V does not expose that bit
+	// through `$for field in T.fields`, so translated required fields use the
+	// `cli_required` attribute to retain the source distinction.
+	$for field in T.fields {
+		if field.attrs.contains('cli_required') && field.name !in fields_set {
+			return error('invalid value')
+		}
 	}
 	return result
 }

@@ -33,6 +33,20 @@ mut:
 	val u8
 }
 
+struct IntegerWidthsData {
+mut:
+	u8_value    u8
+	u16_value   u16
+	u32_value   u32
+	u64_value   u64
+	usize_value usize
+	i8_value    i8
+	i16_value   i16
+	i32_value   i32
+	i64_value   i64
+	isize_value isize
+}
+
 struct FloatTestData {
 mut:
 	val f64
@@ -67,7 +81,7 @@ mut:
 
 struct AutoStructValue {
 mut:
-	count int
+	count int @[cli_required]
 	name  string = 'default'
 }
 
@@ -88,6 +102,25 @@ fn (mut c CustomParsedValue) parse_cli(input string) ! {
 struct CustomParsedData {
 mut:
 	value CustomParsedValue
+}
+
+struct OptionalCustomParsedData {
+mut:
+	value ?CustomParsedValue
+}
+
+struct InitializedValue {
+mut:
+	value string
+}
+
+fn (mut value InitializedValue) init() ! {
+	value.value = 'HELLO!'
+}
+
+struct InitializedData {
+mut:
+	value InitializedValue
 }
 
 struct PackedBoolData {
@@ -234,12 +267,38 @@ fn test_parse_into_field_auto_struct() {
 	parsed := parse_auto_struct('count:7', AutoStructValue{})!
 	assert parsed.count == 7
 	assert parsed.name == 'default'
+
+	if _ := parse_auto_struct('', AutoStructValue{}) {
+		assert false, 'expected missing required field to fail'
+	} else {
+		assert err.msg() == 'invalid value'
+	}
+	if _ := parse_into_field[AutoStructData](mut data, 'value', 'name:hello') {
+		assert false, 'expected missing required field to fail'
+	} else {
+		assert err.msg() == 'invalid value'
+	}
 }
 
 fn test_parse_into_field_custom_parser() {
 	mut data := CustomParsedData{}
 	parse_into_field[CustomParsedData](mut data, 'value', 'hello')!
 	assert data.value.value == 'HELLO'
+}
+
+fn test_parse_into_field_optional_custom_parser() {
+	mut data := OptionalCustomParsedData{}
+	parse_into_field[OptionalCustomParsedData](mut data, 'value', 'hello')!
+	assert (data.value or { CustomParsedValue{} }).value == 'HELLO'
+
+	parse_into_field[OptionalCustomParsedData](mut data, 'value', 'world')!
+	assert (data.value or { CustomParsedValue{} }).value == 'WORLD'
+}
+
+fn test_parse_into_field_empty_value_uses_init() {
+	mut data := InitializedData{}
+	parse_into_field[InitializedData](mut data, 'value', '')!
+	assert data.value.value == 'HELLO!'
 }
 
 fn test_parse_packed_struct() {
@@ -370,6 +429,51 @@ fn test_parse_into_field_unsigned() {
 	mut data := UnsignedTestData{}
 	parse_into_field[UnsignedTestData](mut data, 'val', '1')!
 	assert data.val == u8(1)
+}
+
+fn test_parse_into_field_integer_bases_and_widths() {
+	mut data := IntegerWidthsData{}
+	parse_into_field[IntegerWidthsData](mut data, 'u8_value', '0x2a')!
+	parse_into_field[IntegerWidthsData](mut data, 'u16_value', '0o52')!
+	parse_into_field[IntegerWidthsData](mut data, 'u32_value', '0b101010')!
+	parse_into_field[IntegerWidthsData](mut data, 'u64_value', '42')!
+	parse_into_field[IntegerWidthsData](mut data, 'usize_value', '0x2a')!
+	parse_into_field[IntegerWidthsData](mut data, 'i8_value', '-0x2a')!
+	parse_into_field[IntegerWidthsData](mut data, 'i16_value', '-0o52')!
+	parse_into_field[IntegerWidthsData](mut data, 'i32_value', '-0b101010')!
+	parse_into_field[IntegerWidthsData](mut data, 'i64_value', '-9223372036854775808')!
+	parse_into_field[IntegerWidthsData](mut data, 'isize_value', '-0x2a')!
+	assert data.u8_value == 42
+	assert data.u16_value == 42
+	assert data.u32_value == 42
+	assert data.u64_value == 42
+	assert data.usize_value == 42
+	assert data.i8_value == -42
+	assert data.i16_value == -42
+	assert data.i32_value == -42
+	assert data.i64_value == min_i64
+	assert data.isize_value == -42
+
+	if _ := parse_into_field[IntegerWidthsData](mut data, 'u8_value', '256') {
+		assert false, 'expected u8 overflow to fail'
+	} else {
+		assert err.msg() == 'invalid value'
+	}
+	if _ := parse_into_field[IntegerWidthsData](mut data, 'i8_value', '-129') {
+		assert false, 'expected i8 overflow to fail'
+	} else {
+		assert err.msg() == 'invalid value'
+	}
+	if _ := parse_into_field[IntegerWidthsData](mut data, 'i64_value', '9223372036854775808') {
+		assert false, 'expected i64 positive overflow to fail'
+	} else {
+		assert err.msg() == 'invalid value'
+	}
+	if _ := parse_into_field[IntegerWidthsData](mut data, 'i64_value', '-9223372036854775809') {
+		assert false, 'expected i64 negative overflow to fail'
+	} else {
+		assert err.msg() == 'invalid value'
+	}
 }
 
 // --- parseIntoField: floats ---
