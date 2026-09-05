@@ -2526,6 +2526,18 @@ fn test_screen_prompt_click_move_cursor_not_on_input() {
 	assert r.left == 0
 }
 
+fn test_screen_prompt_click_move_uses_input_under_cursor() {
+	mut s := pcm_setup()
+	defer { s.deinit() }
+	// The pending pen state is output, but the cursor is moved onto an input
+	// cell that was already written. Ghostty permits prompt navigation here.
+	s.cursor_set_semantic_content_output()
+	s.cursor_absolute(2, 0)
+	r := s.prompt_click_move(Pin{ x: 4, y: u32(s.pages.active_start) })
+	assert r.right == 2
+	assert r.left == 0
+}
+
 fn test_screen_prompt_click_move_same_position() {
 	mut s := pcm_setup()
 	defer { s.deinit() }

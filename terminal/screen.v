@@ -3800,7 +3800,14 @@ pub fn (self &Screen) line_iterator(start Pin) LineIterator {
 
 // Determine cursor movement needed to move to a click location in a prompt.
 pub fn (self &Screen) prompt_click_move(click_pin Pin) PromptClickMove {
-	if self.cursor.semantic_content != .input {
+	// The pen may have moved on to a different semantic state while the
+	// cursor still rests on previously written input. Either state makes
+	// prompt navigation possible.
+	cursor_y := self.pages.active_start + int(self.cursor.y)
+	cursor_cell_is_input := cursor_y >= 0 && cursor_y < self.pages.screen_rows.len
+		&& int(self.cursor.x) < self.pages.screen_rows[cursor_y].cells.len
+		&& self.pages.screen_rows[cursor_y].cells[int(self.cursor.x)].semantic_content == .input
+	if self.cursor.semantic_content != .input && !cursor_cell_is_input {
 		return prompt_click_move_zero
 	}
 	match self.semantic_prompt.click {
