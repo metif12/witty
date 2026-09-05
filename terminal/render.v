@@ -313,6 +313,16 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 	self.cols = u16(s.pages.cols)
 	self.viewport_pin = viewport_pin
 	self.cursor.active = Pin{ x: s.cursor.x, y: s.cursor.y }
+	// The cursor cell is always the cell in the active area, even when the
+	// viewport is scrolled far enough that the cursor is not visible. The
+	// viewport coordinate below remains optional, but this snapshot does not.
+	self.cursor.cell = CellData{}
+	if int(cursor_abs_y) < s.pages.screen_rows.len {
+		cursor_row := s.pages.screen_rows[int(cursor_abs_y)]
+		if int(s.cursor.x) < cursor_row.cells.len {
+			self.cursor.cell = cursor_row.cells[int(s.cursor.x)]
+		}
+	}
 	self.cursor.style = s.cursor.style
 	self.cursor.visual_style = s.cursor.cursor_style
 	self.cursor.password_input = t.flags.password_input
@@ -382,9 +392,6 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 				x: u16(s.cursor.x)
 				wide_tail: wide_tail
 			}
-			if int(s.cursor.x) < row.cells.len {
-				self.cursor.cell = row.cells[int(s.cursor.x)]
-			}
 		}
 
 		// Store our pin. We store this even if we're not dirty because it
@@ -443,18 +450,44 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 	// outside the loop above because a selection is unlikely and its
 	// current representation is inefficient.
 	if sel := s.selection {
-		tl := if sel.start_pin.before(sel.end_pin) { sel.start_pin } else { sel.end_pin }
-		br := if sel.start_pin.before(sel.end_pin) { sel.end_pin } else { sel.start_pin }
-		for y in 0 .. int(self.rows) {
-			screen_y := u32(viewport_top) + u32(y)
-			if screen_y >= tl.y && screen_y <= br.y {
-				start_x := if screen_y == tl.y { u16(tl.x) } else { u16(0) }
-				end_x := if screen_y == br.y {
-					u16(br.x)
+		// Populate the same cache Ghostty uses so repeated row containment
+		// checks do not recalculate selection orientation. Rectangle selections
+		// need top_left/bottom_right rather than a plain pin ordering because
+		// either axis may be mirrored independently.
+		mut cache := RenderSelectionCache{}
+		mut cache_valid := false
+		mut mark_rows := true
+		if prior := self.selection_cache {
+			if !redraw && prior.selection.eql(sel) {
+				if !any_dirty {
+					mark_rows = false
 				} else {
-					u16(s.pages.cols - 1)
+					cache = prior
+					cache_valid = true
 				}
-				self.row_data[y].selection = [start_x, end_x]!
+			}
+		}
+
+		if mark_rows {
+			if !cache_valid {
+				tl_pin := sel.top_left(s)
+				br_pin := sel.bottom_right(s)
+				cache = RenderSelectionCache{
+					selection: Selection.init(tl_pin, br_pin, sel.rectangle)
+					tl_pin: tl_pin
+					br_pin: br_pin
+				}
+				self.selection_cache = cache
+			}
+
+			for y in 0 .. int(self.rows) {
+				pin := self.row_data[y].pin
+				row_sel := sel.contained_row_cached(s, cache.tl_pin, cache.br_pin, pin, cache.tl_pin, cache.br_pin, pin) or { continue }
+				start := row_sel.start_pin
+				end := row_sel.end_pin
+				assert start.y == end.y
+				assert start.x <= end.x
+				self.row_data[y].selection = [u16(start.x), u16(end.x)]!
 			}
 		}
 	}

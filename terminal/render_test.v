@@ -233,6 +233,13 @@ fn test_render_state_cursor_out_of_viewport() {
 	assert state.cursor.active.x == 0
 	assert state.cursor.active.y == 1
 	assert state.cursor.viewport == none
+
+	// The active cursor cell is still refreshed even though it has no viewport
+	// coordinate while scrollback is being viewed.
+	s.next_slice('Z\r')!
+	state.update(mut t)
+	assert state.cursor.viewport == none
+	assert state.cursor.cell.codepoint_val() == u32(`Z`)
 }
 
 // ============================================================
@@ -378,6 +385,30 @@ fn test_render_state_selection_multiple_lines() {
 	assert state.row_data[0].selection == none
 	assert state.row_data[1].selection or { panic('nil') } == [u16(0), u16(screen.pages.cols) - 1]!
 	assert state.row_data[2].selection or { panic('nil') } == [u16(0), u16(2)]!
+}
+
+fn test_render_state_rectangle_selection_mirrored_axes() {
+	mut t := Terminal.init(Options{ cols: 10, rows: 3 })!
+	defer {
+		t.deinit()
+	}
+
+	mut screen := t.screens.active
+	// Drag from the top-right to the bottom-left. Rectangle orientation only
+	// mirrors the x axis here; every selected row must retain the same bounds.
+	p1 := screen.pages.pin(PinOpts{ tag: .active, x: 4, y: 0 }) or { panic('no pin') }
+	p2 := screen.pages.pin(PinOpts{ tag: .active, x: 1, y: 2 }) or { panic('no pin') }
+	screen.select(Selection.init(p1, p2, true))!
+
+	mut state := RenderState.empty()
+	defer {
+		state.deinit()
+	}
+	state.update(mut t)
+
+	for row in state.row_data {
+		assert row.selection or { panic('missing rectangle row') } == [u16(1), u16(4)]!
+	}
 }
 
 // ============================================================
