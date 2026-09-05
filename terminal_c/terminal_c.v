@@ -19,6 +19,7 @@ module terminal_c
 
 import input
 import osc
+import terminal
 
 // ============================================================
 // Result (from c/result.zig)
@@ -26,10 +27,10 @@ import osc
 
 // Result represents the outcome of a C API operation.
 // C: GhosttyResult
-pub enum Result {
-	success        // 0
-	out_of_memory  // -1
-	invalid_value  // -2
+pub enum Result as i32 {
+	success       = 0
+	out_of_memory = -1
+	invalid_value = -2
 }
 
 // ============================================================
@@ -97,8 +98,8 @@ pub fn (mut self OscParser) end(terminator u8) ?osc.Command {
 // from an OSC command through the C API.
 // C: GhosttyOscCommandData
 pub enum CommandData {
-	invalid                  // 0
-	change_window_title_str  // 1
+	invalid // 0
+	change_window_title_str // 1
 }
 
 // Extract typed data from an OSC command.
@@ -116,4 +117,72 @@ pub fn command_data(cmd ?osc.Command, data CommandData) ?string {
 			return none
 		}
 	}
+}
+
+// ============================================================
+// SGR (from c/sgr.zig)
+// ============================================================
+
+// SgrParser wraps the terminal SGR parser and owns its copied parameter list.
+@[heap]
+pub struct SgrParser {
+pub mut:
+	parser terminal.SgrParser
+}
+
+pub fn sgr_new() &SgrParser {
+	return &SgrParser{}
+}
+
+pub fn sgr_free(mut parser SgrParser) {
+	parser.parser.params = []u16{}
+	parser.parser.params_sep = terminal.SepList.init_empty()
+	parser.parser.idx = 0
+}
+
+pub fn (mut self SgrParser) reset() {
+	self.parser.idx = 0
+}
+
+// set_params copies the caller's parameters and separator bytes. A colon byte
+// marks the separator after the corresponding parameter; every other byte is
+// treated as a semicolon, matching the C API.
+pub fn (mut self SgrParser) set_params(params []u16, separators ?[]u8) Result {
+	mut sep_list := terminal.SepList.init_empty()
+	if seps := separators {
+		if seps.len > 64 || seps.len < params.len {
+			return .invalid_value
+		}
+		for i, sep in seps[..params.len] {
+			if sep == `:` {
+				sep_list.set(i)
+			}
+		}
+	}
+	self.parser.params = params.clone()
+	self.parser.params_sep = sep_list
+	self.parser.idx = 0
+	return .success
+}
+
+pub fn (mut self SgrParser) next() ?terminal.SgrAttribute {
+	return self.parser.next()
+}
+
+pub fn sgr_unknown_full(attr terminal.SgrAttribute) []u16 {
+	return attr.unknown_full
+}
+
+pub fn sgr_unknown_partial(attr terminal.SgrAttribute) []u16 {
+	return attr.unknown_partial
+}
+
+pub fn sgr_attribute_tag(attr terminal.SgrAttribute) terminal.SgrAttributeKind {
+	return attr.kind
+}
+
+// V does not need the C tagged-union projection: SgrAttribute is already a
+// value-safe representation of the tag and its payload.
+pub fn sgr_attribute_value(attr terminal.SgrAttribute) terminal.SgrAttribute {
+	return attr
 }

@@ -11,6 +11,9 @@ fn test_result_values() {
 	assert Result.success != Result.out_of_memory
 	assert Result.success != Result.invalid_value
 	assert Result.out_of_memory != Result.invalid_value
+	assert i32(Result.success) == 0
+	assert i32(Result.out_of_memory) == -1
+	assert i32(Result.invalid_value) == -2
 }
 
 // ============================================================
@@ -80,4 +83,46 @@ fn test_command_data_invalid() {
 fn test_command_data_no_command() {
 	result := command_data(none, .change_window_title_str)
 	assert result == none
+}
+
+// ============================================================
+// SGR parser tests (from c/sgr.zig)
+// ============================================================
+
+fn test_sgr_parser_lifecycle_and_params() {
+	mut parser := sgr_new()
+	defer { sgr_free(mut parser) }
+	assert parser.set_params([u16(1)], none) == .success
+	attr := parser.next() or {
+		assert false, 'expected bold attribute'
+		return
+	}
+	assert sgr_attribute_tag(attr) == .bold
+	assert sgr_attribute_value(attr).kind == .bold
+	assert parser.next() == none
+
+	parser.reset()
+	assert (parser.next() or { return }).kind == .bold
+}
+
+fn test_sgr_parser_colons_and_unknown_payload() {
+	mut parser := sgr_new()
+	defer { sgr_free(mut parser) }
+	assert parser.set_params([u16(38), 2, 0, 1, 2, 3], [u8(`:`), `:`, `:`, `:`, `:`, `;`]) == .success
+	attr := parser.next() or { return }
+	assert attr.kind == .direct_color_fg
+	assert attr.r == 1
+	assert attr.g == 2
+	assert attr.b == 3
+
+	assert parser.set_params([u16(38), 7, 1], none) == .success
+	unknown := parser.next() or { return }
+	assert sgr_unknown_full(unknown) == [u16(38), 7, 1]
+	assert sgr_unknown_partial(unknown) == [u16(38), 7, 1]
+}
+
+fn test_sgr_parser_rejects_invalid_separator_length() {
+	mut parser := sgr_new()
+	defer { sgr_free(mut parser) }
+	assert parser.set_params([u16(1), 2], [u8(`;`)]) == .invalid_value
 }
