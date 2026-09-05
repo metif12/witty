@@ -499,6 +499,24 @@ fn test_page_list_compact_oversized_page() {
 	}
 }
 
+fn test_page_list_compact_insufficient_savings_returns_none() {
+	mut s := PageList.init(80, 24, usize(0))
+	defer { s.deinit() }
+
+	mut node := s.pages.first or {
+		assert false
+		return
+	}
+	node = s.increase_capacity(node, .grapheme_bytes) or { panic(err) }
+	old_size := page_backing_size(node.data.capacity)
+
+	if old_size <= standard_page_size() {
+		assert s.compact(node) == none
+	} else if compacted := s.compact(node) {
+		assert page_backing_size(compacted.data.capacity) < old_size
+	}
+}
+
 fn test_page_chunk_rows_full_page_and_overlap() {
 	mut s := PageList.init(3, 3, usize(0))
 	defer { s.deinit() }
@@ -2839,18 +2857,23 @@ fn test_page_list_resize_no_reflow_empty_screen() {
 }
 
 fn test_page_list_resize_more_rows_and_cols_large() {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
+	mut s := PageList.init(10, 10, usize(0))
 	defer { s.deinit() }
 
+	new_cols := u16(600)
+	new_rows := u16(600)
+	cap := std_capacity.adjust_checked(new_cols) or { panic(err) }
+	assert cap.rows < new_rows
+
 	s.resize(PageResizeOpts{
-		cols: 200
-		rows: 200
+		cols: new_cols
+		rows: new_rows
 		reflow: true
 	})
 
-	assert s.cols == 200
-	assert s.rows == 200
-	assert s.total_rows >= 200
+	assert s.cols == new_cols
+	assert s.rows == new_rows
+	assert s.total_rows == usize(new_rows)
 }
 
 // ============================================================
@@ -5121,6 +5144,52 @@ fn test_page_list_resize_no_reflow_more_cols_forces_smaller_cap() {
 		mut rp := &row.node.data
 		assert rp.size.cols == cap2.cols
 		assert rp.rows[int(row.y)].cells[0].codepoint == u32(`A`)
+	}
+}
+
+fn test_page_list_resize_no_reflow_more_cols_forces_less_rows_per_page() {
+	cols := u16(5)
+	rows := u16(150)
+	initial := std_capacity.adjust_checked(cols) or { panic(err) }
+	assert initial.rows >= rows
+
+	mut s := PageList.init(cols, rows, usize(0))
+	defer { s.deinit() }
+
+	mut new_cols := u16(50)
+	mut adjusted := std_capacity.adjust_checked(new_cols) or { panic(err) }
+	for adjusted.rows >= rows {
+		new_cols += 50
+		adjusted = std_capacity.adjust_checked(new_cols) or { panic(err) }
+	}
+	s.resize(PageResizeOpts{ cols: new_cols, reflow: false })
+	assert s.cols == new_cols
+	assert s.total_rows == usize(rows)
+	assert_all_but_last_page_full(&s)
+
+	first := s.pages.first or { return }
+	assert first.data.size.rows == first.data.capacity.rows
+	new_cols = first.data.size.cols + 50
+	adjusted = std_capacity.adjust_checked(new_cols) or { panic(err) }
+	for adjusted.rows >= first.data.size.rows {
+		new_cols += 50
+		adjusted = std_capacity.adjust_checked(new_cols) or { panic(err) }
+	}
+	s.resize(PageResizeOpts{ cols: new_cols, reflow: false })
+	assert s.cols == new_cols
+	assert s.total_rows == usize(rows)
+	assert_all_but_last_page_full(&s)
+}
+
+fn assert_all_but_last_page_full(s &PageList) {
+	mut node := s.pages.first
+	for {
+		page := node or { break }
+		if voidptr(page) == voidptr(s.pages.last or { break }) {
+			break
+		}
+		assert page.data.size.rows == page.data.capacity.rows
+		node = page.next
 	}
 }
 
