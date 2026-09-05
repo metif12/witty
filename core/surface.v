@@ -4707,7 +4707,13 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			// as two literals.
 			prefix := if action.tag == .csi { '\x1b[' } else { '\x1b' }
 			full_data := (prefix + action.str_param).bytes()
-			self.queue_io(IOMessage{ kind: .write_small, data: full_data })
+			// Ghostty formats these into a fixed 128-byte buffer before it
+			// constructs the write request. Do not silently truncate it in the
+			// small-message representation.
+			if full_data.len > 128 {
+				return error('binding sequence exceeds 128 bytes')
+			}
+			self.queue_write_request(full_data)
 
 			// CSI/ESC triggers a scroll.
 			locked := self.renderer_state.mutex != unsafe { nil }
@@ -4723,7 +4729,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			// Text actions use Zig string literal escapes, matching the config
 			// representation used by Ghostty.
 			parsed := configpkg.parse_zig_string(action.str_param) or { return true }
-			self.queue_io(IOMessage{ kind: .write_alloc, data: parsed.bytes() })
+			self.queue_write_request(parsed.bytes())
 
 			// Text triggers a scroll.
 			locked := self.renderer_state.mutex != unsafe { nil }
@@ -5866,6 +5872,16 @@ fn (mut self Surface) queue_io(msg IOMessage) {
 		}
 	}
 	self.io.queue_message(msg)
+}
+
+// Choose the same inline-versus-owned mailbox representation as
+// termio.Message.writeReq.
+fn (mut self Surface) queue_write_request(data []u8) {
+	kind := if data.len <= 128 { IOMessageKind.write_small } else { IOMessageKind.write_alloc }
+	self.queue_io(IOMessage{
+		kind: kind
+		data: data
+	})
 }
 
 fn (mut self Surface) recompute_initial_size() ! {

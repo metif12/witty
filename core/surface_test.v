@@ -383,8 +383,37 @@ fn test_text_binding_decodes_zig_escapes_before_writing() {
 	mut surf := make_test_surface()
 	assert surf.perform_binding_action(input.Action.new_str(.text, 'line\\n\\x41'))!
 	assert surf.io.messages.len == 1
-	assert surf.io.messages[0].kind == .write_alloc
+	assert surf.io.messages[0].kind == .write_small
 	assert surf.io.messages[0].data.bytestr() == 'line\nA'
+}
+
+fn test_long_text_binding_uses_allocated_write() {
+	mut surf := make_test_surface()
+	text := 'x'.repeat(129)
+	assert surf.perform_binding_action(input.Action.new_str(.text, text))!
+	assert surf.io.messages.len == 1
+	assert surf.io.messages[0].kind == .write_alloc
+	assert surf.io.messages[0].data.bytestr() == text
+}
+
+fn test_oversized_csi_binding_is_rejected_without_truncation() {
+	mut surf := make_test_surface()
+	action := input.Action.new_str(.csi, 'x'.repeat(127))
+	surf.perform_binding_action(action) or {
+		assert err.msg() == 'binding sequence exceeds 128 bytes'
+		assert surf.io.messages.len == 0
+		return
+	}
+	assert false, 'oversized CSI binding unexpectedly succeeded'
+}
+
+fn test_csi_binding_accepts_exact_fixed_buffer_size() {
+	mut surf := make_test_surface()
+	action := input.Action.new_str(.csi, 'x'.repeat(126))
+	assert surf.perform_binding_action(action)!
+	assert surf.io.messages.len == 1
+	assert surf.io.messages[0].kind == .write_small
+	assert surf.io.messages[0].data.len == 128
 }
 
 fn test_invalid_text_binding_is_handled_without_writing() {
