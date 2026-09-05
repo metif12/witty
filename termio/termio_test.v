@@ -299,6 +299,33 @@ fn test_thread_selection_scroll_timer_reports_final_stop() {
 	assert writer.scroll_deadline == 0
 }
 
+fn test_thread_start_error_explains_pty_exhaustion() {
+	mut tio := Termio{}
+	tio.init(TermioOpts{})!
+	defer { tio.deinit() }
+	mut writer := Thread.init()!
+	defer { writer.deinit() }
+
+	writer.show_start_error(mut tio, 'openpty failed')
+	text := tio.terminal.plain_string()!
+	assert text.starts_with('Your system cannot allocate any more pty devices.')
+	assert text.contains('Please free up some pty devices and try again.')
+	assert !tio.terminal.modes.get(.cursor_visible)
+}
+
+fn test_thread_start_error_explains_invalid_input() {
+	mut tio := Termio{}
+	tio.init(TermioOpts{})!
+	defer { tio.deinit() }
+	mut writer := Thread.init()!
+	defer { writer.deinit() }
+
+	writer.show_start_error(mut tio, 'input not found')
+	text := tio.terminal.plain_string()!
+	assert text.starts_with('A configured `input` path was not found')
+	assert text.contains('ensure that all the path values exist and are readable.')
+}
+
 fn test_process_output_notifies_callback_renderer_wakeup() {
 	mut probe := TermioWakeupProbe{}
 	mut tio := Termio{}

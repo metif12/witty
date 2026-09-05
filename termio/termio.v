@@ -1022,7 +1022,18 @@ fn (t &Thread) show_start_error(mut io Termio, message string) {
 	defer { io.renderer_state.mutex.unlock() }
 	io.terminal.modes.set(.cursor_visible, false)
 	io.terminal.erase_display(.complete, false)
-	io.terminal.print_string('error starting IO thread: ${message}\n\nThis terminal is non-functional. Please close it and try again.') or {}
+	text := match message {
+		'openpty failed' {
+			'Your system cannot allocate any more pty devices.\n\nGhostty requires a pty device to launch a new terminal.\nThis error is usually due to having too many terminal\nwindows open or having another program that is using too\nmany pty devices.\n\nPlease free up some pty devices and try again.'
+		}
+		'input not found', 'input failed' {
+			'A configured `input` path was not found, was not readable,\nwas too large, or the underlying pty failed to accept\nthe write.\n\nGhostty can\'t continue since it can\'t guarantee that\ninitial terminal state will be as desired. Please review\nthe value of `input` in your configuration file and\nensure that all the path values exist and are readable.'
+		}
+		else {
+			'error starting IO thread: ${message}\n\nThe underlying shell or command was unable to be started.\nThis error is usually due to exhausting a system resource.\nIf this looks like a bug, please report it.\n\nThis terminal is non-functional. Please close it and try again.'
+		}
+	}
+	io.terminal.print_string(text) or {}
 }
 
 // Stopwatch is a cross-thread wakeup/stop signal. In ghostty this is backed
