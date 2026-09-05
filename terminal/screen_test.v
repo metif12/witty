@@ -2480,6 +2480,16 @@ fn test_screen_line_iterator_soft_wrap() {
 	assert str2 == '3ABCD'
 }
 
+fn test_screen_line_iterator_invalid_start_is_exhausted() {
+	mut s := Screen.init(5, 5, 0)
+	defer { s.deinit() }
+	mut it := s.line_iterator(Pin{ x: 0, y: 99 })
+
+	assert it.next() == none
+	assert it.current == none
+	assert it.next() == none
+}
+
 // --- promptClickMove ---
 
 fn pcm_setup() Screen {

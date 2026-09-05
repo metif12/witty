@@ -1918,7 +1918,13 @@ pub fn (mut self LineIterator) next() ?Selection {
 		pin: cur
 		whitespace: none
 		semantic_prompt_boundary: false
-	}) or { return none }
+	}) or {
+		// An invalid or otherwise unselectable pin exhausts the iterator.
+		// Ghostty clears `current` on this path so later calls remain a cheap,
+		// stable end-of-iteration result.
+		self.current = none
+		return none
+	}
 	self.current = result.end().down(1)
 	return result
 }
