@@ -1788,6 +1788,7 @@ pub:
 	min_size           ScreenSize
 	max_size           ScreenSize
 	secure_input_on    bool
+	reload_config_soft bool
 }
 
 // PromptTitleKind mirrors apprt.PromptTitle.
@@ -6108,6 +6109,7 @@ fn (mut self Surface) notify_config_conditional_state() {
 	self.rt_app.perform_action(AppAction{
 		kind: .reload_config
 		target: &self
+		reload_config_soft: true
 	}) or {}
 }
 

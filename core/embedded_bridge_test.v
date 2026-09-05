@@ -21,15 +21,19 @@ fn release_embedded_bridge_test_view(view voidptr) {
 
 struct EmbeddedBridgeCapture {
 mut:
-	actions []apprt.ActionKey
-	closed  bool
-	confirm bool
+	actions     []apprt.ActionKey
+	reload_soft []bool
+	closed      bool
+	confirm     bool
 }
 
 fn embedded_bridge_action(app &apprt.App, target apprt.Target, action apprt.RuntimeAction) bool {
 	_ = target
 	mut capture := unsafe { &EmbeddedBridgeCapture(app.opts.userdata) }
 	capture.actions << action.action
+	if action.action == .reload_config {
+		capture.reload_soft << action.data.reload_config_.soft
+	}
 	return true
 }
 
@@ -84,6 +88,9 @@ fn test_embedded_bridge_uses_canonical_core_surface() {
 	// Feed the canonical terminal emulator and read it back exclusively through
 	// the public embedded selection/text API.
 	mut backend := unsafe { &EmbeddedSurfaceCore(surface.core_surface.backend) }
+	backend.surface.color_scheme_callback(.dark)!
+	assert capture.reload_soft.len == 1
+	assert capture.reload_soft[0]
 	mut stream := backend.surface.renderer_state.terminal_.vt_stream()
 	stream.next_slice('hello')!
 	apprt.ghostty_surface_mouse_pos(mut surface, 1, 1, 0)

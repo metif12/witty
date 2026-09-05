@@ -825,10 +825,15 @@ fn test_color_scheme_callback_no_change() ! {
 }
 
 fn test_color_scheme_callback_change() ! {
+	mut runtime := RuntimeApp{}
 	mut surf := make_test_surface()
+	surf.rt_app = &runtime
 	surf.config_conditional_state = ConditionalState{ theme: .dark }
 	surf.color_scheme_callback(.light)!
 	assert surf.config_conditional_state.theme == .light
+	assert runtime.actions.len == 1
+	assert runtime.actions[0].kind == .reload_config
+	assert runtime.actions[0].reload_config_soft
 }
 
 fn test_child_exited_no_wait() {
