@@ -5845,6 +5845,89 @@ fn test_delete_chars_split_wide_character_from_end() {
 	assert c1.wide == .spacer_tail
 }
 
+fn test_delete_chars_with_a_spacer_head_at_the_end() {
+	mut t := create_test_terminal(5, 10) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('0123橋123') or { assert false }
+	assert cell_at(&t, 4, 0).wide == .spacer_head
+	assert t.screens.active.pages.screen_rows[0].wrap
+
+	t.set_cursor_pos(1, 1)
+	t.delete_chars(1)
+	c3 := cell_at(&t, 3, 0)
+	assert c3.codepoint == 0
+	assert c3.wide == .narrow
+}
+
+fn test_delete_chars_split_wide_character_tail() {
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.set_cursor_pos(1, int(t.cols) - 1)
+	t.print(0x6A4B) or { assert false }
+	t.carriage_return()
+	t.delete_chars(int(t.cols) - 1)
+	t.print(u32(`0`)) or { assert false }
+
+	assert t.plain_string() or { '' } == '0'
+}
+
+fn test_delete_chars_wide_character_boundary_conditions() {
+	mut t := create_test_terminal(8, 1) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('😀a😀b😀') or { assert false }
+	assert t.plain_string() or { '' } == '😀a😀b😀'
+
+	t.set_cursor_pos(1, 2)
+	t.delete_chars(3)
+	assert t.plain_string() or { '' } == '  b😀'
+}
+
+fn test_delete_chars_wide_character_wrap_boundary_conditions() {
+	mut t := create_test_terminal(8, 3) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('.......😀abcde😀......') or { assert false }
+	assert t.plain_string() or { '' } == '.......\n😀abcde\n😀......'
+	assert t.plain_string_unwrapped() or { '' } == '.......😀abcde😀......'
+
+	t.set_cursor_pos(2, 2)
+	t.delete_chars(3)
+	assert t.plain_string() or { '' } == '.......\n cde\n😀......'
+	assert t.plain_string_unwrapped() or { '' } == '.......  cde\n😀......'
+}
+
+fn test_delete_chars_wide_character_across_right_margin() {
+	mut t := create_test_terminal(8, 3) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('123456橋') or { assert false }
+	t.modes.set(.enable_left_and_right_margin, true)
+	t.set_left_and_right_margin(2, 7)
+	assert t.plain_string() or { '' } == '123456橋'
+
+	t.set_cursor_pos(1, 2)
+	t.delete_chars(1)
+	assert t.plain_string() or { '' } == '13456'
+}
+
 // ============================================================
 // horizontal tabs (left margin)
 // ============================================================
