@@ -974,6 +974,7 @@ pub enum IntegrityError {
 
 enum PageCloneError {
 	style_set_out_of_memory
+	hyperlink_map_out_of_memory
 }
 
 // ============================================================
@@ -1771,6 +1772,10 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_
 			dst_cell.hyperlink = src_cell.hyperlink.dupe()
 			src_key := cell_key(int(src_row_idx), xi, int(other.capacity.cols))
 			if src_key in other.hyperlink_map {
+				dst_key := cell_key(int(dst_row_idx), xi, int(self.capacity.cols))
+				if dst_key !in self.hyperlink_map && self.hyperlink_count() >= self.hyperlink_capacity() {
+					return .hyperlink_map_out_of_memory
+				}
 				src_hl_id := other.hyperlink_map[src_key]
 				hl_id := if same_page {
 					// Same page: reuse the hyperlink ID.
@@ -1782,7 +1787,6 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_
 					src_link := other.hyperlink_set.get(src_hl_id)
 					self.hyperlink_set.add_with_id(src_link, src_hl_id)
 				}
-				dst_key := cell_key(int(dst_row_idx), xi, int(self.capacity.cols))
 				self.hyperlink_map[dst_key] = hl_id
 				dst_cell.has_hyperlink = true
 				dst_row.hyperlink = true
@@ -2091,16 +2095,20 @@ pub fn (mut self Page) insert_hyperlink(link Hyperlink) u32 {
 // Caller is responsible for updating the refcount in the hyperlink
 // set as necessary by calling use_link if the id was not acquired with
 // add.
-pub fn (mut self Page) set_hyperlink(row_idx int, col_idx int, id u32) {
+pub fn (mut self Page) set_hyperlink(row_idx int, col_idx int, id u32) ! {
 	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
 
 	if key in self.hyperlink_map {
 		old_id := self.hyperlink_map[key]
 		// Always release the old hyperlink.
 		self.hyperlink_set.release(old_id)
+		self.hyperlink_map[key] = id
+	} else {
+		if self.hyperlink_count() >= self.hyperlink_capacity() {
+			return error('HyperlinkMapOutOfMemory')
+		}
+		self.hyperlink_map[key] = id
 	}
-
-	self.hyperlink_map[key] = id
 	if row_idx < self.rows.len && col_idx < self.rows[row_idx].cells.len {
 		self.rows[row_idx].cells[col_idx].has_hyperlink = true
 	}
@@ -2134,9 +2142,7 @@ pub fn (self &Page) hyperlink_count() int {
 
 // Returns the hyperlink capacity for the page.
 pub fn (self &Page) hyperlink_capacity() int {
-	// In V, maps grow dynamically. Return a reasonable capacity
-	// based on the page size for compatibility with tests.
-	return int(self.size.cols) * int(self.size.rows)
+	return int(Page.layout(self.capacity).hyperlink_map_layout.capacity)
 }
 
 // Set the graphemes for the given cell. This asserts that the cell
@@ -2249,6 +2255,12 @@ pub fn (self &Page) grapheme_count() int {
 		}
 	}
 	return count
+}
+
+// Returns the number of unique cells that the pinned page's grapheme map can
+// address without increasing capacity.
+pub fn (self &Page) grapheme_capacity() int {
+	return int(Page.layout(self.capacity).grapheme_map_layout.capacity)
 }
 
 // Checks if the row contains any hyperlinks and sets

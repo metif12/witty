@@ -3631,7 +3631,9 @@ fn clone_row_for_page_list(mut dst Page, dst_y int, src &RowData, cols u32) {
 		dst.rows[dst_y].cells[x] = cell
 		if src_cell.has_hyperlink {
 			id := dst.insert_hyperlink(src_cell.hyperlink)
-			dst.set_hyperlink(dst_y, x, id)
+			dst.set_hyperlink(dst_y, x, id) or {
+				panic('PageList snapshot hyperlink map capacity was undersized')
+			}
 		}
 	}
 }
@@ -5261,16 +5263,24 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 		page.set_graphemes(int(self.y), int(self.x), cell.graphemes)
 	}
 
-	// Copy hyperlink data. The V page allocators grow dynamically, so the
-	// capacity-growth loop in Ghostty is unnecessary, but the source lookup,
-	// preferred-ID insertion, refcount, and destination mapping are identical.
+	// Copy hyperlink data.
 	if cell.has_hyperlink {
 		src_id := src_page.lookup_hyperlink(src_y, src_x) or {
 			panic('hyperlinked source cell is missing its page mapping')
 		}
 		src_link := src_page.hyperlink_set.get(src_id)
+		if page.hyperlink_count() >= page.hyperlink_capacity() {
+			new_node := list.increase_capacity(self.node, .hyperlink_bytes) or {
+				return .out_of_space
+			}
+			self.node = new_node
+			page = &self.node.data
+		}
 		dst_id := page.hyperlink_set.add_with_id(src_link, src_id)
-		page.set_hyperlink(int(self.y), int(self.x), dst_id)
+		page.set_hyperlink(int(self.y), int(self.x), dst_id) or {
+			page.hyperlink_set.release(dst_id)
+			return .out_of_space
+		}
 	}
 
 	// Copy style data.
@@ -5505,12 +5515,12 @@ fn (mut self PageList) fixup_viewport(removed usize) {
 
 enum PageCapacityAdjustment {
 	styles
+	hyperlink_bytes
 }
 
 // Increase one bounded capacity dimension by replacing and recloning the
 // page. The node replacement, pin fixup, and serial change mirror Ghostty's
-// increaseCapacity; V's grapheme and hyperlink stores are dynamic, leaving
-// the bounded StyleSet as the only dimension that can currently request it.
+// increaseCapacity.
 fn (mut self PageList) increase_capacity(node &PageNode, adjustment PageCapacityAdjustment) ?&PageNode {
 	page := &node.data
 	mut cap := page.capacity
@@ -5522,6 +5532,16 @@ fn (mut self PageList) increase_capacity(node &PageNode, adjustment PageCapacity
 			doubled := if cap.styles > max_u16 / 2 { max_u16 } else { cap.styles * 2 }
 			minimum := StyleSet.capacity_for_count(1)
 			cap.styles = if doubled > minimum { doubled } else { minimum }
+		}
+		.hyperlink_bytes {
+			if cap.hyperlink_bytes == max_u16 {
+				return none
+			}
+			cap.hyperlink_bytes = if cap.hyperlink_bytes > max_u16 / 2 {
+				max_u16
+			} else {
+				cap.hyperlink_bytes * 2
+			}
 		}
 	}
 
@@ -5542,8 +5562,9 @@ fn (mut self PageList) increase_capacity(node &PageNode, adjustment PageCapacity
 	return new_node
 }
 
-// Clone a row across pages, growing and replacing the destination node if its
-// bounded style set cannot represent the combined page contents.
+// Clone a row across pages, growing and replacing the destination node if one
+// of its bounded managed-memory dimensions cannot represent the combined
+// page contents.
 fn (mut self PageList) clone_row_growing(dst_node &PageNode, src_page &Page, dst_y u16, src_y u16) &PageNode {
 	mut node := unsafe { dst_node }
 	for {
@@ -5553,6 +5574,11 @@ fn (mut self PageList) clone_row_growing(dst_node &PageNode, src_page &Page, dst
 			.style_set_out_of_memory {
 				node = self.increase_capacity(node, .styles) or {
 					panic('PageList row clone exhausted maximum style capacity')
+				}
+			}
+			.hyperlink_map_out_of_memory {
+				node = self.increase_capacity(node, .hyperlink_bytes) or {
+					panic('PageList row clone exhausted maximum hyperlink capacity')
 				}
 			}
 		}

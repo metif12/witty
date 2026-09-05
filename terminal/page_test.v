@@ -369,7 +369,7 @@ fn test_page_clone_preserves_inline_managed_values() {
 		style: style
 		hyperlink: link.dupe()
 	}
-	page.set_hyperlink(0, 0, link_id)
+	page.set_hyperlink(0, 0, link_id) or { panic(err) }
 
 	mut cloned := page.clone()
 	defer { cloned.deinit() }
@@ -1509,6 +1509,91 @@ fn test_standard_page_layout_and_capacity_adjust_reference() {
 	assert cap500.rows == 94
 }
 
+fn test_page_managed_map_capacities_follow_layout() {
+	mut page := Page.init(PageCapacity{
+		cols: 10
+		rows: 10
+	})
+	defer { page.deinit() }
+	assert page.grapheme_capacity() == 64
+	assert page.hyperlink_capacity() == 64
+
+	mut empty := Page.init(PageCapacity{
+		cols: 1
+		rows: 1
+		grapheme_bytes: 0
+		hyperlink_bytes: 0
+	})
+	defer { empty.deinit() }
+	assert empty.grapheme_capacity() == 0
+	assert empty.hyperlink_capacity() == 0
+}
+
+fn test_page_set_hyperlink_reports_full_map_without_mutating_cell() {
+	mut page := Page.init(PageCapacity{
+		cols: 1
+		rows: 1
+		hyperlink_bytes: 0
+	})
+	defer { page.deinit() }
+	page.size.rows = 1
+	id := page.insert_hyperlink(Hyperlink{
+		uri: 'https://example.com/full'
+	})
+
+	mut failed := false
+	page.set_hyperlink(0, 0, id) or { failed = true }
+	assert failed
+	assert page.hyperlink_count() == 0
+	assert !page.rows[0].cells[0].has_hyperlink
+	assert !page.rows[0].hyperlink
+}
+
+// Translated from Ghostty's "Page cloneFrom hyperlinks exact capacity".
+fn test_page_clone_from_hyperlinks_exact_capacity() {
+	mut page := Page.init(PageCapacity{
+		cols: 50
+		rows: 50
+	})
+	defer { page.deinit() }
+	page.size.rows = page.capacity.rows
+
+	hyperlink_cap := page.hyperlink_capacity()
+	assert hyperlink_cap <= int(page.size.cols) * int(page.size.rows)
+	id := page.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{}
+		uri: 'https://example.com'
+	})
+
+	mut full := false
+	for x in 0 .. int(page.size.cols) {
+		for y in 0 .. int(page.size.rows) {
+			page.rows[y].cells[x] = CellData{
+				content_tag: .codepoint
+				codepoint: 42
+			}
+			if page.hyperlink_count() > 0 {
+				page.hyperlink_set.use_link(id)
+			}
+			page.set_hyperlink(y, x, id) or { panic(err) }
+			if page.hyperlink_count() == hyperlink_cap {
+				full = true
+				break
+			}
+		}
+		if full {
+			break
+		}
+	}
+	assert page.hyperlink_count() == page.hyperlink_capacity()
+
+	mut cloned := Page.init(page.capacity)
+	defer { cloned.deinit() }
+	cloned.size.rows = page.size.rows
+	cloned.clone_from(&page, 0, page.size.rows)
+	assert cloned.hyperlink_count() == page.hyperlink_count()
+}
+
 // Test capacity adjust cols down.
 fn test_page_capacity_adjust_cols_down() {
 	original := PageCapacity{
@@ -1666,7 +1751,7 @@ fn test_page_hyperlink_basic() {
 	})
 
 	// Set it on a cell.
-	page.set_hyperlink(0, 0, hl_id)
+	page.set_hyperlink(0, 0, hl_id) or { panic(err) }
 	assert page.rows[0].cells[0].has_hyperlink
 	assert page.rows[0].hyperlink
 
@@ -1880,7 +1965,7 @@ fn test_page_clone_row_from_partial_hyperlink_in_same_page_copy() {
 
 		// Hyperlink in a single cell.
 		page.rows[0].cells[7].hyperlink = link.dupe()
-		page.set_hyperlink(0, 7, hyperlink_id)
+		page.set_hyperlink(0, 7, hyperlink_id) or { panic(err) }
 	}
 	assert page.hyperlink_count() == 1
 
@@ -1935,7 +2020,7 @@ fn test_page_clone_row_from_partial_hyperlink_in_same_page_omit() {
 		}
 
 		// Hyperlink in a single cell.
-		page.set_hyperlink(0, 7, hyperlink_id)
+		page.set_hyperlink(0, 7, hyperlink_id) or { panic(err) }
 	}
 	assert page.hyperlink_count() == 1
 
@@ -2070,13 +2155,13 @@ fn test_page_exact_row_capacity_hyperlinks() {
 		}
 		uri: 'https://example.com'
 	})
-	page.set_hyperlink(0, 0, id1)
+	page.set_hyperlink(0, 0, id1) or { panic(err) }
 	cap_one := page.exact_row_capacity(0, 5)
 	assert cap_one.hyperlink_bytes == u16(HyperlinkSet.capacity_for_count(1) * 48)
 	assert cap_one.string_bytes == string_chunk
 
 	page.hyperlink_set.use_link(id1)
-	page.set_hyperlink(0, 1, id1)
+	page.set_hyperlink(0, 1, id1) or { panic(err) }
 	duplicate := page.exact_row_capacity(0, 5)
 	assert duplicate.hyperlink_bytes == cap_one.hyperlink_bytes
 	assert duplicate.string_bytes == cap_one.string_bytes
@@ -2087,7 +2172,7 @@ fn test_page_exact_row_capacity_hyperlinks() {
 		}
 		uri: 'https://other.example.org/path'
 	})
-	page.set_hyperlink(0, 2, id2)
+	page.set_hyperlink(0, 2, id2) or { panic(err) }
 	cap_two := page.exact_row_capacity(0, 5)
 	assert cap_two.hyperlink_bytes == u16(HyperlinkSet.capacity_for_count(2) * 48)
 	assert cap_two.string_bytes == string_chunk * 3
@@ -2098,7 +2183,7 @@ fn test_page_exact_row_capacity_hyperlinks() {
 		}
 		uri: 'https://outside.example.com'
 	})
-	page.set_hyperlink(7, 0, id3)
+	page.set_hyperlink(7, 0, id3) or { panic(err) }
 	ranged := page.exact_row_capacity(0, 5)
 	assert ranged.hyperlink_bytes == cap_two.hyperlink_bytes
 	assert ranged.string_bytes == cap_two.string_bytes
@@ -2134,7 +2219,7 @@ fn test_page_exact_row_capacity_single_hyperlink_clone() {
 		}
 		uri: 'https://example.com'
 	})
-	page.set_hyperlink(0, 0, id)
+	page.set_hyperlink(0, 0, id) or { panic(err) }
 	cap := page.exact_row_capacity(0, 1)
 	assert cap.hyperlink_bytes == u16(HyperlinkSet.capacity_for_count(1) * 48)
 
@@ -2163,10 +2248,10 @@ fn test_page_exact_row_capacity_hyperlink_map_for_many_cells() {
 		}
 		uri: 'https://example.com'
 	})
-	page.set_hyperlink(0, 0, id)
+	page.set_hyperlink(0, 0, id) or { panic(err) }
 	for x in 1 .. int(cols) {
 		page.hyperlink_set.use_link(id)
-		page.set_hyperlink(0, x, id)
+		page.set_hyperlink(0, x, id) or { panic(err) }
 	}
 
 	cap := page.exact_row_capacity(0, 1)

@@ -337,6 +337,63 @@ fn test_page_list_reflow_grows_style_capacity_without_losing_styles() {
 	}
 }
 
+fn test_page_list_clone_row_grows_hyperlink_map_capacity() {
+	mut list := PageList.init(60, 3, usize(0x7FFFFFFFFFFFFFFF))
+	defer { list.deinit() }
+	first := list.pages.first or {
+		assert false, 'missing first page'
+		return
+	}
+	list.split(PagePin{ node: first, y: 2 }) or {
+		assert false, 'failed to split source pages'
+		return
+	}
+	second := first.next or {
+		assert false, 'missing second page'
+		return
+	}
+
+	for page_index, row_ref in [
+		PagePin{ node: first, y: 0 },
+		PagePin{ node: second, y: 0 },
+	] {
+		mut page := &row_ref.node.data
+		id := page.insert_hyperlink(Hyperlink{
+			id: HyperlinkImplicitId{ offset: u32(page_index) }
+			uri: 'https://example.com/${page_index}'
+		})
+		for x in 0 .. 60 {
+			page.rows[int(row_ref.y)].cells[x] = CellData{
+				content_tag: .codepoint
+				codepoint: u32(`a`) + u32(page_index)
+			}
+			if x > 0 {
+				page.hyperlink_set.use_link(id)
+			}
+			page.set_hyperlink(int(row_ref.y), x, id) or {
+				assert false, 'failed to populate source hyperlink ${page_index}:${x}'
+				return
+			}
+		}
+	}
+
+	old_capacity := first.data.hyperlink_capacity()
+	assert first.data.hyperlink_count() == 60
+	assert second.data.hyperlink_count() == 60
+	new_first := list.clone_row_growing(first, &second.data, 1, 0)
+
+	assert voidptr(new_first) != voidptr(first)
+	assert new_first.data.hyperlink_capacity() > old_capacity
+	assert new_first.data.hyperlink_count() == 120
+	for x in 0 .. 60 {
+		assert new_first.data.lookup_hyperlink(0, x) != none
+		assert new_first.data.lookup_hyperlink(1, x) != none
+	}
+	if integrity_error := new_first.data.verify_integrity() {
+		assert false, 'grown hyperlink page failed integrity: ${integrity_error}'
+	}
+}
+
 fn test_page_list_erase_row_grows_style_capacity_across_pages() {
 	mut list := PageList.init(60, 3, usize(0x7FFFFFFFFFFFFFFF))
 	defer { list.deinit() }
@@ -1129,7 +1186,7 @@ fn test_page_list_erase_history_preserves_managed_survivor() {
 		}
 		uri: 'https://example.com/survivor'
 	})
-	page.set_hyperlink(2, 3, hyperlink_id)
+	page.set_hyperlink(2, 3, hyperlink_id) or { panic(err) }
 
 	// The first two rows are history. Erasing them compacts old row 2 to row 0.
 	s.erase_rows(Point.new(.history, Coordinate{}), none)
@@ -1228,7 +1285,7 @@ fn test_page_list_erase_row_preserves_managed_cell_data() {
 		}
 		uri: 'https://example.com/managed'
 	})
-	page.set_hyperlink(1, 2, hyperlink_id)
+	page.set_hyperlink(1, 2, hyperlink_id) or { panic(err) }
 
 	s.erase_row(PagePin{ node: first, y: 0, x: 0 })
 
@@ -1277,7 +1334,7 @@ fn test_page_list_erase_row_moves_managed_cell_and_pin_across_page_boundary() {
 		}
 		uri: 'https://example.com/boundary'
 	})
-	second_page.set_hyperlink(0, 1, hyperlink_id)
+	second_page.set_hyperlink(0, 1, hyperlink_id) or { panic(err) }
 	tracked := s.track_pin(PagePin{ node: second, y: 0, x: 1 })
 
 	s.erase_row(PagePin{ node: first, y: 1, x: 0 })
@@ -3058,7 +3115,7 @@ fn test_page_list_erase_row_bounded_preserves_managed_cell_data() {
 		}
 		uri: 'https://example.com/bounded'
 	})
-	page.set_hyperlink(1, 1, hyperlink_id)
+	page.set_hyperlink(1, 1, hyperlink_id) or { panic(err) }
 
 	s.erase_row_bounded(PagePin{ node: first, y: 0, x: 0 }, 1)
 
@@ -3103,7 +3160,7 @@ fn test_page_list_erase_row_bounded_exact_page_boundary() {
 		}
 		uri: 'https://example.com/exact-boundary'
 	})
-	second_page.set_hyperlink(0, 2, hyperlink_id)
+	second_page.set_hyperlink(0, 2, hyperlink_id) or { panic(err) }
 	tracked := s.track_pin(PagePin{ node: second, y: 0, x: 2 })
 
 	// One row remains in the first page. A limit of one must pull the next
@@ -3560,14 +3617,14 @@ fn test_page_list_resize_no_reflow_preserves_hyperlink_key_stride() {
 		codepoint: u32(`a`)
 		hyperlink: link.dupe()
 	}
-	page.set_hyperlink(1, 1, link_id)
+	page.set_hyperlink(1, 1, link_id) or { panic(err) }
 	page.hyperlink_set.use_link(link_id)
 	page.rows[1].cells[3] = CellData{
 		content_tag: .codepoint
 		codepoint: u32(`b`)
 		hyperlink: link.dupe()
 	}
-	page.set_hyperlink(1, 3, link_id)
+	page.set_hyperlink(1, 3, link_id) or { panic(err) }
 
 	s.resize(PageResizeOpts{ cols: 2, reflow: false })
 	shrunk_node := s.pages.first or { return }
@@ -4427,7 +4484,7 @@ fn test_page_list_resize_reflow_preserves_hyperlink_mapping() {
 		}
 		uri: 'https://example.com/reflow'
 	})
-	page.set_hyperlink(0, 3, source_id)
+	page.set_hyperlink(0, 3, source_id) or { panic(err) }
 
 	s.resize(PageResizeOpts{ cols: 2, reflow: true })
 
@@ -4490,7 +4547,7 @@ fn test_page_list_resize_reflow_preserves_hyperlinks_across_source_pages() {
 		}
 		uri: 'https://example.com/first'
 	})
-	first_page.set_hyperlink(1, 1, first_id)
+	first_page.set_hyperlink(1, 1, first_id) or { panic(err) }
 
 	mut second_page := &second.data
 	second_page.rows[0].wrap_continuation = true
@@ -4504,7 +4561,7 @@ fn test_page_list_resize_reflow_preserves_hyperlinks_across_source_pages() {
 		}
 		uri: 'https://example.com/second'
 	})
-	second_page.set_hyperlink(0, 0, second_id)
+	second_page.set_hyperlink(0, 0, second_id) or { panic(err) }
 
 	// The wrapped logical line crosses the old page boundary and is unwrapped
 	// into one destination row.
@@ -5698,7 +5755,7 @@ fn test_page_list_split_preserves_hyperlinks() {
 		content_tag: .codepoint
 		codepoint: u32(`L`)
 	}
-	page.set_hyperlink(7, 0, hyperlink_id)
+	page.set_hyperlink(7, 0, hyperlink_id) or { panic(err) }
 
 	s.split(PagePin{ node: first, y: 5, x: 0 }) or {
 		assert false, 'split failed'
