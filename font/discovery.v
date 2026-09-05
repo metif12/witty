@@ -308,41 +308,28 @@ pub mut:
 // hashcode returns a hash code that can be used to uniquely identify
 // this descriptor.
 pub fn (d &Descriptor) hashcode() u64 {
-	mut state := u64(0)
+	mut hasher := SourceHash{}
+	d.hash_into(mut hasher)
+	return hasher.final()
+}
 
-	// Hash family string
-	if f := d.family {
-		for b in f.bytes() {
-			state = state * 31 + u64(b)
-		}
+// hash_into hashes every field in Ghostty's Descriptor.hash order.
+fn (d &Descriptor) hash_into(mut hasher SourceHash) {
+	hasher.put_optional_string(d.family)
+	hasher.put_optional_string(d.style)
+	hasher.put_u32(d.codepoint)
+	hasher.put_f32(d.size)
+	hasher.put_bool(d.bold)
+	hasher.put_bool(d.italic)
+	hasher.put_bool(d.monospace)
+	hasher.put_u64(u64(d.variations.len))
+	for variation in d.variations {
+		hasher.put_u32(variation.id.value)
+
+		// This intentionally matches Ghostty: decimal variation values are
+		// truncated before hashing because callers don't depend on them.
+		hasher.put_i64(i64(variation.value))
 	}
-	state = state * 31 + 1 // separator
-
-	// Hash style string
-	if s := d.style {
-		for b in s.bytes() {
-			state = state * 31 + u64(b)
-		}
-	}
-	state = state * 31 + 2 // separator
-
-	state = state * 31 + u64(d.codepoint)
-
-	// Hash size as integer bits
-	state = state * 31 + u64(u32(d.size * 1000.0))
-
-	state = state * 31 + u64(if d.bold { 1 } else { 0 })
-	state = state * 31 + u64(if d.italic { 1 } else { 0 })
-	state = state * 31 + u64(if d.monospace { 1 } else { 0 })
-
-	state = state * 31 + u64(d.variations.len)
-	for v in d.variations {
-		state = state * 31 + u64(v.id.value)
-		// This is not correct, but we don't currently depend on the
-		// hash value being different based on decimal values of variations.
-		state = state * 31 + u64(i64(v.value))
-	}
-	return state
 }
 
 // clone creates a deep copy of the descriptor.

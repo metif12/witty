@@ -81,14 +81,17 @@ pub fn (self &CodepointMap) get(cp u32) ?Descriptor {
 // hashcode returns a hash code that can be used to uniquely identify
 // this CodepointMap.
 pub fn (self &CodepointMap) hashcode() u64 {
-	// Hash with a simple multiplicative hash, feeding in length,
-	// ranges, and descriptor hashes.
-	mut state := u64(0)
-	state = state * 31 + u64(self.entries.len)
+	mut hasher := SourceHash{}
+	self.hash_into(mut hasher)
+	return hasher.final()
+}
+
+// hash_into hashes entries in Ghostty's CodepointMap.hash order.
+fn (self &CodepointMap) hash_into(mut hasher SourceHash) {
+	hasher.put_u64(u64(self.entries.len))
 	for entry in self.entries {
-		state = state * 31 + u64(entry.range[0])
-		state = state * 31 + u64(entry.range[1])
-		state = state * 31 + entry.descriptor.hashcode()
+		hasher.put_u32(entry.range[0])
+		hasher.put_u32(entry.range[1])
+		entry.descriptor.hash_into(mut hasher)
 	}
-	return state
 }

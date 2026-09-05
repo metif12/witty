@@ -539,7 +539,7 @@ pub:
 	// Whether to render glyphs in monochrome.
 	monochrome bool
 	// Whether to use light hinting mode.
-	light bool
+	light bool = true
 }
 
 // Default load flags.

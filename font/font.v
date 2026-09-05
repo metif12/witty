@@ -1038,6 +1038,11 @@ fn (mut a Atlas) merge() {
 // to fit exactly within the region. The data must be formatted with the
 // proper bpp configured on init.
 pub fn (mut a Atlas) set(reg AtlasRegion, data []u8) {
+	assert reg.x < a.size - 1
+	assert reg.x + reg.width <= a.size - 1
+	assert reg.y < a.size - 1
+	assert reg.y + reg.height <= a.size - 1
+
 	depth := a.format.depth()
 	for i in u32(0) .. reg.height {
 		tex_offset := (((reg.y + i) * a.size) + reg.x) * depth
@@ -1055,6 +1060,11 @@ pub fn (mut a Atlas) set(reg AtlasRegion, data []u8) {
 // data and an offset x and y, so that a section of a larger buffer may be
 // copied in to the atlas.
 pub fn (mut a Atlas) set_from_larger(reg AtlasRegion, src []u8, src_width u32, src_x u32, src_y u32) {
+	assert reg.x < a.size - 1
+	assert reg.x + reg.width <= a.size - 1
+	assert reg.y < a.size - 1
+	assert reg.y + reg.height <= a.size - 1
+
 	depth := a.format.depth()
 	for i in u32(0) .. reg.height {
 		tex_offset := (((reg.y + i) * a.size) + reg.x) * depth
@@ -1070,7 +1080,7 @@ pub fn (mut a Atlas) set_from_larger(reg AtlasRegion, src []u8, src_width u32, s
 
 // grow grows the texture to the new size, preserving all previously written data.
 pub fn (mut a Atlas) grow(size_new u32) {
-	// assert(size_new >= self.size)
+	assert size_new >= a.size
 	if size_new == a.size {
 		return
 	}

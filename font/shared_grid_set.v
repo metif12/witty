@@ -582,31 +582,41 @@ pub fn (self &GridSetKey) descriptors_for_style(style FontStyle) []Descriptor {
 // hashcode returns a hash code that can be used to uniquely identify
 // this font configuration.
 pub fn (self &GridSetKey) hashcode() u64 {
-	mut state := u64(0)
+	mut hasher := SourceHash{}
 
-	// Hash font size
-	state = state * 31 + u64(u32(self.font_size.points * 1000.0))
-	state = state * 31 + u64(self.font_size.xdpi)
-	state = state * 31 + u64(self.font_size.ydpi)
+	// Hash font size using its exact source bit representation.
+	hasher.put_f32(self.font_size.points)
+	hasher.put_u16(self.font_size.xdpi)
+	hasher.put_u16(self.font_size.ydpi)
 
-	// Hash descriptors
-	state = state * 31 + u64(self.descriptors.len)
+	// Hash descriptors directly into the same stream.
+	hasher.put_u64(u64(self.descriptors.len))
 	for d in self.descriptors {
-		state = state * 31 + d.hashcode()
+		d.hash_into(mut hasher)
 	}
 
-	// Hash codepoint map
-	state = state * 31 + self.codepoint_map.hashcode()
+	self.codepoint_map.hash_into(mut hasher)
 
-	// Hash metric modifiers
-	state = state * 31 + u64(self.metric_modifiers.count())
+	hasher.put_u64(u64(self.metric_modifiers.count()))
 
-	// Hash freetype load flags
-	state = state * 31 + u64(if self.freetype_load_flags.hinting { 1 } else { 0 })
-	state = state * 31 + u64(if self.freetype_load_flags.force_autohint { 1 } else { 0 })
-	state = state * 31 + u64(if self.freetype_load_flags.autohint { 1 } else { 0 })
-	state = state * 31 + u64(if self.freetype_load_flags.monochrome { 1 } else { 0 })
-	state = state * 31 + u64(if self.freetype_load_flags.light { 1 } else { 0 })
+	// Ghostty hashes this packed struct as one byte in declaration order.
+	mut load_flags := u8(0)
+	if self.freetype_load_flags.hinting {
+		load_flags |= 1 << 0
+	}
+	if self.freetype_load_flags.force_autohint {
+		load_flags |= 1 << 1
+	}
+	if self.freetype_load_flags.monochrome {
+		load_flags |= 1 << 2
+	}
+	if self.freetype_load_flags.autohint {
+		load_flags |= 1 << 3
+	}
+	if self.freetype_load_flags.light {
+		load_flags |= 1 << 4
+	}
+	hasher.put_u8(load_flags)
 
 	// Hash metric modifier values
 	if self.metric_modifiers.count() > 0 {
@@ -615,13 +625,13 @@ pub fn (self &GridSetKey) hashcode() u64 {
 			.overline_position, .overline_thickness, .box_thickness, .cursor_height, .icon_height,
 			.cursor_thickness] {
 			if m := self.metric_modifiers.get(mk) {
-				state = state * 31 + u64(int(mk))
-				state = state * 31 + m.hash()
+				hasher.put_u8(u8(mk))
+				m.hash_into(mut hasher)
 			}
 		}
 	}
 
-	return state
+	return hasher.final()
 }
 
 // ============================================================
@@ -666,10 +676,20 @@ pub:
 
 // hash returns a hash value for this modifier.
 pub fn (m MetricsModifier) hash() u64 {
+	mut hasher := SourceHash{}
+	m.hash_into(mut hasher)
+	return hasher.final()
+}
+
+// hash_into hashes the active tagged-union payload exactly as Ghostty does.
+fn (m MetricsModifier) hash_into(mut hasher SourceHash) {
 	if m.is_percent {
-		return u64(u32(m.percent * 100000.0))
+		hasher.put_u8(0)
+		hasher.put_f64(m.percent)
+		return
 	}
-	return u64(u32(m.absolute) + 0x80000000)
+	hasher.put_u8(1)
+	hasher.put_i32(m.absolute)
 }
 
 // parse parses a modifier value. If the value ends in "%" it is assumed to be

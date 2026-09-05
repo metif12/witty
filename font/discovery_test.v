@@ -20,6 +20,15 @@ fn test_descriptor_hash_family_names() {
 	assert d1.hashcode() != d2.hashcode()
 }
 
+// Ghostty hashes the IEEE-754 bits of the requested point size. Values that
+// differ by less than the old decimal quantization must remain distinct.
+fn test_descriptor_hash_exact_size_bits() {
+	d1 := Descriptor{ size: f32(12.000001) }
+	d2 := Descriptor{ size: f32(12.000002) }
+	assert d1.size != d2.size
+	assert d1.hashcode() != d2.hashcode()
+}
+
 // test_fontconfig tests basic fontconfig discovery.
 fn test_fontconfig() {
 	mut fc := FontconfigDiscovery.init()

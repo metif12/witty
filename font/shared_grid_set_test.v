@@ -26,6 +26,18 @@ fn test_gridset_key_different_font_points() {
 	assert k.hashcode() != k2.hashcode()
 }
 
+fn test_gridset_key_preserves_exact_font_point_bits() {
+	cfg := GridSetDerivedConfig{}
+	mut k := GridSetKey.init(&cfg, DesiredSize{ points: f32(12.000001) })
+	defer { k.deinit() }
+
+	mut k2 := GridSetKey.init(&cfg, DesiredSize{ points: f32(12.000002) })
+	defer { k2.deinit() }
+
+	assert k.font_size.points != k2.font_size.points
+	assert k.hashcode() != k2.hashcode()
+}
+
 fn test_gridset_key_different_font_dpi() {
 	cfg := GridSetDerivedConfig{}
 	mut k := GridSetKey.init(&cfg, DesiredSize{ points: 12, xdpi: 1 })
@@ -98,6 +110,52 @@ fn test_gridset_key_metric_modifiers() {
 	assert k1.hashcode() != k2.hashcode()
 }
 
+fn test_gridset_key_preserves_exact_metric_modifier_bits() {
+	cfg1 := GridSetDerivedConfig{
+		adjust_cell_width: MetricsModifier{
+			is_percent: true
+			percent: 1.200001
+		}
+	}
+	cfg2 := GridSetDerivedConfig{
+		adjust_cell_width: MetricsModifier{
+			is_percent: true
+			percent: 1.200002
+		}
+	}
+
+	mut k1 := GridSetKey.init(&cfg1, DesiredSize{ points: 12 })
+	defer { k1.deinit() }
+	mut k2 := GridSetKey.init(&cfg2, DesiredSize{ points: 12 })
+	defer { k2.deinit() }
+
+	assert k1.hashcode() != k2.hashcode()
+}
+
+fn test_metrics_modifier_hash_ignores_inactive_payload() {
+	percent1 := MetricsModifier{
+		is_percent: true
+		percent: 1.25
+		absolute: 1
+	}
+	percent2 := MetricsModifier{
+		is_percent: true
+		percent: 1.25
+		absolute: 999
+	}
+	assert percent1.hash() == percent2.hash()
+
+	absolute1 := MetricsModifier{
+		absolute: 3
+		percent: 1.1
+	}
+	absolute2 := MetricsModifier{
+		absolute: 3
+		percent: 9.9
+	}
+	assert absolute1.hash() == absolute2.hash()
+}
+
 fn test_gridset_metrics_modifier_set() {
 	mut set := MetricsModifierSet{}
 	assert set.count() == 0
@@ -127,6 +185,7 @@ fn test_gridset_derived_config_defaults() {
 	assert cfg.font_synthetic_style.bold == true
 	assert cfg.font_synthetic_style.italic == true
 	assert cfg.freetype_load_flags.hinting == true
+	assert cfg.freetype_load_flags.light == true
 }
 
 fn test_shared_grid_set_init_deinit() {
