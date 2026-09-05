@@ -1045,6 +1045,89 @@ fn test_erase_chars_beyond_screen_edge() {
 	assert str == '1234567'
 }
 
+fn test_erase_chars_protected_attributes_respected_with_iso() {
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.set_protected_mode(.iso)
+	t.print_string('ABC') or { assert false }
+	t.set_cursor_pos(1, 1)
+	t.erase_chars(2)
+	assert t.plain_string() or { '' } == 'ABC'
+}
+
+fn test_erase_chars_protected_attributes_ignored_with_dec_most_recent() {
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.set_protected_mode(.iso)
+	t.print_string('ABC') or { assert false }
+	t.set_protected_mode(.dec)
+	t.set_protected_mode(.off)
+	t.set_cursor_pos(1, 1)
+	t.erase_chars(2)
+	assert t.plain_string() or { '' } == '  C'
+}
+
+fn test_erase_chars_protected_attributes_ignored_with_dec_set() {
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.set_protected_mode(.dec)
+	t.print_string('ABC') or { assert false }
+	t.set_cursor_pos(1, 1)
+	t.erase_chars(2)
+	assert t.plain_string() or { '' } == '  C'
+}
+
+fn test_protected_erases_update_managed_row_flags() {
+	mut t := create_test_terminal(5, 2) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	for y in 0 .. 2 {
+		mut row := &t.screens.active.pages.screen_rows[y]
+		row.grapheme = true
+		row.styled = true
+		row.hyperlink = true
+		row.cells[0] = CellData{
+			content_tag: .codepoint_grapheme
+			codepoint: u32(`x`)
+			has_grapheme: true
+			graphemes: [u32(0x0301)]
+			style_id: 1
+			has_hyperlink: true
+		}
+	}
+
+	// ISO is the most recent protection mode, but these cells themselves are
+	// unprotected, so both erases must clear them through clearUnprotectedCells.
+	t.screens.active.protected_mode = .iso
+	t.erase_chars(1)
+	row0 := &t.screens.active.pages.screen_rows[0]
+	assert !row0.grapheme
+	assert !row0.styled
+	assert !row0.hyperlink
+
+	t.set_cursor_pos(2, 1)
+	t.erase_line(.right, false)
+	row1 := &t.screens.active.pages.screen_rows[1]
+	assert !row1.grapheme
+	assert !row1.styled
+	assert !row1.hyperlink
+}
+
 // ============================================================
 // Erase line
 // ============================================================

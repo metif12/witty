@@ -3681,17 +3681,7 @@ pub fn (mut self Terminal) erase_chars(count_req int) {
 		return
 	}
 
-	// Respect protected cells
-	blank := self.screens.active.blank_cell()
-	unsafe {
-		mut row := &self.screens.active.pages.screen_rows[row_idx]
-		for x in cursor_x .. cursor_x + count {
-			if x < row.cells.len && !row.cells[x].is_protected {
-				row.cells[x] = blank
-			}
-		}
-		row.dirty = true
-	}
+	self.screens.active.clear_unprotected_cells(row_idx, cursor_x, cursor_x + count)
 }
 
 // ============================================================
@@ -3764,19 +3754,7 @@ pub fn (mut self Terminal) erase_line(mode EraseLine, protected_req bool) {
 		return
 	}
 
-	// Protected mode: only clear unprotected cells
-	if row_idx < self.screens.active.pages.screen_rows.len {
-		blank := self.screens.active.blank_cell()
-		unsafe {
-			mut row := &self.screens.active.pages.screen_rows[row_idx]
-			for x in start .. end {
-				if x < row.cells.len && !row.cells[x].is_protected {
-					row.cells[x] = blank
-				}
-			}
-			row.dirty = true
-		}
-	}
+	self.screens.active.clear_unprotected_cells(row_idx, start, end)
 }
 
 pub enum EraseLine {
