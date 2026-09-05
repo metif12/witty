@@ -1326,8 +1326,13 @@ pub fn ghostty_app_userdata(v &App) voidptr {
 pub fn ghostty_app_free(mut v App) {
 	mut core_app := v.core_app
 	v.terminate()
-	unsafe { free(&v) }
+	// CoreApp.destroy deinitializes every live surface. Embedded Surface.deinit
+	// follows its owning App to unregister itself, so that App must remain alive
+	// until core destruction completes. Zig's allocator left the source ordering
+	// observable in practice, but V's free makes the same dereference an immediate
+	// use-after-free.
 	core_app.destroy()
+	unsafe { free(&v) }
 }
 
 // ghostty_app_set_focus updates the focused state of the app.
