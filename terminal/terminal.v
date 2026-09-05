@@ -3322,7 +3322,8 @@ pub fn (mut self Terminal) insert_lines(count int) {
 		dst_idx := active_start + y
 
 		// Handle boundary conditions (split wide chars / orphaned spacer
-		// heads) on the source row before shifting it.
+		// heads) on both rows before shifting them.
+		self.row_will_be_shifted(dst_idx)
 		self.row_will_be_shifted(src_idx)
 
 		if src_idx < self.screens.active.pages.screen_rows.len
@@ -3342,6 +3343,8 @@ pub fn (mut self Terminal) insert_lines(count int) {
 					dst_row.styled = src_row.styled
 					dst_row.grapheme = src_row.grapheme
 					dst_row.hyperlink = src_row.hyperlink
+					dst_row.semantic_prompt = src_row.semantic_prompt
+					dst_row.kitty_virtual_placeholder = src_row.kitty_virtual_placeholder
 					dst_row.dirty = true
 				}
 			} else {
@@ -3352,6 +3355,18 @@ pub fn (mut self Terminal) insert_lines(count int) {
 					for x in int(self.scrolling_region.left) .. int(self.scrolling_region.right) + 1 {
 						if x < src_row.cells.len && x < dst_row.cells.len {
 							dst_row.cells[x] = src_row.cells[x]
+							if src_row.cells[x].has_grapheme {
+								dst_row.grapheme = true
+							}
+							if src_row.cells[x].has_hyperlink {
+								dst_row.hyperlink = true
+							}
+							if src_row.cells[x].style_id != default_style_id {
+								dst_row.styled = true
+							}
+							if src_row.cells[x].codepoint_val() == kitty_unicode_placeholder {
+								dst_row.kitty_virtual_placeholder = true
+							}
 						}
 					}
 					dst_row.dirty = true
@@ -3415,7 +3430,8 @@ pub fn (mut self Terminal) delete_lines(count int) {
 		dst_idx := active_start + y
 
 		// Handle boundary conditions (split wide chars / orphaned spacer
-		// heads) on the source row before shifting it.
+		// heads) on both rows before shifting them.
+		self.row_will_be_shifted(dst_idx)
 		self.row_will_be_shifted(src_idx)
 
 		if src_idx < self.screens.active.pages.screen_rows.len
@@ -3430,6 +3446,8 @@ pub fn (mut self Terminal) delete_lines(count int) {
 					dst_row.styled = src_row.styled
 					dst_row.grapheme = src_row.grapheme
 					dst_row.hyperlink = src_row.hyperlink
+					dst_row.semantic_prompt = src_row.semantic_prompt
+					dst_row.kitty_virtual_placeholder = src_row.kitty_virtual_placeholder
 					dst_row.dirty = true
 				}
 			} else {
@@ -3439,6 +3457,18 @@ pub fn (mut self Terminal) delete_lines(count int) {
 					for x in int(self.scrolling_region.left) .. int(self.scrolling_region.right) + 1 {
 						if x < src_row.cells.len && x < dst_row.cells.len {
 							dst_row.cells[x] = src_row.cells[x]
+							if src_row.cells[x].has_grapheme {
+								dst_row.grapheme = true
+							}
+							if src_row.cells[x].has_hyperlink {
+								dst_row.hyperlink = true
+							}
+							if src_row.cells[x].style_id != default_style_id {
+								dst_row.styled = true
+							}
+							if src_row.cells[x].codepoint_val() == kitty_unicode_placeholder {
+								dst_row.kitty_virtual_placeholder = true
+							}
 						}
 					}
 					dst_row.dirty = true

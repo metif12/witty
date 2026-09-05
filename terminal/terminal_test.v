@@ -4675,6 +4675,69 @@ fn test_scroll_up_left_right_scroll_region() {
 	assert str == 'AEF423\nDHI756\nG   89'
 }
 
+fn test_scroll_up_left_right_region_preserves_hyperlink_flags() {
+	mut t := create_test_terminal(10, 10) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	t.print_string('ABC123') or { assert false }
+	t.carriage_return()
+	t.linefeed() or { assert false }
+	t.screens.active.start_hyperlink('http://example.com', none) or { assert false }
+	t.print_string('DEF456') or { assert false }
+	t.screens.active.end_hyperlink()
+	t.carriage_return()
+	t.linefeed() or { assert false }
+	t.print_string('GHI789') or { assert false }
+	t.scrolling_region.left = 1
+	t.scrolling_region.right = 3
+	t.set_cursor_pos(2, 2)
+	t.scroll_up(1) or { assert false }
+
+	assert (t.plain_string() or { '' }) == 'AEF423\nDHI756\nG   89'
+	row0 := t.screens.active.pages.get_active_row(0)
+	assert row0.hyperlink
+	for x in 1 .. 4 {
+		assert row0.cells[x].has_hyperlink
+		assert row0.cells[x].hyperlink.uri == 'http://example.com'
+	}
+}
+
+fn test_insert_delete_lines_preserve_full_row_metadata() {
+	mut t := create_test_terminal(4, 4) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	// Put managed and semantic state on the row that will move.
+	t.set_cursor_pos(2, 1)
+	t.screens.active.cursor_set_semantic_content_prompt(.initial)
+	t.screens.active.start_hyperlink('http://example.com', none) or { assert false }
+	t.print(kitty_unicode_placeholder) or { assert false }
+	t.screens.active.end_hyperlink()
+	source := t.screens.active.pages.get_active_row(1)
+	assert source.semantic_prompt == .prompt
+	assert source.hyperlink
+	assert source.kitty_virtual_placeholder
+
+	t.set_cursor_pos(1, 1)
+	t.insert_lines(1)
+	moved_down := t.screens.active.pages.get_active_row(2)
+	assert moved_down.semantic_prompt == .prompt
+	assert moved_down.hyperlink
+	assert moved_down.kitty_virtual_placeholder
+
+	t.set_cursor_pos(2, 1)
+	t.delete_lines(1)
+	moved_up := t.screens.active.pages.get_active_row(1)
+	assert moved_up.semantic_prompt == .prompt
+	assert moved_up.hyperlink
+	assert moved_up.kitty_virtual_placeholder
+}
+
 fn test_scroll_up_preserves_pending_wrap() {
 	mut t := create_test_terminal(5, 5) or {
 		assert false
