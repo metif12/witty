@@ -3431,7 +3431,7 @@ pub mut:
 	page_serial     u64
 	page_serial_min u64
 
-	// Byte size tracking (approximate).
+	// Logical Zig backing-allocation byte size.
 	page_size usize
 
 	// Max size for scrollback (0 = no scrollback).
@@ -3480,7 +3480,7 @@ pub fn PageList.init(cols u16, rows u16, max_size ?usize) PageList {
 		node.data.size.rows = use
 		rem -= use
 		page_list.append(node)
-		page_size += usize(cap.cols) * usize(cap.rows) * 16 // approximate
+		page_size += page_backing_size(cap)
 		page_serial += 1
 		total_rows += usize(use)
 	}
@@ -3660,7 +3660,7 @@ pub fn (mut self PageList) reset() {
 		node.data.size.rows = use
 		rem -= use
 		page_list.append(node)
-		page_size += usize(cap.cols) * usize(cap.rows) * 16
+		page_size += page_backing_size(cap)
 		page_serial += 1
 		total_rows += usize(use)
 	}
@@ -3689,7 +3689,23 @@ pub fn (mut self PageList) reset() {
 const max_usize = usize(0x7FFFFFFFFFFFFFFF)
 
 fn initial_capacity(cols u16) PageCapacity {
-	return std_capacity.adjust(cols)
+	return std_capacity.adjust_checked(cols) or {
+		mut cap := std_capacity
+		cap.cols = cols
+		cap
+	}
+}
+
+fn standard_page_size() usize {
+	return Page.layout(std_capacity).total_size
+}
+
+// Ghostty's pool always dispenses a full standard-sized backing block. Only
+// pages whose exact layout exceeds that block are allocated at their own size.
+fn page_backing_size(cap PageCapacity) usize {
+	size := Page.layout(cap).total_size
+	standard := standard_page_size()
+	return if size <= standard { standard } else { size }
 }
 
 fn min_max_size_calc(cols u16, rows u16) usize {
@@ -3701,7 +3717,7 @@ fn min_max_size_calc(cols u16, rows u16) usize {
 	}
 	// Always need at least one extra page
 	pages := pages_for_active + 1
-	return pages * usize(cap.cols) * usize(cap.rows) * 16
+	return pages * standard_page_size()
 }
 
 pub fn (self &PageList) max_size() usize {
@@ -3721,12 +3737,12 @@ fn (mut self PageList) create_page(cap PageCapacity) &PageNode {
 		serial: self.page_serial
 	}
 	self.page_serial += 1
-	self.page_size += usize(cap.cols) * usize(cap.rows) * 16
+	self.page_size += page_backing_size(cap)
 	return node
 }
 
 fn (mut self PageList) destroy_node(node &PageNode) {
-	self.page_size -= usize(node.data.capacity.cols) * usize(node.data.capacity.rows) * 16
+	self.page_size -= page_backing_size(node.data.capacity)
 	self.pages.remove(node)
 }
 
@@ -3752,7 +3768,7 @@ pub fn (mut self PageList) grow() ?&PageNode {
 	first := self.pages.first or { return none }
 	last := self.pages.last or { return none }
 	if voidptr(first) != voidptr(last)
-		&& self.page_size + usize(cap.cols) * usize(cap.rows) * 16 > self.max_size() {
+		&& self.page_size + standard_page_size() > self.max_size() {
 		// Prune the first page
 		pruned := self.pages.pop_first() or { return none }
 
@@ -3787,19 +3803,26 @@ pub fn (mut self PageList) grow() ?&PageNode {
 			}
 			self.viewport_pin.garbage = false
 
-			// Reinit pruned page and reuse it
-			unsafe {
-				mut mp := pruned
-				mp.data.reinit(cap)
-				mp.data.size.rows = 1
-				self.page_serial_min = mp.serial + 1
-				mp.serial = self.page_serial
-			}
-			self.page_serial += 1
-			self.pages.append(pruned)
-			self.total_rows += 1
+			old_backing_size := page_backing_size(pruned.data.capacity)
+			if old_backing_size <= standard_page_size() {
+				// Standard pages reuse the fixed-size pooled allocation.
+				unsafe {
+					mut mp := pruned
+					mp.data.reinit(cap)
+					mp.data.size.rows = 1
+					self.page_serial_min = mp.serial + 1
+					mp.serial = self.page_serial
+				}
+				self.page_serial += 1
+				self.pages.append(pruned)
+				self.total_rows += 1
 
-			return pruned
+				return pruned
+			}
+
+			// A non-standard page cannot enter Ghostty's fixed-size pool. Its
+			// backing is released and the standard page below is newly allocated.
+			self.page_size -= old_backing_size
 		}
 	}
 
@@ -5881,7 +5904,7 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) {
 		// (the new reflow node). We only account for the freed size; V's
 		// GC reclaims the memory.
 		if int(row.y) == int(row.node.data.size.rows) - 1 {
-			self.page_size -= usize(row.node.data.capacity.cols) * usize(row.node.data.capacity.rows) * 16
+			self.page_size -= page_backing_size(row.node.data.capacity)
 		}
 	}
 

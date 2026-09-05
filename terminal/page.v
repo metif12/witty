@@ -836,8 +836,9 @@ const grapheme_chunk_len = 4
 // Chunk size in bytes for grapheme data.
 const grapheme_chunk = grapheme_chunk_len * 4 // sizeof(u32)
 
-// Default grapheme bytes capacity.
-const grapheme_bytes_default = u32(8192)
+// Default grapheme bytes capacity. The standard production page overrides
+// this to 8192 below; an ordinary Capacity literal uses Ghostty's 64 chunks.
+const grapheme_bytes_default = u32(1024)
 
 // The allocator used for shared utf8-encoded strings within a page.
 // Note the chunk size below is the minimum size of a single allocation.
@@ -847,6 +848,7 @@ const grapheme_bytes_default = u32(8192)
 // domain links quite well and is not too wasteful for short IDs.
 const string_chunk_len = 32
 const string_chunk = string_chunk_len
+const string_bytes_default = u32(2048)
 
 // Default number of hyperlinks we support.
 //
@@ -855,6 +857,8 @@ const string_chunk = string_chunk_len
 // just sets the total capacity to simplify adjustable size metrics.
 const hyperlink_count_default = 4
 const hyperlink_cell_multiplier = 16
+const hyperlink_set_item_size = usize(48)
+const hyperlink_bytes_default = u16(hyperlink_count_default * hyperlink_set_item_size)
 
 // Kitty graphics protocol Unicode placeholder / virtual placement codepoint.
 const kitty_unicode_placeholder = u32(0x10EEEE)
@@ -864,6 +868,9 @@ const std_capacity = PageCapacity{
 	cols: 215
 	rows: 215
 	styles: 128
+	hyperlink_bytes: 192
+	grapheme_bytes: 8192
+	string_bytes: 2048
 }
 
 // Number of pages to preheat the pool with.
@@ -976,8 +983,8 @@ enum PageCloneError {
 // Capacity of a page.
 //
 // This capacity can be maxed out (every field max) and still fit
-// within a page layout. For V, the memory-related fields are tracked
-// for API compatibility but V's GC manages actual memory.
+// within a page layout. V's GC owns the actual arrays, but these fields
+// retain Ghostty's exact logical contiguous-page layout and accounting.
 pub struct PageCapacity {
 pub mut:
 	// Number of columns and rows we can know about.
@@ -985,12 +992,12 @@ pub mut:
 	rows u16 = 128
 	// Number of unique styles that can be used on this page.
 	styles u16 = 16
+	// Number of bytes to allocate for hyperlink set entries.
+	hyperlink_bytes u16 = hyperlink_bytes_default
 	// Number of bytes to allocate for grapheme data.
 	grapheme_bytes u32 = grapheme_bytes_default
-	// Logical bytes available to the packed row/cell grid. Ghostty derives
-	// this from the page-aligned backing allocation. V stores page members in
-	// separate arrays, so adjusted capacities carry the original grid budget.
-	grid_bytes usize
+	// Number of bytes to allocate for shared strings.
+	string_bytes u32 = string_bytes_default
 }
 
 // Bit sizes of the packed Row and Cell structs in Ghostty's page.zig.
@@ -1001,23 +1008,173 @@ pub mut:
 const row_bit_size = usize(64)
 const cell_bit_size = usize(64)
 
-// Computes the number of bits available for rows and cells in the page.
-//
-// In Ghostty this lays out the "meta" members (styles, graphemes,
-// hyperlinks, strings) from the end of the page and finds where they
-// start. In V we don't have a fixed backing buffer, so instead we derive
-// a stable grid-bit budget from this capacity's own cols/rows. This gives
-// us the same invariant the Zig code relies on: adjusting to the same cols
-// returns the same rows, and adjusting to more cols yields fewer rows.
-fn (self PageCapacity) available_bits_for_grid() usize {
-	if self.grid_bytes > 0 {
-		return self.grid_bytes * 8
+const page_row_size = usize(8)
+const page_cell_size = usize(8)
+const page_style_item_size = usize(36)
+
+// PageSetLayout is the layout shared by Ghostty's specialized
+// RefCountedSet instances. Item sizes differ for styles and hyperlinks.
+pub struct PageSetLayout {
+pub:
+	cap         usize
+	table_cap   usize
+	table_mask  u16
+	table_start usize
+	items_start usize
+	total_size  usize
+}
+
+// PageLayout mirrors Page.Layout in the pinned Ghostty source. Offsets and
+// sizes describe the Zig backing allocation rather than V object storage.
+pub struct PageLayout {
+pub:
+	total_size            usize
+	rows_start            usize
+	rows_size             usize
+	cells_start           usize
+	cells_size            usize
+	styles_start          usize
+	styles_layout         PageSetLayout
+	grapheme_alloc_start  usize
+	grapheme_alloc_layout BitmapAllocatorLayout
+	grapheme_map_start    usize
+	grapheme_map_layout   HashMapLayout
+	string_alloc_start    usize
+	string_alloc_layout   BitmapAllocatorLayout
+	hyperlink_map_start   usize
+	hyperlink_map_layout  HashMapLayout
+	hyperlink_set_start   usize
+	hyperlink_set_layout  PageSetLayout
+	capacity              PageCapacity
+}
+
+fn page_align_forward(value usize, alignment usize) usize {
+	return (value + alignment - 1) & ~(alignment - 1)
+}
+
+fn page_align_backward(value usize, alignment usize) usize {
+	return value & ~(alignment - 1)
+}
+
+fn page_memory_alignment() usize {
+	$if macos {
+		return 16384
+	} $else {
+		return 4096
+	}
+}
+
+fn page_ceil_power_of_two(value usize) usize {
+	if value <= 1 {
+		return 1
+	}
+	mut result := usize(1)
+	for result < value {
+		result <<= 1
+	}
+	return result
+}
+
+fn page_set_layout(cap usize, item_size usize, item_alignment usize) PageSetLayout {
+	if cap == 0 {
+		return PageSetLayout{}
 	}
 
-	// Page backing allocations are page aligned. Keep the alignment slack in
-	// the logical grid budget just as Page.layout/availableBitsForGrid do.
-	grid_bytes := usize(self.rows) * (usize(self.cols) + 1) * 8
-	return ((grid_bytes + 4095) / 4096 * 4096) * 8
+	table_cap := page_ceil_power_of_two(cap)
+	items_cap := table_cap * 13 / 16
+	table_start := usize(0)
+	table_end := table_start + table_cap * 2
+	items_start := page_align_forward(table_end, item_alignment)
+	return PageSetLayout{
+		cap: items_cap
+		table_cap: table_cap
+		table_mask: u16(table_cap - 1)
+		table_start: table_start
+		items_start: items_start
+		total_size: items_start + items_cap * item_size
+	}
+}
+
+// layout computes the exact byte layout used by the pinned Zig Page.
+pub fn Page.layout(cap PageCapacity) PageLayout {
+	rows_start := usize(0)
+	rows_size := usize(cap.rows) * page_row_size
+	rows_end := rows_start + rows_size
+
+	cells_start := page_align_forward(rows_end, page_cell_size)
+	cells_size := usize(cap.cols) * usize(cap.rows) * page_cell_size
+	cells_end := cells_start + cells_size
+
+	styles_layout := page_set_layout(usize(cap.styles), page_style_item_size, 4)
+	styles_start := page_align_forward(cells_end, 8)
+	styles_end := styles_start + styles_layout.total_size
+
+	grapheme_alloc_layout := bitmap_allocator_layout(int(cap.grapheme_bytes), grapheme_chunk)
+	grapheme_alloc_start := page_align_forward(styles_end, 8)
+	grapheme_alloc_end := grapheme_alloc_start + usize(grapheme_alloc_layout.total_size)
+
+	grapheme_count := if cap.grapheme_bytes == 0 {
+		usize(0)
+	} else {
+		page_ceil_power_of_two((usize(cap.grapheme_bytes) + usize(grapheme_chunk) - 1) / usize(grapheme_chunk))
+	}
+	grapheme_map_layout := layout_for_capacity(u32(grapheme_count), 4, 16, 4, 8)
+	grapheme_map_start := page_align_forward(grapheme_alloc_end, 8)
+	grapheme_map_end := grapheme_map_start + usize(grapheme_map_layout.total_size)
+
+	string_alloc_layout := bitmap_allocator_layout(int(cap.string_bytes), string_chunk)
+	string_alloc_start := page_align_forward(grapheme_map_end, 8)
+	string_alloc_end := string_alloc_start + usize(string_alloc_layout.total_size)
+
+	hyperlink_count := usize(cap.hyperlink_bytes) / hyperlink_set_item_size
+	hyperlink_set_layout := page_set_layout(hyperlink_count, hyperlink_set_item_size, 8)
+	hyperlink_set_start := page_align_forward(string_alloc_end, 8)
+	hyperlink_set_end := hyperlink_set_start + hyperlink_set_layout.total_size
+
+	hyperlink_map_count := if hyperlink_count == 0 {
+		usize(0)
+	} else {
+		page_ceil_power_of_two(hyperlink_count * hyperlink_cell_multiplier)
+	}
+	hyperlink_map_layout := layout_for_capacity(u32(hyperlink_map_count), 4, 2, 4, 2)
+	hyperlink_map_start := page_align_forward(hyperlink_set_end, 4)
+	hyperlink_map_end := hyperlink_map_start + usize(hyperlink_map_layout.total_size)
+
+	return PageLayout{
+		total_size: page_align_forward(hyperlink_map_end, page_memory_alignment())
+		rows_start: rows_start
+		rows_size: rows_size
+		cells_start: cells_start
+		cells_size: cells_size
+		styles_start: styles_start
+		styles_layout: styles_layout
+		grapheme_alloc_start: grapheme_alloc_start
+		grapheme_alloc_layout: grapheme_alloc_layout
+		grapheme_map_start: grapheme_map_start
+		grapheme_map_layout: grapheme_map_layout
+		string_alloc_start: string_alloc_start
+		string_alloc_layout: string_alloc_layout
+		hyperlink_map_start: hyperlink_map_start
+		hyperlink_map_layout: hyperlink_map_layout
+		hyperlink_set_start: hyperlink_set_start
+		hyperlink_set_layout: hyperlink_set_layout
+		capacity: cap
+	}
+}
+
+// Computes the number of bits available for rows and cells in the page.
+//
+// This lays out metadata members backward from the aligned page end exactly
+// as Ghostty does, exposing all alignment slack to the row/cell grid.
+fn (self PageCapacity) available_bits_for_grid() usize {
+	l := Page.layout(self)
+	hyperlink_map_start := page_align_backward(l.total_size - usize(l.hyperlink_map_layout.total_size), 4)
+	hyperlink_set_start := page_align_backward(hyperlink_map_start - l.hyperlink_set_layout.total_size, 8)
+	string_alloc_start := page_align_backward(hyperlink_set_start - usize(l.string_alloc_layout.total_size), 8)
+	grapheme_map_start := page_align_backward(string_alloc_start - usize(l.grapheme_map_layout.total_size), 8)
+	grapheme_alloc_start := page_align_backward(grapheme_map_start - usize(l.grapheme_alloc_layout.total_size), 8)
+	styles_start := page_align_backward(grapheme_alloc_start - l.styles_layout.total_size, 8)
+	return styles_start * 8
 }
 
 // Returns the maximum number of columns that can be used with this
@@ -1036,7 +1193,8 @@ pub fn (self PageCapacity) max_cols() ?u16 {
 
 	// We do the math of how many columns we can fit in the remaining
 	// bits ignoring the metadata of a row.
-	max_cols := available_bits / cell_bit_size
+	remaining_bits := available_bits - row_bit_size
+	max_cols := remaining_bits / cell_bit_size
 
 	// Clamp to CellCountInt (u16) max.
 	if max_cols > usize(max_u16) {
@@ -1049,8 +1207,7 @@ pub fn (self PageCapacity) max_cols() ?u16 {
 //
 // Adjustments always happen by limiting the rows in the page. Everything
 // else can grow. If it is impossible to achieve the desired adjustment
-// (rows would go to zero), an error is returned. Callers that don't want
-// the fallible behavior should use `adjust` which clamps to one row.
+// (rows would go to zero), an error is returned.
 pub fn (self PageCapacity) adjust_checked(cols u16) !PageCapacity {
 	mut adjusted := self
 	if cols > 0 {
@@ -1068,28 +1225,8 @@ pub fn (self PageCapacity) adjust_checked(cols u16) !PageCapacity {
 
 		adjusted.cols = cols
 		adjusted.rows = if new_rows > usize(max_u16) { max_u16 } else { u16(new_rows) }
-		adjusted.grid_bytes = available_bits / 8
 	}
 	return adjusted
-}
-
-// Adjust the capacity parameters while retaining approximately the same
-// total size. Adjustments happen by limiting the rows in the page. If it
-// is impossible to achieve the desired adjustment, returns capacity with
-// one row (the infallible variant of `adjust_checked`).
-pub fn (self PageCapacity) adjust(cols u16) PageCapacity {
-	if cols == 0 {
-		return self
-	}
-	return self.adjust_checked(cols) or {
-		PageCapacity{
-			cols: cols
-			rows: 1
-			styles: self.styles
-			grapheme_bytes: self.grapheme_bytes
-			grid_bytes: self.available_bits_for_grid() / 8
-		}
-	}
 }
 
 const max_u16 = u16(65535)
@@ -1463,11 +1600,57 @@ pub fn (self &Page) exact_row_capacity(y_start int, y_end int) PageCapacity {
 
 	styles_cap := StyleSet.capacity_for_count(style_ids.len)
 
+	// Second pass: size both the hyperlink set and its cell-to-ID map, and
+	// count the page-owned URI/explicit-ID string allocations once per link.
+	mut hyperlink_ids := map[u32]bool{}
+	mut hyperlink_cells := 0
+	mut string_bytes := u32(0)
+	for y in y_start .. y_end {
+		if y >= self.rows.len {
+			break
+		}
+		row := self.rows[y]
+		for x in 0 .. int(self.size.cols) {
+			if x >= row.cells.len {
+				break
+			}
+			if !row.cells[x].has_hyperlink {
+				continue
+			}
+
+			hyperlink_cells++
+			id := self.lookup_hyperlink(y, x) or { continue }
+			if id in hyperlink_ids {
+				continue
+			}
+			hyperlink_ids[id] = true
+
+			entry := self.hyperlink_set.get(id)
+			string_bytes += u32(page_align_forward(usize(entry.uri.len), string_chunk))
+			match entry.id {
+				HyperlinkExplicitId {
+					string_bytes += u32(page_align_forward(usize(entry.id.value.len), string_chunk))
+				}
+				else {}
+			}
+		}
+	}
+
+	hyperlink_set_cap := HyperlinkSet.capacity_for_count(hyperlink_ids.len)
+	hyperlink_map_min := (hyperlink_cells + hyperlink_cell_multiplier - 1) / hyperlink_cell_multiplier
+	hyperlink_cap := if hyperlink_set_cap > hyperlink_map_min {
+		hyperlink_set_cap
+	} else {
+		hyperlink_map_min
+	}
+
 	return PageCapacity{
 		cols: self.size.cols
 		rows: u16(y_end - y_start)
 		styles: styles_cap
+		hyperlink_bytes: u16(hyperlink_cap * int(hyperlink_set_item_size))
 		grapheme_bytes: grapheme_bytes
+		string_bytes: string_bytes
 	}
 }
 

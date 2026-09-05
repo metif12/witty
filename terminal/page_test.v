@@ -1396,13 +1396,129 @@ fn test_page_exact_row_capacity_grapheme_bytes_larger_than_chunk() {
 	assert cap.grapheme_bytes == 32
 }
 
+// Reference values emitted by the pinned Zig implementation. These make the
+// logical V layout auditable byte-for-byte even though V uses GC-owned arrays.
+fn test_page_capacity_defaults_and_layout_reference() {
+	cap := PageCapacity{
+		cols: 215
+		rows: 215
+		styles: 128
+	}
+	assert cap.hyperlink_bytes == 192
+	assert cap.grapheme_bytes == 1024
+	assert cap.string_bytes == 2048
+
+	l := Page.layout(cap)
+	assert l.total_size == 475136
+	assert l.rows_start == 0
+	assert l.rows_size == 1720
+	assert l.cells_start == 1720
+	assert l.cells_size == 369800
+	assert l.styles_start == 371520
+	assert l.styles_layout.cap == 104
+	assert l.styles_layout.table_cap == 128
+	assert l.styles_layout.items_start == 256
+	assert l.styles_layout.total_size == 4000
+	assert l.grapheme_alloc_start == 375520
+	assert l.grapheme_alloc_layout.total_size == 16392
+	assert l.grapheme_alloc_layout.bitmap_count == 1
+	assert l.grapheme_alloc_layout.chunks_start == 8
+	assert l.grapheme_map_start == 391912
+	assert l.grapheme_map_layout.total_size == 1360
+	assert l.grapheme_map_layout.capacity == 64
+	assert l.grapheme_map_layout.keys_start == 64
+	assert l.grapheme_map_layout.vals_start == 320
+	assert l.string_alloc_start == 393272
+	assert l.string_alloc_layout.total_size == 65544
+	assert l.hyperlink_set_start == 458816
+	assert l.hyperlink_set_layout.cap == 3
+	assert l.hyperlink_set_layout.table_cap == 4
+	assert l.hyperlink_set_layout.items_start == 8
+	assert l.hyperlink_set_layout.total_size == 152
+	assert l.hyperlink_map_start == 458968
+	assert l.hyperlink_map_layout.total_size == 464
+	assert l.hyperlink_map_layout.capacity == 64
+}
+
+fn test_page_layout_small_and_zero_metadata_reference() {
+	l := Page.layout(PageCapacity{
+		cols: 80
+		rows: 128
+		styles: 16
+	})
+	assert l.total_size == 180224
+	assert l.rows_size == 1024
+	assert l.cells_start == 1024
+	assert l.cells_size == 81920
+	assert l.styles_start == 82944
+	assert l.styles_layout.total_size == 500
+	assert l.grapheme_alloc_start == 83448
+	assert l.grapheme_map_start == 99840
+	assert l.string_alloc_start == 101200
+	assert l.hyperlink_set_start == 166744
+	assert l.hyperlink_map_start == 166896
+
+	zero := Page.layout(PageCapacity{
+		cols: 10
+		rows: 10
+		styles: 0
+		hyperlink_bytes: 0
+		grapheme_bytes: 0
+		string_bytes: 0
+	})
+	assert zero.total_size == 16384
+	assert zero.rows_size == 80
+	assert zero.cells_start == 80
+	assert zero.cells_size == 800
+	assert zero.styles_start == 880
+	assert zero.grapheme_alloc_start == 880
+	assert zero.grapheme_map_start == 880
+	assert zero.grapheme_map_layout.total_size == 16
+	assert zero.string_alloc_start == 896
+	assert zero.hyperlink_set_start == 896
+	assert zero.hyperlink_map_start == 896
+	assert zero.hyperlink_map_layout.total_size == 16
+}
+
+fn test_standard_page_layout_and_capacity_adjust_reference() {
+	l := Page.layout(std_capacity)
+	assert l.total_size == 589824
+	assert l.grapheme_alloc_start == 375520
+	assert l.grapheme_alloc_layout.total_size == 131136
+	assert l.grapheme_alloc_layout.bitmap_count == 8
+	assert l.grapheme_map_start == 506656
+	assert l.grapheme_map_layout.total_size == 10768
+	assert l.string_alloc_start == 517424
+	assert l.hyperlink_set_start == 582968
+	assert l.hyperlink_map_start == 583120
+	max_cols := std_capacity.max_cols() or {
+		assert false, 'maxCols returned none'
+		return
+	}
+	assert max_cols == u16(47219)
+
+	cap80 := std_capacity.adjust_checked(80) or {
+		assert false, 'capacity adjustment failed'
+		return
+	}
+	assert cap80.rows == 582
+	cap500 := std_capacity.adjust_checked(500) or {
+		assert false, 'capacity adjustment failed'
+		return
+	}
+	assert cap500.rows == 94
+}
+
 // Test capacity adjust cols down.
 fn test_page_capacity_adjust_cols_down() {
 	original := PageCapacity{
 		cols: 80
 		rows: 128
 	}
-	adjusted := original.adjust(original.cols / 2)
+	adjusted := original.adjust_checked(original.cols / 2) or {
+		assert false, 'capacity adjustment failed'
+		return
+	}
 	// Adjusted should have more rows (same total budget).
 	assert adjusted.cols == original.cols / 2
 	assert adjusted.rows > original.rows
@@ -1420,7 +1536,10 @@ fn test_page_capacity_adjust_cols_down_to_1() {
 		cols: 80
 		rows: 128
 	}
-	adjusted := original.adjust(1)
+	adjusted := original.adjust_checked(1) or {
+		assert false, 'capacity adjustment failed'
+		return
+	}
 	assert adjusted.cols == 1
 	// With 1 column, we should have many more rows.
 	assert adjusted.rows > original.rows
@@ -1432,7 +1551,10 @@ fn test_page_capacity_adjust_cols_up() {
 		cols: 80
 		rows: 128
 	}
-	adjusted := original.adjust(original.cols * 2)
+	adjusted := original.adjust_checked(original.cols * 2) or {
+		assert false, 'capacity adjustment failed'
+		return
+	}
 	assert adjusted.cols == original.cols * 2
 	// With double columns, we should have fewer rows.
 	assert adjusted.rows < original.rows
@@ -1444,12 +1566,14 @@ fn test_page_capacity_adjust_cols_too_high() {
 		cols: 80
 		rows: 128
 	}
-	// When cols is very large and total_cells / cols == 0, adjust
-	// clamps rows to 1 (always succeeds).
-	total := u32(original.cols) * u32(original.rows)
-	huge_cols := u16(total + 1)
-	adjusted := original.adjust(huge_cols)
-	assert adjusted.rows >= 1
+	max := original.max_cols() or {
+		assert false, 'maxCols returned none'
+		return
+	}
+	assert max < max_u16
+	mut failed := false
+	original.adjust_checked(max + 1) or { failed = true }
+	assert failed
 }
 
 // Test capacity maxCols basic.
@@ -1467,7 +1591,10 @@ fn test_capacity_max_cols_basic() {
 	assert max >= cap.cols
 
 	// Adjusting to maxCols should succeed with at least 1 row.
-	adjusted := cap.adjust(max)
+	adjusted := cap.adjust_checked(max) or {
+		assert false, 'maxCols adjustment failed'
+		return
+	}
 	assert adjusted.rows >= 1
 }
 
@@ -1702,14 +1829,20 @@ fn test_page_capacity_adjust() {
 	}
 
 	// The page-alignment slack may fit additional rows even at the same width.
-	adj := cap.adjust(80)
+	adj := cap.adjust_checked(80) or {
+		assert false, 'capacity adjustment failed'
+		return
+	}
 	assert adj.cols == 80
 	assert adj.rows >= 128
 	used := usize(adj.rows) * (row_bit_size + cell_bit_size * usize(adj.cols))
 	assert used <= cap.available_bits_for_grid()
 
 	// Very large cols - rows should reduce
-	adj2 := cap.adjust(512)
+	adj2 := cap.adjust_checked(512) or {
+		assert false, 'capacity adjustment failed'
+		return
+	}
 	assert adj2.cols == 512
 	assert adj2.rows < 128
 }
@@ -1914,4 +2047,137 @@ fn test_page_exact_row_capacity_styles_max_single_row() {
 	// Capacity should be at least count (adjusted for load factor).
 	cap := page.exact_row_capacity(0, 1)
 	assert cap.styles == StyleSet.capacity_for_count(count)
+}
+
+fn test_page_exact_row_capacity_hyperlinks() {
+	mut page := Page.init(PageCapacity{
+		cols: 10
+		rows: 10
+		styles: 8
+		hyperlink_bytes: 32 * 48
+		string_bytes: 512
+	})
+	defer { page.deinit() }
+	page.size.rows = page.capacity.rows
+
+	empty := page.exact_row_capacity(0, 5)
+	assert empty.hyperlink_bytes == 0
+	assert empty.string_bytes == 0
+
+	id1 := page.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{
+			offset: 1
+		}
+		uri: 'https://example.com'
+	})
+	page.set_hyperlink(0, 0, id1)
+	cap_one := page.exact_row_capacity(0, 5)
+	assert cap_one.hyperlink_bytes == u16(HyperlinkSet.capacity_for_count(1) * 48)
+	assert cap_one.string_bytes == string_chunk
+
+	page.hyperlink_set.use_link(id1)
+	page.set_hyperlink(0, 1, id1)
+	duplicate := page.exact_row_capacity(0, 5)
+	assert duplicate.hyperlink_bytes == cap_one.hyperlink_bytes
+	assert duplicate.string_bytes == cap_one.string_bytes
+
+	id2 := page.insert_hyperlink(Hyperlink{
+		id: HyperlinkExplicitId{
+			value: 'my-link-id'
+		}
+		uri: 'https://other.example.org/path'
+	})
+	page.set_hyperlink(0, 2, id2)
+	cap_two := page.exact_row_capacity(0, 5)
+	assert cap_two.hyperlink_bytes == u16(HyperlinkSet.capacity_for_count(2) * 48)
+	assert cap_two.string_bytes == string_chunk * 3
+
+	id3 := page.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{
+			offset: 99
+		}
+		uri: 'https://outside.example.com'
+	})
+	page.set_hyperlink(7, 0, id3)
+	ranged := page.exact_row_capacity(0, 5)
+	assert ranged.hyperlink_bytes == cap_two.hyperlink_bytes
+	assert ranged.string_bytes == cap_two.string_bytes
+
+	full := page.exact_row_capacity(0, 10)
+	assert full.hyperlink_bytes == u16(HyperlinkSet.capacity_for_count(3) * 48)
+	assert full.string_bytes == string_chunk * 4
+
+	mut cloned := Page.init(cap_two)
+	defer { cloned.deinit() }
+	cloned.size.rows = cap_two.rows
+	for y in 0 .. 5 {
+		cloned.clone_row_from(&page, u16(y), u16(y))
+	}
+	cloned_cap := cloned.exact_row_capacity(0, 5)
+	assert cloned_cap == cap_two
+}
+
+fn test_page_exact_row_capacity_single_hyperlink_clone() {
+	mut page := Page.init(PageCapacity{
+		cols: 10
+		rows: 2
+		styles: 8
+		hyperlink_bytes: 32 * 48
+		string_bytes: 512
+	})
+	defer { page.deinit() }
+	page.size.rows = page.capacity.rows
+
+	id := page.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{
+			offset: 1
+		}
+		uri: 'https://example.com'
+	})
+	page.set_hyperlink(0, 0, id)
+	cap := page.exact_row_capacity(0, 1)
+	assert cap.hyperlink_bytes == u16(HyperlinkSet.capacity_for_count(1) * 48)
+
+	mut cloned := Page.init(cap)
+	defer { cloned.deinit() }
+	cloned.size.rows = cap.rows
+	cloned.clone_row_from(&page, 0, 0)
+	assert cloned.rows[0].cells[0].has_hyperlink
+}
+
+fn test_page_exact_row_capacity_hyperlink_map_for_many_cells() {
+	cols := u16(50)
+	mut page := Page.init(PageCapacity{
+		cols: cols
+		rows: 2
+		styles: 8
+		hyperlink_bytes: 32 * 48
+		string_bytes: 512
+	})
+	defer { page.deinit() }
+	page.size.rows = page.capacity.rows
+
+	id := page.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{
+			offset: 1
+		}
+		uri: 'https://example.com'
+	})
+	page.set_hyperlink(0, 0, id)
+	for x in 1 .. int(cols) {
+		page.hyperlink_set.use_link(id)
+		page.set_hyperlink(0, x, id)
+	}
+
+	cap := page.exact_row_capacity(0, 1)
+	min_for_map := (int(cols) + hyperlink_cell_multiplier - 1) / hyperlink_cell_multiplier
+	assert cap.hyperlink_bytes >= u16(min_for_map * 48)
+
+	mut cloned := Page.init(cap)
+	defer { cloned.deinit() }
+	cloned.size.rows = cap.rows
+	cloned.clone_row_from(&page, 0, 0)
+	for x in 0 .. int(cols) {
+		assert cloned.rows[0].cells[x].has_hyperlink
+	}
 }

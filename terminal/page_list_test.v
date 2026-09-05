@@ -167,6 +167,16 @@ fn test_page_list_init_rows_across_two_pages() {
 	assert s.total_pages() >= 2
 }
 
+fn test_page_list_uses_pinned_standard_page_byte_accounting() {
+	mut s := PageList.init(80, 24, none)
+	defer { s.deinit() }
+
+	assert initial_capacity(80).rows == 582
+	assert standard_page_size() == 589824
+	assert s.page_size == 589824
+	assert s.min_max_size == 2 * 589824
+}
+
 fn test_page_list_init_more_than_max_cols() {
 	// Test large column count triggers capacity adjustment
 	mut s := PageList.init(500, 24, usize(0x7FFFFFFFFFFFFFFF))
