@@ -1,270 +1,442 @@
 module zf
 
-// V port of ghostty's vendored zf fuzzy finder (natecraddock/zf).
-// See pkg/zf/src/filter.zig for the reference implementation.
-
-// Scoring constants, faithful to zf's filter.zig.
-const default_score = 1.0
-const bonus_boundary = 8.0
-const bonus_head = 10.0
-const bonus_camel = 8.0
-const bonus_consecutive = 12.0
-const bonus_first_char_multiplier = 10.0
+// V translation of Ghostty's pinned zf 0.10.3 dependency.
 
 // RankOptions controls ranking behavior.
 pub struct RankOptions {
 pub:
-	// to_lower performs case-insensitive matching (smart-case is handled by
-	// the caller lowering the query; here it forces case folding).
-	to_lower bool
-	// plain disables the filename bonus (treats the candidate as plain text
-	// rather than a path).
+	// to_lower converts candidate bytes to lowercase while ranking. As in zf,
+	// callers are responsible for lowercasing the tokens.
+	to_lower bool = true
+	// plain disables the filepath-specific filename and strict-path algorithms.
 	plain bool
 }
 
-// rank returns a fuzzy match score for `text` against all `tokens`, or none if
-// any token fails to match. Lower rank means a better match.
-//
-// When `opts.plain` is set the candidate is treated as literal text: tokens
-// must appear as contiguous substrings (no fuzzy skipping) and no filename
-// bonus is applied. Otherwise zf's sequential fuzzy matching is used, and the
-// basename of the candidate receives a filename bonus.
-pub fn rank(text string, tokens []string, opts RankOptions) ?f64 {
-	if opts.plain {
-		return rank_plain(text, tokens, opts.to_lower)
+// RankTokenOptions controls ranking of one token.
+pub struct RankTokenOptions {
+pub:
+	to_lower    bool
+	strict_path bool
+	filename    ?string
+}
+
+struct PathIterator {
+	str string
+mut:
+	index int
+}
+
+fn (mut iter PathIterator) next() ?string {
+	if iter.index >= iter.str.len {
+		return none
 	}
 
-	filename := basename(text)
+	start := iter.index
+	if is_separator(iter.str[iter.index]) {
+		iter.index++
+		return iter.str[start..iter.index]
+	}
 
-	mut total := 0.0
-	for token in tokens {
-		if r := rank_token(text, filename, token, opts.to_lower) {
-			total += r
-		} else {
-			return none
+	for iter.index < iter.str.len {
+		if is_separator(iter.str[iter.index]) {
+			return iter.str[start..iter.index]
+		}
+		iter.index++
+	}
+	return iter.str[start..]
+}
+
+struct ScanResult {
+	rank  f64
+	index int
+}
+
+fn is_separator(byte u8) bool {
+	$if windows {
+		return byte == `\\`
+	} $else {
+		return byte == `/`
+	}
+}
+
+// has_separator reports whether str contains the platform path separator.
+pub fn has_separator(str string) bool {
+	for byte in str.bytes() {
+		if is_separator(byte) {
+			return true
 		}
 	}
-	return total
+	return false
 }
 
-// rank_plain requires every token to be a contiguous substring of `text`.
-fn rank_plain(text string, tokens []string, to_lower bool) ?f64 {
-	haystack := if to_lower { text.to_lower() } else { text }
-
-	mut total := 0.0
-	for token in tokens {
-		needle := if to_lower { token.to_lower() } else { token }
-		idx := haystack.index(needle) or { return none }
-		// Prefer earlier / word-boundary matches: a small positional cost.
-		total += default_score + f64(idx)
+// segment_len scans left and right for the length of the path segment at index.
+pub fn segment_len(str string, index int) int {
+	if is_separator(str[index]) {
+		return 1
 	}
-	return total
+	mut start := index
+	mut end := index
+	for start > 0 {
+		if is_separator(str[start - 1]) {
+			break
+		}
+		start--
+	}
+	for end < str.len && !is_separator(str[end]) {
+		end++
+	}
+	return end - start
 }
 
-// basename returns the final path component of `path`.
+fn ascii_lower(byte u8) u8 {
+	if byte >= `A` && byte <= `Z` {
+		return byte + (`a` - `A`)
+	}
+	return byte
+}
+
+// index_of mirrors zf's byte search: in insensitive mode only the candidate
+// is folded, because the public API requires callers to lowercase tokens.
+fn index_of(str string, start_index int, value u8, case_sensitive bool) ?int {
+	mut i := start_index
+	for i < str.len {
+		if if case_sensitive { str[i] == value } else { ascii_lower(str[i]) == value } {
+			return i
+		}
+		i++
+	}
+	return none
+}
+
+fn is_start_of_word(byte u8) bool {
+	return is_separator(byte) || byte == `_` || byte == `-` || byte == `.` || byte == ` `
+}
+
+// scan_to_end is the core zf ranking algorithm.
+fn scan_to_end(str string, token string, start_index int, case_sensitive bool, strict_path bool) ?ScanResult {
+	mut rank_value := 1.0
+	mut last_index := start_index
+	mut last_sequential := false
+
+	if start_index > 0 && !is_start_of_word(str[start_index - 1]) {
+		rank_value += 2.0
+	}
+
+	for c in token.bytes() {
+		idx := index_of(str, last_index + 1, c, case_sensitive) or { return none }
+		if strict_path && has_separator(str[last_index..idx + 1]) {
+			return none
+		}
+
+		if idx == last_index + 1 {
+			if !last_sequential {
+				last_sequential = true
+				rank_value += 1.0
+			}
+		} else {
+			if !is_start_of_word(str[idx - 1]) {
+				rank_value += 2.0
+			}
+			last_sequential = false
+			rank_value += f64(idx - last_index)
+		}
+		last_index = idx
+	}
+
+	return ScanResult{
+		rank: rank_value
+		index: last_index + 1
+	}
+}
+
 fn basename(path string) string {
 	if path.len == 0 {
 		return path
 	}
-	// Strip a single trailing slash before searching for the last separator.
 	mut end := path.len
-	if path[end - 1] == `/` {
+	for end > 0 && is_separator(path[end - 1]) {
 		end--
 	}
 	if end == 0 {
-		return path
+		return path[path.len - 1..]
 	}
 	mut start := end
-	for start > 0 && path[start - 1] != `/` {
+	for start > 0 && !is_separator(path[start - 1]) {
 		start--
 	}
 	return path[start..end]
 }
 
-// index_of finds `token` inside `str` starting at `start`, matching characters
-// in order. Returns the byte range [start, end) of the match, or none.
-// This mirrors zf's sequential (fuzzy) character matching.
-struct Range {
-	start int
-	end   int
-}
-
-fn index_of_seq(str string, token string, start int, to_lower bool) ?Range {
-	if token.len == 0 {
-		return none
-	}
-	mut str_i := start
-	mut tok_i := 0
-	mut first := -1
-	for str_i < str.len && tok_i < token.len {
-		if char_eq(str[str_i], token[tok_i], to_lower) {
-			if first < 0 {
-				first = str_i
-			}
-			tok_i++
-		}
-		str_i++
-	}
-	if tok_i < token.len {
-		return none
-	}
-	return Range{
-		start: first
-		end:   str_i
-	}
-}
-
-// char_eq compares two bytes, optionally case-insensitively.
-fn char_eq(a u8, b u8, to_lower bool) bool {
-	if a == b {
-		return true
-	}
-	if to_lower {
-		return to_lower_byte(a) == to_lower_byte(b)
-	}
-	return false
-}
-
-fn to_lower_byte(c u8) u8 {
-	if c >= `A` && c <= `Z` {
-		return c + 32
-	}
-	return c
-}
-
-// is_boundary reports whether the character at `str[i]` begins a word,
-// i.e. the previous char is a separator or the case transitions
-// (camelCase boundary).
-fn char_class(c u8) int {
-	if c >= `a` && c <= `z` {
-		return 1 // lower
-	}
-	if c >= `A` && c <= `Z` {
-		return 2 // upper
-	}
-	if c >= `0` && c <= `9` {
-		return 3 // digit
-	}
-	return 0 // separator/other
-}
-
-// bonus_for computes the boundary bonus for matching character at index `i`
-// in `str`, based on the previous character.
-fn bonus_for(str string, i int) f64 {
-	cur := char_class(str[i])
-	if i == 0 {
-		if cur != 0 {
-			return bonus_head
-		}
-		return 0.0
-	}
-	prev := char_class(str[i - 1])
-	// Transition from a separator/non-alnum into an alnum: word boundary.
-	if prev == 0 && cur != 0 {
-		return bonus_boundary
-	}
-	// camelCase boundary: lower/digit -> upper.
-	if (prev == 1 || prev == 3) && cur == 2 {
-		return bonus_camel
-	}
-	return 0.0
-}
-
-// rank_token computes the rank of a single token against `str`, using the
-// filename (if any) for the filename bonus. Lower is better; none means no match.
-fn rank_token(str string, filename string, token string, to_lower bool) ?f64 {
+fn rank_token_impl(str string, filename ?string, token string, case_sensitive bool, strict_path bool) ?f64 {
 	if str.len == 0 || token.len == 0 {
 		return none
 	}
 
-	// Ensure the token appears in order at all; also gives us a starting point.
-	first_range := index_of_seq(str, token, 0, to_lower) or { return none }
-
-	// Compute the best (minimum) rank by trying each possible starting position
-	// for the first token character, matching the remaining characters greedily
-	// while tracking gaps, boundary bonuses, and consecutive-run bonuses.
-	mut best := max_f64()
-
-	mut start := first_range.start
-	for start < str.len {
-		// Only consider starts where the first char matches.
-		if !char_eq(str[start], token[0], to_lower) {
-			start++
-			continue
+	mut best_rank := ?f64(none)
+	if strict_path {
+		mut iter := PathIterator{
+			str: token
 		}
-		if r := score_from(str, token, start, to_lower) {
-			if r < best {
-				best = r
+		mut start := 0
+		for {
+			segment := iter.next() or { break }
+			mut search_index := start
+			mut found := false
+			for {
+				start_index := index_of(str, search_index, segment[0], case_sensitive) or { break }
+				search_index = start_index + 1
+				scan := scan_to_end(str, segment[1..], start_index, case_sensitive, true) or {
+					continue
+				}
+				path_segment_len := segment_len(str, start_index)
+				coverage := 1.0 - (f64(segment.len) / f64(path_segment_len))
+				rank_value := coverage * scan.rank
+				if current := best_rank {
+					best_rank = current + rank_value
+				} else {
+					best_rank = rank_value
+				}
+				start = scan.index
+				found = true
+				break
+			}
+			if !found {
+				return none
 			}
 		}
-		start++
+		return best_rank
 	}
 
-	if best == max_f64() {
-		return none
-	}
-
-	// Filename bonus: if the token also matches within the basename, the match
-	// is more relevant, so reduce (improve) the rank.
-	if filename.len > 0 {
-		if _ := index_of_seq(filename, token, 0, to_lower) {
-			best /= 2.0
-		}
-	}
-
-	return best
-}
-
-// score_from matches `token` against `str` beginning at `start` (str[start]
-// must equal token[0]) and returns the accumulated rank, or none if the full
-// token cannot be matched in order from here.
-fn score_from(str string, token string, start int, to_lower bool) ?f64 {
-	mut total := 0.0
-	mut tok_i := 0
-	mut str_i := start
-	mut last_match := -2 // index in str of the previously matched char
-
-	for str_i < str.len && tok_i < token.len {
-		if char_eq(str[str_i], token[tok_i], to_lower) {
-			// Base cost for this matched character.
-			mut char_rank := default_score
-
-			// Gap penalty: distance from the previous matched character.
-			if last_match >= 0 {
-				gap := str_i - last_match - 1
-				char_rank += f64(gap)
+	if filename_value := filename {
+		mut search_index := 0
+		for {
+			start_index := index_of(filename_value, search_index, token[0], case_sensitive) or {
+				break
 			}
-
-			// Reward matches at word boundaries.
-			bonus := bonus_for(str, str_i)
-
-			// Reward consecutive matches (no gap since previous match).
-			mut consecutive := 0.0
-			if last_match >= 0 && str_i - last_match == 1 {
-				consecutive = bonus_consecutive
-			}
-
-			// The first character of the token weighs more heavily so that
-			// boundary/head starts are strongly preferred.
-			if tok_i == 0 {
-				char_rank = char_rank - (bonus * bonus_first_char_multiplier)
+			search_index = start_index + 1
+			scan := scan_to_end(filename_value, token[1..], start_index, case_sensitive, false) or { break }
+			if current := best_rank {
+				if scan.rank < current {
+					best_rank = scan.rank
+				}
 			} else {
-				char_rank = char_rank - bonus - consecutive
+				best_rank = scan.rank
 			}
-
-			total += char_rank
-			last_match = str_i
-			tok_i++
 		}
-		str_i++
+
+		if mut current := best_rank {
+			current /= 2.0
+			if token.len == filename_value.len {
+				current /= 2.0
+			} else {
+				coverage := 1.0 - (f64(token.len) / f64(filename_value.len))
+				current *= coverage
+			}
+			return current
+		}
 	}
 
-	if tok_i < token.len {
-		return none
+	mut search_index := 0
+	for {
+		start_index := index_of(str, search_index, token[0], case_sensitive) or { break }
+		search_index = start_index + 1
+		scan := scan_to_end(str, token[1..], start_index, case_sensitive, false) or { break }
+		if current := best_rank {
+			if scan.rank < current {
+				best_rank = scan.rank
+			}
+		} else {
+			best_rank = scan.rank
+		}
 	}
-	return total
+	return best_rank
 }
 
-fn max_f64() f64 {
-	return 1.7976931348623157e308
+// rank returns the sum of each token's best score, or none if any token fails.
+pub fn rank(str string, tokens []string, opts RankOptions) ?f64 {
+	filename := if opts.plain { ?string(none) } else { ?string(basename(str)) }
+	mut sum := 0.0
+	for token in tokens {
+		strict_path := !opts.plain && has_separator(token)
+		if token_rank := rank_token_impl(str, filename, token, !opts.to_lower, strict_path) {
+			sum += token_rank
+		} else {
+			return none
+		}
+	}
+	return sum
+}
+
+// rank_token ranks one token with the same options as zf's library API.
+pub fn rank_token(str string, token string, opts RankTokenOptions) ?f64 {
+	return rank_token_impl(str, opts.filename, token, !opts.to_lower, opts.strict_path)
+}
+
+fn append_bounded(mut values []int, value int, limit int) {
+	if values.len < limit {
+		values << value
+	}
+}
+
+fn append_all_bounded(mut values []int, source []int, limit int) {
+	for value in source {
+		append_bounded(mut values, value, limit)
+	}
+}
+
+fn scan_to_end_highlight(str string, token string, start_index int, offset int, mut matched []int, case_sensitive bool, strict_path bool) ?ScanResult {
+	mut rank_value := 1.0
+	mut last_index := start_index
+	mut last_sequential := false
+
+	if start_index > 0 && !is_start_of_word(str[start_index - 1]) {
+		rank_value += 2.0
+	}
+
+	for c in token.bytes() {
+		idx := index_of(str, last_index + 1, c, case_sensitive) or { return none }
+		if strict_path && has_separator(str[last_index..idx + 1]) {
+			return none
+		}
+
+		append_bounded(mut matched, idx + offset, 1024)
+		if idx == last_index + 1 {
+			if !last_sequential {
+				last_sequential = true
+				rank_value += 1.0
+			}
+		} else {
+			if !is_start_of_word(str[idx - 1]) {
+				rank_value += 2.0
+			}
+			last_sequential = false
+			rank_value += f64(idx - last_index)
+		}
+		last_index = idx
+	}
+
+	return ScanResult{
+		rank: rank_value
+		index: last_index + 1
+	}
+}
+
+fn highlight_token_impl(str string, filename ?string, token string, case_sensitive bool, strict_path bool, max_matches int) []int {
+	if str.len == 0 || token.len == 0 {
+		return []
+	}
+
+	mut best_rank := ?f64(none)
+	mut matched := []int{cap: if token.len < 1024 { token.len } else { 1024 }}
+	mut best_matched := []int{cap: max_matches}
+
+	if strict_path {
+		mut iter := PathIterator{
+			str: token
+		}
+		mut start := 0
+		for {
+			segment := iter.next() or { break }
+			mut search_index := start
+			mut found := false
+			for {
+				start_index := index_of(str, search_index, segment[0], case_sensitive) or { break }
+				search_index = start_index + 1
+				append_bounded(mut matched, start_index, 1024)
+				scan := scan_to_end_highlight(str, segment[1..], start_index, 0, mut matched, case_sensitive, true) or {
+					matched.clear()
+					continue
+				}
+				path_segment_len := segment_len(str, start_index)
+				coverage := 1.0 - (f64(segment.len) / f64(path_segment_len))
+				rank_value := coverage * scan.rank
+				if current := best_rank {
+					best_rank = current + rank_value
+				} else {
+					best_rank = rank_value
+				}
+				start = scan.index
+				append_all_bounded(mut best_matched, matched, max_matches)
+				found = true
+				break
+			}
+			if !found {
+				return []
+			}
+			matched.clear()
+		}
+		return best_matched
+	}
+
+	if filename_value := filename {
+		offset := str.len - filename_value.len - if is_separator(str[str.len - 1]) { 1 } else { 0 }
+		mut search_index := 0
+		for {
+			start_index := index_of(filename_value, search_index, token[0], case_sensitive) or {
+				break
+			}
+			search_index = start_index + 1
+			append_bounded(mut matched, start_index + offset, 1024)
+			scan := scan_to_end_highlight(filename_value, token[1..], start_index, offset, mut matched, case_sensitive, false) or { break }
+			if current := best_rank {
+				if scan.rank < current {
+					best_rank = scan.rank
+					best_matched.clear()
+					append_all_bounded(mut best_matched, matched, max_matches)
+				}
+			} else {
+				best_rank = scan.rank
+				append_all_bounded(mut best_matched, matched, max_matches)
+			}
+			matched.clear()
+		}
+		if best_rank != none {
+			return best_matched
+		}
+	}
+
+	matched.clear()
+	mut search_index := 0
+	for {
+		start_index := index_of(str, search_index, token[0], case_sensitive) or { break }
+		search_index = start_index + 1
+		append_bounded(mut matched, start_index, 1024)
+		scan := scan_to_end_highlight(str, token[1..], start_index, 0, mut matched, case_sensitive, false) or { break }
+		if current := best_rank {
+			if scan.rank < current {
+				best_rank = scan.rank
+				best_matched.clear()
+				append_all_bounded(mut best_matched, matched, max_matches)
+			}
+		} else {
+			best_rank = scan.rank
+			append_all_bounded(mut best_matched, matched, max_matches)
+		}
+		matched.clear()
+	}
+	return best_matched
+}
+
+// highlight writes match indices into matches and returns the populated slice.
+pub fn highlight(str string, tokens []string, mut matches []int, opts RankOptions) []int {
+	filename := if opts.plain { ?string(none) } else { ?string(basename(str)) }
+	mut index := 0
+	for token in tokens {
+		strict_path := !opts.plain && has_separator(token)
+		matched := highlight_token_impl(str, filename, token, !opts.to_lower, strict_path, matches.len - index)
+		for value in matched {
+			matches[index] = value
+			index++
+		}
+	}
+	return matches[..index]
+}
+
+// highlight_token writes match indices for one token into matches.
+pub fn highlight_token(str string, token string, mut matches []int, opts RankTokenOptions) []int {
+	matched := highlight_token_impl(str, opts.filename, token, !opts.to_lower, opts.strict_path, matches.len)
+	for i, value in matched {
+		matches[i] = value
+	}
+	return matches[..matched.len]
 }
