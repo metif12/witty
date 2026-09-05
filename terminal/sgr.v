@@ -108,7 +108,6 @@ module terminal
 //
 // --- Original Ghostty Comments End: src/terminal/sgr.zig
 
-
 // SGR (Select Graphic Rendition) attribute parsing.
 //
 // Source: terminal/sgr.zig
@@ -162,12 +161,16 @@ pub fn (mut self SgrParser) next() ?SgrAttribute {
 			else {
 				// Consume all the colon separated
 				// values and return them as unknown.
+				start := self.idx
 				for self.params_sep.is_set(self.idx) {
 					self.idx += 1
 				}
 				self.idx += 1
+				partial_len := int_min(self.idx - start + 1, slice.len)
 				return SgrAttribute{
 					kind: .unknown
+					unknown_full: self.params
+					unknown_partial: slice[..partial_len]
 				}
 			}
 		}
@@ -325,7 +328,13 @@ pub fn (mut self SgrParser) next() ?SgrAttribute {
 
 	return SgrAttribute{
 		kind: .unknown
+		unknown_full: self.params
+		unknown_partial: slice
 	}
+}
+
+fn int_min(a int, b int) int {
+	return if a < b { a } else { b }
 }
 
 fn (mut self SgrParser) parse_direct_color(kind SgrAttributeKind, slice []u16, colon bool) ?SgrAttribute {

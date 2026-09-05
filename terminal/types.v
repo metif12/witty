@@ -1595,6 +1595,10 @@ pub:
 	g         u8
 	b         u8
 	index     u8
+	// Populated for unknown attributes. full is the complete SGR parameter
+	// list and partial begins at the parameter that could not be parsed.
+	unknown_full    []u16
+	unknown_partial []u16
 }
 
 // ============================================================

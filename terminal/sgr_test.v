@@ -66,12 +66,26 @@ fn test_sgr_unsupported_with_colon() {
 		return
 	}
 	assert v1.kind == .unknown
+	assert v1.unknown_full == [u16(0), 4, 1]
+	assert v1.unknown_partial == [u16(0), 4]
 	v2 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
 	assert v2.kind == .bold
 	assert p.next() == none
+}
+
+fn test_sgr_unknown_preserves_full_and_partial_params() {
+	params := [u16(38), 7, 1]
+	mut p := SgrParser{ params: params }
+	attr := p.next() or {
+		assert false, 'expected unknown attribute'
+		return
+	}
+	assert attr.kind == .unknown
+	assert attr.unknown_full == params
+	assert attr.unknown_partial == params
 }
 
 fn test_sgr_unsupported_with_multiple_colon() {
