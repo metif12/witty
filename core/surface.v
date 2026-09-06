@@ -3757,6 +3757,47 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 	// Update modifiers if changed
 	if !self.mouse.mods.equal(event.mods) {
 		self.mods_changed(event.mods)
+
+		if self.renderer_state.terminal_.flags.mouse_event == .none
+			|| (self.mouse.mods.shift && !self.mouse_shift_capture(false)) {
+			if pos := self.rt_surface.get_cursor_pos() {
+				locked := self.renderer_state.mutex != unsafe { nil }
+				if locked {
+					self.renderer_state.mutex.lock()
+				}
+				self.mouse_refresh_links(pos, self.pos_to_viewport(pos.x, pos.y), self.mouse.over_link) or {}
+				if locked {
+					self.renderer_state.mutex.unlock()
+				}
+			}
+		} else if !self.mouse.mods.shift {
+			self.rt_app.perform_action(AppAction{
+				kind: .mouse_shape
+				target: &self
+				mouse_shape: self.renderer_state.terminal_.mouse_shape
+			})!
+			self.rt_app.perform_action(AppAction{
+				kind: .mouse_over_link
+				target: &self
+				url: ''
+			})!
+			self.queue_render()!
+		}
+	}
+
+	if shape := (SurfaceMouse{
+		physical_key: event.key
+		mouse_event: self.renderer_state.terminal_.flags.mouse_event
+		mouse_shape: self.renderer_state.terminal_.mouse_shape
+		mods: self.mouse.mods
+		over_link: self.mouse.over_link
+		hidden: self.mouse.hidden
+	}).key_to_mouse_shape() {
+		self.rt_app.perform_action(AppAction{
+			kind: .mouse_shape
+			target: &self
+			mouse_shape: shape
+		})!
 	}
 
 	// Track pressed key for release handling on focus loss

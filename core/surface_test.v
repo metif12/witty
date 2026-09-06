@@ -772,7 +772,9 @@ fn test_focus_callback_change() ! {
 }
 
 fn test_focus_callback_releases_pressed_key_and_modifiers() ! {
+	mut runtime_surface := RuntimeSurface{}
 	mut surf := make_test_surface()
+	surf.rt_surface = &runtime_surface
 	surf.focused = true
 	surf.pressed_key = KeyEvent{
 		key: .key_a
@@ -786,7 +788,9 @@ fn test_focus_callback_releases_pressed_key_and_modifiers() ! {
 }
 
 fn test_key_release_preserves_held_modifiers_for_focus_loss() ! {
+	mut runtime_surface := RuntimeSurface{}
 	mut surf := make_test_surface()
+	surf.rt_surface = &runtime_surface
 	surf.pressed_key = KeyEvent{
 		key: .key_a
 		mods: input.Mods{ shift: true }
@@ -803,6 +807,55 @@ fn test_key_release_preserves_held_modifiers_for_focus_loss() ! {
 	}
 	assert pending.key == .unidentified
 	assert pending.mods.shift
+}
+
+fn test_modifier_key_updates_mouse_shape() ! {
+	mut runtime := RuntimeApp{}
+	mut surf := make_test_surface()
+	surf.rt_app = &runtime
+	surf.config.mouse_shift_capture = .always
+	surf.renderer_state.terminal_.flags.mouse_event = .normal
+	effect := surf.key_callback(KeyEvent{
+		key: .shift_left
+		mods: input.Mods{ shift: true }
+	})!
+	assert effect == .ignored
+	assert runtime.actions.len == 1
+	assert runtime.actions[0].kind == .mouse_shape
+	assert runtime.actions[0].mouse_shape == .text
+}
+
+fn test_modifier_key_refreshes_link_hover() ! {
+	mut runtime_app := RuntimeApp{}
+	mut runtime_surface := RuntimeSurface{
+		cursor_pos: CursorPos{ x: 6, y: 6 }
+	}
+	mut surf := make_test_surface()
+	surf.size = make_test_size()
+	surf.rt_app = &runtime_app
+	surf.rt_surface = &runtime_surface
+	surf.config.link_previews = .true_
+	surf.config.links = [DerivedConfigLink{
+		pattern: r'http://a'
+		action: .open
+		highlight: .hover
+	}]
+	mut stream := surf.renderer_state.terminal_.vt_stream()
+	stream.next_slice('http://a')!
+
+	mods := input.ctrl_or_super_mods(input.Mods{})
+	key := if mods.super_ { input.Key.meta_left } else { input.Key.control_left }
+	effect := surf.key_callback(KeyEvent{
+		key: key
+		mods: mods
+	})!
+	assert effect == .ignored
+	assert surf.mouse.over_link
+	assert runtime_app.actions.len == 2
+	assert runtime_app.actions[0].kind == .mouse_shape
+	assert runtime_app.actions[0].mouse_shape == .pointer
+	assert runtime_app.actions[1].kind == .mouse_over_link
+	assert runtime_app.actions[1].url == 'http://a'
 }
 
 fn test_focus_callback_always_reveals_mouse() ! {
