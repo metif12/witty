@@ -3760,17 +3760,25 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 	}
 
 	// Track pressed key for release handling on focus loss
+	mut copy := event
+	copy.utf8 = ''
+	mut next_pressed := ?KeyEvent(copy)
 	if event.action == .release {
 		if prev_ev := self.pressed_key {
 			if prev_ev.key == event.key {
-				self.pressed_key = none
+				copy.key = .unidentified
+				next_pressed = copy
 			}
+		} else {
+			next_pressed = none
 		}
-	} else {
-		mut copy := event
-		copy.utf8 = ''
-		self.pressed_key = copy
 	}
+	if pending := next_pressed {
+		if pending.key == .unidentified && pending.mods.empty() {
+			next_pressed = none
+		}
+	}
+	self.pressed_key = next_pressed
 
 	// Encode and send the key to the terminal
 	if write_req := self.encode_key(event) {

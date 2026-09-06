@@ -785,6 +785,26 @@ fn test_focus_callback_releases_pressed_key_and_modifiers() ! {
 	assert surf.mouse.mods.empty()
 }
 
+fn test_key_release_preserves_held_modifiers_for_focus_loss() ! {
+	mut surf := make_test_surface()
+	surf.pressed_key = KeyEvent{
+		key: .key_a
+		mods: input.Mods{ shift: true }
+	}
+	effect := surf.key_callback(KeyEvent{
+		key: .key_a
+		action: .release
+		mods: input.Mods{ shift: true }
+	})!
+	assert effect == .ignored
+	pending := surf.pressed_key or {
+		assert false, 'held modifier state was discarded'
+		return
+	}
+	assert pending.key == .unidentified
+	assert pending.mods.shift
+}
+
 fn test_focus_callback_always_reveals_mouse() ! {
 	mut runtime := RuntimeApp{}
 	mut surf := make_test_surface()
