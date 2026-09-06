@@ -373,11 +373,11 @@ fn test_trigger_hash_matches_source() {
 		mods: Mods{ ctrl: true }
 	}
 	upper := Trigger{
-		key: TriggerKey.new_unicode(`A`)
+		key: TriggerKey.new_unicode(u32(`A`))
 		mods: Mods{ ctrl: true }
 	}
 	lower := Trigger{
-		key: TriggerKey.new_unicode(`a`)
+		key: TriggerKey.new_unicode(u32(`a`))
 		mods: Mods{ ctrl: true }
 	}
 	catch_all := Trigger{ key: TriggerKey.new_catch_all() }
@@ -390,7 +390,7 @@ fn test_trigger_hash_matches_source() {
 fn test_trigger_full_unicode_case_folding() {
 	assert full_case_fold_entries.len == 1557
 	// Unicode 16 full case folding expands sharp S to two codepoints.
-	assert folded_codepoint(0x00df) == [u32(`s`), `s`, 0]!
+	assert folded_codepoint(0x00df) == [u32(`s`), u32(`s`), 0]!
 	// Capital dotted I expands to i + combining dot above in non-Turkic mode.
 	assert folded_codepoint(0x0130) == [u32(`i`), 0x0307, 0]!
 	// Common one-to-one mappings and unmapped values retain fixed width.

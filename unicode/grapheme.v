@@ -20,9 +20,10 @@ pub enum BreakState as u8 {
 pub fn grapheme_break(cp1 u32, cp2 u32, state &BreakState) bool {
 	gb1 := u32(get(cp1).grapheme_break)
 	gb2 := u32(get(cp2).grapheme_break)
-	state_value := unsafe { u32(*state) }
+	state_ptr := unsafe { &u8(state) }
+	state_value := unsafe { u32(*state_ptr) }
 	index := state_value | (gb1 << 3) | (gb2 << 8)
 	value := table_data[grapheme_break_offset + int(index)]
-	unsafe { *state = BreakState((value >> 1) & 0x07) }
+	unsafe { *state_ptr = u8((value >> 1) & 0x07) }
 	return value & 0x01 != 0
 }
