@@ -3939,6 +3939,9 @@ pub fn (mut self Surface) focus_callback(focused bool) ! {
 		}
 	}
 
+	// Schedule render which also drains our mailbox.
+	self.queue_render()!
+
 	// Focus changes always reveal the mouse. This also repairs cases where a
 	// platform loses the matching mouse-motion event while switching apps.
 	self.show_mouse()
@@ -3955,8 +3958,6 @@ pub fn (mut self Surface) focus_callback(focused bool) ! {
 
 	// Notify IO thread
 	self.queue_io(IOMessage{ kind: .focused, flag: focused })
-
-	self.queue_render()!
 }
 
 fn (mut self Surface) release_key_on_focus_loss(event KeyEvent) {
