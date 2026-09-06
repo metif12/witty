@@ -468,7 +468,7 @@ fn run_screen_clone(args []string) ! {
 		}
 		.clone {
 			for _ in 0 .. 1000 {
-				copy := term.screens.active.clone(.viewport, ?terminal.PointTag(none))!
+				copy := term.screens.active.clone(terminal.Point.new(.viewport, terminal.Coordinate{}), ?terminal.Point(none))!
 				C.witty_benchmark_do_not_optimize_ptr(&copy)
 			}
 		}
