@@ -6133,7 +6133,7 @@ fn (mut self Surface) child_exited_abnormally(info apprt.ChildExited) ! {
 	t.carriage_return()
 	t.linefeed()!
 	t.linefeed()!
-	t.print_string(self.config.command)!
+	t.print_string(self.io.impl.backend.subprocess.args.join(' '))!
 	t.set_attribute(terminal.SgrAttribute{ kind: .unset })!
 	t.carriage_return()
 	t.linefeed()!
