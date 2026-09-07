@@ -53,6 +53,15 @@ fn test_rgb_parse_rgbi() {
 	assert c.r == 255 && c.g == 0 && c.b == 0
 }
 
+fn test_rgb_parse_hex_channels_use_zig_unsigned_grammar() {
+	// Zig ignores repeated interior underscores. Channel width still uses the
+	// original four-byte spelling, so 0xff is scaled as a 16-bit channel.
+	c := RGB.parse('rgb:f__f/0/0') or { panic('expected color') }
+	assert c == RGB{0, 0, 0}
+	assert RGB.parse('rgb:_ff/0/0') == none
+	assert RGB.parse('rgb:ff_/0/0') == none
+}
+
 fn test_rgb_parse_rgb_mixed_lengths() {
 	c := RGB.parse('rgb:7f/a0a0/0') or {
 		assert false, 'expected valid parse'
