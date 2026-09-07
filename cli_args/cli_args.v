@@ -424,7 +424,7 @@ fn parse_int_magnitude(raw string, max_magnitude u64) !ParsedIntMagnitude {
 		}
 		if digit >= base || digit > max_magnitude
 			|| magnitude > (max_magnitude - digit) / base {
-			return error('invalid value')
+			return error('overflow')
 		}
 		magnitude = magnitude * base + digit
 	}
@@ -443,7 +443,7 @@ pub fn parse_unsigned_int(raw string, bits int) !u64 {
 	max_value := if bits == 64 { max_u64 } else { (u64(1) << u32(bits)) - 1 }
 	parsed := parse_int_magnitude(raw, max_value)!
 	if parsed.negative && parsed.magnitude != 0 {
-		return error('invalid value')
+		return error('overflow')
 	}
 	return parsed.magnitude
 }
@@ -459,7 +459,7 @@ pub fn parse_signed_int(raw string, bits int) !i64 {
 	parsed := parse_int_magnitude(raw, max_positive + 1)!
 	if !parsed.negative {
 		if parsed.magnitude > max_positive {
-			return error('invalid value')
+			return error('overflow')
 		}
 		return i64(parsed.magnitude)
 	}

@@ -245,20 +245,37 @@ fn test_palette_parse_cli_base() {
 	p.parse_cli('0b1=#014589')!
 	p.parse_cli('0o7=#234567')!
 	p.parse_cli('0xF=#ABCDEF')!
+	p.parse_cli('+0x1__0=#102030')!
+	p.parse_cli('-0=#000000')!
 
+	assert p.value[0] == ColorRGB{0x00, 0x00, 0x00}
 	assert p.value[1] == ColorRGB{0x01, 0x45, 0x89}
 	assert p.value[7] == ColorRGB{0x23, 0x45, 0x67}
 	assert p.value[15] == ColorRGB{0xAB, 0xCD, 0xEF}
+	assert p.value[16] == ColorRGB{0x10, 0x20, 0x30}
 }
 
 // Config.zig: Palette "parseCLI overflow"
 fn test_palette_parse_cli_overflow() {
 	mut p := Palette.default_palette()
-	p.parse_cli('256=#AABBCC') or {
-		expect_parse_error(err, .overflow)
-		return
+	for value in ['256=#AABBCC', '-1=#AABBCC', '18446744073709551616=#AABBCC'] {
+		p.parse_cli(value) or {
+			expect_parse_error(err, .overflow)
+			continue
+		}
+		assert false, 'expected overflow error for ${value}'
 	}
-	assert false, 'expected overflow error'
+}
+
+fn test_palette_parse_cli_rejects_edge_underscores() {
+	mut p := Palette.default_palette()
+	for value in ['_1=#AABBCC', '1_=#AABBCC', '0x_1=#AABBCC'] {
+		p.parse_cli(value) or {
+			expect_parse_error(err, .invalid_value)
+			continue
+		}
+		assert false, 'expected invalid value for ${value}'
+	}
 }
 
 // Config.zig: Palette "parseCLI with whitespace"

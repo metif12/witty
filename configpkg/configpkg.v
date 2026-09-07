@@ -8595,15 +8595,13 @@ fn (mut c Config) apply_palette(value string) {
 	idx_str := value[..inner_eq].trim_space()
 	col_str := value[inner_eq + 1..].trim_space()
 	idx := parse_palette_index(idx_str) or {
-		c.diagnostics << Diagnostic{
-			message: 'invalid palette index: ${idx_str}'
+		kind := parse_error_of(err) or { ParseError.invalid_value }
+		message := if kind == ParseError.overflow {
+			'palette index out of range (0-255): ${idx_str}'
+		} else {
+			'invalid palette index: ${idx_str}'
 		}
-		return
-	}
-	if idx > 255 {
-		c.diagnostics << Diagnostic{
-			message: 'palette index out of range (0-255): ${idx_str}'
-		}
+		c.diagnostics << Diagnostic{ message: message }
 		return
 	}
 	col := parse_color(col_str) or {
@@ -8617,55 +8615,14 @@ fn (mut c Config) apply_palette(value string) {
 
 // parse_palette_index parses a palette index in decimal, binary (`0b`),
 // octal (`0o`), or hexadecimal (`0x`) notation.
-fn parse_palette_index(s string) ?int {
-	if s.len == 0 {
-		return none
-	}
-	mut base := 0
-	mut digits := s
-	if s.len > 2 {
-		prefix := s[..2].to_lower()
-		match prefix {
-			'0b' {
-				base = 2
-				digits = s[2..]
-			}
-			'0o' {
-				base = 8
-				digits = s[2..]
-			}
-			'0x' {
-				base = 16
-				digits = s[2..]
-			}
-			else {}
+fn parse_palette_index(s string) !int {
+	n := cli_args.parse_unsigned_int(s, 8) or {
+		if err.msg() == 'overflow' {
+			return perr(ParseError.overflow)
 		}
-	}
-	n := if base == 0 {
-		strconv_parse_int(digits, 10) or { return none }
-	} else {
-		strconv_parse_int(digits, base) or { return none }
-	}
-	if n < 0 {
-		return none
+		return perr(ParseError.invalid_value)
 	}
 	return int(n)
-}
-
-// strconv_parse_int parses an integer from a string in the given base.
-fn strconv_parse_int(s string, base int) ?i64 {
-	if s.len == 0 {
-		return none
-	}
-	mut result := i64(0)
-	for ch in s {
-		digit := hex_digit(ch) or { return none }
-		if digit >= base {
-			return none
-		}
-		result = result * base + digit
-	}
-	return result
 }
 
 // hex_digit returns the numeric value of a hex digit character, or none.
@@ -9848,10 +9805,7 @@ pub fn (mut p Palette) parse_cli(input ?string) ! {
 	value := input or { return perr(ParseError.value_required) }
 	eq := value.index('=') or { return perr(ParseError.invalid_value) }
 	key_str := value[..eq].trim(' \t')
-	idx := parse_palette_index(key_str) or { return perr(ParseError.invalid_value) }
-	if idx > 255 {
-		return perr(ParseError.overflow)
-	}
+	idx := parse_palette_index(key_str)!
 	col := color_parse_cli(value[eq + 1..])!
 	p.value[idx] = col
 }
