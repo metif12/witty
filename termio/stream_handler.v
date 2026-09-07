@@ -1026,9 +1026,8 @@ pub fn (mut self StreamHandler) set_modify_key_format(format terminal.ModifyKeyF
 
 fn (mut self StreamHandler) request_mode(mode terminal.Mode) {
 	code := if self.terminal.modes.get(mode) { u8(1) } else { u8(2) }
-	mode_val := int(mode)
-	// Build response: ESC [ ? <mode> ; <code> $ y
-	resp := '\x1b[?${mode_val};${code}\$y'
+	prefix := if terminal.mode_is_ansi(mode) { '' } else { '?' }
+	resp := '\x1b[${prefix}${terminal.mode_value(mode)};${code}\$y'
 	self.message_writer(Message.write_req(resp))
 }
 

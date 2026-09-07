@@ -182,6 +182,28 @@ fn test_stream_handler_xtversion_uses_build_version() {
 	assert msg.write_small_data.slice().bytestr() == '\x1bP>|ghostty ${build_meta.version_string}\x1b\\'
 }
 
+fn test_stream_handler_request_mode_uses_dec_protocol_value() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	handler.request_mode(.cursor_visible)
+
+	msg := ctx.mailbox.pop() or { panic('expected DECRQM response') }
+	assert msg.kind == .write_small
+	assert msg.write_small_data.slice().bytestr() == '\x1b[?25;1\$y'
+}
+
+fn test_stream_handler_request_mode_uses_ansi_protocol_value() {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	handler.request_mode(.insert)
+
+	msg := ctx.mailbox.pop() or { panic('expected DECRQM response') }
+	assert msg.kind == .write_small
+	assert msg.write_small_data.slice().bytestr() == '\x1b[4;2\$y'
+}
+
 fn test_stream_handler_decrqss_requires_declrmm_for_horizontal_margins() {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
