@@ -8,14 +8,14 @@ fn test_metrics_apply_absolute_and_percent_modifiers() {
 	})
 	modifiers.put(.cell_height, MetricsModifier{
 		is_percent: true
-		percent:    1.5
+		percent: 1.5
 	})
 	modifiers.put(.underline_thickness, MetricsModifier{
 		absolute: 3
 	})
 	modifiers.put(.icon_height, MetricsModifier{
 		is_percent: true
-		percent:    0.5
+		percent: 0.5
 	})
 
 	metrics.apply(modifiers)
@@ -46,23 +46,23 @@ fn test_metrics_apply_clamps_sizes() {
 // ghostty's private Metrics.init() used by the Metrics tests.
 fn metrics_zero() Metrics {
 	return Metrics{
-		cell_width:              0
-		cell_height:             0
-		cell_baseline:           0
-		underline_position:      0
-		underline_thickness:     0
-		strikethrough_position:  0
+		cell_width: 0
+		cell_height: 0
+		cell_baseline: 0
+		underline_position: 0
+		underline_thickness: 0
+		strikethrough_position: 0
 		strikethrough_thickness: 0
-		overline_position:       0
-		overline_thickness:      0
-		box_thickness:           0
-		cursor_thickness:        0
-		cursor_height:           0
-		icon_height:             0.0
-		icon_height_single:      0.0
-		face_width:              0.0
-		face_height:             0.0
-		face_y:                  0.0
+		overline_position: 0
+		overline_thickness: 0
+		box_thickness: 0
+		cursor_thickness: 0
+		cursor_height: 0
+		icon_height: 0.0
+		icon_height_single: 0.0
+		face_width: 0.0
+		face_height: 0.0
+		face_y: 0.0
 	}
 }
 
@@ -71,7 +71,7 @@ fn test_metrics_apply_modifiers() {
 	mut set := MetricsModifierSet{}
 	set.put(.cell_width, MetricsModifier{
 		is_percent: true
-		percent:    1.2
+		percent: 1.2
 	})
 
 	mut m := metrics_zero()
@@ -85,7 +85,7 @@ fn test_metrics_adjust_cell_height_smaller() {
 	mut set := MetricsModifierSet{}
 	set.put(.cell_height, MetricsModifier{
 		is_percent: true
-		percent:    0.75
+		percent: 0.75
 	})
 
 	mut m := metrics_zero()
@@ -113,7 +113,7 @@ fn test_metrics_adjust_cell_height_larger() {
 	mut set := MetricsModifierSet{}
 	set.put(.cell_height, MetricsModifier{
 		is_percent: true
-		percent:    1.75
+		percent: 1.75
 	})
 
 	mut m := metrics_zero()
@@ -141,7 +141,7 @@ fn test_metrics_adjust_icon_height_by_percentage() {
 	mut set := MetricsModifierSet{}
 	set.put(.icon_height, MetricsModifier{
 		is_percent: true
-		percent:    0.75
+		percent: 0.75
 	})
 
 	mut m := metrics_zero()
@@ -162,7 +162,7 @@ fn test_metrics_adjust_icon_height_by_absolute_pixels() {
 	mut set := MetricsModifierSet{}
 	set.put(.icon_height, MetricsModifier{
 		is_percent: false
-		absolute:   -5
+		absolute: -5
 	})
 
 	mut m := metrics_zero()
@@ -189,6 +189,17 @@ fn test_modifier_parse_absolute() {
 	assert m2.absolute == i32(-100)
 }
 
+fn test_modifier_parse_absolute_matches_zig_i32_boundaries() {
+	assert MetricsModifier.parse('+42')!.absolute == 42
+	assert MetricsModifier.parse('1__2')!.absolute == 12
+	assert MetricsModifier.parse('2147483647')!.absolute == 2147483647
+	assert MetricsModifier.parse('-2147483648')!.absolute == i32(-2147483647 - 1)
+	for invalid in ['', '+', '-', '_1', '1_', '1x', '2147483648', '-2147483649'] {
+		MetricsModifier.parse(invalid) or { continue }
+		assert false, 'expected ${invalid} to fail'
+	}
+}
+
 // ghostty: test "Modifier: parse percent"
 fn test_modifier_parse_percent() {
 	m1 := MetricsModifier.parse('20%')!
@@ -208,13 +219,13 @@ fn test_modifier_parse_percent() {
 fn test_modifier_percent() {
 	m1 := MetricsModifier{
 		is_percent: true
-		percent:    0.8
+		percent: 0.8
 	}
 	assert m1.apply(u32(100)) == u32(80)
 
 	m2 := MetricsModifier{
 		is_percent: true
-		percent:    1.8
+		percent: 1.8
 	}
 	assert m2.apply(u32(100)) == u32(180)
 }
@@ -223,19 +234,19 @@ fn test_modifier_percent() {
 fn test_modifier_absolute() {
 	m1 := MetricsModifier{
 		is_percent: false
-		absolute:   -100
+		absolute: -100
 	}
 	assert m1.apply(u32(100)) == u32(0)
 
 	m2 := MetricsModifier{
 		is_percent: false
-		absolute:   -120
+		absolute: -120
 	}
 	assert m2.apply(u32(100)) == u32(0)
 
 	m3 := MetricsModifier{
 		is_percent: false
-		absolute:   100
+		absolute: 100
 	}
 	assert m3.apply(u32(100)) == u32(200)
 }

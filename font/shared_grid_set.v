@@ -720,11 +720,50 @@ pub fn MetricsModifier.parse(input string) !MetricsModifier {
 		}
 	}
 
-	n := strconv.parse_int(input, 10, 32) or { return error('invalid format') }
+	n := parse_metrics_i32(input) or { return error('invalid format') }
 	return MetricsModifier{
 		is_percent: false
-		absolute: i32(n)
+		absolute: n
 	}
+}
+
+// Direct translation of `std.fmt.parseInt(i32, input, 10)`.
+fn parse_metrics_i32(input string) ?i32 {
+	if input.len == 0 {
+		return none
+	}
+	mut offset := 0
+	mut negative := false
+	if input[0] == `+` || input[0] == `-` {
+		negative = input[0] == `-`
+		offset = 1
+	}
+	if offset == input.len || input[offset] == `_` || input[input.len - 1] == `_` {
+		return none
+	}
+
+	limit := if negative { u64(2147483648) } else { u64(2147483647) }
+	mut magnitude := u64(0)
+	for c in input[offset..] {
+		if c == `_` {
+			continue
+		}
+		if c < `0` || c > `9` {
+			return none
+		}
+		digit := u64(c - `0`)
+		if magnitude > (limit - digit) / 10 {
+			return none
+		}
+		magnitude = magnitude * 10 + digit
+	}
+	if negative {
+		if magnitude == u64(2147483648) {
+			return i32(-2147483647 - 1)
+		}
+		return -i32(magnitude)
+	}
+	return i32(magnitude)
 }
 
 // apply applies this modifier to an unsigned integer value, matching the Zig
