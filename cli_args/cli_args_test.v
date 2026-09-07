@@ -476,6 +476,28 @@ fn test_parse_into_field_integer_bases_and_widths() {
 	}
 }
 
+fn test_parse_into_field_integer_grammar_matches_zig() {
+	mut data := IntegerWidthsData{}
+	parse_into_field[IntegerWidthsData](mut data, 'u8_value', '+0x2a')!
+	assert data.u8_value == 42
+	parse_into_field[IntegerWidthsData](mut data, 'u8_value', '-0')!
+	assert data.u8_value == 0
+	parse_into_field[IntegerWidthsData](mut data, 'u8_value', '010')!
+	assert data.u8_value == 10
+	parse_into_field[IntegerWidthsData](mut data, 'u8_value', '1__0')!
+	assert data.u8_value == 10
+	parse_into_field[IntegerWidthsData](mut data, 'i16_value', '-0x1__0')!
+	assert data.i16_value == -16
+
+	for invalid in ['_10', '10_', '0x_10', '0x10_', '0x', '-1'] {
+		if _ := parse_into_field[IntegerWidthsData](mut data, 'u8_value', invalid) {
+			assert false, 'expected ${invalid} to fail'
+		} else {
+			assert err.msg() == 'invalid value'
+		}
+	}
+}
+
 // --- parseIntoField: floats ---
 
 fn test_parse_into_field_float() {

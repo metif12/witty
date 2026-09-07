@@ -235,7 +235,7 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 				if !has_value {
 					return error('value required')
 				}
-				dst.$(field.name) = u8(strconv.parse_uint(raw, 0, 8) or {
+				dst.$(field.name) = u8(parse_unsigned_int(raw, 8) or {
 					return error('invalid value')
 				})
 				return
@@ -243,7 +243,7 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 				if !has_value {
 					return error('value required')
 				}
-				dst.$(field.name) = u16(strconv.parse_uint(raw, 0, 16) or {
+				dst.$(field.name) = u16(parse_unsigned_int(raw, 16) or {
 					return error('invalid value')
 				})
 				return
@@ -251,16 +251,24 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 				if !has_value {
 					return error('value required')
 				}
-				n := strconv.parse_uint(raw, 0, 32) or { return error('invalid value') }
+				n := parse_unsigned_int(raw, 32) or { return error('invalid value') }
 				dst.$(field.name) = u32(n)
 				return
-			} $else $if field.unaliased_typ is u64 || field.unaliased_typ is ?u64 || field.unaliased_typ is usize || field.unaliased_typ is ?usize {
+			} $else $if field.unaliased_typ is u64 || field.unaliased_typ is ?u64 {
 				if !has_value {
 					return error('value required')
 				}
-				dst.$(field.name) = strconv.parse_uint(raw, 0, 64) or {
+				dst.$(field.name) = parse_unsigned_int(raw, 64) or {
 					return error('invalid value')
 				}
+				return
+			} $else $if field.unaliased_typ is usize || field.unaliased_typ is ?usize {
+				if !has_value {
+					return error('value required')
+				}
+				dst.$(field.name) = usize(parse_unsigned_int(raw, int(sizeof(usize) * 8)) or {
+					return error('invalid value')
+				})
 				return
 			} $else $if field.unaliased_typ is int || field.unaliased_typ is ?int {
 				if !has_value {
@@ -361,31 +369,104 @@ fn parse_optional_custom[T](current ?T, value ?string) !T {
 	return error('unsupported field type')
 }
 
-// strconv.parse_int clamps signed overflow, while Zig's std.fmt.parseInt
-// rejects it. Parse the magnitude as unsigned so CLI integer semantics retain
-// the source's exact range checks for every signed width.
-fn parse_signed_int(raw string, bits int) !i64 {
-	if raw.len == 0 || bits < 1 || bits > 64 {
+struct ParsedIntMagnitude {
+	negative  bool
+	magnitude u64
+}
+
+// This is the V form of Zig's std.fmt.parseInt base-zero scanner used by
+// Ghostty's generic CLI parser. In particular, a leading zero remains decimal,
+// prefixes are case-insensitive, and only interior underscores are ignored.
+fn parse_int_magnitude(raw string, max_magnitude u64) !ParsedIntMagnitude {
+	if raw.len == 0 {
 		return error('invalid value')
 	}
 	negative := raw[0] == `-`
-	start := if negative || raw[0] == `+` { 1 } else { 0 }
+	mut start := if negative || raw[0] == `+` { 1 } else { 0 }
 	if start == raw.len {
 		return error('invalid value')
 	}
-	magnitude := strconv.parse_uint(raw[start..], 0, 64) or { return error('invalid value') }
-	max_positive := if bits == 64 { u64(max_i64) } else { (u64(1) << u32(bits - 1)) - 1 }
-	max_magnitude := max_positive + if negative { u64(1) } else { u64(0) }
-	if magnitude > max_magnitude {
+
+	mut base := u64(10)
+	if raw.len - start > 2 && raw[start] == `0` {
+		match raw[start + 1] {
+			`b`, `B` {
+				base = 2
+				start += 2
+			}
+			`o`, `O` {
+				base = 8
+				start += 2
+			}
+			`x`, `X` {
+				base = 16
+				start += 2
+			}
+			else {}
+		}
+	}
+	if raw[start] == `_` || raw[raw.len - 1] == `_` {
 		return error('invalid value')
 	}
-	if !negative {
-		return i64(magnitude)
+
+	mut magnitude := u64(0)
+	for ch in raw[start..] {
+		if ch == `_` {
+			continue
+		}
+		digit := match ch {
+			`0`...`9` { u64(ch - `0`) }
+			`a`...`z` { u64(ch - `a`) + 10 }
+			`A`...`Z` { u64(ch - `A`) + 10 }
+			else {
+				return error('invalid value')
+			}
+		}
+		if digit >= base || digit > max_magnitude
+			|| magnitude > (max_magnitude - digit) / base {
+			return error('invalid value')
+		}
+		magnitude = magnitude * base + digit
 	}
-	if bits == 64 && magnitude == u64(1) << 63 {
+	return ParsedIntMagnitude{
+		negative: negative
+		magnitude: magnitude
+	}
+}
+
+// parse_unsigned_int matches std.fmt.parseInt for an unsigned integer type.
+// Unlike parseUnsigned, parseInt accepts signs, including -0 for unsigned.
+pub fn parse_unsigned_int(raw string, bits int) !u64 {
+	if bits < 1 || bits > 64 {
+		return error('invalid value')
+	}
+	max_value := if bits == 64 { max_u64 } else { (u64(1) << u32(bits)) - 1 }
+	parsed := parse_int_magnitude(raw, max_value)!
+	if parsed.negative && parsed.magnitude != 0 {
+		return error('invalid value')
+	}
+	return parsed.magnitude
+}
+
+// parse_signed_int matches std.fmt.parseInt for a signed integer type.
+pub fn parse_signed_int(raw string, bits int) !i64 {
+	if raw.len == 0 || bits < 1 || bits > 64 {
+		return error('invalid value')
+	}
+	max_positive := if bits == 64 { u64(max_i64) } else { (u64(1) << u32(bits - 1)) - 1 }
+	// The negative range has one additional value. Parse once against that
+	// maximum, then apply the smaller positive bound when appropriate.
+	parsed := parse_int_magnitude(raw, max_positive + 1)!
+	if !parsed.negative {
+		if parsed.magnitude > max_positive {
+			return error('invalid value')
+		}
+		return i64(parsed.magnitude)
+	}
+	if bits == 64 && parsed.magnitude == u64(1) << 63 {
 		return min_i64
 	}
-	return -i64(magnitude)
+	return -i64(parsed.magnitude)
 }
 
 fn parse_enum_value[T](mut out T, raw string) ! {

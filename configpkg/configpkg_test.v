@@ -2465,6 +2465,31 @@ right-click-action = explode
 	assert cfg.diagnostics.len == 7
 }
 
+fn test_integer_config_values_use_zig_parse_int_grammar() {
+	mut cfg := Config.default_config()
+	cfg.load_string('
+window-width = +0x2a
+window-height = 1__0
+scrollback-limit = -0
+font-thicken-strength = 0xff
+window-position-x = -0x1__0
+')
+	assert cfg.window_width == 42
+	assert cfg.window_height == 10
+	assert cfg.scrollback_limit == 0
+	assert cfg.font_thicken_strength == 255
+	assert cfg.window_position_x? == -16
+	assert cfg.diagnostics.len == 0
+
+	cfg.load_string('
+window-width = 0x_10
+window-position-x = 32768
+')
+	assert cfg.window_width == 42
+	assert cfg.window_position_x? == -16
+	assert cfg.diagnostics.len == 2
+}
+
 fn test_named_colors_work_for_base_colors_and_palette() {
 	mut cfg := Config.default_config()
 	cfg.load_string('

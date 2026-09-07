@@ -8176,7 +8176,7 @@ fn (mut c Config) parse_config_bool(key string, value string) ?bool {
 }
 
 fn (mut c Config) parse_config_u32(key string, value string) ?u32 {
-	parsed := strconv.parse_uint(value, 0, 32) or {
+	parsed := cli_args.parse_unsigned_int(value, 32) or {
 		c.invalid_config_value(key, value)
 		return none
 	}
@@ -8184,7 +8184,7 @@ fn (mut c Config) parse_config_u32(key string, value string) ?u32 {
 }
 
 fn (mut c Config) parse_config_u64(key string, value string) ?u64 {
-	parsed := strconv.parse_uint(value, 0, 64) or {
+	parsed := cli_args.parse_unsigned_int(value, 64) or {
 		c.invalid_config_value(key, value)
 		return none
 	}
@@ -8192,7 +8192,7 @@ fn (mut c Config) parse_config_u64(key string, value string) ?u64 {
 }
 
 fn (mut c Config) parse_config_u8(key string, value string) ?u8 {
-	parsed := strconv.parse_uint(value, 0, 8) or {
+	parsed := cli_args.parse_unsigned_int(value, 8) or {
 		c.invalid_config_value(key, value)
 		return none
 	}
@@ -8200,7 +8200,7 @@ fn (mut c Config) parse_config_u8(key string, value string) ?u8 {
 }
 
 fn (mut c Config) parse_config_i16(key string, value string) ?i16 {
-	parsed := strconv.parse_int(value, 0, 16) or {
+	parsed := cli_args.parse_signed_int(value, 16) or {
 		c.invalid_config_value(key, value)
 		return none
 	}
