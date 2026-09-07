@@ -78,9 +78,11 @@ fn test_envelope_rejects_malformed_json_headers() {
 			assert false, 'malformed envelope header was accepted: ${data}'
 		}
 	}
-	for length in ['-1', '1.5', '1e2', '18446744073709551616'] {
+	for length in ['-1', '1.5', '1e2', '9223372036854775808', '18446744073709551616'] {
 		if _ := Envelope.parse('{}\n{"type":"session","length":${length}}\nx'.bytes()) {
 			assert false, 'malformed item length was accepted: ${length}'
+		} else {
+			assert err.msg() == 'envelope item length is malformed'
 		}
 	}
 }

@@ -352,7 +352,14 @@ fn json_nonnegative_int(raw string) ?u64 {
 		|| raw.contains('E') {
 		return none
 	}
-	return strconv.parse_uint(raw, 10, 64) or { none }
+	value := strconv.parse_uint(raw, 10, 64) or { return none }
+	// std.json.Value stores JSON integers as i64. Values outside that range
+	// are therefore not an `.integer` and Ghostty rejects them as a malformed
+	// envelope item length before attempting to read the payload.
+	if value > u64(max_i64) {
+		return none
+	}
+	return value
 }
 
 struct JsonCursor {
