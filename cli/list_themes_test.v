@@ -175,6 +175,18 @@ fn test_preview_search_uses_text_input() {
 	assert p.filtered.len == 2
 }
 
+fn test_preview_passes_search_tokens_to_zf_unchanged() {
+	mut p := Preview.new([
+		ThemeListElement{ theme: 'Dracula' },
+	], .all)
+	p.search_text = 'D'
+	p.update_filtered()
+	assert p.filtered.len == 0
+	p.search_text = 'd'
+	p.update_filtered()
+	assert p.filtered.len == 1
+}
+
 fn test_preview_mouse_selects_visible_theme() {
 	mut p := Preview.new([
 		ThemeListElement{ theme: 'One' },
