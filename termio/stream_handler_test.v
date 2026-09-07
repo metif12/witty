@@ -90,6 +90,25 @@ fn test_desktop_notification_forwards_typed_payload() {
 	assert ctx.messages[0].notification_body[..12].bytestr() == 'Build failed'
 }
 
+fn test_desktop_notification_preserves_full_sentinel_array_payloads() {
+	mut handler, mut ctx := make_test_handler()
+	defer {
+		ctx.t.deinit()
+	}
+	title := 't'.repeat(63)
+	body := 'b'.repeat(255)
+	handler.show_desktop_notification(osc.DesktopNotification{
+		title: title
+		body: body
+	})
+
+	assert ctx.messages.len == 1
+	assert ctx.messages[0].notification_title[..63].bytestr() == title
+	assert ctx.messages[0].notification_title[63] == 0
+	assert ctx.messages[0].notification_body[..255].bytestr() == body
+	assert ctx.messages[0].notification_body[255] == 0
+}
+
 // Test that the StreamHandler can be created and deinitialized.
 fn test_stream_handler_init_deinit() {
 	mut handler, mut ctx := make_test_handler()

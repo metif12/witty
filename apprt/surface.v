@@ -70,9 +70,9 @@ pub mut:
 
 	// For desktop_notification
 	// Desktop notification title.
-	notification_title [63]u8
+	notification_title [64]u8
 	// Desktop notification body.
-	notification_body [255]u8
+	notification_body [256]u8
 
 	// For renderer_health
 	renderer_health renderer.Health
