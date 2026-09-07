@@ -1480,6 +1480,21 @@ fn test_surface_best_effort_notifications_ignore_runtime_errors() {
 	assert !failed
 }
 
+fn test_surface_ring_bell_uses_monotonic_rate_limit() ! {
+	mut runtime := RuntimeApp{}
+	mut surf := Surface{
+		rt_app: &runtime
+	}
+	surf.handle_message(SurfaceMessage{ kind: .ring_bell })!
+	first := surf.last_bell_time or {
+		assert false, 'bell did not store a timestamp'
+		return
+	}
+	surf.handle_message(SurfaceMessage{ kind: .ring_bell })!
+	assert surf.last_bell_time? >= first
+	assert runtime.actions.len == 1
+}
+
 fn runtime_close_probe(data voidptr, confirm bool) {
 	mut probe := unsafe { &RuntimeCallbackProbe(data) }
 	probe.closed = true
@@ -1552,7 +1567,7 @@ fn test_command_finished_preserves_duration_and_exit_code() ! {
 	mut runtime := RuntimeApp{ actions_handled: true }
 	mut surf := make_test_surface()
 	surf.rt_app = &runtime
-	surf.command_timer = time.now().add(-time.Duration(1_234_567))
+	surf.command_timer = time.sys_mono_now() - 1_234_567
 	surf.handle_message(apprt.SurfaceMessage{
 		kind: .stop_command
 		stop_command_exit_code: u8(7)

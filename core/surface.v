@@ -1659,7 +1659,7 @@ pub mut:
 
 	// Click count for double/triple clicks.
 	left_click_count u8
-	left_click_time  time.Time
+	left_click_time  u64
 
 	// Last x/y sent for mouse reports.
 	event_point ?Coordinate
@@ -2780,8 +2780,8 @@ pub mut:
 	// The search state for the surface. When none, no search is active.
 	search ?&SurfaceSearch
 
-	command_timer  ?time.Time
-	last_bell_time ?time.Time
+	command_timer  ?u64
+	last_bell_time ?u64
 
 	pressed_key          ?KeyEvent
 	last_binding_trigger u64
@@ -3173,10 +3173,10 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			self.password_input(msg.password_input)!
 		}
 		.ring_bell {
-			now := time.now()
+			now := time.sys_mono_now()
 			if last := self.last_bell_time {
 				// Rate-limit bell to at most once per 100ms
-				if now - last < time.Duration(100 * time.millisecond) {
+				if now - last < u64(100 * time.millisecond) {
 					return
 				}
 			}
@@ -3198,18 +3198,18 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			self.selection_scroll_tick()!
 		}
 		.start_command {
-			self.command_timer = time.now()
+			self.command_timer = time.sys_mono_now()
 		}
 		.stop_command {
 			if started := self.command_timer {
-				duration := time.now() - started
+				duration := time.sys_mono_now() - started
 				self.command_timer = none
 				self.rt_app.perform_action(AppAction{
 					kind: .command_finished
 					target: &self
 					command_finished: apprt.CommandFinished{
 						exit_code: msg.stop_command_exit_code
-						duration: configpkg.Duration{ duration: u64(duration) }
+						duration: configpkg.Duration{ duration: duration }
 					}
 				})!
 			}
@@ -4195,9 +4195,9 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			if self.has_selection() {
 				// If we are within the interval that a click would register
 				// an increment then we do not extend the selection.
-				now := time.now()
+				now := time.sys_mono_now()
 				since := now - self.mouse.left_click_time
-				if u64(since) > self.config.mouse_interval {
+				if since > self.config.mouse_interval {
 					pos := self.rt_surface.get_cursor_pos()!
 					self.cursor_pos_callback(pos, none)!
 					return true
@@ -4353,9 +4353,9 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 
 			// Reset a stale click sequence, then advance it. Counts are always
 			// bounded to the single/double/triple-click states.
-			now := time.now()
+			now := time.sys_mono_now()
 			if self.mouse.left_click_count > 0
-				&& u64(now - self.mouse.left_click_time) > self.config.mouse_interval {
+				&& now - self.mouse.left_click_time > self.config.mouse_interval {
 				self.mouse.left_click_count = 0
 			}
 			self.mouse.left_click_time = now

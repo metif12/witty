@@ -126,7 +126,7 @@ mut:
 	left_click_x     f64
 	left_click_y     f64
 	left_click_count u8
-	left_click_time  time.Time
+	left_click_time  u64
 	// Title state: explicit OSC title wins; OSC 7 pwd is fallback when unset.
 	tab_title   string
 	seen_title  bool
@@ -1027,11 +1027,11 @@ fn on_mouse(userdata voidptr, event_type int, x f64, y f64, modflags u64) {
 
 	match event_type {
 		mouse_left_down {
-			now := time.now()
+			now := time.sys_mono_now()
 			elapsed := now - state.left_click_time
 
 			// Check for multi-click (within timing threshold and same approximate position)
-			if elapsed.milliseconds() < double_click_interval_ms {
+			if elapsed < u64(double_click_interval_ms * time.millisecond) {
 				state.left_click_count += 1
 			} else {
 				state.left_click_count = 1
