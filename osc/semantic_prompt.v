@@ -1,19 +1,21 @@
 module osc
 
+import strconv
+
 // Semantic prompt parsing for OSC 133.
 //
 // https://gitlab.freedesktop.org/Per_Bothner/specifications/blob/master/proposals/semantic-prompts.md
 
 // A semantic prompt action.
 pub enum SemanticAction {
-	fresh_line                           // 'L'
-	fresh_line_new_prompt                // 'A'
-	new_command                          // 'N'
-	prompt_start                         // 'P'
-	end_prompt_start_input               // 'B'
+	fresh_line // 'L'
+	fresh_line_new_prompt // 'A'
+	new_command // 'N'
+	prompt_start // 'P'
+	end_prompt_start_input // 'B'
 	end_prompt_start_input_terminate_eol // 'I'
-	end_input_start_output               // 'C'
-	end_command                          // 'D'
+	end_input_start_output // 'C'
+	end_command // 'D'
 }
 
 // The `cl` option specifies what kind of cursor key sequences are handled
@@ -41,10 +43,18 @@ pub enum Click {
 pub fn Click.from_string(value string) ?Click {
 	if value.len == 1 {
 		match value[0] {
-			`m` { return .multiple }
-			`v` { return .conservative_vertical }
-			`w` { return .smart_vertical }
-			else { return none }
+			`m` {
+				return .multiple
+			}
+			`v` {
+				return .conservative_vertical
+			}
+			`w` {
+				return .smart_vertical
+			}
+			else {
+				return none
+			}
 		}
 	} else if value == 'line' {
 		return .line
@@ -62,11 +72,21 @@ pub enum PromptKind {
 // Parse a PromptKind from a single character.
 pub fn PromptKind.from_char(c u8) ?PromptKind {
 	match c {
-		`i` { return .initial }
-		`r` { return .right }
-		`c` { return .continuation }
-		`s` { return .secondary }
-		else { return none }
+		`i` {
+			return .initial
+		}
+		`r` {
+			return .right
+		}
+		`c` {
+			return .continuation
+		}
+		`s` {
+			return .secondary
+		}
+		else {
+			return none
+		}
 	}
 }
 
@@ -170,9 +190,15 @@ pub fn read_special_key(raw string) ?bool {
 	value := read_option_raw(raw, 'special_key') or { return none }
 	if value.len == 1 {
 		match value[0] {
-			`0` { return false }
-			`1` { return true }
-			else { return none }
+			`0` {
+				return false
+			}
+			`1` {
+				return true
+			}
+			else {
+				return none
+			}
 		}
 	}
 	return none
@@ -183,9 +209,15 @@ pub fn read_click_events(raw string) ?bool {
 	value := read_option_raw(raw, 'click_events') or { return none }
 	if value.len == 1 {
 		match value[0] {
-			`0` { return false }
-			`1` { return true }
-			else { return none }
+			`0` {
+				return false
+			}
+			`1` {
+				return true
+			}
+			else {
+				return none
+			}
 		}
 	}
 	return none
@@ -202,23 +234,7 @@ pub fn read_exit_code(raw string) ?i32 {
 	// The exit code is the first value, up to the first semicolon.
 	sep := raw.index_u8(`;`)
 	code_str := if sep >= 0 { raw[..sep] } else { raw }
-	// Validate that the string is a valid integer
-	if code_str.len == 0 {
-		return none
-	}
-	mut start := 0
-	if code_str[0] == `-` {
-		start = 1
-	}
-	if start >= code_str.len {
-		return none
-	}
-	for i in start .. code_str.len {
-		if code_str[i] < `0` || code_str[i] > `9` {
-			return none
-		}
-	}
-	return i32(code_str.int())
+	return strconv.atoi32(code_str) or { return none }
 }
 
 // ============================================================

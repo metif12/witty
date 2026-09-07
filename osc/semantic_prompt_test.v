@@ -725,6 +725,10 @@ fn test_option_read_exit_code() {
 	assert (read_exit_code('42') or { -999 }) == 42
 	assert (read_exit_code('0') or { -999 }) == 0
 	assert (read_exit_code('-1') or { -999 }) == -1
+	assert (read_exit_code('+1') or { -999 }) == 1
+	assert (read_exit_code('2147483647') or { -999 }) == 2147483647
+	assert read_exit_code('2147483648') == none
+	assert read_exit_code('-2147483649') == none
 	assert read_exit_code('abc') == none
 	assert (read_exit_code('127;aid=foo') or { -999 }) == 127
 }
