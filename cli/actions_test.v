@@ -154,7 +154,10 @@ fn test_show_face_codepoint_bases_and_invalid_values() {
 	assert parse_show_face_codepoint('0x41')? == 65
 	assert parse_show_face_codepoint('0o101')? == 65
 	assert parse_show_face_codepoint('0b1000001')? == 65
+	assert parse_show_face_codepoint('+0x4__1')? == 65
+	assert parse_show_face_codepoint('-0')? == 0
 	assert parse_show_face_codepoint('0x200000') == none
+	assert parse_show_face_codepoint('0x_41') == none
 	assert parse_show_face_codepoint('wat') == none
 }
 

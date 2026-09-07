@@ -1,11 +1,11 @@
 module cli
 
+import cli_args
 import configpkg
 import encoding.utf8.validate
 import font
 import input
 import os
-import strconv
 import terminal
 
 // list_actions_output lists every keybinding action, not the CLI actions.
@@ -530,36 +530,7 @@ fn parse_show_face_options(args []string) !ShowFaceOptions {
 }
 
 fn parse_show_face_codepoint(value string) ?u32 {
-	if value.len == 0 {
-		return none
-	}
-	mut digits := value
-	mut base := 10
-	if value.len > 2 && value[0] == `0` {
-		match value[1] {
-			`x`, `X` {
-				base = 16
-				digits = value[2..]
-			}
-			`o`, `O` {
-				base = 8
-				digits = value[2..]
-			}
-			`b`, `B` {
-				base = 2
-				digits = value[2..]
-			}
-			else {}
-		}
-	}
-	if digits.len == 0 {
-		return none
-	}
-	parsed := strconv.parse_uint(digits, base, 32) or { return none }
-	if parsed > 0x1fffff {
-		return none
-	}
-	return u32(parsed)
+	return u32(cli_args.parse_unsigned_int(value, 21) or { return none })
 }
 
 fn grid_set_font_style(style configpkg.FontStyle) font.GridSetFontStyleConfig {
