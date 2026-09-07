@@ -30,6 +30,19 @@ fn test_graphics_execute_persists_transmitted_image() ! {
 	assert image.data == [u8(255), 255, 255]
 }
 
+fn test_graphics_execute_reports_invalid_image_length_as_invalid_data() ! {
+	mut t := make_graphics_terminal()!
+	defer {
+		deinit_terminal_storage(mut t)
+		t.deinit()
+	}
+
+	cmd := Parser.parse_string('a=t,f=24,t=d,i=1,s=2,v=2;////')!
+	response := execute(mut t, &cmd) or { panic('expected transmit error') }
+	assert !response.ok()
+	assert response.message == 'EINVAL: invalid data'
+}
+
 fn test_graphics_execute_chunked_quiet_inheritance() ! {
 	mut t := make_graphics_terminal()!
 	defer {

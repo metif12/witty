@@ -445,7 +445,7 @@ pub fn (mut self LoadingImage) add_data(data []u8) ! {
 	}
 	// If our data would get too big, return an error
 	if self.data.len + data.len > max_image_size {
-		return error('image data too large max_size=${max_image_size}')
+		return error('InvalidData: image data too large max_size=${max_image_size}')
 	}
 	// Append the data
 	self.data << data
@@ -475,7 +475,7 @@ pub fn (mut self LoadingImage) complete() !Image {
 	expected_len := int(self.image.width) * int(self.image.height) * bpp
 	actual_len := self.data.len
 	if actual_len != expected_len {
-		return error('unexpected length image id=${self.image.id} expected=${expected_len} actual=${actual_len}')
+		return error('InvalidData: unexpected length image id=${self.image.id} expected=${expected_len} actual=${actual_len}')
 	}
 
 	// Set our time.
