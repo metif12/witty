@@ -12,6 +12,30 @@ fn testdata_path(name string) string {
 	return os.join_path(testdata_dir, name)
 }
 
+fn test_image_without_data_preserves_metadata() {
+	image := Image{
+		id: 1
+		number: 2
+		width: 3
+		height: 4
+		format: .rgba
+		compression: .zlib_deflate
+		data: [u8(5), 6]
+		transmit_time: 7
+		implicit_id: true
+	}
+	copy := image.without_data()
+	assert copy.id == image.id
+	assert copy.number == image.number
+	assert copy.width == image.width
+	assert copy.height == image.height
+	assert copy.format == image.format
+	assert copy.compression == image.compression
+	assert copy.data.len == 0
+	assert copy.transmit_time == image.transmit_time
+	assert copy.implicit_id == image.implicit_id
+}
+
 // This specifically tests we ALLOW invalid RGB data because Kitty
 // documents that this should work.
 fn test_image_load_with_invalid_rgb_data() {

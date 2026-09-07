@@ -200,6 +200,7 @@ pub fn (self &Image) without_data() Image {
 		height: self.height
 		format: self.format
 		compression: self.compression
+		transmit_time: self.transmit_time
 		implicit_id: self.implicit_id
 	}
 }

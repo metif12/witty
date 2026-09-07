@@ -366,6 +366,8 @@ pub fn (mut self ImageStorage) add_image(img Image) ! {
 // Add a placement for a given image. The caller must verify in advance
 // the image exists to prevent incorrect state.
 pub fn (mut self ImageStorage) add_placement(image_id u32, placement_id u32, p Placement) {
+	assert image_id in self.images
+
 	// The important piece here is that the placement ID needs to
 	// be marked internal if it is zero. This allows multiple placements
 	// to be added for the same image. If it is non-zero, then it is
