@@ -1457,6 +1457,7 @@ import encoding.base64
 import sync
 import search as searchpkg
 import osc
+import internal_hash
 import internal_os
 import terminal
 import inspector as inspectorpkg
@@ -6706,6 +6707,8 @@ pub fn (mut self Surface) complete_clipboard_request(req apprt.ClipboardRequest,
 }
 
 fn (mut self Surface) show_desktop_notification(title string, body string) ! {
+	// Wyhash is used to hash the contents of the desktop notification to limit
+	// how fast identical notifications can be sent sequentially.
 	// Rate limit: at most one notification per second
 	now := time.now()
 	if last := self.app.last_notification_time {
@@ -6714,14 +6717,7 @@ fn (mut self Surface) show_desktop_notification(title string, body string) ! {
 		}
 	}
 
-	// Dedup: don't repeat identical notifications within 5 seconds
-	mut content_hash := u64(0)
-	for b in title.bytes() {
-		content_hash = content_hash * 31 + u64(b)
-	}
-	for b in body.bytes() {
-		content_hash = content_hash * 31 + u64(b)
-	}
+	content_hash := desktop_notification_digest(title, body)
 
 	if content_hash == self.app.last_notification_digest {
 		if last := self.app.last_notification_time {
@@ -6740,6 +6736,13 @@ fn (mut self Surface) show_desktop_notification(title string, body string) ! {
 		notification_title: title
 		notification_body: body
 	})!
+}
+
+fn desktop_notification_digest(title string, body string) u64 {
+	mut contents := []u8{cap: title.len + body.len}
+	contents << title.bytes()
+	contents << body.bytes()
+	return internal_hash.wyhash(contents, 0)
 }
 
 fn (mut self Surface) copy_selection_to_clipboards(sel TermSelection, clipboards []apprt.Clipboard, format input.CopyToClipboard) ! {
