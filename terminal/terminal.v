@@ -2115,10 +2115,8 @@ pub fn (mut self Terminal) print(c u32) ! {
 				// modify the cell width accordingly. VS16 makes the
 				// character wide and VS15 makes it narrow.
 				if c == 0xFE0F || c == 0xFE0E {
-					// Check if it is a valid variation sequence. Without the
-					// emoji-variation-sequences.txt table we treat any
-					// wide-capable base (>= 0x1F000 emoji block or already
-					// wide) as valid; otherwise ignore the char.
+					// Check if it is a valid variation sequence in
+					// emoji-variation-sequences.txt, and if not, ignore the char.
 					if !unicode.get(prev.codepoint).emoji_vs_base {
 						return
 					}
@@ -2189,6 +2187,11 @@ pub fn (mut self Terminal) print(c u32) ! {
 	// byte-sized characters since they're so common. We can ignore
 	// control characters because they're always filtered prior.
 	width := if c <= 0xFF { u16(1) } else { u16(unicode.get(c).width) }
+
+	// Note: it is possible to have a width of "3" and a width of "-1" from
+	// uucode.x's wcwidth. We should look into those cases and handle them
+	// appropriately.
+	assert width <= 2
 
 	// Attach zero-width characters to our cell as grapheme data.
 	if width == 0 {
