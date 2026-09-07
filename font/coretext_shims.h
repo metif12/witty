@@ -4,6 +4,33 @@
 #include <string.h>
 #include <math.h>
 
+static unsigned char witty_ascii_lower(unsigned char c) {
+	return c >= 'A' && c <= 'Z' ? (unsigned char)(c + ('a' - 'A')) : c;
+}
+
+static int witty_ascii_eql_ignore_case(
+	const char *lhs, size_t lhs_len, const char *rhs, size_t rhs_len
+) {
+	if (lhs_len != rhs_len) return 0;
+	for (size_t i = 0; i < lhs_len; i++) {
+		if (witty_ascii_lower((unsigned char)lhs[i]) !=
+			witty_ascii_lower((unsigned char)rhs[i])) return 0;
+	}
+	return 1;
+}
+
+static int witty_ascii_index_of_ignore_case(
+	const char *haystack, size_t haystack_len,
+	const char *needle, size_t needle_len
+) {
+	if (needle_len > haystack_len) return 0;
+	for (size_t i = 0; i + needle_len <= haystack_len; i++) {
+		if (witty_ascii_eql_ignore_case(
+			haystack + i, needle_len, needle, needle_len)) return 1;
+	}
+	return 0;
+}
+
 #ifdef __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreGraphics/CoreGraphics.h>
@@ -460,6 +487,7 @@ static void *witty_cf_array_get(void *arr, int i) {
 // OpenType head/OS/2 flags, and active variation-axis values.
 static uint64_t witty_ct_score(
 	const char *desired_style, // may be NULL
+	size_t desired_style_len,
 	uint32_t codepoint,
 	int want_bold,
 	int want_italic,
@@ -576,49 +604,55 @@ static uint64_t witty_ct_score(
 
 	// Determine desired style strings.
 	const char *desired[4];
+	size_t desired_len[4];
 	int desired_n = 0;
-	if (desired_style && desired_style[0]) {
+	if (desired_style) {
 		desired[desired_n++] = desired_style;
+		desired_len[0] = desired_style_len;
 	} else if (want_bold && want_italic) {
 		desired[desired_n++] = "bold italic";
+		desired_len[0] = sizeof("bold italic") - 1;
 		desired[desired_n++] = "bold";
+		desired_len[1] = sizeof("bold") - 1;
 		desired[desired_n++] = "italic";
+		desired_len[2] = sizeof("italic") - 1;
 		desired[desired_n++] = "oblique";
+		desired_len[3] = sizeof("oblique") - 1;
 	} else if (want_bold) {
 		desired[desired_n++] = "bold";
+		desired_len[0] = sizeof("bold") - 1;
 		desired[desired_n++] = "upright";
+		desired_len[1] = sizeof("upright") - 1;
 	} else if (want_italic) {
 		desired[desired_n++] = "italic";
+		desired_len[0] = sizeof("italic") - 1;
 		desired[desired_n++] = "regular";
+		desired_len[1] = sizeof("regular") - 1;
 		desired[desired_n++] = "oblique";
+		desired_len[2] = sizeof("oblique") - 1;
 	} else {
 		desired[desired_n++] = "regular";
+		desired_len[0] = sizeof("regular") - 1;
 		desired[desired_n++] = "upright";
+		desired_len[1] = sizeof("upright") - 1;
 	}
 
 	// Exact (case-insensitive) match on first desired style.
-	if (desired_n > 0 && strcasecmp(style_buf, desired[0]) == 0) {
+	size_t style_len = strlen(style_buf);
+	if (desired_n > 0 && witty_ascii_eql_ignore_case(
+		style_buf, style_len, desired[0], desired_len[0])) {
 		exact_style = 1;
 	}
 
 	// Fuzzy match: start from the style length, subtract any matching
 	// desired-style lengths, then invert so smaller leftover -> higher score.
 	{
-		size_t leftover = strlen(style_buf);
+		size_t leftover = style_len;
 		size_t slen = leftover;
 		for (int i = 0; i < desired_n; i++) {
 			// case-insensitive substring search
-			size_t dl = strlen(desired[i]);
-			if (dl == 0 || dl > slen) continue;
-			int found = 0;
-			for (size_t j = 0; j + dl <= slen && !found; j++) {
-#if defined(__APPLE__)
-				if (strncasecmp(style_buf + j, desired[i], dl) == 0) found = 1;
-#else
-				if (strncmp(style_buf + j, desired[i], dl) == 0) found = 1;
-#endif
-			}
-			if (found) {
+			size_t dl = desired_len[i];
+			if (witty_ascii_index_of_ignore_case(style_buf, slen, desired[i], dl)) {
 				if (leftover >= dl) leftover -= dl; else leftover = 0;
 			}
 		}
@@ -989,10 +1023,10 @@ static int witty_cf_array_count(void *arr) { (void)arr; return 0; }
 static void *witty_cf_array_get(void *arr, int i) { (void)arr; (void)i; return NULL; }
 
 static uint64_t witty_ct_score(
-	const char *desired_style, uint32_t codepoint,
+	const char *desired_style, size_t desired_style_len, uint32_t codepoint,
 	int want_bold, int want_italic, void *candidate_desc
 ) {
-	(void)desired_style; (void)codepoint; (void)want_bold;
+	(void)desired_style; (void)desired_style_len; (void)codepoint; (void)want_bold;
 	(void)want_italic; (void)candidate_desc;
 	return 0;
 }

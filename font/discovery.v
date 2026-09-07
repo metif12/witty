@@ -242,7 +242,11 @@ fn C.witty_cf_array_count(arr voidptr) int
 
 fn C.witty_cf_array_get(arr voidptr, i int) voidptr
 
-fn C.witty_ct_score(desired_style &char, codepoint u32, want_bold int, want_italic int, candidate_desc voidptr) u64
+fn C.witty_ct_score(desired_style &char, desired_style_len usize, codepoint u32, want_bold int, want_italic int, candidate_desc voidptr) u64
+
+fn C.witty_ascii_eql_ignore_case(lhs &char, lhs_len usize, rhs &char, rhs_len usize) int
+
+fn C.witty_ascii_index_of_ignore_case(haystack &char, haystack_len usize, needle &char, needle_len usize) int
 
 fn C.witty_ct_descriptor_drop_charset(desc voidptr) voidptr
 
@@ -606,9 +610,10 @@ fn copy_matching_descriptors(list voidptr) []voidptr {
 // sortMatchingDescriptors: a higher score is "less" (earlier).
 fn sort_matching_descriptors(desc Descriptor, mut list []voidptr) {
 	style_ptr := if s := desc.style { &char(s.str) } else { &char(unsafe { nil }) }
-	list.sort_with_compare(fn [desc, style_ptr] (a &voidptr, b &voidptr) int {
-		lhs := C.witty_ct_score(style_ptr, desc.codepoint, b2i(desc.bold), b2i(desc.italic), *a)
-		rhs := C.witty_ct_score(style_ptr, desc.codepoint, b2i(desc.bold), b2i(desc.italic), *b)
+	style_len := if s := desc.style { usize(s.len) } else { usize(0) }
+	list.sort_with_compare(fn [desc, style_ptr, style_len] (a &voidptr, b &voidptr) int {
+		lhs := C.witty_ct_score(style_ptr, style_len, desc.codepoint, b2i(desc.bold), b2i(desc.italic), *a)
+		rhs := C.witty_ct_score(style_ptr, style_len, desc.codepoint, b2i(desc.bold), b2i(desc.italic), *b)
 		// Higher score is earlier.
 		if lhs > rhs {
 			return -1
@@ -965,7 +970,8 @@ pub fn Score.from_int(v u64) Score {
 // score into its symbolic fields.
 pub fn Score.score(desc &Descriptor, ct_desc voidptr) Score {
 	style_ptr := if s := desc.style { &char(s.str) } else { &char(unsafe { nil }) }
-	v := C.witty_ct_score(style_ptr, desc.codepoint, b2i(desc.bold), b2i(desc.italic), ct_desc)
+	style_len := if s := desc.style { usize(s.len) } else { usize(0) }
+	v := C.witty_ct_score(style_ptr, style_len, desc.codepoint, b2i(desc.bold), b2i(desc.italic), ct_desc)
 	return Score.from_int(v)
 }
 

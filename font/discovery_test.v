@@ -147,6 +147,22 @@ fn test_score_comparison() {
 	assert s10.to_int() > s9.to_int()
 }
 
+fn test_coretext_score_uses_zig_ascii_matching() {
+	assert coretext_ascii_eql_ignore_case('Bold Italic', 'bOLD iTALIC')
+	assert !coretext_ascii_eql_ignore_case('İtalic', 'italic')
+	assert !coretext_ascii_eql_ignore_case('Regular\x00Bold', 'regular')
+	assert coretext_ascii_contains_ignore_case('ExtraBold Italic', 'bold')
+	assert !coretext_ascii_contains_ignore_case('Khaki', 'kh')
+}
+
+fn coretext_ascii_eql_ignore_case(lhs string, rhs string) bool {
+	return C.witty_ascii_eql_ignore_case(&char(lhs.str), usize(lhs.len), &char(rhs.str), usize(rhs.len)) == 1
+}
+
+fn coretext_ascii_contains_ignore_case(haystack string, needle string) bool {
+	return C.witty_ascii_index_of_ignore_case(&char(haystack.str), usize(haystack.len), &char(needle.str), usize(needle.len)) == 1
+}
+
 // test_descriptor_clone tests that cloning a descriptor works correctly.
 fn test_descriptor_clone() {
 	d := Descriptor{
