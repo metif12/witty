@@ -9,6 +9,7 @@ module kitty
 // the parser for the command portion of the protocol.
 
 import simd
+import strconv
 
 // ============================================================
 // Parser
@@ -250,24 +251,23 @@ fn (mut self Parser) finish_value(next_state ParserState) ! {
 	temp_str := self.kv_temp[0..self.kv_temp_len].bytestr()
 	v := match self.kv_current {
 		`z`, `H`, `V` {
-			// Signed integer fields. Parse as i64 first so we can detect
-			// values that don't fit in an i32 and report an overflow.
-			wide := temp_str.i64()
-			if wide < -2147483648 || wide > 2147483647 {
-				return error('Overflow')
+			signed := strconv.atoi32(temp_str) or {
+				if err.msg().contains('overflow') || err.msg().contains('underflow') {
+					return error('Overflow')
+				}
+				return error('InvalidCharacter')
 			}
-			signed := i32(wide)
 			// Reinterpret i32 as u32
 			unsafe { *(&u32(&signed)) }
 		}
 		else {
-			// Unsigned integer fields
-			parsed := temp_str.u32()
-			// Check for overflow: if string is too long or result doesn't match
-			if temp_str.len > 10 {
-				return error('Overflow')
+			parsed := strconv.parse_uint(temp_str, 10, 32) or {
+				if err.msg().contains('overflow') {
+					return error('Overflow')
+				}
+				return error('InvalidCharacter')
 			}
-			parsed
+			u32(parsed)
 		}
 	}
 	self.kv[self.kv_current] = v

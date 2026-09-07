@@ -199,8 +199,44 @@ fn test_ensure_proper_overflow_error_for_u32() {
 	assert false, 'expected overflow error'
 }
 
+fn test_ensure_u32_overflow_with_ten_digits_is_rejected() {
+	input := 'a=p,i=4294967296'
+	Parser.parse_string(input) or {
+		assert err.msg().contains('Overflow')
+		return
+	}
+	assert false, 'expected overflow error'
+}
+
+fn test_ensure_invalid_u32_is_rejected() {
+	input := 'a=p,i=12x'
+	Parser.parse_string(input) or {
+		assert err.msg().contains('InvalidCharacter')
+		return
+	}
+	assert false, 'expected invalid character error'
+}
+
+fn test_ensure_empty_u32_is_rejected() {
+	input := 'a=p,i='
+	Parser.parse_string(input) or {
+		assert err.msg().contains('InvalidCharacter')
+		return
+	}
+	assert false, 'expected invalid character error'
+}
+
 fn test_ensure_proper_overflow_error_for_i32() {
 	input := 'a=p,i=1,z=-9999999999'
+	Parser.parse_string(input) or {
+		assert err.msg().contains('Overflow')
+		return
+	}
+	assert false, 'expected overflow error'
+}
+
+fn test_ensure_i32_overflow_at_boundary_is_rejected() {
+	input := 'a=p,i=1,z=2147483648'
 	Parser.parse_string(input) or {
 		assert err.msg().contains('Overflow')
 		return
