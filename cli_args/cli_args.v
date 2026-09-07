@@ -374,11 +374,11 @@ struct ParsedIntMagnitude {
 	magnitude u64
 }
 
-// This is the V form of Zig's std.fmt.parseInt base-zero scanner used by
-// Ghostty's generic CLI parser. In particular, a leading zero remains decimal,
-// prefixes are case-insensitive, and only interior underscores are ignored.
-fn parse_int_magnitude(raw string, max_magnitude u64) !ParsedIntMagnitude {
-	if raw.len == 0 {
+// This is the V form of Zig's std.fmt.parseInt scanner used by Ghostty. With
+// base zero, a leading zero remains decimal and b/o/x prefixes select a base.
+// Only interior underscores are ignored.
+fn parse_int_magnitude(raw string, max_magnitude u64, requested_base u8) !ParsedIntMagnitude {
+	if raw.len == 0 || (requested_base != 0 && (requested_base < 2 || requested_base > 36)) {
 		return error('invalid value')
 	}
 	negative := raw[0] == `-`
@@ -387,8 +387,8 @@ fn parse_int_magnitude(raw string, max_magnitude u64) !ParsedIntMagnitude {
 		return error('invalid value')
 	}
 
-	mut base := u64(10)
-	if raw.len - start > 2 && raw[start] == `0` {
+	mut base := if requested_base == 0 { u64(10) } else { u64(requested_base) }
+	if requested_base == 0 && raw.len - start > 2 && raw[start] == `0` {
 		match raw[start + 1] {
 			`b`, `B` {
 				base = 2
@@ -437,11 +437,16 @@ fn parse_int_magnitude(raw string, max_magnitude u64) !ParsedIntMagnitude {
 // parse_unsigned_int matches std.fmt.parseInt for an unsigned integer type.
 // Unlike parseUnsigned, parseInt accepts signs, including -0 for unsigned.
 pub fn parse_unsigned_int(raw string, bits int) !u64 {
+	return parse_unsigned_int_base(raw, bits, 0)
+}
+
+// parse_unsigned_int_base is the explicit-base form of parse_unsigned_int.
+pub fn parse_unsigned_int_base(raw string, bits int, base u8) !u64 {
 	if bits < 1 || bits > 64 {
 		return error('invalid value')
 	}
 	max_value := if bits == 64 { max_u64 } else { (u64(1) << u32(bits)) - 1 }
-	parsed := parse_int_magnitude(raw, max_value)!
+	parsed := parse_int_magnitude(raw, max_value, base)!
 	if parsed.negative && parsed.magnitude != 0 {
 		return error('overflow')
 	}
@@ -456,7 +461,7 @@ pub fn parse_signed_int(raw string, bits int) !i64 {
 	max_positive := if bits == 64 { u64(max_i64) } else { (u64(1) << u32(bits - 1)) - 1 }
 	// The negative range has one additional value. Parse once against that
 	// maximum, then apply the smaller positive bound when appropriate.
-	parsed := parse_int_magnitude(raw, max_positive + 1)!
+	parsed := parse_int_magnitude(raw, max_positive + 1, 0)!
 	if !parsed.negative {
 		if parsed.magnitude > max_positive {
 			return error('overflow')

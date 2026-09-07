@@ -9427,7 +9427,11 @@ fn parse_uint(s string) ?u64 {
 		if ch < `0` || ch > `9` {
 			return none
 		}
-		result = result * 10 + u64(ch - `0`)
+		digit := u64(ch - `0`)
+		if result > (max_u64 - digit) / 10 {
+			return none
+		}
+		result = result * 10 + digit
 	}
 	return result
 }
@@ -9464,11 +9468,7 @@ pub fn window_padding_parse_cli(input ?string) !WindowPadding {
 
 // parse_u32 parses a base-10 u32, returning none on invalid input.
 fn parse_u32(s string) ?u32 {
-	v := parse_uint(s) or { return none }
-	if v > u64(0xffffffff) {
-		return none
-	}
-	return u32(v)
+	return u32(cli_args.parse_unsigned_int_base(s, 32, 10) or { return none })
 }
 
 // ------------------------------------------------------------

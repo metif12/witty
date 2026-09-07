@@ -342,6 +342,9 @@ fn test_parse_duration() {
 	assert duration_parse_cli('584y 49w 23h 34m 33s 709ms 551µs 615ns')!.duration == u64_max
 	// Overflow saturates.
 	assert duration_parse_cli('600y')!.duration == u64_max
+	duration_parse_cli('18446744073709551616ns') or {
+		expect_parse_error(err, .invalid_value)
+	}
 	// Repeated units accumulate.
 	assert duration_parse_cli('100ns100ns')!.duration == 200
 
@@ -456,6 +459,10 @@ fn test_parse_window_padding() {
 	assert window_padding_parse_cli('100')! == WindowPadding{100, 100}
 	assert window_padding_parse_cli('100,200')! == WindowPadding{100, 200}
 	assert window_padding_parse_cli(' 100 , 200 ')! == WindowPadding{100, 200}
+	assert window_padding_parse_cli('+1__0,-0')! == WindowPadding{10, 0}
+	window_padding_parse_cli('0x10') or {
+		expect_parse_error(err, .invalid_value)
+	}
 
 	window_padding_parse_cli(none) or {
 		expect_parse_error(err, .value_required)
@@ -579,6 +586,11 @@ fn test_parse_quick_terminal_size() {
 	assert p2.kind == .pixels
 	assert p2.pixels == 200
 	assert v.secondary == none
+
+	v = QuickTerminalSize{}
+	v.parse_cli('+2__0px,-0px')!
+	assert v.primary?.pixels == 20
+	assert v.secondary?.pixels == 0
 
 	v = QuickTerminalSize{}
 	v.parse_cli('50%,200px')!
