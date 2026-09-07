@@ -6710,9 +6710,9 @@ fn (mut self Surface) show_desktop_notification(title string, body string) ! {
 	// Wyhash is used to hash the contents of the desktop notification to limit
 	// how fast identical notifications can be sent sequentially.
 	// Rate limit: at most one notification per second
-	now := time.now()
+	now := time.sys_mono_now()
 	if last := self.app.last_notification_time {
-		if now - last < time.Duration(1 * time.second) {
+		if now - last < u64(time.second) {
 			return
 		}
 	}
@@ -6721,7 +6721,7 @@ fn (mut self Surface) show_desktop_notification(title string, body string) ! {
 
 	if content_hash == self.app.last_notification_digest {
 		if last := self.app.last_notification_time {
-			if now - last < time.Duration(5 * time.second) {
+			if now - last < u64(5 * time.second) {
 				return
 			}
 		}

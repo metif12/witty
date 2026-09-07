@@ -202,7 +202,6 @@ import configpkg
 import datastruct
 import font
 import input
-import time
 
 // SurfaceList is a list of active surfaces managed by the app.
 // TODO: When full apprt.Surface type is available, change to []&apprt.Surface.
@@ -327,7 +326,7 @@ pub mut:
 	// will run out of resources if desktop notifications are sent too fast
 	// and the OS will kill Ghostty.
 	last_notification_digest u64
-	last_notification_time   ?time.Time
+	last_notification_time   ?u64
 
 	// The conditional state of the configuration. See the equivalent field
 	// in the Surface struct for more information. In this case, this applies
