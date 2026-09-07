@@ -5681,9 +5681,16 @@ pub fn (mut m RepeatableCodepointMap) parse_cli(input ?string) ! {
 	if eq_idx < 0 {
 		return perr(ParseError.invalid_value)
 	}
-	ranges := parse_unicode_ranges(value[..eq_idx].trim(' \t'))!
+	mut parser := UnicodeRangeParser{
+		input: value[..eq_idx].trim(' \t')
+	}
 	family := value[eq_idx + 1..].trim(' \t')
-	for range_ in ranges {
+	for {
+		next := parser.next()!
+		if next.done {
+			break
+		}
+		range_ := next.range
 		m.map.add(font.CodepointMapEntry{
 			range: range_
 			descriptor: font.Descriptor{
@@ -5752,7 +5759,15 @@ pub fn (mut m RepeatableClipboardCodepointMap) parse_cli(value ?string) ! {
 			str: replacement_value
 		})
 	}
-	for range_ in parse_unicode_ranges(key)! {
+	mut parser := UnicodeRangeParser{
+		input: key
+	}
+	for {
+		next := parser.next()!
+		if next.done {
+			break
+		}
+		range_ := next.range
 		m.map << terminal.CodepointMap{
 			range_start: range_[0]
 			range_end: range_[1]
@@ -5771,59 +5786,130 @@ pub fn (m RepeatableClipboardCodepointMap) equal(other RepeatableClipboardCodepo
 	return m.map == other.map
 }
 
-fn parse_unicode_ranges(value string) ![][2]u32 {
-	if value.trim(' \t').len == 0 {
+struct UnicodeRangeParser {
+	input string
+mut:
+	i int
+}
+
+struct UnicodeRangeResult {
+	done  bool
+	range [2]u32
+}
+
+fn (mut p UnicodeRangeParser) next() !UnicodeRangeResult {
+	if p.eof() {
+		return UnicodeRangeResult{ done: true }
+	}
+	start := p.parse_codepoint()!
+	if p.eof() {
+		return UnicodeRangeResult{ range: [start, start]! }
+	}
+	p.consume_whitespace()
+	if p.eof() {
+		return UnicodeRangeResult{ range: [start, start]! }
+	}
+	match p.input[p.i] {
+		`,` {
+			p.advance()
+			p.consume_whitespace()
+			if p.eof() {
+				return perr(ParseError.invalid_value)
+			}
+			return UnicodeRangeResult{ range: [start, start]! }
+		}
+		`-` {
+			p.advance()
+			p.consume_whitespace()
+			if p.eof() {
+				return perr(ParseError.invalid_value)
+			}
+			end := p.parse_codepoint()!
+			p.consume_whitespace()
+			if !p.eof() && p.input[p.i] != `,` {
+				return perr(ParseError.invalid_value)
+			}
+			p.advance()
+			p.consume_whitespace()
+			if start > end {
+				return perr(ParseError.invalid_value)
+			}
+			return UnicodeRangeResult{ range: [start, end]! }
+		}
+		else {
+			return perr(ParseError.invalid_value)
+		}
+	}
+}
+
+fn (mut p UnicodeRangeParser) consume_whitespace() {
+	for !p.eof() && (p.input[p.i] == ` ` || p.input[p.i] == `\t`) {
+		p.advance()
+	}
+}
+
+fn (mut p UnicodeRangeParser) parse_codepoint() !u32 {
+	if p.eof() || p.input[p.i] != `U` {
 		return perr(ParseError.invalid_value)
 	}
-	mut result := [][2]u32{}
-	for raw_part in value.split(',') {
-		part := raw_part.trim(' \t')
-		if part.len == 0 {
-			return perr(ParseError.invalid_value)
-		}
-		body := if part.starts_with('U+') {
-			part[2..]
-		} else {
-			return perr(ParseError.invalid_value)
-		}
-		hyphen := body.index_u8(`-`)
-		if hyphen < 0 {
-			cp := parse_unicode_codepoint(part)!
-			result << [cp, cp]!
-			continue
-		}
-		start_text := body[..hyphen].trim(' \t')
-		mut end_text := body[hyphen + 1..].trim(' \t')
-		if !end_text.starts_with('U+') {
-			return perr(ParseError.invalid_value)
-		}
-		end_text = end_text[2..]
-		start := parse_unicode_hex(start_text)!
-		end := parse_unicode_hex(end_text)!
-		if start > end {
-			return perr(ParseError.invalid_value)
-		}
-		result << [start, end]!
+	p.advance()
+	if p.eof() || p.input[p.i] != `+` {
+		return perr(ParseError.invalid_value)
 	}
-	return result
+	p.advance()
+	if p.eof() {
+		return perr(ParseError.invalid_value)
+	}
+	start := p.i
+	for !p.eof() {
+		current := p.input[p.i]
+		if !((current >= `0` && current <= `9`) || (current >= `A` && current <= `F`)
+			|| (current >= `a` && current <= `f`)) {
+			break
+		}
+		p.advance()
+	}
+	if start == p.i {
+		return perr(ParseError.invalid_value)
+	}
+	return parse_unicode_hex(p.input[start..p.i])
+}
+
+fn (mut p UnicodeRangeParser) advance() {
+	p.i++
+}
+
+fn (p &UnicodeRangeParser) eof() bool {
+	return p.i >= p.input.len
 }
 
 fn parse_unicode_codepoint(value string) !u32 {
 	if !value.starts_with('U+') {
 		return perr(ParseError.invalid_value)
 	}
-	return parse_unicode_hex(value[2..].trim(' \t'))
+	return parse_unicode_hex(value[2..])
 }
 
 fn parse_unicode_hex(value string) !u32 {
 	if value.len == 0 {
 		return perr(ParseError.invalid_value)
 	}
-	cp := strconv.parse_uint(value, 16, 32) or { return perr(ParseError.invalid_value) }
-	if cp > 0x1fffff {
-		return perr(ParseError.invalid_value)
+	mut cp := u32(0)
+	for ch in value {
+		digit := match ch {
+			`0`...`9` { u32(ch - `0`) }
+			`a`...`f` { u32(ch - `a`) + 10 }
+			`A`...`F` { u32(ch - `A`) + 10 }
+			else {
+				return perr(ParseError.invalid_value)
+			}
+		}
+		if cp > (u32(0x1fffff) - digit) / 16 {
+			return perr(ParseError.invalid_value)
+		}
+		cp = cp * 16 + digit
 	}
-	return u32(cp)
+	return cp
 }
 
 // ============================================================

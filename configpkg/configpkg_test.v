@@ -2071,6 +2071,32 @@ fn test_clipboard_codepoint_map_parse() {
 	}
 }
 
+fn test_unicode_range_parser_matches_source_scanning() {
+	mut empty := RepeatableCodepointMap{}
+	empty.parse_cli('=Font')!
+	assert empty.map.entries.len == 0
+
+	for value in ['U+ 0001=Font', 'U+0_001=Font', 'U+0001-U+ 0002=Font'] {
+		mut invalid := RepeatableCodepointMap{}
+		invalid.parse_cli(value) or {
+			expect_parse_error(err, .invalid_value)
+			continue
+		}
+		assert false, 'expected invalid range for ${value}'
+	}
+
+	// The source mutates the repeatable map after every parsed range, so an
+	// error in a later range leaves earlier entries in place.
+	mut partial := RepeatableCodepointMap{}
+	partial.parse_cli('U+0001,U+ZZZZ=Font') or {
+		expect_parse_error(err, .invalid_value)
+		assert partial.map.entries.len == 1
+		assert partial.map.entries[0].range == [u32(1), u32(1)]!
+		return
+	}
+	assert false, 'expected invalid second range'
+}
+
 fn test_load_string_applies_selection_and_clipboard_maps() {
 	mut cfg := Config.default_config()
 	cfg.load_string('
