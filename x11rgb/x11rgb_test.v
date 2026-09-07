@@ -6,5 +6,8 @@ fn test_complete_x11_color_lookup() {
 	assert get('medium spring green')? == RGB{ r: 0, g: 250, b: 154 }
 	assert get('FoReStGReEn')? == RGB{ r: 34, g: 139, b: 34 }
 	assert get('lawngreen')? == RGB{ r: 124, g: 252, b: 0 }
+	// Ghostty's static map folds ASCII bytes only, not Unicode lookalikes.
+	assert get('Khaki') == none
+	assert get('İvory') == none
 	assert entries().len > 700
 }

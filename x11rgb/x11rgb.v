@@ -1,5 +1,7 @@
 module x11rgb
 
+import cli_args
+
 // The canonical X.Org rgb.txt data shipped by Ghostty. This module is kept
 // dependency-neutral so both the terminal and OSC modules can use the same
 // table without introducing a module cycle.
@@ -21,23 +23,46 @@ pub:
 pub fn entries() []Entry {
 	mut result := []Entry{}
 	for line in rgb_data.split_into_lines() {
-		if line.len < 13 {
+		if line.len == 0 {
 			continue
 		}
-		name := line[12..].trim_space()
-		if name.len == 0 {
-			continue
+		r := cli_args.parse_unsigned_int_base(line[0..3].trim(' '), 8, 10) or {
+			panic(err)
+		}
+		g := cli_args.parse_unsigned_int_base(line[4..7].trim(' '), 8, 10) or {
+			panic(err)
+		}
+		b := cli_args.parse_unsigned_int_base(line[8..11].trim(' '), 8, 10) or {
+			panic(err)
 		}
 		result << Entry{
-			name: name
+			name: line[12..].trim(' \t\n')
 			rgb: RGB{
-				r: u8(line[0..3].trim_space().int())
-				g: u8(line[4..7].trim_space().int())
-				b: u8(line[8..11].trim_space().int())
+				r: u8(r)
+				g: u8(g)
+				b: u8(b)
 			}
 		}
 	}
 	return result
+}
+
+fn ascii_lower(ch u8) u8 {
+	return if ch >= `A` && ch <= `Z` { ch + (`a` - `A`) } else { ch }
+}
+
+// This is std.static_string_map.eqlAsciiIgnoreCase, whose caller only invokes
+// it for keys with equal byte lengths.
+fn eql_ascii_ignore_case(a string, b string) bool {
+	if a.len != b.len {
+		return false
+	}
+	for i in 0 .. a.len {
+		if ascii_lower(a[i]) != ascii_lower(b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // get performs the ASCII-insensitive lookup used by Ghostty's static map.
@@ -45,9 +70,8 @@ pub fn get(name string) ?RGB {
 	if name.len == 0 {
 		return none
 	}
-	wanted := name.to_lower()
 	for entry in entries() {
-		if entry.name.to_lower() == wanted {
+		if eql_ascii_ignore_case(entry.name, name) {
 			return entry.rgb
 		}
 	}
