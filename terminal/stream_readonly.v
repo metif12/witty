@@ -366,7 +366,7 @@ pub fn (mut self ReadonlyHandler) vt(event StreamEvent) ! {
 			self.terminal.screens.active.kitty_keyboard.push(u32(event.payload.kitty_flags))
 		}
 		.kitty_keyboard_pop {
-			self.terminal.screens.active.kitty_keyboard.pop(u8(event.payload.num))
+			self.terminal.screens.active.kitty_keyboard.pop(usize(event.payload.num))
 		}
 		.kitty_keyboard_set {
 			self.terminal.screens.active.kitty_keyboard.set(.set_, u32(event.payload.kitty_flags))

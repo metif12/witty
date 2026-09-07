@@ -132,7 +132,7 @@ pub fn (mut self KeyFlagStack) push(flags KeyFlags) {
 
 // Pop `n` entries from the stack. This will just wrap around
 // if `n` is greater than the amount in the stack.
-pub fn (mut self KeyFlagStack) pop(n int) {
+pub fn (mut self KeyFlagStack) pop(n usize) {
 	// If n is more than our length then we just reset the stack.
 	// This also avoids a DoS vector where a malicious client
 	// could send a huge number of pop commands to waste cpu.

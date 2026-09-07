@@ -1667,19 +1667,27 @@ pub mut:
 
 // Push a new set of flags onto the stack.
 pub fn (mut self KeyFlagStack) push(new_flags u32) {
-	if self.idx < 7 {
-		self.idx += 1
-	}
+	// Overflow and wrap around if we're full, which evicts
+	// the oldest entry.
+	self.idx = (self.idx + 1) % 8
 	self.flags[self.idx] = new_flags
 }
 
-// Pop n sets of flags from the stack (minimum 1 entry always remains).
-pub fn (mut self KeyFlagStack) pop(n u8) {
-	count := if n == 0 { u8(1) } else { n }
-	for _ in 0 .. int(count) {
-		if self.idx > 0 {
-			self.idx -= 1
-		}
+// Pop `n` entries from the stack. This will just wrap around
+// if `n` is greater than the amount in the stack.
+pub fn (mut self KeyFlagStack) pop(n usize) {
+	// If n is more than our length then we just reset the stack.
+	// This also avoids a DoS vector where a malicious client
+	// could send a huge number of pop commands to waste cpu.
+	if n >= 8 {
+		self.idx = 0
+		self.flags = [8]u32{}
+		return
+	}
+
+	for _ in 0 .. n {
+		self.flags[self.idx] = 0
+		self.idx = if self.idx == 0 { u8(7) } else { self.idx - 1 }
 	}
 }
 

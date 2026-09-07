@@ -614,6 +614,16 @@ fn test_stream_handler_kitty_keyboard() {
 		payload: terminal.ActionPayload{ num: 1 }
 	})
 	assert handler.terminal.screens.active.kitty_keyboard.current() == 0
+
+	// The full u16 count must reach FlagStack.pop; narrowing to u8 would
+	// turn 256 into zero instead of resetting the stack.
+	handler.terminal.screens.active.kitty_keyboard.set(.set_, 3)
+	handler.terminal.screens.active.kitty_keyboard.push(5)
+	handler.vt(terminal.StreamEvent{
+		key: .kitty_keyboard_pop
+		payload: terminal.ActionPayload{ num: 256 }
+	})
+	assert handler.terminal.screens.active.kitty_keyboard.current() == 0
 }
 
 // Test set_mode for mouse events.

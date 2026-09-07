@@ -3452,3 +3452,33 @@ fn test_screen_dump_string_bounded_region() {
 	}
 	assert result == 'BCDE\nFGH'
 }
+
+fn test_key_flag_stack_wraps_at_capacity() {
+	mut stack := KeyFlagStack{}
+	for value in 1 .. 9 {
+		stack.push(u32(value))
+	}
+	assert stack.idx == 0
+	assert stack.current() == 8
+
+	stack.pop(1)
+	assert stack.idx == 7
+	assert stack.current() == 7
+}
+
+fn test_key_flag_stack_pop_zero_is_noop() {
+	mut stack := KeyFlagStack{}
+	stack.push(5)
+	stack.pop(0)
+	assert stack.current() == 5
+}
+
+fn test_key_flag_stack_large_pop_resets_all_entries() {
+	mut stack := KeyFlagStack{}
+	stack.set(.set_, 3)
+	stack.push(5)
+	stack.pop(256)
+	assert stack.idx == 0
+	assert stack.current() == 0
+	assert stack.flags == [8]u32{}
+}
