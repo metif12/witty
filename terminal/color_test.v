@@ -15,6 +15,10 @@ fn palettes_equal(a [256]RGB, b [256]RGB) bool {
 	return true
 }
 
+fn color_name_from_u8(value u8) ColorName {
+	return unsafe { ColorName(value) }
+}
+
 // ============================================================
 // Palette: default
 // ============================================================
@@ -30,6 +34,11 @@ fn test_palette_default() {
 			&& default_palette[i].g == expected.g
 			&& default_palette[i].b == expected.b
 	}
+}
+
+fn test_color_name_unnamed_has_no_default() {
+	assert color_name_default(color_name_from_u8(16)) == none
+	assert color_name_default(color_name_from_u8(255)) == none
 }
 
 // ============================================================
@@ -162,6 +171,11 @@ fn test_rgb_parse_x11_forest_green_with_spaces() {
 		return
 	}
 	assert c.r == 34 && c.g == 139 && c.b == 34
+}
+
+fn test_rgb_parse_x11_trims_only_spaces() {
+	assert RGB.parse('\tForest Green\t') == none
+	assert RGB.parse('\nForest Green\n') == none
 }
 
 fn test_rgb_parse_invalid_format() {

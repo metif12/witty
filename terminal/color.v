@@ -250,6 +250,9 @@ pub fn (self ColorName) cval() u8 {
 // color_name_default returns the default RGB value for a named color.
 // Returns none for unnamed values (indices >= 16).
 pub fn color_name_default(name ColorName) ?RGB {
+	if u8(name) >= 16 {
+		return none
+	}
 	return match name {
 		.black { RGB{ r: 0x1d, g: 0x1f, b: 0x21 } }
 		.red { RGB{ r: 0xcc, g: 0x66, b: 0x66 } }
@@ -412,7 +415,9 @@ fn from_hex(value string) ?u8 {
 		2 { u64(0xff) } // maxInt(u8) = 255
 		3 { u64(0xfff) } // maxInt(u12) = 4095
 		4 { u64(0xffff) } // maxInt(u16) = 65535
-		else { return none }
+		else {
+			return none
+		}
 	}
 
 	return u8(color * 255 / divisor)
@@ -482,7 +487,7 @@ pub fn RGB.parse(value string) ?RGB {
 	// Check for X11 named colors. We allow whitespace around the edges
 	// of the color because Kitty allows whitespace. This is not part of
 	// any spec I could find.
-	trimmed := value.trim_space()
+	trimmed := value.trim(' ')
 	x11 := x11_color_get(trimmed)
 	if x11 != none {
 		return x11
