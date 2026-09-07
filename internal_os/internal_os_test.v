@@ -313,6 +313,18 @@ fn test_desktop_environment_matches_platform() {
 	}
 }
 
+fn test_parse_pid_matches_zig_signed_integer_rules() {
+	assert parse_pid('0') or { -1 } == 0
+	assert parse_pid('+42') or { -1 } == 42
+	assert parse_pid('-42') or { 0 } == -42
+	assert parse_pid('1__2') or { -1 } == 12
+	assert parse_pid('2147483647') or { -1 } == 2147483647
+	assert parse_pid('-2147483648') or { 0 } == -2147483647 - 1
+	for invalid in ['', '+', '-', '_1', '1_', '1x', '2147483648', '-2147483649'] {
+		assert parse_pid(invalid) == none
+	}
+}
+
 fn test_desktop_environment_linux_and_bsd_detection() {
 	$if linux || freebsd {
 		old_session := os.getenv_opt('XDG_SESSION_DESKTOP')
