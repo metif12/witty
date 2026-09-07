@@ -9,9 +9,9 @@ pub enum Backend {
 
 // Returns the default backend for the current platform.
 pub fn Backend.default_backend() Backend {
-	// On macOS/iOS, Metal is preferred.
-	// On other platforms, OpenGL is the default.
-	$if macos {
+	$if wasm32 {
+		return .webgl
+	} $else $if macos {
 		return .metal
 	} $else $if ios {
 		return .metal
