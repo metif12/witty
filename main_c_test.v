@@ -58,6 +58,15 @@ fn test_cli_help_matches_translated_command() {
 	assert help.ends_with('where `<action>` is one of actions listed above.\n')
 }
 
+fn test_standalone_osc7_pwd_requires_exact_local_hostname() {
+	assert parse_osc7_pwd('file://localhost/tmp/translated%20path') or { '' } == '/tmp/translated path'
+	assert parse_osc7_pwd('kitty-shell-cwd://localhost/tmp/raw%20path') or { '' } == '/tmp/raw%20path'
+	assert parse_osc7_pwd('file:///tmp/no-host') == none
+	assert parse_osc7_pwd('file://LOCALHOST/tmp/wrong-case') == none
+	assert parse_osc7_pwd('file://127.0.0.1/tmp/loopback') == none
+	assert parse_osc7_pwd('file://[::1]/tmp/loopback') == none
+}
+
 fn test_config_c_api_lifecycle_clone_and_primitive_getters() {
 	mut config := ghostty_config_new() or { panic('config allocation failed') }
 	defer {

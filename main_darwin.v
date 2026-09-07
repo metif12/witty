@@ -1,6 +1,7 @@
 module main
 
 import input
+import internal_os
 import macos
 import os
 import pty
@@ -26,8 +27,6 @@ fn C.close(fd int) int
 fn C.read(fd int, buf voidptr, count usize) int
 
 fn C.write(fd int, buf voidptr, count usize) int
-
-fn C.gethostname(name &char, len usize) int
 
 fn C.kill(pid int, sig int) int
 
@@ -188,45 +187,6 @@ fn default_tab_title() string {
 	return 'Witty'
 }
 
-fn local_hostname_lower() string {
-	mut buf := [256]u8{}
-	if C.gethostname(&char(&buf[0]), usize(buf.len - 1)) != 0 {
-		return ''
-	}
-	mut n := 0
-	for n < buf.len && buf[n] != 0 {
-		n++
-	}
-	if n == 0 {
-		return ''
-	}
-	return unsafe { tos(&buf[0], n) }.to_lower()
-}
-
-fn is_local_osc7_host(host string) bool {
-	host_l := host.to_lower()
-	if host_l.len == 0 || host_l == 'localhost' || host_l == '127.0.0.1' || host_l == '::1' {
-		return true
-	}
-	local := local_hostname_lower()
-	if local.len == 0 {
-		// If hostname lookup fails, prefer not to drop the update.
-		return true
-	}
-	if host_l == local {
-		return true
-	}
-	dot_host := host_l.index_u8(`.`)
-	if dot_host > 0 && host_l[..dot_host] == local {
-		return true
-	}
-	dot_local := local.index_u8(`.`)
-	if dot_local > 0 && host_l == local[..dot_local] {
-		return true
-	}
-	return false
-}
-
 fn hex_nibble(ch u8) int {
 	if ch >= `0` && ch <= `9` {
 		return int(ch - `0`)
@@ -282,7 +242,7 @@ fn parse_osc7_pwd(url string) ?string {
 		host = rest[..slash]
 		path = rest[slash..]
 	}
-	if host.len > 0 && !is_local_osc7_host(host) {
+	if host.len == 0 || !(internal_os.hostname_is_local(host) or { false }) {
 		return none
 	}
 	if path.len == 0 {
