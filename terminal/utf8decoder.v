@@ -1,100 +1,442 @@
 module terminal
 
-// UTF8Decoder decodes UTF-8 byte sequences one byte at a time.
-// Based on Bjoern Hoehrmann's DFA-based approach.
+// DFA-based non-allocating error-replacing UTF-8 decoder.
 //
-// The decoder accepts bytes individually and produces codepoints.
-// Invalid sequences produce the replacement character U+FFFD.
+// This implementation is based largely on the excellent work of
+// Bjoern Hoehrmann, with slight modifications to support error-
+// replacement.
+//
+// For details on Bjoern's DFA-based UTF-8 decoder, see
+// http://bjoern.hoehrmann.de/utf-8/decoder/dfa (MIT licensed)
+
+const utf8_char_classes = [
+	u8(0),
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	9,
+	9,
+	9,
+	9,
+	9,
+	9,
+	9,
+	9,
+	9,
+	9,
+	9,
+	9,
+	9,
+	9,
+	9,
+	9,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	7,
+	8,
+	8,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	2,
+	10,
+	3,
+	3,
+	3,
+	3,
+	3,
+	3,
+	3,
+	3,
+	3,
+	3,
+	3,
+	3,
+	4,
+	3,
+	3,
+	11,
+	6,
+	6,
+	6,
+	5,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+]!
+
+const utf8_transitions = [
+	u8(0),
+	12,
+	24,
+	36,
+	60,
+	96,
+	84,
+	12,
+	12,
+	12,
+	48,
+	72,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	0,
+	12,
+	12,
+	12,
+	12,
+	12,
+	0,
+	12,
+	0,
+	12,
+	12,
+	12,
+	24,
+	12,
+	12,
+	12,
+	12,
+	12,
+	24,
+	12,
+	24,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	24,
+	12,
+	12,
+	12,
+	12,
+	12,
+	24,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	24,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	36,
+	12,
+	36,
+	12,
+	12,
+	12,
+	36,
+	12,
+	12,
+	12,
+	12,
+	12,
+	36,
+	12,
+	36,
+	12,
+	12,
+	12,
+	36,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+	12,
+]!
+
+const utf8_accept_state = u8(0)
+const utf8_reject_state = u8(12)
+
 pub struct UTF8Decoder {
 mut:
-	// Current state: 0 = accept (ground), >0 = continuation bytes remaining
+	// This is where we accumulate our current codepoint.
+	accumulator u32
+	// The internal state of the DFA.
 	state u8
-	// Accumulated codepoint value
-	acc u32
-	// Minimum valid value for current sequence (overlong detection)
-	min_val u32
 }
 
 // UTF8DecodeResult is the result of processing a single byte.
 pub struct UTF8DecodeResult {
 pub:
-	// The decoded codepoint, if a complete sequence was formed.
 	codepoint ?u32
-	// Whether the input byte was consumed.
-	consumed bool
+	consumed  bool
 }
 
-// next processes a single byte and returns a decode result.
+// next takes the next byte in the UTF-8 sequence and emits a result containing:
+// - The codepoint that was generated, if there is one.
+// - A boolean that indicates whether the provided byte was consumed.
 //
-// If a codepoint is produced, it will be in the codepoint field.
-// The consumed field indicates whether the byte was accepted. If consumed
-// is false, the caller should retry with the same byte (the decoder has
-// been reset due to an invalid continuation byte).
+// The only case where the byte is not consumed is if an ill-formed sequence is
+// reached, in which case a replacement character will be emitted and the byte
+// will not be consumed.
+//
+// If the byte is not consumed, the caller is responsible for calling again
+// with the same byte before continuing.
 pub fn (mut self UTF8Decoder) next(byte u8) UTF8DecodeResult {
-	if self.state == 0 {
-		// Ground state - start of new sequence
-		if byte < 0x80 {
-			// ASCII
-			return UTF8DecodeResult{
-				codepoint: u32(byte)
-				consumed: true
-			}
-		}
-		if byte & 0xE0 == 0xC0 {
-			// 2-byte sequence start (110xxxxx)
-			self.state = 1
-			self.acc = u32(byte & 0x1F)
-			self.min_val = 0x80
-			return UTF8DecodeResult{ consumed: true }
-		}
-		if byte & 0xF0 == 0xE0 {
-			// 3-byte sequence start (1110xxxx)
-			self.state = 2
-			self.acc = u32(byte & 0x0F)
-			self.min_val = 0x800
-			return UTF8DecodeResult{ consumed: true }
-		}
-		if byte & 0xF8 == 0xF0 && byte <= 0xF4 {
-			// 4-byte sequence start (11110xxx), max F4 for U+10FFFF
-			self.state = 3
-			self.acc = u32(byte & 0x07)
-			self.min_val = 0x10000
-			return UTF8DecodeResult{ consumed: true }
-		}
-		// Invalid start byte (0x80-0xBF, 0xF5-0xFF)
+	char_class := utf8_char_classes[int(byte)]
+	initial_state := self.state
+
+	if self.state != utf8_accept_state {
+		self.accumulator <<= 6
+		self.accumulator |= u32(byte & 0x3f)
+	} else {
+		self.accumulator = (u32(0xff) >> char_class) & u32(byte)
+	}
+
+	self.state = utf8_transitions[int(self.state + char_class)]
+
+	if self.state == utf8_accept_state {
+		codepoint := self.accumulator
+		self.accumulator = 0
 		return UTF8DecodeResult{
-			codepoint: 0xFFFD
+			codepoint: codepoint
 			consumed: true
 		}
-	}
-
-	// Continuation byte expected (10xxxxxx)
-	if byte & 0xC0 == 0x80 {
-		self.acc = (self.acc << 6) | u32(byte & 0x3F)
-		self.state -= 1
-		if self.state == 0 {
-			cp := self.acc
-			// Reject overlong encodings, surrogates, and out-of-range
-			if cp < self.min_val || (cp >= 0xD800 && cp <= 0xDFFF) || cp > 0x10FFFF {
-				return UTF8DecodeResult{
-					codepoint: 0xFFFD
-					consumed: true
-				}
-			}
-			return UTF8DecodeResult{
-				codepoint: cp
-				consumed: true
-			}
+	} else if self.state == utf8_reject_state {
+		self.accumulator = 0
+		self.state = utf8_accept_state
+		return UTF8DecodeResult{
+			codepoint: 0xfffd
+			consumed: initial_state == utf8_accept_state
 		}
-		return UTF8DecodeResult{ consumed: true }
 	}
 
-	// Not a valid continuation byte - sequence is broken.
-	// Emit replacement character and signal that the byte was NOT consumed,
-	// so the caller can retry with this byte as a potential start byte.
-	self.state = 0
 	return UTF8DecodeResult{
-		codepoint: 0xFFFD
-		consumed: false
+		consumed: true
 	}
 }
