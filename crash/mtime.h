@@ -1,6 +1,7 @@
 #ifndef WITTY_CRASH_MTIME_H
 #define WITTY_CRASH_MTIME_H
 
+#include <stddef.h>
 #include <stdint.h>
 #include <sys/stat.h>
 
@@ -24,6 +25,39 @@ static inline int witty_crash_file_mtime_ns(
 #endif
 #endif
     return 0;
+}
+
+typedef struct witty_crash_thread_state_s {
+    int active;
+    int kind;
+    void *surface;
+} witty_crash_thread_state_s;
+
+#if defined(_MSC_VER)
+static __declspec(thread) witty_crash_thread_state_s witty_crash_thread_state;
+#elif defined(__cplusplus)
+static thread_local witty_crash_thread_state_s witty_crash_thread_state;
+#else
+static _Thread_local witty_crash_thread_state_s witty_crash_thread_state;
+#endif
+
+static inline void witty_crash_thread_state_set(int kind, void *surface) {
+    witty_crash_thread_state.active = 1;
+    witty_crash_thread_state.kind = kind;
+    witty_crash_thread_state.surface = surface;
+}
+
+static inline void witty_crash_thread_state_clear(void) {
+    witty_crash_thread_state.active = 0;
+    witty_crash_thread_state.kind = 0;
+    witty_crash_thread_state.surface = NULL;
+}
+
+static inline int witty_crash_thread_state_get(int *kind, void **surface) {
+    if (!witty_crash_thread_state.active) return 0;
+    *kind = witty_crash_thread_state.kind;
+    *surface = witty_crash_thread_state.surface;
+    return 1;
 }
 
 #endif

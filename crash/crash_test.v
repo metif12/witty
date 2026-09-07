@@ -2,6 +2,52 @@ module crash
 
 import os
 
+fn read_thread_state(result chan ThreadState) {
+	set_thread_state(ThreadState{
+		kind: .io
+		surface: voidptr(usize(0x5678))
+	})
+	result <- thread_state() or { ThreadState{} }
+	clear_thread_state()
+}
+
+fn test_thread_state_is_installed_and_cleared() {
+	state := ThreadState{
+		kind: .renderer
+		surface: voidptr(usize(0x1234))
+	}
+	set_thread_state(state)
+	stored := thread_state() or {
+		assert false, 'expected thread state'
+		return
+	}
+	assert stored.kind == .renderer
+	assert stored.surface == state.surface
+	clear_thread_state()
+	assert thread_state() == none
+}
+
+fn test_thread_state_is_thread_local() {
+	set_thread_state(ThreadState{
+		kind: .main
+		surface: voidptr(usize(0x1234))
+	})
+	result := chan ThreadState{ cap: 1 }
+	worker := spawn read_thread_state(result)
+	worker_state := <-result
+	worker.wait()
+
+	assert worker_state.kind == .io
+	assert worker_state.surface == voidptr(usize(0x5678))
+	main_state := thread_state() or {
+		assert false, 'expected main thread state'
+		return
+	}
+	assert main_state.kind == .main
+	assert main_state.surface == voidptr(usize(0x1234))
+	clear_thread_state()
+}
+
 fn test_crash_dir_reports_regular_files_and_missing_directory() {
 	root := os.join_path(os.temp_dir(), 'witty-crash-dir-${os.getpid()}')
 	os.rmdir_all(root) or {}

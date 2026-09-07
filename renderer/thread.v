@@ -180,6 +180,7 @@ module renderer
 // --- Original Ghostty Comments End: src/renderer/Thread.zig
 
 import configpkg
+import crash
 import internal_os
 import sync
 import time
@@ -406,8 +407,17 @@ pub fn (mut self RendererThread) thread_main() {
 fn (mut self RendererThread) thread_main_inner() ! {
 	$if macos {
 		internal_os.set_thread_name('renderer')
-		self.set_qos_class()
 	}
+
+	crash.set_thread_state(crash.ThreadState{
+		kind: .renderer
+		surface: self.renderer.surface_mailbox.user_data
+	})
+	defer {
+		crash.clear_thread_state()
+	}
+
+	self.set_qos_class()
 
 	// Run the renderer lifecycle hooks on the renderer thread. The loop hook
 	// installs platform event sources such as macOS CVDisplayLink.

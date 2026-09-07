@@ -6,16 +6,46 @@ import os
 
 fn C.witty_crash_file_mtime_ns(path &char, value &i64) int
 
-// Sentry provides crash metadata tracking.
-pub struct Sentry {
-pub mut:
-	thread_state ?ThreadState
+fn C.witty_crash_thread_state_set(kind int, surface voidptr)
+
+fn C.witty_crash_thread_state_clear()
+
+fn C.witty_crash_thread_state_get(kind &int, surface &voidptr) int
+
+// ThreadState carries the same per-thread context Ghostty attaches to crash
+// reports. The surface stays opaque here to avoid a crash -> core -> crash
+// import cycle.
+pub struct ThreadState {
+pub:
+	kind    ThreadType
+	surface voidptr
 }
 
-pub struct ThreadState {}
+pub enum ThreadType {
+	main
+	renderer
+	io
+}
 
-// Global sentry instance.
-pub const sentry = &Sentry{}
+pub fn set_thread_state(state ThreadState) {
+	C.witty_crash_thread_state_set(int(state.kind), state.surface)
+}
+
+pub fn clear_thread_state() {
+	C.witty_crash_thread_state_clear()
+}
+
+pub fn thread_state() ?ThreadState {
+	mut kind := 0
+	mut surface := voidptr(unsafe { nil })
+	if C.witty_crash_thread_state_get(&kind, &surface) == 0 {
+		return none
+	}
+	return ThreadState{
+		kind: unsafe { ThreadType(kind) }
+		surface: surface
+	}
+}
 
 // Process-wide crash reporter lifecycle. The pinned Ghostty implementation
 // returns immediately when its optional Sentry build flag is disabled. Witty

@@ -7,6 +7,7 @@ module termio
 import apprt
 import build_meta
 import configpkg
+import crash
 import global_state
 import internal_os
 import os
@@ -850,6 +851,23 @@ pub fn thread_main_posix(fd int, quit int, io &Termio) {
 	// Always close our end of the pipe when we exit.
 	defer {
 		C.close(quit)
+	}
+
+	$if macos {
+		internal_os.set_thread_name('io-reader')
+	}
+
+	has_crash_state := io != unsafe { nil }
+	if has_crash_state {
+		crash.set_thread_state(crash.ThreadState{
+			kind: .io
+			surface: io.surface_mailbox.surface
+		})
+	}
+	defer {
+		if has_crash_state {
+			crash.clear_thread_state()
+		}
 	}
 
 	// Take a mutable alias to the Termio so we can call process_output.

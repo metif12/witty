@@ -1466,6 +1466,7 @@ import highlight
 import renderer as rendererpkg
 import termio as termiopkg
 import unicode
+import crash
 
 // Minimum window size in cells.
 const min_window_width_cells = u32(10)
@@ -3566,6 +3567,11 @@ fn (mut self Surface) queue_renderer_message(msg rendererpkg.RendererMessage) ! 
 
 // size_callback is called when the surface size changes.
 pub fn (mut self Surface) size_callback(width u32, height u32) ! {
+	crash.set_thread_state(self.crash_thread_state())
+	defer {
+		crash.clear_thread_state()
+	}
+
 	new_screen := ScreenSize{
 		width: width
 		height: height
@@ -3608,6 +3614,11 @@ fn (mut self Surface) balance_padding_if_needed() {
 
 // preedit_callback sets the preedit state for character input (dead keys, IME).
 pub fn (mut self Surface) preedit_callback(preedit ?string) ! {
+	crash.set_thread_state(self.crash_thread_state())
+	defer {
+		crash.clear_thread_state()
+	}
+
 	locked := self.renderer_state.mutex != unsafe { nil }
 	if locked {
 		self.renderer_state.mutex.lock()
@@ -3708,6 +3719,11 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 	mut event := event_orig
 	if self.config.key_remaps.is_remapped(event_orig.mods) {
 		event.mods = self.config.key_remaps.apply(event_orig.mods)
+	}
+
+	crash.set_thread_state(self.crash_thread_state())
+	defer {
+		crash.clear_thread_state()
 	}
 
 	// Clone the event before any key processing so the inspector records the
@@ -3877,11 +3893,21 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 
 // text_callback sends text as-is to the terminal (like a paste).
 pub fn (mut self Surface) text_callback(text string) ! {
+	crash.set_thread_state(self.crash_thread_state())
+	defer {
+		crash.clear_thread_state()
+	}
+
 	self.complete_clipboard_paste(text, true)!
 }
 
 // occlusion_callback is called when the surface visibility changes.
 pub fn (mut self Surface) occlusion_callback(visible bool) ! {
+	crash.set_thread_state(self.crash_thread_state())
+	defer {
+		crash.clear_thread_state()
+	}
+
 	self.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.VisibleMessage{
 		visible: visible
 	}))!
@@ -3890,6 +3916,11 @@ pub fn (mut self Surface) occlusion_callback(visible bool) ! {
 
 // focus_callback is called when the surface gains or loses focus.
 pub fn (mut self Surface) focus_callback(focused bool) ! {
+	crash.set_thread_state(self.crash_thread_state())
+	defer {
+		crash.clear_thread_state()
+	}
+
 	if self.focused == focused {
 		return
 	}
@@ -3977,11 +4008,21 @@ fn (mut self Surface) release_modifier_on_focus_loss(event KeyEvent, original_ke
 
 // refresh_callback schedules a render.
 pub fn (mut self Surface) refresh_callback() ! {
+	crash.set_thread_state(self.crash_thread_state())
+	defer {
+		crash.clear_thread_state()
+	}
+
 	self.queue_render()!
 }
 
 // scroll_callback handles mouse scroll events.
 pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, precision bool) ! {
+	crash.set_thread_state(self.crash_thread_state())
+	defer {
+		crash.clear_thread_state()
+	}
+
 	if self.mouse.hidden {
 		self.show_mouse()
 	}
@@ -4085,6 +4126,11 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, precision bool) ! 
 
 // content_scale_callback is called when the DPI content scale changes.
 pub fn (mut self Surface) content_scale_callback(content_scale ContentScale) ! {
+	crash.set_thread_state(self.crash_thread_state())
+	defer {
+		crash.clear_thread_state()
+	}
+
 	x_dpi := content_scale.x * default_dpi
 	y_dpi := content_scale.y * default_dpi
 
@@ -4109,6 +4155,11 @@ pub fn (mut self Surface) content_scale_callback(content_scale ContentScale) ! {
 
 // mouse_button_callback handles mouse button press/release events.
 pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonState, button input.MouseButton, mods input.Mods) !bool {
+	crash.set_thread_state(self.crash_thread_state())
+	defer {
+		crash.clear_thread_state()
+	}
+
 	// If we have an inspector, we always queue a render.
 	if self.inspector != none {
 		defer {
@@ -4516,6 +4567,11 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 
 // cursor_pos_callback handles cursor position / mouse move events.
 pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) ! {
+	crash.set_thread_state(self.crash_thread_state())
+	defer {
+		crash.clear_thread_state()
+	}
+
 	// Update mods if provided
 	if m := mods {
 		self.mods_changed(m)
@@ -4635,6 +4691,11 @@ pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) !
 
 // mouse_pressure_callback handles force touch events.
 pub fn (mut self Surface) mouse_pressure_callback(stage MousePressureStage, pressure f64) ! {
+	crash.set_thread_state(self.crash_thread_state())
+	defer {
+		crash.clear_thread_state()
+	}
+
 	if self.mouse.pressure_stage == stage {
 		return
 	}
@@ -4670,6 +4731,11 @@ pub fn (mut self Surface) mouse_pressure_callback(stage MousePressureStage, pres
 
 // color_scheme_callback is called when the color scheme changes (light/dark).
 pub fn (mut self Surface) color_scheme_callback(scheme ColorScheme) ! {
+	crash.set_thread_state(self.crash_thread_state())
+	defer {
+		crash.clear_thread_state()
+	}
+
 	new_scheme := match scheme {
 		.light { Theme.light }
 		.dark { Theme.dark }
@@ -6208,6 +6274,13 @@ fn (mut self Surface) notify_config_conditional_state() {
 		target: &self
 		reload_config_soft: true
 	}) or {}
+}
+
+fn (self &Surface) crash_thread_state() crash.ThreadState {
+	return crash.ThreadState{
+		kind: .main
+		surface: voidptr(self)
+	}
 }
 
 fn (mut self Surface) present_surface() ! {

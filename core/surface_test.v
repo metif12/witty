@@ -9,12 +9,20 @@ import search as searchpkg
 import termio as termiopkg
 import time
 import osc
+import crash
 
 fn test_desktop_notification_digest_matches_source_wyhash_stream() {
 	// Ghostty updates one Wyhash state with title and then body, which is
 	// equivalent to hashing their concatenated bytes.
 	assert desktop_notification_digest('Compiler', 'Build failed') == u64(0x7bd2dcc36d0783fa)
 	assert desktop_notification_digest('', '') == u64(0x0409638ee2bde459)
+}
+
+fn test_surface_crash_thread_state_carries_main_surface() {
+	surface := &Surface{}
+	state := surface.crash_thread_state()
+	assert state.kind == crash.ThreadType.main
+	assert state.surface == voidptr(surface)
 }
 
 // Test helper: sets up a 10x5 cell grid with 10x20px cells and 5px padding on all sides.

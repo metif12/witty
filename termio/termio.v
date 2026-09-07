@@ -173,7 +173,9 @@ module termio
 
 import apprt
 import configpkg
+import crash
 import datastruct
+import internal_os
 import kitty
 import os
 import pty
@@ -900,6 +902,18 @@ pub fn (mut t Thread) deinit() {
 // so mailbox and timer behavior remains identical without tying Termio to a
 // particular event-loop implementation.
 pub fn (mut t Thread) thread_main(mut io Termio) {
+	$if macos {
+		internal_os.set_thread_name('io')
+	}
+
+	crash.set_thread_state(crash.ThreadState{
+		kind: .io
+		surface: io.surface_mailbox.surface
+	})
+	defer {
+		crash.clear_thread_state()
+	}
+
 	io.thread_enter() or {
 		t.show_start_error(mut io, err.msg())
 		t.drain = true
