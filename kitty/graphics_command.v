@@ -339,10 +339,22 @@ pub fn (self Response) empty() bool {
 // ============================================================
 
 pub struct Command {
-pub:
+pub mut:
 	control Control
 	quiet   Quiet = .no
 	data    []u8
+}
+
+// Take ownership over the data in this command. If the returned value
+// has a length of zero, then the data was empty and need not be freed.
+pub fn (mut self Command) to_owned_data() []u8 {
+	result := self.data
+	self.data = []
+	return result
+}
+
+pub fn (mut self Command) deinit() {
+	self.data = []
 }
 
 pub enum CommandAction {

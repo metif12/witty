@@ -87,6 +87,19 @@ fn test_invalid_base64_payload() {
 	assert false, 'expected invalid payload data'
 }
 
+fn test_command_to_owned_data_clears_command_data() {
+	mut command := Parser.parse_string(';QUFBQQ') or { panic(err) }
+	data := command.to_owned_data()
+	assert data == 'AAAA'.bytes()
+	assert command.data.len == 0
+}
+
+fn test_command_deinit_clears_data() {
+	mut command := Parser.parse_string(';QUFBQQ') or { panic(err) }
+	command.deinit()
+	assert command.data.len == 0
+}
+
 fn test_ignore_unknown_keys_long() {
 	input := 'f=24,s=10,v=20,hello=world'
 	command := Parser.parse_string(input) or { panic(err) }
