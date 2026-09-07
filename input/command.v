@@ -1,5 +1,7 @@
 module input
 
+import ascii
+
 // --- Original Ghostty Comments Start: src/input/command.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/input/command.zig
@@ -87,7 +89,7 @@ pub fn (a Command) equal(b Command) bool {
 
 // less_than implements comparison for sorting commands alphabetically by title.
 pub fn (a Command) less_than(b Command) bool {
-	return a.title.to_lower() < b.title.to_lower()
+	return ascii.order_ignore_case(a.title, b.title) < 0
 }
 
 // command_defaults is the set of default commands, built by iterating over
@@ -108,15 +110,7 @@ fn build_command_defaults() []Command {
 
 	// Sort alphabetically by title, case-insensitive (Command.less_than).
 	result.sort_with_compare(fn (a &Command, b &Command) int {
-		la := a.title.to_lower()
-		lb := b.title.to_lower()
-		if la < lb {
-			return -1
-		}
-		if la > lb {
-			return 1
-		}
-		return 0
+		return ascii.order_ignore_case(a.title, b.title)
 	})
 
 	return result

@@ -1,5 +1,10 @@
 module osc
 
+fn test_osc1337_key_case_folding_is_ascii_only() {
+	assert iterm2_key_from_str('FILE') == .file
+	assert iterm2_key_from_str('Fİle') == .unknown
+}
+
 fn test_osc1337_valid_unimplemented_key_no_value() {
 	mut p := Parser.init(unsafe { nil })
 	input := '1337;SetBadgeFormat'

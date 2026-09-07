@@ -1,5 +1,6 @@
 module input
 
+import ascii
 import cimgui
 
 // --- Original Ghostty Comments Start: src/input/key.zig
@@ -552,7 +553,7 @@ pub fn key_from_name(name string) ?Key {
 // Supports both exact lower-case match and CamelCase to snake_case conversion.
 pub fn key_from_w3c(code string) ?Key {
 	// First try exact lowercase match
-	lower := code.to_lower()
+	lower := ascii.lower_string(code)
 	if lower in key_name_map {
 		return key_name_map[lower]
 	}

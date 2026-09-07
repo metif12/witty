@@ -1,5 +1,6 @@
 module shaper
 
+import ascii
 import strconv
 
 // Represents an OpenType font feature setting, which consists of a tag and
@@ -116,10 +117,10 @@ pub fn Feature.from_string(str string) ?Feature {
 			for pos < end && str[pos] != ` ` && str[pos] != `\t` {
 				pos++
 			}
-			keyword := str[bool_start..pos].to_lower()
-			if keyword == 'n' {
+			keyword := str[bool_start..pos]
+			if ascii.eql_ignore_case(keyword, 'n') {
 				value = 1
-			} else if keyword == 'ff' {
+			} else if ascii.eql_ignore_case(keyword, 'ff') {
 				value = 0
 			} else {
 				return none

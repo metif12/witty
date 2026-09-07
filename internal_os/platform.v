@@ -1,5 +1,6 @@
 module internal_os
 
+import ascii
 import os
 
 // DesktopEnvironment is the set of desktop environments Ghostty distinguishes.
@@ -19,13 +20,14 @@ pub fn desktop_environment() DesktopEnvironment {
 		return .windows
 	} $else $if linux || freebsd {
 		if session := getenv('XDG_SESSION_DESKTOP') {
-			if session.to_lower() in ['gnome', 'gnome-xorg'] {
+			if ascii.eql_ignore_case(session, 'gnome')
+				|| ascii.eql_ignore_case(session, 'gnome-xorg') {
 				return .gnome
 			}
 		}
 		if current := getenv('XDG_CURRENT_DESKTOP') {
 			first := current.all_before(':')
-			if first.to_lower() == 'gnome' {
+			if ascii.eql_ignore_case(first, 'gnome') {
 				return .gnome
 			}
 		}

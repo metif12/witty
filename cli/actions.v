@@ -1,5 +1,6 @@
 module cli
 
+import ascii
 import cli_args
 import configpkg
 import encoding.utf8.validate
@@ -42,15 +43,7 @@ pub fn list_colors_output(args []string) !string {
 	}
 	mut entries := terminal.x11_color_entries()
 	entries.sort_with_compare(fn (a &terminal.NamedRGB, b &terminal.NamedRGB) int {
-		lhs := a.name.to_lower()
-		rhs := b.name.to_lower()
-		if lhs < rhs {
-			return -1
-		}
-		if lhs > rhs {
-			return 1
-		}
-		return 0
+		return ascii.order_ignore_case(a.name, b.name)
 	})
 	mut lines := []string{cap: entries.len}
 	for entry in entries {

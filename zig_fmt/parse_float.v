@@ -1,5 +1,6 @@
 module zig_fmt
 
+import ascii
 import math
 
 #include "@VMODROOT/zig_fmt/parse_float.h"
@@ -109,12 +110,12 @@ fn special_float(raw string) ?f64 {
 	if start == raw.len {
 		return none
 	}
-	value := raw[start..].to_lower()
-	if value == 'nan' {
+	value := raw[start..]
+	if ascii.eql_ignore_case(value, 'nan') {
 		// Zig returns its canonical NaN even when the spelling had a minus.
 		return math.nan()
 	}
-	if value == 'inf' || value == 'infinity' {
+	if ascii.eql_ignore_case(value, 'inf') || ascii.eql_ignore_case(value, 'infinity') {
 		return math.inf(if negative { -1 } else { 1 })
 	}
 	return none

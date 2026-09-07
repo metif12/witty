@@ -6,6 +6,8 @@
 
 module main
 
+import ascii
+
 // FileType represents detected image file formats.
 pub enum FileType {
 	// JPEG image file.
@@ -138,10 +140,9 @@ pub fn detect(contents []u8) FileType {
 // Guess file type from its extension. Case-insensitive comparison.
 // Returns .unknown if no known extension matches.
 pub fn guess_from_extension(extension string) FileType {
-	ext_lower := extension.to_lower()
 	for td in type_details {
 		for ext in td.exts {
-			if ext_lower == ext {
+			if ascii.eql_ignore_case(extension, ext) {
 				return td.typ
 			}
 		}

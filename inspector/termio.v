@@ -1,5 +1,6 @@
 module inspector
 
+import ascii
 import cimgui
 import terminal
 
@@ -305,7 +306,7 @@ fn imgui_text_filter_pass(filter string, text string) bool {
 	if filter.len == 0 {
 		return true
 	}
-	text_lower := text.to_lower()
+	text_lower := ascii.lower_string(text)
 	mut positive_count := 0
 	for raw_term in filter.split(',') {
 		term := raw_term.trim_space()
@@ -313,12 +314,12 @@ fn imgui_text_filter_pass(filter string, text string) bool {
 			continue
 		}
 		if term[0] == `-` {
-			if text_lower.contains(term[1..].to_lower()) {
+			if text_lower.contains(ascii.lower_string(term[1..])) {
 				return false
 			}
 		} else {
 			positive_count++
-			if text_lower.contains(term.to_lower()) {
+			if text_lower.contains(ascii.lower_string(term)) {
 				return true
 			}
 		}

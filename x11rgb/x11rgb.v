@@ -1,5 +1,6 @@
 module x11rgb
 
+import ascii
 import cli_args
 
 // The canonical X.Org rgb.txt data shipped by Ghostty. This module is kept
@@ -47,31 +48,13 @@ pub fn entries() []Entry {
 	return result
 }
 
-fn ascii_lower(ch u8) u8 {
-	return if ch >= `A` && ch <= `Z` { ch + (`a` - `A`) } else { ch }
-}
-
-// This is std.static_string_map.eqlAsciiIgnoreCase, whose caller only invokes
-// it for keys with equal byte lengths.
-fn eql_ascii_ignore_case(a string, b string) bool {
-	if a.len != b.len {
-		return false
-	}
-	for i in 0 .. a.len {
-		if ascii_lower(a[i]) != ascii_lower(b[i]) {
-			return false
-		}
-	}
-	return true
-}
-
 // get performs the ASCII-insensitive lookup used by Ghostty's static map.
 pub fn get(name string) ?RGB {
 	if name.len == 0 {
 		return none
 	}
 	for entry in entries() {
-		if eql_ascii_ignore_case(entry.name, name) {
+		if ascii.eql_ignore_case(entry.name, name) {
 			return entry.rgb
 		}
 	}

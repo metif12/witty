@@ -49,3 +49,8 @@ fn test_w3c() {
 		assert key_from_w3c(w3c_name) or { panic('no w3c mapping for ${w3c_name}') } == key
 	}
 }
+
+fn test_w3c_case_folding_is_ascii_only() {
+	assert key_from_w3c('INSERT')? == .insert
+	assert key_from_w3c('İnsert') == none
+}

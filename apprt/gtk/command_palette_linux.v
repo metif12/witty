@@ -1,5 +1,6 @@
 module gtk
 
+import ascii
 // command_palette_linux.v - The GTK command palette.
 //
 // Translated from ghostty/src/apprt/gtk/class/command_palette.zig.
@@ -475,8 +476,8 @@ fn compare_commands(mut a Command, mut b Command) bool {
 		// Normalize ':' to '\t' so it sorts before space.
 		a_char := if a_title[i] == `:` { u8(`\t`) } else { a_title[i] }
 		b_char := if b_title[i] == `:` { u8(`\t`) } else { b_title[i] }
-		a_lower := ascii_to_lower(a_char)
-		b_lower := ascii_to_lower(b_char)
+		a_lower := ascii.to_lower(a_char)
+		b_lower := ascii.to_lower(b_char)
 		if a_lower != b_lower {
 			return a_lower < b_lower
 		}
@@ -719,16 +720,6 @@ pub fn (mut self CommandPalette) filter(query string) []int {
 		}
 	}
 	return result
-}
-
-// --- helpers --------------------------------------------------------------
-
-// ascii_to_lower lowercases a single ASCII byte. Mirrors std.ascii.toLower.
-fn ascii_to_lower(c u8) u8 {
-	if c >= `A` && c <= `Z` {
-		return c + 32
-	}
-	return c
 }
 
 // dispose releases the command-owned config references and the palette's GTK

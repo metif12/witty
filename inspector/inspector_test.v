@@ -345,4 +345,5 @@ fn test_imgui_text_filter_semantics() {
 	assert imgui_text_filter_pass('-abc', 'xyz')
 	assert !imgui_text_filter_pass('-abc', 'ABC')
 	assert !imgui_text_filter_pass('abc', 'xyz')
+	assert !imgui_text_filter_pass('file', 'FİLE')
 }

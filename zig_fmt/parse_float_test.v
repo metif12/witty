@@ -27,7 +27,7 @@ fn test_parse_float_special_and_hex_values() {
 	assert parse_f64('-0x1p-1')! == -0.5
 	assert parse_f64('0x10p+10')! == 16384
 	assert parse_f64('0x1_f.p1')! == 62
-	for invalid in ['nanx', 'infinite', '0x', '0x.p1', '0x1p', '0x1p_1'] {
+	for invalid in ['nanx', 'infinite', 'İnf', 'İnfinity', '0x', '0x.p1', '0x1p', '0x1p_1'] {
 		if _ := parse_f64(invalid) {
 			assert false, 'expected ${invalid} to fail'
 		}

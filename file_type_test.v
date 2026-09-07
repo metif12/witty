@@ -119,6 +119,7 @@ fn test_guess_from_extension_case_insensitive() {
 	assert guess_from_extension('.PNG') == .png
 	assert guess_from_extension('.Jpg') == .jpeg
 	assert guess_from_extension('.GIF') == .gif
+	assert guess_from_extension('.gİf') == .unknown
 }
 
 // Test unknown extension

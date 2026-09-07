@@ -1,5 +1,6 @@
 module cli
 
+import ascii
 import os
 import strings
 import time
@@ -47,15 +48,7 @@ pub mut:
 // less_than compares two theme list elements by name, case-insensitive.
 // TODO: use Unicode-aware comparison
 fn theme_list_less_than(a &ThemeListElement, b &ThemeListElement) int {
-	la := a.theme.to_lower()
-	lb := b.theme.to_lower()
-	if la < lb {
-		return -1
-	}
-	if la > lb {
-		return 1
-	}
-	return 0
+	return ascii.order_ignore_case(a.theme, b.theme)
 }
 
 // to_uri converts the theme path to a file:// URI string.

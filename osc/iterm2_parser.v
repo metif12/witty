@@ -1,5 +1,7 @@
 module osc
 
+import ascii
+
 // Parse OSC 1337 - iTerm2 proprietary escape codes.
 // https://iterm2.com/documentation-escape-codes.html
 //
@@ -53,7 +55,7 @@ enum Iterm2Key {
 // iterm2_key_names maps iTerm2 key strings to enum values.
 // Uses case-insensitive matching to match Ghostty behavior.
 fn iterm2_key_from_str(s string) Iterm2Key {
-	lower := s.to_lower()
+	lower := ascii.lower_string(s)
 	return match lower {
 		'addannotation' { .add_annotation }
 		'addhiddenannotation' { .add_hidden_annotation }
