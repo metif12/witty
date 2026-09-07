@@ -60,7 +60,7 @@ fn parse_kitty_color_kind(k string) ?KittyColorKind {
 		'visual_bell' { KittyColorSpecial.visual_bell }
 		'second_transparent_background' { KittyColorSpecial.second_transparent_background }
 		else {
-			idx := parse_unsigned_u8(k) or { return none }
+			idx := u8(parse_unsigned_decimal(k, 255) or { return none })
 			return KittyColorKind{
 				kind: .palette
 				palette: idx
@@ -71,28 +71,6 @@ fn parse_kitty_color_kind(k string) ?KittyColorKind {
 		kind: .special
 		special: special
 	}
-}
-
-// Direct translation of `std.fmt.parseUnsigned(u8, key, 10)`.
-fn parse_unsigned_u8(value string) ?u8 {
-	if value.len == 0 || value[0] == `_` || value[value.len - 1] == `_` {
-		return none
-	}
-	mut result := u16(0)
-	for c in value {
-		if c == `_` {
-			continue
-		}
-		if c < `0` || c > `9` {
-			return none
-		}
-		digit := u16(c - `0`)
-		if result > (u16(255) - digit) / 10 {
-			return none
-		}
-		result = result * 10 + digit
-	}
-	return u8(result)
 }
 
 // KittyColorItemType represents the operation type for a kitty color item.

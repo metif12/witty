@@ -463,42 +463,6 @@ fn parse_color_data(op ColorOperation, data string) []ColorRequest {
 	}
 }
 
-// V has no u9 type. This is a direct translation of
-// `std.fmt.parseInt(u9, value, 10)`, including its sign and underscore rules.
-fn parse_int_u9(value string) ?u16 {
-	if value.len == 0 {
-		return none
-	}
-	mut offset := 0
-	mut negative := false
-	if value[0] == `+` || value[0] == `-` {
-		negative = value[0] == `-`
-		offset = 1
-	}
-	if offset == value.len || value[offset] == `_` || value[value.len - 1] == `_` {
-		return none
-	}
-
-	mut result := u16(0)
-	for c in value[offset..] {
-		if c == `_` {
-			continue
-		}
-		if c < `0` || c > `9` {
-			return none
-		}
-		digit := u16(c - `0`)
-		if result > (u16(511) - digit) / 10 {
-			return none
-		}
-		result = result * 10 + digit
-	}
-	if negative && result != 0 {
-		return none
-	}
-	return result
-}
-
 // `std.mem.tokenizeScalar` skips empty fields.
 fn color_tokens(data string) []string {
 	mut result := []string{}
@@ -529,7 +493,7 @@ fn parse_get_set_ansi_color(op ColorOperation, data string) []ColorRequest {
 		offset++
 
 		// Color must be numeric
-		color_idx := parse_int_u9(color_str) or { return result }
+		color_idx := u16(parse_int_unsigned_decimal(color_str, 511) or { return result })
 
 		// Parse the target based on operation
 		target := match op {
@@ -591,7 +555,7 @@ fn parse_reset_ansi_color(op ColorOperation, data string) []ColorRequest {
 	}
 
 	for color_str in color_tokens(data) {
-		color_idx := parse_int_u9(color_str) or { continue }
+		color_idx := u16(parse_int_unsigned_decimal(color_str, 511) or { continue })
 
 		target := match op {
 			.osc_105 {

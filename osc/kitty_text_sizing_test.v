@@ -94,6 +94,17 @@ fn test_osc66_zero_with_leading_zero_is_valid() {
 	assert cmd.kitty_text_sizing.width == 0
 }
 
+fn test_osc66_numeric_fields_use_zig_parse_int_grammar() {
+	mut p := Parser.init(unsafe { nil })
+	for ch in '66;s=+2:w=-0:n=1__5;payload'.bytes() {
+		p.next(ch)
+	}
+	cmd := p.end(0x1b) or { panic('expected command') }
+	assert cmd.kitty_text_sizing.scale == 2
+	assert cmd.kitty_text_sizing.width == 0
+	assert cmd.kitty_text_sizing.numerator == 15
+}
+
 fn test_osc66_utf8() {
 	mut p := Parser.init(unsafe { nil })
 	input := '66;;👻魑魅魍魉ゴースッティ'

@@ -1,7 +1,5 @@
 module osc
 
-import strconv
-
 // Semantic prompt parsing for OSC 133.
 //
 // https://gitlab.freedesktop.org/Per_Bothner/specifications/blob/master/proposals/semantic-prompts.md
@@ -234,7 +232,9 @@ pub fn read_exit_code(raw string) ?i32 {
 	// The exit code is the first value, up to the first semicolon.
 	sep := raw.index_u8(`;`)
 	code_str := if sep >= 0 { raw[..sep] } else { raw }
-	return strconv.atoi32(code_str) or { return none }
+	return i32(parse_int_signed_decimal(code_str, u64(max_i32), u64(max_i32) + 1) or {
+		return none
+	})
 }
 
 // ============================================================

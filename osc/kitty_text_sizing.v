@@ -1,7 +1,5 @@
 module osc
 
-import strconv
-
 // Kitty's text sizing protocol (OSC 66)
 // Specification: https://sw.kovidgoyal.net/kitty/text-sizing-protocol/
 
@@ -36,10 +34,7 @@ pub mut:
 // update sets a key-value pair on the KittyTextSizing.
 fn (mut self KittyTextSizing) update(key u8, value string) bool {
 	// All values are numeric, so we can do a small hack here
-	v := strconv.atoi(value) or { return false }
-	if v < 0 || v > 15 {
-		return false
-	}
+	v := parse_int_unsigned_decimal(value, 15) or { return false }
 
 	match key {
 		`s` {
