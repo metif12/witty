@@ -1,6 +1,7 @@
 module osc
 
 import x11rgb
+import zig_fmt
 
 // --- Original Ghostty Comments Start: src/terminal/osc/parsers/color.zig
 //
@@ -286,7 +287,7 @@ fn parse_rgbi(s string) ?RGB {
 
 // parse_float_channel parses a floating point color channel (0.0-1.0).
 fn parse_float_channel(s string) ?u8 {
-	val := s.f64()
+	val := zig_fmt.parse_f64(s) or { return none }
 	if val < 0.0 || val > 1.0 {
 		return none
 	}

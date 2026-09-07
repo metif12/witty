@@ -525,6 +525,13 @@ fn test_mouse_scroll_multiplier_parse() {
 	assert args.precision == 6
 	assert args.discrete == 8
 
+	args.parse_cli('0x1p1')!
+	assert args.precision == 2
+	assert args.discrete == 2
+	args.parse_cli('precision:1_0e-1')!
+	assert args.precision == 1
+	assert args.discrete == 2
+
 	mut e := MouseScrollMultiplier{}
 	e.parse_cli('foo:1') or {
 		expect_parse_error(err, .invalid_value)
@@ -576,6 +583,10 @@ fn test_parse_quick_terminal_size() {
 	assert primary.kind == .percentage
 	assert primary.percentage == 50
 	assert v.secondary == none
+
+	v = QuickTerminalSize{}
+	v.parse_cli('0x32p0%')!
+	assert v.primary?.percentage == 50
 
 	v = QuickTerminalSize{}
 	v.parse_cli('200px')!
@@ -651,6 +662,21 @@ fn test_parse_quick_terminal_size() {
 		return
 	}
 	assert false, 'expected value_required for null'
+}
+
+fn test_repeatable_font_variation_uses_zig_float_grammar() {
+	mut variation := RepeatableFontVariation{}
+	variation.parse_cli('wght=0x1p1')!
+	assert variation.list[0].value == 2
+	variation.parse_cli('wght= 1 ')!
+	assert variation.list[1].value == 1
+	variation.parse_cli('wght=1 ')!
+	assert variation.list[2].value == 1
+	variation.parse_cli('wght=1 x') or {
+		expect_parse_error(err, .invalid_value)
+		return
+	}
+	assert false, 'expected trailing junk to fail'
 }
 
 // Config.zig: QuickTerminalSize "calculate QuickTerminalSize"

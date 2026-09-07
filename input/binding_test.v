@@ -449,6 +449,8 @@ fn test_parse_action_with_float() {
 
 	b3 := parse_single('a=scroll_page_fractional:1_2.5') or { panic(err.msg()) }
 	assert b3.action.float_param == f32(12.5)
+	b4 := parse_single('a=scroll_page_fractional:0x1p-1') or { panic(err.msg()) }
+	assert b4.action.float_param == f32(0.5)
 	parse_single('a=scroll_page_fractional:1_.5') or {
 		assert err.msg() == 'InvalidFormat'
 		return

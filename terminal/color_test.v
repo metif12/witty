@@ -51,6 +51,8 @@ fn test_rgb_parse_rgbi() {
 		return
 	}
 	assert c.r == 255 && c.g == 0 && c.b == 0
+	assert RGB.parse('rgbi:0x1p0/0_0.0/0')? == RGB{255, 0, 0}
+	assert RGB.parse('rgbi: 1/0/0') == none
 }
 
 fn test_rgb_parse_hex_channels_use_zig_unsigned_grammar() {

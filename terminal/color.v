@@ -15,7 +15,7 @@ module terminal
 // - BoldColor
 
 import math
-import strconv
+import zig_fmt
 
 // ============================================================
 // Palette - the 256 color palette.
@@ -388,7 +388,7 @@ pub fn (self RGB) perceived_luminance() f64 {
 // from_intensity parses a color component from a floating point intensity value.
 // The value should be between 0.0 and 1.0, inclusive.
 fn from_intensity(value string) ?u8 {
-	i := strconv.atof64(value) or {
+	i := zig_fmt.parse_f64(value) or {
 		return none
 	}
 	if i < 0.0 || i > 1.0 {

@@ -1,7 +1,7 @@
 module input
 
-import strconv
 import strings
+import zig_fmt
 
 // --- Original Ghostty Comments Start: src/input/Binding.zig
 //
@@ -2387,25 +2387,25 @@ pub fn Action.parse(input_str string) !Action {
 			if !has_param {
 				return error('InvalidFormat')
 			}
-			Action.new_float(.increase_font_size, strconv_parse_float(param)!)
+			Action.new_float(.increase_font_size, parse_float(param)!)
 		}
 		'decrease_font_size' {
 			if !has_param {
 				return error('InvalidFormat')
 			}
-			Action.new_float(.decrease_font_size, strconv_parse_float(param)!)
+			Action.new_float(.decrease_font_size, parse_float(param)!)
 		}
 		'set_font_size' {
 			if !has_param {
 				return error('InvalidFormat')
 			}
-			Action.new_float(.set_font_size, strconv_parse_float(param)!)
+			Action.new_float(.set_font_size, parse_float(param)!)
 		}
 		'scroll_page_fractional' {
 			if !has_param {
 				return error('InvalidFormat')
 			}
-			Action.new_float(.scroll_page_fractional, strconv_parse_float(param)!)
+			Action.new_float(.scroll_page_fractional, parse_float(param)!)
 		}
 
 		// Int actions
@@ -2697,28 +2697,8 @@ fn parse_write_screen(tag ActionTag, s string) !Action {
 
 // --- String/number parsers ---
 
-fn strconv_parse_float(s string) !f32 {
-	clean := strip_float_underscores(s)!
-	return f32(strconv.atof64(clean) or { return error('InvalidFormat') })
-}
-
-fn strip_float_underscores(s string) !string {
-	if !s.contains('_') {
-		return s
-	}
-	mut result := []u8{cap: s.len}
-	for index, ch in s.bytes() {
-		if ch != `_` {
-			result << ch
-			continue
-		}
-		// Zig permits separators only between decimal digits.
-		if index == 0 || index + 1 >= s.len || s[index - 1] < `0` || s[index - 1] > `9`
-			|| s[index + 1] < `0` || s[index + 1] > `9` {
-			return error('InvalidFormat')
-		}
-	}
-	return result.bytestr()
+fn parse_float(s string) !f32 {
+	return zig_fmt.parse_f32(s) or { return error('InvalidFormat') }
 }
 
 fn strconv_parse_i16(s string) !i64 {

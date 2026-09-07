@@ -1,7 +1,7 @@
 module font
 
 import sync
-import strconv
+import zig_fmt
 
 // This structure contains a set of SharedGrid structures keyed by
 // unique font configuration.
@@ -703,7 +703,7 @@ pub fn MetricsModifier.parse(input string) !MetricsModifier {
 	}
 
 	if input[input.len - 1] == `%` {
-		mut percent := strconv.atof64(input[0..input.len - 1]) or {
+		mut percent := zig_fmt.parse_f64(input[0..input.len - 1]) or {
 			return error('invalid format')
 		}
 		percent /= 100.0

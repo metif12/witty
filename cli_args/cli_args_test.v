@@ -49,7 +49,8 @@ mut:
 
 struct FloatTestData {
 mut:
-	val f64
+	val   f64
+	val32 f32
 }
 
 struct PositionalTestData {
@@ -504,6 +505,17 @@ fn test_parse_into_field_float() {
 	mut data := FloatTestData{}
 	parse_into_field[FloatTestData](mut data, 'val', '1')!
 	assert data.val == f64(1.0)
+	parse_into_field[FloatTestData](mut data, 'val', '0x1_f.p1')!
+	assert data.val == 62
+	parse_into_field[FloatTestData](mut data, 'val32', '0_1.25e1')!
+	assert data.val32 == f32(12.5)
+	for invalid in [' 1', '1 ', '1__0', '1e_2'] {
+		parse_into_field[FloatTestData](mut data, 'val', invalid) or {
+			assert err.msg() == 'invalid value'
+			continue
+		}
+		assert false, 'expected ${invalid} to fail'
+	}
 }
 
 // --- parseIntoField: hyphen to underscore conversion ---

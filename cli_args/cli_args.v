@@ -1,7 +1,7 @@
 module cli_args
 
-import strconv
 import diagnostics
+import zig_fmt
 
 // TODO:
 //   - Only `--long=value` format is accepted. Do we want to allow
@@ -322,14 +322,13 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 				if !has_value {
 					return error('value required')
 				}
-				f := strconv.atof64(raw) or { return error('invalid value') }
-				dst.$(field.name) = f32(f)
+				dst.$(field.name) = zig_fmt.parse_f32(raw) or { return error('invalid value') }
 				return
 			} $else $if field.unaliased_typ is f64 || field.unaliased_typ is ?f64 {
 				if !has_value {
 					return error('value required')
 				}
-				dst.$(field.name) = strconv.atof64(raw) or {
+				dst.$(field.name) = zig_fmt.parse_f64(raw) or {
 					return error('invalid value')
 				}
 				return

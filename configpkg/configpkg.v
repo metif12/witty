@@ -4,11 +4,11 @@ import os
 import input as inputpkg
 import terminal
 import encoding.utf8.validate
-import strconv
 import themepkg
 import cli_args
 import font
 import internal_os
+import zig_fmt
 
 const default_gtk_opengl_debug = $if debug { true } $else { false }
 const default_quit_after_last_window_closed = $if linux { true } $else { false }
@@ -5652,7 +5652,7 @@ pub fn (mut r RepeatableFontVariation) parse_cli(input ?string) ! {
 	if id.len != 4 {
 		return perr(ParseError.invalid_value)
 	}
-	parsed := strconv.atof64(axis_value) or { return perr(ParseError.invalid_value) }
+	parsed := zig_fmt.parse_f64(axis_value) or { return perr(ParseError.invalid_value) }
 	r.list << font.Variation{
 		id: font.VariationId.init(id)
 		value: parsed
@@ -8294,7 +8294,7 @@ fn (mut c Config) parse_config_i16(key string, value string) ?i16 {
 }
 
 fn (mut c Config) parse_config_f64(key string, value string) ?f64 {
-	parsed := strconv.atof64(value) or {
+	parsed := zig_fmt.parse_f64(value) or {
 		c.invalid_config_value(key, value)
 		return none
 	}
@@ -9553,36 +9553,9 @@ pub fn (m MouseScrollMultiplier) format() string {
 	return 'precision:${format_f64(m.precision)},discrete:${format_f64(m.discrete)}'
 }
 
-// parse_float parses a floating point number, returning none if the string is
-// not a valid, fully-consumed float (V's `.f64()` is lax, so validate first).
+// parse_float is the V equivalent of std.fmt.parseFloat(f64, s).
 fn parse_float(s string) ?f64 {
-	t := s
-	if t.len == 0 {
-		return none
-	}
-	mut i := 0
-	if t[i] == `-` || t[i] == `+` {
-		i++
-	}
-	mut digits := 0
-	mut dots := 0
-	for ; i < t.len; i++ {
-		ch := t[i]
-		if ch >= `0` && ch <= `9` {
-			digits++
-		} else if ch == `.` {
-			dots++
-			if dots > 1 {
-				return none
-			}
-		} else {
-			return none
-		}
-	}
-	if digits == 0 {
-		return none
-	}
-	return s.f64()
+	return zig_fmt.parse_f64(s) or { return none }
 }
 
 // format_f64 renders a float without a trailing `.0` for whole numbers, to
@@ -9657,13 +9630,13 @@ fn quick_terminal_size_value_parse(input string) !QuickTerminalSizeValue {
 	}
 	if input.ends_with('%') {
 		digits := input[..input.len - 1]
-		pct := parse_float(digits) or { return perr(ParseError.invalid_value) }
+		pct := zig_fmt.parse_f32(digits) or { return perr(ParseError.invalid_value) }
 		if pct < 0 {
 			return perr(ParseError.invalid_value)
 		}
 		return QuickTerminalSizeValue{
 			kind: .percentage
-			percentage: f32(pct)
+			percentage: pct
 		}
 	}
 	return perr(ParseError.missing_unit)

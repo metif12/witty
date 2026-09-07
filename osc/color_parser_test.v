@@ -76,12 +76,17 @@ fn test_rgb_parse_rgbi() {
 	assert rgb.r == 0xff
 	assert rgb.g == 0xff
 	assert rgb.b == 0xff
+	assert parse_rgb('rgbi:0x1p0/0_0.0/0')? == RGB{
+		r: 255
+	}
 }
 
 fn test_rgb_parse_invalid() {
 	assert parse_rgb('#xxxyyzz') == none
 	assert parse_rgb('') == none
 	assert parse_rgb('notacolor') == none
+	assert parse_rgb('rgbi:a/a/a') == none
+	assert parse_rgb('rgbi: 1/0/0') == none
 }
 
 // Translated from ghostty color.zig test "RGB.parse". Verifies the 8-bit

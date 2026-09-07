@@ -213,6 +213,12 @@ fn test_modifier_parse_percent() {
 	m3 := MetricsModifier.parse('0%')!
 	assert m3.is_percent == true
 	assert m3.percent == 1.0
+
+	assert MetricsModifier.parse('2_0%')!.percent == 1.2
+	assert MetricsModifier.parse('0x14p0%')!.percent == 1.2
+	if _ := MetricsModifier.parse(' 20%') {
+		assert false, 'expected leading whitespace to fail'
+	}
 }
 
 // ghostty: test "Modifier: percent"
