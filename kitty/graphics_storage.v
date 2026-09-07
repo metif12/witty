@@ -9,7 +9,6 @@ module kitty
 // placements.
 
 import math
-import time
 import terminal
 
 // ============================================================
@@ -881,7 +880,7 @@ pub fn (self &ImageStorage) image_count() int {
 
 struct EvictCandidate {
 	id   u32
-	time time.Time
+	time u64
 	used bool
 }
 

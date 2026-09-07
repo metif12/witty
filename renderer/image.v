@@ -422,7 +422,7 @@ fn (mut self Image) release_texture() {
 pub struct ImageEntry {
 pub mut:
 	image         Image
-	transmit_time i64
+	transmit_time u64
 }
 
 // Represents a single image placement on the grid.
@@ -985,7 +985,7 @@ fn (mut self ImageRenderState) prep_kitty_virtual_placement(mut storage kitty.Im
 // only prepare the CPU-side pending image state.
 fn (mut self ImageRenderState) prep_kitty_image(image kitty.Image) ! {
 	id := kitty_image_key(image.id)
-	transmit_time := image.transmit_time.unix_nano()
+	transmit_time := image.transmit_time
 
 	// If this image exists and its transmit time is the same we assume
 	// it is the identical image so we don't need to send it to the GPU.
@@ -1051,7 +1051,7 @@ pub fn (mut self ImageRenderState) overlay_update(overlay ?Overlay) {
 			entry.image.mark_for_replace(pending)
 			entry.image.width = pending.width
 			entry.image.height = pending.height
-			entry.transmit_time = time.now().unix_nano()
+			entry.transmit_time = time.sys_mono_now()
 			self.images[overlay_image_key] = entry
 		} else {
 			self.images[overlay_image_key] = ImageEntry{
@@ -1061,7 +1061,7 @@ pub fn (mut self ImageRenderState) overlay_update(overlay ?Overlay) {
 					width: pending.width
 					height: pending.height
 				}
-				transmit_time: time.now().unix_nano()
+				transmit_time: time.sys_mono_now()
 			}
 		}
 

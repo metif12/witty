@@ -112,6 +112,7 @@ fn test_image_load_rgb_zlib_compressed_direct() {
 	}
 	// should be decompressed
 	assert img.compression == .none_
+	assert img.transmit_time > 0
 }
 
 fn test_image_load_rgb_not_compressed_direct() {

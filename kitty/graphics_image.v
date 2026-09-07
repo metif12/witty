@@ -180,7 +180,7 @@ pub mut:
 	data []u8
 	// Timestamp when image was transmitted. Set in complete(), matching
 	// ghostty (which leaves it undefined until then).
-	transmit_time time.Time
+	transmit_time u64
 	// True if image was loaded by a command that doesn't specify
 	// an ID or number.
 	implicit_id bool
@@ -478,7 +478,7 @@ pub fn (mut self LoadingImage) complete() !Image {
 	}
 
 	// Set our time.
-	self.image.transmit_time = time.now()
+	self.image.transmit_time = time.sys_mono_now()
 
 	// Everything looks good, copy the image data over.
 	mut result := self.image
