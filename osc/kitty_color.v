@@ -49,17 +49,6 @@ const kitty_color_kind_max = 255 + 8
 
 // parse_kitty_color_kind parses a key string into a KittyColorKind.
 fn parse_kitty_color_kind(k string) ?KittyColorKind {
-	// Try as a palette index first
-	if k.len > 0 && k[0] >= `0` && k[0] <= `9` {
-		idx := k.int()
-		if idx >= 0 && idx <= 255 && (idx > 0 || k == '0') {
-			return KittyColorKind{
-				kind:    .palette
-				palette: u8(idx)
-			}
-		}
-		return none
-	}
 	// Try as a special color name
 	special := match k {
 		'foreground' { KittyColorSpecial.foreground }
@@ -70,12 +59,40 @@ fn parse_kitty_color_kind(k string) ?KittyColorKind {
 		'cursor_text' { KittyColorSpecial.cursor_text }
 		'visual_bell' { KittyColorSpecial.visual_bell }
 		'second_transparent_background' { KittyColorSpecial.second_transparent_background }
-		else { return none }
+		else {
+			idx := parse_unsigned_u8(k) or { return none }
+			return KittyColorKind{
+				kind: .palette
+				palette: idx
+			}
+		}
 	}
 	return KittyColorKind{
-		kind:    .special
+		kind: .special
 		special: special
 	}
+}
+
+// Direct translation of `std.fmt.parseUnsigned(u8, key, 10)`.
+fn parse_unsigned_u8(value string) ?u8 {
+	if value.len == 0 || value[0] == `_` || value[value.len - 1] == `_` {
+		return none
+	}
+	mut result := u16(0)
+	for c in value {
+		if c == `_` {
+			continue
+		}
+		if c < `0` || c > `9` {
+			return none
+		}
+		digit := u16(c - `0`)
+		if result > (u16(255) - digit) / 10 {
+			return none
+		}
+		result = result * 10 + digit
+	}
+	return u8(result)
 }
 
 // KittyColorItemType represents the operation type for a kitty color item.
@@ -121,7 +138,7 @@ fn parse_kitty_color_protocol(mut parser Parser, terminator_ch u8) ?Command {
 		mut value := ''
 		if eq >= 0 {
 			k = kv[..eq]
-			value = kv[eq + 1..].trim_space()
+			value = kv[eq + 1..].trim(' ')
 		} else {
 			k = kv
 			value = ''
@@ -137,29 +154,29 @@ fn parse_kitty_color_protocol(mut parser Parser, terminator_ch u8) ?Command {
 			// Reset
 			items << KittyColorItem{
 				item_type: .reset
-				key:       key
+				key: key
 			}
 		} else if value == '?' {
 			// Query
 			items << KittyColorItem{
 				item_type: .query
-				key:       key
+				key: key
 			}
 		} else {
 			// Set
 			rgb := parse_rgb(value) or { continue }
 			items << KittyColorItem{
 				item_type: .set
-				key:       key
-				color:     rgb
+				key: key
+				color: rgb
 			}
 		}
 	}
 
 	parser.command = Command{
-		cmd_type:          .kitty_color_protocol
-		terminator:        init_terminator(terminator_ch)
-		str_value:         data_str
+		cmd_type: .kitty_color_protocol
+		terminator: init_terminator(terminator_ch)
+		str_value: data_str
 		kitty_color_items: items
 	}
 	return parser.command

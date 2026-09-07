@@ -379,7 +379,7 @@ pub:
 	color  RGB
 }
 
-// parse_color_operation parses OSC color commands (4, 5, 10-19, 104, 105, 110-119).
+// parse_color_operation parses OSC color commands (4, 5, 10-19, 104, 110-119).
 fn parse_color_operation(mut parser Parser, terminator_ch u8) ?Command {
 	data := parser.buffered()
 	data_str := data.bytestr()
@@ -399,7 +399,6 @@ fn parse_color_operation(mut parser Parser, terminator_ch u8) ?Command {
 		.s_18 { ColorOperation.osc_18 }
 		.s_19 { ColorOperation.osc_19 }
 		.s_104 { ColorOperation.osc_104 }
-		.s_105 { ColorOperation.osc_105 }
 		.s_110 { ColorOperation.osc_110 }
 		.s_111 { ColorOperation.osc_111 }
 		.s_112 { ColorOperation.osc_112 }
@@ -464,44 +463,79 @@ fn parse_color_data(op ColorOperation, data string) []ColorRequest {
 	}
 }
 
+// V has no u9 type. This is a direct translation of
+// `std.fmt.parseInt(u9, value, 10)`, including its sign and underscore rules.
+fn parse_int_u9(value string) ?u16 {
+	if value.len == 0 {
+		return none
+	}
+	mut offset := 0
+	mut negative := false
+	if value[0] == `+` || value[0] == `-` {
+		negative = value[0] == `-`
+		offset = 1
+	}
+	if offset == value.len || value[offset] == `_` || value[value.len - 1] == `_` {
+		return none
+	}
+
+	mut result := u16(0)
+	for c in value[offset..] {
+		if c == `_` {
+			continue
+		}
+		if c < `0` || c > `9` {
+			return none
+		}
+		digit := u16(c - `0`)
+		if result > (u16(511) - digit) / 10 {
+			return none
+		}
+		result = result * 10 + digit
+	}
+	if negative && result != 0 {
+		return none
+	}
+	return result
+}
+
+// `std.mem.tokenizeScalar` skips empty fields.
+fn color_tokens(data string) []string {
+	mut result := []string{}
+	for token in data.split(';') {
+		if token.len > 0 {
+			result << token
+		}
+	}
+	return result
+}
+
 // OSC 4/5: Get/Set ANSI colors
 fn parse_get_set_ansi_color(op ColorOperation, data string) []ColorRequest {
 	// Note: in ANY error scenario below we return the accumulated results.
 	// This matches the xterm behavior (see misc.c ChangeAnsiColorRequest)
 	mut result := []ColorRequest{}
-	mut remaining := data
-
-	for remaining.len > 0 {
+	tokens := color_tokens(data)
+	mut offset := 0
+	for offset < tokens.len {
 		// We expect a `c;spec` pair. If either doesn't exist then
 		// we return the results up to this point.
-		sep1 := remaining.index_u8(`;`)
-		if sep1 < 0 {
+		color_str := tokens[offset]
+		offset++
+		if offset >= tokens.len {
 			return result
 		}
-		color_str := remaining[..sep1]
-		remaining = remaining[sep1 + 1..]
-
-		sep2 := remaining.index_u8(`;`)
-		mut spec_str := ''
-		if sep2 >= 0 {
-			spec_str = remaining[..sep2]
-			remaining = remaining[sep2 + 1..]
-		} else {
-			spec_str = remaining
-			remaining = ''
-		}
+		spec_str := tokens[offset]
+		offset++
 
 		// Color must be numeric
-		color_idx := color_str.int()
-		if color_str.len == 0 || (color_idx == 0 && color_str != '0') {
-			return result
-		}
+		color_idx := parse_int_u9(color_str) or { return result }
 
 		// Parse the target based on operation
 		target := match op {
 			.osc_5 {
 				// OSC5 maps directly to the Special enum (0-4)
-				if color_idx < 0 || color_idx > 4 {
+				if color_idx > 4 {
 					return result
 				}
 				ColorTarget(ColorTargetSpecial{
@@ -510,7 +544,7 @@ fn parse_get_set_ansi_color(op ColorOperation, data string) []ColorRequest {
 			}
 			.osc_4 {
 				// OSC4 maps 0-255 to palette, 256-260 to special
-				if color_idx >= 0 && color_idx <= 255 {
+				if color_idx <= 255 {
 					ColorTarget(ColorTargetPalette{
 						index: u8(color_idx)
 					})
@@ -556,24 +590,13 @@ fn parse_reset_ansi_color(op ColorOperation, data string) []ColorRequest {
 		return result
 	}
 
-	// Split on semicolons and parse each color index
-	parts := data.split(';')
-	for part in parts {
-		trimmed := part.trim_space()
-		if trimmed.len == 0 {
-			continue
-		}
-
-		color_idx := trimmed.int()
-		if color_idx == 0 && trimmed != '0' {
-			// Invalid number, skip (matches Kitty behavior)
-			continue
-		}
+	for color_str in color_tokens(data) {
+		color_idx := parse_int_u9(color_str) or { continue }
 
 		target := match op {
 			.osc_105 {
 				// OSC105 maps directly to the Special enum (0-4)
-				if color_idx < 0 || color_idx > 4 {
+				if color_idx > 4 {
 					continue
 				}
 				ColorTarget(ColorTargetSpecial{
@@ -582,7 +605,7 @@ fn parse_reset_ansi_color(op ColorOperation, data string) []ColorRequest {
 			}
 			.osc_104 {
 				// OSC104 maps 0-255 to palette, 256-260 to special
-				if color_idx >= 0 && color_idx <= 255 {
+				if color_idx <= 255 {
 					ColorTarget(ColorTargetPalette{
 						index: u8(color_idx)
 					})
@@ -620,19 +643,7 @@ fn parse_get_set_dynamic_color(start DynamicColor, data string) []ColorRequest {
 	// This matches the xterm behavior (see misc.c ChangeColorsRequest)
 	mut result := []ColorRequest{}
 	mut color := start
-	mut remaining := data
-
-	for remaining.len > 0 {
-		sep := remaining.index_u8(`;`)
-		mut spec_str := ''
-		if sep >= 0 {
-			spec_str = remaining[..sep]
-			remaining = remaining[sep + 1..]
-		} else {
-			spec_str = remaining
-			remaining = ''
-		}
-
+	for spec_str in color_tokens(data) {
 		target := ColorTarget(ColorTargetDynamic{ color: color })
 
 		if spec_str == '?' {

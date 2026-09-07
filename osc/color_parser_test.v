@@ -595,3 +595,47 @@ fn test_osc_reset_dynamic_full() {
 		}
 	}
 }
+
+fn test_ansi_color_indices_match_zig_u9_parsing() {
+	for input in ['+1;red', '-0;red', '1__0;red'] {
+		list := parse_get_set_ansi_color(.osc_4, input)
+		assert list.len == 1
+		assert list[0] is ColorRequestSet
+	}
+	assert parse_get_set_ansi_color(.osc_4, '1junk;red').len == 0
+	assert parse_get_set_ansi_color(.osc_4, '512;red').len == 0
+	assert parse_get_set_ansi_color(.osc_4, '_1;red').len == 0
+	assert parse_get_set_ansi_color(.osc_4, '1_;red').len == 0
+}
+
+fn test_color_parser_skips_empty_tokens_like_zig() {
+	ansi := parse_get_set_ansi_color(.osc_4, ';;1;;red;;')
+	assert ansi.len == 1
+	req := ansi[0]
+	assert req is ColorRequestSet
+	if req is ColorRequestSet {
+		assert req.target is ColorTargetPalette
+		if req.target is ColorTargetPalette {
+			assert req.target.index == 1
+		}
+	}
+
+	dynamic := parse_get_set_dynamic_color(.foreground, ';red;;blue;')
+	assert dynamic.len == 2
+	assert dynamic[0] is ColorRequestSet
+	assert dynamic[1] is ColorRequestSet
+}
+
+fn test_reset_color_does_not_trim_whitespace() {
+	list := parse_reset_ansi_color(.osc_104, ' 1 ')
+	assert list.len == 1
+	assert list[0] is ColorRequestResetPalette
+}
+
+fn test_osc105_is_not_a_live_parser_state() {
+	mut p := Parser.init(unsafe { nil })
+	for ch in '105;'.bytes() {
+		p.next(ch)
+	}
+	assert p.end(0x1b) == none
+}

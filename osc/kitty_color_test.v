@@ -50,6 +50,31 @@ fn test_kitty_color_kind_parse_unknown() {
 	assert parse_kitty_color_kind('notacolor') == none
 }
 
+fn test_kitty_color_kind_matches_zig_unsigned_parsing() {
+	kind := parse_kitty_color_kind('1__0') or {
+		assert false, 'expected palette key'
+		return
+	}
+	assert kind.kind == .palette
+	assert kind.palette == 10
+	for invalid in ['2junk', '+2', '-0', '_2', '2_', '256'] {
+		assert parse_kitty_color_kind(invalid) == none
+	}
+}
+
+fn test_kitty_color_value_only_trims_spaces() {
+	mut p := Parser.init(unsafe { nil })
+	for ch in '21;foreground=\t?\t'.bytes() {
+		p.next(ch)
+	}
+	cmd := p.end(0x1b) or {
+		assert false, 'expected command'
+		return
+	}
+	assert cmd.cmd_type == .kitty_color_protocol
+	assert cmd.kitty_color_items.len == 0
+}
+
 // Translated from ghostty "OSC 21: kitty color protocol". Verifies that the
 // parsed item list is attached to the Command and each item matches ghostty.
 fn test_osc21_kitty_color_protocol_items() {
@@ -138,19 +163,19 @@ fn test_kitty_color_items_parse() {
 		if value.len == 0 {
 			items << KittyColorItem{
 				item_type: .reset
-				key:       key
+				key: key
 			}
 		} else if value == '?' {
 			items << KittyColorItem{
 				item_type: .query
-				key:       key
+				key: key
 			}
 		} else {
 			rgb := parse_rgb(value) or { continue }
 			items << KittyColorItem{
 				item_type: .set
-				key:       key
-				color:     rgb
+				key: key
+				color: rgb
 			}
 		}
 	}
