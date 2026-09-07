@@ -148,7 +148,7 @@ pub fn (self Variable) name() string {
 
 // Parse an unsigned integer with Zig's `std.fmt.parseInt(usize, value, 10)`
 // semantics.
-fn parse_usize(value string) !usize {
+pub fn parse_usize(value string) !usize {
 	if value.len == 0 {
 		return error('InvalidCharacter')
 	}

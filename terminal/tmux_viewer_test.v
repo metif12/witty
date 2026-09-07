@@ -262,7 +262,7 @@ fn test_tmux_viewer_two_pane_state_restoration() {
 	viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
 	viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
 	viewer.next(tmux.Notification(tmux.NotifBlockEnd{
-		data: '%0;42;0;1;;;;0;4294967295;4294967295;0;1;0;0;0;0;0;0;0;0;0;;;41;123;8,16,24,32,40,48,56,64,72,80,88,96,104,112,120,128,136,144,152,160\n%4;10;5;1;;;;0;4294967295;4294967295;0;1;0;0;0;0;0;0;0;0;0;;;0;37;8,16,24,32,40,48,56,64,72,80,88,96,104,112,120,128,136,144,152,160'
+		data: '%0;42;0;1;;;;0;4294967295;4294967295;0;1;0;0;0;0;0;0;0;0;0;;;41;123;-0,+8,1__6,24,32,40,48,56,64,72,80,88,96,104,112,120,128,136,144,152,160\n%4;10;5;1;;;;0;4294967295;4294967295;0;1;0;0;0;0;0;0;0;0;0;;;0;37;8,16,24,32,40,48,56,64,72,80,88,96,104,112,120,128,136,144,152,160'
 	}))
 
 	state_pane_zero := viewer.panes[0] or { panic('missing pane zero') }
@@ -278,6 +278,10 @@ fn test_tmux_viewer_two_pane_state_restoration() {
 	// current terminal height.
 	assert state_pane_zero.terminal.scrolling_region.top == 41
 	assert state_pane_zero.terminal.scrolling_region.bottom == 123
+	assert state_pane_zero.terminal.tabstops.get(0)
+	assert state_pane_zero.terminal.tabstops.get(8)
+	assert state_pane_zero.terminal.tabstops.get(16)
+	assert state_pane_zero.terminal.tabstops.get(24)
 
 	state_pane_four := viewer.panes[4] or { panic('missing pane four') }
 	assert state_pane_four.terminal.screens.primary.cursor.x == 10

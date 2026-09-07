@@ -93,4 +93,12 @@ fn test_parse_ssh_cache_options() {
 	assert !opts.clear
 	assert opts.add? == 'host'
 	assert opts.expire_days? == 30
+
+	prefixed := parse_ssh_cache_options(['--expire-days=+0x1__e'])!
+	assert prefixed.expire_days? == 30
+	negative_zero := parse_ssh_cache_options(['--expire-days=-0'])!
+	assert negative_zero.expire_days? == 0
+	if _ := parse_ssh_cache_options(['--expire-days=0x_1e']) {
+		assert false, 'expected an edge underscore to fail'
+	}
 }

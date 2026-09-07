@@ -1,10 +1,10 @@
 module cli
 
+import cli_args
 import internal_os
 import net
 import os
 import os.filelock
-import strconv
 import time
 
 const max_ssh_cache_size = 512 * 1024
@@ -370,7 +370,7 @@ fn parse_ssh_cache_options(args []string) !SshCacheOptions {
 				opts.host = value
 			}
 			'expire-days' {
-				parsed := strconv.parse_uint(value, 10, 32) or {
+				parsed := cli_args.parse_unsigned_int(value, 32) or {
 					return error('invalid value for --expire-days: ${value}')
 				}
 				opts.expire_days = u32(parsed)

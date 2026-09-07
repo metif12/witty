@@ -1,6 +1,5 @@
 module terminal
 
-import strconv
 import tmux
 
 // TmuxViewer is a tmux control-mode client that maintains a local terminal for
@@ -504,11 +503,8 @@ fn (mut self TmuxViewer) received_pane_state(content string) ! {
 		terminal_.tabstops.reset(0)
 		tabs := data.get_string(.pane_tabs) or { return error('missing pane tabs') }
 		for tab in tabs.split(',') {
-			if tab.len == 0 || !tab.bytes().all(it >= `0` && it <= `9`) {
-				continue
-			}
-			col := strconv.parse_uint(tab, 10, int(sizeof(usize) * 8)) or { continue }
-			if col < u64(terminal_.cols) {
+			col := tmux.parse_usize(tab) or { continue }
+			if col < usize(terminal_.cols) {
 				terminal_.tabstops.set(u32(col))
 			}
 		}
