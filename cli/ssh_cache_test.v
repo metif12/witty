@@ -12,6 +12,13 @@ fn test_ssh_cache_entry_parsing_format_and_expiration() {
 	assert SshCacheEntry.parse('test.com|1640995200')?.terminfo_version == 'xterm-ghostty'
 	assert SshCacheEntry.parse('example.com|invalid') == none
 	assert SshCacheEntry.parse('') == none
+	assert SshCacheEntry.parse('host|+42|term')?.timestamp == 42
+	assert SshCacheEntry.parse('host|1__2|term')?.timestamp == 12
+	assert SshCacheEntry.parse('host|9223372036854775807|term')?.timestamp == max_i64
+	assert SshCacheEntry.parse('host|-9223372036854775808|term')?.timestamp == min_i64
+	for invalid in ['9223372036854775808', '-9223372036854775809', '1x', '_1', '1_'] {
+		assert SshCacheEntry.parse('host|${invalid}|term') == none
+	}
 
 	now := time.now().unix()
 	assert !SshCacheEntry{
