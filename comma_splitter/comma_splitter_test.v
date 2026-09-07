@@ -112,8 +112,8 @@ fn test_splitter_illegal_escape_char() {
 }
 
 fn test_splitter_valid_escapes() {
-	mut s := CommaSplitter.init("\\n\\r\\t\\\"\\'\\\\" + '')
-	assert s.next()? == "\\n\\r\\t\\\"\\'\\\\"
+	mut s := CommaSplitter.init('\\n\\r\\t\\"\\\'\\\\' + '')
+	assert s.next()? == '\\n\\r\\t\\"\\\'\\\\'
 	assert s.next() == none
 }
 
@@ -165,4 +165,14 @@ fn test_splitter_unicode_escape_with_comma() {
 	assert s.next()? == 'a'
 	assert s.next() == none
 	assert s.last_error == 'illegal escape'
+}
+
+fn test_splitter_unicode_escape_range_uses_source_accumulator() {
+	mut lowercase := CommaSplitter.init('\\u{1aaaaa}')
+	assert lowercase.next()? == '\\u{1aaaaa}'
+	assert lowercase.next() == none
+
+	mut uppercase := CommaSplitter.init('\\u{1AAAAA}')
+	assert uppercase.next()? == '\\u{1AAAAA}'
+	assert uppercase.next() == none
 }

@@ -192,12 +192,12 @@ pub fn (mut self CommaSplitter) next() ?string {
 							self.index += 1
 							unicodeescape_digits += 1
 							unicodeescape_value <<= 4
-							unicodeescape_value += u32(c - `a`) + 10
+							unicodeescape_value += u32(c - `a`)
 						} else if c >= `A` && c <= `F` {
 							self.index += 1
 							unicodeescape_digits += 1
 							unicodeescape_value <<= 4
-							unicodeescape_value += u32(c - `A`) + 10
+							unicodeescape_value += u32(c - `A`)
 						} else {
 							self.last_error = 'illegal escape'
 							return none
