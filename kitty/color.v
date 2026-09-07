@@ -1,5 +1,7 @@
 module kitty
 
+import strconv
+
 // Kitty color protocol types.
 //
 // Source: kitty/color.zig
@@ -75,12 +77,8 @@ pub fn Kind.parse(key string) ?Kind {
 	}
 
 	// Try to parse as a palette index.
-	index := key.u8()
-	// u8() returns 0 on failure, so we need to check if it's actually "0"
-	if index == 0 && key != '0' {
-		return none
-	}
-	return Kind(KindPalette{ index: index })
+	index := strconv.parse_uint(key, 10, 8) or { return none }
+	return Kind(KindPalette{ index: u8(index) })
 }
 
 // Format the kind as a string suitable for the protocol.
@@ -141,8 +139,8 @@ pub:
 // Terminator represents the string terminator used in the original
 // OSC sequence. We must reply with the same terminator.
 pub enum Terminator {
-	st   // ESC backslash (\x1b\\)
-	bel  // BEL character (\x07)
+	st // ESC backslash (\x1b\\)
+	bel // BEL character (\x07)
 }
 
 // OSC holds a list of color protocol requests parsed from a single

@@ -49,3 +49,9 @@ fn test_kind_parse_zero() {
 		assert false, 'expected KindPalette'
 	}
 }
+
+fn test_kind_parse_rejects_out_of_range_palette() {
+	assert Kind.parse('256') == none
+	assert Kind.parse('257') == none
+	assert Kind.parse('-1') == none
+}

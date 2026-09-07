@@ -139,15 +139,15 @@ fn parse_kitty_text_sizing(mut parser Parser, terminator_ch u8) ?Command {
 		params := data_str[..payload_start]
 		kvs := params.split(':')
 		for kv in kvs {
-			eq := kv.index_u8(`=`)
-			if eq < 0 {
+			parts := kv.split('=')
+			if parts.len < 2 {
 				continue
 			}
-			k := kv[..eq]
+			k := parts[0]
 			if k.len != 1 {
 				continue
 			}
-			v := kv[eq + 1..]
+			v := parts[1]
 			result.update(k[0], v)
 		}
 	}

@@ -47,6 +47,17 @@ fn test_osc66_multiple_parameters() {
 	assert cmd.kitty_text_sizing.text == 'long'
 }
 
+fn test_osc66_ignores_fields_after_second_equals() {
+	mut p := Parser.init(unsafe { nil })
+	for ch in '66;s=2=ignored;payload'.bytes() {
+		p.next(ch)
+	}
+	cmd := p.end(0x1b) or { panic('expected command') }
+	assert cmd.cmd_type == .kitty_text_sizing
+	assert cmd.kitty_text_sizing.scale == 2
+	assert cmd.kitty_text_sizing.text == 'payload'
+}
+
 fn test_osc66_scale_is_zero() {
 	mut p := Parser.init(unsafe { nil })
 	input := '66;s=0;nope'
