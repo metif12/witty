@@ -62,7 +62,7 @@ pub:
 // Raw output from a pane.
 pub struct NotifOutput {
 pub:
-	pane_id int
+	pane_id usize
 	data    string // unescaped
 }
 
@@ -70,7 +70,7 @@ pub:
 // named name.
 pub struct NotifSessionChanged {
 pub:
-	id   int
+	id   usize
 	name string
 }
 
@@ -80,7 +80,7 @@ pub struct NotifSessionsChanged {}
 // The layout of the window with ID window-id changed.
 pub struct NotifLayoutChange {
 pub:
-	window_id      int
+	window_id      usize
 	layout         string
 	visible_layout string
 	raw_flags      string
@@ -89,13 +89,13 @@ pub:
 // The window with ID window-id was linked to the current session.
 pub struct NotifWindowAdd {
 pub:
-	id int
+	id usize
 }
 
 // The window with ID window-id was renamed to name.
 pub struct NotifWindowRenamed {
 pub:
-	id   int
+	id   usize
 	name string
 }
 
@@ -103,8 +103,8 @@ pub:
 // with ID pane-id.
 pub struct NotifWindowPaneChanged {
 pub:
-	window_id int
-	pane_id   int
+	window_id usize
+	pane_id   usize
 }
 
 // The client has detached.
@@ -118,7 +118,7 @@ pub:
 pub struct NotifClientSessionChanged {
 pub:
 	client     string
-	session_id int
+	session_id usize
 	name       string
 }
 
@@ -130,14 +130,20 @@ pub fn (self Notification) str() string {
 		NotifBlockEnd { 'Notification{ .block_end = "${self.data}" }' }
 		NotifBlockErr { 'Notification{ .block_err = "${self.data}" }' }
 		NotifOutput { 'Notification{ .output = pane_id=${self.pane_id} }' }
-		NotifSessionChanged { 'Notification{ .session_changed = id=${self.id} name="${self.name}" }' }
+		NotifSessionChanged {
+			'Notification{ .session_changed = id=${self.id} name="${self.name}" }'
+		}
 		NotifSessionsChanged { 'Notification{ .sessions_changed }' }
 		NotifLayoutChange { 'Notification{ .layout_change = window_id=${self.window_id} }' }
 		NotifWindowAdd { 'Notification{ .window_add = id=${self.id} }' }
 		NotifWindowRenamed { 'Notification{ .window_renamed = id=${self.id} name="${self.name}" }' }
-		NotifWindowPaneChanged { 'Notification{ .window_pane_changed = window_id=${self.window_id} pane_id=${self.pane_id} }' }
+		NotifWindowPaneChanged {
+			'Notification{ .window_pane_changed = window_id=${self.window_id} pane_id=${self.pane_id} }'
+		}
 		NotifClientDetached { 'Notification{ .client_detached = client="${self.client}" }' }
-		NotifClientSessionChanged { 'Notification{ .client_session_changed = client="${self.client}" session_id=${self.session_id} name="${self.name}" }' }
+		NotifClientSessionChanged {
+			'Notification{ .client_session_changed = client="${self.client}" session_id=${self.session_id} name="${self.name}" }'
+		}
 	}
 }
 
@@ -219,6 +225,7 @@ pub fn (mut self ControlParser) put(byte u8) ?Notification {
 		.broken {
 			return none
 		}
+
 		// Waiting for a notification so if the byte is not '%' then
 		// we're in a broken state. Control mode output should always
 		// be wrapped in '%begin/%end' otherwise we expect a notification.
@@ -232,6 +239,7 @@ pub fn (mut self ControlParser) put(byte u8) ?Notification {
 				self.state = .notification
 			}
 		}
+
 		// If we're in a notification and its not a newline then
 		// we accumulate. If it is a newline then we have a
 		// complete notification we need to parse.
@@ -249,6 +257,7 @@ pub fn (mut self ControlParser) put(byte u8) ?Notification {
 				}
 			}
 		}
+
 		// If we're in a block then we accumulate until we see a newline
 		// and then we check to see if that line ended the block.
 		.block {
@@ -320,7 +329,7 @@ fn (mut self ControlParser) parse_notification() ?Notification {
 		}
 		re.match_string(line)
 		if re.groups.len >= 4 {
-			pane_id := line[re.groups[0]..re.groups[1]].int()
+			pane_id := parse_usize(line[re.groups[0]..re.groups[1]]) or { panic(err) }
 			data := line[re.groups[2]..re.groups[3]]
 
 			// Important: do not clear buffer here since data points to it.
@@ -334,7 +343,7 @@ fn (mut self ControlParser) parse_notification() ?Notification {
 		}
 		re.match_string(line)
 		if re.groups.len >= 4 {
-			id := line[re.groups[0]..re.groups[1]].int()
+			id := parse_usize(line[re.groups[0]..re.groups[1]]) or { panic(err) }
 			name := line[re.groups[2]..re.groups[3]]
 
 			// Important: do not clear buffer here since name points to it.
@@ -356,7 +365,7 @@ fn (mut self ControlParser) parse_notification() ?Notification {
 		}
 		re.match_string(line)
 		if re.groups.len >= 8 {
-			id := line[re.groups[0]..re.groups[1]].int()
+			id := parse_usize(line[re.groups[0]..re.groups[1]]) or { panic(err) }
 			layout := line[re.groups[2]..re.groups[3]]
 			visible_layout := line[re.groups[4]..re.groups[5]]
 			raw_flags := line[re.groups[6]..re.groups[7]]
@@ -377,7 +386,7 @@ fn (mut self ControlParser) parse_notification() ?Notification {
 		}
 		re.match_string(line)
 		if re.groups.len >= 2 {
-			id := line[re.groups[0]..re.groups[1]].int()
+			id := parse_usize(line[re.groups[0]..re.groups[1]]) or { panic(err) }
 
 			self.buffer = []
 			self.state = .idle
@@ -390,7 +399,7 @@ fn (mut self ControlParser) parse_notification() ?Notification {
 		}
 		re.match_string(line)
 		if re.groups.len >= 4 {
-			id := line[re.groups[0]..re.groups[1]].int()
+			id := parse_usize(line[re.groups[0]..re.groups[1]]) or { panic(err) }
 			name := line[re.groups[2]..re.groups[3]]
 
 			// Important: do not clear buffer here since name points to it.
@@ -404,8 +413,8 @@ fn (mut self ControlParser) parse_notification() ?Notification {
 		}
 		re.match_string(line)
 		if re.groups.len >= 4 {
-			window_id := line[re.groups[0]..re.groups[1]].int()
-			pane_id := line[re.groups[2]..re.groups[3]].int()
+			window_id := parse_usize(line[re.groups[0]..re.groups[1]]) or { panic(err) }
+			pane_id := parse_usize(line[re.groups[2]..re.groups[3]]) or { panic(err) }
 
 			self.buffer = []
 			self.state = .idle
@@ -435,7 +444,7 @@ fn (mut self ControlParser) parse_notification() ?Notification {
 		re.match_string(line)
 		if re.groups.len >= 6 {
 			client := line[re.groups[0]..re.groups[1]]
-			session_id := line[re.groups[2]..re.groups[3]].int()
+			session_id := parse_usize(line[re.groups[2]..re.groups[3]]) or { panic(err) }
 			name := line[re.groups[4]..re.groups[5]]
 
 			// Important: do not clear buffer here since client/name point to it.

@@ -146,29 +146,38 @@ pub fn (self Variable) name() string {
 	}
 }
 
-// Parse an unsigned integer from a string, faithfully mimicking Zig's
-// `std.fmt.parseInt(usize, value, 10)`. Returns an error for empty input,
-// any non-digit character, or a value that does not fit (including a
-// leading sign, which cannot represent an unsigned value).
-fn parse_usize(value string) !u64 {
+// Parse an unsigned integer with Zig's `std.fmt.parseInt(usize, value, 10)`
+// semantics.
+fn parse_usize(value string) !usize {
 	if value.len == 0 {
 		return error('InvalidCharacter')
 	}
-	// A leading sign means the value cannot fit in an unsigned type.
-	if value[0] == `-` || value[0] == `+` {
-		return error('Overflow')
+	mut offset := 0
+	mut negative := false
+	if value[0] == `+` || value[0] == `-` {
+		negative = value[0] == `-`
+		offset = 1
 	}
-	mut result := u64(0)
-	for c in value {
+	if offset == value.len || value[offset] == `_` || value[value.len - 1] == `_` {
+		return error('InvalidCharacter')
+	}
+
+	mut result := usize(0)
+	for c in value[offset..] {
+		if c == `_` {
+			continue
+		}
 		if c < `0` || c > `9` {
 			return error('InvalidCharacter')
 		}
-		digit := u64(c - `0`)
-		new_result := result * 10 + digit
-		if new_result < result {
+		digit := usize(c - `0`)
+		if result > (usize(-1) - digit) / 10 {
 			return error('Overflow')
 		}
-		result = new_result
+		result = result * 10 + digit
+	}
+	if negative && result != 0 {
+		return error('Overflow')
 	}
 	return result
 }
@@ -178,17 +187,13 @@ fn parse_usize(value string) !u64 {
 // ============================================================
 
 // VariableValue holds the parsed result of a tmux format variable.
-// Depending on the variable type, it is either a bool, int, or string.
-pub type VariableValue = bool | int | string
+// Depending on the variable type, it is either a bool, usize, or string.
+pub type VariableValue = bool | string | usize
 
 // Returns true if this variable type produces a boolean value.
 pub fn (self Variable) is_bool() bool {
 	return match self {
-		.alternate_on, .bracketed_paste, .cursor_blinking, .cursor_flag,
-		.focus_flag, .insert_flag, .keypad_cursor_flag, .keypad_flag,
-		.mouse_all_flag, .mouse_any_flag, .mouse_button_flag,
-		.mouse_sgr_flag, .mouse_standard_flag, .mouse_utf8_flag,
-		.origin_flag, .wrap_flag {
+		.alternate_on, .bracketed_paste, .cursor_blinking, .cursor_flag, .focus_flag, .insert_flag, .keypad_cursor_flag, .keypad_flag, .mouse_all_flag, .mouse_any_flag, .mouse_button_flag, .mouse_sgr_flag, .mouse_standard_flag, .mouse_utf8_flag, .origin_flag, .wrap_flag {
 			true
 		}
 		else {
@@ -200,9 +205,7 @@ pub fn (self Variable) is_bool() bool {
 // Returns true if this variable type produces an integer value.
 pub fn (self Variable) is_int() bool {
 	return match self {
-		.alternate_saved_x, .alternate_saved_y, .cursor_x, .cursor_y,
-		.scroll_region_lower, .scroll_region_upper, .session_id,
-		.window_id, .pane_id, .window_width, .window_height {
+		.alternate_saved_x, .alternate_saved_y, .cursor_x, .cursor_y, .scroll_region_lower, .scroll_region_upper, .session_id, .window_id, .pane_id, .window_width, .window_height {
 			true
 		}
 		else {
@@ -214,8 +217,7 @@ pub fn (self Variable) is_int() bool {
 // Returns true if this variable type produces a string value.
 pub fn (self Variable) is_string() bool {
 	return match self {
-		.cursor_colour, .cursor_shape, .pane_tabs, .version,
-		.window_layout {
+		.cursor_colour, .cursor_shape, .pane_tabs, .version, .window_layout {
 			true
 		}
 		else {
@@ -235,27 +237,27 @@ pub fn (self Variable) parse(value string) !VariableValue {
 		return match self {
 			.session_id {
 				if value.len >= 2 && value[0] == `$` {
-					VariableValue(int(parse_usize(value[1..])!))
+					VariableValue(parse_usize(value[1..])!)
 				} else {
 					return error('FormatError: session_id must start with \$')
 				}
 			}
 			.window_id {
 				if value.len >= 2 && value[0] == `@` {
-					VariableValue(int(parse_usize(value[1..])!))
+					VariableValue(parse_usize(value[1..])!)
 				} else {
 					return error('FormatError: window_id must start with @')
 				}
 			}
 			.pane_id {
 				if value.len >= 2 && value[0] == `%` {
-					VariableValue(int(parse_usize(value[1..])!))
+					VariableValue(parse_usize(value[1..])!)
 				} else {
 					return error('FormatError: pane_id must start with %')
 				}
 			}
 			else {
-				VariableValue(int(parse_usize(value)!))
+				VariableValue(parse_usize(value)!)
 			}
 		}
 	}
@@ -276,7 +278,7 @@ pub fn format_variables(vars []Variable, delimiter u8) string {
 		if i != 0 {
 			result += delimiter.ascii_str()
 		}
-		result += '#\{${variable.name()}\}'
+		result += '#{${variable.name()}}'
 	}
 	return result
 }
@@ -313,9 +315,9 @@ pub fn (self &FormatResult) get_bool(v Variable) ?bool {
 }
 
 // Get an integer value for a specific variable.
-pub fn (self &FormatResult) get_int(v Variable) ?int {
+pub fn (self &FormatResult) get_int(v Variable) ?usize {
 	val := self.get(v) or { return none }
-	if val is int {
+	if val is usize {
 		return val
 	}
 	return none

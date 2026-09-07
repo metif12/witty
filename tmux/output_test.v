@@ -35,13 +35,13 @@ fn test_parse_cursor_x() {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v as int == 0
+	assert v as usize == 0
 
 	v2 := Variable.cursor_x.parse('79') or {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v2 as int == 79
+	assert v2 as usize == 79
 }
 
 fn test_parse_session_id() {
@@ -49,13 +49,13 @@ fn test_parse_session_id() {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v as int == 42
+	assert v as usize == 42
 
 	v2 := Variable.session_id.parse('\$0') or {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v2 as int == 0
+	assert v2 as usize == 0
 
 	// Should fail without $ prefix
 	Variable.session_id.parse('0') or {
@@ -70,13 +70,13 @@ fn test_parse_window_id() {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v as int == 42
+	assert v as usize == 42
 
 	v2 := Variable.window_id.parse('@0') or {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v2 as int == 0
+	assert v2 as usize == 0
 
 	// Should fail without @ prefix
 	Variable.window_id.parse('0') or {
@@ -91,13 +91,13 @@ fn test_parse_pane_id() {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v as int == 42
+	assert v as usize == 42
 
 	v2 := Variable.pane_id.parse('%0') or {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v2 as int == 0
+	assert v2 as usize == 0
 
 	// Should fail without % prefix
 	Variable.pane_id.parse('0') or {
@@ -156,7 +156,7 @@ fn test_parse_window_width() {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v as int == 80
+	assert v as usize == 80
 }
 
 fn test_parse_window_height() {
@@ -164,7 +164,7 @@ fn test_parse_window_height() {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v as int == 24
+	assert v as usize == 24
 }
 
 fn test_parse_bool_flags() {
@@ -203,17 +203,18 @@ fn test_parse_bool_flags() {
 
 fn test_format_single_variable() {
 	result := format_variables([Variable.session_id], ` `)
-	assert result == '#\{session_id\}'
+	assert result == '#{session_id}'
 }
 
 fn test_format_multiple_variables() {
-	result := format_variables([Variable.session_id, Variable.window_id, Variable.window_width, Variable.window_height], ` `)
-	assert result == '#\{session_id\} #\{window_id\} #\{window_width\} #\{window_height\}'
+	result := format_variables([Variable.session_id, Variable.window_id, Variable.window_width,
+		Variable.window_height], ` `)
+	assert result == '#{session_id} #{window_id} #{window_width} #{window_height}'
 }
 
 fn test_format_with_comma_delimiter() {
 	result := format_variables([Variable.window_id, Variable.window_layout], `,`)
-	assert result == '#\{window_id\},#\{window_layout\}'
+	assert result == '#{window_id},#{window_layout}'
 }
 
 fn test_format_empty_variables() {
@@ -226,22 +227,19 @@ fn test_parse_format_struct_single_field() {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert result.get_int(.session_id) or { -1 } == 42
+	assert result.get_int(.session_id) or { usize(-1) } == 42
 }
 
 fn test_parse_format_struct_multiple_fields() {
-	result := parse_format_struct(
-		[Variable.session_id, Variable.window_id, Variable.window_width, Variable.window_height],
-		'\$1 @2 80 24',
-		` `
-	) or {
+	result := parse_format_struct([Variable.session_id, Variable.window_id, Variable.window_width,
+		Variable.window_height], '\$1 @2 80 24', ` `) or {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert result.get_int(.session_id) or { -1 } == 1
-	assert result.get_int(.window_id) or { -1 } == 2
-	assert result.get_int(.window_width) or { -1 } == 80
-	assert result.get_int(.window_height) or { -1 } == 24
+	assert result.get_int(.session_id) or { usize(-1) } == 1
+	assert result.get_int(.window_id) or { usize(-1) } == 2
+	assert result.get_int(.window_width) or { usize(-1) } == 80
+	assert result.get_int(.window_height) or { usize(-1) } == 24
 }
 
 fn test_parse_format_struct_missing_entry() {
@@ -270,13 +268,13 @@ fn test_parse_alternate_saved_x() {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v as int == 0
+	assert v as usize == 0
 
 	v2 := Variable.alternate_saved_x.parse('42') or {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v2 as int == 42
+	assert v2 as usize == 42
 
 	// Non-numeric input must fail.
 	Variable.alternate_saved_x.parse('abc') or { return }
@@ -288,13 +286,13 @@ fn test_parse_alternate_saved_y() {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v as int == 0
+	assert v as usize == 0
 
 	v2 := Variable.alternate_saved_y.parse('42') or {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v2 as int == 42
+	assert v2 as usize == 42
 
 	Variable.alternate_saved_y.parse('abc') or { return }
 	assert false, 'expected error for alternate_saved_y "abc"'
@@ -305,13 +303,13 @@ fn test_parse_cursor_y() {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v as int == 0
+	assert v as usize == 0
 
 	v2 := Variable.cursor_y.parse('23') or {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v2 as int == 23
+	assert v2 as usize == 23
 
 	Variable.cursor_y.parse('abc') or { return }
 	assert false, 'expected error for cursor_y "abc"'
@@ -322,13 +320,13 @@ fn test_parse_scroll_region_upper() {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v as int == 0
+	assert v as usize == 0
 
 	v2 := Variable.scroll_region_upper.parse('5') or {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v2 as int == 5
+	assert v2 as usize == 5
 
 	Variable.scroll_region_upper.parse('abc') or { return }
 	assert false, 'expected error for scroll_region_upper "abc"'
@@ -339,13 +337,13 @@ fn test_parse_scroll_region_lower() {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v as int == 0
+	assert v as usize == 0
 
 	v2 := Variable.scroll_region_lower.parse('23') or {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert v2 as int == 23
+	assert v2 as usize == 23
 
 	Variable.scroll_region_lower.parse('abc') or { return }
 	assert false, 'expected error for scroll_region_lower "abc"'
@@ -362,9 +360,9 @@ fn test_parse_cursor_x_invalid() {
 // ============================================================
 
 fn test_parse_window_width_full() {
-	assert (Variable.window_width.parse('80') or { VariableValue(-1) }) as int == 80
-	assert (Variable.window_width.parse('0') or { VariableValue(-1) }) as int == 0
-	assert (Variable.window_width.parse('12345') or { VariableValue(-1) }) as int == 12345
+	assert (Variable.window_width.parse('80') or { VariableValue(usize(-1)) }) as usize == 80
+	assert (Variable.window_width.parse('0') or { VariableValue(usize(-1)) }) as usize == 0
+	assert (Variable.window_width.parse('12345') or { VariableValue(usize(-1)) }) as usize == 12345
 
 	Variable.window_width.parse('abc') or {
 		Variable.window_width.parse('80px') or {
@@ -379,9 +377,9 @@ fn test_parse_window_width_full() {
 }
 
 fn test_parse_window_height_full() {
-	assert (Variable.window_height.parse('24') or { VariableValue(-1) }) as int == 24
-	assert (Variable.window_height.parse('0') or { VariableValue(-1) }) as int == 0
-	assert (Variable.window_height.parse('12345') or { VariableValue(-1) }) as int == 12345
+	assert (Variable.window_height.parse('24') or { VariableValue(usize(-1)) }) as usize == 24
+	assert (Variable.window_height.parse('0') or { VariableValue(usize(-1)) }) as usize == 0
+	assert (Variable.window_height.parse('12345') or { VariableValue(usize(-1)) }) as usize == 12345
 
 	Variable.window_height.parse('abc') or {
 		Variable.window_height.parse('24px') or {
@@ -396,8 +394,8 @@ fn test_parse_window_height_full() {
 }
 
 fn test_parse_session_id_full() {
-	assert (Variable.session_id.parse('\$42') or { VariableValue(-1) }) as int == 42
-	assert (Variable.session_id.parse('\$0') or { VariableValue(-1) }) as int == 0
+	assert (Variable.session_id.parse('\$42') or { VariableValue(usize(-1)) }) as usize == 42
+	assert (Variable.session_id.parse('\$0') or { VariableValue(usize(-1)) }) as usize == 0
 	// Wrong / missing prefixes and non-numeric bodies must all fail.
 	Variable.session_id.parse('0') or {
 		Variable.session_id.parse('@0') or {
@@ -420,9 +418,9 @@ fn test_parse_session_id_full() {
 }
 
 fn test_parse_window_id_full() {
-	assert (Variable.window_id.parse('@42') or { VariableValue(-1) }) as int == 42
-	assert (Variable.window_id.parse('@0') or { VariableValue(-1) }) as int == 0
-	assert (Variable.window_id.parse('@12345') or { VariableValue(-1) }) as int == 12345
+	assert (Variable.window_id.parse('@42') or { VariableValue(usize(-1)) }) as usize == 42
+	assert (Variable.window_id.parse('@0') or { VariableValue(usize(-1)) }) as usize == 0
+	assert (Variable.window_id.parse('@12345') or { VariableValue(usize(-1)) }) as usize == 12345
 	Variable.window_id.parse('0') or {
 		Variable.window_id.parse('\$0') or {
 			Variable.window_id.parse('@') or {
@@ -444,8 +442,8 @@ fn test_parse_window_id_full() {
 }
 
 fn test_parse_pane_id_full() {
-	assert (Variable.pane_id.parse('%42') or { VariableValue(-1) }) as int == 42
-	assert (Variable.pane_id.parse('%0') or { VariableValue(-1) }) as int == 0
+	assert (Variable.pane_id.parse('%42') or { VariableValue(usize(-1)) }) as usize == 42
+	assert (Variable.pane_id.parse('%0') or { VariableValue(usize(-1)) }) as usize == 0
 	Variable.pane_id.parse('0') or {
 		Variable.pane_id.parse('@0') or {
 			Variable.pane_id.parse('%') or {
@@ -529,13 +527,13 @@ fn test_parse_pane_tabs() {
 
 fn test_format_with_tab_delimiter() {
 	result := format_variables([Variable.window_width, Variable.window_height], `\t`)
-	assert result == '#\{window_width\}\t#\{window_height\}'
+	assert result == '#{window_width}\t#{window_height}'
 }
 
 fn test_format_all_variables() {
 	result := format_variables([Variable.session_id, Variable.window_id, Variable.window_width,
 		Variable.window_height, Variable.window_layout], ` `)
-	assert result == '#\{session_id\} #\{window_id\} #\{window_width\} #\{window_height\} #\{window_layout\}'
+	assert result == '#{session_id} #{window_id} #{window_width} #{window_height} #{window_layout}'
 }
 
 // ============================================================
@@ -543,23 +541,21 @@ fn test_format_all_variables() {
 // ============================================================
 
 fn test_parse_format_struct_with_string_field() {
-	result := parse_format_struct([Variable.window_id, Variable.window_layout], '@5,abc123',
-		`,`) or {
+	result := parse_format_struct([Variable.window_id, Variable.window_layout], '@5,abc123', `,`) or {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert result.get_int(.window_id) or { -1 } == 5
+	assert result.get_int(.window_id) or { usize(-1) } == 5
 	assert result.get_string(.window_layout) or { 'X' } == 'abc123'
 }
 
 fn test_parse_format_struct_different_delimiter() {
-	result := parse_format_struct([Variable.window_width, Variable.window_height], '120\t40',
-		`\t`) or {
+	result := parse_format_struct([Variable.window_width, Variable.window_height], '120\t40', `\t`) or {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert result.get_int(.window_width) or { -1 } == 120
-	assert result.get_int(.window_height) or { -1 } == 40
+	assert result.get_int(.window_width) or { usize(-1) } == 120
+	assert result.get_int(.window_height) or { usize(-1) } == 40
 }
 
 fn test_parse_format_struct_format_error() {
@@ -593,6 +589,24 @@ fn test_parse_format_struct_with_empty_layout_field() {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert result.get_int(.session_id) or { -1 } == 1
+	assert result.get_int(.session_id) or { usize(-1) } == 1
 	assert result.get_string(.window_layout) or { 'X' } == ''
+}
+
+fn test_parse_integer_preserves_values_above_i32() {
+	value := Variable.window_width.parse('4294967295') or {
+		assert false, 'parse failed: ${err}'
+		return
+	}
+	assert value as usize == usize(4294967295)
+}
+
+fn test_parse_integer_matches_zig_sign_and_separator_rules() {
+	assert (Variable.window_width.parse('+10') or { VariableValue(usize(-1)) }) as usize == 10
+	assert (Variable.window_width.parse('-0') or { VariableValue(usize(-1)) }) as usize == 0
+	assert (Variable.window_width.parse('1__0') or { VariableValue(usize(-1)) }) as usize == 10
+	for invalid in ['-1', '+', '-', '_10', '10_'] {
+		Variable.window_width.parse(invalid) or { continue }
+		assert false, 'expected ${invalid} to fail'
+	}
 }

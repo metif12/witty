@@ -19,12 +19,12 @@ module tmux
 pub struct Layout {
 pub:
 	// Width, height of the node.
-	width  int
-	height int
+	width  usize
+	height usize
 
 	// X and Y offset from the top-left corner of the window.
-	x int
-	y int
+	x usize
+	y usize
 
 	// The content of this node, either a pane (leaf) or more nodes
 	// (split) horizontally or vertically.
@@ -35,7 +35,7 @@ pub type Content = ContentPane | ContentHorizontal | ContentVertical
 
 pub struct ContentPane {
 pub:
-	pane_id int
+	pane_id usize
 }
 
 pub struct ContentHorizontal {
@@ -114,8 +114,7 @@ fn parse_next(str string, mut ps ParseState) !Layout {
 	if x_idx < 0 {
 		return error('SyntaxError: missing width separator')
 	}
-	width := str[ps.offset..ps.offset + x_idx].int()
-	if width == 0 && str[ps.offset..ps.offset + x_idx] != '0' {
+	width := parse_usize(str[ps.offset..ps.offset + x_idx]) or {
 		return error('SyntaxError: invalid width')
 	}
 	ps.offset += x_idx + 1 // Consume `x`
@@ -125,8 +124,7 @@ fn parse_next(str string, mut ps ParseState) !Layout {
 	if comma_idx < 0 {
 		return error('SyntaxError: missing height separator')
 	}
-	height := str[ps.offset..ps.offset + comma_idx].int()
-	if height == 0 && str[ps.offset..ps.offset + comma_idx] != '0' {
+	height := parse_usize(str[ps.offset..ps.offset + comma_idx]) or {
 		return error('SyntaxError: invalid height')
 	}
 	ps.offset += comma_idx + 1 // Consume `,`
@@ -136,8 +134,7 @@ fn parse_next(str string, mut ps ParseState) !Layout {
 	if comma_idx2 < 0 {
 		return error('SyntaxError: missing x separator')
 	}
-	x := str[ps.offset..ps.offset + comma_idx2].int()
-	if x == 0 && str[ps.offset..ps.offset + comma_idx2] != '0' {
+	x := parse_usize(str[ps.offset..ps.offset + comma_idx2]) or {
 		return error('SyntaxError: invalid x')
 	}
 	ps.offset += comma_idx2 + 1 // Consume `,`
@@ -153,8 +150,7 @@ fn parse_next(str string, mut ps ParseState) !Layout {
 	if y_end < 0 {
 		return error('SyntaxError: missing y delimiter')
 	}
-	y := str[ps.offset..ps.offset + y_end].int()
-	if y == 0 && str[ps.offset..ps.offset + y_end] != '0' {
+	y := parse_usize(str[ps.offset..ps.offset + y_end]) or {
 		return error('SyntaxError: invalid y')
 	}
 	ps.offset += y_end // Don't consume the delimiter!
@@ -182,18 +178,7 @@ fn parse_next(str string, mut ps ParseState) !Layout {
 		if pane_str.len == 0 {
 			return error('SyntaxError: empty pane ID')
 		}
-		// Validate that the pane ID string is purely numeric.
-		// V's .int() silently parses prefixes like "1extra" as 1,
-		// so we must check all characters are digits.
-		for ch in pane_str.bytes() {
-			if ch < `0` || ch > `9` {
-				return error('SyntaxError: trailing data in pane ID')
-			}
-		}
-		pane_id := pane_str.int()
-		if pane_id == 0 && pane_str != '0' {
-			return error('SyntaxError: invalid pane ID')
-		}
+		pane_id := parse_usize(pane_str) or { return error('SyntaxError: invalid pane ID') }
 		ps.offset += pane_end // Consume the pane ID, not the delimiter
 
 		content = Content(ContentPane{ pane_id: pane_id })

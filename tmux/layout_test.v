@@ -52,6 +52,17 @@ fn test_single_pane_large_values() {
 	}
 }
 
+fn test_single_pane_values_above_i32() {
+	layout := Layout.parse('4294967295x24,2147483648,0,4294967295') or {
+		assert false, 'parse failed: ${err}'
+		return
+	}
+	assert layout.width == usize(4294967295)
+	assert layout.x == usize(2147483648)
+	assert layout.content is ContentPane
+	assert layout.content.pane_id == usize(4294967295)
+}
+
 fn test_horizontal_split_two_panes() {
 	layout := Layout.parse('80x24,0,0{40x24,0,0,1,40x24,40,0,2}') or {
 		assert false, 'parse failed: ${err}'

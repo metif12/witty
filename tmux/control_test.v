@@ -109,6 +109,21 @@ fn test_tmux_output() {
 	}
 }
 
+fn test_tmux_output_pane_id_above_i32() {
+	mut c := ControlParser{}
+	defer { c.deinit() }
+
+	feed_string_none(mut c, '%output %4294967295 data')
+	if n := c.put(`\n`) {
+		if n is NotifOutput {
+			assert n.pane_id == usize(4294967295)
+			assert n.data == 'data'
+			return
+		}
+	}
+	assert false, 'expected NotifOutput'
+}
+
 fn test_tmux_session_changed() {
 	mut c := ControlParser{}
 	defer { c.deinit() }
