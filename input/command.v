@@ -73,6 +73,15 @@ pub:
 	description string
 }
 
+// CCommand is ghostty_command_s.
+pub struct CCommand {
+pub:
+	action_key  &char = unsafe { nil }
+	action      &char = unsafe { nil }
+	title       &char = unsafe { nil }
+	description &char = unsafe { nil }
+}
+
 // clone creates a deep copy of a Command.
 pub fn (c Command) clone() Command {
 	return Command{
@@ -93,6 +102,25 @@ pub fn (a Command) equal(b Command) bool {
 	return a.description == b.description
 }
 
+// comptime_cval is Command.comptimeCval. V uses the same representation for
+// values constructed while initializing module constants and at runtime.
+pub fn (c Command) comptime_cval() CCommand {
+	return c.cval()
+}
+
+// cval converts this command to its C representation. The title and
+// description remain borrowed from the command, matching the source API.
+pub fn (c Command) cval() CCommand {
+	action_key := c.action.tag.str()
+	action := c.action.format()
+	return CCommand{
+		action_key: &char(action_key.str)
+		action: &char(action.str)
+		title: &char(c.title.str)
+		description: &char(c.description.str)
+	}
+}
+
 // less_than implements comparison for sorting commands alphabetically by title.
 pub fn (a Command) less_than(b Command) bool {
 	return ascii.order_ignore_case(a.title, b.title) < 0
@@ -103,6 +131,13 @@ pub fn (a Command) less_than(b Command) bool {
 // alphabetically by title (case-insensitive). This mirrors the Zig `defaults`
 // comptime constant which does the same via `actionCommands` per Action.Key.
 pub const command_defaults = build_command_defaults()
+
+// command_defaults_c is the C-compatible form of command_defaults.
+pub const command_defaults_c = build_command_defaults_c()
+
+fn build_command_defaults_c() []CCommand {
+	return command_defaults.map(it.comptime_cval())
+}
 
 // build_command_defaults assembles and sorts the default command list.
 // Faithful to Zig `defaults`.

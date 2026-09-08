@@ -28,6 +28,23 @@ fn test_link_clone_equal_and_regex() {
 	assert !original.equal(different)
 }
 
+fn test_command_cval_matches_command() {
+	command := Command{
+		action: Action.new_str(.text, 'hello')
+		title: 'Title'
+		description: 'Description'
+	}
+	cval := command.cval()
+	unsafe {
+		assert cstring_to_vstring(cval.action_key) == 'text'
+		assert cstring_to_vstring(cval.action) == 'text:hello'
+		assert cstring_to_vstring(cval.title) == 'Title'
+		assert cstring_to_vstring(cval.description) == 'Description'
+	}
+	assert command.comptime_cval().action_key != unsafe { nil }
+	assert command_defaults_c.len == command_defaults.len
+}
+
 fn test_key_event_effective_mods_no_utf8() {
 	e := KeyEvent{
 		mods: Mods{ shift: true, ctrl: true }

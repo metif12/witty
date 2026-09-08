@@ -24,19 +24,10 @@ pub:
 	len    usize
 }
 
-// CConfigCommand mirrors ghostty_command_s.
-pub struct CConfigCommand {
-pub:
-	action_key  &char = unsafe { nil }
-	action      &char = unsafe { nil }
-	title       &char = unsafe { nil }
-	description &char = unsafe { nil }
-}
-
 // CConfigCommandList mirrors ghostty_config_command_list_s.
 pub struct CConfigCommandList {
 pub:
-	commands &CConfigCommand = unsafe { nil }
+	commands &inputpkg.CCommand = unsafe { nil }
 	len      usize
 }
 
@@ -101,8 +92,7 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 		$if field.name != 'class' {
 			if field.name.len > 0 && field.name[0] != `_` && field.name == normalized_key
 				&& field.name !in ['diagnostics', 'conditional_state', 'conditional_set',
-					'loading_theme', 'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_strings',
-					'capi_commands'] {
+					'loading_theme', 'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_strings'] {
 				$if field.unaliased_typ is string {
 					c_write_cstring(ptr, &char(c.$(field.name).str))
 					return true
@@ -189,7 +179,7 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 					c_write_value[CConfigPalette](ptr, c.$(field.name).cval())
 					return true
 				} $else $if field.unaliased_typ is RepeatableCommand {
-					c_write_value[CConfigCommandList](ptr, c.command_list_cval())
+					c_write_value[CConfigCommandList](ptr, c.$(field.name).cval())
 					return true
 				} $else $if field.unaliased_typ is QuickTerminalSize {
 					c_write_value[CConfigQuickTerminalSize](ptr, c.$(field.name).cval())
@@ -279,29 +269,6 @@ fn enum_c_name(value string) string {
 		return value
 	}
 	return value.trim_string_right('_').replace('_', '-')
-}
-
-@[markused]
-fn (mut c Config) command_list_cval() CConfigCommandList {
-	c.capi_commands = []CConfigCommand{cap: c.command_palette_entry.items.len}
-	for i, command in c.command_palette_entry.items {
-		action_key := c.cache_c_string('_command_key_${i}', command.action.tag.str())
-		action := c.cache_c_string('_command_action_${i}', command.action.format())
-		c.capi_commands << CConfigCommand{
-			action_key: action_key
-			action: action
-			title: &char(command.title.str)
-			description: &char(command.description.str)
-		}
-	}
-	return CConfigCommandList{
-		commands: if c.capi_commands.len == 0 {
-			unsafe { nil }
-		} else {
-			unsafe { &CConfigCommand(c.capi_commands.data) }
-		}
-		len: usize(c.capi_commands.len)
-	}
 }
 
 @[markused]

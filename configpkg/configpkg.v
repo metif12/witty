@@ -4258,12 +4258,8 @@ pub mut:
 	// True while replay_steps are being evaluated; prevents recording a replay
 	// of the replay itself.
 	replaying bool
-	// Storage backing values borrowed through the C configuration API. Ghostty's
-	// arena keeps these values alive for the lifetime of Config; these caches give
-	// the V translation the same ownership guarantee for converted enum strings
-	// and command records.
-	capi_strings  map[string]string
-	capi_commands []CConfigCommand
+	// Storage backing converted enum strings borrowed through the C API.
+	capi_strings map[string]string
 }
 
 // MacOSDockDropBehavior controls behavior when dropping onto the macOS dock.
@@ -5134,10 +5130,9 @@ pub fn (c Config) clone() Config {
 	copy.link = c.link.clone()
 	copy.conditional_set = c.conditional_set.clone()
 	copy.replay_steps = clone_replay_steps(c.replay_steps)
-	// C API caches contain pointers into the source configuration and must never
-	// be shared by a clone. They are rebuilt lazily on the first C getter call.
+	// C API string caches contain pointers into the source configuration and must
+	// never be shared by a clone. They are rebuilt lazily on first access.
 	copy.capi_strings = map[string]string{}
-	copy.capi_commands = []CConfigCommand{}
 	if cmd := c.command {
 		copy.command = cmd.clone()
 	}
@@ -5599,12 +5594,14 @@ pub fn (r RepeatableReadableIO) format_entry() []string {
 // RepeatableCommand is the configured list of command-palette entries.
 pub struct RepeatableCommand {
 pub mut:
-	items []inputpkg.Command
+	items   []inputpkg.Command
+	items_c []inputpkg.CCommand
 }
 
 // init installs Ghostty's built-in command palette entries.
 pub fn (mut r RepeatableCommand) init() {
 	r.items = inputpkg.command_defaults.map(it.clone())
+	r.items_c = inputpkg.command_defaults_c.clone()
 }
 
 // parse_cli appends a title/action/description record. An empty value clears
@@ -5613,6 +5610,7 @@ pub fn (mut r RepeatableCommand) parse_cli(input ?string) ! {
 	input_value := input or { '' }
 	if input_value.len == 0 {
 		r.items.clear()
+		r.items_c.clear()
 		return
 	}
 
@@ -5654,16 +5652,19 @@ pub fn (mut r RepeatableCommand) parse_cli(input ?string) ! {
 		return error('invalid value')
 	}
 	action := inputpkg.Action.parse(action_text) or { return error('invalid value') }
-	r.items << inputpkg.Command{
+	command := inputpkg.Command{
 		action: action
 		title: title
 		description: description
 	}
+	r.items << command
+	r.items_c << command.cval()
 }
 
 pub fn (r RepeatableCommand) clone() RepeatableCommand {
 	return RepeatableCommand{
 		items: r.items.map(it.clone())
+		items_c: r.items_c.clone()
 	}
 }
 
@@ -5677,6 +5678,18 @@ pub fn (r RepeatableCommand) equal(other RepeatableCommand) bool {
 		}
 	}
 	return true
+}
+
+@[markused]
+pub fn (r RepeatableCommand) cval() CConfigCommandList {
+	return CConfigCommandList{
+		commands: if r.items_c.len == 0 {
+			unsafe { nil }
+		} else {
+			unsafe { &inputpkg.CCommand(r.items_c.data) }
+		}
+		len: usize(r.items_c.len)
+	}
 }
 
 pub fn (r RepeatableCommand) format_entry() []string {
@@ -9080,7 +9093,7 @@ fn is_config_key(key string) bool {
 	$for field in Config.fields {
 		if field.name == normalized_key
 			&& field.name !in ['diagnostics', 'conditional_state', 'conditional_set', 'loading_theme',
-				'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_strings', 'capi_commands'] {
+				'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_strings'] {
 			return true
 		}
 	}
@@ -9114,7 +9127,7 @@ fn (mut c Config) reset_empty_config_value(key string) bool {
 		$if !field.is_map {
 			if field.name == normalized_key
 				&& field.name !in ['diagnostics', 'conditional_state', 'loading_theme', 'replay_steps',
-					'replaying', 'xdg_terminal_exec', 'capi_commands'] {
+					'replaying', 'xdg_terminal_exec'] {
 				c.$(field.name) = defaults.$(field.name)
 				return true
 			}

@@ -945,6 +945,8 @@ fn test_repeatable_command_parse_clear_clone_and_format() {
 
 	clone := commands.clone()
 	assert clone.equal(commands)
+	assert clone.items_c.len == clone.items.len
+	assert clone.cval().len == usize(clone.items.len)
 	assert clone.format_entry() == [
 		'title:"Foo",action:"ignore"',
 		'title:"Bar, Baz",description:"line\\ntext",action:"text:hello, world"',
