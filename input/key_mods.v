@@ -555,7 +555,7 @@ fn init_mods(mod_val Mod, side Side) Mods {
 //
 // Faithful to the Zig packed `Mods` bitcast layout; the round-trip with
 // `Mods.int()` preserves the standard keys, the locks and the sides.
-fn mods_from_int(v u16) Mods {
+pub fn mods_from_int(v u16) Mods {
 	return Mods{
 		shift: (v & 1) != 0
 		ctrl: (v & 2) != 0

@@ -498,9 +498,17 @@ fn test_capi_key_event_conversion() {
 fn test_mods_roundtrip() {
 	original := input.Mods{
 		shift: true
-		ctrl: false
+		ctrl: true
 		alt: true
 		super_: true
+		caps_lock: true
+		num_lock: true
+		sides: input.SideInfo{
+			shift: .right
+			ctrl: .right
+			alt: .right
+			super: .right
+		}
 	}
 
 	encoded := mods_to_int(original)
@@ -510,6 +518,12 @@ fn test_mods_roundtrip() {
 	assert decoded.ctrl == original.ctrl
 	assert decoded.alt == original.alt
 	assert decoded.super_ == original.super_
+	assert decoded.caps_lock == original.caps_lock
+	assert decoded.num_lock == original.num_lock
+	assert decoded.sides.shift == original.sides.shift
+	assert decoded.sides.ctrl == original.sides.ctrl
+	assert decoded.sides.alt == original.sides.alt
+	assert decoded.sides.super == original.sides.super
 }
 
 // Test mods_from_int with zero.
@@ -528,8 +542,16 @@ fn test_mods_to_int_all() {
 		ctrl: true
 		alt: true
 		super_: true
+		caps_lock: true
+		num_lock: true
+		sides: input.SideInfo{
+			shift: .right
+			ctrl: .right
+			alt: .right
+			super: .right
+		}
 	}
-	assert mods_to_int(m) == 0x0F
+	assert mods_to_int(m) == 0x3FF
 }
 
 // Test PlatformTag enum values.

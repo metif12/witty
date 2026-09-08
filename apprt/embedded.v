@@ -1186,30 +1186,12 @@ pub fn (self CAPIKeyEvent) key_event() EmbeddedKeyEvent {
 
 // mods_from_int converts an integer bitmask to input.Mods.
 fn mods_from_int(v int) input.Mods {
-	return input.Mods{
-		shift: (v & 1) != 0
-		ctrl: (v & 2) != 0
-		alt: (v & 4) != 0
-		super_: (v & 8) != 0
-	}
+	return input.mods_from_int(u16(v))
 }
 
 // mods_to_int converts input.Mods to an integer bitmask.
 fn mods_to_int(m input.Mods) int {
-	mut v := 0
-	if m.shift {
-		v |= 1
-	}
-	if m.ctrl {
-		v |= 2
-	}
-	if m.alt {
-		v |= 4
-	}
-	if m.super_ {
-		v |= 8
-	}
-	return v
+	return int(m.int())
 }
 
 // CAPISurfaceSize represents the C API surface size with grid and pixel info.
