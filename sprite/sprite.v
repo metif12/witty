@@ -527,9 +527,8 @@ pub fn (mut p StaticPath) close() {
 // Polygon extraction + Bezier flattening
 // ============================================================
 
-// bezier_segments controls how finely cubic Bezier curves are
-// flattened in to line segments.
-const bezier_segments = 24
+// z2d's default maximum error tolerance for spline decomposition.
+const default_tolerance = 0.1
 
 // flatten_path converts a Path in to a list of closed polygons (each
 // polygon is a list of Points). Bezier curves are flattened in to line
@@ -572,10 +571,7 @@ fn flatten_path(path Path) [][]Point {
 					x: node.x
 					y: node.y
 				}
-				for i in 1 .. bezier_segments + 1 {
-					t := f64(i) / f64(bezier_segments)
-					cur << cubic_bezier(p0, p1, p2, p3, t)
-				}
+				cur << decompose_spline(p0, p1, p2, p3, default_tolerance)
 				last = p3
 			}
 			.close {
@@ -595,16 +591,112 @@ fn flatten_path(path Path) [][]Point {
 	return polys
 }
 
-// cubic_bezier evaluates a cubic Bezier at parameter t.
-fn cubic_bezier(p0 Point, p1 Point, p2 Point, p3 Point, t f64) Point {
-	mt := 1.0 - t
-	a := mt * mt * mt
-	b := 3.0 * mt * mt * t
-	c := 3.0 * mt * t * t
-	d := t * t * t
+// decompose_spline is z2d v0.10.0's internal/tess/Spline.zig decomposition.
+// It adaptively subdivides a cubic Bezier using the same error bound rather
+// than choosing an unrelated fixed number of segments.
+fn decompose_spline(a Point, b Point, c Point, d Point, tolerance f64) []Point {
+	if points_equal(a, b) && points_equal(c, d) {
+		return [d]
+	}
+	mut result := []Point{}
+	mut knots := SplineKnots{
+		a: a
+		b: b
+		c: c
+		d: d
+	}
+	decompose_spline_into(mut result, mut knots, a, tolerance * tolerance)
+	result << d
+	return result
+}
+
+fn decompose_spline_into(mut result []Point, mut knots SplineKnots, start Point, tolerance f64) {
+	if knots.error_sq() < tolerance {
+		if !points_equal(knots.a, start) {
+			result << knots.a
+		}
+		return
+	}
+
+	mut second := knots.de_casteljau()
+	decompose_spline_into(mut result, mut knots, start, tolerance)
+	decompose_spline_into(mut result, mut second, start, tolerance)
+}
+
+struct SplineKnots {
+mut:
+	a Point
+	b Point
+	c Point
+	d Point
+}
+
+// error_sq returns z2d's upper bound on the squared error from replacing this
+// spline with the line segment joining its endpoints.
+fn (knots SplineKnots) error_sq() f64 {
+	mut b_x_delta := knots.b.x - knots.a.x
+	mut b_y_delta := knots.b.y - knots.a.y
+	mut c_x_delta := knots.c.x - knots.a.x
+	mut c_y_delta := knots.c.y - knots.a.y
+
+	if knots.a.x != knots.d.x || knots.a.y != knots.d.y {
+		d_x_delta := knots.d.x - knots.a.x
+		d_y_delta := knots.d.y - knots.a.y
+		d_dot_sq := dot_sq(d_x_delta, d_y_delta)
+
+		b_d_dot := b_x_delta * d_x_delta + b_y_delta * d_y_delta
+		if b_d_dot >= d_dot_sq {
+			b_x_delta -= d_x_delta
+			b_y_delta -= d_y_delta
+		} else {
+			b_x_delta -= b_d_dot / d_dot_sq * d_x_delta
+			b_y_delta -= b_d_dot / d_dot_sq * d_y_delta
+		}
+
+		c_d_dot := c_x_delta * d_x_delta + c_y_delta * d_y_delta
+		if c_d_dot >= d_dot_sq {
+			c_x_delta -= d_x_delta
+			c_y_delta -= d_y_delta
+		} else {
+			c_x_delta -= c_d_dot / d_dot_sq * d_x_delta
+			c_y_delta -= c_d_dot / d_dot_sq * d_y_delta
+		}
+	}
+
+	b_error := dot_sq(b_x_delta, b_y_delta)
+	c_error := dot_sq(c_x_delta, c_y_delta)
+	return if b_error > c_error { b_error } else { c_error }
+}
+
+// de_casteljau mutates this knot to the first half and returns the second.
+fn (mut knots SplineKnots) de_casteljau() SplineKnots {
+	ab := lerp_half(knots.a, knots.b)
+	bc := lerp_half(knots.b, knots.c)
+	cd := lerp_half(knots.c, knots.d)
+	abbc := lerp_half(ab, bc)
+	bccd := lerp_half(bc, cd)
+	final := lerp_half(abbc, bccd)
+
+	result := SplineKnots{
+		a: final
+		b: bccd
+		c: cd
+		d: knots.d
+	}
+	knots.b = ab
+	knots.c = abbc
+	knots.d = final
+	return result
+}
+
+fn dot_sq(x f64, y f64) f64 {
+	return x * x + y * y
+}
+
+fn lerp_half(a Point, b Point) Point {
 	return Point{
-		x: a * p0.x + b * p1.x + c * p2.x + d * p3.x
-		y: a * p0.y + b * p1.y + c * p2.y + d * p3.y
+		x: a.x + (b.x - a.x) / 2.0
+		y: a.y + (b.y - a.y) / 2.0
 	}
 }
 
@@ -612,9 +704,8 @@ fn cubic_bezier(p0 Point, p1 Point, p2 Point, p3 Point, t f64) Point {
 // Scanline polygon fill (non-zero winding, anti-aliased)
 // ============================================================
 
-// Supersampling factor per axis for anti-aliasing. z2d defaults to a
-// tolerance-based analytic rasterizer; we approximate with 4x4 vertical
-// supersampling which gives visually equivalent smooth edges.
+// Supersampling factor per axis for anti-aliasing. This rasterizer is still
+// pending replacement by z2d's multisample rasterizer.
 const aa_samples = 4
 
 // fill_path fills a closed path using the non-zero winding rule, with

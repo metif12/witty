@@ -346,6 +346,18 @@ fn test_stroke_path_closes_closed_subpaths() {
 	assert data_at(&c, 5, 5) > 0
 }
 
+fn test_z2d_spline_straight_line_fast_path() {
+	end := Point{ x: 8, y: 4 }
+	points := decompose_spline(Point{}, Point{}, end, end, default_tolerance)
+	assert points == [end]
+}
+
+fn test_z2d_spline_adaptive_decomposition() {
+	points := decompose_spline(Point{}, Point{ x: 0, y: 10 }, Point{ x: 10, y: 10 }, Point{ x: 10, y: 0 }, default_tolerance)
+	assert points.len == 16
+	assert points.last() == Point{ x: 10, y: 0 }
+}
+
 fn test_stroke_path_round_caps_extend_past_endpoints() {
 	mut butt := Canvas.init(12, 12, 0, 0)
 	mut butt_path := butt.static_path(2)
