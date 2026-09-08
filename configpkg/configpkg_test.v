@@ -545,6 +545,7 @@ fn test_duration_round_and_lte() {
 	assert Duration{ duration: 5 }.lte(Duration{ duration: 5 })
 	assert Duration{ duration: 4 }.lte(Duration{ duration: 5 })
 	assert !Duration{ duration: 6 }.lte(Duration{ duration: 5 })
+	assert Duration.parse_cli('5ms')! == Duration{ duration: 5_000_000 }
 }
 
 fn test_quit_after_last_window_closed_delay_parse_and_format() {
@@ -591,6 +592,7 @@ fn test_resize_overlay_defaults_parse_and_format() {
 fn test_parse_window_padding() {
 	one := window_padding_parse_cli('100')!
 	assert one == WindowPadding{100, 100}
+	assert WindowPadding.parse_cli('100')! == one
 	assert one.clone().equal(one)
 	assert one.format_entry() == '100'
 	two := window_padding_parse_cli('100,200')!
@@ -832,7 +834,8 @@ fn test_repeatable_font_variation_uses_zig_float_grammar() {
 }
 
 fn test_font_value_type_formatters() {
-	style := font_style_parse_cli('Regular')!
+	mut style := FontStyle{}
+	style.parse_cli('Regular')!
 	assert style.clone() == style
 	assert style.name_value() or { '' } == 'Regular'
 	assert style.format_entry() == 'Regular'
@@ -1540,7 +1543,7 @@ fn test_notify_on_command_finish_action_and_after() {
 
 // Config.zig: WindowDecoration "parse WindowDecoration"
 fn test_parse_window_decoration() {
-	assert window_decoration_parse_cli(none)! == .auto
+	assert WindowDecoration.parse_cli(none)! == .auto
 	assert window_decoration_parse_cli('true')! == .auto
 	assert window_decoration_parse_cli('false')! == .none_
 	assert window_decoration_parse_cli('server')! == .server

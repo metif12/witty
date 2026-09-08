@@ -5911,6 +5911,10 @@ pub:
 	name string
 }
 
+pub fn (mut s FontStyle) parse_cli(input ?string) ! {
+	s = font_style_parse_cli(input)!
+}
+
 pub fn font_style_parse_cli(input ?string) !FontStyle {
 	value := input or { return perr(ParseError.value_required) }
 	return match value {
@@ -7860,25 +7864,25 @@ fn (mut c Config) apply_kv(key string, value string) {
 			apply_repeatable_string(mut c.font_feature, value)
 		}
 		'font-style' {
-			c.font_style = font_style_parse_cli(value) or {
+			c.font_style.parse_cli(value) or {
 				c.invalid_config_value(key, value)
 				return
 			}
 		}
 		'font-style-bold' {
-			c.font_style_bold = font_style_parse_cli(value) or {
+			c.font_style_bold.parse_cli(value) or {
 				c.invalid_config_value(key, value)
 				return
 			}
 		}
 		'font-style-italic' {
-			c.font_style_italic = font_style_parse_cli(value) or {
+			c.font_style_italic.parse_cli(value) or {
 				c.invalid_config_value(key, value)
 				return
 			}
 		}
 		'font-style-bold-italic' {
-			c.font_style_bold_italic = font_style_parse_cli(value) or {
+			c.font_style_bold_italic.parse_cli(value) or {
 				c.invalid_config_value(key, value)
 				return
 			}
@@ -8049,13 +8053,13 @@ fn (mut c Config) apply_kv(key string, value string) {
 			}
 		}
 		'window-padding-x' {
-			c.window_padding_x = window_padding_parse_cli(value) or {
+			c.window_padding_x = WindowPadding.parse_cli(value) or {
 				c.invalid_config_value(key, value)
 				return
 			}
 		}
 		'window-padding-y' {
-			c.window_padding_y = window_padding_parse_cli(value) or {
+			c.window_padding_y = WindowPadding.parse_cli(value) or {
 				c.invalid_config_value(key, value)
 				return
 			}
@@ -8086,7 +8090,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 			}
 		}
 		'undo-timeout' {
-			c.undo_timeout = duration_parse_cli(value) or {
+			c.undo_timeout = Duration.parse_cli(value) or {
 				c.invalid_config_value(key, value)
 				return
 			}
@@ -8417,7 +8421,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 			}
 		}
 		'notify-on-command-finish-after' {
-			c.notify_on_command_finish_after = duration_parse_cli(value) or {
+			c.notify_on_command_finish_after = Duration.parse_cli(value) or {
 				c.invalid_config_value(key, value)
 				return
 			}
@@ -8498,7 +8502,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 			}
 		}
 		'window-decoration' {
-			c.window_decoration = window_decoration_parse_cli(value) or {
+			c.window_decoration = WindowDecoration.parse_cli(value) or {
 				c.invalid_config_value(key, value)
 				return
 			}
@@ -8527,7 +8531,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 			if value.len == 0 {
 				c.quit_after_last_window_closed_delay = none
 			} else {
-				c.quit_after_last_window_closed_delay = duration_parse_cli(value) or {
+				c.quit_after_last_window_closed_delay = Duration.parse_cli(value) or {
 					c.invalid_config_value(key, value)
 					return
 				}
@@ -8571,7 +8575,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 			}
 		}
 		'resize-overlay-duration' {
-			c.resize_overlay_duration = duration_parse_cli(value) or {
+			c.resize_overlay_duration = Duration.parse_cli(value) or {
 				c.invalid_config_value(key, value)
 				return
 			}
@@ -10343,6 +10347,10 @@ pub fn duration_parse_cli(input ?string) !Duration {
 	return perr(ParseError.value_required)
 }
 
+pub fn Duration.parse_cli(input ?string) !Duration {
+	return duration_parse_cli(input)
+}
+
 // duration_format renders a Duration the way `Duration.format` does, e.g.
 // `1h30m`. `us` is always rendered as `µs`.
 pub fn (d Duration) format() string {
@@ -10420,6 +10428,10 @@ pub fn window_padding_parse_cli(input ?string) !WindowPadding {
 		top_left: value
 		bottom_right: value
 	}
+}
+
+pub fn WindowPadding.parse_cli(input ?string) !WindowPadding {
+	return window_padding_parse_cli(input)
 }
 
 // parse_u32 parses a base-10 u32, returning none on invalid input.
@@ -10806,6 +10818,10 @@ pub fn window_decoration_parse_cli(input ?string) !WindowDecoration {
 			return perr(ParseError.invalid_value)
 		}
 	}
+}
+
+pub fn WindowDecoration.parse_cli(input ?string) !WindowDecoration {
+	return window_decoration_parse_cli(input)
 }
 
 // ------------------------------------------------------------
