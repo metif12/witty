@@ -1,6 +1,5 @@
 module configpkg
 
-import terminal
 import input
 import font
 import datastruct.comparison
@@ -806,20 +805,7 @@ fn selection_word_chars_string(value SelectionWordChars) string {
 }
 
 fn clipboard_codepoint_map_strings(value RepeatableClipboardCodepointMap) []string {
-	mut result := []string{}
-	for entry in value.map {
-		range_text := if entry.range_start == entry.range_end {
-			'U+${entry.range_start:X}'
-		} else {
-			'U+${entry.range_start:X}-${entry.range_end:X}'
-		}
-		replacement := match entry.replacement {
-			terminal.CodepointRepl { 'U+${entry.replacement.codepoint:X}' }
-			terminal.StringRepl { entry.replacement.str }
-		}
-		result << '${range_text}=${replacement}'
-	}
-	return if result.len == 0 { [''] } else { result }
+	return value.format_entry()
 }
 
 fn keybind_values(value Keybinds) []string {

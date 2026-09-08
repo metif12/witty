@@ -5889,12 +5889,58 @@ fn optional_string_equal(a ?string, b ?string) bool {
 	return b == none
 }
 
+// ClipboardCodepointMap retains formatter entries in insertion order. Lookup
+// remains linear because configuration maps are expected to stay very small.
+pub struct ClipboardCodepointMap {
+pub mut:
+	list []terminal.CodepointMap
+}
+
+pub fn (mut m ClipboardCodepointMap) deinit() {
+	m.list = []
+}
+
+pub fn (m ClipboardCodepointMap) clone() ClipboardCodepointMap {
+	mut list := []terminal.CodepointMap{cap: m.list.len}
+	for entry in m.list {
+		replacement := match entry.replacement {
+			terminal.CodepointRepl {
+				terminal.CodepointReplacement(terminal.CodepointRepl{
+					codepoint: entry.replacement.codepoint
+				})
+			}
+			terminal.StringRepl {
+				terminal.CodepointReplacement(terminal.StringRepl{
+					str: entry.replacement.str.clone()
+				})
+			}
+		}
+		list << terminal.CodepointMap{
+			range_start: entry.range_start
+			range_end: entry.range_end
+			replacement: replacement
+		}
+	}
+	return ClipboardCodepointMap{
+		list: list
+	}
+}
+
+// add appends an entry so later conflicting ranges retain source priority.
+pub fn (mut m ClipboardCodepointMap) add(entry terminal.CodepointMap) {
+	assert entry.range_start <= entry.range_end
+	m.list << entry
+}
+
+pub fn (m ClipboardCodepointMap) equal(other ClipboardCodepointMap) bool {
+	return m.list == other.list
+}
+
 // RepeatableClipboardCodepointMap maps Unicode ranges to formatter
-// replacements. Entries remain in insertion order because later entries take
-// priority during clipboard formatting.
+// replacements.
 pub struct RepeatableClipboardCodepointMap {
 pub mut:
-	map []terminal.CodepointMap
+	map ClipboardCodepointMap
 }
 
 pub fn (mut m RepeatableClipboardCodepointMap) parse_cli(value ?string) ! {
@@ -5926,11 +5972,11 @@ pub fn (mut m RepeatableClipboardCodepointMap) parse_cli(value ?string) ! {
 			break
 		}
 		range_ := next.range
-		m.map << terminal.CodepointMap{
+		m.map.add(terminal.CodepointMap{
 			range_start: range_[0]
 			range_end: range_[1]
 			replacement: replacement
-		}
+		})
 	}
 }
 
@@ -5941,7 +5987,28 @@ pub fn (m RepeatableClipboardCodepointMap) clone() RepeatableClipboardCodepointM
 }
 
 pub fn (m RepeatableClipboardCodepointMap) equal(other RepeatableClipboardCodepointMap) bool {
-	return m.map == other.map
+	return m.map.equal(other.map)
+}
+
+// format_entry returns the exact values passed to Ghostty's entry formatter.
+pub fn (m RepeatableClipboardCodepointMap) format_entry() []string {
+	if m.map.list.len == 0 {
+		return ['']
+	}
+	mut result := []string{cap: m.map.list.len}
+	for entry in m.map.list {
+		range_text := if entry.range_start == entry.range_end {
+			'U+${entry.range_start:04X}'
+		} else {
+			'U+${entry.range_start:04X}-U+${entry.range_end:04X}'
+		}
+		replacement := match entry.replacement {
+			terminal.CodepointRepl { 'U+${entry.replacement.codepoint:04X}' }
+			terminal.StringRepl { entry.replacement.str }
+		}
+		result << '${range_text}=${replacement}'
+	}
+	return result
 }
 
 struct UnicodeRangeParser {

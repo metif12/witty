@@ -2288,7 +2288,7 @@ pub mut:
 	clipboard_trim_trailing_spaces   bool
 	clipboard_paste_protection       bool
 	clipboard_paste_bracketed_safe   bool
-	clipboard_codepoint_map          []terminal.CodepointMap
+	clipboard_codepoint_map          configpkg.RepeatableClipboardCodepointMap
 	copy_on_select                   CopyOnSelect
 	confirm_close_surface            ConfirmCloseSurface
 	cursor_click_to_move             bool
@@ -2393,7 +2393,7 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 		clipboard_trim_trailing_spaces: config.clipboard_trim_trailing_spaces
 		clipboard_paste_protection: config.clipboard_paste_protection
 		clipboard_paste_bracketed_safe: config.clipboard_paste_bracketed_safe
-		clipboard_codepoint_map: config.clipboard_codepoint_map.map.clone()
+		clipboard_codepoint_map: config.clipboard_codepoint_map.clone()
 		copy_on_select: unsafe { CopyOnSelect(config.copy_on_select) }
 		confirm_close_surface: unsafe { ConfirmCloseSurface(config.confirm_close_surface) }
 		cursor_click_to_move: config.cursor_click_to_move
@@ -2461,7 +2461,7 @@ pub fn (mut self DerivedConfig) deinit() {
 	// Cleanup compiled regexes and cloned keybinds.
 	self.links = []
 	self.selection_word_chars = []
-	self.clipboard_codepoint_map = []
+	self.clipboard_codepoint_map.map.deinit()
 	self.key_remaps.deinit()
 }
 
@@ -6847,7 +6847,7 @@ fn (mut self Surface) copy_selection_to_clipboards(sel TermSelection, clipboards
 		emit: .plain
 		unwrap: true
 		trim: self.config.clipboard_trim_trailing_spaces
-		codepoint_map: self.config.clipboard_codepoint_map
+		codepoint_map: self.config.clipboard_codepoint_map.map.list
 		background: self.renderer_state.terminal_.colors.background.get()
 		foreground: self.renderer_state.terminal_.colors.foreground.get()
 		palette: self.renderer_state.terminal_.colors.palette.entries[..]

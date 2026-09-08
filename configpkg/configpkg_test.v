@@ -2534,45 +2534,70 @@ fn test_clipboard_codepoint_map_parse() {
 	mappings.parse_cli('U+0010=U+0__02D')!
 	mappings.parse_cli('U+0011=U++02D')!
 	mappings.parse_cli('U+0012=U+-0')!
-	assert mappings.map.len == 6
-	assert mappings.map[0].range_start == 0x2500
-	assert mappings.map[0].range_end == 0x2500
-	match mappings.map[0].replacement {
+	assert mappings.map.list.len == 6
+	assert mappings.map.list[0].range_start == 0x2500
+	assert mappings.map.list[0].range_end == 0x2500
+	match mappings.map.list[0].replacement {
 		terminal.CodepointRepl {
-			assert mappings.map[0].replacement.codepoint == u32(`-`)
+			assert mappings.map.list[0].replacement.codepoint == u32(`-`)
 		}
 		terminal.StringRepl {
 			assert false, 'expected codepoint replacement'
 		}
 	}
-	assert mappings.map[1].range_start == 1
-	assert mappings.map[1].range_end == 5
-	match mappings.map[2].replacement {
+	assert mappings.map.list[1].range_start == 1
+	assert mappings.map.list[1].range_end == 5
+	match mappings.map.list[2].replacement {
 		terminal.StringRepl {
-			assert mappings.map[2].replacement.str == 'SUM'
+			assert mappings.map.list[2].replacement.str == 'SUM'
 		}
 		terminal.CodepointRepl {
 			assert false, 'expected string replacement'
 		}
 	}
 	for i in 3 .. 5 {
-		match mappings.map[i].replacement {
+		match mappings.map.list[i].replacement {
 			terminal.CodepointRepl {
-				assert mappings.map[i].replacement.codepoint == u32(`-`)
+				assert mappings.map.list[i].replacement.codepoint == u32(`-`)
 			}
 			terminal.StringRepl {
 				assert false, 'expected codepoint replacement'
 			}
 		}
 	}
-	match mappings.map[5].replacement {
+	match mappings.map.list[5].replacement {
 		terminal.CodepointRepl {
-			assert mappings.map[5].replacement.codepoint == 0
+			assert mappings.map.list[5].replacement.codepoint == 0
 		}
 		terminal.StringRepl {
 			assert false, 'expected codepoint replacement'
 		}
 	}
+}
+
+fn test_clipboard_codepoint_map_clone_add_and_format_entry() {
+	mut base := ClipboardCodepointMap{}
+	base.add(terminal.CodepointMap{
+		range_start: 1
+		range_end: 5
+		replacement: terminal.CodepointReplacement(terminal.StringRepl{ str: 'SUM' })
+	})
+	cloned := base.clone()
+	assert cloned.equal(base)
+	assert cloned.list.len == 1
+	match cloned.list[0].replacement {
+		terminal.StringRepl { assert cloned.list[0].replacement.str == 'SUM' }
+		terminal.CodepointRepl { assert false }
+	}
+
+	mut mappings := RepeatableClipboardCodepointMap{}
+	assert mappings.format_entry() == ['']
+	mappings.parse_cli('U+0001-U+0005=SUM')!
+	mappings.parse_cli('U+2500=U+002D')!
+	assert mappings.format_entry() == [
+		'U+0001-U+0005=SUM',
+		'U+2500=U+002D',
+	]
 }
 
 fn test_unicode_range_parser_matches_source_scanning() {
@@ -2608,7 +2633,7 @@ selection-word-chars = ._
 clipboard-codepoint-map = U+2500=U+002D
 ')
 	assert cfg.selection_word_chars.codepoints == [u32(0), u32(`.`), u32(`_`)]
-	assert cfg.clipboard_codepoint_map.map.len == 1
+	assert cfg.clipboard_codepoint_map.map.list.len == 1
 	assert cfg.diagnostics.len == 0
 }
 
