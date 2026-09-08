@@ -255,6 +255,24 @@ fn test_style_vt_formatting_bg_rgb() {
 	assert result == '\x1b[0m\x1b[48;2;32;64;96m'
 }
 
+fn test_style_vt_formatting_underline_color_palette() {
+	style := CellStyle{
+		underline_color: .palette
+		underline_palette: 15
+	}
+	assert style.format_vt() == '\x1b[0m\x1b[58;5;15m'
+}
+
+fn test_style_vt_formatting_underline_color_rgb() {
+	style := CellStyle{
+		underline_color: .rgb
+		underline_r: 200
+		underline_g: 100
+		underline_b: 50
+	}
+	assert style.format_vt() == '\x1b[0m\x1b[58;2;200;100;50m'
+}
+
 fn test_style_vt_formatting_multiple_flags() {
 	style := CellStyle{
 		flags: StyleFlags{
@@ -282,7 +300,7 @@ fn test_style_vt_formatting_all_flags() {
 		}
 	}
 	result := style.format_vt()
-	assert result == '\x1b[0m\x1b[1m\x1b[2m\x1b[3m\x1b[4:3m\x1b[5m\x1b[7m\x1b[8m\x1b[9m\x1b[53m'
+	assert result == '\x1b[0m\x1b[1m\x1b[2m\x1b[3m\x1b[5m\x1b[7m\x1b[8m\x1b[9m\x1b[53m\x1b[4:3m'
 }
 
 fn test_style_vt_formatting_combined_colors_and_flags() {
@@ -293,6 +311,8 @@ fn test_style_vt_formatting_combined_colors_and_flags() {
 		fg_b: 0
 		bg_color: .palette
 		bg_palette: 8
+		underline_color: .rgb
+		underline_g: 255
 		flags: StyleFlags{
 			bold: true
 			italic: true
@@ -300,7 +320,7 @@ fn test_style_vt_formatting_combined_colors_and_flags() {
 		}
 	}
 	result := style.format_vt()
-	assert result == '\x1b[0m\x1b[1m\x1b[3m\x1b[4:2m\x1b[38;2;255;0;0m\x1b[48;5;8m'
+	assert result == '\x1b[0m\x1b[1m\x1b[3m\x1b[4:2m\x1b[38;2;255;0;0m\x1b[48;5;8m\x1b[58;2;0;255;0m'
 }
 
 fn test_style_vt_formatting_all_colors_rgb() {
@@ -313,9 +333,13 @@ fn test_style_vt_formatting_all_colors_rgb() {
 		bg_r: 40
 		bg_g: 50
 		bg_b: 60
+		underline_color: .rgb
+		underline_r: 70
+		underline_g: 80
+		underline_b: 90
 	}
 	result := style.format_vt()
-	assert result == '\x1b[0m\x1b[38;2;10;20;30m\x1b[48;2;40;50;60m'
+	assert result == '\x1b[0m\x1b[38;2;10;20;30m\x1b[48;2;40;50;60m\x1b[58;2;70;80;90m'
 }
 
 fn test_style_vt_formatting_all_colors_palette() {
@@ -324,9 +348,31 @@ fn test_style_vt_formatting_all_colors_palette() {
 		fg_palette: 1
 		bg_color: .palette
 		bg_palette: 2
+		underline_color: .palette
+		underline_palette: 3
 	}
 	result := style.format_vt()
-	assert result == '\x1b[0m\x1b[38;5;1m\x1b[48;5;2m'
+	assert result == '\x1b[0m\x1b[38;5;1m\x1b[48;5;2m\x1b[58;5;3m'
+}
+
+fn test_style_vt_formatting_palette_with_palette_set_emits_rgb() {
+	style := CellStyle{
+		fg_color: .palette
+		fg_palette: 1
+	}
+	assert style.format_vt_with_palette(default_palette[..]) == '\x1b[0m\x1b[38;2;204;102;102m'
+}
+
+fn test_style_vt_formatting_all_palette_colors_with_palette_set() {
+	style := CellStyle{
+		fg_color: .palette
+		fg_palette: 1
+		bg_color: .palette
+		bg_palette: 2
+		underline_color: .palette
+		underline_palette: 3
+	}
+	assert style.format_vt_with_palette(default_palette[..]) == '\x1b[0m\x1b[38;2;204;102;102m\x1b[48;2;181;189;104m\x1b[58;2;240;198;116m'
 }
 
 fn test_style_html_formatting_basic_bold() {
@@ -379,6 +425,62 @@ fn test_style_html_formatting_combined_colors_and_flags() {
 	assert result.contains('background-color: rgb(0, 0, 255);')
 	assert result.contains('font-weight: bold;')
 	assert result.contains('font-style: italic;')
+}
+
+fn test_style_html_formatting_single_decoration_line() {
+	style := CellStyle{
+		flags: StyleFlags{
+			underline: .single
+		}
+	}
+	result := style.format_html()
+	assert result.contains('text-decoration-line: underline;')
+	assert result.contains('text-decoration-style: solid;')
+}
+
+fn test_style_html_formatting_multiple_decoration_lines() {
+	style := CellStyle{
+		flags: StyleFlags{
+			underline: .curly
+			strikethrough: true
+			overline: true
+		}
+	}
+	result := style.format_html()
+	assert result.contains('text-decoration-line: underline line-through overline;')
+	assert result.contains('text-decoration-style: wavy;')
+}
+
+fn test_style_html_formatting_palette_with_palette_set_emits_rgb() {
+	style := CellStyle{
+		bg_color: .palette
+		bg_palette: 7
+	}
+	assert style.format_html_with_palette(default_palette[..]) == 'background-color: rgb(197, 200, 198);'
+}
+
+fn test_style_html_formatting_all_palette_colors_with_palette_set() {
+	style := CellStyle{
+		fg_color: .palette
+		fg_palette: 1
+		bg_color: .palette
+		bg_palette: 2
+		underline_color: .palette
+		underline_palette: 3
+	}
+	assert style.format_html_with_palette(default_palette[..]) == 'color: rgb(204, 102, 102);background-color: rgb(181, 189, 104);text-decoration-color: rgb(240, 198, 116);'
+}
+
+fn test_style_html_formatting_remaining_flags() {
+	style := CellStyle{
+		flags: StyleFlags{
+			blink: true
+			faint: true
+			invisible: true
+			inverse: true
+		}
+	}
+	assert style.format_html() == 'text-decoration-line: blink;opacity: 0.5;visibility: hidden;filter: invert(100%);'
 }
 
 fn test_style_default() {

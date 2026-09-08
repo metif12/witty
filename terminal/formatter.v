@@ -1908,16 +1908,6 @@ fn format_style_vt_with_palette(style CellStyle, palette ?[]RGB) string {
 	if style.flags.italic {
 		sb.write_string('\x1b[3m')
 	}
-	if style.flags.underline != .none {
-		match style.flags.underline {
-			.single { sb.write_string('\x1b[4m') }
-			.double { sb.write_string('\x1b[4:2m') }
-			.curly { sb.write_string('\x1b[4:3m') }
-			.dotted { sb.write_string('\x1b[4:4m') }
-			.dashed { sb.write_string('\x1b[4:5m') }
-			.none {}
-		}
-	}
 	if style.flags.blink {
 		sb.write_string('\x1b[5m')
 	}
@@ -1933,15 +1923,21 @@ fn format_style_vt_with_palette(style CellStyle, palette ?[]RGB) string {
 	if style.flags.overline {
 		sb.write_string('\x1b[53m')
 	}
+	match style.flags.underline {
+		.none {}
+		.single { sb.write_string('\x1b[4m') }
+		.double { sb.write_string('\x1b[4:2m') }
+		.curly { sb.write_string('\x1b[4:3m') }
+		.dotted { sb.write_string('\x1b[4:4m') }
+		.dashed { sb.write_string('\x1b[4:5m') }
+	}
 
 	// Foreground color
 	match style.fg_color {
 		.palette {
 			if pal := palette {
-				if int(style.fg_palette) < pal.len {
-					rgb := pal[int(style.fg_palette)]
-					sb.write_string('\x1b[38;2;${rgb.r};${rgb.g};${rgb.b}m')
-				}
+				rgb := pal[int(style.fg_palette)]
+				sb.write_string('\x1b[38;2;${rgb.r};${rgb.g};${rgb.b}m')
 			} else {
 				sb.write_string('\x1b[38;5;${style.fg_palette}m')
 			}
@@ -1956,16 +1952,30 @@ fn format_style_vt_with_palette(style CellStyle, palette ?[]RGB) string {
 	match style.bg_color {
 		.palette {
 			if pal := palette {
-				if int(style.bg_palette) < pal.len {
-					rgb := pal[int(style.bg_palette)]
-					sb.write_string('\x1b[48;2;${rgb.r};${rgb.g};${rgb.b}m')
-				}
+				rgb := pal[int(style.bg_palette)]
+				sb.write_string('\x1b[48;2;${rgb.r};${rgb.g};${rgb.b}m')
 			} else {
 				sb.write_string('\x1b[48;5;${style.bg_palette}m')
 			}
 		}
 		.rgb {
 			sb.write_string('\x1b[48;2;${style.bg_r};${style.bg_g};${style.bg_b}m')
+		}
+		.none {}
+	}
+
+	// Underline color
+	match style.underline_color {
+		.palette {
+			if pal := palette {
+				rgb := pal[int(style.underline_palette)]
+				sb.write_string('\x1b[58;2;${rgb.r};${rgb.g};${rgb.b}m')
+			} else {
+				sb.write_string('\x1b[58;5;${style.underline_palette}m')
+			}
+		}
+		.rgb {
+			sb.write_string('\x1b[58;2;${style.underline_r};${style.underline_g};${style.underline_b}m')
 		}
 		.none {}
 	}
@@ -1977,30 +1987,12 @@ fn format_style_vt_with_palette(style CellStyle, palette ?[]RGB) string {
 fn format_style_html_with_palette(style CellStyle, palette ?[]RGB) string {
 	mut sb := strings.new_builder(128)
 
-	if style.flags.bold {
-		sb.write_string('font-weight: bold;')
-	}
-	if style.flags.italic {
-		sb.write_string('font-style: italic;')
-	}
-	if style.flags.underline != .none {
-		sb.write_string('text-decoration: underline;')
-	}
-	if style.flags.strikethrough {
-		sb.write_string('text-decoration: line-through;')
-	}
-	if style.flags.overline {
-		sb.write_string('text-decoration: overline;')
-	}
-
-	// Foreground color
+	// Colors
 	match style.fg_color {
 		.palette {
 			if pal := palette {
-				if int(style.fg_palette) < pal.len {
-					rgb := pal[int(style.fg_palette)]
-					sb.write_string('color: rgb(${rgb.r}, ${rgb.g}, ${rgb.b});')
-				}
+				rgb := pal[int(style.fg_palette)]
+				sb.write_string('color: rgb(${rgb.r}, ${rgb.g}, ${rgb.b});')
 			} else {
 				sb.write_string('color: var(--vt-palette-${style.fg_palette});')
 			}
@@ -2011,14 +2003,11 @@ fn format_style_html_with_palette(style CellStyle, palette ?[]RGB) string {
 		.none {}
 	}
 
-	// Background color
 	match style.bg_color {
 		.palette {
 			if pal := palette {
-				if int(style.bg_palette) < pal.len {
-					rgb := pal[int(style.bg_palette)]
-					sb.write_string('background-color: rgb(${rgb.r}, ${rgb.g}, ${rgb.b});')
-				}
+				rgb := pal[int(style.bg_palette)]
+				sb.write_string('background-color: rgb(${rgb.r}, ${rgb.g}, ${rgb.b});')
 			} else {
 				sb.write_string('background-color: var(--vt-palette-${style.bg_palette});')
 			}
@@ -2027,6 +2016,66 @@ fn format_style_html_with_palette(style CellStyle, palette ?[]RGB) string {
 			sb.write_string('background-color: rgb(${style.bg_r}, ${style.bg_g}, ${style.bg_b});')
 		}
 		.none {}
+	}
+	match style.underline_color {
+		.palette {
+			if pal := palette {
+				rgb := pal[int(style.underline_palette)]
+				sb.write_string('text-decoration-color: rgb(${rgb.r}, ${rgb.g}, ${rgb.b});')
+			} else {
+				sb.write_string('text-decoration-color: var(--vt-palette-${style.underline_palette});')
+			}
+		}
+		.rgb {
+			sb.write_string('text-decoration-color: rgb(${style.underline_r}, ${style.underline_g}, ${style.underline_b});')
+		}
+		.none {}
+	}
+
+	// Text decoration line
+	has_line := style.flags.underline != .none || style.flags.strikethrough
+		|| style.flags.overline || style.flags.blink
+	if has_line {
+		sb.write_string('text-decoration-line:')
+		if style.flags.underline != .none {
+			sb.write_string(' underline')
+		}
+		if style.flags.strikethrough {
+			sb.write_string(' line-through')
+		}
+		if style.flags.overline {
+			sb.write_string(' overline')
+		}
+		if style.flags.blink {
+			sb.write_string(' blink')
+		}
+		sb.write_string(';')
+	}
+
+	// Text decoration style
+	match style.flags.underline {
+		.none {}
+		.single { sb.write_string('text-decoration-style: solid;') }
+		.double { sb.write_string('text-decoration-style: double;') }
+		.curly { sb.write_string('text-decoration-style: wavy;') }
+		.dotted { sb.write_string('text-decoration-style: dotted;') }
+		.dashed { sb.write_string('text-decoration-style: dashed;') }
+	}
+
+	if style.flags.bold {
+		sb.write_string('font-weight: bold;')
+	}
+	if style.flags.italic {
+		sb.write_string('font-style: italic;')
+	}
+	if style.flags.faint {
+		sb.write_string('opacity: 0.5;')
+	}
+	if style.flags.invisible {
+		sb.write_string('visibility: hidden;')
+	}
+	if style.flags.inverse {
+		sb.write_string('filter: invert(100%);')
 	}
 
 	return sb.str()

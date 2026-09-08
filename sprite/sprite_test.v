@@ -271,6 +271,29 @@ fn test_canvas_invert() {
 	assert data_at(&c, 2, 2) == 255
 }
 
+fn test_canvas_clear_clipping_regions() {
+	mut c := Canvas.init(5, 4, 0, 0)
+	for i in 0 .. c.data.len {
+		c.data[i] = 255
+	}
+	c.clip_left = 1
+	c.clip_right = 2
+	c.clip_top = 1
+	c.clip_bottom = 1
+	c.clear_clipping_regions()
+
+	for y in 0 .. 4 {
+		for x in 0 .. 5 {
+			expected := if y == 1 || y == 2 {
+				if x == 1 || x == 2 { u8(255) } else { u8(0) }
+			} else {
+				u8(0)
+			}
+			assert data_at(&c, x, y) == expected
+		}
+	}
+}
+
 fn test_canvas_flip_horizontal() {
 	mut c := Canvas.init(4, 1, 0, 0)
 	c.pixel(0, 0, .on)

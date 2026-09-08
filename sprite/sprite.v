@@ -231,6 +231,37 @@ pub fn (mut c Canvas) invert() {
 	}
 }
 
+// Only really useful for test purposes, since the clipping region is
+// automatically excluded when the rasterized glyph is written to an atlas.
+pub fn (mut c Canvas) clear_clipping_regions() {
+	width := c.sfc_width()
+	height := c.sfc_height()
+
+	for y in 0 .. height {
+		for x in 0 .. c.clip_left {
+			c.data[y * width + x] = 0
+		}
+	}
+
+	for y in 0 .. height {
+		for x in width - c.clip_right .. width {
+			c.data[y * width + x] = 0
+		}
+	}
+
+	for y in 0 .. c.clip_top {
+		for x in 0 .. width {
+			c.data[y * width + x] = 0
+		}
+	}
+
+	for y in height - c.clip_bottom .. height {
+		for x in 0 .. width {
+			c.data[y * width + x] = 0
+		}
+	}
+}
+
 // Mirror the canvas horizontally.
 pub fn (mut c Canvas) flip_horizontal() {
 	w := int(c.sfc_width())
