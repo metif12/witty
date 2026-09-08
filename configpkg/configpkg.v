@@ -5409,10 +5409,11 @@ pub fn parse_zig_string(value string) !string {
 				mut codepoint := u32(0)
 				mut digits := 0
 				for i < value.len && value[i] != `}` {
-					if digits == 6 {
+					nibble := zig_hex_digit(value[i]) or { return error('invalid string') }
+					if codepoint > 0x10ffff / 16
+						|| (codepoint == 0x10ffff / 16 && nibble > 0x10ffff % 16) {
 						return error('invalid string')
 					}
-					nibble := zig_hex_digit(value[i]) or { return error('invalid string') }
 					codepoint = (codepoint << 4) | nibble
 					digits++
 					i++

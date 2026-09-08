@@ -938,6 +938,7 @@ fn test_readable_io_parse_clone_parse_and_format() {
 		kind: .raw
 		value: 'foo\n😁!'
 	}
+	assert parse_zig_string('zero=\\u{0000000}')! == 'zero=\x00'
 	assert ReadableIO.parse_cli('raw:hello')! == ReadableIO{ kind: .raw, value: 'hello' }
 	assert ReadableIO.parse_cli('path:file.txt')! == ReadableIO{ kind: .path, value: 'file.txt' }
 	assert ReadableIO.parse_cli('other:value')! == ReadableIO{
