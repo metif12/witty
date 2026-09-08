@@ -1,6 +1,7 @@
 module cli
 
 import configpkg
+import os
 import vaxis
 
 fn preview_test_theme(name string) ThemeListElement {
@@ -91,7 +92,7 @@ fn test_theme_list_element_to_uri() {
 
 // Test Preview up/down navigation
 fn test_preview_up() {
-	mut p := Preview.new([], .all)
+	mut p := Preview.new([], .all)!
 	// Empty list: up does nothing
 	p.up(1)
 	assert p.current == 0
@@ -101,7 +102,7 @@ fn test_preview_up() {
 	for i in 0 .. 5 {
 		themes << preview_test_theme('${i}')
 	}
-	p = Preview.new(themes, .all)
+	p = Preview.new(themes, .all)!
 	p.current = 3
 	p.up(1)
 	assert p.current == 2
@@ -110,7 +111,7 @@ fn test_preview_up() {
 }
 
 fn test_preview_down() {
-	mut p := Preview.new([], .all)
+	mut p := Preview.new([], .all)!
 	// Empty list: down does nothing
 	p.down(1)
 	assert p.current == 0
@@ -120,7 +121,7 @@ fn test_preview_down() {
 	for i in 0 .. 5 {
 		themes << preview_test_theme('${i}')
 	}
-	p = Preview.new(themes, .all)
+	p = Preview.new(themes, .all)!
 	p.down(1)
 	assert p.current == 1
 	p.down(100) // clamps to last
@@ -132,7 +133,7 @@ fn test_preview_filter_cycling() {
 	mut themes := [
 		preview_test_theme('Test'),
 	]
-	mut p := Preview.new(themes, .all)
+	mut p := Preview.new(themes, .all)!
 	assert p.theme_filter == .all
 
 	// Simulate pressing 'f' to cycle
@@ -162,22 +163,44 @@ fn test_options_defaults() {
 	assert opts.color == .all
 }
 
+fn test_parse_list_themes_options_uses_shared_cli_parser() {
+	opts := parse_list_themes_options(['--path', '--plain=false', '--color=dark'])!
+	assert opts.path
+	assert !opts.plain
+	assert opts.color == .dark
+
+	if _ := parse_list_themes_options(['--unknown']) {
+		assert false, 'unknown list-themes option must fail'
+	}
+}
+
+fn test_preview_new_propagates_theme_load_failure() {
+	missing := os.join_path(os.temp_dir(), 'witty-missing-theme-${os.getpid()}')
+	os.rm(missing) or {}
+	if _ := Preview.new([ThemeListElement{
+		theme: 'Missing'
+		path: missing
+	}], .all) {
+		assert false, 'missing theme must fail preview initialization'
+	}
+}
+
 fn test_preview_search_uses_text_input() {
 	mut p := Preview.new([
 		preview_test_theme('Dracula'),
 		preview_test_theme('Gruvbox'),
-	], .all)
+	], .all)!
 	p.mode = .search
 	p.update(Event(KeyPressEvent{
 		key: vaxis.Key{ codepoint: u32(`d`) }
-	}))
+	}))!
 	assert p.search_text == 'd'
 	assert p.filtered.len == 1
 	assert p.themes[p.filtered[0]].theme == 'Dracula'
 
 	p.update(Event(KeyPressEvent{
 		key: vaxis.Key{ codepoint: vaxis.backspace }
-	}))
+	}))!
 	assert p.search_text == ''
 	assert p.filtered.len == 2
 }
@@ -186,16 +209,16 @@ fn test_preview_ascii_lowercases_search_tokens_for_zf() {
 	mut p := Preview.new([
 		preview_test_theme('Dracula'),
 		preview_test_theme('ivory'),
-	], .all)
+	], .all)!
 	p.search_text = 'D'
-	p.update_filtered()
+	p.update_filtered()!
 	assert p.filtered.len == 1
 	assert p.themes[p.filtered[0]].theme == 'Dracula'
 	p.search_text = 'd'
-	p.update_filtered()
+	p.update_filtered()!
 	assert p.filtered.len == 1
 	p.search_text = 'İ'
-	p.update_filtered()
+	p.update_filtered()!
 	assert p.filtered.len == 0
 }
 
@@ -204,7 +227,7 @@ fn test_preview_mouse_selects_visible_theme() {
 		preview_test_theme('One'),
 		preview_test_theme('Two'),
 		preview_test_theme('Three'),
-	], .all)
+	], .all)!
 	p.winsize = vaxis.Winsize{ rows: 20, cols: 100 }
 	p.update(Event(MouseEvent{
 		mouse: vaxis.Mouse{
@@ -213,14 +236,31 @@ fn test_preview_mouse_selects_visible_theme() {
 			row: 2
 			col: 5
 		}
-	}))
+	}))!
 	assert p.current == 2
 }
 
 fn test_preview_draws_empty_state() {
-	mut p := Preview.new([], .all)
+	mut p := Preview.new([], .all)!
 	p.winsize = vaxis.Winsize{ rows: 12, cols: 80 }
 	output := p.draw()
 	assert output.contains('No theme found!')
 	assert output.contains('\x1b[2J\x1b[H')
+}
+
+fn test_preview_draw_renders_theme_load_failure() {
+	missing := os.join_path(os.temp_dir(), 'witty-missing-theme-draw-${os.getpid()}')
+	os.rm(missing) or {}
+	mut p := Preview{
+		themes: [ThemeListElement{
+			theme: 'Missing'
+			path: missing
+		}]
+		filtered: [0]
+		winsize: vaxis.Winsize{ rows: 12, cols: 80 }
+		text_input: vaxis.TextInput.new()
+	}
+	output := p.draw()
+	assert output.contains('Unable to open Missing from:')
+	assert output.contains(missing)
 }

@@ -1,6 +1,7 @@
 module cli
 
 import ascii
+import cli_args
 import os
 import strings
 import time
@@ -108,7 +109,7 @@ mut:
 }
 
 // Preview.new creates a new Preview with the given themes and filter.
-fn Preview.new(themes []ThemeListElement, theme_filter ColorScheme) Preview {
+fn Preview.new(themes []ThemeListElement, theme_filter ColorScheme) !Preview {
 	mut p := Preview{
 		themes: themes
 		theme_filter: theme_filter
@@ -116,12 +117,12 @@ fn Preview.new(themes []ThemeListElement, theme_filter ColorScheme) Preview {
 		winsize: vaxis.terminal_size()
 		color_scheme: vaxis.detect_color_scheme()
 	}
-	p.update_filtered()
+	p.update_filtered()!
 	return p
 }
 
 // update_filtered rebuilds the filtered index list based on search text and theme filter.
-fn (mut self Preview) update_filtered() {
+fn (mut self Preview) update_filtered() ! {
 	// Remember current selection's name for re-selection after filtering
 	relative := if self.current > self.window { self.current - self.window } else { 0 }
 	mut selected := ''
@@ -139,7 +140,7 @@ fn (mut self Preview) update_filtered() {
 		tokens := query.split(' ').filter(it.len > 0)
 
 		for i, mut theme in self.themes {
-			theme_config.load_file(theme.path) or {}
+			theme_config.load_file(theme.path)!
 			if !should_include_theme(self.theme_filter, theme_config) {
 				continue
 			}
@@ -154,7 +155,7 @@ fn (mut self Preview) update_filtered() {
 		}
 	} else {
 		for i, mut theme in self.themes {
-			theme_config.load_file(theme.path) or {}
+			theme_config.load_file(theme.path)!
 			if should_include_theme(self.theme_filter, theme_config) {
 				self.filtered << i
 				theme.rank = none
@@ -217,7 +218,7 @@ fn (mut self Preview) down(count int) {
 }
 
 // update processes a single input event.
-fn (mut self Preview) update(event Event) {
+fn (mut self Preview) update(event Event) ! {
 	match event {
 		KeyPressEvent {
 			key := event.key
@@ -244,7 +245,7 @@ fn (mut self Preview) update(event Event) {
 					if key.matches_any([u32(`x`), u32(`/`)], vaxis.Modifiers{ ctrl: true }) {
 						self.text_input.clear_retaining_capacity()
 						self.search_text = ''
-						self.update_filtered()
+						self.update_filtered()!
 					}
 					if key.matches_any([vaxis.home, vaxis.kp_home], vaxis.Modifiers{}) {
 						self.current = 0
@@ -290,7 +291,7 @@ fn (mut self Preview) update(event Event) {
 								self.theme_filter = .all
 							}
 						}
-						self.update_filtered()
+						self.update_filtered()!
 					}
 				}
 				.help {
@@ -312,12 +313,12 @@ fn (mut self Preview) update(event Event) {
 					if key.matches_any([u32(`x`), u32(`/`)], vaxis.Modifiers{ ctrl: true }) {
 						self.text_input.clear_retaining_capacity()
 						self.search_text = ''
-						self.update_filtered()
+						self.update_filtered()!
 						return
 					}
 					self.text_input.update(key)
 					self.search_text = self.text_input.get_text()
-					self.update_filtered()
+					self.update_filtered()!
 				}
 				.save {
 					if key.matches(u32(`q`), vaxis.Modifiers{}) {
@@ -437,7 +438,7 @@ fn (self &Preview) ui_err() vaxis.Style {
 }
 
 // run is the TUI preview event loop.
-fn (mut self Preview) run() {
+fn (mut self Preview) run() ! {
 	mut tty := vaxis.Tty.new()
 	self.winsize = vaxis.terminal_size()
 	self.color_scheme = vaxis.detect_color_scheme()
@@ -453,7 +454,7 @@ fn (mut self Preview) run() {
 		if winsize != self.winsize {
 			self.update(Event(WinsizeEvent{
 				winsize: winsize
-			}))
+			}))!
 			dirty = true
 		}
 
@@ -464,12 +465,12 @@ fn (mut self Preview) run() {
 				vaxis.Key {
 					self.update(Event(KeyPressEvent{
 						key: event
-					}))
+					}))!
 				}
 				vaxis.Mouse {
 					self.update(Event(MouseEvent{
 						mouse: event
-					}))
+					}))!
 				}
 			}
 			handled_input = true
@@ -578,7 +579,19 @@ fn (mut self Preview) draw_preview(x_off int, width int, height int) string {
 
 	theme := self.themes[self.filtered[self.current]]
 	mut config := configpkg.Config.default_config()
-	config.load_file(theme.path) or {}
+	config.load_file(theme.path) or {
+		standard := self.ui_standard()
+		for row in 0 .. height {
+			put_segment(mut out, row, x_off, x_off + width, ' '.repeat(width), standard)
+		}
+		middle := height / 2
+		text := 'Unable to open ${theme.theme} from:'
+		put_segment(mut out, max_int(middle - 1, 0), x_off + max_int((width - text.runes().len) / 2, 0), x_off + width, text, self.ui_err())
+		put_link(mut out, middle, x_off + max_int((width - theme.path.runes().len) / 2, 0), x_off + width, theme.path, theme.to_uri(), self.ui_err())
+		error_text := err.msg()
+		put_segment(mut out, min_int(middle + 1, max_int(height - 1, 0)), x_off + max_int((width - error_text.runes().len) / 2, 0), x_off + width, error_text, self.ui_err())
+		return out.str()
+	}
 	fg := vaxis.Color{ rgb: [config.foreground.r, config.foreground.g, config.foreground.b]! }
 	bg := vaxis.Color{ rgb: [config.background.r, config.background.g, config.background.b]! }
 	standard := vaxis.Style{
@@ -862,9 +875,9 @@ fn color_from_palette(cfg configpkg.Config, palette int) vaxis.Color {
 }
 
 // preview launches the TUI preview for the given themes.
-fn preview(themes []ThemeListElement, theme_filter ColorScheme) {
-	mut app := Preview.new(themes, theme_filter)
-	app.run()
+fn preview(themes []ThemeListElement, theme_filter ColorScheme) ! {
+	mut app := Preview.new(themes, theme_filter)!
+	app.run()!
 }
 
 // should_include_theme returns true if the theme should be listed based on the color filter.
@@ -916,22 +929,8 @@ pub fn should_include_theme(theme_filter ColorScheme, theme_config configpkg.Con
 //
 //   * `--color`: Specify the color scheme of the themes included in the list.
 //                This can be `dark`, `light`, or `all`. The default is `all`.
-pub fn run_list_themes(args []string) int {
-	mut opts := Options{}
-	// Parse CLI arguments
-	for arg in args {
-		if arg == '--path' {
-			opts.path = true
-		} else if arg == '--plain' {
-			opts.plain = true
-		} else if arg == '--color=dark' {
-			opts.color = .dark
-		} else if arg == '--color=light' {
-			opts.color = .light
-		} else if arg == '--color=all' {
-			opts.color = .all
-		}
-	}
+pub fn run_list_themes(args []string) !int {
+	opts := parse_list_themes_options(args)!
 
 	resources_dir := global_state.get_state().resources_dir.app()
 	if resources_dir.len == 0 {
@@ -974,13 +973,13 @@ pub fn run_list_themes(args []string) int {
 	themes.sort_with_compare(theme_list_less_than)
 
 	if tui.can_pretty_print && !opts.plain && os.is_atty(1) > 0 {
-		preview(themes, opts.color)
+		preview(themes, opts.color)!
 		return 0
 	}
 
 	mut theme_config := configpkg.Config.default_config()
 	for theme in themes {
-		theme_config.load_file(theme.path) or {}
+		theme_config.load_file(theme.path)!
 		if !should_include_theme(opts.color, theme_config) {
 			continue
 		}
@@ -994,4 +993,10 @@ pub fn run_list_themes(args []string) int {
 	// Don't forget to flush!
 	// (V's println auto-flushes)
 	return 0
+}
+
+fn parse_list_themes_options(args []string) !Options {
+	mut opts := Options{}
+	cli_args.parse(mut opts, args)!
+	return opts
 }

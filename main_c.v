@@ -161,7 +161,7 @@ pub fn run_cli_action(action global_state.Action, args []string) !int {
 			print_cli_help()
 			0
 		}
-		.list_themes { cli.run_list_themes(action_args(args, action)) }
+		.list_themes { cli.run_list_themes(action_args(args, action))! }
 		.list_fonts { cli.run_list_fonts(action_args(args, action))! }
 		.list_colors { cli.run_list_colors(action_args(args, action))! }
 		.list_keybinds { cli.run_list_keybinds(action_args(args, action))! }
