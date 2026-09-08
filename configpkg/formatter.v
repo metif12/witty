@@ -722,14 +722,7 @@ fn repeat_paths(value RepeatablePath) []string {
 
 fn optional_command_string(value ?Command) string {
 	if command := value {
-		match command {
-			ShellCmd {
-				return command.shell
-			}
-			DirectCmd {
-				return 'direct:${command.direct.join(' ')}'
-			}
-		}
+		return command.format_entry()
 	}
 	return ''
 }

@@ -6076,6 +6076,32 @@ pub:
 	direct []string
 }
 
+// parse_cli parses the source configuration representation. Only literal
+// spaces are trimmed; direct commands are intentionally split naively on
+// literal spaces, including empty arguments between repeated separators.
+pub fn Command.parse_cli(input ?string) !Command {
+	value := input or { return error('value required') }
+	trimmed := value.trim(' ')
+	if trimmed.len == 0 {
+		return error('value required')
+	}
+
+	if trimmed.starts_with('direct:') {
+		command := trimmed[7..].trim(' ')
+		return Command(DirectCmd{
+			direct: command.split(' ')
+		})
+	}
+	if trimmed.starts_with('shell:') {
+		return Command(ShellCmd{
+			shell: trimmed[6..].trim(' ')
+		})
+	}
+	return Command(ShellCmd{
+		shell: trimmed
+	})
+}
+
 // arg_iterator returns an iterator over the command's arguments.
 // For shell commands, this splits on whitespace with basic quoting support.
 // For direct commands, this iterates the args directly.
@@ -6122,6 +6148,13 @@ pub fn (c Command) string_val() string {
 	}
 }
 
+pub fn (c Command) format_entry() string {
+	return match c {
+		ShellCmd { c.shell }
+		DirectCmd { 'direct:${c.direct.join(' ')}' }
+	}
+}
+
 // ArgIterator iterates over the arguments of a command.
 pub struct ArgIterator {
 mut:
@@ -6156,41 +6189,75 @@ pub fn (mut it ArgIterator) next() ?string {
 	}
 }
 
-// next_shell_arg parses the next argument from a shell command string,
-// handling basic quoting (single and double quotes).
+// deinit mirrors ArgIterator.deinit. V owns iterator strings through the GC,
+// so there is no backing allocation to release.
+pub fn (mut it ArgIterator) deinit() {}
+
+// next_shell_arg is Zig 0.15.2's process.ArgIteratorGeneral(.{}).next.
+// With the default options, double quotes group arguments, single quotes are
+// ordinary characters, and backslashes only receive special treatment when
+// immediately preceding a double quote.
 fn (mut it ArgIterator) next_shell_arg() ?string {
 	s := it.shell_str
-	// Skip whitespace
-	for it.pos < s.len && s[it.pos] == ` ` {
+	// Skip space, tab, carriage return, and newline.
+	for it.pos < s.len && s[it.pos] in [` `, `\t`, `\r`, `\n`] {
 		it.pos++
 	}
 	if it.pos >= s.len {
 		return none
 	}
+
 	mut result := []u8{}
+	mut backslash_count := 0
+	mut in_quote := false
 	for it.pos < s.len {
 		ch := s[it.pos]
-		if ch == ` ` {
-			break
-		}
-		if ch == `"` || ch == `'` {
-			// Quoted string
-			quote := ch
-			it.pos++
-			for it.pos < s.len && s[it.pos] != quote {
-				result << s[it.pos]
-				it.pos++
+		match ch {
+			`'` {
+				for _ in 0 .. backslash_count {
+					result << `\\`
+				}
+				backslash_count = 0
+				result << ch
 			}
-			if it.pos < s.len {
-				it.pos++ // skip closing quote
+			`"` {
+				quote_is_real := backslash_count % 2 == 0
+				for _ in 0 .. backslash_count / 2 {
+					result << `\\`
+				}
+				backslash_count = 0
+				if quote_is_real {
+					in_quote = !in_quote
+				} else {
+					result << `"`
+				}
 			}
-		} else {
-			result << ch
-			it.pos++
+			`\\` {
+				backslash_count++
+			}
+			` `, `\t`, `\r`, `\n` {
+				for _ in 0 .. backslash_count {
+					result << `\\`
+				}
+				backslash_count = 0
+				if in_quote {
+					result << ch
+				} else {
+					return result.bytestr()
+				}
+			}
+			else {
+				for _ in 0 .. backslash_count {
+					result << `\\`
+				}
+				backslash_count = 0
+				result << ch
+			}
 		}
+		it.pos++
 	}
-	if result.len == 0 {
-		return none
+	for _ in 0 .. backslash_count {
+		result << `\\`
 	}
 	return result.bytestr()
 }
@@ -7367,7 +7434,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 			if value.len == 0 {
 				c.command = none
 			} else {
-				c.command = parse_command(value) or {
+				c.command = Command.parse_cli(value) or {
 					c.invalid_config_value(key, value)
 					return
 				}
@@ -7377,7 +7444,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 			if value.len == 0 {
 				c.initial_command = none
 			} else {
-				c.initial_command = parse_command(value) or {
+				c.initial_command = Command.parse_cli(value) or {
 					c.invalid_config_value(key, value)
 					return
 				}
@@ -9069,29 +9136,6 @@ fn parse_shell_integration(value string) ?ShellIntegration {
 		'zsh' { ShellIntegration.zsh }
 		else { none }
 	}
-}
-
-// parse_command translates config/command.zig. The direct prefix bypasses
-// shell expansion and intentionally uses a naive split on literal spaces.
-fn parse_command(value string) ?Command {
-	trimmed := value.trim(' ')
-	if trimmed.len == 0 {
-		return none
-	}
-	if trimmed.starts_with('direct:') {
-		command := trimmed[7..].trim(' ')
-		return Command(DirectCmd{
-			direct: command.split(' ')
-		})
-	}
-	if trimmed.starts_with('shell:') {
-		return Command(ShellCmd{
-			shell: trimmed[6..].trim(' ')
-		})
-	}
-	return Command(ShellCmd{
-		shell: trimmed
-	})
 }
 
 fn parse_background_image_position(value string) ?BackgroundImagePosition {

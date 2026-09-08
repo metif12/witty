@@ -897,6 +897,37 @@ fn test_repeatable_command_parse_clear_clone_and_format() {
 	assert commands.items.len == 0
 }
 
+fn test_config_command_public_parse_and_format_apis() {
+	shell := Command.parse_cli(' shell:  echo hello ')!
+	assert shell == Command(ShellCmd{ shell: 'echo hello' })
+	assert shell.string_val() == 'echo hello'
+	assert shell.format_entry() == 'echo hello'
+
+	direct := Command.parse_cli(' direct:  echo  hello ')!
+	assert direct == Command(DirectCmd{ direct: ['echo', '', 'hello'] })
+	assert direct.string_val() == 'echo  hello'
+	assert direct.format_entry() == 'direct:echo  hello'
+
+	Command.parse_cli(' ') or {
+		assert err.msg() == 'value required'
+		return
+	}
+	assert false, 'expected an empty command to fail'
+}
+
+fn test_config_command_arg_iterator_matches_zig_general_defaults() {
+	command := Command(ShellCmd{
+		shell: 'one\t"two three" \'four five\' six\\ seven "" eight\\\\\\"nine'
+	})
+	mut it := command.arg_iterator()
+	defer { it.deinit() }
+	mut args := []string{}
+	for {
+		args << it.next() or { break }
+	}
+	assert args == ['one', 'two three', "'four", "five'", 'six\\', 'seven', '', 'eight\\"nine']
+}
+
 fn test_readable_io_parse_clone_parse_and_format() {
 	raw := ReadableIO.parse_cli('foo\\n\\u{1F601}\\x21')!
 	assert raw == ReadableIO{
