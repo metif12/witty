@@ -21,3 +21,8 @@ fn test_modifier_key_action_right_side_uses_device_mask() {
 	assert modifier_key_action(0x36, ns_event_modifier_flag_command | nx_device_rcmd_key_mask)? == .press
 	assert modifier_key_action(0x36, ns_event_modifier_flag_command)? == .release
 }
+
+fn test_input_mods_preserves_c_abi_bits() {
+	mods := input_mods(ns_event_modifier_flag_shift | ns_event_modifier_flag_control | ns_event_modifier_flag_option | ns_event_modifier_flag_command | ns_event_modifier_flag_caps_lock | nx_device_rshift_key_mask | nx_device_rctl_key_mask | nx_device_ralt_key_mask | nx_device_rcmd_key_mask)
+	assert mods.int() == u16(0x3df)
+}

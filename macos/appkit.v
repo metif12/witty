@@ -2,6 +2,7 @@
 module macos
 
 import os
+import input
 
 // AppKit/Metal bindings for Witty, implemented from V through the macOS
 // Objective-C runtime bridge that ships with vlib.
@@ -29,7 +30,7 @@ import os
 // Callback types. Each callback receives the view's userdata pointer first.
 pub type DrawCallback = fn (userdata voidptr, ctx voidptr, width f64, height f64)
 
-pub type KeyCallback = fn (userdata voidptr, action KeyEventAction, keycode u16, modflags u64, chars &u8, len int, uchars &u8, ulen int)
+pub type KeyCallback = fn (userdata voidptr, event voidptr, action KeyEventAction, keycode u16, modflags u64, chars &u8, len int, uchars &u8, ulen int)
 
 // KeyEventAction is the AppKit-side key action passed to the terminal frontend.
 pub enum KeyEventAction {
@@ -760,18 +761,11 @@ fn vt_view_draw_rect(self ObjId, _cmd Sel, _dirty_rect ObjCRect) {
 }
 
 fn vt_view_key_down(self ObjId, _cmd Sel, event ObjId) {
-	flags := msg_u64(event, 'modifierFlags')
-	device_flags := flags & ns_event_modifier_flag_device_independent_mask
-	cmd_only := (device_flags & ns_event_modifier_flag_command) != 0
-		&& (device_flags & (ns_event_modifier_flag_control | ns_event_modifier_flag_option)) == 0
-	keycode := u16(msg_u64(event, 'keyCode'))
-	if cmd_only && (keycode == 36 || keycode == 76) {
-		window := msg_id(self, 'window')
-		msg_void1(window, 'toggleFullScreen:', nil_obj())
-		return
+	action := if msg_bool(event, 'isARepeat') {
+		KeyEventAction.repeat
+	} else {
+		KeyEventAction.press
 	}
-
-	action := if msg_bool(event, 'isARepeat') { KeyEventAction.repeat } else { KeyEventAction.press }
 	dispatch_key(self, event, action)
 }
 
@@ -797,7 +791,9 @@ fn modifier_key_action(keycode u16, flags u64) ?KeyEventAction {
 		0x3b, 0x3e { ns_event_modifier_flag_control }
 		0x3a, 0x3d { ns_event_modifier_flag_option }
 		0x37, 0x36 { ns_event_modifier_flag_command }
-		else { return none }
+		else {
+			return none
+		}
 	}
 
 	if flags & logical_mask == 0 {
@@ -826,7 +822,7 @@ fn dispatch_key(self ObjId, event ObjId, action KeyEventAction) {
 	flags := msg_u64(event, 'modifierFlags')
 	chars := objc_utf8_string(msg_id(event, 'characters'))
 	uchars := objc_utf8_string(msg_id(event, 'charactersIgnoringModifiers'))
-	g_key_cb(userdata, action, keycode, flags, chars.str, chars.len, uchars.str, uchars.len)
+	g_key_cb(userdata, voidptr(event), action, keycode, flags, chars.str, chars.len, uchars.str, uchars.len)
 }
 
 fn vt_view_mouse_down(self ObjId, _cmd Sel, event ObjId) {
@@ -890,9 +886,7 @@ fn vt_view_paste(self ObjId, _cmd Sel, _sender ObjId) {
 	if is_nil(userdata) {
 		return
 	}
-	pasteboard := msg_id(get_class('NSPasteboard'), 'generalPasteboard')
-	text_obj := msg_id1(pasteboard, 'stringForType:', nsstring('public.utf8-plain-text'))
-	text := objc_utf8_string(text_obj)
+	text := clipboard_get_text() or { return }
 	if text.len > 0 {
 		g_paste_cb(userdata, text.str, text.len)
 	}
@@ -1225,6 +1219,10 @@ pub fn app_run() {
 	msg_void(shared_app(), 'run')
 }
 
+pub fn app_terminate() {
+	msg_void1(shared_app(), 'terminate:', nil_obj())
+}
+
 pub fn create_window(w int, h int, title string) voidptr {
 	register_classes()
 	frame := objc_rect(100, 100, f64(w), f64(h))
@@ -1281,6 +1279,15 @@ pub fn clipboard_set_text(text string) {
 	msg_bool2(pasteboard, 'setString:forType:', nsstring(text), nsstring('public.utf8-plain-text'))
 }
 
+pub fn clipboard_get_text() ?string {
+	pasteboard := msg_id(get_class('NSPasteboard'), 'generalPasteboard')
+	text_obj := msg_id1(pasteboard, 'stringForType:', nsstring('public.utf8-plain-text'))
+	if is_nil(text_obj) {
+		return none
+	}
+	return objc_utf8_string(text_obj)
+}
+
 fn request_display_now(view voidptr) {
 	if is_nil(view) {
 		return
@@ -1290,6 +1297,10 @@ fn request_display_now(view voidptr) {
 
 fn request_display_main_task(ctx voidptr) {
 	request_display_now(ctx)
+}
+
+pub fn dispatch_main(callback fn (voidptr), context voidptr) {
+	C.witty_macos_dispatch_main(voidptr(callback), context)
 }
 
 pub fn request_display(view voidptr) {
@@ -1315,6 +1326,95 @@ pub fn view_height(view voidptr) f64 {
 		return 0
 	}
 	return msg_rect(ObjId(view), 'bounds').height
+}
+
+pub fn view_backing_scale(view voidptr) f64 {
+	if is_nil(view) {
+		return 1
+	}
+	window := msg_id(ObjId(view), 'window')
+	scale := if is_nil(window) { f64(1) } else { msg_f64(window, 'backingScaleFactor') }
+	return if scale > 0 { scale } else { 1 }
+}
+
+pub fn set_view_size(view voidptr, width f64, height f64) {
+	if is_nil(view) || width <= 0 || height <= 0 {
+		return
+	}
+	window := msg_id(ObjId(view), 'window')
+	if !is_nil(window) {
+		msg_void_size(window, 'setContentSize:', objc_size(width, height))
+	}
+}
+
+pub fn toggle_fullscreen(view voidptr) {
+	if is_nil(view) {
+		return
+	}
+	window := msg_id(ObjId(view), 'window')
+	if !is_nil(window) {
+		msg_void1(window, 'toggleFullScreen:', nil_obj())
+	}
+}
+
+pub fn present_view(view voidptr) {
+	if is_nil(view) {
+		return
+	}
+	window := msg_id(ObjId(view), 'window')
+	if !is_nil(window) {
+		msg_void1(window, 'makeKeyAndOrderFront:', nil_obj())
+		msg_bool1(window, 'makeFirstResponder:', ObjId(view))
+	}
+}
+
+pub fn open_url(url string) bool {
+	if url.len == 0 {
+		return false
+	}
+	workspace := msg_id(get_class('NSWorkspace'), 'sharedWorkspace')
+	value := msg_id1(get_class('NSURL'), 'URLWithString:', nsstring(url))
+	return !is_nil(value) && msg_bool1(workspace, 'openURL:', value)
+}
+
+// input_mods translates NSEvent.ModifierFlags using the same bit layout as
+// Ghostty's Ghostty.ghosttyMods Swift adapter.
+pub fn input_mods(flags u64) input.Mods {
+	return input.Mods{
+		shift: flags & ns_event_modifier_flag_shift != 0
+		ctrl: flags & ns_event_modifier_flag_control != 0
+		alt: flags & ns_event_modifier_flag_option != 0
+		super_: flags & ns_event_modifier_flag_command != 0
+		caps_lock: flags & ns_event_modifier_flag_caps_lock != 0
+		sides: input.SideInfo{
+			shift: if flags & nx_device_rshift_key_mask != 0 { .right } else { .left }
+			ctrl: if flags & nx_device_rctl_key_mask != 0 { .right } else { .left }
+			alt: if flags & nx_device_ralt_key_mask != 0 { .right } else { .left }
+			super: if flags & nx_device_rcmd_key_mask != 0 { .right } else { .left }
+		}
+	}
+}
+
+// event_characters applies a Ghostty modifier bitset to an NSEvent. This is
+// the AppKit equivalent of characters(byApplyingModifiers:) used by Ghostty.
+pub fn event_characters(event voidptr, mods int) string {
+	if is_nil(event) {
+		return ''
+	}
+	mut flags := u64(0)
+	if mods & 1 != 0 {
+		flags |= ns_event_modifier_flag_shift
+	}
+	if mods & 2 != 0 {
+		flags |= ns_event_modifier_flag_control
+	}
+	if mods & 4 != 0 {
+		flags |= ns_event_modifier_flag_option
+	}
+	if mods & 8 != 0 {
+		flags |= ns_event_modifier_flag_command
+	}
+	return objc_utf8_string(msg_id_u64(ObjId(event), 'charactersByApplyingModifiers:', flags))
 }
 
 pub fn ct_font_attribute_name() voidptr {

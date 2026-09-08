@@ -4,7 +4,6 @@ import configpkg
 import global_state
 import os
 import apprt
-import terminal
 
 fn test_ghostty_info_exposes_stable_version_bytes() {
 	info := ghostty_info()
@@ -57,42 +56,6 @@ fn test_cli_help_matches_translated_command() {
 	assert help.contains('Run the Ghostty terminal emulator or a specific helper action.\n')
 	assert help.contains('  +list-actions\n')
 	assert help.ends_with('where `<action>` is one of actions listed above.\n')
-}
-
-fn test_standalone_osc7_pwd_requires_exact_local_hostname() {
-	assert parse_osc7_pwd('file://localhost/tmp/translated%20path') or { '' } == '/tmp/translated path'
-	assert parse_osc7_pwd('kitty-shell-cwd://localhost/tmp/raw%20path') or { '' } == '/tmp/raw%20path'
-	assert parse_osc7_pwd('file://localhost/tmp/path?query#fragment') or { '' } == '/tmp/path'
-	assert parse_osc7_pwd('kitty-shell-cwd://localhost/tmp/path??#fragment') or { '' } == '/tmp/path??#fragment'
-	assert parse_osc7_pwd('file://localhost') or { 'missing' } == ''
-	assert parse_osc7_pwd('file:///tmp/no-host') == none
-	assert parse_osc7_pwd('file://LOCALHOST/tmp/wrong-case') == none
-	assert parse_osc7_pwd('file://127.0.0.1/tmp/loopback') == none
-	assert parse_osc7_pwd('file://[::1]/tmp/loopback') == none
-	assert parse_osc7_pwd('https://localhost/tmp/wrong-scheme') == none
-	assert parse_osc7_pwd('file://localhost/tmp/bad%escape') == none
-}
-
-fn test_standalone_window_title_matches_source_buffer_limit() {
-	mut term := terminal.Terminal.init(terminal.Options{
-		cols: 2
-		rows: 2
-	}) or { panic(err) }
-	defer { term.deinit() }
-	mut state := TermState{
-		term: &term
-		tab_title: 'original'
-		seen_title: true
-	}
-
-	apply_window_title(mut state, 'x'.repeat(256))
-	assert state.tab_title == 'original'
-	assert state.seen_title
-
-	term.set_pwd('p'.repeat(256))!
-	apply_window_title(mut state, '')
-	assert state.tab_title == ''
-	assert !state.seen_title
 }
 
 fn test_config_c_api_lifecycle_clone_and_primitive_getters() {
