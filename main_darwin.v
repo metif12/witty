@@ -4,37 +4,19 @@ import input
 import internal_os
 import macos
 import os
-import pty
+import configpkg
+import renderer
 import terminal
+import termio
 import time
 import global_state
 
 // C interop declarations needed in this module.
 #include <unistd.h>
 
-#include <signal.h>
-
-#include <sys/wait.h>
-
-fn C.fork() int
-
-fn C.execvp(file &char, argv &&char) int
-
-fn C.dup2(oldfd int, newfd int) int
-
-fn C.close(fd int) int
-
 fn C.read(fd int, buf voidptr, count usize) int
 
 fn C.write(fd int, buf voidptr, count usize) int
-
-fn C.kill(pid int, sig int) int
-
-fn C.waitpid(pid int, status &int, options int) int
-
-fn C._exit(status int)
-
-fn C.setenv(name &char, value &char, overwrite int) int
 
 // CoreGraphics C functions for drawing.
 fn C.CGContextSetRGBFillColor(ctx voidptr, r f64, g f64, b f64, a f64)
@@ -112,8 +94,8 @@ struct TermState {
 mut:
 	term      &terminal.Terminal = unsafe { nil }
 	stream    terminal.ReadonlyStream
+	subprocess termio.Subprocess
 	pty_fd    int = -1
-	child_pid int = -1
 	cell_w    f64 = 8.0
 	cell_h    f64 = 16.0
 	font      voidptr // CTFontRef (shared)
@@ -268,40 +250,28 @@ fn spawn_terminal(cfg AppConfig) !&TermState {
 	// Fix up the self-referential active pointer to point into the heap copy.
 	term.screens.active = &term.screens.primary
 
-	mut p := pty.Pty.open(pty.Winsize{
-		ws_row: cfg.rows
-		ws_col: cfg.cols
-		ws_xpixel: u16(cfg.pixel_w)
-		ws_ypixel: u16(cfg.pixel_h)
-	})!
-
-	pid := C.fork()
-	if pid < 0 {
-		return error('fork failed')
-	}
-	if pid == 0 {
-		// ---- Child process ----
-		C.dup2(p.slave, 0)
-		C.dup2(p.slave, 1)
-		C.dup2(p.slave, 2)
-		p.child_pre_exec() or { C._exit(1) }
-		C.setenv(c'TERM', c'xterm-256color', 1)
-		argv := [cfg.shell.str, unsafe { nil }]
-		C.execvp(cfg.shell.str, argv.data)
-		C._exit(1)
-	}
-
-	// ---- Parent process ----
-	p.close_slave()
-
 	mut state := &TermState{
 		term: term
-		pty_fd: p.master
-		child_pid: pid
 		font: cfg.font
 		cols: int(cfg.cols)
 		rows: int(cfg.rows)
 	}
+	resources_path := global_state.get_state().resources_dir.app()
+	state.subprocess = termio.Subprocess.init(termio.ExecConfig{
+		command: configpkg.Command(configpkg.ShellCmd{ shell: cfg.shell })
+		env: os.environ()
+		resources_dir: if resources_path.len > 0 { resources_path } else { none }
+	})!
+	state.subprocess.grid_size = renderer.GridSize{
+		columns: u32(cfg.cols)
+		rows: u32(cfg.rows)
+	}
+	state.subprocess.screen_size = renderer.ScreenSize{
+		width: u32(cfg.pixel_w)
+		height: u32(cfg.pixel_h)
+	}
+	fds := state.subprocess.start()!
+	state.pty_fd = fds.read
 	// Construct ReadonlyStream manually. We cannot use ReadonlyStream.init()
 	// because it takes Terminal by value, copies it, then stores &copy —
 	// a dangling pointer. Instead we set the handler's terminal pointer
@@ -393,18 +363,8 @@ fn do_close_tab(userdata voidptr) {
 	// Clear userdata first so the read thread and draw callback
 	// see nil and bail out before we tear anything down.
 	macos.view_set_userdata(state.view, unsafe { nil })
-	if state.child_pid > 0 {
-		// Ensure the child shell exits so any blocked PTY read wakes up.
-		C.kill(state.child_pid, C.SIGHUP)
-		C.kill(state.child_pid, C.SIGTERM)
-		mut status := 0
-		C.waitpid(state.child_pid, &status, C.WNOHANG)
-		state.child_pid = -1
-	}
-	if state.pty_fd >= 0 {
-		C.close(state.pty_fd)
-		state.pty_fd = -1
-	}
+	state.subprocess.deinit()
+	state.pty_fd = -1
 	macos.close_tab(state.view)
 }
 
@@ -846,17 +806,13 @@ fn on_resize(userdata voidptr, width f64, height f64) {
 	state.cols = new_cols
 	state.rows = new_rows
 	state.term.resize(u16(new_cols), u16(new_rows)) or {}
-	if state.pty_fd >= 0 {
-		mut p := pty.Pty{
-			master: state.pty_fd
-		}
-		p.set_size(pty.Winsize{
-			ws_row: u16(new_rows)
-			ws_col: u16(new_cols)
-			ws_xpixel: u16(width)
-			ws_ypixel: u16(height)
-		}) or {}
-	}
+	state.subprocess.resize(renderer.GridSize{
+		columns: u32(new_cols)
+		rows: u32(new_rows)
+	}, renderer.ScreenSize{
+		width: u32(width)
+		height: u32(height)
+	}) or {}
 }
 
 // ============================================================
