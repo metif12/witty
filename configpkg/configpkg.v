@@ -5029,16 +5029,15 @@ pub fn (mut k Keybinds) init() {
 // the new conditional state. We re-run finalize with the new conditional state
 // so conditional (light/dark) theme loading is re-applied.
 pub fn (c Config) change_conditional_state(state ConditionalState) ?Config {
-	// A state change is relevant only when the configuration uses that
-	// conditional key and its value actually changed. ConditionalState only
-	// contains theme today; keep this explicit in step with the source enum.
-	if !c.conditional_set['theme'] || c.conditional_state.theme == state.theme {
+	if (!c.conditional_set['theme'] || c.conditional_state.theme == state.theme)
+		&& (!c.conditional_set['os'] || c.conditional_state.os == state.os) {
 		return none
 	}
-	mut copy := c.clone()
-	copy.conditional_state = state
-	copy.finalize()
-	return copy
+	mut rebuilt := c.clone_empty()
+	rebuilt.conditional_state = state
+	replay_steps_into(mut rebuilt, c.replay_steps)
+	rebuilt.finalize()
+	return rebuilt
 }
 
 pub fn (mut c Config) deinit() {
@@ -6455,11 +6454,131 @@ pub enum MouseShiftCapture {
 pub struct ConditionalState {
 pub mut:
 	theme Theme
+	os    TargetOs = current_target_os()
 }
 
 pub enum Theme {
 	light
 	dark
+}
+
+// TargetOs is the translated Zig 0.15.2 std.Target.Os.Tag used by conditional
+// configuration state.
+pub enum TargetOs {
+	freestanding
+	other
+	contiki
+	fuchsia
+	hermit
+	aix
+	haiku
+	hurd
+	linux
+	plan9
+	rtems
+	serenity
+	zos
+	dragonfly
+	freebsd
+	netbsd
+	openbsd
+	driverkit
+	ios
+	macos
+	tvos
+	visionos
+	watchos
+	illumos
+	solaris
+	windows
+	uefi
+	ps3
+	ps4
+	ps5
+	emscripten
+	wasi
+	amdhsa
+	amdpal
+	cuda
+	mesa3d
+	nvcl
+	opencl
+	opengl
+	vulkan
+}
+
+fn current_target_os() TargetOs {
+	$if ios {
+		return .ios
+	} $else $if macos {
+		return .macos
+	} $else $if wasm32_emscripten {
+		return .emscripten
+	} $else $if wasm32_wasi {
+		return .wasi
+	} $else $if android {
+		return .linux
+	} $else $if linux {
+		return .linux
+	} $else $if windows {
+		return .windows
+	} $else $if freebsd {
+		return .freebsd
+	} $else $if openbsd {
+		return .openbsd
+	} $else $if netbsd {
+		return .netbsd
+	} $else $if dragonfly {
+		return .dragonfly
+	} $else $if solaris {
+		return .solaris
+	} $else $if haiku {
+		return .haiku
+	} $else $if serenity {
+		return .serenity
+	} $else $if wasm32 {
+		return .freestanding
+	} $else {
+		return .other
+	}
+}
+
+pub enum ConditionalKey {
+	theme
+	os
+}
+
+pub enum ConditionalOp {
+	eq
+	ne
+}
+
+pub struct Conditional {
+pub:
+	key   ConditionalKey
+	op    ConditionalOp
+	value string
+}
+
+// match tests a single conditional against this typed state.
+pub fn (state ConditionalState) match(condition Conditional) bool {
+	value := match condition.key {
+		.theme { state.theme.str() }
+		.os { state.os.str() }
+	}
+	equal := value == condition.value
+	return match condition.op {
+		.eq { equal }
+		.ne { !equal }
+	}
+}
+
+// clone deep-copies the conditional value retained by replay steps.
+pub fn (condition Conditional) clone() Conditional {
+	return Conditional{
+		...condition
+		value: condition.value.clone()
+	}
 }
 
 pub struct ScrollToBottom {
@@ -6738,6 +6857,7 @@ pub type Diagnostic = diagnosticspkg.Diagnostic
 enum ReplayStepKind {
 	arg
 	expand
+	conditional_arg
 	diagnostic
 	command
 	xdg_command
@@ -6748,11 +6868,11 @@ enum ReplayStepKind {
 // base layer and every user option—including repeatable options—retains its
 // normal parser semantics.
 struct ReplayStep {
-	kind            ReplayStepKind
-	value           string
-	args            []string
-	diagnostic      Diagnostic
-	condition_theme ?Theme
+	kind       ReplayStepKind
+	value      string
+	args       []string
+	diagnostic Diagnostic
+	conditions []Conditional
 }
 
 // load loads configuration using Ghostty's default-file order, command-line
@@ -7164,8 +7284,9 @@ fn clone_replay_steps(steps []ReplayStep) []ReplayStep {
 	for step in steps {
 		result << ReplayStep{
 			...step
-			args: step.args.clone()
+			args:       step.args.clone()
 			diagnostic: step.diagnostic.clone()
+			conditions: step.conditions.map(it.clone())
 		}
 	}
 	return result
@@ -9437,52 +9558,30 @@ fn (mut c Config) load_theme() {
 	// Expansion and explicit diagnostics remain unconditional, just as in the
 	// source Replay.Step union.
 	for i in 0 .. rebuilt.replay_steps.len {
-		if rebuilt.replay_steps[i].kind == .command {
+		step := rebuilt.replay_steps[i]
+		if step.kind in [.command, .xdg_command] {
 			break
 		}
-		if rebuilt.replay_steps[i].kind == .arg {
-			rebuilt.replay_steps[i] = ReplayStep{
-				...rebuilt.replay_steps[i]
-				condition_theme: state.theme
-			}
+		if step.kind !in [.arg, .conditional_arg] {
+			continue
+		}
+		mut conditions := [Conditional{
+			key: .theme
+			op: .eq
+			value: state.theme.str()
+		}]
+		conditions << step.conditions.map(it.clone())
+		rebuilt.replay_steps[i] = ReplayStep{
+			...step
+			kind: .conditional_arg
+			conditions: conditions
 		}
 	}
 
 	// Replay user/default-file inputs in their original order. The replay
 	// itself records the yielded arguments and expansions into the new config,
 	// preserving the newly conditional theme steps already present above.
-	for step in steps {
-		match step.kind {
-			.arg {
-				if condition := step.condition_theme {
-					if condition != state.theme {
-						continue
-					}
-				}
-				mut iter := cli_args.SliceIterator.new([step.value])
-				rebuilt.load_iter(mut iter)
-			}
-			.expand { rebuilt.expand_paths(step.value) }
-			.diagnostic {
-				rebuilt.diagnostics << step.diagnostic.clone()
-			}
-			.command {
-				rebuilt.replay_steps << ReplayStep{
-					kind: .command
-					args: step.args.clone()
-				}
-				rebuilt.apply_command_tail(step.args, diagnosticspkg.NoneLocation{})
-			}
-			.xdg_command {
-				rebuilt.replay_steps << ReplayStep{
-					kind: .xdg_command
-					args: step.args.clone()
-				}
-				rebuilt.xdg_terminal_exec = true
-				rebuilt.initial_command = Command(DirectCmd{ direct: step.args.clone() })
-			}
-		}
-	}
+	replay_steps_into(mut rebuilt, steps)
 
 	// A conditional theme makes window-theme=auto nonsensical because it
 	// would override the selected light/dark theme.
@@ -9496,6 +9595,54 @@ fn (mut c Config) load_theme() {
 	}
 
 	c = rebuilt
+}
+
+// replay_steps_into is the translated Replay.Iterator side-effect loop. It
+// reapplies recorded inputs without reopening files and evaluates every
+// condition on a conditional argument as an AND.
+fn replay_steps_into(mut destination Config, steps []ReplayStep) {
+	state := destination.conditional_state
+	for step in steps {
+		match step.kind {
+			.arg {
+				mut iter := cli_args.SliceIterator.new([step.value])
+				destination.load_iter(mut iter)
+			}
+			.conditional_arg {
+				mut conditions_match := true
+				for condition in step.conditions {
+					if !state.match(condition) {
+						conditions_match = false
+						break
+					}
+				}
+				if !conditions_match {
+					continue
+				}
+				mut iter := cli_args.SliceIterator.new([step.value])
+				destination.load_iter(mut iter)
+			}
+			.expand { destination.expand_paths(step.value) }
+			.diagnostic {
+				destination.diagnostics << step.diagnostic.clone()
+			}
+			.command {
+				destination.replay_steps << ReplayStep{
+					kind: .command
+					args: step.args.clone()
+				}
+				destination.apply_command_tail(step.args, diagnosticspkg.NoneLocation{})
+			}
+			.xdg_command {
+				destination.replay_steps << ReplayStep{
+					kind: .xdg_command
+					args: step.args.clone()
+				}
+				destination.xdg_terminal_exec = true
+				destination.initial_command = Command(DirectCmd{ direct: step.args.clone() })
+			}
+		}
+	}
 }
 
 // apply_theme_file loads the given theme file and applies its options with the

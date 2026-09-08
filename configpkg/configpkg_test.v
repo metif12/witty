@@ -1685,6 +1685,71 @@ fn test_clone_preserves_conditional_state() {
 	assert dest.conditional_state.theme == .dark
 }
 
+fn test_conditional_enum_match() {
+	state := ConditionalState{
+		theme: .dark
+		os: .linux
+	}
+	assert state.match(Conditional{
+		key: .theme
+		op: .eq
+		value: 'dark'
+	})
+	assert !state.match(Conditional{
+		key: .theme
+		op: .ne
+		value: 'dark'
+	})
+	assert state.match(Conditional{
+		key: .theme
+		op: .ne
+		value: 'light'
+	})
+	assert state.match(Conditional{
+		key: .os
+		op: .eq
+		value: 'linux'
+	})
+	assert Conditional{
+		key: .os
+		op: .ne
+		value: 'macos'
+	}.clone() == Conditional{
+		key: .os
+		op: .ne
+		value: 'macos'
+	}
+	assert ConditionalState{}.os == current_target_os()
+}
+
+fn test_conditional_replay_requires_every_condition_to_match() {
+	mut destination := Config.default_config()
+	destination.conditional_state = ConditionalState{
+		theme: .dark
+		os: .linux
+	}
+	replay_steps_into(mut destination, [
+		ReplayStep{
+			kind: .conditional_arg
+			value: '--font-size=19'
+			conditions: [
+				Conditional{ key: .theme, op: .eq, value: 'dark' },
+				Conditional{ key: .os, op: .eq, value: 'linux' },
+			]
+		},
+		ReplayStep{
+			kind: .conditional_arg
+			value: '--font-thicken=true'
+			conditions: [
+				Conditional{ key: .theme, op: .eq, value: 'dark' },
+				Conditional{ key: .os, op: .ne, value: 'linux' },
+			]
+		},
+	])
+	assert destination.font_size == 19
+	assert !destination.font_thicken
+}
+
 // Config.zig: "changeConditionalState ignores irrelevant changes"
 fn test_change_conditional_state_ignores_irrelevant() {
 	mut cfg := Config.default_config()
@@ -1862,9 +1927,13 @@ fn test_conditional_theme_replay_replaces_theme_repeatables() {
 	assert cfg.font_family == ['Light Font', 'User Font']
 	mut saw_light_theme_step := false
 	for step in cfg.replay_steps {
-		if step.kind == .arg && step.value == '--font-family=Light Font' {
+		if step.kind == .conditional_arg && step.value == '--font-family=Light Font' {
 			saw_light_theme_step = true
-			assert step.condition_theme or { Theme.dark } == .light
+			assert step.conditions == [Conditional{
+				key: .theme
+				op: .eq
+				value: 'light'
+			}]
 		}
 	}
 	assert saw_light_theme_step
@@ -1879,9 +1948,13 @@ fn test_conditional_theme_replay_replaces_theme_repeatables() {
 	assert dark_cfg.font_family == ['Dark Font', 'User Font']
 	mut saw_dark_theme_step := false
 	for step in dark_cfg.replay_steps {
-		if step.kind == .arg && step.value == '--font-family=Dark Font' {
+		if step.kind == .conditional_arg && step.value == '--font-family=Dark Font' {
 			saw_dark_theme_step = true
-			assert step.condition_theme or { Theme.light } == .dark
+			assert step.conditions == [Conditional{
+				key: .theme
+				op: .eq
+				value: 'dark'
+			}]
 		}
 		assert step.value != '--font-family=Light Font'
 	}
