@@ -110,12 +110,12 @@ pub fn ghostty_config_diagnostics_count(config &configpkg.Config) u32 {
 	return u32(config.diagnostics.len)
 }
 
-pub fn ghostty_config_get_diagnostic(config &configpkg.Config, idx u32) ConfigDiagnostic {
+pub fn ghostty_config_get_diagnostic(mut config &configpkg.Config, idx u32) ConfigDiagnostic {
 	if isnil(config) || idx >= u32(config.diagnostics.len) {
 		return ConfigDiagnostic{}
 	}
 	return ConfigDiagnostic{
-		message: &char(config.diagnostics[idx].message.str)
+		message: config.c_diagnostic_message(int(idx))
 	}
 }
 
@@ -230,7 +230,8 @@ fn ghostty_config_get_diagnostic_export(raw voidptr, idx u32) ConfigDiagnostic {
 	if isnil(raw) {
 		return ConfigDiagnostic{}
 	}
-	return ghostty_config_get_diagnostic(unsafe { &configpkg.Config(raw) }, idx)
+	mut config := unsafe { &configpkg.Config(raw) }
+	return ghostty_config_get_diagnostic(mut config, idx)
 }
 
 @[export: 'ghostty_config_open_path']

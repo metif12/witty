@@ -679,9 +679,16 @@ pub fn LineIterator.new_with_path(data string, filepath string) LineIterator {
 
 pub fn (mut self LineIterator) next() ?string {
 	for self.idx < self.lines.len {
-		mut entry := self.lines[self.idx].trim(whitespace + '\r')
+		raw := self.lines[self.idx]
 		self.idx += 1
 		self.line += 1
+		// The source stores the two-byte "--" prefix and the line in one
+		// MAX_LINE_SIZE buffer. An oversized line ends iteration.
+		if raw.len > max_line_size - 2 {
+			self.idx = self.lines.len
+			return none
+		}
+		mut entry := raw.trim(whitespace + '\r')
 
 		// Ignore blank lines and comments
 		if entry.len == 0 || entry[0] == `#` {

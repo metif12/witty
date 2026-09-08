@@ -191,10 +191,10 @@ fn test_config_c_api_file_loading_and_diagnostics() {
 	}
 	ghostty_config_load_file(mut config, path)
 	assert ghostty_config_diagnostics_count(config) == 1
-	diagnostic := ghostty_config_get_diagnostic(config, 0)
+	diagnostic := ghostty_config_get_diagnostic(mut config, 0)
 	assert !isnil(diagnostic.message)
-	assert unsafe { cstring_to_vstring(diagnostic.message) }.contains('font-size')
-	assert unsafe { cstring_to_vstring(ghostty_config_get_diagnostic(config, 99).message) } == ''
+	assert unsafe { cstring_to_vstring(diagnostic.message) } == '${path}:1:font-size: invalid value "nope"'
+	assert unsafe { cstring_to_vstring(ghostty_config_get_diagnostic(mut config, 99).message) } == ''
 }
 
 fn test_embedded_c_abi_layouts_match_ghostty_header() {

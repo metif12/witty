@@ -260,6 +260,13 @@ fn (mut c Config) cache_c_string(key string, value string) &char {
 	return &char(stored.str)
 }
 
+// c_diagnostic_message returns the preformatted diagnostic text through
+// Config-owned storage. Ghostty's DiagnosticList precomputes this text when a
+// diagnostic is appended; the cache provides the same C pointer lifetime in V.
+pub fn (mut c Config) c_diagnostic_message(index int) &char {
+	return c.cache_c_string('_diagnostic_${index}', c.diagnostics[index].format())
+}
+
 @[markused]
 fn enum_c_name(value string) string {
 	if value == 'format_8_bit' {

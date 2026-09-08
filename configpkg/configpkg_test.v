@@ -118,6 +118,36 @@ palette = 300=#ffffff
 	cfg.load_file(path)
 
 	assert cfg.diagnostics.len == 3
+	assert cfg.diagnostics[0].format() == '${path}:2:foreground #ffffff: unknown field'
+	assert cfg.diagnostics[1].format() == '${path}:3:background: invalid value "nope"'
+	assert cfg.diagnostics[2].format().starts_with('${path}:4:palette: ')
+}
+
+fn test_load_cli_args_records_diagnostic_location_and_key() {
+	mut cfg := Config.default_config()
+	cfg.load_cli_args(['--font-size=nope'])
+	assert cfg.diagnostics.len == 1
+	assert cfg.diagnostics[0].format() == 'cli:1:font-size: invalid value "nope"'
+}
+
+fn test_load_cli_args_diagnostic_lists_enum_values() {
+	mut cfg := Config.default_config()
+	cfg.load_cli_args(['--window-theme=nope'])
+	assert cfg.diagnostics.len == 1
+	assert cfg.diagnostics[0].format() == 'cli:1:window-theme: invalid value "nope", valid values are: auto, system, light, dark, ghostty'
+}
+
+fn test_theme_replay_preserves_diagnostic_location_and_key() ! {
+	path := os.join_path(os.temp_dir(), 'witty-diagnostic-theme-${os.getpid()}')
+	os.write_file(path, '')!
+	defer {
+		os.rm(path) or {}
+	}
+	mut cfg := Config.default_config()
+	cfg.load_cli_args(['--theme=${path}', '--font-size=nope'])
+	cfg.finalize()
+	assert cfg.diagnostics.len == 1
+	assert cfg.diagnostics[0].format() == 'cli:2:font-size: invalid value "nope"'
 }
 
 fn test_preferred_default_file_path_uses_platform_location() {
@@ -1819,7 +1849,9 @@ fn test_compat_removed_bool_invalid_value_is_not_silently_accepted() {
 	mut cfg := Config.default_config()
 	cfg.load_string('cursor-invert-fg-bg = maybe\nselection-invert-fg-bg = maybe\nbold-is-bright = maybe\n')
 	assert cfg.diagnostics.len == 3
-	assert cfg.diagnostics.all(it.message.ends_with(': unknown field'))
+	assert cfg.diagnostics.all(it.message == 'unknown field')
+	assert cfg.diagnostics.map(it.key) == ['cursor-invert-fg-bg', 'selection-invert-fg-bg',
+		'bold-is-bright']
 }
 
 // Config.zig: "compatibility: removed cursor-invert-fg-bg"

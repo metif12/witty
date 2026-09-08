@@ -194,8 +194,8 @@ pub fn (self &Config) diagnostics_buffer() GtkTextBuffer {
 	text_buf := C.gtk_text_buffer_new(unsafe { nil })
 	for diag in self.inner.diagnostics {
 		// In ghostty each diagnostic is formatted into a fixed buffer via
-		// `diag.format(&writer)`; here `Diagnostic.str()` yields the message.
-		msg := diag.str()
+		// `diag.format(&writer)`; the translated diagnostic returns that text.
+		msg := diag.format()
 		C.gtk_text_buffer_insert_at_cursor(text_buf, &char(msg.str), msg.len)
 		C.gtk_text_buffer_insert_at_cursor(text_buf, c'\n', 1)
 	}

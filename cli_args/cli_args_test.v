@@ -607,6 +607,13 @@ fn test_line_iterator_no_filepath_no_location() {
 	assert loc == none
 }
 
+fn test_line_iterator_stops_at_maximum_buffer_size() {
+	mut accepted := LineIterator.new('a'.repeat(max_line_size - 2))
+	assert (accepted.next() or { '' }).len == max_line_size
+	mut oversized := LineIterator.new('a'.repeat(max_line_size - 1) + '\nB')
+	assert oversized.next() == none
+}
+
 // --- SliceIterator ---
 
 fn test_slice_iterator() {
