@@ -4030,7 +4030,7 @@ pub mut:
 	search_foreground          TerminalColor = TerminalColor{ color: ColorRGB{ r: 0, g: 0, b: 0 } }
 	search_selected_background TerminalColor = TerminalColor{ color: ColorRGB{ r: 0xf2, g: 0xa5, b: 0x7e } }
 	search_selected_foreground TerminalColor = TerminalColor{ color: ColorRGB{ r: 0, g: 0, b: 0 } }
-	link                       LinkConfig
+	link                       RepeatableLink
 	// Enable URL matching. URLs are matched on hover with control (Linux) or
 	// command (macOS) pressed and open using the default system application for
 	// the linked URL. The URL matcher is always lowest priority of any
@@ -4108,7 +4108,7 @@ pub mut:
 	fullscreen bool
 	// A theme to use. Can be a built-in theme name or an absolute path. Both
 	// light and dark may be set via `light:foo,dark:bar` syntax.
-	theme ?string
+	theme ?ThemePair
 	// The style of the cursor. A running program can request an explicit cursor
 	// style using escape sequences.
 	cursor_style CursorStyle = .block
@@ -4247,8 +4247,6 @@ pub mut:
 	// The current conditional state (e.g. light/dark theme). This is not a
 	// user-facing config option; it tracks runtime conditional evaluation.
 	conditional_state ConditionalState
-	// The parsed light/dark theme pair, if the `theme` value specified one.
-	theme_pair ?ThemePair
 	// Set of conditional keys (currently only "theme") that affect the config
 	// when the conditional state changes.
 	conditional_set map[string]bool
@@ -5127,14 +5125,13 @@ pub fn (c Config) clone() Config {
 	copy.diagnostics = c.diagnostics.clone()
 	copy.keybind = c.keybind.clone()
 	copy.command_palette_entry = c.command_palette_entry.clone()
+	if theme := c.theme {
+		copy.theme = theme.clone()
+	}
 	copy.key_remap = c.key_remap.clone()
 	copy.selection_word_chars = c.selection_word_chars.clone()
 	copy.clipboard_codepoint_map = c.clipboard_codepoint_map.clone()
-	copy.link = LinkConfig{
-		links: LinkList{
-			items: c.link.links.items.clone()
-		}
-	}
+	copy.link = c.link.clone()
 	copy.conditional_set = c.conditional_set.clone()
 	copy.replay_steps = clone_replay_steps(c.replay_steps)
 	// C API caches contain pointers into the source configuration and must never
@@ -5343,6 +5340,23 @@ pub struct BoldColor {
 pub:
 	bright bool = true
 	color  ColorRGB
+}
+
+pub fn BoldColor.parse_cli(input ?string) !BoldColor {
+	value := input or { return perr(ParseError.value_required) }
+	if value == 'bright' {
+		return BoldColor{
+			bright: true
+		}
+	}
+	return BoldColor{
+		bright: false
+		color: ColorRGB.parse_cli(value)!
+	}
+}
+
+pub fn (b BoldColor) format_entry() string {
+	return if b.bright { 'bright' } else { b.color.format_entry() }
 }
 
 // RepeatablePath holds a list of file paths.
@@ -5595,8 +5609,9 @@ pub fn (mut r RepeatableCommand) init() {
 
 // parse_cli appends a title/action/description record. An empty value clears
 // the complete list, matching repeatable configuration semantics.
-pub fn (mut r RepeatableCommand) parse_cli(input string) ! {
-	if input.len == 0 {
+pub fn (mut r RepeatableCommand) parse_cli(input ?string) ! {
+	input_value := input or { '' }
+	if input_value.len == 0 {
 		r.items.clear()
 		return
 	}
@@ -5606,7 +5621,7 @@ pub fn (mut r RepeatableCommand) parse_cli(input string) ! {
 	mut action_text := ''
 	mut has_title := false
 	mut has_action := false
-	mut splitter := cli_args.CommaSplitter.new(input)
+	mut splitter := cli_args.CommaSplitter.new(input_value)
 	for splitter.has_next() {
 		entry := splitter.next() or { return error('invalid value') }
 		colon := entry.index_u8(`:`)
@@ -5662,6 +5677,22 @@ pub fn (r RepeatableCommand) equal(other RepeatableCommand) bool {
 		}
 	}
 	return true
+}
+
+pub fn (r RepeatableCommand) format_entry() []string {
+	if r.items.len == 0 {
+		return ['']
+	}
+	mut result := []string{cap: r.items.len}
+	for item in r.items {
+		mut entry := 'title:"${inputpkg.zig_escape(item.title)}"'
+		if item.description.len > 0 {
+			entry += ',description:"${inputpkg.zig_escape(item.description)}"'
+		}
+		entry += ',action:"${item.action.format()}"'
+		result << entry
+	}
+	return result
 }
 
 // Path represents a config file path.
@@ -5752,23 +5783,41 @@ pub fn (mut p Path) expand(base string) ! {
 	p.path = if os.exists(joined) { os.real_path(joined) } else { os.abs_path(joined) }
 }
 
-// LinkConfig for configurable link detection.
-pub struct LinkConfig {
+// RepeatableLink is Config.RepeatableLink. Custom link parsing is deliberately
+// unimplemented in the pinned source.
+pub struct RepeatableLink {
 pub mut:
-	links LinkList
+	links []inputpkg.Link
 }
 
-pub struct LinkList {
-pub mut:
-	items []LinkEntry
+pub fn (mut r RepeatableLink) parse_cli(input ?string) ! {
+	_ = input
+	return error('not implemented')
 }
 
-pub struct LinkEntry {
-pub:
-	pattern   string
-	action    inputpkg.LinkAction
-	highlight inputpkg.LinkHighlight
-	mods      inputpkg.Mods
+pub fn (r RepeatableLink) clone() RepeatableLink {
+	return RepeatableLink{
+		links: r.links.map(it.clone())
+	}
+}
+
+pub fn (r RepeatableLink) equal(other RepeatableLink) bool {
+	if r.links.len != other.links.len {
+		return false
+	}
+	for i, link in r.links {
+		if !link.equal(other.links[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// format_entry intentionally produces no values because custom links cannot
+// be configured yet. This differs from an empty repeatable, which emits a reset.
+pub fn (r RepeatableLink) format_entry() []string {
+	_ = r
+	return []string{}
 }
 
 // default_url_pattern is the default matcher from config/url.zig expressed in
@@ -7626,18 +7675,9 @@ fn (mut c Config) apply_kv(key string, value string) {
 			if c.loading_theme {
 				return
 			}
-			c.theme = value
-			if pair := theme_pair_parse_cli(value) {
-				// Only record a light/dark pair; a single-value theme is not
-				// conditional.
-				if pair.light != pair.dark {
-					c.theme_pair = pair
-					c.conditional_set['theme'] = true
-				} else {
-					c.theme_pair = none
-				}
-			} else {
-				c.theme_pair = none
+			c.theme = theme_pair_parse_cli(value) or {
+				c.invalid_config_value(key, value)
+				return
 			}
 		}
 		'window-theme' {
@@ -7962,14 +8002,11 @@ fn (mut c Config) apply_kv(key string, value string) {
 			if value.len == 0 {
 				c.bold_color = none
 			} else {
-				parsed := bold_color_parse_cli(value) or {
+				parsed := BoldColor.parse_cli(value) or {
 					c.invalid_config_value(key, value)
 					return
 				}
-				c.bold_color = BoldColor{
-					bright: parsed.bright
-					color: parsed.color
-				}
+				c.bold_color = parsed
 			}
 		}
 		'unfocused-split-fill' {
@@ -9042,9 +9079,8 @@ fn is_config_key(key string) bool {
 	normalized_key := key.replace('-', '_')
 	$for field in Config.fields {
 		if field.name == normalized_key
-			&& field.name !in ['diagnostics', 'conditional_state', 'theme_pair', 'conditional_set',
-				'loading_theme', 'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_strings',
-				'capi_commands'] {
+			&& field.name !in ['diagnostics', 'conditional_state', 'conditional_set', 'loading_theme',
+				'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_strings', 'capi_commands'] {
 			return true
 		}
 	}
@@ -9061,16 +9097,7 @@ fn (mut c Config) reset_empty_config_value(key string) bool {
 	// value is accepted by the generic reset path and restores its field default
 	// (an empty list), not Config.default's appended URL matcher.
 	if key == 'link' {
-		c.link = LinkConfig{}
-		return true
-	}
-
-	// Witty stores the parsed conditional theme alongside the public field.
-	// Reset that derived state together with the source field.
-	if key == 'theme' {
-		c.theme = none
-		c.theme_pair = none
-		c.conditional_set.delete('theme')
+		c.link = RepeatableLink{}
 		return true
 	}
 
@@ -9086,8 +9113,8 @@ fn (mut c Config) reset_empty_config_value(key string) bool {
 	$for field in Config.fields {
 		$if !field.is_map {
 			if field.name == normalized_key
-				&& field.name !in ['diagnostics', 'conditional_state', 'theme_pair', 'loading_theme',
-					'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_commands'] {
+				&& field.name !in ['diagnostics', 'conditional_state', 'loading_theme', 'replay_steps',
+					'replaying', 'xdg_terminal_exec', 'capi_commands'] {
 				c.$(field.name) = defaults.$(field.name)
 				return true
 			}
@@ -9681,13 +9708,8 @@ pub fn (mut c Config) finalize() {
 	c.minimum_contrast = clamp_f64(c.minimum_contrast, 1.0, 21.0)
 
 	// The first default link is always the URL matcher.
-	if !c.link_url && c.link.links.items.len > 0
-		&& c.link.links.items[0].pattern == default_url_pattern {
-		c.link = LinkConfig{
-			links: LinkList{
-				items: c.link.links.items[1..].clone()
-			}
-		}
+	if !c.link_url {
+		c.link.links = c.link.links[1..].clone()
 	}
 
 	// Ghostty only clamps faint opacity at configuration finalization.
@@ -9742,24 +9764,14 @@ fn probable_cli_environment() bool {
 //   * Theme options never override explicitly-set config options.
 //   * A light/dark pair changes `window-theme` from `auto` to `system`.
 //
-// Theme name resolution against config/resource directories is not modeled;
-// absolute paths (as used by the tests) are loaded directly.
 fn (mut c Config) load_theme() {
-	theme_str := c.theme or { return }
-	if theme_str.len == 0 {
-		return
-	}
+	theme := c.theme or { return }
 
 	state := c.conditional_state
 	steps := clone_replay_steps(c.replay_steps)
-	pair := c.theme_pair
-	path := if parsed_pair := pair {
-		match state.theme {
-			.light { parsed_pair.light }
-			.dark { parsed_pair.dark }
-		}
-	} else {
-		theme_str
+	path := match state.theme {
+		.light { theme.light }
+		.dark { theme.dark }
 	}
 
 	mut rebuilt := Config.default_config()
@@ -9799,13 +9811,11 @@ fn (mut c Config) load_theme() {
 
 	// A conditional theme makes window-theme=auto nonsensical because it
 	// would override the selected light/dark theme.
-	if parsed_pair := pair {
-		if parsed_pair.light != parsed_pair.dark {
-			if rebuilt.window_theme == .auto {
-				rebuilt.window_theme = .system
-			}
-			rebuilt.conditional_set['theme'] = true
+	if theme.light != theme.dark {
+		if rebuilt.window_theme == .auto {
+			rebuilt.window_theme = .system
 		}
+		rebuilt.conditional_set['theme'] = true
 	}
 
 	c = rebuilt
@@ -9905,15 +9915,13 @@ pub fn Config.default_config() Config {
 	result.keybind.init()
 	result.command_palette_entry.init()
 	result.selection_word_chars = SelectionWordChars.defaults()
-	result.link = LinkConfig{
-		links: LinkList{
-			items: [LinkEntry{
-				pattern: default_url_pattern
-				action: .open
-				highlight: .hover_mods
-				mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{})
-			}]
-		}
+	result.link = RepeatableLink{
+		links: [inputpkg.Link{
+			regex: default_url_pattern
+			action: .open
+			highlight: .hover_mods
+			mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{})
+		}]
 	}
 	return result
 }
@@ -10195,8 +10203,8 @@ pub fn format_color(c ColorRGB) string {
 }
 
 // ------------------------------------------------------------
-// TerminalColor / BoldColorValue carry the payloads of Ghostty's tagged
-// unions while using an explicit tag in V.
+// TerminalColor carries the payload of Ghostty's tagged union while using an
+// explicit tag in V.
 // ------------------------------------------------------------
 
 // terminal_color_parse_cli translates `TerminalColor.parseCLI`.
@@ -10204,24 +10212,9 @@ pub fn terminal_color_parse_cli(input string) !TerminalColor {
 	return TerminalColor.parse_cli(input)
 }
 
-pub struct BoldColorValue {
-pub:
-	bright bool
-	color  ColorRGB
-}
-
 // bold_color_parse_cli translates `BoldColor.parseCLI`.
-pub fn bold_color_parse_cli(input string) !BoldColorValue {
-	if input == 'bright' {
-		return BoldColorValue{
-			bright: true
-		}
-	}
-	col := color_parse_cli(input)!
-	return BoldColorValue{
-		bright: false
-		color: col
-	}
+pub fn bold_color_parse_cli(input ?string) !BoldColor {
+	return BoldColor.parse_cli(input)
 }
 
 // ------------------------------------------------------------
@@ -10810,8 +10803,26 @@ pub fn window_decoration_parse_cli(input ?string) !WindowDecoration {
 // struct (renamed to avoid colliding with the existing `Theme` enum).
 pub struct ThemePair {
 pub mut:
-	light string
-	dark  string
+	light string @[cli_required]
+	dark  string @[cli_required]
+}
+
+pub fn (mut t ThemePair) parse_cli(input ?string) ! {
+	t = theme_pair_parse_cli(input)!
+}
+
+pub fn (t ThemePair) clone() ThemePair {
+	return ThemePair{
+		light: t.light.clone()
+		dark: t.dark.clone()
+	}
+}
+
+pub fn (t ThemePair) format_entry() string {
+	if t.light == t.dark {
+		return t.light
+	}
+	return 'light:${t.light},dark:${t.dark}'
 }
 
 // theme_pair_parse_cli translates `Theme.parseCLI`. A bare value sets both
@@ -10824,29 +10835,8 @@ pub fn theme_pair_parse_cli(input ?string) !ThemePair {
 	}
 
 	if in_val.contains(',') || in_val.contains('=') || in_val.contains(':') {
-		mut light := ?string(none)
-		mut dark := ?string(none)
-		for entry in in_val.split(',') {
-			colon := entry.index(':') or { return perr(ParseError.invalid_value) }
-			key := entry[..colon].trim(' \t')
-			val := entry[colon + 1..].trim(' \t')
-			match key {
-				'light' {
-					light = val
-				}
-				'dark' {
-					dark = val
-				}
-				else {
-					return perr(ParseError.invalid_value)
-				}
-			}
-		}
-		l := light or { return perr(ParseError.invalid_value) }
-		d := dark or { return perr(ParseError.invalid_value) }
-		return ThemePair{
-			light: l
-			dark: d
+		return cli_args.parse_auto_struct[ThemePair](in_val, ThemePair{}) or {
+			return perr(ParseError.invalid_value)
 		}
 	}
 

@@ -2374,10 +2374,10 @@ fn grid_set_font_style(style configpkg.FontStyle) font.GridSetFontStyleConfig {
 }
 
 pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
-	mut links := []DerivedConfigLink{cap: config.link.links.items.len}
-	for link in config.link.links.items {
+	mut links := []DerivedConfigLink{cap: config.link.links.len}
+	for link in config.link.links {
 		links << DerivedConfigLink{
-			pattern: link.pattern
+			pattern: link.regex
 			action: unsafe { LinkAction(link.action) }
 			highlight: unsafe { LinkHighlight(link.highlight) }
 			mods: link.mods

@@ -10,7 +10,7 @@ fn test_link_clone_equal_and_regex() {
 		mods: Mods{ ctrl: true, shift: true }
 	}
 	cloned := original.clone()
-	assert original.equal(&cloned)
+	assert original.equal(cloned)
 	assert cloned.regex == original.regex
 	assert cloned.mods.equal(original.mods)
 
@@ -25,7 +25,7 @@ fn test_link_clone_equal_and_regex() {
 		highlight: original.highlight
 		mods: original.mods
 	}
-	assert !original.equal(&different)
+	assert !original.equal(different)
 }
 
 fn test_key_event_effective_mods_no_utf8() {

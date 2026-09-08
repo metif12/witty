@@ -100,7 +100,7 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 	$for field in Config.fields {
 		$if field.name != 'class' {
 			if field.name.len > 0 && field.name[0] != `_` && field.name == normalized_key
-				&& field.name !in ['diagnostics', 'conditional_state', 'theme_pair', 'conditional_set',
+				&& field.name !in ['diagnostics', 'conditional_state', 'conditional_set',
 					'loading_theme', 'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_strings',
 					'capi_commands'] {
 				$if field.unaliased_typ is string {

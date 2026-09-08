@@ -319,12 +319,17 @@ fn test_bold_color_parse_cli() {
 	a := bold_color_parse_cli('#4e2a84')!
 	assert !a.bright
 	assert a.color == ColorRGB{78, 42, 132}
+	assert a.format_entry() == '#4e2a84'
 
 	b := bold_color_parse_cli('black')!
 	assert !b.bright
 	assert b.color == ColorRGB{0, 0, 0}
 
-	assert bold_color_parse_cli('bright')!.bright
+	assert BoldColor.parse_cli('bright')!.bright
+	assert BoldColor.parse_cli('bright')!.format_entry() == 'bright'
+	BoldColor.parse_cli(none) or {
+		expect_parse_error(err, .value_required)
+	}
 
 	bold_color_parse_cli('a') or {
 		expect_parse_error(err, .invalid_value)
@@ -940,6 +945,10 @@ fn test_repeatable_command_parse_clear_clone_and_format() {
 
 	clone := commands.clone()
 	assert clone.equal(commands)
+	assert clone.format_entry() == [
+		'title:"Foo",action:"ignore"',
+		'title:"Bar, Baz",description:"line\\ntext",action:"text:hello, world"',
+	]
 
 	mut cfg := Config{}
 	cfg.command_palette_entry = commands
@@ -952,6 +961,10 @@ fn test_repeatable_command_parse_clear_clone_and_format() {
 	assert roundtrip.command_palette_entry.equal(cfg.command_palette_entry)
 
 	commands.parse_cli('')!
+	assert commands.items.len == 0
+	assert commands.format_entry() == ['']
+	commands.parse_cli('title:Again,action:ignore')!
+	commands.parse_cli(none)!
 	assert commands.items.len == 0
 }
 
@@ -1553,6 +1566,7 @@ fn test_parse_theme() {
 	single := theme_pair_parse_cli('foo')!
 	assert single.light == 'foo'
 	assert single.dark == 'foo'
+	assert single.clone().format_entry() == 'foo'
 
 	// Single whitespace
 	single_ws := theme_pair_parse_cli('  foo  ')!
@@ -1563,6 +1577,17 @@ fn test_parse_theme() {
 	pair := theme_pair_parse_cli(' light:foo,  dark : bar  ')!
 	assert pair.light == 'foo'
 	assert pair.dark == 'bar'
+	assert pair.format_entry() == 'light:foo,dark:bar'
+	quoted := theme_pair_parse_cli('light:"foo,bar",dark:"baz\\nqux"')!
+	assert quoted.light == 'foo,bar'
+	assert quoted.dark == 'baz\nqux'
+	mut parsed := ThemePair{}
+	parsed.parse_cli('light:day,dark:night')!
+	assert parsed.format_entry() == 'light:day,dark:night'
+	mut invalid_config := Config.default_config()
+	invalid_config.load_string('theme = light:foo\n')
+	assert invalid_config.theme == none
+	assert invalid_config.diagnostics.len == 1
 
 	theme_pair_parse_cli(none) or {
 		expect_parse_error(err, .value_required)
@@ -1734,7 +1759,7 @@ fn test_config_changed_and_change_iterator() {
 
 	assert source.changed(&dest, 'font-thicken')
 	assert !source.changed(&dest, 'font-size')
-	dest.link.links.items = []
+	dest.link.links = []
 	assert source.changed(&dest, 'link')
 	mut it := source.change_iterator(&dest)
 	mut keys := []string{}
@@ -2581,25 +2606,30 @@ fn test_default_config_initializes_complete_darwin_keybinds() {
 
 fn test_default_config_initializes_url_link() {
 	mut cfg := Config.default_config()
-	assert cfg.link.links.items.len == 1
-	link := cfg.link.links.items[0]
-	assert link.pattern == default_url_pattern
+	assert cfg.link.links.len == 1
+	link := cfg.link.links[0]
+	assert link.regex == default_url_pattern
 	assert link.action == .open
 	assert link.highlight == .hover_mods
 	assert link.mods == input.ctrl_or_super_mods(input.Mods{})
+	assert cfg.link.format_entry().len == 0
+	assert cfg.link.equal(cfg.link.clone())
+	assert !cfg.format_config(false).split_into_lines().any(it.starts_with('link ='))
+	mut custom := RepeatableLink{}
+	custom.parse_cli('regex:foo') or { assert err.msg() == 'not implemented' }
 
 	clone := cfg.clone()
-	cfg.link.links.items << LinkEntry{
-		pattern: 'issue-[0-9]+'
+	cfg.link.links << input.Link{
+		regex: 'issue-[0-9]+'
 		action: .open
 		highlight: .always
 	}
-	assert clone.link.links.items.len == 1
+	assert clone.link.links.len == 1
 
 	cfg.link_url = false
 	cfg.finalize()
-	assert cfg.link.links.items.len == 1
-	assert cfg.link.links.items[0].pattern == 'issue-[0-9]+'
+	assert cfg.link.links.len == 1
+	assert cfg.link.links[0].regex == 'issue-[0-9]+'
 }
 
 fn test_selection_word_chars_defaults_and_parse() {
@@ -3017,7 +3047,7 @@ _xdg-terminal-exec = true
 	assert cfg.keybind.set.bindings.len == 0
 	assert cfg.command_palette_entry.items.len == input.command_defaults.len + 1
 	assert cfg.command_palette_entry.items.last().title == 'Custom'
-	assert cfg.theme_pair != none
+	assert cfg.theme != none
 	assert cfg.xdg_terminal_exec
 
 	cfg.load_string('
@@ -3045,17 +3075,16 @@ _xdg-terminal-exec =
 	assert cfg.keybind.equal(defaults.keybind)
 	assert cfg.command_palette_entry.items.len == defaults.command_palette_entry.items.len
 	assert cfg.theme == none
-	assert cfg.theme_pair == none
 	assert 'theme' !in cfg.conditional_set
 	assert !cfg.xdg_terminal_exec
 }
 
 fn test_config_empty_link_uses_field_default_not_runtime_default_url() {
 	mut cfg := Config.default_config()
-	assert cfg.link.links.items.len == 1
+	assert cfg.link.links.len == 1
 	cfg.load_string('link =\n')
 	assert cfg.diagnostics.len == 0
-	assert cfg.link.links.items.len == 0
+	assert cfg.link.links.len == 0
 }
 
 fn test_xdg_terminal_exec_sets_only_initial_command_mode() {

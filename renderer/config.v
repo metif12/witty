@@ -3,7 +3,6 @@ module renderer
 import terminal
 import configpkg
 import math
-import input
 
 // The configuration for this renderer that is derived from the main
 // configuration. This must be exported so that we don't need to
@@ -122,16 +121,7 @@ pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
 		g: config.foreground.g
 		b: config.foreground.b
 	}
-	mut configured_links := []input.Link{cap: config.link.links.items.len}
-	for configured in config.link.links.items {
-		configured_links << input.Link{
-			regex: configured.pattern
-			action: configured.action
-			highlight: configured.highlight
-			mods: configured.mods
-		}
-	}
-	links := LinkSet.from_config(configured_links)!
+	links := LinkSet.from_config(config.link.links)!
 	custom_shaders := config.custom_shader.clone()!
 	bg_image := if configured_bg_image := config.background_image {
 		configured_bg_image.clone()!

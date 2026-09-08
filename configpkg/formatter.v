@@ -59,10 +59,13 @@ pub fn (c Config) format_config_with_docs(changes_only bool, docs bool) string {
 // hyphenated key spelling. The compile-time field projection is the V
 // equivalent of Zig's comptime Key-to-field lookup.
 pub fn (c &Config) changed(new &Config, key string) bool {
+	if key == 'link' {
+		return !c.link.equal(new.link)
+	}
 	$for field in Config.fields {
 		$if !field.is_map {
-			if field.name !in ['diagnostics', 'conditional_state', 'theme_pair', 'loading_theme',
-				'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_commands'] && field.name.replace('_', '-') == key {
+			if field.name !in ['diagnostics', 'conditional_state', 'loading_theme', 'link', 'replay_steps',
+				'replaying', 'xdg_terminal_exec', 'capi_commands'] && field.name.replace('_', '-') == key {
 				return !comparison.deep_equal(c.$(field.name), new.$(field.name))
 			}
 		}
@@ -366,7 +369,7 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	// RepeatableLink.formatEntry intentionally emits nothing because parsing
 	// custom links is not implemented upstream yet. The key still participates
 	// in docs and change tracking.
-	add_group(mut result, 'link', []string{})
+	add_group(mut result, 'link', c.link.format_entry())
 	add_group(mut result, 'link-previews', [enum_config_string(c.link_previews.str())])
 	add_group(mut result, 'link-url', [bool_string(c.link_url)])
 	add_group(mut result, 'clipboard-read', [c.clipboard_read.str()])
@@ -434,7 +437,7 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	add_group(mut result, 'quit-after-last-window-closed-delay', [
 		optional_duration_string(c.quit_after_last_window_closed_delay),
 	])
-	add_group(mut result, 'theme', [optional_string(c.theme)])
+	add_group(mut result, 'theme', [optional_theme_pair_string(c.theme)])
 	add_group(mut result, 'config-default-files', [
 		bool_string(c.config_default_files),
 	])
@@ -550,7 +553,7 @@ fn readable_io_strings(value RepeatableReadableIO) []string {
 fn add_group(mut groups []ConfigEntryGroup, key string, values []string) {
 	groups << ConfigEntryGroup{
 		key: key
-		values: if values.len == 0 { [''] } else { values }
+		values: values
 	}
 }
 
@@ -567,6 +570,10 @@ fn optional_string(value ?string) string {
 }
 
 fn optional_duration_string(value ?Duration) string {
+	return if actual := value { actual.format_entry() } else { '' }
+}
+
+fn optional_theme_pair_string(value ?ThemePair) string {
 	return if actual := value { actual.format_entry() } else { '' }
 }
 
@@ -667,11 +674,7 @@ fn optional_option_as_alt_string(value ?input.OptionAsAlt) string {
 }
 
 fn optional_bold_color_string(value ?BoldColor) string {
-	return if actual := value {
-		if actual.bright { 'bright' } else { format_color(actual.color) }
-	} else {
-		''
-	}
+	return if actual := value { actual.format_entry() } else { '' }
 }
 
 fn background_blur_string(value BackgroundBlur) string {
@@ -702,19 +705,7 @@ fn optional_command_string(value ?Command) string {
 }
 
 fn command_palette_entry_strings(value RepeatableCommand) []string {
-	if value.items.len == 0 {
-		return ['']
-	}
-	mut result := []string{cap: value.items.len}
-	for item in value.items {
-		mut entry := 'title:"${input.zig_escape(item.title)}"'
-		if item.description.len > 0 {
-			entry += ',description:"${input.zig_escape(item.description)}"'
-		}
-		entry += ',action:"${item.action.format()}"'
-		result << entry
-	}
-	return result
+	return value.format_entry()
 }
 
 fn env_strings(value RepeatableStringMap) []string {

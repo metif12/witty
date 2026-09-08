@@ -286,7 +286,7 @@ pub fn (self &Link) clone() Link {
 }
 
 // equal compares the action, highlight payload, and regular expression.
-pub fn (self &Link) equal(other &Link) bool {
+pub fn (self &Link) equal(other Link) bool {
 	return self.action == other.action && self.highlight == other.highlight
 		&& self.mods.equal(other.mods) && self.regex == other.regex
 }
