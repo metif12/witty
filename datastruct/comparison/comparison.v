@@ -9,9 +9,7 @@ pub fn deep_equal[T](old T, new T) bool {
 	$if T.unaliased_typ is string {
 		return old == new
 	} $else $if T is $option {
-		old_value := old or { return new == none }
-		new_value := new or { return false }
-		return deep_equal(old_value, new_value)
+		return optional_deep_equal(old, new)
 	} $else $if T is $array {
 		if old.len != new.len {
 			return false
@@ -29,10 +27,16 @@ pub fn deep_equal[T](old T, new T) bool {
 			}
 		}
 		$for field in T.fields {
-			old_field := old.$(field.name)
-			new_field := new.$(field.name)
-			if !deep_equal(old_field, new_field) {
-				return false
+			$if field.is_map {
+				if old.$(field.name) != new.$(field.name) {
+					return false
+				}
+			} $else {
+				old_field := old.$(field.name)
+				new_field := new.$(field.name)
+				if !deep_equal(old_field, new_field) {
+					return false
+				}
 			}
 		}
 		return true
@@ -50,6 +54,16 @@ pub fn deep_equal[T](old T, new T) bool {
 	}
 }
 
+// Keeping the optional in the parameter type lets V specialize the payload
+// before compiling the `or` expressions. This is equivalent to deepEqual's
+// optional child recursion and avoids treating the generic T itself as the
+// optional payload.
+fn optional_deep_equal[T](old ?T, new ?T) bool {
+	old_value := old or { return new == none }
+	new_value := new or { return false }
+	return deep_equal(old_value, new_value)
+}
+
 // expect_approx_equal recursively checks approximate relative equality for
 // floating-point values and exact deep equality for all other leaves. Its
 // float tolerance is sqrt(machine epsilon), matching Ghostty.
@@ -63,14 +77,7 @@ pub fn expect_approx_equal[T](expected T, actual T) ! {
 			return error('TestExpectedApproxEqual')
 		}
 	} $else $if T is $option {
-		expected_value := expected or {
-			if actual == none {
-				return
-			}
-			return error('TestExpectedApproxEqual')
-		}
-		actual_value := actual or { return error('TestExpectedApproxEqual') }
-		expect_approx_equal(expected_value, actual_value)!
+		optional_expect_approx_equal(expected, actual)!
 	} $else $if T is $array {
 		if expected.len != actual.len {
 			return error('TestExpectedApproxEqual')
@@ -109,6 +116,17 @@ pub fn expect_approx_equal[T](expected T, actual T) ! {
 			return error('TestExpectedApproxEqual')
 		}
 	}
+}
+
+fn optional_expect_approx_equal[T](expected ?T, actual ?T) ! {
+	expected_value := expected or {
+		if actual == none {
+			return
+		}
+		return error('TestExpectedApproxEqual')
+	}
+	actual_value := actual or { return error('TestExpectedApproxEqual') }
+	expect_approx_equal(expected_value, actual_value)!
 }
 
 fn approx_equal_relative(expected f64, actual f64, tolerance f64) bool {

@@ -2103,7 +2103,7 @@ pub fn (mut self Renderer) change_config(config &DerivedConfig) ! {
 		|| self.config.bg_image_repeat != config.bg_image_repeat
 		|| self.config.bg_image_opacity != config.bg_image_opacity
 	blending_changed := self.config.blending != config.blending
-	custom_shaders_changed := !self.config.custom_shaders.equal(&config.custom_shaders)
+	custom_shaders_changed := !self.config.custom_shaders.equal(config.custom_shaders)
 
 	self.config.deinit()
 	self.config = *config
@@ -2215,7 +2215,7 @@ fn (mut self Renderer) update_bg_image_buffer() {
 fn optional_path_equal(left ?configpkg.Path, right ?configpkg.Path) bool {
 	if l := left {
 		if r := right {
-			return l.equal(&r)
+			return l.equal(r)
 		}
 		return false
 	}

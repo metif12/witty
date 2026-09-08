@@ -87,6 +87,7 @@ fn test_deep_equal_options_arrays_and_structs() {
 fn test_deep_equal_uses_equal_method() {
 	assert deep_equal(TestCustom{ value: 5 }, TestCustom{ value: 15 })
 	assert !deep_equal(TestCustom{ value: 5 }, TestCustom{ value: 6 })
+	assert deep_equal(?TestCustom(TestCustom{ value: 5 }), ?TestCustom(TestCustom{ value: 15 }))
 	assert deep_equal(TestCustomOuter{ custom: TestCustom{ value: 5 } }, TestCustomOuter{
 		custom: TestCustom{ value: 15 }
 	})

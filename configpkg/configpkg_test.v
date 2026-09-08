@@ -1187,7 +1187,7 @@ fn test_gtk_css_config_parse_format_clone_and_clear() {
 	]
 
 	cloned := cfg.clone()
-	assert cloned.gtk_custom_css.equal(&cfg.gtk_custom_css)
+	assert cloned.gtk_custom_css.equal(cfg.gtk_custom_css)
 	formatted := cfg.format_config(true)
 	assert formatted.contains('window-title-font-family = Cantarell\n')
 	assert formatted.contains('window-titlebar-background = #123456\n')
@@ -1435,6 +1435,42 @@ fn test_clone_default() {
 	assert dest.foreground == source.foreground
 	assert dest.term == source.term
 	assert dest.abnormal_command_exit_runtime == source.abnormal_command_exit_runtime
+	mut changes := source.change_iterator(&dest)
+	assert changes.next() == none
+}
+
+// Config.zig: "changed"
+fn test_config_changed_and_change_iterator() {
+	source := Config.default_config()
+	mut dest := source.clone()
+	dest.font_thicken = true
+	dest.window_width = 100
+
+	assert source.changed(&dest, 'font-thicken')
+	assert !source.changed(&dest, 'font-size')
+	dest.link.links.items = []
+	assert source.changed(&dest, 'link')
+	mut it := source.change_iterator(&dest)
+	mut keys := []string{}
+	for key := it.next(); key != none; key = it.next() {
+		keys << key or { break }
+	}
+	assert keys == ['font-thicken', 'link', 'window-width']
+
+	mut lazy_dest := source.clone()
+	mut lazy_it := source.change_iterator(&lazy_dest)
+	lazy_dest.font_thicken = true
+	lazy_key := lazy_it.next() or { '' }
+	assert lazy_key == 'font-thicken'
+
+	mut formatted_dest := source.clone()
+	formatted_dest.font_feature = ['liga']
+	formatted_dest.font_size += 1
+	formatted := formatted_dest.format_config(true)
+	feature_index := formatted.index('font-feature =') or { -1 }
+	size_index := formatted.index('font-size =') or { -1 }
+	assert feature_index >= 0
+	assert feature_index < size_index
 }
 
 // Config.zig: "clone preserves conditional state"
@@ -2739,7 +2775,7 @@ fn test_path_parse_distinguishes_quoted_question_mark() {
 	optional := Path.parse('?"optional.conf"') or { panic('missing optional path') }
 	assert required == Path{ path: '?required.conf' }
 	assert optional == Path{ path: 'optional.conf', optional: true }
-	assert !required.equal(&optional)
+	assert !required.equal(optional)
 }
 
 fn test_load_file_expands_paths_relative_to_declaring_file() {
@@ -2892,7 +2928,7 @@ fn test_format_config_changes_only_round_trips_supported_values() {
 	assert parsed.freetype_load_flags == original.freetype_load_flags
 	assert parsed.background == original.background
 	assert parsed.command?.string_val() == original.command?.string_val()
-	assert parsed.custom_shader.equal(&original.custom_shader)
+	assert parsed.custom_shader.equal(original.custom_shader)
 	assert parsed.split_preserve_zoom.navigation
 	assert parsed.window_padding_x == original.window_padding_x
 	assert parsed.window_padding_y == original.window_padding_y

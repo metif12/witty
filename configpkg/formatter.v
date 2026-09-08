@@ -3,6 +3,7 @@ module configpkg
 import terminal
 import input
 import font
+import datastruct.comparison
 
 // Generated from the documentation comments in the pinned Ghostty
 // config/Config.zig. Records are separated by ASCII record separators so the
@@ -26,15 +27,10 @@ pub fn (c Config) format_config(changes_only bool) string {
 // immediately above the field as configuration comments.
 pub fn (c Config) format_config_with_docs(changes_only bool, docs bool) string {
 	groups := config_entry_groups(c)
-	mut default_values := map[string][]string{}
-	if changes_only {
-		for group in config_entry_groups(Config.default_config()) {
-			default_values[group.key] = group.values
-		}
-	}
+	default_config := Config.default_config()
 	mut lines := []string{}
 	for group in groups {
-		if changes_only && group.values == (default_values[group.key] or { []string{} }) {
+		if changes_only && !default_config.changed(&c, group.key) {
 			continue
 		}
 		mut documented := false
@@ -57,6 +53,22 @@ pub fn (c Config) format_config_with_docs(changes_only bool, docs bool) string {
 		return ''
 	}
 	return lines.join('\n') + '\n'
+}
+
+// changed reports whether one public configuration field differs between two
+// configs. Ghostty's API takes its generated Key enum; V uses the equivalent
+// hyphenated key spelling. The compile-time field projection is the V
+// equivalent of Zig's comptime Key-to-field lookup.
+pub fn (c &Config) changed(new &Config, key string) bool {
+	$for field in Config.fields {
+		$if !field.is_map {
+			if field.name !in ['diagnostics', 'conditional_state', 'theme_pair', 'loading_theme',
+				'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_colors', 'capi_commands'] && field.name.replace('_', '-') == key {
+				return !comparison.deep_equal(c.$(field.name), new.$(field.name))
+			}
+		}
+	}
+	panic('unknown config key: ${key}')
 }
 
 fn config_help(key string) ?string {
@@ -311,11 +323,11 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	add_group(mut result, 'quick-terminal-position', [
 		enum_config_string(c.quick_terminal_position.str()),
 	])
-	if c.quick_terminal_size.primary != none {
-		add_group(mut result, 'quick-terminal-size', [
-			quick_terminal_size_string(c.quick_terminal_size),
-		])
-	}
+	add_group(mut result, 'quick-terminal-size', if c.quick_terminal_size.primary != none {
+		[quick_terminal_size_string(c.quick_terminal_size)]
+	} else {
+		[]string{}
+	})
 	add_group(mut result, 'gtk-quick-terminal-layer', [
 		enum_config_string(c.gtk_quick_terminal_layer.str()),
 	])
@@ -352,6 +364,10 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	add_group(mut result, 'shell-integration-features', [
 		shell_integration_features_string(c.shell_integration_features),
 	])
+	// RepeatableLink.formatEntry intentionally emits nothing because parsing
+	// custom links is not implemented upstream yet. The key still participates
+	// in docs and change tracking.
+	add_group(mut result, 'link', []string{})
 	add_group(mut result, 'link-previews', [enum_config_string(c.link_previews.str())])
 	add_group(mut result, 'link-url', [bool_string(c.link_url)])
 	add_group(mut result, 'clipboard-read', [c.clipboard_read.str()])
@@ -505,7 +521,27 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 		optional_release_channel_string(c.auto_update_channel),
 	])
 	add_group(mut result, 'palette', palette_strings(c.palette))
-	return result
+
+	// Config's V field layout groups values by subsystem. FileFormatter and
+	// Config.Key instead follow the source Config.zig declaration order.
+	mut ordered := []ConfigEntryGroup{cap: config_keys.len}
+	for key in config_keys {
+		mut found := false
+		for group in result {
+			if group.key == key {
+				ordered << ConfigEntryGroup{
+					key: group.key
+					values: group.values.clone()
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			panic('missing config formatter key: ${key}')
+		}
+	}
+	return ordered
 }
 
 fn readable_io_strings(value RepeatableReadableIO) []string {

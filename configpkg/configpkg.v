@@ -5084,6 +5084,35 @@ pub fn (c Config) clone() Config {
 	return copy
 }
 
+// ConfigChangeIterator yields each changed public key in Config declaration
+// order, matching Config.ChangeIterator.
+pub struct ConfigChangeIterator {
+mut:
+	old   &Config = unsafe { nil }
+	new   &Config = unsafe { nil }
+	index int
+}
+
+pub fn (old &Config) change_iterator(new &Config) ConfigChangeIterator {
+	return unsafe {
+		ConfigChangeIterator{
+			old: old
+			new: new
+		}
+	}
+}
+
+pub fn (mut it ConfigChangeIterator) next() ?string {
+	for it.index < config_keys.len {
+		key := config_keys[it.index]
+		it.index++
+		if it.old.changed(it.new, key) {
+			return key
+		}
+	}
+	return none
+}
+
 // ============================================================
 // Types used by renderer DerivedConfig
 // ============================================================
@@ -5206,12 +5235,12 @@ pub mut:
 	items []Path
 }
 
-pub fn (a &RepeatablePath) equal(b &RepeatablePath) bool {
+pub fn (a RepeatablePath) equal(b RepeatablePath) bool {
 	if a.items.len != b.items.len {
 		return false
 	}
 	for i, item in a.items {
-		if !item.equal(&b.items[i]) {
+		if !item.equal(b.items[i]) {
 			return false
 		}
 	}
@@ -5511,7 +5540,7 @@ pub fn Path.parse(input string) ?Path {
 	}
 }
 
-pub fn (a &Path) equal(b &Path) bool {
+pub fn (a Path) equal(b Path) bool {
 	return a.path == b.path && a.optional == b.optional
 }
 
