@@ -712,7 +712,7 @@ fn quick_terminal_size_string(value QuickTerminalSize) string {
 }
 
 fn path_string(value Path) string {
-	return '${if value.optional { '?' } else { '' }}${value.path}'
+	return value.format_entry()
 }
 
 fn optional_path_string(value ?Path) string {
@@ -720,10 +720,7 @@ fn optional_path_string(value ?Path) string {
 }
 
 fn repeat_paths(value RepeatablePath) []string {
-	if value.items.len == 0 {
-		return ['']
-	}
-	return value.items.map(path_string(it))
+	return value.format_entry()
 }
 
 fn optional_command_string(value ?Command) string {

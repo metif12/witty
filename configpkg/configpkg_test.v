@@ -2938,6 +2938,60 @@ fn test_path_parse_distinguishes_quoted_question_mark() {
 	assert !required.equal(optional)
 }
 
+fn test_path_public_parse_and_format_apis() {
+	mut path := Path{
+		path: 'original.conf'
+	}
+	assert path.len() == 13
+	assert path.format_entry() == 'original.conf'
+
+	path.parse_cli('?"optional.conf"')!
+	assert path == Path{ path: 'optional.conf', optional: true }
+	assert path.format_entry() == '?optional.conf'
+
+	// Empty parsed paths do not replace the existing value.
+	path.parse_cli('?')!
+	path.parse_cli('""')!
+	assert path == Path{ path: 'optional.conf', optional: true }
+
+	assert RepeatablePath{}.format_entry() == ['']
+	assert RepeatablePath{
+		items: [Path{ path: 'one' }, Path{ path: 'two', optional: true }]
+	}.format_entry() == ['one', '?two']
+}
+
+fn test_path_expand_uses_translated_home_expansion() {
+	previous := os.getenv_opt('HOME')
+	defer {
+		if value := previous {
+			os.setenv('HOME', value, true)
+		} else {
+			os.unsetenv('HOME')
+		}
+	}
+	os.setenv('HOME', '/tmp/witty-path-home/', true)
+
+	mut path := Path{ path: '~/shader.glsl' }
+	path.expand('/tmp')!
+	assert path.path == '/tmp/witty-path-home//shader.glsl'
+}
+
+fn test_path_expand_canonicalizes_existing_relative_path() ! {
+	$if !windows {
+		dir := os.join_path(os.temp_dir(), 'witty-path-real-${os.getpid()}')
+		os.rmdir_all(dir) or {}
+		os.mkdir_all(os.join_path(dir, 'actual'))!
+		defer {
+			os.rmdir_all(dir) or {}
+		}
+		os.symlink(os.join_path(dir, 'actual'), os.join_path(dir, 'linked'))!
+
+		mut path := Path{ path: 'linked' }
+		path.expand(dir)!
+		assert path.path == os.real_path(os.join_path(dir, 'actual'))
+	}
+}
+
 fn test_load_file_expands_paths_relative_to_declaring_file() {
 	dir := os.join_path(os.temp_dir(), 'witty-config-paths-${os.getpid()}')
 	os.rmdir_all(dir) or {}
@@ -2973,11 +3027,11 @@ fn test_load_recursive_files_preserves_order_and_nested_bases() {
 	cfg.load_recursive_files()
 	assert cfg.font_size == 12
 	assert cfg.config_file.items == [
-		Path{ path: first },
-		Path{ path: second },
+		Path{ path: os.real_path(first) },
+		Path{ path: os.real_path(second) },
 	]
 	assert cfg.custom_shader.items == [
-		Path{ path: os.join_path(dir, 'nested', 'effect.glsl') },
+		Path{ path: os.join_path(os.dir(os.real_path(second)), 'effect.glsl') },
 	]
 	assert cfg.diagnostics.len == 0
 }
@@ -2999,7 +3053,7 @@ fn test_recursive_files_skip_optional_missing_and_report_required_and_cycles() {
 	cfg.load_recursive_files()
 	assert cfg.diagnostics.len == 2
 	assert cfg.diagnostics[0].message == 'error opening config-file ${os.join_path(dir, 'required.conf')}: file not found'
-	assert cfg.diagnostics[1].message == 'config-file ${child}: cycle detected'
+	assert cfg.diagnostics[1].message == 'config-file ${os.real_path(child)}: cycle detected'
 }
 
 fn test_preferred_xdg_path_uses_new_then_legacy_name() {

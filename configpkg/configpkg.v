@@ -5349,6 +5349,15 @@ pub fn (mut p RepeatablePath) parse_cli(input ?string) ! {
 	}
 }
 
+// format_entry returns one formatter value per path. An empty collection
+// emits one empty value so the setting can be reset in generated config.
+pub fn (p RepeatablePath) format_entry() []string {
+	if p.items.len == 0 {
+		return ['']
+	}
+	return p.items.map(it.format_entry())
+}
+
 // ReadableIO is a startup input source. Values retain their Zig string
 // escapes so configuration formatting can recreate the original value.
 pub enum ReadableIOKind {
@@ -5589,6 +5598,10 @@ pub mut:
 	optional bool
 }
 
+pub fn (p Path) len() int {
+	return p.path.len
+}
+
 // parse translates config.Path.parse. A leading question mark makes the path
 // optional, and one pair of surrounding quotes is removed.
 pub fn Path.parse(input string) ?Path {
@@ -5609,6 +5622,18 @@ pub fn Path.parse(input string) ?Path {
 	}
 }
 
+// parse_cli overwrites the path only when parsing produces a non-empty path.
+// Values that become empty after removing `?` or surrounding quotes are
+// ignored, matching Path.parseCLI in the source.
+pub fn (mut p Path) parse_cli(input ?string) ! {
+	value := input or { return error('value required') }
+	parsed := Path.parse(value) or { return }
+	if parsed.len() == 0 {
+		return
+	}
+	p = parsed
+}
+
 pub fn (a Path) equal(b Path) bool {
 	return a.path == b.path && a.optional == b.optional
 }
@@ -5620,26 +5645,38 @@ pub fn (p Path) clone() !Path {
 	}
 }
 
+// format_entry is the value passed to Config's entry formatter.
+pub fn (p Path) format_entry() string {
+	return '${if p.optional { '?' } else { '' }}${p.path}'
+}
+
 // expand resolves this path exactly when a configuration reader finishes a
 // file, so paths in nested files remain relative to the file that declared
 // them.
 pub fn (mut p Path) expand(base string) ! {
+	if !os.is_abs_path(base) {
+		return error('path expansion base must be absolute: ${base}')
+	}
 	if p.path.len == 0 || os.is_abs_path(p.path) {
 		return
 	}
 	if p.path.starts_with('~/') {
-		home := os.home_dir()
-		if home.len == 0 {
-			p.path = ''
-			return error('unable to expand home directory')
+		$if !windows {
+			original := p.path
+			expanded := internal_os.expand_home(original) or {
+				p.path = ''
+				p.optional = false
+				return error('error expanding home directory for path ${original}: ${err}')
+			}
+			p.path = expanded
+			return
 		}
-		p.path = os.abs_path(os.join_path(home, p.path[2..]))
-		return
 	}
-	if !os.is_abs_path(base) {
-		return error('path expansion base must be absolute: ${base}')
-	}
-	p.path = os.abs_path(os.join_path(base, p.path))
+	joined := os.join_path(base, p.path)
+	// Ghostty asks the directory for a real path first, preserving canonical
+	// symlink resolution for existing entries. A missing entry falls back to
+	// lexical path resolution so configuration may name files created later.
+	p.path = if os.exists(joined) { os.real_path(joined) } else { os.abs_path(joined) }
 }
 
 // LinkConfig for configurable link detection.
