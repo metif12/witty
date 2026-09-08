@@ -1116,7 +1116,7 @@ fn test_write_config_template_creates_parent_and_interpolates_path() ! {
 	assert !content.contains('\nfont-family =')
 }
 
-fn test_load_optional_file_distinguishes_only_missing_paths() ! {
+fn test_load_optional_file_reports_source_actions() ! {
 	dir := os.join_path(os.temp_dir(), 'witty-optional-config-${os.getpid()}')
 	os.rmdir_all(dir) or {}
 	defer {
@@ -1127,8 +1127,9 @@ fn test_load_optional_file_distinguishes_only_missing_paths() ! {
 	empty := os.join_path(dir, 'empty')
 	os.write_file(empty, '')!
 	mut cfg := Config.default_config()
-	assert !cfg.load_optional_file(missing)
-	assert cfg.load_optional_file(empty)
+	assert cfg.load_optional_file(missing) == .not_found
+	assert cfg.load_optional_file(empty) == .loaded
+	assert cfg.load_optional_file(dir) == .loaded
 }
 
 fn test_preferred_config_path_prefers_nonempty_then_existing() ! {

@@ -6566,15 +6566,16 @@ pub fn Config.load_args(args []string) Config {
 pub fn (mut c Config) load_default_files() {
 	legacy_xdg_path := legacy_xdg_config_path()
 	xdg_path := default_xdg_config_path()
-	legacy_xdg_loaded := c.load_optional_file(legacy_xdg_path)
-	preferred_xdg_loaded := c.load_optional_file(xdg_path)
-	xdg_loaded := legacy_xdg_loaded || preferred_xdg_loaded
+	legacy_xdg_action := c.load_optional_file(legacy_xdg_path)
+	preferred_xdg_action := c.load_optional_file(xdg_path)
+	xdg_loaded := legacy_xdg_action != .not_found || preferred_xdg_action != .not_found
 	$if macos {
 		legacy_app_support_path := app_support_config_path('config')
 		app_support_path := app_support_config_path('config.ghostty')
-		legacy_app_support_loaded := c.load_optional_file(legacy_app_support_path)
-		preferred_app_support_loaded := c.load_optional_file(app_support_path)
-		app_support_loaded := legacy_app_support_loaded || preferred_app_support_loaded
+		legacy_app_support_action := c.load_optional_file(legacy_app_support_path)
+		preferred_app_support_action := c.load_optional_file(app_support_path)
+		app_support_loaded := legacy_app_support_action != .not_found
+			|| preferred_app_support_action != .not_found
 		if !app_support_loaded && !xdg_loaded {
 			write_config_template(app_support_path) or {}
 		}
@@ -6585,15 +6586,21 @@ pub fn (mut c Config) load_default_files() {
 	}
 }
 
-// load_optional_file mirrors Config.loadOptionalFile's action for purposes of
-// choosing whether to create a template. Any path other than a missing path is
-// considered handled, including an empty file or a path that cannot be read.
-fn (mut c Config) load_optional_file(path string) bool {
+pub enum OptionalFileAction {
+	loaded
+	not_found
+	error_
+}
+
+// load_optional_file ignores file errors and reports the action taken. As in
+// Ghostty, an existing unreadable path is distinct from a missing path so it
+// suppresses creation of a replacement template.
+pub fn (mut c Config) load_optional_file(path string) OptionalFileAction {
 	if !os.exists(path) {
-		return false
+		return .not_found
 	}
-	c.load_file(path)
-	return true
+	c.load_file_result(path) or { return .error_ }
+	return .loaded
 }
 
 fn write_config_template(path string) ! {
@@ -6712,15 +6719,18 @@ fn is_boolean_config_key(key string) bool {
 // ignored. Malformed lines (missing `=`, invalid values, out-of-range
 // indices) are recorded as diagnostics.
 pub fn (mut c Config) load_file(path string) {
+	c.load_file_result(path) or {
+		abs_path := if os.is_abs_path(path) { path } else { os.abs_path(path) }
+		c.add_replay_diagnostic('config-file ${abs_path}: unable to read file')
+	}
+}
+
+fn (mut c Config) load_file_result(path string) ! {
 	abs_path := if os.is_abs_path(path) { path } else { os.abs_path(path) }
 	if os.exists(abs_path) && !os.is_file(abs_path) {
-		c.add_replay_diagnostic('config-file ${abs_path}: not reading because it is not a file')
 		return
 	}
-	content := os.read_file(abs_path) or {
-		c.add_replay_diagnostic('config-file ${abs_path}: unable to read file')
-		return
-	}
+	content := os.read_file(abs_path)!
 	c.load_string(content)
 	c.expand_paths(os.dir(abs_path))
 }
