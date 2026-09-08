@@ -126,7 +126,7 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 					if c.$(field.name) == none {
 						return false
 					}
-					c_write_value[CConfigColor](ptr, color_cval(c.$(field.name)?))
+					c_write_value[CConfigColor](ptr, c.$(field.name)?.cval())
 					return true
 				} $else $if field.unaliased_typ is ?ColorList {
 					if c.$(field.name) == none {
@@ -159,7 +159,7 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 					c_write_cstring(ptr, c.cache_c_string(key, enum_c_name(c.$(field.name)?.str())))
 					return true
 				} $else $if field.unaliased_typ is ColorRGB {
-					c_write_value[CConfigColor](ptr, color_cval(c.$(field.name)))
+					c_write_value[CConfigColor](ptr, c.$(field.name).cval())
 					return true
 				} $else $if field.unaliased_typ is ColorList {
 					c_write_value[CConfigColorList](ptr, c.color_list_cval(c.$(field.name)))
@@ -254,15 +254,6 @@ fn enum_c_name(value string) string {
 }
 
 @[markused]
-fn color_cval(value ColorRGB) CConfigColor {
-	return CConfigColor{
-		r: value.r
-		g: value.g
-		b: value.b
-	}
-}
-
-@[markused]
 fn (mut c Config) color_list_cval(value ColorList) CConfigColorList {
 	c.capi_colors = []ColorRGB{cap: value.colors.len}
 	c.capi_colors << value.colors
@@ -280,7 +271,7 @@ fn (mut c Config) color_list_cval(value ColorList) CConfigColorList {
 fn palette_cval(value Palette) CConfigPalette {
 	mut result := CConfigPalette{}
 	for i, color in value.value {
-		result.colors[i] = color_cval(color)
+		result.colors[i] = color.cval()
 	}
 	return result
 }

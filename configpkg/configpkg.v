@@ -5138,6 +5138,39 @@ pub:
 	color ColorRGB
 }
 
+pub fn TerminalColor.parse_cli(input_ ?string) !TerminalColor {
+	input := input_ or { return perr(ParseError.value_required) }
+	if input == 'cell-foreground' {
+		return TerminalColor{
+			kind: .cell_foreground
+		}
+	}
+	if input == 'cell-background' {
+		return TerminalColor{
+			kind: .cell_background
+		}
+	}
+	return TerminalColor{
+		kind: .color
+		color: ColorRGB.parse_cli(input)!
+	}
+}
+
+pub fn (c TerminalColor) to_terminal_rgb() ?terminal.RGB {
+	if c.kind == .color {
+		return c.color.to_terminal_rgb()
+	}
+	return none
+}
+
+pub fn (c TerminalColor) format_entry() string {
+	return match c.kind {
+		.color { c.color.format_entry() }
+		.cell_foreground { 'cell-foreground' }
+		.cell_background { 'cell-background' }
+	}
+}
+
 // WindowPaddingColor determines how the padding area is colored.
 pub enum WindowPaddingColor {
 	background
@@ -6369,6 +6402,76 @@ pub:
 	r u8
 	g u8
 	b u8
+}
+
+// cval projects Color to ghostty_config_color_s.
+pub fn (c ColorRGB) cval() CConfigColor {
+	return CConfigColor{
+		r: c.r
+		g: c.g
+		b: c.b
+	}
+}
+
+// to_terminal_rgb converts the configuration color to terminal.color.RGB.
+pub fn (c ColorRGB) to_terminal_rgb() terminal.RGB {
+	return terminal.RGB{
+		r: c.r
+		g: c.g
+		b: c.b
+	}
+}
+
+pub fn (c ColorRGB) clone() ColorRGB {
+	return c
+}
+
+pub fn (c ColorRGB) equal(other ColorRGB) bool {
+	return c == other
+}
+
+// format_buf is Color.formatBuf; V returns its owned string directly.
+pub fn (c ColorRGB) format_buf() string {
+	return '#${c.r:02x}${c.g:02x}${c.b:02x}'
+}
+
+pub fn (c ColorRGB) format_entry() string {
+	return c.format_buf()
+}
+
+// from_hex parses a color from #RRGGBB or #RGB syntax.
+pub fn ColorRGB.from_hex(input string) !ColorRGB {
+	mut trimmed := input
+	if trimmed.len != 0 && trimmed[0] == `#` {
+		trimmed = trimmed[1..]
+	}
+	if trimmed.len != 6 && trimmed.len != 3 {
+		return perr(ParseError.invalid_value)
+	}
+	rgb := if trimmed.len == 3 {
+		[trimmed[0], trimmed[0], trimmed[1], trimmed[1], trimmed[2], trimmed[2]].bytestr()
+	} else {
+		trimmed
+	}
+	r := parse_hex_byte(rgb[0..2]) or { return perr(ParseError.invalid_value) }
+	g := parse_hex_byte(rgb[2..4]) or { return perr(ParseError.invalid_value) }
+	b := parse_hex_byte(rgb[4..6]) or { return perr(ParseError.invalid_value) }
+	return ColorRGB{
+		r: r
+		g: g
+		b: b
+	}
+}
+
+// parse_cli trims source-defined ASCII whitespace, tries X11 names, and then
+// parses hexadecimal syntax.
+pub fn ColorRGB.parse_cli(input_ ?string) !ColorRGB {
+	input := input_ or { return perr(ParseError.value_required) }
+	trimmed := input.trim(' \t')
+	if named := named_x11_color(trimmed) {
+		return named
+	}
+	return ColorRGB.from_hex(trimmed)
 }
 
 // Palette holds the 256-color terminal palette.
@@ -9346,36 +9449,13 @@ pub fn parse_error_of(err IError) ?ParseError {
 // is optional and a 3-character short form (`#RGB`) is expanded. This is a
 // faithful translation of `Color.fromHex`.
 pub fn color_from_hex(input string) !ColorRGB {
-	mut trimmed := input
-	if trimmed.len != 0 && trimmed[0] == `#` {
-		trimmed = trimmed[1..]
-	}
-	if trimmed.len != 6 && trimmed.len != 3 {
-		return perr(ParseError.invalid_value)
-	}
-	rgb := if trimmed.len == 3 {
-		[trimmed[0], trimmed[0], trimmed[1], trimmed[1], trimmed[2], trimmed[2]].bytestr()
-	} else {
-		trimmed
-	}
-	r := parse_hex_byte(rgb[0..2]) or { return perr(ParseError.invalid_value) }
-	g := parse_hex_byte(rgb[2..4]) or { return perr(ParseError.invalid_value) }
-	b := parse_hex_byte(rgb[4..6]) or { return perr(ParseError.invalid_value) }
-	return ColorRGB{
-		r: r
-		g: g
-		b: b
-	}
+	return ColorRGB.from_hex(input)
 }
 
 // color_parse_cli parses a color the way `Color.parseCLI` does: it trims
 // surrounding whitespace, then tries a named X11 color, then a hex value.
 pub fn color_parse_cli(input string) !ColorRGB {
-	trimmed := input.trim(' \t')
-	if named := named_x11_color(trimmed) {
-		return named
-	}
-	return color_from_hex(trimmed)
+	return ColorRGB.parse_cli(input)
 }
 
 // named_x11_color resolves the complete embedded X.Org rgb.txt table.
@@ -9393,7 +9473,7 @@ fn named_x11_color(name string) ?ColorRGB {
 // format_color renders a color as `#rrggbb` (lowercase), matching
 // `Color.formatBuf`.
 pub fn format_color(c ColorRGB) string {
-	return '#${c.r:02x}${c.g:02x}${c.b:02x}'
+	return c.format_buf()
 }
 
 // ------------------------------------------------------------
@@ -9403,21 +9483,7 @@ pub fn format_color(c ColorRGB) string {
 
 // terminal_color_parse_cli translates `TerminalColor.parseCLI`.
 pub fn terminal_color_parse_cli(input string) !TerminalColor {
-	if input == 'cell-foreground' {
-		return TerminalColor{
-			kind: .cell_foreground
-		}
-	}
-	if input == 'cell-background' {
-		return TerminalColor{
-			kind: .cell_background
-		}
-	}
-	col := color_parse_cli(input)!
-	return TerminalColor{
-		kind: .color
-		color: col
-	}
+	return TerminalColor.parse_cli(input)
 }
 
 pub struct BoldColorValue {

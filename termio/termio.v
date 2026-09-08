@@ -388,30 +388,14 @@ pub mut:
 pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
 	mut palette := [256]terminal.RGB{}
 	for i, color in config.palette.value {
-		palette[i] = terminal.RGB{ r: color.r, g: color.g, b: color.b }
+		palette[i] = color.to_terminal_rgb()
 	}
 	return DerivedConfig{
 		palette: terminal.DynamicPalette.init(palette)
-		foreground: terminal.RGB{
-			r: config.foreground.r
-			g: config.foreground.g
-			b: config.foreground.b
-		}
-		background: terminal.RGB{
-			r: config.background.r
-			g: config.background.g
-			b: config.background.b
-		}
+		foreground: config.foreground.to_terminal_rgb()
+		background: config.background.to_terminal_rgb()
 		cursor_color: if cursor_color := config.cursor_color {
-			if cursor_color.kind == .color {
-				terminal.RGB{
-					r: cursor_color.color.r
-					g: cursor_color.color.g
-					b: cursor_color.color.b
-				}
-			} else {
-				none
-			}
+			cursor_color.to_terminal_rgb()
 		} else {
 			none
 		}
@@ -1097,7 +1081,7 @@ fn (t &Thread) show_start_error(mut io Termio, message string) {
 			'Your system cannot allocate any more pty devices.\n\nGhostty requires a pty device to launch a new terminal.\nThis error is usually due to having too many terminal\nwindows open or having another program that is using too\nmany pty devices.\n\nPlease free up some pty devices and try again.'
 		}
 		'input not found', 'input failed' {
-			'A configured `input` path was not found, was not readable,\nwas too large, or the underlying pty failed to accept\nthe write.\n\nGhostty can\'t continue since it can\'t guarantee that\ninitial terminal state will be as desired. Please review\nthe value of `input` in your configuration file and\nensure that all the path values exist and are readable.'
+			"A configured `input` path was not found, was not readable,\nwas too large, or the underlying pty failed to accept\nthe write.\n\nGhostty can't continue since it can't guarantee that\ninitial terminal state will be as desired. Please review\nthe value of `input` in your configuration file and\nensure that all the path values exist and are readable."
 		}
 		else {
 			'error starting IO thread: ${message}\n\nThe underlying shell or command was unable to be started.\nThis error is usually due to exhausting a system resource.\nIf this looks like a bug, please report it.\n\nThis terminal is non-functional. Please close it and try again.'

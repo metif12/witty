@@ -153,6 +153,7 @@ fn expect_parse_error(err IError, want ParseError) {
 
 // Config.zig: Color "fromHex"
 fn test_color_from_hex() {
+	assert ColorRGB.from_hex('#000000')! == ColorRGB{0, 0, 0}
 	assert color_from_hex('#000000')! == ColorRGB{0, 0, 0}
 	assert color_from_hex('#0A0B0C')! == ColorRGB{10, 11, 12}
 	assert color_from_hex('0A0B0C')! == ColorRGB{10, 11, 12}
@@ -163,6 +164,7 @@ fn test_color_from_hex() {
 
 // Config.zig: Color "parseCLI from name"
 fn test_color_parse_cli_from_name() {
+	assert ColorRGB.parse_cli('black')! == ColorRGB{0, 0, 0}
 	assert color_parse_cli('black')! == ColorRGB{0, 0, 0}
 }
 
@@ -174,7 +176,13 @@ fn test_color_parse_cli_with_whitespace() {
 
 // Config.zig: Color "formatConfig"
 fn test_color_format() {
-	assert format_color(ColorRGB{10, 11, 12}) == '#0a0b0c'
+	color := ColorRGB{10, 11, 12}
+	assert color.clone().equal(color)
+	assert color.format_buf() == '#0a0b0c'
+	assert color.format_entry() == '#0a0b0c'
+	assert color.to_terminal_rgb() == terminal.RGB{ r: 10, g: 11, b: 12 }
+	assert color.cval() == CConfigColor{ r: 10, g: 11, b: 12 }
+	assert format_color(color) == '#0a0b0c'
 }
 
 // --- TerminalColor ---
@@ -191,6 +199,16 @@ fn test_terminal_color_parse_cli() {
 
 	assert terminal_color_parse_cli('cell-foreground')!.kind == .cell_foreground
 	assert terminal_color_parse_cli('cell-background')!.kind == .cell_background
+	mut got_value_required := false
+	TerminalColor.parse_cli(none) or {
+		expect_parse_error(err, .value_required)
+		got_value_required = true
+	}
+	assert got_value_required
+	terminal_rgb := a.to_terminal_rgb() or { terminal.RGB{} }
+	assert terminal_rgb == terminal.RGB{ r: 78, g: 42, b: 132 }
+	assert TerminalColor{ kind: .cell_foreground }.to_terminal_rgb() == none
+	assert TerminalColor{ kind: .cell_background }.format_entry() == 'cell-background'
 
 	terminal_color_parse_cli('a') or {
 		expect_parse_error(err, .invalid_value)
