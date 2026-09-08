@@ -237,7 +237,7 @@ pub fn validate_config(args []string) !ValidateResult {
 	mut config := if config_path := path {
 		mut value := configpkg.Config.default_config()
 		abs_path := os.real_path(config_path)
-		value.load_file(abs_path)
+		value.load_file(abs_path)!
 		value.load_recursive_files()
 		value.finalize()
 		value

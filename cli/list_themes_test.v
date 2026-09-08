@@ -3,6 +3,13 @@ module cli
 import configpkg
 import vaxis
 
+fn preview_test_theme(name string) ThemeListElement {
+	return ThemeListElement{
+		theme: name
+		path: @FILE
+	}
+}
+
 // Test should_include_theme with dark filter
 fn test_should_include_theme_dark_filter() {
 	mut cfg := configpkg.Config.default_config()
@@ -92,7 +99,7 @@ fn test_preview_up() {
 	// With items
 	mut themes := []ThemeListElement{}
 	for i in 0 .. 5 {
-		themes << ThemeListElement{ theme: '${i}' }
+		themes << preview_test_theme('${i}')
 	}
 	p = Preview.new(themes, .all)
 	p.current = 3
@@ -111,7 +118,7 @@ fn test_preview_down() {
 	// With items
 	mut themes := []ThemeListElement{}
 	for i in 0 .. 5 {
-		themes << ThemeListElement{ theme: '${i}' }
+		themes << preview_test_theme('${i}')
 	}
 	p = Preview.new(themes, .all)
 	p.down(1)
@@ -123,7 +130,7 @@ fn test_preview_down() {
 // Test Preview filter cycling
 fn test_preview_filter_cycling() {
 	mut themes := [
-		ThemeListElement{ theme: 'Test' },
+		preview_test_theme('Test'),
 	]
 	mut p := Preview.new(themes, .all)
 	assert p.theme_filter == .all
@@ -157,8 +164,8 @@ fn test_options_defaults() {
 
 fn test_preview_search_uses_text_input() {
 	mut p := Preview.new([
-		ThemeListElement{ theme: 'Dracula' },
-		ThemeListElement{ theme: 'Gruvbox' },
+		preview_test_theme('Dracula'),
+		preview_test_theme('Gruvbox'),
 	], .all)
 	p.mode = .search
 	p.update(Event(KeyPressEvent{
@@ -177,8 +184,8 @@ fn test_preview_search_uses_text_input() {
 
 fn test_preview_ascii_lowercases_search_tokens_for_zf() {
 	mut p := Preview.new([
-		ThemeListElement{ theme: 'Dracula' },
-		ThemeListElement{ theme: 'ivory' },
+		preview_test_theme('Dracula'),
+		preview_test_theme('ivory'),
 	], .all)
 	p.search_text = 'D'
 	p.update_filtered()
@@ -194,9 +201,9 @@ fn test_preview_ascii_lowercases_search_tokens_for_zf() {
 
 fn test_preview_mouse_selects_visible_theme() {
 	mut p := Preview.new([
-		ThemeListElement{ theme: 'One' },
-		ThemeListElement{ theme: 'Two' },
-		ThemeListElement{ theme: 'Three' },
+		preview_test_theme('One'),
+		preview_test_theme('Two'),
+		preview_test_theme('Three'),
 	], .all)
 	p.winsize = vaxis.Winsize{ rows: 20, cols: 100 }
 	p.update(Event(MouseEvent{

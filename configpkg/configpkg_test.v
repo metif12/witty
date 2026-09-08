@@ -19,7 +19,7 @@ foreground = #abcdef
 	}
 
 	mut cfg := Config.default_config()
-	cfg.load_file(path)
+	cfg.load_file(path)!
 
 	assert cfg.diagnostics.len == 0
 	assert cfg.background == ColorRGB{
@@ -116,7 +116,7 @@ palette = 300=#ffffff
 	}
 
 	mut cfg := Config.default_config()
-	cfg.load_file(path)
+	cfg.load_file(path)!
 
 	assert cfg.diagnostics.len == 3
 	assert cfg.diagnostics[0].format() == '${path}:2:foreground #ffffff: unknown field'
@@ -1391,8 +1391,33 @@ fn test_load_optional_file_reports_source_actions() ! {
 	os.write_file(empty, '')!
 	mut cfg := Config.default_config()
 	assert cfg.load_optional_file(missing) == .not_found
-	assert cfg.load_optional_file(empty) == .loaded
+	assert cfg.load_optional_file(empty) == .error_
 	assert cfg.load_optional_file(dir) == .loaded
+}
+
+fn test_load_file_returns_constrained_open_errors_without_diagnostics() ! {
+	dir := os.join_path(os.temp_dir(), 'witty-load-file-error-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir)!
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	missing := os.join_path(dir, 'missing')
+	empty := os.join_path(dir, 'empty')
+	os.write_file(empty, '')!
+
+	mut cfg := Config.default_config()
+	mut missing_kind := OpenFileError.file_open_failed
+	cfg.load_file(missing) or {
+		missing_kind = open_file_error_of(err) or { OpenFileError.file_open_failed }
+	}
+	assert missing_kind == .file_not_found
+	mut empty_kind := OpenFileError.file_open_failed
+	cfg.load_file(empty) or {
+		empty_kind = open_file_error_of(err) or { OpenFileError.file_open_failed }
+	}
+	assert empty_kind == .file_is_empty
+	assert cfg.diagnostics.len == 0
 }
 
 fn test_preferred_config_path_prefers_nonempty_then_existing() ! {
@@ -2015,7 +2040,7 @@ keybind = ctrl+b=new_tab
 ')!
 
 	mut cfg := Config.default_config()
-	cfg.load_file(config_path)
+	cfg.load_file(config_path)!
 	cfg.finalize()
 
 	assert cfg.font_size == 17
@@ -3332,7 +3357,7 @@ fn test_load_file_expands_paths_relative_to_declaring_file() {
 	path := os.join_path(dir, 'config.ghostty')
 	os.write_file(path, 'custom-shader = shader.glsl\nbackground-image = images/bg.png\n')!
 	mut cfg := Config.default_config()
-	cfg.load_file(path)
+	cfg.load_file(path)!
 	assert cfg.custom_shader.items == [Path{ path: os.join_path(dir, 'shader.glsl') }]
 	assert cfg.background_image? == Path{ path: os.join_path(dir, 'images', 'bg.png') }
 	assert cfg.diagnostics.len == 0
@@ -3353,7 +3378,7 @@ fn test_load_recursive_files_preserves_order_and_nested_bases() {
 	os.write_file(second, 'font-size = 12\ncustom-shader = effect.glsl\n')!
 
 	mut cfg := Config.default_config()
-	cfg.load_file(root)
+	cfg.load_file(root)!
 	cfg.load_recursive_files()
 	assert cfg.font_size == 12
 	assert cfg.config_file.items == [
@@ -3379,7 +3404,7 @@ fn test_recursive_files_skip_optional_missing_and_report_required_and_cycles() {
 	os.write_file(child, 'config-file = child.conf\n')!
 
 	mut cfg := Config.default_config()
-	cfg.load_file(root)
+	cfg.load_file(root)!
 	cfg.load_recursive_files()
 	assert cfg.diagnostics.len == 2
 	assert cfg.diagnostics[0].message == 'error opening config-file ${os.join_path(dir, 'required.conf')}: file not found'

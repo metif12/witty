@@ -139,7 +139,7 @@ fn (mut self Preview) update_filtered() {
 		tokens := query.split(' ').filter(it.len > 0)
 
 		for i, mut theme in self.themes {
-			theme_config.load_file(theme.path)
+			theme_config.load_file(theme.path) or {}
 			if !should_include_theme(self.theme_filter, theme_config) {
 				continue
 			}
@@ -154,7 +154,7 @@ fn (mut self Preview) update_filtered() {
 		}
 	} else {
 		for i, mut theme in self.themes {
-			theme_config.load_file(theme.path)
+			theme_config.load_file(theme.path) or {}
 			if should_include_theme(self.theme_filter, theme_config) {
 				self.filtered << i
 				theme.rank = none
@@ -578,7 +578,7 @@ fn (mut self Preview) draw_preview(x_off int, width int, height int) string {
 
 	theme := self.themes[self.filtered[self.current]]
 	mut config := configpkg.Config.default_config()
-	config.load_file(theme.path)
+	config.load_file(theme.path) or {}
 	fg := vaxis.Color{ rgb: [config.foreground.r, config.foreground.g, config.foreground.b]! }
 	bg := vaxis.Color{ rgb: [config.background.r, config.background.g, config.background.b]! }
 	standard := vaxis.Style{
@@ -980,7 +980,7 @@ pub fn run_list_themes(args []string) int {
 
 	mut theme_config := configpkg.Config.default_config()
 	for theme in themes {
-		theme_config.load_file(theme.path)
+		theme_config.load_file(theme.path) or {}
 		if !should_include_theme(opts.color, theme_config) {
 			continue
 		}

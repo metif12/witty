@@ -73,7 +73,9 @@ pub fn ghostty_config_load_default_files(mut config configpkg.Config) {
 }
 
 pub fn ghostty_config_load_file(mut config configpkg.Config, path string) {
-	config.load_file(path)
+	config.load_file(path) or {
+		eprintln('error loading config from file path=${path} err=${err}')
+	}
 }
 
 pub fn ghostty_config_load_recursive_files(mut config configpkg.Config) {

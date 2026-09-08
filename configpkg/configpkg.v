@@ -7263,10 +7263,14 @@ pub enum OptionalFileAction {
 // Ghostty, an existing unreadable path is distinct from a missing path so it
 // suppresses creation of a replacement template.
 pub fn (mut c Config) load_optional_file(path string) OptionalFileAction {
-	if !os.exists(path) {
-		return .not_found
+	c.load_file(path) or {
+		if kind := open_file_error_of(err) {
+			if kind == .file_not_found {
+				return .not_found
+			}
+		}
+		return .error_
 	}
-	c.load_file_result(path) or { return .error_ }
 	return .loaded
 }
 
@@ -7425,26 +7429,29 @@ fn is_boolean_config_key(key string) bool {
 		'macos-auto-secure-input', 'macos-secure-input-indication', 'cursor-style-blink']
 }
 
-// load_file loads a configuration file and merges it into this config.
-// It parses `key = value` lines, ignoring blank lines and lines beginning
-// with `#`. Recognised keys are applied to the config; unrecognised keys are
-// ignored. Malformed lines (missing `=`, invalid values, out-of-range
-// indices) are recorded as diagnostics.
-pub fn (mut c Config) load_file(path string) {
-	c.load_file_result(path) or {
-		abs_path := if os.is_abs_path(path) { path } else { os.abs_path(path) }
-		c.add_replay_diagnostic('config-file ${abs_path}: unable to read file')
-	}
+// load_file loads the absolute configuration path. File-open failures are
+// returned through config/file_load.zig's constrained error set; malformed
+// configuration entries are recorded as diagnostics by the line iterator.
+pub fn (mut c Config) load_file(path string) ! {
+	c.load_file_result(path)!
 }
 
 fn (mut c Config) load_file_result(path string) ! {
-	abs_path := if os.is_abs_path(path) { path } else { os.abs_path(path) }
-	if os.exists(abs_path) && !os.is_file(abs_path) {
-		return
+	assert os.is_abs_path(path)
+	mut file := open(path) or {
+		if kind := open_file_error_of(err) {
+			if kind == .not_a_file {
+				return
+			}
+		}
+		return err
 	}
-	content := os.read_file(abs_path)!
-	c.load_string_with_path(content, abs_path)
-	c.expand_paths(os.dir(abs_path))
+	defer {
+		file.close()
+	}
+	content := io.read_all(reader: file)!
+	c.load_string_with_path(content.bytestr(), path)
+	c.expand_paths(os.dir(path))
 }
 
 // load_recursive_files loads each config-file entry once, expanding paths
