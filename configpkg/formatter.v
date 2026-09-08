@@ -599,34 +599,15 @@ fn repeat_strings(values []string) []string {
 }
 
 fn font_style_string(value FontStyle) string {
-	return match value.kind {
-		.default_ { 'default' }
-		.false_ { 'false' }
-		.name { value.name }
-	}
+	return value.format_entry()
 }
 
 fn font_variation_strings(value RepeatableFontVariation) []string {
-	if value.list.len == 0 {
-		return ['']
-	}
-	return value.list.map('${it.id.str()}=${format_f64(it.value)}')
+	return value.format_entry()
 }
 
 fn font_codepoint_map_strings(value RepeatableCodepointMap) []string {
-	if value.map.entries.len == 0 {
-		return ['']
-	}
-	mut result := []string{cap: value.map.entries.len}
-	for entry in value.map.entries {
-		family := entry.descriptor.family or { '' }
-		if entry.range[0] == entry.range[1] {
-			result << 'U+${entry.range[0]:04X}=${family}'
-		} else {
-			result << 'U+${entry.range[0]:04X}-U+${entry.range[1]:04X}=${family}'
-		}
-	}
-	return result
+	return value.format_entry()
 }
 
 fn metric_modifier_string(value ?font.MetricsModifier) string {
@@ -798,10 +779,7 @@ fn scroll_to_bottom_string(value ScrollToBottom) string {
 }
 
 fn selection_word_chars_string(value SelectionWordChars) string {
-	if value.codepoints.len <= 1 {
-		return ''
-	}
-	return value.codepoints[1..].map(rune(it).str()).join('')
+	return value.format_entry()
 }
 
 fn clipboard_codepoint_map_strings(value RepeatableClipboardCodepointMap) []string {

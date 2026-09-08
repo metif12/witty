@@ -429,6 +429,17 @@ fn test_repeatable_string_parse_cli_overwrite() {
 	assert list.list.len == 2
 }
 
+fn test_repeatable_string_value_apis() {
+	mut list := RepeatableStringList{}
+	assert list.format_entry() == ['']
+	list.parse_cli('A')!
+	list.parse_cli('B')!
+	cloned := list.clone()
+	assert list.equal(cloned)
+	assert cloned.count() == 2
+	assert cloned.format_entry() == ['A', 'B']
+}
+
 // --- Duration ---
 
 // Config.zig: "parse duration"
@@ -799,6 +810,28 @@ fn test_repeatable_font_variation_uses_zig_float_grammar() {
 		return
 	}
 	assert false, 'expected trailing junk to fail'
+}
+
+fn test_font_value_type_formatters() {
+	style := font_style_parse_cli('Regular')!
+	assert style.clone() == style
+	assert style.name_value() or { '' } == 'Regular'
+	assert style.format_entry() == 'Regular'
+	assert font_style_parse_cli('default')!.format_entry() == 'default'
+
+	mut variation := RepeatableFontVariation{}
+	assert variation.format_entry() == ['']
+	variation.parse_cli('wght=200')!
+	variation.parse_cli('slnt=-15.5')!
+	assert variation.format_entry() == ['wght=200', 'slnt=-15.5']
+
+	mut mappings := RepeatableCodepointMap{}
+	assert mappings.format_entry() == ['']
+	mappings.parse_cli('U+0001-U+0005, U+ABCD=Comic Sans')!
+	assert mappings.format_entry() == [
+		'U+0001-U+0005=Comic Sans',
+		'U+ABCD=Comic Sans',
+	]
 }
 
 // Config.zig: QuickTerminalSize "calculate QuickTerminalSize"
@@ -2552,6 +2585,10 @@ fn test_selection_word_chars_defaults_and_parse() {
 
 	chars.parse_cli('._')!
 	assert chars.codepoints == [u32(0), u32(`.`), u32(`_`)]
+	assert chars.format_entry() == '._'
+	assert SelectionWordChars{
+		codepoints: [u32(0), u32(`a`), u32(0xd800), u32(`b`)]
+	}.format_entry() == 'ab'
 }
 
 fn test_clipboard_codepoint_map_parse() {

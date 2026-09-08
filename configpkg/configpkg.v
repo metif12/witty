@@ -5799,6 +5799,25 @@ pub fn (s SelectionWordChars) equal(other SelectionWordChars) bool {
 	return s.codepoints == other.codepoints
 }
 
+pub fn (s SelectionWordChars) format_entry() string {
+	mut result := ''
+	if s.codepoints.len <= 1 {
+		return result
+	}
+	for codepoint in s.codepoints[1..] {
+		value := rune(codepoint)
+		length := value.length_in_bytes()
+		if length < 0 {
+			continue
+		}
+		if result.len + length > 4096 {
+			break
+		}
+		result += value.str()
+	}
+	return result
+}
+
 // FontStyle is the tagged value used by the four font-style options. A named
 // style is kept distinct from the special default and false values.
 pub enum FontStyleKind {
@@ -5824,6 +5843,21 @@ pub fn font_style_parse_cli(input ?string) !FontStyle {
 
 pub fn (s FontStyle) name_value() ?string {
 	return if s.kind == .name { s.name } else { none }
+}
+
+pub fn (s FontStyle) clone() FontStyle {
+	return FontStyle{
+		...s
+		name: s.name.clone()
+	}
+}
+
+pub fn (s FontStyle) format_entry() string {
+	return match s.kind {
+		.default_ { 'default' }
+		.false_ { 'false' }
+		.name { s.name }
+	}
 }
 
 // RepeatableFontVariation stores OpenType variation axes in declaration order.
@@ -5858,6 +5892,13 @@ pub fn (r RepeatableFontVariation) clone() RepeatableFontVariation {
 
 pub fn (r RepeatableFontVariation) equal(other RepeatableFontVariation) bool {
 	return r.list == other.list
+}
+
+pub fn (r RepeatableFontVariation) format_entry() []string {
+	if r.list.len == 0 {
+		return ['']
+	}
+	return r.list.map('${it.id.str()}=${format_f64(it.value)}')
 }
 
 // RepeatableCodepointMap maps one or more Unicode ranges to a named font.
@@ -5910,6 +5951,22 @@ pub fn (m RepeatableCodepointMap) equal(other RepeatableCodepointMap) bool {
 		}
 	}
 	return true
+}
+
+pub fn (m RepeatableCodepointMap) format_entry() []string {
+	if m.map.entries.len == 0 {
+		return ['']
+	}
+	mut result := []string{cap: m.map.entries.len}
+	for entry in m.map.entries {
+		family := entry.descriptor.family or { '' }
+		if entry.range[0] == entry.range[1] {
+			result << 'U+${entry.range[0]:04X}=${family}'
+		} else {
+			result << 'U+${entry.range[0]:04X}-U+${entry.range[1]:04X}=${family}'
+		}
+	}
+	return result
 }
 
 fn optional_string_equal(a ?string, b ?string) bool {
@@ -10343,6 +10400,20 @@ pub fn (mut r RepeatableStringList) parse_cli(input ?string) ! {
 // count returns the number of items in the list.
 pub fn (r RepeatableStringList) count() int {
 	return r.list.len
+}
+
+pub fn (r RepeatableStringList) clone() RepeatableStringList {
+	return RepeatableStringList{
+		list: r.list.map(it.clone())
+	}
+}
+
+pub fn (r RepeatableStringList) equal(other RepeatableStringList) bool {
+	return r.list == other.list
+}
+
+pub fn (r RepeatableStringList) format_entry() []string {
+	return if r.list.len == 0 { [''] } else { r.list.clone() }
 }
 
 // ------------------------------------------------------------
