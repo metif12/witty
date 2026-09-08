@@ -6806,7 +6806,9 @@ pub fn (mut c Config) load_default_files() {
 	xdg_loaded := legacy_xdg_action != .not_found || preferred_xdg_action != .not_found
 	$if macos {
 		legacy_app_support_path := app_support_config_path('config')
-		app_support_path := app_support_config_path('config.ghostty')
+		app_support_path := preferred_app_support_path() or {
+			app_support_config_path('config.ghostty')
+		}
 		legacy_app_support_action := c.load_optional_file(legacy_app_support_path)
 		preferred_app_support_action := c.load_optional_file(app_support_path)
 		app_support_loaded := legacy_app_support_action != .not_found
@@ -9583,12 +9585,6 @@ pub fn Config.default_config() Config {
 	return result
 }
 
-// preferred_default_file_path returns the location used for config editing.
-pub fn preferred_default_file_path() string {
-	paths := editable_config_path_candidates()
-	return preferred_existing_config_path(paths)
-}
-
 fn preferred_existing_config_path(paths []string) string {
 	mut first_existing := ''
 	for path in paths {
@@ -9624,7 +9620,7 @@ fn editable_config_path_candidates() []string {
 // preferred existing path, create its parent directory, and create a missing
 // file without changing the contents of an existing one.
 pub fn editable_config_path() !string {
-	path := preferred_default_file_path()
+	path := preferred_existing_config_path(editable_config_path_candidates())
 	ensure_editable_config_path(path)!
 	return path
 }
@@ -9640,39 +9636,165 @@ fn ensure_editable_config_path(path string) ! {
 	}
 }
 
-pub fn default_xdg_config_path() string {
-	xdg := os.getenv('XDG_CONFIG_HOME')
-	base := if xdg.len > 0 {
-		xdg
-	} else {
-		os.join_path(os.home_dir(), '.config')
-	}
-	return os.join_path(base, 'ghostty', 'config.ghostty')
+// default_xdg_path returns Ghostty's current XDG configuration path.
+pub fn default_xdg_path() !string {
+	return internal_os.xdg_config(internal_os.XdgOptions{
+		subdir: os.join_path('ghostty', 'config.ghostty')
+	})
 }
 
-pub fn legacy_xdg_config_path() string {
-	return os.join_path(os.dir(default_xdg_config_path()), 'config')
+// legacy_default_xdg_path returns Ghostty's pre-1.3 XDG configuration path.
+pub fn legacy_default_xdg_path() !string {
+	return internal_os.xdg_config(internal_os.XdgOptions{
+		subdir: os.join_path('ghostty', 'config')
+	})
 }
 
-fn preferred_xdg_config_path() string {
-	path := default_xdg_config_path()
-	if os.is_file(path) {
+// preferred_xdg_path prefers the current non-empty configuration, then the
+// legacy non-empty configuration, and otherwise returns the current path.
+pub fn preferred_xdg_path() !string {
+	path := default_xdg_path()!
+	if mut file := open(path) {
+		file.close()
 		return path
 	}
-	legacy := legacy_xdg_config_path()
-	if os.is_file(legacy) {
+	legacy := legacy_default_xdg_path()!
+	if mut file := open(legacy) {
+		file.close()
 		return legacy
 	}
 	return path
 }
 
+// default_app_support_path returns Ghostty's current macOS Application
+// Support configuration path.
+pub fn default_app_support_path() !string {
+	$if macos {
+		return internal_os.app_support_dir('config.ghostty')
+	} $else {
+		return error('Application Support is only available on macOS')
+	}
+}
+
+// legacy_default_app_support_path returns Ghostty's pre-1.3 macOS
+// Application Support configuration path.
+pub fn legacy_default_app_support_path() !string {
+	$if macos {
+		return internal_os.app_support_dir('config')
+	} $else {
+		return error('Application Support is only available on macOS')
+	}
+}
+
+// preferred_app_support_path applies the same non-empty preference as the XDG
+// path pair.
+pub fn preferred_app_support_path() !string {
+	path := default_app_support_path()!
+	if mut file := open(path) {
+		file.close()
+		return path
+	}
+	legacy := legacy_default_app_support_path()!
+	if mut file := open(legacy) {
+		file.close()
+		return legacy
+	}
+	return path
+}
+
+// preferred_default_file_path returns the preferred default configuration
+// file. macOS gives Application Support priority over XDG when either contains
+// a non-empty configuration.
+pub fn preferred_default_file_path() !string {
+	$if macos {
+		app_support_path := preferred_app_support_path()!
+		if mut file := open(app_support_path) {
+			file.close()
+			return app_support_path
+		}
+		xdg_path := preferred_xdg_path()!
+		if mut file := open(xdg_path) {
+			file.close()
+			return xdg_path
+		}
+		return app_support_path
+	} $else {
+		return preferred_xdg_path()
+	}
+}
+
+pub enum OpenFileError {
+	file_not_found = 1
+	file_is_empty
+	file_open_failed
+	not_a_file
+}
+
+fn open_file_error(kind OpenFileError) IError {
+	return error_with_code(kind.str().replace('_', ' '), int(kind))
+}
+
+// open_file_error_of returns the translated file-load error carried by err.
+pub fn open_file_error_of(err IError) ?OpenFileError {
+	code := err.code()
+	if code >= int(OpenFileError.file_not_found) && code <= int(OpenFileError.not_a_file) {
+		return unsafe { OpenFileError(code) }
+	}
+	return none
+}
+
+// open opens an absolute, non-empty regular file. Its deliberately small
+// error set mirrors config/file_load.zig so callers can use it for preference
+// selection without depending on platform-specific filesystem errors.
+pub fn open(path string) !os.File {
+	assert os.is_abs_path(path)
+	mut file := os.open(path) or {
+		if err.code() == int(C.ENOENT) {
+			return open_file_error(.file_not_found)
+		}
+		return open_file_error(.file_open_failed)
+	}
+	stat := os.stat(path) or {
+		file.close()
+		return open_file_error(.file_open_failed)
+	}
+	if stat.get_filetype() != .regular {
+		file.close()
+		return open_file_error(.not_a_file)
+	}
+	if stat.size == 0 {
+		file.close()
+		return open_file_error(.file_is_empty)
+	}
+	return file
+}
+
+// Compatibility names used by the existing Config loading path.
+pub fn default_xdg_config_path() string {
+	return default_xdg_path() or {
+		os.join_path(os.home_dir(), '.config', 'ghostty', 'config.ghostty')
+	}
+}
+
+pub fn legacy_xdg_config_path() string {
+	return legacy_default_xdg_path() or {
+		os.join_path(os.home_dir(), '.config', 'ghostty', 'config')
+	}
+}
+
+pub fn preferred_xdg_config_path() string {
+	return preferred_xdg_path() or { default_xdg_config_path() }
+}
+
 fn app_support_config_path(name string) string {
 	$if macos {
 		return internal_os.app_support_dir(name) or {
-			os.join_path(os.home_dir(), 'Library', 'Application Support', 'com.mitchellh.ghostty', name)
+			os.join_path(os.home_dir(), 'Library', 'Application Support', 'com.mitchellh.ghostty',
+				name)
 		}
 	} $else {
-		return os.join_path(os.home_dir(), 'Library', 'Application Support', 'com.mitchellh.ghostty', name)
+		return os.join_path(os.home_dir(), 'Library', 'Application Support', 'com.mitchellh.ghostty',
+			name)
 	}
 }
 

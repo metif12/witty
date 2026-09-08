@@ -215,7 +215,7 @@ fn test_theme_replay_regenerates_diagnostic_without_iterator_location() ! {
 	assert cfg.diagnostics[0].format() == 'font-size: invalid value "nope"'
 }
 
-fn test_preferred_default_file_path_uses_platform_location() {
+fn test_preferred_default_file_path_uses_platform_location() ! {
 	old := os.getenv_opt('XDG_CONFIG_HOME')
 	os.setenv('XDG_CONFIG_HOME', '/tmp/witty-config-home', true)
 	defer {
@@ -227,7 +227,7 @@ fn test_preferred_default_file_path_uses_platform_location() {
 	}
 
 	expected := $if macos { app_support_config_path('config.ghostty') } $else { os.join_path('/tmp/witty-config-home', 'ghostty', 'config.ghostty') }
-	assert preferred_default_file_path() == expected
+	assert preferred_default_file_path()! == expected
 }
 
 // ============================================================
@@ -3116,7 +3116,7 @@ fn test_recursive_files_skip_optional_missing_and_report_required_and_cycles() {
 	assert cfg.diagnostics[1].message == 'config-file ${os.real_path(child)}: cycle detected'
 }
 
-fn test_preferred_xdg_path_uses_new_then_legacy_name() {
+fn test_preferred_xdg_path_uses_new_then_legacy_name() ! {
 	dir := os.join_path(os.temp_dir(), 'witty-config-default-path-${os.getpid()}')
 	os.rmdir_all(dir) or {}
 	os.mkdir_all(os.join_path(dir, 'ghostty'))!
@@ -3134,11 +3134,45 @@ fn test_preferred_xdg_path_uses_new_then_legacy_name() {
 	}
 	new_path := os.join_path(dir, 'ghostty', 'config.ghostty')
 	legacy_path := os.join_path(dir, 'ghostty', 'config')
-	assert preferred_xdg_config_path() == new_path
+	assert preferred_xdg_path()! == new_path
 	os.write_file(legacy_path, 'font-size = 10\n')!
-	assert preferred_xdg_config_path() == legacy_path
+	assert preferred_xdg_path()! == legacy_path
+	os.write_file(new_path, '')!
+	assert preferred_xdg_path()! == legacy_path
 	os.write_file(new_path, 'font-size = 11\n')!
-	assert preferred_xdg_config_path() == new_path
+	assert preferred_xdg_path()! == new_path
+}
+
+fn expect_open_file_error(path string, want OpenFileError) {
+	mut file := open(path) or {
+		got := open_file_error_of(err) or {
+			assert false, 'expected OpenFileError.${want}, got ${err}'
+			return
+		}
+		assert got == want
+		return
+	}
+	file.close()
+	assert false, 'expected OpenFileError.${want}'
+}
+
+fn test_config_file_open_requires_nonempty_regular_file() ! {
+	dir := os.join_path(os.temp_dir(), 'witty-config-open-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir)!
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	missing := os.join_path(dir, 'missing')
+	empty := os.join_path(dir, 'empty')
+	configured := os.join_path(dir, 'configured')
+	expect_open_file_error(missing, .file_not_found)
+	expect_open_file_error(dir, .not_a_file)
+	os.write_file(empty, '')!
+	expect_open_file_error(empty, .file_is_empty)
+	os.write_file(configured, 'font-size = 11\n')!
+	mut file := open(configured)!
+	file.close()
 }
 
 fn test_keybinds_format_entries_includes_root_tables_and_chains() {

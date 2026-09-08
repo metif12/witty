@@ -268,7 +268,7 @@ pub fn edit_config_target(args []string) !string {
 		return error('unknown option for edit-config: ${args[0]}')
 	}
 	_ := configpkg.Config.load_args([])
-	path := configpkg.preferred_default_file_path()
+	path := configpkg.preferred_default_file_path()!
 	ensure_config_parent(path)!
 	return path
 }

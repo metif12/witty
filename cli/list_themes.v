@@ -833,7 +833,7 @@ const lorem_ipsum = $embed_file('lorem_ipsum.txt').to_string()
 
 // resolve_auto_theme_path returns the path to the auto theme config file.
 fn resolve_auto_theme_path() !string {
-	main_cfg_path := configpkg.preferred_default_file_path()
+	main_cfg_path := configpkg.preferred_default_file_path()!
 	if main_cfg_path.len == 0 {
 		return error('no default config path')
 	}
