@@ -545,10 +545,7 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 }
 
 fn readable_io_strings(value RepeatableReadableIO) []string {
-	if value.items.len == 0 {
-		return ['']
-	}
-	return value.items.map(it.format_entry())
+	return value.format_entry()
 }
 
 fn add_group(mut groups []ConfigEntryGroup, key string, values []string) {
@@ -754,10 +751,7 @@ fn command_palette_entry_strings(value RepeatableCommand) []string {
 }
 
 fn env_strings(value RepeatableStringMap) []string {
-	if value.entries.len == 0 {
-		return ['']
-	}
-	return value.entries.map('${it.key}=${it.value}')
+	return value.format_entry()
 }
 
 fn font_shaping_break_string(value FontShapingBreak) string {

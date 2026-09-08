@@ -5090,9 +5090,7 @@ pub fn (c Config) clone() Config {
 	if colors := c.macos_icon_screen_color {
 		copy.macos_icon_screen_color = colors.clone()
 	}
-	copy.env = RepeatableStringMap{
-		entries: c.env.entries.clone()
-	}
+	copy.env = c.env.clone()
 	copy.diagnostics = c.diagnostics.clone()
 	copy.keybind = c.keybind.clone()
 	copy.command_palette_entry = c.command_palette_entry.clone()
@@ -5475,6 +5473,10 @@ pub fn (r ReadableIO) clone_parsed() !ReadableIO {
 	}
 }
 
+pub fn (r ReadableIO) equal(other ReadableIO) bool {
+	return r.kind == other.kind && r.value == other.value
+}
+
 pub fn (r ReadableIO) format_entry() string {
 	return '${r.kind.str()}:${r.value}'
 }
@@ -5507,6 +5509,27 @@ pub fn (r RepeatableReadableIO) clone_parsed() !RepeatableReadableIO {
 	return RepeatableReadableIO{
 		items: items
 	}
+}
+
+pub fn (r RepeatableReadableIO) equal(other RepeatableReadableIO) bool {
+	if r.items.len != other.items.len {
+		return false
+	}
+	for i, item in r.items {
+		if !item.equal(other.items[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// format_entry returns one formatter value per readable input. An empty list
+// emits one empty value so generated configuration can reset the setting.
+pub fn (r RepeatableReadableIO) format_entry() []string {
+	if r.items.len == 0 {
+		return ['']
+	}
+	return r.items.map(it.format_entry())
 }
 
 // RepeatableCommand is the configured list of command-palette entries.
@@ -6182,6 +6205,83 @@ pub struct StringMapEntry {
 pub:
 	key   string
 	value string
+}
+
+// parse_cli accumulates key/value entries in insertion order. Reassigning a
+// key replaces its value in place, an empty value removes that key, and an
+// empty option resets the complete map.
+pub fn (mut m RepeatableStringMap) parse_cli(input ?string) ! {
+	value := input or { return error('value required') }
+	if value.len == 0 {
+		m.entries.clear()
+		return
+	}
+
+	index := value.index_u8(`=`)
+	if index < 0 {
+		return error('value required')
+	}
+	key := value[..index].trim(' \t')
+	val := value[index + 1..].trim(' \t')
+	for i, entry in m.entries {
+		if entry.key != key {
+			continue
+		}
+		if val.len == 0 {
+			m.entries.delete(i)
+		} else {
+			m.entries[i] = StringMapEntry{
+				key: key
+				value: val
+			}
+		}
+		return
+	}
+	if val.len > 0 {
+		m.entries << StringMapEntry{
+			key: key
+			value: val
+		}
+	}
+}
+
+pub fn (m RepeatableStringMap) clone() RepeatableStringMap {
+	return RepeatableStringMap{
+		entries: m.entries.clone()
+	}
+}
+
+pub fn (m RepeatableStringMap) count() int {
+	return m.entries.len
+}
+
+pub fn (m RepeatableStringMap) equal(other RepeatableStringMap) bool {
+	if m.entries.len != other.entries.len {
+		return false
+	}
+	for entry in m.entries {
+		mut found := false
+		for other_entry in other.entries {
+			if entry.key == other_entry.key {
+				if entry.value != other_entry.value {
+					return false
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+pub fn (m RepeatableStringMap) format_entry() []string {
+	if m.entries.len == 0 {
+		return ['']
+	}
+	return m.entries.map('${it.key}=${it.value}')
 }
 
 // iterator returns an iterator over the string map entries.
@@ -8605,35 +8705,8 @@ fn apply_repeatable_string(mut list []string, value string) {
 // order, assigning an existing key replaces its value, an empty value removes
 // that key, and an entirely empty option clears the map.
 fn (mut c Config) apply_env(value string) {
-	if value.len == 0 {
-		c.env.entries.clear()
-		return
-	}
-	eq := value.index('=') or {
+	c.env.parse_cli(value) or {
 		c.invalid_config_value('env', value)
-		return
-	}
-	key := value[..eq].trim(' \t')
-	val := value[eq + 1..].trim(' \t')
-	for i, entry in c.env.entries {
-		if entry.key != key {
-			continue
-		}
-		if val.len == 0 {
-			c.env.entries.delete(i)
-		} else {
-			c.env.entries[i] = StringMapEntry{
-				key: key
-				value: val
-			}
-		}
-		return
-	}
-	if val.len > 0 {
-		c.env.entries << StringMapEntry{
-			key: key
-			value: val
-		}
 	}
 }
 

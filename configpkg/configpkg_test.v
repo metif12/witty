@@ -927,6 +927,8 @@ fn test_repeatable_readable_io_clear_clone_and_format() {
 	values.parse_cli('path:B')!
 	assert values.items.len == 2
 	assert values.clone().items == values.items
+	assert values.equal(values.clone())
+	assert values.format_entry() == ['raw:A', 'path:B']
 
 	mut cfg := Config.default_config()
 	cfg.input = values
@@ -941,6 +943,32 @@ fn test_repeatable_readable_io_clear_clone_and_format() {
 
 	values.parse_cli('')!
 	assert values.items.len == 0
+	assert values.format_entry() == ['']
+}
+
+fn test_repeatable_string_map_public_api() {
+	mut values := RepeatableStringMap{}
+	values.parse_cli(' A = B ')!
+	values.parse_cli('B=C')!
+	values.parse_cli('A=replaced')!
+	assert values.count() == 2
+	assert values.format_entry() == ['A=replaced', 'B=C']
+	assert values.equal(RepeatableStringMap{
+		entries: [StringMapEntry{'B', 'C'}, StringMapEntry{'A', 'replaced'}]
+	})
+	assert values.clone().equal(values)
+
+	values.parse_cli('A=')!
+	assert values.format_entry() == ['B=C']
+	values.parse_cli('')!
+	assert values.count() == 0
+	assert values.format_entry() == ['']
+
+	values.parse_cli('missing-assignment') or {
+		assert err.msg() == 'value required'
+		return
+	}
+	assert false, 'expected missing assignment to fail'
 }
 
 fn test_macos_configuration_parse_clone_and_format() {
