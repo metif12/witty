@@ -777,15 +777,15 @@ fn on_paste(userdata voidptr, text &u8, len int) {
 	if state.pty_fd < 0 || len <= 0 {
 		return
 	}
-	if state.term.modes.get(.bracketed_paste) {
-		start := '\x1b[200~'
-		finish := '\x1b[201~'
-		C.write(state.pty_fd, start.str, usize(start.len))
-		C.write(state.pty_fd, text, usize(len))
-		C.write(state.pty_fd, finish.str, usize(finish.len))
-		return
+	data := unsafe { tos(text, len) }
+	paste_options := input.PasteOptions{
+		bracketed: state.term.modes.get(.bracketed_paste)
 	}
-	C.write(state.pty_fd, text, usize(len))
+	for encoded in input.paste_encode(data, paste_options) {
+		if encoded.len > 0 {
+			C.write(state.pty_fd, encoded.str, usize(encoded.len))
+		}
+	}
 }
 
 // ============================================================
