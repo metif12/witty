@@ -1642,6 +1642,39 @@ fn test_compat_gtk_single_instance_desktop() {
 	assert cfg.gtk_single_instance == .detect
 }
 
+// Config.zig compatibility map: the removed hidden tab location is now the
+// window-show-tab-bar setting and leaves the actual tab location unchanged.
+fn test_compat_gtk_tabs_location_hidden() {
+	mut cfg := Config.default_config()
+	cfg.gtk_tabs_location = .bottom
+	cfg.load_string('gtk-tabs-location = hidden\n')
+	assert cfg.diagnostics.len == 0
+	assert cfg.gtk_tabs_location == .bottom
+	assert cfg.window_show_tab_bar == .never
+}
+
+fn test_compat_renamed_config_fields() {
+	mut cfg := Config.default_config()
+	cfg.load_string('background-blur-radius = 17\nadw-toolbar-style = raised-border\n')
+	assert cfg.diagnostics.len == 0
+	assert cfg.background_blur.kind == .radius
+	assert cfg.background_blur.radius == 17
+	assert cfg.gtk_toolbar_style == .raised_border
+
+	// The generic renamed-field handler applies the destination field's
+	// declared default for an explicitly empty value.
+	cfg.load_string('background-blur-radius =\nadw-toolbar-style =\n')
+	assert cfg.background_blur.kind == .bool_false
+	assert cfg.gtk_toolbar_style == .raised
+}
+
+fn test_compat_removed_bool_invalid_value_is_not_silently_accepted() {
+	mut cfg := Config.default_config()
+	cfg.load_string('cursor-invert-fg-bg = maybe\nselection-invert-fg-bg = maybe\nbold-is-bright = maybe\n')
+	assert cfg.diagnostics.len == 3
+	assert cfg.diagnostics.all(it.message.ends_with(': unknown field'))
+}
+
 // Config.zig: "compatibility: removed cursor-invert-fg-bg"
 fn test_compat_removed_cursor_invert_fg_bg() {
 	mut cfg := Config.default_config()

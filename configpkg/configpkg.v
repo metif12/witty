@@ -7836,10 +7836,49 @@ fn (mut c Config) apply_kv(key string, value string) {
 		// These faithfully translate the CompatibilityHandler entries in
 		// Config.zig. They run at parse time and remap deprecated options to
 		// their modern equivalents.
+		'background-blur-radius' {
+			// Ghostty 1.1 renamed this field to background-blur. The generic
+			// renamed-field handler parses the value using the replacement
+			// field's type, including resetting an explicitly empty value to the
+			// replacement field's declared default.
+			if value.len == 0 {
+				c.background_blur = BackgroundBlur{ kind: .bool_false }
+			} else {
+				c.background_blur = background_blur_parse_cli(value) or {
+					// A failed renamed-field handler falls through to the original
+					// unknown-field diagnostic.
+					c.diagnostics << Diagnostic{
+						message: '${key}: unknown field'
+					}
+					return
+				}
+			}
+		}
+		'adw-toolbar-style' {
+			// Ghostty 1.2 renamed the libadwaita-prefixed option to its GTK
+			// spelling.
+			c.gtk_toolbar_style = match value {
+				'' { .raised }
+				'flat' { .flat }
+				'raised' { .raised }
+				'raised-border' { .raised_border }
+				else {
+					c.diagnostics << Diagnostic{
+						message: '${key}: unknown field'
+					}
+					return
+				}
+			}
+		}
 		'cursor-invert-fg-bg' {
 			// Ghostty 1.2 removed cursor-invert-fg-bg in favor of setting
 			// cursor-color/cursor-text to the cell colors.
-			set := parse_bool_opt(if value.len == 0 { 't' } else { value }) or { false }
+			set := parse_bool_opt(if value.len == 0 { 't' } else { value }) or {
+				c.diagnostics << Diagnostic{
+					message: '${key}: unknown field'
+				}
+				return
+			}
 			if set {
 				c.cursor_color = TerminalColor{
 					kind: .cell_foreground
@@ -7850,7 +7889,12 @@ fn (mut c Config) apply_kv(key string, value string) {
 			}
 		}
 		'selection-invert-fg-bg' {
-			set := parse_bool_opt(if value.len == 0 { 't' } else { value }) or { false }
+			set := parse_bool_opt(if value.len == 0 { 't' } else { value }) or {
+				c.diagnostics << Diagnostic{
+					message: '${key}: unknown field'
+				}
+				return
+			}
 			if set {
 				c.selection_foreground = TerminalColor{
 					kind: .cell_background
@@ -7862,7 +7906,12 @@ fn (mut c Config) apply_kv(key string, value string) {
 		}
 		'bold-is-bright' {
 			// Ghostty 1.2 merged bold-is-bright into bold-color = bright.
-			set := parse_bool_opt(if value.len == 0 { 't' } else { value }) or { false }
+			set := parse_bool_opt(if value.len == 0 { 't' } else { value }) or {
+				c.diagnostics << Diagnostic{
+					message: '${key}: unknown field'
+				}
+				return
+			}
 			if set {
 				c.bold_color = BoldColor{
 					bright: true
@@ -8101,9 +8150,18 @@ fn (mut c Config) apply_kv(key string, value string) {
 			}
 		}
 		'gtk-tabs-location' {
-			c.gtk_tabs_location = match value {
-				'top' { .top }
-				'bottom' { .bottom }
+			match value {
+				'top' {
+					c.gtk_tabs_location = .top
+				}
+				'bottom' {
+					c.gtk_tabs_location = .bottom
+				}
+				'hidden' {
+					// Ghostty 1.2 removed this enum value and its compatibility
+					// handler maps it to the replacement setting.
+					c.window_show_tab_bar = .never
+				}
 				else {
 					c.invalid_config_value(key, value)
 					return
