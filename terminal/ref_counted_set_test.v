@@ -259,6 +259,36 @@ fn test_rcs_add_with_id_reuses_dead_slot() {
 	assert set.count() == 1
 }
 
+// Ghostty permits a u16-backed set to use a 65,536-bucket table. Keep the
+// table capacity full-width when deciding whether a dead item's bucket is
+// valid; narrowing 65,536 to u16 turns it into zero and leaves a stale table
+// entry behind when the ID is reused.
+fn test_rcs_maximum_table_capacity_reuses_dead_slot() {
+	l := RefCountedSetLayout.init(65536)
+	assert l.table_cap == 65536
+	mut set := RefCountedSet.init(l)
+	first := set.add(CellStyle{})!
+	set.release(first)
+
+	replacement := CellStyle{
+		flags: StyleFlags{
+			bold: true
+		}
+	}
+	result := set.add_with_id(replacement, first)!
+	assert result.used_requested
+	assert result.id == first
+	mut references := 0
+	for id in set.hash_table {
+		if id == first {
+			references++
+		}
+	}
+	assert references == 1
+	assert set.lookup(CellStyle{}) == none
+	assert set.lookup(replacement) or { panic('replacement missing') } == first
+}
+
 fn test_rcs_add_with_id_reuses_matching_live_slot() {
 	l := RefCountedSetLayout.init(32)
 	mut set := RefCountedSet.init(l)

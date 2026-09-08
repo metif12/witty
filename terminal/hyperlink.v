@@ -429,7 +429,7 @@ fn (mut self HyperlinkSet) free_entry_strings(mut entry HyperlinkSetEntry) {
 
 fn (mut self HyperlinkSet) delete_item(id u16) {
 	entry := self.entries[int(id)]
-	if int(entry.bucket) >= int(self.layout.table_cap) {
+	if int(entry.bucket) > int(self.layout.table_cap) {
 		return
 	}
 	assert self.hash_table[int(entry.bucket)] == id

@@ -426,7 +426,7 @@ pub fn (self &RefCountedSet) lookup(value CellStyle) ?u16 {
 fn (mut self RefCountedSet) delete_item(id u16) {
 	item := self.items[id]
 
-	if item.meta.bucket >= u16(self.layout.table_cap) {
+	if int(item.meta.bucket) > self.layout.table_cap {
 		return
 	}
 
