@@ -2662,6 +2662,7 @@ fn (mut self SurfaceWidget) init_surface() ! {
 	self.core_runtime_app = core.RuntimeApp{
 		user_data: self
 		action_fn: surface_core_action_cb
+		wakeup_fn: surface_core_wakeup_cb
 	}
 	self.core_runtime_surface = core.RuntimeSurface{
 		user_data: self
@@ -2703,6 +2704,16 @@ fn surface_core_close_cb(data voidptr, confirm bool) {
 	}
 	self := unsafe { &SurfaceWidget(data) }
 	self.close()
+}
+
+fn surface_core_wakeup_cb(data voidptr) {
+	if isnil(data) {
+		return
+	}
+	self := unsafe { &SurfaceWidget(data) }
+	if !isnil(self.app) {
+		self.app.wakeup()
+	}
 }
 
 fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {

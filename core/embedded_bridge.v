@@ -515,6 +515,17 @@ fn bridge_surface_runtime_action(ptr voidptr, action AppAction) !bool {
 	}
 }
 
+fn bridge_surface_runtime_wakeup(ptr voidptr) {
+	if isnil(ptr) {
+		return
+	}
+	self := unsafe { &EmbeddedSurfaceCore(ptr) }
+	if isnil(self.rt_surface) || isnil(self.rt_surface.app) {
+		return
+	}
+	self.rt_surface.app.wakeup()
+}
+
 fn bridge_surface_color_action(mut app apprt.App, target apprt.Target, value osc.ColoredTarget) !bool {
 	rgb := value.color
 	kind := match value.target {
@@ -621,6 +632,7 @@ fn bridge_surface_init(config &configpkg.Config, core_app &apprt.CoreApp, app &a
 	self.runtime_app = RuntimeApp{
 		user_data: voidptr(self)
 		action_fn: bridge_surface_runtime_action
+		wakeup_fn: bridge_surface_runtime_wakeup
 		keyboard_layout: app.keyboard_layout()
 	}
 	self.runtime_surface = RuntimeSurface{

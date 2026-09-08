@@ -4,6 +4,16 @@ import apprt
 import configpkg
 import input
 
+struct AppWakeupProbe {
+mut:
+	count int
+}
+
+fn app_wakeup_probe(data voidptr) {
+	mut probe := unsafe { &AppWakeupProbe(data) }
+	probe.count++
+}
+
 fn app_mailbox_push_forever_for_test(mailbox_ptr voidptr, done chan bool) {
 	mut mailbox := unsafe { &Mailbox(mailbox_ptr) }
 	assert mailbox.push(Message(PresentSurfaceMsg{ address: 999 })) == app_mailbox_capacity
@@ -178,7 +188,12 @@ fn test_renderer_wakeup_ignores_stale_core_pointer() ! {
 fn test_termio_surface_message_routes_core_pointer_to_live_surface() ! {
 	mut app := App{}
 	mut apprt_runtime := apprt.RuntimeApp{}
-	mut core_runtime := RuntimeApp{ actions_handled: true }
+	mut probe := AppWakeupProbe{}
+	mut core_runtime := RuntimeApp{
+		actions_handled: true
+		user_data: &probe
+		wakeup_fn: app_wakeup_probe
+	}
 	mut core_surface := Surface{ rt_app: &core_runtime }
 	mut surface := &SurfaceRef{ core_surface: &core_surface }
 	app.surfaces = SurfaceList([surface])
@@ -186,6 +201,7 @@ fn test_termio_surface_message_routes_core_pointer_to_live_surface() ! {
 		kind: .set_mouse_shape
 		mouse_shape: .pointer
 	}) == 1
+	assert probe.count == 1
 	app.tick(mut apprt_runtime)!
 	assert core_runtime.actions.len == 1
 	assert core_runtime.actions[0].kind == .mouse_shape

@@ -1724,6 +1724,8 @@ pub type FontGrid = font.SharedGrid
 
 pub type RuntimeAppActionFn = fn (voidptr, AppAction) !bool
 
+pub type RuntimeAppWakeupFn = fn (voidptr)
+
 pub struct RuntimeApp {
 pub mut:
 	// Actions are retained until the runtime consumes them. This is the same
@@ -1733,6 +1735,7 @@ pub mut:
 	actions_handled bool
 	user_data       voidptr = unsafe { nil }
 	action_fn       RuntimeAppActionFn = unsafe { nil }
+	wakeup_fn       RuntimeAppWakeupFn = unsafe { nil }
 	keyboard_layout input.KeyboardLayout
 }
 
@@ -1745,6 +1748,15 @@ fn (mut r RuntimeApp) perform_action(action AppAction) !bool {
 	}
 	r.actions << action
 	return r.actions_handled
+}
+
+// wakeup notifies the runtime that the core app mailbox has work. Ghostty's
+// App.Mailbox performs this after every enqueue so platform event loops never
+// leave PTY or renderer messages waiting for unrelated UI activity.
+fn (r &RuntimeApp) wakeup() {
+	if r != unsafe { nil } && r.wakeup_fn != unsafe { nil } {
+		r.wakeup_fn(r.user_data)
+	}
 }
 
 pub struct AppAction {
@@ -2581,10 +2593,14 @@ fn termio_surface_message_push(app_ptr voidptr, surface_ptr voidptr, msg apprt.S
 	}
 	mut app := unsafe { &App(app_ptr) }
 	surface := unsafe { &Surface(surface_ptr) }
-	return app.mailbox.push(Message(SurfaceCoreMsg{
+	result := app.mailbox.push(Message(SurfaceCoreMsg{
 		surface: surface
 		message: msg
 	}))
+	if surface.rt_app != unsafe { nil } {
+		surface.rt_app.wakeup()
+	}
+	return result
 }
 
 fn (self &Surface) surface_mailbox() apprt.SurfaceMailbox {
@@ -2607,6 +2623,9 @@ fn surface_renderer_wakeup(surface_ptr voidptr) {
 	app.mailbox.try_push(Message(RedrawSurfaceMsg{
 		core_surface: surface
 	}))
+	if surface.rt_app != unsafe { nil } {
+		surface.rt_app.wakeup()
+	}
 }
 
 fn renderer_surface_event_push(surface_ptr voidptr, event rendererpkg.SurfaceEvent) int {
@@ -2632,10 +2651,14 @@ fn renderer_surface_event_push(surface_ptr voidptr, event rendererpkg.SurfaceEve
 		}
 	}
 	mut app := unsafe { surface.app }
-	return app.mailbox.push(Message(SurfaceCoreMsg{
+	result := app.mailbox.push(Message(SurfaceCoreMsg{
 		surface: surface
 		message: message
 	}))
+	if surface.rt_app != unsafe { nil } {
+		surface.rt_app.wakeup()
+	}
+	return result
 }
 
 // SearchNav is the navigation direction for navigate_search.
