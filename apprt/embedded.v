@@ -1718,9 +1718,7 @@ pub fn ghostty_surface_mouse_scroll(mut surface Surface, x f64, y f64, scroll_mo
 	surface.scroll_callback(
 		x,
 		y,
-		input.ScrollMods{
-			precision: (scroll_mods & 1) != 0
-		},
+		input.scroll_mods_from_int(u8(scroll_mods)),
 	)
 }
 
@@ -1873,9 +1871,7 @@ pub fn ghostty_inspector_mouse_scroll(mut insp TerminalInspector, x f64, y f64, 
 	insp.scroll_callback(
 		x,
 		y,
-		input.ScrollMods{
-			precision: (scroll_mods & 1) != 0
-		},
+		input.scroll_mods_from_int(u8(scroll_mods)),
 	)
 }
 

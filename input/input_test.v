@@ -201,6 +201,26 @@ fn test_scroll_mods_default() {
 	assert s.momentum == .none_
 }
 
+fn test_scroll_mods_packed_abi_roundtrip() {
+	values := [Momentum.none_, .began, .stationary, .changed, .ended, .cancelled, .may_begin]
+	for i, momentum in values {
+		for precision in [false, true] {
+			mods := ScrollMods{
+				precision: precision
+				momentum: momentum
+			}
+			expected := u8(precision) | (u8(i) << 1)
+			assert mods.int() == expected
+			assert scroll_mods_from_int(expected) == mods
+		}
+	}
+}
+
+fn test_scroll_mods_invalid_momentum_bits_decode_as_none() {
+	assert scroll_mods_from_int(0x0e) == ScrollMods{}
+	assert scroll_mods_from_int(0x0f) == ScrollMods{ precision: true }
+}
+
 // Tests for MouseButton.
 
 fn test_mouse_button_values() {

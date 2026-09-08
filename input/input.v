@@ -215,6 +215,38 @@ pub mut:
 	momentum Momentum = .none_
 }
 
+// scroll_mods_from_int decodes ScrollMods' packed u8 ABI. Ghostty stores the
+// precision flag in bit 0 and the three-bit Momentum value in bits 1 through 3.
+pub fn scroll_mods_from_int(raw u8) ScrollMods {
+	momentum := match (raw >> 1) & 0x7 {
+		1 { Momentum.began }
+		2 { Momentum.stationary }
+		3 { Momentum.changed }
+		4 { Momentum.ended }
+		5 { Momentum.cancelled }
+		6 { Momentum.may_begin }
+		else { Momentum.none_ }
+	}
+	return ScrollMods{
+		precision: raw & 0x1 != 0
+		momentum: momentum
+	}
+}
+
+// int returns ScrollMods' packed u8 ABI representation.
+pub fn (self ScrollMods) int() u8 {
+	momentum := match self.momentum {
+		.none_ { u8(0) }
+		.began { u8(1) }
+		.stationary { u8(2) }
+		.changed { u8(3) }
+		.ended { u8(4) }
+		.cancelled { u8(5) }
+		.may_begin { u8(6) }
+	}
+	return u8(self.precision) | (momentum << 1)
+}
+
 // OptionAsAlt determines whether the "option" key on macOS is treated
 // as "alt" or not. See the Ghostty `macos_option-as-alt` config
 // docs for a more detailed description of why this is needed.
