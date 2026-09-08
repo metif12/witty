@@ -1444,6 +1444,12 @@ fn test_bell_features_parse_format_and_defaults() {
 }
 
 fn test_bell_audio_parse_format_and_path_expansion() {
+	base := os.join_path(os.temp_dir(), 'witty-config-bell-${os.getpid()}')
+	os.rmdir_all(base) or {}
+	os.mkdir_all(base)!
+	defer {
+		os.rmdir_all(base) or {}
+	}
 	mut cfg := Config.default_config()
 	assert cfg.bell_audio_path == none
 	assert cfg.bell_audio_volume == 0.5
@@ -1451,13 +1457,13 @@ fn test_bell_audio_parse_format_and_path_expansion() {
 	assert cfg.diagnostics.len == 0
 	assert cfg.bell_audio_path? == Path{ path: 'sounds/bell.oga', optional: true }
 	assert cfg.bell_audio_volume == 0.75
-	cfg.expand_paths('/tmp/witty-config')
+	cfg.expand_paths(base)
 	assert cfg.bell_audio_path? == Path{
-		path: '/tmp/witty-config/sounds/bell.oga'
+		path: os.join_path(base, 'sounds', 'bell.oga')
 		optional: true
 	}
 	formatted := cfg.format_config(true)
-	assert formatted.contains('bell-audio-path = ?/tmp/witty-config/sounds/bell.oga\n')
+	assert formatted.contains('bell-audio-path = ?${os.join_path(base, 'sounds', 'bell.oga')}\n')
 	assert formatted.contains('bell-audio-volume = 0.75\n')
 
 	cfg.load_string('bell-audio-path =\nbell-audio-volume = loud')
@@ -3217,11 +3223,26 @@ fn test_repeatable_path_parses_required_optional_quotes_and_reset() {
 }
 
 fn test_path_parse_distinguishes_quoted_question_mark() {
-	required := Path.parse('"?required.conf"') or { panic('missing required path') }
-	optional := Path.parse('?"optional.conf"') or { panic('missing optional path') }
+	maybe_required := Path.parse('"?required.conf"')!
+	maybe_optional := Path.parse('?"optional.conf"')!
+	required := maybe_required.value or { panic('missing required path') }
+	optional := maybe_optional.value or { panic('missing optional path') }
 	assert required == Path{ path: '?required.conf' }
 	assert optional == Path{ path: 'optional.conf', optional: true }
 	assert !required.equal(optional)
+}
+
+fn test_path_parse_preserves_error_union_optional_contract() {
+	mut missing_error := ParseError.invalid_value
+	_ := Path.parse(none) or {
+		missing_error = parse_error_of(err) or { ParseError.invalid_value }
+		PathParseResult{}
+	}
+	assert missing_error == .value_required
+	assert Path.parse('')!.value == none
+	assert Path.parse('?')!.value? == Path{ path: '', optional: true }
+	assert Path.parse('""')!.value? == Path{ path: '' }
+	assert Path.parse('?""')!.value? == Path{ path: '', optional: true }
 }
 
 fn test_path_public_parse_and_format_apis() {
@@ -3258,8 +3279,10 @@ fn test_path_expand_uses_translated_home_expansion() {
 	os.setenv('HOME', '/tmp/witty-path-home/', true)
 
 	mut path := Path{ path: '~/shader.glsl' }
-	path.expand('/tmp')!
+	mut diagnostics := []Diagnostic{}
+	path.expand('/tmp', mut diagnostics)!
 	assert path.path == '/tmp/witty-path-home//shader.glsl'
+	assert diagnostics.len == 0
 }
 
 fn test_path_expand_canonicalizes_existing_relative_path() ! {
@@ -3273,8 +3296,29 @@ fn test_path_expand_canonicalizes_existing_relative_path() ! {
 		os.symlink(os.join_path(dir, 'actual'), os.join_path(dir, 'linked'))!
 
 		mut path := Path{ path: 'linked' }
-		path.expand(dir)!
+		mut diagnostics := []Diagnostic{}
+		path.expand(dir, mut diagnostics)!
 		assert path.path == os.real_path(os.join_path(dir, 'actual'))
+		assert diagnostics.len == 0
+	}
+}
+
+fn test_path_expand_records_resolution_errors_and_blanks_path() ! {
+	$if !windows {
+		dir := os.join_path(os.temp_dir(), 'witty-path-error-${os.getpid()}')
+		os.rmdir_all(dir) or {}
+		os.mkdir_all(dir)!
+		defer {
+			os.rmdir_all(dir) or {}
+		}
+		os.write_file(os.join_path(dir, 'file'), '')!
+
+		mut path := Path{ path: 'file/child', optional: true }
+		mut diagnostics := []Diagnostic{}
+		path.expand(dir, mut diagnostics)!
+		assert path == Path{ path: '', optional: false }
+		assert diagnostics.len == 1
+		assert diagnostics[0].message.starts_with('error resolving file path file/child: ')
 	}
 }
 

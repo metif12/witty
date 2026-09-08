@@ -5384,24 +5384,22 @@ pub fn (p RepeatablePath) clone() !RepeatablePath {
 
 // expand resolves every relative entry against an absolute configuration-file
 // directory. Existing absolute paths and empty values are unchanged.
-pub fn (mut p RepeatablePath) expand(base string) ! {
+pub fn (mut p RepeatablePath) expand(base string, mut diagnostics []Diagnostic) ! {
 	for mut item in p.items {
-		item.expand(base)!
+		item.expand(base, mut diagnostics)!
 	}
 }
 
 // parse_cli appends one path, clears the list for an empty value, and ignores
 // values that become empty after removing the optional marker or quotes.
 pub fn (mut p RepeatablePath) parse_cli(input ?string) ! {
-	value := input or { return error('value required') }
-	item := Path.parse(value)
-	if item == none {
+	maybe_item := Path.parse(input)!
+	item := maybe_item.value or {
 		p.items.clear()
 		return
 	}
-	parsed := item
-	if parsed.path.len > 0 {
-		p.items << parsed
+	if item.path.len > 0 {
+		p.items << item
 	}
 }
 
@@ -5723,12 +5721,19 @@ pub fn (p Path) len() int {
 	return p.path.len
 }
 
+// PathParseResult preserves Ghostty's error-union-of-optional return in V,
+// which cannot directly express !?Path. value == none is the empty input.
+pub struct PathParseResult {
+pub:
+	value ?Path
+}
+
 // parse translates config.Path.parse. A leading question mark makes the path
 // optional, and one pair of surrounding quotes is removed.
-pub fn Path.parse(input string) ?Path {
-	mut value := input
+pub fn Path.parse(input ?string) !PathParseResult {
+	mut value := input or { return perr(ParseError.value_required) }
 	if value.len == 0 {
-		return none
+		return PathParseResult{}
 	}
 	optional := value[0] == `?`
 	if optional {
@@ -5737,9 +5742,11 @@ pub fn Path.parse(input string) ?Path {
 	if value.len >= 2 && value[0] == `"` && value[value.len - 1] == `"` {
 		value = value[1..value.len - 1]
 	}
-	return Path{
-		path: value
-		optional: optional
+	return PathParseResult{
+		value: Path{
+			path: value
+			optional: optional
+		}
 	}
 }
 
@@ -5747,8 +5754,9 @@ pub fn Path.parse(input string) ?Path {
 // Values that become empty after removing `?` or surrounding quotes are
 // ignored, matching Path.parseCLI in the source.
 pub fn (mut p Path) parse_cli(input ?string) ! {
-	value := input or { return error('value required') }
-	parsed := Path.parse(value) or { return }
+	assert input != none
+	maybe_parsed := Path.parse(input)!
+	parsed := maybe_parsed.value or { return }
 	if parsed.len() == 0 {
 		return
 	}
@@ -5774,10 +5782,8 @@ pub fn (p Path) format_entry() string {
 // expand resolves this path exactly when a configuration reader finishes a
 // file, so paths in nested files remain relative to the file that declared
 // them.
-pub fn (mut p Path) expand(base string) ! {
-	if !os.is_abs_path(base) {
-		return error('path expansion base must be absolute: ${base}')
-	}
+pub fn (mut p Path) expand(base string, mut diagnostics []Diagnostic) ! {
+	assert os.is_abs_path(base)
 	if p.path.len == 0 || os.is_abs_path(p.path) {
 		return
 	}
@@ -5787,17 +5793,37 @@ pub fn (mut p Path) expand(base string) ! {
 			expanded := internal_os.expand_home(original) or {
 				p.path = ''
 				p.optional = false
-				return error('error expanding home directory for path ${original}: ${err}')
+				diagnostics << Diagnostic{
+					message: 'error expanding home directory for path ${original}: ${err}'
+				}
+				return
 			}
 			p.path = expanded
 			return
 		}
 	}
+	base_stat := os.stat(base)!
+	if base_stat.get_filetype() != .directory {
+		return error_with_code('not a directory', C.ENOTDIR)
+	}
 	joined := os.join_path(base, p.path)
 	// Ghostty asks the directory for a real path first, preserving canonical
 	// symlink resolution for existing entries. A missing entry falls back to
 	// lexical path resolution so configuration may name files created later.
-	p.path = if os.exists(joined) { os.real_path(joined) } else { os.abs_path(joined) }
+	_ := os.stat(joined) or {
+		if err.code() == C.ENOENT {
+			p.path = os.norm_path(joined)
+			return
+		}
+		original := p.path
+		p.path = ''
+		p.optional = false
+		diagnostics << Diagnostic{
+			message: 'error resolving file path ${original}: ${err}'
+		}
+		return
+	}
+	p.path = os.real_path(joined)
 }
 
 // RepeatableLink is Config.RepeatableLink. Custom link parsing is deliberately
@@ -7467,19 +7493,19 @@ fn (mut c Config) expand_paths(base string) {
 			value: base
 		}
 	}
-	c.custom_shader.expand(base) or { c.add_diagnostic('error expanding custom-shader path: ${err}') }
-	c.config_file.expand(base) or { c.add_diagnostic('error expanding config-file path: ${err}') }
-	c.gtk_custom_css.expand(base) or { c.add_diagnostic('error expanding gtk-custom-css path: ${err}') }
+	c.custom_shader.expand(base, mut c.diagnostics) or { c.add_diagnostic(err.msg()) }
+	c.config_file.expand(base, mut c.diagnostics) or { c.add_diagnostic(err.msg()) }
+	c.gtk_custom_css.expand(base, mut c.diagnostics) or { c.add_diagnostic(err.msg()) }
 	if mut background_image := c.background_image {
-		background_image.expand(base) or {
-			c.add_diagnostic('error expanding background-image path: ${err}')
+		background_image.expand(base, mut c.diagnostics) or {
+			c.add_diagnostic(err.msg())
 			return
 		}
 		c.background_image = background_image
 	}
 	if mut bell_audio_path := c.bell_audio_path {
-		bell_audio_path.expand(base) or {
-			c.add_diagnostic('error expanding bell-audio-path: ${err}')
+		bell_audio_path.expand(base, mut c.diagnostics) or {
+			c.add_diagnostic(err.msg())
 			return
 		}
 		c.bell_audio_path = bell_audio_path
@@ -8001,18 +8027,30 @@ fn (mut c Config) apply_kv(key string, value string) {
 		'background-image' {
 			if value.len == 0 {
 				c.background_image = none
-			} else if parsed := Path.parse(value) {
-				if parsed.path.len > 0 {
-					c.background_image = parsed
+			} else {
+				maybe_parsed := Path.parse(value) or {
+					c.invalid_config_value(key, value)
+					return
+				}
+				if parsed := maybe_parsed.value {
+					if parsed.path.len > 0 {
+						c.background_image = parsed
+					}
 				}
 			}
 		}
 		'bell-audio-path' {
 			if value.len == 0 {
 				c.bell_audio_path = none
-			} else if parsed := Path.parse(value) {
-				if parsed.path.len > 0 {
-					c.bell_audio_path = parsed
+			} else {
+				maybe_parsed := Path.parse(value) or {
+					c.invalid_config_value(key, value)
+					return
+				}
+				if parsed := maybe_parsed.value {
+					if parsed.path.len > 0 {
+						c.bell_audio_path = parsed
+					}
 				}
 			}
 		}
