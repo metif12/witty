@@ -159,7 +159,7 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 					if c.$(field.name) == none {
 						return false
 					}
-					c_write_value[usize](ptr, usize(c.$(field.name)?.as_milliseconds()))
+					c_write_value[usize](ptr, c.$(field.name)?.cval())
 					return true
 				} $else $if field.unaliased_typ is ?AutoUpdate {
 					if c.$(field.name) == none {
@@ -198,7 +198,7 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 					c_write_value[i16](ptr, c.$(field.name).cval())
 					return true
 				} $else $if field.unaliased_typ is Duration {
-					c_write_value[usize](ptr, usize(c.$(field.name).as_milliseconds()))
+					c_write_value[usize](ptr, c.$(field.name).cval())
 					return true
 				} $else $if field.unaliased_typ is fontpkg.FontSyntheticStyle {
 					c_write_value[u32](ptr, font_synthetic_style_bits(c.$(field.name)))

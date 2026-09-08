@@ -5278,6 +5278,13 @@ pub:
 	radius u8
 }
 
+// parse_cli translates BackgroundBlur.parseCLI. The receiver is only changed
+// after a value has parsed successfully, as with the tagged union assignment in
+// the source implementation.
+pub fn (mut b BackgroundBlur) parse_cli(input ?string) ! {
+	b = background_blur_parse_cli(input)!
+}
+
 pub fn (b BackgroundBlur) enabled() bool {
 	return match b.kind {
 		.bool_false { false }
@@ -5296,6 +5303,16 @@ pub fn (b BackgroundBlur) cval() i16 {
 		.radius { i16(b.radius) }
 		.macos_glass_regular { i16(-1) }
 		.macos_glass_clear { i16(-2) }
+	}
+}
+
+pub fn (b BackgroundBlur) format_entry() string {
+	return match b.kind {
+		.bool_false { 'false' }
+		.bool_true { 'true' }
+		.radius { b.radius.str() }
+		.macos_glass_regular { 'macos-glass-regular' }
+		.macos_glass_clear { 'macos-glass-clear' }
 	}
 }
 
@@ -6749,6 +6766,16 @@ pub:
 	duration u64
 }
 
+pub fn (d Duration) clone() Duration {
+	return Duration{
+		duration: d.duration
+	}
+}
+
+pub fn (d Duration) equal(other Duration) bool {
+	return d.duration == other.duration
+}
+
 // round truncates this duration to a multiple of `to`. This mirrors
 // Config.Duration.round and is primarily used for human-facing durations.
 pub fn (d Duration) round(to u64) Duration {
@@ -6770,6 +6797,11 @@ pub fn (d Duration) as_milliseconds() u32 {
 		return u32(0xffff_ffff)
 	}
 	return u32(ms)
+}
+
+@[markused]
+pub fn (d Duration) cval() usize {
+	return usize(d.as_milliseconds())
 }
 
 // NotifyOnCommandFinish controls when command-finished notifications are sent.
@@ -10330,6 +10362,10 @@ pub fn (d Duration) format() string {
 	return out
 }
 
+pub fn (d Duration) format_entry() string {
+	return d.format()
+}
+
 // parse_uint is the std.fmt.parseUnsigned adapter used by Duration.parseCLI.
 fn parse_uint(s string) ?u64 {
 	return zig_fmt.parse_unsigned(s, max_u64, 10) or { return none }
@@ -10343,6 +10379,21 @@ pub struct WindowPadding {
 pub:
 	top_left     u32
 	bottom_right u32
+}
+
+pub fn (w WindowPadding) clone() WindowPadding {
+	return w
+}
+
+pub fn (w WindowPadding) equal(other WindowPadding) bool {
+	return w == other
+}
+
+pub fn (w WindowPadding) format_entry() string {
+	if w.top_left == w.bottom_right {
+		return w.top_left.str()
+	}
+	return '${w.top_left},${w.bottom_right}'
 }
 
 // window_padding_parse_cli translates `WindowPadding.parseCLI`.
@@ -10434,13 +10485,19 @@ pub fn (mut m MouseScrollMultiplier) parse_cli(input ?string) ! {
 
 	// Bare float sets both.
 	if bare := parse_float(in_val) {
-		m.precision = bare
-		m.discrete = bare
+		m = MouseScrollMultiplier{
+			precision: bare
+			discrete: bare
+		}
 		return
 	}
 
 	// Otherwise parse a struct-like `key:value,key:value` form. Any empty
 	// entry or unknown key is an error.
+	mut result := MouseScrollMultiplier{
+		precision: m.precision
+		discrete: m.discrete
+	}
 	parts := in_val.split(',')
 	for part in parts {
 		colon := part.index(':') or { return perr(ParseError.invalid_value) }
@@ -10449,21 +10506,34 @@ pub fn (mut m MouseScrollMultiplier) parse_cli(input ?string) ! {
 		val := parse_float(val_str) or { return perr(ParseError.invalid_value) }
 		match key {
 			'precision' {
-				m.precision = val
+				result.precision = val
 			}
 			'discrete' {
-				m.discrete = val
+				result.discrete = val
 			}
 			else {
 				return perr(ParseError.invalid_value)
 			}
 		}
 	}
+	m = result
+}
+
+pub fn (m MouseScrollMultiplier) clone() MouseScrollMultiplier {
+	return m
+}
+
+pub fn (m MouseScrollMultiplier) equal(other MouseScrollMultiplier) bool {
+	return m.precision == other.precision && m.discrete == other.discrete
 }
 
 // format renders the multiplier as `precision:<p>,discrete:<d>`.
 pub fn (m MouseScrollMultiplier) format() string {
 	return 'precision:${format_f64(m.precision)},discrete:${format_f64(m.discrete)}'
+}
+
+pub fn (m MouseScrollMultiplier) format_entry() string {
+	return m.format()
 }
 
 // parse_float is the V equivalent of std.fmt.parseFloat(f64, s).

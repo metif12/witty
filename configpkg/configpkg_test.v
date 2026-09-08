@@ -527,10 +527,14 @@ fn test_duration_as_milliseconds_saturates() {
 	assert Duration{ duration: 999_999 }.as_milliseconds() == 0
 	assert Duration{ duration: 1_500_000 }.as_milliseconds() == 1
 	assert Duration{ duration: u64_max }.as_milliseconds() == u32(0xffff_ffff)
+	assert Duration{ duration: 1_500_000 }.cval() == usize(1)
 }
 
 fn test_duration_round_and_lte() {
-	assert Duration{ duration: 1_999_999 }.round(1_000_000) == Duration{
+	d := Duration{ duration: 1_999_999 }
+	assert d.clone().equal(d)
+	assert d.format_entry() == '1ms 999µs 999ns'
+	assert d.round(1_000_000) == Duration{
 		duration: 1_000_000
 	}
 	assert Duration{ duration: 5 }.lte(Duration{ duration: 5 })
@@ -580,8 +584,13 @@ fn test_resize_overlay_defaults_parse_and_format() {
 
 // Config.zig: WindowPadding "parse WindowPadding"
 fn test_parse_window_padding() {
-	assert window_padding_parse_cli('100')! == WindowPadding{100, 100}
-	assert window_padding_parse_cli('100,200')! == WindowPadding{100, 200}
+	one := window_padding_parse_cli('100')!
+	assert one == WindowPadding{100, 100}
+	assert one.clone().equal(one)
+	assert one.format_entry() == '100'
+	two := window_padding_parse_cli('100,200')!
+	assert two == WindowPadding{100, 200}
+	assert two.format_entry() == '100,200'
 	assert window_padding_parse_cli(' 100 , 200 ')! == WindowPadding{100, 200}
 	assert window_padding_parse_cli('+1__0,-0')! == WindowPadding{10, 0}
 	window_padding_parse_cli('0x10') or {
@@ -655,6 +664,10 @@ fn test_mouse_scroll_multiplier_parse() {
 	args.parse_cli('precision:1_0e-1')!
 	assert args.precision == 1
 	assert args.discrete == 2
+	before_invalid := args.clone()
+	args.parse_cli('precision:4,invalid:5') or {
+		assert args.equal(before_invalid)
+	}
 
 	mut e := MouseScrollMultiplier{}
 	e.parse_cli('foo:1') or {
@@ -690,7 +703,8 @@ fn test_mouse_scroll_multiplier_format() {
 		precision: 1.5
 		discrete: 2.5
 	}
-	assert args.format() == 'precision:1.5,discrete:2.5'
+	assert args.format_entry() == 'precision:1.5,discrete:2.5'
+	assert args.clone().equal(args)
 }
 
 // --- QuickTerminalSize ---
@@ -893,6 +907,17 @@ fn test_background_blur_cval() {
 	assert BackgroundBlur{ kind: .radius, radius: 255 }.cval() == 255
 	assert BackgroundBlur{ kind: .macos_glass_regular }.cval() == -1
 	assert BackgroundBlur{ kind: .macos_glass_clear }.cval() == -2
+	assert BackgroundBlur{ kind: .bool_false }.format_entry() == 'false'
+	assert BackgroundBlur{ kind: .bool_true }.format_entry() == 'true'
+	assert BackgroundBlur{ kind: .radius, radius: 37 }.format_entry() == '37'
+	assert BackgroundBlur{ kind: .macos_glass_regular }.format_entry() == 'macos-glass-regular'
+	assert BackgroundBlur{ kind: .macos_glass_clear }.format_entry() == 'macos-glass-clear'
+	mut blur := BackgroundBlur{ kind: .bool_false }
+	blur.parse_cli(none)!
+	assert blur.kind == .bool_true
+	blur.parse_cli('invalid') or {
+		assert blur.kind == .bool_true
+	}
 }
 
 fn test_repeatable_command_parse_clear_clone_and_format() {

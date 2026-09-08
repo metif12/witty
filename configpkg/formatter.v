@@ -296,7 +296,7 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 		enum_config_string(c.resize_overlay_position.str()),
 	])
 	add_group(mut result, 'resize-overlay-duration', [
-		c.resize_overlay_duration.format(),
+		c.resize_overlay_duration.format_entry(),
 	])
 	add_group(mut result, 'title', [optional_string(c.title)])
 	add_group(mut result, 'title-report', [bool_string(c.title_report)])
@@ -395,7 +395,7 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 		enum_config_string(c.mouse_shift_capture.str()),
 	])
 	add_group(mut result, 'mouse-scroll-multiplier', [
-		c.mouse_scroll_multiplier.format(),
+		c.mouse_scroll_multiplier.format_entry(),
 	])
 	add_group(mut result, 'right-click-action', [
 		enum_config_string(c.right_click_action.str()),
@@ -567,7 +567,7 @@ fn optional_string(value ?string) string {
 }
 
 fn optional_duration_string(value ?Duration) string {
-	return if actual := value { actual.format() } else { '' }
+	return if actual := value { actual.format_entry() } else { '' }
 }
 
 fn optional_u64_string(value ?u64) string {
@@ -675,13 +675,7 @@ fn optional_bold_color_string(value ?BoldColor) string {
 }
 
 fn background_blur_string(value BackgroundBlur) string {
-	return match value.kind {
-		.bool_false { 'false' }
-		.bool_true { 'true' }
-		.radius { '${value.radius}' }
-		.macos_glass_regular { 'macos-glass-regular' }
-		.macos_glass_clear { 'macos-glass-clear' }
-	}
+	return value.format_entry()
 }
 
 fn quick_terminal_size_string(value QuickTerminalSize) string {
@@ -736,10 +730,7 @@ fn split_preserve_zoom_string(value SplitPreserveZoom) string {
 }
 
 fn window_padding_string(value WindowPadding) string {
-	if value.top_left == value.bottom_right {
-		return value.top_left.str()
-	}
-	return '${value.top_left},${value.bottom_right}'
+	return value.format_entry()
 }
 
 fn shell_integration_features_string(value ShellIntegrationFeatures) string {
