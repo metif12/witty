@@ -47,7 +47,19 @@ pub type PasteCallback = fn (userdata voidptr, text &u8, len int)
 
 pub type ActionCallback = fn (userdata voidptr, action_id int)
 
-pub type MouseCallback = fn (userdata voidptr, event_type int, x f64, y f64, modflags u64)
+pub type MouseCallback = fn (userdata voidptr, event_type int, x f64, y f64, modflags u64, button_number i64) bool
+
+pub type ScrollCallback = fn (userdata voidptr, x f64, y f64, scroll_mods int)
+
+pub type PressureCallback = fn (userdata voidptr, stage u32, pressure f64)
+
+pub type FocusCallback = fn (userdata voidptr, focused bool)
+
+pub type AppFocusCallback = fn (focused bool)
+
+pub type KeyboardChangedCallback = fn ()
+
+pub type AppBoolCallback = fn () bool
 
 type ObjId = voidptr
 
@@ -164,6 +176,14 @@ fn C.witty_macos_objc_msg_point_point_obj(obj ObjId, selector Sel, point ObjCPoi
 fn C.witty_macos_objc_msg_bool2(obj ObjId, selector Sel, a0 voidptr, a1 voidptr) bool
 
 fn C.witty_macos_objc_msg_bool_u64(obj ObjId, selector Sel, a0 u64) bool
+
+fn C.witty_macos_objc_msg_id_rect_u64_obj_obj(obj ObjId, selector Sel, rect ObjCRect, options u64, owner ObjId, user_info ObjId) ObjId
+
+fn C.witty_macos_objc_msg_super_bool0(obj ObjId, selector Sel) bool
+
+fn C.witty_macos_objc_msg_super_void0(obj ObjId, selector Sel)
+
+fn C.witty_macos_objc_msg_super_void1(obj ObjId, selector Sel, value ObjId)
 
 fn C.witty_macos_objc_msg_void_size(obj ObjId, selector Sel, size ObjCSize)
 
@@ -284,6 +304,12 @@ const nx_device_rshift_key_mask = u64(0x00000004)
 const nx_device_rcmd_key_mask = u64(0x00000010)
 const nx_device_ralt_key_mask = u64(0x00000040)
 const nx_device_rctl_key_mask = u64(0x00002000)
+const ns_tracking_mouse_entered_and_exited = u64(0x01)
+const ns_tracking_mouse_moved = u64(0x02)
+const ns_tracking_active_always = u64(0x80)
+const ns_tracking_in_visible_rect = u64(0x200)
+const ns_alert_style_warning = u64(2)
+const ns_alert_first_button_return = i64(1000)
 const objc_assoc_copy_nonatomic = usize(3)
 const mtl_pixel_format_bgra8unorm = u64(80)
 const mtl_load_action_clear = u64(2)
@@ -291,18 +317,27 @@ const mtl_store_action_store = u64(1)
 const mtl_gpu_family_apple3 = u64(3003)
 
 __global (
-	g_draw_cb            DrawCallback
-	g_key_cb             KeyCallback
-	g_resize_cb          ResizeCallback
-	g_ready_cb           ReadyCallback
-	g_paste_cb           PasteCallback
-	g_action_cb          ActionCallback
-	g_mouse_cb           MouseCallback
-	g_app_terminating    bool
-	g_classes_registered bool
-	g_window             ObjId
-	g_delegate           ObjId
-	g_base_title_key     int
+	g_draw_cb              DrawCallback
+	g_key_cb               KeyCallback
+	g_resize_cb            ResizeCallback
+	g_ready_cb             ReadyCallback
+	g_paste_cb             PasteCallback
+	g_action_cb            ActionCallback
+	g_mouse_cb             MouseCallback
+	g_scroll_cb            ScrollCallback
+	g_pressure_cb          PressureCallback
+	g_focus_cb             FocusCallback
+	g_app_focus_cb         AppFocusCallback
+	g_keyboard_change_cb   KeyboardChangedCallback
+	g_should_quit_cb       AppBoolCallback
+	g_should_terminate_cb  AppBoolCallback
+	g_reopen_cb            AppBoolCallback
+	g_app_terminating      bool
+	g_classes_registered   bool
+	g_window               ObjId
+	g_delegate             ObjId
+	g_selection_pasteboard ObjId
+	g_base_title_key       int
 )
 
 @[inline]
@@ -399,6 +434,36 @@ fn msg_id_rect_u64_u64_bool(obj ObjId, selector string, rect ObjCRect, a1 u64, a
 		return nil_obj()
 	}
 	return C.macos_objc_msg_id_rect_u64_u64_bool(obj, sel(selector), rect, a1, a2, a3)
+}
+
+@[inline]
+fn msg_id_rect_u64_obj_obj(obj ObjId, selector string, rect ObjCRect, options u64, owner ObjId, user_info ObjId) ObjId {
+	if is_nil(obj) {
+		return nil_obj()
+	}
+	return C.witty_macos_objc_msg_id_rect_u64_obj_obj(obj, sel(selector), rect, options, owner, user_info)
+}
+
+@[inline]
+fn msg_super_bool(obj ObjId, selector string) bool {
+	if is_nil(obj) {
+		return false
+	}
+	return C.witty_macos_objc_msg_super_bool0(obj, sel(selector))
+}
+
+@[inline]
+fn msg_super_void(obj ObjId, selector string) {
+	if !is_nil(obj) {
+		C.witty_macos_objc_msg_super_void0(obj, sel(selector))
+	}
+}
+
+@[inline]
+fn msg_super_void1(obj ObjId, selector string, value ObjId) {
+	if !is_nil(obj) {
+		C.witty_macos_objc_msg_super_void1(obj, sel(selector), value)
+	}
 }
 
 @[inline]
@@ -701,6 +766,10 @@ fn register_classes() {
 		add_method(view_cls, 'isFlipped', voidptr(vt_view_is_flipped), 'B@:')
 		add_method(view_cls, 'acceptsFirstResponder', voidptr(vt_view_accepts_first_responder), 'B@:')
 		add_method(view_cls, 'canBecomeKeyView', voidptr(vt_view_can_become_key_view), 'B@:')
+		add_method(view_cls, 'becomeFirstResponder', voidptr(vt_view_become_first_responder), 'B@:')
+		add_method(view_cls, 'resignFirstResponder', voidptr(vt_view_resign_first_responder), 'B@:')
+		add_method(view_cls, 'updateTrackingAreas', voidptr(vt_view_update_tracking_areas), 'v@:')
+		add_method(view_cls, 'viewDidChangeBackingProperties', voidptr(vt_view_backing_changed), 'v@:')
 		add_method(view_cls, 'drawRect:', voidptr(vt_view_draw_rect), 'v@:{CGRect={CGPoint=dd}{CGSize=dd}}')
 		add_method(view_cls, 'keyDown:', voidptr(vt_view_key_down), 'v@:@')
 		add_method(view_cls, 'keyUp:', voidptr(vt_view_key_up), 'v@:@')
@@ -710,6 +779,15 @@ fn register_classes() {
 		add_method(view_cls, 'mouseDragged:', voidptr(vt_view_mouse_dragged), 'v@:@')
 		add_method(view_cls, 'rightMouseDown:', voidptr(vt_view_right_mouse_down), 'v@:@')
 		add_method(view_cls, 'rightMouseUp:', voidptr(vt_view_right_mouse_up), 'v@:@')
+		add_method(view_cls, 'rightMouseDragged:', voidptr(vt_view_right_mouse_dragged), 'v@:@')
+		add_method(view_cls, 'otherMouseDown:', voidptr(vt_view_other_mouse_down), 'v@:@')
+		add_method(view_cls, 'otherMouseUp:', voidptr(vt_view_other_mouse_up), 'v@:@')
+		add_method(view_cls, 'otherMouseDragged:', voidptr(vt_view_other_mouse_dragged), 'v@:@')
+		add_method(view_cls, 'mouseEntered:', voidptr(vt_view_mouse_entered), 'v@:@')
+		add_method(view_cls, 'mouseExited:', voidptr(vt_view_mouse_exited), 'v@:@')
+		add_method(view_cls, 'mouseMoved:', voidptr(vt_view_mouse_moved), 'v@:@')
+		add_method(view_cls, 'scrollWheel:', voidptr(vt_view_scroll_wheel), 'v@:@')
+		add_method(view_cls, 'pressureChangeWithEvent:', voidptr(vt_view_pressure_change), 'v@:@')
 		add_method(view_cls, 'vtFrameDidChange:', voidptr(vt_view_frame_did_change), 'v@:@')
 		add_method(view_cls, 'copy:', voidptr(vt_view_copy), 'v@:@')
 		add_method(view_cls, 'paste:', voidptr(vt_view_paste), 'v@:@')
@@ -726,10 +804,19 @@ fn register_classes() {
 		if !is_nil(proto) {
 			C.macos_class_add_protocol(delegate_cls, proto)
 		}
+		window_proto := get_protocol('NSWindowDelegate')
+		if !is_nil(window_proto) {
+			C.macos_class_add_protocol(delegate_cls, window_proto)
+		}
 		add_method(delegate_cls, 'applicationDidFinishLaunching:', voidptr(vt_app_did_finish_launching), 'v@:@')
+		add_method(delegate_cls, 'applicationDidBecomeActive:', voidptr(vt_app_did_become_active), 'v@:@')
+		add_method(delegate_cls, 'applicationDidResignActive:', voidptr(vt_app_did_resign_active), 'v@:@')
+		add_method(delegate_cls, 'vtKeyboardSelectionDidChange:', voidptr(vt_keyboard_selection_did_change), 'v@:@')
 		add_method(delegate_cls, 'applicationShouldTerminateAfterLastWindowClosed:', voidptr(vt_app_should_terminate_after_last_window_closed), 'B@:@')
 		add_method(delegate_cls, 'applicationShouldTerminate:', voidptr(vt_app_should_terminate), 'Q@:@')
+		add_method(delegate_cls, 'applicationShouldHandleReopen:hasVisibleWindows:', voidptr(vt_app_should_handle_reopen), 'B@:@B')
 		add_method(delegate_cls, 'applicationWillTerminate:', voidptr(vt_app_will_terminate), 'v@:@')
+		add_method(delegate_cls, 'windowShouldClose:', voidptr(vt_window_should_close), 'B@:@')
 		C.macos_objc_register_class_pair(delegate_cls)
 	}
 }
@@ -744,6 +831,57 @@ fn vt_view_accepts_first_responder(_self ObjId, _cmd Sel) bool {
 
 fn vt_view_can_become_key_view(_self ObjId, _cmd Sel) bool {
 	return true
+}
+
+fn dispatch_focus(view ObjId, focused bool) {
+	if g_focus_cb == unsafe { nil } {
+		return
+	}
+	userdata := view_userdata(view)
+	if !is_nil(userdata) {
+		g_focus_cb(userdata, focused)
+	}
+}
+
+fn vt_view_become_first_responder(self ObjId, _cmd Sel) bool {
+	result := msg_super_bool(self, 'becomeFirstResponder')
+	if result {
+		dispatch_focus(self, true)
+	}
+	return result
+}
+
+fn vt_view_resign_first_responder(self ObjId, _cmd Sel) bool {
+	result := msg_super_bool(self, 'resignFirstResponder')
+	if result {
+		dispatch_focus(self, false)
+	}
+	return result
+}
+
+fn setup_view_tracking(view ObjId) {
+	areas := msg_id(view, 'trackingAreas')
+	count := int(msg_u64(areas, 'count'))
+	for i in 0 .. count {
+		area := msg_id_u64(areas, 'objectAtIndex:', u64(i))
+		msg_void1(view, 'removeTrackingArea:', area)
+	}
+	options := ns_tracking_mouse_entered_and_exited | ns_tracking_mouse_moved | ns_tracking_in_visible_rect | ns_tracking_active_always
+	area := msg_id_rect_u64_obj_obj(alloc('NSTrackingArea'), 'initWithRect:options:owner:userInfo:', msg_rect(view, 'bounds'), options, view, nil_obj())
+	if !is_nil(area) {
+		msg_void1(view, 'addTrackingArea:', area)
+		msg_void(area, 'release')
+	}
+}
+
+fn vt_view_update_tracking_areas(self ObjId, _cmd Sel) {
+	msg_super_void(self, 'updateTrackingAreas')
+	setup_view_tracking(self)
+}
+
+fn vt_view_backing_changed(self ObjId, _cmd Sel) {
+	msg_super_void(self, 'viewDidChangeBackingProperties')
+	vt_view_frame_did_change(self, unsafe { nil }, unsafe { nil })
 }
 
 fn vt_view_draw_rect(self ObjId, _cmd Sel, _dirty_rect ObjCRect) {
@@ -831,6 +969,7 @@ fn vt_view_mouse_down(self ObjId, _cmd Sel, event ObjId) {
 
 fn vt_view_mouse_up(self ObjId, _cmd Sel, event ObjId) {
 	dispatch_mouse(self, event, 1)
+	dispatch_pressure(self, 0, 0)
 }
 
 fn vt_view_mouse_dragged(self ObjId, _cmd Sel, event ObjId) {
@@ -838,24 +977,112 @@ fn vt_view_mouse_dragged(self ObjId, _cmd Sel, event ObjId) {
 }
 
 fn vt_view_right_mouse_down(self ObjId, _cmd Sel, event ObjId) {
-	dispatch_mouse(self, event, 3)
+	if !dispatch_mouse(self, event, 3) {
+		msg_super_void1(self, 'rightMouseDown:', event)
+	}
 }
 
 fn vt_view_right_mouse_up(self ObjId, _cmd Sel, event ObjId) {
-	dispatch_mouse(self, event, 4)
+	if !dispatch_mouse(self, event, 4) {
+		msg_super_void1(self, 'rightMouseUp:', event)
+	}
 }
 
-fn dispatch_mouse(view ObjId, event ObjId, event_type int) {
-	if g_mouse_cb == unsafe { nil } {
+fn vt_view_other_mouse_down(self ObjId, _cmd Sel, event ObjId) {
+	dispatch_mouse(self, event, 5)
+}
+
+fn vt_view_other_mouse_up(self ObjId, _cmd Sel, event ObjId) {
+	dispatch_mouse(self, event, 6)
+}
+
+fn vt_view_mouse_entered(self ObjId, _cmd Sel, event ObjId) {
+	msg_super_void1(self, 'mouseEntered:', event)
+	dispatch_mouse(self, event, 2)
+}
+
+fn vt_view_mouse_exited(self ObjId, _cmd Sel, event ObjId) {
+	if msg_u64(get_class('NSEvent'), 'pressedMouseButtons') != 0 {
 		return
 	}
-	userdata := view_userdata(view)
+	dispatch_mouse_at(self, event, 2, -1, -1)
+}
+
+fn vt_view_mouse_moved(self ObjId, _cmd Sel, event ObjId) {
+	dispatch_mouse(self, event, 2)
+}
+
+fn vt_view_right_mouse_dragged(self ObjId, _cmd Sel, event ObjId) {
+	vt_view_mouse_moved(self, unsafe { nil }, event)
+}
+
+fn vt_view_other_mouse_dragged(self ObjId, _cmd Sel, event ObjId) {
+	vt_view_mouse_moved(self, unsafe { nil }, event)
+}
+
+fn scroll_momentum(raw u64) input.Momentum {
+	return match raw {
+		1 { .began }
+		2 { .stationary }
+		4 { .changed }
+		8 { .ended }
+		16 { .cancelled }
+		32 { .may_begin }
+		else { .none_ }
+	}
+}
+
+fn vt_view_scroll_wheel(self ObjId, _cmd Sel, event ObjId) {
+	if g_scroll_cb == unsafe { nil } {
+		return
+	}
+	userdata := view_userdata(self)
 	if is_nil(userdata) {
 		return
 	}
+	precision := msg_bool(event, 'hasPreciseScrollingDeltas')
+	mut x := msg_f64(event, 'scrollingDeltaX')
+	mut y := msg_f64(event, 'scrollingDeltaY')
+	if precision {
+		x *= 2
+		y *= 2
+	}
+	mods := input.ScrollMods{
+		precision: precision
+		momentum: scroll_momentum(msg_u64(event, 'momentumPhase'))
+	}
+	g_scroll_cb(userdata, x, y, int(mods.int()))
+}
+
+fn dispatch_pressure(view ObjId, stage u32, pressure f64) {
+	if g_pressure_cb == unsafe { nil } {
+		return
+	}
+	userdata := view_userdata(view)
+	if !is_nil(userdata) {
+		g_pressure_cb(userdata, stage, pressure)
+	}
+}
+
+fn vt_view_pressure_change(self ObjId, _cmd Sel, event ObjId) {
+	dispatch_pressure(self, u32(msg_u64(event, 'stage')), msg_f64(event, 'pressure'))
+}
+
+fn dispatch_mouse_at(view ObjId, event ObjId, event_type int, x f64, y f64) bool {
+	if g_mouse_cb == unsafe { nil } {
+		return false
+	}
+	userdata := view_userdata(view)
+	if is_nil(userdata) {
+		return false
+	}
+	return g_mouse_cb(userdata, event_type, x, y, msg_u64(event, 'modifierFlags'), msg_i64(event, 'buttonNumber'))
+}
+
+fn dispatch_mouse(view ObjId, event ObjId, event_type int) bool {
 	window_point := msg_point(event, 'locationInWindow')
 	point := msg_point_point_obj(view, 'convertPoint:fromView:', window_point, nil_obj())
-	g_mouse_cb(userdata, event_type, point.x, point.y, msg_u64(event, 'modifierFlags'))
+	return dispatch_mouse_at(view, event, event_type, point.x, point.y)
 }
 
 fn vt_view_frame_did_change(self ObjId, _cmd Sel, _notification ObjId) {
@@ -921,13 +1148,60 @@ fn vt_app_did_finish_launching(_self ObjId, _cmd Sel, _notification ObjId) {
 	}
 }
 
+fn vt_app_did_become_active(_self ObjId, _cmd Sel, _notification ObjId) {
+	if g_app_focus_cb != unsafe { nil } {
+		g_app_focus_cb(true)
+	}
+}
+
+fn vt_app_did_resign_active(_self ObjId, _cmd Sel, _notification ObjId) {
+	if g_app_focus_cb != unsafe { nil } {
+		g_app_focus_cb(false)
+	}
+}
+
+fn vt_keyboard_selection_did_change(_self ObjId, _cmd Sel, _notification ObjId) {
+	if g_keyboard_change_cb != unsafe { nil } {
+		g_keyboard_change_cb()
+	}
+}
+
+fn vt_window_should_close(_self ObjId, _cmd Sel, window ObjId) bool {
+	view := msg_id(window, 'contentView')
+	if is_nil(view) || g_action_cb == unsafe { nil } {
+		return true
+	}
+	userdata := view_userdata(view)
+	if is_nil(userdata) {
+		return true
+	}
+	g_action_cb(userdata, vt_action_close_tab)
+	return false
+}
+
 fn vt_app_should_terminate_after_last_window_closed(_self ObjId, _cmd Sel, _app ObjId) bool {
-	return true
+	if g_should_quit_cb != unsafe { nil } {
+		return g_should_quit_cb()
+	}
+	return false
 }
 
 fn vt_app_should_terminate(_self ObjId, _cmd Sel, _app ObjId) u64 {
+	if g_should_terminate_cb != unsafe { nil } && !g_should_terminate_cb() {
+		return 0
+	}
 	g_app_terminating = true
 	return 1
+}
+
+fn vt_app_should_handle_reopen(_self ObjId, _cmd Sel, _app ObjId, has_visible_windows bool) bool {
+	if has_visible_windows {
+		return false
+	}
+	if g_reopen_cb != unsafe { nil } {
+		return g_reopen_cb()
+	}
+	return false
 }
 
 fn vt_app_will_terminate(_self ObjId, _cmd Sel, _notification ObjId) {
@@ -1054,6 +1328,9 @@ fn configure_window_common(window ObjId, base_title string) {
 	msg_void_u64(window, 'setCollectionBehavior:', ns_window_collection_behavior_full_screen_primary)
 	msg_void_bool(window, 'setTitlebarAppearsTransparent:', false)
 	msg_void_bool(window, 'setMovableByWindowBackground:', false)
+	if !is_nil(g_delegate) {
+		msg_void1(window, 'setDelegate:', g_delegate)
+	}
 	set_base_title(window, base_title)
 	msg_void1(window, 'setRepresentedURL:', url_for_title(base_title))
 }
@@ -1160,6 +1437,7 @@ fn create_terminal_view(frame ObjCRect) ObjId {
 	view := msg_id_rect(alloc('VTTerminalView'), 'initWithFrame:', frame)
 	setup_view_metal(view)
 	setup_view_notifications(view)
+	setup_view_tracking(view)
 	return view
 }
 
@@ -1213,6 +1491,8 @@ pub fn app_init() {
 	install_menu_bar()
 	g_delegate = msg_id(alloc('VTAppDelegate'), 'init')
 	msg_void1(app, 'setDelegate:', g_delegate)
+	center := msg_id(get_class('NSNotificationCenter'), 'defaultCenter')
+	msg_id_obj_sel_obj(center, 'addObserver:selector:name:object:', g_delegate, sel('vtKeyboardSelectionDidChange:'), nsstring('NSTextInputContextKeyboardSelectionDidChangeNotification'))
 }
 
 pub fn app_run() {
@@ -1221,6 +1501,10 @@ pub fn app_run() {
 
 pub fn app_terminate() {
 	msg_void1(shared_app(), 'terminate:', nil_obj())
+}
+
+pub fn app_is_active() bool {
+	return msg_bool(shared_app(), 'isActive')
 }
 
 pub fn create_window(w int, h int, title string) voidptr {
@@ -1270,22 +1554,95 @@ pub fn set_mouse_callback(cb MouseCallback) {
 	g_mouse_cb = cb
 }
 
-pub fn clipboard_set_text(text string) {
-	if text.len == 0 {
-		return
-	}
-	pasteboard := msg_id(get_class('NSPasteboard'), 'generalPasteboard')
-	msg_void(pasteboard, 'clearContents')
-	msg_bool2(pasteboard, 'setString:forType:', nsstring(text), nsstring('public.utf8-plain-text'))
+pub fn set_scroll_callback(cb ScrollCallback) {
+	g_scroll_cb = cb
 }
 
-pub fn clipboard_get_text() ?string {
-	pasteboard := msg_id(get_class('NSPasteboard'), 'generalPasteboard')
+pub fn set_pressure_callback(cb PressureCallback) {
+	g_pressure_cb = cb
+}
+
+pub fn set_focus_callback(cb FocusCallback) {
+	g_focus_cb = cb
+}
+
+pub fn set_app_focus_callback(cb AppFocusCallback) {
+	g_app_focus_cb = cb
+}
+
+pub fn set_keyboard_changed_callback(cb KeyboardChangedCallback) {
+	g_keyboard_change_cb = cb
+}
+
+pub fn set_should_quit_after_last_window_callback(cb AppBoolCallback) {
+	g_should_quit_cb = cb
+}
+
+pub fn set_should_terminate_callback(cb AppBoolCallback) {
+	g_should_terminate_cb = cb
+}
+
+pub fn set_reopen_callback(cb AppBoolCallback) {
+	g_reopen_cb = cb
+}
+
+fn clipboard_for(clipboard_type int) ObjId {
+	return match clipboard_type {
+		0 { msg_id(get_class('NSPasteboard'), 'generalPasteboard') }
+		1 {
+			if is_nil(g_selection_pasteboard) {
+				pasteboard := msg_id1(get_class('NSPasteboard'), 'pasteboardWithName:', nsstring('com.mitchellh.ghostty.selection'))
+				g_selection_pasteboard = msg_id(pasteboard, 'retain')
+			}
+			g_selection_pasteboard
+		}
+		else { nil_obj() }
+	}
+}
+
+pub fn clipboard_clear(clipboard_type int) bool {
+	pasteboard := clipboard_for(clipboard_type)
+	if is_nil(pasteboard) {
+		return false
+	}
+	msg_void(pasteboard, 'clearContents')
+	return true
+}
+
+pub fn clipboard_set_value(clipboard_type int, mime string, data string) bool {
+	pasteboard := clipboard_for(clipboard_type)
+	if is_nil(pasteboard) {
+		return false
+	}
+	type_name := match mime {
+		'text/plain' { 'public.utf8-plain-text' }
+		'text/html' { 'public.html' }
+		else { mime }
+	}
+	return msg_bool2(pasteboard, 'setString:forType:', nsstring(data), nsstring(type_name))
+}
+
+pub fn clipboard_set_text(text string) {
+	if text.len == 0 || !clipboard_clear(0) {
+		return
+	}
+	clipboard_set_value(0, 'text/plain', text)
+}
+
+pub fn clipboard_get_text_for(clipboard_type int) ?string {
+	pasteboard := clipboard_for(clipboard_type)
+	if is_nil(pasteboard) {
+		return none
+	}
 	text_obj := msg_id1(pasteboard, 'stringForType:', nsstring('public.utf8-plain-text'))
 	if is_nil(text_obj) {
 		return none
 	}
 	return objc_utf8_string(text_obj)
+}
+
+pub fn clipboard_get_text() ?string {
+	return clipboard_get_text_for(0)
 }
 
 fn request_display_now(view voidptr) {
@@ -1375,6 +1732,79 @@ pub fn open_url(url string) bool {
 	workspace := msg_id(get_class('NSWorkspace'), 'sharedWorkspace')
 	value := msg_id1(get_class('NSURL'), 'URLWithString:', nsstring(url))
 	return !is_nil(value) && msg_bool1(workspace, 'openURL:', value)
+}
+
+// confirm_close presents Ghostty's close confirmation when a surface reports
+// that its child process is still alive.
+pub fn confirm_close(view voidptr) bool {
+	if is_nil(view) {
+		return true
+	}
+	window := msg_id(ObjId(view), 'window')
+	if is_nil(window) {
+		return true
+	}
+	alert := new_obj('NSAlert')
+	if is_nil(alert) {
+		return true
+	}
+	defer {
+		msg_void(alert, 'release')
+	}
+	msg_void1(alert, 'setMessageText:', nsstring('Close Terminal?'))
+	msg_void1(alert, 'setInformativeText:', nsstring('The terminal still has a running process. If you close the terminal the process will be killed.'))
+	msg_id1(alert, 'addButtonWithTitle:', nsstring('Close'))
+	msg_id1(alert, 'addButtonWithTitle:', nsstring('Cancel'))
+	msg_void_u64(alert, 'setAlertStyle:', ns_alert_style_warning)
+	return msg_i64(alert, 'runModal') == ns_alert_first_button_return
+}
+
+pub fn confirm_quit() bool {
+	alert := new_obj('NSAlert')
+	if is_nil(alert) {
+		return true
+	}
+	defer {
+		msg_void(alert, 'release')
+	}
+	msg_void1(alert, 'setMessageText:', nsstring('Quit Ghostty?'))
+	msg_void1(alert, 'setInformativeText:', nsstring('All terminal sessions will be terminated.'))
+	msg_id1(alert, 'addButtonWithTitle:', nsstring('Close Ghostty'))
+	msg_id1(alert, 'addButtonWithTitle:', nsstring('Cancel'))
+	msg_void_u64(alert, 'setAlertStyle:', ns_alert_style_warning)
+	return msg_i64(alert, 'runModal') == ns_alert_first_button_return
+}
+
+pub fn confirm_clipboard(contents string, request int) bool {
+	alert := new_obj('NSAlert')
+	if is_nil(alert) {
+		return false
+	}
+	defer {
+		msg_void(alert, 'release')
+	}
+	mut title := 'Authorize Clipboard Access'
+	mut reason := 'An application is attempting to write to the clipboard. The content to write is shown below.'
+	mut confirm_title := 'Allow'
+	mut cancel_title := 'Deny'
+	match request {
+		0 {
+			title = 'Warning: Potentially Unsafe Paste'
+			reason = 'Pasting this text to the terminal may be dangerous as it looks like some commands may be executed.'
+			confirm_title = 'Paste'
+			cancel_title = 'Cancel'
+		}
+		1 {
+			reason = 'An application is attempting to read from the clipboard. The current clipboard contents are shown below.'
+		}
+		else {}
+	}
+	msg_void1(alert, 'setMessageText:', nsstring(title))
+	msg_void1(alert, 'setInformativeText:', nsstring('${reason}\n\n${contents}'))
+	msg_id1(alert, 'addButtonWithTitle:', nsstring(confirm_title))
+	msg_id1(alert, 'addButtonWithTitle:', nsstring(cancel_title))
+	msg_void_u64(alert, 'setAlertStyle:', ns_alert_style_warning)
+	return msg_i64(alert, 'runModal') == ns_alert_first_button_return
 }
 
 // input_mods translates NSEvent.ModifierFlags using the same bit layout as

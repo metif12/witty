@@ -26,3 +26,14 @@ fn test_input_mods_preserves_c_abi_bits() {
 	mods := input_mods(ns_event_modifier_flag_shift | ns_event_modifier_flag_control | ns_event_modifier_flag_option | ns_event_modifier_flag_command | ns_event_modifier_flag_caps_lock | nx_device_rshift_key_mask | nx_device_rctl_key_mask | nx_device_ralt_key_mask | nx_device_rcmd_key_mask)
 	assert mods.int() == u16(0x3df)
 }
+
+fn test_scroll_momentum_matches_nsevent_phase_values() {
+	assert scroll_momentum(0) == .none_
+	assert scroll_momentum(1) == .began
+	assert scroll_momentum(2) == .stationary
+	assert scroll_momentum(4) == .changed
+	assert scroll_momentum(8) == .ended
+	assert scroll_momentum(16) == .cancelled
+	assert scroll_momentum(32) == .may_begin
+	assert scroll_momentum(3) == .none_
+}

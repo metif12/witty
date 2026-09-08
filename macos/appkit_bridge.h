@@ -156,6 +156,50 @@ static inline bool witty_macos_objc_msg_bool_u64(void* obj, void* sel, unsigned 
 	return ((bool (*)(void*, void*, unsigned long long))objc_msgSend)(obj, sel, a0);
 }
 
+static inline void* witty_macos_objc_msg_id_rect_u64_obj_obj(
+	void* obj,
+	void* selector,
+	macos_rect rect,
+	unsigned long long options,
+	void* owner,
+	void* user_info
+) {
+	return ((void* (*)(void*, void*, macos_rect, unsigned long long, void*, void*))objc_msgSend)(
+		obj,
+		selector,
+		rect,
+		options,
+		owner,
+		user_info
+	);
+}
+
+static inline Class witty_macos_objc_superclass(void* obj) {
+	if (!obj) return Nil;
+	return class_getSuperclass(object_getClass((id)obj));
+}
+
+static inline bool witty_macos_objc_msg_super_bool0(void* obj, void* selector) {
+	Class superclass = witty_macos_objc_superclass(obj);
+	if (!superclass) return false;
+	struct objc_super info = { (id)obj, superclass };
+	return ((bool (*)(struct objc_super*, SEL))objc_msgSendSuper)(&info, (SEL)selector);
+}
+
+static inline void witty_macos_objc_msg_super_void0(void* obj, void* selector) {
+	Class superclass = witty_macos_objc_superclass(obj);
+	if (!superclass) return;
+	struct objc_super info = { (id)obj, superclass };
+	((void (*)(struct objc_super*, SEL))objc_msgSendSuper)(&info, (SEL)selector);
+}
+
+static inline void witty_macos_objc_msg_super_void1(void* obj, void* selector, void* value) {
+	Class superclass = witty_macos_objc_superclass(obj);
+	if (!superclass) return;
+	struct objc_super info = { (id)obj, superclass };
+	((void (*)(struct objc_super*, SEL, void*))objc_msgSendSuper)(&info, (SEL)selector, value);
+}
+
 static inline void witty_macos_objc_msg_void_size(void* obj, void* sel, witty_macos_size size) {
 	((void (*)(void*, void*, witty_macos_size))objc_msgSend)(obj, sel, size);
 }

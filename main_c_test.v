@@ -58,6 +58,21 @@ fn test_cli_help_matches_translated_command() {
 	assert help.ends_with('where `<action>` is one of actions listed above.\n')
 }
 
+fn test_macos_mouse_button_numbers_match_source_adapter() {
+	assert mouse_button_from_number(0) == .left
+	assert mouse_button_from_number(1) == .right
+	assert mouse_button_from_number(2) == .middle
+	assert mouse_button_from_number(3) == .eight
+	assert mouse_button_from_number(4) == .nine
+	assert mouse_button_from_number(5) == .six
+	assert mouse_button_from_number(6) == .seven
+	assert mouse_button_from_number(7) == .four
+	assert mouse_button_from_number(8) == .five
+	assert mouse_button_from_number(9) == .ten
+	assert mouse_button_from_number(10) == .eleven
+	assert mouse_button_from_number(11) == .unknown
+}
+
 fn test_config_c_api_lifecycle_clone_and_primitive_getters() {
 	mut config := ghostty_config_new() or { panic('config allocation failed') }
 	defer {

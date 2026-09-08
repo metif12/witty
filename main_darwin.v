@@ -151,8 +151,11 @@ fn request_close_state(mut state TermState) {
 	macos.dispatch_main(close_state_main, voidptr(&state))
 }
 
-fn runtime_close_surface(userdata voidptr, _confirm bool) {
+fn runtime_close_surface(userdata voidptr, confirm bool) {
 	mut state := state_from_userdata(userdata) or { return }
+	if confirm && !macos.confirm_close(state.view) {
+		return
+	}
 	request_close_state(mut state)
 }
 
@@ -170,25 +173,86 @@ fn runtime_tick_main(userdata voidptr) {
 	}
 }
 
-fn runtime_read_clipboard(userdata voidptr, _clipboard_type int, request &apprt.ClipboardRequest) {
+fn on_app_focus(focused bool) {
+	mut runtime := standalone_runtime()
+	if runtime.app != unsafe { nil } {
+		apprt.ghostty_app_set_focus(mut runtime.app, focused)
+	}
+}
+
+fn on_keyboard_changed() {
+	mut runtime := standalone_runtime()
+	if runtime.app != unsafe { nil } {
+		apprt.ghostty_app_keyboard_changed(mut runtime.app)
+	}
+}
+
+fn on_should_quit_after_last_window() bool {
+	runtime := standalone_runtime()
+	if runtime.app == unsafe { nil } {
+		return false
+	}
+	return runtime.app.config.quit_after_last_window_closed
+}
+
+fn on_should_terminate() bool {
+	runtime := standalone_runtime()
+	if runtime.app == unsafe { nil } || !apprt.ghostty_app_needs_confirm_quit(runtime.app) {
+		return true
+	}
+	return macos.confirm_quit()
+}
+
+fn on_reopen() bool {
+	return do_new_window(none)
+}
+
+fn runtime_read_clipboard(userdata voidptr, clipboard_type int, request &apprt.ClipboardRequest) {
 	mut state := state_from_userdata(userdata) or { return }
 	if state.closed || state.surface == unsafe { nil } {
 		return
 	}
-	text := macos.clipboard_get_text() or { '' }
+	text := macos.clipboard_get_text_for(clipboard_type) or { '' }
 	apprt.ghostty_surface_complete_clipboard_request(mut state.surface, text, request, false)
 }
 
-fn runtime_write_clipboard(userdata voidptr, _clipboard_type int, contents []apprt.ClipboardContent, confirm bool) {
+fn runtime_confirm_read_clipboard(userdata voidptr, value string, request &apprt.ClipboardRequest, request_type apprt.ClipboardRequestType) {
+	mut state := state_from_userdata(userdata) or { return }
+	if state.closed || state.surface == unsafe { nil } {
+		return
+	}
+	confirmed := macos.confirm_clipboard(value, int(request_type))
+	apprt.ghostty_surface_complete_clipboard_request(mut state.surface, if confirmed {
+		value
+	} else {
+		''
+	}, request, true)
+}
+
+fn runtime_write_clipboard(userdata voidptr, clipboard_type int, contents []apprt.ClipboardContent, confirm bool) {
 	state := state_from_userdata(userdata) or { return }
-	if state.closed || confirm {
+	if state.closed || contents.len == 0 {
+		return
+	}
+	if confirm {
+		mut text := ''
+		mut found := false
+		for content in contents {
+			if content.mime == 'text/plain' {
+				text = content.data
+				found = true
+				break
+			}
+		}
+		if !found || !macos.confirm_clipboard(text, int(apprt.ClipboardRequestType.osc_52_write)) {
+			return
+		}
+	}
+	if !macos.clipboard_clear(clipboard_type) {
 		return
 	}
 	for content in contents {
-		if content.mime == 'text/plain' {
-			macos.clipboard_set_text(content.data)
-			return
-		}
+		macos.clipboard_set_value(clipboard_type, content.mime, content.data)
 	}
 }
 
@@ -319,19 +383,30 @@ fn main() {
 	macos.set_paste_callback(on_paste)
 	macos.set_action_callback(on_action)
 	macos.set_mouse_callback(on_mouse)
+	macos.set_scroll_callback(on_scroll)
+	macos.set_pressure_callback(on_pressure)
+	macos.set_focus_callback(on_focus)
+	macos.set_app_focus_callback(on_app_focus)
+	macos.set_keyboard_changed_callback(on_keyboard_changed)
+	macos.set_should_quit_after_last_window_callback(on_should_quit_after_last_window)
+	macos.set_should_terminate_callback(on_should_terminate)
+	macos.set_reopen_callback(on_reopen)
 
 	mut runtime := standalone_runtime()
 	runtime.app = apprt.ghostty_app_new(&apprt.AppOptions{
 		userdata: voidptr(runtime)
+		supports_selection_clipboard: true
 		wakeup_cb: runtime_wakeup
 		action_cb: runtime_action
 		read_clipboard_cb: runtime_read_clipboard
+		confirm_read_clipboard_cb: runtime_confirm_read_clipboard
 		write_clipboard_cb: runtime_write_clipboard
 		close_surface_cb: runtime_close_surface
 	}, &config) or {
 		eprintln('application initialization failed')
 		return
 	}
+	apprt.ghostty_app_set_focus(mut runtime.app, macos.app_is_active())
 
 	if config.initial_window {
 		do_new_window(none)
@@ -365,6 +440,13 @@ fn on_resize(userdata voidptr, width f64, height f64) {
 	apprt.ghostty_surface_set_size(mut state.surface, u32(width * scale), u32(height * scale))
 }
 
+fn on_focus(userdata voidptr, focused bool) {
+	mut state := state_from_userdata(userdata) or { return }
+	if !state.closed && state.surface != unsafe { nil } {
+		apprt.ghostty_surface_set_focus(mut state.surface, focused)
+	}
+}
+
 fn key_event_text(event voidptr, translated_mods int, fallback string) string {
 	mut text := macos.event_characters(event, translated_mods)
 	if text.len == 0 {
@@ -383,6 +465,15 @@ fn key_event_text(event voidptr, translated_mods int, fallback string) string {
 	return text
 }
 
+fn key_event_fallback(chars &u8, len int) string {
+	if len <= 0 {
+		return ''
+	}
+	unsafe {
+		return tos(chars, len)
+	}
+}
+
 fn on_key(userdata voidptr, event voidptr, key_action macos.KeyEventAction, keycode u16, modflags u64, chars &u8, len int, _uchars &u8, _ulen int) {
 	mut state := state_from_userdata(userdata) or { return }
 	if state.closed || state.surface == unsafe { nil } {
@@ -391,7 +482,7 @@ fn on_key(userdata voidptr, event voidptr, key_action macos.KeyEventAction, keyc
 
 	mods := int(macos.input_mods(modflags).int())
 	translation_mods := apprt.ghostty_surface_key_translation_mods(state.surface, mods)
-	fallback := if len > 0 { unsafe { tos(chars, len) } } else { '' }
+	fallback := key_event_fallback(chars, len)
 	text := key_event_text(event, translation_mods, fallback)
 	unshifted := macos.event_characters(event, 0).runes()
 	action := match key_action {
@@ -450,27 +541,64 @@ const mouse_left_dragged = 2
 const mouse_right_down = 3
 const mouse_right_up = 4
 
-fn on_mouse(userdata voidptr, event_type int, x f64, y f64, modflags u64) {
-	mut state := state_from_userdata(userdata) or { return }
+fn mouse_button_from_number(number i64) input.MouseButton {
+	return match number {
+		0 { .left }
+		1 { .right }
+		2 { .middle }
+		3 { .eight }
+		4 { .nine }
+		5 { .six }
+		6 { .seven }
+		7 { .four }
+		8 { .five }
+		9 { .ten }
+		10 { .eleven }
+		else { .unknown }
+	}
+}
+
+fn on_mouse(userdata voidptr, event_type int, x f64, y f64, modflags u64, button_number i64) bool {
+	mut state := state_from_userdata(userdata) or { return false }
 	if state.closed || state.surface == unsafe { nil } {
-		return
+		return false
 	}
 	mods := int(macos.input_mods(modflags).int())
 	apprt.ghostty_surface_mouse_pos(mut state.surface, x, y, mods)
-	match event_type {
+	return match event_type {
 		mouse_left_down {
 			apprt.ghostty_surface_mouse_button(mut state.surface, .press, .left, mods)
 		}
 		mouse_left_up {
 			apprt.ghostty_surface_mouse_button(mut state.surface, .release, .left, mods)
 		}
-		mouse_left_dragged {}
+		mouse_left_dragged { false }
 		mouse_right_down {
 			apprt.ghostty_surface_mouse_button(mut state.surface, .press, .right, mods)
 		}
 		mouse_right_up {
 			apprt.ghostty_surface_mouse_button(mut state.surface, .release, .right, mods)
 		}
-		else {}
+		5 {
+			apprt.ghostty_surface_mouse_button(mut state.surface, .press, mouse_button_from_number(button_number), mods)
+		}
+		6 {
+			apprt.ghostty_surface_mouse_button(mut state.surface, .release, mouse_button_from_number(button_number), mods)
+		}
+		else { false }
+	}
+}
+
+fn on_scroll(userdata voidptr, x f64, y f64, scroll_mods int) {
+	mut state := state_from_userdata(userdata) or { return }
+	if !state.closed && state.surface != unsafe { nil } {
+		apprt.ghostty_surface_mouse_scroll(mut state.surface, x, y, scroll_mods)
+	}
+}
+
+fn on_pressure(userdata voidptr, stage u32, pressure f64) {
+	mut state := state_from_userdata(userdata) or { return }
+	if !state.closed && state.surface != unsafe { nil } {
+		apprt.ghostty_surface_mouse_pressure(mut state.surface, stage, pressure)
 	}
 }
