@@ -7172,7 +7172,6 @@ enum ReplayStepKind {
 	conditional_arg
 	diagnostic
 	command
-	xdg_command
 }
 
 // ReplayStep records configuration input in source order. Ghostty rebuilds a
@@ -7182,9 +7181,61 @@ enum ReplayStepKind {
 struct ReplayStep {
 	kind       ReplayStepKind
 	value      string
-	args       []string
 	diagnostic Diagnostic
 	conditions []Conditional
+}
+
+// ReplayIterator reapplies retained side effects and yields arguments through
+// the ordinary config parser. A command step yields the synthetic `-e` marker;
+// the parser then consumes every following argument as the command tail.
+struct ReplayIterator {
+	steps []ReplayStep
+mut:
+	config &Config = unsafe { nil }
+	index  int
+}
+
+fn ReplayIterator.new(steps []ReplayStep, mut config Config) ReplayIterator {
+	return ReplayIterator{
+		steps: steps
+		config: unsafe { &config }
+	}
+}
+
+fn (mut self ReplayIterator) next() ?string {
+	for self.index < self.steps.len {
+		step := self.steps[self.index]
+		self.index++
+		match step.kind {
+			.expand {
+				self.config.expand_paths(step.value) or {
+					eprintln('error expanding paths err=${err}')
+				}
+			}
+			.diagnostic {
+				self.config.diagnostics << step.diagnostic.clone()
+			}
+			.conditional_arg {
+				mut matches := true
+				for condition in step.conditions {
+					if !self.config.conditional_state.match(condition) {
+						matches = false
+						break
+					}
+				}
+				if matches {
+					return step.value
+				}
+			}
+			.arg {
+				return step.value
+			}
+			.command {
+				return '-e'
+			}
+		}
+	}
+	return none
 }
 
 // load loads configuration using Ghostty's default-file order, command-line
@@ -7353,12 +7404,16 @@ pub fn (mut c Config) parse_manually_hook[T](arg string, mut iter T) bool {
 	}
 
 	mut command_args := []string{}
-	for {
-		command_args << (iter.next() or { break })
-	}
 	c.replay_steps << ReplayStep{
 		kind: .command
-		args: command_args.clone()
+	}
+	for {
+		param := iter.next() or { break }
+		c.replay_steps << ReplayStep{
+			kind: .arg
+			value: param
+		}
+		command_args << param
 	}
 	c.apply_command_tail(command_args, config_iterator_location(iter))
 	return false
@@ -7395,12 +7450,17 @@ fn config_iterator_location[T](iter T) diagnosticspkg.Location {
 // mode. Unlike the normal -e parser, this only sets the initial command and
 // marker; all other configuration remains as loaded from default files.
 fn (mut c Config) load_xdg_terminal_exec_args(args []string) {
+	c.replay_steps << ReplayStep{
+		kind: .command
+	}
+	for arg in args {
+		c.replay_steps << ReplayStep{
+			kind: .arg
+			value: arg
+		}
+	}
 	c.xdg_terminal_exec = true
 	c.initial_command = Command(DirectCmd{ direct: args.clone() })
-	c.replay_steps << ReplayStep{
-		kind: .xdg_command
-		args: args.clone()
-	}
 }
 
 fn is_font_family_key(key string) bool {
@@ -7608,7 +7668,6 @@ fn clone_replay_steps(steps []ReplayStep) []ReplayStep {
 	for step in steps {
 		result << ReplayStep{
 			...step
-			args: step.args.clone()
 			diagnostic: step.diagnostic.clone()
 			conditions: step.conditions.map(it.clone())
 		}
@@ -9868,7 +9927,7 @@ fn (mut c Config) load_theme(theme ThemePair) ! {
 	// source Replay.Step union.
 	for i in 0 .. rebuilt.replay_steps.len {
 		step := rebuilt.replay_steps[i]
-		if step.kind in [.command, .xdg_command] {
+		if step.kind == .command {
 			break
 		}
 		if step.kind !in [.arg, .conditional_arg] {
@@ -9899,52 +9958,8 @@ fn (mut c Config) load_theme(theme ThemePair) ! {
 // reapplies recorded inputs without reopening files and evaluates every
 // condition on a conditional argument as an AND.
 fn replay_steps_into(mut destination Config, steps []ReplayStep) {
-	state := destination.conditional_state
-	for step in steps {
-		match step.kind {
-			.arg {
-				mut iter := cli_args.SliceIterator.new([step.value])
-				destination.load_iter(mut iter)
-			}
-			.conditional_arg {
-				mut conditions_match := true
-				for condition in step.conditions {
-					if !state.match(condition) {
-						conditions_match = false
-						break
-					}
-				}
-				if !conditions_match {
-					continue
-				}
-				mut iter := cli_args.SliceIterator.new([step.value])
-				destination.load_iter(mut iter)
-			}
-			.expand {
-				destination.expand_paths(step.value) or {
-					eprintln('error expanding paths err=${err}')
-				}
-			}
-			.diagnostic {
-				destination.diagnostics << step.diagnostic.clone()
-			}
-			.command {
-				destination.replay_steps << ReplayStep{
-					kind: .command
-					args: step.args.clone()
-				}
-				destination.apply_command_tail(step.args, diagnosticspkg.NoneLocation{})
-			}
-			.xdg_command {
-				destination.replay_steps << ReplayStep{
-					kind: .xdg_command
-					args: step.args.clone()
-				}
-				destination.xdg_terminal_exec = true
-				destination.initial_command = Command(DirectCmd{ direct: step.args.clone() })
-			}
-		}
-	}
+	mut iter := ReplayIterator.new(steps, mut destination)
+	destination.load_iter(mut iter)
 }
 
 // clamp_f64 clamps v to the inclusive range [lo, hi].

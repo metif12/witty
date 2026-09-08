@@ -174,9 +174,12 @@ fn test_parse_manually_hook_records_args_and_consumes_command_tail() {
 	mut params := cli_args.SliceIterator.new(['echo', 'hello world'])
 	assert !command.parse_manually_hook('-e', mut params)
 	assert command.initial_command or { panic('missing command') }.string_val() == 'echo hello world'
-	assert command.replay_steps.len == 1
+	assert command.replay_steps.len == 3
 	assert command.replay_steps[0].kind == .command
-	assert command.replay_steps[0].args == ['echo', 'hello world']
+	assert command.replay_steps[1].kind == .arg
+	assert command.replay_steps[1].value == 'echo'
+	assert command.replay_steps[2].kind == .arg
+	assert command.replay_steps[2].value == 'hello world'
 }
 
 fn test_empty_command_diagnostic_is_regenerated_without_replay_location() ! {
@@ -3158,8 +3161,33 @@ fn test_xdg_terminal_exec_sets_only_initial_command_mode() {
 	assert cfg.quit_after_last_window_closed == default_quit
 	command := cfg.initial_command or { panic('missing initial command') }
 	assert command.string_val() == 'echo hello world'
-	assert cfg.replay_steps.len == 1
-	assert cfg.replay_steps[0].kind == .xdg_command
+	assert cfg.replay_steps.len == 3
+	assert cfg.replay_steps[0].kind == .command
+	assert cfg.replay_steps[1].kind == .arg
+	assert cfg.replay_steps[1].value == 'echo'
+	assert cfg.replay_steps[2].kind == .arg
+	assert cfg.replay_steps[2].value == 'hello world'
+}
+
+fn test_xdg_terminal_exec_theme_replay_uses_command_marker() ! {
+	theme := os.join_path(os.temp_dir(), 'witty-xdg-command-theme-${os.getpid()}')
+	os.write_file(theme, '')!
+	defer {
+		os.rm(theme) or {}
+	}
+
+	mut cfg := Config.default_config()
+	cfg.load_string('theme = ${theme}\n')
+	cfg.load_xdg_terminal_exec_args(['echo', 'hello world'])
+	cfg.finalize()!
+
+	command := cfg.initial_command or { panic('missing replayed initial command') }
+	assert command.string_val() == 'echo hello world'
+	assert cfg.gtk_single_instance == .false_
+	assert cfg.quit_after_last_window_closed
+	// cloneEmpty retains conditional state only, so the internal xdg marker is
+	// not copied when the synthetic -e stream rebuilds the config around a theme.
+	assert !cfg.xdg_terminal_exec
 }
 
 fn test_config_enum_parser_rejects_values_not_present_in_source() {
