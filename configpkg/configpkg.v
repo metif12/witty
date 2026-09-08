@@ -1,6 +1,7 @@
 module configpkg
 
 import os
+import io
 import input as inputpkg
 import terminal
 import encoding.utf8.validate
@@ -9715,52 +9716,24 @@ fn replay_steps_into(mut destination Config, steps []ReplayStep) {
 // apply_theme_file loads the given theme file and applies its options with the
 // theme-loading flag set so they don't override explicit config values.
 fn (mut c Config) apply_theme_file(path string) {
-	resolved := c.resolve_theme_file(path) or { return }
-	content := os.read_file(resolved) or {
+	mut theme_diagnostics := diagnosticspkg.DiagnosticList{}
+	opened := themepkg.open(path, mut theme_diagnostics) or {
+		c.diagnostics << theme_diagnostics.items()
+		return
+	}
+	c.diagnostics << theme_diagnostics.items()
+	mut file := opened.file
+	content_bytes := io.read_all(reader: file) or {
+		file.close()
 		c.add_diagnostic('not reading theme from "${path}": ${err}')
 		return
 	}
+	file.close()
 	was_loading := c.loading_theme
 	c.loading_theme = true
-	c.load_string(content)
-	c.expand_paths(os.dir(resolved))
+	c.load_string(content_bytes.bytestr())
+	c.expand_paths(os.dir(opened.path))
 	c.loading_theme = was_loading
-}
-
-fn (mut c Config) resolve_theme_file(name string) ?string {
-	if os.is_abs_path(name) {
-		if !os.exists(name) {
-			c.add_diagnostic('theme "${name}" not found')
-			return none
-		}
-		if !os.is_file(name) {
-			c.add_diagnostic('not reading theme from "${name}": it is not a file')
-			return none
-		}
-		return name
-	}
-	if os.base(name) != name {
-		c.add_diagnostic('theme "${name}" cannot include path separators unless it is an absolute path')
-		return none
-	}
-	mut locations := themepkg.LocationIterator.new()
-	mut tried := []string{}
-	for {
-		location := locations.next() or { break }
-		path := os.join_path(location.dir, name)
-		tried << path
-		if os.exists(path) {
-			if !os.is_file(path) {
-				c.add_diagnostic('not reading theme from "${name}": it is not a file')
-				return none
-			}
-			return path
-		}
-	}
-	for path in tried {
-		c.add_diagnostic('theme "${name}" not found, tried path "${path}"')
-	}
-	return none
 }
 
 // clamp_f64 clamps v to the inclusive range [lo, hi].
