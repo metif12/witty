@@ -152,6 +152,48 @@ fn test_load_iter_uses_iterator_location_contract() {
 	assert with_location.diagnostics[0].format() == 'cli:2:font-size: invalid value "nope"'
 }
 
+fn test_load_iter_replay_keeps_exact_normalized_argument() {
+	mut cfg := Config.default_config()
+	mut iter := cli_args.SliceIterator.new(['--title=a=b'])
+	cfg.load_iter(mut iter)
+	assert cfg.title or { '' } == 'a=b'
+	assert cfg.replay_steps.len == 1
+	assert cfg.replay_steps[0].kind == .arg
+	assert cfg.replay_steps[0].value == '--title=a=b'
+}
+
+fn test_parse_manually_hook_records_args_and_consumes_command_tail() {
+	mut regular := Config.default_config()
+	mut empty := cli_args.SliceIterator.new([])
+	assert regular.parse_manually_hook('--font-size=18', mut empty)
+	assert regular.replay_steps.len == 1
+	assert regular.replay_steps[0].kind == .arg
+	assert regular.replay_steps[0].value == '--font-size=18'
+
+	mut command := Config.default_config()
+	mut params := cli_args.SliceIterator.new(['echo', 'hello world'])
+	assert !command.parse_manually_hook('-e', mut params)
+	assert command.initial_command or { panic('missing command') }.string_val() == 'echo hello world'
+	assert command.replay_steps.len == 1
+	assert command.replay_steps[0].kind == .command
+	assert command.replay_steps[0].args == ['echo', 'hello world']
+}
+
+fn test_empty_command_diagnostic_is_regenerated_without_replay_location() ! {
+	theme := os.join_path(os.temp_dir(), 'witty-empty-command-theme-${os.getpid()}')
+	os.write_file(theme, '')!
+	defer {
+		os.rm(theme) or {}
+	}
+	mut cfg := Config.default_config()
+	cfg.load_cli_args(['--theme=${theme}', '-e'])
+	assert cfg.diagnostics.len == 1
+	assert cfg.diagnostics[0].format() == 'cli:2: missing command after -e'
+	cfg.finalize()
+	assert cfg.diagnostics.len == 1
+	assert cfg.diagnostics[0].format() == 'missing command after -e'
+}
+
 fn test_add_diagnostic_fmt_has_no_location_or_replay_step() {
 	mut cfg := Config.default_config()
 	cfg.add_diagnostic_fmt('startup failed: OutOfMemory')
@@ -1456,7 +1498,7 @@ fn test_config_file_bare_values_match_line_iterator() {
 	assert cfg.window_decoration == .auto
 	assert cfg.cursor_style_blink or { false }
 	assert cfg.command_palette_entry.items.len == 0
-	assert cfg.replay_steps.all(it.kind != .kv || !it.has_value)
+	assert cfg.replay_steps.all(it.kind != .arg || !it.value.contains('='))
 }
 
 fn test_config_file_bare_required_and_unknown_values_are_diagnostics() {

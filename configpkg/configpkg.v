@@ -6517,7 +6517,7 @@ pub fn Palette.default_palette() Palette {
 pub type Diagnostic = diagnosticspkg.Diagnostic
 
 enum ReplayStepKind {
-	kv
+	arg
 	expand
 	diagnostic
 	command
@@ -6530,9 +6530,7 @@ enum ReplayStepKind {
 // normal parser semantics.
 struct ReplayStep {
 	kind       ReplayStepKind
-	key        string
 	value      string
-	has_value  bool = true
 	args       []string
 	diagnostic Diagnostic
 }
@@ -6652,40 +6650,16 @@ fn (mut c Config) load_iter_internal[T](mut iter T, overwrite_font_families bool
 	mut overwritten_font_fields := map[string]bool{}
 	for {
 		arg := iter.next() or { break }
-		location := config_iterator_location(iter)
-		if arg == '-e' {
-			mut command_args := []string{}
-			for {
-				command_args << (iter.next() or { break })
-			}
-			if command_args.len == 0 {
-				c.add_replay_diagnostic_entry(Diagnostic{
-					location: location
-					message: 'missing command after -e'
-				})
-				return
-			}
-			c.initial_command = Command(DirectCmd{ direct: command_args.clone() })
-			c.gtk_single_instance = .false_
-			c.quit_after_last_window_closed = true
-			c.quit_after_last_window_closed_delay = none
-			if c.shell_integration != .none_ {
-				c.shell_integration = .detect
-			}
-			if !c.replaying {
-				c.replay_steps << ReplayStep{
-					kind: .command
-					args: command_args.clone()
-				}
-			}
-			break
+		if !c.parse_manually_hook(arg, mut iter) {
+			return
 		}
+		location := config_iterator_location(iter)
 		if !arg.starts_with('--') {
-			c.add_replay_diagnostic_entry(Diagnostic{
+			c.diagnostics << Diagnostic{
 				location: location
 				key: arg
 				message: 'invalid field'
-			})
+			}
 			continue
 		}
 		mut key := arg[2..]
@@ -6700,13 +6674,58 @@ fn (mut c Config) load_iter_internal[T](mut iter T, overwrite_font_families bool
 		if overwrite_font_families && has_value && is_font_family_key(key)
 			&& key !in overwritten_font_fields {
 			overwritten_font_fields[key] = true
-			c.record_and_apply_kv(key, '', true, location)
+			c.apply_kv_with_context(key, '', true, location)
 		}
 		if has_value {
-			c.record_and_apply_kv(key, value, true, location)
+			c.apply_kv_with_context(key, value, true, location)
 		} else {
-			c.record_and_apply_kv(key, '', false, location)
+			c.apply_kv_with_context(key, '', false, location)
 		}
+	}
+}
+
+// parse_manually_hook implements Config.parseManuallyHook. It records every
+// ordinary argument for replay and owns the special `-e command...` tail.
+// V's garbage collector removes the allocator parameter from the source API.
+pub fn (mut c Config) parse_manually_hook[T](arg string, mut iter T) bool {
+	if arg != '-e' {
+		if !c.loading_theme && !c.replaying {
+			c.replay_steps << ReplayStep{
+				kind: .arg
+				value: arg
+			}
+		}
+		return true
+	}
+
+	mut command_args := []string{}
+	for {
+		command_args << (iter.next() or { break })
+	}
+	if !c.loading_theme && !c.replaying {
+		c.replay_steps << ReplayStep{
+			kind: .command
+			args: command_args.clone()
+		}
+	}
+	c.apply_command_tail(command_args, config_iterator_location(iter))
+	return false
+}
+
+fn (mut c Config) apply_command_tail(command_args []string, location diagnosticspkg.Location) {
+	if command_args.len == 0 {
+		c.diagnostics << Diagnostic{
+			location: location
+			message: 'missing command after -e'
+		}
+		return
+	}
+	c.initial_command = Command(DirectCmd{ direct: command_args.clone() })
+	c.gtk_single_instance = .false_
+	c.quit_after_last_window_closed = true
+	c.quit_after_last_window_closed_delay = none
+	if c.shell_integration != .none_ {
+		c.shell_integration = .detect
 	}
 }
 
@@ -6889,15 +6908,7 @@ fn (mut c Config) load_string_with_path(content string, path string) {
 	c.load_iter(mut iter)
 }
 
-fn (mut c Config) record_and_apply_kv(key string, value string, has_value bool, location diagnosticspkg.Location) {
-	if !c.loading_theme && !c.replaying {
-		c.replay_steps << ReplayStep{
-			kind: .kv
-			key: key
-			value: value
-			has_value: has_value
-		}
-	}
+fn (mut c Config) apply_kv_with_context(key string, value string, has_value bool, location diagnosticspkg.Location) {
 	diagnostic_start := c.diagnostics.len
 	if has_value {
 		c.apply_kv(key, value)
@@ -9256,20 +9267,16 @@ fn (mut c Config) load_theme() {
 	rebuilt.replaying = true
 	for step in steps {
 		match step.kind {
-			.kv {
-				rebuilt.record_and_apply_kv(step.key, step.value, step.has_value, diagnosticspkg.NoneLocation{})
+			.arg {
+				mut iter := cli_args.SliceIterator.new([step.value])
+				rebuilt.load_iter(mut iter)
 			}
 			.expand { rebuilt.expand_paths(step.value) }
 			.diagnostic {
 				rebuilt.diagnostics << step.diagnostic.clone()
 			}
 			.command {
-				rebuilt.initial_command = Command(DirectCmd{ direct: step.args.clone() })
-				rebuilt.gtk_single_instance = .false_
-				rebuilt.quit_after_last_window_closed = true
-				if rebuilt.shell_integration != .none_ {
-					rebuilt.shell_integration = .detect
-				}
+				rebuilt.apply_command_tail(step.args, diagnosticspkg.NoneLocation{})
 			}
 			.xdg_command {
 				rebuilt.xdg_terminal_exec = true
