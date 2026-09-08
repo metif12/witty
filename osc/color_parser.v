@@ -189,28 +189,30 @@ pub:
 //   - #RGB, #RRGGBB, #RRRGGGBBB, #RRRRGGGGBBBB
 //   - Named X11 colors
 pub fn parse_rgb(spec string) ?RGB {
-	s := spec.trim_space()
-	if s.len == 0 {
+	if spec.len == 0 {
 		return none
 	}
 
-	// Try rgb: format
-	if s.starts_with('rgb:') {
-		return parse_rgb_colon(s[4..])
+	// Hash colors are parsed before the named-color whitespace exception.
+	if spec[0] == `#` {
+		return parse_rgb_hash(spec[1..])
 	}
 
-	// Try rgbi: format (floating point intensity)
-	if s.starts_with('rgbi:') {
-		return parse_rgbi(s[5..])
+	// Ghostty permits only literal spaces around X11 names. Other color forms
+	// are parsed from the original, untrimmed spelling.
+	if named := parse_named_color(spec.trim(' ')) {
+		return named
 	}
 
-	// Try # format
-	if s[0] == `#` {
-		return parse_rgb_hash(s[1..])
+	if spec.starts_with('rgb:') {
+		return parse_rgb_colon(spec[4..])
 	}
 
-	// Try named colors (case insensitive)
-	return parse_named_color(s)
+	if spec.starts_with('rgbi:') {
+		return parse_rgbi(spec[5..])
+	}
+
+	return none
 }
 
 // parse_rgb_colon parses "RR/GG/BB" format (1-4 hex digits per channel).

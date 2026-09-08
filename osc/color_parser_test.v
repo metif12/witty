@@ -97,6 +97,15 @@ fn test_rgb_parse_invalid() {
 	assert parse_rgb('rgbi: 1/0/0') == none
 }
 
+fn test_rgb_parse_only_trims_spaces_around_named_colors() {
+	assert parse_rgb(' red ')? == RGB{
+		r: 255
+	}
+	assert parse_rgb('\tred\t') == none
+	assert parse_rgb(' rgb:f/0/0 ') == none
+	assert parse_rgb(' #fff ') == none
+}
+
 // Translated from ghostty color.zig test "RGB.parse". Verifies the 8-bit
 // channel scaling (color * 255 / max) for hex specs of 1-4 digits, the
 // intensity (rgbi) truncation, and named-color values.
