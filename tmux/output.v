@@ -1,5 +1,7 @@
 module tmux
 
+import zig_fmt
+
 // Tmux output handling - format variables and parsing.
 //
 // Source: terminal/tmux/output.zig
@@ -149,37 +151,13 @@ pub fn (self Variable) name() string {
 // Parse an unsigned integer with Zig's `std.fmt.parseInt(usize, value, 10)`
 // semantics.
 pub fn parse_usize(value string) !usize {
-	if value.len == 0 {
-		return error('InvalidCharacter')
-	}
-	mut offset := 0
-	mut negative := false
-	if value[0] == `+` || value[0] == `-` {
-		negative = value[0] == `-`
-		offset = 1
-	}
-	if offset == value.len || value[offset] == `_` || value[value.len - 1] == `_` {
-		return error('InvalidCharacter')
-	}
-
-	mut result := usize(0)
-	for c in value[offset..] {
-		if c == `_` {
-			continue
-		}
-		if c < `0` || c > `9` {
-			return error('InvalidCharacter')
-		}
-		digit := usize(c - `0`)
-		if result > (usize(-1) - digit) / 10 {
+	result := zig_fmt.parse_int_unsigned(value, 64, 10) or {
+		if err.msg() == 'overflow' {
 			return error('Overflow')
 		}
-		result = result * 10 + digit
+		return error('InvalidCharacter')
 	}
-	if negative && result != 0 {
-		return error('Overflow')
-	}
-	return result
+	return usize(result)
 }
 
 // ============================================================

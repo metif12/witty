@@ -4,6 +4,7 @@ import os
 import crypto.rand as crypto_rand
 import encoding.base64
 import log
+import zig_fmt
 
 // C interop declarations for pipes and resource limits.
 #include <unistd.h>
@@ -208,41 +209,7 @@ pub fn launched_by_dbus_activation() bool {
 
 // Direct translation of `std.fmt.parseInt(@TypeOf(c.getpid()), value, 10)`.
 fn parse_pid(value string) ?int {
-	if value.len == 0 {
-		return none
-	}
-	mut offset := 0
-	mut negative := false
-	if value[0] == `+` || value[0] == `-` {
-		negative = value[0] == `-`
-		offset = 1
-	}
-	if offset == value.len || value[offset] == `_` || value[value.len - 1] == `_` {
-		return none
-	}
-
-	limit := if negative { u64(2147483648) } else { u64(2147483647) }
-	mut magnitude := u64(0)
-	for c in value[offset..] {
-		if c == `_` {
-			continue
-		}
-		if c < `0` || c > `9` {
-			return none
-		}
-		digit := u64(c - `0`)
-		if magnitude > (limit - digit) / 10 {
-			return none
-		}
-		magnitude = magnitude * 10 + digit
-	}
-	if negative {
-		if magnitude == u64(2147483648) {
-			return -2147483647 - 1
-		}
-		return -int(magnitude)
-	}
-	return int(magnitude)
+	return int(zig_fmt.parse_int_signed(value, 32, 10) or { return none })
 }
 
 // launched_from_desktop detects launches from Finder on macOS and desktop

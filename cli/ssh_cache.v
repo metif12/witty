@@ -6,6 +6,7 @@ import net
 import os
 import os.filelock
 import time
+import zig_fmt
 
 const max_ssh_cache_size = 512 * 1024
 
@@ -35,41 +36,7 @@ pub fn SshCacheEntry.parse(line string) ?SshCacheEntry {
 
 // Direct translation of `std.fmt.parseInt(i64, timestamp, 10)`.
 fn parse_ssh_timestamp(input string) ?i64 {
-	if input.len == 0 {
-		return none
-	}
-	mut offset := 0
-	mut negative := false
-	if input[0] == `+` || input[0] == `-` {
-		negative = input[0] == `-`
-		offset = 1
-	}
-	if offset == input.len || input[offset] == `_` || input[input.len - 1] == `_` {
-		return none
-	}
-
-	limit := if negative { u64(1) << 63 } else { u64(max_i64) }
-	mut magnitude := u64(0)
-	for c in input[offset..] {
-		if c == `_` {
-			continue
-		}
-		if c < `0` || c > `9` {
-			return none
-		}
-		digit := u64(c - `0`)
-		if magnitude > (limit - digit) / 10 {
-			return none
-		}
-		magnitude = magnitude * 10 + digit
-	}
-	if negative {
-		if magnitude == u64(1) << 63 {
-			return min_i64
-		}
-		return -i64(magnitude)
-	}
-	return i64(magnitude)
+	return zig_fmt.parse_int_signed(input, 64, 10) or { return none }
 }
 
 pub fn (entry SshCacheEntry) format() string {

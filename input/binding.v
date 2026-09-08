@@ -2702,91 +2702,21 @@ fn parse_float(s string) !f32 {
 }
 
 fn strconv_parse_i16(s string) !i64 {
-	return parse_signed_decimal(s, -32768, 32767)
+	return zig_fmt.parse_int_signed(s, 16, 10) or { return error('InvalidFormat') }
 }
 
 fn strconv_parse_isize(s string) !i64 {
 	// Ghostty supports only 64-bit application targets, where isize is i64.
-	return parse_signed_decimal(s, i64(-9223372036854775807) - 1, 9223372036854775807)
-}
-
-fn parse_signed_decimal(s string, minimum i64, maximum i64) !i64 {
-	if s.len == 0 {
-		return error('InvalidFormat')
-	}
-	mut index := 0
-	mut negative := false
-	if s[0] == `+` || s[0] == `-` {
-		negative = s[0] == `-`
-		index++
-	}
-	if index == s.len || s[index] == `_` || s[s.len - 1] == `_` {
-		return error('InvalidFormat')
-	}
-	limit := if negative { u64(-(minimum + 1)) + 1 } else { u64(maximum) }
-	mut magnitude := u64(0)
-	for index < s.len {
-		ch := s[index]
-		index++
-		if ch == `_` {
-			continue
-		}
-		if ch < `0` || ch > `9` {
-			return error('InvalidFormat')
-		}
-		digit := u64(ch - `0`)
-		if magnitude > (limit - digit) / 10 {
-			return error('InvalidFormat')
-		}
-		magnitude = magnitude * 10 + digit
-	}
-	if negative {
-		if magnitude == u64(9223372036854775807) + 1 {
-			return i64(-9223372036854775807) - 1
-		}
-		return -i64(magnitude)
-	}
-	return i64(magnitude)
+	return zig_fmt.parse_int_signed(s, 64, 10) or { return error('InvalidFormat') }
 }
 
 fn strconv_parse_usize(s string) !u64 {
 	// Ghostty supports only 64-bit application targets, where usize is u64.
-	return parse_unsigned_decimal(s, 0xffffffffffffffff)
+	return zig_fmt.parse_int_unsigned(s, 64, 10) or { return error('InvalidFormat') }
 }
 
 fn parse_unsigned_decimal(s string, maximum u64) !u64 {
-	if s.len == 0 {
-		return error('InvalidFormat')
-	}
-	mut index := 0
-	mut negative := false
-	if s[0] == `+` || s[0] == `-` {
-		negative = s[0] == `-`
-		index++
-	}
-	if index == s.len || s[index] == `_` || s[s.len - 1] == `_` {
-		return error('InvalidFormat')
-	}
-	mut result := u64(0)
-	for index < s.len {
-		ch := s[index]
-		index++
-		if ch == `_` {
-			continue
-		}
-		if ch < `0` || ch > `9` {
-			return error('InvalidFormat')
-		}
-		digit := u64(ch - `0`)
-		if result > (maximum - digit) / 10 {
-			return error('InvalidFormat')
-		}
-		result = result * 10 + digit
-	}
-	if negative && result != 0 {
-		return error('InvalidFormat')
-	}
-	return result
+	return zig_fmt.parse_int_unsigned_max(s, maximum, 10) or { return error('InvalidFormat') }
 }
 
 // --- Parser ---
