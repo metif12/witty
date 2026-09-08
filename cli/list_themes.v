@@ -135,7 +135,8 @@ fn (mut self Preview) update_filtered() {
 	mut theme_config := configpkg.Config.default_config()
 
 	if self.search_text.len > 0 {
-		tokens := self.search_text.split(' ').filter(it.len > 0)
+		query := ascii.lower_string(self.search_text)
+		tokens := query.split(' ').filter(it.len > 0)
 
 		for i, mut theme in self.themes {
 			theme_config.load_file(theme.path)

@@ -175,16 +175,21 @@ fn test_preview_search_uses_text_input() {
 	assert p.filtered.len == 2
 }
 
-fn test_preview_passes_search_tokens_to_zf_unchanged() {
+fn test_preview_ascii_lowercases_search_tokens_for_zf() {
 	mut p := Preview.new([
 		ThemeListElement{ theme: 'Dracula' },
+		ThemeListElement{ theme: 'ivory' },
 	], .all)
 	p.search_text = 'D'
 	p.update_filtered()
-	assert p.filtered.len == 0
+	assert p.filtered.len == 1
+	assert p.themes[p.filtered[0]].theme == 'Dracula'
 	p.search_text = 'd'
 	p.update_filtered()
 	assert p.filtered.len == 1
+	p.search_text = 'İ'
+	p.update_filtered()
+	assert p.filtered.len == 0
 }
 
 fn test_preview_mouse_selects_visible_theme() {
