@@ -9402,24 +9402,9 @@ pub fn (d Duration) format() string {
 	return out
 }
 
-// parse_uint parses a base-10 unsigned integer. Returns none for empty
-// input or any non-digit character (no sign allowed).
+// parse_uint is the std.fmt.parseUnsigned adapter used by Duration.parseCLI.
 fn parse_uint(s string) ?u64 {
-	if s.len == 0 {
-		return none
-	}
-	mut result := u64(0)
-	for ch in s {
-		if ch < `0` || ch > `9` {
-			return none
-		}
-		digit := u64(ch - `0`)
-		if result > (max_u64 - digit) / 10 {
-			return none
-		}
-		result = result * 10 + digit
-	}
-	return result
+	return zig_fmt.parse_unsigned(s, max_u64, 10) or { return none }
 }
 
 // ------------------------------------------------------------
