@@ -3039,6 +3039,17 @@ fn test_keybinds_format_entries_includes_root_tables_and_chains() {
 	]
 }
 
+fn test_keybinds_format_entry_docs_matches_pinned_source_lookup() {
+	mut keybinds := Keybinds{}
+	keybinds.parse_cli('shift+a=copy_to_clipboard')!
+	keybinds.parse_cli('foo/ctrl+b=new_tab')!
+	assert keybinds.format_entry_docs(true) == [
+		'',
+		'keybind = shift+a=copy_to_clipboard:mixed',
+		'keybind = foo/ctrl+b=new_tab',
+	]
+}
+
 fn test_format_config_default_formats_all_supported_values() {
 	formatted := Config.default_config().format_config(false)
 	assert formatted.contains('font-size = 13.0\n')

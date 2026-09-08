@@ -4498,18 +4498,26 @@ pub fn (k Keybinds) equal(other Keybinds) bool {
 	return true
 }
 
-// format_entries serializes all configured keybindings as complete config
-// lines. This is the V equivalent of Keybinds.formatEntryDocs without the
-// generated documentation layer. Root bindings are emitted first, followed
-// by named key-table bindings, matching Ghostty's formatter.
-pub fn (k Keybinds) format_entries() []string {
+// format_entry_docs serializes all configured keybindings as complete config
+// lines. At the pinned source revision the docs lookup compares the binding
+// node tags (leader/leaf/leaf_chained) to action help names, so no help entry
+// matches; docs mode still emits the leading blank line for each root entry.
+// Named key-table bindings never receive documentation.
+pub fn (k Keybinds) format_entry_docs(docs bool) []string {
 	mut result := []string{}
-	root_entries := k.set.format_entries()
-	if root_entries.len == 0 && k.tables.len == 0 {
+	if k.set.bindings.len == 0 && k.tables.len == 0 {
 		return ['keybind = ']
 	}
-	for value in root_entries {
-		result << 'keybind = ${value}'
+	for entry in k.set.bindings {
+		if docs {
+			result << ''
+		}
+		single := inputpkg.Set{
+			bindings: [entry]
+		}
+		for value in single.format_entries() {
+			result << 'keybind = ${value}'
+		}
 	}
 	for name, table in k.tables {
 		for value in table.format_entries() {
@@ -4521,6 +4529,12 @@ pub fn (k Keybinds) format_entries() []string {
 		}
 	}
 	return result
+}
+
+// format_entries is Keybinds.formatEntry and therefore disables per-binding
+// documentation.
+pub fn (k Keybinds) format_entries() []string {
+	return k.format_entry_docs(false)
 }
 
 // keybinds_set_equal compares two binding sets by their primary bindings.
