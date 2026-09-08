@@ -5509,11 +5509,15 @@ pub fn ReadableIO.parse_cli(input ?string) !ReadableIO {
 	// Validate the complete input before parsing the tag. Parsed values are
 	// retained below so formatting is lossless.
 	parse_zig_string(value)!
-	if value.starts_with('raw:') {
-		return ReadableIO{ kind: .raw, value: value[4..].clone() }
+	colon := value.index_u8(`:`)
+	tag_end := if colon < 0 { value.len } else { colon }
+	tag := value[..tag_end].trim(' \t')
+	payload := if colon < 0 { '' } else { value[colon + 1..].clone() }
+	if tag == 'raw' {
+		return ReadableIO{ kind: .raw, value: payload }
 	}
-	if value.starts_with('path:') {
-		return ReadableIO{ kind: .path, value: value[5..].clone() }
+	if tag == 'path' {
+		return ReadableIO{ kind: .path, value: payload }
 	}
 	return ReadableIO{ kind: .raw, value: value.clone() }
 }
