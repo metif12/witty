@@ -127,13 +127,7 @@ mut:
 	left_click_count u8
 	left_click_time  u64
 	// Title state: explicit OSC title wins; OSC 7 pwd is fallback when unset.
-	tab_title   string
-	seen_title  bool
-	title_stack []TitleStackEntry
-}
-
-struct TitleStackEntry {
-	title      string
+	tab_title  string
 	seen_title bool
 }
 
@@ -238,23 +232,6 @@ fn apply_report_pwd(mut state TermState, url string) {
 	}
 }
 
-fn push_title_state(mut state TermState) {
-	state.title_stack << TitleStackEntry{
-		title: state.tab_title
-		seen_title: state.seen_title
-	}
-}
-
-fn pop_title_state(mut state TermState) {
-	if state.title_stack.len == 0 {
-		return
-	}
-	entry := state.title_stack[state.title_stack.len - 1]
-	state.title_stack.delete_last()
-	state.seen_title = entry.seen_title
-	set_tab_title(mut state, entry.title)
-}
-
 fn handle_stream_side_effects(mut state TermState, event terminal.StreamEvent) {
 	match event.key {
 		.window_title {
@@ -262,12 +239,6 @@ fn handle_stream_side_effects(mut state TermState, event terminal.StreamEvent) {
 		}
 		.report_pwd {
 			apply_report_pwd(mut state, event.payload.str1)
-		}
-		.title_push {
-			push_title_state(mut state)
-		}
-		.title_pop {
-			pop_title_state(mut state)
 		}
 		else {}
 	}
