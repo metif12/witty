@@ -2,6 +2,7 @@ module themepkg
 
 import os
 import global_state
+import internal_os
 
 // Location of possible themes. The order of this enum matters because it
 // defines the priority of theme search (from top to bottom).
@@ -18,9 +19,9 @@ pub enum Location {
 pub fn (l Location) dir() string {
 	match l {
 		.user {
-			xdg := os.getenv('XDG_CONFIG_HOME')
-			config_dir := if xdg.len > 0 { xdg } else { os.join_path(os.home_dir(), '.config') }
-			return os.join_path(config_dir, 'ghostty', 'themes')
+			return internal_os.xdg_config(internal_os.XdgOptions{
+				subdir: os.join_path('ghostty', 'themes')
+			}) or { '' }
 		}
 		.resources {
 			// Use the global_state resources_dir to find the themes
