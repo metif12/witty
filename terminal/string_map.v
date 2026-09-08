@@ -46,7 +46,7 @@ pub fn (mut self StringSearchIterator) next() !StringMatchValue {
 	}
 
 	mut region := self.regex.search(self.smap.str[self.offset..], oniguruma.Options{}) or {
-		if err.msg() == oniguruma.mismatch_error {
+		if oniguruma.is_error(err, .mismatch) {
 			self.offset = self.smap.str.len
 			return StringMatchValue{}
 		}

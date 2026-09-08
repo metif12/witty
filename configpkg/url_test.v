@@ -87,7 +87,7 @@ fn test_default_url_regex_matches_pinned_oniguruma_cases() {
 			region.deinit()
 			assert false, 'unexpected URL match: ${input}'
 		} else {
-			assert err.msg() == oniguruma.mismatch_error
+			assert oniguruma.is_error(err, .mismatch)
 		}
 	}
 }

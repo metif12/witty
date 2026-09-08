@@ -92,7 +92,7 @@ pub fn (mut self LinkSet) render_cell_map(mut result terminal.CellSet, render_st
 		mut offset := 0
 		for offset < str.len {
 			mut region := link.regex.search(str[offset..], oniguruma.Options{}) or {
-				if err.msg() == oniguruma.mismatch_error {
+				if oniguruma.is_error(err, .mismatch) {
 					break
 				}
 				return err

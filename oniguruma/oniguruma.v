@@ -15,7 +15,7 @@ fn C.witty_onig_initialize(encoding_ids &int, count usize) int
 
 fn C.onig_end() int
 
-fn C.witty_onig_new(out &voidptr, pattern &u8, pattern_len usize, options u32, encoding_id int, syntax_id int, error_par &voidptr, error_par_end &voidptr, error_message &u8) int
+fn C.witty_onig_new(out &voidptr, pattern &u8, pattern_len usize, options u32, encoding_id int, syntax_id int, error_par &voidptr, error_par_end &voidptr) int
 
 fn C.onig_free(regex voidptr)
 
@@ -138,16 +138,14 @@ pub fn init(encodings []Encoding) ! {
 	} else {
 		unsafe { C.witty_onig_initialize(&values[0], usize(values.len)) }
 	}
-	if result < 0 {
-		return error(error_string(result))
-	}
+	_ = convert_error(result)!
 }
 
 pub fn deinit() {
 	_ = C.onig_end()
 }
 
-pub fn error_string(code int) string {
+pub fn error_string(code int) !string {
 	mut buffer := []u8{len: max_error_len}
 	length := unsafe { C.witty_onig_error_string(&u8(buffer.data), code) }
 	if length <= 0 {
@@ -165,9 +163,8 @@ pub fn Regex.init(pattern string, options Options, encoding Encoding, syntax Syn
 	mut value := voidptr(unsafe { nil })
 	mut error_par := voidptr(unsafe { nil })
 	mut error_par_end := voidptr(unsafe { nil })
-	mut error_message := []u8{len: max_error_len}
 	result := unsafe {
-		C.witty_onig_new(&value, pattern.str, usize(pattern.len), options.int(), int(encoding), int(syntax), &error_par, &error_par_end, &u8(error_message.data))
+		C.witty_onig_new(&value, pattern.str, usize(pattern.len), options.int(), int(encoding), int(syntax), &error_par, &error_par_end)
 	}
 	if result < 0 {
 		if mut info := error_info {
@@ -177,11 +174,7 @@ pub fn Regex.init(pattern string, options Options, encoding Encoding, syntax Syn
 				info.par_end = &u8(error_par_end)
 			}
 		}
-		message := unsafe { cstring_to_vstring(&char(error_message.data)) }
-		if message.len > 0 {
-			return error(message)
-		}
-		return error(error_string(result))
+		_ = convert_error(result)!
 	}
 	return Regex{
 		value: value
@@ -212,13 +205,7 @@ pub fn (r &Regex) search_advanced(str string, start usize, end usize, mut region
 		return error('invalid Oniguruma search range')
 	}
 	result := C.witty_onig_search(r.value, str.str, usize(str.len), start, end, region.value, options.int())
-	if result == -1 {
-		return error(mismatch_error)
-	}
-	if result < 0 {
-		return error(error_string(result))
-	}
-	return usize(result)
+	return usize(convert_error(result)!)
 }
 
 @[heap]

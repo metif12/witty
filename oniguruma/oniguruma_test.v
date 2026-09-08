@@ -4,6 +4,20 @@ fn test_option_bit_order() {
 	assert Options{ extend: true }.int() == u32(2)
 }
 
+fn test_convert_error() {
+	assert convert_error(42)! == 42
+	assert error_string(-1)!.len > 0
+	if _ := convert_error(-123456) {
+		assert false, 'expected unknown error'
+	} else {
+		assert is_error(err, .unknown)
+	}
+}
+
+fn test_ensure_init() {
+	ensure_init()!
+}
+
 fn test_all_linked_encoding_constants() {
 	init([.ascii, .iso_8859_1, .iso_8859_2, .iso_8859_3, .iso_8859_4, .iso_8859_5, .iso_8859_6,
 		.iso_8859_7, .iso_8859_8, .iso_8859_9, .iso_8859_10, .iso_8859_11, .iso_8859_13, .iso_8859_14,
@@ -30,7 +44,7 @@ fn test_regex_error_info() {
 	if _ := Regex.init('(', Options{}, .utf8, .default_, &info) {
 		assert false, 'expected invalid regex'
 	} else {
-		assert err.msg().len > 0
+		assert error_kind_of(err) != none
 		assert info.encoding == .utf8
 	}
 }
@@ -48,6 +62,6 @@ fn test_regex_search_and_mismatch() {
 	if _ := regex.search('hello', Options{}) {
 		assert false, 'expected mismatch'
 	} else {
-		assert err.msg() == mismatch_error
+		assert is_error(err, .mismatch)
 	}
 }
