@@ -5887,29 +5887,15 @@ fn parse_unicode_codepoint(value string) !u32 {
 	if !value.starts_with('U+') {
 		return perr(ParseError.invalid_value)
 	}
-	return parse_unicode_hex(value[2..])
+	return u32(zig_fmt.parse_int_unsigned_max(value[2..], 0x1fffff, 16) or {
+		return perr(ParseError.invalid_value)
+	})
 }
 
 fn parse_unicode_hex(value string) !u32 {
-	if value.len == 0 {
+	return u32(zig_fmt.parse_int_unsigned_max(value, 0x1fffff, 16) or {
 		return perr(ParseError.invalid_value)
-	}
-	mut cp := u32(0)
-	for ch in value {
-		digit := match ch {
-			`0`...`9` { u32(ch - `0`) }
-			`a`...`f` { u32(ch - `a`) + 10 }
-			`A`...`F` { u32(ch - `A`) + 10 }
-			else {
-				return perr(ParseError.invalid_value)
-			}
-		}
-		if cp > (u32(0x1fffff) - digit) / 16 {
-			return perr(ParseError.invalid_value)
-		}
-		cp = cp * 16 + digit
-	}
-	return cp
+	})
 }
 
 // ============================================================

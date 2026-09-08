@@ -2086,7 +2086,10 @@ fn test_clipboard_codepoint_map_parse() {
 	mut mappings := RepeatableClipboardCodepointMap{}
 	mappings.parse_cli('U+2500=U+002D')!
 	mappings.parse_cli('U+0001 - U+0005, U+03A3=SUM')!
-	assert mappings.map.len == 3
+	mappings.parse_cli('U+0010=U+0__02D')!
+	mappings.parse_cli('U+0011=U++02D')!
+	mappings.parse_cli('U+0012=U+-0')!
+	assert mappings.map.len == 6
 	assert mappings.map[0].range_start == 0x2500
 	assert mappings.map[0].range_end == 0x2500
 	match mappings.map[0].replacement {
@@ -2105,6 +2108,24 @@ fn test_clipboard_codepoint_map_parse() {
 		}
 		terminal.CodepointRepl {
 			assert false, 'expected string replacement'
+		}
+	}
+	for i in 3 .. 5 {
+		match mappings.map[i].replacement {
+			terminal.CodepointRepl {
+				assert mappings.map[i].replacement.codepoint == u32(`-`)
+			}
+			terminal.StringRepl {
+				assert false, 'expected codepoint replacement'
+			}
+		}
+	}
+	match mappings.map[5].replacement {
+		terminal.CodepointRepl {
+			assert mappings.map[5].replacement.codepoint == 0
+		}
+		terminal.StringRepl {
+			assert false, 'expected codepoint replacement'
 		}
 	}
 }
