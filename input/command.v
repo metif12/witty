@@ -84,7 +84,13 @@ pub fn (c Command) clone() Command {
 
 // equal returns true if two commands are equal.
 pub fn (a Command) equal(b Command) bool {
-	return a.action.equal(b.action) && a.title == b.title && a.description == b.description
+	if a.action.hash() != b.action.hash() {
+		return false
+	}
+	if a.title != b.title {
+		return false
+	}
+	return a.description == b.description
 }
 
 // less_than implements comparison for sorting commands alphabetically by title.

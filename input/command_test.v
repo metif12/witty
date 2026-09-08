@@ -16,6 +16,27 @@ fn test_command_defaults() {
 	assert command_defaults.len > 0
 }
 
+fn test_command_equal_compares_source_fields() {
+	base := Command{
+		action: Action.new(.reset)
+		title: 'Reset Terminal'
+		description: 'Reset the terminal to a clean state.'
+	}
+	assert base.equal(base.clone())
+	assert !base.equal(Command{
+		...base
+		action: Action.new(.quit)
+	})
+	assert !base.equal(Command{
+		...base
+		title: 'Reset'
+	})
+	assert !base.equal(Command{
+		...base
+		description: ''
+	})
+}
+
 fn test_command_defaults_preserve_signed_move_tab_offsets() {
 	left := command_defaults.filter(it.title == 'Move Tab Left')
 	right := command_defaults.filter(it.title == 'Move Tab Right')
