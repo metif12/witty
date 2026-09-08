@@ -250,23 +250,7 @@ fn parse_color_channel(s string) ?u8 {
 
 // parse_hex parses a hex string to an integer.
 fn parse_hex(s string) ?u64 {
-	if s.len == 0 {
-		return none
-	}
-	mut result := u64(0)
-	for c in s {
-		result *= 16
-		if c >= `0` && c <= `9` {
-			result += u64(c - `0`)
-		} else if c >= `a` && c <= `f` {
-			result += u64(c - `a` + 10)
-		} else if c >= `A` && c <= `F` {
-			result += u64(c - `A` + 10)
-		} else {
-			return none
-		}
-	}
-	return result
+	return zig_fmt.parse_unsigned(s, 65535, 16) or { return none }
 }
 
 // parse_rgbi parses "R.R/G.G/B.B" format (floating point intensity).

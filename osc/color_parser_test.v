@@ -68,6 +68,14 @@ fn test_rgb_parse_rgb_colon() {
 	assert rgb.b == 0xff
 }
 
+fn test_rgb_parse_rgb_colon_matches_zig_unsigned_grammar() {
+	assert parse_rgb('rgb:f__f/0/0')? == RGB{
+		r: 0
+	}
+	assert parse_rgb('rgb:_ff/0/0') == none
+	assert parse_rgb('rgb:ff_/0/0') == none
+}
+
 fn test_rgb_parse_rgbi() {
 	rgb := parse_rgb('rgbi:1.0/1.0/1.0') or {
 		assert false, 'expected rgb'
