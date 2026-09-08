@@ -5033,6 +5033,27 @@ pub fn (mut c Config) deinit() {
 	c = Config{}
 }
 
+// default is Config.default. V's garbage collector replaces the explicit
+// arena allocator used by the source.
+pub fn Config.default() Config {
+	return Config.default_config()
+}
+
+// shallow_clone copies the Config value while retaining references to its
+// existing collection storage. It is intended only for short-lived edits,
+// matching Config.shallowClone.
+pub fn (c Config) shallow_clone() Config {
+	return c
+}
+
+// clone_empty retains conditional metadata but resets all public values to
+// their defaults.
+pub fn (c Config) clone_empty() Config {
+	mut result := Config.default_config()
+	result.conditional_state = c.conditional_state
+	return result
+}
+
 // clone creates a deep copy of the config. Slices and nested collections are
 // cloned so that mutating the copy does not affect the original.
 pub fn (c Config) clone() Config {

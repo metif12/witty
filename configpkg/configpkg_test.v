@@ -1455,7 +1455,7 @@ fn test_config_file_bare_value_is_preserved_during_conditional_replay() {
 
 // Config.zig: "clone default"
 fn test_clone_default() {
-	source := Config.default_config()
+	source := Config.default()
 	dest := source.clone()
 	// A cloned default should equal the source on representative fields.
 	assert dest.font_size == source.font_size
@@ -1465,6 +1465,24 @@ fn test_clone_default() {
 	assert dest.abnormal_command_exit_runtime == source.abnormal_command_exit_runtime
 	mut changes := source.change_iterator(&dest)
 	assert changes.next() == none
+}
+
+fn test_clone_empty_and_shallow_clone() {
+	mut source := Config.default()
+	source.conditional_state.theme = .dark
+	source.font_size = 42
+	source.font_family = ['original']
+
+	empty := source.clone_empty()
+	assert empty.conditional_state.theme == .dark
+	assert empty.font_size == default_font_size
+	assert empty.font_family.len == 0
+
+	mut shallow := source.shallow_clone()
+	shallow.font_size = 24
+	assert source.font_size == 42
+	shallow.font_family[0] = 'shared'
+	assert source.font_family[0] == 'shared'
 }
 
 // Config.zig: "changed"
