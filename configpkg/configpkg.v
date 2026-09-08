@@ -5433,8 +5433,8 @@ pub fn (mut r RepeatableCommand) parse_cli(input string) ! {
 		if colon < 0 {
 			return error('invalid value')
 		}
-		key := entry[..colon].trim_space()
-		mut value := entry[colon + 1..].trim_space()
+		key := entry[..colon].trim(' \t')
+		mut value := entry[colon + 1..].trim(' \t')
 		if value.len >= 2 && value[0] == `"` && value[value.len - 1] == `"` {
 			value = cli_args.decode_quoted_value(value) or { return error('invalid value') }
 		}
@@ -6683,7 +6683,7 @@ pub fn (mut c Config) load_string(content string) {
 		body = body[3..]
 	}
 	for raw_line in body.split_into_lines() {
-		line := raw_line.trim_space()
+		line := raw_line.trim(' \t\r')
 		// Skip blank lines and comments.
 		if line.len == 0 || line[0] == `#` {
 			continue
@@ -6692,8 +6692,8 @@ pub fn (mut c Config) load_string(content string) {
 			c.add_replay_diagnostic('invalid config line (missing "="): ${line}')
 			continue
 		}
-		key := line[..eq].trim_space()
-		value := line[eq + 1..].trim_space()
+		key := line[..eq].trim(' \t')
+		value := line[eq + 1..].trim(' \t')
 		c.record_kv(key, value)
 		c.apply_kv(key, value)
 	}
@@ -8210,8 +8210,8 @@ fn (mut c Config) apply_env(value string) {
 		c.invalid_config_value('env', value)
 		return
 	}
-	key := value[..eq].trim_space()
-	val := value[eq + 1..].trim_space()
+	key := value[..eq].trim(' \t')
+	val := value[eq + 1..].trim(' \t')
 	for i, entry in c.env.entries {
 		if entry.key != key {
 			continue
@@ -8296,7 +8296,7 @@ fn parse_font_shaping_break(value string) ?FontShapingBreak {
 	}
 	mut result := FontShapingBreak{}
 	for raw in value.split(',') {
-		part := raw.trim_space()
+		part := raw.trim(' \t')
 		negative := part.starts_with('no-')
 		name := if negative { part[3..] } else { part }
 		if name != 'cursor' {
@@ -8313,7 +8313,7 @@ fn parse_split_preserve_zoom(value string) ?SplitPreserveZoom {
 	}
 	mut result := SplitPreserveZoom{}
 	for raw in value.split(',') {
-		part := raw.trim_space()
+		part := raw.trim(' \t')
 		negative := part.starts_with('no-')
 		name := if negative { part[3..] } else { part }
 		if name != 'navigation' {
@@ -8336,7 +8336,7 @@ fn parse_font_synthetic_style(value string) ?font.FontSyntheticStyle {
 	mut italic := true
 	mut bold_italic := true
 	for raw in value.split(',') {
-		part := raw.trim_space()
+		part := raw.trim(' \t')
 		negative := part.starts_with('no-')
 		name := if negative { part[3..] } else { part }
 		match name {
@@ -8377,7 +8377,7 @@ fn parse_freetype_load_flags(value string) ?font.FreetypeLoadFlags {
 	mut autohint := true
 	mut light := true
 	for raw in value.split(',') {
-		part := raw.trim_space()
+		part := raw.trim(' \t')
 		negative := part.starts_with('no-')
 		name := if negative { part[3..] } else { part }
 		match name {
@@ -8427,7 +8427,7 @@ fn parse_shell_integration_features(value string) ?ShellIntegrationFeatures {
 	}
 	mut result := ShellIntegrationFeatures{}
 	for raw in value.split(',') {
-		part := raw.trim_space()
+		part := raw.trim(' \t')
 		negative := part.starts_with('no-')
 		name := if negative { part[3..] } else { part }
 		enabled := !negative
@@ -8470,7 +8470,7 @@ fn parse_bell_features(value string) ?BellFeatures {
 	}
 	mut result := BellFeatures{}
 	for raw in value.split(',') {
-		part := raw.trim_space()
+		part := raw.trim(' \t')
 		negative := part.starts_with('no-')
 		name := if negative { part[3..] } else { part }
 		enabled := !negative
@@ -8507,7 +8507,7 @@ fn parse_app_notifications(value string) ?AppNotifications {
 	}
 	mut result := AppNotifications{}
 	for raw in value.split(',') {
-		part := raw.trim_space()
+		part := raw.trim(' \t')
 		negative := part.starts_with('no-')
 		name := if negative { part[3..] } else { part }
 		enabled := !negative
@@ -8535,7 +8535,7 @@ fn parse_notify_on_command_finish_action(value string) ?NotifyOnCommandFinishAct
 	}
 	mut result := NotifyOnCommandFinishAction{}
 	for raw in value.split(',') {
-		part := raw.trim_space()
+		part := raw.trim(' \t')
 		negative := part.starts_with('no-')
 		name := if negative { part[3..] } else { part }
 		enabled := !negative
@@ -8563,7 +8563,7 @@ fn parse_scroll_to_bottom(value string) ?ScrollToBottom {
 	}
 	mut result := ScrollToBottom{}
 	for raw in value.split(',') {
-		part := raw.trim_space()
+		part := raw.trim(' \t')
 		negative := part.starts_with('no-')
 		name := if negative { part[3..] } else { part }
 		enabled := !negative
@@ -8664,8 +8664,8 @@ fn (mut c Config) apply_palette(value string) {
 		}
 		return
 	}
-	idx_str := value[..inner_eq].trim_space()
-	col_str := value[inner_eq + 1..].trim_space()
+	idx_str := value[..inner_eq].trim(' \t')
+	col_str := value[inner_eq + 1..].trim(' \t')
 	idx := parse_palette_index(idx_str) or {
 		kind := parse_error_of(err) or { ParseError.invalid_value }
 		message := if kind == ParseError.overflow {

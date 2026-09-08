@@ -1342,6 +1342,24 @@ fn test_handle_bom_in_config_files() {
 	}
 }
 
+fn test_config_file_whitespace_matches_source_byte_set() {
+	mut cfg := Config.default_config()
+	cfg.load_string('\vfont-size = 20\nenv = NAME=\vvalue\v\nfont-shaping-break = \vcursor')
+
+	// LineIterator trims space, tab, and a trailing carriage return. Vertical
+	// tab remains part of the key/value and must not be silently accepted.
+	assert cfg.font_size == default_font_size
+	assert cfg.env.entries == [StringMapEntry{
+		key: 'NAME'
+		value: '\vvalue\v'
+	}]
+	assert cfg.font_shaping_break == FontShapingBreak{}
+	assert cfg.diagnostics.len == 2
+
+	assert parse_font_shaping_break(' \tcursor\t ')? == FontShapingBreak{ cursor: true }
+	assert parse_font_shaping_break('\vcursor') == none
+}
+
 // Config.zig: "clone default"
 fn test_clone_default() {
 	source := Config.default_config()
