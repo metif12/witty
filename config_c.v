@@ -89,7 +89,9 @@ pub fn ghostty_config_load_recursive_files(mut config configpkg.Config) {
 }
 
 pub fn ghostty_config_finalize(mut config configpkg.Config) {
-	config.finalize()
+	config.finalize() or {
+		eprintln('error finalizing config err=${err}')
+	}
 }
 
 pub fn ghostty_config_get(mut config configpkg.Config, ptr voidptr, key string) bool {

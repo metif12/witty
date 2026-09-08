@@ -285,7 +285,7 @@ fn test_core_app_fallback_update_config_applies_conditional_state() {
 	os.write_file(dark_theme, 'font-size = 19\n')!
 	mut updated := configpkg.Config.default_config()
 	updated.load_string('theme = light:${light_theme},dark:${dark_theme}\n')
-	updated.finalize()
+	updated.finalize()!
 
 	mut core_app := CoreApp{
 		config_conditional_state: configpkg.ConditionalState{ theme: .dark }

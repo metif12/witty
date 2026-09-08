@@ -239,7 +239,7 @@ pub fn validate_config(args []string) !ValidateResult {
 		abs_path := os.real_path(config_path)
 		value.load_file(abs_path)!
 		value.load_recursive_files()!
-		value.finalize()
+		value.finalize()!
 		value
 	} else {
 		configpkg.Config.load_args([])!

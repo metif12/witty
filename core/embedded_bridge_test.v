@@ -166,7 +166,7 @@ fn test_embedded_bridge_uses_canonical_core_surface() {
 	os.write_file(dark_theme, 'font-size = 19\n')!
 	mut updated := configpkg.Config.default_config()
 	updated.load_string('theme = light:${light_theme},dark:${dark_theme}\n')
-	updated.finalize()
+	updated.finalize()!
 	apprt.ghostty_surface_update_config(mut surface, &updated)
 	assert backend.surface.config.original_font_size == 19
 	assert capture.config_sizes.last() == f32(19)

@@ -307,7 +307,11 @@ pub fn (mut c CoreApp) update_config(app &App, config voidptr) ! {
 	// conditional state applied. Surface updates above intentionally receive
 	// the original so each surface can resolve its own state.
 	mut applied := cfg.clone()
-	if conditional := cfg.change_conditional_state(c.config_conditional_state) {
+	conditional_result := cfg.change_conditional_state(c.config_conditional_state) or {
+		eprintln('failed to apply conditional state to config err=${err}')
+		configpkg.ConfigChangeResult{}
+	}
+	if conditional := conditional_result.value {
 		applied = conditional
 	}
 	defer {

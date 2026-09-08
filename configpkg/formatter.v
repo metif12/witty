@@ -64,8 +64,8 @@ pub fn (c &Config) changed(new &Config, key string) bool {
 	}
 	$for field in Config.fields {
 		$if !field.is_map {
-			if field.name !in ['diagnostics', 'conditional_state', 'loading_theme', 'link', 'replay_steps',
-				'replaying', 'xdg_terminal_exec'] && field.name.replace('_', '-') == key {
+			if field.name !in ['diagnostics', 'conditional_state', 'link', 'replay_steps',
+				'xdg_terminal_exec'] && field.name.replace('_', '-') == key {
 				return !comparison.deep_equal(c.$(field.name), new.$(field.name))
 			}
 		}

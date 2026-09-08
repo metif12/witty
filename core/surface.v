@@ -3380,7 +3380,11 @@ pub fn (mut self Surface) update_config(config &Config) ! {
 	// conditional state. Keep the resolved value alive through the synchronous
 	// runtime notification below; consumers must not retain its pointer.
 	mut resolved := config.clone()
-	if conditional := config.change_conditional_state(self.config_conditional_state) {
+	conditional_result := config.change_conditional_state(self.config_conditional_state) or {
+		eprintln('failed to apply conditional state to config err=${err}')
+		configpkg.ConfigChangeResult{}
+	}
+	if conditional := conditional_result.value {
 		resolved = conditional
 	}
 	defer {

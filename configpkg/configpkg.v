@@ -4250,14 +4250,8 @@ pub mut:
 	// Set of conditional keys (currently only "theme") that affect the config
 	// when the conditional state changes.
 	conditional_set map[string]bool
-	// True while options from a theme file are being applied. Theme options
-	// have lower priority than explicit config options and cannot set `theme`.
-	loading_theme bool
 	// Ordered source inputs used to rebuild the config around a theme layer.
 	replay_steps []ReplayStep
-	// True while replay_steps are being evaluated; prevents recording a replay
-	// of the replay itself.
-	replaying bool
 	// Storage backing converted enum strings borrowed through the C API.
 	capi_strings map[string]string
 }
@@ -5050,22 +5044,30 @@ pub fn (mut k Keybinds) init() {
 	}
 }
 
+// ConfigChangeResult preserves Ghostty's error-union-of-optional return in V,
+// which cannot directly express !?Config. value == none means the conditional
+// change is irrelevant; replay and finalization errors are still returned.
+pub struct ConfigChangeResult {
+pub:
+	value ?Config
+}
+
 // change_conditional_state returns a new Config with the given conditional
-// state applied, or `none` if the change is irrelevant (i.e. no conditional
-// key such as `theme` is set). This mirrors Ghostty's `changeConditionalState`,
-// which replays the recorded config steps to rebuild the configuration under
-// the new conditional state. We re-run finalize with the new conditional state
-// so conditional (light/dark) theme loading is re-applied.
-pub fn (c Config) change_conditional_state(state ConditionalState) ?Config {
+// state applied, or a result containing none if the change is irrelevant.
+// This doesn't re-read referenced configuration files: it replays the retained
+// steps and finalizes the rebuilt configuration under the new state.
+pub fn (c Config) change_conditional_state(state ConditionalState) !ConfigChangeResult {
 	if (!c.conditional_set['theme'] || c.conditional_state.theme == state.theme)
 		&& (!c.conditional_set['os'] || c.conditional_state.os == state.os) {
-		return none
+		return ConfigChangeResult{}
 	}
 	mut rebuilt := c.clone_empty()
 	rebuilt.conditional_state = state
 	replay_steps_into(mut rebuilt, c.replay_steps)
-	rebuilt.finalize()
-	return rebuilt
+	rebuilt.finalize()!
+	return ConfigChangeResult{
+		value: rebuilt
+	}
 }
 
 pub fn (mut c Config) deinit() {
@@ -7200,7 +7202,7 @@ pub fn Config.load_argv(argv []string) !Config {
 			c.load_default_files()!
 			c.load_xdg_terminal_exec_args(command_args)
 			c.load_recursive_files()!
-			c.finalize()
+			c.finalize()!
 			return c
 		}
 	}
@@ -7221,7 +7223,7 @@ pub fn Config.load_args(args []string) !Config {
 		c = cli_only
 	}
 	c.load_recursive_files()!
-	c.finalize()
+	c.finalize()!
 	return c
 }
 
@@ -7343,11 +7345,9 @@ fn (mut c Config) load_iter_internal[T](mut iter T, overwrite_font_families bool
 // V's garbage collector removes the allocator parameter from the source API.
 pub fn (mut c Config) parse_manually_hook[T](arg string, mut iter T) bool {
 	if arg != '-e' {
-		if !c.replaying {
-			c.replay_steps << ReplayStep{
-				kind: .arg
-				value: arg
-			}
+		c.replay_steps << ReplayStep{
+			kind: .arg
+			value: arg
 		}
 		return true
 	}
@@ -7356,11 +7356,9 @@ pub fn (mut c Config) parse_manually_hook[T](arg string, mut iter T) bool {
 	for {
 		command_args << (iter.next() or { break })
 	}
-	if !c.replaying {
-		c.replay_steps << ReplayStep{
-			kind: .command
-			args: command_args.clone()
-		}
+	c.replay_steps << ReplayStep{
+		kind: .command
+		args: command_args.clone()
 	}
 	c.apply_command_tail(command_args, config_iterator_location(iter))
 	return false
@@ -7399,11 +7397,9 @@ fn config_iterator_location[T](iter T) diagnosticspkg.Location {
 fn (mut c Config) load_xdg_terminal_exec_args(args []string) {
 	c.xdg_terminal_exec = true
 	c.initial_command = Command(DirectCmd{ direct: args.clone() })
-	if !c.replaying {
-		c.replay_steps << ReplayStep{
-			kind: .xdg_command
-			args: args.clone()
-		}
+	c.replay_steps << ReplayStep{
+		kind: .xdg_command
+		args: args.clone()
 	}
 }
 
@@ -7459,13 +7455,11 @@ pub fn (mut c Config) load_recursive_files() ! {
 		return
 	}
 	mut replay_suffix := []ReplayStep{}
-	if !c.replaying {
-		for i, step in c.replay_steps {
-			if step.kind == .command {
-				replay_suffix = c.replay_steps[i..].clone()
-				c.replay_steps.trim(i)
-				break
-			}
+	for i, step in c.replay_steps {
+		if step.kind == .command {
+			replay_suffix = c.replay_steps[i..].clone()
+			c.replay_steps.trim(i)
+			break
 		}
 	}
 	mut loaded := map[string]bool{}
@@ -7517,11 +7511,9 @@ pub fn (mut c Config) load_recursive_files() ! {
 }
 
 fn (mut c Config) expand_paths(base string) ! {
-	if !c.replaying {
-		c.replay_steps << ReplayStep{
-			kind: .expand
-			value: base
-		}
+	c.replay_steps << ReplayStep{
+		kind: .expand
+		value: base
 	}
 	c.custom_shader.expand(base, mut c.diagnostics)!
 	c.config_file.expand(base, mut c.diagnostics)!
@@ -7560,11 +7552,9 @@ fn (mut c Config) add_replay_diagnostic(message string) {
 
 fn (mut c Config) add_replay_diagnostic_entry(diagnostic Diagnostic) {
 	c.diagnostics << diagnostic
-	if !c.loading_theme && !c.replaying {
-		c.replay_steps << ReplayStep{
-			kind: .diagnostic
-			diagnostic: diagnostic.clone()
-		}
+	c.replay_steps << ReplayStep{
+		kind: .diagnostic
+		diagnostic: diagnostic.clone()
 	}
 }
 
@@ -7618,7 +7608,7 @@ fn clone_replay_steps(steps []ReplayStep) []ReplayStep {
 	for step in steps {
 		result << ReplayStep{
 			...step
-			args:       step.args.clone()
+			args: step.args.clone()
 			diagnostic: step.diagnostic.clone()
 			conditions: step.conditions.map(it.clone())
 		}
@@ -7742,10 +7732,6 @@ fn (mut c Config) apply_kv(key string, value string) {
 			c.apply_palette(value)
 		}
 		'theme' {
-			// A theme file cannot itself set `theme`.
-			if c.loading_theme {
-				return
-			}
 			c.theme = theme_pair_parse_cli(value) or {
 				c.invalid_config_value(key, value)
 				return
@@ -8040,10 +8026,6 @@ fn (mut c Config) apply_kv(key string, value string) {
 			}
 		}
 		'config-file' {
-			// Theme files cannot recursively load general configuration files.
-			if c.loading_theme {
-				return
-			}
 			c.config_file.parse_cli(value) or {
 				c.invalid_config_value(key, value)
 			}
@@ -9162,8 +9144,8 @@ fn is_config_key(key string) bool {
 	normalized_key := key.replace('-', '_')
 	$for field in Config.fields {
 		if field.name == normalized_key
-			&& field.name !in ['diagnostics', 'conditional_state', 'conditional_set', 'loading_theme',
-				'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_strings'] {
+			&& field.name !in ['diagnostics', 'conditional_state', 'conditional_set', 'replay_steps',
+				'xdg_terminal_exec', 'capi_strings'] {
 			return true
 		}
 	}
@@ -9196,8 +9178,8 @@ fn (mut c Config) reset_empty_config_value(key string) bool {
 	$for field in Config.fields {
 		$if !field.is_map {
 			if field.name == normalized_key
-				&& field.name !in ['diagnostics', 'conditional_state', 'loading_theme', 'replay_steps',
-					'replaying', 'xdg_terminal_exec'] {
+				&& field.name !in ['diagnostics', 'conditional_state', 'replay_steps',
+					'xdg_terminal_exec'] {
 				c.$(field.name) = defaults.$(field.name)
 				return true
 			}
@@ -9692,11 +9674,20 @@ fn parse_hex_byte(s string) ?u8 {
 }
 
 // finalize applies defaults and clamps values after loading.
-pub fn (mut c Config) finalize() {
+pub fn (mut c Config) finalize() ! {
 	// Load a referenced theme file, if any. This is done first so that the
 	// theme's options act as a lower-priority base layer beneath explicitly
 	// set config options.
-	c.load_theme()
+	if theme := c.theme {
+		different := theme.light != theme.dark
+		c.load_theme(theme)!
+		if different {
+			if c.window_theme == .auto {
+				c.window_theme = .system
+			}
+			c.conditional_set['theme'] = true
+		}
+	}
 
 	// If a font-family is set and the style-specific families are not, default
 	// them to the primary family so styled variants are searched for too.
@@ -9746,7 +9737,7 @@ pub fn (mut c Config) finalize() {
 					}
 				}
 			} $else {
-				passwd := internal_os.get_passwd() or { internal_os.PasswdEntry{} }
+				passwd := internal_os.get_passwd()!
 				if c.command == none {
 					if shell := passwd.shell {
 						c.command = Command(ShellCmd{ shell: shell })
@@ -9847,9 +9838,7 @@ fn probable_cli_environment() bool {
 //   * Theme options never override explicitly-set config options.
 //   * A light/dark pair changes `window-theme` from `auto` to `system`.
 //
-fn (mut c Config) load_theme() {
-	theme := c.theme or { return }
-
+fn (mut c Config) load_theme(theme ThemePair) ! {
 	state := c.conditional_state
 	steps := clone_replay_steps(c.replay_steps)
 	path := match state.theme {
@@ -9857,11 +9846,22 @@ fn (mut c Config) load_theme() {
 		.dark { theme.dark }
 	}
 
-	mut rebuilt := Config.default_config()
-	rebuilt.conditional_state = state
-	rebuilt.loading_theme = true
-	rebuilt.apply_theme_file(path)
-	rebuilt.loading_theme = false
+	// Resolve the theme before cloning. A recoverable open failure appends its
+	// diagnostics to the existing configuration and otherwise leaves it intact.
+	mut theme_diagnostics := diagnosticspkg.DiagnosticList{}
+	opened := themepkg.open(path, mut theme_diagnostics) or {
+		c.diagnostics << theme_diagnostics.items()
+		return
+	}
+	assert theme_diagnostics.empty()
+	mut file := opened.file
+	defer {
+		file.close()
+	}
+
+	mut rebuilt := c.clone_empty()
+	content_bytes := io.read_all(reader: file)!
+	rebuilt.load_string_with_path(content_bytes.bytestr(), opened.path)
 
 	// Theme arguments are conditional on the state that selected this file.
 	// Expansion and explicit diagnostics remain unconditional, just as in the
@@ -9892,15 +9892,6 @@ fn (mut c Config) load_theme() {
 	// preserving the newly conditional theme steps already present above.
 	replay_steps_into(mut rebuilt, steps)
 
-	// A conditional theme makes window-theme=auto nonsensical because it
-	// would override the selected light/dark theme.
-	if theme.light != theme.dark {
-		if rebuilt.window_theme == .auto {
-			rebuilt.window_theme = .system
-		}
-		rebuilt.conditional_set['theme'] = true
-	}
-
 	c = rebuilt
 }
 
@@ -9929,7 +9920,11 @@ fn replay_steps_into(mut destination Config, steps []ReplayStep) {
 				mut iter := cli_args.SliceIterator.new([step.value])
 				destination.load_iter(mut iter)
 			}
-			.expand { destination.expand_paths(step.value) or {} }
+			.expand {
+				destination.expand_paths(step.value) or {
+					eprintln('error expanding paths err=${err}')
+				}
+			}
 			.diagnostic {
 				destination.diagnostics << step.diagnostic.clone()
 			}
@@ -9950,31 +9945,6 @@ fn replay_steps_into(mut destination Config, steps []ReplayStep) {
 			}
 		}
 	}
-}
-
-// apply_theme_file loads the given theme file and applies its options with the
-// theme-loading flag set so they don't override explicit config values.
-fn (mut c Config) apply_theme_file(path string) {
-	mut theme_diagnostics := diagnosticspkg.DiagnosticList{}
-	opened := themepkg.open(path, mut theme_diagnostics) or {
-		c.diagnostics << theme_diagnostics.items()
-		return
-	}
-	c.diagnostics << theme_diagnostics.items()
-	mut file := opened.file
-	content_bytes := io.read_all(reader: file) or {
-		file.close()
-		c.add_diagnostic('not reading theme from "${path}": ${err}')
-		return
-	}
-	file.close()
-	was_loading := c.loading_theme
-	c.loading_theme = true
-	c.load_string(content_bytes.bytestr())
-	c.expand_paths(os.dir(opened.path)) or {
-		c.add_diagnostic(err.msg())
-	}
-	c.loading_theme = was_loading
 }
 
 // clamp_f64 clamps v to the inclusive range [lo, hi].
@@ -10215,12 +10185,10 @@ pub fn preferred_xdg_config_path() string {
 fn app_support_config_path(name string) string {
 	$if macos {
 		return internal_os.app_support_dir(name) or {
-			os.join_path(os.home_dir(), 'Library', 'Application Support', 'com.mitchellh.ghostty',
-				name)
+			os.join_path(os.home_dir(), 'Library', 'Application Support', 'com.mitchellh.ghostty', name)
 		}
 	} $else {
-		return os.join_path(os.home_dir(), 'Library', 'Application Support', 'com.mitchellh.ghostty',
-			name)
+		return os.join_path(os.home_dir(), 'Library', 'Application Support', 'com.mitchellh.ghostty', name)
 	}
 }
 

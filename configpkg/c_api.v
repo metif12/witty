@@ -92,7 +92,7 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 		$if field.name != 'class' {
 			if field.name.len > 0 && field.name[0] != `_` && field.name == normalized_key
 				&& field.name !in ['diagnostics', 'conditional_state', 'conditional_set',
-					'loading_theme', 'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_strings'] {
+					'replay_steps', 'xdg_terminal_exec', 'capi_strings'] {
 				$if field.unaliased_typ is string {
 					c_write_cstring(ptr, &char(c.$(field.name).str))
 					return true

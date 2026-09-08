@@ -413,7 +413,11 @@ pub fn (mut self App) update_config(mut rt_app apprt.RuntimeApp, config &configp
 	// its own conditional state.
 	//
 	mut applied := config.clone()
-	if conditional := config.change_conditional_state(self.config_conditional_state) {
+	conditional_result := config.change_conditional_state(self.config_conditional_state) or {
+		eprintln('failed to apply conditional state to config err=${err}')
+		configpkg.ConfigChangeResult{}
+	}
+	if conditional := conditional_result.value {
 		applied = conditional
 	}
 	rt_app.config = applied.clone()

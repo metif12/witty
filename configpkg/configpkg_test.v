@@ -189,7 +189,7 @@ fn test_empty_command_diagnostic_is_regenerated_without_replay_location() ! {
 	cfg.load_cli_args(['--theme=${theme}', '-e'])!
 	assert cfg.diagnostics.len == 1
 	assert cfg.diagnostics[0].format() == 'cli:2: missing command after -e'
-	cfg.finalize()
+	cfg.finalize()!
 	assert cfg.diagnostics.len == 1
 	assert cfg.diagnostics[0].format() == 'missing command after -e'
 }
@@ -210,7 +210,7 @@ fn test_theme_replay_regenerates_diagnostic_without_iterator_location() ! {
 	}
 	mut cfg := Config.default_config()
 	cfg.load_cli_args(['--theme=${path}', '--font-size=nope'])!
-	cfg.finalize()
+	cfg.finalize()!
 	assert cfg.diagnostics.len == 1
 	assert cfg.diagnostics[0].format() == 'font-size: invalid value "nope"'
 }
@@ -1662,7 +1662,7 @@ fn test_handle_bom_in_config_files() {
 	{
 		mut cfg := Config.default_config()
 		cfg.load_string('﻿abnormal-command-exit-runtime = 2500\n')
-		cfg.finalize()
+		cfg.finalize()!
 		assert cfg.diagnostics.len == 0
 		assert cfg.abnormal_command_exit_runtime == 2500
 	}
@@ -1670,7 +1670,7 @@ fn test_handle_bom_in_config_files() {
 	{
 		mut cfg := Config.default_config()
 		cfg.load_string('abnormal-command-exit-runtime = 2500\n')
-		cfg.finalize()
+		cfg.finalize()!
 		assert cfg.diagnostics.len == 0
 		assert cfg.abnormal_command_exit_runtime == 2500
 	}
@@ -1750,9 +1750,10 @@ fn test_config_file_bare_value_is_preserved_during_conditional_replay() {
 
 	mut cfg := Config.default_config()
 	cfg.load_string('theme = light:${light},dark:${dark}\nfont-thicken\n')
-	cfg.finalize()
+	cfg.finalize()!
 	assert cfg.font_thicken
-	dark_cfg := cfg.change_conditional_state(ConditionalState{ theme: .dark }) or {
+	dark_result := cfg.change_conditional_state(ConditionalState{ theme: .dark })!
+	dark_cfg := dark_result.value or {
 		panic('conditional theme was not marked relevant')
 	}
 	assert dark_cfg.font_thicken
@@ -1905,25 +1906,23 @@ fn test_conditional_replay_requires_every_condition_to_match() {
 fn test_change_conditional_state_ignores_irrelevant() {
 	mut cfg := Config.default_config()
 	cfg.load_string('theme = foo\n')
-	cfg.finalize()
+	cfg.finalize()!
 
 	// A single (non light/dark) theme is not conditional.
-	mut got_none := false
-	if _ := cfg.change_conditional_state(ConditionalState{ theme: .dark }) {
-		got_none = false
-	} else {
-		got_none = true
+	result := cfg.change_conditional_state(ConditionalState{ theme: .dark })!
+	if _ := result.value {
+		assert false, 'expected none for irrelevant change'
 	}
-	assert got_none, 'expected none for irrelevant change'
 }
 
 // Config.zig: "changeConditionalState applies relevant changes"
 fn test_change_conditional_state_applies_relevant() {
 	mut cfg := Config.default_config()
 	cfg.load_string('theme = light:foo,dark:bar\n')
-	cfg.finalize()
+	cfg.finalize()!
 
-	cfg2 := cfg.change_conditional_state(ConditionalState{ theme: .dark }) or {
+	result := cfg.change_conditional_state(ConditionalState{ theme: .dark })!
+	cfg2 := result.value or {
 		assert false, 'expected a config for relevant change'
 		return
 	}
@@ -1933,9 +1932,10 @@ fn test_change_conditional_state_applies_relevant() {
 fn test_change_conditional_state_ignores_unchanged_relevant_value() {
 	mut cfg := Config.default_config()
 	cfg.load_string('theme = light:foo,dark:bar\n')
-	cfg.finalize()
+	cfg.finalize()!
 
-	if _ := cfg.change_conditional_state(cfg.conditional_state) {
+	result := cfg.change_conditional_state(cfg.conditional_state)!
+	if _ := result.value {
 		assert false, 'expected none when conditional state is unchanged'
 	}
 }
@@ -1952,7 +1952,7 @@ fn test_theme_loading() {
 
 	mut cfg := Config.default_config()
 	cfg.load_string('theme = ${path}\n')
-	cfg.finalize()
+	cfg.finalize()!
 
 	assert cfg.background == ColorRGB{0x12, 0x3A, 0xBC}
 	// Not a conditional theme.
@@ -1979,18 +1979,32 @@ fn test_theme_loading_resolves_user_theme_name() {
 	os.write_file(os.join_path(theme_dir, 'named-theme'), 'background = #123456\ncustom-shader = shader.glsl\n')!
 	mut cfg := Config.default_config()
 	cfg.load_string('theme = named-theme\n')
-	cfg.finalize()
+	cfg.finalize()!
 	assert cfg.background == ColorRGB{0x12, 0x34, 0x56}
 	assert cfg.custom_shader.items == [
-		Path{ path: os.join_path(theme_dir, 'shader.glsl') },
+		Path{ path: 'shader.glsl' },
 	]
 	assert cfg.diagnostics.len == 0
+}
+
+fn test_theme_diagnostic_retains_file_location() ! {
+	path := os.join_path(os.temp_dir(), 'witty-theme-diagnostic-${os.getpid()}')
+	os.write_file(path, 'font-size = nope\n')!
+	defer {
+		os.rm(path) or {}
+	}
+
+	mut cfg := Config.default_config()
+	cfg.load_string('theme = ${path}\n')
+	cfg.finalize()!
+	assert cfg.diagnostics.len == 1
+	assert cfg.diagnostics[0].format() == '${path}:1:font-size: invalid value "nope"'
 }
 
 fn test_theme_rejects_relative_path_with_separator() {
 	mut cfg := Config.default_config()
 	cfg.load_string('theme = nested/theme\n')
-	cfg.finalize()
+	cfg.finalize()!
 	assert cfg.diagnostics.len == 1
 	assert cfg.diagnostics[0].message.contains('cannot include path separators')
 }
@@ -2008,7 +2022,7 @@ fn test_theme_priority_lower_than_config() {
 	mut cfg := Config.default_config()
 	// Config sets background explicitly; theme must not override it.
 	cfg.load_string('background = #ABCDEF\ntheme = ${path}\n')
-	cfg.finalize()
+	cfg.finalize()!
 
 	assert cfg.background == ColorRGB{0xAB, 0xCD, 0xEF}
 }
@@ -2041,7 +2055,7 @@ keybind = ctrl+b=new_tab
 
 	mut cfg := Config.default_config()
 	cfg.load_file(config_path)!
-	cfg.finalize()
+	cfg.finalize()!
 
 	assert cfg.font_size == 17
 	assert cfg.cursor_color?.color == ColorRGB{0xAA, 0xBB, 0xCC}
@@ -2052,7 +2066,7 @@ keybind = ctrl+b=new_tab
 		Path{ path: os.join_path(dir, 'theme.glsl') },
 		Path{ path: os.join_path(dir, 'user.glsl') },
 	]
-	assert cfg.config_file.items.len == 0
+	assert cfg.config_file.items == [Path{ path: os.join_path(dir, 'ignored.conf') }]
 	assert cfg.keybind.set.get(input.Trigger.parse('ctrl+a')!) or {
 		panic('theme keybind was not retained')
 	}.value.leaf_action.tag == .new_window
@@ -2074,7 +2088,7 @@ fn test_conditional_theme_replay_replaces_theme_repeatables() {
 
 	mut cfg := Config.default_config()
 	cfg.load_string('theme = light:${light},dark:${dark}\nfont-family = User Font\ncustom-shader = user.glsl\n')
-	cfg.finalize()
+	cfg.finalize()!
 	assert cfg.font_family == ['Light Font', 'User Font']
 	mut saw_light_theme_step := false
 	for step in cfg.replay_steps {
@@ -2089,11 +2103,12 @@ fn test_conditional_theme_replay_replaces_theme_repeatables() {
 	}
 	assert saw_light_theme_step
 	assert cfg.custom_shader.items == [
-		Path{ path: os.join_path(dir, 'light.glsl') },
+		Path{ path: 'light.glsl' },
 		Path{ path: 'user.glsl' },
 	]
 
-	dark_cfg := cfg.change_conditional_state(ConditionalState{ theme: .dark }) or {
+	dark_result := cfg.change_conditional_state(ConditionalState{ theme: .dark })!
+	dark_cfg := dark_result.value or {
 		panic('conditional theme was not marked relevant')
 	}
 	assert dark_cfg.font_family == ['Dark Font', 'User Font']
@@ -2111,7 +2126,7 @@ fn test_conditional_theme_replay_replaces_theme_repeatables() {
 	}
 	assert saw_dark_theme_step
 	assert dark_cfg.custom_shader.items == [
-		Path{ path: os.join_path(dir, 'dark.glsl') },
+		Path{ path: 'dark.glsl' },
 		Path{ path: 'user.glsl' },
 	]
 }
@@ -2134,7 +2149,7 @@ fn test_theme_loading_correct_light_dark() {
 	{
 		mut cfg := Config.default_config()
 		cfg.load_string(theme_line)
-		cfg.finalize()
+		cfg.finalize()!
 		assert cfg.background == ColorRGB{0xFF, 0xFF, 0xFF}
 	}
 	// Dark (via conditional state)
@@ -2144,15 +2159,16 @@ fn test_theme_loading_correct_light_dark() {
 			theme: .dark
 		}
 		cfg.load_string(theme_line)
-		cfg.finalize()
+		cfg.finalize()!
 		assert cfg.background == ColorRGB{0xEE, 0xEE, 0xEE}
 	}
 	// Light to Dark (via changeConditionalState)
 	{
 		mut cfg := Config.default_config()
 		cfg.load_string(theme_line)
-		cfg.finalize()
-		newc := cfg.change_conditional_state(ConditionalState{ theme: .dark }) or {
+		cfg.finalize()!
+		result := cfg.change_conditional_state(ConditionalState{ theme: .dark })!
+		newc := result.value or {
 			assert false
 			return
 		}
@@ -2164,7 +2180,7 @@ fn test_theme_loading_correct_light_dark() {
 fn test_theme_light_dark_changes_window_theme() {
 	mut cfg := Config.default_config()
 	cfg.load_string('theme = light:foo,dark:bar\nwindow-theme = auto\n')
-	cfg.finalize()
+	cfg.finalize()!
 	assert cfg.window_theme == .system
 }
 
@@ -2172,7 +2188,7 @@ fn test_theme_light_dark_changes_window_theme() {
 fn test_theme_light_dark_sets_conditional() {
 	mut cfg := Config.default_config()
 	cfg.load_string('theme = light:foo,dark:bar\nwindow-theme = auto\n')
-	cfg.finalize()
+	cfg.finalize()!
 	assert cfg.window_theme == .system
 	assert 'theme' in cfg.conditional_set
 }
@@ -2224,7 +2240,7 @@ fn test_compat_removed_bool_invalid_value_is_not_silently_accepted() {
 fn test_compat_removed_cursor_invert_fg_bg() {
 	mut cfg := Config.default_config()
 	cfg.load_string('cursor-invert-fg-bg = true\n')
-	cfg.finalize()
+	cfg.finalize()!
 	assert cfg.cursor_color?.kind == .cell_foreground
 	assert cfg.cursor_text?.kind == .cell_background
 }
@@ -2233,7 +2249,7 @@ fn test_compat_removed_cursor_invert_fg_bg() {
 fn test_compat_removed_selection_invert_fg_bg() {
 	mut cfg := Config.default_config()
 	cfg.load_string('selection-invert-fg-bg = true\n')
-	cfg.finalize()
+	cfg.finalize()!
 	assert cfg.selection_foreground?.kind == .cell_background
 	assert cfg.selection_background?.kind == .cell_foreground
 }
@@ -2262,7 +2278,7 @@ fn test_terminal_color_config_fields() {
 fn test_compat_removed_bold_is_bright() {
 	mut cfg := Config.default_config()
 	cfg.load_string('bold-is-bright = true\n')
-	cfg.finalize()
+	cfg.finalize()!
 	bc := cfg.bold_color or {
 		assert false, 'expected bold_color to be set'
 		return
@@ -2274,7 +2290,7 @@ fn test_compat_removed_bold_is_bright() {
 fn test_compat_window_new_window() {
 	mut cfg := Config.default_config()
 	cfg.load_string('macos-dock-drop-behavior = window\n')
-	cfg.finalize()
+	cfg.finalize()!
 	assert cfg.macos_dock_drop_behavior == .new_window
 }
 
@@ -2588,7 +2604,7 @@ fn test_default_values_match_ghostty() {
 	// Empty term falls back to xterm-ghostty in finalize.
 	mut cfg2 := Config.default_config()
 	cfg2.term = ''
-	cfg2.finalize()
+	cfg2.finalize()!
 	assert cfg2.term == 'xterm-ghostty'
 }
 
@@ -2598,7 +2614,7 @@ fn test_finalize_translates_inherit_working_directory_and_preserves_unclamped_op
 	cfg.background_opacity = 2
 	cfg.cursor_opacity = -1
 	cfg.faint_opacity = 2
-	cfg.finalize()
+	cfg.finalize()!
 	assert cfg.working_directory == none
 	assert cfg.background_opacity == 2
 	assert cfg.cursor_opacity == -1
@@ -2668,7 +2684,7 @@ fn test_default_config_initializes_url_link() {
 	assert clone.link.links.len == 1
 
 	cfg.link_url = false
-	cfg.finalize()
+	cfg.finalize()!
 	assert cfg.link.links.len == 1
 	assert cfg.link.links[0].regex == 'issue-[0-9]+'
 }
@@ -2746,8 +2762,12 @@ fn test_clipboard_codepoint_map_clone_add_and_format_entry() {
 	assert cloned.equal(base)
 	assert cloned.list.len == 1
 	match cloned.list[0].replacement {
-		terminal.StringRepl { assert cloned.list[0].replacement.str == 'SUM' }
-		terminal.CodepointRepl { assert false }
+		terminal.StringRepl {
+			assert cloned.list[0].replacement.str == 'SUM'
+		}
+		terminal.CodepointRepl {
+			assert false
+		}
 	}
 
 	mut mappings := RepeatableClipboardCodepointMap{}
@@ -2808,7 +2828,7 @@ fn test_config_key_remap_is_parsed_cloned_and_finalized() {
 	mut cfg := Config.default_config()
 	cfg.load_string('key-remap = ctrl=super\nkey-remap = right_ctrl=alt\n')
 	assert cfg.diagnostics.len == 0
-	cfg.finalize()
+	cfg.finalize()!
 
 	left_ctrl := input.Mods{
 		ctrl: true
@@ -3059,7 +3079,7 @@ fn test_config_mouse_scroll_multiplier_struct_and_finalize() {
 	assert cfg.diagnostics.len == 0
 	assert cfg.mouse_scroll_multiplier.precision == 0.001
 	assert cfg.mouse_scroll_multiplier.discrete == 20_000
-	cfg.finalize()
+	cfg.finalize()!
 	assert cfg.mouse_scroll_multiplier.precision == 0.01
 	assert cfg.mouse_scroll_multiplier.discrete == 10_000
 	assert cfg.format_config(true).contains('mouse-scroll-multiplier = precision:0.01,discrete:10000\n')
