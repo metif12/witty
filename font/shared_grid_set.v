@@ -674,6 +674,19 @@ pub:
 	absolute i32
 }
 
+// format_entry is Metrics.Modifier.formatEntry. Percent modifiers store a
+// multiplier, so the configuration value converts it back to a delta percent.
+pub fn (m MetricsModifier) format_entry() string {
+	if m.is_percent {
+		value := (m.percent - 1.0) * 100.0
+		if value == f64(i64(value)) {
+			return '${i64(value)}%'
+		}
+		return '${value}%'
+	}
+	return m.absolute.str()
+}
+
 // hash returns a hash value for this modifier.
 pub fn (m MetricsModifier) hash() u64 {
 	mut hasher := SourceHash{}

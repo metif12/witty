@@ -4559,6 +4559,12 @@ pub fn (k Keybinds) format_entries() []string {
 	return k.format_entry_docs(false)
 }
 
+// format_entry is Keybinds.formatEntry. The V formatter owns the field name,
+// so composite values return only the serialized values.
+pub fn (k Keybinds) format_entry() []string {
+	return k.format_entries().map(it.all_after('keybind = '))
+}
+
 // keybinds_set_equal compares two binding sets by their primary bindings.
 // Faithful to Config.zig `Keybinds.equalSet`: equal iff the same triggers map
 // to the same values (recursing into leader sets). Reverse mappings are
@@ -7024,6 +7030,11 @@ pub enum AsyncBackend {
 	auto
 	epoll
 	io_uring
+}
+
+// format_entry preserves the source enum tag's underscore in `io_uring`.
+pub fn (a AsyncBackend) format_entry() string {
+	return a.str()
 }
 
 // AutoUpdate controls Sparkle's automatic update behavior on macOS.

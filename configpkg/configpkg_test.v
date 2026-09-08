@@ -5,6 +5,17 @@ import input
 import terminal
 import cli_args
 
+enum FormatterTestEnum {
+	one
+	two
+	three
+}
+
+struct FormatterTestFlags {
+	one bool = true
+	two bool
+}
+
 fn test_load_file_applies_theme_colors() {
 	path := os.join_path(os.temp_dir(), 'witty-theme-test.conf')
 	os.write_file(path, '
@@ -3594,6 +3605,26 @@ fn test_format_config_default_formats_all_supported_values() {
 	assert formatted.contains('clipboard-codepoint-map = \n')
 	assert formatted.contains('keybind = ')
 	assert formatted.contains('palette = 255=#eeeeee\n')
+	assert config_entry_groups(Config.default_config()).map(it.key) == config_keys
+}
+
+fn test_entry_formatter_formats_primitive_optional_and_packed_values() {
+	formatter := entry_formatter('a')
+	assert formatter.format_entry(true) == 'a = true\n'
+	assert formatter.format_entry(false) == 'a = false\n'
+	assert formatter.format_entry(u8(123)) == 'a = 123\n'
+	assert formatter.format_entry(f64(0.7)) == 'a = 0.7\n'
+	assert formatter.format_entry(FormatterTestEnum.two) == 'a = two\n'
+	assert formatter.format_entry(?bool(none)) == 'a = \n'
+	assert formatter.format_entry(?bool(false)) == 'a = false\n'
+	assert formatter.format_entry('hello') == 'a = hello\n'
+	assert formatter.format_entry(FormatterTestFlags{}) == 'a = one,no-two\n'
+}
+
+fn test_format_entry_uses_composite_format_entry_methods() {
+	assert format_entry('color', ColorRGB{ r: 10, g: 11, b: 12 }) == 'color = #0a0b0c\n'
+	assert format_entry('path', RepeatablePath{}) == 'path = \n'
+	assert format_entry('size', QuickTerminalSize{}) == ''
 }
 
 fn test_format_config_changes_only_round_trips_supported_values() {

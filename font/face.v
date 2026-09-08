@@ -542,6 +542,15 @@ pub:
 	light bool = true
 }
 
+// format_entry preserves Config.FreetypeLoadFlags's packed-field order.
+pub fn (f FreetypeLoadFlags) format_entry() string {
+	return [if f.hinting { 'hinting' } else { 'no-hinting' },
+		if f.force_autohint { 'force-autohint' } else { 'no-force-autohint' },
+		if f.monochrome { 'monochrome' } else { 'no-monochrome' },
+		if f.autohint { 'autohint' } else { 'no-autohint' },
+		if f.light { 'light' } else { 'no-light' }].join(',')
+}
+
 // Default load flags.
 pub const freetype_load_flags_default = FreetypeLoadFlags{}
 

@@ -680,6 +680,12 @@ pub:
 	bold_italic bool = true
 }
 
+// format_entry preserves Config.FontSyntheticStyle's packed-field order.
+pub fn (s FontSyntheticStyle) format_entry() string {
+	return [if s.bold { 'bold' } else { 'no-bold' }, if s.italic { 'italic' } else { 'no-italic' },
+		if s.bold_italic { 'bold-italic' } else { 'no-bold-italic' }].join(',')
+}
+
 // ============================================================
 // Collection
 // ============================================================
