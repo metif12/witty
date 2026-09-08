@@ -5871,11 +5871,6 @@ pub fn (r RepeatableLink) format_entry() []string {
 	return []string{}
 }
 
-// default_url_pattern is the default matcher from config/url.zig expressed in
-// the regular-expression syntax supported by V. It recognizes the same URL
-// schemes and relative/absolute path forms.
-pub const default_url_pattern = r'(https?://|mailto:|ftp://|file:|ssh:|git://|tel:|magnet:|ipfs://|ipns://|gemini://|gopher://|news:)[^\t\r\n "\x27<>]+|(\.\./|\./|/)[^\t\r\n "\x27<>]+|[A-Za-z0-9_][A-Za-z0-9_.-]*/[^\t\r\n "\x27<>]*\.[^\t\r\n "\x27<>]+'
-
 // SelectionWordChars stores parsed word-boundary codepoints. U+0000 is
 // always the first boundary, matching Config.zig.
 pub struct SelectionWordChars {

@@ -1,5 +1,7 @@
 module input
 
+import oniguruma
+
 // Tests for KeyEvent.
 
 fn test_link_clone_equal_and_regex() {
@@ -15,9 +17,11 @@ fn test_link_clone_equal_and_regex() {
 	assert cloned.mods.equal(original.mods)
 
 	mut compiled := original.oni_regex()!
-	start, end := compiled.find('open https://ghostty.org now')
-	assert start == 5
-	assert end == 24
+	defer { compiled.deinit() }
+	mut region := compiled.search('open https://ghostty.org now', oniguruma.Options{})!
+	defer { region.deinit() }
+	assert region.starts()[0] == 5
+	assert region.ends()[0] == 24
 
 	different := Link{
 		regex: original.regex

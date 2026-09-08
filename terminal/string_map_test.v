@@ -1,5 +1,7 @@
 module terminal
 
+import oniguruma
+
 // Tests for StringMap.
 // Translated from Ghostty's StringMap.zig tests.
 
@@ -19,11 +21,17 @@ fn test_string_map_basic() {
 		assert false, err.msg()
 		return
 	}
-	mut it := smap.search_iterator('[A-B]{2}') or {
+	mut regex := oniguruma.Regex.init('[A-B]{2}', oniguruma.Options{}, .utf8, .default_, none) or {
 		assert false, err.msg()
 		return
 	}
-	mut matched := it.next() or {
+	defer { regex.deinit() }
+	mut it := smap.search_iterator(regex)
+	next := it.next() or {
+		assert false, err.msg()
+		return
+	}
+	mut matched := next.get() or {
 		assert false, 'expected match'
 		return
 	}
@@ -31,7 +39,7 @@ fn test_string_map_basic() {
 	sel := matched.selection()
 	assert sel.start() == Pin{ x: 1, y: 0 }
 	assert sel.end() == Pin{ x: 2, y: 0 }
-	assert it.next() == none
+	assert (it.next()!).get() == none
 }
 
 fn test_string_map_search_iterator_url_detection() {
@@ -50,18 +58,25 @@ fn test_string_map_search_iterator_url_detection() {
 		assert false, err.msg()
 		return
 	}
-	mut it := smap.search_iterator(r'https?://[^ ]+') or {
+	mut regex := oniguruma.Regex.init(r'https?://[^ ]+', oniguruma.Options{}, .utf8, .default_, none) or {
 		assert false, err.msg()
 		return
 	}
-	matched := it.next() or {
+	defer { regex.deinit() }
+	mut it := smap.search_iterator(regex)
+	next := it.next() or {
+		assert false, err.msg()
+		return
+	}
+	mut matched := next.get() or {
 		assert false, 'expected URL match'
 		return
 	}
+	defer { matched.deinit() }
 	sel := matched.selection()
 	assert sel.start() == Pin{ x: 6, y: 0 }
 	assert sel.end() == Pin{ x: 29, y: 0 }
-	assert it.next() == none
+	assert (it.next()!).get() == none
 }
 
 fn test_string_map_search_iterator_url_with_click() {
@@ -81,14 +96,18 @@ fn test_string_map_search_iterator_url_with_click() {
 		assert false, err.msg()
 		return
 	}
-	mut it := smap.search_iterator(r'https?://[^ ]+') or {
+	mut regex := oniguruma.Regex.init(r'https?://[^ ]+', oniguruma.Options{}, .utf8, .default_, none) or {
 		assert false, err.msg()
 		return
 	}
+	defer { regex.deinit() }
+	mut it := smap.search_iterator(regex)
 	mut found := false
 	for {
-		matched := it.next() or { break }
+		next := it.next() or { break }
+		mut matched := next.get() or { break }
 		sel := matched.selection()
+		matched.deinit()
 		if sel.contains(&s, click) {
 			found = true
 			assert sel.start() == Pin{ x: 6, y: 0 }

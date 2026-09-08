@@ -1467,6 +1467,7 @@ import renderer as rendererpkg
 import termio as termiopkg
 import unicode
 import crash
+import oniguruma
 
 // Minimum window size in cells.
 const min_window_width_cells = u32(10)
@@ -2331,7 +2332,7 @@ pub type DerivedFontConfig = font.GridSetDerivedConfig
 
 pub struct DerivedConfigLink {
 pub:
-	pattern   string
+	regex     oniguruma.Regex
 	action    LinkAction
 	highlight LinkHighlight
 	mods      input.Mods
@@ -2376,8 +2377,14 @@ fn grid_set_font_style(style configpkg.FontStyle) font.GridSetFontStyleConfig {
 pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 	mut links := []DerivedConfigLink{cap: config.link.links.len}
 	for link in config.link.links {
+		regex := link.oni_regex() or {
+			for mut compiled in links {
+				compiled.regex.deinit()
+			}
+			return err
+		}
 		links << DerivedConfigLink{
-			pattern: link.regex
+			regex: regex
 			action: unsafe { LinkAction(link.action) }
 			highlight: unsafe { LinkHighlight(link.highlight) }
 			mods: link.mods
@@ -2459,6 +2466,9 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 
 pub fn (mut self DerivedConfig) deinit() {
 	// Cleanup compiled regexes and cloned keybinds.
+	for mut link in self.links {
+		link.regex.deinit()
+	}
 	self.links = []
 	self.selection_word_chars = []
 	self.clipboard_codepoint_map.map.deinit()
@@ -6973,10 +6983,12 @@ fn (self &Surface) link_at_pin(pin Pin, mouse_mods ?input.Mods) ?Link {
 				continue
 			}
 		}
-		mut it := strmap.search_iterator(link_cfg.pattern) or { continue }
+		mut it := strmap.search_iterator(link_cfg.regex)
 		for {
-			matched := it.next() or { break }
+			next := it.next() or { break }
+			mut matched := next.get() or { break }
 			sel := matched.selection()
+			matched.deinit()
 			if sel.contains(screen, pin) {
 				return Link{
 					action: link_cfg.action

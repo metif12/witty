@@ -10,6 +10,7 @@ import termio as termiopkg
 import time
 import osc
 import crash
+import oniguruma
 
 fn test_desktop_notification_digest_matches_source_wyhash_stream() {
 	// Ghostty updates one Wyhash state with title and then body, which is
@@ -106,10 +107,11 @@ fn test_derived_config_uses_selection_and_clipboard_maps() {
 	mut cfg := configpkg.Config.default_config()
 	cfg.selection_word_chars.parse_cli('._')!
 	cfg.clipboard_codepoint_map.parse_cli('U+2500=U+002D')!
-	derived := DerivedConfig.from_config(&cfg)!
+	mut derived := DerivedConfig.from_config(&cfg)!
+	defer { derived.deinit() }
 	assert derived.selection_word_chars == [u32(0), u32(`.`), u32(`_`)]
-	assert derived.clipboard_codepoint_map.len == 1
-	assert derived.clipboard_codepoint_map[0].range_start == 0x2500
+	assert derived.clipboard_codepoint_map.map.list.len == 1
+	assert derived.clipboard_codepoint_map.map.list[0].range_start == 0x2500
 }
 
 fn test_surface_command_uses_initial_command_only_for_first_surface() {
@@ -851,10 +853,11 @@ fn test_modifier_key_refreshes_link_hover() ! {
 	surf.rt_surface = &runtime_surface
 	surf.config.link_previews = .true_
 	surf.config.links = [DerivedConfigLink{
-		pattern: r'http://a'
+		regex: oniguruma.Regex.init(r'http://a', oniguruma.Options{}, .utf8, .default_, none)!
 		action: .open
 		highlight: .hover
 	}]
+	defer { surf.config.links[0].regex.deinit() }
 	mut stream := surf.renderer_state.terminal_.vt_stream()
 	stream.next_slice('http://a')!
 
@@ -1405,10 +1408,11 @@ fn test_copy_url_to_clipboard_uses_configured_trailing_space_policy() ! {
 	surf.size = make_test_size()
 	surf.config.clipboard_trim_trailing_spaces = false
 	surf.config.links = [DerivedConfigLink{
-		pattern: r'http://a   '
+		regex: oniguruma.Regex.init(r'http://a   ', oniguruma.Options{}, .utf8, .default_, none)!
 		action: .open
 		highlight: .hover
 	}]
+	defer { surf.config.links[0].regex.deinit() }
 	surf.mouse.over_link = true
 	mut runtime := RuntimeSurface{
 		cursor_pos: CursorPos{ x: 6, y: 6 }
@@ -1428,10 +1432,11 @@ fn test_mouse_link_preview_forwards_untrimmed_url() ! {
 	surf.size = make_test_size()
 	surf.config.link_previews = .true_
 	surf.config.links = [DerivedConfigLink{
-		pattern: r'http://a   '
+		regex: oniguruma.Regex.init(r'http://a   ', oniguruma.Options{}, .utf8, .default_, none)!
 		action: .open
 		highlight: .hover
 	}]
+	defer { surf.config.links[0].regex.deinit() }
 	mut runtime := RuntimeApp{}
 	surf.rt_app = &runtime
 	mut stream := surf.renderer_state.terminal_.vt_stream()

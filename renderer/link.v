@@ -1,21 +1,21 @@
 module renderer
 
 import input
-import regex
+import oniguruma
 import terminal
 
 // The link configuration needed for renderers.
 pub struct Link {
 pub mut:
 	// The regular expression pattern to match the link against.
-	regex regex.RE
+	regex oniguruma.Regex
 	// The situations in which the link should be highlighted.
 	highlight input.LinkHighlight
 	mods      input.Mods
 }
 
 pub fn (mut self Link) deinit() {
-	self.regex = regex.RE{}
+	self.regex.deinit()
 }
 
 // A set of links. This provides a higher level API for renderers
@@ -30,8 +30,14 @@ pub mut:
 pub fn LinkSet.from_config(config []input.Link) !LinkSet {
 	mut links := []Link{}
 	for link in config {
+		regex := link.oni_regex() or {
+			for mut compiled in links {
+				compiled.deinit()
+			}
+			return err
+		}
 		links << Link{
-			regex: link.oni_regex()!
+			regex: regex
 			highlight: link.highlight
 			mods: link.mods
 		}
@@ -49,10 +55,6 @@ pub fn (mut self LinkSet) deinit() {
 }
 
 // Fills matches with the matches from regex link matches.
-//
-// Full link matching requires oniguruma regex engine integration and
-// terminal.RenderState.string() for building a string representation
-// of the viewport with byte-to-cell mapping.
 //
 // The algorithm:
 // 1. Convert render state to string + byte map
@@ -89,19 +91,24 @@ pub fn (mut self LinkSet) render_cell_map(mut result terminal.CellSet, render_st
 
 		mut offset := 0
 		for offset < str.len {
-			start, end := link.regex.find_from(str, offset)
-			if start < 0 || end < start {
-				break
+			mut region := link.regex.search(str[offset..], oniguruma.Options{}) or {
+				if err.msg() == oniguruma.mismatch_error {
+					break
+				}
+				return err
 			}
-			// Empty matches must advance or a permissive expression can loop
-			// forever. They do not cover a terminal cell, so don't record them.
-			offset = if end > offset { end } else { offset + 1 }
-			if end <= start || start >= map_points.len {
-				continue
-			}
+			starts := region.starts()
+			ends := region.ends()
+			start := offset + starts[0]
+			end := offset + ends[0]
+			offset = end
+			mut record := true
 			match link.highlight {
 				.hover, .hover_mods {
-					mouse := mouse_viewport or { continue }
+					mouse := mouse_viewport or {
+						record = false
+						terminal.Coordinate{}
+					}
 					mut contains_mouse := false
 					for point in map_points[start..end] {
 						if point.x == mouse.x && point.y == mouse.y {
@@ -110,14 +117,17 @@ pub fn (mut self LinkSet) render_cell_map(mut result terminal.CellSet, render_st
 						}
 					}
 					if !contains_mouse {
-						continue
+						record = false
 					}
 				}
 				.always, .always_mods {}
 			}
-			for point in map_points[start..end] {
-				result[u64(point.y) << 32 | u64(point.x)] = true
+			if record {
+				for point in map_points[start..end] {
+					result[u64(point.y) << 32 | u64(point.x)] = true
+				}
 			}
+			region.deinit()
 		}
 	}
 }

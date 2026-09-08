@@ -4,6 +4,7 @@ import os
 import internal_os
 import cli_args
 import crash
+import oniguruma
 
 // Global process state. This is initialized in main() for exe artifacts
 // and by ghostty_init() for lib artifacts. This should ONLY be used by
@@ -182,6 +183,9 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 	// Locale affects libc, gettext, and every child shell, so initialize it
 	// before loading translated resources or starting an application runtime.
 	internal_os.ensure_locale()!
+
+	// Initialize Oniguruma for regular-expression link matching.
+	oniguruma.init([.utf8])!
 
 	// Find our resources directory once for the app so every launch
 	// hereafter can use this cached value.

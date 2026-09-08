@@ -1,6 +1,6 @@
 module input
 
-import regex
+import oniguruma
 
 #include "keymap_shims.h"
 
@@ -269,10 +269,8 @@ pub:
 }
 
 // oni_regex compiles the configured expression for renderer link matching.
-// Ghostty returns an Oniguruma regex; Witty's renderer backend uses V's
-// equivalent owned regex value.
-pub fn (self &Link) oni_regex() !regex.RE {
-	return regex.regex_opt(self.regex)
+pub fn (self &Link) oni_regex() !oniguruma.Regex {
+	return oniguruma.Regex.init(self.regex, oniguruma.Options{}, .utf8, .default_, none)
 }
 
 // clone returns an independently owned copy of the link configuration.
