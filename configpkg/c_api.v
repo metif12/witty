@@ -102,7 +102,7 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 			if field.name.len > 0 && field.name[0] != `_` && field.name == normalized_key
 				&& field.name !in ['diagnostics', 'conditional_state', 'theme_pair', 'conditional_set',
 					'loading_theme', 'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_strings',
-					'capi_colors', 'capi_commands'] {
+					'capi_commands'] {
 				$if field.unaliased_typ is string {
 					c_write_cstring(ptr, &char(c.$(field.name).str))
 					return true
@@ -153,7 +153,7 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 					if c.$(field.name) == none {
 						return false
 					}
-					c_write_value[CConfigColorList](ptr, c.color_list_cval(c.$(field.name)?))
+					c_write_value[CConfigColorList](ptr, c.$(field.name)?.cval())
 					return true
 				} $else $if field.unaliased_typ is ?Duration {
 					if c.$(field.name) == none {
@@ -183,10 +183,10 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 					c_write_value[CConfigColor](ptr, c.$(field.name).cval())
 					return true
 				} $else $if field.unaliased_typ is ColorList {
-					c_write_value[CConfigColorList](ptr, c.color_list_cval(c.$(field.name)))
+					c_write_value[CConfigColorList](ptr, c.$(field.name).cval())
 					return true
 				} $else $if field.unaliased_typ is Palette {
-					c_write_value[CConfigPalette](ptr, palette_cval(c.$(field.name)))
+					c_write_value[CConfigPalette](ptr, c.$(field.name).cval())
 					return true
 				} $else $if field.unaliased_typ is RepeatableCommand {
 					c_write_value[CConfigCommandList](ptr, c.command_list_cval())
@@ -279,29 +279,6 @@ fn enum_c_name(value string) string {
 		return value
 	}
 	return value.trim_string_right('_').replace('_', '-')
-}
-
-@[markused]
-fn (mut c Config) color_list_cval(value ColorList) CConfigColorList {
-	c.capi_colors = []ColorRGB{cap: value.colors.len}
-	c.capi_colors << value.colors
-	return CConfigColorList{
-		colors: if c.capi_colors.len == 0 {
-			unsafe { nil }
-		} else {
-			unsafe { &CConfigColor(c.capi_colors.data) }
-		}
-		len: usize(c.capi_colors.len)
-	}
-}
-
-@[markused]
-fn palette_cval(value Palette) CConfigPalette {
-	mut result := CConfigPalette{}
-	for i, color in value.value {
-		result.colors[i] = color.cval()
-	}
-	return result
 }
 
 @[markused]

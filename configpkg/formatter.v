@@ -62,7 +62,7 @@ pub fn (c &Config) changed(new &Config, key string) bool {
 	$for field in Config.fields {
 		$if !field.is_map {
 			if field.name !in ['diagnostics', 'conditional_state', 'theme_pair', 'loading_theme',
-				'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_colors', 'capi_commands'] && field.name.replace('_', '-') == key {
+				'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_commands'] && field.name.replace('_', '-') == key {
 				return !comparison.deep_equal(c.$(field.name), new.$(field.name))
 			}
 		}
@@ -678,7 +678,7 @@ fn optional_color_string(value ?ColorRGB) string {
 }
 
 fn optional_color_list_string(value ?ColorList) string {
-	return if actual := value { actual.colors.map(format_color(it)).join(',') } else { '' }
+	return if actual := value { actual.format_entry() } else { '' }
 }
 
 fn optional_option_as_alt_string(value ?input.OptionAsAlt) string {
@@ -821,9 +821,5 @@ fn osc_color_report_format_string(value OSCColorReportFormat) string {
 }
 
 fn palette_strings(value Palette) []string {
-	mut result := []string{cap: 256}
-	for i, color in value.value {
-		result << '${i}=${format_color(color)}'
-	}
-	return result
+	return value.format_entry()
 }

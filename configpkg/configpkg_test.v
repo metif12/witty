@@ -1058,14 +1058,41 @@ fn test_macos_configuration_parse_clone_and_format() {
 fn test_macos_color_list_resets_and_limits_entries() {
 	mut colors := ColorList{}
 	colors.parse_cli('black,white')!
+	assert colors.colors_c == [CConfigColor{ r: 0, g: 0, b: 0 }, CConfigColor{
+		r: 0xff
+		g: 0xff
+		b: 0xff
+	}]
 	colors.parse_cli('#123456')!
 	assert colors.colors == [ColorRGB{ r: 0x12, g: 0x34, b: 0x56 }]
+	assert colors.format_entry() == '#123456'
+	cloned := colors.clone()
+	assert colors.equal(cloned)
+	cvalue := colors.cval()
+	assert cvalue.len == 1
+	assert unsafe { cvalue.colors[0] } == CConfigColor{ r: 0x12, g: 0x34, b: 0x56 }
 
+	mut rejected_limit := false
 	colors.parse_cli(['black'].repeat(65).join(',')) or {
 		assert err.msg() == 'invalid value'
-		return
+		rejected_limit = true
 	}
-	assert false, 'expected the 64-color limit'
+	assert rejected_limit
+	mut rejected_whitespace_token := false
+	colors.parse_cli('${['black'].repeat(64).join(',')}, ') or {
+		rejected_whitespace_token = true
+	}
+	assert rejected_whitespace_token
+}
+
+fn test_palette_value_apis() {
+	mut palette := Palette.default_palette()
+	palette.parse_cli('1=#123456')!
+	cloned := palette.clone()
+	assert palette.equal(cloned)
+	assert palette.format_entry()[1] == '1=#123456'
+	cvalue := palette.cval()
+	assert cvalue.colors[1] == CConfigColor{ r: 0x12, g: 0x34, b: 0x56 }
 }
 
 fn test_repeatable_command_rejects_missing_and_invalid_fields() {

@@ -4262,10 +4262,9 @@ pub mut:
 	replaying bool
 	// Storage backing values borrowed through the C configuration API. Ghostty's
 	// arena keeps these values alive for the lifetime of Config; these caches give
-	// the V translation the same ownership guarantee for converted enum strings,
-	// color lists, and command records.
+	// the V translation the same ownership guarantee for converted enum strings
+	// and command records.
 	capi_strings  map[string]string
-	capi_colors   []ColorRGB
 	capi_commands []CConfigCommand
 }
 
@@ -4333,7 +4332,8 @@ pub enum MacShortcuts {
 
 pub struct ColorList {
 pub mut:
-	colors []ColorRGB
+	colors   []ColorRGB
+	colors_c []CConfigColor
 }
 
 pub fn (mut c ColorList) parse_cli(input ?string) ! {
@@ -4341,16 +4341,20 @@ pub fn (mut c ColorList) parse_cli(input ?string) ! {
 	if value.len == 0 {
 		return error('value required')
 	}
-	c.colors = []
+	c = ColorList{}
+	mut count := 0
 	for raw in value.split(',') {
-		trimmed := raw.trim(' \t')
-		if trimmed.len == 0 {
+		if raw.len == 0 {
 			continue
 		}
-		if c.colors.len == 64 {
+		count++
+		if count > 64 {
 			return error('invalid value')
 		}
-		c.colors << color_parse_cli(trimmed)!
+		trimmed := raw.trim(' \t')
+		color := color_parse_cli(trimmed)!
+		c.colors << color
+		c.colors_c << color.cval()
 	}
 	if c.colors.len == 0 {
 		return error('invalid value')
@@ -4360,7 +4364,36 @@ pub fn (mut c ColorList) parse_cli(input ?string) ! {
 pub fn (c ColorList) clone() ColorList {
 	return ColorList{
 		colors: c.colors.clone()
+		colors_c: c.colors_c.clone()
 	}
+}
+
+@[markused]
+pub fn (c ColorList) cval() CConfigColorList {
+	return CConfigColorList{
+		colors: if c.colors_c.len == 0 {
+			unsafe { nil }
+		} else {
+			unsafe { &CConfigColor(c.colors_c.data) }
+		}
+		len: usize(c.colors_c.len)
+	}
+}
+
+pub fn (c ColorList) equal(other ColorList) bool {
+	if c.colors.len != other.colors.len {
+		return false
+	}
+	for i, color in c.colors {
+		if !color.equal(other.colors[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+pub fn (c ColorList) format_entry() string {
+	return c.colors.map(it.format_buf()).join(',')
 }
 
 // GtkSingleInstance controls GTK single-instance behavior.
@@ -5107,7 +5140,6 @@ pub fn (c Config) clone() Config {
 	// C API caches contain pointers into the source configuration and must never
 	// be shared by a clone. They are rebuilt lazily on the first C getter call.
 	copy.capi_strings = map[string]string{}
-	copy.capi_colors = []ColorRGB{}
 	copy.capi_commands = []CConfigCommand{}
 	if cmd := c.command {
 		copy.command = cmd.clone()
@@ -6916,6 +6948,31 @@ pub fn Palette.default_palette() Palette {
 		p.value[i] = ColorRGB{color.r, color.g, color.b}
 	}
 	return p
+}
+
+@[markused]
+pub fn (p Palette) cval() CConfigPalette {
+	mut result := CConfigPalette{}
+	for i, color in p.value {
+		result.colors[i] = color.cval()
+	}
+	return result
+}
+
+pub fn (p Palette) clone() Palette {
+	return p
+}
+
+pub fn (p Palette) equal(other Palette) bool {
+	return p == other
+}
+
+pub fn (p Palette) format_entry() []string {
+	mut result := []string{cap: 256}
+	for i, color in p.value {
+		result << '${i}=${color.format_buf()}'
+	}
+	return result
 }
 
 // Diagnostic is the translated cli.Diagnostic, including source location and
@@ -8898,7 +8955,7 @@ fn is_config_key(key string) bool {
 		if field.name == normalized_key
 			&& field.name !in ['diagnostics', 'conditional_state', 'theme_pair', 'conditional_set',
 				'loading_theme', 'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_strings',
-				'capi_colors', 'capi_commands'] {
+				'capi_commands'] {
 			return true
 		}
 	}
@@ -8941,7 +8998,7 @@ fn (mut c Config) reset_empty_config_value(key string) bool {
 		$if !field.is_map {
 			if field.name == normalized_key
 				&& field.name !in ['diagnostics', 'conditional_state', 'theme_pair', 'loading_theme',
-					'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_colors', 'capi_commands'] {
+					'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_commands'] {
 				c.$(field.name) = defaults.$(field.name)
 				return true
 			}
