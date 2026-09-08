@@ -719,10 +719,10 @@ pub fn (mut self LineIterator) next() ?string {
 }
 
 // Returns a location for a diagnostic message.
-pub fn (self LineIterator) location() ?diagnostics.Location {
+pub fn (self LineIterator) location() diagnostics.Location {
 	// If we have no filepath then we have no location.
 	if self.filepath.len == 0 {
-		return none
+		return diagnostics.NoneLocation{}
 	}
 	return diagnostics.FileLocation{
 		path: self.filepath

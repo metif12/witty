@@ -3,6 +3,7 @@ module configpkg
 import os
 import input
 import terminal
+import cli_args
 
 fn test_load_file_applies_theme_colors() {
 	path := os.join_path(os.temp_dir(), 'witty-theme-test.conf')
@@ -137,7 +138,29 @@ fn test_load_cli_args_diagnostic_lists_enum_values() {
 	assert cfg.diagnostics[0].format() == 'cli:1:window-theme: invalid value "nope", valid values are: auto, system, light, dark, ghostty'
 }
 
-fn test_theme_replay_preserves_diagnostic_location_and_key() ! {
+fn test_load_iter_uses_iterator_location_contract() {
+	mut without_location := Config.default_config()
+	mut slice_iter := cli_args.SliceIterator.new(['--font-size=nope'])
+	without_location.load_iter(mut slice_iter)
+	assert without_location.diagnostics.len == 1
+	assert without_location.diagnostics[0].format() == 'font-size: invalid value "nope"'
+
+	mut with_location := Config.default_config()
+	mut args_iter := cli_args.ArgsIterator.new(['+version', '--font-size=nope'])
+	with_location.load_iter(mut args_iter)
+	assert with_location.diagnostics.len == 1
+	assert with_location.diagnostics[0].format() == 'cli:2:font-size: invalid value "nope"'
+}
+
+fn test_add_diagnostic_fmt_has_no_location_or_replay_step() {
+	mut cfg := Config.default_config()
+	cfg.add_diagnostic_fmt('startup failed: OutOfMemory')
+	assert cfg.diagnostics.len == 1
+	assert cfg.diagnostics[0].format() == 'startup failed: OutOfMemory'
+	assert cfg.replay_steps.len == 0
+}
+
+fn test_theme_replay_regenerates_diagnostic_without_iterator_location() ! {
 	path := os.join_path(os.temp_dir(), 'witty-diagnostic-theme-${os.getpid()}')
 	os.write_file(path, '')!
 	defer {
@@ -147,7 +170,7 @@ fn test_theme_replay_preserves_diagnostic_location_and_key() ! {
 	cfg.load_cli_args(['--theme=${path}', '--font-size=nope'])
 	cfg.finalize()
 	assert cfg.diagnostics.len == 1
-	assert cfg.diagnostics[0].format() == 'cli:2:font-size: invalid value "nope"'
+	assert cfg.diagnostics[0].format() == 'font-size: invalid value "nope"'
 }
 
 fn test_preferred_default_file_path_uses_platform_location() {

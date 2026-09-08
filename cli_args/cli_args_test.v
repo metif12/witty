@@ -533,8 +533,14 @@ fn test_args_iterator() {
 	mut iter := ArgsIterator.new(['--what', '+list-things', '--a=42'])
 	// Should return --what (regular arg)
 	assert iter.next()? == '--what'
+	first_location := iter.location()
+	assert first_location is diagnostics.CliLocation
+	assert first_location.index == 1
 	// Should skip +list-things (action prefix)
 	assert iter.next()? == '--a=42'
+	second_location := iter.location()
+	assert second_location is diagnostics.CliLocation
+	assert second_location.index == 3
 	// No more args
 	assert iter.next() == none
 	assert iter.next() == none
@@ -587,7 +593,7 @@ fn test_line_iterator_location() {
 	_ := iter.next()? // consume A
 	_ := iter.next()? // consume B
 
-	loc := iter.location() or { diagnostics.NoneLocation{} }
+	loc := iter.location()
 	match loc {
 		diagnostics.FileLocation {
 			assert loc.path == 'test.conf'
@@ -604,7 +610,7 @@ fn test_line_iterator_no_filepath_no_location() {
 	_ := iter.next()?
 
 	loc := iter.location()
-	assert loc == none
+	assert loc is diagnostics.NoneLocation
 }
 
 fn test_line_iterator_stops_at_maximum_buffer_size() {
