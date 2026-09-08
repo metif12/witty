@@ -16,8 +16,6 @@ import global_state
 
 fn C.read(fd int, buf voidptr, count usize) int
 
-fn C.write(fd int, buf voidptr, count usize) int
-
 // CoreGraphics C functions for drawing.
 fn C.CGContextSetRGBFillColor(ctx voidptr, r f64, g f64, b f64, a f64)
 
@@ -94,7 +92,7 @@ struct TermState {
 mut:
 	term      &terminal.Terminal = unsafe { nil }
 	stream    terminal.ReadonlyStream
-	subprocess termio.Subprocess
+	backend   termio.Exec
 	pty_fd    int = -1
 	cell_w    f64 = 8.0
 	cell_h    f64 = 16.0
@@ -257,20 +255,19 @@ fn spawn_terminal(cfg AppConfig) !&TermState {
 		rows: int(cfg.rows)
 	}
 	resources_path := global_state.get_state().resources_dir.app()
-	state.subprocess = termio.Subprocess.init(termio.ExecConfig{
+	state.backend = termio.Exec.init(termio.ExecConfig{
 		command: configpkg.Command(configpkg.ShellCmd{ shell: cfg.shell })
 		env: os.environ()
 		resources_dir: if resources_path.len > 0 { resources_path } else { none }
 	})!
-	state.subprocess.grid_size = renderer.GridSize{
+	state.backend.resize(renderer.GridSize{
 		columns: u32(cfg.cols)
 		rows: u32(cfg.rows)
-	}
-	state.subprocess.screen_size = renderer.ScreenSize{
+	}, renderer.ScreenSize{
 		width: u32(cfg.pixel_w)
 		height: u32(cfg.pixel_h)
-	}
-	fds := state.subprocess.start()!
+	})!
+	fds := state.backend.subprocess.start()!
 	state.pty_fd = fds.read
 	// Construct ReadonlyStream manually. We cannot use ReadonlyStream.init()
 	// because it takes Terminal by value, copies it, then stores &copy —
@@ -363,7 +360,7 @@ fn do_close_tab(userdata voidptr) {
 	// Clear userdata first so the read thread and draw callback
 	// see nil and bail out before we tear anything down.
 	macos.view_set_userdata(state.view, unsafe { nil })
-	state.subprocess.deinit()
+	state.backend.deinit()
 	state.pty_fd = -1
 	macos.close_tab(state.view)
 }
@@ -643,7 +640,7 @@ fn on_key(userdata voidptr, key_action macos.KeyEventAction, keycode u16, modfla
 	if userdata == unsafe { nil } {
 		return
 	}
-	state := unsafe { &TermState(userdata) }
+	mut state := unsafe { &TermState(userdata) }
 	if state.pty_fd < 0 {
 		return
 	}
@@ -712,7 +709,7 @@ fn on_key(userdata voidptr, key_action macos.KeyEventAction, keycode u16, modfla
 
 	encoded := input.encode(event, opts)
 	if encoded.len > 0 {
-		C.write(state.pty_fd, encoded.str, usize(encoded.len))
+		state.backend.queue_write(encoded.bytes(), false) or {}
 	}
 }
 
@@ -733,7 +730,7 @@ fn on_paste(userdata voidptr, text &u8, len int) {
 	if userdata == unsafe { nil } {
 		return
 	}
-	state := unsafe { &TermState(userdata) }
+	mut state := unsafe { &TermState(userdata) }
 	if state.pty_fd < 0 || len <= 0 {
 		return
 	}
@@ -743,7 +740,7 @@ fn on_paste(userdata voidptr, text &u8, len int) {
 	}
 	for encoded in input.paste_encode(data, paste_options) {
 		if encoded.len > 0 {
-			C.write(state.pty_fd, encoded.str, usize(encoded.len))
+			state.backend.queue_write(encoded.bytes(), false) or {}
 		}
 	}
 }
@@ -806,7 +803,7 @@ fn on_resize(userdata voidptr, width f64, height f64) {
 	state.cols = new_cols
 	state.rows = new_rows
 	state.term.resize(u16(new_cols), u16(new_rows)) or {}
-	state.subprocess.resize(renderer.GridSize{
+	state.backend.resize(renderer.GridSize{
 		columns: u32(new_cols)
 		rows: u32(new_rows)
 	}, renderer.ScreenSize{
