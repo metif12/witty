@@ -42,10 +42,55 @@ pub fn parse_unsigned(raw string, max_value u64, requested_base u8) !u64 {
 			`A`...`Z` { u64(ch - `A`) + 10 }
 			else { return error('invalid character') }
 		}
-		if digit >= base || digit > max_value || result > (max_value - digit) / base {
+		if digit >= base {
+			return error('invalid character')
+		}
+		if digit > max_value || result > (max_value - digit) / base {
 			return error('overflow')
 		}
 		result = result * base + digit
 	}
 	return result
+}
+
+// parse_int_unsigned matches std.fmt.parseInt for an unsigned integer type.
+// Unlike parseUnsigned, parseInt consumes a leading sign; a negative unsigned
+// spelling is valid only when its value is zero.
+pub fn parse_int_unsigned(raw string, bits int, base u8) !u64 {
+	if raw.len == 0 || bits < 1 || bits > 64 {
+		return error('invalid character')
+	}
+	negative := raw[0] == `-`
+	start := if negative || raw[0] == `+` { 1 } else { 0 }
+	if start == raw.len {
+		return error('invalid character')
+	}
+	max_value := if bits == 64 { max_u64 } else { (u64(1) << u32(bits)) - 1 }
+	result := parse_unsigned(raw[start..], max_value, base)!
+	if negative && result != 0 {
+		return error('overflow')
+	}
+	return result
+}
+
+// parse_int_signed matches std.fmt.parseInt for a signed integer type.
+pub fn parse_int_signed(raw string, bits int, base u8) !i64 {
+	if raw.len == 0 || bits < 1 || bits > 64 {
+		return error('invalid character')
+	}
+	negative := raw[0] == `-`
+	start := if negative || raw[0] == `+` { 1 } else { 0 }
+	if start == raw.len {
+		return error('invalid character')
+	}
+	max_positive := if bits == 64 { u64(max_i64) } else { (u64(1) << u32(bits - 1)) - 1 }
+	limit := if negative { max_positive + 1 } else { max_positive }
+	result := parse_unsigned(raw[start..], limit, base)!
+	if negative {
+		if bits == 64 && result == u64(1) << 63 {
+			return min_i64
+		}
+		return -i64(result)
+	}
+	return i64(result)
 }

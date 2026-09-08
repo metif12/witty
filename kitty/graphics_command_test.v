@@ -203,6 +203,16 @@ fn test_ensure_large_negative_values() {
 	assert v.z == -2000000000
 }
 
+fn test_integer_fields_match_zig_parse_int_grammar() {
+	command := Parser.parse_string('a=p,i=4__2,z=-2__0,H=+3,V=-0') or { panic(err) }
+	assert command.control is Display
+	display := command.control as Display
+	assert display.image_id == 42
+	assert display.z == -20
+	assert display.horizontal_offset == 3
+	assert display.vertical_offset == 0
+}
+
 fn test_ensure_proper_overflow_error_for_u32() {
 	input := 'a=p,i=10000000000'
 	Parser.parse_string(input) or {

@@ -9,7 +9,7 @@ module kitty
 // the parser for the command portion of the protocol.
 
 import simd
-import strconv
+import zig_fmt
 
 // ============================================================
 // Parser
@@ -251,18 +251,19 @@ fn (mut self Parser) finish_value(next_state ParserState) ! {
 	temp_str := self.kv_temp[0..self.kv_temp_len].bytestr()
 	v := match self.kv_current {
 		`z`, `H`, `V` {
-			signed := strconv.atoi32(temp_str) or {
-				if err.msg().contains('overflow') || err.msg().contains('underflow') {
+			signed := zig_fmt.parse_int_signed(temp_str, 32, 10) or {
+				if err.msg() == 'overflow' {
 					return error('Overflow')
 				}
 				return error('InvalidCharacter')
 			}
 			// Reinterpret i32 as u32
-			unsafe { *(&u32(&signed)) }
+			signed_i32 := i32(signed)
+			unsafe { *(&u32(&signed_i32)) }
 		}
 		else {
-			parsed := strconv.parse_uint(temp_str, 10, 32) or {
-				if err.msg().contains('overflow') {
+			parsed := zig_fmt.parse_int_unsigned(temp_str, 32, 10) or {
+				if err.msg() == 'overflow' {
 					return error('Overflow')
 				}
 				return error('InvalidCharacter')

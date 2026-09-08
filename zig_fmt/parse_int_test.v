@@ -15,3 +15,26 @@ fn test_parse_unsigned_rejects_signs_edges_and_overflow() {
 		}
 	}
 }
+
+fn test_parse_int_unsigned_matches_zig_sign_rules() {
+	assert parse_int_unsigned('+0xff', 8, 0)! == 255
+	assert parse_int_unsigned('-0', 8, 10)! == 0
+	assert parse_int_unsigned('1__2', 8, 10)! == 12
+	for invalid in ['', '+', '-', '-1', '256'] {
+		if _ := parse_int_unsigned(invalid, 8, 10) {
+			assert false, 'expected ${invalid} to fail'
+		}
+	}
+}
+
+fn test_parse_int_signed_matches_zig_ranges() {
+	assert parse_int_signed('-0x1__0', 16, 0)! == -16
+	assert parse_int_signed('-128', 8, 10)! == -128
+	assert parse_int_signed('+127', 8, 10)! == 127
+	assert parse_int_signed('-9223372036854775808', 64, 10)! == min_i64
+	for invalid in ['-129', '128', '+', '1_'] {
+		if _ := parse_int_signed(invalid, 8, 10) {
+			assert false, 'expected ${invalid} to fail'
+		}
+	}
+}
