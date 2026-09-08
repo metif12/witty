@@ -453,7 +453,7 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 
 	// Load defaults, user files, command-line flags, recursive files, and theme
 	// replay before GTK reads any startup settings.
-	mut config := configpkg.Config.load()
+	mut config := configpkg.Config.load()!
 
 	// Setup our GTK init env vars. This must happen BEFORE GTK init.
 	set_gtk_env(&config)
@@ -1338,7 +1338,7 @@ fn (mut self Application) reload_config(target apprt.Target, soft bool) ! {
 	defer {
 		internal_os.systemd_notify_ready()
 	}
-	config := if soft { self.config.clone() } else { configpkg.Config.load() }
+	config := if soft { self.config.clone() } else { configpkg.Config.load()! }
 	match target {
 		apprt.SurfaceTarget {
 			mut surface := surface_from_target(target) or {

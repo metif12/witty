@@ -76,7 +76,7 @@ pub fn list_keybinds_output(args []string) !string {
 	config := if defaults {
 		configpkg.Config.default_config()
 	} else {
-		configpkg.Config.load_args([])
+		configpkg.Config.load_args([])!
 	}
 	return output_lines(config.keybind.format_entries())
 }
@@ -238,11 +238,11 @@ pub fn validate_config(args []string) !ValidateResult {
 		mut value := configpkg.Config.default_config()
 		abs_path := os.real_path(config_path)
 		value.load_file(abs_path)!
-		value.load_recursive_files()
+		value.load_recursive_files()!
 		value.finalize()
 		value
 	} else {
-		configpkg.Config.load_args([])
+		configpkg.Config.load_args([])!
 	}
 	mut lines := []string{cap: config.diagnostics.len}
 	for diagnostic in config.diagnostics {
@@ -267,7 +267,7 @@ pub fn edit_config_target(args []string) !string {
 	if args.len > 0 {
 		return error('unknown option for edit-config: ${args[0]}')
 	}
-	_ := configpkg.Config.load_args([])
+	_ := configpkg.Config.load_args([])!
 	path := configpkg.preferred_default_file_path()!
 	ensure_config_parent(path)!
 	return path
@@ -326,7 +326,7 @@ pub fn show_config_output(args []string) !string {
 	config := if opts.defaults {
 		configpkg.Config.default_config()
 	} else {
-		configpkg.Config.load_args([])
+		configpkg.Config.load_args([])!
 	}
 	return config.format_config_with_docs(!opts.defaults && opts.changes_only, opts.docs)
 }
@@ -389,7 +389,7 @@ pub fn show_face(args []string) !ShowFaceResult {
 		}
 	}
 
-	mut config := configpkg.Config.load_args(opts.config_args)
+	mut config := configpkg.Config.load_args(opts.config_args)!
 	mut errors := []string{}
 	for diagnostic in config.diagnostics {
 		errors << 'config error: ${diagnostic}'

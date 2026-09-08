@@ -261,7 +261,10 @@ fn reload_runtime_config(app &apprt.App, soft bool) bool {
 	mut config := if soft {
 		runtime_app.config.clone()
 	} else {
-		configpkg.Config.load_args(global_state.get_state().cli_args)
+		configpkg.Config.load_args(global_state.get_state().cli_args) or {
+			eprintln('error loading config: ${err}')
+			return false
+		}
 	}
 	defer {
 		config.deinit()
@@ -371,7 +374,10 @@ fn main() {
 	}
 	ghostty_cli_try_action()
 
-	mut config := configpkg.Config.load_args(global.cli_args)
+	mut config := configpkg.Config.load_args(global.cli_args) or {
+		eprintln('error loading config: ${err}')
+		return
+	}
 	defer {
 		config.deinit()
 	}

@@ -7187,19 +7187,19 @@ struct ReplayStep {
 
 // load loads configuration using Ghostty's default-file order, command-line
 // arguments, recursively referenced files, and finalization order.
-pub fn Config.load() Config {
+pub fn Config.load() !Config {
 	return Config.load_argv(os.args)
 }
 
 // load_argv loads configuration from a complete process argv, including the
 // executable name. This preserves xdg-terminal-exec's argv[0] convention.
-pub fn Config.load_argv(argv []string) Config {
+pub fn Config.load_argv(argv []string) !Config {
 	$if linux || freebsd {
 		if command_args := internal_os.parse_terminal_exec(argv) {
 			mut c := Config.default_config()
-			c.load_default_files()
+			c.load_default_files()!
 			c.load_xdg_terminal_exec_args(command_args)
-			c.load_recursive_files()
+			c.load_recursive_files()!
 			c.finalize()
 			return c
 		}
@@ -7209,18 +7209,18 @@ pub fn Config.load_argv(argv []string) Config {
 }
 
 // load_args is the explicit-argv form used by embedders and tests.
-pub fn Config.load_args(args []string) Config {
+pub fn Config.load_args(args []string) !Config {
 	mut c := Config.default_config()
-	c.load_default_files()
-	c.load_cli_args(args)
+	c.load_default_files()!
+	c.load_cli_args(args)!
 	if !c.config_default_files {
 		// config-default-files only has an effect on the CLI. Rebuild from
 		// defaults and CLI arguments, discarding all default-file steps.
 		mut cli_only := Config.default_config()
-		cli_only.load_cli_args(args)
+		cli_only.load_cli_args(args)!
 		c = cli_only
 	}
-	c.load_recursive_files()
+	c.load_recursive_files()!
 	c.finalize()
 	return c
 }
@@ -7228,17 +7228,15 @@ pub fn Config.load_args(args []string) Config {
 // load_default_files reads the platform's default configuration paths in the
 // same order as Ghostty's Config.loadDefaultFiles. If no default file exists,
 // it creates Ghostty's commented starter template at the preferred location.
-pub fn (mut c Config) load_default_files() {
-	legacy_xdg_path := legacy_xdg_config_path()
-	xdg_path := default_xdg_config_path()
+pub fn (mut c Config) load_default_files() ! {
+	legacy_xdg_path := legacy_default_xdg_path()!
+	xdg_path := default_xdg_path()!
 	legacy_xdg_action := c.load_optional_file(legacy_xdg_path)
 	preferred_xdg_action := c.load_optional_file(xdg_path)
 	xdg_loaded := legacy_xdg_action != .not_found || preferred_xdg_action != .not_found
 	$if macos {
-		legacy_app_support_path := app_support_config_path('config')
-		app_support_path := preferred_app_support_path() or {
-			app_support_config_path('config.ghostty')
-		}
+		legacy_app_support_path := legacy_default_app_support_path()!
+		app_support_path := preferred_app_support_path()!
 		legacy_app_support_action := c.load_optional_file(legacy_app_support_path)
 		preferred_app_support_action := c.load_optional_file(app_support_path)
 		app_support_loaded := legacy_app_support_action != .not_found
@@ -7284,14 +7282,14 @@ fn write_config_template(path string) ! {
 
 // load_cli_args applies Ghostty's `--key=value` configuration syntax and the
 // special `-e command...` tail. Paths declared here resolve against cwd.
-pub fn (mut c Config) load_cli_args(args []string) {
+pub fn (mut c Config) load_cli_args(args []string) ! {
 	c.config_default_files = true
 	if args.len == 0 {
 		return
 	}
 	mut iter := cli_args.ArgsIterator.new(args)
 	c.load_iter_internal(mut iter, true)
-	c.expand_paths(os.getwd())
+	c.expand_paths(os.getwd())!
 }
 
 // load_iter loads configuration from any translated CLI iterator. Iterator
@@ -7451,14 +7449,24 @@ fn (mut c Config) load_file_result(path string) ! {
 	}
 	content := io.read_all(reader: file)!
 	c.load_string_with_path(content.bytestr(), path)
-	c.expand_paths(os.dir(path))
+	c.expand_paths(os.dir(path))!
 }
 
 // load_recursive_files loads each config-file entry once, expanding paths
 // relative to the file that declared them. The list may grow while it is read.
-pub fn (mut c Config) load_recursive_files() {
+pub fn (mut c Config) load_recursive_files() ! {
 	if c.config_file.items.len == 0 {
 		return
+	}
+	mut replay_suffix := []ReplayStep{}
+	if !c.replaying {
+		for i, step in c.replay_steps {
+			if step.kind == .command {
+				replay_suffix = c.replay_steps[i..].clone()
+				c.replay_steps.trim(i)
+				break
+			}
+		}
 	}
 	mut loaded := map[string]bool{}
 	mut index := 0
@@ -7468,53 +7476,62 @@ pub fn (mut c Config) load_recursive_files() {
 		if item.path.len == 0 {
 			continue
 		}
-		path := if os.is_abs_path(item.path) { item.path } else { os.abs_path(item.path) }
+		path := item.path
+		assert os.is_abs_path(path)
 		if path in loaded {
 			c.add_replay_diagnostic('config-file ${path}: cycle detected')
 			continue
 		}
 		loaded[path] = true
-		if !os.exists(path) {
-			if !item.optional {
-				c.add_replay_diagnostic('error opening config-file ${path}: file not found')
+		mut file := os.open(path) or {
+			if err.code() != C.ENOENT || !item.optional {
+				message := if err.code() == C.ENOENT {
+					'error opening config-file ${path}: error.FileNotFound'
+				} else {
+					'error opening config-file ${path}: ${err}'
+				}
+				c.add_replay_diagnostic(message)
 			}
 			continue
 		}
-		if !os.is_file(path) {
-			c.add_replay_diagnostic('config-file ${path}: not reading because it is not a file')
+		stat := os.stat(path) or {
+			file.close()
+			return err
+		}
+		if stat.get_filetype() != .regular {
+			file.close()
+			c.add_replay_diagnostic('config-file ${path}: not reading because file type is ${stat.get_filetype().str()}')
 			continue
 		}
-		content := os.read_file(path) or {
-			c.add_replay_diagnostic('error opening config-file ${path}: ${err}')
-			continue
+		content := io.read_all(reader: file) or {
+			file.close()
+			return err
 		}
-		c.load_string(content)
-		c.expand_paths(os.dir(path))
+		file.close()
+		c.load_string_with_path(content.bytestr(), path)
+		c.expand_paths(os.dir(path))!
+	}
+	if replay_suffix.len > 0 {
+		c.replay_steps << replay_suffix
 	}
 }
 
-fn (mut c Config) expand_paths(base string) {
+fn (mut c Config) expand_paths(base string) ! {
 	if !c.replaying {
 		c.replay_steps << ReplayStep{
 			kind: .expand
 			value: base
 		}
 	}
-	c.custom_shader.expand(base, mut c.diagnostics) or { c.add_diagnostic(err.msg()) }
-	c.config_file.expand(base, mut c.diagnostics) or { c.add_diagnostic(err.msg()) }
-	c.gtk_custom_css.expand(base, mut c.diagnostics) or { c.add_diagnostic(err.msg()) }
+	c.custom_shader.expand(base, mut c.diagnostics)!
+	c.config_file.expand(base, mut c.diagnostics)!
+	c.gtk_custom_css.expand(base, mut c.diagnostics)!
 	if mut background_image := c.background_image {
-		background_image.expand(base, mut c.diagnostics) or {
-			c.add_diagnostic(err.msg())
-			return
-		}
+		background_image.expand(base, mut c.diagnostics)!
 		c.background_image = background_image
 	}
 	if mut bell_audio_path := c.bell_audio_path {
-		bell_audio_path.expand(base, mut c.diagnostics) or {
-			c.add_diagnostic(err.msg())
-			return
-		}
+		bell_audio_path.expand(base, mut c.diagnostics)!
 		c.bell_audio_path = bell_audio_path
 	}
 }
@@ -9912,7 +9929,7 @@ fn replay_steps_into(mut destination Config, steps []ReplayStep) {
 				mut iter := cli_args.SliceIterator.new([step.value])
 				destination.load_iter(mut iter)
 			}
-			.expand { destination.expand_paths(step.value) }
+			.expand { destination.expand_paths(step.value) or {} }
 			.diagnostic {
 				destination.diagnostics << step.diagnostic.clone()
 			}
@@ -9954,7 +9971,9 @@ fn (mut c Config) apply_theme_file(path string) {
 	was_loading := c.loading_theme
 	c.loading_theme = true
 	c.load_string(content_bytes.bytestr())
-	c.expand_paths(os.dir(opened.path))
+	c.expand_paths(os.dir(opened.path)) or {
+		c.add_diagnostic(err.msg())
+	}
 	c.loading_theme = was_loading
 }
 

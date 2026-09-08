@@ -54,7 +54,7 @@ fn test_load_cli_args_applies_flags_paths_and_command_tail() {
 		'-e',
 		'/bin/echo',
 		'hello world',
-	])
+	])!
 
 	assert cfg.font_family == ['From CLI']
 	assert !cfg.window_vsync
@@ -97,7 +97,7 @@ fn test_load_args_cli_can_discard_default_files_and_add_recursive_file() {
 		'--config-default-files=false',
 		'--font-size=17',
 		'--config-file=${extra}',
-	])
+	])!
 	assert cfg.font_size == 17
 	assert cfg.cursor_opacity == 0.25
 	assert !cfg.config_default_files
@@ -126,14 +126,14 @@ palette = 300=#ffffff
 
 fn test_load_cli_args_records_diagnostic_location_and_key() {
 	mut cfg := Config.default_config()
-	cfg.load_cli_args(['--font-size=nope'])
+	cfg.load_cli_args(['--font-size=nope'])!
 	assert cfg.diagnostics.len == 1
 	assert cfg.diagnostics[0].format() == 'cli:1:font-size: invalid value "nope"'
 }
 
 fn test_load_cli_args_diagnostic_lists_enum_values() {
 	mut cfg := Config.default_config()
-	cfg.load_cli_args(['--window-theme=nope'])
+	cfg.load_cli_args(['--window-theme=nope'])!
 	assert cfg.diagnostics.len == 1
 	assert cfg.diagnostics[0].format() == 'cli:1:window-theme: invalid value "nope", valid values are: auto, system, light, dark, ghostty'
 }
@@ -186,7 +186,7 @@ fn test_empty_command_diagnostic_is_regenerated_without_replay_location() ! {
 		os.rm(theme) or {}
 	}
 	mut cfg := Config.default_config()
-	cfg.load_cli_args(['--theme=${theme}', '-e'])
+	cfg.load_cli_args(['--theme=${theme}', '-e'])!
 	assert cfg.diagnostics.len == 1
 	assert cfg.diagnostics[0].format() == 'cli:2: missing command after -e'
 	cfg.finalize()
@@ -209,7 +209,7 @@ fn test_theme_replay_regenerates_diagnostic_without_iterator_location() ! {
 		os.rm(path) or {}
 	}
 	mut cfg := Config.default_config()
-	cfg.load_cli_args(['--theme=${path}', '--font-size=nope'])
+	cfg.load_cli_args(['--theme=${path}', '--font-size=nope'])!
 	cfg.finalize()
 	assert cfg.diagnostics.len == 1
 	assert cfg.diagnostics[0].format() == 'font-size: invalid value "nope"'
@@ -1482,7 +1482,7 @@ fn test_bell_audio_parse_format_and_path_expansion() {
 	assert cfg.diagnostics.len == 0
 	assert cfg.bell_audio_path? == Path{ path: 'sounds/bell.oga', optional: true }
 	assert cfg.bell_audio_volume == 0.75
-	cfg.expand_paths(base)
+	cfg.expand_paths(base)!
 	assert cfg.bell_audio_path? == Path{
 		path: os.join_path(base, 'sounds', 'bell.oga')
 		optional: true
@@ -1731,7 +1731,7 @@ fn test_config_file_surrounding_quotes_match_line_iterator() {
 fn test_cli_bare_values_match_reflected_parser() {
 	mut cfg := Config.default_config()
 	cfg.load_cli_args(['--font-thicken', '--background-blur', '--cursor-style-blink',
-		'--background-blur-radius'])
+		'--background-blur-radius'])!
 	assert cfg.diagnostics.len == 0
 	assert cfg.font_thicken
 	assert cfg.background_blur.kind == .bool_true
@@ -3379,7 +3379,7 @@ fn test_load_recursive_files_preserves_order_and_nested_bases() {
 
 	mut cfg := Config.default_config()
 	cfg.load_file(root)!
-	cfg.load_recursive_files()
+	cfg.load_recursive_files()!
 	assert cfg.font_size == 12
 	assert cfg.config_file.items == [
 		Path{ path: os.real_path(first) },
@@ -3405,10 +3405,56 @@ fn test_recursive_files_skip_optional_missing_and_report_required_and_cycles() {
 
 	mut cfg := Config.default_config()
 	cfg.load_file(root)!
-	cfg.load_recursive_files()
+	cfg.load_recursive_files()!
 	assert cfg.diagnostics.len == 2
-	assert cfg.diagnostics[0].message == 'error opening config-file ${os.join_path(dir, 'required.conf')}: file not found'
+	assert cfg.diagnostics[0].message == 'error opening config-file ${os.join_path(dir, 'required.conf')}: error.FileNotFound'
 	assert cfg.diagnostics[1].message == 'config-file ${os.real_path(child)}: cycle detected'
+}
+
+fn test_recursive_file_diagnostics_keep_the_declaring_path() {
+	dir := os.join_path(os.temp_dir(), 'witty-config-recursive-location-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir)!
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	root := os.join_path(dir, 'config.ghostty')
+	child := os.join_path(dir, 'child.conf')
+	os.write_file(root, 'config-file = child.conf\n')!
+	os.write_file(child, 'font-size = invalid\n')!
+
+	mut cfg := Config.default_config()
+	cfg.load_file(root)!
+	cfg.load_recursive_files()!
+	assert cfg.diagnostics.len == 1
+	assert cfg.diagnostics[0].format() == '${os.real_path(child)}:1:font-size: invalid value "invalid"'
+}
+
+fn test_recursive_replay_steps_are_inserted_before_command_tail() {
+	dir := os.join_path(os.temp_dir(), 'witty-config-recursive-replay-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir)!
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	child := os.join_path(dir, 'child.conf')
+	os.write_file(child, 'font-size = 19\n')!
+
+	mut cfg := Config.default_config()
+	cfg.load_cli_args(['--config-file=${child}', '-e', 'echo', 'hello'])!
+	cfg.load_recursive_files()!
+	mut child_index := -1
+	mut command_index := -1
+	for i, step in cfg.replay_steps {
+		if step.kind == .arg && step.value == '--font-size=19' {
+			child_index = i
+		}
+		if step.kind == .command {
+			command_index = i
+		}
+	}
+	assert child_index >= 0
+	assert command_index > child_index
 }
 
 fn test_preferred_xdg_path_uses_new_then_legacy_name() ! {

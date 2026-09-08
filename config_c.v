@@ -65,11 +65,15 @@ pub fn ghostty_config_clone(config &configpkg.Config) ?&configpkg.Config {
 // whose signature intentionally takes no explicit argv.
 pub fn ghostty_config_load_cli_args(mut config configpkg.Config) {
 	args := if os.args.len > 1 { os.args[1..] } else { []string{} }
-	config.load_cli_args(args)
+	config.load_cli_args(args) or {
+		eprintln('error loading config err=${err}')
+	}
 }
 
 pub fn ghostty_config_load_default_files(mut config configpkg.Config) {
-	config.load_default_files()
+	config.load_default_files() or {
+		eprintln('error loading config err=${err}')
+	}
 }
 
 pub fn ghostty_config_load_file(mut config configpkg.Config, path string) {
@@ -79,7 +83,9 @@ pub fn ghostty_config_load_file(mut config configpkg.Config, path string) {
 }
 
 pub fn ghostty_config_load_recursive_files(mut config configpkg.Config) {
-	config.load_recursive_files()
+	config.load_recursive_files() or {
+		eprintln('error loading config err=${err}')
+	}
 }
 
 pub fn ghostty_config_finalize(mut config configpkg.Config) {
