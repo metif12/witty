@@ -187,72 +187,17 @@ fn default_tab_title() string {
 	return 'Witty'
 }
 
-fn hex_nibble(ch u8) int {
-	if ch >= `0` && ch <= `9` {
-		return int(ch - `0`)
-	}
-	if ch >= `a` && ch <= `f` {
-		return int(ch - `a`) + 10
-	}
-	if ch >= `A` && ch <= `F` {
-		return int(ch - `A`) + 10
-	}
-	return -1
-}
-
-fn percent_decode_uri_path(path string) string {
-	mut out := []u8{cap: path.len}
-	mut i := 0
-	for i < path.len {
-		if path[i] == `%` && i + 2 < path.len {
-			hi := hex_nibble(path[i + 1])
-			lo := hex_nibble(path[i + 2])
-			if hi >= 0 && lo >= 0 {
-				out << u8((u8(hi) << 4) | u8(lo))
-				i += 3
-				continue
-			}
-		}
-		out << path[i]
-		i++
-	}
-	return out.bytestr()
-}
-
 fn parse_osc7_pwd(url string) ?string {
-	mut rest := ''
-	mut decode_percent := false
-
-	if url.starts_with('file://') {
-		rest = url[7..]
-		decode_percent = true
-	} else if url.starts_with('kitty-shell-cwd://') {
-		rest = url['kitty-shell-cwd://'.len..]
-	} else {
+	uri := internal_os.parse_uri(url, internal_os.UriParseOptions{
+		raw_path: url.starts_with('kitty-shell-cwd://')
+	}) or { return none }
+	if uri.scheme != 'file' && uri.scheme != 'kitty-shell-cwd' {
 		return none
 	}
-
-	mut host := ''
-	mut path := rest
-	if !rest.starts_with('/') {
-		slash := rest.index_u8(`/`)
-		if slash <= 0 {
-			return none
-		}
-		host = rest[..slash]
-		path = rest[slash..]
-	}
-	if host.len == 0 || !(internal_os.hostname_is_local(host) or { false }) {
+	if uri.host.len == 0 || !(internal_os.hostname_is_local(uri.host) or { false }) {
 		return none
 	}
-	if path.len == 0 {
-		return none
-	}
-	return if decode_percent {
-		percent_decode_uri_path(path)
-	} else {
-		path
-	}
+	return uri.path
 }
 
 fn set_tab_title(mut state TermState, title string) {
