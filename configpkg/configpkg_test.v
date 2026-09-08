@@ -1360,6 +1360,71 @@ fn test_config_file_whitespace_matches_source_byte_set() {
 	assert parse_font_shaping_break('\vcursor') == none
 }
 
+fn test_config_file_bare_values_match_line_iterator() {
+	mut cfg := Config.default_config()
+	cfg.font_thicken = false
+	cfg.background_blur = BackgroundBlur{ kind: .bool_false }
+	cfg.window_decoration = .none_
+	cfg.cursor_style_blink = none
+	cfg.command_palette_entry.parse_cli('title:Example,action:new_window')!
+
+	cfg.load_string('font-thicken\nbackground-blur\nwindow-decoration\ncursor-style-blink\ncommand-palette-entry\n')
+	assert cfg.diagnostics.len == 0
+	assert cfg.font_thicken
+	assert cfg.background_blur.kind == .bool_true
+	assert cfg.window_decoration == .auto
+	assert cfg.cursor_style_blink or { false }
+	assert cfg.command_palette_entry.items.len == 0
+	assert cfg.replay_steps.all(it.kind != .kv || !it.has_value)
+}
+
+fn test_config_file_bare_required_and_unknown_values_are_diagnostics() {
+	mut cfg := Config.default_config()
+	cfg.load_string('font-size\nnot-a-real-option\n')
+	assert cfg.font_size == default_font_size
+	assert cfg.diagnostics.len == 2
+	assert cfg.diagnostics[0].message.contains('value required')
+	assert cfg.diagnostics[1].message.contains('unknown field')
+}
+
+fn test_config_file_surrounding_quotes_match_line_iterator() {
+	mut cfg := Config.default_config()
+	cfg.load_string('title =  "  spaced title  "  \n')
+	assert cfg.diagnostics.len == 0
+	assert cfg.title or { '' } == '  spaced title  '
+}
+
+fn test_cli_bare_values_match_reflected_parser() {
+	mut cfg := Config.default_config()
+	cfg.load_cli_args(['--font-thicken', '--background-blur', '--cursor-style-blink',
+		'--background-blur-radius'])
+	assert cfg.diagnostics.len == 0
+	assert cfg.font_thicken
+	assert cfg.background_blur.kind == .bool_true
+	assert cfg.cursor_style_blink or { false }
+}
+
+fn test_config_file_bare_value_is_preserved_during_conditional_replay() {
+	dir := os.join_path(os.temp_dir(), 'witty-bare-replay-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir)!
+	defer { os.rmdir_all(dir) or {} }
+	light := os.join_path(dir, 'light')
+	dark := os.join_path(dir, 'dark')
+	os.write_file(light, 'background = #111111\n')!
+	os.write_file(dark, 'background = #222222\n')!
+
+	mut cfg := Config.default_config()
+	cfg.load_string('theme = light:${light},dark:${dark}\nfont-thicken\n')
+	cfg.finalize()
+	assert cfg.font_thicken
+	dark_cfg := cfg.change_conditional_state(ConditionalState{ theme: .dark }) or {
+		panic('conditional theme was not marked relevant')
+	}
+	assert dark_cfg.font_thicken
+	assert dark_cfg.background == ColorRGB{0x22, 0x22, 0x22}
+}
+
 // Config.zig: "clone default"
 fn test_clone_default() {
 	source := Config.default_config()

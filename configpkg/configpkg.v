@@ -6377,10 +6377,11 @@ enum ReplayStepKind {
 // base layer and every user option—including repeatable options—retains its
 // normal parser semantics.
 struct ReplayStep {
-	kind  ReplayStepKind
-	key   string
-	value string
-	args  []string
+	kind      ReplayStepKind
+	key       string
+	value     string
+	has_value bool = true
+	args      []string
 }
 
 pub fn (d Diagnostic) str() string {
@@ -6515,24 +6516,25 @@ pub fn (mut c Config) load_cli_args(args []string) {
 		}
 		mut key := arg[2..]
 		mut value := ''
+		mut has_value := false
 		if eq := key.index('=') {
 			value = key[eq + 1..]
 			key = key[..eq]
-		} else if is_boolean_config_key(key) {
-			value = 'true'
-		} else {
-			c.add_replay_diagnostic('value required for --${key}')
-			i++
-			continue
+			has_value = true
 		}
 
-		if is_font_family_key(key) && key !in overwritten_font_fields {
+		if has_value && is_font_family_key(key) && key !in overwritten_font_fields {
 			overwritten_font_fields[key] = true
 			c.record_kv(key, '')
 			c.apply_kv(key, '')
 		}
-		c.record_kv(key, value)
-		c.apply_kv(key, value)
+		if has_value {
+			c.record_kv(key, value)
+			c.apply_kv(key, value)
+		} else {
+			c.record_missing_value(key)
+			c.apply_kv_missing(key)
+		}
 		i++
 	}
 	c.expand_paths(os.getwd())
@@ -6566,9 +6568,10 @@ fn is_boolean_config_key(key string) bool {
 		'title-report', 'link-url', 'maximize', 'fullscreen', 'focus-follows-mouse',
 		'window-inherit-working-directory', 'tab-inherit-working-directory',
 		'split-inherit-working-directory', 'window-inherit-font-size', 'window-step-resize',
-		'initial-window', 'quick-terminal-autohide', '_xdg-terminal-exec',
-		'quit-after-last-window-closed', 'config-default-files', 'linux-cgroup-hard-fail',
-		'gtk-opengl-debug', 'gtk-titlebar', 'gtk-titlebar-hide-when-maximized', 'gtk-wide-tabs']
+		'initial-window', 'quick-terminal-autohide', 'quit-after-last-window-closed',
+		'config-default-files', 'linux-cgroup-hard-fail', 'gtk-opengl-debug', 'gtk-titlebar',
+		'gtk-titlebar-hide-when-maximized', 'gtk-wide-tabs', 'macos-window-shadow',
+		'macos-auto-secure-input', 'macos-secure-input-indication', 'cursor-style-blink']
 }
 
 // load_file loads a configuration file and merges it into this config.
@@ -6689,11 +6692,17 @@ pub fn (mut c Config) load_string(content string) {
 			continue
 		}
 		eq := line.index('=') or {
-			c.add_replay_diagnostic('invalid config line (missing "="): ${line}')
+			c.record_missing_value(line)
+			c.apply_kv_missing(line)
 			continue
 		}
 		key := line[..eq].trim(' \t')
-		value := line[eq + 1..].trim(' \t')
+		mut value := line[eq + 1..].trim(' \t')
+		// LineIterator removes one pair of surrounding double quotes after
+		// trimming the value. Whitespace inside the quotes remains significant.
+		if value.len >= 2 && value[0] == `"` && value[value.len - 1] == `"` {
+			value = value[1..value.len - 1]
+		}
 		c.record_kv(key, value)
 		c.apply_kv(key, value)
 	}
@@ -6705,6 +6714,16 @@ fn (mut c Config) record_kv(key string, value string) {
 			kind: .kv
 			key: key
 			value: value
+		}
+	}
+}
+
+fn (mut c Config) record_missing_value(key string) {
+	if !c.loading_theme && !c.replaying {
+		c.replay_steps << ReplayStep{
+			kind: .kv
+			key: key
+			has_value: false
 		}
 	}
 }
@@ -8201,6 +8220,70 @@ fn (mut c Config) apply_kv(key string, value string) {
 	}
 }
 
+// apply_kv_missing translates cli.args.parseIntoField when an argument has no
+// `=value` portion. Plain and optional booleans use the CLI flag convention of
+// true. The few custom Config parsers that intentionally accept null retain
+// their source behavior; all other known fields report a required value.
+fn (mut c Config) apply_kv_missing(key string) {
+	if is_boolean_config_key(key) {
+		c.apply_kv(key, 'true')
+		return
+	}
+
+	match key {
+		'background-blur', 'background-blur-radius' {
+			c.background_blur = BackgroundBlur{ kind: .bool_true }
+		}
+		'window-decoration' {
+			c.window_decoration = .auto
+		}
+		'command-palette-entry' {
+			c.command_palette_entry = RepeatableCommand{}
+		}
+		'cursor-invert-fg-bg' {
+			c.cursor_color = TerminalColor{ kind: .cell_foreground }
+			c.cursor_text = TerminalColor{ kind: .cell_background }
+		}
+		'selection-invert-fg-bg' {
+			c.selection_foreground = TerminalColor{ kind: .cell_background }
+			c.selection_background = TerminalColor{ kind: .cell_foreground }
+		}
+		'bold-is-bright' {
+			c.bold_color = BoldColor{ bright: true }
+		}
+		'adw-toolbar-style' {
+			// compatibilityRenamed fails because the destination enum requires a
+			// value, then the original unknown-field error is reported.
+			c.diagnostics << Diagnostic{
+				message: '${key}: unknown field'
+			}
+		}
+		else {
+			message := if is_config_key(key) {
+				'value required for ${key}'
+			} else {
+				'${key}: unknown field'
+			}
+			c.diagnostics << Diagnostic{
+				message: message
+			}
+		}
+	}
+}
+
+fn is_config_key(key string) bool {
+	normalized_key := key.replace('-', '_')
+	$for field in Config.fields {
+		if field.name == normalized_key
+			&& field.name !in ['diagnostics', 'conditional_state', 'theme_pair', 'conditional_set',
+				'loading_theme', 'replay_steps', 'replaying', 'xdg_terminal_exec', 'capi_strings',
+				'capi_colors', 'capi_commands'] {
+			return true
+		}
+	}
+	return false
+}
+
 // reset_empty_config_value translates cli.args.parseIntoField's empty-value
 // path. Config.default_config represents the source-level field defaults,
 // including platform-dependent values and types whose Zig defaults are backed
@@ -8974,7 +9057,13 @@ fn (mut c Config) load_theme() {
 	rebuilt.replaying = true
 	for step in steps {
 		match step.kind {
-			.kv { rebuilt.apply_kv(step.key, step.value) }
+			.kv {
+				if step.has_value {
+					rebuilt.apply_kv(step.key, step.value)
+				} else {
+					rebuilt.apply_kv_missing(step.key)
+				}
+			}
 			.expand { rebuilt.expand_paths(step.value) }
 			.diagnostic {
 				rebuilt.diagnostics << Diagnostic{
