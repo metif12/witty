@@ -48,6 +48,12 @@ fn test_osc9_conemu_sleep_invalid_input() {
 	assert cmd.duration_ms == 100
 }
 
+fn test_osc9_conemu_sleep_matches_zig_unsigned_parsing() {
+	assert parse_osc_input('9;1;1__2').duration_ms == 12
+	assert parse_osc_input('9;1;+12').duration_ms == 100
+	assert parse_osc_input('9;1;65536').duration_ms == 100
+}
+
 fn test_osc9_conemu_sleep_desktop_notification_1() {
 	// "9;1" without semicolon -> desktop notification
 	cmd := parse_osc_input('9;1')
@@ -155,6 +161,12 @@ fn test_osc9_conemu_progress_set_double_digit() {
 	assert cmd.cmd_type == .conemu_progress_report
 	assert cmd.progress_state == .set
 	assert cmd.progress? == 94
+}
+
+fn test_osc9_conemu_progress_matches_zig_unsigned_parsing() {
+	assert parse_osc_input('9;4;1;1__0').progress? == 10
+	assert parse_osc_input('9;4;1;+10').progress? == 0
+	assert parse_osc_input('9;4;1;18446744073709551616').progress? == 0
 }
 
 fn test_osc9_conemu_progress_remove_no_progress() {

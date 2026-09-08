@@ -1,0 +1,17 @@
+module zig_fmt
+
+fn test_parse_unsigned_matches_zig_separators_and_bases() {
+	assert parse_unsigned('65_535', 65535, 10)! == 65535
+	assert parse_unsigned('1__2', 255, 10)! == 12
+	assert parse_unsigned('DeadBeef', 0xffffffff, 16)! == 0xdeadbeef
+	assert parse_unsigned('0b1__01', 255, 0)! == 5
+	assert parse_unsigned('NUMBER', 0xffffffff, 36)! == 1442151747
+}
+
+fn test_parse_unsigned_rejects_signs_edges_and_overflow() {
+	for invalid in ['', '+0', '-0', '_12', '12_', '256', '0x_10', '0x10_'] {
+		if _ := parse_unsigned(invalid, 255, if invalid.starts_with('0x') { u8(0) } else { u8(10) }) {
+			assert false, 'expected ${invalid} to fail'
+		}
+	}
+}

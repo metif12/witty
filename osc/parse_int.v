@@ -1,5 +1,7 @@
 module osc
 
+import zig_fmt
+
 // parse_decimal_digits is the common digit loop from Zig's
 // std.fmt.parseInt/parseUnsigned. Zig ignores interior underscores while
 // rejecting them at either edge and checks every multiply/add for overflow.
@@ -42,7 +44,7 @@ fn parse_int_unsigned_decimal(value string, max_value u64) ?u64 {
 // V form of std.fmt.parseUnsigned for base 10. Unlike parseInt, this does not
 // consume a sign.
 fn parse_unsigned_decimal(value string, max_value u64) ?u64 {
-	return parse_decimal_digits(value, max_value)
+	return zig_fmt.parse_unsigned(value, max_value, 10) or { return none }
 }
 
 // V form of std.fmt.parseInt for a signed integer and base 10.

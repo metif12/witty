@@ -23,8 +23,7 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?Command {
 					mut duration := u16(100)
 					if data.len > 2 {
 						rest := data[2..].bytestr()
-						parsed := parse_unsigned_u16(rest)
-						if parsed >= 0 {
+						if parsed := parse_unsigned_decimal(rest, 65535) {
 							duration = if parsed > 10000 { u16(10000) } else { u16(parsed) }
 						}
 					}
@@ -209,8 +208,7 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?Command {
 				.set, .err_state, .pause {
 					if data.len >= 4 && data[3] == `;` {
 						rest := data[4..].bytestr()
-						parsed := parse_unsigned_u16(rest)
-						if parsed >= 0 {
+						if parsed := parse_unsigned_decimal(rest, max_u64) {
 							clamped := if parsed > 100 { u8(100) } else { u8(parsed) }
 							progress = clamped
 						}
@@ -321,23 +319,4 @@ fn make_desktop_notification(mut parser Parser, data []u8) Command {
 		}
 	}
 	return parser.command
-}
-
-// parse_unsigned_u16 parses a string as an unsigned integer.
-// Returns -1 on parse failure, otherwise the parsed value.
-fn parse_unsigned_u16(s string) int {
-	if s.len == 0 {
-		return -1
-	}
-	mut result := 0
-	for c in s {
-		if c < `0` || c > `9` {
-			return -1
-		}
-		result = result * 10 + int(c - `0`)
-		if result > 65535 {
-			return 65535
-		}
-	}
-	return result
 }

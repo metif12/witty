@@ -1,6 +1,6 @@
 module kitty
 
-import strconv
+import zig_fmt
 
 // Kitty color protocol types.
 //
@@ -77,7 +77,7 @@ pub fn Kind.parse(key string) ?Kind {
 	}
 
 	// Try to parse as a palette index.
-	index := strconv.parse_uint(key, 10, 8) or { return none }
+	index := zig_fmt.parse_unsigned(key, 255, 10) or { return none }
 	return Kind(KindPalette{ index: u8(index) })
 }
 

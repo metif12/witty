@@ -54,4 +54,21 @@ fn test_kind_parse_rejects_out_of_range_palette() {
 	assert Kind.parse('256') == none
 	assert Kind.parse('257') == none
 	assert Kind.parse('-1') == none
+	assert Kind.parse('+1') == none
+	assert Kind.parse('_12') == none
+	assert Kind.parse('12_') == none
+}
+
+fn test_kind_parse_matches_zig_digit_separator_rules() {
+	for spelling in ['1_2', '1__2'] {
+		kind := Kind.parse(spelling) or {
+			assert false, 'expected ${spelling} to parse'
+			return
+		}
+		if kind is KindPalette {
+			assert kind.index == 12
+		} else {
+			assert false, 'expected KindPalette'
+		}
+	}
 }

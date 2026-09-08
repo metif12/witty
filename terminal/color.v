@@ -406,29 +406,7 @@ fn from_hex(value string) ?u8 {
 		return none
 	}
 
-	// Direct translation of std.fmt.parseUnsigned(u16, value, 16): only
-	// interior underscores are ignored and signs are not accepted.
-	if value[0] == `_` || value[value.len - 1] == `_` {
-		return none
-	}
-	mut color := u32(0)
-	for ch in value {
-		if ch == `_` {
-			continue
-		}
-		digit := match ch {
-			`0`...`9` { u32(ch - `0`) }
-			`a`...`f` { u32(ch - `a`) + 10 }
-			`A`...`F` { u32(ch - `A`) + 10 }
-			else {
-				return none
-			}
-		}
-		if color > (u32(65535) - digit) / 16 {
-			return none
-		}
-		color = color * 16 + digit
-	}
+	color := zig_fmt.parse_unsigned(value, 65535, 16) or { return none }
 
 	divisor := match value.len {
 		1 { u64(0xf) } // maxInt(u4) = 15
