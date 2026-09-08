@@ -592,6 +592,11 @@ fn test_mouse_scroll_multiplier_format() {
 // Config.zig: QuickTerminalSize "parse QuickTerminalSize"
 fn test_parse_quick_terminal_size() {
 	mut v := QuickTerminalSize{}
+	parsed_size := QuickTerminalSizeValue.parse('25%')!
+	assert parsed_size.to_pixels(200) == 50
+	assert parsed_size.format() == '25%'
+	assert CQuickTerminalSize.percentage(25).tag == 1
+	assert CQuickTerminalSize.pixels(25) == CQuickTerminalSize{ tag: 2, value: 25 }
 
 	v.parse_cli('50%')!
 	primary := v.primary or {
@@ -601,6 +606,10 @@ fn test_parse_quick_terminal_size() {
 	assert primary.kind == .percentage
 	assert primary.percentage == 50
 	assert v.secondary == none
+	assert v.clone() == v
+	formatted_size := v.format_entry() or { '' }
+	assert formatted_size == '50%'
+	assert v.cval().primary.tag == 1
 
 	v = QuickTerminalSize{}
 	v.parse_cli('0x32p0%')!

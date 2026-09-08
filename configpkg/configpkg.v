@@ -9796,40 +9796,7 @@ pub:
 	pixels     u32
 }
 
-pub struct QuickTerminalSize {
-pub mut:
-	primary   ?QuickTerminalSizeValue
-	secondary ?QuickTerminalSizeValue
-}
-
-pub struct QuickTerminalDimensions {
-pub:
-	width  u32
-	height u32
-}
-
-// quick_terminal_size_parse_cli translates `QuickTerminalSize.parseCLI`.
-pub fn (mut q QuickTerminalSize) parse_cli(input ?string) ! {
-	in_val := input or { return perr(ParseError.value_required) }
-	parts := in_val.split(',')
-
-	primary_str := parts[0].trim(' \t')
-	q.primary = quick_terminal_size_value_parse(primary_str)!
-
-	if parts.len > 1 {
-		secondary_str := parts[1].trim(' \t')
-		q.secondary = quick_terminal_size_value_parse(secondary_str)!
-	} else {
-		q.secondary = none
-	}
-
-	if parts.len > 2 {
-		return perr(ParseError.too_many_arguments)
-	}
-}
-
-// quick_terminal_size_value_parse translates `QuickTerminalSize.Size.parse`.
-fn quick_terminal_size_value_parse(input string) !QuickTerminalSizeValue {
+pub fn QuickTerminalSizeValue.parse(input string) !QuickTerminalSizeValue {
 	if input.len == 0 {
 		return perr(ParseError.value_required)
 	}
@@ -9855,11 +9822,65 @@ fn quick_terminal_size_value_parse(input string) !QuickTerminalSizeValue {
 	return perr(ParseError.missing_unit)
 }
 
-// to_pixels converts a size value to pixels given the parent dimension.
-fn (s QuickTerminalSizeValue) to_pixels(parent u32) u32 {
+pub fn (s QuickTerminalSizeValue) to_pixels(parent u32) u32 {
 	return match s.kind {
 		.percentage { u32(s.percentage / 100.0 * f32(parent)) }
 		.pixels { s.pixels }
+	}
+}
+
+pub fn (s QuickTerminalSizeValue) format() string {
+	return match s.kind {
+		.percentage { '${format_f64(f64(s.percentage))}%' }
+		.pixels { '${s.pixels}px' }
+	}
+}
+
+pub struct QuickTerminalSize {
+pub mut:
+	primary   ?QuickTerminalSizeValue
+	secondary ?QuickTerminalSizeValue
+}
+
+pub fn (q QuickTerminalSize) clone() QuickTerminalSize {
+	return QuickTerminalSize{
+		primary: q.primary
+		secondary: q.secondary
+	}
+}
+
+pub fn (q QuickTerminalSize) format_entry() ?string {
+	primary := q.primary or { return none }
+	mut result := primary.format()
+	if secondary := q.secondary {
+		result += ',${secondary.format()}'
+	}
+	return result
+}
+
+pub struct QuickTerminalDimensions {
+pub:
+	width  u32
+	height u32
+}
+
+// quick_terminal_size_parse_cli translates `QuickTerminalSize.parseCLI`.
+pub fn (mut q QuickTerminalSize) parse_cli(input ?string) ! {
+	in_val := input or { return perr(ParseError.value_required) }
+	parts := in_val.split(',')
+
+	primary_str := parts[0].trim(' \t')
+	q.primary = QuickTerminalSizeValue.parse(primary_str)!
+
+	if parts.len > 1 {
+		secondary_str := parts[1].trim(' \t')
+		q.secondary = QuickTerminalSizeValue.parse(secondary_str)!
+	} else {
+		q.secondary = none
+	}
+
+	if parts.len > 2 {
+		return perr(ParseError.too_many_arguments)
 	}
 }
 

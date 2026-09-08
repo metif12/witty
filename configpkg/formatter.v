@@ -708,19 +708,7 @@ fn background_blur_string(value BackgroundBlur) string {
 }
 
 fn quick_terminal_size_string(value QuickTerminalSize) string {
-	primary := value.primary or { return '' }
-	mut result := quick_terminal_size_value_string(primary)
-	if secondary := value.secondary {
-		result += ',${quick_terminal_size_value_string(secondary)}'
-	}
-	return result
-}
-
-fn quick_terminal_size_value_string(value QuickTerminalSizeValue) string {
-	return match value.kind {
-		.percentage { '${format_f64(f64(value.percentage))}%' }
-		.pixels { '${value.pixels}px' }
-	}
+	return value.format_entry() or { '' }
 }
 
 fn path_string(value Path) string {

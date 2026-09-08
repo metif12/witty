@@ -54,11 +54,32 @@ pub:
 	value u32
 }
 
+pub fn CQuickTerminalSize.percentage(value f32) CQuickTerminalSize {
+	return CQuickTerminalSize{
+		tag: 1
+		value: math.f32_bits(value)
+	}
+}
+
+pub fn CQuickTerminalSize.pixels(value u32) CQuickTerminalSize {
+	return CQuickTerminalSize{
+		tag: 2
+		value: value
+	}
+}
+
 // CConfigQuickTerminalSize mirrors ghostty_config_quick_terminal_size_s.
 pub struct CConfigQuickTerminalSize {
 pub:
 	primary   CQuickTerminalSize
 	secondary CQuickTerminalSize
+}
+
+pub fn (q QuickTerminalSize) cval() CConfigQuickTerminalSize {
+	return CConfigQuickTerminalSize{
+		primary: quick_terminal_size_value_cval(q.primary)
+		secondary: quick_terminal_size_value_cval(q.secondary)
+	}
 }
 
 // c_get writes the requested configuration value using the exact projection
@@ -171,7 +192,7 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 					c_write_value[CConfigCommandList](ptr, c.command_list_cval())
 					return true
 				} $else $if field.unaliased_typ is QuickTerminalSize {
-					c_write_value[CConfigQuickTerminalSize](ptr, quick_terminal_size_cval(c.$(field.name)))
+					c_write_value[CConfigQuickTerminalSize](ptr, c.$(field.name).cval())
 					return true
 				} $else $if field.unaliased_typ is BackgroundBlur {
 					c_write_value[i16](ptr, c.$(field.name).cval())
@@ -300,29 +321,11 @@ fn (mut c Config) command_list_cval() CConfigCommandList {
 }
 
 @[markused]
-fn quick_terminal_size_cval(value QuickTerminalSize) CConfigQuickTerminalSize {
-	return CConfigQuickTerminalSize{
-		primary: quick_terminal_size_value_cval(value.primary)
-		secondary: quick_terminal_size_value_cval(value.secondary)
-	}
-}
-
-@[markused]
 fn quick_terminal_size_value_cval(value ?QuickTerminalSizeValue) CQuickTerminalSize {
 	actual := value or { return CQuickTerminalSize{} }
 	return match actual.kind {
-		.percentage {
-			CQuickTerminalSize{
-				tag: 1
-				value: math.f32_bits(actual.percentage)
-			}
-		}
-		.pixels {
-			CQuickTerminalSize{
-				tag: 2
-				value: actual.pixels
-			}
-		}
+		.percentage { CQuickTerminalSize.percentage(actual.percentage) }
+		.pixels { CQuickTerminalSize.pixels(actual.pixels) }
 	}
 }
 
