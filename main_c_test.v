@@ -4,6 +4,7 @@ import configpkg
 import global_state
 import os
 import apprt
+import terminal
 
 fn test_ghostty_info_exposes_stable_version_bytes() {
 	info := ghostty_info()
@@ -70,6 +71,28 @@ fn test_standalone_osc7_pwd_requires_exact_local_hostname() {
 	assert parse_osc7_pwd('file://[::1]/tmp/loopback') == none
 	assert parse_osc7_pwd('https://localhost/tmp/wrong-scheme') == none
 	assert parse_osc7_pwd('file://localhost/tmp/bad%escape') == none
+}
+
+fn test_standalone_window_title_matches_source_buffer_limit() {
+	mut term := terminal.Terminal.init(terminal.Options{
+		cols: 2
+		rows: 2
+	}) or { panic(err) }
+	defer { term.deinit() }
+	mut state := TermState{
+		term: &term
+		tab_title: 'original'
+		seen_title: true
+	}
+
+	apply_window_title(mut state, 'x'.repeat(256))
+	assert state.tab_title == 'original'
+	assert state.seen_title
+
+	term.set_pwd('p'.repeat(256))!
+	apply_window_title(mut state, '')
+	assert state.tab_title == ''
+	assert !state.seen_title
 }
 
 fn test_config_c_api_lifecycle_clone_and_primitive_getters() {

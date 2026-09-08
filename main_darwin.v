@@ -205,10 +205,16 @@ fn set_tab_title(mut state TermState, title string) {
 }
 
 fn apply_window_title(mut state TermState, title string) {
+	if title.len >= 256 {
+		return
+	}
 	// Empty title resets to pwd fallback (or blank if pwd is unknown).
 	if title.len == 0 {
 		state.seen_title = false
-		pwd := state.term.get_pwd() or { '' }
+		mut pwd := state.term.get_pwd() or { '' }
+		if pwd.len >= 256 {
+			pwd = ''
+		}
 		set_tab_title(mut state, pwd)
 		return
 	}
