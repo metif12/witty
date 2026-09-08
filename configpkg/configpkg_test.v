@@ -1058,16 +1058,18 @@ fn test_repeatable_string_map_public_api() {
 	mut values := RepeatableStringMap{}
 	values.parse_cli(' A = B ')!
 	values.parse_cli('B=C')!
+	values.parse_cli('\r\nC\v=\fD\r')!
 	values.parse_cli('A=replaced')!
-	assert values.count() == 2
-	assert values.format_entry() == ['A=replaced', 'B=C']
+	assert values.count() == 3
+	assert values.format_entry() == ['A=replaced', 'B=C', 'C=D']
 	assert values.equal(RepeatableStringMap{
-		entries: [StringMapEntry{'B', 'C'}, StringMapEntry{'A', 'replaced'}]
+		entries: [StringMapEntry{'B', 'C'}, StringMapEntry{'C', 'D'},
+			StringMapEntry{'A', 'replaced'}]
 	})
 	assert values.clone().equal(values)
 
 	values.parse_cli('A=')!
-	assert values.format_entry() == ['B=C']
+	assert values.format_entry() == ['B=C', 'C=D']
 	values.parse_cli('')!
 	assert values.count() == 0
 	assert values.format_entry() == ['']
@@ -1644,12 +1646,12 @@ fn test_config_file_whitespace_matches_source_byte_set() {
 	mut cfg := Config.default_config()
 	cfg.load_string('\vfont-size = 20\nenv = NAME=\vvalue\v\nfont-shaping-break = \vcursor')
 
-	// LineIterator trims space, tab, and a trailing carriage return. Vertical
-	// tab remains part of the key/value and must not be silently accepted.
+	// LineIterator trims space, tab, and a trailing carriage return. The env
+	// value's RepeatableStringMap parser additionally trims all ASCII whitespace.
 	assert cfg.font_size == default_font_size
 	assert cfg.env.entries == [StringMapEntry{
 		key: 'NAME'
-		value: '\vvalue\v'
+		value: 'value'
 	}]
 	assert cfg.font_shaping_break == FontShapingBreak{}
 	assert cfg.diagnostics.len == 2

@@ -6528,8 +6528,8 @@ pub fn (mut m RepeatableStringMap) parse_cli(input ?string) ! {
 	if index < 0 {
 		return error('value required')
 	}
-	key := value[..index].trim(' \t')
-	val := value[index + 1..].trim(' \t')
+	key := value[..index].trim(' \t\n\r\v\f')
+	val := value[index + 1..].trim(' \t\n\r\v\f')
 	for i, entry in m.entries {
 		if entry.key != key {
 			continue
