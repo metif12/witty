@@ -1800,6 +1800,14 @@ fn test_conditional_theme_replay_replaces_theme_repeatables() {
 	cfg.load_string('theme = light:${light},dark:${dark}\nfont-family = User Font\ncustom-shader = user.glsl\n')
 	cfg.finalize()
 	assert cfg.font_family == ['Light Font', 'User Font']
+	mut saw_light_theme_step := false
+	for step in cfg.replay_steps {
+		if step.kind == .arg && step.value == '--font-family=Light Font' {
+			saw_light_theme_step = true
+			assert step.condition_theme or { Theme.dark } == .light
+		}
+	}
+	assert saw_light_theme_step
 	assert cfg.custom_shader.items == [
 		Path{ path: os.join_path(dir, 'light.glsl') },
 		Path{ path: 'user.glsl' },
@@ -1809,6 +1817,15 @@ fn test_conditional_theme_replay_replaces_theme_repeatables() {
 		panic('conditional theme was not marked relevant')
 	}
 	assert dark_cfg.font_family == ['Dark Font', 'User Font']
+	mut saw_dark_theme_step := false
+	for step in dark_cfg.replay_steps {
+		if step.kind == .arg && step.value == '--font-family=Dark Font' {
+			saw_dark_theme_step = true
+			assert step.condition_theme or { Theme.light } == .dark
+		}
+		assert step.value != '--font-family=Light Font'
+	}
+	assert saw_dark_theme_step
 	assert dark_cfg.custom_shader.items == [
 		Path{ path: os.join_path(dir, 'dark.glsl') },
 		Path{ path: 'user.glsl' },

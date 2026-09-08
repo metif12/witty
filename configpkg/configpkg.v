@@ -6529,10 +6529,11 @@ enum ReplayStepKind {
 // base layer and every user option—including repeatable options—retains its
 // normal parser semantics.
 struct ReplayStep {
-	kind       ReplayStepKind
-	value      string
-	args       []string
-	diagnostic Diagnostic
+	kind            ReplayStepKind
+	value           string
+	args            []string
+	diagnostic      Diagnostic
+	condition_theme ?Theme
 }
 
 // load loads configuration using Ghostty's default-file order, command-line
@@ -6689,7 +6690,7 @@ fn (mut c Config) load_iter_internal[T](mut iter T, overwrite_font_families bool
 // V's garbage collector removes the allocator parameter from the source API.
 pub fn (mut c Config) parse_manually_hook[T](arg string, mut iter T) bool {
 	if arg != '-e' {
-		if !c.loading_theme && !c.replaying {
+		if !c.replaying {
 			c.replay_steps << ReplayStep{
 				kind: .arg
 				value: arg
@@ -6702,7 +6703,7 @@ pub fn (mut c Config) parse_manually_hook[T](arg string, mut iter T) bool {
 	for {
 		command_args << (iter.next() or { break })
 	}
-	if !c.loading_theme && !c.replaying {
+	if !c.replaying {
 		c.replay_steps << ReplayStep{
 			kind: .command
 			args: command_args.clone()
@@ -6835,7 +6836,7 @@ pub fn (mut c Config) load_recursive_files() {
 }
 
 fn (mut c Config) expand_paths(base string) {
-	if !c.loading_theme && !c.replaying {
+	if !c.replaying {
 		c.replay_steps << ReplayStep{
 			kind: .expand
 			value: base
@@ -9261,13 +9262,32 @@ fn (mut c Config) load_theme() {
 	rebuilt.apply_theme_file(path)
 	rebuilt.loading_theme = false
 
-	// Replay user/default-file inputs in their original order. Expansion is a
-	// replay step because relative paths are resolved against the file that
-	// declared them, not against the theme directory.
-	rebuilt.replaying = true
+	// Theme arguments are conditional on the state that selected this file.
+	// Expansion and explicit diagnostics remain unconditional, just as in the
+	// source Replay.Step union.
+	for i in 0 .. rebuilt.replay_steps.len {
+		if rebuilt.replay_steps[i].kind == .command {
+			break
+		}
+		if rebuilt.replay_steps[i].kind == .arg {
+			rebuilt.replay_steps[i] = ReplayStep{
+				...rebuilt.replay_steps[i]
+				condition_theme: state.theme
+			}
+		}
+	}
+
+	// Replay user/default-file inputs in their original order. The replay
+	// itself records the yielded arguments and expansions into the new config,
+	// preserving the newly conditional theme steps already present above.
 	for step in steps {
 		match step.kind {
 			.arg {
+				if condition := step.condition_theme {
+					if condition != state.theme {
+						continue
+					}
+				}
 				mut iter := cli_args.SliceIterator.new([step.value])
 				rebuilt.load_iter(mut iter)
 			}
@@ -9276,16 +9296,22 @@ fn (mut c Config) load_theme() {
 				rebuilt.diagnostics << step.diagnostic.clone()
 			}
 			.command {
+				rebuilt.replay_steps << ReplayStep{
+					kind: .command
+					args: step.args.clone()
+				}
 				rebuilt.apply_command_tail(step.args, diagnosticspkg.NoneLocation{})
 			}
 			.xdg_command {
+				rebuilt.replay_steps << ReplayStep{
+					kind: .xdg_command
+					args: step.args.clone()
+				}
 				rebuilt.xdg_terminal_exec = true
 				rebuilt.initial_command = Command(DirectCmd{ direct: step.args.clone() })
 			}
 		}
 	}
-	rebuilt.replaying = false
-	rebuilt.replay_steps = steps
 
 	// A conditional theme makes window-theme=auto nonsensical because it
 	// would override the selected light/dark theme.
