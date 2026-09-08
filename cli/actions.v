@@ -246,7 +246,7 @@ pub fn validate_config(args []string) !ValidateResult {
 	}
 	mut lines := []string{cap: config.diagnostics.len}
 	for diagnostic in config.diagnostics {
-		lines << diagnostic.str()
+		lines << diagnostic.format()
 	}
 	return ValidateResult{
 		code: if lines.len > 0 { 1 } else { 0 }
