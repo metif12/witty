@@ -1540,6 +1540,36 @@ fn test_screen_first_implicit_hyperlink_uses_zero_offset() {
 	assert s.cursor.hyperlink_implicit_id == 1
 }
 
+fn test_screen_cursor_set_hyperlink_updates_cursor_cell_and_row() {
+	mut s := Screen.init(5, 3, 0)
+	defer { s.deinit() }
+	s.cursor_absolute(2, 1)
+	s.start_hyperlink('https://example.com/cursor', 'cursor') or { panic(err) }
+
+	s.cursor_set_hyperlink() or { panic(err) }
+
+	row := s.pages.get_active_row(1)
+	assert row.hyperlink
+	assert row.cells[2].has_hyperlink
+	assert row.cells[2].hyperlink.uri == 'https://example.com/cursor'
+}
+
+fn test_screen_append_grapheme_updates_cursor_row_cell() {
+	mut s := Screen.init(5, 3, 0)
+	defer { s.deinit() }
+	s.cursor_absolute(2, 1)
+	row_idx := s.pages.active_start + 1
+	s.pages.screen_rows[row_idx].cells[2] = CellData.init(u32(`a`))
+
+	s.append_grapheme(2, u32(0x0301)) or { panic(err) }
+
+	row := s.pages.get_active_row(1)
+	assert row.grapheme
+	assert row.cells[2].content_tag == .codepoint_grapheme
+	assert row.cells[2].has_grapheme
+	assert row.cells[2].graphemes == [u32(0x0301)]
+}
+
 // ============================================================
 // Additional tests translated from ghostty Screen.zig
 // ============================================================

@@ -3309,17 +3309,13 @@ pub fn (mut self Screen) end_hyperlink() {
 // Set the hyperlink on the current cell.
 pub fn (mut self Screen) cursor_set_hyperlink() ! {
 	assert self.cursor.hyperlink_id != 0
-	link := self.cursor.hyperlink_state or { return error('active hyperlink has no value') }
+	link := self.cursor.hyperlink_state or { panic('active hyperlink has no value') }
 	idx := self.pages.active_start + int(self.cursor.y)
-	if idx < self.pages.screen_rows.len {
-		unsafe {
-			mut row := &self.pages.screen_rows[idx]
-			if int(self.cursor.x) < row.cells.len {
-				row.cells[int(self.cursor.x)].has_hyperlink = true
-				row.cells[int(self.cursor.x)].hyperlink = link.dupe()
-			}
-			row.hyperlink = true
-		}
+	unsafe {
+		mut row := &self.pages.screen_rows[idx]
+		row.cells[int(self.cursor.x)].has_hyperlink = true
+		row.cells[int(self.cursor.x)].hyperlink = link.dupe()
+		row.hyperlink = true
 	}
 }
 
@@ -3362,13 +3358,11 @@ pub fn (mut self Screen) cursor_set_semantic_content(value CursorSemanticContent
 			self.cursor.semantic_content = .prompt
 			self.cursor.semantic_content_clear_eol = false
 			idx := self.pages.active_start + int(self.cursor.y)
-			if idx < self.pages.screen_rows.len {
-				unsafe {
-					mut row := &self.pages.screen_rows[idx]
-					row.semantic_prompt = match value.kind {
-						.initial, .right { SemanticPromptType.prompt }
-						.continuation, .secondary { SemanticPromptType.prompt_continuation }
-					}
+			unsafe {
+				mut row := &self.pages.screen_rows[idx]
+				row.semantic_prompt = match value.kind {
+					.initial, .right { SemanticPromptType.prompt }
+					.continuation, .secondary { SemanticPromptType.prompt_continuation }
 				}
 			}
 		}
@@ -3986,18 +3980,15 @@ pub fn (self &Screen) dump_string_alloc_unwrapped(tag PointTag) !string {
 // stored in the cell's graphemes slice and the content tag is switched to
 // codepoint_grapheme.
 pub fn (mut self Screen) append_grapheme(cell_x u32, cp u32) ! {
+	assert cell_x < self.pages.cols
 	idx := self.pages.active_start + int(self.cursor.y)
-	if idx < self.pages.screen_rows.len {
-		unsafe {
-			mut row := &self.pages.screen_rows[idx]
-			if int(cell_x) < row.cells.len {
-				mut cell := &row.cells[int(cell_x)]
-				cell.graphemes << cp
-				cell.has_grapheme = true
-				cell.content_tag = .codepoint_grapheme
-				row.grapheme = true
-			}
-		}
+	unsafe {
+		mut row := &self.pages.screen_rows[idx]
+		mut cell := &row.cells[int(cell_x)]
+		cell.graphemes << cp
+		cell.has_grapheme = true
+		cell.content_tag = .codepoint_grapheme
+		row.grapheme = true
 	}
 }
 
@@ -4134,11 +4125,9 @@ pub fn (mut self Screen) test_write_string(text string) ! {
 					.output {}
 					.prompt, .input {
 						idx := self.pages.active_start + int(self.cursor.y)
-						if idx < self.pages.screen_rows.len {
-							unsafe {
-								mut row := &self.pages.screen_rows[idx]
-								row.semantic_prompt = .prompt_continuation
-							}
+						unsafe {
+							mut row := &self.pages.screen_rows[idx]
+							row.semantic_prompt = .prompt_continuation
 						}
 					}
 				}
@@ -4151,11 +4140,13 @@ pub fn (mut self Screen) test_write_string(text string) ! {
 			assert self.cursor.x > 0
 			mut cell_x := self.cursor.x - 1
 			idx := self.pages.active_start + int(self.cursor.y)
-			if idx < self.pages.screen_rows.len
-				&& int(cell_x) < self.pages.screen_rows[idx].cells.len
-				&& self.pages.screen_rows[idx].cells[int(cell_x)].wide == .spacer_tail {
-				assert cell_x > 0
-				cell_x--
+			match self.pages.screen_rows[idx].cells[int(cell_x)].wide {
+				.narrow, .wide {}
+				.spacer_head { panic('unreachable spacer head before zero-width codepoint') }
+				.spacer_tail {
+					assert cell_x > 0
+					cell_x--
+				}
 			}
 			self.append_grapheme(cell_x, u32(c))!
 			continue
@@ -4166,31 +4157,25 @@ pub fn (mut self Screen) test_write_string(text string) ! {
 			self.cursor.pending_wrap = false
 			// Mark current row as wrapped
 			cur_idx := self.pages.active_start + int(self.cursor.y)
-			if cur_idx < self.pages.screen_rows.len {
-				unsafe {
-					mut row := &self.pages.screen_rows[cur_idx]
-					row.wrap = true
-				}
+			unsafe {
+				mut row := &self.pages.screen_rows[cur_idx]
+				row.wrap = true
 			}
 			self.cursor_down_or_scroll()!
 			self.cursor_horizontal_absolute(0)
 			// Mark new row as continuation
 			new_idx := self.pages.active_start + int(self.cursor.y)
-			if new_idx < self.pages.screen_rows.len {
-				unsafe {
-					mut row := &self.pages.screen_rows[new_idx]
-					row.wrap_continuation = true
-				}
+			unsafe {
+				mut row := &self.pages.screen_rows[new_idx]
+				row.wrap_continuation = true
 			}
 			match self.cursor.semantic_content {
 				.output {}
 				.input, .prompt {
 					idx2 := self.pages.active_start + int(self.cursor.y)
-					if idx2 < self.pages.screen_rows.len {
-						unsafe {
-							mut row := &self.pages.screen_rows[idx2]
-							row.semantic_prompt = .prompt_continuation
-						}
+					unsafe {
+						mut row := &self.pages.screen_rows[idx2]
+						row.semantic_prompt = .prompt_continuation
 					}
 				}
 			}
@@ -4200,22 +4185,18 @@ pub fn (mut self Screen) test_write_string(text string) ! {
 		match width {
 			1 {
 				row_idx := self.pages.active_start + int(self.cursor.y)
-				if row_idx < self.pages.screen_rows.len {
-					unsafe {
-						mut row := &self.pages.screen_rows[row_idx]
-						if int(self.cursor.x) < row.cells.len {
-							row.cells[int(self.cursor.x)] = CellData{
-								codepoint: u32(c)
-								content_tag: .codepoint
-								style_id: self.cursor.style_id
-								is_protected: self.cursor.is_protected
-								semantic_content: self.cursor.semantic_content
-								style: self.cursor.style
-							}
-							if self.cursor.style_id != default_style_id {
-								row.styled = true
-							}
-						}
+				unsafe {
+					mut row := &self.pages.screen_rows[row_idx]
+					row.cells[int(self.cursor.x)] = CellData{
+						codepoint: u32(c)
+						content_tag: .codepoint
+						style_id: self.cursor.style_id
+						is_protected: self.cursor.is_protected
+						semantic_content: self.cursor.semantic_content
+						style: self.cursor.style
+					}
+					if self.cursor.style_id != default_style_id {
+						row.styled = true
 					}
 				}
 				if self.cursor.hyperlink_id > 0 {
@@ -4288,7 +4269,7 @@ pub fn (mut self Screen) test_write_string(text string) ! {
 		}
 
 		if self.cursor.x + 1 < self.pages.cols {
-			self.cursor.x += 1
+			self.cursor_right(1)
 		} else {
 			self.cursor.pending_wrap = true
 		}
