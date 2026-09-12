@@ -5,7 +5,7 @@ module font
 //
 // Translated from ghostty/src/font/backend.zig
 
-pub enum Backend {
+pub enum Backend as u8 {
 	// FreeType for font rendering with no font discovery enabled.
 	freetype
 
@@ -37,7 +37,7 @@ pub enum Backend {
 //
 // Note: In Zig this is a comptime function taking std.Target and WasmTarget.
 // In V we simplify to a runtime function since we don't have comptime.
-pub fn Backend.default_backend() Backend {
+pub fn Backend.default_() Backend {
 	// macOS also supports "coretext_freetype" but there is no scenario
 	// that is the default. It is only used by people who want to
 	// self-compile Ghostty and prefer the freetype aesthetic.
