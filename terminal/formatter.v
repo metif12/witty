@@ -859,56 +859,85 @@ pub mut:
 
 // Extra stuff to emit for terminal formatting.
 pub struct TerminalExtra {
-pub:
-	// Emit the palette using OSC 4 sequences.
-	palette bool
-	// Emit terminal modes that differ from their defaults using CSI h/l
-	// sequences.
-	modes bool
-	// Emit scrolling region state using DECSTBM and DECSLRM sequences.
-	scrolling_region bool
-	// Emit tabstop positions by clearing all tabs (CSI 3 g) and setting
-	// each configured tabstop with HTS.
-	tabstops bool
-	// Emit the present working directory using OSC 7.
-	pwd bool
-	// Emit keyboard modes such as ModifyOtherKeys.
-	keyboard bool
-	// The screen extras to emit.
-	screen ScreenExtra = screen_extra_none
+mut:
+	value u16
 }
 
 // Emit nothing.
-pub const terminal_extra_none = TerminalExtra{
-	palette: false
-	modes: false
-	scrolling_region: false
-	tabstops: false
-	pwd: false
-	keyboard: false
-	screen: screen_extra_none
-}
+pub const terminal_extra_none = TerminalExtra{}
 
 // Emit style-relevant information only such as palettes.
-pub const terminal_extra_styles = TerminalExtra{
-	palette: true
-	modes: false
-	scrolling_region: false
-	tabstops: false
-	pwd: false
-	keyboard: false
-	screen: screen_extra_styles
-}
+pub const terminal_extra_styles = TerminalExtra{ value: 0b000110_000001 }
 
 // Emit everything. This reconstructs the terminal state as closely as possible.
-pub const terminal_extra_all = TerminalExtra{
-	palette: true
-	modes: true
-	scrolling_region: true
-	tabstops: true
-	pwd: true
-	keyboard: true
-	screen: screen_extra_all
+pub const terminal_extra_all = TerminalExtra{ value: 0b111111_111111 }
+
+pub fn (self TerminalExtra) palette() bool {
+	return self.value & (1 << 0) != 0
+}
+
+pub fn (mut self TerminalExtra) set_palette(value bool) {
+	self.set_bit(1 << 0, value)
+}
+
+pub fn (self TerminalExtra) modes() bool {
+	return self.value & (1 << 1) != 0
+}
+
+pub fn (mut self TerminalExtra) set_modes(value bool) {
+	self.set_bit(1 << 1, value)
+}
+
+pub fn (self TerminalExtra) scrolling_region() bool {
+	return self.value & (1 << 2) != 0
+}
+
+pub fn (mut self TerminalExtra) set_scrolling_region(value bool) {
+	self.set_bit(1 << 2, value)
+}
+
+pub fn (self TerminalExtra) tabstops() bool {
+	return self.value & (1 << 3) != 0
+}
+
+pub fn (mut self TerminalExtra) set_tabstops(value bool) {
+	self.set_bit(1 << 3, value)
+}
+
+pub fn (self TerminalExtra) pwd() bool {
+	return self.value & (1 << 4) != 0
+}
+
+pub fn (mut self TerminalExtra) set_pwd(value bool) {
+	self.set_bit(1 << 4, value)
+}
+
+pub fn (self TerminalExtra) keyboard() bool {
+	return self.value & (1 << 5) != 0
+}
+
+pub fn (mut self TerminalExtra) set_keyboard(value bool) {
+	self.set_bit(1 << 5, value)
+}
+
+pub fn (self TerminalExtra) screen() ScreenExtra {
+	return ScreenExtra.from_int(u8((self.value >> 6) & 0b11_1111))
+}
+
+pub fn (mut self TerminalExtra) set_screen(value ScreenExtra) {
+	self.value = (self.value & 0b00_0000_111111) | (u16(value.int()) << 6)
+}
+
+pub fn (self TerminalExtra) int() u16 {
+	return self.value
+}
+
+fn (mut self TerminalExtra) set_bit(mask u16, enabled bool) {
+	if enabled {
+		self.value |= mask
+	} else {
+		self.value &= ~mask
+	}
 }
 
 pub fn TerminalFormatter.init(t &Terminal, opts FormatOptions) TerminalFormatter {
@@ -925,7 +954,7 @@ pub fn (self TerminalFormatter) format() string {
 	mut sb := strings.new_builder(1024)
 
 	// Emit palette before screen content if using VT format.
-	if self.extra.palette {
+	if self.extra.palette() {
 		before := sb.len
 		match self.opts.emit {
 			.plain {}
@@ -948,7 +977,7 @@ pub fn (self TerminalFormatter) format() string {
 	}
 
 	// Emit terminal modes that differ from defaults.
-	if self.opts.emit == .vt && self.extra.modes {
+	if self.opts.emit == .vt && self.extra.modes() {
 		before := sb.len
 		for entry in mode_entries {
 			if entry.disabled {
@@ -968,7 +997,7 @@ pub fn (self TerminalFormatter) format() string {
 	// Format the active screen content
 	mut screen_fmt := ScreenFormatter.init(self.terminal.screens.active, self.opts)
 	screen_fmt.content = self.content
-	screen_fmt.extra = self.extra.screen
+	screen_fmt.extra = self.extra.screen()
 	screen_fmt.pin_map = self.pin_map
 	sb.write_string(screen_fmt.format())
 
@@ -977,7 +1006,7 @@ pub fn (self TerminalFormatter) format() string {
 		before := sb.len
 		prior_pin := last_pin_or_origin(self.pin_map)
 		// Emit scrolling region using DECSTBM and DECSLRM
-		if self.extra.scrolling_region {
+		if self.extra.scrolling_region() {
 			region := self.terminal.scrolling_region
 			// DECSTBM: top and bottom margins (1-indexed)
 			// Only emit if not the full screen
@@ -992,7 +1021,7 @@ pub fn (self TerminalFormatter) format() string {
 		}
 
 		// Emit tabstop positions
-		if self.extra.tabstops {
+		if self.extra.tabstops() {
 			// Clear all tabs (CSI 3 g)
 			sb.write_string('\x1b[3g')
 			// Set each configured tabstop by moving cursor and using HTS
@@ -1007,7 +1036,7 @@ pub fn (self TerminalFormatter) format() string {
 		}
 
 		// Emit keyboard modes such as ModifyOtherKeys
-		if self.extra.keyboard {
+		if self.extra.keyboard() {
 			// Only emit if modify_other_keys_2 is true
 			if self.terminal.flags.modify_other_keys_2() {
 				sb.write_string('\x1b[>4;2m')
@@ -1015,7 +1044,7 @@ pub fn (self TerminalFormatter) format() string {
 		}
 
 		// Emit present working directory using OSC 7
-		if self.extra.pwd {
+		if self.extra.pwd() {
 			if self.terminal.pwd.len > 0 {
 				sb.write_string('\x1b]7;${self.terminal.pwd}\x1b\\')
 			}
@@ -1057,55 +1086,88 @@ pub:
 
 // Extra stuff to emit for screen formatting.
 pub struct ScreenExtra {
-pub:
-	// Emit cursor position using CUP (CSI H).
-	cursor bool
-	// Emit current SGR style state based on the cursor's active style_id.
-	style bool
-	// Emit current hyperlink state using OSC 8 sequences.
-	hyperlink bool
-	// Emit character protection mode using DECSCA.
-	protection bool
-	// Emit Kitty keyboard protocol state using CSI > u and CSI = sequences.
-	kitty_keyboard bool
-	// Emit character set designations and invocations.
-	charsets bool
+mut:
+	value u8
 }
 
 // Emit nothing.
-pub const screen_extra_none = ScreenExtra{
-	cursor: false
-	style: false
-	hyperlink: false
-	protection: false
-	kitty_keyboard: false
-	charsets: false
-}
+pub const screen_extra_none = ScreenExtra{}
 
 // Emit style-relevant information only.
-pub const screen_extra_styles = ScreenExtra{
-	cursor: false
-	style: true
-	hyperlink: true
-	protection: false
-	kitty_keyboard: false
-	charsets: false
-}
+pub const screen_extra_styles = ScreenExtra{ value: 0b00_0110 }
 
 // Emit everything.
-pub const screen_extra_all = ScreenExtra{
-	cursor: true
-	style: true
-	hyperlink: true
-	protection: true
-	kitty_keyboard: true
-	charsets: true
+pub const screen_extra_all = ScreenExtra{ value: 0b11_1111 }
+
+pub fn ScreenExtra.from_int(value u8) ScreenExtra {
+	return ScreenExtra{
+		value: value & 0b11_1111
+	}
+}
+
+pub fn (self ScreenExtra) cursor() bool {
+	return self.value & (1 << 0) != 0
+}
+
+pub fn (mut self ScreenExtra) set_cursor(value bool) {
+	self.set_bit(1 << 0, value)
+}
+
+pub fn (self ScreenExtra) style() bool {
+	return self.value & (1 << 1) != 0
+}
+
+pub fn (mut self ScreenExtra) set_style(value bool) {
+	self.set_bit(1 << 1, value)
+}
+
+pub fn (self ScreenExtra) hyperlink() bool {
+	return self.value & (1 << 2) != 0
+}
+
+pub fn (mut self ScreenExtra) set_hyperlink(value bool) {
+	self.set_bit(1 << 2, value)
+}
+
+pub fn (self ScreenExtra) protection() bool {
+	return self.value & (1 << 3) != 0
+}
+
+pub fn (mut self ScreenExtra) set_protection(value bool) {
+	self.set_bit(1 << 3, value)
+}
+
+pub fn (self ScreenExtra) kitty_keyboard() bool {
+	return self.value & (1 << 4) != 0
+}
+
+pub fn (mut self ScreenExtra) set_kitty_keyboard(value bool) {
+	self.set_bit(1 << 4, value)
+}
+
+pub fn (self ScreenExtra) charsets() bool {
+	return self.value & (1 << 5) != 0
+}
+
+pub fn (mut self ScreenExtra) set_charsets(value bool) {
+	self.set_bit(1 << 5, value)
+}
+
+pub fn (self ScreenExtra) int() u8 {
+	return self.value
+}
+
+fn (mut self ScreenExtra) set_bit(mask u8, enabled bool) {
+	if enabled {
+		self.value |= mask
+	} else {
+		self.value &= ~mask
+	}
 }
 
 // Returns true if any extra flags are set.
 pub fn (self ScreenExtra) is_set() bool {
-	return self.cursor || self.style || self.hyperlink || self.protection
-		|| self.kitty_keyboard || self.charsets
+	return self.value != 0
 }
 
 pub fn ScreenFormatter.init(screen &Screen, opts FormatOptions) ScreenFormatter {
@@ -1274,13 +1336,13 @@ pub fn (self ScreenFormatter) format() string {
 	prior_pin := last_pin_or_origin(self.pin_map)
 
 	// Emit current SGR style state
-	if self.extra.style {
+	if self.extra.style() {
 		cursor := self.screen.cursor
 		sb.write_string(format_style_vt(cursor.style))
 	}
 
 	// Emit current hyperlink state using OSC 8
-	if self.extra.hyperlink {
+	if self.extra.hyperlink() {
 		if link := self.screen.cursor.hyperlink_state {
 			// Start hyperlink with uri (and explicit id if present)
 			match link.id {
@@ -1295,7 +1357,7 @@ pub fn (self ScreenFormatter) format() string {
 	}
 
 	// Emit character protection mode using DECSCA
-	if self.extra.protection {
+	if self.extra.protection() {
 		if self.screen.cursor.is_protected {
 			// DEC protected mode
 			sb.write_string('\x1b[1"q')
@@ -1303,7 +1365,7 @@ pub fn (self ScreenFormatter) format() string {
 	}
 
 	// Emit Kitty keyboard protocol state using CSI = u
-	if self.extra.kitty_keyboard {
+	if self.extra.kitty_keyboard() {
 		flags := self.screen.kitty_keyboard.current().int()
 		if flags != key_flags_disabled.int() {
 			sb.write_string('\x1b[=${flags};1u')
@@ -1311,7 +1373,7 @@ pub fn (self ScreenFormatter) format() string {
 	}
 
 	// Emit character set designations and invocations
-	if self.extra.charsets {
+	if self.extra.charsets() {
 		cs := self.screen.charset
 
 		// Emit G0-G3 designations
@@ -1365,7 +1427,7 @@ pub fn (self ScreenFormatter) format() string {
 	}
 
 	// Emit cursor position using CUP (CSI H)
-	if self.extra.cursor {
+	if self.extra.cursor() {
 		cursor := self.screen.cursor
 		// CUP is 1-indexed
 		sb.write_string('\x1b[${cursor.y + 1};${cursor.x + 1}H')

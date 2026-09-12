@@ -920,7 +920,21 @@ fn test_screen_extra_is_set() {
 	assert screen_extra_none.is_set() == false
 	assert screen_extra_styles.is_set() == true
 	assert screen_extra_all.is_set() == true
-	assert ScreenExtra{ cursor: true }.is_set() == true
+	mut extra := screen_extra_none
+	extra.set_cursor(true)
+	assert extra.is_set() == true
+	assert sizeof(ScreenExtra) == 1
+	assert screen_extra_styles.int() == 0b00_0110
+	assert screen_extra_all.int() == 0b11_1111
+	assert sizeof(TerminalExtra) == 2
+	assert terminal_extra_styles.int() == 0b000110_000001
+	assert terminal_extra_all.int() == 0b111111_111111
+	mut terminal_extra := terminal_extra_all
+	terminal_extra.set_palette(false)
+	terminal_extra.set_screen(screen_extra_styles)
+	assert !terminal_extra.palette()
+	assert terminal_extra.screen() == screen_extra_styles
+	assert terminal_extra.int() == 0b000110_111110
 }
 
 // ============================================================
@@ -1031,10 +1045,8 @@ fn test_terminal_formatter_html_palette() ! {
 	}
 
 	mut formatter := TerminalFormatter.init(&t, FormatOptions{ emit: .html })
-	formatter.extra = TerminalExtra{
-		palette: true
-		screen: screen_extra_none
-	}
+	formatter.extra = terminal_extra_none
+	formatter.extra.set_palette(true)
 	output := formatter.format()
 
 	// Verify palette CSS variables are emitted
@@ -1064,10 +1076,8 @@ fn test_terminal_vt_scrolling_region() ! {
 	}
 
 	mut formatter := TerminalFormatter.init(&t, format_vt)
-	formatter.extra = TerminalExtra{
-		scrolling_region: true
-		screen: screen_extra_none
-	}
+	formatter.extra = terminal_extra_none
+	formatter.extra.set_scrolling_region(true)
 	output := formatter.format()
 
 	// Should contain DECSTBM sequence
@@ -1085,10 +1095,8 @@ fn test_terminal_vt_modes() ! {
 	stream.next_slice('\x1b[?2004h\x1b[?1000h\x1b[?7lhello')!
 
 	mut formatter := TerminalFormatter.init(&t, format_vt)
-	formatter.extra = TerminalExtra{
-		modes: true
-		screen: screen_extra_none
-	}
+	formatter.extra = terminal_extra_none
+	formatter.extra.set_modes(true)
 	output := formatter.format()
 	assert output.contains('\x1b[?2004h')
 	assert output.contains('\x1b[?1000h')
@@ -1121,10 +1129,8 @@ fn test_terminal_vt_keyboard_modes() ! {
 	}
 
 	mut formatter := TerminalFormatter.init(&t, format_vt)
-	formatter.extra = TerminalExtra{
-		keyboard: true
-		screen: screen_extra_none
-	}
+	formatter.extra = terminal_extra_none
+	formatter.extra.set_keyboard(true)
 	output := formatter.format()
 
 	assert output.contains('\x1b[>4;2m'), 'should contain modify other keys mode 2'
@@ -1146,10 +1152,8 @@ fn test_terminal_vt_pwd() ! {
 	}
 
 	mut formatter := TerminalFormatter.init(&t, format_vt)
-	formatter.extra = TerminalExtra{
-		pwd: true
-		screen: screen_extra_none
-	}
+	formatter.extra = terminal_extra_none
+	formatter.extra.set_pwd(true)
 	output := formatter.format()
 
 	assert output.contains('\x1b]7;file://host/home/user\x1b\\'), 'should contain OSC 7 pwd'
@@ -2109,9 +2113,8 @@ fn test_screen_vt_with_cursor_position() {
 	s.next_slice('hello\r\nworld') or { panic(err) }
 
 	mut f := ScreenFormatter.init(t.screens.active, format_vt)
-	f.extra = ScreenExtra{
-		cursor: true
-	}
+	f.extra = screen_extra_none
+	f.extra.set_cursor(true)
 	output := f.format()
 
 	mut t2 := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
@@ -2136,9 +2139,8 @@ fn test_screen_vt_with_style() {
 	s.next_slice('\x1b[1;31mhello') or { panic(err) }
 
 	mut f := ScreenFormatter.init(t.screens.active, format_vt)
-	f.extra = ScreenExtra{
-		style: true
-	}
+	f.extra = screen_extra_none
+	f.extra.set_style(true)
 	output := f.format()
 
 	mut t2 := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
@@ -2161,9 +2163,8 @@ fn test_screen_vt_with_hyperlink() {
 	s.next_slice('\x1b]8;;http://example.com\x1b\\hello') or { panic(err) }
 
 	mut f := ScreenFormatter.init(t.screens.active, format_vt)
-	f.extra = ScreenExtra{
-		hyperlink: true
-	}
+	f.extra = screen_extra_none
+	f.extra.set_hyperlink(true)
 	output := f.format()
 
 	mut t2 := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
@@ -2192,9 +2193,8 @@ fn test_screen_vt_with_protection() {
 	s.next_slice('\x1b[1"qhello') or { panic(err) }
 
 	mut f := ScreenFormatter.init(t.screens.active, format_vt)
-	f.extra = ScreenExtra{
-		protection: true
-	}
+	f.extra = screen_extra_none
+	f.extra.set_protection(true)
 	output := f.format()
 
 	mut t2 := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
@@ -2218,9 +2218,8 @@ fn test_screen_vt_with_kitty_keyboard() {
 	s.next_slice('\x1b[=3;1uhello') or { panic(err) }
 
 	mut f := ScreenFormatter.init(t.screens.active, format_vt)
-	f.extra = ScreenExtra{
-		kitty_keyboard: true
-	}
+	f.extra = screen_extra_none
+	f.extra.set_kitty_keyboard(true)
 	output := f.format()
 
 	mut t2 := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
@@ -2244,9 +2243,8 @@ fn test_screen_vt_with_charsets() {
 	s.next_slice('\x1b(0\x0ehello') or { panic(err) }
 
 	mut f := ScreenFormatter.init(t.screens.active, format_vt)
-	f.extra = ScreenExtra{
-		charsets: true
-	}
+	f.extra = screen_extra_none
+	f.extra.set_charsets(true)
 	output := f.format()
 
 	mut t2 := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
@@ -2276,10 +2274,8 @@ fn test_terminal_vt_with_tabstops() {
 	s.next_slice('hello') or { panic(err) }
 
 	mut f := TerminalFormatter.init(&t, format_vt)
-	f.extra = TerminalExtra{
-		tabstops: true
-		screen: screen_extra_none
-	}
+	f.extra = terminal_extra_none
+	f.extra.set_tabstops(true)
 	output := f.format()
 
 	mut t2 := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
