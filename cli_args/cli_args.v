@@ -151,7 +151,7 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 	has_value := value != none
 
 	$for field in T.fields {
-		if field.name.len > 0 && field.name[0] != `_`
+		if field.name.len > 0 && field.name[0] != `_` && field.name != 'diagnostics'
 			&& translated_identifier_name(field.name) == normalized_key {
 			defaults := T{}
 
@@ -207,6 +207,13 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 				dst.$(field.name) = parse_optional_custom(dst.$(field.name), value) or {
 					return error('invalid value')
 				}
+				return
+			}
+			$if field.is_option && field.is_enum {
+				if !has_value {
+					return error('value required')
+				}
+				dst.$(field.name) = parse_optional_enum(dst.$(field.name), raw)!
 				return
 			}
 
@@ -369,6 +376,12 @@ fn parse_optional_custom[T](current ?T, value ?string) !T {
 	return error('unsupported field type')
 }
 
+fn parse_optional_enum[T](current ?T, raw string) !T {
+	mut parsed := current or { T{} }
+	parse_enum_value(mut parsed, raw)!
+	return parsed
+}
+
 // parse_unsigned_int matches std.fmt.parseInt for an unsigned integer type.
 // Unlike parseUnsigned, parseInt accepts signs, including -0 for unsigned.
 pub fn parse_unsigned_int(raw string, bits int) !u64 {
@@ -386,9 +399,8 @@ pub fn parse_signed_int(raw string, bits int) !i64 {
 }
 
 fn parse_enum_value[T](mut out T, raw string) ! {
-	normalized := raw.replace('-', '_')
 	$for enum_value in T.values {
-		if normalized == translated_identifier_name(enum_value.name) {
+		if raw == translated_identifier_name(enum_value.name) {
 			out = enum_value.value
 			return
 		}
@@ -499,7 +511,7 @@ fn format_values[T](key string) string {
 fn enum_value_suffix[T](_ T) string {
 	mut names := []string{}
 	$for enum_value in T.values {
-		names << translated_identifier_name(enum_value.name).replace('_', '-')
+		names << translated_identifier_name(enum_value.name)
 	}
 	return ', valid values are: ${names.join(', ')}'
 }

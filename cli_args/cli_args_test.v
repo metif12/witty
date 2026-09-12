@@ -148,6 +148,16 @@ mut:
 	default_ bool
 }
 
+enum OptionalEnumValue {
+	one
+	two
+}
+
+struct OptionalEnumTestData {
+mut:
+	value ?OptionalEnumValue
+}
+
 fn (mut h HookTestData) parse_manually_hook(arg string) bool {
 	if arg.starts_with('+') {
 		h.manual = arg
@@ -213,6 +223,32 @@ fn test_parse_maps_v_keyword_suffix_to_source_name() {
 	assert data.default_
 }
 
+fn test_parse_optional_enum() {
+	mut data := OptionalEnumTestData{}
+	parse[OptionalEnumTestData](mut data, ['--value=two'])!
+	assert data.value? == .two
+}
+
+fn test_parse_enum_uses_source_tag_spelling() {
+	mut data := EnumTestData{}
+	parse[EnumTestData](mut data, ['--value=two_words'])!
+	assert data.value == .two_words
+	if _ := parse[EnumTestData](mut data, ['--value=two-words']) {
+		assert false, 'enum tags retain their source underscores'
+	} else {
+		assert err.msg() == 'invalid value'
+	}
+}
+
+fn test_diagnostics_storage_is_not_a_cli_field() {
+	mut data := DiagnosticTestData{}
+	parse[DiagnosticTestData](mut data, ['--diagnostics=value'])!
+	items := data.diagnostics.items()
+	assert items.len == 1
+	assert items[0].key == 'diagnostics'
+	assert items[0].message == 'unknown field'
+}
+
 // --- parse: simple reparsing ---
 
 fn test_parse_reparsing() {
@@ -253,7 +289,7 @@ fn test_parse_empty_value_resets() {
 
 fn test_parse_into_field_enum() {
 	mut data := EnumTestData{}
-	parse_into_field[EnumTestData](mut data, 'value', 'two-words')!
+	parse_into_field[EnumTestData](mut data, 'value', 'two_words')!
 	assert data.value == .two_words
 	if _ := parse_into_field[EnumTestData](mut data, 'value', 'missing') {
 		assert false, 'expected invalid enum value'
@@ -324,8 +360,8 @@ fn test_parse_packed_struct() {
 }
 
 fn test_format_enum_values() {
-	assert format_value_required[EnumTestData]('value') == 'value required, valid values are: one, two-words'
-	assert format_invalid_value[EnumTestData]('value', 'bad') == 'invalid value "bad", valid values are: one, two-words'
+	assert format_value_required[EnumTestData]('value') == 'value required, valid values are: one, two_words'
+	assert format_invalid_value[EnumTestData]('value', 'bad') == 'invalid value "bad", valid values are: one, two_words'
 }
 
 fn test_parse_tracks_diagnostics_and_continues() {
