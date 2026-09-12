@@ -13,7 +13,7 @@ pub fn generated_action_help_data() string {
 // markdown for website) while maintaining consistent content.
 
 // HelpFormat represents the output format for documentation.
-pub enum HelpFormat {
+pub enum HelpFormat as u8 {
 	// Plain text output with indentation.
 	plaintext
 	// Markdown formatted output.

@@ -123,7 +123,7 @@ module input
 // Modifier remapping. See key-remap in Config for detailed docs.
 
 // Mod represents a single modifier key.
-pub enum Mod {
+pub enum Mod as u8 {
 	shift
 	ctrl
 	alt

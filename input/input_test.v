@@ -225,6 +225,26 @@ fn test_keyboard_layout_detect_option_as_alt() {
 	assert KeyboardLayout.unknown.detect_option_as_alt() == .false_
 }
 
+fn test_input_helper_source_tag_layouts_and_ordinals() {
+	assert sizeof(LinkAction) == 1
+	assert [LinkAction.open, .open_osc8].map(u8(it)) == [u8(0), 1]
+
+	assert sizeof(LinkHighlight) == 1
+	assert [LinkHighlight.always, .hover, .always_mods, .hover_mods].map(u8(it)) == [
+		u8(0),
+		1,
+		2,
+		3,
+	]
+
+	assert sizeof(KeyboardLayout) == 1
+	assert [KeyboardLayout.unknown, .us_standard, .us_international].map(u8(it)) == [
+		u8(0),
+		1,
+		2,
+	]
+}
+
 fn test_keyboard_layout_map_apple_id() {
 	assert KeyboardLayout.map_apple_id('com.apple.keylayout.US') or { panic('missing US') } == .us_standard
 	assert KeyboardLayout.map_apple_id('com.apple.keylayout.USInternational') or {

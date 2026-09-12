@@ -1,5 +1,10 @@
 module input
 
+fn test_help_format_source_layout_and_ordinals() {
+	assert sizeof(HelpFormat) == 1
+	assert [HelpFormat.plaintext, .markdown].map(u8(it)) == [u8(0), 1]
+}
+
 fn test_generate_help_action_names() {
 	help := generate_help(.plaintext, false)
 	assert help.starts_with('ignore\nunbind\ncsi\n')

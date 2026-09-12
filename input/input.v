@@ -388,12 +388,12 @@ pub fn (self &Link) equal(other Link) bool {
 	return self.highlight !in [.always_mods, .hover_mods] || self.mods.equal(other.mods)
 }
 
-pub enum LinkAction {
+pub enum LinkAction as u8 {
 	open
 	open_osc8
 }
 
-pub enum LinkHighlight {
+pub enum LinkHighlight as u8 {
 	always
 	hover
 	always_mods
@@ -433,13 +433,10 @@ pub fn paste_is_safe(data string) bool {
 }
 
 // KeyboardLayout represents a detected keyboard layout.
-pub enum KeyboardLayout {
+pub enum KeyboardLayout as u8 {
 	unknown
 	us_standard
 	us_international
-	abc
-	dvorak
-	colemak
 }
 
 // map_apple_id maps an Apple keyboard layout source ID to a KeyboardLayout.
@@ -458,7 +455,7 @@ pub fn KeyboardLayout.map_apple_id(id string) ?KeyboardLayout {
 pub fn (l KeyboardLayout) detect_option_as_alt() OptionAsAlt {
 	return match l {
 		.us_standard, .us_international { .true_ }
-		else { .false_ }
+		.unknown { .false_ }
 	}
 }
 

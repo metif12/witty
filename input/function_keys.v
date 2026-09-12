@@ -1,14 +1,14 @@
 module input
 
 // CursorMode represents the cursor key mode requirement for a function key entry.
-pub enum CursorMode {
+pub enum CursorMode as u8 {
 	any
 	normal
 	application
 }
 
 // KeypadMode represents the keypad application mode requirement for a function key entry.
-pub enum KeypadMode {
+pub enum KeypadMode as u8 {
 	any
 	normal
 	application
@@ -23,7 +23,7 @@ pub enum KeypadMode {
 // mode.
 //
 // See: https://invisible-island.net/xterm/modified-keys.html
-pub enum ModifyKeys {
+pub enum ModifyKeys as u8 {
 	any
 	set
 	set_other

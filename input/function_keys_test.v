@@ -2,6 +2,17 @@ module input
 
 // Tests translated from ghostty src/input/function_keys.zig.
 
+fn test_function_key_mode_source_layouts_and_ordinals() {
+	assert sizeof(CursorMode) == 1
+	assert [CursorMode.any, .normal, .application].map(u8(it)) == [u8(0), 1, 2]
+
+	assert sizeof(KeypadMode) == 1
+	assert [KeypadMode.any, .normal, .application].map(u8(it)) == [u8(0), 1, 2]
+
+	assert sizeof(ModifyKeys) == 1
+	assert [ModifyKeys.any, .set, .set_other].map(u8(it)) == [u8(0), 1, 2]
+}
+
 // test "keys"
 // Ghostty iterates over every entry in the `keys` map and asserts that each
 // key sequence fits into a termio write request small array:

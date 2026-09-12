@@ -1,5 +1,10 @@
 module input
 
+fn test_modifier_source_tag_layout_and_ordinals() {
+	assert sizeof(Mod) == 1
+	assert [Mod.shift, .ctrl, .alt, .super_].map(u8(it)) == [u8(0), 1, 2, 3]
+}
+
 // Tests for RemapSet modifier remapping.
 
 fn test_remap_unsided_creates_both() {
