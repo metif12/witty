@@ -733,7 +733,7 @@ pub mut:
 
 pub fn GLFrameState.init(api &OpenGLAPI, custom_shaders bool) !GLFrameState {
 	mut uniforms := GLBuffer.init(api.uniform_buffer_options(), u32($sizeof(GLUniforms)))!
-	mut cells := GLBuffer.init(api.fg_buffer_options(), u32($sizeof(GLTextCell))) or {
+	mut cells := GLBuffer.init(api.fg_buffer_options(), u32($sizeof(CellText))) or {
 		uniforms.deinit()
 		return err
 	}
@@ -944,45 +944,6 @@ pub fn gl_uniforms(value Uniforms) GLUniforms {
 	}
 }
 
-// GLTextCell is the 32-byte per-instance layout consumed by cell_text.v.glsl.
-pub struct GLTextCell {
-pub mut:
-	glyph_x   u32
-	glyph_y   u32
-	glyph_w   u32
-	glyph_h   u32
-	bearing_x i16
-	bearing_y i16
-	grid_x    u16
-	grid_y    u16
-	color     [4]u8
-	atlas     u8
-	flags     u8
-}
-
-pub fn gl_text_cell(cell CellText) GLTextCell {
-	mut flags := u8(0)
-	if cell.bools.no_min_contrast {
-		flags |= 1
-	}
-	if cell.bools.is_cursor_glyph {
-		flags |= 2
-	}
-	return GLTextCell{
-		glyph_x: cell.glyph_pos[0]
-		glyph_y: cell.glyph_pos[1]
-		glyph_w: cell.glyph_size[0]
-		glyph_h: cell.glyph_size[1]
-		bearing_x: i16(cell.bearings[0])
-		bearing_y: i16(cell.bearings[1])
-		grid_x: cell.grid_pos[0]
-		grid_y: cell.grid_pos[1]
-		color: cell.color
-		atlas: u8(cell.atlas)
-		flags: flags
-	}
-}
-
 pub struct GLImageVertex {
 pub:
 	grid_pos    [2]f32
@@ -1045,7 +1006,7 @@ pub fn GLShaders.init_with_sources(custom_shaders []string) !GLShaders {
 		shaders.deinit()
 		return err
 	}
-	shaders.cell_text = gl_builtin_pipeline(gl_cell_text_vertex_shader_raw, gl_cell_text_fragment_shader_raw, gl_text_cell_attributes(), u32($sizeof(GLTextCell)), .per_instance, true) or {
+	shaders.cell_text = gl_builtin_pipeline(gl_cell_text_vertex_shader_raw, gl_cell_text_fragment_shader_raw, gl_text_cell_attributes(), u32($sizeof(CellText)), .per_instance, true) or {
 		shaders.deinit()
 		return err
 	}
@@ -1118,13 +1079,13 @@ fn gl_builtin_pipeline(vertex_source string, fragment_source string, attributes 
 
 fn gl_text_cell_attributes() []GLVertexAttribute {
 	return [
-		GLVertexAttribute{ scalar_type: .u32_, count: 2, offset: __offsetof(GLTextCell, glyph_x) },
-		GLVertexAttribute{ scalar_type: .u32_, count: 2, offset: __offsetof(GLTextCell, glyph_w) },
-		GLVertexAttribute{ scalar_type: .i16_, count: 2, offset: __offsetof(GLTextCell, bearing_x) },
-		GLVertexAttribute{ scalar_type: .u16_, count: 2, offset: __offsetof(GLTextCell, grid_x) },
-		GLVertexAttribute{ scalar_type: .u8_, count: 4, offset: __offsetof(GLTextCell, color) },
-		GLVertexAttribute{ scalar_type: .u8_, count: 1, offset: __offsetof(GLTextCell, atlas) },
-		GLVertexAttribute{ scalar_type: .u8_, count: 1, offset: __offsetof(GLTextCell, flags) },
+		GLVertexAttribute{ scalar_type: .u32_, count: 2, offset: __offsetof(CellText, glyph_pos) },
+		GLVertexAttribute{ scalar_type: .u32_, count: 2, offset: __offsetof(CellText, glyph_size) },
+		GLVertexAttribute{ scalar_type: .i16_, count: 2, offset: __offsetof(CellText, bearings) },
+		GLVertexAttribute{ scalar_type: .u16_, count: 2, offset: __offsetof(CellText, grid_pos) },
+		GLVertexAttribute{ scalar_type: .u8_, count: 4, offset: __offsetof(CellText, color) },
+		GLVertexAttribute{ scalar_type: .u8_, count: 1, offset: __offsetof(CellText, atlas) },
+		GLVertexAttribute{ scalar_type: .u8_, count: 1, offset: __offsetof(CellText, bools) },
 	]
 }
 

@@ -258,7 +258,7 @@ fn test_cell_contents_cursor() ! {
 
 	// Set a cursor
 	cursor_cell := CellText{
-		bools: CellTextBools{ is_cursor_glyph: true }
+		bools: cell_text_bools(false, true)
 		grid_pos: [u16(5), u16(10)]!
 		color: [u8(255), 255, 255, 255]!
 	}
@@ -272,7 +272,7 @@ fn test_cell_contents_cursor() ! {
 	}
 	assert got.grid_pos[0] == 5
 	assert got.grid_pos[1] == 10
-	assert got.bools.is_cursor_glyph == true
+	assert got.bools.is_cursor_glyph()
 
 	// Non-block cursor styles are stored after all screen rows so the shared
 	// flattened buffer naturally draws them last.
@@ -291,7 +291,7 @@ fn test_cell_contents_cursor_with_zero_sized_screen() ! {
 	mut cells := CellContents{}
 	cells.resize(GridSize{})!
 	assert cells.fg_rows.lists.len == 2
-	cells.set_cursor(CellText{ bools: CellTextBools{ is_cursor_glyph: true } }, .block)
+	cells.set_cursor(CellText{ bools: cell_text_bools(false, true) }, .block)
 	assert cells.fg_rows.lists[0].len == 0
 	assert cells.fg_rows.lists[1].len == 0
 	assert cells.get_cursor_glyph() == none
@@ -473,7 +473,7 @@ fn test_preedit_range_keeps_trailing_codepoints_when_clipped() {
 fn test_cell_text_init() {
 	ct := CellText{
 		atlas: .grayscale
-		bools: CellTextBools{ no_min_contrast: true }
+		bools: cell_text_bools(true, false)
 		grid_pos: [u16(42), u16(7)]!
 		color: [u8(200), 100, 50, 255]!
 		glyph_pos: [u32(100), u32(200)]!
@@ -481,7 +481,7 @@ fn test_cell_text_init() {
 		bearings: [i16(1), i16(-2)]!
 	}
 	assert ct.atlas == .grayscale
-	assert ct.bools.no_min_contrast == true
+	assert ct.bools.no_min_contrast()
 	assert ct.grid_pos[0] == 42
 	assert ct.grid_pos[1] == 7
 	assert ct.color[0] == 200

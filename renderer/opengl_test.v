@@ -108,14 +108,14 @@ fn test_opengl_shader_include_expansion_matches_source_preprocessor() {
 }
 
 fn test_opengl_shader_vertex_layouts_match_source() {
-	assert $sizeof(GLTextCell) == 32
-	assert __offsetof(GLTextCell, glyph_x) == 0
-	assert __offsetof(GLTextCell, glyph_w) == 8
-	assert __offsetof(GLTextCell, bearing_x) == 16
-	assert __offsetof(GLTextCell, grid_x) == 20
-	assert __offsetof(GLTextCell, color) == 24
-	assert __offsetof(GLTextCell, atlas) == 28
-	assert __offsetof(GLTextCell, flags) == 29
+	assert $sizeof(CellText) == 32
+	assert __offsetof(CellText, glyph_pos) == 0
+	assert __offsetof(CellText, glyph_size) == 8
+	assert __offsetof(CellText, bearings) == 16
+	assert __offsetof(CellText, grid_pos) == 20
+	assert __offsetof(CellText, color) == 24
+	assert __offsetof(CellText, atlas) == 28
+	assert __offsetof(CellText, bools) == 29
 
 	text := gl_text_cell_attributes()
 	assert text.len == 7
@@ -156,18 +156,15 @@ fn test_opengl_uniform_conversion_packs_boolean_fields() {
 }
 
 fn test_opengl_text_and_background_image_values_are_packed_for_gpu() {
-	text := gl_text_cell(CellText{
+	text := CellText{
 		atlas: .color
-		bools: CellTextBools{
-			no_min_contrast: true
-			is_cursor_glyph: true
-		}
+		bools: cell_text_bools(true, true)
 		bearings: [i16(-2), 7]!
-	})
-	assert text.atlas == 1
-	assert text.flags == 3
-	assert text.bearing_x == -2
-	assert text.bearing_y == 7
+	}
+	assert u8(text.atlas) == 1
+	assert text.bools.packed() == 3
+	assert text.bearings[0] == -2
+	assert text.bearings[1] == 7
 
 	bg := gl_bg_image_vertex(BgImageBuffer{
 		opacity: 0.5

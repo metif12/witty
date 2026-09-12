@@ -174,33 +174,49 @@ pub enum AtlasKind as u8 {
 	color     = 1
 }
 
-// CellTextBools contains boolean flags for text cell rendering.
+// CellTextBools is the packed byte of boolean flags consumed by the text
+// shaders. Ghostty represents this as a packed struct(u8).
 pub struct CellTextBools {
-pub mut:
-	// Whether this cell should skip minimum contrast adjustment.
-	no_min_contrast bool
-	// Whether this cell is a cursor glyph.
-	is_cursor_glyph bool
+mut:
+	value u8
+}
+
+pub fn cell_text_bools(no_min_contrast bool, is_cursor_glyph bool) CellTextBools {
+	return CellTextBools{
+		value: u8(no_min_contrast) | (u8(is_cursor_glyph) << 1)
+	}
+}
+
+pub fn (self CellTextBools) no_min_contrast() bool {
+	return self.value & 0x01 != 0
+}
+
+pub fn (self CellTextBools) is_cursor_glyph() bool {
+	return self.value & 0x02 != 0
+}
+
+pub fn (self CellTextBools) packed() u8 {
+	return self.value
 }
 
 // CellText represents a foreground (text) cell for GPU rendering.
 // Each glyph rendered to the screen becomes one of these.
 pub struct CellText {
 pub mut:
-	// Which texture atlas this glyph is in.
-	atlas AtlasKind = .grayscale
-	// Boolean flags.
-	bools CellTextBools
-	// Grid position [col, row].
-	grid_pos [2]u16
-	// Color [r, g, b, a].
-	color [4]u8
 	// Position of the glyph in the atlas [x, y].
 	glyph_pos [2]u32
 	// Size of the glyph in the atlas [w, h].
 	glyph_size [2]u32
 	// Bearing offsets [x, y] for positioning.
 	bearings [2]i16
+	// Grid position [col, row].
+	grid_pos [2]u16
+	// Color [r, g, b, a].
+	color [4]u8
+	// Which texture atlas this glyph is in.
+	atlas AtlasKind = .grayscale
+	// Boolean flags.
+	bools CellTextBools
 }
 
 // CellBg represents a background color for a cell.

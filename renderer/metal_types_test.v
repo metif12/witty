@@ -209,7 +209,7 @@ fn test_metal_builtin_shader_pipelines_compile() ! {
 	assert shaders.cell_text.handle != unsafe { nil }
 	assert shaders.image.handle != unsafe { nil }
 	assert shaders.bg_image.handle != unsafe { nil }
-	assert $sizeof(MetalTextCell) == 32
+	assert $sizeof(CellText) == 32
 
 	mut target := MetalTarget.init(MetalTargetOptions{
 		device: api.device
@@ -255,21 +255,16 @@ fn test_metal_text_cell_grayscale_no_flags() {
 		grid_pos: [u16(1), 2]!
 	}
 
-	metal_cell := metal_text_cell(cell)
-
-	assert metal_cell.atlas == 0
-	assert metal_cell.flags == 0
-	assert metal_cell.grid_x == 1
-	assert metal_cell.grid_y == 2
+	assert u8(cell.atlas) == 0
+	assert cell.bools.packed() == 0
+	assert cell.grid_pos[0] == 1
+	assert cell.grid_pos[1] == 2
 }
 
 fn test_metal_text_cell_keeps_color_atlas_flag() {
 	cell := CellText{
 		atlas: .color
-		bools: CellTextBools{
-			no_min_contrast: true
-			is_cursor_glyph: true
-		}
+		bools: cell_text_bools(true, true)
 		grid_pos: [u16(3), 4]!
 		color: [u8(10), 20, 30, 40]!
 		glyph_pos: [u32(5), 6]!
@@ -277,12 +272,10 @@ fn test_metal_text_cell_keeps_color_atlas_flag() {
 		bearings: [i16(1), 2]!
 	}
 
-	metal_cell := metal_text_cell(cell)
-
-	assert metal_cell.atlas == 1
-	assert metal_cell.flags == 3
-	assert metal_cell.grid_x == 3
-	assert metal_cell.grid_y == 4
+	assert u8(cell.atlas) == 1
+	assert cell.bools.packed() == 3
+	assert cell.grid_pos[0] == 3
+	assert cell.grid_pos[1] == 4
 }
 
 fn test_metal_uniform_layout_matches_shader_abi() {

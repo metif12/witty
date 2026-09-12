@@ -679,65 +679,6 @@ pub fn metal_uniforms(value Uniforms) MetalUniforms {
 	}
 }
 
-// MetalTextCell is a single parameter for the terminal cell text shader.
-//
-// Port of ghostty's src/renderer/metal/shaders.zig `CellText`. It is the
-// flattened, GPU-ready form of the logical CellText: the atlas kind is stored
-// as a raw u8 (0 = grayscale, 1 = color), the boolean flags are packed into a
-// single `flags` byte, and the grid position is split into grid_x / grid_y.
-pub struct MetalTextCell {
-pub mut:
-	// Position of the glyph in the atlas [x, y].
-	glyph_x u32
-	glyph_y u32
-	// Size of the glyph in the atlas [w, h].
-	glyph_w u32
-	glyph_h u32
-	// Bearing offsets for positioning. i16 to match ghostty's CellText
-	// (the GPU vertex struct must stay 32 bytes).
-	bearing_x i16
-	bearing_y i16
-	// Grid position (column, row).
-	grid_x u16
-	grid_y u16
-	// Color [r, g, b, a].
-	color [4]u8
-	// Which texture atlas this glyph is in (0 = grayscale, 1 = color).
-	atlas u8
-	// Packed boolean flags:
-	//   bit 0 = no_min_contrast
-	//   bit 1 = is_cursor_glyph
-	flags u8
-}
-
-// metal_text_cell converts a logical CellText into its GPU representation.
-//
-// Mirrors ghostty's construction of shaders.CellText, packing the atlas kind
-// and boolean flags into their compact GPU encodings.
-pub fn metal_text_cell(cell CellText) MetalTextCell {
-	mut flags := u8(0)
-	if cell.bools.no_min_contrast {
-		flags |= 0x01
-	}
-	if cell.bools.is_cursor_glyph {
-		flags |= 0x02
-	}
-
-	return MetalTextCell{
-		glyph_x: cell.glyph_pos[0]
-		glyph_y: cell.glyph_pos[1]
-		glyph_w: cell.glyph_size[0]
-		glyph_h: cell.glyph_size[1]
-		bearing_x: i16(cell.bearings[0])
-		bearing_y: i16(cell.bearings[1])
-		grid_x: cell.grid_pos[0]
-		grid_y: cell.grid_pos[1]
-		color: cell.color
-		atlas: u8(cell.atlas)
-		flags: flags
-	}
-}
-
 // ============================================================
 // Metal Shaders
 // ============================================================
@@ -801,7 +742,7 @@ pub mut:
 
 pub fn MetalFrameState.init(api &MetalAPI, custom_shaders bool) !MetalFrameState {
 	mut uniforms := MetalBuffer.init(api.buffer_options(), u32($sizeof(MetalUniforms)))!
-	mut cells := MetalBuffer.init(api.buffer_options(), u32($sizeof(MetalTextCell))) or {
+	mut cells := MetalBuffer.init(api.buffer_options(), u32($sizeof(CellText))) or {
 		uniforms.deinit()
 		return err
 	}
@@ -1025,7 +966,7 @@ pub fn MetalShaders.init(device voidptr, post_shaders []string, pixel_format Met
 		vertex_library: library
 		fragment_library: library
 		attributes: metal_text_cell_attributes()
-		vertex_stride: $sizeof(MetalTextCell)
+		vertex_stride: $sizeof(CellText)
 		step_fn: .per_instance
 		pixel_format: pixel_format
 		blending_enabled: true
@@ -1117,13 +1058,13 @@ pub fn (mut self MetalShaders) deinit() {
 
 fn metal_text_cell_attributes() []MetalVertexAttribute {
 	return [
-		MetalVertexAttribute{ format: .uint2, offset: __offsetof(MetalTextCell, glyph_x) },
-		MetalVertexAttribute{ format: .uint2, offset: __offsetof(MetalTextCell, glyph_w) },
-		MetalVertexAttribute{ format: .short2, offset: __offsetof(MetalTextCell, bearing_x) },
-		MetalVertexAttribute{ format: .ushort2, offset: __offsetof(MetalTextCell, grid_x) },
-		MetalVertexAttribute{ format: .uchar4, offset: __offsetof(MetalTextCell, color) },
-		MetalVertexAttribute{ format: .uchar, offset: __offsetof(MetalTextCell, atlas) },
-		MetalVertexAttribute{ format: .uchar, offset: __offsetof(MetalTextCell, flags) },
+		MetalVertexAttribute{ format: .uint2, offset: __offsetof(CellText, glyph_pos) },
+		MetalVertexAttribute{ format: .uint2, offset: __offsetof(CellText, glyph_size) },
+		MetalVertexAttribute{ format: .short2, offset: __offsetof(CellText, bearings) },
+		MetalVertexAttribute{ format: .ushort2, offset: __offsetof(CellText, grid_pos) },
+		MetalVertexAttribute{ format: .uchar4, offset: __offsetof(CellText, color) },
+		MetalVertexAttribute{ format: .uchar, offset: __offsetof(CellText, atlas) },
+		MetalVertexAttribute{ format: .uchar, offset: __offsetof(CellText, bools) },
 	]
 }
 

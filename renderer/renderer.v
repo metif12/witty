@@ -1623,7 +1623,7 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	gpu_uniforms := metal_uniforms(self.uniforms)
 	frame_state.uniforms.sync_values([gpu_uniforms])!
 	frame_state.cells_bg.sync_values(self.cells.bg_cells)!
-	foreground := self.metal_text_cells()
+	foreground := self.text_cells()
 	frame_state.cells.sync_values(foreground)!
 	if mut state := frame_state.custom_shader_state {
 		state.uniforms.sync_values([self.custom_shader_uniforms])!
@@ -1737,15 +1737,15 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	}
 }
 
-fn (self &Renderer) metal_text_cells() []MetalTextCell {
+fn (self &Renderer) text_cells() []CellText {
 	mut count := 0
 	for row in self.cells.fg_rows.lists {
 		count += row.len
 	}
-	mut result := []MetalTextCell{cap: count}
+	mut result := []CellText{cap: count}
 	for row in self.cells.fg_rows.lists {
 		for cell in row {
-			result << metal_text_cell(cell)
+			result << cell
 		}
 	}
 	return result
@@ -1836,7 +1836,7 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 	gpu_uniforms := gl_uniforms(self.uniforms)
 	frame_state.uniforms.sync_values([gpu_uniforms])
 	frame_state.cells_bg.sync_values(self.cells.bg_cells)
-	foreground := self.gl_text_cells()
+	foreground := self.text_cells()
 	frame_state.cells.sync_values(foreground)
 	if mut state := frame_state.custom_shader_state {
 		state.uniforms.sync_values([self.custom_shader_uniforms])
@@ -1947,20 +1947,6 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 
 	frame.complete()
 	self.frame_completed(if frame.healthy { .healthy } else { .unhealthy })
-}
-
-fn (self &Renderer) gl_text_cells() []GLTextCell {
-	mut count := 0
-	for row in self.cells.fg_rows.lists {
-		count += row.len
-	}
-	mut result := []GLTextCell{cap: count}
-	for row in self.cells.fg_rows.lists {
-		for cell in row {
-			result << gl_text_cell(cell)
-		}
-	}
-	return result
 }
 
 fn (self &Renderer) sync_gl_atlas_texture(atlas &font.Atlas, mut texture GLTexture) ! {
@@ -3084,7 +3070,7 @@ fn (mut self Renderer) add_glyph(x u16, y u16, color terminal.RGB, alpha u8, gly
 		}
 		grid_pos: [x, y]!
 		color: [color.r, color.g, color.b, alpha]!
-		bools: CellTextBools{ no_min_contrast: no_min_contrast(cp) }
+		bools: cell_text_bools(no_min_contrast(cp), false)
 		glyph_pos: [render.glyph.atlas_x, render.glyph.atlas_y]!
 		glyph_size: [render.glyph.width, render.glyph.height]!
 		bearings: [
@@ -3138,9 +3124,7 @@ fn (mut self Renderer) add_cursor(cursor_state &terminal.RenderCursor, cursor_st
 
 	self.cells.set_cursor(CellText{
 		atlas: .grayscale
-		bools: CellTextBools{
-			is_cursor_glyph: true
-		}
+		bools: cell_text_bools(false, true)
 		grid_pos: [x, cursor_vp.y]!
 		color: [cursor_color.r, cursor_color.g, cursor_color.b, alpha]!
 		glyph_pos: [render.glyph.atlas_x, render.glyph.atlas_y]!
