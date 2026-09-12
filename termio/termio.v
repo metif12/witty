@@ -833,14 +833,49 @@ pub fn (mut self ThreadData) deinit() {}
 
 // CursorStyle: use terminal.CursorStyle directly.
 
+// ThreadFlags is the packed set of flags owned by the IO thread.
+pub struct ThreadFlags {
+mut:
+	value u8
+}
+
+fn (self ThreadFlags) drain() bool {
+	return self.value & 0b001 != 0
+}
+
+fn (mut self ThreadFlags) set_drain(value bool) {
+	self.set(0b001, value)
+}
+
+fn (self ThreadFlags) linefeed_mode() bool {
+	return self.value & 0b010 != 0
+}
+
+fn (mut self ThreadFlags) set_linefeed_mode(value bool) {
+	self.set(0b010, value)
+}
+
+fn (self ThreadFlags) has_inspector() bool {
+	return self.value & 0b100 != 0
+}
+
+fn (mut self ThreadFlags) set_has_inspector(value bool) {
+	self.set(0b100, value)
+}
+
+fn (mut self ThreadFlags) set(mask u8, enabled bool) {
+	if enabled {
+		self.value |= mask
+	} else {
+		self.value &= ~mask
+	}
+}
+
 // Thread manages the IO thread.
 pub struct Thread {
 pub mut:
-	stop Stopwatch
-	// Thread-local flags mirrored from Ghostty's writer thread.
-	linefeed_mode bool
-	has_inspector bool
-	drain         bool
+	stop          Stopwatch
+	flags         ThreadFlags
 	scroll_active bool
 	// Timer/coalescing state. Deadlines use time.sys_mono_now nanoseconds.
 	pending_resize  ?renderer.Size
@@ -878,10 +913,10 @@ pub fn (mut t Thread) thread_main(mut io Termio) {
 
 	io.thread_enter() or {
 		t.show_start_error(mut io, err.msg())
-		t.drain = true
+		t.flags.set_drain(true)
 	}
 	defer {
-		if !t.drain {
+		if !t.flags.drain() {
 			io.thread_exit()
 		}
 	}
@@ -899,7 +934,7 @@ pub fn (mut t Thread) thread_main(mut io Termio) {
 
 	// Match the abnormal-exit behavior: after startup failure, continue
 	// accepting and discarding messages until the owner requests shutdown.
-	if t.drain {
+	if t.flags.drain() {
 		for io.mailbox.pop() != none {
 		}
 	}
@@ -995,7 +1030,7 @@ fn (mut t Thread) drain_mailbox(mut io Termio) bool {
 	mut redraw := false
 	for {
 		msg := io.mailbox.pop() or { break }
-		if t.drain {
+		if t.flags.drain() {
 			continue
 		}
 		redraw = true
@@ -1004,7 +1039,7 @@ fn (mut t Thread) drain_mailbox(mut io Termio) bool {
 			.crash { panic('crash request, crashing intentionally') }
 			.change_config { io.change_config(&msg.config_val) or {} }
 			.inspector {
-				t.has_inspector = msg.flag_val
+				t.flags.set_has_inspector(msg.flag_val)
 			}
 			.resize {
 				t.pending_resize = msg.resize_val
@@ -1035,12 +1070,18 @@ fn (mut t Thread) drain_mailbox(mut io Termio) bool {
 				t.sync_deadline = i64(time.sys_mono_now()) + 1000 * i64(time.millisecond)
 			}
 			.linefeed_mode {
-				t.linefeed_mode = msg.flag_val
+				t.flags.set_linefeed_mode(msg.flag_val)
 			}
 			.focused { io.focus_gained(msg.flag_val) or {} }
-			.write_small { io.queue_write(msg.write_small_data.slice(), t.linefeed_mode) or {} }
-			.write_stable { io.queue_write(msg.write_stable_data.bytes(), t.linefeed_mode) or {} }
-			.write_alloc { io.queue_write(msg.write_alloc_data.bytes(), t.linefeed_mode) or {} }
+			.write_small {
+				io.queue_write(msg.write_small_data.slice(), t.flags.linefeed_mode()) or {}
+			}
+			.write_stable {
+				io.queue_write(msg.write_stable_data.bytes(), t.flags.linefeed_mode()) or {}
+			}
+			.write_alloc {
+				io.queue_write(msg.write_alloc_data.bytes(), t.flags.linefeed_mode()) or {}
+			}
 		}
 	}
 	if redraw {

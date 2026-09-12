@@ -357,8 +357,9 @@ fn test_thread_drain_mailbox_updates_writer_state() {
 	tio.mailbox.push(Message.resize_msg(resize))
 
 	assert writer.drain_mailbox(mut tio)
-	assert writer.has_inspector
-	assert writer.linefeed_mode
+	assert writer.flags.has_inspector()
+	assert writer.flags.linefeed_mode()
+	assert sizeof(ThreadFlags) == 1
 	assert writer.scroll_active
 	assert writer.scroll_deadline > 0
 	assert writer.sync_deadline > 0
