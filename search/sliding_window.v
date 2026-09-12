@@ -192,64 +192,45 @@ pub fn (mut self SlidingWindow) next() ?highlight.FlattenedHighlight {
 
 	// No match. We keep needle.len - 1 bytes available to
 	// handle the future overlap case.
-	prune_success := self.prune_after_miss()
-	if prune_success {
-		// Our data offset now moves to needle.len - 1 from the end so
-		// that we can handle the overlap case.
-		self.data_offset = self.data.len() - self.needle.len + 1
-	}
-
-	self.assert_integrity()
-	return none
-}
-
-// Prune data after a miss. Returns true if pruning happened or
-// the data_offset was updated; false if pruning was skipped
-// (not enough data to save needle.len - 1 bytes).
-fn (mut self SlidingWindow) prune_after_miss() bool {
+	mut meta_it := self.meta.iterator(.reverse)
 	mut saved := 0
 	mut found := false
-	mut found_idx := 0
-
-	// Iterate meta in reverse to find the point where we have
-	// enough saved bytes for the overlap window.
-	for i := self.meta.len() - 1; i >= 0; i-- {
-		meta := self.meta.get(i)
+	for {
+		meta := meta_it.next() or { break }
 		needed := self.needle.len - 1 - saved
 		if meta.cell_map.len >= needed {
 			// We save up to this meta. Set our data offset
 			// to exactly where it needs to be to continue searching.
 			self.data_offset = meta.cell_map.len - needed
 			found = true
-			found_idx = i
 			break
 		}
 		saved += meta.cell_map.len
 	}
 
-	if !found {
+	if found {
+		prune_count := self.meta.len() - meta_it.idx
+		if prune_count > 0 {
+			// Delete all the metas before the one we found and their data.
+			mut prune_data_len := 0
+			for i in 0 .. prune_count {
+				meta := self.meta.get(i)
+				prune_data_len += meta.cell_map.len
+			}
+			self.meta.delete_oldest(prune_count)
+			self.data.delete_oldest(prune_data_len)
+		}
+	} else {
 		// Never got the amount we needed, nothing to prune.
 		assert saved < self.needle.len - 1, 'unexpected saved amount'
-		return false
 	}
 
-	prune_count := found_idx
-	if prune_count == 0 {
-		// This can happen if we need to save up to the first
-		// meta value to retain our window.
-		return true
-	}
+	// Our data offset now moves to needle.len - 1 from the end so
+	// that we can handle the overlap case.
+	self.data_offset = self.data.len() - self.needle.len + 1
 
-	// Delete all the metas before the found index and their data.
-	mut prune_data_len := 0
-	for j in 0 .. prune_count {
-		meta := self.meta.get(j)
-		prune_data_len += meta.cell_map.len
-	}
-	self.meta.delete_oldest(prune_count)
-	self.data.delete_oldest(prune_data_len)
-
-	return true
+	self.assert_integrity()
+	return none
 }
 
 // Return a flattened highlight for the given start offset and length.
@@ -264,7 +245,7 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 	assert start + length <= self.data.len(), 'highlight end out of bounds'
 
 	// Clear our previous chunk buffer to store this result.
-	self.chunk_buf = []
+	self.chunk_buf.clear()
 	mut result := highlight.FlattenedHighlight.empty()
 
 	// Go through the meta nodes to find our start and build chunks.
@@ -273,6 +254,7 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 	mut br_consumed := 0
 	mut prune_meta_count := 0
 	mut prune_data_len := 0
+	mut found_tl := false
 
 	for i in 0 .. self.meta.len() {
 		meta := self.meta.get(i)
@@ -308,6 +290,7 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 			prune_meta_count = i
 			prune_data_len = prior_meta_consumed
 			br_continue_from = -1 // no continuation
+			found_tl = true
 			break
 		} else {
 			// We found the meta that contains the start of the match
@@ -324,13 +307,18 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 			prune_data_len = prior_meta_consumed
 			br_continue_from = i + 1
 			br_consumed = meta_consumed
+			found_tl = true
 			break
 		}
+	}
+	if !found_tl {
+		panic('unreachable: highlight start is outside the data buffer')
 	}
 
 	// Search for our end if the match spans multiple meta nodes.
 	if br_continue_from >= 0 {
 		mut mc := br_consumed
+		mut found_br := false
 		for j := br_continue_from; j < self.meta.len(); j++ {
 			meta := self.meta.get(j)
 
@@ -359,7 +347,11 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 				start: 0
 				end: u16(map_entry.y + 1)
 			}
+			found_br = true
 			break
+		}
+		if !found_br {
+			panic('unreachable: highlight end is outside the data buffer')
 		}
 	}
 
@@ -404,7 +396,7 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 			last := self.chunk_buf.len - 1
 			self.chunk_buf[last].end = self.chunk_buf[last].start + 1
 			self.chunk_buf[last].start = 0
-		} else if self.chunk_buf.len == 1 {
+		} else {
 			// For a single chunk, the y values are in reverse order
 			// (start is the screen-end, end is the screen-start).
 			// Swap them to get proper top-to-bottom order.
@@ -420,8 +412,9 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 		result.bot_x = top_x
 	}
 
-	// Copy our chunks so they're independent of the internal buffer.
-	result.chunks = self.chunk_buf.clone()
+	// The result aliases our reusable chunk buffer and is only valid until
+	// the next call to next() or append().
+	result.chunks = self.chunk_buf
 	return result
 }
 
@@ -434,9 +427,6 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 // an accurate measure of the text content size added.
 pub fn (mut self SlidingWindow) append(node &terminal.PageNode) int {
 	page := &node.data
-	if page.size.rows == 0 {
-		return 0
-	}
 
 	// PageFormatter is the canonical terminal-text encoder. A lightweight
 	// Pages view lets the V port reuse it for PageList nodes without copying
@@ -478,6 +468,7 @@ pub fn (mut self SlidingWindow) append(node &terminal.PageNode) int {
 	}
 
 	if encoded.len == 0 {
+		self.assert_integrity()
 		return 0
 	}
 

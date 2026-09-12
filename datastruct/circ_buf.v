@@ -237,7 +237,7 @@ fn (self &CircBuf[T]) storage_offset(offset int) int {
 pub struct CircBufIterator[T] {
 	buf       CircBuf[T]
 	direction CircBufDirection
-mut:
+pub mut:
 	idx int
 }
 

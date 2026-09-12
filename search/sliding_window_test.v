@@ -380,6 +380,15 @@ fn test_sliding_window_single_append() {
 	assert w.next() == none
 }
 
+fn test_sliding_window_highlight_uses_reusable_chunk_buffer() {
+	mut node := sliding_test_node(['hello. boo!'], [false], 80, 1)
+	defer { node.data.deinit() }
+	mut w := SlidingWindow.init(.forward, 'boo!'.bytes())
+	w.append(node)
+	h := w.next() or { panic('expected a search match') }
+	assert h.chunks.data == w.chunk_buf.data
+}
+
 fn test_sliding_window_single_append_case_insensitive() {
 	mut node := sliding_test_node(['hello. boo!'], [false], 80, 1)
 	defer { node.data.deinit() }
