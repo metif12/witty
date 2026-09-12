@@ -2053,6 +2053,47 @@ fn test_page_swap_cells() {
 	}
 }
 
+fn test_page_swap_cells_swaps_grapheme_and_hyperlink_mappings() {
+	mut page := Page.init(PageCapacity{
+		cols: 2
+		rows: 1
+		styles: 0
+		hyperlink_bytes: 32 * 48
+		grapheme_bytes: grapheme_chunk * 2
+		string_bytes: 64
+	})
+	defer { page.deinit() }
+	page.rows[0].cells[0] = CellData.init(u32(`A`))
+	page.rows[0].cells[1] = CellData.init(u32(`B`))
+	page.set_graphemes(0, 0, [u32(0x0301)]) or { panic(err) }
+	page.set_graphemes(0, 1, [u32(0x0302)]) or { panic(err) }
+
+	link_a := Hyperlink{ id: HyperlinkImplicitId{ offset: 1 }, uri: 'a' }
+	link_b := Hyperlink{ id: HyperlinkImplicitId{ offset: 2 }, uri: 'b' }
+	id_a := page.insert_hyperlink(link_a) or { panic(err) }
+	id_b := page.insert_hyperlink(link_b) or { panic(err) }
+	page.set_hyperlink(0, 0, id_a) or { panic(err) }
+	page.set_hyperlink(0, 1, id_b) or { panic(err) }
+	page.rows[0].cells[0].hyperlink = link_a.dupe()
+	page.rows[0].cells[1].hyperlink = link_b.dupe()
+
+	page.swap_cells(0, 0, 1)
+
+	assert page.rows[0].cells[0].codepoint == u32(`B`)
+	assert page.rows[0].cells[1].codepoint == u32(`A`)
+	assert page.lookup_grapheme_at(0, 0) or { panic('missing grapheme') } == [
+		u32(0x0302),
+	]
+	assert page.lookup_grapheme_at(0, 1) or { panic('missing grapheme') } == [
+		u32(0x0301),
+	]
+	assert page.lookup_hyperlink(0, 0) or { panic('missing hyperlink') } == id_b
+	assert page.lookup_hyperlink(0, 1) or { panic('missing hyperlink') } == id_a
+	assert page.hyperlink_set.ref_count(id_a) == 1
+	assert page.hyperlink_set.ref_count(id_b) == 1
+	assert page.verify_integrity() == none
+}
+
 // Test reinit.
 fn test_page_reinit() {
 	mut page := Page.init(PageCapacity{

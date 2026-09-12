@@ -2024,8 +2024,13 @@ pub fn (mut self Page) swap_cells(row_idx int, src_x int, dst_x int) {
 		src_key := cell_key(row_idx, src_x, int(self.capacity.cols))
 		dst_key := cell_key(row_idx, dst_x, int(self.capacity.cols))
 		if src_has_grapheme && dst_has_grapheme {
-			src_allocation := self.grapheme_map[src_key]
-			self.grapheme_map[src_key] = self.grapheme_map[dst_key]
+			src_allocation := self.grapheme_map[src_key] or {
+				panic('swapped grapheme cell is missing its page mapping')
+			}
+			dst_allocation := self.grapheme_map[dst_key] or {
+				panic('swapped grapheme cell is missing its page mapping')
+			}
+			self.grapheme_map[src_key] = dst_allocation
 			self.grapheme_map[dst_key] = src_allocation
 		} else if src_has_grapheme {
 			self.move_grapheme(row_idx, src_x, row_idx, dst_x)
@@ -2040,17 +2045,19 @@ pub fn (mut self Page) swap_cells(row_idx int, src_x int, dst_x int) {
 	if src_has_hl || dst_has_hl {
 		src_key := cell_key(row_idx, src_x, int(self.capacity.cols))
 		dst_key := cell_key(row_idx, dst_x, int(self.capacity.cols))
-		src_hl := self.hyperlink_map[src_key] or { 0 }
-		dst_hl := self.hyperlink_map[dst_key] or { 0 }
 		if src_has_hl && dst_has_hl {
+			src_hl := self.hyperlink_map[src_key] or {
+				panic('swapped hyperlink cell is missing its page mapping')
+			}
+			dst_hl := self.hyperlink_map[dst_key] or {
+				panic('swapped hyperlink cell is missing its page mapping')
+			}
 			self.hyperlink_map[src_key] = dst_hl
 			self.hyperlink_map[dst_key] = src_hl
 		} else if src_has_hl {
-			self.hyperlink_map.delete(src_key)
-			self.hyperlink_map[dst_key] = src_hl
+			self.move_hyperlink(row_idx, src_x, row_idx, dst_x)
 		} else {
-			self.hyperlink_map.delete(dst_key)
-			self.hyperlink_map[src_key] = dst_hl
+			self.move_hyperlink(row_idx, dst_x, row_idx, src_x)
 		}
 	}
 
@@ -2250,11 +2257,11 @@ fn (mut self Page) move_hyperlink(src_row int, src_col int, dst_row int, dst_col
 	assert !self.rows[dst_row].cells[dst_col].has_hyperlink
 	src_key := cell_key(src_row, src_col, int(self.capacity.cols))
 	dst_key := cell_key(dst_row, dst_col, int(self.capacity.cols))
-	if src_key in self.hyperlink_map {
-		hl_id := self.hyperlink_map[src_key]
-		self.hyperlink_map.delete(src_key)
-		self.hyperlink_map[dst_key] = hl_id
+	hl_id := self.hyperlink_map[src_key] or {
+		panic('moved hyperlink cell is missing its page mapping')
 	}
+	self.hyperlink_map.delete(src_key)
+	self.hyperlink_map[dst_key] = hl_id
 	// NOTE: We must not set has_hyperlink here because this
 	// function is used in various cases where we swap cell contents
 	// and its unsafe. The flip side: the caller must be careful
