@@ -1,6 +1,6 @@
 module terminal
 
-// Tests for cursor_style.v (translated from cursor.zig)
+// Tests for cursor.v (translated from cursor.zig)
 
 fn test_cursor_style_values() {
 	assert int(CursorStyle.bar) == 0
