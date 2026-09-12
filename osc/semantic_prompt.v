@@ -18,7 +18,7 @@ pub enum SemanticAction {
 
 // The `cl` option specifies what kind of cursor key sequences are handled
 // by the application for click-to-move-cursor functionality.
-pub enum Click {
+pub enum Click as u8 {
 	// Value: "line". Allows motion within a single input line using standard
 	// left/right arrow escape sequences. Only a single left/right sequence
 	// should be emitted for double-width characters.

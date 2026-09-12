@@ -127,13 +127,17 @@ fn draw_screen_semantic_prompt(context cimgui.Context, prompt terminal.SemanticP
 
 	draw_terminal_label(context, 'Click Handling', "How click events are handled in prompts. Set via 'cl' or 'click_events' options in OSC 133.")
 	context.table_set_column(1)
-	match prompt.click {
+	match prompt.click.tag {
 		.none { context.text_disabled('(none)') }
 		.click_events { context.text('click_events') }
-		.cl_line { context.text('cl=line') }
-		.cl_multiple { context.text('cl=multiple') }
-		.cl_conservative_vertical { context.text('cl=conservative_vertical') }
-		.cl_smart_vertical { context.text('cl=smart_vertical') }
+		.cl {
+			context.text(match prompt.click.cl {
+				.line { 'cl=line' }
+				.multiple { 'cl=multiple' }
+				.conservative_vertical { 'cl=conservative_vertical' }
+				.smart_vertical { 'cl=smart_vertical' }
+			})
+		}
 	}
 }
 

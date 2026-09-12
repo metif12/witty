@@ -16,6 +16,24 @@ fn test_flat_page_internal_tag_source_layouts() {
 	assert u8(PromptKind.secondary) == 3
 }
 
+fn test_semantic_click_source_layout() {
+	assert sizeof(SemanticClickTag) == 1
+	assert u8(SemanticClickTag.none) == 0
+	assert u8(SemanticClickTag.click_events) == 1
+	assert u8(SemanticClickTag.cl) == 2
+	assert sizeof(SemanticClickCl) == 1
+	assert u8(SemanticClickCl.line) == 0
+	assert u8(SemanticClickCl.multiple) == 1
+	assert u8(SemanticClickCl.conservative_vertical) == 2
+	assert u8(SemanticClickCl.smart_vertical) == 3
+	assert sizeof(SemanticClick) == 2
+	assert sizeof(SemanticPrompt) == 3
+	assert semantic_click_none.tag == .none
+	assert semantic_click_click_events.tag == .click_events
+	assert SemanticClick.from_cl(.smart_vertical).tag == .cl
+	assert SemanticClick.from_cl(.smart_vertical).cl == .smart_vertical
+}
+
 fn test_flat_pages_scrollbar() {
 	mut no_scrollback := Pages.init(4, 2, 0)
 	no_scrollback.screen_rows << RowData.init(4)
@@ -2629,7 +2647,7 @@ fn test_screen_line_iterator_invalid_start_is_exhausted() {
 
 fn pcm_setup() Screen {
 	mut s := Screen.init(20, 5, 0)
-	s.semantic_prompt.click = .cl_line
+	s.semantic_prompt.click = SemanticClick.from_cl(.line)
 	s.cursor_set_semantic_content_prompt(.initial)
 	s.test_write_string('> ') or {}
 	s.cursor_set_semantic_content_input(true)
@@ -2649,7 +2667,7 @@ fn test_screen_prompt_click_move_line_right_basic() {
 fn test_screen_prompt_click_move_cursor_not_on_input() {
 	mut s := Screen.init(20, 5, 0)
 	defer { s.deinit() }
-	s.semantic_prompt.click = .cl_line
+	s.semantic_prompt.click = SemanticClick.from_cl(.line)
 	s.cursor_set_semantic_content_prompt(.initial)
 	s.test_write_string('> ') or { assert false }
 	s.cursor_set_semantic_content_input(true)
@@ -2685,7 +2703,7 @@ fn test_screen_prompt_click_move_same_position() {
 fn test_screen_prompt_click_move_right_skips_non_input() {
 	mut s := Screen.init(20, 5, 0)
 	defer { s.deinit() }
-	s.semantic_prompt.click = .cl_line
+	s.semantic_prompt.click = SemanticClick.from_cl(.line)
 	s.cursor_set_semantic_content_prompt(.initial)
 	s.test_write_string('> ') or { assert false }
 	s.cursor_set_semantic_content_input(true)
@@ -2703,7 +2721,7 @@ fn test_screen_prompt_click_move_right_skips_non_input() {
 fn test_screen_prompt_click_move_right_soft_wrapped() {
 	mut s := Screen.init(10, 5, 0)
 	defer { s.deinit() }
-	s.semantic_prompt.click = .cl_line
+	s.semantic_prompt.click = SemanticClick.from_cl(.line)
 	s.cursor_set_semantic_content_prompt(.initial)
 	s.test_write_string('> ') or { assert false }
 	s.cursor_set_semantic_content_input(true)
@@ -2725,7 +2743,7 @@ fn test_screen_prompt_click_move_right_soft_wrapped() {
 fn test_screen_prompt_click_move_disabled_when_click_none() {
 	mut s := Screen.init(20, 5, 0)
 	defer { s.deinit() }
-	assert s.semantic_prompt.click == .none
+	assert s.semantic_prompt.click == semantic_click_none
 	s.cursor_set_semantic_content_prompt(.initial)
 	s.test_write_string('> ') or { assert false }
 	s.cursor_set_semantic_content_input(true)
@@ -2739,7 +2757,7 @@ fn test_screen_prompt_click_move_disabled_when_click_none() {
 fn test_screen_prompt_click_move_line_right_stops_at_hard_wrap() {
 	mut s := Screen.init(20, 5, 0)
 	defer { s.deinit() }
-	s.semantic_prompt.click = .cl_line
+	s.semantic_prompt.click = SemanticClick.from_cl(.line)
 	s.cursor_set_semantic_content_prompt(.initial)
 	s.test_write_string('> ') or { assert false }
 	s.cursor_set_semantic_content_input(false)
@@ -2754,7 +2772,7 @@ fn test_screen_prompt_click_move_line_right_stops_at_hard_wrap() {
 fn test_screen_prompt_click_move_line_right_stops_at_non_continuation_row() {
 	mut s := Screen.init(20, 5, 0)
 	defer { s.deinit() }
-	s.semantic_prompt.click = .cl_line
+	s.semantic_prompt.click = SemanticClick.from_cl(.line)
 	s.cursor_set_semantic_content_prompt(.initial)
 	s.test_write_string('> ') or { assert false }
 	s.cursor_set_semantic_content_input(false)
@@ -2785,7 +2803,7 @@ fn test_screen_prompt_click_move_line_left_basic() {
 fn test_screen_prompt_click_move_left_skips_non_input() {
 	mut s := Screen.init(20, 5, 0)
 	defer { s.deinit() }
-	s.semantic_prompt.click = .cl_line
+	s.semantic_prompt.click = SemanticClick.from_cl(.line)
 	s.cursor_set_semantic_content_prompt(.initial)
 	s.test_write_string('> ') or { assert false }
 	s.cursor_set_semantic_content_input(true)
@@ -2803,7 +2821,7 @@ fn test_screen_prompt_click_move_left_skips_non_input() {
 fn test_screen_prompt_click_move_left_soft_wrapped() {
 	mut s := Screen.init(10, 5, 0)
 	defer { s.deinit() }
-	s.semantic_prompt.click = .cl_line
+	s.semantic_prompt.click = SemanticClick.from_cl(.line)
 	s.cursor_set_semantic_content_prompt(.initial)
 	s.test_write_string('> ') or { assert false }
 	s.cursor_set_semantic_content_input(true)
@@ -2825,7 +2843,7 @@ fn test_screen_prompt_click_move_left_soft_wrapped() {
 fn test_screen_prompt_click_move_line_left_stops_at_hard_wrap() {
 	mut s := Screen.init(20, 5, 0)
 	defer { s.deinit() }
-	s.semantic_prompt.click = .cl_line
+	s.semantic_prompt.click = SemanticClick.from_cl(.line)
 	s.cursor_set_semantic_content_prompt(.initial)
 	s.test_write_string('> ') or { assert false }
 	s.cursor_set_semantic_content_input(false)

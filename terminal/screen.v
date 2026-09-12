@@ -1778,16 +1778,36 @@ pub mut:
 
 pub const semantic_prompt_disabled = SemanticPrompt{
 	seen: false
-	click: .none
+	click: semantic_click_none
 }
 
-pub enum SemanticClick {
+pub enum SemanticClickTag as u8 {
 	none
 	click_events
-	cl_line
-	cl_multiple
-	cl_conservative_vertical
-	cl_smart_vertical
+	cl
+}
+
+pub enum SemanticClickCl as u8 {
+	line
+	multiple
+	conservative_vertical
+	smart_vertical
+}
+
+pub struct SemanticClick {
+pub:
+	tag SemanticClickTag
+	cl  SemanticClickCl
+}
+
+pub const semantic_click_none = SemanticClick{}
+pub const semantic_click_click_events = SemanticClick{ tag: .click_events }
+
+pub fn SemanticClick.from_cl(cl SemanticClickCl) SemanticClick {
+	return SemanticClick{
+		tag: .cl
+		cl: cl
+	}
 }
 
 // Cursor holds the cursor position and associated state.
@@ -3845,12 +3865,16 @@ pub fn (self &Screen) prompt_click_move(click_pin Pin) PromptClickMove {
 	if self.cursor.semantic_content != .input && !cursor_cell_is_input {
 		return prompt_click_move_zero
 	}
-	match self.semantic_prompt.click {
+	match self.semantic_prompt.click.tag {
 		.none, .click_events {
 			return prompt_click_move_zero
 		}
-		.cl_line, .cl_multiple, .cl_conservative_vertical, .cl_smart_vertical {
-			return self.prompt_click_line(click_pin)
+		.cl {
+			return match self.semantic_prompt.click.cl {
+				.line, .multiple, .conservative_vertical, .smart_vertical {
+					self.prompt_click_line(click_pin)
+				}
+			}
 		}
 	}
 }

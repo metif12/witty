@@ -677,6 +677,11 @@ fn test_option_read_aid() {
 }
 
 fn test_option_read_cl() {
+	assert sizeof(Click) == 1
+	assert u8(Click.line) == 0
+	assert u8(Click.multiple) == 1
+	assert u8(Click.conservative_vertical) == 2
+	assert u8(Click.smart_vertical) == 3
 	assert (read_click('cl=line') or { Click.line }) == .line
 	assert (read_click('cl=m') or { Click.line }) == .multiple
 	assert (read_click('cl=v') or { Click.line }) == .conservative_vertical

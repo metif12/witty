@@ -11,6 +11,33 @@ fn test_mouse_mode_storage() {
 	assert u8(MouseFormat.sgr_pixels) == 4
 }
 
+fn semantic_click_for(options string) SemanticClick {
+	mut t := Terminal.init(Options{ cols: 10, rows: 5 }) or { panic(err) }
+	t.semantic_prompt_options(.fresh_line_new_prompt, options)
+	result := t.screens.active.semantic_prompt.click
+	t.deinit()
+	return result
+}
+
+fn test_terminal_semantic_prompt_click_options() {
+	assert semantic_click_for('click_events=1') == semantic_click_click_events
+	assert semantic_click_for('click_events=0') == semantic_click_none
+
+	multiple := semantic_click_for('cl=m')
+	assert multiple.tag == .cl
+	assert multiple.cl == .multiple
+
+	line := semantic_click_for('cl=line')
+	assert line.tag == .cl
+	assert line.cl == .line
+
+	assert semantic_click_for('click_events=1;cl=m') == semantic_click_click_events
+	conservative := semantic_click_for('click_events=0;cl=v')
+	assert conservative.tag == .cl
+	assert conservative.cl == .conservative_vertical
+	assert semantic_click_for('aid=123') == semantic_click_none
+}
+
 // ============================================================
 // Helper: create a terminal for tests with wraparound mode enabled by default
 // ============================================================

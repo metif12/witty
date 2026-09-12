@@ -4196,16 +4196,16 @@ pub fn (mut self Terminal) semantic_prompt_options(action osc.SemanticAction, op
 
 			if click_events := osc.read_click_events(options) {
 				if click_events {
-					self.screens.active.semantic_prompt.click = .click_events
+					self.screens.active.semantic_prompt.click = semantic_click_click_events
 					return
 				}
 			}
 			if click := osc.read_click(options) {
 				self.screens.active.semantic_prompt.click = match click {
-					.line { .cl_line }
-					.multiple { .cl_multiple }
-					.conservative_vertical { .cl_conservative_vertical }
-					.smart_vertical { .cl_smart_vertical }
+					.line { SemanticClick.from_cl(.line) }
+					.multiple { SemanticClick.from_cl(.multiple) }
+					.conservative_vertical { SemanticClick.from_cl(.conservative_vertical) }
+					.smart_vertical { SemanticClick.from_cl(.smart_vertical) }
 				}
 			}
 		}

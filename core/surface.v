@@ -6341,7 +6341,7 @@ fn (mut self Surface) maybe_prompt_click() !bool {
 	}
 	t := self.renderer_state.terminal_
 	screen := t.screens.active
-	if screen.semantic_prompt.click == .none || !t.cursor_is_at_prompt()
+	if screen.semantic_prompt.click.tag == .none || !t.cursor_is_at_prompt()
 		|| screen.selection != none {
 		return false
 	}
@@ -6369,7 +6369,7 @@ fn (mut self Surface) maybe_prompt_click() !bool {
 		return false
 	}
 
-	match screen.semantic_prompt.click {
+	match screen.semantic_prompt.click.tag {
 		.none {
 			return false
 		}
@@ -6377,7 +6377,7 @@ fn (mut self Surface) maybe_prompt_click() !bool {
 			data := '\x1b[<0;${pos_vp.x + 1};${pos_vp.y + 1}M'
 			self.queue_io(termiopkg.Message.write_small_msg(data.bytes()))
 		}
-		else {
+		.cl {
 			left_arrow := if t.modes.get(.cursor_keys) { '\x1bOD' } else { '\x1b[D' }
 			right_arrow := if t.modes.get(.cursor_keys) { '\x1bOC' } else { '\x1b[C' }
 			move := screen.prompt_click_move(click_pin)
