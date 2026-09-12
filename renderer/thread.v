@@ -260,6 +260,9 @@ pub mut:
 
 	// Whether the draw timer is currently active.
 	draw_active bool
+	// Whether the draw completion is armed. This remains true for one pending
+	// callback after draw_active is disabled.
+	draw_timer_armed bool
 
 	// Whether the cursor blink timer is currently active. This mirrors
 	// the state of the `cursor_c` completion in Ghostty (whether the
@@ -433,7 +436,6 @@ fn (mut self RendererThread) thread_main_inner() ! {
 	// Start blinking the cursor and arm the animation timer exactly as the
 	// xev-backed renderer thread does.
 	now := time.sys_mono_now()
-	self.flags.cursor_blink_visible = true
 	self.cursor_blink_active = true
 	self.next_cursor_blink_at = now + cursor_blink_interval()
 
@@ -468,19 +470,18 @@ fn (mut self RendererThread) thread_main_inner() ! {
 			self.next_cursor_blink_at = current + cursor_blink_interval()
 			self.cursor_timer_callback()
 		}
-		if self.draw_active && current >= self.next_draw_at {
-			self.next_draw_at = current + draw_interval_ns()
-			self.draw_frame(false)
+		if self.draw_timer_armed && current >= self.next_draw_at {
+			self.draw_timer_callback()
 		}
 	}
 
 	self.draw_active = false
+	self.draw_timer_armed = false
 	self.cursor_blink_active = false
 }
 
 // Sync the draw timer state based on configuration and focus.
 fn (mut self RendererThread) sync_draw_timer() {
-	was_active := self.draw_active
 	mut active := false
 
 	// If our renderer supports animations and has them, then we
@@ -503,7 +504,8 @@ fn (mut self RendererThread) sync_draw_timer() {
 	}
 
 	self.draw_active = active
-	if active && !was_active {
+	if active && !self.draw_timer_armed {
+		self.draw_timer_armed = true
 		self.next_draw_at = time.sys_mono_now() + draw_interval_ns()
 	}
 }
@@ -677,6 +679,17 @@ fn (mut self RendererThread) cursor_timer_callback() {
 	self.request_wakeup()
 }
 
+// Draw once for an armed timer completion and rearm only when animation is
+// still active. A disabled timer therefore fires its already-pending callback.
+fn (mut self RendererThread) draw_timer_callback() {
+	self.draw_timer_armed = false
+	self.draw_frame(false)
+	if self.draw_active {
+		self.draw_timer_armed = true
+		self.next_draw_at = time.sys_mono_now() + draw_interval_ns()
+	}
+}
+
 // send publishes a mailbox message and wakes the render loop. A full mailbox
 // is reported to the producer, matching Ghostty's bounded BlockingQueue.
 pub fn (mut self RendererThread) send(msg RendererMessage) bool {
@@ -741,7 +754,7 @@ fn (self &RendererThread) next_timer_timeout(now u64) i64 {
 	if self.cursor_blink_active {
 		deadline = self.next_cursor_blink_at
 	}
-	if self.draw_active && (deadline == 0 || self.next_draw_at < deadline) {
+	if self.draw_timer_armed && (deadline == 0 || self.next_draw_at < deadline) {
 		deadline = self.next_draw_at
 	}
 	if deadline == 0 {

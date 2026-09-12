@@ -95,10 +95,62 @@ fn test_renderer_thread_timer_deadlines() {
 		cursor_blink_active: true
 		next_cursor_blink_at: 2_000
 		draw_active: true
+		draw_timer_armed: true
 		next_draw_at: 1_000
 	}
 	assert render_thread.next_timer_timeout(500) == 500
 	assert render_thread.next_timer_timeout(1_000) == 0
+}
+
+fn test_renderer_thread_flags_match_source_defaults() {
+	flags := ThreadFlags{}
+	assert !flags.cursor_blink_visible
+	assert !flags.has_inspector
+	assert flags.visible
+	assert flags.focused
+}
+
+fn test_renderer_thread_disabled_draw_keeps_armed_completion() {
+	mut render := Renderer{}
+	mut render_thread := RendererThread{
+		renderer: &render
+		config: ThreadDerivedConfig{
+			custom_shader_animation: .false_
+		}
+		flags: ThreadFlags{
+			visible: false
+		}
+		draw_active: true
+		draw_timer_armed: true
+		next_draw_at: 123
+	}
+	render_thread.sync_draw_timer()
+	assert !render_thread.draw_active
+	assert render_thread.draw_timer_armed
+	assert render_thread.next_draw_at == 123
+
+	render_thread.draw_timer_callback()
+	assert !render_thread.draw_timer_armed
+}
+
+fn test_renderer_thread_active_draw_rearms_completion() {
+	mut render := Renderer{}
+	mut render_thread := RendererThread{
+		renderer: &render
+		config: ThreadDerivedConfig{
+			custom_shader_animation: .always
+		}
+		flags: ThreadFlags{
+			visible: false
+		}
+		draw_active: true
+		draw_timer_armed: true
+		next_draw_at: 123
+	}
+	before := time.sys_mono_now()
+	render_thread.draw_timer_callback()
+	assert render_thread.draw_timer_armed
+	assert render_thread.next_draw_at >= before + draw_interval_ns()
 }
 
 fn test_renderer_thread_routes_app_thread_draws_through_redraw_callback() {
