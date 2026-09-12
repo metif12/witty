@@ -799,6 +799,10 @@ fn test_page_html_ascii_unchanged() {
 // ============================================================
 
 fn test_format_styled() {
+	assert sizeof(Format) == 1
+	assert u8(Format.plain) == 0
+	assert u8(Format.vt) == 1
+	assert u8(Format.html) == 2
 	assert Format.plain.styled() == false
 	assert Format.vt.styled() == true
 	assert Format.html.styled() == true

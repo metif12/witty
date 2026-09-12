@@ -691,7 +691,7 @@ import math
 import strings
 
 // Formats available.
-pub enum Format {
+pub enum Format as u8 {
 	// Plain text.
 	plain
 	// Include VT sequences to preserve colors, styles, URLs, etc.
