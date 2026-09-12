@@ -1,5 +1,62 @@
 module input
 
+fn test_binding_source_tag_layouts_and_ordinals() {
+	// Trigger.Key is explicitly tagged by its C enum in Ghostty.
+	assert sizeof(TriggerKeyType) == 4
+	assert [TriggerKeyType.physical, .unicode, .catch_all].map(i32(it)) == [i32(0), 1, 2]
+
+	// Action is a source-inferred 83-case tagged union (u7 in Zig).
+	assert sizeof(ActionTag) == 1
+	mut action_count := 0
+	$for enum_value in ActionTag.values {
+		assert u8(enum_value.value) == u8(action_count)
+		action_count++
+	}
+	assert action_count == 83
+	assert u8(ActionTag.ignore) == 0
+	assert u8(ActionTag.crash) == 82
+
+	assert sizeof(SplitDirection) == 1
+	assert [SplitDirection.right, .down, .left, .up, .auto_].map(u8(it)) == [u8(0), 1, 2, 3, 4]
+	assert sizeof(SplitFocusDirection) == 1
+	assert [SplitFocusDirection.previous, .next, .up, .left, .down, .right].map(u8(it)) == [
+		u8(0),
+		1,
+		2,
+		3,
+		4,
+		5,
+	]
+	assert sizeof(GotoWindow) == 1
+	assert [GotoWindow.previous, .next].map(u8(it)) == [u8(0), 1]
+	assert sizeof(NavigateSearch) == 1
+	assert [NavigateSearch.previous, .next].map(u8(it)) == [u8(0), 1]
+	assert sizeof(AdjustSelection) == 1
+	assert [AdjustSelection.left, .right, .up, .down, .page_up, .page_down, .home, .end_,
+		.beginning_of_line, .end_of_line].map(u8(it)) == [u8(0), 1, 2, 3, 4, 5, 6, 7, 8, 9]
+	assert sizeof(SplitResizeDirection) == 1
+	assert [SplitResizeDirection.up, .down, .left, .right].map(u8(it)) == [u8(0), 1, 2, 3]
+	assert sizeof(CopyToClipboard) == 1
+	assert [CopyToClipboard.plain, .vt, .html, .mixed].map(u8(it)) == [u8(0), 1, 2, 3]
+	assert sizeof(WriteScreenAction) == 1
+	assert [WriteScreenAction.copy, .paste, .open].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(WriteScreenFormat) == 1
+	assert [WriteScreenFormat.plain, .vt, .html].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(InspectorMode) == 1
+	assert [InspectorMode.toggle, .show, .hide].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(CloseTabMode) == 1
+	assert [CloseTabMode.this, .other, .right].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(CrashThread) == 1
+	assert [CrashThread.main_thread, .io, .render].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(ActionScope) == 1
+	assert [ActionScope.app, .surface].map(u8(it)) == [u8(0), 1]
+
+	assert sizeof(ParserElemType) == 1
+	assert [ParserElemType.leader, .binding, .chain].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(SetValueType) == 1
+	assert [SetValueType.leader, .leaf, .leaf_chained].map(u8(it)) == [u8(0), 1, 2]
+}
+
 // --- Flags tests ---
 
 fn test_flags_cval_default() {

@@ -1136,7 +1136,7 @@ pub:
 	unicode  u32 // used when typ == .unicode
 }
 
-pub enum TriggerKeyType {
+pub enum TriggerKeyType as i32 {
 	physical
 	unicode
 	catch_all
@@ -1465,7 +1465,7 @@ pub fn Trigger.parse(input_str string) !Trigger {
 // --- Action ---
 
 // ActionTag enumerates all the possible binding action types.
-pub enum ActionTag {
+pub enum ActionTag as u8 {
 	// Ignore this key combination.
 	ignore
 	// Unbind a previously bound key binding.
@@ -1920,7 +1920,7 @@ pub fn zig_escape(value string) string {
 }
 
 // SplitDirection values for new_split.
-pub enum SplitDirection {
+pub enum SplitDirection as u8 {
 	right
 	down
 	left
@@ -1929,7 +1929,7 @@ pub enum SplitDirection {
 }
 
 // SplitFocusDirection values for goto_split.
-pub enum SplitFocusDirection {
+pub enum SplitFocusDirection as u8 {
 	previous
 	next
 	up
@@ -1953,17 +1953,17 @@ pub fn parse_split_focus_direction(s string) !SplitFocusDirection {
 	}
 }
 
-pub enum GotoWindow {
+pub enum GotoWindow as u8 {
 	previous
 	next
 }
 
-pub enum NavigateSearch {
+pub enum NavigateSearch as u8 {
 	previous
 	next
 }
 
-pub enum AdjustSelection {
+pub enum AdjustSelection as u8 {
 	left
 	right
 	up
@@ -1976,27 +1976,27 @@ pub enum AdjustSelection {
 	end_of_line
 }
 
-pub enum SplitResizeDirection {
+pub enum SplitResizeDirection as u8 {
 	up
 	down
 	left
 	right
 }
 
-pub enum CopyToClipboard {
+pub enum CopyToClipboard as u8 {
 	plain
 	vt
 	html
 	mixed
 }
 
-pub enum WriteScreenAction {
+pub enum WriteScreenAction as u8 {
 	copy
 	paste
 	open
 }
 
-pub enum WriteScreenFormat {
+pub enum WriteScreenFormat as u8 {
 	plain
 	vt
 	html
@@ -2008,26 +2008,26 @@ pub:
 	emit   WriteScreenFormat
 }
 
-pub enum InspectorMode {
+pub enum InspectorMode as u8 {
 	toggle
 	show
 	hide
 }
 
-pub enum CloseTabMode {
+pub enum CloseTabMode as u8 {
 	this
 	other
 	right
 }
 
-pub enum CrashThread {
+pub enum CrashThread as u8 {
 	main_thread
 	io
 	render
 }
 
 // ActionScope indicates whether an action runs at app or surface level.
-pub enum ActionScope {
+pub enum ActionScope as u8 {
 	app
 	surface
 }
@@ -2772,7 +2772,7 @@ pub:
 	action  Action // used for .chain
 }
 
-pub enum ParserElemType {
+pub enum ParserElemType as u8 {
 	leader
 	binding
 	chain
@@ -3033,7 +3033,7 @@ pub mut:
 	chain_flags   Flags // used when typ == .leaf_chained
 }
 
-pub enum SetValueType {
+pub enum SetValueType as u8 {
 	leader
 	leaf
 	leaf_chained
