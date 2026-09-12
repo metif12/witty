@@ -1386,8 +1386,8 @@ fn test_page_plain_single_line_with_styling() {
 	f := PageFormatter.init(&t.screens.active.pages, format_plain)
 	r := f.format_with_state()
 	assert r.output == 'hello, world'
-	assert r.state.rows == int(t.screens.active.pages.rows)
-	assert r.state.cells == int(t.screens.active.pages.cols) - 12
+	assert r.state.rows == usize(t.screens.active.pages.rows)
+	assert r.state.cells == usize(t.screens.active.pages.cols) - 12
 }
 
 // Page plain multiline rectangle.
@@ -1405,7 +1405,7 @@ fn test_page_plain_multiline_rectangle() {
 	f.rectangle = true
 	r := f.format_with_state()
 	assert r.output == 'ell\norl'
-	assert r.state.rows == int(t.screens.active.pages.rows) - 1
+	assert r.state.rows == usize(t.screens.active.pages.rows) - 1
 	assert r.state.cells == 0
 }
 
@@ -1422,8 +1422,8 @@ fn test_page_plain_end_x_greater_than_cols() {
 	f.end_x = 100
 	r := f.format_with_state()
 	assert r.output == 'hello'
-	assert r.state.rows == int(t.screens.active.pages.rows)
-	assert r.state.cells == int(t.screens.active.pages.cols) - 5
+	assert r.state.rows == usize(t.screens.active.pages.rows)
+	assert r.state.cells == usize(t.screens.active.pages.cols) - 5
 }
 
 // Page plain end_x less than start_x on a single row returns empty.
@@ -1458,8 +1458,8 @@ fn test_page_plain_soft_wrapped_3_lines_no_unwrap() {
 	r := f.format_with_state()
 	// Without unwrap, wrapped lines show as separate lines
 	assert r.output == 'hello worl\nd this is\na test'
-	assert r.state.rows == int(t.screens.active.pages.rows) - 2
-	assert r.state.cells == int(t.screens.active.pages.cols) - 6
+	assert r.state.rows == usize(t.screens.active.pages.rows) - 2
+	assert r.state.cells == usize(t.screens.active.pages.cols) - 6
 }
 
 // Page plain soft-wrapped 3 lines with unwrap.
@@ -1478,8 +1478,8 @@ fn test_page_plain_soft_wrapped_3_lines_with_unwrap() {
 	r := f.format_with_state()
 	// With unwrap, wrapped lines are joined together
 	assert r.output == 'hello world this is a test'
-	assert r.state.rows == int(t.screens.active.pages.rows) - 2
-	assert r.state.cells == int(t.screens.active.pages.cols) - 6
+	assert r.state.rows == usize(t.screens.active.pages.rows) - 2
+	assert r.state.cells == usize(t.screens.active.pages.cols) - 6
 }
 
 // Page plain single line soft-wrapped unwrapped.
@@ -1515,8 +1515,8 @@ fn test_page_plain_single_wide_char() {
 	f.point_map = &points
 	result := f.format_with_state()
 	assert result.output == '1A⚡'
-	assert result.state.rows == int(t.screens.active.pages.screen_rows.len)
-	assert result.state.cells == int(t.screens.active.pages.cols) - 4
+	assert result.state.rows == usize(t.screens.active.pages.screen_rows.len)
+	assert result.state.cells == usize(t.screens.active.pages.cols) - 4
 	assert points.points.len == result.output.len
 	for i in 2 .. result.output.len {
 		assert points.points[i] == Coordinate{ x: 2, y: 0 }
@@ -1529,8 +1529,8 @@ fn test_page_plain_single_wide_char() {
 	f2.point_map = &points
 	result2 := f2.format_with_state()
 	assert result2.output == '⚡'
-	assert result2.state.rows == int(t.screens.active.pages.screen_rows.len)
-	assert result2.state.cells == int(t.screens.active.pages.cols) - 4
+	assert result2.state.rows == usize(t.screens.active.pages.screen_rows.len)
+	assert result2.state.cells == usize(t.screens.active.pages.cols) - 4
 	assert points.points.len == result2.output.len
 	for point in points.points {
 		assert point == Coordinate{ x: 2, y: 0 }
@@ -1543,8 +1543,8 @@ fn test_page_plain_single_wide_char() {
 	f3.point_map = &points
 	result3 := f3.format_with_state()
 	assert result3.output == '⚡'
-	assert result3.state.rows == int(t.screens.active.pages.screen_rows.len)
-	assert result3.state.cells == int(t.screens.active.pages.cols) - 4
+	assert result3.state.rows == usize(t.screens.active.pages.screen_rows.len)
+	assert result3.state.cells == usize(t.screens.active.pages.cols) - 4
 	assert points.points.len == result3.output.len
 	for point in points.points {
 		assert point == Coordinate{ x: 2, y: 0 }
@@ -1917,8 +1917,8 @@ fn test_page_plain_start_y_and_start_x_zero_uses_trailing_state() {
 	r := f.format_with_state()
 	// SHOULD output the 2 newlines because both start_y and start_x are 0
 	assert r.output == '\n\nhello'
-	assert r.state.rows == int(t.screens.active.pages.rows)
-	assert r.state.cells == int(t.screens.active.pages.cols) - 5
+	assert r.state.rows == usize(t.screens.active.pages.rows)
+	assert r.state.cells == usize(t.screens.active.pages.cols) - 5
 }
 
 // Page plain with prior trailing state cells, no wrapped line.
@@ -1935,8 +1935,8 @@ fn test_page_plain_with_prior_trailing_state_cells_no_wrap() {
 	r := f.format_with_state()
 	// Blank cells are reset when row is not a wrap continuation
 	assert r.output == 'hello'
-	assert r.state.rows == int(t.screens.active.pages.rows)
-	assert r.state.cells == int(t.screens.active.pages.cols) - 5
+	assert r.state.rows == usize(t.screens.active.pages.rows)
+	assert r.state.cells == usize(t.screens.active.pages.cols) - 5
 }
 
 // Page plain with prior trailing state cells, with wrap continuation.
@@ -1960,8 +1960,8 @@ fn test_page_plain_with_prior_trailing_state_cells_wrap_continuation() {
 	r := f.format_with_state()
 	// Blank cells are preserved when the row is a wrap continuation with unwrap
 	assert r.output == '   world'
-	assert r.state.rows == int(t.screens.active.pages.rows)
-	assert r.state.cells == int(t.screens.active.pages.cols) - 5
+	assert r.state.rows == usize(t.screens.active.pages.rows)
+	assert r.state.cells == usize(t.screens.active.pages.cols) - 5
 }
 
 // Page html mixed ascii and unicode.

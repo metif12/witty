@@ -1407,8 +1407,8 @@ pub mut:
 // Trailing state for cross-page continuation.
 pub struct TrailingState {
 pub mut:
-	rows  int
-	cells int
+	rows  usize
+	cells usize
 }
 
 pub const trailing_state_empty = TrailingState{ rows: 0, cells: 0 }
@@ -1439,8 +1439,8 @@ pub fn (self PageFormatter) format() string {
 }
 
 pub fn (self PageFormatter) format_with_state() FormatResult {
-	mut blank_rows := 0
-	mut blank_cells := 0
+	mut blank_rows := usize(0)
+	mut blank_cells := usize(0)
 
 	// Continue our prior trailing state if we have it, but only if we're
 	// starting from the beginning (start_y and start_x are both 0).
@@ -1603,7 +1603,7 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 			} else {
 				Coordinate{}
 			}
-			for row_offset in 0 .. blank_rows {
+			for row_offset in usize(0) .. blank_rows {
 				sb.write_string(newline)
 				point := if row_offset == 0 {
 					map_start
@@ -1658,8 +1658,8 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 			if blank_cells > 0 {
 				mut blank_x := x
 				mut blank_y := y
-				mut blank_points := []Coordinate{cap: blank_cells}
-				for _ in 0 .. blank_cells {
+				mut blank_points := []Coordinate{cap: int(blank_cells)}
+				for _ in usize(0) .. blank_cells {
 					if blank_x > 0 {
 						blank_x--
 					} else if blank_y > 0 {
