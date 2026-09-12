@@ -3261,7 +3261,7 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 			}
 		}
 		if self.config.scroll_to_bottom_keystroke {
-			self.renderer_state.terminal_.scroll_viewport(.bottom, 0) or {
+			self.renderer_state.terminal_.scroll_viewport(terminal.scroll_viewport_bottom) or {
 				if locked {
 					self.renderer_state.mutex.unlock()
 				}
@@ -3509,7 +3509,7 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 		}
 
 		if y.delta != 0 {
-			t.scroll_viewport(.delta, -y.delta)!
+			t.scroll_viewport(terminal.ScrollViewport.from_delta(-y.delta))!
 		}
 	}
 	self.queue_render()!
@@ -4477,10 +4477,10 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.queue_io(termiopkg.Message.clear_screen_msg(false))
 		}
 		.scroll_to_top {
-			self.queue_io(termiopkg.Message.scroll_viewport_msg(.top, 0))
+			self.queue_io(termiopkg.Message.scroll_viewport_msg(terminal.scroll_viewport_top))
 		}
 		.scroll_to_bottom {
-			self.queue_io(termiopkg.Message.scroll_viewport_msg(.bottom, 0))
+			self.queue_io(termiopkg.Message.scroll_viewport_msg(terminal.scroll_viewport_bottom))
 		}
 		.scroll_to_row {
 			locked := self.renderer_state.mutex != unsafe { nil }
@@ -4509,19 +4509,19 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 		}
 		.scroll_page_up {
 			rows := isize(self.size.grid().rows)
-			self.queue_io(termiopkg.Message.scroll_viewport_msg(.delta, -rows))
+			self.queue_io(termiopkg.Message.scroll_viewport_msg(terminal.ScrollViewport.from_delta(-rows)))
 		}
 		.scroll_page_down {
 			rows := isize(self.size.grid().rows)
-			self.queue_io(termiopkg.Message.scroll_viewport_msg(.delta, rows))
+			self.queue_io(termiopkg.Message.scroll_viewport_msg(terminal.ScrollViewport.from_delta(rows)))
 		}
 		.scroll_page_fractional {
 			rows := f32(self.size.grid().rows)
 			delta := isize(action.float_param * rows)
-			self.queue_io(termiopkg.Message.scroll_viewport_msg(.delta, delta))
+			self.queue_io(termiopkg.Message.scroll_viewport_msg(terminal.ScrollViewport.from_delta(delta)))
 		}
 		.scroll_page_lines {
-			self.queue_io(termiopkg.Message.scroll_viewport_msg(.delta, isize(action.int_param)))
+			self.queue_io(termiopkg.Message.scroll_viewport_msg(terminal.ScrollViewport.from_delta(isize(action.int_param))))
 		}
 		.jump_to_prompt {
 			self.queue_io(termiopkg.Message.jump_to_prompt_msg(isize(action.int_param)))
@@ -5425,7 +5425,7 @@ fn (mut self Surface) recompute_initial_size() ! {
 }
 
 fn (mut self Surface) scroll_to_bottom() ! {
-	self.renderer_state.terminal_.scroll_viewport(.bottom, 0)!
+	self.renderer_state.terminal_.scroll_viewport(terminal.scroll_viewport_bottom)!
 	self.queue_render()!
 }
 
@@ -5902,7 +5902,7 @@ fn (mut self Surface) selection_scroll_tick() ! {
 	}
 
 	// Scroll the viewport
-	self.renderer_state.terminal_.scroll_viewport(.delta, delta)!
+	self.renderer_state.terminal_.scroll_viewport(terminal.ScrollViewport.from_delta(delta))!
 
 	// Continue drag selection
 	if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{

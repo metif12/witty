@@ -139,6 +139,14 @@ fn test_message_discriminants_match_source_declaration_order() {
 	assert u8(MutexState.unlocked) == 1
 }
 
+fn test_scroll_viewport_message_preserves_source_payload() {
+	wide_delta := isize(1_099_511_627_776)
+	msg := Message.scroll_viewport_msg(terminal.ScrollViewport.from_delta(wide_delta))
+	assert msg.kind == .scroll_viewport
+	assert msg.scroll_viewport_val.tag == .delta
+	assert msg.scroll_viewport_val.delta == wide_delta
+}
+
 fn test_termio_queue_message_uses_mailbox() {
 	mut tio := Termio{}
 	tio.init(make_termio_opts())!

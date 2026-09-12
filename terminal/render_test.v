@@ -233,7 +233,7 @@ fn test_render_state_cursor_out_of_viewport() {
 	assert (state.cursor.viewport or { panic('nil') }).y == 1
 
 	// Scroll the viewport to the top
-	t.scroll_viewport(.top, 0)!
+	t.scroll_viewport(scroll_viewport_top)!
 	state.update(mut t)
 
 	// The cursor is still in the active area but out of the viewport.

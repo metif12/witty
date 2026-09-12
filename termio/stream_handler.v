@@ -220,7 +220,7 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.terminal.erase_display(.above, event.payload.flag)
 		}
 		.erase_display_complete {
-			self.terminal.scroll_viewport(.bottom, 0) or {}
+			self.terminal.scroll_viewport(terminal.scroll_viewport_bottom) or {}
 			self.terminal.erase_display(.complete, event.payload.flag)
 		}
 		.erase_display_scrollback {

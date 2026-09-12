@@ -696,12 +696,12 @@ pub fn (mut t Termio) clear_screen(history bool) ! {
 }
 
 // scroll_viewport scrolls the viewport.
-pub fn (mut t Termio) scroll_viewport(behavior terminal.ScrollViewport, delta isize) ! {
+pub fn (mut t Termio) scroll_viewport(scroll terminal.ScrollViewport) ! {
 	t.renderer_state.mutex.lock()
 	defer {
 		t.renderer_state.mutex.unlock()
 	}
-	t.terminal.scroll_viewport(behavior, delta)!
+	t.terminal.scroll_viewport(scroll)!
 }
 
 // jump_to_prompt jumps the viewport to the prompt.
@@ -1050,7 +1050,7 @@ fn (mut t Thread) drain_mailbox(mut io Termio) bool {
 			.size_report { io.size_report(msg.size_report_val) or {} }
 			.clear_screen { io.clear_screen(msg.flag_val) or {} }
 			.scroll_viewport {
-				io.scroll_viewport(msg.scroll_behavior, msg.scroll_delta) or {}
+				io.scroll_viewport(msg.scroll_viewport_val) or {}
 			}
 			.selection_scroll {
 				if msg.flag_val {
@@ -1182,8 +1182,7 @@ pub mut:
 	size_report_val   SizeReportKind
 	resize_val        renderer.Size
 	config_val        DerivedConfig
-	scroll_behavior   terminal.ScrollViewport
-	scroll_delta      isize
+	scroll_viewport_val terminal.ScrollViewport
 	prompt_delta      isize
 }
 
@@ -1381,11 +1380,10 @@ pub fn Message.clear_screen_msg(history bool) Message {
 	}
 }
 
-pub fn Message.scroll_viewport_msg(behavior terminal.ScrollViewport, delta isize) Message {
+pub fn Message.scroll_viewport_msg(scroll terminal.ScrollViewport) Message {
 	return Message{
 		kind: .scroll_viewport
-		scroll_behavior: behavior
-		scroll_delta: delta
+		scroll_viewport_val: scroll
 	}
 }
 
