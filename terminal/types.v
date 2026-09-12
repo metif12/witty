@@ -1481,14 +1481,6 @@ pub:
 // Style types
 // ============================================================
 
-// CursorStyle describes the cursor appearance.
-pub enum CursorStyle {
-	block
-	underline
-	bar
-	block_hollow
-}
-
 // UnderlineStyle for cell underline decoration.
 pub enum UnderlineStyle {
 	none

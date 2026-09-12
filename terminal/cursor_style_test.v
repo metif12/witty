@@ -2,14 +2,15 @@ module terminal
 
 // Tests for cursor_style.v (translated from cursor.zig)
 
-fn test_cursor_visual_style_values() {
-	assert CursorVisualStyle.bar != CursorVisualStyle.block
-	assert CursorVisualStyle.block != CursorVisualStyle.underline
-	assert CursorVisualStyle.underline != CursorVisualStyle.block_hollow
+fn test_cursor_style_values() {
+	assert int(CursorStyle.bar) == 0
+	assert int(CursorStyle.block) == 1
+	assert int(CursorStyle.underline) == 2
+	assert int(CursorStyle.block_hollow) == 3
 }
 
-fn test_cursor_visual_style_match() {
-	style := CursorVisualStyle.block_hollow
+fn test_cursor_style_match() {
+	style := CursorStyle.block_hollow
 	result := match style {
 		.bar { 'bar' }
 		.block { 'block' }
