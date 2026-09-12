@@ -1018,19 +1018,30 @@ fn (mut self ImageRenderState) prep_kitty_image(image kitty.Image) ! {
 		// which keeps the existing texture if any).
 		mut entry := self.images[id] or { ImageEntry{} }
 		entry.image.mark_for_replace(pending)
+		entry.image.prep_for_upload() or {
+			entry.image.mark_for_unload()
+			self.images[id] = entry
+			return error('image conversion error')
+		}
 		entry.transmit_time = transmit_time
 		self.images[id] = entry
 	} else {
 		// New entry.
-		self.images[id] = ImageEntry{
+		mut entry := ImageEntry{
 			image: Image{
 				state: .pending
 				pending: pending
 				width: image.width
 				height: image.height
 			}
-			transmit_time: transmit_time
 		}
+		entry.image.prep_for_upload() or {
+			entry.image.mark_for_unload()
+			self.images[id] = entry
+			return error('image conversion error')
+		}
+		entry.transmit_time = transmit_time
+		self.images[id] = entry
 	}
 }
 
@@ -1087,15 +1098,15 @@ pub fn (mut self ImageRenderState) overlay_update(overlay ?Overlay) {
 pub fn (mut self ImageRenderState) draw(api &MetalAPI, pipeline MetalPipeline, mut pass MetalRenderPass, placement_type DrawPlacements) {
 	placements := match placement_type {
 		.kitty_below_bg {
-			self.kitty_placements[..math.min(int(self.kitty_bg_end), self.kitty_placements.len)]
+			self.kitty_placements[..int(self.kitty_bg_end)]
 		}
 		.kitty_below_text {
-			start := math.min(int(self.kitty_bg_end), self.kitty_placements.len)
-			end := math.min(int(self.kitty_text_end), self.kitty_placements.len)
+			start := int(self.kitty_bg_end)
+			end := int(self.kitty_text_end)
 			self.kitty_placements[start..end]
 		}
 		.kitty_above_text {
-			start := math.min(int(self.kitty_text_end), self.kitty_placements.len)
+			start := int(self.kitty_text_end)
 			self.kitty_placements[start..]
 		}
 		.overlay { self.overlay_placements }
@@ -1127,15 +1138,15 @@ pub fn (mut self ImageRenderState) draw(api &MetalAPI, pipeline MetalPipeline, m
 pub fn (mut self ImageRenderState) draw_opengl(api &OpenGLAPI, pipeline GLPipeline, mut pass GLRenderPass, placement_type DrawPlacements) {
 	placements := match placement_type {
 		.kitty_below_bg {
-			self.kitty_placements[..math.min(int(self.kitty_bg_end), self.kitty_placements.len)]
+			self.kitty_placements[..int(self.kitty_bg_end)]
 		}
 		.kitty_below_text {
-			start := math.min(int(self.kitty_bg_end), self.kitty_placements.len)
-			end := math.min(int(self.kitty_text_end), self.kitty_placements.len)
+			start := int(self.kitty_bg_end)
+			end := int(self.kitty_text_end)
 			self.kitty_placements[start..end]
 		}
 		.kitty_above_text {
-			start := math.min(int(self.kitty_text_end), self.kitty_placements.len)
+			start := int(self.kitty_text_end)
 			self.kitty_placements[start..]
 		}
 		.overlay { self.overlay_placements }

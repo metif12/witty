@@ -396,6 +396,10 @@ fn test_kitty_update_reads_terminal_storage() ! {
 	storage := kitty.terminal_storage(&t) or { panic('expected image storage') }
 	assert !storage.dirty
 	assert kitty_image_key(7) in state.images
+	entry := state.images[kitty_image_key(7)] or { panic('expected prepared image') }
+	pending := entry.image.pending or { panic('expected pending image') }
+	assert pending.pixel_format == .rgba
+	assert pending.data == [u8(255), 255, 255, 255]
 	assert state.kitty_placements.len == 1
 	placement := state.kitty_placements[0]
 	assert placement.image_id == ImageId(KittyImageId{ id: 7 })
