@@ -219,14 +219,8 @@ pub mut:
 	bools CellTextBools
 }
 
-// CellBg represents a background color for a cell.
-pub struct CellBg {
-pub mut:
-	r u8
-	g u8
-	b u8
-	a u8
-}
+// CellBg is the RGBA value consumed by the cell background shader.
+pub type CellBg = [4]u8
 
 // CellLayer identifies which layer a cell belongs to.
 pub enum CellLayer {
@@ -271,8 +265,9 @@ pub fn (mut c CellContents) resize(size GridSize) ! {
 // Reset all cell contents (clear everything).
 pub fn (mut c CellContents) reset() {
 	// Clear all background cells to transparent
+	zero := CellBg([u8(0), 0, 0, 0]!)
 	for i in 0 .. c.bg_cells.len {
-		c.bg_cells[i] = CellBg{}
+		c.bg_cells[i] = zero
 	}
 	// Clear all foreground rows
 	c.fg_rows.reset()
@@ -285,8 +280,9 @@ pub fn (mut c CellContents) clear(row u16) {
 	// Also clear bg cells for this row
 	start := int(row) * int(c.size.columns)
 	end := start + int(c.size.columns)
+	zero := CellBg([u8(0), 0, 0, 0]!)
 	for i in start .. end {
-		c.bg_cells[i] = CellBg{}
+		c.bg_cells[i] = zero
 	}
 }
 
@@ -304,7 +300,7 @@ pub fn (c &CellContents) get_bg(row u16, col u16) CellBg {
 	if idx < c.bg_cells.len {
 		return c.bg_cells[idx]
 	}
-	return CellBg{}
+	return CellBg([u8(0), 0, 0, 0]!)
 }
 
 // Add a foreground cell to the given layer.

@@ -210,7 +210,7 @@ fn test_cell_contents_reset() ! {
 	cells.resize(GridSize{ columns: 10, rows: 5 })!
 
 	// Set some bg cell data
-	cells.set_bg(0, 0, CellBg{ r: 255, g: 0, b: 0, a: 255 })
+	cells.set_bg(0, 0, CellBg([u8(255), 0, 0, 255]!))
 
 	// Add a fg cell
 	cells.add(.text, CellText{
@@ -222,7 +222,7 @@ fn test_cell_contents_reset() ! {
 	cells.reset()
 
 	// Check bg is cleared
-	assert cells.bg_cells[0] == CellBg{}
+	assert cells.bg_cells[0] == CellBg([u8(0), 0, 0, 0]!)
 	// Check fg is cleared
 	assert cells.fg_rows.lists[1].len == 0
 }
@@ -537,22 +537,21 @@ fn test_multiple_fg_cells_per_row() ! {
 
 // Test set_bg / get_bg.
 fn test_bg_cell_set_get() ! {
+	assert $sizeof(CellBg) == 4
+
 	mut cells := CellContents{}
 	cells.resize(GridSize{ columns: 10, rows: 5 })!
 
 	// Set bg for cell at (3, 2)
-	cells.set_bg(2, 3, CellBg{ r: 100, g: 150, b: 200, a: 255 })
+	cells.set_bg(2, 3, CellBg([u8(100), 150, 200, 255]!))
 
 	// Read it back
 	idx := 2 * 10 + 3
-	assert cells.bg_cells[idx] == CellBg{ r: 100, g: 150, b: 200, a: 255 }
+	assert cells.bg_cells[idx] == CellBg([u8(100), 150, 200, 255]!)
 
 	// Also test get_bg
 	got := cells.get_bg(2, 3)
-	assert got.r == 100
-	assert got.g == 150
-	assert got.b == 200
-	assert got.a == 255
+	assert got == CellBg([u8(100), 150, 200, 255]!)
 }
 
 // Test AtlasKind enum.
