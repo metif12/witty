@@ -1687,6 +1687,42 @@ fn test_page_insert_hyperlink_enforces_string_allocator_capacity() {
 	assert page.hyperlink_set.string_used() == int(string_bytes_default)
 }
 
+fn test_page_capacity_adjust_no_columns_request() {
+	original := std_capacity
+	adjusted := original.adjust_checked(none)!
+	assert adjusted == original
+}
+
+fn test_page_capacity_adjust_zero_columns_is_not_noop() {
+	original := std_capacity
+	adjusted := original.adjust_checked(u16(0))!
+	assert adjusted.cols == 0
+	assert adjusted.rows == u16(original.available_bits_for_grid() / row_bit_size)
+	assert Page.layout(adjusted).total_size == Page.layout(original).total_size
+}
+
+fn test_page_capacity_adjust_cols_sweep_preserves_total_size() {
+	mut cap := std_capacity
+	original_cols := cap.cols
+	original_size := Page.layout(cap).total_size
+	for c in 1 .. int(original_cols) * 2 {
+		cap = cap.adjust_checked(u16(c))!
+		assert Page.layout(cap).total_size == original_size
+
+		mut bigger := cap
+		bigger.rows++
+		assert Page.layout(bigger).total_size > original_size
+	}
+}
+
+fn test_page_capacity_max_cols_preserves_size_and_uses_one_row() {
+	cap := std_capacity
+	max := cap.max_cols() or { panic('maxCols returned none') }
+	adjusted := cap.adjust_checked(max)!
+	assert Page.layout(adjusted).total_size == Page.layout(cap).total_size
+	assert adjusted.rows == 1
+}
+
 // Test capacity adjust cols down.
 fn test_page_capacity_adjust_cols_down() {
 	original := PageCapacity{

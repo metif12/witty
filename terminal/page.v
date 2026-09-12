@@ -1221,9 +1221,9 @@ pub fn (self PageCapacity) max_cols() ?u16 {
 // Adjustments always happen by limiting the rows in the page. Everything
 // else can grow. If it is impossible to achieve the desired adjustment
 // (rows would go to zero), an error is returned.
-pub fn (self PageCapacity) adjust_checked(cols u16) !PageCapacity {
+pub fn (self PageCapacity) adjust_checked(cols_ ?u16) !PageCapacity {
 	mut adjusted := self
-	if cols > 0 {
+	if cols := cols_ {
 		available_bits := self.available_bits_for_grid()
 
 		// Each packed row consists of its metadata and n packed cells.
@@ -1237,7 +1237,8 @@ pub fn (self PageCapacity) adjust_checked(cols u16) !PageCapacity {
 		}
 
 		adjusted.cols = cols
-		adjusted.rows = if new_rows > usize(max_u16) { max_u16 } else { u16(new_rows) }
+		assert new_rows <= usize(max_u16)
+		adjusted.rows = u16(new_rows)
 	}
 	return adjusted
 }
