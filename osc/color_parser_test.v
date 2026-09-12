@@ -1,5 +1,50 @@
 module osc
 
+fn test_color_source_tag_layouts_and_ordinals() {
+	assert sizeof(ColorOperation) == 1
+	assert u8(ColorOperation.osc_4) == 0
+	assert u8(ColorOperation.osc_5) == 1
+	assert u8(ColorOperation.osc_10) == 2
+	assert u8(ColorOperation.osc_11) == 3
+	assert u8(ColorOperation.osc_12) == 4
+	assert u8(ColorOperation.osc_13) == 5
+	assert u8(ColorOperation.osc_14) == 6
+	assert u8(ColorOperation.osc_15) == 7
+	assert u8(ColorOperation.osc_16) == 8
+	assert u8(ColorOperation.osc_17) == 9
+	assert u8(ColorOperation.osc_18) == 10
+	assert u8(ColorOperation.osc_19) == 11
+	assert u8(ColorOperation.osc_104) == 12
+	assert u8(ColorOperation.osc_105) == 13
+	assert u8(ColorOperation.osc_110) == 14
+	assert u8(ColorOperation.osc_111) == 15
+	assert u8(ColorOperation.osc_112) == 16
+	assert u8(ColorOperation.osc_113) == 17
+	assert u8(ColorOperation.osc_114) == 18
+	assert u8(ColorOperation.osc_115) == 19
+	assert u8(ColorOperation.osc_116) == 20
+	assert u8(ColorOperation.osc_117) == 21
+	assert u8(ColorOperation.osc_118) == 22
+	assert u8(ColorOperation.osc_119) == 23
+	assert sizeof(DynamicColor) == 1
+	assert u8(DynamicColor.foreground) == 10
+	assert u8(DynamicColor.background) == 11
+	assert u8(DynamicColor.cursor) == 12
+	assert u8(DynamicColor.pointer_foreground) == 13
+	assert u8(DynamicColor.pointer_background) == 14
+	assert u8(DynamicColor.tektronix_foreground) == 15
+	assert u8(DynamicColor.tektronix_background) == 16
+	assert u8(DynamicColor.highlight_background) == 17
+	assert u8(DynamicColor.tektronix_cursor) == 18
+	assert u8(DynamicColor.highlight_foreground) == 19
+	assert sizeof(SpecialColor) == 1
+	assert u8(SpecialColor.bold) == 0
+	assert u8(SpecialColor.underline) == 1
+	assert u8(SpecialColor.blink) == 2
+	assert u8(SpecialColor.reverse) == 3
+	assert u8(SpecialColor.italic) == 4
+}
+
 fn test_rgb_parse_named_red() {
 	rgb := parse_rgb('red') or {
 		assert false, 'expected rgb'

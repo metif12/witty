@@ -1,5 +1,24 @@
 module osc
 
+fn test_kitty_color_source_tag_layouts_and_ordinals() {
+	assert sizeof(KittyColorKindType) == 1
+	assert u8(KittyColorKindType.palette) == 0
+	assert u8(KittyColorKindType.special) == 1
+	assert sizeof(KittyColorSpecial) == 1
+	assert u8(KittyColorSpecial.foreground) == 0
+	assert u8(KittyColorSpecial.background) == 1
+	assert u8(KittyColorSpecial.selection_foreground) == 2
+	assert u8(KittyColorSpecial.selection_background) == 3
+	assert u8(KittyColorSpecial.cursor) == 4
+	assert u8(KittyColorSpecial.cursor_text) == 5
+	assert u8(KittyColorSpecial.visual_bell) == 6
+	assert u8(KittyColorSpecial.second_transparent_background) == 7
+	assert sizeof(KittyColorItemType) == 1
+	assert u8(KittyColorItemType.query) == 0
+	assert u8(KittyColorItemType.set) == 1
+	assert u8(KittyColorItemType.reset) == 2
+}
+
 fn test_osc21_kitty_color_protocol() {
 	mut p := Parser.init(voidptr(1))
 	input := '21;foreground=?;background=rgb:f0/f8/ff'

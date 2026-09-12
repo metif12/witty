@@ -12,7 +12,7 @@ import ascii
 // All other commands are recognized but currently unimplemented.
 
 // Iterm2Key identifies the type of iTerm2 OSC 1337 command.
-enum Iterm2Key {
+enum Iterm2Key as u8 {
 	add_annotation
 	add_hidden_annotation
 	block
@@ -49,12 +49,11 @@ enum Iterm2Key {
 	shell_integration_version
 	steal_focus
 	unicode_version
-	unknown
 }
 
 // iterm2_key_names maps iTerm2 key strings to enum values.
 // Uses case-insensitive matching to match Ghostty behavior.
-fn iterm2_key_from_str(s string) Iterm2Key {
+fn iterm2_key_from_str(s string) ?Iterm2Key {
 	lower := ascii.lower_string(s)
 	return match lower {
 		'addannotation' { .add_annotation }
@@ -93,7 +92,7 @@ fn iterm2_key_from_str(s string) Iterm2Key {
 		'shellintegrationversion' { .shell_integration_version }
 		'stealfocus' { .steal_focus }
 		'unicodeversion' { .unicode_version }
-		else { .unknown }
+		else { none }
 	}
 }
 
@@ -114,10 +113,7 @@ fn parse_iterm2(mut parser Parser, terminator_ch ?u8) ?Command {
 		key_str = data_str
 	}
 
-	key := iterm2_key_from_str(key_str)
-	if key == .unknown {
-		return none
-	}
+	key := iterm2_key_from_str(key_str) or { return none }
 
 	match key {
 		.copy {

@@ -319,7 +319,7 @@ pub mut:
 }
 
 // OscParserState tracks where we are in parsing the OSC number prefix.
-pub enum OscParserState {
+pub enum OscParserState as u8 {
 	start
 	invalid
 	s_0

@@ -107,7 +107,7 @@ import zig_fmt
 // 4, 5, 10-19, 104, 105, 110-119
 
 // The possible operations we support for colors.
-pub enum ColorOperation {
+pub enum ColorOperation as u8 {
 	osc_4
 	osc_5
 	osc_10
@@ -135,38 +135,30 @@ pub enum ColorOperation {
 }
 
 // DynamicColor represents the dynamic color targets for OSC 10-19.
-pub enum DynamicColor {
-	foreground // 10
-	background // 11
-	cursor // 12
-	pointer_foreground // 13
-	pointer_background // 14
-	tektronix_foreground // 15
-	tektronix_background // 16
-	highlight_background // 17
-	tektronix_cursor // 18
-	highlight_foreground // 19
+pub enum DynamicColor as u8 {
+	foreground           = 10
+	background           = 11
+	cursor               = 12
+	pointer_foreground   = 13
+	pointer_background   = 14
+	tektronix_foreground = 15
+	tektronix_background = 16
+	highlight_background = 17
+	tektronix_cursor     = 18
+	highlight_foreground = 19
 }
 
 // next returns the next DynamicColor in sequence, or none if at end.
 pub fn (c DynamicColor) next() ?DynamicColor {
-	return match c {
-		.foreground { .background }
-		.background { .cursor }
-		.cursor { .pointer_foreground }
-		.pointer_foreground { .pointer_background }
-		.pointer_background { .tektronix_foreground }
-		.tektronix_foreground { .tektronix_background }
-		.tektronix_background { .highlight_background }
-		.highlight_background { .tektronix_cursor }
-		.tektronix_cursor { .highlight_foreground }
-		.highlight_foreground { none }
+	if c == .highlight_foreground {
+		return none
 	}
+	return unsafe { DynamicColor(u8(c) + 1) }
 }
 
 // SpecialColor represents special colors beyond the 256-color palette.
 // This mirrors ghostty's `terminal.color.Special` enum(u3).
-pub enum SpecialColor {
+pub enum SpecialColor as u8 {
 	bold // 0
 	underline // 1
 	blink // 2

@@ -5,7 +5,7 @@ module osc
 // https://gitlab.freedesktop.org/Per_Bothner/specifications/blob/master/proposals/semantic-prompts.md
 
 // A semantic prompt action.
-pub enum SemanticAction {
+pub enum SemanticAction as u8 {
 	fresh_line // 'L'
 	fresh_line_new_prompt // 'A'
 	new_command // 'N'

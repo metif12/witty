@@ -1,8 +1,22 @@
 module osc
 
+fn test_iterm2_key_source_layout_and_ordinals() {
+	assert sizeof(Iterm2Key) == 1
+	keys := [Iterm2Key.add_annotation, .add_hidden_annotation, .block, .button,
+		.clear_captured_output, .clear_scrollback, .copy, .copy_to_clipboard, .current_dir,
+		.cursor_shape, .custom, .disinter, .end_copy, .file, .file_end, .file_part,
+		.highlight_cursor_line, .multipart_file, .open_url, .pop_key_labels, .push_key_labels,
+		.remote_host, .report_cell_size, .report_variable, .request_attention, .request_upload,
+		.set_background_image_file, .set_badge_format, .set_colors, .set_key_label, .set_mark,
+		.set_profile, .set_user_var, .shell_integration_version, .steal_focus, .unicode_version]
+	for idx, key in keys {
+		assert u8(key) == u8(idx)
+	}
+}
+
 fn test_osc1337_key_case_folding_is_ascii_only() {
-	assert iterm2_key_from_str('FILE') == .file
-	assert iterm2_key_from_str('Fİle') == .unknown
+	assert iterm2_key_from_str('FILE')? == .file
+	assert iterm2_key_from_str('Fİle') == none
 }
 
 fn test_osc1337_valid_unimplemented_key_no_value() {

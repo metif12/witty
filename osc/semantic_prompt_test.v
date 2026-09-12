@@ -1,5 +1,17 @@
 module osc
 
+fn test_semantic_action_source_layout_and_ordinals() {
+	assert sizeof(SemanticAction) == 1
+	assert u8(SemanticAction.fresh_line) == 0
+	assert u8(SemanticAction.fresh_line_new_prompt) == 1
+	assert u8(SemanticAction.new_command) == 2
+	assert u8(SemanticAction.prompt_start) == 3
+	assert u8(SemanticAction.end_prompt_start_input) == 4
+	assert u8(SemanticAction.end_prompt_start_input_terminate_eol) == 5
+	assert u8(SemanticAction.end_input_start_output) == 6
+	assert u8(SemanticAction.end_command) == 7
+}
+
 // Tests for OSC 133 semantic prompt parsing.
 
 fn test_osc133_end_input_start_output() {

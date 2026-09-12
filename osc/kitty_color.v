@@ -17,13 +17,13 @@ module osc
 
 // KittyColorKindType represents whether a kitty color key is a special
 // color name or a palette index.
-pub enum KittyColorKindType {
-	special
+pub enum KittyColorKindType as u8 {
 	palette
+	special
 }
 
 // KittyColorSpecial represents the named special colors in the kitty protocol.
-pub enum KittyColorSpecial {
+pub enum KittyColorSpecial as u8 {
 	foreground
 	background
 	selection_foreground
@@ -74,7 +74,7 @@ fn parse_kitty_color_kind(k string) ?KittyColorKind {
 }
 
 // KittyColorItemType represents the operation type for a kitty color item.
-pub enum KittyColorItemType {
+pub enum KittyColorItemType as u8 {
 	query
 	set
 	reset

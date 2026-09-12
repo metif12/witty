@@ -1685,7 +1685,7 @@ fn (self &StreamHandler) color_query_response(target osc.ColorTarget, terminator
 			self.terminal.colors.palette.current[int(target.index)]
 		}
 		osc.ColorTargetDynamic {
-			prefix = '\x1b]${dynamic_color_osc_number(target.color)};rgb:'
+			prefix = '\x1b]${u8(target.color)};rgb:'
 			match target.color {
 				.foreground { self.terminal.colors.foreground.get() or { return none } }
 				.background { self.terminal.colors.background.get() or { return none } }
@@ -1712,21 +1712,6 @@ fn (self &StreamHandler) color_query_response(target osc.ColorTarget, terminator
 			'${prefix}${hex2(color.r)}/${hex2(color.g)}/${hex2(color.b)}${term}'
 		}
 		.none_ { '' }
-	}
-}
-
-fn dynamic_color_osc_number(color osc.DynamicColor) int {
-	return match color {
-		.foreground { 10 }
-		.background { 11 }
-		.cursor { 12 }
-		.pointer_foreground { 13 }
-		.pointer_background { 14 }
-		.tektronix_foreground { 15 }
-		.tektronix_background { 16 }
-		.highlight_background { 17 }
-		.tektronix_cursor { 18 }
-		.highlight_foreground { 19 }
 	}
 }
 

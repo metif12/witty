@@ -1,5 +1,17 @@
 module osc
 
+fn test_osc_parser_state_source_layout_and_ordinals() {
+	assert sizeof(OscParserState) == 1
+	states := [OscParserState.start, .invalid, .s_0, .s_1, .s_2, .s_4, .s_5, .s_6,
+		.s_7, .s_8, .s_9, .s_10, .s_11, .s_12, .s_13, .s_14, .s_15, .s_16, .s_17,
+		.s_18, .s_19, .s_21, .s_22, .s_52, .s_66, .s_77, .s_104, .s_110, .s_111,
+		.s_112, .s_113, .s_114, .s_115, .s_116, .s_117, .s_118, .s_119, .s_133,
+		.s_777, .s_1337]
+	for idx, state in states {
+		assert u8(state) == u8(idx)
+	}
+}
+
 fn test_osc0_change_window_title() {
 	mut p := Parser.init(unsafe { nil })
 	p.next(`0`)
