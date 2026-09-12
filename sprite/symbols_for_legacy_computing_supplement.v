@@ -615,13 +615,13 @@ pub fn draw_1cc1b_1cc1e(cp u32, mut canvas Canvas, width u32, height u32, metric
 	match cp {
 		// BOX DRAWINGS LIGHT HORIZONTAL AND UPPER RIGHT
 		0x1cc1b {
-			lines_char(metrics, mut canvas, Lines{ left: .light, right: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x44))
 			canvas.draw_box(w - t, 0, w, h / 2, .on)
 		}
 
 		// BOX DRAWINGS LIGHT HORIZONTAL AND LOWER RIGHT
 		0x1cc1c {
-			lines_char(metrics, mut canvas, Lines{ left: .light, right: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x44))
 			canvas.draw_box(w - t, h / 2, w, h, .on)
 		}
 
@@ -688,25 +688,25 @@ pub fn draw_1ce16_1ce19(cp u32, mut canvas Canvas, width u32, height u32, metric
 	match cp {
 		// BOX DRAWINGS LIGHT VERTICAL AND TOP RIGHT
 		0x1ce16 {
-			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x11))
 			canvas.draw_box(w / 2, 0, w, t, .on)
 		}
 
 		// BOX DRAWINGS LIGHT VERTICAL AND BOTTOM RIGHT
 		0x1ce17 {
-			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x11))
 			canvas.draw_box(w / 2, h - t, w, h, .on)
 		}
 
 		// BOX DRAWINGS LIGHT VERTICAL AND TOP LEFT
 		0x1ce18 {
-			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x11))
 			canvas.draw_box(0, 0, w / 2, t, .on)
 		}
 
 		// BOX DRAWINGS LIGHT VERTICAL AND BOTTOM LEFT
 		0x1ce19 {
-			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x11))
 			canvas.draw_box(0, h - t, w / 2, h, .on)
 		}
 		else { panic('unreachable') }

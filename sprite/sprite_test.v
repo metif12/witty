@@ -642,6 +642,23 @@ fn test_quads_drive_source_quadrant_order() {
 	assert data_at(&c, 7, 7) == 255
 }
 
+fn test_lines_packed_layout() {
+	assert sizeof(LineStyle) == 1
+	assert sizeof(Lines) == 1
+
+	lines := Lines.from_int(0x39)
+	assert lines.up() == .light
+	assert lines.right() == .heavy
+	assert lines.down() == .double_
+	assert lines.left() == .none_
+
+	all_double := Lines.from_int(0xff)
+	assert all_double.up() == .double_
+	assert all_double.right() == .double_
+	assert all_double.down() == .double_
+	assert all_double.left() == .double_
+}
+
 fn test_alignment_named_constants() {
 	assert align_center.horizontal == .center
 	assert align_center.vertical == .middle

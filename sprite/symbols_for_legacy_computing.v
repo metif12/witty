@@ -821,12 +821,7 @@ pub fn draw_1fbaf(cp u32, mut canvas Canvas, width u32, height u32, metrics font
 	_ = width
 	_ = height
 
-	lines_char(metrics, mut canvas, Lines{
-		up: .heavy
-		down: .heavy
-		left: .light
-		right: .light
-	})
+	lines_char(metrics, mut canvas, Lines.from_int(0x66))
 }
 
 // ============================================================

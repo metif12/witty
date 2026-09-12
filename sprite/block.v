@@ -396,13 +396,13 @@ pub fn draw_2500_257f(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 
 	match cp {
 		// '─'
-		0x2500 { lines_char(metrics, mut canvas, Lines{ left: .light, right: .light }) }
+		0x2500 { lines_char(metrics, mut canvas, Lines.from_int(0x44)) }
 		// '━'
-		0x2501 { lines_char(metrics, mut canvas, Lines{ left: .heavy, right: .heavy }) }
+		0x2501 { lines_char(metrics, mut canvas, Lines.from_int(0x88)) }
 		// '│'
-		0x2502 { lines_char(metrics, mut canvas, Lines{ up: .light, down: .light }) }
+		0x2502 { lines_char(metrics, mut canvas, Lines.from_int(0x11)) }
 		// '┃'
-		0x2503 { lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .heavy }) }
+		0x2503 { lines_char(metrics, mut canvas, Lines.from_int(0x22)) }
 		// '┄'
 		0x2504 {
 			dash_horizontal(metrics, mut canvas, 3, Thickness.light.height(metrics.box_thickness), max_u32(4, Thickness.light.height(metrics.box_thickness)))
@@ -444,205 +444,205 @@ pub fn draw_2500_257f(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		}
 
 		// '┌'
-		0x250c { lines_char(metrics, mut canvas, Lines{ down: .light, right: .light }) }
+		0x250c { lines_char(metrics, mut canvas, Lines.from_int(0x14)) }
 		// '┍'
-		0x250d { lines_char(metrics, mut canvas, Lines{ down: .light, right: .heavy }) }
+		0x250d { lines_char(metrics, mut canvas, Lines.from_int(0x18)) }
 		// '┎'
-		0x250e { lines_char(metrics, mut canvas, Lines{ down: .heavy, right: .light }) }
+		0x250e { lines_char(metrics, mut canvas, Lines.from_int(0x24)) }
 		// '┏'
-		0x250f { lines_char(metrics, mut canvas, Lines{ down: .heavy, right: .heavy }) }
+		0x250f { lines_char(metrics, mut canvas, Lines.from_int(0x28)) }
 
 		// '┐'
-		0x2510 { lines_char(metrics, mut canvas, Lines{ down: .light, left: .light }) }
+		0x2510 { lines_char(metrics, mut canvas, Lines.from_int(0x50)) }
 		// '┑'
-		0x2511 { lines_char(metrics, mut canvas, Lines{ down: .light, left: .heavy }) }
+		0x2511 { lines_char(metrics, mut canvas, Lines.from_int(0x90)) }
 		// '┒'
-		0x2512 { lines_char(metrics, mut canvas, Lines{ down: .heavy, left: .light }) }
+		0x2512 { lines_char(metrics, mut canvas, Lines.from_int(0x60)) }
 		// '┓'
-		0x2513 { lines_char(metrics, mut canvas, Lines{ down: .heavy, left: .heavy }) }
+		0x2513 { lines_char(metrics, mut canvas, Lines.from_int(0xa0)) }
 		// '└'
-		0x2514 { lines_char(metrics, mut canvas, Lines{ up: .light, right: .light }) }
+		0x2514 { lines_char(metrics, mut canvas, Lines.from_int(0x05)) }
 		// '┕'
-		0x2515 { lines_char(metrics, mut canvas, Lines{ up: .light, right: .heavy }) }
+		0x2515 { lines_char(metrics, mut canvas, Lines.from_int(0x09)) }
 		// '┖'
-		0x2516 { lines_char(metrics, mut canvas, Lines{ up: .heavy, right: .light }) }
+		0x2516 { lines_char(metrics, mut canvas, Lines.from_int(0x06)) }
 		// '┗'
-		0x2517 { lines_char(metrics, mut canvas, Lines{ up: .heavy, right: .heavy }) }
+		0x2517 { lines_char(metrics, mut canvas, Lines.from_int(0x0a)) }
 		// '┘'
-		0x2518 { lines_char(metrics, mut canvas, Lines{ up: .light, left: .light }) }
+		0x2518 { lines_char(metrics, mut canvas, Lines.from_int(0x41)) }
 		// '┙'
-		0x2519 { lines_char(metrics, mut canvas, Lines{ up: .light, left: .heavy }) }
+		0x2519 { lines_char(metrics, mut canvas, Lines.from_int(0x81)) }
 		// '┚'
-		0x251a { lines_char(metrics, mut canvas, Lines{ up: .heavy, left: .light }) }
+		0x251a { lines_char(metrics, mut canvas, Lines.from_int(0x42)) }
 		// '┛'
-		0x251b { lines_char(metrics, mut canvas, Lines{ up: .heavy, left: .heavy }) }
+		0x251b { lines_char(metrics, mut canvas, Lines.from_int(0x82)) }
 		// '├'
-		0x251c { lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, right: .light }) }
+		0x251c { lines_char(metrics, mut canvas, Lines.from_int(0x15)) }
 		// '┝'
-		0x251d { lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, right: .heavy }) }
+		0x251d { lines_char(metrics, mut canvas, Lines.from_int(0x19)) }
 		// '┞'
-		0x251e { lines_char(metrics, mut canvas, Lines{ up: .heavy, right: .light, down: .light }) }
+		0x251e { lines_char(metrics, mut canvas, Lines.from_int(0x16)) }
 		// '┟'
-		0x251f { lines_char(metrics, mut canvas, Lines{ down: .heavy, right: .light, up: .light }) }
+		0x251f { lines_char(metrics, mut canvas, Lines.from_int(0x25)) }
 
 		// '┠'
-		0x2520 { lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .heavy, right: .light }) }
+		0x2520 { lines_char(metrics, mut canvas, Lines.from_int(0x26)) }
 		// '┡'
-		0x2521 { lines_char(metrics, mut canvas, Lines{ down: .light, right: .heavy, up: .heavy }) }
+		0x2521 { lines_char(metrics, mut canvas, Lines.from_int(0x1a)) }
 		// '┢'
-		0x2522 { lines_char(metrics, mut canvas, Lines{ up: .light, right: .heavy, down: .heavy }) }
+		0x2522 { lines_char(metrics, mut canvas, Lines.from_int(0x29)) }
 		// '┣'
-		0x2523 { lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .heavy, right: .heavy }) }
+		0x2523 { lines_char(metrics, mut canvas, Lines.from_int(0x2a)) }
 		// '┤'
-		0x2524 { lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, left: .light }) }
+		0x2524 { lines_char(metrics, mut canvas, Lines.from_int(0x51)) }
 		// '┥'
-		0x2525 { lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, left: .heavy }) }
+		0x2525 { lines_char(metrics, mut canvas, Lines.from_int(0x91)) }
 		// '┦'
-		0x2526 { lines_char(metrics, mut canvas, Lines{ up: .heavy, left: .light, down: .light }) }
+		0x2526 { lines_char(metrics, mut canvas, Lines.from_int(0x52)) }
 		// '┧'
-		0x2527 { lines_char(metrics, mut canvas, Lines{ down: .heavy, left: .light, up: .light }) }
+		0x2527 { lines_char(metrics, mut canvas, Lines.from_int(0x61)) }
 		// '┨'
-		0x2528 { lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .heavy, left: .light }) }
+		0x2528 { lines_char(metrics, mut canvas, Lines.from_int(0x62)) }
 		// '┩'
-		0x2529 { lines_char(metrics, mut canvas, Lines{ down: .light, left: .heavy, up: .heavy }) }
+		0x2529 { lines_char(metrics, mut canvas, Lines.from_int(0x92)) }
 		// '┪'
-		0x252a { lines_char(metrics, mut canvas, Lines{ up: .light, left: .heavy, down: .heavy }) }
+		0x252a { lines_char(metrics, mut canvas, Lines.from_int(0xa1)) }
 		// '┫'
-		0x252b { lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .heavy, left: .heavy }) }
+		0x252b { lines_char(metrics, mut canvas, Lines.from_int(0xa2)) }
 		// '┬'
 		0x252c {
-			lines_char(metrics, mut canvas, Lines{ down: .light, left: .light, right: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x54))
 		}
 
 		// '┭'
 		0x252d {
-			lines_char(metrics, mut canvas, Lines{ left: .heavy, right: .light, down: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x94))
 		}
 
 		// '┮'
 		0x252e {
-			lines_char(metrics, mut canvas, Lines{ right: .heavy, left: .light, down: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x58))
 		}
 
 		// '┯'
 		0x252f {
-			lines_char(metrics, mut canvas, Lines{ down: .light, left: .heavy, right: .heavy })
+			lines_char(metrics, mut canvas, Lines.from_int(0x98))
 		}
 
 		// '┰'
 		0x2530 {
-			lines_char(metrics, mut canvas, Lines{ down: .heavy, left: .light, right: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x64))
 		}
 
 		// '┱'
 		0x2531 {
-			lines_char(metrics, mut canvas, Lines{ right: .light, left: .heavy, down: .heavy })
+			lines_char(metrics, mut canvas, Lines.from_int(0xa4))
 		}
 
 		// '┲'
 		0x2532 {
-			lines_char(metrics, mut canvas, Lines{ left: .light, right: .heavy, down: .heavy })
+			lines_char(metrics, mut canvas, Lines.from_int(0x68))
 		}
 
 		// '┳'
 		0x2533 {
-			lines_char(metrics, mut canvas, Lines{ down: .heavy, left: .heavy, right: .heavy })
+			lines_char(metrics, mut canvas, Lines.from_int(0xa8))
 		}
 
 		// '┴'
-		0x2534 { lines_char(metrics, mut canvas, Lines{ up: .light, left: .light, right: .light }) }
+		0x2534 { lines_char(metrics, mut canvas, Lines.from_int(0x45)) }
 		// '┵'
-		0x2535 { lines_char(metrics, mut canvas, Lines{ left: .heavy, right: .light, up: .light }) }
+		0x2535 { lines_char(metrics, mut canvas, Lines.from_int(0x85)) }
 		// '┶'
-		0x2536 { lines_char(metrics, mut canvas, Lines{ right: .heavy, left: .light, up: .light }) }
+		0x2536 { lines_char(metrics, mut canvas, Lines.from_int(0x49)) }
 		// '┷'
-		0x2537 { lines_char(metrics, mut canvas, Lines{ up: .light, left: .heavy, right: .heavy }) }
+		0x2537 { lines_char(metrics, mut canvas, Lines.from_int(0x89)) }
 		// '┸'
-		0x2538 { lines_char(metrics, mut canvas, Lines{ up: .heavy, left: .light, right: .light }) }
+		0x2538 { lines_char(metrics, mut canvas, Lines.from_int(0x46)) }
 		// '┹'
-		0x2539 { lines_char(metrics, mut canvas, Lines{ right: .light, left: .heavy, up: .heavy }) }
+		0x2539 { lines_char(metrics, mut canvas, Lines.from_int(0x86)) }
 		// '┺'
-		0x253a { lines_char(metrics, mut canvas, Lines{ left: .light, right: .heavy, up: .heavy }) }
+		0x253a { lines_char(metrics, mut canvas, Lines.from_int(0x4a)) }
 		// '┻'
-		0x253b { lines_char(metrics, mut canvas, Lines{ up: .heavy, left: .heavy, right: .heavy }) }
+		0x253b { lines_char(metrics, mut canvas, Lines.from_int(0x8a)) }
 		// '┼'
 		0x253c {
-			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, left: .light, right: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x55))
 		}
 
 		// '┽'
 		0x253d {
-			lines_char(metrics, mut canvas, Lines{ left: .heavy, right: .light, up: .light, down: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x95))
 		}
 
 		// '┾'
 		0x253e {
-			lines_char(metrics, mut canvas, Lines{ right: .heavy, left: .light, up: .light, down: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x59))
 		}
 
 		// '┿'
 		0x253f {
-			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, left: .heavy, right: .heavy })
+			lines_char(metrics, mut canvas, Lines.from_int(0x99))
 		}
 
 		// '╀'
 		0x2540 {
-			lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .light, left: .light, right: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x56))
 		}
 
 		// '╁'
 		0x2541 {
-			lines_char(metrics, mut canvas, Lines{ down: .heavy, up: .light, left: .light, right: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x65))
 		}
 
 		// '╂'
 		0x2542 {
-			lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .heavy, left: .light, right: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x66))
 		}
 
 		// '╃'
 		0x2543 {
-			lines_char(metrics, mut canvas, Lines{ left: .heavy, up: .heavy, right: .light, down: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x96))
 		}
 
 		// '╄'
 		0x2544 {
-			lines_char(metrics, mut canvas, Lines{ right: .heavy, up: .heavy, left: .light, down: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x5a))
 		}
 
 		// '╅'
 		0x2545 {
-			lines_char(metrics, mut canvas, Lines{ left: .heavy, down: .heavy, right: .light, up: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0xa5))
 		}
 
 		// '╆'
 		0x2546 {
-			lines_char(metrics, mut canvas, Lines{ right: .heavy, down: .heavy, left: .light, up: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x69))
 		}
 
 		// '╇'
 		0x2547 {
-			lines_char(metrics, mut canvas, Lines{ down: .light, up: .heavy, left: .heavy, right: .heavy })
+			lines_char(metrics, mut canvas, Lines.from_int(0x9a))
 		}
 
 		// '╈'
 		0x2548 {
-			lines_char(metrics, mut canvas, Lines{ up: .light, down: .heavy, left: .heavy, right: .heavy })
+			lines_char(metrics, mut canvas, Lines.from_int(0xa9))
 		}
 
 		// '╉'
 		0x2549 {
-			lines_char(metrics, mut canvas, Lines{ right: .light, left: .heavy, up: .heavy, down: .heavy })
+			lines_char(metrics, mut canvas, Lines.from_int(0xa6))
 		}
 
 		// '╊'
 		0x254a {
-			lines_char(metrics, mut canvas, Lines{ left: .light, right: .heavy, up: .heavy, down: .heavy })
+			lines_char(metrics, mut canvas, Lines.from_int(0x6a))
 		}
 
 		// '╋'
 		0x254b {
-			lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .heavy, left: .heavy, right: .heavy })
+			lines_char(metrics, mut canvas, Lines.from_int(0xaa))
 		}
 
 		// '╌'
@@ -666,106 +666,106 @@ pub fn draw_2500_257f(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		}
 
 		// '═'
-		0x2550 { lines_char(metrics, mut canvas, Lines{ left: .double_, right: .double_ }) }
+		0x2550 { lines_char(metrics, mut canvas, Lines.from_int(0xcc)) }
 		// '║'
-		0x2551 { lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_ }) }
+		0x2551 { lines_char(metrics, mut canvas, Lines.from_int(0x33)) }
 		// '╒'
-		0x2552 { lines_char(metrics, mut canvas, Lines{ down: .light, right: .double_ }) }
+		0x2552 { lines_char(metrics, mut canvas, Lines.from_int(0x1c)) }
 		// '╓'
-		0x2553 { lines_char(metrics, mut canvas, Lines{ down: .double_, right: .light }) }
+		0x2553 { lines_char(metrics, mut canvas, Lines.from_int(0x34)) }
 		// '╔'
-		0x2554 { lines_char(metrics, mut canvas, Lines{ down: .double_, right: .double_ }) }
+		0x2554 { lines_char(metrics, mut canvas, Lines.from_int(0x3c)) }
 		// '╕'
-		0x2555 { lines_char(metrics, mut canvas, Lines{ down: .light, left: .double_ }) }
+		0x2555 { lines_char(metrics, mut canvas, Lines.from_int(0xd0)) }
 		// '╖'
-		0x2556 { lines_char(metrics, mut canvas, Lines{ down: .double_, left: .light }) }
+		0x2556 { lines_char(metrics, mut canvas, Lines.from_int(0x70)) }
 		// '╗'
-		0x2557 { lines_char(metrics, mut canvas, Lines{ down: .double_, left: .double_ }) }
+		0x2557 { lines_char(metrics, mut canvas, Lines.from_int(0xf0)) }
 		// '╘'
-		0x2558 { lines_char(metrics, mut canvas, Lines{ up: .light, right: .double_ }) }
+		0x2558 { lines_char(metrics, mut canvas, Lines.from_int(0x0d)) }
 		// '╙'
-		0x2559 { lines_char(metrics, mut canvas, Lines{ up: .double_, right: .light }) }
+		0x2559 { lines_char(metrics, mut canvas, Lines.from_int(0x07)) }
 		// '╚'
-		0x255a { lines_char(metrics, mut canvas, Lines{ up: .double_, right: .double_ }) }
+		0x255a { lines_char(metrics, mut canvas, Lines.from_int(0x0f)) }
 		// '╛'
-		0x255b { lines_char(metrics, mut canvas, Lines{ up: .light, left: .double_ }) }
+		0x255b { lines_char(metrics, mut canvas, Lines.from_int(0xc1)) }
 		// '╜'
-		0x255c { lines_char(metrics, mut canvas, Lines{ up: .double_, left: .light }) }
+		0x255c { lines_char(metrics, mut canvas, Lines.from_int(0x43)) }
 		// '╝'
-		0x255d { lines_char(metrics, mut canvas, Lines{ up: .double_, left: .double_ }) }
+		0x255d { lines_char(metrics, mut canvas, Lines.from_int(0xc3)) }
 		// '╞'
 		0x255e {
-			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, right: .double_ })
+			lines_char(metrics, mut canvas, Lines.from_int(0x1d))
 		}
 
 		// '╟'
 		0x255f {
-			lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, right: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x37))
 		}
 
 		// '╠'
 		0x2560 {
-			lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, right: .double_ })
+			lines_char(metrics, mut canvas, Lines.from_int(0x3f))
 		}
 
 		// '╡'
 		0x2561 {
-			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, left: .double_ })
+			lines_char(metrics, mut canvas, Lines.from_int(0xd1))
 		}
 
 		// '╢'
 		0x2562 {
-			lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, left: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x73))
 		}
 
 		// '╣'
 		0x2563 {
-			lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, left: .double_ })
+			lines_char(metrics, mut canvas, Lines.from_int(0xf3))
 		}
 
 		// '╤'
 		0x2564 {
-			lines_char(metrics, mut canvas, Lines{ down: .light, left: .double_, right: .double_ })
+			lines_char(metrics, mut canvas, Lines.from_int(0xdc))
 		}
 
 		// '╥'
 		0x2565 {
-			lines_char(metrics, mut canvas, Lines{ down: .double_, left: .light, right: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x74))
 		}
 
 		// '╦'
 		0x2566 {
-			lines_char(metrics, mut canvas, Lines{ down: .double_, left: .double_, right: .double_ })
+			lines_char(metrics, mut canvas, Lines.from_int(0xfc))
 		}
 
 		// '╧'
 		0x2567 {
-			lines_char(metrics, mut canvas, Lines{ up: .light, left: .double_, right: .double_ })
+			lines_char(metrics, mut canvas, Lines.from_int(0xcd))
 		}
 
 		// '╨'
 		0x2568 {
-			lines_char(metrics, mut canvas, Lines{ up: .double_, left: .light, right: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x47))
 		}
 
 		// '╩'
 		0x2569 {
-			lines_char(metrics, mut canvas, Lines{ up: .double_, left: .double_, right: .double_ })
+			lines_char(metrics, mut canvas, Lines.from_int(0xcf))
 		}
 
 		// '╪'
 		0x256a {
-			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light, left: .double_, right: .double_ })
+			lines_char(metrics, mut canvas, Lines.from_int(0xdd))
 		}
 
 		// '╫'
 		0x256b {
-			lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, left: .light, right: .light })
+			lines_char(metrics, mut canvas, Lines.from_int(0x77))
 		}
 
 		// '╬'
 		0x256c {
-			lines_char(metrics, mut canvas, Lines{ up: .double_, down: .double_, left: .double_, right: .double_ })
+			lines_char(metrics, mut canvas, Lines.from_int(0xff))
 		}
 
 		// '╭'
@@ -784,29 +784,29 @@ pub fn draw_2500_257f(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		// '╳'
 		0x2573 { light_diagonal_cross(metrics, mut canvas) }
 		// '╴'
-		0x2574 { lines_char(metrics, mut canvas, Lines{ left: .light }) }
+		0x2574 { lines_char(metrics, mut canvas, Lines.from_int(0x40)) }
 		// '╵'
-		0x2575 { lines_char(metrics, mut canvas, Lines{ up: .light }) }
+		0x2575 { lines_char(metrics, mut canvas, Lines.from_int(0x01)) }
 		// '╶'
-		0x2576 { lines_char(metrics, mut canvas, Lines{ right: .light }) }
+		0x2576 { lines_char(metrics, mut canvas, Lines.from_int(0x04)) }
 		// '╷'
-		0x2577 { lines_char(metrics, mut canvas, Lines{ down: .light }) }
+		0x2577 { lines_char(metrics, mut canvas, Lines.from_int(0x10)) }
 		// '╸'
-		0x2578 { lines_char(metrics, mut canvas, Lines{ left: .heavy }) }
+		0x2578 { lines_char(metrics, mut canvas, Lines.from_int(0x80)) }
 		// '╹'
-		0x2579 { lines_char(metrics, mut canvas, Lines{ up: .heavy }) }
+		0x2579 { lines_char(metrics, mut canvas, Lines.from_int(0x02)) }
 		// '╺'
-		0x257a { lines_char(metrics, mut canvas, Lines{ right: .heavy }) }
+		0x257a { lines_char(metrics, mut canvas, Lines.from_int(0x08)) }
 		// '╻'
-		0x257b { lines_char(metrics, mut canvas, Lines{ down: .heavy }) }
+		0x257b { lines_char(metrics, mut canvas, Lines.from_int(0x20)) }
 		// '╼'
-		0x257c { lines_char(metrics, mut canvas, Lines{ left: .light, right: .heavy }) }
+		0x257c { lines_char(metrics, mut canvas, Lines.from_int(0x48)) }
 		// '╽'
-		0x257d { lines_char(metrics, mut canvas, Lines{ up: .light, down: .heavy }) }
+		0x257d { lines_char(metrics, mut canvas, Lines.from_int(0x21)) }
 		// '╾'
-		0x257e { lines_char(metrics, mut canvas, Lines{ left: .heavy, right: .light }) }
+		0x257e { lines_char(metrics, mut canvas, Lines.from_int(0x84)) }
 		// '╿'
-		0x257f { lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .light }) }
+		0x257f { lines_char(metrics, mut canvas, Lines.from_int(0x12)) }
 		else { panic('unreachable') }
 	}
 }
@@ -821,98 +821,102 @@ fn max_u32(a u32, b u32) u32 {
 pub fn lines_char(metrics font.Metrics, mut canvas Canvas, lines Lines) {
 	light_px := Thickness.light.height(metrics.box_thickness)
 	heavy_px := Thickness.heavy.height(metrics.box_thickness)
+	up := lines.up()
+	right := lines.right()
+	down := lines.down()
+	left := lines.left()
 
 	// Top of light horizontal strokes
 	h_light_top := sat_sub(metrics.cell_height, light_px) / 2
 	// Bottom of light horizontal strokes
-	h_light_bottom := h_light_top + light_px
+	h_light_bottom := sat_add(h_light_top, light_px)
 
 	// Top of heavy horizontal strokes
 	h_heavy_top := sat_sub(metrics.cell_height, heavy_px) / 2
 	// Bottom of heavy horizontal strokes
-	h_heavy_bottom := h_heavy_top + heavy_px
+	h_heavy_bottom := sat_add(h_heavy_top, heavy_px)
 
 	// Top of the top doubled horizontal stroke (bottom is `h_light_top`)
 	h_double_top := sat_sub(h_light_top, light_px)
 	// Bottom of the bottom doubled horizontal stroke (top is `h_light_bottom`)
-	h_double_bottom := h_light_bottom + light_px
+	h_double_bottom := sat_add(h_light_bottom, light_px)
 
 	// Left of light vertical strokes
 	v_light_left := sat_sub(metrics.cell_width, light_px) / 2
 	// Right of light vertical strokes
-	v_light_right := v_light_left + light_px
+	v_light_right := sat_add(v_light_left, light_px)
 
 	// Left of heavy vertical strokes
 	v_heavy_left := sat_sub(metrics.cell_width, heavy_px) / 2
 	// Right of heavy vertical strokes
-	v_heavy_right := v_heavy_left + heavy_px
+	v_heavy_right := sat_add(v_heavy_left, heavy_px)
 
 	// Left of the left doubled vertical stroke (right is `v_light_left`)
 	v_double_left := sat_sub(v_light_left, light_px)
 	// Right of the right doubled vertical stroke (left is `v_light_right`)
-	v_double_right := v_light_right + light_px
+	v_double_right := sat_add(v_light_right, light_px)
 
 	// The bottom of the up line
-	up_bottom := if lines.left == .heavy || lines.right == .heavy {
+	up_bottom := if left == .heavy || right == .heavy {
 		h_heavy_bottom
-	} else if lines.left != lines.right || lines.down == lines.up {
-		if lines.left == .double_ || lines.right == .double_ {
+	} else if left != right || down == up {
+		if left == .double_ || right == .double_ {
 			h_double_bottom
 		} else {
 			h_light_bottom
 		}
-	} else if lines.left == .none_ && lines.right == .none_ {
+	} else if left == .none_ && right == .none_ {
 		h_light_bottom
 	} else {
 		h_light_top
 	}
 
 	// The top of the down line
-	down_top := if lines.left == .heavy || lines.right == .heavy {
+	down_top := if left == .heavy || right == .heavy {
 		h_heavy_top
-	} else if lines.left != lines.right || lines.up == lines.down {
-		if lines.left == .double_ || lines.right == .double_ {
+	} else if left != right || up == down {
+		if left == .double_ || right == .double_ {
 			h_double_top
 		} else {
 			h_light_top
 		}
-	} else if lines.left == .none_ && lines.right == .none_ {
+	} else if left == .none_ && right == .none_ {
 		h_light_top
 	} else {
 		h_light_bottom
 	}
 
 	// The right of the left line
-	left_right := if lines.up == .heavy || lines.down == .heavy {
+	left_right := if up == .heavy || down == .heavy {
 		v_heavy_right
-	} else if lines.up != lines.down || lines.left == lines.right {
-		if lines.up == .double_ || lines.down == .double_ {
+	} else if up != down || left == right {
+		if up == .double_ || down == .double_ {
 			v_double_right
 		} else {
 			v_light_right
 		}
-	} else if lines.up == .none_ && lines.down == .none_ {
+	} else if up == .none_ && down == .none_ {
 		v_light_right
 	} else {
 		v_light_left
 	}
 
 	// The left of the right line
-	right_left := if lines.up == .heavy || lines.down == .heavy {
+	right_left := if up == .heavy || down == .heavy {
 		v_heavy_left
-	} else if lines.up != lines.down || lines.right == lines.left {
-		if lines.up == .double_ || lines.down == .double_ {
+	} else if up != down || right == left {
+		if up == .double_ || down == .double_ {
 			v_double_left
 		} else {
 			v_light_left
 		}
-	} else if lines.up == .none_ && lines.down == .none_ {
+	} else if up == .none_ && down == .none_ {
 		v_light_left
 	} else {
 		v_light_right
 	}
 
-	match lines.up {
+	match up {
 		.none_ {}
 		.light {
 			canvas.draw_box(i32(v_light_left), 0, i32(v_light_right), i32(up_bottom), .on)
@@ -921,14 +925,14 @@ pub fn lines_char(metrics font.Metrics, mut canvas Canvas, lines Lines) {
 			canvas.draw_box(i32(v_heavy_left), 0, i32(v_heavy_right), i32(up_bottom), .on)
 		}
 		.double_ {
-			left_bottom := if lines.left == .double_ { h_light_top } else { up_bottom }
-			right_bottom := if lines.right == .double_ { h_light_top } else { up_bottom }
+			left_bottom := if left == .double_ { h_light_top } else { up_bottom }
+			right_bottom := if right == .double_ { h_light_top } else { up_bottom }
 			canvas.draw_box(i32(v_double_left), 0, i32(v_light_left), i32(left_bottom), .on)
 			canvas.draw_box(i32(v_light_right), 0, i32(v_double_right), i32(right_bottom), .on)
 		}
 	}
 
-	match lines.right {
+	match right {
 		.none_ {}
 		.light {
 			canvas.draw_box(i32(right_left), i32(h_light_top), i32(metrics.cell_width), i32(h_light_bottom), .on)
@@ -937,14 +941,14 @@ pub fn lines_char(metrics font.Metrics, mut canvas Canvas, lines Lines) {
 			canvas.draw_box(i32(right_left), i32(h_heavy_top), i32(metrics.cell_width), i32(h_heavy_bottom), .on)
 		}
 		.double_ {
-			top_left := if lines.up == .double_ { v_light_right } else { right_left }
-			bottom_left := if lines.down == .double_ { v_light_right } else { right_left }
+			top_left := if up == .double_ { v_light_right } else { right_left }
+			bottom_left := if down == .double_ { v_light_right } else { right_left }
 			canvas.draw_box(i32(top_left), i32(h_double_top), i32(metrics.cell_width), i32(h_light_top), .on)
 			canvas.draw_box(i32(bottom_left), i32(h_light_bottom), i32(metrics.cell_width), i32(h_double_bottom), .on)
 		}
 	}
 
-	match lines.down {
+	match down {
 		.none_ {}
 		.light {
 			canvas.draw_box(i32(v_light_left), i32(down_top), i32(v_light_right), i32(metrics.cell_height), .on)
@@ -953,14 +957,14 @@ pub fn lines_char(metrics font.Metrics, mut canvas Canvas, lines Lines) {
 			canvas.draw_box(i32(v_heavy_left), i32(down_top), i32(v_heavy_right), i32(metrics.cell_height), .on)
 		}
 		.double_ {
-			left_top := if lines.left == .double_ { h_light_bottom } else { down_top }
-			right_top := if lines.right == .double_ { h_light_bottom } else { down_top }
+			left_top := if left == .double_ { h_light_bottom } else { down_top }
+			right_top := if right == .double_ { h_light_bottom } else { down_top }
 			canvas.draw_box(i32(v_double_left), i32(left_top), i32(v_light_left), i32(metrics.cell_height), .on)
 			canvas.draw_box(i32(v_light_right), i32(right_top), i32(v_double_right), i32(metrics.cell_height), .on)
 		}
 	}
 
-	match lines.left {
+	match left {
 		.none_ {}
 		.light {
 			canvas.draw_box(0, i32(h_light_top), i32(left_right), i32(h_light_bottom), .on)
@@ -969,8 +973,8 @@ pub fn lines_char(metrics font.Metrics, mut canvas Canvas, lines Lines) {
 			canvas.draw_box(0, i32(h_heavy_top), i32(left_right), i32(h_heavy_bottom), .on)
 		}
 		.double_ {
-			top_right := if lines.up == .double_ { v_light_left } else { left_right }
-			bottom_right := if lines.down == .double_ { v_light_left } else { left_right }
+			top_right := if up == .double_ { v_light_left } else { left_right }
+			bottom_right := if down == .double_ { v_light_left } else { left_right }
 			canvas.draw_box(0, i32(h_double_top), i32(top_right), i32(h_light_top), .on)
 			canvas.draw_box(0, i32(h_light_bottom), i32(bottom_right), i32(h_double_bottom), .on)
 		}

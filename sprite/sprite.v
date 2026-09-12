@@ -1337,7 +1337,7 @@ pub fn hline(mut canvas Canvas, x1 i32, x2 i32, y i32, thickness_px u32) {
 // Lines struct (for box-drawing line styles)
 // ============================================================
 
-pub enum LineStyle {
+pub enum LineStyle as u8 {
 	none_
 	light
 	heavy
@@ -1345,11 +1345,29 @@ pub enum LineStyle {
 }
 
 pub struct Lines {
-pub:
-	up    LineStyle = .none_
-	right LineStyle = .none_
-	down  LineStyle = .none_
-	left  LineStyle = .none_
+	value u8
+}
+
+pub fn Lines.from_int(value u8) Lines {
+	return Lines{
+		value: value
+	}
+}
+
+pub fn (lines Lines) up() LineStyle {
+	return unsafe { LineStyle((lines.value >> 0) & 0x03) }
+}
+
+pub fn (lines Lines) right() LineStyle {
+	return unsafe { LineStyle((lines.value >> 2) & 0x03) }
+}
+
+pub fn (lines Lines) down() LineStyle {
+	return unsafe { LineStyle((lines.value >> 4) & 0x03) }
+}
+
+pub fn (lines Lines) left() LineStyle {
+	return unsafe { LineStyle((lines.value >> 6) & 0x03) }
 }
 
 // ============================================================
