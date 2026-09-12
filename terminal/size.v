@@ -81,7 +81,12 @@ pub fn (self Offset) ptr(base &u8) &u8 {
 pub struct OffsetSlice {
 pub mut:
 	offset Offset
-	len    int
+	len    usize
+}
+
+// slice returns a view of the offset bytes without copying them.
+pub fn (self OffsetSlice) slice(base &u8) []u8 {
+	return unsafe { self.offset.ptr(base).vbytes(int(self.len)) }
 }
 
 // ============================================================
@@ -111,7 +116,7 @@ pub mut:
 	// structure is located. We use this so that we can slowly
 	// build up a chain of offset-based structures but always
 	// have the base pointer sent into functions be the true base.
-	offset int
+	offset usize
 }
 
 // Initialize a zero-offset buffer from a base pointer.
@@ -125,7 +130,7 @@ pub fn OffsetBuf.init(base &u8) OffsetBuf {
 }
 
 // Initialize from some base pointer and offset.
-pub fn OffsetBuf.init_offset(base &u8, offset int) OffsetBuf {
+pub fn OffsetBuf.init_offset(base &u8, offset usize) OffsetBuf {
 	return unsafe {
 		OffsetBuf{
 			base: base
@@ -145,14 +150,15 @@ pub fn (self OffsetBuf) start() &u8 {
 // Returns an Offset calculation for some child member of
 // your struct. The offset is against the true base pointer
 // so that future callers can pass that in as the base.
-pub fn (self OffsetBuf) member(len int) Offset {
+pub fn (self OffsetBuf) member(len usize) Offset {
+	assert self.offset + len <= usize(offset_int_max)
 	return Offset{
 		offset: u32(self.offset + len)
 	}
 }
 
 // Add an offset to the current offset.
-pub fn (self OffsetBuf) add(extra int) OffsetBuf {
+pub fn (self OffsetBuf) add(extra usize) OffsetBuf {
 	return OffsetBuf{
 		base: self.base
 		offset: self.offset + extra
@@ -161,7 +167,7 @@ pub fn (self OffsetBuf) add(extra int) OffsetBuf {
 
 // Rebase the offset to have a zero offset by rebasing onto start.
 // This is similar to `add` but all of the offsets are merged into base.
-pub fn (self OffsetBuf) rebase(extra int) OffsetBuf {
+pub fn (self OffsetBuf) rebase(extra usize) OffsetBuf {
 	return OffsetBuf{
 		base: unsafe { self.start() + extra }
 		offset: 0
@@ -178,6 +184,8 @@ pub fn (self OffsetBuf) rebase(extra int) OffsetBuf {
 pub fn get_offset(base &u8, ptr &u8) Offset {
 	base_int := u64(base)
 	ptr_int := u64(ptr)
+	assert ptr_int >= base_int
+	assert ptr_int - base_int <= u64(offset_int_max)
 	return Offset{
 		offset: u32(ptr_int - base_int)
 	}

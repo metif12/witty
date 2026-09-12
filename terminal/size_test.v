@@ -5,10 +5,7 @@ struct SizeTestWidget {
 	y u32
 }
 
-// Tests for size.v types.
-// Translated from Ghostty's terminal/size.zig tests.
-// Note: Zig pointer arithmetic tests are skipped as they are
-// Zig-specific and not applicable to V's memory model.
+// Tests for size.v types, translated from Ghostty's terminal/size.zig tests.
 
 // ============================================================
 // Offset tests
@@ -34,6 +31,19 @@ fn test_offset_slice_default() {
 	s := OffsetSlice{}
 	assert s.offset.offset == u32(0)
 	assert s.len == 0
+}
+
+fn test_offset_slice_view() {
+	mut bytes := 'ABCD'.bytes()
+	s := OffsetSlice{
+		offset: Offset{ offset: 1 }
+		len: 2
+	}
+	base := unsafe { &bytes[0] }
+	mut view := s.slice(base)
+	assert view.bytestr() == 'BC'
+	view[0] = `X`
+	assert bytes.bytestr() == 'AXCD'
 }
 
 // ============================================================
@@ -69,6 +79,15 @@ fn test_offset_buf_add() {
 	ob := OffsetBuf.init_offset(&buf[0], 8)
 	ob2 := ob.add(4)
 	assert ob2.offset == 12
+}
+
+fn test_offset_buf_rebase() {
+	buf := [64]u8{}
+	ob := OffsetBuf.init_offset(&buf[0], 8)
+	rebased := ob.rebase(4)
+	assert rebased.offset == 0
+	base := unsafe { &buf[0] }
+	assert u64(rebased.base) == u64(base) + 12
 }
 
 // ============================================================
