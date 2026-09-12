@@ -1424,7 +1424,7 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 
 	// Build our GPU cells.
 	preedit := if value := state.preedit { value.clone() } else { none }
-	cs := cursor_style(&self.terminal_state, StyleOptions{
+	cs := style(&self.terminal_state, StyleOptions{
 		preedit: preedit != none
 		focused: self.focused
 		blink_visible: cursor_blink_visible
@@ -2392,7 +2392,7 @@ fn (mut self Renderer) update_custom_shader_uniforms_for_frame() ! {
 struct PreeditRange {
 	y         u16
 	x         [2]u16
-	cp_offset int
+	cp_offset usize
 }
 
 // Compute the CellSet key matching terminal.cell_set_key: (y << 32) | x.
@@ -2429,7 +2429,7 @@ fn resolve_terminal_color(tc configpkg.TerminalColor, inverse bool, fg_style ter
 // iteration with dirty tracking, cursor rendering info, and preedit text.
 //
 // Dirty state on terminal state won't be reset by this.
-fn (mut self Renderer) rebuild_cells(preedit ?RenderPreedit, cursor_style_ ?CursorStyle, links &terminal.CellSet) ! {
+fn (mut self Renderer) rebuild_cells(preedit ?RenderPreedit, cursor_style_ ?Style, links &terminal.CellSet) ! {
 	state := &self.terminal_state
 
 	// Determine our x/y range for preedit. We don't want to render anything
@@ -2440,7 +2440,7 @@ fn (mut self Renderer) rebuild_cells(preedit ?RenderPreedit, cursor_style_ ?Curs
 		// viewport. If the cursor isn't visible in the viewport we
 		// don't show it.
 		if cursor_vp := state.cursor.viewport {
-			r_start, r_end, cp_offset := p.range(u32(cursor_vp.x), u32(state.cols) - 1)
+			r_start, r_end, cp_offset := p.range(cursor_vp.x, state.cols - 1)
 			preedit_range = PreeditRange{
 				y: cursor_vp.y
 				x: [u16(r_start), u16(r_end)]!
@@ -2546,7 +2546,7 @@ fn (mut self Renderer) rebuild_cells(preedit ?RenderPreedit, cursor_style_ ?Curs
 // Setup cursor rendering info: clear cursor by default, then if visible
 // determine cursor color and set uniforms. Faithful translation of the
 // `cursor:` block in rebuildCells.
-fn (mut self Renderer) rebuild_cursor(preedit ?RenderPreedit, cursor_style_ ?CursorStyle) {
+fn (mut self Renderer) rebuild_cursor(preedit ?RenderPreedit, cursor_style_ ?Style) {
 	state := &self.terminal_state
 
 	// Clear our cursor by default.
@@ -2572,15 +2572,15 @@ fn (mut self Renderer) rebuild_cursor(preedit ?RenderPreedit, cursor_style_ ?Cur
 	}
 
 	// If there isn't a cursor visual style requested then we don't render.
-	style := cursor_style_ or { return }
+	cursor_visual_style := cursor_style_ or { return }
 
 	// Determine the cursor color.
 	cursor_color := self.compute_cursor_color(cursor_cell_style)
 
-	self.add_cursor(&state.cursor, style, cursor_color)
+	self.add_cursor(&state.cursor, cursor_visual_style, cursor_color)
 
 	// If the cursor is visible then we set our uniforms.
-	if style == .block {
+	if cursor_visual_style == .block {
 		wide := state.cursor.cell.wide
 
 		// If we are a spacer tail of a wide cell, our cursor needs
@@ -2762,7 +2762,7 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		}
 
 		wide := cell.wide
-		style := if cell.has_styling() { cell.style } else { terminal.CellStyle{} }
+		cell_style := if cell.has_styling() { cell.style } else { terminal.CellStyle{} }
 
 		// True if this cell is selected. Order below matters for precedence.
 		// x_compare handles spacer tails by comparing against the base cell.
@@ -2792,21 +2792,21 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		// The `_style` suffixed values are the colors based on the cell
 		// style (SGR), before applying any additional configuration,
 		// inversions, selections, etc.
-		bg_style_opt := style.bg_rgb(cell, state.colors.palette)
-		fg_style := style.fg_rgb(terminal.FgOpts{
+		bg_style_opt := cell_style.bg_rgb(cell, state.colors.palette)
+		fg_style := cell_style.fg_rgb(terminal.FgOpts{
 			default_color: state.colors.foreground
 			palette: state.colors.palette
 			bold_color: self.config.bold_color
 		})
 
 		// The final background color for the cell.
-		bg := self.compute_cell_bg(selected, style, cell, bg_style_opt, fg_style)
+		bg := self.compute_cell_bg(selected, cell_style, cell, bg_style_opt, fg_style)
 
 		// The final foreground color for the cell.
-		fg := self.compute_cell_fg(selected, style, bg_style_opt, fg_style)
+		fg := self.compute_cell_fg(selected, cell_style, bg_style_opt, fg_style)
 
 		// Foreground alpha for this cell.
-		alpha := if style.flags.faint { self.config.faint_opacity } else { u8(255) }
+		alpha := if cell_style.flags.faint { self.config.faint_opacity } else { u8(255) }
 
 		// Set the cell's background color.
 		{
@@ -2814,7 +2814,7 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 
 			// Determine our background alpha. If we have transparency
 			// configured then this is dynamic depending on some situations.
-			bg_alpha := self.compute_bg_alpha(selected, style, bg_style_opt)
+			bg_alpha := self.compute_bg_alpha(selected, cell_style, bg_style_opt)
 
 			self.cells.set_bg(y, u16(x), CellBg{
 				r: rgb.r
@@ -2827,15 +2827,15 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		// If the invisible flag is set on this cell then we don't need to
 		// render any foreground elements, so we skip all glyphs with this
 		// x coordinate. NOTE: matches xterm's behavior.
-		if style.flags.invisible {
+		if cell_style.flags.invisible {
 			continue
 		}
 
 		// Give links a single underline, unless they already have an
 		// underline, in which case use a double underline to distinguish.
-		mut underline := style.flags.underline
+		mut underline := cell_style.flags.underline
 		if u64(cell_set_key(u32(x), u32(y))) in links {
-			underline = if style.flags.underline == .single {
+			underline = if cell_style.flags.underline == .single {
 				terminal.UnderlineStyle.double
 			} else {
 				terminal.UnderlineStyle.single
@@ -2844,11 +2844,11 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 
 		// We draw underlines first so that they layer underneath text.
 		if underline != .none {
-			ul_color := style.underline_color_rgb(state.colors.palette) or { fg }
+			ul_color := cell_style.underline_color_rgb(state.colors.palette) or { fg }
 			self.add_underline(u16(x), y, underline, ul_color, alpha) or {}
 		}
 
-		if style.flags.overline {
+		if cell_style.flags.overline {
 			self.add_overline(u16(x), y, fg, alpha) or {}
 		}
 
@@ -2857,7 +2857,7 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		}
 
 		// Finally, draw a strikethrough if necessary.
-		if style.flags.strikethrough {
+		if cell_style.flags.strikethrough {
 			self.add_strikethrough(u16(x), y, fg, alpha) or {}
 		}
 	}
@@ -3067,7 +3067,7 @@ fn (mut self Renderer) add_glyph(x u16, y u16, color terminal.RGB, alpha u8, gly
 }
 
 // Add a cursor to the cell rendering.
-fn (mut self Renderer) add_cursor(cursor_state &terminal.RenderCursor, cursor_style CursorStyle, cursor_color terminal.RGB) {
+fn (mut self Renderer) add_cursor(cursor_state &terminal.RenderCursor, cursor_style Style, cursor_color terminal.RGB) {
 	cursor_vp := cursor_state.viewport or { return }
 
 	// Add the cursor. We render the cursor over the wide character if
@@ -3226,15 +3226,6 @@ pub fn (w Wakeup) notify() ! {
 pub enum Health {
 	healthy
 	unhealthy
-}
-
-// CursorStyle describes how the cursor should be rendered.
-pub enum CursorStyle {
-	block
-	block_hollow
-	bar
-	underline
-	lock
 }
 
 // This is called early right after surface creation.

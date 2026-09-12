@@ -298,14 +298,14 @@ pub fn (mut c CellContents) add(layer CellLayer, cell CellText) ! {
 }
 
 // Set the cursor cell and style.
-pub fn (mut c CellContents) set_cursor(cell ?CellText, style ?CursorStyle) {
+pub fn (mut c CellContents) set_cursor(cell ?CellText, style_ ?Style) {
 	if c.size.rows == 0 {
 		return
 	}
 	c.fg_rows.lists[0].clear()
 	c.fg_rows.lists[int(c.size.rows) + 1].clear()
 	value := cell or { return }
-	visual_style := style or { return }
+	visual_style := style_ or { return }
 	match visual_style {
 		.block { c.fg_rows.lists[0] << value }
 		.block_hollow, .bar, .underline, .lock {

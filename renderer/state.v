@@ -100,10 +100,10 @@ pub fn (self &RenderPreedit) clone() RenderPreedit {
 }
 
 // The width in cells of all codepoints in the preedit.
-pub fn (self &RenderPreedit) width() int {
-	mut result := 0
+pub fn (self &RenderPreedit) width() usize {
+	mut result := usize(0)
 	for cp in self.codepoints {
-		result += if cp.wide { 2 } else { 1 }
+		result += if cp.wide { usize(2) } else { usize(1) }
 	}
 	return result
 }
@@ -111,7 +111,7 @@ pub fn (self &RenderPreedit) width() int {
 // Range returns the start and end x position of the preedit text
 // along with any codepoint offset necessary to fit the preedit
 // into the available space.
-pub fn (self &RenderPreedit) range(start u32, max u32) (u32, u32, int) {
+pub fn (self &RenderPreedit) range(start u16, max u16) (u16, u16, usize) {
 	// If our width is greater than the number of cells we have
 	// then we need to adjust our codepoint start to a point where
 	// our width would be less than the number of cells we have.
@@ -120,13 +120,13 @@ pub fn (self &RenderPreedit) range(start u32, max u32) (u32, u32, int) {
 	max_width := max - start + 1
 
 	// Rebuild our width in reverse order.
-	mut w := u32(0)
-	mut cp_offset := 0
+	mut w := u16(0)
+	mut cp_offset := usize(0)
 	for i := self.codepoints.len - 1; i >= 0; i-- {
 		cp := self.codepoints[i]
-		w += if cp.wide { u32(2) } else { u32(1) }
+		w += if cp.wide { u16(2) } else { u16(1) }
 		if w > max_width {
-			cp_offset = i
+			cp_offset = usize(i)
 			break
 		}
 	}
@@ -134,8 +134,8 @@ pub fn (self &RenderPreedit) range(start u32, max u32) (u32, u32, int) {
 	// If our preedit goes off the end of the screen, we adjust it so
 	// that it shifts left.
 	end := start + w
-	start_offset := if end > max { end - max } else { u32(0) }
-	result_start := if start > start_offset { start - start_offset } else { u32(0) }
-	result_end := if end > start_offset { end - start_offset } else { u32(0) }
+	start_offset := if end > max { end - max } else { u16(0) }
+	result_start := if start > start_offset { start - start_offset } else { u16(0) }
+	result_end := if end > start_offset { end - start_offset } else { u16(0) }
 	return result_start, result_end, cp_offset
 }

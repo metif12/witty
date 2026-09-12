@@ -2,6 +2,15 @@ module renderer
 
 import terminal
 
+// Available cursor styles for drawing that renderers must support.
+pub enum Style {
+	block
+	block_hollow
+	bar
+	underline
+	lock
+}
+
 // StyleOptions contains the options used to determine cursor visibility
 // and style during rendering.
 pub struct StyleOptions {
@@ -20,7 +29,7 @@ pub:
 // Note the order of conditionals is important. It represents
 // a priority system of how we determine what state overrides cursor
 // visibility and style.
-pub fn cursor_style(state &terminal.RenderState, opts StyleOptions) ?CursorStyle {
+pub fn style(state &terminal.RenderState, opts StyleOptions) ?Style {
 	// The cursor must be visible in the viewport to be rendered.
 	if _ := state.cursor.viewport {
 		// viewport is set, continue
@@ -58,11 +67,11 @@ pub fn cursor_style(state &terminal.RenderState, opts StyleOptions) ?CursorStyle
 	}
 
 	// Otherwise, we use whatever style the terminal wants.
-	return CursorStyle.from_terminal(state.cursor.visual_style)
+	return Style.from_terminal(state.cursor.visual_style)
 }
 
 // Create a cursor style from the terminal style request.
-pub fn CursorStyle.from_terminal(term terminal.CursorStyle) ?CursorStyle {
+pub fn Style.from_terminal(term terminal.CursorStyle) ?Style {
 	return match term {
 		.bar { .bar }
 		.block { .block }

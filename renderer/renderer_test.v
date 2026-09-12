@@ -385,10 +385,10 @@ fn test_health_enum() {
 	assert h != .unhealthy
 }
 
-// Test CursorStyle enum values.
+// Test Style enum values.
 fn test_cursor_style_enum() {
-	assert CursorStyle.block != CursorStyle.bar
-	assert CursorStyle.block_hollow != CursorStyle.underline
+	assert Style.block != Style.bar
+	assert Style.block_hollow != Style.underline
 }
 
 // Test BgImageBuffer defaults.
@@ -430,6 +430,33 @@ fn test_preedit_width() {
 		]
 	}
 	assert p.width() == 5 // 2 + 2 + 1
+}
+
+fn test_preedit_range_fits() {
+	p := RenderPreedit{
+		codepoints: [
+			RenderPreeditCodepoint{ codepoint: u32(`a`) },
+			RenderPreeditCodepoint{ codepoint: 0x3042, wide: true },
+		]
+	}
+	start, end, cp_offset := p.range(2, 9)
+	assert start == 2
+	assert end == 5
+	assert cp_offset == 0
+}
+
+fn test_preedit_range_keeps_trailing_codepoints_when_clipped() {
+	p := RenderPreedit{
+		codepoints: [
+			RenderPreeditCodepoint{ codepoint: u32(`a`) },
+			RenderPreeditCodepoint{ codepoint: u32(`b`) },
+			RenderPreeditCodepoint{ codepoint: 0x3042, wide: true },
+		]
+	}
+	start, end, cp_offset := p.range(8, 9)
+	assert start == 6
+	assert end == 9
+	assert cp_offset == 1
 }
 
 // Test CellText initialization.

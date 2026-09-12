@@ -6,9 +6,9 @@ import terminal
 // Cursor tests - translated from cursor.zig
 // ============================================================
 
-// Test CursorStyle.from_terminal conversion.
+// Test Style.from_terminal conversion.
 fn test_cursor_style_from_terminal_bar() {
-	result := CursorStyle.from_terminal(.bar) or {
+	result := Style.from_terminal(.bar) or {
 		assert false
 		return
 	}
@@ -16,7 +16,7 @@ fn test_cursor_style_from_terminal_bar() {
 }
 
 fn test_cursor_style_from_terminal_block() {
-	result := CursorStyle.from_terminal(.block) or {
+	result := Style.from_terminal(.block) or {
 		assert false
 		return
 	}
@@ -24,7 +24,7 @@ fn test_cursor_style_from_terminal_block() {
 }
 
 fn test_cursor_style_from_terminal_underline() {
-	result := CursorStyle.from_terminal(.underline) or {
+	result := Style.from_terminal(.underline) or {
 		assert false
 		return
 	}
@@ -32,7 +32,7 @@ fn test_cursor_style_from_terminal_underline() {
 }
 
 fn test_cursor_style_from_terminal_block_hollow() {
-	result := CursorStyle.from_terminal(.block_hollow) or {
+	result := Style.from_terminal(.block_hollow) or {
 		assert false
 		return
 	}
@@ -43,7 +43,7 @@ fn test_cursor_style_from_terminal_block_hollow() {
 fn test_cursor_style_not_in_viewport() {
 	state := terminal.RenderState{}
 	// viewport is none by default
-	result := cursor_style(&state, StyleOptions{
+	result := style(&state, StyleOptions{
 		preedit: false
 		focused: true
 		blink_visible: true
@@ -55,10 +55,10 @@ fn test_cursor_style_not_in_viewport() {
 fn test_cursor_style_preedit_block() {
 	state := terminal.RenderState{
 		cursor: terminal.RenderCursor{
-			viewport: terminal.ViewportPoint{x: 0, y: 0}
+			viewport: terminal.ViewportPoint{ x: 0, y: 0 }
 		}
 	}
-	result := cursor_style(&state, StyleOptions{
+	result := style(&state, StyleOptions{
 		preedit: true
 		focused: false
 		blink_visible: false
@@ -73,11 +73,11 @@ fn test_cursor_style_preedit_block() {
 fn test_cursor_style_password_lock() {
 	state := terminal.RenderState{
 		cursor: terminal.RenderCursor{
-			viewport: terminal.ViewportPoint{x: 0, y: 0}
+			viewport: terminal.ViewportPoint{ x: 0, y: 0 }
 			password_input: true
 		}
 	}
-	result := cursor_style(&state, StyleOptions{
+	result := style(&state, StyleOptions{
 		preedit: false
 		focused: true
 		blink_visible: true
@@ -92,11 +92,11 @@ fn test_cursor_style_password_lock() {
 fn test_cursor_style_not_visible() {
 	state := terminal.RenderState{
 		cursor: terminal.RenderCursor{
-			viewport: terminal.ViewportPoint{x: 0, y: 0}
+			viewport: terminal.ViewportPoint{ x: 0, y: 0 }
 			visible: false
 		}
 	}
-	result := cursor_style(&state, StyleOptions{
+	result := style(&state, StyleOptions{
 		preedit: false
 		focused: true
 		blink_visible: true
@@ -108,12 +108,12 @@ fn test_cursor_style_not_visible() {
 fn test_cursor_style_not_focused() {
 	state := terminal.RenderState{
 		cursor: terminal.RenderCursor{
-			viewport: terminal.ViewportPoint{x: 0, y: 0}
+			viewport: terminal.ViewportPoint{ x: 0, y: 0 }
 			visible: true
 			visual_style: .bar
 		}
 	}
-	result := cursor_style(&state, StyleOptions{
+	result := style(&state, StyleOptions{
 		preedit: false
 		focused: false
 		blink_visible: true
@@ -128,13 +128,13 @@ fn test_cursor_style_not_focused() {
 fn test_cursor_style_blinking_not_visible() {
 	state := terminal.RenderState{
 		cursor: terminal.RenderCursor{
-			viewport: terminal.ViewportPoint{x: 0, y: 0}
+			viewport: terminal.ViewportPoint{ x: 0, y: 0 }
 			visible: true
 			blinking: true
 			visual_style: .bar
 		}
 	}
-	result := cursor_style(&state, StyleOptions{
+	result := style(&state, StyleOptions{
 		preedit: false
 		focused: true
 		blink_visible: false
@@ -146,12 +146,12 @@ fn test_cursor_style_blinking_not_visible() {
 fn test_cursor_style_normal_case() {
 	state := terminal.RenderState{
 		cursor: terminal.RenderCursor{
-			viewport: terminal.ViewportPoint{x: 0, y: 0}
+			viewport: terminal.ViewportPoint{ x: 0, y: 0 }
 			visible: true
 			visual_style: .bar
 		}
 	}
-	result := cursor_style(&state, StyleOptions{
+	result := style(&state, StyleOptions{
 		preedit: false
 		focused: true
 		blink_visible: true
