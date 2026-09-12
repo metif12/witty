@@ -4,7 +4,9 @@ import renderer
 import terminal
 import apprt
 import build_meta
+import datastruct
 import osc
+import sync
 import tmux
 
 // ============================================================
@@ -14,17 +16,23 @@ import tmux
 // TestContext holds all test allocations so pointers stay valid.
 struct TestContext {
 mut:
-	t        terminal.Terminal
-	mailbox  Mailbox
-	rstate   renderer.State
-	rmailbox renderer.Mailbox
-	rsize    renderer.Size
-	messages []apprt.SurfaceMessage
+	t              terminal.Terminal
+	mailbox        Mailbox
+	rstate         renderer.State
+	rmailbox       renderer.Mailbox
+	rsize          renderer.Size
+	messages       []apprt.SurfaceMessage
+	timeouts       []datastruct.BlockingQueueTimeoutKind
+	reject_instant bool
 }
 
-fn collect_surface_message(app voidptr, surface voidptr, msg apprt.SurfaceMessage) int {
+fn collect_surface_message(app voidptr, surface voidptr, msg apprt.SurfaceMessage, timeout datastruct.BlockingQueueTimeout) u32 {
 	_ = app
 	mut ctx := unsafe { &TestContext(surface) }
+	ctx.timeouts << timeout.kind
+	if ctx.reject_instant && timeout.kind == .instant {
+		return 0
+	}
 	ctx.messages << msg
 	return 1
 }
@@ -51,6 +59,23 @@ fn make_test_handler() (&StreamHandler, &TestContext) {
 		default_cursor_style: .block
 	}
 	return handler, ctx
+}
+
+fn test_surface_message_writer_retries_without_renderer_lock_after_full_queue() {
+	mut handler, mut ctx := make_test_handler()
+	defer {
+		ctx.t.deinit()
+	}
+	ctx.reject_instant = true
+	ctx.rstate.mutex = sync.new_mutex()
+	ctx.rstate.mutex.lock()
+	handler.surface_message_writer(apprt.SurfaceMessage{ kind: .ring_bell })
+	ctx.rstate.mutex.unlock()
+	ctx.rstate.mutex.destroy()
+	ctx.rstate.mutex = unsafe { nil }
+	assert ctx.messages.len == 1
+	assert ctx.messages[0].kind == .ring_bell
+	assert ctx.timeouts == [.instant, .forever]
 }
 
 fn test_progress_report_forwards_payload() {

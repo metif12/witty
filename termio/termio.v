@@ -950,7 +950,7 @@ fn (mut t Thread) run_timers(mut io Termio, now i64) bool {
 		io.surface_mailbox.push(apprt.SurfaceMessage{
 			kind: .selection_scroll_tick
 			selection_scroll_tick: t.scroll_active
-		})
+		}, datastruct.blocking_queue_instant)
 		if t.scroll_active {
 			t.scroll_deadline = now + 15 * i64(time.millisecond)
 		} else {
@@ -1008,7 +1008,7 @@ fn (mut t Thread) apply_termios_mode(mut io Termio, mode pty.Mode) {
 	io.surface_mailbox.push(apprt.SurfaceMessage{
 		kind: .password_input
 		password_input: password_input
-	})
+	}, datastruct.blocking_queue_forever)
 }
 
 // drain_mailbox dispatches every currently queued writer message. Returning

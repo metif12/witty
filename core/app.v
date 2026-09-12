@@ -991,15 +991,20 @@ fn (mut self Mailbox) ensure_queue() &datastruct.BlockingQueue[Message] {
 // try_push adds a message without blocking and returns the queue occupancy, or
 // zero when the fixed-capacity queue is full.
 pub fn (mut self Mailbox) try_push(msg Message) int {
-	mut queue := self.ensure_queue()
-	return int(queue.push(msg, datastruct.blocking_queue_instant))
+	return int(self.push_timeout(msg, datastruct.blocking_queue_instant))
 }
 
 // push adds a message, waiting for the consumer if the queue is full. App
 // requests use Ghostty's `.forever` queue timeout, so no message is dropped.
 pub fn (mut self Mailbox) push(msg Message) int {
+	return int(self.push_timeout(msg, datastruct.blocking_queue_forever))
+}
+
+// push_timeout preserves the source BlockingQueue timeout contract for
+// adapters such as the per-surface mailbox.
+pub fn (mut self Mailbox) push_timeout(msg Message, timeout datastruct.BlockingQueueTimeout) u32 {
 	mut queue := self.ensure_queue()
-	return int(queue.push(msg, datastruct.blocking_queue_forever))
+	return queue.push(msg, timeout)
 }
 
 // pop removes and returns the next message from the queue.

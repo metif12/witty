@@ -8,6 +8,7 @@ import apprt
 import build_meta
 import configpkg
 import crash
+import datastruct
 import global_state
 import internal_os
 import os
@@ -1020,7 +1021,7 @@ fn process_exit_common(start_ns u64, exit_code u32, io &Termio) {
 				exit_code: exit_code
 				runtime_ms: runtime_ms
 			}
-		})
+		}, datastruct.blocking_queue_forever)
 	}
 }
 

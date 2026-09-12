@@ -2,6 +2,7 @@ module termio
 
 import apprt
 import build_meta
+import datastruct
 import internal_os
 import kitty
 import osc
@@ -112,10 +113,10 @@ pub fn (mut self StreamHandler) change_config(config &DerivedConfig) {
 fn (mut self StreamHandler) surface_message_writer(msg apprt.SurfaceMessage) {
 	// See message_writer which has similar logic and explains why
 	// we may have to do this.
-	if self.surface_mailbox.push(msg) == 0 {
+	if self.surface_mailbox.push(msg, datastruct.blocking_queue_instant) == 0 {
 		self.renderer_state.mutex.unlock()
 		defer { self.renderer_state.mutex.lock() }
-		self.surface_mailbox.push(msg)
+		self.surface_mailbox.push(msg, datastruct.blocking_queue_forever)
 	}
 }
 

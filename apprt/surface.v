@@ -178,17 +178,17 @@ pub:
 	push_fn SurfaceMailboxPushFn = unsafe { nil }
 }
 
-pub type SurfaceMailboxPushFn = fn (app voidptr, surface voidptr, msg SurfaceMessage) int
+pub type SurfaceMailboxPushFn = fn (app voidptr, surface voidptr, msg SurfaceMessage, timeout datastruct.BlockingQueueTimeout) u32
 
 // push sends a message to the surface.
 // Surface message sending is implemented on the app thread, so the
 // message must be rewrapped with the surface pointer and sent to the
 // app thread.
-pub fn (m SurfaceMailbox) push(msg SurfaceMessage) int {
+pub fn (m SurfaceMailbox) push(msg SurfaceMessage, timeout datastruct.BlockingQueueTimeout) u32 {
 	if m.push_fn == unsafe { nil } {
 		return 0
 	}
-	return m.push_fn(m.app, m.surface, msg)
+	return m.push_fn(m.app, m.surface, msg, timeout)
 }
 
 // NewSurfaceContext describes where a new surface should be created

@@ -2,6 +2,7 @@ module termio
 
 import apprt
 import configpkg
+import datastruct
 import os
 import pty
 import renderer
@@ -324,13 +325,15 @@ fn test_thread_drain_mailbox_updates_writer_state() {
 
 struct SelectionScrollProbe {
 mut:
-	values []bool
+	values   []bool
+	timeouts []datastruct.BlockingQueueTimeoutKind
 }
 
-fn selection_scroll_probe_push(_ voidptr, surface voidptr, msg apprt.SurfaceMessage) int {
+fn selection_scroll_probe_push(_ voidptr, surface voidptr, msg apprt.SurfaceMessage, timeout datastruct.BlockingQueueTimeout) u32 {
 	if msg.kind == .selection_scroll_tick {
 		mut probe := unsafe { &SelectionScrollProbe(surface) }
 		probe.values << msg.selection_scroll_tick
+		probe.timeouts << timeout.kind
 	}
 	return 1
 }
@@ -367,18 +370,21 @@ fn test_thread_selection_scroll_timer_reports_final_stop() {
 	assert writer.scroll_deadline == deadline
 	assert writer.run_timers(mut tio, deadline)
 	assert probe.values == [false]
+	assert probe.timeouts == [.instant]
 	assert writer.scroll_deadline == 0
 }
 
 struct PasswordInputProbe {
 mut:
-	values []bool
+	values   []bool
+	timeouts []datastruct.BlockingQueueTimeoutKind
 }
 
-fn password_input_probe_push(_ voidptr, surface voidptr, msg apprt.SurfaceMessage) int {
+fn password_input_probe_push(_ voidptr, surface voidptr, msg apprt.SurfaceMessage, timeout datastruct.BlockingQueueTimeout) u32 {
 	if msg.kind == .password_input {
 		mut probe := unsafe { &PasswordInputProbe(surface) }
 		probe.values << msg.password_input
+		probe.timeouts << timeout.kind
 	}
 	return 1
 }
@@ -408,6 +414,7 @@ fn test_thread_termios_mode_reports_password_input_transitions() {
 	tio.terminal.flags.password_input = true
 	writer.apply_termios_mode(mut tio, pty.Mode{})
 	assert probe.values == [true, false]
+	assert probe.timeouts == [.forever, .forever]
 }
 
 fn test_thread_termios_timer_stops_unfocused_and_restarts_on_focus() {
