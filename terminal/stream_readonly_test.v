@@ -525,7 +525,7 @@ fn test_readonly_semantic_prompt_fresh_line_new_prompt() {
 
 	s.next_slice('prompt\$ ') or { panic(err) }
 	s.next_slice('\x1b]133;A;redraw=1\a') or { panic(err) }
-	assert t.flags.shell_redraws_prompt == .true_
+	assert t.flags.shell_redraws_prompt == .redraw_true
 }
 
 fn test_readonly_semantic_prompt_prompt_start() {

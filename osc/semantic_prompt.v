@@ -92,21 +92,21 @@ pub fn PromptKind.init(c u8) ?PromptKind {
 // started by Kitty[1] and extended by Ghostty (the "last" option).
 //
 // [1]: https://sw.kovidgoyal.net/kitty/shell-integration/#notes-for-shell-developers
-pub enum Redraw {
+pub enum Redraw as u8 {
 	// The shell supports redrawing the full prompt and all continuations.
 	// This is the default value, it does not need to be explicitly set
 	// unless it is to reset a prior other value.
-	redraw_true
+	redraw_true  = 0
 	// The shell does NOT support redrawing. In this case, Ghostty will NOT
 	// clear any prompt lines on resize.
-	redraw_false
+	redraw_false = 1
 	// The shell supports redrawing only the LAST line of the prompt.
 	// Ghostty will only clear the last line of the prompt on resize.
 	//
 	// This is specifically introduced because Bash only redraws the last
 	// line. It is literally the only shell that does this and it does this
 	// because its bad and they should feel bad. Don't be like Bash.
-	last
+	last         = 2
 }
 
 // ============================================================

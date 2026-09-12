@@ -1682,7 +1682,7 @@ pub mut:
 	// This supports a Kitty extension where programs using semantic
 	// prompts (OSC133) can annotate their new prompts with `redraw=0` to
 	// disable clearing the prompt on resize.
-	shell_redraws_prompt PromptRedraw = .true_
+	shell_redraws_prompt osc.Redraw = .redraw_true
 
 	// This is set via ESC[4;2m. Any other modify key mode just sets
 	// this to false and we act in mode 1 by default.
@@ -1764,16 +1764,6 @@ pub enum SwitchScreenMode {
 	// do not clear the screen, and restore the cursor on the
 	// primary screen.
 	mode_1049
-}
-
-// ============================================================
-// Prompt redraw
-// ============================================================
-
-pub enum PromptRedraw {
-	false_
-	true_
-	last
 }
 
 // ============================================================
@@ -4076,11 +4066,7 @@ pub fn (mut self Terminal) semantic_prompt_options(action osc.SemanticAction, op
 			self.screens.active.cursor_set_semantic_content_prompt(prompt_kind_from_osc(options))
 
 			if redraw := osc.read_redraw(options) {
-				self.flags.shell_redraws_prompt = match redraw {
-					.redraw_false { .false_ }
-					.redraw_true { .true_ }
-					.last { .last }
-				}
+				self.flags.shell_redraws_prompt = redraw
 			}
 
 			if click_events := osc.read_click_events(options) {

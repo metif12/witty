@@ -1,5 +1,6 @@
 module terminal
 
+import osc
 import unicode
 
 // --- Original Ghostty Comments Start: src/terminal/Screen.zig
@@ -1884,7 +1885,7 @@ pub:
 	cols          u32
 	rows          u32
 	reflow        bool = true
-	prompt_redraw PromptRedraw = .false_
+	prompt_redraw osc.Redraw = .redraw_false
 }
 
 // SelectionString options for converting selection to string.
@@ -2997,15 +2998,15 @@ pub fn (mut self Screen) resize(opts ScreenResize) ! {
 	// redraw it. This works with OSC 133 semantic prompts. We check
 	// cursor.semantic_content rather than the row's semantic_prompt because
 	// some shells mark input areas but don't mark continuation lines.
-	if opts.prompt_redraw != .false_ && self.cursor.semantic_content != .output {
+	if opts.prompt_redraw != .redraw_false && self.cursor.semantic_content != .output {
 		cur_idx := self.pages.active_start + int(self.cursor.y)
 		match opts.prompt_redraw {
-			.false_ {}
+			.redraw_false {}
 			.last {
 				// Only clear the current line where the cursor is.
 				self.clear_cells(cur_idx, 0, int(self.pages.cols))
 			}
-			.true_ {
+			.redraw_true {
 				mut prompt_it := self.pages.prompt_iterator(Pin{
 					x: self.cursor.x
 					y: u32(cur_idx)

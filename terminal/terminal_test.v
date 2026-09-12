@@ -1957,7 +1957,7 @@ fn test_resize_clears_redrawable_prompt_on_primary_screen() {
 	t.print_string('echo') or { assert false }
 	assert t.plain_string() or { '' } == 'ABCDE\n> echo'
 
-	t.flags.shell_redraws_prompt = .true_
+	t.flags.shell_redraws_prompt = .redraw_true
 	t.resize(20, 3) or { assert false }
 
 	assert primary.cursor.x == 6
@@ -1982,7 +1982,7 @@ fn test_resize_clears_redrawable_prompt_on_inactive_primary_screen() {
 
 	t.switch_screen_mode(.mode_47, true) or { assert false }
 	assert t.screens.active_key == .alternate
-	t.flags.shell_redraws_prompt = .true_
+	t.flags.shell_redraws_prompt = .redraw_true
 	t.resize(20, 3) or { assert false }
 	t.switch_screen_mode(.mode_47, false) or { assert false }
 

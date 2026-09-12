@@ -701,6 +701,11 @@ fn test_option_read_err() {
 }
 
 fn test_option_read_redraw() {
+	assert $sizeof(Redraw) == 1
+	assert u8(Redraw.redraw_true) == 0
+	assert u8(Redraw.redraw_false) == 1
+	assert u8(Redraw.last) == 2
+
 	assert (read_redraw('redraw=1') or { Redraw.last }) == .redraw_true
 	assert (read_redraw('redraw=0') or { Redraw.last }) == .redraw_false
 	assert (read_redraw('redraw=last') or { Redraw.redraw_true }) == .last

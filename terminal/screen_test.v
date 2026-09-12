@@ -3462,7 +3462,7 @@ fn test_screen_resize_more_cols_with_cursor_at_prompt() {
 	}
 	assert str_view0 == 'ABCDE\n> echo'
 
-	s.resize(ScreenResize{ cols: 20, rows: 3, reflow: true, prompt_redraw: .true_ }) or {
+	s.resize(ScreenResize{ cols: 20, rows: 3, reflow: true, prompt_redraw: .redraw_true }) or {
 		assert false
 	}
 
@@ -3494,7 +3494,7 @@ fn test_screen_resize_more_cols_with_cursor_not_at_prompt() {
 	}
 	assert str_view0 == 'ABCDE\n> echo\noutput'
 
-	s.resize(ScreenResize{ cols: 20, rows: 3, reflow: true, prompt_redraw: .true_ }) or {
+	s.resize(ScreenResize{ cols: 20, rows: 3, reflow: true, prompt_redraw: .redraw_true }) or {
 		assert false
 	}
 
