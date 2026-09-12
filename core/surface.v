@@ -2186,7 +2186,7 @@ fn surface_search_event(event searchpkg.Event, userdata voidptr) {
 			})) or {}
 		}
 		.selected_match {
-			selected := if value := event.selected { ?usize(usize(value.idx)) } else { none }
+			selected := if value := event.selected { ?usize(value.idx) } else { none }
 			match_ := if value := event.selected {
 				?highlight.FlattenedHighlight(value.highlight.clone())
 			} else {
@@ -2203,7 +2203,7 @@ fn surface_search_event(event searchpkg.Event, userdata voidptr) {
 		.total_matches {
 			surface.surface_mailbox().push(apprt.SurfaceMessage{
 				kind: .search_total
-				search_total: usize(event.total)
+				search_total: event.total
 			})
 		}
 		.quit {

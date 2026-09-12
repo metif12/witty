@@ -39,12 +39,8 @@ fn test_screen_search_finds_active_matches_newest_first() {
 	assert finder.state == .complete
 	assert finder.matches_len() == 2
 
-	mut matches := finder.matches()
-	defer {
-		for mut item in matches {
-			item.deinit()
-		}
-	}
+	matches := finder.matches()
+	assert matches[0].chunks.data == finder.active_results[finder.active_results.len - 1].chunks.data
 	assert screen_search_point(&finder, matches[0]).y == 2
 	assert screen_search_point(&finder, matches[1]).y == 0
 }
@@ -65,12 +61,7 @@ fn test_screen_search_finds_scrollback_beyond_first_page() {
 	finder.search_all()
 	assert finder.matches_len() == 3
 
-	mut matches := finder.matches()
-	defer {
-		for mut item in matches {
-			item.deinit()
-		}
-	}
+	matches := finder.matches()
 	assert screen_search_point(&finder, matches[0]).y == 82
 	assert screen_search_point(&finder, matches[1]).y == 79
 	assert screen_search_point(&finder, matches[2]).y == 3
@@ -112,12 +103,7 @@ fn test_screen_search_reload_researches_changed_active_area() {
 	finder.reload_active()
 	assert finder.state == .complete
 	assert finder.matches_len() == 1
-	mut matches := finder.matches()
-	defer {
-		for mut item in matches {
-			item.deinit()
-		}
-	}
+	matches := finder.matches()
 	point := screen_search_point(&finder, matches[0])
 	assert point.x == 3
 	assert point.y == 1

@@ -315,7 +315,7 @@ pub enum EventType {
 // Source: Thread.Event.SelectedMatch
 pub struct ThreadSelectedMatch {
 pub mut:
-	idx       int
+	idx       usize
 	highlight highlight.FlattenedHighlight
 }
 
@@ -325,7 +325,7 @@ pub struct Event {
 pub mut:
 	kind EventType
 	// total_matches payload
-	total int
+	total usize
 	// selected_match payload (none => selection cleared)
 	selected ?ThreadSelectedMatch
 	// viewport_matches payload. The memory is owned by the search thread
@@ -674,7 +674,7 @@ mut:
 	// Last active screen key.
 	key terminal.ScreenKey = .primary
 	// Last notified total matches count.
-	total ?int
+	total ?usize
 	// Last notified selected match index + highlight.
 	selected ?ScreenStateSelectedMatch
 }
@@ -685,7 +685,7 @@ mut:
 // Source: Search.ScreenState.SelectedMatch
 struct ScreenStateSelectedMatch {
 mut:
-	idx       int
+	idx       usize
 	highlight highlight.UntrackedHighlight
 }
 

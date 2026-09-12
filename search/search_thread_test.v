@@ -35,7 +35,7 @@ fn test_search_thread_processes_messages_asynchronously() {
 	thread_ := spawn worker.thread_main()
 
 	worker.push(Message.change_needle('world'.bytes()))
-	mut total := -1
+	mut total := usize(0)
 	mut complete := false
 	for !complete {
 		select {
