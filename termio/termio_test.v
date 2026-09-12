@@ -109,6 +109,36 @@ fn test_write_req_preserves_storage_kind_and_full_payload() {
 	assert allocated_msg.write_slice().bytestr() == allocated_data
 }
 
+fn test_message_discriminants_match_source_declaration_order() {
+	assert sizeof(MessageKind) == 1
+	assert u8(MessageKind.color_scheme_report) == 0
+	assert u8(MessageKind.crash) == 1
+	assert u8(MessageKind.change_config) == 2
+	assert u8(MessageKind.inspector) == 3
+	assert u8(MessageKind.resize) == 4
+	assert u8(MessageKind.size_report) == 5
+	assert u8(MessageKind.clear_screen) == 6
+	assert u8(MessageKind.scroll_viewport) == 7
+	assert u8(MessageKind.selection_scroll) == 8
+	assert u8(MessageKind.jump_to_prompt) == 9
+	assert u8(MessageKind.start_synchronized_output) == 10
+	assert u8(MessageKind.linefeed_mode) == 11
+	assert u8(MessageKind.focused) == 12
+	assert u8(MessageKind.write_small) == 13
+	assert u8(MessageKind.write_stable) == 14
+	assert u8(MessageKind.write_alloc) == 15
+
+	assert sizeof(SizeReportKind) == 1
+	assert u8(SizeReportKind.mode_2048) == 0
+	assert u8(SizeReportKind.csi_14_t) == 1
+	assert u8(SizeReportKind.csi_16_t) == 2
+	assert u8(SizeReportKind.csi_18_t) == 3
+
+	assert sizeof(MutexState) == 1
+	assert u8(MutexState.locked) == 0
+	assert u8(MutexState.unlocked) == 1
+}
+
 fn test_termio_queue_message_uses_mailbox() {
 	mut tio := Termio{}
 	tio.init(make_termio_opts())!

@@ -1146,31 +1146,31 @@ pub mut:
 	prompt_delta      isize
 }
 
-pub enum MessageKind {
-	write_small
-	write_stable
-	write_alloc
-	resize
-	inspector
-	change_config
-	focused
-	color_scheme_report
-	selection_scroll
-	start_synchronized_output
-	linefeed_mode
-	size_report
-	clear_screen
-	scroll_viewport
-	jump_to_prompt
-	crash
+pub enum MessageKind as u8 {
+	color_scheme_report       = 0
+	crash                     = 1
+	change_config             = 2
+	inspector                 = 3
+	resize                    = 4
+	size_report               = 5
+	clear_screen              = 6
+	scroll_viewport           = 7
+	selection_scroll          = 8
+	jump_to_prompt            = 9
+	start_synchronized_output = 10
+	linefeed_mode             = 11
+	focused                   = 12
+	write_small               = 13
+	write_stable              = 14
+	write_alloc               = 15
 }
 
 // SizeReportKind identifies what kind of size report to send.
-pub enum SizeReportKind {
-	csi_14_t
-	csi_16_t
-	csi_18_t
-	mode_2048
+pub enum SizeReportKind as u8 {
+	mode_2048 = 0
+	csi_14_t  = 1
+	csi_16_t  = 2
+	csi_18_t  = 3
 }
 
 pub struct WriteSmall {
@@ -1355,9 +1355,9 @@ pub fn Message.jump_to_prompt_msg(delta isize) Message {
 	}
 }
 
-pub enum MutexState {
-	locked
-	unlocked
+pub enum MutexState as u8 {
+	locked   = 0
+	unlocked = 1
 }
 
 // mailbox_capacity is the number of messages the mailbox can hold. Ghostty
