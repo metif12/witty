@@ -896,8 +896,7 @@ fn bridge_surface_needs_confirm(ptr voidptr) bool {
 
 fn bridge_surface_ime(ptr voidptr) apprt.IMEPos {
 	self := unsafe { &EmbeddedSurfaceCore(ptr) }
-	pos := self.surface.ime_point()
-	return apprt.IMEPos{ x: pos.x, y: pos.y, width: pos.width, height: pos.height }
+	return self.surface.ime_point()
 }
 
 fn bridge_surface_pwd(ptr voidptr) !string {

@@ -2123,17 +2123,6 @@ pub type ConditionalState = configpkg.ConditionalState
 
 pub type Theme = configpkg.Theme
 
-pub type ColorScheme = apprt.ColorScheme
-
-// IMEPos represents the position and size for the Input Method Editor.
-pub struct IMEPos {
-pub:
-	x      f64
-	y      f64
-	width  f64
-	height f64
-}
-
 // Text represents text read from the terminal with viewport metadata.
 pub struct Text {
 pub mut:
@@ -3375,7 +3364,7 @@ pub fn (self &Surface) pwd() ?string {
 }
 
 // ime_point returns the x/y coordinate of where the IME keyboard should be rendered.
-pub fn (self &Surface) ime_point() IMEPos {
+pub fn (self &Surface) ime_point() apprt.IMEPos {
 	locked := self.renderer_state.mutex != unsafe { nil }
 	if locked {
 		self.renderer_state.mutex.lock()
@@ -3416,7 +3405,7 @@ pub fn (self &Surface) ime_point() IMEPos {
 		w = max_w
 	}
 
-	return IMEPos{
+	return apprt.IMEPos{
 		x: x
 		y: y
 		width: w
@@ -4634,7 +4623,7 @@ pub fn (mut self Surface) mouse_pressure_callback(stage input.PressureStage, pre
 }
 
 // color_scheme_callback is called when the color scheme changes (light/dark).
-pub fn (mut self Surface) color_scheme_callback(scheme ColorScheme) ! {
+pub fn (mut self Surface) color_scheme_callback(scheme apprt.ColorScheme) ! {
 	crash.set_thread_state(self.crash_thread_state())
 	defer {
 		crash.clear_thread_state()
@@ -4643,9 +4632,6 @@ pub fn (mut self Surface) color_scheme_callback(scheme ColorScheme) ! {
 	new_scheme := match scheme {
 		.light { Theme.light }
 		.dark { Theme.dark }
-		else {
-			return
-		}
 	}
 	if self.config_conditional_state.theme == new_scheme {
 		return
