@@ -21,6 +21,30 @@ fn overlay_pixel(overlay &Overlay, x int, y int) [4]u8 {
 		overlay.pixels[idx + 3]]!
 }
 
+fn test_overlay_rejects_dimensions_outside_source_raster_range() {
+	Overlay.init(Size{
+		screen: ScreenSize{
+			width: u32(2147483648)
+			height: 1
+		}
+	}) or {
+		assert err.msg() == 'invalid dimensions for overlay'
+		return
+	}
+	assert false, 'out-of-range overlay width should fail'
+}
+
+fn test_overlay_grid_rectangle_rejects_coordinate_overflow() {
+	mut overlay := overlay_for_grid(1, 1, 1, 1)
+	overlay.cell_size.width = 2
+	overlay.highlight_grid_rect(usize(2147483647), 0, 1, 1, .hyperlink) or {
+		assert err.msg() == 'overlay coordinate overflow'
+		assert overlay.pixels == []u8{len: 4}
+		return
+	}
+	assert false, 'out-of-range overlay coordinate should fail'
+}
+
 fn render_cell_with_hyperlink(active bool) terminal.RenderCell {
 	return terminal.RenderCell{
 		raw: terminal.CellData{

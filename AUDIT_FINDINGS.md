@@ -29,6 +29,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | renderer/cell | Foreground rows omitted Ghostty's two cursor lists, so each backend reconstructed cursor ordering by hand; row capacities were discarded on clear/reset; the logical shader bearings were widened to `i32`. | Use the translated `ArrayListCollection`, allocate `rows + 2` lists with source capacities, retain capacities, assert row bounds, store block/other cursors in the first/last lists, flatten them directly, and use `i16` bearings. |
 | renderer/size | `Size.grid()` could return zero rows/columns, grid units were widened to `u32`, and same-space coordinate conversion clamped out-of-bounds grid coordinates instead of returning them unchanged. Size definitions and handwritten wrappers also lived in `renderer.v`. | Restore the source `GridSize.init/update` minimum of one, `u16` cell-count units, the coordinate identity fast path, and the source method/file boundaries; remove the unused wrappers. |
 | renderer/cursor | Cursor style was duplicated in `renderer.v`, the source `style()` decision was renamed, and preedit offsets/ranges were widened inconsistently. | Restore the cursor-owned `Style` enum and `style()` function, `usize` byte offsets/widths, and `u16` cell ranges. |
+| renderer/image, overlay | Pending image length arithmetic ran in `u32`, and overlay grid-to-pixel products used unchecked `int` arithmetic despite the source's checked `usize` multiplication and `i32` raster-coordinate casts. | Restore `usize` bytes-per-pixel and pending lengths; validate overlay surface dimensions and check every coordinate product before drawing. |
 | renderer/row | `never_extend_bg` took no palette and read bg from the style for bg-color cells (color is on the cell); ignored palette backgrounds. | `resolve_bg` faithful to `Style.bg`; callers pass `state.colors.palette`. |
 | renderer/renderer | `fg_rgb`/cursor color calls never passed `bold_color`. | (field wiring noted; passed where applicable) |
 | sprite/face | `render_glyph` hardcoded glyph `offset_x/offset_y` to 0. | Compute from canvas clip + padding (matches `Face.renderGlyph`). |
@@ -84,6 +85,14 @@ an item here does not mean its full module has been certified yet.
 - **Render-state integration:** the production render path adapts the flat
   `Pages` screen rather than traversing Ghostty's active `PageList`; therefore
   PageList cross-node behavior is not exercised through the live renderer.
+- **Overlay rasterizer:** Ghostty delegates paths, fill/stroke, clipping, and
+  compositing to z2d. Witty has a handwritten RGBA rectangle rasterizer. The
+  reviewed feature grouping, colors, premultiplication, and overflow boundaries
+  are close, but this remains source-external rendering logic.
+- **Shadertoy toolchain:** Witty invokes external `glslangValidator` and
+  `spirv-cross` executables through temporary files, whereas Ghostty links the
+  shader compiler/cross-compiler libraries. This has different availability,
+  process, filesystem, and error contracts.
 - **Source placement:** V module-cycle constraints keep the translated shaper
   run algorithm in `font/font.v` while `font/shaper/run.v` exposes aliases.
   This is behaviorally implemented but not a file-for-file layout match.

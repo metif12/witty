@@ -38,6 +38,15 @@ fn test_pending_image_data_len_rgb() {
 	assert p.data_len() == 5 * 5 * 3
 }
 
+fn test_pending_image_length_uses_source_usize_contract() {
+	p := PendingImage{
+		width: 70_000
+		height: 70_000
+		pixel_format: .gray
+	}
+	assert p.len() == usize(4_900_000_000)
+}
+
 fn test_pending_image_data_slice() {
 	p := PendingImage{
 		width: 2

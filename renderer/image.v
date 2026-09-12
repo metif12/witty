@@ -289,7 +289,7 @@ pub enum PixelFormat {
 }
 
 // Get bytes per pixel for this format.
-pub fn (f PixelFormat) bpp() u32 {
+pub fn (f PixelFormat) bpp() usize {
 	return match f {
 		.gray { 1 }
 		.gray_alpha { 2 }
@@ -311,13 +311,13 @@ pub mut:
 }
 
 // Returns the expected data length.
-pub fn (p &PendingImage) data_len() u32 {
-	return p.width * p.height * p.pixel_format.bpp()
+pub fn (p &PendingImage) data_len() usize {
+	return usize(p.width) * usize(p.height) * p.pixel_format.bpp()
 }
 
 // Returns the expected data length as an array index.
 pub fn (p &PendingImage) len() usize {
-	return usize(p.data_len())
+	return p.data_len()
 }
 
 // Returns the pending pixel data at its dimension-derived length.
@@ -532,8 +532,7 @@ pub fn (mut self ImageRenderState) upload(api &MetalAPI) bool {
 fn (mut self Image) upload(api &MetalAPI) ! {
 	self.prep_for_upload()!
 	pending := self.pending or { return error('image has no pending data') }
-	mut texture := MetalTexture.init(api.image_texture_options(.rgba, true), pending.width, pending.height,
-		pending.data_slice())!
+	mut texture := MetalTexture.init(api.image_texture_options(.rgba, true), pending.width, pending.height, pending.data_slice())!
 	self.release_texture()
 	self.texture_handle = texture.handle
 	self.texture_backend = .metal
@@ -571,8 +570,7 @@ pub fn (mut self ImageRenderState) upload_opengl(api &OpenGLAPI) bool {
 fn (mut self Image) upload_opengl(api &OpenGLAPI) ! {
 	self.prep_for_upload()!
 	pending := self.pending or { return error('image has no pending data') }
-	mut texture := GLTexture.init(api.image_texture_options(.rgba, true), pending.width, pending.height,
-		pending.data_slice())!
+	mut texture := GLTexture.init(api.image_texture_options(.rgba, true), pending.width, pending.height, pending.data_slice())!
 	self.release_texture()
 	self.gl_texture = texture
 	texture.id = 0
@@ -611,7 +609,7 @@ fn pending_to_rgba(pending PendingImage) ![]u8 {
 	if pending.pixel_format == .rgba {
 		return pending.data.clone()
 	}
-	pixels := int(pending.width * pending.height)
+	pixels := int(usize(pending.width) * usize(pending.height))
 	mut rgba := []u8{len: pixels * 4}
 	for i in 0 .. pixels {
 		src := i * int(pending.pixel_format.bpp())

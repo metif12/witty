@@ -2,6 +2,8 @@ module renderer
 
 import terminal
 
+const overlay_max_i32 = usize(2147483647)
+
 // The debug overlay that can be drawn on top of the terminal
 // during the rendering process.
 //
@@ -88,10 +90,15 @@ pub fn Overlay.init(sz Size) !Overlay {
 	term_size := sz.terminal()
 	w := term_size.width
 	h := term_size.height
-	if w == 0 || h == 0 {
+	if w == 0 || h == 0 || usize(w) > overlay_max_i32 || usize(h) > overlay_max_i32 {
 		return error('invalid dimensions for overlay')
 	}
-	total := int(w) * int(h) * 4
+	// V arrays use an `int` length, so reject surfaces whose backing store
+	// cannot be represented before performing the multiplication.
+	if u64(w) > u64(overlay_max_i32) / u64(h) / 4 {
+		return error('invalid dimensions for overlay')
+	}
+	total := int(u64(w) * u64(h) * 4)
 	return Overlay{
 		pixels: []u8{len: total}
 		width: w
@@ -158,7 +165,7 @@ fn (mut self Overlay) highlight_hyperlinks(state &terminal.RenderState) {
 			for x < row.cells.len && row.cells[x].raw.has_hyperlink {
 				x++
 			}
-			self.highlight_grid_rect(start_x, y, x - start_x, 1, .hyperlink)
+			self.highlight_grid_rect(usize(start_x), usize(y), usize(x - start_x), 1, .hyperlink) or {}
 		}
 	}
 }
@@ -180,7 +187,7 @@ fn (mut self Overlay) highlight_semantic_prompts(state &terminal.RenderState) {
 			y++
 		}
 		bar_width := if self.cell_size.width < 5 { int(self.cell_size.width) } else { 5 }
-		self.highlight_pixel_rect(0, start_y, bar_width, y - start_y, .semantic_prompt)
+		self.highlight_pixel_rect(0, usize(start_y), usize(bar_width), usize(y - start_y), .semantic_prompt) or {}
 	}
 
 	// Highlight contiguous prompt/input content. Output is intentionally
@@ -204,19 +211,19 @@ fn (mut self Overlay) highlight_semantic_prompts(state &terminal.RenderState) {
 			} else {
 				OverlayColor.semantic_input
 			}
-			self.highlight_grid_rect(start_x, row_y, x - start_x, 1, color)
+			self.highlight_grid_rect(usize(start_x), usize(row_y), usize(x - start_x), 1, color) or {}
 		}
 	}
 }
 
 // Draw a filled and bordered rectangle at grid coordinates.
 // x/y/width/height are all in grid cells.
-fn (mut self Overlay) highlight_grid_rect(x int, y int, width int, height int, color OverlayColor) {
-	// Calculate pixel coordinates
-	px_x := x * int(self.cell_size.width)
-	px_y := y * int(self.cell_size.height)
-	px_w := width * int(self.cell_size.width)
-	px_h := height * int(self.cell_size.height)
+fn (mut self Overlay) highlight_grid_rect(x usize, y usize, width usize, height usize, color OverlayColor) ! {
+	// All grid-to-pixel products use the same checked i32 boundary as z2d.
+	px_x := overlay_mul_i32(x, self.cell_size.width)!
+	px_y := overlay_mul_i32(y, self.cell_size.height)!
+	px_w := overlay_mul_i32(width, self.cell_size.width)!
+	px_h := overlay_mul_i32(height, self.cell_size.height)!
 
 	col := color.rgb()
 	fill_a := color.fill_alpha()
@@ -244,10 +251,14 @@ fn (mut self Overlay) highlight_grid_rect(x int, y int, width int, height int, c
 
 // Draw a filled and bordered rectangle where x/y are grid cells and
 // width_px/height are pixels.
-fn (mut self Overlay) highlight_pixel_rect(x int, y int, width_px int, height int, color OverlayColor) {
-	px_x := x * int(self.cell_size.width)
-	px_y := y * int(self.cell_size.height)
-	px_h := height * int(self.cell_size.height)
+fn (mut self Overlay) highlight_pixel_rect(x usize, y usize, width_px usize, height usize, color OverlayColor) ! {
+	px_x := overlay_mul_i32(x, self.cell_size.width)!
+	px_y := overlay_mul_i32(y, self.cell_size.height)!
+	if width_px > overlay_max_i32 {
+		return error('overlay coordinate overflow')
+	}
+	px_width := int(width_px)
+	px_h := overlay_mul_i32(height, self.cell_size.height)!
 
 	col := color.rgb()
 	fill_a := color.fill_alpha()
@@ -257,18 +268,27 @@ fn (mut self Overlay) highlight_pixel_rect(x int, y int, width_px int, height in
 		if row < 0 || row >= int(self.height) {
 			continue
 		}
-		for col_px in px_x .. px_x + width_px {
+		for col_px in px_x .. px_x + px_width {
 			if col_px < 0 || col_px >= int(self.width) {
 				continue
 			}
 			is_border := row == px_y || row == px_y + px_h - 1
-				|| col_px == px_x || col_px == px_x + width_px - 1
+				|| col_px == px_x || col_px == px_x + px_width - 1
 			a := if is_border { border_a } else { fill_a }
 
 			idx := (row * int(self.width) + col_px) * 4
 			self.composite_pixel(idx, col, a)
 		}
 	}
+}
+
+// Multiply a grid coordinate by a cell dimension and cast it to the signed
+// coordinate range accepted by the source rasterizer.
+fn overlay_mul_i32(value usize, scale u32) !int {
+	if scale != 0 && value > overlay_max_i32 / usize(scale) {
+		return error('overlay coordinate overflow')
+	}
+	return int(value * usize(scale))
 }
 
 // z2d's RGBA surfaces store premultiplied colors and composite with src-over.
