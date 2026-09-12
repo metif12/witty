@@ -3420,8 +3420,8 @@ pub fn (self &Screen) selection_string(opts SelectionString) !string {
 	if !isnil(opts.map) {
 		unsafe {
 			mut output_map := opts.map
-			output_map.str = result
-			output_map.map_pin = pin_map.pins.clone()
+			output_map.string = result
+			output_map.map = pin_map.pins.clone()
 		}
 	}
 	return result

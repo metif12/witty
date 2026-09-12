@@ -12,96 +12,96 @@ import oniguruma
 // to one byte in the string, mapping it back to a screen position.
 pub struct StringMap {
 pub mut:
-	str     string
-	map_pin []Pin
+	string string
+	map    []Pin
 }
 
 // deinit frees the string and pin map.
 pub fn (mut self StringMap) deinit() {
-	self.str = ''
-	self.map_pin = []
+	self.string = ''
+	self.map = []
 }
 
 // search_iterator returns an iterator for an already compiled expression.
-pub fn (self StringMap) search_iterator(regex oniguruma.Regex) StringSearchIterator {
-	return StringSearchIterator{
-		smap: self
+pub fn (self StringMap) search_iterator(regex oniguruma.Regex) SearchIterator {
+	return SearchIterator{
+		map: self
 		regex: regex
 	}
 }
 
-// StringSearchIterator iterates over regular expression matches of the string.
-pub struct StringSearchIterator {
+// SearchIterator iterates over regular expression matches of the string.
+pub struct SearchIterator {
 pub mut:
-	smap   StringMap
+	map    StringMap
 	regex  oniguruma.Regex
-	offset int
+	offset usize
 }
 
 // next returns the next regular expression match or none if there are
 // no more matches.
-pub fn (mut self StringSearchIterator) next() !StringMatchValue {
-	if self.offset >= self.smap.str.len {
-		return StringMatchValue{}
+pub fn (mut self SearchIterator) next() !MatchValue {
+	if self.offset >= self.map.string.len {
+		return MatchValue{}
 	}
 
-	mut region := self.regex.search(self.smap.str[self.offset..], oniguruma.Options{}) or {
+	mut region := self.regex.search(self.map.string[self.offset..], oniguruma.Options{}) or {
 		if oniguruma.is_error(err, .mismatch) {
-			self.offset = self.smap.str.len
-			return StringMatchValue{}
+			self.offset = usize(self.map.string.len)
+			return MatchValue{}
 		}
 		return err
 	}
-	end_idx := region.ends()[0]
+	end_idx := usize(region.ends()[0])
 	match_offset := self.offset
 	self.offset += end_idx
-	return StringMatchValue{
+	return MatchValue{
 		has_value: true
-		value: StringMatch{
-			smap: self.smap
+		value: Match{
+			map: self.map
 			offset: match_offset
 			region: region
 		}
 	}
 }
 
-// StringMatchValue preserves Ghostty's !?Match contract. V cannot nest an
+// MatchValue preserves Ghostty's !?Match contract. V cannot nest an
 // Option in a Result, so has_value represents the optional layer.
-pub struct StringMatchValue {
+pub struct MatchValue {
 pub:
 	has_value bool
 mut:
-	value StringMatch
+	value Match
 }
 
-pub fn (v StringMatchValue) get() ?StringMatch {
+pub fn (v MatchValue) get() ?Match {
 	if !v.has_value {
 		return none
 	}
 	return v.value
 }
 
-// StringMatch represents a single regular expression match.
+// Match represents a single regular expression match.
 // Contains the mapping back to screen positions via the StringMap.
-pub struct StringMatch {
+pub struct Match {
 pub mut:
-	smap   StringMap
-	offset int
+	map    StringMap
+	offset usize
 mut:
 	region oniguruma.Region
 }
 
 // deinit releases the Oniguruma match region.
-pub fn (mut self StringMatch) deinit() {
+pub fn (mut self Match) deinit() {
 	self.region.deinit()
 }
 
 // selection returns the Selection containing the full match.
 // Maps byte offsets back to screen positions via the pin map.
-pub fn (self StringMatch) selection() Selection {
+pub fn (self Match) selection() Selection {
 	starts := self.region.starts()
 	ends := self.region.ends()
-	start_idx := self.offset + starts[0]
-	end_idx := self.offset + ends[0] - 1
-	return Selection.init(self.smap.map_pin[start_idx], self.smap.map_pin[end_idx], false)
+	start_idx := usize(starts[0])
+	end_idx := usize(ends[0] - 1)
+	return Selection.init(self.map.map[self.offset + start_idx], self.map.map[self.offset + end_idx], false)
 }
