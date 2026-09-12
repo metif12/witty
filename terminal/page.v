@@ -1611,34 +1611,26 @@ pub fn (self &Page) clone() Page {
 // Preconditions:
 // - Range must be at least 1 row
 // - Start and end must be valid for this page
-pub fn (self &Page) exact_row_capacity(y_start int, y_end int) PageCapacity {
+pub fn (self &Page) exact_row_capacity(y_start usize, y_end usize) PageCapacity {
 	assert y_start < y_end
-	assert y_end <= int(self.size.rows)
+	assert y_end <= usize(self.size.rows)
 
 	// Track unique style IDs.
 	mut style_ids := map[u32]bool{}
-	mut grapheme_bytes := u32(0)
+	mut grapheme_bytes := usize(0)
 
 	// First pass: count styles and grapheme bytes.
 	for y in y_start .. y_end {
-		if y >= self.rows.len {
-			break
-		}
-		row := self.rows[y]
+		row := self.rows[int(y)]
 		for x in 0 .. int(self.size.cols) {
-			if x >= row.cells.len {
-				break
-			}
 			cell := row.cells[x]
 			if cell.style_id != default_style_id {
 				style_ids[cell.style_id] = true
 			}
-			if cell.has_grapheme && cell.graphemes.len > 0 {
-				// Each grapheme allocation rounds up to grapheme_chunk.
-				bytes := u32(cell.graphemes.len) * 4 // sizeof(u32)
-				// Round up to grapheme_chunk.
-				chunks := (bytes + u32(grapheme_chunk) - 1) / u32(grapheme_chunk)
-				grapheme_bytes += chunks * u32(grapheme_chunk)
+			if cell.has_grapheme {
+				if cps := self.lookup_grapheme_at(int(y), x) {
+					grapheme_bytes += usize(self.grapheme_alloc.bytes_required(int(sizeof(u32)), cps.len))
+				}
 			}
 		}
 	}
@@ -1649,32 +1641,26 @@ pub fn (self &Page) exact_row_capacity(y_start int, y_end int) PageCapacity {
 	// count the page-owned URI/explicit-ID string allocations once per link.
 	mut hyperlink_ids := map[u32]bool{}
 	mut hyperlink_cells := 0
-	mut string_bytes := u32(0)
+	mut string_bytes := usize(0)
 	for y in y_start .. y_end {
-		if y >= self.rows.len {
-			break
-		}
-		row := self.rows[y]
+		row := self.rows[int(y)]
 		for x in 0 .. int(self.size.cols) {
-			if x >= row.cells.len {
-				break
-			}
 			if !row.cells[x].has_hyperlink {
 				continue
 			}
 
 			hyperlink_cells++
-			id := self.lookup_hyperlink(y, x) or { continue }
+			id := self.lookup_hyperlink(int(y), x) or { continue }
 			if id in hyperlink_ids {
 				continue
 			}
 			hyperlink_ids[id] = true
 
 			entry := self.hyperlink_set.get(id)
-			string_bytes += u32(page_align_forward(usize(entry.uri.len), string_chunk))
+			string_bytes += page_align_forward(usize(entry.uri.len), string_chunk)
 			match entry.id {
 				HyperlinkExplicitId {
-					string_bytes += u32(page_align_forward(usize(entry.id.value.len), string_chunk))
+					string_bytes += page_align_forward(usize(entry.id.value.len), string_chunk)
 				}
 				else {}
 			}
@@ -1688,14 +1674,19 @@ pub fn (self &Page) exact_row_capacity(y_start int, y_end int) PageCapacity {
 	} else {
 		hyperlink_map_min
 	}
+	assert y_end - y_start <= usize(max_u16)
+	assert styles_cap <= int(max_u16)
+	assert hyperlink_cap * int(hyperlink_set_item_size) <= int(max_u16)
+	assert grapheme_bytes <= usize(max_u32)
+	assert string_bytes <= usize(max_u32)
 
 	return PageCapacity{
 		cols: self.size.cols
 		rows: u16(y_end - y_start)
 		styles: styles_cap
 		hyperlink_bytes: u16(hyperlink_cap * int(hyperlink_set_item_size))
-		grapheme_bytes: grapheme_bytes
-		string_bytes: string_bytes
+		grapheme_bytes: u32(grapheme_bytes)
+		string_bytes: u32(string_bytes)
 	}
 }
 

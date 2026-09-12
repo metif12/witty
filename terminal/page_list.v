@@ -5866,7 +5866,7 @@ pub fn (mut self PageList) compact(node &PageNode) ?&PageNode {
 	}
 
 	// Compute the minimum capacity required for this page's content.
-	req_cap := page.exact_row_capacity(0, int(page.size.rows))
+	req_cap := page.exact_row_capacity(0, usize(page.size.rows))
 	new_size := Page.layout(req_cap).total_size
 	if new_size >= old_size {
 		return none

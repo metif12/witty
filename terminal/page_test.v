@@ -1179,6 +1179,8 @@ fn test_page_exact_row_capacity_empty_rows() {
 	assert cap.rows == 5
 	assert cap.styles == 0
 	assert cap.grapheme_bytes == 0
+	assert cap.hyperlink_bytes == 0
+	assert cap.string_bytes == 0
 }
 
 // Test exactRowCapacity with styles.
@@ -1283,6 +1285,18 @@ fn test_page_exact_row_capacity_styles() {
 		cap := page.exact_row_capacity(0, 10)
 		assert cap.styles == StyleSet.capacity_for_count(3)
 	}
+
+	// Verify clone works with exact capacity and produces the same result.
+	{
+		cap := page.exact_row_capacity(0, 5)
+		mut cloned := Page.init(cap)
+		defer { cloned.deinit() }
+		for y in 0 .. 5 {
+			cloned.clone_row_from(&page, u16(y), u16(y)) or { panic(err) }
+		}
+		cloned_cap := cloned.exact_row_capacity(0, 5)
+		assert cloned_cap == cap
+	}
 }
 
 // Test exactRowCapacity with grapheme_bytes.
@@ -1370,6 +1384,18 @@ fn test_page_exact_row_capacity_grapheme_bytes() {
 		cap := page.exact_row_capacity(0, 10)
 		assert cap.grapheme_bytes == u32(grapheme_chunk * 4)
 	}
+
+	// Verify clone works with exact capacity and produces the same result.
+	{
+		cap := page.exact_row_capacity(0, 5)
+		mut cloned := Page.init(cap)
+		defer { cloned.deinit() }
+		for y in 0 .. 5 {
+			cloned.clone_row_from(&page, u16(y), u16(y)) or { panic(err) }
+		}
+		cloned_cap := cloned.exact_row_capacity(0, 5)
+		assert cloned_cap == cap
+	}
 }
 
 // Test exactRowCapacity with grapheme_bytes larger than chunk.
@@ -1399,6 +1425,13 @@ fn test_page_exact_row_capacity_grapheme_bytes_larger_than_chunk() {
 	cap := page.exact_row_capacity(0, 1)
 	// 6 codepoints = 24 bytes, rounds up to 32 (2 * grapheme_chunk).
 	assert cap.grapheme_bytes == 32
+
+	// Verify clone works with exact capacity and produces the same result.
+	mut cloned := Page.init(cap)
+	defer { cloned.deinit() }
+	cloned.clone_row_from(&page, 0, 0) or { panic(err) }
+	cloned_cap := cloned.exact_row_capacity(0, 1)
+	assert cloned_cap == cap
 }
 
 // Reference values emitted by the pinned Zig implementation. These make the
