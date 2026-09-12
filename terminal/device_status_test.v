@@ -57,3 +57,9 @@ fn test_device_status_req_tag() {
 	assert t2.value == 996
 	assert t2.question == true
 }
+
+fn test_device_status_request_uses_packed_tag_values() {
+	assert u16(DeviceStatusRequest.operating_status) == 5
+	assert u16(DeviceStatusRequest.cursor_position) == 6
+	assert u16(DeviceStatusRequest.color_scheme) == (u16(1) << 15) | 996
+}

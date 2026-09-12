@@ -7,10 +7,10 @@ module terminal
 // In Zig this is a comptime-generated enum(u16) where the tag packs the
 // value and question bit into a u16 using a packed struct. In V we represent
 // it as a regular enum and provide from_int/to_tag helpers.
-pub enum DeviceStatusRequest {
-	operating_status   // value=5, question=false
-	cursor_position    // value=6, question=false
-	color_scheme       // value=996, question=true
+pub enum DeviceStatusRequest as u16 {
+	operating_status = 5 // value=5, question=false
+	cursor_position  = 6 // value=6, question=false
+	color_scheme     = 33764 // value=996, question=true
 }
 
 // The tag type for our enum is a u16 but we use a struct
@@ -28,8 +28,9 @@ pub:
 // Pack a DeviceStatusTag into a u16.
 // Bit 15 = question, bits 0-14 = value.
 pub fn (self &DeviceStatusTag) to_u16() u16 {
+	assert self.value <= 0x7fff
 	q := if self.question { u16(1) << 15 } else { u16(0) }
-	return (self.value & 0x7FFF) | q
+	return self.value | q
 }
 
 // Unpack a u16 into a DeviceStatusTag.
@@ -64,15 +65,5 @@ pub fn DeviceStatusRequest.from_int(v u16, question bool) ?DeviceStatusRequest {
 
 // Returns the DeviceStatusTag for a given request.
 pub fn (self DeviceStatusRequest) tag() DeviceStatusTag {
-	return match self {
-		.operating_status {
-			DeviceStatusTag{ value: 5, question: false }
-		}
-		.cursor_position {
-			DeviceStatusTag{ value: 6, question: false }
-		}
-		.color_scheme {
-			DeviceStatusTag{ value: 996, question: true }
-		}
-	}
+	return DeviceStatusTag.from_u16(u16(self))
 }
