@@ -37,6 +37,30 @@ fn test_open_command_platform_selection() {
 	assert args_html == ['/tmp/index.html']
 }
 
+fn test_open_process_collects_stdout_and_stderr_concurrently() {
+	$if !windows {
+		mut process := os.new_process('/bin/sh')
+		process.set_args(['-c', 'head -c 131072 /dev/zero >&2; printf stdout-complete'])
+		process.set_redirect_stdio()
+		process.run()
+		assert process.status != .aborted
+
+		stdout_result := chan string{ cap: 1 }
+		stderr_result := chan string{ cap: 1 }
+		stdout_thread := spawn collect_open_stdout(mut process, stdout_result)
+		stderr_thread := spawn collect_open_stderr(mut process, stderr_result)
+		stdout := <-stdout_result
+		stderr := <-stderr_result
+		stdout_thread.wait()
+		stderr_thread.wait()
+		process.wait()
+		process.close()
+
+		assert stdout == 'stdout-complete'
+		assert stderr.len == 131072
+	}
+}
+
 fn test_temp_dir_is_unique_and_deletes_contents() {
 	mut first := TempDir.init()!
 	mut second := TempDir.init()!

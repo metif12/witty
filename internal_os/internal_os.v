@@ -94,13 +94,28 @@ pub fn open_kind(kind OpenKind, url string) ! {
 // The platform URL opener may block until the target application exits. Reap
 // it away from the caller so opening a link never stalls terminal input.
 fn reap_open_process(mut process os.Process) {
-	_ = process.stdout_slurp()
-	stderr := process.stderr_slurp()
+	stdout_result := chan string{ cap: 1 }
+	stderr_result := chan string{ cap: 1 }
+	stdout_thread := spawn collect_open_stdout(mut process, stdout_result)
+	stderr_thread := spawn collect_open_stderr(mut process, stderr_result)
+	stdout := <-stdout_result
+	stderr := <-stderr_result
+	stdout_thread.wait()
+	stderr_thread.wait()
 	process.wait()
-	if stderr.len > 0 {
+	// std.process.Child.collectOutput rejects either stream above 50 KiB.
+	if stdout.len <= 50 * 1024 && stderr.len > 0 && stderr.len <= 50 * 1024 {
 		log.warn('URL opener stderr: ${stderr}')
 	}
 	process.close()
+}
+
+fn collect_open_stdout(mut process os.Process, result chan string) {
+	result <- process.stdout_slurp()
+}
+
+fn collect_open_stderr(mut process os.Process, result chan string) {
+	result <- process.stderr_slurp()
 }
 
 // TempDir manages a temporary directory for scratch files.
