@@ -795,6 +795,8 @@ mut:
 
 // from_input converts input mods to Kitty mods.
 fn KittyMods.from_input(action KeyAction, k Key, mods Mods) KittyMods {
+	_ = action
+	_ = k
 	return KittyMods{
 		shift: mods.shift
 		alt: mods.alt

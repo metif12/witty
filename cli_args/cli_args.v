@@ -87,7 +87,7 @@ pub fn parse[T](mut dst T, args []string) ! {
 		// values set with spaces so this is an error.
 		if !arg.starts_with('--') {
 			if append_diagnostic[T](mut dst, arg, 'invalid field', diagnostics.CliLocation{
-				index: arg_index + 1
+				index: usize(arg_index + 1)
 			}) {
 				continue
 			}
@@ -126,7 +126,7 @@ pub fn parse[T](mut dst T, args []string) ! {
 				message = format_invalid_value[T](key, value)
 			}
 			if append_diagnostic[T](mut dst, key, message, diagnostics.CliLocation{
-				index: arg_index + 1
+				index: usize(arg_index + 1)
 			}) {
 				continue
 			}
@@ -650,7 +650,7 @@ mut:
 	// Our current index into the iterator. This is 1-indexed.
 	// The 0 value is used to indicate that we haven't read any
 	// values yet.
-	index int
+	index usize
 }
 
 pub fn ArgsIterator.new(args []string) ArgsIterator {
@@ -660,8 +660,8 @@ pub fn ArgsIterator.new(args []string) ArgsIterator {
 }
 
 pub fn (mut self ArgsIterator) next() ?string {
-	for self.index < self.args.len {
-		value := self.args[self.index]
+	for self.index < usize(self.args.len) {
+		value := self.args[int(self.index)]
 		self.index += 1
 		// We ignore any argument that starts with "+". This is used
 		// to indicate actions and are expected to be parsed out before
@@ -694,7 +694,7 @@ pub mut:
 	// The current line that we're on. This is 1-indexed because
 	// lines are generally 1-indexed in the real world. The value
 	// can be zero if we haven't read any lines yet.
-	line int
+	line usize
 mut:
 	// The lines of input data.
 	lines []string

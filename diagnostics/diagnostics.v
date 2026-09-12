@@ -56,14 +56,21 @@ pub struct NoneLocation {}
 // A CLI argument index (1-indexed).
 pub struct CliLocation {
 pub:
-	index int
+	index usize
 }
 
 // A file path and line number.
 pub struct FileLocation {
 pub:
 	path string
-	line int
+	line usize
+}
+
+// LocationKind is the tag type for Location.
+pub enum LocationKind as u8 {
+	none
+	cli
+	file
 }
 
 // Clone the location.
@@ -114,21 +121,25 @@ pub fn (self DiagnosticList) items() []Diagnostic {
 	return self.list
 }
 
-// Returns true if there are any diagnostics for CLI locations.
-pub fn (self DiagnosticList) contains_cli_location() bool {
+// Returns true if there are any diagnostics for the given location type.
+pub fn (self DiagnosticList) contains_location(location LocationKind) bool {
 	for diag in self.list {
-		if diag.location is CliLocation {
-			return true
-		}
-	}
-	return false
-}
-
-// Returns true if there are any diagnostics for file locations.
-pub fn (self DiagnosticList) contains_file_location() bool {
-	for diag in self.list {
-		if diag.location is FileLocation {
-			return true
+		match location {
+			.none {
+				if diag.location is NoneLocation {
+					return true
+				}
+			}
+			.cli {
+				if diag.location is CliLocation {
+					return true
+				}
+			}
+			.file {
+				if diag.location is FileLocation {
+					return true
+				}
+			}
 		}
 	}
 	return false

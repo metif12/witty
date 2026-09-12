@@ -105,6 +105,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | termio message discriminants | The flattened `MessageKind`, nested size-report kind, and mutex-state enums used default 32-bit V storage; the message and size-report declaration orders also differed from their source unions/enums. | Restore byte backing and the exact source declaration values for all three translated discriminants. |
 | termio derived config enums | The IO layer redeclared both `configpkg.ClipboardAccess` and `Config.OSCColorReportFormat`, converted into them case-by-case, and carried those parallel types through `StreamHandler`. | Store both canonical config values directly in derived IO state and the stream handler, removing the duplicate enums and conversions. |
 | simd/stream | SIMD search/decode offsets and terminal bulk-stream lengths were narrowed to `u32`, creating artificial overflow boundaries that do not exist in Ghostty's `usize` contracts. | Restore `usize` through `simd.index_of`, VT/base64 decode results, and terminal stream consumption. |
+| CLI diagnostics | Diagnostic CLI indexes and file line numbers were narrowed from Ghostty's `usize` to V's 32-bit `int`, and its tag-keyed `containsLocation` operation was replaced by two CLI/file-only predicates. | Preserve pointer-width locations through both iterators and diagnostic cloning/formatting, and restore one canonical location-kind query including the `.none` tag. |
 
 ## Focused behavior reviewed
 
