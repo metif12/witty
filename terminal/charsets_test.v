@@ -25,6 +25,21 @@ fn test_charset_table_lengths() {
 	assert dec_tbl.len == 256
 }
 
+fn test_charset_source_enum_layout() {
+	assert sizeof(CharsetSlot) == 4
+	assert sizeof(ActiveSlot) == 4
+	assert sizeof(Charset) == 4
+	assert int(CharsetSlot.g0) == 0
+	assert int(CharsetSlot.g3) == 3
+	assert int(ActiveSlot.gl) == 0
+	assert int(ActiveSlot.gr) == 1
+	assert int(Charset.utf8) == 0
+	assert int(Charset.dec_special) == 3
+
+	slot := Slots.g2
+	assert slot == .g2
+}
+
 // ============================================================
 // ASCII table identity tests
 // ============================================================

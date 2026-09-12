@@ -2381,11 +2381,6 @@ pub fn (mut self Terminal) invoke_charset(active ActiveSlot, slot CharsetSlot, s
 	}
 }
 
-pub enum ActiveSlot {
-	gl
-	gr
-}
-
 // ============================================================
 // Basic cursor movement
 // ============================================================

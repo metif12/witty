@@ -3,10 +3,33 @@ module terminal
 // Character set types and lookup tables.
 // Translated from Ghostty's terminal/charsets.zig.
 //
-// The Charset enum and CharsetSlot enum are defined in types.v.
-// The ActiveSlot enum is defined in terminal.v.
-// This file provides the character mapping tables for each charset
-// and the lookup function to get the appropriate table.
+// This file provides the character-set enums, mapping tables, and lookup.
+
+// The available charset slots for a terminal.
+pub enum CharsetSlot as i32 {
+	g0
+	g1
+	g2
+	g3
+}
+
+// Slots preserves Ghostty's source type name. CharsetSlot remains the primary
+// V name because V flattens file namespaces for the entire terminal module.
+pub type Slots = CharsetSlot
+
+// The name of the active slots.
+pub enum ActiveSlot as i32 {
+	gl
+	gr
+}
+
+// The list of supported character sets and their associated tables.
+pub enum Charset as i32 {
+	utf8
+	ascii
+	british
+	dec_special
+}
 
 // ============================================================
 // Table length

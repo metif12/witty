@@ -1622,24 +1622,6 @@ pub:
 	unknown_partial []u16
 }
 
-// ============================================================
-// Charset types
-// ============================================================
-
-pub enum Charset {
-	utf8
-	ascii
-	british
-	dec_special
-}
-
-pub enum CharsetSlot {
-	g0
-	g1
-	g2
-	g3
-}
-
 // Hyperlink is defined in hyperlink.v.
 
 // ============================================================
