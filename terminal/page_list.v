@@ -4878,13 +4878,21 @@ pub fn (mut self PageList) erase_rows(tl Point, bl ?Point) {
 
 // Split a page at the given pin, creating a new page for rows from pin.y onwards.
 pub fn (mut self PageList) split(p PagePin) ! {
-	mut page := unsafe { &p.node.data }
+	$if !prod {
+		assert self.pin_is_valid(p)
+	}
+
+	// Keep this separate from p because a tracked pin may alias an entry that
+	// is updated below.
+	original_node := p.node
+	mut page := unsafe { &original_node.data }
 	if page.size.rows <= 1 {
 		return error('OutOfSpace')
 	}
 	if p.y == 0 {
 		return
 	}
+	defer { self.assert_integrity() }
 
 	// Create new page with same capacity
 	new_node := self.create_page(page.capacity)
@@ -4893,7 +4901,7 @@ pub fn (mut self PageList) split(p PagePin) ! {
 	y_start := p.y
 	y_end := page.size.rows
 	new_page.size.rows = y_end - y_start
-	new_page.size.cols = page.size.cols
+	assert new_page.size.rows <= new_page.capacity.rows
 	new_page.clone_from(page, y_start, y_end) or {
 		// The source destroys the speculative page and translates every clone
 		// failure to OutOfSpace so callers can recover from a failed split.
@@ -4904,7 +4912,7 @@ pub fn (mut self PageList) split(p PagePin) ! {
 
 	// Update tracked pins
 	for mut tp in self.tracked_pins {
-		if voidptr(tp.node) == voidptr(p.node) && tp.y >= p.y {
+		if voidptr(tp.node) == voidptr(original_node) && tp.y >= p.y {
 			tp.node = new_node
 			tp.y -= p.y
 		}
@@ -4912,17 +4920,12 @@ pub fn (mut self PageList) split(p PagePin) ! {
 
 	// Clear original page rows and reduce size
 	for i in int(y_start) .. int(y_end) {
-		if i < page.rows.len {
-			page.clear_row(u16(i))
-		}
+		page.clear_cells(u16(i), 0, page.size.cols)
 	}
-	unsafe {
-		mut mp := p.node
-		mp.data.size.rows = y_start
-	}
+	page.size.rows -= y_end - y_start
 
 	// Insert after original
-	self.pages.insert_after(p.node, new_node)
+	self.pages.insert_after(original_node, new_node)
 }
 
 // ============================================================
@@ -5783,50 +5786,6 @@ pub fn (mut self PageList) increase_capacity(node &PageNode, adjustment ?PageCap
 	return new_node
 }
 
-// Clone a row across pages, growing and replacing the destination node if one
-// of its bounded managed-memory dimensions cannot represent the combined
-// page contents.
-fn (mut self PageList) clone_row_growing(dst_node &PageNode, src_page &Page, dst_y u16, src_y u16) &PageNode {
-	mut node := unsafe { dst_node }
-	for {
-		mut page := &node.data
-		clone_error := page.try_clone_row_from(src_page, dst_y, src_y) or { return node }
-		match clone_error {
-			.style_set_out_of_memory {
-				node = self.increase_capacity(node, .styles) or {
-					panic('PageList row clone exhausted maximum style capacity')
-				}
-			}
-			.grapheme_map_out_of_memory, .grapheme_alloc_out_of_memory {
-				node = self.increase_capacity(node, .grapheme_bytes) or {
-					panic('PageList row clone exhausted maximum grapheme capacity')
-				}
-			}
-			.hyperlink_map_out_of_memory {
-				node = self.increase_capacity(node, .hyperlink_bytes) or {
-					panic('PageList row clone exhausted maximum hyperlink capacity')
-				}
-			}
-			.string_alloc_out_of_memory {
-				node = self.increase_capacity(node, .string_bytes) or {
-					panic('PageList row clone exhausted maximum string capacity')
-				}
-			}
-			.hyperlink_set_out_of_memory {
-				node = self.increase_capacity(node, .hyperlink_bytes) or {
-					panic('PageList row clone exhausted maximum hyperlink set capacity')
-				}
-			}
-			.hyperlink_set_needs_rehash {
-				node = self.increase_capacity(node, none) or {
-					panic('PageList row clone could not rehash hyperlink set')
-				}
-			}
-		}
-	}
-	return node
-}
-
 // Compact a page to use the minimum required memory for the contents it
 // stores. Returns the new node if compaction occurred, or none if the page
 // was already compact.
@@ -6450,7 +6409,7 @@ fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk
 	// created a page where we'll never reclaim capacity. To avoid this, we
 	// try to fill our previous page first if it has excess capacity.
 	if initial_prev_node := chunk.node.prev {
-		mut prev_node := unsafe { initial_prev_node }
+		prev_node := unsafe { initial_prev_node }
 		mut prev_page := &prev_node.data
 		// We only want scenarios where we have excess capacity.
 		if prev_page.size.rows < prev_page.capacity.rows {
@@ -6459,24 +6418,32 @@ fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk
 			} else {
 				page.size.rows
 			}
-			base := prev_page.size.rows
+			mut copied_all := true
 			for i in 0 .. int(len) {
-				dst_idx := int(base) + i
+				dst_idx := prev_page.size.rows
 				// Ensure prev page has the row slot.
-				for prev_page.rows.len <= dst_idx {
+				for prev_page.rows.len <= int(dst_idx) {
 					prev_page.rows << RowData.init(u32(prev_page.capacity.cols))
 				}
 				prev_page.size.rows += 1
-				prev_node = self.clone_row_growing(prev_node, page, u16(dst_idx), u16(i))
-				prev_page = &prev_node.data
+				prev_page.clone_row_from(page, dst_idx, u16(i)) or {
+					prev_page.size.rows -= 1
+					copied_all = false
+					break
+				}
 				copied += 1
 			}
 
-			// Remap any tracked pins that pointed to rows we just copied.
-			for mut p in self.tracked_pins {
-				if voidptr(p.node) == voidptr(chunk.node) && p.y < len {
-					p.node = prev_node
-					p.y += prev_page.size.rows - len
+			if copied_all {
+				assert copied == len
+				assert prev_page.size.rows <= prev_page.capacity.rows
+
+				// Remap any tracked pins that pointed to rows we just copied.
+				for mut p in self.tracked_pins {
+					if voidptr(p.node) == voidptr(chunk.node) && p.y < len {
+						p.node = prev_node
+						p.y += prev_page.size.rows - len
+					}
 				}
 			}
 		}
