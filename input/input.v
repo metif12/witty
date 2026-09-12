@@ -2,18 +2,6 @@ module input
 
 import oniguruma
 
-#include "keymap_shims.h"
-
-#flag darwin -framework Carbon
-
-fn C.witty_keymap_current_source() voidptr
-
-fn C.witty_keymap_release(source voidptr)
-
-fn C.witty_keymap_source_id(source voidptr, out &char, cap usize) int
-
-fn C.witty_keymap_translate(source voidptr, code u16, modifiers u32, dead_key &u32, out &char, cap usize, composing &int) int
-
 // KeyEvent represents a keyboard event.
 // This is a generic key input event that provides the information needed
 // regardless of apprt to generate proper terminal control sequences.
@@ -331,95 +319,6 @@ pub fn paste_is_safe(data string) bool {
 		return false
 	}
 	return true
-}
-
-// Keymap handles mapping between physical keycodes and logical keys.
-// On macOS this wraps the keyboard layout system.
-pub struct Keymap {
-pub mut:
-	// Internal state for the keymap.
-	state voidptr
-}
-
-pub fn Keymap.init() !Keymap {
-	state := C.witty_keymap_current_source()
-	if state == unsafe { nil } {
-		return error('failed to get keyboard input source')
-	}
-	return Keymap{ state: state }
-}
-
-pub fn (mut k Keymap) deinit() {
-	if k.state != unsafe { nil } {
-		C.witty_keymap_release(k.state)
-	}
-	k.state = unsafe { nil }
-}
-
-pub fn (mut k Keymap) reload() ! {
-	new_state := C.witty_keymap_current_source()
-	if new_state == unsafe { nil } {
-		return error('failed to get keyboard input source')
-	}
-	if k.state != unsafe { nil } {
-		C.witty_keymap_release(k.state)
-	}
-	k.state = new_state
-}
-
-// source_id returns the keyboard layout source identifier.
-pub fn (k Keymap) source_id(mut buf []u8) !string {
-	if buf.len == 0 {
-		return error('keyboard source ID buffer is empty')
-	}
-	if C.witty_keymap_source_id(k.state, unsafe { &char(buf.data) }, usize(buf.len)) != 0 {
-		return error('keyboard source ID does not fit in buffer')
-	}
-	return unsafe { cstring_to_vstring(&char(buf.data)) }
-}
-
-// KeymapState is the opaque state threaded through consecutive translations.
-// A non-zero dead_key means the current input is composing.
-pub struct KeymapState {
-pub mut:
-	dead_key u32
-}
-
-pub struct KeymapTranslation {
-pub:
-	text      string
-	composing bool
-	mods      Mods
-}
-
-// translate maps a native macOS virtual key code through the selected input
-// source. Ctrl is deliberately removed before Carbon translation so Ctrl+C
-// produces "c", not the control character 0x03; the original modifiers are
-// otherwise returned after that consumption step.
-pub fn (k Keymap) translate(mut out []u8, mut state KeymapState, code u16, input_mods Mods) !KeymapTranslation {
-	if out.len == 0 {
-		return error('keyboard translation buffer is empty')
-	}
-	mut mods := input_mods
-	mods.ctrl = false
-	modifier_state := (u32(if mods.super_ { 1 } else { 0 }) | u32(if mods.shift {
-		1 << 1
-	} else {
-		0
-	}) | u32(if mods.caps_lock {
-		1 << 2
-	} else {
-		0
-	}) | u32(if mods.alt { 1 << 3 } else { 0 }))
-	mut composing := 0
-	if C.witty_keymap_translate(k.state, code, modifier_state, &state.dead_key, unsafe { &char(out.data) }, usize(out.len), &composing) != 0 {
-		return error('keyboard translation failed')
-	}
-	return KeymapTranslation{
-		text: unsafe { cstring_to_vstring(&char(out.data)) }
-		composing: composing != 0
-		mods: mods
-	}
 }
 
 // KeyboardLayout represents a detected keyboard layout.

@@ -206,10 +206,23 @@ fn test_keyboard_layout_map_apple_id() {
 fn test_keymap_current_source() {
 	mut keymap := Keymap.init() or { panic(err) }
 	defer { keymap.deinit() }
-	mut buf := []u8{len: 256}
-	id := keymap.source_id(mut buf) or { panic(err) }
 	$if macos {
+		mut buf := []u8{len: 256}
+		id := keymap.source_id(mut buf) or { panic(err) }
 		assert id.len > 0
+	} $else {
+		mut state := KeymapState{}
+		result := keymap.translate([]u8{}, mut state, 0xffff, Mods{
+			shift: true
+			ctrl: true
+			alt: true
+			super_: true
+			caps_lock: true
+			num_lock: true
+		}) or { panic(err) }
+		assert result.text == ''
+		assert !result.composing
+		assert result.mods == Mods{}
 	}
 	keymap.reload() or { panic(err) }
 }

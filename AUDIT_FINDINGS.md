@@ -15,6 +15,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | input/key | `w3c()` blindly did `- 32` on the char after `_`, corrupting digits (`digit_1` → "Digit\x11"). | Uppercase only `a-z`. |
 | input/function_keys | `make_kp_keys` returned only the unmodified keypad entry, dropping the 15 modifier combinations. | Generate all 16 (kpDefault ++ pcStyle), `mods_empty_is_any=false` on default. |
 | input (Mods) | `Mods.translation()` fully inverted (unset/keep alt and left/right swapped); `int()`/`SideInfo` dropped caps/num-lock + side bits and had no `super` side. | Rewrote translation to match macos-option-as-alt; full packed `int()` round-trip preserving sides+locks. |
+| input/keymap | Darwin and no-op keymaps were collapsed into one C wrapper, causing the non-macOS path to reject an empty output buffer and return the input modifiers (minus Ctrl) instead of a completely default translation. The Darwin path also looked up its Unicode layout per keypress and required spare room for a C terminator. | Restore platform-selected keymap files; make the no-op translation ignore every argument; retain Darwin's input-source and Unicode-layout pointers; return an explicit UTF-8 byte length from the Carbon shim. |
 | osc/color_parser | Hex channel scaling used `>>4`/`>>8` instead of `*255/4095` and `*255/65535`; float intensity rounded not truncated; named `green` = (0,128,0). | Correct scaling; truncate; `green` = (0,255,0). |
 | osc/osc9 | OSC 9;12 emitted default `.fresh_line` instead of `.fresh_line_new_prompt`. | Set correct action. |
 | osc/kitty_color | `kind_max` = 256 (should be 263 = maxInt(u8)+8); parsed items discarded. | Fixed max; attach items to Command. |
@@ -27,10 +28,12 @@ below exist. Earlier versions of this document overstated the completed review.
 | renderer/metal_types | `MetalTextCell.bearings` were `i32`; ghostty CellText requires `i16` (32-byte GPU struct). | i16. |
 | renderer/cell | Foreground rows omitted Ghostty's two cursor lists, so each backend reconstructed cursor ordering by hand; row capacities were discarded on clear/reset; the logical shader bearings were widened to `i32`. | Use the translated `ArrayListCollection`, allocate `rows + 2` lists with source capacities, retain capacities, assert row bounds, store block/other cursors in the first/last lists, flatten them directly, and use `i16` bearings. |
 | renderer/size | `Size.grid()` could return zero rows/columns, grid units were widened to `u32`, and same-space coordinate conversion clamped out-of-bounds grid coordinates instead of returning them unchanged. Size definitions and handwritten wrappers also lived in `renderer.v`. | Restore the source `GridSize.init/update` minimum of one, `u16` cell-count units, the coordinate identity fast path, and the source method/file boundaries; remove the unused wrappers. |
+| renderer/cursor | Cursor style was duplicated in `renderer.v`, the source `style()` decision was renamed, and preedit offsets/ranges were widened inconsistently. | Restore the cursor-owned `Style` enum and `style()` function, `usize` byte offsets/widths, and `u16` cell ranges. |
 | renderer/row | `never_extend_bg` took no palette and read bg from the style for bg-color cells (color is on the cell); ignored palette backgrounds. | `resolve_bg` faithful to `Style.bg`; callers pass `state.colors.palette`. |
 | renderer/renderer | `fg_rgb`/cursor color calls never passed `bold_color`. | (field wiring noted; passed where applicable) |
 | sprite/face | `render_glyph` hardcoded glyph `offset_x/offset_y` to 0. | Compute from canvas clip + padding (matches `Face.renderGlyph`). |
 | termio/termio | `resize` sent renderer `.font_grid` (should `.resize`); cursor reset sent `.focus` (should `.reset_cursor_blink`). | Correct message kinds (+ wired the two MessageKind variants). |
+| simd/stream | SIMD search/decode offsets and terminal bulk-stream lengths were narrowed to `u32`, creating artificial overflow boundaries that do not exist in Ghostty's `usize` contracts. | Restore `usize` through `simd.index_of`, VT/base64 decode results, and terminal stream consumption. |
 
 ## Focused behavior reviewed
 
@@ -50,9 +53,10 @@ hyperlink, clipboard, change_window_*, report_pwd, rxvt, mouse_shape,
 kitty_text_sizing. input: kitty (80/80),
 keycodes (243/243), command, binding (83-tag order), key (logic).
 kitty: graphics_command, graphics_unicode, graphics execution/storage. renderer:
-cell, size, row, Atlas, shader cell layouts. datastruct: CircBuf,
+cell, cursor, size, row, Atlas, shader cell layouts. datastruct: CircBuf,
 ArrayListCollection. ssh: cache Entry/DiskCache. tmux: control, layout, output.
-termio: exec, shell_integration, stream_handler. root: quirks, build_config,
+termio: exec, shell_integration, stream_handler. simd: index_of, base64, vt.
+root: quirks, build_config,
 opentype (all 6 tables), cli_args, split_tree, command (POSIX). apprt: structs,
 none, browser, action.
 

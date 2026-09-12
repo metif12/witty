@@ -11,6 +11,13 @@ static inline void *witty_keymap_current_source(void) {
     return (void *)TISCopyCurrentKeyboardLayoutInputSource();
 }
 
+static inline const void *witty_keymap_unicode_layout(void *source) {
+    if (source == NULL) return NULL;
+    CFDataRef data = (CFDataRef)TISGetInputSourceProperty(
+        (TISInputSourceRef)source, kTISPropertyUnicodeKeyLayoutData);
+    return data == NULL ? NULL : (const void *)CFDataGetBytePtr(data);
+}
+
 static inline void witty_keymap_release(void *source) {
     if (source != NULL) CFRelease((CFTypeRef)source);
 }
@@ -24,16 +31,14 @@ static inline int witty_keymap_source_id(void *source, char *out, size_t cap) {
     return 0;
 }
 
-static inline int witty_keymap_translate(void *source, uint16_t code,
+static inline int witty_keymap_translate(const void *layout_raw, uint16_t code,
                                          uint32_t modifiers, uint32_t *dead_key,
                                          char *out, size_t cap,
+                                         size_t *out_len,
                                          int *composing) {
-    if (source == NULL || dead_key == NULL || out == NULL || cap == 0) return -1;
-    CFDataRef data = (CFDataRef)TISGetInputSourceProperty(
-        (TISInputSourceRef)source, kTISPropertyUnicodeKeyLayoutData);
-    if (data == NULL) return -1;
-    const UCKeyboardLayout *layout =
-        (const UCKeyboardLayout *)CFDataGetBytePtr(data);
+    if (layout_raw == NULL || dead_key == NULL || out_len == NULL ||
+        composing == NULL) return -1;
+    const UCKeyboardLayout *layout = (const UCKeyboardLayout *)layout_raw;
     UniChar chars[4];
     UniCharCount count = 0;
     OSStatus status = UCKeyTranslate(layout, code, kUCKeyActionDown, modifiers,
@@ -54,27 +59,13 @@ static inline int witty_keymap_translate(void *source, uint16_t code,
     CFStringRef string = CFStringCreateWithCharacters(kCFAllocatorDefault,
                                                        chars, (CFIndex)count);
     if (string == NULL) return -1;
-    Boolean ok = CFStringGetCString(string, out, (CFIndex)cap,
-                                    kCFStringEncodingUTF8);
+    CFIndex used = 0;
+    CFIndex converted = CFStringGetBytes(
+        string, CFRangeMake(0, (CFIndex)count), kCFStringEncodingUTF8, 0,
+        false, (UInt8 *)out, (CFIndex)cap, &used);
     CFRelease(string);
-    return ok ? 0 : -1;
-}
-
-#else
-static inline void *witty_keymap_current_source(void) { return (void *)1; }
-static inline void witty_keymap_release(void *source) { (void)source; }
-static inline int witty_keymap_source_id(void *source, char *out, size_t cap) {
-    (void)source;
-    if (out != NULL && cap > 0) out[0] = 0;
-    return 0;
-}
-static inline int witty_keymap_translate(void *source, uint16_t code,
-                                         uint32_t modifiers, uint32_t *dead_key,
-                                         char *out, size_t cap,
-                                         int *composing) {
-    (void)source; (void)code; (void)modifiers; (void)dead_key;
-    if (out != NULL && cap > 0) out[0] = 0;
-    if (composing != NULL) *composing = 0;
+    if (converted != (CFIndex)count) return -1;
+    *out_len = (size_t)used;
     return 0;
 }
 #endif

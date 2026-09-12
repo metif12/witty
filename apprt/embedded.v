@@ -228,14 +228,14 @@ pub fn (mut self App) reload_keymap() ! {
 // "kind of expensive" I mean that its not something you probably want
 // to run on every keypress.
 pub fn (self &App) keyboard_layout() input.KeyboardLayout {
-	// Attempt to detect the keyboard layout via the keymap source ID.
-	// On macOS this maps to Apple keyboard layout identifiers.
-	mut buf := []u8{len: 256}
-	source_id := self.keymap.source_id(mut buf) or { return .unknown }
-	if source_id.len == 0 {
+	// We only support keyboard layout detection on macOS.
+	$if macos {
+		mut buf := []u8{len: 256}
+		source_id := self.keymap.source_id(mut buf) or { return .unknown }
+		return input.KeyboardLayout.map_apple_id(source_id) or { input.KeyboardLayout.unknown }
+	} $else {
 		return .unknown
 	}
-	return input.KeyboardLayout.map_apple_id(source_id) or { input.KeyboardLayout.unknown }
 }
 
 // wakeup triggers the event loop wakeup callback.
