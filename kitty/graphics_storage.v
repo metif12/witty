@@ -15,7 +15,7 @@ import terminal
 // PlacementTag - distinguishes internal vs external placement IDs
 // ============================================================
 
-pub enum PlacementTag {
+pub enum PlacementTag as u8 {
 	internal
 	external
 }
@@ -25,9 +25,25 @@ pub enum PlacementTag {
 // ============================================================
 
 pub struct PlacementId {
-pub:
-	tag PlacementTag
-	id  u32
+	value u64
+}
+
+pub fn PlacementId.init(tag PlacementTag, id u32) PlacementId {
+	return PlacementId{
+		value: u64(tag) | (u64(id) << 1)
+	}
+}
+
+pub fn (id PlacementId) tag() PlacementTag {
+	return unsafe { PlacementTag(id.value & 0x1) }
+}
+
+pub fn (id PlacementId) id() u32 {
+	return u32(id.value >> 1)
+}
+
+pub fn (id PlacementId) int_val() u64 {
+	return id.value
 }
 
 // ============================================================
@@ -44,8 +60,7 @@ pub:
 }
 
 fn (a PlacementKey) ==(b PlacementKey) bool {
-	return a.image_id == b.image_id && a.placement_id.tag == b.placement_id.tag
-		&& a.placement_id.id == b.placement_id.id
+	return a.image_id == b.image_id && a.placement_id.int_val() == b.placement_id.int_val()
 }
 
 // ============================================================
@@ -378,15 +393,9 @@ pub fn (mut self ImageStorage) add_placement(image_id u32, placement_id u32, p P
 		placement_id: if placement_id == 0 {
 			pid := self.next_internal_placement_id
 			self.next_internal_placement_id += 1
-			PlacementId{
-				tag: .internal
-				id: pid
-			}
+			PlacementId.init(.internal, pid)
 		} else {
-			PlacementId{
-				tag: .external
-				id: placement_id
-			}
+			PlacementId.init(.external, placement_id)
 		}
 	}
 
@@ -678,7 +687,7 @@ fn (mut self ImageStorage) delete_by_id(s &terminal.Screen, image_id u32, placem
 	} else {
 		target_key := PlacementKey{
 			image_id: image_id
-			placement_id: PlacementId{ tag: .external, id: placement_id }
+			placement_id: PlacementId.init(.external, placement_id)
 		}
 		mut i := 0
 		for i < self.placements.len {

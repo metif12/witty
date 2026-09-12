@@ -6,6 +6,19 @@ module kitty
 
 import terminal
 
+fn test_placement_id_packed_layout_matches_ghostty() {
+	assert sizeof(PlacementTag) == 1
+	assert sizeof(PlacementId) == sizeof(u64)
+	internal := PlacementId.init(.internal, 0x89abcdef)
+	assert internal.int_val() == 0x1_1357_9bde
+	assert internal.tag() == .internal
+	assert internal.id() == 0x89abcdef
+	external := PlacementId.init(.external, 0xffffffff)
+	assert external.int_val() == 0x1_ffff_ffff
+	assert external.tag() == .external
+	assert external.id() == 0xffffffff
+}
+
 // Helper: create a terminal with given cols and rows.
 fn make_terminal(cols u16, rows u16) !terminal.Terminal {
 	return terminal.Terminal.init(terminal.Options{ cols: cols, rows: rows })!
@@ -43,11 +56,11 @@ fn test_storage_add_placement_with_zero_placement_id() ! {
 	// verify the placement is what we expect
 	assert s.get_placement(PlacementKey{
 		image_id: 1
-		placement_id: PlacementId{ tag: .internal, id: 0 }
+		placement_id: PlacementId.init(.internal, 0)
 	}) != none
 	assert s.get_placement(PlacementKey{
 		image_id: 1
-		placement_id: PlacementId{ tag: .internal, id: 1 }
+		placement_id: PlacementId.init(.internal, 1)
 	}) != none
 }
 
@@ -233,7 +246,7 @@ fn test_storage_delete_intersecting_cursor() ! {
 	// verify the placement is what we expect
 	assert s.get_placement(PlacementKey{
 		image_id: 1
-		placement_id: PlacementId{ tag: .external, id: 2 }
+		placement_id: PlacementId.init(.external, 2)
 	}) != none
 }
 
@@ -265,7 +278,7 @@ fn test_storage_delete_intersecting_cursor_plus_unused() ! {
 	// verify the placement is what we expect
 	assert s.get_placement(PlacementKey{
 		image_id: 1
-		placement_id: PlacementId{ tag: .external, id: 2 }
+		placement_id: PlacementId.init(.external, 2)
 	}) != none
 }
 
@@ -324,7 +337,7 @@ fn test_storage_delete_by_column() ! {
 	// verify the placement is what we expect
 	assert s.get_placement(PlacementKey{
 		image_id: 1
-		placement_id: PlacementId{ tag: .external, id: 1 }
+		placement_id: PlacementId.init(.external, 1)
 	}) != none
 }
 
@@ -355,11 +368,11 @@ fn test_storage_delete_by_column_1x1() ! {
 	// verify the placements are what we expect
 	assert s.get_placement(PlacementKey{
 		image_id: 1
-		placement_id: PlacementId{ tag: .external, id: 1 }
+		placement_id: PlacementId.init(.external, 1)
 	}) != none
 	assert s.get_placement(PlacementKey{
 		image_id: 1
-		placement_id: PlacementId{ tag: .external, id: 3 }
+		placement_id: PlacementId.init(.external, 3)
 	}) != none
 }
 
@@ -392,7 +405,7 @@ fn test_storage_delete_by_row() ! {
 	// verify the placement is what we expect
 	assert s.get_placement(PlacementKey{
 		image_id: 1
-		placement_id: PlacementId{ tag: .external, id: 1 }
+		placement_id: PlacementId.init(.external, 1)
 	}) != none
 }
 
@@ -423,11 +436,11 @@ fn test_storage_delete_by_row_1x1() ! {
 	// verify the placements are what we expect
 	assert s.get_placement(PlacementKey{
 		image_id: 1
-		placement_id: PlacementId{ tag: .external, id: 1 }
+		placement_id: PlacementId.init(.external, 1)
 	}) != none
 	assert s.get_placement(PlacementKey{
 		image_id: 1
-		placement_id: PlacementId{ tag: .external, id: 3 }
+		placement_id: PlacementId.init(.external, 3)
 	}) != none
 }
 

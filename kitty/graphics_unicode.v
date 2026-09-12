@@ -201,7 +201,7 @@ fn (self &VirtualPlacement) grid(storage &ImageStorage, image &Image, cell_width
 	p := if self.placement_id > 0 {
 		storage.get_placement(PlacementKey{
 			image_id: self.image_id
-			placement_id: PlacementId{ tag: .external, id: self.placement_id }
+			placement_id: PlacementId.init(.external, self.placement_id)
 		}) or {
 			return error('PlacementMissingPlacement')
 		}
