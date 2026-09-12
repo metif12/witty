@@ -2,6 +2,15 @@ module terminal
 
 // Tests translated from ghostty's Terminal.zig
 
+fn test_mouse_mode_storage() {
+	assert $sizeof(MouseEvents) == 1
+	assert u8(MouseEvents.none) == 0
+	assert u8(MouseEvents.any) == 4
+	assert $sizeof(MouseFormat) == 1
+	assert u8(MouseFormat.x10) == 0
+	assert u8(MouseFormat.sgr_pixels) == 4
+}
+
 // ============================================================
 // Helper: create a terminal for tests with wraparound mode enabled by default
 // ============================================================

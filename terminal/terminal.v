@@ -1624,12 +1624,12 @@ pub mut:
 
 // The event types that can be reported for mouse-related activities.
 // These are all mutually exclusive (hence in a single enum).
-pub enum MouseEvents {
-	none
-	x10 // 9
-	normal // 1000
-	button // 1002
-	any // 1003
+pub enum MouseEvents as u8 {
+	none   = 0
+	x10    = 1 // 9
+	normal = 2 // 1000
+	button = 3 // 1002
+	any    = 4 // 1003
 }
 
 // Returns true if this event sends motion events.
@@ -1639,12 +1639,12 @@ pub fn (self MouseEvents) motion() bool {
 
 // The format of mouse events when enabled.
 // These are all mutually exclusive (hence in a single enum).
-pub enum MouseFormat {
-	x10
-	utf8 // 1005
-	sgr // 1006
-	urxvt // 1015
-	sgr_pixels // 1016
+pub enum MouseFormat as u8 {
+	x10        = 0
+	utf8       = 1 // 1005
+	sgr        = 2 // 1006
+	urxvt      = 3 // 1015
+	sgr_pixels = 4 // 1016
 }
 
 // Scrolling region is the area of the screen designated where scrolling

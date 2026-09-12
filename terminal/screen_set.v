@@ -18,9 +18,9 @@ mut:
 	all map[ScreenKey]&Screen
 }
 
-pub enum ScreenKey {
-	primary
-	alternate
+pub enum ScreenKey as u8 {
+	primary   = 0
+	alternate = 1
 }
 
 pub fn ScreenSet.init(opts ScreenOptions) !ScreenSet {

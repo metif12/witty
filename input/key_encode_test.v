@@ -3,6 +3,12 @@ module input
 // Tests for key encoding logic.
 // Translated from ghostty/src/input/key_encode.zig
 
+fn test_kitty_event_storage() {
+	assert $sizeof(KittyEvent) == 1
+	assert u8(KittyEvent.none_) == 0
+	assert u8(KittyEvent.release) == 3
+}
+
 // === CsiUMods tests ===
 
 fn test_csiu_modifier_sequence_values() {

@@ -2,6 +2,17 @@ module terminal
 
 // Tests for page.v, translated from Ghostty's terminal/page.zig tests.
 
+fn test_packed_cell_enum_storage() {
+	assert $sizeof(CellWide) == 1
+	assert u8(CellWide.spacer_head) == 3
+	assert $sizeof(ContentTag) == 1
+	assert u8(ContentTag.bg_color_rgb) == 3
+	assert $sizeof(SemanticContent) == 1
+	assert u8(SemanticContent.prompt) == 2
+	assert $sizeof(SemanticPromptType) == 1
+	assert u8(SemanticPromptType.prompt_continuation) == 2
+}
+
 // Test that a page can be initialized.
 fn test_page_init() {
 	mut page := Page.init(PageCapacity{

@@ -2,11 +2,11 @@ module synthetic
 
 import rand
 
-pub enum Utf8Len {
-	one = 1
-	two
-	three
-	four
+pub enum Utf8Len as u8 {
+	one   = 1
+	two   = 2
+	three = 3
+	four  = 4
 }
 
 // Utf8 generates valid UTF-8 with configurable relative encoding-length

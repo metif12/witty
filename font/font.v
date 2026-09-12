@@ -1348,17 +1348,17 @@ pub type GlyphConstraintSize = ConstraintSize
 pub const none_constraint = constraint_none
 
 // Presentation for a glyph (text or emoji).
-pub enum Presentation {
-	text
-	emoji
+pub enum Presentation as u8 {
+	text  = 0
+	emoji = 1
 }
 
 // FontStyle for codepoint rendering.
-pub enum FontStyle {
-	regular
-	bold
-	italic
-	bold_italic
+pub enum FontStyle as u8 {
+	regular     = 0
+	bold        = 1
+	italic      = 2
+	bold_italic = 3
 }
 
 // ============================================================

@@ -852,7 +852,7 @@ fn (m KittyMods) seq_int() int {
 
 // KittyEvent represents the event type in a Kitty sequence.
 // Values for the event code (see "event-type" in the Kitty spec).
-enum KittyEvent {
+enum KittyEvent as u8 {
 	none_   = 0
 	press   = 1
 	repeat  = 2

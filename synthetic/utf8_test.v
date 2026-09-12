@@ -3,6 +3,12 @@ module synthetic
 import encoding.utf8.validate
 import rand
 
+fn test_utf8_length_storage() {
+	assert $sizeof(Utf8Len) == 1
+	assert u8(Utf8Len.one) == 1
+	assert u8(Utf8Len.four) == 4
+}
+
 fn test_utf8_generator_fills_valid_buffer() {
 	mut rng := rand.new_default(seed_: [u32(0), 0])
 	defer { rng.free() }

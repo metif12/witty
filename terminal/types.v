@@ -15,35 +15,35 @@ pub const default_style_id = u32(0)
 // ============================================================
 
 // CellWide describes the width behavior of a cell.
-pub enum CellWide {
-	narrow
-	wide
-	spacer_tail
-	spacer_head
+pub enum CellWide as u8 {
+	narrow      = 0
+	wide        = 1
+	spacer_tail = 2
+	spacer_head = 3
 }
 
 // ContentTag describes what kind of content a cell holds.
 // The content tag dictates the active field in CellData and possibly
 // some other behaviors.
-pub enum ContentTag {
+pub enum ContentTag as u8 {
 	// A single codepoint, could be zero to be empty cell.
-	codepoint
+	codepoint          = 0
 	// A codepoint that is part of a multi-codepoint grapheme cluster.
 	// The codepoint field is active, but also expect more
 	// codepoints in the graphemes data.
-	codepoint_grapheme
+	codepoint_grapheme = 1
 	// The cell has no text but only a background color. This is an
 	// optimization so that cells with only backgrounds don't take up
 	// style map space and also don't require a style map lookup.
-	bg_color_palette
-	bg_color_rgb
+	bg_color_palette   = 2
+	bg_color_rgb       = 3
 }
 
 // SemanticContent describes what the cell content semantically represents.
-pub enum SemanticContent {
-	output
-	input
-	prompt
+pub enum SemanticContent as u8 {
+	output = 0
+	input  = 1
+	prompt = 2
 }
 
 // CellData is the data for a single cell in the terminal grid.
@@ -167,10 +167,10 @@ pub fn has_text_any(cells []CellData) bool {
 // ============================================================
 
 // SemanticPromptType tracks what kind of semantic prompt a row has.
-pub enum SemanticPromptType {
-	unknown
-	prompt
-	prompt_continuation
+pub enum SemanticPromptType as u8 {
+	unknown             = 0
+	prompt              = 1
+	prompt_continuation = 2
 }
 
 // RowData is the data for a single row in the terminal grid.
@@ -1491,13 +1491,13 @@ pub:
 // ============================================================
 
 // UnderlineStyle for cell underline decoration.
-pub enum UnderlineStyle {
-	none
-	single
-	double
-	curly
-	dotted
-	dashed
+pub enum UnderlineStyle as u8 {
+	none   = 0
+	single = 1
+	double = 2
+	curly  = 3
+	dotted = 4
+	dashed = 5
 }
 
 // StyleFlags contains boolean style attributes.

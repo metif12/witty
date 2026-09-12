@@ -2,6 +2,12 @@ module terminal
 
 // Tests for SGR (Select Graphic Rendition) parsing.
 
+fn test_underline_style_storage() {
+	assert $sizeof(UnderlineStyle) == 1
+	assert u8(UnderlineStyle.none) == 0
+	assert u8(UnderlineStyle.dashed) == 5
+}
+
 // Helper: parse SGR params with semicolon separators.
 fn sgr_parse(params []u16) SgrAttribute {
 	mut p := SgrParser{ params: params }

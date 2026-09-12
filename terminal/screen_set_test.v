@@ -1,5 +1,11 @@
 module terminal
 
+fn test_screen_key_storage() {
+	assert $sizeof(ScreenKey) == 1
+	assert u8(ScreenKey.primary) == 0
+	assert u8(ScreenKey.alternate) == 1
+}
+
 fn test_screen_set() {
 	mut set := ScreenSet.init(ScreenOptions{
 		cols: 80
