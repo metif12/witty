@@ -95,6 +95,20 @@ fn test_message_write_req_uses_pinned_inline_capacity() {
 	assert allocated_msg.write_alloc_data == allocated_data
 }
 
+fn test_write_req_preserves_storage_kind_and_full_payload() {
+	inline_data := 'x'.repeat(38)
+	inline_req := WriteReq.init(inline_data.bytes())
+	inline_msg := inline_req.message()
+	assert inline_msg.kind == .write_small
+	assert inline_msg.write_slice().bytestr() == inline_data
+
+	allocated_data := 'y'.repeat(39)
+	allocated_req := WriteReq.init(allocated_data.bytes())
+	allocated_msg := allocated_req.message()
+	assert allocated_msg.kind == .write_alloc
+	assert allocated_msg.write_slice().bytestr() == allocated_data
+}
+
 fn test_termio_queue_message_uses_mailbox() {
 	mut tio := Termio{}
 	tio.init(make_termio_opts())!

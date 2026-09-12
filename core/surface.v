@@ -1586,7 +1586,7 @@ pub mut:
 	sequence_set ?BindingSet
 
 	// Queued keys when in the middle of a sequenced binding.
-	sequence_queued []WriteReq
+	sequence_queued []termiopkg.WriteReq
 
 	// Stack of active key tables.
 	table_stack []KeyTableEntry
@@ -1958,21 +1958,18 @@ pub type Pin = terminal.Pin
 pub struct TermIO {
 pub mut:
 	impl     termiopkg.Termio
-	messages []IOMessage
+	messages []termiopkg.Message
 	live     bool
 }
 
-fn (mut t TermIO) queue_message(msg IOMessage) {
+fn (mut t TermIO) queue_message(msg termiopkg.Message) {
 	if t.live {
-		t.impl.queue_message(termio_message(msg), .unlocked)
+		t.impl.queue_message(msg, .unlocked)
 		return
 	}
 	// Zero-initialized surfaces used by focused unit tests have no PTY. Retain
-	// their writes so the tests can inspect the exact encoded bytes.
-	t.messages << IOMessage{
-		...msg
-		data: msg.data.clone()
-	}
+	// their messages so the tests can inspect the exact payloads.
+	t.messages << msg
 }
 
 fn (mut t TermIO) deinit() {
@@ -1997,14 +1994,6 @@ fn (mut t IOThread) deinit() {
 pub type Inspector = inspectorpkg.Inspector
 
 pub type BindingSet = input.Set
-
-pub struct WriteReq {
-pub:
-	data []u8
-}
-
-fn (w WriteReq) deinit() {
-}
 
 @[heap]
 pub struct SurfaceSearch {
@@ -2318,92 +2307,6 @@ fn (self &DerivedConfig) scaled_padding(x_dpi f32, y_dpi f32) rendererpkg.Paddin
 		bottom: bottom
 		left: left
 		right: right
-	}
-}
-
-pub struct IOMessage {
-pub:
-	kind IOMessageKind
-	// data carries the raw bytes for write_small/write_stable/write_alloc
-	// messages. For non-write kinds this is empty. This lets us faithfully
-	// encode escape sequences (e.g. mouse reports, CSI/ESC bindings) rather
-	// than only tracking the message kind.
-	data []u8
-	// scroll_delta carries the delta for scroll_viewport messages.
-	scroll_delta isize
-	// prompt_delta carries the delta for jump_to_prompt messages.
-	prompt_delta isize
-	flag         bool
-	size         rendererpkg.Size
-	config       termiopkg.DerivedConfig
-}
-
-pub enum IOMessageKind {
-	write_small
-	write_stable
-	write_alloc
-	resize
-	inspector_
-	change_config
-	focused
-	color_scheme_report
-	selection_scroll
-	// clear_screen clears the terminal screen (and optionally history).
-	clear_screen
-	// scroll_viewport scrolls the viewport by IOMessage.scroll_delta.
-	scroll_viewport
-	// scroll_to_top scrolls to the top of the scrollback.
-	scroll_to_top
-	// scroll_to_bottom scrolls to the bottom.
-	scroll_to_bottom
-	// jump_to_prompt jumps to a shell prompt by IOMessage.prompt_delta.
-	jump_to_prompt
-	crash
-}
-
-fn termio_message(msg IOMessage) termiopkg.Message {
-	return match msg.kind {
-		.write_small { termiopkg.Message.write_small_msg(msg.data) }
-		.write_stable {
-			termiopkg.Message{
-				kind: .write_stable
-				write_stable_data: msg.data.bytestr().clone()
-			}
-		}
-		.write_alloc {
-			termiopkg.Message{
-				kind: .write_alloc
-				write_alloc_data: msg.data.bytestr().clone()
-			}
-		}
-		.resize { termiopkg.Message.resize_msg(msg.size) }
-		.inspector_ { termiopkg.Message{ kind: .inspector, flag_val: msg.flag } }
-		.change_config { termiopkg.Message{ kind: .change_config, config_val: msg.config } }
-		.focused { termiopkg.Message{ kind: .focused, flag_val: msg.flag } }
-		.color_scheme_report {
-			termiopkg.Message{ kind: .color_scheme_report, force_val: msg.flag }
-		}
-		.selection_scroll {
-			termiopkg.Message{ kind: .selection_scroll, flag_val: msg.flag }
-		}
-		.clear_screen { termiopkg.Message{ kind: .clear_screen, flag_val: msg.flag } }
-		.scroll_viewport {
-			termiopkg.Message{
-				kind: .scroll_viewport
-				scroll_behavior: .delta
-				scroll_delta: msg.scroll_delta
-			}
-		}
-		.scroll_to_top {
-			termiopkg.Message{ kind: .scroll_viewport, scroll_behavior: .top }
-		}
-		.scroll_to_bottom {
-			termiopkg.Message{ kind: .scroll_viewport, scroll_behavior: .bottom }
-		}
-		.jump_to_prompt {
-			termiopkg.Message{ kind: .jump_to_prompt, prompt_delta: msg.prompt_delta }
-		}
-		.crash { termiopkg.Message{ kind: .crash } }
 	}
 }
 
@@ -2891,7 +2794,7 @@ pub fn (mut self Surface) deinit() {
 	}
 
 	// Clean up keyboard state
-	for req in self.keyboard.sequence_queued {
+	for mut req in self.keyboard.sequence_queued {
 		req.deinit()
 	}
 	self.keyboard.sequence_queued.clear()
@@ -2956,7 +2859,7 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			}
 			title := self.rt_surface.get_title() or { '' }
 			data := '\x1b]l${title}\x1b\\'
-			self.queue_io(IOMessage{ kind: .write_alloc, data: data.bytes() })
+			self.queue_io(termiopkg.Message.write_alloc_msg(data))
 		}
 		.color_change {
 			self.rt_app.perform_action(AppAction{
@@ -3103,7 +3006,7 @@ pub fn (mut self Surface) activate_inspector() ! {
 	self.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.InspectorMessage{
 		active: true
 	}))!
-	self.queue_io(IOMessage{ kind: .inspector_, flag: true })
+	self.queue_io(termiopkg.Message.inspector_msg(true))
 }
 
 // deactivate_inspector stops collecting inspection data.
@@ -3117,7 +3020,7 @@ pub fn (mut self Surface) deactivate_inspector() {
 	self.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.InspectorMessage{
 		active: false
 	})) or {}
-	self.queue_io(IOMessage{ kind: .inspector_, flag: false })
+	self.queue_io(termiopkg.Message.inspector_msg(false))
 
 	// Cleanup
 	insp.deinit()
@@ -3240,7 +3143,7 @@ pub fn (mut self Surface) update_config(config &Config) ! {
 	// Notify renderer and IO of config change
 	renderer_message := rendererpkg.RendererMessage.init_change_config(&resolved)!
 	self.queue_renderer_message(renderer_message)!
-	self.queue_io(IOMessage{ kind: .change_config, config: termio_config })
+	self.queue_io(termiopkg.Message.change_config_msg(&termio_config))
 
 	// Notify runtime of config change
 	if _ := self.config.title {
@@ -3448,7 +3351,7 @@ fn (mut self Surface) resize(size rendererpkg.ScreenSize) ! {
 	}
 
 	// Notify IO thread of resize
-	self.queue_io(IOMessage{ kind: .resize, size: self.size })
+	self.queue_io(termiopkg.Message.resize_msg(self.size))
 }
 
 fn (mut self Surface) balance_padding_if_needed() {
@@ -3686,7 +3589,7 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 	// Encode and send the key to the terminal
 	if write_req := self.encode_key(event) {
 		if inspecting {
-			inspector_event.pty = write_req.data.clone()
+			inspector_event.pty = write_req.slice().clone()
 		}
 		// If process exited and we got an encoded key, close surface
 		if self.child_exited {
@@ -3695,7 +3598,7 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 		}
 
 		// Queue the encoded key for IO
-		self.queue_io(IOMessage{ kind: .write_small, data: write_req.data })
+		self.queue_io(write_req.message())
 	} else {
 		return .ignored
 	}
@@ -3834,7 +3737,7 @@ pub fn (mut self Surface) focus_callback(focused bool) ! {
 	}
 
 	// Notify IO thread
-	self.queue_io(IOMessage{ kind: .focused, flag: focused })
+	self.queue_io(termiopkg.Message.focused_msg(focused))
 }
 
 fn (mut self Surface) release_key_on_focus_loss(event KeyEvent) {
@@ -3934,7 +3837,7 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 					if y.direction() == .up_right { '\x1b[A' } else { '\x1b[B' }
 				}
 				for _ in usize(0) .. y.magnitude() {
-					self.queue_io(IOMessage{ kind: .write_stable, data: seq.bytes() })
+					self.queue_io(termiopkg.Message.write_stable_msg(seq))
 				}
 			}
 			return
@@ -4054,7 +3957,7 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			// only when selection scrolling is active.
 			if self.selection_scroll_active {
 				self.selection_scroll_active = false
-				self.queue_io(IOMessage{ kind: .selection_scroll, flag: false })
+				self.queue_io(termiopkg.Message.selection_scroll_msg(false))
 			}
 
 			// The selection clipboard is only updated for left-click drag
@@ -4453,7 +4356,7 @@ pub fn (mut self Surface) cursor_pos_callback(pos apprt.CursorPos, mods ?input.M
 	}
 
 	if pos.y >= 1 && self.selection_scroll_active {
-		self.queue_io(IOMessage{ kind: .selection_scroll, flag: false })
+		self.queue_io(termiopkg.Message.selection_scroll_msg(false))
 	}
 	self.renderer_state.mouse.point = none
 	if pos.x < 0 || pos.y < 0 {
@@ -4514,7 +4417,7 @@ pub fn (mut self Surface) cursor_pos_callback(pos apprt.CursorPos, mods ?input.M
 		self.queue_render()!
 		max_y := f64(self.size.screen.height)
 		if (pos.y <= 1 || pos.y > max_y - 1) && !self.selection_scroll_active {
-			self.queue_io(IOMessage{ kind: .selection_scroll, flag: true })
+			self.queue_io(termiopkg.Message.selection_scroll_msg(true))
 		}
 		if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
 			tag: .viewport
@@ -4580,7 +4483,7 @@ pub fn (mut self Surface) color_scheme_callback(scheme apprt.ColorScheme) ! {
 	self.notify_config_conditional_state()
 
 	// Notify IO thread for mode 2031 DSR report
-	self.queue_io(IOMessage{ kind: .color_scheme_report, flag: false })
+	self.queue_io(termiopkg.Message.color_scheme_report_msg(false))
 }
 
 // pos_to_viewport converts surface pixel coordinates to viewport cell coordinates.
@@ -4700,7 +4603,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				self.renderer_state.mutex.unlock()
 			}
 			data := if normal { action.cursor_key.normal } else { action.cursor_key.application }
-			self.queue_io(IOMessage{ kind: .write_stable, data: data.bytes() })
+			self.queue_io(termiopkg.Message.write_stable_msg(data))
 		}
 		.reset {
 			locked := self.renderer_state.mutex != unsafe { nil }
@@ -4913,13 +4816,13 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			if alternate {
 				return false
 			}
-			self.queue_io(IOMessage{ kind: .clear_screen })
+			self.queue_io(termiopkg.Message.clear_screen_msg(false))
 		}
 		.scroll_to_top {
-			self.queue_io(IOMessage{ kind: .scroll_to_top })
+			self.queue_io(termiopkg.Message.scroll_viewport_msg(.top, 0))
 		}
 		.scroll_to_bottom {
-			self.queue_io(IOMessage{ kind: .scroll_to_bottom })
+			self.queue_io(termiopkg.Message.scroll_viewport_msg(.bottom, 0))
 		}
 		.scroll_to_row {
 			locked := self.renderer_state.mutex != unsafe { nil }
@@ -4948,22 +4851,22 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 		}
 		.scroll_page_up {
 			rows := isize(self.size.grid().rows)
-			self.queue_io(IOMessage{ kind: .scroll_viewport, scroll_delta: -rows })
+			self.queue_io(termiopkg.Message.scroll_viewport_msg(.delta, -rows))
 		}
 		.scroll_page_down {
 			rows := isize(self.size.grid().rows)
-			self.queue_io(IOMessage{ kind: .scroll_viewport, scroll_delta: rows })
+			self.queue_io(termiopkg.Message.scroll_viewport_msg(.delta, rows))
 		}
 		.scroll_page_fractional {
 			rows := f32(self.size.grid().rows)
 			delta := isize(action.float_param * rows)
-			self.queue_io(IOMessage{ kind: .scroll_viewport, scroll_delta: delta })
+			self.queue_io(termiopkg.Message.scroll_viewport_msg(.delta, delta))
 		}
 		.scroll_page_lines {
-			self.queue_io(IOMessage{ kind: .scroll_viewport, scroll_delta: isize(action.int_param) })
+			self.queue_io(termiopkg.Message.scroll_viewport_msg(.delta, isize(action.int_param)))
 		}
 		.jump_to_prompt {
-			self.queue_io(IOMessage{ kind: .jump_to_prompt, prompt_delta: isize(action.int_param) })
+			self.queue_io(termiopkg.Message.jump_to_prompt_msg(isize(action.int_param)))
 		}
 		.write_screen_file {
 			self.write_screen_file(.screen, write_screen_from_input(action))!
@@ -5239,7 +5142,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				.render {
 					self.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.CrashMessage{})) or {}
 				}
-				.io { self.queue_io(IOMessage{ kind: .crash }) }
+				.io { self.queue_io(termiopkg.Message{ kind: .crash }) }
 			}
 		}
 		else {
@@ -5676,7 +5579,7 @@ fn (mut self Surface) mouse_report(button ?input.MouseButton, action MouseReport
 			data << u8(32 + button_code)
 			data << u8(32 + u8(viewport_point.x) + 1)
 			data << u8(32 + u8(viewport_point.y) + 1)
-			self.queue_io(IOMessage{ kind: .write_small, data: data })
+			self.queue_io(termiopkg.Message.write_small_msg(data))
 		}
 		.utf8 {
 			mut data := []u8{cap: 12}
@@ -5687,17 +5590,17 @@ fn (mut self Surface) mouse_report(button ?input.MouseButton, action MouseReport
 			// UTF-8 encode the x/y.
 			data << utf8_encode(u32(32 + viewport_point.x + 1))
 			data << utf8_encode(u32(32 + viewport_point.y + 1))
-			self.queue_io(IOMessage{ kind: .write_small, data: data })
+			self.queue_io(termiopkg.Message.write_small_msg(data))
 		}
 		.sgr {
 			// Final character to send in the CSI.
 			final := if action == .release { `m` } else { `M` }
 			resp := '\x1b[<${button_code};${viewport_point.x + 1};${viewport_point.y + 1}${rune(final)}'
-			self.queue_io(IOMessage{ kind: .write_small, data: resp.bytes() })
+			self.queue_io(termiopkg.Message.write_small_msg(resp.bytes()))
 		}
 		.urxvt {
 			resp := '\x1b[${u16(32) + u16(button_code)};${viewport_point.x + 1};${viewport_point.y + 1}M'
-			self.queue_io(IOMessage{ kind: .write_small, data: resp.bytes() })
+			self.queue_io(termiopkg.Message.write_small_msg(resp.bytes()))
 		}
 		.sgr_pixels {
 			// Final character to send in the CSI.
@@ -5707,7 +5610,7 @@ fn (mut self Surface) mouse_report(button ?input.MouseButton, action MouseReport
 			px := i32(math.round(pos.x - f64(self.size.padding.left)))
 			py := i32(math.round(pos.y - f64(self.size.padding.top)))
 			resp := '\x1b[<${button_code};${px};${py}${rune(final)}'
-			self.queue_io(IOMessage{ kind: .write_small, data: resp.bytes() })
+			self.queue_io(termiopkg.Message.write_small_msg(resp.bytes()))
 		}
 	}
 }
@@ -5825,7 +5728,7 @@ fn (mut self Surface) set_cell_size(size rendererpkg.CellSize) ! {
 	self.balance_padding_if_needed()
 
 	// Notify IO thread of new size
-	self.queue_io(IOMessage{ kind: .resize, size: self.size })
+	self.queue_io(termiopkg.Message.resize_msg(self.size))
 
 	// Recompute initial window size if configured
 	self.recompute_initial_size() or {}
@@ -5838,7 +5741,7 @@ fn (mut self Surface) set_cell_size(size rendererpkg.CellSize) ! {
 	})!
 }
 
-fn (mut self Surface) queue_io(msg IOMessage) {
+fn (mut self Surface) queue_io(msg termiopkg.Message) {
 	// In readonly mode, block write operations
 	if self.readonly {
 		match msg.kind {
@@ -5854,11 +5757,7 @@ fn (mut self Surface) queue_io(msg IOMessage) {
 // Choose the same inline-versus-owned mailbox representation as
 // termio.Message.writeReq.
 fn (mut self Surface) queue_write_request(data []u8) {
-	kind := if data.len <= 128 { IOMessageKind.write_small } else { IOMessageKind.write_alloc }
-	self.queue_io(IOMessage{
-		kind: kind
-		data: data
-	})
+	self.queue_io(termiopkg.Message.write_req(data.bytestr()))
 }
 
 fn (mut self Surface) recompute_initial_size() ! {
@@ -6124,12 +6023,12 @@ fn (mut self Surface) end_key_sequence(action KeySequenceQueued, mem KeySequence
 		.flush {
 			// Send all queued keys to the IO thread
 			for write_req in self.keyboard.sequence_queued {
-				self.queue_io(IOMessage{ kind: .write_small, data: write_req.data })
+				self.queue_io(write_req.message())
 			}
 		}
 		.drop {
 			// Discard all queued keys
-			for write_req in self.keyboard.sequence_queued {
+			for mut write_req in self.keyboard.sequence_queued {
 				write_req.deinit()
 			}
 		}
@@ -6284,13 +6183,13 @@ fn (mut self Surface) handle_binding_entry(event KeyEvent, entry &input.SetEntry
 	return none
 }
 
-fn (mut self Surface) encode_key(event KeyEvent) ?WriteReq {
+fn (mut self Surface) encode_key(event KeyEvent) ?termiopkg.WriteReq {
 	opts := self.encode_key_opts()
 	encoded := input.encode(event, opts)
 	if encoded.len == 0 {
 		return none
 	}
-	return WriteReq{ data: encoded.bytes() }
+	return termiopkg.WriteReq.init(encoded.bytes())
 }
 
 fn (mut self Surface) encode_key_opts() input.Options {
@@ -6356,7 +6255,7 @@ fn (mut self Surface) selection_scroll_tick() ! {
 	// selection-scroll loop if an application switched primary/alternate
 	// screens during the drag.
 	if self.mouse.left_click_screen != self.renderer_state.terminal_.screens.active_key {
-		self.queue_io(IOMessage{ kind: .selection_scroll, flag: false })
+		self.queue_io(termiopkg.Message.selection_scroll_msg(false))
 		return
 	}
 
@@ -6517,7 +6416,7 @@ fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen WriteSc
 			self.open_url(apprt.OpenUrl{ kind: kind, url: tmp_path })!
 		}
 		.paste {
-			self.queue_io(IOMessage{ kind: .write_alloc, data: tmp_path.bytes() })
+			self.queue_io(termiopkg.Message.write_alloc_msg(tmp_path))
 		}
 	}
 }
@@ -6558,7 +6457,7 @@ fn (mut self Surface) complete_clipboard_paste(data string, allow_unsafe bool) !
 	}
 	for encoded in input.paste_encode(data, paste_opts) {
 		if encoded.len > 0 {
-			self.queue_io(IOMessage{ kind: .write_alloc, data: encoded.bytes() })
+			self.queue_io(termiopkg.Message.write_alloc_msg(encoded))
 		}
 	}
 }
@@ -6584,7 +6483,7 @@ pub fn (mut self Surface) complete_clipboard_request(req apprt.ClipboardRequest,
 			}
 			encoded := base64.encode_str(data)
 			response := '\x1b]52;${kind};${encoded}\x1b\\'
-			self.queue_io(IOMessage{ kind: .write_alloc, data: response.bytes() })
+			self.queue_io(termiopkg.Message.write_alloc_msg(response))
 		}
 		.osc_52_write {
 			self.rt_surface.set_clipboard_at(req.clipboard, [apprt.ClipboardContent{
@@ -6828,17 +6727,17 @@ fn (mut self Surface) maybe_prompt_click() !bool {
 		}
 		.click_events {
 			data := '\x1b[<0;${pos_vp.x + 1};${pos_vp.y + 1}M'
-			self.queue_io(IOMessage{ kind: .write_small, data: data.bytes() })
+			self.queue_io(termiopkg.Message.write_small_msg(data.bytes()))
 		}
 		else {
 			left_arrow := if t.modes.get(.cursor_keys) { '\x1bOD' } else { '\x1b[D' }
 			right_arrow := if t.modes.get(.cursor_keys) { '\x1bOC' } else { '\x1b[C' }
 			move := screen.prompt_click_move(click_pin)
 			for _ in 0 .. move.left {
-				self.queue_io(IOMessage{ kind: .write_stable, data: left_arrow.bytes() })
+				self.queue_io(termiopkg.Message.write_stable_msg(left_arrow))
 			}
 			for _ in 0 .. move.right {
-				self.queue_io(IOMessage{ kind: .write_stable, data: right_arrow.bytes() })
+				self.queue_io(termiopkg.Message.write_stable_msg(right_arrow))
 			}
 		}
 	}

@@ -405,7 +405,7 @@ fn test_text_binding_decodes_zig_escapes_before_writing() {
 	assert surf.perform_binding_action(input.Action.new_str(.text, 'line\\n\\x41'))!
 	assert surf.io.messages.len == 1
 	assert surf.io.messages[0].kind == .write_small
-	assert surf.io.messages[0].data.bytestr() == 'line\nA'
+	assert surf.io.messages[0].write_slice().bytestr() == 'line\nA'
 }
 
 fn test_long_text_binding_uses_allocated_write() {
@@ -414,7 +414,7 @@ fn test_long_text_binding_uses_allocated_write() {
 	assert surf.perform_binding_action(input.Action.new_str(.text, text))!
 	assert surf.io.messages.len == 1
 	assert surf.io.messages[0].kind == .write_alloc
-	assert surf.io.messages[0].data.bytestr() == text
+	assert surf.io.messages[0].write_slice().bytestr() == text
 }
 
 fn test_oversized_csi_binding_is_rejected_without_truncation() {
@@ -428,13 +428,13 @@ fn test_oversized_csi_binding_is_rejected_without_truncation() {
 	assert false, 'oversized CSI binding unexpectedly succeeded'
 }
 
-fn test_csi_binding_accepts_exact_fixed_buffer_size() {
+fn test_csi_binding_accepts_exact_fixed_buffer_size_without_truncation() {
 	mut surf := make_test_surface()
 	action := input.Action.new_str(.csi, 'x'.repeat(126))
 	assert surf.perform_binding_action(action)!
 	assert surf.io.messages.len == 1
-	assert surf.io.messages[0].kind == .write_small
-	assert surf.io.messages[0].data.len == 128
+	assert surf.io.messages[0].kind == .write_alloc
+	assert surf.io.messages[0].write_slice().len == 128
 }
 
 fn test_invalid_text_binding_is_handled_without_writing() {
@@ -447,11 +447,11 @@ fn test_cursor_key_binding_selects_sequence_from_terminal_mode() {
 	mut surf := make_test_surface()
 	action := input.Action.new_cursor_key('\x1b[A', '\x1bOA')
 	assert surf.perform_binding_action(action)!
-	assert surf.io.messages.last().data.bytestr() == '\x1b[A'
+	assert surf.io.messages.last().write_slice().bytestr() == '\x1b[A'
 
 	surf.renderer_state.terminal_.modes.set(.cursor_keys, true)
 	assert surf.perform_binding_action(action)!
-	assert surf.io.messages.last().data.bytestr() == '\x1bOA'
+	assert surf.io.messages.last().write_slice().bytestr() == '\x1bOA'
 }
 
 fn test_grid_size_basic() {
@@ -558,48 +558,6 @@ fn test_pos_to_viewport_clamps_to_grid() {
 	coord := surf.pos_to_viewport(10000.0, 10000.0)
 	assert coord.x == 9
 	assert coord.y == 4
-}
-
-fn test_termio_message_translates_every_surface_message_variant() {
-	size := make_test_size()
-	wide_delta := isize(u64(1) << 40)
-	mut config := configpkg.Config.default_config()
-	derived := termiopkg.DerivedConfig.init(&config)!
-	messages := [
-		IOMessage{ kind: .write_small, data: 'small'.bytes() },
-		IOMessage{ kind: .write_stable, data: 'stable'.bytes() },
-		IOMessage{ kind: .write_alloc, data: 'allocated'.bytes() },
-		IOMessage{ kind: .resize, size: size },
-		IOMessage{ kind: .inspector_, flag: true },
-		IOMessage{ kind: .change_config, config: derived },
-		IOMessage{ kind: .focused, flag: true },
-		IOMessage{ kind: .color_scheme_report, flag: true },
-		IOMessage{ kind: .selection_scroll, flag: true },
-		IOMessage{ kind: .clear_screen, flag: true },
-		IOMessage{ kind: .scroll_viewport, scroll_delta: wide_delta },
-		IOMessage{ kind: .scroll_to_top },
-		IOMessage{ kind: .scroll_to_bottom },
-		IOMessage{ kind: .jump_to_prompt, prompt_delta: -2 },
-		IOMessage{ kind: .crash },
-	]
-	translated := messages.map(termio_message(it))
-	assert translated.map(it.kind) == [termiopkg.MessageKind.write_small, .write_stable, .write_alloc,
-		.resize, .inspector, .change_config, .focused, .color_scheme_report, .selection_scroll,
-		.clear_screen, .scroll_viewport, .scroll_viewport, .scroll_viewport, .jump_to_prompt, .crash]
-	assert translated[0].write_small_data.slice().bytestr() == 'small'
-	assert translated[1].write_stable_data == 'stable'
-	assert translated[2].write_alloc_data == 'allocated'
-	assert translated[3].resize_val.screen.width == size.screen.width
-	assert translated[4].flag_val
-	assert translated[6].flag_val
-	assert translated[7].force_val
-	assert translated[8].flag_val
-	assert translated[9].flag_val
-	assert translated[10].scroll_behavior == .delta
-	assert translated[10].scroll_delta == wide_delta
-	assert translated[11].scroll_behavior == .top
-	assert translated[12].scroll_behavior == .bottom
-	assert translated[13].prompt_delta == -2
 }
 
 fn test_input_effect_values() {
@@ -1033,7 +991,7 @@ fn test_selection_scroll_stops_after_screen_switch() ! {
 	surf.selection_scroll_tick()!
 	assert surf.io.messages.len == 1
 	assert surf.io.messages[0].kind == .selection_scroll
-	assert !surf.io.messages[0].flag
+	assert !surf.io.messages[0].flag_val
 }
 
 fn test_complete_clipboard_paste_empty() ! {
@@ -1047,7 +1005,7 @@ fn test_complete_clipboard_paste_encodes_non_bracketed_newlines() ! {
 	surf.complete_clipboard_paste('one\ntwo', true)!
 	assert surf.io.messages.len == 1
 	assert surf.io.messages[0].kind == .write_alloc
-	assert surf.io.messages[0].data.bytestr() == 'one\rtwo'
+	assert surf.io.messages[0].write_slice().bytestr() == 'one\rtwo'
 }
 
 fn test_complete_clipboard_paste_encodes_bracketed_fences() ! {
@@ -1055,7 +1013,7 @@ fn test_complete_clipboard_paste_encodes_bracketed_fences() ! {
 	surf.renderer_state.terminal_.modes.set(.bracketed_paste, true)
 	surf.complete_clipboard_paste('one\ntwo', true)!
 	assert surf.io.messages.len == 3
-	assert surf.io.messages.map(it.data.bytestr()).join('') == '\x1b[200~one\ntwo\x1b[201~'
+	assert surf.io.messages.map(it.write_slice().bytestr()).join('') == '\x1b[200~one\ntwo\x1b[201~'
 }
 
 fn test_complete_clipboard_paste_rejects_unsafe_text() {
@@ -1089,7 +1047,7 @@ fn test_complete_clipboard_request_osc52_read() ! {
 		clipboard: .selection
 	}, 'hello', false)!
 	assert surf.io.messages.len == 1
-	assert surf.io.messages[0].data.bytestr() == '\x1b]52;s;aGVsbG8=\x1b\\'
+	assert surf.io.messages[0].write_slice().bytestr() == '\x1b]52;s;aGVsbG8=\x1b\\'
 }
 
 fn test_complete_clipboard_request_osc52_read_requires_confirmation() {
@@ -1128,6 +1086,20 @@ fn test_end_key_sequence_no_queued() {
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].kind == .key_sequence
 	assert !runtime.actions[0].key_sequence.active
+}
+
+fn test_end_key_sequence_flush_preserves_allocated_write() {
+	mut runtime := RuntimeApp{}
+	mut surf := Surface{ rt_app: &runtime }
+	data := 'x'.repeat(80)
+	surf.keyboard.sequence_queued << termiopkg.WriteReq.init(data.bytes())
+
+	surf.end_key_sequence(.flush, .retain)
+
+	assert surf.keyboard.sequence_queued.len == 0
+	assert surf.io.messages.len == 1
+	assert surf.io.messages[0].kind == .write_alloc
+	assert surf.io.messages[0].write_slice().bytestr() == data
 }
 
 fn test_deactivate_all_key_tables_empty() ! {
@@ -1257,8 +1229,8 @@ fn test_encode_key_text() {
 		assert false, 'expected write req'
 		return
 	}
-	assert req.data.len > 0
-	assert req.data[0] == u8(`a`)
+	assert req.slice().len > 0
+	assert req.slice()[0] == u8(`a`)
 }
 
 fn test_encode_key_escape() {
@@ -1272,8 +1244,8 @@ fn test_encode_key_escape() {
 		assert false, 'expected write req'
 		return
 	}
-	assert req.data.len == 1
-	assert req.data[0] == 0x1b
+	assert req.slice().len == 1
+	assert req.slice()[0] == 0x1b
 }
 
 fn test_encode_key_no_output() {
@@ -1298,7 +1270,7 @@ fn test_encode_key_honors_ignore_keypad_with_numlock_mode() {
 		assert false, 'expected write req'
 		return
 	}
-	assert req.data.bytestr() == '1'
+	assert req.slice().bytestr() == '1'
 }
 
 fn test_scroll_callback_uses_precision_multiplier_and_accumulates_pixels() {
@@ -1324,7 +1296,7 @@ fn test_scroll_callback_alternate_screen_emits_cursor_sequences() {
 	assert surf.io.messages.len == 3
 	for msg in surf.io.messages {
 		assert msg.kind == .write_stable
-		assert msg.data.bytestr() == '\x1bOA'
+		assert msg.write_slice().bytestr() == '\x1bOA'
 	}
 }
 
@@ -1339,7 +1311,7 @@ fn test_scroll_callback_reports_horizontal_wheel_buttons() {
 	assert surf.io.messages.len == 2
 	for msg in surf.io.messages {
 		assert msg.kind in [.write_small, .write_alloc]
-		assert msg.data.len > 0
+		assert msg.write_slice().len > 0
 	}
 }
 

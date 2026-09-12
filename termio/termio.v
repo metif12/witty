@@ -1179,6 +1179,43 @@ pub mut:
 	len  u8
 }
 
+// WriteReq is the payload queued by Surface while a key sequence is active.
+// Ghostty defines this as MessageData(u8, 38), using the same inline capacity
+// as Message.write_small.
+pub struct WriteReq {
+mut:
+	payload datastruct.MessageData[u8]
+}
+
+pub fn WriteReq.init(data []u8) WriteReq {
+	return WriteReq{
+		payload: datastruct.MessageData.init[u8](38, data)
+	}
+}
+
+pub fn WriteReq.from_stable(data []u8) WriteReq {
+	return WriteReq{
+		payload: datastruct.MessageData.from_stable[u8](data)
+	}
+}
+
+pub fn (req &WriteReq) slice() []u8 {
+	return req.payload.slice()
+}
+
+pub fn (req &WriteReq) message() Message {
+	data := req.payload.slice()
+	return match req.payload.kind {
+		.small { Message.write_small_msg(data) }
+		.stable { Message.write_stable_msg(data.bytestr()) }
+		.alloc { Message.write_alloc_msg(data.bytestr()) }
+	}
+}
+
+pub fn (mut req WriteReq) deinit() {
+	req.payload.deinit()
+}
+
 pub fn WriteSmall.from_slice(s []u8) WriteSmall {
 	mut w := WriteSmall{}
 	length := if s.len < 38 { u8(s.len) } else { u8(38) }
@@ -1234,6 +1271,23 @@ pub fn Message.write_stable_msg(data string) Message {
 	return Message{
 		kind: .write_stable
 		write_stable_data: data
+	}
+}
+
+pub fn Message.write_alloc_msg(data string) Message {
+	return Message{
+		kind: .write_alloc
+		write_alloc_data: data.clone()
+	}
+}
+
+// write_slice returns the byte payload for any write message.
+pub fn (msg &Message) write_slice() []u8 {
+	return match msg.kind {
+		.write_small { msg.write_small_data.slice() }
+		.write_stable { msg.write_stable_data.bytes() }
+		.write_alloc { msg.write_alloc_data.bytes() }
+		else { []u8{} }
 	}
 }
 
