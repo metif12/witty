@@ -103,7 +103,7 @@ fn test_c_action_key_sequence_end_zeros_ignored_trigger() {
 				active: false
 				trigger: input.Trigger{
 					key: input.TriggerKey.new_physical(.key_a)
-					mods: input.Mods{ ctrl: true }
+					mods: input.Mods.init(false, true, false, false, false, false, input.SideInfo{})
 				}
 			}
 		}

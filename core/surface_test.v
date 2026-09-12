@@ -260,7 +260,7 @@ fn test_surface_key_binding_applies_modifier_remap() {
 	cfg.keybind.set = input.Set{}
 	cfg.keybind.set.put(input.Trigger{
 		key: input.TriggerKey.new_unicode(u32(`q`))
-		mods: input.Mods{ super_: true }
+		mods: input.Mods.init(false, false, false, true, false, false, input.SideInfo{})
 	}, input.Action.new(.quit))
 	cfg.key_remap.parse('ctrl=super')!
 	cfg.key_remap.finalize()
@@ -270,10 +270,7 @@ fn test_surface_key_binding_applies_modifier_remap() {
 	flags := surf.key_event_is_binding(input.KeyEvent{
 		key: .key_q
 		action: .press
-		mods: input.Mods{
-			ctrl: true
-			sides: input.SideInfo{ ctrl: .left }
-		}
+		mods: input.Mods.init(false, true, false, false, false, false, input.SideInfo.init(.left, .left, .left, .left))
 		utf8: 'q'
 	}) or {
 		assert false, 'remapped binding was not found'
@@ -816,7 +813,7 @@ fn test_focus_callback_releases_pressed_key_and_modifiers() ! {
 	surf.pressed_key = KeyEvent{
 		key: .key_a
 		action: .press
-		mods: input.Mods{ shift: true, ctrl: true }
+		mods: input.Mods.init(true, true, false, false, false, false, input.SideInfo{})
 		utf8: ''
 	}
 	surf.focus_callback(false)!
@@ -830,12 +827,12 @@ fn test_key_release_preserves_held_modifiers_for_focus_loss() ! {
 	surf.rt_surface = &runtime_surface
 	surf.pressed_key = KeyEvent{
 		key: .key_a
-		mods: input.Mods{ shift: true }
+		mods: input.Mods.init(true, false, false, false, false, false, input.SideInfo{})
 	}
 	effect := surf.key_callback(KeyEvent{
 		key: .key_a
 		action: .release
-		mods: input.Mods{ shift: true }
+		mods: input.Mods.init(true, false, false, false, false, false, input.SideInfo{})
 	})!
 	assert effect == .ignored
 	pending := surf.pressed_key or {
@@ -843,7 +840,7 @@ fn test_key_release_preserves_held_modifiers_for_focus_loss() ! {
 		return
 	}
 	assert pending.key == .unidentified
-	assert pending.mods.shift
+	assert pending.mods.shift()
 }
 
 fn test_modifier_key_updates_mouse_shape() ! {
@@ -854,7 +851,7 @@ fn test_modifier_key_updates_mouse_shape() ! {
 	surf.renderer_state.terminal_.flags.set_mouse_event(.normal)
 	effect := surf.key_callback(KeyEvent{
 		key: .shift_left
-		mods: input.Mods{ shift: true }
+		mods: input.Mods.init(true, false, false, false, false, false, input.SideInfo{})
 	})!
 	assert effect == .ignored
 	assert runtime.actions.len == 1
@@ -882,7 +879,7 @@ fn test_modifier_key_refreshes_link_hover() ! {
 	stream.next_slice('http://a')!
 
 	mods := input.ctrl_or_super_mods(input.Mods{})
-	key := if mods.super_ { input.Key.meta_left } else { input.Key.control_left }
+	key := if mods.super_() { input.Key.meta_left } else { input.Key.control_left }
 	effect := surf.key_callback(KeyEvent{
 		key: key
 		mods: mods

@@ -237,7 +237,7 @@ fn test_kitty_shift_backspace_emits_csi_u() {
 	// This is important for programs that want to distinguish shift+backspace.
 	result := kitty_encode(KeyEvent{
 		key: .backspace
-		mods: Mods{ shift: true }
+		mods: Mods.init(true, false, false, false, false, false, SideInfo{})
 		utf8: ''
 	}, Options{
 		kitty_flags: KittyFlags.from_int(1)
@@ -248,7 +248,7 @@ fn test_kitty_shift_backspace_emits_csi_u() {
 fn test_kitty_shift_enter_emits_csi_u() {
 	result := kitty_encode(KeyEvent{
 		key: .enter
-		mods: Mods{ shift: true }
+		mods: Mods.init(true, false, false, false, false, false, SideInfo{})
 		utf8: ''
 	}, Options{
 		kitty_flags: KittyFlags.from_int(1)
@@ -259,7 +259,7 @@ fn test_kitty_shift_enter_emits_csi_u() {
 fn test_kitty_shift_tab_emits_csi_u() {
 	result := kitty_encode(KeyEvent{
 		key: .tab
-		mods: Mods{ shift: true }
+		mods: Mods.init(true, false, false, false, false, false, SideInfo{})
 		utf8: ''
 	}, Options{
 		kitty_flags: KittyFlags.from_int(1)
@@ -277,7 +277,7 @@ fn test_kitty_enter_with_all_flags() {
 fn test_kitty_ctrl_with_all_flags() {
 	result := kitty_encode(KeyEvent{
 		key: .control_left
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		utf8: ''
 	}, Options{
 		kitty_flags: KittyFlags.from_int(31)
@@ -289,7 +289,7 @@ fn test_kitty_ctrl_release_with_ctrl_mod_set() {
 	result := kitty_encode(KeyEvent{
 		action: .release
 		key: .control_left
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		utf8: ''
 	}, Options{
 		kitty_flags: KittyFlags.from_int(31)
@@ -310,7 +310,7 @@ fn test_kitty_delete() {
 fn test_kitty_composing_with_no_modifier() {
 	result := kitty_encode(KeyEvent{
 		key: .key_a
-		mods: Mods{ shift: true }
+		mods: Mods.init(true, false, false, false, false, false, SideInfo{})
 		composing: true
 	}, Options{
 		kitty_flags: KittyFlags.from_int(1)
@@ -321,7 +321,7 @@ fn test_kitty_composing_with_no_modifier() {
 fn test_kitty_composing_with_modifier() {
 	result := kitty_encode(KeyEvent{
 		key: .shift_left
-		mods: Mods{ shift: true }
+		mods: Mods.init(true, false, false, false, false, false, SideInfo{})
 		composing: true
 	}, Options{
 		kitty_flags: KittyFlags.from_int(9)
@@ -332,7 +332,7 @@ fn test_kitty_composing_with_modifier() {
 fn test_kitty_shift_a_on_us_keyboard() {
 	result := kitty_encode(KeyEvent{
 		key: .key_a
-		mods: Mods{ shift: true }
+		mods: Mods.init(true, false, false, false, false, false, SideInfo{})
 		utf8: 'A'
 		unshifted_codepoint: 97 // lowercase A
 	}, Options{
@@ -344,7 +344,7 @@ fn test_kitty_shift_a_on_us_keyboard() {
 fn test_kitty_matching_unshifted_codepoint() {
 	result := kitty_encode(KeyEvent{
 		key: .key_a
-		mods: Mods{ shift: true }
+		mods: Mods.init(true, false, false, false, false, false, SideInfo{})
 		utf8: 'A'
 		unshifted_codepoint: 65
 	}, Options{
@@ -360,7 +360,7 @@ fn test_kitty_matching_unshifted_codepoint() {
 fn test_kitty_report_alternates_with_caps() {
 	result := kitty_encode(KeyEvent{
 		key: .key_j
-		mods: Mods{ caps_lock: true }
+		mods: Mods.init(false, false, false, false, true, false, SideInfo{})
 		utf8: 'J'
 		unshifted_codepoint: 106
 	}, Options{
@@ -373,7 +373,7 @@ fn test_kitty_report_alternates_colon() {
 	// shift+';' produces ':'
 	result := kitty_encode(KeyEvent{
 		key: .semicolon
-		mods: Mods{ shift: true }
+		mods: Mods.init(true, false, false, false, false, false, SideInfo{})
 		utf8: ':'
 		unshifted_codepoint: u32(`;`)
 	}, Options{
@@ -396,7 +396,7 @@ fn test_kitty_report_alternates_with_ru_layout() {
 fn test_kitty_report_alternates_with_ru_layout_shifted() {
 	result := kitty_encode(KeyEvent{
 		key: .semicolon
-		mods: Mods{ shift: true }
+		mods: Mods.init(true, false, false, false, false, false, SideInfo{})
 		utf8: '\u0427' // Ч
 		unshifted_codepoint: 1095
 	}, Options{
@@ -408,7 +408,7 @@ fn test_kitty_report_alternates_with_ru_layout_shifted() {
 fn test_kitty_report_alternates_with_ru_layout_caps_lock() {
 	result := kitty_encode(KeyEvent{
 		key: .semicolon
-		mods: Mods{ caps_lock: true }
+		mods: Mods.init(false, false, false, false, true, false, SideInfo{})
 		utf8: '\u0427' // Ч
 		unshifted_codepoint: 1095
 	}, Options{
@@ -421,7 +421,7 @@ fn test_kitty_report_alternates_with_hu_layout_release() {
 	result := kitty_encode(KeyEvent{
 		action: .release
 		key: .bracket_left
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		utf8: ''
 		unshifted_codepoint: 337
 	}, Options{
@@ -444,7 +444,7 @@ fn test_kitty_up_arrow_with_utf8() {
 fn test_kitty_shift_tab() {
 	result := kitty_encode(KeyEvent{
 		key: .tab
-		mods: Mods{ shift: true }
+		mods: Mods.init(true, false, false, false, false, false, SideInfo{})
 		utf8: ''
 	}, Options{
 		kitty_flags: KittyFlags.from_int(5)
@@ -475,7 +475,7 @@ fn test_kitty_left_shift_with_report_all() {
 fn test_kitty_report_associated_with_modifiers() {
 	result := kitty_encode(KeyEvent{
 		key: .key_j
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		utf8: 'j'
 		unshifted_codepoint: 106
 	}, Options{
@@ -487,7 +487,7 @@ fn test_kitty_report_associated_with_modifiers() {
 fn test_kitty_report_associated() {
 	result := kitty_encode(KeyEvent{
 		key: .key_j
-		mods: Mods{ shift: true }
+		mods: Mods.init(true, false, false, false, false, false, SideInfo{})
 		utf8: 'J'
 		unshifted_codepoint: 106
 	}, Options{
@@ -500,7 +500,7 @@ fn test_kitty_report_associated_on_release() {
 	result := kitty_encode(KeyEvent{
 		action: .release
 		key: .key_j
-		mods: Mods{ shift: true }
+		mods: Mods.init(true, false, false, false, false, false, SideInfo{})
 		utf8: 'J'
 		unshifted_codepoint: 106
 	}, Options{
@@ -583,7 +583,7 @@ fn test_legacy_esc_with_utf8_dead_key_state() {
 fn test_legacy_ctrl_shift_minus() {
 	result := legacy_encode(KeyEvent{
 		key: .minus
-		mods: Mods{ ctrl: true, shift: true }
+		mods: Mods.init(true, true, false, false, false, false, SideInfo{})
 		utf8: '_'
 	}, Options{})
 	assert result == '\x1f'
@@ -592,7 +592,7 @@ fn test_legacy_ctrl_shift_minus() {
 fn test_legacy_ctrl_alt_c() {
 	result := legacy_encode(KeyEvent{
 		key: .key_c
-		mods: Mods{ ctrl: true, alt: true }
+		mods: Mods.init(false, true, true, false, false, false, SideInfo{})
 		utf8: 'c'
 	}, Options{})
 	assert result == '\x1b\x03'
@@ -602,7 +602,7 @@ fn test_legacy_alt_c() {
 	result := legacy_encode(KeyEvent{
 		key: .key_c
 		utf8: 'c'
-		mods: Mods{ alt: true }
+		mods: Mods.init(false, false, true, false, false, false, SideInfo{})
 	}, Options{
 		alt_esc_prefix: true
 		macos_option_as_alt: .true_
@@ -614,7 +614,7 @@ fn test_legacy_alt_e_only_unshifted() {
 	result := legacy_encode(KeyEvent{
 		key: .key_e
 		unshifted_codepoint: u32(`e`)
-		mods: Mods{ alt: true }
+		mods: Mods.init(false, false, true, false, false, false, SideInfo{})
 	}, Options{
 		alt_esc_prefix: true
 		macos_option_as_alt: .true_
@@ -625,7 +625,7 @@ fn test_legacy_alt_e_only_unshifted() {
 fn test_legacy_ctrl_c() {
 	result := legacy_encode(KeyEvent{
 		key: .key_c
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		utf8: 'c'
 	}, Options{})
 	assert result == '\x03'
@@ -634,7 +634,7 @@ fn test_legacy_ctrl_c() {
 fn test_legacy_ctrl_space() {
 	result := legacy_encode(KeyEvent{
 		key: .space
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		utf8: ' '
 	}, Options{})
 	assert result == '\x00'
@@ -643,7 +643,7 @@ fn test_legacy_ctrl_space() {
 fn test_legacy_ctrl_shift_backspace() {
 	result := legacy_encode(KeyEvent{
 		key: .backspace
-		mods: Mods{ ctrl: true, shift: true }
+		mods: Mods.init(true, true, false, false, false, false, SideInfo{})
 	}, Options{})
 	assert result == '\x08'
 }
@@ -651,7 +651,7 @@ fn test_legacy_ctrl_shift_backspace() {
 fn test_legacy_ctrl_shift_char_with_modify_other_state_2() {
 	result := legacy_encode(KeyEvent{
 		key: .key_h
-		mods: Mods{ ctrl: true, shift: true }
+		mods: Mods.init(true, true, false, false, false, false, SideInfo{})
 		utf8: 'H'
 	}, Options{
 		modify_other_keys_state_2: true
@@ -662,8 +662,8 @@ fn test_legacy_ctrl_shift_char_with_modify_other_state_2() {
 fn test_legacy_ctrl_shift_char_with_modify_other_state_2_and_consumed_mods() {
 	result := legacy_encode(KeyEvent{
 		key: .key_h
-		mods: Mods{ ctrl: true, shift: true }
-		consumed_mods: Mods{ shift: true }
+		mods: Mods.init(true, true, false, false, false, false, SideInfo{})
+		consumed_mods: Mods.init(true, false, false, false, false, false, SideInfo{})
 		utf8: 'H'
 	}, Options{
 		modify_other_keys_state_2: true
@@ -674,7 +674,7 @@ fn test_legacy_ctrl_shift_char_with_modify_other_state_2_and_consumed_mods() {
 fn test_legacy_alt_digit_with_modify_other_state_2() {
 	result := legacy_encode(KeyEvent{
 		key: .digit_8
-		mods: Mods{ alt: true }
+		mods: Mods.init(false, false, true, false, false, false, SideInfo{})
 		utf8: '8'
 	}, Options{
 		modify_other_keys_state_2: true
@@ -687,7 +687,7 @@ fn test_legacy_fixterm_awkward_letters() {
 	// ctrl+i
 	r1 := legacy_encode(KeyEvent{
 		key: .key_i
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		utf8: 'i'
 	}, Options{})
 	assert r1 == '\x1b[105;5u'
@@ -695,7 +695,7 @@ fn test_legacy_fixterm_awkward_letters() {
 	// ctrl+m
 	r2 := legacy_encode(KeyEvent{
 		key: .key_m
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		utf8: 'm'
 	}, Options{})
 	assert r2 == '\x1b[109;5u'
@@ -703,7 +703,7 @@ fn test_legacy_fixterm_awkward_letters() {
 	// ctrl+[
 	r3 := legacy_encode(KeyEvent{
 		key: .bracket_left
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		utf8: '['
 	}, Options{})
 	assert r3 == '\x1b[91;5u'
@@ -711,7 +711,7 @@ fn test_legacy_fixterm_awkward_letters() {
 	// ctrl+shift+2 -> '@'
 	r4 := legacy_encode(KeyEvent{
 		key: .digit_2
-		mods: Mods{ ctrl: true, shift: true }
+		mods: Mods.init(true, true, false, false, false, false, SideInfo{})
 		utf8: '@'
 		unshifted_codepoint: u32(`2`)
 	}, Options{})
@@ -723,7 +723,7 @@ fn test_legacy_ctrl_shift_letter_ascii() {
 	// is sent as the unshifted letter with the shift modifier present.
 	result := legacy_encode(KeyEvent{
 		key: .key_m
-		mods: Mods{ ctrl: true, shift: true }
+		mods: Mods.init(true, true, false, false, false, false, SideInfo{})
 		utf8: 'M'
 		unshifted_codepoint: u32(`m`)
 	}, Options{})
@@ -733,8 +733,8 @@ fn test_legacy_ctrl_shift_letter_ascii() {
 fn test_legacy_shift_function_key_should_use_all_mods() {
 	result := legacy_encode(KeyEvent{
 		key: .arrow_up
-		mods: Mods{ shift: true }
-		consumed_mods: Mods{ shift: true }
+		mods: Mods.init(true, false, false, false, false, false, SideInfo{})
+		consumed_mods: Mods.init(true, false, false, false, false, false, SideInfo{})
 	}, Options{})
 	assert result == '\x1b[1;2A'
 }
@@ -767,7 +767,7 @@ fn test_legacy_keypad_1_with_application_keypad() {
 fn test_legacy_keypad_1_with_application_keypad_and_numlock() {
 	result := legacy_encode(KeyEvent{
 		key: .numpad_1
-		mods: Mods{ num_lock: true }
+		mods: Mods.init(false, false, false, false, false, true, SideInfo{})
 		utf8: '1'
 	}, Options{
 		keypad_key_application: true
@@ -790,35 +790,35 @@ fn test_legacy_f1() {
 	// F1 with ctrl
 	r1 := legacy_encode(KeyEvent{
 		key: .f1
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 	}, Options{})
 	assert r1 == '\x1b[1;5P'
 
 	// F2 with ctrl
 	r2 := legacy_encode(KeyEvent{
 		key: .f2
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 	}, Options{})
 	assert r2 == '\x1b[1;5Q'
 
 	// F3 with ctrl
 	r3 := legacy_encode(KeyEvent{
 		key: .f3
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 	}, Options{})
 	assert r3 == '\x1b[13;5~'
 
 	// F4 with ctrl
 	r4 := legacy_encode(KeyEvent{
 		key: .f4
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 	}, Options{})
 	assert r4 == '\x1b[1;5S'
 
 	// F5 with ctrl uses new encoding
 	r5 := legacy_encode(KeyEvent{
 		key: .f5
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 	}, Options{})
 	assert r5 == '\x1b[15;5~'
 }
@@ -826,10 +826,7 @@ fn test_legacy_f1() {
 fn test_legacy_left_shift_tab() {
 	result := legacy_encode(KeyEvent{
 		key: .tab
-		mods: Mods{
-			shift: true
-			sides: SideInfo{ shift: .left }
-		}
+		mods: Mods.init(true, false, false, false, false, false, SideInfo.init(.left, .left, .left, .left))
 	}, Options{})
 	assert result == '\x1b[Z'
 }
@@ -837,10 +834,7 @@ fn test_legacy_left_shift_tab() {
 fn test_legacy_right_shift_tab() {
 	result := legacy_encode(KeyEvent{
 		key: .tab
-		mods: Mods{
-			shift: true
-			sides: SideInfo{ shift: .right }
-		}
+		mods: Mods.init(true, false, false, false, false, false, SideInfo.init(.right, .left, .left, .left))
 	}, Options{})
 	assert result == '\x1b[Z'
 }
@@ -848,7 +842,7 @@ fn test_legacy_right_shift_tab() {
 fn test_legacy_hu_layout_ctrl_o_sends_proper_codepoint() {
 	result := legacy_encode(KeyEvent{
 		key: .bracket_left
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		utf8: '\u0151' // ő
 		unshifted_codepoint: 337
 	}, Options{})
@@ -867,22 +861,19 @@ fn test_legacy_backspace_with_del_utf8() {
 // === ctrlSeq tests ===
 
 fn test_ctrlseq_normal_ctrl_c() {
-	seq := ctrl_seq(.unidentified, 'c', u32(`c`), Mods{ ctrl: true })
+	seq := ctrl_seq(.unidentified, 'c', u32(`c`), Mods.init(false, true, false, false, false, false, SideInfo{}))
 	assert seq != none
 	assert seq or { 0 } == u8(0x03)
 }
 
 fn test_ctrlseq_normal_ctrl_c_right_control() {
-	seq := ctrl_seq(.unidentified, 'c', u32(`c`), Mods{
-		ctrl: true
-		sides: SideInfo{ ctrl: .right }
-	})
+	seq := ctrl_seq(.unidentified, 'c', u32(`c`), Mods.init(false, true, false, false, false, false, SideInfo.init(.left, .right, .left, .left)))
 	assert seq != none
 	assert seq or { 0 } == u8(0x03)
 }
 
 fn test_ctrlseq_alt_should_be_allowed() {
-	seq := ctrl_seq(.unidentified, 'c', u32(`c`), Mods{ alt: true, ctrl: true })
+	seq := ctrl_seq(.unidentified, 'c', u32(`c`), Mods.init(false, true, true, false, false, false, SideInfo{}))
 	assert seq != none
 	assert seq or { 0 } == u8(0x03)
 }
@@ -892,44 +883,41 @@ fn test_ctrlseq_no_ctrl_does_nothing() {
 }
 
 fn test_ctrlseq_shifted_non_character() {
-	seq := ctrl_seq(.unidentified, '_', u32(`-`), Mods{ ctrl: true, shift: true })
+	seq := ctrl_seq(.unidentified, '_', u32(`-`), Mods.init(true, true, false, false, false, false, SideInfo{}))
 	assert seq != none
 	assert seq or { 0 } == u8(0x1F)
 }
 
 fn test_ctrlseq_caps_ascii_letter() {
-	seq := ctrl_seq(.unidentified, 'C', u32(`c`), Mods{ ctrl: true, caps_lock: true })
+	seq := ctrl_seq(.unidentified, 'C', u32(`c`), Mods.init(false, true, false, false, true, false, SideInfo{}))
 	assert seq != none
 	assert seq or { 0 } == u8(0x03)
 }
 
 fn test_ctrlseq_shift_does_not_generate_ctrl_seq() {
-	assert ctrl_seq(.unidentified, 'C', u32(`c`), Mods{ shift: true }) == none
-	assert ctrl_seq(.unidentified, 'C', u32(`c`), Mods{ shift: true, ctrl: true }) == none
+	assert ctrl_seq(.unidentified, 'C', u32(`c`), Mods.init(true, false, false, false, false, false, SideInfo{})) == none
+	assert ctrl_seq(.unidentified, 'C', u32(`c`), Mods.init(true, true, false, false, false, false, SideInfo{})) == none
 }
 
 fn test_ctrlseq_russian_ctrl_c() {
-	seq := ctrl_seq(.key_c, '\u0441', 0x0441, Mods{ ctrl: true })
+	seq := ctrl_seq(.key_c, '\u0441', 0x0441, Mods.init(false, true, false, false, false, false, SideInfo{}))
 	assert seq != none
 	assert seq or { 0 } == u8(0x03)
 }
 
 fn test_ctrlseq_russian_shifted_ctrl_c() {
-	seq := ctrl_seq(.key_c, '\u0441', 0x0441, Mods{ ctrl: true, shift: true })
+	seq := ctrl_seq(.key_c, '\u0441', 0x0441, Mods.init(true, true, false, false, false, false, SideInfo{}))
 	assert seq == none
 }
 
 fn test_ctrlseq_russian_alt_ctrl_c() {
-	seq := ctrl_seq(.key_c, '\u0441', 0x0441, Mods{ ctrl: true, alt: true })
+	seq := ctrl_seq(.key_c, '\u0441', 0x0441, Mods.init(false, true, true, false, false, false, SideInfo{}))
 	assert seq != none
 	assert seq or { 0 } == u8(0x03)
 }
 
 fn test_ctrlseq_right_ctrl_c() {
-	seq := ctrl_seq(.key_c, '\u0441', u32(`c`), Mods{
-		ctrl: true
-		sides: SideInfo{ ctrl: .right }
-	})
+	seq := ctrl_seq(.key_c, '\u0441', u32(`c`), Mods.init(false, true, false, false, false, false, SideInfo.init(.left, .right, .left, .left)))
 	assert seq != none
 	assert seq or { 0 } == u8(0x03)
 }

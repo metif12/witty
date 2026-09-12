@@ -30,19 +30,19 @@ fn test_surface_mouse_tracking_transitions_use_canonical_types() {
 		physical_key: .shift_left
 		mouse_event: terminal.MouseEvents.x10
 		mouse_shape: .default_
-		mods: input.Mods{ shift: true }
+		mods: input.Mods.init(true, false, false, false, false, false, input.SideInfo{})
 	}.key_to_mouse_shape()? == .text
 	assert SurfaceMouse{
 		physical_key: .alt_left
 		mouse_event: terminal.MouseEvents.x10
 		mouse_shape: .default_
-		mods: input.Mods{ ctrl: true, super_: true, alt: true, shift: true }
+		mods: input.Mods.init(true, true, true, true, false, false, input.SideInfo{})
 	}.key_to_mouse_shape()? == .crosshair
 	assert SurfaceMouse{
 		physical_key: .alt_left
 		mouse_event: terminal.MouseEvents.x10
 		mouse_shape: .crosshair
-		mods: input.Mods{ shift: true }
+		mods: input.Mods.init(true, false, false, false, false, false, input.SideInfo{})
 	}.key_to_mouse_shape()? == .text
 	assert SurfaceMouse{
 		physical_key: .alt_left
@@ -53,7 +53,7 @@ fn test_surface_mouse_tracking_transitions_use_canonical_types() {
 		physical_key: .alt_left
 		mouse_event: terminal.MouseEvents.x10
 		mouse_shape: .text
-		mods: input.Mods{ ctrl: true, super_: true, alt: true, shift: true }
+		mods: input.Mods.init(true, true, true, true, false, false, input.SideInfo{})
 	}.key_to_mouse_shape()? == .crosshair
 	assert SurfaceMouse{
 		physical_key: .shift_left
@@ -70,7 +70,7 @@ fn test_surface_mouse_non_tracking_transitions_use_rectangle_state() {
 	assert SurfaceMouse{
 		physical_key: .alt_left
 		mouse_shape: .text
-		mods: input.Mods{ ctrl: true, super_: true, alt: true }
+		mods: input.Mods.init(false, true, true, true, false, false, input.SideInfo{})
 	}.key_to_mouse_shape()? == .crosshair
 	assert SurfaceMouse{
 		physical_key: .alt_left
@@ -79,7 +79,7 @@ fn test_surface_mouse_non_tracking_transitions_use_rectangle_state() {
 }
 
 fn test_rectangle_selection_modifier_contract() {
-	assert is_rectangle_select_state(input.Mods{ ctrl: true, super_: true, alt: true })
+	assert is_rectangle_select_state(input.Mods.init(false, true, true, true, false, false, input.SideInfo{}))
 	assert !is_rectangle_select_state(input.Mods{})
-	assert !is_rectangle_select_state(input.Mods{ ctrl: true, super_: true })
+	assert !is_rectangle_select_state(input.Mods.init(false, true, false, true, false, false, input.SideInfo{}))
 }

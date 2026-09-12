@@ -78,16 +78,16 @@ fn (mut k Keymap) reinit() ! {
 // source. Ctrl is removed so Carbon does not turn Ctrl+C into byte 0x03.
 pub fn (k &Keymap) translate(mut out []u8, mut state KeymapState, code u16, input_mods Mods) !KeymapTranslation {
 	mut mods := input_mods
-	mods.ctrl = false
-	modifier_state := (u32(if mods.super_ { 1 } else { 0 }) | u32(if mods.shift {
+	mods.set_ctrl(false)
+	modifier_state := (u32(if mods.super_() { 1 } else { 0 }) | u32(if mods.shift() {
 		1 << 1
 	} else {
 		0
-	}) | u32(if mods.caps_lock {
+	}) | u32(if mods.caps_lock() {
 		1 << 2
 	} else {
 		0
-	}) | u32(if mods.alt { 1 << 3 } else { 0 }))
+	}) | u32(if mods.alt() { 1 << 3 } else { 0 }))
 	mut out_len := usize(0)
 	mut composing := 0
 	if C.witty_keymap_translate(k.unicode_layout, code, modifier_state, &state.dead_key, unsafe { &char(out.data) }, usize(out.len), &out_len, &composing) != 0 {

@@ -4621,7 +4621,7 @@ pub fn (mut k Keybinds) init() {
 	// keybinds for opening and reloading config
 	k.set.put(inputpkg.Trigger{
 		key: inputpkg.TriggerKey.new_unicode(u32(`,`))
-		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{ shift: true })
+		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods.init(true, false, false, false, false, false, inputpkg.SideInfo{}))
 	}, inputpkg.Action.new(.reload_config))
 	k.set.put(inputpkg.Trigger{
 		key: inputpkg.TriggerKey.new_unicode(u32(`,`))
@@ -4637,9 +4637,7 @@ pub fn (mut k Keybinds) init() {
 	}, inputpkg.Action.new(.paste_from_clipboard))
 
 	// On macOS we default to super for copy/paste.
-	copy_mods := inputpkg.Mods{
-		super_: true
-	}
+	copy_mods := inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 	k.set.put_flags(inputpkg.Trigger{
 		key: inputpkg.TriggerKey.new_unicode(u32(`c`))
 		mods: copy_mods
@@ -4670,15 +4668,15 @@ pub fn (mut k Keybinds) init() {
 	// Write the visible screen to a temporary file.
 	k.set.put(inputpkg.Trigger{
 		key: inputpkg.TriggerKey.new_unicode(u32(`j`))
-		mods: inputpkg.Mods{ shift: true, ctrl: true, super_: true }
+		mods: inputpkg.Mods.init(true, true, false, true, false, false, inputpkg.SideInfo{})
 	}, inputpkg.Action.new_enum2(.write_screen_file, i32(inputpkg.WriteScreenAction.copy), i32(inputpkg.WriteScreenFormat.plain)))
 	k.set.put(inputpkg.Trigger{
 		key: inputpkg.TriggerKey.new_unicode(u32(`j`))
-		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{ shift: true })
+		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods.init(true, false, false, false, false, false, inputpkg.SideInfo{}))
 	}, inputpkg.Action.new_enum2(.write_screen_file, i32(inputpkg.WriteScreenAction.paste), i32(inputpkg.WriteScreenFormat.plain)))
 	k.set.put(inputpkg.Trigger{
 		key: inputpkg.TriggerKey.new_unicode(u32(`j`))
-		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{ shift: true, alt: true })
+		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods.init(true, false, true, false, false, false, inputpkg.SideInfo{}))
 	}, inputpkg.Action.new_enum2(.write_screen_file, i32(inputpkg.WriteScreenAction.open), i32(inputpkg.WriteScreenFormat.plain)))
 
 	// Expand selection.
@@ -4689,57 +4687,54 @@ pub fn (mut k Keybinds) init() {
 	for i, key in selection_keys {
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(key)
-			mods: inputpkg.Mods{ shift: true }
+			mods: inputpkg.Mods.init(true, false, false, false, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_enum(.adjust_selection, i32(selection_actions[i])), inputpkg.Flags.init(true, false, false, true))
 	}
 
 	// Tabs common to all platforms.
 	k.set.put(inputpkg.Trigger{
 		key: inputpkg.TriggerKey.new_physical(.tab)
-		mods: inputpkg.Mods{ ctrl: true, shift: true }
+		mods: inputpkg.Mods.init(true, true, false, false, false, false, inputpkg.SideInfo{})
 	}, inputpkg.Action.new(.previous_tab))
 	k.set.put(inputpkg.Trigger{
 		key: inputpkg.TriggerKey.new_physical(.tab)
-		mods: inputpkg.Mods{ ctrl: true }
+		mods: inputpkg.Mods.init(false, true, false, false, false, false, inputpkg.SideInfo{})
 	}, inputpkg.Action.new(.next_tab))
 
 	$if !macos {
 		// Non-Darwin windowing.
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`n`))
-			mods: inputpkg.Mods{ ctrl: true, shift: true }
+			mods: inputpkg.Mods.init(true, true, false, false, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.new_window))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`w`))
-			mods: inputpkg.Mods{ ctrl: true, shift: true }
+			mods: inputpkg.Mods.init(true, true, false, false, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.close_surface))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`q`))
-			mods: inputpkg.Mods{ ctrl: true, shift: true }
+			mods: inputpkg.Mods.init(true, true, false, false, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.quit))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.f4)
-			mods: inputpkg.Mods{ alt: true }
+			mods: inputpkg.Mods.init(false, false, true, false, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.close_window))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`t`))
-			mods: inputpkg.Mods{ ctrl: true, shift: true }
+			mods: inputpkg.Mods.init(true, true, false, false, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.new_tab))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`w`))
-			mods: inputpkg.Mods{ ctrl: true, shift: true }
+			mods: inputpkg.Mods.init(true, true, false, false, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_enum(.close_tab, i32(inputpkg.CloseTabMode.this)))
 		for item in [
 			[inputpkg.Key.arrow_left, inputpkg.Key.arrow_right]!,
 			[inputpkg.Key.page_up, inputpkg.Key.page_down]!,
 		] {
 			mods := if item[0] == .page_up {
-				inputpkg.Mods{ ctrl: true }
+				inputpkg.Mods.init(false, true, false, false, false, false, inputpkg.SideInfo{})
 			} else {
-				inputpkg.Mods{
-					ctrl: true
-					shift: true
-				}
+				inputpkg.Mods.init(true, true, false, false, false, false, inputpkg.SideInfo{})
 			}
 			k.set.put_flags(inputpkg.Trigger{
 				key: inputpkg.TriggerKey.new_physical(item[0])
@@ -4752,17 +4747,17 @@ pub fn (mut k Keybinds) init() {
 		}
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`o`))
-			mods: inputpkg.Mods{ ctrl: true, shift: true }
+			mods: inputpkg.Mods.init(true, true, false, false, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_enum(.new_split, i32(inputpkg.SplitDirection.right)))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`e`))
-			mods: inputpkg.Mods{ ctrl: true, shift: true }
+			mods: inputpkg.Mods.init(true, true, false, false, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_enum(.new_split, i32(inputpkg.SplitDirection.down)))
 		for direction, rune_ in [inputpkg.SplitFocusDirection.previous, .next] {
 			key := if direction == 0 { `[` } else { `]` }
 			k.set.put_flags(inputpkg.Trigger{
 				key: inputpkg.TriggerKey.new_unicode(u32(key))
-				mods: inputpkg.Mods{ ctrl: true, super_: true }
+				mods: inputpkg.Mods.init(false, true, false, true, false, false, inputpkg.SideInfo{})
 			}, inputpkg.Action.new_enum(.goto_split, i32(rune_)), inputpkg.Flags.init(true, false, false, true))
 		}
 		focus_keys := [inputpkg.Key.arrow_up, .arrow_down, .arrow_left, .arrow_right]
@@ -4770,14 +4765,14 @@ pub fn (mut k Keybinds) init() {
 		for i, key in focus_keys {
 			k.set.put_flags(inputpkg.Trigger{
 				key: inputpkg.TriggerKey.new_physical(key)
-				mods: inputpkg.Mods{ ctrl: true, alt: true }
+				mods: inputpkg.Mods.init(false, true, true, false, false, false, inputpkg.SideInfo{})
 			}, inputpkg.Action.new_enum(.goto_split, i32(focus_dirs[i])), inputpkg.Flags.init(true, false, false, true))
 		}
 		resize_dirs := [inputpkg.SplitResizeDirection.up, .down, .left, .right]
 		for i, key in focus_keys {
 			k.set.put_flags(inputpkg.Trigger{
 				key: inputpkg.TriggerKey.new_physical(key)
-				mods: inputpkg.Mods{ super_: true, ctrl: true, shift: true }
+				mods: inputpkg.Mods.init(true, true, false, true, false, false, inputpkg.SideInfo{})
 			}, inputpkg.Action.new_enum2(.resize_split, i32(resize_dirs[i]), 10), inputpkg.Flags.init(true, false, false, true))
 		}
 		viewport_keys := [inputpkg.Key.home, .end, .page_up, .page_down]
@@ -4786,43 +4781,41 @@ pub fn (mut k Keybinds) init() {
 		for i, key in viewport_keys {
 			k.set.put(inputpkg.Trigger{
 				key: inputpkg.TriggerKey.new_physical(key)
-				mods: inputpkg.Mods{ shift: true }
+				mods: inputpkg.Mods.init(true, false, false, false, false, false, inputpkg.SideInfo{})
 			}, inputpkg.Action.new(viewport_actions[i]))
 		}
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.page_up)
-			mods: inputpkg.Mods{ shift: true, ctrl: true }
+			mods: inputpkg.Mods.init(true, true, false, false, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_int(.jump_to_prompt, -1))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.page_down)
-			mods: inputpkg.Mods{ shift: true, ctrl: true }
+			mods: inputpkg.Mods.init(true, true, false, false, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_int(.jump_to_prompt, 1))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`f`))
-			mods: inputpkg.Mods{ ctrl: true, shift: true }
+			mods: inputpkg.Mods.init(true, true, false, false, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.start_search), inputpkg.Flags.init(true, false, false, true))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.escape)
 		}, inputpkg.Action.new(.end_search), inputpkg.Flags.init(true, false, false, true))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`i`))
-			mods: inputpkg.Mods{ shift: true, ctrl: true }
+			mods: inputpkg.Mods.init(true, true, false, false, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_enum(.inspector, i32(inputpkg.InspectorMode.toggle)))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`a`))
-			mods: inputpkg.Mods{ shift: true, ctrl: true }
+			mods: inputpkg.Mods.init(true, true, false, false, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.select_all))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.insert)
-			mods: inputpkg.Mods{ shift: true }
+			mods: inputpkg.Mods.init(true, false, false, false, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.paste_from_selection))
 	}
 
 	// Cmd/Alt+N selects tab N. Register both physical and Unicode forms so
 	// layouts such as AZERTY retain the shortcut.
-	index_mods := $if macos { inputpkg.Mods{ super_: true } } $else { inputpkg.Mods{
-		alt: true
-	} }
+	index_mods := $if macos { inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{}) } $else { inputpkg.Mods.init(false, false, true, false, false, false, inputpkg.SideInfo{}) }
 	digit_keys := [inputpkg.Key.digit_1, .digit_2, .digit_3, .digit_4, .digit_5, .digit_6, .digit_7,
 		.digit_8]
 	for i, key in digit_keys {
@@ -4849,38 +4842,38 @@ pub fn (mut k Keybinds) init() {
 	}, inputpkg.Action.new(.toggle_fullscreen))
 	k.set.put(inputpkg.Trigger{
 		key: inputpkg.TriggerKey.new_physical(.enter)
-		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{ shift: true })
+		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods.init(true, false, false, false, false, false, inputpkg.SideInfo{}))
 	}, inputpkg.Action.new(.toggle_split_zoom))
 	k.set.put(inputpkg.Trigger{
 		key: inputpkg.TriggerKey.new_unicode(u32(`p`))
-		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{ shift: true })
+		mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods.init(true, false, false, false, false, false, inputpkg.SideInfo{}))
 	}, inputpkg.Action.new(.toggle_command_palette))
 
 	$if macos {
 		// Darwin application and editing bindings.
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`q`))
-			mods: inputpkg.Mods{ super_: true }
+			mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.quit))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`k`))
-			mods: inputpkg.Mods{ super_: true }
+			mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.clear_screen), inputpkg.Flags.init(true, false, false, true))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`a`))
-			mods: inputpkg.Mods{ super_: true }
+			mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.select_all))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`t`))
-			mods: inputpkg.Mods{ super_: true, shift: true }
+			mods: inputpkg.Mods.init(true, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.undo), inputpkg.Flags.init(true, false, false, true))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`z`))
-			mods: inputpkg.Mods{ super_: true }
+			mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.undo), inputpkg.Flags.init(true, false, false, true))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`z`))
-			mods: inputpkg.Mods{ super_: true, shift: true }
+			mods: inputpkg.Mods.init(true, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.redo), inputpkg.Flags.init(true, false, false, true))
 
 		viewport_keys := [inputpkg.Key.home, .end, .page_up, .page_down]
@@ -4889,20 +4882,20 @@ pub fn (mut k Keybinds) init() {
 		for i, key in viewport_keys {
 			k.set.put(inputpkg.Trigger{
 				key: inputpkg.TriggerKey.new_physical(key)
-				mods: inputpkg.Mods{ super_: true }
+				mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 			}, inputpkg.Action.new(viewport_actions[i]))
 		}
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`j`))
-			mods: inputpkg.Mods{ super_: true }
+			mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.scroll_to_selection), inputpkg.Flags.init(true, false, false, true))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.arrow_up)
-			mods: inputpkg.Mods{ super_: true, shift: true }
+			mods: inputpkg.Mods.init(true, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_int(.jump_to_prompt, -1))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.arrow_down)
-			mods: inputpkg.Mods{ super_: true, shift: true }
+			mods: inputpkg.Mods.init(true, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_int(.jump_to_prompt, 1))
 
 		window_bindings := [
@@ -4913,44 +4906,44 @@ pub fn (mut k Keybinds) init() {
 		for binding in window_bindings {
 			k.set.put(inputpkg.Trigger{
 				key: inputpkg.TriggerKey.new_unicode(binding[0])
-				mods: inputpkg.Mods{ super_: true }
+				mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 			}, inputpkg.Action.new(unsafe { inputpkg.ActionTag(binding[1]) }))
 		}
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`w`))
-			mods: inputpkg.Mods{ super_: true, alt: true }
+			mods: inputpkg.Mods.init(false, false, true, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_enum(.close_tab, i32(inputpkg.CloseTabMode.this)))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`w`))
-			mods: inputpkg.Mods{ super_: true, shift: true }
+			mods: inputpkg.Mods.init(true, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.close_window))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`w`))
-			mods: inputpkg.Mods{ super_: true, shift: true, alt: true }
+			mods: inputpkg.Mods.init(true, false, true, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.close_all_windows))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`[`))
-			mods: inputpkg.Mods{ super_: true, shift: true }
+			mods: inputpkg.Mods.init(true, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.previous_tab))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`]`))
-			mods: inputpkg.Mods{ super_: true, shift: true }
+			mods: inputpkg.Mods.init(true, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.next_tab))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`d`))
-			mods: inputpkg.Mods{ super_: true }
+			mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_enum(.new_split, i32(inputpkg.SplitDirection.right)))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`d`))
-			mods: inputpkg.Mods{ super_: true, shift: true }
+			mods: inputpkg.Mods.init(true, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_enum(.new_split, i32(inputpkg.SplitDirection.down)))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`[`))
-			mods: inputpkg.Mods{ super_: true }
+			mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_enum(.goto_split, i32(inputpkg.SplitFocusDirection.previous)))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`]`))
-			mods: inputpkg.Mods{ super_: true }
+			mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_enum(.goto_split, i32(inputpkg.SplitFocusDirection.next)))
 		arrow_keys := [inputpkg.Key.arrow_up, .arrow_down, .arrow_left, .arrow_right]
 		focus_dirs := [inputpkg.SplitFocusDirection.up, .down, .left, .right]
@@ -4958,82 +4951,82 @@ pub fn (mut k Keybinds) init() {
 		for i, key in arrow_keys {
 			k.set.put(inputpkg.Trigger{
 				key: inputpkg.TriggerKey.new_physical(key)
-				mods: inputpkg.Mods{ super_: true, alt: true }
+				mods: inputpkg.Mods.init(false, false, true, true, false, false, inputpkg.SideInfo{})
 			}, inputpkg.Action.new_enum(.goto_split, i32(focus_dirs[i])))
 			k.set.put(inputpkg.Trigger{
 				key: inputpkg.TriggerKey.new_physical(key)
-				mods: inputpkg.Mods{ super_: true, ctrl: true }
+				mods: inputpkg.Mods.init(false, true, false, true, false, false, inputpkg.SideInfo{})
 			}, inputpkg.Action.new_enum2(.resize_split, i32(resize_dirs[i]), 10))
 		}
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`=`))
-			mods: inputpkg.Mods{ super_: true, ctrl: true }
+			mods: inputpkg.Mods.init(false, true, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.equalize_splits))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.arrow_up)
-			mods: inputpkg.Mods{ super_: true }
+			mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_int(.jump_to_prompt, -1))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.arrow_down)
-			mods: inputpkg.Mods{ super_: true }
+			mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_int(.jump_to_prompt, 1))
 
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`f`))
-			mods: inputpkg.Mods{ super_: true }
+			mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.start_search), inputpkg.Flags.init(true, false, false, true))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`e`))
-			mods: inputpkg.Mods{ super_: true }
+			mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.search_selection), inputpkg.Flags.init(true, false, false, true))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`f`))
-			mods: inputpkg.Mods{ super_: true, shift: true }
+			mods: inputpkg.Mods.init(true, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.end_search), inputpkg.Flags.init(true, false, false, true))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.escape)
 		}, inputpkg.Action.new(.end_search), inputpkg.Flags.init(true, false, false, true))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`g`))
-			mods: inputpkg.Mods{ super_: true }
+			mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_enum(.navigate_search, i32(inputpkg.NavigateSearch.next)), inputpkg.Flags.init(true, false, false, true))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`g`))
-			mods: inputpkg.Mods{ super_: true, shift: true }
+			mods: inputpkg.Mods.init(true, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_enum(.navigate_search, i32(inputpkg.NavigateSearch.previous)), inputpkg.Flags.init(true, false, false, true))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`i`))
-			mods: inputpkg.Mods{ alt: true, super_: true }
+			mods: inputpkg.Mods.init(false, false, true, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_enum(.inspector, i32(inputpkg.InspectorMode.toggle)))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`f`))
-			mods: inputpkg.Mods{ super_: true, ctrl: true }
+			mods: inputpkg.Mods.init(false, true, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.toggle_fullscreen))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`v`))
-			mods: inputpkg.Mods{ super_: true, shift: true }
+			mods: inputpkg.Mods.init(true, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new(.paste_from_selection))
 
 		// Natural text editing keys use legacy sequences on macOS.
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.arrow_right)
-			mods: inputpkg.Mods{ super_: true }
+			mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_str(.text, '\x05'))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.arrow_left)
-			mods: inputpkg.Mods{ super_: true }
+			mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_str(.text, '\x01'))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.backspace)
-			mods: inputpkg.Mods{ super_: true }
+			mods: inputpkg.Mods.init(false, false, false, true, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_str(.text, '\x15'))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.arrow_left)
-			mods: inputpkg.Mods{ alt: true }
+			mods: inputpkg.Mods.init(false, false, true, false, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_str(.esc, 'b'))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.arrow_right)
-			mods: inputpkg.Mods{ alt: true }
+			mods: inputpkg.Mods.init(false, false, true, false, false, false, inputpkg.SideInfo{})
 		}, inputpkg.Action.new_str(.esc, 'f'))
 	}
 }
@@ -6659,8 +6652,7 @@ pub struct ShellIntegrationFeatures {
 
 pub fn ShellIntegrationFeatures.init(cursor bool, sudo bool, title bool, ssh_env bool, ssh_terminfo bool, path bool) ShellIntegrationFeatures {
 	return ShellIntegrationFeatures{
-		value: u8(cursor) | (u8(sudo) << 1) | (u8(title) << 2) | (u8(ssh_env) << 3) |
-			(u8(ssh_terminfo) << 4) | (u8(path) << 5)
+		value: u8(cursor) | (u8(sudo) << 1) | (u8(title) << 2) | (u8(ssh_env) << 3) | (u8(ssh_terminfo) << 4) | (u8(path) << 5)
 	}
 }
 
@@ -6732,8 +6724,7 @@ pub struct BellFeatures {
 
 pub fn BellFeatures.init(system bool, audio bool, attention bool, title bool, border bool) BellFeatures {
 	return BellFeatures{
-		value: u8(system) | (u8(audio) << 1) | (u8(attention) << 2) | (u8(title) << 3) |
-			(u8(border) << 4)
+		value: u8(system) | (u8(audio) << 1) | (u8(attention) << 2) | (u8(title) << 3) | (u8(border) << 4)
 	}
 }
 
@@ -6794,8 +6785,10 @@ pub fn (config AppNotifications) int_val() u8 {
 }
 
 pub fn (config AppNotifications) format_entry() string {
-	return [if config.clipboard_copy() { 'clipboard-copy' } else { 'no-clipboard-copy' },
-		if config.config_reload() { 'config-reload' } else { 'no-config-reload' }].join(',')
+	return [
+		if config.clipboard_copy() { 'clipboard-copy' } else { 'no-clipboard-copy' },
+		if config.config_reload() { 'config-reload' } else { 'no-config-reload' },
+	].join(',')
 }
 
 pub enum ShellIntegration {
@@ -9582,8 +9575,7 @@ fn parse_freetype_load_flags(value string) ?font.FreetypeLoadFlags {
 			}
 		}
 	}
-	return font.FreetypeLoadFlags.init(hinting, force_autohint, monochrome, autohint,
-		light)
+	return font.FreetypeLoadFlags.init(hinting, force_autohint, monochrome, autohint, light)
 }
 
 fn metric_modifier_parse_cli(value string) !font.MetricsModifier {

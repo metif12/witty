@@ -249,19 +249,19 @@ pub fn (self X11App) event_mods(device GdkDevice, gtk_mods u32) ?input.Mods {
 
 	mut mods := input.Mods{}
 	if lookup_mods & x_shift_mask != 0 {
-		mods.shift = true
+		mods.set_shift(true)
 	}
 	if lookup_mods & x_control_mask != 0 {
-		mods.ctrl = true
+		mods.set_ctrl(true)
 	}
 	if lookup_mods & x_mod1_mask != 0 {
-		mods.alt = true
+		mods.set_alt(true)
 	}
 	if lookup_mods & x_mod4_mask != 0 {
-		mods.super_ = true
+		mods.set_super(true)
 	}
 	if lookup_mods & x_lock_mask != 0 {
-		mods.caps_lock = true
+		mods.set_caps_lock(true)
 	}
 
 	return mods

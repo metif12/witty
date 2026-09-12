@@ -157,7 +157,7 @@ fn test_core_app_key_event_dispatches_app_binding() {
 	mut config := configpkg.Config.default_config()
 	trigger := input.Trigger{
 		key: input.TriggerKey.new_physical(.f25)
-		mods: input.Mods{ ctrl: true, alt: true }
+		mods: input.Mods.init(false, true, true, false, false, false, input.SideInfo{})
 	}
 	config.keybind.set.put(trigger, input.Action.new(.open_config))
 	mut core_app := CoreApp{}
@@ -172,7 +172,7 @@ fn test_core_app_key_event_dispatches_app_binding() {
 	event := input.KeyEvent{
 		action: .press
 		key: .f25
-		mods: input.Mods{ ctrl: true, alt: true }
+		mods: input.Mods.init(false, true, true, false, false, false, input.SideInfo{})
 	}
 	assert core_app.key_event_is_binding(&app, voidptr(&event))
 	assert core_app.key_event(&app, voidptr(&event))
@@ -198,7 +198,7 @@ fn test_core_app_key_event_is_binding_includes_leader_entries() {
 	event := input.KeyEvent{
 		action: .press
 		key: .key_a
-		mods: input.Mods{ ctrl: true }
+		mods: input.Mods.init(false, true, false, false, false, false, input.SideInfo{})
 		utf8: 'a'
 	}
 
@@ -399,7 +399,7 @@ fn test_embedded_inspector_context_and_input_dispatch() {
 	inspector.cursor_pos_callback(12, 24)
 	inspector.focus_callback(true)
 	inspector.text_callback('hello')
-	inspector.key_callback(.press, .key_a, input.Mods{ super_: true })!
+	inspector.key_callback(.press, .key_a, input.Mods.init(false, false, false, true, false, false, input.SideInfo{}))!
 	assert capture.action.action == .render_inspector
 	match capture.target {
 		SurfaceTarget {
@@ -434,7 +434,7 @@ fn test_surface_options_default() {
 fn test_embedded_key_event_core() {
 	event := EmbeddedKeyEvent{
 		action: .press
-		mods: input.Mods{ shift: true }
+		mods: input.Mods.init(true, false, false, false, false, false, input.SideInfo{})
 		consumed_mods: input.Mods{}
 		keycode: 0
 		text: 'A'
@@ -448,7 +448,7 @@ fn test_embedded_key_event_core() {
 	}
 
 	assert core_event.action == .press
-	assert core_event.mods.shift == true
+	assert core_event.mods.shift() == true
 	assert core_event.utf8 == 'A'
 	assert core_event.unshifted_codepoint == 0x41
 	assert core_event.composing == false
@@ -523,72 +523,47 @@ fn test_capi_key_event_conversion() {
 
 	event := capi.key_event()
 	assert event.action == .press
-	assert event.mods.shift == true
-	assert event.mods.alt == true
-	assert event.mods.ctrl == false
-	assert event.consumed_mods.shift == true
-	assert event.consumed_mods.alt == false
+	assert event.mods.shift() == true
+	assert event.mods.alt() == true
+	assert event.mods.ctrl() == false
+	assert event.consumed_mods.shift() == true
+	assert event.consumed_mods.alt() == false
 	assert event.keycode == 10
 }
 
 // Test mods_from_int / mods_to_int roundtrip.
 fn test_mods_roundtrip() {
-	original := input.Mods{
-		shift: true
-		ctrl: true
-		alt: true
-		super_: true
-		caps_lock: true
-		num_lock: true
-		sides: input.SideInfo{
-			shift: .right
-			ctrl: .right
-			alt: .right
-			super: .right
-		}
-	}
+	original := input.Mods.init(true, true, true, true, true, true, input.SideInfo.init(.right, .right, .right, .right))
 
 	encoded := mods_to_int(original)
 	decoded := mods_from_int(encoded)
 
-	assert decoded.shift == original.shift
-	assert decoded.ctrl == original.ctrl
-	assert decoded.alt == original.alt
-	assert decoded.super_ == original.super_
-	assert decoded.caps_lock == original.caps_lock
-	assert decoded.num_lock == original.num_lock
-	assert decoded.sides.shift == original.sides.shift
-	assert decoded.sides.ctrl == original.sides.ctrl
-	assert decoded.sides.alt == original.sides.alt
-	assert decoded.sides.super == original.sides.super
+	assert decoded.shift() == original.shift()
+	assert decoded.ctrl() == original.ctrl()
+	assert decoded.alt() == original.alt()
+	assert decoded.super_() == original.super_()
+	assert decoded.caps_lock() == original.caps_lock()
+	assert decoded.num_lock() == original.num_lock()
+	assert decoded.sides().shift() == original.sides().shift()
+	assert decoded.sides().ctrl() == original.sides().ctrl()
+	assert decoded.sides().alt() == original.sides().alt()
+	assert decoded.sides().super_() == original.sides().super_()
 }
 
 // Test mods_from_int with zero.
 fn test_mods_from_int_zero() {
 	m := mods_from_int(0)
-	assert m.shift == false
-	assert m.ctrl == false
-	assert m.alt == false
-	assert m.super_ == false
+	assert m.shift() == false
+	assert m.ctrl() == false
+	assert m.alt() == false
+	assert m.super_() == false
 }
 
 // Test mods_to_int with all set.
 fn test_mods_to_int_all() {
-	m := input.Mods{
-		shift: true
-		ctrl: true
-		alt: true
-		super_: true
-		caps_lock: true
-		num_lock: true
-		sides: input.SideInfo{
-			shift: .right
-			ctrl: .right
-			alt: .right
-			super: .right
-		}
-	}
+	m := input.Mods.init(true, true, true, true, true, true, input.SideInfo.init(.right, .right, .right, .right))
 	assert mods_to_int(m) == 0x3FF
+	assert mods_to_int(mods_from_int(0xffff)) == 0xffff
 }
 
 // Test PlatformTag enum values.
@@ -860,11 +835,8 @@ fn test_surface_key_translation_mods_honors_explicit_option_as_alt() {
 	$if macos {
 		mut surface := Surface{}
 		surface.core_surface.config.macos_option_as_alt = .true_
-		mods := input.Mods{
-			alt: true
-			sides: input.SideInfo{ alt: .left }
-		}
+		mods := input.Mods.init(false, false, true, false, false, false, input.SideInfo.init(.left, .left, .left, .left))
 		translated := mods_from_int(ghostty_surface_key_translation_mods(&surface, mods_to_int(mods)))
-		assert !translated.alt
+		assert !translated.alt()
 	}
 }

@@ -11,7 +11,7 @@ fn test_key_event_owns_data_and_formats_details() {
 	mut source := input.KeyEvent{
 		action: .press
 		key: .unidentified
-		mods: input.Mods{ shift: true, ctrl: true }
+		mods: input.Mods.init(true, true, false, false, false, false, input.SideInfo{})
 		composing: true
 		utf8: 'é'
 	}
@@ -78,7 +78,7 @@ fn test_inspector_renders_key_stream_into_real_imgui_frame() {
 	mut event := KeyEvent.init(input.KeyEvent{
 		action: .press
 		key: .key_a
-		mods: input.Mods{ shift: true, super_: true }
+		mods: input.Mods.init(true, false, false, true, false, false, input.SideInfo{})
 		utf8: 'A'
 	})
 	event.binding = [input.Action.new(.copy_to_clipboard)]

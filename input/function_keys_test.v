@@ -69,7 +69,7 @@ fn test_kp_keys() {
 fn test_kp_keys_encode_modified() {
 	result := legacy_encode(KeyEvent{
 		key: .numpad_1
-		mods: Mods{ shift: true }
+		mods: Mods.init(true, false, false, false, false, false, SideInfo{})
 		utf8: '1'
 	}, Options{
 		keypad_key_application: true

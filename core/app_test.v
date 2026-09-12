@@ -243,7 +243,7 @@ fn test_app_key_event_uses_runtime_config_binding() {
 	mut cfg := configpkg.Config.default_config()
 	cfg.keybind.set.put(input.Trigger{
 		key: input.TriggerKey.new_unicode(u32(`q`))
-		mods: input.Mods{ super_: true }
+		mods: input.Mods.init(false, false, false, true, false, false, input.SideInfo{})
 	}, input.Action.new(.quit))
 	mut runtime := apprt.RuntimeApp{
 		config: cfg
@@ -252,7 +252,7 @@ fn test_app_key_event_uses_runtime_config_binding() {
 	used := app.key_event(mut runtime, input.KeyEvent{
 		key: .key_q
 		action: .press
-		mods: input.Mods{ super_: true }
+		mods: input.Mods.init(false, false, false, true, false, false, input.SideInfo{})
 		utf8: 'q'
 	})
 	assert used
@@ -270,7 +270,7 @@ fn test_app_key_event_is_binding_includes_leader_entries() {
 	event := input.KeyEvent{
 		key: .key_a
 		action: .press
-		mods: input.Mods{ ctrl: true }
+		mods: input.Mods.init(false, true, false, false, false, false, input.SideInfo{})
 		utf8: 'a'
 	}
 

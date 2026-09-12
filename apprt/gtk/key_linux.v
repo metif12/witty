@@ -341,16 +341,16 @@ pub fn accel_from_trigger(trigger input.Trigger) ?string {
 	mut sb := ''
 
 	// Modifiers
-	if trigger.mods.shift {
+	if trigger.mods.shift() {
 		sb += '<Shift>'
 	}
-	if trigger.mods.ctrl {
+	if trigger.mods.ctrl() {
 		sb += '<Ctrl>'
 	}
-	if trigger.mods.alt {
+	if trigger.mods.alt() {
 		sb += '<Alt>'
 	}
-	if trigger.mods.super_ {
+	if trigger.mods.super_() {
 		sb += '<Super>'
 	}
 
@@ -368,16 +368,16 @@ pub fn xdg_shortcut_from_trigger(trigger input.Trigger) ?string {
 	mut sb := ''
 
 	// Modifiers
-	if trigger.mods.shift {
+	if trigger.mods.shift() {
 		sb += 'SHIFT+'
 	}
-	if trigger.mods.ctrl {
+	if trigger.mods.ctrl() {
 		sb += 'CTRL+'
 	}
-	if trigger.mods.alt {
+	if trigger.mods.alt() {
 		sb += 'ALT+'
 	}
-	if trigger.mods.super_ {
+	if trigger.mods.super_() {
 		sb += 'LOGO+'
 	}
 
@@ -419,16 +419,16 @@ pub fn label_from_trigger(trigger input.Trigger) ?string {
 	mut sb := ''
 
 	// Modifiers first, using human-readable format
-	if trigger.mods.super_ {
+	if trigger.mods.super_() {
 		sb += 'Super+'
 	}
-	if trigger.mods.ctrl {
+	if trigger.mods.ctrl() {
 		sb += 'Ctrl+'
 	}
-	if trigger.mods.alt {
+	if trigger.mods.alt() {
 		sb += 'Alt+'
 	}
-	if trigger.mods.shift {
+	if trigger.mods.shift() {
 		sb += 'Shift+'
 	}
 
@@ -487,14 +487,8 @@ const gdk_super_mask = u32(1) << 26
 // translate_mods converts a GDK ModifierType bitmask into input.Mods.
 // Mirrors `translateMods`.
 pub fn translate_mods(state u32) input.Mods {
-	return input.Mods{
-		shift: (state & gdk_shift_mask) != 0
-		ctrl: (state & gdk_control_mask) != 0
-		alt: (state & gdk_alt_mask) != 0
-		super_: (state & gdk_super_mask) != 0
-		// Lock is dependent on X settings but we assume caps lock.
-		caps_lock: (state & gdk_lock_mask) != 0
-	}
+	// Lock is dependent on X settings but we assume caps lock.
+	return input.Mods.init((state & gdk_shift_mask) != 0, (state & gdk_control_mask) != 0, (state & gdk_alt_mask) != 0, (state & gdk_super_mask) != 0, (state & gdk_lock_mask) != 0, false, input.SideInfo{})
 }
 
 // --- GDK keyval helpers (string wrappers) ---------------------------------

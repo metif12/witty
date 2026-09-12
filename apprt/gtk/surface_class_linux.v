@@ -701,11 +701,11 @@ fn terminal_surface_set_property(obj voidptr, property_id u32, value voidptr, ps
 		}
 		surface_prop_pwd {
 			text := C.g_value_get_string(value)
-			self.set_pwd(if isnil(text) { none } else { unsafe { cstring_to_vstring(text) } })
+			self.set_pwd(if isnil(text) { none } else { cstring_to_vstring(text) })
 		}
 		surface_prop_title {
 			text := C.g_value_get_string(value)
-			self.set_title(if isnil(text) { none } else { unsafe { cstring_to_vstring(text) } })
+			self.set_title(if isnil(text) { none } else { cstring_to_vstring(text) })
 		}
 		surface_prop_title_override {
 			text := C.g_value_get_string(value)
@@ -1704,8 +1704,8 @@ fn surface_media_file_error_cb(media_file GtkMediaFile, pspec voidptr, data void
 	}
 	c_err := unsafe { &C.GError(err) }
 	domain_ptr := C.g_quark_to_string(c_err.domain)
-	domain := if isnil(domain_ptr) { '' } else { unsafe { cstring_to_vstring(domain_ptr) } }
-	message := if isnil(c_err.message) { '' } else { unsafe { cstring_to_vstring(c_err.message) } }
+	domain := if isnil(domain_ptr) { '' } else { cstring_to_vstring(domain_ptr) }
+	message := if isnil(c_err.message) { '' } else { cstring_to_vstring(c_err.message) }
 	eprintln('error playing bell from ${path}: ${domain} ${c_err.code} ${message}')
 }
 
@@ -1901,7 +1901,7 @@ pub fn (mut self SurfaceWidget) key_event(action input.KeyAction, event GdkEvent
 		translate_mods(gtk_mods)
 	}
 	if !isnil(device) {
-		mods.num_lock = C.gdk_device_get_num_lock_state(device)
+		mods.set_num_lock(C.gdk_device_get_num_lock_state(device))
 	}
 	self.apply_sided_mods(mut mods, physical_key, action)
 
@@ -2009,36 +2009,36 @@ fn (self &SurfaceWidget) apply_sided_mods(mut mods input.Mods, physical_key inpu
 	pressed := action != .release
 	match physical_key {
 		.shift_left {
-			mods.shift = pressed
-			mods.sides.shift = .left
+			mods.set_shift(pressed)
+			mods.set_side_shift(.left)
 		}
 		.shift_right {
-			mods.shift = pressed
-			mods.sides.shift = .right
+			mods.set_shift(pressed)
+			mods.set_side_shift(.right)
 		}
 		.control_left {
-			mods.ctrl = pressed
-			mods.sides.ctrl = .left
+			mods.set_ctrl(pressed)
+			mods.set_side_ctrl(.left)
 		}
 		.control_right {
-			mods.ctrl = pressed
-			mods.sides.ctrl = .right
+			mods.set_ctrl(pressed)
+			mods.set_side_ctrl(.right)
 		}
 		.alt_left {
-			mods.alt = pressed
-			mods.sides.alt = .left
+			mods.set_alt(pressed)
+			mods.set_side_alt(.left)
 		}
 		.alt_right {
-			mods.alt = pressed
-			mods.sides.alt = .right
+			mods.set_alt(pressed)
+			mods.set_side_alt(.right)
 		}
 		.meta_left {
-			mods.super_ = pressed
-			mods.sides.super = .left
+			mods.set_super(pressed)
+			mods.set_side_super(.left)
 		}
 		.meta_right {
-			mods.super_ = pressed
-			mods.sides.super = .right
+			mods.set_super(pressed)
+			mods.set_side_super(.right)
 		}
 		else {}
 	}
@@ -2840,8 +2840,7 @@ fn surface_core_action_cb(data voidptr, action apprt.RuntimeAction) !bool {
 			return self.command_finished(action.data.command_finished_)
 		}
 		.desktop_notification {
-			self.send_desktop_notification(action.data.desktop_notification.title,
-				action.data.desktop_notification.body)
+			self.send_desktop_notification(action.data.desktop_notification.title, action.data.desktop_notification.body)
 			return true
 		}
 		.readonly {

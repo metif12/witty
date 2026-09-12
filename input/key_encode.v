@@ -228,8 +228,8 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 		mut alt_prevents_text := true
 		$if macos {
 			alt_prevents_text = match opts.macos_option_as_alt {
-				.left { all_mods.sides.alt == .left }
-				.right { all_mods.sides.alt == .right }
+				.left { all_mods.sides().alt() == .left }
+				.right { all_mods.sides().alt() == .right }
 				.true_ { true }
 				.false_ { false }
 			}
@@ -299,7 +299,7 @@ fn legacy_encode(event KeyEvent, opts Options) string {
 	// If we match a control sequence, we output that directly.
 	if ch := ctrl_seq(event.key, event.utf8, event.unshifted_codepoint, all_mods) {
 		// C0 sequences support alt-as-esc prefixing.
-		if binding_mods.alt {
+		if binding_mods.alt() {
 			return '\x1b' + [ch].bytestr()
 		}
 		return [ch].bytestr()
@@ -331,17 +331,17 @@ fn legacy_encode(event KeyEvent, opts Options) string {
 						// alt stays as-is
 					}
 					.left {
-						if event.mods.sides.alt == .left {
+						if event.mods.sides().alt() == .left {
 							// alt stays as-is
 						} else {
-							mods_binding.alt = false
+							mods_binding.set_alt(false)
 						}
 					}
 					.right {
-						if event.mods.sides.alt == .right {
+						if event.mods.sides().alt() == .right {
 							// alt stays as-is
 						} else {
-							mods_binding.alt = false
+							mods_binding.set_alt(false)
 						}
 					}
 				}
@@ -358,7 +358,7 @@ fn legacy_encode(event KeyEvent, opts Options) string {
 			if !should_modify {
 				// If we have anything other than shift pressed, encode.
 				mut mods_no_shift := mods_binding
-				mods_no_shift.shift = false
+				mods_no_shift.set_shift(false)
 				if !mods_no_shift.empty() {
 					should_modify = true
 				}
@@ -385,7 +385,7 @@ fn legacy_encode(event KeyEvent, opts Options) string {
 	// Let's see if we should apply fixterms to this codepoint.
 	// At this stage of key processing, we only need to apply fixterms
 	// to unicode codepoints if we have ctrl set.
-	if event.mods.ctrl {
+	if event.mods.ctrl() {
 		// Important: we want to use the original mods here, not the
 		// effective mods.
 		runes := event.utf8.runes()
@@ -419,7 +419,7 @@ fn legacy_encode(event KeyEvent, opts Options) string {
 
 	// If we are on macOS, command+keys do not encode text.
 	$if macos {
-		if all_mods.super_ {
+		if all_mods.super_() {
 			return ''
 		}
 	}
@@ -431,7 +431,7 @@ fn legacy_encode(event KeyEvent, opts Options) string {
 // alt prefix should be applied.
 fn legacy_alt_prefix(event KeyEvent, binding_mods Mods, mods Mods, opts Options) ?u8 {
 	// This only takes effect with alt pressed
-	if !binding_mods.alt || !opts.alt_esc_prefix {
+	if !binding_mods.alt() || !opts.alt_esc_prefix {
 		return none
 	}
 
@@ -442,12 +442,12 @@ fn legacy_alt_prefix(event KeyEvent, binding_mods Mods, mods Mods, opts Options)
 				return none
 			}
 			.left {
-				if mods.sides.alt == .right {
+				if mods.sides().alt() == .right {
 					return none
 				}
 			}
 			.right {
-				if mods.sides.alt == .left {
+				if mods.sides().alt() == .left {
 					return none
 				}
 			}
@@ -564,7 +564,7 @@ fn pc_style_function_key(keyval Key, mods Mods, cursor_key_application bool, key
 // into a C0 byte.
 fn ctrl_seq(logical_key Key, utf8 string, unshifted_codepoint u32, mods Mods) ?u8 {
 	// If ctrl is not pressed then we never do anything.
-	if !mods.ctrl {
+	if !mods.ctrl() {
 		return none
 	}
 
@@ -575,7 +575,7 @@ fn ctrl_seq(logical_key Key, utf8 string, unshifted_codepoint u32, mods Mods) ?u
 	// Remove alt from our modifiers because it does not impact whether
 	// we are generating a ctrl sequence and we handle the ESC-prefix
 	// logic separately.
-	unset_mods.alt = false
+	unset_mods.set_alt(false)
 
 	mut ch := u8(0)
 	mut got_char := false
@@ -594,7 +594,7 @@ fn ctrl_seq(logical_key Key, utf8 string, unshifted_codepoint u32, mods Mods) ?u
 			if cp < 256 {
 				// For this specific case, we only map to the key if
 				// we have exactly ctrl pressed.
-				ctrl_only := Mods{ ctrl: true }
+				ctrl_only := Mods.init(false, true, false, false, false, false, SideInfo{})
 				if unset_mods.int() != ctrl_only.int() {
 					return none
 				}
@@ -611,10 +611,10 @@ fn ctrl_seq(logical_key Key, utf8 string, unshifted_codepoint u32, mods Mods) ?u
 	// Remove shift if we have something outside of the US letter
 	// range. This is so that characters such as `ctrl+shift+-`
 	// generate the correct ctrl-seq (used by emacs).
-	if unset_mods.shift && (ch < u8(`A`) || ch > u8(`Z`)) {
+	if unset_mods.shift() && (ch < u8(`A`) || ch > u8(`Z`)) {
 		// Special case for fixterms awkward case as specified.
 		if ch != u8(`@`) {
-			unset_mods.shift = false
+			unset_mods.set_shift(false)
 		}
 	}
 
@@ -627,7 +627,7 @@ fn ctrl_seq(logical_key Key, utf8 string, unshifted_codepoint u32, mods Mods) ?u
 	}
 
 	// After unsetting, we only continue if we have ONLY control set.
-	ctrl_only := Mods{ ctrl: true }
+	ctrl_only := Mods.init(false, true, false, false, false, false, SideInfo{})
 	if unset_mods.int() != ctrl_only.int() {
 		return none
 	}
@@ -724,7 +724,7 @@ mut:
 // from_input converts input mods to CSI u mods.
 fn CsiUMods.from_input(mods Mods) CsiUMods {
 	return CsiUMods{
-		value: u8(mods.shift) | (u8(mods.alt) << 1) | (u8(mods.ctrl) << 2)
+		value: u8(mods.shift()) | (u8(mods.alt()) << 1) | (u8(mods.ctrl()) << 2)
 	}
 }
 
@@ -762,7 +762,7 @@ fn KittyMods.from_input(action KeyAction, k Key, mods Mods) KittyMods {
 	_ = action
 	_ = k
 	return KittyMods{
-		value: u8(mods.shift) | (u8(mods.alt) << 1) | (u8(mods.ctrl) << 2) | (u8(mods.super_) << 3) | (u8(mods.caps_lock) << 6) | (u8(mods.num_lock) << 7)
+		value: u8(mods.shift()) | (u8(mods.alt()) << 1) | (u8(mods.ctrl()) << 2) | (u8(mods.super_()) << 3) | (u8(mods.caps_lock()) << 6) | (u8(mods.num_lock()) << 7)
 	}
 }
 

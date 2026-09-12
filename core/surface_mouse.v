@@ -45,15 +45,15 @@ fn eligible_mouse_shape_key_event(physical_key input.Key) bool {
 }
 
 fn is_mouse_mode_override_state(mods input.Mods) bool {
-	return mods.shift
+	return mods.shift()
 }
 
 // Returns true if our modifiers put us in a state where dragging should
 // cause a rectangle selection.
 pub fn is_rectangle_select_state(mods input.Mods) bool {
 	$if macos {
-		return mods.alt
+		return mods.alt()
 	} $else {
-		return mods.ctrl_or_super() && mods.alt
+		return mods.ctrl_or_super() && mods.alt()
 	}
 }

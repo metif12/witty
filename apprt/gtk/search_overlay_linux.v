@@ -287,7 +287,7 @@ fn (self &SearchOverlay) emit_search_changed(text string) {
 pub fn (self &SearchOverlay) search_entry_key_pressed(keyval u32, keycode u32, gtk_mods u32) bool {
 	if keyval == gdk_key_return || keyval == gdk_key_kp_enter {
 		mods := translate_mods(gtk_mods)
-		if mods.shift {
+		if mods.shift() {
 			self.previous_match()
 		} else {
 			self.next_match()
@@ -582,7 +582,7 @@ fn search_match_label_closure_cb(instance voidptr, has_selected int, selected u6
 fn search_entry_key_pressed_cb(controller voidptr, keyval u32, keycode u32, gtk_mods u32, instance voidptr) int {
 	if keyval == gdk_key_return || keyval == gdk_key_kp_enter {
 		mods := translate_mods(gtk_mods)
-		if mods.shift {
+		if mods.shift() {
 			if !isnil(instance) {
 				C.g_signal_emit_by_name(instance, c'previous-match')
 			}

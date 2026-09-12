@@ -1137,10 +1137,10 @@ pub fn (mut self TerminalInspector) text_callback(text string) {
 pub fn (mut self TerminalInspector) key_callback(action input.KeyAction, key input.Key, mods input.Mods) ! {
 	self.queue_render()
 
-	self.context.add_key(.left_shift, mods.shift)
-	self.context.add_key(.left_ctrl, mods.ctrl)
-	self.context.add_key(.left_alt, mods.alt)
-	self.context.add_key(.left_super, mods.super_)
+	self.context.add_key(.left_shift, mods.shift())
+	self.context.add_key(.left_ctrl, mods.ctrl())
+	self.context.add_key(.left_alt, mods.alt())
+	self.context.add_key(.left_super, mods.super_())
 
 	if imgui_key := key.imgui_key() {
 		self.context.add_key(imgui_key, action == .press || action == .repeat)

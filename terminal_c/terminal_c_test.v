@@ -76,18 +76,18 @@ fn test_key_event_set_and_get() {
 
 	event.set_action(.repeat)
 	event.set_key(.key_z)
-	event.set_mods(input.Mods{ alt: true, super_: true })
-	event.set_consumed_mods(input.Mods{ alt: true })
+	event.set_mods(input.Mods.init(false, false, true, true, false, false, input.SideInfo{}))
+	event.set_consumed_mods(input.Mods.init(false, false, true, false, false, false, input.SideInfo{}))
 	event.set_composing(true)
 	event.set_utf8('test')
 	event.set_unshifted_codepoint(u32(`z`))
 
 	assert event.get_action() == .repeat
 	assert event.get_key() == .key_z
-	assert event.get_mods().alt
-	assert event.get_mods().super_
-	assert event.get_consumed_mods().alt
-	assert !event.get_consumed_mods().super_
+	assert event.get_mods().alt()
+	assert event.get_mods().super_()
+	assert event.get_consumed_mods().alt()
+	assert !event.get_consumed_mods().super_()
 	assert event.get_composing()
 	assert event.get_utf8() == 'test'
 	assert event.get_unshifted_codepoint() == u32(`z`)

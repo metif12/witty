@@ -43,37 +43,37 @@ fn test_parse_single_character() {
 
 fn test_parse_single_modifier() {
 	b := parse_single('shift+a=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.shift == true
+	assert b.trigger.mods.shift() == true
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 	assert b.action.tag == .ignore
 
 	b2 := parse_single('ctrl+a=ignore') or { panic(err.msg()) }
-	assert b2.trigger.mods.ctrl == true
+	assert b2.trigger.mods.ctrl() == true
 	assert b2.trigger.key == TriggerKey.new_unicode(u32(`a`))
 }
 
 fn test_parse_multiple_modifiers() {
 	b := parse_single('shift+ctrl+a=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.shift == true
-	assert b.trigger.mods.ctrl == true
+	assert b.trigger.mods.shift() == true
+	assert b.trigger.mods.ctrl() == true
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 }
 
 fn test_parse_key_before_modifier() {
 	b := parse_single('a+shift=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.shift == true
+	assert b.trigger.mods.shift() == true
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 }
 
 fn test_parse_physical_keys() {
 	b := parse_single('shift+key_a=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.shift == true
+	assert b.trigger.mods.shift() == true
 	assert b.trigger.key == TriggerKey.new_physical(.key_a)
 }
 
 fn test_parse_unicode_keys() {
 	b := parse_single('shift+ö=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.shift == true
+	assert b.trigger.mods.shift() == true
 	assert b.trigger.key.typ == .unicode
 	// ö is U+00F6
 	assert b.trigger.key.unicode == 0xF6
@@ -81,21 +81,21 @@ fn test_parse_unicode_keys() {
 
 fn test_parse_unconsumed_keys() {
 	b := parse_single('unconsumed:shift+a=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.shift == true
+	assert b.trigger.mods.shift() == true
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 	assert b.flags.consumed() == false
 }
 
 fn test_parse_unconsumed_physical_keys() {
 	b := parse_single('unconsumed:key_a+shift=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.shift == true
+	assert b.trigger.mods.shift() == true
 	assert b.trigger.key == TriggerKey.new_physical(.key_a)
 	assert b.flags.consumed() == false
 }
 
 fn test_parse_performable_keys() {
 	b := parse_single('performable:shift+a=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.shift == true
+	assert b.trigger.mods.shift() == true
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 	assert b.flags.performable() == true
 }
@@ -148,7 +148,7 @@ fn test_parse_catch_all() {
 
 fn test_parse_catch_all_with_modifiers() {
 	b := parse_single('ctrl+catch_all=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.ctrl == true
+	assert b.trigger.mods.ctrl() == true
 	assert b.trigger.key == TriggerKey.new_catch_all()
 }
 
@@ -162,7 +162,7 @@ fn test_parse_plus_sign() {
 fn test_parse_plus_with_modifier() {
 	b := parse_single('ctrl++=ignore') or { panic(err.msg()) }
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`+`))
-	assert b.trigger.mods.ctrl == true
+	assert b.trigger.mods.ctrl() == true
 }
 
 fn test_parse_double_plus_invalid() {
@@ -184,7 +184,7 @@ fn test_parse_equals_sign() {
 fn test_parse_equals_with_modifier() {
 	b := parse_single('ctrl+==ignore') or { panic(err.msg()) }
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`=`))
-	assert b.trigger.mods.ctrl == true
+	assert b.trigger.mods.ctrl() == true
 }
 
 fn test_parse_bare_equals_invalid() {
@@ -213,14 +213,14 @@ fn test_parse_text_action_equals_2() {
 fn test_parse_text_action_equals_ctrl() {
 	b := parse_single('ctrl+==text:=hello') or { panic(err.msg()) }
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`=`))
-	assert b.trigger.mods.ctrl == true
+	assert b.trigger.mods.ctrl() == true
 	assert b.action.str_param == '=hello'
 }
 
 fn test_parse_text_action_equals_after() {
 	b := parse_single('=+ctrl=text:=hello') or { panic(err.msg()) }
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`=`))
-	assert b.trigger.mods.ctrl == true
+	assert b.trigger.mods.ctrl() == true
 	assert b.action.str_param == '=hello'
 }
 
@@ -228,21 +228,21 @@ fn test_parse_text_action_equals_after() {
 
 fn test_parse_global() {
 	b := parse_single('global:shift+a=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.shift == true
+	assert b.trigger.mods.shift() == true
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 	assert b.flags.global() == true
 }
 
 fn test_parse_global_physical() {
 	b := parse_single('global:key_a+shift=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.shift == true
+	assert b.trigger.mods.shift() == true
 	assert b.trigger.key == TriggerKey.new_physical(.key_a)
 	assert b.flags.global() == true
 }
 
 fn test_parse_global_unconsumed() {
 	b := parse_single('unconsumed:global:a+shift=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.shift == true
+	assert b.trigger.mods.shift() == true
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 	assert b.flags.global() == true
 	assert b.flags.consumed() == false
@@ -261,21 +261,21 @@ fn test_parse_global_sequence_not_allowed() {
 
 fn test_parse_all() {
 	b := parse_single('all:shift+a=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.shift == true
+	assert b.trigger.mods.shift() == true
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 	assert b.flags.all() == true
 }
 
 fn test_parse_all_physical() {
 	b := parse_single('all:key_a+shift=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.shift == true
+	assert b.trigger.mods.shift() == true
 	assert b.trigger.key == TriggerKey.new_physical(.key_a)
 	assert b.flags.all() == true
 }
 
 fn test_parse_all_unconsumed() {
 	b := parse_single('unconsumed:all:a+shift=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.shift == true
+	assert b.trigger.mods.shift() == true
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
 	assert b.flags.all() == true
 	assert b.flags.consumed() == false
@@ -294,27 +294,27 @@ fn test_parse_all_sequence_not_allowed() {
 
 fn test_parse_modifier_cmd() {
 	b := parse_single('cmd+a=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.super_ == true
+	assert b.trigger.mods.super_() == true
 }
 
 fn test_parse_modifier_command() {
 	b := parse_single('command+a=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.super_ == true
+	assert b.trigger.mods.super_() == true
 }
 
 fn test_parse_modifier_opt() {
 	b := parse_single('opt+a=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.alt == true
+	assert b.trigger.mods.alt() == true
 }
 
 fn test_parse_modifier_option() {
 	b := parse_single('option+a=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.alt == true
+	assert b.trigger.mods.alt() == true
 }
 
 fn test_parse_modifier_control() {
 	b := parse_single('control+a=ignore') or { panic(err.msg()) }
-	assert b.trigger.mods.ctrl == true
+	assert b.trigger.mods.ctrl() == true
 }
 
 // --- Action parse tests ---
@@ -371,15 +371,15 @@ fn test_action_hash_matches_source() {
 fn test_trigger_hash_matches_source() {
 	physical := Trigger{
 		key: TriggerKey.new_physical(.key_a)
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 	}
 	upper := Trigger{
 		key: TriggerKey.new_unicode(u32(`A`))
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 	}
 	lower := Trigger{
 		key: TriggerKey.new_unicode(u32(`a`))
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 	}
 	catch_all := Trigger{ key: TriggerKey.new_catch_all() }
 	assert physical.hash() == u64(0x2ee14028a2f3cedb)
@@ -592,7 +592,7 @@ fn test_parse_sequence_single() {
 	mut p := Parser.init('ctrl+a=ignore') or { panic(err.msg()) }
 	elem := p.next() or { panic(err.msg()) }
 	assert elem.typ == .binding
-	assert elem.binding.trigger.mods.ctrl == true
+	assert elem.binding.trigger.mods.ctrl() == true
 	assert elem.binding.trigger.key == TriggerKey.new_unicode(u32(`a`))
 	assert elem.binding.action.tag == .ignore
 	p.next() or {
@@ -621,20 +621,20 @@ fn test_parse_sequence_two() {
 // --- Trigger equal tests ---
 
 fn test_trigger_equal_physical() {
-	t1 := Trigger{ key: TriggerKey.new_physical(.arrow_up), mods: Mods{ ctrl: true } }
-	t2 := Trigger{ key: TriggerKey.new_physical(.arrow_up), mods: Mods{ ctrl: true } }
+	t1 := Trigger{ key: TriggerKey.new_physical(.arrow_up), mods: Mods.init(false, true, false, false, false, false, SideInfo{}) }
+	t2 := Trigger{ key: TriggerKey.new_physical(.arrow_up), mods: Mods.init(false, true, false, false, false, false, SideInfo{}) }
 	assert t1.equal(t2)
 }
 
 fn test_trigger_different_physical() {
-	t1 := Trigger{ key: TriggerKey.new_physical(.arrow_up), mods: Mods{ ctrl: true } }
-	t2 := Trigger{ key: TriggerKey.new_physical(.arrow_down), mods: Mods{ ctrl: true } }
+	t1 := Trigger{ key: TriggerKey.new_physical(.arrow_up), mods: Mods.init(false, true, false, false, false, false, SideInfo{}) }
+	t2 := Trigger{ key: TriggerKey.new_physical(.arrow_down), mods: Mods.init(false, true, false, false, false, false, SideInfo{}) }
 	assert !t1.equal(t2)
 }
 
 fn test_trigger_different_mods() {
-	t1 := Trigger{ key: TriggerKey.new_physical(.arrow_up), mods: Mods{ ctrl: true } }
-	t2 := Trigger{ key: TriggerKey.new_physical(.arrow_up), mods: Mods{ shift: true } }
+	t1 := Trigger{ key: TriggerKey.new_physical(.arrow_up), mods: Mods.init(false, true, false, false, false, false, SideInfo{}) }
+	t2 := Trigger{ key: TriggerKey.new_physical(.arrow_up), mods: Mods.init(true, false, false, false, false, false, SideInfo{}) }
 	assert !t1.equal(t2)
 }
 
@@ -664,7 +664,7 @@ fn test_trigger_catch_all_equal() {
 
 fn test_trigger_catch_all_different_mods() {
 	t1 := Trigger{ key: TriggerKey.new_catch_all() }
-	t2 := Trigger{ key: TriggerKey.new_catch_all(), mods: Mods{ alt: true } }
+	t2 := Trigger{ key: TriggerKey.new_catch_all(), mods: Mods.init(false, false, true, false, false, false, SideInfo{}) }
 	assert !t1.equal(t2)
 }
 
@@ -850,7 +850,7 @@ fn test_set_get_event_physical() {
 	s.parse_and_put('ctrl+quote=new_window') or { panic(err.msg()) }
 
 	// Physical matches on physical
-	entry := s.get_event(KeyEvent{ key: .quote, mods: Mods{ ctrl: true } }) or {
+	entry := s.get_event(KeyEvent{ key: .quote, mods: Mods.init(false, true, false, false, false, false, SideInfo{}) }) or {
 		panic('not found')
 	}
 	assert entry.value.leaf_action.tag == .new_window
@@ -858,7 +858,7 @@ fn test_set_get_event_physical() {
 	// Physical does not match on UTF-8/codepoint
 	r := s.get_event(KeyEvent{
 		key: .key_a
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		utf8: "'"
 		unshifted_codepoint: u32(`'`)
 	})
@@ -872,7 +872,7 @@ fn test_set_get_event_codepoint() {
 	// Matches on codepoint
 	entry := s.get_event(KeyEvent{
 		key: .key_a
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		unshifted_codepoint: u32(`'`)
 	}) or { panic('not found') }
 	assert entry.value.leaf_action.tag == .new_window
@@ -880,13 +880,13 @@ fn test_set_get_event_codepoint() {
 	// Matches on UTF-8
 	entry2 := s.get_event(KeyEvent{
 		key: .key_a
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		utf8: "'"
 	}) or { panic('not found') }
 	assert entry2.value.leaf_action.tag == .new_window
 
 	// Doesn't match on physical
-	r := s.get_event(KeyEvent{ key: .key_a, mods: Mods{ ctrl: true } })
+	r := s.get_event(KeyEvent{ key: .key_a, mods: Mods.init(false, true, false, false, false, false, SideInfo{}) })
 	assert r == none
 }
 
@@ -897,7 +897,7 @@ fn test_set_get_event_case_folding() {
 	// Lowercase codepoint
 	entry := s.get_event(KeyEvent{
 		key: .key_j
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		unshifted_codepoint: u32(`a`)
 	}) or { panic('not found') }
 	assert entry.value.leaf_action.tag == .new_window
@@ -905,13 +905,13 @@ fn test_set_get_event_case_folding() {
 	// Uppercase codepoint
 	entry2 := s.get_event(KeyEvent{
 		key: .key_a
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		unshifted_codepoint: u32(`A`)
 	}) or { panic('not found') }
 	assert entry2.value.leaf_action.tag == .new_window
 
 	// Negative case for sanity
-	r := s.get_event(KeyEvent{ key: .key_j, mods: Mods{ ctrl: true } })
+	r := s.get_event(KeyEvent{ key: .key_j, mods: Mods.init(false, true, false, false, false, false, SideInfo{}) })
 	assert r == none
 }
 
@@ -924,7 +924,7 @@ fn test_set_get_event_catch_all_fallback() {
 	assert entry.value.leaf_action.tag == .ignore
 
 	// Matches unbound key with modifiers (falls back to catch_all without mods)
-	entry2 := s.get_event(KeyEvent{ key: .key_a, mods: Mods{ ctrl: true } }) or {
+	entry2 := s.get_event(KeyEvent{ key: .key_a, mods: Mods.init(false, true, false, false, false, false, SideInfo{}) }) or {
 		panic('not found')
 	}
 	assert entry2.value.leaf_action.tag == .ignore
@@ -933,7 +933,7 @@ fn test_set_get_event_catch_all_fallback() {
 	s.parse_and_put('ctrl+b=new_window') or { panic(err.msg()) }
 	entry3 := s.get_event(KeyEvent{
 		key: .key_b
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		unshifted_codepoint: u32(`b`)
 	}) or { panic('not found') }
 	assert entry3.value.leaf_action.tag == .new_window
@@ -945,7 +945,7 @@ fn test_set_get_event_catch_all_with_mods() {
 	s.parse_and_put('catch_all=ignore') or { panic(err.msg()) }
 
 	// Key with ctrl matches catch_all with ctrl modifier
-	entry := s.get_event(KeyEvent{ key: .key_a, mods: Mods{ ctrl: true } }) or {
+	entry := s.get_event(KeyEvent{ key: .key_a, mods: Mods.init(false, true, false, false, false, false, SideInfo{}) }) or {
 		panic('not found')
 	}
 	assert entry.value.leaf_action.tag == .close_surface
@@ -955,7 +955,7 @@ fn test_set_get_event_catch_all_with_mods() {
 	assert entry2.value.leaf_action.tag == .ignore
 
 	// Key with different mods falls back to catch_all without mods
-	entry3 := s.get_event(KeyEvent{ key: .key_a, mods: Mods{ alt: true } }) or {
+	entry3 := s.get_event(KeyEvent{ key: .key_a, mods: Mods.init(false, false, true, false, false, false, SideInfo{}) }) or {
 		panic('not found')
 	}
 	assert entry3.value.leaf_action.tag == .ignore
@@ -1134,7 +1134,7 @@ fn test_set_put_overwrites_sequence() {
 	mut s := Set{}
 	s.parse_and_put('ctrl+a>b=new_window') or { panic(err.msg()) }
 	s.put(Trigger{
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		key: TriggerKey.new_unicode(u32(`a`))
 	}, Action.new(.new_window))
 

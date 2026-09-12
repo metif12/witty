@@ -187,8 +187,7 @@ pub fn (m RemapMask) int() u16 {
 pub fn (mut m RemapMask) update(mods Mods) {
 	keys := mods.keys_int()
 	side_bits := mods.sides_int()
-	m.value |= u16(keys) | (u16((keys & ~side_bits) & 0x0f) << 4) |
-		(u16((keys & side_bits) & 0x0f) << 8)
+	m.value |= u16(keys) | (u16((keys & ~side_bits) & 0x0f) << 4) | (u16((keys & side_bits) & 0x0f) << 8)
 }
 
 // does_match returns true if the given mods match any remapping in this mask.
@@ -208,50 +207,18 @@ pub fn (m RemapMask) does_match(mods Mods) bool {
 // keys_int returns a 4-bit mask of which standard modifier keys are set.
 // Bit 0=shift, 1=ctrl, 2=alt, 3=super.
 pub fn (m Mods) keys_int() u8 {
-	mut v := u8(0)
-	if m.shift {
-		v |= 1
-	}
-	if m.ctrl {
-		v |= 2
-	}
-	if m.alt {
-		v |= 4
-	}
-	if m.super_ {
-		v |= 8
-	}
-	return v
+	return u8(m.int() & 0x000f)
 }
 
 // sides_int returns a 4-bit mask of which sides are right.
 // Each bit corresponds to shift/ctrl/alt/super. 0=left, 1=right.
 pub fn (m Mods) sides_int() u8 {
-	mut v := u8(0)
-	if m.sides.shift == .right {
-		v |= 1
-	}
-	if m.sides.ctrl == .right {
-		v |= 2
-	}
-	if m.sides.alt == .right {
-		v |= 4
-	}
-	if m.sides.super == .right {
-		v |= 8
-	}
-	return v
+	return m.sides().int()
 }
 
 // without_locks returns mods without lock keys set.
 pub fn (m Mods) without_locks() Mods {
-	return Mods{
-		shift: m.shift
-		ctrl: m.ctrl
-		alt: m.alt
-		super_: m.super_
-		sides: m.sides
-	}
+	return Mods.from_int(m.int() & ~u16(0x0030))
 }
 
 // ctrl_or_super checks if super is on (macOS) or ctrl (everything else).
@@ -260,9 +227,9 @@ pub fn (m Mods) ctrl_or_super() bool {
 	// On Darwin the "command" (super) key is the primary modifier; on
 	// all other platforms it is ctrl.
 	$if darwin {
-		return m.super_
+		return m.super_()
 	} $else {
-		return m.ctrl
+		return m.ctrl()
 	}
 }
 
@@ -271,9 +238,9 @@ pub fn (m Mods) ctrl_or_super() bool {
 pub fn ctrl_or_super_mods(m Mods) Mods {
 	mut copy := m
 	$if darwin {
-		copy.super_ = true
+		copy.set_super(true)
 	} $else {
-		copy.ctrl = true
+		copy.set_ctrl(true)
 	}
 	return copy
 }
@@ -462,17 +429,18 @@ pub fn (s RemapSet) format_entry() []string {
 // Faithful to Zig `formatMod`: iterates shift, ctrl, alt, super in order and
 // emits the first one that is set, prefixed with its side.
 fn format_mod(mods Mods) string {
-	if mods.shift {
-		return side_prefix(mods.sides.shift) + 'shift'
+	sides := mods.sides()
+	if mods.shift() {
+		return side_prefix(sides.shift()) + 'shift'
 	}
-	if mods.ctrl {
-		return side_prefix(mods.sides.ctrl) + 'ctrl'
+	if mods.ctrl() {
+		return side_prefix(sides.ctrl()) + 'ctrl'
 	}
-	if mods.alt {
-		return side_prefix(mods.sides.alt) + 'alt'
+	if mods.alt() {
+		return side_prefix(sides.alt()) + 'alt'
 	}
-	if mods.super_ {
-		return side_prefix(mods.sides.super) + 'super'
+	if mods.super_() {
+		return side_prefix(sides.super_()) + 'super'
 	}
 	return ''
 }
@@ -485,10 +453,7 @@ fn side_prefix(side Side) string {
 // equal_sided compares two Mods including their side information. This is
 // needed for RemapSet.equal since remappings are side-specific.
 fn (a Mods) equal_sided(b Mods) bool {
-	return a.shift == b.shift && a.ctrl == b.ctrl && a.alt == b.alt
-		&& a.super_ == b.super_ && a.sides.shift == b.sides.shift
-		&& a.sides.ctrl == b.sides.ctrl && a.sides.alt == b.sides.alt
-		&& a.sides.super == b.sides.super
+	return a.equal(b)
 }
 
 // parse_mod parses a single modifier string like "ctrl", "left_shift", "cmd".
@@ -538,20 +503,20 @@ fn init_mods(mod_val Mod, side Side) Mods {
 	mut m := Mods{}
 	match mod_val {
 		.shift {
-			m.shift = true
-			m.sides.shift = side
+			m.set_shift(true)
+			m.set_side_shift(side)
 		}
 		.ctrl {
-			m.ctrl = true
-			m.sides.ctrl = side
+			m.set_ctrl(true)
+			m.set_side_ctrl(side)
 		}
 		.alt {
-			m.alt = true
-			m.sides.alt = side
+			m.set_alt(true)
+			m.set_side_alt(side)
 		}
 		.super_ {
-			m.super_ = true
-			m.sides.super = side
+			m.set_super(true)
+			m.set_side_super(side)
 		}
 	}
 	return m
@@ -562,18 +527,5 @@ fn init_mods(mod_val Mod, side Side) Mods {
 // Faithful to the Zig packed `Mods` bitcast layout; the round-trip with
 // `Mods.int()` preserves the standard keys, the locks and the sides.
 pub fn mods_from_int(v u16) Mods {
-	return Mods{
-		shift: (v & 1) != 0
-		ctrl: (v & 2) != 0
-		alt: (v & 4) != 0
-		super_: (v & 8) != 0
-		caps_lock: (v & 16) != 0
-		num_lock: (v & 32) != 0
-		sides: SideInfo{
-			shift: if (v & 64) != 0 { Side.right } else { Side.left }
-			ctrl: if (v & 128) != 0 { Side.right } else { Side.left }
-			alt: if (v & 256) != 0 { Side.right } else { Side.left }
-			super: if (v & 512) != 0 { Side.right } else { Side.left }
-		}
-	}
+	return Mods.from_int(v)
 }

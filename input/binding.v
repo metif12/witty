@@ -1253,16 +1253,16 @@ pub fn (t Trigger) hash() u64 {
 // format returns the trigger as a string (e.g. "ctrl+a", "shift+key_a").
 pub fn (t Trigger) format() string {
 	mut parts := []string{}
-	if t.mods.super_ {
+	if t.mods.super_() {
 		parts << 'super'
 	}
-	if t.mods.ctrl {
+	if t.mods.ctrl() {
 		parts << 'ctrl'
 	}
-	if t.mods.alt {
+	if t.mods.alt() {
 		parts << 'alt'
 	}
-	if t.mods.shift {
+	if t.mods.shift() {
 		parts << 'shift'
 	}
 	match t.key.typ {
@@ -1302,54 +1302,50 @@ pub fn Trigger.parse(input_str string) !Trigger {
 
 		// Check if it's a modifier
 		if part == 'shift' {
-			if result.mods.shift {
+			if result.mods.shift() {
 				return error('InvalidFormat')
 			}
+			mut mods := result.mods
+			mods.set_shift(true)
 			result = Trigger{
 				...result
-				mods: Mods{
-					...result.mods
-					shift: true
-				}
+				mods: mods
 			}
 			continue
 		}
 		if part == 'ctrl' {
-			if result.mods.ctrl {
+			if result.mods.ctrl() {
 				return error('InvalidFormat')
 			}
+			mut mods := result.mods
+			mods.set_ctrl(true)
 			result = Trigger{
 				...result
-				mods: Mods{
-					...result.mods
-					ctrl: true
-				}
+				mods: mods
 			}
 			continue
 		}
 		if part == 'alt' {
-			if result.mods.alt {
+			if result.mods.alt() {
 				return error('InvalidFormat')
 			}
+			mut mods := result.mods
+			mods.set_alt(true)
 			result = Trigger{
 				...result
-				mods: Mods{
-					...result.mods
-					alt: true
-				}
+				mods: mods
 			}
 			continue
 		}
 		if part == 'super' {
-			if result.mods.super_ {
+			if result.mods.super_() {
 				return error('InvalidFormat')
 			}
+			mut mods := result.mods
+			mods.set_super(true)
 			result = Trigger{
 				...result
-				mods: Mods{
-					...result.mods
-					super_: true
-				}
+				mods: mods
 			}
 			continue
 		}
@@ -1357,41 +1353,38 @@ pub fn Trigger.parse(input_str string) !Trigger {
 		// Check modifier aliases
 		if alias := mod_alias(part) {
 			if alias == 'super_' {
-				if result.mods.super_ {
+				if result.mods.super_() {
 					return error('InvalidFormat')
 				}
+				mut mods := result.mods
+				mods.set_super(true)
 				result = Trigger{
 					...result
-					mods: Mods{
-						...result.mods
-						super_: true
-					}
+					mods: mods
 				}
 				continue
 			}
 			if alias == 'alt' {
-				if result.mods.alt {
+				if result.mods.alt() {
 					return error('InvalidFormat')
 				}
+				mut mods := result.mods
+				mods.set_alt(true)
 				result = Trigger{
 					...result
-					mods: Mods{
-						...result.mods
-						alt: true
-					}
+					mods: mods
 				}
 				continue
 			}
 			if alias == 'ctrl' {
-				if result.mods.ctrl {
+				if result.mods.ctrl() {
 					return error('InvalidFormat')
 				}
+				mut mods := result.mods
+				mods.set_ctrl(true)
 				result = Trigger{
 					...result
-					mods: Mods{
-						...result.mods
-						ctrl: true
-					}
+					mods: mods
 				}
 				continue
 			}
@@ -3000,36 +2993,23 @@ pub fn less_than(lhs Binding, rhs Binding) bool {
 
 fn mod_count(m Mods) int {
 	mut count := 0
-	if m.super_ {
+	if m.super_() {
 		count++
 	}
-	if m.ctrl {
+	if m.ctrl() {
 		count++
 	}
-	if m.shift {
+	if m.shift() {
 		count++
 	}
-	if m.alt {
+	if m.alt() {
 		count++
 	}
 	return count
 }
 
 fn mods_int(m Mods) int {
-	mut v := 0
-	if m.shift {
-		v |= 1
-	}
-	if m.ctrl {
-		v |= 2
-	}
-	if m.alt {
-		v |= 4
-	}
-	if m.super_ {
-		v |= 8
-	}
-	return v
+	return int(m.int())
 }
 
 fn trigger_key_int(k TriggerKey) int {

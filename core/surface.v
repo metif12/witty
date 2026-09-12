@@ -3167,7 +3167,7 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 		self.mods_changed(event.mods)
 
 		if self.renderer_state.terminal_.flags.mouse_event() == .none
-			|| (self.mouse.mods.shift && !self.mouse_shift_capture(false)) {
+			|| (self.mouse.mods.shift() && !self.mouse_shift_capture(false)) {
 			if pos := self.rt_surface.get_cursor_pos() {
 				locked := self.renderer_state.mutex != unsafe { nil }
 				if locked {
@@ -3178,7 +3178,7 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 					self.renderer_state.mutex.unlock()
 				}
 			}
-		} else if !self.mouse.mods.shift {
+		} else if !self.mouse.mods.shift() {
 			self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.mouse_shape,
@@ -3339,23 +3339,23 @@ pub fn (mut self Surface) focus_callback(focused bool) ! {
 				self.release_key_on_focus_loss(pressed_key)
 			}
 
-			if pressed_key.mods.shift {
-				pressed_key.mods.shift = false
+			if pressed_key.mods.shift() {
+				pressed_key.mods.set_shift(false)
 				self.release_modifier_on_focus_loss(pressed_key, original_key, .shift_right)
 				self.release_modifier_on_focus_loss(pressed_key, original_key, .shift_left)
 			}
-			if pressed_key.mods.ctrl {
-				pressed_key.mods.ctrl = false
+			if pressed_key.mods.ctrl() {
+				pressed_key.mods.set_ctrl(false)
 				self.release_modifier_on_focus_loss(pressed_key, original_key, .control_right)
 				self.release_modifier_on_focus_loss(pressed_key, original_key, .control_left)
 			}
-			if pressed_key.mods.alt {
-				pressed_key.mods.alt = false
+			if pressed_key.mods.alt() {
+				pressed_key.mods.set_alt(false)
 				self.release_modifier_on_focus_loss(pressed_key, original_key, .alt_right)
 				self.release_modifier_on_focus_loss(pressed_key, original_key, .alt_left)
 			}
-			if pressed_key.mods.super_ {
-				pressed_key.mods.super_ = false
+			if pressed_key.mods.super_() {
+				pressed_key.mods.set_super(false)
 				self.release_modifier_on_focus_loss(pressed_key, original_key, .meta_right)
 				self.release_modifier_on_focus_loss(pressed_key, original_key, .meta_left)
 			}
@@ -3578,7 +3578,7 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 	// cursorPosCallback will also do a mouse report so we don't need to do
 	// any of the logic below.
 	if button == .left && is_press {
-		if mods.shift && self.mouse.left_click_count > 0 && !shift_capture {
+		if mods.shift() && self.mouse.left_click_count > 0 && !shift_capture {
 			if self.has_selection() {
 				// If we are within the interval that a click would register
 				// an increment then we do not extend the selection.
@@ -3675,7 +3675,7 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 		if self.is_mouse_reporting() {
 			// If shift is pressed and we aren't allowed to capture it, then we
 			// do not do a mouse report.
-			if !(mods.shift && !shift_capture) {
+			if !(mods.shift() && !shift_capture) {
 				// In any other mouse button scenario without shift pressed we
 				// clear the selection since the underlying application can handle
 				// that in any way (i.e. "scrolling").
@@ -4024,14 +4024,14 @@ pub fn (mut self Surface) cursor_pos_callback(pos apprt.CursorPos, mods ?input.M
 	if (over_link || self.mouse.link_point == none
 		|| !(self.mouse.link_point or { Coordinate{} }).eql(pos_vp))
 		&& (self.renderer_state.terminal_.flags.mouse_event() == .none
-			|| (self.mouse.mods.shift && !self.mouse_shift_capture(false))) {
+			|| (self.mouse.mods.shift() && !self.mouse_shift_capture(false))) {
 		self.mouse_refresh_links(pos, pos_vp, over_link)!
 	}
 
 	// Handle mouse reporting for motion events
 	if self.is_mouse_reporting() {
 		mut report := true
-		if self.mouse.mods.shift && !self.mouse_shift_capture(false) {
+		if self.mouse.mods.shift() && !self.mouse_shift_capture(false) {
 			for state in self.mouse.click_state {
 				if state != .release {
 					report = false
@@ -5191,13 +5191,13 @@ fn (mut self Surface) mouse_report(button ?input.MouseButton, action MouseReport
 
 	// X10 doesn't have modifiers.
 	if mouse_event != .x10 {
-		if mods.shift {
+		if mods.shift() {
 			button_code += 4
 		}
-		if mods.alt {
+		if mods.alt() {
 			button_code += 8
 		}
-		if mods.ctrl {
+		if mods.ctrl() {
 			button_code += 16
 		}
 	}
@@ -5324,12 +5324,9 @@ fn (self &Surface) mouse_mods_with_capture(mods input.Mods) input.Mods {
 	// If the terminal is reporting mouse events and shift is pressed,
 	// strip shift from mods if we're not capturing shift
 	if self.renderer_state.terminal_.flags.mouse_event() != .none {
-		if mods.shift && !self.mouse_shift_capture(false) {
-			return input.Mods{
-				ctrl: mods.ctrl
-				alt: mods.alt
-				super_: mods.super_
-			}
+		if mods.shift() && !self.mouse_shift_capture(false) {
+			return input.Mods.init(false, mods.ctrl(), mods.alt(), mods.super_(), false, false,
+				input.SideInfo{})
 		}
 	}
 	return mods
@@ -5865,7 +5862,7 @@ fn (mut self Surface) encode_key_opts() input.Options {
 	}
 	$if macos {
 		opts.macos_option_as_alt = self.config.macos_option_as_alt or {
-			if !self.mouse.mods.alt {
+			if !self.mouse.mods.alt() {
 				input.OptionAsAlt.false_
 			} else {
 				self.rt_app.keyboard_layout.detect_option_as_alt()

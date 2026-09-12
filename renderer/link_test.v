@@ -70,7 +70,7 @@ fn test_render_cell_map_modifiers() ! {
 			regex: 'EF'
 			action: .open
 			highlight: .always_mods
-			mods: input.Mods{ ctrl: true }
+			mods: input.Mods.init(false, true, false, false, false, false, input.SideInfo{})
 		},
 	])!
 	defer {
@@ -79,6 +79,6 @@ fn test_render_cell_map_modifiers() ! {
 	mut result := terminal.CellSet{}
 	links.render_cell_map(mut result, &state, none, input.Mods{})!
 	assert result.len == 0
-	links.render_cell_map(mut result, &state, none, input.Mods{ ctrl: true })!
+	links.render_cell_map(mut result, &state, none, input.Mods.init(false, true, false, false, false, false, input.SideInfo{}))!
 	assert result[u64(1) << 32 | 1]
 }

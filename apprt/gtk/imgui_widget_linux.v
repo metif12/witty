@@ -215,10 +215,10 @@ fn (mut self ImguiWidget) key_event(action input.KeyAction, controller GtkEventC
 		return false
 	}
 	mods := translate_mods(gtk_mods)
-	self.context.add_key(.left_shift, mods.shift)
-	self.context.add_key(.left_ctrl, mods.ctrl)
-	self.context.add_key(.left_alt, mods.alt)
-	self.context.add_key(.left_super, mods.super_)
+	self.context.add_key(.left_shift, mods.shift())
+	self.context.add_key(.left_ctrl, mods.ctrl())
+	self.context.add_key(.left_alt, mods.alt())
+	self.context.add_key(.left_super, mods.super_())
 	if key := key_from_keyval(keyval) {
 		if imgui_key := key.imgui_key() {
 			self.context.add_key(imgui_key, action == .press)

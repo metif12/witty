@@ -54,67 +54,187 @@ pub enum Side as u8 {
 	right = 1
 }
 
-// SideInfo tracks which side modifier keys are pressed on.
+// SideInfo tracks which side modifier keys are pressed on. Ghostty retains
+// this as a packed u4; V's narrowest addressable backing integer is u8.
 pub struct SideInfo {
-pub mut:
-	shift Side
-	ctrl  Side
-	alt   Side
-	super Side
+mut:
+	value u8
 }
 
-// Mods is a bitmask for all key modifiers.
+pub fn SideInfo.init(shift Side, ctrl Side, alt Side, super_ Side) SideInfo {
+	return SideInfo{
+		value: u8(shift) | (u8(ctrl) << 1) | (u8(alt) << 2) | (u8(super_) << 3)
+	}
+}
+
+pub fn SideInfo.from_int(value u8) SideInfo {
+	return SideInfo{
+		value: value & 0x0f
+	}
+}
+
+pub fn (s SideInfo) int() u8 {
+	return s.value
+}
+
+pub fn (s SideInfo) shift() Side {
+	return if s.value & 1 != 0 { .right } else { .left }
+}
+
+pub fn (s SideInfo) ctrl() Side {
+	return if s.value & 2 != 0 { .right } else { .left }
+}
+
+pub fn (s SideInfo) alt() Side {
+	return if s.value & 4 != 0 { .right } else { .left }
+}
+
+pub fn (s SideInfo) super_() Side {
+	return if s.value & 8 != 0 { .right } else { .left }
+}
+
+// Mods is Ghostty's complete packed public modifier ABI, retained as its u16
+// backing value. Bits 10 through 15 are padding but remain part of bitcasts.
 pub struct Mods {
-pub mut:
-	shift     bool
-	ctrl      bool
-	alt       bool
-	super_    bool
-	caps_lock bool
-	num_lock  bool
-	sides     SideInfo
+mut:
+	value u16
+}
+
+pub fn Mods.init(shift bool, ctrl bool, alt bool, super_ bool, caps_lock bool, num_lock bool, sides SideInfo) Mods {
+	mut value := u16(sides.int() & 0x0f) << 6
+	if shift {
+		value |= 1
+	}
+	if ctrl {
+		value |= 2
+	}
+	if alt {
+		value |= 4
+	}
+	if super_ {
+		value |= 8
+	}
+	if caps_lock {
+		value |= 16
+	}
+	if num_lock {
+		value |= 32
+	}
+	return Mods{
+		value: value
+	}
+}
+
+pub fn Mods.from_int(value u16) Mods {
+	return Mods{
+		value: value
+	}
+}
+
+pub fn (m Mods) shift() bool {
+	return m.value & 1 != 0
+}
+
+pub fn (m Mods) ctrl() bool {
+	return m.value & 2 != 0
+}
+
+pub fn (m Mods) alt() bool {
+	return m.value & 4 != 0
+}
+
+pub fn (m Mods) super_() bool {
+	return m.value & 8 != 0
+}
+
+pub fn (m Mods) caps_lock() bool {
+	return m.value & 16 != 0
+}
+
+pub fn (m Mods) num_lock() bool {
+	return m.value & 32 != 0
+}
+
+pub fn (m Mods) sides() SideInfo {
+	return SideInfo.from_int(u8((m.value >> 6) & 0x0f))
+}
+
+pub fn (mut m Mods) set_shift(value bool) {
+	if value {
+		m.value |= 1
+	} else {
+		m.value &= ~u16(1)
+	}
+}
+
+pub fn (mut m Mods) set_ctrl(value bool) {
+	if value {
+		m.value |= 2
+	} else {
+		m.value &= ~u16(2)
+	}
+}
+
+pub fn (mut m Mods) set_alt(value bool) {
+	if value {
+		m.value |= 4
+	} else {
+		m.value &= ~u16(4)
+	}
+}
+
+pub fn (mut m Mods) set_super(value bool) {
+	if value {
+		m.value |= 8
+	} else {
+		m.value &= ~u16(8)
+	}
+}
+
+pub fn (mut m Mods) set_caps_lock(value bool) {
+	if value {
+		m.value |= 16
+	} else {
+		m.value &= ~u16(16)
+	}
+}
+
+pub fn (mut m Mods) set_num_lock(value bool) {
+	if value {
+		m.value |= 32
+	} else {
+		m.value &= ~u16(32)
+	}
+}
+
+fn (mut m Mods) set_side(bit u16, side Side) {
+	if side == .right {
+		m.value |= bit
+	} else {
+		m.value &= ~bit
+	}
+}
+
+pub fn (mut m Mods) set_side_shift(side Side) {
+	m.set_side(64, side)
+}
+
+pub fn (mut m Mods) set_side_ctrl(side Side) {
+	m.set_side(128, side)
+}
+
+pub fn (mut m Mods) set_side_alt(side Side) {
+	m.set_side(256, side)
+}
+
+pub fn (mut m Mods) set_side_super(side Side) {
+	m.set_side(512, side)
 }
 
 // int returns the integer value of the modifier bitmask.
 //
-// Faithful to Zig's packed `Mods` bitcast layout:
-//   bit 0: shift, 1: ctrl, 2: alt, 3: super,
-//   bit 4: caps_lock, 5: num_lock,
-//   bit 6: sides.shift, 7: sides.ctrl, 8: sides.alt, 9: sides.super
-// where each side bit is 0 for left (and none_) and 1 for right.
 pub fn (m Mods) int() u16 {
-	mut v := u16(0)
-	if m.shift {
-		v |= 1
-	}
-	if m.ctrl {
-		v |= 2
-	}
-	if m.alt {
-		v |= 4
-	}
-	if m.super_ {
-		v |= 8
-	}
-	if m.caps_lock {
-		v |= 16
-	}
-	if m.num_lock {
-		v |= 32
-	}
-	if m.sides.shift == .right {
-		v |= 64
-	}
-	if m.sides.ctrl == .right {
-		v |= 128
-	}
-	if m.sides.alt == .right {
-		v |= 256
-	}
-	if m.sides.super == .right {
-		v |= 512
-	}
-	return v
+	return m.value
 }
 
 // empty returns true if no modifiers are set.
@@ -129,12 +249,7 @@ pub fn (a Mods) equal(b Mods) bool {
 
 // binding returns only the binding-relevant modifiers.
 pub fn (m Mods) binding() Mods {
-	return Mods{
-		shift: m.shift
-		ctrl: m.ctrl
-		alt: m.alt
-		super_: m.super_
-	}
+	return Mods.from_int(m.value & 0x000f)
 }
 
 // unset performs self &~ other to remove the other mods from self.
@@ -143,7 +258,7 @@ pub fn (m Mods) binding() Mods {
 // operation is a pure bitmask over the full packed layout, preserving the
 // side and lock bits that `other` does not clear.
 pub fn (self Mods) unset(other Mods) Mods {
-	return mods_from_int(self.int() & ~other.int())
+	return Mods.from_int(self.int() & ~other.int())
 }
 
 // ButtonState represents the state of a mouse button.
@@ -362,11 +477,11 @@ pub fn (m Mods) translation(option_as_alt OptionAsAlt) Mods {
 		unset_alt := match option_as_alt {
 			.false_ { false }
 			.true_ { true }
-			.left { m.sides.alt != .right }
-			.right { m.sides.alt != .left }
+			.left { m.sides().alt() != .right }
+			.right { m.sides().alt() != .left }
 		}
 		if unset_alt {
-			result.alt = false
+			result.set_alt(false)
 		}
 	}
 	return result

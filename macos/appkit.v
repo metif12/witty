@@ -1830,19 +1830,15 @@ pub fn confirm_clipboard(contents string, request int) bool {
 // input_mods translates NSEvent.ModifierFlags using the same bit layout as
 // Ghostty's Ghostty.ghosttyMods Swift adapter.
 pub fn input_mods(flags u64) input.Mods {
-	return input.Mods{
-		shift: flags & ns_event_modifier_flag_shift != 0
-		ctrl: flags & ns_event_modifier_flag_control != 0
-		alt: flags & ns_event_modifier_flag_option != 0
-		super_: flags & ns_event_modifier_flag_command != 0
-		caps_lock: flags & ns_event_modifier_flag_caps_lock != 0
-		sides: input.SideInfo{
-			shift: if flags & nx_device_rshift_key_mask != 0 { .right } else { .left }
-			ctrl: if flags & nx_device_rctl_key_mask != 0 { .right } else { .left }
-			alt: if flags & nx_device_ralt_key_mask != 0 { .right } else { .left }
-			super: if flags & nx_device_rcmd_key_mask != 0 { .right } else { .left }
-		}
-	}
+	return input.Mods.init(flags & ns_event_modifier_flag_shift != 0, flags & ns_event_modifier_flag_control != 0, flags & ns_event_modifier_flag_option != 0, flags & ns_event_modifier_flag_command != 0, flags & ns_event_modifier_flag_caps_lock != 0, false, input.SideInfo.init(if flags & nx_device_rshift_key_mask != 0 {
+		.right
+	} else {
+		.left
+	}, if flags & nx_device_rctl_key_mask != 0 { .right } else { .left }, if flags & nx_device_ralt_key_mask != 0 {
+		.right
+	} else {
+		.left
+	}, if flags & nx_device_rcmd_key_mask != 0 { .right } else { .left }))
 }
 
 // event_characters applies a Ghostty modifier bitset to an NSEvent. This is

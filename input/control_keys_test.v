@@ -3,12 +3,10 @@ module input
 fn test_ctrl_v_encoding() {
 	// Simulate Ctrl-v
 	mut event := KeyEvent{
-		action:              .press
-		key:                 .key_v
-		mods:                Mods{
-			ctrl: true
-		}
-		utf8:                'v'
+		action: .press
+		key: .key_v
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
+		utf8: 'v'
 		unshifted_codepoint: u32(`v`)
 	}
 

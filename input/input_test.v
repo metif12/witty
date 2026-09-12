@@ -9,7 +9,7 @@ fn test_link_clone_equal_and_regex() {
 		regex: 'https?://[^ ]+'
 		action: .open
 		highlight: .hover_mods
-		mods: Mods{ ctrl: true, shift: true }
+		mods: Mods.init(true, true, false, false, false, false, SideInfo{})
 	}
 	cloned := original.clone()
 	assert original.equal(cloned)
@@ -34,7 +34,7 @@ fn test_link_clone_equal_and_regex() {
 		regex: original.regex
 		action: original.action
 		highlight: original.highlight
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 	}
 	assert !original.equal(different_mods)
 }
@@ -44,7 +44,7 @@ fn test_link_non_mod_highlight_has_no_mod_payload() {
 		regex: 'https?://[^ ]+'
 		action: .open
 		highlight: .always
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 	}
 	canonical := Link{
 		regex: with_stale_mods.regex
@@ -76,22 +76,22 @@ fn test_command_cval_matches_command() {
 
 fn test_key_event_effective_mods_no_utf8() {
 	e := KeyEvent{
-		mods: Mods{ shift: true, ctrl: true }
+		mods: Mods.init(true, true, false, false, false, false, SideInfo{})
 	}
 	result := e.effective_mods()
-	assert result.shift == true
-	assert result.ctrl == true
+	assert result.shift() == true
+	assert result.ctrl() == true
 }
 
 fn test_key_event_effective_mods_with_utf8() {
 	e := KeyEvent{
 		utf8: 'a'
-		mods: Mods{ shift: true, ctrl: true }
-		consumed_mods: Mods{ shift: true }
+		mods: Mods.init(true, true, false, false, false, false, SideInfo{})
+		consumed_mods: Mods.init(true, false, false, false, false, false, SideInfo{})
 	}
 	result := e.effective_mods()
-	assert result.shift == false
-	assert result.ctrl == true
+	assert result.shift() == false
+	assert result.ctrl() == true
 }
 
 fn test_key_event_binding_hash_different_keys() {
@@ -110,7 +110,7 @@ fn test_key_event_binding_hash_matches_source() {
 	e := KeyEvent{
 		key: .key_a
 		unshifted_codepoint: u32(`A`)
-		mods: Mods{ ctrl: true }
+		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 	}
 	// Reference value from KeyEvent.bindingHash under Zig 0.15.2.
 	assert e.binding_hash() == u64(0x65a4726ba67fc9ce)
@@ -131,35 +131,35 @@ fn test_mods_translation_macos_option_as_alt() {
 
 		// Set
 		{
-			mods := Mods{ alt: true }
+			mods := Mods.init(false, false, true, false, false, false, SideInfo{})
 			result := mods.translation(.true_)
 			assert result.equal(Mods{})
 		}
 
 		// Set but disabled
 		{
-			mods := Mods{ alt: true }
+			mods := Mods.init(false, false, true, false, false, false, SideInfo{})
 			result := mods.translation(.false_)
 			assert result.equal(mods)
 		}
 
 		// Set wrong side
 		{
-			mods := Mods{ alt: true, sides: SideInfo{ alt: .right } }
+			mods := Mods.init(false, false, true, false, false, false, SideInfo.init(.left, .left, .right, .left))
 			result := mods.translation(.left)
 			assert result.equal(mods)
 		}
 		{
-			mods := Mods{ alt: true, sides: SideInfo{ alt: .left } }
+			mods := Mods.init(false, false, true, false, false, false, SideInfo.init(.left, .left, .left, .left))
 			result := mods.translation(.right)
 			assert result.equal(mods)
 		}
 
 		// Set with other mods
 		{
-			mods := Mods{ alt: true, shift: true }
+			mods := Mods.init(true, false, true, false, false, false, SideInfo{})
 			result := mods.translation(.true_)
-			assert result.equal(Mods{ shift: true })
+			assert result.equal(Mods.init(true, false, false, false, false, false, SideInfo{}))
 		}
 	}
 }
@@ -168,10 +168,10 @@ fn test_mods_translation_macos_option_as_alt() {
 
 fn test_side_defaults() {
 	s := SideInfo{}
-	assert s.shift == .left
-	assert s.ctrl == .left
-	assert s.alt == .left
-	assert s.super == .left
+	assert s.shift() == .left
+	assert s.ctrl() == .left
+	assert s.alt() == .left
+	assert s.super_() == .left
 }
 
 // Verifies that Mods.int() covers the full packed layout (standard keys,
@@ -179,37 +179,42 @@ fn test_side_defaults() {
 // it. Faithful to ghostty's packed `Mods` bitcast, where int()/@bitCast are
 // inverse operations over all fields.
 fn test_mods_int_roundtrip() {
+	assert sizeof(Mods) == 2
+	assert sizeof(SideInfo) == 1
+
 	// Locks occupy bits 4 and 5.
-	assert Mods{ caps_lock: true }.int() == 16
-	assert Mods{ num_lock: true }.int() == 32
+	assert Mods.init(false, false, false, false, true, false, SideInfo{}).int() == 16
+	assert Mods.init(false, false, false, false, false, true, SideInfo{}).int() == 32
 
 	// Right sides occupy bits 6..9 (shift, ctrl, alt, super).
-	assert Mods{ sides: SideInfo{ shift: .right } }.int() == 64
-	assert Mods{ sides: SideInfo{ ctrl: .right } }.int() == 128
-	assert Mods{ sides: SideInfo{ alt: .right } }.int() == 256
-	assert Mods{ sides: SideInfo{ super: .right } }.int() == 512
+	assert Mods.init(false, false, false, false, false, false, SideInfo.init(.right, .left, .left, .left)).int() == 64
+	assert Mods.init(false, false, false, false, false, false, SideInfo.init(.left, .right, .left, .left)).int() == 128
+	assert Mods.init(false, false, false, false, false, false, SideInfo.init(.left, .left, .right, .left)).int() == 256
+	assert Mods.init(false, false, false, false, false, false, SideInfo.init(.left, .left, .left, .right)).int() == 512
 
 	// Full round-trip preserves keys, locks and sides.
-	m := Mods{
-		shift: true
-		ctrl: true
-		alt: true
-		super_: true
-		caps_lock: true
-		num_lock: true
-		sides: SideInfo{ shift: .right, ctrl: .left, alt: .right, super: .right }
-	}
+	m := Mods.init(true, true, true, true, true, true, SideInfo.init(.right, .left, .right, .right))
 	r := mods_from_int(m.int())
-	assert r.shift == m.shift
-	assert r.ctrl == m.ctrl
-	assert r.alt == m.alt
-	assert r.super_ == m.super_
-	assert r.caps_lock == m.caps_lock
-	assert r.num_lock == m.num_lock
-	assert r.sides.shift == .right
-	assert r.sides.ctrl == .left
-	assert r.sides.alt == .right
-	assert r.sides.super == .right
+	assert r.shift() == m.shift()
+	assert r.ctrl() == m.ctrl()
+	assert r.alt() == m.alt()
+	assert r.super_() == m.super_()
+	assert r.caps_lock() == m.caps_lock()
+	assert r.num_lock() == m.num_lock()
+	assert r.sides().shift() == .right
+	assert r.sides().ctrl() == .left
+	assert r.sides().alt() == .right
+	assert r.sides().super_() == .right
+
+	// A source bitcast retains the complete u16, including padding bits.
+	assert mods_from_int(0xffff).int() == 0xffff
+	mut padded := mods_from_int(0xfc00)
+	padded.set_shift(true)
+	padded.set_side_super(.right)
+	assert padded.int() == 0xfe01
+	padded.set_shift(false)
+	padded.set_side_super(.left)
+	assert padded.int() == 0xfc00
 }
 
 // Tests for KeyboardLayout.
@@ -237,14 +242,7 @@ fn test_keymap_current_source() {
 		assert id.len > 0
 	} $else {
 		mut state := KeymapState{}
-		result := keymap.translate([]u8{}, mut state, 0xffff, Mods{
-			shift: true
-			ctrl: true
-			alt: true
-			super_: true
-			caps_lock: true
-			num_lock: true
-		}) or { panic(err) }
+		result := keymap.translate([]u8{}, mut state, 0xffff, Mods.init(true, true, true, true, true, true, SideInfo{})) or { panic(err) }
 		assert result.text == ''
 		assert !result.composing
 		assert result.mods == Mods{}

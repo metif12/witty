@@ -40,16 +40,16 @@ pub fn (event &KeyEvent) label() string {
 		.release { 'Release: ' }
 		.repeat { 'Repeat: ' }
 	}
-	if event.event.mods.shift {
+	if event.event.mods.shift() {
 		result += 'Shift+'
 	}
-	if event.event.mods.ctrl {
+	if event.event.mods.ctrl() {
 		result += 'Ctrl+'
 	}
-	if event.event.mods.alt {
+	if event.event.mods.alt() {
 		result += 'Alt+'
 	}
-	if event.event.mods.super_ {
+	if event.event.mods.super_() {
 		result += 'Super+'
 	}
 	result += if event.event.key == .unidentified && event.event.utf8.len > 0 {
@@ -490,22 +490,22 @@ fn draw_modifiers(context cimgui.Context, mods input.Mods) {
 		return
 	}
 	mut hovered := false
-	if mods.shift {
+	if mods.shift() {
 		_ = context.small_button('S')
 		hovered = hovered || context.item_hovered()
 		context.same_line()
 	}
-	if mods.ctrl {
+	if mods.ctrl() {
 		_ = context.small_button('C')
 		hovered = hovered || context.item_hovered()
 		context.same_line()
 	}
-	if mods.alt {
+	if mods.alt() {
 		_ = context.small_button('A')
 		hovered = hovered || context.item_hovered()
 		context.same_line()
 	}
-	if mods.super_ {
+	if mods.super_() {
 		_ = context.small_button('M')
 		hovered = hovered || context.item_hovered()
 		context.same_line()
@@ -518,16 +518,16 @@ fn draw_modifiers(context cimgui.Context, mods input.Mods) {
 
 fn modifiers_tooltip(mods input.Mods) string {
 	mut names := []string{cap: 4}
-	if mods.shift {
+	if mods.shift() {
 		names << 'Shift'
 	}
-	if mods.ctrl {
+	if mods.ctrl() {
 		names << 'Ctrl'
 	}
-	if mods.alt {
+	if mods.alt() {
 		names << 'Alt'
 	}
-	if mods.super_ {
+	if mods.super_() {
 		names << 'Super'
 	}
 	return names.join('+')

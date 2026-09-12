@@ -2679,19 +2679,19 @@ fn test_default_config_initializes_complete_darwin_keybinds() {
 
 		quit := cfg.keybind.set.get(input.Trigger{
 			key: input.TriggerKey.new_unicode(u32(`q`))
-			mods: input.Mods{ super_: true }
+			mods: input.Mods.init(false, false, false, true, false, false, input.SideInfo{})
 		}) or { panic('missing default quit binding') }
 		assert quit.value.leaf_action.tag == .quit
 
 		resize := cfg.keybind.set.get(input.Trigger{
 			key: input.TriggerKey.new_physical(.arrow_left)
-			mods: input.Mods{ super_: true, ctrl: true }
+			mods: input.Mods.init(false, true, false, true, false, false, input.SideInfo{})
 		}) or { panic('missing default split resize binding') }
 		assert resize.value.leaf_action == input.Action.new_enum2(.resize_split, i32(input.SplitResizeDirection.left), 10)
 
 		natural := cfg.keybind.set.get(input.Trigger{
 			key: input.TriggerKey.new_physical(.arrow_right)
-			mods: input.Mods{ alt: true }
+			mods: input.Mods.init(false, false, true, false, false, false, input.SideInfo{})
 		}) or { panic('missing natural text editing binding') }
 		assert natural.value.leaf_action == input.Action.new_str(.esc, 'f')
 	} $else {
@@ -2868,16 +2868,10 @@ fn test_config_key_remap_is_parsed_cloned_and_finalized() {
 	assert cfg.diagnostics.len == 0
 	cfg.finalize()!
 
-	left_ctrl := input.Mods{
-		ctrl: true
-		sides: input.SideInfo{ ctrl: .left }
-	}
-	right_ctrl := input.Mods{
-		ctrl: true
-		sides: input.SideInfo{ ctrl: .right }
-	}
-	assert cfg.key_remap.apply(left_ctrl).super_
-	assert cfg.key_remap.apply(right_ctrl).alt
+	left_ctrl := input.Mods.init(false, true, false, false, false, false, input.SideInfo.init(.left, .left, .left, .left))
+	right_ctrl := input.Mods.init(false, true, false, false, false, false, input.SideInfo.init(.left, .right, .left, .left))
+	assert cfg.key_remap.apply(left_ctrl).super_()
+	assert cfg.key_remap.apply(right_ctrl).alt()
 
 	cloned := cfg.clone()
 	assert cloned.key_remap.equal(cfg.key_remap)
