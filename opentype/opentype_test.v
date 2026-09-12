@@ -7,16 +7,17 @@ module opentype
 fn test_fixed_from_and_to_f64() {
 	// Test positive value
 	f := fixed_from(1.5)
-	assert f.int_part == 1
-	assert f.frac == 32768 // 0.5 * 65536
+	assert sizeof(Fixed) == 4
+	assert f.int_part() == 1
+	assert f.frac() == 32768 // 0.5 * 65536
 
 	result := f.to_f64()
 	assert result == 1.5
 
 	// Test zero
 	z := fixed_from(0.0)
-	assert z.int_part == 0
-	assert z.frac == 0
+	assert z.int_part() == 0
+	assert z.frac() == 0
 	assert z.to_f64() == 0.0
 }
 
@@ -68,31 +69,31 @@ fn test_f26dot6_round_half() {
 
 fn test_f2dot14_from_to_and_round() {
 	positive := f2dot14_from(1.5)
-	assert positive.int_part == 1
-	assert positive.frac == 8192
+	assert sizeof(F2Dot14) == 2
+	assert positive.int_part() == 1
+	assert positive.frac() == 8192
 	assert positive.to_f64() == 1.5
 	assert positive.round() == 2
 
 	negative := f2dot14_from(-1.5)
-	assert negative.int_part == -2
-	assert negative.frac == 8192
+	assert negative.int_part() == -2
+	assert negative.frac() == 8192
 	assert negative.to_f64() == -1.5
 	assert negative.round() == -1
 
 	quarter := f2dot14_from(0.25)
-	assert quarter.int_part == 0
-	assert quarter.frac == 4096
+	assert quarter.int_part() == 0
+	assert quarter.frac() == 4096
 	assert quarter.to_f64() == 0.25
 	assert quarter.round() == 0
 }
 
 fn test_version16dot16() {
-	v := Version16Dot16{
-		major: 2
-		minor: 0
-	}
-	assert v.major == 2
-	assert v.minor == 0
+	v := Version16Dot16.init(2, 0)
+	assert sizeof(Version16Dot16) == 4
+	assert v.value == 0x0002_0000
+	assert v.major() == 2
+	assert v.minor() == 0
 }
 
 // ============================================================
@@ -144,23 +145,21 @@ fn test_read_i64_be() {
 fn test_fs_selection_from_u16() {
 	// Regular + use_typo_metrics
 	fs := fs_selection_from_u16(0x00C0)
-	assert fs.regular == true
-	assert fs.use_typo_metrics == true
-	assert fs.italic == false
-	assert fs.bold == false
-	assert fs.underscore == false
-	assert fs.negative == false
-	assert fs.outlined == false
-	assert fs.strikeout == false
-	assert fs.wws == false
-	assert fs.oblique == false
+	assert sizeof(FSSelection) == 2
+	assert fs.regular()
+	assert fs.use_typo_metrics()
+	assert !fs.italic()
+	assert !fs.bold()
+	assert !fs.underscore()
+	assert !fs.negative()
+	assert !fs.outlined()
+	assert !fs.strikeout()
+	assert !fs.wws()
+	assert !fs.oblique()
 }
 
 fn test_fs_selection_to_u16() {
-	fs := FSSelection{
-		italic: true
-		bold: true
-	}
+	fs := fs_selection_from_u16(0x0021)
 	val := fs.to_u16()
 	assert (val & 0x0001) != 0 // italic
 	assert (val & 0x0020) != 0 // bold
@@ -172,21 +171,22 @@ fn test_fs_selection_roundtrip() {
 	fs := fs_selection_from_u16(original)
 	result := fs.to_u16()
 	assert result == original
+	assert fs_selection_from_u16(0xfc00).to_u16() == 0xfc00
 }
 
 fn test_fs_selection_all_bits() {
 	// All bits set
 	fs := fs_selection_from_u16(0x03FF)
-	assert fs.italic == true
-	assert fs.underscore == true
-	assert fs.negative == true
-	assert fs.outlined == true
-	assert fs.strikeout == true
-	assert fs.bold == true
-	assert fs.regular == true
-	assert fs.use_typo_metrics == true
-	assert fs.wws == true
-	assert fs.oblique == true
+	assert fs.italic()
+	assert fs.underscore()
+	assert fs.negative()
+	assert fs.outlined()
+	assert fs.strikeout()
+	assert fs.bold()
+	assert fs.regular()
+	assert fs.use_typo_metrics()
+	assert fs.wws()
+	assert fs.oblique()
 }
 
 // ============================================================
@@ -435,8 +435,8 @@ fn test_head_parse() {
 
 	assert head.major_version == 1
 	assert head.minor_version == 0
-	assert head.font_revision.int_part == 1
-	assert head.font_revision.frac == 0
+	assert head.font_revision.int_part() == 1
+	assert head.font_revision.frac() == 0
 	assert head.checksum_adjustment == 0x12345678
 	assert head.magic_number == 0x5F0F3CF5
 	assert head.flags == 7
@@ -703,9 +703,9 @@ fn test_os2_v0_parse() {
 	assert os2.ach_vend_id[1] == 0x45
 	assert os2.ach_vend_id[2] == 0x53
 	assert os2.ach_vend_id[3] == 0x54
-	assert os2.fs_selection.regular == true
-	assert os2.fs_selection.italic == false
-	assert os2.fs_selection.bold == false
+	assert os2.fs_selection.regular()
+	assert !os2.fs_selection.italic()
+	assert !os2.fs_selection.bold()
 	assert os2.us_first_char_index == 32
 	assert os2.us_last_char_index == 127
 	assert os2.s_typo_ascender == 800
@@ -859,9 +859,9 @@ fn test_os2_fs_selection_bold_italic() {
 		assert false
 		return
 	}
-	assert os2.fs_selection.italic == true
-	assert os2.fs_selection.bold == true
-	assert os2.fs_selection.regular == false
+	assert os2.fs_selection.italic()
+	assert os2.fs_selection.bold()
+	assert !os2.fs_selection.regular()
 }
 
 // ============================================================
@@ -913,8 +913,8 @@ fn test_post_parse() {
 		return
 	}
 
-	assert post.version.major == 2
-	assert post.version.minor == 0
+	assert post.version.major() == 2
+	assert post.version.minor() == 0
 	assert post.italic_angle.to_f64() == 0.0
 	assert post.underline_position == -200
 	assert post.underline_thickness == 100

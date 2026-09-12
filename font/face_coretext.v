@@ -538,7 +538,7 @@ fn refine_coretext_metrics(base FaceMetrics, units_per_em u32, post ?opentype.Po
 
 	if hhea_value := hhea {
 		if os2_value := os2 {
-			if os2_value.fs_selection.use_typo_metrics {
+			if os2_value.fs_selection.use_typo_metrics() {
 				result.ascent = f64(os2_value.s_typo_ascender) * px_per_unit
 				result.descent = f64(os2_value.s_typo_descender) * px_per_unit
 				result.line_gap = f64(os2_value.s_typo_line_gap) * px_per_unit

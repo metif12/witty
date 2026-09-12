@@ -143,9 +143,7 @@ fn test_coretext_metrics_refine_typographic_os2_tables() {
 		ex_height: 5
 	}
 	metrics := refine_coretext_metrics(base, 1000, none, opentype.OS2{
-		fs_selection: opentype.FSSelection{
-			use_typo_metrics: true
-		}
+		fs_selection: opentype.fs_selection_from_u16(0x0080)
 		s_typo_ascender: 700
 		s_typo_descender: -300
 		s_typo_line_gap: 50

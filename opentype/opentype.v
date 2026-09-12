@@ -54,53 +54,64 @@ pub type Tag = [4]u8
 
 // Version16Dot16 is a packed 32-bit value with major and minor version numbers.
 pub struct Version16Dot16 {
-pub:
-	// Minor version number (low 16 bits when read from big-endian).
-	minor u16
-	// Major version number (high 16 bits when read from big-endian).
-	major u16
+	value u32
+}
+
+pub fn Version16Dot16.init(major u16, minor u16) Version16Dot16 {
+	return Version16Dot16{
+		value: u32(minor) | (u32(major) << 16)
+	}
+}
+
+pub fn (version Version16Dot16) minor() u16 {
+	return u16(version.value & 0xffff)
+}
+
+pub fn (version Version16Dot16) major() u16 {
+	return u16(version.value >> 16)
 }
 
 // Fixed is a 32-bit signed fixed-point number (16.16).
 // The integer part is the high 16 bits and the fractional part is the low 16 bits.
 pub struct Fixed {
-pub:
-	// Fractional part (low 16 bits).
-	frac u16
-	// Integer part (high 16 bits, signed).
-	int_part i16
+	raw i32
+}
+
+pub fn (f Fixed) frac() u16 {
+	return u16(u32(f.raw) & 0xffff)
+}
+
+pub fn (f Fixed) int_part() i16 {
+	return i16(f.raw >> 16)
 }
 
 // to_f64 converts a Fixed value to f64.
 pub fn (f Fixed) to_f64() f64 {
-	raw := i32(u32(f.frac) | (u32(u16(f.int_part)) << 16))
-	return f64(raw) / 65536.0
+	return f64(f.raw) / 65536.0
 }
 
 // fixed_from creates a Fixed value from a float.
 pub fn fixed_from(float f64) Fixed {
 	raw := i32(float * 65536.0 + if float >= 0 { 0.5 } else { -0.5 })
 	return Fixed{
-		frac: u16(u32(raw) & 0xFFFF)
-		int_part: i16(u32(raw) >> 16)
+		raw: raw
 	}
 }
 
 // round returns the fixed-point value rounded using the high fractional bit,
 // matching SFNT.FixedPoint.round.
 pub fn (f Fixed) round() i32 {
-	if f.frac & 0x8000 != 0 {
-		return i32(f.int_part) + 1
+	if f.frac() & 0x8000 != 0 {
+		return i32(f.int_part()) + 1
 	}
-	return i32(f.int_part)
+	return i32(f.int_part())
 }
 
 // read_fixed_be reads a big-endian Fixed from data at offset.
 fn read_fixed_be(data []u8, offset int) Fixed {
 	raw := read_u32_be(data, offset)
 	return Fixed{
-		frac: u16(raw & 0xFFFF)
-		int_part: i16(raw >> 16)
+		raw: i32(raw)
 	}
 }
 
@@ -147,43 +158,44 @@ pub fn (f F26Dot6) round() i32 {
 
 // F2Dot14 is a 16-bit signed fixed number with the low 14 bits of fraction (2.14).
 pub struct F2Dot14 {
-pub:
-	// Fractional part (low 14 bits).
-	frac u16
-	// Integer part (high 2 bits, signed).
-	int_part i8
+	raw i16
+}
+
+pub fn (f F2Dot14) frac() u16 {
+	return u16(f.raw) & 0x3fff
+}
+
+pub fn (f F2Dot14) int_part() i8 {
+	return i8(f.raw >> 14)
 }
 
 // to_f64 converts an F2Dot14 value to f64.
 pub fn (f F2Dot14) to_f64() f64 {
-	raw := i16((u16(f.frac) & 0x3FFF) | (u16(u8(f.int_part)) << 14))
-	return f64(raw) / 16384.0
+	return f64(f.raw) / 16384.0
 }
 
 // f2dot14_from creates an F2Dot14 value from a float.
 pub fn f2dot14_from(float f64) F2Dot14 {
 	raw := i16(float * 16384.0 + if float >= 0 { 0.5 } else { -0.5 })
 	return F2Dot14{
-		frac: u16(raw) & 0x3fff
-		int_part: i8(raw >> 14)
+		raw: raw
 	}
 }
 
 // round returns the fixed-point value rounded using the high fractional bit,
 // matching SFNT.FixedPoint.round.
 pub fn (f F2Dot14) round() i16 {
-	if f.frac & 0x2000 != 0 {
-		return i16(f.int_part) + 1
+	if f.frac() & 0x2000 != 0 {
+		return i16(f.int_part()) + 1
 	}
-	return i16(f.int_part)
+	return i16(f.int_part())
 }
 
 // read_version16dot16_be reads a big-endian Version16Dot16 from data at offset.
 fn read_version16dot16_be(data []u8, offset int) Version16Dot16 {
 	raw := read_u32_be(data, offset)
 	return Version16Dot16{
-		minor: u16(raw & 0xFFFF)
-		major: u16(raw >> 16)
+		value: raw
 	}
 }
 
@@ -564,82 +576,69 @@ pub fn Hhea.init(data []u8) !Hhea {
 //
 // https://learn.microsoft.com/en-us/typography/opentype/spec/os2/#fsselection
 pub struct FSSelection {
-pub:
-	// Font contains italic or oblique glyphs, otherwise they are upright.
-	italic bool
-	// Glyphs are underscored.
-	underscore bool
-	// Glyphs have their foreground and background reversed.
-	negative bool
-	// Outline (hollow) glyphs, otherwise they are solid.
-	outlined bool
-	// Glyphs are overstruck.
-	strikeout bool
-	// Glyphs are emboldened.
-	bold bool
-	// Glyphs are in the standard weight/style for the font.
-	regular bool
-	// If set, it is strongly recommended that applications use
-	// OS/2.sTypoAscender - OS/2.sTypoDescender + OS/2.sTypoLineGap
-	// as the default line spacing for this font.
-	use_typo_metrics bool
-	// The font has 'name' table strings consistent with a weight/width/slope
-	// family without requiring use of name IDs 21 and 22.
-	wws bool
-	// Font contains oblique glyphs.
-	oblique bool
+	value u16
+}
+
+// Font contains italic or oblique glyphs, otherwise they are upright.
+pub fn (fs FSSelection) italic() bool {
+	return fs.value & 0x0001 != 0
+}
+
+// Glyphs are underscored.
+pub fn (fs FSSelection) underscore() bool {
+	return fs.value & 0x0002 != 0
+}
+
+// Glyphs have their foreground and background reversed.
+pub fn (fs FSSelection) negative() bool {
+	return fs.value & 0x0004 != 0
+}
+
+// Outline (hollow) glyphs, otherwise they are solid.
+pub fn (fs FSSelection) outlined() bool {
+	return fs.value & 0x0008 != 0
+}
+
+// Glyphs are overstruck.
+pub fn (fs FSSelection) strikeout() bool {
+	return fs.value & 0x0010 != 0
+}
+
+// Glyphs are emboldened.
+pub fn (fs FSSelection) bold() bool {
+	return fs.value & 0x0020 != 0
+}
+
+// Glyphs are in the standard weight/style for the font.
+pub fn (fs FSSelection) regular() bool {
+	return fs.value & 0x0040 != 0
+}
+
+// Use the OS/2 typographic metrics as the default line spacing.
+pub fn (fs FSSelection) use_typo_metrics() bool {
+	return fs.value & 0x0080 != 0
+}
+
+// The name table follows the WWS family-model recommendations.
+pub fn (fs FSSelection) wws() bool {
+	return fs.value & 0x0100 != 0
+}
+
+// Font contains oblique glyphs.
+pub fn (fs FSSelection) oblique() bool {
+	return fs.value & 0x0200 != 0
 }
 
 // fs_selection_from_u16 parses FSSelection flags from a u16 value.
 pub fn fs_selection_from_u16(val u16) FSSelection {
 	return FSSelection{
-		italic: (val & 0x0001) != 0
-		underscore: (val & 0x0002) != 0
-		negative: (val & 0x0004) != 0
-		outlined: (val & 0x0008) != 0
-		strikeout: (val & 0x0010) != 0
-		bold: (val & 0x0020) != 0
-		regular: (val & 0x0040) != 0
-		use_typo_metrics: (val & 0x0080) != 0
-		wws: (val & 0x0100) != 0
-		oblique: (val & 0x0200) != 0
+		value: val
 	}
 }
 
 // to_u16 converts FSSelection flags to a u16 value.
 pub fn (fs FSSelection) to_u16() u16 {
-	mut val := u16(0)
-	if fs.italic {
-		val |= 0x0001
-	}
-	if fs.underscore {
-		val |= 0x0002
-	}
-	if fs.negative {
-		val |= 0x0004
-	}
-	if fs.outlined {
-		val |= 0x0008
-	}
-	if fs.strikeout {
-		val |= 0x0010
-	}
-	if fs.bold {
-		val |= 0x0020
-	}
-	if fs.regular {
-		val |= 0x0040
-	}
-	if fs.use_typo_metrics {
-		val |= 0x0080
-	}
-	if fs.wws {
-		val |= 0x0100
-	}
-	if fs.oblique {
-		val |= 0x0200
-	}
-	return val
+	return fs.value
 }
 
 // Generic OS/2 table with optional fields
