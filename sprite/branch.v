@@ -126,12 +126,44 @@ import math
 // Specification of a branch drawing node, which consists of a
 // circle which is either empty or filled, and lines connecting
 // optionally between the circle and each of the 4 edges.
+const branch_node_up = u8(1 << 0)
+const branch_node_right = u8(1 << 1)
+const branch_node_down = u8(1 << 2)
+const branch_node_left = u8(1 << 3)
+const branch_node_filled = u8(1 << 4)
+const branch_node_mask = u8(0x1f)
+
+// V has no packed structs, so the source's packed struct(u5) is stored in the
+// smallest available integer with the same declaration-order bit layout.
 struct BranchNode {
-	up     bool
-	right  bool
-	down   bool
-	left   bool
-	filled bool
+	value u8
+}
+
+fn BranchNode.from_int(value u8) BranchNode {
+	assert value & ~branch_node_mask == 0
+	return BranchNode{
+		value: value
+	}
+}
+
+fn (node BranchNode) up() bool {
+	return node.value & branch_node_up != 0
+}
+
+fn (node BranchNode) right() bool {
+	return node.value & branch_node_right != 0
+}
+
+fn (node BranchNode) down() bool {
+	return node.value & branch_node_down != 0
+}
+
+fn (node BranchNode) left() bool {
+	return node.value & branch_node_left != 0
+}
+
+fn (node BranchNode) filled() bool {
+	return node.value & branch_node_filled != 0
 }
 
 // draw_f5d0_f60d dispatches drawing for branch drawing characters.
@@ -289,269 +321,163 @@ pub fn draw_f5d0_f60d(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		}
 
 		// ''
-		0x0f5ee { branch_node(metrics, mut canvas, BranchNode{ filled: true }, .light) }
+		0x0f5ee {
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_filled), .light)
+		}
+
 		// ''
-		0x0f5ef { branch_node(metrics, mut canvas, BranchNode{}, .light) }
+		0x0f5ef { branch_node(metrics, mut canvas, BranchNode.from_int(0), .light) }
 
 		// ''
 		0x0f5f0 {
-			branch_node(metrics, mut canvas, BranchNode{
-				right: true
-				filled: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_right | branch_node_filled), .light)
 		}
 
 		// ''
 		0x0f5f1 {
-			branch_node(metrics, mut canvas, BranchNode{
-				right: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_right), .light)
 		}
 
 		// ''
 		0x0f5f2 {
-			branch_node(metrics, mut canvas, BranchNode{
-				left: true
-				filled: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_left | branch_node_filled), .light)
 		}
 
 		// ''
 		0x0f5f3 {
-			branch_node(metrics, mut canvas, BranchNode{
-				left: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_left), .light)
 		}
 
 		// ''
 		0x0f5f4 {
-			branch_node(metrics, mut canvas, BranchNode{
-				left: true
-				right: true
-				filled: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_left | branch_node_right | branch_node_filled), .light)
 		}
 
 		// ''
 		0x0f5f5 {
-			branch_node(metrics, mut canvas, BranchNode{
-				left: true
-				right: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_left | branch_node_right), .light)
 		}
 
 		// ''
 		0x0f5f6 {
-			branch_node(metrics, mut canvas, BranchNode{
-				down: true
-				filled: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_down | branch_node_filled), .light)
 		}
 
 		// ''
 		0x0f5f7 {
-			branch_node(metrics, mut canvas, BranchNode{
-				down: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_down), .light)
 		}
 
 		// ''
 		0x0f5f8 {
-			branch_node(metrics, mut canvas, BranchNode{
-				up: true
-				filled: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_up | branch_node_filled), .light)
 		}
 
 		// ''
 		0x0f5f9 {
-			branch_node(metrics, mut canvas, BranchNode{
-				up: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_up), .light)
 		}
 
 		// ''
 		0x0f5fa {
-			branch_node(metrics, mut canvas, BranchNode{
-				up: true
-				down: true
-				filled: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_up | branch_node_down | branch_node_filled), .light)
 		}
 
 		// ''
 		0x0f5fb {
-			branch_node(metrics, mut canvas, BranchNode{
-				up: true
-				down: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_up | branch_node_down), .light)
 		}
 
 		// ''
 		0x0f5fc {
-			branch_node(metrics, mut canvas, BranchNode{
-				right: true
-				down: true
-				filled: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_right | branch_node_down | branch_node_filled), .light)
 		}
 
 		// ''
 		0x0f5fd {
-			branch_node(metrics, mut canvas, BranchNode{
-				right: true
-				down: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_right | branch_node_down), .light)
 		}
 
 		// ''
 		0x0f5fe {
-			branch_node(metrics, mut canvas, BranchNode{
-				left: true
-				down: true
-				filled: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_left | branch_node_down | branch_node_filled), .light)
 		}
 
 		// ''
 		0x0f5ff {
-			branch_node(metrics, mut canvas, BranchNode{
-				left: true
-				down: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_left | branch_node_down), .light)
 		}
 
 		// ''
 		0x0f600 {
-			branch_node(metrics, mut canvas, BranchNode{
-				up: true
-				right: true
-				filled: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_up | branch_node_right | branch_node_filled), .light)
 		}
 
 		// ''
 		0x0f601 {
-			branch_node(metrics, mut canvas, BranchNode{
-				up: true
-				right: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_up | branch_node_right), .light)
 		}
 
 		// ''
 		0x0f602 {
-			branch_node(metrics, mut canvas, BranchNode{
-				up: true
-				left: true
-				filled: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_up | branch_node_left | branch_node_filled), .light)
 		}
 
 		// ''
 		0x0f603 {
-			branch_node(metrics, mut canvas, BranchNode{
-				up: true
-				left: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_up | branch_node_left), .light)
 		}
 
 		// ''
 		0x0f604 {
-			branch_node(metrics, mut canvas, BranchNode{
-				up: true
-				down: true
-				right: true
-				filled: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_up | branch_node_down | branch_node_right | branch_node_filled), .light)
 		}
 
 		// ''
 		0x0f605 {
-			branch_node(metrics, mut canvas, BranchNode{
-				up: true
-				down: true
-				right: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_up | branch_node_down | branch_node_right), .light)
 		}
 
 		// ''
 		0x0f606 {
-			branch_node(metrics, mut canvas, BranchNode{
-				up: true
-				down: true
-				left: true
-				filled: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_up | branch_node_down | branch_node_left | branch_node_filled), .light)
 		}
 
 		// ''
 		0x0f607 {
-			branch_node(metrics, mut canvas, BranchNode{
-				up: true
-				down: true
-				left: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_up | branch_node_down | branch_node_left), .light)
 		}
 
 		// ''
 		0x0f608 {
-			branch_node(metrics, mut canvas, BranchNode{
-				down: true
-				left: true
-				right: true
-				filled: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_down | branch_node_left | branch_node_right | branch_node_filled), .light)
 		}
 
 		// ''
 		0x0f609 {
-			branch_node(metrics, mut canvas, BranchNode{
-				down: true
-				left: true
-				right: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_down | branch_node_left | branch_node_right), .light)
 		}
 
 		// ''
 		0x0f60a {
-			branch_node(metrics, mut canvas, BranchNode{
-				up: true
-				left: true
-				right: true
-				filled: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_up | branch_node_left | branch_node_right | branch_node_filled), .light)
 		}
 
 		// ''
 		0x0f60b {
-			branch_node(metrics, mut canvas, BranchNode{
-				up: true
-				left: true
-				right: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_up | branch_node_left | branch_node_right), .light)
 		}
 
 		// ''
 		0x0f60c {
-			branch_node(metrics, mut canvas, BranchNode{
-				up: true
-				down: true
-				left: true
-				right: true
-				filled: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_up | branch_node_down | branch_node_left | branch_node_right | branch_node_filled), .light)
 		}
 
 		// ''
 		0x0f60d {
-			branch_node(metrics, mut canvas, BranchNode{
-				up: true
-				down: true
-				left: true
-				right: true
-			}, .light)
+			branch_node(metrics, mut canvas, BranchNode.from_int(branch_node_up | branch_node_down | branch_node_left | branch_node_right), .light)
 		}
-		else {}
+		else { panic('unreachable') }
 	}
 }
 
@@ -564,13 +490,13 @@ fn branch_node(metrics font.Metrics, mut canvas Canvas, node BranchNode, thickne
 	float_thick := f64(thick_px)
 
 	// Top of horizontal strokes
-	h_top := (metrics.cell_height - thick_px) / 2
+	h_top := sat_sub(metrics.cell_height, thick_px) / 2
 	// Bottom of horizontal strokes
-	h_bottom := h_top + thick_px
+	h_bottom := sat_add(h_top, thick_px)
 	// Left of vertical strokes
-	v_left := (metrics.cell_width - thick_px) / 2
+	v_left := sat_sub(metrics.cell_width, thick_px) / 2
 	// Right of vertical strokes
-	v_right := v_left + thick_px
+	v_right := sat_add(v_left, thick_px)
 
 	// We calculate the center of the circle this way
 	// to ensure it aligns with box drawing characters
@@ -600,7 +526,7 @@ fn branch_node(metrics font.Metrics, mut canvas Canvas, node BranchNode, thickne
 	// These @intFromFloat casts shouldn't ever fail since r can never
 	// be greater than cx or cy, so when subtracting it from them the
 	// result can never be negative.
-	if node.up {
+	if node.up() {
 		canvas.draw_box(
 			i32(v_left),
 			0,
@@ -609,7 +535,7 @@ fn branch_node(metrics font.Metrics, mut canvas Canvas, node BranchNode, thickne
 			.on,
 		)
 	}
-	if node.right {
+	if node.right() {
 		canvas.draw_box(
 			int(math.floor(cx + r - float_thick / 2)),
 			i32(h_top),
@@ -618,7 +544,7 @@ fn branch_node(metrics font.Metrics, mut canvas Canvas, node BranchNode, thickne
 			.on,
 		)
 	}
-	if node.down {
+	if node.down() {
 		canvas.draw_box(
 			i32(v_left),
 			int(math.floor(cy + r - float_thick / 2)),
@@ -627,7 +553,7 @@ fn branch_node(metrics font.Metrics, mut canvas Canvas, node BranchNode, thickne
 			.on,
 		)
 	}
-	if node.left {
+	if node.left() {
 		canvas.draw_box(
 			0,
 			i32(h_top),
@@ -637,7 +563,7 @@ fn branch_node(metrics font.Metrics, mut canvas Canvas, node BranchNode, thickne
 		)
 	}
 
-	if node.filled {
+	if node.filled() {
 		ctx.arc(cx, cy, r, 0, math.pi * 2) or { return }
 		ctx.close_path() or { return }
 		ctx.fill() or { return }
@@ -655,13 +581,13 @@ fn fading_line(metrics font.Metrics, mut canvas Canvas, to Edge, thickness Thick
 	float_height := f64(metrics.cell_height)
 
 	// Top of horizontal strokes
-	h_top := (metrics.cell_height - thick_px) / 2
+	h_top := sat_sub(metrics.cell_height, thick_px) / 2
 	// Bottom of horizontal strokes
-	h_bottom := h_top + thick_px
+	h_bottom := sat_add(h_top, thick_px)
 	// Left of vertical strokes
-	v_left := (metrics.cell_width - thick_px) / 2
+	v_left := sat_sub(metrics.cell_width, thick_px) / 2
 	// Right of vertical strokes
-	v_right := v_left + thick_px
+	v_right := sat_add(v_left, thick_px)
 
 	// If we're fading to the top or left, we start with 0.0
 	// and increment up as we progress, otherwise we start

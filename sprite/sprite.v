@@ -346,6 +346,11 @@ fn sat_sub(a u32, b u32) u32 {
 	return if a > b { a - b } else { u32(0) }
 }
 
+// sat_add is a saturating addition for u32 (matches Zig's `+|`).
+fn sat_add(a u32, b u32) u32 {
+	return if b > u32(0xffff_ffff) - a { u32(0xffff_ffff) } else { a + b }
+}
+
 // rasterize trims transparent margins and returns the owned alpha surface plus
 // the source rectangle containing the glyph. Atlas allocation remains in the
 // font module, which is the owner of that resource.

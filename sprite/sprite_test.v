@@ -469,6 +469,12 @@ fn test_sat_sub() {
 	assert sat_sub(10, 10) == 0
 }
 
+fn test_sat_add() {
+	assert sat_add(5, 3) == 8
+	assert sat_add(0xffff_fffe, 1) == 0xffff_ffff
+	assert sat_add(0xffff_ffff, 1) == 0xffff_ffff
+}
+
 // ------------------------------------------------------------
 // fill() -- fills the fraction-bounded box with .on
 // ------------------------------------------------------------
