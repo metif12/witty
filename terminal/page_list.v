@@ -2899,12 +2899,12 @@ pub:
 
 pub struct PageScrollDeltaRow {
 pub:
-	delta int
+	delta isize
 }
 
 pub struct PageScrollDeltaPrompt {
 pub:
-	delta int
+	delta isize
 }
 
 pub struct PageScrollPin {
@@ -2934,6 +2934,22 @@ pub const scrollbar_zero = Scrollbar{
 	total: 0
 	offset: 0
 	len: 0
+}
+
+// Sync with ghostty_action_scrollbar_s.
+pub struct ScrollbarC {
+pub:
+	total  u64
+	offset u64
+	len    u64
+}
+
+pub fn (self Scrollbar) cval() ScrollbarC {
+	return ScrollbarC{
+		total: u64(self.total)
+		offset: u64(self.offset)
+		len: u64(self.len)
+	}
 }
 
 pub fn (self Scrollbar) eql(other Scrollbar) bool {
@@ -3711,7 +3727,7 @@ pub fn (mut self PageList) reset() {
 // Helpers
 // ============================================================
 
-const max_usize = usize(0x7FFFFFFFFFFFFFFF)
+const max_usize = ~usize(0)
 
 fn initial_capacity(cols u16) PageCapacity {
 	return std_capacity.adjust_checked(cols) or {
@@ -4373,6 +4389,8 @@ pub fn (self &PageList) count_total_rows() usize {
 // ============================================================
 
 pub fn (mut self PageList) scroll(behavior PageScroll) {
+	defer { self.assert_integrity() }
+
 	// No-scrollback mode
 	if self.explicit_max_size == 0 {
 		self.viewport = .active
@@ -4396,9 +4414,7 @@ pub fn (mut self PageList) scroll(behavior PageScroll) {
 				self.viewport = .top
 				return
 			}
-			self.viewport_pin.node = p.node
-			self.viewport_pin.y = p.y
-			self.viewport_pin.x = p.x
+			unsafe { *self.viewport_pin = p }
 			self.viewport = .pin
 			self.viewport_pin_row_offset = none
 		}
@@ -4412,21 +4428,65 @@ pub fn (mut self PageList) scroll(behavior PageScroll) {
 				self.viewport = .active
 				return
 			}
+
+			match self.viewport {
+				.top, .active {}
+				.pin {
+					if cached := self.viewport_pin_row_offset {
+						delta := isize(n) - isize(cached)
+						self.scroll(PageScrollDeltaRow{ delta: delta })
+						return
+					}
+				}
+			}
+
 			self.viewport_pin_row_offset = n
 			self.viewport = .pin
-			// Traverse to find the pin
-			mut rem := usize(n)
-			mut node := self.pages.first
-			for {
-				nd := node or { break }
-				if rem < usize(nd.data.size.rows) {
-					self.viewport_pin.node = nd
-					self.viewport_pin.y = u16(rem)
-					self.viewport_pin.x = 0
+
+			midpoint := self.total_rows / 2
+			if n < midpoint {
+				if n > usize(max_u16) {
+					self.viewport = .active
 					return
 				}
-				rem -= usize(nd.data.size.rows)
-				node = nd.next
+				mut rem := u16(n)
+				mut node := self.pages.first
+				for {
+					nd := node or { break }
+					if rem < nd.data.size.rows {
+						unsafe {
+							*self.viewport_pin = PagePin{
+								node: nd
+								y: rem
+							}
+						}
+						return
+					}
+					rem -= nd.data.size.rows
+					node = nd.next
+				}
+			} else {
+				distance := self.total_rows - n
+				if distance > usize(max_u16) {
+					self.viewport = .active
+					return
+				}
+				mut rem := u16(distance)
+				mut node := self.pages.last
+				for {
+					nd := node or { break }
+					if rem <= nd.data.size.rows {
+						unsafe {
+							*self.viewport_pin = PagePin{
+								node: nd
+								y: nd.data.size.rows - rem
+							}
+						}
+						return
+					}
+					rem -= nd.data.size.rows
+					node = nd.prev
+				}
 			}
 			self.viewport = .active
 		}
@@ -4453,9 +4513,7 @@ pub fn (mut self PageList) scroll(behavior PageScroll) {
 						result := self.viewport_pin.up_overflow(abs_delta)
 						match result {
 							UpOverflowOffset {
-								self.viewport_pin.node = result.pin.node
-								self.viewport_pin.y = result.pin.y
-								self.viewport_pin.x = result.pin.x
+								unsafe { *self.viewport_pin = result.pin }
 								if v := self.viewport_pin_row_offset {
 									self.viewport_pin_row_offset = v - usize(abs_delta)
 								}
@@ -4474,9 +4532,7 @@ pub fn (mut self PageList) scroll(behavior PageScroll) {
 								if self.pin_is_active(result.pin) {
 									self.viewport = .active
 								} else {
-									self.viewport_pin.node = result.pin.node
-									self.viewport_pin.y = result.pin.y
-									self.viewport_pin.x = result.pin.x
+									unsafe { *self.viewport_pin = result.pin }
 									if v := self.viewport_pin_row_offset {
 										self.viewport_pin_row_offset = v + usize(abs_delta)
 									}
@@ -4525,9 +4581,7 @@ pub fn (mut self PageList) scroll(behavior PageScroll) {
 				self.viewport = .top
 				return
 			}
-			self.viewport_pin.node = p.node
-			self.viewport_pin.y = p.y
-			self.viewport_pin.x = p.x
+			unsafe { *self.viewport_pin = p }
 			self.viewport = .pin
 			self.viewport_pin_row_offset = none
 		}
@@ -4538,7 +4592,7 @@ pub fn (mut self PageList) scroll(behavior PageScroll) {
 	}
 }
 
-fn (mut self PageList) scroll_prompt(delta int) {
+fn (mut self PageList) scroll_prompt(delta isize) {
 	if delta == 0 {
 		return
 	}
@@ -4564,9 +4618,7 @@ fn (mut self PageList) scroll_prompt(delta int) {
 		if self.pin_is_active(p) {
 			self.viewport = .active
 		} else {
-			self.viewport_pin.node = p.node
-			self.viewport_pin.y = p.y
-			self.viewport_pin.x = p.x
+			unsafe { *self.viewport_pin = p }
 			self.viewport = .pin
 			self.viewport_pin_row_offset = none
 		}
@@ -4579,34 +4631,53 @@ fn (mut self PageList) scroll_prompt(delta int) {
 
 // Scroll written content into scrollback. Does not update viewport.
 pub fn (mut self PageList) scroll_clear() {
-	// Find first non-empty row in active area, walking backward
-	non_empty := self.count_non_empty_active_rows()
-	if non_empty == 0 {
-		return
+	defer { self.assert_integrity() }
+
+	mut page := self.pages.last or { panic('page list has no last page') }
+	mut n := usize(0)
+	mut non_empty := usize(0)
+	mut found := false
+	for {
+		for i in 0 .. int(page.data.size.rows) {
+			reverse_i := int(page.data.size.rows) - i - 1
+			row := page.data.rows[reverse_i]
+			cells := row.cells[..int(self.cols)]
+			for cell in cells {
+				if !cell.is_empty() {
+					non_empty = n + usize(page.data.size.rows) - usize(i)
+					found = true
+					break
+				}
+			}
+			if found {
+				break
+			}
+		}
+		if found {
+			break
+		}
+
+		n += usize(page.data.size.rows)
+		if n >= usize(self.rows) {
+			non_empty = n
+			break
+		}
+		page = page.prev or {
+			non_empty = n
+			break
+		}
 	}
+
 	for _ in 0 .. non_empty {
 		self.grow() or {}
 	}
-}
-
-fn (self &PageList) count_non_empty_active_rows() usize {
-	mut pin := self.get_bottom_right(.active) or { return 0 }
-	for offset in 0 .. usize(self.rows) {
-		for cell in pin.cells(.all) {
-			if !cell.is_empty() {
-				return usize(self.rows) - offset
-			}
-		}
-		pin = pin.up(1) or { return 0 }
-	}
-	return 0
 }
 
 // ============================================================
 // Scrollbar
 // ============================================================
 
-pub fn (self &PageList) scrollbar() Scrollbar {
+pub fn (mut self PageList) scrollbar() Scrollbar {
 	if self.explicit_max_size == 0 {
 		return Scrollbar{
 			total: usize(self.rows)
@@ -4621,29 +4692,37 @@ pub fn (self &PageList) scrollbar() Scrollbar {
 	}
 }
 
-pub fn (self &PageList) viewport_row_offset() usize {
-	return match self.viewport {
-		.top { usize(0) }
-		.active { self.total_rows - usize(self.rows) }
+fn (mut self PageList) viewport_row_offset() usize {
+	match self.viewport {
+		.top {
+			return 0
+		}
+		.active {
+			return self.total_rows - usize(self.rows)
+		}
 		.pin {
+			defer { self.assert_integrity() }
 			if v := self.viewport_pin_row_offset {
-				v
-			} else {
-				// Calculate by traversal
-				mut offset := usize(0)
-				mut node := self.pages.first
-				for {
-					n := node or { break }
-					if voidptr(n) == voidptr(self.viewport_pin.node) {
-						return offset + usize(self.viewport_pin.y)
-					}
-					offset += usize(n.data.size.rows)
-					node = n.next
+				return v
+			}
+
+			mut offset := usize(0)
+			mut node := self.pages.last
+			for {
+				n := node or { panic('viewport pin is outside the page list') }
+				offset += usize(n.data.size.rows)
+				if voidptr(n) == voidptr(self.viewport_pin.node) {
+					assert n.data.size.rows > self.viewport_pin.y
+					offset -= usize(self.viewport_pin.y)
+					top_offset := self.total_rows - offset
+					self.viewport_pin_row_offset = top_offset
+					return top_offset
 				}
-				self.total_rows - usize(self.rows) // fallback
+				node = n.prev
 			}
 		}
 	}
+	panic('invalid viewport state')
 }
 
 // ============================================================

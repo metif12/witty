@@ -108,6 +108,20 @@ fn test_page_list_init() {
 	assert cell.cell.codepoint == 0
 }
 
+fn test_page_list_init_without_limit_uses_max_usize() {
+	mut s := PageList.init(80, 24, none)
+	defer { s.deinit() }
+
+	assert s.explicit_max_size == ~usize(0)
+}
+
+fn test_page_list_scrollbar_cval() {
+	value := Scrollbar{ total: 42, offset: 7, len: 24 }.cval()
+	assert value.total == 42
+	assert value.offset == 7
+	assert value.len == 24
+}
+
 fn test_page_list_increase_capacity_rejects_layout_over_max_page_size() {
 	mut s := PageList.init(2, 2, usize(0))
 	defer { s.deinit() }
@@ -1667,8 +1681,39 @@ fn test_page_list_scroll_clear() {
 	// Scroll clear pushes active content to scrollback
 	s.scroll_clear()
 
-	// Should have more rows now (original + new blank active rows)
-	assert s.total_rows > initial_rows
+	assert s.total_rows == initial_rows + 5
+	assert (s.get_cell(Point.new(.viewport, Coordinate{})) or {
+		assert false, 'viewport cell missing'
+		return
+	}).screen_point() == Point.new(.screen, Coordinate{ y: 5 })
+}
+
+fn test_page_list_scroll_clear_empty_active_area() {
+	mut s := PageList.init(5, 5, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	initial_rows := s.total_rows
+
+	s.scroll_clear()
+
+	assert s.total_rows == initial_rows + usize(s.rows)
+}
+
+fn test_page_list_scroll_clear_counts_background_only_cell() {
+	mut s := PageList.init(5, 5, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	p := s.pin(Point.new(.active, Coordinate{ y: 1 })) or {
+		assert false, 'active pin missing'
+		return
+	}
+	mut row := &p.node.data.rows[int(p.y)]
+	row.cells[0] = CellData{
+		content_tag: .bg_color_palette
+	}
+	initial_rows := s.total_rows
+
+	s.scroll_clear()
+
+	assert s.total_rows == initial_rows + 2
 }
 
 fn test_page_list_scroll_clear_includes_internal_blank_rows() {
@@ -1761,6 +1806,9 @@ fn test_page_list_get_top_left_pinned_viewport_preserves_pin() {
 	s.scroll(PageScrollPin{ pin: p })
 	assert s.viewport == .pin
 	assert s.get_top_left(.viewport).eql(p)
+	assert s.viewport_pin_row_offset == none
+	assert s.scrollbar().offset == 1
+	assert s.viewport_pin_row_offset or { usize(max_usize) } == 1
 }
 
 fn test_page_list_get_bottom_right() {
