@@ -89,7 +89,7 @@ pub fn (mut self NoopShaper) shape(run font.TextRun) ![]font.ShapeCell {
 
 	// Special fonts aren't shaped and their codepoint == glyph so we
 	// can just return the codepoints as-is.
-	if run.font_index == font.sprite_index {
+	if _ := run.font_index.special() {
 		self.cell_buf.clear()
 		for entry in state.codepoints {
 			self.cell_buf << font.ShapeCell{
@@ -107,7 +107,7 @@ pub fn (mut self NoopShaper) shape(run font.TextRun) ![]font.ShapeCell {
 		return error('noop shaper has no font grid')
 	}
 	mut grid := unsafe { self.grid }
-	face := grid.resolver.collection.get_face(font.Index.from_int(run.font_index))!
+	face := grid.resolver.collection.get_face(run.font_index)!
 	for entry in state.codepoints {
 		glyph_index := face.glyph_index(entry.codepoint) or {
 			return error('text run contains an unsupported codepoint')

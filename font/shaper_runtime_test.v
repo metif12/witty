@@ -100,7 +100,7 @@ fn test_public_run_iterator_yields_single_text_run() {
 
 	assert run.cells == 3
 	assert run.offset == 0
-	assert run.font_index == 0
+	assert run.font_index == Index{}
 	assert run.hash != 0
 	if _ := (it.next()!).get() {
 		assert false, 'expected iterator to stop after one fallback run'

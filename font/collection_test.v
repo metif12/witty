@@ -247,8 +247,12 @@ fn test_face_metrics() {
 }
 
 fn test_index_special() {
+	assert sizeof(Index) == sizeof(u16)
+	assert sizeof(Special) == sizeof(u16)
+
 	// Verify special index properties.
 	idx := Index.init_special(.sprite)
+	assert idx.int_val() == 0xfff8
 	assert idx.special() != none
 	assert idx.special() or { Special.sprite } == .sprite
 
@@ -260,15 +264,11 @@ fn test_index_special() {
 fn test_index_packed_layout_matches_ghostty() {
 	for style in [FontStyle.regular, .bold, .italic, .bold_italic] {
 		for face_index in [u16(0), 1, 42, 0x1ffe, 0x1fff] {
-			idx := Index{
-				style: style
-				idx: face_index
-			}
+			idx := Index.init(style, face_index)
 			packed := idx.int_val()
 			assert packed == (face_index << 3) | u16(style)
-			decoded := Index.from_int(packed)
-			assert decoded.style == style
-			assert decoded.idx == face_index
+			assert idx.style() == style
+			assert idx.idx() == face_index
 		}
 	}
 }

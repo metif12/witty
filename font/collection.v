@@ -428,58 +428,61 @@ pub fn (p PresentationMode) requested() ?Presentation {
 
 // Index represents a specific font in the collection.
 //
-// The combination of style + idx uniquely identifies a font. The idx
-// represents the priority within a style (lower = higher priority).
+// The three low bits store the style and the upper 13 bits store the
+// priority within that style (lower = higher priority).
 //
 // Special indices (>= index_special_start) represent built-in fonts
 // that don't have an associated face (e.g., sprite drawing).
 pub struct Index {
-pub:
-	// What style this index refers to.
-	style FontStyle = .regular
-	// The index within the style's face list.
-	idx u16
+	value u16
 }
 
 // The starting index for special (built-in) fonts.
 pub const index_special_start = u16(8191)
 
 // Special enumerates special built-in font indices.
-pub enum Special {
+pub enum Special as u16 {
 	// Sprite drawing, rendered JIT using 2D graphics APIs.
 	sprite = 8191
 }
 
+// init packs a style and its face-list index into Ghostty's u16 layout.
+pub fn Index.init(style FontStyle, idx u16) Index {
+	assert u8(style) <= 0x7
+	assert idx <= 0x1fff
+	return Index{
+		value: (idx << 3) | u16(style)
+	}
+}
+
 // init_special creates an Index for a special built-in font.
 pub fn Index.init_special(v Special) Index {
-	return Index{
-		style: .regular
-		idx: u16(v)
-	}
+	return Index.init(.regular, u16(v))
+}
+
+// style returns the style stored in the low three bits.
+pub fn (i Index) style() FontStyle {
+	return unsafe { FontStyle(i.value & 0x7) }
+}
+
+// idx returns the 13-bit index within the style's face list.
+pub fn (i Index) idx() u16 {
+	return i.value >> 3
 }
 
 // int_val returns the index as a packed integer.
 pub fn (i Index) int_val() u16 {
-	// Zig packed structs place the first field in the least-significant bits:
-	// style occupies bits 0..2 and the 13-bit face index occupies bits 3..15.
-	return (i.idx << 3) | u16(i.style)
-}
-
-// from_int decodes the packed form carried by TextRun and renderer caches.
-pub fn Index.from_int(value u32) Index {
-	return Index{
-		style: unsafe { FontStyle(value & 0x7) }
-		idx: u16((value >> 3) & 0x1fff)
-	}
+	return i.value
 }
 
 // special returns the Special value if this is a special index,
 // or none for normal font indices.
 pub fn (i Index) special() ?Special {
-	if i.idx < index_special_start {
+	idx := i.idx()
+	if idx < index_special_start {
 		return none
 	}
-	if i.idx == u16(Special.sprite) {
+	if idx == u16(Special.sprite) {
 		return .sprite
 	}
 	return none
@@ -809,10 +812,7 @@ pub fn (mut self Collection) add(face Face, opts AddOptions) !Index {
 		scale: scale_factor
 	}))
 
-	return Index{
-		style: opts.style
-		idx: u16(count)
-	}
+	return Index.init(opts.style, u16(count))
 }
 
 // add_deferred adds a deferred face to the collection.
@@ -836,10 +836,7 @@ pub fn (mut self Collection) add_deferred(face DeferredFace, opts AddOptions) !I
 		adjustment: opts.size_adjustment
 	}))
 
-	return Index{
-		style: opts.style
-		idx: u16(count)
-	}
+	return Index.init(opts.style, u16(count))
 }
 
 // get_face returns the Face for the given Index. The returned pointer
@@ -856,11 +853,11 @@ pub fn (mut self Collection) get_entry(index Index) !&Entry {
 	if _ := index.special() {
 		return error('special has no face')
 	}
-	list := self.faces_for(index.style)
-	if int(index.idx) >= list.len {
+	list := self.faces_for(index.style())
+	if int(index.idx()) >= list.len {
 		return error('index out of bounds')
 	}
-	return list[int(index.idx)].get_entry()
+	return list[int(index.idx())].get_entry()
 }
 
 // get_face_from_entry loads a face from an entry if needed and returns it.
@@ -912,10 +909,7 @@ pub fn (self &Collection) get_index(cp u32, style FontStyle, p_mode Presentation
 	list := self.faces_for(style)
 	for i, item in list {
 		if item.get_entry().has_codepoint(cp, p_mode) {
-			return Index{
-				style: style
-				idx: u16(i)
-			}
+			return Index.init(style, u16(i))
 		}
 	}
 	// Not found.
@@ -925,11 +919,11 @@ pub fn (self &Collection) get_index(cp u32, style FontStyle, p_mode Presentation
 // has_codepoint checks if a specific font index has a specific codepoint.
 // This does not necessarily force the font to load.
 pub fn (self &Collection) has_codepoint(index Index, cp u32, p_mode PresentationMode) bool {
-	list := self.faces_for(index.style)
-	if int(index.idx) >= list.len {
+	list := self.faces_for(index.style())
+	if int(index.idx()) >= list.len {
 		return false
 	}
-	return list[int(index.idx)].get_entry().has_codepoint(cp, p_mode)
+	return list[int(index.idx())].get_entry().has_codepoint(cp, p_mode)
 }
 
 // complete_styles ensures we have an option for all styles in the collection,

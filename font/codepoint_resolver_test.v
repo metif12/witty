@@ -58,7 +58,7 @@ fn test_descriptor_cache_basic() {
 	}
 
 	desc := Descriptor{ family: 'TestFont' }
-	idx := Index{ style: .regular, idx: 0 }
+	idx := Index.init(.regular, 0)
 
 	// Initially not cached.
 	assert dc.get(desc) == none
@@ -72,8 +72,8 @@ fn test_descriptor_cache_basic() {
 		return
 	}
 	assert entry.has_index == true
-	assert entry.index.style == .regular
-	assert entry.index.idx == 0
+	assert entry.index.style() == .regular
+	assert entry.index.idx() == 0
 }
 
 fn test_descriptor_cache_negative() {
@@ -145,17 +145,17 @@ fn test_get_index_basic() {
 	defer { r.deinit() }
 	for cp := u32(32); cp < 127; cp++ {
 		idx := r.get_index(cp, .regular, none) or { panic('missing ASCII U+${cp:04X}') }
-		assert idx.style == .regular
-		assert idx.idx == 0
+		assert idx.style() == .regular
+		assert idx.idx() == 0
 	}
 	emoji := r.get_index(0x1f978, .regular, none) or { panic('missing emoji face') }
-	assert emoji.idx == 1
+	assert emoji.idx() == 1
 	text := r.get_index(0x270c, .regular, Presentation.text) or { panic('missing text emoji') }
-	assert text.idx == 2
+	assert text.idx() == 2
 	graphical := r.get_index(0x270c, .regular, Presentation.emoji) or {
 		panic('missing graphical emoji')
 	}
-	assert graphical.idx == 1
+	assert graphical.idx() == 1
 	assert r.get_index(0x1fb00, .regular, none) == none
 }
 
@@ -173,11 +173,11 @@ fn test_get_index_disabled_font_style() {
 	r.styles.set(.bold, false)
 
 	regular := r.get_index(0x41, .regular, none) or { panic('missing regular A') }
-	assert regular.style == .regular && regular.idx == 0
+	assert regular.style() == .regular && regular.idx() == 0
 	bold := r.get_index(0x41, .bold, none) or { panic('missing bold fallback A') }
-	assert bold.style == .regular && bold.idx == 0
+	assert bold.style() == .regular && bold.idx() == 0
 	italic := r.get_index(0x41, .italic, none) or { panic('missing italic A') }
-	assert italic.style == .italic && italic.idx == 0
+	assert italic.style() == .italic && italic.idx() == 0
 }
 
 fn test_get_index_box_glyph() {
@@ -207,9 +207,9 @@ fn test_get_index_box_glyph() {
 		assert false, 'expected to find box glyph U+2500'
 		return
 	}
-	assert idx.style == .regular
+	assert idx.style() == .regular
 	// Special.sprite has integer value index_special_start (8191).
-	assert idx.idx == u16(Special.sprite)
+	assert idx.idx() == u16(Special.sprite)
 	assert idx.special() or { return } == .sprite
 }
 
@@ -243,8 +243,8 @@ fn test_get_index_style_fallback() {
 	mut r := CodepointResolver{ collection: c }
 	defer { r.deinit() }
 	idx := r.get_index(0x41, .bold, none) or { panic('missing regular style fallback') }
-	assert idx.style == .regular
-	assert idx.idx == 0
+	assert idx.style() == .regular
+	assert idx.idx() == 0
 }
 
 fn test_get_presentation() {

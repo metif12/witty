@@ -2676,7 +2676,7 @@ enum CellSelected {
 
 struct RowShapedGlyph {
 	cell       font.ShapeCell
-	font_index u32
+	font_index font.Index
 }
 
 // Rebuild a single row's cells: shaping, selection/highlight classification,
@@ -2735,7 +2735,7 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 			new_cells
 		}
 		for shaped_cell in shaped_cells {
-			x := int(run.offset + shaped_cell.x)
+			x := int(u32(run.offset) + shaped_cell.x)
 			if x >= 0 && x < shaped.len {
 				shaped[x] << RowShapedGlyph{ cell: shaped_cell, font_index: run.font_index }
 			}
@@ -3034,13 +3034,12 @@ fn (mut self Renderer) add_strikethrough(x u16, y u16, color terminal.RGB, alpha
 }
 
 // Add a glyph to the specified cell.
-fn (mut self Renderer) add_glyph(x u16, y u16, color terminal.RGB, alpha u8, glyph_index u32, font_index u32, x_offset i32, y_offset i32, cell_width u32, raw_cells []terminal.CellData, raw_x int, cols int) ! {
-	fidx := font.Index.from_int(font_index)
+fn (mut self Renderer) add_glyph(x u16, y u16, color terminal.RGB, alpha u8, glyph_index u32, font_index font.Index, x_offset i32, y_offset i32, cell_width u32, raw_cells []terminal.CellData, raw_x int, cols int) ! {
 	cp := raw_cells[raw_x].codepoint_val()
 	constraint := font.get_constraint(cp) or {
 		if is_symbol(cp) { font.Constraint{ size: .fit } } else { font.Constraint{} }
 	}
-	render := self.font_grid.render_glyph(fidx, glyph_index, font.RenderOptions{
+	render := self.font_grid.render_glyph(font_index, glyph_index, font.RenderOptions{
 		grid_metrics: self.grid_metrics
 		thicken: self.config.font_thicken
 		thicken_strength: self.config.font_thicken_strength

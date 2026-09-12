@@ -408,9 +408,7 @@ import tripwire
 pub const default_dpi = $if macos { u16(72) } $else { u16(96) }
 
 // Packed Collection.Index reserved for built-in sprites.
-// Packed Index{style: regular, idx: Special.sprite}. Index stores the
-// three-bit style first and the 13-bit face index above it.
-pub const sprite_index = u32(8191 << 3)
+pub const sprite_index = Index{ value: u16(8191 << 3) }
 
 // ============================================================
 // Metrics
@@ -1436,7 +1434,7 @@ pub fn (mut s Shaper) end_frame() {
 
 // Shape a text run into positioned glyphs.
 pub fn (mut s Shaper) shape(run TextRun) ![]ShapeCell {
-	if run.font_index == sprite_index {
+	if _ := run.font_index.special() {
 		s.cell_buf.clear()
 		for cp in s.codepoints {
 			s.cell_buf << ShapeCell{ x: cp.cluster, glyph_index: cp.codepoint }
@@ -1451,7 +1449,7 @@ pub fn (mut s Shaper) shape(run TextRun) ![]ShapeCell {
 		return error('font shaper has no grid')
 	}
 	mut grid := unsafe { grid_ptr }
-	face := grid.resolver.collection.get_face(Index.from_int(run.font_index))!
+	face := grid.resolver.collection.get_face(run.font_index)!
 	feature_start := if face.quirks_disable_default_font_features { 1 } else { 0 }
 	face.ft_mutex.lock()
 	harfbuzz.shape(face.hb_font, s.hb_buf, s.hb_feats[feature_start..])
@@ -1555,9 +1553,9 @@ pub:
 	// results. The hash is position-independent within the row by using
 	// relative cluster positions.
 	hash       u64
-	font_index u32
-	offset     u32
-	cells      u32
+	font_index Index
+	offset     u16
+	cells      u16
 	grid       &SharedGrid = unsafe { nil }
 	// Set by the WebCanvas backend so multi-codepoint graphemes can reserve
 	// the private glyph ID that the same face will later render.
@@ -1740,9 +1738,9 @@ fn (mut it RunIterator) next_bytes() !TextRunValue {
 		has_value: true
 		value: TextRun{
 			hash: hasher.final()
-			font_index: 0
-			offset: u32(start)
-			cells: u32(it.i - start)
+			font_index: Index{}
+			offset: u16(start)
+			cells: u16(it.i - start)
 			grid: it.opts.grid
 		}
 	}
@@ -1862,9 +1860,9 @@ fn (mut it RunIterator) next_render_cells() !TextRunValue {
 		has_value: true
 		value: TextRun{
 			hash: hasher.final()
-			font_index: u32(current_font.int_val())
-			offset: u32(start)
-			cells: u32(j - start)
+			font_index: current_font
+			offset: u16(start)
+			cells: u16(j - start)
 			grid: it.opts.grid
 		}
 	}

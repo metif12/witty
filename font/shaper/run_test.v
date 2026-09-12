@@ -29,7 +29,7 @@ fn test_run_iterator2_builds_fallback_run() {
 	}
 	assert run.offset == 0
 	assert run.cells == 3
-	assert run.font_index == 0
+	assert run.font_index == font.Index{}
 	assert run.hash != 0
 
 	if _ := (it.next()!).get() {

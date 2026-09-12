@@ -55,8 +55,8 @@ const hb_default_feature_strings = ['liga']
 // is_special_font checks if the font index refers to a built-in sprite font.
 // Special fonts (sprites for cursors, underlines, etc.) don't need shaping
 // because their codepoint == glyph_index.
-fn is_special_font(font_index u32) bool {
-	return font_index == font.sprite_index
+fn is_special_font(font_index font.Index) bool {
+	return font_index.special() != none
 }
 
 // init creates a new HarfBuzz shaper.
@@ -155,7 +155,7 @@ pub fn (mut self HbShaper) shape(run font.TextRun) ![]font.ShapeCell {
 	if !is_special_font(run.font_index) {
 		if self.grid != unsafe { nil } {
 			mut grid := unsafe { self.grid }
-			face := grid.resolver.collection.get_face(font.Index.from_int(run.font_index))!
+			face := grid.resolver.collection.get_face(run.font_index)!
 			feature_start := if face.quirks_disable_default_font_features {
 				hb_default_feature_strings.len
 			} else {

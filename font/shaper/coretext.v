@@ -323,7 +323,7 @@ pub fn (mut self Shaper) shape(run font.TextRun) ![]font.ShapeCell {
 
 	// Special fonts aren't shaped and their codepoint == glyph so we
 	// can just return the codepoints as-is.
-	if run.font_index == font.sprite_index {
+	if _ := run.font_index.special() {
 		self.cell_buf.clear()
 		for entry in state.codepoints {
 			// We use null codepoints to pad out our list so indices match
@@ -494,7 +494,7 @@ fn (mut self Shaper) get_font(run font.TextRun) !&macos.CFDictionary {
 		self.cached_font_grid = grid_id
 	}
 
-	index_int := int(run.font_index)
+	index_int := int(run.font_index.int_val())
 
 	// The cached fonts are indexed directly by the font index, since
 	// this number is usually low. Therefore, we set any index we haven't
@@ -522,7 +522,7 @@ fn (mut self Shaper) get_font(run font.TextRun) !&macos.CFDictionary {
 
 	mut grid := unsafe { run.grid }
 	grid.lock.rlock()
-	face := grid.resolver.collection.get_face(font.Index.from_int(run.font_index)) or {
+	face := grid.resolver.collection.get_face(run.font_index) or {
 		grid.lock.runlock()
 		return err
 	}

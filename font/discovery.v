@@ -694,10 +694,7 @@ fn (ct &CoreTextDiscovery) discover_codepoint(mut collection Collection, desc De
 		if collection.face_count(style) == 0 {
 			continue
 		}
-		face := collection.get_face(Index{
-			style: style
-			idx: 0
-		}) or { continue }
+		face := collection.get_face(Index.init(style, 0)) or { continue }
 		if !isnil(face.ct_font) {
 			seed_font = face.ct_font
 			break

@@ -745,7 +745,7 @@ fn test_hb_shape_empty_buffer() {
 
 	// Shape with empty buffer - should return empty
 	cells := shp.shape(font.TextRun{
-		font_index: 1 // non-special font
+		font_index: font.Index.init(.regular, 1) // non-special font
 		offset: 0
 		cells: 0
 	}) or { return }
@@ -755,6 +755,6 @@ fn test_hb_shape_empty_buffer() {
 // test "is_special_font"
 fn test_is_special_font() {
 	assert is_special_font(font.sprite_index) == true
-	assert is_special_font(1) == false
-	assert is_special_font(42) == false
+	assert is_special_font(font.Index.init(.regular, 1)) == false
+	assert is_special_font(font.Index.init(.regular, 42)) == false
 }

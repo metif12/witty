@@ -44,14 +44,14 @@ fn test_shared_grid_get_index() {
 	for cp := u32(32); cp < 127; cp++ {
 		value := grid.get_index(cp, .regular, none) or { panic(err) }
 		assert value.has_value
-		assert value.index.style == .regular
-		assert value.index.idx == 0
+		assert value.index.style() == .regular
+		assert value.index.idx() == 0
 		assert grid.has_codepoint(value.index, cp, none)
 	}
 	// The second pass exercises the cached lookup path.
 	for cp := u32(32); cp < 127; cp++ {
 		value := grid.get_index(cp, .regular, none) or { panic(err) }
-		assert value.has_value && value.index.idx == 0
+		assert value.has_value && value.index.idx() == 0
 	}
 }
 
@@ -98,8 +98,8 @@ fn test_codepoint_key_hash_matches_zig_source() {
 fn test_codepoint_cache_handles_hash_collisions() {
 	first_key := CodepointKey{.regular, 65, none}
 	second_key := CodepointKey{.bold, 65, Presentation.text}
-	first_value := CodepointValue{true, Index{.regular, 1}}
-	second_value := CodepointValue{true, Index{.bold, 2}}
+	first_value := CodepointValue{true, Index.init(.regular, 1)}
+	second_value := CodepointValue{true, Index.init(.bold, 2)}
 	mut cache := map[u64][]CodepointCacheEntry{}
 	collision := u64(7)
 	codepoint_cache_put(mut cache, collision, first_key, first_value)
@@ -112,7 +112,7 @@ fn test_codepoint_cache_handles_hash_collisions() {
 }
 
 fn test_glyph_key_hash_matches_zig_source() {
-	index := Index{.bold, 2}
+	index := Index.init(.bold, 2)
 	assert GlyphKey{
 		index: index
 		glyph: 42
@@ -131,8 +131,8 @@ fn test_glyph_key_hash_matches_zig_source() {
 }
 
 fn test_glyph_cache_handles_hash_collisions() {
-	first_key := GlyphKey{Index{.regular, 0}, 1, RenderOptions{}}
-	second_key := GlyphKey{Index{.bold, 2}, 42, RenderOptions{ cell_width: 2 }}
+	first_key := GlyphKey{Index.init(.regular, 0), 1, RenderOptions{}}
+	second_key := GlyphKey{Index.init(.bold, 2), 42, RenderOptions{ cell_width: 2 }}
 	first_value := RenderResult{GlyphInfo{ atlas_x: 1 }, .text}
 	second_value := RenderResult{GlyphInfo{ atlas_x: 2 }, .emoji}
 	mut cache := map[u64][]GlyphCacheEntry{}
