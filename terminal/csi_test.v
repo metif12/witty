@@ -23,6 +23,11 @@ fn test_tab_clear_values() {
 }
 
 fn test_title_push_pop() {
+	assert sizeof(SizeReportStyle) == 4
+	assert sizeof(TitlePushPopOp) == 1
+	assert sizeof(TitlePushPop) == 4
+	assert u8(TitlePushPopOp.push) == 0
+	assert u8(TitlePushPopOp.pop) == 1
 	pp := TitlePushPop{
 		op: .push
 		index: 42

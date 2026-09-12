@@ -43,7 +43,7 @@ pub:
 	index u16
 }
 
-pub enum TitlePushPopOp {
+pub enum TitlePushPopOp as u8 {
 	push
 	pop
 }
