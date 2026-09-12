@@ -836,8 +836,8 @@ pub fn (mut self Search) feed(mut t terminal.Terminal) {
 	// exactly this is for. But, if this is set, we know the renderer found
 	// the viewport/active area dirty, so we should mark it as dirty in our
 	// viewport searcher so it forces a re-search.
-	if t.flags.search_viewport_dirty {
-		t.flags.search_viewport_dirty = false
+	if t.flags.search_viewport_dirty() {
+		t.flags.set_search_viewport_dirty(false)
 
 		// Mark our viewport dirty so it researches the active.
 		self.viewport.active_dirty = true

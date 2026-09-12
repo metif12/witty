@@ -1731,9 +1731,42 @@ import unicode
 
 // ScreenDirty tracks what parts of the screen need redrawing.
 pub struct ScreenDirty {
-pub mut:
-	selection       bool
-	hyperlink_hover bool
+mut:
+	value u8
+}
+
+pub fn ScreenDirty.init(selection bool, hyperlink_hover bool) ScreenDirty {
+	return ScreenDirty{
+		value: u8(selection) | (u8(hyperlink_hover) << 1)
+	}
+}
+
+pub fn (self ScreenDirty) selection() bool {
+	return self.value & 0b01 != 0
+}
+
+pub fn (mut self ScreenDirty) set_selection(value bool) {
+	self.set_bit(0b01, value)
+}
+
+pub fn (self ScreenDirty) hyperlink_hover() bool {
+	return self.value & 0b10 != 0
+}
+
+pub fn (mut self ScreenDirty) set_hyperlink_hover(value bool) {
+	self.set_bit(0b10, value)
+}
+
+pub fn (self ScreenDirty) int() u8 {
+	return self.value
+}
+
+fn (mut self ScreenDirty) set_bit(mask u8, enabled bool) {
+	if enabled {
+		self.value |= mask
+	} else {
+		self.value &= ~mask
+	}
 }
 
 // SemanticPrompt tracks OSC 133 semantic prompt state.
@@ -3391,13 +3424,13 @@ pub fn (mut self Screen) cursor_set_semantic_content_input(clear_eol bool) {
 // Set the selection, replacing any previous selection.
 pub fn (mut self Screen) select(sel ?Selection) ! {
 	self.selection = sel
-	self.dirty.selection = true
+	self.dirty.set_selection(true)
 }
 
 // Clear the current selection.
 pub fn (mut self Screen) clear_selection() {
 	if self.selection != none {
-		self.dirty.selection = true
+		self.dirty.set_selection(true)
 	}
 	self.selection = none
 }

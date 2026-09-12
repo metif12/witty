@@ -295,10 +295,10 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 	mut redraw := false
 	if t.screens.active_key != self.screen {
 		redraw = true
-	} else if t.flags.dirty.clear || t.flags.dirty.palette || t.flags.dirty.reverse_colors
-		|| t.flags.dirty.preedit {
+	} else if t.flags.dirty().clear() || t.flags.dirty().palette()
+		|| t.flags.dirty().reverse_colors() || t.flags.dirty().preedit() {
 		redraw = true
-	} else if s.dirty.selection || s.dirty.hyperlink_hover {
+	} else if s.dirty.selection() || s.dirty.hyperlink_hover() {
 		redraw = true
 	} else if self.rows != u16(s.pages.rows) || self.cols != u16(s.pages.cols) {
 		redraw = true
@@ -325,7 +325,7 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 	}
 	self.cursor.style = s.cursor.style
 	self.cursor.visual_style = s.cursor.cursor_style
-	self.cursor.password_input = t.flags.password_input
+	self.cursor.password_input = t.flags.password_input()
 	self.cursor.visible = t.modes.get(.cursor_visible)
 	self.cursor.blinking = t.modes.get(.cursor_blinking)
 
@@ -501,7 +501,7 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 	}
 
 	// Clear our terminal/screen dirty flags now that they're consumed.
-	t.flags.dirty = Dirty{}
+	t.flags.set_dirty(Dirty{})
 	s.dirty = ScreenDirty{}
 }
 

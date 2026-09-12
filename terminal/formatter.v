@@ -1009,7 +1009,7 @@ pub fn (self TerminalFormatter) format() string {
 		// Emit keyboard modes such as ModifyOtherKeys
 		if self.extra.keyboard {
 			// Only emit if modify_other_keys_2 is true
-			if self.terminal.flags.modify_other_keys_2 {
+			if self.terminal.flags.modify_other_keys_2() {
 				sb.write_string('\x1b[>4;2m')
 			}
 		}

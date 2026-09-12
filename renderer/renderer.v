@@ -1365,6 +1365,9 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 
 	// Update our terminal state.
 	self.terminal_state.update(mut t)
+	if self.terminal_state.dirty != .false_ {
+		t.flags.set_search_viewport_dirty(true)
+	}
 	if self.images.kitty_requires_update(t) {
 		self.images.kitty_update(t, self.size.cell)
 	}

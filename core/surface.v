@@ -3037,7 +3037,7 @@ pub fn (mut self Surface) preedit_callback(preedit ?string) ! {
 	self.renderer_state.preedit = none
 
 	// Mark preedit dirty
-	self.renderer_state.terminal_.flags.dirty.preedit = true
+	self.renderer_state.terminal_.flags.set_dirty_preedit(true)
 
 	// If no text, just queue render to clear previous preedit display
 	text := preedit or {
@@ -3166,7 +3166,7 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 	if !self.mouse.mods.equal(event.mods) {
 		self.mods_changed(event.mods)
 
-		if self.renderer_state.terminal_.flags.mouse_event == .none
+		if self.renderer_state.terminal_.flags.mouse_event() == .none
 			|| (self.mouse.mods.shift && !self.mouse_shift_capture(false)) {
 			if pos := self.rt_surface.get_cursor_pos() {
 				locked := self.renderer_state.mutex != unsafe { nil }
@@ -3195,7 +3195,7 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 
 	if shape := (SurfaceMouse{
 		physical_key: event.key
-		mouse_event: self.renderer_state.terminal_.flags.mouse_event
+		mouse_event: self.renderer_state.terminal_.flags.mouse_event()
 		mouse_shape: self.renderer_state.terminal_.mouse_shape
 		mods: self.mouse.mods
 		over_link: self.mouse.over_link
@@ -3374,7 +3374,7 @@ pub fn (mut self Surface) focus_callback(focused bool) ! {
 	if locked {
 		self.renderer_state.mutex.lock()
 	}
-	self.renderer_state.terminal_.flags.focused = focused
+	self.renderer_state.terminal_.flags.set_focused(focused)
 	if locked {
 		self.renderer_state.mutex.unlock()
 	}
@@ -3470,7 +3470,7 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 		}
 
 		mut t := self.renderer_state.terminal_
-		if t.screens.active_key == .alternate && t.flags.mouse_event == .none
+		if t.screens.active_key == .alternate && t.flags.mouse_event() == .none
 			&& t.modes.get(.mouse_alternate_scroll) {
 			if y.delta != 0 {
 				self.set_selection(none)!
@@ -4004,7 +4004,7 @@ pub fn (mut self Surface) cursor_pos_callback(pos apprt.CursorPos, mods ?input.M
 	}
 	self.renderer_state.mouse.point = none
 	if pos.x < 0 || pos.y < 0 {
-		self.renderer_state.terminal_.screens.active.dirty.hyperlink_hover = true
+		self.renderer_state.terminal_.screens.active.dirty.set_hyperlink_hover(true)
 	}
 
 	// If we have an inspector, always record position information. The
@@ -4023,7 +4023,7 @@ pub fn (mut self Surface) cursor_pos_callback(pos apprt.CursorPos, mods ?input.M
 	// Check for link hover
 	if (over_link || self.mouse.link_point == none
 		|| !(self.mouse.link_point or { Coordinate{} }).eql(pos_vp))
-		&& (self.renderer_state.terminal_.flags.mouse_event == .none
+		&& (self.renderer_state.terminal_.flags.mouse_event() == .none
 			|| (self.mouse.mods.shift && !self.mouse_shift_capture(false))) {
 		self.mouse_refresh_links(pos, pos_vp, over_link)!
 	}
@@ -4800,7 +4800,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				}
 				screen.scroll_to_row(target_row)
 			}
-			screen.dirty.selection = true
+			screen.dirty.set_selection(true)
 			self.queue_render()!
 		}
 		.crash {
@@ -4997,7 +4997,7 @@ fn (mut self Surface) mods_changed(mods input.Mods) {
 	self.renderer_state.mouse.mods = self.mouse_mods_with_capture(self.mouse.mods)
 
 	// Force screen rebuild to update link highlight state
-	self.renderer_state.terminal_.flags.dirty.clear = true
+	self.renderer_state.terminal_.flags.set_dirty_clear(true)
 	if locked {
 		self.renderer_state.mutex.unlock()
 	}
@@ -5044,7 +5044,7 @@ fn (mut self Surface) mouse_refresh_links(pos apprt.CursorPos, pos_vp Coordinate
 	// Found a link — update state and notify runtime.
 	self.renderer_state.mouse.point = pos_vp
 	self.mouse.over_link = true
-	self.renderer_state.terminal_.screens.active.dirty.hyperlink_hover = true
+	self.renderer_state.terminal_.screens.active.dirty.set_hyperlink_hover(true)
 
 	self.rt_app.perform_action(
 		apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
@@ -5084,12 +5084,12 @@ fn (mut self Surface) clear_link_hover(over_link bool) ! {
 
 fn (self &Surface) is_mouse_reporting() bool {
 	return self.config.mouse_reporting
-		&& self.renderer_state.terminal_.flags.mouse_event != .none
+		&& self.renderer_state.terminal_.flags.mouse_event() != .none
 }
 
 fn (mut self Surface) mouse_report(button ?input.MouseButton, action MouseReportAction, mods input.Mods, pos apprt.CursorPos) ! {
-	mouse_event := self.renderer_state.terminal_.flags.mouse_event
-	mouse_format := self.renderer_state.terminal_.flags.mouse_format
+	mouse_event := self.renderer_state.terminal_.flags.mouse_event()
+	mouse_format := self.renderer_state.terminal_.flags.mouse_format()
 
 	// Depending on the event, we may do nothing at all.
 	match mouse_event {
@@ -5294,7 +5294,7 @@ fn (self &Surface) mouse_shift_capture(do_lock bool) bool {
 	}
 
 	// An explicit terminal request wins over the user's conditional default.
-	match self.renderer_state.terminal_.flags.mouse_shift_capture {
+	match self.renderer_state.terminal_.flags.mouse_shift_capture() {
 		.false_ {
 			return false
 		}
@@ -5317,13 +5317,13 @@ pub fn (mut self Surface) mouse_captured() bool {
 			self.renderer_state.mutex.unlock()
 		}
 	}
-	return self.renderer_state.terminal_.flags.mouse_event != .none
+	return self.renderer_state.terminal_.flags.mouse_event() != .none
 }
 
 fn (self &Surface) mouse_mods_with_capture(mods input.Mods) input.Mods {
 	// If the terminal is reporting mouse events and shift is pressed,
 	// strip shift from mods if we're not capturing shift
-	if self.renderer_state.terminal_.flags.mouse_event != .none {
+	if self.renderer_state.terminal_.flags.mouse_event() != .none {
 		if mods.shift && !self.mouse_shift_capture(false) {
 			return input.Mods{
 				ctrl: mods.ctrl
@@ -5592,13 +5592,13 @@ fn (mut self Surface) password_input(v bool) ! {
 		self.renderer_state.mutex.lock()
 	}
 	// Check if state actually changed
-	if self.renderer_state.terminal_.flags.password_input == v {
+	if self.renderer_state.terminal_.flags.password_input() == v {
 		if locked {
 			self.renderer_state.mutex.unlock()
 		}
 		return
 	}
-	self.renderer_state.terminal_.flags.password_input = v
+	self.renderer_state.terminal_.flags.set_password_input(v)
 	if locked {
 		self.renderer_state.mutex.unlock()
 	}
@@ -5860,7 +5860,7 @@ fn (mut self Surface) encode_key_opts() input.Options {
 		keypad_key_application: t.modes.get(.keypad_keys)
 		ignore_keypad_with_numlock: t.modes.get(.ignore_keypad_with_numlock)
 		alt_esc_prefix: t.modes.get(.alt_esc_prefix)
-		modify_other_keys_state_2: t.flags.modify_other_keys_2
+		modify_other_keys_state_2: t.flags.modify_other_keys_2()
 		kitty_flags: flags
 	}
 	$if macos {

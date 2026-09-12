@@ -340,11 +340,11 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.terminal.set_protected_mode(.dec)
 		}
 		.mouse_shift_capture {
-			self.terminal.flags.mouse_shift_capture = if event.payload.flag {
+			self.terminal.flags.set_mouse_shift_capture(if event.payload.flag {
 				.true_
 			} else {
 				.false_
-			}
+			})
 		}
 		.size_report {
 			self.send_size_report(event.payload.size_report_style)
@@ -1013,10 +1013,10 @@ pub fn (mut self StreamHandler) next_line() {
 // ============================================================
 
 pub fn (mut self StreamHandler) set_modify_key_format(format terminal.ModifyKeyFormat) {
-	self.terminal.flags.modify_other_keys_2 = false
+	self.terminal.flags.set_modify_other_keys_2(false)
 	match format {
 		.other_keys_numeric {
-			self.terminal.flags.modify_other_keys_2 = true
+			self.terminal.flags.set_modify_other_keys_2(true)
 		}
 		else {}
 	}
@@ -1094,7 +1094,7 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) {
 
 		// Schedule a render since we changed colors
 		.reverse_colors {
-			self.terminal.flags.dirty.reverse_colors = true
+			self.terminal.flags.set_dirty_reverse_colors(true)
 		}
 
 		// Origin resets cursor pos. This is called whether or not
@@ -1167,56 +1167,56 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) {
 		}
 		.focus_event {
 			if enabled {
-				self.message_writer(Message.focused_msg(self.terminal.flags.focused))
+				self.message_writer(Message.focused_msg(self.terminal.flags.focused()))
 			}
 		}
 		.mouse_event_x10 {
 			if enabled {
-				self.terminal.flags.mouse_event = .x10
+				self.terminal.flags.set_mouse_event(.x10)
 				self.set_mouse_shape(.default_)
 			} else {
-				self.terminal.flags.mouse_event = .none
+				self.terminal.flags.set_mouse_event(.none)
 				self.set_mouse_shape(.text)
 			}
 		}
 		.mouse_event_normal {
 			if enabled {
-				self.terminal.flags.mouse_event = .normal
+				self.terminal.flags.set_mouse_event(.normal)
 				self.set_mouse_shape(.default_)
 			} else {
-				self.terminal.flags.mouse_event = .none
+				self.terminal.flags.set_mouse_event(.none)
 				self.set_mouse_shape(.text)
 			}
 		}
 		.mouse_event_button {
 			if enabled {
-				self.terminal.flags.mouse_event = .button
+				self.terminal.flags.set_mouse_event(.button)
 				self.set_mouse_shape(.default_)
 			} else {
-				self.terminal.flags.mouse_event = .none
+				self.terminal.flags.set_mouse_event(.none)
 				self.set_mouse_shape(.text)
 			}
 		}
 		.mouse_event_any {
 			if enabled {
-				self.terminal.flags.mouse_event = .any
+				self.terminal.flags.set_mouse_event(.any)
 				self.set_mouse_shape(.default_)
 			} else {
-				self.terminal.flags.mouse_event = .none
+				self.terminal.flags.set_mouse_event(.none)
 				self.set_mouse_shape(.text)
 			}
 		}
 		.mouse_format_utf8 {
-			self.terminal.flags.mouse_format = if enabled { .utf8 } else { .x10 }
+			self.terminal.flags.set_mouse_format(if enabled { .utf8 } else { .x10 })
 		}
 		.mouse_format_sgr {
-			self.terminal.flags.mouse_format = if enabled { .sgr } else { .x10 }
+			self.terminal.flags.set_mouse_format(if enabled { .sgr } else { .x10 })
 		}
 		.mouse_format_urxvt {
-			self.terminal.flags.mouse_format = if enabled { .urxvt } else { .x10 }
+			self.terminal.flags.set_mouse_format(if enabled { .urxvt } else { .x10 })
 		}
 		.mouse_format_sgr_pixels {
-			self.terminal.flags.mouse_format = if enabled { .sgr_pixels } else { .x10 }
+			self.terminal.flags.set_mouse_format(if enabled { .sgr_pixels } else { .x10 })
 		}
 		else {}
 	}
@@ -1583,7 +1583,7 @@ fn (mut self StreamHandler) color_operation(op osc.ColorOperation, requests []os
 				color := terminal_rgb(request.color)
 				match request.target {
 					osc.ColorTargetPalette {
-						self.terminal.flags.dirty.palette = true
+						self.terminal.flags.set_dirty_palette(true)
 						self.terminal.colors.palette.set(request.target.index, color)
 					}
 					osc.ColorTargetDynamic {
@@ -1597,7 +1597,7 @@ fn (mut self StreamHandler) color_operation(op osc.ColorOperation, requests []os
 				match request.target {
 					osc.ColorTargetPalette {
 						idx := request.target.index
-						self.terminal.flags.dirty.palette = true
+						self.terminal.flags.set_dirty_palette(true)
 						self.terminal.colors.palette.reset(idx)
 						self.notify_color_change(request.target, self.terminal.colors.palette.current[int(idx)])
 					}
@@ -1611,7 +1611,7 @@ fn (mut self StreamHandler) color_operation(op osc.ColorOperation, requests []os
 				for i in 0 .. 256 {
 					idx := u8(i)
 					if self.terminal.colors.palette.mask_is_set(idx) {
-						self.terminal.flags.dirty.palette = true
+						self.terminal.flags.set_dirty_palette(true)
 						self.terminal.colors.palette.reset(idx)
 						self.notify_color_change(osc.ColorTarget(osc.ColorTargetPalette{
 							index: idx
@@ -1810,7 +1810,7 @@ fn (self &StreamHandler) kitty_color_get(key osc.KittyColorKind) ?terminal.RGB {
 fn (mut self StreamHandler) kitty_color_set(key osc.KittyColorKind, color terminal.RGB) {
 	match key.kind {
 		.palette {
-			self.terminal.flags.dirty.palette = true
+			self.terminal.flags.set_dirty_palette(true)
 			self.terminal.colors.palette.set(key.palette, color)
 		}
 		.special {
@@ -1827,7 +1827,7 @@ fn (mut self StreamHandler) kitty_color_set(key osc.KittyColorKind, color termin
 fn (mut self StreamHandler) kitty_color_reset(key osc.KittyColorKind) {
 	match key.kind {
 		.palette {
-			self.terminal.flags.dirty.palette = true
+			self.terminal.flags.set_dirty_palette(true)
 			self.terminal.colors.palette.reset(key.palette)
 		}
 		.special {

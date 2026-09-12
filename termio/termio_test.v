@@ -453,7 +453,7 @@ fn test_thread_termios_mode_reports_password_input_transitions() {
 
 	// The surface owns the shared password-input flag after consuming the
 	// notification. Moving back to normal canonical+echo mode reports false.
-	tio.terminal.flags.password_input = true
+	tio.terminal.flags.set_password_input(true)
 	writer.apply_termios_mode(mut tio, pty.Mode{})
 	assert probe.values == [true, false]
 	assert probe.timeouts == [.forever, .forever]

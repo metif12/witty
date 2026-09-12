@@ -556,7 +556,7 @@ pub fn (mut t Termio) change_config(config &DerivedConfig) ! {
 
 	// Update the default palette.
 	t.terminal.colors.palette.change_default(config.palette)
-	t.terminal.flags.dirty.palette = true
+	t.terminal.flags.set_dirty_palette(true)
 
 	// Update all our other colors.
 	t.terminal.colors.background.default_color = config.background
@@ -1012,7 +1012,7 @@ fn (mut t Thread) apply_termios_mode(mut io Termio, mode pty.Mode) {
 	password_input := mode.canonical() && !mode.echo()
 
 	io.renderer_state.mutex.lock()
-	unchanged := io.terminal.flags.password_input == password_input
+	unchanged := io.terminal.flags.password_input() == password_input
 	io.renderer_state.mutex.unlock()
 	if unchanged {
 		return

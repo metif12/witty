@@ -1966,7 +1966,7 @@ fn test_resize_clears_redrawable_prompt_on_primary_screen() {
 	t.print_string('echo') or { assert false }
 	assert t.plain_string() or { '' } == 'ABCDE\n> echo'
 
-	t.flags.shell_redraws_prompt = .redraw_true
+	t.flags.set_shell_redraws_prompt(.redraw_true)
 	t.resize(20, 3) or { assert false }
 
 	assert primary.cursor.x == 6
@@ -1991,7 +1991,7 @@ fn test_resize_clears_redrawable_prompt_on_inactive_primary_screen() {
 
 	t.switch_screen_mode(.mode_47, true) or { assert false }
 	assert t.screens.active_key == .alternate
-	t.flags.shell_redraws_prompt = .redraw_true
+	t.flags.set_shell_redraws_prompt(.redraw_true)
 	t.resize(20, 3) or { assert false }
 	t.switch_screen_mode(.mode_47, false) or { assert false }
 
@@ -2596,6 +2596,58 @@ fn test_cursor_is_at_prompt_alternate_screen() {
 // ============================================================
 // Dirty / clear dirty
 // ============================================================
+
+fn test_terminal_dirty_packed_layout() {
+	mut dirty := Dirty.init(true, true, true, true)
+	assert sizeof(Dirty) == 1
+	assert dirty.int() == 0b1111
+	dirty.set_palette(false)
+	dirty.set_preedit(false)
+	assert dirty.int() == 0b0110
+	assert !dirty.palette()
+	assert dirty.reverse_colors()
+	assert dirty.clear()
+	assert !dirty.preedit()
+}
+
+fn test_terminal_flags_packed_layout_and_defaults() {
+	mut flags := TerminalFlags{}
+	assert sizeof(TerminalFlags) == 4
+	assert sizeof(MouseShiftCaptureState) == 1
+	assert flags.int() == u32(1 << 11)
+	assert flags.shell_redraws_prompt() == .redraw_true
+	assert !flags.modify_other_keys_2()
+	assert flags.mouse_event() == .none
+	assert flags.mouse_format() == .x10
+	assert flags.mouse_shift_capture() == .null_
+	assert flags.focused()
+	assert !flags.password_input()
+	assert !flags.selection_scroll()
+	assert !flags.search_viewport_dirty()
+	assert flags.dirty().int() == 0
+
+	flags.set_shell_redraws_prompt(.last)
+	flags.set_modify_other_keys_2(true)
+	flags.set_mouse_event(.any)
+	flags.set_mouse_format(.sgr_pixels)
+	flags.set_mouse_shift_capture(.true_)
+	flags.set_focused(false)
+	flags.set_password_input(true)
+	flags.set_selection_scroll(true)
+	flags.set_search_viewport_dirty(true)
+	flags.set_dirty(Dirty.init(true, true, true, true))
+	assert flags.int() == u32(2 | (1 << 2) | (4 << 3) | (4 << 6) | (2 << 9) | (1 << 12) | (1 << 13) | (1 << 14) | (0b1111 << 15))
+}
+
+fn test_screen_dirty_packed_layout() {
+	mut dirty := ScreenDirty.init(true, true)
+	assert sizeof(ScreenDirty) == 1
+	assert dirty.int() == 0b11
+	dirty.set_selection(false)
+	assert dirty.int() == 0b10
+	assert !dirty.selection()
+	assert dirty.hyperlink_hover()
+}
 
 fn test_is_dirty_and_clear() {
 	mut t := create_test_terminal(10, 5) or {

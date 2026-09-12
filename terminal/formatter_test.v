@@ -1112,7 +1112,7 @@ fn test_terminal_vt_modes() ! {
 fn test_terminal_vt_keyboard_modes() ! {
 	mut t := Terminal.init(Options{ cols: 80, rows: 24 })!
 	mut primary := t.screens.get(.primary) or { panic('primary screen must be initialized') }
-	t.flags.modify_other_keys_2 = true
+	t.flags.set_modify_other_keys_2(true)
 
 	for i, ch in 'hello'.runes() {
 		idx := primary.pages.active_start

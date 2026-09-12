@@ -1608,19 +1608,69 @@ pub:
 // This only contains dirty flags for terminal state, not for the screen
 // state. The screen state has its own dirty flags.
 pub struct Dirty {
-pub mut:
-	// Set when the color palette is modified in any way.
-	palette bool
+mut:
+	value u8
+}
 
-	// Set when the reverse colors mode is modified.
-	reverse_colors bool
+pub fn Dirty.init(palette bool, reverse_colors bool, clear bool, preedit bool) Dirty {
+	return Dirty{
+		value: u8(palette) | (u8(reverse_colors) << 1) | (u8(clear) << 2) | (u8(preedit) << 3)
+	}
+}
 
-	// Screen clear of some kind. This can be due to a screen change,
-	// erase display, etc.
-	clear bool
+pub fn Dirty.from_int(value u8) Dirty {
+	return Dirty{
+		value: value & 0b1111
+	}
+}
 
-	// Set when the pre-edit is modified.
-	preedit bool
+// Set when the color palette is modified in any way.
+pub fn (self Dirty) palette() bool {
+	return self.value & 0b0001 != 0
+}
+
+pub fn (mut self Dirty) set_palette(value bool) {
+	self.set_bit(0b0001, value)
+}
+
+// Set when the reverse colors mode is modified.
+pub fn (self Dirty) reverse_colors() bool {
+	return self.value & 0b0010 != 0
+}
+
+pub fn (mut self Dirty) set_reverse_colors(value bool) {
+	self.set_bit(0b0010, value)
+}
+
+// Screen clear of some kind. This can be due to a screen change,
+// erase display, etc.
+pub fn (self Dirty) clear() bool {
+	return self.value & 0b0100 != 0
+}
+
+pub fn (mut self Dirty) set_clear(value bool) {
+	self.set_bit(0b0100, value)
+}
+
+// Set when the pre-edit is modified.
+pub fn (self Dirty) preedit() bool {
+	return self.value & 0b1000 != 0
+}
+
+pub fn (mut self Dirty) set_preedit(value bool) {
+	self.set_bit(0b1000, value)
+}
+
+pub fn (self Dirty) int() u8 {
+	return self.value
+}
+
+fn (mut self Dirty) set_bit(mask u8, enabled bool) {
+	if enabled {
+		self.value |= mask
+	} else {
+		self.value &= ~mask
+	}
 }
 
 // The event types that can be reported for mouse-related activities.
@@ -1679,53 +1729,127 @@ pub:
 }
 
 pub struct TerminalFlags {
-pub mut:
-	// This supports a Kitty extension where programs using semantic
-	// prompts (OSC133) can annotate their new prompts with `redraw=0` to
-	// disable clearing the prompt on resize.
-	shell_redraws_prompt osc.Redraw = .redraw_true
-
-	// This is set via ESC[4;2m. Any other modify key mode just sets
-	// this to false and we act in mode 1 by default.
-	modify_other_keys_2 bool
-
-	// The mouse event mode and format. These are set to the last
-	// set mode in modes. You can't get the right event/format to use
-	// based on modes alone because modes don't show you what order
-	// this was called so we have to track it separately.
-	mouse_event  MouseEvents = .none
-	mouse_format MouseFormat = .x10
-
-	// Set via the XTSHIFTESCAPE sequence. If true (XTSHIFTESCAPE = 1)
-	// then we want to capture the shift key for the mouse protocol
-	// if the configuration allows it.
-	mouse_shift_capture MouseShiftCaptureState = .null_
-
-	// True if the window is focused.
-	focused bool = true
-
-	// True if the terminal is in a password entry mode. This is set
-	// to true based on termios state.
-	password_input bool
-
-	// True if the terminal should perform selection scrolling.
-	selection_scroll bool
-
-	// Dirty flag used only by the search thread. The renderer is expected
-	// to set this to true if the viewport was dirty as it was rendering.
-	// This is used by the search thread to more efficiently re-search the
-	// viewport and active area.
-	//
-	// Since the renderer is going to inspect the viewport/active area ANYWAYS,
-	// this lets our search thread do less work and hold the lock less time,
-	// resulting in more throughput for everything.
-	search_viewport_dirty bool
-
-	// Dirty flags for the renderer.
-	dirty Dirty
+mut:
+	value u32 = 1 << 11
 }
 
-pub enum MouseShiftCaptureState {
+// This supports a Kitty extension where programs using semantic prompts
+// (OSC133) can annotate prompt redraw behavior.
+pub fn (self TerminalFlags) shell_redraws_prompt() osc.Redraw {
+	return unsafe { osc.Redraw(u8(self.value & 0b11)) }
+}
+
+pub fn (mut self TerminalFlags) set_shell_redraws_prompt(value osc.Redraw) {
+	self.set_field(0b11, u32(value))
+}
+
+// This is set via ESC[4;2m.
+pub fn (self TerminalFlags) modify_other_keys_2() bool {
+	return self.value & (1 << 2) != 0
+}
+
+pub fn (mut self TerminalFlags) set_modify_other_keys_2(value bool) {
+	self.set_bit(1 << 2, value)
+}
+
+pub fn (self TerminalFlags) mouse_event() MouseEvents {
+	return unsafe { MouseEvents(u8((self.value >> 3) & 0b111)) }
+}
+
+pub fn (mut self TerminalFlags) set_mouse_event(value MouseEvents) {
+	self.set_field(0b111 << 3, u32(value) << 3)
+}
+
+pub fn (self TerminalFlags) mouse_format() MouseFormat {
+	return unsafe { MouseFormat(u8((self.value >> 6) & 0b111)) }
+}
+
+pub fn (mut self TerminalFlags) set_mouse_format(value MouseFormat) {
+	self.set_field(0b111 << 6, u32(value) << 6)
+}
+
+pub fn (self TerminalFlags) mouse_shift_capture() MouseShiftCaptureState {
+	return unsafe { MouseShiftCaptureState(u8((self.value >> 9) & 0b11)) }
+}
+
+pub fn (mut self TerminalFlags) set_mouse_shift_capture(value MouseShiftCaptureState) {
+	self.set_field(0b11 << 9, u32(value) << 9)
+}
+
+pub fn (self TerminalFlags) focused() bool {
+	return self.value & (1 << 11) != 0
+}
+
+pub fn (mut self TerminalFlags) set_focused(value bool) {
+	self.set_bit(1 << 11, value)
+}
+
+pub fn (self TerminalFlags) password_input() bool {
+	return self.value & (1 << 12) != 0
+}
+
+pub fn (mut self TerminalFlags) set_password_input(value bool) {
+	self.set_bit(1 << 12, value)
+}
+
+pub fn (self TerminalFlags) selection_scroll() bool {
+	return self.value & (1 << 13) != 0
+}
+
+pub fn (mut self TerminalFlags) set_selection_scroll(value bool) {
+	self.set_bit(1 << 13, value)
+}
+
+// Dirty flag used only by the search thread.
+pub fn (self TerminalFlags) search_viewport_dirty() bool {
+	return self.value & (1 << 14) != 0
+}
+
+pub fn (mut self TerminalFlags) set_search_viewport_dirty(value bool) {
+	self.set_bit(1 << 14, value)
+}
+
+pub fn (self TerminalFlags) dirty() Dirty {
+	return Dirty.from_int(u8((self.value >> 15) & 0b1111))
+}
+
+pub fn (mut self TerminalFlags) set_dirty(value Dirty) {
+	self.set_field(0b1111 << 15, u32(value.int()) << 15)
+}
+
+pub fn (mut self TerminalFlags) set_dirty_palette(value bool) {
+	self.set_bit(1 << 15, value)
+}
+
+pub fn (mut self TerminalFlags) set_dirty_reverse_colors(value bool) {
+	self.set_bit(1 << 16, value)
+}
+
+pub fn (mut self TerminalFlags) set_dirty_clear(value bool) {
+	self.set_bit(1 << 17, value)
+}
+
+pub fn (mut self TerminalFlags) set_dirty_preedit(value bool) {
+	self.set_bit(1 << 18, value)
+}
+
+pub fn (self TerminalFlags) int() u32 {
+	return self.value
+}
+
+fn (mut self TerminalFlags) set_bit(mask u32, enabled bool) {
+	if enabled {
+		self.value |= mask
+	} else {
+		self.value &= ~mask
+	}
+}
+
+fn (mut self TerminalFlags) set_field(mask u32, value u32) {
+	self.value = (self.value & ~mask) | (value & mask)
+}
+
+pub enum MouseShiftCaptureState as u8 {
 	null_
 	false_
 	true_
@@ -3578,7 +3702,7 @@ pub fn (mut self Terminal) erase_display(mode EraseDisplay, protected_req bool) 
 			self.screens.active.clear_rows(Point.new(.active, Coordinate{}), ?Point(none), is_protected)
 			self.screens.active.cursor.pending_wrap = false
 			self.screens.active.clear_kitty_images()
-			self.flags.dirty.clear = true
+			self.flags.set_dirty_clear(true)
 		}
 		.below {
 			// All lines to the right (including the cursor)
@@ -3832,7 +3956,7 @@ pub fn (mut self Terminal) resize(cols u16, rows u16) ! {
 		cols: u32(cols)
 		rows: u32(rows)
 		reflow: self.modes.get(.wraparound)
-		prompt_redraw: self.flags.shell_redraws_prompt
+		prompt_redraw: self.flags.shell_redraws_prompt()
 	})!
 
 	// Alternate screen, if it exists, doesn't reflow.
@@ -3845,7 +3969,7 @@ pub fn (mut self Terminal) resize(cols u16, rows u16) ! {
 	}
 
 	// Whenever we resize we just mark it as a screen clear
-	self.flags.dirty.clear = true
+	self.flags.set_dirty_clear(true)
 
 	// Set our size
 	self.cols = cols
@@ -3922,7 +4046,7 @@ pub fn (mut self Terminal) switch_screen(key ScreenKey) !&Screen {
 	new.mark_kitty_images_dirty()
 
 	// Mark terminal as dirty.
-	self.flags.dirty.clear = true
+	self.flags.set_dirty_clear(true)
 
 	// Finalize the switch.
 	self.screens.switch_to(key)
@@ -4041,7 +4165,7 @@ pub fn (mut self Terminal) full_reset() {
 	}
 
 	// Always mark dirty so we redraw everything
-	self.flags.dirty.clear = true
+	self.flags.set_dirty_clear(true)
 }
 
 // Perform a semantic prompt command (OSC 133).
@@ -4067,7 +4191,7 @@ pub fn (mut self Terminal) semantic_prompt_options(action osc.SemanticAction, op
 			self.screens.active.cursor_set_semantic_content_prompt(prompt_kind_from_osc(options))
 
 			if redraw := osc.read_redraw(options) {
-				self.flags.shell_redraws_prompt = redraw
+				self.flags.set_shell_redraws_prompt(redraw)
 			}
 
 			if click_events := osc.read_click_events(options) {

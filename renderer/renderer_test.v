@@ -59,6 +59,21 @@ fn test_renderer_emits_health_transitions_and_dirty_scrollbar() {
 	assert !render.scrollbar_dirty
 }
 
+fn test_update_frame_marks_search_viewport_dirty() ! {
+	mut term := terminal.Terminal.init(terminal.Options{ cols: 2, rows: 2 })!
+	defer { term.deinit() }
+	term.modes.set(.cursor_visible, false)
+	state := RenderState{
+		terminal_: &term
+	}
+	mut render := Renderer{
+		images: ImageRenderState.empty()
+	}
+	assert !term.flags.search_viewport_dirty()
+	render.update_frame(&state, true)!
+	assert term.flags.search_viewport_dirty()
+}
+
 // Test DerivedConfig init and deinit.
 fn test_derived_config_deinit() {
 	mut config := DerivedConfig{

@@ -378,11 +378,11 @@ pub fn (mut self ReadonlyHandler) vt(event StreamEvent) ! {
 			self.terminal.set_protected_mode(.dec)
 		}
 		.mouse_shift_capture {
-			self.terminal.flags.mouse_shift_capture = if event.payload.flag {
+			self.terminal.flags.set_mouse_shift_capture(if event.payload.flag {
 				MouseShiftCaptureState.true_
 			} else {
 				MouseShiftCaptureState.false_
-			}
+			})
 		}
 		.kitty_keyboard_push {
 			self.terminal.screens.active.kitty_keyboard.push(KeyFlags.from_int(event.payload.kitty_flags))
@@ -400,10 +400,10 @@ pub fn (mut self ReadonlyHandler) vt(event StreamEvent) ! {
 			self.terminal.screens.active.kitty_keyboard.set(.not_, KeyFlags.from_int(event.payload.kitty_flags))
 		}
 		.modify_key_format {
-			self.terminal.flags.modify_other_keys_2 = false
+			self.terminal.flags.set_modify_other_keys_2(false)
 			match event.payload.modify_key_format {
 				.other_keys_numeric {
-					self.terminal.flags.modify_other_keys_2 = true
+					self.terminal.flags.set_modify_other_keys_2(true)
 				}
 				else {}
 			}
@@ -481,7 +481,7 @@ fn (mut self ReadonlyHandler) color_operation(op osc.ColorOperation, requests []
 				}
 				match request.target {
 					osc.ColorTargetPalette {
-						self.terminal.flags.dirty.palette = true
+						self.terminal.flags.set_dirty_palette(true)
 						self.terminal.colors.palette.set(request.target.index, color)
 					}
 					osc.ColorTargetDynamic {
@@ -493,7 +493,7 @@ fn (mut self ReadonlyHandler) color_operation(op osc.ColorOperation, requests []
 			osc.ColorRequestReset {
 				match request.target {
 					osc.ColorTargetPalette {
-						self.terminal.flags.dirty.palette = true
+						self.terminal.flags.set_dirty_palette(true)
 						self.terminal.colors.palette.reset(request.target.index)
 					}
 					osc.ColorTargetDynamic {
@@ -506,7 +506,7 @@ fn (mut self ReadonlyHandler) color_operation(op osc.ColorOperation, requests []
 				for i in 0 .. 256 {
 					idx := u8(i)
 					if self.terminal.colors.palette.mask_is_set(idx) {
-						self.terminal.flags.dirty.palette = true
+						self.terminal.flags.set_dirty_palette(true)
 						self.terminal.colors.palette.reset(idx)
 					}
 				}
@@ -541,7 +541,7 @@ fn (mut self ReadonlyHandler) kitty_color_operation(items []osc.KittyColorItem) 
 		}
 		match item.key.kind {
 			.palette {
-				self.terminal.flags.dirty.palette = true
+				self.terminal.flags.set_dirty_palette(true)
 				if item.item_type == .set {
 					self.terminal.colors.palette.set(item.key.palette, RGB{
 						r: item.color.r
@@ -625,59 +625,59 @@ fn (mut self ReadonlyHandler) set_mode(mode Mode, enabled bool) ! {
 		.synchronized_output, .linefeed, .in_band_size_reports, .focus_event {}
 		.mouse_event_x10 {
 			if enabled {
-				self.terminal.flags.mouse_event = .x10
+				self.terminal.flags.set_mouse_event(.x10)
 			} else {
-				self.terminal.flags.mouse_event = .none
+				self.terminal.flags.set_mouse_event(.none)
 			}
 		}
 		.mouse_event_normal {
 			if enabled {
-				self.terminal.flags.mouse_event = .normal
+				self.terminal.flags.set_mouse_event(.normal)
 			} else {
-				self.terminal.flags.mouse_event = .none
+				self.terminal.flags.set_mouse_event(.none)
 			}
 		}
 		.mouse_event_button {
 			if enabled {
-				self.terminal.flags.mouse_event = .button
+				self.terminal.flags.set_mouse_event(.button)
 			} else {
-				self.terminal.flags.mouse_event = .none
+				self.terminal.flags.set_mouse_event(.none)
 			}
 		}
 		.mouse_event_any {
 			if enabled {
-				self.terminal.flags.mouse_event = .any
+				self.terminal.flags.set_mouse_event(.any)
 			} else {
-				self.terminal.flags.mouse_event = .none
+				self.terminal.flags.set_mouse_event(.none)
 			}
 		}
 		.mouse_format_utf8 {
-			self.terminal.flags.mouse_format = if enabled {
+			self.terminal.flags.set_mouse_format(if enabled {
 				MouseFormat.utf8
 			} else {
 				MouseFormat.x10
-			}
+			})
 		}
 		.mouse_format_sgr {
-			self.terminal.flags.mouse_format = if enabled {
+			self.terminal.flags.set_mouse_format(if enabled {
 				MouseFormat.sgr
 			} else {
 				MouseFormat.x10
-			}
+			})
 		}
 		.mouse_format_urxvt {
-			self.terminal.flags.mouse_format = if enabled {
+			self.terminal.flags.set_mouse_format(if enabled {
 				MouseFormat.urxvt
 			} else {
 				MouseFormat.x10
-			}
+			})
 		}
 		.mouse_format_sgr_pixels {
-			self.terminal.flags.mouse_format = if enabled {
+			self.terminal.flags.set_mouse_format(if enabled {
 				MouseFormat.sgr_pixels
 			} else {
 				MouseFormat.x10
-			}
+			})
 		}
 		else {}
 	}

@@ -136,7 +136,7 @@ fn (mut self TerminalInfo) draw_screen_window(context cimgui.Context, key termin
 	context.set_next_window_size_max(400, 300)
 	visible, still_open := context.begin_window_open('Screen: ${key}', true)
 	mut info := self.screens[key]
-	info.draw(context, visible, mut screen, key, term.screens.active_key, term.flags.modify_other_keys_2, term.colors.palette.current)
+	info.draw(context, visible, mut screen, key, term.screens.active_key, term.flags.modify_other_keys_2(), term.colors.palette.current)
 	context.end_window()
 	if still_open {
 		self.screens[key] = info
@@ -200,7 +200,7 @@ fn draw_terminal_misc(context cimgui.Context, term &terminal.Terminal) {
 
 	draw_terminal_label(context, 'Focused', 'Whether the terminal itself is currently focused.')
 	context.table_set_column(1)
-	context.checkbox('##focused', term.flags.focused)
+	context.checkbox('##focused', term.flags.focused())
 
 	draw_terminal_label(context, 'Previous Char', 'The previously printed character, used only for the REP sequence.')
 	context.table_set_column(1)
@@ -290,11 +290,11 @@ fn draw_terminal_mouse(context cimgui.Context, term &terminal.Terminal) {
 
 	draw_terminal_label(context, 'Event Mode', 'The mouse event reporting mode set by the application.')
 	context.table_set_column(1)
-	context.text(terminal_enum_name(term.flags.mouse_event.str()))
+	context.text(terminal_enum_name(term.flags.mouse_event().str()))
 
 	draw_terminal_label(context, 'Format', 'The mouse event encoding format.')
 	context.table_set_column(1)
-	context.text(terminal_enum_name(term.flags.mouse_format.str()))
+	context.text(terminal_enum_name(term.flags.mouse_format().str()))
 
 	draw_terminal_label(context, 'Shape', 'The current mouse cursor shape set by the application.')
 	context.table_set_column(1)
@@ -302,10 +302,10 @@ fn draw_terminal_mouse(context cimgui.Context, term &terminal.Terminal) {
 
 	draw_terminal_label(context, 'Shift Capture', 'XTSHIFTESCAPE state for capturing shift in mouse protocol.')
 	context.table_set_column(1)
-	if term.flags.mouse_shift_capture == .null_ {
+	if term.flags.mouse_shift_capture() == .null_ {
 		context.text_disabled('(unset)')
 	} else {
-		context.text(terminal_enum_name(term.flags.mouse_shift_capture.str()))
+		context.text(terminal_enum_name(term.flags.mouse_shift_capture().str()))
 	}
 }
 

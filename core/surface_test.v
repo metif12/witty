@@ -433,22 +433,22 @@ fn test_right_click_copy_or_paste_requests_paste_without_selection() {
 fn test_mouse_shift_capture_uses_terminal_override_then_config_default() {
 	mut surf := make_test_surface()
 	surf.config.mouse_shift_capture = .false_
-	surf.renderer_state.terminal_.flags.mouse_shift_capture = .null_
+	surf.renderer_state.terminal_.flags.set_mouse_shift_capture(.null_)
 	assert !surf.mouse_shift_capture(false)
 
 	surf.config.mouse_shift_capture = .true_
 	assert surf.mouse_shift_capture(false)
 
-	surf.renderer_state.terminal_.flags.mouse_shift_capture = .false_
+	surf.renderer_state.terminal_.flags.set_mouse_shift_capture(.false_)
 	assert !surf.mouse_shift_capture(false)
 	surf.config.mouse_shift_capture = .false_
-	surf.renderer_state.terminal_.flags.mouse_shift_capture = .true_
+	surf.renderer_state.terminal_.flags.set_mouse_shift_capture(.true_)
 	assert surf.mouse_shift_capture(false)
 
 	surf.config.mouse_shift_capture = .never
 	assert !surf.mouse_shift_capture(false)
 	surf.config.mouse_shift_capture = .always
-	surf.renderer_state.terminal_.flags.mouse_shift_capture = .false_
+	surf.renderer_state.terminal_.flags.set_mouse_shift_capture(.false_)
 	assert surf.mouse_shift_capture(false)
 }
 
@@ -851,7 +851,7 @@ fn test_modifier_key_updates_mouse_shape() ! {
 	mut surf := make_test_surface()
 	surf.rt_app = &runtime
 	surf.config.mouse_shift_capture = .always
-	surf.renderer_state.terminal_.flags.mouse_event = .normal
+	surf.renderer_state.terminal_.flags.set_mouse_event(.normal)
 	effect := surf.key_callback(KeyEvent{
 		key: .shift_left
 		mods: input.Mods{ shift: true }
@@ -1370,7 +1370,7 @@ fn test_scroll_callback_reports_horizontal_wheel_buttons() {
 	surf.rt_surface = &runtime
 	surf.size = make_test_size()
 	surf.config.mouse_reporting = true
-	surf.renderer_state.terminal_.flags.mouse_event = .normal
+	surf.renderer_state.terminal_.flags.set_mouse_event(.normal)
 	surf.scroll_callback(2, 0, input.ScrollMods{})!
 	assert surf.io.messages.len == 2
 	for msg in surf.io.messages {
@@ -1477,7 +1477,7 @@ fn test_mouse_link_preview_forwards_untrimmed_url() ! {
 
 	surf.mouse_refresh_links(apprt.CursorPos{ x: 6, y: 6 }, Coordinate{ x: 0, y: 0 }, false)!
 	assert surf.mouse.over_link
-	assert surf.renderer_state.terminal_.screens.active.dirty.hyperlink_hover
+	assert surf.renderer_state.terminal_.screens.active.dirty.hyperlink_hover()
 	assert runtime.actions.len == 2
 	assert runtime.actions[0].action == .mouse_shape
 	assert runtime.actions[1].action == .mouse_over_link

@@ -475,19 +475,19 @@ fn test_stream_handler_modify_key_format() {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
 
-	assert !handler.terminal.flags.modify_other_keys_2
+	assert !handler.terminal.flags.modify_other_keys_2()
 
 	handler.vt(terminal.StreamEvent{
 		key: .modify_key_format
 		payload: terminal.ActionPayload{ modify_key_format: .other_keys_numeric }
 	})
-	assert handler.terminal.flags.modify_other_keys_2
+	assert handler.terminal.flags.modify_other_keys_2()
 
 	handler.vt(terminal.StreamEvent{
 		key: .modify_key_format
 		payload: terminal.ActionPayload{ modify_key_format: .legacy }
 	})
-	assert !handler.terminal.flags.modify_other_keys_2
+	assert !handler.terminal.flags.modify_other_keys_2()
 }
 
 // Test linefeed dispatching (calls index).
@@ -658,12 +658,12 @@ fn test_stream_handler_mouse_modes() {
 
 	// Enable mouse normal tracking
 	handler.set_mode(.mouse_event_normal, true)
-	assert handler.terminal.flags.mouse_event == .normal
+	assert handler.terminal.flags.mouse_event() == .normal
 	assert handler.terminal.mouse_shape == .default_
 
 	// Disable
 	handler.set_mode(.mouse_event_normal, false)
-	assert handler.terminal.flags.mouse_event == .none
+	assert handler.terminal.flags.mouse_event() == .none
 	assert handler.terminal.mouse_shape == .text
 }
 
@@ -673,10 +673,10 @@ fn test_stream_handler_mouse_format() {
 	defer { ctx.t.deinit() }
 
 	handler.set_mode(.mouse_format_sgr, true)
-	assert handler.terminal.flags.mouse_format == .sgr
+	assert handler.terminal.flags.mouse_format() == .sgr
 
 	handler.set_mode(.mouse_format_sgr, false)
-	assert handler.terminal.flags.mouse_format == .x10
+	assert handler.terminal.flags.mouse_format() == .x10
 }
 
 // Test DCS/APC handlers don't crash.

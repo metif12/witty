@@ -378,7 +378,7 @@ fn test_readonly_kitty_color_protocol_set_palette() {
 	assert t.colors.palette.current[5].g == 0x00
 	assert t.colors.palette.current[5].b == 0xff
 	assert t.colors.palette.mask_is_set(5)
-	assert t.flags.dirty.palette
+	assert t.flags.dirty().palette()
 }
 
 fn test_readonly_kitty_color_protocol_reset_palette() {
@@ -467,21 +467,21 @@ fn test_readonly_palette_dirty_flag_set_on_color_change() {
 	}
 
 	// Clear dirty flag
-	t.flags.dirty.palette = false
+	t.flags.set_dirty_palette(false)
 
 	// Setting palette color should set dirty flag
 	s.next_slice('\x1b]4;0;rgb:ff/00/00\x1b\\') or { panic(err) }
-	assert t.flags.dirty.palette
+	assert t.flags.dirty().palette()
 
 	// Clear and test reset
-	t.flags.dirty.palette = false
+	t.flags.set_dirty_palette(false)
 	s.next_slice('\x1b]104;0\x1b\\') or { panic(err) }
-	assert t.flags.dirty.palette
+	assert t.flags.dirty().palette()
 
 	// Clear and test kitty protocol
-	t.flags.dirty.palette = false
+	t.flags.set_dirty_palette(false)
 	s.next_slice('\x1b]21;1=rgb:00/ff/00\x1b\\') or { panic(err) }
-	assert t.flags.dirty.palette
+	assert t.flags.dirty().palette()
 }
 
 fn test_readonly_semantic_prompt_end_of_input_then_start_output() {
@@ -525,7 +525,7 @@ fn test_readonly_semantic_prompt_fresh_line_new_prompt() {
 
 	s.next_slice('prompt\$ ') or { panic(err) }
 	s.next_slice('\x1b]133;A;redraw=1\a') or { panic(err) }
-	assert t.flags.shell_redraws_prompt == .redraw_true
+	assert t.flags.shell_redraws_prompt() == .redraw_true
 }
 
 fn test_readonly_semantic_prompt_prompt_start() {
