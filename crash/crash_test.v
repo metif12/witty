@@ -7,7 +7,8 @@ fn read_thread_state(result chan ThreadState) {
 		kind: .io
 		surface: voidptr(usize(0x5678))
 	})
-	result <- thread_state() or { ThreadState{} }
+	state := thread_state() or { ThreadState{} }
+	result <- state
 	clear_thread_state()
 }
 
@@ -63,16 +64,37 @@ fn test_crash_dir_reports_regular_files_and_missing_directory() {
 	defer {
 		iter.deinit()
 	}
-	report := iter.next() or {
+	next := iter.next()!
+	report := next.value or {
 		assert false, 'expected crash report'
 		return
 	}
 	assert report.name == 'one.dmp'
 	assert report.mtime > 0
-	assert iter.next() == none
+	assert iter.next()!.value == none
 
 	reports := dir.reports()!
 	assert reports.len == 1
 	assert reports[0].name == 'one.dmp'
 	assert reports[0].mtime > 0
+}
+
+fn test_crash_report_iterator_propagates_metadata_errors() {
+	root := os.join_path(os.temp_dir(), 'witty-crash-dir-error-${os.getpid()}')
+	os.rmdir_all(root) or {}
+	os.mkdir_all(root)!
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	mut iter := ReportIterator{
+		path: root
+		entries: ['vanished.dmp']
+	}
+	if _ := iter.next() {
+		assert false, 'metadata errors must not become end-of-iteration'
+	}
+}
+
+fn test_crash_thread_type_uses_compact_storage() {
+	assert sizeof(ThreadType) == 1
 }

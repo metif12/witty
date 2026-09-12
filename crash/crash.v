@@ -4,7 +4,7 @@ import os
 
 #include "@VMODROOT/crash/mtime.h"
 
-fn C.witty_crash_file_mtime_ns(path &char, value &i64) int
+fn C.witty_crash_file_info(path &char, regular &int, value &i64) int
 
 fn C.witty_crash_thread_state_set(kind int, surface voidptr)
 
@@ -21,10 +21,10 @@ pub:
 	surface voidptr
 }
 
-pub enum ThreadType {
-	main
-	renderer
-	io
+pub enum ThreadType as u8 {
+	main     = 0
+	renderer = 1
+	io       = 2
 }
 
 pub fn set_thread_state(state ThreadState) {
@@ -76,6 +76,12 @@ pub mut:
 	index   int
 }
 
+// ReportIteratorNext preserves Ghostty's error-union-of-optional result.
+pub struct ReportIteratorNext {
+pub:
+	value ?Report
+}
+
 // default_dir returns Ghostty's XDG state directory for crash reports.
 pub fn default_dir() Dir {
 	return Dir{
@@ -99,25 +105,29 @@ pub fn (mut self ReportIterator) deinit() {
 
 // next returns the next regular crash-report file, skipping directories and
 // other non-file entries just like std.fs.Dir.Iterator in Ghostty.
-pub fn (mut self ReportIterator) next() ?Report {
+pub fn (mut self ReportIterator) next() !ReportIteratorNext {
 	for self.index < self.entries.len {
 		name := self.entries[self.index]
 		self.index++
 		path := os.join_path(self.path, name)
-		if !os.is_file(path) {
-			continue
-		}
 
+		mut regular := 0
 		mut mtime := i64(0)
-		if C.witty_crash_file_mtime_ns(&char(path.str), &mtime) != 0 {
+		result := C.witty_crash_file_info(&char(path.str), &regular, &mtime)
+		if result != 0 {
+			return error_with_code('unable to stat crash report', result)
+		}
+		if regular == 0 {
 			continue
 		}
-		return Report{
-			name: name
-			mtime: mtime
+		return ReportIteratorNext{
+			value: Report{
+				name: name
+				mtime: mtime
+			}
 		}
 	}
-	return none
+	return ReportIteratorNext{}
 }
 
 // reports collects the report iterator for callers that need an owned array.
@@ -128,7 +138,8 @@ pub fn (dir &Dir) reports() ![]Report {
 	}
 	mut result := []Report{}
 	for {
-		report := iter.next() or { break }
+		next := iter.next()!
+		report := next.value or { break }
 		result << report
 	}
 	return result

@@ -112,6 +112,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | system click interval | The Cocoa shim overloaded a valid zero-millisecond interval as its missing-class sentinel and its Darwin file selection also exposed the macOS-only implementation to iOS. | Return success separately from the `u32` value and select the AppKit implementation only for macOS, leaving every other target on Ghostty's absent-value branch. |
 | Linux cgroup controls | Cgroup moves, controller configuration, and limits used a create-and-truncate file helper instead of Ghostty's existing-file, write-only opens; the tagged limit payload was fixed at `u64` instead of `usize`. | Share a write-all helper that opens only existing control files with `O_WRONLY`, preserve write errors and short writes, and carry pointer-width limit values behind a compact tag. |
 | POSIX pipe setup | The `pipe2(.CLOEXEC)` adaptation ignored both `fcntl` results, so it could return descriptors without the mandatory close-on-exec flag and leaked both descriptors if setup needed to fail. | Propagate the platform errors from `pipe`/both `fcntl` calls, close the pair on either flag failure, and verify `FD_CLOEXEC` on both returned ends. |
+| crash report iteration | `ReportIterator.next()` silently skipped metadata errors and returned the same optional absence as a clean end of iteration; its three-case crash-thread tag also used default-width storage. | Preserve Ghostty's fallible optional result with an explicit V wrapper, propagate the native metadata error, skip only confirmed non-files, and use byte-backed thread-kind values. |
 
 ## Focused behavior reviewed
 
@@ -177,6 +178,9 @@ an item here does not mean its full module has been certified yet.
   allocator failure paths, and generic `RefCountedSet` storage are adapted to
   V GC arrays/specializations. Their reviewed observable behavior is close,
   but they are not literal layout, ownership, or failure-mode translations.
+- **Crash timestamp width:** Ghostty retains filesystem modification times and
+  `nanoTimestamp()` arithmetic as `i128`. V has no `i128` integer type, so the
+  crash-report directory and CLI retain the platform nanosecond value as `i64`.
 - **Render-state integration:** the production render path adapts the flat
   `Pages` screen rather than traversing Ghostty's active `PageList`; therefore
   PageList cross-node behavior is not exercised through the live renderer.
