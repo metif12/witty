@@ -3,6 +3,20 @@ module global_state
 import os
 import cli_args
 
+fn test_logging_defaults_follow_runtime_and_darwin_target() {
+	logging := Logging{}
+	$if linux || freebsd {
+		assert logging.stderr
+	} $else {
+		assert !logging.stderr
+	}
+	$if macos || ios {
+		assert logging.macos
+	} $else {
+		assert !logging.macos
+	}
+}
+
 fn test_detect_action_direct_match() {
 	assert detect_action(['--font-size=12', '+list-themes'])! == .list_themes
 }

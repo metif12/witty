@@ -57,16 +57,17 @@ pub struct Logging {
 pub mut:
 	// Whether to log to stderr. For lib mode we always disable stderr
 	// logging by default. Otherwise it's enabled by default.
-	stderr bool = true
+	stderr bool = default_logging_stderr
 
 	// Whether to log to macOS's unified logging. Enabled by default
 	// on macOS.
-	macos bool = is_macos
+	macos bool = is_darwin
 }
 
-// is_macos is true on macOS, false otherwise. Used as a struct field default
-// since V does not support $if in struct field initializers.
-const is_macos = $if macos { true } $else { false }
+// These mirror the selected application runtime and builtin.os.tag.isDarwin().
+// Constants are used because V does not support $if in field initializers.
+const default_logging_stderr = $if linux || freebsd { true } $else { false }
+const is_darwin = $if macos || ios { true } $else { false }
 
 // Action represents the special commands accepted through +<action>.
 pub enum Action {
