@@ -1,6 +1,7 @@
 module termio
 
 import build_meta
+import command as commandpkg
 import configpkg
 import os
 import renderer
@@ -190,6 +191,43 @@ fn test_subprocess_resize() {
 	assert sub.grid_size.rows == 24
 	assert sub.screen_size.width == 800
 	assert sub.screen_size.height == 480
+}
+
+fn test_subprocess_start_delegates_to_command() {
+	$if windows {
+		return
+	}
+	mut sub := Subprocess{
+		args: ['/bin/sh', '-c', 'exit 23']
+		env: map[string]string{}
+		grid_size: renderer.GridSize{
+			columns: 80
+			rows: 24
+		}
+		screen_size: renderer.ScreenSize{
+			width: 800
+			height: 480
+		}
+	}
+	defer {
+		sub.deinit()
+	}
+	pty_fds := sub.start()!
+	assert pty_fds.read >= 0
+	assert pty_fds.write == pty_fds.read
+	process := sub.process or { panic('expected the translated Command process') }
+	assert process.path == '/bin/sh'
+	assert process.pid > 0
+	exit_state := process.wait(true)!
+	match exit_state {
+		commandpkg.ExitNormal {
+			assert exit_state.status == 23
+		}
+		else {
+			assert false, 'expected a normal command exit'
+		}
+	}
+	sub.external_exit()
 }
 
 fn test_clamp_u16() {

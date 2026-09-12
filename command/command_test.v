@@ -1,4 +1,4 @@
-module main
+module command
 
 import os
 
@@ -84,8 +84,8 @@ fn test_command_defaults() {
 	cmd := Command{}
 	assert cmd.path == ''
 	assert cmd.args.len == 0
-	assert cmd.env.len == 0
-	assert cmd.cwd == ''
+	assert cmd.env == none
+	assert cmd.cwd == none
 	assert cmd.stdin_fd == -1
 	assert cmd.stdout_fd == -1
 	assert cmd.stderr_fd == -1
@@ -133,9 +133,13 @@ fn test_command_with_env() {
 			'VALUE': 'hello'
 		}
 	}
-	assert cmd.env.len == 2
-	assert cmd.env['HOME'] == '/home/test'
-	assert cmd.env['VALUE'] == 'hello'
+	if env := cmd.env {
+		assert env.len == 2
+		assert env['HOME'] == '/home/test'
+		assert env['VALUE'] == 'hello'
+	} else {
+		assert false, 'expected an explicit environment'
+	}
 }
 
 fn test_command_with_cwd() {
@@ -144,7 +148,7 @@ fn test_command_with_cwd() {
 		args: ['/bin/sh', '-c', 'pwd']
 		cwd: '/tmp'
 	}
-	assert cmd.cwd == '/tmp'
+	assert cmd.cwd or { '' } == '/tmp'
 }
 
 fn test_command_wait_not_started() {
@@ -221,6 +225,32 @@ fn test_command_start_inherits_environment() {
 	mut cmd := Command{
 		path: '/bin/sh'
 		args: ['/bin/sh', '-c', 'test "\$WITTY_COMMAND_INHERIT_TEST" = inherited']
+	}
+	cmd.start() or { assert false, err.msg() }
+	exit := cmd.wait(true) or { panic(err) }
+	assert exit == Exit(ExitNormal{
+		status: 0
+	})
+}
+
+fn test_command_start_with_explicit_empty_environment() {
+	$if windows {
+		return
+	}
+	name := 'WITTY_COMMAND_EMPTY_ENV_TEST'
+	previous := os.getenv_opt(name)
+	os.setenv(name, 'must-not-be-inherited', true)
+	defer {
+		if value := previous {
+			os.setenv(name, value, true)
+		} else {
+			os.unsetenv(name)
+		}
+	}
+	mut cmd := Command{
+		path: '/bin/sh'
+		args: ['/bin/sh', '-c', 'test -z "\$WITTY_COMMAND_EMPTY_ENV_TEST"']
+		env: map[string]string{}
 	}
 	cmd.start() or { assert false, err.msg() }
 	exit := cmd.wait(true) or { panic(err) }

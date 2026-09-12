@@ -1,4 +1,4 @@
-module main
+module command
 
 import internal_os
 import global_state
@@ -273,14 +273,14 @@ pub mut:
 	// be set to equal path.
 	args []string
 
-	// Environment variables for the child process. If this is empty, inherits
+	// Environment variables for the child process. If this is none, inherits
 	// the environment variables from this process. These are the exact
 	// environment variables to set; these are /not/ merged.
-	env map[string]string
+	env ?map[string]string
 
 	// Working directory to change to in the child process. If not set, the
 	// working directory of the calling process is preserved.
-	cwd string
+	cwd ?string
 
 	// File descriptors for stdin/out/err (as fd integers).
 	// -1 means not set, in which case we do nothing explicitly
@@ -348,9 +348,12 @@ fn (mut self Command) start_posix() ! {
 	}
 
 	// Build the exact environment before fork and retain its backing strings.
-	// An empty map represents inheritance, matching Command.env's contract.
-	env := if self.env.len > 0 {
-		create_null_delimited_env(self.env)
+	// `none` represents inheritance; a present empty map is an explicitly empty
+	// environment, matching Command.env's source contract.
+	mut has_env := false
+	env := if values := self.env {
+		has_env = true
+		create_null_delimited_env(values)
 	} else {
 		NullDelimitedEnv{}
 	}
@@ -398,8 +401,8 @@ fn (mut self Command) start_posix() ! {
 	// or if due to race conditions it doesn't exist or any various other
 	// reasons. We don't want to crash the entire process if this fails
 	// so we ignore it. We don't log because that'll show up in the output.
-	if self.cwd.len > 0 {
-		C.chdir(self.cwd.str)
+	if cwd := self.cwd {
+		C.chdir(cwd.str)
 	}
 
 	// Ghostty may raise process-wide resource limits during startup. Restore
@@ -428,7 +431,7 @@ fn (mut self Command) start_posix() ! {
 	// null-delimited `envp` array (these are the EXACT vars to set; they
 	// are NOT merged with the parent environment) and use execvpe.
 	// Otherwise we use execvp, which inherits the current environment.
-	if self.env.len > 0 {
+	if has_env {
 		C.witty_execvpe(self.path.str, c_argv.data, env.pointers.data)
 	} else {
 		C.execvp(self.path.str, c_argv.data)
@@ -640,8 +643,8 @@ fn (mut self Command) start_windows() ! {
 	}
 
 	mut cwd_w := &u16(unsafe { nil })
-	if self.cwd.len > 0 {
-		cwd_w = self.cwd.to_wide()
+	if cwd := self.cwd {
+		cwd_w = cwd.to_wide()
 		defer {
 			unsafe { free(cwd_w) }
 		}
@@ -649,8 +652,8 @@ fn (mut self Command) start_windows() ! {
 
 	mut environment := []u16{}
 	mut environment_w := &u16(unsafe { nil })
-	if self.env.len > 0 {
-		environment = create_windows_env_block(self.env)
+	if values := self.env {
+		environment = create_windows_env_block(values)
 		environment_w = environment.data
 	}
 

@@ -6,10 +6,10 @@ module termio
 
 import apprt
 import build_meta
+import command as commandpkg
 import configpkg
 import crash
 import datastruct
-import global_state
 import internal_os
 import os
 import pty
@@ -31,18 +31,6 @@ import time
 #include <sys/wait.h>
 
 fn C.pipe(fds voidptr) int
-
-fn C.fork() int
-
-fn C.setsid() int
-
-fn C.dup2(oldfd int, newfd int) int
-
-fn C.witty_execvpe(file &char, argv &&char, envp &&char) int
-
-fn C.execvp(file &char, argv &&char) int
-
-fn C.chdir(path &char) int
 
 fn C.close(fd int) int
 
@@ -67,8 +55,6 @@ fn C.killpg(pgrp int, sig int) int
 fn C.getpgid(pid int) int
 
 fn C.waitpid(pid int, status &int, options int) int
-
-fn C._exit(status int)
 
 // Signal constants
 const sig_hup = 1
@@ -209,9 +195,10 @@ fn (mut self Exec) thread_enter_common(io &Termio) ! {
 	if !isnil(self.subprocess.flatpak_command) {
 		command := self.subprocess.flatpak_command
 		self.exit_thread = spawn flatpak_process_exit_watcher(command, start_ns, io)
-	} else if self.subprocess.child_pid > 0 {
-		pid := self.subprocess.child_pid
-		self.exit_thread = spawn process_exit_watcher(pid, start_ns, io)
+	} else if process := self.subprocess.process {
+		if process.pid > 0 {
+			self.exit_thread = spawn process_exit_watcher(process.pid, start_ns, io)
+		}
 	}
 }
 
@@ -389,31 +376,11 @@ pub mut:
 	screen_size  renderer.ScreenSize
 	pty_         ?pty.Pty
 	running      bool
-	child_pid    int = -1
+	process      ?commandpkg.Command
 	linux_cgroup ?string
 	// Stable native command state when the process was launched on a Flatpak
 	// host. A host PID cannot be watched or signalled with local POSIX calls.
 	flatpak_command &internal_os.FlatpakHostCommand = unsafe { nil }
-}
-
-struct NullDelimitedEnv {
-	entries  []string
-	pointers []&char
-}
-
-fn null_delimited_env(env map[string]string) NullDelimitedEnv {
-	mut entries := []string{cap: env.len}
-	for key, value in env {
-		entries << '${key}=${value}'
-	}
-	mut pointers := unsafe { []&char{len: entries.len + 1, init: &char(0)} }
-	for i, entry in entries {
-		pointers[i] = entry.str
-	}
-	return NullDelimitedEnv{
-		entries: entries
-		pointers: pointers
-	}
 }
 
 // Add our executable directory to the child environment. Flatpak commands run
@@ -614,25 +581,12 @@ pub fn (mut self Subprocess) start() !PtyFds {
 		''
 	}
 
-	// Build the argv for execvp. We need null-terminated C strings.
 	if self.args.len == 0 {
+		p.close_slave()
+		p.deinit()
+		self.pty_ = none
 		return error('no command specified')
 	}
-
-	// Build null-terminated argv array for execvp.
-	mut c_argv := []&char{cap: self.args.len + 1}
-	for arg in self.args {
-		c_argv << arg.str
-	}
-	c_argv << &char(unsafe { nil })
-
-	// Build the exact environment before fork and retain all backing strings.
-	env := if values := self.env {
-		null_delimited_env(values)
-	} else {
-		NullDelimitedEnv{}
-	}
-	has_env := env.pointers.len > 0
 
 	// Flatpak cannot fork a sandbox child into the host namespace. Use the
 	// Development portal with the same argv, environment, cwd, and PTY slave
@@ -647,15 +601,17 @@ pub fn (mut self Subprocess) start() !PtyFds {
 				stdout: p.slave
 				stderr: p.slave
 			}
-			pid := command.spawn() or {
+			_ = command.spawn() or {
 				command.deinit()
 				unsafe {
 					free(command)
 				}
+				p.close_slave()
+				p.deinit()
+				self.pty_ = none
 				return err
 			}
 			self.flatpak_command = command
-			self.child_pid = int(pid)
 			p.close_slave()
 			self.env = none
 			self.running = true
@@ -666,54 +622,28 @@ pub fn (mut self Subprocess) start() !PtyFds {
 		}
 	}
 
-	// When configured on Linux, clone directly into the cgroup so there is no
-	// race where the child can execute before a later move. Other launches use
-	// the normal fork path.
-	pid := $if linux { if cgroup := self.linux_cgroup {
-		internal_os.cgroup_clone_into(cgroup)!
-	} else {
-		C.fork()
-	} } $else { C.fork() }
-	if pid < 0 {
-		return error('fork failed')
+	// Build and start the shared Command translation used by Ghostty's exec
+	// backend. Command owns the fork/exec, environment, descriptor, cgroup,
+	// working-directory, and pre-exec contracts.
+	mut cmd := commandpkg.Command{
+		path: self.args[0]
+		args: self.args
+		env: self.env
+		cwd: if cwd.len > 0 { cwd } else { none }
+		stdin_fd: p.slave
+		stdout_fd: p.slave
+		stderr_fd: p.slave
+		pre_exec: subprocess_child_pre_exec
+		linux_cgroup: self.linux_cgroup
+		data: voidptr(self)
 	}
-
-	if pid == 0 {
-		// === CHILD PROCESS ===
-		// Dup the slave fd to stdin/stdout/stderr.
-		C.dup2(p.slave, 0) // stdin
-		C.dup2(p.slave, 1) // stdout
-		C.dup2(p.slave, 2) // stderr
-
-		// Perform child-side pty setup (setsid, set controlling terminal,
-		// close master/slave fds).
-		p.child_pre_exec() or {
-			C._exit(1)
-		}
-
-		// Change to the requested working directory if specified.
-		if cwd.len > 0 {
-			C.chdir(cwd.str)
-		}
-
-		// Do not leak Witty's raised file-descriptor limit into the shell.
-		global_state.get_state().rlimits.restore()
-
-		// Execute with the exact environment assembled during initialization.
-		// witty_execvpe supplies Zig's portable execvpeZ behavior on macOS too.
-		if has_env {
-			C.witty_execvpe(c_argv[0], c_argv.data, env.pointers.data)
-		} else {
-			C.execvp(c_argv[0], c_argv.data)
-		}
-
-		// If execvp returns, exec failed.
-		C._exit(127)
+	cmd.start() or {
+		p.close_slave()
+		p.deinit()
+		self.pty_ = none
+		return err
 	}
-
-	// === PARENT PROCESS ===
-	// Store the child pid for later signal sending.
-	self.child_pid = pid
+	self.process = cmd
 
 	// Close the slave fd in the parent. The child has already
 	// inherited it via fork and duped it to stdin/stdout/stderr.
@@ -732,6 +662,7 @@ pub fn (mut self Subprocess) start() !PtyFds {
 // Called to notify that we exited externally so we can unset our
 // running state.
 pub fn (mut self Subprocess) external_exit() {
+	self.process = none
 	self.running = false
 }
 
@@ -752,14 +683,15 @@ pub fn (mut self Subprocess) stop() {
 		return
 	}
 
-	if self.child_pid > 0 {
+	if process := self.process {
+		pid := process.pid
 		// Get the process group ID. Before the child calls setsid
 		// the pgid will be ours because we forked it. We spin until
 		// the child has its own pgid.
 		my_pgid := C.getpgid(0)
 		mut pgid := -1
 		for {
-			pgid = C.getpgid(self.child_pid)
+			pgid = C.getpgid(pid)
 			if pgid < 0 {
 				// Process doesn't exist anymore, we're done.
 				break
@@ -780,7 +712,7 @@ pub fn (mut self Subprocess) stop() {
 				// Wait with WNOHANG so we don't block. If the child
 				// is still alive, loop and kill again.
 				mut status := 0
-				res := C.waitpid(self.child_pid, &status, wnohang)
+				res := C.waitpid(pid, &status, wnohang)
 				if res != 0 {
 					break
 				}
@@ -788,10 +720,24 @@ pub fn (mut self Subprocess) stop() {
 			}
 		}
 
-		self.child_pid = -1
+		self.process = none
 	}
 
 	self.running = false
+}
+
+// This runs in the forked child after Command has redirected the standard
+// descriptors and before it replaces the process image.
+fn subprocess_child_pre_exec(mut cmd commandpkg.Command) {
+	mut subprocess := unsafe { &Subprocess(cmd.get_data()) }
+	subprocess.child_pre_exec() or {
+		eprintln('error initializing child: ${err}')
+	}
+}
+
+fn (self &Subprocess) child_pre_exec() ! {
+	p := self.pty_ or { return error('subprocess pty is unavailable') }
+	p.child_pre_exec()!
 }
 
 // Resize the pty subprocess. This is safe to call anytime.
