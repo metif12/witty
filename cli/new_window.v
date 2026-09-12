@@ -1,9 +1,14 @@
 module cli
 
+import cli_args
+import diagnostics
+
 pub struct NewWindowOptions {
 pub mut:
-	class     ?string
-	arguments ?[]string
+	class          ?string
+	arguments      ?[]string @[cli_internal]
+	help_requested bool @[cli_internal]
+	diagnostics    diagnostics.DiagnosticList
 }
 
 pub struct NewWindowResult {
@@ -12,27 +17,30 @@ pub:
 	errors string
 }
 
-// parse_new_window_options mirrors the action's manual -e hook. Unknown
-// configuration flags are deliberately ignored because upstream enables CLI
-// diagnostics and only reports diagnostics for fields owned by this action.
+// parse_manually_hook mirrors Options.parseManuallyHook. Once -e is seen every
+// remaining argument is command input, including strings such as --help.
+fn (mut opts NewWindowOptions) parse_manually_hook(arg string) bool {
+	if mut arguments := opts.arguments {
+		arguments << arg
+		opts.arguments = arguments
+		return true
+	}
+	if arg == '-e' {
+		opts.arguments = []string{}
+		return true
+	}
+	if arg == '--help' || arg == '-h' {
+		opts.help_requested = true
+		return true
+	}
+	return false
+}
+
 fn parse_new_window_options(args []string) !NewWindowOptions {
 	mut opts := NewWindowOptions{}
-	mut index := 0
-	for index < args.len {
-		arg := args[index]
-		if arg == '-e' {
-			opts.arguments = args[index + 1..].clone()
-			return opts
-		}
-		request_action_help(arg)!
-		if arg == '--class' {
-			return error('value required for --class')
-		}
-		if arg.starts_with('--class=') {
-			value := arg.all_after('=')
-			opts.class = if value.len == 0 { none } else { value }
-		}
-		index++
+	cli_args.parse(mut opts, args)!
+	if opts.help_requested {
+		return error(action_help_requested_message)
 	}
 	return opts
 }
@@ -45,6 +53,18 @@ pub fn new_window_result(args []string) !NewWindowResult {
 		return NewWindowResult{
 			code: 1
 			errors: 'Error parsing args: ${err}\n'
+		}
+	}
+	mut errors := []string{}
+	for diagnostic in opts.diagnostics.items() {
+		if diagnostic.location is diagnostics.CliLocation && diagnostic.key == 'class' {
+			errors << 'config error: ${diagnostic.format()}'
+		}
+	}
+	if errors.len > 0 {
+		return NewWindowResult{
+			code: 1
+			errors: errors.join('\n') + '\n'
 		}
 	}
 	if arguments := opts.arguments {

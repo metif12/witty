@@ -186,8 +186,10 @@ fn run_cli_action_main(action global_state.Action, args []string) !int {
 }
 
 fn action_args(args []string, action global_state.Action) []string {
-	needle := '+${action.cli_name()}'
-	return args.filter(it != needle)
+	_ = action
+	// Ghostty's ArgsIterator skips action tokens while iterating, rather than
+	// deleting them up front, so CLI diagnostic indexes still count them.
+	return args.clone()
 }
 
 // ghostty_info: Return metadata about Ghostty, such as version, build mode, etc.

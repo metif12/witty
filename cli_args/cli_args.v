@@ -49,6 +49,11 @@ pub type CompatibilityHandler = fn (key string, value string) bool
 // case, in the case of an error some memory might be leaked into the arena.
 pub fn parse[T](mut dst T, args []string) ! {
 	for arg_index, arg in args {
+		// Actions are detected before parsing, but remain in argv so diagnostic
+		// indexes retain their original command-line position.
+		if arg.len > 0 && arg[0] == `+` {
+			continue
+		}
 		// Do manual parsing when the destination declares the V equivalent
 		// `parse_manually_hook(arg) bool`. A true result consumes the arg.
 		mut manually_handled := false
@@ -152,6 +157,7 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 
 	$for field in T.fields {
 		if field.name.len > 0 && field.name[0] != `_` && field.name != 'diagnostics'
+			&& !field.attrs.contains('cli_internal')
 			&& translated_identifier_name(field.name) == normalized_key {
 			defaults := T{}
 

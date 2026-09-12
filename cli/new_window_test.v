@@ -21,7 +21,23 @@ fn test_new_window_rejects_empty_command() {
 fn test_new_window_requires_class_value() {
 	result := new_window_result(['--class'])!
 	assert result.code == 1
-	assert result.errors.contains('value required for --class')
+	assert result.errors == 'config error: cli:1:class: value required\n'
+}
+
+fn test_new_window_filters_config_diagnostics() {
+	opts := parse_new_window_options(['--font-size=14', '--class'])!
+	items := opts.diagnostics.items()
+	assert items.len == 2
+	assert items[0].key == 'font-size'
+	assert items[1].key == 'class'
+
+	result := new_window_result(['--font-size=14', '--class'])!
+	assert result.code == 1
+	assert result.errors == 'config error: cli:2:class: value required\n'
+
+	with_action := new_window_result(['+new-window', '--class'])!
+	assert with_action.code == 1
+	assert with_action.errors == 'config error: cli:2:class: value required\n'
 }
 
 $if !linux {

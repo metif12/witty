@@ -136,6 +136,12 @@ mut:
 	diagnostics diagnostics.DiagnosticList
 }
 
+struct InternalFieldTestData {
+mut:
+	visible  bool
+	internal bool @[cli_internal]
+}
+
 struct HookTestData {
 mut:
 	manual      string
@@ -159,7 +165,7 @@ mut:
 }
 
 fn (mut h HookTestData) parse_manually_hook(arg string) bool {
-	if arg.starts_with('+') {
+	if arg == '-e' {
 		h.manual = arg
 		return true
 	}
@@ -247,6 +253,17 @@ fn test_diagnostics_storage_is_not_a_cli_field() {
 	assert items.len == 1
 	assert items[0].key == 'diagnostics'
 	assert items[0].message == 'unknown field'
+}
+
+fn test_internal_fields_are_not_cli_fields() {
+	mut data := InternalFieldTestData{}
+	parse[InternalFieldTestData](mut data, ['--visible'])!
+	assert data.visible
+	if _ := parse[InternalFieldTestData](mut data, ['--internal']) {
+		assert false, 'internal parser state must not become a CLI option'
+	} else {
+		assert err.msg() == 'invalid field'
+	}
 }
 
 // --- parse: simple reparsing ---
@@ -380,10 +397,18 @@ fn test_parse_tracks_diagnostics_and_continues() {
 	assert items[1].message == 'invalid field'
 }
 
+fn test_parse_skips_actions_without_losing_diagnostic_position() {
+	mut data := DiagnosticTestData{}
+	parse[DiagnosticTestData](mut data, ['+show-face', '--missing=value'])!
+	items := data.diagnostics.items()
+	assert items.len == 1
+	assert items[0].format() == 'cli:2:missing: unknown field'
+}
+
 fn test_parse_manual_help_and_compatibility_hooks() {
 	mut manual := HookTestData{}
-	parse[HookTestData](mut manual, ['+new-window', '--old=yes'])!
-	assert manual.manual == '+new-window'
+	parse[HookTestData](mut manual, ['-e', '--old=yes'])!
+	assert manual.manual == '-e'
 	assert manual.compat
 
 	mut help := HookTestData{}

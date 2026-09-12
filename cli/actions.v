@@ -408,6 +408,9 @@ pub fn run_show_face(args []string) !int {
 fn parse_show_face_options(args []string) !ShowFaceOptions {
 	mut opts := ShowFaceOptions{}
 	for arg in args {
+		if arg.starts_with('+') {
+			continue
+		}
 		request_action_help(arg)!
 		if !arg.starts_with('--') {
 			opts.config_args << arg

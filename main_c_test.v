@@ -38,8 +38,9 @@ fn test_ghostty_translate_falls_back_to_original_message() {
 	assert ghostty_translate(msgid) == msgid
 }
 
-fn test_action_args_remove_only_selected_action() {
+fn test_action_args_preserve_action_for_parser_location() {
 	assert action_args(['+list-themes', '--plain', '--color=dark'], .list_themes) == [
+		'+list-themes',
 		'--plain',
 		'--color=dark',
 	]
