@@ -146,13 +146,10 @@ fn test_opengl_uniform_conversion_packs_boolean_fields() {
 		}
 	})
 	assert packed.padding_extend == 5
-	assert packed.cursor_wide == 1
-	assert packed.use_display_p3 == 1
-	assert packed.use_linear_blending == 1
-	assert packed.use_linear_correction == 1
+	assert packed.bools == 0b1111
 	assert __offsetof(GLUniforms, screen_size) == 64
 	assert __offsetof(GLUniforms, grid_padding) == 96
-	assert __offsetof(GLUniforms, cursor_wide) == 132
+	assert __offsetof(GLUniforms, bools) == 132
 }
 
 fn test_opengl_text_and_background_image_values_are_packed_for_gpu() {

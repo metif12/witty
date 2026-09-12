@@ -899,21 +899,17 @@ pub mut:
 	grid_size             [2]u16
 	reserved0             [12]u8
 	grid_padding          [4]f32
-	padding_extend        u8
-	reserved1             [3]u8
+	padding_extend        u32
 	min_contrast          f32
 	cursor_pos            [2]u16
 	cursor_color          [4]u8
 	bg_color              [4]u8
-	cursor_wide           u8
-	use_display_p3        u8
-	use_linear_blending   u8
-	use_linear_correction u8
+	bools                  u32
 	reserved2             [8]u8
 }
 
 pub fn gl_uniforms(value Uniforms) GLUniforms {
-	mut padding_extend := u8(0)
+	mut padding_extend := u32(0)
 	if value.padding_extend.left {
 		padding_extend |= 1
 	}
@@ -926,6 +922,19 @@ pub fn gl_uniforms(value Uniforms) GLUniforms {
 	if value.padding_extend.down {
 		padding_extend |= 8
 	}
+	mut bools := u32(0)
+	if value.bools.cursor_wide {
+		bools |= 1
+	}
+	if value.bools.use_display_p3 {
+		bools |= 2
+	}
+	if value.bools.use_linear_blending {
+		bools |= 4
+	}
+	if value.bools.use_linear_correction {
+		bools |= 8
+	}
 	return GLUniforms{
 		projection_matrix: value.projection_matrix
 		screen_size: value.screen_size
@@ -937,10 +946,7 @@ pub fn gl_uniforms(value Uniforms) GLUniforms {
 		cursor_pos: value.cursor_pos
 		cursor_color: value.cursor_color
 		bg_color: value.bg_color
-		cursor_wide: u8(value.bools.cursor_wide)
-		use_display_p3: u8(value.bools.use_display_p3)
-		use_linear_blending: u8(value.bools.use_linear_blending)
-		use_linear_correction: u8(value.bools.use_linear_correction)
+		bools: bools
 	}
 }
 
