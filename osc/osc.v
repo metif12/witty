@@ -144,7 +144,7 @@ pub const max_buf = 2048
 // The terminator used to end an OSC command. For OSC commands that demand
 // a response, we try to match the terminator used in the request since that
 // is most likely to be accepted by the calling program.
-pub enum Terminator {
+pub enum Terminator as u8 {
 	// The preferred string terminator is ESC followed by \
 	st
 	// Some applications and terminals use BELL (0x07) as the string terminator.

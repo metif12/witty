@@ -1,5 +1,22 @@
 module kitty
 
+import osc
+
+fn test_color_source_tag_layouts_and_shared_terminator() {
+	assert sizeof(Special) == 1
+	assert u8(Special.foreground) == 0
+	assert u8(Special.background) == 1
+	assert u8(Special.selection_foreground) == 2
+	assert u8(Special.selection_background) == 3
+	assert u8(Special.cursor) == 4
+	assert u8(Special.cursor_text) == 5
+	assert u8(Special.visual_bell) == 6
+	assert u8(Special.second_transparent_background) == 7
+	assert sizeof(Terminator) == 1
+	assert Terminator.st == osc.Terminator.st
+	assert Terminator.bel == osc.Terminator.bel
+}
+
 // Tests for Kitty color protocol types.
 //
 // Source: kitty/color.zig (tests)

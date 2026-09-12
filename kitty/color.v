@@ -1,5 +1,6 @@
 module kitty
 
+import osc
 import zig_fmt
 
 // Kitty color protocol types.
@@ -14,7 +15,7 @@ import zig_fmt
 // Special - special color kinds beyond palette indices
 // ============================================================
 
-pub enum Special {
+pub enum Special as u8 {
 	foreground
 	background
 	selection_foreground
@@ -136,12 +137,9 @@ pub:
 	kind Kind
 }
 
-// Terminator represents the string terminator used in the original
-// OSC sequence. We must reply with the same terminator.
-pub enum Terminator {
-	st // ESC backslash (\x1b\\)
-	bel // BEL character (\x07)
-}
+// We must reply with the same string terminator used in the original OSC
+// sequence. Ghostty uses terminal.osc.Terminator directly here.
+pub type Terminator = osc.Terminator
 
 // OSC holds a list of color protocol requests parsed from a single
 // OSC sequence, along with the terminator that was used.

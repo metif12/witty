@@ -1,5 +1,64 @@
 module kitty
 
+fn test_graphics_command_source_tag_layouts_and_ordinals() {
+	assert sizeof(ParserState) == 1
+	assert u8(ParserState.control_key) == 0
+	assert u8(ParserState.control_key_ignore) == 1
+	assert u8(ParserState.control_value) == 2
+	assert u8(ParserState.control_value_ignore) == 3
+	assert u8(ParserState.data) == 4
+	assert sizeof(CommandAction) == 1
+	assert u8(CommandAction.query) == 0
+	assert u8(CommandAction.transmit) == 1
+	assert u8(CommandAction.transmit_and_display) == 2
+	assert u8(CommandAction.display) == 3
+	assert u8(CommandAction.delete_) == 4
+	assert u8(CommandAction.transmit_animation_frame) == 5
+	assert u8(CommandAction.control_animation) == 6
+	assert u8(CommandAction.compose_animation) == 7
+	assert sizeof(Quiet) == 1
+	assert u8(Quiet.no) == 0
+	assert u8(Quiet.ok) == 1
+	assert u8(Quiet.failures) == 2
+	assert sizeof(TransmissionFormat) == 1
+	assert u8(TransmissionFormat.rgb) == 0
+	assert u8(TransmissionFormat.rgba) == 1
+	assert u8(TransmissionFormat.png) == 2
+	assert u8(TransmissionFormat.gray_alpha) == 3
+	assert u8(TransmissionFormat.gray) == 4
+	assert sizeof(TransmissionMedium) == 1
+	assert u8(TransmissionMedium.direct) == 0
+	assert u8(TransmissionMedium.file) == 1
+	assert u8(TransmissionMedium.temporary_file) == 2
+	assert u8(TransmissionMedium.shared_memory) == 3
+	assert sizeof(TransmissionCompression) == 1
+	assert u8(TransmissionCompression.none_) == 0
+	assert u8(TransmissionCompression.zlib_deflate) == 1
+	assert sizeof(CursorMovement) == 1
+	assert u8(CursorMovement.after) == 0
+	assert u8(CursorMovement.none_) == 1
+	assert sizeof(AnimationAction) == 1
+	assert u8(AnimationAction.invalid) == 0
+	assert u8(AnimationAction.stop) == 1
+	assert u8(AnimationAction.run_wait) == 2
+	assert u8(AnimationAction.run) == 3
+	assert sizeof(DeleteKind) == 1
+	assert u8(DeleteKind.all) == 0
+	assert u8(DeleteKind.id) == 1
+	assert u8(DeleteKind.newest) == 2
+	assert u8(DeleteKind.intersect_cursor) == 3
+	assert u8(DeleteKind.animation_frames) == 4
+	assert u8(DeleteKind.intersect_cell) == 5
+	assert u8(DeleteKind.intersect_cell_z) == 6
+	assert u8(DeleteKind.range) == 7
+	assert u8(DeleteKind.column) == 8
+	assert u8(DeleteKind.row) == 9
+	assert u8(DeleteKind.z) == 10
+	assert sizeof(CompositionMode) == 1
+	assert u8(CompositionMode.alpha_blend) == 0
+	assert u8(CompositionMode.overwrite) == 1
+}
+
 fn test_transmission_command() {
 	input := 'f=24,s=10,v=20'
 	command := Parser.parse_string(input) or { panic(err) }

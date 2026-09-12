@@ -16,7 +16,7 @@ import zig_fmt
 // ============================================================
 
 // Parser state for the key-value pair parsing state machine.
-enum ParserState {
+enum ParserState as u8 {
 	// Parsing k/v pairs. The "ignore" variants are in that state
 	// but ignore any data because we know they're invalid.
 	control_key
@@ -358,7 +358,7 @@ pub fn (mut self Command) deinit() {
 	self.data = []
 }
 
-pub enum CommandAction {
+pub enum CommandAction as u8 {
 	query // q
 	transmit // t
 	transmit_and_display // T
@@ -369,7 +369,7 @@ pub enum CommandAction {
 	compose_animation // c
 }
 
-pub enum Quiet {
+pub enum Quiet as u8 {
 	no // 0
 	ok // 1
 	failures // 2
@@ -475,7 +475,7 @@ pub mut:
 	is_query bool
 }
 
-pub enum TransmissionFormat {
+pub enum TransmissionFormat as u8 {
 	rgb // 24
 	rgba // 32
 	png // 100
@@ -498,14 +498,14 @@ pub fn (self TransmissionFormat) bpp() u8 {
 	// Must be validated before
 }
 
-pub enum TransmissionMedium {
+pub enum TransmissionMedium as u8 {
 	direct // d
 	file // f
 	temporary_file // t
 	shared_memory // s
 }
 
-pub enum TransmissionCompression {
+pub enum TransmissionCompression as u8 {
 	none_
 	zlib_deflate // z
 }
@@ -623,7 +623,7 @@ pub mut:
 	z                   i32 // z
 }
 
-pub enum CursorMovement {
+pub enum CursorMovement as u8 {
 	after // 0
 	none_ // 1
 }
@@ -858,7 +858,7 @@ pub mut:
 	loops         u32 // v
 }
 
-pub enum AnimationAction {
+pub enum AnimationAction as u8 {
 	invalid // 0
 	stop // 1
 	run_wait // 2
@@ -905,7 +905,7 @@ pub:
 	kind DeleteKind
 }
 
-pub enum DeleteKind {
+pub enum DeleteKind as u8 {
 	all // a/A
 	id // i/I
 	newest // n/N
@@ -1151,7 +1151,7 @@ fn Delete.parse(kv map[u8]u32) !FullDelete {
 // CompositionMode
 // ============================================================
 
-pub enum CompositionMode {
+pub enum CompositionMode as u8 {
 	alpha_blend // 0
 	overwrite // 1
 }
