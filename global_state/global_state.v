@@ -54,20 +54,70 @@ pub mut:
 
 // Where logging should go.
 pub struct Logging {
-pub mut:
-	// Whether to log to stderr. For lib mode we always disable stderr
-	// logging by default. Otherwise it's enabled by default.
-	stderr bool = default_logging_stderr
-
-	// Whether to log to macOS's unified logging. Enabled by default
-	// on macOS.
-	macos bool = is_darwin
+mut:
+	value u8 = default_logging_bits
 }
 
 // These mirror the selected application runtime and builtin.os.tag.isDarwin().
 // Constants are used because V does not support $if in field initializers.
 const default_logging_stderr = $if linux || freebsd { true } $else { false }
 const is_darwin = $if macos || ios { true } $else { false }
+const default_logging_bits = u8(default_logging_stderr) | (u8(is_darwin) << 1)
+
+// Whether to log to stderr. For lib mode we always disable stderr logging by
+// default. Otherwise it is enabled by default.
+pub fn (self Logging) stderr() bool {
+	return self.value & 0b01 != 0
+}
+
+pub fn (mut self Logging) set_stderr(value bool) {
+	self.set_bit(0b01, value)
+}
+
+// Whether to log to macOS's unified logging. Enabled by default on macOS.
+pub fn (self Logging) macos() bool {
+	return self.value & 0b10 != 0
+}
+
+pub fn (mut self Logging) set_macos(value bool) {
+	self.set_bit(0b10, value)
+}
+
+pub fn (self Logging) int() u8 {
+	return self.value
+}
+
+fn (mut self Logging) set_bit(mask u8, enabled bool) {
+	if enabled {
+		self.value |= mask
+	} else {
+		self.value &= ~mask
+	}
+}
+
+fn parse_logging(value string) !Logging {
+	mut result := Logging{}
+	if all := cli_args.parse_bool(value) {
+		result.set_stderr(all)
+		result.set_macos(all)
+		return result
+	}
+
+	for raw_part in value.split(',') {
+		mut part := raw_part.trim(cli_args.whitespace)
+		mut enabled := true
+		if part.starts_with('no-') {
+			part = part[3..]
+			enabled = false
+		}
+		match part {
+			'stderr' { result.set_stderr(enabled) }
+			'macos' { result.set_macos(enabled) }
+			else { return error('invalid value') }
+		}
+	}
+	return result
+}
 
 // Action represents the special commands accepted through +<action>.
 pub enum Action {
@@ -159,7 +209,7 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 	// since we write to stderr we don't want logs messing up our
 	// output.
 	if self.action != .none {
-		self.logging.stderr = false
+		self.logging.set_stderr(false)
 	}
 
 	// I don't love the env var name but I don't have it in my heart
@@ -168,7 +218,7 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 	// this. Env vars are useful for logging too because they are
 	// easy to set.
 	if v := os.getenv_opt('GHOSTTY_LOG') {
-		self.logging = cli_args.parse_packed_struct[Logging](v) or { Logging{} }
+		self.logging = parse_logging(v) or { Logging{} }
 	}
 
 	// Setup our signal handlers before logging

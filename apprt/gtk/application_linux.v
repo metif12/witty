@@ -2111,7 +2111,7 @@ fn set_gtk_env(config &configpkg.Config) {
 	}
 
 	// gtk-opengl-debug dumps directly to stderr; both switches must be true.
-	if config.gtk_opengl_debug && global_state.get_state().logging.stderr {
+	if config.gtk_opengl_debug && global_state.get_state().logging.stderr() {
 		gdk_debug << 'opengl'
 	}
 

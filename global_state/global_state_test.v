@@ -1,20 +1,21 @@
 module global_state
 
 import os
-import cli_args
 
 fn test_logging_defaults_follow_runtime_and_darwin_target() {
 	logging := Logging{}
 	$if linux || freebsd {
-		assert logging.stderr
+		assert logging.stderr()
 	} $else {
-		assert !logging.stderr
+		assert !logging.stderr()
 	}
 	$if macos || ios {
-		assert logging.macos
+		assert logging.macos()
 	} $else {
-		assert !logging.macos
+		assert !logging.macos()
 	}
+	assert sizeof(Logging) == 1
+	assert logging.int() == default_logging_bits
 }
 
 fn test_detect_action_direct_match() {
@@ -58,7 +59,14 @@ fn test_logging_env_uses_packed_boolean_parser() {
 			os.unsetenv('GHOSTTY_LOG')
 		}
 	}
-	parsed := cli_args.parse_packed_struct[Logging](os.getenv('GHOSTTY_LOG'))!
-	assert parsed.stderr
-	assert !parsed.macos
+	parsed := parse_logging(os.getenv('GHOSTTY_LOG'))!
+	assert parsed.stderr()
+	assert !parsed.macos()
+	assert parse_logging('true')!.int() == 0b11
+	assert parse_logging('false')!.int() == 0
+	if _ := parse_logging('unknown') {
+		assert false, 'unknown logging field must fail'
+	} else {
+		assert err.msg() == 'invalid value'
+	}
 }
