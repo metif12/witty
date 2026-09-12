@@ -446,9 +446,9 @@ pub fn (mut self SlidingWindow) append(node &terminal.PageNode) int {
 		point_map: &point_map
 	}
 	mut encoded := formatter.format().bytes()
-	mut cell_map := []highlight.Coordinate{cap: point_map.points.len + 1}
+	mut cell_map := []terminal.Coordinate{cap: point_map.points.len + 1}
 	for point in point_map.points {
-		cell_map << highlight.Coordinate{
+		cell_map << terminal.Coordinate{
 			x: point.x
 			y: point.y
 		}
@@ -463,7 +463,7 @@ pub fn (mut self SlidingWindow) append(node &terminal.PageNode) int {
 		cell_map << if cell_map.len > 0 {
 			cell_map[cell_map.len - 1]
 		} else {
-			highlight.Coordinate{}
+			terminal.Coordinate{}
 		}
 	}
 

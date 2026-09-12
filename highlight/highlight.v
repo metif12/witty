@@ -10,18 +10,6 @@ module highlight
 
 import terminal
 
-// Coordinate represents a cell position within a page.
-// x is the column index (CellCountInt), y is the row index.
-pub struct Coordinate {
-pub mut:
-	x u16
-	y u32
-}
-
-pub fn (self Coordinate) eql(other Coordinate) bool {
-	return self.x == other.x && self.y == other.y
-}
-
 // ============================================================
 // Chunk
 // ============================================================
@@ -82,6 +70,27 @@ pub fn (self &FlattenedHighlight) clone() FlattenedHighlight {
 	}
 }
 
+// Initialize a flattened highlight from start and end pins by collecting
+// every page chunk between them.
+pub fn FlattenedHighlight.init(start terminal.PagePin, end terminal.PagePin) FlattenedHighlight {
+	mut chunks := []Chunk{}
+	mut iterator := start.page_iterator(.right_down, end)
+	for {
+		chunk := iterator.next() or { break }
+		chunks << Chunk{
+			node: chunk.node
+			serial: chunk.node.serial
+			start: chunk.start
+			end: chunk.end
+		}
+	}
+	return FlattenedHighlight{
+		chunks: chunks
+		top_x: start.x
+		bot_x: end.x
+	}
+}
+
 // Get the start pin (top-left position) of this highlight.
 pub fn (self &FlattenedHighlight) start_pin() terminal.PagePin {
 	first := self.chunks[0]
@@ -104,9 +113,19 @@ pub fn (self &FlattenedHighlight) end_pin() terminal.PagePin {
 
 // Convert to an untracked highlight (just start/end pins).
 pub fn (self &FlattenedHighlight) untracked() UntrackedHighlight {
+	first := self.chunks[0]
+	last := self.chunks[self.chunks.len - 1]
 	return UntrackedHighlight{
-		start: self.start_pin()
-		end: self.end_pin()
+		start: terminal.PagePin{
+			node: first.node
+			x: self.top_x
+			y: first.start
+		}
+		end: terminal.PagePin{
+			node: last.node
+			x: self.bot_x
+			y: last.end - 1
+		}
 	}
 }
 
@@ -129,11 +148,25 @@ pub fn (self UntrackedHighlight) eql(other UntrackedHighlight) bool {
 
 // Track this highlight by creating tracked pins in its backing page list.
 pub fn (self &UntrackedHighlight) track(mut list terminal.PageList) TrackedHighlight {
-	start_pin := list.track_pin(self.start)
-	end_pin := list.track_pin(self.end)
+	return TrackedHighlight.init(mut list, self.start, self.end)
+}
+
+// Initialize a tracked highlight by registering both pins with the page list.
+pub fn TrackedHighlight.init(mut list terminal.PageList, start terminal.PagePin, end terminal.PagePin) TrackedHighlight {
+	start_pin := list.track_pin(start)
+	end_pin := list.track_pin(end)
 	return TrackedHighlight{
 		start: start_pin
 		end: end_pin
+	}
+}
+
+// Initialize from pins that are already tracked.
+// Do not call deinit on highlights created with this function.
+pub fn TrackedHighlight.init_assume(start &terminal.PagePin, end &terminal.PagePin) TrackedHighlight {
+	return TrackedHighlight{
+		start: start
+		end: end
 	}
 }
 
@@ -154,10 +187,6 @@ pub mut:
 
 // Free tracked resources by untracking the pins.
 pub fn (self TrackedHighlight) deinit(mut list terminal.PageList) {
-	if self.start != unsafe { nil } {
-		list.untrack_pin(self.start)
-	}
-	if self.end != unsafe { nil } {
-		list.untrack_pin(self.end)
-	}
+	list.untrack_pin(self.start)
+	list.untrack_pin(self.end)
 }

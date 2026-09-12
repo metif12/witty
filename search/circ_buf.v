@@ -6,7 +6,6 @@ module search
 // src/datastruct/circ_buf.zig.
 
 import datastruct
-import highlight
 import terminal
 
 // Meta stores the page identity and the byte-to-cell map for one page in the
@@ -15,7 +14,7 @@ struct Meta {
 mut:
 	node     &terminal.PageNode = unsafe { nil }
 	serial   u64
-	cell_map []highlight.Coordinate
+	cell_map []terminal.Coordinate
 }
 
 type DataBuf = datastruct.CircBuf[u8]

@@ -8,7 +8,6 @@ module search
 // formatter mapping and node identities as production without depending on
 // the older flat Screen facade.
 
-import highlight
 import terminal
 
 // ============================================================
@@ -169,7 +168,7 @@ fn test_meta_buf_basic() {
 	buf.ensure_unused_capacity(2)
 	buf.append_assume_capacity(Meta{
 		serial: 42
-		cell_map: [highlight.Coordinate{ x: 1, y: 2 }]
+		cell_map: [terminal.Coordinate{ x: 1, y: 2 }]
 	})
 	assert buf.len() == 1
 
@@ -295,7 +294,7 @@ fn test_sliding_window_clear_and_retain_capacity() {
 	w.meta.ensure_unused_capacity(1)
 	w.meta.append_assume_capacity(Meta{
 		serial: 1
-		cell_map: []highlight.Coordinate{len: 5}
+		cell_map: []terminal.Coordinate{len: 5}
 	})
 
 	w.clear_and_retain_capacity()
@@ -326,7 +325,7 @@ fn test_sliding_window_next_data_shorter_than_needle() {
 	w.meta.ensure_unused_capacity(1)
 	w.meta.append_assume_capacity(Meta{
 		serial: 1
-		cell_map: []highlight.Coordinate{len: 2}
+		cell_map: []terminal.Coordinate{len: 2}
 	})
 
 	assert w.next() == none
