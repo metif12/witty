@@ -1925,7 +1925,7 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 		title_report: config.title_report
 		links: links
 		link_previews: config.link_previews
-		scroll_to_bottom_keystroke: config.scroll_to_bottom.keystroke
+		scroll_to_bottom_keystroke: config.scroll_to_bottom.keystroke()
 		font: font.GridSetDerivedConfig{
 			font_family: config.font_family.clone()
 			font_family_bold: config.font_family_bold.clone()

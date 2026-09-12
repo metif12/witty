@@ -637,7 +637,7 @@ pub fn (self &Tab) computed_title(config_ &Config, terminal_ ?string, override_ 
 	mut result := ''
 
 	// Bell prefix.
-	if bell_ringing && cfg.bell_features.title {
+	if bell_ringing && cfg.bell_features.title() {
 		result += '🔔 ' // bell emoji (U+1F514)
 	}
 

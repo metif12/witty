@@ -133,6 +133,36 @@ fn test_config_c_api_gets_enum_color_duration_and_packed_values() {
 	mut feature_bits := u32(0)
 	assert ghostty_config_get(mut config, voidptr(&feature_bits), 'bell-features')
 	assert feature_bits == 0b01100
+	assert ghostty_config_get(mut config, voidptr(&feature_bits), 'shell-integration-features')
+	assert feature_bits == 0b100101
+	assert ghostty_config_get(mut config, voidptr(&feature_bits), 'split-preserve-zoom')
+	assert feature_bits == 0
+	assert ghostty_config_get(mut config, voidptr(&feature_bits), 'app-notifications')
+	assert feature_bits == 0b11
+	assert ghostty_config_get(mut config, voidptr(&feature_bits), 'scroll-to-bottom')
+	assert feature_bits == 0b01
+	assert ghostty_config_get(mut config, voidptr(&feature_bits), 'notify-on-command-finish-action')
+	assert feature_bits == 0b01
+
+	config.shell_integration_features = configpkg.ShellIntegrationFeatures.init(false, true,
+		false, true, false, true)
+	config.split_preserve_zoom = configpkg.SplitPreserveZoom.init(true)
+	config.app_notifications = configpkg.AppNotifications.init(false, true)
+	config.bell_features = configpkg.BellFeatures.init(true, false, true, false, true)
+	config.scroll_to_bottom = configpkg.ScrollToBottom.init(false, true)
+	config.notify_on_command_finish_action = configpkg.NotifyOnCommandFinishAction.init(false,
+		true)
+	for key, expected in {
+		'shell-integration-features':     u32(0b101010)
+		'split-preserve-zoom':            u32(0b1)
+		'app-notifications':              u32(0b10)
+		'bell-features':                  u32(0b10101)
+		'scroll-to-bottom':               u32(0b10)
+		'notify-on-command-finish-action': u32(0b10)
+	} {
+		assert ghostty_config_get(mut config, voidptr(&feature_bits), key)
+		assert feature_bits == expected
+	}
 
 	assert !ghostty_config_get(mut config, voidptr(&feature_bits), 'scrollback-limit')
 	assert !ghostty_config_get(mut config, voidptr(&feature_bits), 'not-a-config-key')

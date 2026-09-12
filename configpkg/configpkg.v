@@ -6654,38 +6654,148 @@ pub fn (mut it RepeatableStringMapIterator) next() ?StringMapEntry {
 
 // ShellIntegrationFeatures controls which shell integration features are enabled.
 pub struct ShellIntegrationFeatures {
-pub mut:
-	cursor       bool = true
-	sudo         bool
-	title        bool = true
-	ssh_env      bool
-	ssh_terminfo bool
-	path         bool = true
+	value u8 = 0x25
+}
+
+pub fn ShellIntegrationFeatures.init(cursor bool, sudo bool, title bool, ssh_env bool, ssh_terminfo bool, path bool) ShellIntegrationFeatures {
+	return ShellIntegrationFeatures{
+		value: u8(cursor) | (u8(sudo) << 1) | (u8(title) << 2) | (u8(ssh_env) << 3) |
+			(u8(ssh_terminfo) << 4) | (u8(path) << 5)
+	}
+}
+
+pub fn (config ShellIntegrationFeatures) cursor() bool {
+	return config.value & 0x01 != 0
+}
+
+pub fn (config ShellIntegrationFeatures) sudo() bool {
+	return config.value & 0x02 != 0
+}
+
+pub fn (config ShellIntegrationFeatures) title() bool {
+	return config.value & 0x04 != 0
+}
+
+pub fn (config ShellIntegrationFeatures) ssh_env() bool {
+	return config.value & 0x08 != 0
+}
+
+pub fn (config ShellIntegrationFeatures) ssh_terminfo() bool {
+	return config.value & 0x10 != 0
+}
+
+pub fn (config ShellIntegrationFeatures) path() bool {
+	return config.value & 0x20 != 0
+}
+
+pub fn (config ShellIntegrationFeatures) int_val() u8 {
+	return config.value
+}
+
+pub fn (config ShellIntegrationFeatures) format_entry() string {
+	return [if config.cursor() { 'cursor' } else { 'no-cursor' },
+		if config.sudo() { 'sudo' } else { 'no-sudo' },
+		if config.title() { 'title' } else { 'no-title' },
+		if config.ssh_env() { 'ssh-env' } else { 'no-ssh-env' },
+		if config.ssh_terminfo() { 'ssh-terminfo' } else { 'no-ssh-terminfo' },
+		if config.path() { 'path' } else { 'no-path' }].join(',')
 }
 
 // SplitPreserveZoom controls which split operations keep the zoomed state.
 pub struct SplitPreserveZoom {
-pub mut:
-	navigation bool
+	value u8
+}
+
+pub fn SplitPreserveZoom.init(navigation bool) SplitPreserveZoom {
+	return SplitPreserveZoom{
+		value: if navigation { u8(0x01) } else { u8(0) }
+	}
+}
+
+pub fn (config SplitPreserveZoom) navigation() bool {
+	return config.value & 0x01 != 0
+}
+
+pub fn (config SplitPreserveZoom) int_val() u8 {
+	return config.value
+}
+
+pub fn (config SplitPreserveZoom) format_entry() string {
+	return if config.navigation() { 'navigation' } else { 'no-navigation' }
 }
 
 // BellFeatures controls the system, audio, attention, title, and border bell
 // effects. The defaults match Ghostty's packed struct.
 pub struct BellFeatures {
-pub mut:
-	system    bool
-	audio     bool
-	attention bool = true
-	title     bool = true
-	border    bool
+	value u8 = 0x0c
+}
+
+pub fn BellFeatures.init(system bool, audio bool, attention bool, title bool, border bool) BellFeatures {
+	return BellFeatures{
+		value: u8(system) | (u8(audio) << 1) | (u8(attention) << 2) | (u8(title) << 3) |
+			(u8(border) << 4)
+	}
+}
+
+pub fn (config BellFeatures) system() bool {
+	return config.value & 0x01 != 0
+}
+
+pub fn (config BellFeatures) audio() bool {
+	return config.value & 0x02 != 0
+}
+
+pub fn (config BellFeatures) attention() bool {
+	return config.value & 0x04 != 0
+}
+
+pub fn (config BellFeatures) title() bool {
+	return config.value & 0x08 != 0
+}
+
+pub fn (config BellFeatures) border() bool {
+	return config.value & 0x10 != 0
+}
+
+pub fn (config BellFeatures) int_val() u8 {
+	return config.value
+}
+
+pub fn (config BellFeatures) format_entry() string {
+	return [if config.system() { 'system' } else { 'no-system' },
+		if config.audio() { 'audio' } else { 'no-audio' },
+		if config.attention() { 'attention' } else { 'no-attention' },
+		if config.title() { 'title' } else { 'no-title' },
+		if config.border() { 'border' } else { 'no-border' }].join(',')
 }
 
 // AppNotifications controls the two GTK in-app toast categories. Defaults
 // match Ghostty's packed struct, where both notification kinds are enabled.
 pub struct AppNotifications {
-pub mut:
-	clipboard_copy bool = true
-	config_reload  bool = true
+	value u8 = 0x03
+}
+
+pub fn AppNotifications.init(clipboard_copy bool, config_reload bool) AppNotifications {
+	return AppNotifications{
+		value: u8(clipboard_copy) | (u8(config_reload) << 1)
+	}
+}
+
+pub fn (config AppNotifications) clipboard_copy() bool {
+	return config.value & 0x01 != 0
+}
+
+pub fn (config AppNotifications) config_reload() bool {
+	return config.value & 0x02 != 0
+}
+
+pub fn (config AppNotifications) int_val() u8 {
+	return config.value
+}
+
+pub fn (config AppNotifications) format_entry() string {
+	return [if config.clipboard_copy() { 'clipboard-copy' } else { 'no-clipboard-copy' },
+		if config.config_reload() { 'config-reload' } else { 'no-config-reload' }].join(',')
 }
 
 pub enum ShellIntegration {
@@ -6860,9 +6970,30 @@ pub fn (condition Conditional) clone() Conditional {
 }
 
 pub struct ScrollToBottom {
-pub mut:
-	keystroke bool = true
-	output    bool
+	value u8 = 0x01
+}
+
+pub fn ScrollToBottom.init(keystroke bool, output bool) ScrollToBottom {
+	return ScrollToBottom{
+		value: u8(keystroke) | (u8(output) << 1)
+	}
+}
+
+pub fn (config ScrollToBottom) keystroke() bool {
+	return config.value & 0x01 != 0
+}
+
+pub fn (config ScrollToBottom) output() bool {
+	return config.value & 0x02 != 0
+}
+
+pub fn (config ScrollToBottom) int_val() u8 {
+	return config.value
+}
+
+pub fn (config ScrollToBottom) format_entry() string {
+	return [if config.keystroke() { 'keystroke' } else { 'no-keystroke' },
+		if config.output() { 'output' } else { 'no-output' }].join(',')
 }
 
 pub struct Duration {
@@ -6916,9 +7047,30 @@ pub enum NotifyOnCommandFinish {
 }
 
 pub struct NotifyOnCommandFinishAction {
-pub mut:
-	bell   bool = true
-	notify bool
+	value u8 = 0x01
+}
+
+pub fn NotifyOnCommandFinishAction.init(bell bool, notify bool) NotifyOnCommandFinishAction {
+	return NotifyOnCommandFinishAction{
+		value: u8(bell) | (u8(notify) << 1)
+	}
+}
+
+pub fn (config NotifyOnCommandFinishAction) bell() bool {
+	return config.value & 0x01 != 0
+}
+
+pub fn (config NotifyOnCommandFinishAction) notify() bool {
+	return config.value & 0x02 != 0
+}
+
+pub fn (config NotifyOnCommandFinishAction) int_val() u8 {
+	return config.value
+}
+
+pub fn (config NotifyOnCommandFinishAction) format_entry() string {
+	return [if config.bell() { 'bell' } else { 'no-bell' },
+		if config.notify() { 'notify' } else { 'no-notify' }].join(',')
 }
 
 // GraphemeWidthMethod for calculating the cell width of a grapheme cluster.
@@ -9352,7 +9504,7 @@ fn parse_font_shaping_break(value string) ?FontShapingBreak {
 
 fn parse_split_preserve_zoom(value string) ?SplitPreserveZoom {
 	if b := parse_bool_opt(value) {
-		return SplitPreserveZoom{ navigation: b }
+		return SplitPreserveZoom.init(b)
 	}
 	mut result := SplitPreserveZoom{}
 	for raw in value.split(',') {
@@ -9362,7 +9514,7 @@ fn parse_split_preserve_zoom(value string) ?SplitPreserveZoom {
 		if name != 'navigation' {
 			return none
 		}
-		result.navigation = !negative
+		result = SplitPreserveZoom.init(!negative)
 	}
 	return result
 }
@@ -9440,16 +9592,14 @@ fn metric_modifier_parse_cli(value string) !font.MetricsModifier {
 
 fn parse_shell_integration_features(value string) ?ShellIntegrationFeatures {
 	if b := parse_bool_opt(value) {
-		return ShellIntegrationFeatures{
-			cursor: b
-			sudo: b
-			title: b
-			ssh_env: b
-			ssh_terminfo: b
-			path: b
-		}
+		return ShellIntegrationFeatures.init(b, b, b, b, b, b)
 	}
-	mut result := ShellIntegrationFeatures{}
+	mut cursor := true
+	mut sudo := false
+	mut title := true
+	mut ssh_env := false
+	mut ssh_terminfo := false
+	mut path := true
 	for raw in value.split(',') {
 		part := raw.trim(' \t')
 		negative := part.starts_with('no-')
@@ -9457,42 +9607,40 @@ fn parse_shell_integration_features(value string) ?ShellIntegrationFeatures {
 		enabled := !negative
 		match name {
 			'cursor' {
-				result.cursor = enabled
+				cursor = enabled
 			}
 			'sudo' {
-				result.sudo = enabled
+				sudo = enabled
 			}
 			'title' {
-				result.title = enabled
+				title = enabled
 			}
 			'ssh-env' {
-				result.ssh_env = enabled
+				ssh_env = enabled
 			}
 			'ssh-terminfo' {
-				result.ssh_terminfo = enabled
+				ssh_terminfo = enabled
 			}
 			'path' {
-				result.path = enabled
+				path = enabled
 			}
 			else {
 				return none
 			}
 		}
 	}
-	return result
+	return ShellIntegrationFeatures.init(cursor, sudo, title, ssh_env, ssh_terminfo, path)
 }
 
 fn parse_bell_features(value string) ?BellFeatures {
 	if b := parse_bool_opt(value) {
-		return BellFeatures{
-			system: b
-			audio: b
-			attention: b
-			title: b
-			border: b
-		}
+		return BellFeatures.init(b, b, b, b, b)
 	}
-	mut result := BellFeatures{}
+	mut system := false
+	mut audio := false
+	mut attention := true
+	mut title := true
+	mut border := false
 	for raw in value.split(',') {
 		part := raw.trim(' \t')
 		negative := part.starts_with('no-')
@@ -9500,36 +9648,34 @@ fn parse_bell_features(value string) ?BellFeatures {
 		enabled := !negative
 		match name {
 			'system' {
-				result.system = enabled
+				system = enabled
 			}
 			'audio' {
-				result.audio = enabled
+				audio = enabled
 			}
 			'attention' {
-				result.attention = enabled
+				attention = enabled
 			}
 			'title' {
-				result.title = enabled
+				title = enabled
 			}
 			'border' {
-				result.border = enabled
+				border = enabled
 			}
 			else {
 				return none
 			}
 		}
 	}
-	return result
+	return BellFeatures.init(system, audio, attention, title, border)
 }
 
 fn parse_app_notifications(value string) ?AppNotifications {
 	if b := parse_bool_opt(value) {
-		return AppNotifications{
-			clipboard_copy: b
-			config_reload: b
-		}
+		return AppNotifications.init(b, b)
 	}
-	mut result := AppNotifications{}
+	mut clipboard_copy := true
+	mut config_reload := true
 	for raw in value.split(',') {
 		part := raw.trim(' \t')
 		negative := part.starts_with('no-')
@@ -9537,27 +9683,25 @@ fn parse_app_notifications(value string) ?AppNotifications {
 		enabled := !negative
 		match name {
 			'clipboard-copy' {
-				result.clipboard_copy = enabled
+				clipboard_copy = enabled
 			}
 			'config-reload' {
-				result.config_reload = enabled
+				config_reload = enabled
 			}
 			else {
 				return none
 			}
 		}
 	}
-	return result
+	return AppNotifications.init(clipboard_copy, config_reload)
 }
 
 fn parse_notify_on_command_finish_action(value string) ?NotifyOnCommandFinishAction {
 	if b := parse_bool_opt(value) {
-		return NotifyOnCommandFinishAction{
-			bell: b
-			notify: b
-		}
+		return NotifyOnCommandFinishAction.init(b, b)
 	}
-	mut result := NotifyOnCommandFinishAction{}
+	mut bell := true
+	mut notify := false
 	for raw in value.split(',') {
 		part := raw.trim(' \t')
 		negative := part.starts_with('no-')
@@ -9565,27 +9709,25 @@ fn parse_notify_on_command_finish_action(value string) ?NotifyOnCommandFinishAct
 		enabled := !negative
 		match name {
 			'bell' {
-				result.bell = enabled
+				bell = enabled
 			}
 			'notify' {
-				result.notify = enabled
+				notify = enabled
 			}
 			else {
 				return none
 			}
 		}
 	}
-	return result
+	return NotifyOnCommandFinishAction.init(bell, notify)
 }
 
 fn parse_scroll_to_bottom(value string) ?ScrollToBottom {
 	if b := parse_bool_opt(value) {
-		return ScrollToBottom{
-			keystroke: b
-			output: b
-		}
+		return ScrollToBottom.init(b, b)
 	}
-	mut result := ScrollToBottom{}
+	mut keystroke := true
+	mut output := false
 	for raw in value.split(',') {
 		part := raw.trim(' \t')
 		negative := part.starts_with('no-')
@@ -9593,17 +9735,17 @@ fn parse_scroll_to_bottom(value string) ?ScrollToBottom {
 		enabled := !negative
 		match name {
 			'keystroke' {
-				result.keystroke = enabled
+				keystroke = enabled
 			}
 			'output' {
-				result.output = enabled
+				output = enabled
 			}
 			else {
 				return none
 			}
 		}
 	}
-	return result
+	return ScrollToBottom.init(keystroke, output)
 }
 
 fn parse_shell_integration(value string) ?ShellIntegration {

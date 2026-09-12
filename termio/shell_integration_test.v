@@ -127,40 +127,22 @@ fn test_detect_shell_bin_bash_on_darwin() {
 
 fn test_setup_features_all_enabled() {
 	mut env := map[string]string{}
-	setup_features(mut env, configpkg.ShellIntegrationFeatures{
-		cursor: true
-		sudo: true
-		title: true
-		ssh_env: true
-		ssh_terminfo: true
-		path: true
-	})
+	setup_features(mut env, configpkg.ShellIntegrationFeatures.init(true, true, true, true,
+		true, true))
 	assert env['GHOSTTY_SHELL_FEATURES'] == 'cursor,path,ssh-env,ssh-terminfo,sudo,title'
 }
 
 fn test_setup_features_all_disabled() {
 	mut env := map[string]string{}
-	setup_features(mut env, configpkg.ShellIntegrationFeatures{
-		cursor: false
-		sudo: false
-		title: false
-		ssh_env: false
-		ssh_terminfo: false
-		path: false
-	})
+	setup_features(mut env, configpkg.ShellIntegrationFeatures.init(false, false, false,
+		false, false, false))
 	assert 'GHOSTTY_SHELL_FEATURES' !in env
 }
 
 fn test_setup_features_mixed() {
 	mut env := map[string]string{}
-	setup_features(mut env, configpkg.ShellIntegrationFeatures{
-		cursor: false
-		sudo: true
-		title: false
-		ssh_env: true
-		ssh_terminfo: false
-		path: false
-	})
+	setup_features(mut env, configpkg.ShellIntegrationFeatures.init(false, true, false, true,
+		false, false))
 	assert env['GHOSTTY_SHELL_FEATURES'] == 'ssh-env,sudo'
 }
 

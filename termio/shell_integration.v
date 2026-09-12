@@ -101,22 +101,22 @@ pub fn setup_features(mut env map[string]string, features configpkg.ShellIntegra
 	// The fields are sorted alphabetically at compile time for deterministic output.
 	mut parts := []string{}
 
-	if features.cursor {
+	if features.cursor() {
 		parts << 'cursor'
 	}
-	if features.path {
+	if features.path() {
 		parts << 'path'
 	}
-	if features.ssh_env {
+	if features.ssh_env() {
 		parts << 'ssh-env'
 	}
-	if features.ssh_terminfo {
+	if features.ssh_terminfo() {
 		parts << 'ssh-terminfo'
 	}
-	if features.sudo {
+	if features.sudo() {
 		parts << 'sudo'
 	}
-	if features.title {
+	if features.title() {
 		parts << 'title'
 	}
 

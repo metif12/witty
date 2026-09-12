@@ -12,7 +12,7 @@ fn test_tab_computed_title_uses_config_title_and_bell_features() {
 	assert tab.computed_title(cfg, 'Terminal Title', none, true, true) == '🔔 🔍 Terminal Title'
 	assert tab.computed_title(cfg, 'Terminal Title', 'Override', false, false) == 'Override'
 
-	cfg.get_mut().bell_features.title = false
+	cfg.get_mut().bell_features = configpkg.BellFeatures.init(false, false, true, false, false)
 	assert tab.computed_title(cfg, 'Terminal Title', none, false, true) == 'Terminal Title'
 	cfg.unref()
 }

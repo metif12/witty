@@ -1453,7 +1453,7 @@ fn (self &SurfaceWidget) sync_bell_border_overlay() {
 	if isnil(self.bell_revealer) {
 		return
 	}
-	show := self.bell_ringing && !isnil(self.config) && self.config.get().bell_features.border
+	show := self.bell_ringing && !isnil(self.config) && self.config.get().bell_features.border()
 	C.gtk_revealer_set_reveal_child(self.bell_revealer, show)
 }
 
@@ -1578,10 +1578,10 @@ pub fn (mut self SurfaceWidget) command_finished(value apprt.CommandFinished) bo
 	}
 
 	action := cfg.notify_on_command_finish_action
-	if action.bell {
+	if action.bell() {
 		self.set_bell_ringing(true)
 	}
-	if action.notify {
+	if action.notify() {
 		title := if exit_code := value.exit_code {
 			if exit_code == 0 { i18n_('Command Succeeded') } else { i18n_('Command Failed') }
 		} else {
@@ -1653,7 +1653,7 @@ fn (self &SurfaceWidget) ring_bell() {
 		return
 	}
 	cfg := self.config.get()
-	if !cfg.bell_features.audio {
+	if !cfg.bell_features.audio() {
 		return
 	}
 	config_path := cfg.bell_audio_path or { return }

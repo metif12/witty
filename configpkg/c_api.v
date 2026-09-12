@@ -191,31 +191,31 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 					c_write_value[usize](ptr, c.$(field.name).cval())
 					return true
 				} $else $if field.unaliased_typ is fontpkg.FontSyntheticStyle {
-					c_write_value[u32](ptr, font_synthetic_style_bits(c.$(field.name)))
+					c_write_value[u32](ptr, u32(c.$(field.name).int_val()))
 					return true
 				} $else $if field.unaliased_typ is FontShapingBreak {
 					c_write_value[u32](ptr, u32(c.$(field.name).int_val()))
 					return true
 				} $else $if field.unaliased_typ is ShellIntegrationFeatures {
-					c_write_value[u32](ptr, shell_integration_feature_bits(c.$(field.name)))
+					c_write_value[u32](ptr, u32(c.$(field.name).int_val()))
 					return true
 				} $else $if field.unaliased_typ is SplitPreserveZoom {
-					c_write_value[u32](ptr, bool_bit(c.$(field.name).navigation, 0))
+					c_write_value[u32](ptr, u32(c.$(field.name).int_val()))
 					return true
 				} $else $if field.unaliased_typ is fontpkg.FreetypeLoadFlags {
-					c_write_value[u32](ptr, freetype_load_flag_bits(c.$(field.name)))
+					c_write_value[u32](ptr, u32(c.$(field.name).int_val()))
 					return true
 				} $else $if field.unaliased_typ is AppNotifications {
-					c_write_value[u32](ptr, app_notification_bits(c.$(field.name)))
+					c_write_value[u32](ptr, u32(c.$(field.name).int_val()))
 					return true
 				} $else $if field.unaliased_typ is BellFeatures {
-					c_write_value[u32](ptr, bell_feature_bits(c.$(field.name)))
+					c_write_value[u32](ptr, u32(c.$(field.name).int_val()))
 					return true
 				} $else $if field.unaliased_typ is ScrollToBottom {
-					c_write_value[u32](ptr, scroll_to_bottom_bits(c.$(field.name)))
+					c_write_value[u32](ptr, u32(c.$(field.name).int_val()))
 					return true
 				} $else $if field.unaliased_typ is NotifyOnCommandFinishAction {
-					c_write_value[u32](ptr, notify_action_bits(c.$(field.name)))
+					c_write_value[u32](ptr, u32(c.$(field.name).int_val()))
 					return true
 				} $else $if field.unaliased_typ is $enum {
 					c_write_cstring(ptr, c.cache_c_string(key, enum_c_name(c.$(field.name).str())))
@@ -278,44 +278,4 @@ fn quick_terminal_size_value_cval(value ?QuickTerminalSizeValue) CQuickTerminalS
 		.percentage { CQuickTerminalSize.percentage(actual.percentage) }
 		.pixels { CQuickTerminalSize.pixels(actual.pixels) }
 	}
-}
-
-@[markused]
-fn bool_bit(value bool, shift u32) u32 {
-	return if value { u32(1) << shift } else { 0 }
-}
-
-@[markused]
-fn font_synthetic_style_bits(value fontpkg.FontSyntheticStyle) u32 {
-	return u32(value.int_val())
-}
-
-@[markused]
-fn shell_integration_feature_bits(value ShellIntegrationFeatures) u32 {
-	return bool_bit(value.cursor, 0) | bool_bit(value.sudo, 1) | bool_bit(value.title, 2) | bool_bit(value.ssh_env, 3) | bool_bit(value.ssh_terminfo, 4) | bool_bit(value.path, 5)
-}
-
-@[markused]
-fn freetype_load_flag_bits(value fontpkg.FreetypeLoadFlags) u32 {
-	return u32(value.int_val())
-}
-
-@[markused]
-fn app_notification_bits(value AppNotifications) u32 {
-	return bool_bit(value.clipboard_copy, 0) | bool_bit(value.config_reload, 1)
-}
-
-@[markused]
-fn bell_feature_bits(value BellFeatures) u32 {
-	return bool_bit(value.system, 0) | bool_bit(value.audio, 1) | bool_bit(value.attention, 2) | bool_bit(value.title, 3) | bool_bit(value.border, 4)
-}
-
-@[markused]
-fn scroll_to_bottom_bits(value ScrollToBottom) u32 {
-	return bool_bit(value.keystroke, 0) | bool_bit(value.output, 1)
-}
-
-@[markused]
-fn notify_action_bits(value NotifyOnCommandFinishAction) u32 {
-	return bool_bit(value.bell, 0) | bool_bit(value.notify, 1)
 }

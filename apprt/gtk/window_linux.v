@@ -1998,7 +1998,7 @@ pub fn (mut self Window) window_realize(mut app Application) {
 // prop_config reacts to a config change: optionally toasts, then syncs
 // appearance. Mirrors `propConfig`.
 pub fn (mut self Window) prop_config() {
-	if !isnil(self.config) && self.config.get().app_notifications.config_reload {
+	if !isnil(self.config) && self.config.get().app_notifications.config_reload() {
 		self.add_toast('Reloaded the configuration')
 	}
 	self.sync_appearance()
@@ -2014,7 +2014,7 @@ pub fn (mut self Window) prop_config() {
 // Ghostty's Surface clipboard-write signal handler.
 fn (mut self Window) surface_clipboard_write(clipboard_type apprt.Clipboard, text string) {
 	if clipboard_type != .standard || isnil(self.config)
-		|| !self.config.get().app_notifications.clipboard_copy {
+		|| !self.config.get().app_notifications.clipboard_copy() {
 		return
 	}
 	self.add_toast(if text.len > 0 { 'Copied to clipboard' } else { 'Cleared clipboard' })
@@ -2185,7 +2185,7 @@ pub fn (mut self Window) action_ring_bell() {
 		return
 	}
 	cfg := self.config.get()
-	if cfg.bell_features.system {
+	if cfg.bell_features.system() {
 		native_surface := C.gtk_native_get_surface(self.as_native())
 		if isnil(native_surface) {
 			eprintln('unable to get native surface from window')
@@ -2194,7 +2194,7 @@ pub fn (mut self Window) action_ring_bell() {
 		}
 	}
 
-	if cfg.bell_features.attention {
+	if cfg.bell_features.attention() {
 		if C.gtk_window_is_active(self.as_window()) != 0 {
 			return
 		}

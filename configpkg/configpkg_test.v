@@ -1454,29 +1454,53 @@ fn test_preferred_config_path_prefers_nonempty_then_existing() ! {
 	assert preferred_existing_config_path([first, second, third]) == first
 }
 
+fn test_packed_config_flag_layouts_match_source() {
+	assert sizeof(FontShapingBreak) == 1
+	assert FontShapingBreak{}.int_val() == 0x01
+	assert FontShapingBreak.init(false).int_val() == 0
+	assert sizeof(SplitPreserveZoom) == 1
+	assert SplitPreserveZoom{}.int_val() == 0
+	assert SplitPreserveZoom.init(true).int_val() == 0x01
+	assert sizeof(ShellIntegrationFeatures) == 1
+	assert ShellIntegrationFeatures{}.int_val() == 0x25
+	assert ShellIntegrationFeatures.init(true, true, true, true, true, true).int_val() == 0x3f
+	assert sizeof(BellFeatures) == 1
+	assert BellFeatures{}.int_val() == 0x0c
+	assert BellFeatures.init(true, true, true, true, true).int_val() == 0x1f
+	assert sizeof(AppNotifications) == 1
+	assert AppNotifications{}.int_val() == 0x03
+	assert AppNotifications.init(false, true).int_val() == 0x02
+	assert sizeof(ScrollToBottom) == 1
+	assert ScrollToBottom{}.int_val() == 0x01
+	assert ScrollToBottom.init(false, true).int_val() == 0x02
+	assert sizeof(NotifyOnCommandFinishAction) == 1
+	assert NotifyOnCommandFinishAction{}.int_val() == 0x01
+	assert NotifyOnCommandFinishAction.init(false, true).int_val() == 0x02
+}
+
 fn test_bell_features_parse_format_and_defaults() {
 	mut cfg := Config.default_config()
-	assert !cfg.bell_features.system
-	assert !cfg.bell_features.audio
-	assert cfg.bell_features.attention
-	assert cfg.bell_features.title
-	assert !cfg.bell_features.border
+	assert !cfg.bell_features.system()
+	assert !cfg.bell_features.audio()
+	assert cfg.bell_features.attention()
+	assert cfg.bell_features.title()
+	assert !cfg.bell_features.border()
 
 	cfg.load_string('bell-features = audio,no-attention,no-title,border')
 	assert cfg.diagnostics.len == 0
-	assert !cfg.bell_features.system
-	assert cfg.bell_features.audio
-	assert !cfg.bell_features.attention
-	assert !cfg.bell_features.title
-	assert cfg.bell_features.border
+	assert !cfg.bell_features.system()
+	assert cfg.bell_features.audio()
+	assert !cfg.bell_features.attention()
+	assert !cfg.bell_features.title()
+	assert cfg.bell_features.border()
 	assert cfg.format_config(true).contains('bell-features = no-system,audio,no-attention,no-title,border\n')
 
 	cfg.load_string('bell-features = true')
-	assert cfg.bell_features.system
-	assert cfg.bell_features.audio
-	assert cfg.bell_features.attention
-	assert cfg.bell_features.title
-	assert cfg.bell_features.border
+	assert cfg.bell_features.system()
+	assert cfg.bell_features.audio()
+	assert cfg.bell_features.attention()
+	assert cfg.bell_features.title()
+	assert cfg.bell_features.border()
 
 	cfg.load_string('bell-features = sparkle')
 	assert cfg.diagnostics.len == 1
@@ -1540,22 +1564,22 @@ fn test_gtk_css_config_parse_format_clone_and_clear() {
 
 fn test_app_notifications_parse_format_and_defaults() {
 	mut cfg := Config.default_config()
-	assert cfg.app_notifications.clipboard_copy
-	assert cfg.app_notifications.config_reload
+	assert cfg.app_notifications.clipboard_copy()
+	assert cfg.app_notifications.config_reload()
 
 	cfg.load_string('app-notifications = no-clipboard-copy,config-reload')
 	assert cfg.diagnostics.len == 0
-	assert !cfg.app_notifications.clipboard_copy
-	assert cfg.app_notifications.config_reload
+	assert !cfg.app_notifications.clipboard_copy()
+	assert cfg.app_notifications.config_reload()
 	assert cfg.format_config(true).contains('app-notifications = no-clipboard-copy,config-reload\n')
 
 	cfg.load_string('app-notifications = false')
-	assert !cfg.app_notifications.clipboard_copy
-	assert !cfg.app_notifications.config_reload
+	assert !cfg.app_notifications.clipboard_copy()
+	assert !cfg.app_notifications.config_reload()
 
 	cfg.load_string('app-notifications = true')
-	assert cfg.app_notifications.clipboard_copy
-	assert cfg.app_notifications.config_reload
+	assert cfg.app_notifications.clipboard_copy()
+	assert cfg.app_notifications.config_reload()
 
 	cfg.load_string('app-notifications = sparkle')
 	assert cfg.diagnostics.len == 1
@@ -1564,26 +1588,26 @@ fn test_app_notifications_parse_format_and_defaults() {
 fn test_notify_on_command_finish_action_and_after() {
 	mut cfg := Config.default_config()
 	assert cfg.notify_on_command_finish == .never
-	assert cfg.notify_on_command_finish_action.bell
-	assert !cfg.notify_on_command_finish_action.notify
+	assert cfg.notify_on_command_finish_action.bell()
+	assert !cfg.notify_on_command_finish_action.notify()
 	assert cfg.notify_on_command_finish_after == Duration{ duration: 5_000_000_000 }
 
 	cfg.load_string('notify-on-command-finish = unfocused\nnotify-on-command-finish-action = no-bell,notify\nnotify-on-command-finish-after = 1m 250ms')
 	assert cfg.diagnostics.len == 0
 	assert cfg.notify_on_command_finish == .unfocused
-	assert !cfg.notify_on_command_finish_action.bell
-	assert cfg.notify_on_command_finish_action.notify
+	assert !cfg.notify_on_command_finish_action.bell()
+	assert cfg.notify_on_command_finish_action.notify()
 	assert cfg.notify_on_command_finish_after == Duration{ duration: 60_250_000_000 }
 	formatted := cfg.format_config(true)
 	assert formatted.contains('notify-on-command-finish-action = no-bell,notify\n')
 	assert formatted.contains('notify-on-command-finish-after = 1m 250ms\n')
 
 	cfg.load_string('notify-on-command-finish-action = false')
-	assert !cfg.notify_on_command_finish_action.bell
-	assert !cfg.notify_on_command_finish_action.notify
+	assert !cfg.notify_on_command_finish_action.bell()
+	assert !cfg.notify_on_command_finish_action.notify()
 	cfg.load_string('notify-on-command-finish-action = true')
-	assert cfg.notify_on_command_finish_action.bell
-	assert cfg.notify_on_command_finish_action.notify
+	assert cfg.notify_on_command_finish_action.bell()
+	assert cfg.notify_on_command_finish_action.notify()
 
 	cfg.load_string('notify-on-command-finish-action = sparkle\nnotify-on-command-finish-after = soon')
 	assert cfg.diagnostics.len == 2
@@ -1691,9 +1715,6 @@ fn test_handle_bom_in_config_files() {
 }
 
 fn test_config_file_whitespace_matches_source_byte_set() {
-	assert sizeof(FontShapingBreak) == 1
-	assert FontShapingBreak{}.int_val() == 0x01
-	assert FontShapingBreak.init(false).int_val() == 0
 	mut cfg := Config.default_config()
 	cfg.load_string('\vfont-size = 20\nenv = NAME=\vvalue\v\nfont-shaping-break = \vcursor')
 
@@ -3042,7 +3063,7 @@ auto-update-channel = stable
 	assert cfg.bold_color?.color == ColorRGB{102, 51, 153}
 	assert cfg.unfocused_split_fill? == ColorRGB{250, 250, 210}
 	assert cfg.split_divider_color? == ColorRGB{170, 187, 204}
-	assert cfg.split_preserve_zoom.navigation
+	assert cfg.split_preserve_zoom.navigation()
 	assert cfg.window_padding_x == WindowPadding{3, 4}
 	assert cfg.window_padding_y == WindowPadding{1, 2}
 	assert cfg.window_padding_balance
@@ -3062,13 +3083,13 @@ auto-update-channel = stable
 	assert cfg.confirm_close_surface == .always
 	assert cfg.mouse_shift_capture == .never
 	assert cfg.shell_integration == .fish
-	assert !cfg.shell_integration_features.cursor
-	assert cfg.shell_integration_features.sudo
-	assert cfg.shell_integration_features.ssh_env
-	assert !cfg.shell_integration_features.path
+	assert !cfg.shell_integration_features.cursor()
+	assert cfg.shell_integration_features.sudo()
+	assert cfg.shell_integration_features.ssh_env()
+	assert !cfg.shell_integration_features.path()
 	assert cfg.link_previews == .osc8
-	assert !cfg.scroll_to_bottom.keystroke
-	assert cfg.scroll_to_bottom.output
+	assert !cfg.scroll_to_bottom.keystroke()
+	assert cfg.scroll_to_bottom.output()
 	assert cfg.grapheme_width_method == .legacy
 	assert cfg.scrollbar == .never
 	assert cfg.notify_on_command_finish == .always
@@ -3671,7 +3692,7 @@ fn test_format_config_changes_only_round_trips_supported_values() {
 	assert parsed.background == original.background
 	assert parsed.command?.string_val() == original.command?.string_val()
 	assert parsed.custom_shader.equal(original.custom_shader)
-	assert parsed.split_preserve_zoom.navigation
+	assert parsed.split_preserve_zoom.navigation()
 	assert parsed.window_padding_x == original.window_padding_x
 	assert parsed.window_padding_y == original.window_padding_y
 	assert parsed.window_position_x == original.window_position_x
