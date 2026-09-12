@@ -6049,6 +6049,16 @@ pub fn (mut self PageList) erase_row_bounded(point Point, limit usize) ! {
 // ============================================================
 
 pub fn (mut self PageList) resize(opts PageResizeOpts) {
+	defer { self.assert_integrity() }
+	$if !prod {
+		if cols := opts.cols {
+			assert cols > 0
+		}
+		if rows := opts.rows {
+			assert rows > 0
+		}
+	}
+
 	// Resizing (especially with reflow) can cause our row offset to
 	// become invalid. Rather than do something fancy like we do other
 	// places and try to update it in place, we just invalidate it because
@@ -6147,9 +6157,14 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) {
 			have_preserved = true
 		}
 	}
+	defer {
+		if have_preserved {
+			self.untrack_pin(preserved_pin)
+		}
+	}
 
 	// Create the first node that contains our reflow.
-	first_page := &(self.pages.first or { return }).data
+	first_page := &(self.pages.first or { panic('page list has no first page') }).data
 	first_cap := first_page.capacity.adjust_checked(cols) or {
 		// We verify all maxed out page layouts work. We're growing columns so
 		// we can only get less rows so use the lesser of our capacity and size
@@ -6177,15 +6192,10 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) {
 		row := it.next() or { break }
 		reflow_cursor.reflow_row(mut self, row)
 
-		// Once we're done reflowing a page, release it immediately.
-		// These old pages are already orphaned from self.pages (which
-		// now holds the new reflowed list), so we must NOT call
-		// destroy_node/pages.remove here: remove() treats a node with
-		// prev == nil as the list head and would clobber self.pages.first
-		// (the new reflow node). We only account for the freed size; V's
-		// GC reclaims the memory.
+		// Once we're done reflowing a page, destroy it immediately. The old
+		// pages are already orphaned from self.pages, so no unlink is needed.
 		if int(row.y) == int(row.node.data.size.rows) - 1 {
-			self.page_size -= page_backing_size(row.node.data.capacity)
+			self.destroy_node(row.node)
 		}
 	}
 
@@ -6221,7 +6231,6 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) {
 			x: preserved_pin.x
 		}
 		active_pt := self.point_from_pin(.active, vp) or {
-			self.untrack_pin(preserved_pin)
 			return
 		}
 		active_pin := self.get_top_left(.active)
@@ -6257,8 +6266,6 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) {
 			self.grow() or {}
 			req_rows -= 1
 		}
-
-		self.untrack_pin(preserved_pin)
 	}
 }
 
@@ -6275,6 +6282,7 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) {
 	// destroy pages if we're increasing cols which will free up page_size
 	// so that when we call grow() in the row mods, we won't prune.
 	if cols := opts.cols {
+		old_total_rows := self.total_rows
 		if cols < self.cols {
 			// Making our columns smaller. We always have space for this
 			// in existing pages so we need to go through the pages,
@@ -6288,6 +6296,7 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) {
 					page.clear_cells(u16(i), cols, self.cols)
 				}
 				page.size.cols = cols
+				page.assert_integrity()
 			}
 
 			// Update all our tracked pins. If they have an X
@@ -6305,15 +6314,9 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) {
 			// the capacity we need to allocate a new page and copy the data.
 			old_cols := self.cols
 
-			// We must gather the chunks up front because
-			// resize_without_reflow_grow_cols rewrites the linked list.
-			mut chunks := []PageChunk{}
 			mut it := self.page_iterator(.right_down, Point{ tag: .screen }, none)
 			for {
 				chunk := it.next() or { break }
-				chunks << chunk
-			}
-			for chunk in chunks {
 				// We need to restore our old cols after we resize because
 				// we have an assertion on this and we want to be able to
 				// call this method multiple times.
@@ -6323,6 +6326,7 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) {
 
 			self.cols = cols
 		}
+		assert self.total_rows == old_total_rows
 	}
 
 	if rows := opts.rows {
@@ -6402,6 +6406,10 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) {
 				}
 			}
 		}
+
+		$if !prod {
+			assert self.count_total_rows() >= usize(self.rows)
+		}
 	}
 }
 
@@ -6419,18 +6427,6 @@ fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk
 	// is only true if we resized to less cols earlier.
 	if page.capacity.cols >= cols {
 		page.size.cols = cols
-		// Ensure all rows have enough cell slots.
-		for i in 0 .. page.rows.len {
-			mut row := &page.rows[i]
-			for row.cells.len < int(cols) {
-				row.cells << CellData{}
-			}
-			// Clear any spacer heads exposed by the growth.
-			last_idx := int(page.size.cols) - 1
-			if last_idx >= 0 && last_idx < row.cells.len && row.cells[last_idx].wide == .spacer_head {
-				row.cells[last_idx].wide = .narrow
-			}
-		}
 		return
 	}
 
@@ -6534,6 +6530,7 @@ fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk
 				p.y -= y_start
 			}
 		}
+		new_page.assert_integrity()
 	}
 	assert copied == page.size.rows
 
