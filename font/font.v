@@ -395,6 +395,7 @@ module font
 // --- Original Ghostty Comments End: src/font/Metrics.zig
 
 import datastruct
+import fastmem
 import harfbuzz
 import io
 import math
@@ -1047,9 +1048,8 @@ pub fn (mut a Atlas) set(reg AtlasRegion, data []u8) {
 		tex_offset := (((reg.y + i) * a.size) + reg.x) * depth
 		data_offset := i * reg.width * depth
 		row := reg.width * depth
-		for j in u32(0) .. row {
-			a.data[int(tex_offset + j)] = data[int(data_offset + j)]
-		}
+		mut dest := a.data[int(tex_offset)..]
+		fastmem.copy(mut dest, data[int(data_offset)..int(data_offset + row)])
 	}
 
 	a.modified += 1
@@ -1069,9 +1069,8 @@ pub fn (mut a Atlas) set_from_larger(reg AtlasRegion, src []u8, src_width u32, s
 		tex_offset := (((reg.y + i) * a.size) + reg.x) * depth
 		src_offset := (((src_y + i) * src_width) + src_x) * depth
 		row := reg.width * depth
-		for j in u32(0) .. row {
-			a.data[int(tex_offset + j)] = src[int(src_offset + j)]
-		}
+		mut dest := a.data[int(tex_offset)..]
+		fastmem.copy(mut dest, src[int(src_offset)..int(src_offset + row)])
 	}
 
 	a.modified += 1

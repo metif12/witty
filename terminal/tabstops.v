@@ -1,5 +1,7 @@
 module terminal
 
+import fastmem
+
 // Keep track of the location of tabstops.
 //
 // This is implemented as a bit set. There is a preallocation segment that
@@ -138,9 +140,7 @@ pub fn (mut self Tabstops) resize(cols usize) ! {
 	mut new_stops := []u8{len: int(size)}
 	// Copy existing dynamic data if any
 	if self.dynamic_stops.len > 0 {
-		for i in 0 .. self.dynamic_stops.len {
-			new_stops[i] = self.dynamic_stops[i]
-		}
+		fastmem.copy(mut new_stops, self.dynamic_stops)
 	}
 
 	self.dynamic_stops = new_stops

@@ -1,5 +1,7 @@
 module datastruct
 
+import fastmem
+
 // Faithful specialization of Ghostty's datastruct.CacheTable for the
 // shaper cache. Ghostty configures that cache with an identity u64 hash,
 // 256 buckets, and 8 entries per bucket.
@@ -43,11 +45,7 @@ pub fn (mut self U64CacheTable[T]) put(key u64, value T) ?U64CacheEntry[T] {
 		return none
 	}
 
-	evicted := bucket[0]
-	for i in 1 .. bucket.len {
-		bucket[i - 1] = bucket[i]
-	}
-	bucket[bucket.len - 1] = entry
+	evicted := fastmem.rotate_in(mut bucket, entry)
 	self.buckets[idx] = bucket
 	return evicted
 }
@@ -62,10 +60,7 @@ pub fn (mut self U64CacheTable[T]) get(key u64) ?T {
 		i--
 		if bucket[i].key == key {
 			entry := bucket[i]
-			for j in i .. bucket.len - 1 {
-				bucket[j] = bucket[j + 1]
-			}
-			bucket[bucket.len - 1] = entry
+			fastmem.rotate_once(mut bucket[i..])
 			self.buckets[idx] = bucket
 			return entry.value
 		}

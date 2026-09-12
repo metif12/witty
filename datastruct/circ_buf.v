@@ -1,5 +1,7 @@
 module datastruct
 
+import fastmem
+
 // CircBufDirection selects iteration from the oldest or newest value.
 pub enum CircBufDirection {
 	forward
@@ -64,12 +66,8 @@ pub fn (mut self CircBuf[T]) append_assume_capacity(value T) {
 
 pub fn (mut self CircBuf[T]) append_slice_assume_capacity(values []T) {
 	mut slices := self.get_ptr_slice(self.len(), values.len)
-	for i in 0 .. slices.first.len {
-		slices.first[i] = values[i]
-	}
-	for i in 0 .. slices.second.len {
-		slices.second[i] = values[slices.first.len + i]
-	}
+	fastmem.copy(mut slices.first, values[..slices.first.len])
+	fastmem.copy(mut slices.second, values[slices.first.len..])
 }
 
 pub fn (mut self CircBuf[T]) clear() {
