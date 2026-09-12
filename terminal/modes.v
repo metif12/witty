@@ -7,8 +7,63 @@ module terminal
 // mode values (ANSI and DEC) to our internal Mode enum, and the
 // mode_from_int lookup function.
 //
-// The Mode enum, ModeState, and ModePacked are defined in terminal.v.
-// This file provides the protocol-level mapping layer on top of those.
+// V represents Ghostty's generated packed mode struct as a u64. The bit order
+// follows mode_entries while Mode itself retains its packed protocol tag.
+
+pub struct ModePacked {
+pub mut:
+	data u64
+}
+
+pub struct ModeState {
+pub mut:
+	values  ModePacked
+	saved   ModePacked
+	default ModePacked
+}
+
+pub enum Mode as u16 {
+	disable_keyboard                   = 32770
+	insert                             = 32772
+	send_receive_mode                  = 32780
+	linefeed                           = 32788
+	cursor_keys                        = 1
+	column_132                         = 3
+	slow_scroll                        = 4
+	reverse_colors                     = 5
+	origin                             = 6
+	wraparound                         = 7
+	autorepeat                         = 8
+	mouse_event_x10                    = 9
+	cursor_blinking                    = 12
+	cursor_visible                     = 25
+	enable_mode_3                      = 40
+	reverse_wrap                       = 45
+	alt_screen_legacy                  = 47
+	keypad_keys                        = 66
+	enable_left_and_right_margin       = 69
+	mouse_event_normal                 = 1000
+	mouse_event_button                 = 1002
+	mouse_event_any                    = 1003
+	focus_event                        = 1004
+	mouse_format_utf8                  = 1005
+	mouse_format_sgr                   = 1006
+	mouse_alternate_scroll             = 1007
+	mouse_format_urxvt                 = 1015
+	mouse_format_sgr_pixels            = 1016
+	ignore_keypad_with_numlock         = 1035
+	alt_esc_prefix                     = 1036
+	alt_sends_escape                   = 1039
+	reverse_wrap_extended              = 1045
+	alt_screen                         = 1047
+	save_cursor                        = 1048
+	alt_screen_save_cursor_clear_enter = 1049
+	bracketed_paste                    = 2004
+	synchronized_output                = 2026
+	grapheme_cluster                   = 2027
+	report_color_scheme                = 2031
+	in_band_size_reports               = 2048
+}
 
 // ============================================================
 // ModeEntry - a single entry in the mode table
@@ -86,14 +141,61 @@ const mode_entries = [
 // `.default`. Modes default to false unless their table entry says otherwise.
 pub fn build_default_modes() ModePacked {
 	mut data := u64(0)
-	for entry in mode_entries {
+	for i, entry in mode_entries {
 		if entry.default_val {
-			data |= u64(1) << (int(entry.mode) & 63)
+			data |= u64(1) << i
 		}
 	}
 	return ModePacked{
 		data: data
 	}
+}
+
+fn mode_mask(mode Mode) u64 {
+	for i, entry in mode_entries {
+		if entry.mode == mode {
+			return u64(1) << i
+		}
+	}
+	panic('unreachable: mode has no entry')
+}
+
+pub fn (self ModeState) get(mode Mode) bool {
+	return (self.values.data & mode_mask(mode)) != 0
+}
+
+pub fn (mut self ModeState) set(mode Mode, val bool) {
+	mask := mode_mask(mode)
+	if val {
+		self.values.data |= mask
+	} else {
+		self.values.data &= ~mask
+	}
+}
+
+pub fn (mut self ModeState) reset() {
+	self.values = self.default
+	self.saved = ModePacked{}
+}
+
+pub fn (mut self ModeState) save(mode Mode) {
+	mask := mode_mask(mode)
+	if (self.values.data & mask) != 0 {
+		self.saved.data |= mask
+	} else {
+		self.saved.data &= ~mask
+	}
+}
+
+pub fn (mut self ModeState) restore(mode Mode) bool {
+	mask := mode_mask(mode)
+	val := (self.saved.data & mask) != 0
+	if val {
+		self.values.data |= mask
+	} else {
+		self.values.data &= ~mask
+	}
+	return val
 }
 
 // ============================================================
@@ -140,10 +242,7 @@ pub fn mode_entry_for(mode Mode) ?ModeEntry {
 // Returns the protocol-level integer value for the given mode.
 // For example, mode_value(.cursor_visible) returns 25.
 pub fn mode_value(mode Mode) u16 {
-	if entry := mode_entry_for(mode) {
-		return entry.value
-	}
-	return 0
+	return u16(mode) & 0x7fff
 }
 
 // ============================================================
@@ -153,8 +252,5 @@ pub fn mode_value(mode Mode) u16 {
 // Returns true if the given mode is an ANSI mode (as opposed to
 // a DEC private mode).
 pub fn mode_is_ansi(mode Mode) bool {
-	if entry := mode_entry_for(mode) {
-		return entry.ansi
-	}
-	return false
+	return (u16(mode) & (u16(1) << 15)) != 0
 }

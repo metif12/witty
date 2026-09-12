@@ -1888,7 +1888,7 @@ fn test_full_reset_clears_alternate_screen_kitty_keyboard_state() {
 
 fn test_full_reset_default_modes() {
 	mut defaults := build_default_modes()
-	defaults.data |= u64(1) << int(Mode.grapheme_cluster)
+	defaults.data |= mode_mask(.grapheme_cluster)
 	mut t := Terminal.init(Options{
 		cols: 10
 		rows: 10
@@ -2784,7 +2784,7 @@ fn test_mode_state_set_get() {
 
 fn test_mode_state_reset() {
 	mut ms := ModeState{}
-	ms.default.data = 0x01 // wraparound default on
+	ms.default.data = mode_mask(.wraparound)
 
 	ms.set(.origin, true)
 	ms.set(.wraparound, false)

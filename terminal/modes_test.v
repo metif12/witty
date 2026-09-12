@@ -129,6 +129,26 @@ fn test_mode_state_with_mode_from_int() {
 	assert state.get(mode) == true
 }
 
+fn test_mode_state_reset_clears_saved_modes() {
+	mut state := ModeState{
+		default: build_default_modes()
+	}
+	state.set(.cursor_keys, true)
+	state.save(.cursor_keys)
+	assert state.saved.data != 0
+
+	state.reset()
+	assert state.values.data == state.default.data
+	assert state.saved.data == 0
+}
+
+fn test_mode_uses_packed_protocol_tags() {
+	assert u16(Mode.cursor_keys) == 1
+	assert u16(Mode.insert) == (u16(1) << 15) | 4
+	assert u16(Mode.send_receive_mode) == (u16(1) << 15) | 12
+	assert u16(Mode.grapheme_cluster) == 2027
+}
+
 // ============================================================
 // mode_entry_for tests
 // ============================================================

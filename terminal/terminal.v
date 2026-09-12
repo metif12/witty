@@ -1677,14 +1677,6 @@ pub:
 	default_modes ModePacked = build_default_modes()
 }
 
-pub struct ModePacked {
-pub mut:
-	// One bit per Mode (indexed by the Mode enum position). This is u64
-	// because there are more than 32 modes; a u32 would alias modes >= 32
-	// onto modes 0-7.
-	data u64
-}
-
 pub struct TerminalFlags {
 pub mut:
 	// This supports a Kitty extension where programs using semantic
@@ -1847,78 +1839,6 @@ pub fn (mut self ScreenSet) remove(key ScreenKey) {
 		.primary {}
 	}
 	// never remove primary
-}
-
-// ============================================================
-// ModeState: terminal modes
-// ============================================================
-
-pub struct ModeState {
-pub mut:
-	values  ModePacked
-	saved   ModePacked
-	default ModePacked
-}
-
-pub fn (self ModeState) get(mode Mode) bool {
-	bit := u64(1) << (int(mode) & 63)
-	return (self.values.data & bit) != 0
-}
-
-pub fn (mut self ModeState) set(mode Mode, val bool) {
-	bit := u64(1) << (int(mode) & 63)
-	if val {
-		self.values.data |= bit
-	} else {
-		self.values.data &= ~bit
-	}
-}
-
-pub fn (mut self ModeState) reset() {
-	self.values = self.default
-}
-
-pub enum Mode {
-	wraparound // = 0
-	origin // = 1
-	cursor_visible // = 2
-	insert // = 3
-	linefeed // = 4
-	grapheme_cluster // = 5 (mode 2027)
-	reverse_wrap // = 6
-	reverse_wrap_extended // = 7
-	enable_left_and_right_margin // = 8
-	enable_mode_3 // = 9 (DECCOLM support)
-	column_132 // = 10
-	bracketed_paste // = 11
-	focus_event // = 12
-	cursor_blinking // = 13
-	autorepeat // = 14
-	reverse_colors // = 15
-	alt_screen_legacy // = 16 (mode 47)
-	alt_screen // = 17 (mode 1047)
-	alt_screen_save_cursor_clear_enter // = 18 (mode 1049)
-	save_cursor // = 19 (mode 1048)
-	synchronized_output // = 20
-	in_band_size_reports // = 21 (mode 2048)
-	mouse_event_x10 // = 22 (mode 9)
-	mouse_event_normal // = 23 (mode 1000)
-	mouse_event_button // = 24 (mode 1002)
-	mouse_event_any // = 25 (mode 1003)
-	mouse_format_utf8 // = 26 (mode 1005)
-	mouse_format_sgr // = 27 (mode 1006)
-	mouse_format_urxvt // = 28 (mode 1015)
-	mouse_format_sgr_pixels // = 29 (mode 1016)
-	disable_keyboard // = 30 (KAM, ANSI mode 2)
-	send_receive_mode // = 31 (SRM, ANSI mode 12)
-	cursor_keys // = 32 (DECCKM, DEC mode 1)
-	slow_scroll // = 33 (DEC mode 4)
-	keypad_keys // = 34 (DEC mode 66)
-	mouse_alternate_scroll // = 35 (DEC mode 1007)
-	ignore_keypad_with_numlock // = 36 (DEC mode 1035)
-	alt_esc_prefix // = 37 (DEC mode 1036)
-	alt_sends_escape // = 38 (DEC mode 1039)
-	report_color_scheme // = 39 (DEC mode 2031)
 }
 
 // ============================================================
@@ -4393,27 +4313,6 @@ fn (mut self Terminal) semantic_prompt_fresh_line() {
 
 	self.carriage_return()
 	self.index() or {}
-}
-
-// ModeState save/restore
-pub fn (mut self ModeState) save(mode Mode) {
-	bit := u64(1) << (int(mode) & 63)
-	if (self.values.data & bit) != 0 {
-		self.saved.data |= bit
-	} else {
-		self.saved.data &= ~bit
-	}
-}
-
-pub fn (mut self ModeState) restore(mode Mode) bool {
-	bit := u64(1) << (int(mode) & 63)
-	val := (self.saved.data & bit) != 0
-	if val {
-		self.values.data |= bit
-	} else {
-		self.values.data &= ~bit
-	}
-	return val
 }
 
 // ============================================================
