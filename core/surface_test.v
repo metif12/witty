@@ -1344,9 +1344,9 @@ fn test_scroll_callback_uses_precision_multiplier_and_accumulates_pixels() {
 		precision: 2
 		discrete: 3
 	}
-	surf.scroll_callback(0, 2, input.ScrollMods{ precision: true })!
+	surf.scroll_callback(0, 2, input.ScrollMods.init(true, .none_))!
 	assert surf.mouse.pending_scroll_y == 4
-	surf.scroll_callback(0, 3, input.ScrollMods{ precision: true })!
+	surf.scroll_callback(0, 3, input.ScrollMods.init(true, .none_))!
 	assert surf.mouse.pending_scroll_y == 0
 }
 

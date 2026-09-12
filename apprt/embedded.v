@@ -1111,7 +1111,7 @@ pub fn (mut self TerminalInspector) mouse_button_callback(action input.MouseButt
 pub fn (mut self TerminalInspector) scroll_callback(xoff f64, yoff f64, mods input.ScrollMods) {
 	self.queue_render()
 
-	scale := if mods.precision { 0.1 } else { 1.0 }
+	scale := if mods.precision() { 0.1 } else { 1.0 }
 	self.context.add_mouse_wheel(f32(xoff * scale), f32(yoff * scale))
 }
 

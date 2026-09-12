@@ -3421,7 +3421,7 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 	mut y := ScrollAmount{}
 	if yoff != 0 {
 		cell_size := f64(self.size.cell.height)
-		yoff_adjusted := if scroll_mods.precision {
+		yoff_adjusted := if scroll_mods.precision() {
 			yoff * self.config.mouse_scroll_multiplier.precision
 		} else {
 			yoff_max := if yoff > 0 { math.max(yoff, 1) } else { math.min(yoff, -1) }
@@ -3439,7 +3439,7 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 
 	mut x := ScrollAmount{}
 	if xoff != 0 {
-		if !scroll_mods.precision {
+		if !scroll_mods.precision() {
 			x.delta = isize(math.round(xoff))
 		} else {
 			poff := self.mouse.pending_scroll_x + xoff

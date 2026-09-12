@@ -1070,10 +1070,7 @@ fn vt_view_scroll_wheel(self ObjId, _cmd Sel, event ObjId) {
 		x *= 2
 		y *= 2
 	}
-	mods := input.ScrollMods{
-		precision: precision
-		momentum: scroll_momentum(msg_u64(event, 'momentumPhase'))
-	}
+	mods := input.ScrollMods.init(precision, scroll_momentum(msg_u64(event, 'momentumPhase')))
 	g_scroll_cb(userdata, x, y, int(mods.int()))
 }
 

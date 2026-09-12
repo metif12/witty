@@ -397,7 +397,7 @@ fn test_embedded_inspector_context_and_input_dispatch() {
 	assert inspector.content_scale == 2
 
 	inspector.mouse_button_callback(.press, .left, input.Mods{})
-	inspector.scroll_callback(10, -20, input.ScrollMods{ precision: true })
+	inspector.scroll_callback(10, -20, input.ScrollMods.init(true, .none_))
 	inspector.cursor_pos_callback(12, 24)
 	inspector.focus_callback(true)
 	inspector.text_callback('hello')

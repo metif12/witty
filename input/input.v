@@ -147,7 +147,7 @@ pub fn (self Mods) unset(other Mods) Mods {
 }
 
 // ButtonState represents the state of a mouse button.
-pub enum MouseButtonState {
+pub enum MouseButtonState as i32 {
 	release
 	press
 }
@@ -155,7 +155,7 @@ pub enum MouseButtonState {
 // Button represents possible mouse buttons. We track up to 11 because
 // that's the maximum button input that terminal mouse tracking handles
 // without becoming ambiguous.
-pub enum MouseButton {
+pub enum MouseButton as i32 {
 	unknown
 	left
 	right
@@ -193,45 +193,40 @@ pub enum PressureStage as u8 {
 	deep // Deep press amount (after a "force click" on macOS trackpads).
 }
 
-// ScrollMods contains additional information about a scroll event.
+// ScrollMods contains additional information about a scroll event. Ghostty
+// packs precision, momentum, and four padding bits into this one byte.
 pub struct ScrollMods {
-pub mut:
-	// Whether this is a precision scroll (e.g. trackpad).
-	precision bool
-	// The momentum phase of the scroll event.
-	momentum Momentum = .none_
+mut:
+	value u8
+}
+
+pub fn ScrollMods.init(precision bool, momentum Momentum) ScrollMods {
+	return ScrollMods{
+		value: u8(precision) | (u8(momentum) << 1)
+	}
+}
+
+// precision reports whether this is a high-precision scroll event.
+pub fn (self ScrollMods) precision() bool {
+	return self.value & 0x1 != 0
+}
+
+// momentum returns the three-bit momentum phase.
+pub fn (self ScrollMods) momentum() Momentum {
+	return unsafe { Momentum((self.value >> 1) & 0x7) }
 }
 
 // scroll_mods_from_int decodes ScrollMods' packed u8 ABI. Ghostty stores the
 // precision flag in bit 0 and the three-bit Momentum value in bits 1 through 3.
 pub fn scroll_mods_from_int(raw u8) ScrollMods {
-	momentum := match (raw >> 1) & 0x7 {
-		1 { Momentum.began }
-		2 { Momentum.stationary }
-		3 { Momentum.changed }
-		4 { Momentum.ended }
-		5 { Momentum.cancelled }
-		6 { Momentum.may_begin }
-		else { Momentum.none_ }
-	}
 	return ScrollMods{
-		precision: raw & 0x1 != 0
-		momentum: momentum
+		value: raw
 	}
 }
 
 // int returns ScrollMods' packed u8 ABI representation.
 pub fn (self ScrollMods) int() u8 {
-	momentum := match self.momentum {
-		.none_ { u8(0) }
-		.began { u8(1) }
-		.stationary { u8(2) }
-		.changed { u8(3) }
-		.ended { u8(4) }
-		.cancelled { u8(5) }
-		.may_begin { u8(6) }
-	}
-	return u8(self.precision) | (momentum << 1)
+	return self.value
 }
 
 // OptionAsAlt determines whether the "option" key on macOS is treated
