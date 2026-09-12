@@ -2,6 +2,26 @@ module terminal
 
 // Tests for Selection, translated from Ghostty's Selection.zig.
 
+fn test_selection_enum_source_layouts() {
+	assert sizeof(SelectionOrder) == 1
+	assert u8(SelectionOrder.forward) == 0
+	assert u8(SelectionOrder.reverse) == 1
+	assert u8(SelectionOrder.mirrored_forward) == 2
+	assert u8(SelectionOrder.mirrored_reverse) == 3
+
+	assert sizeof(SelectionAdjustment) == 1
+	assert u8(SelectionAdjustment.left) == 0
+	assert u8(SelectionAdjustment.right) == 1
+	assert u8(SelectionAdjustment.up) == 2
+	assert u8(SelectionAdjustment.down) == 3
+	assert u8(SelectionAdjustment.home) == 4
+	assert u8(SelectionAdjustment.end_) == 5
+	assert u8(SelectionAdjustment.page_up) == 6
+	assert u8(SelectionAdjustment.page_down) == 7
+	assert u8(SelectionAdjustment.beginning_of_line) == 8
+	assert u8(SelectionAdjustment.end_of_line) == 9
+}
+
 // ============================================================
 // Helper: create a pin via Pages.pin for screen coordinates
 // ============================================================
@@ -25,11 +45,7 @@ fn test_selection_adjust_right() {
 
 	// Simple movement right
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 5, 1),
-			screen_pin(&s, 3, 3),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 5, 1), screen_pin(&s, 3, 3), false)
 		sel.adjust(&s, .right)
 
 		assert sel.start_pin.x == 5
@@ -40,11 +56,7 @@ fn test_selection_adjust_right() {
 
 	// Already at end of the line.
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 4, 1),
-			screen_pin(&s, 4, 2),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 4, 1), screen_pin(&s, 4, 2), false)
 		sel.adjust(&s, .right)
 
 		assert sel.start_pin.x == 4
@@ -55,11 +67,7 @@ fn test_selection_adjust_right() {
 
 	// Already at end of the screen
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 5, 1),
-			screen_pin(&s, 4, 3),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 5, 1), screen_pin(&s, 4, 3), false)
 		sel.adjust(&s, .right)
 
 		assert sel.start_pin.x == 5
@@ -83,11 +91,7 @@ fn test_selection_adjust_left() {
 
 	// Simple movement left
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 5, 1),
-			screen_pin(&s, 3, 3),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 5, 1), screen_pin(&s, 3, 3), false)
 		sel.adjust(&s, .left)
 
 		// Start line
@@ -99,11 +103,7 @@ fn test_selection_adjust_left() {
 
 	// Already at beginning of the line.
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 5, 1),
-			screen_pin(&s, 0, 3),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 5, 1), screen_pin(&s, 0, 3), false)
 		sel.adjust(&s, .left)
 
 		// Start line
@@ -127,11 +127,7 @@ fn test_selection_adjust_left_skips_blanks() {
 
 	// Same line
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 5, 1),
-			screen_pin(&s, 4, 3),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 5, 1), screen_pin(&s, 4, 3), false)
 		sel.adjust(&s, .left)
 
 		// Start line
@@ -143,11 +139,7 @@ fn test_selection_adjust_left_skips_blanks() {
 
 	// Edge
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 5, 1),
-			screen_pin(&s, 0, 3),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 5, 1), screen_pin(&s, 0, 3), false)
 		sel.adjust(&s, .left)
 
 		// Start line
@@ -171,11 +163,7 @@ fn test_selection_adjust_up() {
 
 	// Not on the first line
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 5, 1),
-			screen_pin(&s, 3, 3),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 5, 1), screen_pin(&s, 3, 3), false)
 		sel.adjust(&s, .up)
 
 		assert sel.start_pin.x == 5
@@ -186,11 +174,7 @@ fn test_selection_adjust_up() {
 
 	// On the first line
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 5, 1),
-			screen_pin(&s, 3, 0),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 5, 1), screen_pin(&s, 3, 0), false)
 		sel.adjust(&s, .up)
 
 		assert sel.start_pin.x == 5
@@ -213,11 +197,7 @@ fn test_selection_adjust_down() {
 
 	// Not on the last line
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 5, 1),
-			screen_pin(&s, 3, 3),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 5, 1), screen_pin(&s, 3, 3), false)
 		sel.adjust(&s, .down)
 
 		assert sel.start_pin.x == 5
@@ -228,11 +208,7 @@ fn test_selection_adjust_down() {
 
 	// On the last line
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 4, 1),
-			screen_pin(&s, 3, 4),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 4, 1), screen_pin(&s, 3, 4), false)
 		sel.adjust(&s, .down)
 
 		assert sel.start_pin.x == 4
@@ -255,11 +231,7 @@ fn test_selection_adjust_down_not_full_screen() {
 
 	// On the last line with text
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 4, 1),
-			screen_pin(&s, 3, 2),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 4, 1), screen_pin(&s, 3, 2), false)
 		sel.adjust(&s, .down)
 
 		// Start line
@@ -282,11 +254,7 @@ fn test_selection_adjust_home() {
 	s.test_write_string('A\nB\nC') or { assert false }
 
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 4, 1),
-			screen_pin(&s, 1, 2),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 4, 1), screen_pin(&s, 1, 2), false)
 		sel.adjust(&s, .home)
 
 		// Start line
@@ -309,11 +277,7 @@ fn test_selection_adjust_end_not_full_screen() {
 	s.test_write_string('A\nB\nC') or { assert false }
 
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 4, 0),
-			screen_pin(&s, 1, 1),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 4, 0), screen_pin(&s, 1, 1), false)
 		sel.adjust(&s, .end_)
 
 		// Start line
@@ -338,11 +302,7 @@ fn test_selection_adjust_beginning_of_line() {
 
 	// Not at beginning of the line
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 5, 1),
-			screen_pin(&s, 5, 1),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 5, 1), screen_pin(&s, 5, 1), false)
 		sel.adjust(&s, .beginning_of_line)
 
 		// Start line
@@ -354,11 +314,7 @@ fn test_selection_adjust_beginning_of_line() {
 
 	// Already at beginning of the line
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 5, 1),
-			screen_pin(&s, 0, 1),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 5, 1), screen_pin(&s, 0, 1), false)
 		sel.adjust(&s, .beginning_of_line)
 
 		// Start line
@@ -370,11 +326,7 @@ fn test_selection_adjust_beginning_of_line() {
 
 	// End pin moves to start pin
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 0, 1),
-			screen_pin(&s, 5, 1),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 0, 1), screen_pin(&s, 5, 1), false)
 		sel.adjust(&s, .beginning_of_line)
 
 		// Start line
@@ -398,11 +350,7 @@ fn test_selection_adjust_end_of_line() {
 
 	// Not at end of the line
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 1, 0),
-			screen_pin(&s, 1, 0),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 1, 0), screen_pin(&s, 1, 0), false)
 		sel.adjust(&s, .end_of_line)
 
 		assert sel.start_pin.x == 1
@@ -413,11 +361,7 @@ fn test_selection_adjust_end_of_line() {
 
 	// Already at end of the line
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 1, 0),
-			screen_pin(&s, 7, 0),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 1, 0), screen_pin(&s, 7, 0), false)
 		sel.adjust(&s, .end_of_line)
 
 		assert sel.start_pin.x == 1
@@ -428,11 +372,7 @@ fn test_selection_adjust_end_of_line() {
 
 	// End pin moves to start pin
 	{
-		mut sel := Selection.init(
-			screen_pin(&s, 7, 0),
-			screen_pin(&s, 1, 0),
-			false
-		)
+		mut sel := Selection.init(screen_pin(&s, 7, 0), screen_pin(&s, 1, 0), false)
 		sel.adjust(&s, .end_of_line)
 
 		// Start line
@@ -455,47 +395,27 @@ fn test_selection_order_standard() {
 
 	{
 		// forward, multi-line
-		sel := Selection.init(
-			screen_pin(&s, 2, 1),
-			screen_pin(&s, 2, 2),
-			false
-		)
+		sel := Selection.init(screen_pin(&s, 2, 1), screen_pin(&s, 2, 2), false)
 		assert sel.order(&s) == .forward
 	}
 	{
 		// reverse, multi-line
-		sel := Selection.init(
-			screen_pin(&s, 2, 2),
-			screen_pin(&s, 2, 1),
-			false
-		)
+		sel := Selection.init(screen_pin(&s, 2, 2), screen_pin(&s, 2, 1), false)
 		assert sel.order(&s) == .reverse
 	}
 	{
 		// forward, same-line
-		sel := Selection.init(
-			screen_pin(&s, 2, 1),
-			screen_pin(&s, 3, 1),
-			false
-		)
+		sel := Selection.init(screen_pin(&s, 2, 1), screen_pin(&s, 3, 1), false)
 		assert sel.order(&s) == .forward
 	}
 	{
 		// forward, single char
-		sel := Selection.init(
-			screen_pin(&s, 2, 1),
-			screen_pin(&s, 2, 1),
-			false
-		)
+		sel := Selection.init(screen_pin(&s, 2, 1), screen_pin(&s, 2, 1), false)
 		assert sel.order(&s) == .forward
 	}
 	{
 		// reverse, single line
-		sel := Selection.init(
-			screen_pin(&s, 2, 1),
-			screen_pin(&s, 1, 1),
-			false
-		)
+		sel := Selection.init(screen_pin(&s, 2, 1), screen_pin(&s, 1, 1), false)
 		assert sel.order(&s) == .reverse
 	}
 }
@@ -517,83 +437,47 @@ fn test_selection_order_rectangle() {
 	// BR - bottom right
 	{
 		// forward (TL -> BR)
-		sel := Selection.init(
-			screen_pin(&s, 1, 1),
-			screen_pin(&s, 2, 2),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 1, 1), screen_pin(&s, 2, 2), true)
 		assert sel.order(&s) == .forward
 	}
 	{
 		// reverse (BR -> TL)
-		sel := Selection.init(
-			screen_pin(&s, 2, 2),
-			screen_pin(&s, 1, 1),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 2, 2), screen_pin(&s, 1, 1), true)
 		assert sel.order(&s) == .reverse
 	}
 	{
 		// mirrored_forward (TR -> BL)
-		sel := Selection.init(
-			screen_pin(&s, 3, 1),
-			screen_pin(&s, 1, 3),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 3, 1), screen_pin(&s, 1, 3), true)
 		assert sel.order(&s) == .mirrored_forward
 	}
 	{
 		// mirrored_reverse (BL -> TR)
-		sel := Selection.init(
-			screen_pin(&s, 1, 3),
-			screen_pin(&s, 3, 1),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 1, 3), screen_pin(&s, 3, 1), true)
 		assert sel.order(&s) == .mirrored_reverse
 	}
 	{
 		// forward, single line (left -> right)
-		sel := Selection.init(
-			screen_pin(&s, 1, 1),
-			screen_pin(&s, 3, 1),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 1, 1), screen_pin(&s, 3, 1), true)
 		assert sel.order(&s) == .forward
 	}
 	{
 		// reverse, single line (right -> left)
-		sel := Selection.init(
-			screen_pin(&s, 3, 1),
-			screen_pin(&s, 1, 1),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 3, 1), screen_pin(&s, 1, 1), true)
 		assert sel.order(&s) == .reverse
 	}
 	{
 		// forward, single column (top -> bottom)
-		sel := Selection.init(
-			screen_pin(&s, 2, 1),
-			screen_pin(&s, 2, 3),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 2, 1), screen_pin(&s, 2, 3), true)
 		assert sel.order(&s) == .forward
 	}
 	{
 		// reverse, single column (bottom -> top)
-		sel := Selection.init(
-			screen_pin(&s, 2, 3),
-			screen_pin(&s, 2, 1),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 2, 3), screen_pin(&s, 2, 1), true)
 		assert sel.order(&s) == .reverse
 	}
 	{
 		// forward, single cell
-		sel := Selection.init(
-			screen_pin(&s, 1, 1),
-			screen_pin(&s, 1, 1),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 1, 1), screen_pin(&s, 1, 1), true)
 		assert sel.order(&s) == .forward
 	}
 }
@@ -609,44 +493,28 @@ fn test_selection_top_left() {
 	}
 	{
 		// forward
-		sel := Selection.init(
-			screen_pin(&s, 1, 1),
-			screen_pin(&s, 3, 1),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 1, 1), screen_pin(&s, 3, 1), true)
 		tl := sel.top_left(&s)
 		assert tl.x == 1
 		assert tl.y == 1
 	}
 	{
 		// reverse
-		sel := Selection.init(
-			screen_pin(&s, 3, 1),
-			screen_pin(&s, 1, 1),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 3, 1), screen_pin(&s, 1, 1), true)
 		tl := sel.top_left(&s)
 		assert tl.x == 1
 		assert tl.y == 1
 	}
 	{
 		// mirrored_forward
-		sel := Selection.init(
-			screen_pin(&s, 3, 1),
-			screen_pin(&s, 1, 3),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 3, 1), screen_pin(&s, 1, 3), true)
 		tl := sel.top_left(&s)
 		assert tl.x == 1
 		assert tl.y == 1
 	}
 	{
 		// mirrored_reverse
-		sel := Selection.init(
-			screen_pin(&s, 1, 3),
-			screen_pin(&s, 3, 1),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 1, 3), screen_pin(&s, 3, 1), true)
 		tl := sel.top_left(&s)
 		assert tl.x == 1
 		assert tl.y == 1
@@ -664,44 +532,28 @@ fn test_selection_bottom_right() {
 	}
 	{
 		// forward
-		sel := Selection.init(
-			screen_pin(&s, 1, 1),
-			screen_pin(&s, 3, 1),
-			false
-		)
+		sel := Selection.init(screen_pin(&s, 1, 1), screen_pin(&s, 3, 1), false)
 		br := sel.bottom_right(&s)
 		assert br.x == 3
 		assert br.y == 1
 	}
 	{
 		// reverse
-		sel := Selection.init(
-			screen_pin(&s, 3, 1),
-			screen_pin(&s, 1, 1),
-			false
-		)
+		sel := Selection.init(screen_pin(&s, 3, 1), screen_pin(&s, 1, 1), false)
 		br := sel.bottom_right(&s)
 		assert br.x == 3
 		assert br.y == 1
 	}
 	{
 		// mirrored_forward
-		sel := Selection.init(
-			screen_pin(&s, 3, 1),
-			screen_pin(&s, 1, 3),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 3, 1), screen_pin(&s, 1, 3), true)
 		br := sel.bottom_right(&s)
 		assert br.x == 3
 		assert br.y == 3
 	}
 	{
 		// mirrored_reverse
-		sel := Selection.init(
-			screen_pin(&s, 1, 3),
-			screen_pin(&s, 3, 1),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 1, 3), screen_pin(&s, 3, 1), true)
 		br := sel.bottom_right(&s)
 		assert br.x == 3
 		assert br.y == 3
@@ -719,74 +571,34 @@ fn test_selection_ordered() {
 	}
 	{
 		// forward
-		sel := Selection.init(
-			screen_pin(&s, 1, 1),
-			screen_pin(&s, 3, 1),
-			false
-		)
-		sel_reverse := Selection.init(
-			screen_pin(&s, 3, 1),
-			screen_pin(&s, 1, 1),
-			false
-		)
+		sel := Selection.init(screen_pin(&s, 1, 1), screen_pin(&s, 3, 1), false)
+		sel_reverse := Selection.init(screen_pin(&s, 3, 1), screen_pin(&s, 1, 1), false)
 		assert sel.ordered(&s, .forward).eql(sel)
 		assert sel.ordered(&s, .reverse).eql(sel_reverse)
 		assert sel.ordered(&s, .mirrored_forward).eql(sel)
 	}
 	{
 		// reverse
-		sel := Selection.init(
-			screen_pin(&s, 3, 1),
-			screen_pin(&s, 1, 1),
-			false
-		)
-		sel_forward := Selection.init(
-			screen_pin(&s, 1, 1),
-			screen_pin(&s, 3, 1),
-			false
-		)
+		sel := Selection.init(screen_pin(&s, 3, 1), screen_pin(&s, 1, 1), false)
+		sel_forward := Selection.init(screen_pin(&s, 1, 1), screen_pin(&s, 3, 1), false)
 		assert sel.ordered(&s, .forward).eql(sel_forward)
 		assert sel.ordered(&s, .reverse).eql(sel)
 		assert sel.ordered(&s, .mirrored_forward).eql(sel_forward)
 	}
 	{
 		// mirrored_forward
-		sel := Selection.init(
-			screen_pin(&s, 3, 1),
-			screen_pin(&s, 1, 3),
-			true
-		)
-		sel_forward := Selection.init(
-			screen_pin(&s, 1, 1),
-			screen_pin(&s, 3, 3),
-			true
-		)
-		sel_reverse := Selection.init(
-			screen_pin(&s, 3, 3),
-			screen_pin(&s, 1, 1),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 3, 1), screen_pin(&s, 1, 3), true)
+		sel_forward := Selection.init(screen_pin(&s, 1, 1), screen_pin(&s, 3, 3), true)
+		sel_reverse := Selection.init(screen_pin(&s, 3, 3), screen_pin(&s, 1, 1), true)
 		assert sel.ordered(&s, .forward).eql(sel_forward)
 		assert sel.ordered(&s, .reverse).eql(sel_reverse)
 		assert sel.ordered(&s, .mirrored_reverse).eql(sel_forward)
 	}
 	{
 		// mirrored_reverse
-		sel := Selection.init(
-			screen_pin(&s, 1, 3),
-			screen_pin(&s, 3, 1),
-			true
-		)
-		sel_forward := Selection.init(
-			screen_pin(&s, 1, 1),
-			screen_pin(&s, 3, 3),
-			true
-		)
-		sel_reverse := Selection.init(
-			screen_pin(&s, 3, 3),
-			screen_pin(&s, 1, 1),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 1, 3), screen_pin(&s, 3, 1), true)
+		sel_forward := Selection.init(screen_pin(&s, 1, 1), screen_pin(&s, 3, 3), true)
+		sel_reverse := Selection.init(screen_pin(&s, 3, 3), screen_pin(&s, 1, 1), true)
 		assert sel.ordered(&s, .forward).eql(sel_forward)
 		assert sel.ordered(&s, .reverse).eql(sel_reverse)
 		assert sel.ordered(&s, .mirrored_forward).eql(sel_forward)
@@ -803,11 +615,7 @@ fn test_selection_contains() {
 		s.deinit()
 	}
 	{
-		sel := Selection.init(
-			screen_pin(&s, 5, 1),
-			screen_pin(&s, 3, 2),
-			false
-		)
+		sel := Selection.init(screen_pin(&s, 5, 1), screen_pin(&s, 3, 2), false)
 
 		assert sel.contains(&s, screen_pin(&s, 6, 1))
 		assert sel.contains(&s, screen_pin(&s, 1, 2))
@@ -817,11 +625,7 @@ fn test_selection_contains() {
 
 	// Reverse
 	{
-		sel := Selection.init(
-			screen_pin(&s, 3, 2),
-			screen_pin(&s, 5, 1),
-			false
-		)
+		sel := Selection.init(screen_pin(&s, 3, 2), screen_pin(&s, 5, 1), false)
 
 		assert sel.contains(&s, screen_pin(&s, 6, 1))
 		assert sel.contains(&s, screen_pin(&s, 1, 2))
@@ -831,11 +635,7 @@ fn test_selection_contains() {
 
 	// Single line
 	{
-		sel := Selection.init(
-			screen_pin(&s, 5, 1),
-			screen_pin(&s, 8, 1),
-			false
-		)
+		sel := Selection.init(screen_pin(&s, 5, 1), screen_pin(&s, 8, 1), false)
 
 		assert sel.contains(&s, screen_pin(&s, 6, 1))
 		assert !sel.contains(&s, screen_pin(&s, 2, 1))
@@ -853,11 +653,7 @@ fn test_selection_contains_rectangle() {
 		s.deinit()
 	}
 	{
-		sel := Selection.init(
-			screen_pin(&s, 3, 3),
-			screen_pin(&s, 7, 9),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 3, 3), screen_pin(&s, 7, 9), true)
 
 		assert sel.contains(&s, screen_pin(&s, 5, 6)) // Center
 		assert sel.contains(&s, screen_pin(&s, 3, 6)) // Left border
@@ -875,11 +671,7 @@ fn test_selection_contains_rectangle() {
 
 	// Reverse
 	{
-		sel := Selection.init(
-			screen_pin(&s, 7, 9),
-			screen_pin(&s, 3, 3),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 7, 9), screen_pin(&s, 3, 3), true)
 
 		assert sel.contains(&s, screen_pin(&s, 5, 6)) // Center
 		assert sel.contains(&s, screen_pin(&s, 3, 6)) // Left border
@@ -898,11 +690,7 @@ fn test_selection_contains_rectangle() {
 	// Single line
 	// NOTE: This is the same as normal selection but we just do it for brevity
 	{
-		sel := Selection.init(
-			screen_pin(&s, 5, 1),
-			screen_pin(&s, 10, 1),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 5, 1), screen_pin(&s, 10, 1), true)
 
 		assert sel.contains(&s, screen_pin(&s, 6, 1))
 		assert !sel.contains(&s, screen_pin(&s, 2, 1))
@@ -921,11 +709,7 @@ fn test_selection_contained_row() {
 	}
 
 	{
-		sel := Selection.init(
-			screen_pin(&s, 5, 1),
-			screen_pin(&s, 3, 3),
-			false
-		)
+		sel := Selection.init(screen_pin(&s, 5, 1), screen_pin(&s, 3, 3), false)
 
 		// Not contained
 		assert sel.contained_row(&s, screen_pin(&s, 1, 4)) == none
@@ -935,42 +719,26 @@ fn test_selection_contained_row() {
 			assert false
 			return
 		}
-		assert start_row.eql(Selection.init(
-			sel.start_pin,
-			Pin{ x: s.pages.cols - 1, y: 1 },
-			false
-		))
+		assert start_row.eql(Selection.init(sel.start_pin, Pin{ x: s.pages.cols - 1, y: 1 }, false))
 
 		// End line
 		end_row := sel.contained_row(&s, screen_pin(&s, 2, 3)) or {
 			assert false
 			return
 		}
-		assert end_row.eql(Selection.init(
-			Pin{ x: 0, y: 3 },
-			sel.end_pin,
-			false
-		))
+		assert end_row.eql(Selection.init(Pin{ x: 0, y: 3 }, sel.end_pin, false))
 
 		// Middle line
 		mid_row := sel.contained_row(&s, screen_pin(&s, 2, 2)) or {
 			assert false
 			return
 		}
-		assert mid_row.eql(Selection.init(
-			Pin{ x: 0, y: 2 },
-			Pin{ x: s.pages.cols - 1, y: 2 },
-			false
-		))
+		assert mid_row.eql(Selection.init(Pin{ x: 0, y: 2 }, Pin{ x: s.pages.cols - 1, y: 2 }, false))
 	}
 
 	// Rectangle
 	{
-		sel := Selection.init(
-			screen_pin(&s, 3, 1),
-			screen_pin(&s, 6, 3),
-			true
-		)
+		sel := Selection.init(screen_pin(&s, 3, 1), screen_pin(&s, 6, 3), true)
 
 		// Not contained
 		assert sel.contained_row(&s, screen_pin(&s, 1, 4)) == none
@@ -980,42 +748,26 @@ fn test_selection_contained_row() {
 			assert false
 			return
 		}
-		assert start_row.eql(Selection.init(
-			Pin{ x: 3, y: 1 },
-			Pin{ x: 6, y: 1 },
-			true
-		))
+		assert start_row.eql(Selection.init(Pin{ x: 3, y: 1 }, Pin{ x: 6, y: 1 }, true))
 
 		// End line
 		end_row := sel.contained_row(&s, screen_pin(&s, 2, 3)) or {
 			assert false
 			return
 		}
-		assert end_row.eql(Selection.init(
-			Pin{ x: 3, y: 3 },
-			Pin{ x: 6, y: 3 },
-			true
-		))
+		assert end_row.eql(Selection.init(Pin{ x: 3, y: 3 }, Pin{ x: 6, y: 3 }, true))
 
 		// Middle line
 		mid_row := sel.contained_row(&s, screen_pin(&s, 2, 2)) or {
 			assert false
 			return
 		}
-		assert mid_row.eql(Selection.init(
-			Pin{ x: 3, y: 2 },
-			Pin{ x: 6, y: 2 },
-			true
-		))
+		assert mid_row.eql(Selection.init(Pin{ x: 3, y: 2 }, Pin{ x: 6, y: 2 }, true))
 	}
 
 	// Single-line selection
 	{
-		sel := Selection.init(
-			screen_pin(&s, 2, 1),
-			screen_pin(&s, 6, 1),
-			false
-		)
+		sel := Selection.init(screen_pin(&s, 2, 1), screen_pin(&s, 6, 1), false)
 
 		// Not contained
 		assert sel.contained_row(&s, screen_pin(&s, 1, 0)) == none
@@ -1039,26 +791,10 @@ fn test_selection_eql() {
 	defer {
 		s.deinit()
 	}
-	sel1 := Selection.init(
-		screen_pin(&s, 1, 1),
-		screen_pin(&s, 3, 3),
-		false
-	)
-	sel2 := Selection.init(
-		screen_pin(&s, 1, 1),
-		screen_pin(&s, 3, 3),
-		false
-	)
-	sel3 := Selection.init(
-		screen_pin(&s, 2, 1),
-		screen_pin(&s, 3, 3),
-		false
-	)
-	sel4 := Selection.init(
-		screen_pin(&s, 1, 1),
-		screen_pin(&s, 3, 3),
-		true
-	)
+	sel1 := Selection.init(screen_pin(&s, 1, 1), screen_pin(&s, 3, 3), false)
+	sel2 := Selection.init(screen_pin(&s, 1, 1), screen_pin(&s, 3, 3), false)
+	sel3 := Selection.init(screen_pin(&s, 2, 1), screen_pin(&s, 3, 3), false)
+	sel4 := Selection.init(screen_pin(&s, 1, 1), screen_pin(&s, 3, 3), true)
 
 	assert sel1.eql(sel2)
 	assert !sel1.eql(sel3)

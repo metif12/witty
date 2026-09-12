@@ -28,7 +28,7 @@ module terminal
 //  selections, both of these selections are *mirrored* as orientation
 //  operations only flip the x or y axis, not both. Depending on the y axis
 //  direction, this is either mirrored_forward or mirrored_reverse.
-pub enum SelectionOrder {
+pub enum SelectionOrder as u8 {
 	forward
 	reverse
 	mirrored_forward
@@ -40,7 +40,7 @@ pub enum SelectionOrder {
 // ============================================================
 
 // Possible adjustments to the selection.
-pub enum SelectionAdjustment {
+pub enum SelectionAdjustment as u8 {
 	left
 	right
 	up
@@ -234,11 +234,7 @@ pub fn (self &Selection) contained_row_cached(s &Screen, tl_pin Pin, br_pin Pin,
 	// Rectangle case: we can return early as the x range will always be the
 	// same. We've already validated that the row is in the selection.
 	if self.rectangle {
-		return Selection.init(
-			Pin{ x: tl.x, y: pin.y },
-			Pin{ x: br.x, y: pin.y },
-			true
-		)
+		return Selection.init(Pin{ x: tl.x, y: pin.y }, Pin{ x: br.x, y: pin.y }, true)
 	}
 
 	if p.y == tl.y {
@@ -248,11 +244,7 @@ pub fn (self &Selection) contained_row_cached(s &Screen, tl_pin Pin, br_pin Pin,
 		}
 
 		// Selection top-left line matches only.
-		return Selection.init(
-			tl_pin,
-			Pin{ x: s.pages.cols - 1, y: pin.y },
-			false
-		)
+		return Selection.init(tl_pin, Pin{ x: s.pages.cols - 1, y: pin.y }, false)
 	}
 
 	// Row is our bottom selection, so we return the selection from the
@@ -260,19 +252,11 @@ pub fn (self &Selection) contained_row_cached(s &Screen, tl_pin Pin, br_pin Pin,
 	// one line (due to conditionals above)
 	if p.y == br.y {
 		assert p.y != tl.y
-		return Selection.init(
-			Pin{ x: 0, y: pin.y },
-			br_pin,
-			false
-		)
+		return Selection.init(Pin{ x: 0, y: pin.y }, br_pin, false)
 	}
 
 	// Row is somewhere between our selection lines so we return the full line.
-	return Selection.init(
-		Pin{ x: 0, y: pin.y },
-		Pin{ x: s.pages.cols - 1, y: pin.y },
-		false
-	)
+	return Selection.init(Pin{ x: 0, y: pin.y }, Pin{ x: s.pages.cols - 1, y: pin.y }, false)
 }
 
 // Adjust the selection by some given adjustment. An adjustment allows
