@@ -1658,29 +1658,8 @@ pub fn ghostty_surface_key_binding_flags(mut surface Surface, event CAPIKeyEvent
 	}
 
 	flags_raw := surface.core_surface.key_event_is_binding(&core_event) or { return none }
-	flags := unsafe { &EmbeddedBindingFlags(flags_raw) }
-	mut result := u32(0)
-	if flags.consumed {
-		result |= 1
-	}
-	if flags.all {
-		result |= 2
-	}
-	if flags.global {
-		result |= 4
-	}
-	if flags.performable {
-		result |= 8
-	}
-	return result
-}
-
-// Mirrors core.BindingFlags across the intentionally opaque apprt bridge.
-struct EmbeddedBindingFlags {
-	consumed    bool
-	global      bool
-	all         bool
-	performable bool
+	flags := unsafe { &input.Flags(flags_raw) }
+	return u32(flags.cval())
 }
 
 // ghostty_surface_text sends raw text to the terminal. This is treated

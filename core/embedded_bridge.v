@@ -33,7 +33,7 @@ mut:
 	surface_ref      SurfaceRef
 	rt_surface       &apprt.Surface = unsafe { nil }
 	selection        terminal.Selection
-	binding_flags    BindingFlags
+	binding_flags    input.Flags
 	registered       bool
 	inspector_marker voidptr
 }

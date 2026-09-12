@@ -2559,14 +2559,6 @@ pub enum WriteScreenTarget {
 	paste
 }
 
-pub struct BindingFlags {
-pub:
-	consumed    bool
-	global      bool
-	all         bool
-	performable bool
-}
-
 pub type KeyEvent = input.KeyEvent
 
 pub type KeyAction = input.KeyAction
@@ -3530,7 +3522,7 @@ pub fn (mut self Surface) preedit_callback(preedit ?string) ! {
 }
 
 // key_event_is_binding returns binding flags if the key event would trigger a keybinding.
-pub fn (mut self Surface) key_event_is_binding(event_orig KeyEvent) ?BindingFlags {
+pub fn (mut self Surface) key_event_is_binding(event_orig KeyEvent) ?input.Flags {
 	// Apply physical modifier remappings before any binding lookup.
 	mut event := event_orig
 	if self.config.key_remaps.is_remapped(event_orig.mods) {
@@ -3558,17 +3550,11 @@ pub fn (mut self Surface) key_event_is_binding(event_orig KeyEvent) ?BindingFlag
 	return binding_flags(entry)
 }
 
-fn binding_flags(entry &input.SetEntry) BindingFlags {
-	flags := match entry.value.typ {
+fn binding_flags(entry &input.SetEntry) input.Flags {
+	return match entry.value.typ {
 		.leader { input.Flags{} }
 		.leaf { entry.value.leaf_flags }
 		.leaf_chained { entry.value.chain_flags }
-	}
-	return BindingFlags{
-		consumed: flags.consumed
-		global: flags.global
-		all: flags.all
-		performable: flags.performable
 	}
 }
 
