@@ -1517,20 +1517,20 @@ fn test_page_list_scroll_clear() {
 	defer { s.deinit() }
 
 	// Write to a few rows
-	for y in u16(0) .. 5 {
+	for y in u16(0) .. 2 {
 		set_active_cell(mut s, 0, y, u32(0x41))
 	}
 
 	initial_rows := s.total_rows
 
 	// Scroll clear pushes active content to scrollback
-	s.scroll_clear()
+	s.scroll_clear() or { panic(err) }
 
-	assert s.total_rows == initial_rows + 5
+	assert s.total_rows == initial_rows + 2
 	assert (s.get_cell(Point.new(.viewport, Coordinate{})) or {
 		assert false, 'viewport cell missing'
 		return
-	}).screen_point() == Point.new(.screen, Coordinate{ y: 5 })
+	}).screen_point() == Point.new(.screen, Coordinate{ y: 2 })
 }
 
 fn test_page_list_scroll_clear_empty_active_area() {
@@ -1538,9 +1538,9 @@ fn test_page_list_scroll_clear_empty_active_area() {
 	defer { s.deinit() }
 	initial_rows := s.total_rows
 
-	s.scroll_clear()
+	s.scroll_clear() or { panic(err) }
 
-	assert s.total_rows == initial_rows + usize(s.rows)
+	assert s.total_rows == initial_rows
 }
 
 fn test_page_list_scroll_clear_counts_background_only_cell() {
@@ -1556,7 +1556,7 @@ fn test_page_list_scroll_clear_counts_background_only_cell() {
 	}
 	initial_rows := s.total_rows
 
-	s.scroll_clear()
+	s.scroll_clear() or { panic(err) }
 
 	assert s.total_rows == initial_rows + 2
 }
@@ -1568,9 +1568,21 @@ fn test_page_list_scroll_clear_includes_internal_blank_rows() {
 	set_active_cell(mut s, 0, 4, u32(`B`))
 	initial_rows := s.total_rows
 
-	s.scroll_clear()
+	s.scroll_clear() or { panic(err) }
 
 	assert s.total_rows == initial_rows + 5
+}
+
+fn test_page_list_scroll_clear_counts_trailing_rows_across_pages() {
+	mut s := PageList.init(80, 600, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	assert s.total_pages() > 1
+	set_active_cell(mut s, 0, 580, u32(`A`))
+	initial_rows := s.total_rows
+
+	s.scroll_clear() or { panic(err) }
+
+	assert s.total_rows == initial_rows + 581
 }
 
 // ============================================================

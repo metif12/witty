@@ -3967,7 +3967,9 @@ pub fn (self &PageList) get_bottom_right(tag PointTag) ?PagePin {
 		}
 		.viewport {
 			tl := self.get_top_left(.viewport)
-			p := tl.down(usize(self.rows) - 1) or { return none }
+			p := tl.down(usize(self.rows) - 1) or {
+				panic('viewport has fewer rows than the active area')
+			}
 			return PagePin{
 				node: p.node
 				y: p.y
@@ -4047,7 +4049,7 @@ pub fn (self &PageList) diagram() !string {
 			out.write_string('${y:5} ')
 			out.write_string(if row.wrap_continuation { '…' } else { '|' })
 			if row_has_content {
-				for cell in cells {
+				for x, cell in cells {
 					if cell.wide == .spacer_tail {
 						continue
 					}
@@ -4056,7 +4058,10 @@ pub fn (self &PageList) diagram() !string {
 					} else {
 						out.write_rune(rune(cell.codepoint))
 						if cell.has_grapheme {
-							for cp in cell.graphemes {
+							graphemes := node.data.lookup_grapheme_at(y, x) or {
+								panic('grapheme cell is missing its page mapping')
+							}
+							for cp in graphemes {
 								out.write_rune(rune(cp))
 							}
 						}
@@ -4139,7 +4144,7 @@ pub mut:
 // The pin must be on the first row of a prompt, as returned by PromptIterator.
 pub fn (self &PageList) highlight_semantic_content(at PagePin, content SemanticContent) ?PageSemanticHighlight {
 	mut prompt_it := at.prompt_iterator(.right_down, none)
-	first := prompt_it.next() or { return none }
+	first := prompt_it.next() or { panic('semantic highlight pin is not on a prompt') }
 	assert first.y == at.y
 
 	zone_end := if next := prompt_it.next() {
@@ -4147,7 +4152,7 @@ pub fn (self &PageList) highlight_semantic_content(at PagePin, content SemanticC
 		previous.x = previous.node.data.size.cols - 1
 		previous
 	} else {
-		self.get_bottom_right(.screen) or { return none }
+		self.get_bottom_right(.screen) or { panic('page list has no bottom-right pin') }
 	}
 
 	match content {
@@ -4254,6 +4259,9 @@ pub fn (self &PageList) highlight_semantic_content(at PagePin, content SemanticC
 
 // Track a pin so it auto-updates during modifications.
 pub fn (mut self PageList) track_pin(p PagePin) &PagePin {
+	$if !prod {
+		assert self.pin_is_valid(p)
+	}
 	tracked := &PagePin{
 		node: p.node
 		y: p.y
@@ -4391,9 +4399,9 @@ pub fn (self &PageList) total_pages() usize {
 	mut count := usize(0)
 	mut node := self.pages.first
 	for {
-		_ := node or { break }
+		n := node or { break }
 		count += 1
-		node = (node or { break }).next
+		node = n.next
 	}
 	return count
 }
@@ -4656,13 +4664,13 @@ fn (mut self PageList) scroll_prompt(delta isize) {
 // ============================================================
 
 // Scroll written content into scrollback. Does not update viewport.
-pub fn (mut self PageList) scroll_clear() {
+pub fn (mut self PageList) scroll_clear() ! {
 	defer { self.assert_integrity() }
 
 	mut page := self.pages.last or { panic('page list has no last page') }
 	mut n := usize(0)
 	mut non_empty := usize(0)
-	mut found := false
+	mut done := false
 	for {
 		for i in 0 .. int(page.data.size.rows) {
 			reverse_i := int(page.data.size.rows) - i - 1
@@ -4670,26 +4678,27 @@ pub fn (mut self PageList) scroll_clear() {
 			cells := row.cells[..int(self.cols)]
 			for cell in cells {
 				if !cell.is_empty() {
-					non_empty = n + usize(page.data.size.rows) - usize(i)
-					found = true
+					non_empty = usize(self.rows) - n
+					done = true
 					break
 				}
 			}
-			if found {
+			if done {
+				break
+			}
+
+			n += 1
+			if n > usize(self.rows) {
+				non_empty = 0
+				done = true
 				break
 			}
 		}
-		if found {
+		if done {
 			break
 		}
 
-		n += usize(page.data.size.rows)
-		if n >= usize(self.rows) {
-			non_empty = n
-			break
-		}
 		page = page.prev or {
-			non_empty = n
 			break
 		}
 	}
@@ -5634,11 +5643,9 @@ fn (self &PageList) trailing_blank_lines(max u16) u16 {
 		len := int(page.data.size.rows)
 		for i in 0 .. len {
 			rev_i := len - i - 1
-			if rev_i < page.data.rows.len {
-				// If the row has any text then we're done.
-				if has_text_any(page.data.rows[rev_i].cells[..int(page.data.size.cols)]) {
-					return count
-				}
+			// If the row has any text then we're done.
+			if has_text_any(page.data.rows[rev_i].cells[..int(page.data.size.cols)]) {
+				return count
 			}
 			count += 1
 			if count >= max {
@@ -5659,14 +5666,11 @@ fn (self &PageList) trailing_blank_lines(max u16) u16 {
 // number of rows trimmed and the caller must decrement total_rows.
 fn (mut self PageList) trim_trailing_blank_rows(max u16) u16 {
 	mut trimmed := u16(0)
-	bl_pin := self.get_bottom_right(.screen) or { return 0 }
+	bl_pin := self.get_bottom_right(.screen) or { panic('page list has no bottom-right pin') }
 	mut it := bl_pin.row_iterator(.left_up, none)
 	for {
 		row_pin := it.next() or { break }
 		mut page := &row_pin.node.data
-		if int(row_pin.y) >= page.rows.len {
-			continue
-		}
 		cells := page.rows[int(row_pin.y)].cells[..int(page.size.cols)]
 
 		// If the row has any text then we're done.
@@ -5676,21 +5680,19 @@ fn (mut self PageList) trim_trailing_blank_rows(max u16) u16 {
 
 		// If our tracked pins are in this row then we cannot trim it because
 		// it implies some sort of importance.
-		mut has_pin := false
 		for p in self.tracked_pins {
 			if voidptr(p.node) == voidptr(row_pin.node) && p.y == row_pin.y {
-				has_pin = true
-				break
+				return trimmed
 			}
 		}
-		if has_pin {
-			return trimmed
-		}
 
-		// No text, we can trim this row.
+		// No text, we can trim this row. Because it has no text we can also be
+		// sure it has no styling, so we don't need to worry about memory.
 		page.size.rows -= 1
 		if page.size.rows == 0 {
 			self.erase_page(row_pin.node)
+		} else {
+			page.assert_integrity()
 		}
 
 		trimmed += 1
