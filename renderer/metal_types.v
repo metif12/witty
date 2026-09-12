@@ -723,11 +723,6 @@ pub fn metal_text_cell(cell CellText) MetalTextCell {
 		flags |= 0x02
 	}
 
-	atlas := match cell.atlas {
-		.grayscale { u8(0) }
-		.color { u8(1) }
-	}
-
 	return MetalTextCell{
 		glyph_x: cell.glyph_pos[0]
 		glyph_y: cell.glyph_pos[1]
@@ -738,7 +733,7 @@ pub fn metal_text_cell(cell CellText) MetalTextCell {
 		grid_x: cell.grid_pos[0]
 		grid_y: cell.grid_pos[1]
 		color: cell.color
-		atlas: atlas
+		atlas: u8(cell.atlas)
 		flags: flags
 	}
 }

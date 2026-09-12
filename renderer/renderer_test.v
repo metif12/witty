@@ -552,7 +552,9 @@ fn test_bg_cell_set_get() ! {
 
 // Test AtlasKind enum.
 fn test_atlas_kind() {
-	assert AtlasKind.grayscale != AtlasKind.color
+	assert $sizeof(AtlasKind) == 1
+	assert u8(AtlasKind.grayscale) == 0
+	assert u8(AtlasKind.color) == 1
 }
 
 // Test CellLayer enum.

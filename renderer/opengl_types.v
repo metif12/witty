@@ -978,10 +978,7 @@ pub fn gl_text_cell(cell CellText) GLTextCell {
 		grid_x: cell.grid_pos[0]
 		grid_y: cell.grid_pos[1]
 		color: cell.color
-		atlas: match cell.atlas {
-			.grayscale { u8(0) }
-			.color { u8(1) }
-		}
+		atlas: u8(cell.atlas)
 		flags: flags
 	}
 }

@@ -169,9 +169,9 @@ import unicode
 // ============================================================
 
 // AtlasKind identifies which texture atlas a glyph belongs to.
-pub enum AtlasKind {
-	grayscale
-	color
+pub enum AtlasKind as u8 {
+	grayscale = 0
+	color     = 1
 }
 
 // CellTextBools contains boolean flags for text cell rendering.
