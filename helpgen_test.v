@@ -3,27 +3,34 @@ module main
 fn test_helpgen_extracts_config_fields() {
 	help := gen_config()
 	assert help.entries.len > 100
-	assert help.entries[0].name == 'font_size'
-	assert help.entries.any(it.name == 'image_storage_limit')
+	assert help.entries[0].name == 'font-family'
+	assert help.entries.any(it.name == 'image-storage-limit')
+	assert help.entries.all(!it.name.starts_with('_'))
 }
 
 fn test_helpgen_extracts_cli_actions() {
 	help := gen_actions()
-	assert help.entries.len > 10
-	assert help.entries[0].name == 'none'
-	assert help.entries.any(it.name == 'list_themes')
-	assert help.entries.any(it.name == 'crash_report')
+	assert help.entries.len == 15
+	assert help.entries[0].name == 'version'
+	assert help.entries.any(it.name == 'list-themes')
+	crash := help.entries.filter(it.name == 'crash-report')
+	assert crash.len == 1
+	assert crash[0].text.contains('Viewing\nand sending crash reports is unimplemented')
 }
 
 fn test_helpgen_extracts_keybind_docs() {
 	help := gen_keybind_actions()
-	assert help.entries.len > 50
+	assert help.entries.len == 83
 	ignore := help.entries.filter(it.name == 'ignore')
 	assert ignore.len == 1
-	assert ignore[0].text == 'Ignore this key combination.'
+	assert ignore[0].text.contains('Ghostty will not process this combination')
 	assert help.entries.any(it.name == 'crash')
 }
 
-fn test_find_common_prefix_ignores_empty_lines() {
-	assert find_common_prefix(['  first', '', '    second']) == 2
+fn test_generated_help_parser_preserves_blank_and_indented_lines() {
+	entries := generated_help_entries('@@one\nfirst\n\n  second\n@@two\nlast', '@@')
+	assert entries == [
+		HelpEntry{ name: 'one', text: 'first\n\n  second' },
+		HelpEntry{ name: 'two', text: 'last' },
+	]
 }

@@ -7,6 +7,10 @@ import datastruct.comparison
 // Markdown remains byte-for-byte data rather than V string literals.
 const config_help_data = $embed_file('config_help.txt').to_string()
 
+pub fn generated_config_help_data() string {
+	return config_help_data
+}
+
 struct ConfigEntryGroup {
 	key    string
 	values []string

@@ -2,7 +2,11 @@ module input
 
 import strings
 
-const binding_action_help_data = $embed_file('action_help.txt').to_string()
+const binding_action_help_data = $embed_file('keybind_action_help.txt').to_string()
+
+pub fn generated_action_help_data() string {
+	return binding_action_help_data
+}
 
 // This module is a help generator for keybind actions documentation.
 // It can generate documentation in different formats (plaintext for CLI,

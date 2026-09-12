@@ -3,7 +3,11 @@ module cli
 import cli_args
 
 const action_help_requested_message = 'ActionHelpRequested'
-const action_help_data = $embed_file('action_help.txt').to_string()
+const action_help_data = $embed_file('cli_action_help.txt').to_string()
+
+pub fn generated_action_help_data() string {
+	return action_help_data
+}
 
 // request_action_help is the translated Action.help_error path shared by the
 // option declarations for Ghostty CLI actions.
