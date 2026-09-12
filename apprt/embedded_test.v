@@ -618,6 +618,14 @@ fn test_capi_text_deinit() {
 	assert text.text_len == 0
 }
 
+fn test_capi_text_length_is_pointer_width() {
+	max_len := ~usize(0)
+	mut text := CAPIText{ text_len: max_len }
+	assert text.text_len == max_len
+	text.deinit()
+	assert text.text_len == 0
+}
+
 // Test CAPIPoint tag values.
 fn test_capi_point_tag_values() {
 	assert int(CAPIPointTag.active) == 0

@@ -1222,7 +1222,7 @@ pub mut:
 	offset_start u32
 	offset_len   u32
 	text         ?string
-	text_len     int
+	text_len     usize
 }
 
 // deinit frees the text buffer.
@@ -1540,7 +1540,7 @@ fn read_text_locked(mut surface Surface, core_sel voidptr, mut result CAPIText) 
 	result.offset_start = offset_start
 	result.offset_len = offset_len
 	result.text = dumped.text
-	result.text_len = dumped.text.len
+	result.text_len = usize(dumped.text.len)
 	return true
 }
 
