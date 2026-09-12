@@ -1593,6 +1593,7 @@ pub const colors_default = Colors{
 	palette: dynamic_palette_default_val
 }
 
+@[aligned: 4]
 pub struct RGB {
 pub:
 	r u8

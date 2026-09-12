@@ -46,6 +46,8 @@ fn test_color_name_unnamed_has_no_default() {
 // ============================================================
 
 fn test_rgb_cval() {
+	assert sizeof(RGB) == 4
+	assert sizeof(RGBC) == 3
 	value := RGB{ r: 0xaa, g: 0xbb, b: 0xcc }.cval()
 	assert value == RGBC{
 		r: 0xaa
