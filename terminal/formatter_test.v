@@ -613,6 +613,32 @@ fn test_page_vt_duplicate_style_not_emitted_twice() {
 	assert f.format() == '\x1b[0m\x1b[1mhello\x1b[0m'
 }
 
+fn test_page_vt_underline_color_change_emits_new_style() {
+	mut pages := Pages.init(2, 1, 0)
+	mut row := &pages.screen_rows[pages.active_start]
+	row.cells[0] = CellData{
+		codepoint: u32(`A`)
+		style_id: 1
+		style: CellStyle{
+			flags: StyleFlags{ underline: .single }
+			underline_color: .palette
+			underline_palette: 1
+		}
+	}
+	row.cells[1] = CellData{
+		codepoint: u32(`B`)
+		style_id: 1
+		style: CellStyle{
+			flags: StyleFlags{ underline: .single }
+			underline_color: .palette
+			underline_palette: 2
+		}
+	}
+
+	f := PageFormatter.init(&pages, format_vt)
+	assert f.format() == '\x1b[0m\x1b[4m\x1b[58;5;1mA\x1b[0m\x1b[4m\x1b[58;5;2mB\x1b[0m'
+}
+
 fn test_page_vt_palette_option_emits_rgb() {
 	mut t := Terminal.init(Options{ cols: 80, rows: 24 }) or { panic(err) }
 	mut s := ReadonlyStream.init(mut t)
@@ -827,40 +853,6 @@ fn test_has_text_any() {
 	cells2[2].codepoint = u32(`x`)
 	cells2[2].content_tag = .codepoint
 	assert has_text_any(cells2) == true
-}
-
-// ============================================================
-// cell_is_empty helper
-// ============================================================
-
-fn test_cell_is_empty() {
-	// Default cell is empty
-	assert cell_is_empty(CellData{}) == true
-
-	// Cell with codepoint tag, 0 codepoint, no style is also empty (default state)
-	assert cell_is_empty(CellData{ content_tag: .codepoint, codepoint: 0, style_id: 0 }) == true
-
-	// Cell with a non-zero codepoint is not empty
-	assert cell_is_empty(CellData{ content_tag: .codepoint, codepoint: u32(0x41), style_id: 0 }) == false
-
-	// Cell with style
-	assert cell_is_empty(CellData{ style_id: 1 }) == false
-}
-
-// ============================================================
-// cell_style_eql helper
-// ============================================================
-
-fn test_cell_style_eql() {
-	a := CellStyle{}
-	b := CellStyle{}
-	assert cell_style_eql(a, b) == true
-
-	c := CellStyle{
-		flags: StyleFlags{ bold: true }
-	}
-	assert cell_style_eql(a, c) == false
-	assert cell_style_eql(c, c) == true
 }
 
 // ============================================================
@@ -2116,7 +2108,7 @@ fn test_screen_vt_with_style() {
 	}
 	s2.next_slice(output) or { panic(err) }
 
-	assert cell_style_eql(t.screens.active.cursor.style, t2.screens.active.cursor.style)
+	assert t.screens.active.cursor.style.eql(&t2.screens.active.cursor.style)
 }
 
 // Screen vt with hyperlink (roundtrip via a second terminal).

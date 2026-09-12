@@ -1649,7 +1649,7 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 			}
 
 			// If we have a zero value, then we accumulate a counter.
-			if self.opts.emit.styled() && (!cell_is_empty(cell) || cell_has_styling(cell)) {
+			if self.opts.emit.styled() && (!cell.is_empty() || cell.has_styling()) {
 				// Not blank - styled cell with content or styling
 			} else if !cell.has_text() {
 				blank_cells += 1
@@ -1690,7 +1690,7 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 				cell_style := self.cell_style(cell)
 
 				// If the style hasn't changed, don't bloat output.
-				if !cell_style_eql(cell_style, style) {
+				if !cell_style.eql(&style) {
 					// If we had a previous style, we need to close it
 					if !style.default() {
 						before := sb.len
@@ -1845,7 +1845,7 @@ fn (self PageFormatter) write_codepoint(mut sb strings.Builder, codepoint u32) {
 fn (self PageFormatter) cell_style(cell CellData) CellStyle {
 	return match cell.content_tag {
 		.codepoint, .codepoint_grapheme {
-			if !cell_has_styling(cell) {
+			if !cell.has_styling() {
 				CellStyle{}
 			} else if self.linked_page != unsafe { nil } {
 				self.linked_page.styles.get(cell.style_id)
@@ -2123,29 +2123,6 @@ fn write_utf8(mut sb strings.Builder, codepoint u32) {
 }
 
 // has_text_any is defined in types.v
-
-// Check if a cell is empty (no codepoint, no styling).
-fn cell_is_empty(cell CellData) bool {
-	return cell.content_tag == .codepoint && cell.codepoint == 0 && cell.style_id == 0
-}
-
-// Check if a cell has non-default styling.
-fn cell_has_styling(cell CellData) bool {
-	return cell.style_id != default_style_id
-}
-
-// Compare two CellStyle structs for equality.
-fn cell_style_eql(a CellStyle, b CellStyle) bool {
-	return a.flags.bold == b.flags.bold && a.flags.faint == b.flags.faint
-		&& a.flags.italic == b.flags.italic && a.flags.underline == b.flags.underline
-		&& a.flags.overline == b.flags.overline && a.flags.blink == b.flags.blink
-		&& a.flags.inverse == b.flags.inverse && a.flags.invisible == b.flags.invisible
-		&& a.flags.strikethrough == b.flags.strikethrough && a.fg_color == b.fg_color
-		&& a.bg_color == b.bg_color && a.underline_color == b.underline_color
-		&& a.fg_r == b.fg_r && a.fg_g == b.fg_g && a.fg_b == b.fg_b && a.bg_r == b.bg_r
-		&& a.bg_g == b.bg_g && a.bg_b == b.bg_b && a.fg_palette == b.fg_palette
-		&& a.bg_palette == b.bg_palette
-}
 
 // Max u32 sentinel value.
 const max_u32 = u32(0xFFFFFFFF)
