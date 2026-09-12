@@ -171,14 +171,45 @@ import math
 //   5 6   (lower-middle row)
 //   7 8   (bottom row)
 struct Octant {
-	o1 bool
-	o2 bool
-	o3 bool
-	o4 bool
-	o5 bool
-	o6 bool
-	o7 bool
-	o8 bool
+	value u8
+}
+
+fn Octant.from_int(value u8) Octant {
+	return Octant{
+		value: value
+	}
+}
+
+fn (oct Octant) o1() bool {
+	return oct.value & (u8(1) << 0) != 0
+}
+
+fn (oct Octant) o2() bool {
+	return oct.value & (u8(1) << 1) != 0
+}
+
+fn (oct Octant) o3() bool {
+	return oct.value & (u8(1) << 2) != 0
+}
+
+fn (oct Octant) o4() bool {
+	return oct.value & (u8(1) << 3) != 0
+}
+
+fn (oct Octant) o5() bool {
+	return oct.value & (u8(1) << 4) != 0
+}
+
+fn (oct Octant) o6() bool {
+	return oct.value & (u8(1) << 5) != 0
+}
+
+fn (oct Octant) o7() bool {
+	return oct.value & (u8(1) << 6) != 0
+}
+
+fn (oct Octant) o8() bool {
+	return oct.value & (u8(1) << 7) != 0
 }
 
 // octant_min and octant_max define the codepoint range for octants.
@@ -192,246 +223,242 @@ const octant_max = u32(0x1cde5)
 // indicate which octants are filled (1..8). We weren't able to discern a
 // mathematical pattern for these, hence the explicit table.
 const octant_table = [
-	Octant{false, false, true, false, false, false, false, false},
-	Octant{false, true, true, false, false, false, false, false},
-	Octant{true, true, true, false, false, false, false, false},
-	Octant{false, false, false, true, false, false, false, false},
-	Octant{true, false, false, true, false, false, false, false},
-	Octant{true, true, false, true, false, false, false, false},
-	Octant{false, false, true, true, false, false, false, false},
-	Octant{true, false, true, true, false, false, false, false},
-	Octant{false, true, true, true, false, false, false, false},
-	Octant{false, false, false, false, true, false, false, false},
-	Octant{true, false, false, false, true, false, false, false},
-	Octant{false, true, false, false, true, false, false, false},
-	Octant{true, true, false, false, true, false, false, false},
-	Octant{true, false, true, false, true, false, false, false},
-	Octant{false, true, true, false, true, false, false, false},
-	Octant{true, true, true, false, true, false, false, false},
-	Octant{false, false, false, true, true, false, false, false},
-	Octant{true, false, false, true, true, false, false, false},
-	Octant{false, true, false, true, true, false, false, false},
-	Octant{true, true, false, true, true, false, false, false},
-	Octant{false, false, true, true, true, false, false, false},
-	Octant{true, false, true, true, true, false, false, false},
-	Octant{false, true, true, true, true, false, false, false},
-	Octant{true, true, true, true, true, false, false, false},
-	Octant{false, false, false, false, false, true, false, false},
-	Octant{true, false, false, false, false, true, false, false},
-	Octant{false, true, false, false, false, true, false, false},
-	Octant{true, true, false, false, false, true, false, false},
-	Octant{false, false, true, false, false, true, false, false},
-	Octant{true, false, true, false, false, true, false, false},
-	Octant{false, true, true, false, false, true, false, false},
-	Octant{true, true, true, false, false, true, false, false},
-	Octant{true, false, false, true, false, true, false, false},
-	Octant{false, true, false, true, false, true, false, false},
-	Octant{true, true, false, true, false, true, false, false},
-	Octant{false, false, true, true, false, true, false, false},
-	Octant{true, false, true, true, false, true, false, false},
-	Octant{false, true, true, true, false, true, false, false},
-	Octant{true, true, true, true, false, true, false, false},
-	Octant{false, false, false, false, true, true, false, false},
-	Octant{true, false, false, false, true, true, false, false},
-	Octant{false, true, false, false, true, true, false, false},
-	Octant{true, true, false, false, true, true, false, false},
-	Octant{false, false, true, false, true, true, false, false},
-	Octant{true, false, true, false, true, true, false, false},
-	Octant{false, true, true, false, true, true, false, false},
-	Octant{true, true, true, false, true, true, false, false},
-	Octant{false, false, false, true, true, true, false, false},
-	Octant{true, false, false, true, true, true, false, false},
-	Octant{false, true, false, true, true, true, false, false},
-	Octant{true, true, false, true, true, true, false, false},
-	Octant{false, false, true, true, true, true, false, false},
-	Octant{true, false, true, true, true, true, false, false},
-	Octant{false, true, true, true, true, true, false, false},
-	Octant{true, false, false, false, false, false, true, false},
-	Octant{false, true, false, false, false, false, true, false},
-	Octant{true, true, false, false, false, false, true, false},
-	Octant{false, false, true, false, false, false, true, false},
-	Octant{true, false, true, false, false, false, true, false},
-	Octant{false, true, true, false, false, false, true, false},
-	Octant{true, true, true, false, false, false, true, false},
-	Octant{false, false, false, true, false, false, true, false},
-	Octant{true, false, false, true, false, false, true, false},
-	Octant{false, true, false, true, false, false, true, false},
-	Octant{true, true, false, true, false, false, true, false},
-	Octant{false, false, true, true, false, false, true, false},
-	Octant{true, false, true, true, false, false, true, false},
-	Octant{false, true, true, true, false, false, true, false},
-	Octant{true, true, true, true, false, false, true, false},
-	Octant{true, false, false, false, true, false, true, false},
-	Octant{false, true, false, false, true, false, true, false},
-	Octant{true, true, false, false, true, false, true, false},
-	Octant{false, false, true, false, true, false, true, false},
-	Octant{false, true, true, false, true, false, true, false},
-	Octant{true, true, true, false, true, false, true, false},
-	Octant{false, false, false, true, true, false, true, false},
-	Octant{true, false, false, true, true, false, true, false},
-	Octant{true, true, false, true, true, false, true, false},
-	Octant{false, false, true, true, true, false, true, false},
-	Octant{true, false, true, true, true, false, true, false},
-	Octant{false, true, true, true, true, false, true, false},
-	Octant{false, false, false, false, false, true, true, false},
-	Octant{true, false, false, false, false, true, true, false},
-	Octant{false, true, false, false, false, true, true, false},
-	Octant{true, true, false, false, false, true, true, false},
-	Octant{false, false, true, false, false, true, true, false},
-	Octant{true, false, true, false, false, true, true, false},
-	Octant{false, true, true, false, false, true, true, false},
-	Octant{true, true, true, false, false, true, true, false},
-	Octant{false, false, false, true, false, true, true, false},
-	Octant{true, false, false, true, false, true, true, false},
-	Octant{false, true, false, true, false, true, true, false},
-	Octant{true, true, false, true, false, true, true, false},
-	Octant{false, false, true, true, false, true, true, false},
-	Octant{true, false, true, true, false, true, true, false},
-	Octant{false, true, true, true, false, true, true, false},
-	Octant{true, true, true, true, false, true, true, false},
-	Octant{false, false, false, false, true, true, true, false},
-	Octant{true, false, false, false, true, true, true, false},
-	Octant{false, true, false, false, true, true, true, false},
-	Octant{true, true, false, false, true, true, true, false},
-	Octant{false, false, true, false, true, true, true, false},
-	Octant{true, false, true, false, true, true, true, false},
-	Octant{false, true, true, false, true, true, true, false},
-	Octant{true, true, true, false, true, true, true, false},
-	Octant{false, false, false, true, true, true, true, false},
-	Octant{true, false, false, true, true, true, true, false},
-	Octant{false, true, false, true, true, true, true, false},
-	Octant{true, true, false, true, true, true, true, false},
-	Octant{false, false, true, true, true, true, true, false},
-	Octant{true, false, true, true, true, true, true, false},
-	Octant{false, true, true, true, true, true, true, false},
-	Octant{true, true, true, true, true, true, true, false},
-	Octant{true, false, false, false, false, false, false, true},
-	Octant{false, true, false, false, false, false, false, true},
-	Octant{true, true, false, false, false, false, false, true},
-	Octant{false, false, true, false, false, false, false, true},
-	Octant{true, false, true, false, false, false, false, true},
-	Octant{false, true, true, false, false, false, false, true},
-	Octant{true, true, true, false, false, false, false, true},
-	Octant{false, false, false, true, false, false, false, true},
-	Octant{true, false, false, true, false, false, false, true},
-	Octant{false, true, false, true, false, false, false, true},
-	Octant{true, true, false, true, false, false, false, true},
-	Octant{false, false, true, true, false, false, false, true},
-	Octant{true, false, true, true, false, false, false, true},
-	Octant{false, true, true, true, false, false, false, true},
-	Octant{true, true, true, true, false, false, false, true},
-	Octant{false, false, false, false, true, false, false, true},
-	Octant{true, false, false, false, true, false, false, true},
-	Octant{false, true, false, false, true, false, false, true},
-	Octant{true, true, false, false, true, false, false, true},
-	Octant{false, false, true, false, true, false, false, true},
-	Octant{true, false, true, false, true, false, false, true},
-	Octant{false, true, true, false, true, false, false, true},
-	Octant{true, true, true, false, true, false, false, true},
-	Octant{false, false, false, true, true, false, false, true},
-	Octant{true, false, false, true, true, false, false, true},
-	Octant{false, true, false, true, true, false, false, true},
-	Octant{true, true, false, true, true, false, false, true},
-	Octant{false, false, true, true, true, false, false, true},
-	Octant{true, false, true, true, true, false, false, true},
-	Octant{false, true, true, true, true, false, false, true},
-	Octant{true, true, true, true, true, false, false, true},
-	Octant{true, false, false, false, false, true, false, true},
-	Octant{false, true, false, false, false, true, false, true},
-	Octant{true, true, false, false, false, true, false, true},
-	Octant{false, false, true, false, false, true, false, true},
-	Octant{false, true, true, false, false, true, false, true},
-	Octant{true, true, true, false, false, true, false, true},
-	Octant{false, false, false, true, false, true, false, true},
-	Octant{true, false, false, true, false, true, false, true},
-	Octant{true, true, false, true, false, true, false, true},
-	Octant{false, false, true, true, false, true, false, true},
-	Octant{true, false, true, true, false, true, false, true},
-	Octant{false, true, true, true, false, true, false, true},
-	Octant{false, false, false, false, true, true, false, true},
-	Octant{true, false, false, false, true, true, false, true},
-	Octant{false, true, false, false, true, true, false, true},
-	Octant{true, true, false, false, true, true, false, true},
-	Octant{false, false, true, false, true, true, false, true},
-	Octant{true, false, true, false, true, true, false, true},
-	Octant{false, true, true, false, true, true, false, true},
-	Octant{true, true, true, false, true, true, false, true},
-	Octant{false, false, false, true, true, true, false, true},
-	Octant{true, false, false, true, true, true, false, true},
-	Octant{false, true, false, true, true, true, false, true},
-	Octant{true, true, false, true, true, true, false, true},
-	Octant{false, false, true, true, true, true, false, true},
-	Octant{true, false, true, true, true, true, false, true},
-	Octant{false, true, true, true, true, true, false, true},
-	Octant{true, true, true, true, true, true, false, true},
-	Octant{true, false, false, false, false, false, true, true},
-	Octant{false, true, false, false, false, false, true, true},
-	Octant{true, true, false, false, false, false, true, true},
-	Octant{false, false, true, false, false, false, true, true},
-	Octant{true, false, true, false, false, false, true, true},
-	Octant{false, true, true, false, false, false, true, true},
-	Octant{true, true, true, false, false, false, true, true},
-	Octant{false, false, false, true, false, false, true, true},
-	Octant{true, false, false, true, false, false, true, true},
-	Octant{false, true, false, true, false, false, true, true},
-	Octant{true, true, false, true, false, false, true, true},
-	Octant{false, false, true, true, false, false, true, true},
-	Octant{true, false, true, true, false, false, true, true},
-	Octant{false, true, true, true, false, false, true, true},
-	Octant{true, true, true, true, false, false, true, true},
-	Octant{false, false, false, false, true, false, true, true},
-	Octant{true, false, false, false, true, false, true, true},
-	Octant{false, true, false, false, true, false, true, true},
-	Octant{true, true, false, false, true, false, true, true},
-	Octant{false, false, true, false, true, false, true, true},
-	Octant{true, false, true, false, true, false, true, true},
-	Octant{false, true, true, false, true, false, true, true},
-	Octant{true, true, true, false, true, false, true, true},
-	Octant{false, false, false, true, true, false, true, true},
-	Octant{true, false, false, true, true, false, true, true},
-	Octant{false, true, false, true, true, false, true, true},
-	Octant{true, true, false, true, true, false, true, true},
-	Octant{false, false, true, true, true, false, true, true},
-	Octant{true, false, true, true, true, false, true, true},
-	Octant{false, true, true, true, true, false, true, true},
-	Octant{true, true, true, true, true, false, true, true},
-	Octant{false, false, false, false, false, true, true, true},
-	Octant{true, false, false, false, false, true, true, true},
-	Octant{false, true, false, false, false, true, true, true},
-	Octant{true, true, false, false, false, true, true, true},
-	Octant{false, false, true, false, false, true, true, true},
-	Octant{true, false, true, false, false, true, true, true},
-	Octant{false, true, true, false, false, true, true, true},
-	Octant{true, true, true, false, false, true, true, true},
-	Octant{false, false, false, true, false, true, true, true},
-	Octant{true, false, false, true, false, true, true, true},
-	Octant{false, true, false, true, false, true, true, true},
-	Octant{true, true, false, true, false, true, true, true},
-	Octant{false, false, true, true, false, true, true, true},
-	Octant{true, false, true, true, false, true, true, true},
-	Octant{false, true, true, true, false, true, true, true},
-	Octant{true, true, true, true, false, true, true, true},
-	Octant{true, false, false, false, true, true, true, true},
-	Octant{false, true, false, false, true, true, true, true},
-	Octant{true, true, false, false, true, true, true, true},
-	Octant{false, false, true, false, true, true, true, true},
-	Octant{false, true, true, false, true, true, true, true},
-	Octant{true, true, true, false, true, true, true, true},
-	Octant{false, false, false, true, true, true, true, true},
-	Octant{true, false, false, true, true, true, true, true},
-	Octant{true, true, false, true, true, true, true, true},
-	Octant{true, false, true, true, true, true, true, true},
-	Octant{false, true, true, true, true, true, true, true},
+	Octant.from_int(0x04),
+	Octant.from_int(0x06),
+	Octant.from_int(0x07),
+	Octant.from_int(0x08),
+	Octant.from_int(0x09),
+	Octant.from_int(0x0b),
+	Octant.from_int(0x0c),
+	Octant.from_int(0x0d),
+	Octant.from_int(0x0e),
+	Octant.from_int(0x10),
+	Octant.from_int(0x11),
+	Octant.from_int(0x12),
+	Octant.from_int(0x13),
+	Octant.from_int(0x15),
+	Octant.from_int(0x16),
+	Octant.from_int(0x17),
+	Octant.from_int(0x18),
+	Octant.from_int(0x19),
+	Octant.from_int(0x1a),
+	Octant.from_int(0x1b),
+	Octant.from_int(0x1c),
+	Octant.from_int(0x1d),
+	Octant.from_int(0x1e),
+	Octant.from_int(0x1f),
+	Octant.from_int(0x20),
+	Octant.from_int(0x21),
+	Octant.from_int(0x22),
+	Octant.from_int(0x23),
+	Octant.from_int(0x24),
+	Octant.from_int(0x25),
+	Octant.from_int(0x26),
+	Octant.from_int(0x27),
+	Octant.from_int(0x29),
+	Octant.from_int(0x2a),
+	Octant.from_int(0x2b),
+	Octant.from_int(0x2c),
+	Octant.from_int(0x2d),
+	Octant.from_int(0x2e),
+	Octant.from_int(0x2f),
+	Octant.from_int(0x30),
+	Octant.from_int(0x31),
+	Octant.from_int(0x32),
+	Octant.from_int(0x33),
+	Octant.from_int(0x34),
+	Octant.from_int(0x35),
+	Octant.from_int(0x36),
+	Octant.from_int(0x37),
+	Octant.from_int(0x38),
+	Octant.from_int(0x39),
+	Octant.from_int(0x3a),
+	Octant.from_int(0x3b),
+	Octant.from_int(0x3c),
+	Octant.from_int(0x3d),
+	Octant.from_int(0x3e),
+	Octant.from_int(0x41),
+	Octant.from_int(0x42),
+	Octant.from_int(0x43),
+	Octant.from_int(0x44),
+	Octant.from_int(0x45),
+	Octant.from_int(0x46),
+	Octant.from_int(0x47),
+	Octant.from_int(0x48),
+	Octant.from_int(0x49),
+	Octant.from_int(0x4a),
+	Octant.from_int(0x4b),
+	Octant.from_int(0x4c),
+	Octant.from_int(0x4d),
+	Octant.from_int(0x4e),
+	Octant.from_int(0x4f),
+	Octant.from_int(0x51),
+	Octant.from_int(0x52),
+	Octant.from_int(0x53),
+	Octant.from_int(0x54),
+	Octant.from_int(0x56),
+	Octant.from_int(0x57),
+	Octant.from_int(0x58),
+	Octant.from_int(0x59),
+	Octant.from_int(0x5b),
+	Octant.from_int(0x5c),
+	Octant.from_int(0x5d),
+	Octant.from_int(0x5e),
+	Octant.from_int(0x60),
+	Octant.from_int(0x61),
+	Octant.from_int(0x62),
+	Octant.from_int(0x63),
+	Octant.from_int(0x64),
+	Octant.from_int(0x65),
+	Octant.from_int(0x66),
+	Octant.from_int(0x67),
+	Octant.from_int(0x68),
+	Octant.from_int(0x69),
+	Octant.from_int(0x6a),
+	Octant.from_int(0x6b),
+	Octant.from_int(0x6c),
+	Octant.from_int(0x6d),
+	Octant.from_int(0x6e),
+	Octant.from_int(0x6f),
+	Octant.from_int(0x70),
+	Octant.from_int(0x71),
+	Octant.from_int(0x72),
+	Octant.from_int(0x73),
+	Octant.from_int(0x74),
+	Octant.from_int(0x75),
+	Octant.from_int(0x76),
+	Octant.from_int(0x77),
+	Octant.from_int(0x78),
+	Octant.from_int(0x79),
+	Octant.from_int(0x7a),
+	Octant.from_int(0x7b),
+	Octant.from_int(0x7c),
+	Octant.from_int(0x7d),
+	Octant.from_int(0x7e),
+	Octant.from_int(0x7f),
+	Octant.from_int(0x81),
+	Octant.from_int(0x82),
+	Octant.from_int(0x83),
+	Octant.from_int(0x84),
+	Octant.from_int(0x85),
+	Octant.from_int(0x86),
+	Octant.from_int(0x87),
+	Octant.from_int(0x88),
+	Octant.from_int(0x89),
+	Octant.from_int(0x8a),
+	Octant.from_int(0x8b),
+	Octant.from_int(0x8c),
+	Octant.from_int(0x8d),
+	Octant.from_int(0x8e),
+	Octant.from_int(0x8f),
+	Octant.from_int(0x90),
+	Octant.from_int(0x91),
+	Octant.from_int(0x92),
+	Octant.from_int(0x93),
+	Octant.from_int(0x94),
+	Octant.from_int(0x95),
+	Octant.from_int(0x96),
+	Octant.from_int(0x97),
+	Octant.from_int(0x98),
+	Octant.from_int(0x99),
+	Octant.from_int(0x9a),
+	Octant.from_int(0x9b),
+	Octant.from_int(0x9c),
+	Octant.from_int(0x9d),
+	Octant.from_int(0x9e),
+	Octant.from_int(0x9f),
+	Octant.from_int(0xa1),
+	Octant.from_int(0xa2),
+	Octant.from_int(0xa3),
+	Octant.from_int(0xa4),
+	Octant.from_int(0xa6),
+	Octant.from_int(0xa7),
+	Octant.from_int(0xa8),
+	Octant.from_int(0xa9),
+	Octant.from_int(0xab),
+	Octant.from_int(0xac),
+	Octant.from_int(0xad),
+	Octant.from_int(0xae),
+	Octant.from_int(0xb0),
+	Octant.from_int(0xb1),
+	Octant.from_int(0xb2),
+	Octant.from_int(0xb3),
+	Octant.from_int(0xb4),
+	Octant.from_int(0xb5),
+	Octant.from_int(0xb6),
+	Octant.from_int(0xb7),
+	Octant.from_int(0xb8),
+	Octant.from_int(0xb9),
+	Octant.from_int(0xba),
+	Octant.from_int(0xbb),
+	Octant.from_int(0xbc),
+	Octant.from_int(0xbd),
+	Octant.from_int(0xbe),
+	Octant.from_int(0xbf),
+	Octant.from_int(0xc1),
+	Octant.from_int(0xc2),
+	Octant.from_int(0xc3),
+	Octant.from_int(0xc4),
+	Octant.from_int(0xc5),
+	Octant.from_int(0xc6),
+	Octant.from_int(0xc7),
+	Octant.from_int(0xc8),
+	Octant.from_int(0xc9),
+	Octant.from_int(0xca),
+	Octant.from_int(0xcb),
+	Octant.from_int(0xcc),
+	Octant.from_int(0xcd),
+	Octant.from_int(0xce),
+	Octant.from_int(0xcf),
+	Octant.from_int(0xd0),
+	Octant.from_int(0xd1),
+	Octant.from_int(0xd2),
+	Octant.from_int(0xd3),
+	Octant.from_int(0xd4),
+	Octant.from_int(0xd5),
+	Octant.from_int(0xd6),
+	Octant.from_int(0xd7),
+	Octant.from_int(0xd8),
+	Octant.from_int(0xd9),
+	Octant.from_int(0xda),
+	Octant.from_int(0xdb),
+	Octant.from_int(0xdc),
+	Octant.from_int(0xdd),
+	Octant.from_int(0xde),
+	Octant.from_int(0xdf),
+	Octant.from_int(0xe0),
+	Octant.from_int(0xe1),
+	Octant.from_int(0xe2),
+	Octant.from_int(0xe3),
+	Octant.from_int(0xe4),
+	Octant.from_int(0xe5),
+	Octant.from_int(0xe6),
+	Octant.from_int(0xe7),
+	Octant.from_int(0xe8),
+	Octant.from_int(0xe9),
+	Octant.from_int(0xea),
+	Octant.from_int(0xeb),
+	Octant.from_int(0xec),
+	Octant.from_int(0xed),
+	Octant.from_int(0xee),
+	Octant.from_int(0xef),
+	Octant.from_int(0xf1),
+	Octant.from_int(0xf2),
+	Octant.from_int(0xf3),
+	Octant.from_int(0xf4),
+	Octant.from_int(0xf6),
+	Octant.from_int(0xf7),
+	Octant.from_int(0xf8),
+	Octant.from_int(0xf9),
+	Octant.from_int(0xfb),
+	Octant.from_int(0xfd),
+	Octant.from_int(0xfe),
 ]
 
 // get_octant returns the octant pattern for the given codepoint by
 // indexing in to octant_table.
 fn get_octant(cp u32) Octant {
-	idx := cp - octant_min
-	if idx >= u32(octant_table.len) {
-		return Octant{}
-	}
-	return octant_table[idx]
+	return octant_table[cp - octant_min]
 }
 
 // draw_1cd00_1cde5 draws octant characters (U+1CD00..U+1CDE5).
@@ -441,28 +468,28 @@ pub fn draw_1cd00_1cde5(cp u32, mut canvas Canvas, width u32, height u32, metric
 	_ = height
 
 	oct := get_octant(cp)
-	if oct.o1 {
+	if oct.o1() {
 		fill(metrics, mut canvas, .zero, .half_, .zero, .one_quarter)
 	}
-	if oct.o2 {
+	if oct.o2() {
 		fill(metrics, mut canvas, .half_, .full, .zero, .one_quarter)
 	}
-	if oct.o3 {
+	if oct.o3() {
 		fill(metrics, mut canvas, .zero, .half_, .one_quarter, .two_quarters)
 	}
-	if oct.o4 {
+	if oct.o4() {
 		fill(metrics, mut canvas, .half_, .full, .one_quarter, .two_quarters)
 	}
-	if oct.o5 {
+	if oct.o5() {
 		fill(metrics, mut canvas, .zero, .half_, .two_quarters, .three_quarters)
 	}
-	if oct.o6 {
+	if oct.o6() {
 		fill(metrics, mut canvas, .half_, .full, .two_quarters, .three_quarters)
 	}
-	if oct.o7 {
+	if oct.o7() {
 		fill(metrics, mut canvas, .zero, .half_, .three_quarters, .end_)
 	}
-	if oct.o8 {
+	if oct.o8() {
 		fill(metrics, mut canvas, .half_, .full, .three_quarters, .end_)
 	}
 }
@@ -566,7 +593,7 @@ pub fn draw_1cc30_1cc3f(cp u32, mut canvas Canvas, width u32, height u32, metric
 		0x1cc3e { circle_piece(mut canvas, width, height, metrics, 2, 3, 2, 2, .br)! }
 		// LOWER RIGHT TWELFTH CIRCLE
 		0x1cc3f { circle_piece(mut canvas, width, height, metrics, 3, 3, 2, 2, .br)! }
-		else {}
+		else { panic('unreachable') }
 	}
 }
 
@@ -609,7 +636,7 @@ pub fn draw_1cc1b_1cc1e(cp u32, mut canvas Canvas, width u32, height u32, metric
 			canvas.draw_box(0, h - t, w, h, .on)
 			canvas.draw_box(0, h / 2, t, h, .on)
 		}
-		else {}
+		else { panic('unreachable') }
 	}
 }
 
@@ -682,7 +709,7 @@ pub fn draw_1ce16_1ce19(cp u32, mut canvas Canvas, width u32, height u32, metric
 			lines_char(metrics, mut canvas, Lines{ up: .light, down: .light })
 			canvas.draw_box(0, h - t, w / 2, h, .on)
 		}
-		else {}
+		else { panic('unreachable') }
 	}
 }
 
@@ -696,13 +723,7 @@ pub fn draw_1ce51_1ce8f(cp u32, mut canvas Canvas, width u32, height u32, metric
 	_ = metrics
 
 	// Struct laid out to match the codepoint order so we can cast from it.
-	bits := u8(cp - 0x1ce50) & 0x3f
-	sex_tl := (bits & 0x01) != 0
-	sex_tr := (bits & 0x02) != 0
-	sex_ml := (bits & 0x04) != 0
-	sex_mr := (bits & 0x08) != 0
-	sex_bl := (bits & 0x10) != 0
-	sex_br := (bits & 0x20) != 0
+	sex := Sextants.from_int(u8(cp - 0x1ce50) & 0x3f)
 
 	gap := i32(if width / 12 > 1 { width / 12 } else { u32(1) })
 
@@ -715,7 +736,7 @@ pub fn draw_1ce51_1ce8f(cp u32, mut canvas Canvas, width u32, height u32, metric
 	// Distribute any leftover height in to the middle row of blocks.
 	h_m := i32(height) - gap * 2 - mid_gap_y * 2 - h * 2
 
-	if sex_tl {
+	if sex.tl() {
 		canvas.draw_box(
 			gap,
 			gap,
@@ -724,7 +745,7 @@ pub fn draw_1ce51_1ce8f(cp u32, mut canvas Canvas, width u32, height u32, metric
 			.on,
 		)
 	}
-	if sex_tr {
+	if sex.tr() {
 		canvas.draw_box(
 			gap + w + mid_gap_x,
 			gap,
@@ -733,7 +754,7 @@ pub fn draw_1ce51_1ce8f(cp u32, mut canvas Canvas, width u32, height u32, metric
 			.on,
 		)
 	}
-	if sex_ml {
+	if sex.ml() {
 		canvas.draw_box(
 			gap,
 			gap + h + mid_gap_y,
@@ -742,7 +763,7 @@ pub fn draw_1ce51_1ce8f(cp u32, mut canvas Canvas, width u32, height u32, metric
 			.on,
 		)
 	}
-	if sex_mr {
+	if sex.mr() {
 		canvas.draw_box(
 			gap + w + mid_gap_x,
 			gap + h + mid_gap_y,
@@ -751,7 +772,7 @@ pub fn draw_1ce51_1ce8f(cp u32, mut canvas Canvas, width u32, height u32, metric
 			.on,
 		)
 	}
-	if sex_bl {
+	if sex.bl() {
 		canvas.draw_box(
 			gap,
 			gap + h + mid_gap_y + h_m + mid_gap_y,
@@ -760,7 +781,7 @@ pub fn draw_1ce51_1ce8f(cp u32, mut canvas Canvas, width u32, height u32, metric
 			.on,
 		)
 	}
-	if sex_br {
+	if sex.br() {
 		canvas.draw_box(
 			gap + w + mid_gap_x,
 			gap + h + mid_gap_y + h_m + mid_gap_y,
@@ -847,7 +868,7 @@ pub fn draw_1ce90_1ceaf(cp u32, mut canvas Canvas, width u32, height u32, metric
 		0x1ceae { fill(metrics, mut canvas, q[3], q[4], q[1], q[4]) }
 		// LOWER HALF RIGHT ONE QUARTER BLOCK
 		0x1ceaf { fill(metrics, mut canvas, q[3], q[4], q[2], q[4]) }
-		else {}
+		else { panic('unreachable') }
 	}
 }
 

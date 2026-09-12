@@ -807,7 +807,7 @@ pub fn draw_2500_257f(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		0x257e { lines_char(metrics, mut canvas, Lines{ left: .heavy, right: .light }) }
 		// '╿'
 		0x257f { lines_char(metrics, mut canvas, Lines{ up: .heavy, down: .light }) }
-		else {}
+		else { panic('unreachable') }
 	}
 }
 

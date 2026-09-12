@@ -13,16 +13,47 @@ import math
 // ============================================================
 
 struct SmoothMosaic {
-	tl bool
-	ul bool
-	ll bool
-	bl bool
-	bc bool
-	br bool
-	lr bool
-	ur bool
-	tr bool
-	tc bool
+	value u16
+}
+
+fn (mosaic SmoothMosaic) tl() bool {
+	return mosaic.value & (u16(1) << 0) != 0
+}
+
+fn (mosaic SmoothMosaic) ul() bool {
+	return mosaic.value & (u16(1) << 1) != 0
+}
+
+fn (mosaic SmoothMosaic) ll() bool {
+	return mosaic.value & (u16(1) << 2) != 0
+}
+
+fn (mosaic SmoothMosaic) bl() bool {
+	return mosaic.value & (u16(1) << 3) != 0
+}
+
+fn (mosaic SmoothMosaic) bc() bool {
+	return mosaic.value & (u16(1) << 4) != 0
+}
+
+fn (mosaic SmoothMosaic) br() bool {
+	return mosaic.value & (u16(1) << 5) != 0
+}
+
+fn (mosaic SmoothMosaic) lr() bool {
+	return mosaic.value & (u16(1) << 6) != 0
+}
+
+fn (mosaic SmoothMosaic) ur() bool {
+	return mosaic.value & (u16(1) << 7) != 0
+}
+
+fn (mosaic SmoothMosaic) tr() bool {
+	return mosaic.value & (u16(1) << 8) != 0
+}
+
+fn (mosaic SmoothMosaic) tc() bool {
+	return mosaic.value & (u16(1) << 9) != 0
 }
 
 // smooth_mosaic_from creates a SmoothMosaic from a 4-row pattern.
@@ -38,18 +69,75 @@ struct SmoothMosaic {
 // Redundant edge vertices (where both neighbors are also filled)
 // are removed to produce a clean polygon outline.
 fn smooth_mosaic_from(r0 string, r1 string, r2 string, r3 string) SmoothMosaic {
-	return SmoothMosaic{
-		tl: r0[0] == `#`
-		ul: r1[0] == `#` && (r0[0] != `#` || r2[0] != `#`)
-		ll: r2[0] == `#` && (r1[0] != `#` || r3[0] != `#`)
-		bl: r3[0] == `#`
-		bc: r3[1] == `#` && (r3[0] != `#` || r3[2] != `#`)
-		br: r3[2] == `#`
-		lr: r2[2] == `#` && (r3[2] != `#` || r1[2] != `#`)
-		ur: r1[2] == `#` && (r2[2] != `#` || r0[2] != `#`)
-		tr: r0[2] == `#`
-		tc: r0[1] == `#` && (r0[2] != `#` || r0[0] != `#`)
+	mut value := u16(0)
+	if r0[0] == `#` {
+		value |= u16(1) << 0
 	}
+	if r1[0] == `#` && (r0[0] != `#` || r2[0] != `#`) {
+		value |= u16(1) << 1
+	}
+	if r2[0] == `#` && (r1[0] != `#` || r3[0] != `#`) {
+		value |= u16(1) << 2
+	}
+	if r3[0] == `#` {
+		value |= u16(1) << 3
+	}
+	if r3[1] == `#` && (r3[0] != `#` || r3[2] != `#`) {
+		value |= u16(1) << 4
+	}
+	if r3[2] == `#` {
+		value |= u16(1) << 5
+	}
+	if r2[2] == `#` && (r3[2] != `#` || r1[2] != `#`) {
+		value |= u16(1) << 6
+	}
+	if r1[2] == `#` && (r2[2] != `#` || r0[2] != `#`) {
+		value |= u16(1) << 7
+	}
+	if r0[2] == `#` {
+		value |= u16(1) << 8
+	}
+	if r0[1] == `#` && (r0[2] != `#` || r0[0] != `#`) {
+		value |= u16(1) << 9
+	}
+	return SmoothMosaic{
+		value: value
+	}
+}
+
+struct Sextants {
+	value u8
+}
+
+fn Sextants.from_int(value u8) Sextants {
+	assert value & 0xc0 == 0
+	return Sextants{
+		value: value
+	}
+}
+
+fn (sex Sextants) tl() bool {
+	return sex.value & (u8(1) << 0) != 0
+}
+
+fn (sex Sextants) tr() bool {
+	return sex.value & (u8(1) << 1) != 0
+}
+
+fn (sex Sextants) ml() bool {
+	return sex.value & (u8(1) << 2) != 0
+}
+
+fn (sex Sextants) mr() bool {
+	return sex.value & (u8(1) << 3) != 0
+}
+
+fn (sex Sextants) bl() bool {
+	return sex.value & (u8(1) << 4) != 0
+}
+
+fn (sex Sextants) br() bool {
+	return sex.value & (u8(1) << 5) != 0
 }
 
 // ============================================================
@@ -62,33 +150,28 @@ pub fn draw_1fb00_1fb3b(cp u32, mut canvas Canvas, width u32, height u32, metric
 	_ = width
 	_ = height
 
+	assert cp >= 0x1fb00 && cp <= 0x1fb3b
 	idx := cp - 0x1fb00
 	// The sextant index formula maps codepoints to a 6-bit pattern.
 	// Each bit controls one of the six blocks: tl, tr, ml, mr, bl, br.
-	val := u8(idx + (idx / 0x14) + 1) & 0x3F
-	tl := (val & 0x01) != 0
-	tr := (val & 0x02) != 0
-	ml := (val & 0x04) != 0
-	mr := (val & 0x08) != 0
-	bl := (val & 0x10) != 0
-	br := (val & 0x20) != 0
+	sex := Sextants.from_int(u8(idx + (idx / 0x14) + 1))
 
-	if tl {
+	if sex.tl() {
 		fill(metrics, mut canvas, .zero, .half_, .zero, .one_third)
 	}
-	if tr {
+	if sex.tr() {
 		fill(metrics, mut canvas, .half_, .full, .zero, .one_third)
 	}
-	if ml {
+	if sex.ml() {
 		fill(metrics, mut canvas, .zero, .half_, .one_third, .two_thirds)
 	}
-	if mr {
+	if sex.mr() {
 		fill(metrics, mut canvas, .half_, .full, .one_third, .two_thirds)
 	}
-	if bl {
+	if sex.bl() {
 		fill(metrics, mut canvas, .zero, .half_, .two_thirds, .end_)
 	}
-	if br {
+	if sex.br() {
 		fill(metrics, mut canvas, .half_, .full, .two_thirds, .end_)
 	}
 }
@@ -195,7 +278,7 @@ pub fn draw_1fb3c_1fb67(cp u32, mut canvas Canvas, width u32, height u32, metric
 		0x1fb66 { smooth_mosaic_from('.##', '.##', '..#', '..#') }
 		// '🭧'
 		0x1fb67 { smooth_mosaic_from('###', '###', '.\\#', '...') }
-		else { smooth_mosaic_from('...', '...', '...', '...') }
+		else { panic('unreachable') }
 	}
 
 	top_ := f64(0.0)
@@ -207,34 +290,34 @@ pub fn draw_1fb3c_1fb67(cp u32, mut canvas Canvas, width u32, height u32, metric
 	right_ := f64(metrics.cell_width)
 
 	mut path := canvas.static_path(12)
-	if mosaic.tl {
+	if mosaic.tl() {
 		path.line_to(left_, top_)
 	}
-	if mosaic.ul {
+	if mosaic.ul() {
 		path.line_to(left_, upper)
 	}
-	if mosaic.ll {
+	if mosaic.ll() {
 		path.line_to(left_, lower)
 	}
-	if mosaic.bl {
+	if mosaic.bl() {
 		path.line_to(left_, bottom_)
 	}
-	if mosaic.bc {
+	if mosaic.bc() {
 		path.line_to(center_, bottom_)
 	}
-	if mosaic.br {
+	if mosaic.br() {
 		path.line_to(right_, bottom_)
 	}
-	if mosaic.lr {
+	if mosaic.lr() {
 		path.line_to(right_, lower)
 	}
-	if mosaic.ur {
+	if mosaic.ur() {
 		path.line_to(right_, upper)
 	}
-	if mosaic.tr {
+	if mosaic.tr() {
 		path.line_to(right_, top_)
 	}
-	if mosaic.tc {
+	if mosaic.tc() {
 		path.line_to(center_, top_)
 	}
 	path.close()
@@ -317,7 +400,7 @@ pub fn draw_1fb68_1fb6f(cp u32, mut canvas Canvas, width u32, height u32, metric
 		0x1fb6f {
 			edge_triangle(metrics, mut canvas, .bottom)!
 		}
-		else {}
+		else { panic('unreachable') }
 	}
 }
 
@@ -541,7 +624,7 @@ pub fn draw_1fb7c_1fb97(cp u32, mut canvas Canvas, width u32, height u32, metric
 				.on,
 			)
 		}
-		else {}
+		else { panic('unreachable') }
 	}
 }
 
@@ -663,7 +746,7 @@ pub fn draw_1fb9a_1fb9f(cp u32, mut canvas Canvas, width u32, height u32, metric
 		0x1fb9f {
 			corner_triangle_shade(metrics, mut canvas, .bl, .medium)!
 		}
-		else {}
+		else { panic('unreachable') }
 	}
 }
 
@@ -891,7 +974,7 @@ pub fn draw_1fbd0_1fbdf(cp u32, mut canvas Canvas, width u32, height u32, metric
 			cell_diagonal(metrics, mut canvas, align_upper_left, align_middle_right)
 			cell_diagonal(metrics, mut canvas, align_middle_right, align_lower_left)
 		}
-		else {}
+		else { panic('unreachable') }
 	}
 }
 
@@ -939,7 +1022,7 @@ pub fn draw_1fbe0_1fbef(cp u32, mut canvas Canvas, width u32, height u32, metric
 		0x1fbee { draw_circle(metrics, mut canvas, align_bottom_right, true) }
 		// '🯯'
 		0x1fbef { draw_circle(metrics, mut canvas, align_top_left, true) }
-		else {}
+		else { panic('unreachable') }
 	}
 }
 
