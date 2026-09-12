@@ -1271,6 +1271,25 @@ fn test_page_point_map_accumulated_blank_cells_match_source_order() {
 	]
 }
 
+fn test_page_point_map_style_close_uses_previous_cell() {
+	mut pages := make_pages_with_text(2, 1, 'AB', 0)
+	mut row := &pages.screen_rows[pages.active_start]
+	row.cells[0].style_id = 1
+	row.cells[0].style = CellStyle{ flags: StyleFlags{ bold: true } }
+
+	mut points := PointMap{}
+	mut formatter := PageFormatter.init(&pages, format_vt)
+	formatter.point_map = &points
+	output := formatter.format()
+
+	assert output == '\x1b[0m\x1b[1mA\x1b[0mB'
+	assert points.points.len == output.len
+	for i in 0 .. 13 {
+		assert points.points[i] == Coordinate{ x: 0, y: 0 }
+	}
+	assert points.points[13] == Coordinate{ x: 1, y: 0 }
+}
+
 fn test_screen_pin_map() {
 	mut screen := Screen.init(8, 2, 0)
 	for i, ch in 'abc'.runes() {

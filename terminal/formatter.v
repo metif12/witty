@@ -1342,7 +1342,7 @@ pub fn (self ScreenFormatter) format() string {
 		// Emit GL invocation if not G0
 		if cs.gl != .g0 {
 			seq := match cs.gl {
-				.g0 { '' } // unreachable
+				.g0 { panic('unreachable') }
 				.g1 { '\x0e' } // SO - Shift Out
 				.g2 { '\x1bn' } // LS2
 				.g3 { '\x1bo' }
@@ -1354,9 +1354,9 @@ pub fn (self ScreenFormatter) format() string {
 		// Emit GR invocation if not G2
 		if cs.gr != .g2 {
 			seq := match cs.gr {
-				.g0 { '' } // unreachable
+				.g0 { panic('unreachable') }
 				.g1 { '\x1b~' } // LS1R
-				.g2 { '' } // unreachable
+				.g2 { panic('unreachable') }
 				.g3 { '\x1b|' }
 			}
 			// LS3R
@@ -1579,12 +1579,11 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 			if !style.default() {
 				before := sb.len
 				sb.write_string(format_style_close(self.opts.emit))
-				last := if self.point_map != unsafe { nil } && self.point_map.points.len > 0 {
-					self.point_map.points[self.point_map.points.len - 1]
-				} else {
-					Coordinate{}
+				if self.point_map != unsafe { nil } {
+					assert self.point_map.points.len > 0
+					last := self.point_map.points[self.point_map.points.len - 1]
+					append_point_bytes(self.point_map, last, sb.len - before)
 				}
-				append_point_bytes(self.point_map, last, sb.len - before)
 				style = CellStyle{}
 			}
 
@@ -1694,13 +1693,14 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 									sb.write_string(format_style_close(self.opts.emit))
 								}
 							}
-							.plain {}
+							.plain { panic('unreachable') }
 						}
-						append_point_bytes(self.point_map, Coordinate{
-							x: u16(x)
-							y: y
-						}, sb.len - before)
-						// unreachable
+						written := sb.len - before
+						if self.point_map != unsafe { nil } && written > 0 {
+							assert self.point_map.points.len > 0
+							last := self.point_map.points[self.point_map.points.len - 1]
+							append_point_bytes(self.point_map, last, written)
+						}
 					}
 
 					style = cell_style
@@ -1751,24 +1751,22 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 	if !style.default() {
 		before := sb.len
 		sb.write_string(format_style_close(self.opts.emit))
-		last := if self.point_map != unsafe { nil } && self.point_map.points.len > 0 {
-			self.point_map.points[self.point_map.points.len - 1]
-		} else {
-			Coordinate{}
+		if self.point_map != unsafe { nil } {
+			assert self.point_map.points.len > 0
+			last := self.point_map.points[self.point_map.points.len - 1]
+			append_point_bytes(self.point_map, last, sb.len - before)
 		}
-		append_point_bytes(self.point_map, last, sb.len - before)
 	}
 
 	// Close the monospace wrapper for HTML output
 	if self.opts.emit == .html {
 		before := sb.len
 		sb.write_string('</div>')
-		last := if self.point_map != unsafe { nil } && self.point_map.points.len > 0 {
-			self.point_map.points[self.point_map.points.len - 1]
-		} else {
-			Coordinate{}
+		if self.point_map != unsafe { nil } {
+			assert self.point_map.points.len > 0
+			last := self.point_map.points[self.point_map.points.len - 1]
+			append_point_bytes(self.point_map, last, sb.len - before)
 		}
-		append_point_bytes(self.point_map, last, sb.len - before)
 	}
 
 	return FormatResult{
@@ -1867,8 +1865,8 @@ fn (self PageFormatter) cell_style(cell CellData) CellStyle {
 fn (self PageFormatter) format_style_open(style CellStyle) string {
 	match self.opts.emit {
 		.plain {
-			return ''
-		} // unreachable
+			panic('unreachable')
+		}
 		.vt {
 			return format_style_vt_with_palette(style, self.opts.palette)
 		}
