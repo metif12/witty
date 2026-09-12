@@ -501,22 +501,18 @@ pub fn (mut s CoreSurface) cursor_pos_callback(pos CursorPos, mods input.Mods) !
 	}
 }
 
-pub fn (mut s CoreSurface) preedit_callback(preedit ?string) !bool {
+pub fn (mut s CoreSurface) preedit_callback(preedit ?string) ! {
 	if !isnil(s.backend) && g_core_bridge.surface_preedit != unsafe { nil } {
 		g_core_bridge.surface_preedit(s.backend, preedit)!
 		s.sync_backend()
-		return true
 	}
-	return false
 }
 
-pub fn (mut s CoreSurface) text_callback(text string) !bool {
+pub fn (mut s CoreSurface) text_callback(text string) ! {
 	if !isnil(s.backend) && g_core_bridge.surface_text != unsafe { nil } {
 		g_core_bridge.surface_text(s.backend, text)!
 		s.sync_backend()
-		return true
 	}
-	return false
 }
 
 pub fn (mut s CoreSurface) focus_callback(focused bool) ! {
@@ -802,12 +798,17 @@ pub:
 
 // grid returns the grid dimensions from the surface size.
 pub fn (s SurfaceSizeInfo) grid() GridSizeInfo {
-	if s.cell.width == 0 || s.cell.height == 0 {
-		return GridSizeInfo{}
-	}
+	assert s.cell.width > 0
+	assert s.cell.height > 0
+	calc_columns := f32(s.screen.width) / f32(s.cell.width)
+	calc_rows := f32(s.screen.height) / f32(s.cell.height)
+	assert calc_columns <= f32(65535)
+	assert calc_rows <= f32(65535)
+	columns := u16(calc_columns)
+	rows := u16(calc_rows)
 	return GridSizeInfo{
-		columns: u16(s.screen.width / s.cell.width)
-		rows: u16(s.screen.height / s.cell.height)
+		columns: if columns > 1 { columns } else { 1 }
+		rows: if rows > 1 { rows } else { 1 }
 	}
 }
 

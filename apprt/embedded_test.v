@@ -65,6 +65,22 @@ fn test_embedded_perform_ipc_reports_unhandled() {
 	assert perform_ipc('new-window')! == false
 }
 
+fn test_surface_size_info_grid_enforces_source_minimum() {
+	grid := SurfaceSizeInfo{
+		screen: ScreenSizeInfo{ width: 3, height: 5 }
+		cell: CellSizeInfo{ width: 8, height: 16 }
+	}.grid()
+	assert grid.columns == 1
+	assert grid.rows == 1
+
+	larger := SurfaceSizeInfo{
+		screen: ScreenSizeInfo{ width: 81, height: 49 }
+		cell: CellSizeInfo{ width: 8, height: 16 }
+	}.grid()
+	assert larger.columns == 10
+	assert larger.rows == 3
+}
+
 fn test_embedded_clipboard_c_callbacks_preserve_request_and_project_contents() {
 	mut capture := EmbeddedClipboardCapture{}
 	mut app := App{
