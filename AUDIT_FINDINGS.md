@@ -47,6 +47,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | root/tripwire | The failure-injection translation used untyped string points in a private instance exercised only by its own tests, so none of Ghostty's live error sites could be armed; Atlas initialization/growth had also been made infallible. | Restore a generic typed-point module with test-only checks; wire the tabstop allocation plus Atlas init/reserve/grow points into live paths, and restore the Atlas result contracts. |
 | root/Command | The translated process launcher was stranded in module `main` and exercised only by parallel tests, while the live termio backend independently rebuilt argv/envp and repeated cgroup clone, fork, descriptor, cwd, rlimit, pre-exec, and exec logic. Its empty environment incorrectly meant inheritance; fd setup omitted Ghostty's platform contract; child errors exited inside `Command`; and stopped children were misclassified as signal 127. | Move `Command` into an importable module and delegate the live PTY launch to it; preserve optional environment/PID and `ExecFailedInChild` contracts; restore target-specific fd setup and correct wait-status classification. |
 | CLI action help | Although the general help text told users to run `+<action> --help`, every translated action parser rejected `--help`/`-h`; `show-face` and `new-window` also swallowed parser errors that Ghostty explicitly propagates to its central action dispatcher. | Embed all 15 byte-for-byte generated action documentation entries, restore `ActionHelpRequested` propagation at each parser and at the two catching runners, and handle it centrally while retaining `new-window -e ... --help` as command input. |
+| CLI action options | Simple actions independently hand-parsed flags, accepting source-invalid separated values (`--style Italic`, `--config-file path`), rejecting source-valid explicit booleans such as `--docs=false`, and rejecting repeated option assignments instead of applying them in order. The shared parser also could not address source identifiers translated with V's keyword suffix. | Route list-actions/colors/keybinds/fonts/themes, validate/edit/show-config, SSH-cache, crash-report, and boo option structs through the translated generic parser; retain argument-order help checks and map V's trailing keyword underscore back to the source CLI name. |
 | embedded C text | Successful text projections allocated only the payload bytes and returned a null pointer for empty text, violating Ghostty's sentinel-terminated result type. | Always allocate the trailing byte, preserve embedded NUL bytes via the separate length, and return a non-null sentinel for an empty successful result. |
 | osc/color_parser | Hex channel scaling used `>>4`/`>>8` instead of `*255/4095` and `*255/65535`; float intensity rounded not truncated; named `green` = (0,128,0). | Correct scaling; truncate; `green` = (0,255,0). |
 | osc/osc9 | OSC 9;12 emitted default `.fresh_line` instead of `.fresh_line_new_prompt`. | Set correct action. |
@@ -123,6 +124,13 @@ an item here does not mean its full module has been certified yet.
   text parser. Its `gen_actions` still reads enum comments rather than the
   documentation attached to each action's `run` function as Ghostty's build
   generator does.
+- **CLI TTY presentation:** `list-colors` and `list-keybinds` retain only their
+  plain serialization in Witty. Ghostty selects large vaxis-based pretty
+  renderers when stdout is a TTY and `--plain` is not set.
+- **Diagnostic action parsing:** `show-face` and `new-window` preserve ordinary
+  config arguments with manual V parsers rather than Ghostty's shared parser
+  plus diagnostic filtering. Their main values and help boundary are covered,
+  but action-owned parse diagnostic formatting/timing is not yet identical.
 - **Allocator and memory representation:** `Page`, typed `Offset(T)` slices,
   allocator failure paths, and generic `RefCountedSet` storage are adapted to
   V GC arrays/specializations. Their reviewed observable behavior is close,

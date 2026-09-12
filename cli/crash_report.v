@@ -5,6 +5,8 @@ import crash
 import os
 import time
 
+struct CrashReportOptions {}
+
 // crash_report_output lists crash reports newest-first. An empty non-TTY
 // output stays silent for scripting, while an interactive terminal receives
 // Ghostty's friendly empty-state message.
@@ -34,10 +36,7 @@ fn format_crash_reports(reports []crash.Report, now_ns i64, is_tty bool) string 
 }
 
 pub fn run_crash_report(args []string) !int {
-	if args.len > 0 {
-		request_action_help(args[0])!
-		return error('unknown option for crash-report: ${args[0]}')
-	}
+	_ := parse_action_options[CrashReportOptions](args)!
 	print(crash_report_output(crash.default_dir().path, time.now().unix_nano(), os.is_atty(1) > 0)!)
 	return 0
 }

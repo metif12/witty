@@ -10,6 +10,8 @@ const boo_frame_width = 100
 const boo_frame_height = 41
 const boo_frame_rate = 1000 / 30
 
+struct BooOptions {}
+
 enum BooParseState {
 	normal
 	span
@@ -102,10 +104,7 @@ fn draw_boo_frame(frame string, width int, height int) !string {
 // run_boo displays the Ghostty website animation at 30 frames per second until
 // the user presses Ctrl-C or Escape.
 pub fn run_boo(args []string) !int {
-	if args.len > 0 {
-		request_action_help(args[0])!
-		return error('unknown option for boo: ${args[0]}')
-	}
+	_ := parse_action_options[BooOptions](args)!
 	frames := decompress_boo_frames()!
 	if frames.len == 0 {
 		return error('boo animation has no frames')

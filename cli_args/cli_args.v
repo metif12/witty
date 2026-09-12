@@ -151,7 +151,8 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 	has_value := value != none
 
 	$for field in T.fields {
-		if field.name.len > 0 && field.name[0] != `_` && field.name == normalized_key {
+		if field.name.len > 0 && field.name[0] != `_`
+			&& translated_identifier_name(field.name) == normalized_key {
 			defaults := T{}
 
 			// If the value is empty string (set but empty string),
@@ -387,7 +388,7 @@ pub fn parse_signed_int(raw string, bits int) !i64 {
 fn parse_enum_value[T](mut out T, raw string) ! {
 	normalized := raw.replace('-', '_')
 	$for enum_value in T.values {
-		if normalized == enum_value.name {
+		if normalized == translated_identifier_name(enum_value.name) {
 			out = enum_value.value
 			return
 		}
@@ -423,7 +424,8 @@ pub fn parse_auto_struct[T](value string, default_value T) !T {
 	// through `$for field in T.fields`, so translated required fields use the
 	// `cli_required` attribute to retain the source distinction.
 	$for field in T.fields {
-		if field.attrs.contains('cli_required') && field.name !in fields_set {
+		if field.attrs.contains('cli_required')
+			&& translated_identifier_name(field.name) !in fields_set {
 			return error('invalid value')
 		}
 	}
@@ -457,7 +459,7 @@ pub fn parse_packed_struct[T](value string) !T {
 		mut matched := false
 		$for field in T.fields {
 			$if field.unaliased_typ is bool {
-				if field.name == part {
+				if translated_identifier_name(field.name) == part {
 					result.$(field.name) = enabled
 					matched = true
 				}
@@ -485,7 +487,7 @@ fn format_values[T](key string) string {
 	normalized_key := key.replace('-', '_')
 	defaults := T{}
 	$for field in T.fields {
-		if field.name == normalized_key {
+		if translated_identifier_name(field.name) == normalized_key {
 			$if field.unaliased_typ is $enum {
 				return enum_value_suffix(defaults.$(field.name))
 			}
@@ -497,9 +499,15 @@ fn format_values[T](key string) string {
 fn enum_value_suffix[T](_ T) string {
 	mut names := []string{}
 	$for enum_value in T.values {
-		names << enum_value.name.replace('_', '-')
+		names << translated_identifier_name(enum_value.name).replace('_', '-')
 	}
 	return ', valid values are: ${names.join(', ')}'
+}
+
+// V appends an underscore when translating source identifiers that are V
+// keywords (`default` -> `default_`). CLI spelling retains the source name.
+fn translated_identifier_name(name string) string {
+	return if name.ends_with('_') { name[..name.len - 1] } else { name }
 }
 
 pub fn decode_quoted_value(value string) !string {

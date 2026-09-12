@@ -16,10 +16,26 @@ fn test_list_actions_docs_and_unknown_option() {
 	assert output.contains('new_window:\n  Open a new window.\n')
 
 	list_actions_output(['--plain']) or {
-		assert err.msg().contains('unknown option')
+		assert err.msg() == 'invalid field'
 		return
 	}
 	assert false
+}
+
+fn test_action_boolean_options_accept_explicit_false() {
+	assert !list_actions_output(['--docs=false'])!.contains('ignore:\n')
+	colors := parse_action_options[ListColorsOptions](['--plain=false'])!
+	assert !colors.plain
+	keybinds := parse_action_options[ListKeybindsOptions](['--default=false', '--docs=false',
+		'--plain=false'])!
+	assert !keybinds.default_
+	assert !keybinds.docs
+	assert !keybinds.plain
+	show_config := parse_show_config_options(['--default=false', '--changes-only=false',
+		'--docs=false'])!
+	assert !show_config.default_
+	assert !show_config.changes_only
+	assert !show_config.docs
 }
 
 fn test_list_colors_plain_contains_complete_sorted_x11_data() {
@@ -34,7 +50,7 @@ fn test_list_colors_plain_contains_complete_sorted_x11_data() {
 
 fn test_list_colors_rejects_unknown_options() {
 	list_colors_output(['--wat']) or {
-		assert err.msg().contains('unknown option')
+		assert err.msg() == 'invalid field'
 		return
 	}
 	assert false
@@ -58,12 +74,18 @@ fn test_format_font_list_sorts_unfiltered_and_preserves_filtered_priority() {
 }
 
 fn test_list_fonts_options() {
-	opts := parse_list_fonts_options(['--family=JetBrains Mono', '--style', 'Italic', '--bold',
-		'--italic'])!
+	opts := parse_list_fonts_options(['--family=JetBrains Mono', '--style=Italic', '--bold',
+		'--italic=false'])!
 	assert opts.family? == 'JetBrains Mono'
 	assert opts.style? == 'Italic'
 	assert opts.bold
-	assert opts.italic
+	assert !opts.italic
+
+	if _ := parse_list_fonts_options(['--style', 'Italic']) {
+		assert false, 'action values must use --long=value syntax'
+	} else {
+		assert err.msg() == 'value required'
+	}
 }
 
 fn test_validate_config_specific_file() {
@@ -75,7 +97,7 @@ fn test_validate_config_specific_file() {
 	}
 	valid_path := os.join_path(dir, 'valid.conf')
 	os.write_file(valid_path, 'font-size = 14\n')!
-	valid := validate_config(['--config-file', valid_path])!
+	valid := validate_config(['--config-file=${valid_path}'])!
 	assert valid.code == 0
 	assert valid.output == ''
 
@@ -84,6 +106,14 @@ fn test_validate_config_specific_file() {
 	invalid := validate_config(['--config-file=${invalid_path}'])!
 	assert invalid.code == 1
 	assert invalid.output.contains('no-such-option: unknown field')
+}
+
+fn test_validate_config_requires_equals_value_syntax() {
+	if _ := validate_config(['--config-file', 'config']) {
+		assert false, 'action values must use --long=value syntax'
+	} else {
+		assert err.msg() == 'value required'
+	}
 }
 
 fn test_choose_editor_prefers_visual_and_ignores_empty_values() {
@@ -123,7 +153,7 @@ fn test_show_config_changes_only_false_outputs_every_field() {
 
 fn test_show_config_rejects_config_and_unknown_options() {
 	show_config_output(['--font-size=19']) or {
-		assert err.msg().contains('unknown option')
+		assert err.msg() == 'invalid field'
 		return
 	}
 	assert false

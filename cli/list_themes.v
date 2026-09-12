@@ -1,7 +1,6 @@
 module cli
 
 import ascii
-import cli_args
 import os
 import strings
 import time
@@ -996,10 +995,5 @@ pub fn run_list_themes(args []string) !int {
 }
 
 fn parse_list_themes_options(args []string) !Options {
-	mut opts := Options{}
-	for arg in args {
-		request_action_help(arg)!
-		cli_args.parse(mut opts, [arg])!
-	}
-	return opts
+	return parse_action_options[Options](args)
 }

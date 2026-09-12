@@ -9,23 +9,17 @@ import input
 import os
 import terminal
 
+struct ListActionsOptions {
+mut:
+	docs bool
+}
+
 // list_actions_output lists every keybinding action, not the CLI actions.
 // This is the translated `cli/list_actions.zig` output path; `--docs` asks
 // the shared input help generator to include each action's documentation.
 pub fn list_actions_output(args []string) !string {
-	mut docs := false
-	for arg in args {
-		request_action_help(arg)!
-		match arg {
-			'--docs' {
-				docs = true
-			}
-			else {
-				return error('unknown option for list-actions: ${arg}')
-			}
-		}
-	}
-	return input.generate_help(.plaintext, docs)
+	opts := parse_action_options[ListActionsOptions](args)!
+	return input.generate_help(.plaintext, opts.docs)
 }
 
 pub fn run_list_actions(args []string) !int {
@@ -36,13 +30,14 @@ pub fn run_list_actions(args []string) !int {
 // list_colors_output implements the deterministic plain output of
 // `+list-colors`. Pretty terminal rendering is only presentation; the source
 // data and ordering are identical to Ghostty's X.Org rgb.txt-backed command.
+struct ListColorsOptions {
+mut:
+	plain bool
+}
+
 pub fn list_colors_output(args []string) !string {
-	for arg in args {
-		request_action_help(arg)!
-		if arg != '--plain' {
-			return error('unknown option for list-colors: ${arg}')
-		}
-	}
+	opts := parse_action_options[ListColorsOptions](args)!
+	_ = opts.plain
 	mut entries := terminal.x11_color_entries()
 	entries.sort_with_compare(fn (a &terminal.NamedRGB, b &terminal.NamedRGB) int {
 		return ascii.order_ignore_case(a.name, b.name)
@@ -62,21 +57,18 @@ pub fn run_list_colors(args []string) !int {
 // list_keybinds_output serializes either the default or loaded binding set in
 // valid Ghostty configuration syntax. `--docs` is accepted for parity; the
 // pinned Ghostty option documents that it currently has no effect.
+struct ListKeybindsOptions {
+mut:
+	default_ bool
+	docs     bool
+	plain    bool
+}
+
 pub fn list_keybinds_output(args []string) !string {
-	mut defaults := false
-	for arg in args {
-		request_action_help(arg)!
-		match arg {
-			'--default' {
-				defaults = true
-			}
-			'--docs', '--plain' {}
-			else {
-				return error('unknown option for list-keybinds: ${arg}')
-			}
-		}
-	}
-	config := if defaults {
+	opts := parse_action_options[ListKeybindsOptions](args)!
+	_ = opts.docs
+	_ = opts.plain
+	config := if opts.default_ {
 		configpkg.Config.default_config()
 	} else {
 		configpkg.Config.load_args([])!
@@ -144,35 +136,7 @@ pub fn run_list_fonts(args []string) !int {
 }
 
 fn parse_list_fonts_options(args []string) !FontListOptions {
-	mut opts := FontListOptions{}
-	mut i := 0
-	for i < args.len {
-		arg := args[i]
-		request_action_help(arg)!
-		if arg == '--bold' {
-			opts.bold = true
-		} else if arg == '--italic' {
-			opts.italic = true
-		} else if arg.starts_with('--family=') {
-			opts.family = arg.all_after('=')
-		} else if arg.starts_with('--style=') {
-			opts.style = arg.all_after('=')
-		} else if arg == '--family' || arg == '--style' {
-			if i + 1 >= args.len {
-				return error('value required for ${arg}')
-			}
-			i++
-			if arg == '--family' {
-				opts.family = args[i]
-			} else {
-				opts.style = args[i]
-			}
-		} else {
-			return error('unknown option for list-fonts: ${arg}')
-		}
-		i++
-	}
-	return opts
+	return parse_action_options[FontListOptions](args)
 }
 
 pub fn format_font_list(entries []FontListEntry, sort_results bool) string {
@@ -214,32 +178,17 @@ pub:
 	output string
 }
 
+struct ValidateConfigOptions {
+mut:
+	config_file ?string
+}
+
 // validate_config evaluates a specified file, or the normal default config
 // stack, and renders every diagnostic one per line.
 pub fn validate_config(args []string) !ValidateResult {
-	mut path := ?string(none)
-	mut i := 0
-	for i < args.len {
-		arg := args[i]
-		request_action_help(arg)!
-		if arg.starts_with('--config-file=') {
-			if path != none {
-				return error('config-file specified more than once')
-			}
-			path = arg.all_after('=')
-		} else if arg == '--config-file' {
-			if path != none || i + 1 >= args.len {
-				return error('value required for --config-file')
-			}
-			i++
-			path = args[i]
-		} else {
-			return error('unknown option for validate-config: ${arg}')
-		}
-		i++
-	}
+	opts := parse_action_options[ValidateConfigOptions](args)!
 
-	mut config := if config_path := path {
+	mut config := if config_path := opts.config_file {
 		mut value := configpkg.Config.default_config()
 		abs_path := os.real_path(config_path)
 		value.load_file(abs_path)!
@@ -268,11 +217,10 @@ pub fn run_validate_config(args []string) !int {
 // edit_config_target performs the non-exec portion of `+edit-config`: load the
 // config once, resolve Ghostty's preferred user file, and make sure its parent
 // directory exists so an editor can create a first configuration.
+struct EditConfigOptions {}
+
 pub fn edit_config_target(args []string) !string {
-	if args.len > 0 {
-		request_action_help(args[0])!
-		return error('unknown option for edit-config: ${args[0]}')
-	}
+	_ := parse_action_options[EditConfigOptions](args)!
 	_ := configpkg.Config.load_args([])!
 	path := configpkg.preferred_default_file_path()!
 	ensure_config_parent(path)!
@@ -322,19 +270,19 @@ pub fn run_edit_config(args []string) !int {
 
 pub struct ShowConfigOptions {
 pub mut:
-	defaults     bool
+	default_     bool
 	changes_only bool = true
 	docs         bool
 }
 
 pub fn show_config_output(args []string) !string {
 	opts := parse_show_config_options(args)!
-	config := if opts.defaults {
+	config := if opts.default_ {
 		configpkg.Config.default_config()
 	} else {
 		configpkg.Config.load_args([])!
 	}
-	return config.format_config_with_docs(!opts.defaults && opts.changes_only, opts.docs)
+	return config.format_config_with_docs(!opts.default_ && opts.changes_only, opts.docs)
 }
 
 pub fn run_show_config(args []string) !int {
@@ -343,29 +291,7 @@ pub fn run_show_config(args []string) !int {
 }
 
 fn parse_show_config_options(args []string) !ShowConfigOptions {
-	mut opts := ShowConfigOptions{}
-	for arg in args {
-		request_action_help(arg)!
-		if arg == '--default' {
-			opts.defaults = true
-		} else if arg == '--docs' {
-			opts.docs = true
-		} else if arg == '--changes-only' {
-			opts.changes_only = true
-		} else if arg.starts_with('--changes-only=') {
-			value := arg.all_after('=')
-			opts.changes_only = match value {
-				'true', 't', '1' { true }
-				'false', 'f', '0' { false }
-				else {
-					return error('invalid value for --changes-only: ${value}')
-				}
-			}
-		} else {
-			return error('unknown option for show-config: ${arg}')
-		}
-	}
-	return opts
+	return parse_action_options[ShowConfigOptions](args)
 }
 
 pub struct ShowFaceOptions {

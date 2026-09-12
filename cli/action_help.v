@@ -1,5 +1,7 @@
 module cli
 
+import cli_args
+
 const action_help_requested_message = 'ActionHelpRequested'
 const action_help_data = $embed_file('action_help.txt').to_string()
 
@@ -9,6 +11,17 @@ fn request_action_help(arg string) ! {
 	if arg == '--help' || arg == '-h' {
 		return error(action_help_requested_message)
 	}
+}
+
+// parse_action_options is the common cli.args.parse path used by Ghostty's
+// action option structs. Help is checked at the same point in argument order.
+fn parse_action_options[T](args []string) !T {
+	mut opts := T{}
+	for arg in args {
+		request_action_help(arg)!
+		cli_args.parse(mut opts, [arg])!
+	}
+	return opts
 }
 
 pub fn is_action_help_requested(err IError) bool {

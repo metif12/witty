@@ -1,6 +1,5 @@
 module cli
 
-import cli_args
 import internal_os
 import net
 import os
@@ -309,54 +308,7 @@ pub fn run_ssh_cache(args []string) !int {
 }
 
 fn parse_ssh_cache_options(args []string) !SshCacheOptions {
-	mut opts := SshCacheOptions{}
-	for arg in args {
-		request_action_help(arg)!
-		if arg == '--clear' {
-			opts.clear = true
-			continue
-		}
-		if !arg.starts_with('--') || !arg.contains('=') {
-			return error('unknown option for ssh-cache: ${arg}')
-		}
-		equals := arg.index_u8(`=`)
-		key := arg[2..equals]
-		value := arg[equals + 1..]
-		match key {
-			'clear' {
-				opts.clear = parse_cli_bool(value) or {
-					return error('invalid value for --clear: ${value}')
-				}
-			}
-			'add' {
-				opts.add = value
-			}
-			'remove' {
-				opts.remove = value
-			}
-			'host' {
-				opts.host = value
-			}
-			'expire-days' {
-				parsed := cli_args.parse_unsigned_int(value, 32) or {
-					return error('invalid value for --expire-days: ${value}')
-				}
-				opts.expire_days = u32(parsed)
-			}
-			else {
-				return error('unknown option for ssh-cache: ${arg}')
-			}
-		}
-	}
-	return opts
-}
-
-fn parse_cli_bool(value string) ?bool {
-	return match value {
-		'1', 't', 'T', 'true' { true }
-		'0', 'f', 'F', 'false' { false }
-		else { none }
-	}
+	return parse_action_options[SshCacheOptions](args)
 }
 
 fn ssh_cache_operation_error(operation string, host string, err IError) SshCacheResult {

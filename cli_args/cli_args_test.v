@@ -143,6 +143,11 @@ mut:
 	compat      bool
 }
 
+struct KeywordFieldTestData {
+mut:
+	default_ bool
+}
+
 fn (mut h HookTestData) parse_manually_hook(arg string) bool {
 	if arg.starts_with('+') {
 		h.manual = arg
@@ -200,6 +205,12 @@ fn test_parse_simple() {
 	assert data.a == '42'
 	assert data.b == true
 	assert data.b_f == false
+}
+
+fn test_parse_maps_v_keyword_suffix_to_source_name() {
+	mut data := KeywordFieldTestData{}
+	parse[KeywordFieldTestData](mut data, ['--default'])!
+	assert data.default_
 }
 
 // --- parse: simple reparsing ---
