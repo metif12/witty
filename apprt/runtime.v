@@ -5,7 +5,7 @@ module apprt
 
 // Runtime is the runtime to use for Ghostty. All runtimes do not provide
 // equivalent feature sets.
-pub enum Runtime {
+pub enum Runtime as u8 {
 	// Will not produce an executable at all when `zig build` is called.
 	// This is only useful if you're only interested in the lib only (macOS).
 	none_
@@ -14,20 +14,10 @@ pub enum Runtime {
 	gtk
 }
 
-// default_for_os returns the default runtime for the given OS name. The
-// Linux and FreeBSD default is GTK because it is a full featured
-// application. Otherwise we use none so we don't create an exe and instead
-// create libghostty (on macOS, Xcode builds the app that links the lib).
-pub fn Runtime.default_for_os(os_name string) Runtime {
-	return match os_name {
-		'linux', 'freebsd' { Runtime.gtk }
-		else { Runtime.none_ }
-	}
-}
-
-// default_runtime returns the default runtime for the platform witty is
-// currently built for.
-pub fn default_runtime() Runtime {
+// default returns the default runtime for the build target. The source accepts
+// std.Target explicitly; V's compile-time platform selection supplies the
+// equivalent target here.
+pub fn Runtime.default() Runtime {
 	$if linux {
 		return Runtime.gtk
 	} $else $if freebsd {
