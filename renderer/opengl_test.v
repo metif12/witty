@@ -163,14 +163,10 @@ fn test_opengl_text_and_background_image_values_are_packed_for_gpu() {
 	assert text.bearings[0] == -2
 	assert text.bearings[1] == 7
 
-	bg := gl_bg_image_vertex(BgImageBuffer{
+	bg := BgImageBuffer{
 		opacity: 0.5
-		info: BgImageInfo{
-			position: .br
-			fit: .stretch
-			repeat: true
-		}
-	})
+		info: bg_image_info(.br, .stretch, true)
+	}
 	assert bg.opacity == 0.5
-	assert bg.info == u8(8 | (2 << 4) | (1 << 6))
+	assert bg.info.packed() == u8(8 | (2 << 4) | (1 << 6))
 }

@@ -742,7 +742,7 @@ pub fn GLFrameState.init(api &OpenGLAPI, custom_shaders bool) !GLFrameState {
 		uniforms.deinit()
 		return err
 	}
-	mut bg_image_buffer := GLBuffer.init(api.bg_image_buffer_options(), u32($sizeof(GLBgImageVertex))) or {
+	mut bg_image_buffer := GLBuffer.init(api.bg_image_buffer_options(), u32($sizeof(BgImageBuffer))) or {
 		cells_bg.deinit()
 		cells.deinit()
 		uniforms.deinit()
@@ -893,19 +893,19 @@ pub fn (mut self GLCustomShaderState) resize(api &OpenGLAPI, width u32, height u
 // GLUniforms is the std140 byte layout consumed by common.glsl.
 pub struct GLUniforms {
 pub mut:
-	projection_matrix     [16]f32
-	screen_size           [2]f32
-	cell_size             [2]f32
-	grid_size             [2]u16
-	reserved0             [12]u8
-	grid_padding          [4]f32
-	padding_extend        u32
-	min_contrast          f32
-	cursor_pos            [2]u16
-	cursor_color          [4]u8
-	bg_color              [4]u8
-	bools                  u32
-	reserved2             [8]u8
+	projection_matrix [16]f32
+	screen_size       [2]f32
+	cell_size         [2]f32
+	grid_size         [2]u16
+	reserved0         [12]u8
+	grid_padding      [4]f32
+	padding_extend    u32
+	min_contrast      f32
+	cursor_pos        [2]u16
+	cursor_color      [4]u8
+	bg_color          [4]u8
+	bools             u32
+	reserved2         [8]u8
 }
 
 pub fn gl_uniforms(value Uniforms) GLUniforms {
@@ -958,36 +958,6 @@ pub:
 	dest_size   [2]f32
 }
 
-pub struct GLBgImageVertex {
-pub:
-	opacity f32
-	info    u8
-}
-
-pub fn gl_bg_image_vertex(value BgImageBuffer) GLBgImageVertex {
-	position := match value.info.position {
-		.tl { u8(0) }
-		.tc { u8(1) }
-		.tr { u8(2) }
-		.ml { u8(3) }
-		.mc { u8(4) }
-		.mr { u8(5) }
-		.bl { u8(6) }
-		.bc { u8(7) }
-		.br { u8(8) }
-	}
-	fit := match value.info.fit {
-		.contain { u8(0) }
-		.cover { u8(1) }
-		.stretch { u8(2) }
-		.none_ { u8(3) }
-	}
-	return GLBgImageVertex{
-		opacity: value.opacity
-		info: position | (fit << 4) | (if value.info.repeat { u8(1 << 6) } else { u8(0) })
-	}
-}
-
 pub struct GLShaders {
 pub mut:
 	bg_color       GLPipeline
@@ -1020,7 +990,7 @@ pub fn GLShaders.init_with_sources(custom_shaders []string) !GLShaders {
 		shaders.deinit()
 		return err
 	}
-	shaders.bg_image = gl_builtin_pipeline(gl_bg_image_vertex_shader_raw, gl_bg_image_fragment_shader_raw, gl_bg_image_attributes(), u32($sizeof(GLBgImageVertex)), .per_instance, true) or {
+	shaders.bg_image = gl_builtin_pipeline(gl_bg_image_vertex_shader_raw, gl_bg_image_fragment_shader_raw, gl_bg_image_attributes(), u32($sizeof(BgImageBuffer)), .per_instance, true) or {
 		shaders.deinit()
 		return err
 	}
@@ -1106,7 +1076,7 @@ fn gl_image_attributes() []GLVertexAttribute {
 
 fn gl_bg_image_attributes() []GLVertexAttribute {
 	return [
-		GLVertexAttribute{ scalar_type: .f32_, count: 1, offset: __offsetof(GLBgImageVertex, opacity) },
-		GLVertexAttribute{ scalar_type: .u8_, count: 1, offset: __offsetof(GLBgImageVertex, info) },
+		GLVertexAttribute{ scalar_type: .f32_, count: 1, offset: __offsetof(BgImageBuffer, opacity) },
+		GLVertexAttribute{ scalar_type: .u8_, count: 1, offset: __offsetof(BgImageBuffer, info) },
 	]
 }

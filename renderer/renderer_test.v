@@ -404,10 +404,15 @@ fn test_cursor_style_enum() {
 // Test BgImageBuffer defaults.
 fn test_bg_image_buffer_defaults() {
 	buf := BgImageBuffer{}
+	assert $sizeof(BgImageInfo) == 1
+	assert $sizeof(BgImageBuffer) == 8
+	assert __offsetof(BgImageBuffer, opacity) == 0
+	assert __offsetof(BgImageBuffer, info) == 4
 	assert buf.opacity == 1.0
-	assert buf.info.position == .mc
-	assert buf.info.fit == .contain
-	assert buf.info.repeat == false
+	assert buf.info.position() == .mc
+	assert buf.info.fit() == .contain
+	assert !buf.info.repeats()
+	assert buf.info.packed() == 4
 }
 
 // Test CustomShaderUniforms defaults.

@@ -309,14 +309,10 @@ fn test_metal_uniform_and_background_flags_are_packed() {
 	assert uniforms.cursor_wide == 1
 	assert uniforms.use_linear_correction == 1
 
-	background := metal_bg_image_vertex(BgImageBuffer{
+	background := BgImageBuffer{
 		opacity: 0.5
-		info: BgImageInfo{
-			position: .br
-			fit: .stretch
-			repeat: true
-		}
-	})
+		info: bg_image_info(.br, .stretch, true)
+	}
 	assert background.opacity == 0.5
-	assert background.info == u8(8 | (2 << 4) | (1 << 6))
+	assert background.info.packed() == u8(8 | (2 << 4) | (1 << 6))
 }

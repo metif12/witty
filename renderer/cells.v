@@ -487,32 +487,52 @@ pub enum HighlightTag as u8 {
 // ============================================================
 
 // BgImagePosition for the background image shader.
-pub enum BgImagePosition {
-	tl
-	tc
-	tr
-	ml
-	mc
-	mr
-	bl
-	bc
-	br
+pub enum BgImagePosition as u8 {
+	tl = 0
+	tc = 1
+	tr = 2
+	ml = 3
+	mc = 4
+	mr = 5
+	bl = 6
+	bc = 7
+	br = 8
 }
 
 // BgImageFit for the background image shader.
-pub enum BgImageFit {
-	contain
-	cover
-	stretch
-	none_
+pub enum BgImageFit as u8 {
+	contain = 0
+	cover   = 1
+	stretch = 2
+	none_   = 3
 }
 
 // BgImageInfo holds position/fit/repeat info for the background image.
 pub struct BgImageInfo {
-pub mut:
-	position BgImagePosition = .mc
-	fit      BgImageFit = .contain
-	repeat   bool
+mut:
+	value u8 = 4
+}
+
+pub fn bg_image_info(position BgImagePosition, fit BgImageFit, repeat bool) BgImageInfo {
+	return BgImageInfo{
+		value: u8(position) | (u8(fit) << 4) | (u8(repeat) << 6)
+	}
+}
+
+pub fn (self BgImageInfo) position() BgImagePosition {
+	return unsafe { BgImagePosition(self.value & 0x0f) }
+}
+
+pub fn (self BgImageInfo) fit() BgImageFit {
+	return unsafe { BgImageFit((self.value >> 4) & 0x03) }
+}
+
+pub fn (self BgImageInfo) repeats() bool {
+	return self.value & 0x40 != 0
+}
+
+pub fn (self BgImageInfo) packed() u8 {
+	return self.value
 }
 
 // BgImageBuffer is the vertex data for the background image.

@@ -691,36 +691,6 @@ pub:
 	dest_size   [2]f32
 }
 
-pub struct MetalBgImageVertex {
-pub:
-	opacity f32
-	info    u8
-}
-
-pub fn metal_bg_image_vertex(value BgImageBuffer) MetalBgImageVertex {
-	position := match value.info.position {
-		.tl { u8(0) }
-		.tc { u8(1) }
-		.tr { u8(2) }
-		.ml { u8(3) }
-		.mc { u8(4) }
-		.mr { u8(5) }
-		.bl { u8(6) }
-		.bc { u8(7) }
-		.br { u8(8) }
-	}
-	fit := match value.info.fit {
-		.contain { u8(0) }
-		.cover { u8(1) }
-		.stretch { u8(2) }
-		.none_ { u8(3) }
-	}
-	return MetalBgImageVertex{
-		opacity: value.opacity
-		info: position | (fit << 4) | (if value.info.repeat { u8(1 << 6) } else { u8(0) })
-	}
-}
-
 // MetalFrameState contains every resource that the CPU may update while a
 // frame is in flight. Renderer keeps one instance per swap-chain slot, just
 // like ghostty's generic renderer FrameState.
@@ -751,7 +721,7 @@ pub fn MetalFrameState.init(api &MetalAPI, custom_shaders bool) !MetalFrameState
 		uniforms.deinit()
 		return err
 	}
-	mut bg_image_buffer := MetalBuffer.init(api.buffer_options(), u32($sizeof(MetalBgImageVertex))) or {
+	mut bg_image_buffer := MetalBuffer.init(api.buffer_options(), u32($sizeof(BgImageBuffer))) or {
 		cells_bg.deinit()
 		cells.deinit()
 		uniforms.deinit()
@@ -996,7 +966,7 @@ pub fn MetalShaders.init(device voidptr, post_shaders []string, pixel_format Met
 		vertex_library: library
 		fragment_library: library
 		attributes: metal_bg_image_attributes()
-		vertex_stride: $sizeof(MetalBgImageVertex)
+		vertex_stride: $sizeof(BgImageBuffer)
 		step_fn: .per_instance
 		pixel_format: pixel_format
 		blending_enabled: true
@@ -1079,7 +1049,7 @@ fn metal_image_attributes() []MetalVertexAttribute {
 
 fn metal_bg_image_attributes() []MetalVertexAttribute {
 	return [
-		MetalVertexAttribute{ format: .float, offset: __offsetof(MetalBgImageVertex, opacity) },
-		MetalVertexAttribute{ format: .uchar, offset: __offsetof(MetalBgImageVertex, info) },
+		MetalVertexAttribute{ format: .float, offset: __offsetof(BgImageBuffer, opacity) },
+		MetalVertexAttribute{ format: .uchar, offset: __offsetof(BgImageBuffer, info) },
 	]
 }

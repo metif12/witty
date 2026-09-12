@@ -1631,8 +1631,7 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	}
 
 	if frame_state.bg_image_buffer_modified != self.bg_image_buffer_modified {
-		bg_vertex := metal_bg_image_vertex(self.bg_image_buffer)
-		frame_state.bg_image_buffer.sync_values([bg_vertex])!
+		frame_state.bg_image_buffer.sync_values([self.bg_image_buffer])!
 		frame_state.bg_image_buffer_modified = self.bg_image_buffer_modified
 	}
 
@@ -1843,8 +1842,7 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 		frame_state.custom_shader_state = state
 	}
 	if frame_state.bg_image_buffer_modified != self.bg_image_buffer_modified {
-		bg_vertex := gl_bg_image_vertex(self.bg_image_buffer)
-		frame_state.bg_image_buffer.sync_values([bg_vertex])
+		frame_state.bg_image_buffer.sync_values([self.bg_image_buffer])
 		frame_state.bg_image_buffer_modified = self.bg_image_buffer_modified
 	}
 
@@ -2174,26 +2172,22 @@ fn (mut self Renderer) update_screen_size_uniforms() {
 fn (mut self Renderer) update_bg_image_buffer() {
 	self.bg_image_buffer = BgImageBuffer{
 		opacity: self.config.bg_image_opacity
-		info: BgImageInfo{
-			position: match self.config.bg_image_position {
-				.top_left { .tl }
-				.top_center { .tc }
-				.top_right { .tr }
-				.center_left { .ml }
-				.center, .center_center { .mc }
-				.center_right { .mr }
-				.bottom_left { .bl }
-				.bottom_center { .bc }
-				.bottom_right { .br }
-			}
-			fit: match self.config.bg_image_fit {
-				.contain { .contain }
-				.cover { .cover }
-				.stretch { .stretch }
-				.none_ { .none_ }
-			}
-			repeat: self.config.bg_image_repeat
-		}
+		info: bg_image_info(match self.config.bg_image_position {
+			.top_left { .tl }
+			.top_center { .tc }
+			.top_right { .tr }
+			.center_left { .ml }
+			.center, .center_center { .mc }
+			.center_right { .mr }
+			.bottom_left { .bl }
+			.bottom_center { .bc }
+			.bottom_right { .br }
+		}, match self.config.bg_image_fit {
+			.contain { .contain }
+			.cover { .cover }
+			.stretch { .stretch }
+			.none_ { .none_ }
+		}, self.config.bg_image_repeat)
 	}
 	self.bg_image_buffer_modified++
 }
