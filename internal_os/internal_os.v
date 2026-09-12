@@ -157,6 +157,9 @@ pub fn (mut t TempDir) deinit() {
 
 // get_env_map returns the current environment as a map.
 pub fn get_env_map() !map[string]string {
+	if is_flatpak() {
+		return map[string]string{}
+	}
 	return os.environ()
 }
 

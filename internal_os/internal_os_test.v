@@ -80,6 +80,26 @@ fn test_environment_access_preserves_missing_and_empty() {
 	assert (getenv_not_empty(key) or { '' }) == 'value'
 }
 
+fn test_get_env_map_obeys_flatpak_isolation() {
+	key := 'WITTY_INTERNAL_OS_ENV_MAP_TEST'
+	previous := os.getenv_opt(key)
+	os.setenv(key, 'present', true)
+	defer {
+		if value := previous {
+			os.setenv(key, value, true)
+		} else {
+			os.unsetenv(key)
+		}
+	}
+
+	env := get_env_map()!
+	if is_flatpak() {
+		assert env.len == 0
+	} else {
+		assert env[key] == 'present'
+	}
+}
+
 fn test_environment_path_composition_uses_platform_delimiter() {
 	assert append_env('', 'foo') == 'foo'
 	assert append_env('a:b', 'foo') == 'a:b${os.path_delimiter}foo'

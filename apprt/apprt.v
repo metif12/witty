@@ -3,7 +3,7 @@ module apprt
 
 import configpkg
 import input
-import os
+import internal_os
 
 // "apprt" is the "application runtime" package. This abstracts the
 // application runtime and lifecycle management such as creating windows,
@@ -227,7 +227,7 @@ pub fn (mut r RuntimeSurface) clipboard_request(loc Clipboard, req ClipboardRequ
 
 pub fn (r RuntimeSurface) default_termio_env() !map[string]string {
 	if unsafe { voidptr(&r) == nil } {
-		return os.environ()
+		return internal_os.get_env_map()
 	}
 	if r.default_env_fn != unsafe { nil } {
 		return r.default_env_fn(r.user_data)!
@@ -235,7 +235,7 @@ pub fn (r RuntimeSurface) default_termio_env() !map[string]string {
 	if r.default_env.len > 0 {
 		return r.default_env.clone()
 	}
-	return os.environ()
+	return internal_os.get_env_map()
 }
 
 // CoreApp represents the core application logic. The concrete core.App is
