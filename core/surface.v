@@ -1530,10 +1530,6 @@ enum ScrollDirection {
 // Coordinate represents x/y in the viewport.
 pub type Coordinate = terminal.Coordinate
 
-fn (a Coordinate) eql(b Coordinate) bool {
-	return a.x == b.x && a.y == b.y
-}
-
 // FontMetrics holds font measurement data.
 pub type FontMetrics = font.Metrics
 
@@ -6992,16 +6988,13 @@ fn (mut self Surface) dump_text_locked(sel TermSelection) !Text {
 
 // mouse_selection calculates the selection given click/drag pins and pixel positions.
 fn mouse_selection(click_pin Pin, drag_pin Pin, click_x u32, drag_x u32, mods input.Mods, size rendererpkg.Size) ?TermSelection {
-	if size.cell.width == 0 || size.grid().columns == 0 {
-		return none
-	}
 	threshold := u32(math.round(f64(size.cell.width) * 0.6))
 	max_x := size.grid().columns * size.cell.width - 1
 	drag_relative := if drag_x > size.padding.left { drag_x - size.padding.left } else { u32(0) }
 	click_relative := if click_x > size.padding.left { click_x - size.padding.left } else { u32(0) }
 	drag_x_frac := math.min(max_x, drag_relative) % size.cell.width
 	click_x_frac := math.min(max_x, click_relative) % size.cell.width
-	rectangle := rectangle_select_mods(mods)
+	rectangle := is_rectangle_select_state(mods)
 	same_pin := drag_pin.eql(click_pin)
 	end_before_start := if same_pin {
 		drag_x_frac < click_x_frac
@@ -7052,14 +7045,6 @@ fn mouse_selection(click_pin Pin, drag_pin Pin, click_x u32, drag_x u32, mods in
 		return none
 	}
 	return TermSelection.init(start_pin, end_pin, rectangle)
-}
-
-fn rectangle_select_mods(mods input.Mods) bool {
-	$if macos {
-		return mods.alt
-	} $else {
-		return mods.ctrl_or_super() && mods.alt
-	}
 }
 
 fn pin_left_clamp(pin Pin) Pin {
