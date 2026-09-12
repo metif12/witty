@@ -467,25 +467,37 @@ fn test_embedded_key_event_core_no_text() {
 	assert core_event.unshifted_codepoint == 0
 }
 
-// Test EmbeddedKeyEvent.core with oversized codepoint clamping.
-fn test_embedded_key_event_oversized_codepoint() {
-	event := EmbeddedKeyEvent{
+// Test EmbeddedKeyEvent.core with the source u21 cast boundary.
+fn test_embedded_key_event_u21_codepoint_boundary() {
+	in_range := EmbeddedKeyEvent{
 		action: .press
 		mods: input.Mods{}
 		consumed_mods: input.Mods{}
 		keycode: 0
 		text: none
-		unshifted_codepoint: 0xFFFFFFFF // too large for valid Unicode
+		unshifted_codepoint: 0x1FFFFF
 		composing: false
 	}
-
-	core_event := event.core() or {
+	core_event := in_range.core() or {
 		assert false, 'core() should not return none'
 		return
 	}
+	assert core_event.unshifted_codepoint == 0x1FFFFF
 
-	// Should be clamped to 0 since it exceeds U+10FFFF.
-	assert core_event.unshifted_codepoint == 0
+	too_large := EmbeddedKeyEvent{
+		action: .press
+		mods: input.Mods{}
+		consumed_mods: input.Mods{}
+		keycode: 0
+		text: none
+		unshifted_codepoint: 0x200000
+		composing: false
+	}
+	clamped := too_large.core() or {
+		assert false, 'core() should not return none'
+		return
+	}
+	assert clamped.unshifted_codepoint == 0
 }
 
 // Test CAPIKeyEvent conversion.

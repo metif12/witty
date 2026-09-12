@@ -121,7 +121,7 @@ pub:
 // core converts a libghostty key event into a core key event.
 pub fn (self EmbeddedKeyEvent) core() ?input.KeyEvent {
 	text := self.text or { '' }
-	unshifted_codepoint := if self.unshifted_codepoint <= 0x10FFFF {
+	unshifted_codepoint := if self.unshifted_codepoint <= 0x1FFFFF {
 		self.unshifted_codepoint
 	} else {
 		u32(0)
