@@ -15,6 +15,19 @@ pub fn Bytes.init(rng &rand.PRNG) Bytes {
 	return Bytes{ rng: unsafe { rng } }
 }
 
+// generate_alphabet returns every byte for which check is true, in ascending
+// byte order. This is the V equivalent of Ghostty's comptime helper.
+pub fn generate_alphabet(check fn (u8) bool) []u8 {
+	mut alphabet := []u8{cap: 256}
+	for value in 0 .. 256 {
+		byte := u8(value)
+		if check(byte) {
+			alphabet << byte
+		}
+	}
+	return alphabet
+}
+
 pub fn (mut self Bytes) generator() Generator {
 	return self
 }

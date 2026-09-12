@@ -269,34 +269,28 @@ fn osc_weighted_index(mut rng rand.PRNG, weights []f64) !int {
 	return weights.len - 1
 }
 
-fn osc_build_alphabet(kind OscAlphabetKind) []u8 {
-	mut result := []u8{}
-	for value in 0 .. 256 {
-		byte := u8(value)
-		valid := match kind {
-			.kv { byte !in [u8(0x1b), 0x07, `;`, `=`] && byte >= 0x20 && byte <= 0x7e }
-			.osc { byte !in [u8(0x1b), 0x07] }
-			.ascii { byte >= 0x20 && byte <= 0x7e }
-			.alphabetic { byte.is_letter() }
-			.alphanumeric { byte.is_alnum() }
-		}
-		if valid {
-			result << byte
-		}
-	}
-	return result
+fn osc_kv_byte(byte u8) bool {
+	return byte !in [u8(0x1b), 0x07, `;`, `=`] && byte >= 0x20 && byte <= 0x7e
 }
 
-enum OscAlphabetKind {
-	kv
-	osc
-	ascii
-	alphabetic
-	alphanumeric
+fn osc_byte(byte u8) bool {
+	return byte !in [u8(0x1b), 0x07]
 }
 
-pub const osc_kv_alphabet = osc_build_alphabet(.kv)
-pub const osc_alphabet = osc_build_alphabet(.osc)
-pub const osc_ascii_alphabet = osc_build_alphabet(.ascii)
-pub const osc_alphabetic_alphabet = osc_build_alphabet(.alphabetic)
-pub const osc_alphanumeric_alphabet = osc_build_alphabet(.alphanumeric)
+fn osc_ascii_byte(byte u8) bool {
+	return byte >= 0x20 && byte <= 0x7e
+}
+
+fn osc_alphabetic_byte(byte u8) bool {
+	return byte.is_letter()
+}
+
+fn osc_alphanumeric_byte(byte u8) bool {
+	return byte.is_alnum()
+}
+
+pub const osc_kv_alphabet = generate_alphabet(osc_kv_byte)
+pub const osc_alphabet = generate_alphabet(osc_byte)
+pub const osc_ascii_alphabet = generate_alphabet(osc_ascii_byte)
+pub const osc_alphabetic_alphabet = generate_alphabet(osc_alphabetic_byte)
+pub const osc_alphanumeric_alphabet = generate_alphabet(osc_alphanumeric_byte)

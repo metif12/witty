@@ -2,6 +2,18 @@ module synthetic
 
 import rand
 
+fn synthetic_test_even_byte(value u8) bool {
+	return value & 1 == 0
+}
+
+fn test_bytes_generate_alphabet() {
+	alphabet := generate_alphabet(synthetic_test_even_byte)
+	assert alphabet.len == 128
+	assert alphabet[0] == 0
+	assert alphabet[1] == 2
+	assert alphabet[127] == 254
+}
+
 fn test_bytes_generator_respects_exact_length() {
 	mut rng := rand.new_default(seed_: [u32(0), 0])
 	defer { rng.free() }
