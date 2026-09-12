@@ -165,6 +165,19 @@ fn test_color_values() {
 	assert u8(Color.on) == 0xff
 }
 
+fn test_corner_and_edge_source_layouts() {
+	assert sizeof(Corner) == 1
+	assert u8(Corner.tl) == 0
+	assert u8(Corner.tr) == 1
+	assert u8(Corner.bl) == 2
+	assert u8(Corner.br) == 3
+	assert sizeof(Edge) == 1
+	assert u8(Edge.top) == 0
+	assert u8(Edge.left) == 1
+	assert u8(Edge.bottom) == 2
+	assert u8(Edge.right) == 3
+}
+
 // ------------------------------------------------------------
 // Canvas.pixel / rect / box primitives
 // ------------------------------------------------------------

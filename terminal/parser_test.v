@@ -45,6 +45,7 @@ fn test_parser_state_source_ordinals() {
 fn test_parser_source_limits_and_separator_list() {
 	assert max_params == 24
 	assert max_intermediate == 4
+	assert sizeof(Sep) == 1
 	assert int(Sep.semicolon) == 0
 	assert int(Sep.colon) == 1
 

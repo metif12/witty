@@ -1,5 +1,12 @@
 module terminal
 
+fn test_style_color_tag_source_layout() {
+	assert sizeof(ColorType) == 1
+	assert u8(ColorType.none) == 0
+	assert u8(ColorType.palette) == 1
+	assert u8(ColorType.rgb) == 2
+}
+
 fn test_style_equality_ignores_inactive_color_storage() {
 	base := CellStyle{}
 	stale := CellStyle{

@@ -1087,7 +1087,7 @@ pub fn (quads Quads) br() bool {
 // ============================================================
 
 // A corner of a cell.
-pub enum Corner {
+pub enum Corner as u8 {
 	tl
 	tr
 	bl
@@ -1099,7 +1099,7 @@ pub enum Corner {
 // ============================================================
 
 // An edge of a cell.
-pub enum Edge {
+pub enum Edge as u8 {
 	top
 	left
 	bottom

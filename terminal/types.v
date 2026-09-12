@@ -1508,9 +1508,7 @@ mut:
 
 pub fn StyleFlags.init(bold bool, italic bool, faint bool, blink bool, inverse bool, invisible bool, strikethrough bool, overline bool, underline UnderlineStyle) StyleFlags {
 	return StyleFlags{
-		value: u16(bold) | (u16(italic) << 1) | (u16(faint) << 2) | (u16(blink) << 3) |
-			(u16(inverse) << 4) | (u16(invisible) << 5) | (u16(strikethrough) << 6) |
-			(u16(overline) << 7) | (u16(underline) << 8)
+		value: u16(bold) | (u16(italic) << 1) | (u16(faint) << 2) | (u16(blink) << 3) | (u16(inverse) << 4) | (u16(invisible) << 5) | (u16(strikethrough) << 6) | (u16(overline) << 7) | (u16(underline) << 8)
 	}
 }
 
@@ -1595,7 +1593,7 @@ pub fn (mut flags StyleFlags) set_underline(underline UnderlineStyle) {
 }
 
 // ColorType describes what type of color is set.
-pub enum ColorType {
+pub enum ColorType as u8 {
 	none
 	palette
 	rgb

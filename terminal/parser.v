@@ -153,9 +153,9 @@ pub fn (mut self SepList) set(idx usize) {
 }
 
 // Sep identifies the separator following a CSI parameter.
-pub enum Sep {
-	semicolon
-	colon
+pub enum Sep as u8 {
+	semicolon = 0
+	colon     = 1
 }
 
 pub fn SepList.init_empty() SepList {
