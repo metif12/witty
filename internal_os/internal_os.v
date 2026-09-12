@@ -439,10 +439,31 @@ pub fn get_passwd() !PasswdEntry {
 		|| isnil(pw_result) {
 		return PasswdEntry{}
 	}
+
+	// A Flatpak passwd entry only has a reliable username. Query the host for
+	// the shell and home directory, matching Ghostty's host-command path.
+	$if linux {
+		if is_flatpak() {
+			name := if isnil(pw.pw_name) {
+				''
+			} else {
+				unsafe { cstring_to_vstring(pw.pw_name) }
+			}
+			return get_passwd_flatpak(name)!
+		}
+	}
 	return PasswdEntry{
 		shell: if isnil(pw.pw_shell) { none } else { unsafe { cstring_to_vstring(pw.pw_shell) } }
 		home: if isnil(pw.pw_dir) { none } else { unsafe { cstring_to_vstring(pw.pw_dir) } }
 		name: if isnil(pw.pw_name) { none } else { unsafe { cstring_to_vstring(pw.pw_name) } }
+	}
+}
+
+fn parse_flatpak_passwd_output(output string) PasswdEntry {
+	parts := output.trim_right(' \r\n').split(':')
+	return PasswdEntry{
+		shell: if parts.len > 0 { parts[parts.len - 1] } else { none }
+		home: if parts.len > 1 { parts[parts.len - 2] } else { none }
 	}
 }
 

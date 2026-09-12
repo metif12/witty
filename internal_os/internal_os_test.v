@@ -275,6 +275,13 @@ fn test_get_passwd_returns_shell_and_home() {
 	}
 }
 
+fn test_parse_flatpak_passwd_output_uses_last_two_fields() {
+	entry := parse_flatpak_passwd_output('alex:x:501:20:Alex:/Users/alex:/bin/zsh\r\n')
+	assert entry.name == none
+	assert entry.home? == '/Users/alex'
+	assert entry.shell? == '/bin/zsh'
+}
+
 fn test_i18n_locale_canonicalization() {
 	assert canonicalize_locale('en_US') == 'en_US'
 	assert canonicalize_locale('en-US') == 'en_US'

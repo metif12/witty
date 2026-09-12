@@ -1,8 +1,14 @@
 module internal_os
 
+import pty
+
 #pkgconfig gio-2.0 gio-unix-2.0
 
 #include "flatpak_linux.h"
+
+#include <errno.h>
+
+#include <unistd.h>
 
 fn C.witty_flatpak_host_command_new(argv &&char, cwd &char, envp &&char, stdin_fd int, stdout_fd int, stderr_fd int) voidptr
 
@@ -15,6 +21,47 @@ fn C.witty_flatpak_host_command_signal(command voidptr, signal u8, process_group
 fn C.witty_flatpak_host_command_error(command voidptr) &char
 
 fn C.witty_flatpak_host_command_free(command voidptr)
+
+fn C.read(fd int, buf voidptr, count usize) isize
+
+fn get_passwd_flatpak(username string) !PasswdEntry {
+	mut pseudoterminal := pty.Pty.open(pty.Winsize{})!
+	defer {
+		pseudoterminal.close_slave()
+		pseudoterminal.deinit()
+	}
+
+	mut command := FlatpakHostCommand{
+		argv: ['/bin/sh', '-l', '-c', 'getent passwd ${username}']
+		stdin: pseudoterminal.slave
+		stdout: pseudoterminal.slave
+		stderr: pseudoterminal.slave
+	}
+	defer {
+		command.deinit()
+	}
+	command.spawn()!
+	command.wait()!
+	pseudoterminal.close_slave()
+
+	mut output := []u8{}
+	mut buf := [1024]u8{}
+	for {
+		n := C.read(pseudoterminal.master, &buf[0], usize(buf.len))
+		if n < 0 {
+			if C.errno == C.EIO {
+				break
+			}
+			return error_with_code('failed to read host passwd entry', C.errno)
+		}
+		output << buf[..int(n)]
+		if output.len > buf.len {
+			break
+		}
+	}
+
+	return parse_flatpak_passwd_output(output.bytestr())
+}
 
 fn flatpak_host_command_spawn_linux(mut self FlatpakHostCommand) !u32 {
 	if !isnil(self.handle) {
