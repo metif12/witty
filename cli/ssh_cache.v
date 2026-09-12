@@ -311,6 +311,7 @@ pub fn run_ssh_cache(args []string) !int {
 fn parse_ssh_cache_options(args []string) !SshCacheOptions {
 	mut opts := SshCacheOptions{}
 	for arg in args {
+		request_action_help(arg)!
 		if arg == '--clear' {
 			opts.clear = true
 			continue

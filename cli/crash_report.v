@@ -35,6 +35,7 @@ fn format_crash_reports(reports []crash.Report, now_ns i64, is_tty bool) string 
 
 pub fn run_crash_report(args []string) !int {
 	if args.len > 0 {
+		request_action_help(args[0])!
 		return error('unknown option for crash-report: ${args[0]}')
 	}
 	print(crash_report_output(crash.default_dir().path, time.now().unix_nano(), os.is_atty(1) > 0)!)

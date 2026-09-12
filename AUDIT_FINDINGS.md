@@ -46,6 +46,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | root/quirks | The translated helper was stranded in module `main`; both font backends omitted Ghostty's explicit `disableDefaultFontFeatures` initialization and happened to get the current result only from V's false zero value. | Move the helper into an importable, cycle-free generic module and call it from both live FreeType and CoreText face constructors. |
 | root/tripwire | The failure-injection translation used untyped string points in a private instance exercised only by its own tests, so none of Ghostty's live error sites could be armed; Atlas initialization/growth had also been made infallible. | Restore a generic typed-point module with test-only checks; wire the tabstop allocation plus Atlas init/reserve/grow points into live paths, and restore the Atlas result contracts. |
 | root/Command | The translated process launcher was stranded in module `main` and exercised only by parallel tests, while the live termio backend independently rebuilt argv/envp and repeated cgroup clone, fork, descriptor, cwd, rlimit, pre-exec, and exec logic. Its empty environment incorrectly meant inheritance; fd setup omitted Ghostty's platform contract; child errors exited inside `Command`; and stopped children were misclassified as signal 127. | Move `Command` into an importable module and delegate the live PTY launch to it; preserve optional environment/PID and `ExecFailedInChild` contracts; restore target-specific fd setup and correct wait-status classification. |
+| CLI action help | Although the general help text told users to run `+<action> --help`, every translated action parser rejected `--help`/`-h`; `show-face` and `new-window` also swallowed parser errors that Ghostty explicitly propagates to its central action dispatcher. | Embed all 15 byte-for-byte generated action documentation entries, restore `ActionHelpRequested` propagation at each parser and at the two catching runners, and handle it centrally while retaining `new-window -e ... --help` as command input. |
 | embedded C text | Successful text projections allocated only the payload bytes and returned a null pointer for empty text, violating Ghostty's sentinel-terminated result type. | Always allocate the trailing byte, preserve embedded NUL bytes via the separate length, and return a non-null sentinel for an empty successful result. |
 | osc/color_parser | Hex channel scaling used `>>4`/`>>8` instead of `*255/4095` and `*255/65535`; float intensity rounded not truncated; named `green` = (0,128,0). | Correct scaling; truncate; `green` = (0,255,0). |
 | osc/osc9 | OSC 9;12 emitted default `.fresh_line` instead of `.fresh_line_new_prompt`. | Set correct action. |
@@ -117,6 +118,11 @@ an item here does not mean its full module has been certified yet.
   has a build-options carrier but does not yet generate or apply equivalent
   feature gating; APC handling is consequently unconditional and structurally
   embedded in `termio/stream_handler.v` rather than the source tagged state.
+- **Help generator structure:** the live CLI now embeds the pinned generated
+  action-help strings, but root `helpgen.v` remains a source-external runtime
+  text parser. Its `gen_actions` still reads enum comments rather than the
+  documentation attached to each action's `run` function as Ghostty's build
+  generator does.
 - **Allocator and memory representation:** `Page`, typed `Offset(T)` slices,
   allocator failure paths, and generic `RefCountedSet` storage are adapted to
   V GC arrays/specializations. Their reviewed observable behavior is close,

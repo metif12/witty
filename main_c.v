@@ -138,6 +138,17 @@ pub fn ghostty_cli_try_action() {
 }
 
 pub fn run_cli_action(action global_state.Action, args []string) !int {
+	return run_cli_action_main(action, args) or {
+		if cli.is_action_help_requested(err) {
+			help := cli.action_help_output(action.cli_name()) or { return err }
+			print(help)
+			return 0
+		}
+		return err
+	}
+}
+
+fn run_cli_action_main(action global_state.Action, args []string) !int {
 	return match action {
 		.none { 0 }
 		.version {

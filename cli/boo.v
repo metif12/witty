@@ -103,6 +103,7 @@ fn draw_boo_frame(frame string, width int, height int) !string {
 // the user presses Ctrl-C or Escape.
 pub fn run_boo(args []string) !int {
 	if args.len > 0 {
+		request_action_help(args[0])!
 		return error('unknown option for boo: ${args[0]}')
 	}
 	frames := decompress_boo_frames()!

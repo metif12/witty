@@ -24,6 +24,7 @@ fn parse_new_window_options(args []string) !NewWindowOptions {
 			opts.arguments = args[index + 1..].clone()
 			return opts
 		}
+		request_action_help(arg)!
 		if arg == '--class' {
 			return error('value required for --class')
 		}
@@ -38,6 +39,9 @@ fn parse_new_window_options(args []string) !NewWindowOptions {
 
 pub fn new_window_result(args []string) !NewWindowResult {
 	opts := parse_new_window_options(args) or {
+		if is_action_help_requested(err) {
+			return err
+		}
 		return NewWindowResult{
 			code: 1
 			errors: 'Error parsing args: ${err}\n'

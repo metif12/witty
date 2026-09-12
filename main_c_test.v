@@ -50,6 +50,10 @@ fn test_all_declared_actions_are_dispatched() {
 	assert global_state.actions().len == 15
 }
 
+fn test_cli_action_help_error_is_handled_centrally() {
+	assert run_cli_action(.crash_report, ['+crash-report', '--help'])! == 0
+}
+
 fn test_cli_help_matches_translated_command() {
 	help := cli_help_output()
 	assert help.starts_with('Usage: ghostty [+action] [options]\n\n')

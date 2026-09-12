@@ -15,6 +15,7 @@ import terminal
 pub fn list_actions_output(args []string) !string {
 	mut docs := false
 	for arg in args {
+		request_action_help(arg)!
 		match arg {
 			'--docs' {
 				docs = true
@@ -37,6 +38,7 @@ pub fn run_list_actions(args []string) !int {
 // data and ordering are identical to Ghostty's X.Org rgb.txt-backed command.
 pub fn list_colors_output(args []string) !string {
 	for arg in args {
+		request_action_help(arg)!
 		if arg != '--plain' {
 			return error('unknown option for list-colors: ${arg}')
 		}
@@ -63,6 +65,7 @@ pub fn run_list_colors(args []string) !int {
 pub fn list_keybinds_output(args []string) !string {
 	mut defaults := false
 	for arg in args {
+		request_action_help(arg)!
 		match arg {
 			'--default' {
 				defaults = true
@@ -145,6 +148,7 @@ fn parse_list_fonts_options(args []string) !FontListOptions {
 	mut i := 0
 	for i < args.len {
 		arg := args[i]
+		request_action_help(arg)!
 		if arg == '--bold' {
 			opts.bold = true
 		} else if arg == '--italic' {
@@ -217,6 +221,7 @@ pub fn validate_config(args []string) !ValidateResult {
 	mut i := 0
 	for i < args.len {
 		arg := args[i]
+		request_action_help(arg)!
 		if arg.starts_with('--config-file=') {
 			if path != none {
 				return error('config-file specified more than once')
@@ -265,6 +270,7 @@ pub fn run_validate_config(args []string) !int {
 // directory exists so an editor can create a first configuration.
 pub fn edit_config_target(args []string) !string {
 	if args.len > 0 {
+		request_action_help(args[0])!
 		return error('unknown option for edit-config: ${args[0]}')
 	}
 	_ := configpkg.Config.load_args([])!
@@ -339,6 +345,7 @@ pub fn run_show_config(args []string) !int {
 fn parse_show_config_options(args []string) !ShowConfigOptions {
 	mut opts := ShowConfigOptions{}
 	for arg in args {
+		request_action_help(arg)!
 		if arg == '--default' {
 			opts.defaults = true
 		} else if arg == '--docs' {
@@ -461,6 +468,9 @@ pub fn show_face(args []string) !ShowFaceResult {
 
 pub fn run_show_face(args []string) !int {
 	result := show_face(args) or {
+		if is_action_help_requested(err) {
+			return err
+		}
 		eprintln('Error parsing args: ${err}')
 		return 1
 	}
@@ -472,6 +482,7 @@ pub fn run_show_face(args []string) !int {
 fn parse_show_face_options(args []string) !ShowFaceOptions {
 	mut opts := ShowFaceOptions{}
 	for arg in args {
+		request_action_help(arg)!
 		if !arg.starts_with('--') {
 			opts.config_args << arg
 			continue

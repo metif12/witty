@@ -997,6 +997,9 @@ pub fn run_list_themes(args []string) !int {
 
 fn parse_list_themes_options(args []string) !Options {
 	mut opts := Options{}
-	cli_args.parse(mut opts, args)!
+	for arg in args {
+		request_action_help(arg)!
+		cli_args.parse(mut opts, [arg])!
+	}
 	return opts
 }
