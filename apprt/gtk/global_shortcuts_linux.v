@@ -436,7 +436,7 @@ fn (mut self GlobalShortcuts) refresh_map_from_bindings(mut new_map []ShortcutMa
 // iterate.
 fn map_binding(trigger input.Trigger, flags input.Flags, actions []input.Action) ?ShortcutMapEntry {
 	// Only global keybinds are registered with the portal.
-	if !flags.global {
+	if !flags.global() {
 		return none
 	}
 

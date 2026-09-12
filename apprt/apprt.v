@@ -318,12 +318,12 @@ pub fn (mut c CoreApp) key_event(app &App, event voidptr) bool {
 	}
 
 	// When the application isn't focused, only global bindings are eligible.
-	if !c.focused && !flags.global {
+	if !c.focused && !flags.global() {
 		return false
 	}
 
 	mut runtime_app := unsafe { &App(app) }
-	if flags.global {
+	if flags.global() {
 		for action in actions {
 			c.perform_all_action(mut runtime_app, action) or {}
 		}

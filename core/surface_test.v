@@ -279,7 +279,7 @@ fn test_surface_key_binding_applies_modifier_remap() {
 		assert false, 'remapped binding was not found'
 		return
 	}
-	assert !flags.global
+	assert !flags.global()
 }
 
 fn test_surface_inspector_records_owned_key_and_pty_data() {

@@ -168,12 +168,12 @@ pub fn (self &App) has_global_keybinds() bool {
 		match entry.value.typ {
 			.leader {}
 			.leaf {
-				if entry.value.leaf_flags.global {
+				if entry.value.leaf_flags.global() {
 					return true
 				}
 			}
 			.leaf_chained {
-				if entry.value.chain_flags.global {
+				if entry.value.chain_flags.global() {
 					return true
 				}
 			}

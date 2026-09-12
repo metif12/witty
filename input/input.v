@@ -382,23 +382,3 @@ pub:
 }
 
 // The OS-specific native-keycode mappings are defined in keycodes.v.
-
-// BindingFlags represents flags associated with a keybinding action.
-pub struct BindingFlags {
-pub:
-	// Whether this binding is a global keybind.
-	global bool
-}
-
-// BindingFlagsC is the C-compatible version of BindingFlags.
-pub struct BindingFlagsC {
-pub:
-	global bool
-}
-
-// cval converts BindingFlags to its C-compatible form.
-pub fn (f BindingFlags) cval() BindingFlagsC {
-	return BindingFlagsC{
-		global: f.global
-	}
-}

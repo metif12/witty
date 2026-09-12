@@ -4643,7 +4643,7 @@ pub fn (mut k Keybinds) init() {
 	k.set.put_flags(inputpkg.Trigger{
 		key: inputpkg.TriggerKey.new_unicode(u32(`c`))
 		mods: copy_mods
-	}, inputpkg.Action.new_enum(.copy_to_clipboard, i32(inputpkg.CopyToClipboard.mixed)), inputpkg.Flags{ performable: true })
+	}, inputpkg.Action.new_enum(.copy_to_clipboard, i32(inputpkg.CopyToClipboard.mixed)), inputpkg.Flags.init(true, false, false, true))
 	k.set.put(inputpkg.Trigger{
 		key: inputpkg.TriggerKey.new_unicode(u32(`v`))
 		mods: copy_mods
@@ -4690,9 +4690,7 @@ pub fn (mut k Keybinds) init() {
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(key)
 			mods: inputpkg.Mods{ shift: true }
-		}, inputpkg.Action.new_enum(.adjust_selection, i32(selection_actions[i])), inputpkg.Flags{
-			performable: true
-		})
+		}, inputpkg.Action.new_enum(.adjust_selection, i32(selection_actions[i])), inputpkg.Flags.init(true, false, false, true))
 	}
 
 	// Tabs common to all platforms.
@@ -4746,11 +4744,11 @@ pub fn (mut k Keybinds) init() {
 			k.set.put_flags(inputpkg.Trigger{
 				key: inputpkg.TriggerKey.new_physical(item[0])
 				mods: mods
-			}, inputpkg.Action.new(.previous_tab), inputpkg.Flags{ performable: true })
+			}, inputpkg.Action.new(.previous_tab), inputpkg.Flags.init(true, false, false, true))
 			k.set.put_flags(inputpkg.Trigger{
 				key: inputpkg.TriggerKey.new_physical(item[1])
 				mods: mods
-			}, inputpkg.Action.new(.next_tab), inputpkg.Flags{ performable: true })
+			}, inputpkg.Action.new(.next_tab), inputpkg.Flags.init(true, false, false, true))
 		}
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`o`))
@@ -4765,9 +4763,7 @@ pub fn (mut k Keybinds) init() {
 			k.set.put_flags(inputpkg.Trigger{
 				key: inputpkg.TriggerKey.new_unicode(u32(key))
 				mods: inputpkg.Mods{ ctrl: true, super_: true }
-			}, inputpkg.Action.new_enum(.goto_split, i32(rune_)), inputpkg.Flags{
-				performable: true
-			})
+			}, inputpkg.Action.new_enum(.goto_split, i32(rune_)), inputpkg.Flags.init(true, false, false, true))
 		}
 		focus_keys := [inputpkg.Key.arrow_up, .arrow_down, .arrow_left, .arrow_right]
 		focus_dirs := [inputpkg.SplitFocusDirection.up, .down, .left, .right]
@@ -4775,18 +4771,14 @@ pub fn (mut k Keybinds) init() {
 			k.set.put_flags(inputpkg.Trigger{
 				key: inputpkg.TriggerKey.new_physical(key)
 				mods: inputpkg.Mods{ ctrl: true, alt: true }
-			}, inputpkg.Action.new_enum(.goto_split, i32(focus_dirs[i])), inputpkg.Flags{
-				performable: true
-			})
+			}, inputpkg.Action.new_enum(.goto_split, i32(focus_dirs[i])), inputpkg.Flags.init(true, false, false, true))
 		}
 		resize_dirs := [inputpkg.SplitResizeDirection.up, .down, .left, .right]
 		for i, key in focus_keys {
 			k.set.put_flags(inputpkg.Trigger{
 				key: inputpkg.TriggerKey.new_physical(key)
 				mods: inputpkg.Mods{ super_: true, ctrl: true, shift: true }
-			}, inputpkg.Action.new_enum2(.resize_split, i32(resize_dirs[i]), 10), inputpkg.Flags{
-				performable: true
-			})
+			}, inputpkg.Action.new_enum2(.resize_split, i32(resize_dirs[i]), 10), inputpkg.Flags.init(true, false, false, true))
 		}
 		viewport_keys := [inputpkg.Key.home, .end, .page_up, .page_down]
 		viewport_actions := [inputpkg.ActionTag.scroll_to_top, .scroll_to_bottom, .scroll_page_up,
@@ -4808,10 +4800,10 @@ pub fn (mut k Keybinds) init() {
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`f`))
 			mods: inputpkg.Mods{ ctrl: true, shift: true }
-		}, inputpkg.Action.new(.start_search), inputpkg.Flags{ performable: true })
+		}, inputpkg.Action.new(.start_search), inputpkg.Flags.init(true, false, false, true))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.escape)
-		}, inputpkg.Action.new(.end_search), inputpkg.Flags{ performable: true })
+		}, inputpkg.Action.new(.end_search), inputpkg.Flags.init(true, false, false, true))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`i`))
 			mods: inputpkg.Mods{ shift: true, ctrl: true }
@@ -4835,7 +4827,7 @@ pub fn (mut k Keybinds) init() {
 		.digit_8]
 	for i, key in digit_keys {
 		performable := $if macos { false } $else { true }
-		flags := inputpkg.Flags{ performable: performable }
+		flags := inputpkg.Flags.init(true, false, false, performable)
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(key)
 			mods: index_mods
@@ -4849,7 +4841,7 @@ pub fn (mut k Keybinds) init() {
 	k.set.put_flags(inputpkg.Trigger{
 		key: inputpkg.TriggerKey.new_unicode(u32(`9`))
 		mods: index_mods
-	}, inputpkg.Action.new(.last_tab), inputpkg.Flags{ performable: last_tab_performable })
+	}, inputpkg.Action.new(.last_tab), inputpkg.Flags.init(true, false, false, last_tab_performable))
 
 	k.set.put(inputpkg.Trigger{
 		key: inputpkg.TriggerKey.new_physical(.enter)
@@ -4873,7 +4865,7 @@ pub fn (mut k Keybinds) init() {
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`k`))
 			mods: inputpkg.Mods{ super_: true }
-		}, inputpkg.Action.new(.clear_screen), inputpkg.Flags{ performable: true })
+		}, inputpkg.Action.new(.clear_screen), inputpkg.Flags.init(true, false, false, true))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`a`))
 			mods: inputpkg.Mods{ super_: true }
@@ -4881,15 +4873,15 @@ pub fn (mut k Keybinds) init() {
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`t`))
 			mods: inputpkg.Mods{ super_: true, shift: true }
-		}, inputpkg.Action.new(.undo), inputpkg.Flags{ performable: true })
+		}, inputpkg.Action.new(.undo), inputpkg.Flags.init(true, false, false, true))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`z`))
 			mods: inputpkg.Mods{ super_: true }
-		}, inputpkg.Action.new(.undo), inputpkg.Flags{ performable: true })
+		}, inputpkg.Action.new(.undo), inputpkg.Flags.init(true, false, false, true))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`z`))
 			mods: inputpkg.Mods{ super_: true, shift: true }
-		}, inputpkg.Action.new(.redo), inputpkg.Flags{ performable: true })
+		}, inputpkg.Action.new(.redo), inputpkg.Flags.init(true, false, false, true))
 
 		viewport_keys := [inputpkg.Key.home, .end, .page_up, .page_down]
 		viewport_actions := [inputpkg.ActionTag.scroll_to_top, .scroll_to_bottom, .scroll_page_up,
@@ -4903,7 +4895,7 @@ pub fn (mut k Keybinds) init() {
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`j`))
 			mods: inputpkg.Mods{ super_: true }
-		}, inputpkg.Action.new(.scroll_to_selection), inputpkg.Flags{ performable: true })
+		}, inputpkg.Action.new(.scroll_to_selection), inputpkg.Flags.init(true, false, false, true))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.arrow_up)
 			mods: inputpkg.Mods{ super_: true, shift: true }
@@ -4989,30 +4981,26 @@ pub fn (mut k Keybinds) init() {
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`f`))
 			mods: inputpkg.Mods{ super_: true }
-		}, inputpkg.Action.new(.start_search), inputpkg.Flags{ performable: true })
+		}, inputpkg.Action.new(.start_search), inputpkg.Flags.init(true, false, false, true))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`e`))
 			mods: inputpkg.Mods{ super_: true }
-		}, inputpkg.Action.new(.search_selection), inputpkg.Flags{ performable: true })
+		}, inputpkg.Action.new(.search_selection), inputpkg.Flags.init(true, false, false, true))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`f`))
 			mods: inputpkg.Mods{ super_: true, shift: true }
-		}, inputpkg.Action.new(.end_search), inputpkg.Flags{ performable: true })
+		}, inputpkg.Action.new(.end_search), inputpkg.Flags.init(true, false, false, true))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_physical(.escape)
-		}, inputpkg.Action.new(.end_search), inputpkg.Flags{ performable: true })
+		}, inputpkg.Action.new(.end_search), inputpkg.Flags.init(true, false, false, true))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`g`))
 			mods: inputpkg.Mods{ super_: true }
-		}, inputpkg.Action.new_enum(.navigate_search, i32(inputpkg.NavigateSearch.next)), inputpkg.Flags{
-			performable: true
-		})
+		}, inputpkg.Action.new_enum(.navigate_search, i32(inputpkg.NavigateSearch.next)), inputpkg.Flags.init(true, false, false, true))
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`g`))
 			mods: inputpkg.Mods{ super_: true, shift: true }
-		}, inputpkg.Action.new_enum(.navigate_search, i32(inputpkg.NavigateSearch.previous)), inputpkg.Flags{
-			performable: true
-		})
+		}, inputpkg.Action.new_enum(.navigate_search, i32(inputpkg.NavigateSearch.previous)), inputpkg.Flags.init(true, false, false, true))
 		k.set.put(inputpkg.Trigger{
 			key: inputpkg.TriggerKey.new_unicode(u32(`i`))
 			mods: inputpkg.Mods{ alt: true, super_: true }

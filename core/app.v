@@ -743,13 +743,13 @@ pub fn (mut self App) key_event(mut rt_app apprt.RuntimeApp, event input.KeyEven
 	}
 
 	// If we aren't focused, then we only process global keybinds.
-	if !self.focused && !leaf.flags.global {
+	if !self.focused && !leaf.flags.global() {
 		return false
 	}
 
 	// Global keybinds are done using performAll so they can target all
 	// surfaces too.
-	if leaf.flags.global {
+	if leaf.flags.global() {
 		self.perform_all_chained_action(mut rt_app, actions)
 		return true
 	}

@@ -8,27 +8,28 @@ fn test_flags_cval_default() {
 }
 
 fn test_flags_cval_not_consumed() {
-	f := Flags{ consumed: false }
+	f := Flags.init(false, false, false, false)
 	assert f.cval() == u8(0b0000)
 }
 
 fn test_flags_cval_all() {
-	f := Flags{ all: true }
+	f := Flags.init(true, true, false, false)
 	assert f.cval() == u8(0b0011)
 }
 
 fn test_flags_cval_global() {
-	f := Flags{ global: true }
+	f := Flags.init(true, false, true, false)
 	assert f.cval() == u8(0b0101)
 }
 
 fn test_flags_cval_performable() {
-	f := Flags{ performable: true }
+	f := Flags.init(true, false, false, true)
 	assert f.cval() == u8(0b1001)
 }
 
 fn test_flags_cval_all_set() {
-	f := Flags{ consumed: true, all: true, global: true, performable: true }
+	f := Flags.init(true, true, true, true)
+	assert sizeof(Flags) == 1
 	assert f.cval() == u8(0b1111)
 }
 
@@ -82,21 +83,21 @@ fn test_parse_unconsumed_keys() {
 	b := parse_single('unconsumed:shift+a=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
-	assert b.flags.consumed == false
+	assert b.flags.consumed() == false
 }
 
 fn test_parse_unconsumed_physical_keys() {
 	b := parse_single('unconsumed:key_a+shift=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
 	assert b.trigger.key == TriggerKey.new_physical(.key_a)
-	assert b.flags.consumed == false
+	assert b.flags.consumed() == false
 }
 
 fn test_parse_performable_keys() {
 	b := parse_single('performable:shift+a=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
-	assert b.flags.performable == true
+	assert b.flags.performable() == true
 }
 
 fn test_parse_invalid_key() {
@@ -229,22 +230,22 @@ fn test_parse_global() {
 	b := parse_single('global:shift+a=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
-	assert b.flags.global == true
+	assert b.flags.global() == true
 }
 
 fn test_parse_global_physical() {
 	b := parse_single('global:key_a+shift=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
 	assert b.trigger.key == TriggerKey.new_physical(.key_a)
-	assert b.flags.global == true
+	assert b.flags.global() == true
 }
 
 fn test_parse_global_unconsumed() {
 	b := parse_single('unconsumed:global:a+shift=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
-	assert b.flags.global == true
-	assert b.flags.consumed == false
+	assert b.flags.global() == true
+	assert b.flags.consumed() == false
 }
 
 fn test_parse_global_sequence_not_allowed() {
@@ -262,22 +263,22 @@ fn test_parse_all() {
 	b := parse_single('all:shift+a=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
-	assert b.flags.all == true
+	assert b.flags.all() == true
 }
 
 fn test_parse_all_physical() {
 	b := parse_single('all:key_a+shift=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
 	assert b.trigger.key == TriggerKey.new_physical(.key_a)
-	assert b.flags.all == true
+	assert b.flags.all() == true
 }
 
 fn test_parse_all_unconsumed() {
 	b := parse_single('unconsumed:all:a+shift=ignore') or { panic(err.msg()) }
 	assert b.trigger.mods.shift == true
 	assert b.trigger.key == TriggerKey.new_unicode(u32(`a`))
-	assert b.flags.all == true
-	assert b.flags.consumed == false
+	assert b.flags.all() == true
+	assert b.flags.consumed() == false
 }
 
 fn test_parse_all_sequence_not_allowed() {
@@ -691,7 +692,7 @@ fn test_set_parse_and_put_unconsumed() {
 	entry := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
 	assert entry.value.typ == .leaf
 	assert entry.value.leaf_action.tag == .new_window
-	assert entry.value.leaf_flags.consumed == false
+	assert entry.value.leaf_flags.consumed() == false
 
 	trigger := s.get_trigger(Action.new(.new_window)) or { panic('not found') }
 	assert trigger.key == TriggerKey.new_unicode(u32(`a`))
@@ -804,7 +805,7 @@ fn test_set_performable_not_in_reverse() {
 	assert trigger.key == TriggerKey.new_unicode(u32(`a`))
 
 	// Performable trigger should not replace reverse mapping
-	s.put_flags(Trigger{ key: TriggerKey.new_unicode(u32(`b`)) }, Action.new(.new_window), Flags{ performable: true })
+	s.put_flags(Trigger{ key: TriggerKey.new_unicode(u32(`b`)) }, Action.new(.new_window), Flags.init(true, false, false, true))
 	trigger2 := s.get_trigger(Action.new(.new_window)) or { panic('not found') }
 	assert trigger2.key == TriggerKey.new_unicode(u32(`a`))
 
@@ -831,15 +832,15 @@ fn test_set_consumed_state() {
 	s.put(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }, Action.new(.new_window))
 	entry1 := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
 	assert entry1.value.typ == .leaf
-	assert entry1.value.leaf_flags.consumed
+	assert entry1.value.leaf_flags.consumed()
 
-	s.put_flags(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }, Action.new(.new_window), Flags{ consumed: false })
+	s.put_flags(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }, Action.new(.new_window), Flags.init(false, false, false, false))
 	entry2 := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
-	assert !entry2.value.leaf_flags.consumed
+	assert !entry2.value.leaf_flags.consumed()
 
 	s.put(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }, Action.new(.new_window))
 	entry3 := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
-	assert entry3.value.leaf_flags.consumed
+	assert entry3.value.leaf_flags.consumed()
 }
 
 // --- getEvent tests ---
@@ -1146,12 +1147,10 @@ fn test_set_value_generic_leaf() {
 	value := SetValue{
 		typ: .leaf
 		leaf_action: action
-		leaf_flags: Flags{
-			global: true
-		}
+		leaf_flags: Flags.init(true, false, true, false)
 	}
 	leaf := value.generic() or { panic('leaf must have a generic view') }
-	assert leaf.flags.global
+	assert leaf.flags.global()
 	assert leaf.actions_slice().len == 1
 	assert leaf.actions_slice()[0].equal(action)
 }
@@ -1161,12 +1160,10 @@ fn test_set_value_generic_chained_leaf() {
 	value := SetValue{
 		typ: .leaf_chained
 		chain_actions: actions
-		chain_flags: Flags{
-			performable: true
-		}
+		chain_flags: Flags.init(true, false, false, true)
 	}
 	leaf := value.generic() or { panic('chained leaf must have a generic view') }
-	assert leaf.flags.performable
+	assert leaf.flags.performable()
 	assert leaf.actions_slice().len == 2
 	assert leaf.actions_slice()[0].equal(actions[0])
 	assert leaf.actions_slice()[1].equal(actions[1])

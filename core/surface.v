@@ -5800,7 +5800,7 @@ fn (mut self Surface) handle_binding_entry(event KeyEvent, entry &input.SetEntry
 	if inspecting {
 		inspector_event.binding = actions.clone()
 	}
-	consumed := flags.consumed || flags.global || flags.all
+	consumed := flags.consumed() || flags.global() || flags.all()
 	self.keyboard.last_trigger = none
 	self.keyboard.sequence_set = none
 
@@ -5821,7 +5821,7 @@ fn (mut self Surface) handle_binding_entry(event KeyEvent, entry &input.SetEntry
 			}
 		}
 	}
-	if flags.performable && !performed {
+	if flags.performable() && !performed {
 		self.end_key_sequence(.flush, .retain)
 		return none
 	}

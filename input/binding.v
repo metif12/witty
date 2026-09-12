@@ -1057,7 +1057,7 @@ pub:
 	flags Flags
 }
 
-pub fn (a Binding) ==(b Binding) bool {
+pub fn (a Binding) == (b Binding) bool {
 	return a.trigger.equal(b.trigger) && a.action.equal(b.action) && a.flags == b.flags
 }
 
@@ -1070,39 +1070,61 @@ pub enum BindingError {
 }
 
 // Flags are the full binding-scoped flags that can be set per binding.
+// Ghostty exposes this exact packed byte through its C API.
 pub struct Flags {
-pub:
-	// True if this binding should consume the input when the
-	// action is triggered.
-	consumed bool = true
-	// True if this binding should be forwarded to all active surfaces
-	// in the application.
-	all bool
-	// True if this binding is global. Global bindings should work system-wide
-	// and not just while the terminal is focused.
-	global bool
-	// True if this binding should only be triggered if the action can be
-	// performed. If the action can't be performed then the binding acts as
-	// if it doesn't exist.
-	performable bool
+mut:
+	value u8 = 0b0001
+}
+
+pub fn Flags.init(consumed bool, all bool, global bool, performable bool) Flags {
+	return Flags{
+		value: u8(consumed) | (u8(all) << 1) | (u8(global) << 2) | (u8(performable) << 3)
+	}
+}
+
+pub fn (self Flags) consumed() bool {
+	return self.value & 0b0001 != 0
+}
+
+pub fn (self Flags) all() bool {
+	return self.value & 0b0010 != 0
+}
+
+pub fn (self Flags) global() bool {
+	return self.value & 0b0100 != 0
+}
+
+pub fn (self Flags) performable() bool {
+	return self.value & 0b1000 != 0
+}
+
+fn (mut self Flags) set_consumed(value bool) {
+	self.set(0b0001, value)
+}
+
+fn (mut self Flags) set_all(value bool) {
+	self.set(0b0010, value)
+}
+
+fn (mut self Flags) set_global(value bool) {
+	self.set(0b0100, value)
+}
+
+fn (mut self Flags) set_performable(value bool) {
+	self.set(0b1000, value)
+}
+
+fn (mut self Flags) set(mask u8, enabled bool) {
+	if enabled {
+		self.value |= mask
+	} else {
+		self.value &= ~mask
+	}
 }
 
 // cval converts flags to a packed u8 value.
 pub fn (f Flags) cval() u8 {
-	mut result := u8(0)
-	if f.consumed {
-		result |= 0b0001
-	}
-	if f.all {
-		result |= 0b0010
-	}
-	if f.global {
-		result |= 0b0100
-	}
-	if f.performable {
-		result |= 0b1000
-	}
-	return result
+	return f.value
 }
 
 // TriggerKey represents the key part of a trigger. It can be either a
@@ -1140,7 +1162,7 @@ pub fn TriggerKey.new_catch_all() TriggerKey {
 	}
 }
 
-pub fn (a TriggerKey) ==(b TriggerKey) bool {
+pub fn (a TriggerKey) == (b TriggerKey) bool {
 	if a.typ != b.typ {
 		return false
 	}
@@ -1160,7 +1182,7 @@ pub:
 	mods Mods
 }
 
-pub fn (a Trigger) ==(b Trigger) bool {
+pub fn (a Trigger) == (b Trigger) bool {
 	return a.equal(b)
 }
 
@@ -1646,7 +1668,7 @@ pub:
 	cursor_key CursorKey
 }
 
-pub fn (a Action) ==(b Action) bool {
+pub fn (a Action) == (b Action) bool {
 	return a.equal(b)
 }
 
@@ -2862,37 +2884,25 @@ fn parse_flags(raw_input string) !(Flags, int) {
 		prefix := inp[..idx]
 
 		if prefix == 'all' {
-			if flags.all {
+			if flags.all() {
 				return error('InvalidFormat')
 			}
-			flags = Flags{
-				...flags
-				all: true
-			}
+			flags.set_all(true)
 		} else if prefix == 'global' {
-			if flags.global {
+			if flags.global() {
 				return error('InvalidFormat')
 			}
-			flags = Flags{
-				...flags
-				global: true
-			}
+			flags.set_global(true)
 		} else if prefix == 'unconsumed' {
-			if !flags.consumed {
+			if !flags.consumed() {
 				return error('InvalidFormat')
 			}
-			flags = Flags{
-				...flags
-				consumed: false
-			}
+			flags.set_consumed(false)
 		} else if prefix == 'performable' {
-			if flags.performable {
+			if flags.performable() {
 				return error('InvalidFormat')
 			}
-			flags = Flags{
-				...flags
-				performable: true
-			}
+			flags.set_performable(true)
 		} else {
 			// Unknown prefix - let trigger-specific parsing handle it
 			break
@@ -2917,7 +2927,7 @@ pub fn (mut self Parser) next() !ParserElem {
 
 	if !self.trigger_it.done() {
 		// Global/all bindings can't be sequences
-		if self.flags.global || self.flags.all {
+		if self.flags.global() || self.flags.all() {
 			return error('InvalidFormat')
 		}
 		return ParserElem{
@@ -3242,7 +3252,7 @@ pub fn (mut s Set) put_flags(t Trigger, action Action, flags Flags) {
 
 	// This is true if we're going to track this entry as a reverse mapping.
 	// There are certain scenarios we don't. See the reverse map docs.
-	track_reverse := !flags.performable
+	track_reverse := !flags.performable()
 
 	// Check for existing entry
 	for i in 0 .. s.bindings.len {
