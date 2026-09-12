@@ -12,6 +12,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | terminal/modes | `ModePacked` was `u32` with `& 31` masking, but 40 modes exist → modes ≥32 (cursor_keys, mouse_alternate_scroll, alt_esc_prefix…) aliased onto modes 0-7. Also 4 wrong table defaults and a hardcoded `data:5` default. | `data` → `u64`, mask `& 63`; corrected `send_receive_mode`/`mouse_alternate_scroll`/`ignore_keypad_with_numlock`/`alt_esc_prefix` defaults; default now derived from the table via `build_default_modes()`. |
 | terminal (screen/types/style) | SGR 58 underline color written into the **foreground** fields (no dedicated storage); `underline_color_rgb` read from fg. | Added `underline_r/g/b/palette` to `CellStyle`; `set_attribute` and `underline_color_rgb` use them; `eql`/`hash` include them. |
 | terminal/terminal | `index()` didn't mark the new row `prompt_continuation` on a plain linefeed in prompt/**input** mode (logic was only in `print_wrap`, only for `.prompt`). | Added the `defer` marking for `semantic_content != .output` (prompt AND input). |
+| terminal/stream, terminal/terminal | Ghostty's repeat, character-edit, line-edit, and scroll actions carry `usize`, but Witty collapsed them into the shared `u16` event field and then narrowed them to V's 32-bit `int` at both handlers. | Add a dedicated `usize` action count, route all eight actions through it, and restore `usize` terminal method contracts; bounded screen operations clamp before conversion to array indexes. |
 | input/key | `w3c()` blindly did `- 32` on the char after `_`, corrupting digits (`digit_1` → "Digit\x11"). | Uppercase only `a-z`. |
 | input/function_keys | `make_kp_keys` returned only the unmodified keypad entry, dropping the 15 modifier combinations. | Generate all 16 (kpDefault ++ pcStyle), `mods_empty_is_any=false` on default. |
 | input (Mods) | `Mods.translation()` fully inverted (unset/keep alt and left/right swapped); `int()`/`SideInfo` dropped caps/num-lock + side bits and had no `super` side. | Rewrote translation to match macos-option-as-alt; full packed `int()` round-trip preserving sides+locks. |
@@ -46,7 +47,8 @@ and ABI boundaries as one-for-one translations.
 
 terminal: color, csi, ansi, dcs, charsets, device_status, tabstops,
 size, point, mouse_shape, sgr, selection, bitmap_allocator, ScreenSet,
-RefCountedSet, hash_map, style, x11_color, formatter, stream parser boundaries.
+RefCountedSet, hash_map, style, x11_color, formatter, stream parser boundaries
+and readonly handler.
 font: backend, Atlas, Metrics, codepoint_map,
 embedded, shared_grid, codepoint_resolver (pure logic), collection,
 discovery, face (Constraint math), shaper/feature/cache/noop/run,
@@ -75,6 +77,11 @@ an item here does not mean its full module has been certified yet.
   allocator/writer objects, and nested parser types are represented by a flat
   V command struct and GC-backed arrays. Observable parser boundaries are now
   enforced, but this is not a one-for-one representation or ABI translation.
+- **Stream dispatch representation:** Ghostty specializes `Stream(Handler)` and
+  invokes typed, comptime-tagged callbacks synchronously as parsing progresses.
+  Witty's shared parser stores flat `StreamEvent`/`ActionPayload` values for a
+  later handler pass. The reviewed action values and read-only effects are
+  close, but callback/error timing, allocation, and representation differ.
 - **Generated feature wiring:** Ghostty's build synthesizes
   `kitty_graphics`/`tmux_control_mode` from the Oniguruma build option. Witty
   has a build-options carrier but does not yet generate or apply equivalent

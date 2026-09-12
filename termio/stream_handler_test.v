@@ -523,7 +523,7 @@ fn test_stream_handler_scroll_up() {
 	defer { ctx.t.deinit() }
 	handler.vt(terminal.StreamEvent{
 		key: .scroll_up
-		payload: terminal.ActionPayload{ num: 1 }
+		payload: terminal.ActionPayload{ count: 1 }
 	})
 	// Should not crash
 }
@@ -534,7 +534,7 @@ fn test_stream_handler_erase_chars() {
 	defer { ctx.t.deinit() }
 	handler.vt(terminal.StreamEvent{
 		key: .erase_chars
-		payload: terminal.ActionPayload{ num: 5 }
+		payload: terminal.ActionPayload{ count: 5 }
 	})
 }
 
@@ -544,7 +544,7 @@ fn test_stream_handler_insert_lines() {
 	defer { ctx.t.deinit() }
 	handler.vt(terminal.StreamEvent{
 		key: .insert_lines
-		payload: terminal.ActionPayload{ num: 2 }
+		payload: terminal.ActionPayload{ count: 2 }
 	})
 }
 
@@ -554,7 +554,7 @@ fn test_stream_handler_delete_lines() {
 	defer { ctx.t.deinit() }
 	handler.vt(terminal.StreamEvent{
 		key: .delete_lines
-		payload: terminal.ActionPayload{ num: 1 }
+		payload: terminal.ActionPayload{ count: 1 }
 	})
 }
 
@@ -564,7 +564,7 @@ fn test_stream_handler_insert_blanks() {
 	defer { ctx.t.deinit() }
 	handler.vt(terminal.StreamEvent{
 		key: .insert_blanks
-		payload: terminal.ActionPayload{ num: 3 }
+		payload: terminal.ActionPayload{ count: 3 }
 	})
 }
 
@@ -574,7 +574,7 @@ fn test_stream_handler_delete_chars() {
 	defer { ctx.t.deinit() }
 	handler.vt(terminal.StreamEvent{
 		key: .delete_chars
-		payload: terminal.ActionPayload{ num: 2 }
+		payload: terminal.ActionPayload{ count: 2 }
 	})
 }
 

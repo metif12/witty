@@ -153,7 +153,7 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.terminal.print(event.payload.cp) or {}
 		}
 		.print_repeat {
-			self.terminal.print_repeat(int(event.payload.num)) or {}
+			self.terminal.print_repeat(event.payload.count) or {}
 		}
 		.bell {
 			self.bell()
@@ -240,25 +240,25 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.terminal.erase_line(.right_unless_pending_wrap, event.payload.flag)
 		}
 		.delete_chars {
-			self.terminal.delete_chars(int(event.payload.num))
+			self.terminal.delete_chars(event.payload.count)
 		}
 		.erase_chars {
-			self.terminal.erase_chars(int(event.payload.num))
+			self.terminal.erase_chars(event.payload.count)
 		}
 		.insert_lines {
-			self.terminal.insert_lines(int(event.payload.num))
+			self.terminal.insert_lines(event.payload.count)
 		}
 		.insert_blanks {
-			self.terminal.insert_blanks(int(event.payload.num))
+			self.terminal.insert_blanks(event.payload.count)
 		}
 		.delete_lines {
-			self.terminal.delete_lines(int(event.payload.num))
+			self.terminal.delete_lines(event.payload.count)
 		}
 		.scroll_up {
-			self.terminal.scroll_up(int(event.payload.num)) or {}
+			self.terminal.scroll_up(event.payload.count) or {}
 		}
 		.scroll_down {
-			self.terminal.scroll_down(int(event.payload.num))
+			self.terminal.scroll_down(event.payload.count)
 		}
 		.tab_clear_current {
 			self.terminal.tab_clear(.current)

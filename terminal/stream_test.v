@@ -31,6 +31,12 @@ fn get_last_event(events []StreamEvent, key ActionKey) StreamEvent {
 	return result
 }
 
+fn test_action_payload_preserves_source_usize_counts() {
+	count := usize(70_000)
+	payload := ActionPayload{ count: count }
+	assert payload.count == count
+}
+
 // ============================================================
 // Tests
 // ============================================================

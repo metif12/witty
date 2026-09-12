@@ -192,7 +192,7 @@ pub fn (mut self ReadonlyHandler) vt(event StreamEvent) ! {
 			self.terminal.print(event.payload.cp)!
 		}
 		.print_repeat {
-			self.terminal.print_repeat(int(event.payload.num))!
+			self.terminal.print_repeat(event.payload.count)!
 		}
 		.backspace {
 			self.terminal.backspace()
@@ -287,25 +287,25 @@ pub fn (mut self ReadonlyHandler) vt(event StreamEvent) ! {
 			self.terminal.erase_line(.right_unless_pending_wrap, event.payload.flag)
 		}
 		.delete_chars {
-			self.terminal.delete_chars(int(event.payload.num))
+			self.terminal.delete_chars(event.payload.count)
 		}
 		.erase_chars {
-			self.terminal.erase_chars(int(event.payload.num))
+			self.terminal.erase_chars(event.payload.count)
 		}
 		.insert_lines {
-			self.terminal.insert_lines(int(event.payload.num))
+			self.terminal.insert_lines(event.payload.count)
 		}
 		.insert_blanks {
-			self.terminal.insert_blanks(int(event.payload.num))
+			self.terminal.insert_blanks(event.payload.count)
 		}
 		.delete_lines {
-			self.terminal.delete_lines(int(event.payload.num))
+			self.terminal.delete_lines(event.payload.count)
 		}
 		.scroll_up {
-			self.terminal.scroll_up(int(event.payload.num))!
+			self.terminal.scroll_up(event.payload.count)!
 		}
 		.scroll_down {
-			self.terminal.scroll_down(int(event.payload.num))
+			self.terminal.scroll_down(event.payload.count)
 		}
 		.horizontal_tab {
 			self.horizontal_tab(event.payload.num)

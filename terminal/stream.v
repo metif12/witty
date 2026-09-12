@@ -439,8 +439,11 @@ pub:
 	// For .print
 	cp u32
 	// For cursor movements, counts, tab amounts, kitty_keyboard_pop,
-	// title_push, title_pop, print_repeat, etc.
+	// title_push, title_pop, etc. Ghostty's cursor-oriented values are u16.
 	num u16
+	// Ghostty uses usize for repeat/edit/scroll counts even though values parsed
+	// from CSI parameters currently originate as u16.
+	count usize
 	// Second numeric value (for cursor_pos col, margin bottom_right)
 	num2 u16
 	// Boolean flag (for erase protected, mouse_shift_capture)
@@ -1043,7 +1046,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 		u8(`L`) {
 			if input.intermediates.len == 0 {
 				val := self.csi_single_param(input, 1) or { return }
-				self.dispatch(.insert_lines, ActionPayload{ num: val })
+				self.dispatch(.insert_lines, ActionPayload{ count: val })
 			}
 		}
 
@@ -1051,7 +1054,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 		u8(`M`) {
 			if input.intermediates.len == 0 {
 				val := self.csi_single_param(input, 1) or { return }
-				self.dispatch(.delete_lines, ActionPayload{ num: val })
+				self.dispatch(.delete_lines, ActionPayload{ count: val })
 			}
 		}
 
@@ -1059,7 +1062,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 		u8(`P`) {
 			if input.intermediates.len == 0 {
 				val := self.csi_single_param(input, 1) or { return }
-				self.dispatch(.delete_chars, ActionPayload{ num: val })
+				self.dispatch(.delete_chars, ActionPayload{ count: val })
 			}
 		}
 
@@ -1067,7 +1070,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 		u8(`S`) {
 			if input.intermediates.len == 0 {
 				val := self.csi_single_param(input, 1) or { return }
-				self.dispatch(.scroll_up, ActionPayload{ num: val })
+				self.dispatch(.scroll_up, ActionPayload{ count: val })
 			}
 		}
 
@@ -1075,7 +1078,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 		u8(`T`) {
 			if input.intermediates.len == 0 {
 				val := self.csi_single_param(input, 1) or { return }
-				self.dispatch(.scroll_down, ActionPayload{ num: val })
+				self.dispatch(.scroll_down, ActionPayload{ count: val })
 			}
 		}
 
@@ -1088,7 +1091,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 		u8(`X`) {
 			if input.intermediates.len == 0 {
 				val := self.csi_single_param(input, 1) or { return }
-				self.dispatch(.erase_chars, ActionPayload{ num: val })
+				self.dispatch(.erase_chars, ActionPayload{ count: val })
 			}
 		}
 
@@ -1112,7 +1115,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 		u8(`b`) {
 			if input.intermediates.len == 0 {
 				val := self.csi_single_param(input, 1) or { return }
-				self.dispatch(.print_repeat, ActionPayload{ num: val })
+				self.dispatch(.print_repeat, ActionPayload{ count: val })
 			}
 		}
 
@@ -1202,7 +1205,7 @@ fn (mut self Stream) csi_dispatch(input CSIAction) {
 		u8(`@`) {
 			if input.intermediates.len == 0 {
 				val := self.csi_single_param(input, 1) or { return }
-				self.dispatch(.insert_blanks, ActionPayload{ num: val })
+				self.dispatch(.insert_blanks, ActionPayload{ count: val })
 			}
 		}
 

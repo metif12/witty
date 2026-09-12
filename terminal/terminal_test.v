@@ -964,7 +964,9 @@ fn test_delete_chars_more_than_line_width() {
 	t.print_string('123456789') or { assert false }
 	t.set_cursor_pos(1, 4)
 
-	t.delete_chars(100)
+	// The source accepts usize and clamps to the remaining columns before any
+	// narrowing. Keep this above V's signed 32-bit int range.
+	t.delete_chars(usize(3_000_000_000))
 
 	str := t.plain_string() or {
 		assert false
@@ -1036,7 +1038,7 @@ fn test_erase_chars_beyond_screen_edge() {
 	t.print_string('123456789A') or { assert false }
 	t.set_cursor_pos(1, 8)
 
-	t.erase_chars(100)
+	t.erase_chars(usize(3_000_000_000))
 
 	str := t.plain_string() or {
 		assert false
@@ -6069,7 +6071,7 @@ fn test_delete_chars_split_wide_character_tail() {
 	t.set_cursor_pos(1, int(t.cols) - 1)
 	t.print(0x6A4B) or { assert false }
 	t.carriage_return()
-	t.delete_chars(int(t.cols) - 1)
+	t.delete_chars(usize(t.cols) - 1)
 	t.print(u32(`0`)) or { assert false }
 
 	assert t.plain_string() or { '' } == '0'

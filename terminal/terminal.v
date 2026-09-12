@@ -1846,10 +1846,10 @@ pub fn (mut self Terminal) print_string(str string) ! {
 }
 
 // Print the previous printed character a repeated amount of times.
-pub fn (mut self Terminal) print_repeat(count_req int) ! {
+pub fn (mut self Terminal) print_repeat(count_req usize) ! {
 	if c := self.previous_char {
-		count := if count_req < 1 { 1 } else { count_req }
-		for _ in 0 .. count {
+		count := if count_req < 1 { usize(1) } else { count_req }
+		for _ in usize(0) .. count {
 			self.print(c)!
 		}
 	}
@@ -2053,7 +2053,7 @@ pub fn (mut self Terminal) print(c u32) ! {
 	// If we have insert mode enabled then we need to handle that. We
 	// only do insert mode if we're not at the end of the line.
 	if self.modes.get(.insert) && self.screens.active.cursor.x + width < self.cols {
-		self.insert_blanks(int(width))
+		self.insert_blanks(usize(width))
 	}
 
 	if width == 1 {
@@ -2953,7 +2953,7 @@ pub fn (mut self Terminal) set_left_and_right_margin(left_req int, right_req int
 // ============================================================
 
 // Scroll the text down by one row.
-pub fn (mut self Terminal) scroll_down(count int) {
+pub fn (mut self Terminal) scroll_down(count usize) {
 	// Preserve our x/y to restore.
 	old_x := self.screens.active.cursor.x
 	old_y := self.screens.active.cursor.y
@@ -2975,7 +2975,7 @@ pub fn (mut self Terminal) scroll_down(count int) {
 // The new lines are created according to the current SGR state.
 //
 // Does not change the (absolute) cursor position.
-pub fn (mut self Terminal) scroll_up(count int) ! {
+pub fn (mut self Terminal) scroll_up(count usize) ! {
 	// Preserve our x/y to restore.
 	old_x := self.screens.active.cursor.x
 	old_y := self.screens.active.cursor.y
@@ -2986,12 +2986,12 @@ pub fn (mut self Terminal) scroll_up(count int) ! {
 	if self.scrolling_region.top == 0 && self.scrolling_region.left == 0
 		&& self.scrolling_region.right == self.cols - 1 {
 		// Clamp count to the scroll region height.
-		region_height := int(self.scrolling_region.bottom) + 1
+		region_height := usize(self.scrolling_region.bottom) + 1
 		adjusted_count := if count < region_height { count } else { region_height }
 
 		// Move cursor to bottom and scroll
 		self.screens.active.cursor_absolute(0, u32(self.scrolling_region.bottom))
-		for _ in 0 .. adjusted_count {
+		for _ in usize(0) .. adjusted_count {
 			self.screens.active.cursor_scroll_above()!
 		}
 
@@ -3111,7 +3111,7 @@ fn (mut self Terminal) row_will_be_shifted(row_idx int) {
 // position is outside of the current scroll region it does nothing.
 //
 // Moves the cursor to the left margin.
-pub fn (mut self Terminal) insert_lines(count int) {
+pub fn (mut self Terminal) insert_lines(count usize) {
 	// Rare, but happens
 	if count == 0 {
 		return
@@ -3130,7 +3130,7 @@ pub fn (mut self Terminal) insert_lines(count int) {
 
 	// Remaining rows from our cursor to the bottom of the scroll region.
 	rem := int(self.scrolling_region.bottom) - int(self.screens.active.cursor.y) + 1
-	adjusted_count := if count < rem { count } else { rem }
+	adjusted_count := if count < usize(rem) { int(count) } else { rem }
 
 	// Check if we have left/right scroll margins
 	left_right := self.scrolling_region.left > 0 || self.scrolling_region.right < self.cols - 1
@@ -3218,7 +3218,7 @@ pub fn (mut self Terminal) insert_lines(count int) {
 // filled with empty lines.
 //
 // Moves the cursor to the left margin.
-pub fn (mut self Terminal) delete_lines(count int) {
+pub fn (mut self Terminal) delete_lines(count usize) {
 	// Rare, but happens
 	if count == 0 {
 		return
@@ -3237,7 +3237,7 @@ pub fn (mut self Terminal) delete_lines(count int) {
 
 	// Remaining rows from our cursor to the bottom of the scroll region.
 	rem := int(self.scrolling_region.bottom) - int(self.screens.active.cursor.y) + 1
-	adjusted_count := if count < rem { count } else { rem }
+	adjusted_count := if count < usize(rem) { int(count) } else { rem }
 
 	// Check if we have left/right scroll margins
 	left_right := self.scrolling_region.left > 0 || self.scrolling_region.right < self.cols - 1
@@ -3328,7 +3328,7 @@ pub fn (mut self Terminal) delete_lines(count int) {
 // region are lost. The cursor position is not changed.
 //
 // This unsets the pending wrap state without wrapping.
-pub fn (mut self Terminal) insert_blanks(count int) {
+pub fn (mut self Terminal) insert_blanks(count usize) {
 	// Unset pending wrap state without wrapping.
 	self.screens.active.cursor.pending_wrap = false
 
@@ -3354,7 +3354,7 @@ pub fn (mut self Terminal) insert_blanks(count int) {
 
 	// Remaining cols from our cursor to the right margin.
 	rem := int(self.scrolling_region.right) - int(self.screens.active.cursor.x) + 1
-	adjusted_count := if count < rem { count } else { rem }
+	adjusted_count := if count < usize(rem) { int(count) } else { rem }
 	scroll_amount := rem - adjusted_count
 
 	if scroll_amount > 0 {
@@ -3395,7 +3395,7 @@ pub fn (mut self Terminal) insert_blanks(count int) {
 // margin is filled with spaces.
 //
 // Does not change the cursor position.
-pub fn (mut self Terminal) delete_chars(count_req int) {
+pub fn (mut self Terminal) delete_chars(count_req usize) {
 	if count_req == 0 {
 		return
 	}
@@ -3408,7 +3408,7 @@ pub fn (mut self Terminal) delete_chars(count_req int) {
 
 	// Remaining cols from our cursor to the right margin.
 	rem := int(self.scrolling_region.right) - int(self.screens.active.cursor.x) + 1
-	count := if count_req < rem { count_req } else { rem }
+	count := if count_req < usize(rem) { int(count_req) } else { rem }
 
 	// Handle any boundary conditions where the region being moved would
 	// split a multi-cell character.
@@ -3448,10 +3448,10 @@ pub fn (mut self Terminal) delete_chars(count_req int) {
 }
 
 // Erase characters at the cursor position.
-pub fn (mut self Terminal) erase_chars(count_req int) {
+pub fn (mut self Terminal) erase_chars(count_req usize) {
 	remaining := int(self.cols) - int(self.screens.active.cursor.x)
-	count_min := if count_req < 1 { 1 } else { count_req }
-	count := if count_min < remaining { count_min } else { remaining }
+	count_min := if count_req < 1 { usize(1) } else { count_req }
+	count := if count_min < usize(remaining) { int(count_min) } else { remaining }
 
 	// Handle any boundary conditions on the edges of the erased area.
 	//
