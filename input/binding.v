@@ -1688,6 +1688,32 @@ pub fn (a Action) equal(b Action) bool {
 	}
 }
 
+// clone duplicates the active action payload. Strings are the only owned
+// payloads in the translated representation; numeric, enum, and void payloads
+// are values.
+pub fn (a Action) clone() Action {
+	return match a.tag {
+		.cursor_key {
+			Action{
+				...a
+				cursor_key: CursorKey{
+					normal: a.cursor_key.normal.clone()
+					application: a.cursor_key.application.clone()
+				}
+			}
+		}
+		.csi, .esc, .text, .search, .activate_key_table, .activate_key_table_once {
+			Action{
+				...a
+				str_param: a.str_param.clone()
+			}
+		}
+		else {
+			a
+		}
+	}
+}
+
 // hash returns a hash code for the action.
 pub fn (a Action) hash() u64 {
 	mut hasher := SourceHash{}

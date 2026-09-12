@@ -6,14 +6,14 @@ module input
 // Ghostty:
 //   try testing.expect(defaults.len > 0);
 //   try testing.expectEqual(defaults.len, defaultsC.len);
-// The second assertion compares against `defaultsC`, the C-ABI (Command.C)
-// form of `defaults` built via `comptimeCval()`. That C-ABI representation is
-// not modeled in witty (no cval), and in ghostty it is defined as
-// `[defaults.len]Command.C`, making `defaults.len == defaultsC.len` a
-// tautology by construction. The meaningful assertion — that the default
-// command set is analyzed and non-empty — is translated faithfully here.
 fn test_command_defaults() {
 	assert command_defaults.len > 0
+	assert command_defaults.len == command_defaults_c.len
+	assert action_tags().len == 83
+	assert command_defaults.len == 88
+	for i in 1 .. command_defaults.len {
+		assert !command_defaults[i].less_than(command_defaults[i - 1])
+	}
 }
 
 fn test_command_equal_compares_source_fields() {
@@ -35,6 +35,19 @@ fn test_command_equal_compares_source_fields() {
 		...base
 		description: ''
 	})
+}
+
+fn test_command_clone_duplicates_owned_payloads() {
+	original := Command{
+		action: Action.new_str(.text, 'payload'.clone())
+		title: 'Title'.clone()
+		description: 'Description'.clone()
+	}
+	cloned := original.clone()
+	assert cloned.equal(original)
+	assert cloned.action.str_param.str != original.action.str_param.str
+	assert cloned.title.str != original.title.str
+	assert cloned.description.str != original.description.str
 }
 
 fn test_command_defaults_preserve_signed_move_tab_offsets() {

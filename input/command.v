@@ -85,9 +85,9 @@ pub:
 // clone creates a deep copy of a Command.
 pub fn (c Command) clone() Command {
 	return Command{
-		action: c.action
-		title: c.title
-		description: c.description
+		action: c.action.clone()
+		title: c.title.clone()
+		description: c.description.clone()
 	}
 }
 
@@ -145,7 +145,7 @@ fn build_command_defaults() []Command {
 	mut result := []Command{}
 	// Iterate every action tag and append its default commands. Faithful to
 	// the Zig loop over `@typeInfo(Action.Key).@"enum".fields`.
-	for tag in all_action_tags {
+	for tag in action_tags() {
 		result << action_commands(tag)
 	}
 
@@ -157,93 +157,15 @@ fn build_command_defaults() []Command {
 	return result
 }
 
-// all_action_tags enumerates every ActionTag so we can build defaults by
-// iterating over all actions, matching the Zig comptime enum-field iteration.
-const all_action_tags = [
-	ActionTag.ignore,
-	.unbind,
-	.csi,
-	.esc,
-	.text,
-	.cursor_key,
-	.reset,
-	.copy_to_clipboard,
-	.paste_from_clipboard,
-	.paste_from_selection,
-	.copy_url_to_clipboard,
-	.copy_title_to_clipboard,
-	.increase_font_size,
-	.decrease_font_size,
-	.reset_font_size,
-	.set_font_size,
-	.search,
-	.search_selection,
-	.navigate_search,
-	.start_search,
-	.end_search,
-	.clear_screen,
-	.select_all,
-	.scroll_to_top,
-	.scroll_to_bottom,
-	.scroll_to_selection,
-	.scroll_to_row,
-	.scroll_page_up,
-	.scroll_page_down,
-	.scroll_page_fractional,
-	.scroll_page_lines,
-	.adjust_selection,
-	.jump_to_prompt,
-	.write_scrollback_file,
-	.write_screen_file,
-	.write_selection_file,
-	.new_window,
-	.new_tab,
-	.previous_tab,
-	.next_tab,
-	.last_tab,
-	.goto_tab,
-	.move_tab,
-	.toggle_tab_overview,
-	.prompt_surface_title,
-	.prompt_tab_title,
-	.new_split,
-	.goto_split,
-	.goto_window,
-	.toggle_split_zoom,
-	.toggle_readonly,
-	.resize_split,
-	.equalize_splits,
-	.reset_window_size,
-	.inspector,
-	.show_gtk_inspector,
-	.show_on_screen_keyboard,
-	.open_config,
-	.reload_config,
-	.close_surface,
-	.close_tab,
-	.close_window,
-	.close_all_windows,
-	.toggle_maximize,
-	.toggle_fullscreen,
-	.toggle_window_decorations,
-	.toggle_window_float_on_top,
-	.toggle_secure_input,
-	.toggle_mouse_reporting,
-	.toggle_command_palette,
-	.toggle_quick_terminal,
-	.toggle_visibility,
-	.toggle_background_opacity,
-	.check_for_updates,
-	.undo,
-	.redo,
-	.end_key_sequence,
-	.activate_key_table,
-	.activate_key_table_once,
-	.deactivate_key_table,
-	.deactivate_all_key_tables,
-	.quit,
-	.crash,
-]
+// action_tags translates the source's type-info iteration so newly added enum
+// values are included automatically.
+fn action_tags() []ActionTag {
+	mut result := []ActionTag{}
+	$for enum_value in ActionTag.values {
+		result << enum_value.value
+	}
+	return result
+}
 
 // cmd is a small helper to build a Command from an action, title and
 // description, matching the Zig `.{ .action = ..., .title = ..., .description = ... }`.
@@ -258,7 +180,7 @@ fn cmd(action Action, title string, description string) Command {
 // action_commands returns the set of commands associated with this action tag
 // by default. Not all actions have commands. Faithful to Zig `actionCommands`.
 fn action_commands(action ActionTag) []Command {
-	return match action {
+	result := match action {
 		.reset {
 			[
 				cmd(Action.new(.reset), 'Reset Terminal', 'Reset the terminal to a clean state.'),
@@ -499,13 +421,30 @@ fn action_commands(action ActionTag) []Command {
 		}
 
 		// No commands because they're parameterized and there aren't obvious
-		// values users would use, or they don't make sense in a command
-		// palette, or for obvious reasons (ignore/unbind). Faithful to the
-		// combined `=> comptime &.{}` arms in Zig.
-		else {
+		// values users would use.
+		.csi, .esc, .cursor_key, .set_font_size, .search, .scroll_to_row,
+		.scroll_page_fractional, .scroll_page_lines, .adjust_selection, .jump_to_prompt,
+		.write_scrollback_file, .goto_tab, .resize_split, .activate_key_table,
+		.activate_key_table_once, .deactivate_key_table, .deactivate_all_key_tables,
+		.end_key_sequence, .crash {
+			[]Command{}
+		}
+		// No commands because they don't make sense in a command palette context.
+		.toggle_command_palette, .toggle_quick_terminal, .toggle_visibility, .previous_tab,
+		.next_tab, .last_tab {
+			[]Command{}
+		}
+		// No commands for obvious reasons.
+		.ignore, .unbind {
 			[]Command{}
 		}
 	}
+	// All generated commands should have the same action tag as the action
+	// passed in.
+	for generated in result {
+		assert generated.action.tag == action
+	}
+	return result
 }
 
 // write_file_commands builds the 9-entry command set for write_screen_file /
