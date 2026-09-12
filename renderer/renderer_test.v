@@ -297,29 +297,29 @@ fn test_ortho2d() {
 	assert m[15] == 1.0
 }
 
-// Test Size.terminal_size.
-fn test_size_terminal_size() {
+// Test Size.terminal.
+fn test_size_terminal() {
 	s := Size{
 		screen: ScreenSize{ width: 800, height: 600 }
 		cell: CellSize{ width: 10, height: 20 }
 		padding: Padding{ top: 5, bottom: 5, left: 5, right: 5 }
 	}
-	ts := s.terminal_size()
+	ts := s.terminal()
 	// The terminal area is the screen with padding removed. It is not rounded
 	// down to a whole-cell multiple.
 	assert ts.width == 790
 	assert ts.height == 590
 }
 
-// Test Size.blank_padding.
-fn test_size_blank_padding() {
+// Test ScreenSize.blank_padding.
+fn test_screen_size_blank_padding() {
 	s := Size{
 		screen: ScreenSize{ width: 800, height: 600 }
 		cell: CellSize{ width: 10, height: 20 }
 		padding: Padding{ top: 0, bottom: 0, left: 0, right: 0 }
 	}
 	grid := GridSize{ columns: 80, rows: 30 }
-	bp := s.blank_padding(grid)
+	bp := s.screen.blank_padding(s.padding, grid, s.cell).add(s.padding)
 	// Screen 800x600, grid 80*10=800, 30*20=600 => no extra padding
 	assert bp.left == 0
 	assert bp.right == 0
@@ -327,13 +327,13 @@ fn test_size_blank_padding() {
 	assert bp.bottom == 0
 }
 
-fn test_size_blank_padding_is_trailing_and_includes_explicit_padding() {
+fn test_screen_size_blank_padding_is_trailing_and_includes_explicit_padding() {
 	s := Size{
 		screen: ScreenSize{ width: 108, height: 112 }
 		cell: CellSize{ width: 10, height: 20 }
 		padding: Padding{ top: 2, bottom: 3, left: 1, right: 2 }
 	}
-	bp := s.blank_padding(GridSize{ columns: 10, rows: 5 })
+	bp := s.screen.blank_padding(s.padding, GridSize{ columns: 10, rows: 5 }, s.cell).add(s.padding)
 	assert bp.left == 1
 	assert bp.top == 2
 	assert bp.right == 7

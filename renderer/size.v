@@ -1,5 +1,68 @@
 module renderer
 
+// All relevant sizes for a rendered terminal.
+pub struct Size {
+pub mut:
+	screen  ScreenSize
+	cell    CellSize
+	padding Padding
+}
+
+// The dimensions of the screen that the grid is rendered to, in pixels.
+pub struct ScreenSize {
+pub mut:
+	width  u32
+	height u32
+}
+
+// The dimensions of a single terminal cell in world-space pixels.
+pub struct CellSize {
+pub mut:
+	width  u32
+	height u32
+}
+
+// The dimensions of the terminal grid. Ghostty's Unit is CellCountInt (u16).
+pub struct GridSize {
+pub mut:
+	columns u16
+	rows    u16
+}
+
+// Padding around a terminal screen.
+pub struct Padding {
+pub mut:
+	top    u32
+	bottom u32
+	left   u32
+	right  u32
+}
+
+// Return the grid size after subtracting the configured padding.
+pub fn (self Size) grid() GridSize {
+	return GridSize.init(self.screen.sub_padding(self.padding), self.cell)
+}
+
+// Return the terminal size: the screen with padding removed.
+pub fn (self Size) terminal() ScreenSize {
+	return self.screen.sub_padding(self.padding)
+}
+
+// Set balanced padding after accounting for explicit padding.
+pub fn (mut self Size) balance_padding(explicit Padding) {
+	self.padding = explicit
+	self.padding = Padding.balanced(self.screen, self.grid(), self.cell)
+
+	max_padding_left := (explicit.left + explicit.right + self.cell.width) / 2
+	vshift := if self.padding.top > max_padding_left {
+		self.padding.top - max_padding_left
+	} else {
+		u32(0)
+	}
+	self.padding.top -= vshift
+	self.padding.bottom += vshift
+}
+
 // A coordinate. This is defined as a tagged union to allow for different
 // coordinate systems to be represented.
 //
@@ -34,8 +97,8 @@ pub:
 
 pub struct GridCoord {
 pub:
-	x u32
-	y u32
+	x u16
+	y u16
 }
 
 // Coordinate system tag for conversion.
@@ -46,9 +109,29 @@ pub enum CoordTag {
 }
 
 // Convert a coordinate to a different space within the same Size.
-pub fn coord_convert(c SizeCoordinate, to CoordTag, sz Size) SizeCoordinate {
+pub fn (self SizeCoordinate) convert(to CoordTag, size Size) SizeCoordinate {
+	// Same-space conversion is an exact identity, even when the coordinate is
+	// outside the current surface or grid.
+	match self {
+		SurfaceCoord {
+			if to == .surface {
+				return self
+			}
+		}
+		TerminalCoord {
+			if to == .terminal {
+				return self
+			}
+		}
+		GridCoord {
+			if to == .grid {
+				return self
+			}
+		}
+	}
+
 	// First convert to surface coordinates.
-	surface := coord_to_surface(c, sz)
+	surface := self.convert_to_surface(size)
 
 	if to == .surface {
 		return SizeCoordinate(SurfaceCoord{
@@ -57,25 +140,25 @@ pub fn coord_convert(c SizeCoordinate, to CoordTag, sz Size) SizeCoordinate {
 		})
 	} else if to == .terminal {
 		return SizeCoordinate(TerminalCoord{
-			x: surface.x - f64(sz.padding.left)
-			y: surface.y - f64(sz.padding.top)
+			x: surface.x - f64(size.padding.left)
+			y: surface.y - f64(size.padding.top)
 		})
 	} else {
 		// .grid
 		// Get rid of the padding.
-		term_x := surface.x - f64(sz.padding.left)
-		term_y := surface.y - f64(sz.padding.top)
+		term_x := surface.x - f64(size.padding.left)
+		term_y := surface.y - f64(size.padding.top)
 
 		// We need our grid to clamp
-		g := sz.grid()
+		g := size.grid()
 
 		// Calculate the grid position.
-		cell_width := f64(sz.cell.width)
-		cell_height := f64(sz.cell.height)
+		cell_width := f64(size.cell.width)
+		cell_height := f64(size.cell.height)
 		clamped_x := if term_x > 0 { term_x } else { 0.0 }
 		clamped_y := if term_y > 0 { term_y } else { 0.0 }
-		col := u32(clamped_x / cell_width)
-		row := u32(clamped_y / cell_height)
+		col := u16(clamped_x / cell_width)
+		row := u16(clamped_y / cell_height)
 		clamped_col := if col < g.columns - 1 { col } else { g.columns - 1 }
 		clamped_row := if row < g.rows - 1 { row } else { g.rows - 1 }
 		return SizeCoordinate(GridCoord{
@@ -86,27 +169,27 @@ pub fn coord_convert(c SizeCoordinate, to CoordTag, sz Size) SizeCoordinate {
 }
 
 // Convert a coordinate to the surface coordinate system.
-fn coord_to_surface(c SizeCoordinate, sz Size) SurfaceCoord {
-	match c {
+fn (self SizeCoordinate) convert_to_surface(size Size) SurfaceCoord {
+	match self {
 		SurfaceCoord {
 			return SurfaceCoord{
-				x: c.x
-				y: c.y
+				x: self.x
+				y: self.y
 			}
 		}
 		TerminalCoord {
 			return SurfaceCoord{
-				x: c.x + f64(sz.padding.left)
-				y: c.y + f64(sz.padding.top)
+				x: self.x + f64(size.padding.left)
+				y: self.y + f64(size.padding.top)
 			}
 		}
 		GridCoord {
-			col := f64(c.x)
-			row := f64(c.y)
-			cell_width := f64(sz.cell.width)
-			cell_height := f64(sz.cell.height)
-			padding_left := f64(sz.padding.left)
-			padding_top := f64(sz.padding.top)
+			col := f64(self.x)
+			row := f64(self.y)
+			cell_width := f64(size.cell.width)
+			cell_height := f64(size.cell.height)
+			padding_left := f64(size.padding.left)
+			padding_top := f64(size.padding.top)
 			return SurfaceCoord{
 				x: col * cell_width + padding_left
 				y: row * cell_height + padding_top
@@ -125,13 +208,18 @@ pub fn (self ScreenSize) sub_padding(padding Padding) ScreenSize {
 	}
 }
 
+// Returns true if two screen sizes are equal.
+pub fn (self ScreenSize) equals(other ScreenSize) bool {
+	return self.width == other.width && self.height == other.height
+}
+
 // Calculates the amount of blank space around the grid. This is possible
 // when padding isn't balanced.
 //
 // The "self" screen size here should be the unpadded screen.
-pub fn (self ScreenSize) blank_padding_calc(padding Padding, g GridSize, cell CellSize) Padding {
-	grid_width := g.columns * cell.width
-	grid_height := g.rows * cell.height
+pub fn (self ScreenSize) blank_padding(padding Padding, g GridSize, cell CellSize) Padding {
+	grid_width := u32(g.columns) * cell.width
+	grid_height := u32(g.rows) * cell.height
 	padded_width := grid_width + (padding.left + padding.right)
 	padded_height := grid_height + (padding.top + padding.bottom)
 
@@ -187,6 +275,16 @@ pub fn Padding.balanced(screen ScreenSize, g GridSize, cell CellSize) Padding {
 	}
 }
 
+// Add another padding to this one.
+pub fn (self Padding) add(other Padding) Padding {
+	return Padding{
+		top: self.top + other.top
+		bottom: self.bottom + other.bottom
+		left: self.left + other.left
+		right: self.right + other.right
+	}
+}
+
 // Equality test between two paddings.
 pub fn (self Padding) eql(other Padding) bool {
 	return self.top == other.top && self.bottom == other.bottom
@@ -194,21 +292,21 @@ pub fn (self Padding) eql(other Padding) bool {
 }
 
 // Initialize a grid size based on a screen and cell size.
-pub fn GridSize.init_from_screen(screen ScreenSize, cell CellSize) GridSize {
+pub fn GridSize.init(screen ScreenSize, cell CellSize) GridSize {
 	mut result := GridSize{}
-	result.update_from_screen(screen, cell)
+	result.update(screen, cell)
 	return result
 }
 
 // Update the columns/rows for the grid based on the given screen and
 // cell size.
-pub fn (mut self GridSize) update_from_screen(screen ScreenSize, cell CellSize) {
+pub fn (mut self GridSize) update(screen ScreenSize, cell CellSize) {
 	cell_width := f32(cell.width)
 	cell_height := f32(cell.height)
 	screen_width := f32(screen.width)
 	screen_height := f32(screen.height)
-	calc_cols := u32(screen_width / cell_width)
-	calc_rows := u32(screen_height / cell_height)
+	calc_cols := u16(screen_width / cell_width)
+	calc_rows := u16(screen_height / cell_height)
 	self.columns = if calc_cols > 1 { calc_cols } else { 1 }
 	self.rows = if calc_rows > 1 { calc_rows } else { 1 }
 }

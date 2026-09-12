@@ -262,8 +262,8 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 	term.modes.set(.cursor_blinking, opts.config.cursor_blink or { true })
 	term.modes.default = term.modes.values
 	term.screens.active.cursor.cursor_style = opts.config.cursor_style
-	term.width_px = grid.columns * size.cell.width
-	term.height_px = grid.rows * size.cell.height
+	term.width_px = u32(grid.columns) * size.cell.width
+	term.height_px = u32(grid.rows) * size.cell.height
 	term.kitty_image_limit = usize(opts.config.image_storage_limit)
 
 	mut backend := Exec.init(opts.backend_config)!
@@ -582,7 +582,7 @@ pub fn (mut t Termio) resize(size renderer.Size) ! {
 	grid_size := size.grid()
 
 	// Update the size of our pty.
-	t.backend.resize(grid_size, size.terminal_size())!
+	t.backend.resize(grid_size, size.terminal())!
 
 	// Enter the critical area that we want to keep small.
 	{
@@ -595,8 +595,8 @@ pub fn (mut t Termio) resize(size renderer.Size) ! {
 		t.terminal.resize(u16(grid_size.columns), u16(grid_size.rows))!
 
 		// Update our pixel sizes.
-		t.terminal.width_px = grid_size.columns * t.size.cell.width
-		t.terminal.height_px = grid_size.rows * t.size.cell.height
+		t.terminal.width_px = u32(grid_size.columns) * t.size.cell.width
+		t.terminal.height_px = u32(grid_size.rows) * t.size.cell.height
 
 		// Disable synchronized output mode so that we show changes
 		// immediately for a resize. This is allowed by the spec.
@@ -630,10 +630,10 @@ fn (mut t Termio) size_report_locked(style SizeReportKind) ! {
 	// Build the size report message. Reports in columns and pixels.
 	message := match style {
 		.mode_2048 {
-			'\x1b[48;${grid_size.rows};${grid_size.columns};${grid_size.rows * t.size.cell.height};${grid_size.columns * t.size.cell.width}t'
+			'\x1b[48;${grid_size.rows};${grid_size.columns};${u32(grid_size.rows) * t.size.cell.height};${u32(grid_size.columns) * t.size.cell.width}t'
 		}
 		.csi_14_t {
-			'\x1b[4;${grid_size.rows * t.size.cell.height};${grid_size.columns * t.size.cell.width}t'
+			'\x1b[4;${u32(grid_size.rows) * t.size.cell.height};${u32(grid_size.columns) * t.size.cell.width}t'
 		}
 		.csi_16_t {
 			'\x1b[6;${t.size.cell.height};${t.size.cell.width}t'

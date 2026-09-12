@@ -85,7 +85,7 @@ pub enum OverlayFeature {
 // we render the overlay using the image subsystem and shaders which
 // already take that into account.
 pub fn Overlay.init(sz Size) !Overlay {
-	term_size := sz.terminal_size()
+	term_size := sz.terminal()
 	w := term_size.width
 	h := term_size.height
 	if w == 0 || h == 0 {

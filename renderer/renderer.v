@@ -1478,7 +1478,7 @@ fn (mut self Renderer) rebuild_overlay(features []OverlayFeature) ! {
 		return
 	}
 
-	terminal_size := self.size.terminal_size()
+	terminal_size := self.size.terminal()
 	if mut current := self.overlay {
 		if current.width == terminal_size.width && current.height == terminal_size.height
 			&& current.cell_size.width == self.size.cell.width
@@ -2129,10 +2129,10 @@ pub fn (mut self Renderer) set_screen_size(size Size) {
 
 // Update uniforms that are based on the screen size.
 fn (mut self Renderer) update_screen_size_uniforms() {
-	terminal_size := self.size.terminal_size()
+	terminal_size := self.size.terminal()
 
 	// Blank space around the grid
-	blank := self.size.blank_padding(self.cells.size)
+	blank := self.size.screen.blank_padding(self.size.padding, self.cells.size, self.size.cell).add(self.size.padding)
 
 	// Setup our uniforms
 	self.uniforms.projection_matrix = ortho2d(
@@ -2449,13 +2449,13 @@ fn (mut self Renderer) rebuild_cells(preedit ?RenderPreedit, cursor_style_ ?Curs
 		}
 	}
 
-	grid_size_diff := self.cells.size.rows != u32(state.rows)
-		|| self.cells.size.columns != u32(state.cols)
+	grid_size_diff := self.cells.size.rows != state.rows
+		|| self.cells.size.columns != state.cols
 
 	if grid_size_diff {
 		mut new_size := self.cells.size
-		new_size.rows = u32(state.rows)
-		new_size.columns = u32(state.cols)
+		new_size.rows = state.rows
+		new_size.columns = state.cols
 		self.cells.resize(new_size)!
 
 		// Update our uniforms accordingly, otherwise
@@ -3235,117 +3235,6 @@ pub enum CursorStyle {
 	bar
 	underline
 	lock
-}
-
-// Size holds all sizing information.
-pub struct Size {
-pub mut:
-	screen  ScreenSize
-	cell    CellSize
-	padding Padding
-}
-
-pub struct ScreenSize {
-pub mut:
-	width  u32
-	height u32
-}
-
-pub fn (a ScreenSize) equals(b ScreenSize) bool {
-	return a.width == b.width && a.height == b.height
-}
-
-pub struct CellSize {
-pub mut:
-	width  u32
-	height u32
-}
-
-pub struct Padding {
-pub mut:
-	top    u32
-	bottom u32
-	left   u32
-	right  u32
-}
-
-// Add two paddings together.
-pub fn (a Padding) add(b Padding) Padding {
-	return Padding{
-		top: a.top + b.top
-		bottom: a.bottom + b.bottom
-		left: a.left + b.left
-		right: a.right + b.right
-	}
-}
-
-pub fn (s Size) grid() GridSize {
-	usable_w := if s.screen.width > s.padding.left + s.padding.right {
-		s.screen.width - s.padding.left - s.padding.right
-	} else {
-		u32(0)
-	}
-	usable_h := if s.screen.height > s.padding.top + s.padding.bottom {
-		s.screen.height - s.padding.top - s.padding.bottom
-	} else {
-		u32(0)
-	}
-	cols := if s.cell.width > 0 { usable_w / s.cell.width } else { u32(0) }
-	rows := if s.cell.height > 0 { usable_h / s.cell.height } else { u32(0) }
-	return GridSize{ columns: cols, rows: rows }
-}
-
-pub struct GridSize {
-pub mut:
-	columns u32
-	rows    u32
-}
-
-// Get the terminal rendering area. This is the surface size with the
-// configured padding removed; it is intentionally not rounded to whole cells.
-pub fn (s &Size) terminal_size() ScreenSize {
-	return s.screen.sub_padding(s.padding)
-}
-
-pub fn (s Size) terminal_width() u32 {
-	g := GridSize{
-		columns: if s.cell.width > 0 {
-			usable_w := if s.screen.width > s.padding.left + s.padding.right {
-				s.screen.width - s.padding.left - s.padding.right
-			} else {
-				u32(0)
-			}
-			usable_w / s.cell.width
-		} else {
-			u32(0)
-		}
-		rows: u32(0)
-	}
-	return g.columns * s.cell.width
-}
-
-// Compute the blank padding (space between the grid and the edge of the screen).
-pub fn (s &Size) blank_padding(grid GridSize) Padding {
-	return s.screen.blank_padding_calc(s.padding, grid, s.cell).add(s.padding)
-}
-
-pub fn (mut s Size) balance_padding(explicit Padding) {
-	// grid() must account for the explicit padding before the balanced
-	// whitespace is calculated.
-	s.padding = explicit
-	s.padding = Padding.balanced(s.screen, s.grid(), s.cell)
-
-	// A large top inset is visually heavy. Match Ghostty by limiting it to
-	// the balanced explicit horizontal padding plus half a cell width and
-	// moving the excess to the bottom.
-	max_padding_left := (explicit.left + explicit.right + s.cell.width) / 2
-	vshift := if s.padding.top > max_padding_left {
-		s.padding.top - max_padding_left
-	} else {
-		u32(0)
-	}
-	s.padding.top -= vshift
-	s.padding.bottom += vshift
 }
 
 // This is called early right after surface creation.
