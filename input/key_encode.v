@@ -1,40 +1,13 @@
 module input
 
+import terminal
+
 // Key encoding for terminal input. Translates key events into the proper
 // escape sequences based on terminal mode state (legacy, xterm modifyOtherKeys,
 // fixterms, and Kitty keyboard protocol).
 
-// KittyFlags represents the Kitty keyboard protocol flags.
-// These flags control what information is reported in key events.
-pub struct KittyFlags {
-pub mut:
-	disambiguate      bool
-	report_events     bool
-	report_alternates bool
-	report_all        bool
-	report_associated bool
-}
-
-// int returns the raw integer value of the flags bitmask.
-pub fn (f KittyFlags) int() u8 {
-	mut v := u8(0)
-	if f.disambiguate {
-		v |= 1
-	}
-	if f.report_events {
-		v |= 2
-	}
-	if f.report_alternates {
-		v |= 4
-	}
-	if f.report_all {
-		v |= 8
-	}
-	if f.report_associated {
-		v |= 16
-	}
-	return v
-}
+// KittyFlags is the canonical packed terminal Kitty keyboard flag value.
+pub type KittyFlags = terminal.KeyFlags
 
 // Options that affect key encoding behavior. This is a mix of behavior
 // from terminal state as well as application configuration.
@@ -81,12 +54,12 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 
 	// We only process "press" events unless report events is active
 	if event.action == .release {
-		if !opts.kitty_flags.report_events {
+		if !opts.kitty_flags.report_events() {
 			return ''
 		}
 		// Enter, backspace, and tab do not report release events unless "report
 		// all" is set
-		if !opts.kitty_flags.report_all {
+		if !opts.kitty_flags.report_all() {
 			match event.key {
 				.enter, .backspace, .tab {
 					return ''
@@ -158,7 +131,7 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 		}
 
 		// If we're reporting all then we always send CSI sequences.
-		if !opts.kitty_flags.report_all {
+		if !opts.kitty_flags.report_all() {
 			// The only exceptions are Enter, Tab, Backspace which still generate
 			// the same bytes as in legacy mode
 			if binding_mods.empty() {
@@ -198,7 +171,7 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 	entry := entry_ or { return '' }
 
 	// If this is just a modifier we require "report all" to send the sequence.
-	if entry.modifier && !opts.kitty_flags.report_all {
+	if entry.modifier && !opts.kitty_flags.report_all() {
 		return ''
 	}
 
@@ -209,7 +182,7 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 		mods: KittyMods.from_input(event.action, event.key, all_mods)
 	}
 
-	if opts.kitty_flags.report_events {
+	if opts.kitty_flags.report_events() {
 		seq.event = match event.action {
 			.press { .press }
 			.release { .release }
@@ -217,7 +190,7 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 		}
 	}
 
-	if opts.kitty_flags.report_alternates {
+	if opts.kitty_flags.report_alternates() {
 		// Break early if this is a control key
 		if !is_control(seq.key_code) {
 			runes := event.utf8.runes()
@@ -226,7 +199,7 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 				has_cp2 := runes.len > 1
 
 				// Set the first alternate (shifted version)
-				if cp1 != seq.key_code && seq.mods.shift {
+				if cp1 != seq.key_code && seq.mods.shift() {
 					seq.alternates[0] = cp1
 				}
 
@@ -248,7 +221,7 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 		}
 	}
 
-	if opts.kitty_flags.report_associated && seq.event != .release {
+	if opts.kitty_flags.report_associated() && seq.event != .release {
 		// Determine if the Alt modifier should be treated as an actual
 		// modifier (in which case it prevents associated text) or as
 		// the macOS Option key, which does not prevent associated text.
@@ -423,7 +396,7 @@ fn legacy_encode(event KeyEvent, opts Options) string {
 			// If our character is A to Z and we have shift set, then
 			// we lowercase it. This is a Kitty-specific behavior that
 			// we choose to follow and diverge from the fixterms spec.
-			if ch >= u32(`A`) && ch <= u32(`Z`) && csi_u_mods.shift {
+			if ch >= u32(`A`) && ch <= u32(`Z`) && csi_u_mods.shift() {
 				ch = ch + 32 // toLower
 			}
 
@@ -431,7 +404,7 @@ fn legacy_encode(event KeyEvent, opts Options) string {
 			// then we consider shift. Otherwise, we do not because the
 			// shift key was used to obtain the character.
 			if event.unshifted_codepoint != ch {
-				csi_u_mods.shift = false
+				csi_u_mods.set_shift(false)
 			}
 
 			return '\x1b[${ch};${csi_u_mods.seq_int()}u'
@@ -745,33 +718,31 @@ fn is_control_utf8(s string) bool {
 // CsiUMods is the bitmask for fixterm CSI u modifiers.
 struct CsiUMods {
 mut:
-	shift bool
-	alt   bool
-	ctrl  bool
+	value u8
 }
 
 // from_input converts input mods to CSI u mods.
 fn CsiUMods.from_input(mods Mods) CsiUMods {
 	return CsiUMods{
-		shift: mods.shift
-		alt: mods.alt
-		ctrl: mods.ctrl
+		value: u8(mods.shift) | (u8(mods.alt) << 1) | (u8(mods.ctrl) << 2)
+	}
+}
+
+fn (m CsiUMods) shift() bool {
+	return m.value & 0b001 != 0
+}
+
+fn (mut m CsiUMods) set_shift(value bool) {
+	if value {
+		m.value |= 0b001
+	} else {
+		m.value &= ~u8(0b001)
 	}
 }
 
 // int returns the raw integer bitmask value.
 fn (m CsiUMods) int() u8 {
-	mut v := u8(0)
-	if m.shift {
-		v |= 1
-	}
-	if m.alt {
-		v |= 2
-	}
-	if m.ctrl {
-		v |= 4
-	}
-	return v
+	return m.value
 }
 
 // seq_int returns the integer value sent as part of the CSI u sequence.
@@ -783,14 +754,7 @@ fn (m CsiUMods) seq_int() int {
 // KittyMods is the bitfields for Kitty modifiers.
 struct KittyMods {
 mut:
-	shift     bool
-	alt       bool
-	ctrl      bool
-	super_    bool
-	hyper     bool
-	meta      bool
-	caps_lock bool
-	num_lock  bool
+	value u8
 }
 
 // from_input converts input mods to Kitty mods.
@@ -798,12 +762,7 @@ fn KittyMods.from_input(action KeyAction, k Key, mods Mods) KittyMods {
 	_ = action
 	_ = k
 	return KittyMods{
-		shift: mods.shift
-		alt: mods.alt
-		ctrl: mods.ctrl
-		super_: mods.super_
-		caps_lock: mods.caps_lock
-		num_lock: mods.num_lock
+		value: u8(mods.shift) | (u8(mods.alt) << 1) | (u8(mods.ctrl) << 2) | (u8(mods.super_) << 3) | (u8(mods.caps_lock) << 6) | (u8(mods.num_lock) << 7)
 	}
 }
 
@@ -813,37 +772,16 @@ fn KittyMods.from_input(action KeyAction, k Key, mods Mods) KittyMods {
 // modifier prevents printable text. On Linux, this is always true. On
 // macOS, this is only true if macos-option-as-alt is set.
 fn (m KittyMods) prevents_text(alt_prevents_text bool) bool {
-	return (m.alt && alt_prevents_text) || m.ctrl || m.super_ || m.hyper || m.meta
+	return (m.value & 0b0000_0010 != 0 && alt_prevents_text) || m.value & 0b0011_1100 != 0
+}
+
+fn (m KittyMods) shift() bool {
+	return m.value & 0b0000_0001 != 0
 }
 
 // int returns the raw integer bitmask value.
 fn (m KittyMods) int() u8 {
-	mut v := u8(0)
-	if m.shift {
-		v |= 1
-	}
-	if m.alt {
-		v |= 2
-	}
-	if m.ctrl {
-		v |= 4
-	}
-	if m.super_ {
-		v |= 8
-	}
-	if m.hyper {
-		v |= 16
-	}
-	if m.meta {
-		v |= 32
-	}
-	if m.caps_lock {
-		v |= 64
-	}
-	if m.num_lock {
-		v |= 128
-	}
-	return v
+	return m.value
 }
 
 // seq_int returns the integer value sent as part of the Kitty sequence.

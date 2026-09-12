@@ -1889,8 +1889,8 @@ fn test_full_reset_clears_alternate_screen_kitty_keyboard_state() {
 	defer { t.deinit() }
 
 	t.switch_screen_mode(.mode_1049, true) or { assert false }
-	t.screens.active.kitty_keyboard.push(0b1_1111)
-	assert t.screens.active.kitty_keyboard.current() == 0b1_1111
+	t.screens.active.kitty_keyboard.push(KeyFlags.from_int(0b1_1111))
+	assert t.screens.active.kitty_keyboard.current() == key_flags_all
 	t.switch_screen_mode(.mode_1049, false) or { assert false }
 
 	t.full_reset()

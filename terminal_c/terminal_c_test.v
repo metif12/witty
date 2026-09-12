@@ -115,9 +115,9 @@ fn test_key_encoder_options() {
 	encoder.setopt(.macos_option_as_alt, KeyEncoderOptionValue(input.OptionAsAlt.left))
 	assert encoder.opts.cursor_key_application
 	assert encoder.opts.keypad_key_application
-	assert encoder.opts.kitty_flags.disambiguate
-	assert encoder.opts.kitty_flags.report_events
-	assert !encoder.opts.kitty_flags.report_alternates
+	assert encoder.opts.kitty_flags.disambiguate()
+	assert encoder.opts.kitty_flags.report_events()
+	assert !encoder.opts.kitty_flags.report_alternates()
 	assert encoder.opts.macos_option_as_alt == .left
 }
 

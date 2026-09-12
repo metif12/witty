@@ -385,19 +385,19 @@ pub fn (mut self ReadonlyHandler) vt(event StreamEvent) ! {
 			}
 		}
 		.kitty_keyboard_push {
-			self.terminal.screens.active.kitty_keyboard.push(u32(event.payload.kitty_flags))
+			self.terminal.screens.active.kitty_keyboard.push(KeyFlags.from_int(event.payload.kitty_flags))
 		}
 		.kitty_keyboard_pop {
 			self.terminal.screens.active.kitty_keyboard.pop(usize(event.payload.num))
 		}
 		.kitty_keyboard_set {
-			self.terminal.screens.active.kitty_keyboard.set(.set_, u32(event.payload.kitty_flags))
+			self.terminal.screens.active.kitty_keyboard.set(.set_, KeyFlags.from_int(event.payload.kitty_flags))
 		}
 		.kitty_keyboard_set_or {
-			self.terminal.screens.active.kitty_keyboard.set(.or_, u32(event.payload.kitty_flags))
+			self.terminal.screens.active.kitty_keyboard.set(.or_, KeyFlags.from_int(event.payload.kitty_flags))
 		}
 		.kitty_keyboard_set_not {
-			self.terminal.screens.active.kitty_keyboard.set(.not_, u32(event.payload.kitty_flags))
+			self.terminal.screens.active.kitty_keyboard.set(.not_, KeyFlags.from_int(event.payload.kitty_flags))
 		}
 		.modify_key_format {
 			self.terminal.flags.modify_other_keys_2 = false

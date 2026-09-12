@@ -1637,14 +1637,60 @@ pub:
 // KeyFlagStack (Kitty keyboard protocol)
 // ============================================================
 
+// KeyFlags is the packed five-bit value used by the Kitty keyboard protocol.
+// V's narrowest integer backing is one byte.
+pub struct KeyFlags {
+mut:
+	value u8
+}
+
+pub const key_flags_disabled = KeyFlags{}
+pub const key_flags_all = KeyFlags{ value: 0b1_1111 }
+
+pub fn KeyFlags.init(disambiguate bool, report_events bool, report_alternates bool, report_all bool, report_associated bool) KeyFlags {
+	return KeyFlags{
+		value: u8(disambiguate) | (u8(report_events) << 1) | (u8(report_alternates) << 2) | (u8(report_all) << 3) | (u8(report_associated) << 4)
+	}
+}
+
+pub fn KeyFlags.from_int(value u8) KeyFlags {
+	return KeyFlags{
+		value: value & 0b1_1111
+	}
+}
+
+pub fn (self KeyFlags) disambiguate() bool {
+	return self.value & 0b0_0001 != 0
+}
+
+pub fn (self KeyFlags) report_events() bool {
+	return self.value & 0b0_0010 != 0
+}
+
+pub fn (self KeyFlags) report_alternates() bool {
+	return self.value & 0b0_0100 != 0
+}
+
+pub fn (self KeyFlags) report_all() bool {
+	return self.value & 0b0_1000 != 0
+}
+
+pub fn (self KeyFlags) report_associated() bool {
+	return self.value & 0b1_0000 != 0
+}
+
+pub fn (self KeyFlags) int() u8 {
+	return self.value
+}
+
 pub struct KeyFlagStack {
 pub mut:
-	flags [8]u32
+	flags [8]KeyFlags = [8]KeyFlags{init: key_flags_disabled}
 	idx   u8
 }
 
 // Push a new set of flags onto the stack.
-pub fn (mut self KeyFlagStack) push(new_flags u32) {
+pub fn (mut self KeyFlagStack) push(new_flags KeyFlags) {
 	// Overflow and wrap around if we're full, which evicts
 	// the oldest entry.
 	self.idx = (self.idx + 1) % 8
@@ -1659,38 +1705,38 @@ pub fn (mut self KeyFlagStack) pop(n usize) {
 	// could send a huge number of pop commands to waste cpu.
 	if n >= 8 {
 		self.idx = 0
-		self.flags = [8]u32{}
+		self.flags = [8]KeyFlags{init: key_flags_disabled}
 		return
 	}
 
 	for _ in 0 .. n {
-		self.flags[self.idx] = 0
+		self.flags[self.idx] = key_flags_disabled
 		self.idx = if self.idx == 0 { u8(7) } else { self.idx - 1 }
 	}
 }
 
 // Get the current (top) flags value.
-pub fn (self &KeyFlagStack) current() u32 {
+pub fn (self KeyFlagStack) current() KeyFlags {
 	return self.flags[self.idx]
 }
 
 // Set flags using a merge operation.
-pub enum KeyFlagSetOp {
+pub enum KeyFlagSetOp as u8 {
 	set_
 	or_
 	not_
 }
 
-pub fn (mut self KeyFlagStack) set(op KeyFlagSetOp, new_flags u32) {
+pub fn (mut self KeyFlagStack) set(op KeyFlagSetOp, new_flags KeyFlags) {
 	match op {
 		.set_ {
 			self.flags[self.idx] = new_flags
 		}
 		.or_ {
-			self.flags[self.idx] |= new_flags
+			self.flags[self.idx] = KeyFlags.from_int(self.flags[self.idx].int() | new_flags.int())
 		}
 		.not_ {
-			self.flags[self.idx] &= ~new_flags
+			self.flags[self.idx] = KeyFlags.from_int(self.flags[self.idx].int() & ~new_flags.int())
 		}
 	}
 }

@@ -92,7 +92,7 @@ fn draw_screen_keyboard(context cimgui.Context, screen &terminal.Screen, modify_
 	defer {
 		context.end_table()
 	}
-	kitty_flags := screen.kitty_keyboard.current()
+	kitty_flags := screen.kitty_keyboard.current().int()
 	draw_screen_row(context, 'Mode', if kitty_flags != 0 { 'kitty' } else { 'legacy' })
 	if kitty_flags != 0 {
 		for flag in [

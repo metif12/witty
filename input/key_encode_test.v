@@ -17,26 +17,27 @@ fn test_csiu_modifier_sequence_values() {
 	mut mods := CsiUMods{}
 	assert mods.seq_int() == 1
 
-	mods = CsiUMods{ shift: true }
+	mods = CsiUMods{ value: 1 }
 	assert mods.seq_int() == 2
 
-	mods = CsiUMods{ alt: true }
+	mods = CsiUMods{ value: 2 }
 	assert mods.seq_int() == 3
 
-	mods = CsiUMods{ ctrl: true }
+	mods = CsiUMods{ value: 4 }
 	assert mods.seq_int() == 5
 
-	mods = CsiUMods{ alt: true, shift: true }
+	mods = CsiUMods{ value: 3 }
 	assert mods.seq_int() == 4
 
-	mods = CsiUMods{ ctrl: true, shift: true }
+	mods = CsiUMods{ value: 5 }
 	assert mods.seq_int() == 6
 
-	mods = CsiUMods{ alt: true, ctrl: true }
+	mods = CsiUMods{ value: 6 }
 	assert mods.seq_int() == 7
 
-	mods = CsiUMods{ alt: true, ctrl: true, shift: true }
+	mods = CsiUMods{ value: 7 }
 	assert mods.seq_int() == 8
+	assert sizeof(CsiUMods) == 1
 }
 
 // === KittyMods tests ===
@@ -47,26 +48,27 @@ fn test_kitty_modifier_sequence_values() {
 	mut mods := KittyMods{}
 	assert mods.seq_int() == 1
 
-	mods = KittyMods{ shift: true }
+	mods = KittyMods{ value: 1 }
 	assert mods.seq_int() == 2
 
-	mods = KittyMods{ alt: true }
+	mods = KittyMods{ value: 2 }
 	assert mods.seq_int() == 3
 
-	mods = KittyMods{ ctrl: true }
+	mods = KittyMods{ value: 4 }
 	assert mods.seq_int() == 5
 
-	mods = KittyMods{ alt: true, shift: true }
+	mods = KittyMods{ value: 3 }
 	assert mods.seq_int() == 4
 
-	mods = KittyMods{ ctrl: true, shift: true }
+	mods = KittyMods{ value: 5 }
 	assert mods.seq_int() == 6
 
-	mods = KittyMods{ alt: true, ctrl: true }
+	mods = KittyMods{ value: 6 }
 	assert mods.seq_int() == 7
 
-	mods = KittyMods{ alt: true, ctrl: true, shift: true }
+	mods = KittyMods{ value: 7 }
 	assert mods.seq_int() == 8
+	assert sizeof(KittyMods) == 1
 }
 
 // === KittySequence tests ===
@@ -84,7 +86,7 @@ fn test_kitty_sequence_backspace() {
 	seq3 := KittySequence{
 		key_code: 127
 		final_byte: `u`
-		mods: KittyMods{ shift: true }
+		mods: KittyMods{ value: 1 }
 	}
 	assert seq3.encode_seq() == '\x1b[127;2u'
 }
@@ -111,7 +113,7 @@ fn test_kitty_sequence_text() {
 	seq3 := KittySequence{
 		key_code: 127
 		final_byte: `u`
-		mods: KittyMods{ shift: true }
+		mods: KittyMods{ value: 1 }
 		text: 'A'
 	}
 	assert seq3.encode_seq() == '\x1b[127;2;65u'
@@ -141,7 +143,7 @@ fn test_kitty_sequence_special_no_mods() {
 }
 
 fn test_kitty_sequence_special_mods_only() {
-	seq := KittySequence{ key_code: 1, final_byte: `A`, mods: KittyMods{ shift: true } }
+	seq := KittySequence{ key_code: 1, final_byte: `A`, mods: KittyMods{ value: 1 } }
 	assert seq.encode_seq() == '\x1b[1;2A'
 }
 
@@ -150,7 +152,7 @@ fn test_kitty_sequence_special_mods_and_event() {
 		key_code: 1
 		final_byte: `A`
 		event: .release
-		mods: KittyMods{ shift: true }
+		mods: KittyMods{ value: 1 }
 	}
 	assert seq.encode_seq() == '\x1b[1;2:3A'
 }
@@ -162,7 +164,7 @@ fn test_kitty_plain_text() {
 		key: .key_a
 		utf8: 'abcd'
 	}, Options{
-		kitty_flags: KittyFlags{ disambiguate: true }
+		kitty_flags: KittyFlags.from_int(1)
 	})
 	assert result == 'abcd'
 }
@@ -173,7 +175,7 @@ fn test_kitty_repeat_with_just_disambiguate() {
 		action: .repeat
 		utf8: 'a'
 	}, Options{
-		kitty_flags: KittyFlags{ disambiguate: true }
+		kitty_flags: KittyFlags.from_int(1)
 	})
 	assert result == 'a'
 }
@@ -181,51 +183,51 @@ fn test_kitty_repeat_with_just_disambiguate() {
 fn test_kitty_enter_backspace_tab() {
 	// Enter
 	r1 := kitty_encode(KeyEvent{ key: .enter, utf8: '' }, Options{
-		kitty_flags: KittyFlags{ disambiguate: true }
+		kitty_flags: KittyFlags.from_int(1)
 	})
 	assert r1 == '\r'
 
 	// Backspace
 	r2 := kitty_encode(KeyEvent{ key: .backspace, utf8: '' }, Options{
-		kitty_flags: KittyFlags{ disambiguate: true }
+		kitty_flags: KittyFlags.from_int(1)
 	})
 	assert r2 == '\x7f'
 
 	// Tab
 	r3 := kitty_encode(KeyEvent{ key: .tab, utf8: '' }, Options{
-		kitty_flags: KittyFlags{ disambiguate: true }
+		kitty_flags: KittyFlags.from_int(1)
 	})
 	assert r3 == '\t'
 
 	// No release events if "report_all" is not set
 	r4 := kitty_encode(KeyEvent{ action: .release, key: .enter, utf8: '' }, Options{
-		kitty_flags: KittyFlags{ disambiguate: true, report_events: true }
+		kitty_flags: KittyFlags.from_int(3)
 	})
 	assert r4 == ''
 
 	r5 := kitty_encode(KeyEvent{ action: .release, key: .backspace, utf8: '' }, Options{
-		kitty_flags: KittyFlags{ disambiguate: true, report_events: true }
+		kitty_flags: KittyFlags.from_int(3)
 	})
 	assert r5 == ''
 
 	r6 := kitty_encode(KeyEvent{ action: .release, key: .tab, utf8: '' }, Options{
-		kitty_flags: KittyFlags{ disambiguate: true, report_events: true }
+		kitty_flags: KittyFlags.from_int(3)
 	})
 	assert r6 == ''
 
 	// Release events if "report_all" is set
 	r7 := kitty_encode(KeyEvent{ action: .release, key: .enter, utf8: '' }, Options{
-		kitty_flags: KittyFlags{ disambiguate: true, report_events: true, report_all: true }
+		kitty_flags: KittyFlags.from_int(11)
 	})
 	assert r7 == '\x1b[13;1:3u'
 
 	r8 := kitty_encode(KeyEvent{ action: .release, key: .backspace, utf8: '' }, Options{
-		kitty_flags: KittyFlags{ disambiguate: true, report_events: true, report_all: true }
+		kitty_flags: KittyFlags.from_int(11)
 	})
 	assert r8 == '\x1b[127;1:3u'
 
 	r9 := kitty_encode(KeyEvent{ action: .release, key: .tab, utf8: '' }, Options{
-		kitty_flags: KittyFlags{ disambiguate: true, report_events: true, report_all: true }
+		kitty_flags: KittyFlags.from_int(11)
 	})
 	assert r9 == '\x1b[9;1:3u'
 }
@@ -238,7 +240,7 @@ fn test_kitty_shift_backspace_emits_csi_u() {
 		mods: Mods{ shift: true }
 		utf8: ''
 	}, Options{
-		kitty_flags: KittyFlags{ disambiguate: true }
+		kitty_flags: KittyFlags.from_int(1)
 	})
 	assert result == '\x1b[127;2u'
 }
@@ -249,7 +251,7 @@ fn test_kitty_shift_enter_emits_csi_u() {
 		mods: Mods{ shift: true }
 		utf8: ''
 	}, Options{
-		kitty_flags: KittyFlags{ disambiguate: true }
+		kitty_flags: KittyFlags.from_int(1)
 	})
 	assert result == '\x1b[13;2u'
 }
@@ -260,20 +262,14 @@ fn test_kitty_shift_tab_emits_csi_u() {
 		mods: Mods{ shift: true }
 		utf8: ''
 	}, Options{
-		kitty_flags: KittyFlags{ disambiguate: true }
+		kitty_flags: KittyFlags.from_int(1)
 	})
 	assert result == '\x1b[9;2u'
 }
 
 fn test_kitty_enter_with_all_flags() {
 	result := kitty_encode(KeyEvent{ key: .enter, utf8: '' }, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_events: true
-			report_alternates: true
-			report_all: true
-			report_associated: true
-		}
+		kitty_flags: KittyFlags.from_int(31)
 	})
 	assert result[1..] == '[13u'
 }
@@ -284,13 +280,7 @@ fn test_kitty_ctrl_with_all_flags() {
 		mods: Mods{ ctrl: true }
 		utf8: ''
 	}, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_events: true
-			report_alternates: true
-			report_all: true
-			report_associated: true
-		}
+		kitty_flags: KittyFlags.from_int(31)
 	})
 	assert result[1..] == '[57442;5u'
 }
@@ -302,13 +292,7 @@ fn test_kitty_ctrl_release_with_ctrl_mod_set() {
 		mods: Mods{ ctrl: true }
 		utf8: ''
 	}, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_events: true
-			report_alternates: true
-			report_all: true
-			report_associated: true
-		}
+		kitty_flags: KittyFlags.from_int(31)
 	})
 	assert result[1..] == '[57442;5:3u'
 }
@@ -318,7 +302,7 @@ fn test_kitty_delete() {
 		key: .delete
 		utf8: '\x7f'
 	}, Options{
-		kitty_flags: KittyFlags{ disambiguate: true }
+		kitty_flags: KittyFlags.from_int(1)
 	})
 	assert result == '\x1b[3~'
 }
@@ -329,7 +313,7 @@ fn test_kitty_composing_with_no_modifier() {
 		mods: Mods{ shift: true }
 		composing: true
 	}, Options{
-		kitty_flags: KittyFlags{ disambiguate: true }
+		kitty_flags: KittyFlags.from_int(1)
 	})
 	assert result == ''
 }
@@ -340,7 +324,7 @@ fn test_kitty_composing_with_modifier() {
 		mods: Mods{ shift: true }
 		composing: true
 	}, Options{
-		kitty_flags: KittyFlags{ disambiguate: true, report_all: true }
+		kitty_flags: KittyFlags.from_int(9)
 	})
 	assert result == '\x1b[57441;2u'
 }
@@ -352,10 +336,7 @@ fn test_kitty_shift_a_on_us_keyboard() {
 		utf8: 'A'
 		unshifted_codepoint: 97 // lowercase A
 	}, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_alternates: true
-		}
+		kitty_flags: KittyFlags.from_int(5)
 	})
 	assert result == '\x1b[97:65;2u'
 }
@@ -367,10 +348,7 @@ fn test_kitty_matching_unshifted_codepoint() {
 		utf8: 'A'
 		unshifted_codepoint: 65
 	}, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_alternates: true
-		}
+		kitty_flags: KittyFlags.from_int(5)
 	})
 	// WARNING: This is not a valid encoding. This is a hypothetical encoding
 	// just to test that our logic is correct around matching unshifted
@@ -386,12 +364,7 @@ fn test_kitty_report_alternates_with_caps() {
 		utf8: 'J'
 		unshifted_codepoint: 106
 	}, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_all: true
-			report_alternates: true
-			report_associated: true
-		}
+		kitty_flags: KittyFlags.from_int(29)
 	})
 	assert result == '\x1b[106;65;74u'
 }
@@ -404,12 +377,7 @@ fn test_kitty_report_alternates_colon() {
 		utf8: ':'
 		unshifted_codepoint: u32(`;`)
 	}, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_all: true
-			report_alternates: true
-			report_associated: true
-		}
+		kitty_flags: KittyFlags.from_int(29)
 	})
 	assert result == '\x1b[59:58;2;58u'
 }
@@ -420,12 +388,7 @@ fn test_kitty_report_alternates_with_ru_layout() {
 		utf8: '\u0447' // ч
 		unshifted_codepoint: 1095
 	}, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_all: true
-			report_alternates: true
-			report_associated: true
-		}
+		kitty_flags: KittyFlags.from_int(29)
 	})
 	assert result == '\x1b[1095::59;;1095u'
 }
@@ -437,12 +400,7 @@ fn test_kitty_report_alternates_with_ru_layout_shifted() {
 		utf8: '\u0427' // Ч
 		unshifted_codepoint: 1095
 	}, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_all: true
-			report_alternates: true
-			report_associated: true
-		}
+		kitty_flags: KittyFlags.from_int(29)
 	})
 	assert result == '\x1b[1095:1063:59;2;1063u'
 }
@@ -454,12 +412,7 @@ fn test_kitty_report_alternates_with_ru_layout_caps_lock() {
 		utf8: '\u0427' // Ч
 		unshifted_codepoint: 1095
 	}, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_all: true
-			report_alternates: true
-			report_associated: true
-		}
+		kitty_flags: KittyFlags.from_int(29)
 	})
 	assert result == '\x1b[1095::59;65;1063u'
 }
@@ -472,13 +425,7 @@ fn test_kitty_report_alternates_with_hu_layout_release() {
 		utf8: ''
 		unshifted_codepoint: 337
 	}, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_all: true
-			report_alternates: true
-			report_associated: true
-			report_events: true
-		}
+		kitty_flags: KittyFlags.from_int(31)
 	})
 	assert result[1..] == '[337::91;5:3u'
 }
@@ -489,7 +436,7 @@ fn test_kitty_up_arrow_with_utf8() {
 		key: .arrow_up
 		utf8: [u8(30)].bytestr()
 	}, Options{
-		kitty_flags: KittyFlags{ disambiguate: true }
+		kitty_flags: KittyFlags.from_int(1)
 	})
 	assert result == '\x1b[A'
 }
@@ -500,7 +447,7 @@ fn test_kitty_shift_tab() {
 		mods: Mods{ shift: true }
 		utf8: ''
 	}, Options{
-		kitty_flags: KittyFlags{ disambiguate: true, report_alternates: true }
+		kitty_flags: KittyFlags.from_int(5)
 	})
 	assert result == '\x1b[9;2u'
 }
@@ -510,7 +457,7 @@ fn test_kitty_left_shift() {
 		key: .shift_left
 		utf8: ''
 	}, Options{
-		kitty_flags: KittyFlags{ disambiguate: true, report_alternates: true }
+		kitty_flags: KittyFlags.from_int(5)
 	})
 	assert result == ''
 }
@@ -520,7 +467,7 @@ fn test_kitty_left_shift_with_report_all() {
 		key: .shift_left
 		utf8: ''
 	}, Options{
-		kitty_flags: KittyFlags{ disambiguate: true, report_all: true }
+		kitty_flags: KittyFlags.from_int(9)
 	})
 	assert result == '\x1b[57441u'
 }
@@ -532,12 +479,7 @@ fn test_kitty_report_associated_with_modifiers() {
 		utf8: 'j'
 		unshifted_codepoint: 106
 	}, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_all: true
-			report_alternates: true
-			report_associated: true
-		}
+		kitty_flags: KittyFlags.from_int(29)
 	})
 	assert result == '\x1b[106;5u'
 }
@@ -549,12 +491,7 @@ fn test_kitty_report_associated() {
 		utf8: 'J'
 		unshifted_codepoint: 106
 	}, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_all: true
-			report_alternates: true
-			report_associated: true
-		}
+		kitty_flags: KittyFlags.from_int(29)
 	})
 	assert result == '\x1b[106:74;2;74u'
 }
@@ -567,13 +504,7 @@ fn test_kitty_report_associated_on_release() {
 		utf8: 'J'
 		unshifted_codepoint: 106
 	}, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_all: true
-			report_alternates: true
-			report_associated: true
-			report_events: true
-		}
+		kitty_flags: KittyFlags.from_int(31)
 	})
 	assert result[1..] == '[106:74;2:3u'
 }
@@ -583,11 +514,7 @@ fn test_kitty_alternates_omit_control_characters() {
 		key: .delete
 		utf8: '\x7f'
 	}, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_alternates: true
-			report_all: true
-		}
+		kitty_flags: KittyFlags.from_int(13)
 	})
 	assert result == '\x1b[3~'
 }
@@ -598,11 +525,7 @@ fn test_kitty_enter_with_utf8_dead_key_state() {
 		utf8: 'A'
 		unshifted_codepoint: 0x0D
 	}, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_alternates: true
-			report_all: true
-		}
+		kitty_flags: KittyFlags.from_int(13)
 	})
 	assert result == 'A'
 }
@@ -612,13 +535,7 @@ fn test_kitty_keypad_number() {
 		key: .numpad_1
 		utf8: '1'
 	}, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_events: true
-			report_alternates: true
-			report_all: true
-			report_associated: true
-		}
+		kitty_flags: KittyFlags.from_int(31)
 	})
 	assert result[1..] == '[57400;;49u'
 }
@@ -629,13 +546,7 @@ fn test_kitty_backspace_with_utf8_dead_key_state() {
 		utf8: 'A'
 		unshifted_codepoint: 0x0D
 	}, Options{
-		kitty_flags: KittyFlags{
-			disambiguate: true
-			report_events: true
-			report_alternates: true
-			report_all: true
-			report_associated: true
-		}
+		kitty_flags: KittyFlags.from_int(31)
 	})
 	assert result == ''
 }

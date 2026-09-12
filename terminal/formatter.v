@@ -1304,8 +1304,8 @@ pub fn (self ScreenFormatter) format() string {
 
 	// Emit Kitty keyboard protocol state using CSI = u
 	if self.extra.kitty_keyboard {
-		flags := self.screen.kitty_keyboard.flags[self.screen.kitty_keyboard.idx]
-		if flags != 0 {
+		flags := self.screen.kitty_keyboard.current().int()
+		if flags != key_flags_disabled.int() {
 			sb.write_string('\x1b[=${flags};1u')
 		}
 	}

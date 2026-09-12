@@ -196,13 +196,7 @@ pub fn (mut self KeyEncoder) setopt(option KeyEncoderOption, value KeyEncoderOpt
 		}
 		u8 {
 			if option == .kitty_flags {
-				self.opts.kitty_flags = input.KittyFlags{
-					disambiguate: value & 1 != 0
-					report_events: value & 2 != 0
-					report_alternates: value & 4 != 0
-					report_all: value & 8 != 0
-					report_associated: value & 16 != 0
-				}
+				self.opts.kitty_flags = input.KittyFlags.from_int(value)
 			}
 		}
 		input.OptionAsAlt {

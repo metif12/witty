@@ -3577,29 +3577,29 @@ fn test_screen_dump_string_bounded_region() {
 fn test_key_flag_stack_wraps_at_capacity() {
 	mut stack := KeyFlagStack{}
 	for value in 1 .. 9 {
-		stack.push(u32(value))
+		stack.push(KeyFlags.from_int(u8(value)))
 	}
 	assert stack.idx == 0
-	assert stack.current() == 8
+	assert stack.current().int() == 8
 
 	stack.pop(1)
 	assert stack.idx == 7
-	assert stack.current() == 7
+	assert stack.current().int() == 7
 }
 
 fn test_key_flag_stack_pop_zero_is_noop() {
 	mut stack := KeyFlagStack{}
-	stack.push(5)
+	stack.push(KeyFlags.from_int(5))
 	stack.pop(0)
-	assert stack.current() == 5
+	assert stack.current().int() == 5
 }
 
 fn test_key_flag_stack_large_pop_resets_all_entries() {
 	mut stack := KeyFlagStack{}
-	stack.set(.set_, 3)
-	stack.push(5)
+	stack.set(.set_, KeyFlags.from_int(3))
+	stack.push(KeyFlags.from_int(5))
 	stack.pop(256)
 	assert stack.idx == 0
-	assert stack.current() == 0
-	assert stack.flags == [8]u32{}
+	assert stack.current() == key_flags_disabled
+	assert stack.flags == [8]KeyFlags{init: key_flags_disabled}
 }

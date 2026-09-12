@@ -5513,7 +5513,7 @@ fn (mut self Surface) child_exited_handler(runtime_ms u32, exit_code u32) {
 			t.print_string('Process exited. Press any key to close the terminal.') or {}
 			t.modes.set(.cursor_visible, false)
 			t.modes.set(.disable_keyboard, false)
-			t.screens.active.kitty_keyboard.set(.set_, 0)
+			t.screens.active.kitty_keyboard.set(.set_, terminal.key_flags_disabled)
 		}
 		if locked {
 			self.renderer_state.mutex.unlock()
@@ -5861,13 +5861,7 @@ fn (mut self Surface) encode_key_opts() input.Options {
 		ignore_keypad_with_numlock: t.modes.get(.ignore_keypad_with_numlock)
 		alt_esc_prefix: t.modes.get(.alt_esc_prefix)
 		modify_other_keys_state_2: t.flags.modify_other_keys_2
-		kitty_flags: input.KittyFlags{
-			disambiguate: flags & 1 != 0
-			report_events: flags & 2 != 0
-			report_alternates: flags & 4 != 0
-			report_all: flags & 8 != 0
-			report_associated: flags & 16 != 0
-		}
+		kitty_flags: flags
 	}
 	$if macos {
 		opts.macos_option_as_alt = self.config.macos_option_as_alt or {

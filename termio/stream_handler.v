@@ -366,19 +366,19 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.query_kitty_keyboard()
 		}
 		.kitty_keyboard_push {
-			self.terminal.screens.active.kitty_keyboard.push(u32(event.payload.kitty_flags))
+			self.terminal.screens.active.kitty_keyboard.push(terminal.KeyFlags.from_int(event.payload.kitty_flags))
 		}
 		.kitty_keyboard_pop {
 			self.terminal.screens.active.kitty_keyboard.pop(usize(event.payload.num))
 		}
 		.kitty_keyboard_set {
-			self.terminal.screens.active.kitty_keyboard.set(.set_, u32(event.payload.kitty_flags))
+			self.terminal.screens.active.kitty_keyboard.set(.set_, terminal.KeyFlags.from_int(event.payload.kitty_flags))
 		}
 		.kitty_keyboard_set_or {
-			self.terminal.screens.active.kitty_keyboard.set(.or_, u32(event.payload.kitty_flags))
+			self.terminal.screens.active.kitty_keyboard.set(.or_, terminal.KeyFlags.from_int(event.payload.kitty_flags))
 		}
 		.kitty_keyboard_set_not {
-			self.terminal.screens.active.kitty_keyboard.set(.not_, u32(event.payload.kitty_flags))
+			self.terminal.screens.active.kitty_keyboard.set(.not_, terminal.KeyFlags.from_int(event.payload.kitty_flags))
 		}
 		.kitty_color_report {
 			// Kitty color protocol: query/set/reset colors (OSC 21).
@@ -1379,7 +1379,7 @@ pub fn (mut self StreamHandler) full_reset() {
 
 pub fn (mut self StreamHandler) query_kitty_keyboard() {
 	flags := self.terminal.screens.active.kitty_keyboard.current()
-	resp := '\x1b[?${flags}u'
+	resp := '\x1b[?${flags.int()}u'
 	self.message_writer(Message.write_req(resp))
 }
 
