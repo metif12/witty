@@ -36,9 +36,13 @@ fn test_pagelist_search_initial_page_and_feed() {
 
 	mut finder := PageListSearch.init('Fizz'.bytes(), &list, last_node)
 	defer { finder.deinit() }
+	start_y := finder.pin.y
+	start_x := finder.pin.x
 	assert finder.next() != none
 	assert finder.next() == none
 	assert finder.feed()
+	assert finder.pin.y == start_y
+	assert finder.pin.x == start_x
 	assert finder.next() != none
 	for finder.feed() {
 	}

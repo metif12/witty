@@ -45,12 +45,10 @@ pub fn PageListSearch.init(needle []u8, list &terminal.PageList, start &terminal
 
 // Free resources.
 pub fn (mut self PageListSearch) deinit() {
-	// Untrack the pin from the page list.
-	if self.pin != unsafe { nil } {
-		mut mutable_list := unsafe { &terminal.PageList(self.list) }
-		mutable_list.untrack_pin(self.pin)
-	}
 	self.window.deinit()
+	// Untrack the pin from the page list.
+	mut mutable_list := unsafe { &terminal.PageList(self.list) }
+	mutable_list.untrack_pin(self.pin)
 }
 
 // Search for the next match in the loaded data.
@@ -79,8 +77,6 @@ pub fn (mut self PageListSearch) feed() bool {
 			remaining -= added
 		}
 		self.pin.node = current
-		self.pin.y = u16(current.data.size.rows - 1)
-		self.pin.x = u16(current.data.size.cols - 1)
 		if remaining == 0 {
 			break
 		}
