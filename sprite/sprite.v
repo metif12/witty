@@ -12,12 +12,8 @@ module sprite
 //   ghostty/src/font/sprite/draw/block.zig (fill helpers)
 //
 // The original Ghostty Canvas is backed by the `z2d` 2D vector graphics
-// library. We don't have z2d in V, so this file additionally implements
-// (faithfully to z2d's semantics) the rasterization primitives that z2d
-// provided: scanline polygon fill (non-zero winding, anti-aliased via
-// supersampling), path stroking (butt caps, miter joins approximated by
-// filling the union of per-segment quads), and cubic Bezier flattening
-// for `curveTo`/`arc`.
+// library. Its required path and raster operations are translated in this
+// module so Ghostty's Canvas behavior is preserved in V.
 
 import sprite_types as font
 import math
@@ -122,27 +118,6 @@ pub fn (mut c Canvas) pixel(x i32, y i32, color Color) {
 		return
 	}
 	c.data[py * w + px] = u8(color)
-}
-
-// blend_pixel writes an anti-aliased (coverage-weighted) pixel value.
-// `alpha` is the coverage in [0,255] scaled by the color intensity.
-// We take the maximum with the existing value so overlapping fills of
-// the same color don't darken seams (z2d composites with src_over onto
-// a transparent surface, but for the single opaque color we draw with,
-// max is equivalent and avoids double-counting on shared edges).
-fn (mut c Canvas) blend_pixel(px i32, py i32, value u8) {
-	if px < 0 || py < 0 {
-		return
-	}
-	w := i32(c.sfc_width())
-	h := i32(c.sfc_height())
-	if px >= w || py >= h {
-		return
-	}
-	idx := py * w + px
-	if value > c.data[idx] {
-		c.data[idx] = value
-	}
 }
 
 // Draw and fill a rectangle. This is the main primitive for drawing
@@ -452,28 +427,42 @@ pub:
 // applied to every coordinate.
 pub struct StaticPath {
 pub mut:
-	canvas       &Canvas = unsafe { nil }
-	nodes        []PathNode
-	wrapped_path Path
+	canvas        &Canvas = unsafe { nil }
+	nodes         []PathNode
+	wrapped_path  Path
+	initial_point ?Point
+	current_point ?Point
+}
+
+// z2d stores path coordinates in its Cairo-compatible signed 24-bit range.
+fn clamp_i24(value f64) f64 {
+	return math.clamp(value, -8388608.0, 8388607.0)
 }
 
 // px/py apply the padding transformation to a coordinate, matching
 // z2d's `wrapped_path.transformation` set in `Canvas.staticPath`.
 fn (p &StaticPath) tx(x f64) f64 {
-	return x + f64(p.canvas.padding_x)
+	return clamp_i24(x) + f64(p.canvas.padding_x)
 }
 
 fn (p &StaticPath) ty(y f64) f64 {
-	return y + f64(p.canvas.padding_y)
+	return clamp_i24(y) + f64(p.canvas.padding_y)
 }
 
 // move_to adds a move-to node.
 pub fn (mut p StaticPath) move_to(x f64, y f64) {
+	point := Point{ x: p.tx(x), y: p.ty(y) }
+	if p.nodes.len > 0 && p.nodes.last().kind == .move_to
+		&& p.nodes.last().x == point.x && p.nodes.last().y == point.y {
+		return
+	}
 	p.nodes << PathNode{
 		kind: .move_to
-		x: p.tx(x)
-		y: p.ty(y)
+		x: point.x
+		y: point.y
 	}
+	p.initial_point = point
+	p.current_point = point
 	p.wrapped_path = Path{
 		nodes: p.nodes
 	}
@@ -481,11 +470,16 @@ pub fn (mut p StaticPath) move_to(x f64, y f64) {
 
 // line_to adds a line-to node.
 pub fn (mut p StaticPath) line_to(x f64, y f64) {
+	if p.current_point == none {
+		p.move_to(x, y)
+		return
+	}
 	p.nodes << PathNode{
 		kind: .line_to
 		x: p.tx(x)
 		y: p.ty(y)
 	}
+	p.current_point = Point{ x: p.tx(x), y: p.ty(y) }
 	p.wrapped_path = Path{
 		nodes: p.nodes
 	}
@@ -494,6 +488,9 @@ pub fn (mut p StaticPath) line_to(x f64, y f64) {
 // curve_to adds a cubic Bezier curve node with the two control points
 // (c1, c2) and the end point (x, y). Matches z2d `path.curveTo`.
 pub fn (mut p StaticPath) curve_to(c1x f64, c1y f64, c2x f64, c2y f64, x f64, y f64) {
+	if p.current_point == none {
+		panic('curve_to requires a current point')
+	}
 	p.nodes << PathNode{
 		kind: .curve_to
 		x: p.tx(x)
@@ -503,6 +500,7 @@ pub fn (mut p StaticPath) curve_to(c1x f64, c1y f64, c2x f64, c2y f64, x f64, y 
 		c2x: p.tx(c2x)
 		c2y: p.ty(c2y)
 	}
+	p.current_point = Point{ x: p.tx(x), y: p.ty(y) }
 	p.wrapped_path = Path{
 		nodes: p.nodes
 	}
@@ -510,86 +508,26 @@ pub fn (mut p StaticPath) curve_to(c1x f64, c1y f64, c2x f64, c2y f64, x f64, y 
 
 // close closes the current path.
 //
-// z2d's `StaticPath.close` reserves two nodes (a close node plus an
-// implicit move back to the subpath start). We only need one closing
-// marker; the rasterizer closes each subpath implicitly, so this
-// simply records a `.close`.
 pub fn (mut p StaticPath) close() {
+	if p.current_point == none {
+		return
+	}
 	p.nodes << PathNode{
 		kind: .close
+	}
+	initial := p.initial_point or { return }
+	p.nodes << PathNode{
+		kind: .move_to
+		x: initial.x
+		y: initial.y
 	}
 	p.wrapped_path = Path{
 		nodes: p.nodes
 	}
 }
 
-// ============================================================
-// Polygon extraction + Bezier flattening
-// ============================================================
-
 // z2d's default maximum error tolerance for spline decomposition.
 const default_tolerance = 0.1
-
-// flatten_path converts a Path in to a list of closed polygons (each
-// polygon is a list of Points). Bezier curves are flattened in to line
-// segments. This is the input to both the fill and stroke rasterizers.
-fn flatten_path(path Path) [][]Point {
-	mut polys := [][]Point{}
-	mut cur := []Point{}
-	mut last := Point{}
-	for node in path.nodes {
-		match node.kind {
-			.move_to {
-				if cur.len > 0 {
-					polys << cur
-				}
-				cur = []Point{}
-				last = Point{
-					x: node.x
-					y: node.y
-				}
-				cur << last
-			}
-			.line_to {
-				last = Point{
-					x: node.x
-					y: node.y
-				}
-				cur << last
-			}
-			.curve_to {
-				p0 := last
-				p1 := Point{
-					x: node.c1x
-					y: node.c1y
-				}
-				p2 := Point{
-					x: node.c2x
-					y: node.c2y
-				}
-				p3 := Point{
-					x: node.x
-					y: node.y
-				}
-				cur << decompose_spline(p0, p1, p2, p3, default_tolerance)
-				last = p3
-			}
-			.close {
-				if cur.len > 0 {
-					if cur.len > 1 && (cur.last().x != cur[0].x || cur.last().y != cur[0].y) {
-						cur << cur[0]
-					}
-					polys << cur
-					cur = []Point{}
-				}
-			}
-		}
-	}
-	if cur.len > 0 {
-		polys << cur
-	}
-	return polys
-}
 
 // decompose_spline is z2d v0.10.0's internal/tess/Spline.zig decomposition.
 // It adaptively subdivides a cubic Bezier using the same error bound rather
@@ -700,205 +638,55 @@ fn lerp_half(a Point, b Point) Point {
 	}
 }
 
-// ============================================================
-// Scanline polygon fill (non-zero winding, anti-aliased)
-// ============================================================
-
-// Supersampling factor per axis for anti-aliasing. This rasterizer is still
-// pending replacement by z2d's multisample rasterizer.
-const aa_samples = 4
-
 // fill_path fills a closed path using the non-zero winding rule, with
-// anti-aliasing. This is the workhorse used by `fill`, `quad`,
-// `triangle`, and Context.fill.
+// z2d's default 4x multisample anti-aliasing. This is the workhorse used by
+// `fill`, `quad`, `triangle`, and Context.fill.
 pub fn (mut c Canvas) fill_path(path Path, opts FillOptions, color Color) ! {
 	_ = opts
-	polys := flatten_path(path)
-	if polys.len == 0 {
+	if path.nodes.len == 0 {
 		return
 	}
-	c.fill_polys(polys, color)
+	if !path_nodes_closed(path.nodes) {
+		return error('path not closed')
+	}
+	polygon := z2d_fill_plot(path, z2d_multisample_scale, default_tolerance)!
+	z2d_multisample_fill(mut c, polygon, color)
 }
 
-// fill_polys rasterizes a set of polygons with non-zero winding + AA.
-fn (mut c Canvas) fill_polys(polys [][]Point, color Color) {
-	w := int(c.sfc_width())
-	h := int(c.sfc_height())
-
-	// Compute the vertical bounds so we only scan relevant rows.
-	mut min_y := f64(h)
-	mut max_y := f64(0)
-	for poly in polys {
-		for pt in poly {
-			if pt.y < min_y {
-				min_y = pt.y
-			}
-			if pt.y > max_y {
-				max_y = pt.y
-			}
-		}
+fn path_nodes_closed(nodes []PathNode) bool {
+	if nodes.len == 0 {
+		return false
 	}
-	mut y0 := int(math.floor(min_y))
-	mut y1 := int(math.ceil(max_y))
-	if y0 < 0 {
-		y0 = 0
-	}
-	if y1 > h {
-		y1 = h
-	}
-
-	// Coverage accumulation buffer for one row of pixels.
-	mut coverage := []f64{len: w}
-
-	color_val := f64(u8(color))
-
-	for py in y0 .. y1 {
-		for i in 0 .. w {
-			coverage[i] = 0.0
-		}
-		// Sample `aa_samples` sub-scanlines within this pixel row.
-		for s in 0 .. aa_samples {
-			sy := f64(py) + (f64(s) + 0.5) / f64(aa_samples)
-			// Gather winding-aware crossings for this sub-scanline.
-			mut xs := []XCross{}
-			for poly in polys {
-				n := poly.len
-				if n < 2 {
-					continue
-				}
-				for k in 0 .. n {
-					a := poly[k]
-					b := poly[(k + 1) % n]
-					ay := a.y
-					by := b.y
-					if ay == by {
-						continue
-					}
-					// dir: +1 for downward edge, -1 for upward.
-					mut dir := 1
-					mut lo := a
-					mut hi := b
-					if ay > by {
-						dir = -1
-						lo = b
-						hi = a
-					}
-					if sy < lo.y || sy >= hi.y {
-						continue
-					}
-					t := (sy - lo.y) / (hi.y - lo.y)
-					x := lo.x + t * (hi.x - lo.x)
-					xs << XCross{
-						x: x
-						dir: dir
-					}
+	mut closed := false
+	for i, node in nodes {
+		match node.kind {
+			.move_to {
+				if !closed && i != 0 {
+					break
 				}
 			}
-			if xs.len < 2 {
-				continue
+			.close {
+				closed = true
 			}
-			xs.sort(a.x < b.x)
-			// Walk crossings accumulating winding number; spans where
-			// winding != 0 are inside (non-zero rule).
-			mut winding := 0
-			for idx in 0 .. xs.len - 1 {
-				winding += xs[idx].dir
-				if winding != 0 {
-					accumulate_span(mut coverage, xs[idx].x, xs[idx + 1].x, w)
-				}
-			}
-		}
-		// Emit the accumulated coverage for this pixel row.
-		for px in 0 .. w {
-			cov := coverage[px] / f64(aa_samples)
-			if cov <= 0.0 {
-				continue
-			}
-			cc := if cov > 1.0 { 1.0 } else { cov }
-			val := u8(math.round(color_val * cc))
-			if val > 0 {
-				c.blend_pixel(px, py, val)
+			else {
+				closed = false
 			}
 		}
 	}
-}
-
-// XCross is an edge crossing on a scanline with its winding direction.
-struct XCross {
-	x   f64
-	dir int
-}
-
-// accumulate_span adds fractional horizontal coverage for the interval
-// [xa, xb) in to the per-row coverage buffer, with partial coverage on
-// the boundary pixels for horizontal anti-aliasing.
-fn accumulate_span(mut coverage []f64, xa f64, xb f64, w int) {
-	if xb <= xa {
-		return
-	}
-	mut a := xa
-	mut b := xb
-	if a < 0 {
-		a = 0
-	}
-	if b > f64(w) {
-		b = f64(w)
-	}
-	if b <= a {
-		return
-	}
-	ia := int(math.floor(a))
-	ib := int(math.floor(b - 0.0000001))
-	if ia == ib {
-		if ia >= 0 && ia < w {
-			coverage[ia] += (b - a)
-		}
-		return
-	}
-	// Left partial pixel.
-	if ia >= 0 && ia < w {
-		coverage[ia] += (f64(ia + 1) - a)
-	}
-	// Full middle pixels.
-	for px in ia + 1 .. ib {
-		if px >= 0 && px < w {
-			coverage[px] += 1.0
-		}
-	}
-	// Right partial pixel.
-	if ib >= 0 && ib < w {
-		coverage[ib] += (b - f64(ib))
-	}
+	return closed
 }
 
 // ============================================================
 // Path stroking
 // ============================================================
 
-// stroke_path strokes the given (open or closed) path with the given
-// options. Each segment is expanded in to a quad of the requested width
-// and filled; the union of these quads produces the stroke.
+// stroke_path strokes the given (open or closed) path with z2d's tessellator.
 pub fn (mut c Canvas) stroke_path(path Path, opts StrokeOptions, color Color) ! {
-	half := opts.line_width / 2.0
-	polys := stroke_to_polys(path, half, opts.line_cap_mode)
-	if polys.len == 0 {
+	if path.nodes.len == 0 {
 		return
 	}
-	// Fill each stroke quad independently. Because the fill uses `max`
-	// blending, overlapping quads at joints combine cleanly without
-	// darkening.
-	for poly in polys {
-		c.fill_polys([poly], color)
-	}
-
-	if opts.line_cap_mode == .round_ {
-		for sub in flatten_path(path) {
-			if sub.len < 2 || points_equal(sub[0], sub.last()) {
-				continue
-			}
-			c.fill_polys([circle_polygon(sub[0], half), circle_polygon(sub.last(), half)], color)
-		}
-	}
+	polygon := z2d_stroke_plot(path, opts)!
+	z2d_multisample_fill(mut c, polygon, color)
 }
 
 // inner_stroke_path strokes only the portion of a path that lies inside
@@ -909,6 +697,14 @@ pub fn (mut c Canvas) inner_stroke_path(path Path, opts StrokeOptions, color Col
 	mut closed_nodes := path.nodes.clone()
 	closed_nodes << PathNode{
 		kind: .close
+	}
+	if path.nodes.len > 0 {
+		for node in path.nodes {
+			if node.kind == .move_to {
+				closed_nodes << node
+				break
+			}
+		}
 	}
 
 	mut fill_canvas := Canvas.init(c.width, c.height, c.padding_x, c.padding_y)
@@ -924,83 +720,12 @@ pub fn (mut c Canvas) inner_stroke_path(path Path, opts StrokeOptions, color Col
 		masked := u8(math.round(f64(fill_canvas.data[i]) * f64(stroke_canvas.data[i]) / 255.0))
 		dst := u32(c.data[i])
 		src := u32(masked)
-		c.data[i] = u8(src + (dst * (255 - src) + 127) / 255)
+		c.data[i] = u8(src + dst - src * dst / 255)
 	}
-}
-
-// stroke_to_polys converts a path in to a list of quad polygons, one
-// per line segment, each offset by `half` on either side of the segment.
-fn stroke_to_polys(path Path, half f64, cap LineCapMode) [][]Point {
-	mut polys := [][]Point{}
-	subs := flatten_path(path)
-	for sub in subs {
-		if sub.len < 2 {
-			continue
-		}
-		for k in 0 .. sub.len - 1 {
-			mut a := sub[k]
-			mut b := sub[k + 1]
-			dx := b.x - a.x
-			dy := b.y - a.y
-			len := math.sqrt(dx * dx + dy * dy)
-			if len == 0 {
-				continue
-			}
-			// Unit normal.
-			nx := -dy / len * half
-			ny := dx / len * half
-			if cap == .square && !points_equal(sub[0], sub.last()) {
-				if k == 0 {
-					a = Point{
-						x: a.x - dx / len * half
-						y: a.y - dy / len * half
-					}
-				}
-				if k == sub.len - 2 {
-					b = Point{
-						x: b.x + dx / len * half
-						y: b.y + dy / len * half
-					}
-				}
-			}
-			polys << [
-				Point{
-					x: a.x + nx
-					y: a.y + ny
-				},
-				Point{
-					x: b.x + nx
-					y: b.y + ny
-				},
-				Point{
-					x: b.x - nx
-					y: b.y - ny
-				},
-				Point{
-					x: a.x - nx
-					y: a.y - ny
-				},
-			]
-		}
-	}
-	return polys
 }
 
 fn points_equal(a Point, b Point) bool {
 	return a.x == b.x && a.y == b.y
-}
-
-fn circle_polygon(center Point, radius f64) []Point {
-	segments := 24
-	mut points := []Point{cap: segments}
-	for i in 0 .. segments {
-		angle := f64(i) * math.tau / f64(segments)
-		points << Point{
-			x: center.x + radius * math.cos(angle)
-			y: center.y + radius * math.sin(angle)
-		}
-	}
-	return points
 }
 
 // ============================================================
@@ -1060,18 +785,24 @@ pub fn (mut ctx Context) set_line_width(width f64) {
 }
 
 fn (ctx &Context) tx(x f64) f64 {
-	return x + f64(ctx.canvas.padding_x)
+	return clamp_i24(x) + f64(ctx.canvas.padding_x)
 }
 
 fn (ctx &Context) ty(y f64) f64 {
-	return y + f64(ctx.canvas.padding_y)
+	return clamp_i24(y) + f64(ctx.canvas.padding_y)
 }
 
 pub fn (mut ctx Context) move_to(x f64, y f64) {
+	point_x := ctx.tx(x)
+	point_y := ctx.ty(y)
+	if ctx.nodes.len > 0 && ctx.nodes.last().kind == .move_to
+		&& ctx.nodes.last().x == point_x && ctx.nodes.last().y == point_y {
+		return
+	}
 	ctx.nodes << PathNode{
 		kind: .move_to
-		x: ctx.tx(x)
-		y: ctx.ty(y)
+		x: point_x
+		y: point_y
 	}
 	ctx.cur_x = x
 	ctx.cur_y = y
@@ -1096,7 +827,10 @@ pub fn (mut ctx Context) line_to(x f64, y f64) {
 	ctx.has_current = true
 }
 
-pub fn (mut ctx Context) curve_to(c1x f64, c1y f64, c2x f64, c2y f64, x f64, y f64) {
+pub fn (mut ctx Context) curve_to(c1x f64, c1y f64, c2x f64, c2y f64, x f64, y f64) ! {
+	if !ctx.has_current {
+		return error('curve_to requires a current point')
+	}
 	ctx.nodes << PathNode{
 		kind: .curve_to
 		x: ctx.tx(x)
@@ -1111,56 +845,114 @@ pub fn (mut ctx Context) curve_to(c1x f64, c1y f64, c2x f64, c2y f64, x f64, y f
 	ctx.has_current = true
 }
 
-// arc appends a circular arc centered at (x, y) with radius r, going
-// from start_angle to end_angle (radians, positive = counter-clockwise
-// in the standard math sense, i.e. y-down here it sweeps clockwise on
-// screen). It is approximated with a sequence of cubic Bezier curves,
-// matching z2d's arc rendering behavior closely enough for our sprites.
+// arc appends a circular arc using z2d v0.10.0's internal/arc.zig algorithm.
 pub fn (mut ctx Context) arc(x f64, y f64, r f64, start_angle f64, end_angle f64) ! {
-	sweep := end_angle - start_angle
-	// Number of Bezier segments; each covers at most ~90 degrees.
-	half_pi := math.pi / 2.0
-	mut n := int(math.ceil(math.abs(sweep) / half_pi))
-	if n < 1 {
-		n = 1
+	mut effective_end := end_angle
+	for effective_end < start_angle {
+		effective_end += math.tau
 	}
-	seg := sweep / f64(n)
-	// Control-point distance coefficient for a Bezier approximation of
-	// a circular arc of angle `seg`.
-	alpha := 4.0 / 3.0 * math.tan(seg / 4.0)
+	z2d_arc_in_direction(mut ctx, x, y, r, start_angle, effective_end)!
+}
 
-	mut a := start_angle
-	sx := x + r * math.cos(a)
-	sy := y + r * math.sin(a)
-	if !ctx.has_current {
-		ctx.move_to(sx, sy)
+fn z2d_arc_error_normalized(angle f64) f64 {
+	sine := math.sin(angle / 4)
+	cosine := math.cos(angle / 4)
+	return 2.0 / 27.0 * math.pow(sine, 6) / math.pow(cosine, 2)
+}
+
+fn z2d_arc_max_angle_for_tolerance_normalized(tolerance f64) f64 {
+	angles := [math.pi, math.pi / 2, math.pi / 3, math.pi / 4, math.pi / 5, math.pi / 6, math.pi / 7,
+		math.pi / 8, math.pi / 9, math.pi / 10, math.pi / 11]
+	errors := [0.0185185185185185036127, 0.000272567143730179811158, 2.38647043651461047433e-05,
+		4.2455377443222443279e-06, 1.11281001494389081528e-06, 3.72662000942734705475e-07,
+		1.47783685574284411325e-07, 6.63240432022601149057e-08, 3.2715520137536980553e-08,
+		1.73863223499021216974e-08, 9.81410988043554039085e-09]
+	for i, arc_error in errors {
+		if arc_error < tolerance {
+			return angles[i]
+		}
+	}
+	mut angle := 0.0
+	for i in angles.len .. 1000 {
+		angle = math.pi / f64(i)
+		if z2d_arc_error_normalized(angle) <= tolerance {
+			break
+		}
+	}
+	return angle
+}
+
+fn z2d_arc_segments_needed(angle f64, radius f64, tolerance f64) int {
+	max_angle := z2d_arc_max_angle_for_tolerance_normalized(tolerance / radius)
+	return int(math.ceil(math.abs(angle) / max_angle))
+}
+
+fn z2d_mod(value f64, modulus f64) f64 {
+	result := math.fmod(value, modulus)
+	return if result < 0 { result + modulus } else { result }
+}
+
+fn z2d_arc_segment(mut ctx Context, xc f64, yc f64, radius f64, angle_a f64, angle_b f64) ! {
+	r_sin_a := radius * math.sin(angle_a)
+	r_cos_a := radius * math.cos(angle_a)
+	r_sin_b := radius * math.sin(angle_b)
+	r_cos_b := radius * math.cos(angle_b)
+	h := 4.0 / 3.0 * math.tan((angle_b - angle_a) / 4.0)
+	ctx.curve_to(xc + r_cos_a - h * r_sin_a, yc + r_sin_a + h * r_cos_a, xc + r_cos_b + h * r_sin_b, yc + r_sin_b - h * r_cos_b, xc + r_cos_b, yc + r_sin_b)!
+}
+
+// Path.arc uses a line callback that suppresses an exact line to the current
+// transformed point before handing the remaining arc to the path builder.
+fn z2d_arc_line_to(mut ctx Context, x f64, y f64) {
+	if ctx.has_current && ctx.tx(ctx.cur_x) == x && ctx.ty(ctx.cur_y) == y {
+		return
+	}
+	ctx.line_to(x, y)
+}
+
+fn z2d_arc_in_direction(mut ctx Context, xc f64, yc f64, radius f64, angle_min f64, angle_max f64) ! {
+	mut minimum := angle_min
+	mut maximum := angle_max
+	if !(maximum * maximum >= 0) || !(minimum * minimum >= 0) {
+		return
+	}
+	if maximum - minimum > math.tau * 65536.0 {
+		maximum = z2d_mod(maximum - minimum, math.tau)
+		minimum = z2d_mod(minimum, math.tau)
+		maximum += minimum + math.tau * 65536.0
+	}
+	if maximum - minimum > math.pi {
+		middle := minimum + (maximum - minimum) / 2
+		z2d_arc_in_direction(mut ctx, xc, yc, radius, minimum, middle)!
+		z2d_arc_in_direction(mut ctx, xc, yc, radius, middle, maximum)!
+	} else if maximum != minimum {
+		mut segments := z2d_arc_segments_needed(maximum - minimum, radius, default_tolerance)
+		step := (maximum - minimum) / f64(segments)
+		segments -= 1
+		z2d_arc_line_to(mut ctx, xc + radius * math.cos(minimum), yc + radius * math.sin(minimum))
+		for _ in 0 .. segments {
+			z2d_arc_segment(mut ctx, xc, yc, radius, minimum, minimum + step)!
+			minimum += step
+		}
+		z2d_arc_segment(mut ctx, xc, yc, radius, minimum, maximum)!
 	} else {
-		ctx.line_to(sx, sy)
-	}
-
-	for _ in 0 .. n {
-		a1 := a
-		a2 := a + seg
-		p1x := x + r * math.cos(a1)
-		p1y := y + r * math.sin(a1)
-		p2x := x + r * math.cos(a2)
-		p2y := y + r * math.sin(a2)
-		c1x := p1x - alpha * r * math.sin(a1)
-		c1y := p1y + alpha * r * math.cos(a1)
-		c2x := p2x + alpha * r * math.sin(a2)
-		c2y := p2y - alpha * r * math.cos(a2)
-		ctx.curve_to(c1x, c1y, c2x, c2y, p2x, p2y)
-		a = a2
+		z2d_arc_line_to(mut ctx, xc + radius * math.cos(minimum), yc + radius * math.sin(minimum))
 	}
 }
 
 pub fn (mut ctx Context) close_path() ! {
+	if !ctx.has_current {
+		return
+	}
 	ctx.nodes << PathNode{
 		kind: .close
 	}
 	if ctx.has_start {
-		ctx.cur_x = ctx.start_x
-		ctx.cur_y = ctx.start_y
+		ctx.nodes << PathNode{
+			kind: .move_to
+			x: ctx.tx(ctx.start_x)
+			y: ctx.ty(ctx.start_y)
+		}
 	}
 }
 

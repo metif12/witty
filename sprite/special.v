@@ -204,8 +204,8 @@ pub fn draw_underline_curly(cp u32, mut canvas Canvas, width u32, height u32, me
 
 	// We create a single cycle of a wave that peaks at the center of the cell.
 	ctx.move_to(0, bottom_)
-	ctx.curve_to(center * r, bottom_, center - center * r, top_, center, top_)
-	ctx.curve_to(center + center * r, top_, float_width - center * r, bottom_, float_width, bottom_)
+	ctx.curve_to(center * r, bottom_, center - center * r, top_, center, top_)!
+	ctx.curve_to(center + center * r, top_, float_width - center * r, bottom_, float_width, bottom_)!
 	ctx.stroke()!
 }
 

@@ -5,12 +5,8 @@ module sprite
 //   src/font/sprite/draw/common.zig   (Fraction, Thickness, fill, Quads, ...)
 //   src/font/sprite/canvas.zig        (Canvas.pixel/rect/box/invert/flip)
 //
-// Ghostty's sprite module has no dedicated unit `test` blocks for these
-// primitives (its only sprite test is the PNG-regression
-// "sprite face render all sprites" in Face.zig, which is not portable).
-// These tests exercise the documented behavior of the translated logic
-// so the V port is verified against ghostty's exact formulas and
-// worked-example comments.
+// These tests exercise the documented behavior of the translated logic. The
+// exact-pixel translation of Ghostty's golden-atlas test lives in face_test.v.
 
 import sprite_types as font
 
@@ -332,6 +328,26 @@ fn test_canvas_flip_vertical_swaps_clip() {
 // ------------------------------------------------------------
 // Vector path stroking
 // ------------------------------------------------------------
+
+fn test_z2d_path_coordinates_are_clamped_before_transform() {
+	mut c := Canvas.init(1, 1, 2, 3)
+	mut path := c.static_path(3)
+	path.move_to(-8388609, 8388608)
+	assert path.nodes[0].x == -8388608.0 + 2.0
+	assert path.nodes[0].y == 8388607.0 + 3.0
+
+	path.line_to(8388608, -8388609)
+	assert path.nodes[1].x == 8388607.0 + 2.0
+	assert path.nodes[1].y == -8388608.0 + 3.0
+
+	path.curve_to(-8388609, 8388608, 3, 4, 8388608, -8388609)
+	assert path.nodes[2].c1x == -8388608.0 + 2.0
+	assert path.nodes[2].c1y == 8388607.0 + 3.0
+	assert path.nodes[2].c2x == 5
+	assert path.nodes[2].c2y == 7
+	assert path.nodes[2].x == 8388607.0 + 2.0
+	assert path.nodes[2].y == -8388608.0 + 3.0
+}
 
 fn test_stroke_path_closes_closed_subpaths() {
 	mut c := Canvas.init(12, 12, 0, 0)
