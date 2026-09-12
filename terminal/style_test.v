@@ -581,30 +581,30 @@ fn test_rgb_not_eql() {
 	assert !a.eql(b)
 }
 
-fn test_style_bg_cell_from_style_none() {
+fn test_style_bg_cell_none() {
 	style := CellStyle{}
-	result := style.bg_cell_from_style()
+	result := style.bg_cell()
 	assert result == none
 }
 
-fn test_style_bg_cell_from_style_palette() {
+fn test_style_bg_cell_palette() {
 	style := CellStyle{
 		bg_color: .palette
 		bg_palette: 42
 	}
-	cell := style.bg_cell_from_style() or { panic('expected cell') }
+	cell := style.bg_cell() or { panic('expected cell') }
 	assert cell.content_tag == .bg_color_palette
 	assert cell.color_palette == 42
 }
 
-fn test_style_bg_cell_from_style_rgb() {
+fn test_style_bg_cell_rgb() {
 	style := CellStyle{
 		bg_color: .rgb
 		bg_r: 10
 		bg_g: 20
 		bg_b: 30
 	}
-	cell := style.bg_cell_from_style() or { panic('expected cell') }
+	cell := style.bg_cell() or { panic('expected cell') }
 	assert cell.content_tag == .bg_color_rgb
 	assert cell.color_rgb_r == 10
 	assert cell.color_rgb_g == 20

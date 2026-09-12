@@ -267,27 +267,6 @@ pub fn (self &CellStyle) underline_color_rgb(palette [256]RGB) ?RGB {
 	}
 }
 
-// Returns a bg-color only cell from this style, if it exists.
-pub fn (self &CellStyle) bg_cell_from_style() ?CellData {
-	return match self.bg_color {
-		.none { none }
-		.palette {
-			CellData{
-				content_tag: .bg_color_palette
-				color_palette: self.bg_palette
-			}
-		}
-		.rgb {
-			CellData{
-				content_tag: .bg_color_rgb
-				color_rgb_r: self.bg_r
-				color_rgb_g: self.bg_g
-				color_rgb_b: self.bg_b
-			}
-		}
-	}
-}
-
 // ============================================================
 // Style hashing
 // ============================================================
