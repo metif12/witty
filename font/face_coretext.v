@@ -2,6 +2,7 @@ module font
 
 import math
 import opentype
+import quirks
 
 // CoreText-based font face implementation for macOS.
 //
@@ -203,12 +204,14 @@ pub fn CoreTextFace.init_font(ct_font voidptr, opts FaceOptions) !CoreTextFace {
 		C.witty_coretext_release(ct_font)
 		return error('CoreText: failed to create HarfBuzz font')
 	}
-	return CoreTextFace{
+	mut result := CoreTextFace{
 		ct_font: ct_font
 		hb_font: hb_font
 		color: color
 		size: opts.size
 	}
+	result.quirks_disable_default_font_features = quirks.disable_default_font_features(&result)
+	return result
 }
 
 // deinit releases all resources associated with this face.

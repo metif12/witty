@@ -1,5 +1,7 @@
 module font
 
+import quirks
+
 // --- Original Ghostty Comments Start: src/font/face/freetype.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/font/face/freetype.zig
@@ -923,7 +925,7 @@ fn init_freetype_face(lib Library, mut ft_face freetype.Face, opts FaceOptions) 
 		ft_face.deinit()
 		return err
 	}
-	return Face{
+	mut result := Face{
 		lib: lib
 		face: ft_face
 		hb_font: hb_font
@@ -931,6 +933,8 @@ fn init_freetype_face(lib Library, mut ft_face freetype.Face, opts FaceOptions) 
 		load_flags: opts.freetype_load_flags
 		size: opts.size
 	}
+	result.quirks_disable_default_font_features = quirks.disable_default_font_features(&result)
+	return result
 }
 
 // deinit destroys this face and releases all resources.
