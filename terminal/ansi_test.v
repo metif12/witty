@@ -23,3 +23,17 @@ fn test_status_line_type_values() {
 	assert u16(StatusLineType.indicator) == 1
 	assert u16(StatusLineType.host_writable) == 2
 }
+
+fn test_ansi_enum_source_layouts() {
+	// These four go through Ghostty's lib.Enum(.c, ...) in C-ABI builds.
+	assert sizeof(DeviceAttributeReq) == 4
+	assert sizeof(AnsiCursorStyle) == 4
+	assert sizeof(StatusDisplay) == 4
+	assert sizeof(ModifyKeyFormat) == 4
+
+	// ProtectedMode is a direct inferred Zig enum even in C-ABI builds.
+	assert sizeof(ProtectedMode) == 1
+	assert u8(ProtectedMode.off) == 0
+	assert u8(ProtectedMode.iso) == 1
+	assert u8(ProtectedMode.dec) == 2
+}

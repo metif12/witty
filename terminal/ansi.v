@@ -88,7 +88,7 @@ pub enum ModifyKeyFormat {
 
 // The protection modes that can be set for the terminal. See DECSCA and
 // ESC V, W.
-pub enum ProtectedMode {
+pub enum ProtectedMode as u8 {
 	off
 	iso // ESC V, W
 	dec // CSI Ps " q
