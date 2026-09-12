@@ -222,9 +222,15 @@ pub fn (runtime_action RuntimeAction) capi() CAPIAction {
 		.float_window { capi_action_payload(tag, int(data.float_window_)) }
 		.secure_input { capi_action_payload(tag, int(data.secure_input_)) }
 		.key_sequence {
+			trigger := if data.key_sequence_.active {
+				trigger_capi(data.key_sequence_.trigger)
+			} else {
+				// Ghostty's `.end` union arm explicitly uses a default C trigger.
+				CAPIInputTrigger{}
+			}
 			capi_action_payload(tag, CActionKeySequence{
 				active: data.key_sequence_.active
-				trigger: trigger_capi(data.key_sequence_.trigger)
+				trigger: trigger
 			})
 		}
 		.key_table {

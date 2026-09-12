@@ -1,6 +1,7 @@
 module apprt
 
 import configpkg
+import input
 import osc
 
 fn test_c_action_and_target_layouts_match_header() {
@@ -92,4 +93,24 @@ fn test_c_action_projects_optional_and_clamped_payloads() {
 		}
 	}.capi()
 	assert unsafe { &CActionCount(&selected.action[0]) }.value == isize(max_count)
+}
+
+fn test_c_action_key_sequence_end_zeros_ignored_trigger() {
+	ended := RuntimeAction{
+		action: .key_sequence
+		data: ActionValue{
+			key_sequence_: KeySequence{
+				active: false
+				trigger: input.Trigger{
+					key: input.TriggerKey.new_physical(.key_a)
+					mods: input.Mods{ ctrl: true }
+				}
+			}
+		}
+	}.capi()
+	value := unsafe { &CActionKeySequence(&ended.action[0]) }
+	assert !value.active
+	assert value.trigger.tag == 0
+	assert value.trigger.key == 0
+	assert value.trigger.mods == 0
 }
