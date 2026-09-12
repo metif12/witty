@@ -404,7 +404,7 @@ pub fn (mut self ReadonlyHandler) vt(event StreamEvent) ! {
 		.semantic_prompt {
 			self.terminal.semantic_prompt_options(event.payload.semantic_prompt_action, event.payload.semantic_prompt_opts)
 		}
-		.mouse_shape_action {
+		.mouse_shape {
 			self.terminal.mouse_shape = event.payload.mouse_shape_val
 		}
 		.color_operation {

@@ -1,5 +1,6 @@
 module terminal
 
+import encoding.utf8.validate
 import osc
 import simd
 
@@ -423,7 +424,7 @@ pub enum ActionKey {
 	progress_report
 	start_hyperlink
 	clipboard_contents
-	mouse_shape_action
+	mouse_shape
 	configure_charset
 	set_attribute
 	kitty_color_report
@@ -458,7 +459,7 @@ pub:
 	size_report_style SizeReportStyle
 	// Status display (for .active_status_display)
 	status_display StatusDisplay
-	// Mouse shape (for .mouse_shape_action)
+	// Mouse shape (for .mouse_shape)
 	mouse_shape_val MouseShape
 	// Charset bank GL/GR (for .invoke_charset)
 	charset_bank ActiveSlot
@@ -538,7 +539,9 @@ pub mut:
 
 // init creates a new stream.
 pub fn Stream.init() Stream {
-	return Stream{}
+	return Stream{
+		parser: VTParser.init()
+	}
 }
 
 // deinit frees resources.
@@ -611,7 +614,7 @@ fn (mut self Stream) next_slice_capped(input_ []u8, mut cp_buf []u32) {
 			if cp <= 0x0f {
 				self.execute(u8(cp))
 			} else {
-				self.do_print(cp)
+				self.print(cp)
 			}
 		}
 		offset += result.consumed
@@ -673,6 +676,7 @@ pub fn (mut self Stream) next(c u8) {
 
 // next_utf8 processes a byte in the UTF-8 decoding state (ground).
 fn (mut self Stream) next_utf8(c u8) {
+	assert self.parser.state == .ground
 	res := self.utf8d.next(c)
 	if cp := res.codepoint {
 		self.handle_codepoint(cp)
@@ -681,6 +685,7 @@ fn (mut self Stream) next_utf8(c u8) {
 		// The byte was not consumed (invalid continuation).
 		// Retry with the same byte after the decoder has been reset.
 		retry := self.utf8d.next(c)
+		assert retry.consumed
 		if cp := retry.codepoint {
 			self.handle_codepoint(cp)
 		}
@@ -689,26 +694,23 @@ fn (mut self Stream) next_utf8(c u8) {
 
 // handle_codepoint processes a decoded codepoint.
 fn (mut self Stream) handle_codepoint(c u32) {
+	// C0 control
+	if c <= 0x0f {
+		self.execute(u8(c))
+		return
+	}
 	// ESC
 	if c == 0x1B {
 		self.parser.state = .escape
 		self.parser.clear()
 		return
 	}
-	// C0 control (0x00-0x1F)
-	if c < 0x20 {
-		self.execute(u8(c))
-		return
-	}
-	// DEL
-	if c == 0x7F {
-		return
-	}
-	self.do_print(c)
+	self.print(c)
 }
 
 // next_non_utf8 processes a byte when the parser is not in ground state.
 fn (mut self Stream) next_non_utf8(c u8) {
+	assert self.parser.state != .ground
 	// Fast path for CSI entry: ESC [
 	if self.parser.state == .escape && c == u8(`[`) {
 		self.parser.state = .csi_entry
@@ -765,11 +767,11 @@ fn (mut self Stream) next_non_utf8(c u8) {
 
 	for action in actions {
 		if self.capture_raw && action.action_type !in [.none, .print_action, .execute_action] {
-			self.raw_events << action
+			self.raw_events << action.clone_for_retention()
 		}
 		match action.action_type {
 			.print_action {
-				self.do_print(action.char)
+				self.print(action.char)
 			}
 			.execute_action {
 				self.execute(action.byte_val)
@@ -818,11 +820,38 @@ fn (mut self Stream) dispatch(key ActionKey, payload ActionPayload) {
 	self.events << StreamEvent{ key: key, payload: payload }
 }
 
+// clone_for_retention copies parser-backed views when Witty's event adapter
+// retains a raw action beyond Parser.next. Ghostty's vtRaw callback is
+// synchronous, so any retaining handler must make this same ownership copy.
+fn (self ParserAction) clone_for_retention() ParserAction {
+	return ParserAction{
+		action_type: self.action_type
+		char: self.char
+		byte_val: self.byte_val
+		csi: CSIAction{
+			intermediates: self.csi.intermediates.clone()
+			params: self.csi.params.clone()
+			params_sep: self.csi.params_sep
+			final_byte: self.csi.final_byte
+		}
+		esc: ESCAction{
+			intermediates: self.esc.intermediates.clone()
+			final_byte: self.esc.final_byte
+		}
+		osc: self.osc
+		dcs: DCSAction{
+			intermediates: self.dcs.intermediates.clone()
+			params: self.dcs.params.clone()
+			final_byte: self.dcs.final_byte
+		}
+	}
+}
+
 // ============================================================
 // Print and Execute
 // ============================================================
 
-fn (mut self Stream) do_print(c u32) {
+pub fn (mut self Stream) print(c u32) {
 	if self.capture_raw {
 		self.raw_events << ParserAction{
 			action_type: .print_action
@@ -832,7 +861,7 @@ fn (mut self Stream) do_print(c u32) {
 	self.dispatch(.print, ActionPayload{ cp: c })
 }
 
-fn (mut self Stream) execute(c u8) {
+pub fn (mut self Stream) execute(c u8) {
 	if self.capture_raw {
 		self.raw_events << ParserAction{
 			action_type: .execute_action
@@ -1233,7 +1262,7 @@ fn (mut self Stream) csi_erase_display(input CSIAction) {
 		1 { ActionKey.erase_display_above }
 		2 { ActionKey.erase_display_complete }
 		3 { ActionKey.erase_display_scrollback }
-		4 { ActionKey.erase_display_scroll_complete }
+		22 { ActionKey.erase_display_scroll_complete }
 		else {
 			return
 		}
@@ -1379,13 +1408,10 @@ fn (mut self Stream) csi_request_mode(input CSIAction) {
 		return
 	}
 
-	is_ansi := if input.intermediates[0] == u8(`$`) {
-		true
-	} else if input.intermediates[0] == u8(`?`) && input.intermediates[1] == u8(`$`) {
-		false
-	} else {
+	if input.intermediates[0] != u8(`?`) || input.intermediates[1] != u8(`$`) {
 		return
 	}
+	is_ansi := false
 
 	if input.params.len != 1 {
 		return
@@ -1682,7 +1708,7 @@ fn (mut self Stream) csi_u(input CSIAction) {
 fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 	match cmd.cmd_type {
 		.change_window_title {
-			if !is_valid_utf8(cmd.str_value) {
+			if !validate.utf8_string(cmd.str_value) {
 				return
 			}
 			self.dispatch(.window_title, ActionPayload{ str1: cmd.str_value })
@@ -1699,8 +1725,8 @@ fn (mut self Stream) osc_dispatch(cmd OscCommand) {
 			self.dispatch(.report_pwd, ActionPayload{ str1: cmd.str_value })
 		}
 		.mouse_shape {
-			if ms := mouse_shape_from_string(cmd.str_value) {
-				self.dispatch(.mouse_shape_action, ActionPayload{
+			if ms := MouseShape.from_string(cmd.str_value) {
+				self.dispatch(.mouse_shape, ActionPayload{
 					mouse_shape_val: ms
 				})
 			}
@@ -1971,56 +1997,4 @@ fn (mut self Stream) configure_charset(intermediates []u8, charset Charset) {
 // mode_from_int maps a mode integer (from CSI params) to a terminal Mode.
 // mode_from_int is defined in modes.v.
 
-// mouse_shape_from_string converts a string to a MouseShape.
-pub fn mouse_shape_from_string(s string) ?MouseShape {
-	return MouseShape.from_string(s)
-}
-
 // SgrParser is defined in sgr.v with full colon-separator support.
-
-// ============================================================
-// UTF-8 validation helper
-// ============================================================
-
-// is_valid_utf8 checks if a string contains valid UTF-8.
-fn is_valid_utf8(s string) bool {
-	mut i := 0
-	for i < s.len {
-		b := s[i]
-		if b < 0x80 {
-			i += 1
-		} else if b & 0xE0 == 0xC0 {
-			if i + 1 >= s.len || s[i + 1] & 0xC0 != 0x80 {
-				return false
-			}
-			// Overlong check
-			cp := (u32(b & 0x1F) << 6) | u32(s[i + 1] & 0x3F)
-			if cp < 0x80 {
-				return false
-			}
-			i += 2
-		} else if b & 0xF0 == 0xE0 {
-			if i + 2 >= s.len || s[i + 1] & 0xC0 != 0x80 || s[i + 2] & 0xC0 != 0x80 {
-				return false
-			}
-			cp := (u32(b & 0x0F) << 12) | (u32(s[i + 1] & 0x3F) << 6) | u32(s[i + 2] & 0x3F)
-			if cp < 0x800 || (cp >= 0xD800 && cp <= 0xDFFF) {
-				return false
-			}
-			i += 3
-		} else if b & 0xF8 == 0xF0 {
-			if i + 3 >= s.len || s[i + 1] & 0xC0 != 0x80 || s[i + 2] & 0xC0 != 0x80
-				|| s[i + 3] & 0xC0 != 0x80 {
-				return false
-			}
-			cp := (u32(b & 0x07) << 18) | (u32(s[i + 1] & 0x3F) << 12) | (u32(s[i + 2] & 0x3F) << 6) | u32(s[i + 3] & 0x3F)
-			if cp < 0x10000 || cp > 0x10FFFF {
-				return false
-			}
-			i += 4
-		} else {
-			return false
-		}
-	}
-	return true
-}

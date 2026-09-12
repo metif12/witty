@@ -71,6 +71,19 @@ fn test_stream_collects_raw_parser_actions() {
 	assert s.raw_events.len == 0
 }
 
+fn test_stream_retains_parser_backed_raw_action_views() {
+	mut s := Stream.init()
+	s.capture_raw = true
+	defer { s.deinit() }
+
+	s.next_slice('\x1b[1C\x1b[2;3H'.bytes())
+	assert s.raw_events.len == 2
+	assert s.raw_events[0].csi.params == [u16(1)]
+	assert s.raw_events[1].csi.params == [u16(2), 3]
+	assert s.raw_events[0].csi.params.data != s.parser.params.data
+	assert s.raw_events[1].csi.params.data != s.parser.params.data
+}
+
 fn test_stream_preserves_osc_terminator_for_color_responses() {
 	mut s := Stream.init()
 	defer { s.deinit() }
@@ -159,6 +172,26 @@ fn test_simd_print_invalid_utf8() {
 	assert has_event(s.events, .print)
 	ev := get_last_event(s.events, .print)
 	assert ev.payload.cp == 0xFFFD
+}
+
+fn test_ground_scalar_control_boundaries_match_source() {
+	mut s := Stream.init()
+	defer { s.deinit() }
+
+	s.next(0x0f)
+	assert has_event(s.events, .invoke_charset)
+
+	s.clear_events()
+	s.next(0x10)
+	assert s.events.len == 1
+	assert s.events[0].key == .print
+	assert s.events[0].payload.cp == 0x10
+
+	s.clear_events()
+	s.next(0x7f)
+	assert s.events.len == 1
+	assert s.events[0].key == .print
+	assert s.events[0].payload.cp == 0x7f
 }
 
 // Test that an incomplete multi-byte UTF-8 sequence completes
@@ -403,6 +436,18 @@ fn test_stream_erase_display() {
 	ev10 := get_last_event(s.events, .erase_display_scrollback)
 	assert ev10.payload.flag == false
 
+	// CSI 22J → Kitty erase display scroll-complete extension.
+	s.clear_events()
+	s.next_slice('\x1b[22J'.bytes())
+	assert has_event(s.events, .erase_display_scroll_complete)
+	ev11 := get_last_event(s.events, .erase_display_scroll_complete)
+	assert ev11.payload.flag == false
+
+	// Parameter 4 is not the scroll-complete wire value.
+	s.clear_events()
+	s.next_slice('\x1b[4J'.bytes())
+	assert !has_event(s.events, .erase_display_scroll_complete)
+
 	// CSI >0J → invalid intermediate, ignored
 	s.clear_events()
 	s.next_slice('\x1b[>0J'.bytes())
@@ -410,6 +455,18 @@ fn test_stream_erase_display() {
 	assert !has_event(s.events, .erase_display_above)
 	assert !has_event(s.events, .erase_display_complete)
 	assert !has_event(s.events, .erase_display_scrollback)
+}
+
+fn test_stream_decrqm_rejects_malformed_two_intermediate_ansi_form() {
+	mut s := Stream.init()
+	defer { s.deinit() }
+
+	s.next_slice('\x1b[4$$p'.bytes())
+	assert !has_event(s.events, .request_mode)
+	assert !has_event(s.events, .request_mode_unknown)
+
+	s.next_slice('\x1b[?25$p'.bytes())
+	assert has_event(s.events, .request_mode)
 }
 
 // Test DECEL/DECSEL (Erase Line) with and without protected mode.

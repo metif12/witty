@@ -416,7 +416,7 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 		.semantic_prompt {
 			self.semantic_prompt(event.payload)
 		}
-		.mouse_shape_action {
+		.mouse_shape {
 			self.set_mouse_shape(event.payload.mouse_shape_val)
 		}
 		.configure_charset {
