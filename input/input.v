@@ -267,14 +267,16 @@ pub fn (self &Link) clone() Link {
 		regex: self.regex.clone()
 		action: self.action
 		highlight: self.highlight
-		mods: self.mods
+		mods: if self.highlight in [.always_mods, .hover_mods] { self.mods } else { Mods{} }
 	}
 }
 
 // equal compares the action, highlight payload, and regular expression.
 pub fn (self &Link) equal(other Link) bool {
-	return self.action == other.action && self.highlight == other.highlight
-		&& self.mods.equal(other.mods) && self.regex == other.regex
+	if self.action != other.action || self.highlight != other.highlight || self.regex != other.regex {
+		return false
+	}
+	return self.highlight !in [.always_mods, .hover_mods] || self.mods.equal(other.mods)
 }
 
 pub enum LinkAction {

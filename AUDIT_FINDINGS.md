@@ -14,6 +14,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | terminal/terminal | `index()` didn't mark the new row `prompt_continuation` on a plain linefeed in prompt/**input** mode (logic was only in `print_wrap`, only for `.prompt`). | Added the `defer` marking for `semantic_content != .output` (prompt AND input). |
 | terminal/stream, terminal/terminal | Ghostty's repeat, character-edit, line-edit, and scroll actions carry `usize`, but Witty collapsed them into the shared `u16` event field and then narrowed them to V's 32-bit `int` at both handlers. | Add a dedicated `usize` action count, route all eight actions through it, and restore `usize` terminal method contracts; bounded screen operations clamp before conversion to array indexes. |
 | input/key | `w3c()` blindly did `- 32` on the char after `_`, corrupting digits (`digit_1` → "Digit\x11"). | Uppercase only `a-z`. |
+| input/Link | Flattening the tagged `Highlight` union left `mods` storage on `.always`/`.hover`, and `equal()` compared that source-nonexistent payload. | Ignore `mods` for non-modifier tags and canonicalize it to empty when cloning; preserve payload comparison for `.always_mods`/`.hover_mods`. |
 | input/function_keys | `make_kp_keys` returned only the unmodified keypad entry, dropping the 15 modifier combinations. | Generate all 16 (kpDefault ++ pcStyle), `mods_empty_is_any=false` on default. |
 | input (Mods) | `Mods.translation()` fully inverted (unset/keep alt and left/right swapped); `int()`/`SideInfo` dropped caps/num-lock + side bits and had no `super` side. | Rewrote translation to match macos-option-as-alt; full packed `int()` round-trip preserving sides+locks. |
 | input/keymap | Darwin and no-op keymaps were collapsed into one C wrapper, causing the non-macOS path to reject an empty output buffer and return the input modifiers (minus Ctrl) instead of a completely default translation. The Darwin path also looked up its Unicode layout per keypress and required spare room for a C terminator. | Restore platform-selected keymap files; make the no-op translation ignore every argument; retain Darwin's input-source and Unicode-layout pointers; return an explicit UTF-8 byte length from the Carbon shim. |
@@ -56,7 +57,7 @@ nerd_font_attributes (276/276 constraint entries verified). osc: parser state
 transitions and buffer boundaries, encoding, semantic_prompt, iterm2,
 hyperlink, clipboard, change_window_*, report_pwd, rxvt, mouse_shape,
 kitty_text_sizing. input: kitty (80/80),
-keycodes (243/243), command, binding (83-tag order), key (logic).
+keycodes (243/243), command, binding (83-tag order), key (logic), Link.
 kitty: graphics_command, graphics_unicode, graphics execution/storage. renderer:
 cell, cursor, size, row, Atlas, shader cell layouts. datastruct: CircBuf,
 ArrayListCollection. ssh: cache Entry/DiskCache. tmux: control, layout, output.

@@ -30,6 +30,31 @@ fn test_link_clone_equal_and_regex() {
 		mods: original.mods
 	}
 	assert !original.equal(different)
+	different_mods := Link{
+		regex: original.regex
+		action: original.action
+		highlight: original.highlight
+		mods: Mods{ ctrl: true }
+	}
+	assert !original.equal(different_mods)
+}
+
+fn test_link_non_mod_highlight_has_no_mod_payload() {
+	with_stale_mods := Link{
+		regex: 'https?://[^ ]+'
+		action: .open
+		highlight: .always
+		mods: Mods{ ctrl: true }
+	}
+	canonical := Link{
+		regex: with_stale_mods.regex
+		action: .open
+		highlight: .always
+	}
+	assert with_stale_mods.equal(canonical)
+	cloned := with_stale_mods.clone()
+	assert cloned.equal(canonical)
+	assert cloned.mods.equal(Mods{})
 }
 
 fn test_command_cval_matches_command() {
