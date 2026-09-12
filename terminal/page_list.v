@@ -2765,12 +2765,20 @@ pub fn (self &PagePin) up_overflow(n usize) UpOverflowResult {
 // ---- Pin iterator factories ----
 
 pub fn (self &PagePin) page_iterator(direction IterDirection, limit ?PagePin) PageIterator {
-	return PageIterator{
-		row: PagePin{
-			node: self.node
-			y: self.y
-			x: self.x
+	$if debug {
+		if lim := limit {
+			match direction {
+				.right_down {
+					assert self.eql(lim) || self.before(lim)
+				}
+				.left_up {
+					assert self.eql(lim) || lim.before(*self)
+				}
+			}
 		}
+	}
+	return PageIterator{
+		row: *self
 		direction: direction
 		limit: if lim := limit {
 			PageIteratorLimit(PageIteratorLimitRow{
@@ -2815,11 +2823,7 @@ pub fn (self &PagePin) cell_iterator(direction IterDirection, limit ?PagePin) Ce
 
 pub fn (self &PagePin) prompt_iterator(direction IterDirection, limit ?PagePin) PromptIterator {
 	return PromptIterator{
-		current: PagePin{
-			node: self.node
-			y: self.y
-			x: self.x
-		}
+		current: *self
 		limit: limit
 		direction: direction
 	}
@@ -3098,40 +3102,19 @@ fn (mut self PageIterator) next_down() ?PageChunk {
 			}
 		}
 		PageIteratorLimitCount {
-			remaining_in_page := u32(page_rows) - u32(start)
-			mut count := usize(remaining_in_page)
-			if count > self.limit.count {
-				count = self.limit.count
-			}
-			self.limit.count -= count
-			end := u16(u32(start) + u32(count))
-			if end < page_rows {
-				self.row = PagePin{
-					node: node
-					y: end
-					x: 0
-				}
+			assert self.limit.count > 0
+			remaining := usize(page_rows - start)
+			len := if remaining < self.limit.count { remaining } else { self.limit.count }
+			if len > self.limit.count {
+				self.row = cur.down(len)
+				self.limit.count -= len
 			} else {
-				self.row = if next := node.next {
-					PagePin{
-						node: next
-						y: 0
-						x: 0
-					}
-				} else {
-					none
-				}
-			}
-			if self.limit.count == 0 {
 				self.row = none
-			}
-			if count == 0 {
-				return none
 			}
 			return PageChunk{
 				node: node
 				start: start
-				end: end
+				end: start + u16(len)
 			}
 		}
 		PageIteratorLimitRow {
@@ -3194,39 +3177,19 @@ fn (mut self PageIterator) next_up() ?PageChunk {
 			}
 		}
 		PageIteratorLimitCount {
-			mut count := usize(end)
-			if count > self.limit.count {
-				count = self.limit.count
-			}
-			self.limit.count -= count
-			start := u16(u32(end) - u32(count))
-			if start > 0 {
-				self.row = PagePin{
-					node: node
-					y: start - 1
-					x: 0
-				}
+			assert self.limit.count > 0
+			row := usize(cur.y)
+			len := if row < self.limit.count { row } else { self.limit.count }
+			if len > self.limit.count {
+				self.row = cur.up(len)
+				self.limit.count -= len
 			} else {
-				self.row = if prev := node.prev {
-					PagePin{
-						node: prev
-						y: u16(prev.data.size.rows - 1)
-						x: 0
-					}
-				} else {
-					none
-				}
-			}
-			if self.limit.count == 0 {
 				self.row = none
-			}
-			if count == 0 {
-				return none
 			}
 			return PageChunk{
 				node: node
-				start: start
-				end: end
+				start: cur.y - u16(len)
+				end: cur.y - 1
 			}
 		}
 		PageIteratorLimitRow {
@@ -3322,29 +3285,23 @@ pub fn (mut self CellIterator) next() ?PagePin {
 	match self.row_it.page_it.direction {
 		.right_down {
 			if c.x + 1 < c.node.data.size.cols {
-				self.cell = PagePin{
-					node: c.node
-					y: c.y
-					x: c.x + 1
-				}
+				mut copy := c
+				copy.x += 1
+				self.cell = copy
 			} else {
 				self.cell = self.row_it.next()
 			}
 		}
 		.left_up {
 			if c.x > 0 {
-				self.cell = PagePin{
-					node: c.node
-					y: c.y
-					x: c.x - 1
-				}
+				mut copy := c
+				copy.x -= 1
+				self.cell = copy
 			} else {
 				if next_cell := self.row_it.next() {
-					self.cell = PagePin{
-						node: next_cell.node
-						y: next_cell.y
-						x: next_cell.node.data.size.cols - 1
-					}
+					mut copy := next_cell
+					copy.x = next_cell.node.data.size.cols - 1
+					self.cell = copy
 				} else {
 					self.cell = none
 				}
@@ -3921,7 +3878,7 @@ pub fn (mut self PageList) grow_rows(n usize) {
 pub fn (self &PageList) get_top_left(tag PointTag) PagePin {
 	match tag {
 		.screen, .history {
-			node := self.pages.first or { return PagePin{} }
+			node := self.pages.first or { panic('page list has no first page') }
 			return PagePin{
 				node: node
 				y: 0
@@ -3932,13 +3889,7 @@ pub fn (self &PageList) get_top_left(tag PointTag) PagePin {
 			return match self.viewport {
 				.active { self.get_top_left(.active) }
 				.top { self.get_top_left(.screen) }
-				.pin {
-					PagePin{
-						node: self.viewport_pin.node
-						y: self.viewport_pin.y
-						x: 0
-					}
-				}
+				.pin { *self.viewport_pin }
 			}
 		}
 		.active {
@@ -3957,13 +3908,7 @@ pub fn (self &PageList) get_top_left(tag PointTag) PagePin {
 				rem -= usize(n.data.size.rows)
 				node = n.prev
 			}
-			// Fallback: first page
-			first := self.pages.first or { return PagePin{} }
-			return PagePin{
-				node: first
-				y: 0
-				x: 0
-			}
+			panic('page list has fewer rows than its active area')
 		}
 	}
 }
@@ -3971,14 +3916,11 @@ pub fn (self &PageList) get_top_left(tag PointTag) PagePin {
 pub fn (self &PageList) get_bottom_right(tag PointTag) ?PagePin {
 	match tag {
 		.screen, .active {
-			last := self.pages.last or { return none }
-			if last.data.size.rows == 0 {
-				return none
-			}
+			last := self.pages.last or { panic('page list has no last page') }
 			return PagePin{
 				node: last
 				y: u16(last.data.size.rows - 1)
-				x: self.cols - 1
+				x: last.data.size.cols - 1
 			}
 		}
 		.viewport {
@@ -3987,7 +3929,7 @@ pub fn (self &PageList) get_bottom_right(tag PointTag) ?PagePin {
 			return PagePin{
 				node: p.node
 				y: p.y
-				x: self.cols - 1
+				x: p.node.data.size.cols - 1
 			}
 		}
 		.history {
@@ -3996,7 +3938,7 @@ pub fn (self &PageList) get_bottom_right(tag PointTag) ?PagePin {
 			return PagePin{
 				node: p.node
 				y: p.y
-				x: self.cols - 1
+				x: p.node.data.size.cols - 1
 			}
 		}
 	}
@@ -6566,14 +6508,12 @@ fn (mut self PageList) mark_dirty(point Point) {
 // ============================================================
 
 pub fn (self &PageList) page_iterator(direction IterDirection, tl Point, bl ?Point) PageIterator {
-	tl_pin := self.pin(tl) or { return PageIterator{} }
+	tl_pin := self.pin(tl) or { panic('page iterator top-left is outside the page list') }
 	bl_pin := if bottom := bl {
-		assert bottom.tag == tl.tag
-		self.pin(bottom) or { return PageIterator{} }
+		self.pin(bottom) or { panic('page iterator bottom-left is outside the page list') }
 	} else {
 		self.get_bottom_right(tl.tag) or { return PageIterator{} }
 	}
-	assert tl_pin.eql(bl_pin) || tl_pin.before(bl_pin)
 
 	return match direction {
 		.right_down {
@@ -6586,14 +6526,12 @@ pub fn (self &PageList) page_iterator(direction IterDirection, tl Point, bl ?Poi
 }
 
 pub fn (self &PageList) row_iterator(direction IterDirection, tl Point, bl ?Point) RowIterator {
-	tl_pin := self.pin(tl) or { return RowIterator{} }
+	tl_pin := self.pin(tl) or { panic('row iterator top-left is outside the page list') }
 	bl_pin := if bottom := bl {
-		assert bottom.tag == tl.tag
-		self.pin(bottom) or { return RowIterator{} }
+		self.pin(bottom) or { panic('row iterator bottom-left is outside the page list') }
 	} else {
 		self.get_bottom_right(tl.tag) or { return RowIterator{} }
 	}
-	assert tl_pin.eql(bl_pin) || tl_pin.before(bl_pin)
 
 	return match direction {
 		.right_down {
@@ -6606,14 +6544,12 @@ pub fn (self &PageList) row_iterator(direction IterDirection, tl Point, bl ?Poin
 }
 
 pub fn (self &PageList) cell_iterator(direction IterDirection, tl Point, bl ?Point) CellIterator {
-	tl_pin := self.pin(tl) or { return CellIterator{} }
+	tl_pin := self.pin(tl) or { panic('cell iterator top-left is outside the page list') }
 	bl_pin := if bottom := bl {
-		assert bottom.tag == tl.tag
-		self.pin(bottom) or { return CellIterator{} }
+		self.pin(bottom) or { panic('cell iterator bottom-left is outside the page list') }
 	} else {
 		self.get_bottom_right(tl.tag) or { return CellIterator{} }
 	}
-	assert tl_pin.eql(bl_pin) || tl_pin.before(bl_pin)
 
 	return match direction {
 		.right_down {
@@ -6626,14 +6562,12 @@ pub fn (self &PageList) cell_iterator(direction IterDirection, tl Point, bl ?Poi
 }
 
 pub fn (self &PageList) prompt_iterator(direction IterDirection, tl Point, bl ?Point) PromptIterator {
-	tl_pin := self.pin(tl) or { return PromptIterator{} }
+	tl_pin := self.pin(tl) or { panic('prompt iterator top-left is outside the page list') }
 	bl_pin := if bottom := bl {
-		assert bottom.tag == tl.tag
-		self.pin(bottom) or { return PromptIterator{} }
+		self.pin(bottom) or { panic('prompt iterator bottom-left is outside the page list') }
 	} else {
 		self.get_bottom_right(tl.tag) or { return PromptIterator{} }
 	}
-	assert tl_pin.eql(bl_pin) || tl_pin.before(bl_pin)
 
 	return match direction {
 		.right_down {

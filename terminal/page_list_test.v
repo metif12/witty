@@ -1749,6 +1749,20 @@ fn test_page_list_get_top_left_active_with_history() {
 	assert tl_screen.before(tl_active)
 }
 
+fn test_page_list_get_top_left_pinned_viewport_preserves_pin() {
+	mut s := PageList.init(10, 3, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	s.grow_rows(3)
+
+	p := s.pin(Point.new(.screen, Coordinate{ x: 4, y: 1 })) or {
+		assert false, 'viewport pin missing'
+		return
+	}
+	s.scroll(PageScrollPin{ pin: p })
+	assert s.viewport == .pin
+	assert s.get_top_left(.viewport).eql(p)
+}
+
 fn test_page_list_get_bottom_right() {
 	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
@@ -1758,6 +1772,22 @@ fn test_page_list_get_bottom_right() {
 		return
 	}
 	assert br.x == s.cols - 1
+}
+
+fn test_page_list_get_bottom_right_uses_owning_page_width() {
+	mut s := PageList.init(10, 3, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+
+	mut last := s.pages.last or {
+		assert false, 'last page missing'
+		return
+	}
+	last.data.size.cols = 7
+	br := s.get_bottom_right(.active) or {
+		assert false, 'get_bottom_right failed'
+		return
+	}
+	assert br.x == 6
 }
 
 // ============================================================
