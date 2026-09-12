@@ -26,6 +26,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | apprt/core bridge | Runtime-neutral preedit/text wrappers invented boolean results absent from `Surface.zig`, and the duplicated embedded size projection returned zero grid dimensions below one cell instead of using `GridSize`'s minimum-one contract. | Restore void error-union callback results and mirror the source floating-point, checked `u16`, minimum-one grid calculation. |
 | apprt/runtime | The two-case source enum used default 32-bit V storage, while its source `default` method had been replaced by an unused string dispatcher plus a duplicate free function. | Use byte storage and expose one platform-selected `Runtime.default()` method, eliminating the source-external string API. |
 | apprt/embedded text | The internal embedded text result narrowed Ghostty's `usize`/`uintptr_t` text length to V's 32-bit `int` before the public C projection. | Preserve `usize` from the dumped text through the embedded result and assert pointer-width storage with a value above `int` range. |
+| apprt/embedded platform | Surface initialization replaced explicit zero/negative scale factors with `1`, accepted platform tags outside the source enum, and constructed Darwin-only platforms on other targets. | Preserve Ghostty's direct `f64` to `f32` scale conversion, reject unknown tags, and return `UnsupportedPlatform` outside Darwin. |
 | osc/color_parser | Hex channel scaling used `>>4`/`>>8` instead of `*255/4095` and `*255/65535`; float intensity rounded not truncated; named `green` = (0,128,0). | Correct scaling; truncate; `green` = (0,255,0). |
 | osc/osc9 | OSC 9;12 emitted default `.fresh_line` instead of `.fresh_line_new_prompt`. | Set correct action. |
 | osc/kitty_color | `kind_max` = 256 (should be 263 = maxInt(u8)+8); parsed items discarded. | Fixed max; attach items to Command. |
@@ -118,6 +119,11 @@ an item here does not mean its full module has been certified yet.
 - **Source placement:** V module-cycle constraints keep the translated shaper
   run algorithm in `font/font.v` while `font/shaper/run.v` exposes aliases.
   This is behaviorally implemented but not a file-for-file layout match.
+- **Runtime bridge representation:** Ghostty selects the concrete apprt types at
+  compile time. Witty's merged V module boundary instead introduces
+  `RuntimeApp`/`RuntimeSurface` aliases and a process-global table of opaque core
+  callbacks. This bridge is source-external architecture, even where each
+  callback delegates to the translated core implementation.
 - **Native/platform coverage:** The complete FreeType/CoreText/web-canvas,
   discovery, Metal/OpenGL, shadertoy, regex,
   embedded-resource, locking, configuration, and platform application surfaces

@@ -413,19 +413,27 @@ pub mut:
 // platform_init initializes a Platform from a tag and configuration
 // from the C ABI.
 pub fn platform_init(tag_int int, c_platform PlatformC) !Platform {
-	tag := unsafe { PlatformTag(tag_int) }
-	return match tag {
-		.macos {
+	return match tag_int {
+		int(PlatformTag.macos) {
+			$if !macos && !ios {
+				return error('UnsupportedPlatform')
+			}
 			if c_platform.nsview == unsafe { nil } {
 				return error('NSView must be set')
 			}
 			Platform(MacOSPlatform{ nsview: c_platform.nsview })
 		}
-		.ios {
+		int(PlatformTag.ios) {
+			$if !macos && !ios {
+				return error('UnsupportedPlatform')
+			}
 			if c_platform.uiview == unsafe { nil } {
 				return error('UIView must be set')
 			}
 			Platform(IOSPlatform{ uiview: c_platform.uiview })
+		}
+		else {
+			return error('InvalidEnumTag')
 		}
 	}
 }
@@ -516,7 +524,7 @@ pub fn (mut self Surface) init(mut app App, opts SurfaceOptions) ! {
 	self.platform = platform_init(opts.platform_tag, opts.platform)!
 	self.userdata = opts.userdata
 	self.core_surface = CoreSurface{}
-	scale := if opts.scale_factor > 0 { f32(opts.scale_factor) } else { f32(1.0) }
+	scale := f32(opts.scale_factor)
 	self.content_scale = ContentScale{
 		x: scale
 		y: scale

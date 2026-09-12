@@ -580,7 +580,15 @@ fn test_platform_tag_values() {
 fn test_platform_init_macos() {
 	dummy_view := voidptr(usize(0xDEAD))
 	p := platform_init(1, PlatformC{ nsview: dummy_view }) or {
+		$if !macos && !ios {
+			assert err.msg() == 'UnsupportedPlatform'
+			return
+		}
 		assert false, 'should not fail'
+		return
+	}
+	$if !macos && !ios {
+		assert false, 'should have failed'
 		return
 	}
 	match p {
@@ -596,10 +604,46 @@ fn test_platform_init_macos() {
 // Test platform_init with null nsview fails.
 fn test_platform_init_macos_null() {
 	platform_init(1, PlatformC{}) or {
-		assert err.msg() == 'NSView must be set'
+		$if macos || ios {
+			assert err.msg() == 'NSView must be set'
+		} $else {
+			assert err.msg() == 'UnsupportedPlatform'
+		}
 		return
 	}
 	assert false, 'should have failed'
+}
+
+fn test_platform_init_rejects_invalid_tag() {
+	for tag in [0, 3, -1] {
+		platform_init(tag, PlatformC{}) or {
+			assert err.msg() == 'InvalidEnumTag'
+			continue
+		}
+		assert false, 'should have rejected platform tag ${tag}'
+	}
+}
+
+fn test_surface_init_preserves_explicit_scale_factor() {
+	$if macos || ios {
+		mut core_app := CoreApp{}
+		mut app := App{
+			core_app: &core_app
+			config: configpkg.Config.default_config()
+		}
+		mut surface := Surface{}
+		surface.init(mut app, SurfaceOptions{
+			platform_tag: int(PlatformTag.macos)
+			platform: PlatformC{ nsview: voidptr(usize(0xDEAD)) }
+			scale_factor: -2.25
+		})!
+		defer {
+			surface.deinit()
+			app.config.deinit()
+		}
+		assert surface.content_scale.x == f32(-2.25)
+		assert surface.content_scale.y == f32(-2.25)
+	}
 }
 
 // Test CAPIText deinit.
