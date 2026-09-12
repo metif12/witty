@@ -2516,8 +2516,7 @@ pub fn (mut self SurfaceWidget) glarea_resize(width int, height int) {
 		surface.content_scale_callback(core.ContentScale{ x: scale.x, y: scale.y }) or {
 			eprintln('error in content scale callback err=${err}')
 		}
-		// core.Surface.size_callback takes width/height in pixels, not a struct.
-		surface.size_callback(self.size.width, self.size.height) or {
+		surface.size_callback(self.size) or {
 			eprintln('error in size callback err=${err}')
 		}
 		self.resize_overlay_schedule()

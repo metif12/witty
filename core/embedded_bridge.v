@@ -739,7 +739,7 @@ fn bridge_surface_content_scale(ptr voidptr, scale apprt.ContentScale) ! {
 
 fn bridge_surface_size(ptr voidptr, size apprt.SurfaceSize) ! {
 	mut self := unsafe { &EmbeddedSurfaceCore(ptr) }
-	self.surface.size_callback(size.width, size.height)!
+	self.surface.size_callback(size)!
 }
 
 fn bridge_surface_color_scheme(ptr voidptr, scheme apprt.ColorScheme) ! {

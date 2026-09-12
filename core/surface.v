@@ -3593,15 +3593,15 @@ fn (mut self Surface) queue_renderer_message(msg rendererpkg.RendererMessage) ! 
 }
 
 // size_callback is called when the surface size changes.
-pub fn (mut self Surface) size_callback(width u32, height u32) ! {
+pub fn (mut self Surface) size_callback(size apprt.SurfaceSize) ! {
 	crash.set_thread_state(self.crash_thread_state())
 	defer {
 		crash.clear_thread_state()
 	}
 
 	new_screen := ScreenSize{
-		width: width
-		height: height
+		width: size.width
+		height: size.height
 	}
 	if self.size.screen.equals(new_screen) {
 		return

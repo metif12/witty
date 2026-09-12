@@ -923,7 +923,7 @@ fn test_size_callback_no_change() ! {
 		cell: CellSize{ width: 10, height: 20 }
 	}
 	// Same size should be a no-op (no error)
-	surf.size_callback(800, 600)!
+	surf.size_callback(apprt.SurfaceSize{ width: 800, height: 600 })!
 }
 
 fn test_color_scheme_callback_no_change() ! {
