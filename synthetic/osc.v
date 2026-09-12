@@ -42,7 +42,7 @@ pub fn (mut self Osc) generator() Generator {
 	return self
 }
 
-pub fn (mut self Osc) next(max_len int) ![]u8 {
+pub fn (mut self Osc) next(max_len usize) ![]u8 {
 	if isnil(self.rng) {
 		return error('random generator is not initialized')
 	}
@@ -55,7 +55,7 @@ pub fn (mut self Osc) next(max_len int) ![]u8 {
 	return result
 }
 
-fn (mut self Osc) next_unwrapped(max_len int) ![]u8 {
+fn (mut self Osc) next_unwrapped(max_len usize) ![]u8 {
 	if self.rng.f64() <= self.p_valid {
 		idx := osc_weighted_index(mut self.rng, self.p_valid_kind[..])!
 		return self.next_unwrapped_valid_exact(unsafe { OscValidKind(idx) }, max_len)
@@ -64,7 +64,7 @@ fn (mut self Osc) next_unwrapped(max_len int) ![]u8 {
 	return self.next_unwrapped_invalid_exact(unsafe { OscInvalidKind(idx) }, max_len)
 }
 
-fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len int) ![]u8 {
+fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len usize) ![]u8 {
 	mut result := []u8{}
 	match kind {
 		.change_window_title {
@@ -83,9 +83,9 @@ fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len int) ![]
 			if self.random_bool() && remaining >= 6 {
 				result << ';aid='.bytes()
 				remaining -= 5
-				aid := self.random_bytes(synthetic_min_int(16, remaining), osc_kv_alphabet)!
+				aid := self.random_bytes(synthetic_min_usize(16, remaining), osc_kv_alphabet)!
 				result << aid
-				remaining -= aid.len
+				remaining -= usize(aid.len)
 			}
 			if self.random_bool() && remaining >= 9 {
 				result << ';redraw='.bytes()
@@ -104,10 +104,10 @@ fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len int) ![]
 			result << '133;C'.bytes()
 			mut remaining := max_len - 5
 			prefix := ';cmdline_url='
-			if self.random_bool() && remaining >= prefix.len + 1 {
+			if self.random_bool() && remaining >= usize(prefix.len) + 1 {
 				result << prefix.bytes()
-				remaining -= prefix.len
-				raw := self.random_bytes(synthetic_min_int(remaining, 128), osc_ascii_alphabet)!
+				remaining -= usize(prefix.len)
+				raw := self.random_bytes(synthetic_min_usize(remaining, 128), osc_ascii_alphabet)!
 				result << internal_os.url_percent_encode(raw).bytes()
 			}
 		}
@@ -125,21 +125,21 @@ fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len int) ![]
 				return result
 			}
 			result << '22;'.bytes()
-			result << self.random_bytes(synthetic_min_int(32, max_len - 3), osc_alphabetic_alphabet)!
+			result << self.random_bytes(synthetic_min_usize(32, max_len - 3), osc_alphabetic_alphabet)!
 		}
 		.rxvt_notify {
 			prefix := '777;notify;'
-			if max_len < prefix.len {
+			if max_len < usize(prefix.len) {
 				return result
 			}
 			result << prefix.bytes()
-			mut remaining := max_len - prefix.len
+			mut remaining := max_len - usize(prefix.len)
 			if remaining < 3 {
 				return result
 			}
-			title := self.random_bytes(synthetic_min_int(remaining - 2, 32), osc_kv_alphabet)!
+			title := self.random_bytes(synthetic_min_usize(remaining - 2, 32), osc_kv_alphabet)!
 			result << title
-			remaining -= title.len
+			remaining -= usize(title.len)
 			result << `;`
 			remaining--
 			result << self.random_bytes(remaining, osc_alphabet)!
@@ -153,7 +153,7 @@ fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len int) ![]
 			if self.random_bool() {
 				selection := self.random_bytes(1, osc_alphabetic_alphabet)!
 				result << selection
-				remaining -= selection.len
+				remaining -= usize(selection.len)
 			}
 			result << `;`
 			remaining--
@@ -163,18 +163,18 @@ fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len int) ![]
 		}
 		.report_pwd {
 			prefix := '7;file://localhost'
-			if max_len < prefix.len {
+			if max_len < usize(prefix.len) {
 				return result
 			}
 			result << prefix.bytes()
-			mut remaining := max_len - prefix.len
+			mut remaining := max_len - usize(prefix.len)
 			count := synthetic_random_inclusive(mut self.rng, 2, 5)!
 			for _ in 0 .. count {
 				result << `/`
 				remaining--
-				component := self.random_bytes(synthetic_min_int(16, remaining), osc_alphanumeric_alphabet)!
+				component := self.random_bytes(synthetic_min_usize(16, remaining), osc_alphanumeric_alphabet)!
 				result << component
-				remaining -= component.len
+				remaining -= usize(component.len)
 			}
 		}
 		.hyperlink_start {
@@ -198,7 +198,7 @@ fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len int) ![]
 		.conemu_progress {
 			result << '9;'.bytes()
 			value := synthetic_random_inclusive(mut self.rng, 0, 4)!
-			if value in [0, 3] || self.random_bool() {
+			if value == 0 || value == 3 || self.random_bool() {
 				result << ';${value}'.bytes()
 			} else {
 				progress := synthetic_random_inclusive(mut self.rng, 0, 100)!
@@ -216,7 +216,7 @@ fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len int) ![]
 	return result
 }
 
-fn (mut self Osc) next_unwrapped_invalid_exact(kind OscInvalidKind, max_len int) ![]u8 {
+fn (mut self Osc) next_unwrapped_invalid_exact(kind OscInvalidKind, max_len usize) ![]u8 {
 	return match kind {
 		.random { self.random_bytes(max_len, [])! }
 		.good_prefix {
@@ -229,7 +229,7 @@ fn (mut self Osc) next_unwrapped_invalid_exact(kind OscInvalidKind, max_len int)
 	}
 }
 
-fn (mut self Osc) random_bytes(max_len int, alphabet []u8) ![]u8 {
+fn (mut self Osc) random_bytes(max_len usize, alphabet []u8) ![]u8 {
 	if max_len < 1 {
 		return []u8{}
 	}

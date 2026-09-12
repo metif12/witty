@@ -5,5 +5,5 @@ module synthetic
 // slice while preserving the same maximum-length contract.
 pub interface Generator {
 mut:
-	next(max_len int) ![]u8
+	next(max_len usize) ![]u8
 }

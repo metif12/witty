@@ -6,9 +6,9 @@ import rand
 pub struct Bytes {
 pub mut:
 	rng      &rand.PRNG = unsafe { nil }
-	min_len  int = 1
-	max_len  int = 2147483647
-	alphabet []u8
+	min_len  usize = 1
+	max_len  usize = ~usize(0)
+	alphabet ?[]u8
 }
 
 pub fn Bytes.init(rng &rand.PRNG) Bytes {
@@ -21,7 +21,7 @@ pub fn (mut self Bytes) generator() Generator {
 
 // new_alphabet returns a copy that draws bytes from the supplied alphabet.
 // Duplicate alphabet entries intentionally increase their probability.
-pub fn (self &Bytes) new_alphabet(alphabet []u8) Bytes {
+pub fn (self &Bytes) new_alphabet(alphabet ?[]u8) Bytes {
 	return Bytes{
 		rng: self.rng
 		min_len: self.min_len
@@ -30,26 +30,26 @@ pub fn (self &Bytes) new_alphabet(alphabet []u8) Bytes {
 	}
 }
 
-pub fn (self &Bytes) at_least(new_min_len int) Bytes {
+pub fn (self &Bytes) at_least(new_min_len usize) Bytes {
 	return Bytes{
 		rng: self.rng
-		min_len: synthetic_min_int(self.max_len, new_min_len)
+		min_len: synthetic_min_usize(self.max_len, new_min_len)
 		max_len: self.max_len
 		alphabet: self.alphabet
 	}
 }
 
-pub fn (self &Bytes) at_most(new_max_len int) Bytes {
-	max_len := synthetic_min_int(self.max_len, new_max_len)
+pub fn (self &Bytes) at_most(new_max_len usize) Bytes {
+	max_len := synthetic_min_usize(self.max_len, new_max_len)
 	return Bytes{
 		rng: self.rng
-		min_len: synthetic_min_int(self.min_len, max_len)
+		min_len: synthetic_min_usize(self.min_len, max_len)
 		max_len: max_len
 		alphabet: self.alphabet
 	}
 }
 
-pub fn (mut self Bytes) next(max_len int) ![]u8 {
+pub fn (mut self Bytes) next(max_len usize) ![]u8 {
 	mut bounded := self.at_most(max_len)
 	return bounded.write()
 }
@@ -64,26 +64,29 @@ pub fn (mut self Bytes) write() ![]u8 {
 		return error('invalid byte length range')
 	}
 	len := synthetic_random_inclusive(mut self.rng, self.min_len, self.max_len)!
-	mut result := self.rng.bytes(len)!
-	if self.alphabet.len > 0 {
+	if len > usize(2147483647) {
+		return error('byte length exceeds V array capacity')
+	}
+	mut result := self.rng.bytes(int(len))!
+	if alphabet := self.alphabet {
 		for i, byte in result {
-			result[i] = self.alphabet[int(byte) % self.alphabet.len]
+			result[i] = alphabet[int(byte) % alphabet.len]
 		}
 	}
 	return result
 }
 
-fn synthetic_random_inclusive(mut rng rand.PRNG, min_value int, max_value int) !int {
+fn synthetic_random_inclusive(mut rng rand.PRNG, min_value usize, max_value usize) !usize {
 	if min_value == max_value {
 		return min_value
 	}
-	if max_value == 2147483647 {
-		span := u32(max_value - min_value) + 1
-		return min_value + int(rng.u32n(span)!)
+	if min_value == 0 && max_value == ~usize(0) {
+		return usize(rng.u64())
 	}
-	return rng.int_in_range(min_value, max_value + 1)
+	span := max_value - min_value + 1
+	return min_value + usize(rng.u64n(u64(span))!)
 }
 
-fn synthetic_min_int(a int, b int) int {
+fn synthetic_min_usize(a usize, b usize) usize {
 	return if a < b { a } else { b }
 }

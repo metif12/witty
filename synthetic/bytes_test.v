@@ -50,3 +50,22 @@ fn test_bytes_generator_interface() {
 	mut generator := bytes.generator()
 	assert generator.next(8)!.len == 8
 }
+
+fn test_bytes_generator_preserves_pointer_width_limits() {
+	mut rng := rand.new_default(seed_: [u32(2), 0])
+	defer { rng.free() }
+	mut bytes := Bytes.init(rng)
+	assert bytes.max_len == ~usize(0)
+	bytes.min_len = usize(2147483647) + 1
+	mut generator := bytes.generator()
+	assert generator.next(8)!.len == 8
+}
+
+fn test_bytes_generator_preserves_optional_alphabet() {
+	mut rng := rand.new_default(seed_: [u32(3), 0])
+	defer { rng.free() }
+	bytes := Bytes.init(rng)
+	assert bytes.alphabet == none
+	with_empty := bytes.new_alphabet([]u8{})
+	assert with_empty.alphabet != none
+}
