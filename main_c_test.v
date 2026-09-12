@@ -54,12 +54,12 @@ fn test_cli_action_help_error_is_handled_centrally() {
 	assert run_cli_action(.crash_report, ['+crash-report', '--help'])! == 0
 }
 
-fn test_cli_help_matches_translated_command() {
-	help := cli_help_output()
-	assert help.starts_with('Usage: ghostty [+action] [options]\n\n')
-	assert help.contains('Run the Ghostty terminal emulator or a specific helper action.\n')
-	assert help.contains('  +list-actions\n')
-	assert help.ends_with('where `<action>` is one of actions listed above.\n')
+fn test_cli_help_action_rejects_unknown_fields() {
+	if _ := run_cli_action(.help, ['+help', '--unknown']) {
+		assert false, 'the help action must parse its own options'
+	} else {
+		assert err.msg() == 'invalid field'
+	}
 }
 
 fn test_macos_mouse_button_numbers_match_source_adapter() {

@@ -168,10 +168,7 @@ fn run_cli_action_main(action global_state.Action, args []string) !int {
 			}
 			0
 		}
-		.help {
-			print_cli_help()
-			0
-		}
+		.help { cli.run_help(action_args(args, action))! }
 		.list_themes { cli.run_list_themes(action_args(args, action))! }
 		.list_fonts { cli.run_list_fonts(action_args(args, action))! }
 		.list_colors { cli.run_list_colors(action_args(args, action))! }
@@ -191,42 +188,6 @@ fn run_cli_action_main(action global_state.Action, args []string) !int {
 fn action_args(args []string, action global_state.Action) []string {
 	needle := '+${action.cli_name()}'
 	return args.filter(it != needle)
-}
-
-fn print_cli_help() {
-	print(cli_help_output())
-}
-
-// cli_help_output is the translated `cli/help.zig` help text. The help action
-// is deliberately the one CLI action that accepts `--help` itself, so the
-// action list is generated from the same enum used by action detection.
-fn cli_help_output() string {
-	mut output := 'Usage: ghostty [+action] [options]\n\n'
-	output += 'Run the Ghostty terminal emulator or a specific helper action.\n\n'
-	output += 'If no `+action` is specified, run the Ghostty terminal emulator.\n'
-	output += 'All configuration keys are available as command line options.\n'
-	output += 'To specify a configuration key, use the `--<key>=<value>` syntax\n'
-	output += "where key and value are the same format you'd put into a configuration\n"
-	output += 'file. For example, `--font-size=12` or `--font-family="Fira Code"`.\n\n'
-	output += 'To see a list of all available configuration options, please see\n'
-	output += 'the `src/config/Config.zig` file. A future update will allow seeing\n'
-	output += 'the list of configuration options from the command line.\n\n'
-	output += 'A special command line argument `-e <command>` can be used to run\n'
-	output += 'the specific command inside the terminal emulator. For example,\n'
-	output += '`ghostty -e top` will run the `top` command inside the terminal.\n\n'
-	output += 'On macOS, launching the terminal emulator from the CLI is not\n'
-	output += 'supported and only actions are supported. Use `open -na Ghostty.app`\n'
-	output += 'instead, or `open -na ghostty.app --args --foo=bar --baz=quz` to pass\n'
-	output += 'arguments.\n\n'
-	output += 'Available actions:\n\n'
-	for action in global_state.actions() {
-		if action != .none {
-			output += '  +${action.cli_name()}\n'
-		}
-	}
-	output += '\nSpecify `+<action> --help` to see the help for a specific action,\n'
-	output += 'where `<action>` is one of actions listed above.\n'
-	return output
 }
 
 // ghostty_info: Return metadata about Ghostty, such as version, build mode, etc.
