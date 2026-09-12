@@ -175,6 +175,16 @@ fn test_osc_change_window_title() {
 	assert osc_command_type(none) == .invalid
 }
 
+fn test_osc_c_parser_is_allocation_enabled() {
+	mut parser := osc_new()
+	defer { osc_free(mut parser) }
+	for ch in '21;foreground=?'.bytes() {
+		parser.next(ch)
+	}
+	cmd := parser.end(0x1b)
+	assert osc_command_type(cmd) == .kitty_color_protocol
+}
+
 // ============================================================
 // SGR parser tests (from c/sgr.zig)
 // ============================================================

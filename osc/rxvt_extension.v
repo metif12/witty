@@ -36,7 +36,7 @@ fn parse_rxvt_extension(mut parser Parser, terminator_ch ?u8) ?Command {
 
 	parser.command = Command{
 		cmd_type: .show_desktop_notification
-		terminator: init_terminator(terminator_ch)
+		terminator: Terminator.init(terminator_ch)
 		desktop_notification: DesktopNotification{
 			title: title
 			body: body

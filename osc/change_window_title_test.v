@@ -100,7 +100,7 @@ fn test_osc0_change_window_title_exactly_at_buffer_length() {
 }
 
 fn test_osc_terminator_defaults_to_st_when_final_byte_is_absent() {
-	assert init_terminator(none) == .st
+	assert Terminator.init(none) == .st
 	assert Terminator.st.string() == '\x1b\\'
 	assert Terminator.bel.string() == '\x07'
 }

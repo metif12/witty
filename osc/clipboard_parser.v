@@ -23,7 +23,7 @@ fn parse_clipboard_operation(mut parser Parser, terminator_ch ?u8) ?Command {
 		// No explicit kind, default to 'c'
 		parser.command = Command{
 			cmd_type: .clipboard_contents
-			terminator: init_terminator(terminator_ch)
+			terminator: Terminator.init(terminator_ch)
 			clipboard: ClipboardContents{
 				kind: `c`
 				data: data_str[1..]
@@ -47,7 +47,7 @@ fn parse_clipboard_operation(mut parser Parser, terminator_ch ?u8) ?Command {
 
 	parser.command = Command{
 		cmd_type: .clipboard_contents
-		terminator: init_terminator(terminator_ch)
+		terminator: Terminator.init(terminator_ch)
 		clipboard: ClipboardContents{
 			kind: kind
 			data: clipboard_data

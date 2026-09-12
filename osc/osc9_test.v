@@ -169,6 +169,14 @@ fn test_osc9_conemu_progress_set_overflow() {
 	assert cmd.progress? == 100
 }
 
+fn test_progress_report_cval() {
+	assert ProgressReport{ state: .pause, progress: u8(250) }.cval() == ProgressReportC{
+		state: int(ProgressState.pause)
+		progress: 100
+	}
+	assert ProgressReport{ state: .remove }.cval().progress == -1
+}
+
 fn test_osc9_conemu_progress_set_single_digit() {
 	cmd := parse_osc_input('9;4;1;9')
 	assert cmd.cmd_type == .conemu_progress_report

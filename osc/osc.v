@@ -151,9 +151,15 @@ pub enum Terminator {
 	bel
 }
 
-// init_terminator creates a terminator based on the last byte seen.
+// TerminatorC is the C ABI representation of Terminator.
+pub enum TerminatorC as int {
+	st
+	bel
+}
+
+// init creates a terminator based on the last byte seen.
 // If the last byte is a BEL then we use BEL, otherwise we just assume ST.
-pub fn init_terminator(ch ?u8) Terminator {
+pub fn Terminator.init(ch ?u8) Terminator {
 	return if ch or { return .st } == 0x07 { Terminator.bel } else { Terminator.st }
 }
 
@@ -162,6 +168,14 @@ pub fn (self Terminator) string() string {
 	return match self {
 		.st { '\x1b\\' }
 		.bel { '\x07' }
+	}
+}
+
+// cval returns the C ABI representation of this terminator.
+pub fn (self Terminator) cval() TerminatorC {
+	return match self {
+		.st { .st }
+		.bel { .bel }
 	}
 }
 
@@ -180,6 +194,27 @@ pub struct ProgressReport {
 pub:
 	state    ProgressState
 	progress ?u8
+}
+
+// ProgressReportC is the C ABI representation of ProgressReport.
+pub struct ProgressReportC {
+pub:
+	state    int
+	progress i8
+}
+
+// cval converts a progress report to its source C ABI layout.
+pub fn (self ProgressReport) cval() ProgressReportC {
+	progress := if value := self.progress {
+		clamped := if value > 100 { u8(100) } else { value }
+		i8(clamped)
+	} else {
+		i8(-1)
+	}
+	return ProgressReportC{
+		state: int(self.state)
+		progress: progress
+	}
 }
 
 // DesktopNotification is the parsed payload for OSC 9 and OSC 777.

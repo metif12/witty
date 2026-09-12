@@ -97,6 +97,10 @@ pub mut:
 
 // parse_kitty_color_protocol parses an OSC 21 kitty color protocol command.
 fn parse_kitty_color_protocol(mut parser Parser, terminator_ch ?u8) ?Command {
+	if !parser.has_allocator || parser.writer == .none {
+		parser.state = .invalid
+		return none
+	}
 	data := parser.buffered()
 	data_str := data.bytestr()
 
@@ -153,7 +157,7 @@ fn parse_kitty_color_protocol(mut parser Parser, terminator_ch ?u8) ?Command {
 
 	parser.command = Command{
 		cmd_type: .kitty_color_protocol
-		terminator: init_terminator(terminator_ch)
+		terminator: Terminator.init(terminator_ch)
 		str_value: data_str
 		kitty_color_items: items
 	}

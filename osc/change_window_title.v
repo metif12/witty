@@ -13,7 +13,7 @@ fn parse_change_window_title(mut parser Parser, terminator_ch ?u8) ?Command {
 	title := data.bytestr()
 	parser.command = Command{
 		cmd_type: .change_window_title
-		terminator: init_terminator(terminator_ch)
+		terminator: Terminator.init(terminator_ch)
 		str_value: title
 	}
 	return parser.command

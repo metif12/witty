@@ -11,7 +11,7 @@ fn parse_report_pwd(mut parser Parser, terminator_ch ?u8) ?Command {
 	value := data.bytestr()
 	parser.command = Command{
 		cmd_type: .report_pwd
-		terminator: init_terminator(terminator_ch)
+		terminator: Terminator.init(terminator_ch)
 		str_value: value
 	}
 	return parser.command

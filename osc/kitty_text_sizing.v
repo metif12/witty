@@ -149,7 +149,7 @@ fn parse_kitty_text_sizing(mut parser Parser, terminator_ch ?u8) ?Command {
 
 	parser.command = Command{
 		cmd_type: .kitty_text_sizing
-		terminator: init_terminator(terminator_ch)
+		terminator: Terminator.init(terminator_ch)
 		kitty_text_sizing: result
 	}
 	return parser.command

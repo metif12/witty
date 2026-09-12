@@ -240,7 +240,7 @@ pub mut:
 // Create a new OSC parser.
 pub fn osc_new() OscParser {
 	return OscParser{
-		parser: osc.Parser{}
+		parser: osc.Parser.init(voidptr(1))
 	}
 }
 
@@ -329,7 +329,7 @@ pub fn (mut self SgrParser) set_params(params []u16, separators ?[]u8) Result {
 		}
 		for i, sep in seps[..params.len] {
 			if sep == `:` {
-				sep_list.set(i)
+				sep_list.set(usize(i))
 			}
 		}
 	}

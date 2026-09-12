@@ -368,6 +368,10 @@ pub:
 
 // parse_color_operation parses OSC color commands (4, 5, 10-19, 104, 110-119).
 fn parse_color_operation(mut parser Parser, terminator_ch ?u8) ?Command {
+	if !parser.has_allocator {
+		parser.state = .invalid
+		return none
+	}
 	data := parser.buffered()
 	data_str := data.bytestr()
 
@@ -412,7 +416,7 @@ fn parse_color_operation(mut parser Parser, terminator_ch ?u8) ?Command {
 	// consumers can apply the color changes without re-parsing strings.
 	parser.command = Command{
 		cmd_type: .color_operation
-		terminator: init_terminator(terminator_ch)
+		terminator: Terminator.init(terminator_ch)
 		color_op: op
 		color_requests: requests
 	}

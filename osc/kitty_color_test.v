@@ -36,6 +36,14 @@ fn test_osc21_kitty_color_protocol_without_allocator() {
 	assert p.end(0x1b) == none
 }
 
+fn test_osc21_kitty_color_protocol_without_payload_writer() {
+	mut p := Parser.init(voidptr(1))
+	for ch in '21'.bytes() {
+		p.next(ch)
+	}
+	assert p.end(0x1b) == none
+}
+
 fn test_kitty_color_kind_parse_palette() {
 	kind := parse_kitty_color_kind('2') or {
 		assert false, 'expected kind'

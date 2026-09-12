@@ -11,7 +11,7 @@ fn parse_change_window_icon(mut parser Parser, terminator_ch ?u8) ?Command {
 	icon := data.bytestr()
 	parser.command = Command{
 		cmd_type: .change_window_icon
-		terminator: init_terminator(terminator_ch)
+		terminator: Terminator.init(terminator_ch)
 		str_value: icon
 	}
 	return parser.command

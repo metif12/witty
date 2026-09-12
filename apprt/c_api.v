@@ -3,7 +3,6 @@
 
 module apprt
 
-import math
 import input
 
 // CAPITarget mirrors ghostty_target_s.
@@ -266,14 +265,10 @@ pub fn (runtime_action RuntimeAction) capi() CAPIAction {
 			})
 		}
 		.progress_report {
-			progress := if value := data.progress_report_.progress {
-				i8(math.min(value, u8(100)))
-			} else {
-				i8(-1)
-			}
+			progress := data.progress_report_.cval()
 			capi_action_payload(tag, CActionProgressReport{
-				state: int(data.progress_report_.state)
-				progress: progress
+				state: progress.state
+				progress: progress.progress
 			})
 		}
 		.command_finished {

@@ -38,7 +38,7 @@ pub enum Click {
 }
 
 // Parse a Click value from a string.
-pub fn Click.from_string(value string) ?Click {
+pub fn Click.init(value string) ?Click {
 	if value.len == 1 {
 		match value[0] {
 			`m` {
@@ -68,7 +68,7 @@ pub enum PromptKind {
 }
 
 // Parse a PromptKind from a single character.
-pub fn PromptKind.from_char(c u8) ?PromptKind {
+pub fn PromptKind.init(c u8) ?PromptKind {
 	match c {
 		`i` {
 			return .initial
@@ -125,7 +125,7 @@ fn read_option_raw(raw string, key string) ?string {
 		len := if sep >= 0 { sep } else { remaining.len }
 
 		// Grab our full value and move our cursor past the `;`.
-		full := remaining[..len]
+		full := unsafe { remaining[..len] }
 
 		// Parse our key=value and verify our key matches our expectation.
 		eq := full.index_u8(`=`)
@@ -153,14 +153,14 @@ pub fn read_aid(raw string) ?string {
 // Read the 'cl' option (click type). Returns the Click enum value or none.
 pub fn read_click(raw string) ?Click {
 	value := read_option_raw(raw, 'cl') or { return none }
-	return Click.from_string(value)
+	return Click.init(value)
 }
 
 // Read the 'k' option (prompt kind). Returns the PromptKind enum value or none.
 pub fn read_prompt_kind(raw string) ?PromptKind {
 	value := read_option_raw(raw, 'k') or { return none }
 	if value.len == 1 {
-		return PromptKind.from_char(value[0])
+		return PromptKind.init(value[0])
 	}
 	return none
 }
@@ -252,7 +252,7 @@ pub fn parse_osc133(mut parser Parser, terminator_ch ?u8) ?Command {
 	// All valid cases terminate within this block. Any fallthroughs
 	// are invalid. This makes some of our parse logic a little less
 	// repetitive.
-	term := init_terminator(terminator_ch)
+	term := Terminator.init(terminator_ch)
 
 	match data[0] {
 		`A` {

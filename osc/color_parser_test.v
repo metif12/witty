@@ -364,6 +364,28 @@ fn test_osc4_empty_param() {
 	_ = p.end(0x1b)
 }
 
+fn test_color_operation_without_allocator_and_without_payload_writer() {
+	mut p := Parser.init(unsafe { nil })
+	for ch in '10'.bytes() {
+		p.next(ch)
+	}
+	assert p.end(none) == none
+}
+
+fn test_color_operation_with_allocator_accepts_missing_payload_writer() {
+	mut p := Parser.init(voidptr(1))
+	for ch in '10'.bytes() {
+		p.next(ch)
+	}
+	cmd := p.end(none) or {
+		assert false, 'expected command'
+		return
+	}
+	assert cmd.cmd_type == .color_operation
+	assert cmd.color_op == .osc_10
+	assert cmd.color_requests.len == 0
+}
+
 // Translated from ghostty test "OSC 4:" - exhaustive palette + special coverage.
 fn test_osc4_full() {
 	// Test every palette index (0..254 to match ghostty's maxInt(u8) exclusive)

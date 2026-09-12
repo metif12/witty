@@ -151,7 +151,7 @@ fn parse_iterm2(mut parser Parser, terminator_ch ?u8) ?Command {
 			// would mean parsing the base64 data twice in the "normal" case.
 			parser.command = Command{
 				cmd_type: .clipboard_contents
-				terminator: init_terminator(terminator_ch)
+				terminator: Terminator.init(terminator_ch)
 				clipboard: ClipboardContents{
 					kind: `c`
 					data: b64_data
@@ -166,7 +166,7 @@ fn parse_iterm2(mut parser Parser, terminator_ch ?u8) ?Command {
 			}
 			parser.command = Command{
 				cmd_type: .report_pwd
-				terminator: init_terminator(terminator_ch)
+				terminator: Terminator.init(terminator_ch)
 				str_value: val
 			}
 			return parser.command
