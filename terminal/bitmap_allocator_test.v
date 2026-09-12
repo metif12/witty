@@ -293,6 +293,10 @@ fn test_bitmap_allocator_bytes_required() {
 		assert bm.bytes_required(1, 1) == 16
 		assert bm.bytes_required(1, 16) == 16
 		assert bm.bytes_required(1, 17) == 32
+		assert bm.bytes_required(4, 1) == 16
+		assert bm.bytes_required(4, 4) == 16
+		assert bm.bytes_required(4, 5) == 32
+		assert bm.bytes_required(4, 6) == 32
 	}
 
 	// Chunk size of 4 bytes
