@@ -141,13 +141,7 @@ pub:
 
 // Returns true if the style is equal to another style.
 pub fn (self &CellStyle) eql(other &CellStyle) bool {
-	return self.flags.bold == other.flags.bold && self.flags.faint == other.flags.faint
-		&& self.flags.italic == other.flags.italic
-		&& self.flags.underline == other.flags.underline
-		&& self.flags.overline == other.flags.overline && self.flags.blink == other.flags.blink
-		&& self.flags.inverse == other.flags.inverse
-		&& self.flags.invisible == other.flags.invisible
-		&& self.flags.strikethrough == other.flags.strikethrough
+	return self.flags.int() == other.flags.int()
 		&& style_color_eql(self.fg_color, self.fg_r, self.fg_g, self.fg_b, self.fg_palette, other.fg_color, other.fg_r, other.fg_g, other.fg_b, other.fg_palette)
 		&& style_color_eql(self.bg_color, self.bg_r, self.bg_g, self.bg_b, self.bg_palette, other.bg_color, other.bg_r, other.bg_g, other.bg_b, other.bg_palette)
 		&& style_color_eql(self.underline_color, self.underline_r, self.underline_g, self.underline_b, self.underline_palette, other.underline_color, other.underline_r, other.underline_g, other.underline_b, other.underline_palette)
@@ -207,7 +201,7 @@ pub fn (self &CellStyle) fg_rgb(opts FgOpts) RGB {
 
 	match self.fg_color {
 		.none {
-			if self.flags.bold {
+			if self.flags.bold() {
 				if bold := opts.bold_color {
 					if bold.bright {
 						// bright mode: no special color, use default
@@ -221,7 +215,7 @@ pub fn (self &CellStyle) fg_rgb(opts FgOpts) RGB {
 		}
 		.palette {
 			idx := self.fg_palette
-			if self.flags.bold {
+			if self.flags.bold() {
 				if _ := opts.bold_color {
 					// bold_is_bright: if idx < 8, use bright variant
 					bright_offset := u8(8) // bright_black offset
@@ -238,7 +232,7 @@ pub fn (self &CellStyle) fg_rgb(opts FgOpts) RGB {
 				g: self.fg_g
 				b: self.fg_b
 			}
-			if self.flags.bold && rgb.r == opts.default_color.r && rgb.g == opts.default_color.g
+			if self.flags.bold() && rgb.r == opts.default_color.r && rgb.g == opts.default_color.g
 				&& rgb.b == opts.default_color.b {
 				if bold := opts.bold_color {
 					if !bold.bright {
@@ -281,35 +275,8 @@ pub fn (self &CellStyle) hash() u64 {
 	bg_data := style_color_data(self.bg_color, self.bg_r, self.bg_g, self.bg_b, self.bg_palette)
 	underline_data := style_color_data(self.underline_color, self.underline_r, self.underline_g, self.underline_b, self.underline_palette)
 
-	mut flags := u16(0)
-	if self.flags.bold {
-		flags |= 1 << 0
-	}
-	if self.flags.italic {
-		flags |= 1 << 1
-	}
-	if self.flags.faint {
-		flags |= 1 << 2
-	}
-	if self.flags.blink {
-		flags |= 1 << 3
-	}
-	if self.flags.inverse {
-		flags |= 1 << 4
-	}
-	if self.flags.invisible {
-		flags |= 1 << 5
-	}
-	if self.flags.strikethrough {
-		flags |= 1 << 6
-	}
-	if self.flags.overline {
-		flags |= 1 << 7
-	}
-	flags |= u16(int(self.flags.underline)) << 8
-
 	low := u64(int(self.fg_color)) | (u64(int(self.bg_color)) << 8) | (u64(int(self.underline_color)) << 16) | (fg_data << 24) | ((bg_data & 0xffff) << 48)
-	high := (bg_data >> 16) | (underline_data << 8) | (u64(flags) << 32)
+	high := (bg_data >> 16) | (underline_data << 8) | (u64(self.flags.int()) << 32)
 	return internal_hash.int_u64(low ^ high)
 }
 

@@ -1744,7 +1744,7 @@ fn (mut it RunIterator) next_render_cells() !TextRunValue {
 	for max > 0 && cells[max - 1].raw.is_empty() {
 		max--
 	}
-	for it.i < max && cell_style(cells[it.i]).flags.invisible {
+	for it.i < max && cell_style(cells[it.i]).flags.invisible() {
 		it.i++
 	}
 	if it.i >= max {
@@ -1865,9 +1865,9 @@ fn cell_style(cell terminal.RenderCell) terminal.CellStyle {
 }
 
 fn style_to_font_style(style terminal.CellStyle) FontStyle {
-	return if style.flags.bold {
-		if style.flags.italic { FontStyle.bold_italic } else { FontStyle.bold }
-	} else if style.flags.italic {
+	return if style.flags.bold() {
+		if style.flags.italic() { FontStyle.bold_italic } else { FontStyle.bold }
+	} else if style.flags.italic() {
 		FontStyle.italic
 	} else {
 		FontStyle.regular

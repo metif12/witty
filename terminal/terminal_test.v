@@ -1742,15 +1742,15 @@ fn test_decaln_clears_non_color_attributes() {
 	}) or { assert false }
 	t.decaln() or { assert false }
 
-	assert !t.screens.active.cursor.style.flags.bold
-	assert t.screens.active.cursor.style.flags.underline == .none
+	assert !t.screens.active.cursor.style.flags.bold()
+	assert t.screens.active.cursor.style.flags.underline() == .none
 	cell := cell_at(&t, 0, 0)
 	assert cell.style.fg_color == .rgb
 	assert cell.style.fg_r == 0x12
 	assert cell.style.fg_g == 0x34
 	assert cell.style.fg_b == 0x56
-	assert !cell.style.flags.bold
-	assert cell.style.flags.underline == .none
+	assert !cell.style.flags.bold()
+	assert cell.style.flags.underline() == .none
 }
 
 // ============================================================
@@ -1812,7 +1812,7 @@ fn test_full_reset_with_a_non_empty_pen() {
 	t.full_reset()
 
 	// Style should be reset
-	assert !t.screens.active.cursor.style.flags.bold
+	assert !t.screens.active.cursor.style.flags.bold()
 	str := t.plain_string() or {
 		assert false
 		return

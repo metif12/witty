@@ -634,7 +634,7 @@ fn test_page_pin_row_cell_grapheme_and_style_accessors() {
 		return
 	}
 	mut page := &pin.node.data
-	style := CellStyle{ flags: StyleFlags{ bold: true } }
+	style := CellStyle{ flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none) }
 	style_id := page.styles.add(style) or {
 		assert false, err.msg()
 		return
@@ -753,14 +753,10 @@ fn test_page_list_from_pages_translates_managed_cells() {
 	defer { src.deinit() }
 
 	style_a := CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}
 	style_b := CellStyle{
-		flags: StyleFlags{
-			italic: true
-		}
+		flags: StyleFlags.init(false, true, false, false, false, false, false, false, .none)
 	}
 	link := Hyperlink{
 		id: HyperlinkExplicitId{
@@ -1884,9 +1880,7 @@ fn test_page_list_erase_history_preserves_managed_survivor() {
 	}
 	mut page := &first.data
 	style_id := page.styles.add(CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}) or {
 		assert false, 'style add failed'
 		return
@@ -1913,7 +1907,7 @@ fn test_page_list_erase_history_preserves_managed_survivor() {
 	cell := page.rows[0].cells[3]
 	assert cell.codepoint == u32(`S`)
 	assert cell.graphemes == [u32(0x0302)]
-	assert page.styles.get(cell.style_id).flags.bold
+	assert page.styles.get(cell.style_id).flags.bold()
 	assert page.styles.ref_count(cell.style_id) == 1
 	moved_link_id := page.lookup_hyperlink(0, 3) or {
 		assert false, 'survivor hyperlink mapping missing'
@@ -1998,9 +1992,7 @@ fn test_page_list_erase_row_preserves_managed_cell_data() {
 	mut page := &first.data
 
 	style_id := page.styles.add(CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}) or {
 		assert false, 'style add failed'
 		return
@@ -2027,7 +2019,7 @@ fn test_page_list_erase_row_preserves_managed_cell_data() {
 	assert cell.has_grapheme
 	assert cell.graphemes == [u32(0x0301)]
 	assert cell.style_id == style_id
-	assert page.styles.get(cell.style_id).flags.bold
+	assert page.styles.get(cell.style_id).flags.bold()
 	assert page.styles.ref_count(cell.style_id) == 1
 	assert cell.has_hyperlink
 	moved_link_id := page.lookup_hyperlink(0, 2) or {
@@ -2463,7 +2455,7 @@ fn test_page_list_clone_partial_trimmed_left_reclaims_styles() {
 		return
 	}
 	style_id := first.data.styles.add(CellStyle{
-		flags: StyleFlags{ bold: true }
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}) or { panic(err) }
 	for y in 0 .. 10 {
 		first.data.rows[y].styled = true
@@ -4512,9 +4504,7 @@ fn test_page_list_erase_row_bounded_preserves_managed_cell_data() {
 	}
 	mut page := &first.data
 	style_id := page.styles.add(CellStyle{
-		flags: StyleFlags{
-			italic: true
-		}
+		flags: StyleFlags.init(false, true, false, false, false, false, false, false, .none)
 	}) or {
 		assert false, 'style add failed'
 		return
@@ -4539,7 +4529,7 @@ fn test_page_list_erase_row_bounded_preserves_managed_cell_data() {
 	cell := page.rows[0].cells[1]
 	assert cell.codepoint == u32(`M`)
 	assert cell.graphemes == [u32(0x0308)]
-	assert page.styles.get(cell.style_id).flags.italic
+	assert page.styles.get(cell.style_id).flags.italic()
 	assert page.styles.ref_count(cell.style_id) == 1
 	moved_link_id := page.lookup_hyperlink(0, 1) or {
 		assert false, 'bounded hyperlink mapping missing'
@@ -6565,9 +6555,7 @@ fn test_page_list_resize_reflow_less_cols_copy_style() {
 	}
 	mut page := &first.data
 	style_id := page.styles.add(CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}) or {
 		assert false, 'style add failed'
 		return
@@ -6596,7 +6584,7 @@ fn test_page_list_resize_reflow_less_cols_copy_style() {
 			c := rd.cells[x]
 			assert c.style_id != 0
 			st := rp.styles.get(c.style_id)
-			assert st.flags.bold
+			assert st.flags.bold()
 			assert rd.styled
 		}
 	}
@@ -7864,9 +7852,7 @@ fn test_page_list_split_preserves_styled_cells() {
 
 	// Create a style and apply it to cells in rows 5-7.
 	style := CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}
 	style_id := page.styles.add(style) or {
 		assert false, 'style add failed'
@@ -7903,7 +7889,7 @@ fn test_page_list_split_preserves_styled_cells() {
 		assert c.codepoint == u32(`S`)
 		assert c.style_id != 0
 		got_style := second_page.styles.get(c.style_id)
-		assert got_style.flags.bold
+		assert got_style.flags.bold()
 		assert second_page.rows[int(y)].styled
 	}
 }

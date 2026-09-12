@@ -57,7 +57,7 @@ fn test_style_equality_uses_only_active_color_payload() {
 fn test_style_hash_matches_zig_source() {
 	assert CellStyle{}.hash() == 0
 	assert CellStyle{
-		flags: StyleFlags{ bold: true }
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}.hash() == 0xd0fc3c4cfdcbcf4e
 	assert CellStyle{
 		fg_color: .palette
@@ -68,12 +68,26 @@ fn test_style_hash_matches_zig_source() {
 		bg_b: 3
 		underline_color: .palette
 		underline_palette: 9
-		flags: StyleFlags{
-			bold: true
-			italic: true
-			underline: .curly
-		}
+		flags: StyleFlags.init(true, true, false, false, false, false, false, false, .curly)
 	}.hash() == 0x50c324342b82c60f
+}
+
+fn test_style_flags_retain_source_packed_layout() {
+	assert sizeof(StyleFlags) == 2
+	mut flags := StyleFlags.init(true, true, true, true, true, true, true, true, .dashed)
+	assert flags.int() == 0x05ff
+	flags.set_bold(false)
+	flags.set_underline(.curly)
+	assert flags.int() == 0x03fe
+	assert !flags.bold()
+	assert flags.italic()
+	assert flags.faint()
+	assert flags.blink()
+	assert flags.inverse()
+	assert flags.invisible()
+	assert flags.strikethrough()
+	assert flags.overline()
+	assert flags.underline() == .curly
 }
 
 // Tests for Style VT and HTML formatting.
@@ -87,9 +101,7 @@ fn test_style_vt_formatting_empty() {
 
 fn test_style_vt_formatting_bold() {
 	style := CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}
 	result := style.format_vt()
 	assert result == '\x1b[0m\x1b[1m'
@@ -97,9 +109,7 @@ fn test_style_vt_formatting_bold() {
 
 fn test_style_vt_formatting_faint() {
 	style := CellStyle{
-		flags: StyleFlags{
-			faint: true
-		}
+		flags: StyleFlags.init(false, false, true, false, false, false, false, false, .none)
 	}
 	result := style.format_vt()
 	assert result == '\x1b[0m\x1b[2m'
@@ -107,9 +117,7 @@ fn test_style_vt_formatting_faint() {
 
 fn test_style_vt_formatting_italic() {
 	style := CellStyle{
-		flags: StyleFlags{
-			italic: true
-		}
+		flags: StyleFlags.init(false, true, false, false, false, false, false, false, .none)
 	}
 	result := style.format_vt()
 	assert result == '\x1b[0m\x1b[3m'
@@ -117,9 +125,7 @@ fn test_style_vt_formatting_italic() {
 
 fn test_style_vt_formatting_blink() {
 	style := CellStyle{
-		flags: StyleFlags{
-			blink: true
-		}
+		flags: StyleFlags.init(false, false, false, true, false, false, false, false, .none)
 	}
 	result := style.format_vt()
 	assert result == '\x1b[0m\x1b[5m'
@@ -127,9 +133,7 @@ fn test_style_vt_formatting_blink() {
 
 fn test_style_vt_formatting_inverse() {
 	style := CellStyle{
-		flags: StyleFlags{
-			inverse: true
-		}
+		flags: StyleFlags.init(false, false, false, false, true, false, false, false, .none)
 	}
 	result := style.format_vt()
 	assert result == '\x1b[0m\x1b[7m'
@@ -137,9 +141,7 @@ fn test_style_vt_formatting_inverse() {
 
 fn test_style_vt_formatting_invisible() {
 	style := CellStyle{
-		flags: StyleFlags{
-			invisible: true
-		}
+		flags: StyleFlags.init(false, false, false, false, false, true, false, false, .none)
 	}
 	result := style.format_vt()
 	assert result == '\x1b[0m\x1b[8m'
@@ -147,9 +149,7 @@ fn test_style_vt_formatting_invisible() {
 
 fn test_style_vt_formatting_strikethrough() {
 	style := CellStyle{
-		flags: StyleFlags{
-			strikethrough: true
-		}
+		flags: StyleFlags.init(false, false, false, false, false, false, true, false, .none)
 	}
 	result := style.format_vt()
 	assert result == '\x1b[0m\x1b[9m'
@@ -157,9 +157,7 @@ fn test_style_vt_formatting_strikethrough() {
 
 fn test_style_vt_formatting_overline() {
 	style := CellStyle{
-		flags: StyleFlags{
-			overline: true
-		}
+		flags: StyleFlags.init(false, false, false, false, false, false, false, true, .none)
 	}
 	result := style.format_vt()
 	assert result == '\x1b[0m\x1b[53m'
@@ -167,9 +165,7 @@ fn test_style_vt_formatting_overline() {
 
 fn test_style_vt_formatting_underline_single() {
 	style := CellStyle{
-		flags: StyleFlags{
-			underline: .single
-		}
+		flags: StyleFlags.init(false, false, false, false, false, false, false, false, .single)
 	}
 	result := style.format_vt()
 	assert result == '\x1b[0m\x1b[4m'
@@ -177,9 +173,7 @@ fn test_style_vt_formatting_underline_single() {
 
 fn test_style_vt_formatting_underline_double() {
 	style := CellStyle{
-		flags: StyleFlags{
-			underline: .double
-		}
+		flags: StyleFlags.init(false, false, false, false, false, false, false, false, .double)
 	}
 	result := style.format_vt()
 	assert result == '\x1b[0m\x1b[4:2m'
@@ -187,9 +181,7 @@ fn test_style_vt_formatting_underline_double() {
 
 fn test_style_vt_formatting_underline_curly() {
 	style := CellStyle{
-		flags: StyleFlags{
-			underline: .curly
-		}
+		flags: StyleFlags.init(false, false, false, false, false, false, false, false, .curly)
 	}
 	result := style.format_vt()
 	assert result == '\x1b[0m\x1b[4:3m'
@@ -197,9 +189,7 @@ fn test_style_vt_formatting_underline_curly() {
 
 fn test_style_vt_formatting_underline_dotted() {
 	style := CellStyle{
-		flags: StyleFlags{
-			underline: .dotted
-		}
+		flags: StyleFlags.init(false, false, false, false, false, false, false, false, .dotted)
 	}
 	result := style.format_vt()
 	assert result == '\x1b[0m\x1b[4:4m'
@@ -207,9 +197,7 @@ fn test_style_vt_formatting_underline_dotted() {
 
 fn test_style_vt_formatting_underline_dashed() {
 	style := CellStyle{
-		flags: StyleFlags{
-			underline: .dashed
-		}
+		flags: StyleFlags.init(false, false, false, false, false, false, false, false, .dashed)
 	}
 	result := style.format_vt()
 	assert result == '\x1b[0m\x1b[4:5m'
@@ -275,11 +263,7 @@ fn test_style_vt_formatting_underline_color_rgb() {
 
 fn test_style_vt_formatting_multiple_flags() {
 	style := CellStyle{
-		flags: StyleFlags{
-			bold: true
-			italic: true
-			underline: .single
-		}
+		flags: StyleFlags.init(true, true, false, false, false, false, false, false, .single)
 	}
 	result := style.format_vt()
 	assert result == '\x1b[0m\x1b[1m\x1b[3m\x1b[4m'
@@ -287,17 +271,7 @@ fn test_style_vt_formatting_multiple_flags() {
 
 fn test_style_vt_formatting_all_flags() {
 	style := CellStyle{
-		flags: StyleFlags{
-			bold: true
-			faint: true
-			italic: true
-			blink: true
-			inverse: true
-			invisible: true
-			strikethrough: true
-			overline: true
-			underline: .curly
-		}
+		flags: StyleFlags.init(true, true, true, true, true, true, true, true, .curly)
 	}
 	result := style.format_vt()
 	assert result == '\x1b[0m\x1b[1m\x1b[2m\x1b[3m\x1b[5m\x1b[7m\x1b[8m\x1b[9m\x1b[53m\x1b[4:3m'
@@ -313,11 +287,7 @@ fn test_style_vt_formatting_combined_colors_and_flags() {
 		bg_palette: 8
 		underline_color: .rgb
 		underline_g: 255
-		flags: StyleFlags{
-			bold: true
-			italic: true
-			underline: .double
-		}
+		flags: StyleFlags.init(true, true, false, false, false, false, false, false, .double)
 	}
 	result := style.format_vt()
 	assert result == '\x1b[0m\x1b[1m\x1b[3m\x1b[4:2m\x1b[38;2;255;0;0m\x1b[48;5;8m\x1b[58;2;0;255;0m'
@@ -377,9 +347,7 @@ fn test_style_vt_formatting_all_palette_colors_with_palette_set() {
 
 fn test_style_html_formatting_basic_bold() {
 	style := CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}
 	result := style.format_html()
 	assert result == 'font-weight: bold;'
@@ -415,10 +383,7 @@ fn test_style_html_formatting_combined_colors_and_flags() {
 		bg_r: 0
 		bg_g: 0
 		bg_b: 255
-		flags: StyleFlags{
-			bold: true
-			italic: true
-		}
+		flags: StyleFlags.init(true, true, false, false, false, false, false, false, .none)
 	}
 	result := style.format_html()
 	assert result.contains('color: rgb(255, 0, 0);')
@@ -429,9 +394,7 @@ fn test_style_html_formatting_combined_colors_and_flags() {
 
 fn test_style_html_formatting_single_decoration_line() {
 	style := CellStyle{
-		flags: StyleFlags{
-			underline: .single
-		}
+		flags: StyleFlags.init(false, false, false, false, false, false, false, false, .single)
 	}
 	result := style.format_html()
 	assert result.contains('text-decoration-line: underline;')
@@ -440,11 +403,7 @@ fn test_style_html_formatting_single_decoration_line() {
 
 fn test_style_html_formatting_multiple_decoration_lines() {
 	style := CellStyle{
-		flags: StyleFlags{
-			underline: .curly
-			strikethrough: true
-			overline: true
-		}
+		flags: StyleFlags.init(false, false, false, false, false, false, true, true, .curly)
 	}
 	result := style.format_html()
 	assert result.contains('text-decoration-line: underline line-through overline;')
@@ -473,12 +432,7 @@ fn test_style_html_formatting_all_palette_colors_with_palette_set() {
 
 fn test_style_html_formatting_remaining_flags() {
 	style := CellStyle{
-		flags: StyleFlags{
-			blink: true
-			faint: true
-			invisible: true
-			inverse: true
-		}
+		flags: StyleFlags.init(false, false, true, true, true, true, false, false, .none)
 	}
 	assert style.format_html() == 'text-decoration-line: blink;opacity: 0.5;visibility: hidden;filter: invert(100%);'
 }
@@ -490,65 +444,47 @@ fn test_style_default() {
 
 fn test_style_not_default() {
 	style := CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}
 	assert !style.default()
 }
 
 fn test_style_eql() {
 	s1 := CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}
 	s2 := CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}
 	assert s1.eql(&s2)
 }
 
 fn test_style_not_eql() {
 	s1 := CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}
 	s2 := CellStyle{
-		flags: StyleFlags{
-			italic: true
-		}
+		flags: StyleFlags.init(false, true, false, false, false, false, false, false, .none)
 	}
 	assert !s1.eql(&s2)
 }
 
 fn test_style_hash_different_styles() {
 	s1 := CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}
 	s2 := CellStyle{
-		flags: StyleFlags{
-			italic: true
-		}
+		flags: StyleFlags.init(false, true, false, false, false, false, false, false, .none)
 	}
 	assert s1.hash() != s2.hash()
 }
 
 fn test_style_hash_same_styles() {
 	s1 := CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}
 	s2 := CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}
 	assert s1.hash() == s2.hash()
 }

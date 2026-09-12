@@ -2640,7 +2640,7 @@ fn (self &Renderer) compute_cursor_color(cursor_style terminal.CellStyle) termin
 		bg_style := cursor_style.bg_rgb(&state.cursor.cell, state.colors.palette) or {
 			state.colors.background
 		}
-		return resolve_terminal_color(v, cursor_style.flags.inverse, fg_style, bg_style)
+		return resolve_terminal_color(v, cursor_style.flags.inverse(), fg_style, bg_style)
 	}
 
 	return state.colors.foreground
@@ -2660,7 +2660,7 @@ fn (self &Renderer) compute_cursor_text_color(cursor_style terminal.CellStyle) t
 		bg_style := cursor_style.bg_rgb(&state.cursor.cell, state.colors.palette) or {
 			state.colors.background
 		}
-		return resolve_terminal_color(txt, cursor_style.flags.inverse, fg_style, bg_style)
+		return resolve_terminal_color(txt, cursor_style.flags.inverse(), fg_style, bg_style)
 	}
 
 	return state.colors.background
@@ -2815,7 +2815,7 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		fg := self.compute_cell_fg(selected, cell_style, bg_style_opt, fg_style)
 
 		// Foreground alpha for this cell.
-		alpha := if cell_style.flags.faint { self.config.faint_opacity } else { u8(255) }
+		alpha := if cell_style.flags.faint() { self.config.faint_opacity } else { u8(255) }
 
 		// Set the cell's background color.
 		{
@@ -2831,15 +2831,15 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		// If the invisible flag is set on this cell then we don't need to
 		// render any foreground elements, so we skip all glyphs with this
 		// x coordinate. NOTE: matches xterm's behavior.
-		if cell_style.flags.invisible {
+		if cell_style.flags.invisible() {
 			continue
 		}
 
 		// Give links a single underline, unless they already have an
 		// underline, in which case use a double underline to distinguish.
-		mut underline := cell_style.flags.underline
+		mut underline := cell_style.flags.underline()
 		if u64(cell_set_key(u32(x), u32(y))) in links {
-			underline = if cell_style.flags.underline == .single {
+			underline = if cell_style.flags.underline() == .single {
 				terminal.UnderlineStyle.double
 			} else {
 				terminal.UnderlineStyle.single
@@ -2852,7 +2852,7 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 			self.add_underline(u16(x), y, underline, ul_color, alpha) or {}
 		}
 
-		if cell_style.flags.overline {
+		if cell_style.flags.overline() {
 			self.add_overline(u16(x), y, fg, alpha) or {}
 		}
 
@@ -2861,7 +2861,7 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		}
 
 		// Finally, draw a strikethrough if necessary.
-		if cell_style.flags.strikethrough {
+		if cell_style.flags.strikethrough() {
 			self.add_strikethrough(u16(x), y, fg, alpha) or {}
 		}
 	}
@@ -2872,7 +2872,7 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 fn (self &Renderer) compute_cell_bg(selected CellSelected, style terminal.CellStyle, cell &terminal.CellData, bg_style_opt ?terminal.RGB, fg_style terminal.RGB) ?terminal.RGB {
 	state := &self.terminal_state
 	bg_style := bg_style_opt or { state.colors.background }
-	inverse := style.flags.inverse
+	inverse := style.flags.inverse()
 
 	return match selected {
 		.selection {
@@ -2913,7 +2913,7 @@ fn (self &Renderer) compute_cell_fg(selected CellSelected, style terminal.CellSt
 	// Our happy-path non-selection background color is our style or
 	// our configured defaults.
 	final_bg := bg_style_opt or { state.colors.background }
-	inverse := style.flags.inverse
+	inverse := style.flags.inverse()
 
 	return match selected {
 		.selection {
@@ -2946,7 +2946,7 @@ fn (self &Renderer) compute_bg_alpha(selected CellSelected, style terminal.CellS
 	}
 
 	// Cells that are reversed should be fully opaque.
-	if style.flags.inverse {
+	if style.flags.inverse() {
 		return default
 	}
 

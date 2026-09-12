@@ -1953,31 +1953,31 @@ fn format_style_vt_with_palette(style CellStyle, palette ?[]RGB) string {
 	mut sb := strings.new_builder(64)
 	sb.write_string('\x1b[0m')
 
-	if style.flags.bold {
+	if style.flags.bold() {
 		sb.write_string('\x1b[1m')
 	}
-	if style.flags.faint {
+	if style.flags.faint() {
 		sb.write_string('\x1b[2m')
 	}
-	if style.flags.italic {
+	if style.flags.italic() {
 		sb.write_string('\x1b[3m')
 	}
-	if style.flags.blink {
+	if style.flags.blink() {
 		sb.write_string('\x1b[5m')
 	}
-	if style.flags.inverse {
+	if style.flags.inverse() {
 		sb.write_string('\x1b[7m')
 	}
-	if style.flags.invisible {
+	if style.flags.invisible() {
 		sb.write_string('\x1b[8m')
 	}
-	if style.flags.strikethrough {
+	if style.flags.strikethrough() {
 		sb.write_string('\x1b[9m')
 	}
-	if style.flags.overline {
+	if style.flags.overline() {
 		sb.write_string('\x1b[53m')
 	}
-	match style.flags.underline {
+	match style.flags.underline() {
 		.none {}
 		.single { sb.write_string('\x1b[4m') }
 		.double { sb.write_string('\x1b[4:2m') }
@@ -2087,27 +2087,27 @@ fn format_style_html_with_palette(style CellStyle, palette ?[]RGB) string {
 	}
 
 	// Text decoration line
-	has_line := style.flags.underline != .none || style.flags.strikethrough
-		|| style.flags.overline || style.flags.blink
+	has_line := style.flags.underline() != .none || style.flags.strikethrough()
+		|| style.flags.overline() || style.flags.blink()
 	if has_line {
 		sb.write_string('text-decoration-line:')
-		if style.flags.underline != .none {
+		if style.flags.underline() != .none {
 			sb.write_string(' underline')
 		}
-		if style.flags.strikethrough {
+		if style.flags.strikethrough() {
 			sb.write_string(' line-through')
 		}
-		if style.flags.overline {
+		if style.flags.overline() {
 			sb.write_string(' overline')
 		}
-		if style.flags.blink {
+		if style.flags.blink() {
 			sb.write_string(' blink')
 		}
 		sb.write_string(';')
 	}
 
 	// Text decoration style
-	match style.flags.underline {
+	match style.flags.underline() {
 		.none {}
 		.single { sb.write_string('text-decoration-style: solid;') }
 		.double { sb.write_string('text-decoration-style: double;') }
@@ -2116,19 +2116,19 @@ fn format_style_html_with_palette(style CellStyle, palette ?[]RGB) string {
 		.dashed { sb.write_string('text-decoration-style: dashed;') }
 	}
 
-	if style.flags.bold {
+	if style.flags.bold() {
 		sb.write_string('font-weight: bold;')
 	}
-	if style.flags.italic {
+	if style.flags.italic() {
 		sb.write_string('font-style: italic;')
 	}
-	if style.flags.faint {
+	if style.flags.faint() {
 		sb.write_string('opacity: 0.5;')
 	}
-	if style.flags.invisible {
+	if style.flags.invisible() {
 		sb.write_string('visibility: hidden;')
 	}
-	if style.flags.inverse {
+	if style.flags.inverse() {
 		sb.write_string('filter: invert(100%);')
 	}
 

@@ -3159,53 +3159,53 @@ pub fn (mut self Screen) set_attribute(attr SgrAttribute) ! {
 			self.cursor.style = CellStyle{}
 		}
 		.bold {
-			self.cursor.style.flags.bold = true
+			self.cursor.style.flags.set_bold(true)
 		}
 		.reset_bold {
-			self.cursor.style.flags.bold = false
-			self.cursor.style.flags.faint = false
+			self.cursor.style.flags.set_bold(false)
+			self.cursor.style.flags.set_faint(false)
 		}
 		.italic {
-			self.cursor.style.flags.italic = true
+			self.cursor.style.flags.set_italic(true)
 		}
 		.reset_italic {
-			self.cursor.style.flags.italic = false
+			self.cursor.style.flags.set_italic(false)
 		}
 		.faint {
-			self.cursor.style.flags.faint = true
+			self.cursor.style.flags.set_faint(true)
 		}
 		.underline_set {
-			self.cursor.style.flags.underline = attr.underline
+			self.cursor.style.flags.set_underline(attr.underline)
 		}
 		.overline {
-			self.cursor.style.flags.overline = true
+			self.cursor.style.flags.set_overline(true)
 		}
 		.reset_overline {
-			self.cursor.style.flags.overline = false
+			self.cursor.style.flags.set_overline(false)
 		}
 		.blink {
-			self.cursor.style.flags.blink = true
+			self.cursor.style.flags.set_blink(true)
 		}
 		.reset_blink {
-			self.cursor.style.flags.blink = false
+			self.cursor.style.flags.set_blink(false)
 		}
 		.inverse {
-			self.cursor.style.flags.inverse = true
+			self.cursor.style.flags.set_inverse(true)
 		}
 		.reset_inverse {
-			self.cursor.style.flags.inverse = false
+			self.cursor.style.flags.set_inverse(false)
 		}
 		.invisible {
-			self.cursor.style.flags.invisible = true
+			self.cursor.style.flags.set_invisible(true)
 		}
 		.reset_invisible {
-			self.cursor.style.flags.invisible = false
+			self.cursor.style.flags.set_invisible(false)
 		}
 		.strikethrough {
-			self.cursor.style.flags.strikethrough = true
+			self.cursor.style.flags.set_strikethrough(true)
 		}
 		.reset_strikethrough {
-			self.cursor.style.flags.strikethrough = false
+			self.cursor.style.flags.set_strikethrough(false)
 		}
 		.direct_color_fg {
 			self.cursor.style.fg_color = .rgb

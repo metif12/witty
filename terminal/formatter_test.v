@@ -620,7 +620,7 @@ fn test_page_vt_underline_color_change_emits_new_style() {
 		codepoint: u32(`A`)
 		style_id: 1
 		style: CellStyle{
-			flags: StyleFlags{ underline: .single }
+			flags: StyleFlags.init(false, false, false, false, false, false, false, false, .single)
 			underline_color: .palette
 			underline_palette: 1
 		}
@@ -629,7 +629,7 @@ fn test_page_vt_underline_color_change_emits_new_style() {
 		codepoint: u32(`B`)
 		style_id: 1
 		style: CellStyle{
-			flags: StyleFlags{ underline: .single }
+			flags: StyleFlags.init(false, false, false, false, false, false, false, false, .single)
 			underline_color: .palette
 			underline_palette: 2
 		}
@@ -861,7 +861,7 @@ fn test_has_text_any() {
 
 fn test_cell_style_default() {
 	assert CellStyle{}.default() == true
-	assert CellStyle{ flags: StyleFlags{ bold: true } }.default() == false
+	assert CellStyle{ flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none) }.default() == false
 	assert CellStyle{ fg_color: .palette }.default() == false
 	assert CellStyle{ bg_color: .rgb }.default() == false
 }
@@ -876,12 +876,12 @@ fn test_format_style_vt() {
 	assert s == '\x1b[0m'
 
 	// Bold
-	s2 := format_style_vt(CellStyle{ flags: StyleFlags{ bold: true } })
+	s2 := format_style_vt(CellStyle{ flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none) })
 	assert s2 == '\x1b[0m\x1b[1m'
 
 	// Bold + italic
 	s3 := format_style_vt(CellStyle{
-		flags: StyleFlags{ bold: true, italic: true }
+		flags: StyleFlags.init(true, true, false, false, false, false, false, false, .none)
 	})
 	assert s3 == '\x1b[0m\x1b[1m\x1b[3m'
 
@@ -1285,7 +1285,7 @@ fn test_page_point_map_style_close_uses_previous_cell() {
 	mut pages := make_pages_with_text(2, 1, 'AB', 0)
 	mut row := &pages.screen_rows[pages.active_start]
 	row.cells[0].style_id = 1
-	row.cells[0].style = CellStyle{ flags: StyleFlags{ bold: true } }
+	row.cells[0].style = CellStyle{ flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none) }
 
 	mut points := PointMap{}
 	mut formatter := PageFormatter.init(&pages, format_vt)
@@ -1890,9 +1890,7 @@ fn test_page_list_vt_uses_each_pages_style_table() {
 		return
 	}
 	bold := CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}
 	first_style_id := first.data.styles.add(bold)!
 	first.data.rows[0].cells[0] = CellData{
@@ -1907,9 +1905,7 @@ fn test_page_list_vt_uses_each_pages_style_table() {
 	list.page_serial++
 	second.data.size.rows = 1
 	italic := CellStyle{
-		flags: StyleFlags{
-			italic: true
-		}
+		flags: StyleFlags.init(false, true, false, false, false, false, false, false, .none)
 	}
 	second_style_id := second.data.styles.add(italic)!
 	second.data.rows[0].cells[0] = CellData{

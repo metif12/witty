@@ -3848,28 +3848,28 @@ pub fn (mut self Terminal) print_attributes() !string {
 
 	pen := self.screens.active.cursor.style
 
-	if pen.flags.bold {
+	if pen.flags.bold() {
 		result.write_string(';1')
 	}
-	if pen.flags.faint {
+	if pen.flags.faint() {
 		result.write_string(';2')
 	}
-	if pen.flags.italic {
+	if pen.flags.italic() {
 		result.write_string(';3')
 	}
-	if pen.flags.underline != .none {
+	if pen.flags.underline() != .none {
 		result.write_string(';4')
 	}
-	if pen.flags.blink {
+	if pen.flags.blink() {
 		result.write_string(';5')
 	}
-	if pen.flags.inverse {
+	if pen.flags.inverse() {
 		result.write_string(';7')
 	}
-	if pen.flags.invisible {
+	if pen.flags.invisible() {
 		result.write_string(';8')
 	}
-	if pen.flags.strikethrough {
+	if pen.flags.strikethrough() {
 		result.write_string(';9')
 	}
 

@@ -101,12 +101,12 @@ fn test_render_state_styled_text() {
 	// Row zero should contain our styled text
 	c0 := state.row_data[0].cells[0]
 	assert c0.raw.codepoint_val() == u32(`A`)
-	assert c0.style.flags.bold
+	assert c0.style.flags.bold()
 
 	c1 := state.row_data[0].cells[1]
 	assert c1.raw.codepoint_val() == u32(`B`)
-	assert !c1.style.flags.bold
-	assert c1.style.flags.italic
+	assert !c1.style.flags.bold()
+	assert c1.style.flags.italic()
 
 	assert state.row_data[0].cells[2].raw.codepoint_val() == u32(`C`)
 	assert state.row_data[0].cells[3].raw.codepoint_val() == 0
@@ -185,7 +185,7 @@ fn test_render_state_cursor_in_viewport() {
 	s.next_slice('\x1b[1m')! // Bold
 	state.update(mut t)
 	assert !state.cursor.style.default()
-	assert state.cursor.style.flags.bold
+	assert state.cursor.style.flags.bold()
 	s.next_slice('\x1b[0m')! // Reset style
 
 	// Move cursor to 2,1

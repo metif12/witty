@@ -130,12 +130,12 @@ fn test_screen_style_basics() {
 	// Set bold
 	s.set_attribute(SgrAttribute{ kind: .bold }) or { assert false }
 	assert s.cursor.style_id != u32(0)
-	assert s.cursor.style.flags.bold
+	assert s.cursor.style.flags.bold()
 
 	// Set italic (replaces bold since style is cumulative)
 	s.set_attribute(SgrAttribute{ kind: .italic }) or { assert false }
 	assert s.cursor.style_id != u32(0)
-	assert s.cursor.style.flags.italic
+	assert s.cursor.style.flags.italic()
 }
 
 fn test_screen_style_reset_to_default() {
@@ -148,7 +148,7 @@ fn test_screen_style_reset_to_default() {
 
 	s.set_attribute(SgrAttribute{ kind: .reset_bold }) or { assert false }
 	// After resetting bold, if no other styles are set, should be default
-	if !s.cursor.style.flags.italic && !s.cursor.style.flags.faint {
+	if !s.cursor.style.flags.italic() && !s.cursor.style.flags.faint() {
 		assert s.cursor.style_id == u32(0)
 	}
 }
@@ -1289,9 +1289,7 @@ fn test_screen_clone_deep_copies_managed_cells_and_resets_cursor_state() {
 	mut s := Screen.init(3, 2, 10)
 	defer { s.deinit() }
 	style := CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}
 	link := Hyperlink{
 		id: HyperlinkExplicitId{
@@ -1349,10 +1347,10 @@ fn test_screen_clone_deep_copies_managed_cells_and_resets_cursor_state() {
 
 	// The clone owns nested managed values, not only the outer cell array.
 	s.pages.screen_rows[0].cells[0].graphemes[0] = u32(0x0302)
-	s.pages.screen_rows[0].cells[0].style.flags.bold = false
+	s.pages.screen_rows[0].cells[0].style.flags.set_bold(false)
 	s.pages.screen_rows[0].cells[0].hyperlink.uri = 'https://example.com/changed'
 	assert cloned.pages.screen_rows[0].cells[0].graphemes == [u32(0x0301)]
-	assert cloned.pages.screen_rows[0].cells[0].style.flags.bold
+	assert cloned.pages.screen_rows[0].cells[0].style.flags.bold()
 	assert cloned.pages.screen_rows[0].cells[0].hyperlink.uri == 'https://example.com/screen-clone'
 }
 
@@ -1610,7 +1608,7 @@ fn test_screen_cursor_copy_style_copy() {
 	mut s2 := Screen.init(10, 10, 0)
 	defer { s2.deinit() }
 	s2.cursor_copy(s.cursor, CursorCopyOptions{}) or { assert false }
-	assert s2.cursor.style.flags.bold
+	assert s2.cursor.style.flags.bold()
 }
 
 fn test_screen_cursor_copy_hyperlink_deref() {
@@ -1840,7 +1838,7 @@ fn test_screen_cursor_down_scroll_preserves_style() {
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL') or { assert false }
 	s.cursor_down_scroll() or { assert false }
 
-	assert s.cursor.style.flags.bold
+	assert s.cursor.style.flags.bold()
 
 	str := s.dump_string_alloc(.active) or {
 		assert false
@@ -3546,14 +3544,14 @@ fn test_screen_test_write_string_preserves_style_and_hyperlink() {
 	mut s := Screen.init(4, 2, 0)
 	defer { s.deinit() }
 
-	s.cursor.style.flags.bold = true
+	s.cursor.style.flags.set_bold(true)
 	s.manual_style_update() or { assert false }
 	s.start_hyperlink('https://example.com/', 'test') or { assert false }
 	s.test_write_string('界') or { assert false }
 	row := s.pages.screen_rows[s.pages.active_start]
 	assert row.styled
 	assert row.hyperlink
-	assert row.cells[0].style.flags.bold
+	assert row.cells[0].style.flags.bold()
 	assert row.cells[0].has_hyperlink
 	assert row.cells[1].has_hyperlink
 }

@@ -1502,16 +1502,96 @@ pub enum UnderlineStyle as u8 {
 
 // StyleFlags contains boolean style attributes.
 pub struct StyleFlags {
-pub mut:
-	bold          bool
-	faint         bool
-	italic        bool
-	underline     UnderlineStyle = .none
-	overline      bool
-	blink         bool
-	inverse       bool
-	invisible     bool
-	strikethrough bool
+mut:
+	value u16
+}
+
+pub fn StyleFlags.init(bold bool, italic bool, faint bool, blink bool, inverse bool, invisible bool, strikethrough bool, overline bool, underline UnderlineStyle) StyleFlags {
+	return StyleFlags{
+		value: u16(bold) | (u16(italic) << 1) | (u16(faint) << 2) | (u16(blink) << 3) |
+			(u16(inverse) << 4) | (u16(invisible) << 5) | (u16(strikethrough) << 6) |
+			(u16(overline) << 7) | (u16(underline) << 8)
+	}
+}
+
+pub fn (flags StyleFlags) bold() bool {
+	return flags.value & 0x0001 != 0
+}
+
+pub fn (flags StyleFlags) italic() bool {
+	return flags.value & 0x0002 != 0
+}
+
+pub fn (flags StyleFlags) faint() bool {
+	return flags.value & 0x0004 != 0
+}
+
+pub fn (flags StyleFlags) blink() bool {
+	return flags.value & 0x0008 != 0
+}
+
+pub fn (flags StyleFlags) inverse() bool {
+	return flags.value & 0x0010 != 0
+}
+
+pub fn (flags StyleFlags) invisible() bool {
+	return flags.value & 0x0020 != 0
+}
+
+pub fn (flags StyleFlags) strikethrough() bool {
+	return flags.value & 0x0040 != 0
+}
+
+pub fn (flags StyleFlags) overline() bool {
+	return flags.value & 0x0080 != 0
+}
+
+pub fn (flags StyleFlags) underline() UnderlineStyle {
+	return unsafe { UnderlineStyle((flags.value >> 8) & 0x0007) }
+}
+
+pub fn (flags StyleFlags) int() u16 {
+	return flags.value
+}
+
+fn (mut flags StyleFlags) set_bool(mask u16, enabled bool) {
+	flags.value = if enabled { flags.value | mask } else { flags.value & ~mask }
+}
+
+pub fn (mut flags StyleFlags) set_bold(enabled bool) {
+	flags.set_bool(0x0001, enabled)
+}
+
+pub fn (mut flags StyleFlags) set_italic(enabled bool) {
+	flags.set_bool(0x0002, enabled)
+}
+
+pub fn (mut flags StyleFlags) set_faint(enabled bool) {
+	flags.set_bool(0x0004, enabled)
+}
+
+pub fn (mut flags StyleFlags) set_blink(enabled bool) {
+	flags.set_bool(0x0008, enabled)
+}
+
+pub fn (mut flags StyleFlags) set_inverse(enabled bool) {
+	flags.set_bool(0x0010, enabled)
+}
+
+pub fn (mut flags StyleFlags) set_invisible(enabled bool) {
+	flags.set_bool(0x0020, enabled)
+}
+
+pub fn (mut flags StyleFlags) set_strikethrough(enabled bool) {
+	flags.set_bool(0x0040, enabled)
+}
+
+pub fn (mut flags StyleFlags) set_overline(enabled bool) {
+	flags.set_bool(0x0080, enabled)
+}
+
+pub fn (mut flags StyleFlags) set_underline(underline UnderlineStyle) {
+	flags.value = (flags.value & ~u16(0x0700)) | (u16(underline) << 8)
 }
 
 // ColorType describes what type of color is set.
@@ -1546,10 +1626,7 @@ pub mut:
 
 // Returns true if this is the default (empty) style.
 pub fn (self &CellStyle) default() bool {
-	return !self.flags.bold && !self.flags.faint && !self.flags.italic
-		&& self.flags.underline == .none && !self.flags.overline && !self.flags.blink
-		&& !self.flags.inverse && !self.flags.invisible && !self.flags.strikethrough
-		&& self.fg_color == .none && self.bg_color == .none
+	return self.flags.int() == 0 && self.fg_color == .none && self.bg_color == .none
 		&& self.underline_color == .none
 }
 

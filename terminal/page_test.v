@@ -313,9 +313,7 @@ fn test_page_clone_styles() {
 	// Write with some styles.
 	{
 		id := page.styles.add(CellStyle{
-			flags: StyleFlags{
-				bold: true
-			}
+			flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 		}) or {
 			assert false, 'failed to add style'
 			return
@@ -348,7 +346,7 @@ fn test_page_clone_styles() {
 		}
 
 		style := page.styles.get(id)
-		assert style.flags.bold
+		assert style.flags.bold()
 	}
 }
 
@@ -362,9 +360,7 @@ fn test_page_clone_preserves_inline_managed_values() {
 	page.size.rows = 1
 
 	style := CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}
 	style_id := page.styles.add(style) or {
 		assert false, 'failed to add style'
@@ -1038,9 +1034,7 @@ fn test_page_verify_integrity_styles_good() {
 
 	// Upsert a style we'll use.
 	id := page.styles.add(CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}) or {
 		assert false, 'failed to add style'
 		return
@@ -1080,9 +1074,7 @@ fn test_page_verify_integrity_styles_ref_count_mismatch() {
 
 	// Upsert a style we'll use.
 	id := page.styles.add(CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}) or {
 		assert false, 'failed to add style'
 		return
@@ -1214,9 +1206,7 @@ fn test_page_exact_row_capacity_styles() {
 
 	// Add one style to a cell.
 	style1_id := page.styles.add(CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}) or {
 		assert false, 'failed to add style'
 		return
@@ -1249,9 +1239,7 @@ fn test_page_exact_row_capacity_styles() {
 
 	// Add a different style.
 	style2_id := page.styles.add(CellStyle{
-		flags: StyleFlags{
-			italic: true
-		}
+		flags: StyleFlags.init(false, true, false, false, false, false, false, false, .none)
 	}) or {
 		assert false, 'failed to add style'
 		return
@@ -1273,9 +1261,7 @@ fn test_page_exact_row_capacity_styles() {
 	// Style outside the row range should not be counted.
 	{
 		style3_id := page.styles.add(CellStyle{
-			flags: StyleFlags{
-				underline: .single
-			}
+			flags: StyleFlags.init(false, false, false, false, false, false, false, false, .single)
 		}) or {
 			assert false, 'failed to add style'
 			return
@@ -1929,9 +1915,7 @@ fn test_page_clear_cells() {
 
 	// Write with graphemes and styles.
 	id := page.styles.add(CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}) or {
 		assert false, 'failed to add style'
 		return
@@ -2265,9 +2249,7 @@ fn test_page_exact_row_capacity_single_style_clone() {
 
 	// Add exactly one style to row 0.
 	style_id := page.styles.add(CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}) or {
 		assert false, 'failed to add style'
 		return
@@ -2305,7 +2287,7 @@ fn test_page_clone_row_reports_bounded_style_failure() {
 		styles: u16(StyleSet.capacity_for_count(1))
 	})
 	defer { src.deinit() }
-	style_id := src.styles.add(CellStyle{ flags: StyleFlags{ bold: true } }) or {
+	style_id := src.styles.add(CellStyle{ flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none) }) or {
 		panic(err)
 	}
 	src.rows[0].cells[0] = CellData{

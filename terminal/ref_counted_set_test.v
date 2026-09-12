@@ -92,9 +92,7 @@ fn test_rcs_add_different() {
 
 	style1 := CellStyle{}
 	style2 := CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}
 
 	id1 := s.add(style1) or {
@@ -115,9 +113,7 @@ fn test_rcs_lookup() {
 	mut s := RefCountedSet.init(l)
 
 	style := CellStyle{
-		flags: StyleFlags{
-			italic: true
-		}
+		flags: StyleFlags.init(false, true, false, false, false, false, false, false, .none)
 	}
 	id := s.add(style) or {
 		assert false, 'add failed'
@@ -181,10 +177,7 @@ fn test_rcs_get() {
 	mut s := RefCountedSet.init(l)
 
 	style := CellStyle{
-		flags: StyleFlags{
-			bold: true
-			underline: .single
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .single)
 	}
 	id := s.add(style) or {
 		assert false, 'add failed'
@@ -192,8 +185,8 @@ fn test_rcs_get() {
 	}
 
 	got := s.get(id)
-	assert got.flags.bold == true
-	assert got.flags.underline == .single
+	assert got.flags.bold() == true
+	assert got.flags.underline() == .single
 }
 
 // Test capacity_for_count calculation.
@@ -255,9 +248,7 @@ fn test_rcs_add_with_id_reuses_dead_slot() {
 	set.release(first)
 
 	replacement := CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}
 	result := set.add_with_id(replacement, first)!
 	assert result.used_requested
@@ -279,9 +270,7 @@ fn test_rcs_maximum_table_capacity_reuses_dead_slot() {
 	set.release(first)
 
 	replacement := CellStyle{
-		flags: StyleFlags{
-			bold: true
-		}
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}
 	result := set.add_with_id(replacement, first)!
 	assert result.used_requested
@@ -301,9 +290,7 @@ fn test_rcs_add_with_id_reuses_matching_live_slot() {
 	l := RefCountedSetLayout.init(32)
 	mut set := RefCountedSet.init(l)
 	style := CellStyle{
-		flags: StyleFlags{
-			italic: true
-		}
+		flags: StyleFlags.init(false, true, false, false, false, false, false, false, .none)
 	}
 	id := set.add(style)!
 
@@ -319,9 +306,7 @@ fn test_rcs_add_with_id_falls_back_when_requested_slot_is_live() {
 	mut set := RefCountedSet.init(l)
 	first := set.add(CellStyle{})!
 	second_style := CellStyle{
-		flags: StyleFlags{
-			underline: .single
-		}
+		flags: StyleFlags.init(false, false, false, false, false, false, false, false, .single)
 	}
 
 	result := set.add_with_id(second_style, first)!

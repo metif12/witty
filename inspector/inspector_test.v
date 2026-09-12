@@ -150,7 +150,7 @@ fn test_flat_pagelist_inspector_projects_regions_and_style_usage() {
 	}
 
 	mut style := terminal.CellStyle{}
-	style.flags.bold = true
+	style.flags.set_bold(true)
 	term.screens.active.pages.screen_rows[0].cells[0].style_id = 1
 	term.screens.active.pages.screen_rows[0].cells[0].style = style
 	term.screens.active.pages.screen_rows[1].cells[2].style_id = 1
