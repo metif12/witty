@@ -95,7 +95,7 @@ pub fn Layout.parse_with_checksum(str string) !Layout {
 pub fn Layout.parse(str string) !Layout {
 	mut ps := ParseState{}
 	root := parse_next(str, mut ps)!
-	if ps.offset != str.len {
+	if ps.offset != usize(str.len) {
 		return error('SyntaxError: trailing data')
 	}
 	return root
@@ -105,7 +105,7 @@ pub fn Layout.parse(str string) !Layout {
 // V does not allow mutable primitive parameters, so we use a struct.
 struct ParseState {
 mut:
-	offset int
+	offset usize
 }
 
 fn parse_next(str string, mut ps ParseState) !Layout {
@@ -114,46 +114,46 @@ fn parse_next(str string, mut ps ParseState) !Layout {
 	if x_idx < 0 {
 		return error('SyntaxError: missing width separator')
 	}
-	width := parse_usize(str[ps.offset..ps.offset + x_idx]) or {
+	width := parse_usize(str[ps.offset..ps.offset + usize(x_idx)]) or {
 		return error('SyntaxError: invalid width')
 	}
-	ps.offset += x_idx + 1 // Consume `x`
+	ps.offset += usize(x_idx + 1) // Consume `x`
 
 	// Find the height, up to a comma.
 	comma_idx := str[ps.offset..].index_u8(`,`)
 	if comma_idx < 0 {
 		return error('SyntaxError: missing height separator')
 	}
-	height := parse_usize(str[ps.offset..ps.offset + comma_idx]) or {
+	height := parse_usize(str[ps.offset..ps.offset + usize(comma_idx)]) or {
 		return error('SyntaxError: invalid height')
 	}
-	ps.offset += comma_idx + 1 // Consume `,`
+	ps.offset += usize(comma_idx + 1) // Consume `,`
 
 	// Find X.
 	comma_idx2 := str[ps.offset..].index_u8(`,`)
 	if comma_idx2 < 0 {
 		return error('SyntaxError: missing x separator')
 	}
-	x := parse_usize(str[ps.offset..ps.offset + comma_idx2]) or {
+	x := parse_usize(str[ps.offset..ps.offset + usize(comma_idx2)]) or {
 		return error('SyntaxError: invalid x')
 	}
-	ps.offset += comma_idx2 + 1 // Consume `,`
+	ps.offset += usize(comma_idx2 + 1) // Consume `,`
 
 	// Find Y, which can end in any of `,{,[`
 	mut y_end := -1
-	for i := ps.offset; i < str.len; i++ {
+	for i := ps.offset; i < usize(str.len); i++ {
 		if str[i] == `,` || str[i] == `{` || str[i] == `[` {
-			y_end = i - ps.offset
+			y_end = int(i - ps.offset)
 			break
 		}
 	}
 	if y_end < 0 {
 		return error('SyntaxError: missing y delimiter')
 	}
-	y := parse_usize(str[ps.offset..ps.offset + y_end]) or {
+	y := parse_usize(str[ps.offset..ps.offset + usize(y_end)]) or {
 		return error('SyntaxError: invalid y')
 	}
-	ps.offset += y_end // Don't consume the delimiter!
+	ps.offset += usize(y_end) // Don't consume the delimiter!
 
 	// Determine our child node based on the delimiter character.
 	delimiter := str[ps.offset]
@@ -166,8 +166,8 @@ fn parse_next(str string, mut ps ParseState) !Layout {
 
 		// Leaf pane. Read up to `,}]` because we may be in
 		// a set of nodes. If none exist, end of string is fine.
-		mut pane_end := str.len - ps.offset
-		for i := ps.offset; i < str.len; i++ {
+		mut pane_end := usize(str.len) - ps.offset
+		for i := ps.offset; i < usize(str.len); i++ {
 			if str[i] == `,` || str[i] == `}` || str[i] == `]` {
 				pane_end = i - ps.offset
 				break
@@ -175,7 +175,7 @@ fn parse_next(str string, mut ps ParseState) !Layout {
 		}
 
 		pane_str := str[ps.offset..ps.offset + pane_end]
-		if pane_str.len == 0 {
+		if pane_end == 0 {
 			return error('SyntaxError: empty pane ID')
 		}
 		pane_id := parse_usize(pane_str) or { return error('SyntaxError: invalid pane ID') }
@@ -195,7 +195,7 @@ fn parse_next(str string, mut ps ParseState) !Layout {
 
 			// We should not reach the end of string here because
 			// we expect a closing bracket.
-			if ps.offset >= str.len {
+			if ps.offset >= usize(str.len) {
 				return error('SyntaxError: unexpected end of string')
 			}
 
