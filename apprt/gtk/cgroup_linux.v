@@ -102,7 +102,7 @@ pub fn cgroup_configure_controllers(cgroup string, v string) ! {
 
 // cgroup_configure_memory_high writes a memory.high (soft) limit in bytes.
 // Mirrors `os.cgroup.configureLimit(.{ .memory_high = ... })`.
-pub fn cgroup_configure_memory_high(cgroup string, size u64) ! {
+pub fn cgroup_configure_memory_high(cgroup string, size usize) ! {
 	internal_os.cgroup_configure_limit(cgroup, internal_os.CgroupLimit{
 		kind: .memory_high
 		value: size
@@ -111,7 +111,7 @@ pub fn cgroup_configure_memory_high(cgroup string, size u64) ! {
 
 // cgroup_configure_pids_max writes a pids.max (hard) limit. Mirrors
 // `os.cgroup.configureLimit(.{ .pids_max = ... })`.
-pub fn cgroup_configure_pids_max(cgroup string, size u64) ! {
+pub fn cgroup_configure_pids_max(cgroup string, size usize) ! {
 	internal_os.cgroup_configure_limit(cgroup, internal_os.CgroupLimit{
 		kind: .pids_max
 		value: size

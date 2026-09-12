@@ -457,3 +457,29 @@ fn test_cgroup_path_from_contents() {
 	assert (last.value or { '' }) == '/last.scope'
 	assert cgroup_path_from_contents('missing delimiters').value == none
 }
+
+fn test_cgroup_limit_uses_pointer_width_payload() {
+	assert sizeof(CgroupLimitKind) == 1
+	assert sizeof(CgroupLimit) == 2 * sizeof(usize)
+}
+
+fn test_cgroup_write_existing_does_not_create_files() {
+	$if linux {
+		root := os.join_path(os.temp_dir(), 'witty-cgroup-write-${os.getpid()}')
+		os.rmdir_all(root) or {}
+		os.mkdir_all(root)!
+		defer {
+			os.rmdir_all(root) or {}
+		}
+		path := os.join_path(root, 'control')
+		os.write_file(path, 'old')!
+		cgroup_write_existing(path, 'new')!
+		assert os.read_file(path)! == 'new'
+
+		missing := os.join_path(root, 'missing')
+		if _ := cgroup_write_existing(missing, 'value') {
+			assert false, 'write-only cgroup paths must already exist'
+		}
+		assert !os.exists(missing)
+	}
+}

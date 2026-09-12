@@ -20,13 +20,13 @@ pub fn cgroup_path_from_contents(contents string) CgroupCurrentResult {
 	}
 }
 
-pub enum CgroupLimitKind {
-	memory_high
-	pids_max
+pub enum CgroupLimitKind as u8 {
+	memory_high = 0
+	pids_max    = 1
 }
 
 pub struct CgroupLimit {
 pub:
 	kind  CgroupLimitKind
-	value u64
+	value usize
 }

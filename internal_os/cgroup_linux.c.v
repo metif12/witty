@@ -4,7 +4,13 @@ import os
 
 #include "@VMODROOT/internal_os/cgroup_linux.h"
 
+#include <errno.h>
+
+#include <fcntl.h>
+
 fn C.witty_clone_into_cgroup(path &char, error_code &int) int
+
+fn C.open(path &char, flags int, mode ...int) int
 
 // cgroup_current returns the process's cgroup path from /proc/<pid>/cgroup.
 pub fn cgroup_current(pid int) !CgroupCurrentResult {
@@ -21,7 +27,7 @@ pub fn cgroup_create(cgroup string, child string, move ?int) ! {
 	path := checked_cgroup_path('${cgroup}/${child}')!
 	os.mkdir_all(path)!
 	if pid := move {
-		os.write_file(os.join_path(path, 'cgroup.procs'), pid.str())!
+		cgroup_write_existing(os.join_path(path, 'cgroup.procs'), pid.str())!
 	}
 }
 
@@ -38,7 +44,7 @@ pub fn cgroup_remove(cgroup string) ! {
 
 pub fn cgroup_move_into(cgroup string, pid int) ! {
 	path := os.join_path(checked_cgroup_path(cgroup)!, 'cgroup.procs')
-	os.write_file(path, pid.str())!
+	cgroup_write_existing(path, pid.str())!
 }
 
 pub fn cgroup_controllers(cgroup string) !string {
@@ -52,7 +58,7 @@ pub fn cgroup_controllers(cgroup string) !string {
 
 pub fn cgroup_configure_controllers(cgroup string, value string) ! {
 	path := os.join_path(checked_cgroup_path(cgroup)!, 'cgroup.subtree_control')
-	os.write_file(path, value)!
+	cgroup_write_existing(path, value)!
 }
 
 pub fn cgroup_configure_limit(cgroup string, limit CgroupLimit) ! {
@@ -61,7 +67,33 @@ pub fn cgroup_configure_limit(cgroup string, limit CgroupLimit) ! {
 		.pids_max { 'pids.max' }
 	}
 	path := os.join_path(checked_cgroup_path(cgroup)!, filename)
-	os.write_file(path, limit.value.str())!
+	cgroup_write_existing(path, limit.value.str())!
+}
+
+fn cgroup_write_existing(path string, value string) ! {
+	fd := C.open(&char(path.str), C.O_WRONLY)
+	if fd < 0 {
+		return os.error_posix()
+	}
+	defer {
+		os.fd_close(fd)
+	}
+
+	mut offset := usize(0)
+	for offset < usize(value.len) {
+		ptr := unsafe { voidptr(usize(value.str) + offset) }
+		written := C.write(fd, ptr, usize(value.len) - offset)
+		if written < 0 {
+			if C.errno == C.EINTR {
+				continue
+			}
+			return os.error_posix()
+		}
+		if written == 0 {
+			return error('short write to cgroup control file')
+		}
+		offset += usize(written)
+	}
 }
 
 // cgroup_clone_into uses clone3(CLONE_INTO_CGROUP) so the child is born in
