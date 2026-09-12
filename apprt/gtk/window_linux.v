@@ -209,14 +209,6 @@ pub enum AdwToolbarStyle {
 	raised_border
 }
 
-// NewSurfaceContext mirrors `apprt.surface.NewSurfaceContext` at the GTK
-// boundary.
-pub enum NewSurfaceContext {
-	window
-	tab
-	split
-}
-
 __global g_window_type = GType(0)
 __global g_window_titlebar_style_type = GType(0)
 __global g_window_titlebar_style_values [3]C.GEnumValue
@@ -1201,7 +1193,7 @@ pub fn (mut self Window) new_tab_for_window(parent ?&core.Surface) {
 
 // new_tab_page creates a Tab, computes its insert position, inserts/selects it,
 // and wires the SplitTree changed signal. Mirrors `newTabPage`.
-fn (mut self Window) new_tab_page(parent ?&core.Surface, context NewSurfaceContext) AdwTabPage {
+fn (mut self Window) new_tab_page(parent ?&core.Surface, context apprt.NewSurfaceContext) AdwTabPage {
 	tab_view := self.tab_view
 	if isnil(tab_view) || isnil(self.config) {
 		return AdwTabPage(unsafe { nil })

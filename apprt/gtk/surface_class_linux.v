@@ -962,7 +962,7 @@ pub mut:
 	// Owning GTK objects and containers.
 	app           &Application = unsafe { nil }
 	split_tree    &SplitTreeWidget = unsafe { nil }
-	context       NewSurfaceContext = .window
+	context       apprt.NewSurfaceContext = .window
 	terminal_page GtkWidget = unsafe { nil }
 	error_page    GtkWidget = unsafe { nil }
 
@@ -1121,7 +1121,7 @@ fn (self &SurfaceWidget) notify_property(pspec &C.GParamSpec) {
 
 // set_parent captures inheritable state before the GLArea realizes. No parent
 // pointer is retained, matching Ghostty's Surface.setParent.
-pub fn (mut self SurfaceWidget) set_parent(parent &core.Surface, context NewSurfaceContext) {
+pub fn (mut self SurfaceWidget) set_parent(parent &core.Surface, context apprt.NewSurfaceContext) {
 	if self.has_core() {
 		return
 	}

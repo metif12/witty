@@ -18,6 +18,7 @@ module gtk
 
 import core
 import datastruct
+import apprt
 
 // --- New Adw C bindings unique to this file -------------------------------
 //
@@ -390,8 +391,8 @@ pub fn (mut self Tab) set_parent(parent &core.Surface) {
 }
 
 // set_parent_with_context sets the parent using the given context. Mirrors
-// `setParentWithContext`. Reuses `NewSurfaceContext` from window_linux.v.
-pub fn (mut self Tab) set_parent_with_context(parent &core.Surface, context NewSurfaceContext) {
+// `setParentWithContext`.
+pub fn (mut self Tab) set_parent_with_context(parent &core.Surface, context apprt.NewSurfaceContext) {
 	if mut surface := self.get_active_surface() {
 		surface.set_parent(parent, context)
 	}
