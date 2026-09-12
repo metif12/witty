@@ -202,7 +202,6 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 // Cleans up the global state. This doesn't _need_ to be called but
 // doing so in dev modes will check for memory leaks.
 pub fn (mut self GlobalState) deinit() {
-	self.rlimits.restore()
 	self.resources_dir = internal_os.ResourcesDir{}
 	self.cli_args.clear()
 	internal_os.shutdown_i18n()
