@@ -2738,7 +2738,7 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 		}
 		.new_split {
 			direction := match action.split_dir {
-				.right, .auto { datastruct.Direction.right }
+				.right { datastruct.Direction.right }
 				.left { datastruct.Direction.left }
 				.down { datastruct.Direction.down }
 				.up { datastruct.Direction.up }
@@ -2915,7 +2915,7 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			return true
 		}
 		.inspector {
-			return self.control_core_inspector(action.inspector_mode)!
+			return self.control_inspector(action.inspector_mode)!
 		}
 		.open_config {
 			return self.app.perform_action(apprt.Target(apprt.AppTarget{}), .open_config, apprt.ActionValue{})!
@@ -3497,33 +3497,9 @@ pub fn (self &SurfaceWidget) toggle_maximize() {
 	}
 }
 
-enum InspectorControlMode {
-	toggle
-	show
-	hide
-}
-
 // control_inspector controls the terminal inspector window. Mirrors
 // Surface.controlInspector.
 pub fn (mut self SurfaceWidget) control_inspector(value apprt.InspectorAction) !bool {
-	mode := match value {
-		.toggle { InspectorControlMode.toggle }
-		.show { InspectorControlMode.show }
-		.hide { InspectorControlMode.hide }
-	}
-	return self.control_inspector_mode(mode)
-}
-
-fn (mut self SurfaceWidget) control_core_inspector(value core.InspectorMode) !bool {
-	mode := match value {
-		.toggle { InspectorControlMode.toggle }
-		.show { InspectorControlMode.show }
-		.hide { InspectorControlMode.hide }
-	}
-	return self.control_inspector_mode(mode)
-}
-
-fn (mut self SurfaceWidget) control_inspector_mode(value InspectorControlMode) !bool {
 	if !isnil(self.inspector) {
 		match value {
 			.show {}

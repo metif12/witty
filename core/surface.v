@@ -1655,16 +1655,16 @@ pub:
 	// value to the runtime instead of dropping it.
 	needle             string
 	readonly_on        bool
-	prompt_title       PromptTitleKind
-	fullscreen_mode    FullscreenMode
-	inspector_mode     InspectorMode
-	split_dir          SplitDir
-	goto_split         GotoSplitDir
-	goto_window        GotoWindowDir
-	resize_dir         ResizeDir
+	prompt_title       apprt.PromptTitle
+	fullscreen_mode    apprt.Fullscreen
+	inspector_mode     apprt.InspectorAction
+	split_dir          apprt.SplitDirection
+	goto_split         apprt.GotoSplit
+	goto_window        apprt.GotoWindow
+	resize_dir         apprt.ResizeSplitDirection
 	resize_amount      u16
-	goto_tab           int
-	close_tab_mode     CloseTabModeKind
+	goto_tab           apprt.GotoTab
+	close_tab_mode     apprt.CloseTabMode
 	move_tab_amount    isize
 	key_sequence       apprt.KeySequence
 	key_table          apprt.KeyTable
@@ -1691,20 +1691,6 @@ pub:
 	secure_input_mode  apprt.SecureInput
 	reload_config_soft bool
 	config_change      &Config = unsafe { nil }
-}
-
-// PromptTitleKind mirrors apprt.PromptTitle.
-pub enum PromptTitleKind {
-	surface
-	tab
-}
-
-// FullscreenMode mirrors apprt.Fullscreen.
-pub enum FullscreenMode {
-	native
-	macos_non_native
-	macos_non_native_visible_menu
-	macos_non_native_padded_notch
 }
 
 pub enum AppActionKind {
@@ -2025,7 +2011,7 @@ fn (mut s SurfaceSearch) change_needle(needle string) {
 	s.state.push(searchpkg.Message.change_needle(needle.bytes()))
 }
 
-fn (mut s SurfaceSearch) navigate(nav SearchNav) {
+fn (mut s SurfaceSearch) navigate(nav input.NavigateSearch) {
 	s.state.push(searchpkg.Message{
 		kind: .select_result
 		select: if nav == .next { .next } else { .prev }
@@ -2386,80 +2372,6 @@ fn renderer_surface_event_push(surface_ptr voidptr, event rendererpkg.SurfaceEve
 		surface.rt_app.wakeup()
 	}
 	return result
-}
-
-// SearchNav is the navigation direction for navigate_search.
-pub enum SearchNav {
-	next
-	previous
-}
-
-// CloseTabModeKind mirrors apprt.CloseTabMode.
-pub enum CloseTabModeKind {
-	this
-	other
-	right
-}
-
-// SplitDir is the direction of a new split (includes auto).
-pub enum SplitDir {
-	right
-	left
-	down
-	up
-	auto
-}
-
-// GotoSplitDir is the direction to navigate to a split.
-pub enum GotoSplitDir {
-	previous
-	next
-	up
-	left
-	down
-	right
-}
-
-// GotoWindowDir is the direction to navigate windows.
-pub enum GotoWindowDir {
-	previous
-	next
-}
-
-// ResizeDir is the direction to resize a split.
-pub enum ResizeDir {
-	up
-	down
-	left
-	right
-}
-
-// InspectorMode controls the inspector action.
-pub enum InspectorMode {
-	toggle
-	show
-	hide
-}
-
-// WriteScreenAction is the config for write_*_file binding actions.
-pub struct WriteScreenAction {
-pub:
-	// emit determines the format (plain/vt/html).
-	emit WriteScreenEmit
-	// action determines what to do with the written file.
-	action WriteScreenTarget
-}
-
-pub enum WriteScreenEmit {
-	plain
-	vt
-	html
-}
-
-pub enum WriteScreenTarget {
-	copy
-	open
-	paste
 }
 
 pub type KeyEvent = input.KeyEvent
@@ -4673,7 +4585,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 		}
 		.navigate_search {
 			if mut s := self.search {
-				s.navigate(nav_from_input(action.enum_param))
+				s.navigate(unsafe { input.NavigateSearch(action.enum_param) })
 			} else {
 				return false
 			}
@@ -4891,16 +4803,16 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			})!
 		}
 		.previous_tab {
-			return self.goto_tab_action(int(GotoTabSpecial.previous))!
+			return self.goto_tab_action(.previous)!
 		}
 		.next_tab {
-			return self.goto_tab_action(int(GotoTabSpecial.next))!
+			return self.goto_tab_action(.next)!
 		}
 		.last_tab {
-			return self.goto_tab_action(int(GotoTabSpecial.last))!
+			return self.goto_tab_action(.last)!
 		}
 		.goto_tab {
-			return self.goto_tab_action(int(action.uint_param))!
+			return self.goto_tab_action(unsafe { apprt.GotoTab(int(action.uint_param)) })!
 		}
 		.move_tab {
 			return self.rt_app.perform_action(AppAction{
@@ -4910,21 +4822,10 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			})!
 		}
 		.new_split {
-			// Resolve .auto based on the surface aspect ratio.
-			in_dir := split_dir_from_input(action.enum_param)
-			dir := if in_dir == .auto {
-				if self.size.screen.width > self.size.screen.height {
-					SplitDir.right
-				} else {
-					SplitDir.down
-				}
-			} else {
-				in_dir
-			}
 			return self.rt_app.perform_action(AppAction{
 				kind: .new_split
 				target: &self
-				split_dir: dir
+				split_dir: split_dir_from_input(action.enum_param, self.size.screen)
 			})!
 		}
 		.goto_split {
@@ -4984,10 +4885,10 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 		}
 		.toggle_fullscreen {
 			mode := match self.config.macos_non_native_fullscreen {
-				.false_ { FullscreenMode.native }
-				.true_ { FullscreenMode.macos_non_native }
-				.visible_menu { FullscreenMode.macos_non_native_visible_menu }
-				.padded_notch { FullscreenMode.macos_non_native_padded_notch }
+				.false_ { apprt.Fullscreen.native }
+				.true_ { apprt.Fullscreen.macos_non_native }
+				.visible_menu { apprt.Fullscreen.macos_non_native_visible_menu }
+				.padded_notch { apprt.Fullscreen.macos_non_native_padded_notch }
 			}
 			return self.rt_app.perform_action(AppAction{
 				kind: .toggle_fullscreen
@@ -5174,77 +5075,70 @@ fn app_action_kind(tag input.ActionTag) AppActionKind {
 	}
 }
 
-// nav_from_input converts an input.NavigateSearch (stored as enum_param) into
-// the core SearchNav. Note the two enums have different declaration orders.
-fn nav_from_input(e i32) SearchNav {
-	return match unsafe { input.NavigateSearch(e) } {
-		.previous { SearchNav.previous }
-		.next { SearchNav.next }
-	}
-}
-
 // split_dir_from_input converts an input.SplitDirection (stored as enum_param)
-// into the core SplitDir.
-fn split_dir_from_input(e i32) SplitDir {
+// into the runtime direction, resolving the input-only auto case.
+fn split_dir_from_input(e i32, size rendererpkg.ScreenSize) apprt.SplitDirection {
 	return match unsafe { input.SplitDirection(e) } {
-		.right { SplitDir.right }
-		.down { SplitDir.down }
-		.left { SplitDir.left }
-		.up { SplitDir.up }
-		.auto_ { SplitDir.auto }
+		.right { .right }
+		.down { .down }
+		.left { .left }
+		.up { .up }
+		.auto_ {
+			if size.width > size.height { .right } else { .down }
+		}
 	}
 }
 
 // goto_split_from_input converts an input.SplitFocusDirection (stored as
-// enum_param) into the core GotoSplitDir.
-fn goto_split_from_input(e i32) GotoSplitDir {
+// enum_param) into the runtime direction.
+fn goto_split_from_input(e i32) apprt.GotoSplit {
 	return match unsafe { input.SplitFocusDirection(e) } {
-		.previous { GotoSplitDir.previous }
-		.next { GotoSplitDir.next }
-		.up { GotoSplitDir.up }
-		.left { GotoSplitDir.left }
-		.down { GotoSplitDir.down }
-		.right { GotoSplitDir.right }
+		.previous { .previous }
+		.next { .next }
+		.up { .up }
+		.left { .left }
+		.down { .down }
+		.right { .right }
 	}
 }
 
 // goto_window_from_input converts an input.GotoWindow (stored as enum_param)
-// into the core GotoWindowDir.
-fn goto_window_from_input(e i32) GotoWindowDir {
+// into the runtime direction.
+fn goto_window_from_input(e i32) apprt.GotoWindow {
 	return match unsafe { input.GotoWindow(e) } {
-		.previous { GotoWindowDir.previous }
-		.next { GotoWindowDir.next }
+		.previous { .previous }
+		.next { .next }
 	}
 }
 
 // resize_dir_from_input converts an input.SplitResizeDirection (stored as
-// enum_param) into the core ResizeDir.
-fn resize_dir_from_input(e i32) ResizeDir {
+// enum_param) into the runtime direction.
+fn resize_dir_from_input(e i32) apprt.ResizeSplitDirection {
 	return match unsafe { input.SplitResizeDirection(e) } {
-		.up { ResizeDir.up }
-		.down { ResizeDir.down }
-		.left { ResizeDir.left }
-		.right { ResizeDir.right }
+		.up { .up }
+		.down { .down }
+		.left { .left }
+		.right { .right }
 	}
 }
 
 // close_tab_mode_from_input converts an input.CloseTabMode (stored as
-// enum_param) into the core CloseTabModeKind.
-fn close_tab_mode_from_input(e i32) CloseTabModeKind {
+// enum_param) into the runtime close mode.
+fn close_tab_mode_from_input(e i32) apprt.CloseTabMode {
 	return match unsafe { input.CloseTabMode(e) } {
-		.this { CloseTabModeKind.this }
-		.other { CloseTabModeKind.other }
-		.right { CloseTabModeKind.right }
+		.this { .this }
+		.other { .other }
+		.right { .right }
 	}
 }
 
 // inspector_mode_from_input converts an input.InspectorMode (stored as
-// enum_param) into the core InspectorMode.
-fn inspector_mode_from_input(e i32) InspectorMode {
+// enum_param) into the runtime inspector action.
+fn inspector_mode_from_input(e i32) apprt.InspectorAction {
 	return match unsafe { input.InspectorMode(e) } {
-		.toggle { InspectorMode.toggle }
-		.show { InspectorMode.show }
-		.hide { InspectorMode.hide }
+		.toggle { .toggle }
+		.show { .show }
+		.hide { .hide }
 	}
 }
 
@@ -5263,36 +5157,18 @@ fn selection_adjustment_from_input(e i32) terminal.SelectionAdjustment {
 	}
 }
 
-// write_screen_from_input builds the core WriteScreenAction from an
+// write_screen_from_input rebuilds the tagged input.WriteScreen payload from an
 // input.Action's write_*_file parameters (enum_param = action, enum_param2 =
 // format).
-fn write_screen_from_input(action input.Action) WriteScreenAction {
-	target := match unsafe { input.WriteScreenAction(action.enum_param) } {
-		.copy { WriteScreenTarget.copy }
-		.paste { WriteScreenTarget.paste }
-		.open { WriteScreenTarget.open }
-	}
-	emit := match unsafe { input.WriteScreenFormat(action.enum_param2) } {
-		.plain { WriteScreenEmit.plain }
-		.vt { WriteScreenEmit.vt }
-		.html { WriteScreenEmit.html }
-	}
-	return WriteScreenAction{
-		action: target
-		emit: emit
+fn write_screen_from_input(action input.Action) input.WriteScreen {
+	return input.WriteScreen{
+		action: unsafe { input.WriteScreenAction(action.enum_param) }
+		emit: unsafe { input.WriteScreenFormat(action.enum_param2) }
 	}
 }
 
-// GotoTabSpecial holds the special negative tab targets for goto_tab.
-enum GotoTabSpecial {
-	previous = -1
-	next     = -2
-	last     = -3
-}
-
-// goto_tab_action forwards a goto_tab action to the runtime with the given
-// raw tab index (which may be a GotoTabSpecial negative value).
-fn (mut self Surface) goto_tab_action(idx int) !bool {
+// goto_tab_action forwards a goto_tab action to the runtime.
+fn (mut self Surface) goto_tab_action(idx apprt.GotoTab) !bool {
 	return self.rt_app.perform_action(AppAction{
 		kind: .goto_tab
 		target: &self
@@ -6331,7 +6207,7 @@ fn (self &Surface) osc8_uri(pin Pin) ?string {
 	return cell.hyperlink.uri
 }
 
-fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen WriteScreenAction) ! {
+fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen input.WriteScreen) ! {
 	locked := self.renderer_state.mutex != unsafe { nil }
 	if locked {
 		self.renderer_state.mutex.lock()

@@ -191,6 +191,35 @@ fn test_toggle_fullscreen_uses_configured_macos_mode() {
 	assert runtime.actions[0].fullscreen_mode == .macos_non_native_padded_notch
 }
 
+fn test_binding_actions_use_canonical_runtime_payloads() {
+	mut runtime := RuntimeApp{ actions_handled: true }
+	mut surf := make_test_surface()
+	surf.rt_app = &runtime
+	surf.size.screen = rendererpkg.ScreenSize{ width: 800, height: 600 }
+
+	assert surf.perform_binding_action(input.Action.new_enum(.new_split, i32(input.SplitDirection.auto_)))!
+	assert runtime.actions.last().split_dir == apprt.SplitDirection.right
+	surf.size.screen = rendererpkg.ScreenSize{ width: 600, height: 800 }
+	assert surf.perform_binding_action(input.Action.new_enum(.new_split, i32(input.SplitDirection.auto_)))!
+	assert runtime.actions.last().split_dir == apprt.SplitDirection.down
+
+	assert surf.perform_binding_action(input.Action.new_enum(.close_tab, i32(input.CloseTabMode.other)))!
+	assert runtime.actions.last().close_tab_mode == apprt.CloseTabMode.other
+	assert surf.perform_binding_action(input.Action.new_enum(.goto_split, i32(input.SplitFocusDirection.left)))!
+	assert runtime.actions.last().goto_split == apprt.GotoSplit.left
+	assert surf.perform_binding_action(input.Action.new_enum(.goto_window, i32(input.GotoWindow.next)))!
+	assert runtime.actions.last().goto_window == apprt.GotoWindow.next
+	assert surf.perform_binding_action(input.Action.new_enum2(.resize_split, i32(input.SplitResizeDirection.right), 7))!
+	assert runtime.actions.last().resize_dir == apprt.ResizeSplitDirection.right
+	assert runtime.actions.last().resize_amount == 7
+	assert surf.perform_binding_action(input.Action.new_enum(.inspector, i32(input.InspectorMode.show)))!
+	assert runtime.actions.last().inspector_mode == apprt.InspectorAction.show
+	assert surf.perform_binding_action(input.Action.new(.previous_tab))!
+	assert runtime.actions.last().goto_tab == apprt.GotoTab.previous
+	assert surf.perform_binding_action(input.Action.new_uint(.goto_tab, 7))!
+	assert int(runtime.actions.last().goto_tab) == 7
+}
+
 fn test_surface_key_binding_applies_modifier_remap() {
 	mut cfg := configpkg.Config.default_config()
 	cfg.keybind.set = input.Set{}

@@ -260,10 +260,7 @@ fn bridge_surface_runtime_action(ptr voidptr, action AppAction) !bool {
 		}
 		.prompt_title {
 			app.perform_action(target, .prompt_title, apprt.ActionValue{
-				prompt_title_: match action.prompt_title {
-					.surface { apprt.PromptTitle.surface }
-					.tab { apprt.PromptTitle.tab }
-				}
+				prompt_title_: action.prompt_title
 			})!
 		}
 		.cell_size {
@@ -415,18 +412,14 @@ fn bridge_surface_runtime_action(ptr voidptr, action AppAction) !bool {
 		.close_window { app.perform_action(target, .close_window, apprt.ActionValue{})! }
 		.close_tab {
 			app.perform_action(target, .close_tab, apprt.ActionValue{
-				close_tab: match action.close_tab_mode {
-					.this { apprt.CloseTabMode.this }
-					.other { apprt.CloseTabMode.other }
-					.right { apprt.CloseTabMode.right }
-				}
+				close_tab: action.close_tab_mode
 			})!
 		}
 		.new_window { app.perform_action(target, .new_window, apprt.ActionValue{})! }
 		.new_tab { app.perform_action(target, .new_tab, apprt.ActionValue{})! }
 		.goto_tab {
 			app.perform_action(target, .goto_tab, apprt.ActionValue{
-				goto_tab: unsafe { apprt.GotoTab(action.goto_tab) }
+				goto_tab: action.goto_tab
 			})!
 		}
 		.move_tab {
@@ -436,29 +429,23 @@ fn bridge_surface_runtime_action(ptr voidptr, action AppAction) !bool {
 		}
 		.new_split {
 			app.perform_action(target, .new_split, apprt.ActionValue{
-				new_split: match action.split_dir {
-					.right { apprt.SplitDirection.right }
-					.left { apprt.SplitDirection.left }
-					.down { apprt.SplitDirection.down }
-					.up { apprt.SplitDirection.up }
-					.auto { apprt.SplitDirection.right }
-				}
+				new_split: action.split_dir
 			})!
 		}
 		.goto_split {
 			app.perform_action(target, .goto_split, apprt.ActionValue{
-				goto_split_: unsafe { apprt.GotoSplit(action.goto_split) }
+				goto_split_: action.goto_split
 			})!
 		}
 		.goto_window {
 			app.perform_action(target, .goto_window, apprt.ActionValue{
-				goto_window_: unsafe { apprt.GotoWindow(action.goto_window) }
+				goto_window_: action.goto_window
 			})!
 		}
 		.resize_split {
 			app.perform_action(target, .resize_split, apprt.ActionValue{
 				resize_split_: apprt.ResizeSplit{
-					direction: unsafe { apprt.ResizeSplitDirection(action.resize_dir) }
+					direction: action.resize_dir
 					amount: action.resize_amount
 				}
 			})!
@@ -467,7 +454,7 @@ fn bridge_surface_runtime_action(ptr voidptr, action AppAction) !bool {
 		.toggle_split_zoom { app.perform_action(target, .toggle_split_zoom, apprt.ActionValue{})! }
 		.toggle_fullscreen {
 			app.perform_action(target, .toggle_fullscreen, apprt.ActionValue{
-				toggle_fullscreen: unsafe { apprt.Fullscreen(action.fullscreen_mode) }
+				toggle_fullscreen: action.fullscreen_mode
 			})!
 		}
 		.toggle_maximize { app.perform_action(target, .toggle_maximize, apprt.ActionValue{})! }
@@ -494,7 +481,7 @@ fn bridge_surface_runtime_action(ptr voidptr, action AppAction) !bool {
 		}
 		.inspector {
 			app.perform_action(target, .inspector, apprt.ActionValue{
-				inspector_: unsafe { apprt.InspectorAction(action.inspector_mode) }
+				inspector_: action.inspector_mode
 			})!
 		}
 		.unbind { panic('unbind action reached embedded runtime dispatch') }
