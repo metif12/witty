@@ -60,11 +60,26 @@ pub mut:
 // most typical values for a pty. This makes it easier for cross-platform
 // code which doesn't support all of the modes to work correctly.
 pub struct Mode {
-pub:
-	// ICANON on POSIX. When set, input is processed line by line.
-	canonical bool = true
-	// ECHO on POSIX. When set, input characters are echoed back.
-	echo bool = true
+mut:
+	value u8 = 0b11
+}
+
+pub fn Mode.init(canonical bool, echo bool) Mode {
+	return Mode{
+		value: u8(canonical) | (u8(echo) << 1)
+	}
+}
+
+// canonical reports the ICANON POSIX mode. When set, input is processed line
+// by line.
+pub fn (self Mode) canonical() bool {
+	return self.value & 0b01 != 0
+}
+
+// echo reports the ECHO POSIX mode. When set, input characters are echoed
+// back.
+pub fn (self Mode) echo() bool {
+	return self.value & 0b10 != 0
 }
 
 // Pty represents the pseudo-terminal with master and slave file descriptors.
@@ -153,10 +168,7 @@ pub fn (self Pty) get_mode() !Mode {
 		return error('tcgetattr failed')
 	}
 
-	return Mode{
-		canonical: canonical != 0
-		echo: echo != 0
-	}
+	return Mode.init(canonical != 0, echo != 0)
 }
 
 // get_size returns the current size of the pty.

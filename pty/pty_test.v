@@ -12,8 +12,9 @@ fn test_winsize_defaults() {
 
 fn test_mode_defaults() {
 	m := Mode{}
-	assert m.canonical == true
-	assert m.echo == true
+	assert m.canonical() == true
+	assert m.echo() == true
+	assert sizeof(Mode) == 1
 }
 
 fn test_pty_defaults() {
@@ -128,8 +129,8 @@ fn test_pty_get_mode() {
 	}
 	// The defaults for a newly opened pty typically have canonical
 	// and echo enabled, matching the Mode struct defaults.
-	assert mode.canonical == true
-	assert mode.echo == true
+	assert mode.canonical() == true
+	assert mode.echo() == true
 }
 
 fn test_pty_close_slave() {

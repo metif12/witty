@@ -974,7 +974,7 @@ fn (mut t Thread) apply_termios_mode(mut io Termio, mode pty.Mode) {
 		return
 	}
 	io.backend.thread_data.termios_mode = mode
-	password_input := mode.canonical && !mode.echo
+	password_input := mode.canonical() && !mode.echo()
 
 	io.renderer_state.mutex.lock()
 	unchanged := io.terminal.flags.password_input == password_input

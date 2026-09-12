@@ -447,10 +447,7 @@ fn test_thread_termios_mode_reports_password_input_transitions() {
 	mut writer := Thread.init()!
 	defer { writer.deinit() }
 
-	writer.apply_termios_mode(mut tio, pty.Mode{
-		canonical: true
-		echo: false
-	})
+	writer.apply_termios_mode(mut tio, pty.Mode.init(true, false))
 	assert probe.values == [true]
 
 	// The surface owns the shared password-input flag after consuming the
