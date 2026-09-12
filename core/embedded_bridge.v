@@ -563,22 +563,19 @@ fn bridge_runtime_close(ptr voidptr, confirm bool) {
 	self.rt_surface.close(confirm)
 }
 
-fn bridge_runtime_content_scale(ptr voidptr) !ContentScale {
+fn bridge_runtime_content_scale(ptr voidptr) !apprt.ContentScale {
 	self := unsafe { &EmbeddedSurfaceCore(ptr) }
-	scale := self.rt_surface.get_content_scale()!
-	return ContentScale{ x: scale.x, y: scale.y }
+	return self.rt_surface.get_content_scale()!
 }
 
-fn bridge_runtime_size(ptr voidptr) !ScreenSize {
+fn bridge_runtime_size(ptr voidptr) !apprt.SurfaceSize {
 	self := unsafe { &EmbeddedSurfaceCore(ptr) }
-	size := self.rt_surface.get_size()!
-	return ScreenSize{ width: size.width, height: size.height }
+	return self.rt_surface.get_size()!
 }
 
-fn bridge_runtime_cursor_pos(ptr voidptr) !CursorPos {
+fn bridge_runtime_cursor_pos(ptr voidptr) !apprt.CursorPos {
 	self := unsafe { &EmbeddedSurfaceCore(ptr) }
-	pos := self.rt_surface.get_cursor_pos()!
-	return CursorPos{ x: pos.x, y: pos.y }
+	return self.rt_surface.get_cursor_pos()!
 }
 
 fn bridge_runtime_title(ptr voidptr) ?string {
@@ -734,7 +731,7 @@ fn bridge_surface_draw(ptr voidptr) ! {
 
 fn bridge_surface_content_scale(ptr voidptr, scale apprt.ContentScale) ! {
 	mut self := unsafe { &EmbeddedSurfaceCore(ptr) }
-	self.surface.content_scale_callback(ContentScale{ x: scale.x, y: scale.y })!
+	self.surface.content_scale_callback(scale)!
 }
 
 fn bridge_surface_size(ptr voidptr, size apprt.SurfaceSize) ! {
@@ -764,7 +761,7 @@ fn bridge_surface_scroll(ptr voidptr, xoff f64, yoff f64, mods input.ScrollMods)
 
 fn bridge_surface_cursor_pos(ptr voidptr, pos apprt.CursorPos, mods input.Mods) ! {
 	mut self := unsafe { &EmbeddedSurfaceCore(ptr) }
-	self.surface.cursor_pos_callback(CursorPos{ x: pos.x, y: pos.y }, mods)!
+	self.surface.cursor_pos_callback(pos, mods)!
 }
 
 fn bridge_surface_preedit(ptr voidptr, preedit ?string) ! {

@@ -2283,7 +2283,7 @@ pub fn (mut self SurfaceWidget) ec_mouse_motion(event GdkEvent, x f64, y f64) {
 		mut surface := self.core_surface
 		gtk_mods := C.gdk_event_get_modifier_state(event)
 		mods := translate_mods(gtk_mods)
-		surface.cursor_pos_callback(core.CursorPos{ x: self.cursor_pos.x, y: self.cursor_pos.y }, mods) or {
+		surface.cursor_pos_callback(self.cursor_pos, mods) or {
 			eprintln('error in cursor pos callback err=${err}')
 		}
 	}
@@ -2299,7 +2299,7 @@ pub fn (mut self SurfaceWidget) ec_mouse_leave(event GdkEvent) {
 		mut surface := self.core_surface
 		gtk_mods := C.gdk_event_get_modifier_state(event)
 		mods := translate_mods(gtk_mods)
-		surface.cursor_pos_callback(core.CursorPos{ x: -1, y: -1 }, mods) or {
+		surface.cursor_pos_callback(apprt.CursorPos{ x: -1, y: -1 }, mods) or {
 			eprintln('error in cursor pos callback err=${err}')
 		}
 	}
@@ -2513,7 +2513,7 @@ pub fn (mut self SurfaceWidget) glarea_resize(width int, height int) {
 				y: 1.0
 			}
 		}
-		surface.content_scale_callback(core.ContentScale{ x: scale.x, y: scale.y }) or {
+		surface.content_scale_callback(scale) or {
 			eprintln('error in content scale callback err=${err}')
 		}
 		surface.size_callback(self.size) or {
@@ -2942,22 +2942,19 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 	}
 }
 
-fn surface_core_content_scale_cb(data voidptr) !core.ContentScale {
+fn surface_core_content_scale_cb(data voidptr) !apprt.ContentScale {
 	self := unsafe { &SurfaceWidget(data) }
-	scale := self.get_content_scale()!
-	return core.ContentScale{ x: scale.x, y: scale.y }
+	return self.get_content_scale()!
 }
 
-fn surface_core_size_cb(data voidptr) !core.ScreenSize {
+fn surface_core_size_cb(data voidptr) !apprt.SurfaceSize {
 	self := unsafe { &SurfaceWidget(data) }
-	size := self.get_size()!
-	return core.ScreenSize{ width: size.width, height: size.height }
+	return self.get_size()!
 }
 
-fn surface_core_cursor_pos_cb(data voidptr) !core.CursorPos {
+fn surface_core_cursor_pos_cb(data voidptr) !apprt.CursorPos {
 	self := unsafe { &SurfaceWidget(data) }
-	pos := self.get_cursor_pos()!
-	return core.CursorPos{ x: f64(pos.x), y: f64(pos.y) }
+	return self.get_cursor_pos()!
 }
 
 fn surface_core_title_cb(data voidptr) ?string {

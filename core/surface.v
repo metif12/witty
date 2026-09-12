@@ -1534,20 +1534,6 @@ fn (a Coordinate) eql(b Coordinate) bool {
 	return a.x == b.x && a.y == b.y
 }
 
-// ContentScale represents the DPI content scale factors.
-pub struct ContentScale {
-pub:
-	x f32
-	y f32
-}
-
-// CursorPos represents a cursor position in surface coordinates.
-pub struct CursorPos {
-pub:
-	x f64
-	y f64
-}
-
 // ScreenSize represents the pixel dimensions of the screen area.
 pub struct ScreenSize {
 pub mut:
@@ -1880,11 +1866,11 @@ pub enum AppActionKind {
 
 pub type RuntimeSurfaceCloseFn = fn (voidptr, bool)
 
-pub type RuntimeSurfaceContentScaleFn = fn (voidptr) !ContentScale
+pub type RuntimeSurfaceContentScaleFn = fn (voidptr) !apprt.ContentScale
 
-pub type RuntimeSurfaceSizeFn = fn (voidptr) !ScreenSize
+pub type RuntimeSurfaceSizeFn = fn (voidptr) !apprt.SurfaceSize
 
-pub type RuntimeSurfaceCursorPosFn = fn (voidptr) !CursorPos
+pub type RuntimeSurfaceCursorPosFn = fn (voidptr) !apprt.CursorPos
 
 pub type RuntimeSurfaceTitleFn = fn (voidptr) ?string
 
@@ -1904,9 +1890,9 @@ pub:
 
 pub struct RuntimeSurface {
 pub mut:
-	content_scale       ContentScale = ContentScale{ x: 1.0, y: 1.0 }
-	size                ScreenSize = ScreenSize{ width: 800, height: 600 }
-	cursor_pos          CursorPos
+	content_scale       apprt.ContentScale = apprt.ContentScale{ x: 1.0, y: 1.0 }
+	size                apprt.SurfaceSize = apprt.SurfaceSize{ width: 800, height: 600 }
+	cursor_pos          apprt.CursorPos
 	title               ?string
 	clipboards          map[apprt.Clipboard][]apprt.ClipboardContent
 	requests            []RuntimeClipboardRequest
@@ -1942,9 +1928,9 @@ fn (mut r RuntimeSurface) close(confirm bool) {
 	r.close_confirm = confirm
 }
 
-fn (r RuntimeSurface) get_content_scale() !ContentScale {
+fn (r RuntimeSurface) get_content_scale() !apprt.ContentScale {
 	if unsafe { voidptr(&r) == nil } {
-		return ContentScale{ x: 1, y: 1 }
+		return apprt.ContentScale{ x: 1, y: 1 }
 	}
 	if r.content_scale_fn != unsafe { nil } {
 		return r.content_scale_fn(r.user_data)
@@ -1952,9 +1938,9 @@ fn (r RuntimeSurface) get_content_scale() !ContentScale {
 	return r.content_scale
 }
 
-fn (r RuntimeSurface) get_size() !ScreenSize {
+fn (r RuntimeSurface) get_size() !apprt.SurfaceSize {
 	if unsafe { voidptr(&r) == nil } {
-		return ScreenSize{ width: 800, height: 600 }
+		return apprt.SurfaceSize{ width: 800, height: 600 }
 	}
 	if r.size_fn != unsafe { nil } {
 		return r.size_fn(r.user_data)
@@ -1962,9 +1948,9 @@ fn (r RuntimeSurface) get_size() !ScreenSize {
 	return r.size
 }
 
-fn (r RuntimeSurface) get_cursor_pos() !CursorPos {
+fn (r RuntimeSurface) get_cursor_pos() !apprt.CursorPos {
 	if unsafe { voidptr(&r) == nil } {
-		return CursorPos{}
+		return apprt.CursorPos{}
 	}
 	if r.cursor_pos_fn != unsafe { nil } {
 		return r.cursor_pos_fn(r.user_data)
@@ -3506,7 +3492,7 @@ pub fn (self &Surface) ime_point() IMEPos {
 	}
 
 	content_scale := self.rt_surface.get_content_scale() or {
-		ContentScale{ x: 1.0, y: 1.0 }
+		apprt.ContentScale{ x: 1.0, y: 1.0 }
 	}
 
 	// X: cursor column * cell width + padding, centered in cell, scaled
@@ -3809,7 +3795,7 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 				if locked {
 					self.renderer_state.mutex.lock()
 				}
-				self.mouse_refresh_links(pos, self.pos_to_viewport(pos.x, pos.y), self.mouse.over_link) or {}
+				self.mouse_refresh_links(pos, self.pos_to_viewport(f64(pos.x), f64(pos.y)), self.mouse.over_link) or {}
 				if locked {
 					self.renderer_state.mutex.unlock()
 				}
@@ -4152,7 +4138,7 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 }
 
 // content_scale_callback is called when the DPI content scale changes.
-pub fn (mut self Surface) content_scale_callback(content_scale ContentScale) ! {
+pub fn (mut self Surface) content_scale_callback(content_scale apprt.ContentScale) ! {
 	crash.set_thread_state(self.crash_thread_state())
 	defer {
 		crash.clear_thread_state()
@@ -4350,7 +4336,7 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 		}
 		mut screen := self.renderer_state.terminal_.screens.active
 		pos := self.rt_surface.get_cursor_pos()!
-		vp := self.pos_to_viewport(pos.x, pos.y)
+		vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
 		if pin := screen.pages.pin(terminal.PinOpts{
 			tag: .viewport
 			x: vp.x
@@ -4451,7 +4437,7 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			}
 			return err
 		}
-		vp := self.pos_to_viewport(pos.x, pos.y)
+		vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
 		pin := screen.pages.pin(terminal.PinOpts{
 			tag: .viewport
 			x: vp.x
@@ -4589,7 +4575,7 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 }
 
 // cursor_pos_callback handles cursor position / mouse move events.
-pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) ! {
+pub fn (mut self Surface) cursor_pos_callback(pos apprt.CursorPos, mods ?input.Mods) ! {
 	crash.set_thread_state(self.crash_thread_state())
 	defer {
 		crash.clear_thread_state()
@@ -4601,7 +4587,7 @@ pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) !
 	}
 
 	// Convert to viewport coordinates
-	pos_vp := self.pos_to_viewport(pos.x, pos.y)
+	pos_vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
 	if pos.x < 0 || pos.y < 0 {
 		self.mouse.link_point = none
 		if self.mouse.over_link {
@@ -4645,8 +4631,8 @@ pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) !
 	// If we have an inspector, always record position information. The
 	// inspector renderer reads this state while holding the same mutex.
 	if mut insp := self.inspector {
-		insp.mouse.last_xpos = pos.x
-		insp.mouse.last_ypos = pos.y
+		insp.mouse.last_xpos = f64(pos.x)
+		insp.mouse.last_ypos = f64(pos.y)
 		insp.mouse.last_point = self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
 			tag: .viewport
 			x: pos_vp.x
@@ -4704,7 +4690,7 @@ pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) !
 			y: pos_vp.y
 		}) {
 			match self.mouse.left_click_count {
-				1 { self.drag_left_click_single(pin, pos.x)! }
+				1 { self.drag_left_click_single(pin, f64(pos.x))! }
 				2 { self.drag_left_click_double(pin)! }
 				else { self.drag_left_click_triple(pin)! }
 			}
@@ -5659,7 +5645,7 @@ fn (mut self Surface) mods_changed(mods input.Mods) {
 	self.queue_render() or {}
 }
 
-fn (mut self Surface) mouse_refresh_links(pos CursorPos, pos_vp Coordinate, over_link bool) ! {
+fn (mut self Surface) mouse_refresh_links(pos apprt.CursorPos, pos_vp Coordinate, over_link bool) ! {
 	if pos.x < 0 || pos.y < 0 {
 		return
 	}
@@ -5741,7 +5727,7 @@ fn (self &Surface) is_mouse_reporting() bool {
 		&& self.renderer_state.terminal_.flags.mouse_event != .none
 }
 
-fn (mut self Surface) mouse_report(button ?input.MouseButton, action MouseReportAction, mods input.Mods, pos CursorPos) ! {
+fn (mut self Surface) mouse_report(button ?input.MouseButton, action MouseReportAction, mods input.Mods, pos apprt.CursorPos) ! {
 	mouse_event := self.renderer_state.terminal_.flags.mouse_event
 	mouse_format := self.renderer_state.terminal_.flags.mouse_format
 
@@ -5803,7 +5789,7 @@ fn (mut self Surface) mouse_report(button ?input.MouseButton, action MouseReport
 	}
 
 	// This format reports X/Y.
-	viewport_point := self.pos_to_viewport(pos.x, pos.y)
+	viewport_point := self.pos_to_viewport(f64(pos.x), f64(pos.y))
 
 	// Record our new point. We only want to send a mouse event if the cell
 	// changed, unless we're tracking raw pixels.
@@ -6539,7 +6525,7 @@ fn (mut self Surface) selection_scroll_tick() ! {
 	}
 
 	pos := self.rt_surface.get_cursor_pos()!
-	pos_vp := self.pos_to_viewport(pos.x, pos.y)
+	pos_vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
 	delta := if pos.y < 0 { i32(-1) } else { i32(1) }
 	locked := self.renderer_state.mutex != unsafe { nil }
 	if locked {
@@ -6568,13 +6554,13 @@ fn (mut self Surface) selection_scroll_tick() ! {
 		x: pos_vp.x
 		y: pos_vp.y
 	}) {
-		self.drag_left_click_single(pin, pos.x)!
+		self.drag_left_click_single(pin, f64(pos.x))!
 	}
 
 	self.queue_render()!
 }
 
-fn (mut self Surface) process_links(pos CursorPos) !bool {
+fn (mut self Surface) process_links(pos apprt.CursorPos) !bool {
 	link := self.link_at_pos(pos) or { return false }
 	match link.action {
 		.open {
@@ -6900,12 +6886,12 @@ fn (mut self Surface) start_clipboard_request(loc apprt.Clipboard, req apprt.Cli
 	return self.rt_surface.clipboard_request(loc, req)!
 }
 
-fn (self &Surface) link_at_pos(pos CursorPos) ?Link {
+fn (self &Surface) link_at_pos(pos apprt.CursorPos) ?Link {
 	if pos.x < 0 || pos.y < 0 {
 		return none
 	}
 
-	pos_vp := self.pos_to_viewport(pos.x, pos.y)
+	pos_vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
 	pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
 		tag: .viewport
 		x: pos_vp.x
@@ -6998,7 +6984,7 @@ fn (mut self Surface) maybe_prompt_click() !bool {
 		return false
 	}
 	pos := self.rt_surface.get_cursor_pos()!
-	pos_vp := self.pos_to_viewport(pos.x, pos.y)
+	pos_vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
 	click_pin := screen.pages.pin(terminal.PinOpts{
 		tag: .viewport
 		x: pos_vp.x
@@ -7102,7 +7088,7 @@ fn (mut self Surface) dump_text_locked(sel TermSelection) !Text {
 
 	// Calculate viewport info for the selection
 	content_scale := self.rt_surface.get_content_scale() or {
-		ContentScale{ x: 1.0, y: 1.0 }
+		apprt.ContentScale{ x: 1.0, y: 1.0 }
 	}
 
 	tl := sel.top_left(self.renderer_state.terminal_.screens.active)

@@ -268,7 +268,7 @@ fn test_surface_inspector_records_mouse_position() {
 		surf.deactivate_inspector()
 	}
 
-	surf.cursor_pos_callback(CursorPos{ x: 25, y: 45 }, none)!
+	surf.cursor_pos_callback(apprt.CursorPos{ x: 25, y: 45 }, none)!
 
 	insp := surf.inspector or {
 		assert false, 'inspector unexpectedly inactive'
@@ -297,7 +297,7 @@ fn test_surface_mouse_buttons_use_canonical_enum_indices() {
 }
 
 fn test_left_click_uses_source_multi_click_selection_state_machine() {
-	mut runtime := RuntimeSurface{ cursor_pos: CursorPos{ x: 15, y: 15 } }
+	mut runtime := RuntimeSurface{ cursor_pos: apprt.CursorPos{ x: 15, y: 15 } }
 	mut surf := make_test_surface()
 	surf.rt_surface = &runtime
 	surf.size = make_test_size()
@@ -332,7 +332,7 @@ fn test_left_click_uses_source_multi_click_selection_state_machine() {
 }
 
 fn test_right_click_context_menu_selects_word_without_consuming() {
-	mut runtime := RuntimeSurface{ cursor_pos: CursorPos{ x: 15, y: 15 } }
+	mut runtime := RuntimeSurface{ cursor_pos: apprt.CursorPos{ x: 15, y: 15 } }
 	mut surf := make_test_surface()
 	surf.rt_surface = &runtime
 	surf.size = make_test_size()
@@ -351,7 +351,7 @@ fn test_right_click_context_menu_selects_word_without_consuming() {
 }
 
 fn test_right_click_copy_or_paste_requests_paste_without_selection() {
-	mut runtime := RuntimeSurface{ cursor_pos: CursorPos{ x: 15, y: 15 } }
+	mut runtime := RuntimeSurface{ cursor_pos: apprt.CursorPos{ x: 15, y: 15 } }
 	mut surf := make_test_surface()
 	surf.rt_surface = &runtime
 	surf.size = make_test_size()
@@ -863,7 +863,7 @@ fn test_modifier_key_updates_mouse_shape() ! {
 fn test_modifier_key_refreshes_link_hover() ! {
 	mut runtime_app := RuntimeApp{}
 	mut runtime_surface := RuntimeSurface{
-		cursor_pos: CursorPos{ x: 6, y: 6 }
+		cursor_pos: apprt.CursorPos{ x: 6, y: 6 }
 	}
 	mut surf := make_test_surface()
 	surf.size = make_test_size()
@@ -911,7 +911,7 @@ fn test_content_scale_callback_unchanged_dpi_is_noop() ! {
 	mut surf := make_test_surface()
 	surf.font_size.xdpi = u16(default_dpi)
 	surf.font_size.ydpi = u16(default_dpi)
-	surf.content_scale_callback(ContentScale{ x: 1, y: 1 })!
+	surf.content_scale_callback(apprt.ContentScale{ x: 1, y: 1 })!
 	assert surf.font_size.xdpi == u16(default_dpi)
 	assert surf.font_size.ydpi == u16(default_dpi)
 }
@@ -1433,7 +1433,7 @@ fn test_copy_url_to_clipboard_uses_configured_trailing_space_policy() ! {
 	defer { surf.config.links[0].regex.deinit() }
 	surf.mouse.over_link = true
 	mut runtime := RuntimeSurface{
-		cursor_pos: CursorPos{ x: 6, y: 6 }
+		cursor_pos: apprt.CursorPos{ x: 6, y: 6 }
 	}
 	surf.rt_surface = &runtime
 	mut stream := surf.renderer_state.terminal_.vt_stream()
@@ -1460,7 +1460,7 @@ fn test_mouse_link_preview_forwards_untrimmed_url() ! {
 	mut stream := surf.renderer_state.terminal_.vt_stream()
 	stream.next_slice('http://a   ')!
 
-	surf.mouse_refresh_links(CursorPos{ x: 6, y: 6 }, Coordinate{ x: 0, y: 0 }, false)!
+	surf.mouse_refresh_links(apprt.CursorPos{ x: 6, y: 6 }, Coordinate{ x: 0, y: 0 }, false)!
 	assert surf.mouse.over_link
 	assert surf.renderer_state.terminal_.screens.active.dirty.hyperlink_hover
 	assert runtime.actions.len == 2
@@ -1524,9 +1524,9 @@ fn runtime_close_probe(data voidptr, confirm bool) {
 	probe.confirmed = confirm
 }
 
-fn runtime_scale_probe(data voidptr) !ContentScale {
+fn runtime_scale_probe(data voidptr) !apprt.ContentScale {
 	_ = data
-	return ContentScale{ x: 2, y: 3 }
+	return apprt.ContentScale{ x: 2, y: 3 }
 }
 
 fn runtime_env_probe(data voidptr) !map[string]string {
@@ -1556,7 +1556,7 @@ fn test_runtime_callbacks_override_headless_storage() ! {
 	assert probe.closed
 	assert probe.confirmed
 	assert !surface.closed
-	assert surface.get_content_scale()! == ContentScale{ x: 2, y: 3 }
+	assert surface.get_content_scale()! == apprt.ContentScale{ x: 2, y: 3 }
 	assert surface.default_termio_env()!['WITTY_TEST_ENV'] == 'runtime'
 }
 
