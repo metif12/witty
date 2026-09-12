@@ -31,10 +31,10 @@ import apprt
 // `new_window.newWindow`.
 pub fn ipc_new_window(target apprt.IpcTarget, value apprt.IpcNewWindow) !bool {
 	// Choose the action based on whether command arguments were given.
-	action := if value.arguments.len == 0 {
-		'new-window'
-	} else {
+	action := if _ := value.arguments {
 		'new-window-command'
+	} else {
+		'new-window'
 	}
 
 	mut dbus := dbus_init(target, action)!
@@ -42,7 +42,7 @@ pub fn ipc_new_window(target apprt.IpcTarget, value apprt.IpcNewWindow) !bool {
 		dbus.deinit()
 	}
 
-	if value.arguments.len > 0 {
+	if arguments := value.arguments {
 		// If `-e` was specified on the command line, the first parameter is an
 		// array of strings that contain the arguments that came after `-e`,
 		// which will be interpreted as a command to run.
@@ -57,7 +57,7 @@ pub fn ipc_new_window(target apprt.IpcTarget, value apprt.IpcNewWindow) !bool {
 
 		command := C.g_variant_builder_new(as_variant_type)
 
-		for argument in value.arguments {
+		for argument in arguments {
 			// arg.len + 1 to include the terminating NUL, like ghostty.
 			bytes := C.g_bytes_new(argument.str, usize(argument.len + 1))
 			string_variant := C.g_variant_new_from_bytes(s_variant_type, bytes, true)

@@ -18,6 +18,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | input/function_keys | `make_kp_keys` returned only the unmodified keypad entry, dropping the 15 modifier combinations. | Generate all 16 (kpDefault ++ pcStyle), `mods_empty_is_any=false` on default. |
 | input (Mods) | `Mods.translation()` fully inverted (unset/keep alt and left/right swapped); `int()`/`SideInfo` dropped caps/num-lock + side bits and had no `super` side. | Rewrote translation to match macos-option-as-alt; full packed `int()` round-trip preserving sides+locks. |
 | input/keymap | Darwin and no-op keymaps were collapsed into one C wrapper, causing the non-macOS path to reject an empty output buffer and return the input modifiers (minus Ctrl) instead of a completely default translation. The Darwin path also looked up its Unicode layout per keypress and required spare room for a C terminator. | Restore platform-selected keymap files; make the no-op translation ignore every argument; retain Darwin's input-source and Unicode-layout pointers; return an explicit UTF-8 byte length from the Carbon shim. |
+| apprt/ipc | The optional new-window argument slice was collapsed to an always-present V array, and all of Ghostty's target/action C ABI projections were omitted. | Preserve absent versus present-empty arguments through the CLI and GTK path; restore target/action tags, unions, C layouts, null-terminated argv allocation, and deinitialization. |
 | osc/color_parser | Hex channel scaling used `>>4`/`>>8` instead of `*255/4095` and `*255/65535`; float intensity rounded not truncated; named `green` = (0,128,0). | Correct scaling; truncate; `green` = (0,255,0). |
 | osc/osc9 | OSC 9;12 emitted default `.fresh_line` instead of `.fresh_line_new_prompt`. | Set correct action. |
 | osc/kitty_color | `kind_max` = 256 (should be 263 = maxInt(u8)+8); parsed items discarded. | Fixed max; attach items to Command. |
@@ -64,7 +65,7 @@ ArrayListCollection. ssh: cache Entry/DiskCache. tmux: control, layout, output.
 termio: exec, shell_integration, stream_handler. simd: index_of, base64, vt.
 root: quirks, build_config,
 opentype (all 6 tables), cli_args, split_tree, command (POSIX). apprt: structs,
-none, browser, action.
+none, browser, action, ipc.
 
 ## Remaining known divergences (NOT yet fixed)
 
