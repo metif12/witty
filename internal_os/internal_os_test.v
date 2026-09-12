@@ -148,6 +148,16 @@ fn test_argument_iterator_next_skip_and_deinit() {
 	assert iter.next() == none
 }
 
+fn test_argument_iterator_uses_platform_arguments() {
+	mut iter := args_iterator()
+	defer { iter.deinit() }
+	mut actual := []string{}
+	for {
+		actual << iter.next() or { break }
+	}
+	assert actual == os.args
+}
+
 fn test_dbus_activation_requires_both_environment_variables() {
 	address_key := 'DBUS_STARTER_ADDRESS'
 	bus_key := 'DBUS_STARTER_BUS_TYPE'

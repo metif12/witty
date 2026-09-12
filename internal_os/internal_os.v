@@ -184,12 +184,12 @@ pub fn get_env_map() !map[string]string {
 pub struct ArgIterator {
 mut:
 	args  []string
-	index int
+	index usize
 }
 
 pub fn args_iterator() ArgIterator {
 	return ArgIterator{
-		args: os.args.clone()
+		args: platform_args()
 	}
 }
 
@@ -199,7 +199,7 @@ pub fn (mut self ArgIterator) deinit() {
 }
 
 pub fn (mut self ArgIterator) next() ?string {
-	if self.index >= self.args.len {
+	if self.index >= usize(self.args.len) {
 		return none
 	}
 	result := self.args[self.index]
@@ -208,7 +208,7 @@ pub fn (mut self ArgIterator) next() ?string {
 }
 
 pub fn (mut self ArgIterator) skip() bool {
-	if self.index >= self.args.len {
+	if self.index >= usize(self.args.len) {
 		return false
 	}
 	self.index++

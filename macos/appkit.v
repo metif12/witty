@@ -667,6 +667,28 @@ pub fn home_directory_for_current_user() ?string {
 	return objc_utf8_string(home_path)
 }
 
+// process_arguments returns NSProcessInfo.processInfo.arguments. Cocoa owns
+// the array and NSString values, so clone each UTF-8 projection for the caller.
+pub fn process_arguments() []string {
+	pool := msg_id(alloc('NSAutoreleasePool'), 'init')
+	defer { msg_void(pool, 'drain') }
+	info := msg_id(get_class('NSProcessInfo'), 'processInfo')
+	if is_nil(info) {
+		return []string{}
+	}
+	values := msg_id(info, 'arguments')
+	if is_nil(values) {
+		return []string{}
+	}
+	count := usize(msg_u64(values, 'count'))
+	mut result := []string{cap: int(count)}
+	for i in usize(0) .. count {
+		value := msg_id_u64(values, 'objectAtIndex:', u64(i))
+		result << if is_nil(value) { '' } else { objc_utf8_string(value) }
+	}
+	return result
+}
+
 // is_at_least_version checks the running macOS version through NSProcessInfo.
 pub fn is_at_least_version(major i64, minor i64, patch i64) bool {
 	return C.witty_macos_is_at_least_version(major, minor, patch)
