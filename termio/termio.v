@@ -364,8 +364,8 @@ pub:
 // that the stream handler needs.
 pub struct DerivedConfig {
 pub mut:
-	osc_color_report_format OSCColorReportFormat = .bits_16
-	clipboard_write         ClipboardAccess = .allow
+	osc_color_report_format configpkg.OSCColorReportFormat = .format_16_bit
+	clipboard_write         configpkg.ClipboardAccess = .allow
 	enquiry_response        string
 	cursor_style            terminal.CursorStyle = .block
 	cursor_blink            ?bool
@@ -407,16 +407,8 @@ pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
 			.block_hollow { .block_hollow }
 		}
 		cursor_blink: config.cursor_style_blink
-		osc_color_report_format: match config.osc_color_report_format {
-			.none_ { .none_ }
-			.format_8_bit { .bits_8 }
-			.format_16_bit { .bits_16 }
-		}
-		clipboard_write: match config.clipboard_write {
-			.allow { .allow }
-			.ask { .ask }
-			.deny { .deny }
-		}
+		osc_color_report_format: config.osc_color_report_format
+		clipboard_write: config.clipboard_write
 		enquiry_response: config.enquiry_response.clone()
 		conditional_state: config.conditional_state
 	}
@@ -838,20 +830,6 @@ pub mut:
 }
 
 pub fn (mut self ThreadData) deinit() {}
-
-// OSCColorReportFormat controls how colors are reported in OSC responses.
-pub enum OSCColorReportFormat {
-	none_
-	bits_8
-	bits_16
-}
-
-// ClipboardAccess controls clipboard read/write permissions.
-pub enum ClipboardAccess {
-	allow
-	ask
-	deny
-}
 
 // CursorStyle: use terminal.CursorStyle directly.
 

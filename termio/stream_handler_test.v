@@ -752,7 +752,7 @@ fn test_stream_handler_change_config() {
 	defer { ctx.t.deinit() }
 
 	config := DerivedConfig{
-		osc_color_report_format: .bits_8
+		osc_color_report_format: .format_8_bit
 		clipboard_write: .deny
 		enquiry_response: 'test'
 		cursor_style: .underline
@@ -760,7 +760,7 @@ fn test_stream_handler_change_config() {
 	}
 	handler.change_config(&config)
 
-	assert handler.osc_color_report_format == .bits_8
+	assert handler.osc_color_report_format == .format_8_bit
 	assert handler.clipboard_write == .deny
 	assert handler.enquiry_response == 'test'
 	assert handler.default_cursor_style == .underline
@@ -769,7 +769,7 @@ fn test_stream_handler_change_config() {
 fn test_color_query_response_mirrors_osc_terminator() {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.osc_color_report_format = .bits_8
+	handler.osc_color_report_format = .format_8_bit
 
 	handler.vt(terminal.StreamEvent{
 		key: .color_operation

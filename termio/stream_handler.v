@@ -2,6 +2,7 @@ module termio
 
 import apprt
 import build_meta
+import configpkg
 import datastruct
 import internal_os
 import kitty
@@ -45,10 +46,10 @@ pub mut:
 	enquiry_response string
 
 	// The color reporting format for OSC requests.
-	osc_color_report_format OSCColorReportFormat = .bits_16
+	osc_color_report_format configpkg.OSCColorReportFormat = .format_16_bit
 
 	// The clipboard write access configuration.
-	clipboard_write ClipboardAccess = .allow
+	clipboard_write configpkg.ClipboardAccess = .allow
 
 	// ---------------------------------------------------------------
 	// Internal state
@@ -1704,10 +1705,10 @@ fn (self &StreamHandler) color_query_response(target osc.ColorTarget, terminator
 	}
 	term := terminator.string()
 	return match self.osc_color_report_format {
-		.bits_16 {
+		.format_16_bit {
 			'${prefix}${hex4(color.r)}/${hex4(color.g)}/${hex4(color.b)}${term}'
 		}
-		.bits_8 {
+		.format_8_bit {
 			'${prefix}${hex2(color.r)}/${hex2(color.g)}/${hex2(color.b)}${term}'
 		}
 		.none_ { '' }
