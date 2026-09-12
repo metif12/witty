@@ -153,9 +153,59 @@ static inline DWORD witty_command_wait_windows(
 #else
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdint.h>
+#include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+#if defined(__linux__)
+extern int dup3(int oldfd, int newfd, int flags);
+#endif
+
+/* Translate Command.setupFd without exposing platform errno macros to V. */
+static inline int witty_command_setup_fd(int src, int target) {
+#if defined(__linux__)
+    int result;
+    do {
+        result = dup3(src, target, 0);
+    } while (result < 0 && errno == EINTR);
+    return result < 0 ? errno : 0;
+#elif defined(__APPLE__) || defined(__FreeBSD__)
+    int flags = fcntl(src, F_GETFD, 0);
+    if (flags < 0) return errno;
+    if ((flags & FD_CLOEXEC) != 0 &&
+        fcntl(src, F_SETFD, flags & ~FD_CLOEXEC) < 0) {
+        return errno;
+    }
+    int result;
+    do {
+        result = dup2(src, target);
+    } while (result < 0 && errno == EINTR);
+    return result < 0 ? errno : 0;
+#else
+#error unsupported platform
+#endif
+}
+
+/* Preserve Command.startPosix's child-side diagnostic without allocating. */
+static inline void witty_command_write_exec_error(void) {
+    int exec_errno = errno;
+    if (exec_errno == ENOENT) {
+        static const char message[] =
+            "Requested executable not found. Please verify the command is on\n"
+            "the PATH and try again.\n";
+        (void)write(STDERR_FILENO, message, sizeof(message) - 1);
+        return;
+    }
+
+    static const char prefix[] =
+        "exec syscall failed with unexpected error: ";
+    const char *message = strerror(exec_errno);
+    (void)write(STDERR_FILENO, prefix, sizeof(prefix) - 1);
+    (void)write(STDERR_FILENO, message, strlen(message));
+    (void)write(STDERR_FILENO, "\n", 1);
+}
 
 /* Match std.posix.read: interrupted reads are retried before exposing errno. */
 static inline ssize_t witty_read_retry(int fd, void *buf, size_t count) {

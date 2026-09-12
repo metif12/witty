@@ -156,15 +156,13 @@ fn C.witty_execvpe(file &char, argv &&char, envp &&char) int
 
 fn C.waitpid(pid int, status &int, options int) int
 
-fn C.dup2(oldfd int, newfd int) int
-
 fn C.chdir(path &char) int
 
-fn C.write(fd int, buf voidptr, count usize) int
-
-fn C.setsid() int
-
 fn C._exit(status int)
+
+fn C.witty_command_setup_fd(src int, target int) int
+
+fn C.witty_command_write_exec_error()
 
 fn C.witty_command_start_windows(application &u16, command_line &u16, environment &u16, cwd &u16, stdin_fd int, stdout_fd int, stderr_fd int, pseudo_console voidptr, process_handle &voidptr, process_id &u32) u32
 
@@ -173,7 +171,13 @@ fn C.witty_command_wait_windows(process_handle voidptr, exit_code &u32) u32
 // WNOHANG flag for non-blocking waitpid.
 const wnohang = 1
 
-const exec_failure_message = 'Requested executable not found. Please verify the command is on the PATH and try again.\n'
+const exec_failed_in_child_message = 'ExecFailedInChild'
+
+// is_exec_failed_in_child identifies the one Command.start error that is
+// returned only in the forked child process.
+pub fn is_exec_failed_in_child(err IError) bool {
+	return err.msg() == exec_failed_in_child_message
+}
 
 // WIFEXITED and friends - macros for interpreting waitpid status.
 // These match the POSIX definitions on macOS and Linux.
@@ -190,7 +194,8 @@ fn wexitstatus(status int) u8 {
 
 // wifsignaled returns true if the child was terminated by a signal.
 fn wifsignaled(status int) bool {
-	return ((status & 0x7f) + 1) >> 1 > 0
+	signal_bits := status & 0x7f
+	return signal_bits != 0 && signal_bits != 0x7f
 }
 
 // wtermsig returns the signal number that caused the child to terminate.
@@ -301,7 +306,7 @@ pub mut:
 	data voidptr
 
 	// Process ID is set after start is called.
-	pid int = -1
+	pid ?int
 
 	// Windows keeps a process HANDLE separately from the numeric process ID.
 	process_handle voidptr
@@ -332,18 +337,10 @@ pub fn (mut self Command) start() ! {
 
 // start_posix implements the POSIX fork/exec subprocess launch.
 fn (mut self Command) start_posix() ! {
-	// Build the argv array for execvp.
-	// If args is empty, args[0] will be set to path.
-	mut argv := if self.args.len > 0 {
-		self.args.clone()
-	} else {
-		[self.path]
-	}
-
-	// Null-terminate the argument pointers before fork. `argv` owns the
-	// backing strings for the lifetime of this function.
-	mut c_argv := unsafe { []&char{len: argv.len + 1, init: &char(0)} }
-	for i, arg in argv {
+	// Null-terminate the argument pointers before fork. The command's argument
+	// strings remain alive for the lifetime of this function.
+	mut c_argv := unsafe { []&char{len: self.args.len + 1, init: &char(0)} }
+	for i, arg in self.args {
 		c_argv[i] = arg.str
 	}
 
@@ -378,22 +375,14 @@ fn (mut self Command) start_posix() ! {
 	// We are the child.
 
 	// Setup our file descriptors for std streams.
-	// We use dup2 to redirect file descriptors. We purposely do NOT
-	// set CLO_ON_EXEC for these since we want them inherited by exec.
 	if self.stdin_fd >= 0 {
-		if C.dup2(self.stdin_fd, 0) < 0 {
-			C._exit(1)
-		}
+		setup_fd(self.stdin_fd, 0) or { return error(exec_failed_in_child_message) }
 	}
 	if self.stdout_fd >= 0 {
-		if C.dup2(self.stdout_fd, 1) < 0 {
-			C._exit(1)
-		}
+		setup_fd(self.stdout_fd, 1) or { return error(exec_failed_in_child_message) }
 	}
 	if self.stderr_fd >= 0 {
-		if C.dup2(self.stderr_fd, 2) < 0 {
-			C._exit(1)
-		}
+		setup_fd(self.stderr_fd, 2) or { return error(exec_failed_in_child_message) }
 	}
 
 	// Setup our working directory.
@@ -441,11 +430,24 @@ fn (mut self Command) start_posix() ! {
 	// child process so there isn't much we can do. We try to output
 	// something reasonable. It's important to note we MUST NOT return
 	// any other error condition from here on out - we must exit.
-	C.write(2, exec_failure_message.str, exec_failure_message.len)
+	C.witty_command_write_exec_error()
 
-	// Exit with status 1 to indicate failure. We use _exit to avoid
-	// running any atexit handlers from the parent process.
-	C._exit(1)
+	// This specific error tells the caller that execution is continuing in the
+	// forked child and that it must terminate instead of resuming parent logic.
+	return error(exec_failed_in_child_message)
+}
+
+// setup_fd preserves Command.setupFd's target-specific behavior: Linux uses
+// dup3 so close-on-exec is cleared atomically, while Darwin/FreeBSD clear the
+// source flag and use dup2.
+fn setup_fd(src int, target int) ! {
+	$if windows {
+		return error('unsupported platform')
+	} $else {
+		if C.witty_command_setup_fd(src, target) != 0 {
+			return error('unable to configure child file descriptor')
+		}
+	}
 }
 
 // wait waits for the command to exit and returns information about
@@ -459,9 +461,7 @@ fn (mut self Command) start_posix() ! {
 // performed, so we need to keep trying until we get a non-zero pid
 // back, otherwise we end up with zombie processes.
 pub fn (self Command) wait(block bool) !Exit {
-	if self.pid < 0 {
-		return error('process not started')
-	}
+	pid := self.pid or { return error('process not started') }
 	$if windows {
 		_ = block
 		if self.process_handle == unsafe { nil } {
@@ -479,7 +479,7 @@ pub fn (self Command) wait(block bool) !Exit {
 
 	mut status := 0
 	if block {
-		result := C.waitpid(self.pid, &status, 0)
+		result := C.waitpid(pid, &status, 0)
 		if result < 0 {
 			return error('waitpid failed')
 		}
@@ -488,7 +488,7 @@ pub fn (self Command) wait(block bool) !Exit {
 		// for the tty doesn't properly waitpid its children. We don't want
 		// to hang the terminal over it.
 		for {
-			result := C.waitpid(self.pid, &status, wnohang)
+			result := C.waitpid(pid, &status, wnohang)
 			if result < 0 {
 				return error('waitpid failed')
 			}

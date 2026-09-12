@@ -80,6 +80,19 @@ fn test_exit_from_status_zero() {
 	}
 }
 
+fn test_exit_from_status_stopped() {
+	status := (int(19) << 8) | 0x7f
+	exit_val := exit_from_status(status)
+	match exit_val {
+		ExitStopped {
+			assert exit_val.signal == 19
+		}
+		else {
+			assert false, 'expected ExitStopped from status'
+		}
+	}
+}
+
 fn test_command_defaults() {
 	cmd := Command{}
 	assert cmd.path == ''
@@ -89,7 +102,7 @@ fn test_command_defaults() {
 	assert cmd.stdin_fd == -1
 	assert cmd.stdout_fd == -1
 	assert cmd.stderr_fd == -1
-	assert cmd.pid == -1
+	assert cmd.pid == none
 	assert cmd.data == unsafe { nil }
 	assert cmd.process_handle == unsafe { nil }
 	assert cmd.pseudo_console == unsafe { nil }
@@ -182,6 +195,8 @@ fn test_wifsignaled() {
 	assert wifsignaled(9) == true
 	// Normal exit: low 7 bits = 0, (0+1)>>1 = 0, not > 0.
 	assert wifsignaled(0) == false
+	// A stopped child has the low status byte 0x7f and is not signaled.
+	assert wifsignaled((int(19) << 8) | 0x7f) == false
 }
 
 fn test_wtermsig() {
@@ -201,11 +216,58 @@ fn test_command_start_with_exact_environment_and_path_search() {
 			'WITTY_COMMAND_ENV': 'translated'
 		}
 	}
-	cmd.start() or { assert false, err.msg() }
+	testing_start(mut cmd) or { assert false, err.msg() }
 	exit := cmd.wait(true) or { panic(err) }
 	assert exit == Exit(ExitNormal{
 		status: 0
 	})
+}
+
+fn command_test_pre_exec(mut _ Command) {
+	C._exit(42)
+}
+
+fn test_command_pre_exec() {
+	$if windows {
+		return
+	}
+	mut cmd := Command{
+		path: '/bin/sh'
+		args: ['/bin/sh', '-v']
+		pre_exec: command_test_pre_exec
+	}
+	testing_start(mut cmd)!
+	assert cmd.pid != none
+	exit_state := cmd.wait(true)!
+	assert exit_state == Exit(ExitNormal{
+		status: 42
+	})
+}
+
+fn test_command_redirect_stdout() {
+	$if windows {
+		return
+	}
+	path := os.join_path(os.temp_dir(), 'witty-command-stdout-${os.getpid()}')
+	os.rm(path) or {}
+	defer {
+		os.rm(path) or {}
+	}
+	mut stdout := os.create(path)!
+	defer {
+		stdout.close()
+	}
+	mut cmd := Command{
+		path: '/bin/sh'
+		args: ['/bin/sh', '-c', 'echo hello']
+		stdout_fd: stdout.fd
+	}
+	testing_start(mut cmd)!
+	exit_state := cmd.wait(true)!
+	assert exit_state == Exit(ExitNormal{
+		status: 0
+	})
+	assert os.read_file(path)! == 'hello\n'
 }
 
 fn test_command_start_inherits_environment() {
@@ -226,7 +288,7 @@ fn test_command_start_inherits_environment() {
 		path: '/bin/sh'
 		args: ['/bin/sh', '-c', 'test "\$WITTY_COMMAND_INHERIT_TEST" = inherited']
 	}
-	cmd.start() or { assert false, err.msg() }
+	testing_start(mut cmd) or { assert false, err.msg() }
 	exit := cmd.wait(true) or { panic(err) }
 	assert exit == Exit(ExitNormal{
 		status: 0
@@ -252,7 +314,7 @@ fn test_command_start_with_explicit_empty_environment() {
 		args: ['/bin/sh', '-c', 'test -z "\$WITTY_COMMAND_EMPTY_ENV_TEST"']
 		env: map[string]string{}
 	}
-	cmd.start() or { assert false, err.msg() }
+	testing_start(mut cmd) or { assert false, err.msg() }
 	exit := cmd.wait(true) or { panic(err) }
 	assert exit == Exit(ExitNormal{
 		status: 0
@@ -265,10 +327,20 @@ fn test_command_exec_failure_exits_child() {
 	}
 	mut cmd := Command{
 		path: '/not/a/witty-binary'
+		args: ['/not/a/witty-binary', '']
 	}
-	cmd.start() or { assert false, err.msg() }
+	testing_start(mut cmd) or { assert false, err.msg() }
 	exit := cmd.wait(true) or { panic(err) }
 	assert exit == Exit(ExitNormal{
 		status: 1
 	})
+}
+
+fn testing_start(mut cmd Command) ! {
+	cmd.start() or {
+		if is_exec_failed_in_child(err) {
+			C._exit(1)
+		}
+		return err
+	}
 }

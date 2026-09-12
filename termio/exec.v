@@ -56,6 +56,8 @@ fn C.getpgid(pid int) int
 
 fn C.waitpid(pid int, status &int, options int) int
 
+fn C._exit(status int)
+
 // Signal constants
 const sig_hup = 1
 
@@ -157,7 +159,12 @@ pub fn (mut self Exec) thread_enter_io(io &Termio) ! {
 
 fn (mut self Exec) thread_enter_common(io &Termio) ! {
 	// Start our subprocess
-	pty_fds := self.subprocess.start()!
+	pty_fds := self.subprocess.start() or {
+		if commandpkg.is_exec_failed_in_child(err) {
+			C._exit(1)
+		}
+		return err
+	}
 
 	// Create pipe for quit signaling.
 	// pipe_fds[0] is the read end, pipe_fds[1] is the write end.
@@ -196,8 +203,8 @@ fn (mut self Exec) thread_enter_common(io &Termio) ! {
 		command := self.subprocess.flatpak_command
 		self.exit_thread = spawn flatpak_process_exit_watcher(command, start_ns, io)
 	} else if process := self.subprocess.process {
-		if process.pid > 0 {
-			self.exit_thread = spawn process_exit_watcher(process.pid, start_ns, io)
+		if pid := process.pid {
+			self.exit_thread = spawn process_exit_watcher(pid, start_ns, io)
 		}
 	}
 }
@@ -638,6 +645,9 @@ pub fn (mut self Subprocess) start() !PtyFds {
 		data: voidptr(self)
 	}
 	cmd.start() or {
+		if commandpkg.is_exec_failed_in_child(err) {
+			return err
+		}
 		p.close_slave()
 		p.deinit()
 		self.pty_ = none
@@ -684,7 +694,11 @@ pub fn (mut self Subprocess) stop() {
 	}
 
 	if process := self.process {
-		pid := process.pid
+		pid := process.pid or {
+			self.process = none
+			self.running = false
+			return
+		}
 		// Get the process group ID. Before the child calls setsid
 		// the pgid will be ours because we forked it. We spin until
 		// the child has its own pgid.

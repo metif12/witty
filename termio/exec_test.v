@@ -217,7 +217,7 @@ fn test_subprocess_start_delegates_to_command() {
 	assert pty_fds.write == pty_fds.read
 	process := sub.process or { panic('expected the translated Command process') }
 	assert process.path == '/bin/sh'
-	assert process.pid > 0
+	assert process.pid or { -1 } > 0
 	exit_state := process.wait(true)!
 	match exit_state {
 		commandpkg.ExitNormal {
