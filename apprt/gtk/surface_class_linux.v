@@ -2332,9 +2332,9 @@ pub fn (mut self SurfaceWidget) ec_scroll_vertical(x f64, y f64) bool {
 
 	sx, sy := self.scaled_coordinates(x, y)
 	// We invert because we apply natural scrolling to the values.
-	// core.Surface.scroll_callback takes a `precision bool` rather than the
-	// full input.ScrollMods (momentum is not consumed by the core yet).
-	surface.scroll_callback(sx * -1 * multiplier, sy * -1 * multiplier, self.precision_scroll) or {
+	surface.scroll_callback(sx * -1 * multiplier, sy * -1 * multiplier, input.ScrollMods{
+		precision: self.precision_scroll
+	}) or {
 		eprintln('error in scroll callback err=${err}')
 		return false
 	}

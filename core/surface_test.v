@@ -1311,9 +1311,9 @@ fn test_scroll_callback_uses_precision_multiplier_and_accumulates_pixels() {
 		precision: 2
 		discrete: 3
 	}
-	surf.scroll_callback(0, 2, true)!
+	surf.scroll_callback(0, 2, input.ScrollMods{ precision: true })!
 	assert surf.mouse.pending_scroll_y == 4
-	surf.scroll_callback(0, 3, true)!
+	surf.scroll_callback(0, 3, input.ScrollMods{ precision: true })!
 	assert surf.mouse.pending_scroll_y == 0
 }
 
@@ -1323,7 +1323,7 @@ fn test_scroll_callback_alternate_screen_emits_cursor_sequences() {
 	mut term := surf.renderer_state.terminal_
 	term.switch_screen(.alternate)!
 	term.modes.set(.cursor_keys, true)
-	surf.scroll_callback(0, 0.1, false)!
+	surf.scroll_callback(0, 0.1, input.ScrollMods{})!
 	assert surf.io.messages.len == 3
 	for msg in surf.io.messages {
 		assert msg.kind == .write_stable
@@ -1338,7 +1338,7 @@ fn test_scroll_callback_reports_horizontal_wheel_buttons() {
 	surf.size = make_test_size()
 	surf.config.mouse_reporting = true
 	surf.renderer_state.terminal_.flags.mouse_event = .normal
-	surf.scroll_callback(2, 0, false)!
+	surf.scroll_callback(2, 0, input.ScrollMods{})!
 	assert surf.io.messages.len == 2
 	for msg in surf.io.messages {
 		assert msg.kind in [.write_small, .write_alloc]

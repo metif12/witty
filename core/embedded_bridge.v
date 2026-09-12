@@ -764,7 +764,7 @@ fn bridge_surface_mouse_pressure(ptr voidptr, stage input.PressureStage, pressur
 
 fn bridge_surface_scroll(ptr voidptr, xoff f64, yoff f64, mods input.ScrollMods) ! {
 	mut self := unsafe { &EmbeddedSurfaceCore(ptr) }
-	self.surface.scroll_callback(xoff, yoff, mods.precision)!
+	self.surface.scroll_callback(xoff, yoff, mods)!
 }
 
 fn bridge_surface_cursor_pos(ptr voidptr, pos apprt.CursorPos, mods input.Mods) ! {
