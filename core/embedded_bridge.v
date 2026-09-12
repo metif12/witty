@@ -26,7 +26,7 @@ struct EmbeddedSurfaceCore {
 mut:
 	app              &EmbeddedAppCore = unsafe { nil }
 	wrapper          &apprt.CoreSurface = unsafe { nil }
-	runtime_app      RuntimeApp
+	runtime_app      apprt.RuntimeApp
 	runtime_surface  RuntimeSurface
 	surface          Surface
 	surface_ref      SurfaceRef
@@ -242,15 +242,14 @@ fn bridge_surface_target(self &EmbeddedSurfaceCore) apprt.Target {
 	})
 }
 
-fn bridge_surface_runtime_action(ptr voidptr, action AppAction) !bool {
+fn bridge_surface_runtime_action(ptr voidptr, action apprt.RuntimeAction) !bool {
 	mut self := unsafe { &EmbeddedSurfaceCore(ptr) }
 	mut app := self.rt_surface.app
-	target := if isnil(action.target) {
-		apprt.Target(apprt.AppTarget{})
-	} else {
-		bridge_surface_target(self)
+	target := match action.target {
+		apprt.AppTarget { apprt.Target(apprt.AppTarget{}) }
+		apprt.SurfaceTarget { bridge_surface_target(self) }
 	}
-	return app.perform_action(target, action.kind, action.data)!
+	return app.perform_action(target, action.action, action.data)!
 }
 
 fn bridge_surface_runtime_wakeup(ptr voidptr) {
@@ -332,7 +331,7 @@ fn bridge_surface_init(config &configpkg.Config, core_app &apprt.CoreApp, app &a
 		wrapper: wrapper
 		rt_surface: rt_surface
 	}
-	self.runtime_app = RuntimeApp{
+	self.runtime_app = apprt.RuntimeApp{
 		user_data: voidptr(self)
 		action_fn: bridge_surface_runtime_action
 		wakeup_fn: bridge_surface_runtime_wakeup

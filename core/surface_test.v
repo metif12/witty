@@ -208,18 +208,26 @@ fn test_derived_config_preserves_right_click_action() {
 }
 
 fn test_toggle_fullscreen_uses_configured_macos_mode() {
-	mut runtime := RuntimeApp{ actions_handled: true }
+	mut runtime := apprt.RuntimeApp{ actions_handled: true }
 	mut surf := make_test_surface()
 	surf.rt_app = &runtime
 	surf.config.macos_non_native_fullscreen = .padded_notch
 	assert surf.perform_binding_action(input.Action.new(.toggle_fullscreen))!
 	assert runtime.actions.len == 1
-	assert runtime.actions[0].kind == .toggle_fullscreen
+	assert runtime.actions[0].action == .toggle_fullscreen
+	match runtime.actions[0].target {
+		apprt.SurfaceTarget {
+			assert runtime.actions[0].target.surface == voidptr(&surf)
+		}
+		apprt.AppTarget {
+			assert false, 'surface binding must retain its surface target'
+		}
+	}
 	assert runtime.actions[0].data.toggle_fullscreen == .macos_non_native_padded_notch
 }
 
 fn test_binding_actions_use_canonical_runtime_payloads() {
-	mut runtime := RuntimeApp{ actions_handled: true }
+	mut runtime := apprt.RuntimeApp{ actions_handled: true }
 	mut surf := make_test_surface()
 	surf.rt_app = &runtime
 	surf.size.screen = rendererpkg.ScreenSize{ width: 800, height: 600 }
@@ -839,7 +847,7 @@ fn test_key_release_preserves_held_modifiers_for_focus_loss() ! {
 }
 
 fn test_modifier_key_updates_mouse_shape() ! {
-	mut runtime := RuntimeApp{}
+	mut runtime := apprt.RuntimeApp{}
 	mut surf := make_test_surface()
 	surf.rt_app = &runtime
 	surf.config.mouse_shift_capture = .always
@@ -850,12 +858,12 @@ fn test_modifier_key_updates_mouse_shape() ! {
 	})!
 	assert effect == .ignored
 	assert runtime.actions.len == 1
-	assert runtime.actions[0].kind == .mouse_shape
+	assert runtime.actions[0].action == .mouse_shape
 	assert runtime.actions[0].data.mouse_shape_ == .text
 }
 
 fn test_modifier_key_refreshes_link_hover() ! {
-	mut runtime_app := RuntimeApp{}
+	mut runtime_app := apprt.RuntimeApp{}
 	mut runtime_surface := RuntimeSurface{
 		cursor_pos: apprt.CursorPos{ x: 6, y: 6 }
 	}
@@ -882,14 +890,14 @@ fn test_modifier_key_refreshes_link_hover() ! {
 	assert effect == .ignored
 	assert surf.mouse.over_link
 	assert runtime_app.actions.len == 2
-	assert runtime_app.actions[0].kind == .mouse_shape
+	assert runtime_app.actions[0].action == .mouse_shape
 	assert runtime_app.actions[0].data.mouse_shape_ == .pointer
-	assert runtime_app.actions[1].kind == .mouse_over_link
+	assert runtime_app.actions[1].action == .mouse_over_link
 	assert runtime_app.actions[1].data.mouse_over_link_.url == 'http://a'
 }
 
 fn test_focus_callback_always_reveals_mouse() ! {
-	mut runtime := RuntimeApp{}
+	mut runtime := apprt.RuntimeApp{}
 	mut surf := make_test_surface()
 	surf.rt_app = &runtime
 	surf.focused = true
@@ -897,7 +905,7 @@ fn test_focus_callback_always_reveals_mouse() ! {
 	surf.focus_callback(false)!
 	assert !surf.mouse.hidden
 	assert runtime.actions.len == 1
-	assert runtime.actions[0].kind == .mouse_visibility
+	assert runtime.actions[0].action == .mouse_visibility
 	assert runtime.actions[0].data.mouse_visibility_ == .visible
 }
 
@@ -929,19 +937,19 @@ fn test_color_scheme_callback_no_change() ! {
 }
 
 fn test_color_scheme_callback_change() ! {
-	mut runtime := RuntimeApp{}
+	mut runtime := apprt.RuntimeApp{}
 	mut surf := make_test_surface()
 	surf.rt_app = &runtime
 	surf.config_conditional_state = ConditionalState{ theme: .dark }
 	surf.color_scheme_callback(.light)!
 	assert surf.config_conditional_state.theme == .light
 	assert runtime.actions.len == 1
-	assert runtime.actions[0].kind == .reload_config
+	assert runtime.actions[0].action == .reload_config
 	assert runtime.actions[0].data.reload_config_.soft
 }
 
 fn test_secure_input_actions_preserve_on_off_and_toggle() ! {
-	mut runtime := RuntimeApp{ actions_handled: true }
+	mut runtime := apprt.RuntimeApp{ actions_handled: true }
 	mut surf := make_test_surface()
 	surf.rt_app = &runtime
 
@@ -956,7 +964,7 @@ fn test_secure_input_actions_preserve_on_off_and_toggle() ! {
 }
 
 fn test_child_exited_no_wait() {
-	mut app_runtime := RuntimeApp{ actions_handled: true }
+	mut app_runtime := apprt.RuntimeApp{ actions_handled: true }
 	mut surface_runtime := RuntimeSurface{}
 	mut surf := make_test_surface()
 	surf.rt_app = &app_runtime
@@ -969,14 +977,14 @@ fn test_child_exited_no_wait() {
 	surf.child_exited_handler(1000, 0)
 	assert surf.child_exited == true
 	assert app_runtime.actions.len == 1
-	assert app_runtime.actions[0].kind == .show_child_exited
+	assert app_runtime.actions[0].action == .show_child_exited
 	assert app_runtime.actions[0].data.show_child_exited_.runtime_ms == 1000
 	assert app_runtime.actions[0].data.show_child_exited_.exit_code == 0
 	assert surface_runtime.closed
 }
 
 fn test_child_exited_abnormal_native_banner_stops_fallback() {
-	mut app_runtime := RuntimeApp{ actions_handled: true }
+	mut app_runtime := apprt.RuntimeApp{ actions_handled: true }
 	mut surface_runtime := RuntimeSurface{}
 	mut surf := make_test_surface()
 	surf.rt_app = &app_runtime
@@ -995,7 +1003,7 @@ fn test_child_exited_abnormal_native_banner_stops_fallback() {
 }
 
 fn test_child_exited_abnormal_terminal_fallback() {
-	mut app_runtime := RuntimeApp{}
+	mut app_runtime := apprt.RuntimeApp{}
 	mut surface_runtime := RuntimeSurface{}
 	mut surf := make_test_surface()
 	surf.rt_app = &app_runtime
@@ -1133,19 +1141,19 @@ fn test_complete_clipboard_request_osc52_write() ! {
 }
 
 fn test_end_key_sequence_no_queued() {
-	mut runtime := RuntimeApp{}
+	mut runtime := apprt.RuntimeApp{}
 	mut surf := Surface{ rt_app: &runtime }
 	// With no queued items, should just clear sequence_set
 	surf.keyboard.sequence_queued = []
 	surf.end_key_sequence(.flush, .retain)
 	assert surf.keyboard.sequence_set == none
 	assert runtime.actions.len == 1
-	assert runtime.actions[0].kind == .key_sequence
+	assert runtime.actions[0].action == .key_sequence
 	assert !runtime.actions[0].data.key_sequence_.active
 }
 
 fn test_end_key_sequence_flush_preserves_allocated_write() {
-	mut runtime := RuntimeApp{}
+	mut runtime := apprt.RuntimeApp{}
 	mut surf := Surface{ rt_app: &runtime }
 	data := 'x'.repeat(80)
 	surf.keyboard.sequence_queued << termiopkg.WriteReq.init(data.bytes())
@@ -1166,24 +1174,24 @@ fn test_deactivate_all_key_tables_empty() ! {
 }
 
 fn test_deactivate_all_key_tables_action_payload() ! {
-	mut runtime := RuntimeApp{ actions_handled: true }
+	mut runtime := apprt.RuntimeApp{ actions_handled: true }
 	mut surf := Surface{ rt_app: &runtime }
 	surf.keyboard.table_stack << KeyTableEntry{ name: 'copy-mode' }
 	assert surf.deactivate_all_key_tables()!
 	assert surf.keyboard.table_stack.len == 0
 	assert runtime.actions.len == 1
-	assert runtime.actions[0].kind == .key_table
+	assert runtime.actions[0].action == .key_table
 	assert runtime.actions[0].data.key_table_.tag == .deactivate_all
 }
 
 fn test_deactivate_key_table_action_payload() ! {
-	mut runtime := RuntimeApp{ actions_handled: true }
+	mut runtime := apprt.RuntimeApp{ actions_handled: true }
 	mut surf := Surface{ rt_app: &runtime }
 	surf.keyboard.table_stack << KeyTableEntry{ name: 'copy-mode' }
 	assert surf.perform_binding_action(input.Action.new(.deactivate_key_table))!
 	assert surf.keyboard.table_stack.len == 0
 	assert runtime.actions.len == 1
-	assert runtime.actions[0].kind == .key_table
+	assert runtime.actions[0].action == .key_table
 	assert runtime.actions[0].data.key_table_.tag == .deactivate
 }
 
@@ -1462,7 +1470,7 @@ fn test_mouse_link_preview_forwards_untrimmed_url() ! {
 		highlight: .hover
 	}]
 	defer { surf.config.links[0].regex.deinit() }
-	mut runtime := RuntimeApp{}
+	mut runtime := apprt.RuntimeApp{}
 	surf.rt_app = &runtime
 	mut stream := surf.renderer_state.terminal_.vt_stream()
 	stream.next_slice('http://a   ')!
@@ -1471,8 +1479,8 @@ fn test_mouse_link_preview_forwards_untrimmed_url() ! {
 	assert surf.mouse.over_link
 	assert surf.renderer_state.terminal_.screens.active.dirty.hyperlink_hover
 	assert runtime.actions.len == 2
-	assert runtime.actions[0].kind == .mouse_shape
-	assert runtime.actions[1].kind == .mouse_over_link
+	assert runtime.actions[0].action == .mouse_shape
+	assert runtime.actions[1].action == .mouse_over_link
 	assert runtime.actions[1].data.mouse_over_link_.url == 'http://a   '
 }
 
@@ -1483,18 +1491,18 @@ mut:
 	confirmed   bool
 }
 
-fn runtime_action_probe(data voidptr, action AppAction) !bool {
+fn runtime_action_probe(data voidptr, action apprt.RuntimeAction) !bool {
 	mut probe := unsafe { &RuntimeCallbackProbe(data) }
-	probe.action_kind = action.kind
+	probe.action_kind = action.action
 	return true
 }
 
-fn runtime_action_failure(_ voidptr, _ AppAction) !bool {
+fn runtime_action_failure(_ voidptr, _ apprt.RuntimeAction) !bool {
 	return error('runtime action failed')
 }
 
 fn test_surface_best_effort_notifications_ignore_runtime_errors() {
-	mut runtime := RuntimeApp{
+	mut runtime := apprt.RuntimeApp{
 		action_fn: runtime_action_failure
 	}
 	mut surf := Surface{
@@ -1511,7 +1519,7 @@ fn test_surface_best_effort_notifications_ignore_runtime_errors() {
 }
 
 fn test_surface_ring_bell_uses_monotonic_rate_limit() ! {
-	mut runtime := RuntimeApp{}
+	mut runtime := apprt.RuntimeApp{}
 	mut surf := Surface{
 		rt_app: &runtime
 	}
@@ -1545,11 +1553,11 @@ fn runtime_env_probe(data voidptr) !map[string]string {
 
 fn test_runtime_callbacks_override_headless_storage() ! {
 	mut probe := RuntimeCallbackProbe{}
-	mut app := RuntimeApp{
+	mut app := apprt.RuntimeApp{
 		user_data: &probe
 		action_fn: runtime_action_probe
 	}
-	assert app.perform_action(AppAction{ kind: .ring_bell })!
+	assert app.perform_action(apprt.Target(apprt.AppTarget{}), .ring_bell, apprt.ActionValue{})!
 	assert probe.action_kind == .ring_bell
 	assert app.actions.len == 0
 
@@ -1579,7 +1587,7 @@ fn test_runtime_surface_clones_configured_default_environment() ! {
 }
 
 fn test_open_url_preserves_content_kind_for_runtime() ! {
-	mut runtime := RuntimeApp{ actions_handled: true }
+	mut runtime := apprt.RuntimeApp{ actions_handled: true }
 	mut surface := make_test_surface()
 	surface.rt_app = &runtime
 	surface.open_url(apprt.OpenUrl{
@@ -1588,13 +1596,13 @@ fn test_open_url_preserves_content_kind_for_runtime() ! {
 	})!
 
 	assert runtime.actions.len == 1
-	assert runtime.actions[0].kind == .open_url
+	assert runtime.actions[0].action == .open_url
 	assert runtime.actions[0].data.open_url_.kind == .html
 	assert runtime.actions[0].data.open_url_.url == '/tmp/export.html'
 }
 
 fn test_command_finished_preserves_duration_and_exit_code() ! {
-	mut runtime := RuntimeApp{ actions_handled: true }
+	mut runtime := apprt.RuntimeApp{ actions_handled: true }
 	mut surf := make_test_surface()
 	surf.rt_app = &runtime
 	surf.command_timer = time.sys_mono_now() - 1_234_567
@@ -1605,7 +1613,7 @@ fn test_command_finished_preserves_duration_and_exit_code() ! {
 
 	assert surf.command_timer == none
 	assert runtime.actions.len == 1
-	assert runtime.actions[0].kind == .command_finished
+	assert runtime.actions[0].action == .command_finished
 	assert runtime.actions[0].data.command_finished_.exit_code? == 7
 	assert runtime.actions[0].data.command_finished_.duration.duration >= 1_234_567
 }

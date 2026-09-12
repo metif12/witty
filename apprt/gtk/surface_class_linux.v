@@ -990,7 +990,7 @@ pub mut:
 	// can't be initialized until there is a realized GLArea. In ghostty this is
 	// `?*core.Surface`; we model "unset" with `unsafe { nil }`.
 	core_surface         &core.Surface = unsafe { nil }
-	core_runtime_app     core.RuntimeApp
+	core_runtime_app     apprt.RuntimeApp
 	core_runtime_surface core.RuntimeSurface
 	core_surface_ref     &core.SurfaceRef = unsafe { nil }
 
@@ -2658,7 +2658,7 @@ fn (mut self SurfaceWidget) init_surface() ! {
 	}
 	self.core_surface = surface
 	self.core_surface_ref = surface_ref
-	self.core_runtime_app = core.RuntimeApp{
+	self.core_runtime_app = apprt.RuntimeApp{
 		user_data: self
 		action_fn: surface_core_action_cb
 		wakeup_fn: surface_core_wakeup_cb
@@ -2715,12 +2715,12 @@ fn surface_core_wakeup_cb(data voidptr) {
 	}
 }
 
-fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
+fn surface_core_action_cb(data voidptr, action apprt.RuntimeAction) !bool {
 	if isnil(data) {
 		return false
 	}
 	mut self := unsafe { &SurfaceWidget(data) }
-	match action.kind {
+	match action.action {
 		.prompt_title {
 			if action.data.prompt_title_ != .surface {
 				return false

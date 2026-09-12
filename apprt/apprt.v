@@ -25,15 +25,24 @@ import input
 //   browser.v  - Browser (WASM) runtime stubs
 //   embedded.v - Embedded runtime (macOS / libghostty)
 
-// RuntimeApp is the headless implementation of the application runtime used
-// by the translated core package and tests. Platform runtimes implement the
-// same action boundary; this implementation retains actions for its consumer.
+pub type RuntimeAppActionFn = fn (voidptr, RuntimeAction) !bool
+
+pub type RuntimeAppWakeupFn = fn (voidptr)
+
+// RuntimeApp is the runtime-neutral application boundary used by the
+// translated core package and tests. Platform runtimes install callbacks;
+// the headless implementation retains actions for its consumer.
 pub struct RuntimeApp {
 pub mut:
 	config             configpkg.Config
 	actions            []RuntimeAction
 	handled            map[ActionKey]bool
+	actions_handled    bool
 	quit_timer_running bool
+	user_data          voidptr = unsafe { nil }
+	action_fn          RuntimeAppActionFn = unsafe { nil }
+	wakeup_fn          RuntimeAppWakeupFn = unsafe { nil }
+	keyboard_layout    input.KeyboardLayout
 }
 
 pub struct RuntimeAction {
@@ -44,7 +53,10 @@ pub:
 }
 
 pub fn (mut r RuntimeApp) perform_action(target Target, action ActionKey, data ActionValue) !bool {
-	r.actions << RuntimeAction{
+	if unsafe { voidptr(&r) == nil } {
+		return false
+	}
+	event := RuntimeAction{
 		target: target
 		action: action
 		data: data
@@ -52,7 +64,20 @@ pub fn (mut r RuntimeApp) perform_action(target Target, action ActionKey, data A
 	if action == .quit_timer {
 		r.quit_timer_running = data.quit_timer_ == .start
 	}
-	return r.handled[action]
+	if r.action_fn != unsafe { nil } {
+		return r.action_fn(r.user_data, event)
+	}
+	r.actions << event
+	return r.actions_handled || r.handled[action]
+}
+
+// wakeup notifies the runtime that the core app mailbox has work. Ghostty's
+// App.Mailbox performs this after every enqueue so platform event loops never
+// leave PTY or renderer messages waiting for unrelated UI activity.
+pub fn (r &RuntimeApp) wakeup() {
+	if r != unsafe { nil } && r.wakeup_fn != unsafe { nil } {
+		r.wakeup_fn(r.user_data)
+	}
 }
 
 // RuntimeSurface represents a single surface in the runtime.
