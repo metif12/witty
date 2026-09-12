@@ -3677,6 +3677,12 @@ fn clone_row_for_page_list(mut dst Page, dst_y int, src &RowData, cols u32) {
 
 pub fn (mut self PageList) deinit() {
 	self.assert_integrity()
+	mut node := self.pages.first
+	for {
+		n := node or { break }
+		node = n.next
+		self.destroy_node(n)
+	}
 	self.tracked_pins = []
 	self.pages = PageNodeList{}
 }
@@ -3774,6 +3780,7 @@ pub fn (self &PageList) max_size() usize {
 // ============================================================
 
 fn (mut self PageList) create_page(cap PageCapacity) &PageNode {
+	assert Page.layout(cap).total_size <= usize(max_page_size)
 	mut node := &PageNode{
 		data: Page.init(cap)
 		serial: self.page_serial
@@ -3789,7 +3796,10 @@ fn (mut self PageList) create_page(cap PageCapacity) &PageNode {
 
 fn (mut self PageList) destroy_node(node &PageNode) {
 	self.page_size -= page_backing_size(node.data.capacity)
-	self.pages.remove(node)
+	unsafe {
+		mut mutable_node := node
+		mutable_node.data.deinit()
+	}
 }
 
 // ============================================================
@@ -3798,25 +3808,26 @@ fn (mut self PageList) destroy_node(node &PageNode) {
 
 // Grow the active area by one row. Returns the new node if one was allocated.
 pub fn (mut self PageList) grow() ?&PageNode {
+	defer { self.assert_integrity() }
 	// Fast path: last page has capacity
-	if mut last := self.pages.last {
-		if last.data.capacity.rows > last.data.size.rows {
-			last.data.size.rows += 1
-			self.total_rows += 1
-			return none
-		}
+	mut last_page := self.pages.last or { panic('page list has no last page') }
+	if last_page.data.capacity.rows > last_page.data.size.rows {
+		last_page.data.size.rows += 1
+		last_page.data.assert_integrity()
+		self.total_rows += 1
+		return none
 	}
 
 	// Need a new page
 	cap := initial_capacity(self.cols)
 
 	// Check if we need to prune for max size
-	first := self.pages.first or { return none }
-	last := self.pages.last or { return none }
+	first := self.pages.first or { panic('page list has no first page') }
+	last := self.pages.last or { panic('page list has no last page') }
 	if voidptr(first) != voidptr(last)
 		&& self.page_size + standard_page_size() > self.max_size() {
 		// Prune the first page
-		pruned := self.pages.pop_first() or { return none }
+		pruned := self.pages.pop_first() or { panic('page list has no first page') }
 
 		self.total_rows -= usize(pruned.data.size.rows)
 
@@ -3838,7 +3849,7 @@ pub fn (mut self PageList) grow() ?&PageNode {
 			}
 
 			// Update tracked pins pointing to pruned page
-			new_first := self.pages.first or { return none }
+			new_first := self.pages.first or { panic('pruning left the page list empty') }
 			for mut p in self.tracked_pins {
 				if voidptr(p.node) == voidptr(pruned) {
 					p.node = new_first
@@ -3862,13 +3873,14 @@ pub fn (mut self PageList) grow() ?&PageNode {
 				self.page_serial += 1
 				self.pages.append(pruned)
 				self.total_rows += 1
+				pruned.data.assert_integrity()
 
 				return pruned
 			}
 
 			// A non-standard page cannot enter Ghostty's fixed-size pool. Its
 			// backing is released and the standard page below is newly allocated.
-			self.page_size -= old_backing_size
+			self.destroy_node(pruned)
 		}
 	}
 
@@ -3877,6 +3889,7 @@ pub fn (mut self PageList) grow() ?&PageNode {
 	new_node.data.size.rows = 1
 	self.pages.append(new_node)
 	self.total_rows += 1
+	new_node.data.assert_integrity()
 
 	return new_node
 }
@@ -4905,8 +4918,7 @@ pub fn (mut self PageList) split(p PagePin) ! {
 	new_page.clone_from(page, y_start, y_end) or {
 		// The source destroys the speculative page and translates every clone
 		// failure to OutOfSpace so callers can recover from a failed split.
-		self.page_size -= page_backing_size(new_page.capacity)
-		new_page.deinit()
+		self.destroy_node(new_node)
 		return error('OutOfSpace')
 	}
 
@@ -5537,6 +5549,7 @@ fn (mut self ReflowCursor) move_last_row_to_new_page(mut list PageList, cap Page
 
 	// If that was the last row in that page then remove it from the list.
 	if old_page.size.rows == 0 {
+		list.pages.remove(old_node)
 		list.destroy_node(old_node)
 	}
 
@@ -5658,8 +5671,9 @@ fn (mut self PageList) trim_trailing_blank_rows(max u16) u16 {
 //
 // IMPORTANT: This does NOT update total_rows. The caller is responsible.
 fn (mut self PageList) erase_page(node &PageNode) {
+	assert node.next != none || node.prev != none
 	// Update any tracked pins to move to the previous or next page.
-	next := node.prev or { node.next or { node } }
+	next := node.prev or { node.next or { panic('cannot erase the final page') } }
 	for mut p in self.tracked_pins {
 		if voidptr(p.node) == voidptr(node) {
 			p.node = next
@@ -5667,6 +5681,7 @@ fn (mut self PageList) erase_page(node &PageNode) {
 			p.x = 0
 		}
 	}
+	self.pages.remove(node)
 	self.destroy_node(node)
 }
 
@@ -5781,6 +5796,7 @@ pub fn (mut self PageList) increase_capacity(node &PageNode, adjustment ?PageCap
 	}
 
 	self.pages.insert_before(node, new_node)
+	self.pages.remove(node)
 	self.destroy_node(node)
 	new_page.assert_integrity()
 	return new_node
@@ -5822,8 +5838,7 @@ pub fn (mut self PageList) compact(node &PageNode) ?&PageNode {
 	new_page.clone_from(page, 0, page.size.rows) or {
 		// The requested capacity was computed from this exact content. Preserve
 		// the original page if a bounded clone nevertheless rejects it.
-		self.page_size -= page_backing_size(new_node.data.capacity)
-		new_page.deinit()
+		self.destroy_node(new_node)
 		return none
 	}
 
@@ -5836,6 +5851,7 @@ pub fn (mut self PageList) compact(node &PageNode) ?&PageNode {
 
 	// Insert the new page and destroy the old one.
 	self.pages.insert_before(node, new_node)
+	self.pages.remove(node)
 	self.destroy_node(node)
 
 	return new_node
@@ -6490,6 +6506,7 @@ fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk
 	assert copied == page.size.rows
 
 	// Remove the old page. Deallocate the old page.
+	self.pages.remove(chunk.node)
 	self.destroy_node(chunk.node)
 }
 
