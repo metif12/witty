@@ -1767,47 +1767,6 @@ pub enum SwitchScreenMode {
 }
 
 // ============================================================
-// Mouse shape
-// ============================================================
-
-pub enum MouseShape {
-	default_
-	context_menu
-	help
-	pointer
-	progress
-	wait
-	cell
-	crosshair
-	text
-	vertical_text
-	alias
-	copy
-	move
-	no_drop
-	not_allowed
-	grab
-	grabbing
-	all_scroll
-	col_resize
-	row_resize
-	n_resize
-	e_resize
-	s_resize
-	w_resize
-	ne_resize
-	nw_resize
-	se_resize
-	sw_resize
-	ew_resize
-	ns_resize
-	nesw_resize
-	nwse_resize
-	zoom_in
-	zoom_out
-}
-
-// ============================================================
 // Prompt redraw
 // ============================================================
 

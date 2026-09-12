@@ -8,6 +8,15 @@ fn test_cursor_shape_from_string() {
 	assert result == MouseShape.default_
 }
 
+fn test_mouse_shape_source_layout_and_ordinals() {
+	assert sizeof(MouseShape) == 4
+	assert int(MouseShape.default_) == 0
+	assert int(MouseShape.context_menu) == 1
+	assert int(MouseShape.pointer) == 3
+	assert int(MouseShape.all_scroll) == 17
+	assert int(MouseShape.zoom_out) == 33
+}
+
 fn test_cursor_shape_from_string_w3c() {
 	assert MouseShape.from_string('pointer') or { panic('expected value') } == .pointer
 	assert MouseShape.from_string('help') or { panic('expected value') } == .help
