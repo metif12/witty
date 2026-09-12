@@ -138,6 +138,7 @@ fn test_fraction_halves_index_table() {
 // ------------------------------------------------------------
 
 fn test_thickness_height() {
+	assert sizeof(Thickness) == 1
 	assert Thickness.light.height(4) == 4
 	assert Thickness.heavy.height(4) == 8
 	assert Thickness.super_light.height(4) == 2
@@ -176,6 +177,21 @@ fn test_corner_and_edge_source_layouts() {
 	assert u8(Edge.left) == 1
 	assert u8(Edge.bottom) == 2
 	assert u8(Edge.right) == 3
+}
+
+fn test_alignment_and_fraction_source_layouts() {
+	assert sizeof(HorizontalAlignment) == 1
+	assert sizeof(VerticalAlignment) == 1
+	assert sizeof(Alignment) == 2
+	assert u8(HorizontalAlignment.left) == 0
+	assert u8(HorizontalAlignment.right) == 1
+	assert u8(HorizontalAlignment.center) == 2
+	assert u8(VerticalAlignment.top) == 0
+	assert u8(VerticalAlignment.bottom) == 1
+	assert u8(VerticalAlignment.middle) == 2
+	assert sizeof(Fraction) == 1
+	assert u8(Fraction.start) == 0
+	assert Fraction.full != Fraction.one
 }
 
 // ------------------------------------------------------------

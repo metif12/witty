@@ -1011,7 +1011,7 @@ pub:
 // ============================================================
 
 // The thickness of a line.
-pub enum Thickness {
+pub enum Thickness as u8 {
 	super_light
 	light
 	heavy
@@ -1110,13 +1110,13 @@ pub enum Edge as u8 {
 // HorizontalAlignment / VerticalAlignment / Alignment
 // ============================================================
 
-pub enum HorizontalAlignment {
+pub enum HorizontalAlignment as u8 {
 	left
 	right
 	center
 }
 
-pub enum VerticalAlignment {
+pub enum VerticalAlignment as u8 {
 	top
 	bottom
 	middle
@@ -1182,7 +1182,7 @@ pub const align_bottom_right = align_lower_right
 //
 // This has some redundant names in it so that you can
 // use whichever one feels most semantically appropriate.
-pub enum Fraction {
+pub enum Fraction as u8 {
 	// Names for the min edge
 	start
 	left
