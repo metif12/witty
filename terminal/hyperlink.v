@@ -191,8 +191,8 @@ fn hyperlink_hash_put_slice(mut data []u8, value string) {
 struct HyperlinkSetEntry {
 mut:
 	link            Hyperlink
-	uri_offset      int = -1
-	explicit_offset int = -1
+	uri_offset      ?usize
+	explicit_offset ?usize
 	bucket          u16 = max_u16
 	psl             u16
 	ref_count       u16
@@ -213,7 +213,7 @@ pub mut:
 }
 
 pub fn HyperlinkSet.init() HyperlinkSet {
-	return HyperlinkSet.init_bounded(page_set_layout(16, hyperlink_set_item_size, 8), bitmap_allocator_layout(int(string_bytes_default), string_chunk))
+	return HyperlinkSet.init_bounded(page_set_layout(16, hyperlink_set_item_size, 8), bitmap_allocator_layout(usize(string_bytes_default), string_chunk))
 }
 
 fn HyperlinkSet.init_bounded(set_layout PageSetLayout, string_layout BitmapAllocatorLayout) HyperlinkSet {
@@ -371,15 +371,15 @@ pub fn (self &HyperlinkSet) capacity() usize {
 	return self.layout.cap - 1
 }
 
-pub fn (self &HyperlinkSet) string_capacity() int {
+pub fn (self &HyperlinkSet) string_capacity() usize {
 	return self.string_alloc.capacity_bytes()
 }
 
-pub fn (self &HyperlinkSet) string_used() int {
+pub fn (self &HyperlinkSet) string_used() usize {
 	return self.string_alloc.used_bytes()
 }
 
-fn (mut self HyperlinkSet) can_allocate_string_bytes(byte_count int) bool {
+fn (mut self HyperlinkSet) can_allocate_string_bytes(byte_count usize) bool {
 	if byte_count == 0 {
 		return true
 	}
@@ -393,14 +393,14 @@ fn (mut self HyperlinkSet) allocate_entry(link Hyperlink) !HyperlinkSetEntry {
 		link: link.dupe()
 	}
 	if link.uri.len > 0 {
-		entry.uri_offset = self.string_alloc.alloc(link.uri.len) or {
+		entry.uri_offset = self.string_alloc.alloc(usize(link.uri.len)) or {
 			return error('strings out of memory')
 		}
 	}
 	match link.id {
 		HyperlinkExplicitId {
 			if link.id.value.len > 0 {
-				entry.explicit_offset = self.string_alloc.alloc(link.id.value.len) or {
+				entry.explicit_offset = self.string_alloc.alloc(usize(link.id.value.len)) or {
 					self.free_entry_strings(mut entry)
 					return error('strings out of memory')
 				}
@@ -412,15 +412,15 @@ fn (mut self HyperlinkSet) allocate_entry(link Hyperlink) !HyperlinkSetEntry {
 }
 
 fn (mut self HyperlinkSet) free_entry_strings(mut entry HyperlinkSetEntry) {
-	if entry.uri_offset >= 0 && entry.link.uri.len > 0 {
-		self.string_alloc.release(entry.uri_offset, entry.link.uri.len)
-		entry.uri_offset = -1
+	if offset := entry.uri_offset {
+		self.string_alloc.release(offset, usize(entry.link.uri.len))
+		entry.uri_offset = none
 	}
 	match entry.link.id {
 		HyperlinkExplicitId {
-			if entry.explicit_offset >= 0 && entry.link.id.value.len > 0 {
-				self.string_alloc.release(entry.explicit_offset, entry.link.id.value.len)
-				entry.explicit_offset = -1
+			if offset := entry.explicit_offset {
+				self.string_alloc.release(offset, usize(entry.link.id.value.len))
+				entry.explicit_offset = none
 			}
 		}
 		else {}

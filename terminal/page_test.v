@@ -151,7 +151,7 @@ fn test_page_append_grapheme_larger_than_chunk() {
 	for i in 0 .. count {
 		assert cps[i] == u32(0x0A + i)
 	}
-	assert page.grapheme_alloc.used_bytes() == count * int(sizeof(u32))
+	assert page.grapheme_alloc.used_bytes() == usize(count) * usize(sizeof(u32))
 }
 
 // Test clearing graphemes when not all cells have them.
@@ -1613,7 +1613,7 @@ fn test_page_set_graphemes_enforces_allocator_capacity() {
 	page.set_graphemes(0, 0, []u32{len: int(grapheme_bytes_default / 4) - 1, init: u32(`x`)}) or {
 		panic(err)
 	}
-	assert page.grapheme_alloc.used_bytes() == int(grapheme_bytes_default)
+	assert page.grapheme_alloc.used_bytes() == usize(grapheme_bytes_default)
 
 	mut error_message := ''
 	page.append_grapheme(0, 1, 0x0301) or { error_message = err.msg() }
@@ -1706,7 +1706,7 @@ fn test_page_insert_hyperlink_enforces_string_allocator_capacity() {
 		id: HyperlinkImplicitId{}
 		uri: 'a'.repeat(int(string_bytes_default) - 1)
 	}) or { panic(err) }
-	assert page.hyperlink_set.string_used() == int(string_bytes_default)
+	assert page.hyperlink_set.string_used() == usize(string_bytes_default)
 
 	mut error_message := ''
 	_ := page.insert_hyperlink(Hyperlink{
@@ -1717,7 +1717,7 @@ fn test_page_insert_hyperlink_enforces_string_allocator_capacity() {
 		u32(0)
 	}
 	assert error_message == 'strings out of memory'
-	assert page.hyperlink_set.string_used() == int(string_bytes_default)
+	assert page.hyperlink_set.string_used() == usize(string_bytes_default)
 }
 
 fn test_page_capacity_adjust_no_columns_request() {

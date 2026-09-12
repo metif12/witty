@@ -17,15 +17,15 @@ import math.bits
 // memory in aggregate. To avoid fragmentation, use a chunk size that is
 // large enough to cover most of your allocations.
 
-const bitmap_bit_size = 64
+const bitmap_bit_size = usize(64)
 
 // BitmapAllocatorLayout describes the memory layout for a BitmapAllocator.
 pub struct BitmapAllocatorLayout {
 pub:
-	total_size   int
-	bitmap_count int
-	bitmap_start int
-	chunks_start int
+	total_size   usize
+	bitmap_count usize
+	bitmap_start usize
+	chunks_start usize
 }
 
 // BitmapAllocator manages a pool of fixed-size chunks using bitmaps.
@@ -46,32 +46,30 @@ pub mut:
 // chunk_size. The capacity is in number of bytes, not chunks. The capacity
 // will likely be rounded up to the nearest chunk size and bitmap size so
 // everything is perfectly divisible.
-pub fn bitmap_allocator_layout(cap int, chunk_size int) BitmapAllocatorLayout {
-	// Ghostty's cap is usize and chunk_size is a positive, power-of-two
-	// comptime parameter. Preserve those type-level contracts explicitly.
-	assert cap >= 0
+pub fn bitmap_allocator_layout(cap usize, chunk_size int) BitmapAllocatorLayout {
 	assert chunk_size > 0
 	assert (chunk_size & (chunk_size - 1)) == 0
+	chunk_size_bytes := usize(chunk_size)
 
 	// Align the cap forward to our chunk size so we always have
 	// a full chunk at the end.
-	aligned_cap := align_forward(cap, chunk_size)
+	aligned_cap := align_forward(cap, chunk_size_bytes)
 
 	// Calculate the number of bitmaps. We need 1 bitmap per 64 chunks.
 	// We align the chunk count forward so our bitmaps are full so we
 	// don't have to handle the case where we have a partial bitmap.
-	chunk_count := aligned_cap / chunk_size
+	chunk_count := aligned_cap / chunk_size_bytes
 	aligned_chunk_count := align_forward(chunk_count, 64)
 	bm_count := aligned_chunk_count / 64
 
-	bitmap_start := 0
+	bitmap_start := usize(0)
 	bitmap_end := 8 * bm_count // 8 bytes per u64
 	chunks_start := align_forward(bitmap_end, 1)
-	chunks_end := chunks_start + (aligned_cap * chunk_size)
+	chunks_end := chunks_start + (aligned_cap * chunk_size_bytes)
 	total := chunks_end
 
 	return BitmapAllocatorLayout{
-		total_size:   total
+		total_size: total
 		bitmap_count: bm_count
 		bitmap_start: bitmap_start
 		chunks_start: chunks_start
@@ -85,48 +83,45 @@ pub fn BitmapAllocator.init(chunk_size int, l BitmapAllocatorLayout) BitmapAlloc
 	assert (chunk_size & (chunk_size - 1)) == 0
 
 	// Initialize our bitmaps to all 1s to note that all chunks are free.
-	mut bms := []u64{len: l.bitmap_count, init: ~u64(0)}
+	mut bms := []u64{len: int(l.bitmap_count), init: ~u64(0)}
 	total_chunks := l.bitmap_count * bitmap_bit_size
-	chk := []u8{len: total_chunks * chunk_size}
+	chk := []u8{len: int(total_chunks * usize(chunk_size))}
 
 	return BitmapAllocator{
 		chunk_size: chunk_size
-		bitmaps:    bms
-		chunks:     chk
+		bitmaps: bms
+		chunks: chk
 	}
 }
 
 // bytes_required returns the number of bytes required to allocate n elements
 // of size element_size. This accounts for the chunk size alignment used by
 // the bitmap allocator.
-pub fn (self &BitmapAllocator) bytes_required(element_size int, n int) int {
-	assert element_size >= 0
-	assert n >= 0
+pub fn (self &BitmapAllocator) bytes_required(element_size usize, n usize) usize {
 	byte_count := element_size * n
-	return align_forward(byte_count, self.chunk_size)
+	return align_forward(byte_count, usize(self.chunk_size))
 }
 
 // alloc allocates n contiguous chunks worth of bytes.
 // Returns the byte offset into the chunks buffer, or none if out of memory.
-pub fn (mut self BitmapAllocator) alloc(n_bytes int) ?int {
+pub fn (mut self BitmapAllocator) alloc(n_bytes usize) ?usize {
 	assert n_bytes > 0
-	chunk_count := div_ceil(n_bytes, self.chunk_size)
+	chunk_count := div_ceil(n_bytes, usize(self.chunk_size))
 
 	// Find free chunks. This also marks them as used.
 	idx := find_free_chunks(mut self.bitmaps, chunk_count) or { return none }
 
-	return idx * self.chunk_size
+	return idx * usize(self.chunk_size)
 }
 
 // release marks the chunks starting at byte offset `start` spanning `n_bytes` as free.
-pub fn (mut self BitmapAllocator) release(start int, n_bytes int) {
-	assert start >= 0
-	assert start % self.chunk_size == 0
+pub fn (mut self BitmapAllocator) release(start usize, n_bytes usize) {
+	assert start % usize(self.chunk_size) == 0
 	assert n_bytes > 0
 
-	aligned_len := align_forward(n_bytes, self.chunk_size)
-	chunk_count := aligned_len / self.chunk_size
-	chunk_idx := start / self.chunk_size
+	aligned_len := align_forward(n_bytes, usize(self.chunk_size))
+	chunk_count := aligned_len / usize(self.chunk_size)
+	chunk_idx := start / usize(self.chunk_size)
 
 	// Current bitmap index.
 	mut i := chunk_idx / 64
@@ -138,7 +133,7 @@ pub fn (mut self BitmapAllocator) release(start int, n_bytes int) {
 		// Bit index.
 		bit := chunk_idx % 64
 		// Number of bits we need to mark in this bitmap.
-		nbits := min_int(rem, 64 - bit)
+		nbits := min_usize(rem, 64 - bit)
 
 		self.bitmaps[i] |= (~u64(0) >> u64(64 - nbits)) << u64(bit)
 		rem -= nbits
@@ -159,30 +154,29 @@ pub fn (mut self BitmapAllocator) release(start int, n_bytes int) {
 }
 
 // capacity_bytes returns the total capacity in bytes.
-pub fn (self &BitmapAllocator) capacity_bytes() int {
-	return self.bitmaps.len * bitmap_bit_size * self.chunk_size
+pub fn (self &BitmapAllocator) capacity_bytes() usize {
+	return usize(self.bitmaps.len) * bitmap_bit_size * usize(self.chunk_size)
 }
 
 // used_bytes returns the number of bytes currently in use.
-pub fn (self &BitmapAllocator) used_bytes() int {
-	mut free_chunks := 0
+pub fn (self &BitmapAllocator) used_bytes() usize {
+	mut free_chunks := usize(0)
 	for bm in self.bitmaps {
-		free_chunks += bits.ones_count_64(bm)
+		free_chunks += usize(bits.ones_count_64(bm))
 	}
-	total_chunks := self.bitmaps.len * bitmap_bit_size
-	return (total_chunks - free_chunks) * self.chunk_size
+	total_chunks := usize(self.bitmaps.len) * bitmap_bit_size
+	return (total_chunks - free_chunks) * usize(self.chunk_size)
 }
 
 // is_allocated returns true if all chunks covered by the given range are allocated.
 // For testing only.
-fn (self &BitmapAllocator) is_allocated(start int, n_bytes int) bool {
-	assert start >= 0
-	assert start % self.chunk_size == 0
+fn (self &BitmapAllocator) is_allocated(start usize, n_bytes usize) bool {
+	assert start % usize(self.chunk_size) == 0
 	assert n_bytes > 0
 
-	aligned_len := align_forward(n_bytes, self.chunk_size)
-	chunk_count := aligned_len / self.chunk_size
-	chunk_idx := start / self.chunk_size
+	aligned_len := align_forward(n_bytes, usize(self.chunk_size))
+	chunk_count := aligned_len / usize(self.chunk_size)
+	chunk_idx := start / usize(self.chunk_size)
 
 	for ci in chunk_idx .. chunk_idx + chunk_count {
 		bm_idx := ci / bitmap_bit_size
@@ -198,7 +192,7 @@ fn (self &BitmapAllocator) is_allocated(start int, n_bytes int) bool {
 // find_free_chunks finds `n` sequential free chunks in the given bitmaps and
 // returns the index of the first chunk. If no chunks are found, returns none.
 // This also updates the bitmap to mark the chunks as used.
-fn find_free_chunks(mut bitmaps []u64, n int) ?int {
+fn find_free_chunks(mut bitmaps []u64, n usize) ?usize {
 	assert n > 0
 
 	// NOTE: This is a naive implementation that just iterates through the
@@ -208,10 +202,10 @@ fn find_free_chunks(mut bitmaps []u64, n int) ?int {
 
 	// Large chunks require special handling.
 	if n > 64 {
-		mut i := 0
-		for i < bitmaps.len {
+		mut i := usize(0)
+		for i < usize(bitmaps.len) {
 			// Number of chunks available at the end of this bitmap.
-			prefix := bits.leading_zeros_64(~bitmaps[i])
+			prefix := usize(bits.leading_zeros_64(~bitmaps[i]))
 
 			// If there are no chunks available at the end of this bitmap
 			// then we can't start in it, so we'll try the next one.
@@ -231,7 +225,7 @@ fn find_free_chunks(mut bitmaps []u64, n int) ?int {
 			mut found := true
 			for rem > 64 {
 				// We ran out of bitmaps, there's no sufficiently large gap.
-				if i >= bitmaps.len {
+				if i >= usize(bitmaps.len) {
 					return none
 				}
 
@@ -254,7 +248,7 @@ fn find_free_chunks(mut bitmaps []u64, n int) ?int {
 
 			// If the number of available chunks at the start of this bitmap
 			// is less than the remaining required, we have to try again.
-			if bits.trailing_zeros_64(~bitmaps[i]) < rem {
+			if usize(bits.trailing_zeros_64(~bitmaps[i])) < rem {
 				continue
 			}
 
@@ -263,7 +257,7 @@ fn find_free_chunks(mut bitmaps []u64, n int) ?int {
 			// Found! Mark everything between our start and end as full.
 			bitmaps[start_bitmap] ^= ~u64(0) >> u64(start_bit) << u64(start_bit)
 			full_bitmaps := (n - prefix - suffix) / 64
-			for fi in 0 .. full_bitmaps {
+			for fi in usize(0) .. full_bitmaps {
 				bitmaps[start_bitmap + 1 + fi] = 0
 			}
 			if suffix > 0 {
@@ -290,7 +284,7 @@ fn find_free_chunks(mut bitmaps []u64, n int) ?int {
 		//                ^       ^
 		// In this example there are 2 places with at least 4 sequential 1s.
 		mut shifted := bm
-		for si in 1 .. n {
+		for si in usize(1) .. n {
 			shifted &= bm >> u64(si)
 		}
 
@@ -301,33 +295,33 @@ fn find_free_chunks(mut bitmaps []u64, n int) ?int {
 
 		// Trailing zeroes gets us the index of the first bit index with at
 		// least `n` sequential 1s. In the example above, that would be `4`.
-		bit := bits.trailing_zeros_64(shifted)
+		bit := usize(bits.trailing_zeros_64(shifted))
 
 		// Calculate the mask so we can mark it as used
 		mask := (~u64(0) >> u64(64 - n)) << u64(bit)
 		bitmaps[idx] ^= mask
 
-		return idx * 64 + bit
+		return usize(idx) * 64 + bit
 	}
 
 	return none
 }
 
 // align_forward aligns val up to the given alignment.
-fn align_forward(val int, alignment int) int {
-	if alignment <= 0 {
+fn align_forward(val usize, alignment usize) usize {
+	if alignment == 0 {
 		return val
 	}
 	return ((val + alignment - 1) / alignment) * alignment
 }
 
 // div_ceil divides a by b, rounding up.
-fn div_ceil(a int, b int) int {
-	return (a + b - 1) / b
+fn div_ceil(a usize, b usize) usize {
+	return a / b + usize(a % b != 0)
 }
 
-// min_int returns the smaller of two ints.
-fn min_int(a int, b int) int {
+// min_usize returns the smaller of two usize values.
+fn min_usize(a usize, b usize) usize {
 	if a < b {
 		return a
 	}

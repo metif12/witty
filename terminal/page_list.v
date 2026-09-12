@@ -5471,12 +5471,12 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 			page = &self.node.data
 		}
 		for {
-			offset := page.grapheme_alloc.alloc(cps.len * int(sizeof(u32))) or {
+			offset := page.grapheme_alloc.alloc(usize(cps.len) * usize(sizeof(u32))) or {
 				self.increase_capacity(mut list, .grapheme_bytes)!
 				page = &self.node.data
 				continue
 			}
-			page.grapheme_alloc.release(offset, cps.len * int(sizeof(u32)))
+			page.grapheme_alloc.release(offset, usize(cps.len) * usize(sizeof(u32)))
 			break
 		}
 		page.set_graphemes(int(self.y), int(self.x), cps) or {
@@ -5502,10 +5502,10 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 			self.increase_capacity(mut list, .hyperlink_bytes)!
 			page = &self.node.data
 		}
-		additional_string_bytes := src_link.uri.len + match src_link.id {
+		additional_string_bytes := usize(src_link.uri.len + match src_link.id {
 			HyperlinkExplicitId { src_link.id.value.len }
 			else { 0 }
-		}
+		})
 		for !page.hyperlink_set.can_allocate_string_bytes(additional_string_bytes) {
 			self.increase_capacity(mut list, .string_bytes)!
 			page = &self.node.data

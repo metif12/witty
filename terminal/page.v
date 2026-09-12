@@ -1122,9 +1122,9 @@ pub fn Page.layout(cap PageCapacity) PageLayout {
 	styles_start := page_align_forward(cells_end, 8)
 	styles_end := styles_start + styles_layout.total_size
 
-	grapheme_alloc_layout := bitmap_allocator_layout(int(cap.grapheme_bytes), grapheme_chunk)
+	grapheme_alloc_layout := bitmap_allocator_layout(usize(cap.grapheme_bytes), grapheme_chunk)
 	grapheme_alloc_start := page_align_forward(styles_end, 8)
-	grapheme_alloc_end := grapheme_alloc_start + usize(grapheme_alloc_layout.total_size)
+	grapheme_alloc_end := grapheme_alloc_start + grapheme_alloc_layout.total_size
 
 	grapheme_count := if cap.grapheme_bytes == 0 {
 		usize(0)
@@ -1135,9 +1135,9 @@ pub fn Page.layout(cap PageCapacity) PageLayout {
 	grapheme_map_start := page_align_forward(grapheme_alloc_end, 8)
 	grapheme_map_end := grapheme_map_start + usize(grapheme_map_layout.total_size)
 
-	string_alloc_layout := bitmap_allocator_layout(int(cap.string_bytes), string_chunk)
+	string_alloc_layout := bitmap_allocator_layout(usize(cap.string_bytes), string_chunk)
 	string_alloc_start := page_align_forward(grapheme_map_end, 8)
-	string_alloc_end := string_alloc_start + usize(string_alloc_layout.total_size)
+	string_alloc_end := string_alloc_start + string_alloc_layout.total_size
 
 	hyperlink_count := usize(cap.hyperlink_bytes) / hyperlink_set_item_size
 	hyperlink_set_layout := page_set_layout(hyperlink_count, hyperlink_set_item_size, 8)
@@ -1257,8 +1257,8 @@ pub mut:
 
 struct GraphemeAllocation {
 mut:
-	offset int
-	len    int
+	offset usize
+	len    usize
 }
 
 // ============================================================
@@ -1629,7 +1629,7 @@ pub fn (self &Page) exact_row_capacity(y_start usize, y_end usize) PageCapacity 
 			}
 			if cell.has_grapheme {
 				if cps := self.lookup_grapheme_at(int(y), x) {
-					grapheme_bytes += usize(self.grapheme_alloc.bytes_required(int(sizeof(u32)), cps.len))
+					grapheme_bytes += self.grapheme_alloc.bytes_required(usize(sizeof(u32)), usize(cps.len))
 				}
 			}
 		}
@@ -1807,16 +1807,16 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_
 				panic('grapheme source cell is missing its page mapping')
 			}
 			dst_key := cell_key(int(dst_row_idx), xi, int(self.capacity.cols))
-			offset := self.grapheme_alloc.alloc(cps.len * int(sizeof(u32))) or {
+			offset := self.grapheme_alloc.alloc(usize(cps.len) * usize(sizeof(u32))) or {
 				return .grapheme_alloc_out_of_memory
 			}
 			if dst_key in self.grapheme_map || self.grapheme_count() >= self.grapheme_capacity() {
-				self.grapheme_alloc.release(offset, cps.len * int(sizeof(u32)))
+				self.grapheme_alloc.release(offset, usize(cps.len) * usize(sizeof(u32)))
 				return .grapheme_map_out_of_memory
 			}
 			self.grapheme_map[dst_key] = GraphemeAllocation{
 				offset: offset
-				len: cps.len
+				len: usize(cps.len)
 			}
 			dst_row.cells[xi].graphemes = cps.clone()
 			dst_row.cells[xi].has_grapheme = true
@@ -2299,17 +2299,17 @@ pub fn (mut self Page) set_graphemes(row_idx int, col_idx int, cps []u32) ! {
 	assert cell.content_tag == .codepoint
 	assert cps.len > 0
 
-	offset := self.grapheme_alloc.alloc(cps.len * int(sizeof(u32))) or {
+	offset := self.grapheme_alloc.alloc(usize(cps.len) * usize(sizeof(u32))) or {
 		return error('GraphemeAllocOutOfMemory')
 	}
 	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
 	if key in self.grapheme_map || self.grapheme_count() >= self.grapheme_capacity() {
-		self.grapheme_alloc.release(offset, cps.len * int(sizeof(u32)))
+		self.grapheme_alloc.release(offset, usize(cps.len) * usize(sizeof(u32)))
 		return error('GraphemeMapOutOfMemory')
 	}
 	self.grapheme_map[key] = GraphemeAllocation{
 		offset: offset
-		len: cps.len
+		len: usize(cps.len)
 	}
 
 	cell.graphemes = cps.clone()
@@ -2329,11 +2329,11 @@ pub fn (mut self Page) append_grapheme(row_idx int, col_idx int, cp u32) ! {
 	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
 
 	if cell.content_tag != .codepoint_grapheme {
-		offset := self.grapheme_alloc.alloc(int(sizeof(u32))) or {
+		offset := self.grapheme_alloc.alloc(usize(sizeof(u32))) or {
 			return error('GraphemeAllocOutOfMemory')
 		}
 		if self.grapheme_count() >= self.grapheme_capacity() {
-			self.grapheme_alloc.release(offset, int(sizeof(u32)))
+			self.grapheme_alloc.release(offset, usize(sizeof(u32)))
 			return error('GraphemeMapOutOfMemory')
 		}
 		self.grapheme_map[key] = GraphemeAllocation{
@@ -2350,7 +2350,7 @@ pub fn (mut self Page) append_grapheme(row_idx int, col_idx int, cp u32) ! {
 	mut allocation := self.grapheme_map[key] or {
 		panic('grapheme cell is missing its page mapping')
 	}
-	if allocation.len % grapheme_chunk_len != 0 {
+	if allocation.len % usize(grapheme_chunk_len) != 0 {
 		allocation.len++
 		self.grapheme_map[key] = allocation
 		cell.graphemes << cp
@@ -2358,10 +2358,10 @@ pub fn (mut self Page) append_grapheme(row_idx int, col_idx int, cp u32) ! {
 	}
 
 	new_len := allocation.len + 1
-	new_offset := self.grapheme_alloc.alloc(new_len * int(sizeof(u32))) or {
+	new_offset := self.grapheme_alloc.alloc(new_len * usize(sizeof(u32))) or {
 		return error('GraphemeAllocOutOfMemory')
 	}
-	self.grapheme_alloc.release(allocation.offset, allocation.len * int(sizeof(u32)))
+	self.grapheme_alloc.release(allocation.offset, allocation.len * usize(sizeof(u32)))
 	self.grapheme_map[key] = GraphemeAllocation{
 		offset: new_offset
 		len: new_len
@@ -2428,7 +2428,7 @@ pub fn (mut self Page) clear_grapheme(row_idx int, col_idx int) {
 	allocation := self.grapheme_map[key] or {
 		panic('cleared grapheme cell is missing its page mapping')
 	}
-	self.grapheme_alloc.release(allocation.offset, allocation.len * int(sizeof(u32)))
+	self.grapheme_alloc.release(allocation.offset, allocation.len * usize(sizeof(u32)))
 	self.grapheme_map.delete(key)
 	self.rows[row_idx].cells[col_idx].graphemes = []
 	self.rows[row_idx].cells[col_idx].has_grapheme = false

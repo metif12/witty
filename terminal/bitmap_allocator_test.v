@@ -91,7 +91,7 @@ fn test_find_free_chunks_larger_than_64_exact() {
 
 fn test_bitmap_allocator_layout() {
 	chunk_size := 4
-	cap := 64 * 4
+	cap := usize(64 * 4)
 	l := bitmap_allocator_layout(cap, chunk_size)
 
 	// We expect to use one bitmap since the cap is bytes.
@@ -100,7 +100,7 @@ fn test_bitmap_allocator_layout() {
 
 fn test_bitmap_allocator_alloc_sequentially() {
 	chunk_size := 4
-	cap := 64
+	cap := usize(64)
 	l := bitmap_allocator_layout(cap, chunk_size)
 	mut bm := BitmapAllocator.init(chunk_size, l)
 
@@ -130,7 +130,7 @@ fn test_bitmap_allocator_alloc_sequentially() {
 
 fn test_bitmap_allocator_alloc_large() {
 	chunk_size := 2
-	cap := 256
+	cap := usize(256)
 	l := bitmap_allocator_layout(cap, chunk_size)
 	mut bm := BitmapAllocator.init(chunk_size, l)
 
@@ -327,7 +327,7 @@ fn test_bitmap_allocator_bytes_required() {
 // Test alloc non-byte (element size 4, one chunk each).
 fn test_bitmap_allocator_alloc_non_byte() {
 	chunk_size := 4
-	cap := 128
+	cap := usize(128)
 	l := bitmap_allocator_layout(cap, chunk_size)
 	mut bm := BitmapAllocator.init(chunk_size, l)
 
@@ -357,7 +357,7 @@ fn test_bitmap_allocator_alloc_non_byte() {
 // Test alloc non-byte spanning multiple chunks.
 fn test_bitmap_allocator_alloc_non_byte_multi_chunk() {
 	chunk_size := 4 * 4
-	cap := 128
+	cap := usize(128)
 	l := bitmap_allocator_layout(cap, chunk_size)
 	mut bm := BitmapAllocator.init(chunk_size, l)
 
