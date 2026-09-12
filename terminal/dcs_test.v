@@ -5,6 +5,15 @@ import tmux
 // Tests for DCS command handler.
 // Translated from Ghostty's dcs.zig tests.
 
+fn test_dcs_decrqss_source_layout() {
+	assert sizeof(DcsDecrqss) == 1
+	assert u8(DcsDecrqss.none_val) == 0
+	assert u8(DcsDecrqss.sgr) == 1
+	assert u8(DcsDecrqss.decscusr) == 2
+	assert u8(DcsDecrqss.decstbm) == 3
+	assert u8(DcsDecrqss.decslrm) == 4
+}
+
 fn test_dcs_unknown_command() {
 	mut h := DcsHandler{}
 	defer { h.deinit() }

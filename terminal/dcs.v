@@ -113,7 +113,7 @@ pub fn (mut self DcsXtgettcap) next() ?string {
 }
 
 // Supported DECRQSS settings
-pub enum DcsDecrqss {
+pub enum DcsDecrqss as u8 {
 	none_val
 	sgr
 	decscusr
