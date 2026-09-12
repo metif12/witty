@@ -151,23 +151,7 @@ pub fn run_cli_action(action global_state.Action, args []string) !int {
 fn run_cli_action_main(action global_state.Action, args []string) !int {
 	return match action {
 		.none { 0 }
-		.version {
-			println('Ghostty ${version_string}')
-			println('')
-			println('Version')
-			println('  - version: ${version_string}')
-			println('  - channel: ${release_channel}')
-			println('Build Config')
-			println('  - V version     : ${@VEXE}')
-			println('  - build mode    : ${if is_debug { 'debug' } else { 'release' }}')
-			println('  - app runtime   : ${artifact}')
-			$if linux {
-				kernel := internal_os.get_kernel_info() or { 'Kernel information unavailable' }
-				println('  - kernel version: ${kernel}')
-				println('  - desktop env   : ${internal_os.desktop_environment()}')
-			}
-			0
-		}
+		.version { cli.run_version()! }
 		.help { cli.run_help(action_args(args, action))! }
 		.list_themes { cli.run_list_themes(action_args(args, action))! }
 		.list_fonts { cli.run_list_fonts(action_args(args, action))! }
