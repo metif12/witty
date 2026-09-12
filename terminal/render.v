@@ -205,7 +205,7 @@ pub mut:
 }
 
 // Dirty state
-pub enum RenderDirty {
+pub enum RenderDirty as u8 {
 	// Not dirty at all. Can skip rendering if prior state was
 	// already rendered.
 	false_

@@ -8,6 +8,13 @@ module terminal
 // link_cells, to_string and the dirty tracking is preserved so these tests
 // mirror the Ghostty originals.
 
+fn test_render_dirty_source_layout() {
+	assert sizeof(RenderDirty) == 1
+	assert u8(RenderDirty.false_) == 0
+	assert u8(RenderDirty.partial) == 1
+	assert u8(RenderDirty.full) == 2
+}
+
 // ============================================================
 // styled
 // ============================================================
