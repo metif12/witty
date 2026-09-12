@@ -3,6 +3,7 @@ module apprt
 
 import configpkg
 import input
+import os
 
 // "apprt" is the "application runtime" package. This abstracts the
 // application runtime and lifecycle management such as creating windows,
@@ -80,7 +81,32 @@ pub fn (r &RuntimeApp) wakeup() {
 	}
 }
 
-// RuntimeSurface represents a single surface in the runtime.
+pub type RuntimeSurfaceCloseFn = fn (voidptr, bool)
+
+pub type RuntimeSurfaceContentScaleFn = fn (voidptr) !ContentScale
+
+pub type RuntimeSurfaceSizeFn = fn (voidptr) !SurfaceSize
+
+pub type RuntimeSurfaceCursorPosFn = fn (voidptr) !CursorPos
+
+pub type RuntimeSurfaceTitleFn = fn (voidptr) ?string
+
+pub type RuntimeSurfaceSetClipboardFn = fn (voidptr, Clipboard, []ClipboardContent, bool) !
+
+pub type RuntimeSurfaceSupportsClipboardFn = fn (voidptr, Clipboard) bool
+
+pub type RuntimeSurfaceClipboardRequestFn = fn (voidptr, Clipboard, ClipboardRequest) !bool
+
+pub type RuntimeSurfaceDefaultEnvFn = fn (voidptr) !map[string]string
+
+pub struct RuntimeClipboardRequest {
+pub:
+	clipboard Clipboard
+	request   ClipboardRequest
+}
+
+// RuntimeSurface is the runtime-neutral surface boundary. Platform runtimes
+// install callbacks; the headless implementation retains observable state.
 pub struct RuntimeSurface {
 pub mut:
 	content_scale       ContentScale = ContentScale{ x: 1, y: 1 }
@@ -88,35 +114,87 @@ pub mut:
 	cursor_pos          CursorPos
 	title               ?string
 	clipboards          map[Clipboard][]ClipboardContent
-	requests            []ClipboardRequest
+	requests            []RuntimeClipboardRequest
 	closed              bool
 	close_confirm       bool
 	selection_clipboard bool
 	default_env         map[string]string
+	linux_cgroup        ?string
+	// Native NSView/UIView used by the Metal renderer. GTK leaves this nil
+	// because its current GL context is the rendering surface.
+	renderer_view         voidptr = unsafe { nil }
+	user_data             voidptr = unsafe { nil }
+	close_fn              RuntimeSurfaceCloseFn = unsafe { nil }
+	content_scale_fn      RuntimeSurfaceContentScaleFn = unsafe { nil }
+	size_fn               RuntimeSurfaceSizeFn = unsafe { nil }
+	cursor_pos_fn         RuntimeSurfaceCursorPosFn = unsafe { nil }
+	title_fn              RuntimeSurfaceTitleFn = unsafe { nil }
+	set_clipboard_fn      RuntimeSurfaceSetClipboardFn = unsafe { nil }
+	supports_clipboard_fn RuntimeSurfaceSupportsClipboardFn = unsafe { nil }
+	clipboard_request_fn  RuntimeSurfaceClipboardRequestFn = unsafe { nil }
+	default_env_fn        RuntimeSurfaceDefaultEnvFn = unsafe { nil }
 }
 
 pub fn (mut r RuntimeSurface) close(confirm bool) {
+	if unsafe { voidptr(&r) == nil } {
+		return
+	}
+	if r.close_fn != unsafe { nil } {
+		r.close_fn(r.user_data, confirm)
+		return
+	}
 	r.closed = true
 	r.close_confirm = confirm
 }
 
 pub fn (r RuntimeSurface) get_content_scale() !ContentScale {
+	if unsafe { voidptr(&r) == nil } {
+		return ContentScale{ x: 1, y: 1 }
+	}
+	if r.content_scale_fn != unsafe { nil } {
+		return r.content_scale_fn(r.user_data)
+	}
 	return r.content_scale
 }
 
 pub fn (r RuntimeSurface) get_size() !SurfaceSize {
+	if unsafe { voidptr(&r) == nil } {
+		return SurfaceSize{ width: 800, height: 600 }
+	}
+	if r.size_fn != unsafe { nil } {
+		return r.size_fn(r.user_data)
+	}
 	return r.size
 }
 
 pub fn (r RuntimeSurface) get_cursor_pos() !CursorPos {
+	if unsafe { voidptr(&r) == nil } {
+		return CursorPos{}
+	}
+	if r.cursor_pos_fn != unsafe { nil } {
+		return r.cursor_pos_fn(r.user_data)
+	}
 	return r.cursor_pos
 }
 
 pub fn (r RuntimeSurface) get_title() ?string {
+	if unsafe { voidptr(&r) == nil } {
+		return none
+	}
+	if r.title_fn != unsafe { nil } {
+		return r.title_fn(r.user_data)
+	}
 	return r.title
 }
 
 pub fn (mut r RuntimeSurface) set_clipboard(loc Clipboard, contents []ClipboardContent, confirm bool) ! {
+	if unsafe { voidptr(&r) == nil } {
+		return
+	}
+	if r.set_clipboard_fn != unsafe { nil } {
+		r.set_clipboard_fn(r.user_data, loc, contents, confirm)!
+		return
+	}
 	if confirm {
 		return error('clipboard confirmation required')
 	}
@@ -124,18 +202,40 @@ pub fn (mut r RuntimeSurface) set_clipboard(loc Clipboard, contents []ClipboardC
 }
 
 pub fn (r RuntimeSurface) supports_clipboard(loc Clipboard) bool {
+	if unsafe { voidptr(&r) == nil } {
+		return false
+	}
+	if r.supports_clipboard_fn != unsafe { nil } {
+		return r.supports_clipboard_fn(r.user_data, loc)
+	}
 	return loc == .standard || r.selection_clipboard
 }
 
-pub fn (mut r RuntimeSurface) clipboard_request(loc Clipboard, req ClipboardRequest) ! {
-	r.requests << ClipboardRequest{
-		...req
-		clipboard: loc
+pub fn (mut r RuntimeSurface) clipboard_request(loc Clipboard, req ClipboardRequest) !bool {
+	if unsafe { voidptr(&r) == nil } {
+		return false
 	}
+	if r.clipboard_request_fn != unsafe { nil } {
+		return r.clipboard_request_fn(r.user_data, loc, req)!
+	}
+	r.requests << RuntimeClipboardRequest{
+		clipboard: loc
+		request: req
+	}
+	return true
 }
 
 pub fn (r RuntimeSurface) default_termio_env() !map[string]string {
-	return r.default_env.clone()
+	if unsafe { voidptr(&r) == nil } {
+		return os.environ()
+	}
+	if r.default_env_fn != unsafe { nil } {
+		return r.default_env_fn(r.user_data)!
+	}
+	if r.default_env.len > 0 {
+		return r.default_env.clone()
+	}
+	return os.environ()
 }
 
 // CoreApp represents the core application logic. The concrete core.App is

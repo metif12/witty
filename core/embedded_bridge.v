@@ -27,7 +27,7 @@ mut:
 	app              &EmbeddedAppCore = unsafe { nil }
 	wrapper          &apprt.CoreSurface = unsafe { nil }
 	runtime_app      apprt.RuntimeApp
-	runtime_surface  RuntimeSurface
+	runtime_surface  apprt.RuntimeSurface
 	surface          Surface
 	surface_ref      SurfaceRef
 	rt_surface       &apprt.Surface = unsafe { nil }
@@ -293,9 +293,9 @@ fn bridge_runtime_set_clipboard(ptr voidptr, loc apprt.Clipboard, contents []app
 	self.rt_surface.set_clipboard(loc, contents, confirm)!
 }
 
-fn bridge_runtime_supports_selection(ptr voidptr) bool {
+fn bridge_runtime_supports_clipboard(ptr voidptr, loc apprt.Clipboard) bool {
 	self := unsafe { &EmbeddedSurfaceCore(ptr) }
-	return self.rt_surface.supports_clipboard(.selection)
+	return self.rt_surface.supports_clipboard(loc)
 }
 
 fn bridge_runtime_clipboard_request(ptr voidptr, loc apprt.Clipboard, req apprt.ClipboardRequest) !bool {
@@ -337,7 +337,7 @@ fn bridge_surface_init(config &configpkg.Config, core_app &apprt.CoreApp, app &a
 		wakeup_fn: bridge_surface_runtime_wakeup
 		keyboard_layout: app.keyboard_layout()
 	}
-	self.runtime_surface = RuntimeSurface{
+	self.runtime_surface = apprt.RuntimeSurface{
 		user_data: voidptr(self)
 		renderer_view: embedded_renderer_view(rt_surface)
 		close_fn: bridge_runtime_close
@@ -346,7 +346,7 @@ fn bridge_surface_init(config &configpkg.Config, core_app &apprt.CoreApp, app &a
 		cursor_pos_fn: bridge_runtime_cursor_pos
 		title_fn: bridge_runtime_title
 		set_clipboard_fn: bridge_runtime_set_clipboard
-		supports_selection_fn: bridge_runtime_supports_selection
+		supports_clipboard_fn: bridge_runtime_supports_clipboard
 		clipboard_request_fn: bridge_runtime_clipboard_request
 		default_env_fn: bridge_runtime_default_env
 	}

@@ -1609,168 +1609,6 @@ pub type FontGridKey = font.GridSetKey
 
 pub type FontGrid = font.SharedGrid
 
-pub type RuntimeSurfaceCloseFn = fn (voidptr, bool)
-
-pub type RuntimeSurfaceContentScaleFn = fn (voidptr) !apprt.ContentScale
-
-pub type RuntimeSurfaceSizeFn = fn (voidptr) !apprt.SurfaceSize
-
-pub type RuntimeSurfaceCursorPosFn = fn (voidptr) !apprt.CursorPos
-
-pub type RuntimeSurfaceTitleFn = fn (voidptr) ?string
-
-pub type RuntimeSurfaceSetClipboardFn = fn (voidptr, apprt.Clipboard, []apprt.ClipboardContent, bool) !
-
-pub type RuntimeSurfaceSupportsSelectionFn = fn (voidptr) bool
-
-pub type RuntimeSurfaceClipboardRequestFn = fn (voidptr, apprt.Clipboard, apprt.ClipboardRequest) !bool
-
-pub type RuntimeSurfaceDefaultEnvFn = fn (voidptr) !map[string]string
-
-pub struct RuntimeClipboardRequest {
-pub:
-	clipboard apprt.Clipboard
-	request   apprt.ClipboardRequest
-}
-
-pub struct RuntimeSurface {
-pub mut:
-	content_scale       apprt.ContentScale = apprt.ContentScale{ x: 1.0, y: 1.0 }
-	size                apprt.SurfaceSize = apprt.SurfaceSize{ width: 800, height: 600 }
-	cursor_pos          apprt.CursorPos
-	title               ?string
-	clipboards          map[apprt.Clipboard][]apprt.ClipboardContent
-	requests            []RuntimeClipboardRequest
-	closed              bool
-	close_confirm       bool
-	selection_clipboard bool
-	default_env         map[string]string
-	linux_cgroup        ?string
-	// Native NSView/UIView used by the Metal renderer. GTK leaves this nil
-	// because its current GL context is the rendering surface.
-	renderer_view         voidptr = unsafe { nil }
-	user_data             voidptr = unsafe { nil }
-	close_fn              RuntimeSurfaceCloseFn = unsafe { nil }
-	content_scale_fn      RuntimeSurfaceContentScaleFn = unsafe { nil }
-	size_fn               RuntimeSurfaceSizeFn = unsafe { nil }
-	cursor_pos_fn         RuntimeSurfaceCursorPosFn = unsafe { nil }
-	title_fn              RuntimeSurfaceTitleFn = unsafe { nil }
-	set_clipboard_fn      RuntimeSurfaceSetClipboardFn = unsafe { nil }
-	supports_selection_fn RuntimeSurfaceSupportsSelectionFn = unsafe { nil }
-	clipboard_request_fn  RuntimeSurfaceClipboardRequestFn = unsafe { nil }
-	default_env_fn        RuntimeSurfaceDefaultEnvFn = unsafe { nil }
-}
-
-fn (mut r RuntimeSurface) close(confirm bool) {
-	if unsafe { voidptr(&r) == nil } {
-		return
-	}
-	if r.close_fn != unsafe { nil } {
-		r.close_fn(r.user_data, confirm)
-		return
-	}
-	r.closed = true
-	r.close_confirm = confirm
-}
-
-fn (r RuntimeSurface) get_content_scale() !apprt.ContentScale {
-	if unsafe { voidptr(&r) == nil } {
-		return apprt.ContentScale{ x: 1, y: 1 }
-	}
-	if r.content_scale_fn != unsafe { nil } {
-		return r.content_scale_fn(r.user_data)
-	}
-	return r.content_scale
-}
-
-fn (r RuntimeSurface) get_size() !apprt.SurfaceSize {
-	if unsafe { voidptr(&r) == nil } {
-		return apprt.SurfaceSize{ width: 800, height: 600 }
-	}
-	if r.size_fn != unsafe { nil } {
-		return r.size_fn(r.user_data)
-	}
-	return r.size
-}
-
-fn (r RuntimeSurface) get_cursor_pos() !apprt.CursorPos {
-	if unsafe { voidptr(&r) == nil } {
-		return apprt.CursorPos{}
-	}
-	if r.cursor_pos_fn != unsafe { nil } {
-		return r.cursor_pos_fn(r.user_data)
-	}
-	return r.cursor_pos
-}
-
-fn (r RuntimeSurface) get_title() ?string {
-	if unsafe { voidptr(&r) == nil } {
-		return none
-	}
-	if r.title_fn != unsafe { nil } {
-		return r.title_fn(r.user_data)
-	}
-	return r.title
-}
-
-fn (r RuntimeSurface) default_termio_env() !map[string]string {
-	if unsafe { voidptr(&r) == nil } {
-		return os.environ()
-	}
-	if r.default_env_fn != unsafe { nil } {
-		return r.default_env_fn(r.user_data)!
-	}
-	if r.default_env.len > 0 {
-		return r.default_env.clone()
-	}
-	return os.environ()
-}
-
-fn (mut r RuntimeSurface) set_clipboard(contents string, confirm bool) ! {
-	r.set_clipboard_at(.standard, [apprt.ClipboardContent{
-		mime: 'text/plain'
-		data: contents
-	}], confirm)!
-}
-
-fn (mut r RuntimeSurface) set_clipboard_at(loc apprt.Clipboard, contents []apprt.ClipboardContent, confirm bool) ! {
-	if unsafe { voidptr(&r) == nil } {
-		return
-	}
-	if r.set_clipboard_fn != unsafe { nil } {
-		r.set_clipboard_fn(r.user_data, loc, contents, confirm)!
-		return
-	}
-	if confirm {
-		return error('clipboard confirmation required')
-	}
-	r.clipboards[loc] = contents.clone()
-}
-
-fn (r RuntimeSurface) supports_clipboard_selection() bool {
-	if unsafe { voidptr(&r) == nil } {
-		return false
-	}
-	if r.supports_selection_fn != unsafe { nil } {
-		return r.supports_selection_fn(r.user_data)
-	}
-	return r.selection_clipboard
-}
-
-fn (mut r RuntimeSurface) clipboard_request(loc apprt.Clipboard, req apprt.ClipboardRequest) !bool {
-	if unsafe { voidptr(&r) == nil } {
-		return false
-	}
-	if r.clipboard_request_fn != unsafe { nil } {
-		return r.clipboard_request_fn(r.user_data, loc, req)!
-	}
-	r.requests << RuntimeClipboardRequest{
-		clipboard: loc
-		request: req
-	}
-	return true
-}
-
 pub type Renderer = rendererpkg.Renderer
 
 pub type RendererState = rendererpkg.RenderState
@@ -2247,7 +2085,7 @@ pub mut:
 
 	app        &App = unsafe { nil }
 	rt_app     &apprt.RuntimeApp = unsafe { nil }
-	rt_surface &RuntimeSurface = unsafe { nil }
+	rt_surface &apprt.RuntimeSurface = unsafe { nil }
 
 	font_grid_key      FontGridKey
 	font_grid          &font.SharedGrid = unsafe { nil }
@@ -2298,7 +2136,7 @@ fn (self &Surface) has_terminal() bool {
 // ---- Surface methods ----
 
 // init creates a new surface. This must be called from the main thread.
-pub fn (mut self Surface) init(config &Config, mut app App, rt_app &apprt.RuntimeApp, rt_surface &RuntimeSurface) ! {
+pub fn (mut self Surface) init(config &Config, mut app App, rt_app &apprt.RuntimeApp, rt_surface &apprt.RuntimeSurface) ! {
 	unsafe {
 		self.app = app
 		self.rt_app = rt_app
@@ -3951,7 +3789,7 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 	// Middle-click pastes from our selection clipboard.
 	if button == .middle && is_press {
 		if self.config.copy_on_select != .false_ {
-			clipboard := if self.rt_surface.supports_clipboard_selection() {
+			clipboard := if self.rt_surface.supports_clipboard(.selection) {
 				apprt.Clipboard.selection
 			} else {
 				apprt.Clipboard.standard
@@ -4545,7 +4383,10 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 					self.osc8_uri(link_info.selection.start()) or { return false }
 				}
 			}
-			self.rt_surface.set_clipboard(url_text, false) or { return false }
+			self.rt_surface.set_clipboard(.standard, [apprt.ClipboardContent{
+				mime: 'text/plain'
+				data: url_text
+			}], false) or { return false }
 			return true
 		}
 		.copy_title_to_clipboard {
@@ -4553,7 +4394,10 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			if title.len == 0 {
 				return false
 			}
-			self.rt_surface.set_clipboard(title, false) or { return true }
+			self.rt_surface.set_clipboard(.standard, [apprt.ClipboardContent{
+				mime: 'text/plain'
+				data: title
+			}], false) or { return true }
 			return true
 		}
 		.paste_from_clipboard {
@@ -5511,7 +5355,7 @@ fn (mut self Surface) set_selection(sel ?terminal.Selection) ! {
 			self.copy_selection_to_clipboards(new_sel, [.standard, .selection], .mixed)!
 		}
 		.true_ {
-			loc := if self.rt_surface.supports_clipboard_selection() {
+			loc := if self.rt_surface.supports_clipboard(.selection) {
 				apprt.Clipboard.selection
 			} else {
 				apprt.Clipboard.standard
@@ -6213,7 +6057,10 @@ fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen input.W
 	// Act on the written file per the action.
 	match write_screen.action {
 		.copy {
-			self.rt_surface.set_clipboard(tmp_path, false)!
+			self.rt_surface.set_clipboard(.standard, [apprt.ClipboardContent{
+				mime: 'text/plain'
+				data: tmp_path
+			}], false)!
 		}
 		.open {
 			kind := match write_screen.emit {
@@ -6293,7 +6140,7 @@ pub fn (mut self Surface) complete_clipboard_request(req apprt.ClipboardRequest,
 			self.queue_io(termiopkg.Message.write_alloc_msg(response))
 		}
 		.osc_52_write {
-			self.rt_surface.set_clipboard_at(req.clipboard, [apprt.ClipboardContent{
+			self.rt_surface.set_clipboard(req.clipboard, [apprt.ClipboardContent{
 				mime: 'text/plain'
 				data: data
 			}], !confirmed)!
@@ -6389,7 +6236,7 @@ fn (mut self Surface) copy_selection_to_clipboards(sel TermSelection, clipboards
 		return
 	}
 	for loc in clipboards {
-		self.rt_surface.set_clipboard_at(loc, contents, false) or {}
+		self.rt_surface.set_clipboard(loc, contents, false) or {}
 	}
 }
 
@@ -6398,7 +6245,7 @@ fn (mut self Surface) clipboard_write(data string, loc apprt.Clipboard) ! {
 		return
 	}
 	decoded := base64.decode(data)
-	self.rt_surface.set_clipboard_at(loc, [apprt.ClipboardContent{
+	self.rt_surface.set_clipboard(loc, [apprt.ClipboardContent{
 		mime: 'text/plain'
 		data: decoded.bytestr()
 	}], self.config.clipboard_write == .ask)!

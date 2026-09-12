@@ -991,7 +991,7 @@ pub mut:
 	// `?*core.Surface`; we model "unset" with `unsafe { nil }`.
 	core_surface         &core.Surface = unsafe { nil }
 	core_runtime_app     apprt.RuntimeApp
-	core_runtime_surface core.RuntimeSurface
+	core_runtime_surface apprt.RuntimeSurface
 	core_surface_ref     &core.SurfaceRef = unsafe { nil }
 
 	// Weakly-owned terminal inspector window. The window clears this pointer
@@ -2663,7 +2663,7 @@ fn (mut self SurfaceWidget) init_surface() ! {
 		action_fn: surface_core_action_cb
 		wakeup_fn: surface_core_wakeup_cb
 	}
-	self.core_runtime_surface = core.RuntimeSurface{
+	self.core_runtime_surface = apprt.RuntimeSurface{
 		user_data: self
 		close_fn: surface_core_close_cb
 		content_scale_fn: surface_core_content_scale_cb
@@ -2671,7 +2671,7 @@ fn (mut self SurfaceWidget) init_surface() ! {
 		cursor_pos_fn: surface_core_cursor_pos_cb
 		title_fn: surface_core_title_cb
 		set_clipboard_fn: surface_core_set_clipboard_cb
-		supports_selection_fn: surface_core_supports_selection_cb
+		supports_clipboard_fn: surface_core_supports_clipboard_cb
 		clipboard_request_fn: surface_core_clipboard_request_cb
 		default_env_fn: surface_core_default_env_cb
 		linux_cgroup: self.cgroup_path
@@ -2967,8 +2967,9 @@ fn surface_core_set_clipboard_cb(data voidptr, clipboard apprt.Clipboard, conten
 	self.set_clipboard(clipboard, contents, confirm)
 }
 
-fn surface_core_supports_selection_cb(data voidptr) bool {
+fn surface_core_supports_clipboard_cb(data voidptr, clipboard apprt.Clipboard) bool {
 	_ = data
+	_ = clipboard
 	return true
 }
 

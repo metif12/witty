@@ -43,6 +43,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | core/surface action discriminant | The surface runtime wrapper declared a 62-case `AppActionKind` copy in a different order from `apprt.ActionKey`, including three values that could never validly reach runtime dispatch. | Store `apprt.ActionKey` directly in the wrapper, map app-scoped input actions to that canonical key, and remove the dead close/ignore/unbind bridge arms. |
 | core/surface action value | The surface runtime wrapper flattened Ghostty's tagged action value into more than thirty parallel fields, and the embedded bridge reconstructed the canonical `apprt.ActionValue` with a second handwritten dispatch switch. | Carry `apprt.ActionValue` unchanged through the core and runtime adapters, construct every canonical payload at its source producer, and retain Ghostty's supported-only OSC color projection at the surface boundary. |
 | core/surface runtime action transport | Core still declared a second `RuntimeApp` and `AppAction` queue around the now-canonical target, key, and value, so every surface action crossed an unnecessary source-external record and runtime implementation. | Use the shared `apprt.RuntimeApp` and `apprt.RuntimeAction` directly for both app- and surface-scoped actions; retain only a runtime callback hook for V's compile-time module boundary. |
+| core/surface runtime surface transport | Core duplicated the runtime surface's close, scale, size, cursor, title, clipboard, environment, renderer-view, and Linux-cgroup state plus every dispatch method. Its clipboard-capability callback accepted no location even though Ghostty queries a specific clipboard. | Use one shared `apprt.RuntimeSurface`, move the V module-boundary callbacks onto it, pass the requested clipboard location unchanged, and retain both the source clipboard location and tagged request in headless captures. |
 | core/surface IO messages | The surface declared a second IO message enum/struct and projected it into `termio.Message` at the live boundary. Its queued-key and fixed-buffer paths labeled payloads up to 128 bytes as the 38-byte `write_small` arm, silently truncating them when a live PTY was used. | Queue canonical `termio.Message` values directly, represent queued keys with the translated `MessageData(u8, 38)` storage contract, and select the small/allocated arm at the source 38-byte boundary without truncation. |
 | core/terminal viewport scroll | Normalized mouse-scroll deltas used fixed `i64`/`u64`, then narrowed to V's 32-bit `int` through core, termio, and terminal; jump-to-prompt messages were narrowed the same way. | Restore source `isize`/`usize` storage across the complete message/API path and clamp only where the flat screen representation reaches its bounded array indexes. |
 | core/surface coordinates | `pos_to_viewport` independently reimplemented padding removal, cell division, and clamping rather than using Ghostty's renderer coordinate conversion path. | Delegate directly to the translated `renderer.SizeCoordinate.convert(.grid, size)` and only project the resulting grid pair into the terminal coordinate. |
@@ -188,10 +189,10 @@ an item here does not mean its full module has been certified yet.
   This is behaviorally implemented but not a file-for-file layout match.
 - **Runtime bridge representation:** Ghostty selects the concrete apprt types at
   compile time. Witty's merged V module boundary instead adds callbacks to its
-  runtime-neutral `apprt.RuntimeApp`, retains a core `RuntimeSurface` adapter,
-  and uses a process-global table of opaque core callbacks. This bridge is
-  source-external architecture, even where each callback delegates to the
-  translated core implementation.
+  runtime-neutral `apprt.RuntimeApp` and `apprt.RuntimeSurface` and uses a
+  process-global table of opaque core callbacks. This bridge is source-external
+  architecture, even where each callback delegates to the translated core
+  implementation.
 - **Native/platform coverage:** The complete FreeType/CoreText/web-canvas,
   discovery, Metal/OpenGL, shadertoy, regex,
   embedded-resource, locking, configuration, and platform application surfaces

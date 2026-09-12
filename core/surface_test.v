@@ -364,7 +364,7 @@ fn test_surface_mouse_buttons_use_canonical_enum_indices() {
 }
 
 fn test_left_click_uses_source_multi_click_selection_state_machine() {
-	mut runtime := RuntimeSurface{ cursor_pos: apprt.CursorPos{ x: 15, y: 15 } }
+	mut runtime := apprt.RuntimeSurface{ cursor_pos: apprt.CursorPos{ x: 15, y: 15 } }
 	mut surf := make_test_surface()
 	surf.rt_surface = &runtime
 	surf.size = make_test_size()
@@ -399,7 +399,7 @@ fn test_left_click_uses_source_multi_click_selection_state_machine() {
 }
 
 fn test_right_click_context_menu_selects_word_without_consuming() {
-	mut runtime := RuntimeSurface{ cursor_pos: apprt.CursorPos{ x: 15, y: 15 } }
+	mut runtime := apprt.RuntimeSurface{ cursor_pos: apprt.CursorPos{ x: 15, y: 15 } }
 	mut surf := make_test_surface()
 	surf.rt_surface = &runtime
 	surf.size = make_test_size()
@@ -418,7 +418,7 @@ fn test_right_click_context_menu_selects_word_without_consuming() {
 }
 
 fn test_right_click_copy_or_paste_requests_paste_without_selection() {
-	mut runtime := RuntimeSurface{ cursor_pos: apprt.CursorPos{ x: 15, y: 15 } }
+	mut runtime := apprt.RuntimeSurface{ cursor_pos: apprt.CursorPos{ x: 15, y: 15 } }
 	mut surf := make_test_surface()
 	surf.rt_surface = &runtime
 	surf.size = make_test_size()
@@ -809,7 +809,7 @@ fn test_focus_callback_change() ! {
 }
 
 fn test_focus_callback_releases_pressed_key_and_modifiers() ! {
-	mut runtime_surface := RuntimeSurface{}
+	mut runtime_surface := apprt.RuntimeSurface{}
 	mut surf := make_test_surface()
 	surf.rt_surface = &runtime_surface
 	surf.focused = true
@@ -825,7 +825,7 @@ fn test_focus_callback_releases_pressed_key_and_modifiers() ! {
 }
 
 fn test_key_release_preserves_held_modifiers_for_focus_loss() ! {
-	mut runtime_surface := RuntimeSurface{}
+	mut runtime_surface := apprt.RuntimeSurface{}
 	mut surf := make_test_surface()
 	surf.rt_surface = &runtime_surface
 	surf.pressed_key = KeyEvent{
@@ -864,7 +864,7 @@ fn test_modifier_key_updates_mouse_shape() ! {
 
 fn test_modifier_key_refreshes_link_hover() ! {
 	mut runtime_app := apprt.RuntimeApp{}
-	mut runtime_surface := RuntimeSurface{
+	mut runtime_surface := apprt.RuntimeSurface{
 		cursor_pos: apprt.CursorPos{ x: 6, y: 6 }
 	}
 	mut surf := make_test_surface()
@@ -965,7 +965,7 @@ fn test_secure_input_actions_preserve_on_off_and_toggle() ! {
 
 fn test_child_exited_no_wait() {
 	mut app_runtime := apprt.RuntimeApp{ actions_handled: true }
-	mut surface_runtime := RuntimeSurface{}
+	mut surface_runtime := apprt.RuntimeSurface{}
 	mut surf := make_test_surface()
 	surf.rt_app = &app_runtime
 	surf.rt_surface = &surface_runtime
@@ -985,7 +985,7 @@ fn test_child_exited_no_wait() {
 
 fn test_child_exited_abnormal_native_banner_stops_fallback() {
 	mut app_runtime := apprt.RuntimeApp{ actions_handled: true }
-	mut surface_runtime := RuntimeSurface{}
+	mut surface_runtime := apprt.RuntimeSurface{}
 	mut surf := make_test_surface()
 	surf.rt_app = &app_runtime
 	surf.rt_surface = &surface_runtime
@@ -1004,7 +1004,7 @@ fn test_child_exited_abnormal_native_banner_stops_fallback() {
 
 fn test_child_exited_abnormal_terminal_fallback() {
 	mut app_runtime := apprt.RuntimeApp{}
-	mut surface_runtime := RuntimeSurface{}
+	mut surface_runtime := apprt.RuntimeSurface{}
 	mut surf := make_test_surface()
 	surf.rt_app = &app_runtime
 	surf.rt_surface = &surface_runtime
@@ -1044,7 +1044,7 @@ fn test_selection_scroll_tick_no_click() ! {
 }
 
 fn test_selection_scroll_stops_after_screen_switch() ! {
-	mut runtime := RuntimeSurface{}
+	mut runtime := apprt.RuntimeSurface{}
 	mut surf := make_test_surface()
 	surf.rt_surface = &runtime
 	surf.selection_scroll_active = true
@@ -1092,7 +1092,7 @@ fn test_complete_clipboard_paste_rejects_unsafe_text() {
 }
 
 fn test_runtime_clipboard_request_preserves_source_and_request() ! {
-	mut runtime := RuntimeSurface{}
+	mut runtime := apprt.RuntimeSurface{}
 	request := apprt.ClipboardRequest{
 		kind: .osc_52_read
 		clipboard: .primary
@@ -1130,7 +1130,7 @@ fn test_complete_clipboard_request_osc52_read_requires_confirmation() {
 
 fn test_complete_clipboard_request_osc52_write() ! {
 	mut surf := make_test_surface()
-	mut runtime := RuntimeSurface{}
+	mut runtime := apprt.RuntimeSurface{}
 	surf.rt_surface = &runtime
 	surf.complete_clipboard_request(apprt.ClipboardRequest{
 		kind: .osc_52_write
@@ -1365,7 +1365,7 @@ fn test_scroll_callback_alternate_screen_emits_cursor_sequences() {
 }
 
 fn test_scroll_callback_reports_horizontal_wheel_buttons() {
-	mut runtime := RuntimeSurface{}
+	mut runtime := apprt.RuntimeSurface{}
 	mut surf := make_test_surface()
 	surf.rt_surface = &runtime
 	surf.size = make_test_size()
@@ -1381,7 +1381,7 @@ fn test_scroll_callback_reports_horizontal_wheel_buttons() {
 
 fn test_copy_selection_to_standard_clipboard() ! {
 	mut surf := make_test_surface()
-	mut runtime := RuntimeSurface{}
+	mut runtime := apprt.RuntimeSurface{}
 	surf.rt_surface = &runtime
 	for i, cp in 'hello'.runes() {
 		surf.renderer_state.terminal_.screens.active.pages.screen_rows[0].cells[i] = terminal.CellData.init(u32(cp))
@@ -1407,7 +1407,7 @@ fn test_copy_selection_to_standard_clipboard() ! {
 
 fn test_copy_selection_mixed_to_requested_clipboards() ! {
 	mut surf := make_test_surface()
-	mut runtime := RuntimeSurface{}
+	mut runtime := apprt.RuntimeSurface{}
 	surf.rt_surface = &runtime
 	for i, cp in 'hello'.runes() {
 		surf.renderer_state.terminal_.screens.active.pages.screen_rows[0].cells[i] = terminal.CellData.init(u32(cp))
@@ -1447,7 +1447,7 @@ fn test_copy_url_to_clipboard_uses_configured_trailing_space_policy() ! {
 	}]
 	defer { surf.config.links[0].regex.deinit() }
 	surf.mouse.over_link = true
-	mut runtime := RuntimeSurface{
+	mut runtime := apprt.RuntimeSurface{
 		cursor_pos: apprt.CursorPos{ x: 6, y: 6 }
 	}
 	surf.rt_surface = &runtime
@@ -1487,6 +1487,7 @@ fn test_mouse_link_preview_forwards_untrimmed_url() ! {
 struct RuntimeCallbackProbe {
 mut:
 	action_kind apprt.ActionKey
+	clipboard   apprt.Clipboard
 	closed      bool
 	confirmed   bool
 }
@@ -1551,6 +1552,12 @@ fn runtime_env_probe(data voidptr) !map[string]string {
 	}
 }
 
+fn runtime_supports_clipboard_probe(data voidptr, clipboard apprt.Clipboard) bool {
+	mut probe := unsafe { &RuntimeCallbackProbe(data) }
+	probe.clipboard = clipboard
+	return clipboard == .primary
+}
+
 fn test_runtime_callbacks_override_headless_storage() ! {
 	mut probe := RuntimeCallbackProbe{}
 	mut app := apprt.RuntimeApp{
@@ -1561,10 +1568,11 @@ fn test_runtime_callbacks_override_headless_storage() ! {
 	assert probe.action_kind == .ring_bell
 	assert app.actions.len == 0
 
-	mut surface := RuntimeSurface{
+	mut surface := apprt.RuntimeSurface{
 		user_data: &probe
 		close_fn: runtime_close_probe
 		content_scale_fn: runtime_scale_probe
+		supports_clipboard_fn: runtime_supports_clipboard_probe
 		default_env_fn: runtime_env_probe
 	}
 	surface.close(true)
@@ -1572,11 +1580,15 @@ fn test_runtime_callbacks_override_headless_storage() ! {
 	assert probe.confirmed
 	assert !surface.closed
 	assert surface.get_content_scale()! == apprt.ContentScale{ x: 2, y: 3 }
+	assert surface.supports_clipboard(.primary)
+	assert probe.clipboard == .primary
+	assert !surface.supports_clipboard(.selection)
+	assert probe.clipboard == .selection
 	assert surface.default_termio_env()!['WITTY_TEST_ENV'] == 'runtime'
 }
 
 fn test_runtime_surface_clones_configured_default_environment() ! {
-	surface := RuntimeSurface{
+	surface := apprt.RuntimeSurface{
 		default_env: {
 			'WITTY_TEST_ENV': 'configured'
 		}
