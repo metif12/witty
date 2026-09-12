@@ -8,7 +8,7 @@ module terminal
 // cursor is? the entire scrollback history? etc.
 //
 // This tag is used to differentiate those cases.
-pub enum PointTag {
+pub enum PointTag as u8 {
 	// Top-left is part of the active area where a running program can
 	// jump the cursor and make changes. The active area is the "editable"
 	// part of the screen.

@@ -31,6 +31,13 @@ fn test_point_get_coord() {
 }
 
 fn test_point_tags() {
+	assert sizeof(PointTag) == 1
+	assert sizeof(Coordinate) == 8
+	assert sizeof(Point) == 12
+	assert u8(PointTag.active) == 0
+	assert u8(PointTag.viewport) == 1
+	assert u8(PointTag.screen) == 2
+	assert u8(PointTag.history) == 3
 	active := Point.new(.active, Coordinate{})
 	viewport := Point.new(.viewport, Coordinate{})
 	screen := Point.new(.screen, Coordinate{})
