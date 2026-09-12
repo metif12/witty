@@ -28,7 +28,7 @@ pub:
 	c_abi bool
 }
 
-pub enum Artifact {
+pub enum Artifact as u8 {
 	// Ghostty application
 	ghostty
 	// libghostty-vt, Zig module

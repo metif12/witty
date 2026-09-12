@@ -6,7 +6,7 @@ module terminal
 // is determined by mode 12 (modes.zig). This mode is synchronized
 // with CSI q, the same as xterm.
 //
-pub enum CursorStyle {
+pub enum CursorStyle as u8 {
 	bar // DECSCUSR 5, 6
 	block // DECSCUSR 1, 2
 	underline // DECSCUSR 3, 4

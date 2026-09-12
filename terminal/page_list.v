@@ -2363,7 +2363,7 @@ import strings
 // Direction for iterators
 // ============================================================
 
-pub enum IterDirection {
+pub enum IterDirection as u8 {
 	left_up
 	right_down
 }
@@ -2372,7 +2372,7 @@ pub enum IterDirection {
 // PageViewport - where the viewport is positioned
 // ============================================================
 
-pub enum PageViewport {
+pub enum PageViewport as u8 {
 	active // Pinned to active area (bottom)
 	top // Pinned to top of scrollback
 	pin // Pinned to a tracked pin
@@ -2393,7 +2393,7 @@ pub mut:
 
 // Selects which part of a pin's row is returned by cells. The left and
 // right subsets both include the cell at the pin.
-pub enum PagePinCellSubset {
+pub enum PagePinCellSubset as u8 {
 	all
 	left
 	right
@@ -5101,7 +5101,7 @@ fn ReflowCursor.init(node &PageNode) ReflowCursor {
 }
 
 // Result of writing a cell.
-enum PageReflowWriteResult {
+enum PageReflowWriteResult as u8 {
 	success
 	repeat
 	skip_next
@@ -5783,7 +5783,7 @@ fn (mut self PageList) fixup_viewport(removed usize) {
 	}
 }
 
-pub enum PageCapacityAdjustment {
+pub enum PageCapacityAdjustment as u8 {
 	styles
 	grapheme_bytes
 	hyperlink_bytes

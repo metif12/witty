@@ -3,6 +3,7 @@ module terminal
 // Tests for cursor.v (translated from cursor.zig)
 
 fn test_cursor_style_values() {
+	assert sizeof(CursorStyle) == 1
 	assert int(CursorStyle.bar) == 0
 	assert int(CursorStyle.block) == 1
 	assert int(CursorStyle.underline) == 2

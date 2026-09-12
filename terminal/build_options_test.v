@@ -26,5 +26,8 @@ fn test_build_options_custom() {
 }
 
 fn test_artifact_values() {
+	assert sizeof(Artifact) == 1
 	assert Artifact.ghostty != Artifact.lib
+	assert u8(Artifact.ghostty) == 0
+	assert u8(Artifact.lib) == 1
 }

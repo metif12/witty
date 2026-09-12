@@ -1,8 +1,29 @@
 module terminal
 
 fn test_page_list_direction_values_match_source_order() {
+	assert sizeof(IterDirection) == 1
 	assert int(IterDirection.left_up) == 0
 	assert int(IterDirection.right_down) == 1
+}
+
+fn test_page_list_internal_tag_layouts_match_source() {
+	assert sizeof(PageViewport) == 1
+	assert u8(PageViewport.active) == 0
+	assert u8(PageViewport.top) == 1
+	assert u8(PageViewport.pin) == 2
+	assert sizeof(PagePinCellSubset) == 1
+	assert u8(PagePinCellSubset.all) == 0
+	assert u8(PagePinCellSubset.left) == 1
+	assert u8(PagePinCellSubset.right) == 2
+	assert sizeof(PageReflowWriteResult) == 1
+	assert u8(PageReflowWriteResult.success) == 0
+	assert u8(PageReflowWriteResult.repeat) == 1
+	assert u8(PageReflowWriteResult.skip_next) == 2
+	assert sizeof(PageCapacityAdjustment) == 1
+	assert u8(PageCapacityAdjustment.styles) == 0
+	assert u8(PageCapacityAdjustment.grapheme_bytes) == 1
+	assert u8(PageCapacityAdjustment.hyperlink_bytes) == 2
+	assert u8(PageCapacityAdjustment.string_bytes) == 3
 }
 
 // Tests translated from Ghostty's PageList.zig
