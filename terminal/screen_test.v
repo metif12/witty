@@ -1,5 +1,21 @@
 module terminal
 
+fn test_flat_page_internal_tag_source_layouts() {
+	assert sizeof(ViewportState) == 1
+	assert u8(ViewportState.active) == 0
+	assert u8(ViewportState.top) == 1
+	assert u8(ViewportState.pin) == 2
+	assert sizeof(ReflowWriteResult) == 1
+	assert u8(ReflowWriteResult.success) == 0
+	assert u8(ReflowWriteResult.repeat) == 1
+	assert u8(ReflowWriteResult.skip_next) == 2
+	assert sizeof(PromptKind) == 1
+	assert u8(PromptKind.initial) == 0
+	assert u8(PromptKind.right) == 1
+	assert u8(PromptKind.continuation) == 2
+	assert u8(PromptKind.secondary) == 3
+}
+
 fn test_flat_pages_scrollbar() {
 	mut no_scrollback := Pages.init(4, 2, 0)
 	no_scrollback.screen_rows << RowData.init(4)
@@ -509,7 +525,7 @@ fn test_screen_scroll_payload_variants() {
 	assert s.pages.viewport_start == 0
 
 	s.scroll(ScrollRow{ n: 2 })
-	assert s.pages.viewport == .pinned
+	assert s.pages.viewport == .pin
 	assert s.pages.viewport_start == 2
 
 	s.scroll(ScrollDeltaRow{ delta: 10 })
@@ -517,7 +533,7 @@ fn test_screen_scroll_payload_variants() {
 	assert s.pages.viewport_start == 3
 
 	s.scroll(ScrollPin{ pin: Pin{ x: 4, y: 1 } })
-	assert s.pages.viewport == .pinned
+	assert s.pages.viewport == .pin
 	assert s.pages.viewport_start == 1
 
 	s.scroll(ScrollPin{ pin: Pin{ x: 0, y: 4 } })
@@ -559,7 +575,7 @@ fn test_screen_scroll_prompt_overshoot_uses_furthest_prompt() {
 	s.pages.screen_rows[3].semantic_prompt = .prompt
 
 	s.scroll(ScrollDeltaPrompt{ delta: -10 })
-	assert s.pages.viewport == .pinned
+	assert s.pages.viewport == .pin
 	assert s.pages.viewport_start == 1
 
 	s.scroll(ScrollDeltaPrompt{ delta: 10 })
@@ -1971,7 +1987,7 @@ fn test_screen_resize_no_reflow_more_rows_contains_pinned_viewport() {
 	defer { s.deinit() }
 	s.test_write_string('1\n2\n3\n4') or { assert false }
 	s.scroll_to_row(1)
-	assert s.pages.viewport == .pinned
+	assert s.pages.viewport == .pin
 	assert s.pages.viewport_start == 1
 
 	s.resize(ScreenResize{ cols: 2, rows: 4, reflow: false }) or { assert false }
@@ -3004,14 +3020,14 @@ fn test_screen_resize_more_cols_reflows_pinned_viewport() {
 	s.test_write_string('ABCD\nEF\nGH') or { assert false }
 	assert s.pages.active_start == 2
 	s.scroll_to_row(1)
-	assert s.pages.viewport == .pinned
+	assert s.pages.viewport == .pin
 
 	s.resize(ScreenResize{ cols: 4, rows: 2, reflow: true }) or { assert false }
 
 	// The old row 1 was the continuation "CD". It was unwrapped into row 0,
 	// so the tracked viewport follows it instead of jumping to active row 1.
 	assert s.pages.active_start == 1
-	assert s.pages.viewport == .pinned
+	assert s.pages.viewport == .pin
 	assert s.pages.viewport_start == 0
 }
 

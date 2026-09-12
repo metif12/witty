@@ -2507,7 +2507,7 @@ fn (mut self Screen) scroll_to_absolute_row(row int) {
 	} else if self.pages.viewport_start == self.pages.active_start {
 		.active
 	} else {
-		.pinned
+		.pin
 	}
 }
 
@@ -2523,7 +2523,7 @@ fn (mut self Screen) scroll_prompts(delta isize) {
 	current := match self.pages.viewport {
 		.active { self.pages.active_start }
 		.top { 0 }
-		.pinned { self.pages.viewport_start }
+		.pin { self.pages.viewport_start }
 	}
 	mut y := current + if delta > 0 { 1 } else { -1 }
 	mut prompt_y := ?int(none)

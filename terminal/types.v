@@ -327,10 +327,10 @@ pub mut:
 }
 
 // ViewportState tracks where the viewport is positioned.
-pub enum ViewportState {
+pub enum ViewportState as u8 {
 	active
 	top
-	pinned
+	pin
 }
 
 pub fn Pages.init(cols u32, rows u32, max_scrollback usize) Pages {
@@ -400,7 +400,7 @@ pub fn (mut self Pages) scroll(behavior ViewportState) {
 	self.viewport_start = match behavior {
 		.active { self.active_start }
 		.top { 0 }
-		.pinned { self.viewport_start }
+		.pin { self.viewport_start }
 	}
 }
 
@@ -410,7 +410,7 @@ pub fn (mut self Pages) scroll_delta(delta isize) {
 	base := match self.viewport {
 		.active { self.active_start }
 		.top { 0 }
-		.pinned { self.viewport_start }
+		.pin { self.viewport_start }
 	}
 	if delta < 0 {
 		self.viewport_start = if delta <= -isize(base) { 0 } else { base + int(delta) }
@@ -427,7 +427,7 @@ pub fn (mut self Pages) scroll_delta(delta isize) {
 	} else if self.viewport_start == self.active_start {
 		.active
 	} else {
-		.pinned
+		.pin
 	}
 }
 
@@ -483,7 +483,7 @@ fn (mut self Pages) trim_scrollback() int {
 		self.screen_rows.delete(0)
 		self.active_start -= 1
 		pruned++
-		if self.viewport == .pinned && self.viewport_start > 0 {
+		if self.viewport == .pin && self.viewport_start > 0 {
 			self.viewport_start -= 1
 		}
 	}
@@ -556,7 +556,7 @@ pub fn (mut self Pages) erase_rows(tl Point, bl ?Point) {
 		.top {
 			self.viewport_start = 0
 		}
-		.pinned {
+		.pin {
 			if self.viewport_start > end {
 				self.viewport_start -= erased
 			} else if self.viewport_start >= start {
@@ -922,7 +922,7 @@ pub fn (mut self Pages) resize(opts ResizeOpts) ! {
 	// model represents it as an absolute row, so include a temporary pin in
 	// the same resize remapper used by Screen-owned tracked state.
 	mut viewport_pin := Pin{}
-	track_viewport := self.viewport == .pinned
+	track_viewport := self.viewport == .pin
 	mut tracked_pins := opts.tracked_pins.clone()
 	if track_viewport {
 		viewport_pin = Pin{
@@ -1119,11 +1119,10 @@ mut:
 // faithful port of PageList's ReflowCursor to the flat `Pages` row array:
 // it trims trailing blanks on non-wrapped rows, defers fully-blank trailing
 // rows, and preserves wrap/wrap_continuation flags.
-enum ReflowWriteResult {
+enum ReflowWriteResult as u8 {
 	success
 	repeat
 	skip_next
-	out_of_space
 }
 
 struct FlatReflowCursor {
@@ -1312,11 +1311,6 @@ fn (mut c FlatReflowCursor) reflow_row(src RowData, src_abs int) {
 				x += 2
 			}
 			.repeat {}
-			.out_of_space {
-				// Cannot happen in the flat model (rows grow dynamically).
-				x++
-				c.cursor_forward()
-			}
 		}
 	}
 
@@ -1820,18 +1814,9 @@ pub fn (mut self KeyFlagStack) set(op KeyFlagSetOp, new_flags KeyFlags) {
 // PromptKind - for semantic prompt operations
 // ============================================================
 
-pub enum PromptKind {
+pub enum PromptKind as u8 {
 	initial
 	right
 	continuation
 	secondary
-}
-
-// ============================================================
-// Direction
-// ============================================================
-
-pub enum Direction {
-	left_to_right
-	right_to_left
 }

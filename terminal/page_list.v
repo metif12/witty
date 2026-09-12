@@ -3594,7 +3594,7 @@ pub fn PageList.from_pages(src &Pages) &PageList {
 	match src.viewport {
 		.active { result.scroll(PageScrollActive{}) }
 		.top { result.scroll(PageScrollTop{}) }
-		.pinned {
+		.pin {
 			result.scroll(PageScrollRow{
 				n: usize(src.viewport_start)
 			})

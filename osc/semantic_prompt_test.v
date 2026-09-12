@@ -686,6 +686,11 @@ fn test_option_read_cl() {
 }
 
 fn test_option_read_prompt_kind() {
+	assert sizeof(PromptKind) == 1
+	assert u8(PromptKind.initial) == 0
+	assert u8(PromptKind.right) == 1
+	assert u8(PromptKind.continuation) == 2
+	assert u8(PromptKind.secondary) == 3
 	assert (read_prompt_kind('k=i') or { PromptKind.initial }) == .initial
 	assert (read_prompt_kind('k=r') or { PromptKind.initial }) == .right
 	assert (read_prompt_kind('k=c') or { PromptKind.initial }) == .continuation

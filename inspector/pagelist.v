@@ -302,11 +302,7 @@ fn draw_pagelist_summary(context cimgui.Context, pages &terminal.Pages) {
 	draw_pagelist_info_row(context, 'Page Bytes', 'Total bytes allocated for active pages.', '${page_bytes / 1024} KiB')
 	max_bytes := flat_page_max_bytes(pages)
 	draw_pagelist_info_row(context, 'Max Size', 'Maximum bytes before pages must be evicted. The next allocation that would exceed this limit evicts rows from the front to free space.', '${max_bytes / 1024} KiB')
-	draw_pagelist_info_row(context, 'Viewport', 'Current viewport anchoring mode.', if pages.viewport == .pinned {
-		'pin'
-	} else {
-		pages.viewport.str()
-	})
+	draw_pagelist_info_row(context, 'Viewport', 'Current viewport anchoring mode.', pages.viewport.str())
 	draw_pagelist_info_row(context, 'Tracked Pins', 'Number of pins tracked for automatic updates.', '0')
 }
 

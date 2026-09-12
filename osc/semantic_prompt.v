@@ -60,7 +60,7 @@ pub fn Click.init(value string) ?Click {
 	return none
 }
 
-pub enum PromptKind {
+pub enum PromptKind as u8 {
 	initial
 	right
 	continuation

@@ -276,7 +276,7 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 	viewport_top := match s.pages.viewport {
 		.active { s.pages.active_start }
 		.top { 0 }
-		.pinned { s.pages.viewport_start }
+		.pin { s.pages.viewport_start }
 	}
 
 	// The absolute cursor row within screen_rows.

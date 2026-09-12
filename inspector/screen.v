@@ -170,8 +170,7 @@ fn draw_screen_internal_state(context cimgui.Context, screen &terminal.Screen) {
 	max_bytes := usize(screen.pages.rows + screen.pages.max_scrollback) * usize(screen.pages.cols) * sizeof(terminal.CellData)
 	draw_screen_row(context, 'Memory Usage', '${page_bytes} bytes (${page_bytes / 1024} KiB)')
 	draw_screen_row(context, 'Memory Limit', '${max_bytes} bytes (${max_bytes / 1024} KiB)')
-	viewport := if screen.pages.viewport == .pinned { 'pin' } else { screen.pages.viewport.str() }
-	draw_screen_row(context, 'Viewport Location', viewport)
+	draw_screen_row(context, 'Viewport Location', screen.pages.viewport.str())
 }
 
 fn draw_style(context cimgui.Context, style terminal.CellStyle, palette [256]terminal.RGB, resolve_palette bool) {
