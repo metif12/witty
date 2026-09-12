@@ -56,11 +56,10 @@ pub fn (mut self ActiveSearch) update(list &terminal.PageList) ?&terminal.PageNo
 
 	// Include preceding soft-wrapped pages so a match that crosses the
 	// history/active boundary remains discoverable.
-	overlap_needed := if self.window.needle.len > 0 { self.window.needle.len - 1 } else { 0 }
+	overlap_needed := self.window.needle.len - 1
 	for {
 		current := node or { break }
-		if current.data.size.rows == 0
-			|| !current.data.get_row(usize(current.data.size.rows - 1)).wrap {
+		if !current.data.get_row(usize(current.data.size.rows - 1)).wrap {
 			break
 		}
 		added := self.window.append(current)
