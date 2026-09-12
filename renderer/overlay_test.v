@@ -2,6 +2,16 @@ module renderer
 
 import terminal
 
+fn test_overlay_source_tag_layouts_and_ordinals() {
+	assert sizeof(OverlayColor) == 1
+	assert u8(OverlayColor.hyperlink) == 0
+	assert u8(OverlayColor.semantic_prompt) == 1
+	assert u8(OverlayColor.semantic_input) == 2
+	assert sizeof(OverlayFeature) == 1
+	assert u8(OverlayFeature.highlight_hyperlinks) == 0
+	assert u8(OverlayFeature.semantic_prompts) == 1
+}
+
 fn overlay_for_grid(cols u32, rows u32, cell_width u32, cell_height u32) Overlay {
 	return Overlay.init(Size{
 		screen: ScreenSize{

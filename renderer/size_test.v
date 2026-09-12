@@ -1,5 +1,12 @@
 module renderer
 
+fn test_coordinate_tag_source_layout_and_ordinals() {
+	assert sizeof(CoordTag) == 1
+	assert u8(CoordTag.surface) == 0
+	assert u8(CoordTag.terminal) == 1
+	assert u8(CoordTag.grid) == 2
+}
+
 // ============================================================
 // Size tests - translated from size.zig
 // ============================================================

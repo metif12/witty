@@ -8,7 +8,7 @@ const shadertoy_prefix = $embed_file('shaders/shadertoy_prefix.glsl').to_string(
 const max_shader_size = 4 * 1024 * 1024
 
 // The target to load shaders for.
-pub enum ShaderTarget {
+pub enum ShaderTarget as u8 {
 	glsl
 	msl
 }

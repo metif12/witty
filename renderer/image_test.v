@@ -10,6 +10,13 @@ import macos
 
 // Test PixelFormat bytes per pixel.
 fn test_pixel_format_bpp() {
+	assert sizeof(PixelFormat) == 1
+	assert u8(PixelFormat.gray) == 0
+	assert u8(PixelFormat.gray_alpha) == 1
+	assert u8(PixelFormat.rgb) == 2
+	assert u8(PixelFormat.bgr) == 3
+	assert u8(PixelFormat.rgba) == 4
+	assert u8(PixelFormat.bgra) == 5
 	assert PixelFormat.gray.bpp() == 1
 	assert PixelFormat.gray_alpha.bpp() == 2
 	assert PixelFormat.rgb.bpp() == 3
@@ -491,6 +498,19 @@ fn test_kitty_virtual_placement_uses_viewport_relative_row() ! {
 
 // Test DrawPlacements enum.
 fn test_draw_placements_enum() {
-	assert DrawPlacements.kitty_below_bg != DrawPlacements.kitty_below_text
-	assert DrawPlacements.kitty_above_text != DrawPlacements.overlay
+	assert sizeof(DrawPlacements) == 1
+	assert u8(DrawPlacements.kitty_below_bg) == 0
+	assert u8(DrawPlacements.kitty_below_text) == 1
+	assert u8(DrawPlacements.kitty_above_text) == 2
+	assert u8(DrawPlacements.overlay) == 3
+}
+
+fn test_image_upload_state_source_layout_and_ordinals() {
+	assert sizeof(ImageUploadState) == 1
+	assert u8(ImageUploadState.pending) == 0
+	assert u8(ImageUploadState.replace) == 1
+	assert u8(ImageUploadState.ready) == 2
+	assert u8(ImageUploadState.unload_pending) == 3
+	assert u8(ImageUploadState.unload_ready) == 4
+	assert u8(ImageUploadState.unload_replace) == 5
 }

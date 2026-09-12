@@ -102,7 +102,7 @@ pub:
 }
 
 // Coordinate system tag for conversion.
-pub enum CoordTag {
+pub enum CoordTag as u8 {
 	surface
 	terminal
 	grid

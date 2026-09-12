@@ -2,9 +2,16 @@ module renderer
 
 import font
 
+fn test_image_texture_format_source_layout_and_ordinals() {
+	assert sizeof(ImageTextureFormat) == 1
+	assert u8(ImageTextureFormat.gray) == 0
+	assert u8(ImageTextureFormat.rgba) == 1
+	assert u8(ImageTextureFormat.bgra) == 2
+}
+
 fn test_opengl_init_does_not_require_a_current_context() {
 	default_api := OpenGLAPI.init()!
-	assert default_api.blending == .none_
+	assert default_api.blending == .native
 
 	linear_api := OpenGLAPI.init(RendererOptions{
 		config: DerivedConfig{
@@ -16,7 +23,7 @@ fn test_opengl_init_does_not_require_a_current_context() {
 
 fn test_opengl_target_options_follow_blending_mode() {
 	native := OpenGLAPI{
-		blending: .none_
+		blending: .native
 	}
 	assert native.target_options(80, 24) == GLTargetOptions{
 		width: 80

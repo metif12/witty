@@ -222,12 +222,13 @@ pub mut:
 // CellBg is the RGBA value consumed by the cell background shader.
 pub type CellBg = [4]u8
 
-// CellLayer identifies which layer a cell belongs to.
-pub enum CellLayer {
+// CellKey identifies the source cell content collection.
+pub enum CellKey as u8 {
+	bg
 	text
 	underline
-	overline
 	strikethrough
+	overline
 }
 
 // ============================================================
@@ -304,7 +305,8 @@ pub fn (c &CellContents) get_bg(row u16, col u16) CellBg {
 }
 
 // Add a foreground cell to the given layer.
-pub fn (mut c CellContents) add(layer CellLayer, cell CellText) ! {
+pub fn (mut c CellContents) add(key CellKey, cell CellText) ! {
+	assert key != .bg
 	row := int(cell.grid_pos[1])
 	assert row < int(c.size.rows)
 	c.fg_rows.lists[row + 1] << cell

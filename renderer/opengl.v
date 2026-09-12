@@ -1,5 +1,6 @@
 module renderer
 
+import configpkg
 import font
 import log
 import opengl
@@ -12,7 +13,7 @@ import opengl
 pub struct OpenGLAPI {
 pub mut:
 	// Alpha blending mode
-	blending AlphaBlendingMode
+	blending configpkg.AlphaBlending
 
 	// The most recently presented target, in case the runtime needs to
 	// present it again without redrawing the terminal contents.
@@ -38,13 +39,9 @@ pub fn OpenGLAPI.init(options ...RendererOptions) !OpenGLAPI {
 	if options.len > 1 {
 		return error('OpenGLAPI.init accepts at most one RendererOptions value')
 	}
-	mut blending := AlphaBlendingMode.none_
+	mut blending := configpkg.AlphaBlending.native
 	if options.len == 1 {
-		blending = match options[0].config.blending {
-			.native { .none_ }
-			.linear { .linear }
-			.linear_corrected { .linear_corrected }
-		}
+		blending = options[0].config.blending
 	}
 	return OpenGLAPI{
 		blending: blending
@@ -272,7 +269,7 @@ pub fn (self &OpenGLAPI) sampler_options() GLSamplerOptions {
 }
 
 // ImageTextureFormat is the CPU pixel layout used for uploaded images.
-pub enum ImageTextureFormat {
+pub enum ImageTextureFormat as u8 {
 	gray
 	rgba
 	bgra

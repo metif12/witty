@@ -1,5 +1,6 @@
 module renderer
 
+import configpkg
 import macos
 
 // Graphics API wrapper for Metal.
@@ -17,7 +18,7 @@ pub mut:
 	layer  voidptr = unsafe { nil }
 
 	// Alpha blending mode
-	blending AlphaBlendingMode
+	blending configpkg.AlphaBlending
 
 	// The default storage mode to use for resources.
 	default_storage_mode MetalStorageMode
@@ -87,17 +88,6 @@ pub fn (opts MetalResourceOptions) hazard_tracking_mode() MetalHazardTrackingMod
 	return unsafe { MetalHazardTrackingMode((opts.value >> 8) & 0x3) }
 }
 
-// Blending mode (re-export from configpkg for convenience).
-pub enum AlphaBlendingMode {
-	none_
-	linear
-	linear_corrected
-}
-
-pub fn (b AlphaBlendingMode) is_linear() bool {
-	return b == .linear || b == .linear_corrected
-}
-
 // Triple buffering for Metal swap chain.
 pub const metal_swap_chain_count = 3
 
@@ -136,7 +126,7 @@ pub fn MetalAPI.init_from_view(view voidptr, content_scale f64) !MetalAPI {
 		device: device
 		queue: queue
 		layer: layer
-		blending: .none_
+		blending: .native
 		default_storage_mode: storage
 		max_texture_size: max_tex
 		owns_handles: true
@@ -157,7 +147,7 @@ pub fn MetalAPI.init() !MetalAPI {
 	return MetalAPI{
 		device: device
 		queue: queue
-		blending: .none_
+		blending: .native
 		default_storage_mode: if macos.metal_has_unified_memory(device) {
 			.shared
 		} else {

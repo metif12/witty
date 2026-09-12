@@ -2,6 +2,15 @@ module renderer
 
 import terminal
 
+fn test_cursor_style_source_layout_and_ordinals() {
+	assert sizeof(Style) == 1
+	assert u8(Style.block) == 0
+	assert u8(Style.block_hollow) == 1
+	assert u8(Style.bar) == 2
+	assert u8(Style.underline) == 3
+	assert u8(Style.lock) == 4
+}
+
 // ============================================================
 // Cursor tests - translated from cursor.zig
 // ============================================================

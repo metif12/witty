@@ -273,7 +273,7 @@ pub fn (lhs ImageId) z_less_than(rhs ImageId) bool {
 }
 
 // Pixel format for image data.
-pub enum PixelFormat {
+pub enum PixelFormat as u8 {
 	// 1 byte per pixel grayscale.
 	gray
 	// 2 bytes per pixel grayscale + alpha.
@@ -327,13 +327,13 @@ pub fn (p &PendingImage) data_slice() []u8 {
 
 // Image upload state tracks whether the image data is pending, ready (uploaded
 // to GPU), or unloading.
-pub enum ImageUploadState {
+pub enum ImageUploadState as u8 {
 	// The image data is pending upload to the GPU.
 	pending
-	// The image is uploaded and ready to be used.
-	ready
 	// The image has been replaced - old texture exists, new data pending.
 	replace
+	// The image is uploaded and ready to be used.
+	ready
 	// Pending data scheduled to be unloaded.
 	unload_pending
 	// An uploaded texture scheduled to be unloaded.
@@ -454,7 +454,7 @@ pub mut:
 }
 
 // Which set of placements to draw.
-pub enum DrawPlacements {
+pub enum DrawPlacements as u8 {
 	kitty_below_bg
 	kitty_below_text
 	kitty_above_text

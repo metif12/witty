@@ -27,7 +27,7 @@ pub mut:
 }
 
 // The colors we use for overlays.
-pub enum OverlayColor {
+pub enum OverlayColor as u8 {
 	hyperlink // light blue
 	semantic_prompt // orange/gold
 	semantic_input // cyan
@@ -77,7 +77,7 @@ pub fn (c OverlayColor) border_alpha() u8 {
 }
 
 // The set of available features and their configuration.
-pub enum OverlayFeature {
+pub enum OverlayFeature as u8 {
 	highlight_hyperlinks
 	semantic_prompts
 }

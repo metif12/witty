@@ -958,11 +958,7 @@ fn Renderer.init_metal(opts RendererOpts) !Renderer {
 			return err
 		}
 	}
-	metal.blending = match opts.config.blending {
-		.native { .none_ }
-		.linear { .linear }
-		.linear_corrected { .linear_corrected }
-	}
+	metal.blending = opts.config.blending
 
 	post_shaders := load_shaders_from_files(opts.config.custom_shaders, .msl) or {
 		eprintln('renderer: error loading custom shaders: ${err}')
@@ -2103,17 +2099,12 @@ pub fn (mut self Renderer) change_config(config &DerivedConfig) ! {
 		self.update_bg_image_buffer()
 	}
 	if blending_changed {
-		blending := match config.blending {
-			.native { AlphaBlendingMode.none_ }
-			.linear { AlphaBlendingMode.linear }
-			.linear_corrected { AlphaBlendingMode.linear_corrected }
-		}
 		match self.backend {
 			.metal {
-				self.metal.blending = blending
+				self.metal.blending = config.blending
 			}
 			.opengl {
-				self.opengl.blending = blending
+				self.opengl.blending = config.blending
 			}
 		}
 		self.reinitialize_shaders = true
@@ -2667,7 +2658,7 @@ fn (self &Renderer) compute_cursor_text_color(cursor_style terminal.CellStyle) t
 }
 
 // Selection classification for a cell, matching the Zig `selected` enum.
-enum CellSelected {
+enum CellSelected as u8 {
 	false_
 	selection
 	search

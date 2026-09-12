@@ -576,10 +576,22 @@ fn test_atlas_kind() {
 	assert u8(AtlasKind.color) == 1
 }
 
-// Test CellLayer enum.
-fn test_cell_layer() {
-	assert CellLayer.text != CellLayer.underline
-	assert CellLayer.overline != CellLayer.strikethrough
+// Test source cell content keys.
+fn test_cell_key_source_layout_and_ordinals() {
+	assert sizeof(CellKey) == 1
+	assert u8(CellKey.bg) == 0
+	assert u8(CellKey.text) == 1
+	assert u8(CellKey.underline) == 2
+	assert u8(CellKey.strikethrough) == 3
+	assert u8(CellKey.overline) == 4
+}
+
+fn test_cell_selected_source_layout_and_ordinals() {
+	assert sizeof(CellSelected) == 1
+	assert u8(CellSelected.false_) == 0
+	assert u8(CellSelected.selection) == 1
+	assert u8(CellSelected.search) == 2
+	assert u8(CellSelected.search_selected) == 3
 }
 
 // Test FontStyleStatus defaults.

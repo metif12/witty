@@ -3,6 +3,12 @@ module renderer
 import configpkg
 import os
 
+fn test_shader_target_source_layout_and_ordinals() {
+	assert sizeof(ShaderTarget) == 1
+	assert u8(ShaderTarget.glsl) == 0
+	assert u8(ShaderTarget.msl) == 1
+}
+
 fn test_glsl_from_shader_uses_ghostty_prefix() {
 	user_source := 'void mainImage(out vec4 color, in vec2 coord) { color = vec4(1); }'
 	source := glsl_from_shader(user_source)

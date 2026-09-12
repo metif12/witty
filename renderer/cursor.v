@@ -3,7 +3,7 @@ module renderer
 import terminal
 
 // Available cursor styles for drawing that renderers must support.
-pub enum Style {
+pub enum Style as u8 {
 	block
 	block_hollow
 	bar
