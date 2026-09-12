@@ -33,6 +33,11 @@ fn test_clipboard() {
 	assert Clipboard.standard == .standard
 	assert Clipboard.selection == .selection
 	assert Clipboard.primary == .primary
+	$if linux || freebsd {
+		assert sizeof(Clipboard) == sizeof(int)
+	} $else {
+		assert sizeof(Clipboard) == 1
+	}
 }
 
 // Test ClipboardContent struct creation.
@@ -47,18 +52,25 @@ fn test_clipboard_request_type() {
 	assert ClipboardRequestType.paste == .paste
 	assert ClipboardRequestType.osc_52_read == .osc_52_read
 	assert ClipboardRequestType.osc_52_write == .osc_52_write
+	assert sizeof(ClipboardRequestType) == 1
 }
 
 // Test ClipboardRequest struct creation.
 fn test_clipboard_request() {
 	cr := ClipboardRequest{ kind: .paste }
 	assert cr.kind == .paste
+	$if linux || freebsd {
+		assert sizeof(ClipboardRequest) == 8
+	} $else {
+		assert sizeof(ClipboardRequest) == 2
+	}
 }
 
 // Test ColorScheme enum values.
 fn test_color_scheme() {
 	assert ColorScheme.light == .light
 	assert ColorScheme.dark == .dark
+	assert sizeof(ColorScheme) == 1
 }
 
 // Test Selection struct creation.

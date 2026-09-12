@@ -35,14 +35,6 @@ pub:
 	height f64
 }
 
-// Clipboard identifies the type of system clipboard.
-// If this is changed, you must also update ghostty.h
-pub enum Clipboard {
-	standard  // ctrl+c/v
-	selection
-	primary
-}
-
 // ClipboardContent holds the MIME type and data for clipboard contents.
 pub struct ClipboardContent {
 pub:
@@ -51,7 +43,7 @@ pub:
 }
 
 // ClipboardRequestType identifies the type of clipboard request.
-pub enum ClipboardRequestType {
+pub enum ClipboardRequestType as u8 {
 	paste
 	osc_52_read
 	osc_52_write
@@ -68,7 +60,7 @@ pub:
 }
 
 // ColorScheme represents the color scheme in use (light vs dark).
-pub enum ColorScheme {
+pub enum ColorScheme as u8 {
 	light
 	dark
 }
