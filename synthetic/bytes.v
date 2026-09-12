@@ -66,8 +66,8 @@ pub fn (mut self Bytes) write() ![]u8 {
 	len := synthetic_random_inclusive(mut self.rng, self.min_len, self.max_len)!
 	mut result := self.rng.bytes(len)!
 	if self.alphabet.len > 0 {
-		for mut byte in result {
-			byte = self.alphabet[int(byte) % self.alphabet.len]
+		for i, byte in result {
+			result[i] = self.alphabet[int(byte) % self.alphabet.len]
 		}
 	}
 	return result

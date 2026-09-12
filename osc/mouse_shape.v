@@ -7,6 +7,7 @@ module osc
 // are moving towards using the W3C CSS cursor names. For OSC parsing,
 // we just parse whatever string is given.
 fn parse_mouse_shape(mut parser Parser, terminator_ch ?u8) ?Command {
+	assert parser.state == .s_22
 	data := parser.finish_zero_terminated() or { return none }
 	value := data.bytestr()
 	parser.command = Command{

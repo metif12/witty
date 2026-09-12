@@ -48,6 +48,22 @@ fn test_osc_generator_exact_kind_selection() {
 	}
 }
 
+fn test_osc_generator_tracks_remaining_payload_space() {
+	mut rng := rand.new_default(seed_: [u32(0xc0ffeeee), 0xeeeeeeee])
+	defer { rng.free() }
+	mut generator := Osc.init(rng)
+	// Ghostty subtracts four bytes for the five-byte "133;A" prefix, so the
+	// prompt form may exceed the nominal limit by exactly one byte.
+	for _ in 0 .. 100 {
+		payload := generator.next_unwrapped_valid_exact(.prompt_start, 20)!
+		assert payload.len <= 21
+	}
+	for _ in 0 .. 100 {
+		payload := generator.next_unwrapped_valid_exact(.report_pwd, 100)!
+		assert payload.len <= 100
+	}
+}
+
 fn test_osc_generator_invalid_output_is_rejected() {
 	mut rng := rand.new_default(seed_: [u32(0xc0ffeeee), 0xeeeeeeee])
 	defer { rng.free() }

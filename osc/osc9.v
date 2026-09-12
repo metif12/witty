@@ -1,5 +1,7 @@
 module osc
 
+const max_usize_value = u64(~usize(0))
+
 // Parse OSC 9, which could be an iTerm2 notification or a ConEmu extension.
 fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 	mut data := parser.buffered()
@@ -211,7 +213,7 @@ fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 				.set, .err_state, .pause {
 					if data.len >= 4 && data[3] == `;` {
 						rest := data[4..].bytestr()
-						if parsed := parse_unsigned_decimal(rest, max_u64) {
+						if parsed := parse_unsigned_decimal(rest, max_usize_value) {
 							clamped := if parsed > 100 { u8(100) } else { u8(parsed) }
 							progress = clamped
 						}

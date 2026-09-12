@@ -1,9 +1,9 @@
-# Full-Codebase Fidelity Audit
+# Ongoing Source-Fidelity Audit
 
-Function-by-function and comment-by-comment audit of every witty (V) source
-file against its ghostty (Zig) original. ~186 source files across all modules
-were reviewed. This records what was found, what was fixed, and the remaining
-known divergences.
+This is a working record of the function-by-function audit of Witty against the
+pinned Ghostty source. It is not evidence of full coverage, and the repository
+must not be described as a 100% translation while the remaining divergences
+below exist. Earlier versions of this document overstated the completed review.
 
 ## Bugs found and FIXED this pass
 
@@ -18,6 +18,8 @@ known divergences.
 | osc/color_parser | Hex channel scaling used `>>4`/`>>8` instead of `*255/4095` and `*255/65535`; float intensity rounded not truncated; named `green` = (0,128,0). | Correct scaling; truncate; `green` = (0,255,0). |
 | osc/osc9 | OSC 9;12 emitted default `.fresh_line` instead of `.fresh_line_new_prompt`. | Set correct action. |
 | osc/kitty_color | `kind_max` = 256 (should be 263 = maxInt(u8)+8); parsed items discarded. | Fixed max; attach items to Command. |
+| osc parser | Every payload used an unbounded V array, allocator-required commands were accepted in bounded mode, `end` could not represent an absent terminator, and hyperlink parsing continued after an incomplete option. | Restored fixed/allocation writer selection, the 2,048-byte boundary and sentinel reservation, allocator gating, optional terminators, and source option termination. |
+| synthetic/bytes, synthetic/osc | Mutable byte iteration converted an element address into an alphabet index; prompt and PWD generators failed to debit generated component lengths. | Index from the byte value and restore Ghostty's remaining-length accounting. |
 | kitty/color, kitty/graphics_image | `kind_max` off-by-one; `Image.format` default `.rgba` (should `.rgb`); `transmit_time` set at init not in `complete()`. | All corrected. |
 | configpkg | 9 wrong struct defaults. | `background` 0x282C34, `term` xterm-ghostty, `title_report`/`mouse_hide_while_typing`/`selection_clear_on_copy` false, `cursor_click_to_move`/`clipboard_trim_trailing_spaces` true, `font_thicken_strength` 255, `minimum_contrast` 1. |
 | renderer/config | `DerivedConfig.init` hardcoded background/foreground (black/white), empty font_features, all-true font_styles, truncated faint_opacity. | Read `config.background/foreground/font_feature/font_style_* != 'false'`; `ceil()` faint_opacity. |
@@ -28,16 +30,21 @@ known divergences.
 | sprite/face | `render_glyph` hardcoded glyph `offset_x/offset_y` to 0. | Compute from canvas clip + padding (matches `Face.renderGlyph`). |
 | termio/termio | `resize` sent renderer `.font_grid` (should `.resize`); cursor reset sent `.focus` (should `.reset_cursor_blink`). | Correct message kinds (+ wired the two MessageKind variants). |
 
-## Verified CORRECT (faithful, no issues found)
+## Focused behavior reviewed
 
-terminal: color, csi, ansi, dcs, apc, charsets, device_status, tabstops,
-size, point, mouse_shape, sgr, selection, bitmap_allocator, stream,
-stream_readonly, parser. font: backend, Atlas, Metrics, codepoint_map,
+The following areas have received focused source comparisons and regression
+tests. This list does not certify their entire modules or their representation
+and ABI boundaries as one-for-one translations.
+
+terminal: color, csi, ansi, dcs, charsets, device_status, tabstops,
+size, point, mouse_shape, sgr, selection, bitmap_allocator, stream parser
+boundaries. font: backend, Atlas, Metrics, codepoint_map,
 embedded, shared_grid, codepoint_resolver (pure logic), collection,
 discovery, face (Constraint math), shaper/feature/cache/noop,
-nerd_font_attributes (276/276 constraint entries verified). osc: osc,
-encoding, semantic_prompt, iterm2, hyperlink, clipboard, change_window_*,
-report_pwd, rxvt, mouse_shape, kitty_text_sizing. input: kitty (80/80),
+nerd_font_attributes (276/276 constraint entries verified). osc: parser state
+transitions and buffer boundaries, encoding, semantic_prompt, iterm2,
+hyperlink, clipboard, change_window_*, report_pwd, rxvt, mouse_shape,
+kitty_text_sizing. input: kitty (80/80),
 keycodes (243/243), command, binding (83-tag order), key (logic).
 kitty: graphics_command, graphics_unicode. tmux: control, layout, output.
 termio: exec, shell_integration, stream_handler. root: quirks, build_config,
@@ -51,6 +58,10 @@ These are lower-impact, intentional stubs/boundaries, or larger refactors:
 - **Architectural:** `Screen`/`Terminal` use the flat `Pages` model, not the
   faithful `PageList` linked-list (which is exercised only by its own tests +
   the PageList formatter). Both exist; they are parallel.
+- **OSC representation:** Ghostty's tagged `Command` union, sentinel slices,
+  allocator/writer objects, and nested parser types are represented by a flat
+  V command struct and GC-backed arrays. Observable parser boundaries are now
+  enforced, but this is not a one-for-one representation or ABI translation.
 - **terminal/x11_color:** ~150 hardcoded color names vs ghostty's full X11
   rgb.txt (~780). Names outside the subset return none.
 - **terminal/ref_counted_set:** uses a hardcoded style-specific hash instead
@@ -81,5 +92,6 @@ These are lower-impact, intentional stubs/boundaries, or larger refactors:
 
 ## Status
 
-`v -check .` and `v .` clean; 121/121 test files pass; ~2500 test functions.
-Every fix above is covered by a translated ghostty regression test.
+The focused tests and compile gates named in each audit session are expected to
+pass at the recorded commit. A repository-wide build is not proof that every
+Ghostty file and function has been translated, and no 100% claim is made.

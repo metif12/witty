@@ -24,6 +24,23 @@ fn test_bytes_generator_bounds_and_alphabet() {
 	}
 }
 
+fn test_bytes_generator_maps_byte_values_not_iterator_addresses() {
+	mut rng := rand.new_default(seed_: [u32(0xc0ffeeee), 0xeeeeeeee])
+	defer { rng.free() }
+	base := Bytes.init(rng)
+	mut alphabet := []u8{}
+	for value in `A` .. `Z` + 1 {
+		alphabet << u8(value)
+	}
+	for value in `a` .. `z` + 1 {
+		alphabet << u8(value)
+	}
+	mut bytes := base.new_alphabet(alphabet).at_least(256).at_most(256)
+	result := bytes.next(256)!
+	assert result.len == 256
+	assert result.all(it in alphabet)
+}
+
 fn test_bytes_generator_interface() {
 	mut rng := rand.new_default(seed_: [u32(1), 0])
 	defer { rng.free() }

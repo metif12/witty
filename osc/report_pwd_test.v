@@ -2,16 +2,11 @@ module osc
 
 fn test_osc7_report_pwd() {
 	mut p := Parser.init(unsafe { nil })
-	for ch in 'file:///tmp/example'.bytes() {
-		p.next(ch)
-	}
-	// Feed the OSC number first
-	mut p2 := Parser.init(unsafe { nil })
 	input := '7;file:///tmp/example'
 	for ch in input.bytes() {
-		p2.next(ch)
+		p.next(ch)
 	}
-	cmd := p2.end(0) or {
+	cmd := p.end(none) or {
 		assert false, 'expected command'
 		return
 	}

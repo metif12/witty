@@ -97,6 +97,7 @@ pub mut:
 
 // parse_kitty_color_protocol parses an OSC 21 kitty color protocol command.
 fn parse_kitty_color_protocol(mut parser Parser, terminator_ch ?u8) ?Command {
+	assert parser.state == .s_21
 	if !parser.has_allocator || parser.writer == .none {
 		parser.state = .invalid
 		return none

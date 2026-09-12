@@ -139,7 +139,7 @@ module osc
 // and other irregular formatting so a dedicated parser is created to handle it.
 
 // Maximum size of a "normal" OSC.
-const max_buf = 2048
+pub const max_buf = 2048
 
 // The terminator used to end an OSC command. For OSC commands that demand
 // a response, we try to match the terminator used in the request since that

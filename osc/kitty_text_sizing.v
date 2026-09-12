@@ -3,7 +3,7 @@ module osc
 // Kitty's text sizing protocol (OSC 66)
 // Specification: https://sw.kovidgoyal.net/kitty/text-sizing-protocol/
 
-const kitty_text_sizing_max_payload = 4096
+pub const max_payload_length = 4096
 
 // KittyTextSizingVAlign represents vertical alignment for text sizing.
 pub enum KittyTextSizingVAlign {
@@ -102,6 +102,7 @@ fn (mut self KittyTextSizing) update(key u8, value string) bool {
 
 // parse_kitty_text_sizing parses an OSC 66 command.
 fn parse_kitty_text_sizing(mut parser Parser, terminator_ch ?u8) ?Command {
+	assert parser.state == .s_66
 	data := parser.finish_zero_terminated() or { return none }
 	data_str := data.bytestr()
 
@@ -116,7 +117,7 @@ fn parse_kitty_text_sizing(mut parser Parser, terminator_ch ?u8) ?Command {
 
 	// Payload has to be an escape-code-safe UTF-8 string,
 	// and be under the size limit.
-	if payload.len > kitty_text_sizing_max_payload {
+	if payload.len > max_payload_length {
 		parser.state = .invalid
 		return none
 	}

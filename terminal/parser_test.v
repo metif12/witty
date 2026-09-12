@@ -543,7 +543,8 @@ fn test_parser_param_digit_counter_matches_source_overflow() {
 }
 
 fn test_osc_color_operation_preserves_bel_terminator() {
-	mut p := VTParser{}
+	mut p := VTParser.init()
+	p.osc_parser.has_allocator = true
 	for byte_val in '\x1b]10;?'.bytes() {
 		p.next(byte_val)
 	}
@@ -554,7 +555,8 @@ fn test_osc_color_operation_preserves_bel_terminator() {
 }
 
 fn test_osc_kitty_color_preserves_st_terminator() {
-	mut p := VTParser{}
+	mut p := VTParser.init()
+	p.osc_parser.has_allocator = true
 	for byte_val in '\x1b]21;foreground=?'.bytes() {
 		p.next(byte_val)
 	}

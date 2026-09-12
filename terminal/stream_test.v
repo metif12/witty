@@ -85,7 +85,7 @@ fn test_stream_retains_parser_backed_raw_action_views() {
 }
 
 fn test_stream_preserves_osc_terminator_for_color_responses() {
-	mut s := Stream.init()
+	mut s := Stream.init_alloc(voidptr(1))
 	defer { s.deinit() }
 
 	s.next_slice('\x1b]10;?\a'.bytes())

@@ -132,7 +132,7 @@ fn test_osc66_overlong_utf8() {
 		p.next(ch)
 	}
 	// Feed more than max_payload characters
-	for _ in 0 .. kitty_text_sizing_max_payload + 10 {
+	for _ in 0 .. max_payload_length + 10 {
 		p.next(`b`)
 	}
 	assert p.end(0x1b) == none

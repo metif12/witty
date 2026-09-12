@@ -1,5 +1,11 @@
 # Translation Audit: Top 100 Ghostty Zig Files by LOC
 
+> Historical prioritization snapshot, not a completion certificate. Several
+> rows and percentages predate later source audits and fixes. Labels such as
+> “faithful” describe behavior sampled at the time; they do not establish
+> file-by-file, function-by-function, representation, or ABI equivalence. See
+> `AUDIT_FINDINGS.md` for current blockers to any 100% claim.
+
 Generated from `/Users/alexander/code/3rd/ghostty/src` and `/Users/alexander/code/3rd/ghostty/pkg` (`.zig` files only). Target: `/Users/alexander/code/witty`.
 
 The requirement is strict: **translated logic AND comments should match the original.** This pass is a genuine side-by-side review — each original file was read against its V candidate (not scored by identifier/heuristic overlap). Every row's numbers are backed by reading the actual code.

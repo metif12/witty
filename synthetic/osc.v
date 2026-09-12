@@ -83,7 +83,9 @@ fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len int) ![]
 			if self.random_bool() && remaining >= 6 {
 				result << ';aid='.bytes()
 				remaining -= 5
-				result << self.random_bytes(synthetic_min_int(16, remaining), osc_kv_alphabet)!
+				aid := self.random_bytes(synthetic_min_int(16, remaining), osc_kv_alphabet)!
+				result << aid
+				remaining -= aid.len
 			}
 			if self.random_bool() && remaining >= 9 {
 				result << ';redraw='.bytes()
@@ -165,10 +167,14 @@ fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len int) ![]
 				return result
 			}
 			result << prefix.bytes()
+			mut remaining := max_len - prefix.len
 			count := synthetic_random_inclusive(mut self.rng, 2, 5)!
 			for _ in 0 .. count {
 				result << `/`
-				result << self.random_bytes(16, osc_alphanumeric_alphabet)!
+				remaining--
+				component := self.random_bytes(synthetic_min_int(16, remaining), osc_alphanumeric_alphabet)!
+				result << component
+				remaining -= component.len
 			}
 		}
 		.hyperlink_start {
