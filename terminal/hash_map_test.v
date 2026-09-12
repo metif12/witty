@@ -670,7 +670,7 @@ fn test_hash_map_layout_no_overflow_large_capacity() {
 	layout := layout_for_capacity(large_cap, 8, 8, 8, 8)
 
 	// total_size should be at least cap * (sizeof(K) + sizeof(V))
-	min_expected := int(large_cap) * 16
+	min_expected := usize(large_cap) * 16
 	assert layout.total_size >= min_expected
 	assert layout.keys_start > 0
 	assert layout.vals_start > layout.keys_start

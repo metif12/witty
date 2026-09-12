@@ -1133,7 +1133,7 @@ pub fn Page.layout(cap PageCapacity) PageLayout {
 	}
 	grapheme_map_layout := layout_for_capacity(u32(grapheme_count), 4, 16, 4, 8)
 	grapheme_map_start := page_align_forward(grapheme_alloc_end, 8)
-	grapheme_map_end := grapheme_map_start + usize(grapheme_map_layout.total_size)
+	grapheme_map_end := grapheme_map_start + grapheme_map_layout.total_size
 
 	string_alloc_layout := bitmap_allocator_layout(usize(cap.string_bytes), string_chunk)
 	string_alloc_start := page_align_forward(grapheme_map_end, 8)
@@ -1151,7 +1151,7 @@ pub fn Page.layout(cap PageCapacity) PageLayout {
 	}
 	hyperlink_map_layout := layout_for_capacity(u32(hyperlink_map_count), 4, 2, 4, 2)
 	hyperlink_map_start := page_align_forward(hyperlink_set_end, 4)
-	hyperlink_map_end := hyperlink_map_start + usize(hyperlink_map_layout.total_size)
+	hyperlink_map_end := hyperlink_map_start + hyperlink_map_layout.total_size
 
 	return PageLayout{
 		total_size: page_align_forward(hyperlink_map_end, page_memory_alignment())
@@ -1181,11 +1181,14 @@ pub fn Page.layout(cap PageCapacity) PageLayout {
 // as Ghostty does, exposing all alignment slack to the row/cell grid.
 fn (self PageCapacity) available_bits_for_grid() usize {
 	l := Page.layout(self)
-	hyperlink_map_start := page_align_backward(l.total_size - usize(l.hyperlink_map_layout.total_size), 4)
+	hyperlink_map_start := page_align_backward(l.total_size - l.hyperlink_map_layout.total_size,
+		4)
 	hyperlink_set_start := page_align_backward(hyperlink_map_start - l.hyperlink_set_layout.total_size, 8)
-	string_alloc_start := page_align_backward(hyperlink_set_start - usize(l.string_alloc_layout.total_size), 8)
-	grapheme_map_start := page_align_backward(string_alloc_start - usize(l.grapheme_map_layout.total_size), 8)
-	grapheme_alloc_start := page_align_backward(grapheme_map_start - usize(l.grapheme_alloc_layout.total_size), 8)
+	string_alloc_start := page_align_backward(hyperlink_set_start - l.string_alloc_layout.total_size,
+		8)
+	grapheme_map_start := page_align_backward(string_alloc_start - l.grapheme_map_layout.total_size, 8)
+	grapheme_alloc_start := page_align_backward(grapheme_map_start - l.grapheme_alloc_layout.total_size,
+		8)
 	styles_start := page_align_backward(grapheme_alloc_start - l.styles_layout.total_size, 8)
 	return styles_start * 8
 }
