@@ -194,6 +194,21 @@ fn test_remap_is_remapped_checks_mask() {
 	assert !set.is_remapped(Mods{ shift: true })
 }
 
+fn test_remap_mask_retains_source_packed_lanes() {
+	assert sizeof(RemapMask) == 2
+	mut mask := RemapMask{}
+	mask.update(Mods{ ctrl: true })
+	assert mask.int() == 0x022
+	assert mask.keys() == 0x02
+	assert mask.left_sides() == 0x02
+	assert mask.right_sides() == 0
+	mask.update(Mods{
+		ctrl: true
+		sides: SideInfo{ ctrl: .right }
+	})
+	assert mask.int() == 0x222
+}
+
 fn test_remap_aliased_cmd() {
 	mut set := RemapSet{}
 	set.parse('cmd=ctrl') or { assert false }

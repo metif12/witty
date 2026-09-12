@@ -159,40 +159,48 @@ pub:
 // RemapMask tracks which modifier keys and sides have remappings registered.
 // Used as a fast pre-check before doing expensive lookups.
 pub struct RemapMask {
-pub mut:
-	// Which modifier keys (shift/ctrl/alt/super) have any remapping.
-	keys_mask u8
-	// Which modifiers have left-side remappings.
-	left_sides u8
-	// Which modifiers have right-side remappings.
-	right_sides u8
+mut:
+	value u16
+}
+
+// keys returns the low four-bit lane containing modifiers with remappings.
+pub fn (m RemapMask) keys() u8 {
+	return u8(m.value & 0x000f)
+}
+
+// left_sides returns the inverted-left four-bit lane.
+pub fn (m RemapMask) left_sides() u8 {
+	return u8((m.value >> 4) & 0x000f)
+}
+
+// right_sides returns the right-side four-bit lane.
+pub fn (m RemapMask) right_sides() u8 {
+	return u8((m.value >> 8) & 0x000f)
+}
+
+// int returns the packed 12-bit source value.
+pub fn (m RemapMask) int() u16 {
+	return m.value
 }
 
 // update adds a modifier to the mask, marking it as having a remapping.
 pub fn (mut m RemapMask) update(mods Mods) {
 	keys := mods.keys_int()
 	side_bits := mods.sides_int()
-
-	m.keys_mask |= keys
-
-	// Update left_sides: set bit if this key is active AND side is left.
-	// Since left=0, we invert sides (~sides) so left becomes 1.
-	m.left_sides |= (keys & ~side_bits) & 0x0f
-
-	// Update right_sides: set bit if this key is active AND side is right.
-	m.right_sides |= (keys & side_bits) & 0x0f
+	m.value |= u16(keys) | (u16((keys & ~side_bits) & 0x0f) << 4) |
+		(u16((keys & side_bits) & 0x0f) << 8)
 }
 
 // does_match returns true if the given mods match any remapping in this mask.
 pub fn (m RemapMask) does_match(mods Mods) bool {
 	// Find which pressed keys have remappings registered.
-	active := mods.keys_int() & m.keys_mask
+	active := mods.keys_int() & m.keys()
 	if active == 0 {
 		return false
 	}
 
 	sides := mods.sides_int()
-	side_match := (~sides & m.left_sides) | (sides & m.right_sides)
+	side_match := (~sides & m.left_sides()) | (sides & m.right_sides())
 
 	return (active & side_match & 0x0f) != 0
 }
