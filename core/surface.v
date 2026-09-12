@@ -1484,25 +1484,25 @@ const default_dpi = f32(font.default_dpi)
 // interface; core.Surface returns apprt.InputEffect.
 
 // The action to report for a mouse event.
-enum MouseReportAction {
+enum MouseReportAction as u8 {
 	press
 	release
 	motion
 }
 
 // The portion of the screen to write for write_screen_file.
-enum WriteScreenLoc {
+enum WriteScreenLoc as u8 {
 	screen
 	history
 	selection
 }
 
-enum KeySequenceQueued {
+enum KeySequenceQueued as u8 {
 	flush
 	drop
 }
 
-enum KeySequenceMemory {
+enum KeySequenceMemory as u8 {
 	retain
 	free
 }
@@ -1522,7 +1522,7 @@ fn (s ScrollAmount) magnitude() usize {
 	return if s.delta < 0 { usize(-s.delta) } else { usize(s.delta) }
 }
 
-enum ScrollDirection {
+enum ScrollDirection as u8 {
 	down_left
 	up_right
 }

@@ -13,6 +13,19 @@ import crash
 import oniguruma
 import renderer as rendererpkg
 
+fn test_surface_private_source_tag_layouts_and_ordinals() {
+	assert sizeof(MouseReportAction) == 1
+	assert [MouseReportAction.press, .release, .motion].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(WriteScreenLoc) == 1
+	assert [WriteScreenLoc.screen, .history, .selection].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(KeySequenceQueued) == 1
+	assert [KeySequenceQueued.flush, .drop].map(u8(it)) == [u8(0), 1]
+	assert sizeof(KeySequenceMemory) == 1
+	assert [KeySequenceMemory.retain, .free].map(u8(it)) == [u8(0), 1]
+	assert sizeof(ScrollDirection) == 1
+	assert [ScrollDirection.down_left, .up_right].map(u8(it)) == [u8(0), 1]
+}
+
 fn test_desktop_notification_digest_matches_source_wyhash_stream() {
 	// Ghostty updates one Wyhash state with title and then body, which is
 	// equivalent to hashing their concatenated bytes.
