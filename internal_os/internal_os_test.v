@@ -384,6 +384,24 @@ fn test_desktop_environment_matches_platform() {
 	}
 }
 
+fn test_executable_desktop_launch_ignores_library_marker() {
+	$if macos {
+		key := 'GHOSTTY_MAC_LAUNCH_SOURCE'
+		previous := os.getenv_opt(key)
+		defer {
+			if value := previous {
+				os.setenv(key, value, true)
+			} else {
+				os.unsetenv(key)
+			}
+		}
+		os.unsetenv(key)
+		expected := launched_from_desktop()
+		os.setenv(key, 'app', true)
+		assert launched_from_desktop() == expected
+	}
+}
+
 fn test_parse_pid_matches_zig_signed_integer_rules() {
 	assert parse_pid('0') or { -1 } == 0
 	assert parse_pid('+42') or { -1 } == 42

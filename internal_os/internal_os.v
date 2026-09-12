@@ -235,9 +235,8 @@ fn parse_pid(value string) ?int {
 // deciding whether GUI-only environment overrides should reach child shells.
 pub fn launched_from_desktop() bool {
 	$if macos {
-		if os.getenv('GHOSTTY_MAC_LAUNCH_SOURCE') == 'app' {
-			return true
-		}
+		// The pinned build configuration selects the executable artifact.
+		// Ghostty consults GHOSTTY_MAC_LAUNCH_SOURCE only for library builds.
 		return C.getppid() == 1
 	} $else $if linux || freebsd {
 		pid := parse_pid(os.getenv('GIO_LAUNCHED_DESKTOP_FILE_PID')) or { return false }
