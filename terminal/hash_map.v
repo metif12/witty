@@ -245,6 +245,7 @@ pub fn take_fingerprint(hash u64) u8 {
 
 // fill marks this slot as used with the given fingerprint.
 pub fn (mut m HashSlotMetadata) fill(fp u8) {
+	assert fp <= 0x7f
 	m.value = fp | 0x80
 }
 
@@ -277,6 +278,8 @@ pub:
 // key_size/val_size are element sizes in bytes; key_align/val_align are alignments.
 // Uses i64 internally to avoid overflow with large capacities (>2^30).
 pub fn layout_for_capacity(new_capacity u32, key_size i64, val_size i64, key_align i64, val_align i64) HashMapLayout {
+	assert new_capacity == 0 || (new_capacity & (new_capacity - 1)) == 0
+
 	header_size := i64(16) // two Offsets (u32 each) + two u32 (capacity, size)
 	cap := i64(new_capacity)
 
@@ -477,6 +480,8 @@ pub mut:
 // init creates a new hash map with the given capacity.
 // Capacity should be a power of two (or zero).
 pub fn HashMapUnmanaged.init(cap u32) HashMapUnmanaged {
+	// Ghostty receives a private Layout whose constructor guarantees this.
+	assert cap == 0 || (cap & (cap - 1)) == 0
 	return HashMapUnmanaged{
 		metadata: []HashSlotMetadata{len: int(cap)}
 		keys: []u64{len: int(cap)}
@@ -504,6 +509,7 @@ pub fn (mut self HashMapUnmanaged) put(key u64, value u64) ! {
 
 // put_no_clobber inserts a key-value pair. Asserts the key doesn't exist.
 pub fn (mut self HashMapUnmanaged) put_no_clobber(key u64, value u64) ! {
+	assert !self.contains(key)
 	self.grow_if_needed(1)!
 	self.put_assume_capacity_no_clobber(key, value)
 }
@@ -517,6 +523,7 @@ pub fn (mut self HashMapUnmanaged) put_assume_capacity(key u64, value u64) {
 // put_assume_capacity_no_clobber inserts without checking capacity.
 // The key must not already exist.
 pub fn (mut self HashMapUnmanaged) put_assume_capacity_no_clobber(key u64, value u64) {
+	assert !self.contains(key)
 	hash := hash_key(key)
 	mask := u64(self.cap_ - 1)
 	mut idx := int(hash & mask)

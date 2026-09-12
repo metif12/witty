@@ -1,5 +1,7 @@
 module terminal
 
+import rand
+
 // Tests for hash_hm.v
 // Translated from Ghostty's terminal/hash_hm.zig test cases.
 
@@ -266,39 +268,32 @@ fn test_hash_map_multiple_removes_same_metadata() {
 }
 
 fn test_hash_map_put_and_remove_loop() {
-	// Simplified version of the random order test.
-	// Tests that repeated put/remove cycles work correctly.
 	mut hm := HashMapUnmanaged.init(64)
-
 	size := u32(32)
+	iterations := u32(100)
+	mut keys := []u64{cap: int(size)}
+	mut i := u32(0)
+	for i < size {
+		keys << u64(i)
+		i++
+	}
+	mut prng := rand.new_default(seed_: [u32(0), 0])
 
-	// Fill the map
-	for i in 0 .. size {
-		hm.put(u64(i), u64(i)) or {
-			assert false
-			return
+	// Ghostty reuses the population-loop counter, so this runs iterations
+	// 32 through 99 with a deterministic shuffle before every cycle.
+	for i < iterations {
+		prng.shuffle(mut keys)!
+		for key in keys {
+			hm.put(key, key)!
 		}
-	}
-	assert hm.count() == size
+		assert hm.count() == size
 
-	// Remove all
-	for i in 0 .. size {
-		hm.remove(u64(i))
-	}
-	assert hm.count() == 0
-
-	// Refill and remove again
-	for i in 0 .. size {
-		hm.put(u64(i), u64(i)) or {
-			assert false
-			return
+		for key in keys {
+			_ = hm.remove(key)
 		}
+		assert hm.count() == 0
+		i++
 	}
-	assert hm.count() == size
-	for i in 0 .. size {
-		hm.remove(u64(i))
-	}
-	assert hm.count() == 0
 }
 
 fn test_hash_map_put() {
@@ -550,7 +545,7 @@ fn test_hash_map_ensure_unused_capacity() {
 	assert got_error
 }
 
-fn test_hash_map_remove_by_index() {
+fn test_hash_map_remove_by_ptr() {
 	mut hm := HashMapUnmanaged.init(64)
 
 	for i in 0 .. 10 {
@@ -562,19 +557,19 @@ fn test_hash_map_remove_by_index() {
 	assert hm.count() == 10
 
 	for i in 0 .. 10 {
-		key_idx := hm.get_key_index(u64(i))
-		assert key_idx != none
-		if idx := key_idx {
-			hm.remove_by_index(idx)
+		key_ptr := hm.get_key_ptr(u64(i))
+		assert key_ptr != none
+		if ptr := key_ptr {
+			hm.remove_by_ptr(ptr)
 		}
 	}
 	assert hm.count() == 0
 }
 
-fn test_hash_map_remove_by_index_zero_sized_key() {
+fn test_hash_map_remove_by_ptr_zero_sized_key_adaptation() {
 	// Translated from ghostty "HashMap removeByPtr 0 sized key". In Zig this
 	// exercises a zero-sized key type; witty keys are always u64, so this is
-	// a single-entry remove-by-index round-trip on key 0.
+	// a single-entry remove-by-pointer round-trip on key 0.
 	mut hm := HashMapUnmanaged.init(64)
 
 	hm.put(0, 0) or {
@@ -583,10 +578,10 @@ fn test_hash_map_remove_by_index_zero_sized_key() {
 	}
 	assert hm.count() == 1
 
-	key_idx := hm.get_key_index(0)
-	assert key_idx != none
-	if idx := key_idx {
-		hm.remove_by_index(idx)
+	key_ptr := hm.get_key_ptr(0)
+	assert key_ptr != none
+	if ptr := key_ptr {
+		hm.remove_by_ptr(ptr)
 	}
 
 	assert hm.count() == 0
@@ -620,18 +615,38 @@ fn test_hash_map_offset_basic_usage() {
 	assert offset_map.metadata_offset.offset == 16
 
 	mut hashmap := offset_map.map(base)
+	mut total := u64(0)
 	for i in u64(0) .. u64(5) {
-		hashmap.put(i, i * i)!
+		hashmap.put(i, i)!
+		total += i
 	}
 	assert hashmap.count() == 5
-	assert hashmap.get(3)? == 9
 
-	// Recreating the view retains the same map contents, mirroring rebuilding
-	// the pointer view from a moved page base in Ghostty.
+	mut sum := u64(0)
+	mut it := hashmap.iterator()
+	for {
+		sum += (it.next() or { break }).key
+	}
+	assert sum == total
+
+	sum = 0
+	for i in u64(0) .. u64(5) {
+		assert hashmap.get(i)? == i
+		sum += hashmap.get(i)?
+	}
+	assert sum == total
+}
+
+fn test_hash_map_offset_remake_map() {
+	layout := OffsetHashMap.layout(16)
+	mut backing := []u8{len: int(layout.total_size)}
+	base := unsafe { &backing[0] }
+	offset_map := OffsetHashMap.init(OffsetBuf.init(base), layout)
+
+	mut hashmap := offset_map.map(base)
+	hashmap.put(5, 5)!
 	mut remade := offset_map.map(base)
-	assert remade.get(4)? == 16
-	assert remade.remove(2)
-	assert hashmap.get(2) == none
+	assert remade.get(5)? == 5
 }
 
 fn test_hash_map_layout_for_capacity() {
