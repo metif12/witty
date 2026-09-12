@@ -1534,92 +1534,6 @@ fn (a Coordinate) eql(b Coordinate) bool {
 	return a.x == b.x && a.y == b.y
 }
 
-// ScreenSize represents the pixel dimensions of the screen area.
-pub struct ScreenSize {
-pub mut:
-	width  u32
-	height u32
-}
-
-fn (a ScreenSize) equals(b ScreenSize) bool {
-	return a.width == b.width && a.height == b.height
-}
-
-// CellSize represents the pixel dimensions of a single cell.
-pub type CellSize = font.CellSize
-
-// Padding represents the padding around the terminal grid.
-pub struct Padding {
-pub mut:
-	top    u32
-	bottom u32
-	left   u32
-	right  u32
-}
-
-// GridSize represents the terminal grid dimensions in cells.
-pub struct GridSize {
-pub:
-	columns u32
-	rows    u32
-}
-
-// Size holds all the sizing information for the surface.
-pub struct Size {
-pub mut:
-	screen  ScreenSize
-	cell    CellSize
-	padding Padding
-}
-
-pub fn (s Size) grid() GridSize {
-	usable_w := if s.screen.width > s.padding.left + s.padding.right {
-		s.screen.width - s.padding.left - s.padding.right
-	} else {
-		u32(0)
-	}
-	usable_h := if s.screen.height > s.padding.top + s.padding.bottom {
-		s.screen.height - s.padding.top - s.padding.bottom
-	} else {
-		u32(0)
-	}
-	cols := if s.cell.width > 0 { usable_w / s.cell.width } else { u32(0) }
-	rows := if s.cell.height > 0 { usable_h / s.cell.height } else { u32(0) }
-	return GridSize{
-		columns: cols
-		rows: rows
-	}
-}
-
-fn (s Size) terminal_width() u32 {
-	g := s.grid()
-	return g.columns * s.cell.width
-}
-
-fn (mut s Size) balance_padding(explicit Padding) {
-	g := s.grid()
-	total_w := g.columns * s.cell.width
-	total_h := g.rows * s.cell.height
-	usable_w := if s.screen.width > explicit.left + explicit.right {
-		s.screen.width - explicit.left - explicit.right
-	} else {
-		u32(0)
-	}
-	usable_h := if s.screen.height > explicit.top + explicit.bottom {
-		s.screen.height - explicit.top - explicit.bottom
-	} else {
-		u32(0)
-	}
-	extra_w := if usable_w > total_w { usable_w - total_w } else { u32(0) }
-	extra_h := if usable_h > total_h { usable_h - total_h } else { u32(0) }
-	s.padding = Padding{
-		top: explicit.top + extra_h / 2
-		bottom: explicit.bottom + (extra_h - extra_h / 2)
-		left: explicit.left + extra_w / 2
-		right: explicit.right + (extra_w - extra_w / 2)
-	}
-}
-
 // FontMetrics holds font measurement data.
 pub type FontMetrics = font.Metrics
 
@@ -1765,8 +1679,8 @@ pub:
 	url                string
 	url_kind           apprt.OpenUrlKind
 	pwd                string
-	cell_size          CellSize
-	initial_size       ScreenSize
+	cell_size          rendererpkg.CellSize
+	initial_size       rendererpkg.ScreenSize
 	mouse_shape        terminal.MouseShape
 	mouse_visible      bool
 	notification_title string
@@ -1776,8 +1690,8 @@ pub:
 	scrollbar          terminal.Scrollbar
 	health             int
 	command_finished   apprt.CommandFinished
-	min_size           ScreenSize
-	max_size           ScreenSize
+	min_size           rendererpkg.ScreenSize
+	max_size           rendererpkg.ScreenSize
 	secure_input_mode  apprt.SecureInput
 	reload_config_soft bool
 	config_change      &Config = unsafe { nil }
@@ -2451,12 +2365,12 @@ pub fn (mut self DerivedConfig) deinit() {
 	self.key_remaps.deinit()
 }
 
-fn (self &DerivedConfig) scaled_padding(x_dpi f32, y_dpi f32) Padding {
+fn (self &DerivedConfig) scaled_padding(x_dpi f32, y_dpi f32) rendererpkg.Padding {
 	top := u32(math.floor(f32(self.window_padding_top) * y_dpi / 72.0))
 	bottom := u32(math.floor(f32(self.window_padding_bottom) * y_dpi / 72.0))
 	left := u32(math.floor(f32(self.window_padding_left) * x_dpi / 72.0))
 	right := u32(math.floor(f32(self.window_padding_right) * x_dpi / 72.0))
-	return Padding{
+	return rendererpkg.Padding{
 		top: top
 		bottom: bottom
 		left: left
@@ -2477,7 +2391,7 @@ pub:
 	// prompt_delta carries the delta for jump_to_prompt messages.
 	prompt_delta int
 	flag         bool
-	size         Size
+	size         rendererpkg.Size
 	config       termiopkg.DerivedConfig
 }
 
@@ -2504,25 +2418,6 @@ pub enum IOMessageKind {
 	crash
 }
 
-fn renderer_size(size Size) rendererpkg.Size {
-	return rendererpkg.Size{
-		screen: rendererpkg.ScreenSize{
-			width: size.screen.width
-			height: size.screen.height
-		}
-		cell: rendererpkg.CellSize{
-			width: size.cell.width
-			height: size.cell.height
-		}
-		padding: rendererpkg.Padding{
-			top: size.padding.top
-			bottom: size.padding.bottom
-			left: size.padding.left
-			right: size.padding.right
-		}
-	}
-}
-
 fn termio_message(msg IOMessage) termiopkg.Message {
 	return match msg.kind {
 		.write_small { termiopkg.Message.write_small_msg(msg.data) }
@@ -2538,7 +2433,7 @@ fn termio_message(msg IOMessage) termiopkg.Message {
 				write_alloc_data: msg.data.bytestr().clone()
 			}
 		}
-		.resize { termiopkg.Message.resize_msg(renderer_size(msg.size)) }
+		.resize { termiopkg.Message.resize_msg(msg.size) }
 		.inspector_ { termiopkg.Message{ kind: .inspector, flag_val: msg.flag } }
 		.change_config { termiopkg.Message{ kind: .change_config, config_val: msg.config } }
 		.focused { termiopkg.Message{ kind: .focused, flag_val: msg.flag } }
@@ -2775,7 +2670,7 @@ pub mut:
 
 	inspector ?&Inspector
 
-	size   Size
+	size   rendererpkg.Size
 	config DerivedConfig
 
 	config_conditional_state ConditionalState
@@ -2842,12 +2737,16 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 
 	// Build our size struct with screen size, cell size, and padding
 	surface_size := rt_surface.get_size()!
-	self.size = Size{
-		screen: ScreenSize{
+	font_cell_size := font_grid.cell_size()
+	self.size = rendererpkg.Size{
+		screen: rendererpkg.ScreenSize{
 			width: surface_size.width
 			height: surface_size.height
 		}
-		cell: font_grid.cell_size()
+		cell: rendererpkg.CellSize{
+			width: font_cell_size.width
+			height: font_cell_size.height
+		}
 	}
 
 	// Apply padding
@@ -2873,7 +2772,7 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 		content_scale: f64(content_scale.x)
 		font_grid: font_grid
 		config: renderer_config
-		size: renderer_size(self.size)
+		size: self.size
 		surface_mailbox: rendererpkg.SurfaceMailbox{
 			user_data: voidptr(&self)
 			push_fn: renderer_surface_event_push
@@ -2893,7 +2792,7 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 	self.io.impl.init(termiopkg.TermioOpts{
 		config: termio_config
 		full_config: unsafe { config }
-		size: renderer_size(self.size)
+		size: self.size
 		max_scrollback: usize(config.scrollback_limit)
 		grapheme_cluster: config.grapheme_width_method == .unicode
 		backend_config: termiopkg.ExecConfig{
@@ -2932,7 +2831,7 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 	self.rt_app.perform_action(AppAction{
 		kind: .size_limit
 		target: &self
-		min_size: ScreenSize{
+		min_size: rendererpkg.ScreenSize{
 			width: self.size.cell.width * min_window_width_cells
 			height: self.size.cell.height * min_window_height_cells
 		}
@@ -3510,7 +3409,7 @@ pub fn (self &Surface) ime_point() IMEPos {
 
 	// Width is preedit width clamped to remaining screen space
 	mut w := f64(preedit_width * self.size.cell.width)
-	term_w := f64(self.size.terminal_width())
+	term_w := f64(self.size.terminal().width)
 	x_offset := f64((cursor.x + 1) * self.size.cell.width)
 	max_w := term_w - x_offset
 	if w > max_w {
@@ -3533,7 +3432,11 @@ pub fn (mut self Surface) set_font_size(size DesiredSize) ! {
 	font_grid_key, font_grid := self.app.font_grid_set.ref(&self.config.font, self.font_size)!
 
 	// Update cell size
-	self.set_cell_size(font_grid.cell_size())!
+	font_cell_size := font_grid.cell_size()
+	self.set_cell_size(rendererpkg.CellSize{
+		width: font_cell_size.width
+		height: font_cell_size.height
+	})!
 
 	// Notify renderer of new font grid
 	if self.renderer_thread.mailbox != unsafe { nil } {
@@ -3585,7 +3488,7 @@ pub fn (mut self Surface) size_callback(size apprt.SurfaceSize) ! {
 		crash.clear_thread_state()
 	}
 
-	new_screen := ScreenSize{
+	new_screen := rendererpkg.ScreenSize{
 		width: size.width
 		height: size.height
 	}
@@ -3595,7 +3498,7 @@ pub fn (mut self Surface) size_callback(size apprt.SurfaceSize) ! {
 	self.resize(new_screen)!
 }
 
-fn (mut self Surface) resize(size ScreenSize) ! {
+fn (mut self Surface) resize(size rendererpkg.ScreenSize) ! {
 	self.size.screen = size
 	self.balance_padding_if_needed()
 
@@ -6005,7 +5908,7 @@ fn (mut self Surface) set_selection(sel ?terminal.Selection) ! {
 	}
 }
 
-fn (mut self Surface) set_cell_size(size CellSize) ! {
+fn (mut self Surface) set_cell_size(size rendererpkg.CellSize) ! {
 	self.size.cell = size
 	self.balance_padding_if_needed()
 
@@ -6063,7 +5966,7 @@ fn (mut self Surface) recompute_initial_size() ! {
 	self.rt_app.perform_action(AppAction{
 		kind: .initial_size
 		target: &self
-		initial_size: ScreenSize{ width: final_width, height: final_height }
+		initial_size: rendererpkg.ScreenSize{ width: final_width, height: final_height }
 	})!
 }
 
@@ -7116,7 +7019,7 @@ fn (mut self Surface) dump_text_locked(sel TermSelection) !Text {
 }
 
 // mouse_selection calculates the selection given click/drag pins and pixel positions.
-fn mouse_selection(click_pin Pin, drag_pin Pin, click_x u32, drag_x u32, mods input.Mods, size Size) ?TermSelection {
+fn mouse_selection(click_pin Pin, drag_pin Pin, click_x u32, drag_x u32, mods input.Mods, size rendererpkg.Size) ?TermSelection {
 	if size.cell.width == 0 || size.grid().columns == 0 {
 		return none
 	}

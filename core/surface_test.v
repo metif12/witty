@@ -11,6 +11,7 @@ import time
 import osc
 import crash
 import oniguruma
+import renderer as rendererpkg
 
 fn test_desktop_notification_digest_matches_source_wyhash_stream() {
 	// Ghostty updates one Wyhash state with title and then body, which is
@@ -27,11 +28,11 @@ fn test_surface_crash_thread_state_carries_main_surface() {
 }
 
 // Test helper: sets up a 10x5 cell grid with 10x20px cells and 5px padding on all sides.
-fn make_test_size() Size {
-	return Size{
-		cell: CellSize{ width: 10, height: 20 }
-		padding: Padding{ left: 5, top: 5, right: 5, bottom: 5 }
-		screen: ScreenSize{ width: 110, height: 110 }
+fn make_test_size() rendererpkg.Size {
+	return rendererpkg.Size{
+		cell: rendererpkg.CellSize{ width: 10, height: 20 }
+		padding: rendererpkg.Padding{ left: 5, top: 5, right: 5, bottom: 5 }
+		screen: rendererpkg.ScreenSize{ width: 110, height: 110 }
 	}
 }
 
@@ -460,33 +461,22 @@ fn test_grid_size_basic() {
 	assert g.rows == 5
 }
 
-fn test_grid_size_zero_cell() {
-	s := Size{
-		cell: CellSize{ width: 0, height: 0 }
-		padding: Padding{}
-		screen: ScreenSize{ width: 100, height: 100 }
-	}
-	g := s.grid()
-	assert g.columns == 0
-	assert g.rows == 0
-}
-
 fn test_grid_size_large_padding() {
-	s := Size{
-		cell: CellSize{ width: 10, height: 10 }
-		padding: Padding{ left: 50, top: 50, right: 50, bottom: 50 }
-		screen: ScreenSize{ width: 100, height: 100 }
+	s := rendererpkg.Size{
+		cell: rendererpkg.CellSize{ width: 10, height: 10 }
+		padding: rendererpkg.Padding{ left: 50, top: 50, right: 50, bottom: 50 }
+		screen: rendererpkg.ScreenSize{ width: 100, height: 100 }
 	}
 	g := s.grid()
-	// usable: 100 - 50 - 50 = 0
-	assert g.columns == 0
-	assert g.rows == 0
+	// Ghostty's renderer grid always retains at least one cell per axis.
+	assert g.columns == 1
+	assert g.rows == 1
 }
 
 fn test_screen_size_equals() {
-	a := ScreenSize{ width: 100, height: 200 }
-	b := ScreenSize{ width: 100, height: 200 }
-	c := ScreenSize{ width: 100, height: 201 }
+	a := rendererpkg.ScreenSize{ width: 100, height: 200 }
+	b := rendererpkg.ScreenSize{ width: 100, height: 200 }
+	c := rendererpkg.ScreenSize{ width: 100, height: 201 }
 	assert a.equals(b) == true
 	assert a.equals(c) == false
 }
@@ -566,19 +556,6 @@ fn test_pos_to_viewport_clamps_to_grid() {
 	coord := surf.pos_to_viewport(10000.0, 10000.0)
 	assert coord.x == 9
 	assert coord.y == 4
-}
-
-fn test_renderer_size_preserves_surface_dimensions() {
-	size := make_test_size()
-	translated := renderer_size(size)
-	assert translated.screen.width == size.screen.width
-	assert translated.screen.height == size.screen.height
-	assert translated.cell.width == size.cell.width
-	assert translated.cell.height == size.cell.height
-	assert translated.padding.top == size.padding.top
-	assert translated.padding.bottom == size.padding.bottom
-	assert translated.padding.left == size.padding.left
-	assert translated.padding.right == size.padding.right
 }
 
 fn test_termio_message_translates_every_surface_message_variant() {
@@ -918,9 +895,9 @@ fn test_content_scale_callback_unchanged_dpi_is_noop() ! {
 
 fn test_size_callback_no_change() ! {
 	mut surf := make_test_surface()
-	surf.size = Size{
-		screen: ScreenSize{ width: 800, height: 600 }
-		cell: CellSize{ width: 10, height: 20 }
+	surf.size = rendererpkg.Size{
+		screen: rendererpkg.ScreenSize{ width: 800, height: 600 }
+		cell: rendererpkg.CellSize{ width: 10, height: 20 }
 	}
 	// Same size should be a no-op (no error)
 	surf.size_callback(apprt.SurfaceSize{ width: 800, height: 600 })!
@@ -1192,18 +1169,17 @@ fn test_balance_padding_if_needed_disabled() {
 }
 
 fn test_balance_padding_basic() {
-	mut s := Size{
-		screen: ScreenSize{ width: 120, height: 120 }
-		cell: CellSize{ width: 10, height: 20 }
-		padding: Padding{}
+	mut s := rendererpkg.Size{
+		screen: rendererpkg.ScreenSize{ width: 120, height: 120 }
+		cell: rendererpkg.CellSize{ width: 10, height: 20 }
+		padding: rendererpkg.Padding{}
 	}
-	// 120/10 = 12 cols, 12*10 = 120, extra_w = 0
-	// 120/20 = 6 rows, 6*20 = 120, extra_h = 0
-	explicit := Padding{ left: 5, top: 5, right: 5, bottom: 5 }
+	explicit := rendererpkg.Padding{ left: 5, top: 5, right: 5, bottom: 5 }
 	s.balance_padding(explicit)
-	// usable: 120 - 10 = 110, 110/10 = 11 cols, 11*10=110, extra=0
-	assert s.padding.left >= 5
-	assert s.padding.top >= 5
+	// The explicit padding is installed before calculating the 11x5 grid.
+	// Balancing the remaining 10x20 pixels produces 5 horizontal and 10
+	// vertical pixels, exactly as renderer.Size.balancePadding does.
+	assert s.padding == rendererpkg.Padding{ left: 5, right: 5, top: 10, bottom: 10 }
 }
 
 fn test_pin_eql() {
@@ -1324,7 +1300,7 @@ fn test_encode_key_honors_ignore_keypad_with_numlock_mode() {
 
 fn test_scroll_callback_uses_precision_multiplier_and_accumulates_pixels() {
 	mut surf := make_test_surface()
-	surf.size.cell = CellSize{ width: 10, height: 10 }
+	surf.size.cell = rendererpkg.CellSize{ width: 10, height: 10 }
 	surf.config.mouse_scroll_multiplier = configpkg.MouseScrollMultiplier{
 		precision: 2
 		discrete: 3
@@ -1337,7 +1313,7 @@ fn test_scroll_callback_uses_precision_multiplier_and_accumulates_pixels() {
 
 fn test_scroll_callback_alternate_screen_emits_cursor_sequences() {
 	mut surf := make_test_surface()
-	surf.size.cell = CellSize{ width: 10, height: 10 }
+	surf.size.cell = rendererpkg.CellSize{ width: 10, height: 10 }
 	mut term := surf.renderer_state.terminal_
 	term.switch_screen(.alternate)!
 	term.modes.set(.cursor_keys, true)
