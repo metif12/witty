@@ -1869,32 +1869,6 @@ fn test_page_is_dirty() {
 	assert page.is_dirty()
 }
 
-// Test row_is_blank.
-fn test_page_row_is_blank() {
-	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
-	})
-	defer {
-		page.deinit()
-	}
-	page.size.rows = u16(page.capacity.rows)
-
-	// New row should be blank.
-	assert page.row_is_blank(0)
-
-	// Write something.
-	mut rac := page.get_row_and_cell(0, 0)
-	unsafe {
-		rac.cell.content_tag = .codepoint
-		rac.cell.codepoint = u32(`A`)
-	}
-	assert !page.row_is_blank(0)
-
-	// Other row should still be blank.
-	assert page.row_is_blank(1)
-}
-
 // Test hyperlink operations.
 fn test_page_hyperlink_basic() {
 	mut page := Page.init(PageCapacity{

@@ -1907,12 +1907,20 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_
 
 // Get a single row. y must be valid.
 pub fn (self &Page) get_row(y int) &RowData {
-	assert y < int(self.size.rows)
+	assert y >= 0 && y < int(self.size.rows)
 	return &self.rows[y]
 }
 
 // Get the cells for a row.
 pub fn (self &Page) get_cells(row &RowData) []CellData {
+	mut owned := false
+	for y in 0 .. self.rows.len {
+		if voidptr(&self.rows[y]) == voidptr(row) {
+			owned = true
+			break
+		}
+	}
+	assert owned
 	return row.cells[..int(self.size.cols)]
 }
 
@@ -1924,8 +1932,8 @@ pub mut:
 }
 
 pub fn (mut self Page) get_row_and_cell(x int, y int) RowAndCell {
-	assert y < int(self.size.rows)
-	assert x < int(self.size.cols)
+	assert y >= 0 && y < int(self.size.rows)
+	assert x >= 0 && x < int(self.size.cols)
 	return RowAndCell{
 		row: unsafe { &self.rows[y] }
 		cell: unsafe { &self.rows[y].cells[x] }
@@ -2374,11 +2382,11 @@ pub fn (self &Page) lookup_grapheme(cell &CellData) ?[]u32 {
 
 // Index-addressed helper for code that already has a page row and column.
 pub fn (self &Page) lookup_grapheme_at(row_idx int, col_idx int) ?[]u32 {
-	if row_idx >= self.rows.len {
+	if row_idx < 0 || row_idx >= self.rows.len {
 		return none
 	}
 	row := self.rows[row_idx]
-	if col_idx >= row.cells.len {
+	if col_idx < 0 || col_idx >= row.cells.len {
 		return none
 	}
 	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
@@ -2499,20 +2507,6 @@ pub fn (self &Page) is_dirty() bool {
 		}
 	}
 	return false
-}
-
-// Returns true if a row is entirely blank (no codepoints).
-pub fn (self &Page) row_is_blank(row_idx u16) bool {
-	if int(row_idx) >= self.rows.len {
-		return true
-	}
-	row := self.rows[int(row_idx)]
-	for cell in row.cells {
-		if cell.has_text() {
-			return false
-		}
-	}
-	return true
 }
 
 // ============================================================
