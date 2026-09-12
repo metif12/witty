@@ -53,7 +53,7 @@ module terminal
 //   TransitionAction  - Actions for state transitions
 //   Transition        - State transition table entry
 //   Table             - The full transition table type
-//   transition_table  - The generated transition table constant
+//   table             - The generated transition table constant
 //
 // == Ref-counted set (from ref_counted_set.v) ==
 //   RefCountedSet     - Reference-counted set for styles

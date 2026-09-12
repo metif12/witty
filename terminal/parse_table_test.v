@@ -14,9 +14,23 @@ module terminal
 fn test_table_creation() {
 	// Verify the table exists and has the right dimensions.
 	// Access a few entries to make sure it's populated.
-	t := transition_table
+	t := table
 	assert t.len == table_byte_count
 	assert t[0].cols.len == table_state_count
+}
+
+fn test_transition_action_source_ordinals() {
+	assert int(TransitionAction.ta_none) == 0
+	assert int(TransitionAction.ta_ignore) == 1
+	assert int(TransitionAction.ta_print) == 2
+	assert int(TransitionAction.ta_execute) == 3
+	assert int(TransitionAction.ta_collect) == 4
+	assert int(TransitionAction.ta_param) == 5
+	assert int(TransitionAction.ta_esc_dispatch) == 6
+	assert int(TransitionAction.ta_csi_dispatch) == 7
+	assert int(TransitionAction.ta_put) == 8
+	assert int(TransitionAction.ta_osc_put) == 9
+	assert int(TransitionAction.ta_apc_put) == 10
 }
 
 // Test ground state: printable characters produce print action.

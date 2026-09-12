@@ -62,10 +62,14 @@ const table_state_count = 14
 // TransitionRow wraps [14]Transition to work around a V compiler bug
 // where nested fixed-size arrays of structs ([256][14]Transition) don't
 // get proper C type declarations.
-struct TransitionRow {
-mut:
+pub struct TransitionRow {
+pub mut:
 	cols [14]Transition
 }
+
+// Table is the exactly-sized state transition table. TransitionRow is a V
+// adapter for the nested fixed array used by Ghostty.
+pub type Table = [256]TransitionRow
 
 // ============================================================
 // Table generation
@@ -73,7 +77,7 @@ mut:
 
 // gen_table generates the full state transition table for VT emulation.
 // This is the V equivalent of the Zig comptime genTable() function.
-fn gen_table() [256]TransitionRow {
+fn gen_table() Table {
 	// We accumulate using an "optional" table so we can detect duplicates.
 	// In V we use a sentinel value (ta_none with ground) as "unset" and
 	// track which entries have been explicitly set via a separate bool table.
@@ -420,11 +424,11 @@ fn table_range(mut t [256]TransitionRow, mut s [256][14]bool, from int, to int, 
 // ============================================================
 
 // The state transition table. Indexed as:
-//   transition_table[input_byte].cols[state] -> Transition
+//   table[input_byte].cols[state] -> Transition
 //
 // The table maps (state, input_byte) -> (action, new_state).
 // This is the V equivalent of the Zig comptime-generated `table` constant.
-pub const transition_table = gen_table()
+pub const table = gen_table()
 
 // ============================================================
 // Lookup helper
@@ -432,5 +436,5 @@ pub const transition_table = gen_table()
 
 // lookup retrieves the transition for a given input byte and current state.
 pub fn table_lookup(c u8, state ParserState) Transition {
-	return transition_table[c].cols[int(state)]
+	return table[c].cols[int(state)]
 }
