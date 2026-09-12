@@ -3049,7 +3049,7 @@ pub fn (mut self Surface) preedit_callback(preedit ?string) ! {
 	mut codepoints := []PreeditCodepoint{}
 	for ch in text.runes() {
 		cp := u32(ch)
-		width := unicode.get(cp).width
+		width := unicode.get(cp).width()
 		// Ghostty cannot display zero-width preedit codepoints independently,
 		// so they are omitted from the renderer preedit buffer.
 		if width == 0 {

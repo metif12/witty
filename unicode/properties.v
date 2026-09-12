@@ -32,10 +32,29 @@ pub enum GraphemeBreak as u8 {
 }
 
 pub struct Properties {
-pub:
-	width          u8
-	grapheme_break GraphemeBreak
-	emoji_vs_base  bool
+	value u8
+}
+
+pub fn Properties.from_int(value u8) Properties {
+	return Properties{
+		value: value
+	}
+}
+
+pub fn (props Properties) width() u8 {
+	return props.value & 0x03
+}
+
+pub fn (props Properties) grapheme_break() GraphemeBreak {
+	return unsafe { GraphemeBreak((props.value >> 2) & 0x1f) }
+}
+
+pub fn (props Properties) emoji_vs_base() bool {
+	return props.value & 0x80 != 0
+}
+
+pub fn (a Properties) eql(b Properties) bool {
+	return a.value == b.value
 }
 
 const table_data = $embed_file('@VMODROOT/unicode/tables.bin').to_bytes()
@@ -66,21 +85,12 @@ fn table_u16(offset int, index u32) u16 {
 // table covers the full u21 domain, matching Ghostty's table exactly.
 @[direct_array_access]
 pub fn get(cp u32) Properties {
-	if cp > 0x1fffff {
-		return Properties{
-			width: 1
-		}
-	}
+	assert cp <= 0x1fffff
 	high := cp >> 8
 	low := cp & 0xff
 	stage2 := table_u16(props_stage1_offset, high)
 	stage3 := table_u16(props_stage2_offset, u32(stage2) + low)
-	packed := table_data[props_stage3_offset + int(stage3)]
-	return Properties{
-		width: packed & 0x03
-		grapheme_break: unsafe { GraphemeBreak((packed >> 2) & 0x1f) }
-		emoji_vs_base: packed & 0x80 != 0
-	}
+	return Properties.from_int(table_data[props_stage3_offset + int(stage3)])
 }
 
 // is_symbol uses Ghostty's separately generated symbol table. It includes
@@ -88,9 +98,7 @@ pub fn get(cp u32) Properties {
 // uucode build configuration.
 @[direct_array_access]
 pub fn is_symbol(cp u32) bool {
-	if cp > 0x1fffff {
-		return false
-	}
+	assert cp <= 0x1fffff
 	high := cp >> 8
 	low := cp & 0xff
 	stage2 := table_u16(symbols_stage1_offset, high)

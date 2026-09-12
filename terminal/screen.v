@@ -4169,7 +4169,7 @@ pub fn (mut self Screen) test_write_string(text string) ! {
 			continue
 		}
 
-		width := if c <= 0xff { u32(1) } else { u32(unicode.get(u32(c)).width) }
+		width := if c <= 0xff { u32(1) } else { u32(unicode.get(u32(c)).width()) }
 		if width == 0 {
 			assert self.cursor.x > 0
 			mut cell_x := self.cursor.x - 1

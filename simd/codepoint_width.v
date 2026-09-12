@@ -10,5 +10,5 @@ pub fn codepoint_width(cp u32) i8 {
 	if cp > 0x1fffff {
 		return 1
 	}
-	return i8(unicode.get(cp).width)
+	return i8(unicode.get(cp).width())
 }

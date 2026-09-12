@@ -271,7 +271,7 @@ fn run_codepoint_width(args []string) ! {
 					.wcwidth { C.witty_benchmark_wcwidth(cp) }
 					.simd { int(simd.codepoint_width(cp)) }
 					.table {
-						if cp <= 0xff { 1 } else { int(unicode.get(cp).width) }
+						if cp <= 0xff { 1 } else { int(unicode.get(cp).width()) }
 					}
 					.noop { 0 }
 				}

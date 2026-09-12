@@ -2040,7 +2040,7 @@ pub fn (mut self Terminal) print(c u32) ! {
 				if c == 0xFE0F || c == 0xFE0E {
 					// Check if it is a valid variation sequence in
 					// emoji-variation-sequences.txt, and if not, ignore the char.
-					if !unicode.get(prev.codepoint).emoji_vs_base {
+					if !unicode.get(prev.codepoint).emoji_vs_base() {
 						return
 					}
 
@@ -2109,7 +2109,7 @@ pub fn (mut self Terminal) print(c u32) ! {
 	// non-single-width characters properly. We have a fast-path for
 	// byte-sized characters since they're so common. We can ignore
 	// control characters because they're always filtered prior.
-	width := if c <= 0xFF { u16(1) } else { u16(unicode.get(c).width) }
+	width := if c <= 0xFF { u16(1) } else { u16(unicode.get(c).width()) }
 
 	// Note: it is possible to have a width of "3" and a width of "-1" from
 	// uucode.x's wcwidth. We should look into those cases and handle them
@@ -2148,7 +2148,7 @@ pub fn (mut self Terminal) print(c u32) ! {
 
 		// If this is a emoji variation selector, prev must be an emoji.
 		if c == 0xFE0F || c == 0xFE0E {
-			if unicode.get(prev.codepoint).grapheme_break != .extended_pictographic {
+			if unicode.get(prev.codepoint).grapheme_break() != .extended_pictographic {
 				return
 			}
 		}
