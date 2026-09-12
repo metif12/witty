@@ -1,5 +1,71 @@
 module apprt
 
+fn test_action_c_enum_layouts_and_ordinals() {
+	assert sizeof(ActionKey) == 4
+	mut action_count := 0
+	$for enum_value in ActionKey.values {
+		assert i32(enum_value.value) == i32(action_count)
+		action_count++
+	}
+	assert action_count == 63
+	assert i32(ActionKey.quit) == 0
+	assert i32(ActionKey.readonly) == 62
+
+	assert sizeof(SplitDirection) == 4
+	assert [SplitDirection.right, .down, .left, .up].map(i32(it)) == [i32(0), 1, 2, 3]
+	assert sizeof(GotoSplit) == 4
+	assert [GotoSplit.previous, .next, .up, .left, .down, .right].map(i32(it)) == [
+		i32(0),
+		1,
+		2,
+		3,
+		4,
+		5,
+	]
+	assert sizeof(GotoWindow) == 4
+	assert [GotoWindow.previous, .next].map(i32(it)) == [i32(0), 1]
+	assert sizeof(ResizeSplitDirection) == 4
+	assert [ResizeSplitDirection.up, .down, .left, .right].map(i32(it)) == [i32(0), 1, 2, 3]
+
+	assert sizeof(GotoTab) == 4
+	assert [GotoTab.previous, .next, .last].map(i32(it)) == [i32(-1), -2, -3]
+	tab_index := 17
+	assert i32(unsafe { GotoTab(tab_index) }) == tab_index
+
+	assert sizeof(Fullscreen) == 4
+	assert [Fullscreen.native, .macos_non_native, .macos_non_native_visible_menu,
+		.macos_non_native_padded_notch].map(i32(it)) == [i32(0), 1, 2, 3]
+	assert sizeof(FloatWindow) == 4
+	assert [FloatWindow.on, .off, .toggle].map(i32(it)) == [i32(0), 1, 2]
+	assert sizeof(SecureInput) == 4
+	assert [SecureInput.on, .off, .toggle].map(i32(it)) == [i32(0), 1, 2]
+	assert sizeof(InspectorAction) == 4
+	assert [InspectorAction.toggle, .show, .hide].map(i32(it)) == [i32(0), 1, 2]
+	assert sizeof(QuitTimer) == 4
+	assert [QuitTimer.start, .stop].map(i32(it)) == [i32(0), 1]
+	assert sizeof(Readonly) == 4
+	assert [Readonly.off, .on].map(i32(it)) == [i32(0), 1]
+	assert sizeof(MouseVisibility) == 4
+	assert [MouseVisibility.visible, .hidden].map(i32(it)) == [i32(0), 1]
+	assert sizeof(PromptTitle) == 4
+	assert [PromptTitle.surface, .tab].map(i32(it)) == [i32(0), 1]
+
+	assert sizeof(KeyTableTag) == 4
+	assert [KeyTableTag.activate, .deactivate, .deactivate_all].map(i32(it)) == [
+		i32(0),
+		1,
+		2,
+	]
+	assert sizeof(ColorKind) == 4
+	assert [ColorKind.foreground, .background, .cursor].map(i32(it)) == [i32(-1), -2, -3]
+	palette_index := 255
+	assert i32(unsafe { ColorKind(palette_index) }) == palette_index
+	assert sizeof(OpenUrlKind) == 4
+	assert [OpenUrlKind.unknown, .text, .html].map(i32(it)) == [i32(0), 1, 2]
+	assert sizeof(CloseTabMode) == 4
+	assert [CloseTabMode.this, .other, .right].map(i32(it)) == [i32(0), 1, 2]
+}
+
 // Test that action key enum has all expected values.
 fn test_action_key_values() {
 	// Verify first and last values exist

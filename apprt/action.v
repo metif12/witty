@@ -25,7 +25,7 @@ pub:
 // directly to the libghostty C enum. For ABI compatibility, new actions should
 // be added to the end.
 // Sync with: ghostty_action_tag_e
-pub enum ActionKey {
+pub enum ActionKey as i32 {
 	// Quit the application.
 	quit
 	// Open a new window. The target determines whether properties such
@@ -210,7 +210,7 @@ pub:
 // SplitDirection is the direction of a new split.
 // This is made extern (c_int) to make interop easier with our embedded
 // runtime. The small size cost doesn't make a difference in our union.
-pub enum SplitDirection {
+pub enum SplitDirection as i32 {
 	right
 	down
 	left
@@ -220,7 +220,7 @@ pub enum SplitDirection {
 // GotoSplit is the direction to navigate to a split.
 // This is made extern (c_int) to make interop easier with our embedded
 // runtime. The small size cost doesn't make a difference in our union.
-pub enum GotoSplit {
+pub enum GotoSplit as i32 {
 	previous
 	next
 	up
@@ -232,7 +232,7 @@ pub enum GotoSplit {
 // GotoWindow is the direction to navigate windows.
 // This is made extern (c_int) to make interop easier with our embedded
 // runtime. The small size cost doesn't make a difference in our union.
-pub enum GotoWindow {
+pub enum GotoWindow as i32 {
 	previous
 	next
 }
@@ -245,7 +245,7 @@ pub:
 }
 
 // ResizeSplitDirection is the direction to resize a split.
-pub enum ResizeSplitDirection {
+pub enum ResizeSplitDirection as i32 {
 	up
 	down
 	left
@@ -260,14 +260,14 @@ pub:
 
 // GotoTab is the tab to jump to. Positive values represent the index
 // (zero-based) of the tab to jump to. Negative values are special values.
-pub enum GotoTab {
+pub enum GotoTab as i32 {
 	previous = -1
 	next     = -2
 	last     = -3
 }
 
 // Fullscreen is the fullscreen mode to toggle to if we're moving to fullscreen.
-pub enum Fullscreen {
+pub enum Fullscreen as i32 {
 	native
 	// macOS has a non-native fullscreen mode that is more like a maximized
 	// window. This is much faster to enter and exit than the native mode.
@@ -278,7 +278,7 @@ pub enum Fullscreen {
 
 // FloatWindow controls the window floating state. A floating window is one
 // that is always on top of other windows even when not focused.
-pub enum FloatWindow {
+pub enum FloatWindow as i32 {
 	on
 	off
 	toggle
@@ -287,39 +287,39 @@ pub enum FloatWindow {
 // SecureInput controls whether secure input is on or off.
 // "Secure input" means that the user is currently at some sort of prompt
 // where they may be entering a password or other sensitive information.
-pub enum SecureInput {
+pub enum SecureInput as i32 {
 	on
 	off
 	toggle
 }
 
 // InspectorAction controls whether the inspector is shown or hidden.
-pub enum InspectorAction {
+pub enum InspectorAction as i32 {
 	toggle
 	show
 	hide
 }
 
 // QuitTimer controls the quit timer behavior.
-pub enum QuitTimer {
+pub enum QuitTimer as i32 {
 	start
 	stop
 }
 
 // Readonly controls the readonly state.
-pub enum Readonly {
+pub enum Readonly as i32 {
 	off
 	on
 }
 
 // MouseVisibility controls whether the mouse cursor is visible or not.
-pub enum MouseVisibility {
+pub enum MouseVisibility as i32 {
 	visible
 	hidden
 }
 
 // PromptTitle specifies whether to prompt for the surface title or tab title.
-pub enum PromptTitle {
+pub enum PromptTitle as i32 {
 	surface
 	tab
 }
@@ -390,7 +390,7 @@ pub:
 
 // KeyTableTag identifies the key table operation.
 // Sync with: ghostty_action_key_table_tag_e
-pub enum KeyTableTag {
+pub enum KeyTableTag as i32 {
 	activate
 	deactivate
 	deactivate_all
@@ -407,7 +407,7 @@ pub:
 
 // ColorKind identifies the color being changed.
 // Negative numbers indicate some named kind, 0+ values indicate a palette index.
-pub enum ColorKind {
+pub enum ColorKind as i32 {
 	foreground = -1
 	background = -2
 	cursor     = -3
@@ -440,7 +440,7 @@ pub:
 
 // OpenUrlKind identifies the type of the data at the URL.
 // Sync with: ghostty_action_open_url_kind_e
-pub enum OpenUrlKind {
+pub enum OpenUrlKind as i32 {
 	// The type is unknown. Apprts should open the URL in the most generic
 	// way possible (e.g., open on macOS, xdg-open on Linux).
 	unknown
@@ -453,7 +453,7 @@ pub enum OpenUrlKind {
 
 // CloseTabMode controls which tab(s) to close.
 // Sync with ghostty_action_close_tab_mode_e in ghostty.h
-pub enum CloseTabMode {
+pub enum CloseTabMode as i32 {
 	// Close the current tab.
 	this
 	// Close all other tabs.
