@@ -751,9 +751,11 @@ import font
 import input
 import time
 import configpkg
+import file_type
 import highlight
 import stbi
 import macos
+import os
 import sync
 
 // Create a renderer type with the provided graphics API wrapper.
@@ -1983,9 +1985,30 @@ pub fn (mut self Renderer) frame_completed(health Health) {
 // Call this any time the background image path changes.
 fn (mut self Renderer) prep_background_image() ! {
 	if path_config := self.config.bg_image {
-		decoded := stbi.load(path_config.path, stbi.LoadParams{ desired_channels: 4 }) or {
-			eprintln('renderer: unable to decode background image "${path_config.path}": ${err}')
+		contents := os.read_bytes(path_config.path) or {
+			eprintln('renderer: error reading background image file "${path_config.path}": ${err}')
 			return
+		}
+		detected_type := file_type.detect(contents)
+		image_type := match detected_type {
+			.unknown { file_type.guess_from_extension(os.file_ext(path_config.path)) }
+			else { detected_type }
+		}
+		match image_type {
+			.png, .jpeg {}
+			.unknown {
+				eprintln('renderer: cannot determine file type for background image file "${path_config.path}"')
+				return
+			}
+			else {
+				eprintln('renderer: unsupported file type ${image_type} for background image file "${path_config.path}"')
+				return
+			}
+		}
+		decoded := stbi.load_from_memory(contents.data, contents.len, stbi.LoadParams{
+			desired_channels: 4
+		}) or {
+			return error('unable to decode background image "${path_config.path}": ${err}')
 		}
 		defer {
 			decoded.free()

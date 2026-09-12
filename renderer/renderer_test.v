@@ -3,6 +3,7 @@ module renderer
 import font
 import terminal
 import configpkg
+import os
 import sync
 
 struct SurfaceEventCapture {
@@ -71,6 +72,23 @@ fn test_derived_config_deinit() {
 	assert config.font_features.len == 0
 	assert config.custom_shaders.items.len == 0
 	assert config.bg_image == none
+}
+
+fn test_prep_background_image_detects_magic_without_extension() ! {
+	path := os.join_path(os.dir(@FILE), '..', 'kitty', 'testdata', 'image-png-none-50x76-2147483647-raw.data')
+	mut render := Renderer{
+		config: DerivedConfig{
+			bg_image: configpkg.Path{ path: path }
+		}
+	}
+	render.prep_background_image()!
+	mut image := render.bg_image or { return error('background image was not prepared') }
+	assert image.state == .pending
+	assert image.width == 50
+	assert image.height == 76
+	pending := image.pending or { return error('background image has no pending pixels') }
+	assert pending.data.len == 50 * 76 * 4
+	image.deinit()
 }
 
 fn test_derived_config_owns_shader_path_list() {
