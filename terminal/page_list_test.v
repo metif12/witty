@@ -1041,7 +1041,7 @@ fn test_page_list_clone_row_grows_grapheme_allocator_capacity() {
 	assert new_first.data.lookup_grapheme_at(1, 0) or { []u32{} } == cps
 }
 
-fn test_page_list_erase_row_grows_style_capacity_across_pages() {
+fn test_page_list_erase_row_propagates_style_capacity_error_across_pages() {
 	mut list := PageList.init(60, 3, usize(0x7FFFFFFFFFFFFFFF))
 	defer { list.deinit() }
 	first := list.pages.first or {
@@ -1082,24 +1082,17 @@ fn test_page_list_erase_row_grows_style_capacity_across_pages() {
 		}
 	}
 
-	list.erase_row(PagePin{ node: first, y: 0 })
+	mut error_message := ''
+	list.erase_row(Point.new(.active, Coordinate{})) or { error_message = err.msg() }
+	assert error_message == PageCloneError.style_set_out_of_memory.str()
 
 	dst_node := list.pages.first or {
 		assert false, 'missing erase destination page'
 		return
 	}
+	assert voidptr(dst_node) == voidptr(first)
 	dst := &dst_node.data
-	assert dst.capacity.styles > std_capacity.styles
-	for y in 0 .. 2 {
-		assert dst.rows[y].styled
-		for x in 0 .. 60 {
-			cell := dst.rows[y].cells[x]
-			assert cell.style_id != default_style_id
-			style := dst.styles.get(cell.style_id)
-			assert style.fg_r == u8(x)
-			assert style.fg_g == u8(y + 1)
-		}
-	}
+	assert dst.capacity.styles == std_capacity.styles
 	if integrity_error := dst.verify_integrity() {
 		assert false, 'erase destination failed integrity: ${integrity_error}'
 	}
@@ -2073,11 +2066,7 @@ fn test_page_list_erase_row() {
 	}
 
 	// Erase row 0
-	p := s.pin(Point.new(.active, Coordinate{ x: 0, y: 0 })) or {
-		assert false, 'get_pin failed'
-		return
-	}
-	s.erase_row(p)
+	s.erase_row(Point.new(.active, Coordinate{})) or { panic(err) }
 
 	// After erase, row 0 should have what was row 1 ('B')
 	cell := s.get_cell(Point.new(.active, Coordinate{ x: 0, y: 0 })) or {
@@ -2099,11 +2088,7 @@ fn test_page_list_erase_row_with_tracked_pin() {
 	tp := s.track_pin(p)
 
 	// Erase row 0 (before tracked pin)
-	erase_pin := s.pin(Point.new(.active, Coordinate{ x: 0, y: 0 })) or {
-		assert false, 'get_pin failed'
-		return
-	}
-	s.erase_row(erase_pin)
+	s.erase_row(Point.new(.active, Coordinate{})) or { panic(err) }
 
 	// Tracked pin should shift up by 1
 	assert tp.y == p.y - 1
@@ -2143,7 +2128,7 @@ fn test_page_list_erase_row_preserves_managed_cell_data() {
 	}) or { panic(err) }
 	page.set_hyperlink(1, 2, hyperlink_id) or { panic(err) }
 
-	s.erase_row(PagePin{ node: first, y: 0, x: 0 })
+	s.erase_row(Point.new(.active, Coordinate{})) or { panic(err) }
 
 	cell := page.rows[0].cells[2]
 	assert cell.codepoint == u32(`M`)
@@ -2193,7 +2178,7 @@ fn test_page_list_erase_row_moves_managed_cell_and_pin_across_page_boundary() {
 	second_page.set_hyperlink(0, 1, hyperlink_id) or { panic(err) }
 	tracked := s.track_pin(PagePin{ node: second, y: 0, x: 1 })
 
-	s.erase_row(PagePin{ node: first, y: 1, x: 0 })
+	s.erase_row(Point.new(.active, Coordinate{ y: 1 })) or { panic(err) }
 
 	assert voidptr(tracked.node) == voidptr(first)
 	assert tracked.y == 1
@@ -4602,11 +4587,7 @@ fn test_page_list_erase_row_bounded_less_than_full_row() {
 	})
 
 	// Erase only a few rows in our active.
-	erase_pin := s.pin(Point.new(.active, Coordinate{ x: 0, y: 5 })) or {
-		assert false, 'get_pin failed'
-		return
-	}
-	s.erase_row_bounded(erase_pin, 3)
+	s.erase_row_bounded(Point.new(.active, Coordinate{ y: 5 }), 3) or { panic(err) }
 	assert s.total_rows == usize(s.rows)
 
 	first := s.pages.first or {
@@ -4661,7 +4642,7 @@ fn test_page_list_erase_row_bounded_preserves_managed_cell_data() {
 	}) or { panic(err) }
 	page.set_hyperlink(1, 1, hyperlink_id) or { panic(err) }
 
-	s.erase_row_bounded(PagePin{ node: first, y: 0, x: 0 }, 1)
+	s.erase_row_bounded(Point.new(.active, Coordinate{}), 1) or { panic(err) }
 
 	cell := page.rows[0].cells[1]
 	assert cell.codepoint == u32(`M`)
@@ -4709,7 +4690,7 @@ fn test_page_list_erase_row_bounded_exact_page_boundary() {
 
 	// One row remains in the first page. A limit of one must pull the next
 	// page's first row across the boundary, then blank that source row.
-	s.erase_row_bounded(PagePin{ node: first, y: 1, x: 0 }, 1)
+	s.erase_row_bounded(Point.new(.active, Coordinate{ y: 1 }), 1) or { panic(err) }
 
 	assert voidptr(tracked.node) == voidptr(first)
 	assert tracked.y == 1
@@ -4738,11 +4719,7 @@ fn test_page_list_erase_row_bounded_with_pin_at_top() {
 		return
 	})
 
-	erase_pin := s.pin(Point.new(.active, Coordinate{ x: 0, y: 0 })) or {
-		assert false, 'get_pin failed'
-		return
-	}
-	s.erase_row_bounded(erase_pin, 3)
+	s.erase_row_bounded(Point.new(.active, Coordinate{}), 3) or { panic(err) }
 	assert s.total_rows == usize(s.rows)
 
 	first := s.pages.first or {
@@ -4769,11 +4746,7 @@ fn test_page_list_erase_row_bounded_full_rows_single_page() {
 		return
 	})
 
-	erase_pin := s.pin(Point.new(.active, Coordinate{ x: 0, y: 5 })) or {
-		assert false, 'get_pin failed'
-		return
-	}
-	s.erase_row_bounded(erase_pin, 10)
+	s.erase_row_bounded(Point.new(.active, Coordinate{ y: 5 }), 10) or { panic(err) }
 	assert s.total_rows == usize(s.rows)
 
 	first := s.pages.first or {
@@ -4845,11 +4818,7 @@ fn test_page_list_erase_row_bounded_full_rows_two_pages() {
 	assert p_out.y == 4
 
 	// Erase a few rows in our active starting at active y=4.
-	erase_pin := s.pin(Point.new(.active, Coordinate{ x: 0, y: 4 })) or {
-		assert false, 'get_pin failed'
-		return
-	}
-	s.erase_row_bounded(erase_pin, 4)
+	s.erase_row_bounded(Point.new(.active, Coordinate{ y: 4 }), 4) or { panic(err) }
 
 	// In-page pin in first page is shifted up by one.
 	assert voidptr(p_first.node) == voidptr(prev)
@@ -7732,8 +7701,7 @@ fn test_page_list_erase_row_invalidates_viewport_offset_cache() {
 	s.scroll(PageScrollPin{ pin: viewport_pin })
 	assert s.scrollbar().offset == usize(pin_y)
 
-	erase_pin := s.pin(Point.new(.history, Coordinate{ x: 0, y: 0 })) or { return }
-	s.erase_row(erase_pin)
+	s.erase_row(Point.new(.history, Coordinate{})) or { panic(err) }
 	assert s.scrollbar() == Scrollbar{
 		total: s.total_rows
 		offset: usize(pin_y - 1)
@@ -7751,8 +7719,7 @@ fn test_page_list_erase_row_bounded_invalidates_viewport_offset_cache() {
 	s.scroll(PageScrollPin{ pin: viewport_pin })
 	assert s.scrollbar().offset == usize(pin_y)
 
-	erase_pin := s.pin(Point.new(.history, Coordinate{ x: 0, y: 0 })) or { return }
-	s.erase_row_bounded(erase_pin, 10)
+	s.erase_row_bounded(Point.new(.history, Coordinate{}), 10) or { panic(err) }
 	assert s.scrollbar() == Scrollbar{
 		total: s.total_rows
 		offset: usize(pin_y - 1)
@@ -7770,8 +7737,9 @@ fn test_page_list_erase_row_bounded_multi_page_invalidates_viewport_offset_cache
 	s.scroll(PageScrollPin{ pin: viewport_pin })
 	assert s.scrollbar().offset == usize(pin_y)
 
-	erase_pin := s.pin(Point.new(.history, Coordinate{ x: 0, y: 0 })) or { return }
-	s.erase_row_bounded(erase_pin, usize(cap.rows) + 10)
+	s.erase_row_bounded(Point.new(.history, Coordinate{}), usize(cap.rows) + 10) or {
+		panic(err)
+	}
 	assert s.scrollbar() == Scrollbar{
 		total: s.total_rows
 		offset: usize(pin_y - 1)
@@ -7789,8 +7757,9 @@ fn test_page_list_erase_row_bounded_full_page_shift_invalidates_viewport_offset_
 	s.scroll(PageScrollPin{ pin: viewport_pin })
 	assert s.scrollbar().offset == usize(pin_y)
 
-	erase_pin := s.pin(Point.new(.history, Coordinate{ x: 0, y: 0 })) or { return }
-	s.erase_row_bounded(erase_pin, usize(cap.rows) * 2 + 10)
+	s.erase_row_bounded(Point.new(.history, Coordinate{}), usize(cap.rows) * 2 + 10) or {
+		panic(err)
+	}
 	assert s.scrollbar() == Scrollbar{
 		total: s.total_rows
 		offset: usize(pin_y - 1)
@@ -7809,8 +7778,9 @@ fn test_page_list_erase_row_bounded_exhausts_pages_invalidates_viewport_offset_c
 	s.scroll(PageScrollPin{ pin: viewport_pin })
 	assert s.scrollbar().offset == usize(pin_y)
 
-	erase_pin := s.pin(Point.new(.history, Coordinate{ x: 0, y: 0 })) or { return }
-	s.erase_row_bounded(erase_pin, total_rows_before * 2)
+	s.erase_row_bounded(Point.new(.history, Coordinate{}), total_rows_before * 2) or {
+		panic(err)
+	}
 	assert s.scrollbar() == Scrollbar{
 		total: s.total_rows
 		offset: usize(pin_y - 1)

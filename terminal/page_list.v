@@ -4731,7 +4731,9 @@ fn (mut self PageList) viewport_row_offset() usize {
 // ============================================================
 
 // Erase a single row, shifting subsequent rows up.
-pub fn (mut self PageList) erase_row(p PagePin) {
+pub fn (mut self PageList) erase_row(point Point) ! {
+	defer { self.assert_integrity() }
+	p := self.pin(point) or { panic('erase row point is outside the page list') }
 	mut node := p.node
 	mut page := &node.data
 	y := int(p.y)
@@ -4740,9 +4742,7 @@ pub fn (mut self PageList) erase_row(p PagePin) {
 	// than copying RowData directly so grapheme/style/hyperlink ownership and
 	// coordinate-indexed maps move with the cells.
 	for i in y .. int(page.size.rows) - 1 {
-		page.clone_row_from(page, u16(i), u16(i + 1)) or {
-			panic('same-page row shift failed: ${err}')
-		}
+		page.clone_row_from(page, u16(i), u16(i + 1))!
 	}
 
 	// Pins below the erased row in the first page move up one row.
@@ -4760,15 +4760,12 @@ pub fn (mut self PageList) erase_row(p PagePin) {
 	for {
 		mut next := node.next or { break }
 		mut next_page := &next.data
-		node = self.clone_row_growing(node, next_page, page.size.rows - 1, 0)
-		page = &node.data
+		page.clone_row_from(next_page, page.size.rows - 1, 0)!
 
 		node = next
 		page = next_page
 		for i in 0 .. int(page.size.rows) - 1 {
-			page.clone_row_from(page, u16(i), u16(i + 1)) or {
-				panic('same-page row shift failed: ${err}')
-			}
+			page.clone_row_from(page, u16(i), u16(i + 1))!
 		}
 		page.dirty = true
 
@@ -4795,16 +4792,11 @@ pub fn (mut self PageList) erase_row(p PagePin) {
 
 // Erase a range of rows from tl to bl (inclusive).
 pub fn (mut self PageList) erase_rows(tl Point, bl ?Point) {
-	tl_pin := self.pin(tl) or { return }
-	bl_pin := if point := bl {
-		self.pin(point) or { return }
-	} else {
-		self.get_bottom_right(tl.tag) or { return }
-	}
+	defer { self.assert_integrity() }
 
 	// Count rows to erase
 	mut erased := usize(0)
-	mut it := tl_pin.page_iterator(.right_down, bl_pin)
+	mut it := self.page_iterator(.right_down, tl, bl)
 	for {
 		chunk := it.next() or { break }
 
@@ -4827,7 +4819,7 @@ pub fn (mut self PageList) erase_rows(tl Point, bl ?Point) {
 		}
 
 		// The chunk is not a full page so we need to move the rows.
-		// ghostty asserts chunk.start == 0 here.
+		assert chunk.start == 0
 		mut page := &chunk.node.data
 		end := int(chunk.end)
 		scroll_amount := int(page.size.rows) - end
@@ -4862,8 +4854,8 @@ pub fn (mut self PageList) erase_rows(tl Point, bl ?Point) {
 		}
 
 		page.size.rows = u16(scroll_amount)
-		page.dirty = true
 		erased += usize(end)
+		page.assert_integrity()
 	}
 
 	self.total_rows -= erased
@@ -5895,7 +5887,9 @@ pub fn (mut self PageList) compact(node &PageNode) ?&PageNode {
 //
 // `limit` is exclusive of the erased row. A limit of 1 will erase the target
 // row and shift the row below into its position, leaving a blank row below.
-pub fn (mut self PageList) erase_row_bounded(p PagePin, limit usize) {
+pub fn (mut self PageList) erase_row_bounded(point Point, limit usize) ! {
+	defer { self.assert_integrity() }
+	p := self.pin(point) or { panic('bounded erase row point is outside the page list') }
 	mut node := p.node
 	mut page := &node.data
 	y := int(p.y)
@@ -5906,9 +5900,7 @@ pub fn (mut self PageList) erase_row_bounded(p PagePin, limit usize) {
 	if int(page.size.rows) - y > int(limit) {
 		// Shift within the page over the bounded region.
 		for i in 0 .. int(limit) {
-			page.clone_row_from(page, u16(y + i), u16(y + i + 1)) or {
-				panic('same-page bounded row shift failed: ${err}')
-			}
+			page.clone_row_from(page, u16(y + i), u16(y + i + 1))!
 		}
 		page.clear_row(u16(y + int(limit)))
 
@@ -5944,9 +5936,7 @@ pub fn (mut self PageList) erase_row_bounded(p PagePin, limit usize) {
 	// ghostty rotates rows[pn.y..size.rows] which processes size.rows - pn.y
 	// rows, leaving the bottom slot to be filled by the next page's top row.
 	for i in y .. int(page.size.rows) - 1 {
-		page.clone_row_from(page, u16(i), u16(i + 1)) or {
-			panic('same-page bounded row shift failed: ${err}')
-		}
+		page.clone_row_from(page, u16(i), u16(i + 1))!
 	}
 	mut shifted := usize(int(page.size.rows) - y)
 
@@ -5980,8 +5970,7 @@ pub fn (mut self PageList) erase_row_bounded(p PagePin, limit usize) {
 		mut next_page := &next.data
 
 		// Bring the top row of this page up into the previous page.
-		node = self.clone_row_growing(node, next_page, page.size.rows - 1, 0)
-		page = &node.data
+		page.clone_row_from(next_page, page.size.rows - 1, 0)!
 		node = next
 		page = next_page
 
@@ -5989,9 +5978,7 @@ pub fn (mut self PageList) erase_row_bounded(p PagePin, limit usize) {
 		shifted_limit := limit - shifted
 		if usize(page.size.rows) > shifted_limit {
 			for i in 0 .. shifted_limit {
-				page.clone_row_from(page, u16(i), u16(i + 1)) or {
-					panic('same-page bounded row shift failed: ${err}')
-				}
+				page.clone_row_from(page, u16(i), u16(i + 1))!
 			}
 			page.clear_row(u16(shifted_limit))
 			page.dirty = true
@@ -6022,9 +6009,7 @@ pub fn (mut self PageList) erase_row_bounded(p PagePin, limit usize) {
 
 		// Otherwise shift the whole page up and continue.
 		for i in 0 .. int(page.size.rows) - 1 {
-			page.clone_row_from(page, u16(i), u16(i + 1)) or {
-				panic('same-page bounded row shift failed: ${err}')
-			}
+			page.clone_row_from(page, u16(i), u16(i + 1))!
 		}
 
 		if self.viewport == .pin {
