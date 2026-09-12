@@ -25,6 +25,8 @@ below exist. Earlier versions of this document overstated the completed review.
 | renderer/config | `DerivedConfig.init` hardcoded background/foreground (black/white), empty font_features, all-true font_styles, truncated faint_opacity. | Read `config.background/foreground/font_feature/font_style_* != 'false'`; `ceil()` faint_opacity. |
 | renderer/thread | `ThreadDerivedConfig` ignored config (`custom_shader_animation` hardcoded). | Map from config. |
 | renderer/metal_types | `MetalTextCell.bearings` were `i32`; ghostty CellText requires `i16` (32-byte GPU struct). | i16. |
+| renderer/cell | Foreground rows omitted Ghostty's two cursor lists, so each backend reconstructed cursor ordering by hand; row capacities were discarded on clear/reset; the logical shader bearings were widened to `i32`. | Use the translated `ArrayListCollection`, allocate `rows + 2` lists with source capacities, retain capacities, assert row bounds, store block/other cursors in the first/last lists, flatten them directly, and use `i16` bearings. |
+| renderer/size | `Size.grid()` could return zero rows/columns, grid units were widened to `u32`, and same-space coordinate conversion clamped out-of-bounds grid coordinates instead of returning them unchanged. Size definitions and handwritten wrappers also lived in `renderer.v`. | Restore the source `GridSize.init/update` minimum of one, `u16` cell-count units, the coordinate identity fast path, and the source method/file boundaries; remove the unused wrappers. |
 | renderer/row | `never_extend_bg` took no palette and read bg from the style for bg-color cells (color is on the cell); ignored palette backgrounds. | `resolve_bg` faithful to `Style.bg`; callers pass `state.colors.palette`. |
 | renderer/renderer | `fg_rgb`/cursor color calls never passed `bold_color`. | (field wiring noted; passed where applicable) |
 | sprite/face | `render_glyph` hardcoded glyph `offset_x/offset_y` to 0. | Compute from canvas clip + padding (matches `Face.renderGlyph`). |
@@ -37,23 +39,27 @@ tests. This list does not certify their entire modules or their representation
 and ABI boundaries as one-for-one translations.
 
 terminal: color, csi, ansi, dcs, charsets, device_status, tabstops,
-size, point, mouse_shape, sgr, selection, bitmap_allocator, stream parser
-boundaries. font: backend, Atlas, Metrics, codepoint_map,
+size, point, mouse_shape, sgr, selection, bitmap_allocator, ScreenSet,
+RefCountedSet, hash_map, style, x11_color, formatter, stream parser boundaries.
+font: backend, Atlas, Metrics, codepoint_map,
 embedded, shared_grid, codepoint_resolver (pure logic), collection,
-discovery, face (Constraint math), shaper/feature/cache/noop,
+discovery, face (Constraint math), shaper/feature/cache/noop/run,
 nerd_font_attributes (276/276 constraint entries verified). osc: parser state
 transitions and buffer boundaries, encoding, semantic_prompt, iterm2,
 hyperlink, clipboard, change_window_*, report_pwd, rxvt, mouse_shape,
 kitty_text_sizing. input: kitty (80/80),
 keycodes (243/243), command, binding (83-tag order), key (logic).
-kitty: graphics_command, graphics_unicode. tmux: control, layout, output.
+kitty: graphics_command, graphics_unicode, graphics execution/storage. renderer:
+cell, size, row, Atlas, shader cell layouts. datastruct: CircBuf,
+ArrayListCollection. ssh: cache Entry/DiskCache. tmux: control, layout, output.
 termio: exec, shell_integration, stream_handler. root: quirks, build_config,
-opentype (all 6 tables), cli_args, split_tree, command (POSIX). apprt:
-structs, none, browser, action.
+opentype (all 6 tables), cli_args, split_tree, command (POSIX). apprt: structs,
+none, browser, action.
 
 ## Remaining known divergences (NOT yet fixed)
 
-These are lower-impact, intentional stubs/boundaries, or larger refactors:
+These are confirmed structural boundaries or larger refactors. The absence of
+an item here does not mean its full module has been certified yet.
 
 - **Architectural:** `Screen`/`Terminal` use the flat `Pages` model, not the
   faithful `PageList` linked-list (which is exercised only by its own tests +
@@ -62,30 +68,25 @@ These are lower-impact, intentional stubs/boundaries, or larger refactors:
   allocator/writer objects, and nested parser types are represented by a flat
   V command struct and GC-backed arrays. Observable parser boundaries are now
   enforced, but this is not a one-for-one representation or ABI translation.
-- **terminal/x11_color:** ~150 hardcoded color names vs ghostty's full X11
-  rgb.txt (~780). Names outside the subset return none.
-- **terminal/ref_counted_set:** uses a hardcoded style-specific hash instead
-  of the generic context hash; `addWithId`/`upsert` missing; `delete_item`
-  bound `>=` vs `>`.
-- **terminal/hash_map, style, hyperlink:** bespoke hash functions (splitmix64/
-  FNV) instead of Wyhash — internal-only, values won't match ghostty.
-- **terminal/page:** `std_capacity` {80,128} vs ghostty {215,215,128}; capacity
-  math omits per-row metadata (documented, GC model).
-- **font/shaper/run:** byte-model scaffold, not a faithful port of the
-  run-splitting algorithm (selections/styles/graphemes/cursor breaks) — XTODO.
-- **font/collection:** `Index.int_val()` reversed bit layout (internal hashing).
-- **font/atlas:** drops the unused `bgr` (3bpp) format variant.
-- **formatter:** terminal-mode (`extra.modes`) emission not implemented (XTODO).
-- **apprt/embedded:** `perform_ipc` errors instead of returning false;
-  `default_termio_env` scrubs the wrong env vars; `new_surface_options`
-  inheritance conditions differ; inspector/imgui stubbed.
-- **apprt/surface, runtime:** `should_inherit_working_directory` stub,
-  `newConfig` missing, `Runtime.default` missing.
-- **configpkg:** ~90 of ghostty's ~198 option fields present; `search_*` colors
-  can't hold their default RGB (bare enum type); no config formatter subsystem.
-- **C-binding stubs (by design):** FreeType/CoreText/web_canvas rasterization,
-  font discovery backends, Metal/OpenGL GPU paths, shadertoy, link regex,
-  `@embedFile` font data, RwLock, uucode emoji-presentation.
+- **Generated feature wiring:** Ghostty's build synthesizes
+  `kitty_graphics`/`tmux_control_mode` from the Oniguruma build option. Witty
+  has a build-options carrier but does not yet generate or apply equivalent
+  feature gating; APC handling is consequently unconditional and structurally
+  embedded in `termio/stream_handler.v` rather than the source tagged state.
+- **Allocator and memory representation:** `Page`, typed `Offset(T)` slices,
+  allocator failure paths, and generic `RefCountedSet` storage are adapted to
+  V GC arrays/specializations. Their reviewed observable behavior is close,
+  but they are not literal layout, ownership, or failure-mode translations.
+- **Render-state integration:** the production render path adapts the flat
+  `Pages` screen rather than traversing Ghostty's active `PageList`; therefore
+  PageList cross-node behavior is not exercised through the live renderer.
+- **Source placement:** V module-cycle constraints keep the translated shaper
+  run algorithm in `font/font.v` while `font/shaper/run.v` exposes aliases.
+  This is behaviorally implemented but not a file-for-file layout match.
+- **Native/platform coverage:** WebGL is explicitly stubbed and the complete
+  FreeType/CoreText/web-canvas, discovery, Metal/OpenGL, shadertoy, regex,
+  embedded-resource, locking, configuration, and platform application surfaces
+  have not all been certified function-by-function against the pinned tree.
 - **Comment style:** many large files use a verbatim "Original Ghostty Comments"
   header-dump block plus paraphrased inline comments, rather than each comment
   attached in place.
