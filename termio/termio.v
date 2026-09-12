@@ -351,7 +351,7 @@ pub:
 	config           DerivedConfig
 	full_config      &configpkg.Config = unsafe { nil }
 	size             renderer.Size
-	max_scrollback   int = 10_000_000
+	max_scrollback   usize = 10_000_000
 	grapheme_cluster bool = true
 	backend_config   ExecConfig
 	renderer_state   &renderer.State = unsafe { nil }

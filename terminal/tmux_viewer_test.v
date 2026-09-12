@@ -76,7 +76,10 @@ fn test_tmux_viewer_initial_flow_and_live_output() {
 	actions = viewer.next(tmux.Notification(tmux.NotifBlockEnd{ data: 'Hello, world!' }))
 	assert tmux_viewer_command(actions)?.contains('-t %0')
 	pane_zero := viewer.panes[0] or { panic('missing pane zero') }
-	assert pane_zero.terminal.screens.primary.dump_string_alloc(.history)! == 'Hello, world!'
+	primary_zero := pane_zero.terminal.screens.get(.primary) or {
+		panic('primary screen must be initialized')
+	}
+	assert primary_zero.dump_string_alloc(.history)! == 'Hello, world!'
 	actions = viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
 	assert tmux_viewer_command(actions)?.contains('-a')
 	actions = viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
@@ -250,15 +253,21 @@ fn test_tmux_viewer_two_pane_state_restoration() {
 	viewer.next(tmux.Notification(tmux.NotifBlockEnd{ data: 'prompt %\nprompt %' }))
 	viewer.next(tmux.Notification(tmux.NotifBlockEnd{ data: 'prompt %' }))
 	mut pane := viewer.panes[0] or { panic('missing pane zero') }
-	assert pane.terminal.screens.primary.dump_string_alloc(.history)!.count('prompt %') == 2
-	assert pane.terminal.screens.primary.dump_string_alloc(.active)! == 'prompt %'
+	mut pane_primary := pane.terminal.screens.get(.primary) or {
+		panic('primary screen must be initialized')
+	}
+	assert pane_primary.dump_string_alloc(.history)!.count('prompt %') == 2
+	assert pane_primary.dump_string_alloc(.active)! == 'prompt %'
 	viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
 	viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
 	viewer.next(tmux.Notification(tmux.NotifBlockEnd{ data: 'prompt %' }))
 	viewer.next(tmux.Notification(tmux.NotifBlockEnd{ data: 'prompt %' }))
 	pane = viewer.panes[4] or { panic('missing pane four') }
-	assert pane.terminal.screens.primary.dump_string_alloc(.history)! == 'prompt %'
-	assert pane.terminal.screens.primary.dump_string_alloc(.active)!.starts_with('prompt %')
+	pane_primary = pane.terminal.screens.get(.primary) or {
+		panic('primary screen must be initialized')
+	}
+	assert pane_primary.dump_string_alloc(.history)! == 'prompt %'
+	assert pane_primary.dump_string_alloc(.active)!.starts_with('prompt %')
 	viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
 	viewer.next(tmux.Notification(tmux.NotifBlockEnd{}))
 	viewer.next(tmux.Notification(tmux.NotifBlockEnd{
@@ -266,8 +275,11 @@ fn test_tmux_viewer_two_pane_state_restoration() {
 	}))
 
 	state_pane_zero := viewer.panes[0] or { panic('missing pane zero') }
-	assert state_pane_zero.terminal.screens.primary.cursor.x == 42
-	assert state_pane_zero.terminal.screens.primary.cursor.y == 0
+	state_primary_zero := state_pane_zero.terminal.screens.get(.primary) or {
+		panic('primary screen must be initialized')
+	}
+	assert state_primary_zero.cursor.x == 42
+	assert state_primary_zero.cursor.y == 0
 	assert state_pane_zero.terminal.modes.get(.cursor_visible)
 	assert state_pane_zero.terminal.modes.get(.wraparound)
 	assert !state_pane_zero.terminal.modes.get(.insert)
@@ -284,8 +296,11 @@ fn test_tmux_viewer_two_pane_state_restoration() {
 	assert state_pane_zero.terminal.tabstops.get(24)
 
 	state_pane_four := viewer.panes[4] or { panic('missing pane four') }
-	assert state_pane_four.terminal.screens.primary.cursor.x == 10
-	assert state_pane_four.terminal.screens.primary.cursor.y == 5
+	state_primary_four := state_pane_four.terminal.screens.get(.primary) or {
+		panic('primary screen must be initialized')
+	}
+	assert state_primary_four.cursor.x == 10
+	assert state_primary_four.cursor.y == 5
 	assert state_pane_four.terminal.modes.get(.cursor_visible)
 	assert state_pane_four.terminal.modes.get(.wraparound)
 	assert !state_pane_four.terminal.modes.get(.insert)

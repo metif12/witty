@@ -173,9 +173,11 @@ fn deinit_screen_storage(mut screen terminal.Screen) {
 // deinit_terminal_storage releases both primary and alternate screen state.
 // Call this before terminal.Terminal.deinit clears the opaque pointers.
 pub fn deinit_terminal_storage(mut t terminal.Terminal) {
-	deinit_screen_storage(mut t.screens.primary)
-	if t.screens.alternate_ptr != unsafe { nil } {
-		deinit_screen_storage(mut t.screens.alternate_ptr)
+	if mut primary := t.screens.get(.primary) {
+		deinit_screen_storage(mut primary)
+	}
+	if mut alternate := t.screens.get(.alternate) {
+		deinit_screen_storage(mut alternate)
 	}
 }
 
@@ -183,14 +185,17 @@ pub fn deinit_terminal_storage(mut t terminal.Terminal) {
 // instances that have already been materialized.
 pub fn set_terminal_storage_limit(mut t terminal.Terminal, limit usize) {
 	t.kitty_image_limit = limit
-	if t.screens.primary.kitty_images != unsafe { nil } {
-		mut storage := unsafe { &ImageStorage(t.screens.primary.kitty_images) }
-		storage.set_limit(t.screens.primary, limit)
+	if mut primary := t.screens.get(.primary) {
+		if primary.kitty_images != unsafe { nil } {
+			mut storage := unsafe { &ImageStorage(primary.kitty_images) }
+			storage.set_limit(primary, limit)
+		}
 	}
-	if t.screens.alternate_ptr != unsafe { nil }
-		&& t.screens.alternate_ptr.kitty_images != unsafe { nil } {
-		mut storage := unsafe { &ImageStorage(t.screens.alternate_ptr.kitty_images) }
-		storage.set_limit(t.screens.alternate_ptr, limit)
+	if mut alternate := t.screens.get(.alternate) {
+		if alternate.kitty_images != unsafe { nil } {
+			mut storage := unsafe { &ImageStorage(alternate.kitty_images) }
+			storage.set_limit(alternate, limit)
+		}
 	}
 }
 

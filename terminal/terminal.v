@@ -1667,7 +1667,7 @@ pub struct Options {
 pub:
 	cols           u16
 	rows           u16
-	max_scrollback int = 10_000
+	max_scrollback usize = 10_000
 	colors         Colors = terminal.colors_default
 
 	// The default mode state. When the terminal gets a reset, it
@@ -1767,81 +1767,6 @@ pub enum SwitchScreenMode {
 }
 
 // ============================================================
-// ScreenSet: manages primary and alternate screens
-// ============================================================
-
-pub struct ScreenSet {
-pub mut:
-	primary       &Screen = unsafe { nil }
-	alternate_ptr &Screen = unsafe { nil }
-	active        &Screen = unsafe { nil }
-	active_key    ScreenKey = .primary
-}
-
-pub enum ScreenKey {
-	primary
-	alternate
-}
-
-pub fn ScreenSet.init(cols u16, rows u16, max_scrollback int) !ScreenSet {
-	mut init_primary := Screen.init(u32(cols), u32(rows), u32(max_scrollback))
-	primary := unsafe { &Screen(memdup(&init_primary, int(sizeof(Screen)))) }
-	return ScreenSet{
-		primary: primary
-		active: primary
-	}
-}
-
-pub fn (mut self ScreenSet) deinit() {
-	self.primary.deinit()
-	if self.alternate_ptr != unsafe { nil } {
-		self.alternate_ptr.deinit()
-	}
-}
-
-pub fn (mut self ScreenSet) get(key ScreenKey) ?&Screen {
-	match key {
-		.primary {
-			return self.primary
-		}
-		.alternate {
-			if self.alternate_ptr != unsafe { nil } {
-				return self.alternate_ptr
-			}
-			return none
-		}
-	}
-}
-
-pub fn (mut self ScreenSet) switch_to(key ScreenKey) {
-	match key {
-		.primary {
-			self.active = self.primary
-			self.active_key = .primary
-		}
-		.alternate {
-			if self.alternate_ptr != unsafe { nil } {
-				self.active = self.alternate_ptr
-				self.active_key = .alternate
-			}
-		}
-	}
-}
-
-pub fn (mut self ScreenSet) remove(key ScreenKey) {
-	match key {
-		.alternate {
-			if self.alternate_ptr != unsafe { nil } {
-				self.alternate_ptr.deinit()
-			}
-			self.alternate_ptr = unsafe { nil }
-		}
-		.primary {}
-	}
-	// never remove primary
-}
-
-// ============================================================
 // Mouse shape
 // ============================================================
 
@@ -1900,7 +1825,11 @@ pub fn Terminal.init(opts Options) !Terminal {
 	cols := opts.cols
 	rows := opts.rows
 
-	mut screen_set := ScreenSet.init(cols, rows, opts.max_scrollback)!
+	mut screen_set := ScreenSet.init(ScreenOptions{
+		cols: u32(cols)
+		rows: u32(rows)
+		max_scrollback: opts.max_scrollback
+	})!
 
 	return Terminal{
 		cols: cols
@@ -3967,45 +3896,21 @@ pub fn (mut self Terminal) resize(cols u16, rows u16) ! {
 		self.tabstops = Tabstops.init(usize(cols), 8)!
 	}
 
-	// Whether the active screen will reflow on this resize.
-	active_reflow := self.screens.active_key == .primary && self.modes.get(.wraparound)
-	active_prompt_redraw := if self.screens.active_key == .primary {
-		self.flags.shell_redraws_prompt
-	} else {
-		PromptRedraw.false_
-	}
-
-	// Resize the active screen. All terminal state is read/written through
-	// `screens.active`, so this is the screen we must resize to keep content
-	// consistent. The primary screen supports reflow (governed by the
-	// wraparound mode); the alternate screen never reflows.
-	self.screens.active.resize(ScreenResize{
+	// Resize primary screen, which supports reflow.
+	mut primary := self.screens.get(.primary) or { panic('primary screen must be initialized') }
+	primary.resize(ScreenResize{
 		cols: u32(cols)
 		rows: u32(rows)
-		reflow: active_reflow
-		prompt_redraw: active_prompt_redraw
+		reflow: self.modes.get(.wraparound)
+		prompt_redraw: self.flags.shell_redraws_prompt
 	})!
 
-	// Resize the inactive screen too so both stay in sync. When the primary
-	// screen is active, the inactive screen is the alternate (no reflow).
-	// When the alternate screen is active, the inactive screen is the
-	// primary (reflow governed by wraparound).
-	if self.screens.active_key == .primary {
-		// Alternate screen, if it exists, doesn't reflow.
-		if self.screens.alternate_ptr != unsafe { nil } {
-			self.screens.alternate_ptr.resize(ScreenResize{
-				cols: u32(cols)
-				rows: u32(rows)
-				reflow: false
-			})!
-		}
-	} else {
-		// Primary screen supports reflow.
-		self.screens.primary.resize(ScreenResize{
+	// Alternate screen, if it exists, doesn't reflow.
+	if mut alternate := self.screens.get(.alternate) {
+		alternate.resize(ScreenResize{
 			cols: u32(cols)
 			rows: u32(rows)
-			reflow: self.modes.get(.wraparound)
-			prompt_redraw: self.flags.shell_redraws_prompt
+			reflow: false
 		})!
 	}
 
@@ -4060,28 +3965,37 @@ pub fn (mut self Terminal) switch_screen(key ScreenKey) !&Screen {
 	// We always end hyperlink state when switching screens.
 	old.end_hyperlink()
 
-	// Switch the screens
-	match key {
-		.alternate {
-			if self.screens.alternate_ptr == unsafe { nil } {
-				// Create alternate screen on heap (no scrollback)
-				mut init_screen := Screen.init(u32(self.cols), u32(self.rows), 0)
-				self.screens.alternate_ptr = unsafe { &Screen(memdup(&init_screen, int(sizeof(Screen)))) }
+	// Get or initialize the new screen.
+	mut new := self.screens.get(key) or {
+		self.screens.get_or_init(key, ScreenOptions{
+			cols: u32(self.cols)
+			rows: u32(self.rows)
+			max_scrollback: if key == .primary {
+				primary := self.screens.get(.primary) or {
+					panic('primary screen must be initialized')
+				}
+				primary.pages.max_scrollback
+			} else {
+				0
 			}
-		}
-		.primary {}
+		})!
 	}
 
-	// Switch and bring charset state
-	self.screens.switch_to(key)
-	self.screens.active.charset = old.charset
+	// The new screen should not have any hyperlinks set.
+	assert new.cursor.hyperlink_id == 0
 
-	// Clear selection on new screen
-	self.screens.active.clear_selection()
-	self.screens.active.mark_kitty_images_dirty()
+	// Bring charset state with us.
+	new.charset = old.charset
 
-	// Mark terminal as dirty
+	// Clear selection and redraw Kitty images on the new screen.
+	new.clear_selection()
+	new.mark_kitty_images_dirty()
+
+	// Mark terminal as dirty.
 	self.flags.dirty.clear = true
+
+	// Finalize the switch.
+	self.screens.switch_to(key)
 
 	return old
 }

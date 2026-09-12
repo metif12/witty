@@ -970,15 +970,16 @@ fn test_screen_formatter_plain_multiline() {
 
 fn test_terminal_formatter_plain() ! {
 	mut t := Terminal.init(Options{ cols: 80, rows: 24 })!
+	mut primary := t.screens.get(.primary) or { panic('primary screen must be initialized') }
 	for i, ch in 'hello'.runes() {
-		idx := t.screens.primary.pages.active_start
-		t.screens.primary.pages.screen_rows[idx].cells[i].codepoint = u32(ch)
-		t.screens.primary.pages.screen_rows[idx].cells[i].content_tag = .codepoint
+		idx := primary.pages.active_start
+		primary.pages.screen_rows[idx].cells[i].codepoint = u32(ch)
+		primary.pages.screen_rows[idx].cells[i].content_tag = .codepoint
 	}
 	for i, ch in 'world'.runes() {
-		idx := t.screens.primary.pages.active_start + 1
-		t.screens.primary.pages.screen_rows[idx].cells[i].codepoint = u32(ch)
-		t.screens.primary.pages.screen_rows[idx].cells[i].content_tag = .codepoint
+		idx := primary.pages.active_start + 1
+		primary.pages.screen_rows[idx].cells[i].codepoint = u32(ch)
+		primary.pages.screen_rows[idx].cells[i].content_tag = .codepoint
 	}
 
 	formatter := TerminalFormatter.init(&t, format_plain)
@@ -992,14 +993,15 @@ fn test_terminal_formatter_plain() ! {
 
 fn test_terminal_formatter_vt_palette() ! {
 	mut t := Terminal.init(Options{ cols: 80, rows: 24 })!
+	mut primary := t.screens.get(.primary) or { panic('primary screen must be initialized') }
 	// Modify a palette color
 	t.colors.palette.current[0] = RGB{ r: 0x12, g: 0x34, b: 0x56 }
 	t.colors.palette.current[1] = RGB{ r: 0xab, g: 0xcd, b: 0xef }
 
 	for i, ch in 'test'.runes() {
-		idx := t.screens.primary.pages.active_start
-		t.screens.primary.pages.screen_rows[idx].cells[i].codepoint = u32(ch)
-		t.screens.primary.pages.screen_rows[idx].cells[i].content_tag = .codepoint
+		idx := primary.pages.active_start
+		primary.pages.screen_rows[idx].cells[i].codepoint = u32(ch)
+		primary.pages.screen_rows[idx].cells[i].content_tag = .codepoint
 	}
 
 	formatter := TerminalFormatter.init(&t, format_vt)
@@ -1017,14 +1019,15 @@ fn test_terminal_formatter_vt_palette() ! {
 
 fn test_terminal_formatter_html_palette() ! {
 	mut t := Terminal.init(Options{ cols: 80, rows: 24 })!
+	mut primary := t.screens.get(.primary) or { panic('primary screen must be initialized') }
 	t.colors.palette.current[0] = RGB{ r: 0x12, g: 0x34, b: 0x56 }
 	t.colors.palette.current[1] = RGB{ r: 0xab, g: 0xcd, b: 0xef }
 	t.colors.palette.current[255] = RGB{ r: 0xff, g: 0x00, b: 0xff }
 
 	for i, ch in 'test'.runes() {
-		idx := t.screens.primary.pages.active_start
-		t.screens.primary.pages.screen_rows[idx].cells[i].codepoint = u32(ch)
-		t.screens.primary.pages.screen_rows[idx].cells[i].content_tag = .codepoint
+		idx := primary.pages.active_start
+		primary.pages.screen_rows[idx].cells[i].codepoint = u32(ch)
+		primary.pages.screen_rows[idx].cells[i].content_tag = .codepoint
 	}
 
 	mut formatter := TerminalFormatter.init(&t, FormatOptions{ emit: .html })
@@ -1049,14 +1052,15 @@ fn test_terminal_formatter_html_palette() ! {
 
 fn test_terminal_vt_scrolling_region() ! {
 	mut t := Terminal.init(Options{ cols: 80, rows: 24 })!
+	mut primary := t.screens.get(.primary) or { panic('primary screen must be initialized') }
 	// Set scrolling region: top=5, bottom=20
 	t.scrolling_region.top = 5
 	t.scrolling_region.bottom = 20
 
 	for i, ch in 'hello'.runes() {
-		idx := t.screens.primary.pages.active_start
-		t.screens.primary.pages.screen_rows[idx].cells[i].codepoint = u32(ch)
-		t.screens.primary.pages.screen_rows[idx].cells[i].content_tag = .codepoint
+		idx := primary.pages.active_start
+		primary.pages.screen_rows[idx].cells[i].codepoint = u32(ch)
+		primary.pages.screen_rows[idx].cells[i].content_tag = .codepoint
 	}
 
 	mut formatter := TerminalFormatter.init(&t, format_vt)
@@ -1107,12 +1111,13 @@ fn test_terminal_vt_modes() ! {
 
 fn test_terminal_vt_keyboard_modes() ! {
 	mut t := Terminal.init(Options{ cols: 80, rows: 24 })!
+	mut primary := t.screens.get(.primary) or { panic('primary screen must be initialized') }
 	t.flags.modify_other_keys_2 = true
 
 	for i, ch in 'hello'.runes() {
-		idx := t.screens.primary.pages.active_start
-		t.screens.primary.pages.screen_rows[idx].cells[i].codepoint = u32(ch)
-		t.screens.primary.pages.screen_rows[idx].cells[i].content_tag = .codepoint
+		idx := primary.pages.active_start
+		primary.pages.screen_rows[idx].cells[i].codepoint = u32(ch)
+		primary.pages.screen_rows[idx].cells[i].content_tag = .codepoint
 	}
 
 	mut formatter := TerminalFormatter.init(&t, format_vt)
@@ -1131,12 +1136,13 @@ fn test_terminal_vt_keyboard_modes() ! {
 
 fn test_terminal_vt_pwd() ! {
 	mut t := Terminal.init(Options{ cols: 80, rows: 24 })!
+	mut primary := t.screens.get(.primary) or { panic('primary screen must be initialized') }
 	t.pwd = 'file://host/home/user'
 
 	for i, ch in 'hello'.runes() {
-		idx := t.screens.primary.pages.active_start
-		t.screens.primary.pages.screen_rows[idx].cells[i].codepoint = u32(ch)
-		t.screens.primary.pages.screen_rows[idx].cells[i].content_tag = .codepoint
+		idx := primary.pages.active_start
+		primary.pages.screen_rows[idx].cells[i].codepoint = u32(ch)
+		primary.pages.screen_rows[idx].cells[i].content_tag = .codepoint
 	}
 
 	mut formatter := TerminalFormatter.init(&t, format_vt)

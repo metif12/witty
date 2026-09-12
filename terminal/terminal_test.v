@@ -1883,7 +1883,7 @@ fn test_full_reset_clears_alternate_screen_kitty_keyboard_state() {
 	t.switch_screen_mode(.mode_1049, false) or { assert false }
 
 	t.full_reset()
-	assert t.screens.alternate_ptr == unsafe { nil }
+	assert t.screens.get(.alternate) == none
 }
 
 fn test_full_reset_default_modes() {
@@ -1948,17 +1948,18 @@ fn test_resize_clears_redrawable_prompt_on_primary_screen() {
 	defer { t.deinit() }
 
 	t.print_string('ABCDE\n') or { assert false }
-	t.screens.primary.cursor_set_semantic_content_prompt(.initial)
+	mut primary := t.screens.get(.primary) or { panic('primary screen must be initialized') }
+	primary.cursor_set_semantic_content_prompt(.initial)
 	t.print_string('> ') or { assert false }
-	t.screens.primary.cursor_set_semantic_content_input(true)
+	primary.cursor_set_semantic_content_input(true)
 	t.print_string('echo') or { assert false }
 	assert t.plain_string() or { '' } == 'ABCDE\n> echo'
 
 	t.flags.shell_redraws_prompt = .true_
 	t.resize(20, 3) or { assert false }
 
-	assert t.screens.primary.cursor.x == 6
-	assert t.screens.primary.cursor.y == 1
+	assert primary.cursor.x == 6
+	assert primary.cursor.y == 1
 	assert t.plain_string() or { '' } == 'ABCDE'
 }
 
@@ -1970,9 +1971,10 @@ fn test_resize_clears_redrawable_prompt_on_inactive_primary_screen() {
 	defer { t.deinit() }
 
 	t.print_string('ABCDE\n') or { assert false }
-	t.screens.primary.cursor_set_semantic_content_prompt(.initial)
+	mut primary := t.screens.get(.primary) or { panic('primary screen must be initialized') }
+	primary.cursor_set_semantic_content_prompt(.initial)
 	t.print_string('> ') or { assert false }
-	t.screens.primary.cursor_set_semantic_content_input(true)
+	primary.cursor_set_semantic_content_input(true)
 	t.print_string('echo') or { assert false }
 	assert t.plain_string() or { '' } == 'ABCDE\n> echo'
 
@@ -2836,31 +2838,6 @@ fn test_tabstops_reset() {
 	assert !ts.get(0)
 	assert ts.get(8)
 	assert ts.get(16)
-}
-
-// ============================================================
-// ScreenSet
-// ============================================================
-
-fn test_screen_set_init_and_switch() {
-	mut ss := ScreenSet.init(10, 10, 100) or {
-		assert false
-		return
-	}
-	defer { ss.deinit() }
-
-	assert ss.active_key == .primary
-	ss.primary.test_write_string('Hello') or { assert false }
-
-	// Create alternate and switch
-	mut init_alt := Screen.init(10, 10, 0)
-	ss.alternate_ptr = unsafe { &Screen(memdup(&init_alt, int(sizeof(Screen)))) }
-	ss.switch_to(.alternate)
-	assert ss.active_key == .alternate
-
-	// Switch back
-	ss.switch_to(.primary)
-	assert ss.active_key == .primary
 }
 
 // ============================================================

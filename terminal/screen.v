@@ -1843,7 +1843,7 @@ pub struct ScreenOptions {
 pub:
 	cols           u32 = 80
 	rows           u32 = 24
-	max_scrollback u32
+	max_scrollback usize
 }
 
 // Scroll controls viewport scrolling behavior.
@@ -1979,7 +1979,7 @@ pub mut:
 }
 
 // Initialize a new screen with the given dimensions and scrollback.
-pub fn Screen.init(cols u32, rows u32, max_scrollback u32) Screen {
+pub fn Screen.init(cols u32, rows u32, max_scrollback usize) Screen {
 	return Screen{
 		pages: Pages.init(cols, rows, max_scrollback)
 		no_scrollback: max_scrollback == 0

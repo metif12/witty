@@ -313,7 +313,7 @@ pub mut:
 	active_start   int
 	cols           u32
 	rows           u32
-	max_scrollback u32
+	max_scrollback usize
 	viewport       ViewportState = .active
 	// Absolute row at the top of a pinned viewport.
 	viewport_start int
@@ -333,7 +333,7 @@ pub enum ViewportState {
 	pinned
 }
 
-pub fn Pages.init(cols u32, rows u32, max_scrollback u32) Pages {
+pub fn Pages.init(cols u32, rows u32, max_scrollback usize) Pages {
 	mut screen_rows := []RowData{cap: int(rows)}
 	for _ in 0 .. int(rows) {
 		screen_rows << RowData.init(cols)

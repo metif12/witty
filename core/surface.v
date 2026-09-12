@@ -2918,7 +2918,7 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 		config: termio_config
 		full_config: unsafe { config }
 		size: renderer_size(self.size)
-		max_scrollback: int(config.scrollback_limit)
+		max_scrollback: usize(config.scrollback_limit)
 		grapheme_cluster: config.grapheme_width_method == .unicode
 		backend_config: termiopkg.ExecConfig{
 			command: command
