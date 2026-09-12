@@ -387,7 +387,7 @@ pub fn (mut s RemapSet) parse_cli(inp ?string) ! {
 		return
 	}
 
-	s.parse(value)!
+	s.parse(value) or { return error('invalid value') }
 }
 
 // deinit releases any resources held by the set. Required by Config.
@@ -470,8 +470,6 @@ fn format_mod(mods Mods) string {
 }
 
 // side_prefix returns the "right_"/"left_" prefix for the given side.
-// For unset (none_) sides we default to "left_" to match the Zig behavior
-// which always writes a side prefix for a sided mapping.
 fn side_prefix(side Side) string {
 	return if side == .right { 'right_' } else { 'left_' }
 }
@@ -504,7 +502,7 @@ fn parse_mod(inp string) !(Mod, ?Side) {
 		Mod.ctrl
 	} else if mod_str == 'alt' {
 		Mod.alt
-	} else if mod_str == 'super' || mod_str == 'super_' {
+	} else if mod_str == 'super' {
 		Mod.super_
 	} else if mod_str in mod_aliases {
 		mod_aliases[mod_str]

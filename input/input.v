@@ -49,10 +49,9 @@ pub enum KeyAction {
 }
 
 // Side represents which side (left or right) a modifier key is on.
-pub enum Side {
-	none_
-	left
-	right
+pub enum Side as u8 {
+	left  = 0
+	right = 1
 }
 
 // SideInfo tracks which side modifier keys are pressed on.

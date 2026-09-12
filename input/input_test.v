@@ -168,10 +168,10 @@ fn test_mods_translation_macos_option_as_alt() {
 
 fn test_side_defaults() {
 	s := SideInfo{}
-	assert s.shift == .none_
-	assert s.ctrl == .none_
-	assert s.alt == .none_
-	assert s.super == .none_
+	assert s.shift == .left
+	assert s.ctrl == .left
+	assert s.alt == .left
+	assert s.super == .left
 }
 
 // Verifies that Mods.int() covers the full packed layout (standard keys,

@@ -164,6 +164,26 @@ fn test_remap_error_invalid_side() {
 	assert false
 }
 
+fn test_remap_rejects_translated_v_identifier() {
+	mut set := RemapSet{}
+	set.parse('super_=ctrl') or {
+		assert err.msg().contains('invalid modifier')
+		return
+	}
+	assert false
+}
+
+fn test_remap_parse_cli_maps_parser_errors_to_invalid_value() {
+	mut set := RemapSet{}
+	for value in ['ctrl', 'invalid=ctrl', 'ctrl=invalid', 'middle_ctrl=super'] {
+		set.parse_cli(value) or {
+			assert err.msg() == 'invalid value'
+			continue
+		}
+		assert false, 'expected invalid value for ${value}'
+	}
+}
+
 fn test_remap_is_remapped_checks_mask() {
 	mut set := RemapSet{}
 	set.parse('ctrl=super') or { assert false }
@@ -240,8 +260,7 @@ fn test_mods_equal() {
 		shift: true
 		sides: SideInfo{ shift: .left }
 	})
-	// V uses `none_` when no side information is available. Both `none_`
-	// and the source's default `left` encode as zero in the packed value.
+	// The source's packed side fields default to left and encode as zero.
 	assert Mods{ shift: true }.equal(Mods{
 		shift: true
 		sides: SideInfo{ shift: .left }
