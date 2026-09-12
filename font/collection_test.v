@@ -261,6 +261,16 @@ fn test_index_special() {
 	assert normal.special() == none
 }
 
+fn test_font_synthetic_style_packed_layout_matches_ghostty() {
+	assert sizeof(FontSyntheticStyle) == 1
+	assert FontSyntheticStyle{}.int_val() == 0x07
+	style := FontSyntheticStyle.init(true, false, true)
+	assert style.int_val() == 0x05
+	assert style.bold()
+	assert !style.italic()
+	assert style.bold_italic()
+}
+
 fn test_index_packed_layout_matches_ghostty() {
 	for style in [FontStyle.regular, .bold, .italic, .bold_italic] {
 		for face_index in [u16(0), 1, 42, 0x1ffe, 0x1fff] {

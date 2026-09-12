@@ -600,23 +600,7 @@ pub fn (self &GridSetKey) hashcode() u64 {
 	hasher.put_u64(u64(self.metric_modifiers.count()))
 
 	// Ghostty hashes this packed struct as one byte in declaration order.
-	mut load_flags := u8(0)
-	if self.freetype_load_flags.hinting {
-		load_flags |= 1 << 0
-	}
-	if self.freetype_load_flags.force_autohint {
-		load_flags |= 1 << 1
-	}
-	if self.freetype_load_flags.monochrome {
-		load_flags |= 1 << 2
-	}
-	if self.freetype_load_flags.autohint {
-		load_flags |= 1 << 3
-	}
-	if self.freetype_load_flags.light {
-		load_flags |= 1 << 4
-	}
-	hasher.put_u8(load_flags)
+	hasher.put_u8(self.freetype_load_flags.int_val())
 
 	// Hash metric modifier values
 	if self.metric_modifiers.count() > 0 {

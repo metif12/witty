@@ -184,11 +184,11 @@ fn test_derived_config_preserves_complete_font_configuration() {
 	assert derived.font.font_variation[0].value == 350
 	assert derived.font.font_codepoint_map.entries.len == 1
 	assert derived.font.font_codepoint_map.entries[0].descriptor.family? == 'Symbols'
-	assert !derived.font.font_synthetic_style.bold
+	assert !derived.font.font_synthetic_style.bold()
 	assert derived.font.adjust_cell_width?.is_percent
 	assert derived.font.adjust_cell_width?.percent == 1.1
-	assert !derived.font.freetype_load_flags.hinting
-	assert derived.font.freetype_load_flags.force_autohint
+	assert !derived.font.freetype_load_flags.hinting()
+	assert derived.font.freetype_load_flags.force_autohint()
 }
 
 fn test_derived_config_preserves_macos_surface_options() {

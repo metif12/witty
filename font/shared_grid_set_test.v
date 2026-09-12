@@ -220,10 +220,10 @@ fn test_gridset_font_style_config() {
 fn test_gridset_derived_config_defaults() {
 	cfg := GridSetDerivedConfig{}
 	assert cfg.font_family.len == 0
-	assert cfg.font_synthetic_style.bold == true
-	assert cfg.font_synthetic_style.italic == true
-	assert cfg.freetype_load_flags.hinting == true
-	assert cfg.freetype_load_flags.light == true
+	assert cfg.font_synthetic_style.bold() == true
+	assert cfg.font_synthetic_style.italic() == true
+	assert cfg.freetype_load_flags.hinting() == true
+	assert cfg.freetype_load_flags.light() == true
 }
 
 fn test_shared_grid_set_init_deinit() {

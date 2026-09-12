@@ -531,26 +531,62 @@ pub fn (mut l Library) deinit() {
 // Only a subset is exposed for configuration; for the whole set of flags
 // see freetype.LoadFlags.
 pub struct FreetypeLoadFlags {
-pub:
-	// Whether to enable hinting.
-	hinting bool = true
-	// Whether to force the auto-hinter.
-	force_autohint bool
-	// Whether to enable the auto-hinter.
-	autohint bool = true
-	// Whether to render glyphs in monochrome.
-	monochrome bool
-	// Whether to use light hinting mode.
-	light bool = true
+	value u8 = 0x19
+}
+
+pub fn FreetypeLoadFlags.init(hinting bool, force_autohint bool, monochrome bool, autohint bool, light bool) FreetypeLoadFlags {
+	mut value := u8(0)
+	if hinting {
+		value |= 0x01
+	}
+	if force_autohint {
+		value |= 0x02
+	}
+	if monochrome {
+		value |= 0x04
+	}
+	if autohint {
+		value |= 0x08
+	}
+	if light {
+		value |= 0x10
+	}
+	return FreetypeLoadFlags{
+		value: value
+	}
+}
+
+pub fn (flags FreetypeLoadFlags) hinting() bool {
+	return flags.value & 0x01 != 0
+}
+
+pub fn (flags FreetypeLoadFlags) force_autohint() bool {
+	return flags.value & 0x02 != 0
+}
+
+pub fn (flags FreetypeLoadFlags) monochrome() bool {
+	return flags.value & 0x04 != 0
+}
+
+pub fn (flags FreetypeLoadFlags) autohint() bool {
+	return flags.value & 0x08 != 0
+}
+
+pub fn (flags FreetypeLoadFlags) light() bool {
+	return flags.value & 0x10 != 0
+}
+
+pub fn (flags FreetypeLoadFlags) int_val() u8 {
+	return flags.value
 }
 
 // format_entry preserves Config.FreetypeLoadFlags's packed-field order.
 pub fn (f FreetypeLoadFlags) format_entry() string {
-	return [if f.hinting { 'hinting' } else { 'no-hinting' },
-		if f.force_autohint { 'force-autohint' } else { 'no-force-autohint' },
-		if f.monochrome { 'monochrome' } else { 'no-monochrome' },
-		if f.autohint { 'autohint' } else { 'no-autohint' },
-		if f.light { 'light' } else { 'no-light' }].join(',')
+	return [if f.hinting() { 'hinting' } else { 'no-hinting' },
+		if f.force_autohint() { 'force-autohint' } else { 'no-force-autohint' },
+		if f.monochrome() { 'monochrome' } else { 'no-monochrome' },
+		if f.autohint() { 'autohint' } else { 'no-autohint' },
+		if f.light() { 'light' } else { 'no-light' }].join(',')
 }
 
 // Default load flags.
@@ -1200,7 +1236,7 @@ pub fn (self &Face) is_color_glyph(glyph_id u32) bool {
 // if it does, then it'll mess up the hinting anyway when it moves or
 // resizes the glyph.
 fn (self Face) glyph_load_flags(constrained bool) freetype.LoadFlags {
-	do_hinting := self.load_flags.hinting && !constrained
+	do_hinting := self.load_flags.hinting() && !constrained
 
 	return freetype.LoadFlags{
 		// If our glyph has color, we want to render the color.
@@ -1210,17 +1246,17 @@ fn (self Face) glyph_load_flags(constrained bool) freetype.LoadFlags {
 		render: false
 		// Use options from config.
 		no_hinting: !do_hinting
-		force_autohint: self.load_flags.force_autohint
-		no_autohint: !self.load_flags.autohint
+		force_autohint: self.load_flags.force_autohint()
+		no_autohint: !self.load_flags.autohint()
 		// If we're gonna be rendering this glyph in monochrome,
 		// then we should use the monochrome hinter as well, or
 		// else it won't look very good at all.
 		//
 		// Otherwise if the user asked for light hinting we
 		// use that, otherwise we just use the normal target.
-		target: if self.load_flags.monochrome {
+		target: if self.load_flags.monochrome() {
 			.mono
-		} else if self.load_flags.light {
+		} else if self.load_flags.light() {
 			.light
 		} else {
 			.normal
@@ -1340,7 +1376,7 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 					y: i64(math.round(py * 64.0))
 				})
 			}
-			self.face.render_glyph(if self.load_flags.monochrome { .mono } else { .normal })!
+			self.face.render_glyph(if self.load_flags.monochrome() { .mono } else { .normal })!
 			glyph = self.face.glyph() or { return error('FreeType returned no rendered glyph') }
 			freetype.bitmap_convert(self.lib.lib, &glyph.bitmap, mut bitmap, 1)!
 			bitmap_left = glyph.bitmap_left

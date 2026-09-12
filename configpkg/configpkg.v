@@ -9352,11 +9352,7 @@ fn parse_split_preserve_zoom(value string) ?SplitPreserveZoom {
 
 fn parse_font_synthetic_style(value string) ?font.FontSyntheticStyle {
 	if b := parse_bool_opt(value) {
-		return font.FontSyntheticStyle{
-			bold: b
-			italic: b
-			bold_italic: b
-		}
+		return font.FontSyntheticStyle.init(b, b, b)
 	}
 	mut bold := true
 	mut italic := true
@@ -9380,22 +9376,12 @@ fn parse_font_synthetic_style(value string) ?font.FontSyntheticStyle {
 			}
 		}
 	}
-	return font.FontSyntheticStyle{
-		bold: bold
-		italic: italic
-		bold_italic: bold_italic
-	}
+	return font.FontSyntheticStyle.init(bold, italic, bold_italic)
 }
 
 fn parse_freetype_load_flags(value string) ?font.FreetypeLoadFlags {
 	if b := parse_bool_opt(value) {
-		return font.FreetypeLoadFlags{
-			hinting: b
-			force_autohint: b
-			monochrome: b
-			autohint: b
-			light: b
-		}
+		return font.FreetypeLoadFlags.init(b, b, b, b, b)
 	}
 	mut hinting := true
 	mut force_autohint := false
@@ -9427,13 +9413,8 @@ fn parse_freetype_load_flags(value string) ?font.FreetypeLoadFlags {
 			}
 		}
 	}
-	return font.FreetypeLoadFlags{
-		hinting: hinting
-		force_autohint: force_autohint
-		monochrome: monochrome
-		autohint: autohint
-		light: light
-	}
+	return font.FreetypeLoadFlags.init(hinting, force_autohint, monochrome, autohint,
+		light)
 }
 
 fn metric_modifier_parse_cli(value string) !font.MetricsModifier {

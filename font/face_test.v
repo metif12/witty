@@ -1,5 +1,17 @@
 module font
 
+fn test_freetype_load_flags_packed_layout_matches_ghostty() {
+	assert sizeof(FreetypeLoadFlags) == 1
+	assert FreetypeLoadFlags{}.int_val() == 0x19
+	flags := FreetypeLoadFlags.init(false, true, true, false, true)
+	assert flags.int_val() == 0x16
+	assert !flags.hinting()
+	assert flags.force_autohint()
+	assert flags.monochrome()
+	assert !flags.autohint()
+	assert flags.light()
+}
+
 fn test_freetype_synthetic_flags_packed_layout() {
 	assert sizeof(FaceSynthetic) == 1
 	mut synthetic := FaceSynthetic{}

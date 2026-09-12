@@ -677,16 +677,46 @@ pub:
 
 // FontSyntheticStyle controls which synthetic styles are enabled.
 pub struct FontSyntheticStyle {
-pub:
-	italic      bool = true
-	bold        bool = true
-	bold_italic bool = true
+	value u8 = 0x07
+}
+
+pub fn FontSyntheticStyle.init(bold bool, italic bool, bold_italic bool) FontSyntheticStyle {
+	mut value := u8(0)
+	if bold {
+		value |= 0x01
+	}
+	if italic {
+		value |= 0x02
+	}
+	if bold_italic {
+		value |= 0x04
+	}
+	return FontSyntheticStyle{
+		value: value
+	}
+}
+
+pub fn (style FontSyntheticStyle) bold() bool {
+	return style.value & 0x01 != 0
+}
+
+pub fn (style FontSyntheticStyle) italic() bool {
+	return style.value & 0x02 != 0
+}
+
+pub fn (style FontSyntheticStyle) bold_italic() bool {
+	return style.value & 0x04 != 0
+}
+
+pub fn (style FontSyntheticStyle) int_val() u8 {
+	return style.value
 }
 
 // format_entry preserves Config.FontSyntheticStyle's packed-field order.
 pub fn (s FontSyntheticStyle) format_entry() string {
-	return [if s.bold { 'bold' } else { 'no-bold' }, if s.italic { 'italic' } else { 'no-italic' },
-		if s.bold_italic { 'bold-italic' } else { 'no-bold-italic' }].join(',')
+	return [if s.bold() { 'bold' } else { 'no-bold' },
+		if s.italic() { 'italic' } else { 'no-italic' },
+		if s.bold_italic() { 'bold-italic' } else { 'no-bold-italic' }].join(',')
 }
 
 // ============================================================
@@ -969,7 +999,7 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 	// face for italic.
 	have_italic := self.italic_faces.len > 0
 	if !have_italic {
-		if !synthetic_config.italic {
+		if !synthetic_config.italic() {
 			// italic style not available and synthetic italic disabled
 			self.italic_faces << EntryOrAlias.new_alias(regular_entry)
 		} else if synthetic := self.create_synthetic_italic(regular_entry) {
@@ -990,7 +1020,7 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 	// If we don't have bold, use the regular font (or a synthetic bold).
 	have_bold := self.bold_faces.len > 0
 	if !have_bold {
-		if !synthetic_config.bold {
+		if !synthetic_config.bold() {
 			// bold style not available and synthetic bold disabled
 			self.bold_faces << EntryOrAlias.new_alias(regular_entry)
 		} else if synthetic := self.create_synthetic_bold(regular_entry) {
@@ -1011,7 +1041,7 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 	// If we don't have bold italic, we attempt to synthesize a bold variant
 	// of the italic font. If we can't do that, we'll use the italic font.
 	if self.bold_italic_faces.len == 0 {
-		if !synthetic_config.bold_italic {
+		if !synthetic_config.bold_italic() {
 			// bold italic style not available and synthetic bold italic disabled
 			self.bold_italic_faces << EntryOrAlias.new_alias(regular_entry)
 			return

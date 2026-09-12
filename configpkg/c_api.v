@@ -287,7 +287,7 @@ fn bool_bit(value bool, shift u32) u32 {
 
 @[markused]
 fn font_synthetic_style_bits(value fontpkg.FontSyntheticStyle) u32 {
-	return bool_bit(value.bold, 0) | bool_bit(value.italic, 1) | bool_bit(value.bold_italic, 2)
+	return u32(value.int_val())
 }
 
 @[markused]
@@ -297,7 +297,7 @@ fn shell_integration_feature_bits(value ShellIntegrationFeatures) u32 {
 
 @[markused]
 fn freetype_load_flag_bits(value fontpkg.FreetypeLoadFlags) u32 {
-	return bool_bit(value.hinting, 0) | bool_bit(value.force_autohint, 1) | bool_bit(value.monochrome, 2) | bool_bit(value.autohint, 3) | bool_bit(value.light, 4)
+	return u32(value.int_val())
 }
 
 @[markused]

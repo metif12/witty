@@ -2982,9 +2982,9 @@ auto-update-channel = stable
 	assert cfg.font_style_bold == FontStyle{ kind: .name, name: 'Bold' }
 	assert cfg.font_style_italic == FontStyle{ kind: .name, name: 'Italic' }
 	assert cfg.font_style_bold_italic == FontStyle{ kind: .name, name: 'Bold Italic' }
-	assert cfg.font_synthetic_style.bold
-	assert !cfg.font_synthetic_style.italic
-	assert !cfg.font_synthetic_style.bold_italic
+	assert cfg.font_synthetic_style.bold()
+	assert !cfg.font_synthetic_style.italic()
+	assert !cfg.font_synthetic_style.bold_italic()
 	assert cfg.font_variation.list.len == 2
 	assert cfg.font_variation.list[0].id.str() == 'wght'
 	assert cfg.font_variation.list[0].value == 200
@@ -3012,11 +3012,11 @@ auto-update-channel = stable
 	assert cfg.adjust_cursor_height?.percent == 0.9
 	assert cfg.adjust_box_thickness?.absolute == 11
 	assert cfg.adjust_icon_height?.percent == 1.12
-	assert !cfg.freetype_load_flags.hinting
-	assert cfg.freetype_load_flags.force_autohint
-	assert cfg.freetype_load_flags.monochrome
-	assert !cfg.freetype_load_flags.autohint
-	assert cfg.freetype_load_flags.light
+	assert !cfg.freetype_load_flags.hinting()
+	assert cfg.freetype_load_flags.force_autohint()
+	assert cfg.freetype_load_flags.monochrome()
+	assert !cfg.freetype_load_flags.autohint()
+	assert cfg.freetype_load_flags.light()
 	assert cfg.font_thicken
 	assert cfg.font_thicken_strength == 42
 	assert !cfg.font_shaping_break.cursor
