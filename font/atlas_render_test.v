@@ -1,5 +1,16 @@
 module font
 
+fn test_atlas_format_contract() {
+	assert sizeof(AtlasFormat) == 1
+	assert u8(AtlasFormat.grayscale) == 0
+	assert u8(AtlasFormat.bgr) == 1
+	assert u8(AtlasFormat.bgra) == 2
+	assert typeof(AtlasFormat.bgra.depth()).name == 'u8'
+	assert AtlasFormat.grayscale.depth() == 1
+	assert AtlasFormat.bgr.depth() == 3
+	assert AtlasFormat.bgra.depth() == 4
+}
+
 fn test_atlas_init_tripwires() {
 	mut tw := atlas_init_tripwire()
 	tw.error_always(.alloc_data, error('OutOfMemory'))

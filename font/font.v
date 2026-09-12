@@ -829,21 +829,21 @@ pub fn (d DesiredSize) pixels() f64 {
 // ============================================================
 
 // AtlasFormat specifies the pixel format for an atlas.
-pub enum AtlasFormat {
+pub enum AtlasFormat as u8 {
 	// 1 byte per pixel grayscale.
-	grayscale
+	grayscale = 0
 	// 3 bytes per pixel BGR.
-	bgr
+	bgr       = 1
 	// 4 bytes per pixel BGRA.
-	bgra
+	bgra      = 2
 }
 
 // depth returns the number of bytes per pixel for this format.
-pub fn (f AtlasFormat) depth() u32 {
+pub fn (f AtlasFormat) depth() u8 {
 	return match f {
-		.grayscale { u32(1) }
-		.bgr { u32(3) }
-		.bgra { u32(4) }
+		.grayscale { u8(1) }
+		.bgr { u8(3) }
+		.bgra { u8(4) }
 	}
 }
 
