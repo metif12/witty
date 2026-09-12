@@ -78,3 +78,16 @@ fn test_osc_generator_invalid_output_is_rejected() {
 		assert parser.end(0x07) == none
 	}
 }
+
+fn test_osc_generator_reports_fixed_writer_overflow() {
+	mut rng := rand.new_default(seed_: [u32(0xc0ffeeee), 0xeeeeeeee])
+	defer { rng.free() }
+	mut generator := Osc.init(rng)
+	generator.p_valid = 0
+	generator.p_invalid_kind = [f64(0), 1]!
+	generator.next(3) or {
+		assert err.msg() == 'WriteFailed'
+		return
+	}
+	assert false, 'expected the fixed OSC writer boundary to fail'
+}

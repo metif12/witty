@@ -46,11 +46,13 @@ pub fn (mut self Osc) next(max_len usize) ![]u8 {
 	if isnil(self.rng) {
 		return error('random generator is not initialized')
 	}
-	if max_len < 3 {
-		return error('OSC buffer must be at least three bytes')
+	assert max_len >= 3
+	payload := self.next_unwrapped(max_len - 3)!
+	if usize(payload.len) > max_len - 3 {
+		return error('WriteFailed')
 	}
 	mut result := [u8(0x1b), `]`]
-	result << self.next_unwrapped(max_len - 3)!
+	result << payload
 	result << u8(0x07)
 	return result
 }
