@@ -286,20 +286,29 @@ pub fn (runtime_action RuntimeAction) capi() CAPIAction {
 			capi_action_payload(tag, CActionString{ value: &char(data.start_search_.needle.str) })
 		}
 		.search_total {
-			value := if total := data.search_total_.total { isize(total) } else { isize(-1) }
-			capi_action_payload(tag, CActionCount{ value: value })
+			capi_action_payload(tag, CActionCount{
+				value: optional_count_capi(data.search_total_.total)
+			})
 		}
 		.search_selected {
-			value := if selected := data.search_selected_.selected {
-				isize(selected)
-			} else {
-				isize(-1)
-			}
-			capi_action_payload(tag, CActionCount{ value: value })
+			capi_action_payload(tag, CActionCount{
+				value: optional_count_capi(data.search_selected_.selected)
+			})
 		}
 		.readonly { capi_action_payload(tag, int(data.readonly_)) }
 		else { CAPIAction{ tag: tag } }
 	}
+}
+
+// Ghostty uses @intCast for present search counts, so values outside the
+// signed pointer-width C representation are a checked-cast failure rather
+// than wrapping into a negative sentinel.
+fn optional_count_capi(value ?usize) isize {
+	if count := value {
+		assert count <= (~usize(0) >> 1)
+		return isize(count)
+	}
+	return -1
 }
 
 fn capi_action_payload[T](tag int, value T) CAPIAction {

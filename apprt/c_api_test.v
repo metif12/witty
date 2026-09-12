@@ -83,4 +83,13 @@ fn test_c_action_projects_optional_and_clamped_payloads() {
 		data: ActionValue{ search_total_: SearchTotal{} }
 	}.capi()
 	assert unsafe { &CActionCount(&search.action[0]) }.value == -1
+
+	max_count := usize(~usize(0) >> 1)
+	selected := RuntimeAction{
+		action: .search_selected
+		data: ActionValue{
+			search_selected_: SearchSelected{ selected: max_count }
+		}
+	}.capi()
+	assert unsafe { &CActionCount(&selected.action[0]) }.value == isize(max_count)
 }

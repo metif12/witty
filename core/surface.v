@@ -1779,7 +1779,7 @@ pub:
 	resize_amount      u16
 	goto_tab           int
 	close_tab_mode     CloseTabModeKind
-	move_tab_amount    i64
+	move_tab_amount    isize
 	key_sequence       apprt.KeySequence
 	key_table          apprt.KeyTable
 	child_exit         apprt.ChildExited
@@ -5224,7 +5224,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			return self.rt_app.perform_action(AppAction{
 				kind: .move_tab
 				target: &self
-				move_tab_amount: action.int_param
+				move_tab_amount: isize(action.int_param)
 			})!
 		}
 		.new_split {

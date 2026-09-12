@@ -255,7 +255,7 @@ pub enum ResizeSplitDirection {
 // MoveTab holds the relative offset to move a tab by.
 pub struct MoveTab {
 pub:
-	amount i64
+	amount isize
 }
 
 // GotoTab is the tab to jump to. Positive values represent the index

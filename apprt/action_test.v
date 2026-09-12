@@ -92,6 +92,7 @@ fn test_move_tab() {
 
 	mt2 := MoveTab{ amount: 1 }
 	assert mt2.amount == 1
+	assert sizeof(MoveTab) == sizeof(isize)
 }
 
 // Test SizeLimit struct creation.
@@ -170,14 +171,22 @@ fn test_close_tab_mode() {
 fn test_target() {
 	t := Target(AppTarget{})
 	match t {
-		AppTarget { assert true }
-		SurfaceTarget { assert false }
+		AppTarget {
+			assert true
+		}
+		SurfaceTarget {
+			assert false
+		}
 	}
 
 	t2 := Target(SurfaceTarget{ surface: unsafe { nil } })
 	match t2 {
-		SurfaceTarget { assert true }
-		AppTarget { assert false }
+		SurfaceTarget {
+			assert true
+		}
+		AppTarget {
+			assert false
+		}
 	}
 }
 
