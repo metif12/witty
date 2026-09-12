@@ -37,7 +37,6 @@ module terminal
 //   RenderCell        - A cell prepared for rendering
 //
 // == Colors (from color.v) ==
-//   TerminalColor     - Color type (none, palette, rgb)
 //   BoldColor         - Bold color override configuration
 //   RGB               - RGB color value
 //

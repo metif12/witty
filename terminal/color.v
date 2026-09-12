@@ -11,7 +11,6 @@ module terminal
 // - Name enum for the 16 named colors
 // - Special enum for bold/underline/blink/reverse/italic
 // - Dynamic enum for foreground/background/cursor etc
-// - TerminalColor - a color that can be explicit or derived from cell fg/bg
 // - BoldColor
 
 import math
@@ -33,7 +32,9 @@ fn init_default_palette() [256]RGB {
 
 	// Named values (0..15)
 	for i in 0 .. 16 {
-		result[i] = color_name_default(unsafe { ColorName(u8(i)) }) or { RGB{} }
+		result[i] = color_name_default(unsafe { ColorName(u8(i)) }) or {
+			panic('unreachable: named palette color has no default')
+		}
 	}
 
 	// 6x6x6 color cube (indices 16..231)
@@ -336,6 +337,22 @@ pub fn (self Dynamic) next() ?Dynamic {
 // The eql method is defined in style.v.
 // ============================================================
 
+// RGBC is the C-compatible, padding-free representation returned by RGB.cval.
+pub struct RGBC {
+pub:
+	r u8
+	g u8
+	b u8
+}
+
+pub fn (self RGB) cval() RGBC {
+	return RGBC{
+		r: self.r
+		g: self.g
+		b: self.b
+	}
+}
+
 // contrast calculates the contrast ratio between two colors. The contrast
 // ratio is a value between 1 and 21 where 1 is the lowest contrast
 // and 21 is the highest contrast.
@@ -414,7 +431,7 @@ fn from_hex(value string) ?u8 {
 		3 { u64(0xfff) } // maxInt(u12) = 4095
 		4 { u64(0xffff) } // maxInt(u16) = 65535
 		else {
-			return none
+			panic('unreachable: hexadecimal component length was prevalidated')
 		}
 	}
 
@@ -543,27 +560,6 @@ pub fn RGB.parse(value string) ?RGB {
 		g: g
 		b: b
 	}
-}
-
-// ============================================================
-// TerminalColor - a color that can be an explicit color or
-// derived from cell foreground/background.
-// ============================================================
-
-pub enum TerminalColorKind {
-	color
-	cell_foreground
-	cell_background
-}
-
-pub struct TerminalColor {
-pub mut:
-	kind  TerminalColorKind = .color
-	color RGB
-}
-
-pub fn (tc TerminalColor) to_terminal_rgb() RGB {
-	return tc.color
 }
 
 // ============================================================

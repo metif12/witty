@@ -45,6 +45,15 @@ fn test_color_name_unnamed_has_no_default() {
 // RGB.parse
 // ============================================================
 
+fn test_rgb_cval() {
+	value := RGB{ r: 0xaa, g: 0xbb, b: 0xcc }.cval()
+	assert value == RGBC{
+		r: 0xaa
+		g: 0xbb
+		b: 0xcc
+	}
+}
+
 fn test_rgb_parse_rgbi() {
 	c := RGB.parse('rgbi:1.0/0/0') or {
 		assert false, 'expected valid parse'
