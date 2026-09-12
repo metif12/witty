@@ -1,5 +1,22 @@
 module font
 
+fn test_freetype_synthetic_flags_packed_layout() {
+	assert sizeof(FaceSynthetic) == 1
+	mut synthetic := FaceSynthetic{}
+	assert !synthetic.italic()
+	assert !synthetic.bold()
+
+	synthetic.set_italic(true)
+	assert synthetic.value == 0x01
+	assert synthetic.italic()
+	assert !synthetic.bold()
+
+	synthetic.set_bold(true)
+	assert synthetic.value == 0x03
+	assert synthetic.italic()
+	assert synthetic.bold()
+}
+
 // Tests for Face (translated from ghostty/src/font/face/freetype.zig).
 
 fn test_face_name() {
@@ -7,12 +24,12 @@ fn test_face_name() {
 	defer { lib.deinit() }
 	mut buf := []u8{len: 1024}
 	mut variable := Face.init_mem(lib, embedded_variable, FaceOptions{
-		size: DesiredSize{points: 14}
+		size: DesiredSize{ points: 14 }
 	}) or { panic(err) }
 	assert variable.name(mut buf) or { panic(err) } == 'JetBrains Mono'
 	variable.deinit()
 	mut inconsolata := Face.init_mem(lib, embedded_inconsolata, FaceOptions{
-		size: DesiredSize{points: 14}
+		size: DesiredSize{ points: 14 }
 	}) or { panic(err) }
 	assert inconsolata.name(mut buf) or { panic(err) } == 'Inconsolata'
 	inconsolata.deinit()
@@ -24,22 +41,22 @@ fn test_render_all_ascii() {
 	mut atlas := Atlas.init(512, .grayscale) or { panic(err) }
 	defer { atlas.deinit() }
 	mut face := Face.init_mem(lib, embedded_inconsolata, FaceOptions{
-		size: DesiredSize{points: 12, xdpi: 96, ydpi: 96}
+		size: DesiredSize{ points: 12, xdpi: 96, ydpi: 96 }
 	}) or { panic(err) }
 	defer { face.deinit() }
 	mut metrics := Metrics.calc(face.get_metrics())
 	for cp := u32(32); cp < 127; cp++ {
 		idx := face.glyph_index(cp) or { panic('missing visible ASCII ${cp}') }
-		face.render_glyph(mut atlas, idx, RenderOptions{grid_metrics: metrics}) or { panic(err) }
+		face.render_glyph(mut atlas, idx, RenderOptions{ grid_metrics: metrics }) or { panic(err) }
 	}
 	a_idx := face.glyph_index(u32(`A`)) or { panic('missing A') }
-	g1 := face.render_glyph(mut atlas, a_idx, RenderOptions{grid_metrics: metrics}) or { panic(err) }
+	g1 := face.render_glyph(mut atlas, a_idx, RenderOptions{ grid_metrics: metrics }) or { panic(err) }
 	assert g1.height == 11
 	face.set_face_size(FaceOptions{
-		size: DesiredSize{points: 24, xdpi: 96, ydpi: 96}
+		size: DesiredSize{ points: 24, xdpi: 96, ydpi: 96 }
 	}) or { panic(err) }
 	metrics = Metrics.calc(face.get_metrics())
-	g2 := face.render_glyph(mut atlas, a_idx, RenderOptions{grid_metrics: metrics}) or { panic(err) }
+	g2 := face.render_glyph(mut atlas, a_idx, RenderOptions{ grid_metrics: metrics }) or { panic(err) }
 	// FreeType 2.14 rasterizes this one pixel shorter than the version used
 	// by the pinned Ghostty test; both results reflect the same 24pt outline.
 	assert g2.height == 20 || g2.height == 21
@@ -51,7 +68,7 @@ fn test_color_emoji() {
 	mut atlas := Atlas.init(512, .bgra)!
 	defer { atlas.deinit() }
 	mut face := Face.init_mem(lib, embedded_emoji, FaceOptions{
-		size: DesiredSize{points: 12, xdpi: 96, ydpi: 96}
+		size: DesiredSize{ points: 12, xdpi: 96, ydpi: 96 }
 	}) or { panic(err) }
 	defer { face.deinit() }
 	idx := face.glyph_index(0x1f978) or { panic('missing emoji') }
@@ -76,7 +93,7 @@ fn test_mono_to_bgra() {
 	mut atlas := Atlas.init(512, .bgra)!
 	defer { atlas.deinit() }
 	mut face := Face.init_mem(lib, embedded_emoji, FaceOptions{
-		size: DesiredSize{points: 12, xdpi: 72, ydpi: 72}
+		size: DesiredSize{ points: 12, xdpi: 72, ydpi: 72 }
 	}) or { panic(err) }
 	defer { face.deinit() }
 	face.render_glyph(mut atlas, 3, RenderOptions{
@@ -88,7 +105,7 @@ fn test_svg_font_table() {
 	mut lib := Library.init() or { panic(err) }
 	defer { lib.deinit() }
 	mut face := Face.init_mem(lib, embedded_julia_mono, FaceOptions{
-		size: DesiredSize{points: 12, xdpi: 72, ydpi: 72}
+		size: DesiredSize{ points: 12, xdpi: 72, ydpi: 72 }
 	}) or { panic(err) }
 	defer { face.deinit() }
 	table := face.copy_table('SVG ') or { panic(err) }
@@ -97,9 +114,22 @@ fn test_svg_font_table() {
 
 fn test_bitmap_glyph() {
 	pattern := [
-		'........', '........', '...#....', '...#....', '........', '..##....', '...#....',
-		'...#....', '...#....', '...#....', '...#....', '..###...', '........', '........',
-		'........', '........',
+		'........',
+		'........',
+		'...#....',
+		'...#....',
+		'........',
+		'..##....',
+		'...#....',
+		'...#....',
+		'...#....',
+		'...#....',
+		'...#....',
+		'..###...',
+		'........',
+		'........',
+		'........',
+		'........',
 	]
 	check_bitmap_font(embedded_terminus_ttf, 77, pattern)
 }
@@ -118,14 +148,27 @@ fn test_bitmap_glyph_otb() {
 
 fn check_spleen_bitmap(data []u8) {
 	pattern := [
-		'........', '........', '.#####..', '##...##.', '##...##.', '##...##.', '#######.',
-		'##...##.', '##...##.', '##...##.', '##...##.', '##...##.', '........', '........',
-		'........', '........',
+		'........',
+		'........',
+		'.#####..',
+		'##...##.',
+		'##...##.',
+		'##...##.',
+		'#######.',
+		'##...##.',
+		'##...##.',
+		'##...##.',
+		'##...##.',
+		'##...##.',
+		'........',
+		'........',
+		'........',
+		'........',
 	]
 	mut lib := Library.init() or { panic(err) }
 	defer { lib.deinit() }
 	mut face := Face.init_mem(lib, data, FaceOptions{
-		size: DesiredSize{points: 12, xdpi: 96, ydpi: 96}
+		size: DesiredSize{ points: 12, xdpi: 96, ydpi: 96 }
 	}) or { panic(err) }
 	idx := face.glyph_index(u32(`A`)) or { panic('missing A') }
 	face.deinit()
@@ -138,7 +181,7 @@ fn check_bitmap_font(data []u8, glyph_index u32, pattern []string) {
 	mut atlas := Atlas.init(512, .grayscale) or { panic(err) }
 	defer { atlas.deinit() }
 	mut face := Face.init_mem(lib, data, FaceOptions{
-		size: DesiredSize{points: 12, xdpi: 96, ydpi: 96}
+		size: DesiredSize{ points: 12, xdpi: 96, ydpi: 96 }
 	}) or { panic(err) }
 	defer { face.deinit() }
 	glyph := face.render_glyph(mut atlas, glyph_index, RenderOptions{
@@ -198,33 +241,33 @@ fn test_constraints() {
 	// Hardcoded data matches metrics from CoreText at size 12 and DPI 96.
 	// Grid metrics matching font-family = JetBrains Mono.
 	metrics := Metrics{
-		cell_width:              10
-		cell_height:             22
-		cell_baseline:           5
-		underline_position:      19
-		underline_thickness:     1
-		strikethrough_position:  12
+		cell_width: 10
+		cell_height: 22
+		cell_baseline: 5
+		underline_position: 19
+		underline_thickness: 1
+		strikethrough_position: 12
 		strikethrough_thickness: 1
-		overline_position:       0
-		overline_thickness:      1
-		box_thickness:           1
-		cursor_thickness:        1
-		cursor_height:           22
-		icon_height:             21.12
-		icon_height_single:      44.48 / 3.0
-		face_width:              9.6
-		face_height:             21.12
-		face_y:                  0.2
+		overline_position: 0
+		overline_thickness: 1
+		box_thickness: 1
+		cursor_thickness: 1
+		cursor_height: 22
+		icon_height: 21.12
+		icon_height_single: 44.48 / 3.0
+		face_width: 9.6
+		face_height: 21.12
+		face_y: 0.2
 	}
 
 	// ASCII (no constraint): do nothing for any constraint width.
 	{
 		constraint := Constraint{}
 		glyph_x := GlyphSize{
-			width:  6.784
+			width: 6.784
 			height: 15.28
-			x:      1.408
-			y:      4.84
+			x: 1.408
+			y: 4.84
 		}
 		assert_glyph_approx(glyph_x, constraint.constrain(glyph_x, metrics, 1))
 		assert_glyph_approx(glyph_x, constraint.constrain(glyph_x, metrics, 2))
@@ -237,17 +280,17 @@ fn test_constraints() {
 		}
 		// BBox of '■' (0x25A0 black square) from Iosevka.
 		glyph_25a0 := GlyphSize{
-			width:  10.272
+			width: 10.272
 			height: 10.272
-			x:      2.864
-			y:      5.304
+			x: 2.864
+			y: 5.304
 		}
 		// Constraint width 1: scale down and shift to fit a single cell.
 		assert_glyph_approx(GlyphSize{
-			width:  metrics.face_width
+			width: metrics.face_width
 			height: metrics.face_width
-			x:      0
-			y:      5.64
+			x: 0
+			y: 5.64
 		}, constraint.constrain(glyph_25a0, metrics, 1))
 		// Constraint width 2: do nothing.
 		assert_glyph_approx(glyph_25a0, constraint.constrain(glyph_25a0, metrics, 2))
@@ -256,25 +299,25 @@ fn test_constraints() {
 	// Emoji (same constraint as hardcoded in SharedGrid.renderGlyph).
 	{
 		constraint := Constraint{
-			size:             .cover
+			size: .cover
 			align_horizontal: .center
-			align_vertical:   .center
-			pad_left:         0.025
-			pad_right:        0.025
+			align_vertical: .center
+			pad_left: 0.025
+			pad_right: 0.025
 		}
 		// BBox of '🥸' (0x1F978) from Apple Color Emoji.
 		glyph_1f978 := GlyphSize{
-			width:  20
+			width: 20
 			height: 20
-			x:      0.46
-			y:      1
+			x: 0.46
+			y: 1
 		}
 		// Constraint width 2: scale to cover two cells with padding, center.
 		assert_glyph_approx(GlyphSize{
-			width:  18.72
+			width: 18.72
 			height: 18.72
-			x:      0.44
-			y:      1.4
+			x: 0.44
+			y: 1.4
 		}, constraint.constrain(glyph_1f978, metrics, 2))
 	}
 
@@ -293,24 +336,24 @@ fn test_constraints() {
 		// BBox of the icon (part of a group, so the constraint applies to
 		// a larger bounding box via relative_* fields).
 		glyph_ea61 := GlyphSize{
-			width:  9.015625
+			width: 9.015625
 			height: 13.015625
-			x:      3.015625
-			y:      3.76525
+			x: 3.015625
+			y: 3.76525
 		}
 		// Constraint width 1: scale and shift group to fit a single cell.
 		assert_glyph_approx(GlyphSize{
-			width:  7.2125
+			width: 7.2125
 			height: 10.4125
-			x:      0.8125
-			y:      5.950695224719102
+			x: 0.8125
+			y: 5.950695224719102
 		}, constraint.constrain(glyph_ea61, metrics, 1))
 		// Constraint width 2: no scaling; left-align and vertically center group.
 		assert_glyph_approx(GlyphSize{
-			width:  glyph_ea61.width
+			width: glyph_ea61.width
 			height: glyph_ea61.height
-			x:      1.015625
-			y:      4.7483690308988775
+			x: 1.015625
+			y: 4.7483690308988775
 		}, constraint.constrain(glyph_ea61, metrics, 2))
 	}
 
@@ -327,24 +370,24 @@ fn test_constraints() {
 		assert constraint.align_vertical == .center1
 
 		glyph_e0c0 := GlyphSize{
-			width:  16.796875
+			width: 16.796875
 			height: 16.46875
-			x:      -0.796875
-			y:      1.7109375
+			x: -0.796875
+			y: 1.7109375
 		}
 		// Constraint width 1: stretch and position to exactly cover one cell.
 		assert_glyph_approx(GlyphSize{
-			width:  f64(metrics.cell_width)
+			width: f64(metrics.cell_width)
 			height: f64(metrics.cell_height)
-			x:      0
-			y:      0
+			x: 0
+			y: 0
 		}, constraint.constrain(glyph_e0c0, metrics, 1))
 		// Constraint width 2: stretch and position to exactly cover two cells.
 		assert_glyph_approx(GlyphSize{
-			width:  f64(2 * metrics.cell_width)
+			width: f64(2 * metrics.cell_width)
 			height: f64(metrics.cell_height)
-			x:      0
-			y:      0
+			x: 0
+			y: 0
 		}, constraint.constrain(glyph_e0c0, metrics, 2))
 	}
 }

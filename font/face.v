@@ -843,6 +843,37 @@ pub fn (d DeferredFace) has_codepoint(cp u32, presentation ?Presentation) bool {
 // Face
 // ============================================================
 
+// V has no packed structs, so FreeType's two synthetic-style flags retain the
+// source declaration-order bits in the smallest available integer.
+struct FaceSynthetic {
+mut:
+	value u8
+}
+
+fn (synthetic FaceSynthetic) italic() bool {
+	return synthetic.value & 0x01 != 0
+}
+
+fn (synthetic FaceSynthetic) bold() bool {
+	return synthetic.value & 0x02 != 0
+}
+
+fn (mut synthetic FaceSynthetic) set_italic(value bool) {
+	if value {
+		synthetic.value |= 0x01
+	} else {
+		synthetic.value &= ~u8(0x01)
+	}
+}
+
+fn (mut synthetic FaceSynthetic) set_bold(value bool) {
+	if value {
+		synthetic.value |= 0x02
+	} else {
+		synthetic.value &= ~u8(0x02)
+	}
+}
+
 // Face represents a single font face backed by FreeType.
 pub struct Face {
 pub mut:
@@ -862,10 +893,8 @@ pub mut:
 	load_flags FreetypeLoadFlags
 	// Set quirks.disableDefaultFontFeatures.
 	quirks_disable_default_font_features bool
-	// Set to true to apply a synthetic italic to the face.
-	synthetic_italic bool
-	// Set to true to apply a synthetic bold to the face.
-	synthetic_bold bool
+	// Synthetic italic and bold flags.
+	synthetic FaceSynthetic
 	// The current size this font is set to.
 	size DesiredSize
 }
@@ -1026,8 +1055,8 @@ pub fn (self &Face) synthetic_bold_face(opts FaceOptions) !Face {
 	if !isnil(self.ct_font) {
 		f.ct_font = macos.cf_retain(self.ct_font)
 	}
-	f.synthetic_italic = self.synthetic_italic
-	f.synthetic_bold = true
+	f.synthetic = self.synthetic
+	f.synthetic.set_bold(true)
 	return f
 }
 
@@ -1040,8 +1069,8 @@ pub fn (self &Face) synthetic_italic_face(opts FaceOptions) !Face {
 	if !isnil(self.ct_font) {
 		f.ct_font = macos.cf_retain(self.ct_font)
 	}
-	f.synthetic_italic = true
-	f.synthetic_bold = self.synthetic_bold
+	f.synthetic = self.synthetic
+	f.synthetic.set_italic(true)
 	return f
 }
 
@@ -1245,7 +1274,7 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 	self.face.load_glyph(glyph_index, self.glyph_load_flags(opts.constraint.does_anything()))!
 	mut glyph := self.face.glyph() or { return error('FreeType returned no glyph slot') }
 
-	if self.synthetic_bold && glyph.format == freetype.glyph_format_outline {
+	if self.synthetic.bold() && glyph.format == freetype.glyph_format_outline {
 		size_metrics := self.face.size_metrics() or { return error('FreeType face has no size metrics') }
 		amount := i64(math.ceil(f64(size_metrics.height) * (64.0 / 2048.0)))
 		freetype.outline_embolden(mut glyph.outline, amount)
@@ -1297,7 +1326,7 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 		freetype.glyph_format_outline {
 			scale_x := width / rect.width
 			scale_y := height / rect.height
-			skew := if self.synthetic_italic { math.tan(12.0 * math.pi / 180.0) } else { 0.0 }
+			skew := if self.synthetic.italic() { math.tan(12.0 * math.pi / 180.0) } else { 0.0 }
 			point_count := freetype.outline_points_len(&glyph.outline)
 			for i in 0 .. point_count {
 				point := freetype.outline_point(&glyph.outline, i)
