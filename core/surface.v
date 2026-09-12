@@ -2136,20 +2136,8 @@ pub:
 
 // Link represents a detected link at a position in the terminal.
 struct Link {
-	action    LinkAction
+	action    input.LinkAction
 	selection TermSelection
-}
-
-pub enum LinkAction {
-	open
-	open_osc8
-}
-
-pub enum LinkHighlight {
-	always
-	hover
-	always_mods
-	hover_mods
 }
 
 // DerivedConfig holds the configuration derived from the main config.
@@ -2159,14 +2147,14 @@ pub mut:
 	keybind                          configpkg.Keybinds
 	key_remaps                       input.RemapSet
 	abnormal_command_exit_runtime_ms u32
-	clipboard_read                   ClipboardAccess
-	clipboard_write                  ClipboardAccess
+	clipboard_read                   configpkg.ClipboardAccess
+	clipboard_write                  configpkg.ClipboardAccess
 	clipboard_trim_trailing_spaces   bool
 	clipboard_paste_protection       bool
 	clipboard_paste_bracketed_safe   bool
 	clipboard_codepoint_map          configpkg.RepeatableClipboardCodepointMap
-	copy_on_select                   CopyOnSelect
-	confirm_close_surface            ConfirmCloseSurface
+	copy_on_select                   configpkg.CopyOnSelect
+	confirm_close_surface            configpkg.ConfirmCloseSurface
 	cursor_click_to_move             bool
 	desktop_notifications            bool
 	right_click_action               configpkg.RightClickAction
@@ -2174,7 +2162,7 @@ pub mut:
 	mouse_hide_while_typing          bool
 	mouse_reporting                  bool
 	mouse_scroll_multiplier          configpkg.MouseScrollMultiplier
-	mouse_shift_capture              MouseShiftCapture
+	mouse_shift_capture              configpkg.MouseShiftCapture
 	macos_non_native_fullscreen      configpkg.NonNativeFullscreen
 	macos_option_as_alt              ?input.OptionAsAlt
 	selection_clear_on_copy          bool
@@ -2193,14 +2181,9 @@ pub mut:
 	title                            ?string
 	title_report                     bool
 	links                            []DerivedConfigLink
-	link_previews                    LinkPreviews
+	link_previews                    configpkg.LinkPreviews
 	scroll_to_bottom_keystroke       bool
 	font                             DerivedFontConfig
-}
-
-pub enum LinkPreviews {
-	true_
-	false_
 }
 
 pub type DerivedFontConfig = font.GridSetDerivedConfig
@@ -2208,34 +2191,9 @@ pub type DerivedFontConfig = font.GridSetDerivedConfig
 pub struct DerivedConfigLink {
 pub:
 	regex     oniguruma.Regex
-	action    LinkAction
-	highlight LinkHighlight
+	action    input.LinkAction
+	highlight input.LinkHighlight
 	mods      input.Mods
-}
-
-pub enum ClipboardAccess {
-	allow
-	ask
-	deny
-}
-
-pub enum CopyOnSelect {
-	false_
-	true_
-	clipboard
-}
-
-pub enum ConfirmCloseSurface {
-	always
-	false_
-	true_
-}
-
-pub enum MouseShiftCapture {
-	never
-	always
-	false_
-	true_
 }
 
 fn grid_set_font_style(style configpkg.FontStyle) font.GridSetFontStyleConfig {
@@ -2260,8 +2218,8 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 		}
 		links << DerivedConfigLink{
 			regex: regex
-			action: unsafe { LinkAction(link.action) }
-			highlight: unsafe { LinkHighlight(link.highlight) }
+			action: link.action
+			highlight: link.highlight
 			mods: link.mods
 		}
 	}
@@ -2270,14 +2228,14 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 		keybind: config.keybind.clone()
 		key_remaps: config.key_remap.clone()
 		abnormal_command_exit_runtime_ms: config.abnormal_command_exit_runtime
-		clipboard_read: unsafe { ClipboardAccess(config.clipboard_read) }
-		clipboard_write: unsafe { ClipboardAccess(config.clipboard_write) }
+		clipboard_read: config.clipboard_read
+		clipboard_write: config.clipboard_write
 		clipboard_trim_trailing_spaces: config.clipboard_trim_trailing_spaces
 		clipboard_paste_protection: config.clipboard_paste_protection
 		clipboard_paste_bracketed_safe: config.clipboard_paste_bracketed_safe
 		clipboard_codepoint_map: config.clipboard_codepoint_map.clone()
-		copy_on_select: unsafe { CopyOnSelect(config.copy_on_select) }
-		confirm_close_surface: unsafe { ConfirmCloseSurface(config.confirm_close_surface) }
+		copy_on_select: config.copy_on_select
+		confirm_close_surface: config.confirm_close_surface
 		cursor_click_to_move: config.cursor_click_to_move
 		desktop_notifications: config.desktop_notifications
 		right_click_action: config.right_click_action
@@ -2285,7 +2243,7 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 		mouse_hide_while_typing: config.mouse_hide_while_typing
 		mouse_reporting: config.mouse_reporting
 		mouse_scroll_multiplier: config.mouse_scroll_multiplier
-		mouse_shift_capture: unsafe { MouseShiftCapture(config.mouse_shift_capture) }
+		mouse_shift_capture: config.mouse_shift_capture
 		macos_non_native_fullscreen: config.macos_non_native_fullscreen
 		macos_option_as_alt: config.macos_option_as_alt
 		selection_clear_on_copy: config.selection_clear_on_copy
@@ -2304,7 +2262,7 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 		title: config.title
 		title_report: config.title_report
 		links: links
-		link_previews: unsafe { LinkPreviews(config.link_previews) }
+		link_previews: config.link_previews
 		scroll_to_bottom_keystroke: config.scroll_to_bottom.keystroke
 		font: font.GridSetDerivedConfig{
 			font_family: config.font_family.clone()

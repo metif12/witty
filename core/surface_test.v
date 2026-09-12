@@ -108,11 +108,13 @@ fn test_derived_config_uses_selection_and_clipboard_maps() {
 	mut cfg := configpkg.Config.default_config()
 	cfg.selection_word_chars.parse_cli('._')!
 	cfg.clipboard_codepoint_map.parse_cli('U+2500=U+002D')!
+	cfg.link_previews = .osc8
 	mut derived := DerivedConfig.from_config(&cfg)!
 	defer { derived.deinit() }
 	assert derived.selection_word_chars == [u32(0), u32(`.`), u32(`_`)]
 	assert derived.clipboard_codepoint_map.map.list.len == 1
 	assert derived.clipboard_codepoint_map.map.list[0].range_start == 0x2500
+	assert derived.link_previews == configpkg.LinkPreviews.osc8
 }
 
 fn test_surface_command_uses_initial_command_only_for_first_surface() {
