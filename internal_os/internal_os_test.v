@@ -282,6 +282,14 @@ fn test_parse_flatpak_passwd_output_uses_last_two_fields() {
 	assert entry.shell? == '/bin/zsh'
 }
 
+fn test_click_interval_matches_platform_contract() {
+	$if macos {
+		assert click_interval() != none
+	} $else {
+		assert click_interval() == none
+	}
+}
+
 fn test_i18n_locale_canonicalization() {
 	assert canonicalize_locale('en_US') == 'en_US'
 	assert canonicalize_locale('en-US') == 'en_US'

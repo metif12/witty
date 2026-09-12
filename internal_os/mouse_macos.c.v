@@ -6,13 +6,13 @@ module internal_os
 
 #insert "@VMODROOT/internal_os/mouse_darwin.h"
 
-fn C.witty_internal_os_click_interval() u32
+fn C.witty_internal_os_click_interval(value &u32) int
 
 // click_interval returns the system-configured double-click interval in
-// milliseconds. This is the Darwin branch of os.mouse.clickInterval.
+// milliseconds. This is the macOS branch of os.mouse.clickInterval.
 pub fn click_interval() ?u32 {
-	interval := C.witty_internal_os_click_interval()
-	if interval == 0 {
+	mut interval := u32(0)
+	if C.witty_internal_os_click_interval(&interval) == 0 {
 		return none
 	}
 	return interval

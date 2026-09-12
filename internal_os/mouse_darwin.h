@@ -6,12 +6,13 @@
 #include <objc/runtime.h>
 #include <stdint.h>
 
-static inline uint32_t witty_internal_os_click_interval(void) {
+static inline int witty_internal_os_click_interval(uint32_t *value) {
     Class cls = objc_getClass("NSEvent");
     if (cls == NULL) return 0;
     SEL selector = sel_registerName("doubleClickInterval");
     double interval = ((double (*)(id, SEL))objc_msgSend)((id)cls, selector);
-    return (uint32_t)ceil(interval * 1000.0);
+    *value = (uint32_t)ceil(interval * 1000.0);
+    return 1;
 }
 
 #endif
