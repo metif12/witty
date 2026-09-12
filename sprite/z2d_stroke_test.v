@@ -5,6 +5,13 @@ module sprite
 
 import math
 
+fn test_z2d_join_mode_source_layout() {
+	assert sizeof(Z2dJoinMode) == 1
+	assert u8(Z2dJoinMode.miter) == 0
+	assert u8(Z2dJoinMode.round_) == 1
+	assert u8(Z2dJoinMode.bevel) == 2
+}
+
 fn test_z2d_slope_normalize() {
 	mut slope := Z2dSlope{ dx: 3, dy: 4 }
 	assert slope.normalize() == 5

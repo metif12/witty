@@ -19,7 +19,7 @@ import math
 
 fn C.hypot(f64, f64) f64
 
-enum Z2dJoinMode {
+enum Z2dJoinMode as u8 {
 	miter
 	round_
 	bevel

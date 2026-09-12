@@ -389,7 +389,7 @@ pub:
 // Path types
 // ============================================================
 
-pub enum PathNodeKind {
+pub enum PathNodeKind as u8 {
 	move_to
 	line_to
 	curve_to
@@ -415,7 +415,7 @@ pub:
 
 pub struct FillOptions {}
 
-pub enum LineCapMode {
+pub enum LineCapMode as u8 {
 	butt
 	round_
 	square

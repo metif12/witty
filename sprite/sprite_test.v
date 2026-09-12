@@ -194,6 +194,18 @@ fn test_alignment_and_fraction_source_layouts() {
 	assert Fraction.full != Fraction.one
 }
 
+fn test_z2d_path_and_cap_source_layouts() {
+	assert sizeof(PathNodeKind) == 1
+	assert u8(PathNodeKind.move_to) == 0
+	assert u8(PathNodeKind.line_to) == 1
+	assert u8(PathNodeKind.curve_to) == 2
+	assert u8(PathNodeKind.close) == 3
+	assert sizeof(LineCapMode) == 1
+	assert u8(LineCapMode.butt) == 0
+	assert u8(LineCapMode.round_) == 1
+	assert u8(LineCapMode.square) == 2
+}
+
 // ------------------------------------------------------------
 // Canvas.pixel / rect / box primitives
 // ------------------------------------------------------------
