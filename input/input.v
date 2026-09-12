@@ -177,7 +177,7 @@ pub const mouse_button_max = 11
 // Momentum represents the "momentum" of a mouse scroll event.
 // Used to handle "inertial scrolling" (i.e. flicking).
 // https://developer.apple.com/documentation/appkit/nseventphase
-pub enum Momentum {
+pub enum Momentum as u8 {
 	none_
 	began
 	stationary
@@ -188,7 +188,7 @@ pub enum Momentum {
 }
 
 // PressureStage represents the pressure stage of a pressure-sensitive input device.
-pub enum PressureStage {
+pub enum PressureStage as u8 {
 	none_ // The input device is unpressed.
 	normal // Normal press amount (after a "click" on macOS trackpads).
 	deep // Deep press amount (after a "force click" on macOS trackpads).

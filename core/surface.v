@@ -1644,7 +1644,7 @@ pub type DesiredSize = font.DesiredSize
 pub struct Mouse {
 pub mut:
 	// Last tracked mouse button state by button.
-	click_state [input.mouse_button_max]MouseButtonState = [input.mouse_button_max]MouseButtonState{init: .release}
+	click_state [input.mouse_button_max]input.MouseButtonState = [input.mouse_button_max]input.MouseButtonState{init: .release}
 
 	// Last mods state when the last mouse button was pressed/released.
 	mods input.Mods
@@ -1667,7 +1667,7 @@ pub mut:
 	event_point ?Coordinate
 
 	// Pressure stage for the mouse.
-	pressure_stage MousePressureStage = .none_
+	pressure_stage input.PressureStage = .none_
 
 	// Pending scroll amounts for high-precision scrolls.
 	pending_scroll_x f64
@@ -1681,17 +1681,6 @@ pub mut:
 
 	// Last x/y in the cursor position for links.
 	link_point ?Coordinate
-}
-
-pub enum MouseButtonState {
-	press
-	release
-}
-
-pub enum MousePressureStage {
-	none_
-	light
-	deep
 }
 
 // Keyboard state for the surface.
@@ -4206,11 +4195,7 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 	}
 
 	// Always record our latest mouse state.
-	self.mouse.click_state[int(button)] = if button_action == .press {
-		MouseButtonState.press
-	} else {
-		MouseButtonState.release
-	}
+	self.mouse.click_state[int(button)] = button_action
 
 	// Show mouse on click.
 	if self.mouse.hidden {
@@ -4728,7 +4713,7 @@ pub fn (mut self Surface) cursor_pos_callback(pos CursorPos, mods ?input.Mods) !
 }
 
 // mouse_pressure_callback handles force touch events.
-pub fn (mut self Surface) mouse_pressure_callback(stage MousePressureStage, pressure f64) ! {
+pub fn (mut self Surface) mouse_pressure_callback(stage input.PressureStage, pressure f64) ! {
 	crash.set_thread_state(self.crash_thread_state())
 	defer {
 		crash.clear_thread_state()
@@ -4740,8 +4725,7 @@ pub fn (mut self Surface) mouse_pressure_callback(stage MousePressureStage, pres
 	self.mouse.pressure_stage = stage
 
 	// On deep press with left mouse button, select word under cursor
-	if stage == .deep && self.mouse.click_state[int(input.MouseButton.left)] == .press
-		&& self.has_terminal() {
+	if stage == .deep && self.mouse.click_state[int(input.MouseButton.left)] == .press {
 		locked := self.renderer_state.mutex != unsafe { nil }
 		if locked {
 			self.renderer_state.mutex.lock()
@@ -4751,17 +4735,10 @@ pub fn (mut self Surface) mouse_pressure_callback(stage MousePressureStage, pres
 				self.renderer_state.mutex.unlock()
 			}
 		}
-		pos := self.rt_surface.get_cursor_pos()!
-		vp := self.pos_to_viewport(pos.x, pos.y)
-		if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
-			tag: .viewport
-			x: vp.x
-			y: vp.y
-		}) {
-			if sel := self.renderer_state.terminal_.screens.active.select_word(pin, self.config.selection_word_chars) {
-				self.renderer_state.terminal_.screens.active.select(sel)!
-				self.queue_render()!
-			}
+		pin := self.mouse.left_click_pin or { return }
+		if sel := self.renderer_state.terminal_.screens.active.select_word(pin, self.config.selection_word_chars) {
+			self.renderer_state.terminal_.screens.active.select(sel)!
+			self.queue_render()!
 		}
 	}
 	_ = pressure

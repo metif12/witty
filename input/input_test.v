@@ -260,6 +260,11 @@ fn test_scroll_mods_default() {
 	assert s.momentum == .none_
 }
 
+fn test_compact_mouse_enum_storage() {
+	assert sizeof(Momentum) == 1
+	assert sizeof(PressureStage) == 1
+}
+
 fn test_scroll_mods_packed_abi_roundtrip() {
 	values := [Momentum.none_, .began, .stationary, .changed, .ended, .cancelled, .may_begin]
 	for i, momentum in values {

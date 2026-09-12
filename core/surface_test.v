@@ -760,10 +760,10 @@ fn test_hide_show_mouse() {
 
 fn test_mouse_pressure_callback_no_change() ! {
 	mut surf := make_test_surface()
-	surf.mouse.pressure_stage = .light
+	surf.mouse.pressure_stage = .normal
 	// Same stage should be a no-op
-	surf.mouse_pressure_callback(.light, 0.5)!
-	assert surf.mouse.pressure_stage == .light
+	surf.mouse_pressure_callback(.normal, 0.5)!
+	assert surf.mouse.pressure_stage == .normal
 }
 
 fn test_mouse_pressure_callback_change() ! {
@@ -771,6 +771,24 @@ fn test_mouse_pressure_callback_change() ! {
 	surf.mouse.pressure_stage = .none_
 	surf.mouse_pressure_callback(.deep, 0.9)!
 	assert surf.mouse.pressure_stage == .deep
+}
+
+fn test_mouse_pressure_deep_selects_word_at_original_click_pin() ! {
+	mut surf := make_test_surface()
+	surf.config.selection_word_chars = [u32(` `)]
+	for i, cp in 'left right'.runes() {
+		surf.renderer_state.terminal_.screens.active.pages.screen_rows[0].cells[i] = terminal.CellData.init(u32(cp))
+	}
+	surf.mouse.click_state[int(input.MouseButton.left)] = .press
+	surf.mouse.left_click_pin = terminal.Pin{ x: 1, y: 0 }
+
+	surf.mouse_pressure_callback(.deep, 0.9)!
+	selection := surf.renderer_state.terminal_.screens.active.selection or {
+		assert false, 'deep pressure should select the clicked word'
+		return
+	}
+	assert selection.start().x == 0
+	assert selection.end().x == 3
 }
 
 fn test_focus_callback_same_state() ! {

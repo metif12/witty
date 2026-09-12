@@ -754,12 +754,7 @@ fn bridge_surface_mouse_button(ptr voidptr, action input.MouseButtonState, butto
 
 fn bridge_surface_mouse_pressure(ptr voidptr, stage input.PressureStage, pressure f64) ! {
 	mut self := unsafe { &EmbeddedSurfaceCore(ptr) }
-	core_stage := match stage {
-		.none_ { MousePressureStage.none_ }
-		.normal { MousePressureStage.light }
-		.deep { MousePressureStage.deep }
-	}
-	self.surface.mouse_pressure_callback(core_stage, pressure)!
+	self.surface.mouse_pressure_callback(stage, pressure)!
 }
 
 fn bridge_surface_scroll(ptr voidptr, xoff f64, yoff f64, mods input.ScrollMods) ! {
