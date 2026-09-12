@@ -113,7 +113,7 @@ pub const max_intermediate = 4
 // ============================================================
 
 // ParserState represents the state of the VT parser state machine.
-pub enum ParserState {
+pub enum ParserState as u8 {
 	ground
 	escape
 	escape_intermediate
@@ -212,8 +212,7 @@ pub type OscCommand = osc.Command
 // ============================================================
 
 // ParserActionType identifies the type of parser action.
-pub enum ParserActionType {
-	none
+pub enum ParserActionType as u8 {
 	print_action
 	execute_action
 	csi_dispatch_action
@@ -451,13 +450,11 @@ fn (mut self VTParser) process_csi_param_byte(c u8) {
 }
 
 // build_csi_action creates a CSI dispatch action from the current parser state.
-fn (mut self VTParser) build_csi_action(final_byte u8) ParserAction {
+fn (mut self VTParser) build_csi_action(final_byte u8) ?ParserAction {
 	// Ignore too many parameters: if we've hit the max, the whole sequence
 	// is dropped (matches Ghostty).
 	if self.params_idx >= max_params {
-		return ParserAction{
-			action_type: .none
-		}
+		return none
 	}
 
 	// Finalize params: add accumulator if digits were seen
@@ -471,9 +468,7 @@ fn (mut self VTParser) build_csi_action(final_byte u8) ParserAction {
 	// the sequence entirely (no dispatch). This matches Ghostty and is
 	// derived from real-world Kakoune SGR sequences.
 	if final_byte != u8(`m`) && self.params_sep.count() > 0 {
-		return ParserAction{
-			action_type: .none
-		}
+		return none
 	}
 
 	return ParserAction{

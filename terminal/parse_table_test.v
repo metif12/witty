@@ -20,6 +20,7 @@ fn test_table_creation() {
 }
 
 fn test_transition_action_source_ordinals() {
+	assert sizeof(TransitionAction) == 1
 	assert int(TransitionAction.ta_none) == 0
 	assert int(TransitionAction.ta_ignore) == 1
 	assert int(TransitionAction.ta_print) == 2
@@ -31,6 +32,7 @@ fn test_transition_action_source_ordinals() {
 	assert int(TransitionAction.ta_put) == 8
 	assert int(TransitionAction.ta_osc_put) == 9
 	assert int(TransitionAction.ta_apc_put) == 10
+	assert sizeof(Transition) == 2
 }
 
 // Test ground state: printable characters produce print action.

@@ -22,7 +22,7 @@ module terminal
 // TransitionAction is an action that can be taken during a state
 // transition. This is more of an internal action, not one used by
 // end users, typically.
-pub enum TransitionAction {
+pub enum TransitionAction as u8 {
 	ta_none
 	ta_ignore
 	ta_print

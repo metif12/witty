@@ -781,7 +781,7 @@ fn (mut self Stream) next_non_utf8(c u8) {
 	actions := self.parser.next(c)
 
 	for action in actions {
-		if self.capture_raw && action.action_type !in [.none, .print_action, .execute_action] {
+		if self.capture_raw && action.action_type !in [.print_action, .execute_action] {
 			self.raw_events << action.clone_for_retention()
 		}
 		match action.action_type {
@@ -822,7 +822,6 @@ fn (mut self Stream) next_non_utf8(c u8) {
 			.apc_end_action {
 				self.dispatch(.apc_end, ActionPayload{})
 			}
-			.none {}
 		}
 	}
 }

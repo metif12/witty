@@ -7,8 +7,7 @@ import terminal
 const max_vt_events = 100
 
 const vt_filter_action_types = [
-	terminal.ParserActionType.none,
-	.print_action,
+	terminal.ParserActionType.print_action,
 	.execute_action,
 	.csi_dispatch_action,
 	.esc_dispatch_action,
@@ -21,7 +20,7 @@ const vt_filter_action_types = [
 	.apc_end_action,
 ]
 
-enum VTKind {
+enum VTKind as u8 {
 	print
 	execute
 	csi
@@ -57,7 +56,7 @@ mut:
 	parser_stream           terminal.Stream
 	paused                  bool
 	current_seq             usize = 1
-	filter_exclude          [12]bool
+	filter_exclude          [11]bool
 	filter_text             string
 	selected_event_seq      ?u32
 	need_scroll_to_selected bool
@@ -148,7 +147,6 @@ fn vt_kind(action_type terminal.ParserActionType) VTKind {
 		.osc_dispatch_action { .osc }
 		.dcs_hook_action, .dcs_put_action, .dcs_unhook_action { .dcs }
 		.apc_start_action, .apc_put_action, .apc_end_action { .apc }
-		.none { .execute }
 	}
 }
 

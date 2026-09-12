@@ -6,26 +6,17 @@ module terminal
 //
 // Ghostty's `next()` returns `[3]?Action` (exit, transition, entry actions,
 // each optionally null). Witty's `next()` returns a flat `[]ParserAction`
-// list that only contains the non-null actions produced for that byte (plus
-// possibly a single `.none` sentinel from build_csi_action when a colon
-// separator is used with a non-'m' final byte).
+// list that only contains the non-null actions produced for that byte.
 //
 // To translate faithfully we collapse the ghostty triple into "the single
 // meaningful action produced by this byte", and assert on its type/contents.
 
-// dispatch_actions filters a next() result down to the "meaningful" actions,
-// dropping the `.none` sentinel that witty's build_csi_action can emit.
 fn dispatch_actions(actions []ParserAction) []ParserAction {
-	mut out := []ParserAction{}
-	for a in actions {
-		if a.action_type != .none {
-			out << a
-		}
-	}
-	return out
+	return actions
 }
 
 fn test_parser_state_source_ordinals() {
+	assert sizeof(ParserState) == 1
 	assert int(ParserState.ground) == 0
 	assert int(ParserState.escape) == 1
 	assert int(ParserState.escape_intermediate) == 2
@@ -40,6 +31,21 @@ fn test_parser_state_source_ordinals() {
 	assert int(ParserState.dcs_ignore) == 11
 	assert int(ParserState.osc_string) == 12
 	assert int(ParserState.sos_pm_apc_string) == 13
+}
+
+fn test_parser_action_tag_source_layout_and_ordinals() {
+	assert sizeof(ParserActionType) == 1
+	assert u8(ParserActionType.print_action) == 0
+	assert u8(ParserActionType.execute_action) == 1
+	assert u8(ParserActionType.csi_dispatch_action) == 2
+	assert u8(ParserActionType.esc_dispatch_action) == 3
+	assert u8(ParserActionType.osc_dispatch_action) == 4
+	assert u8(ParserActionType.dcs_hook_action) == 5
+	assert u8(ParserActionType.dcs_put_action) == 6
+	assert u8(ParserActionType.dcs_unhook_action) == 7
+	assert u8(ParserActionType.apc_start_action) == 8
+	assert u8(ParserActionType.apc_put_action) == 9
+	assert u8(ParserActionType.apc_end_action) == 10
 }
 
 fn test_parser_source_limits_and_separator_list() {
