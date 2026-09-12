@@ -252,6 +252,37 @@ fn test_embedded_surface_config_defaults_and_conversion() {
 	assert converted.context == .split
 }
 
+fn test_embedded_text_projection_preserves_length_and_sentinel() {
+	mut result := TextC{}
+	assert text_to_c(apprt.CAPIText{
+		text: 'a\x00b'
+	}, mut result)
+	defer {
+		ghostty_surface_free_text_c(unsafe { nil }, &result)
+	}
+	assert !isnil(result.text)
+	assert result.text_len == 3
+	unsafe {
+		assert int(result.text[0]) == int(`a`)
+		assert int(result.text[1]) == 0
+		assert int(result.text[2]) == int(`b`)
+		assert int(result.text[3]) == 0
+	}
+
+	mut empty := TextC{}
+	assert text_to_c(apprt.CAPIText{
+		text: ''
+	}, mut empty)
+	defer {
+		ghostty_surface_free_text_c(unsafe { nil }, &empty)
+	}
+	assert !isnil(empty.text)
+	assert empty.text_len == 0
+	unsafe {
+		assert int(empty.text[0]) == 0
+	}
+}
+
 fn test_embedded_input_key_conversion_rejects_invalid_action() {
 	assert input_key_from_c(InputKeyC{ action: -1 }) == none
 	assert input_key_from_c(InputKeyC{ action: 3 }) == none

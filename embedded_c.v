@@ -481,7 +481,10 @@ fn ghostty_surface_text_c(raw voidptr, ptr &u8, len usize) {
 	if isnil(raw) || (isnil(ptr) && len > 0) {
 		return
 	}
-	text := if len == 0 { '' } else { unsafe { tos(ptr, int(len)) } }
+	mut text := ''
+	if len > 0 {
+		text = unsafe { tos(ptr, int(len)) }
+	}
 	mut surface := unsafe { &apprt.Surface(raw) }
 	apprt.ghostty_surface_text(mut surface, text)
 }
@@ -595,7 +598,10 @@ fn ghostty_surface_binding_action_c(raw voidptr, ptr &u8, len usize) bool {
 	if isnil(raw) || (isnil(ptr) && len > 0) {
 		return false
 	}
-	action := if len == 0 { '' } else { unsafe { tos(ptr, int(len)) } }
+	mut action := ''
+	if len > 0 {
+		action = unsafe { tos(ptr, int(len)) }
+	}
 	mut surface := unsafe { &apprt.Surface(raw) }
 	return apprt.ghostty_surface_binding_action(mut surface, action)
 }
@@ -612,20 +618,19 @@ fn ghostty_surface_complete_clipboard_request_c(raw voidptr, text_ptr &char, sta
 
 fn text_to_c(value apprt.CAPIText, mut result TextC) bool {
 	text_value := value.text or { return false }
-	mut ptr := unsafe { &char(nil) }
-	if text_value.len > 0 {
-		raw := unsafe { malloc(text_value.len) }
-		if isnil(raw) {
-			return false
-		}
-		unsafe { vmemcpy(raw, text_value.str, text_value.len) }
-		ptr = unsafe { &char(raw) }
+	raw := unsafe { malloc(text_value.len + 1) }
+	if isnil(raw) {
+		return false
 	}
+	if text_value.len > 0 {
+		unsafe { vmemcpy(raw, text_value.str, text_value.len) }
+	}
+	unsafe { (&u8(raw))[text_value.len] = 0 }
 	result.tl_px_x = value.tl_px_x
 	result.tl_px_y = value.tl_px_y
 	result.offset_start = value.offset_start
 	result.offset_len = value.offset_len
-	result.text = ptr
+	result.text = unsafe { &char(raw) }
 	result.text_len = usize(text_value.len)
 	return true
 }
