@@ -526,10 +526,10 @@ pub mut:
 // We need to do this because each window consumes at least a handful of fds.
 // This is extracted from the Zig compiler source code. Returns the previous
 // limit so it can later be restored, or none if the limit couldn't be queried.
-pub fn fix_max_files() !Rlimit {
+pub fn fix_max_files() ?Rlimit {
 	old := getrlimit_nofile() or {
 		// Oh well; we tried.
-		return error('failed to query file handle limit, may limit max windows')
+		return none
 	}
 
 	// If we're already at the max, we're done.
