@@ -33,6 +33,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | renderer/row | `never_extend_bg` took no palette and read bg from the style for bg-color cells (color is on the cell); ignored palette backgrounds. | `resolve_bg` faithful to `Style.bg`; callers pass `state.colors.palette`. |
 | renderer/renderer | `fg_rgb`/cursor color calls never passed `bold_color`. | (field wiring noted; passed where applicable) |
 | renderer/thread | Thread startup forced the initially-false cursor blink flag to visible, and `sync_draw_timer()` immediately discarded an already-armed callback when animation became inactive. | Keep Ghostty's initial blink value and track desired draw activity separately from the armed completion so its final pending callback still fires. |
+| renderer/module surface | Witty carried an unused `renderer.Color` type with no Ghostty source counterpart and renamed the source's empty `WebGL` declaration to an invented `WebGLAPI` dummy struct. | Remove the orphan color file and restore the exact empty `WebGL` type. |
 | sprite/face | `render_glyph` hardcoded glyph `offset_x/offset_y` to 0. | Compute from canvas clip + padding (matches `Face.renderGlyph`). |
 | termio/termio | `resize` sent renderer `.font_grid` (should `.resize`); cursor reset sent `.focus` (should `.reset_cursor_blink`). | Correct message kinds (+ wired the two MessageKind variants). |
 | simd/stream | SIMD search/decode offsets and terminal bulk-stream lengths were narrowed to `u32`, creating artificial overflow boundaries that do not exist in Ghostty's `usize` contracts. | Restore `usize` through `simd.index_of`, VT/base64 decode results, and terminal stream consumption. |
@@ -101,8 +102,8 @@ an item here does not mean its full module has been certified yet.
 - **Source placement:** V module-cycle constraints keep the translated shaper
   run algorithm in `font/font.v` while `font/shaper/run.v` exposes aliases.
   This is behaviorally implemented but not a file-for-file layout match.
-- **Native/platform coverage:** WebGL is explicitly stubbed and the complete
-  FreeType/CoreText/web-canvas, discovery, Metal/OpenGL, shadertoy, regex,
+- **Native/platform coverage:** The complete FreeType/CoreText/web-canvas,
+  discovery, Metal/OpenGL, shadertoy, regex,
   embedded-resource, locking, configuration, and platform application surfaces
   have not all been certified function-by-function against the pinned tree.
 - **Comment style:** many large files use a verbatim "Original Ghostty Comments"
