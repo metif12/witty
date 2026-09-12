@@ -2538,54 +2538,44 @@ pub fn (self &PagePin) is_between(top_pin PagePin, bottom_pin PagePin) bool {
 // ---- Movement methods ----
 
 // Move left by n columns (asserts n <= x).
-pub fn (self &PagePin) left(n u16) PagePin {
-	assert self.x >= n, 'PagePin.left: n=${n} > x=${self.x}'
-	return PagePin{
-		node: self.node
-		y: self.y
-		x: self.x - n
-	}
+pub fn (self &PagePin) left(n usize) PagePin {
+	assert n <= usize(self.x), 'PagePin.left: n=${n} > x=${self.x}'
+	mut result := *self
+	result.x -= u16(n)
+	return result
 }
 
 // Move right by n columns (asserts fits in row).
-pub fn (self &PagePin) right(n u16) PagePin {
-	assert self.x + n < self.node.data.size.cols, 'PagePin.right: overflow'
-	return PagePin{
-		node: self.node
-		y: self.y
-		x: self.x + n
-	}
+pub fn (self &PagePin) right(n usize) PagePin {
+	assert usize(self.x) + n < usize(self.node.data.size.cols), 'PagePin.right: overflow'
+	mut result := *self
+	result.x += u16(n)
+	return result
 }
 
 // Move left, clamping at 0.
 pub fn (self &PagePin) left_clamp(n u16) PagePin {
-	new_x := if n > self.x { u16(0) } else { self.x - n }
-	return PagePin{
-		node: self.node
-		y: self.y
-		x: new_x
-	}
+	mut result := *self
+	result.x = if n > self.x { u16(0) } else { self.x - n }
+	return result
 }
 
 // Move right, clamping at end of row.
 pub fn (self &PagePin) right_clamp(n u16) PagePin {
+	mut result := *self
 	max_x := self.node.data.size.cols - 1
 	sum := u32(self.x) + u32(n)
-	new_x := if sum > u32(max_x) { max_x } else { u16(sum) }
-	return PagePin{
-		node: self.node
-		y: self.y
-		x: new_x
-	}
+	result.x = if sum > u32(max_x) { max_x } else { u16(sum) }
+	return result
 }
 
 // Move left by n cells, wrapping to preceding rows as needed.
 // Returns none if the movement goes beyond the start of the page list.
-pub fn (self &PagePin) left_wrap(n u32) ?PagePin {
-	cols := u32(self.node.data.size.cols)
-	remaining_in_row := u32(self.x)
+pub fn (self &PagePin) left_wrap(n usize) ?PagePin {
+	cols := usize(self.node.data.size.cols)
+	remaining_in_row := usize(self.x)
 	if n <= remaining_in_row {
-		return self.left(u16(n))
+		return self.left(n)
 	}
 
 	extra_after_remaining := n - remaining_in_row
@@ -2597,11 +2587,11 @@ pub fn (self &PagePin) left_wrap(n u32) ?PagePin {
 
 // Move right by n cells, wrapping to following rows as needed.
 // Returns none if the movement goes beyond the end of the page list.
-pub fn (self &PagePin) right_wrap(n u32) ?PagePin {
-	cols := u32(self.node.data.size.cols)
-	remaining_in_row := cols - u32(self.x) - 1
+pub fn (self &PagePin) right_wrap(n usize) ?PagePin {
+	cols := usize(self.node.data.size.cols)
+	remaining_in_row := cols - usize(self.x) - 1
 	if n <= remaining_in_row {
-		return self.right(u16(n))
+		return self.right(n)
 	}
 
 	extra_after_remaining := n - remaining_in_row
@@ -2612,70 +2602,21 @@ pub fn (self &PagePin) right_wrap(n u32) ?PagePin {
 }
 
 // Move down by n rows, crossing page boundaries. Returns none if overflow.
-pub fn (self &PagePin) down(n u32) ?PagePin {
-	mut rem := n
-	mut node := self.node
-	mut y := u32(self.y)
-
-	// First try within current page
-	avail := u32(node.data.size.rows) - y - 1
-	if rem <= avail {
-		return PagePin{
-			node: node
-			y: u16(y + rem)
-			x: self.x
-		}
+pub fn (self &PagePin) down(n usize) ?PagePin {
+	result := self.down_overflow(n)
+	return match result {
+		DownOverflowOffset { result.pin }
+		DownOverflowOverflow { none }
 	}
-	rem -= avail
-
-	// Move to next pages
-	mut next := node.next
-	for {
-		nd := next or { return none }
-		if rem <= u32(nd.data.size.rows) {
-			return PagePin{
-				node: nd
-				y: u16(rem - 1)
-				x: self.x
-			}
-		}
-		rem -= u32(nd.data.size.rows)
-		next = nd.next
-	}
-	return none
 }
 
 // Move up by n rows, crossing page boundaries. Returns none if overflow.
-pub fn (self &PagePin) up(n u32) ?PagePin {
-	mut rem := n
-	mut node := self.node
-	mut y := u32(self.y)
-
-	// First try within current page
-	if rem <= y {
-		return PagePin{
-			node: node
-			y: u16(y - rem)
-			x: self.x
-		}
+pub fn (self &PagePin) up(n usize) ?PagePin {
+	result := self.up_overflow(n)
+	return match result {
+		UpOverflowOffset { result.pin }
+		UpOverflowOverflow { none }
 	}
-	rem -= y
-
-	// Move to previous pages
-	mut prev := node.prev
-	for {
-		nd := prev or { return none }
-		if rem <= u32(nd.data.size.rows) {
-			return PagePin{
-				node: nd
-				y: u16(u32(nd.data.size.rows) - rem)
-				x: self.x
-			}
-		}
-		rem -= u32(nd.data.size.rows)
-		prev = nd.prev
-	}
-	return none
 }
 
 // DownOverflow result
@@ -2687,19 +2628,19 @@ pub:
 pub struct DownOverflowOverflow {
 pub:
 	end       PagePin
-	remaining u32
+	remaining usize
 }
 
 pub type DownOverflowResult = DownOverflowOffset | DownOverflowOverflow
 
 // Move down by n, returning overflow info if past end.
-pub fn (self &PagePin) down_overflow(n u32) DownOverflowResult {
+pub fn (self &PagePin) down_overflow(n usize) DownOverflowResult {
 	mut rem := n
 	mut node := self.node
-	mut y := u32(self.y)
+	mut y := usize(self.y)
 
 	// Try within current page
-	avail := u32(node.data.size.rows) - y - 1
+	avail := usize(node.data.size.rows) - y - 1
 	if rem <= avail {
 		return DownOverflowOffset{
 			pin: PagePin{
@@ -2725,7 +2666,7 @@ pub fn (self &PagePin) down_overflow(n u32) DownOverflowResult {
 				remaining: rem
 			}
 		}
-		if rem <= u32(nd.data.size.rows) {
+		if rem <= usize(nd.data.size.rows) {
 			return DownOverflowOffset{
 				pin: PagePin{
 					node: nd
@@ -2734,7 +2675,7 @@ pub fn (self &PagePin) down_overflow(n u32) DownOverflowResult {
 				}
 			}
 		}
-		rem -= u32(nd.data.size.rows)
+		rem -= usize(nd.data.size.rows)
 		unsafe {
 			last_node = nd
 		}
@@ -2760,15 +2701,15 @@ pub:
 pub struct UpOverflowOverflow {
 pub:
 	end       PagePin
-	remaining u32
+	remaining usize
 }
 
 pub type UpOverflowResult = UpOverflowOffset | UpOverflowOverflow
 
 // Move up by n, returning overflow info if past beginning.
-pub fn (self &PagePin) up_overflow(n u32) UpOverflowResult {
+pub fn (self &PagePin) up_overflow(n usize) UpOverflowResult {
 	mut rem := n
-	mut y := u32(self.y)
+	mut y := usize(self.y)
 
 	// Try within current page
 	if rem <= y {
@@ -2796,16 +2737,16 @@ pub fn (self &PagePin) up_overflow(n u32) UpOverflowResult {
 				remaining: rem
 			}
 		}
-		if rem <= u32(nd.data.size.rows) {
+		if rem <= usize(nd.data.size.rows) {
 			return UpOverflowOffset{
 				pin: PagePin{
 					node: nd
-					y: u16(u32(nd.data.size.rows) - rem)
+					y: u16(usize(nd.data.size.rows) - rem)
 					x: self.x
 				}
 			}
 		}
-		rem -= u32(nd.data.size.rows)
+		rem -= usize(nd.data.size.rows)
 		unsafe {
 			first_node = nd
 		}
@@ -4042,7 +3983,7 @@ pub fn (self &PageList) get_bottom_right(tag PointTag) ?PagePin {
 		}
 		.viewport {
 			tl := self.get_top_left(.viewport)
-			p := tl.down(u32(self.rows) - 1) or { return none }
+			p := tl.down(usize(self.rows) - 1) or { return none }
 			return PagePin{
 				node: p.node
 				y: p.y
@@ -4067,7 +4008,7 @@ pub fn (self &PageList) pin(point Point) ?PagePin {
 	if u32(point.coord.x) >= u32(self.cols) {
 		return none
 	}
-	mut result := self.get_top_left(point.tag).down(point.coord.y) or { return none }
+	mut result := self.get_top_left(point.tag).down(usize(point.coord.y)) or { return none }
 	result.x = point.coord.x
 	return result
 }
@@ -4327,20 +4268,6 @@ pub fn (self &PageList) highlight_semantic_content(at PagePin, content SemanticC
 // Pin / Track Pin
 // ============================================================
 
-// Convert a point to a PagePin.
-pub fn (self &PageList) get_pin(tag PointTag, x u16, y u16) ?PagePin {
-	if x >= self.cols {
-		return none
-	}
-	tl := self.get_top_left(tag)
-	p := tl.down(u32(y)) or { return none }
-	return PagePin{
-		node: p.node
-		y: p.y
-		x: x
-	}
-}
-
 // Track a pin so it auto-updates during modifications.
 pub fn (mut self PageList) track_pin(p PagePin) &PagePin {
 	tracked := &PagePin{
@@ -4460,19 +4387,13 @@ fn (self &PageList) pin_is_top(p PagePin) bool {
 // Get Cell
 // ============================================================
 
-pub fn (self &PageList) get_cell(tag PointTag, x u16, y u16) ?PageCell {
-	p := self.get_pin(tag, x, y) or { return none }
-	if int(p.y) >= p.node.data.rows.len {
-		return none
-	}
-	row := &p.node.data.rows[int(p.y)]
-	if int(p.x) >= row.cells.len {
-		return none
-	}
+pub fn (self &PageList) get_cell(point Point) ?PageCell {
+	p := self.pin(point) or { return none }
+	rac := p.row_and_cell()
 	return PageCell{
 		node: p.node
-		row: row
-		cell: &row.cells[int(p.x)]
+		row: rac.row
+		cell: rac.cell
 		row_idx: p.y
 		col_idx: p.x
 	}
@@ -4586,13 +4507,13 @@ pub fn (mut self PageList) scroll(behavior PageScroll) {
 				}
 				.pin {
 					if delta < 0 {
-						abs_delta := u32(-delta)
-						match self.viewport_pin.up_overflow(abs_delta) {
+						abs_delta := usize(-delta)
+						result := self.viewport_pin.up_overflow(abs_delta)
+						match result {
 							UpOverflowOffset {
-								uo := self.viewport_pin.up_overflow(abs_delta) as UpOverflowOffset
-								self.viewport_pin.node = uo.pin.node
-								self.viewport_pin.y = uo.pin.y
-								self.viewport_pin.x = uo.pin.x
+								self.viewport_pin.node = result.pin.node
+								self.viewport_pin.y = result.pin.y
+								self.viewport_pin.x = result.pin.x
 								if v := self.viewport_pin_row_offset {
 									self.viewport_pin_row_offset = v - usize(abs_delta)
 								}
@@ -4604,16 +4525,16 @@ pub fn (mut self PageList) scroll(behavior PageScroll) {
 							}
 						}
 					} else if delta > 0 {
-						abs_delta := u32(delta)
-						match self.viewport_pin.down_overflow(abs_delta) {
+						abs_delta := usize(delta)
+						result := self.viewport_pin.down_overflow(abs_delta)
+						match result {
 							DownOverflowOffset {
-								dof := self.viewport_pin.down_overflow(abs_delta) as DownOverflowOffset
-								if self.pin_is_active(dof.pin) {
+								if self.pin_is_active(result.pin) {
 									self.viewport = .active
 								} else {
-									self.viewport_pin.node = dof.pin.node
-									self.viewport_pin.y = dof.pin.y
-									self.viewport_pin.x = dof.pin.x
+									self.viewport_pin.node = result.pin.node
+									self.viewport_pin.y = result.pin.y
+									self.viewport_pin.x = result.pin.x
 									if v := self.viewport_pin_row_offset {
 										self.viewport_pin_row_offset = v + usize(abs_delta)
 									}
@@ -4633,21 +4554,23 @@ pub fn (mut self PageList) scroll(behavior PageScroll) {
 			// Slow path: calculate from viewport top
 			tl := self.get_top_left(.viewport)
 			p := if delta < 0 {
-				match tl.up_overflow(u32(-delta)) {
+				result := tl.up_overflow(usize(-delta))
+				match result {
 					UpOverflowOffset {
-						(tl.up_overflow(u32(-delta)) as UpOverflowOffset).pin
+						result.pin
 					}
 					UpOverflowOverflow {
-						(tl.up_overflow(u32(-delta)) as UpOverflowOverflow).end
+						result.end
 					}
 				}
 			} else {
-				match tl.down_overflow(u32(delta)) {
+				result := tl.down_overflow(usize(delta))
+				match result {
 					DownOverflowOffset {
-						(tl.down_overflow(u32(delta)) as DownOverflowOffset).pin
+						result.pin
 					}
 					DownOverflowOverflow {
-						(tl.down_overflow(u32(delta)) as DownOverflowOverflow).end
+						result.end
 					}
 				}
 			}
@@ -6202,7 +6125,7 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) {
 	mut preserved_wrapped := usize(0)
 	mut have_preserved := false
 	if c := cursor {
-		if p := self.get_pin(.active, c.x, c.y) {
+		if p := self.pin(Point.new(.active, Coordinate{ x: c.x, y: c.y })) {
 			active_pin := self.get_top_left(.active)
 
 			// We count how many wraps the cursor had before it to begin with

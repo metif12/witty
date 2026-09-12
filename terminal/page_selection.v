@@ -341,14 +341,14 @@ pub fn (mut self PageSelection) adjust(pages &PageList, adjustment SelectionAdju
 			}
 		}
 		.page_up {
-			if new_end := end_pin.up(u32(pages.rows)) {
+			if new_end := end_pin.up(usize(pages.rows)) {
 				unsafe { *end_pin = new_end }
 			} else {
 				self.adjust(pages, .home)
 			}
 		}
 		.page_down {
-			if new_end := end_pin.down(u32(pages.rows)) {
+			if new_end := end_pin.down(usize(pages.rows)) {
 				unsafe { *end_pin = new_end }
 			} else {
 				self.adjust(pages, .end_)

@@ -40,7 +40,7 @@ fn set_page_list_line(mut list PageList, row u16, text string) {
 		if x >= int(list.cols) {
 			break
 		}
-		pin := list.get_pin(.screen, u16(x), row) or { break }
+		pin := list.pin(Point.new(.screen, Coordinate{ x: u16(x), y: row })) or { break }
 		mut page_row := &pin.node.data.rows[int(pin.y)]
 		page_row.cells[int(pin.x)] = CellData.init(u32(cp))
 	}

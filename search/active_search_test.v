@@ -4,7 +4,10 @@ import terminal
 
 fn write_active_search_text(mut list terminal.PageList, x u16, y u16, text string) {
 	for i, ch in text.runes() {
-		pin := list.get_pin(.active, x + u16(i), y) or { continue }
+		pin := list.pin(terminal.Point.new(.active, terminal.Coordinate{
+			x: x + u16(i)
+			y: y
+		})) or { continue }
 		mut row := &pin.node.data.rows[int(pin.y)]
 		row.cells[int(pin.x)] = terminal.CellData{
 			content_tag: .codepoint
