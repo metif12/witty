@@ -103,30 +103,32 @@ module kitty
 //
 import terminal
 
-fn storage_lifecycle(storage_ptr voidptr, screen &terminal.Screen, event terminal.KittyImagesEvent) {
+fn storage_mark_dirty(storage_ptr voidptr, _ &terminal.Screen) {
 	mut storage := unsafe { &ImageStorage(storage_ptr) }
-	match event {
-		.dirty {
-			storage.dirty = true
-		}
-		.reset {
-			limit := storage.total_limit
-			storage.deinit(screen)
-			fresh := ImageStorage{
-				total_limit: limit
-				dirty: true
-			}
-			unsafe {
-				*storage = fresh
-			}
-		}
-		.deinit {
-			storage.deinit(screen)
-		}
-		.clear {
-			storage.clear_screen_images(screen)
-		}
+	storage.dirty = true
+}
+
+fn storage_reset(storage_ptr voidptr, screen &terminal.Screen) {
+	mut storage := unsafe { &ImageStorage(storage_ptr) }
+	limit := storage.total_limit
+	storage.deinit(screen)
+	fresh := ImageStorage{
+		total_limit: limit
+		dirty: true
 	}
+	unsafe {
+		*storage = fresh
+	}
+}
+
+fn storage_deinit(storage_ptr voidptr, screen &terminal.Screen) {
+	mut storage := unsafe { &ImageStorage(storage_ptr) }
+	storage.deinit(screen)
+}
+
+fn storage_clear(storage_ptr voidptr, screen &terminal.Screen) {
+	mut storage := unsafe { &ImageStorage(storage_ptr) }
+	storage.clear_screen_images(screen)
 }
 
 // terminal.Screen keeps this value opaque to avoid a terminal -> kitty ->
@@ -138,7 +140,10 @@ fn active_storage(mut t terminal.Terminal) &ImageStorage {
 			total_limit: t.kitty_image_limit
 		}
 		t.screens.active.kitty_images = voidptr(storage)
-		t.screens.active.kitty_images_lifecycle = storage_lifecycle
+		t.screens.active.kitty_images_reset = storage_reset
+		t.screens.active.kitty_images_deinit = storage_deinit
+		t.screens.active.kitty_images_dirty = storage_mark_dirty
+		t.screens.active.kitty_images_clear = storage_clear
 	}
 	return unsafe { &ImageStorage(t.screens.active.kitty_images) }
 }
@@ -167,7 +172,10 @@ fn deinit_screen_storage(mut screen terminal.Screen) {
 	mut storage := unsafe { &ImageStorage(screen.kitty_images) }
 	storage.deinit(&screen)
 	screen.kitty_images = unsafe { nil }
-	screen.kitty_images_lifecycle = unsafe { nil }
+	screen.kitty_images_reset = unsafe { nil }
+	screen.kitty_images_deinit = unsafe { nil }
+	screen.kitty_images_dirty = unsafe { nil }
+	screen.kitty_images_clear = unsafe { nil }
 }
 
 // deinit_terminal_storage releases both primary and alternate screen state.

@@ -34,6 +34,13 @@ fn test_semantic_click_source_layout() {
 	assert SemanticClick.from_cl(.smart_vertical).cl == .smart_vertical
 }
 
+fn test_semantic_input_clear_source_layout() {
+	assert sizeof(SemanticInputClear) == 1
+	assert u8(SemanticInputClear.clear_explicit) == 0
+	assert u8(SemanticInputClear.clear_eol) == 1
+	assert sizeof(CursorSemanticInput) == 1
+}
+
 fn test_flat_pages_scrollbar() {
 	mut no_scrollback := Pages.init(4, 2, 0)
 	no_scrollback.screen_rows << RowData.init(4)

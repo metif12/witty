@@ -1995,18 +1995,10 @@ pub const prompt_click_move_zero = PromptClickMove{
 	right: 0
 }
 
-// KittyImagesEvent is sent through Screen's opaque Kitty storage hook. The
-// terminal package owns screen lifecycle while the kitty package owns the
-// concrete storage type, so this keeps both responsibilities intact without
-// introducing an import cycle.
-pub enum KittyImagesEvent {
-	reset
-	deinit
-	dirty
-	clear
-}
-
-pub type KittyImagesLifecycleFn = fn (voidptr, &Screen, KittyImagesEvent)
+// The terminal package owns screen lifecycle while the kitty package owns the
+// concrete storage type. Operation-specific hooks preserve the direct source
+// calls without introducing a terminal -> kitty -> terminal import cycle.
+pub type KittyImagesLifecycleFn = fn (voidptr, &Screen)
 
 // ============================================================
 // Screen struct
@@ -2026,8 +2018,11 @@ pub mut:
 	// Opaque pointer to kitty.ImageStorage. Keeping the storage behind an
 	// opaque module boundary avoids a terminal -> kitty -> terminal import
 	// cycle while still giving every screen independent persistent state.
-	kitty_images           voidptr
-	kitty_images_lifecycle KittyImagesLifecycleFn = unsafe { nil }
+	kitty_images        voidptr
+	kitty_images_reset  KittyImagesLifecycleFn = unsafe { nil }
+	kitty_images_deinit KittyImagesLifecycleFn = unsafe { nil }
+	kitty_images_dirty  KittyImagesLifecycleFn = unsafe { nil }
+	kitty_images_clear  KittyImagesLifecycleFn = unsafe { nil }
 	semantic_prompt        SemanticPrompt
 	dirty                  ScreenDirty
 }
@@ -2047,14 +2042,16 @@ pub fn Screen.init(cols u32, rows u32, max_scrollback usize) Screen {
 
 // Clean up screen resources.
 pub fn (mut self Screen) deinit() {
-	if self.kitty_images != unsafe { nil }
-		&& self.kitty_images_lifecycle != unsafe { nil } {
-		lifecycle := self.kitty_images_lifecycle
-		lifecycle(self.kitty_images, self, KittyImagesEvent.deinit)
+	if self.kitty_images != unsafe { nil } && self.kitty_images_deinit != unsafe { nil } {
+		deinit := self.kitty_images_deinit
+		deinit(self.kitty_images, self)
 	}
 	self.pages.deinit()
 	self.kitty_images = unsafe { nil }
-	self.kitty_images_lifecycle = unsafe { nil }
+	self.kitty_images_reset = unsafe { nil }
+	self.kitty_images_deinit = unsafe { nil }
+	self.kitty_images_dirty = unsafe { nil }
+	self.kitty_images_clear = unsafe { nil }
 	self.selection = none
 	self.saved_cursor = none
 }
@@ -2074,10 +2071,9 @@ pub fn (self &Screen) assert_integrity() {
 // Reset the screen: clear content, move cursor to top-left, reset state.
 pub fn (mut self Screen) reset() {
 	self.pages.reset()
-	if self.kitty_images != unsafe { nil }
-		&& self.kitty_images_lifecycle != unsafe { nil } {
-		lifecycle := self.kitty_images_lifecycle
-		lifecycle(self.kitty_images, self, KittyImagesEvent.reset)
+	if self.kitty_images != unsafe { nil } && self.kitty_images_reset != unsafe { nil } {
+		reset := self.kitty_images_reset
+		reset(self.kitty_images, self)
 	}
 	self.cursor = Cursor{
 		x: 0
@@ -2093,19 +2089,17 @@ pub fn (mut self Screen) reset() {
 
 // Mark Kitty placements dirty after operations such as switching screens.
 pub fn (self &Screen) mark_kitty_images_dirty() {
-	if self.kitty_images != unsafe { nil }
-		&& self.kitty_images_lifecycle != unsafe { nil } {
-		lifecycle := self.kitty_images_lifecycle
-		lifecycle(self.kitty_images, self, KittyImagesEvent.dirty)
+	if self.kitty_images != unsafe { nil } && self.kitty_images_dirty != unsafe { nil } {
+		dirty := self.kitty_images_dirty
+		dirty(self.kitty_images, self)
 	}
 }
 
 // Clear all non-virtual placements and their now-unused images.
 pub fn (self &Screen) clear_kitty_images() {
-	if self.kitty_images != unsafe { nil }
-		&& self.kitty_images_lifecycle != unsafe { nil } {
-		lifecycle := self.kitty_images_lifecycle
-		lifecycle(self.kitty_images, self, KittyImagesEvent.clear)
+	if self.kitty_images != unsafe { nil } && self.kitty_images_clear != unsafe { nil } {
+		clear := self.kitty_images_clear
+		clear(self.kitty_images, self)
 	}
 }
 
@@ -3377,7 +3371,7 @@ pub fn (mut self Screen) cursor_set_hyperlink() ! {
 // Semantic content
 // ============================================================
 
-pub enum SemanticInputClear {
+pub enum SemanticInputClear as u8 {
 	clear_explicit
 	clear_eol
 }
