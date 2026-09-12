@@ -38,7 +38,7 @@ pub struct Tabstops {
 mut:
 	// The number of columns this tabstop is set to manage. Use resize()
 	// to change this number.
-	cols int
+	cols usize
 	// Preallocated tab stops (enough for 512 columns).
 	prealloc_stops [tabstop_prealloc_count]u8
 	// Dynamically expanded stops above prealloc stops.
@@ -46,18 +46,18 @@ mut:
 }
 
 // Returns the entry index in the stops array that would contain this column.
-fn tabstop_entry(col u32) int {
-	return int(col) / tabstop_unit_bits
+fn tabstop_entry(col usize) usize {
+	return col / tabstop_unit_bits
 }
 
 // Returns the bit index within the entry for this column.
-fn tabstop_index(col u32) int {
-	return int(col) % tabstop_unit_bits
+fn tabstop_index(col usize) usize {
+	return col % tabstop_unit_bits
 }
 
 // init creates a new Tabstops with the given number of columns and
 // initial tab stop interval. Returns error if dynamic allocation fails.
-pub fn Tabstops.init(cols int, interval int) !Tabstops {
+pub fn Tabstops.init(cols usize, interval usize) !Tabstops {
 	mut res := Tabstops{}
 	res.resize(cols)!
 	res.reset(interval)
@@ -70,7 +70,7 @@ pub fn (mut self Tabstops) deinit() {
 }
 
 // set marks a tabstop at a certain column. The columns are 0-indexed.
-pub fn (mut self Tabstops) set(col u32) {
+pub fn (mut self Tabstops) set(col usize) {
 	i := tabstop_entry(col)
 	idx := tabstop_index(col)
 	if i < tabstop_prealloc_count {
@@ -79,12 +79,13 @@ pub fn (mut self Tabstops) set(col u32) {
 	}
 
 	dynamic_i := i - tabstop_prealloc_count
+	assert dynamic_i < usize(self.dynamic_stops.len)
 	self.dynamic_stops[dynamic_i] |= tabstop_masks[idx]
 }
 
 // unset removes a tabstop at a certain column. The columns are 0-indexed.
 // Uses XOR to toggle the bit off (assumes bit is currently set).
-pub fn (mut self Tabstops) unset(col u32) {
+pub fn (mut self Tabstops) unset(col usize) {
 	i := tabstop_entry(col)
 	idx := tabstop_index(col)
 	if i < tabstop_prealloc_count {
@@ -93,12 +94,13 @@ pub fn (mut self Tabstops) unset(col u32) {
 	}
 
 	dynamic_i := i - tabstop_prealloc_count
+	assert dynamic_i < usize(self.dynamic_stops.len)
 	self.dynamic_stops[dynamic_i] ^= tabstop_masks[idx]
 }
 
 // get returns whether a tabstop is set at a specific column. The columns
 // are 0-indexed.
-pub fn (self Tabstops) get(col u32) bool {
+pub fn (self Tabstops) get(col usize) bool {
 	i := tabstop_entry(col)
 	idx := tabstop_index(col)
 	mask := tabstop_masks[idx]
@@ -106,6 +108,7 @@ pub fn (self Tabstops) get(col u32) bool {
 		self.prealloc_stops[i]
 	} else {
 		dynamic_i := i - tabstop_prealloc_count
+		assert dynamic_i < usize(self.dynamic_stops.len)
 		self.dynamic_stops[dynamic_i]
 	}
 
@@ -116,7 +119,7 @@ pub fn (self Tabstops) get(col u32) bool {
 // If cols fits within the preallocated space, no allocation occurs.
 // Otherwise, a dynamic slice is allocated or extended.
 // TODO: needs interval to set new tabstops
-pub fn (mut self Tabstops) resize(cols int) ! {
+pub fn (mut self Tabstops) resize(cols usize) ! {
 	// Do nothing if it fits within preallocated space.
 	if cols <= tabstop_prealloc_columns {
 		self.cols = cols
@@ -125,14 +128,14 @@ pub fn (mut self Tabstops) resize(cols int) ! {
 
 	// What we need in the dynamic size
 	size := cols - tabstop_prealloc_columns
-	if size < self.dynamic_stops.len {
+	if size < usize(self.dynamic_stops.len) {
 		self.cols = cols
 		return
 	}
 
 	// Allocate new dynamic stops and copy existing data.
 	// Note: we could probably try to realloc here but it doesn't matter much.
-	mut new_stops := []u8{len: size}
+	mut new_stops := []u8{len: int(size)}
 	// Copy existing dynamic data if any
 	if self.dynamic_stops.len > 0 {
 		for i in 0 .. self.dynamic_stops.len {
@@ -146,13 +149,13 @@ pub fn (mut self Tabstops) resize(cols int) ! {
 
 // capacity returns the maximum number of columns this can support currently
 // without needing to resize.
-pub fn (self Tabstops) capacity() int {
-	return (tabstop_prealloc_count + self.dynamic_stops.len) * tabstop_unit_bits
+pub fn (self Tabstops) capacity() usize {
+	return usize(tabstop_prealloc_count + self.dynamic_stops.len) * tabstop_unit_bits
 }
 
 // reset unsets all tabstops and then sets tabstops at the given interval.
 // An interval of 0 sets no tabstops.
-pub fn (mut self Tabstops) reset(interval int) {
+pub fn (mut self Tabstops) reset(interval usize) {
 	// Clear preallocated stops
 	for i in 0 .. tabstop_prealloc_count {
 		self.prealloc_stops[i] = 0
@@ -165,7 +168,7 @@ pub fn (mut self Tabstops) reset(interval int) {
 	if interval > 0 {
 		mut i := interval
 		for i < self.cols - 1 {
-			self.set(u32(i))
+			self.set(i)
 			i += interval
 		}
 	}

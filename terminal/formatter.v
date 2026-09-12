@@ -997,7 +997,7 @@ pub fn (self TerminalFormatter) format() string {
 			sb.write_string('\x1b[3g')
 			// Set each configured tabstop by moving cursor and using HTS
 			for col in 0 .. int(self.terminal.cols) {
-				if self.terminal.tabstops.get(u32(col)) {
+				if self.terminal.tabstops.get(usize(col)) {
 					// Move cursor to the column (1-indexed)
 					sb.write_string('\x1b[${col + 1}G')
 					// Set tab (HTS)

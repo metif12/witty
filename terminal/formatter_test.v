@@ -2285,6 +2285,6 @@ fn test_terminal_vt_with_tabstops() {
 
 	// Verify tabstops match (columns are 0-indexed in the API)
 	for c in 0 .. int(t.cols) {
-		assert t.tabstops.get(u32(c)) == t2.tabstops.get(u32(c))
+		assert t.tabstops.get(usize(c)) == t2.tabstops.get(usize(c))
 	}
 }

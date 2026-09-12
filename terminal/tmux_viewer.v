@@ -505,7 +505,7 @@ fn (mut self TmuxViewer) received_pane_state(content string) ! {
 		for tab in tabs.split(',') {
 			col := tmux.parse_usize(tab) or { continue }
 			if col < usize(terminal_.cols) {
-				terminal_.tabstops.set(u32(col))
+				terminal_.tabstops.set(usize(col))
 			}
 		}
 	}

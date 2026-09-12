@@ -1906,7 +1906,7 @@ pub fn Terminal.init(opts Options) !Terminal {
 		cols: cols
 		rows: rows
 		screens: screen_set
-		tabstops: Tabstops.init(int(cols), terminal.tabstop_interval)!
+		tabstops: Tabstops.init(usize(cols), terminal.tabstop_interval)!
 		scrolling_region: ScrollingRegion{
 			top: 0
 			bottom: rows - 1
@@ -2835,7 +2835,7 @@ pub fn (mut self Terminal) horizontal_tab() {
 		self.screens.active.cursor_right(1)
 
 		// If the last cursor position was a tabstop we return.
-		if self.tabstops.get(self.screens.active.cursor.x) {
+		if self.tabstops.get(usize(self.screens.active.cursor.x)) {
 			return
 		}
 	}
@@ -2858,7 +2858,7 @@ pub fn (mut self Terminal) horizontal_tab_back() {
 
 		// Move the cursor left
 		self.screens.active.cursor_left(1)
-		if self.tabstops.get(self.screens.active.cursor.x) {
+		if self.tabstops.get(usize(self.screens.active.cursor.x)) {
 			return
 		}
 	}
@@ -2867,14 +2867,14 @@ pub fn (mut self Terminal) horizontal_tab_back() {
 // Clear tab stops.
 pub fn (mut self Terminal) tab_clear(cmd TabClear) {
 	match cmd {
-		.current { self.tabstops.unset(self.screens.active.cursor.x) }
+		.current { self.tabstops.unset(usize(self.screens.active.cursor.x)) }
 		.all { self.tabstops.reset(0) }
 	}
 }
 
 // Set a tab stop on the current cursor.
 pub fn (mut self Terminal) tab_set() {
-	self.tabstops.set(self.screens.active.cursor.x)
+	self.tabstops.set(usize(self.screens.active.cursor.x))
 }
 
 // Reset tab stops to default interval.
@@ -3964,7 +3964,7 @@ pub fn (mut self Terminal) resize(cols u16, rows u16) ! {
 	// Resize our tabstops
 	if self.cols != cols {
 		self.tabstops.deinit()
-		self.tabstops = Tabstops.init(int(cols), 8)!
+		self.tabstops = Tabstops.init(usize(cols), 8)!
 	}
 
 	// Whether the active screen will reflow on this resize.

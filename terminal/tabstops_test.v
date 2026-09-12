@@ -41,19 +41,25 @@ fn test_tabstops_dynamic_allocations() {
 
 	// Grow the capacity by 2.
 	cap := t.capacity()
-	t.resize(cap * 2) or { assert false; return }
+	t.resize(cap * 2) or {
+		assert false
+		return
+	}
 
 	// Set something that was out of range of the first
-	t.set(u32(cap + 5))
-	assert t.get(u32(cap + 5))
-	assert !t.get(u32(cap + 4))
+	t.set(cap + 5)
+	assert t.get(cap + 5)
+	assert !t.get(cap + 4)
 
 	// Prealloc still works
-	assert !t.get(u32(5))
+	assert !t.get(5)
 }
 
 fn test_tabstops_interval() {
-	t := Tabstops.init(80, 4) or { assert false; return }
+	t := Tabstops.init(80, 4) or {
+		assert false
+		return
+	}
 	assert !t.get(0)
 	assert t.get(4)
 	assert !t.get(5)
@@ -63,7 +69,10 @@ fn test_tabstops_interval() {
 fn test_tabstops_count_on_80() {
 	// https://superuser.com/questions/710019/why-there-are-11-tabstops-on-a-80-column-console
 
-	t := Tabstops.init(80, 8) or { assert false; return }
+	t := Tabstops.init(80, 8) or {
+		assert false
+		return
+	}
 
 	// Count the tabstops
 	mut count := 0
