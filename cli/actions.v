@@ -325,7 +325,7 @@ pub fn show_face(args []string) !ShowFaceResult {
 	mut config := configpkg.Config.load_args(opts.config_args)!
 	mut errors := []string{}
 	for diagnostic in config.diagnostics {
-		errors << 'config error: ${diagnostic}'
+		errors << 'config error: ${diagnostic.format()}'
 	}
 
 	mut grid_set := font.SharedGridSet.init() or {

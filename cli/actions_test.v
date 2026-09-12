@@ -200,3 +200,10 @@ fn test_show_face_resolves_embedded_face_and_sprites() {
 	assert sprite.code == 0
 	assert sprite.output.contains("handled by Ghostty's internal sprites")
 }
+
+fn test_show_face_formats_config_diagnostics() {
+	result := show_face(['--cp=65', '--config-default-files=false', '--font-size=wat'])!
+	assert result.errors.contains('config error: cli:')
+	assert result.errors.contains('font-size:')
+	assert !result.errors.contains('Diagnostic{')
+}
