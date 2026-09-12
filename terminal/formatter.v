@@ -987,9 +987,10 @@ pub fn (self TerminalFormatter) format() string {
 			if current == entry.default_val {
 				continue
 			}
-			prefix := if entry.ansi { '' } else { '?' }
+			tag := entry.mode.tag()
+			prefix := if tag.ansi() { '' } else { '?' }
 			suffix := if current { 'h' } else { 'l' }
-			sb.write_string('\x1b[${prefix}${entry.value}${suffix}')
+			sb.write_string('\x1b[${prefix}${tag.value()}${suffix}')
 		}
 		append_pin_bytes(self.pin_map, Pin{}, sb.len - before)
 	}

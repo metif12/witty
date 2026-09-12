@@ -147,6 +147,14 @@ fn test_mode_uses_packed_protocol_tags() {
 	assert u16(Mode.insert) == (u16(1) << 15) | 4
 	assert u16(Mode.send_receive_mode) == (u16(1) << 15) | 12
 	assert u16(Mode.grapheme_cluster) == 2027
+	assert sizeof(ModeTag) == 2
+	dec := Mode.cursor_keys.tag()
+	assert dec.value() == 1
+	assert !dec.ansi()
+	ansi := Mode.insert.tag()
+	assert ansi.value() == 4
+	assert ansi.ansi()
+	assert ansi.int() == (u16(1) << 15) | 4
 }
 
 // ============================================================

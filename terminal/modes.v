@@ -65,6 +65,42 @@ pub enum Mode as u16 {
 	in_band_size_reports               = 2048
 }
 
+// The packed protocol tag underlying Mode. Bits 0-14 retain the numeric mode
+// value and bit 15 distinguishes ANSI modes from DEC private modes.
+pub struct ModeTag {
+mut:
+	data u16
+}
+
+pub fn ModeTag.init(value u16, ansi bool) ModeTag {
+	assert value <= 0x7fff
+	return ModeTag{
+		data: value | (u16(ansi) << 15)
+	}
+}
+
+pub fn ModeTag.from_u16(value u16) ModeTag {
+	return ModeTag{
+		data: value
+	}
+}
+
+pub fn (self ModeTag) value() u16 {
+	return self.data & 0x7fff
+}
+
+pub fn (self ModeTag) ansi() bool {
+	return self.data & 0x8000 != 0
+}
+
+pub fn (self ModeTag) int() u16 {
+	return self.data
+}
+
+pub fn (self Mode) tag() ModeTag {
+	return ModeTag.from_u16(u16(self))
+}
+
 // ============================================================
 // ModeEntry - a single entry in the mode table
 // ============================================================

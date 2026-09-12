@@ -13,31 +13,42 @@ pub enum DeviceStatusRequest as u16 {
 	color_scheme     = 33764 // value=996, question=true
 }
 
-// The tag type for our enum is a u16 but we use a struct
+// The tag type for our enum is a u16 but we use a packed value
 // in order to pack the question bit into the tag. The "u16" size is
 // chosen somewhat arbitrarily to match the largest expected size
 // we see as a multiple of 8 bits.
 //
 // Layout: bits 0-14 are the value (u15), bit 15 is the question flag.
 pub struct DeviceStatusTag {
-pub:
-	value    u16
-	question bool
+mut:
+	data u16
+}
+
+pub fn DeviceStatusTag.init(value u16, question bool) DeviceStatusTag {
+	assert value <= 0x7fff
+	return DeviceStatusTag{
+		data: value | (u16(question) << 15)
+	}
+}
+
+pub fn (self DeviceStatusTag) value() u16 {
+	return self.data & 0x7fff
+}
+
+pub fn (self DeviceStatusTag) question() bool {
+	return self.data & 0x8000 != 0
 }
 
 // Pack a DeviceStatusTag into a u16.
 // Bit 15 = question, bits 0-14 = value.
-pub fn (self &DeviceStatusTag) to_u16() u16 {
-	assert self.value <= 0x7fff
-	q := if self.question { u16(1) << 15 } else { u16(0) }
-	return self.value | q
+pub fn (self DeviceStatusTag) to_u16() u16 {
+	return self.data
 }
 
 // Unpack a u16 into a DeviceStatusTag.
 pub fn DeviceStatusTag.from_u16(v u16) DeviceStatusTag {
 	return DeviceStatusTag{
-		value: v & 0x7FFF
-		question: (v >> 15) & 1 == 1
+		data: v
 	}
 }
 
