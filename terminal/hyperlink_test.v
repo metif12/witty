@@ -1,5 +1,9 @@
 module terminal
 
+fn test_hyperlink_id_uses_source_width() {
+	assert sizeof(HyperlinkId) == 2
+}
+
 fn implicit_link(offset u32, uri string) Hyperlink {
 	return Hyperlink{
 		id: HyperlinkImplicitId{ offset: offset }

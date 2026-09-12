@@ -244,7 +244,7 @@ pub fn (self &HyperlinkSet) clone() HyperlinkSet {
 
 // add allocates the page-owned strings and adds the semantic hyperlink to the
 // bounded ref-counted set. The returned ID owns one reference.
-pub fn (mut self HyperlinkSet) add(link Hyperlink) !u32 {
+pub fn (mut self HyperlinkSet) add(link Hyperlink) !HyperlinkId {
 	mut entry := self.allocate_entry(link)!
 	for self.next_id > 1 && self.entries[int(self.next_id) - 1].ref_count == 0 {
 		self.next_id--
@@ -276,18 +276,18 @@ pub fn (mut self HyperlinkSet) add(link Hyperlink) !u32 {
 	if id == self.next_id {
 		self.next_id++
 	}
-	return u32(id)
+	return HyperlinkId(id)
 }
 
 // add_with_id adds a hyperlink while preferring the source page's ID. This is
 // used when cloning/reflowing pages so the common case keeps stable IDs. If
 // the requested slot is occupied by a different live link, normal allocation
 // and deduplication determine the returned ID.
-pub fn (mut self HyperlinkSet) add_with_id(link Hyperlink, preferred_id u32) !u32 {
+pub fn (mut self HyperlinkSet) add_with_id(link Hyperlink, preferred_id HyperlinkId) !HyperlinkId {
 	assert preferred_id > 0
 	mut entry := self.allocate_entry(link)!
 
-	if preferred_id < u32(self.next_id) {
+	if u16(preferred_id) < self.next_id {
 		if self.entries[int(preferred_id)].ref_count == 0 {
 			if self.psl_stats[31] > 0 {
 				self.free_entry_strings(mut entry)
@@ -297,7 +297,7 @@ pub fn (mut self HyperlinkSet) add_with_id(link Hyperlink, preferred_id u32) !u3
 			added_id := self.upsert(entry, u16(preferred_id))
 			self.entries[int(added_id)].ref_count++
 			self.living++
-			return u32(added_id)
+			return HyperlinkId(added_id)
 		}
 		if self.entries[int(preferred_id)].link.eql(&entry.link) {
 			self.free_entry_strings(mut entry)
@@ -310,7 +310,7 @@ pub fn (mut self HyperlinkSet) add_with_id(link Hyperlink, preferred_id u32) !u3
 	return self.add(link)
 }
 
-pub fn (self &HyperlinkSet) lookup(link &Hyperlink) ?u32 {
+pub fn (self &HyperlinkSet) lookup(link &Hyperlink) ?HyperlinkId {
 	if self.layout.table_cap == 0 {
 		return none
 	}
@@ -326,19 +326,19 @@ pub fn (self &HyperlinkSet) lookup(link &Hyperlink) ?u32 {
 			return none
 		}
 		if entry.psl == u16(i) && entry.ref_count > 0 && entry.link.eql(link) {
-			return u32(id)
+			return HyperlinkId(id)
 		}
 	}
 	return none
 }
 
-pub fn (mut self HyperlinkSet) use_link(id u32) {
+pub fn (mut self HyperlinkSet) use_link(id HyperlinkId) {
 	assert id > 0 && int(id) < self.entries.len
 	assert self.entries[int(id)].ref_count > 0
 	self.entries[int(id)].ref_count++
 }
 
-pub fn (mut self HyperlinkSet) release(id u32) {
+pub fn (mut self HyperlinkSet) release(id HyperlinkId) {
 	assert id > 0 && int(id) < self.entries.len
 	mut entry := &self.entries[int(id)]
 	assert entry.ref_count > 0
@@ -348,13 +348,13 @@ pub fn (mut self HyperlinkSet) release(id u32) {
 	}
 }
 
-pub fn (self &HyperlinkSet) get(id u32) Hyperlink {
+pub fn (self &HyperlinkSet) get(id HyperlinkId) Hyperlink {
 	assert id > 0 && int(id) < self.entries.len
 	assert self.entries[int(id)].ref_count > 0
 	return self.entries[int(id)].link
 }
 
-pub fn (self &HyperlinkSet) ref_count(id u32) int {
+pub fn (self &HyperlinkSet) ref_count(id HyperlinkId) int {
 	assert id > 0
 	assert int(id) < self.entries.len
 	return self.entries[int(id)].ref_count

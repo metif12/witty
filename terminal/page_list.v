@@ -5511,7 +5511,7 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 		}
 
 		mut hyperlink_valid := true
-		mut dst_id := u32(0)
+		mut dst_id := HyperlinkId(0)
 		if initial_id := page.hyperlink_set.add_with_id(src_link, src_id) {
 			dst_id = initial_id
 		} else {

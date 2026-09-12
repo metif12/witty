@@ -1639,7 +1639,7 @@ pub fn (self &Page) exact_row_capacity(y_start usize, y_end usize) PageCapacity 
 
 	// Second pass: size both the hyperlink set and its cell-to-ID map, and
 	// count the page-owned URI/explicit-ID string allocations once per link.
-	mut hyperlink_ids := map[u32]bool{}
+	mut hyperlink_ids := map[HyperlinkId]bool{}
 	mut hyperlink_cells := 0
 	mut string_bytes := usize(0)
 	for y in y_start .. y_end {
@@ -2158,7 +2158,7 @@ fn (self &Page) key_for_cell(cell &CellData) ?u64 {
 }
 
 // Returns the hyperlink ID for the given page-owned cell.
-pub fn (self &Page) lookup_hyperlink_cell(cell &CellData) ?u32 {
+pub fn (self &Page) lookup_hyperlink_cell(cell &CellData) ?HyperlinkId {
 	key := self.key_for_cell(cell) or { return none }
 	if key in self.hyperlink_map {
 		return self.hyperlink_map[key]
@@ -2167,7 +2167,7 @@ pub fn (self &Page) lookup_hyperlink_cell(cell &CellData) ?u32 {
 }
 
 // Index-addressed helper for code that already has a page row and column.
-pub fn (self &Page) lookup_hyperlink(row_idx int, col_idx int) ?u32 {
+pub fn (self &Page) lookup_hyperlink(row_idx int, col_idx int) ?HyperlinkId {
 	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
 	if key in self.hyperlink_map {
 		return self.hyperlink_map[key]
@@ -2196,7 +2196,7 @@ pub fn (mut self Page) clear_hyperlink(row_idx int, col_idx int) {
 // To release the memory associated with the given hyperlink,
 // release the ID from the hyperlink_set. If the refcount reaches
 // zero the slot is freed.
-pub fn (mut self Page) insert_hyperlink(link Hyperlink) !u32 {
+pub fn (mut self Page) insert_hyperlink(link Hyperlink) !HyperlinkId {
 	return self.hyperlink_set.add(link)
 }
 
@@ -2209,7 +2209,7 @@ pub fn (mut self Page) insert_hyperlink(link Hyperlink) !u32 {
 // Caller is responsible for updating the refcount in the hyperlink
 // set as necessary by calling use_link if the id was not acquired with
 // add.
-pub fn (mut self Page) set_hyperlink(row_idx int, col_idx int, id u32) ! {
+pub fn (mut self Page) set_hyperlink(row_idx int, col_idx int, id HyperlinkId) ! {
 	defer { self.assert_integrity() }
 	assert row_idx >= 0 && row_idx < int(self.size.rows)
 	assert col_idx >= 0 && col_idx < int(self.size.cols)
