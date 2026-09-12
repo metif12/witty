@@ -722,9 +722,9 @@ pub mut:
 	cells_bg                 GLBuffer
 	bg_image_buffer          GLBuffer
 	grayscale                GLTexture
-	grayscale_modified       u64
+	grayscale_modified       usize
 	color                    GLTexture
-	color_modified           u64
+	color_modified           usize
 	target                   GLTarget
 	target_config_modified   u64
 	bg_image_buffer_modified u64

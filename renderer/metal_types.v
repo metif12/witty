@@ -795,9 +795,9 @@ pub mut:
 	cells_bg                 MetalBuffer
 	bg_image_buffer          MetalBuffer
 	grayscale                MetalTexture
-	grayscale_modified       u64
+	grayscale_modified       usize
 	color                    MetalTexture
-	color_modified           u64
+	color_modified           usize
 	target                   MetalTarget
 	target_config_modified   u64
 	bg_image_buffer_modified u64

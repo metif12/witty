@@ -399,6 +399,7 @@ import fastmem
 import harfbuzz
 import io
 import math
+import sync.stdatomic
 import terminal
 import tripwire
 
@@ -873,9 +874,9 @@ mut:
 pub struct Atlas {
 pub mut:
 	// Modification counter, incremented on each atlas update.
-	modified u64
+	modified stdatomic.AtomicVal[usize]
 	// Resize counter, incremented on each atlas resize.
-	resized u64
+	resized stdatomic.AtomicVal[usize]
 	// The size of the atlas texture (width and height are equal).
 	size u32
 	// The pixel format of this atlas.
@@ -1093,7 +1094,7 @@ pub fn (mut a Atlas) set(reg AtlasRegion, data []u8) {
 		fastmem.copy(mut dest, data[int(data_offset)..int(data_offset + row)])
 	}
 
-	a.modified += 1
+	_ = a.modified.add(1)
 }
 
 // set_from_larger is like set but allows specifying a width for the source
@@ -1114,7 +1115,7 @@ pub fn (mut a Atlas) set_from_larger(reg AtlasRegion, src []u8, src_width u32, s
 		fastmem.copy(mut dest, src[int(src_offset)..int(src_offset + row)])
 	}
 
-	a.modified += 1
+	_ = a.modified.add(1)
 }
 
 // grow grows the texture to the new size, preserving all previously written data.
@@ -1158,13 +1159,13 @@ pub fn (mut a Atlas) grow(size_new u32) ! {
 	}
 
 	// We are both modified and resized.
-	a.modified += 1
-	a.resized += 1
+	_ = a.modified.add(1)
+	_ = a.resized.add(1)
 }
 
 // clear empties the atlas. This doesn't reclaim any previously allocated memory.
 pub fn (mut a Atlas) clear() {
-	a.modified += 1
+	_ = a.modified.add(1)
 	for i in 0 .. a.data.len {
 		a.data[i] = 0
 	}

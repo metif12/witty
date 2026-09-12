@@ -9,6 +9,9 @@ fn test_atlas_format_contract() {
 	assert AtlasFormat.grayscale.depth() == 1
 	assert AtlasFormat.bgr.depth() == 3
 	assert AtlasFormat.bgra.depth() == 4
+	mut atlas := Atlas.init(4, .grayscale)!
+	assert typeof(atlas.modified.load()).name == 'usize'
+	assert typeof(atlas.resized.load()).name == 'usize'
 }
 
 fn test_atlas_init_tripwires() {
@@ -90,9 +93,9 @@ fn (mut writer AtlasChunkWriter) write(data []u8) !int {
 
 fn test_atlas_exact_fit() {
 	mut atlas := Atlas.init(34, .grayscale)! // +2 for 1px border
-	modified := atlas.modified
+	modified := atlas.modified.load()
 	atlas.reserve(32, 32)!
-	assert atlas.modified == modified
+	assert atlas.modified.load() == modified
 	if _ := atlas.reserve(1, 1) {
 		assert false, 'expected AtlasFull'
 	}
@@ -118,9 +121,9 @@ fn test_atlas_fit_multiple() {
 fn test_atlas_writing_data() {
 	mut atlas := Atlas.init(32, .grayscale)!
 	reg := atlas.reserve(2, 2)!
-	old := atlas.modified
+	old := atlas.modified.load()
 	atlas.set(reg, [u8(1), 2, 3, 4])
-	new := atlas.modified
+	new := atlas.modified.load()
 	assert new > old
 
 	// 33 because of the 1px border and so on
@@ -133,7 +136,7 @@ fn test_atlas_writing_data() {
 fn test_atlas_writing_data_from_larger_source() {
 	mut atlas := Atlas.init(32, .grayscale)!
 	reg := atlas.reserve(2, 2)!
-	old := atlas.modified
+	old := atlas.modified.load()
 	atlas.set_from_larger(reg, [
 		u8(8),
 		8,
@@ -156,7 +159,7 @@ fn test_atlas_writing_data_from_larger_source() {
 		8,
 		8,
 	], 5, 2, 1)
-	new := atlas.modified
+	new := atlas.modified.load()
 	assert new > old
 
 	// 33 because of the 1px border and so on
@@ -260,11 +263,11 @@ fn test_atlas_grow() {
 	assert atlas.data[10] == 4
 
 	// Expand by exactly 1 should fit our new 1x1 block.
-	old_modified := atlas.modified
-	old_resized := atlas.resized
+	old_modified := atlas.modified.load()
+	old_resized := atlas.resized.load()
 	atlas.grow(atlas.size + 1)!
-	assert atlas.modified > old_modified
-	assert atlas.resized > old_resized
+	assert atlas.modified.load() > old_modified
+	assert atlas.resized.load() > old_resized
 	atlas.reserve(1, 1)!
 
 	// Ensure our data is still set. Note the offsets change due to size.
@@ -281,14 +284,14 @@ fn test_atlas_set_and_grow_preserves_pixels() {
 	first_idx := int(region.y * atlas.size + region.x)
 	assert atlas.data[first_idx] == 1
 	assert atlas.data[first_idx + 1] == 2
-	old_modified := atlas.modified
+	old_modified := atlas.modified.load()
 
 	atlas.grow(16)!
 	grown_idx := int(region.y * atlas.size + region.x)
 	assert atlas.data[grown_idx] == 1
 	assert atlas.data[grown_idx + 1] == 2
-	assert atlas.modified > old_modified
-	assert atlas.resized == 1
+	assert atlas.modified.load() > old_modified
+	assert atlas.resized.load() == 1
 }
 
 fn test_builtin_glyph_render_ignores_unsupported_codepoint() {

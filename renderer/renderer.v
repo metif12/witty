@@ -1636,13 +1636,15 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 		frame_state.bg_image_buffer_modified = self.bg_image_buffer_modified
 	}
 
-	if self.font_grid.atlas_grayscale.modified > frame_state.grayscale_modified {
+	grayscale_modified := self.font_grid.atlas_grayscale.modified.load()
+	if grayscale_modified > frame_state.grayscale_modified {
 		self.sync_atlas_texture(&self.font_grid.atlas_grayscale, mut frame_state.grayscale)!
-		frame_state.grayscale_modified = self.font_grid.atlas_grayscale.modified
+		frame_state.grayscale_modified = self.font_grid.atlas_grayscale.modified.load()
 	}
-	if self.font_grid.atlas_color.modified > frame_state.color_modified {
+	color_modified := self.font_grid.atlas_color.modified.load()
+	if color_modified > frame_state.color_modified {
 		self.sync_atlas_texture(&self.font_grid.atlas_color, mut frame_state.color)!
-		frame_state.color_modified = self.font_grid.atlas_color.modified
+		frame_state.color_modified = self.font_grid.atlas_color.modified.load()
 	}
 
 	mut frame := MetalFrame.begin(self.metal.queue)!
@@ -1846,13 +1848,15 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 		frame_state.bg_image_buffer_modified = self.bg_image_buffer_modified
 	}
 
-	if self.font_grid.atlas_grayscale.modified > frame_state.grayscale_modified {
+	grayscale_modified := self.font_grid.atlas_grayscale.modified.load()
+	if grayscale_modified > frame_state.grayscale_modified {
 		self.sync_gl_atlas_texture(&self.font_grid.atlas_grayscale, mut frame_state.grayscale)!
-		frame_state.grayscale_modified = self.font_grid.atlas_grayscale.modified
+		frame_state.grayscale_modified = self.font_grid.atlas_grayscale.modified.load()
 	}
-	if self.font_grid.atlas_color.modified > frame_state.color_modified {
+	color_modified := self.font_grid.atlas_color.modified.load()
+	if color_modified > frame_state.color_modified {
 		self.sync_gl_atlas_texture(&self.font_grid.atlas_color, mut frame_state.color)!
-		frame_state.color_modified = self.font_grid.atlas_color.modified
+		frame_state.color_modified = self.font_grid.atlas_color.modified.load()
 	}
 
 	mut frame := self.opengl.begin_frame(mut frame_state.target)!
