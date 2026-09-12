@@ -485,7 +485,7 @@ static void *witty_cf_array_get(void *arr, int i) {
 //
 // This mirrors ghostty's Score.score() using CoreText's trait/attribute APIs,
 // OpenType head/OS/2 flags, and active variation-axis values.
-static uint64_t witty_ct_score(
+static uint32_t witty_ct_score(
 	const char *desired_style, // may be NULL
 	size_t desired_style_len,
 	uint32_t codepoint,
@@ -493,13 +493,13 @@ static uint64_t witty_ct_score(
 	int want_italic,
 	void *candidate_desc
 ) {
-	uint64_t glyph_count = 0;
+	uint32_t glyph_count = 0;
 	uint8_t fuzzy_style = 0;
-	uint64_t bold_match = 0;
-	uint64_t italic_match = 0;
-	uint64_t exact_style = 0;
-	uint64_t monospace = 0;
-	uint64_t has_codepoint = 0;
+	uint32_t bold_match = 0;
+	uint32_t italic_match = 0;
+	uint32_t exact_style = 0;
+	uint32_t monospace = 0;
+	uint32_t has_codepoint = 0;
 
 	if (!candidate_desc) return 0;
 
@@ -513,7 +513,7 @@ static uint64_t witty_ct_score(
 		CFIndex gc = CTFontGetGlyphCount(font);
 		if (gc < 0) gc = 0;
 		if (gc > 0xFFFF) gc = 0xFFFF;
-		glyph_count = (uint64_t)gc;
+		glyph_count = (uint32_t)gc;
 	}
 
 	// Codepoint coverage.
@@ -662,8 +662,8 @@ static uint64_t witty_ct_score(
 
 	CFRelease(font);
 
-	uint64_t result = glyph_count & 0xFFFF;
-	result |= ((uint64_t)fuzzy_style) << 16;
+	uint32_t result = glyph_count & 0xFFFF;
+	result |= ((uint32_t)fuzzy_style) << 16;
 	result |= bold_match << 24;
 	result |= italic_match << 25;
 	result |= exact_style << 26;
@@ -1022,7 +1022,7 @@ static int witty_ct_descriptor_is_color(void *desc_ptr) {
 static int witty_cf_array_count(void *arr) { (void)arr; return 0; }
 static void *witty_cf_array_get(void *arr, int i) { (void)arr; (void)i; return NULL; }
 
-static uint64_t witty_ct_score(
+static uint32_t witty_ct_score(
 	const char *desired_style, size_t desired_style_len, uint32_t codepoint,
 	int want_bold, int want_italic, void *candidate_desc
 ) {

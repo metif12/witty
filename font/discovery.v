@@ -242,7 +242,7 @@ fn C.witty_cf_array_count(arr voidptr) int
 
 fn C.witty_cf_array_get(arr voidptr, i int) voidptr
 
-fn C.witty_ct_score(desired_style &char, desired_style_len usize, codepoint u32, want_bold int, want_italic int, candidate_desc voidptr) u64
+fn C.witty_ct_score(desired_style &char, desired_style_len usize, codepoint u32, want_bold int, want_italic int, candidate_desc voidptr) u32
 
 fn C.witty_ascii_eql_ignore_case(lhs &char, lhs_len usize, rhs &char, rhs_len usize) int
 
@@ -903,59 +903,54 @@ pub fn (mut it DiscoverIterator) next() ?DeferredFace {
 // The fields are defined in increasing order of precedence
 // (least significant to most significant in the packed integer).
 pub struct Score {
-pub mut:
-	// Number of glyphs in the font, if two fonts have identical
-	// scores otherwise then we prefer the one with more glyphs.
-	// (Number of glyphs clamped at u16 max)
-	glyph_count u16
-	// A fuzzy match on the style string, less important than
-	// an exact match, and less important than trait matches.
-	fuzzy_style u8
-	// Whether the bold-ness of the font matches the descriptor.
-	// This is less important than italic because a font that's italic
-	// when it shouldn't be or not italic when it should be is a bigger
-	// problem (subjectively) than being the wrong weight.
-	bold bool
-	// Whether the italic-ness of the font matches the descriptor.
-	// This is less important than an exact match on the style string
-	// because we want users to be allowed to override trait matching
-	// for the bold/italic/bold italic styles if they want.
-	italic bool
-	// An exact (case-insensitive) match on the style string.
-	exact_style bool
-	// Whether the font is monospace, this is more important than any of
-	// the other fields unless we're looking for a specific codepoint,
-	// in which case that is the most important thing.
-	monospace bool
-	// If we're looking for a codepoint, whether this font has it.
-	codepoint bool
+mut:
+	value u32
 }
 
-// to_int converts the score to an integer for comparison.
-// Higher scores are "better" (should sort earlier).
-// Fields are packed from least to most significant.
-pub fn (s Score) to_int() u64 {
-	mut result := u64(s.glyph_count)
-	result |= u64(s.fuzzy_style) << 16
-	result |= u64(if s.bold { 1 } else { 0 }) << 24
-	result |= u64(if s.italic { 1 } else { 0 }) << 25
-	result |= u64(if s.exact_style { 1 } else { 0 }) << 26
-	result |= u64(if s.monospace { 1 } else { 0 }) << 27
-	result |= u64(if s.codepoint { 1 } else { 0 }) << 28
-	return result
-}
-
-// from_int unpacks a packed integer score into a Score struct.
-pub fn Score.from_int(v u64) Score {
+pub fn Score.init(glyph_count u16, fuzzy_style u8, bold bool, italic bool, exact_style bool, monospace bool, codepoint bool) Score {
 	return Score{
-		glyph_count: u16(v & 0xFFFF)
-		fuzzy_style: u8((v >> 16) & 0xFF)
-		bold: (v >> 24) & 1 == 1
-		italic: (v >> 25) & 1 == 1
-		exact_style: (v >> 26) & 1 == 1
-		monospace: (v >> 27) & 1 == 1
-		codepoint: (v >> 28) & 1 == 1
+		value: u32(glyph_count) | (u32(fuzzy_style) << 16) | (u32(bold) << 24) | (u32(italic) << 25) | (u32(exact_style) << 26) | (u32(monospace) << 27) | (u32(codepoint) << 28)
 	}
+}
+
+pub fn Score.from_int(v u32) Score {
+	return Score{
+		value: v & 0x1fff_ffff
+	}
+}
+
+pub fn (self Score) glyph_count() u16 {
+	return u16(self.value)
+}
+
+pub fn (self Score) fuzzy_style() u8 {
+	return u8(self.value >> 16)
+}
+
+pub fn (self Score) bold() bool {
+	return self.value & (1 << 24) != 0
+}
+
+pub fn (self Score) italic() bool {
+	return self.value & (1 << 25) != 0
+}
+
+pub fn (self Score) exact_style() bool {
+	return self.value & (1 << 26) != 0
+}
+
+pub fn (self Score) monospace() bool {
+	return self.value & (1 << 27) != 0
+}
+
+pub fn (self Score) codepoint() bool {
+	return self.value & (1 << 28) != 0
+}
+
+// int returns the packed score used for numeric comparison. Higher scores
+// sort earlier.
+pub fn (self Score) int() u32 {
+	return self.value
 }
 
 // score computes the sorting Score for a candidate CoreText descriptor

@@ -122,29 +122,40 @@ fn test_coretext_sorting() {
 // test_score_comparison tests that Score comparison works correctly.
 fn test_score_comparison() {
 	// A score with codepoint should be higher than one without
-	s1 := Score{ codepoint: true }
-	s2 := Score{ monospace: true }
-	assert s1.to_int() > s2.to_int()
+	s1 := Score.init(0, 0, false, false, false, false, true)
+	s2 := Score.init(0, 0, false, false, false, true, false)
+	assert s1.int() > s2.int()
 
 	// Monospace is more important than exact_style
-	s3 := Score{ monospace: true }
-	s4 := Score{ exact_style: true }
-	assert s3.to_int() > s4.to_int()
+	s3 := Score.init(0, 0, false, false, false, true, false)
+	s4 := Score.init(0, 0, false, false, true, false, false)
+	assert s3.int() > s4.int()
 
 	// Exact style is more important than italic
-	s5 := Score{ exact_style: true }
-	s6 := Score{ italic: true }
-	assert s5.to_int() > s6.to_int()
+	s5 := Score.init(0, 0, false, false, true, false, false)
+	s6 := Score.init(0, 0, false, true, false, false, false)
+	assert s5.int() > s6.int()
 
 	// Italic is more important than bold
-	s7 := Score{ italic: true }
-	s8 := Score{ bold: true }
-	assert s7.to_int() > s8.to_int()
+	s7 := Score.init(0, 0, false, true, false, false, false)
+	s8 := Score.init(0, 0, true, false, false, false, false)
+	assert s7.int() > s8.int()
 
 	// Glyph count is least significant
-	s9 := Score{ glyph_count: 65535 }
-	s10 := Score{ bold: true }
-	assert s10.to_int() > s9.to_int()
+	s9 := Score.init(65535, 0, false, false, false, false, false)
+	s10 := Score.init(0, 0, true, false, false, false, false)
+	assert s10.int() > s9.int()
+
+	all := Score.init(0xabcd, 0xef, true, true, true, true, true)
+	assert sizeof(Score) == 4
+	assert all.int() == 0x1fef_abcd
+	assert all.glyph_count() == 0xabcd
+	assert all.fuzzy_style() == 0xef
+	assert all.bold()
+	assert all.italic()
+	assert all.exact_style()
+	assert all.monospace()
+	assert all.codepoint()
 }
 
 fn test_coretext_score_uses_zig_ascii_matching() {
