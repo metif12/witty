@@ -186,7 +186,7 @@ pub mut:
 	// memory usage. If the buffer exceeds this size, the client will
 	// enter a broken state (the control mode session will be forcibly
 	// exited and future data dropped).
-	max_bytes int = 1024 * 1024
+	max_bytes usize = 1024 * 1024
 }
 
 pub fn (mut self ControlParser) deinit() {
@@ -198,32 +198,36 @@ pub fn (mut self ControlParser) deinit() {
 	self.buffer = []
 }
 
+// ControlParserPutValue preserves Ghostty's !?Notification contract. V cannot
+// nest an Option in a Result, so notification represents the optional layer.
+pub struct ControlParserPutValue {
+pub:
+	notification ?Notification
+}
+
 // Handle a byte of input.
 //
 // If we reach our byte limit this will return an error. It only
 // does this on the first time we exceed the limit; subsequent calls
 // will return none as we drop all input in a broken state.
-pub fn (mut self ControlParser) put(byte u8) ?Notification {
+pub fn (mut self ControlParser) put(byte u8) !ControlParserPutValue {
 	// If we're in a broken state, just do nothing.
 	//
 	// We have to do this check here before we check the buffer, because if
 	// we're in a broken state then we'd have already deinited the buffer.
 	if self.state == .broken {
-		return none
+		return ControlParserPutValue{}
 	}
 
-	if self.buffer.len >= self.max_bytes {
+	if usize(self.buffer.len) >= self.max_bytes {
 		self.set_broken()
-		// V can't combine ! and ? return types, so we return an exit
-		// notification when we exceed the buffer limit. In the Zig version
-		// this returned an error('OutOfMemory').
-		return Notification(NotifExit{})
+		return error('tmux control parser exceeded max_bytes')
 	}
 
 	match self.state {
 		// Drop because we're in a broken state.
 		.broken {
-			return none
+			return ControlParserPutValue{}
 		}
 
 		// Waiting for a notification so if the byte is not '%' then
@@ -233,7 +237,9 @@ pub fn (mut self ControlParser) put(byte u8) ?Notification {
 		.idle {
 			if byte != `%` {
 				self.set_broken()
-				return Notification(NotifExit{})
+				return ControlParserPutValue{
+					notification: Notification(NotifExit{})
+				}
 			} else {
 				self.buffer = []
 				self.state = .notification
@@ -246,14 +252,17 @@ pub fn (mut self ControlParser) put(byte u8) ?Notification {
 		.notification {
 			if byte == `\n` {
 				// We have a complete notification, parse it.
-				return self.parse_notification() or {
+				notification := self.parse_notification() or {
 					// If parsing failed, then we do not mark the state
 					// as broken because we may be able to continue parsing
 					// other types of notifications.
 					//
 					// In the future we may want to emit a notification
 					// here about unknown or unsupported notifications.
-					return none
+					return ControlParserPutValue{}
+				}
+				return ControlParserPutValue{
+					notification: notification
 				}
 			}
 		}
@@ -284,9 +293,13 @@ pub fn (mut self ControlParser) put(byte u8) ?Notification {
 					// contains it.
 					self.state = .idle
 					if is_err {
-						return Notification(NotifBlockErr{ data: output })
+						return ControlParserPutValue{
+							notification: Notification(NotifBlockErr{ data: output })
+						}
 					} else {
-						return Notification(NotifBlockEnd{ data: output })
+						return ControlParserPutValue{
+							notification: Notification(NotifBlockEnd{ data: output })
+						}
 					}
 				}
 
@@ -296,7 +309,7 @@ pub fn (mut self ControlParser) put(byte u8) ?Notification {
 	}
 
 	self.buffer << byte
-	return none
+	return ControlParserPutValue{}
 }
 
 fn (mut self ControlParser) parse_notification() ?Notification {

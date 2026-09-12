@@ -46,7 +46,7 @@ pub mut:
 pub struct DcsStateDecrqss {
 pub mut:
 	data [2]u8
-	len  int
+	len  u8
 }
 
 // DcsStateTmux holds the tmux control mode parser state.
@@ -84,7 +84,7 @@ fn dcs_state_deinit(mut state DcsState) {
 pub struct DcsXtgettcap {
 pub mut:
 	data []u8
-	i    int
+	i    usize
 }
 
 // next returns the next terminfo key being requested, or none when
@@ -107,7 +107,7 @@ pub fn (mut self DcsXtgettcap) next() ?string {
 	// Note that if we're at the end, idx + 1 is len + 1 so we're over
 	// the end but that's okay because our check above is >= so we'll
 	// never read.
-	self.i += idx + 1
+	self.i += usize(idx + 1)
 
 	return rem[0..idx].bytestr()
 }
@@ -162,13 +162,13 @@ pub fn (mut self DcsCommand) deinit() {
 // DcsHandler is the DCS command handler. It processes DCS sequences
 // through hook/put/unhook calls.
 pub struct DcsHandler {
-pub mut:
+mut:
 	state DcsState = DcsStateInactive{}
 
 	// Maximum bytes any DCS command can take. This is to prevent
 	// malicious input from causing us to allocate too much memory.
 	// This is arbitrarily set to 1MB today, increase if needed.
-	max_bytes int = 1024 * 1024
+	max_bytes usize = 1024 * 1024
 
 	// Pending tmux notification produced by the last put() call.
 	// This is needed because try_put returns `!` (not `?DcsCommand`)
@@ -186,6 +186,8 @@ pub fn (mut self DcsHandler) deinit() {
 // be immediately executed (e.g. tmux enter), or none if the command
 // requires more data via put().
 pub fn (mut self DcsHandler) hook(dcs DcsParams) ?DcsCommand {
+	assert self.state is DcsStateInactive
+
 	// Initialize our state to ignore in case of error
 	self.state = DcsStateIgnore{}
 
@@ -317,14 +319,15 @@ fn (mut self DcsHandler) try_put(byte u8) ! {
 			// Feed the byte to the tmux control parser. If it
 			// produces a notification, store it for the caller to
 			// retrieve via the tmux_pending field.
-			if notif := self.state.parser.put(byte) {
+			result := self.state.parser.put(byte)!
+			if notif := result.notification {
 				self.tmux_pending = DcsCommand(DcsCommandTmux{
 					notification: notif
 				})
 			}
 		}
 		DcsStateXtgettcap {
-			if self.state.data.len >= self.max_bytes {
+			if usize(self.state.data.len) >= self.max_bytes {
 				return error('DCS xtgettcap buffer exceeded max_bytes')
 			}
 			self.state.data << byte

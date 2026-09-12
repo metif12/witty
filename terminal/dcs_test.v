@@ -21,7 +21,10 @@ fn test_dcs_xtgettcap_command() {
 	for byte in '536D756C78'.bytes() {
 		_ = h.put(byte)
 	}
-	mut cmd := h.unhook() or { assert false; return }
+	mut cmd := h.unhook() or {
+		assert false
+		return
+	}
 	defer { cmd.deinit() }
 	match mut cmd {
 		DcsCommandXtgettcap {
@@ -45,7 +48,10 @@ fn test_dcs_xtgettcap_mixed_case() {
 	for byte in '536d756C78'.bytes() {
 		_ = h.put(byte)
 	}
-	mut cmd := h.unhook() or { assert false; return }
+	mut cmd := h.unhook() or {
+		assert false
+		return
+	}
 	defer { cmd.deinit() }
 	match mut cmd {
 		DcsCommandXtgettcap {
@@ -70,7 +76,10 @@ fn test_dcs_xtgettcap_multiple_keys() {
 	for byte in '536D756C78;536D756C78'.bytes() {
 		_ = h.put(byte)
 	}
-	mut cmd := h.unhook() or { assert false; return }
+	mut cmd := h.unhook() or {
+		assert false
+		return
+	}
 	defer { cmd.deinit() }
 	match mut cmd {
 		DcsCommandXtgettcap {
@@ -99,7 +108,10 @@ fn test_dcs_xtgettcap_invalid_data() {
 	for byte in 'who;536D756C78'.bytes() {
 		_ = h.put(byte)
 	}
-	mut cmd := h.unhook() or { assert false; return }
+	mut cmd := h.unhook() or {
+		assert false
+		return
+	}
 	defer { cmd.deinit() }
 	match mut cmd {
 		DcsCommandXtgettcap {
@@ -127,7 +139,10 @@ fn test_dcs_decrqss_command() {
 	defer { h.deinit() }
 	assert h.hook(DcsParams{ intermediates: '$', final_byte: `q` }) == none
 	_ = h.put(`m`)
-	mut cmd := h.unhook() or { assert false; return }
+	mut cmd := h.unhook() or {
+		assert false
+		return
+	}
 	defer { cmd.deinit() }
 	match mut cmd {
 		DcsCommandDecrqss {
@@ -144,7 +159,10 @@ fn test_dcs_decrqss_invalid_command() {
 	defer { h.deinit() }
 	assert h.hook(DcsParams{ intermediates: '$', final_byte: `q` }) == none
 	_ = h.put(`z`)
-	mut cmd := h.unhook() or { assert false; return }
+	mut cmd := h.unhook() or {
+		assert false
+		return
+	}
 	defer { cmd.deinit() }
 	match mut cmd {
 		DcsCommandDecrqss {
@@ -171,7 +189,7 @@ fn test_dcs_tmux_enter_and_implicit_exit() {
 
 	// Hook with tmux params (1000, 'p')
 	cmd1 := h.hook(DcsParams{
-		params:     [u16(1000)]
+		params: [u16(1000)]
 		final_byte: `p`
 	}) or {
 		assert false
@@ -187,7 +205,10 @@ fn test_dcs_tmux_enter_and_implicit_exit() {
 	}
 
 	// Unhook should return tmux exit
-	cmd2 := h.unhook() or { assert false; return }
+	cmd2 := h.unhook() or {
+		assert false
+		return
+	}
 	match cmd2 {
 		DcsCommandTmux {
 			assert cmd2.notification is tmux.NotifExit
@@ -196,4 +217,25 @@ fn test_dcs_tmux_enter_and_implicit_exit() {
 			assert false
 		}
 	}
+}
+
+fn test_dcs_tmux_buffer_limit_discards_without_exit_command() {
+	mut h := DcsHandler{
+		max_bytes: 1
+	}
+	defer { h.deinit() }
+
+	enter := h.hook(DcsParams{
+		params: [u16(1000)]
+		final_byte: `p`
+	}) or {
+		assert false
+		return
+	}
+	assert enter is DcsCommandTmux
+
+	assert h.put(`%`) == none
+	assert h.put(`x`) == none
+	assert h.state is DcsStateIgnore
+	assert h.unhook() == none
 }

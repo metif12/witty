@@ -8,7 +8,8 @@ module tmux
 // notification encountered (or none if no notification was produced).
 fn feed_string(mut c ControlParser, s string) ?Notification {
 	for byte in s.bytes() {
-		if n := c.put(byte) {
+		result := c.put(byte) or { panic(err) }
+		if n := result.notification {
 			return n
 		}
 	}
@@ -18,10 +19,16 @@ fn feed_string(mut c ControlParser, s string) ?Notification {
 // Feed a string and assert no notification is produced.
 fn feed_string_none(mut c ControlParser, s string) {
 	for byte in s.bytes() {
-		if _ := c.put(byte) {
+		result := c.put(byte) or { panic(err) }
+		if _ := result.notification {
 			assert false, 'unexpected notification during feed'
 		}
 	}
+}
+
+fn put_byte(mut c ControlParser, byte u8) ?Notification {
+	result := c.put(byte) or { panic(err) }
+	return result.notification
 }
 
 fn test_tmux_begin_end_empty() {
@@ -37,7 +44,7 @@ fn test_tmux_begin_end_empty() {
 	feed_string_none(mut c, '%end 1578922740 269 1')
 
 	// The final newline should trigger the notification.
-	if n := c.put(`\n`) {
+	if n := put_byte(mut c, `\n`) {
 		if n is NotifBlockEnd {
 			assert n.data == ''
 		} else {
@@ -57,7 +64,7 @@ fn test_tmux_begin_error_empty() {
 	}
 	feed_string_none(mut c, '%error 1578922740 269 1')
 
-	if n := c.put(`\n`) {
+	if n := put_byte(mut c, `\n`) {
 		if n is NotifBlockErr {
 			assert n.data == ''
 		} else {
@@ -80,7 +87,7 @@ fn test_tmux_begin_end_data() {
 	}
 	feed_string_none(mut c, '%end 1578922740 269 1')
 
-	if n := c.put(`\n`) {
+	if n := put_byte(mut c, `\n`) {
 		if n is NotifBlockEnd {
 			assert n.data == 'hello\nworld'
 		} else {
@@ -97,7 +104,7 @@ fn test_tmux_output() {
 
 	feed_string_none(mut c, '%output %42 foo bar baz')
 
-	if n := c.put(`\n`) {
+	if n := put_byte(mut c, `\n`) {
 		if n is NotifOutput {
 			assert n.pane_id == 42
 			assert n.data == 'foo bar baz'
@@ -114,7 +121,7 @@ fn test_tmux_output_pane_id_above_i32() {
 	defer { c.deinit() }
 
 	feed_string_none(mut c, '%output %4294967295 data')
-	if n := c.put(`\n`) {
+	if n := put_byte(mut c, `\n`) {
 		if n is NotifOutput {
 			assert n.pane_id == usize(4294967295)
 			assert n.data == 'data'
@@ -130,7 +137,7 @@ fn test_tmux_session_changed() {
 
 	feed_string_none(mut c, '%session-changed \$42 foo')
 
-	if n := c.put(`\n`) {
+	if n := put_byte(mut c, `\n`) {
 		if n is NotifSessionChanged {
 			assert n.id == 42
 			assert n.name == 'foo'
@@ -148,7 +155,7 @@ fn test_tmux_sessions_changed() {
 
 	feed_string_none(mut c, '%sessions-changed')
 
-	if n := c.put(`\n`) {
+	if n := put_byte(mut c, `\n`) {
 		assert n is NotifSessionsChanged
 	} else {
 		assert false, 'expected notification'
@@ -161,7 +168,7 @@ fn test_tmux_sessions_changed_carriage_return() {
 
 	feed_string_none(mut c, '%sessions-changed\r')
 
-	if n := c.put(`\n`) {
+	if n := put_byte(mut c, `\n`) {
 		assert n is NotifSessionsChanged
 	} else {
 		assert false, 'expected notification'
@@ -174,7 +181,7 @@ fn test_tmux_layout_change() {
 
 	feed_string_none(mut c, '%layout-change @2 1234x791,0,0{617x791,0,0,0,617x791,618,0,1} 1234x791,0,0{617x791,0,0,0,617x791,618,0,1} *-')
 
-	if n := c.put(`\n`) {
+	if n := put_byte(mut c, `\n`) {
 		if n is NotifLayoutChange {
 			assert n.window_id == 2
 			assert n.layout == '1234x791,0,0{617x791,0,0,0,617x791,618,0,1}'
@@ -194,7 +201,7 @@ fn test_tmux_window_add() {
 
 	feed_string_none(mut c, '%window-add @14')
 
-	if n := c.put(`\n`) {
+	if n := put_byte(mut c, `\n`) {
 		if n is NotifWindowAdd {
 			assert n.id == 14
 		} else {
@@ -211,7 +218,7 @@ fn test_tmux_window_renamed() {
 
 	feed_string_none(mut c, '%window-renamed @42 bar')
 
-	if n := c.put(`\n`) {
+	if n := put_byte(mut c, `\n`) {
 		if n is NotifWindowRenamed {
 			assert n.id == 42
 			assert n.name == 'bar'
@@ -229,7 +236,7 @@ fn test_tmux_window_pane_changed() {
 
 	feed_string_none(mut c, '%window-pane-changed @42 %2')
 
-	if n := c.put(`\n`) {
+	if n := put_byte(mut c, `\n`) {
 		if n is NotifWindowPaneChanged {
 			assert n.window_id == 42
 			assert n.pane_id == 2
@@ -247,7 +254,7 @@ fn test_tmux_client_detached() {
 
 	feed_string_none(mut c, '%client-detached /dev/pts/1')
 
-	if n := c.put(`\n`) {
+	if n := put_byte(mut c, `\n`) {
 		if n is NotifClientDetached {
 			assert n.client == '/dev/pts/1'
 		} else {
@@ -264,7 +271,7 @@ fn test_tmux_client_session_changed() {
 
 	feed_string_none(mut c, '%client-session-changed /dev/pts/1 \$2 mysession')
 
-	if n := c.put(`\n`) {
+	if n := put_byte(mut c, `\n`) {
 		if n is NotifClientSessionChanged {
 			assert n.client == '/dev/pts/1'
 			assert n.session_id == 2
@@ -275,4 +282,31 @@ fn test_tmux_client_session_changed() {
 	} else {
 		assert false, 'expected notification'
 	}
+}
+
+fn test_tmux_buffer_limit_returns_error_once() {
+	mut c := ControlParser{
+		max_bytes: 1
+	}
+	defer { c.deinit() }
+
+	first := c.put(`%`) or {
+		assert false, err.msg()
+		return
+	}
+	assert first.notification == none
+
+	mut failed := false
+	_ = c.put(`x`) or {
+		failed = true
+		ControlParserPutValue{}
+	}
+	assert failed
+	assert c.state == .broken
+
+	after := c.put(`x`) or {
+		assert false, err.msg()
+		return
+	}
+	assert after.notification == none
 }

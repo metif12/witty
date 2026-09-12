@@ -28,17 +28,6 @@ pub:
 	c_abi bool
 }
 
-// The Zig `add` method installs these fields into a Zig Build.Module. V build
-// options are selected by compile-time defines rather than module mutation;
-// these accessors expose the two values synthesized by Ghostty's build step.
-pub fn (self BuildOptions) kitty_graphics() bool {
-	return self.oniguruma
-}
-
-pub fn (self BuildOptions) tmux_control_mode() bool {
-	return self.oniguruma
-}
-
 pub enum Artifact {
 	// Ghostty application
 	ghostty
