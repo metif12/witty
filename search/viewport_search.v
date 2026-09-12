@@ -53,6 +53,9 @@ pub fn ViewportSearch.init(needle []u8) ViewportSearch {
 
 // Free resources.
 pub fn (mut self ViewportSearch) deinit() {
+	if mut fp := self.fingerprint {
+		fp.deinit()
+	}
 	self.fingerprint = none
 	self.window.deinit()
 }
@@ -60,6 +63,9 @@ pub fn (mut self ViewportSearch) deinit() {
 // Reset our fingerprint and results so that the next update will
 // always re-search.
 pub fn (mut self ViewportSearch) reset() {
+	if mut fp := self.fingerprint {
+		fp.deinit()
+	}
 	self.fingerprint = none
 	self.window.clear_and_retain_capacity()
 }
@@ -80,13 +86,9 @@ pub fn (self &ViewportSearch) needle() []u8 {
 // Returns true if the viewport changed and a re-search is needed.
 // Returns false if the viewport is unchanged.
 pub fn (mut self ViewportSearch) update(list &terminal.PageList) bool {
-	fingerprint := ViewportFingerprint.init(list)
-	if fingerprint.nodes.len == 0 {
-		self.reset()
-		return true
-	}
+	mut fingerprint := ViewportFingerprint.init(list)
 
-	if old := self.fingerprint {
+	if mut old := self.fingerprint {
 		if old.eql(fingerprint) {
 			mut check_active := true
 			if dirty := self.active_dirty {
@@ -99,39 +101,43 @@ pub fn (mut self ViewportSearch) update(list &terminal.PageList) bool {
 			mut overlaps_active := false
 			if check_active {
 				active_tl := list.get_top_left(.active)
-				if active_br := list.get_bottom_right(.active) {
-					for node in old.nodes {
-						if voidptr(node) == voidptr(active_tl.node)
-							|| voidptr(node) == voidptr(active_br.node) {
-							overlaps_active = true
-							break
-						}
+				active_br := list.get_bottom_right(.active) or {
+					panic('active area has no bottom-right pin')
+				}
+				for node in old.nodes {
+					if voidptr(node) == voidptr(active_tl.node)
+						|| voidptr(node) == voidptr(active_br.node) {
+						overlaps_active = true
+						break
 					}
 				}
 			}
 			if !overlaps_active {
+				fingerprint.deinit()
 				return false
 			}
 		}
+
+		old.deinit()
+		self.fingerprint = none
 	}
 
+	assert self.fingerprint == none, 'old viewport fingerprint must be released'
 	self.fingerprint = fingerprint
 	if self.active_dirty != none {
 		self.active_dirty = false
 	}
 	self.window.clear_and_retain_capacity()
 
-	overlap_needed := if self.window.needle.len > 0 { self.window.needle.len - 1 } else { 0 }
 	mut node := fingerprint.nodes[0].prev
 	mut added := 0
 	for {
 		current := node or { break }
-		if current.data.size.rows == 0
-			|| !current.data.get_row(usize(current.data.size.rows - 1)).wrap {
+		if !current.data.get_row(usize(current.data.size.rows - 1)).wrap {
 			break
 		}
 		added += self.window.append(current)
-		if added >= overlap_needed {
+		if added >= self.window.needle.len - 1 {
 			break
 		}
 		node = current.prev
@@ -142,17 +148,16 @@ pub fn (mut self ViewportSearch) update(list &terminal.PageList) bool {
 	}
 
 	end := fingerprint.nodes[fingerprint.nodes.len - 1]
-	if end.data.size.rows > 0 && end.data.get_row(usize(end.data.size.rows - 1)).wrap {
+	if end.data.get_row(usize(end.data.size.rows - 1)).wrap {
 		node = end.next
 		added = 0
 		for {
 			current := node or { break }
 			added += self.window.append(current)
-			if added >= overlap_needed {
+			if added >= self.window.needle.len - 1 {
 				break
 			}
-			if current.data.size.rows == 0
-				|| !current.data.get_row(usize(current.data.size.rows - 1)).wrap {
+			if !current.data.get_row(usize(current.data.size.rows - 1)).wrap {
 				break
 			}
 			node = current.next
@@ -185,7 +190,7 @@ mut:
 
 fn ViewportFingerprint.init(list &terminal.PageList) ViewportFingerprint {
 	tl := list.get_top_left(.viewport)
-	br := list.get_bottom_right(.viewport) or { return ViewportFingerprint{} }
+	br := list.get_bottom_right(.viewport) or { panic('viewport has no bottom-right pin') }
 	mut iterator := tl.page_iterator(.right_down, br)
 	mut nodes := []&terminal.PageNode{}
 	for {
