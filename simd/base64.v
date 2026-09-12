@@ -16,7 +16,7 @@ fn base64_scalar_input(input []u8) []u8 {
 
 // base64_max_len returns the exact decoded length, or zero for an invalid
 // input length.
-pub fn base64_max_len(input []u8) int {
+pub fn base64_max_len(input []u8) usize {
 	scalar := base64_scalar_input(input)
 	return scalar_base64_calc_size(scalar) or { 0 }
 }
@@ -29,7 +29,7 @@ pub fn base64_decode(input []u8, mut output []u8) ![]u8 {
 	if size == 0 {
 		return output[..0]
 	}
-	assert output.len >= size
+	assert usize(output.len) >= size
 	scalar_base64_decode(scalar, mut output) or { return error('Base64Invalid') }
 	return output[..size]
 }

@@ -4,10 +4,10 @@ module simd
 // scalar fallback from src/simd/index_of.zig; the public contract is identical
 // when Ghostty's optional C++ SIMD backend is disabled.
 @[inline]
-pub fn index_of(input []u8, needle u8) ?int {
+pub fn index_of(input []u8, needle u8) ?usize {
 	for i, value in input {
 		if value == needle {
-			return i
+			return usize(i)
 		}
 	}
 	return none

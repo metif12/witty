@@ -585,12 +585,13 @@ pub fn (mut self Stream) next_slice(input_ []u8) {
 	}
 
 	mut cp_buf := []u32{len: 4096}
-	mut offset := 0
+	mut offset := usize(0)
 	for {
-		len := int_min(cp_buf.len, input_.len - offset)
+		remaining := usize(input_.len) - offset
+		len := if usize(cp_buf.len) < remaining { usize(cp_buf.len) } else { remaining }
 		self.next_slice_capped(input_[offset..offset + len], mut cp_buf)
 		offset += len
-		if offset >= input_.len {
+		if offset >= usize(input_.len) {
 			break
 		}
 	}
@@ -598,28 +599,28 @@ pub fn (mut self Stream) next_slice(input_ []u8) {
 
 fn (mut self Stream) next_slice_capped(input_ []u8, mut cp_buf []u32) {
 	assert input_.len <= cp_buf.len
-	mut offset := 0
+	mut offset := usize(0)
 
 	// Complete any UTF-8 sequence split across calls before bulk decoding.
 	for self.utf8d.state != 0 {
-		if offset >= input_.len {
+		if offset >= usize(input_.len) {
 			return
 		}
 		self.next_utf8(input_[offset])
 		offset++
 	}
-	if offset >= input_.len {
+	if offset >= usize(input_.len) {
 		return
 	}
 
 	// Finish a control sequence carried over from the previous chunk.
 	offset += self.consume_until_ground(input_[offset..])
-	if offset >= input_.len {
+	if offset >= usize(input_.len) {
 		return
 	}
 	offset += self.consume_all_escapes(input_[offset..])
 
-	for self.parser.state == .ground && offset < input_.len {
+	for self.parser.state == .ground && offset < usize(input_.len) {
 		result := simd.utf8_decode_until_control_seq(input_[offset..], mut cp_buf)
 		for cp in cp_buf[..result.decoded] {
 			if cp <= 0x0f {
@@ -629,7 +630,7 @@ fn (mut self Stream) next_slice_capped(input_ []u8, mut cp_buf []u32) {
 			}
 		}
 		offset += result.consumed
-		if offset >= input_.len {
+		if offset >= usize(input_.len) {
 			return
 		}
 
@@ -647,15 +648,15 @@ fn (mut self Stream) next_slice_capped(input_ []u8, mut cp_buf []u32) {
 
 // consume_all_escapes parses consecutive escape sequences and returns their
 // byte count. The caller enters at an ESC while the parser is in ground.
-fn (mut self Stream) consume_all_escapes(input_ []u8) int {
-	mut offset := 0
-	for offset < input_.len && input_[offset] == 0x1b {
+fn (mut self Stream) consume_all_escapes(input_ []u8) usize {
+	mut offset := usize(0)
+	for offset < usize(input_.len) && input_[offset] == 0x1b {
 		self.parser.state = .escape
 		self.parser.clear()
 		offset++
 		offset += self.consume_until_ground(input_[offset..])
-		if offset >= input_.len {
-			return input_.len
+		if offset >= usize(input_.len) {
+			return usize(input_.len)
 		}
 	}
 	return offset
@@ -663,11 +664,11 @@ fn (mut self Stream) consume_all_escapes(input_ []u8) int {
 
 // consume_until_ground advances an in-progress escape sequence until the VT
 // parser returns to ground, or consumes all available input.
-fn (mut self Stream) consume_until_ground(input_ []u8) int {
-	mut offset := 0
+fn (mut self Stream) consume_until_ground(input_ []u8) usize {
+	mut offset := usize(0)
 	for self.parser.state != .ground {
-		if offset >= input_.len {
-			return input_.len
+		if offset >= usize(input_.len) {
+			return usize(input_.len)
 		}
 		self.next_non_utf8(input_[offset])
 		offset++
