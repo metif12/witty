@@ -390,6 +390,9 @@ fn test_health_enum() {
 	h := Health.healthy
 	assert h == .healthy
 	assert h != .unhealthy
+	assert sizeof(Health) == sizeof(int)
+	assert int(Health.healthy) == 0
+	assert int(Health.unhealthy) == 1
 }
 
 // Test Style enum values.

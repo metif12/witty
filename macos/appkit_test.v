@@ -1,5 +1,10 @@
 module macos
 
+fn test_metal_gpu_family_values_match_metal_api() {
+	assert mtl_gpu_family_apple3 == 1003
+	assert mtl_gpu_family_apple10 == 1010
+}
+
 fn test_modifier_key_action() {
 	assert modifier_key_action(0x38, ns_event_modifier_flag_shift)? == .press
 	assert modifier_key_action(0x38, 0)? == .release

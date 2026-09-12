@@ -3247,9 +3247,9 @@ pub fn (w Wakeup) notify() ! {
 }
 
 // Health status of the renderer.
-pub enum Health {
-	healthy
-	unhealthy
+pub enum Health as int {
+	healthy   = 0
+	unhealthy = 1
 }
 
 // This is called early right after surface creation.

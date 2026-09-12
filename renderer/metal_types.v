@@ -35,9 +35,9 @@ pub:
 	storage_mode MetalStorageMode = .shared
 }
 
-pub enum MetalCPUCacheMode {
-	default_cache
-	write_combined
+pub enum MetalCPUCacheMode as u8 {
+	default        = 0
+	write_combined = 1
 }
 
 // Initialize a buffer with the given length pre-allocated.
@@ -143,9 +143,7 @@ fn (mut self MetalBuffer) sync_raw(data voidptr, req_bytes usize) ! {
 }
 
 fn (opts MetalBufferOptions) resource_options() u64 {
-	cache := if opts.cpu_cache_mode == .write_combined { u64(1) } else { u64(0) }
-	storage := if opts.storage_mode == .managed { u64(1 << 4) } else { u64(0) }
-	return cache | storage
+	return u64(opts.cpu_cache_mode) | (u64(opts.storage_mode) << 4)
 }
 
 fn metal_command_buffer_status(raw u64) MetalCommandBufferStatus {
@@ -156,14 +154,6 @@ fn metal_command_buffer_status(raw u64) MetalCommandBufferStatus {
 		3 { .scheduled }
 		4 { .completed }
 		else { .error }
-	}
-}
-
-fn metal_sampler_address_mode(mode MetalSamplerAddressMode) u64 {
-	return match mode {
-		.clamp_to_edge { 0 }
-		.repeat { 2 }
-		.mirror_repeat { 3 }
 	}
 }
 
@@ -311,12 +301,12 @@ pub:
 	offset usize
 }
 
-pub enum MetalVertexStepFunction {
-	constant
-	per_vertex
-	per_instance
-	per_patch
-	per_patch_control_point
+pub enum MetalVertexStepFunction as u64 {
+	constant                = 0
+	per_vertex              = 1
+	per_instance            = 2
+	per_patch               = 3
+	per_patch_control_point = 4
 }
 
 pub struct MetalPipelineOptions {
@@ -344,11 +334,11 @@ pub fn MetalPipeline.init(opts MetalPipelineOptions) !MetalPipeline {
 	mut attributes := []macos.MetalVertexAttribute{cap: opts.attributes.len}
 	for attribute in opts.attributes {
 		attributes << macos.MetalVertexAttribute{
-			format: metal_vertex_format_value(attribute.format)
+			format: u64(attribute.format)
 			offset: attribute.offset
 		}
 	}
-	handle := macos.metal_new_pipeline(opts.device, opts.vertex_library, opts.fragment_library, opts.vertex_fn, opts.fragment_fn, attributes, opts.vertex_stride, u64(opts.step_fn), metal_pixel_format_value(opts.pixel_format), opts.blending_enabled)
+	handle := macos.metal_new_pipeline(opts.device, opts.vertex_library, opts.fragment_library, opts.vertex_fn, opts.fragment_fn, attributes, opts.vertex_stride, u64(opts.step_fn), u64(opts.pixel_format), opts.blending_enabled)
 	if handle == unsafe { nil } {
 		return error('Metal render pipeline creation failed')
 	}
@@ -386,7 +376,7 @@ pub fn MetalSampler.init(opts MetalSamplerOptions) !MetalSampler {
 	if opts.device == unsafe { nil } {
 		return error('Metal sampler requires a device')
 	}
-	handle := macos.metal_new_sampler(opts.device, u64(opts.min_filter), u64(opts.mag_filter), metal_sampler_address_mode(opts.s_address_mode), metal_sampler_address_mode(opts.t_address_mode))
+	handle := macos.metal_new_sampler(opts.device, u64(opts.min_filter), u64(opts.mag_filter), u64(opts.s_address_mode), u64(opts.t_address_mode))
 	if handle == unsafe { nil } {
 		return error('Metal sampler allocation failed')
 	}
@@ -443,7 +433,7 @@ pub fn MetalTarget.init(opts MetalTargetOptions) !MetalTarget {
 		bytes_per_element: 4
 		colorspace: colorspace
 	})!
-	texture := macos.metal_new_iosurface_texture(opts.device, voidptr(surface), metal_pixel_format_value(opts.pixel_format), usize(opts.width), usize(opts.height), metal_resource_options(.write_combined, opts.storage_mode))
+	texture := macos.metal_new_iosurface_texture(opts.device, voidptr(surface), u64(opts.pixel_format), usize(opts.width), usize(opts.height), metal_resource_options(.write_combined, opts.storage_mode))
 	if texture == unsafe { nil } {
 		surface.deinit()
 		return error('Metal target texture allocation failed')
@@ -502,7 +492,7 @@ pub fn MetalTexture.init(opts MetalTextureOptions, width u32, height u32, data ?
 		return error('Metal texture dimensions must be non-zero')
 	}
 	bpp := bpp_of(opts.pixel_format)
-	handle := macos.metal_new_texture(opts.device, metal_pixel_format_value(opts.pixel_format), usize(width), usize(height), metal_resource_options(.default_cache, opts.storage_mode), metal_texture_usage_value(opts.usage))
+	handle := macos.metal_new_texture(opts.device, u64(opts.pixel_format), usize(width), usize(height), metal_resource_options(.default, opts.storage_mode), metal_texture_usage_value(opts.usage))
 	if handle == unsafe { nil } {
 		return error('Metal texture allocation failed')
 	}
@@ -568,38 +558,7 @@ pub fn (mut self MetalTexture) replace_region(x u32, y u32, width u32, height u3
 }
 
 fn metal_resource_options(cache MetalCPUCacheMode, storage MetalStorageMode) u64 {
-	return (if cache == .write_combined { u64(1) } else { u64(0) }) | (if storage == .managed {
-		u64(1 << 4)
-	} else {
-		u64(0)
-	})
-}
-
-fn metal_pixel_format_value(format MetalPixelFormat) u64 {
-	return match format {
-		.r8unorm { 10 }
-		.r8unorm_srgb { 11 }
-		.rgba8unorm { 70 }
-		.rgba8unorm_srgb { 71 }
-		.bgra8unorm { 80 }
-		.bgra8unorm_srgb { 81 }
-	}
-}
-
-fn metal_vertex_format_value(format MetalVertexFormat) u64 {
-	return match format {
-		.uchar4 { 3 }
-		.uchar4_normalized { 9 }
-		.ushort2 { 13 }
-		.short2 { 16 }
-		.float { 28 }
-		.float2 { 29 }
-		.float3 { 30 }
-		.float4 { 31 }
-		.uint { 36 }
-		.uint2 { 37 }
-		.uchar { 45 }
-	}
+	return u64(cache) | (u64(storage) << 4)
 }
 
 fn metal_texture_usage_value(usage MetalTextureUsage) u64 {

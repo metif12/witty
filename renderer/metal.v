@@ -32,11 +32,13 @@ pub mut:
 }
 
 // Storage mode for Metal resources.
-pub enum MetalStorageMode {
+pub enum MetalStorageMode as u8 {
 	// Shared between CPU and GPU (unified memory).
-	shared
+	shared     = 0
 	// Managed by the GPU (discrete GPU).
-	managed
+	managed    = 1
+	private    = 2
+	memoryless = 3
 }
 
 // Blending mode (re-export from configpkg for convenience).
@@ -246,81 +248,103 @@ fn clamped_metal_surface_dimension(value f64, maximum u32) u32 {
 	return u32(value)
 }
 
-// Metal pixel format enum (subset).
-pub enum MetalPixelFormat {
-	bgra8unorm
-	bgra8unorm_srgb
-	rgba8unorm
-	rgba8unorm_srgb
-	r8unorm
-	r8unorm_srgb
+// Metal pixel formats used by the renderer.
+pub enum MetalPixelFormat as u64 {
+	r8unorm         = 10
+	r8unorm_srgb    = 11
+	rgba8unorm      = 70
+	rgba8unorm_srgb = 71
+	bgra8unorm      = 80
+	bgra8unorm_srgb = 81
 }
 
 // Metal GPU family for feature detection.
-pub enum MetalGPUFamily {
-	apple3
-	apple10
+pub enum MetalGPUFamily as i64 {
+	apple3  = 1003
+	apple10 = 1010
 }
 
 // Metal command buffer status.
-pub enum MetalCommandBufferStatus {
-	not_enqueued
-	enqueued
-	committed
-	scheduled
-	completed
-	error
+pub enum MetalCommandBufferStatus as u64 {
+	not_enqueued = 0
+	enqueued     = 1
+	committed    = 2
+	scheduled    = 3
+	completed    = 4
+	error        = 5
 }
 
 // Metal load action.
-pub enum MetalLoadAction {
-	dont_care
-	load
-	clear
+pub enum MetalLoadAction as u64 {
+	dont_care = 0
+	load      = 1
+	clear     = 2
 }
 
 // Metal store action.
-pub enum MetalStoreAction {
-	dont_care
-	store
-	multisample_resolve
+pub enum MetalStoreAction as u64 {
+	dont_care                     = 0
+	store                         = 1
+	multisample_resolve           = 2
+	store_and_multisample_resolve = 3
+	unknown                       = 4
+	custom_sample_depth_store     = 5
 }
 
 // Metal primitive type.
-pub enum MetalPrimitiveType {
-	point
-	line
-	line_strip
-	triangle
-	triangle_strip
+pub enum MetalPrimitiveType as u64 {
+	point          = 0
+	line           = 1
+	line_strip     = 2
+	triangle       = 3
+	triangle_strip = 4
 }
 
-// Metal vertex format (subset).
-pub enum MetalVertexFormat {
-	float
-	float2
-	float3
-	float4
-	uchar
-	uchar4
-	uchar4_normalized
-	short2
-	uint
-	ushort2
-	uint2
+// Metal vertex formats used by the renderer.
+pub enum MetalVertexFormat as u64 {
+	uchar4           = 3
+	uchar4normalized = 9
+	ushort2          = 13
+	short2           = 16
+	float            = 28
+	float2           = 29
+	float3           = 30
+	float4           = 31
+	uint             = 36
+	uint2            = 37
+	uchar            = 45
 }
 
 // Metal blend factor.
-pub enum MetalBlendFactor {
-	zero
-	one
-	source_alpha
-	one_minus_source_alpha
+pub enum MetalBlendFactor as u64 {
+	zero                     = 0
+	one                      = 1
+	source_color             = 2
+	one_minus_source_color   = 3
+	source_alpha             = 4
+	one_minus_source_alpha   = 5
+	dest_color               = 6
+	one_minus_dest_color     = 7
+	dest_alpha               = 8
+	one_minus_dest_alpha     = 9
+	source_alpha_saturated   = 10
+	blend_color              = 11
+	one_minus_blend_color    = 12
+	blend_alpha              = 13
+	one_minus_blend_alpha    = 14
+	source_1_color           = 15
+	one_minus_source_1_color = 16
+	source_1_alpha           = 17
+	one_minus_source_1_alpha = 18
 }
 
 // Metal blend operation.
-pub enum MetalBlendOperation {
-	add
+pub enum MetalBlendOperation as u64 {
+	add              = 0
+	subtract         = 1
+	reverse_subtract = 2
+	min              = 3
+	max              = 4
 }
 
 // Metal texture usage.
@@ -331,16 +355,19 @@ pub mut:
 }
 
 // Metal sampler filter.
-pub enum MetalSamplerFilter {
-	nearest
-	linear
+pub enum MetalSamplerFilter as u64 {
+	nearest = 0
+	linear  = 1
 }
 
 // Metal sampler address mode.
-pub enum MetalSamplerAddressMode {
-	clamp_to_edge
-	repeat
-	mirror_repeat
+pub enum MetalSamplerAddressMode as u64 {
+	clamp_to_edge         = 0
+	mirror_clamp_to_edge  = 1
+	repeat                = 2
+	mirror_repeat         = 3
+	clamp_to_zero         = 4
+	clamp_to_border_color = 5
 }
 
 // Metal clear color.

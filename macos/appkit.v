@@ -314,7 +314,8 @@ const objc_assoc_copy_nonatomic = usize(3)
 const mtl_pixel_format_bgra8unorm = u64(80)
 const mtl_load_action_clear = u64(2)
 const mtl_store_action_store = u64(1)
-const mtl_gpu_family_apple3 = u64(3003)
+const mtl_gpu_family_apple3 = u64(1003)
+const mtl_gpu_family_apple10 = u64(1010)
 
 __global (
 	g_draw_cb              DrawCallback
@@ -2274,6 +2275,9 @@ pub fn metal_release(ptr voidptr) {
 pub fn metal_max_texture_size(device voidptr) u32 {
 	if is_nil(device) {
 		return 16384
+	}
+	if msg_bool_u64(ObjId(device), 'supportsFamily:', mtl_gpu_family_apple10) {
+		return 32768
 	}
 	if msg_bool_u64(ObjId(device), 'supportsFamily:', mtl_gpu_family_apple3) {
 		return 16384
