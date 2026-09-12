@@ -122,12 +122,12 @@ pub struct SgrParser {
 pub mut:
 	params     []u16
 	params_sep SepList
-	idx        int
+	idx        usize
 }
 
 // next returns the next attribute or none if there are no more attributes.
 pub fn (mut self SgrParser) next() ?SgrAttribute {
-	if self.idx >= self.params.len {
+	if self.idx >= usize(self.params.len) {
 		// Add one to ensure we don't loop on unset.
 		defer {
 			self.idx += 1
@@ -143,9 +143,9 @@ pub fn (mut self SgrParser) next() ?SgrAttribute {
 		return none
 	}
 
-	slice := self.params[self.idx..]
+	slice := self.params[int(self.idx)..]
 	// Check if current separator is a colon.
-	colon := self.params_sep.is_set(self.idx)
+	colon := self.params_sep.is_set(int(self.idx))
 	self.idx += 1
 
 	// Our last one will have an idx be the last value.
@@ -162,15 +162,19 @@ pub fn (mut self SgrParser) next() ?SgrAttribute {
 				// Consume all the colon separated
 				// values and return them as unknown.
 				start := self.idx
-				for self.params_sep.is_set(self.idx) {
+				for self.params_sep.is_set(int(self.idx)) {
 					self.idx += 1
 				}
 				self.idx += 1
-				partial_len := int_min(self.idx - start + 1, slice.len)
+				partial_len := if self.idx - start + 1 < usize(slice.len) {
+					self.idx - start + 1
+				} else {
+					usize(slice.len)
+				}
 				return SgrAttribute{
 					kind: .unknown
 					unknown_full: self.params
-					unknown_partial: slice[..partial_len]
+					unknown_partial: slice[..int(partial_len)]
 				}
 			}
 		}
@@ -189,7 +193,8 @@ pub fn (mut self SgrParser) next() ?SgrAttribute {
 	} else if p == 4 {
 		// Underline
 		if colon {
-			if slice.len >= 2 && !self.is_colon() {
+			assert slice.len >= 2, 'colon underline requires a style parameter'
+			if !self.is_colon() {
 				self.idx += 1
 				ul := match slice[1] {
 					0 { UnderlineStyle.none }
@@ -206,7 +211,7 @@ pub fn (mut self SgrParser) next() ?SgrAttribute {
 					underline: ul
 				}
 			}
-			if slice.len >= 2 && self.is_colon() {
+			if self.is_colon() {
 				self.consume_unknown_colon()
 			}
 			// Fall through to unknown return at end
@@ -333,10 +338,6 @@ pub fn (mut self SgrParser) next() ?SgrAttribute {
 	}
 }
 
-fn int_min(a int, b int) int {
-	return if a < b { a } else { b }
-}
-
 fn (mut self SgrParser) parse_direct_color(kind SgrAttributeKind, slice []u16, colon bool) ?SgrAttribute {
 	// Any direct color style must have at least 5 values.
 	if slice.len < 5 {
@@ -344,6 +345,7 @@ fn (mut self SgrParser) parse_direct_color(kind SgrAttributeKind, slice []u16, c
 	}
 
 	// Only used for direct color sets (38, 48, 58) and subparam 2.
+	assert slice[1] == 2, 'direct color parser requires subparameter 2'
 
 	// Note: We use truncation because the value should be 0 to 255. If
 	// it isn't, the behavior is undefined so we just truncate it.
@@ -390,13 +392,13 @@ fn (mut self SgrParser) parse_direct_color(kind SgrAttributeKind, slice []u16, c
 // This always returns false for the last value since it has no
 // separator.
 fn (self &SgrParser) is_colon() bool {
-	return self.params_sep.is_set(self.idx)
+	return self.params_sep.is_set(int(self.idx))
 }
 
-fn (self &SgrParser) count_colon() int {
-	mut count := 0
+fn (self &SgrParser) count_colon() usize {
+	mut count := usize(0)
 	mut idx := self.idx
-	for idx < self.params.len - 1 && self.params_sep.is_set(idx) {
+	for idx < usize(self.params.len - 1) && self.params_sep.is_set(int(idx)) {
 		count += 1
 		idx += 1
 	}
