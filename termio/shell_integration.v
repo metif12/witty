@@ -5,7 +5,7 @@ import internal_os
 import os
 
 // Shell types we support
-pub enum Shell {
+pub enum Shell as u8 {
 	bash
 	elvish
 	fish

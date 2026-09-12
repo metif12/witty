@@ -721,6 +721,7 @@ fn test_apc_handler_rejects_unknown_and_invalid_commands() {
 }
 
 fn test_apc_handler_state_values_match_source_order() {
+	assert sizeof(ApcHandlerState) == 1
 	assert int(ApcHandlerState.inactive) == 0
 	assert int(ApcHandlerState.ignore) == 1
 	assert int(ApcHandlerState.identify) == 2

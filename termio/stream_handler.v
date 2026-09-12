@@ -1991,7 +1991,7 @@ pub fn (mut self ApcHandler) end() ?kitty.Command {
 	return self.parser.complete() or { return none }
 }
 
-enum ApcHandlerState {
+enum ApcHandlerState as u8 {
 	inactive
 	ignore
 	identify

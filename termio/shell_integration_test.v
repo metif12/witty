@@ -3,6 +3,15 @@ module termio
 import configpkg
 import os
 
+fn test_shell_source_layout_and_ordinals() {
+	assert sizeof(Shell) == 1
+	assert u8(Shell.bash) == 0
+	assert u8(Shell.elvish) == 1
+	assert u8(Shell.fish) == 2
+	assert u8(Shell.nushell) == 3
+	assert u8(Shell.zsh) == 4
+}
+
 // TmpResourcesDir is a test helper that creates a temporary resources directory
 // with shell integration paths.
 struct TmpResourcesDir {

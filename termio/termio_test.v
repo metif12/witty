@@ -223,6 +223,11 @@ fn test_prepare_initial_input_opens_all_sources_before_start() {
 		close_prepared_inputs(mut prepared)
 	}
 	assert prepared.len == 2
+	assert sizeof(PreparedInputTag) == 1
+	assert u8(PreparedInputTag.string) == 0
+	assert u8(PreparedInputTag.file) == 1
+	assert prepared[0].kind == .string
+	assert prepared[1].kind == .file
 	assert prepared[0].data.bytestr() == 'raw bytes'
 	assert read_initial_input_file(mut prepared[1].file)!.bytestr() == 'from file'
 

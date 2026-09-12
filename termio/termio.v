@@ -440,8 +440,8 @@ pub fn (mut t Termio) thread_enter() ! {
 	t.backend.thread_enter_io(t)!
 	for mut item in inputs {
 		data := match item.kind {
-			.raw { item.data }
-			.path {
+			.string { item.data }
+			.file {
 				read_initial_input_file(mut item.file) or {
 					t.backend.thread_exit()
 					return error('input failed')
@@ -458,15 +458,15 @@ pub fn (mut t Termio) thread_enter() ! {
 const initial_input_max_bytes = 10 * 1024 * 1024
 
 struct PreparedInput {
-	kind ReadableInputKind
+	kind PreparedInputTag
 	data []u8
 mut:
 	file os.File
 }
 
-enum ReadableInputKind {
-	raw
-	path
+enum PreparedInputTag as u8 {
+	string
+	file
 }
 
 fn (t &Termio) prepare_initial_input() ![]PreparedInput {
@@ -475,7 +475,7 @@ fn (t &Termio) prepare_initial_input() ![]PreparedInput {
 		match item.kind {
 			.raw {
 				result << PreparedInput{
-					kind: .raw
+					kind: .string
 					data: item.value.bytes()
 				}
 			}
@@ -485,7 +485,7 @@ fn (t &Termio) prepare_initial_input() ![]PreparedInput {
 					return error('input not found')
 				}
 				result << PreparedInput{
-					kind: .path
+					kind: .file
 					file: file
 				}
 			}
@@ -518,7 +518,7 @@ fn read_initial_input_file(mut file os.File) ![]u8 {
 
 fn close_prepared_inputs(mut inputs []PreparedInput) {
 	for mut item in inputs {
-		if item.kind == .path {
+		if item.kind == .file {
 			item.file.close()
 		}
 	}
