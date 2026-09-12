@@ -1152,7 +1152,9 @@ pub fn PageListFormatter.init(list &PageList, opts FormatOptions) PageListFormat
 
 pub fn (self PageListFormatter) format() string {
 	tl := self.top_left or { self.list.get_top_left(.screen) }
-	br := self.bottom_right or { self.list.get_bottom_right(.screen) or { return '' } }
+	br := self.bottom_right or {
+		self.list.get_bottom_right(.screen) or { panic('page list has no bottom-right pin') }
+	}
 
 	mut output := strings.new_builder(1024)
 	mut point_map := PointMap{}
@@ -1161,6 +1163,7 @@ pub fn (self PageListFormatter) format() string {
 	for {
 		chunk := iter.next() or { break }
 		assert chunk.start < chunk.end
+		assert chunk.end > 0
 
 		// PageFormatter is shared with the flat Screen representation. A linked
 		// Page already uses the same RowData/CellData values, so this is a
@@ -1548,31 +1551,21 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 			page_cols
 		}
 
-		mut row_start_x := if start_x > 0 && (self.rectangle || y == start_y) {
+		row_start_x := if start_x > 0 && (self.rectangle || y == start_y) {
 			// Check if our start X falls on the tail of a wide character.
-			if int(start_x) < cells.len {
-				match cells[int(start_x)].wide {
-					.spacer_tail { start_x - 1 }
-					.spacer_head {
-						continue
-					} // skip this whole row
-					else { start_x }
+			match cells[int(start_x)].wide {
+				.spacer_tail { start_x - 1 }
+				.spacer_head {
+					continue
 				}
-			} else {
-				start_x
+				else { start_x }
 			}
 		} else {
 			u32(0)
 		}
 
 		// Get the subset of cells for this row
-		actual_end := math.min(row_end_x, u32(cells.len))
-		if row_start_x >= actual_end {
-			// No cells in range
-			blank_rows += 1
-			continue
-		}
-		cells_subset := cells[int(row_start_x)..int(actual_end)]
+		cells_subset := cells[int(row_start_x)..int(row_end_x)]
 
 		// If this row is blank, accumulate to avoid a bunch of extra work later.
 		if !has_text_any(cells_subset) {
@@ -1655,7 +1648,7 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 			} else if !cell.has_text() {
 				blank_cells += 1
 				continue
-			} else if cell.codepoint == u32(` `) && self.opts.trim {
+			} else if cell.codepoint_val() == u32(` `) && self.opts.trim {
 				blank_cells += 1
 				continue
 			}
