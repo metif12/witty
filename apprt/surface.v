@@ -109,7 +109,7 @@ pub mut:
 }
 
 // SurfaceMessageKind identifies the type of surface message.
-pub enum SurfaceMessageKind {
+pub enum SurfaceMessageKind as u8 {
 	// Set the title of the surface.
 	set_title
 	// Report the window title back to the terminal.
@@ -158,7 +158,7 @@ pub enum SurfaceMessageKind {
 }
 
 // ReportTitleStyle identifies the style of title report.
-pub enum ReportTitleStyle {
+pub enum ReportTitleStyle as u8 {
 	csi_21_t
 	// This enum is a placeholder for future title styles.
 }
@@ -193,7 +193,7 @@ pub fn (m SurfaceMailbox) push(msg SurfaceMessage, timeout datastruct.BlockingQu
 
 // NewSurfaceContext describes where a new surface should be created
 // (for determining inheritance behavior).
-pub enum NewSurfaceContext {
+pub enum NewSurfaceContext as i32 {
 	window
 	tab
 	split

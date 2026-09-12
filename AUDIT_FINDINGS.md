@@ -36,6 +36,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | apprt/action C enums | The action discriminant and all seventeen C-visible action payload enums depended on V's default enum representation rather than preserving Ghostty's explicit `enum(c_int)` contracts. | Give every C-facing enum signed 32-bit backing, retain non-exhaustive positive tab/palette values through raw casts, and verify complete declaration-order ordinals. |
 | apprt/none | The no-op runtime's IPC entry point returned plain `bool`, unlike Ghostty's fallible runtime contract and the other application runtimes. | Restore the `!bool` result contract while retaining the source's always-unhandled result. |
 | apprt/surface mailbox | The flattened callback erased `BlockingQueue.Timeout`, so the stream handler's nominal instant probe actually performed a forever-blocking app-mailbox push while holding the renderer mutex; selection-scroll ticks also became blocking. | Carry the timeout and `u32` queue size through the surface callback, preserve instant/forever at every producer, and only retry the stream-handler write after releasing the renderer lock. |
+| apprt/surface tags | The flattened surface-message discriminant and title-report style used V's default 32-bit storage, while the shared new-surface context merely depended on that default for Ghostty's explicit `enum(c_int)` contract. | Restore byte backing for both source-inferred tags, signed 32-bit backing for the C-facing context, and verify every ordinal. |
 | apprt/core bridge | Runtime-neutral preedit/text wrappers invented boolean results absent from `Surface.zig`, and the duplicated embedded size projection returned zero grid dimensions below one cell instead of using `GridSize`'s minimum-one contract. | Restore void error-union callback results and mirror the source floating-point, checked `u16`, minimum-one grid calculation. |
 | apprt/runtime | The two-case source enum used default 32-bit V storage, while its source `default` method had been replaced by an unused string dispatcher plus a duplicate free function. | Use byte storage and expose one platform-selected `Runtime.default()` method, eliminating the source-external string API. |
 | core/App teardown | App teardown silently deinitialized a non-empty shared font-grid set, omitting Ghostty's ownership assertion that all surfaces must release their grid references before application destruction. | Restore the zero-grid assertion immediately before `SharedGridSet.deinit()`. |
@@ -219,6 +220,11 @@ an item here does not mean its full module has been certified yet.
   Witty's shared parser stores flat `StreamEvent`/`ActionPayload` values for a
   later handler pass. The reviewed action values and read-only effects are
   close, but callback/error timing, allocation, and representation differ.
+- **Surface-message representation:** Ghostty's apprt mailbox carries a tagged
+  `Message` union whose inactive payload does not exist. Witty retains the
+  corrected compact discriminant but stores every possible message payload in
+  one flat `SurfaceMessage`, so its memory representation and invalid-state
+  space are not a one-for-one translation.
 - **Generated feature wiring:** Ghostty's build synthesizes
   `kitty_graphics`/`tmux_control_mode` from the Oniguruma build option. Witty
   has a build-options carrier but does not yet generate or apply equivalent
