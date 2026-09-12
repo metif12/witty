@@ -129,7 +129,7 @@ mut:
 }
 
 pub fn TempDir.init() !TempDir {
-	parent := if os.temp_dir().len > 0 { os.temp_dir() } else { os.getwd() }
+	parent := alloc_tmp_dir() or { os.getwd() }
 	for {
 		random := crypto_rand.bytes(16)!
 		name := base64.url_encode(random)

@@ -84,6 +84,35 @@ fn test_temp_dir_is_unique_and_deletes_contents() {
 	first.deinit()
 }
 
+fn test_temp_dir_uses_source_temp_directory_selection() {
+	$if !windows {
+		mut parent := TempDir.init()!
+		defer { parent.deinit() }
+		previous_tmpdir := os.getenv_opt('TMPDIR')
+		previous_tmp := os.getenv_opt('TMP')
+		defer {
+			if value := previous_tmpdir {
+				os.setenv('TMPDIR', value, true)
+			} else {
+				os.unsetenv('TMPDIR')
+			}
+			if value := previous_tmp {
+				os.setenv('TMP', value, true)
+			} else {
+				os.unsetenv('TMP')
+			}
+		}
+
+		os.setenv('TMP', os.getwd(), true)
+		os.setenv('TMPDIR', parent.path, true)
+		mut child := TempDir.init()!
+		assert child.parent == parent.path
+		assert child.path == os.join_path(parent.path, child.name())
+		child.deinit()
+		assert !os.exists(child.path)
+	}
+}
+
 fn test_environment_access_preserves_missing_and_empty() {
 	key := 'WITTY_INTERNAL_OS_ENV_TEST'
 	previous := os.getenv_opt(key)
