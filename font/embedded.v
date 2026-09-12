@@ -79,7 +79,7 @@ fn reserve_growing(mut atlas Atlas, width u32, height u32) !AtlasRegion {
 		} else {
 			// Atlas is full; grow and retry. We double the size, matching
 			// ghostty's SharedGrid growth strategy.
-			atlas.grow(atlas.size * 2)
+			atlas.grow(atlas.size * 2)!
 		}
 	}
 	return AtlasRegion{}

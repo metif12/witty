@@ -21,7 +21,7 @@ fn test_face_name() {
 fn test_render_all_ascii() {
 	mut lib := Library.init() or { panic(err) }
 	defer { lib.deinit() }
-	mut atlas := Atlas.init(512, .grayscale)
+	mut atlas := Atlas.init(512, .grayscale) or { panic(err) }
 	defer { atlas.deinit() }
 	mut face := Face.init_mem(lib, embedded_inconsolata, FaceOptions{
 		size: DesiredSize{points: 12, xdpi: 96, ydpi: 96}
@@ -48,7 +48,7 @@ fn test_render_all_ascii() {
 fn test_color_emoji() {
 	mut lib := Library.init() or { panic(err) }
 	defer { lib.deinit() }
-	mut atlas := Atlas.init(512, .bgra)
+	mut atlas := Atlas.init(512, .bgra)!
 	defer { atlas.deinit() }
 	mut face := Face.init_mem(lib, embedded_emoji, FaceOptions{
 		size: DesiredSize{points: 12, xdpi: 96, ydpi: 96}
@@ -73,7 +73,7 @@ fn test_color_emoji() {
 fn test_mono_to_bgra() {
 	mut lib := Library.init() or { panic(err) }
 	defer { lib.deinit() }
-	mut atlas := Atlas.init(512, .bgra)
+	mut atlas := Atlas.init(512, .bgra)!
 	defer { atlas.deinit() }
 	mut face := Face.init_mem(lib, embedded_emoji, FaceOptions{
 		size: DesiredSize{points: 12, xdpi: 72, ydpi: 72}
@@ -135,7 +135,7 @@ fn check_spleen_bitmap(data []u8) {
 fn check_bitmap_font(data []u8, glyph_index u32, pattern []string) {
 	mut lib := Library.init() or { panic(err) }
 	defer { lib.deinit() }
-	mut atlas := Atlas.init(512, .grayscale)
+	mut atlas := Atlas.init(512, .grayscale) or { panic(err) }
 	defer { atlas.deinit() }
 	mut face := Face.init_mem(lib, data, FaceOptions{
 		size: DesiredSize{points: 12, xdpi: 96, ydpi: 96}

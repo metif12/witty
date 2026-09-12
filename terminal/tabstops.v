@@ -1,6 +1,22 @@
 module terminal
 
 import fastmem
+import tripwire
+
+enum TabstopsResizeFailPoint {
+	dynamic_alloc
+}
+
+struct TabstopsResizeTripwire {
+mut:
+	value tripwire.TripwireModule[TabstopsResizeFailPoint]
+}
+
+const resize_tw_singleton = &TabstopsResizeTripwire{}
+
+fn resize_tripwire() &tripwire.TripwireModule[TabstopsResizeFailPoint] {
+	return unsafe { &resize_tw_singleton.value }
+}
 
 // Keep track of the location of tabstops.
 //
@@ -137,6 +153,8 @@ pub fn (mut self Tabstops) resize(cols usize) ! {
 
 	// Allocate new dynamic stops and copy existing data.
 	// Note: we could probably try to realloc here but it doesn't matter much.
+	mut tw := resize_tripwire()
+	tw.check(.dynamic_alloc)!
 	mut new_stops := []u8{len: int(size)}
 	// Copy existing dynamic data if any
 	if self.dynamic_stops.len > 0 {

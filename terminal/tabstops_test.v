@@ -1,5 +1,19 @@
 module terminal
 
+fn test_resize_tripwire() {
+	mut tw := resize_tripwire()
+	tw.error_always(.dynamic_alloc, error('OutOfMemory'))
+	defer {
+		tw.end(.reset) or { panic(err) }
+	}
+	mut tabstops := Tabstops.init(80, 8)!
+	if _ := tabstops.resize(1000) {
+		assert false
+	} else {
+		assert err.msg() == 'OutOfMemory'
+	}
+}
+
 // Tests for Tabstops (bitset-based tab stop tracking).
 // Translated from Ghostty's Tabstops.zig tests.
 

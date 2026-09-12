@@ -54,7 +54,7 @@ fn test_coretext_basic_ascii_rendering() {
 		mut face := named_coretext_test_face('Menlo', 12) or { panic(err) }
 		defer { face.deinit() }
 		metrics := Metrics.calc(face.get_metrics())
-		mut atlas := Atlas.init(512, .grayscale)
+		mut atlas := Atlas.init(512, .grayscale)!
 		defer { atlas.deinit() }
 		for cp in u32(32) .. u32(127) {
 			glyph := face.glyph_index(cp) or { panic('Menlo is missing ASCII ${cp}') }
@@ -80,7 +80,7 @@ fn test_coretext_emoji_color_detection() {
 		defer { face.deinit() }
 		glyph := face.glyph_index(0x1f978) or { panic('emoji glyph unavailable') }
 		assert face.is_color_glyph(glyph)
-		mut atlas := Atlas.init(512, .bgra)
+		mut atlas := Atlas.init(512, .bgra)!
 		defer { atlas.deinit() }
 		info := face.render_glyph(mut atlas, glyph, RenderOptions{
 			grid_metrics: Metrics.calc(face.get_metrics())
@@ -100,7 +100,7 @@ fn test_coretext_in_memory_font() {
 		defer { face.deinit() }
 		assert face.hb_font != unsafe { nil }
 		assert face.glyph_index(u32(`A`)) != none
-		mut atlas := Atlas.init(128, .grayscale)
+		mut atlas := Atlas.init(128, .grayscale)!
 		defer { atlas.deinit() }
 		glyph := face.glyph_index(u32(`A`)) or { panic('missing A') }
 		info := face.render_glyph(mut atlas, glyph, RenderOptions{

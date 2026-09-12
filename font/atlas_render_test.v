@@ -1,5 +1,62 @@
 module font
 
+fn test_atlas_init_tripwires() {
+	mut tw := atlas_init_tripwire()
+	tw.error_always(.alloc_data, error('OutOfMemory'))
+	if _ := Atlas.init(32, .grayscale) {
+		assert false
+	} else {
+		assert err.msg() == 'OutOfMemory'
+	}
+	tw.end(.reset)!
+
+	tw.error_always(.alloc_nodes, error('OutOfMemory'))
+	if _ := Atlas.init(32, .grayscale) {
+		assert false
+	} else {
+		assert err.msg() == 'OutOfMemory'
+	}
+	tw.end(.reset)!
+}
+
+fn test_atlas_reserve_tripwire_preserves_nodes() {
+	mut atlas := Atlas.init(32, .grayscale)!
+	original := atlas.nodes.clone()
+	mut tw := atlas_reserve_tripwire()
+	tw.error_always(.insert_node, error('OutOfMemory'))
+	defer {
+		tw.end(.reset) or { panic(err) }
+	}
+	if _ := atlas.reserve(2, 2) {
+		assert false
+	} else {
+		assert err.msg() == 'OutOfMemory'
+	}
+	assert atlas.nodes == original
+}
+
+fn test_atlas_grow_tripwires_preserve_size() {
+	mut atlas := Atlas.init(8, .grayscale)!
+	mut tw := atlas_grow_tripwire()
+	tw.error_always(.ensure_node_capacity, error('OutOfMemory'))
+	if _ := atlas.grow(16) {
+		assert false
+	} else {
+		assert err.msg() == 'OutOfMemory'
+	}
+	assert atlas.size == 8
+	tw.end(.reset)!
+
+	tw.error_always(.alloc_data, error('OutOfMemory'))
+	if _ := atlas.grow(16) {
+		assert false
+	} else {
+		assert err.msg() == 'OutOfMemory'
+	}
+	assert atlas.size == 8
+	tw.end(.reset)!
+}
+
 struct AtlasChunkWriter {
 	chunk int
 pub mut:
@@ -21,7 +78,7 @@ fn (mut writer AtlasChunkWriter) write(data []u8) !int {
 // ============================================================
 
 fn test_atlas_exact_fit() {
-	mut atlas := Atlas.init(34, .grayscale) // +2 for 1px border
+	mut atlas := Atlas.init(34, .grayscale)! // +2 for 1px border
 	modified := atlas.modified
 	atlas.reserve(32, 32)!
 	assert atlas.modified == modified
@@ -31,7 +88,7 @@ fn test_atlas_exact_fit() {
 }
 
 fn test_atlas_doesnt_fit() {
-	mut atlas := Atlas.init(32, .grayscale)
+	mut atlas := Atlas.init(32, .grayscale)!
 	// doesn't fit due to border
 	if _ := atlas.reserve(32, 32) {
 		assert false, 'expected AtlasFull'
@@ -39,7 +96,7 @@ fn test_atlas_doesnt_fit() {
 }
 
 fn test_atlas_fit_multiple() {
-	mut atlas := Atlas.init(32, .grayscale)
+	mut atlas := Atlas.init(32, .grayscale)!
 	atlas.reserve(15, 30)!
 	atlas.reserve(15, 30)!
 	if _ := atlas.reserve(1, 1) {
@@ -48,7 +105,7 @@ fn test_atlas_fit_multiple() {
 }
 
 fn test_atlas_writing_data() {
-	mut atlas := Atlas.init(32, .grayscale)
+	mut atlas := Atlas.init(32, .grayscale)!
 	reg := atlas.reserve(2, 2)!
 	old := atlas.modified
 	atlas.set(reg, [u8(1), 2, 3, 4])
@@ -63,7 +120,7 @@ fn test_atlas_writing_data() {
 }
 
 fn test_atlas_writing_data_from_larger_source() {
-	mut atlas := Atlas.init(32, .grayscale)
+	mut atlas := Atlas.init(32, .grayscale)!
 	reg := atlas.reserve(2, 2)!
 	old := atlas.modified
 	atlas.set_from_larger(reg, [
@@ -105,7 +162,7 @@ fn test_atlas_writing_data_from_larger_source() {
 }
 
 fn test_atlas_writing_bgr_data() {
-	mut atlas := Atlas.init(32, .bgr)
+	mut atlas := Atlas.init(32, .bgr)!
 	reg := atlas.reserve(1, 2)!
 	atlas.set(reg, [u8(1), 2, 3, 4, 5, 6])
 
@@ -118,7 +175,7 @@ fn test_atlas_writing_bgr_data() {
 }
 
 fn test_atlas_grow_bgr() {
-	mut atlas := Atlas.init(4, .bgr)
+	mut atlas := Atlas.init(4, .bgr)!
 	reg := atlas.reserve(2, 2)!
 	atlas.set(reg, [
 		u8(10),
@@ -134,7 +191,7 @@ fn test_atlas_grow_bgr() {
 		24,
 		25,
 	])
-	atlas.grow(8)
+	atlas.grow(8)!
 
 	depth := atlas.format.depth()
 	first := int((atlas.size + 1) * depth)
@@ -144,7 +201,7 @@ fn test_atlas_grow_bgr() {
 }
 
 fn test_atlas_dump_grayscale_with_partial_writer() {
-	mut atlas := Atlas.init(4, .grayscale)
+	mut atlas := Atlas.init(4, .grayscale)!
 	atlas.data[5] = 0x7f
 	mut writer := AtlasChunkWriter{
 		chunk: 3
@@ -157,7 +214,7 @@ fn test_atlas_dump_grayscale_with_partial_writer() {
 }
 
 fn test_atlas_dump_bgr_and_reject_bgra() {
-	mut bgr := Atlas.init(3, .bgr)
+	mut bgr := Atlas.init(3, .bgr)!
 	bgr.data[0] = 1
 	bgr.data[1] = 2
 	bgr.data[2] = 3
@@ -168,7 +225,7 @@ fn test_atlas_dump_bgr_and_reject_bgra() {
 	assert writer.data[..11].bytestr() == 'P6\n3 3\n255\n'
 	assert writer.data[11..] == bgr.data
 
-	bgra := Atlas.init(3, .bgra)
+	bgra := Atlas.init(3, .bgra)!
 	mut rejected := AtlasChunkWriter{
 		chunk: 1024
 	}
@@ -178,7 +235,7 @@ fn test_atlas_dump_bgr_and_reject_bgra() {
 }
 
 fn test_atlas_grow() {
-	mut atlas := Atlas.init(4, .grayscale) // +2 for 1px border
+	mut atlas := Atlas.init(4, .grayscale)! // +2 for 1px border
 	reg := atlas.reserve(2, 2)!
 	if _ := atlas.reserve(1, 1) {
 		assert false, 'expected AtlasFull'
@@ -194,7 +251,7 @@ fn test_atlas_grow() {
 	// Expand by exactly 1 should fit our new 1x1 block.
 	old_modified := atlas.modified
 	old_resized := atlas.resized
-	atlas.grow(atlas.size + 1)
+	atlas.grow(atlas.size + 1)!
 	assert atlas.modified > old_modified
 	assert atlas.resized > old_resized
 	atlas.reserve(1, 1)!
@@ -207,7 +264,7 @@ fn test_atlas_grow() {
 }
 
 fn test_atlas_set_and_grow_preserves_pixels() {
-	mut atlas := Atlas.init(8, .grayscale)
+	mut atlas := Atlas.init(8, .grayscale)!
 	region := atlas.reserve(2, 2)!
 	atlas.set(region, [u8(1), 2, 3, 4])
 	first_idx := int(region.y * atlas.size + region.x)
@@ -215,7 +272,7 @@ fn test_atlas_set_and_grow_preserves_pixels() {
 	assert atlas.data[first_idx + 1] == 2
 	old_modified := atlas.modified
 
-	atlas.grow(16)
+	atlas.grow(16)!
 	grown_idx := int(region.y * atlas.size + region.x)
 	assert atlas.data[grown_idx] == 1
 	assert atlas.data[grown_idx + 1] == 2
@@ -224,14 +281,14 @@ fn test_atlas_set_and_grow_preserves_pixels() {
 }
 
 fn test_builtin_glyph_render_ignores_unsupported_codepoint() {
-	mut atlas := Atlas.init(64, .grayscale)
+	mut atlas := Atlas.init(64, .grayscale)!
 	glyph := render_builtin_cell_glyph(mut atlas, u32(`A`), default_grid_metrics(8, 16))!
 	assert glyph.width == 0
 	assert glyph.height == 0
 }
 
 fn test_sprite_render_writes_cursor_atlas() {
-	mut atlas := Atlas.init(64, .grayscale)
+	mut atlas := Atlas.init(64, .grayscale)!
 	sf := SpriteFace{
 		metrics: default_grid_metrics(8, 16)
 	}
@@ -250,7 +307,7 @@ fn test_sprite_render_writes_cursor_atlas() {
 }
 
 fn test_sprite_face_renders_unicode_sprite_codepoint_without_enum_cast() {
-	mut atlas := Atlas.init(64, .grayscale)
+	mut atlas := Atlas.init(64, .grayscale)!
 	sf := SpriteFace{
 		metrics: default_grid_metrics(8, 16)
 	}

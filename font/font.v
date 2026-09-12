@@ -400,6 +400,7 @@ import harfbuzz
 import io
 import math
 import terminal
+import tripwire
 
 // Default DPI for the platform. Fontconfig environments conventionally use
 // 96 DPI while CoreText uses 72 DPI, matching font.face.default_dpi.
@@ -885,14 +886,52 @@ pub mut:
 	nodes []AtlasNode
 }
 
+enum AtlasInitFailPoint {
+	alloc_data
+	alloc_nodes
+}
+
+enum AtlasReserveFailPoint {
+	insert_node
+}
+
+enum AtlasGrowFailPoint {
+	ensure_node_capacity
+	alloc_data
+}
+
+struct AtlasTripwires {
+mut:
+	init    tripwire.TripwireModule[AtlasInitFailPoint]
+	reserve tripwire.TripwireModule[AtlasReserveFailPoint]
+	grow    tripwire.TripwireModule[AtlasGrowFailPoint]
+}
+
+const atlas_tripwires = &AtlasTripwires{}
+
+fn atlas_init_tripwire() &tripwire.TripwireModule[AtlasInitFailPoint] {
+	return unsafe { &atlas_tripwires.init }
+}
+
+fn atlas_reserve_tripwire() &tripwire.TripwireModule[AtlasReserveFailPoint] {
+	return unsafe { &atlas_tripwires.reserve }
+}
+
+fn atlas_grow_tripwire() &tripwire.TripwireModule[AtlasGrowFailPoint] {
+	return unsafe { &atlas_tripwires.grow }
+}
+
 // init creates a new Atlas with the given initial size and format.
-pub fn Atlas.init(size u32, format AtlasFormat) Atlas {
+pub fn Atlas.init(size u32, format AtlasFormat) !Atlas {
+	mut tw := atlas_init_tripwire()
+	tw.check(.alloc_data)!
 	mut a := Atlas{
 		size: size
 		format: format
 		data: []u8{len: int(size * size * format.depth())}
 		nodes: []AtlasNode{cap: 64}
 	}
+	tw.check(.alloc_nodes)!
 	// This sets up our initial state.
 	a.clear()
 	return a
@@ -951,6 +990,8 @@ pub fn (mut a Atlas) reserve(width u32, height u32) !AtlasRegion {
 	best_idx := chosen
 
 	// Insert our new node for this rectangle at the exact best index.
+	mut tw := atlas_reserve_tripwire()
+	tw.check(.insert_node)!
 	a.nodes.insert(best_idx, AtlasNode{
 		x: region.x
 		y: region.y + height
@@ -1077,13 +1118,17 @@ pub fn (mut a Atlas) set_from_larger(reg AtlasRegion, src []u8, src_width u32, s
 }
 
 // grow grows the texture to the new size, preserving all previously written data.
-pub fn (mut a Atlas) grow(size_new u32) {
+pub fn (mut a Atlas) grow(size_new u32) ! {
 	assert size_new >= a.size
 	if size_new == a.size {
 		return
 	}
 
 	depth := a.format.depth()
+	mut tw := atlas_grow_tripwire()
+	tw.check(.ensure_node_capacity)!
+	a.nodes.ensure_cap(a.nodes.len + 1)
+	tw.check(.alloc_data)!
 
 	// Keep track of our old data so that we can copy it.
 	data_old := a.data

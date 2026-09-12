@@ -272,7 +272,7 @@ fn test_render_glyph() {
 	mut face := r.collection.get_face(Index{}) or { panic(err) }
 	glyph_index := face.glyph_index(0x41) or { panic('missing A') }
 	metrics := Metrics.calc(face.get_metrics())
-	mut atlas := Atlas.init(512, .grayscale)
+	mut atlas := Atlas.init(512, .grayscale)!
 	defer { atlas.deinit() }
 	glyph := r.render_glyph(mut atlas, Index{}, glyph_index, RenderOptions{
 		grid_metrics: metrics
