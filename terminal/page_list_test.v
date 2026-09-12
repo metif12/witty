@@ -315,7 +315,7 @@ fn test_page_list_increase_capacity_after_col_shrink() {
 	s.resize(PageResizeOpts{
 		cols: 5
 		reflow: false
-	})
+	}) or { panic(err) }
 	assert s.cols == 5
 	mut first := s.pages.first or {
 		assert false
@@ -868,7 +868,7 @@ fn test_page_list_reflow_grows_style_capacity_without_losing_styles() {
 	list.resize(PageResizeOpts{
 		cols: 120
 		reflow: true
-	})
+	}) or { panic(err) }
 
 	dst_node := list.pages.first or {
 		assert false, 'missing reflow destination page'
@@ -2624,7 +2624,7 @@ fn test_page_list_resize_no_reflow_more_rows() {
 		cols: 80
 		rows: 10
 		reflow: false
-	})
+	}) or { panic(err) }
 
 	assert s.rows == 10
 	assert s.total_rows >= 10
@@ -2643,7 +2643,7 @@ fn test_page_list_resize_no_reflow_more_rows_with_history() {
 		cols: 80
 		rows: 10
 		reflow: false
-	})
+	}) or { panic(err) }
 
 	assert s.rows == 10
 	assert s.total_rows >= old_total
@@ -2662,7 +2662,7 @@ fn test_page_list_resize_no_reflow_less_rows() {
 		cols: 80
 		rows: 5
 		reflow: false
-	})
+	}) or { panic(err) }
 
 	assert s.rows == 5
 }
@@ -2680,7 +2680,7 @@ fn test_page_list_resize_no_reflow_one_row() {
 		cols: 80
 		rows: 1
 		reflow: false
-	})
+	}) or { panic(err) }
 
 	assert s.rows == 1
 }
@@ -2693,7 +2693,7 @@ fn test_page_list_resize_no_reflow_less_cols() {
 		cols: 5
 		rows: 10
 		reflow: false
-	})
+	}) or { panic(err) }
 
 	assert s.cols == 5
 
@@ -2724,7 +2724,7 @@ fn test_page_list_resize_no_reflow_less_cols_pin_in_trimmed() {
 		cols: 5
 		rows: 10
 		reflow: false
-	})
+	}) or { panic(err) }
 
 	// Pin should be clamped to x=4
 	assert tp.x == 4
@@ -2740,7 +2740,7 @@ fn test_page_list_resize_no_reflow_more_cols() {
 		cols: 10
 		rows: 10
 		reflow: false
-	})
+	}) or { panic(err) }
 
 	assert s.cols == 10
 
@@ -2763,14 +2763,14 @@ fn test_page_list_resize_no_reflow_less_cols_then_more() {
 		cols: 2
 		rows: 10
 		reflow: false
-	})
+	}) or { panic(err) }
 	assert s.cols == 2
 
 	s.resize(PageResizeOpts{
 		cols: 5
 		rows: 10
 		reflow: false
-	})
+	}) or { panic(err) }
 	assert s.cols == 5
 
 	// Verify all rows have 5 cells
@@ -2792,7 +2792,7 @@ fn test_page_list_resize_no_reflow_less_rows_and_cols() {
 		cols: 5
 		rows: 5
 		reflow: false
-	})
+	}) or { panic(err) }
 
 	assert s.cols == 5
 	assert s.rows == 5
@@ -2806,7 +2806,7 @@ fn test_page_list_resize_no_reflow_more_rows_and_less_cols() {
 		cols: 5
 		rows: 20
 		reflow: false
-	})
+	}) or { panic(err) }
 
 	assert s.cols == 5
 	assert s.rows == 20
@@ -2821,7 +2821,7 @@ fn test_page_list_resize_no_reflow_empty_screen() {
 		cols: 10
 		rows: 10
 		reflow: false
-	})
+	}) or { panic(err) }
 
 	assert s.cols == 10
 	assert s.rows == 10
@@ -2847,7 +2847,7 @@ fn test_page_list_resize_more_rows_and_cols_large() {
 		cols: new_cols
 		rows: new_rows
 		reflow: true
-	})
+	}) or { panic(err) }
 
 	assert s.cols == new_cols
 	assert s.rows == new_rows
@@ -4720,7 +4720,7 @@ fn test_page_list_resize_no_reflow_one_row_precise() {
 		}
 	}
 
-	s.resize(PageResizeOpts{ rows: 1, reflow: false })
+	s.resize(PageResizeOpts{ rows: 1, reflow: false }) or { panic(err) }
 	assert s.rows == 1
 	assert s.total_rows == 10
 
@@ -4755,7 +4755,7 @@ fn test_page_list_resize_no_reflow_less_rows_cursor_on_bottom() {
 		return
 	})
 
-	s.resize(PageResizeOpts{ rows: 5, reflow: false })
+	s.resize(PageResizeOpts{ rows: 5, reflow: false }) or { panic(err) }
 	assert s.rows == 5
 	assert s.total_rows == 10
 
@@ -4800,7 +4800,7 @@ fn test_page_list_resize_no_reflow_less_rows_cursor_in_scrollback() {
 		return
 	})
 
-	s.resize(PageResizeOpts{ rows: 5, reflow: false })
+	s.resize(PageResizeOpts{ rows: 5, reflow: false }) or { panic(err) }
 	assert s.rows == 5
 	assert s.total_rows == 10
 
@@ -4839,7 +4839,7 @@ fn test_page_list_resize_no_reflow_more_rows_contains_viewport() {
 	s.scroll(PageScrollDeltaRow{ delta: -1 })
 	assert s.viewport == .top
 
-	s.resize(PageResizeOpts{ rows: 7, reflow: false })
+	s.resize(PageResizeOpts{ rows: 7, reflow: false }) or { panic(err) }
 	assert s.rows == 7
 	assert s.total_rows == 7
 	assert s.viewport == .top
@@ -4868,7 +4868,7 @@ fn test_page_list_resize_no_reflow_more_rows_extends_blank_lines() {
 		}
 	}
 
-	s.resize(PageResizeOpts{ rows: 7, reflow: false })
+	s.resize(PageResizeOpts{ rows: 7, reflow: false }) or { panic(err) }
 	assert s.rows == 7
 	assert s.total_rows == 7
 
@@ -4909,7 +4909,7 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines() {
 		return
 	})
 
-	s.resize(PageResizeOpts{ rows: 2, reflow: false })
+	s.resize(PageResizeOpts{ rows: 2, reflow: false }) or { panic(err) }
 	assert s.rows == 2
 	assert s.total_rows == 2
 
@@ -4950,7 +4950,7 @@ fn test_page_list_resize_no_reflow_less_cols_clears_graphemes() {
 	page.append_grapheme(0, 9, u32(`A`)) or { panic(err) }
 	assert page.grapheme_count() == 1
 
-	s.resize(PageResizeOpts{ cols: 5, reflow: false })
+	s.resize(PageResizeOpts{ cols: 5, reflow: false }) or { panic(err) }
 	assert s.cols == 5
 	assert s.total_rows == 10
 
@@ -4991,7 +4991,7 @@ fn test_page_list_resize_no_reflow_preserves_hyperlink_key_stride() {
 	}
 	page.set_hyperlink(1, 3, link_id) or { panic(err) }
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: false })
+	s.resize(PageResizeOpts{ cols: 2, reflow: false }) or { panic(err) }
 	shrunk_node := s.pages.first or { return }
 	shrunk := &shrunk_node.data
 	assert shrunk.size.cols == 2
@@ -5004,7 +5004,7 @@ fn test_page_list_resize_no_reflow_preserves_hyperlink_key_stride() {
 	assert shrunk.hyperlink_count() == 1
 	assert shrunk.hyperlink_set.ref_count(link_id) == 1
 
-	s.resize(PageResizeOpts{ cols: 4, reflow: false })
+	s.resize(PageResizeOpts{ cols: 4, reflow: false }) or { panic(err) }
 	regrown_node := s.pages.first or { return }
 	regrown := &regrown_node.data
 	regrown_link_id := regrown.lookup_hyperlink(1, 1) or {
@@ -5046,7 +5046,7 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines_cursor_in_blank_l
 		return
 	})
 
-	s.resize(PageResizeOpts{ rows: 2, reflow: false })
+	s.resize(PageResizeOpts{ rows: 2, reflow: false }) or { panic(err) }
 	assert s.rows == 2
 	assert s.total_rows == 4
 
@@ -5072,7 +5072,7 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines_erases_pages() {
 
 	// Resize to take up two pages.
 	rows := u16(int(first.data.capacity.rows) + 10)
-	s.resize(PageResizeOpts{ rows: rows, reflow: false })
+	s.resize(PageResizeOpts{ rows: rows, reflow: false }) or { panic(err) }
 	assert s.total_pages() == 2
 
 	// Write codepoint into first line.
@@ -5084,7 +5084,7 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines_erases_pages() {
 
 	// Resize down. Every row except the first is blank so we should
 	// erase the second page.
-	s.resize(PageResizeOpts{ rows: 5, reflow: false })
+	s.resize(PageResizeOpts{ rows: 5, reflow: false }) or { panic(err) }
 	assert s.rows == 5
 	assert s.total_rows == 5
 	assert s.total_pages() == 1
@@ -5123,7 +5123,7 @@ fn test_page_list_resize_no_reflow_more_cols_with_spacer_head() {
 		wide: .spacer_tail
 	}
 
-	s.resize(PageResizeOpts{ cols: 3, reflow: false })
+	s.resize(PageResizeOpts{ cols: 3, reflow: false }) or { panic(err) }
 	assert s.cols == 3
 	assert s.total_rows == 3
 
@@ -5168,7 +5168,7 @@ fn test_page_list_resize_no_reflow_more_cols_forces_smaller_cap() {
 	}
 
 	rows := s.total_rows
-	s.resize(PageResizeOpts{ cols: cap2.cols, reflow: false })
+	s.resize(PageResizeOpts{ cols: cap2.cols, reflow: false }) or { panic(err) }
 	assert s.total_rows == rows
 
 	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
@@ -5195,7 +5195,7 @@ fn test_page_list_resize_no_reflow_more_cols_forces_less_rows_per_page() {
 		new_cols += 50
 		adjusted = std_capacity.adjust_checked(new_cols) or { panic(err) }
 	}
-	s.resize(PageResizeOpts{ cols: new_cols, reflow: false })
+	s.resize(PageResizeOpts{ cols: new_cols, reflow: false }) or { panic(err) }
 	assert s.cols == new_cols
 	assert s.total_rows == usize(rows)
 	assert_all_but_last_page_full(&s)
@@ -5208,7 +5208,7 @@ fn test_page_list_resize_no_reflow_more_cols_forces_less_rows_per_page() {
 		new_cols += 50
 		adjusted = std_capacity.adjust_checked(new_cols) or { panic(err) }
 	}
-	s.resize(PageResizeOpts{ cols: new_cols, reflow: false })
+	s.resize(PageResizeOpts{ cols: new_cols, reflow: false }) or { panic(err) }
 	assert s.cols == new_cols
 	assert s.total_rows == usize(rows)
 	assert_all_but_last_page_full(&s)
@@ -5262,7 +5262,7 @@ fn test_page_list_resize_no_reflow_more_cols_remaps_pins_in_backfill_path() {
 	rac.cell.content_tag = .codepoint
 	rac.cell.codepoint = marker
 
-	s.resize(PageResizeOpts{ cols: new_cols, reflow: false })
+	s.resize(PageResizeOpts{ cols: new_cols, reflow: false }) or { panic(err) }
 
 	mut found := false
 	mut node := s.pages.first
@@ -5327,7 +5327,7 @@ fn test_page_list_resize_no_reflow_more_rows_adds_blank_rows_if_cursor_at_bottom
 			x: 0
 			y: u16(s.rows - 2)
 		}
-	})
+	}) or { panic(err) }
 	assert s.cols == 5
 	assert s.rows == 10
 
@@ -5373,7 +5373,7 @@ fn test_page_list_resize_reflow_more_cols_no_wrapped_rows() {
 		}
 	}
 
-	s.resize(PageResizeOpts{ cols: 10, reflow: true })
+	s.resize(PageResizeOpts{ cols: 10, reflow: true }) or { panic(err) }
 	assert s.cols == 10
 	assert s.total_rows == 3
 
@@ -5409,7 +5409,7 @@ fn test_page_list_resize_reflow_more_cols_wrapped_rows() {
 		}
 	}
 
-	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	s.resize(PageResizeOpts{ cols: 4, reflow: true }) or { panic(err) }
 	assert s.cols == 4
 	assert s.total_rows == 4
 
@@ -5473,7 +5473,7 @@ fn test_page_list_resize_reflow_invalidates_viewport_offset_cache() {
 	assert sb1.len == usize(s.rows)
 
 	// Resize with reflow - unwrapping rows changes total_rows.
-	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	s.resize(PageResizeOpts{ cols: 4, reflow: true }) or { panic(err) }
 	assert s.cols == 4
 
 	// Verify the scrollbar cache was invalidated during reflow.
@@ -5516,7 +5516,7 @@ fn test_page_list_resize_reflow_more_cols_creates_multiple_pages() {
 
 	newcap := initial_capacity(cap.cols + 100)
 	assert newcap.rows < cap.rows
-	s.resize(PageResizeOpts{ cols: newcap.cols, reflow: true })
+	s.resize(PageResizeOpts{ cols: newcap.cols, reflow: true }) or { panic(err) }
 	assert s.cols == newcap.cols
 	assert s.total_rows == cap.rows
 
@@ -5557,7 +5557,7 @@ fn test_page_list_resize_reflow_more_cols_wrap_across_page_boundary() {
 	}
 	end_rows := s.total_rows - 1
 
-	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	s.resize(PageResizeOpts{ cols: 4, reflow: true }) or { panic(err) }
 	assert s.cols == 4
 	assert s.total_rows == end_rows
 	p8 := s.pin(Point.new(.active, Coordinate{ x: 0, y: 8 })) or { return }
@@ -5601,7 +5601,7 @@ fn test_page_list_resize_reflow_more_cols_wrap_across_page_boundary_cursor_in_se
 	assert voidptr(tracked.node) == voidptr(last)
 	end_rows := s.total_rows - 1
 
-	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	s.resize(PageResizeOpts{ cols: 4, reflow: true }) or { panic(err) }
 	assert s.cols == 4
 	assert s.total_rows == end_rows
 	point := s.point_from_pin(.active, *tracked) or { return }
@@ -5645,7 +5645,7 @@ fn test_page_list_resize_reflow_less_cols_wrap_across_page_boundary_cursor_in_se
 		cols: 4
 		reflow: true
 		cursor: PageResizeCursor{ x: 2, y: 5 }
-	})
+	}) or { panic(err) }
 	assert s.cols == 4
 	point := s.point_from_pin(.active, *tracked) or { return }
 	assert point == Point{ tag: .active, coord: Coordinate{ x: 3, y: 5 } }
@@ -5717,7 +5717,7 @@ fn test_page_list_resize_grow_cols_with_unwrap_fixes_viewport_pin() {
 	}
 
 	// Resize with reflow: unwraps rows, reducing total_rows.
-	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	s.resize(PageResizeOpts{ cols: 4, reflow: true }) or { panic(err) }
 	assert s.cols == 4
 	assert s.total_rows < 40
 
@@ -5760,7 +5760,7 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row() {
 		return
 	})
 
-	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	s.resize(PageResizeOpts{ cols: 4, reflow: true }) or { panic(err) }
 	assert s.cols == 4
 	assert s.total_rows == 4
 
@@ -5804,7 +5804,7 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_not_wrapped_row() {
 		return
 	})
 
-	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	s.resize(PageResizeOpts{ cols: 4, reflow: true }) or { panic(err) }
 	assert s.cols == 4
 	assert s.total_rows == 4
 
@@ -5858,7 +5858,7 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row_that_isnt_unwrap
 		return
 	})
 
-	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	s.resize(PageResizeOpts{ cols: 4, reflow: true }) or { panic(err) }
 	assert s.cols == 4
 	assert s.total_rows == 4
 
@@ -5883,7 +5883,7 @@ fn test_page_list_resize_reflow_more_cols_no_reflow_preserves_semantic_prompt() 
 	mut page := &first.data
 	page.rows[1].semantic_prompt = .prompt
 
-	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	s.resize(PageResizeOpts{ cols: 4, reflow: true }) or { panic(err) }
 	assert s.cols == 4
 	assert s.total_rows == 4
 
@@ -5913,7 +5913,7 @@ fn test_page_list_resize_reflow_less_cols_no_reflow_preserves_semantic_prompt() 
 		}
 	}
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
 	assert s.total_rows == 4
 
@@ -5944,7 +5944,7 @@ fn test_page_list_resize_reflow_less_cols_no_reflow_preserves_semantic_prompt_on
 	mut page := &first.data
 	page.rows[0].semantic_prompt = .prompt
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
 	assert s.total_rows == 4
 
@@ -5968,7 +5968,7 @@ fn test_page_list_resize_reflow_less_cols_wrap_preserves_semantic_prompt() {
 	mut page := &first.data
 	page.rows[0].semantic_prompt = .prompt
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
 	assert s.total_rows == 4
 
@@ -5999,7 +5999,7 @@ fn test_page_list_resize_reflow_less_cols_no_wrapped_rows() {
 		}
 	}
 
-	s.resize(PageResizeOpts{ cols: 5, reflow: true })
+	s.resize(PageResizeOpts{ cols: 5, reflow: true }) or { panic(err) }
 	assert s.cols == 5
 	assert s.total_rows == 3
 
@@ -6032,7 +6032,7 @@ fn test_page_list_resize_reflow_less_cols_wrapped_rows() {
 		}
 	}
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
 	assert s.total_rows == 4
 
@@ -6095,7 +6095,7 @@ fn test_page_list_resize_reflow_preserves_hyperlink_mapping() {
 	}) or { panic(err) }
 	page.set_hyperlink(0, 3, source_id) or { panic(err) }
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 
 	mut found := false
 	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
@@ -6174,7 +6174,7 @@ fn test_page_list_resize_reflow_preserves_hyperlinks_across_source_pages() {
 
 	// The wrapped logical line crosses the old page boundary and is unwrapped
 	// into one destination row.
-	s.resize(PageResizeOpts{ cols: 3, reflow: true })
+	s.resize(PageResizeOpts{ cols: 3, reflow: true }) or { panic(err) }
 
 	mut found := map[u32]string{}
 	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
@@ -6248,7 +6248,7 @@ fn test_page_list_resize_reflow_exceeds_hyperlink_memory_forcing_capacity_increa
 	}
 	assert second_error == 'strings out of memory'
 
-	s.resize(PageResizeOpts{ cols: s.cols + 1, reflow: true })
+	s.resize(PageResizeOpts{ cols: s.cols + 1, reflow: true }) or { panic(err) }
 	assert s.cols == 3
 }
 
@@ -6298,7 +6298,7 @@ fn test_page_list_resize_reflow_exceeds_style_memory_forcing_capacity_increase()
 		}
 	}
 
-	s.resize(PageResizeOpts{ cols: s.cols * 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: s.cols * 2, reflow: true }) or { panic(err) }
 	assert s.cols == (std_capacity.styles - 1) * 2
 }
 
@@ -6325,7 +6325,7 @@ fn test_page_list_resize_reflow_less_cols_cursor_in_wrapped_row() {
 		return
 	})
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
 	assert s.total_rows == 4
 
@@ -6356,7 +6356,7 @@ fn reflow_cursor_cell_helper(init_cols u16, new_cols u16, pin_x u16, exp_x u32, 
 
 	p := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: pin_x, y: 0 })) or { return })
 
-	s.resize(PageResizeOpts{ cols: new_cols, reflow: true })
+	s.resize(PageResizeOpts{ cols: new_cols, reflow: true }) or { panic(err) }
 	assert s.cols == new_cols
 	assert s.total_rows == 2
 
@@ -6402,7 +6402,7 @@ fn test_page_list_resize_reflow_less_cols_blank_lines() {
 		}
 	}
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
 	assert s.total_rows == 3
 
@@ -6440,7 +6440,7 @@ fn test_page_list_resize_reflow_less_cols_wrapped_rows_with_graphemes() {
 		page.append_grapheme(y, 2, u32(`A`)) or { panic(err) }
 	}
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
 	assert s.total_rows == 4
 
@@ -6503,7 +6503,7 @@ fn test_page_list_resize_reflow_less_cols_cursor_goes_to_scrollback() {
 		return
 	})
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
 	assert s.total_rows == 4
 
@@ -6543,7 +6543,7 @@ fn test_page_list_resize_reflow_less_cols_copy_style() {
 	}
 	page.styles.release(style_id)
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
 	assert s.total_rows == 2
 
@@ -6582,7 +6582,7 @@ fn test_page_list_resize_reflow_less_cols_to_eliminate_a_wide_char() {
 		wide: .spacer_tail
 	}
 
-	s.resize(PageResizeOpts{ cols: 1, reflow: true })
+	s.resize(PageResizeOpts{ cols: 1, reflow: true }) or { panic(err) }
 	assert s.cols == 1
 	assert s.total_rows == 1
 
@@ -6620,7 +6620,7 @@ fn test_page_list_resize_reflow_less_cols_to_wrap_a_wide_char() {
 		wide: .spacer_tail
 	}
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
 	assert s.total_rows == 2
 
@@ -6671,7 +6671,7 @@ fn test_page_list_resize_reflow_less_cols_to_wrap_a_multicodepoint_grapheme_with
 		wide: .spacer_tail
 	}
 
-	s.resize(PageResizeOpts{ cols: 3, reflow: true })
+	s.resize(PageResizeOpts{ cols: 3, reflow: true }) or { panic(err) }
 	assert s.cols == 3
 	assert s.total_rows == 2
 	new_node := s.pages.first or { return }
@@ -6713,7 +6713,7 @@ fn test_page_list_resize_reflow_more_cols_unwrap_wide_spacer_head() {
 	}
 	page.rows[1].cells[1] = CellData{ content_tag: .codepoint, wide: .spacer_tail }
 
-	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	s.resize(PageResizeOpts{ cols: 4, reflow: true }) or { panic(err) }
 	assert s.cols == 4
 	assert s.total_rows == 2
 	new_node := s.pages.first or { return }
@@ -6747,7 +6747,7 @@ fn test_page_list_resize_reflow_more_cols_unwrap_wide_spacer_head_across_two_row
 	}
 	page.rows[2].cells[1] = CellData{ content_tag: .codepoint, wide: .spacer_tail }
 
-	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	s.resize(PageResizeOpts{ cols: 4, reflow: true }) or { panic(err) }
 	assert s.cols == 4
 	assert s.total_rows == 3
 	new_page := &(s.pages.first or { return }).data
@@ -6777,7 +6777,7 @@ fn test_page_list_resize_reflow_more_cols_unwrap_still_requires_wide_spacer_head
 	}
 	page.rows[1].cells[1] = CellData{ content_tag: .codepoint, wide: .spacer_tail }
 
-	s.resize(PageResizeOpts{ cols: 3, reflow: true })
+	s.resize(PageResizeOpts{ cols: 3, reflow: true }) or { panic(err) }
 	assert s.cols == 3
 	assert s.total_rows == 2
 	new_page := &(s.pages.first or { return }).data
@@ -6800,7 +6800,7 @@ fn test_page_list_resize_reflow_less_cols_copy_kitty_placeholder() {
 	}
 	first.data.rows[0].kitty_virtual_placeholder = true
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
 	assert s.total_rows == 2
 	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
@@ -6820,8 +6820,8 @@ fn test_page_list_resize_reflow_more_cols_clears_kitty_placeholder() {
 	}
 	first.data.rows[0].kitty_virtual_placeholder = true
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: true })
-	s.resize(PageResizeOpts{ cols: 4, reflow: true })
+	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
+	s.resize(PageResizeOpts{ cols: 4, reflow: true }) or { panic(err) }
 	assert s.cols == 4
 	assert s.total_rows == 2
 	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
@@ -6842,7 +6842,7 @@ fn test_page_list_resize_reflow_wrap_moves_kitty_placeholder() {
 	}
 	first.data.rows[0].kitty_virtual_placeholder = true
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
 	assert s.total_rows == 2
 	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
@@ -6896,7 +6896,7 @@ fn test_page_list_resize_reflow_grapheme_map_capacity_exceeded() {
 		page1.append_grapheme(y, 0, u32(0x0302)) or { panic(err) }
 	}
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
 }
 
@@ -6934,7 +6934,7 @@ fn test_page_list_resize_reflow_exceeds_grapheme_memory_forcing_capacity_increas
 	}
 	page1.set_graphemes(0, 0, cps) or { panic(err) }
 
-	s.resize(PageResizeOpts{ cols: s.cols + 1, reflow: true })
+	s.resize(PageResizeOpts{ cols: s.cols + 1, reflow: true }) or { panic(err) }
 	assert s.cols == 3
 }
 
@@ -6958,7 +6958,7 @@ fn test_page_list_resize_reflow_less_cols_blank_lines_between() {
 		}
 	}
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
 	assert s.total_rows == 5
 
@@ -7000,7 +7000,7 @@ fn test_page_list_resize_reflow_less_cols_blank_lines_between_no_scrollback() {
 		codepoint: u32(`C`)
 	}
 
-	s.resize(PageResizeOpts{ cols: 2, reflow: true })
+	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
 	assert s.total_rows == 3
 
@@ -7058,7 +7058,7 @@ fn test_page_list_resize_reflow_less_cols_cursor_not_on_last_line_preserves_loca
 			x: 1
 			y: 1
 		}
-	})
+	}) or { panic(err) }
 	assert s.cols == 4
 	assert s.total_rows == 10
 
@@ -7113,7 +7113,7 @@ fn test_page_list_resize_reflow_less_cols_wraps_spacer_head() {
 		wide: .spacer_tail
 	}
 
-	s.resize(PageResizeOpts{ cols: 3, reflow: true })
+	s.resize(PageResizeOpts{ cols: 3, reflow: true }) or { panic(err) }
 	assert s.cols == 3
 	assert s.total_rows == 3
 

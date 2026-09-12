@@ -5069,11 +5069,10 @@ fn ReflowCursor.init(node &PageNode) ReflowCursor {
 }
 
 // Result of writing a cell.
-enum ReflowWriteResult {
+enum PageReflowWriteResult {
 	success
 	repeat
 	skip_next
-	out_of_space
 }
 
 // The destination page for the cursor.
@@ -5114,7 +5113,7 @@ fn (mut self ReflowCursor) cursor_scroll() {
 
 // Create a new page in the provided list with the provided capacity and
 // one row and move the cursor into it at 0,0.
-fn (mut self ReflowCursor) cursor_new_page(mut list PageList, cap PageCapacity) {
+fn (mut self ReflowCursor) cursor_new_page(mut list PageList, cap PageCapacity) ! {
 	// Remember our new row count so we can restore it after
 	// reinitializing our cursor on the new page.
 	new_rows := self.new_rows
@@ -5134,13 +5133,13 @@ fn (mut self ReflowCursor) cursor_new_page(mut list PageList, cap PageCapacity) 
 
 // Performs cursor_scroll or cursor_new_page as necessary depending on if
 // the cursor is currently at the bottom.
-fn (mut self ReflowCursor) cursor_scroll_or_new_page(mut list PageList, cap PageCapacity) {
+fn (mut self ReflowCursor) cursor_scroll_or_new_page(mut list PageList, cap PageCapacity) ! {
 	// The functions below may overwrite self so we cache our total rows.
 	// We add one because no matter what when this returns we'll have one
 	// more row added.
 	new_total_rows := self.total_rows + 1
 	if self.bottom() {
-		self.cursor_new_page(mut list, cap)
+		self.cursor_new_page(mut list, cap)!
 	} else {
 		self.cursor_scroll()
 	}
@@ -5210,7 +5209,7 @@ fn (mut self ReflowCursor) copy_row_metadata(other &RowData) {
 }
 
 // Reflow the provided row into this cursor.
-fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) {
+fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) ! {
 	mut src_page := &row.node.data
 	src_row := src_page.rows[int(row.y)]
 	src_y := row.y
@@ -5280,7 +5279,7 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) {
 
 	// Our row isn't blank, write any new rows we deferred.
 	for self.new_rows > 0 {
-		self.cursor_scroll_or_new_page(mut list, cap)
+		self.cursor_scroll_or_new_page(mut list, cap)!
 		self.new_rows -= 1
 	}
 
@@ -5290,7 +5289,7 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) {
 	for x < int(cols_len) {
 		if self.pending_wrap {
 			self.node.data.rows[int(self.y)].wrap = true
-			self.cursor_scroll_or_new_page(mut list, cap)
+			self.cursor_scroll_or_new_page(mut list, cap)!
 			self.copy_row_metadata(src_row)
 			self.node.data.rows[int(self.y)].wrap_continuation = true
 		}
@@ -5305,7 +5304,23 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) {
 			p.y = self.y
 		}
 
-		result := self.write_cell(mut list, &cells[x], src_page, int(src_y), x)
+		result := self.write_cell(mut list, &cells[x], src_page, int(src_y), x) or {
+			if err.msg() != 'OutOfSpace' {
+				return err
+			}
+			// We reached the managed-memory capacity of a single page. If
+			// we're on the first row we can't split further, so we take the
+			// valid base cell without the managed value.
+			if self.y == 0 {
+				x += 1
+				self.cursor_forward()
+			} else {
+				// Move our last row to a new page. Do NOT increment x so
+				// that we retry writing the same existing cell.
+				self.move_last_row_to_new_page(mut list, cap)!
+			}
+			continue
+		}
 		match result {
 			.success {
 				// Wrote the cell, move to the next.
@@ -5328,19 +5343,6 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) {
 			.repeat {
 				// Didn't write the cell, repeat writing this same cell.
 			}
-			.out_of_space {
-				// We reached the managed-memory capacity of a single page. If
-				// we're on the first row we can't split further, so we take the
-				// valid base cell without the managed value.
-				if self.y == 0 {
-					x += 1
-					self.cursor_forward()
-				} else {
-					// Move our last row to a new page. Do NOT increment x so
-					// that we retry writing the same existing cell.
-					self.move_last_row_to_new_page(mut list, cap)
-				}
-			}
 		}
 	}
 
@@ -5353,7 +5355,7 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) {
 // Write a cell. On error, this will not unwrite the cell but the cell may
 // be incomplete (but valid). This guarantees the page is in a coherent
 // state even on error.
-fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_page &Page, src_y int, src_x int) ReflowWriteResult {
+fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_page &Page, src_y int, src_x int) !PageReflowWriteResult {
 	mut page := &self.node.data
 	dst_cols := page.size.cols
 
@@ -5362,7 +5364,7 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 		.codepoint, .codepoint_grapheme {
 			match cell.wide {
 				.narrow {
-					page.rows[int(self.y)].cells[int(self.x)] = base_cell_copy(cell)
+					page.rows[int(self.y)].cells[int(self.x)] = *cell
 				}
 				.wide {
 					if dst_cols > 1 {
@@ -5381,7 +5383,7 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 							// Reprocess this source cell again.
 							return .repeat
 						} else {
-							page.rows[int(self.y)].cells[int(self.x)] = base_cell_copy(cell)
+							page.rows[int(self.y)].cells[int(self.x)] = *cell
 						}
 					} else {
 						// Edge case, when resizing to 1 column, wide characters
@@ -5399,7 +5401,7 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 				}
 				.spacer_tail {
 					if dst_cols > 1 {
-						page.rows[int(self.y)].cells[int(self.x)] = base_cell_copy(cell)
+						page.rows[int(self.y)].cells[int(self.x)] = *cell
 					} else {
 						// Edge case, resizing to 1 column: discard spacer tails.
 						return .success
@@ -5416,7 +5418,7 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 		.bg_color_palette, .bg_color_rgb {
 			// These are guaranteed to have no style or grapheme data
 			// associated with them so we can fast path them.
-			page.rows[int(self.y)].cells[int(self.x)] = base_cell_copy(cell)
+			page.rows[int(self.y)].cells[int(self.x)] = *cell
 			self.cursor_forward()
 			return .success
 		}
@@ -5444,16 +5446,12 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 			panic('grapheme source cell is missing its page mapping')
 		}
 		if page.grapheme_count() >= page.grapheme_capacity() {
-			self.increase_capacity(mut list, .grapheme_bytes) or {
-				return .out_of_space
-			}
+			self.increase_capacity(mut list, .grapheme_bytes)!
 			page = &self.node.data
 		}
 		for {
 			offset := page.grapheme_alloc.alloc(cps.len * int(sizeof(u32))) or {
-				self.increase_capacity(mut list, .grapheme_bytes) or {
-					return .out_of_space
-				}
+				self.increase_capacity(mut list, .grapheme_bytes)!
 				page = &self.node.data
 				continue
 			}
@@ -5461,7 +5459,15 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 			break
 		}
 		page.set_graphemes(int(self.y), int(self.x), cps) or {
-			return .out_of_space
+			$if !prod {
+				panic('set_graphemes failed after PageList capacity increase: ${err}')
+			} $else {
+				mut current_cell := &page.rows[int(self.y)].cells[int(self.x)]
+				current_cell.content_tag = .codepoint
+				current_cell.codepoint = 0xFFFD
+				current_cell.has_grapheme = false
+				current_cell.graphemes = []
+			}
 		}
 	}
 
@@ -5472,9 +5478,7 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 		}
 		src_link := src_page.hyperlink_set.get(src_id)
 		if page.hyperlink_count() >= page.hyperlink_capacity() {
-			self.increase_capacity(mut list, .hyperlink_bytes) or {
-				return .out_of_space
-			}
+			self.increase_capacity(mut list, .hyperlink_bytes)!
 			page = &self.node.data
 		}
 		additional_string_bytes := src_link.uri.len + match src_link.id {
@@ -5482,54 +5486,80 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 			else { 0 }
 		}
 		for !page.hyperlink_set.can_allocate_string_bytes(additional_string_bytes) {
-			self.increase_capacity(mut list, .string_bytes) or {
-				return .out_of_space
-			}
+			self.increase_capacity(mut list, .string_bytes)!
 			page = &self.node.data
 		}
 
+		mut hyperlink_valid := true
 		mut dst_id := u32(0)
-		for {
-			dst_id = page.hyperlink_set.add_with_id(src_link, src_id) or {
-				mut adjustment := ?PageCapacityAdjustment(none)
-				match err.msg() {
-					'strings out of memory' {
-						adjustment = .string_bytes
-					}
-					'set needs rehash' {}
-					else {
-						adjustment = .hyperlink_bytes
-					}
+		if initial_id := page.hyperlink_set.add_with_id(src_link, src_id) {
+			dst_id = initial_id
+		} else {
+			if err.msg() == 'strings out of memory' {
+				$if !prod {
+					panic('hyperlink copy failed after PageList capacity check: ${err}')
+				} $else {
+					hyperlink_valid = false
 				}
-				self.increase_capacity(mut list, adjustment) or {
-					return .out_of_space
+			} else {
+				adjustment := if err.msg() == 'set needs rehash' {
+					?PageCapacityAdjustment(none)
+				} else {
+					?PageCapacityAdjustment(.hyperlink_bytes)
 				}
+				self.increase_capacity(mut list, adjustment)!
 				page = &self.node.data
-				continue
+				if retry_id := page.hyperlink_set.add_with_id(src_link, src_id) {
+					dst_id = retry_id
+				} else {
+					$if !prod {
+						panic('hyperlink insertion failed after PageList capacity increase: ${err}')
+					} $else {
+						hyperlink_valid = false
+					}
+				}
 			}
-			break
 		}
-		page.set_hyperlink(int(self.y), int(self.x), dst_id) or {
-			page.hyperlink_set.release(dst_id)
-			return .out_of_space
+		if hyperlink_valid {
+			page.set_hyperlink(int(self.y), int(self.x), dst_id) or {
+				$if !prod {
+					panic('set_hyperlink failed after PageList capacity increase: ${err}')
+				} $else {
+					page.hyperlink_set.release(dst_id)
+				}
+			}
 		}
 	}
 
 	// Copy style data.
 	if cell.has_styling() {
 		style := src_page.styles.get(cell.style_id)
-		id := page.styles.add_with_id(style, cell.style_id) or {
-			self.increase_capacity(mut list, .styles) or {
-				return .out_of_space
+		mut style_valid := true
+		mut id := default_style_id
+		if initial_id := page.styles.add_with_id(style, cell.style_id) {
+			id = initial_id
+		} else {
+			mut adjustment := ?PageCapacityAdjustment(none)
+			if err.msg() != 'needs rehash' {
+				adjustment = .styles
 			}
+			self.increase_capacity(mut list, adjustment)!
 			mut grown_page := &self.node.data
-			grown_page.styles.add_with_id(style, cell.style_id) or {
-				panic('style insertion failed after PageList capacity increase')
+			if retry_id := grown_page.styles.add_with_id(style, cell.style_id) {
+				id = retry_id
+			} else {
+				$if !prod {
+					panic('style insertion failed after PageList capacity increase: ${err}')
+				} $else {
+					style_valid = false
+				}
 			}
 		}
-		mut current_page := &self.node.data
-		current_page.rows[int(self.y)].cells[int(self.x)].style_id = id
-		current_page.rows[int(self.y)].styled = true
+		if style_valid {
+			mut current_page := &self.node.data
+			current_page.rows[int(self.y)].cells[int(self.x)].style_id = id
+			current_page.rows[int(self.y)].styled = true
+		}
 	}
 
 	self.cursor_forward()
@@ -5540,7 +5570,7 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 // clone the row currently being worked on to it and delete it from the old
 // page. Places cursor in the same position it was in the old row in the new
 // one. Asserts that the cursor is on the final row of the page.
-fn (mut self ReflowCursor) move_last_row_to_new_page(mut list PageList, cap PageCapacity) {
+fn (mut self ReflowCursor) move_last_row_to_new_page(mut list PageList, cap PageCapacity) ! {
 	assert self.y == self.node.data.size.rows - 1
 	assert !self.pending_wrap
 
@@ -5552,7 +5582,7 @@ fn (mut self ReflowCursor) move_last_row_to_new_page(mut list PageList, cap Page
 	// from the last page and moving it into a new page.
 	old_total_rows := self.total_rows
 
-	self.cursor_new_page(mut list, cap)
+	self.cursor_new_page(mut list, cap)!
 	assert voidptr(self.node) != voidptr(old_node)
 	assert self.y == 0
 
@@ -5586,27 +5616,6 @@ fn (mut self ReflowCursor) move_last_row_to_new_page(mut list PageList, cap Page
 	}
 
 	self.total_rows = old_total_rows
-}
-
-// Copy the unmanaged basic content of a cell (no grapheme/style/hyperlink
-// managed memory, which is re-applied by the caller).
-fn base_cell_copy(cell &CellData) CellData {
-	return CellData{
-		codepoint: cell.codepoint
-		content_tag: cell.content_tag
-		style_id: cell.style_id
-		wide: cell.wide
-		is_protected: cell.is_protected
-		has_grapheme: cell.has_grapheme
-		has_hyperlink: cell.has_hyperlink
-		semantic_content: cell.semantic_content
-		graphemes: cell.graphemes.clone()
-		color_palette: cell.color_palette
-		color_rgb_r: cell.color_rgb_r
-		color_rgb_g: cell.color_rgb_g
-		color_rgb_b: cell.color_rgb_b
-		style: cell.style
-	}
 }
 
 // ============================================================
@@ -6048,7 +6057,7 @@ pub fn (mut self PageList) erase_row_bounded(point Point, limit usize) ! {
 // Resize
 // ============================================================
 
-pub fn (mut self PageList) resize(opts PageResizeOpts) {
+pub fn (mut self PageList) resize(opts PageResizeOpts) ! {
 	defer { self.assert_integrity() }
 	$if !prod {
 		if cols := opts.cols {
@@ -6066,13 +6075,14 @@ pub fn (mut self PageList) resize(opts PageResizeOpts) {
 	self.viewport_pin_row_offset = none
 
 	if !opts.reflow {
-		self.resize_without_reflow(opts)
+		self.resize_without_reflow(opts)!
 		return
 	}
 
 	// Recalculate our minimum max size. This allows grow to work properly
 	// when increasing beyond our initial minimum max size or explicit max
 	// size to fit the active area.
+	old_min_max_size := self.min_max_size
 	self.min_max_size = min_max_size_calc(opts.cols or { self.cols }, opts.rows or { self.rows })
 
 	// On reflow, the main thing that causes reflow is column changes. If
@@ -6081,12 +6091,21 @@ pub fn (mut self PageList) resize(opts PageResizeOpts) {
 	cols := opts.cols or { self.cols }
 
 	if cols == self.cols {
-		self.resize_without_reflow(opts)
+		self.resize_without_reflow(opts) or {
+			self.min_max_size = old_min_max_size
+			return err
+		}
 	} else if cols > self.cols {
 		// We grow rows after cols so that we can do our unwrapping/reflow
 		// before we do a no-reflow grow.
-		self.resize_cols(cols, opts.cursor)
-		self.resize_without_reflow(opts)
+		self.resize_cols(cols, opts.cursor) or {
+			self.min_max_size = old_min_max_size
+			return err
+		}
+		self.resize_without_reflow(opts) or {
+			self.min_max_size = old_min_max_size
+			return err
+		}
 	} else {
 		// We first change our row count so that we have the proper amount
 		// we can use when shrinking our cols.
@@ -6096,8 +6115,14 @@ pub fn (mut self PageList) resize(opts PageResizeOpts) {
 			reflow: opts.reflow
 			cursor: opts.cursor
 		}
-		self.resize_without_reflow(copy_opts)
-		self.resize_cols(cols, opts.cursor)
+		self.resize_without_reflow(copy_opts) or {
+			self.min_max_size = old_min_max_size
+			return err
+		}
+		self.resize_cols(cols, opts.cursor) or {
+			self.min_max_size = old_min_max_size
+			return err
+		}
 	}
 
 	// Various resize operations can change our total row count such
@@ -6116,7 +6141,7 @@ pub fn (mut self PageList) resize(opts PageResizeOpts) {
 }
 
 // Resize the pagelist with reflow by adding or removing columns.
-fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) {
+fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) ! {
 	assert cols != self.cols
 
 	// Update our cols. We have to do this early because grow() that we
@@ -6190,7 +6215,20 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) {
 	mut reflow_cursor := ReflowCursor.init(first_rewritten_node)
 	for {
 		row := it.next() or { break }
-		reflow_cursor.reflow_row(mut self, row)
+		reflow_cursor.reflow_row(mut self, row) or {
+			// The old pages were orphaned above. On error, destroy every source
+			// page still held by the iterator, matching Ghostty's errdefer cleanup.
+			mut orphan := ?&PageNode(none)
+			if chunk := it.chunk {
+				orphan = chunk.node
+			}
+			for {
+				node := orphan or { break }
+				orphan = node.next
+				self.destroy_node(node)
+			}
+			return err
+		}
 
 		// Once we're done reflowing a page, destroy it immediately. The old
 		// pages are already orphaned from self.pages, so no unlink is needed.
@@ -6269,9 +6307,10 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) {
 	}
 }
 
-fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) {
+fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) ! {
 	// We only set the new min_max_size if we're not reflowing. If we are
 	// reflowing, then resize handles this for us.
+	old_min_max_size := self.min_max_size
 	if !opts.reflow {
 		self.min_max_size = min_max_size_calc(opts.cols or { self.cols }, opts.rows or {
 			self.rows
@@ -6321,7 +6360,10 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) {
 				// we have an assertion on this and we want to be able to
 				// call this method multiple times.
 				self.cols = old_cols
-				self.resize_without_reflow_grow_cols(cols, chunk)
+				self.resize_without_reflow_grow_cols(cols, chunk) or {
+					self.min_max_size = old_min_max_size
+					return err
+				}
 			}
 
 			self.cols = cols
@@ -6416,7 +6458,7 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) {
 // Resize a single chunk to grow its columns. This may split the chunk's
 // page into multiple pages if the new column count reduces the row
 // capacity of a page.
-fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk) {
+fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk) ! {
 	assert cols > self.cols
 	mut page := &chunk.node.data
 

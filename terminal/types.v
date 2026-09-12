@@ -1110,6 +1110,13 @@ mut:
 // faithful port of PageList's ReflowCursor to the flat `Pages` row array:
 // it trims trailing blanks on non-wrapped rows, defers fully-blank trailing
 // rows, and preserves wrap/wrap_continuation flags.
+enum ReflowWriteResult {
+	success
+	repeat
+	skip_next
+	out_of_space
+}
+
 struct FlatReflowCursor {
 mut:
 	cols         int
