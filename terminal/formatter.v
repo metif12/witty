@@ -687,6 +687,7 @@ module terminal
 
 */
 
+import math
 import strings
 
 // Formats available.
@@ -1388,8 +1389,8 @@ pub mut:
 	// Start and end are both inclusive.
 	start_x u32
 	start_y u32
-	end_x   u32 = max_u32
-	end_y   u32 = max_u32
+	end_x   ?u32
+	end_y   ?u32
 	// If true, the start x/y and end x/y define a rectangle selection.
 	rectangle bool
 	// The previous trailing state from the prior page.
@@ -1422,8 +1423,8 @@ pub fn PageFormatter.init(pages &Pages, opts FormatOptions) PageFormatter {
 		opts: opts
 		start_x: 0
 		start_y: 0
-		end_x: max_u32
-		end_y: max_u32
+		end_x: none
+		end_y: none
 		rectangle: false
 		trailing_state: none
 		point_map: unsafe { nil }
@@ -1459,8 +1460,8 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 			state: TrailingState{ rows: blank_rows, cells: blank_cells }
 		}
 	}
-	end_x_unclamped := if self.end_x == max_u32 { page_cols - 1 } else { self.end_x }
-	mut end_x := min_u32(end_x_unclamped, page_cols - 1)
+	end_x_unclamped := self.end_x or { page_cols - 1 }
+	mut end_x := math.min(end_x_unclamped, page_cols - 1)
 
 	// Setup our starting row and perform some validation for overflows.
 	start_y := self.start_y
@@ -1470,14 +1471,14 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 			state: TrailingState{ rows: blank_rows, cells: blank_cells }
 		}
 	}
-	end_y_unclamped := if self.end_y == max_u32 { page_rows - 1 } else { self.end_y }
+	end_y_unclamped := self.end_y or { page_rows - 1 }
 	if start_y > end_y_unclamped {
 		return FormatResult{
 			output: ''
 			state: TrailingState{ rows: blank_rows, cells: blank_cells }
 		}
 	}
-	mut end_y := min_u32(end_y_unclamped, page_rows - 1)
+	mut end_y := math.min(end_y_unclamped, page_rows - 1)
 
 	// Edge case: if our end x/y falls on a spacer head AND we're unwrapping,
 	// then we move the x/y to the start of the next row (if available).
@@ -1565,7 +1566,7 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 		}
 
 		// Get the subset of cells for this row
-		actual_end := min_u32(row_end_x, u32(cells.len))
+		actual_end := math.min(row_end_x, u32(cells.len))
 		if row_start_x >= actual_end {
 			// No cells in range
 			blank_rows += 1
@@ -1677,7 +1678,6 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 						y: blank_y
 					}
 				}
-				blank_points.reverse_in_place()
 				for point in blank_points {
 					sb.write_u8(` `)
 					append_point_bytes(self.point_map, point, 1)
@@ -2123,11 +2123,3 @@ fn write_utf8(mut sb strings.Builder, codepoint u32) {
 }
 
 // has_text_any is defined in types.v
-
-// Max u32 sentinel value.
-const max_u32 = u32(0xFFFFFFFF)
-
-// Minimum of two u32 values.
-fn min_u32(a u32, b u32) u32 {
-	return if a < b { a } else { b }
-}

@@ -1256,6 +1256,21 @@ fn test_page_point_map_multibyte_replacement() {
 	}
 }
 
+fn test_page_point_map_accumulated_blank_cells_match_source_order() {
+	mut pages := make_pages_with_text(4, 1, 'a  b', 0)
+	mut points := PointMap{}
+	mut formatter := PageFormatter.init(&pages, format_plain)
+	formatter.point_map = &points
+
+	assert formatter.format() == 'a  b'
+	assert points.points == [
+		Coordinate{ x: 0, y: 0 },
+		Coordinate{ x: 2, y: 0 },
+		Coordinate{ x: 1, y: 0 },
+		Coordinate{ x: 3, y: 0 },
+	]
+}
+
 fn test_screen_pin_map() {
 	mut screen := Screen.init(8, 2, 0)
 	for i, ch in 'abc'.runes() {
