@@ -1,5 +1,40 @@
 module terminal
 
+fn test_sgr_attribute_kind_c_abi() {
+	assert sizeof(SgrAttributeKind) == 4
+	assert int(SgrAttributeKind.unset) == 0
+	assert int(SgrAttributeKind.unknown) == 1
+	assert int(SgrAttributeKind.bold) == 2
+	assert int(SgrAttributeKind.reset_bold) == 3
+	assert int(SgrAttributeKind.italic) == 4
+	assert int(SgrAttributeKind.reset_italic) == 5
+	assert int(SgrAttributeKind.faint) == 6
+	assert int(SgrAttributeKind.underline_set) == 7
+	assert int(SgrAttributeKind.underline_color) == 8
+	assert int(SgrAttributeKind.underline_color_256) == 9
+	assert int(SgrAttributeKind.reset_underline_color) == 10
+	assert int(SgrAttributeKind.overline) == 11
+	assert int(SgrAttributeKind.reset_overline) == 12
+	assert int(SgrAttributeKind.blink) == 13
+	assert int(SgrAttributeKind.reset_blink) == 14
+	assert int(SgrAttributeKind.inverse) == 15
+	assert int(SgrAttributeKind.reset_inverse) == 16
+	assert int(SgrAttributeKind.invisible) == 17
+	assert int(SgrAttributeKind.reset_invisible) == 18
+	assert int(SgrAttributeKind.strikethrough) == 19
+	assert int(SgrAttributeKind.reset_strikethrough) == 20
+	assert int(SgrAttributeKind.direct_color_fg) == 21
+	assert int(SgrAttributeKind.direct_color_bg) == 22
+	assert int(SgrAttributeKind.bg_8) == 23
+	assert int(SgrAttributeKind.fg_8) == 24
+	assert int(SgrAttributeKind.reset_fg) == 25
+	assert int(SgrAttributeKind.reset_bg) == 26
+	assert int(SgrAttributeKind.bright_bg_8) == 27
+	assert int(SgrAttributeKind.bright_fg_8) == 28
+	assert int(SgrAttributeKind.bg_256) == 29
+	assert int(SgrAttributeKind.fg_256) == 30
+}
+
 // Tests for SGR (Select Graphic Rendition) parsing.
 
 fn test_underline_style_storage() {

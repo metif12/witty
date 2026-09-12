@@ -1660,12 +1660,16 @@ pub fn (self &CellStyle) bg_cell() ?CellData {
 
 pub enum SgrAttributeKind {
 	unset
+	unknown
 	bold
 	reset_bold
-	faint
 	italic
 	reset_italic
+	faint
 	underline_set
+	underline_color
+	underline_color_256
+	reset_underline_color
 	overline
 	reset_overline
 	blink
@@ -1678,18 +1682,14 @@ pub enum SgrAttributeKind {
 	reset_strikethrough
 	direct_color_fg
 	direct_color_bg
-	fg_8
-	bright_fg_8
-	fg_256
 	bg_8
-	bright_bg_8
-	bg_256
+	fg_8
 	reset_fg
 	reset_bg
-	underline_color
-	underline_color_256
-	reset_underline_color
-	unknown
+	bright_bg_8
+	bright_fg_8
+	bg_256
+	fg_256
 }
 
 pub struct SgrAttribute {
