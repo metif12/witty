@@ -14,8 +14,8 @@ fn test_resources_dir_detects_env() {
 	}
 
 	result := resources_dir()
-	assert result.app() == '/tmp/witty-resources-env'
-	assert result.host() == '/tmp/witty-resources-env'
+	assert result.app()? == '/tmp/witty-resources-env'
+	assert result.host()? == '/tmp/witty-resources-env'
 }
 
 fn test_resources_dir_detects_share_layout() {
@@ -29,7 +29,7 @@ fn test_resources_dir_detects_share_layout() {
 	os.write_file(sentinel_path, '') or { panic(err) }
 
 	result := resources_dir_from_exe(os.join_path(tmp, 'bin', 'witty'))
-	assert result.app() == os.join_path(tmp, 'share', 'ghostty')
+	assert result.app()? == os.join_path(tmp, 'share', 'ghostty')
 }
 
 fn test_resources_maybe_dir_returns_verified_parent() {
@@ -52,19 +52,24 @@ fn test_resources_dir_returns_empty_when_not_found() {
 	os.mkdir_all(os.join_path(tmp, 'bin')) or { panic(err) }
 
 	result := resources_dir_from_exe(os.join_path(tmp, 'bin', 'witty'))
-	assert result.app() == ''
-	assert result.host() == ''
+	assert result.app() == none
+	assert result.host() == none
 }
 
 fn test_resources_dir_host_falls_back_to_app() {
 	result := ResourcesDir{
 		app_path: '/some/app/path'
 	}
-	assert result.host() == '/some/app/path'
+	assert result.host()? == '/some/app/path'
 
 	result_with_host := ResourcesDir{
 		app_path: '/some/app/path'
 		host_path: '/some/host/path'
 	}
-	assert result_with_host.host() == '/some/host/path'
+	assert result_with_host.host()? == '/some/host/path'
+	assert result_with_host.app()? == '/some/app/path'
+
+	empty := ResourcesDir{}
+	assert empty.app() == none
+	assert empty.host() == none
 }

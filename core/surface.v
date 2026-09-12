@@ -2224,7 +2224,6 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &apprt.Runtim
 	// Termio publishes its terminal pointer into renderer_state and owns the PTY
 	// subprocess, stream parser, and writer mailbox from this point onward.
 	env := rt_surface.default_termio_env()!
-	resources_dir_value := global_state.get_state().resources_dir.app()
 	termio_config := termiopkg.DerivedConfig.init(config)!
 	self.io.impl.init(termiopkg.TermioOpts{
 		config: termio_config
@@ -2239,7 +2238,7 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &apprt.Runtim
 			shell_integration: config.shell_integration
 			shell_integration_features: config.shell_integration_features
 			working_directory: config.working_directory
-			resources_dir: if resources_dir_value.len > 0 { resources_dir_value } else { none }
+			resources_dir: global_state.get_state().resources_dir.host()
 			term: config.term
 			linux_cgroup: rt_surface.linux_cgroup
 		}

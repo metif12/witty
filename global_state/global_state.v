@@ -191,8 +191,7 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 	// Find our resources directory once for the app so every launch
 	// hereafter can use this cached value.
 	self.resources_dir = internal_os.resources_dir()
-	resources_dir := self.resources_dir.app()
-	if resources_dir.len > 0 {
+	if resources_dir := self.resources_dir.app() {
 		internal_os.init_i18n(resources_dir) or {
 			eprintln('failed to initialize translations: ${err}')
 		}

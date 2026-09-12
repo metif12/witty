@@ -12,9 +12,9 @@ pub mut:
 }
 
 // app returns the directory to the bundled resources directory accessible
-// by the application, or an empty string if not detected.
-pub fn (r ResourcesDir) app() string {
-	return r.app_path or { '' }
+// by the application.
+pub fn (r ResourcesDir) app() ?string {
+	return r.app_path
 }
 
 // host returns the directory to the bundled resources directory accessible
@@ -22,11 +22,11 @@ pub fn (r ResourcesDir) app() string {
 // directory might not be accessible from the application itself.
 //
 // In a non-sandboxed environment this is the same as app().
-pub fn (r ResourcesDir) host() string {
+pub fn (r ResourcesDir) host() ?string {
 	if p := r.host_path {
 		return p
 	}
-	return r.app_path or { '' }
+	return r.app_path
 }
 
 // The sentinel values are target-specific because each package layout uses
@@ -53,7 +53,7 @@ pub fn resources_dir() ResourcesDir {
 	}
 
 	detected := resources_dir_from_exe(os.executable())
-	if detected.app().len > 0 {
+	if detected.app() != none {
 		return detected
 	}
 

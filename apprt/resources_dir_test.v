@@ -14,6 +14,6 @@ fn test_resources_dir_forwards_internal_os_detection() {
 	}
 
 	result := resources_dir()
-	assert result.app() == '/tmp/witty-apprt-resources'
-	assert result.host() == '/tmp/witty-apprt-resources'
+	assert result.app()? == '/tmp/witty-apprt-resources'
+	assert result.host()? == '/tmp/witty-apprt-resources'
 }

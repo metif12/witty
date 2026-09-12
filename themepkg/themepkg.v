@@ -25,10 +25,7 @@ pub fn (l Location) dir() ?string {
 			}) or { none }
 		}
 		.resources {
-			resources_path := global_state.get_state().resources_dir.app()
-			if resources_path.len == 0 {
-				return none
-			}
+			resources_path := global_state.get_state().resources_dir.app() or { return none }
 			return os.join_path(resources_path, 'themes')
 		}
 	}
