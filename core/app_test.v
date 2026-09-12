@@ -206,7 +206,7 @@ fn test_termio_surface_message_routes_core_pointer_to_live_surface() ! {
 	app.tick(mut apprt_runtime)!
 	assert core_runtime.actions.len == 1
 	assert core_runtime.actions[0].kind == .mouse_shape
-	assert core_runtime.actions[0].mouse_shape == .pointer
+	assert core_runtime.actions[0].data.mouse_shape_ == .pointer
 }
 
 fn test_termio_surface_message_ignores_closed_surface() ! {

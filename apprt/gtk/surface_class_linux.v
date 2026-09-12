@@ -2722,7 +2722,7 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 	mut self := unsafe { &SurfaceWidget(data) }
 	match action.kind {
 		.prompt_title {
-			if action.prompt_title != .surface {
+			if action.data.prompt_title_ != .surface {
 				return false
 			}
 			self.prompt_title()
@@ -2737,7 +2737,7 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			return true
 		}
 		.new_split {
-			direction := match action.split_dir {
+			direction := match action.data.new_split {
 				.right { datastruct.Direction.right }
 				.left { datastruct.Direction.left }
 				.down { datastruct.Direction.down }
@@ -2748,7 +2748,7 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			return true
 		}
 		.goto_split {
-			to := match action.goto_split {
+			to := match action.data.goto_split_ {
 				.previous { datastruct.Goto(datastruct.GotoPrevious{}) }
 				.next { datastruct.Goto(datastruct.GotoNext{}) }
 				.up { datastruct.Goto(datastruct.GotoSpatial{ direction: .up }) }
@@ -2760,14 +2760,14 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			return tree.goto_(to)
 		}
 		.resize_split {
-			direction := match action.resize_dir {
+			direction := match action.data.resize_split_.direction {
 				.up { datastruct.Direction.up }
 				.down { datastruct.Direction.down }
 				.left { datastruct.Direction.left }
 				.right { datastruct.Direction.right }
 			}
 			mut tree := unsafe { self.split_tree }
-			return tree.resize(direction, action.resize_amount)
+			return tree.resize(direction, action.data.resize_split_.amount)
 		}
 		.equalize_splits {
 			mut tree := unsafe { self.split_tree }
@@ -2788,7 +2788,7 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			mut window := unsafe { self.split_tree.window }
 			for mut tab in window.tabs {
 				if tab.split_tree == self.split_tree {
-					mode := match action.close_tab_mode {
+					mode := match action.data.close_tab {
 						.this { CloseTabMode.this }
 						.other { CloseTabMode.other }
 						.right { CloseTabMode.right }
@@ -2800,52 +2800,54 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			return false
 		}
 		.set_title {
-			self.set_title(action.title_value)
+			self.set_title(action.data.set_title_.title)
 			return true
 		}
 		.initial_size {
 			self.set_default_size(Size{
-				width: action.initial_size.width
-				height: action.initial_size.height
+				width: action.data.initial_size_.width
+				height: action.data.initial_size_.height
 			})
 			return true
 		}
 		.size_limit {
 			self.set_min_size(Size{
-				width: action.min_size.width
-				height: action.min_size.height
+				width: action.data.size_limit_.min_width
+				height: action.data.size_limit_.min_height
 			})
 			return true
 		}
 		.mouse_shape {
-			self.set_mouse_shape(action.mouse_shape)
+			self.set_mouse_shape(action.data.mouse_shape_)
 			return true
 		}
 		.mouse_visibility {
-			self.set_mouse_hidden(!action.mouse_visible)
+			self.set_mouse_hidden(action.data.mouse_visibility_ == .hidden)
 			return true
 		}
 		.mouse_over_link {
-			self.set_mouse_hover_url(if action.url.len > 0 { action.url } else { none })
+			url := action.data.mouse_over_link_.url
+			self.set_mouse_hover_url(if url.len > 0 { url } else { none })
 			return true
 		}
 		.scrollbar {
-			self.set_scrollbar(action.scrollbar)
+			self.set_scrollbar(action.data.scrollbar_)
 			return true
 		}
 		.progress_report {
-			self.set_progress_report(action.progress)
+			self.set_progress_report(action.data.progress_report_)
 			return true
 		}
 		.command_finished {
-			return self.command_finished(action.command_finished)
+			return self.command_finished(action.data.command_finished_)
 		}
 		.desktop_notification {
-			self.send_desktop_notification(action.notification_title, action.notification_body)
+			self.send_desktop_notification(action.data.desktop_notification.title,
+				action.data.desktop_notification.body)
 			return true
 		}
 		.readonly {
-			self.set_readonly(action.readonly_on)
+			self.set_readonly(action.data.readonly_ == .on)
 			return true
 		}
 		.config_change {
@@ -2853,7 +2855,7 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			return true
 		}
 		.start_search {
-			self.set_search_active(true, action.needle)
+			self.set_search_active(true, action.data.start_search_.needle)
 			return true
 		}
 		.end_search {
@@ -2861,26 +2863,26 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			return true
 		}
 		.search_total {
-			self.set_search_total(action.search_total)
+			self.set_search_total(action.data.search_total_.total)
 			return true
 		}
 		.search_selected {
-			self.set_search_selected(action.search_selected)
+			self.set_search_selected(action.data.search_selected_.selected)
 			return true
 		}
 		.show_child_exited {
-			return self.child_exited_action(action.child_exit)
+			return self.child_exited_action(action.data.show_child_exited_)
 		}
 		.key_sequence {
-			self.key_sequence_action(action.key_sequence)
+			self.key_sequence_action(action.data.key_sequence_)
 			return true
 		}
 		.key_table {
-			self.key_table_action(action.key_table)
+			self.key_table_action(action.data.key_table_)
 			return true
 		}
 		.pwd {
-			self.set_pwd(action.pwd)
+			self.set_pwd(action.data.pwd_.pwd)
 			return true
 		}
 		.present_terminal {
@@ -2915,7 +2917,7 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 			return true
 		}
 		.inspector {
-			return self.control_inspector(action.inspector_mode)!
+			return self.control_inspector(action.data.inspector_)!
 		}
 		.open_config {
 			return self.app.perform_action(apprt.Target(apprt.AppTarget{}), .open_config, apprt.ActionValue{})!
@@ -2932,9 +2934,7 @@ fn surface_core_action_cb(data voidptr, action core.AppAction) !bool {
 		.open_url {
 			return self.app.perform_action(apprt.Target(apprt.SurfaceTarget{
 				surface: self.core_surface
-			}), .open_url, apprt.ActionValue{
-				open_url_: apprt.OpenUrl{ kind: action.url_kind, url: action.url }
-			})!
+			}), .open_url, action.data)!
 		}
 		else {
 			return false

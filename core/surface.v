@@ -1650,47 +1650,7 @@ pub struct AppAction {
 pub:
 	kind   apprt.ActionKey
 	target &Surface = unsafe { nil }
-	// Payload data for actions that carry values. Only the field matching
-	// the kind is meaningful. These let the surface forward the correct
-	// value to the runtime instead of dropping it.
-	needle             string
-	readonly_on        bool
-	prompt_title       apprt.PromptTitle
-	fullscreen_mode    apprt.Fullscreen
-	inspector_mode     apprt.InspectorAction
-	split_dir          apprt.SplitDirection
-	goto_split         apprt.GotoSplit
-	goto_window        apprt.GotoWindow
-	resize_dir         apprt.ResizeSplitDirection
-	resize_amount      u16
-	goto_tab           apprt.GotoTab
-	close_tab_mode     apprt.CloseTabMode
-	move_tab_amount    isize
-	key_sequence       apprt.KeySequence
-	key_table          apprt.KeyTable
-	child_exit         apprt.ChildExited
-	search_total       ?usize
-	search_selected    ?usize
-	title_value        string
-	url                string
-	url_kind           apprt.OpenUrlKind
-	pwd                string
-	cell_size          rendererpkg.CellSize
-	initial_size       rendererpkg.ScreenSize
-	mouse_shape        terminal.MouseShape
-	mouse_visible      bool
-	notification_title string
-	notification_body  string
-	color_change       osc.ColoredTarget
-	progress           osc.ProgressReport
-	scrollbar          terminal.Scrollbar
-	health             int
-	command_finished   apprt.CommandFinished
-	min_size           rendererpkg.ScreenSize
-	max_size           rendererpkg.ScreenSize
-	secure_input_mode  apprt.SecureInput
-	reload_config_soft bool
-	config_change      &Config = unsafe { nil }
+	data   apprt.ActionValue
 }
 
 pub type RuntimeSurfaceCloseFn = fn (voidptr, bool)
@@ -2507,16 +2467,23 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 	self.rt_app.perform_action(AppAction{
 		kind: .cell_size
 		target: &self
-		cell_size: self.size.cell
+		data: apprt.ActionValue{
+			cell_size_: apprt.CellSize{
+				width: self.size.cell.width
+				height: self.size.cell.height
+			}
+		}
 	})!
 
 	// Report size limits
 	self.rt_app.perform_action(AppAction{
 		kind: .size_limit
 		target: &self
-		min_size: rendererpkg.ScreenSize{
-			width: self.size.cell.width * min_window_width_cells
-			height: self.size.cell.height * min_window_height_cells
+		data: apprt.ActionValue{
+			size_limit_: apprt.SizeLimit{
+				min_width: self.size.cell.width * min_window_width_cells
+				min_height: self.size.cell.height * min_window_height_cells
+			}
 		}
 	})!
 
@@ -2545,7 +2512,7 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &RuntimeApp, 
 		self.rt_app.perform_action(AppAction{
 			kind: .set_title
 			target: &self
-			title_value: title
+			data: apprt.ActionValue{ set_title_: apprt.SetTitle{ title: title } }
 		})!
 	}
 
@@ -2695,7 +2662,9 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			self.rt_app.perform_action(AppAction{
 				kind: .set_title
 				target: &self
-				title_value: null_terminated_bytes(msg.title_buf[..])
+				data: apprt.ActionValue{
+					set_title_: apprt.SetTitle{ title: null_terminated_bytes(msg.title_buf[..]) }
+				}
 			})!
 		}
 		.report_title {
@@ -2707,17 +2676,19 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			self.queue_io(termiopkg.Message.write_alloc_msg(data))
 		}
 		.color_change {
-			self.rt_app.perform_action(AppAction{
-				kind: .color_change
-				target: &self
-				color_change: msg.color_change
-			})!
+			if color_change := apprt_color_change(msg.color_change) {
+				self.rt_app.perform_action(AppAction{
+					kind: .color_change
+					target: &self
+					data: apprt.ActionValue{ color_change_: color_change }
+				})!
+			}
 		}
 		.set_mouse_shape {
 			self.rt_app.perform_action(AppAction{
 				kind: .mouse_shape
 				target: &self
-				mouse_shape: msg.mouse_shape
+				data: apprt.ActionValue{ mouse_shape_: msg.mouse_shape }
 			})!
 		}
 		.clipboard_read {
@@ -2736,7 +2707,9 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			self.rt_app.perform_action(AppAction{
 				kind: .pwd
 				target: &self
-				pwd: msg.pwd_change.slice().bytestr()
+				data: apprt.ActionValue{
+					pwd_: apprt.PwdValue{ pwd: msg.pwd_change.slice().bytestr() }
+				}
 			})!
 		}
 		.close {
@@ -2752,7 +2725,7 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			self.show_desktop_notification(null_terminated_bytes(msg.notification_title[..]), null_terminated_bytes(msg.notification_body[..]))!
 		}
 		.renderer_health {
-			self.update_renderer_health(int(msg.renderer_health))
+			self.update_renderer_health(msg.renderer_health)
 		}
 		.scrollbar {
 			self.update_scrollbar_value(msg.scrollbar)
@@ -2781,7 +2754,7 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			self.rt_app.perform_action(AppAction{
 				kind: .progress_report
 				target: &self
-				progress: msg.progress_report
+				data: apprt.ActionValue{ progress_report_: msg.progress_report }
 			}) or {}
 		}
 		.selection_scroll_tick {
@@ -2798,9 +2771,11 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 				self.rt_app.perform_action(AppAction{
 					kind: .command_finished
 					target: &self
-					command_finished: apprt.CommandFinished{
-						exit_code: msg.stop_command_exit_code
-						duration: configpkg.Duration{ duration: duration }
+					data: apprt.ActionValue{
+						command_finished_: apprt.CommandFinished{
+							exit_code: msg.stop_command_exit_code
+							duration: configpkg.Duration{ duration: duration }
+						}
 					}
 				})!
 			}
@@ -2809,16 +2784,43 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			self.rt_app.perform_action(AppAction{
 				kind: .search_total
 				target: &self
-				search_total: msg.search_total
+				data: apprt.ActionValue{ search_total_: apprt.SearchTotal{ total: msg.search_total } }
 			})!
 		}
 		.search_selected {
 			self.rt_app.perform_action(AppAction{
 				kind: .search_selected
 				target: &self
-				search_selected: msg.search_selected
+				data: apprt.ActionValue{
+					search_selected_: apprt.SearchSelected{ selected: msg.search_selected }
+				}
 			})!
 		}
+	}
+}
+
+fn apprt_color_change(value osc.ColoredTarget) ?apprt.ColorChange {
+	kind := match value.target {
+		osc.ColorTargetPalette { unsafe { apprt.ColorKind(value.target.index) } }
+		osc.ColorTargetDynamic {
+			match value.target.color {
+				.foreground { apprt.ColorKind.foreground }
+				.background { apprt.ColorKind.background }
+				.cursor { apprt.ColorKind.cursor }
+				else {
+					return none
+				}
+			}
+		}
+		osc.ColorTargetSpecial {
+			return none
+		}
+	}
+	return apprt.ColorChange{
+		kind: kind
+		r: value.color.r
+		g: value.color.g
+		b: value.color.b
 	}
 }
 
@@ -2995,13 +2997,15 @@ pub fn (mut self Surface) update_config(config &Config) ! {
 		self.rt_app.perform_action(AppAction{
 			kind: .set_title
 			target: &self
-			title_value: self.config.title or { '' }
+			data: apprt.ActionValue{
+				set_title_: apprt.SetTitle{ title: self.config.title or { '' } }
+			}
 		})!
 	}
 	self.rt_app.perform_action(AppAction{
 		kind: .config_change
 		target: &self
-		config_change: &resolved
+		data: apprt.ActionValue{ config_change_: apprt.ConfigChange{ config: &resolved } }
 	})!
 }
 
@@ -3384,12 +3388,12 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 			self.rt_app.perform_action(AppAction{
 				kind: .mouse_shape
 				target: &self
-				mouse_shape: self.renderer_state.terminal_.mouse_shape
+				data: apprt.ActionValue{ mouse_shape_: self.renderer_state.terminal_.mouse_shape }
 			})!
 			self.rt_app.perform_action(AppAction{
 				kind: .mouse_over_link
 				target: &self
-				url: ''
+				data: apprt.ActionValue{ mouse_over_link_: apprt.MouseOverLink{} }
 			})!
 			self.queue_render()!
 		}
@@ -3406,7 +3410,7 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 		self.rt_app.perform_action(AppAction{
 			kind: .mouse_shape
 			target: &self
-			mouse_shape: shape
+			data: apprt.ActionValue{ mouse_shape_: shape }
 		})!
 	}
 
@@ -4175,11 +4179,12 @@ pub fn (mut self Surface) cursor_pos_callback(pos apprt.CursorPos, mods ?input.M
 			self.rt_app.perform_action(AppAction{
 				kind: .mouse_shape
 				target: &self
-				mouse_shape: self.renderer_state.terminal_.mouse_shape
+				data: apprt.ActionValue{ mouse_shape_: self.renderer_state.terminal_.mouse_shape }
 			})!
 			self.rt_app.perform_action(AppAction{
 				kind: .mouse_over_link
 				target: &self
+				data: apprt.ActionValue{ mouse_over_link_: apprt.MouseOverLink{} }
 			})!
 			self.queue_render()!
 		}
@@ -4469,7 +4474,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			return self.rt_app.perform_action(AppAction{
 				kind: .start_search
 				target: &self
-				needle: ''
+				data: apprt.ActionValue{ start_search_: apprt.StartSearch{} }
 			})!
 		}
 		.search_selection {
@@ -4477,7 +4482,9 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			return self.rt_app.perform_action(AppAction{
 				kind: .start_search
 				target: &self
-				needle: selection
+				data: apprt.ActionValue{
+					start_search_: apprt.StartSearch{ needle: selection }
+				}
 			})!
 		}
 		.end_search {
@@ -4637,14 +4644,14 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			return self.rt_app.perform_action(AppAction{
 				kind: .prompt_title
 				target: &self
-				prompt_title: .surface
+				data: apprt.ActionValue{ prompt_title_: .surface }
 			})!
 		}
 		.prompt_tab_title {
 			return self.rt_app.perform_action(AppAction{
 				kind: .prompt_title
 				target: &self
-				prompt_title: .tab
+				data: apprt.ActionValue{ prompt_title_: .tab }
 			})!
 		}
 		.clear_screen {
@@ -4732,7 +4739,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			return self.rt_app.perform_action(AppAction{
 				kind: .close_tab
 				target: &self
-				close_tab_mode: close_tab_mode_from_input(action.enum_param)
+				data: apprt.ActionValue{ close_tab: close_tab_mode_from_input(action.enum_param) }
 			})!
 		}
 		.previous_tab {
@@ -4751,36 +4758,42 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			return self.rt_app.perform_action(AppAction{
 				kind: .move_tab
 				target: &self
-				move_tab_amount: isize(action.int_param)
+				data: apprt.ActionValue{ move_tab: apprt.MoveTab{ amount: isize(action.int_param) } }
 			})!
 		}
 		.new_split {
 			return self.rt_app.perform_action(AppAction{
 				kind: .new_split
 				target: &self
-				split_dir: split_dir_from_input(action.enum_param, self.size.screen)
+				data: apprt.ActionValue{
+					new_split: split_dir_from_input(action.enum_param, self.size.screen)
+				}
 			})!
 		}
 		.goto_split {
 			return self.rt_app.perform_action(AppAction{
 				kind: .goto_split
 				target: &self
-				goto_split: goto_split_from_input(action.enum_param)
+				data: apprt.ActionValue{ goto_split_: goto_split_from_input(action.enum_param) }
 			})!
 		}
 		.goto_window {
 			return self.rt_app.perform_action(AppAction{
 				kind: .goto_window
 				target: &self
-				goto_window: goto_window_from_input(action.enum_param)
+				data: apprt.ActionValue{ goto_window_: goto_window_from_input(action.enum_param) }
 			})!
 		}
 		.resize_split {
 			return self.rt_app.perform_action(AppAction{
 				kind: .resize_split
 				target: &self
-				resize_dir: resize_dir_from_input(action.enum_param)
-				resize_amount: u16(action.enum_param2)
+				data: apprt.ActionValue{
+					resize_split_: apprt.ResizeSplit{
+						direction: resize_dir_from_input(action.enum_param)
+						amount: u16(action.enum_param2)
+					}
+				}
 			})!
 		}
 		.equalize_splits {
@@ -4800,7 +4813,9 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.rt_app.perform_action(AppAction{
 				kind: .readonly
 				target: &self
-				readonly_on: self.readonly
+				data: apprt.ActionValue{
+					readonly_: if self.readonly { apprt.Readonly.on } else { apprt.Readonly.off }
+				}
 			})!
 			return true
 		}
@@ -4826,7 +4841,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			return self.rt_app.perform_action(AppAction{
 				kind: .toggle_fullscreen
 				target: &self
-				fullscreen_mode: mode
+				data: apprt.ActionValue{ toggle_fullscreen: mode }
 			})!
 		}
 		.toggle_window_decorations {
@@ -4845,13 +4860,14 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			return self.rt_app.perform_action(AppAction{
 				kind: .float_window
 				target: &self
+				data: apprt.ActionValue{ float_window_: .toggle }
 			})!
 		}
 		.toggle_secure_input {
 			return self.rt_app.perform_action(AppAction{
 				kind: .secure_input
 				target: &self
-				secure_input_mode: .toggle
+				data: apprt.ActionValue{ secure_input_: .toggle }
 			})!
 		}
 		.toggle_mouse_reporting {
@@ -4894,7 +4910,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			return self.rt_app.perform_action(AppAction{
 				kind: .inspector
 				target: &self
-				inspector_mode: inspector_mode_from_input(action.enum_param)
+				data: apprt.ActionValue{ inspector_: inspector_mode_from_input(action.enum_param) }
 			})!
 		}
 		.close_surface {
@@ -4927,7 +4943,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.rt_app.perform_action(AppAction{
 				kind: .key_table
 				target: &self
-				key_table: apprt.KeyTable{ tag: .deactivate }
+				data: apprt.ActionValue{ key_table_: apprt.KeyTable{ tag: .deactivate } }
 			}) or {}
 		}
 		.deactivate_all_key_tables {
@@ -5103,7 +5119,7 @@ fn (mut self Surface) goto_tab_action(idx apprt.GotoTab) !bool {
 	return self.rt_app.perform_action(AppAction{
 		kind: .goto_tab
 		target: &self
-		goto_tab: idx
+		data: apprt.ActionValue{ goto_tab: idx }
 	})!
 }
 
@@ -5137,9 +5153,11 @@ fn (mut self Surface) activate_key_table(name string, once bool) !bool {
 	self.rt_app.perform_action(AppAction{
 		kind: .key_table
 		target: &self
-		key_table: apprt.KeyTable{
-			tag: .activate
-			name: name
+		data: apprt.ActionValue{
+			key_table_: apprt.KeyTable{
+				tag: .activate
+				name: name
+			}
 		}
 	}) or {}
 
@@ -5214,14 +5232,14 @@ fn (mut self Surface) mouse_refresh_links(pos apprt.CursorPos, pos_vp Coordinate
 	self.rt_app.perform_action(AppAction{
 		kind: .mouse_shape
 		target: &self
-		mouse_shape: .pointer
+		data: apprt.ActionValue{ mouse_shape_: .pointer }
 	})!
 
 	if preview {
 		self.rt_app.perform_action(AppAction{
 			kind: .mouse_over_link
 			target: &self
-			url: url
+			data: apprt.ActionValue{ mouse_over_link_: apprt.MouseOverLink{ url: url } }
 		})!
 	}
 
@@ -5237,12 +5255,12 @@ fn (mut self Surface) clear_link_hover(over_link bool) ! {
 	self.rt_app.perform_action(AppAction{
 		kind: .mouse_shape
 		target: &self
-		mouse_shape: self.renderer_state.terminal_.mouse_shape
+		data: apprt.ActionValue{ mouse_shape_: self.renderer_state.terminal_.mouse_shape }
 	})!
 	self.rt_app.perform_action(AppAction{
 		kind: .mouse_over_link
 		target: &self
-		url: ''
+		data: apprt.ActionValue{ mouse_over_link_: apprt.MouseOverLink{} }
 	})!
 	self.queue_render()!
 }
@@ -5544,7 +5562,9 @@ fn (mut self Surface) set_cell_size(size rendererpkg.CellSize) ! {
 	self.rt_app.perform_action(AppAction{
 		kind: .cell_size
 		target: &self
-		cell_size: size
+		data: apprt.ActionValue{
+			cell_size_: apprt.CellSize{ width: size.width, height: size.height }
+		}
 	})!
 }
 
@@ -5584,7 +5604,9 @@ fn (mut self Surface) recompute_initial_size() ! {
 	self.rt_app.perform_action(AppAction{
 		kind: .initial_size
 		target: &self
-		initial_size: rendererpkg.ScreenSize{ width: final_width, height: final_height }
+		data: apprt.ActionValue{
+			initial_size_: apprt.InitialSize{ width: final_width, height: final_height }
+		}
 	})!
 }
 
@@ -5601,7 +5623,7 @@ fn (mut self Surface) hide_mouse() {
 	self.rt_app.perform_action(AppAction{
 		kind: .mouse_visibility
 		target: &self
-		mouse_visible: false
+		data: apprt.ActionValue{ mouse_visibility_: .hidden }
 	}) or {}
 }
 
@@ -5613,7 +5635,7 @@ fn (mut self Surface) show_mouse() {
 	self.rt_app.perform_action(AppAction{
 		kind: .mouse_visibility
 		target: &self
-		mouse_visible: true
+		data: apprt.ActionValue{ mouse_visibility_: .visible }
 	}) or {}
 }
 
@@ -5637,7 +5659,7 @@ fn (mut self Surface) child_exited_handler(runtime_ms u32, exit_code u32) {
 		shown := self.rt_app.perform_action(AppAction{
 			kind: .show_child_exited
 			target: &self
-			child_exit: info
+			data: apprt.ActionValue{ show_child_exited_: info }
 		}) or {
 			eprintln('error trying to show native child exited GUI err=${err}')
 			false
@@ -5657,7 +5679,7 @@ fn (mut self Surface) child_exited_handler(runtime_ms u32, exit_code u32) {
 	shown := self.rt_app.perform_action(AppAction{
 		kind: .show_child_exited
 		target: &self
-		child_exit: info
+		data: apprt.ActionValue{ show_child_exited_: info }
 	}) or {
 		eprintln('error trying to show native child exited GUI err=${err}')
 		false
@@ -5768,17 +5790,19 @@ fn (mut self Surface) password_input(v bool) ! {
 	self.rt_app.perform_action(AppAction{
 		kind: .secure_input
 		target: &self
-		secure_input_mode: if v { .on } else { .off }
+		data: apprt.ActionValue{
+			secure_input_: if v { apprt.SecureInput.on } else { apprt.SecureInput.off }
+		}
 	}) or {}
 
 	self.queue_render()!
 }
 
-fn (mut self Surface) update_renderer_health(health int) {
+fn (mut self Surface) update_renderer_health(health rendererpkg.Health) {
 	self.rt_app.perform_action(AppAction{
 		kind: .renderer_health
 		target: &self
-		health: health
+		data: apprt.ActionValue{ renderer_health_: health }
 	}) or {}
 }
 
@@ -5786,7 +5810,7 @@ fn (mut self Surface) update_scrollbar_value(scrollbar terminal.Scrollbar) {
 	self.rt_app.perform_action(AppAction{
 		kind: .scrollbar
 		target: &self
-		scrollbar: scrollbar
+		data: apprt.ActionValue{ scrollbar_: scrollbar }
 	}) or {}
 }
 
@@ -5794,7 +5818,7 @@ fn (mut self Surface) notify_config_conditional_state() {
 	self.rt_app.perform_action(AppAction{
 		kind: .reload_config
 		target: &self
-		reload_config_soft: true
+		data: apprt.ActionValue{ reload_config_: apprt.ReloadConfig{ soft: true } }
 	}) or {}
 }
 
@@ -5819,7 +5843,7 @@ fn (mut self Surface) end_key_sequence(action KeySequenceQueued, mem KeySequence
 	self.rt_app.perform_action(AppAction{
 		kind: .key_sequence
 		target: &self
-		key_sequence: apprt.KeySequence{ active: false }
+		data: apprt.ActionValue{ key_sequence_: apprt.KeySequence{ active: false } }
 	}) or {}
 
 	if self.keyboard.sequence_queued.len == 0 {
@@ -5859,7 +5883,7 @@ fn (mut self Surface) deactivate_all_key_tables() !bool {
 	self.rt_app.perform_action(AppAction{
 		kind: .key_table
 		target: &self
-		key_table: apprt.KeyTable{ tag: .deactivate_all }
+		data: apprt.ActionValue{ key_table_: apprt.KeyTable{ tag: .deactivate_all } }
 	})!
 	return true
 }
@@ -5942,9 +5966,11 @@ fn (mut self Surface) handle_binding_entry(event KeyEvent, entry &input.SetEntry
 		self.rt_app.perform_action(AppAction{
 			kind: .key_sequence
 			target: &self
-			key_sequence: apprt.KeySequence{
-				active: true
-				trigger: entry.trigger
+			data: apprt.ActionValue{
+				key_sequence_: apprt.KeySequence{
+					active: true
+					trigger: entry.trigger
+				}
 			}
 		}) or {}
 		return .consumed
@@ -6113,8 +6139,7 @@ fn (mut self Surface) open_url(action apprt.OpenUrl) ! {
 	handled := self.rt_app.perform_action(AppAction{
 		kind: .open_url
 		target: &self
-		url: action.url
-		url_kind: action.kind
+		data: apprt.ActionValue{ open_url_: action }
 	})!
 	if !handled && action.url.len > 0 {
 		kind := match action.kind {
@@ -6328,8 +6353,12 @@ fn (mut self Surface) show_desktop_notification(title string, body string) ! {
 	self.rt_app.perform_action(AppAction{
 		kind: .desktop_notification
 		target: &self
-		notification_title: title
-		notification_body: body
+		data: apprt.ActionValue{
+			desktop_notification: apprt.DesktopNotificationValue{
+				title: title
+				body: body
+			}
+		}
 	})!
 }
 
