@@ -274,7 +274,7 @@ fn test_metal_text_cell_keeps_color_atlas_flag() {
 		color: [u8(10), 20, 30, 40]!
 		glyph_pos: [u32(5), 6]!
 		glyph_size: [u32(7), 8]!
-		bearings: [i32(1), 2]!
+		bearings: [i16(1), 2]!
 	}
 
 	metal_cell := metal_text_cell(cell)

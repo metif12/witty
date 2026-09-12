@@ -162,7 +162,7 @@ fn test_opengl_text_and_background_image_values_are_packed_for_gpu() {
 			no_min_contrast: true
 			is_cursor_glyph: true
 		}
-		bearings: [i32(-2), 7]!
+		bearings: [i16(-2), 7]!
 	})
 	assert text.atlas == 1
 	assert text.flags == 3

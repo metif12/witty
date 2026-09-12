@@ -3,7 +3,7 @@ module datastruct
 // ArrayListCollection is a collection of arrays with methods for bulk
 // operations. Translated from Ghostty's datastruct/array_list_collection.zig.
 pub struct ArrayListCollection[T] {
-mut:
+pub mut:
 	// The arrays that belong to this collection.
 	lists [][]T
 }

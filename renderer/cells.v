@@ -1,5 +1,6 @@
 module renderer
 
+import datastruct
 import terminal
 import unicode
 
@@ -198,7 +199,7 @@ pub mut:
 	// Size of the glyph in the atlas [w, h].
 	glyph_size [2]u32
 	// Bearing offsets [x, y] for positioning.
-	bearings [2]i32
+	bearings [2]i16
 }
 
 // CellBg represents a background color for a cell.
@@ -230,20 +231,24 @@ pub mut:
 	size GridSize
 	// Background cells, one per grid position (row-major).
 	bg_cells []CellBg
-	// Foreground (text) cells per row. Each row is a list of CellText.
-	fg_rows [][]CellText
-	// The cursor cell, if visible.
-	cursor ?CellText
-	// The cursor style, if visible.
-	cursor_style ?CursorStyle
+	// Foreground cells. Screen row y is stored at y + 1: list zero is
+	// reserved for a block cursor that must be drawn first, and the final
+	// list is reserved for cursor styles that must be drawn last.
+	fg_rows datastruct.ArrayListCollection[CellText]
 }
 
 // Resize the cell contents to the given grid size.
 pub fn (mut c CellContents) resize(size GridSize) ! {
+	c.size = size
 	total := int(size.columns) * int(size.rows)
 	c.bg_cells = []CellBg{len: total}
-	c.fg_rows = [][]CellText{len: int(size.rows)}
-	c.size = size
+	// Ghostty keeps two extra lists around the screen rows so cursor ordering
+	// is represented by the container itself rather than reconstructed by each
+	// renderer backend.
+	mut fg_rows := datastruct.ArrayListCollection.init[CellText](usize(size.rows) + 2, usize(size.columns) * 3)
+	fg_rows.lists[0] = []CellText{cap: 1}
+	fg_rows.lists[int(size.rows) + 1] = []CellText{cap: 1}
+	c.fg_rows = fg_rows
 }
 
 // Reset all cell contents (clear everything).
@@ -253,25 +258,18 @@ pub fn (mut c CellContents) reset() {
 		c.bg_cells[i] = CellBg{}
 	}
 	// Clear all foreground rows
-	for i in 0 .. c.fg_rows.len {
-		c.fg_rows[i] = []CellText{}
-	}
-	c.cursor = none
-	c.cursor_style = none
+	c.fg_rows.reset()
 }
 
 // Clear a specific row's foreground cells.
 pub fn (mut c CellContents) clear(row u16) {
-	if int(row) < c.fg_rows.len {
-		c.fg_rows[int(row)] = []CellText{}
-	}
+	assert row < c.size.rows
+	c.fg_rows.lists[int(row) + 1].clear()
 	// Also clear bg cells for this row
 	start := int(row) * int(c.size.columns)
 	end := start + int(c.size.columns)
 	for i in start .. end {
-		if i < c.bg_cells.len {
-			c.bg_cells[i] = CellBg{}
-		}
+		c.bg_cells[i] = CellBg{}
 	}
 }
 
@@ -295,21 +293,40 @@ pub fn (c &CellContents) get_bg(row u16, col u16) CellBg {
 // Add a foreground cell to the given layer.
 pub fn (mut c CellContents) add(layer CellLayer, cell CellText) ! {
 	row := int(cell.grid_pos[1])
-	if row >= c.fg_rows.len {
-		return
-	}
-	c.fg_rows[row] << cell
+	assert row < int(c.size.rows)
+	c.fg_rows.lists[row + 1] << cell
 }
 
 // Set the cursor cell and style.
 pub fn (mut c CellContents) set_cursor(cell ?CellText, style ?CursorStyle) {
-	c.cursor = cell
-	c.cursor_style = style
+	if c.size.rows == 0 {
+		return
+	}
+	c.fg_rows.lists[0].clear()
+	c.fg_rows.lists[int(c.size.rows) + 1].clear()
+	value := cell or { return }
+	visual_style := style or { return }
+	match visual_style {
+		.block { c.fg_rows.lists[0] << value }
+		.block_hollow, .bar, .underline, .lock {
+			c.fg_rows.lists[int(c.size.rows) + 1] << value
+		}
+	}
 }
 
 // Get the cursor glyph, if one is set.
 pub fn (c &CellContents) get_cursor_glyph() ?CellText {
-	return c.cursor
+	if c.size.rows == 0 {
+		return none
+	}
+	if c.fg_rows.lists[0].len > 0 {
+		return c.fg_rows.lists[0][0]
+	}
+	last := int(c.size.rows) + 1
+	if c.fg_rows.lists[last].len > 0 {
+		return c.fg_rows.lists[last][0]
+	}
+	return none
 }
 
 // ============================================================

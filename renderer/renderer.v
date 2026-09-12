@@ -1734,27 +1734,13 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 
 fn (self &Renderer) metal_text_cells() []MetalTextCell {
 	mut count := 0
-	for row in self.cells.fg_rows {
+	for row in self.cells.fg_rows.lists {
 		count += row.len
 	}
-	if self.cells.cursor != none {
-		count++
-	}
 	mut result := []MetalTextCell{cap: count}
-	cursor_first := if style := self.cells.cursor_style { style == .block } else { false }
-	if cursor_first {
-		if cursor := self.cells.cursor {
-			result << metal_text_cell(cursor)
-		}
-	}
-	for row in self.cells.fg_rows {
+	for row in self.cells.fg_rows.lists {
 		for cell in row {
 			result << metal_text_cell(cell)
-		}
-	}
-	if !cursor_first {
-		if cursor := self.cells.cursor {
-			result << metal_text_cell(cursor)
 		}
 	}
 	return result
@@ -1958,27 +1944,13 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 
 fn (self &Renderer) gl_text_cells() []GLTextCell {
 	mut count := 0
-	for row in self.cells.fg_rows {
+	for row in self.cells.fg_rows.lists {
 		count += row.len
 	}
-	if self.cells.cursor != none {
-		count++
-	}
 	mut result := []GLTextCell{cap: count}
-	cursor_first := if style := self.cells.cursor_style { style == .block } else { false }
-	if cursor_first {
-		if cursor := self.cells.cursor {
-			result << gl_text_cell(cursor)
-		}
-	}
-	for row in self.cells.fg_rows {
+	for row in self.cells.fg_rows.lists {
 		for cell in row {
 			result << gl_text_cell(cell)
-		}
-	}
-	if !cursor_first {
-		if cursor := self.cells.cursor {
-			result << gl_text_cell(cursor)
 		}
 	}
 	return result
@@ -3017,7 +2989,7 @@ fn (mut self Renderer) add_underline(x u16, y u16, style terminal.UnderlineStyle
 		color: [color.r, color.g, color.b, alpha]!
 		glyph_pos: [render.glyph.atlas_x, render.glyph.atlas_y]!
 		glyph_size: [render.glyph.width, render.glyph.height]!
-		bearings: [render.glyph.offset_x, render.glyph.offset_y]!
+		bearings: [i16(render.glyph.offset_x), i16(render.glyph.offset_y)]!
 	})!
 }
 
@@ -3034,7 +3006,7 @@ fn (mut self Renderer) add_overline(x u16, y u16, color terminal.RGB, alpha u8) 
 		color: [color.r, color.g, color.b, alpha]!
 		glyph_pos: [render.glyph.atlas_x, render.glyph.atlas_y]!
 		glyph_size: [render.glyph.width, render.glyph.height]!
-		bearings: [render.glyph.offset_x, render.glyph.offset_y]!
+		bearings: [i16(render.glyph.offset_x), i16(render.glyph.offset_y)]!
 	})!
 }
 
@@ -3051,7 +3023,7 @@ fn (mut self Renderer) add_strikethrough(x u16, y u16, color terminal.RGB, alpha
 		color: [color.r, color.g, color.b, alpha]!
 		glyph_pos: [render.glyph.atlas_x, render.glyph.atlas_y]!
 		glyph_size: [render.glyph.width, render.glyph.height]!
-		bearings: [render.glyph.offset_x, render.glyph.offset_y]!
+		bearings: [i16(render.glyph.offset_x), i16(render.glyph.offset_y)]!
 	})!
 }
 
@@ -3088,8 +3060,8 @@ fn (mut self Renderer) add_glyph(x u16, y u16, color terminal.RGB, alpha u8, gly
 		glyph_pos: [render.glyph.atlas_x, render.glyph.atlas_y]!
 		glyph_size: [render.glyph.width, render.glyph.height]!
 		bearings: [
-			i32(render.glyph.offset_x + x_offset),
-			i32(render.glyph.offset_y + y_offset),
+			i16(render.glyph.offset_x + x_offset),
+			i16(render.glyph.offset_y + y_offset),
 		]!
 	})!
 }
@@ -3145,7 +3117,7 @@ fn (mut self Renderer) add_cursor(cursor_state &terminal.RenderCursor, cursor_st
 		color: [cursor_color.r, cursor_color.g, cursor_color.b, alpha]!
 		glyph_pos: [render.glyph.atlas_x, render.glyph.atlas_y]!
 		glyph_size: [render.glyph.width, render.glyph.height]!
-		bearings: [render.glyph.offset_x, render.glyph.offset_y]!
+		bearings: [i16(render.glyph.offset_x), i16(render.glyph.offset_y)]!
 	}, cursor_style)
 }
 
@@ -3179,7 +3151,7 @@ fn (mut self Renderer) add_preedit_cell(cp PreeditCodepoint, coord terminal.View
 		color: [screen_fg.r, screen_fg.g, screen_fg.b, u8(255)]!
 		glyph_pos: [render.glyph.atlas_x, render.glyph.atlas_y]!
 		glyph_size: [render.glyph.width, render.glyph.height]!
-		bearings: [render.glyph.offset_x, render.glyph.offset_y]!
+		bearings: [i16(render.glyph.offset_x), i16(render.glyph.offset_y)]!
 	})!
 
 	// Add underline for preedit text

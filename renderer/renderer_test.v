@@ -178,7 +178,12 @@ fn test_cell_contents_resize() ! {
 	assert cells.size.columns == 80
 	assert cells.size.rows == 24
 	assert cells.bg_cells.len == 80 * 24
-	assert cells.fg_rows.len == 24
+	assert cells.fg_rows.lists.len == 26
+	assert cells.fg_rows.lists[0].len == 0
+	assert cells.fg_rows.lists[0].cap >= 1
+	assert cells.fg_rows.lists[1].cap >= 80 * 3
+	assert cells.fg_rows.lists[25].len == 0
+	assert cells.fg_rows.lists[25].cap >= 1
 }
 
 // Test CellContents reset clears everything.
@@ -201,7 +206,7 @@ fn test_cell_contents_reset() ! {
 	// Check bg is cleared
 	assert cells.bg_cells[0] == CellBg{}
 	// Check fg is cleared
-	assert cells.fg_rows[0].len == 0
+	assert cells.fg_rows.lists[1].len == 0
 }
 
 // Test CellContents clear for a specific row.
@@ -221,8 +226,8 @@ fn test_cell_contents_clear_row() ! {
 
 	// Clear row 0 only
 	cells.clear(0)
-	assert cells.fg_rows[0].len == 0
-	assert cells.fg_rows[1].len == 1
+	assert cells.fg_rows.lists[1].len == 0
+	assert cells.fg_rows.lists[2].len == 1
 }
 
 // Test cursor set/get.
@@ -240,6 +245,8 @@ fn test_cell_contents_cursor() ! {
 		color: [u8(255), 255, 255, 255]!
 	}
 	cells.set_cursor(cursor_cell, .block)
+	assert cells.fg_rows.lists[0] == [cursor_cell]
+	assert cells.fg_rows.lists[25].len == 0
 
 	got := cells.get_cursor_glyph() or {
 		assert false, 'expected cursor'
@@ -248,6 +255,28 @@ fn test_cell_contents_cursor() ! {
 	assert got.grid_pos[0] == 5
 	assert got.grid_pos[1] == 10
 	assert got.bools.is_cursor_glyph == true
+
+	// Non-block cursor styles are stored after all screen rows so the shared
+	// flattened buffer naturally draws them last.
+	cells.set_cursor(cursor_cell, .bar)
+	assert cells.fg_rows.lists[0].len == 0
+	assert cells.fg_rows.lists[25] == [cursor_cell]
+	assert cells.get_cursor_glyph()? == cursor_cell
+
+	cells.set_cursor(none, none)
+	assert cells.fg_rows.lists[0].len == 0
+	assert cells.fg_rows.lists[25].len == 0
+	assert cells.get_cursor_glyph() == none
+}
+
+fn test_cell_contents_cursor_with_zero_sized_screen() ! {
+	mut cells := CellContents{}
+	cells.resize(GridSize{})!
+	assert cells.fg_rows.lists.len == 2
+	cells.set_cursor(CellText{ bools: CellTextBools{ is_cursor_glyph: true } }, .block)
+	assert cells.fg_rows.lists[0].len == 0
+	assert cells.fg_rows.lists[1].len == 0
+	assert cells.get_cursor_glyph() == none
 }
 
 // Test Uniforms default values.
@@ -412,7 +441,7 @@ fn test_cell_text_init() {
 		color: [u8(200), 100, 50, 255]!
 		glyph_pos: [u32(100), u32(200)]!
 		glyph_size: [u32(8), u32(16)]!
-		bearings: [i32(1), i32(-2)]!
+		bearings: [i16(1), i16(-2)]!
 	}
 	assert ct.atlas == .grayscale
 	assert ct.bools.no_min_contrast == true
@@ -460,8 +489,8 @@ fn test_multiple_fg_cells_per_row() ! {
 		})!
 	}
 
-	assert cells.fg_rows[0].len == 10
-	assert cells.fg_rows[1].len == 0
+	assert cells.fg_rows.lists[1].len == 10
+	assert cells.fg_rows.lists[2].len == 0
 }
 
 // Test set_bg / get_bg.
@@ -597,8 +626,8 @@ fn test_rebuild_row_shapes_and_renders_text() ! {
 	links := terminal.CellSet{}
 	render.rebuild_row(0, &row, none, &links)!
 
-	assert render.cells.fg_rows[0].len == 3
-	for cell in render.cells.fg_rows[0] {
+	assert render.cells.fg_rows.lists[1].len == 3
+	for cell in render.cells.fg_rows.lists[1] {
 		assert cell.glyph_size[0] > 0
 		assert cell.glyph_size[1] > 0
 	}
