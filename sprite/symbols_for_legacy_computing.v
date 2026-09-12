@@ -680,51 +680,50 @@ pub fn draw_1fba0_1fbae(cp u32, mut canvas Canvas, width u32, height u32, metric
 
 	match cp {
 		// '🮠'
-		0x1fba0 { corner_diagonal_lines(metrics, mut canvas, Quads{ tl: true }) }
+		0x1fba0 { corner_diagonal_lines(metrics, mut canvas, Quads.from_int(quad_tl)) }
 		// '🮡'
-		0x1fba1 { corner_diagonal_lines(metrics, mut canvas, Quads{ tr: true }) }
+		0x1fba1 { corner_diagonal_lines(metrics, mut canvas, Quads.from_int(quad_tr)) }
 		// '🮢'
-		0x1fba2 { corner_diagonal_lines(metrics, mut canvas, Quads{ bl: true }) }
+		0x1fba2 { corner_diagonal_lines(metrics, mut canvas, Quads.from_int(quad_bl)) }
 		// '🮣'
-		0x1fba3 { corner_diagonal_lines(metrics, mut canvas, Quads{ br: true }) }
+		0x1fba3 { corner_diagonal_lines(metrics, mut canvas, Quads.from_int(quad_br)) }
 		// '🮤'
-		0x1fba4 { corner_diagonal_lines(metrics, mut canvas, Quads{ tl: true, bl: true }) }
+		0x1fba4 { corner_diagonal_lines(metrics, mut canvas, Quads.from_int(quad_tl | quad_bl)) }
 		// '🮥'
-		0x1fba5 { corner_diagonal_lines(metrics, mut canvas, Quads{ tr: true, br: true }) }
+		0x1fba5 { corner_diagonal_lines(metrics, mut canvas, Quads.from_int(quad_tr | quad_br)) }
 		// '🮦'
-		0x1fba6 { corner_diagonal_lines(metrics, mut canvas, Quads{ bl: true, br: true }) }
+		0x1fba6 { corner_diagonal_lines(metrics, mut canvas, Quads.from_int(quad_bl | quad_br)) }
 		// '🮧'
-		0x1fba7 { corner_diagonal_lines(metrics, mut canvas, Quads{ tl: true, tr: true }) }
+		0x1fba7 { corner_diagonal_lines(metrics, mut canvas, Quads.from_int(quad_tl | quad_tr)) }
 		// '🮨'
-		0x1fba8 { corner_diagonal_lines(metrics, mut canvas, Quads{ tl: true, br: true }) }
+		0x1fba8 { corner_diagonal_lines(metrics, mut canvas, Quads.from_int(quad_tl | quad_br)) }
 		// '🮩'
-		0x1fba9 { corner_diagonal_lines(metrics, mut canvas, Quads{ tr: true, bl: true }) }
+		0x1fba9 { corner_diagonal_lines(metrics, mut canvas, Quads.from_int(quad_tr | quad_bl)) }
 		// '🮪'
 		0x1fbaa {
-			corner_diagonal_lines(metrics, mut canvas, Quads{ tr: true, bl: true, br: true })
+			corner_diagonal_lines(metrics, mut canvas, Quads.from_int(quad_tr | quad_bl | quad_br))
 		}
+
 		// '🮫'
 		0x1fbab {
-			corner_diagonal_lines(metrics, mut canvas, Quads{ tl: true, bl: true, br: true })
+			corner_diagonal_lines(metrics, mut canvas, Quads.from_int(quad_tl | quad_bl | quad_br))
 		}
+
 		// '🮬'
 		0x1fbac {
-			corner_diagonal_lines(metrics, mut canvas, Quads{ tl: true, tr: true, br: true })
+			corner_diagonal_lines(metrics, mut canvas, Quads.from_int(quad_tl | quad_tr | quad_br))
 		}
+
 		// '🮭'
 		0x1fbad {
-			corner_diagonal_lines(metrics, mut canvas, Quads{ tl: true, tr: true, bl: true })
+			corner_diagonal_lines(metrics, mut canvas, Quads.from_int(quad_tl | quad_tr | quad_bl))
 		}
+
 		// '🮮'
 		0x1fbae {
-			corner_diagonal_lines(metrics, mut canvas, Quads{
-				tl: true
-				tr: true
-				bl: true
-				br: true
-			})
+			corner_diagonal_lines(metrics, mut canvas, Quads.from_int(quads_mask))
 		}
-		else {}
+		else { panic('unreachable') }
 	}
 }
 
@@ -772,7 +771,7 @@ pub fn draw_1fbbe(cp u32, mut canvas Canvas, width u32, height u32, metrics font
 	_ = width
 	_ = height
 
-	corner_diagonal_lines(metrics, mut canvas, Quads{ br: true })
+	corner_diagonal_lines(metrics, mut canvas, Quads.from_int(quad_br))
 	canvas.invert()
 	// Set the clip so we don't include anything outside of the cell.
 	canvas.clip_left = canvas.padding_x
@@ -787,12 +786,7 @@ pub fn draw_1fbbf(cp u32, mut canvas Canvas, width u32, height u32, metrics font
 	_ = width
 	_ = height
 
-	corner_diagonal_lines(metrics, mut canvas, Quads{
-		tl: true
-		tr: true
-		bl: true
-		br: true
-	})
+	corner_diagonal_lines(metrics, mut canvas, Quads.from_int(quads_mask))
 	canvas.invert()
 	// Set the clip so we don't include anything outside of the cell.
 	canvas.clip_left = canvas.padding_x
@@ -990,28 +984,28 @@ fn corner_diagonal_lines(metrics font.Metrics, mut canvas Canvas, corners Quads)
 	center_x := f64(metrics.cell_width / 2 + metrics.cell_width % 2)
 	center_y := f64(metrics.cell_height / 2 + metrics.cell_height % 2)
 
-	if corners.tl {
+	if corners.tl() {
 		canvas.line(LineSegment{
 			p0: Point{ x: center_x, y: 0 }
 			p1: Point{ x: 0, y: center_y }
 		}, float_thick, .on) or {}
 	}
 
-	if corners.tr {
+	if corners.tr() {
 		canvas.line(LineSegment{
 			p0: Point{ x: center_x, y: 0 }
 			p1: Point{ x: float_width, y: center_y }
 		}, float_thick, .on) or {}
 	}
 
-	if corners.bl {
+	if corners.bl() {
 		canvas.line(LineSegment{
 			p0: Point{ x: center_x, y: float_height }
 			p1: Point{ x: 0, y: center_y }
 		}, float_thick, .on) or {}
 	}
 
-	if corners.br {
+	if corners.br() {
 		canvas.line(LineSegment{
 			p0: Point{ x: center_x, y: float_height }
 			p1: Point{ x: float_width, y: center_y }

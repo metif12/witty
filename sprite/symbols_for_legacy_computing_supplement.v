@@ -477,11 +477,7 @@ pub fn draw_1cc21_1cc2f(cp u32, mut canvas Canvas, width u32, height u32, metric
 	_ = metrics
 
 	// Struct laid out to match the codepoint order so we can cast from it.
-	bits := u8(cp - 0x1cc20) & 0x0f
-	quad_tl := (bits & 0x01) != 0
-	quad_tr := (bits & 0x02) != 0
-	quad_bl := (bits & 0x04) != 0
-	quad_br := (bits & 0x08) != 0
+	quad := Quads.from_int(u8(cp - 0x1cc20) & quads_mask)
 
 	gap := i32(if width / 12 > 1 { width / 12 } else { u32(1) })
 
@@ -491,7 +487,7 @@ pub fn draw_1cc21_1cc2f(cp u32, mut canvas Canvas, width u32, height u32, metric
 	w := (i32(width) - gap * 2 - mid_gap_x) / 2
 	h := (i32(height) - gap * 2 - mid_gap_y) / 2
 
-	if quad_tl {
+	if quad.tl() {
 		canvas.draw_box(
 			gap,
 			gap,
@@ -500,7 +496,7 @@ pub fn draw_1cc21_1cc2f(cp u32, mut canvas Canvas, width u32, height u32, metric
 			.on,
 		)
 	}
-	if quad_tr {
+	if quad.tr() {
 		canvas.draw_box(
 			gap + w + mid_gap_x,
 			gap,
@@ -509,7 +505,7 @@ pub fn draw_1cc21_1cc2f(cp u32, mut canvas Canvas, width u32, height u32, metric
 			.on,
 		)
 	}
-	if quad_bl {
+	if quad.bl() {
 		canvas.draw_box(
 			gap,
 			gap + h + mid_gap_y,
@@ -518,7 +514,7 @@ pub fn draw_1cc21_1cc2f(cp u32, mut canvas Canvas, width u32, height u32, metric
 			.on,
 		)
 	}
-	if quad_br {
+	if quad.br() {
 		canvas.draw_box(
 			gap + w + mid_gap_x,
 			gap + h + mid_gap_y,

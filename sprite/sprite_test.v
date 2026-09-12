@@ -612,10 +612,34 @@ fn test_block_shade_bottom_right() {
 
 fn test_quads_default() {
 	q := Quads{}
-	assert q.tl == false
-	assert q.tr == false
-	assert q.bl == false
-	assert q.br == false
+	assert sizeof(Quads) == 1
+	assert q.value == 0
+	assert !q.tl()
+	assert !q.tr()
+	assert !q.bl()
+	assert !q.br()
+
+	assert Quads.from_int(0x01).tl()
+	assert Quads.from_int(0x02).tr()
+	assert Quads.from_int(0x04).bl()
+	assert Quads.from_int(0x08).br()
+	all := Quads.from_int(quads_mask)
+	assert all.value == 0x0f
+	assert all.tl()
+	assert all.tr()
+	assert all.bl()
+	assert all.br()
+}
+
+fn test_quads_drive_source_quadrant_order() {
+	metrics := font.default_grid_metrics(8, 8)
+	mut c := Canvas.init(8, 8, 0, 0)
+	quadrant(metrics, mut c, Quads.from_int(quad_tl | quad_br))
+
+	assert data_at(&c, 0, 0) == 255
+	assert data_at(&c, 7, 0) == 0
+	assert data_at(&c, 0, 7) == 0
+	assert data_at(&c, 7, 7) == 255
 }
 
 fn test_alignment_named_constants() {

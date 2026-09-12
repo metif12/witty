@@ -1049,12 +1049,37 @@ pub enum Shade as u8 {
 
 // Applicable to any set of glyphs with features
 // that may be present or not in each quadrant.
+const quad_tl = u8(1 << 0)
+const quad_tr = u8(1 << 1)
+const quad_bl = u8(1 << 2)
+const quad_br = u8(1 << 3)
+const quads_mask = u8(0x0f)
+
 pub struct Quads {
-pub:
-	tl bool
-	tr bool
-	bl bool
-	br bool
+	value u8
+}
+
+pub fn Quads.from_int(value u8) Quads {
+	assert value & ~quads_mask == 0
+	return Quads{
+		value: value
+	}
+}
+
+pub fn (quads Quads) tl() bool {
+	return quads.value & quad_tl != 0
+}
+
+pub fn (quads Quads) tr() bool {
+	return quads.value & quad_tr != 0
+}
+
+pub fn (quads Quads) bl() bool {
+	return quads.value & quad_bl != 0
+}
+
+pub fn (quads Quads) br() bool {
+	return quads.value & quad_br != 0
 }
 
 // ============================================================
