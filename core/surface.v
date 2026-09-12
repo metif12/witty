@@ -4645,29 +4645,15 @@ pub fn (mut self Surface) color_scheme_callback(scheme apprt.ColorScheme) ! {
 
 // pos_to_viewport converts surface pixel coordinates to viewport cell coordinates.
 pub fn (self &Surface) pos_to_viewport(xpos f64, ypos f64) Coordinate {
-	raw_x := xpos - f64(self.size.padding.left)
-	raw_y := ypos - f64(self.size.padding.top)
-	grid := self.size.grid()
-	if grid.columns == 0 || grid.rows == 0 {
-		return Coordinate{}
-	}
-	column := if raw_x < 0 {
-		u32(0)
-	} else if self.size.cell.width > 0 {
-		u32(raw_x) / self.size.cell.width
-	} else {
-		u32(0)
-	}
-	row := if raw_y < 0 {
-		u32(0)
-	} else if self.size.cell.height > 0 {
-		u32(raw_y) / self.size.cell.height
-	} else {
-		u32(0)
-	}
-	return Coordinate{
-		x: u16(if column < grid.columns { column } else { grid.columns - 1 })
-		y: if row < grid.rows { row } else { grid.rows - 1 }
+	coord := rendererpkg.SizeCoordinate(rendererpkg.SurfaceCoord{ x: xpos, y: ypos })
+	grid := coord.convert(.grid, self.size)
+	match grid {
+		rendererpkg.GridCoord {
+			return Coordinate{ x: grid.x, y: grid.y }
+		}
+		else {
+			panic('renderer coordinate conversion returned a non-grid value')
+		}
 	}
 }
 
