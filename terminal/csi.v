@@ -3,7 +3,7 @@ module terminal
 // Translated from ghostty/src/terminal/csi.zig
 
 // Modes for the ED CSI command.
-pub enum CsiEraseDisplay as u8 {
+pub enum EraseDisplay as u8 {
 	below           = 0
 	above           = 1
 	complete        = 2
@@ -14,7 +14,7 @@ pub enum CsiEraseDisplay as u8 {
 }
 
 // Modes for the EL CSI command.
-pub enum CsiEraseLine as u8 {
+pub enum EraseLine as u8 {
 	right                     = 0
 	left                      = 1
 	complete                  = 2

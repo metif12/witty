@@ -3556,13 +3556,6 @@ pub fn (mut self Terminal) erase_line(mode EraseLine, protected_req bool) {
 	self.screens.active.clear_unprotected_cells(row_idx, start, end)
 }
 
-pub enum EraseLine {
-	right
-	left
-	complete
-	right_unless_pending_wrap
-}
-
 // Erase the display.
 pub fn (mut self Terminal) erase_display(mode EraseDisplay, protected_req bool) {
 	// We respect protected attributes if explicitly requested or if our
@@ -3620,14 +3613,6 @@ pub fn (mut self Terminal) erase_display(mode EraseDisplay, protected_req bool) 
 			self.screens.active.erase_rows(Point.new(.history, Coordinate{}), ?Point(none))
 		}
 	}
-}
-
-pub enum EraseDisplay {
-	scroll_complete
-	complete
-	below
-	above
-	scrollback
 }
 
 fn (self &Terminal) check_at_prompt_for_clear() bool {

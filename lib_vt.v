@@ -94,9 +94,9 @@ pub type StatusLineType = terminal.StatusLineType
 
 pub type StatusDisplay = terminal.StatusDisplay
 
-pub type EraseDisplay = terminal.CsiEraseDisplay
+pub type EraseDisplay = terminal.EraseDisplay
 
-pub type EraseLine = terminal.CsiEraseLine
+pub type EraseLine = terminal.EraseLine
 
 pub type TabClear = terminal.TabClear
 
