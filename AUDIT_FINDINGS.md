@@ -110,6 +110,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | font/renderer backends | Both translated backend enums used V's default 32-bit backing and renamed Ghostty's target-selecting `default` declaration to the source-external `default_backend`. | Restore compact byte storage and the translated `Backend.default_()` declaration for both font and renderer backends, with target-selection and feature-query coverage. |
 | renderer/Metal API contracts | Metal's native constants were represented as sequential V enums plus handwritten conversion switches; the GPU-family bridge used `3003` for Apple3 and omitted Ghostty's Apple10 32,768-pixel limit. The shared renderer health enum also relied on implicit layout and values. | Give the exposed Metal and health enums their source ABI widths and numeric values, pass native values directly instead of remapping them, and restore the Apple10/Apple3 maximum-texture-size checks with the source constants. |
 | sprite/face | `render_glyph` hardcoded glyph `offset_x/offset_y` to 0. | Compute from canvas clip + padding (matches `Face.renderGlyph`). |
+| sprite/braille | The Unicode braille byte was expanded into eight stored booleans; the final dot-width adjustment stopped debiting its remaining pixels, and every source geometry/codepoint invariant was omitted. | Retain the source byte as the canonical pattern with bit accessors, restore the final accounting, and enforce the same layout and U+2800–U+28FF preconditions. |
 | termio/termio | `resize` sent renderer `.font_grid` (should `.resize`); cursor reset sent `.focus` (should `.reset_cursor_blink`). | Correct message kinds (+ wired the two MessageKind variants). |
 | termio message discriminants | The flattened `MessageKind`, nested size-report kind, and mutex-state enums used default 32-bit V storage; the message and size-report declaration orders also differed from their source unions/enums. | Restore byte backing and the exact source declaration values for all three translated discriminants. |
 | termio derived config enums | The IO layer redeclared both `configpkg.ClipboardAccess` and `Config.OSCColorReportFormat`, converted into them case-by-case, and carried those parallel types through `StreamHandler`. | Store both canonical config values directly in derived IO state and the stream handler, removing the duplicate enums and conversions. |
@@ -215,6 +216,11 @@ an item here does not mean its full module has been certified yet.
   returns 600 ms in Witty. Ghostty detects Valgrind at runtime and returns
   3,000 ms there; the available V toolchain exposes only a compile-time custom
   define, not an equivalent runtime primitive.
+- **macOS CF release worker:** Ghostty uses xev async wake/stop completions and
+  switches a packed drain flag only after an abnormal loop exit. Witty replaces
+  that state machine with a semaphore/mutex worker and an ordinary
+  `stop_requested` boolean, so its scheduling, failure, and drain behavior is
+  source-external.
 - **Source placement:** V module-cycle constraints keep the translated shaper
   run algorithm in `font/font.v` while `font/shaper/run.v` exposes aliases.
   This is behaviorally implemented but not a file-for-file layout match.

@@ -39,30 +39,47 @@ import sprite_types as font
 //
 // Struct layout matches bit patterns of unicode codepoints.
 struct BraillePattern {
-	tl bool
-	ul bool
-	ll bool
-	tr bool
-	ur bool
-	lr bool
-	bl bool
-	br bool
+	value u8
 }
 
 // braille_pattern_from creates a BraillePattern from a codepoint
-// by extracting the bit pattern.
+// by retaining the low byte as the packed bit pattern.
 fn braille_pattern_from(cp u32) BraillePattern {
-	bits := u8(cp & 0xff)
 	return BraillePattern{
-		tl: (bits & 0x01) != 0
-		ul: (bits & 0x02) != 0
-		ll: (bits & 0x04) != 0
-		tr: (bits & 0x08) != 0
-		ur: (bits & 0x10) != 0
-		lr: (bits & 0x20) != 0
-		bl: (bits & 0x40) != 0
-		br: (bits & 0x80) != 0
+		value: u8(cp)
 	}
+}
+
+fn (self BraillePattern) tl() bool {
+	return self.value & 0x01 != 0
+}
+
+fn (self BraillePattern) ul() bool {
+	return self.value & 0x02 != 0
+}
+
+fn (self BraillePattern) ll() bool {
+	return self.value & 0x04 != 0
+}
+
+fn (self BraillePattern) tr() bool {
+	return self.value & 0x08 != 0
+}
+
+fn (self BraillePattern) ur() bool {
+	return self.value & 0x10 != 0
+}
+
+fn (self BraillePattern) lr() bool {
+	return self.value & 0x20 != 0
+}
+
+fn (self BraillePattern) bl() bool {
+	return self.value & 0x40 != 0
+}
+
+fn (self BraillePattern) br() bool {
+	return self.value & 0x80 != 0
 }
 
 // draw_2800_28ff draws braille pattern characters (U+2800..U+28FF).
@@ -119,9 +136,13 @@ pub fn draw_2800_28ff(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 	// Last - increase dot width
 	if x_px_left >= 2 && y_px_left >= 4 {
 		w += 1
-		// x_px_left -= 2
-		// y_px_left -= 4
+		x_px_left -= 2
+		y_px_left -= 4
 	}
+
+	assert x_px_left <= 1 || y_px_left <= 1
+	assert 2 * x_margin + 2 * w + x_spacing <= i32(width)
+	assert 2 * y_margin + 4 * w + 3 * y_spacing <= i32(height)
 
 	x := [x_margin, x_margin + w + x_spacing]!
 	y0 := y_margin
@@ -130,30 +151,32 @@ pub fn draw_2800_28ff(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 	y3 := y2 + w + y_spacing
 	y := [y0, y1, y2, y3]!
 
+	assert cp >= 0x2800
+	assert cp <= 0x28ff
 	p := braille_pattern_from(cp)
 
-	if p.tl {
+	if p.tl() {
 		canvas.draw_box(x[0], y[0], x[0] + w, y[0] + w, .on)
 	}
-	if p.ul {
+	if p.ul() {
 		canvas.draw_box(x[0], y[1], x[0] + w, y[1] + w, .on)
 	}
-	if p.ll {
+	if p.ll() {
 		canvas.draw_box(x[0], y[2], x[0] + w, y[2] + w, .on)
 	}
-	if p.bl {
+	if p.bl() {
 		canvas.draw_box(x[0], y[3], x[0] + w, y[3] + w, .on)
 	}
-	if p.tr {
+	if p.tr() {
 		canvas.draw_box(x[1], y[0], x[1] + w, y[0] + w, .on)
 	}
-	if p.ur {
+	if p.ur() {
 		canvas.draw_box(x[1], y[1], x[1] + w, y[1] + w, .on)
 	}
-	if p.lr {
+	if p.lr() {
 		canvas.draw_box(x[1], y[2], x[1] + w, y[2] + w, .on)
 	}
-	if p.br {
+	if p.br() {
 		canvas.draw_box(x[1], y[3], x[1] + w, y[3] + w, .on)
 	}
 }
