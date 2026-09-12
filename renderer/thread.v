@@ -217,21 +217,55 @@ pub fn ThreadDerivedConfig.init(config &configpkg.Config) ThreadDerivedConfig {
 	}
 }
 
-// Flags for the renderer thread state.
+// Flags for the renderer thread state. Ghostty packs these four booleans into
+// one byte in declaration order.
 pub struct ThreadFlags {
-pub mut:
-	// This is true when a blinking cursor should be visible and false
-	// when it should not be visible. This is toggled on a timer by the
-	// thread automatically.
-	cursor_blink_visible bool
-	// This is true when the inspector is active.
-	has_inspector bool
-	// This is true when the view is visible. This is used to determine
-	// if we should be rendering or not.
-	visible bool = true
-	// This is true when the view is focused. This defaults to true
-	// and it is up to the apprt to set the correct value.
-	focused bool = true
+mut:
+	value u8 = 0b1100
+}
+
+fn (self ThreadFlags) cursor_blink_visible() bool {
+	return self.value & 0b0001 != 0
+}
+
+fn (mut self ThreadFlags) set_cursor_blink_visible(value bool) {
+	self.set(0b0001, value)
+}
+
+fn (mut self ThreadFlags) toggle_cursor_blink_visible() {
+	self.value ^= 0b0001
+}
+
+fn (self ThreadFlags) has_inspector() bool {
+	return self.value & 0b0010 != 0
+}
+
+fn (mut self ThreadFlags) set_has_inspector(value bool) {
+	self.set(0b0010, value)
+}
+
+fn (self ThreadFlags) visible() bool {
+	return self.value & 0b0100 != 0
+}
+
+fn (mut self ThreadFlags) set_visible(value bool) {
+	self.set(0b0100, value)
+}
+
+fn (self ThreadFlags) focused() bool {
+	return self.value & 0b1000 != 0
+}
+
+fn (mut self ThreadFlags) set_focused(value bool) {
+	self.set(0b1000, value)
+}
+
+fn (mut self ThreadFlags) set(mask u8, enabled bool) {
+	if enabled {
+		self.value |= mask
+	} else {
+		self.value &= ~mask
+	}
 }
 
 // RendererThread represents the renderer thread logic. The renderer thread
@@ -497,7 +531,7 @@ fn (mut self RendererThread) sync_draw_timer() {
 				active = true
 			}
 			.true_ {
-				active = self.flags.focused
+				active = self.flags.focused()
 			}
 			.false_ {}
 		}
@@ -519,8 +553,8 @@ fn (mut self RendererThread) drain_mailbox() ! {
 				panic('crash request, crashing intentionally')
 			}
 			VisibleMessage {
-				if self.flags.visible != msg.visible {
-					self.flags.visible = msg.visible
+				if self.flags.visible() != msg.visible {
+					self.flags.set_visible(msg.visible)
 					$if macos {
 						self.set_qos_class()
 					}
@@ -532,9 +566,9 @@ fn (mut self RendererThread) drain_mailbox() ! {
 			}
 			FocusMessage {
 				// If our state didn't change we do nothing.
-				if self.flags.focused != msg.focused {
+				if self.flags.focused() != msg.focused {
 					// Set our state
-					self.flags.focused = msg.focused
+					self.flags.set_focused(msg.focused)
 					$if macos {
 						self.set_qos_class()
 					}
@@ -553,7 +587,7 @@ fn (mut self RendererThread) drain_mailbox() ! {
 						// If we're focused, we immediately show the cursor again
 						// and then restart the timer.
 						if !self.cursor_blink_active {
-							self.flags.cursor_blink_visible = true
+							self.flags.set_cursor_blink_visible(true)
 							self.cursor_blink_active = true
 							self.next_cursor_blink_at = time.sys_mono_now() + cursor_blink_interval()
 						}
@@ -561,7 +595,7 @@ fn (mut self RendererThread) drain_mailbox() ! {
 				}
 			}
 			ResetCursorBlinkMessage {
-				self.flags.cursor_blink_visible = true
+				self.flags.set_cursor_blink_visible(true)
 				if self.cursor_blink_active {
 					self.next_cursor_blink_at = time.sys_mono_now() + cursor_blink_interval()
 				}
@@ -596,7 +630,7 @@ fn (mut self RendererThread) drain_mailbox() ! {
 				self.renderer.search_matches_dirty = true
 			}
 			InspectorMessage {
-				self.flags.has_inspector = msg.active
+				self.flags.set_has_inspector(msg.active)
 			}
 			MacosDisplayIdMessage {
 				self.renderer.set_macos_display_id(msg.display_id)
@@ -609,9 +643,9 @@ fn (mut self RendererThread) drain_mailbox() ! {
 // thread. This only exists on Darwin at compile time.
 fn (self &RendererThread) set_qos_class() {
 	$if macos {
-		class := if !self.flags.visible {
+		class := if !self.flags.visible() {
 			internal_os.QosClass.utility
-		} else if !self.flags.focused {
+		} else if !self.flags.focused() {
 			internal_os.QosClass.user_initiated
 		} else {
 			internal_os.QosClass.user_interactive
@@ -628,7 +662,7 @@ fn (mut self RendererThread) change_config(config &ThreadDerivedConfig) {
 // just trigger a draw/paint.
 fn (mut self RendererThread) draw_frame(now bool) {
 	// If we're invisible, we do not draw.
-	if !self.flags.visible {
+	if !self.flags.visible() {
 		return
 	}
 
@@ -654,10 +688,10 @@ fn (mut self RendererThread) render_callback() {
 	// Ghostty while rebuilding the renderer's immutable frame snapshot.
 	if self.state.mutex != unsafe { nil } {
 		self.state.mutex.lock()
-		self.renderer.update_frame(self.state, self.flags.cursor_blink_visible) or {}
+		self.renderer.update_frame(self.state, self.flags.cursor_blink_visible()) or {}
 		self.state.mutex.unlock()
 	} else {
-		self.renderer.update_frame(self.state, self.flags.cursor_blink_visible) or {}
+		self.renderer.update_frame(self.state, self.flags.cursor_blink_visible()) or {}
 	}
 
 	// Draw
@@ -673,7 +707,7 @@ fn (mut self RendererThread) cursor_timer_callback() {
 	}
 
 	// Toggle the cursor visibility state.
-	self.flags.cursor_blink_visible = !self.flags.cursor_blink_visible
+	self.flags.toggle_cursor_blink_visible()
 
 	// Wake up the renderer so it can redraw with the new blink state.
 	self.request_wakeup()

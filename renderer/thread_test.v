@@ -104,22 +104,23 @@ fn test_renderer_thread_timer_deadlines() {
 
 fn test_renderer_thread_flags_match_source_defaults() {
 	flags := ThreadFlags{}
-	assert !flags.cursor_blink_visible
-	assert !flags.has_inspector
-	assert flags.visible
-	assert flags.focused
+	assert !flags.cursor_blink_visible()
+	assert !flags.has_inspector()
+	assert flags.visible()
+	assert flags.focused()
+	assert sizeof(ThreadFlags) == 1
 }
 
 fn test_renderer_thread_disabled_draw_keeps_armed_completion() {
 	mut render := Renderer{}
+	mut flags := ThreadFlags{}
+	flags.set_visible(false)
 	mut render_thread := RendererThread{
 		renderer: &render
 		config: ThreadDerivedConfig{
 			custom_shader_animation: .false_
 		}
-		flags: ThreadFlags{
-			visible: false
-		}
+		flags: flags
 		draw_active: true
 		draw_timer_armed: true
 		next_draw_at: 123
@@ -135,14 +136,14 @@ fn test_renderer_thread_disabled_draw_keeps_armed_completion() {
 
 fn test_renderer_thread_active_draw_rearms_completion() {
 	mut render := Renderer{}
+	mut flags := ThreadFlags{}
+	flags.set_visible(false)
 	mut render_thread := RendererThread{
 		renderer: &render
 		config: ThreadDerivedConfig{
 			custom_shader_animation: .always
 		}
-		flags: ThreadFlags{
-			visible: false
-		}
+		flags: flags
 		draw_active: true
 		draw_timer_armed: true
 		next_draw_at: 123
@@ -167,7 +168,7 @@ fn test_renderer_thread_routes_app_thread_draws_through_redraw_callback() {
 	render_thread.draw_frame(false)
 	assert capture.count == 1
 
-	render_thread.flags.visible = false
+	render_thread.flags.set_visible(false)
 	render_thread.draw_frame(true)
 	assert capture.count == 1
 }
