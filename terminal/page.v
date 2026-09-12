@@ -1181,14 +1181,11 @@ pub fn Page.layout(cap PageCapacity) PageLayout {
 // as Ghostty does, exposing all alignment slack to the row/cell grid.
 fn (self PageCapacity) available_bits_for_grid() usize {
 	l := Page.layout(self)
-	hyperlink_map_start := page_align_backward(l.total_size - l.hyperlink_map_layout.total_size,
-		4)
+	hyperlink_map_start := page_align_backward(l.total_size - l.hyperlink_map_layout.total_size, 4)
 	hyperlink_set_start := page_align_backward(hyperlink_map_start - l.hyperlink_set_layout.total_size, 8)
-	string_alloc_start := page_align_backward(hyperlink_set_start - l.string_alloc_layout.total_size,
-		8)
+	string_alloc_start := page_align_backward(hyperlink_set_start - l.string_alloc_layout.total_size, 8)
 	grapheme_map_start := page_align_backward(string_alloc_start - l.grapheme_map_layout.total_size, 8)
-	grapheme_alloc_start := page_align_backward(grapheme_map_start - l.grapheme_alloc_layout.total_size,
-		8)
+	grapheme_alloc_start := page_align_backward(grapheme_map_start - l.grapheme_alloc_layout.total_size, 8)
 	styles_start := page_align_backward(grapheme_alloc_start - l.styles_layout.total_size, 8)
 	return styles_start * 8
 }
@@ -1410,7 +1407,7 @@ pub fn (self &Page) verify_integrity() ?IntegrityError {
 			cell := row.cells[x]
 
 			if cell.has_grapheme {
-				key := cell_key(y, x, int(self.capacity.cols))
+				key := cell_key(usize(y), usize(x), usize(self.capacity.cols))
 				// If a cell has grapheme data, it must have both the page map
 				// entry and the translated codepoint slice.
 				if key !in self.grapheme_map || cell.graphemes.len == 0 {
@@ -1418,7 +1415,7 @@ pub fn (self &Page) verify_integrity() ?IntegrityError {
 				}
 				graphemes_seen++
 			} else if total_graphemes > 0 {
-				key := cell_key(y, x, int(self.capacity.cols))
+				key := cell_key(usize(y), usize(x), usize(self.capacity.cols))
 				// It should not have grapheme data if it isn't marked.
 				if key in self.grapheme_map || cell.graphemes.len > 0 {
 					return IntegrityError.unmarked_grapheme_cell
@@ -1433,7 +1430,7 @@ pub fn (self &Page) verify_integrity() ?IntegrityError {
 			}
 
 			if cell.has_hyperlink {
-				key := cell_key(y, x, int(self.capacity.cols))
+				key := cell_key(usize(y), usize(x), usize(self.capacity.cols))
 				if key !in self.hyperlink_map {
 					return IntegrityError.missing_hyperlink_data
 				}
@@ -1444,7 +1441,7 @@ pub fn (self &Page) verify_integrity() ?IntegrityError {
 				hyperlinks_seen[hl_id] = hyperlinks_seen[hl_id] + 1
 			} else {
 				// It should not have hyperlink data if it isn't marked.
-				key := cell_key(y, x, int(self.capacity.cols))
+				key := cell_key(usize(y), usize(x), usize(self.capacity.cols))
 				if key in self.hyperlink_map {
 					return IntegrityError.unmarked_hyperlink_cell
 				}
@@ -1631,7 +1628,7 @@ pub fn (self &Page) exact_row_capacity(y_start usize, y_end usize) PageCapacity 
 				style_ids[cell.style_id] = true
 			}
 			if cell.has_grapheme {
-				if cps := self.lookup_grapheme_at(int(y), x) {
+				if cps := self.lookup_grapheme_at(y, usize(x)) {
 					grapheme_bytes += self.grapheme_alloc.bytes_required(usize(sizeof(u32)), usize(cps.len))
 				}
 			}
@@ -1653,7 +1650,7 @@ pub fn (self &Page) exact_row_capacity(y_start usize, y_end usize) PageCapacity 
 			}
 
 			hyperlink_cells++
-			id := self.lookup_hyperlink(int(y), x) or { continue }
+			id := self.lookup_hyperlink(y, usize(x)) or { continue }
 			if id in hyperlink_ids {
 				continue
 			}
@@ -1705,23 +1702,22 @@ pub fn (self &Page) exact_row_capacity(y_start usize, y_end usize) PageCapacity 
 // If the other page has more columns, the extra columns will be
 // truncated. If the other page has fewer columns, the extra columns
 // will be zeroed.
-pub fn (mut self Page) clone_from(other &Page, y_start u16, y_end u16) ! {
+pub fn (mut self Page) clone_from(other &Page, y_start usize, y_end usize) ! {
 	assert y_start <= y_end
-	assert y_end <= other.size.rows
-	assert y_end - y_start <= self.size.rows
-	assert int(y_end) <= other.rows.len
-	assert int(y_end) - int(y_start) <= self.rows.len
+	assert y_end <= usize(other.size.rows)
+	assert y_end - y_start <= usize(self.size.rows)
+	assert y_end <= usize(other.rows.len)
+	assert y_end - y_start <= usize(self.rows.len)
 
-	count := int(y_end) - int(y_start)
-	for i in 0 .. count {
-		src_idx := int(y_start) + i
-		self.clone_row_from(other, u16(i), u16(src_idx))!
+	count := y_end - y_start
+	for i in usize(0) .. count {
+		self.clone_row_from(other, i, y_start + i)!
 	}
 	self.assert_integrity()
 }
 
 // Clone a single row from another page into this page.
-pub fn (mut self Page) clone_row_from(other &Page, dst_row_idx u16, src_row_idx u16) ! {
+pub fn (mut self Page) clone_row_from(other &Page, dst_row_idx usize, src_row_idx usize) ! {
 	if clone_error := self.try_clone_row_from(other, dst_row_idx, src_row_idx) {
 		return error('${clone_error}')
 	}
@@ -1729,19 +1725,19 @@ pub fn (mut self Page) clone_row_from(other &Page, dst_row_idx u16, src_row_idx 
 
 // Clone a single row from another page into this page, supporting
 // partial copy. clone_row_from calls this.
-pub fn (mut self Page) clone_partial_row_from(other &Page, dst_row_idx u16, src_row_idx u16, x_start u16, x_end_req u16) ! {
+pub fn (mut self Page) clone_partial_row_from(other &Page, dst_row_idx usize, src_row_idx usize, x_start usize, x_end_req usize) ! {
 	if clone_error := self.try_clone_partial_row_from(other, dst_row_idx, src_row_idx, x_start, x_end_req) {
 		return error('${clone_error}')
 	}
 }
 
-fn (mut self Page) try_clone_row_from(other &Page, dst_row_idx u16, src_row_idx u16) ?PageCloneError {
-	return self.try_clone_partial_row_from(other, dst_row_idx, src_row_idx, 0, self.size.cols)
+fn (mut self Page) try_clone_row_from(other &Page, dst_row_idx usize, src_row_idx usize) ?PageCloneError {
+	return self.try_clone_partial_row_from(other, dst_row_idx, src_row_idx, 0, usize(self.size.cols))
 }
 
 // Failable core of clone_partial_row_from. PageList consumes this result to
 // grow a bounded style set and retry, matching Ghostty's cloneRowFrom callers.
-fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_row_idx u16, x_start u16, x_end_req u16) ?PageCloneError {
+fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx usize, src_row_idx usize, x_start usize, x_end_req usize) ?PageCloneError {
 	// Cloning updates row flags, managed maps, allocators, and cell markers in
 	// stages. Match Page.clonePartialRowFrom by suspending checks until every
 	// stage (including an error return) has left the page consistent.
@@ -1751,15 +1747,19 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_
 		self.assert_integrity()
 	}
 
-	assert int(src_row_idx) < other.rows.len
-	assert int(dst_row_idx) < self.rows.len
+	assert src_row_idx < usize(other.rows.len)
+	assert dst_row_idx < usize(self.rows.len)
 
-	cell_len := if self.size.cols < other.size.cols { self.size.cols } else { other.size.cols }
+	cell_len := usize(if self.size.cols < other.size.cols {
+		self.size.cols
+	} else {
+		other.size.cols
+	})
 	x_end := if x_end_req < cell_len { x_end_req } else { cell_len }
 	assert x_start <= x_end
 
-	src_row := other.rows[int(src_row_idx)]
-	mut dst_row := &self.rows[int(dst_row_idx)]
+	src_row := other.rows[src_row_idx]
+	mut dst_row := &self.rows[dst_row_idx]
 
 	// If our destination has styles or graphemes then we need to
 	// clear some state.
@@ -1768,7 +1768,7 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_
 	}
 
 	// Copy row metadata but adjust if partial copy.
-	is_full_row := (int(x_end) - int(x_start)) >= int(self.size.cols)
+	is_full_row := x_end - x_start >= usize(self.size.cols)
 	if is_full_row {
 		dst_row.wrap = src_row.wrap
 		dst_row.wrap_continuation = src_row.wrap_continuation
@@ -1785,7 +1785,7 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_
 
 	// Copy cells.
 	same_page := unsafe { voidptr(other) == voidptr(&self) }
-	for xi in int(x_start) .. int(x_end) {
+	for xi in x_start .. x_end {
 		src_cell := src_row.cells[xi]
 		dst_row.cells[xi] = CellData{
 			codepoint: src_cell.codepoint
@@ -1806,10 +1806,10 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_
 
 		// Copy graphemes.
 		if src_cell.has_grapheme {
-			cps := other.lookup_grapheme_at(int(src_row_idx), xi) or {
+			cps := other.lookup_grapheme_at(src_row_idx, xi) or {
 				panic('grapheme source cell is missing its page mapping')
 			}
-			dst_key := cell_key(int(dst_row_idx), xi, int(self.capacity.cols))
+			dst_key := cell_key(dst_row_idx, xi, usize(self.capacity.cols))
 			offset := self.grapheme_alloc.alloc(usize(cps.len) * usize(sizeof(u32))) or {
 				return .grapheme_alloc_out_of_memory
 			}
@@ -1829,9 +1829,9 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_
 
 		// Copy hyperlinks.
 		if src_cell.has_hyperlink {
-			src_key := cell_key(int(src_row_idx), xi, int(other.capacity.cols))
+			src_key := cell_key(src_row_idx, xi, usize(other.capacity.cols))
 			if src_key in other.hyperlink_map {
-				dst_key := cell_key(int(dst_row_idx), xi, int(self.capacity.cols))
+				dst_key := cell_key(dst_row_idx, xi, usize(self.capacity.cols))
 				if dst_key !in self.hyperlink_map && self.hyperlink_count() >= self.hyperlink_capacity() {
 					return .hyperlink_map_out_of_memory
 				}
@@ -1909,8 +1909,8 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_
 }
 
 // Get a single row. y must be valid.
-pub fn (self &Page) get_row(y int) &RowData {
-	assert y >= 0 && y < int(self.size.rows)
+pub fn (self &Page) get_row(y usize) &RowData {
+	assert y < usize(self.size.rows)
 	return &self.rows[y]
 }
 
@@ -1934,9 +1934,9 @@ pub mut:
 	cell &CellData = unsafe { nil }
 }
 
-pub fn (mut self Page) get_row_and_cell(x int, y int) RowAndCell {
-	assert y >= 0 && y < int(self.size.rows)
-	assert x >= 0 && x < int(self.size.cols)
+pub fn (mut self Page) get_row_and_cell(x usize, y usize) RowAndCell {
+	assert y < usize(self.size.rows)
+	assert x < usize(self.size.cols)
 	return RowAndCell{
 		row: unsafe { &self.rows[y] }
 		cell: unsafe { &self.rows[y].cells[x] }
@@ -1946,16 +1946,15 @@ pub fn (mut self Page) get_row_and_cell(x int, y int) RowAndCell {
 // Move cells from one location to another. This will replace the
 // previous contents with a blank cell. Because this is a move, this
 // doesn't allocate and can't fail.
-pub fn (mut self Page) move_cells(src_row_idx int, src_left int, dst_row_idx int, dst_left int, len int) {
+pub fn (mut self Page) move_cells(src_row_idx usize, src_left usize, dst_row_idx usize, dst_left usize, len usize) {
 	defer { self.assert_integrity() }
-	assert len >= 0
-	assert src_row_idx >= 0 && src_row_idx < int(self.size.rows)
-	assert dst_row_idx >= 0 && dst_row_idx < int(self.size.rows)
-	assert src_left >= 0 && src_left + len <= int(self.size.cols)
-	assert dst_left >= 0 && dst_left + len <= int(self.size.cols)
+	assert src_row_idx < usize(self.size.rows)
+	assert dst_row_idx < usize(self.size.rows)
+	assert src_left + len <= usize(self.size.cols)
+	assert dst_left + len <= usize(self.size.cols)
 
 	// Clear our destination no matter what.
-	self.clear_cells(u16(dst_row_idx), u16(dst_left), u16(dst_left + len))
+	self.clear_cells(dst_row_idx, dst_left, dst_left + len)
 
 	mut src_row := &self.rows[src_row_idx]
 	mut dst_row := &self.rows[dst_row_idx]
@@ -2012,7 +2011,7 @@ pub fn (mut self Page) move_cells(src_row_idx int, src_left int, dst_row_idx int
 	for i in 0 .. len {
 		src_row.cells[src_left + i] = CellData{}
 	}
-	if len == int(self.size.cols) {
+	if len == usize(self.size.cols) {
 		src_row.grapheme = false
 		src_row.hyperlink = false
 		src_row.styled = false
@@ -2021,19 +2020,19 @@ pub fn (mut self Page) move_cells(src_row_idx int, src_left int, dst_row_idx int
 }
 
 // Swap two cells within the same row as quickly as possible.
-pub fn (mut self Page) swap_cells(row_idx int, src_x int, dst_x int) {
+pub fn (mut self Page) swap_cells(row_idx usize, src_x usize, dst_x usize) {
 	defer { self.assert_integrity() }
-	assert row_idx >= 0 && row_idx < int(self.size.rows)
-	assert src_x >= 0 && src_x < int(self.size.cols)
-	assert dst_x >= 0 && dst_x < int(self.size.cols)
+	assert row_idx < usize(self.size.rows)
+	assert src_x < usize(self.size.cols)
+	assert dst_x < usize(self.size.cols)
 	mut row := &self.rows[row_idx]
 
 	// Graphemes are keyed by cell, so we do have to move them.
 	src_has_grapheme := row.cells[src_x].has_grapheme
 	dst_has_grapheme := row.cells[dst_x].has_grapheme
 	if src_has_grapheme || dst_has_grapheme {
-		src_key := cell_key(row_idx, src_x, int(self.capacity.cols))
-		dst_key := cell_key(row_idx, dst_x, int(self.capacity.cols))
+		src_key := cell_key(row_idx, src_x, usize(self.capacity.cols))
+		dst_key := cell_key(row_idx, dst_x, usize(self.capacity.cols))
 		if src_has_grapheme && dst_has_grapheme {
 			src_allocation := self.grapheme_map[src_key] or {
 				panic('swapped grapheme cell is missing its page mapping')
@@ -2054,8 +2053,8 @@ pub fn (mut self Page) swap_cells(row_idx int, src_x int, dst_x int) {
 	src_has_hl := row.cells[src_x].has_hyperlink
 	dst_has_hl := row.cells[dst_x].has_hyperlink
 	if src_has_hl || dst_has_hl {
-		src_key := cell_key(row_idx, src_x, int(self.capacity.cols))
-		dst_key := cell_key(row_idx, dst_x, int(self.capacity.cols))
+		src_key := cell_key(row_idx, src_x, usize(self.capacity.cols))
+		dst_key := cell_key(row_idx, dst_x, usize(self.capacity.cols))
 		if src_has_hl && dst_has_hl {
 			src_hl := self.hyperlink_map[src_key] or {
 				panic('swapped hyperlink cell is missing its page mapping')
@@ -2083,24 +2082,24 @@ pub fn (mut self Page) swap_cells(row_idx int, src_x int, dst_x int) {
 // active, Page cannot know this and it will still be ref counted down.
 // The best solution for this is to artificially increment the ref count
 // prior to calling this function.
-pub fn (mut self Page) clear_cells(row_idx u16, left u16, end u16) {
+pub fn (mut self Page) clear_cells(row_idx usize, left usize, end usize) {
 	defer { self.assert_integrity() }
-	assert row_idx < self.size.rows
+	assert row_idx < usize(self.size.rows)
 	assert left <= end
-	assert end <= self.size.cols
-	mut row := &self.rows[int(row_idx)]
-	cols := int(self.size.cols)
+	assert end <= usize(self.size.cols)
+	mut row := &self.rows[row_idx]
+	cols := usize(self.size.cols)
 
 	// If we have managed memory (styles, graphemes, or hyperlinks)
 	// in this row then we go cell by cell and clear them if present.
 	if row.grapheme {
-		for x in int(left) .. int(end) {
+		for x in left .. end {
 			if row.cells[x].has_grapheme {
-				self.clear_grapheme(int(row_idx), x)
+				self.clear_grapheme(row_idx, x)
 			}
 		}
 		// If we cleared the full row width, clear the flag.
-		if int(end) - int(left) >= cols {
+		if end - left >= cols {
 			row.grapheme = false
 		} else {
 			self.update_row_grapheme_flag(row)
@@ -2108,9 +2107,9 @@ pub fn (mut self Page) clear_cells(row_idx u16, left u16, end u16) {
 	}
 
 	if row.hyperlink {
-		for x in int(left) .. int(end) {
+		for x in left .. end {
 			if row.cells[x].has_hyperlink {
-				key := cell_key(int(row_idx), x, int(self.capacity.cols))
+				key := cell_key(row_idx, x, usize(self.capacity.cols))
 				if key in self.hyperlink_map {
 					hl_id := self.hyperlink_map[key]
 					self.hyperlink_set.release(hl_id)
@@ -2119,7 +2118,7 @@ pub fn (mut self Page) clear_cells(row_idx u16, left u16, end u16) {
 				row.cells[x].has_hyperlink = false
 			}
 		}
-		if int(end) - int(left) >= cols {
+		if end - left >= cols {
 			row.hyperlink = false
 		} else {
 			self.update_row_hyperlink_flag(row)
@@ -2127,12 +2126,12 @@ pub fn (mut self Page) clear_cells(row_idx u16, left u16, end u16) {
 	}
 
 	if row.styled {
-		for x in int(left) .. int(end) {
+		for x in left .. end {
 			if row.cells[x].has_styling() {
 				self.styles.release(row.cells[x].style_id)
 			}
 		}
-		if int(end) - int(left) >= cols {
+		if end - left >= cols {
 			row.styled = false
 		} else {
 			self.update_row_styled_flag(row)
@@ -2141,9 +2140,9 @@ pub fn (mut self Page) clear_cells(row_idx u16, left u16, end u16) {
 
 	// Kitty placeholder row flags may be false positives. Ghostty clears a
 	// false-positive flag when a full-row clear finds no placeholder cells.
-	if row.kitty_virtual_placeholder && int(end) - int(left) >= cols {
+	if row.kitty_virtual_placeholder && end - left >= cols {
 		mut has_placeholder := false
-		for x in int(left) .. int(end) {
+		for x in left .. end {
 			if row.cells[x].codepoint_val() == kitty_unicode_placeholder {
 				has_placeholder = true
 				break
@@ -2155,7 +2154,7 @@ pub fn (mut self Page) clear_cells(row_idx u16, left u16, end u16) {
 	}
 
 	// Zero the cells.
-	for x in int(left) .. int(end) {
+	for x in left .. end {
 		row.cells[x] = CellData{}
 	}
 }
@@ -2175,7 +2174,7 @@ fn (self &Page) key_for_cell(cell &CellData) ?u64 {
 		}
 		for x in 0 .. limit {
 			if voidptr(&row.cells[x]) == target {
-				return cell_key(y, x, int(self.capacity.cols))
+				return cell_key(usize(y), usize(x), usize(self.capacity.cols))
 			}
 		}
 	}
@@ -2192,8 +2191,8 @@ pub fn (self &Page) lookup_hyperlink_cell(cell &CellData) ?HyperlinkId {
 }
 
 // Index-addressed helper for code that already has a page row and column.
-pub fn (self &Page) lookup_hyperlink(row_idx int, col_idx int) ?HyperlinkId {
-	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
+pub fn (self &Page) lookup_hyperlink(row_idx usize, col_idx usize) ?HyperlinkId {
+	key := cell_key(row_idx, col_idx, usize(self.capacity.cols))
 	if key in self.hyperlink_map {
 		return self.hyperlink_map[key]
 	}
@@ -2205,11 +2204,11 @@ pub fn (self &Page) lookup_hyperlink(row_idx int, col_idx int) ?HyperlinkId {
 // In order to update the hyperlink flag on the row, call
 // update_row_hyperlink_flag after you finish clearing any
 // hyperlinks in the row.
-pub fn (mut self Page) clear_hyperlink(row_idx int, col_idx int) {
+pub fn (mut self Page) clear_hyperlink(row_idx usize, col_idx usize) {
 	defer { self.assert_integrity() }
-	assert row_idx >= 0 && row_idx < int(self.size.rows)
-	assert col_idx >= 0 && col_idx < int(self.size.cols)
-	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
+	assert row_idx < usize(self.size.rows)
+	assert col_idx < usize(self.size.cols)
+	key := cell_key(row_idx, col_idx, usize(self.capacity.cols))
 	hl_id := self.hyperlink_map[key] or { return }
 	self.hyperlink_set.release(hl_id)
 	self.hyperlink_map.delete(key)
@@ -2234,11 +2233,11 @@ pub fn (mut self Page) insert_hyperlink(link Hyperlink) !HyperlinkId {
 // Caller is responsible for updating the refcount in the hyperlink
 // set as necessary by calling use_link if the id was not acquired with
 // add.
-pub fn (mut self Page) set_hyperlink(row_idx int, col_idx int, id HyperlinkId) ! {
+pub fn (mut self Page) set_hyperlink(row_idx usize, col_idx usize, id HyperlinkId) ! {
 	defer { self.assert_integrity() }
-	assert row_idx >= 0 && row_idx < int(self.size.rows)
-	assert col_idx >= 0 && col_idx < int(self.size.cols)
-	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
+	assert row_idx < usize(self.size.rows)
+	assert col_idx < usize(self.size.cols)
+	key := cell_key(row_idx, col_idx, usize(self.capacity.cols))
 
 	if key in self.hyperlink_map {
 		old_id := self.hyperlink_map[key]
@@ -2263,11 +2262,11 @@ pub fn (mut self Page) set_hyperlink(row_idx int, col_idx int, id HyperlinkId) !
 // Move the hyperlink from one cell to another. This can't fail
 // because we avoid any allocations since we're just moving data.
 // Destination must NOT have a hyperlink.
-fn (mut self Page) move_hyperlink(src_row int, src_col int, dst_row int, dst_col int) {
+fn (mut self Page) move_hyperlink(src_row usize, src_col usize, dst_row usize, dst_col usize) {
 	assert self.rows[src_row].cells[src_col].has_hyperlink
 	assert !self.rows[dst_row].cells[dst_col].has_hyperlink
-	src_key := cell_key(src_row, src_col, int(self.capacity.cols))
-	dst_key := cell_key(dst_row, dst_col, int(self.capacity.cols))
+	src_key := cell_key(src_row, src_col, usize(self.capacity.cols))
+	dst_key := cell_key(dst_row, dst_col, usize(self.capacity.cols))
 	hl_id := self.hyperlink_map[src_key] or {
 		panic('moved hyperlink cell is missing its page mapping')
 	}
@@ -2281,21 +2280,21 @@ fn (mut self Page) move_hyperlink(src_row int, src_col int, dst_row int, dst_col
 
 // Returns the number of hyperlinks in the page. This isn't the byte
 // size but the total number of unique cells that have hyperlink data.
-pub fn (self &Page) hyperlink_count() int {
-	return self.hyperlink_map.keys().len
+pub fn (self &Page) hyperlink_count() usize {
+	return usize(self.hyperlink_map.keys().len)
 }
 
 // Returns the hyperlink capacity for the page.
-pub fn (self &Page) hyperlink_capacity() int {
-	return int(Page.layout(self.capacity).hyperlink_map_layout.capacity)
+pub fn (self &Page) hyperlink_capacity() usize {
+	return Page.layout(self.capacity).hyperlink_map_layout.capacity
 }
 
 // Set the graphemes for the given cell. This asserts that the cell
 // has no graphemes set, and only contains a single codepoint.
-pub fn (mut self Page) set_graphemes(row_idx int, col_idx int, cps []u32) ! {
+pub fn (mut self Page) set_graphemes(row_idx usize, col_idx usize, cps []u32) ! {
 	defer { self.assert_integrity() }
-	assert row_idx >= 0 && row_idx < int(self.size.rows)
-	assert col_idx >= 0 && col_idx < int(self.size.cols)
+	assert row_idx < usize(self.size.rows)
+	assert col_idx < usize(self.size.cols)
 	mut row := &self.rows[row_idx]
 	mut cell := &row.cells[col_idx]
 	assert cell.codepoint > 0
@@ -2305,7 +2304,7 @@ pub fn (mut self Page) set_graphemes(row_idx int, col_idx int, cps []u32) ! {
 	offset := self.grapheme_alloc.alloc(usize(cps.len) * usize(sizeof(u32))) or {
 		return error('GraphemeAllocOutOfMemory')
 	}
-	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
+	key := cell_key(row_idx, col_idx, usize(self.capacity.cols))
 	if key in self.grapheme_map || self.grapheme_count() >= self.grapheme_capacity() {
 		self.grapheme_alloc.release(offset, usize(cps.len) * usize(sizeof(u32)))
 		return error('GraphemeMapOutOfMemory')
@@ -2322,14 +2321,14 @@ pub fn (mut self Page) set_graphemes(row_idx int, col_idx int, cps []u32) ! {
 }
 
 // Append a codepoint to the given cell as a grapheme.
-pub fn (mut self Page) append_grapheme(row_idx int, col_idx int, cp u32) ! {
+pub fn (mut self Page) append_grapheme(row_idx usize, col_idx usize, cp u32) ! {
 	defer { self.assert_integrity() }
-	assert row_idx >= 0 && row_idx < int(self.size.rows)
-	assert col_idx >= 0 && col_idx < int(self.size.cols)
+	assert row_idx < usize(self.size.rows)
+	assert col_idx < usize(self.size.cols)
 	mut row := &self.rows[row_idx]
 	mut cell := &row.cells[col_idx]
 	assert cell.codepoint != 0
-	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
+	key := cell_key(row_idx, col_idx, usize(self.capacity.cols))
 
 	if cell.content_tag != .codepoint_grapheme {
 		offset := self.grapheme_alloc.alloc(usize(sizeof(u32))) or {
@@ -2384,15 +2383,15 @@ pub fn (self &Page) lookup_grapheme(cell &CellData) ?[]u32 {
 }
 
 // Index-addressed helper for code that already has a page row and column.
-pub fn (self &Page) lookup_grapheme_at(row_idx int, col_idx int) ?[]u32 {
-	if row_idx < 0 || row_idx >= self.rows.len {
+pub fn (self &Page) lookup_grapheme_at(row_idx usize, col_idx usize) ?[]u32 {
+	if row_idx >= usize(self.rows.len) {
 		return none
 	}
 	row := self.rows[row_idx]
-	if col_idx < 0 || col_idx >= row.cells.len {
+	if col_idx >= usize(row.cells.len) {
 		return none
 	}
-	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
+	key := cell_key(row_idx, col_idx, usize(self.capacity.cols))
 	if key in self.grapheme_map {
 		return row.cells[col_idx].graphemes
 	}
@@ -2405,11 +2404,11 @@ pub fn (self &Page) lookup_grapheme_at(row_idx int, col_idx int) ?[]u32 {
 // WARNING: This will NOT change the content_tag on the cells because
 // there are scenarios where we want to move graphemes without changing
 // the content tag. Callers beware but assert_integrity should catch this.
-fn (mut self Page) move_grapheme(src_row int, src_col int, dst_row int, dst_col int) {
+fn (mut self Page) move_grapheme(src_row usize, src_col usize, dst_row usize, dst_col usize) {
 	assert self.rows[src_row].cells[src_col].has_grapheme
 	assert !self.rows[dst_row].cells[dst_col].has_grapheme
-	src_key := cell_key(src_row, src_col, int(self.capacity.cols))
-	dst_key := cell_key(dst_row, dst_col, int(self.capacity.cols))
+	src_key := cell_key(src_row, src_col, usize(self.capacity.cols))
+	dst_key := cell_key(dst_row, dst_col, usize(self.capacity.cols))
 	allocation := self.grapheme_map[src_key] or {
 		panic('moved grapheme cell is missing its page mapping')
 	}
@@ -2422,12 +2421,12 @@ fn (mut self Page) move_grapheme(src_row int, src_col int, dst_row int, dst_col 
 // In order to update the grapheme flag on the row, call
 // update_row_grapheme_flag after you finish clearing any
 // graphemes in the row.
-pub fn (mut self Page) clear_grapheme(row_idx int, col_idx int) {
+pub fn (mut self Page) clear_grapheme(row_idx usize, col_idx usize) {
 	defer { self.assert_integrity() }
-	assert row_idx >= 0 && row_idx < int(self.size.rows)
-	assert col_idx >= 0 && col_idx < int(self.size.cols)
+	assert row_idx < usize(self.size.rows)
+	assert col_idx < usize(self.size.cols)
 	assert self.rows[row_idx].cells[col_idx].has_grapheme
-	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
+	key := cell_key(row_idx, col_idx, usize(self.capacity.cols))
 	allocation := self.grapheme_map[key] or {
 		panic('cleared grapheme cell is missing its page mapping')
 	}
@@ -2457,14 +2456,14 @@ pub fn (mut self Page) update_row_grapheme_flag(row &RowData) {
 
 // Returns the number of graphemes in the page. This isn't the byte
 // size but the total number of unique cells that have grapheme data.
-pub fn (self &Page) grapheme_count() int {
-	return self.grapheme_map.keys().len
+pub fn (self &Page) grapheme_count() usize {
+	return usize(self.grapheme_map.keys().len)
 }
 
 // Returns the number of unique cells that the pinned page's grapheme map can
 // address without increasing capacity.
-pub fn (self &Page) grapheme_capacity() int {
-	return int(Page.layout(self.capacity).grapheme_map_layout.capacity)
+pub fn (self &Page) grapheme_capacity() usize {
+	return Page.layout(self.capacity).grapheme_map_layout.capacity
 }
 
 // Checks if the row contains any hyperlinks and sets
@@ -2517,7 +2516,7 @@ pub fn (self &Page) is_dirty() bool {
 // ============================================================
 
 // Compute a unique key for a cell position in the hyperlink map.
-fn cell_key(row_idx int, col_idx int, max_cols int) u64 {
+fn cell_key(row_idx usize, col_idx usize, max_cols usize) u64 {
 	return u64(row_idx) * u64(max_cols) + u64(col_idx)
 }
 

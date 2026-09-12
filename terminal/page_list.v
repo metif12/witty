@@ -3665,7 +3665,7 @@ fn clone_row_for_page_list(mut dst Page, dst_y int, src &RowData, cols u32) {
 		cell.has_hyperlink = false
 		dst.rows[dst_y].cells[x] = cell
 		if src_cell.has_grapheme {
-			dst.set_graphemes(dst_y, x, src_cell.graphemes) or {
+			dst.set_graphemes(usize(dst_y), usize(x), src_cell.graphemes) or {
 				panic('PageList snapshot grapheme capacity was undersized: ${err}')
 			}
 		}
@@ -3673,7 +3673,7 @@ fn clone_row_for_page_list(mut dst Page, dst_y int, src &RowData, cols u32) {
 			id := dst.insert_hyperlink(src_cell.hyperlink) or {
 				panic('PageList snapshot hyperlink capacity was undersized: ${err}')
 			}
-			dst.set_hyperlink(dst_y, x, id) or {
+			dst.set_hyperlink(usize(dst_y), usize(x), id) or {
 				panic('PageList snapshot hyperlink map capacity was undersized')
 			}
 		}
@@ -4059,7 +4059,7 @@ pub fn (self &PageList) diagram() !string {
 					} else {
 						out.write_rune(rune(cell.codepoint))
 						if cell.has_grapheme {
-							graphemes := node.data.lookup_grapheme_at(y, x) or {
+							graphemes := node.data.lookup_grapheme_at(usize(y), usize(x)) or {
 								panic('grapheme cell is missing its page mapping')
 							}
 							for cp in graphemes {
@@ -5479,7 +5479,7 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 			page.grapheme_alloc.release(offset, usize(cps.len) * usize(sizeof(u32)))
 			break
 		}
-		page.set_graphemes(int(self.y), int(self.x), cps) or {
+		page.set_graphemes(usize(self.y), usize(self.x), cps) or {
 			$if !prod {
 				panic('set_graphemes failed after PageList capacity increase: ${err}')
 			} $else {
@@ -5494,7 +5494,7 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 
 	// Copy hyperlink data.
 	if cell.has_hyperlink {
-		src_id := src_page.lookup_hyperlink(src_y, src_x) or {
+		src_id := src_page.lookup_hyperlink(usize(src_y), usize(src_x)) or {
 			panic('hyperlinked source cell is missing its page mapping')
 		}
 		src_link := src_page.hyperlink_set.get(src_id)
@@ -5542,7 +5542,7 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 			}
 		}
 		if hyperlink_valid {
-			page.set_hyperlink(int(self.y), int(self.x), dst_id) or {
+			page.set_hyperlink(usize(self.y), usize(self.x), dst_id) or {
 				$if !prod {
 					panic('set_hyperlink failed after PageList capacity increase: ${err}')
 				} $else {

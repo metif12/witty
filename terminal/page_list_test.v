@@ -640,7 +640,7 @@ fn test_page_pin_row_cell_grapheme_and_style_accessors() {
 		style_id: style_id
 	}
 	page.rows[int(pin.y)].styled = true
-	page.set_graphemes(int(pin.y), int(pin.x), [u32(0x0301)]) or { panic(err) }
+	page.set_graphemes(usize(pin.y), usize(pin.x), [u32(0x0301)]) or { panic(err) }
 
 	rac := pin.row_and_cell()
 	assert voidptr(rac.row) == voidptr(pin.row_data())
@@ -6142,7 +6142,7 @@ fn test_page_list_resize_reflow_preserves_hyperlink_mapping() {
 				continue
 			}
 			assert cell.has_hyperlink
-			id := reflowed.lookup_hyperlink(int(pin.y), x) or {
+			id := reflowed.lookup_hyperlink(usize(pin.y), usize(x)) or {
 				assert false, 'reflowed hyperlink mapping missing'
 				return
 			}
@@ -6220,7 +6220,7 @@ fn test_page_list_resize_reflow_preserves_hyperlinks_across_source_pages() {
 			if cell.codepoint != u32(`A`) && cell.codepoint != u32(`B`) {
 				continue
 			}
-			id := reflowed.lookup_hyperlink(int(pin.y), x) or {
+			id := reflowed.lookup_hyperlink(usize(pin.y), usize(x)) or {
 				assert false, 'reflowed hyperlink mapping missing'
 				return
 			}
@@ -6239,8 +6239,8 @@ fn test_page_list_resize_reflow_exceeds_hyperlink_memory_forcing_capacity_increa
 
 	mut first := s.pages.first or { return }
 	mut page0 := &first.data
-	y0 := int(page0.size.rows) - 1
-	x0 := int(page0.size.cols) - 1
+	y0 := usize(page0.size.rows) - 1
+	x0 := usize(page0.size.cols) - 1
 	first_id := page0.insert_hyperlink(Hyperlink{
 		id: HyperlinkImplicitId{ offset: 0 }
 		uri: uri
@@ -6507,7 +6507,7 @@ fn test_page_list_resize_reflow_less_cols_wrapped_rows_with_graphemes() {
 	assert !r1.row_data().wrap
 	assert r1.row_data().grapheme
 	assert r1.node.data.rows[int(r1.y)].cells[0].codepoint == 2
-	cps := r1.node.data.lookup_grapheme_at(int(r1.y), 0) or {
+	cps := r1.node.data.lookup_grapheme_at(usize(r1.y), 0) or {
 		assert false, 'lookup_grapheme failed'
 		return
 	}
@@ -6906,7 +6906,7 @@ fn test_page_list_resize_reflow_grapheme_map_capacity_exceeded() {
 
 	mut page0_node := s.pages.first or { return }
 	mut page0 := &page0_node.data
-	start_row := int(page0.size.rows) - graphemes_per_page
+	start_row := usize(page0.size.rows) - graphemes_per_page
 	for i in 0 .. graphemes_per_page {
 		y := start_row + i
 		page0.rows[y].cells[0] = CellData{
@@ -6918,10 +6918,10 @@ fn test_page_list_resize_reflow_grapheme_map_capacity_exceeded() {
 
 	mut page1_node := s.pages.last or { return }
 	mut page1 := &page1_node.data
-	count := if graphemes_per_page < int(page1.size.rows) {
+	count := if graphemes_per_page < usize(page1.size.rows) {
 		graphemes_per_page
 	} else {
-		int(page1.size.rows)
+		usize(page1.size.rows)
 	}
 	for y in 0 .. count {
 		page1.rows[y].cells[0] = CellData{
@@ -6951,8 +6951,8 @@ fn test_page_list_resize_reflow_exceeds_grapheme_memory_forcing_capacity_increas
 	cps := []u32{len: int(grapheme_bytes_default / sizeof(u32)) - 1, init: u32(`a`)}
 	mut page0_node := s.pages.first or { return }
 	mut page0 := &page0_node.data
-	y0 := int(page0.size.rows) - 1
-	x0 := int(page0.size.cols) - 1
+	y0 := usize(page0.size.rows) - 1
+	x0 := usize(page0.size.cols) - 1
 	page0.rows[y0].wrap = true
 	page0.rows[y0].cells[x0] = CellData{
 		content_tag: .codepoint

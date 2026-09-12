@@ -127,7 +127,7 @@ pub fn (mut self ViewportSearch) update(list &terminal.PageList) bool {
 	for {
 		current := node or { break }
 		if current.data.size.rows == 0
-			|| !current.data.get_row(int(current.data.size.rows) - 1).wrap {
+			|| !current.data.get_row(usize(current.data.size.rows - 1)).wrap {
 			break
 		}
 		added += self.window.append(current)
@@ -142,7 +142,7 @@ pub fn (mut self ViewportSearch) update(list &terminal.PageList) bool {
 	}
 
 	end := fingerprint.nodes[fingerprint.nodes.len - 1]
-	if end.data.size.rows > 0 && end.data.get_row(int(end.data.size.rows) - 1).wrap {
+	if end.data.size.rows > 0 && end.data.get_row(usize(end.data.size.rows - 1)).wrap {
 		node = end.next
 		added = 0
 		for {
@@ -152,7 +152,7 @@ pub fn (mut self ViewportSearch) update(list &terminal.PageList) bool {
 				break
 			}
 			if current.data.size.rows == 0
-				|| !current.data.get_row(int(current.data.size.rows) - 1).wrap {
+				|| !current.data.get_row(usize(current.data.size.rows - 1)).wrap {
 				break
 			}
 			node = current.next

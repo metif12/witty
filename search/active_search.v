@@ -60,7 +60,7 @@ pub fn (mut self ActiveSearch) update(list &terminal.PageList) ?&terminal.PageNo
 	for {
 		current := node or { break }
 		if current.data.size.rows == 0
-			|| !current.data.get_row(int(current.data.size.rows) - 1).wrap {
+			|| !current.data.get_row(usize(current.data.size.rows - 1)).wrap {
 			break
 		}
 		added := self.window.append(current)

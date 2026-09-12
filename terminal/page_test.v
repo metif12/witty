@@ -845,7 +845,7 @@ fn test_page_move_cells_text_only() {
 		}
 	}
 
-	page.move_cells(0, 0, 1, 0, int(page.capacity.cols))
+	page.move_cells(0, 0, 1, 0, usize(page.capacity.cols))
 
 	// New row should have text.
 	for x in 0 .. int(page.capacity.cols) {
@@ -883,7 +883,7 @@ fn test_page_move_cells_graphemes() {
 	}
 	original_count := page.grapheme_count()
 
-	page.move_cells(0, 0, 1, 0, int(page.size.cols))
+	page.move_cells(0, 0, 1, 0, usize(page.size.cols))
 	assert page.grapheme_count() == original_count
 
 	// New row should have text and graphemes.
@@ -947,7 +947,7 @@ fn test_page_move_cells_marks_kitty_virtual_placeholder() {
 	page.set_graphemes(0, 1, [u32(0x0305)]) or { panic(err) }
 	page.rows[0].kitty_virtual_placeholder = true
 
-	page.move_cells(0, 0, 1, 0, int(page.size.cols))
+	page.move_cells(0, 0, 1, 0, usize(page.size.cols))
 
 	assert !page.rows[0].kitty_virtual_placeholder
 	assert page.rows[1].cells[1].codepoint == kitty_unicode_placeholder
@@ -1633,8 +1633,8 @@ fn test_page_set_hyperlink_reports_full_map_without_mutating_cell() {
 		uri: 'https://example.com/full'
 	}) or { panic(err) }
 	for key in 0 .. page.hyperlink_capacity() {
-		y := key / int(page.size.cols)
-		x := key % int(page.size.cols)
+		y := key / usize(page.size.cols)
+		x := key % usize(page.size.cols)
 		if key > 0 {
 			page.hyperlink_set.use_link(id)
 		}
@@ -1939,7 +1939,7 @@ fn test_page_clear_cells() {
 	}
 	page.styles.release(id) // balance the initial add
 
-	assert page.grapheme_count() == int(page.size.cols)
+	assert page.grapheme_count() == usize(page.size.cols)
 
 	// Clear all cells.
 	page.clear_cells(0, 0, page.size.cols)
