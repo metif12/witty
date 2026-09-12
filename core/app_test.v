@@ -35,6 +35,13 @@ fn test_runtime_app_records_actions_and_quit_timer() ! {
 	assert !runtime.quit_timer_running
 }
 
+fn test_app_initialized_font_grid_set_is_empty_at_teardown() ! {
+	mut app := App{}
+	app.init()!
+	assert app.font_grid_set.count() == 0
+	app.deinit()
+}
+
 fn test_app_mailbox_dispatches_open_config() ! {
 	mut app := App{}
 	mut runtime := apprt.RuntimeApp{}

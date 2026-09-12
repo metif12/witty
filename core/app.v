@@ -376,6 +376,7 @@ pub fn (mut self App) deinit() {
 	// We should have zero items in the grid set at this point because
 	// destroy only gets called when the app is shutting down and this
 	// should gracefully close all surfaces.
+	assert self.font_grid_set.count() == 0
 	self.font_grid_set.deinit()
 }
 
