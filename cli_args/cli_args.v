@@ -29,7 +29,8 @@ pub type CompatibilityHandler = fn (key string, value string) bool
 // dst must be a struct. The fields and their types will be used to determine
 // the valid CLI flags. See the tests in this file as an example. For field
 // types that are structs, the struct can implement the `parse_cli` function
-// to do custom parsing.
+// to do custom parsing. Since V has no u21 integer, a translated u21 field is
+// represented as u32 with `@[cli_u21]` so parsing retains the source bound.
 //
 // If the destination type has a field "_arena" of type `?ArenaAllocator`,
 // an arena allocator will be created (or reused if set already) for any
@@ -139,6 +140,21 @@ pub fn parse[T](mut dst T, args []string) ! {
 pub fn compatibility_renamed[T](mut dst T, to string, value string) bool {
 	parse_into_field[T](mut dst, to, value) or { return false }
 	return true
+}
+
+// has_field reports whether key names a parser-visible field of T. This is the
+// reflected field test used by actions that share argv with Config and must
+// decide which parser owns a diagnostic.
+pub fn has_field[T](key string) bool {
+	normalized_key := key.replace('-', '_')
+	$for field in T.fields {
+		if field.name.len > 0 && field.name[0] != `_` && field.name != 'diagnostics'
+			&& !field.attrs.contains('cli_internal')
+			&& translated_identifier_name(field.name) == normalized_key {
+			return true
+		}
+	}
+	return false
 }
 
 // Parse a single key/value pair into the destination type T.
@@ -265,7 +281,8 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 				if !has_value {
 					return error('value required')
 				}
-				n := parse_unsigned_int(raw, 32) or { return error('invalid value') }
+				bits := if field.attrs.contains('cli_u21') { 21 } else { 32 }
+				n := parse_unsigned_int(raw, bits) or { return error('invalid value') }
 				dst.$(field.name) = u32(n)
 				return
 			} $else $if field.unaliased_typ is u64 || field.unaliased_typ is ?u64 {

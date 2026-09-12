@@ -80,6 +80,11 @@ mut:
 	enabled ?bool
 }
 
+struct U21TestData {
+mut:
+	value ?u32 @[cli_u21]
+}
+
 struct AutoStructValue {
 mut:
 	count int @[cli_required]
@@ -233,6 +238,25 @@ fn test_parse_optional_enum() {
 	mut data := OptionalEnumTestData{}
 	parse[OptionalEnumTestData](mut data, ['--value=two'])!
 	assert data.value? == .two
+}
+
+fn test_parse_u21_field_retains_source_bound() {
+	mut data := U21TestData{}
+	parse[U21TestData](mut data, ['--value=0x1fffff'])!
+	assert data.value? == 0x1fffff
+	if _ := parse[U21TestData](mut data, ['--value=0x200000']) {
+		assert false, 'expected invalid u21 value'
+	} else {
+		assert err.msg() == 'invalid value'
+	}
+}
+
+fn test_has_field_uses_parser_visibility_and_source_names() {
+	assert has_field[KeywordFieldTestData]('default')
+	assert !has_field[KeywordFieldTestData]('default_')
+	assert has_field[InternalFieldTestData]('visible')
+	assert !has_field[InternalFieldTestData]('internal')
+	assert !has_field[DiagnosticTestData]('diagnostics')
 }
 
 fn test_parse_enum_uses_source_tag_spelling() {
