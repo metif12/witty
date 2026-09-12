@@ -581,12 +581,10 @@ pub fn (mut self Surface) init(mut app App, opts SurfaceOptions) ! {
 	// If we have initial input, escape the bytes into the retained config
 	// representation. Termio decodes this after cloning the startup state.
 	if initial := opts.initial_input {
-		if initial.len > 0 {
-			config.input.items.clear()
-			config.input.items << configpkg.ReadableIO{
-				kind: .raw
-				value: input.zig_escape(initial)
-			}
+		config.input.items.clear()
+		config.input.items << configpkg.ReadableIO{
+			kind: .raw
+			value: input.zig_escape(initial)
 		}
 	}
 

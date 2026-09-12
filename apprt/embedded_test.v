@@ -22,6 +22,17 @@ mut:
 	write_confirm  bool
 }
 
+struct EmbeddedSurfaceConfigCapture {
+mut:
+	input_items []configpkg.ReadableIO
+}
+
+fn embedded_surface_config_capture_init(config &configpkg.Config, core_app &CoreApp, _ &App, _ voidptr) !voidptr {
+	mut capture := unsafe { &EmbeddedSurfaceConfigCapture(core_app.backend) }
+	capture.input_items = config.input.items.clone()
+	return unsafe { nil }
+}
+
 fn embedded_read_clipboard_test_callback(userdata voidptr, clipboard int, state &ClipboardRequest) {
 	mut capture := unsafe { &EmbeddedClipboardCapture(userdata) }
 	capture.read_clipboard = clipboard
@@ -655,6 +666,46 @@ fn test_surface_init_preserves_explicit_scale_factor() {
 		}
 		assert surface.content_scale.x == f32(-2.25)
 		assert surface.content_scale.y == f32(-2.25)
+	}
+}
+
+fn test_surface_init_present_empty_input_clears_configured_input() {
+	$if macos || ios {
+		previous_bridge := g_core_bridge
+		defer {
+			install_core_bridge(previous_bridge)
+		}
+		install_core_bridge(CoreBridge{
+			surface_init: embedded_surface_config_capture_init
+		})
+
+		mut capture := EmbeddedSurfaceConfigCapture{}
+		mut core_app := CoreApp{
+			backend: voidptr(&capture)
+		}
+		mut config := configpkg.Config.default_config()
+		config.input.items << configpkg.ReadableIO{
+			kind: .raw
+			value: 'configured input'
+		}
+		mut app := App{
+			core_app: &core_app
+			config: config
+		}
+		mut surface := Surface{}
+		surface.init(mut app, SurfaceOptions{
+			platform_tag: int(PlatformTag.macos)
+			platform: PlatformC{ nsview: voidptr(usize(0xDEAD)) }
+			initial_input: ''
+		})!
+		defer {
+			surface.deinit()
+		}
+
+		assert capture.input_items == [configpkg.ReadableIO{
+			kind: .raw
+			value: ''
+		}]
 	}
 }
 
