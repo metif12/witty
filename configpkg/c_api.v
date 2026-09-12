@@ -194,7 +194,7 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 					c_write_value[u32](ptr, font_synthetic_style_bits(c.$(field.name)))
 					return true
 				} $else $if field.unaliased_typ is FontShapingBreak {
-					c_write_value[u32](ptr, bool_bit(c.$(field.name).cursor, 0))
+					c_write_value[u32](ptr, u32(c.$(field.name).int_val()))
 					return true
 				} $else $if field.unaliased_typ is ShellIntegrationFeatures {
 					c_write_value[u32](ptr, shell_integration_feature_bits(c.$(field.name)))

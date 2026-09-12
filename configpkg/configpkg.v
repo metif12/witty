@@ -5173,8 +5173,25 @@ pub fn (mut it ConfigChangeIterator) next() ?string {
 
 // FontShapingBreak controls optional shaping-run boundaries.
 pub struct FontShapingBreak {
-pub:
-	cursor bool = true
+	value u8 = 0x01
+}
+
+pub fn FontShapingBreak.init(cursor bool) FontShapingBreak {
+	return FontShapingBreak{
+		value: if cursor { u8(0x01) } else { u8(0) }
+	}
+}
+
+pub fn (config FontShapingBreak) cursor() bool {
+	return config.value & 0x01 != 0
+}
+
+pub fn (config FontShapingBreak) int_val() u8 {
+	return config.value
+}
+
+pub fn (config FontShapingBreak) format_entry() string {
+	return if config.cursor() { 'cursor' } else { 'no-cursor' }
 }
 
 // TerminalColorKind identifies whether a terminal color is explicit or is
@@ -9318,7 +9335,7 @@ fn (mut c Config) parse_config_f64(key string, value string) ?f64 {
 // fields and the no- prefix disables one.
 fn parse_font_shaping_break(value string) ?FontShapingBreak {
 	if b := parse_bool_opt(value) {
-		return FontShapingBreak{ cursor: b }
+		return FontShapingBreak.init(b)
 	}
 	mut result := FontShapingBreak{}
 	for raw in value.split(',') {
@@ -9328,7 +9345,7 @@ fn parse_font_shaping_break(value string) ?FontShapingBreak {
 		if name != 'cursor' {
 			return none
 		}
-		result = FontShapingBreak{ cursor: !negative }
+		result = FontShapingBreak.init(!negative)
 	}
 	return result
 }

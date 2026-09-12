@@ -2,9 +2,9 @@ module font
 
 fn test_run_options_apply_break_config() {
 	mut opts := RunOptions{ cursor_x: u16(7) }
-	opts.apply_break_config(RunBreakConfig{ cursor: true })
+	opts.apply_break_config(true)
 	assert opts.cursor_x or { 0 } == u16(7)
-	opts.apply_break_config(RunBreakConfig{ cursor: false })
+	opts.apply_break_config(false)
 	assert opts.cursor_x == none
 }
 

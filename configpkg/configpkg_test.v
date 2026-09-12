@@ -1691,6 +1691,9 @@ fn test_handle_bom_in_config_files() {
 }
 
 fn test_config_file_whitespace_matches_source_byte_set() {
+	assert sizeof(FontShapingBreak) == 1
+	assert FontShapingBreak{}.int_val() == 0x01
+	assert FontShapingBreak.init(false).int_val() == 0
 	mut cfg := Config.default_config()
 	cfg.load_string('\vfont-size = 20\nenv = NAME=\vvalue\v\nfont-shaping-break = \vcursor')
 
@@ -1704,7 +1707,7 @@ fn test_config_file_whitespace_matches_source_byte_set() {
 	assert cfg.font_shaping_break == FontShapingBreak{}
 	assert cfg.diagnostics.len == 2
 
-	assert parse_font_shaping_break(' \tcursor\t ')? == FontShapingBreak{ cursor: true }
+	assert parse_font_shaping_break(' \tcursor\t ')? == FontShapingBreak.init(true)
 	assert parse_font_shaping_break('\vcursor') == none
 }
 
@@ -3019,7 +3022,7 @@ auto-update-channel = stable
 	assert cfg.freetype_load_flags.light()
 	assert cfg.font_thicken
 	assert cfg.font_thicken_strength == 42
-	assert !cfg.font_shaping_break.cursor
+	assert !cfg.font_shaping_break.cursor()
 	assert cfg.custom_shader.items == [
 		Path{ path: 'one.glsl' },
 		Path{ path: 'optional shader.glsl', optional: true },

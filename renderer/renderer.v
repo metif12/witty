@@ -2719,9 +2719,7 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		selection: row.selection
 		cursor_x: cursor_x
 	}
-	run_opts.apply_break_config(font.RunBreakConfig{
-		cursor: self.config.font_shaping_break.cursor
-	})
+	run_opts.apply_break_config(self.config.font_shaping_break.cursor())
 	mut run_iter := self.font_shaper.run_iterator(run_opts)
 	for {
 		next_run := run_iter.next()!

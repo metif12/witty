@@ -1599,18 +1599,10 @@ pub mut:
 	cursor_x     ?u16
 }
 
-// RunBreakConfig is the font-side projection of configpkg.FontShapingBreak.
-// Keeping this one-field value in font avoids a V module cycle while retaining
-// Ghostty's RunOptions.applyBreakConfig behavior at the same ownership layer.
-pub struct RunBreakConfig {
-pub:
-	cursor bool
-}
-
 // apply_break_config removes cursor shaping boundaries when the corresponding
 // configuration is disabled.
-pub fn (mut self RunOptions) apply_break_config(config RunBreakConfig) {
-	if !config.cursor {
+pub fn (mut self RunOptions) apply_break_config(cursor bool) {
+	if !cursor {
 		self.cursor_x = none
 	}
 }
