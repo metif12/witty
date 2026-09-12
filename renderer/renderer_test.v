@@ -304,17 +304,6 @@ fn test_uniforms_defaults() {
 	assert u.bools.cursor_wide == false
 }
 
-// Test ortho2d projection.
-fn test_ortho2d() {
-	m := ortho2d(0, 800, 600, 0)
-	// Check that the matrix is a valid orthographic projection
-	// m[0] = 2 / (right - left) = 2 / 800 = 0.0025
-	assert m[0] > 0.0024 && m[0] < 0.0026
-	// m[5] = 2 / (top - bottom) = 2 / -600 = -0.00333...
-	assert m[5] < -0.003 && m[5] > -0.004
-	assert m[15] == 1.0
-}
-
 // Test Size.terminal.
 fn test_size_terminal() {
 	s := Size{

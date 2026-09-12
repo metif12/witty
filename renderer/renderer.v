@@ -755,6 +755,7 @@ import file_type
 import highlight
 import stbi
 import macos
+import mathutil
 import os
 import sync
 
@@ -2158,7 +2159,7 @@ fn (mut self Renderer) update_screen_size_uniforms() {
 	blank := self.size.screen.blank_padding(self.size.padding, self.cells.size, self.size.cell).add(self.size.padding)
 
 	// Setup our uniforms
-	self.uniforms.projection_matrix = ortho2d(
+	self.uniforms.projection_matrix = mathutil.ortho2d(
 		-1 * f32(self.size.padding.left),
 		f32(terminal_size.width + self.size.padding.right),
 		f32(terminal_size.height + self.size.padding.bottom),

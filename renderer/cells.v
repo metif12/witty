@@ -1,5 +1,6 @@
 module renderer
 
+import mathutil
 import datastruct
 import terminal
 import unicode
@@ -368,7 +369,7 @@ pub mut:
 pub struct Uniforms {
 pub mut:
 	// Orthographic projection matrix (4x4, column-major).
-	projection_matrix [16]f32
+	projection_matrix mathutil.Mat
 	// Cell size in pixels [width, height].
 	cell_size [2]f32
 	// Grid size in cells [columns, rows].
@@ -463,22 +464,6 @@ pub mut:
 pub enum HighlightTag as u8 {
 	search_match
 	search_match_selected
-}
-
-// ============================================================
-// Helper: ortho2d projection matrix
-// ============================================================
-
-// Compute a 2D orthographic projection matrix (column-major).
-pub fn ortho2d(left f32, right f32, bottom f32, top f32) [16]f32 {
-	mut m := [16]f32{}
-	m[0] = 2.0 / (right - left)
-	m[5] = 2.0 / (top - bottom)
-	m[10] = -1.0
-	m[12] = -(right + left) / (right - left)
-	m[13] = -(top + bottom) / (top - bottom)
-	m[15] = 1.0
-	return m
 }
 
 // ============================================================
