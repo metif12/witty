@@ -542,6 +542,16 @@ pub mut:
 	info    BgImageInfo
 }
 
+// ImageVertex is a single image-placement parameter for either renderer
+// shader backend.
+pub struct ImageVertex {
+pub:
+	grid_pos    [2]f32
+	cell_offset [2]f32
+	source_rect [4]f32
+	dest_size   [2]f32
+}
+
 // ============================================================
 // Cell classification free functions (from cell.zig)
 // ============================================================

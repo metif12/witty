@@ -950,14 +950,6 @@ pub fn gl_uniforms(value Uniforms) GLUniforms {
 	}
 }
 
-pub struct GLImageVertex {
-pub:
-	grid_pos    [2]f32
-	cell_offset [2]f32
-	source_rect [4]f32
-	dest_size   [2]f32
-}
-
 pub struct GLShaders {
 pub mut:
 	bg_color       GLPipeline
@@ -986,7 +978,7 @@ pub fn GLShaders.init_with_sources(custom_shaders []string) !GLShaders {
 		shaders.deinit()
 		return err
 	}
-	shaders.image = gl_builtin_pipeline(gl_image_vertex_shader_raw, gl_image_fragment_shader_raw, gl_image_attributes(), u32($sizeof(GLImageVertex)), .per_instance, true) or {
+	shaders.image = gl_builtin_pipeline(gl_image_vertex_shader_raw, gl_image_fragment_shader_raw, gl_image_attributes(), u32($sizeof(ImageVertex)), .per_instance, true) or {
 		shaders.deinit()
 		return err
 	}
@@ -1067,10 +1059,10 @@ fn gl_text_cell_attributes() []GLVertexAttribute {
 
 fn gl_image_attributes() []GLVertexAttribute {
 	return [
-		GLVertexAttribute{ scalar_type: .f32_, count: 2, offset: __offsetof(GLImageVertex, grid_pos) },
-		GLVertexAttribute{ scalar_type: .f32_, count: 2, offset: __offsetof(GLImageVertex, cell_offset) },
-		GLVertexAttribute{ scalar_type: .f32_, count: 4, offset: __offsetof(GLImageVertex, source_rect) },
-		GLVertexAttribute{ scalar_type: .f32_, count: 2, offset: __offsetof(GLImageVertex, dest_size) },
+		GLVertexAttribute{ scalar_type: .f32_, count: 2, offset: __offsetof(ImageVertex, grid_pos) },
+		GLVertexAttribute{ scalar_type: .f32_, count: 2, offset: __offsetof(ImageVertex, cell_offset) },
+		GLVertexAttribute{ scalar_type: .f32_, count: 4, offset: __offsetof(ImageVertex, source_rect) },
+		GLVertexAttribute{ scalar_type: .f32_, count: 2, offset: __offsetof(ImageVertex, dest_size) },
 	]
 }
 

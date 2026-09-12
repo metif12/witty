@@ -124,6 +124,11 @@ fn test_opengl_shader_vertex_layouts_match_source() {
 
 	image := gl_image_attributes()
 	assert image.len == 4
+	assert $sizeof(ImageVertex) == 40
+	assert __offsetof(ImageVertex, grid_pos) == 0
+	assert __offsetof(ImageVertex, cell_offset) == 8
+	assert __offsetof(ImageVertex, source_rect) == 16
+	assert __offsetof(ImageVertex, dest_size) == 32
 	assert image[0].offset == 0
 	assert image[3].offset == 32
 

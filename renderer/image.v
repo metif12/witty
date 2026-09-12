@@ -1116,7 +1116,7 @@ pub fn (mut self ImageRenderState) draw(api &MetalAPI, pipeline MetalPipeline, m
 		if entry.image.state !in [.ready, .unload_ready] || entry.image.texture_handle == unsafe { nil } {
 			continue
 		}
-		vertex := MetalImageVertex{
+		vertex := ImageVertex{
 			grid_pos: [f32(placement.x), f32(placement.y)]!
 			cell_offset: [f32(placement.cell_offset_x), f32(placement.cell_offset_y)]!
 			source_rect: [f32(placement.source_x), f32(placement.source_y),
@@ -1157,14 +1157,14 @@ pub fn (mut self ImageRenderState) draw_opengl(api &OpenGLAPI, pipeline GLPipeli
 			|| entry.image.gl_texture.id == 0 {
 			continue
 		}
-		vertex := GLImageVertex{
+		vertex := ImageVertex{
 			grid_pos: [f32(placement.x), f32(placement.y)]!
 			cell_offset: [f32(placement.cell_offset_x), f32(placement.cell_offset_y)]!
 			source_rect: [f32(placement.source_x), f32(placement.source_y),
 				f32(placement.source_width), f32(placement.source_height)]!
 			dest_size: [f32(placement.width), f32(placement.height)]!
 		}
-		mut buffer := GLBuffer.init(api.image_buffer_options(), u32($sizeof(GLImageVertex))) or {
+		mut buffer := GLBuffer.init(api.image_buffer_options(), u32($sizeof(ImageVertex))) or {
 			continue
 		}
 		buffer.sync_values([vertex])

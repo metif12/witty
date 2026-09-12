@@ -683,14 +683,6 @@ pub fn metal_uniforms(value Uniforms) MetalUniforms {
 // Metal Shaders
 // ============================================================
 
-pub struct MetalImageVertex {
-pub:
-	grid_pos    [2]f32
-	cell_offset [2]f32
-	source_rect [4]f32
-	dest_size   [2]f32
-}
-
 // MetalFrameState contains every resource that the CPU may update while a
 // frame is in flight. Renderer keeps one instance per swap-chain slot, just
 // like ghostty's generic renderer FrameState.
@@ -951,7 +943,7 @@ pub fn MetalShaders.init(device voidptr, post_shaders []string, pixel_format Met
 		vertex_library: library
 		fragment_library: library
 		attributes: metal_image_attributes()
-		vertex_stride: $sizeof(MetalImageVertex)
+		vertex_stride: $sizeof(ImageVertex)
 		step_fn: .per_instance
 		pixel_format: pixel_format
 		blending_enabled: true
@@ -1040,10 +1032,10 @@ fn metal_text_cell_attributes() []MetalVertexAttribute {
 
 fn metal_image_attributes() []MetalVertexAttribute {
 	return [
-		MetalVertexAttribute{ format: .float2, offset: __offsetof(MetalImageVertex, grid_pos) },
-		MetalVertexAttribute{ format: .float2, offset: __offsetof(MetalImageVertex, cell_offset) },
-		MetalVertexAttribute{ format: .float4, offset: __offsetof(MetalImageVertex, source_rect) },
-		MetalVertexAttribute{ format: .float2, offset: __offsetof(MetalImageVertex, dest_size) },
+		MetalVertexAttribute{ format: .float2, offset: __offsetof(ImageVertex, grid_pos) },
+		MetalVertexAttribute{ format: .float2, offset: __offsetof(ImageVertex, cell_offset) },
+		MetalVertexAttribute{ format: .float4, offset: __offsetof(ImageVertex, source_rect) },
+		MetalVertexAttribute{ format: .float2, offset: __offsetof(ImageVertex, dest_size) },
 	]
 }
 
