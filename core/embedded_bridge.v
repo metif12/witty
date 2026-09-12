@@ -405,10 +405,6 @@ fn bridge_surface_runtime_action(ptr voidptr, action AppAction) !bool {
 				readonly_: if action.readonly_on { apprt.Readonly.on } else { apprt.Readonly.off }
 			})!
 		}
-		.close_surface {
-			self.rt_surface.close(self.surface.needs_confirm_quit())
-			true
-		}
 		.close_window { app.perform_action(target, .close_window, apprt.ActionValue{})! }
 		.close_tab {
 			app.perform_action(target, .close_tab, apprt.ActionValue{
@@ -484,8 +480,6 @@ fn bridge_surface_runtime_action(ptr voidptr, action AppAction) !bool {
 				inspector_: action.inspector_mode
 			})!
 		}
-		.unbind { panic('unbind action reached embedded runtime dispatch') }
-		.ignore { true }
 		.open_config { app.perform_action(target, .open_config, apprt.ActionValue{})! }
 		.close_all_windows { app.perform_action(target, .close_all_windows, apprt.ActionValue{})! }
 		.quit { app.perform_action(target, .quit, apprt.ActionValue{})! }
@@ -499,6 +493,7 @@ fn bridge_surface_runtime_action(ptr voidptr, action AppAction) !bool {
 		}
 		.undo { app.perform_action(target, .undo, apprt.ActionValue{})! }
 		.redo { app.perform_action(target, .redo, apprt.ActionValue{})! }
+		else { panic('action without a core surface wrapper payload') }
 	}
 }
 

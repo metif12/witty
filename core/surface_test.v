@@ -1451,7 +1451,7 @@ fn test_mouse_link_preview_forwards_untrimmed_url() ! {
 
 struct RuntimeCallbackProbe {
 mut:
-	action_kind AppActionKind
+	action_kind apprt.ActionKey
 	closed      bool
 	confirmed   bool
 }

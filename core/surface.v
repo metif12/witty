@@ -1648,7 +1648,7 @@ fn (r &RuntimeApp) wakeup() {
 
 pub struct AppAction {
 pub:
-	kind   AppActionKind
+	kind   apprt.ActionKey
 	target &Surface = unsafe { nil }
 	// Payload data for actions that carry values. Only the field matching
 	// the kind is meaningful. These let the surface forward the correct
@@ -1691,73 +1691,6 @@ pub:
 	secure_input_mode  apprt.SecureInput
 	reload_config_soft bool
 	config_change      &Config = unsafe { nil }
-}
-
-pub enum AppActionKind {
-	set_title
-	prompt_title
-	cell_size
-	size_limit
-	initial_size
-	mouse_shape
-	mouse_visibility
-	mouse_over_link
-	color_change
-	renderer_health
-	scrollbar
-	present_terminal
-	secure_input
-	ring_bell
-	progress_report
-	command_finished
-	desktop_notification
-	reload_config
-	config_change
-	pwd
-	open_url
-	show_child_exited
-	key_sequence
-	key_table
-	search_total
-	search_selected
-	start_search
-	end_search
-	close_surface
-	close_window
-	close_tab
-	new_window
-	new_tab
-	goto_tab
-	move_tab
-	new_split
-	goto_split
-	goto_window
-	resize_split
-	equalize_splits
-	toggle_split_zoom
-	toggle_fullscreen
-	toggle_maximize
-	toggle_window_decorations
-	toggle_tab_overview
-	toggle_command_palette
-	toggle_background_opacity
-	float_window
-	reset_window_size
-	show_on_screen_keyboard
-	inspector
-	readonly
-	undo
-	redo
-	// App-scoped actions forwarded from perform_binding_action.
-	ignore
-	unbind
-	open_config
-	close_all_windows
-	quit
-	toggle_quick_terminal
-	toggle_visibility
-	check_for_updates
-	show_gtk_inspector
 }
 
 pub type RuntimeSurfaceCloseFn = fn (voidptr, bool)
@@ -4455,7 +4388,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				// toggle_visibility, check_for_updates, show_gtk_inspector) are
 				// forwarded to the app.
 				self.rt_app.perform_action(AppAction{
-					kind: app_action_kind(action.tag)
+					kind: app_action_key(action.tag)
 				})!
 			}
 		}
@@ -5056,13 +4989,11 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 	return true
 }
 
-// app_action_kind maps an app-scoped input.ActionTag to the corresponding
-// AppActionKind so it can be forwarded to the runtime. Only the app-scoped
+// app_action_key maps an app-scoped input.ActionTag to the corresponding
+// apprt.ActionKey so it can be forwarded to the runtime. Only the app-scoped
 // tags reach this (see perform_binding_action's scope() == .app branch).
-fn app_action_kind(tag input.ActionTag) AppActionKind {
+fn app_action_key(tag input.ActionTag) apprt.ActionKey {
 	return match tag {
-		.ignore { .ignore }
-		.unbind { .unbind }
 		.open_config { .open_config }
 		.reload_config { .reload_config }
 		.close_all_windows { .close_all_windows }
@@ -5071,7 +5002,7 @@ fn app_action_kind(tag input.ActionTag) AppActionKind {
 		.toggle_visibility { .toggle_visibility }
 		.check_for_updates { .check_for_updates }
 		.show_gtk_inspector { .show_gtk_inspector }
-		else { .ignore }
+		else { panic('non-app action reached app action dispatch') }
 	}
 }
 
