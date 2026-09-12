@@ -560,6 +560,7 @@ fn test_pos_to_viewport_clamps_to_grid() {
 
 fn test_termio_message_translates_every_surface_message_variant() {
 	size := make_test_size()
+	wide_delta := isize(u64(1) << 40)
 	mut config := configpkg.Config.default_config()
 	derived := termiopkg.DerivedConfig.init(&config)!
 	messages := [
@@ -573,7 +574,7 @@ fn test_termio_message_translates_every_surface_message_variant() {
 		IOMessage{ kind: .color_scheme_report, flag: true },
 		IOMessage{ kind: .selection_scroll, flag: true },
 		IOMessage{ kind: .clear_screen, flag: true },
-		IOMessage{ kind: .scroll_viewport, scroll_delta: -3 },
+		IOMessage{ kind: .scroll_viewport, scroll_delta: wide_delta },
 		IOMessage{ kind: .scroll_to_top },
 		IOMessage{ kind: .scroll_to_bottom },
 		IOMessage{ kind: .jump_to_prompt, prompt_delta: -2 },
@@ -593,7 +594,7 @@ fn test_termio_message_translates_every_surface_message_variant() {
 	assert translated[8].flag_val
 	assert translated[9].flag_val
 	assert translated[10].scroll_behavior == .delta
-	assert translated[10].scroll_delta == -3
+	assert translated[10].scroll_delta == wide_delta
 	assert translated[11].scroll_behavior == .top
 	assert translated[12].scroll_behavior == .bottom
 	assert translated[13].prompt_delta == -2

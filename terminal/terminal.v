@@ -3011,7 +3011,7 @@ pub fn (mut self Terminal) scroll_up(count usize) ! {
 }
 
 // Scroll the viewport of the terminal grid.
-pub fn (mut self Terminal) scroll_viewport(behavior ScrollViewport, delta int) ! {
+pub fn (mut self Terminal) scroll_viewport(behavior ScrollViewport, delta isize) ! {
 	match behavior {
 		.top { self.screens.active.scroll(ScrollTop{}) }
 		.bottom { self.screens.active.scroll(ScrollActive{}) }

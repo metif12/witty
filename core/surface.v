@@ -1511,15 +1511,15 @@ enum KeySequenceMemory {
 // negative is down/left and positive is up/right.
 struct ScrollAmount {
 mut:
-	delta i64
+	delta isize
 }
 
 fn (s ScrollAmount) direction() ScrollDirection {
 	return if s.delta < 0 { ScrollDirection.down_left } else { ScrollDirection.up_right }
 }
 
-fn (s ScrollAmount) magnitude() u64 {
-	return if s.delta < 0 { u64(-s.delta) } else { u64(s.delta) }
+fn (s ScrollAmount) magnitude() usize {
+	return if s.delta < 0 { usize(-s.delta) } else { usize(s.delta) }
 }
 
 enum ScrollDirection {
@@ -2376,9 +2376,9 @@ pub:
 	// than only tracking the message kind.
 	data []u8
 	// scroll_delta carries the delta for scroll_viewport messages.
-	scroll_delta i64
+	scroll_delta isize
 	// prompt_delta carries the delta for jump_to_prompt messages.
-	prompt_delta int
+	prompt_delta isize
 	flag         bool
 	size         rendererpkg.Size
 	config       termiopkg.DerivedConfig
@@ -2437,7 +2437,7 @@ fn termio_message(msg IOMessage) termiopkg.Message {
 			termiopkg.Message{
 				kind: .scroll_viewport
 				scroll_behavior: .delta
-				scroll_delta: int(msg.scroll_delta)
+				scroll_delta: msg.scroll_delta
 			}
 		}
 		.scroll_to_top {
@@ -3947,14 +3947,14 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 		} else {
 			amount := poff / cell_size
 			self.mouse.pending_scroll_y = poff - (amount * cell_size)
-			y.delta = i64(amount)
+			y.delta = isize(amount)
 		}
 	}
 
 	mut x := ScrollAmount{}
 	if xoff != 0 {
 		if !scroll_mods.precision {
-			x.delta = i64(math.round(xoff))
+			x.delta = isize(math.round(xoff))
 		} else {
 			poff := self.mouse.pending_scroll_x + xoff
 			cell_size := f64(self.size.cell.width)
@@ -3963,7 +3963,7 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 			} else {
 				amount := poff / cell_size
 				self.mouse.pending_scroll_x = poff - (amount * cell_size)
-				x.delta = i64(amount)
+				x.delta = isize(amount)
 			}
 		}
 	}
@@ -3993,7 +3993,7 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 				} else {
 					if y.direction() == .up_right { '\x1b[A' } else { '\x1b[B' }
 				}
-				for _ in 0 .. int(y.magnitude()) {
+				for _ in usize(0) .. y.magnitude() {
 					self.queue_io(IOMessage{ kind: .write_stable, data: seq.bytes() })
 				}
 			}
@@ -4001,7 +4001,7 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 		}
 
 		if self.is_mouse_reporting() {
-			for _ in 0 .. int(y.magnitude()) {
+			for _ in usize(0) .. y.magnitude() {
 				pos := self.rt_surface.get_cursor_pos()!
 				button := if y.direction() == .up_right {
 					input.MouseButton.four
@@ -4010,7 +4010,7 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 				}
 				self.mouse_report(button, .press, self.mouse.mods, pos)!
 			}
-			for _ in 0 .. int(x.magnitude()) {
+			for _ in usize(0) .. x.magnitude() {
 				pos := self.rt_surface.get_cursor_pos()!
 				button := if x.direction() == .up_right {
 					input.MouseButton.six
@@ -4023,7 +4023,7 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 		}
 
 		if y.delta != 0 {
-			t.scroll_viewport(.delta, int(-y.delta))!
+			t.scroll_viewport(.delta, -y.delta)!
 		}
 	}
 	self.queue_render()!
@@ -5021,23 +5021,23 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.queue_render()!
 		}
 		.scroll_page_up {
-			rows := i64(self.size.grid().rows)
+			rows := isize(self.size.grid().rows)
 			self.queue_io(IOMessage{ kind: .scroll_viewport, scroll_delta: -rows })
 		}
 		.scroll_page_down {
-			rows := i64(self.size.grid().rows)
+			rows := isize(self.size.grid().rows)
 			self.queue_io(IOMessage{ kind: .scroll_viewport, scroll_delta: rows })
 		}
 		.scroll_page_fractional {
 			rows := f32(self.size.grid().rows)
-			delta := i64(action.float_param * rows)
+			delta := isize(action.float_param * rows)
 			self.queue_io(IOMessage{ kind: .scroll_viewport, scroll_delta: delta })
 		}
 		.scroll_page_lines {
-			self.queue_io(IOMessage{ kind: .scroll_viewport, scroll_delta: i64(action.int_param) })
+			self.queue_io(IOMessage{ kind: .scroll_viewport, scroll_delta: isize(action.int_param) })
 		}
 		.jump_to_prompt {
-			self.queue_io(IOMessage{ kind: .jump_to_prompt, prompt_delta: int(action.int_param) })
+			self.queue_io(IOMessage{ kind: .jump_to_prompt, prompt_delta: isize(action.int_param) })
 		}
 		.write_screen_file {
 			self.write_screen_file(.screen, write_screen_from_input(action))!
@@ -6415,7 +6415,7 @@ fn (mut self Surface) selection_scroll_tick() ! {
 
 	pos := self.rt_surface.get_cursor_pos()!
 	pos_vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
-	delta := if pos.y < 0 { i32(-1) } else { i32(1) }
+	delta := if pos.y < 0 { isize(-1) } else { isize(1) }
 	locked := self.renderer_state.mutex != unsafe { nil }
 	if locked {
 		self.renderer_state.mutex.lock()
@@ -6435,7 +6435,7 @@ fn (mut self Surface) selection_scroll_tick() ! {
 	}
 
 	// Scroll the viewport
-	self.renderer_state.terminal_.scroll_viewport(.delta, int(delta))!
+	self.renderer_state.terminal_.scroll_viewport(.delta, delta)!
 
 	// Continue drag selection
 	if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{

@@ -704,7 +704,7 @@ pub fn (mut t Termio) clear_screen(history bool) ! {
 }
 
 // scroll_viewport scrolls the viewport.
-pub fn (mut t Termio) scroll_viewport(behavior terminal.ScrollViewport, delta int) ! {
+pub fn (mut t Termio) scroll_viewport(behavior terminal.ScrollViewport, delta isize) ! {
 	t.renderer_state.mutex.lock()
 	defer {
 		t.renderer_state.mutex.unlock()
@@ -713,7 +713,7 @@ pub fn (mut t Termio) scroll_viewport(behavior terminal.ScrollViewport, delta in
 }
 
 // jump_to_prompt jumps the viewport to the prompt.
-pub fn (mut t Termio) jump_to_prompt(delta int) ! {
+pub fn (mut t Termio) jump_to_prompt(delta isize) ! {
 	{
 		t.renderer_state.mutex.lock()
 		defer {
@@ -1164,8 +1164,8 @@ pub mut:
 	resize_val        renderer.Size
 	config_val        DerivedConfig
 	scroll_behavior   terminal.ScrollViewport
-	scroll_delta      int
-	prompt_delta      int
+	scroll_delta      isize
+	prompt_delta      isize
 }
 
 pub enum MessageKind {
@@ -1308,7 +1308,7 @@ pub fn Message.clear_screen_msg(history bool) Message {
 	}
 }
 
-pub fn Message.scroll_viewport_msg(behavior terminal.ScrollViewport, delta int) Message {
+pub fn Message.scroll_viewport_msg(behavior terminal.ScrollViewport, delta isize) Message {
 	return Message{
 		kind: .scroll_viewport
 		scroll_behavior: behavior
@@ -1316,7 +1316,7 @@ pub fn Message.scroll_viewport_msg(behavior terminal.ScrollViewport, delta int) 
 	}
 }
 
-pub fn Message.jump_to_prompt_msg(delta int) Message {
+pub fn Message.jump_to_prompt_msg(delta isize) Message {
 	return Message{
 		kind: .jump_to_prompt
 		prompt_delta: delta

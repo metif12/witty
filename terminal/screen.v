@@ -1863,12 +1863,12 @@ pub:
 
 pub struct ScrollDeltaRow {
 pub:
-	delta int
+	delta isize
 }
 
 pub struct ScrollDeltaPrompt {
 pub:
-	delta int
+	delta isize
 }
 
 pub type Scroll = ScrollActive
@@ -2458,7 +2458,7 @@ pub fn (mut self Screen) scroll(behavior Scroll) {
 	}
 }
 
-pub fn (mut self Screen) scroll_delta_rows(delta int) {
+pub fn (mut self Screen) scroll_delta_rows(delta isize) {
 	self.scroll(ScrollDeltaRow{ delta: delta })
 }
 
@@ -2477,11 +2477,11 @@ fn (mut self Screen) scroll_to_absolute_row(row int) {
 	}
 }
 
-pub fn (mut self Screen) scroll_delta_prompts(delta int) {
+pub fn (mut self Screen) scroll_delta_prompts(delta isize) {
 	self.scroll(ScrollDeltaPrompt{ delta: delta })
 }
 
-fn (mut self Screen) scroll_prompts(delta int) {
+fn (mut self Screen) scroll_prompts(delta isize) {
 	if delta == 0 {
 		return
 	}

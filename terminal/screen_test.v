@@ -525,6 +525,22 @@ fn test_screen_scroll_payload_variants() {
 	assert s.pages.viewport_start == 3
 }
 
+fn test_screen_scroll_delta_preserves_pointer_width_before_clamping() {
+	mut s := Screen.init(5, 3, 3)
+	defer { s.deinit() }
+	s.test_write_string('1\n2\n3\n4\n5\n6') or { assert false }
+
+	wide_delta := isize(u64(1) << 40)
+	s.scroll(ScrollTop{})
+	s.scroll(ScrollDeltaRow{ delta: wide_delta })
+	assert s.pages.viewport == .active
+	assert s.pages.viewport_start == s.pages.active_start
+
+	s.scroll(ScrollDeltaRow{ delta: -wide_delta })
+	assert s.pages.viewport == .top
+	assert s.pages.viewport_start == 0
+}
+
 fn test_screen_scroll_no_scrollback_stays_active() {
 	mut s := Screen.init(5, 3, 0)
 	defer { s.deinit() }

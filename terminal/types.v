@@ -406,13 +406,22 @@ pub fn (mut self Pages) scroll(behavior ViewportState) {
 
 // Scroll the viewport by physical rows and clamp it between the top of
 // scrollback and the active area.
-pub fn (mut self Pages) scroll_delta(delta int) {
+pub fn (mut self Pages) scroll_delta(delta isize) {
 	base := match self.viewport {
 		.active { self.active_start }
 		.top { 0 }
 		.pinned { self.viewport_start }
 	}
-	self.viewport_start = clamp_int(base + delta, 0, self.active_start)
+	if delta < 0 {
+		self.viewport_start = if delta <= -isize(base) { 0 } else { base + int(delta) }
+	} else {
+		distance := isize(self.active_start - base)
+		self.viewport_start = if delta >= distance {
+			self.active_start
+		} else {
+			base + int(delta)
+		}
+	}
 	self.viewport = if self.viewport_start == 0 {
 		.top
 	} else if self.viewport_start == self.active_start {
