@@ -16,7 +16,7 @@ pub mut:
 	panes map[u64]&TmuxViewerPane
 }
 
-pub enum TmuxViewerState {
+pub enum TmuxViewerState as u8 {
 	startup_block
 	startup_session
 	defunct
@@ -152,7 +152,7 @@ pub fn (mut self TmuxViewer) next(notification tmux.Notification) []TmuxViewerAc
 fn (mut self TmuxViewer) next_startup_block(notification tmux.Notification) []TmuxViewerAction {
 	match notification {
 		tmux.NotifEnter {
-			return self.defunct()
+			panic('tmux enter notification cannot reach startup-block state')
 		}
 		tmux.NotifExit {
 			return self.defunct()
@@ -168,7 +168,7 @@ fn (mut self TmuxViewer) next_startup_block(notification tmux.Notification) []Tm
 fn (mut self TmuxViewer) next_startup_session(notification tmux.Notification) []TmuxViewerAction {
 	match notification {
 		tmux.NotifEnter {
-			return self.defunct()
+			panic('tmux enter notification cannot reach startup-session state')
 		}
 		tmux.NotifExit {
 			return self.defunct()
@@ -191,7 +191,7 @@ fn (mut self TmuxViewer) next_command(notification tmux.Notification) []TmuxView
 
 	match notification {
 		tmux.NotifEnter {
-			return self.defunct()
+			panic('tmux enter notification cannot reach command-queue state')
 		}
 		tmux.NotifExit {
 			return self.defunct()

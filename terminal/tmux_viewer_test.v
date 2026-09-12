@@ -2,6 +2,10 @@ module terminal
 
 import tmux
 
+fn test_tmux_viewer_state_uses_compact_source_storage() {
+	assert sizeof(TmuxViewerState) == 1
+}
+
 fn tmux_viewer_command(actions []TmuxViewerAction) ?string {
 	for action in actions {
 		match action {
