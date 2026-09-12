@@ -1783,11 +1783,8 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_
 	// Copy cells.
 	same_page := unsafe { voidptr(other) == voidptr(&self) }
 	for xi in int(x_start) .. int(x_end) {
-		if xi >= src_row.cells.len || xi >= dst_row.cells.len {
-			break
-		}
 		src_cell := src_row.cells[xi]
-		mut dst_cell := CellData{
+		dst_row.cells[xi] = CellData{
 			codepoint: src_cell.codepoint
 			content_tag: if src_cell.content_tag == .codepoint_grapheme {
 				ContentTag.codepoint
@@ -1805,27 +1802,30 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_
 		}
 
 		// Copy graphemes.
-		if src_cell.has_grapheme && src_cell.graphemes.len > 0 {
-			dst_key := cell_key(int(dst_row_idx), xi, int(self.capacity.cols))
-			if dst_key !in self.grapheme_map && self.grapheme_count() >= self.grapheme_capacity() {
-				return .grapheme_map_out_of_memory
+		if src_cell.has_grapheme {
+			cps := other.lookup_grapheme_at(int(src_row_idx), xi) or {
+				panic('grapheme source cell is missing its page mapping')
 			}
-			offset := self.grapheme_alloc.alloc(src_cell.graphemes.len * int(sizeof(u32))) or {
+			dst_key := cell_key(int(dst_row_idx), xi, int(self.capacity.cols))
+			offset := self.grapheme_alloc.alloc(cps.len * int(sizeof(u32))) or {
 				return .grapheme_alloc_out_of_memory
+			}
+			if dst_key in self.grapheme_map || self.grapheme_count() >= self.grapheme_capacity() {
+				self.grapheme_alloc.release(offset, cps.len * int(sizeof(u32)))
+				return .grapheme_map_out_of_memory
 			}
 			self.grapheme_map[dst_key] = GraphemeAllocation{
 				offset: offset
-				len: src_cell.graphemes.len
+				len: cps.len
 			}
-			dst_cell.graphemes = src_cell.graphemes.clone()
-			dst_cell.has_grapheme = true
-			dst_cell.content_tag = .codepoint_grapheme
+			dst_row.cells[xi].graphemes = cps.clone()
+			dst_row.cells[xi].has_grapheme = true
+			dst_row.cells[xi].content_tag = .codepoint_grapheme
 			dst_row.grapheme = true
 		}
 
 		// Copy hyperlinks.
 		if src_cell.has_hyperlink {
-			dst_cell.hyperlink = src_cell.hyperlink.dupe()
 			src_key := cell_key(int(src_row_idx), xi, int(other.capacity.cols))
 			if src_key in other.hyperlink_map {
 				dst_key := cell_key(int(dst_row_idx), xi, int(self.capacity.cols))
@@ -1833,31 +1833,40 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_
 					return .hyperlink_map_out_of_memory
 				}
 				src_hl_id := other.hyperlink_map[src_key]
-				hl_id := if same_page {
+				mut hl_id := HyperlinkId(0)
+				if same_page {
 					// Same page: reuse the hyperlink ID.
 					self.hyperlink_set.use_link(src_hl_id)
-					src_hl_id
+					hl_id = src_hl_id
 				} else {
-					// Different page: clone the hyperlink, preferring the
-					// source ID just like Ghostty's addWithIdContext path.
+					// Different page: deduplicate before allocating page-owned
+					// strings, then prefer the source ID for a new entry.
 					src_link := other.hyperlink_set.get(src_hl_id)
-					self.hyperlink_set.add_with_id(src_link, src_hl_id) or {
-						match err.msg() {
-							'strings out of memory' {
-								return .string_alloc_out_of_memory
-							}
-							'set needs rehash' {
-								return .hyperlink_set_needs_rehash
-							}
-							else {
-								return .hyperlink_set_out_of_memory
+					if existing_id := self.hyperlink_set.lookup(&src_link) {
+						self.hyperlink_set.use_link(existing_id)
+						hl_id = existing_id
+					} else {
+						hl_id = self.hyperlink_set.add_with_id(src_link, src_hl_id) or {
+							match err.msg() {
+								'strings out of memory' {
+									return .string_alloc_out_of_memory
+								}
+								'set needs rehash' {
+									return .hyperlink_set_needs_rehash
+								}
+								else {
+									return .hyperlink_set_out_of_memory
+								}
 							}
 						}
 					}
 				}
 				self.hyperlink_map[dst_key] = hl_id
-				dst_cell.has_hyperlink = true
+				dst_row.cells[xi].has_hyperlink = true
+				dst_row.cells[xi].hyperlink = src_cell.hyperlink.dupe()
 				dst_row.hyperlink = true
+			} else {
+				panic('hyperlinked source cell is missing its page mapping')
 			}
 		}
 
@@ -1865,12 +1874,12 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_
 		if src_cell.style_id != default_style_id {
 			if same_page {
 				// Same page: use the same style ID.
-				dst_cell.style_id = src_cell.style_id
+				dst_row.cells[xi].style_id = src_cell.style_id
 				self.styles.use_style(src_cell.style_id)
 			} else {
 				// Different page: add the style to our set.
 				src_style := other.styles.get(src_cell.style_id)
-				dst_cell.style_id = self.styles.add_with_id(src_style, src_cell.style_id) or {
+				dst_row.cells[xi].style_id = self.styles.add_with_id(src_style, src_cell.style_id) or {
 					return .style_set_out_of_memory
 				}
 			}
@@ -1881,8 +1890,6 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx u16, src_
 		if src_cell.codepoint_val() == kitty_unicode_placeholder {
 			dst_row.kitty_virtual_placeholder = true
 		}
-
-		dst_row.cells[xi] = dst_cell
 	}
 
 	// If we are growing columns, then we need to ensure spacer heads

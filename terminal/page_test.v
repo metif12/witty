@@ -2302,6 +2302,115 @@ fn test_page_clone_row_reports_bounded_style_failure() {
 	assert reported
 }
 
+fn test_page_clone_row_preserves_integrity_after_late_managed_memory_failure() {
+	mut src := Page.init(PageCapacity{
+		cols: 1
+		rows: 1
+		styles: 0
+		hyperlink_bytes: 32 * 48
+		grapheme_bytes: grapheme_chunk
+		string_bytes: 128
+	})
+	defer { src.deinit() }
+	src.rows[0].cells[0] = CellData.init(u32(`a`))
+	src.set_graphemes(0, 0, [u32(0x0301)]) or { panic(err) }
+	link_id := src.insert_hyperlink(Hyperlink{
+		id: HyperlinkImplicitId{ offset: 1 }
+		uri: 'https://example.com'
+	}) or { panic(err) }
+	src.set_hyperlink(0, 0, link_id) or { panic(err) }
+
+	mut dst := Page.init(PageCapacity{
+		cols: 1
+		rows: 1
+		styles: 0
+		hyperlink_bytes: 32 * 48
+		grapheme_bytes: grapheme_chunk
+		string_bytes: 0
+	})
+	defer { dst.deinit() }
+	mut error_message := ''
+	dst.clone_row_from(&src, 0, 0) or { error_message = err.msg() }
+
+	assert error_message == PageCloneError.string_alloc_out_of_memory.str()
+	assert dst.rows[0].cells[0].codepoint == u32(`a`)
+	assert dst.rows[0].cells[0].has_grapheme
+	assert dst.rows[0].cells[0].graphemes == [u32(0x0301)]
+	assert !dst.rows[0].cells[0].has_hyperlink
+	assert dst.lookup_hyperlink(0, 0) == none
+	assert dst.verify_integrity() == none
+}
+
+fn test_page_clone_partial_row_deduplicates_hyperlink_before_allocating_strings() {
+	link := Hyperlink{
+		id: HyperlinkExplicitId{ value: 'same' }
+		uri: 'https://example.com'
+	}
+	mut src := Page.init(PageCapacity{
+		cols: 2
+		rows: 1
+		styles: 0
+		hyperlink_bytes: 32 * 48
+		string_bytes: 64
+	})
+	defer { src.deinit() }
+	src_id := src.insert_hyperlink(link) or { panic(err) }
+	src.set_hyperlink(0, 1, src_id) or { panic(err) }
+	src.rows[0].cells[1].hyperlink = link.dupe()
+
+	mut dst := Page.init(PageCapacity{
+		cols: 2
+		rows: 1
+		styles: 0
+		hyperlink_bytes: 32 * 48
+		string_bytes: 64
+	})
+	defer { dst.deinit() }
+	dst_id := dst.insert_hyperlink(link) or { panic(err) }
+	dst.set_hyperlink(0, 0, dst_id) or { panic(err) }
+	dst.rows[0].cells[0].hyperlink = link.dupe()
+	assert dst.hyperlink_set.string_used() == 64
+
+	dst.clone_partial_row_from(&src, 0, 0, 1, 2) or { panic(err) }
+
+	cloned_id := dst.lookup_hyperlink(0, 1) or { panic('cloned hyperlink missing') }
+	assert cloned_id == dst_id
+	assert dst.hyperlink_set.ref_count(dst_id) == 2
+	assert dst.hyperlink_set.string_used() == 64
+	assert dst.verify_integrity() == none
+}
+
+fn test_page_clone_reports_grapheme_allocator_failure_before_map_failure() {
+	mut src := Page.init(PageCapacity{
+		cols: 1
+		rows: 1
+		styles: 0
+		grapheme_bytes: grapheme_chunk
+	})
+	defer { src.deinit() }
+	src.rows[0].cells[0] = CellData.init(u32(`a`))
+	src.set_graphemes(0, 0, [u32(0x0301)]) or { panic(err) }
+
+	mut dst := Page.init(PageCapacity{
+		cols: 1
+		rows: 2
+		styles: 0
+		grapheme_bytes: grapheme_chunk
+	})
+	defer { dst.deinit() }
+	dst.rows[1].cells[0] = CellData.init(u32(`b`))
+	dst.set_graphemes(1, 0, [u32(0x0302)]) or { panic(err) }
+	remaining := dst.grapheme_alloc.capacity_bytes() - grapheme_chunk
+	_ := dst.grapheme_alloc.alloc(remaining) or { panic('failed to fill grapheme allocator') }
+
+	mut error_message := ''
+	dst.clone_row_from(&src, 0, 0) or { error_message = err.msg() }
+	assert error_message == PageCloneError.grapheme_alloc_out_of_memory.str()
+	assert !dst.rows[0].cells[0].has_grapheme
+	assert dst.grapheme_count() == 1
+	assert dst.verify_integrity() == none
+}
+
 // Test exactRowCapacity styles with a maxed-out single row.
 fn test_page_exact_row_capacity_styles_max_single_row() {
 	mut page := Page.init(PageCapacity{
