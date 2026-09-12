@@ -2364,8 +2364,8 @@ import strings
 // ============================================================
 
 pub enum IterDirection {
-	right_down
 	left_up
+	right_down
 }
 
 // ============================================================
@@ -2491,6 +2491,17 @@ pub fn (self &PagePin) before(other PagePin) bool {
 
 // Returns true if self is between top and bottom (inclusive).
 pub fn (self &PagePin) is_between(top_pin PagePin, bottom_pin PagePin) bool {
+	$if !prod {
+		if voidptr(top_pin.node) == voidptr(bottom_pin.node) {
+			assert top_pin.y <= bottom_pin.y
+			if top_pin.y == bottom_pin.y {
+				assert top_pin.x <= bottom_pin.x
+			}
+		} else {
+			assert top_pin.before(bottom_pin)
+		}
+	}
+
 	if voidptr(self.node) == voidptr(top_pin.node) {
 		if self.y < top_pin.y {
 			return false
@@ -2864,14 +2875,14 @@ pub fn (self &PageCell) style() CellStyle {
 // Traverses backward through the page list to compute the absolute y
 // coordinate from the top of the entire page list.
 pub fn (self &PageCell) screen_point() Point {
-	mut y := u32(self.row_idx)
+	mut y := self.row_idx
 
 	// Traverse backward through the linked list to accumulate rows
 	// from all preceding pages.
 	mut prev := self.node.prev
 	for {
 		nd := prev or { break }
-		y += u32(nd.data.size.rows)
+		y += nd.data.size.rows
 		prev = nd.prev
 	}
 
@@ -2879,7 +2890,7 @@ pub fn (self &PageCell) screen_point() Point {
 		tag: .screen
 		coord: Coordinate{
 			x: self.col_idx
-			y: y
+			y: u32(y)
 		}
 	}
 }

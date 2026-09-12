@@ -1,5 +1,10 @@
 module terminal
 
+fn test_page_list_direction_values_match_source_order() {
+	assert int(IterDirection.left_up) == 0
+	assert int(IterDirection.right_down) == 1
+}
+
 // Tests translated from Ghostty's PageList.zig
 
 // ============================================================
