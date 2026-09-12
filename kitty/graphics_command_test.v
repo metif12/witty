@@ -203,6 +203,18 @@ fn test_ensure_large_negative_values() {
 	assert v.z == -2000000000
 }
 
+fn test_animation_frame_background_retains_packed_rgba_word() {
+	assert sizeof(AnimBackground) == 4
+	command := Parser.parse_string('a=f,Y=1144201745') or { panic(err) }
+	assert command.control is AnimationFrameLoading
+	frame := command.control as AnimationFrameLoading
+	assert frame.background.int() == u32(0x44332211)
+	assert frame.background.r() == 0x11
+	assert frame.background.g() == 0x22
+	assert frame.background.b() == 0x33
+	assert frame.background.a() == 0x44
+}
+
 fn test_integer_fields_match_zig_parse_int_grammar() {
 	command := Parser.parse_string('a=p,i=4__2,z=-2__0,H=+3,V=-0') or { panic(err) }
 	assert command.control is Display

@@ -725,11 +725,31 @@ pub mut:
 }
 
 pub struct AnimBackground {
-pub:
-	r u8
-	g u8
-	b u8
-	a u8
+	value u32
+}
+
+pub fn AnimBackground.from_int(value u32) AnimBackground {
+	return AnimBackground{ value: value }
+}
+
+pub fn (background AnimBackground) r() u8 {
+	return u8(background.value)
+}
+
+pub fn (background AnimBackground) g() u8 {
+	return u8(background.value >> 8)
+}
+
+pub fn (background AnimBackground) b() u8 {
+	return u8(background.value >> 16)
+}
+
+pub fn (background AnimBackground) a() u8 {
+	return u8(background.value >> 24)
+}
+
+pub fn (background AnimBackground) int() u32 {
+	return background.value
 }
 
 fn AnimationFrameLoading.parse(kv map[u8]u32) !AnimationFrameLoading {
@@ -761,13 +781,7 @@ fn AnimationFrameLoading.parse(kv map[u8]u32) !AnimationFrameLoading {
 		}
 	}
 	if `Y` in kv {
-		v := kv[`Y`]
-		result.background = AnimBackground{
-			r: u8(v & 0xFF)
-			g: u8((v >> 8) & 0xFF)
-			b: u8((v >> 16) & 0xFF)
-			a: u8((v >> 24) & 0xFF)
-		}
+		result.background = AnimBackground.from_int(kv[`Y`])
 	}
 
 	return result
