@@ -1940,6 +1940,29 @@ fn test_page_list_erase_row() {
 	assert cell.cell.codepoint == u32(0x42)
 }
 
+fn test_page_list_erase_row_preserves_rotated_row_metadata() {
+	mut s := PageList.init(4, 4, usize(0x7FFFFFFFFFFFFFFF))
+	defer { s.deinit() }
+	first := s.pages.first or { panic('no first page') }
+	mut page := &first.data
+	page.rows[0].wrap = true
+	page.rows[0].wrap_continuation = true
+	page.rows[0].semantic_prompt = .prompt
+	page.rows[0].kitty_virtual_placeholder = true
+	page.rows[0].cells[0] = CellData.init(kitty_unicode_placeholder)
+	page.rows[0].dirty = false
+
+	s.erase_row(Point.new(.active, Coordinate{})) or { panic(err) }
+
+	last := page.rows[int(page.size.rows) - 1]
+	assert last.cells[0].is_zero()
+	assert last.wrap
+	assert last.wrap_continuation
+	assert last.semantic_prompt == .prompt
+	assert last.kitty_virtual_placeholder
+	assert !last.dirty
+}
+
 fn test_page_list_erase_row_with_tracked_pin() {
 	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }

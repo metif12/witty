@@ -1995,6 +1995,23 @@ fn test_page_clear_cells_clears_false_positive_kitty_placeholder_flag() {
 	assert !page.rows[0].kitty_virtual_placeholder
 }
 
+fn test_page_clear_cells_preserves_dirty_state() {
+	mut page := Page.init(PageCapacity{
+		cols: 4
+		rows: 1
+	})
+	defer { page.deinit() }
+	page.size.rows = 1
+	page.rows[0].cells[0] = CellData.init(u32(`x`))
+
+	page.clear_cells(0, 0, page.size.cols)
+	assert !page.rows[0].dirty
+
+	page.rows[0].dirty = true
+	page.clear_cells(0, 0, page.size.cols)
+	assert page.rows[0].dirty
+}
+
 // Test swap_cells.
 fn test_page_swap_cells() {
 	mut page := Page.init(PageCapacity{
@@ -2068,23 +2085,6 @@ fn test_page_reinit() {
 		rac := page.get_row_and_cell(0, 0)
 		assert rac.cell.codepoint == 0
 	}
-}
-
-// Test clear_row resets row metadata.
-fn test_page_clear_row() {
-	mut p := Page.init(PageCapacity{
-		cols: 10
-		rows: 5
-	})
-	p.size.rows = 5
-
-	p.rows[2].wrap = true
-	p.rows[2].semantic_prompt = .prompt
-
-	p.clear_row(2)
-
-	assert p.rows[2].wrap == false
-	assert p.rows[2].semantic_prompt == .unknown
 }
 
 // Test capacity adjust with same cols and larger cols.

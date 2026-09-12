@@ -4771,6 +4771,8 @@ pub fn (mut self PageList) erase_row(point Point) ! {
 	mut node := p.node
 	mut page := &node.data
 	y := int(p.y)
+	page.clear_cells(p.y, 0, page.size.cols)
+	mut vacated_row := page.rows[y]
 
 	// Shift rows up within the page. Use Page's managed clone path rather
 	// than copying RowData directly so grapheme/style/hyperlink ownership and
@@ -4798,6 +4800,8 @@ pub fn (mut self PageList) erase_row(point Point) ! {
 
 		node = next
 		page = next_page
+		page.clear_cells(0, 0, page.size.cols)
+		vacated_row = page.rows[0]
 		for i in 0 .. int(page.size.rows) - 1 {
 			page.clone_row_from(page, u16(i), u16(i + 1))!
 		}
@@ -4817,7 +4821,11 @@ pub fn (mut self PageList) erase_row(point Point) ! {
 	}
 
 	// The final row is the duplicate left by the shift.
-	page.clear_row(page.size.rows - 1)
+	last_idx := int(page.size.rows) - 1
+	last_cells := page.rows[last_idx].cells
+	page.clear_cells(page.size.rows - 1, 0, page.size.cols)
+	page.rows[last_idx] = vacated_row
+	page.rows[last_idx].cells = last_cells
 }
 
 // ============================================================
@@ -5919,11 +5927,18 @@ pub fn (mut self PageList) erase_row_bounded(point Point, limit usize) ! {
 	// page, then we clear the row, rotate it to the end of the boundary limit
 	// and update our pins.
 	if int(page.size.rows) - y > int(limit) {
+		page.clear_cells(p.y, 0, page.size.cols)
+		vacated_row := page.rows[y]
+
 		// Shift within the page over the bounded region.
 		for i in 0 .. int(limit) {
 			page.clone_row_from(page, u16(y + i), u16(y + i + 1))!
 		}
-		page.clear_row(u16(y + int(limit)))
+		vacated_idx := y + int(limit)
+		vacated_cells := page.rows[vacated_idx].cells
+		page.clear_cells(u16(vacated_idx), 0, page.size.cols)
+		page.rows[vacated_idx] = vacated_row
+		page.rows[vacated_idx].cells = vacated_cells
 
 		// If our viewport is a pin and our pin is within the erased
 		// region we need to maybe shift our cache up.
@@ -5956,6 +5971,8 @@ pub fn (mut self PageList) erase_row_bounded(point Point, limit usize) ! {
 	// page up and continue into following pages, tracking how many we shifted.
 	// ghostty rotates rows[pn.y..size.rows] which processes size.rows - pn.y
 	// rows, leaving the bottom slot to be filled by the next page's top row.
+	page.clear_cells(p.y, 0, page.size.cols)
+	mut vacated_row := page.rows[y]
 	for i in y .. int(page.size.rows) - 1 {
 		page.clone_row_from(page, u16(i), u16(i + 1))!
 	}
@@ -5985,7 +6002,11 @@ pub fn (mut self PageList) erase_row_bounded(point Point, limit usize) ! {
 		mut next := node.next or {
 			// We reached the end before the limit, so clear the duplicate left
 			// in the final row by the managed shift above.
-			page.clear_row(page.size.rows - 1)
+			last_idx := int(page.size.rows) - 1
+			last_cells := page.rows[last_idx].cells
+			page.clear_cells(page.size.rows - 1, 0, page.size.cols)
+			page.rows[last_idx] = vacated_row
+			page.rows[last_idx].cells = last_cells
 			return
 		}
 		mut next_page := &next.data
@@ -5997,11 +6018,17 @@ pub fn (mut self PageList) erase_row_bounded(point Point, limit usize) ! {
 
 		// If we can satisfy the limit within this page, do a partial shift.
 		shifted_limit := limit - shifted
+		page.clear_cells(0, 0, page.size.cols)
+		vacated_row = page.rows[0]
 		if usize(page.size.rows) > shifted_limit {
 			for i in 0 .. shifted_limit {
 				page.clone_row_from(page, u16(i), u16(i + 1))!
 			}
-			page.clear_row(u16(shifted_limit))
+			vacated_idx := int(shifted_limit)
+			vacated_cells := page.rows[vacated_idx].cells
+			page.clear_cells(u16(shifted_limit), 0, page.size.cols)
+			page.rows[vacated_idx] = vacated_row
+			page.rows[vacated_idx].cells = vacated_cells
 			page.dirty = true
 
 			if self.viewport == .pin {

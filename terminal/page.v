@@ -2133,21 +2133,6 @@ pub fn (mut self Page) clear_cells(row_idx u16, left u16, end u16) {
 	for x in int(left) .. int(end) {
 		row.cells[x] = CellData{}
 	}
-	row.dirty = true
-}
-
-// Clear an entire row.
-pub fn (mut self Page) clear_row(row_idx u16) {
-	assert row_idx < self.size.rows
-	self.clear_cells(row_idx, 0, self.size.cols)
-	mut row := &self.rows[int(row_idx)]
-	row.wrap = false
-	row.wrap_continuation = false
-	row.styled = false
-	row.grapheme = false
-	row.hyperlink = false
-	row.semantic_prompt = .unknown
-	row.kitty_virtual_placeholder = false
 }
 
 // Translate Ghostty's pointer-to-offset lookup for V's per-row cell arrays.
@@ -2200,11 +2185,9 @@ pub fn (mut self Page) clear_hyperlink(row_idx int, col_idx int) {
 	assert row_idx >= 0 && row_idx < int(self.size.rows)
 	assert col_idx >= 0 && col_idx < int(self.size.cols)
 	key := cell_key(row_idx, col_idx, int(self.capacity.cols))
-	if key in self.hyperlink_map {
-		hl_id := self.hyperlink_map[key]
-		self.hyperlink_set.release(hl_id)
-		self.hyperlink_map.delete(key)
-	}
+	hl_id := self.hyperlink_map[key] or { return }
+	self.hyperlink_set.release(hl_id)
+	self.hyperlink_map.delete(key)
 	self.rows[row_idx].cells[col_idx].has_hyperlink = false
 }
 
@@ -2236,6 +2219,11 @@ pub fn (mut self Page) set_hyperlink(row_idx int, col_idx int, id u32) ! {
 		old_id := self.hyperlink_map[key]
 		// Always release the old hyperlink.
 		self.hyperlink_set.release(old_id)
+		if old_id == id {
+			assert self.rows[row_idx].hyperlink
+			self.rows[row_idx].cells[col_idx].has_hyperlink = true
+			return
+		}
 		self.hyperlink_map[key] = id
 	} else {
 		if self.hyperlink_count() >= self.hyperlink_capacity() {
