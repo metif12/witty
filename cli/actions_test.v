@@ -12,7 +12,7 @@ fn test_list_actions_lists_keybinding_actions() {
 
 fn test_list_actions_docs_and_unknown_option() {
 	output := list_actions_output(['--docs'])!
-	assert output.starts_with('ignore:\n  Ignore this key combination.\n')
+	assert output.starts_with('\nignore:\n  Ignore this key combination.\n')
 	assert output.contains('new_window:\n  Open a new window.\n')
 
 	list_actions_output(['--plain']) or {

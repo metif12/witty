@@ -9,12 +9,25 @@ fn test_generate_help_action_names() {
 
 fn test_generate_help_plaintext_docs() {
 	help := generate_help(.plaintext, true)
-	assert help.starts_with('ignore:\n  Ignore this key combination.\n')
-	assert help.contains('new_window:\n  Open a new window.\n')
+	assert help.starts_with('\nignore:\n  Ignore this key combination.\n  \n  Ghostty will not process')
+	assert help.contains('new_window:\n  Open a new window.\n  \n')
+	assert help.contains('toggle_readonly:\n  Toggle read-only mode for the current surface.\n  \n')
+	assert help.ends_with('    Crash on the render thread for the focused surface.\n  \n')
 }
 
 fn test_generate_help_markdown() {
 	help := generate_help(.markdown, true)
 	assert help.starts_with('---\ntitle: Keybinding Action Reference\n')
 	assert help.contains('## `copy_to_clipboard`\nCopy the selected text to the clipboard.\n')
+}
+
+fn test_embedded_action_help_matches_every_translated_tag() {
+	entries := binding_action_help_entries()
+	mut tags := []string{}
+	$for enum_value in ActionTag.values {
+		tags << enum_value.name
+	}
+	assert entries.map(it.name) == tags
+	assert entries.len == 83
+	assert entries.all(it.docs.len > 0)
 }
