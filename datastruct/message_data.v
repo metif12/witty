@@ -1,7 +1,7 @@
 module datastruct
 
 // MessageDataKind identifies the storage selected for a message payload.
-pub enum MessageDataKind {
+pub enum MessageDataKind as u8 {
 	small
 	stable
 	alloc

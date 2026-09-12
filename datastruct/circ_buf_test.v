@@ -1,5 +1,11 @@
 module datastruct
 
+fn test_circ_buf_direction_source_layout_and_ordinals() {
+	assert sizeof(CircBufDirection) == 1
+	assert u8(CircBufDirection.forward) == 0
+	assert u8(CircBufDirection.reverse) == 1
+}
+
 fn test_circ_buf_empty() {
 	buf := new_circ_buf[u8](12, 0)
 	assert buf.empty()

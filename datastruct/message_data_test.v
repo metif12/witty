@@ -1,5 +1,12 @@
 module datastruct
 
+fn test_message_data_tag_source_layout_and_ordinals() {
+	assert sizeof(MessageDataKind) == 1
+	assert u8(MessageDataKind.small) == 0
+	assert u8(MessageDataKind.stable) == 1
+	assert u8(MessageDataKind.alloc) == 2
+}
+
 fn test_message_data_init_small() {
 	mut input := 'hello!'.bytes()
 	data := MessageData.init[u8](10, input)

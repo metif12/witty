@@ -3,7 +3,7 @@ module datastruct
 import fastmem
 
 // CircBufDirection selects iteration from the oldest or newest value.
-pub enum CircBufDirection {
+pub enum CircBufDirection as u8 {
 	forward
 	reverse
 }

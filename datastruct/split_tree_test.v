@@ -1,5 +1,24 @@
 module datastruct
 
+fn test_split_tree_source_enum_layouts_and_ordinals() {
+	assert sizeof(Layout) == 1
+	assert u8(Layout.horizontal) == 0
+	assert u8(Layout.vertical) == 1
+	assert sizeof(Direction) == 1
+	assert u8(Direction.left) == 0
+	assert u8(Direction.right) == 1
+	assert u8(Direction.down) == 2
+	assert u8(Direction.up) == 3
+	assert sizeof(Side) == 1
+	assert u8(Side.left) == 0
+	assert u8(Side.right) == 1
+	assert sizeof(SpatialDirection) == 1
+	assert u8(SpatialDirection.left) == 0
+	assert u8(SpatialDirection.right) == 1
+	assert u8(SpatialDirection.down) == 2
+	assert u8(SpatialDirection.up) == 3
+}
+
 // TestView is used in tests to implement the required view interface.
 struct TestView {
 	label string

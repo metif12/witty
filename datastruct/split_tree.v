@@ -63,13 +63,13 @@ pub:
 }
 
 // Layout direction for a split.
-pub enum Layout {
+pub enum Layout as u8 {
 	horizontal
 	vertical
 }
 
 // Direction for split operations.
-pub enum Direction {
+pub enum Direction as u8 {
 	left
 	right
 	down
@@ -77,13 +77,13 @@ pub enum Direction {
 }
 
 // Side of a tree (left or right).
-pub enum Side {
+pub enum Side as u8 {
 	left
 	right
 }
 
 // SpatialDirection for spatial navigation.
-pub enum SpatialDirection {
+pub enum SpatialDirection as u8 {
 	left
 	right
 	down

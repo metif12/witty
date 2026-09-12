@@ -4,7 +4,7 @@ import sync
 import time
 
 // BlockingQueueTimeoutKind selects how a full-queue push behaves.
-pub enum BlockingQueueTimeoutKind {
+pub enum BlockingQueueTimeoutKind as u8 {
 	instant
 	forever
 	ns

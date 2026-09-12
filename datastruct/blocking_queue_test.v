@@ -2,6 +2,19 @@ module datastruct
 
 import time
 
+fn test_blocking_queue_timeout_source_layout_and_payload() {
+	assert sizeof(BlockingQueueTimeoutKind) == 1
+	assert u8(BlockingQueueTimeoutKind.instant) == 0
+	assert u8(BlockingQueueTimeoutKind.forever) == 1
+	assert u8(BlockingQueueTimeoutKind.ns) == 2
+	assert sizeof(BlockingQueueTimeout) == 2 * sizeof(u64)
+	assert blocking_queue_instant.kind == .instant
+	assert blocking_queue_forever.kind == .forever
+	timeout := blocking_queue_timeout(1_099_511_627_776)
+	assert timeout.kind == .ns
+	assert timeout.ns == u64(1_099_511_627_776)
+}
+
 fn test_blocking_queue_basic_push_pop_and_drain() {
 	mut queue := BlockingQueue.create[u64](4)!
 	defer { queue.destroy() }
