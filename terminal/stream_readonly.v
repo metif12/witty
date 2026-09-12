@@ -125,16 +125,38 @@ pub fn ReadonlyStream.init(mut term Terminal) ReadonlyStream {
 
 pub fn (mut self ReadonlyStream) deinit() {
 	self.stream.deinit()
+	self.handler.deinit()
 }
 
 // Process a string of bytes through the stream and apply to the terminal.
 pub fn (mut self ReadonlyStream) next_slice(input_ string) ! {
 	self.stream.next_slice(input_.bytes())
-	// Process all collected events against the terminal
+	self.apply_events()!
+}
+
+// Process one byte through the stream and apply its actions to the terminal.
+pub fn (mut self ReadonlyStream) next(c u8) ! {
+	self.stream.next(c)
+	self.apply_events()!
+}
+
+// Apply a decoded codepoint directly through the readonly handler.
+pub fn (mut self ReadonlyStream) print(c u32) ! {
+	self.stream.print(c)
+	self.apply_events()!
+}
+
+// Apply a C0 or C1 control directly through the readonly handler.
+pub fn (mut self ReadonlyStream) execute(c u8) ! {
+	self.stream.execute(c)
+	self.apply_events()!
+}
+
+fn (mut self ReadonlyStream) apply_events() ! {
+	defer { self.stream.clear_events() }
 	for event in self.stream.events {
 		self.handler.vt(event)!
 	}
-	self.stream.clear_events()
 }
 
 // ============================================================

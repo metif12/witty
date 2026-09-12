@@ -17,6 +17,21 @@ fn test_readonly_basic_print() {
 	assert str == 'Hello'
 }
 
+fn test_readonly_scalar_stream_surface() {
+	mut term := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
+	defer { term.deinit() }
+	mut stream := ReadonlyStream.init(mut term)
+	defer { stream.deinit() }
+
+	stream.next(u8(`A`))!
+	stream.print(u32(`B`))!
+	assert term.screens.active.cursor.x == 2
+	assert (term.plain_string() or { panic(err) }) == 'AB'
+
+	stream.execute(0x0d)!
+	assert term.screens.active.cursor.x == 0
+}
+
 fn test_readonly_cursor_movement() {
 	mut t := Terminal.init(Options{ cols: 10, rows: 10 }) or { panic(err) }
 	mut s := ReadonlyStream.init(mut t)
