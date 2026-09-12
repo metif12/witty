@@ -1969,7 +1969,8 @@ pub fn (mut self ApcHandler) start() {
 
 pub fn (mut self ApcHandler) feed(byte_val u8) {
 	match self.state {
-		.inactive, .ignore {}
+		.inactive { panic('ApcHandler.feed called while inactive') }
+		.ignore {}
 		.identify {
 			self.state = if byte_val == `G` { .kitty } else { .ignore }
 		}
@@ -1987,6 +1988,9 @@ pub fn (mut self ApcHandler) end() ?kitty.Command {
 		self.parser = kitty.Parser.init()
 	}
 
+	if self.state == .inactive {
+		panic('ApcHandler.end called while inactive')
+	}
 	if self.state != .kitty {
 		return none
 	}
@@ -1995,9 +1999,9 @@ pub fn (mut self ApcHandler) end() ?kitty.Command {
 
 enum ApcHandlerState {
 	inactive
+	ignore
 	identify
 	kitty
-	ignore
 }
 
 // DcsHandler wraps terminal.DcsHandler, delegating all DCS state

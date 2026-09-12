@@ -695,6 +695,13 @@ fn test_apc_handler_rejects_unknown_and_invalid_commands() {
 	}
 }
 
+fn test_apc_handler_state_values_match_source_order() {
+	assert int(ApcHandlerState.inactive) == 0
+	assert int(ApcHandlerState.ignore) == 1
+	assert int(ApcHandlerState.identify) == 2
+	assert int(ApcHandlerState.kitty) == 3
+}
+
 fn test_apc_handler_parses_valid_kitty_command() {
 	mut handler := ApcHandler{}
 	handler.start()
