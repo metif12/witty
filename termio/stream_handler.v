@@ -1701,7 +1701,7 @@ fn (self &StreamHandler) color_query_response(target osc.ColorTarget, terminator
 			return none
 		}
 	}
-	term := osc_terminator(terminator)
+	term := terminator.string()
 	return match self.osc_color_report_format {
 		.bits_16 {
 			'${prefix}${hex4(color.r)}/${hex4(color.g)}/${hex4(color.b)}${term}'
@@ -1725,14 +1725,6 @@ fn dynamic_color_osc_number(color osc.DynamicColor) int {
 		.highlight_background { 17 }
 		.tektronix_cursor { 18 }
 		.highlight_foreground { 19 }
-	}
-}
-
-// osc_terminator returns the wire representation of an OSC terminator.
-fn osc_terminator(terminator osc.Terminator) string {
-	return match terminator {
-		.st { '\x1b\\' }
-		.bel { '\a' }
 	}
 }
 
@@ -1785,7 +1777,7 @@ fn (mut self StreamHandler) kitty_color_report(items []osc.KittyColorItem, termi
 	}
 
 	if response.len > 0 {
-		response += osc_terminator(terminator)
+		response += terminator.string()
 		self.message_writer(Message.write_req(response))
 	}
 }

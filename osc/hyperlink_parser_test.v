@@ -61,6 +61,21 @@ fn test_osc8_hyperlink_with_incomplete_key() {
 	assert cmd.hyperlink.uri == 'http://example.com'
 }
 
+fn test_osc8_hyperlink_stops_options_at_incomplete_key() {
+	mut p := Parser.init(unsafe { nil })
+	input := '8;broken:id=ignored;http://example.com'
+	for ch in input.bytes() {
+		p.next(ch)
+	}
+	cmd := p.end(0x1b) or {
+		assert false, 'expected command'
+		return
+	}
+	assert cmd.cmd_type == .hyperlink_start
+	assert cmd.hyperlink.id == none
+	assert cmd.hyperlink.uri == 'http://example.com'
+}
+
 fn test_osc8_hyperlink_with_empty_key() {
 	mut p := Parser.init(unsafe { nil })
 	input := '8;=value;http://example.com'

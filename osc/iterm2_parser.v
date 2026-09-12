@@ -98,8 +98,8 @@ fn iterm2_key_from_str(s string) Iterm2Key {
 }
 
 // parse_iterm2 parses an OSC 1337 iTerm2 command.
-fn parse_iterm2(mut parser Parser, terminator_ch u8) ?Command {
-	data := parser.buffered()
+fn parse_iterm2(mut parser Parser, terminator_ch ?u8) ?Command {
+	data := parser.finish_zero_terminated() or { return none }
 	data_str := data.bytestr()
 
 	// Split on '=' to get key and optional value

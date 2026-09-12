@@ -153,8 +153,16 @@ pub enum Terminator {
 
 // init_terminator creates a terminator based on the last byte seen.
 // If the last byte is a BEL then we use BEL, otherwise we just assume ST.
-pub fn init_terminator(ch u8) Terminator {
-	return if ch == 0x07 { Terminator.bel } else { Terminator.st }
+pub fn init_terminator(ch ?u8) Terminator {
+	return if ch or { return .st } == 0x07 { Terminator.bel } else { Terminator.st }
+}
+
+// string returns the wire representation of this terminator.
+pub fn (self Terminator) string() string {
+	return match self {
+		.st { '\x1b\\' }
+		.bel { '\x07' }
+	}
 }
 
 // ProgressState represents the state of a ConEmu progress report.
@@ -276,7 +284,7 @@ pub mut:
 }
 
 // OscParserState tracks where we are in parsing the OSC number prefix.
-enum OscParserState {
+pub enum OscParserState {
 	start
 	invalid
 	s_0
@@ -319,27 +327,42 @@ enum OscParserState {
 	s_1337
 }
 
+// OscWriter tracks the source writer selected for a payload. Normal OSCs use
+// the fixed 2 KiB buffer; OSC 52 and OSC 66 use the allocating writer.
+enum OscWriter {
+	none
+	fixed
+	allocating
+}
+
 // Parser accumulates bytes of an OSC sequence and dispatches to
 // the appropriate sub-parser on end().
 pub struct Parser {
 pub mut:
+	// Whether the source parser was initialized with an allocator. V's arrays
+	// are GC-managed, but the flag preserves Ghostty's allocation-free parser
+	// contract for commands whose result itself requires allocation.
+	has_allocator bool
+
 	// Current state of the parser.
 	state OscParserState = .start
 
 	// Buffer for accumulating OSC data after the semicolon.
 	buf []u8
 
-	// Whether we're in "writing" mode (accumulating data after semicolon).
-	writing bool
+	// Active source writer for accumulating data after the semicolon.
+	writer OscWriter
 
 	// The command that is the result of parsing.
 	command Command
 }
 
-// init creates a new OSC Parser. The allocator parameter is accepted
-// for API compatibility but not used in this implementation.
+// init creates a new OSC Parser. V owns storage through its GC, while the
+// allocator's presence still controls the same source parser capabilities.
 pub fn Parser.init(allocator voidptr) Parser {
-	return Parser{}
+	return Parser{
+		has_allocator: unsafe { allocator != nil }
+	}
 }
 
 // deinit frees any allocated resources.
@@ -351,8 +374,31 @@ pub fn (mut self Parser) deinit() {
 pub fn (mut self Parser) reset() {
 	self.state = .start
 	self.buf = []
-	self.writing = false
+	self.writer = .none
 	self.command = Command{}
+}
+
+// ensure_allocator rejects OSCs whose parsed command requires allocation when
+// the parser was initialized in allocation-free mode.
+fn (mut self Parser) ensure_allocator() bool {
+	if self.has_allocator {
+		return true
+	}
+	self.state = .invalid
+	return false
+}
+
+// write_to_fixed selects Ghostty's fixed-size writer.
+fn (mut self Parser) write_to_fixed() {
+	self.writer = .fixed
+	self.buf = []
+}
+
+// write_to_allocating selects Ghostty's allocating writer. V's backing array
+// already grows dynamically, so only the writer identity needs translation.
+fn (mut self Parser) write_to_allocating() {
+	self.writer = if self.has_allocator { .allocating } else { .fixed }
+	self.buf = []
 }
 
 // next processes the next byte of OSC data.
@@ -365,8 +411,8 @@ pub fn (mut self Parser) next(c u8) {
 
 	// If a writer has been initialized, we just accumulate the rest of the
 	// OSC sequence in the buffer and skip the state machine.
-	if self.writing {
-		self.buf << c
+	if self.writer != .none {
+		self.write_byte(c)
 		return
 	}
 
@@ -410,7 +456,7 @@ pub fn (mut self Parser) next(c u8) {
 		}
 		.s_1 {
 			match c {
-				`;` { self.start_writing() }
+				`;` { self.write_to_fixed() }
 				`0` {
 					self.state = .s_10
 				}
@@ -448,7 +494,11 @@ pub fn (mut self Parser) next(c u8) {
 		}
 		.s_10 {
 			match c {
-				`;` { self.start_writing() }
+				`;` {
+					if self.ensure_allocator() {
+						self.write_to_fixed()
+					}
+				}
 				`4` {
 					self.state = .s_104
 				}
@@ -459,7 +509,11 @@ pub fn (mut self Parser) next(c u8) {
 		}
 		.s_11 {
 			match c {
-				`;` { self.start_writing() }
+				`;` {
+					if self.ensure_allocator() {
+						self.write_to_fixed()
+					}
+				}
 				`0` {
 					self.state = .s_110
 				}
@@ -497,7 +551,11 @@ pub fn (mut self Parser) next(c u8) {
 		}
 		.s_13 {
 			match c {
-				`;` { self.start_writing() }
+				`;` {
+					if self.ensure_allocator() {
+						self.write_to_fixed()
+					}
+				}
 				`3` {
 					self.state = .s_133
 				}
@@ -508,7 +566,7 @@ pub fn (mut self Parser) next(c u8) {
 		}
 		.s_2 {
 			match c {
-				`;` { self.start_writing() }
+				`;` { self.write_to_fixed() }
 				`1` {
 					self.state = .s_21
 				}
@@ -522,7 +580,11 @@ pub fn (mut self Parser) next(c u8) {
 		}
 		.s_5 {
 			match c {
-				`;` { self.start_writing() }
+				`;` {
+					if self.ensure_allocator() {
+						self.write_to_fixed()
+					}
+				}
 				`2` {
 					self.state = .s_52
 				}
@@ -543,7 +605,7 @@ pub fn (mut self Parser) next(c u8) {
 		}
 		.s_7 {
 			match c {
-				`;` { self.start_writing() }
+				`;` { self.write_to_fixed() }
 				`7` {
 					self.state = .s_77
 				}
@@ -564,7 +626,7 @@ pub fn (mut self Parser) next(c u8) {
 		}
 		.s_133 {
 			match c {
-				`;` { self.start_writing() }
+				`;` { self.write_to_fixed() }
 				`7` {
 					self.state = .s_1337
 				}
@@ -575,27 +637,41 @@ pub fn (mut self Parser) next(c u8) {
 		}
 		.s_0, .s_22, .s_777, .s_8, .s_9 {
 			match c {
-				`;` { self.start_writing() }
+				`;` { self.write_to_fixed() }
 				else {
 					self.state = .invalid
 				}
 			}
 		}
-		.s_4, .s_12, .s_14, .s_15, .s_16, .s_17, .s_18, .s_19, .s_21, .s_52, .s_66, .s_104, .s_110, .s_111, .s_112, .s_113, .s_114, .s_115, .s_116, .s_117, .s_118, .s_119, .s_1337 {
+		.s_52, .s_66 {
 			match c {
-				`;` { self.start_writing() }
+				`;` { self.write_to_allocating() }
+				else {
+					self.state = .invalid
+				}
+			}
+		}
+		.s_4, .s_12, .s_14, .s_15, .s_16, .s_17, .s_18, .s_19, .s_21, .s_104, .s_110, .s_111, .s_112, .s_113, .s_114, .s_115, .s_116, .s_117, .s_118, .s_119 {
+			match c {
+				`;` {
+					if self.ensure_allocator() {
+						self.write_to_fixed()
+					}
+				}
+				else {
+					self.state = .invalid
+				}
+			}
+		}
+		.s_1337 {
+			match c {
+				`;` { self.write_to_fixed() }
 				else {
 					self.state = .invalid
 				}
 			}
 		}
 	}
-}
-
-// start_writing transitions the parser to accumulating data.
-fn (mut self Parser) start_writing() {
-	self.writing = true
-	self.buf = []
 }
 
 // buffered returns the currently buffered data as a byte slice.
@@ -605,12 +681,31 @@ pub fn (self &Parser) buffered() []u8 {
 
 // write_byte appends a byte to the buffer.
 pub fn (mut self Parser) write_byte(b u8) {
+	if self.writer == .none {
+		self.state = .invalid
+		return
+	}
+	if self.writer == .fixed && self.buf.len >= max_buf {
+		self.state = .invalid
+		return
+	}
 	self.buf << b
+}
+
+// finish_zero_terminated mirrors parsers that append a sentinel byte before
+// exposing a source sentinel-terminated slice. V strings do not retain that
+// sentinel, but the fixed writer must still have room for it.
+fn (mut self Parser) finish_zero_terminated() ?[]u8 {
+	if self.writer == .none || (self.writer == .fixed && self.buf.len >= max_buf) {
+		self.state = .invalid
+		return none
+	}
+	return self.buf
 }
 
 // end finalizes parsing and returns the command, if any.
 // The optional terminator_ch is the final character in the OSC sequence.
-pub fn (mut self Parser) end(terminator_ch u8) ?Command {
+pub fn (mut self Parser) end(terminator_ch ?u8) ?Command {
 	match self.state {
 		.start, .invalid {
 			return none

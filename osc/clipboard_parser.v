@@ -9,8 +9,8 @@ module osc
 // Format: OSC 52 ; Pc ; Pd ST
 // Pc is a single character clipboard selection (s, c, p, etc.) or empty (defaults to 'c')
 // Pd is the base64-encoded data, "?" for query, or empty to clear.
-fn parse_clipboard_operation(mut parser Parser, terminator_ch u8) ?Command {
-	data := parser.buffered()
+fn parse_clipboard_operation(mut parser Parser, terminator_ch ?u8) ?Command {
+	data := parser.finish_zero_terminated() or { return none }
 	data_str := data.bytestr()
 
 	if data_str.len == 0 {

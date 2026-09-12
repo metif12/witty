@@ -96,7 +96,7 @@ pub mut:
 }
 
 // parse_kitty_color_protocol parses an OSC 21 kitty color protocol command.
-fn parse_kitty_color_protocol(mut parser Parser, terminator_ch u8) ?Command {
+fn parse_kitty_color_protocol(mut parser Parser, terminator_ch ?u8) ?Command {
 	data := parser.buffered()
 	data_str := data.bytestr()
 

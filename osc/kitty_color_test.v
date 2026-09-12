@@ -1,7 +1,7 @@
 module osc
 
 fn test_osc21_kitty_color_protocol() {
-	mut p := Parser.init(unsafe { nil })
+	mut p := Parser.init(voidptr(1))
 	input := '21;foreground=?;background=rgb:f0/f8/ff'
 	for ch in input.bytes() {
 		p.next(ch)
@@ -16,7 +16,7 @@ fn test_osc21_kitty_color_protocol() {
 }
 
 fn test_osc21_kitty_color_no_key() {
-	mut p := Parser.init(unsafe { nil })
+	mut p := Parser.init(voidptr(1))
 	input := '21;'
 	for ch in input.bytes() {
 		p.next(ch)
@@ -26,6 +26,14 @@ fn test_osc21_kitty_color_no_key() {
 		return
 	}
 	assert cmd.cmd_type == .kitty_color_protocol
+}
+
+fn test_osc21_kitty_color_protocol_without_allocator() {
+	mut p := Parser.init(unsafe { nil })
+	for ch in '21;foreground=?'.bytes() {
+		p.next(ch)
+	}
+	assert p.end(0x1b) == none
 }
 
 fn test_kitty_color_kind_parse_palette() {
@@ -63,7 +71,7 @@ fn test_kitty_color_kind_matches_zig_unsigned_parsing() {
 }
 
 fn test_kitty_color_value_only_trims_spaces() {
-	mut p := Parser.init(unsafe { nil })
+	mut p := Parser.init(voidptr(1))
 	for ch in '21;foreground=\t?\t'.bytes() {
 		p.next(ch)
 	}
@@ -78,7 +86,7 @@ fn test_kitty_color_value_only_trims_spaces() {
 // Translated from ghostty "OSC 21: kitty color protocol". Verifies that the
 // parsed item list is attached to the Command and each item matches ghostty.
 fn test_osc21_kitty_color_protocol_items() {
-	mut p := Parser.init(unsafe { nil })
+	mut p := Parser.init(voidptr(1))
 	input := '21;foreground=?;background=rgb:f0/f8/ff;cursor=aliceblue;cursor_text;visual_bell=;selection_foreground=#xxxyyzz;selection_background=?;selection_background=#aabbcc;2=?;3=rgbi:1.0/1.0/1.0'
 	for ch in input.bytes() {
 		p.next(ch)

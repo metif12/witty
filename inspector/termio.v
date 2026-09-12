@@ -65,7 +65,7 @@ mut:
 }
 
 fn VTStream.init() VTStream {
-	mut parser_stream := terminal.Stream.init()
+	mut parser_stream := terminal.Stream.init_alloc(voidptr(1))
 	parser_stream.capture_raw = true
 	mut result := VTStream{
 		events: []VTEvent{cap: 2}

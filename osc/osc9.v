@@ -1,7 +1,7 @@
 module osc
 
 // Parse OSC 9, which could be an iTerm2 notification or a ConEmu extension.
-fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?Command {
+fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 	mut data := parser.buffered()
 
 	if data.len == 0 {
@@ -97,8 +97,9 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?Command {
 					if data[2] != `;` {
 						return make_desktop_notification(mut parser, data)
 					}
-					comment_data := if data.len > 3 {
-						data[3..].bytestr()
+					terminated := parser.finish_zero_terminated() or { return none }
+					comment_data := if terminated.len > 3 {
+						terminated[3..].bytestr()
 					} else {
 						''
 					}
@@ -131,7 +132,8 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?Command {
 			if data[1] != `;` {
 				return make_desktop_notification(mut parser, data)
 			}
-			msg := if data.len > 2 { data[2..].bytestr() } else { '' }
+			terminated := parser.finish_zero_terminated() or { return none }
+			msg := if terminated.len > 2 { terminated[2..].bytestr() } else { '' }
 			parser.command = Command{
 				cmd_type: .conemu_show_message_box
 				str_value: msg
@@ -156,7 +158,8 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?Command {
 				}
 				return parser.command
 			}
-			val := data[2..].bytestr()
+			terminated := parser.finish_zero_terminated() or { return none }
+			val := terminated[2..].bytestr()
 			parser.command = Command{
 				cmd_type: .conemu_change_tab_title
 				tab_title: ConEmuTabTitle{
@@ -245,7 +248,8 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?Command {
 			if data[1] != `;` {
 				return make_desktop_notification(mut parser, data)
 			}
-			val := if data.len > 2 { data[2..].bytestr() } else { '' }
+			terminated := parser.finish_zero_terminated() or { return none }
+			val := if terminated.len > 2 { terminated[2..].bytestr() } else { '' }
 			parser.command = Command{
 				cmd_type: .conemu_guimacro
 				str_value: val
@@ -261,7 +265,8 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?Command {
 			if data[1] != `;` {
 				return make_desktop_notification(mut parser, data)
 			}
-			val := if data.len > 2 { data[2..].bytestr() } else { '' }
+			terminated := parser.finish_zero_terminated() or { return none }
+			val := if terminated.len > 2 { terminated[2..].bytestr() } else { '' }
 			parser.command = Command{
 				cmd_type: .conemu_run_process
 				str_value: val
@@ -277,7 +282,8 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?Command {
 			if data[1] != `;` {
 				return make_desktop_notification(mut parser, data)
 			}
-			val := if data.len > 2 { data[2..].bytestr() } else { '' }
+			terminated := parser.finish_zero_terminated() or { return none }
+			val := if terminated.len > 2 { terminated[2..].bytestr() } else { '' }
 			parser.command = Command{
 				cmd_type: .conemu_output_environment_variable
 				str_value: val
@@ -293,7 +299,8 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?Command {
 			if data[1] != `;` {
 				return make_desktop_notification(mut parser, data)
 			}
-			val := if data.len > 2 { data[2..].bytestr() } else { '' }
+			terminated := parser.finish_zero_terminated() or { return none }
+			val := if terminated.len > 2 { terminated[2..].bytestr() } else { '' }
 			parser.command = Command{
 				cmd_type: .report_pwd
 				str_value: val
@@ -310,7 +317,8 @@ fn parse_osc9(mut parser Parser, terminator_ch ?u8) ?Command {
 
 // make_desktop_notification creates a show_desktop_notification command
 // from the given data. This is the iTerm2 notification fallback.
-fn make_desktop_notification(mut parser Parser, data []u8) Command {
+fn make_desktop_notification(mut parser Parser, _ []u8) ?Command {
+	data := parser.finish_zero_terminated() or { return none }
 	body := data.bytestr()
 	parser.command = Command{
 		cmd_type: .show_desktop_notification

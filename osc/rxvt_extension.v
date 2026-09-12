@@ -6,8 +6,8 @@ module osc
 // a desktop notification with a title and body.
 //
 // Format: OSC 777 ; notify ; title ; body ST
-fn parse_rxvt_extension(mut parser Parser, terminator_ch u8) ?Command {
-	data := parser.buffered()
+fn parse_rxvt_extension(mut parser Parser, terminator_ch ?u8) ?Command {
+	data := parser.finish_zero_terminated() or { return none }
 	data_str := data.bytestr()
 
 	// Find the extension name (before first semicolon)

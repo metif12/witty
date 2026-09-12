@@ -101,8 +101,8 @@ fn (mut self KittyTextSizing) update(key u8, value string) bool {
 }
 
 // parse_kitty_text_sizing parses an OSC 66 command.
-fn parse_kitty_text_sizing(mut parser Parser, terminator_ch u8) ?Command {
-	data := parser.buffered()
+fn parse_kitty_text_sizing(mut parser Parser, terminator_ch ?u8) ?Command {
+	data := parser.finish_zero_terminated() or { return none }
 	data_str := data.bytestr()
 
 	// Find the semicolon separating params from payload

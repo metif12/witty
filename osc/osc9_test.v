@@ -24,6 +24,26 @@ fn test_osc9_show_single_character_desktop_notification() {
 	assert cmd.desktop_notification.body == 'H'
 }
 
+fn test_osc9_notification_exactly_at_buffer_length_has_no_sentinel_space() {
+	mut p := Parser.init(unsafe { nil })
+	for ch in ('9;' + 'a'.repeat(max_buf)).bytes() {
+		p.next(ch)
+	}
+	assert p.end(none) == none
+}
+
+fn test_osc9_non_string_command_does_not_require_sentinel_space() {
+	mut p := Parser.init(unsafe { nil })
+	for ch in ('9;5' + 'a'.repeat(max_buf - 1)).bytes() {
+		p.next(ch)
+	}
+	cmd := p.end(none) or {
+		assert false, 'expected command'
+		return
+	}
+	assert cmd.cmd_type == .conemu_wait_input
+}
+
 fn test_osc9_conemu_sleep() {
 	cmd := parse_osc_input('9;1;420')
 	assert cmd.cmd_type == .conemu_sleep

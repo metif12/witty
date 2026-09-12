@@ -290,7 +290,7 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 	t.surface_mailbox = opts.surface_mailbox
 	t.size = size
 	t.mailbox = Mailbox.init()!
-	t.terminal_stream = terminal.Stream.init()
+	t.terminal_stream = terminal.Stream.init_alloc(voidptr(1))
 	t.backend = backend
 	if opts.full_config != unsafe { nil } && opts.full_config.input.items.len > 0 {
 		t.thread_enter_input = opts.full_config.input.clone_parsed()!.items

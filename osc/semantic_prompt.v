@@ -242,7 +242,7 @@ pub fn read_exit_code(raw string) ?i32 {
 // ============================================================
 
 // parse_osc133 parses a semantic prompt command from the OSC parser buffer.
-pub fn parse_osc133(mut parser Parser, terminator_ch u8) ?Command {
+pub fn parse_osc133(mut parser Parser, terminator_ch ?u8) ?Command {
 	data := parser.buffered()
 	if data.len == 0 {
 		parser.state = .invalid

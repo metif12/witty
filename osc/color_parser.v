@@ -367,7 +367,7 @@ pub:
 }
 
 // parse_color_operation parses OSC color commands (4, 5, 10-19, 104, 110-119).
-fn parse_color_operation(mut parser Parser, terminator_ch u8) ?Command {
+fn parse_color_operation(mut parser Parser, terminator_ch ?u8) ?Command {
 	data := parser.buffered()
 	data_str := data.bytestr()
 

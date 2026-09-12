@@ -8,8 +8,8 @@ module osc
 // If uri is empty, this ends the hyperlink.
 // params is a colon-separated list of key=value pairs.
 // The only recognized key is "id".
-fn parse_hyperlink(mut parser Parser, terminator_ch u8) ?Command {
-	data := parser.buffered()
+fn parse_hyperlink(mut parser Parser, terminator_ch ?u8) ?Command {
+	data := parser.finish_zero_terminated() or { return none }
 	data_str := data.bytestr()
 
 	// Find the semicolon separating params from URI
@@ -29,7 +29,7 @@ fn parse_hyperlink(mut parser Parser, terminator_ch u8) ?Command {
 		for kv in kvs {
 			eq := kv.index_u8(`=`)
 			if eq < 0 {
-				continue
+				break
 			}
 			key := kv[..eq]
 			value := kv[eq + 1..]

@@ -119,7 +119,7 @@ pub mut:
 pub fn ReadonlyStream.init(mut term Terminal) ReadonlyStream {
 	return ReadonlyStream{
 		handler: ReadonlyHandler.init(mut term)
-		stream: Stream.init()
+		stream: Stream.init_alloc(voidptr(1))
 	}
 }
 

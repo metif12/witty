@@ -67,11 +67,40 @@ fn test_osc0_change_window_title_longer_than_buffer() {
 	mut p := Parser.init(unsafe { nil })
 	p.next(`0`)
 	p.next(`;`)
-	// Feed more than max_buf characters
 	for _ in 0 .. max_buf + 2 {
 		p.next(`a`)
 	}
-	// Should still work since we use a dynamic buffer
-	// but contents may be truncated
-	_ = p.end(0)
+	assert p.end(none) == none
+}
+
+fn test_osc0_change_window_title_one_shorter_than_buffer_length() {
+	mut p := Parser.init(unsafe { nil })
+	p.next(`0`)
+	p.next(`;`)
+	for _ in 0 .. max_buf - 1 {
+		p.next(`a`)
+	}
+	cmd := p.end(none) or {
+		assert false, 'expected command'
+		return
+	}
+	assert cmd.cmd_type == .change_window_title
+	assert cmd.str_value == 'a'.repeat(max_buf - 1)
+}
+
+fn test_osc0_change_window_title_exactly_at_buffer_length() {
+	mut p := Parser.init(unsafe { nil })
+	p.next(`0`)
+	p.next(`;`)
+	for _ in 0 .. max_buf {
+		p.next(`a`)
+	}
+	// The source parser reserves one byte for the sentinel terminator.
+	assert p.end(none) == none
+}
+
+fn test_osc_terminator_defaults_to_st_when_final_byte_is_absent() {
+	assert init_terminator(none) == .st
+	assert Terminator.st.string() == '\x1b\\'
+	assert Terminator.bel.string() == '\x07'
 }

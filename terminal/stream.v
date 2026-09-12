@@ -544,6 +544,17 @@ pub fn Stream.init() Stream {
 	}
 }
 
+// init_alloc initializes the source allocation-enabled stream. V manages the
+// payload storage itself, while the non-null token preserves OSC capability
+// selection in the translated parser.
+pub fn Stream.init_alloc(allocator voidptr) Stream {
+	return Stream{
+		parser: VTParser{
+			osc_parser: osc.Parser.init(allocator)
+		}
+	}
+}
+
 // deinit frees resources.
 pub fn (mut self Stream) deinit() {
 	self.parser.deinit()
