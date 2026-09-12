@@ -11,6 +11,8 @@ fn test_pipe_returns_distinct_fds() {
 	assert fds[0] >= 0
 	assert fds[1] >= 0
 	assert fds[0] != fds[1]
+	assert C.fcntl(fds[0], C.F_GETFD, 0) & C.FD_CLOEXEC != 0
+	assert C.fcntl(fds[1], C.F_GETFD, 0) & C.FD_CLOEXEC != 0
 }
 
 fn test_open_command_platform_selection() {
