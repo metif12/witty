@@ -6714,7 +6714,7 @@ fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen WriteSc
 		trim: false
 		background: self.renderer_state.terminal_.colors.background.get()
 		foreground: self.renderer_state.terminal_.colors.foreground.get()
-		palette: self.renderer_state.terminal_.colors.palette.entries[..]
+		palette: self.renderer_state.terminal_.colors.palette.current[..]
 	})
 	formatter.content = terminal.ScreenContent(terminal.ScreenContentSelection{
 		sel: sel.ordered(screen, .forward)
@@ -6864,7 +6864,7 @@ fn (mut self Surface) copy_selection_to_clipboards(sel TermSelection, clipboards
 		codepoint_map: self.config.clipboard_codepoint_map.map.list
 		background: self.renderer_state.terminal_.colors.background.get()
 		foreground: self.renderer_state.terminal_.colors.foreground.get()
-		palette: self.renderer_state.terminal_.colors.palette.entries[..]
+		palette: self.renderer_state.terminal_.colors.palette.current[..]
 	}
 	mut contents := []apprt.ClipboardContent{}
 	if format in [.plain, .mixed] {

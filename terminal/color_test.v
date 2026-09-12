@@ -252,7 +252,7 @@ fn test_dynamic_next() {
 
 fn test_dynamic_palette_init() {
 	p := DynamicPalette.init(default_palette)
-	assert palettes_equal(p.entries, default_palette)
+	assert palettes_equal(p.current, default_palette)
 	assert palettes_equal(p.original, default_palette)
 	assert p.mask_count() == 0
 }
@@ -262,7 +262,7 @@ fn test_dynamic_palette_set() {
 	new_color := RGB{ r: 255, g: 0, b: 0 }
 
 	p.set(0, new_color)
-	assert p.entries[0].eql(new_color)
+	assert p.current[0].eql(new_color)
 	assert p.mask_is_set(0)
 	assert p.mask_count() == 1
 
@@ -278,7 +278,7 @@ fn test_dynamic_palette_reset() {
 	assert p.mask_is_set(0)
 
 	p.reset(0)
-	assert p.entries[0].eql(default_palette[0])
+	assert p.current[0].eql(default_palette[0])
 	assert !p.mask_is_set(0)
 	assert p.mask_count() == 0
 }
@@ -293,7 +293,7 @@ fn test_dynamic_palette_reset_all() {
 	assert p.mask_count() == 3
 
 	p.reset_all()
-	assert palettes_equal(p.entries, default_palette)
+	assert palettes_equal(p.current, default_palette)
 	assert palettes_equal(p.original, default_palette)
 	assert p.mask_count() == 0
 }
@@ -305,7 +305,7 @@ fn test_dynamic_palette_change_default_no_changes() {
 
 	p.change_default(new_palette)
 	assert palettes_equal(p.original, new_palette)
-	assert palettes_equal(p.entries, new_palette)
+	assert palettes_equal(p.current, new_palette)
 	assert p.mask_count() == 0
 }
 
@@ -324,9 +324,9 @@ fn test_dynamic_palette_change_default_preserves_changes() {
 
 	assert palettes_equal(p.original, new_palette)
 	// Index 0 should use the new default (wasn't changed by user)
-	assert p.entries[0].eql(new_palette[0])
+	assert p.current[0].eql(new_palette[0])
 	// Index 5 should keep the custom color (was changed by user)
-	assert p.entries[5].eql(custom_color)
+	assert p.current[5].eql(custom_color)
 	assert p.mask_is_set(5)
 	assert p.mask_count() == 1
 }
@@ -348,10 +348,10 @@ fn test_dynamic_palette_change_default_multiple_changes() {
 	p.change_default(new_palette)
 
 	// Index 0 should use the new default
-	assert p.entries[0].eql(new_palette[0])
+	assert p.current[0].eql(new_palette[0])
 	// Indices 1-3 should keep the custom colors
-	assert p.entries[1].eql(red)
-	assert p.entries[2].eql(green)
-	assert p.entries[3].eql(blue)
+	assert p.current[1].eql(red)
+	assert p.current[2].eql(green)
+	assert p.current[3].eql(blue)
 	assert p.mask_count() == 3
 }

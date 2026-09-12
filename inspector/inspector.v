@@ -236,7 +236,7 @@ pub fn (mut self Inspector) render(context_handle voidptr, surface_info SurfaceI
 
 	open_termio := context.begin_window('Terminal IO')
 	if open_termio {
-		self.vt_stream.draw(context, term.colors.palette.entries)
+		self.vt_stream.draw(context, term.colors.palette.current)
 	}
 	context.end_window()
 

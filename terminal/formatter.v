@@ -930,7 +930,7 @@ pub fn (self TerminalFormatter) format() string {
 		match self.opts.emit {
 			.plain {}
 			.vt {
-				for i, rgb in self.terminal.colors.palette.entries {
+				for i, rgb in self.terminal.colors.palette.current {
 					sb.write_string('\x1b]4;${i};rgb:${hex02(rgb.r)}/${hex02(rgb.g)}/${hex02(rgb.b)}\x1b\\')
 				}
 			}
@@ -938,7 +938,7 @@ pub fn (self TerminalFormatter) format() string {
 			// For HTML, we emit CSS to setup our palette variables.
 			.html {
 				sb.write_string('<style>:root{')
-				for i, rgb in self.terminal.colors.palette.entries {
+				for i, rgb in self.terminal.colors.palette.current {
 					sb.write_string('--vt-palette-${i}: #${hex02(rgb.r)}${hex02(rgb.g)}${hex02(rgb.b)};')
 				}
 				sb.write_string('}</style>')

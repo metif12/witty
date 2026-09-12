@@ -254,14 +254,14 @@ fn test_readonly_osc4_set_and_reset_palette() {
 
 	// Set color 0 to red
 	s.next_slice('\x1b]4;0;rgb:ff/00/00\x1b\\') or { panic(err) }
-	assert t.colors.palette.entries[0].r == 0xff
-	assert t.colors.palette.entries[0].g == 0x00
-	assert t.colors.palette.entries[0].b == 0x00
+	assert t.colors.palette.current[0].r == 0xff
+	assert t.colors.palette.current[0].g == 0x00
+	assert t.colors.palette.current[0].b == 0x00
 	assert t.colors.palette.mask_is_set(0)
 
 	// Reset color 0
 	s.next_slice('\x1b]104;0\x1b\\') or { panic(err) }
-	assert t.colors.palette.entries[0] == default_color_0
+	assert t.colors.palette.current[0] == default_color_0
 	assert !t.colors.palette.mask_is_set(0)
 }
 
@@ -282,9 +282,9 @@ fn test_readonly_osc104_reset_all_palette_colors() {
 
 	// Reset all palette colors
 	s.next_slice('\x1b]104\x1b\\') or { panic(err) }
-	assert t.colors.palette.entries[0] == t.colors.palette.original[0]
-	assert t.colors.palette.entries[1] == t.colors.palette.original[1]
-	assert t.colors.palette.entries[2] == t.colors.palette.original[2]
+	assert t.colors.palette.current[0] == t.colors.palette.original[0]
+	assert t.colors.palette.current[1] == t.colors.palette.original[1]
+	assert t.colors.palette.current[2] == t.colors.palette.original[2]
 	assert !t.colors.palette.mask_is_set(0)
 	assert !t.colors.palette.mask_is_set(1)
 	assert !t.colors.palette.mask_is_set(2)
@@ -359,9 +359,9 @@ fn test_readonly_kitty_color_protocol_set_palette() {
 
 	// Set palette color 5 to magenta using kitty protocol
 	s.next_slice('\x1b]21;5=rgb:ff/00/ff\x1b\\') or { panic(err) }
-	assert t.colors.palette.entries[5].r == 0xff
-	assert t.colors.palette.entries[5].g == 0x00
-	assert t.colors.palette.entries[5].b == 0xff
+	assert t.colors.palette.current[5].r == 0xff
+	assert t.colors.palette.current[5].g == 0x00
+	assert t.colors.palette.current[5].b == 0xff
 	assert t.colors.palette.mask_is_set(5)
 	assert t.flags.dirty.palette
 }
@@ -379,7 +379,7 @@ fn test_readonly_kitty_color_protocol_reset_palette() {
 	assert t.colors.palette.mask_is_set(7)
 
 	s.next_slice('\x1b]21;7=\x1b\\') or { panic(err) }
-	assert t.colors.palette.entries[7] == original
+	assert t.colors.palette.current[7] == original
 	assert !t.colors.palette.mask_is_set(7)
 }
 

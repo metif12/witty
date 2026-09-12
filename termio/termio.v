@@ -255,7 +255,7 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 			} else {
 				terminal.dynamic_rgb_unset
 			}
-			palette: opts.config.palette
+			palette: terminal.DynamicPalette.init(opts.config.palette)
 		}
 	})!
 	term.modes.set(.grapheme_cluster, opts.grapheme_cluster)
@@ -371,7 +371,7 @@ pub mut:
 	cursor_blink            ?bool
 
 	// The default 256-color palette.
-	palette terminal.DynamicPalette = terminal.dynamic_palette_default_val
+	palette [256]terminal.RGB
 
 	// The default foreground/background colors and optional cursor color.
 	foreground   terminal.RGB = terminal.RGB{ r: 0xff, g: 0xff, b: 0xff }
@@ -391,7 +391,7 @@ pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
 		palette[i] = color.to_terminal_rgb()
 	}
 	return DerivedConfig{
-		palette: terminal.DynamicPalette.init(palette)
+		palette: palette
 		foreground: config.foreground.to_terminal_rgb()
 		background: config.background.to_terminal_rgb()
 		cursor_color: if cursor_color := config.cursor_color {
@@ -563,7 +563,7 @@ pub fn (mut t Termio) change_config(config &DerivedConfig) ! {
 	//     process so we don't care or need to know about these.
 
 	// Update the default palette.
-	t.terminal.colors.palette.change_default(config.palette.entries)
+	t.terminal.colors.palette.change_default(config.palette)
 	t.terminal.flags.dirty.palette = true
 
 	// Update all our other colors.

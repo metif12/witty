@@ -76,9 +76,7 @@ fn init_default_palette() [256]RGB {
 pub struct DynamicPalette {
 pub mut:
 	// The current palette including any user modifications.
-	// Named "entries" for backward compatibility with existing code
-	// that accesses palette.entries[i].
-	entries [256]RGB
+	current [256]RGB
 
 	// The original/default palette values.
 	original [256]RGB
@@ -96,7 +94,7 @@ pub const dynamic_palette_default_val = DynamicPalette.init(default_palette)
 // init initializes a dynamic palette with a default palette.
 pub fn DynamicPalette.init(def [256]RGB) DynamicPalette {
 	return DynamicPalette{
-		entries: def
+		current: def
 		original: def
 		mask: [4]u64{}
 	}
@@ -104,20 +102,20 @@ pub fn DynamicPalette.init(def [256]RGB) DynamicPalette {
 
 // set sets a custom color at the given palette index.
 pub fn (mut self DynamicPalette) set(idx u8, color RGB) {
-	self.entries[int(idx)] = color
+	self.current[int(idx)] = color
 	self.mask_set(idx)
 }
 
 // reset resets the color at the given palette index to its original value.
 pub fn (mut self DynamicPalette) reset(idx u8) {
-	self.entries[int(idx)] = self.original[int(idx)]
+	self.current[int(idx)] = self.original[int(idx)]
 	self.mask_unset(idx)
 }
 
 // reset_all resets all colors to their original values.
 pub fn (mut self DynamicPalette) reset_all() {
 	new := DynamicPalette.init(self.original)
-	self.entries = new.entries
+	self.current = new.current
 	self.original = new.original
 	self.mask = new.mask
 }
@@ -128,7 +126,7 @@ pub fn (mut self DynamicPalette) change_default(def [256]RGB) {
 
 	// Fast path: the palette is usually not changed.
 	if self.mask_count() == 0 {
-		self.entries = self.original
+		self.current = self.original
 		return
 	}
 
@@ -137,10 +135,10 @@ pub fn (mut self DynamicPalette) change_default(def [256]RGB) {
 	mut current := self.original
 	for i in 0 .. 256 {
 		if self.mask_is_set(u8(i)) {
-			current[i] = self.entries[i]
+			current[i] = self.current[i]
 		}
 	}
-	self.entries = current
+	self.current = current
 }
 
 // mask_set sets the bit for the given index in the bitmask.
@@ -208,13 +206,13 @@ pub fn (self &DynamicRGB) get() ?RGB {
 	return self.override_color or { return self.default_color }
 }
 
-// set_override sets the override color.
-pub fn (mut self DynamicRGB) set_override(color RGB) {
+// set sets the override color.
+pub fn (mut self DynamicRGB) set(color RGB) {
 	self.override_color = color
 }
 
-// reset_override resets the override to the default color.
-pub fn (mut self DynamicRGB) reset_override() {
+// reset resets the override to the default color.
+pub fn (mut self DynamicRGB) reset() {
 	self.override_color = self.default_color
 }
 

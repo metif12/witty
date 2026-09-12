@@ -74,6 +74,14 @@ fn test_derived_config_converts_only_explicit_cursor_color() {
 	assert unset.cursor_color == none
 }
 
+fn test_derived_config_carries_raw_palette() {
+	mut config := configpkg.Config.default_config()
+	config.palette.value[42] = configpkg.ColorRGB{ r: 0x12, g: 0x34, b: 0x56 }
+
+	derived := DerivedConfig.init(&config)!
+	assert derived.palette[42] == terminal.RGB{ r: 0x12, g: 0x34, b: 0x56 }
+}
+
 fn test_message_write_req_uses_pinned_inline_capacity() {
 	inline_data := 'x'.repeat(38)
 	inline_msg := Message.write_req(inline_data)

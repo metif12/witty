@@ -334,7 +334,7 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 
 	// Colors.
 	self.colors.cursor = t.colors.cursor.get()
-	self.colors.palette = t.colors.palette.entries
+	self.colors.palette = t.colors.palette.current
 	if bg := t.colors.background.get() {
 		if fg := t.colors.foreground.get() {
 			if t.modes.get(.reverse_colors) {

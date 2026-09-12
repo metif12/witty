@@ -650,7 +650,7 @@ fn test_page_vt_palette_option_emits_rgb() {
 
 	resolved := PageFormatter.init(&t.screens.active.pages, FormatOptions{
 		emit: .vt
-		palette: t.colors.palette.entries[..]
+		palette: t.colors.palette.current[..]
 	})
 	assert resolved.format() == '\x1b[0m\x1b[38;2;171;205;239mred\x1b[0m'
 }
@@ -666,7 +666,7 @@ fn test_page_html_palette_option_emits_rgb() {
 
 	resolved := PageFormatter.init(&t.screens.active.pages, FormatOptions{
 		emit: .html
-		palette: t.colors.palette.entries[..]
+		palette: t.colors.palette.current[..]
 	})
 	assert resolved.format() == '<div style="font-family: monospace; white-space: pre;"><div style="display: inline;color: rgb(171, 205, 239);">red</div></div>'
 }
@@ -993,8 +993,8 @@ fn test_terminal_formatter_plain() ! {
 fn test_terminal_formatter_vt_palette() ! {
 	mut t := Terminal.init(Options{ cols: 80, rows: 24 })!
 	// Modify a palette color
-	t.colors.palette.entries[0] = RGB{ r: 0x12, g: 0x34, b: 0x56 }
-	t.colors.palette.entries[1] = RGB{ r: 0xab, g: 0xcd, b: 0xef }
+	t.colors.palette.current[0] = RGB{ r: 0x12, g: 0x34, b: 0x56 }
+	t.colors.palette.current[1] = RGB{ r: 0xab, g: 0xcd, b: 0xef }
 
 	for i, ch in 'test'.runes() {
 		idx := t.screens.primary.pages.active_start
@@ -1017,9 +1017,9 @@ fn test_terminal_formatter_vt_palette() ! {
 
 fn test_terminal_formatter_html_palette() ! {
 	mut t := Terminal.init(Options{ cols: 80, rows: 24 })!
-	t.colors.palette.entries[0] = RGB{ r: 0x12, g: 0x34, b: 0x56 }
-	t.colors.palette.entries[1] = RGB{ r: 0xab, g: 0xcd, b: 0xef }
-	t.colors.palette.entries[255] = RGB{ r: 0xff, g: 0x00, b: 0xff }
+	t.colors.palette.current[0] = RGB{ r: 0x12, g: 0x34, b: 0x56 }
+	t.colors.palette.current[1] = RGB{ r: 0xab, g: 0xcd, b: 0xef }
+	t.colors.palette.current[255] = RGB{ r: 0xff, g: 0x00, b: 0xff }
 
 	for i, ch in 'test'.runes() {
 		idx := t.screens.primary.pages.active_start

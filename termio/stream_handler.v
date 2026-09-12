@@ -1597,7 +1597,7 @@ fn (mut self StreamHandler) color_operation(op osc.ColorOperation, requests []os
 						idx := request.target.index
 						self.terminal.flags.dirty.palette = true
 						self.terminal.colors.palette.reset(idx)
-						self.notify_color_change(request.target, self.terminal.colors.palette.entries[int(idx)])
+						self.notify_color_change(request.target, self.terminal.colors.palette.current[int(idx)])
 					}
 					osc.ColorTargetDynamic {
 						self.reset_dynamic_color(request.target.color, request.target)
@@ -1613,7 +1613,7 @@ fn (mut self StreamHandler) color_operation(op osc.ColorOperation, requests []os
 						self.terminal.colors.palette.reset(idx)
 						self.notify_color_change(osc.ColorTarget(osc.ColorTargetPalette{
 							index: idx
-						}), self.terminal.colors.palette.entries[i])
+						}), self.terminal.colors.palette.current[i])
 					}
 				}
 			}
@@ -1641,9 +1641,9 @@ fn terminal_rgb(color osc.RGB) terminal.RGB {
 
 fn (mut self StreamHandler) set_dynamic_color(dynamic osc.DynamicColor, color terminal.RGB) {
 	match dynamic {
-		.foreground { self.terminal.colors.foreground.set_override(color) }
-		.background { self.terminal.colors.background.set_override(color) }
-		.cursor { self.terminal.colors.cursor.set_override(color) }
+		.foreground { self.terminal.colors.foreground.set(color) }
+		.background { self.terminal.colors.background.set(color) }
+		.cursor { self.terminal.colors.cursor.set(color) }
 		else {}
 	}
 }
@@ -1651,19 +1651,19 @@ fn (mut self StreamHandler) set_dynamic_color(dynamic osc.DynamicColor, color te
 fn (mut self StreamHandler) reset_dynamic_color(dynamic osc.DynamicColor, target osc.ColorTarget) {
 	match dynamic {
 		.foreground {
-			self.terminal.colors.foreground.reset_override()
+			self.terminal.colors.foreground.reset()
 			if color := self.terminal.colors.foreground.default_color {
 				self.notify_color_change(target, color)
 			}
 		}
 		.background {
-			self.terminal.colors.background.reset_override()
+			self.terminal.colors.background.reset()
 			if color := self.terminal.colors.background.default_color {
 				self.notify_color_change(target, color)
 			}
 		}
 		.cursor {
-			self.terminal.colors.cursor.reset_override()
+			self.terminal.colors.cursor.reset()
 			if color := self.terminal.colors.cursor.default_color {
 				self.notify_color_change(target, color)
 			}
@@ -1680,7 +1680,7 @@ fn (self &StreamHandler) color_query_response(target osc.ColorTarget, terminator
 	color := match target {
 		osc.ColorTargetPalette {
 			prefix = '\x1b]4;${target.index};rgb:'
-			self.terminal.colors.palette.entries[int(target.index)]
+			self.terminal.colors.palette.current[int(target.index)]
 		}
 		osc.ColorTargetDynamic {
 			prefix = '\x1b]${dynamic_color_osc_number(target.color)};rgb:'
@@ -1801,7 +1801,7 @@ fn kitty_color_supported(key osc.KittyColorKind) bool {
 
 fn (self &StreamHandler) kitty_color_get(key osc.KittyColorKind) ?terminal.RGB {
 	return match key.kind {
-		.palette { self.terminal.colors.palette.entries[int(key.palette)] }
+		.palette { self.terminal.colors.palette.current[int(key.palette)] }
 		.special {
 			match key.special {
 				.foreground { self.terminal.colors.foreground.get() }
@@ -1821,9 +1821,9 @@ fn (mut self StreamHandler) kitty_color_set(key osc.KittyColorKind, color termin
 		}
 		.special {
 			match key.special {
-				.foreground { self.terminal.colors.foreground.set_override(color) }
-				.background { self.terminal.colors.background.set_override(color) }
-				.cursor { self.terminal.colors.cursor.set_override(color) }
+				.foreground { self.terminal.colors.foreground.set(color) }
+				.background { self.terminal.colors.background.set(color) }
+				.cursor { self.terminal.colors.cursor.set(color) }
 				else {}
 			}
 		}
@@ -1838,9 +1838,9 @@ fn (mut self StreamHandler) kitty_color_reset(key osc.KittyColorKind) {
 		}
 		.special {
 			match key.special {
-				.foreground { self.terminal.colors.foreground.reset_override() }
-				.background { self.terminal.colors.background.reset_override() }
-				.cursor { self.terminal.colors.cursor.reset_override() }
+				.foreground { self.terminal.colors.foreground.reset() }
+				.background { self.terminal.colors.background.reset() }
+				.cursor { self.terminal.colors.cursor.reset() }
 				else {}
 			}
 		}

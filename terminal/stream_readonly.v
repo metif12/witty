@@ -496,18 +496,18 @@ fn (mut self ReadonlyHandler) color_operation(op osc.ColorOperation, requests []
 
 fn (mut self ReadonlyHandler) readonly_dynamic_set(dynamic osc.DynamicColor, color RGB) {
 	match dynamic {
-		.foreground { self.terminal.colors.foreground.set_override(color) }
-		.background { self.terminal.colors.background.set_override(color) }
-		.cursor { self.terminal.colors.cursor.set_override(color) }
+		.foreground { self.terminal.colors.foreground.set(color) }
+		.background { self.terminal.colors.background.set(color) }
+		.cursor { self.terminal.colors.cursor.set(color) }
 		else {}
 	}
 }
 
 fn (mut self ReadonlyHandler) readonly_dynamic_reset(dynamic osc.DynamicColor) {
 	match dynamic {
-		.foreground { self.terminal.colors.foreground.reset_override() }
-		.background { self.terminal.colors.background.reset_override() }
-		.cursor { self.terminal.colors.cursor.reset_override() }
+		.foreground { self.terminal.colors.foreground.reset() }
+		.background { self.terminal.colors.background.reset() }
+		.cursor { self.terminal.colors.cursor.reset() }
 		else {}
 	}
 }
@@ -545,17 +545,17 @@ fn (mut self ReadonlyHandler) readonly_kitty_special(item osc.KittyColorItem) {
 			b: item.color.b
 		}
 		match item.key.special {
-			.foreground { self.terminal.colors.foreground.set_override(color) }
-			.background { self.terminal.colors.background.set_override(color) }
-			.cursor { self.terminal.colors.cursor.set_override(color) }
+			.foreground { self.terminal.colors.foreground.set(color) }
+			.background { self.terminal.colors.background.set(color) }
+			.cursor { self.terminal.colors.cursor.set(color) }
 			else {}
 		}
 		return
 	}
 	match item.key.special {
-		.foreground { self.terminal.colors.foreground.reset_override() }
-		.background { self.terminal.colors.background.reset_override() }
-		.cursor { self.terminal.colors.cursor.reset_override() }
+		.foreground { self.terminal.colors.foreground.reset() }
+		.background { self.terminal.colors.background.reset() }
+		.cursor { self.terminal.colors.cursor.reset() }
 		else {}
 	}
 }

@@ -82,7 +82,7 @@ fn (mut self TerminalInfo) draw(context cimgui.Context, open bool, mut term term
 		visible, palette_open := context.begin_window_open('256-Color Palette', self.show_palette)
 		self.show_palette = palette_open
 		if visible {
-			draw_terminal_palette(context, 'palette', term.colors.palette.entries)
+			draw_terminal_palette(context, 'palette', term.colors.palette.current)
 		}
 		context.end_window()
 	}
@@ -136,7 +136,7 @@ fn (mut self TerminalInfo) draw_screen_window(context cimgui.Context, key termin
 	context.set_next_window_size_max(400, 300)
 	visible, still_open := context.begin_window_open('Screen: ${key}', true)
 	mut info := self.screens[key]
-	info.draw(context, visible, mut screen, key, term.screens.active_key, term.flags.modify_other_keys_2, term.colors.palette.entries)
+	info.draw(context, visible, mut screen, key, term.screens.active_key, term.flags.modify_other_keys_2, term.colors.palette.current)
 	context.end_window()
 	if still_open {
 		self.screens[key] = info
