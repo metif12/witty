@@ -7,9 +7,7 @@ fn test_metal_buffer_sync_writes_native_buffer() {
 	defer {
 		api.deinit()
 	}
-	mut buffer := MetalBuffer.init(MetalBufferOptions{
-		device: api.device
-	}, 2)!
+	mut buffer := MetalBuffer.init(api.buffer_options(), 2)!
 	defer {
 		buffer.deinit()
 	}
@@ -26,13 +24,8 @@ fn test_metal_texture_initial_upload_and_replace_region() ! {
 	defer {
 		api.deinit()
 	}
-	mut texture := MetalTexture.init(MetalTextureOptions{
-		device: api.device
-		pixel_format: .r8unorm
-		usage: MetalTextureUsage{
-			shader_read: true
-		}
-	}, 4, 4, [u8(0), 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])!
+	mut texture := MetalTexture.init(api.image_texture_options(.gray, false), 4, 4,
+		[u8(0), 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])!
 	defer {
 		texture.deinit()
 	}
@@ -52,9 +45,7 @@ fn test_metal_buffer_init_fill_copies_data() {
 	defer {
 		api.deinit()
 	}
-	mut buffer := MetalBuffer.init_fill(MetalBufferOptions{
-		device: api.device
-	}, [u8(5), 6, 7])!
+	mut buffer := MetalBuffer.init_fill(api.buffer_options(), [u8(5), 6, 7])!
 	defer {
 		buffer.deinit()
 	}
@@ -72,9 +63,7 @@ fn test_metal_buffer_sync_within_capacity_leaves_tail() {
 	defer {
 		api.deinit()
 	}
-	mut buffer := MetalBuffer.init_fill(MetalBufferOptions{
-		device: api.device
-	}, [u8(0), 0, 0, 0])!
+	mut buffer := MetalBuffer.init_fill(api.buffer_options(), [u8(0), 0, 0, 0])!
 	defer {
 		buffer.deinit()
 	}
@@ -97,20 +86,14 @@ fn test_metal_texture_bpp_for_pixel_formats() {
 		api.deinit()
 	}
 	// r8unorm is 1 byte per pixel: a 2x2 texture is 4 bytes.
-	mut gray := MetalTexture.init(MetalTextureOptions{
-		device: api.device
-		pixel_format: .r8unorm
-	}, 2, 2, none)!
+	mut gray := MetalTexture.init(api.image_texture_options(.gray, false), 2, 2, none)!
 	defer {
 		gray.deinit()
 	}
 	assert gray.bpp == 1
 
 	// bgra8unorm is 4 bytes per pixel: a 2x2 texture is 16 bytes.
-	mut color := MetalTexture.init(MetalTextureOptions{
-		device: api.device
-		pixel_format: .bgra8unorm
-	}, 2, 2, none)!
+	mut color := MetalTexture.init(api.image_texture_options(.bgra, false), 2, 2, none)!
 	defer {
 		color.deinit()
 	}
@@ -123,10 +106,8 @@ fn test_metal_texture_replace_region_respects_bpp() {
 		api.deinit()
 	}
 	// 2x2 bgra8unorm texture (4 bytes per pixel, row stride = 8 bytes).
-	mut texture := MetalTexture.init(MetalTextureOptions{
-		device: api.device
-		pixel_format: .bgra8unorm
-	}, 2, 2, []u8{len: 16})!
+	mut texture := MetalTexture.init(api.image_texture_options(.bgra, false), 2, 2,
+		[]u8{len: 16})!
 	defer {
 		texture.deinit()
 	}
@@ -220,10 +201,7 @@ fn test_metal_builtin_shader_pipelines_compile() ! {
 	defer {
 		target.deinit()
 	}
-	mut uniforms := MetalBuffer.init_fill(MetalBufferOptions{
-		device: api.device
-		storage_mode: api.default_storage_mode
-	}, []u8{len: int($sizeof(Uniforms))})!
+	mut uniforms := MetalBuffer.init_fill(api.buffer_options(), []u8{len: int($sizeof(Uniforms))})!
 	defer {
 		uniforms.deinit()
 	}

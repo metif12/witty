@@ -418,7 +418,8 @@ static inline void* witty_metal_new_iosurface_texture(
 	unsigned long long pixel_format,
 	size_t width,
 	size_t height,
-	unsigned long long resource_options
+	unsigned long long resource_options,
+	unsigned long long usage
 ) {
 	if (!device || !surface || width == 0 || height == 0) return NULL;
 	Class cls = objc_getClass("MTLTextureDescriptor");
@@ -429,7 +430,7 @@ static inline void* witty_metal_new_iosurface_texture(
 	((void (*)(void*, SEL, unsigned long))objc_msgSend)(desc, sel_registerName("setWidth:"), (unsigned long)width);
 	((void (*)(void*, SEL, unsigned long))objc_msgSend)(desc, sel_registerName("setHeight:"), (unsigned long)height);
 	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(desc, sel_registerName("setPixelFormat:"), pixel_format);
-	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(desc, sel_registerName("setUsage:"), 4ull);
+	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(desc, sel_registerName("setUsage:"), usage);
 	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(desc, sel_registerName("setResourceOptions:"), resource_options);
 	void* texture = ((void* (*)(void*, SEL, void*, void*, unsigned long))objc_msgSend)(device, sel_registerName("newTextureWithDescriptor:iosurface:plane:"), desc, surface, 0);
 	((void (*)(void*, SEL))objc_msgSend)(desc, sel_registerName("release"));

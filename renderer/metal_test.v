@@ -23,8 +23,27 @@ fn test_metal_api_enum_values_match_native_contracts() {
 
 	assert u64(MetalCPUCacheMode.write_combined) == 1
 	assert u64(MetalStorageMode.managed) == 1
-	assert metal_resource_options(.write_combined, .managed) == 0x11
-	assert metal_resource_options(.default, .private) == 0x20
+	assert sizeof(MetalResourceOptions) == sizeof(u64)
+	managed := MetalResourceOptions.init(.write_combined, .managed, .default)
+	assert managed.int_val() == 0x11
+	assert managed.cpu_cache_mode() == .write_combined
+	assert managed.storage_mode() == .managed
+	assert managed.hazard_tracking_mode() == .default
+	tracked := MetalResourceOptions.init(.default, .private, .tracked)
+	assert tracked.int_val() == 0x220
+	assert tracked.storage_mode() == .private
+	assert tracked.hazard_tracking_mode() == .tracked
+	assert MetalResourceOptions.from_int(0xffff_ffff_ffff_ffff).int_val() == 0xffff_ffff_ffff_ffff
+
+	assert sizeof(MetalTextureUsage) == sizeof(u64)
+	usage := MetalTextureUsage.from_int(0x37)
+	assert usage.int_val() == 0x37
+	assert usage.shader_read()
+	assert usage.shader_write()
+	assert usage.render_target()
+	assert usage.pixel_format_view()
+	assert usage.shader_atomic()
+	assert MetalTextureUsage.from_int(0xffff_ffff_ffff_ffff).int_val() == 0xffff_ffff_ffff_ffff
 }
 
 fn test_clamped_metal_surface_dimension() {

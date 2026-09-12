@@ -29,15 +29,7 @@ pub struct MetalBufferOptions {
 pub:
 	// MTLDevice used to allocate this buffer.
 	device voidptr = unsafe { nil }
-	// CPU cache mode (write_combined for write-only from CPU).
-	cpu_cache_mode MetalCPUCacheMode = .write_combined
-	// Storage mode.
-	storage_mode MetalStorageMode = .shared
-}
-
-pub enum MetalCPUCacheMode as u8 {
-	default        = 0
-	write_combined = 1
+	resource_options MetalResourceOptions
 }
 
 // Initialize a buffer with the given length pre-allocated.
@@ -45,7 +37,7 @@ pub fn MetalBuffer.init(opts MetalBufferOptions, len u32) !MetalBuffer {
 	if opts.device == unsafe { nil } {
 		return error('Metal buffer requires a device')
 	}
-	handle := macos.metal_new_buffer_length(opts.device, usize(len), opts.resource_options())
+	handle := macos.metal_new_buffer_length(opts.device, usize(len), opts.resource_options.int_val())
 	if handle == unsafe { nil } {
 		return error('Metal buffer allocation failed')
 	}
@@ -64,7 +56,7 @@ pub fn MetalBuffer.init_fill(opts MetalBufferOptions, data []u8) !MetalBuffer {
 	if opts.device == unsafe { nil } {
 		return error('Metal buffer requires a device')
 	}
-	handle := macos.metal_new_buffer_bytes(opts.device, data, opts.resource_options())
+	handle := macos.metal_new_buffer_bytes(opts.device, data, opts.resource_options.int_val())
 	if handle == unsafe { nil } {
 		return error('Metal buffer allocation failed')
 	}
@@ -80,7 +72,7 @@ pub fn MetalBuffer.init_value[T](opts MetalBufferOptions, value &T) !MetalBuffer
 		return error('Metal buffer requires a device')
 	}
 	length := usize($sizeof(T))
-	handle := macos.metal_new_buffer_raw(opts.device, voidptr(value), length, opts.resource_options())
+	handle := macos.metal_new_buffer_raw(opts.device, voidptr(value), length, opts.resource_options.int_val())
 	if handle == unsafe { nil } {
 		return error('Metal buffer allocation failed')
 	}
@@ -122,7 +114,7 @@ fn (mut self MetalBuffer) sync_raw(data voidptr, req_bytes usize) ! {
 	if req_bytes > available_bytes {
 		macos.metal_release(self.handle)
 		new_len := req_bytes * 2
-		self.handle = macos.metal_new_buffer_length(self.opts.device, new_len, self.opts.resource_options())
+		self.handle = macos.metal_new_buffer_length(self.opts.device, new_len, self.opts.resource_options.int_val())
 		if self.handle == unsafe { nil } {
 			self.len = 0
 			return error('Metal buffer reallocation failed')
@@ -137,13 +129,9 @@ fn (mut self MetalBuffer) sync_raw(data voidptr, req_bytes usize) ! {
 		return error('Metal buffer contents pointer is null')
 	}
 	unsafe { vmemcpy(dst, data, int(req_bytes)) }
-	if self.opts.storage_mode == .managed {
+	if self.opts.resource_options.storage_mode() == .managed {
 		macos.metal_buffer_did_modify(self.handle, req_bytes)
 	}
-}
-
-fn (opts MetalBufferOptions) resource_options() u64 {
-	return u64(opts.cpu_cache_mode) | (u64(opts.storage_mode) << 4)
 }
 
 fn metal_command_buffer_status(raw u64) MetalCommandBufferStatus {
@@ -433,7 +421,9 @@ pub fn MetalTarget.init(opts MetalTargetOptions) !MetalTarget {
 		bytes_per_element: 4
 		colorspace: colorspace
 	})!
-	texture := macos.metal_new_iosurface_texture(opts.device, voidptr(surface), u64(opts.pixel_format), usize(opts.width), usize(opts.height), metal_resource_options(.write_combined, opts.storage_mode))
+	resource_options := MetalResourceOptions.init(.write_combined, opts.storage_mode, .default)
+	usage := MetalTextureUsage.from_int(0x04)
+	texture := macos.metal_new_iosurface_texture(opts.device, voidptr(surface), u64(opts.pixel_format), usize(opts.width), usize(opts.height), resource_options.int_val(), usage.int_val())
 	if texture == unsafe { nil } {
 		surface.deinit()
 		return error('Metal target texture allocation failed')
@@ -478,7 +468,7 @@ pub struct MetalTextureOptions {
 pub:
 	device       voidptr = unsafe { nil }
 	pixel_format MetalPixelFormat = .bgra8unorm
-	storage_mode MetalStorageMode = .shared
+	resource_options MetalResourceOptions
 	usage        MetalTextureUsage
 }
 
@@ -492,7 +482,7 @@ pub fn MetalTexture.init(opts MetalTextureOptions, width u32, height u32, data ?
 		return error('Metal texture dimensions must be non-zero')
 	}
 	bpp := bpp_of(opts.pixel_format)
-	handle := macos.metal_new_texture(opts.device, u64(opts.pixel_format), usize(width), usize(height), metal_resource_options(.default, opts.storage_mode), metal_texture_usage_value(opts.usage))
+	handle := macos.metal_new_texture(opts.device, u64(opts.pixel_format), usize(width), usize(height), opts.resource_options.int_val(), opts.usage.int_val())
 	if handle == unsafe { nil } {
 		return error('Metal texture allocation failed')
 	}
@@ -555,21 +545,6 @@ pub fn (mut self MetalTexture) replace_region(x u32, y u32, width u32, height u3
 		return
 	}
 	macos.metal_texture_replace_region(self.handle, usize(x), usize(y), usize(width), usize(height), data, usize(width * self.bpp))
-}
-
-fn metal_resource_options(cache MetalCPUCacheMode, storage MetalStorageMode) u64 {
-	return u64(cache) | (u64(storage) << 4)
-}
-
-fn metal_texture_usage_value(usage MetalTextureUsage) u64 {
-	mut value := u64(0)
-	if usage.shader_read {
-		value |= 1
-	}
-	if usage.render_target {
-		value |= 4
-	}
-	return value
 }
 
 // ============================================================

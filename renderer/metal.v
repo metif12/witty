@@ -41,6 +41,52 @@ pub enum MetalStorageMode as u8 {
 	memoryless = 3
 }
 
+// CPU cache mode for Metal resources.
+pub enum MetalCPUCacheMode as u8 {
+	default        = 0
+	write_combined = 1
+}
+
+// Hazard tracking mode for Metal resources.
+pub enum MetalHazardTrackingMode as u8 {
+	default   = 0
+	untracked = 1
+	tracked   = 2
+}
+
+// MetalResourceOptions retains the native c_ulong packed layout.
+pub struct MetalResourceOptions {
+	value u64
+}
+
+pub fn MetalResourceOptions.init(cache MetalCPUCacheMode, storage MetalStorageMode, hazard MetalHazardTrackingMode) MetalResourceOptions {
+	return MetalResourceOptions{
+		value: u64(cache) | (u64(storage) << 4) | (u64(hazard) << 8)
+	}
+}
+
+pub fn MetalResourceOptions.from_int(value u64) MetalResourceOptions {
+	return MetalResourceOptions{
+		value: value
+	}
+}
+
+pub fn (opts MetalResourceOptions) int_val() u64 {
+	return opts.value
+}
+
+pub fn (opts MetalResourceOptions) cpu_cache_mode() MetalCPUCacheMode {
+	return unsafe { MetalCPUCacheMode(opts.value & 0xf) }
+}
+
+pub fn (opts MetalResourceOptions) storage_mode() MetalStorageMode {
+	return unsafe { MetalStorageMode((opts.value >> 4) & 0xf) }
+}
+
+pub fn (opts MetalResourceOptions) hazard_tracking_mode() MetalHazardTrackingMode {
+	return unsafe { MetalHazardTrackingMode((opts.value >> 8) & 0x3) }
+}
+
 // Blending mode (re-export from configpkg for convenience).
 pub enum AlphaBlendingMode {
 	none_
@@ -150,8 +196,8 @@ pub fn (self &MetalAPI) create_command_buffer() voidptr {
 pub fn (self &MetalAPI) buffer_options() MetalBufferOptions {
 	return MetalBufferOptions{
 		device: self.device
-		cpu_cache_mode: .write_combined
-		storage_mode: self.default_storage_mode
+		resource_options: MetalResourceOptions.init(.write_combined, self.default_storage_mode,
+			.default)
 	}
 }
 
@@ -171,10 +217,9 @@ pub fn (self &MetalAPI) image_texture_options(format PixelFormat, srgb bool) Met
 	return MetalTextureOptions{
 		device: self.device
 		pixel_format: pixel_format
-		storage_mode: self.default_storage_mode
-		usage: MetalTextureUsage{
-			shader_read: true
-		}
+		resource_options: MetalResourceOptions.init(.write_combined, self.default_storage_mode,
+			.default)
+		usage: MetalTextureUsage.from_int(0x01)
 	}
 }
 
@@ -184,11 +229,9 @@ pub fn (self &MetalAPI) custom_shader_texture_options() MetalTextureOptions {
 	return MetalTextureOptions{
 		device: self.device
 		pixel_format: self.target_pixel_format()
-		storage_mode: self.default_storage_mode
-		usage: MetalTextureUsage{
-			shader_read: true
-			render_target: true
-		}
+		resource_options: MetalResourceOptions.init(.write_combined, self.default_storage_mode,
+			.default)
+		usage: MetalTextureUsage.from_int(0x05)
 	}
 }
 
@@ -347,11 +390,39 @@ pub enum MetalBlendOperation as u64 {
 	max              = 4
 }
 
-// Metal texture usage.
+// Metal texture usage, retained in the native c_ulong packed layout.
 pub struct MetalTextureUsage {
-pub mut:
-	shader_read   bool
-	render_target bool
+	value u64
+}
+
+pub fn MetalTextureUsage.from_int(value u64) MetalTextureUsage {
+	return MetalTextureUsage{
+		value: value
+	}
+}
+
+pub fn (usage MetalTextureUsage) int_val() u64 {
+	return usage.value
+}
+
+pub fn (usage MetalTextureUsage) shader_read() bool {
+	return usage.value & 0x01 != 0
+}
+
+pub fn (usage MetalTextureUsage) shader_write() bool {
+	return usage.value & 0x02 != 0
+}
+
+pub fn (usage MetalTextureUsage) render_target() bool {
+	return usage.value & 0x04 != 0
+}
+
+pub fn (usage MetalTextureUsage) pixel_format_view() bool {
+	return usage.value & 0x10 != 0
+}
+
+pub fn (usage MetalTextureUsage) shader_atomic() bool {
+	return usage.value & 0x20 != 0
 }
 
 // Metal sampler filter.

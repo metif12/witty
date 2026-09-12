@@ -229,7 +229,7 @@ fn C.witty_metal_encoder_draw(encoder voidptr, primitive u64, vertex_count usize
 
 fn C.witty_metal_new_sampler(device voidptr, min_filter u64, mag_filter u64, s_address_mode u64, t_address_mode u64) voidptr
 
-fn C.witty_metal_new_iosurface_texture(device voidptr, surface voidptr, pixel_format u64, width usize, height usize, resource_options u64) voidptr
+fn C.witty_metal_new_iosurface_texture(device voidptr, surface voidptr, pixel_format u64, width usize, height usize, resource_options u64, usage u64) voidptr
 
 fn C.witty_metal_new_library_source(device voidptr, source &char, length usize) voidptr
 
@@ -2196,8 +2196,8 @@ pub fn metal_new_sampler(device voidptr, min_filter u64, mag_filter u64, s_addre
 	return C.witty_metal_new_sampler(device, min_filter, mag_filter, s_address_mode, t_address_mode)
 }
 
-pub fn metal_new_iosurface_texture(device voidptr, surface voidptr, pixel_format u64, width usize, height usize, resource_options u64) voidptr {
-	return C.witty_metal_new_iosurface_texture(device, surface, pixel_format, width, height, resource_options)
+pub fn metal_new_iosurface_texture(device voidptr, surface voidptr, pixel_format u64, width usize, height usize, resource_options u64, usage u64) voidptr {
+	return C.witty_metal_new_iosurface_texture(device, surface, pixel_format, width, height, resource_options, usage)
 }
 
 pub fn metal_new_library_source(device voidptr, source string) voidptr {
