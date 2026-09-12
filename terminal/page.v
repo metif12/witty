@@ -1085,6 +1085,10 @@ fn page_ceil_power_of_two(value usize) usize {
 }
 
 fn page_set_layout(cap usize, item_size usize, item_alignment usize) PageSetLayout {
+	// RefCountedSet.Layout.init asserts this because the u16 ID must address
+	// every table bucket. This helper is the page-backed form of that layout.
+	assert cap <= 65536
+
 	if cap == 0 {
 		return PageSetLayout{}
 	}

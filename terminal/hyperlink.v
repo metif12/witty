@@ -271,6 +271,7 @@ pub fn (mut self HyperlinkSet) add(link Hyperlink) !u32 {
 
 	id := self.insert(entry, self.next_id)
 	self.entries[int(id)].ref_count++
+	assert self.entries[int(id)].ref_count == 1
 	self.living++
 	if id == self.next_id {
 		self.next_id++
@@ -354,9 +355,8 @@ pub fn (self &HyperlinkSet) get(id u32) Hyperlink {
 }
 
 pub fn (self &HyperlinkSet) ref_count(id u32) int {
-	if id == 0 || int(id) >= self.entries.len {
-		return 0
-	}
+	assert id > 0
+	assert int(id) < self.entries.len
 	return self.entries[int(id)].ref_count
 }
 
@@ -467,6 +467,10 @@ fn (mut self HyperlinkSet) upsert(entry HyperlinkSetEntry, new_id u16) u16 {
 }
 
 fn (mut self HyperlinkSet) insert(entry HyperlinkSetEntry, new_id u16) u16 {
+	$if !prod {
+		assert self.lookup(&entry.link) == none
+	}
+
 	hash := HyperlinkPageEntry.from_hyperlink(&entry.link).hash()
 	mut held_id := new_id
 	mut held_psl := u16(0)
@@ -485,6 +489,7 @@ fn (mut self HyperlinkSet) insert(entry HyperlinkSetEntry, new_id u16) u16 {
 				new_psl = held_psl
 			} else {
 				self.entries[int(held_id)].bucket = p
+				self.entries[int(held_id)].psl = held_psl
 			}
 			self.psl_stats[int(held_psl)]++
 			if held_psl > self.max_psl {
@@ -509,6 +514,7 @@ fn (mut self HyperlinkSet) insert(entry HyperlinkSetEntry, new_id u16) u16 {
 				new_psl = held_psl
 			} else {
 				self.entries[int(held_id)].bucket = p
+				self.entries[int(held_id)].psl = held_psl
 			}
 			self.psl_stats[int(held_psl)]++
 			if held_psl > self.max_psl {
@@ -524,6 +530,7 @@ fn (mut self HyperlinkSet) insert(entry HyperlinkSetEntry, new_id u16) u16 {
 				new_psl = held_psl
 			} else {
 				self.entries[int(held_id)].bucket = p
+				self.entries[int(held_id)].psl = held_psl
 			}
 			self.psl_stats[int(held_psl)]++
 			if held_psl > self.max_psl {

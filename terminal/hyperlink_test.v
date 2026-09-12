@@ -183,3 +183,38 @@ fn test_hyperlink_set_add_with_id_deduplicates_before_reusing_slot() {
 	// when upsert selects an already-live semantic duplicate.
 	assert set.count() == 2
 }
+
+fn test_hyperlink_set_robin_hood_displacement_updates_stored_psl() {
+	mut set := HyperlinkSet.init()
+	mut links_by_bucket := [][]Hyperlink{len: int(set.layout.table_cap)}
+	for offset in 0 .. 256 {
+		link := implicit_link(u32(offset), 'https://collision.example/${offset}')
+		entry := HyperlinkPageEntry.from_hyperlink(&link)
+		bucket := int(entry.hash() & u64(set.layout.table_mask))
+		links_by_bucket[bucket] << link
+	}
+
+	mut start_bucket := -1
+	for bucket in 0 .. int(set.layout.table_cap) {
+		next_bucket := (bucket + 1) & int(set.layout.table_mask)
+		if links_by_bucket[bucket].len >= 2 && links_by_bucket[next_bucket].len >= 1 {
+			start_bucket = bucket
+			break
+		}
+	}
+	assert start_bucket >= 0
+
+	next_bucket := (start_bucket + 1) & int(set.layout.table_mask)
+	first := links_by_bucket[start_bucket][0]
+	displaced := links_by_bucket[next_bucket][0]
+	colliding := links_by_bucket[start_bucket][1]
+
+	first_id := set.add(first)!
+	displaced_id := set.add(displaced)!
+	colliding_id := set.add(colliding)!
+
+	assert set.lookup(&first) or { panic('first hyperlink missing') } == first_id
+	assert set.lookup(&colliding) or { panic('colliding hyperlink missing') } == colliding_id
+	assert set.entries[int(displaced_id)].psl == 1
+	assert set.lookup(&displaced) or { panic('displaced hyperlink missing') } == displaced_id
+}

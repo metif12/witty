@@ -35,6 +35,14 @@ fn test_rcs_layout_small() {
 	assert l.total_size > 0
 }
 
+fn test_rcs_layout_matches_ghostty_style_set_item_layout() {
+	l := RefCountedSetLayout.init(16)
+	assert l.table_cap == 16
+	assert l.cap == 13
+	assert l.items_start == 32
+	assert l.total_size == 500
+}
+
 // Test creating an empty set.
 fn test_rcs_init_empty() {
 	l := RefCountedSetLayout.init(16)
@@ -322,4 +330,46 @@ fn test_rcs_add_with_id_falls_back_when_requested_slot_is_live() {
 	assert second != first
 	assert set.lookup(second_style) or { panic('second style missing') } == second
 	assert set.count() == 2
+}
+
+// Ghostty carries the displaced item itself while Robin Hood probing, so its
+// PSL is incremented in-place before it is stored in the next bucket. Exercise
+// the equivalent path with two values sharing a bucket and one value beginning
+// in the following bucket.
+fn test_rcs_robin_hood_displacement_updates_stored_psl() {
+	l := RefCountedSetLayout.init(16)
+	mut styles_by_bucket := [][]CellStyle{len: l.table_cap}
+	for palette_index in 0 .. 256 {
+		style := CellStyle{
+			fg_color: .palette
+			fg_palette: u8(palette_index)
+		}
+		bucket := int(style.hash() & u64(l.table_mask))
+		styles_by_bucket[bucket] << style
+	}
+
+	mut start_bucket := -1
+	for bucket in 0 .. l.table_cap {
+		next_bucket := (bucket + 1) & int(l.table_mask)
+		if styles_by_bucket[bucket].len >= 2 && styles_by_bucket[next_bucket].len >= 1 {
+			start_bucket = bucket
+			break
+		}
+	}
+	assert start_bucket >= 0
+
+	next_bucket := (start_bucket + 1) & int(l.table_mask)
+	first := styles_by_bucket[start_bucket][0]
+	displaced := styles_by_bucket[next_bucket][0]
+	colliding := styles_by_bucket[start_bucket][1]
+
+	mut set := RefCountedSet.init(l)
+	first_id := set.add(first)!
+	displaced_id := set.add(displaced)!
+	colliding_id := set.add(colliding)!
+
+	assert set.lookup(first) or { panic('first style missing') } == first_id
+	assert set.lookup(colliding) or { panic('colliding style missing') } == colliding_id
+	assert set.items[displaced_id].meta.psl == 1
+	assert set.lookup(displaced) or { panic('displaced style missing') } == displaced_id
 }

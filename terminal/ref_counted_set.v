@@ -133,6 +133,11 @@ pub fn rcs_capacity_for_count(n int) int {
 // Returns the memory layout for a desired capacity.
 // The capacity is rounded up to the next power of 2.
 pub fn RefCountedSetLayout.init(cap int) RefCountedSetLayout {
+	// Ghostty accepts a usize here and asserts that the requested table can be
+	// addressed by Id. V's signed int needs the lower-bound check explicitly.
+	assert cap >= 0
+	assert cap <= 65536
+
 	// Zero-cap set is valid, return special case
 	if cap == 0 {
 		return RefCountedSetLayout{}
@@ -147,9 +152,10 @@ pub fn RefCountedSetLayout.init(cap int) RefCountedSetLayout {
 	table_start := 0
 	table_end := table_start + table_cap * 2 // sizeof(u16) = 2
 
-	// Align items_start to alignment of RefCountedSetItem
-	items_start := rcs_align_forward(table_end, 8) // 8-byte alignment
-	items_end := items_start + items_cap * int(sizeof(RefCountedSetItem))
+	// This is the CellStyle specialization. Ghostty's StyleSet.Item is 36
+	// bytes with 4-byte alignment (the same constants used by Page.layout).
+	items_start := rcs_align_forward(table_end, 4)
+	items_end := items_start + items_cap * int(page_style_item_size)
 
 	total_size := items_end
 
@@ -257,6 +263,7 @@ pub fn (mut self RefCountedSet) add(value CellStyle) !u16 {
 
 	id := self.insert(value, self.next_id)
 	self.items[id].meta.ref_count += 1
+	assert self.items[id].meta.ref_count == 1
 	self.living += 1
 
 	// It's possible insert returns a different ID by reusing a
@@ -429,6 +436,7 @@ fn (mut self RefCountedSet) delete_item(id u16) {
 	if int(item.meta.bucket) > self.layout.table_cap {
 		return
 	}
+	assert self.hash_table[item.meta.bucket] == id
 
 	self.psl_stats[item.meta.psl] -= 1
 	self.hash_table[item.meta.bucket] = 0
@@ -466,6 +474,10 @@ fn (mut self RefCountedSet) upsert(value CellStyle, new_id u16) u16 {
 
 // Insert the given value into the hash table with the given ID.
 fn (mut self RefCountedSet) insert(value CellStyle, new_id u16) u16 {
+	$if !prod {
+		assert self.lookup(value) == none
+	}
+
 	hash := rcs_hash_style(value)
 
 	mut held_id := new_id
@@ -489,6 +501,7 @@ fn (mut self RefCountedSet) insert(value CellStyle, new_id u16) u16 {
 				new_psl = held_psl
 			} else {
 				self.items[held_id].meta.bucket = p
+				self.items[held_id].meta.psl = held_psl
 			}
 			self.psl_stats[held_psl] += 1
 			if held_psl > self.max_psl {
@@ -523,6 +536,7 @@ fn (mut self RefCountedSet) insert(value CellStyle, new_id u16) u16 {
 				new_psl = held_psl
 			} else {
 				self.items[held_id].meta.bucket = p
+				self.items[held_id].meta.psl = held_psl
 			}
 			self.psl_stats[held_psl] += 1
 			if held_psl > self.max_psl {
@@ -544,6 +558,7 @@ fn (mut self RefCountedSet) insert(value CellStyle, new_id u16) u16 {
 				new_psl = held_psl
 			} else {
 				self.items[held_id].meta.bucket = p
+				self.items[held_id].meta.psl = held_psl
 			}
 			self.psl_stats[held_psl] += 1
 			if held_psl > self.max_psl {
