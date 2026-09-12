@@ -8,7 +8,7 @@ module apprt
 pub struct NoneApp {}
 
 // perform_ipc always returns false as there is no apprt to communicate with.
-pub fn (a NoneApp) perform_ipc(target IpcTarget, action IpcAction) bool {
+pub fn (a NoneApp) perform_ipc(target IpcTarget, action IpcAction) !bool {
 	_ = target
 	_ = action
 	return false
