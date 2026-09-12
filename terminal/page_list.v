@@ -3491,6 +3491,7 @@ pub mut:
 pub fn PageList.init(cols u16, rows u16, max_size ?usize) PageList {
 	// Create initial pages to fit the viewport
 	cap := initial_capacity(cols)
+	assert Page.layout(cap).total_size <= usize(max_page_size)
 	mut page_list := PageNodeList{}
 	mut page_serial := u64(0)
 	mut page_size := usize(0)
@@ -3510,15 +3511,16 @@ pub fn PageList.init(cols u16, rows u16, max_size ?usize) PageList {
 		page_serial += 1
 		total_rows += usize(use)
 	}
+	assert page_list.first != none
 
 	mms := min_max_size_calc(cols, rows)
 
 	// Create viewport pin
 	viewport_pin := &PagePin{
-		node: page_list.first or { unsafe { &PageNode(nil) } }
+		node: page_list.first or { panic('initial page list is empty') }
 	}
 
-	return PageList{
+	result := PageList{
 		cols: cols
 		rows: rows
 		pages: page_list
@@ -3533,6 +3535,8 @@ pub fn PageList.init(cols u16, rows u16, max_size ?usize) PageList {
 		viewport_pin: viewport_pin
 		viewport_pin_row_offset: none
 	}
+	result.assert_integrity()
+	return result
 }
 
 // Build a linked-page snapshot from the flat storage used by Screen.
@@ -3692,6 +3696,14 @@ pub fn (mut self PageList) reset() {
 	cap := initial_capacity(self.cols)
 	assert cap.rows > 0
 
+	mut old_node := self.pages.first
+	for {
+		node := old_node or { break }
+		old_node = node.next
+		self.destroy_node(node)
+	}
+	assert self.page_size == 0
+
 	// Rebuild page list
 	mut page_list := PageNodeList{}
 	mut page_serial := self.page_serial
@@ -3719,7 +3731,7 @@ pub fn (mut self PageList) reset() {
 	self.total_rows = total_rows
 
 	// Update all tracked pins to point to first page top-left
-	first := self.pages.first or { return }
+	first := self.pages.first or { panic('reset page list is empty') }
 	for mut p in self.tracked_pins {
 		p.node = first
 		p.y = 0
@@ -4947,24 +4959,45 @@ pub fn (mut self PageList) split(p PagePin) ! {
 pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 	mut it := self.page_iterator(.right_down, opts.top, opts.bot)
 
-	mut result := PageList.init(self.cols, self.rows, self.explicit_max_size)
-	// Clear default pages
-	result.pages = PageNodeList{}
-	result.page_serial = 0
-	result.total_rows = 0
-	result.page_size = 0
+	mut viewport_pin := &PagePin{}
+	mut result := PageList{
+		cols: self.cols
+		rows: self.rows
+		pages: PageNodeList{}
+		page_serial: 0
+		page_serial_min: 0
+		page_size: 0
+		explicit_max_size: self.explicit_max_size
+		min_max_size: self.min_max_size
+		total_rows: 0
+		tracked_pins: [viewport_pin]
+		viewport: .active
+		viewport_pin: viewport_pin
+		viewport_pin_row_offset: none
+	}
 
 	for {
 		chunk := it.next() or { break }
 		new_node := result.create_page(chunk.node.data.capacity)
 		mut new_page := &new_node.data
+		assert new_page.capacity.rows >= chunk.end - chunk.start
 		new_page.size.rows = chunk.end - chunk.start
 		new_page.size.cols = chunk.node.data.size.cols
-		new_page.clone_from(&chunk.node.data, chunk.start, chunk.end)!
+		new_page.clone_from(&chunk.node.data, chunk.start, chunk.end) or {
+			result.destroy_node(new_node)
+			mut cleanup_node := result.pages.first
+			for {
+				node := cleanup_node or { break }
+				cleanup_node = node.next
+				result.destroy_node(node)
+			}
+			return err
+		}
 		new_page.dirty = chunk.node.data.dirty
 
 		result.pages.append(new_node)
 		result.total_rows += usize(new_page.size.rows)
+		new_page.assert_integrity()
 
 		// Recreate every tracked pin that falls within this cloned chunk.
 		if opts.tracked_pins != unsafe { nil } {
@@ -4989,17 +5022,16 @@ pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 	}
 
 	// Ensure viewport pin points to valid node
-	if first := result.pages.first {
-		unsafe { *result.viewport_pin = PagePin{ node: first } }
-	}
+	first := result.pages.first or { panic('cloned page list is empty') }
+	unsafe { *result.viewport_pin = PagePin{ node: first } }
 
 	// Ensure we have enough rows for active area
 	for result.total_rows < usize(self.rows) {
 		result.grow() or {}
-		if mut last := result.pages.last {
-			last.data.clear_row(u16(last.data.size.rows - 1))
-		}
+		mut last := result.pages.last or { panic('cloned page list is empty') }
+		last.data.clear_cells(last.data.size.rows - 1, 0, result.cols)
 	}
+	result.total_rows = usize(result.rows)
 
 	result.assert_integrity()
 	return result
