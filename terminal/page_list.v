@@ -5035,12 +5035,15 @@ pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 	unsafe { *result.viewport_pin = PagePin{ node: first } }
 
 	// Ensure we have enough rows for active area
-	for result.total_rows < usize(self.rows) {
-		result.grow() or {}
-		mut last := result.pages.last or { panic('cloned page list is empty') }
-		last.data.clear_cells(last.data.size.rows - 1, 0, result.cols)
+	if result.total_rows < usize(result.rows) {
+		len := usize(result.rows) - result.total_rows
+		for _ in 0 .. len {
+			result.grow() or {}
+			mut last := result.pages.last or { panic('cloned page list is empty') }
+			last.data.clear_cells(last.data.size.rows - 1, 0, result.cols)
+		}
+		result.total_rows = usize(result.rows)
 	}
-	result.total_rows = usize(result.rows)
 
 	result.assert_integrity()
 	return result
@@ -6690,6 +6693,14 @@ pub fn (self &PageList) prompt_iterator(direction IterDirection, tl Point, bl ?P
 // Assert Integrity
 // ============================================================
 
+pub enum PageListIntegrityError {
+	page_serial_invalid
+	total_rows_mismatch
+	tracked_pin_invalid
+	viewport_pin_offset_mismatch
+	viewport_pin_insufficient_rows
+}
+
 pub fn (self &PageList) assert_integrity() {
 	$if prod {
 		return
@@ -6697,20 +6708,20 @@ pub fn (self &PageList) assert_integrity() {
 	if self.pause_integrity_checks > 0 {
 		return
 	}
-	assert self.verify_integrity(), 'PageList integrity check failed'
+	if violation := self.verify_integrity() {
+		panic('PageList integrity check failed: ${violation}')
+	}
 }
 
-pub fn (self &PageList) verify_integrity() bool {
+pub fn (self &PageList) verify_integrity() ?PageListIntegrityError {
 	$if prod {
-		return true
+		return none
 	}
 	if self.pause_integrity_checks > 0 {
-		return true
+		return none
 	}
 	// The viewport pin is permanently tracked and must never be garbage.
-	if self.viewport_pin.garbage {
-		return false
-	}
+	assert !self.viewport_pin.garbage
 
 	// Verify the row cache and reject nodes whose serial predates the oldest
 	// still-valid allocation after page recycling.
@@ -6719,13 +6730,13 @@ pub fn (self &PageList) verify_integrity() bool {
 	for {
 		current := node or { break }
 		if current.serial < self.page_serial_min {
-			return false
+			return .page_serial_invalid
 		}
 		actual_rows += usize(current.data.size.rows)
 		node = current.next
 	}
 	if actual_rows != self.total_rows {
-		return false
+		return .total_rows_mismatch
 	}
 
 	// Verify every tracked pin still points into a live page.
@@ -6735,41 +6746,38 @@ pub fn (self &PageList) verify_integrity() bool {
 			y: p.y
 			x: p.x
 		}) {
-			return false
+			return .tracked_pin_invalid
 		}
 	}
 
 	if self.viewport == .pin {
 		// Calculate the pinned viewport offset without consulting the cache so
 		// a stale cache cannot validate itself.
-		mut actual_offset := usize(0)
-		mut found := false
-		mut current_node := self.pages.first
+		mut offset := usize(0)
+		mut actual_offset := ?usize(none)
+		mut current_node := self.pages.last
 		for {
 			current := current_node or { break }
+			offset += usize(current.data.size.rows)
 			if voidptr(current) == voidptr(self.viewport_pin.node) {
-				actual_offset += usize(self.viewport_pin.y)
-				found = true
+				offset -= usize(self.viewport_pin.y)
+				actual_offset = self.total_rows - offset
 				break
 			}
-			actual_offset += usize(current.data.size.rows)
-			current_node = current.next
+			current_node = current.prev
 		}
-		if !found {
-			return false
-		}
+		actual := actual_offset or { return .viewport_pin_offset_mismatch }
 		if cached_offset := self.viewport_pin_row_offset {
-			if cached_offset != actual_offset {
-				return false
+			if cached_offset != actual {
+				return .viewport_pin_offset_mismatch
 			}
 		}
-		if actual_offset > self.total_rows
-			|| self.total_rows - actual_offset < usize(self.rows) {
-			return false
+		if self.total_rows - actual < usize(self.rows) {
+			return .viewport_pin_insufficient_rows
 		}
 	}
 
-	return true
+	return none
 }
 
 // Temporarily pause or resume integrity checks around multi-step mutations.

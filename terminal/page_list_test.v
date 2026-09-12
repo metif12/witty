@@ -701,14 +701,14 @@ fn test_page_list_pause_integrity_checks_is_nested() {
 	defer { s.deinit() }
 	original_total := s.total_rows
 	s.total_rows += 1
-	assert !s.verify_integrity()
+	assert (s.verify_integrity() or { panic('missing integrity violation') }) == .total_rows_mismatch
 	s.pause_integrity_checks_set(true)
 	s.pause_integrity_checks_set(true)
-	assert s.verify_integrity()
+	assert s.verify_integrity() == none
 	s.pause_integrity_checks_set(false)
-	assert s.verify_integrity()
+	assert s.verify_integrity() == none
 	s.pause_integrity_checks_set(false)
-	assert !s.verify_integrity()
+	assert (s.verify_integrity() or { panic('missing integrity violation') }) == .total_rows_mismatch
 	s.total_rows = original_total
 }
 
@@ -3906,25 +3906,25 @@ fn test_page_list_verify_integrity() {
 	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
 
-	assert s.verify_integrity()
+	assert s.verify_integrity() == none
 
 	s.grow_rows(100)
-	assert s.verify_integrity()
+	assert s.verify_integrity() == none
 
 	// Cached row count must match the linked pages.
 	s.total_rows++
-	assert !s.verify_integrity()
+	assert (s.verify_integrity() or { panic('missing integrity violation') }) == .total_rows_mismatch
 	s.total_rows--
 
 	// Every live page serial must be at least page_serial_min.
 	s.page_serial_min = s.page_serial
-	assert !s.verify_integrity()
+	assert (s.verify_integrity() or { panic('missing integrity violation') }) == .page_serial_invalid
 	s.page_serial_min = 0
 
 	// Tracked pins must point within a live page.
 	old_y := s.viewport_pin.y
 	s.viewport_pin.y = s.viewport_pin.node.data.size.rows
-	assert !s.verify_integrity()
+	assert (s.verify_integrity() or { panic('missing integrity violation') }) == .tracked_pin_invalid
 	s.viewport_pin.y = old_y
 
 	// A pinned viewport cache must equal its independently calculated offset.
@@ -3936,9 +3936,9 @@ fn test_page_list_verify_integrity() {
 	s.viewport_pin.y = 0
 	s.viewport_pin.x = 0
 	s.viewport_pin_row_offset = 1
-	assert !s.verify_integrity()
+	assert (s.verify_integrity() or { panic('missing integrity violation') }) == .viewport_pin_offset_mismatch
 	s.viewport_pin_row_offset = 0
-	assert s.verify_integrity()
+	assert s.verify_integrity() == none
 
 	// A pin too close to the bottom cannot fill the viewport.
 	last := s.pages.last or {
@@ -3948,7 +3948,7 @@ fn test_page_list_verify_integrity() {
 	s.viewport_pin.node = last
 	s.viewport_pin.y = last.data.size.rows - 1
 	s.viewport_pin_row_offset = none
-	assert !s.verify_integrity()
+	assert (s.verify_integrity() or { panic('missing integrity violation') }) == .viewport_pin_insufficient_rows
 
 	// Restore a valid state for deferred cleanup.
 	s.viewport = .active
