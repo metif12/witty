@@ -1976,11 +1976,6 @@ pub mut:
 	kitty_images_lifecycle KittyImagesLifecycleFn = unsafe { nil }
 	semantic_prompt        SemanticPrompt
 	dirty                  ScreenDirty
-	// Scratch cell/row used only as a safe fallback when a cursor
-	// pointer accessor is called with invalid (out-of-bounds) state,
-	// which should not happen given the callers' preconditions.
-	scratch_cell CellData
-	scratch_row  RowData
 }
 
 // Initialize a new screen with the given dimensions and scrollback.
@@ -2012,8 +2007,10 @@ pub fn (mut self Screen) deinit() {
 
 // Assert screen state integrity (simplified for V).
 pub fn (self &Screen) assert_integrity() {
-	assert self.cursor.x < self.pages.cols, 'cursor x ${self.cursor.x} >= cols ${self.pages.cols}'
-	assert self.cursor.y < self.pages.rows, 'cursor y ${self.cursor.y} >= rows ${self.pages.rows}'
+	$if !prod {
+		assert self.cursor.x < self.pages.cols, 'cursor x ${self.cursor.x} >= cols ${self.pages.cols}'
+		assert self.cursor.y < self.pages.rows, 'cursor y ${self.cursor.y} >= rows ${self.pages.rows}'
+	}
 }
 
 // ============================================================
@@ -2240,18 +2237,21 @@ pub fn (mut self Screen) cursor_cell_left(n u32) &CellData {
 // Move the cursor right by n positions.
 pub fn (mut self Screen) cursor_right(n u32) {
 	assert self.cursor.x + n < self.pages.cols
+	defer { self.assert_integrity() }
 	self.cursor.x += n
 }
 
 // Move the cursor left by n positions.
 pub fn (mut self Screen) cursor_left(n u32) {
 	assert self.cursor.x >= n
+	defer { self.assert_integrity() }
 	self.cursor.x -= n
 }
 
 // Move the cursor up by n rows.
 pub fn (mut self Screen) cursor_up(n u32) {
 	assert self.cursor.y >= n
+	defer { self.assert_integrity() }
 	if n == 0 {
 		return
 	}
@@ -2266,6 +2266,7 @@ pub fn (mut self Screen) cursor_up(n u32) {
 // Move the cursor down by n rows.
 pub fn (mut self Screen) cursor_down(n u32) {
 	assert self.cursor.y + n < self.pages.rows
+	defer { self.assert_integrity() }
 	if n == 0 {
 		return
 	}
@@ -2277,6 +2278,7 @@ pub fn (mut self Screen) cursor_down(n u32) {
 // Move the cursor to the given absolute column.
 pub fn (mut self Screen) cursor_horizontal_absolute(x u32) {
 	assert x < self.pages.cols
+	defer { self.assert_integrity() }
 	self.cursor.x = x
 }
 
@@ -2284,6 +2286,7 @@ pub fn (mut self Screen) cursor_horizontal_absolute(x u32) {
 pub fn (mut self Screen) cursor_absolute(x u32, y u32) {
 	assert x < self.pages.cols
 	assert y < self.pages.rows
+	defer { self.assert_integrity() }
 	if self.cursor.x == x && self.cursor.y == y {
 		return
 	}
@@ -2304,6 +2307,7 @@ pub fn (mut self Screen) cursor_absolute(x u32, y u32) {
 // pointers), so we clamp them to the active area (top-left on overflow) and
 // then re-ensure our style is consistent, mirroring the tail of cursorReload.
 pub fn (mut self Screen) cursor_reload() {
+	defer { self.assert_integrity() }
 	// Our x/y should always be within the active area. If they are not,
 	// reset the cursor to the top-left (this mirrors the pin fallback).
 	if self.cursor.x >= self.pages.cols || self.cursor.y >= self.pages.rows {
@@ -2324,11 +2328,9 @@ pub fn (mut self Screen) cursor_reload() {
 // Mark the cursor row as dirty for rendering.
 pub fn (mut self Screen) cursor_mark_dirty() {
 	idx := self.pages.active_start + int(self.cursor.y)
-	if idx < self.pages.screen_rows.len {
-		unsafe {
-			mut row := &self.pages.screen_rows[idx]
-			row.dirty = true
-		}
+	unsafe {
+		mut row := &self.pages.screen_rows[idx]
+		row.dirty = true
 	}
 }
 
@@ -2339,14 +2341,7 @@ pub fn (mut self Screen) cursor_cell_end_of_prev() &CellData {
 	assert self.cursor.y > 0
 	prev_idx := self.pages.active_start + int(self.cursor.y) - 1
 	last := int(self.pages.cols) - 1
-	if prev_idx >= 0 && prev_idx < self.pages.screen_rows.len
-		&& last >= 0 && last < self.pages.screen_rows[prev_idx].cells.len {
-		return unsafe { &self.pages.screen_rows[prev_idx].cells[last] }
-	}
-	// Fall back to a scratch cell to avoid a null deref. Callers only
-	// reach here on malformed state.
-	self.scratch_cell = CellData{}
-	return unsafe { &self.scratch_cell }
+	return unsafe { &self.pages.screen_rows[prev_idx].cells[last] }
 }
 
 // Returns the row n rows above the cursor row.
@@ -2354,12 +2349,9 @@ pub fn (mut self Screen) cursor_cell_end_of_prev() &CellData {
 // Precondition: cursor.y >= n
 pub fn (mut self Screen) cursor_row_up(n u32) &RowData {
 	assert self.cursor.y >= n
+	defer { self.assert_integrity() }
 	idx := self.pages.active_start + int(self.cursor.y) - int(n)
-	if idx >= 0 && idx < self.pages.screen_rows.len {
-		return unsafe { &self.pages.screen_rows[idx] }
-	}
-	self.scratch_row = RowData.init(self.pages.cols)
-	return unsafe { &self.scratch_row }
+	return unsafe { &self.pages.screen_rows[idx] }
 }
 
 // Copy another cursor's state into this screen. The cursor can be on any
@@ -2412,19 +2404,23 @@ pub fn (mut self Screen) cursor_copy(other Cursor, opts CursorCopyOptions) ! {
 pub fn (mut self Screen) cursor_reset_wrap() {
 	self.cursor.pending_wrap = false
 	idx := self.pages.active_start + int(self.cursor.y)
-	if idx < self.pages.screen_rows.len {
-		unsafe {
-			mut row := &self.pages.screen_rows[idx]
-			row.wrap = false
-		}
-		// Also reset next row's wrap_continuation
-		next_idx := idx + 1
-		if next_idx < self.pages.screen_rows.len {
-			unsafe {
-				mut next_row := &self.pages.screen_rows[next_idx]
-				next_row.wrap_continuation = false
-			}
-		}
+	if !self.pages.screen_rows[idx].wrap {
+		return
+	}
+
+	self.pages.screen_rows[idx].wrap = false
+	// Also reset next row's wrap_continuation.
+	next_idx := idx + 1
+	if next_idx < self.pages.screen_rows.len {
+		self.pages.screen_rows[next_idx].wrap_continuation = false
+	}
+
+	// A wide character that did not fit at the end of this wrapped row leaves
+	// a spacer head in the final cell. Once the wrap is removed, that spacer
+	// no longer has meaning and must be cleared with the current blank style.
+	last := int(self.pages.cols) - 1
+	if self.pages.screen_rows[idx].cells[last].wide == .spacer_head {
+		self.clear_cells(idx, last, last + 1)
 	}
 }
 
@@ -2434,6 +2430,7 @@ pub fn (mut self Screen) cursor_reset_wrap() {
 
 // Scroll the viewport.
 pub fn (mut self Screen) scroll(behavior Scroll) {
+	defer { self.assert_integrity() }
 	self.mark_kitty_images_dirty()
 	if self.no_scrollback {
 		self.pages.scroll(.active)
@@ -2513,6 +2510,7 @@ fn (mut self Screen) scroll_prompts(delta int) {
 
 // Scroll and clear the screen, moving content to scrollback.
 pub fn (mut self Screen) scroll_clear() ! {
+	defer { self.assert_integrity() }
 	self.mark_kitty_images_dirty()
 	pruned := self.pages.scroll_clear()!
 	self.shift_selection_after_top_prune(pruned)
@@ -2544,6 +2542,7 @@ fn (mut self Screen) shift_selection_after_top_prune(pruned int) {
 // Scroll down when cursor is at the bottom of the screen.
 pub fn (mut self Screen) cursor_down_scroll() ! {
 	assert self.cursor.y == self.pages.rows - 1
+	defer { self.assert_integrity() }
 	self.mark_kitty_images_dirty()
 
 	if self.no_scrollback {
@@ -2562,7 +2561,7 @@ pub fn (mut self Screen) cursor_down_scroll() ! {
 		}
 	} else {
 		// With scrollback: grow by one row, moving old top row to scrollback
-		pruned := self.pages.grow() or { 0 }
+		pruned := self.pages.grow()!
 		self.shift_selection_after_top_prune(pruned)
 		self.pages.active_start += 1
 		if self.pages.viewport == .active {
@@ -2596,6 +2595,8 @@ pub fn (mut self Screen) cursor_scroll_above() ! {
 	if self.cursor.y == self.pages.rows - 1 {
 		return self.cursor_down_scroll()
 	}
+	defer { self.assert_integrity() }
+	assert self.cursor.y < self.pages.rows - 1
 
 	if self.no_scrollback {
 		// Without scrollback we can't push a row into history, so we drop the
@@ -2612,7 +2613,7 @@ pub fn (mut self Screen) cursor_scroll_above() ! {
 	} else {
 		// With scrollback: grow by one row (moving the old top active row into
 		// scrollback) and slide the active window down by one.
-		pruned := self.pages.grow() or { 0 }
+		pruned := self.pages.grow()!
 		self.shift_selection_after_top_prune(pruned)
 		self.pages.active_start += 1
 		if self.pages.viewport == .active {
@@ -2735,6 +2736,7 @@ fn (mut self Screen) clear_active_row(y u32) {
 
 // Erase rows physically (reclaim memory).
 pub fn (mut self Screen) erase_rows(tl Point, bl ?Point) {
+	defer { self.assert_integrity() }
 	top := self.pages.pin_point(tl) or { return }
 	bottom := if point := bl {
 		self.pages.pin_point(point) or { return }
@@ -2792,6 +2794,7 @@ fn pin_after_row_erase(pin Pin, top Pin, bottom Pin) Pin {
 
 // Clear rows (set to blank, preserving the row slots).
 pub fn (mut self Screen) clear_rows(tl Point, bl ?Point, protected bool) {
+	defer { self.assert_integrity() }
 	tl_pin := self.pages.pin_point(tl) or { return }
 	bl_pin := if point := bl {
 		self.pages.pin_point(point) or { return }
@@ -2829,6 +2832,7 @@ pub fn (mut self Screen) clear_rows(tl Point, bl ?Point, protected bool) {
 
 // Clear specific cells in a row.
 pub fn (mut self Screen) clear_cells(row_idx int, start int, end int) {
+	defer { self.assert_integrity() }
 	if row_idx < 0 || row_idx >= self.pages.screen_rows.len {
 		return
 	}
@@ -2902,6 +2906,7 @@ pub fn (mut self Screen) clear_cells(row_idx int, start int, end int) {
 // finding contiguous runs of unprotected cells within [start, end) and
 // clearing each run, matching Ghostty's clearUnprotectedCells.
 pub fn (mut self Screen) clear_unprotected_cells(row_idx int, start int, end int) {
+	defer { self.assert_integrity() }
 	if row_idx < 0 || row_idx >= self.pages.screen_rows.len {
 		return
 	}
@@ -2948,6 +2953,7 @@ pub fn (self &Screen) blank_cell() CellData {
 //   - clear prompt/input lines when prompt_redraw is requested
 //   - reload the cursor and fix up the saved cursor's pending wrap
 pub fn (mut self Screen) resize(opts ScreenResize) ! {
+	defer { self.assert_integrity() }
 	self.mark_kitty_images_dirty()
 	mut cursor_pin := Pin{
 		x: self.cursor.x
@@ -3234,6 +3240,7 @@ pub fn (mut self Screen) set_attribute(attr SgrAttribute) ! {
 // (non-zero) ID otherwise. We still clear the ID first so that print writes
 // the correct discriminator regardless of intermediate state.
 pub fn (mut self Screen) manual_style_update() ! {
+	defer { self.assert_integrity() }
 	// Clear the cursor style ID to prevent weird things from happening.
 	// This also ensures that if the style is default we fall back to
 	// clearing our style.
@@ -4040,14 +4047,9 @@ pub fn (mut self Screen) split_cell_boundary(x u32) {
 	cols := self.pages.cols
 	// `x` may be up to and INCLUDING `cols`, since that signifies splitting
 	// the boundary to the right of the final cell in the row.
-	if x > cols {
-		return
-	}
+	assert x <= cols
 
 	row_idx := self.pages.active_start + int(self.cursor.y)
-	if row_idx < 0 || row_idx >= self.pages.screen_rows.len {
-		return
-	}
 
 	// [ A B C D E F|]
 	//              ^ Boundary between final cell and row end.
@@ -4058,10 +4060,8 @@ pub fn (mut self Screen) split_cell_boundary(x u32) {
 		}
 		// Spacer head at end of wrapped row.
 		last := int(cols) - 1
-		if last >= 0 && last < self.pages.screen_rows[row_idx].cells.len {
-			if self.pages.screen_rows[row_idx].cells[last].wide == .spacer_head {
-				self.clear_cells(row_idx, last, last + 1)
-			}
+		if self.pages.screen_rows[row_idx].cells[last].wide == .spacer_head {
+			self.clear_cells(row_idx, last, last + 1)
 		}
 		return
 	}
@@ -4077,16 +4077,12 @@ pub fn (mut self Screen) split_cell_boundary(x u32) {
 	// First cell may be a wrapped wide cell with a spacer head on the
 	// previous row that needs to be cleared.
 	if (x == 0 || x == 1) && self.pages.screen_rows[row_idx].wrap_continuation {
-		first_wide := self.pages.screen_rows[row_idx].cells.len > 0
-			&& self.pages.screen_rows[row_idx].cells[0].wide == .wide
-		if first_wide {
+		if self.pages.screen_rows[row_idx].cells[0].wide == .wide {
 			prev_idx := row_idx - 1
 			if prev_idx >= 0 {
 				last := int(cols) - 1
-				if last >= 0 && last < self.pages.screen_rows[prev_idx].cells.len {
-					if self.pages.screen_rows[prev_idx].cells[last].wide == .spacer_head {
-						self.clear_cells(prev_idx, last, last + 1)
-					}
+				if self.pages.screen_rows[prev_idx].cells[last].wide == .spacer_head {
+					self.clear_cells(prev_idx, last, last + 1)
 				}
 			}
 		}
@@ -4100,17 +4096,17 @@ pub fn (mut self Screen) split_cell_boundary(x u32) {
 	// [ ... X|Y ... ]
 	//        ^ Boundary between two cells in the middle of the row.
 	xi := int(x)
-	if xi - 1 < self.pages.screen_rows[row_idx].cells.len {
-		left := self.pages.screen_rows[row_idx].cells[xi - 1]
-		match left.wide {
-			// There should not be spacer heads in the middle of the row.
-			.spacer_head {}
-			// We don't need to do anything for narrow cells or spacer tails.
-			.narrow, .spacer_tail {}
-			// A wide char would be split, so must be cleared.
-			.wide {
-				self.clear_cells(row_idx, xi - 1, xi + 1)
-			}
+	assert x > 0
+	assert x < cols
+	left := self.pages.screen_rows[row_idx].cells[xi - 1]
+	match left.wide {
+		// There should not be spacer heads in the middle of the row.
+		.spacer_head { panic('unreachable spacer head in middle of row') }
+		// We don't need to do anything for narrow cells or spacer tails.
+		.narrow, .spacer_tail {}
+		// A wide char would be split, so must be cleared.
+		.wide {
+			self.clear_cells(row_idx, xi - 1, xi + 1)
 		}
 	}
 }

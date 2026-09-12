@@ -983,6 +983,20 @@ fn test_screen_cursor_cell_left_right() {
 	assert voidptr(right) == voidptr(&s.pages.screen_rows[row_idx].cells[7])
 }
 
+fn test_screen_cursor_previous_cell_and_row_up_reference_page_storage() {
+	mut s := Screen.init(10, 3, 0)
+	defer { s.deinit() }
+	s.cursor_absolute(5, 2)
+	previous_row_idx := s.pages.active_start + 1
+	s.pages.screen_rows[previous_row_idx].cells[9].codepoint = u32(`P`)
+
+	previous_cell := s.cursor_cell_end_of_prev()
+	previous_row := s.cursor_row_up(1)
+	assert previous_cell.codepoint == u32(`P`)
+	assert voidptr(previous_cell) == voidptr(&s.pages.screen_rows[previous_row_idx].cells[9])
+	assert voidptr(previous_row) == voidptr(&s.pages.screen_rows[previous_row_idx])
+}
+
 fn test_screen_prompt_click_move_zero() {
 	mut s := Screen.init(10, 10, 0)
 	defer { s.deinit() }
@@ -1407,6 +1421,67 @@ fn test_screen_cursor_reset_wrap() {
 
 	s.cursor_reset_wrap()
 	assert s.cursor.pending_wrap == false
+}
+
+fn test_screen_cursor_reset_wrap_clears_wide_spacer_head() {
+	mut s := Screen.init(5, 5, 0)
+	defer { s.deinit() }
+	row_idx := s.pages.active_start
+	s.pages.screen_rows[row_idx].wrap = true
+	s.pages.screen_rows[row_idx].cells[4] = CellData{
+		wide: .spacer_head
+	}
+	s.pages.screen_rows[row_idx + 1].wrap_continuation = true
+
+	s.cursor_reset_wrap()
+
+	assert !s.pages.screen_rows[row_idx].wrap
+	assert !s.pages.screen_rows[row_idx + 1].wrap_continuation
+	assert s.pages.screen_rows[row_idx].cells[4].is_zero()
+}
+
+fn test_screen_cursor_reset_wrap_preserves_next_row_without_wrap() {
+	mut s := Screen.init(5, 5, 0)
+	defer { s.deinit() }
+	row_idx := s.pages.active_start
+	s.pages.screen_rows[row_idx + 1].wrap_continuation = true
+
+	s.cursor_reset_wrap()
+
+	assert s.pages.screen_rows[row_idx + 1].wrap_continuation
+}
+
+fn test_screen_split_cell_boundary_clears_wrapped_wide_spacer_head() {
+	mut s := Screen.init(5, 3, 0)
+	defer { s.deinit() }
+	row_idx := s.pages.active_start
+	s.pages.screen_rows[row_idx].wrap = true
+	s.pages.screen_rows[row_idx].cells[4] = CellData{
+		wide: .spacer_head
+	}
+
+	s.split_cell_boundary(5)
+
+	assert s.pages.screen_rows[row_idx].cells[4].is_zero()
+}
+
+fn test_screen_split_cell_boundary_clears_previous_wrapped_wide_spacer_head() {
+	mut s := Screen.init(5, 3, 0)
+	defer { s.deinit() }
+	s.cursor_absolute(0, 1)
+	row_idx := s.pages.active_start + 1
+	s.pages.screen_rows[row_idx].wrap_continuation = true
+	s.pages.screen_rows[row_idx].cells[0] = CellData{
+		codepoint: u32(0x1f600)
+		wide: .wide
+	}
+	s.pages.screen_rows[row_idx - 1].cells[4] = CellData{
+		wide: .spacer_head
+	}
+
+	s.split_cell_boundary(0)
+
+	assert s.pages.screen_rows[row_idx - 1].cells[4].is_zero()
 }
 
 fn test_screen_semantic_content() {
