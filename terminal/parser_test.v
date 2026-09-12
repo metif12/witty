@@ -25,6 +25,48 @@ fn dispatch_actions(actions []ParserAction) []ParserAction {
 	return out
 }
 
+fn test_parser_state_source_ordinals() {
+	assert int(ParserState.ground) == 0
+	assert int(ParserState.escape) == 1
+	assert int(ParserState.escape_intermediate) == 2
+	assert int(ParserState.csi_entry) == 3
+	assert int(ParserState.csi_intermediate) == 4
+	assert int(ParserState.csi_param) == 5
+	assert int(ParserState.csi_ignore) == 6
+	assert int(ParserState.dcs_entry) == 7
+	assert int(ParserState.dcs_param) == 8
+	assert int(ParserState.dcs_intermediate) == 9
+	assert int(ParserState.dcs_passthrough) == 10
+	assert int(ParserState.dcs_ignore) == 11
+	assert int(ParserState.osc_string) == 12
+	assert int(ParserState.sos_pm_apc_string) == 13
+}
+
+fn test_parser_source_limits_and_separator_list() {
+	assert max_params == 24
+	assert max_intermediate == 4
+	assert int(Sep.semicolon) == 0
+	assert int(Sep.colon) == 1
+
+	mut sep := SepList.init_empty()
+	sep.set(0)
+	sep.set(usize(max_params - 1))
+	assert sep.is_set(0)
+	assert sep.is_set(usize(max_params - 1))
+	assert sep.count() == usize(2)
+}
+
+fn test_parser_init_and_collect_source_contract() {
+	mut p := VTParser.init()
+	defer { p.deinit() }
+	assert p.state == .ground
+	for byte_val in 'abcde'.bytes() {
+		p.collect(byte_val)
+	}
+	assert p.intermediates_idx == max_intermediate
+	assert p.intermediates[..max_intermediate] == 'abcd'.bytes()
+}
+
 // ============================================================
 // test {} (unnamed): C1 8-bit controls + print + execute
 // ============================================================
@@ -107,6 +149,7 @@ fn test_csi_esc_bracket_1_4_h() {
 	assert d.params.len == 2
 	assert d.params[0] == u16(1)
 	assert d.params[1] == u16(4)
+	assert d.params.data == p.params.data
 }
 
 // ============================================================
@@ -473,6 +516,30 @@ fn test_osc_change_window_title_end_in_esc() {
 	cmd := a[0].osc
 	assert cmd.cmd_type == .change_window_title
 	assert cmd.str_value == 'abc'
+}
+
+fn test_osc_invalid_sequence_produces_no_action() {
+	mut p := VTParser.init()
+	defer { p.deinit() }
+	for byte_val in '\x1b]6'.bytes() {
+		p.next(byte_val)
+	}
+	a := dispatch_actions(p.next(0x07))
+	assert p.state == .ground
+	assert a.len == 0
+}
+
+fn test_parser_param_digit_counter_matches_source_overflow() {
+	mut p := VTParser.init()
+	p.next(0x1b)
+	p.next(u8(`[`))
+	for _ in 0 .. 256 {
+		p.next(u8(`1`))
+	}
+	assert p.param_acc_idx == 0
+	a := dispatch_actions(p.next(u8(`m`)))
+	assert a.len == 1
+	assert a[0].csi.params.len == 0
 }
 
 fn test_osc_color_operation_preserves_bel_terminator() {

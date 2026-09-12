@@ -745,7 +745,7 @@ fn (mut self Stream) next_non_utf8(c u8) {
 			if self.parser.params_idx < max_params {
 				self.parser.params[self.parser.params_idx] = self.parser.param_acc
 				if c == u8(`:`) {
-					self.parser.params_sep.set(int(self.parser.params_idx))
+					self.parser.params_sep.set(usize(self.parser.params_idx))
 				}
 				self.parser.params_idx += 1
 				self.parser.param_acc = 0

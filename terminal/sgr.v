@@ -145,7 +145,7 @@ pub fn (mut self SgrParser) next() ?SgrAttribute {
 
 	slice := self.params[int(self.idx)..]
 	// Check if current separator is a colon.
-	colon := self.params_sep.is_set(int(self.idx))
+	colon := self.params_sep.is_set(self.idx)
 	self.idx += 1
 
 	// Our last one will have an idx be the last value.
@@ -162,7 +162,7 @@ pub fn (mut self SgrParser) next() ?SgrAttribute {
 				// Consume all the colon separated
 				// values and return them as unknown.
 				start := self.idx
-				for self.params_sep.is_set(int(self.idx)) {
+				for self.params_sep.is_set(self.idx) {
 					self.idx += 1
 				}
 				self.idx += 1
@@ -392,13 +392,13 @@ fn (mut self SgrParser) parse_direct_color(kind SgrAttributeKind, slice []u16, c
 // This always returns false for the last value since it has no
 // separator.
 fn (self &SgrParser) is_colon() bool {
-	return self.params_sep.is_set(int(self.idx))
+	return self.params_sep.is_set(self.idx)
 }
 
 fn (self &SgrParser) count_colon() usize {
 	mut count := usize(0)
 	mut idx := self.idx
-	for idx < usize(self.params.len - 1) && self.params_sep.is_set(int(idx)) {
+	for idx < usize(self.params.len - 1) && self.params_sep.is_set(idx) {
 		count += 1
 		idx += 1
 	}

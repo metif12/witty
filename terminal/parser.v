@@ -103,10 +103,10 @@ import osc
 // apc_end).
 
 // Maximum number of CSI parameters.
-const max_params = 24
+pub const max_params = 24
 
 // Maximum number of intermediate bytes.
-const max_intermediates = 4
+pub const max_intermediate = 4
 
 // ============================================================
 // Parser state
@@ -118,8 +118,8 @@ pub enum ParserState {
 	escape
 	escape_intermediate
 	csi_entry
-	csi_param
 	csi_intermediate
+	csi_param
 	csi_ignore
 	dcs_entry
 	dcs_param
@@ -138,21 +138,24 @@ pub enum ParserState {
 // vs semicolon (;). The bit at index N indicates the separator AFTER
 // param N. A set bit means colon, unset means semicolon.
 pub struct SepList {
-pub mut:
-	bits u64
+mut:
+	bits u32
 }
 
-pub fn (self SepList) is_set(idx int) bool {
-	if idx < 0 || idx >= 64 {
-		return false
-	}
-	return (self.bits & (u64(1) << u32(idx))) != 0
+pub fn (self SepList) is_set(idx usize) bool {
+	assert idx < usize(max_params), 'CSI separator index exceeds MAX_PARAMS'
+	return (self.bits & (u32(1) << u32(idx))) != 0
 }
 
-pub fn (mut self SepList) set(idx int) {
-	if idx >= 0 && idx < 64 {
-		self.bits |= u64(1) << u32(idx)
-	}
+pub fn (mut self SepList) set(idx usize) {
+	assert idx < usize(max_params), 'CSI separator index exceeds MAX_PARAMS'
+	self.bits |= u32(1) << u32(idx)
+}
+
+// Sep identifies the separator following a CSI parameter.
+pub enum Sep {
+	semicolon
+	colon
 }
 
 pub fn SepList.init_empty() SepList {
@@ -162,8 +165,8 @@ pub fn SepList.init_empty() SepList {
 // count returns the number of set bits, i.e. how many colon (:) separators
 // were used. A non-zero count means at least one colon/mixed separator was
 // present in the CSI parameters.
-pub fn (self SepList) count() int {
-	mut c := 0
+pub fn (self SepList) count() usize {
+	mut c := usize(0)
 	mut v := self.bits
 	for v != 0 {
 		v &= v - 1
@@ -247,17 +250,24 @@ pub mut:
 	state ParserState = .ground
 
 	// CSI/ESC/DCS parameter tracking
-	params        [max_params]u16
+	params        []u16 = []u16{len: max_params}
 	params_idx    u8
 	param_acc     u16
 	param_acc_idx u8
 	params_sep    SepList
 
-	intermediates     [max_intermediates]u8
+	intermediates     []u8 = []u8{len: max_intermediate}
 	intermediates_idx u8
 
-	// OSC string accumulation
-	osc_buf []u8
+	// Parser for OSC sequences.
+	osc_parser osc.Parser
+}
+
+// init initializes a parser and its OSC sub-parser.
+pub fn VTParser.init() VTParser {
+	return VTParser{
+		osc_parser: osc.Parser.init(unsafe { nil })
+	}
 }
 
 // clear resets the parser's parameter accumulation state.
@@ -271,7 +281,7 @@ pub fn (mut self VTParser) clear() {
 
 // deinit frees any allocated resources.
 pub fn (mut self VTParser) deinit() {
-	self.osc_buf = []
+	self.osc_parser.deinit()
 }
 
 // next consumes the next character c and returns the actions to execute.
@@ -298,7 +308,12 @@ pub fn (mut self VTParser) next(c u8) []ParserAction {
 	if self.state != next_state {
 		match self.state {
 			.osc_string {
-				actions << self.build_osc_action(c)
+				if cmd := self.osc_parser.end(c) {
+					actions << ParserAction{
+						action_type: .osc_dispatch_action
+						osc: cmd
+					}
+				}
 			}
 			.dcs_passthrough {
 				actions << ParserAction{
@@ -326,7 +341,7 @@ pub fn (mut self VTParser) next(c u8) []ParserAction {
 				self.clear()
 			}
 			.osc_string {
-				self.osc_buf = []
+				self.osc_parser.reset()
 			}
 			.dcs_passthrough {
 				// build_dcs_hook_action finalizes the pending parameter
@@ -366,7 +381,7 @@ fn (mut self VTParser) do_action(action TransitionAction, c u8) ?ParserAction {
 			}
 		}
 		.ta_collect {
-			self.collect_intermediate(c)
+			self.collect(c)
 			return none
 		}
 		.ta_param {
@@ -374,8 +389,7 @@ fn (mut self VTParser) do_action(action TransitionAction, c u8) ?ParserAction {
 			return none
 		}
 		.ta_osc_put {
-			// Accumulate OSC bytes.
-			self.osc_buf << c
+			self.osc_parser.next(c)
 			return none
 		}
 		.ta_csi_dispatch {
@@ -403,29 +417,31 @@ fn (mut self VTParser) do_action(action TransitionAction, c u8) ?ParserAction {
 // Helper methods
 // ============================================================
 
-fn (mut self VTParser) collect_intermediate(c u8) {
-	if self.intermediates_idx < max_intermediates {
-		self.intermediates[self.intermediates_idx] = c
-		self.intermediates_idx += 1
+pub fn (mut self VTParser) collect(c u8) {
+	if self.intermediates_idx >= max_intermediate {
+		return
 	}
+
+	self.intermediates[self.intermediates_idx] = c
+	self.intermediates_idx += 1
 }
 
 // process_csi_param_byte handles a digit, semicolon, or colon in CSI param state.
 fn (mut self VTParser) process_csi_param_byte(c u8) {
 	if c >= 0x30 && c <= 0x39 {
 		// Digit
-		if self.params_idx < max_params {
-			// Saturating multiply and add
-			v := u32(self.param_acc) * 10 + u32(c - 0x30)
-			self.param_acc = if v > 65535 { u16(65535) } else { u16(v) }
-			self.param_acc_idx |= 1
-		}
+		// Saturating multiply and add.
+		v := u32(self.param_acc) * 10 + u32(c - 0x30)
+		self.param_acc = if v > 65535 { u16(65535) } else { u16(v) }
+
+		// Match @addWithOverflow on Ghostty's u8 digit counter.
+		self.param_acc_idx++
 	} else if c == 0x3A || c == 0x3B {
 		// Colon or semicolon separator
 		if self.params_idx < max_params {
 			self.params[self.params_idx] = self.param_acc
 			if c == 0x3A {
-				self.params_sep.set(int(self.params_idx))
+				self.params_sep.set(usize(self.params_idx))
 			}
 			self.params_idx += 1
 			self.param_acc = 0
@@ -445,20 +461,9 @@ fn (mut self VTParser) build_csi_action(final_byte u8) ParserAction {
 	}
 
 	// Finalize params: add accumulator if digits were seen
-	mut p_len := int(self.params_idx)
-	if self.param_acc_idx > 0 && self.params_idx < max_params {
+	if self.param_acc_idx > 0 {
 		self.params[self.params_idx] = self.param_acc
-		p_len = int(self.params_idx) + 1
-	}
-
-	// Copy params and intermediates to slices
-	mut params_copy := []u16{cap: p_len}
-	for i in 0 .. p_len {
-		params_copy << self.params[i]
-	}
-	mut inter_copy := []u8{cap: int(self.intermediates_idx)}
-	for i in 0 .. int(self.intermediates_idx) {
-		inter_copy << self.intermediates[i]
+		self.params_idx += 1
 	}
 
 	// We only allow colon or mixed separators for the 'm' command.
@@ -474,8 +479,8 @@ fn (mut self VTParser) build_csi_action(final_byte u8) ParserAction {
 	return ParserAction{
 		action_type: .csi_dispatch_action
 		csi: CSIAction{
-			intermediates: inter_copy
-			params: params_copy
+			intermediates: self.intermediates[..int(self.intermediates_idx)]
+			params: self.params[..int(self.params_idx)]
 			params_sep: self.params_sep
 			final_byte: final_byte
 		}
@@ -483,68 +488,29 @@ fn (mut self VTParser) build_csi_action(final_byte u8) ParserAction {
 }
 
 // build_esc_action creates an ESC dispatch action from the current parser state.
-fn (self &VTParser) build_esc_action(final_byte u8) ParserAction {
-	mut inter_copy := []u8{cap: int(self.intermediates_idx)}
-	for i in 0 .. int(self.intermediates_idx) {
-		inter_copy << self.intermediates[i]
-	}
-
+fn (mut self VTParser) build_esc_action(final_byte u8) ParserAction {
 	return ParserAction{
 		action_type: .esc_dispatch_action
 		esc: ESCAction{
-			intermediates: inter_copy
+			intermediates: self.intermediates[..int(self.intermediates_idx)]
 			final_byte: final_byte
 		}
-	}
-}
-
-// build_osc_action creates an OSC dispatch action from the accumulated buffer.
-fn (mut self VTParser) build_osc_action(terminator_ch u8) ParserAction {
-	osc_data := self.osc_buf.bytestr()
-	self.osc_buf = []
-
-	cmd := parse_osc_command(osc_data, terminator_ch)
-
-	return ParserAction{
-		action_type: .osc_dispatch_action
-		osc: cmd
 	}
 }
 
 // build_dcs_hook_action creates a DCS hook action from the current parser state.
 fn (mut self VTParser) build_dcs_hook_action(final_byte u8) ParserAction {
-	mut p_len := int(self.params_idx)
-	if self.param_acc_idx > 0 && self.params_idx < max_params {
+	if self.param_acc_idx > 0 {
 		self.params[self.params_idx] = self.param_acc
-		p_len = int(self.params_idx) + 1
-	}
-
-	mut params_copy := []u16{cap: p_len}
-	for i in 0 .. p_len {
-		params_copy << self.params[i]
-	}
-	mut inter_copy := []u8{cap: int(self.intermediates_idx)}
-	for i in 0 .. int(self.intermediates_idx) {
-		inter_copy << self.intermediates[i]
+		self.params_idx += 1
 	}
 
 	return ParserAction{
 		action_type: .dcs_hook_action
 		dcs: DCSAction{
-			intermediates: inter_copy
-			params: params_copy
+			intermediates: self.intermediates[..int(self.intermediates_idx)]
+			params: self.params[..int(self.params_idx)]
 			final_byte: final_byte
 		}
 	}
-}
-
-// parse_osc_command parses an OSC string into a command.
-// The format is: <number>[;<data>]. Some OSCs (e.g. 104, 110-119, 133)
-// may legitimately arrive without a trailing semicolon.
-fn parse_osc_command(data string, terminator_ch u8) OscCommand {
-	mut parser := osc.Parser.init(unsafe { nil })
-	for byte_val in data.bytes() {
-		parser.next(byte_val)
-	}
-	return parser.end(terminator_ch) or { OscCommand{ cmd_type: .invalid } }
 }
