@@ -2765,7 +2765,7 @@ pub fn (self &PagePin) up_overflow(n usize) UpOverflowResult {
 // ---- Pin iterator factories ----
 
 pub fn (self &PagePin) page_iterator(direction IterDirection, limit ?PagePin) PageIterator {
-	$if debug {
+	$if !prod {
 		if lim := limit {
 			match direction {
 				.right_down {
@@ -2964,9 +2964,7 @@ pub struct PageCloneOpts {
 pub:
 	// Top and bottom are inclusive. Their x coordinate is ignored; cloning
 	// always copies complete rows.
-	top Point = Point{
-		tag: .screen
-	}
+	top Point @[required]
 	bot ?Point
 	// When set, tracked pins inside the cloned region are recreated and the
 	// old-to-new pointer mapping is recorded here.
@@ -3678,12 +3676,15 @@ fn clone_row_for_page_list(mut dst Page, dst_y int, src &RowData, cols u32) {
 }
 
 pub fn (mut self PageList) deinit() {
+	self.assert_integrity()
 	self.tracked_pins = []
 	self.pages = PageNodeList{}
 }
 
 pub fn (mut self PageList) reset() {
+	defer { self.assert_integrity() }
 	cap := initial_capacity(self.cols)
+	assert cap.rows > 0
 
 	// Rebuild page list
 	mut page_list := PageNodeList{}
@@ -4937,20 +4938,7 @@ pub fn (mut self PageList) split(p PagePin) ! {
 // ============================================================
 
 pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
-	mut top := opts.top
-	top.coord.x = 0
-	tl_pin := self.pin(top) or {
-		return PageList.init(self.cols, self.rows, self.explicit_max_size)
-	}
-	bl_pin := if bt := opts.bot {
-		mut bot := bt
-		bot.coord.x = 0
-		self.pin(bot) or { return PageList.init(self.cols, self.rows, self.explicit_max_size) }
-	} else {
-		self.get_bottom_right(top.tag) or {
-			return PageList.init(self.cols, self.rows, self.explicit_max_size)
-		}
-	}
+	mut it := self.page_iterator(.right_down, opts.top, opts.bot)
 
 	mut result := PageList.init(self.cols, self.rows, self.explicit_max_size)
 	// Clear default pages
@@ -4959,7 +4947,6 @@ pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 	result.total_rows = 0
 	result.page_size = 0
 
-	mut it := tl_pin.page_iterator(.right_down, bl_pin)
 	for {
 		chunk := it.next() or { break }
 		new_node := result.create_page(chunk.node.data.capacity)
@@ -4996,9 +4983,7 @@ pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 
 	// Ensure viewport pin points to valid node
 	if first := result.pages.first {
-		result.viewport_pin.node = first
-		result.viewport_pin.y = 0
-		result.viewport_pin.x = 0
+		unsafe { *result.viewport_pin = PagePin{ node: first } }
 	}
 
 	// Ensure we have enough rows for active area
@@ -5009,6 +4994,7 @@ pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 		}
 	}
 
+	result.assert_integrity()
 	return result
 }
 
@@ -6663,6 +6649,9 @@ pub fn (self &PageList) prompt_iterator(direction IterDirection, tl Point, bl ?P
 // ============================================================
 
 pub fn (self &PageList) assert_integrity() {
+	$if prod {
+		return
+	}
 	if self.pause_integrity_checks > 0 {
 		return
 	}
@@ -6670,6 +6659,9 @@ pub fn (self &PageList) assert_integrity() {
 }
 
 pub fn (self &PageList) verify_integrity() bool {
+	$if prod {
+		return true
+	}
 	if self.pause_integrity_checks > 0 {
 		return true
 	}
@@ -6740,6 +6732,9 @@ pub fn (self &PageList) verify_integrity() bool {
 
 // Temporarily pause or resume integrity checks around multi-step mutations.
 pub fn (mut self PageList) pause_integrity_checks_set(pause bool) {
+	$if prod {
+		return
+	}
 	if pause {
 		self.pause_integrity_checks += 1
 	} else {

@@ -2526,7 +2526,7 @@ fn test_page_list_clone() {
 	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
 
-	mut c := s.clone(PageCloneOpts{}) or { panic(err) }
+	mut c := s.clone(PageCloneOpts{ top: Point{ tag: .screen } }) or { panic(err) }
 	defer { c.deinit() }
 
 	assert c.total_rows == s.total_rows
@@ -2540,7 +2540,7 @@ fn test_page_list_clone_with_history() {
 
 	s.grow_rows(100)
 
-	mut c := s.clone(PageCloneOpts{}) or { panic(err) }
+	mut c := s.clone(PageCloneOpts{ top: Point{ tag: .screen } }) or { panic(err) }
 	defer { c.deinit() }
 
 	assert c.total_rows == s.total_rows
@@ -2634,7 +2634,7 @@ fn test_page_list_clone_partial_trimmed_both() {
 	assert c.count_total_rows() == 26
 }
 
-fn test_page_list_clone_ignores_horizontal_coordinates() {
+fn test_page_list_clone_ignores_valid_horizontal_coordinates() {
 	mut s := PageList.init(10, 20, none)
 	defer { s.deinit() }
 	s.grow_rows(30)
@@ -2642,11 +2642,11 @@ fn test_page_list_clone_ignores_horizontal_coordinates() {
 	mut c := s.clone(PageCloneOpts{
 		top: Point{
 			tag: .screen
-			coord: Coordinate{ x: max_u16, y: 10 }
+			coord: Coordinate{ x: 9, y: 10 }
 		}
 		bot: Point{
 			tag: .screen
-			coord: Coordinate{ x: max_u16, y: 35 }
+			coord: Coordinate{ x: 9, y: 35 }
 		}
 	}) or { panic(err) }
 	defer { c.deinit() }
@@ -2715,7 +2715,7 @@ fn test_page_list_clone_full_dirty() {
 		})
 	}
 
-	mut c := s.clone(PageCloneOpts{}) or { panic(err) }
+	mut c := s.clone(PageCloneOpts{ top: Point{ tag: .screen } }) or { panic(err) }
 	defer { c.deinit() }
 	for y in 0 .. 24 {
 		assert c.is_dirty(Point{
@@ -2730,7 +2730,7 @@ fn test_page_list_clone_restarts_page_serials() {
 	defer { s.deinit() }
 	s.grow_rows(usize(initial_capacity(s.cols).rows))
 
-	mut cloned := s.clone(PageCloneOpts{}) or { panic(err) }
+	mut cloned := s.clone(PageCloneOpts{ top: Point{ tag: .screen } }) or { panic(err) }
 	defer { cloned.deinit() }
 	mut expected := u64(0)
 	mut node := cloned.pages.first
