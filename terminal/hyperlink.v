@@ -195,7 +195,7 @@ mut:
 	explicit_offset int = -1
 	bucket          u16 = max_u16
 	psl             u16
-	ref_count       int
+	ref_count       u16
 }
 
 // HyperlinkSet is the page-local ref-counted set. Dead slots are reused and
@@ -206,7 +206,7 @@ pub mut:
 	hash_table   []u16
 	max_psl      u16
 	psl_stats    [32]u16
-	living       int
+	living       usize
 	next_id      u16 = 1
 	layout       PageSetLayout
 	string_alloc BitmapAllocator
@@ -261,9 +261,9 @@ pub fn (mut self HyperlinkSet) add(link Hyperlink) !HyperlinkId {
 		self.free_entry_strings(mut entry)
 		return error('set out of memory')
 	}
-	if int(self.next_id) >= int(self.layout.cap) {
+	if usize(self.next_id) >= self.layout.cap {
 		self.free_entry_strings(mut entry)
-		if self.living < int(f64(self.layout.cap) * 0.9) {
+		if self.living < usize(f64(self.layout.cap) * 0.9) {
 			return error('set needs rehash')
 		}
 		return error('set out of memory')
@@ -354,21 +354,21 @@ pub fn (self &HyperlinkSet) get(id HyperlinkId) Hyperlink {
 	return self.entries[int(id)].link
 }
 
-pub fn (self &HyperlinkSet) ref_count(id HyperlinkId) int {
+pub fn (self &HyperlinkSet) ref_count(id HyperlinkId) u16 {
 	assert id > 0
 	assert int(id) < self.entries.len
 	return self.entries[int(id)].ref_count
 }
 
-pub fn (self &HyperlinkSet) count() int {
+pub fn (self &HyperlinkSet) count() usize {
 	return self.living
 }
 
-pub fn (self &HyperlinkSet) capacity() int {
+pub fn (self &HyperlinkSet) capacity() usize {
 	if self.layout.cap == 0 {
 		return 0
 	}
-	return int(self.layout.cap) - 1
+	return self.layout.cap - 1
 }
 
 pub fn (self &HyperlinkSet) string_capacity() int {
@@ -553,7 +553,7 @@ fn (mut self HyperlinkSet) insert(entry HyperlinkSetEntry, new_id u16) u16 {
 	return chosen_id
 }
 
-pub fn HyperlinkSet.capacity_for_count(count int) int {
+pub fn HyperlinkSet.capacity_for_count(count usize) usize {
 	return rcs_capacity_for_count(count)
 }
 

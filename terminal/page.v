@@ -890,7 +890,7 @@ pub mut:
 // Initialize a new empty StyleSet for the requested page capacity.
 pub fn StyleSet.init(capacity u16) StyleSet {
 	return StyleSet{
-		set: RefCountedSet.init(RefCountedSetLayout.init(int(capacity)))
+		set: RefCountedSet.init(RefCountedSetLayout.init(usize(capacity)))
 	}
 }
 
@@ -926,14 +926,14 @@ pub fn (self &StyleSet) get(id u32) CellStyle {
 }
 
 // Get the ref count for a style.
-pub fn (self &StyleSet) ref_count(id u32) int {
-	return int(self.set.ref_count(u16(id)))
+pub fn (self &StyleSet) ref_count(id u32) u16 {
+	return self.set.ref_count(u16(id))
 }
 
 // Returns the number of styles with capacity for the given count,
 // accounting for the canonical load factor and reserved ID zero.
-pub fn StyleSet.capacity_for_count(count int) u16 {
-	return u16(rcs_capacity_for_count(count))
+pub fn StyleSet.capacity_for_count(count usize) usize {
+	return rcs_capacity_for_count(count)
 }
 
 // clone returns an independent copy preserving IDs, refs, and probe metadata.
@@ -1389,8 +1389,8 @@ pub fn (self &Page) verify_integrity() ?IntegrityError {
 	}
 
 	mut graphemes_seen := 0
-	mut styles_seen := map[u32]int{}
-	mut hyperlinks_seen := map[u32]int{}
+	mut styles_seen := map[u32]usize{}
+	mut hyperlinks_seen := map[u32]usize{}
 	total_graphemes := self.grapheme_count()
 
 	for y in 0 .. int(self.size.rows) {
@@ -1635,12 +1635,12 @@ pub fn (self &Page) exact_row_capacity(y_start usize, y_end usize) PageCapacity 
 		}
 	}
 
-	styles_cap := StyleSet.capacity_for_count(style_ids.keys().len)
+	styles_cap := StyleSet.capacity_for_count(usize(style_ids.keys().len))
 
 	// Second pass: size both the hyperlink set and its cell-to-ID map, and
 	// count the page-owned URI/explicit-ID string allocations once per link.
 	mut hyperlink_ids := map[HyperlinkId]bool{}
-	mut hyperlink_cells := 0
+	mut hyperlink_cells := usize(0)
 	mut string_bytes := usize(0)
 	for y in y_start .. y_end {
 		row := self.rows[int(y)]
@@ -1667,24 +1667,24 @@ pub fn (self &Page) exact_row_capacity(y_start usize, y_end usize) PageCapacity 
 		}
 	}
 
-	hyperlink_set_cap := HyperlinkSet.capacity_for_count(hyperlink_ids.keys().len)
-	hyperlink_map_min := (hyperlink_cells + hyperlink_cell_multiplier - 1) / hyperlink_cell_multiplier
+	hyperlink_set_cap := HyperlinkSet.capacity_for_count(usize(hyperlink_ids.keys().len))
+	hyperlink_map_min := (hyperlink_cells + usize(hyperlink_cell_multiplier) - 1) / usize(hyperlink_cell_multiplier)
 	hyperlink_cap := if hyperlink_set_cap > hyperlink_map_min {
 		hyperlink_set_cap
 	} else {
 		hyperlink_map_min
 	}
 	assert y_end - y_start <= usize(max_u16)
-	assert styles_cap <= int(max_u16)
-	assert hyperlink_cap * int(hyperlink_set_item_size) <= int(max_u16)
+	assert styles_cap <= usize(max_u16)
+	assert hyperlink_cap * hyperlink_set_item_size <= usize(max_u16)
 	assert grapheme_bytes <= usize(max_u32)
 	assert string_bytes <= usize(max_u32)
 
 	return PageCapacity{
 		cols: self.size.cols
 		rows: u16(y_end - y_start)
-		styles: styles_cap
-		hyperlink_bytes: u16(hyperlink_cap * int(hyperlink_set_item_size))
+		styles: u16(styles_cap)
+		hyperlink_bytes: u16(hyperlink_cap * hyperlink_set_item_size)
 		grapheme_bytes: u32(grapheme_bytes)
 		string_bytes: u32(string_bytes)
 	}

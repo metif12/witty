@@ -1,5 +1,7 @@
 module terminal
 
+import math
+
 // A reference counted set.
 //
 // Source: ref_counted_set.zig (714 lines)
@@ -101,17 +103,17 @@ pub mut:
 pub struct RefCountedSetLayout {
 pub:
 	// The number of items that can be stored (including reserved ID 0).
-	cap int
+	cap usize
 	// The capacity of the hash table (power of 2).
-	table_cap int
+	table_cap usize
 	// Bitmask for fast modulo on the table (table_cap - 1).
 	table_mask u16
 	// Byte offset of the hash table from the base.
-	table_start int
+	table_start usize
 	// Byte offset of the items array from the base.
-	items_start int
+	items_start usize
 	// Total size in bytes needed for the set.
-	total_size int
+	total_size usize
 }
 
 // This is the max load until the set returns out_of_memory and
@@ -122,20 +124,17 @@ pub const rcs_load_factor = 0.8125
 
 // Returns the minimum capacity needed to store n items,
 // accounting for the load factor and the reserved ID 0.
-pub fn rcs_capacity_for_count(n int) int {
+pub fn rcs_capacity_for_count(n usize) usize {
 	if n == 0 {
 		return 0
 	}
 	// +1 because ID 0 is reserved, so we need at least n+1 slots.
-	return int(f64(n + 1) / rcs_load_factor + 0.999999)
+	return usize(math.ceil(f64(n + 1) / rcs_load_factor))
 }
 
 // Returns the memory layout for a desired capacity.
 // The capacity is rounded up to the next power of 2.
-pub fn RefCountedSetLayout.init(cap int) RefCountedSetLayout {
-	// Ghostty accepts a usize here and asserts that the requested table can be
-	// addressed by Id. V's signed int needs the lower-bound check explicitly.
-	assert cap >= 0
+pub fn RefCountedSetLayout.init(cap usize) RefCountedSetLayout {
 	assert cap <= 65536
 
 	// Zero-cap set is valid, return special case
@@ -145,17 +144,17 @@ pub fn RefCountedSetLayout.init(cap int) RefCountedSetLayout {
 
 	// Round up to next power of 2
 	table_cap := rcs_ceil_power_of_two(cap)
-	items_cap := int(rcs_load_factor * f64(table_cap))
+	items_cap := usize(rcs_load_factor * f64(table_cap))
 
 	table_mask := u16(table_cap - 1)
 
-	table_start := 0
+	table_start := usize(0)
 	table_end := table_start + table_cap * 2 // sizeof(u16) = 2
 
 	// This is the CellStyle specialization. Ghostty's StyleSet.Item is 36
 	// bytes with 4-byte alignment (the same constants used by Page.layout).
 	items_start := rcs_align_forward(table_end, 4)
-	items_end := items_start + items_cap * int(page_style_item_size)
+	items_end := items_start + items_cap * page_style_item_size
 
 	total_size := items_end
 
@@ -205,7 +204,7 @@ pub mut:
 	// item with a PSL in the last slot of the stats array.
 	psl_stats [32]u16
 	// The number of living items currently stored in the set.
-	living int
+	living usize
 	// The next index to store an item at.
 	// Id 0 is reserved for unused items.
 	next_id u16 = 1
@@ -215,8 +214,8 @@ pub mut:
 
 // init creates a new RefCountedSet with the given layout.
 pub fn RefCountedSet.init(l RefCountedSetLayout) RefCountedSet {
-	mut hash_table := []u16{len: l.table_cap}
-	mut items := []RefCountedSetItem{len: l.cap}
+	mut hash_table := []u16{len: int(l.table_cap)}
+	mut items := []RefCountedSetItem{len: int(l.cap)}
 	return RefCountedSet{
 		hash_table: hash_table
 		items: items
@@ -255,7 +254,7 @@ pub fn (mut self RefCountedSet) add(value CellStyle) !u16 {
 		// If less than 90% of currently allocated IDs
 		// correspond to living items, we should rehash.
 		rehash_threshold := 0.9
-		if self.living < int(f64(self.layout.cap) * rehash_threshold) {
+		if self.living < usize(f64(self.layout.cap) * rehash_threshold) {
 			return error('needs rehash')
 		}
 		return error('out of memory')
@@ -375,7 +374,7 @@ pub fn (self &RefCountedSet) ref_count(id u16) u16 {
 }
 
 // Get the current number of non-dead items in the set.
-pub fn (self &RefCountedSet) count() int {
+pub fn (self &RefCountedSet) count() usize {
 	return self.living
 }
 
@@ -433,7 +432,7 @@ pub fn (self &RefCountedSet) lookup(value CellStyle) ?u16 {
 fn (mut self RefCountedSet) delete_item(id u16) {
 	item := self.items[id]
 
-	if int(item.meta.bucket) > self.layout.table_cap {
+	if usize(item.meta.bucket) > self.layout.table_cap {
 		return
 	}
 	assert self.hash_table[item.meta.bucket] == id
@@ -489,7 +488,7 @@ fn (mut self RefCountedSet) insert(value CellStyle, new_id u16) u16 {
 	mut new_bucket := u16(0)
 	mut new_psl := u16(0)
 
-	for i in 0 .. self.layout.table_cap - 1 {
+	for i in 0 .. int(self.layout.table_cap) - 1 {
 		p := u16((hash + u64(i)) & u64(self.layout.table_mask))
 		id := self.hash_table[p]
 
@@ -605,11 +604,11 @@ fn rcs_hash_style(s CellStyle) u64 {
 }
 
 // rcs_ceil_power_of_two rounds up to the next power of 2.
-fn rcs_ceil_power_of_two(v int) int {
+fn rcs_ceil_power_of_two(v usize) usize {
 	if v <= 1 {
 		return 1
 	}
-	mut p := 1
+	mut p := usize(1)
 	for p < v {
 		p *= 2
 	}
@@ -617,7 +616,7 @@ fn rcs_ceil_power_of_two(v int) int {
 }
 
 // rcs_align_forward aligns a value forward to the given alignment.
-fn rcs_align_forward(v int, alignment int) int {
+fn rcs_align_forward(v usize, alignment usize) usize {
 	if alignment == 0 {
 		return v
 	}

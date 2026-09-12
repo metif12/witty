@@ -2291,7 +2291,7 @@ fn test_page_clone_row_reports_bounded_style_failure() {
 	mut src := Page.init(PageCapacity{
 		cols: 1
 		rows: 1
-		styles: StyleSet.capacity_for_count(1)
+		styles: u16(StyleSet.capacity_for_count(1))
 	})
 	defer { src.deinit() }
 	style_id := src.styles.add(CellStyle{ flags: StyleFlags{ bold: true } }) or {
@@ -2443,7 +2443,7 @@ fn test_page_exact_row_capacity_styles_max_single_row() {
 
 	// Fill cells with styles until we get OOM, but limit to a reasonable count
 	// to avoid overflow when computing capacity_for_count near maxInt.
-	mut count := 0
+	mut count := usize(0)
 	max_count := 1000 // Limit to avoid overflow in capacity calculation.
 	for i in 0 .. int(page.size.cols) {
 		if count >= max_count {

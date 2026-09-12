@@ -3597,7 +3597,7 @@ pub fn PageList.from_pages(src &Pages) &PageList {
 // so the linked page must deduplicate the inline CellStyle values themselves.
 fn prepare_page_list_snapshot_styles(mut dst Page, rows []RowData, cols u32) {
 	mut styles_by_hash := map[u64][]CellStyle{}
-	mut unique_count := 0
+	mut unique_count := usize(0)
 	for row in rows {
 		limit := if row.cells.len < int(cols) { row.cells.len } else { int(cols) }
 		for cell in row.cells[..limit] {
@@ -3623,8 +3623,9 @@ fn prepare_page_list_snapshot_styles(mut dst Page, rows []RowData, cols u32) {
 	}
 
 	style_capacity := StyleSet.capacity_for_count(unique_count)
-	dst.capacity.styles = style_capacity
-	dst.styles = StyleSet.init(style_capacity)
+	assert style_capacity <= usize(max_u16)
+	dst.capacity.styles = u16(style_capacity)
+	dst.styles = StyleSet.init(u16(style_capacity))
 }
 
 // Copy one flat row into a linked Page, translating inline styles and

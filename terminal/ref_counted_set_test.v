@@ -338,7 +338,7 @@ fn test_rcs_add_with_id_falls_back_when_requested_slot_is_live() {
 // in the following bucket.
 fn test_rcs_robin_hood_displacement_updates_stored_psl() {
 	l := RefCountedSetLayout.init(16)
-	mut styles_by_bucket := [][]CellStyle{len: l.table_cap}
+	mut styles_by_bucket := [][]CellStyle{len: int(l.table_cap)}
 	for palette_index in 0 .. 256 {
 		style := CellStyle{
 			fg_color: .palette
@@ -349,7 +349,7 @@ fn test_rcs_robin_hood_displacement_updates_stored_psl() {
 	}
 
 	mut start_bucket := -1
-	for bucket in 0 .. l.table_cap {
+	for bucket in 0 .. int(l.table_cap) {
 		next_bucket := (bucket + 1) & int(l.table_mask)
 		if styles_by_bucket[bucket].len >= 2 && styles_by_bucket[next_bucket].len >= 1 {
 			start_bucket = bucket
