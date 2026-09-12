@@ -62,8 +62,20 @@ fn assert_page_list_semantic_highlight(pl &PageList, at Pin, content SemanticCon
 		assert false, 'semantic highlight missing'
 		return
 	}
-	assert (pl.point_from_pin(.screen, hl.start) or { Pin{} }) == start
-	assert (pl.point_from_pin(.screen, hl.end) or { Pin{} }) == end
+	start_point := pl.point_from_pin(.screen, hl.start) or {
+		assert false
+		return
+	}
+	end_point := pl.point_from_pin(.screen, hl.end) or {
+		assert false
+		return
+	}
+	assert start_point.tag == .screen
+	assert start_point.coord.x == start.x
+	assert start_point.coord.y == start.y
+	assert end_point.tag == .screen
+	assert end_point.coord.x == end.x
+	assert end_point.coord.y == end.y
 }
 
 fn grow_page_list_to_second_page(mut pl PageList, extra_rows usize) {
@@ -632,6 +644,18 @@ fn test_page_pin_row_cell_grapheme_and_style_accessors() {
 	assert pin.grapheme(&foreign) == none
 	assert pin.style(rac.cell).eql(&style)
 	assert pin.style(&CellData{}).default()
+
+	page_cell := s.get_cell(.screen, pin.x, pin.y) or {
+		assert false
+		return
+	}
+	assert page_cell.style().eql(&style)
+	assert !page_cell.is_dirty()
+	pin.mark_dirty()
+	assert page_cell.is_dirty()
+	screen_point := page_cell.screen_point()
+	assert screen_point.tag == .screen
+	assert screen_point.coord == Coordinate{ x: 1, y: 1 }
 }
 
 fn test_page_pin_left_right_wrap() {
@@ -1084,8 +1108,8 @@ fn test_page_list_point_from_pin_active_no_history() {
 		assert false, 'point_from_pin failed'
 		return
 	}
-	assert pt.x == 0
-	assert pt.y == 0
+	assert pt.coord.x == 0
+	assert pt.coord.y == 0
 
 	// Active pin at (5, 10)
 	p2 := s.get_pin(.active, 5, 10) or {
@@ -1096,8 +1120,8 @@ fn test_page_list_point_from_pin_active_no_history() {
 		assert false, 'point_from_pin failed'
 		return
 	}
-	assert pt2.x == 5
-	assert pt2.y == 10
+	assert pt2.coord.x == 5
+	assert pt2.coord.y == 10
 }
 
 fn test_page_list_point_from_pin_active_with_history() {
@@ -1116,15 +1140,15 @@ fn test_page_list_point_from_pin_active_with_history() {
 		assert false, 'point_from_pin failed'
 		return
 	}
-	assert pt.x == 0
-	assert pt.y == 0
+	assert pt.coord.x == 0
+	assert pt.coord.y == 0
 
 	// Screen pin at active area should have y offset by history
 	pt_screen := s.point_from_pin(.screen, p) or {
 		assert false, 'point_from_pin screen failed'
 		return
 	}
-	assert pt_screen.y > 0 // Should be offset by scrollback
+	assert pt_screen.coord.y > 0 // Should be offset by scrollback
 }
 
 fn test_page_list_point_from_pin_traverse_pages() {
@@ -1144,8 +1168,8 @@ fn test_page_list_point_from_pin_traverse_pages() {
 		assert false, 'point_from_pin failed'
 		return
 	}
-	assert pt.x == 5
-	assert pt.y == 10
+	assert pt.coord.x == 5
+	assert pt.coord.y == 10
 }
 
 // ============================================================
@@ -1766,6 +1790,17 @@ fn test_page_list_pin_is_valid() {
 	}
 
 	assert s.pin_is_valid(p)
+
+	// Page widths can temporarily differ during an incomplete reflow. Pin
+	// validity is bounded by the owning page rather than the list target width.
+	mut node := p.node
+	node.data.size.cols = 1
+	assert !s.pin_is_valid(PagePin{
+		node: node
+		y: 0
+		x: 1
+	})
+	node.data.size.cols = 80
 }
 
 fn test_page_list_pin_is_active() {
@@ -2567,8 +2602,8 @@ fn test_page_list_clone_remap_tracked_pin() {
 		assert false
 		return
 	}
-	assert point.x == 0
-	assert point.y == 1
+	assert point.coord.x == 0
+	assert point.coord.y == 1
 }
 
 fn test_page_list_clone_remap_tracked_pin_not_in_cloned_area() {
@@ -2596,22 +2631,38 @@ fn test_page_list_clone_full_dirty() {
 	mut s := PageList.init(80, 24, none)
 	defer { s.deinit() }
 	for y in [u16(0), 12, 23] {
-		mut pin := s.get_pin(.active, 0, y) or {
-			assert false
-			return
-		}
-		pin.mark_dirty()
+		s.mark_dirty(Point{
+			tag: .active
+			coord: Coordinate{ y: y }
+		})
 	}
 
 	mut c := s.clone(PageCloneOpts{}) or { panic(err) }
 	defer { c.deinit() }
 	for y in 0 .. 24 {
-		pin := c.get_pin(.active, 0, u16(y)) or {
-			assert false
-			return
-		}
-		assert pin.is_dirty() == (y in [0, 12, 23])
+		assert c.is_dirty(Point{
+			tag: .active
+			coord: Coordinate{ y: u32(y) }
+		}) == (y in [0, 12, 23])
 	}
+}
+
+fn test_page_list_clone_restarts_page_serials() {
+	mut s := PageList.init(80, 24, none)
+	defer { s.deinit() }
+	s.grow_rows(usize(initial_capacity(s.cols).rows))
+
+	mut cloned := s.clone(PageCloneOpts{}) or { panic(err) }
+	defer { cloned.deinit() }
+	mut expected := u64(0)
+	mut node := cloned.pages.first
+	for {
+		current := node or { break }
+		assert current.serial == expected
+		expected++
+		node = current.next
+	}
+	assert cloned.page_serial == expected
 }
 
 fn test_page_list_clone_active_only() {
@@ -2971,24 +3022,19 @@ fn test_page_list_dirty() {
 
 	// Clear dirty
 	s.clear_dirty()
-	assert !s.is_dirty()
+	point := Point{
+		tag: .active
+		coord: Coordinate{}
+	}
+	assert !s.is_dirty(point)
 
 	// Set a row dirty
-	p := s.get_pin(.active, 0, 0) or {
-		assert false, 'get_pin failed'
-		return
-	}
-	mut pin := PagePin{
-		node: p.node
-		y: p.y
-		x: p.x
-	}
-	pin.mark_dirty()
+	s.mark_dirty(point)
 
-	assert s.is_dirty()
+	assert s.is_dirty(point)
 
 	s.clear_dirty()
-	assert !s.is_dirty()
+	assert !s.is_dirty(point)
 }
 
 // ============================================================
@@ -3208,7 +3254,8 @@ fn test_page_list_prompt_iterator_left_up() {
 			assert false
 			return
 		}
-		assert point == Pin{ x: 0, y: expected }
+		assert point.tag == .screen
+		assert point.coord == Coordinate{ x: 0, y: expected }
 	}
 	assert it.next() == none
 }
@@ -3236,7 +3283,8 @@ fn test_page_list_prompt_iterator_right_down() {
 			assert false
 			return
 		}
-		assert point == Pin{ x: 0, y: expected }
+		assert point.tag == .screen
+		assert point.coord == Coordinate{ x: 0, y: expected }
 	}
 	assert it.next() == none
 }
@@ -3262,7 +3310,8 @@ fn test_page_list_prompt_iterator_right_down_continuation_at_start() {
 			assert false
 			return
 		}
-		assert point == Pin{ x: 0, y: expected }
+		assert point.tag == .screen
+		assert point.coord == Coordinate{ x: 0, y: expected }
 	}
 	assert it.next() == none
 }
@@ -3290,7 +3339,7 @@ fn test_page_list_prompt_iterator_right_down_with_prompt_before_continuation() {
 		assert false
 		return
 	}
-	assert point == Pin{ x: 0, y: 3 }
+	assert point == Point{ tag: .screen, coord: Coordinate{ x: 0, y: 3 } }
 	assert it.next() == none
 }
 
@@ -3316,7 +3365,7 @@ fn test_page_list_prompt_iterator_right_down_limit_inclusive() {
 		assert false
 		return
 	}
-	assert point == Pin{ x: 0, y: 5 }
+	assert point == Point{ tag: .screen, coord: Coordinate{ x: 0, y: 5 } }
 	assert it.next() == none
 }
 
@@ -3345,7 +3394,7 @@ fn test_page_list_prompt_iterator_left_up_limit_inclusive() {
 		assert false
 		return
 	}
-	assert point == Pin{ x: 0, y: 10 }
+	assert point == Point{ tag: .screen, coord: Coordinate{ x: 0, y: 10 } }
 	assert it.next() == none
 }
 
@@ -3392,22 +3441,40 @@ fn test_page_list_highlight_semantic_content() {
 		assert false, 'prompt highlight missing'
 		return
 	}
-	assert (s.point_from_pin(.screen, prompt.start) or { Pin{} }) == Pin{ x: 0, y: 2 }
-	assert (s.point_from_pin(.screen, prompt.end) or { Pin{} }) == Pin{ x: 4, y: 2 }
+	assert (s.point_from_pin(.screen, prompt.start) or { Point{} }) == Point{
+		tag: .screen
+		coord: Coordinate{ x: 0, y: 2 }
+	}
+	assert (s.point_from_pin(.screen, prompt.end) or { Point{} }) == Point{
+		tag: .screen
+		coord: Coordinate{ x: 4, y: 2 }
+	}
 
 	input := s.highlight_semantic_content(at, .input) or {
 		assert false, 'input highlight missing'
 		return
 	}
-	assert (s.point_from_pin(.screen, input.start) or { Pin{} }) == Pin{ x: 2, y: 2 }
-	assert (s.point_from_pin(.screen, input.end) or { Pin{} }) == Pin{ x: 4, y: 2 }
+	assert (s.point_from_pin(.screen, input.start) or { Point{} }) == Point{
+		tag: .screen
+		coord: Coordinate{ x: 2, y: 2 }
+	}
+	assert (s.point_from_pin(.screen, input.end) or { Point{} }) == Point{
+		tag: .screen
+		coord: Coordinate{ x: 4, y: 2 }
+	}
 
 	output := s.highlight_semantic_content(at, .output) or {
 		assert false, 'output highlight missing'
 		return
 	}
-	assert (s.point_from_pin(.screen, output.start) or { Pin{} }) == Pin{ x: 0, y: 3 }
-	assert (s.point_from_pin(.screen, output.end) or { Pin{} }) == Pin{ x: 1, y: 4 }
+	assert (s.point_from_pin(.screen, output.start) or { Point{} }) == Point{
+		tag: .screen
+		coord: Coordinate{ x: 0, y: 3 }
+	}
+	assert (s.point_from_pin(.screen, output.end) or { Point{} }) == Point{
+		tag: .screen
+		coord: Coordinate{ x: 1, y: 4 }
+	}
 }
 
 fn test_page_list_highlight_semantic_content_missing_input_and_output() {
@@ -3674,6 +3741,7 @@ fn test_page_pin_left_clamp_right_clamp() {
 	// Right clamp past end
 	rc := p.right_clamp(20)
 	assert rc.x == 9 // cols - 1
+	assert p.right_clamp(max_u16).x == 9
 }
 
 fn test_page_pin_down_up() {
@@ -3694,7 +3762,7 @@ fn test_page_pin_down_up() {
 		assert false, 'point_from_pin failed'
 		return
 	}
-	assert pt.y == 5
+	assert pt.coord.y == 5
 
 	// Up
 	u := d.up(3) or {
@@ -3705,7 +3773,7 @@ fn test_page_pin_down_up() {
 		assert false, 'point_from_pin failed'
 		return
 	}
-	assert pt2.y == 2
+	assert pt2.coord.y == 2
 }
 
 fn test_page_pin_down_overflow() {
@@ -3725,7 +3793,7 @@ fn test_page_pin_down_overflow() {
 				assert false, 'point_from_pin failed'
 				return
 			}
-			assert pt.y == 8
+			assert pt.coord.y == 8
 		}
 		DownOverflowOverflow {
 			assert false, 'should not overflow'
@@ -3761,7 +3829,7 @@ fn test_page_pin_up_overflow() {
 				assert false, 'point_from_pin failed'
 				return
 			}
-			assert pt.y == 2
+			assert pt.coord.y == 2
 		}
 		UpOverflowOverflow {
 			assert false, 'should not overflow'
@@ -4163,8 +4231,8 @@ fn test_page_list_point_from_pin_active_from_prior_page() {
 		assert false, 'point_from_pin failed'
 		return
 	}
-	assert pt.x == 2
-	assert pt.y == 0
+	assert pt.coord.x == 2
+	assert pt.coord.y == 0
 
 	// A pin in a prior (first) page is not in the active area.
 	if _ := s.point_from_pin(.active, PagePin{ node: first, y: 0, x: 0 }) {
@@ -4183,8 +4251,8 @@ fn test_page_list_scroll_delta_row_back_without_space_preserves_active() {
 		return
 	}
 	sp := pc.screen_point()
-	assert sp.x == 0
-	assert sp.y == 0
+	assert sp.coord.x == 0
+	assert sp.coord.y == 0
 
 	assert s.viewport == .active
 
@@ -4224,14 +4292,17 @@ fn test_page_list_jump_back_one_prompt() {
 	s.scroll(PageScrollDeltaPrompt{ delta: -1 })
 	assert s.viewport == .pin
 	viewport := s.get_top_left(.viewport)
-	assert s.point_from_pin(.screen, viewport) or { return } == Pin{ x: 0, y: 1 }
+	assert s.point_from_pin(.screen, viewport) or { return } == Point{
+		tag: .screen
+		coord: Coordinate{ x: 0, y: 1 }
+	}
 	assert s.scrollbar() == Scrollbar{ total: s.total_rows, offset: 1, len: usize(s.rows) }
 
 	s.scroll(PageScrollDeltaPrompt{ delta: -1 })
 	assert s.viewport == .pin
-	assert s.point_from_pin(.screen, s.get_top_left(.viewport)) or { return } == Pin{
-		x: 0
-		y: 1
+	assert s.point_from_pin(.screen, s.get_top_left(.viewport)) or { return } == Point{
+		tag: .screen
+		coord: Coordinate{ x: 0, y: 1 }
 	}
 	assert s.scrollbar().offset == 1
 
@@ -4259,8 +4330,8 @@ fn test_page_list_scroll_to_row_with_cache_fast_path_down() {
 		return
 	}
 	sp1 := pc1.screen_point()
-	assert sp1.x == 0
-	assert sp1.y == 10
+	assert sp1.coord.x == 0
+	assert sp1.coord.y == 10
 
 	// Cache should be populated.
 	off1 := s.viewport_pin_row_offset or {
@@ -4280,7 +4351,7 @@ fn test_page_list_scroll_to_row_with_cache_fast_path_down() {
 		return
 	}
 	sp2 := pc2.screen_point()
-	assert sp2.y == 20
+	assert sp2.coord.y == 20
 
 	s.grow_rows(10)
 	pc3 := s.get_cell(.viewport, 0, 0) or {
@@ -4288,7 +4359,7 @@ fn test_page_list_scroll_to_row_with_cache_fast_path_down() {
 		return
 	}
 	sp3 := pc3.screen_point()
-	assert sp3.y == 20
+	assert sp3.coord.y == 20
 
 	sb3 := s.scrollbar()
 	assert sb3.offset == 20
@@ -4308,7 +4379,7 @@ fn test_page_list_scroll_to_row_with_cache_fast_path_up() {
 		assert false, 'get_cell failed'
 		return
 	}
-	assert pc1.screen_point().y == 30
+	assert pc1.screen_point().coord.y == 30
 
 	off1 := s.viewport_pin_row_offset or {
 		assert false, 'viewport_pin_row_offset not cached'
@@ -4326,14 +4397,14 @@ fn test_page_list_scroll_to_row_with_cache_fast_path_up() {
 		assert false, 'get_cell failed'
 		return
 	}
-	assert pc2.screen_point().y == 15
+	assert pc2.screen_point().coord.y == 15
 
 	s.grow_rows(10)
 	pc3 := s.get_cell(.viewport, 0, 0) or {
 		assert false, 'get_cell failed'
 		return
 	}
-	assert pc3.screen_point().y == 15
+	assert pc3.screen_point().coord.y == 15
 
 	sb3 := s.scrollbar()
 	assert sb3.offset == 15
@@ -4708,8 +4779,8 @@ fn test_page_list_resize_no_reflow_one_row_precise() {
 		return
 	}
 	sp := pc.screen_point()
-	assert sp.x == 0
-	assert sp.y == 9
+	assert sp.coord.x == 0
+	assert sp.coord.y == 9
 }
 
 fn test_page_list_resize_no_reflow_less_rows_cursor_on_bottom() {
@@ -4743,16 +4814,16 @@ fn test_page_list_resize_no_reflow_less_rows_cursor_on_bottom() {
 		assert false, 'point_from_pin failed'
 		return
 	}
-	assert cursor.x == 0
-	assert cursor.y == 4
+	assert cursor.coord.x == 0
+	assert cursor.coord.y == 4
 
 	pc := s.get_cell(.active, 0, 0) or {
 		assert false, 'get_cell failed'
 		return
 	}
 	sp := pc.screen_point()
-	assert sp.x == 0
-	assert sp.y == 5
+	assert sp.coord.x == 0
+	assert sp.coord.y == 5
 
 	s.untrack_pin(p)
 }
@@ -4791,16 +4862,16 @@ fn test_page_list_resize_no_reflow_less_rows_cursor_in_scrollback() {
 		assert false, 'point_from_pin screen failed'
 		return
 	}
-	assert sp_pin.x == 0
-	assert sp_pin.y == 2
+	assert sp_pin.coord.x == 0
+	assert sp_pin.coord.y == 2
 
 	pc := s.get_cell(.active, 0, 0) or {
 		assert false, 'get_cell failed'
 		return
 	}
 	sp := pc.screen_point()
-	assert sp.x == 0
-	assert sp.y == 5
+	assert sp.coord.x == 0
+	assert sp.coord.y == 5
 
 	s.untrack_pin(p)
 }
@@ -4856,8 +4927,8 @@ fn test_page_list_resize_no_reflow_more_rows_extends_blank_lines() {
 		return
 	}
 	sp := pc.screen_point()
-	assert sp.x == 0
-	assert sp.y == 0
+	assert sp.coord.x == 0
+	assert sp.coord.y == 0
 }
 
 fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines() {
@@ -4897,16 +4968,16 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines() {
 		assert false, 'point_from_pin failed'
 		return
 	}
-	assert cursor.x == 0
-	assert cursor.y == 0
+	assert cursor.coord.x == 0
+	assert cursor.coord.y == 0
 
 	pc := s.get_cell(.active, 0, 0) or {
 		assert false, 'get_cell failed'
 		return
 	}
 	sp := pc.screen_point()
-	assert sp.x == 0
-	assert sp.y == 0
+	assert sp.coord.x == 0
+	assert sp.coord.y == 0
 
 	s.untrack_pin(p)
 }
@@ -5034,8 +5105,8 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines_cursor_in_blank_l
 		assert false, 'point_from_pin failed'
 		return
 	}
-	assert cursor.x == 0
-	assert cursor.y == 1
+	assert cursor.coord.x == 0
+	assert cursor.coord.y == 1
 
 	s.untrack_pin(p)
 }
@@ -5286,7 +5357,7 @@ fn test_page_list_resize_no_reflow_more_rows_adds_blank_rows_if_cursor_at_bottom
 		assert false, 'get_cell failed'
 		return
 	}
-	assert pc0.screen_point().y == 2
+	assert pc0.screen_point().coord.y == 2
 
 	// Tracked pin at cursor position (near bottom of active).
 	p := s.track_pin(s.get_pin(.active, 0, u16(s.rows - 2)) or {
@@ -5315,8 +5386,8 @@ fn test_page_list_resize_no_reflow_more_rows_adds_blank_rows_if_cursor_at_bottom
 		assert false, 'point_from_pin failed'
 		return
 	}
-	assert new_cursor.x == original_cursor.x
-	assert new_cursor.y == original_cursor.y
+	assert new_cursor.coord.x == original_cursor.coord.x
+	assert new_cursor.coord.y == original_cursor.coord.y
 
 	// 12 = 10 active + 2 scrollback preserved by the cursor.
 	assert s.total_rows == 12
@@ -5325,7 +5396,7 @@ fn test_page_list_resize_no_reflow_more_rows_adds_blank_rows_if_cursor_at_bottom
 		assert false, 'get_cell failed'
 		return
 	}
-	assert pc.screen_point().y == 2
+	assert pc.screen_point().coord.y == 2
 
 	s.untrack_pin(p)
 }
@@ -5398,8 +5469,8 @@ fn test_page_list_resize_reflow_more_cols_wrapped_rows() {
 		return
 	}
 	sp := pc.screen_point()
-	assert sp.x == 0
-	assert sp.y == 0
+	assert sp.coord.x == 0
+	assert sp.coord.y == 0
 
 	// First row should be unwrapped and hold the reflowed content.
 	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
@@ -5584,7 +5655,7 @@ fn test_page_list_resize_reflow_more_cols_wrap_across_page_boundary_cursor_in_se
 	assert s.cols == 4
 	assert s.total_rows == end_rows
 	point := s.point_from_pin(.active, *tracked) or { return }
-	assert point == Pin{ x: 3, y: 9 }
+	assert point == Point{ tag: .active, coord: Coordinate{ x: 3, y: 9 } }
 	p9 := s.get_pin(.active, 0, 9) or { return }
 	assert !p9.row_data().wrap
 	assert p9.row_data().cells[0].codepoint == 0
@@ -5627,7 +5698,7 @@ fn test_page_list_resize_reflow_less_cols_wrap_across_page_boundary_cursor_in_se
 	})
 	assert s.cols == 4
 	point := s.point_from_pin(.active, *tracked) or { return }
-	assert point == Pin{ x: 3, y: 5 }
+	assert point == Point{ tag: .active, coord: Coordinate{ x: 3, y: 5 } }
 	p3 := s.get_pin(.active, 0, 3) or { return }
 	assert !p3.row_data().wrap
 	assert !p3.row_data().wrap_continuation
@@ -5748,8 +5819,8 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row() {
 		assert false, 'point_from_pin failed'
 		return
 	}
-	assert cursor.x == 3
-	assert cursor.y == 0
+	assert cursor.coord.x == 3
+	assert cursor.coord.y == 0
 
 	s.untrack_pin(p)
 }
@@ -5791,8 +5862,8 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_not_wrapped_row() {
 		assert false, 'point_from_pin failed'
 		return
 	}
-	assert cursor.x == 1
-	assert cursor.y == 0
+	assert cursor.coord.x == 1
+	assert cursor.coord.y == 0
 
 	s.untrack_pin(p)
 }
@@ -5845,8 +5916,8 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row_that_isnt_unwrap
 		assert false, 'point_from_pin failed'
 		return
 	}
-	assert cursor.x == 1
-	assert cursor.y == 1
+	assert cursor.coord.x == 1
+	assert cursor.coord.y == 1
 
 	s.untrack_pin(p)
 }
@@ -6020,7 +6091,7 @@ fn test_page_list_resize_reflow_less_cols_wrapped_rows() {
 		assert false, 'get_cell failed'
 		return
 	}
-	assert pc.screen_point().y == 2
+	assert pc.screen_point().coord.y == 2
 
 	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
 	// Row 0: wrapped, cells[0]=0.
@@ -6312,8 +6383,8 @@ fn test_page_list_resize_reflow_less_cols_cursor_in_wrapped_row() {
 		assert false, 'point_from_pin failed'
 		return
 	}
-	assert cursor.x == 0
-	assert cursor.y == 1
+	assert cursor.coord.x == 0
+	assert cursor.coord.y == 1
 
 	s.untrack_pin(p)
 }
@@ -6343,8 +6414,8 @@ fn reflow_cursor_cell_helper(init_cols u16, new_cols u16, pin_x u16, exp_x u32, 
 		assert false, 'point_from_pin failed'
 		return
 	}
-	assert cursor.x == exp_x
-	assert cursor.y == exp_y
+	assert cursor.coord.x == exp_x
+	assert cursor.coord.y == exp_y
 
 	s.untrack_pin(p)
 }
@@ -6427,7 +6498,7 @@ fn test_page_list_resize_reflow_less_cols_wrapped_rows_with_graphemes() {
 		assert false, 'get_cell failed'
 		return
 	}
-	assert pc.screen_point().y == 2
+	assert pc.screen_point().coord.y == 2
 
 	np := s.pages.first or {
 		assert false, 'no first page'
@@ -7045,8 +7116,8 @@ fn test_page_list_resize_reflow_less_cols_cursor_not_on_last_line_preserves_loca
 		assert false, 'point_from_pin failed'
 		return
 	}
-	assert cursor.x == 0
-	assert cursor.y == 0
+	assert cursor.coord.x == 0
+	assert cursor.coord.y == 0
 
 	s.untrack_pin(p)
 }
@@ -7327,8 +7398,8 @@ fn test_page_list_cell_iterator_precise() {
 			assert false, 'point_from_pin failed'
 			return
 		}
-		assert pt.x == exp[0]
-		assert pt.y == exp[1]
+		assert pt.coord.x == exp[0]
+		assert pt.coord.y == exp[1]
 	}
 	assert it.next() == none
 }
@@ -7362,8 +7433,8 @@ fn test_page_list_cell_iterator_reverse_precise() {
 			assert false, 'point_from_pin failed'
 			return
 		}
-		assert pt.x == exp[0]
-		assert pt.y == exp[1]
+		assert pt.coord.x == exp[0]
+		assert pt.coord.y == exp[1]
 	}
 	assert it.next() == none
 }

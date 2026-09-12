@@ -2491,15 +2491,48 @@ pub fn (self &PagePin) before(other PagePin) bool {
 
 // Returns true if self is between top and bottom (inclusive).
 pub fn (self &PagePin) is_between(top_pin PagePin, bottom_pin PagePin) bool {
-	return (self.eql(top_pin) || top_pin.before(PagePin{
-		node: self.node
-		y: self.y
-		x: self.x
-	})) && (self.eql(bottom_pin) || PagePin{
-		node: self.node
-		y: self.y
-		x: self.x
-	}.before(bottom_pin))
+	if voidptr(self.node) == voidptr(top_pin.node) {
+		if self.y < top_pin.y {
+			return false
+		}
+		if self.y > top_pin.y {
+			return if voidptr(self.node) == voidptr(bottom_pin.node) {
+				self.y <= bottom_pin.y
+			} else {
+				true
+			}
+		}
+		assert self.y == top_pin.y
+		if self.x < top_pin.x {
+			return false
+		}
+	}
+	if voidptr(self.node) == voidptr(bottom_pin.node) {
+		if self.y > bottom_pin.y {
+			return false
+		}
+		if self.y < bottom_pin.y {
+			return true
+		}
+		assert self.y == bottom_pin.y
+		return self.x <= bottom_pin.x
+	}
+
+	if voidptr(top_pin.node) == voidptr(bottom_pin.node) {
+		return false
+	}
+	mut node := top_pin.node.next
+	for {
+		n := node or { break }
+		if voidptr(n) == voidptr(bottom_pin.node) {
+			break
+		}
+		if voidptr(n) == voidptr(self.node) {
+			return true
+		}
+		node = n.next
+	}
+	return false
 }
 
 // ---- Movement methods ----
@@ -2537,7 +2570,8 @@ pub fn (self &PagePin) left_clamp(n u16) PagePin {
 // Move right, clamping at end of row.
 pub fn (self &PagePin) right_clamp(n u16) PagePin {
 	max_x := self.node.data.size.cols - 1
-	new_x := if self.x + n > max_x { max_x } else { self.x + n }
+	sum := u32(self.x) + u32(n)
+	new_x := if sum > u32(max_x) { max_x } else { u16(sum) }
 	return PagePin{
 		node: self.node
 		y: self.y
@@ -2863,24 +2897,45 @@ pub:
 	col_idx u16
 }
 
+// Returns true if this cell is marked as dirty.
+//
+// This is not very performant; it is primarily used for assertions and
+// testing.
+pub fn (self &PageCell) is_dirty() bool {
+	return self.node.data.dirty || self.row.dirty
+}
+
+// Get the cell style.
+//
+// Not meant for non-test usage since this is inefficient.
+pub fn (self &PageCell) style() CellStyle {
+	if self.cell.style_id == default_style_id {
+		return CellStyle{}
+	}
+	return self.node.data.styles.get(self.cell.style_id)
+}
+
 // Convert to screen point (absolute row from top of page list).
 // Traverses backward through the page list to compute the absolute y
 // coordinate from the top of the entire page list.
-pub fn (self &PageCell) screen_point() Pin {
-	mut abs_y := u32(self.row_idx)
+pub fn (self &PageCell) screen_point() Point {
+	mut y := u32(self.row_idx)
 
 	// Traverse backward through the linked list to accumulate rows
 	// from all preceding pages.
 	mut prev := self.node.prev
 	for {
 		nd := prev or { break }
-		abs_y += u32(nd.data.size.rows)
+		y += u32(nd.data.size.rows)
 		prev = nd.prev
 	}
 
-	return Pin{
-		x: u32(self.col_idx)
-		y: abs_y
+	return Point{
+		tag: .screen
+		coord: Coordinate{
+			x: self.col_idx
+			y: y
+		}
 	}
 }
 
@@ -4326,7 +4381,7 @@ pub fn (self &PageList) pin_is_valid(p PagePin) bool {
 	for {
 		n := node or { return false }
 		if voidptr(n) == voidptr(p.node) {
-			return p.y < n.data.size.rows && p.x < self.cols
+			return p.y < n.data.size.rows && p.x < n.data.size.cols
 		}
 		node = n.next
 	}
@@ -4334,7 +4389,7 @@ pub fn (self &PageList) pin_is_valid(p PagePin) bool {
 }
 
 // Convert a pin to a point in the given coordinate space.
-pub fn (self &PageList) point_from_pin(tag PointTag, p PagePin) ?Pin {
+pub fn (self &PageList) point_from_pin(tag PointTag, p PagePin) ?Point {
 	tl := self.get_top_left(tag)
 
 	tl_ptr := voidptr(tl.node)
@@ -4344,9 +4399,12 @@ pub fn (self &PageList) point_from_pin(tag PointTag, p PagePin) ?Pin {
 		if tl.y > p.y {
 			return none
 		}
-		return Pin{
-			x: u32(p.x)
-			y: u32(p.y - tl.y)
+		return Point{
+			tag: tag
+			coord: Coordinate{
+				x: p.x
+				y: u32(p.y - tl.y)
+			}
 		}
 	}
 
@@ -4356,9 +4414,12 @@ pub fn (self &PageList) point_from_pin(tag PointTag, p PagePin) ?Pin {
 	for {
 		node := cur or { return none }
 		if voidptr(node) == p_ptr {
-			return Pin{
-				x: u32(p.x)
-				y: y + u32(p.y)
+			return Point{
+				tag: tag
+				coord: Coordinate{
+					x: p.x
+					y: y + u32(p.y)
+				}
 			}
 		}
 		y += u32(node.data.size.rows)
@@ -4950,6 +5011,7 @@ pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 	mut result := PageList.init(self.cols, self.rows, self.explicit_max_size)
 	// Clear default pages
 	result.pages = PageNodeList{}
+	result.page_serial = 0
 	result.total_rows = 0
 	result.page_size = 0
 
@@ -6257,7 +6319,7 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) {
 			}
 		}
 
-		current := usize(self.rows) - usize(active_pt.y) - 1
+		current := usize(self.rows) - usize(active_pt.coord.y) - 1
 
 		mut req_rows := preserved_remaining
 		// req_rows -|= wrapped -| c.wrapped_rows  (saturating subtractions)
@@ -6558,28 +6620,22 @@ pub fn (mut self PageList) clear_dirty() {
 	for {
 		mut n := node or { break }
 		n.data.dirty = false
-		for mut row in n.data.rows {
-			row.dirty = false
+		for y in 0 .. int(n.data.size.rows) {
+			n.data.rows[y].dirty = false
 		}
 		node = n.next
 	}
 }
 
-pub fn (self &PageList) is_dirty() bool {
-	mut node := self.pages.first
-	for {
-		n := node or { break }
-		if n.data.dirty {
-			return true
-		}
-		for row in n.data.rows {
-			if row.dirty {
-				return true
-			}
-		}
-		node = n.next
-	}
-	return false
+// Returns true if the point is dirty, used for testing.
+pub fn (self &PageList) is_dirty(point Point) bool {
+	return (self.pin(point) or { panic('dirty point is outside the page list') }).is_dirty()
+}
+
+// Mark a point as dirty, used for testing.
+fn (mut self PageList) mark_dirty(point Point) {
+	mut pin := self.pin(point) or { panic('dirty point is outside the page list') }
+	pin.mark_dirty()
 }
 
 // ============================================================

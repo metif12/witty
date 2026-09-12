@@ -880,8 +880,8 @@ fn (mut self ScreenSearch) restart_from_screen(fingerprint u64) {
 	// This retains a selection when an active-area redraw leaves the match in
 	// the same place. If its page was effectively pruned, Ghostty falls back to
 	// selecting the oldest remaining result, which we do below as well.
-	mut old_start := ?terminal.Pin(none)
-	mut old_end := ?terminal.Pin(none)
+	mut old_start := ?terminal.Point(none)
+	mut old_end := ?terminal.Point(none)
 	had_selection := self.selected != none
 	if selected := self.selected_match() {
 		old_start = self.pages.point_from_pin(.screen, selected.start_pin())
@@ -907,7 +907,7 @@ fn (mut self ScreenSearch) restart_from_screen(fingerprint u64) {
 }
 
 // Select the result occupying the given absolute screen coordinates.
-fn (mut self ScreenSearch) select_coordinates(start terminal.Pin, end terminal.Pin) bool {
+fn (mut self ScreenSearch) select_coordinates(start terminal.Point, end terminal.Point) bool {
 	active_len := self.active_results.len
 	total := active_len + self.history_results.len
 	for idx in 0 .. total {
@@ -918,8 +918,7 @@ fn (mut self ScreenSearch) select_coordinates(start terminal.Pin, end terminal.P
 		}
 		new_start := self.pages.point_from_pin(.screen, hl.start_pin()) or { continue }
 		new_end := self.pages.point_from_pin(.screen, hl.end_pin()) or { continue }
-		if new_start.x == start.x && new_start.y == start.y && new_end.x == end.x
-			&& new_end.y == end.y {
+		if new_start == start && new_end == end {
 			self.selected = SelectedMatch{
 				idx: idx
 				hl: hl.untracked().track(mut self.pages)

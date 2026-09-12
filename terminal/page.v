@@ -1638,7 +1638,7 @@ pub fn (self &Page) exact_row_capacity(y_start int, y_end int) PageCapacity {
 		}
 	}
 
-	styles_cap := StyleSet.capacity_for_count(style_ids.len)
+	styles_cap := StyleSet.capacity_for_count(style_ids.keys().len)
 
 	// Second pass: size both the hyperlink set and its cell-to-ID map, and
 	// count the page-owned URI/explicit-ID string allocations once per link.
@@ -1676,7 +1676,7 @@ pub fn (self &Page) exact_row_capacity(y_start int, y_end int) PageCapacity {
 		}
 	}
 
-	hyperlink_set_cap := HyperlinkSet.capacity_for_count(hyperlink_ids.len)
+	hyperlink_set_cap := HyperlinkSet.capacity_for_count(hyperlink_ids.keys().len)
 	hyperlink_map_min := (hyperlink_cells + hyperlink_cell_multiplier - 1) / hyperlink_cell_multiplier
 	hyperlink_cap := if hyperlink_set_cap > hyperlink_map_min {
 		hyperlink_set_cap
@@ -2273,7 +2273,7 @@ fn (mut self Page) move_hyperlink(src_row int, src_col int, dst_row int, dst_col
 // Returns the number of hyperlinks in the page. This isn't the byte
 // size but the total number of unique cells that have hyperlink data.
 pub fn (self &Page) hyperlink_count() int {
-	return self.hyperlink_map.len
+	return self.hyperlink_map.keys().len
 }
 
 // Returns the hyperlink capacity for the page.
@@ -2449,7 +2449,7 @@ pub fn (mut self Page) update_row_grapheme_flag(row &RowData) {
 // Returns the number of graphemes in the page. This isn't the byte
 // size but the total number of unique cells that have grapheme data.
 pub fn (self &Page) grapheme_count() int {
-	return self.grapheme_map.len
+	return self.grapheme_map.keys().len
 }
 
 // Returns the number of unique cells that the pinned page's grapheme map can
