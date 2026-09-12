@@ -38,12 +38,7 @@ pub fn parse_uri(text string, options UriParseOptions) !ParsedUri {
 	mut path_start := text.len
 	if authority_start >= 0 {
 		start := authority_start + 3
-		for i in start .. text.len {
-			if text[i] == `/` {
-				path_start = i
-				break
-			}
-		}
+		path_start = authority_path_start(text, start)
 
 		// V's URL.hostname treats the final MAC octet as a port when it is
 		// numeric. Ghostty repairs that parse and also accepts a real port
@@ -88,13 +83,7 @@ pub fn parse_uri(text string, options UriParseOptions) !ParsedUri {
 fn parse_mac_uri(text string, options UriParseOptions) !ParsedUri {
 	scheme_end := text.index('://') or { return error('invalid URI') }
 	authority_start := scheme_end + 3
-	mut path_start := text.len
-	for i in authority_start .. text.len {
-		if text[i] == `/` {
-			path_start = i
-			break
-		}
-	}
+	path_start := authority_path_start(text, authority_start)
 
 	authority := text[authority_start..path_start]
 	mut host := authority
@@ -118,6 +107,18 @@ fn parse_mac_uri(text string, options UriParseOptions) !ParsedUri {
 		host: host
 		path: path
 	}
+}
+
+// authority_path_start returns the first byte after an authority. A URI path
+// can be empty, so a query or fragment delimiter also terminates the host and
+// is the start retained by Ghostty's raw_path option.
+fn authority_path_start(text string, start int) int {
+	for i in start .. text.len {
+		if text[i] == `/` || text[i] == `?` || text[i] == `#` {
+			return i
+		}
+	}
+	return text.len
 }
 
 fn decoded_uri_path(text string, path_start int) !string {

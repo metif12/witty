@@ -68,6 +68,29 @@ fn test_parse_uri_raw_path() ! {
 	assert uri3.path == ''
 }
 
+fn test_parse_uri_raw_path_starts_at_query_or_fragment_without_slash() ! {
+	query := parse_uri('file://localhost?key=value#fragment', UriParseOptions{
+		raw_path: true
+	})!
+	assert query.host == 'localhost'
+	assert query.path == '?key=value#fragment'
+
+	fragment := parse_uri('file://localhost#fragment', UriParseOptions{
+		raw_path: true
+	})!
+	assert fragment.host == 'localhost'
+	assert fragment.path == '#fragment'
+}
+
+fn test_parse_uri_mac_address_without_slash_stops_before_query() ! {
+	uri := parse_uri('file://ab:cd:ef:ab:cd:ef?key=value', UriParseOptions{
+		mac_address: true
+		raw_path: true
+	})!
+	assert uri.host == 'ab:cd:ef:ab:cd:ef'
+	assert uri.path == '?key=value'
+}
+
 fn test_parse_uri_decodes_path() ! {
 	uri := parse_uri('file://localhost/a%20path/%E2%98%83', UriParseOptions{})!
 	assert uri.path == '/a path/☃'
