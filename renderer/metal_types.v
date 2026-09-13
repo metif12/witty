@@ -1,5 +1,6 @@
 module renderer
 
+import font
 import macos
 
 // Metal sub-types: Buffer, Frame, RenderPass, Pipeline, Sampler, Target, Texture
@@ -689,21 +690,20 @@ pub fn MetalFrameState.init(api &MetalAPI, custom_shaders bool) !MetalFrameState
 		uniforms.deinit()
 		return err
 	}
-	mut grayscale := MetalTexture.init(api.image_texture_options(.gray, false), 1, 1, [
-		u8(0),
-	]) or {
+	mut grayscale := api.init_atlas_texture(&font.Atlas{
+		size: 1
+		format: .grayscale
+	}) or {
 		bg_image_buffer.deinit()
 		cells_bg.deinit()
 		cells.deinit()
 		uniforms.deinit()
 		return err
 	}
-	mut color := MetalTexture.init(api.image_texture_options(.bgra, true), 1, 1, [
-		u8(0),
-		0,
-		0,
-		0,
-	]) or {
+	mut color := api.init_atlas_texture(&font.Atlas{
+		size: 1
+		format: .bgra
+	}) or {
 		grayscale.deinit()
 		bg_image_buffer.deinit()
 		cells_bg.deinit()
@@ -784,16 +784,16 @@ pub mut:
 
 pub fn MetalCustomShaderState.init(api &MetalAPI) !MetalCustomShaderState {
 	mut uniforms := MetalBuffer.init(api.buffer_options(), usize($sizeof(CustomShaderUniforms)))!
-	mut front_texture := MetalTexture.init(api.custom_shader_texture_options(), 1, 1, none) or {
+	mut front_texture := MetalTexture.init(api.texture_options(), 1, 1, none) or {
 		uniforms.deinit()
 		return err
 	}
-	mut back_texture := MetalTexture.init(api.custom_shader_texture_options(), 1, 1, none) or {
+	mut back_texture := MetalTexture.init(api.texture_options(), 1, 1, none) or {
 		front_texture.deinit()
 		uniforms.deinit()
 		return err
 	}
-	sampler := MetalSampler.init(api.custom_shader_sampler_options()) or {
+	sampler := MetalSampler.init(api.sampler_options()) or {
 		back_texture.deinit()
 		front_texture.deinit()
 		uniforms.deinit()
@@ -821,8 +821,8 @@ pub fn (mut self MetalCustomShaderState) swap() {
 }
 
 pub fn (mut self MetalCustomShaderState) resize(api &MetalAPI, width usize, height usize) ! {
-	mut front_texture := MetalTexture.init(api.custom_shader_texture_options(), width, height, none)!
-	back_texture := MetalTexture.init(api.custom_shader_texture_options(), width, height, none) or {
+	mut front_texture := MetalTexture.init(api.texture_options(), width, height, none)!
+	back_texture := MetalTexture.init(api.texture_options(), width, height, none) or {
 		front_texture.deinit()
 		return err
 	}

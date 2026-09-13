@@ -255,13 +255,18 @@ pub fn (self &OpenGLAPI) sampler_options() GLSamplerOptions {
 }
 
 // ImageTextureFormat is the CPU pixel layout used for uploaded images.
+//
+// Both backends declare this enum in the source; V has one namespace per
+// module, so the two identical declarations are flattened into this one and
+// each backend keeps its own pixel format conversion.
 pub enum ImageTextureFormat as u8 {
 	gray
 	rgba
 	bgra
 }
 
-fn (format ImageTextureFormat) pixel_format() GLTextureFormat {
+// gl_pixel_format translates an image pixel layout to its OpenGL format.
+fn (format ImageTextureFormat) gl_pixel_format() GLTextureFormat {
 	return match format {
 		.gray { .red }
 		.rgba { .rgba }
@@ -274,7 +279,7 @@ fn (format ImageTextureFormat) pixel_format() GLTextureFormat {
 pub fn (self &OpenGLAPI) image_texture_options(format ImageTextureFormat, srgb bool) GLTextureOptions {
 	_ = self
 	return GLTextureOptions{
-		format: format.pixel_format()
+		format: format.gl_pixel_format()
 		internal_format: if srgb { .srgba } else { .rgba }
 		target: .texture_2d
 		min_filter: .linear

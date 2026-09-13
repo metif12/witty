@@ -1760,12 +1760,9 @@ fn (self &Renderer) text_cells() []CellText {
 }
 
 fn (self &Renderer) sync_atlas_texture(atlas &font.Atlas, mut texture MetalTexture) ! {
-	if atlas.format == .bgr {
-		return error('BGR font atlases are unsupported by Metal')
-	}
 	if atlas.size > texture.width {
-		format := if atlas.format == .grayscale { PixelFormat.gray } else { PixelFormat.bgra }
-		mut replacement := MetalTexture.init(self.metal.image_texture_options(format, atlas.format == .bgra), atlas.size, atlas.size, none)!
+		// Free our old texture, then reallocate.
+		mut replacement := self.metal.init_atlas_texture(atlas)!
 		texture.deinit()
 		texture = replacement
 	}

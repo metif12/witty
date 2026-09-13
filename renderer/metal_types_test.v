@@ -1,5 +1,6 @@
 module renderer
 
+import font
 import macos
 
 fn test_metal_render_step_counts_retain_source_pointer_width() {
@@ -214,7 +215,7 @@ fn test_metal_sampler_target_and_empty_frame() ! {
 		api.deinit()
 	}
 
-	mut sampler := MetalSampler.init(api.custom_shader_sampler_options())!
+	mut sampler := MetalSampler.init(api.sampler_options())!
 	defer {
 		sampler.deinit()
 	}
@@ -350,4 +351,49 @@ fn test_metal_uniform_and_background_flags_are_packed() {
 	}
 	assert background.opacity == 0.5
 	assert background.info.packed() == u8(8 | (2 << 4) | (1 << 6))
+}
+
+fn test_metal_image_texture_options_translate_pixel_layout_and_color_space() ! {
+	mut api := MetalAPI.init()!
+	defer {
+		api.deinit()
+	}
+
+	gray := api.image_texture_options(.gray, false)
+	assert gray.pixel_format == .r8unorm
+	assert gray.usage.shader_read()
+	assert !gray.usage.render_target()
+
+	rgba := api.image_texture_options(.rgba, true)
+	assert rgba.pixel_format == .rgba8unorm_srgb
+
+	bgra := api.image_texture_options(.bgra, true)
+	assert bgra.pixel_format == .bgra8unorm_srgb
+
+	// Custom shader textures are chained, so they read and render.
+	custom := api.texture_options()
+	assert custom.pixel_format == api.target_pixel_format()
+	assert custom.usage.shader_read()
+	assert custom.usage.render_target()
+}
+
+fn test_metal_atlas_texture_options_match_atlas_layout() ! {
+	mut api := MetalAPI.init()!
+	defer {
+		api.deinit()
+	}
+
+	gray := api.atlas_texture_options(.grayscale)!
+	assert gray.pixel_format == .r8unorm
+	assert gray.usage.shader_read()
+	assert !gray.usage.render_target()
+
+	bgra := api.atlas_texture_options(.bgra)!
+	assert bgra.pixel_format == .bgra8unorm_srgb
+
+	if _ := api.atlas_texture_options(font.AtlasFormat.bgr) {
+		assert false
+	} else {
+		assert err.msg().contains('unsupported')
+	}
 }

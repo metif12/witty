@@ -1,6 +1,7 @@
 module renderer
 
 import configpkg
+import font
 import macos
 
 // Graphics API wrapper for Metal.
@@ -190,8 +191,9 @@ pub fn (self &MetalAPI) buffer_options() MetalBufferOptions {
 	}
 }
 
-pub fn (self &MetalAPI) image_texture_options(format PixelFormat, srgb bool) MetalTextureOptions {
-	pixel_format := match format {
+// metal_pixel_format translates an image pixel layout to its Metal format.
+fn (format ImageTextureFormat) metal_pixel_format(srgb bool) MetalPixelFormat {
+	return match format {
 		.gray {
 			if srgb { MetalPixelFormat.r8unorm_srgb } else { MetalPixelFormat.r8unorm }
 		}
@@ -201,35 +203,80 @@ pub fn (self &MetalAPI) image_texture_options(format PixelFormat, srgb bool) Met
 		.bgra {
 			if srgb { MetalPixelFormat.bgra8unorm_srgb } else { MetalPixelFormat.bgra8unorm }
 		}
-		else { MetalPixelFormat.rgba8unorm }
 	}
+}
+
+// image_texture_options returns the options to use when constructing textures
+// for images.
+pub fn (self &MetalAPI) image_texture_options(format ImageTextureFormat, srgb bool) MetalTextureOptions {
 	return MetalTextureOptions{
 		device: self.device
-		pixel_format: pixel_format
+		pixel_format: format.metal_pixel_format(srgb)
+		// Indicate that the CPU writes to this resource but never reads it.
 		resource_options: MetalResourceOptions.init(.write_combined, self.default_storage_mode, .default)
+		// We only need to read from this texture from a shader.
 		usage: MetalTextureUsage.from_int(0x01)
 	}
 }
 
-// custom_shader_texture_options returns the render-target/readable texture
-// configuration used by Ghostty's ping-pong post-processing passes.
-pub fn (self &MetalAPI) custom_shader_texture_options() MetalTextureOptions {
+// texture_options returns the options to use when constructing textures.
+pub fn (self &MetalAPI) texture_options() MetalTextureOptions {
 	return MetalTextureOptions{
 		device: self.device
+		// Using an `*_srgb` pixel format makes Metal gamma encode the pixels
+		// written to it *after* blending, which means we get linear alpha
+		// blending rather than gamma-incorrect blending.
 		pixel_format: self.target_pixel_format()
+		// Indicate that the CPU writes to this resource but never reads it.
 		resource_options: MetalResourceOptions.init(.write_combined, self.default_storage_mode, .default)
+		// texture_options is currently only used for custom shaders, which
+		// require both the shader read (for when multiple shaders are chained)
+		// and render target (for the final output) usage. Disabling either of
+		// these will lead to metal validation errors in Xcode.
 		usage: MetalTextureUsage.from_int(0x05)
 	}
 }
 
-pub fn (self &MetalAPI) custom_shader_sampler_options() MetalSamplerOptions {
+pub fn (self &MetalAPI) sampler_options() MetalSamplerOptions {
 	return MetalSamplerOptions{
 		device: self.device
+		// These parameters match Shadertoy behaviors.
 		min_filter: .linear
 		mag_filter: .linear
 		s_address_mode: .clamp_to_edge
 		t_address_mode: .clamp_to_edge
 	}
+}
+
+// atlas_texture_options translates a font atlas format to its exact Metal
+// pixel layout. BGR is unsupported by the source backend.
+pub fn (self &MetalAPI) atlas_texture_options(format font.AtlasFormat) !MetalTextureOptions {
+	pixel_format := match format {
+		.grayscale {
+			MetalPixelFormat.r8unorm
+		}
+		.bgra {
+			MetalPixelFormat.bgra8unorm_srgb
+		}
+		.bgr {
+			return error('BGR font atlases are unsupported by Metal')
+		}
+	}
+	return MetalTextureOptions{
+		device: self.device
+		pixel_format: pixel_format
+		// Indicate that the CPU writes to this resource but never reads it.
+		resource_options: MetalResourceOptions.init(.write_combined, self.default_storage_mode, .default)
+		// We only need to read from this texture from a shader.
+		usage: MetalTextureUsage.from_int(0x01)
+	}
+}
+
+// init_atlas_texture initializes an empty texture matching the atlas. Atlas
+// bytes are synchronized separately by the renderer.
+pub fn (self &MetalAPI) init_atlas_texture(atlas &font.Atlas) !MetalTexture {
+	return MetalTexture.init(self.atlas_texture_options(atlas.format)!, usize(atlas.size),
+		usize(atlas.size), none)
 }
 
 pub fn (self &MetalAPI) target_pixel_format() MetalPixelFormat {
