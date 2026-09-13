@@ -423,8 +423,21 @@ pub enum MetalPixelFormat as u64 {
 
 // Metal GPU family for feature detection.
 pub enum MetalGPUFamily as i64 {
+	apple1  = 1001
+	apple2  = 1002
 	apple3  = 1003
+	apple4  = 1004
+	apple5  = 1005
+	apple6  = 1006
+	apple7  = 1007
+	apple8  = 1008
+	apple9  = 1009
 	apple10 = 1010
+	common1 = 3001
+	common2 = 3002
+	common3 = 3003
+	metal3  = 5001
+	metal4  = 5002
 }
 
 // Metal command buffer status.
@@ -461,6 +474,12 @@ pub enum MetalPrimitiveType as u64 {
 	line_strip     = 2
 	triangle       = 3
 	triangle_strip = 4
+}
+
+// Metal index type.
+pub enum MetalIndexType as u64 {
+	uint16 = 0
+	uint32 = 1
 }
 
 // Metal vertex formats.
@@ -602,6 +621,30 @@ pub enum MetalSamplerAddressMode as u64 {
 	mirror_repeat         = 3
 	clamp_to_zero         = 4
 	clamp_to_border_color = 5
+}
+
+// Metal purgeable state.
+pub enum MetalPurgeableState as u64 {
+	keep_current = 1
+	non_volatile = 2
+	volatile_    = 3
+	empty        = 4
+}
+
+// Metal memory-barrier scope.
+pub enum MetalBarrierScope as u64 {
+	buffers        = 1
+	textures       = 2
+	render_targets = 4
+}
+
+// Metal render stage.
+pub enum MetalRenderStage as u64 {
+	vertex   = 1
+	fragment = 2
+	tile     = 4
+	object   = 8
+	mesh     = 16
 }
 
 // Metal clear color.

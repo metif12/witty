@@ -7,8 +7,11 @@ fn test_metal_api_enum_values_match_native_contracts() {
 	assert u64(MetalPixelFormat.bgra8unorm_srgb) == 81
 
 	assert sizeof(MetalGPUFamily) == sizeof(i64)
+	assert i64(MetalGPUFamily.apple1) == 1001
 	assert i64(MetalGPUFamily.apple3) == 1003
 	assert i64(MetalGPUFamily.apple10) == 1010
+	assert i64(MetalGPUFamily.common1) == 3001
+	assert i64(MetalGPUFamily.metal4) == 5002
 
 	assert u64(MetalVertexFormat.uchar4normalized) == 9
 	assert u64(MetalVertexFormat.float) == 28
@@ -20,6 +23,26 @@ fn test_metal_api_enum_values_match_native_contracts() {
 	assert u64(MetalBlendFactor.source_alpha) == 4
 	assert u64(MetalBlendFactor.one_minus_source_alpha) == 5
 	assert u64(MetalStoreAction.custom_sample_depth_store) == 5
+	assert sizeof(MetalIndexType) == sizeof(u64)
+	assert [MetalIndexType.uint16, .uint32].map(u64(it)) == [u64(0), 1]
+	assert [MetalPurgeableState.keep_current, .non_volatile, .volatile_, .empty].map(u64(it)) == [
+		u64(1),
+		2,
+		3,
+		4,
+	]
+	assert [MetalBarrierScope.buffers, .textures, .render_targets].map(u64(it)) == [
+		u64(1),
+		2,
+		4,
+	]
+	assert [MetalRenderStage.vertex, .fragment, .tile, .object, .mesh].map(u64(it)) == [
+		u64(1),
+		2,
+		4,
+		8,
+		16,
+	]
 
 	assert u64(MetalCPUCacheMode.write_combined) == 1
 	assert u64(MetalStorageMode.managed) == 1
@@ -44,6 +67,16 @@ fn test_metal_api_enum_values_match_native_contracts() {
 	assert usage.pixel_format_view()
 	assert usage.shader_atomic()
 	assert MetalTextureUsage.from_int(0xffff_ffff_ffff_ffff).int_val() == 0xffff_ffff_ffff_ffff
+}
+
+fn test_metal_gpu_family_complete_source_values() {
+	want := [i64(1001), 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 3001, 3002, 3003,
+		5001, 5002]
+	mut got := []i64{}
+	$for value in MetalGPUFamily.values {
+		got << i64(value.value)
+	}
+	assert got == want
 }
 
 fn test_metal_pixel_format_complete_source_values() {
