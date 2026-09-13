@@ -7,11 +7,25 @@ fn test_metal_render_step_counts_retain_source_pointer_width() {
 	buffer := MetalBuffer{
 		len: max_count
 	}
+	target := MetalTarget{
+		width: max_count
+		height: max_count
+	}
+	texture := MetalTexture{
+		width: max_count
+		height: max_count
+		bpp: max_count
+	}
 	step := MetalRenderStep{
 		vertex_count: max_count
 		instance_count: max_count
 	}
 	assert buffer.len == max_count
+	assert target.width == max_count
+	assert target.height == max_count
+	assert texture.width == max_count
+	assert texture.height == max_count
+	assert texture.bpp == max_count
 	assert step.vertex_count == max_count
 	assert step.instance_count == max_count
 }
@@ -46,7 +60,7 @@ fn test_metal_texture_initial_upload_and_replace_region() ! {
 		texture.deinit()
 	}
 
-	texture.replace_region(1, 1, 2, 2, [u8(90), 80, 70, 60])!
+	texture.replace_region(1, 1, 2, 2, [u8(90), 80, 70, 60])
 
 	bytes := read_metal_texture(texture)
 	assert bytes[0..4] == [u8(0), 1, 2, 3]
@@ -129,7 +143,7 @@ fn test_metal_texture_replace_region_respects_bpp() {
 	}
 
 	// Replace the single pixel at (1, 1) with 4 bytes.
-	texture.replace_region(1, 1, 1, 1, [u8(11), 22, 33, 44])!
+	texture.replace_region(1, 1, 1, 1, [u8(11), 22, 33, 44])
 
 	// Pixel (1, 1) lives at offset 1*8 + 1*4 = 12.
 	data := read_metal_texture(texture)

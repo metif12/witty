@@ -374,15 +374,15 @@ pub mut:
 	// The texture handle.
 	texture voidptr = unsafe { nil }
 	// Width and height of the target.
-	width  u32
-	height u32
+	width  usize
+	height usize
 }
 
 pub struct MetalTargetOptions {
 pub:
 	device       voidptr = unsafe { nil }
-	width        u32
-	height       u32
+	width        usize
+	height       usize
 	pixel_format MetalPixelFormat = .bgra8unorm
 	storage_mode MetalStorageMode = .shared
 }
@@ -407,7 +407,7 @@ pub fn MetalTarget.init(opts MetalTargetOptions) !MetalTarget {
 	})!
 	resource_options := MetalResourceOptions.init(.write_combined, opts.storage_mode, .default)
 	usage := MetalTextureUsage.from_int(0x04)
-	texture := macos.metal_new_iosurface_texture(opts.device, voidptr(surface), u64(opts.pixel_format), usize(opts.width), usize(opts.height), resource_options.int_val(), usage.int_val())
+	texture := macos.metal_new_iosurface_texture(opts.device, voidptr(surface), u64(opts.pixel_format), opts.width, opts.height, resource_options.int_val(), usage.int_val())
 	if texture == unsafe { nil } {
 		surface.deinit()
 		return error('Metal target texture allocation failed')
@@ -441,10 +441,10 @@ pub mut:
 	// The texture handle.
 	handle voidptr = unsafe { nil }
 	// Width and height.
-	width  u32
-	height u32
+	width  usize
+	height usize
 	// Bytes per pixel for this texture.
-	bpp u32
+	bpp usize
 }
 
 // MetalTextureOptions configures texture creation.
@@ -458,15 +458,9 @@ pub:
 
 // Initialize a texture. If data is provided, it is uploaded starting at the
 // top-left (0, 0) origin.
-pub fn MetalTexture.init(opts MetalTextureOptions, width u32, height u32, data ?[]u8) !MetalTexture {
-	if opts.device == unsafe { nil } {
-		return error('Metal texture requires a device')
-	}
-	if width == 0 || height == 0 {
-		return error('Metal texture dimensions must be non-zero')
-	}
+pub fn MetalTexture.init(opts MetalTextureOptions, width usize, height usize, data ?[]u8) !MetalTexture {
 	bpp := bpp_of(opts.pixel_format)
-	handle := macos.metal_new_texture(opts.device, u64(opts.pixel_format), usize(width), usize(height), opts.resource_options.int_val(), opts.usage.int_val())
+	handle := macos.metal_new_texture(opts.device, u64(opts.pixel_format), width, height, opts.resource_options.int_val(), opts.usage.int_val())
 	if handle == unsafe { nil } {
 		return error('Metal texture allocation failed')
 	}
@@ -478,11 +472,8 @@ pub fn MetalTexture.init(opts MetalTextureOptions, width u32, height u32, data ?
 	}
 
 	if d := data {
-		if d.len != int(width * height * bpp) {
-			self.deinit()
-			return error('Metal texture data size does not match dimensions')
-		}
-		self.replace_region(0, 0, width, height, d)!
+		assert d.len == int(width * height * bpp)
+		self.replace_region(0, 0, width, height, d)
 	}
 
 	return self
@@ -492,16 +483,16 @@ pub fn MetalTexture.init(opts MetalTextureOptions, width u32, height u32, data ?
 //
 // Port of ghostty's texture.zig `bppOf`, restricted to the pixel formats we
 // actually expose in MetalPixelFormat.
-fn bpp_of(pixel_format MetalPixelFormat) u32 {
+fn bpp_of(pixel_format MetalPixelFormat) usize {
 	return match pixel_format {
 		// 8-bit pixel formats.
 		.r8unorm, .r8unorm_srgb {
-			u32(1)
+			usize(1)
 		}
 
 		// 32-bit pixel formats.
 		.rgba8unorm, .rgba8unorm_srgb, .bgra8unorm, .bgra8unorm_srgb {
-			u32(4)
+			usize(4)
 		}
 	}
 }
@@ -517,18 +508,8 @@ pub fn (mut self MetalTexture) deinit() {
 // data is laid out with a stride of `width * bpp` (the region width), and is
 // written into the texture using the texture's own row stride of
 // `self.width * bpp`.
-pub fn (mut self MetalTexture) replace_region(x u32, y u32, width u32, height u32, data []u8) ! {
-	if x + width > self.width || y + height > self.height {
-		return error('Metal texture region is out of bounds')
-	}
-	required := width * height * self.bpp
-	if data.len != int(required) {
-		return error('Metal texture region data size does not match dimensions')
-	}
-	if required == 0 {
-		return
-	}
-	macos.metal_texture_replace_region(self.handle, usize(x), usize(y), usize(width), usize(height), data, usize(width * self.bpp))
+pub fn (self MetalTexture) replace_region(x usize, y usize, width usize, height usize, data []u8) {
+	macos.metal_texture_replace_region(self.handle, x, y, width, height, data, width * self.bpp)
 }
 
 // ============================================================
@@ -656,8 +637,8 @@ pub mut:
 	color                    MetalTexture
 	color_modified           usize
 	target                   MetalTarget
-	target_config_modified   u64
-	bg_image_buffer_modified u64
+	target_config_modified   usize
+	bg_image_buffer_modified usize
 	custom_shader_state      ?MetalCustomShaderState
 }
 
@@ -713,7 +694,7 @@ pub fn MetalFrameState.init(api &MetalAPI, custom_shaders bool) !MetalFrameState
 	} else {
 		none
 	}
-	target := MetalTarget.init(api.target_options(1, 1)) or {
+	target := api.init_target(1, 1) or {
 		if mut state := custom_shader_state {
 			state.deinit()
 		}
@@ -751,12 +732,12 @@ pub fn (mut self MetalFrameState) deinit() {
 	self.custom_shader_state = none
 }
 
-pub fn (mut self MetalFrameState) resize_target(api &MetalAPI, width u32, height u32) ! {
+pub fn (mut self MetalFrameState) resize_target(api &MetalAPI, width usize, height usize) ! {
 	if mut state := self.custom_shader_state {
 		state.resize(api, width, height)!
 		self.custom_shader_state = state
 	}
-	target := MetalTarget.init(api.target_options(width, height))!
+	target := api.init_target(width, height)!
 	self.target.deinit()
 	self.target = target
 }
@@ -809,7 +790,7 @@ pub fn (mut self MetalCustomShaderState) swap() {
 	self.back_texture = front
 }
 
-pub fn (mut self MetalCustomShaderState) resize(api &MetalAPI, width u32, height u32) ! {
+pub fn (mut self MetalCustomShaderState) resize(api &MetalAPI, width usize, height usize) ! {
 	mut front_texture := MetalTexture.init(api.custom_shader_texture_options(), width, height, none)!
 	back_texture := MetalTexture.init(api.custom_shader_texture_options(), width, height, none) or {
 		front_texture.deinit()

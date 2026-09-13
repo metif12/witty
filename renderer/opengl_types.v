@@ -510,10 +510,22 @@ pub:
 
 pub fn GLSampler.init(opts GLSamplerOptions) !GLSampler {
 	sampler := opengl.Sampler.create()!
-	sampler.parameter(.min_filter, int(gl_min_filter(opts.min_filter)))!
-	sampler.parameter(.mag_filter, int(gl_mag_filter(opts.mag_filter)))!
-	sampler.parameter(.wrap_s, int(gl_wrap(opts.wrap_s)))!
-	sampler.parameter(.wrap_t, int(gl_wrap(opts.wrap_t)))!
+	sampler.parameter(.min_filter, int(gl_min_filter(opts.min_filter))) or {
+		sampler.destroy()
+		return err
+	}
+	sampler.parameter(.mag_filter, int(gl_mag_filter(opts.mag_filter))) or {
+		sampler.destroy()
+		return err
+	}
+	sampler.parameter(.wrap_s, int(gl_wrap(opts.wrap_s))) or {
+		sampler.destroy()
+		return err
+	}
+	sampler.parameter(.wrap_t, int(gl_wrap(opts.wrap_t))) or {
+		sampler.destroy()
+		return err
+	}
 	return GLSampler{
 		id: sampler.id
 	}
@@ -536,25 +548,18 @@ pub struct GLTarget {
 pub mut:
 	fbo    u32
 	rbo    u32
-	width  u32
-	height u32
+	width  usize
+	height usize
 }
 
 pub struct GLTargetOptions {
 pub:
-	width           u32
-	height          u32
-	internal_format GLInternalFormat = .rgba
+	width           usize
+	height          usize
+	internal_format GLInternalFormat
 }
 
-pub fn GLTarget.init(width u32, height u32) !GLTarget {
-	return GLTarget.init_with_options(GLTargetOptions{
-		width: width
-		height: height
-	})
-}
-
-pub fn GLTarget.init_with_options(opts GLTargetOptions) !GLTarget {
+pub fn GLTarget.init(opts GLTargetOptions) !GLTarget {
 	rbo := opengl.Renderbuffer.create()!
 	rbo_bind := rbo.bind()!
 	defer {
@@ -599,8 +604,8 @@ pub fn (mut self GLTarget) deinit() {
 pub struct GLTexture {
 pub mut:
 	id     u32
-	width  u32
-	height u32
+	width  usize
+	height usize
 	format GLTextureFormat = .rgba
 	target GLTextureTarget = .texture_2d
 }
@@ -662,23 +667,44 @@ fn gl_wrap(wrap GLWrapMode) opengl.TextureWrap {
 	}
 }
 
-pub fn GLTexture.init(opts GLTextureOptions, width u32, height u32, data ?[]u8) !GLTexture {
+pub fn GLTexture.init(opts GLTextureOptions, width usize, height usize, data ?[]u8) !GLTexture {
 	texture := opengl.Texture.create()!
-	binding := texture.bind(gl_texture_target(opts.target))!
-	defer {
-		binding.unbind()
+	binding := texture.bind(gl_texture_target(opts.target)) or {
+		texture.destroy()
+		return err
 	}
-	binding.parameter(.wrap_s, int(gl_wrap(opts.wrap_s)))!
-	binding.parameter(.wrap_t, int(gl_wrap(opts.wrap_t)))!
-	binding.parameter(.min_filter, int(gl_min_filter(opts.min_filter)))!
-	binding.parameter(.mag_filter, int(gl_mag_filter(opts.mag_filter)))!
+	binding.parameter(.wrap_s, int(gl_wrap(opts.wrap_s))) or {
+		binding.unbind()
+		texture.destroy()
+		return err
+	}
+	binding.parameter(.wrap_t, int(gl_wrap(opts.wrap_t))) or {
+		binding.unbind()
+		texture.destroy()
+		return err
+	}
+	binding.parameter(.min_filter, int(gl_min_filter(opts.min_filter))) or {
+		binding.unbind()
+		texture.destroy()
+		return err
+	}
+	binding.parameter(.mag_filter, int(gl_mag_filter(opts.mag_filter))) or {
+		binding.unbind()
+		texture.destroy()
+		return err
+	}
 	mut ptr := voidptr(unsafe { nil })
 	if d := data {
 		if d.len > 0 {
 			ptr = voidptr(d.data)
 		}
 	}
-	binding.image_2d(0, gl_internal_format(opts.internal_format), int(width), int(height), gl_texture_format(opts.format), .unsigned_byte, ptr)!
+	binding.image_2d(0, gl_internal_format(opts.internal_format), int(width), int(height), gl_texture_format(opts.format), .unsigned_byte, ptr) or {
+		binding.unbind()
+		texture.destroy()
+		return err
+	}
+	binding.unbind()
 	return GLTexture{
 		id: texture.id
 		width: width
@@ -697,21 +723,18 @@ pub fn (mut self GLTexture) deinit() {
 	self.id = 0
 }
 
-pub fn (mut self GLTexture) replace_region(x u32, y u32, width u32, height u32, data []u8) {
-	if self.id == 0 {
-		return
-	}
+pub fn (self GLTexture) replace_region(x usize, y usize, width usize, height usize, data []u8) ! {
 	mut ptr := voidptr(unsafe { nil })
 	if data.len > 0 {
 		ptr = voidptr(data.data)
 	}
 	binding := opengl.Texture{
 		id: self.id
-	}.bind(gl_texture_target(self.target)) or { return }
+	}.bind(gl_texture_target(self.target))!
 	defer {
 		binding.unbind()
 	}
-	binding.sub_image_2d(0, int(x), int(y), int(width), int(height), gl_texture_format(self.format), .unsigned_byte, ptr) or { return }
+	binding.sub_image_2d(0, int(x), int(y), int(width), int(height), gl_texture_format(self.format), .unsigned_byte, ptr)!
 }
 
 // ============================================================
@@ -732,8 +755,8 @@ pub mut:
 	color                    GLTexture
 	color_modified           usize
 	target                   GLTarget
-	target_config_modified   u64
-	bg_image_buffer_modified u64
+	target_config_modified   usize
+	bg_image_buffer_modified usize
 	custom_shader_state      ?GLCustomShaderState
 }
 
@@ -822,7 +845,7 @@ pub fn (mut self GLFrameState) deinit() {
 	self.custom_shader_state = none
 }
 
-pub fn (mut self GLFrameState) resize_target(api &OpenGLAPI, width u32, height u32) ! {
+pub fn (mut self GLFrameState) resize_target(api &OpenGLAPI, width usize, height usize) ! {
 	if mut state := self.custom_shader_state {
 		state.resize(api, width, height)!
 		self.custom_shader_state = state
@@ -880,7 +903,7 @@ pub fn (mut self GLCustomShaderState) swap() {
 	self.back_texture = front
 }
 
-pub fn (mut self GLCustomShaderState) resize(api &OpenGLAPI, width u32, height u32) ! {
+pub fn (mut self GLCustomShaderState) resize(api &OpenGLAPI, width usize, height usize) ! {
 	mut front_texture := GLTexture.init(api.texture_options(), width, height, none)!
 	mut back_texture := GLTexture.init(api.texture_options(), width, height, none) or {
 		front_texture.deinit()

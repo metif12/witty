@@ -22,11 +22,23 @@ fn test_render_pass_tags_and_counts_match_source_contract() {
 	buffer := GLBuffer{
 		len: max_count
 	}
+	target := GLTarget{
+		width: max_count
+		height: max_count
+	}
+	texture := GLTexture{
+		width: max_count
+		height: max_count
+	}
 	draw := GLDraw{
 		vertex_count: max_count
 		instance_count: max_count
 	}
 	assert buffer.len == max_count
+	assert target.width == max_count
+	assert target.height == max_count
+	assert texture.width == max_count
+	assert texture.height == max_count
 	assert draw.vertex_count == max_count
 	assert draw.instance_count == max_count
 }
@@ -41,26 +53,6 @@ fn test_opengl_init_does_not_require_a_current_context() {
 		}
 	})!
 	assert linear_api.blending == .linear_corrected
-}
-
-fn test_opengl_target_options_follow_blending_mode() {
-	native := OpenGLAPI{
-		blending: .native
-	}
-	assert native.target_options(80, 24) == GLTargetOptions{
-		width: 80
-		height: 24
-		internal_format: .rgba
-	}
-
-	linear := OpenGLAPI{
-		blending: .linear
-	}
-	assert linear.target_options(120, 40) == GLTargetOptions{
-		width: 120
-		height: 40
-		internal_format: .srgba
-	}
 }
 
 fn test_opengl_buffer_options_are_shared_by_every_role() {

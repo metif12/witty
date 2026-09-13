@@ -927,8 +927,8 @@ pub mut:
 
 	// Background image vertex buffer.
 	bg_image_buffer          BgImageBuffer
-	bg_image_buffer_modified u64
-	target_config_modified   u64
+	bg_image_buffer_modified usize
+	target_config_modified   usize
 
 	// Health of the most recently completed frame.
 	health Health = .healthy
@@ -1759,7 +1759,7 @@ fn (self &Renderer) sync_atlas_texture(atlas &font.Atlas, mut texture MetalTextu
 		texture.deinit()
 		texture = replacement
 	}
-	texture.replace_region(0, 0, atlas.size, atlas.size, atlas.data)!
+	texture.replace_region(0, 0, atlas.size, atlas.size, atlas.data)
 }
 
 fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
@@ -1955,7 +1955,7 @@ fn (self &Renderer) sync_gl_atlas_texture(atlas &font.Atlas, mut texture GLTextu
 		texture.deinit()
 		texture = replacement
 	}
-	texture.replace_region(0, 0, atlas.size, atlas.size, atlas.data)
+	texture.replace_region(0, 0, atlas.size, atlas.size, atlas.data)!
 }
 
 // Callback from the graphics API when a frame is completed.

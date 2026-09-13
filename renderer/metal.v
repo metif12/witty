@@ -239,14 +239,14 @@ pub fn (self &MetalAPI) target_pixel_format() MetalPixelFormat {
 	return if self.blending.is_linear() { .bgra8unorm_srgb } else { .bgra8unorm }
 }
 
-pub fn (self &MetalAPI) target_options(width u32, height u32) MetalTargetOptions {
-	return MetalTargetOptions{
+pub fn (self &MetalAPI) init_target(width usize, height usize) !MetalTarget {
+	return MetalTarget.init(MetalTargetOptions{
 		device: self.device
 		width: width
 		height: height
 		pixel_format: self.target_pixel_format()
 		storage_mode: self.default_storage_mode
-	}
+	})
 }
 
 // present_and_commit presents the drawable and commits the command buffer.

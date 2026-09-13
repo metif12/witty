@@ -167,19 +167,13 @@ pub fn (self &OpenGLAPI) init_shaders(custom_shaders []string) !GLShaders {
 	return GLShaders.init_with_sources(custom_shaders)
 }
 
-// target_options returns the renderbuffer format required by the configured
-// blending mode.
-pub fn (self &OpenGLAPI) target_options(width u32, height u32) GLTargetOptions {
-	return GLTargetOptions{
+// init_target creates an off-screen render target suitable for presentation.
+pub fn (self &OpenGLAPI) init_target(width usize, height usize) !GLTarget {
+	return GLTarget.init(GLTargetOptions{
 		width: width
 		height: height
 		internal_format: if self.blending.is_linear() { .srgba } else { .rgba }
-	}
-}
-
-// init_target creates an off-screen render target suitable for presentation.
-pub fn (self &OpenGLAPI) init_target(width u32, height u32) !GLTarget {
-	return GLTarget.init_with_options(self.target_options(width, height))
+	})
 }
 
 // present blits an off-screen target to the default framebuffer.
