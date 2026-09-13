@@ -28,7 +28,7 @@ pub mut:
 pub struct MetalBufferOptions {
 pub:
 	// MTLDevice used to allocate this buffer.
-	device voidptr = unsafe { nil }
+	device           voidptr = unsafe { nil }
 	resource_options MetalResourceOptions
 }
 
@@ -462,10 +462,10 @@ pub mut:
 // MetalTextureOptions configures texture creation.
 pub struct MetalTextureOptions {
 pub:
-	device       voidptr = unsafe { nil }
-	pixel_format MetalPixelFormat = .bgra8unorm
+	device           voidptr = unsafe { nil }
+	pixel_format     MetalPixelFormat = .bgra8unorm
 	resource_options MetalResourceOptions
-	usage        MetalTextureUsage
+	usage            MetalTextureUsage
 }
 
 // Initialize a texture. If data is provided, it is uploaded starting at the
@@ -492,19 +492,38 @@ pub fn MetalTexture.init(opts MetalTextureOptions, width usize, height usize, da
 }
 
 // bpp_of returns the bytes per pixel for the provided pixel format.
-//
-// Port of ghostty's texture.zig `bppOf`, restricted to the pixel formats we
-// actually expose in MetalPixelFormat.
 fn bpp_of(pixel_format MetalPixelFormat) usize {
 	return match pixel_format {
+		.invalid {
+			panic('invalid pixel format')
+		}
+
 		// 8-bit pixel formats.
-		.r8unorm, .r8unorm_srgb {
+		.a8unorm, .r8unorm, .r8unorm_srgb, .r8snorm, .r8uint, .r8sint, .rg8unorm, .rg8unorm_srgb, .rg8snorm, .rg8uint, .rg8sint, .stencil8 {
 			usize(1)
 		}
 
+		// 16-bit pixel formats.
+		.r16unorm, .r16snorm, .r16uint, .r16sint, .r16float, .rg16unorm, .rg16snorm, .rg16uint, .rg16sint, .rg16float, .b5g6r5unorm, .a1bgr5unorm, .abgr4unorm, .bgr5a1unorm, .depth16unorm {
+			usize(2)
+		}
+
 		// 32-bit pixel formats.
-		.rgba8unorm, .rgba8unorm_srgb, .bgra8unorm, .bgra8unorm_srgb {
+		.rgba8unorm, .rgba8unorm_srgb, .rgba8snorm, .rgba8uint, .rgba8sint, .bgra8unorm, .bgra8unorm_srgb, .rgb10a2unorm, .rgb10a2uint, .rg11b10float, .rgb9e5float, .bgr10a2unorm, .bgr10_xr, .bgr10_xr_srgb, .r32uint, .r32sint, .r32float, .depth32float, .depth24unorm_stencil8 {
 			usize(4)
+		}
+
+		// 64-bit pixel formats.
+		.rg32uint, .rg32sint, .rg32float, .rgba16unorm, .rgba16snorm, .rgba16uint, .rgba16sint, .rgba16float, .bgra10_xr, .bgra10_xr_srgb {
+			usize(8)
+		}
+
+		// 128-bit pixel formats.
+		.rgba32uint, .rgba32sint, .rgba32float {
+			usize(128)
+		}
+		else {
+			panic('pixel format size unknown (unlikely that this format was actually used, could be memory corruption)')
 		}
 	}
 }
