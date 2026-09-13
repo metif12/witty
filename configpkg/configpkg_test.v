@@ -16,6 +16,46 @@ struct FormatterTestFlags {
 	two bool
 }
 
+fn test_platform_config_enum_layouts_and_source_ordinals() {
+	assert sizeof(MacOSDockDropBehavior) == 1
+	assert [MacOSDockDropBehavior.new_tab, .new_window].map(u8(it)) == [u8(0), 1]
+
+	assert sizeof(NonNativeFullscreen) == 4
+	assert [NonNativeFullscreen.false_, .true_, .visible_menu, .padded_notch].map(i32(it)) == [i32(0),
+		1, 2, 3]
+
+	assert sizeof(MacWindowButtons) == 1
+	assert [MacWindowButtons.visible, .hidden].map(u8(it)) == [u8(0), 1]
+	assert sizeof(MacTitlebarStyle) == 1
+	assert [MacTitlebarStyle.native, .transparent, .tabs, .hidden].map(u8(it)) == [u8(0), 1,
+		2, 3]
+	assert sizeof(MacTitlebarProxyIcon) == 1
+	assert [MacTitlebarProxyIcon.visible, .hidden].map(u8(it)) == [u8(0), 1]
+	assert sizeof(MacHidden) == 1
+	assert [MacHidden.never, .always].map(u8(it)) == [u8(0), 1]
+
+	assert sizeof(MacAppIcon) == 1
+	assert [MacAppIcon.official, .blueprint, .chalkboard, .microchip, .glass, .holographic,
+		.paper, .retro, .xray, .custom, .custom_style].map(u8(it)) == [u8(0), 1, 2, 3, 4, 5,
+		6, 7, 8, 9, 10]
+	assert sizeof(MacAppIconFrame) == 1
+	assert [MacAppIconFrame.aluminum, .beige, .plastic, .chrome].map(u8(it)) == [u8(0), 1,
+		2, 3]
+	assert sizeof(MacShortcuts) == 1
+	assert [MacShortcuts.allow, .deny, .ask].map(u8(it)) == [u8(0), 1, 2]
+
+	assert sizeof(GtkSingleInstance) == 1
+	assert [GtkSingleInstance.false_, .true_, .detect].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(LinuxCgroup) == 1
+	assert [LinuxCgroup.never, .always, .single_instance].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(GtkTabsLocation) == 1
+	assert [GtkTabsLocation.top, .bottom].map(u8(it)) == [u8(0), 1]
+	assert sizeof(GtkToolbarStyle) == 1
+	assert [GtkToolbarStyle.flat, .raised, .raised_border].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(GtkTitlebarStyle) == 4
+	assert [GtkTitlebarStyle.native, .tabs].map(i32(it)) == [i32(0), 1]
+}
+
 fn test_load_file_applies_theme_colors() {
 	path := os.join_path(os.temp_dir(), 'witty-theme-test.conf')
 	os.write_file(path, '

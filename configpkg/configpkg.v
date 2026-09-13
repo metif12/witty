@@ -4257,41 +4257,41 @@ pub mut:
 }
 
 // MacOSDockDropBehavior controls behavior when dropping onto the macOS dock.
-pub enum MacOSDockDropBehavior {
+pub enum MacOSDockDropBehavior as u8 {
 	new_tab
 	new_window
 }
 
-pub enum NonNativeFullscreen {
+pub enum NonNativeFullscreen as i32 {
 	false_
 	true_
 	visible_menu
 	padded_notch
 }
 
-pub enum MacWindowButtons {
+pub enum MacWindowButtons as u8 {
 	visible
 	hidden
 }
 
-pub enum MacTitlebarStyle {
+pub enum MacTitlebarStyle as u8 {
 	native
 	transparent
 	tabs
 	hidden
 }
 
-pub enum MacTitlebarProxyIcon {
+pub enum MacTitlebarProxyIcon as u8 {
 	visible
 	hidden
 }
 
-pub enum MacHidden {
+pub enum MacHidden as u8 {
 	never
 	always
 }
 
-pub enum MacAppIcon {
+pub enum MacAppIcon as u8 {
 	official
 	blueprint
 	chalkboard
@@ -4305,14 +4305,14 @@ pub enum MacAppIcon {
 	custom_style
 }
 
-pub enum MacAppIconFrame {
+pub enum MacAppIconFrame as u8 {
 	aluminum
 	beige
 	plastic
 	chrome
 }
 
-pub enum MacShortcuts {
+pub enum MacShortcuts as u8 {
 	allow
 	deny
 	ask
@@ -4385,34 +4385,34 @@ pub fn (c ColorList) format_entry() string {
 }
 
 // GtkSingleInstance controls GTK single-instance behavior.
-pub enum GtkSingleInstance {
-	detect
+pub enum GtkSingleInstance as u8 {
 	false_
 	true_
+	detect
 }
 
 // LinuxCgroup controls when systemd cgroup isolation is enabled.
-pub enum LinuxCgroup {
+pub enum LinuxCgroup as u8 {
 	never
 	always
 	single_instance
 }
 
 // GtkTabsLocation controls which edge hosts the tab bar.
-pub enum GtkTabsLocation {
+pub enum GtkTabsLocation as u8 {
 	top
 	bottom
 }
 
 // GtkToolbarStyle controls the visual separation of the toolbar and terminal.
-pub enum GtkToolbarStyle {
+pub enum GtkToolbarStyle as u8 {
 	flat
 	raised
 	raised_border
 }
 
 // GtkTitlebarStyle selects a traditional titlebar or a merged tab titlebar.
-pub enum GtkTitlebarStyle {
+pub enum GtkTitlebarStyle as i32 {
 	native
 	tabs
 }
