@@ -127,10 +127,8 @@ pub fn ghostty_init(argc int, argv []string) int {
 // the action and exits the process with its return code.
 pub fn ghostty_cli_try_action() {
 	state := global_state.get_state()
-	if state.action == .none {
-		return
-	}
-	code := run_cli_action(state.action, state.cli_args) or {
+	action := state.action or { return }
+	code := run_cli_action(action, state.cli_args) or {
 		eprintln('CLI action failed: ${err}')
 		exit(1)
 	}
@@ -150,7 +148,6 @@ pub fn run_cli_action(action global_state.Action, args []string) !int {
 
 fn run_cli_action_main(action global_state.Action, args []string) !int {
 	return match action {
-		.none { 0 }
 		.version { cli.run_version()! }
 		.help { cli.run_help(action_args(args, action))! }
 		.list_themes { cli.run_list_themes(action_args(args, action))! }

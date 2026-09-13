@@ -19,21 +19,33 @@ fn test_logging_defaults_follow_runtime_and_darwin_target() {
 }
 
 fn test_detect_action_direct_match() {
-	assert detect_action(['--font-size=12', '+list-themes'])! == .list_themes
+	assert detect_action(['--font-size=12', '+list-themes'])!.action? == .list_themes
 }
 
 fn test_detect_action_version_is_immediate() {
-	assert detect_action(['+help', '--version', '+list-fonts'])! == .version
+	assert detect_action(['+help', '--version', '+list-fonts'])!.action? == .version
 }
 
 fn test_detect_action_help_is_fallback() {
-	assert detect_action(['--help'])! == .help
-	assert detect_action(['--help', '+list-fonts'])! == .list_fonts
+	assert detect_action(['--help'])!.action? == .help
+	assert detect_action(['--help', '+list-fonts'])!.action? == .list_fonts
 }
 
 fn test_detect_action_exec_aborts_before_action() {
-	assert detect_action(['-e', '+help'])! == .none
-	assert detect_action(['+help', '-e'])! == .help
+	assert detect_action(['-e', '+help'])!.action == none
+	assert detect_action(['+help', '-e'])!.action? == .help
+}
+
+fn test_cli_action_layout_and_source_ordinals() {
+	assert sizeof(Action) == 1
+	mut action_count := 0
+	$for enum_value in Action.values {
+		assert u8(enum_value.value) == u8(action_count)
+		action_count++
+	}
+	assert action_count == 15
+	assert u8(Action.version) == 0
+	assert u8(Action.new_window) == 14
 }
 
 fn test_detect_action_rejects_invalid_and_multiple_actions() {

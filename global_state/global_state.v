@@ -35,7 +35,7 @@ pub fn get_state_mut() &GlobalState {
 pub struct GlobalState {
 pub mut:
 	// The action to execute, if any. This is detected from CLI args.
-	action Action = .none
+	action ?Action
 
 	// Where logging should go.
 	logging Logging
@@ -120,8 +120,7 @@ fn parse_logging(value string) !Logging {
 }
 
 // Action represents the special commands accepted through +<action>.
-pub enum Action {
-	none
+pub enum Action as u8 {
 	version
 	help
 	list_fonts
@@ -139,6 +138,14 @@ pub enum Action {
 	new_window
 }
 
+// DetectActionResult preserves Ghostty's `!?Action` return contract. V cannot
+// combine an optional value with an error result directly, so `action == none`
+// represents successful detection with no CLI action.
+pub struct DetectActionResult {
+pub:
+	action ?Action
+}
+
 pub fn (action Action) cli_name() string {
 	return action.str().replace('_', '-')
 }
@@ -151,31 +158,31 @@ pub fn actions() []Action {
 
 // detect_action translates cli/action.zig's generic action detector and
 // cli/ghostty.zig's special-case handling.
-pub fn detect_action(args []string) !Action {
-	mut fallback := Action.none
-	mut pending := Action.none
+pub fn detect_action(args []string) !DetectActionResult {
+	mut fallback := ?Action(none)
+	mut pending := ?Action(none)
 	for arg in args {
 		if arg == '--version' {
-			return .version
+			return DetectActionResult{ action: .version }
 		}
 		if arg == '--help' || arg == '-h' {
 			fallback = .help
 		}
-		if arg == '-e' && pending == .none {
-			return .none
+		if arg == '-e' && pending == none {
+			return DetectActionResult{}
 		}
 		if !arg.starts_with('+') {
 			continue
 		}
-		if pending != .none {
+		if pending != none {
 			return error('multiple actions')
 		}
 		pending = action_from_name(arg[1..]) or { return error('invalid action: ${arg[1..]}') }
 	}
-	if pending != .none {
-		return pending
+	if action := pending {
+		return DetectActionResult{ action: action }
 	}
-	return fallback
+	return DetectActionResult{ action: fallback }
 }
 
 fn action_from_name(name string) ?Action {
@@ -197,18 +204,18 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 	// Initialize ourself to nothing so we don't have any extra state.
 	// IMPORTANT: this MUST be initialized before any log output because
 	// the log function uses the global state.
-	self.action = .none
+	self.action = none
 	self.logging = Logging{}
 	self.rlimits = ResourceLimits{}
 	self.resources_dir = internal_os.ResourcesDir{}
 	self.cli_args = args.clone()
 
-	self.action = detect_action(args)!
+	self.action = detect_action(args)!.action
 
 	// If we have an action executing, we disable logging by default
 	// since we write to stderr we don't want logs messing up our
 	// output.
-	if self.action != .none {
+	if self.action != none {
 		self.logging.set_stderr(false)
 	}
 
