@@ -1513,7 +1513,7 @@ pub fn (mut self SurfaceWidget) set_progress_report(value osc.ProgressReport) {
 		.set {
 			C.gtk_widget_remove_css_class(self.progress_bar_overlay, c'error')
 			if progress := value.progress {
-				C.gtk_progress_bar_set_fraction(self.progress_bar_overlay, f64(progress) / 100.0)
+				C.gtk_progress_bar_set_fraction(self.progress_bar_overlay, compute_fraction(progress))
 			} else {
 				C.gtk_progress_bar_pulse(self.progress_bar_overlay)
 			}
@@ -1521,7 +1521,7 @@ pub fn (mut self SurfaceWidget) set_progress_report(value osc.ProgressReport) {
 		.err_state {
 			C.gtk_widget_add_css_class(self.progress_bar_overlay, c'error')
 			if progress := value.progress {
-				C.gtk_progress_bar_set_fraction(self.progress_bar_overlay, f64(progress) / 100.0)
+				C.gtk_progress_bar_set_fraction(self.progress_bar_overlay, compute_fraction(progress))
 			} else {
 				C.gtk_progress_bar_pulse(self.progress_bar_overlay)
 			}
@@ -1531,13 +1531,21 @@ pub fn (mut self SurfaceWidget) set_progress_report(value osc.ProgressReport) {
 		}
 		.pause {
 			if progress := value.progress {
-				C.gtk_progress_bar_set_fraction(self.progress_bar_overlay, f64(progress) / 100.0)
+				C.gtk_progress_bar_set_fraction(self.progress_bar_overlay, compute_fraction(progress))
 			}
 		}
 	}
 
 	C.gtk_widget_set_visible(self.progress_bar_overlay, true)
 	self.progress_bar_timer = C.g_timeout_add(15_000, voidptr(surface_progress_bar_timer_cb), voidptr(self))
+}
+
+// compute_fraction converts an OSC progress percentage to the 0..1 fraction a
+// GtkProgressBar takes. The value is clamped because a report can carry any
+// byte, and a fraction above 1.0 is not meaningful to GTK.
+fn compute_fraction(progress u8) f64 {
+	clamped := if progress > 100 { u8(100) } else { progress }
+	return f64(clamped) / 100.0
 }
 
 // command_finished applies the per-surface command notification policy.
