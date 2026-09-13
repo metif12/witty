@@ -1742,15 +1742,24 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 		frame_state.custom_shader_state = state
 	}
 
-	// Ghostty presents from the command-buffer completion callback. The V
-	// bridge waits here before handing the IOSurface to Core Animation, which
-	// preserves the same ordering and resource-safety guarantees.
+	// Ghostty registers a completion handler on the command buffer and both
+	// presents and reports health from it. The V bridge instead waits for the
+	// buffer here and runs the same body inline; see the Metal frame/pass
+	// representation note in AUDIT_FINDINGS.md.
 	status := frame.complete(true)
+
+	// Get our command buffer status to pass back to the renderer.
 	health := if status == .error { Health.unhealthy } else { Health.healthy }
-	self.frame_completed(health)
+
+	// If the frame is healthy, present it. A presentation failure is reported
+	// but does not change the health we report for the frame itself.
 	if health == .healthy && self.metal.layer != none {
-		self.metal.present(&frame_state.target, sync_)!
+		self.metal.present(&frame_state.target, sync_) or {
+			eprintln('renderer: failed to present render target: ${err}')
+		}
 	}
+
+	self.frame_completed(health)
 }
 
 fn (self &Renderer) sync_atlas_texture(atlas &font.Atlas, mut texture MetalTexture) ! {
@@ -1942,7 +1951,7 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 		frame_state.custom_shader_state = state
 	}
 
-	frame.complete()
+	frame.complete(sync_)
 	self.frame_completed(if frame.healthy { .healthy } else { .unhealthy })
 }
 

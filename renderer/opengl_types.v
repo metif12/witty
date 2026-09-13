@@ -181,13 +181,24 @@ pub fn GLFrame.begin(mut api OpenGLAPI, mut target GLTarget) !GLFrame {
 	}
 }
 
-pub fn (mut self GLFrame) complete() {
+// Complete this frame and present the target.
+//
+// NOTE: For OpenGL, `sync` is ignored and we always block.
+pub fn (mut self GLFrame) complete(sync_ bool) {
+	_ = sync_
 	opengl.finish()
+
+	// If there are any GL errors, consider the frame unhealthy.
 	opengl.get_error() or { self.healthy = false }
+
+	// If the frame is healthy, present it. A presentation failure is reported
+	// but does not change the health we report for the frame itself.
 	if self.healthy && self.api != unsafe { nil } && self.target != unsafe { nil } {
 		mut api := unsafe { self.api }
 		target := unsafe { *self.target }
-		api.present(target) or { self.healthy = false }
+		api.present(target) or {
+			eprintln('renderer: failed to present render target: ${err}')
+		}
 	}
 }
 
