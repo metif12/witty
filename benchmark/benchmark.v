@@ -22,7 +22,7 @@ fn C.witty_benchmark_do_not_optimize_ptr(value voidptr)
 // Benchmark.once run mode, so each action below performs its setup, one step,
 // and teardown in that order.
 
-pub enum Action {
+pub enum Action as u8 {
 	codepoint_width
 	grapheme_break
 	screen_clone
@@ -32,7 +32,7 @@ pub enum Action {
 	osc_parser
 }
 
-enum CodepointWidthMode {
+enum CodepointWidthMode as u8 {
 	noop
 	wcwidth
 	simd
@@ -45,7 +45,7 @@ mut:
 	data ?string
 }
 
-enum GraphemeBreakMode {
+enum GraphemeBreakMode as u8 {
 	noop
 	table
 }
@@ -56,7 +56,7 @@ mut:
 	data ?string
 }
 
-enum IsSymbolMode {
+enum IsSymbolMode as u8 {
 	uucode
 	table
 }
@@ -67,7 +67,7 @@ mut:
 	data ?string
 }
 
-enum ScreenCloneMode {
+enum ScreenCloneMode as u8 {
 	noop
 	clone
 	render
