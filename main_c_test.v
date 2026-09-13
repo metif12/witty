@@ -190,8 +190,8 @@ fn test_config_c_api_gets_composite_values() {
 	config.quick_terminal_size.parse_cli('72%,480px')!
 	mut quick_size := configpkg.CConfigQuickTerminalSize{}
 	assert ghostty_config_get(mut config, voidptr(&quick_size), 'quick-terminal-size')
-	assert quick_size.primary.tag == 1
-	assert quick_size.secondary.tag == 2
+	assert quick_size.primary.tag == .percentage
+	assert quick_size.secondary.tag == .pixels
 	assert quick_size.secondary.value == 480
 
 	mut commands := configpkg.CConfigCommandList{}

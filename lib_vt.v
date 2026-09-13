@@ -88,6 +88,8 @@ pub type ModePacked = terminal.ModePacked
 
 pub type ModifyKeyFormat = terminal.ModifyKeyFormat
 
+pub type MouseShape = terminal.MouseShape
+
 pub type ProtectedMode = terminal.ProtectedMode
 
 pub type StatusLineType = terminal.StatusLineType
