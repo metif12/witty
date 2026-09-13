@@ -16,7 +16,10 @@ pub mut:
 	// Opaque handles to Metal objects.
 	device voidptr = unsafe { nil }
 	queue  voidptr = unsafe { nil }
-	layer  voidptr = unsafe { nil }
+
+	// The presentation layer. Absent for the off-screen/test API, which has no
+	// runtime surface to present to.
+	layer ?MetalIOSurfaceLayer
 
 	// Alpha blending mode
 	blending configpkg.AlphaBlending
@@ -32,8 +35,6 @@ pub mut:
 
 	// True when this instance created and therefore owns device and queue.
 	owns_handles bool
-	// True when this instance owns its IOSurface presentation layer.
-	owns_layer bool
 }
 
 // Storage mode for Metal resources.
@@ -113,14 +114,12 @@ pub fn MetalAPI.init_from_view(view voidptr, content_scale f64) !MetalAPI {
 		macos.metal_release(device)
 		return error('Metal command queue unavailable')
 	}
-	layer := macos.metal_iosurface_layer_new()
-
-	if layer == unsafe { nil } {
+	layer := MetalIOSurfaceLayer.init() or {
 		macos.metal_release(queue)
 		macos.metal_release(device)
-		return error('Metal presentation layer unavailable')
+		return err
 	}
-	macos.metal_install_iosurface_layer(view, layer, content_scale)
+	macos.metal_install_iosurface_layer(view, layer.layer, content_scale)
 
 	unified := macos.metal_has_unified_memory(device)
 	storage := if unified { MetalStorageMode.shared } else { MetalStorageMode.managed }
@@ -134,7 +133,6 @@ pub fn MetalAPI.init_from_view(view voidptr, content_scale f64) !MetalAPI {
 		default_storage_mode: storage
 		max_texture_size: max_tex
 		owns_handles: true
-		owns_layer: true
 	}
 }
 
@@ -167,25 +165,21 @@ pub fn (mut self MetalAPI) deinit() {
 		macos.metal_release(self.queue)
 		macos.metal_release(self.device)
 	}
-	if self.owns_layer {
-		macos.metal_release(self.layer)
+	if layer := self.layer {
+		layer.release()
 	}
 	self.device = unsafe { nil }
 	self.queue = unsafe { nil }
-	self.layer = unsafe { nil }
+	self.layer = none
 	self.owns_handles = false
-	self.owns_layer = false
 }
 
 // loop_enter installs the display callback the Metal layer invokes when the
 // compositor is ready for a new frame. Called by renderer.Thread when it
 // starts the main loop.
 pub fn (self &MetalAPI) loop_enter(r &Renderer) {
-	if self.layer == unsafe { nil } {
-		return
-	}
-	macos.metal_iosurface_layer_set_display_callback(self.layer, voidptr(renderer_metal_layer_display_callback),
-		voidptr(r))
+	layer := self.layer or { return }
+	layer.set_display_callback(renderer_metal_layer_display_callback, voidptr(r))
 }
 
 // draw_frame_start performs the actions taken before doing anything in
@@ -328,19 +322,18 @@ pub fn (self &MetalAPI) init_target(width usize, height usize) !MetalTarget {
 }
 
 pub fn (self &MetalAPI) present(target &MetalTarget, sync_ bool) ! {
-	if self.layer == unsafe { nil } || target.surface == unsafe { nil } {
-		return error('Metal presentation layer unavailable')
-	}
+	layer := self.layer or { return error('Metal presentation layer unavailable') }
 	if sync_ {
-		macos.metal_iosurface_layer_set_surface_sync(self.layer, voidptr(target.surface))
-	} else if !macos.metal_iosurface_layer_set_surface(self.layer, voidptr(target.surface)) {
-		return error('Metal surface presentation failed')
+		layer.set_surface_sync(target.surface)
+	} else {
+		layer.set_surface(target.surface)!
 	}
 }
 
 // Get the current size of the runtime surface.
 pub fn (self &MetalAPI) surface_size() (u32, u32) {
-	width, height := macos.metal_layer_surface_size(self.layer)
+	layer := self.layer or { return 0, 0 }
+	width, height := layer.surface_size()
 	return clamped_metal_surface_dimension(width, self.max_texture_size), clamped_metal_surface_dimension(height, self.max_texture_size)
 }
 

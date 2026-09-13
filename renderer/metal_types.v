@@ -610,27 +610,38 @@ pub fn MetalIOSurfaceLayer.init() !MetalIOSurfaceLayer {
 	}
 }
 
-pub fn (mut self MetalIOSurfaceLayer) release() {
+pub fn (self &MetalIOSurfaceLayer) release() {
 	macos.metal_release(self.layer)
-	self.layer = unsafe { nil }
 }
 
-// Set the surface to display (async, on main thread).
-pub fn (mut self MetalIOSurfaceLayer) set_surface(surface &macos.IOSurface) ! {
+// Sets the layer's `contents` to the provided IOSurface.
+//
+// Makes sure to do so on the main thread to avoid visual artifacts. The
+// retain/release pairing, the main-thread check, and the discard of a surface
+// whose size no longer matches the layer all live in the C shim, which stands
+// in for the source's Objective-C block.
+pub fn (self &MetalIOSurfaceLayer) set_surface(surface &macos.IOSurface) ! {
 	if !macos.metal_iosurface_layer_set_surface(self.layer, voidptr(surface)) {
 		return error('Metal IOSurface layer update failed')
 	}
 }
 
-// Set the surface to display synchronously.
-pub fn (mut self MetalIOSurfaceLayer) set_surface_sync(surface &macos.IOSurface) {
+// Sets the layer's `contents` to the provided IOSurface.
+//
+// Does not ensure this happens on the main thread.
+pub fn (self &MetalIOSurfaceLayer) set_surface_sync(surface &macos.IOSurface) {
 	macos.metal_iosurface_layer_set_surface_sync(self.layer, voidptr(surface))
 }
 
 pub type MetalLayerDisplayCallback = fn (context voidptr)
 
-pub fn (mut self MetalIOSurfaceLayer) set_display_callback(callback MetalLayerDisplayCallback, context voidptr) {
+pub fn (self &MetalIOSurfaceLayer) set_display_callback(callback MetalLayerDisplayCallback, context voidptr) {
 	macos.metal_iosurface_layer_set_display_callback(self.layer, voidptr(callback), context)
+}
+
+// surface_size returns the current size of the runtime surface.
+pub fn (self &MetalIOSurfaceLayer) surface_size() (f64, f64) {
+	return macos.metal_layer_surface_size(self.layer)
 }
 
 // ============================================================

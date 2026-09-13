@@ -454,3 +454,27 @@ fn test_metal_buffer_sync_from_array_lists_concatenates_rows() ! {
 	// Syncing nothing is still valid and reports zero items.
 	assert buffer.sync_from_array_lists([][]u8{})! == 0
 }
+
+fn test_metal_api_without_layer_cannot_present() ! {
+	// The off-screen API has no runtime surface, so the layer is absent and
+	// every layer-driven operation is either a no-op or reports unavailable.
+	mut api := MetalAPI.init()!
+	defer {
+		api.deinit()
+	}
+	assert api.layer == none
+
+	width, height := api.surface_size()
+	assert width == 0
+	assert height == 0
+
+	mut target := api.init_target(4, 4)!
+	defer {
+		target.deinit()
+	}
+	if _ := api.present(&target, true) {
+		assert false
+	} else {
+		assert err.msg().contains('presentation layer unavailable')
+	}
+}

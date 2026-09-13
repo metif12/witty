@@ -1550,7 +1550,7 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	mut surface_width, mut surface_height := self.metal.surface_size()
 	// A MetalAPI created without a view is useful for off-screen rendering and
 	// tests. In that case the configured screen size is the render-target size.
-	if self.metal.layer == unsafe { nil } {
+	if self.metal.layer == none {
 		surface_width = self.size.screen.width
 		surface_height = self.size.screen.height
 	}
@@ -1748,7 +1748,7 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	status := frame.complete(true)
 	health := if status == .error { Health.unhealthy } else { Health.healthy }
 	self.frame_completed(health)
-	if health == .healthy && self.metal.layer != unsafe { nil } {
+	if health == .healthy && self.metal.layer != none {
 		self.metal.present(&frame_state.target, sync_)!
 	}
 }
