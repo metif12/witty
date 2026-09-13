@@ -13,11 +13,11 @@ import build_meta
 pub const version_string = build_meta.version_string
 
 // ReleaseChannel determines the release channel for this build.
-pub enum ReleaseChannel {
-	// Stable release
-	stable
+pub enum ReleaseChannel as u8 {
 	// Tip/nightly release (built from latest source)
 	tip
+	// Stable release
+	stable
 }
 
 // The release channel for this build.
@@ -25,7 +25,7 @@ pub const release_channel = ReleaseChannel.tip
 
 // The artifact we're producing. This can be used to determine if we're
 // building a standalone exe, an embedded lib, etc.
-pub enum Artifact {
+pub enum Artifact as u8 {
 	// Standalone executable
 	exe
 	// Embeddable library
