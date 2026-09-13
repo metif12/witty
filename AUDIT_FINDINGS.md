@@ -213,6 +213,10 @@ below exist. Earlier versions of this document overstated the completed review.
 | renderer auxiliary Metal enums | The native GPU-family wrapper exposed only two of Ghostty's fifteen values, while index type, purgeable state, barrier scope, and render stage were omitted entirely from the translated Metal API surface. | Restore all five unsigned-/signed-long-compatible enums with their complete declaration order and raw values. |
 | renderer Metal native records | The translated native API renamed `MTLClearColor`'s four fields and omitted Ghostty's viewport, region, origin, and size records. | Restore all five eight-byte-aligned value layouts with exact source field names, order, scalar widths, and aggregate sizes. |
 | renderer Metal render-pass contracts | The pass constructor was fallible and rejected missing native objects despite Ghostty's direct infallible Objective-C dispatch; the step flattened its required nested draw record, silently skipped a missing encoder/pipeline, and bound null entries that source optional-resource loops skip. Completion also mutated the retained encoder to null. | Restore source-shaped options and draw records, add `Frame.render_pass`, construct directly, keep only the zero-instance early return, skip null optional resources, and end encoding without changing the wrapper. |
+| renderer Metal constructor contracts | Ghostty's sampler, target, and texture options are all mandatory, but every translated field carried a default, so a call site could silently construct a resource with an invented pixel format, storage mode, or filter. The sampler, target, and pipeline constructors also pre-checked nil devices/libraries, empty function names, and zero dimensions, none of which the source does. | Mark all option fields required and pass explicit values at every call site; remove the source-external pre-checks, leaving the native allocation failures the source actually reports. |
+| renderer Metal texture factories | The Metal image-texture factory took the six-case image pixel format instead of the source's three-case `ImageTextureFormat` and fell back to RGBA for the three layouts it cannot represent. `initAtlasTexture` was missing entirely: its layout was open-coded in the renderer's atlas sync from an image factory with the BGR rejection hoisted out, and the frame state built its initial 1x1 atlas textures the same way with an invented zero-byte upload. The general texture/sampler option factories were also renamed for custom shaders. | Use the three-case enum (shared by both backends in V's single module namespace) with a per-backend pixel-format conversion, restore `atlas_texture_options`/`init_atlas_texture` and route the frame state and atlas sync through them, and restore the source factory names. |
+| renderer Metal API entry points | Five graphics-API methods the renderer calls on every backend were missing from Metal, so the renderer reached past the API and open-coded them. Most consequentially, nothing ever created the per-frame `NSAutoreleasePool` that the source brackets every `drawFrame` with, so autoreleased Objective-C objects accumulated for the lifetime of the renderer thread. | Add `draw_frame_start`/`draw_frame_end` backed by a new `macos.AutoreleasePool`, plus `loop_enter`, `init_shaders`, and the no-op `present_last_target` that marks the skipped-redraw path, and route the renderer through all five. |
+| renderer Metal drawable path | The Metal backend renders into an IOSurface-backed target and never acquires a `CAMetalDrawable`, but an earlier drawable-based presentation path survived beside it: `next_drawable`, `create_command_buffer`, and `present_and_commit` on the API, their Objective-C wrappers, and the single-attachment render-pass descriptor builder the multi-attachment one replaced. None had a caller; none exists in the source. | Remove the entire path, along with the load/store action constants it was the last user of. |
 
 ## Focused behavior reviewed
 
@@ -330,9 +334,14 @@ an item here does not mean its full module has been certified yet.
 - **Metal frame/pass representation:** Metal frame completion is synchronously
   polled in Witty even for frames Ghostty completes through an Objective-C
   completion block, so the translated renderer currently blocks before
-  presentation. Render-pass attachment targets and optional step resources are
-  also retained as raw native handles instead of Ghostty's typed texture/target
-  union and wrapper optionals.
+  presentation. Consequently `beginFrame` is still the one graphics-API entry
+  point the Metal backend does not expose: the source takes the renderer and
+  target so the frame can report health on completion, while Witty's frame is
+  begun from the queue alone and the renderer presents it itself. Render-pass
+  attachment targets and optional step resources are also retained as raw
+  native handles instead of Ghostty's typed texture/target union and wrapper
+  optionals, and `loop_enter` sets the layer display callback through the raw
+  handle rather than the `IOSurfaceLayer` wrapper.
 - **Native/platform coverage:** The complete FreeType/CoreText/web-canvas,
   discovery, Metal/OpenGL, shadertoy, regex,
   embedded-resource, locking, configuration, and platform application surfaces
