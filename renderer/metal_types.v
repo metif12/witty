@@ -29,15 +29,12 @@ pub mut:
 pub struct MetalBufferOptions {
 pub:
 	// MTLDevice used to allocate this buffer.
-	device           voidptr = unsafe { nil }
-	resource_options MetalResourceOptions
+	device           voidptr              @[required]
+	resource_options MetalResourceOptions @[required]
 }
 
 // Initialize a buffer with the given length pre-allocated.
 pub fn MetalBuffer.init(opts MetalBufferOptions, len usize) !MetalBuffer {
-	if opts.device == unsafe { nil } {
-		return error('Metal buffer requires a device')
-	}
 	handle := macos.metal_new_buffer_length(opts.device, len, opts.resource_options.int_val())
 	if handle == unsafe { nil } {
 		return error('Metal buffer allocation failed')
@@ -51,9 +48,6 @@ pub fn MetalBuffer.init(opts MetalBufferOptions, len usize) !MetalBuffer {
 
 // Init the buffer filled with the given data.
 pub fn MetalBuffer.init_fill[T](opts MetalBufferOptions, data []T) !MetalBuffer {
-	if opts.device == unsafe { nil } {
-		return error('Metal buffer requires a device')
-	}
 	byte_len := usize(data.len) * usize($sizeof(T))
 	mut ptr := voidptr(unsafe { nil })
 	if data.len > 0 {
@@ -94,6 +88,58 @@ pub fn (mut self MetalBuffer) sync_values[T](values []T) ! {
 		ptr = voidptr(values.data)
 	}
 	self.sync_raw(ptr, usize(values.len) * usize($sizeof(T)))!
+}
+
+// Like MetalBuffer.sync but takes data from an array of lists, rather than a
+// single array. Returns the number of items synced.
+pub fn (mut self MetalBuffer) sync_from_array_lists[T](lists [][]T) !usize {
+	mut total_len := usize(0)
+	for list in lists {
+		total_len += usize(list.len)
+	}
+
+	// If we need more bytes than our buffer has, we need to reallocate.
+	req_bytes := total_len * usize($sizeof(T))
+	available_bytes := macos.metal_buffer_length(self.handle)
+	if req_bytes > available_bytes {
+		// Deallocate previous buffer.
+		macos.metal_release(self.handle)
+
+		// Allocate a new buffer with enough to hold double what we require.
+		self.handle = macos.metal_new_buffer_length(self.opts.device, req_bytes * 2,
+			self.opts.resource_options.int_val())
+		if self.handle == unsafe { nil } {
+			return error('Metal buffer reallocation failed')
+		}
+	}
+	if req_bytes == 0 {
+		return total_len
+	}
+
+	// We can fit within the buffer so we can just replace bytes.
+	dst := macos.metal_buffer_contents(self.handle)
+	if dst == unsafe { nil } {
+		return error('Metal buffer contents pointer is null')
+	}
+	mut i := usize(0)
+	for list in lists {
+		if list.len == 0 {
+			continue
+		}
+		bytes := usize(list.len) * usize($sizeof(T))
+		unsafe { vmemcpy(voidptr(&u8(dst) + i), voidptr(list.data), int(bytes)) }
+		i += bytes
+	}
+
+	// If we're using the managed resource storage mode, then we need to signal
+	// Metal to synchronize the buffer data.
+	//
+	// Ref: https://developer.apple.com/documentation/metal/synchronizing-a-managed-resource-in-macos?language=objc
+	if self.opts.resource_options.storage_mode() == .managed {
+		macos.metal_buffer_did_modify(self.handle, req_bytes)
+	}
+
+	return total_len
 }
 
 fn (mut self MetalBuffer) sync_raw(data voidptr, req_bytes usize) ! {

@@ -1631,8 +1631,7 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	gpu_uniforms := metal_uniforms(self.uniforms)
 	frame_state.uniforms.sync_values([gpu_uniforms])!
 	frame_state.cells_bg.sync_values(self.cells.bg_cells)!
-	foreground := self.text_cells()
-	frame_state.cells.sync_values(foreground)!
+	fg_count := frame_state.cells.sync_from_array_lists(self.cells.fg_rows.lists)!
 	if mut state := frame_state.custom_shader_state {
 		state.uniforms.sync_values([self.custom_shader_uniforms])!
 		frame_state.custom_shader_state = state
@@ -1710,7 +1709,7 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 		draw: MetalRenderDraw{
 			draw_type: .triangle_strip
 			vertex_count: 4
-			instance_count: usize(foreground.len)
+			instance_count: fg_count
 		}
 	})
 	self.images.draw(&self.metal, self.shaders.image, mut pass, .kitty_above_text)
@@ -1752,20 +1751,6 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	if health == .healthy && self.metal.layer != unsafe { nil } {
 		self.metal.present(&frame_state.target, sync_)!
 	}
-}
-
-fn (self &Renderer) text_cells() []CellText {
-	mut count := 0
-	for row in self.cells.fg_rows.lists {
-		count += row.len
-	}
-	mut result := []CellText{cap: count}
-	for row in self.cells.fg_rows.lists {
-		for cell in row {
-			result << cell
-		}
-	}
-	return result
 }
 
 fn (self &Renderer) sync_atlas_texture(atlas &font.Atlas, mut texture MetalTexture) ! {
@@ -1850,8 +1835,7 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 	gpu_uniforms := gl_uniforms(self.uniforms)
 	frame_state.uniforms.sync_values([gpu_uniforms])!
 	frame_state.cells_bg.sync_values(self.cells.bg_cells)!
-	foreground := self.text_cells()
-	frame_state.cells.sync_values(foreground)!
+	fg_count := frame_state.cells.sync_from_array_lists(self.cells.fg_rows.lists)!
 	if mut state := frame_state.custom_shader_state {
 		state.uniforms.sync_values([self.custom_shader_uniforms])!
 		frame_state.custom_shader_state = state
@@ -1923,7 +1907,7 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 		draw: GLDraw{
 			primitive: .triangle_strip
 			vertex_count: 4
-			instance_count: usize(foreground.len)
+			instance_count: fg_count
 		}
 	})
 	self.images.draw_opengl(&self.opengl, self.gl_shaders.image, mut pass, .kitty_above_text)

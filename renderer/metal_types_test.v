@@ -6,6 +6,10 @@ import macos
 fn test_metal_render_step_counts_retain_source_pointer_width() {
 	max_count := ~usize(0)
 	buffer := MetalBuffer{
+		opts: MetalBufferOptions{
+			device: unsafe { nil }
+			resource_options: MetalResourceOptions.init(.write_combined, .shared, .default)
+		}
 		len: max_count
 	}
 	target := MetalTarget{
@@ -418,4 +422,35 @@ fn test_metal_draw_frame_brackets_an_autorelease_pool() ! {
 
 	// Metal has no last target to re-present.
 	api.present_last_target()!
+}
+
+fn test_metal_buffer_sync_from_array_lists_concatenates_rows() ! {
+	mut api := MetalAPI.init()!
+	defer {
+		api.deinit()
+	}
+	mut buffer := MetalBuffer.init(api.buffer_options(), 2)!
+	defer {
+		buffer.deinit()
+	}
+
+	// Empty lists are skipped, not padded, so the rows land back to back.
+	lists := [
+		[u8(1), 2],
+		[]u8{},
+		[u8(3)],
+		[u8(4), 5, 6],
+	]
+	assert buffer.sync_from_array_lists(lists)! == 6
+	assert read_metal_buffer(buffer, 6) == [u8(1), 2, 3, 4, 5, 6]
+
+	// Growing reallocates to double the requirement.
+	assert macos.metal_buffer_length(buffer.handle) == 12
+
+	// A shorter sync leaves the tail untouched, as the source documents.
+	assert buffer.sync_from_array_lists([[u8(9)]])! == 1
+	assert read_metal_buffer(buffer, 6) == [u8(9), 2, 3, 4, 5, 6]
+
+	// Syncing nothing is still valid and reports zero items.
+	assert buffer.sync_from_array_lists([][]u8{})! == 0
 }

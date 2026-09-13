@@ -123,6 +123,46 @@ pub fn (mut self GLBuffer) sync_values[T](values []T) ! {
 	self.sync(bytes)!
 }
 
+// Like GLBuffer.sync but takes data from an array of lists, rather than a
+// single array. Returns the number of items synced.
+pub fn (mut self GLBuffer) sync_from_array_lists[T](lists [][]T) !usize {
+	buffer := opengl.Buffer{
+		id: self.id
+	}
+	binding := buffer.bind(gl_buffer_target(self.target))!
+	defer {
+		binding.unbind()
+	}
+
+	mut total_len := usize(0)
+	for list in lists {
+		total_len += usize(list.len)
+	}
+
+	// If we need more space than our buffer has, we need to reallocate. This
+	// local specialization stores bytes, so `len` is a byte count.
+	req_bytes := total_len * usize($sizeof(T))
+	if req_bytes > self.len {
+		// Reallocate the buffer to hold double what we require.
+		self.len = req_bytes * 2
+		binding.set_data_null(self.len, gl_buffer_usage(self.usage))!
+	}
+
+	// We can fit within the buffer so we can just replace bytes.
+	mut i := usize(0)
+	for list in lists {
+		if list.len == 0 {
+			continue
+		}
+		byte_len := list.len * int($sizeof(T))
+		bytes := unsafe { voidptr(list.data).vbytes(byte_len) }
+		binding.set_sub_data(i, bytes)!
+		i += usize(byte_len)
+	}
+
+	return total_len
+}
+
 // ============================================================
 // OpenGL Frame
 // ============================================================
