@@ -19,7 +19,7 @@ pub:
 pub struct IpcTargetDetect {}
 
 // IpcTargetKey is synchronized with ghostty_ipc_target_tag_e.
-pub enum IpcTargetKey {
+pub enum IpcTargetKey as i32 {
 	class
 	detect
 }
@@ -109,7 +109,7 @@ pub fn (value &IpcNewWindow) cval() !IpcNewWindowC {
 }
 
 // IpcActionKey is synchronized with ghostty_ipc_action_tag_e.
-pub enum IpcActionKey {
+pub enum IpcActionKey as u32 {
 	new_window
 }
 

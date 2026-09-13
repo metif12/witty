@@ -88,6 +88,11 @@ fn test_ipc_new_window_cval_preserves_optional_arguments() {
 }
 
 fn test_ipc_c_projection_sizes() {
+	assert sizeof(IpcTargetKey) == 4
+	assert int(IpcTargetKey.class) == 0
+	assert int(IpcTargetKey.detect) == 1
+	assert sizeof(IpcActionKey) == 4
+	assert u32(IpcActionKey.new_window) == 0
 	assert sizeof(IpcTargetCValue) == sizeof(voidptr)
 	assert sizeof(IpcActionCValue) == sizeof(voidptr)
 	assert sizeof(IpcTargetC) == if sizeof(voidptr) == 8 { 16 } else { 8 }
