@@ -217,6 +217,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | renderer Metal texture factories | The Metal image-texture factory took the six-case image pixel format instead of the source's three-case `ImageTextureFormat` and fell back to RGBA for the three layouts it cannot represent. `initAtlasTexture` was missing entirely: its layout was open-coded in the renderer's atlas sync from an image factory with the BGR rejection hoisted out, and the frame state built its initial 1x1 atlas textures the same way with an invented zero-byte upload. The general texture/sampler option factories were also renamed for custom shaders. | Use the three-case enum (shared by both backends in V's single module namespace) with a per-backend pixel-format conversion, restore `atlas_texture_options`/`init_atlas_texture` and route the frame state and atlas sync through them, and restore the source factory names. |
 | renderer Metal API entry points | Five graphics-API methods the renderer calls on every backend were missing from Metal, so the renderer reached past the API and open-coded them. Most consequentially, nothing ever created the per-frame `NSAutoreleasePool` that the source brackets every `drawFrame` with, so autoreleased Objective-C objects accumulated for the lifetime of the renderer thread. | Add `draw_frame_start`/`draw_frame_end` backed by a new `macos.AutoreleasePool`, plus `loop_enter`, `init_shaders`, and the no-op `present_last_target` that marks the skipped-redraw path, and route the renderer through all five. |
 | renderer Metal drawable path | The Metal backend renders into an IOSurface-backed target and never acquires a `CAMetalDrawable`, but an earlier drawable-based presentation path survived beside it: `next_drawable`, `create_command_buffer`, and `present_and_commit` on the API, their Objective-C wrappers, and the single-attachment render-pass descriptor builder the multi-attachment one replaced. None had a caller; none exists in the source. | Remove the entire path, along with the load/store action constants it was the last user of. |
+| renderer buffer array-list sync | Both backends' buffer wrappers omitted `syncFromArrayLists`, which copies a set of per-row lists straight into the mapped GPU buffer and returns the item count. The renderer instead summed the row lengths, allocated a flat array, and copied every foreground text cell into it on every frame, in both draw paths. Metal's buffer options also carried defaults (the source requires them) and its constructors pre-checked a nil device. | Add the method to both buffer wrappers, call it directly on `cells.fg_rows.lists` from both draw paths and take the draw instance count from its result, and restore Metal's required options without the source-external pre-checks. OpenGL's options do default in the source and were left alone. |
 
 ## Focused behavior reviewed
 
@@ -331,6 +332,14 @@ an item here does not mean its full module has been certified yet.
   process-global table of opaque core callbacks. This bridge is source-external
   architecture, even where each callback delegates to the translated core
   implementation.
+- **Metal buffer growth size:** Ghostty's `Buffer(T).sync` computes
+  `req_bytes = len * @sizeOf(T)` and then reallocates `req_bytes * 2 *
+  @sizeOf(T)` bytes, multiplying by the element size a second time. Witty
+  allocates `req_bytes * 2`. Replicating the source expression would
+  over-allocate every grown buffer by the element size (64x for `CellText`),
+  so this divergence is deliberate and is the one place the buffer wrapper
+  does not match the source expression.
+
 - **Metal frame/pass representation:** Metal frame completion is synchronously
   polled in Witty even for frames Ghostty completes through an Objective-C
   completion block, so the translated renderer currently blocks before
