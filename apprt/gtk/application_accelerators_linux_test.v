@@ -62,7 +62,7 @@ fn test_application_activate_queues_new_window() {
 		core_app: core_app
 	}
 	assert core_app.pending_message_count() == 0
-	application_activate_cb(unsafe { nil }, voidptr(&app))
+	app.activate()
 	assert core_app.pending_message_count() == 1
 }
 
