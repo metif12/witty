@@ -5190,7 +5190,7 @@ pub fn (config FontShapingBreak) format_entry() string {
 // TerminalColorKind identifies whether a terminal color is explicit or is
 // derived from the cell foreground/background. TerminalColor carries the RGB
 // payload used by the explicit color variant.
-pub enum TerminalColorKind {
+pub enum TerminalColorKind as u8 {
 	color
 	cell_foreground
 	cell_background
@@ -5236,20 +5236,20 @@ pub fn (c TerminalColor) format_entry() string {
 }
 
 // WindowPaddingColor determines how the padding area is colored.
-pub enum WindowPaddingColor {
+pub enum WindowPaddingColor as u8 {
 	background
 	extend
 	extend_always
 }
 
 // WindowColorspace for color rendering.
-pub enum WindowColorspace {
+pub enum WindowColorspace as u8 {
 	srgb
 	display_p3
 }
 
 // AlphaBlending mode for the renderer.
-pub enum AlphaBlending {
+pub enum AlphaBlending as u8 {
 	native
 	linear
 	linear_corrected
@@ -5262,12 +5262,12 @@ pub fn (b AlphaBlending) is_linear() bool {
 
 // BackgroundBlur carries every variant accepted by Ghostty, including the
 // platform-specific numeric radius form.
-pub enum BackgroundBlurKind {
+pub enum BackgroundBlurKind as u8 {
 	bool_false
 	bool_true
-	radius
 	macos_glass_regular
 	macos_glass_clear
+	radius
 }
 
 pub struct BackgroundBlur {
@@ -5315,21 +5315,21 @@ pub fn (b BackgroundBlur) format_entry() string {
 }
 
 // BackgroundImagePosition for the background image.
-pub enum BackgroundImagePosition {
+pub enum BackgroundImagePosition as u8 {
 	top_left
 	top_center
 	top_right
 	center_left
-	center
 	center_center
 	center_right
 	bottom_left
 	bottom_center
 	bottom_right
+	center
 }
 
 // BackgroundImageFit for the background image.
-pub enum BackgroundImageFit {
+pub enum BackgroundImageFit as u8 {
 	contain
 	cover
 	stretch
@@ -5420,7 +5420,7 @@ pub fn (p RepeatablePath) format_entry() []string {
 
 // ReadableIO is a startup input source. Values retain their Zig string
 // escapes so configuration formatting can recreate the original value.
-pub enum ReadableIOKind {
+pub enum ReadableIOKind as u8 {
 	raw
 	path
 }
@@ -5930,7 +5930,7 @@ pub fn (s SelectionWordChars) format_entry() string {
 
 // FontStyle is the tagged value used by the four font-style options. A named
 // style is kept distinct from the special default and false values.
-pub enum FontStyleKind {
+pub enum FontStyleKind as u8 {
 	default_
 	false_
 	name

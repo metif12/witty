@@ -56,6 +56,39 @@ fn test_platform_config_enum_layouts_and_source_ordinals() {
 	assert [GtkTitlebarStyle.native, .tabs].map(i32(it)) == [i32(0), 1]
 }
 
+fn test_config_value_tag_layouts_and_source_ordinals() {
+	assert sizeof(TerminalColorKind) == 1
+	assert [TerminalColorKind.color, .cell_foreground, .cell_background].map(u8(it)) == [u8(0),
+		1, 2]
+	assert sizeof(TerminalColor) == 4
+
+	assert sizeof(WindowPaddingColor) == 1
+	assert [WindowPaddingColor.background, .extend, .extend_always].map(u8(it)) == [u8(0), 1,
+		2]
+	assert sizeof(WindowColorspace) == 1
+	assert [WindowColorspace.srgb, .display_p3].map(u8(it)) == [u8(0), 1]
+	assert sizeof(AlphaBlending) == 1
+	assert [AlphaBlending.native, .linear, .linear_corrected].map(u8(it)) == [u8(0), 1, 2]
+
+	assert sizeof(BackgroundBlurKind) == 1
+	assert [BackgroundBlurKind.bool_false, .bool_true, .macos_glass_regular, .macos_glass_clear,
+		.radius].map(u8(it)) == [u8(0), 1, 2, 3, 4]
+	assert sizeof(BackgroundBlur) == 2
+
+	assert sizeof(BackgroundImagePosition) == 1
+	assert [BackgroundImagePosition.top_left, .top_center, .top_right, .center_left, .center_center,
+		.center_right, .bottom_left, .bottom_center, .bottom_right, .center].map(u8(it)) == [u8(0),
+		1, 2, 3, 4, 5, 6, 7, 8, 9]
+	assert sizeof(BackgroundImageFit) == 1
+	assert [BackgroundImageFit.contain, .cover, .stretch, .none_].map(u8(it)) == [u8(0), 1,
+		2, 3]
+
+	assert sizeof(ReadableIOKind) == 1
+	assert [ReadableIOKind.raw, .path].map(u8(it)) == [u8(0), 1]
+	assert sizeof(FontStyleKind) == 1
+	assert [FontStyleKind.default_, .false_, .name].map(u8(it)) == [u8(0), 1, 2]
+}
+
 fn test_load_file_applies_theme_colors() {
 	path := os.join_path(os.temp_dir(), 'witty-theme-test.conf')
 	os.write_file(path, '
