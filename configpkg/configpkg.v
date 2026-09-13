@@ -6439,7 +6439,7 @@ mut:
 	direct_idx  int
 }
 
-enum ArgIterKind {
+enum ArgIterKind as u8 {
 	shell
 	direct
 }
@@ -7309,7 +7309,7 @@ pub fn (p Palette) format_entry() []string {
 // key metadata as well as the human-readable message.
 pub type Diagnostic = diagnosticspkg.Diagnostic
 
-enum ReplayStepKind {
+enum ReplayStepKind as u8 {
 	arg
 	expand
 	conditional_arg
@@ -7447,7 +7447,7 @@ pub fn (mut c Config) load_default_files() ! {
 	}
 }
 
-pub enum OptionalFileAction {
+pub enum OptionalFileAction as u8 {
 	loaded
 	not_found
 	error_
@@ -10736,7 +10736,7 @@ fn format_f64(v f64) string {
 // QuickTerminalSize
 // ------------------------------------------------------------
 
-pub enum QuickTerminalSizeKind {
+pub enum QuickTerminalSizeKind as u8 {
 	percentage
 	pixels
 }
@@ -10867,7 +10867,7 @@ pub fn (q QuickTerminalSize) calculate(position QuickTerminalPosition, dims Quic
 	}
 }
 
-pub enum QuickTerminalPosition {
+pub enum QuickTerminalPosition as u8 {
 	top
 	bottom
 	left
@@ -10875,25 +10875,25 @@ pub enum QuickTerminalPosition {
 	center
 }
 
-pub enum QuickTerminalLayer {
+pub enum QuickTerminalLayer as u8 {
 	overlay
 	top
 	bottom
 	background
 }
 
-pub enum QuickTerminalScreen {
+pub enum QuickTerminalScreen as u8 {
 	main
 	mouse
 	macos_menu_bar
 }
 
-pub enum QuickTerminalSpaceBehavior {
+pub enum QuickTerminalSpaceBehavior as u8 {
 	remain
 	move
 }
 
-pub enum QuickTerminalKeyboardInteractivity {
+pub enum QuickTerminalKeyboardInteractivity as u8 {
 	none_
 	on_demand
 	exclusive

@@ -170,6 +170,34 @@ fn test_window_and_runtime_config_enum_layouts_and_source_ordinals() {
 	assert [buildcfg.ReleaseChannel.tip, .stable].map(u8(it)) == [u8(0), 1]
 }
 
+fn test_config_local_and_quick_terminal_tag_layouts_and_source_ordinals() {
+	assert sizeof(ArgIterKind) == 1
+	assert [ArgIterKind.shell, .direct].map(u8(it)) == [u8(0), 1]
+	assert sizeof(ReplayStepKind) == 1
+	assert [ReplayStepKind.arg, .expand, .conditional_arg, .diagnostic, .command].map(u8(it)) == [u8(0),
+		1, 2, 3, 4]
+	assert sizeof(OptionalFileAction) == 1
+	assert [OptionalFileAction.loaded, .not_found, .error_].map(u8(it)) == [u8(0), 1, 2]
+
+	assert sizeof(QuickTerminalSizeKind) == 1
+	assert [QuickTerminalSizeKind.percentage, .pixels].map(u8(it)) == [u8(0), 1]
+	assert sizeof(CQuickTerminalSizeTag) == 4
+	assert [CQuickTerminalSizeTag.none, .percentage, .pixels].map(i32(it)) == [i32(0), 1, 2]
+	assert sizeof(QuickTerminalPosition) == 1
+	assert [QuickTerminalPosition.top, .bottom, .left, .right, .center].map(u8(it)) == [u8(0),
+		1, 2, 3, 4]
+	assert sizeof(QuickTerminalLayer) == 1
+	assert [QuickTerminalLayer.overlay, .top, .bottom, .background].map(u8(it)) == [u8(0),
+		1, 2, 3]
+	assert sizeof(QuickTerminalScreen) == 1
+	assert [QuickTerminalScreen.main, .mouse, .macos_menu_bar].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(QuickTerminalSpaceBehavior) == 1
+	assert [QuickTerminalSpaceBehavior.remain, .move].map(u8(it)) == [u8(0), 1]
+	assert sizeof(QuickTerminalKeyboardInteractivity) == 1
+	assert [QuickTerminalKeyboardInteractivity.none_, .on_demand, .exclusive].map(u8(it)) == [u8(0),
+		1, 2]
+}
+
 fn test_load_file_applies_theme_colors() {
 	path := os.join_path(os.temp_dir(), 'witty-theme-test.conf')
 	os.write_file(path, '
@@ -890,8 +918,8 @@ fn test_parse_quick_terminal_size() {
 	parsed_size := QuickTerminalSizeValue.parse('25%')!
 	assert parsed_size.to_pixels(200) == 50
 	assert parsed_size.format() == '25%'
-	assert CQuickTerminalSize.percentage(25).tag == 1
-	assert CQuickTerminalSize.pixels(25) == CQuickTerminalSize{ tag: 2, value: 25 }
+	assert CQuickTerminalSize.percentage(25).tag == .percentage
+	assert CQuickTerminalSize.pixels(25) == CQuickTerminalSize{ tag: .pixels, value: 25 }
 
 	v.parse_cli('50%')!
 	primary := v.primary or {
@@ -904,7 +932,7 @@ fn test_parse_quick_terminal_size() {
 	assert v.clone() == v
 	formatted_size := v.format_entry() or { '' }
 	assert formatted_size == '50%'
-	assert v.cval().primary.tag == 1
+	assert v.cval().primary.tag == .percentage
 
 	v = QuickTerminalSize{}
 	v.parse_cli('0x32p0%')!

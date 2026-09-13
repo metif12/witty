@@ -40,22 +40,28 @@ pub mut:
 
 // CQuickTerminalSize mirrors ghostty_quick_terminal_size_s. Its value field is
 // the four-byte storage shared by the C union's f32 and u32 alternatives.
+pub enum CQuickTerminalSizeTag as i32 {
+	none
+	percentage
+	pixels
+}
+
 pub struct CQuickTerminalSize {
 pub:
-	tag   int
+	tag   CQuickTerminalSizeTag
 	value u32
 }
 
 pub fn CQuickTerminalSize.percentage(value f32) CQuickTerminalSize {
 	return CQuickTerminalSize{
-		tag: 1
+		tag: .percentage
 		value: math.f32_bits(value)
 	}
 }
 
 pub fn CQuickTerminalSize.pixels(value u32) CQuickTerminalSize {
 	return CQuickTerminalSize{
-		tag: 2
+		tag: .pixels
 		value: value
 	}
 }
