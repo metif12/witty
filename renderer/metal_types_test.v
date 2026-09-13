@@ -478,3 +478,22 @@ fn test_metal_api_without_layer_cannot_present() ! {
 		assert err.msg().contains('presentation layer unavailable')
 	}
 }
+
+fn test_metal_shaders_survive_a_broken_postprocess_shader() ! {
+	mut api := MetalAPI.init()!
+	defer {
+		api.deinit()
+	}
+
+	// A custom shader that does not compile must not block the built-in
+	// pipelines; the whole postprocess set is discarded instead.
+	mut shaders := api.init_shaders(['this is not valid metal shading language'])!
+	defer {
+		shaders.deinit()
+	}
+	assert shaders.post_pipelines.len == 0
+	assert shaders.library != unsafe { nil }
+	assert shaders.bg_color.handle != unsafe { nil }
+	assert shaders.cell_text.handle != unsafe { nil }
+	assert shaders.bg_image.handle != unsafe { nil }
+}

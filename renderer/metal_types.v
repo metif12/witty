@@ -913,9 +913,6 @@ pub mut:
 }
 
 pub fn MetalShaders.init(device voidptr, post_shaders []string, pixel_format MetalPixelFormat) !MetalShaders {
-	if device == unsafe { nil } {
-		return error('Metal shaders require a device')
-	}
 	library := macos.metal_new_library_source(device, metal_shader_source)
 	if library == unsafe { nil } {
 		return error('Metal shader library compilation failed')
@@ -1026,6 +1023,10 @@ pub fn MetalShaders.init(device voidptr, post_shaders []string, pixel_format Met
 		self.post_pipelines << pipeline
 	}
 	if post_failed {
+		// If an error happens while building postprocess shaders we want to
+		// just not use any postprocess shaders since we don't want to block
+		// Ghostty from working.
+		eprintln('renderer: error initializing postprocess shaders')
 		for mut pipeline in self.post_pipelines {
 			pipeline.deinit()
 		}
