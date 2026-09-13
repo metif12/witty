@@ -4,6 +4,24 @@ import oniguruma
 
 // Tests for KeyEvent.
 
+fn test_public_key_c_enum_layouts_and_ordinals() {
+	assert sizeof(KeyAction) == 4
+	assert [KeyAction.release, .press, .repeat].map(i32(it)) == [i32(0), 1, 2]
+
+	assert sizeof(OptionAsAlt) == 4
+	assert [OptionAsAlt.false_, .true_, .left, .right].map(i32(it)) == [i32(0), 1, 2, 3]
+
+	assert sizeof(Key) == 4
+	mut key_count := 0
+	$for enum_value in Key.values {
+		assert i32(enum_value.value) == i32(key_count)
+		key_count++
+	}
+	assert key_count == 176
+	assert i32(Key.unidentified) == 0
+	assert i32(Key.paste) == 175
+}
+
 fn test_link_clone_equal_and_regex() {
 	original := Link{
 		regex: 'https?://[^ ]+'

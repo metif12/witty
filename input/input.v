@@ -42,7 +42,7 @@ pub fn (e KeyEvent) binding_hash() u64 {
 }
 
 // KeyAction represents the action type of a key event.
-pub enum KeyAction {
+pub enum KeyAction as i32 {
 	release
 	press
 	repeat
@@ -347,7 +347,7 @@ pub fn (self ScrollMods) int() u8 {
 // OptionAsAlt determines whether the "option" key on macOS is treated
 // as "alt" or not. See the Ghostty `macos_option-as-alt` config
 // docs for a more detailed description of why this is needed.
-pub enum OptionAsAlt {
+pub enum OptionAsAlt as i32 {
 	false_ // don't treat option as alt (macOS default)
 	true_ // treat both options as alt
 	left // treat left option as alt

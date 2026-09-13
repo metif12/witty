@@ -161,7 +161,7 @@ import cimgui
 // keyboard, but both will report the "a" enum value in the key
 // event. These values are based on the W3C standard. See:
 // https://www.w3.org/TR/uievents-code
-pub enum Key {
+pub enum Key as i32 {
 	unidentified
 
 	// "Writing System Keys" § 3.1.1
@@ -831,8 +831,11 @@ pub fn (k Key) should_be_remappable() bool {
 // ctrl_or_super returns true if this key is one of the left or right
 // versions of super (macOS) or ctrl.
 pub fn (k Key) ctrl_or_super() bool {
-	// On macOS, use super (command) key
-	return k == .meta_left || k == .meta_right
+	$if darwin {
+		return k == .meta_left || k == .meta_right
+	} $else {
+		return k == .control_left || k == .control_right
+	}
 }
 
 // left_or_right_shift returns true if this key is left or right shift.

@@ -33,6 +33,20 @@ fn test_ctrl_or_super() {
 	assert m.ctrl_or_super()
 }
 
+fn test_key_ctrl_or_super_uses_platform_primary_modifier() {
+	$if darwin {
+		assert Key.meta_left.ctrl_or_super()
+		assert Key.meta_right.ctrl_or_super()
+		assert !Key.control_left.ctrl_or_super()
+		assert !Key.control_right.ctrl_or_super()
+	} $else {
+		assert Key.control_left.ctrl_or_super()
+		assert Key.control_right.ctrl_or_super()
+		assert !Key.meta_left.ctrl_or_super()
+		assert !Key.meta_right.ctrl_or_super()
+	}
+}
+
 // test "w3c"
 // Ghostty:
 //   // All our keys should convert to and from the W3C format.
