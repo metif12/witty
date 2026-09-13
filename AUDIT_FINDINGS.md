@@ -212,6 +212,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | renderer Metal pixel-format ABI | The translated native `MTLPixelFormat` exposed only the six formats currently selected by the renderer instead of Ghostty's complete 139-case `enum(c_ulong)`, and its bytes-per-pixel helper omitted every other source-supported value. | Restore all 139 values in exact declaration order with unsigned-long-compatible backing, restore every source-supported byte-size group and panic branch, and exhaustively verify the ABI values. |
 | renderer auxiliary Metal enums | The native GPU-family wrapper exposed only two of Ghostty's fifteen values, while index type, purgeable state, barrier scope, and render stage were omitted entirely from the translated Metal API surface. | Restore all five unsigned-/signed-long-compatible enums with their complete declaration order and raw values. |
 | renderer Metal native records | The translated native API renamed `MTLClearColor`'s four fields and omitted Ghostty's viewport, region, origin, and size records. | Restore all five eight-byte-aligned value layouts with exact source field names, order, scalar widths, and aggregate sizes. |
+| renderer Metal render-pass contracts | The pass constructor was fallible and rejected missing native objects despite Ghostty's direct infallible Objective-C dispatch; the step flattened its required nested draw record, silently skipped a missing encoder/pipeline, and bound null entries that source optional-resource loops skip. Completion also mutated the retained encoder to null. | Restore source-shaped options and draw records, add `Frame.render_pass`, construct directly, keep only the zero-instance early return, skip null optional resources, and end encoding without changing the wrapper. |
 
 ## Focused behavior reviewed
 
@@ -326,6 +327,12 @@ an item here does not mean its full module has been certified yet.
   process-global table of opaque core callbacks. This bridge is source-external
   architecture, even where each callback delegates to the translated core
   implementation.
+- **Metal frame/pass representation:** Metal frame completion is synchronously
+  polled in Witty even for frames Ghostty completes through an Objective-C
+  completion block, so the translated renderer currently blocks before
+  presentation. Render-pass attachment targets and optional step resources are
+  also retained as raw native handles instead of Ghostty's typed texture/target
+  union and wrapper optionals.
 - **Native/platform coverage:** The complete FreeType/CoreText/web-canvas,
   discovery, Metal/OpenGL, shadertoy, regex,
   embedded-resource, locking, configuration, and platform application surfaces

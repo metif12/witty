@@ -17,8 +17,12 @@ fn test_metal_render_step_counts_retain_source_pointer_width() {
 		bpp: max_count
 	}
 	step := MetalRenderStep{
-		vertex_count: max_count
-		instance_count: max_count
+		pipeline: MetalPipeline{}
+		draw: MetalRenderDraw{
+			draw_type: .triangle
+			vertex_count: max_count
+			instance_count: max_count
+		}
 	}
 	assert buffer.len == max_count
 	assert target.width == max_count
@@ -26,8 +30,8 @@ fn test_metal_render_step_counts_retain_source_pointer_width() {
 	assert texture.width == max_count
 	assert texture.height == max_count
 	assert texture.bpp == max_count
-	assert step.vertex_count == max_count
-	assert step.instance_count == max_count
+	assert step.draw.vertex_count == max_count
+	assert step.draw.instance_count == max_count
 }
 
 fn test_metal_pipeline_retains_every_source_attachment() {
@@ -71,8 +75,24 @@ fn test_metal_texture_initial_upload_and_replace_region() ! {
 	defer {
 		api.deinit()
 	}
-	mut texture := MetalTexture.init(api.image_texture_options(.gray, false), 4, 4,
-		[u8(0), 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])!
+	mut texture := MetalTexture.init(api.image_texture_options(.gray, false), 4, 4, [
+		u8(0),
+		1,
+		2,
+		3,
+		4,
+		5,
+		6,
+		7,
+		8,
+		9,
+		10,
+		11,
+		12,
+		13,
+		14,
+		15,
+	])!
 	defer {
 		texture.deinit()
 	}
@@ -153,8 +173,7 @@ fn test_metal_texture_replace_region_respects_bpp() {
 		api.deinit()
 	}
 	// 2x2 bgra8unorm texture (4 bytes per pixel, row stride = 8 bytes).
-	mut texture := MetalTexture.init(api.image_texture_options(.bgra, false), 2, 2,
-		[]u8{len: 16})!
+	mut texture := MetalTexture.init(api.image_texture_options(.bgra, false), 2, 2, []u8{len: 16})!
 	defer {
 		texture.deinit()
 	}
@@ -217,10 +236,10 @@ fn test_metal_sampler_target_and_empty_frame() ! {
 	assert target.texture != unsafe { nil }
 
 	mut frame := MetalFrame.begin(api.queue)!
-	mut pass := MetalRenderPass.begin(frame.command_buffer, [MetalRenderPassAttachment{
-		texture: target.texture
+	mut pass := frame.render_pass([MetalRenderPassAttachment{
+		target: target.texture
 		clear_color: [f64(0.25), 0.5, 0.75, 1.0]!
-	}])!
+	}])
 	pass.complete()
 	assert frame.complete(true) == .completed
 }
@@ -253,14 +272,17 @@ fn test_metal_builtin_shader_pipelines_compile() ! {
 		uniforms.deinit()
 	}
 	mut frame := MetalFrame.begin(api.queue)!
-	mut pass := MetalRenderPass.begin(frame.command_buffer, [MetalRenderPassAttachment{
-		texture: target.texture
+	mut pass := frame.render_pass([MetalRenderPassAttachment{
+		target: target.texture
 		clear_color: [f64(0), 0, 0, 1]!
-	}])!
+	}])
 	pass.step(MetalRenderStep{
 		pipeline: shaders.bg_color
 		uniforms: uniforms.handle
-		vertex_count: 3
+		draw: MetalRenderDraw{
+			draw_type: .triangle
+			vertex_count: 3
+		}
 	})
 	pass.complete()
 	assert frame.complete(true) == .completed

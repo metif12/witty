@@ -359,14 +359,17 @@ fn test_image_draw_encodes_gpu_placement() ! {
 		uniforms.deinit()
 	}
 	mut frame := MetalFrame.begin(api.queue)!
-	mut pass := MetalRenderPass.begin(frame.command_buffer, [MetalRenderPassAttachment{
-		texture: target.texture
+	mut pass := frame.render_pass([MetalRenderPassAttachment{
+		target: target.texture
 		clear_color: [f64(0), 0, 0, 1]!
-	}])!
+	}])
 	pass.step(MetalRenderStep{
 		pipeline: shaders.bg_color
 		uniforms: uniforms.handle
-		vertex_count: 3
+		draw: MetalRenderDraw{
+			draw_type: .triangle
+			vertex_count: 3
+		}
 	})
 	state.draw(&api, shaders.image, mut pass, .kitty_below_bg)
 	pass.complete()

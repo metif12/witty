@@ -153,6 +153,13 @@ pub fn MetalFrame.begin(queue voidptr) !MetalFrame {
 	}
 }
 
+pub fn (self &MetalFrame) render_pass(attachments []MetalRenderPassAttachment) MetalRenderPass {
+	return MetalRenderPass.begin(MetalRenderPassOptions{
+		command_buffer: self.command_buffer
+		attachments: attachments
+	})
+}
+
 pub fn (mut self MetalFrame) complete(sync_ bool) MetalCommandBufferStatus {
 	if self.command_buffer == unsafe { nil } {
 		return .error
@@ -179,81 +186,82 @@ pub mut:
 pub struct MetalRenderStep {
 pub:
 	// The pipeline to use.
-	pipeline MetalPipeline
+	pipeline MetalPipeline @[required]
 	// Uniform buffer, bound at index 1 for both shader stages.
 	uniforms voidptr = unsafe { nil }
 	// Vertex and fragment buffers. Entry zero uses index zero; later entries
 	// start at index two so uniforms can remain at index one.
-	buffers []voidptr
+	buffers []voidptr = []
 	// Textures bound to both stages by slice index.
-	textures []voidptr
+	textures []voidptr = []
 	// Fragment samplers bound by slice index.
-	samplers []voidptr
+	samplers []voidptr = []
 	// Draw call configuration.
-	draw_type      MetalPrimitiveType = .triangle_strip
-	vertex_count   usize = 4
+	draw MetalRenderDraw @[required]
+}
+
+pub struct MetalRenderDraw {
+pub:
+	draw_type      MetalPrimitiveType @[required]
+	vertex_count   usize @[required]
 	instance_count usize = 1
 }
 
 pub struct MetalRenderPassAttachment {
 pub:
-	texture     voidptr = unsafe { nil }
+	target      voidptr @[required]
 	clear_color ?[4]f64
 }
 
-pub fn MetalRenderPass.begin(command_buffer voidptr, attachments []MetalRenderPassAttachment) !MetalRenderPass {
-	if command_buffer == unsafe { nil } {
-		return error('Metal render pass requires a command buffer')
-	}
-	if attachments.len == 0 {
-		return error('Metal render pass requires an attachment')
-	}
+pub struct MetalRenderPassOptions {
+pub:
+	command_buffer voidptr @[required]
+	attachments    []MetalRenderPassAttachment @[required]
+}
+
+pub fn MetalRenderPass.begin(opts MetalRenderPassOptions) MetalRenderPass {
 	descriptor := macos.metal_render_pass_descriptor()
-	if descriptor == unsafe { nil } {
-		return error('Metal render pass descriptor unavailable')
-	}
-	for index, attachment in attachments {
-		if attachment.texture == unsafe { nil } {
-			return error('Metal render pass attachment texture is null')
-		}
-		macos.metal_render_pass_set_attachment(descriptor, usize(index), attachment.texture, attachment.clear_color)
-	}
-	encoder := macos.metal_create_encoder(command_buffer, descriptor)
-	if encoder == unsafe { nil } {
-		return error('Metal render command encoder creation failed')
+	for index, attachment in opts.attachments {
+		macos.metal_render_pass_set_attachment(descriptor, usize(index), attachment.target, attachment.clear_color)
 	}
 	return MetalRenderPass{
-		encoder: encoder
+		encoder: macos.metal_create_encoder(opts.command_buffer, descriptor)
 	}
 }
 
-pub fn (mut self MetalRenderPass) step(s MetalRenderStep) {
-	if s.instance_count == 0 || self.encoder == unsafe { nil }
-		|| s.pipeline.handle == unsafe { nil } {
+pub fn (self &MetalRenderPass) step(s MetalRenderStep) {
+	if s.draw.instance_count == 0 {
 		return
 	}
 	macos.metal_encoder_set_pipeline(self.encoder, s.pipeline.handle)
 	if s.buffers.len > 0 {
-		macos.metal_encoder_set_buffer(self.encoder, s.buffers[0], 0)
+		if s.buffers[0] != unsafe { nil } {
+			macos.metal_encoder_set_buffer(self.encoder, s.buffers[0], 0)
+		}
 		for index in 1 .. s.buffers.len {
-			macos.metal_encoder_set_buffer(self.encoder, s.buffers[index], usize(index + 1))
+			if s.buffers[index] != unsafe { nil } {
+				macos.metal_encoder_set_buffer(self.encoder, s.buffers[index], usize(index + 1))
+			}
 		}
 	}
 	if s.uniforms != unsafe { nil } {
 		macos.metal_encoder_set_buffer(self.encoder, s.uniforms, 1)
 	}
 	for index, texture in s.textures {
-		macos.metal_encoder_set_texture(self.encoder, texture, usize(index))
+		if texture != unsafe { nil } {
+			macos.metal_encoder_set_texture(self.encoder, texture, usize(index))
+		}
 	}
 	for index, sampler in s.samplers {
-		macos.metal_encoder_set_sampler(self.encoder, sampler, usize(index))
+		if sampler != unsafe { nil } {
+			macos.metal_encoder_set_sampler(self.encoder, sampler, usize(index))
+		}
 	}
-	macos.metal_encoder_draw(self.encoder, u64(s.draw_type), s.vertex_count, s.instance_count)
+	macos.metal_encoder_draw(self.encoder, u64(s.draw.draw_type), s.draw.vertex_count, s.draw.instance_count)
 }
 
-pub fn (mut self MetalRenderPass) complete() {
+pub fn (self &MetalRenderPass) complete() {
 	macos.metal_end_encoding(self.encoder)
-	self.encoder = unsafe { nil }
 }
 
 // ============================================================

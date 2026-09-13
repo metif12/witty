@@ -1128,8 +1128,10 @@ pub fn (mut self ImageRenderState) draw(api &MetalAPI, pipeline MetalPipeline, m
 			pipeline: pipeline
 			buffers: [buffer.handle]
 			textures: [entry.image.texture_handle]
-			draw_type: .triangle_strip
-			vertex_count: 4
+			draw: MetalRenderDraw{
+				draw_type: .triangle_strip
+				vertex_count: 4
+			}
 		})
 		buffer.deinit()
 	}
