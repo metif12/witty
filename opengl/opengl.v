@@ -196,6 +196,9 @@ fn C.glDeleteSamplers(n int, samplers &u32)
 // glad.zig compatibility
 // ============================================================
 
+// load reports the GL version, mirroring `glad.load`. Witty links the GL
+// entry points directly rather than resolving them through glad, so there is
+// no loader to prime and the proc-address argument is unused.
 pub fn load(get_proc_address voidptr) !u32 {
 	_ = get_proc_address
 	mut major := int(0)
@@ -206,6 +209,8 @@ pub fn load(get_proc_address voidptr) !u32 {
 	return (u32(major) << 16) | u32(minor)
 }
 
+// unload mirrors `glad.unload`. The source releases its glad loader context
+// here; witty has no loader context to release.
 pub fn unload() {
 }
 

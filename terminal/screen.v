@@ -4044,21 +4044,6 @@ pub fn (mut self Screen) append_grapheme(cell_x u32, cp u32) ! {
 	}
 }
 
-// ============================================================
-// Increase capacity (page management)
-// ============================================================
-
-// Increase capacity of the page containing the given node.
-pub fn (mut self Screen) increase_capacity() ! {
-	// Pages uses growable V arrays rather than fixed packed allocations, so
-	// capacity increases happen automatically at the point of insertion.
-}
-
-// Split a page for capacity reasons.
-fn (mut self Screen) split_for_capacity() ! {
-	// The flat Pages storage has no fixed-capacity page boundary to split.
-}
-
 // Clean up boundary conditions where a cell will become discontiguous with
 // a neighboring cell because either one of them will be moved and/or cleared.
 //

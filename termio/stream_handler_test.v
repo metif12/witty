@@ -180,21 +180,26 @@ fn test_stream_handler_tmux_viewer_lifecycle_and_commands() {
 }
 
 fn test_xtgettcap_uses_complete_ghostty_capability_encoding() {
-	assert xtgettcap_lookup(hex_encode('am')) or { 'missing' } == ''
-	assert xtgettcap_lookup(hex_encode('colors')) or { '' } == '323536'
-	assert xtgettcap_lookup(hex_encode('RGB')) or { '' } == '38'
-	assert xtgettcap_lookup(hex_encode('Smulx')) or { '' } == '5C455B343A25703125646D'
-	assert xtgettcap_lookup(hex_encode('kbs')) or { '' } == '7F'
-	assert xtgettcap_lookup(hex_encode('kf1')) or { '' } == '1B4F50'
-	assert xtgettcap_lookup(hex_encode('kf63')) or { '' } == '1B5B313B3452'
-	assert xtgettcap_lookup(hex_encode('not-a-capability')) == none
+	// Keys are the hex-encoded capability names exactly as they arrive on the
+	// wire, and each value is the full DCS response.
+	assert xtgettcap_map['616D'] or { 'missing' } == '\x1bP1+r616D\x1b\\'
+	assert xtgettcap_map['636F6C6F7273'] or { '' } == '\x1bP1+r636F6C6F7273=323536\x1b\\'
+	assert xtgettcap_map['524742'] or { '' } == '\x1bP1+r524742=38\x1b\\'
+	assert xtgettcap_map['536D756C78'] or { '' } == '\x1bP1+r536D756C78=5C455B343A25703125646D\x1b\\'
+	assert xtgettcap_map['6B6273'] or { '' } == '\x1bP1+r6B6273=7F\x1b\\'
+	assert xtgettcap_map['6B6631'] or { '' } == '\x1bP1+r6B6631=1B4F50\x1b\\'
+	assert xtgettcap_map['6B663633'] or { '' } == '\x1bP1+r6B663633=1B5B313B3452\x1b\\'
+	assert '6E6F742D612D6361706162696C697479' !in xtgettcap_map
+
+	// Lower-case requests go unanswered, as in the source.
+	assert '616d' !in xtgettcap_map
 }
 
 fn test_stream_handler_xtgettcap_omits_unknown_and_formats_boolean() {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
 	mut query := terminal.DcsXtgettcap{
-		data: '${hex_encode('am')};${hex_encode('unknown')};${hex_encode('colors')}'.bytes()
+		data: '616D;756E6B6E6F776E;636F6C6F7273'.bytes()
 	}
 	handler.dcs_xtgettcap(mut query)
 	assert ctx.mailbox.len() == 2

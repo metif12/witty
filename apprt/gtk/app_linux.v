@@ -7,10 +7,8 @@ module gtk
 // In ghostty this struct is a thin wrapper around the GObject `Application`
 // class (class/application.zig). All the heavy lifting lives in that GObject
 // class, which is translated in `application_linux.v` (the canonical owner of
-// the `Application` type). `CoreApp` remains a minimal placeholder here because
-// the gtk module cannot import witty's root `main` module where the real
-// `App`/`Surface` core types live. The apprt-interface method signatures are
-// kept faithful to the Zig original.
+// the `Application` type). The core `App` is `core.App`, used directly. The
+// apprt-interface method signatures are kept faithful to the Zig original.
 
 import apprt
 import core

@@ -23,11 +23,10 @@ import os
 //     private storage points at `Application`.
 //   * Its startup/activate/dispose/finalize virtual methods and read-only
 //     `config` object property are installed on the native class.
-//   * The core `App` (libghostty `CoreApp`) is the root `main.App`, which the
-//     gtk module cannot import, so calls into it go through the `CoreApp`
-//     placeholder (declared in app_linux.v). Method SIGNATURES are kept
-//     faithful; the pure logic (config env setup, single-instance/app-id
-//     resolution, action map, quit timer, quit flow) is translated directly.
+//   * The core `App` (libghostty `CoreApp`) is `core.App`, held directly.
+//     Method SIGNATURES are kept faithful; the pure logic (config env setup,
+//     single-instance/app-id resolution, action map, quit timer, quit flow) is
+//     translated directly.
 //
 // The apprt `App` adapter (app_linux.v) wraps this `Application` and forwards
 // init/run/terminate/wakeup/perform_action to it.
