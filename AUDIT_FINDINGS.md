@@ -243,10 +243,13 @@ hyperlink, clipboard, change_window_*, report_pwd, rxvt, mouse_shape,
 kitty_text_sizing. input: kitty (80/80),
 keycodes (243/243), command, binding (83-tag order), key (logic), Link.
 kitty: graphics_command, graphics_unicode, graphics execution/storage. renderer:
-cell, cursor, size, row, Atlas, shader cell layouts, and the Metal
+cell, cursor, size, row, Atlas, shader cell layouts. Both graphics backends
+are now compared function-for-function against the pinned tree: the Metal
 wrappers api/buffer/Pipeline/RenderPass/Sampler/Target/Texture/IOSurfaceLayer/
 shaders (pipeline table, vertex attributes, and the Uniforms/CellText/CellBg/
-Image/BgImage ABI structs). Metal `Frame` remains uncertified; see below. datastruct: CircBuf,
+Image/BgImage ABI structs) and the OpenGL wrappers Frame/Pipeline/RenderPass/
+Sampler/Target/Texture/buffer/shaders, plus the `Metal.zig` and `OpenGL.zig`
+API surfaces. Only Metal's completion block remains; see below. datastruct: CircBuf,
 ArrayListCollection. ssh: cache Entry/DiskCache. tmux: control, layout, output.
 termio: exec, shell_integration, stream_handler. simd: index_of, base64, vt.
 root: quirks, build_config,
