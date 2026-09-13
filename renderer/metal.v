@@ -650,8 +650,42 @@ pub enum MetalRenderStage as u64 {
 // Metal clear color.
 pub struct MetalClearColor {
 pub:
-	r f64
-	g f64
-	b f64
-	a f64
+	red   f64
+	green f64
+	blue  f64
+	alpha f64
+}
+
+// Metal viewport.
+pub struct MetalViewport {
+pub:
+	x      f64
+	y      f64
+	width  f64
+	height f64
+	znear  f64
+	zfar   f64
+}
+
+// Metal region.
+pub struct MetalRegion {
+pub:
+	origin MetalOrigin
+	size   MetalSize
+}
+
+// Metal region origin.
+pub struct MetalOrigin {
+pub:
+	x u64
+	y u64
+	z u64
+}
+
+// Metal region size.
+pub struct MetalSize {
+pub:
+	width  u64
+	height u64
+	depth  u64
 }

@@ -79,6 +79,36 @@ fn test_metal_gpu_family_complete_source_values() {
 	assert got == want
 }
 
+fn test_metal_native_value_layouts() {
+	assert sizeof(MetalClearColor) == 32
+	assert sizeof(MetalViewport) == 48
+	assert sizeof(MetalOrigin) == 24
+	assert sizeof(MetalSize) == 24
+	assert sizeof(MetalRegion) == 48
+
+	color := MetalClearColor{
+		red: 1
+		green: 2
+		blue: 3
+		alpha: 4
+	}
+	assert [color.red, color.green, color.blue, color.alpha] == [f64(1), 2, 3, 4]
+	region := MetalRegion{
+		origin: MetalOrigin{
+			x: 1
+			y: 2
+			z: 3
+		}
+		size: MetalSize{
+			width: 4
+			height: 5
+			depth: 6
+		}
+	}
+	assert [region.origin.x, region.origin.y, region.origin.z, region.size.width, region.size.height,
+		region.size.depth] == [u64(1), 2, 3, 4, 5, 6]
+}
+
 fn test_metal_pixel_format_complete_source_values() {
 	want := [
 		u64(0),
