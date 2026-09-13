@@ -13,6 +13,12 @@ fn test_ghostty_info_exposes_stable_version_bytes() {
 	assert version == version_string
 }
 
+fn test_build_mode_c_layout_and_ordinals() {
+	assert sizeof(BuildMode) == 4
+	assert [BuildMode.debug, .release_safe, .release_fast, .release_small].map(i32(it)) == [i32(0),
+		1, 2, 3]
+}
+
 fn test_ghostty_string_owns_c_string() {
 	value := GhosttyString.from_string('hello')
 	assert value.len == 5

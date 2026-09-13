@@ -24,7 +24,7 @@ fn init() {
 }
 
 // BuildMode mirrors the C enum ghostty_build_mode_e.
-pub enum BuildMode {
+pub enum BuildMode as i32 {
 	debug
 	release_safe
 	release_fast

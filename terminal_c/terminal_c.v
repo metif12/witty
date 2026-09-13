@@ -265,7 +265,7 @@ pub fn osc_command_type(cmd ?osc.Command) osc.CommandType {
 // CommandData enumerates the types of data that can be extracted
 // from an OSC command through the C API.
 // C: GhosttyOscCommandData
-pub enum CommandData {
+pub enum CommandData as i32 {
 	invalid // 0
 	change_window_title_str // 1
 }

@@ -10,12 +10,18 @@ import input
 // ============================================================
 
 fn test_result_values() {
+	assert sizeof(Result) == 4
 	assert Result.success != Result.out_of_memory
 	assert Result.success != Result.invalid_value
 	assert Result.out_of_memory != Result.invalid_value
 	assert i32(Result.success) == 0
 	assert i32(Result.out_of_memory) == -1
 	assert i32(Result.invalid_value) == -2
+}
+
+fn test_osc_command_data_c_layout_and_ordinals() {
+	assert sizeof(CommandData) == 4
+	assert [CommandData.invalid, .change_window_title_str].map(i32(it)) == [i32(0), 1]
 }
 
 // ============================================================
