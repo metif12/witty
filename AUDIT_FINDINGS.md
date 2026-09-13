@@ -228,6 +228,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | GTK drag and drop | Dropping files or text onto the terminal did nothing. The source sets a `GtkDropTarget` accepting `GdkFileList`, `GFile` and string, whose handler shell-escapes dropped paths and pastes them, or pastes dropped text directly. The port had neither the controller nor the handler, only a comment listing `drop_target` among the template children it had not built. | Add the controller with the same accepted types in the same order and translate the handler through the existing `ShellEscapeWriter`, factoring the paste into `clipboard_paste` as the source's `Clipboard.paste`. The single-`GFile` arm builds its string and returns without pasting, as the source does. |
 | terminfo module | `src/terminfo` had no counterpart. It defines Ghostty's terminfo entry as structured data and encodes it to terminfo source format, feeding both the build's terminfo install and XTGETTCAP. XTGETTCAP worked, but from a separately hand-transcribed copy of the same data in `stream_handler.v` -- two copies free to drift. | Translate `Source` and the 268-capability entry with both of the source's tests. Checking the transcribed table against it showed all 271 responses matched exactly, so the table is removed and the handler reads the generated map as the source does. That drops the transcription's case-insensitive hex decoding, which answered lower-case requests the source ignores. |
 | editor support files | `src/extra` generates the editor and shell support files for the config format from Config's fields; none of it had a counterpart. | Translate the vim (syntax, ftdetect, ftplugin, compiler) and sublime generators, carrying the file bodies over verbatim and generating the keyword lists from `configpkg.config_keys`. |
+| build data command | `src/main_build_data.zig` is the command the build runs to produce the generated artifacts. Nothing in the translation emitted the terminfo, vim or sublime files, so they existed but could not be installed. | Translate it as plain functions at the repository root, following `helpgen.v`, covering six of the source's nine actions. |
 | dead capacity stubs | `Screen.increase_capacity` and `Screen.split_for_capacity` were empty no-ops with no callers; the real implementation is `PageList.increase_capacity`, which is fully translated and has fourteen tests. | Remove both. |
 | GTK progress bar fraction | The source converts an OSC progress percentage through `computeFraction`, which clamps to 0..100 before dividing and is tested to map 255 to 1.0. The translation inlined `progress / 100.0` at all three call sites without the clamp. Both OSC parsers clamp what they parse, so this is the source's second line of defence rather than a reachable bug, but a `ProgressReport` is an ordinary value nothing stops from holding 250. | Restore the function, its clamp, and the test. |
 | crash thread state | `crash_test.v` died with SIGSEGV on the first write to the per-thread crash state, before producing any output. tcc, V's default C backend for debug and test builds, miscompiles `_Thread_local` on macOS arm64: it emits a direct `TPIDR_EL0` plus static offset access, but Darwin resolves thread locals dynamically. Correct under clang, so `-prod` was unaffected and it only ever showed up in testing. | Hold the state in a pthread key, which every supported toolchain implements correctly. This was the only thread local in the project. |
@@ -354,14 +355,25 @@ an item here does not mean its full module has been certified yet.
   architecture, even where each callback delegates to the translated core
   implementation.
 - **Shell completions:** `src/extra/bash.zig`, `zsh.zig` and `fish.zig`
-  (about 760 lines) generate shell completions by reflecting over both
-  `Config`'s field types and every CLI `Action`'s options struct, choosing a
-  completion strategy per field kind (booleans, enums, paths, fonts, themes).
-  Witty has no per-field type metadata or Action-options registry to drive
-  that, so the completions are absent. Translating them needs that metadata
-  layer built first; it is not a mechanical port. The vim and sublime
-  generators from the same directory are translated, since they need only the
-  key list.
+  (about 760 lines) generate shell completions by reflecting over `Config`'s
+  field types and every CLI `Action`'s options struct, choosing a completion
+  strategy per field kind. The vim and sublime generators from the same
+  directory are translated, since they need only the key list.
+
+  The equivalent V reflection does not compile. Three forms were tried against
+  `Config`: a generic `enum_variants[T]` helper called with `c.$(field.name)`
+  segfaults the compiler; `$for e in field.typ.values` emits references to
+  `_option_<Enum>__<variant>` for optional enum fields; and excluding optional
+  fields still binds the wrong enum's variants, emitting
+  `configpkg__AsyncBackend__allow/deny/ask` when `AsyncBackend` is
+  `auto/epoll/io_uring`. The same generic helper works correctly on a small
+  enum outside the `$for`, so this is the compiler failing on a struct of
+  `Config`'s size, not a language limit.
+
+  Writing the per-field classification out by hand instead would mean judging
+  93 named field types across two codebases with no reference output to check
+  against -- there is no Zig toolchain here to run the source generator -- so
+  it is left absent rather than approximated.
 
 - **libghostty ABI type generators:** `src/lib` is a comptime toolkit that
   builds C-ABI-compatible enums, tagged unions and structs from Zig
@@ -371,11 +383,6 @@ an item here does not mean its full module has been certified yet.
   Witty declares those types directly with explicit backing instead. The
   *output* of that layer is what many entries above verify; the layer itself
   is not translated and cannot be.
-
-- **Build data CLI:** `src/main_build_data.zig` exposes nine generated
-  artifacts (three shell completions, four vim files, the sublime syntax and
-  the terminfo source) to the build. Witty has the terminfo, vim and sublime
-  generators but no command that emits them, so nothing installs them.
 
 - **Snap build variant:** Ghostty's build exposes a `snap` option, and when it
   is set `Surface.filterSnapPaths` strips the `SNAP*` prefixes the Snap runtime
