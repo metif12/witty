@@ -708,6 +708,7 @@ fn test_capi_text_length_is_pointer_width() {
 
 // Test CAPIPoint tag values.
 fn test_capi_point_tag_values() {
+	assert sizeof(CAPIPointTag) == 4
 	assert int(CAPIPointTag.active) == 0
 	assert int(CAPIPointTag.viewport) == 1
 	assert int(CAPIPointTag.screen) == 2
@@ -716,9 +717,15 @@ fn test_capi_point_tag_values() {
 
 // Test CAPICoordTag values.
 fn test_capi_coord_tag_values() {
+	assert sizeof(CAPICoordTag) == 4
 	assert int(CAPICoordTag.exact) == 0
 	assert int(CAPICoordTag.top_left) == 1
 	assert int(CAPICoordTag.bottom_right) == 2
+}
+
+fn test_platform_tag_c_abi_layout_and_values() {
+	assert sizeof(PlatformTag) == 4
+	assert [PlatformTag.macos, .ios].map(i32(it)) == [i32(1), 2]
 }
 
 // Test ghostty_surface_config_new returns defaults.

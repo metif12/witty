@@ -26,6 +26,11 @@ fn test_surface_private_source_tag_layouts_and_ordinals() {
 	assert [ScrollDirection.down_left, .up_right].map(u8(it)) == [u8(0), 1]
 }
 
+fn test_input_effect_source_layout_and_ordinals() {
+	assert sizeof(apprt.InputEffect) == 1
+	assert [apprt.InputEffect.ignored, .consumed, .closed].map(u8(it)) == [u8(0), 1, 2]
+}
+
 fn test_desktop_notification_digest_matches_source_wyhash_stream() {
 	// Ghostty updates one Wyhash state with title and then body, which is
 	// equivalent to hashing their concatenated bytes.

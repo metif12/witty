@@ -871,7 +871,7 @@ fn (mut s CoreSurface) sync_backend() {
 }
 
 // InputEffect represents the effect of processing an input event.
-pub enum InputEffect {
+pub enum InputEffect as u8 {
 	// Input was not handled.
 	ignored
 	// Input was handled and consumed.

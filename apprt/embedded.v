@@ -393,7 +393,7 @@ pub:
 }
 
 // PlatformTag identifies the platform.
-pub enum PlatformTag {
+pub enum PlatformTag as i32 {
 	// "0" is reserved for invalid so we can detect unset values
 	// from the C API.
 	macos = 1
@@ -1248,7 +1248,7 @@ pub:
 }
 
 // CAPIPointTag identifies the coordinate space.
-pub enum CAPIPointTag {
+pub enum CAPIPointTag as i32 {
 	active   = 0
 	viewport = 1
 	screen   = 2
@@ -1256,7 +1256,7 @@ pub enum CAPIPointTag {
 }
 
 // CAPICoordTag identifies how coordinates should be interpreted.
-pub enum CAPICoordTag {
+pub enum CAPICoordTag as i32 {
 	exact        = 0
 	top_left     = 1
 	bottom_right = 2
