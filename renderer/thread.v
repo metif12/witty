@@ -414,7 +414,32 @@ pub fn RendererThread.init(config &configpkg.Config, renderer_impl &Renderer, st
 }
 
 // Clean up the thread.
+// Release the font grid references still held by undelivered mailbox messages.
+//
+// A font grid handoff transfers ownership of the old grid's reference to this
+// thread, which must accept the new grid and dereference the old one. The
+// surface has already swapped to the new key by the time it queues the
+// message, so if the thread stopped before draining it, nothing else holds the
+// old grid's reference and the app's grid set never reaches zero.
+fn (mut self RendererThread) release_pending_font_grids() {
+	if self.mailbox == unsafe { nil } {
+		return
+	}
+	for {
+		msg := self.mailbox.pop() or { break }
+		if msg is FontGridMessage {
+			if msg.set != unsafe { nil } {
+				mut set := unsafe { msg.set }
+				set.deref(msg.old_key)
+			}
+		}
+	}
+}
+
 pub fn (mut self RendererThread) deinit() {
+	// Nothing can possibly access the mailbox anymore, so hand back anything
+	// it still owns before destroying it.
+	self.release_pending_font_grids()
 	unsafe {
 		self.mailbox.destroy()
 		self.event.destroy()
