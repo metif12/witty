@@ -203,8 +203,12 @@ pub fn SplitTree.empty[T]() SplitTree[T] {
 pub fn SplitTree.new[T](view &T) SplitTree[T] {
 	mut v := unsafe { view }
 	reffed := v.ref()
+	mut nodes := []Node[T]{cap: 1}
+	nodes << Leaf[T]{
+		view: reffed
+	}
 	return SplitTree[T]{
-		nodes: [Node[T](Leaf[T]{ view: reffed })]
+		nodes: nodes
 	}
 }
 

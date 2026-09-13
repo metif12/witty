@@ -1,49 +1,51 @@
-module datastruct
+module main
+
+import datastruct
 
 fn test_split_tree_source_enum_layouts_and_ordinals() {
-	assert sizeof(Layout) == 1
-	assert u8(Layout.horizontal) == 0
-	assert u8(Layout.vertical) == 1
-	assert sizeof(Direction) == 1
-	assert u8(Direction.left) == 0
-	assert u8(Direction.right) == 1
-	assert u8(Direction.down) == 2
-	assert u8(Direction.up) == 3
-	assert sizeof(Side) == 1
-	assert u8(Side.left) == 0
-	assert u8(Side.right) == 1
-	assert sizeof(SpatialDirection) == 1
-	assert u8(SpatialDirection.left) == 0
-	assert u8(SpatialDirection.right) == 1
-	assert u8(SpatialDirection.down) == 2
-	assert u8(SpatialDirection.up) == 3
+	assert sizeof(datastruct.Layout) == 1
+	assert u8(datastruct.Layout.horizontal) == 0
+	assert u8(datastruct.Layout.vertical) == 1
+	assert sizeof(datastruct.Direction) == 1
+	assert u8(datastruct.Direction.left) == 0
+	assert u8(datastruct.Direction.right) == 1
+	assert u8(datastruct.Direction.down) == 2
+	assert u8(datastruct.Direction.up) == 3
+	assert sizeof(datastruct.Side) == 1
+	assert u8(datastruct.Side.left) == 0
+	assert u8(datastruct.Side.right) == 1
+	assert sizeof(datastruct.SpatialDirection) == 1
+	assert u8(datastruct.SpatialDirection.left) == 0
+	assert u8(datastruct.SpatialDirection.right) == 1
+	assert u8(datastruct.SpatialDirection.down) == 2
+	assert u8(datastruct.SpatialDirection.up) == 3
 }
 
 // TestView is used in tests to implement the required view interface.
-struct TestView {
+pub struct TestView {
 	label string
 }
 
-fn (mut self TestView) ref() &TestView {
+pub fn (mut self TestView) ref() &TestView {
 	return &TestView{
 		label: self.label
 	}
 }
 
-fn (mut self TestView) unref() {
+pub fn (mut self TestView) unref() {
 	// No-op with V's GC
 }
 
-fn (self &TestView) eql(other &TestView) bool {
+pub fn (self &TestView) eql(other &TestView) bool {
 	return self.label == other.label
 }
 
-fn (self &TestView) split_tree_label() string {
+pub fn (self &TestView) split_tree_label() string {
 	return self.label
 }
 
 // helper: find a view handle by label
-fn find_handle(tree &SplitTree[TestView], label string) int {
+fn find_handle(tree &datastruct.SplitTree[TestView], label string) int {
 	mut it := tree.iterator()
 	for {
 		entry := it.next() or { break }
@@ -56,7 +58,7 @@ fn find_handle(tree &SplitTree[TestView], label string) int {
 
 fn test_is_split() {
 	// Empty tree should not be split
-	mut empty := SplitTree.empty[TestView]()
+	mut empty := datastruct.SplitTree.empty[TestView]()
 	defer {
 		empty.free()
 	}
@@ -64,19 +66,19 @@ fn test_is_split() {
 
 	// Single node tree should not be split
 	mut v1 := TestView{ label: 'A' }
-	mut single := SplitTree.new[TestView](&v1)
+	mut single := datastruct.SplitTree.new[TestView](&v1)
 	defer {
 		single.free()
 	}
 	assert !single.is_split()
 
-	// Split tree should be split
+	// datastruct.Split tree should be split
 	mut v2 := TestView{ label: 'B' }
-	mut tree2 := SplitTree.new[TestView](&v2)
+	mut tree2 := datastruct.SplitTree.new[TestView](&v2)
 	defer {
 		tree2.free()
 	}
-	mut split := single.split_(handle_root, .right, 0.5, &tree2)
+	mut split := single.split_(datastruct.handle_root, .right, 0.5, &tree2)
 	defer {
 		split.free()
 	}
@@ -84,7 +86,7 @@ fn test_is_split() {
 }
 
 fn test_empty_tree() {
-	mut t := SplitTree.empty[TestView]()
+	mut t := datastruct.SplitTree.empty[TestView]()
 	defer {
 		t.free()
 	}
@@ -93,7 +95,7 @@ fn test_empty_tree() {
 
 fn test_single_node() {
 	mut v := TestView{ label: 'A' }
-	mut t := SplitTree.new[TestView](&v)
+	mut t := datastruct.SplitTree.new[TestView](&v)
 	defer {
 		t.free()
 	}
@@ -103,16 +105,16 @@ fn test_single_node() {
 
 fn test_split_horizontal() {
 	mut v1 := TestView{ label: 'A' }
-	mut t1 := SplitTree.new[TestView](&v1)
+	mut t1 := datastruct.SplitTree.new[TestView](&v1)
 	defer {
 		t1.free()
 	}
 	mut v2 := TestView{ label: 'B' }
-	mut t2 := SplitTree.new[TestView](&v2)
+	mut t2 := datastruct.SplitTree.new[TestView](&v2)
 	defer {
 		t2.free()
 	}
-	mut t3 := t1.split_(handle_root, .right, 0.5, &t2)
+	mut t3 := t1.split_(datastruct.handle_root, .right, 0.5, &t2)
 	defer {
 		t3.free()
 	}
@@ -120,9 +122,9 @@ fn test_split_horizontal() {
 	expected_t3 := '+---++---+\n| A || B |\n+---++---+\nsplit (layout: horizontal, ratio: 0.50)\n  leaf: A\n  leaf: B\n'
 	assert t3.format() == expected_t3
 
-	// Split right at B
+	// datastruct.Split right at B
 	mut vc := TestView{ label: 'C' }
-	mut tc := SplitTree.new[TestView](&vc)
+	mut tc := datastruct.SplitTree.new[TestView](&vc)
 	defer {
 		tc.free()
 	}
@@ -135,9 +137,9 @@ fn test_split_horizontal() {
 	expected_t4 := '+--------++---++---+\n|    A   || B || C |\n+--------++---++---+\nsplit (layout: horizontal, ratio: 0.50)\n  leaf: A\n  split (layout: horizontal, ratio: 0.50)\n    leaf: B\n    leaf: C\n'
 	assert t4.format() == expected_t4
 
-	// Split right at C
+	// datastruct.Split right at C
 	mut vd := TestView{ label: 'D' }
-	mut td := SplitTree.new[TestView](&vd)
+	mut td := datastruct.SplitTree.new[TestView](&vd)
 	defer {
 		td.free()
 	}
@@ -154,10 +156,10 @@ fn test_split_horizontal() {
 	mut current := u8(`D`)
 	for current != u8(`A`) {
 		handle := find_handle(&t5, [current].bytestr())
-		prev_handle := t5.previous(handle)
+		prev_handle := t5.goto_(handle, datastruct.GotoPrevious{})
 		assert prev_handle >= 0
 		prev_entry := t5.nodes[prev_handle]
-		if prev_entry is Leaf[TestView] {
+		if prev_entry is datastruct.Leaf[TestView] {
 			assert prev_entry.view.label == [current - 1].bytestr()
 		}
 		current -= 1
@@ -165,16 +167,16 @@ fn test_split_horizontal() {
 
 	// A has no previous
 	a_handle := find_handle(&t5, 'A')
-	assert t5.previous(a_handle) == -1
+	assert t5.goto_(a_handle, datastruct.GotoPrevious{}) == -1
 
 	// Find "next" from A forward.
 	current = u8(`A`)
 	for current != u8(`D`) {
 		handle := find_handle(&t5, [current].bytestr())
-		next_handle := t5.next_node(handle)
+		next_handle := t5.goto_(handle, datastruct.GotoNext{})
 		assert next_handle >= 0
 		next_entry := t5.nodes[next_handle]
-		if next_entry is Leaf[TestView] {
+		if next_entry is datastruct.Leaf[TestView] {
 			assert next_entry.view.label == [current + 1].bytestr()
 		}
 		current += 1
@@ -182,22 +184,22 @@ fn test_split_horizontal() {
 
 	// D has no next
 	d_handle := find_handle(&t5, 'D')
-	assert t5.next_node(d_handle) == -1
+	assert t5.goto_(d_handle, datastruct.GotoNext{}) == -1
 }
 
 fn test_split_vertical() {
 	mut v1 := TestView{ label: 'A' }
-	mut t1 := SplitTree.new[TestView](&v1)
+	mut t1 := datastruct.SplitTree.new[TestView](&v1)
 	defer {
 		t1.free()
 	}
 	mut v2 := TestView{ label: 'B' }
-	mut t2 := SplitTree.new[TestView](&v2)
+	mut t2 := datastruct.SplitTree.new[TestView](&v2)
 	defer {
 		t2.free()
 	}
 
-	mut t3 := t1.split_(handle_root, .down, 0.5, &t2)
+	mut t3 := t1.split_(datastruct.handle_root, .down, 0.5, &t2)
 	defer {
 		t3.free()
 	}
@@ -208,18 +210,18 @@ fn test_split_vertical() {
 
 fn test_split_horizontal_zero_ratio() {
 	mut v1 := TestView{ label: 'A' }
-	mut t1 := SplitTree.new[TestView](&v1)
+	mut t1 := datastruct.SplitTree.new[TestView](&v1)
 	defer {
 		t1.free()
 	}
 	mut v2 := TestView{ label: 'B' }
-	mut t2 := SplitTree.new[TestView](&v2)
+	mut t2 := datastruct.SplitTree.new[TestView](&v2)
 	defer {
 		t2.free()
 	}
 
 	// A | B horizontal with ratio 0
-	mut split := t1.split_(handle_root, .right, 0, &t2)
+	mut split := t1.split_(datastruct.handle_root, .right, 0, &t2)
 	defer {
 		split.free()
 	}
@@ -230,17 +232,17 @@ fn test_split_horizontal_zero_ratio() {
 
 fn test_split_vertical_zero_ratio() {
 	mut v1 := TestView{ label: 'A' }
-	mut t1 := SplitTree.new[TestView](&v1)
+	mut t1 := datastruct.SplitTree.new[TestView](&v1)
 	defer {
 		t1.free()
 	}
 	mut v2 := TestView{ label: 'B' }
-	mut t2 := SplitTree.new[TestView](&v2)
+	mut t2 := datastruct.SplitTree.new[TestView](&v2)
 	defer {
 		t2.free()
 	}
 
-	mut split := t1.split_(handle_root, .down, 0, &t2)
+	mut split := t1.split_(datastruct.handle_root, .down, 0, &t2)
 	defer {
 		split.free()
 	}
@@ -251,17 +253,17 @@ fn test_split_vertical_zero_ratio() {
 
 fn test_split_horizontal_full_width() {
 	mut v1 := TestView{ label: 'A' }
-	mut t1 := SplitTree.new[TestView](&v1)
+	mut t1 := datastruct.SplitTree.new[TestView](&v1)
 	defer {
 		t1.free()
 	}
 	mut v2 := TestView{ label: 'B' }
-	mut t2 := SplitTree.new[TestView](&v2)
+	mut t2 := datastruct.SplitTree.new[TestView](&v2)
 	defer {
 		t2.free()
 	}
 
-	mut split := t1.split_(handle_root, .right, 1, &t2)
+	mut split := t1.split_(datastruct.handle_root, .right, 1, &t2)
 	defer {
 		split.free()
 	}
@@ -272,17 +274,17 @@ fn test_split_horizontal_full_width() {
 
 fn test_split_vertical_full_width() {
 	mut v1 := TestView{ label: 'A' }
-	mut t1 := SplitTree.new[TestView](&v1)
+	mut t1 := datastruct.SplitTree.new[TestView](&v1)
 	defer {
 		t1.free()
 	}
 	mut v2 := TestView{ label: 'B' }
-	mut t2 := SplitTree.new[TestView](&v2)
+	mut t2 := datastruct.SplitTree.new[TestView](&v2)
 	defer {
 		t2.free()
 	}
 
-	mut split := t1.split_(handle_root, .down, 1, &t2)
+	mut split := t1.split_(datastruct.handle_root, .down, 1, &t2)
 	defer {
 		split.free()
 	}
@@ -293,16 +295,16 @@ fn test_split_vertical_full_width() {
 
 fn test_remove_leaf() {
 	mut v1 := TestView{ label: 'A' }
-	mut t1 := SplitTree.new[TestView](&v1)
+	mut t1 := datastruct.SplitTree.new[TestView](&v1)
 	defer {
 		t1.free()
 	}
 	mut v2 := TestView{ label: 'B' }
-	mut t2 := SplitTree.new[TestView](&v2)
+	mut t2 := datastruct.SplitTree.new[TestView](&v2)
 	defer {
 		t2.free()
 	}
-	mut t3 := t1.split_(handle_root, .right, 0.5, &t2)
+	mut t3 := t1.split_(datastruct.handle_root, .right, 0.5, &t2)
 	defer {
 		t3.free()
 	}
@@ -320,29 +322,29 @@ fn test_remove_leaf() {
 
 fn test_split_twice_remove_intermediary() {
 	mut v1 := TestView{ label: 'A' }
-	mut t1 := SplitTree.new[TestView](&v1)
+	mut t1 := datastruct.SplitTree.new[TestView](&v1)
 	defer {
 		t1.free()
 	}
 	mut v2 := TestView{ label: 'B' }
-	mut t2 := SplitTree.new[TestView](&v2)
+	mut t2 := datastruct.SplitTree.new[TestView](&v2)
 	defer {
 		t2.free()
 	}
 	mut v3 := TestView{ label: 'C' }
-	mut t3 := SplitTree.new[TestView](&v3)
+	mut t3 := datastruct.SplitTree.new[TestView](&v3)
 	defer {
 		t3.free()
 	}
 
 	// A | B horizontal
-	mut split1 := t1.split_(handle_root, .right, 0.5, &t2)
+	mut split1 := t1.split_(datastruct.handle_root, .right, 0.5, &t2)
 	defer {
 		split1.free()
 	}
 
 	// Insert C below
-	mut split2 := split1.split_(handle_root, .down, 0.5, &t3)
+	mut split2 := split1.split_(datastruct.handle_root, .down, 0.5, &t3)
 	defer {
 		split2.free()
 	}
@@ -371,28 +373,28 @@ fn test_split_twice_remove_intermediary() {
 
 fn test_spatial_goto() {
 	mut v1 := TestView{ label: 'A' }
-	mut t1 := SplitTree.new[TestView](&v1)
+	mut t1 := datastruct.SplitTree.new[TestView](&v1)
 	defer {
 		t1.free()
 	}
 	mut v2 := TestView{ label: 'B' }
-	mut t2 := SplitTree.new[TestView](&v2)
+	mut t2 := datastruct.SplitTree.new[TestView](&v2)
 	defer {
 		t2.free()
 	}
 	mut v3 := TestView{ label: 'C' }
-	mut t3 := SplitTree.new[TestView](&v3)
+	mut t3 := datastruct.SplitTree.new[TestView](&v3)
 	defer {
 		t3.free()
 	}
 	mut v4 := TestView{ label: 'D' }
-	mut t4 := SplitTree.new[TestView](&v4)
+	mut t4 := datastruct.SplitTree.new[TestView](&v4)
 	defer {
 		t4.free()
 	}
 
 	// A | B horizontal
-	mut split_ab := t1.split_(handle_root, .right, 0.5, &t2)
+	mut split_ab := t1.split_(datastruct.handle_root, .right, 0.5, &t2)
 	defer {
 		split_ab.free()
 	}
@@ -412,23 +414,23 @@ fn test_spatial_goto() {
 	}
 	split := &split_bd
 
-	// Spatial C => right should be D
+	// datastruct.Spatial C => right should be D
 	c_handle := find_handle(split, 'C')
-	target := split.goto_(c_handle, GotoSpatial{ direction: .right })
+	target := split.goto_(c_handle, datastruct.GotoSpatial{ direction: .right })
 	assert target >= 0
 	target_node := split.nodes[target]
-	if target_node is Leaf[TestView] {
+	if target_node is datastruct.Leaf[TestView] {
 		assert target_node.view.label == 'D'
 	} else {
 		assert false
 	}
 
-	// Spatial D => left should be A
+	// datastruct.Spatial D => left should be A
 	d_handle := find_handle(split, 'D')
-	target2 := split.goto_(d_handle, GotoSpatial{ direction: .left })
+	target2 := split.goto_(d_handle, datastruct.GotoSpatial{ direction: .left })
 	assert target2 >= 0
 	target_node2 := split.nodes[target2]
-	if target_node2 is Leaf[TestView] {
+	if target_node2 is datastruct.Leaf[TestView] {
 		assert target_node2.view.label == 'A'
 	} else {
 		assert false
@@ -446,18 +448,18 @@ fn test_spatial_goto() {
 
 fn test_resize() {
 	mut v1 := TestView{ label: 'A' }
-	mut t1 := SplitTree.new[TestView](&v1)
+	mut t1 := datastruct.SplitTree.new[TestView](&v1)
 	defer {
 		t1.free()
 	}
 	mut v2 := TestView{ label: 'B' }
-	mut t2 := SplitTree.new[TestView](&v2)
+	mut t2 := datastruct.SplitTree.new[TestView](&v2)
 	defer {
 		t2.free()
 	}
 
 	// A | B horizontal
-	mut split := t1.split_(handle_root, .right, 0.5, &t2)
+	mut split := t1.split_(datastruct.handle_root, .right, 0.5, &t2)
 	defer {
 		split.free()
 	}
@@ -484,7 +486,7 @@ fn test_resize() {
 }
 
 fn test_clone_empty_tree() {
-	mut t := SplitTree.empty[TestView]()
+	mut t := datastruct.SplitTree.empty[TestView]()
 	defer {
 		t.free()
 	}
@@ -499,18 +501,18 @@ fn test_clone_empty_tree() {
 
 fn test_zoom() {
 	mut v1 := TestView{ label: 'A' }
-	mut t1 := SplitTree.new[TestView](&v1)
+	mut t1 := datastruct.SplitTree.new[TestView](&v1)
 	defer {
 		t1.free()
 	}
 	mut v2 := TestView{ label: 'B' }
-	mut t2 := SplitTree.new[TestView](&v2)
+	mut t2 := datastruct.SplitTree.new[TestView](&v2)
 	defer {
 		t2.free()
 	}
 
 	// A | B horizontal
-	mut split := t1.split_(handle_root, .right, 0.5, &t2)
+	mut split := t1.split_(datastruct.handle_root, .right, 0.5, &t2)
 	defer {
 		split.free()
 	}
@@ -530,12 +532,12 @@ fn test_zoom() {
 
 fn test_split_resets_zoom() {
 	mut v1 := TestView{ label: 'A' }
-	mut t1 := SplitTree.new[TestView](&v1)
+	mut t1 := datastruct.SplitTree.new[TestView](&v1)
 	defer {
 		t1.free()
 	}
 	mut v2 := TestView{ label: 'B' }
-	mut t2 := SplitTree.new[TestView](&v2)
+	mut t2 := datastruct.SplitTree.new[TestView](&v2)
 	defer {
 		t2.free()
 	}
@@ -545,7 +547,7 @@ fn test_split_resets_zoom() {
 	t1.zoom(a_handle)
 
 	// A | B horizontal
-	mut split := t1.split_(handle_root, .right, 0.5, &t2)
+	mut split := t1.split_(datastruct.handle_root, .right, 0.5, &t2)
 	defer {
 		split.free()
 	}
@@ -557,18 +559,18 @@ fn test_split_resets_zoom() {
 
 fn test_remove_and_zoom() {
 	mut v1 := TestView{ label: 'A' }
-	mut t1 := SplitTree.new[TestView](&v1)
+	mut t1 := datastruct.SplitTree.new[TestView](&v1)
 	defer {
 		t1.free()
 	}
 	mut v2 := TestView{ label: 'B' }
-	mut t2 := SplitTree.new[TestView](&v2)
+	mut t2 := datastruct.SplitTree.new[TestView](&v2)
 	defer {
 		t2.free()
 	}
 
 	// A | B horizontal
-	mut split := t1.split_(handle_root, .right, 0.5, &t2)
+	mut split := t1.split_(datastruct.handle_root, .right, 0.5, &t2)
 	defer {
 		split.free()
 	}
