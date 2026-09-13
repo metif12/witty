@@ -3,6 +3,7 @@ module configpkg
 import datastruct.comparison
 import buildcfg
 import terminal
+import fontstyle
 
 // Generated from the documentation comments in the pinned Ghostty
 // config/Config.zig. Records are separated by ASCII record separators so the
@@ -65,6 +66,8 @@ fn format_entry_values[T](value T) []string {
 		// V's old compiler does not classify enums imported through another
 		// module as `$enum` in this generic. They use the same source enum path.
 		return [enum_config_string(value.str())]
+	} $else $if T is fontstyle.FontStyle {
+		return [value.format_entry()]
 	} $else $if T is $enum {
 		$for method in T.methods {
 			$if method.name == 'format_entry' && method.return_type is string {

@@ -4,9 +4,6 @@ module font
 // Translated from ghostty/src/font/SharedGridSet.zig tests.
 
 fn test_gridset_local_tag_layouts_and_source_ordinals() {
-	assert sizeof(GridSetFontStyleKind) == 1
-	assert [GridSetFontStyleKind.default_, .false_, .name].map(u8(it)) == [u8(0), 1, 2]
-
 	assert sizeof(MetricsKey) == 1
 	mut metric_count := 0
 	$for enum_value in MetricsKey.values {
@@ -225,12 +222,6 @@ fn test_gridset_metrics_modifier_set() {
 	}
 
 	assert set.get(.cell_height) == none
-}
-
-fn test_gridset_font_style_config() {
-	assert GridSetFontStyleConfig{}.name_value() == none
-	assert GridSetFontStyleConfig{ kind: .false_ }.name_value() == none
-	assert GridSetFontStyleConfig{ kind: .name, name: 'Heavy' }.name_value()? == 'Heavy'
 }
 
 fn test_gridset_derived_config_defaults() {

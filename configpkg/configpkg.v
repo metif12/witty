@@ -12,6 +12,7 @@ import internal_os
 import zig_fmt
 import diagnostics as diagnosticspkg
 import buildcfg
+import fontstyle
 
 const default_gtk_opengl_debug = $if debug { true } $else { false }
 const default_quit_after_last_window_closed = $if linux { true } $else { false }
@@ -4049,10 +4050,10 @@ pub mut:
 	// The named font style to use for each of the requested terminal font
 	// styles. This looks up the style based on the font style string advertised
 	// by the font itself.
-	font_style             FontStyle
-	font_style_bold        FontStyle
-	font_style_italic      FontStyle
-	font_style_bold_italic FontStyle
+	font_style             fontstyle.FontStyle
+	font_style_bold        fontstyle.FontStyle
+	font_style_italic      fontstyle.FontStyle
+	font_style_bold_italic fontstyle.FontStyle
 	// The font families to use, with fallback fonts appended by repeating the
 	// option. An empty list means use the platform default.
 	font_family             []string
@@ -5929,50 +5930,12 @@ pub fn (s SelectionWordChars) format_entry() string {
 	return result
 }
 
-// FontStyle is the tagged value used by the four font-style options. A named
-// style is kept distinct from the special default and false values.
-pub enum FontStyleKind as u8 {
-	default_
-	false_
-	name
-}
+pub type FontStyleKind = fontstyle.Kind
 
-pub struct FontStyle {
-pub:
-	kind FontStyleKind
-	name string
-}
-
-pub fn (mut s FontStyle) parse_cli(input ?string) ! {
-	s = font_style_parse_cli(input)!
-}
+pub type FontStyle = fontstyle.FontStyle
 
 pub fn font_style_parse_cli(input ?string) !FontStyle {
-	value := input or { return perr(ParseError.value_required) }
-	return match value {
-		'default' { FontStyle{ kind: .default_ } }
-		'false' { FontStyle{ kind: .false_ } }
-		else { FontStyle{ kind: .name, name: value } }
-	}
-}
-
-pub fn (s FontStyle) name_value() ?string {
-	return if s.kind == .name { s.name } else { none }
-}
-
-pub fn (s FontStyle) clone() FontStyle {
-	return FontStyle{
-		...s
-		name: s.name.clone()
-	}
-}
-
-pub fn (s FontStyle) format_entry() string {
-	return match s.kind {
-		.default_ { 'default' }
-		.false_ { 'false' }
-		.name { s.name }
-	}
+	return fontstyle.FontStyle.parse(input)
 }
 
 // RepeatableFontVariation stores OpenType variation axes in declaration order.

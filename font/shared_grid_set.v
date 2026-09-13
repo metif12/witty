@@ -2,6 +2,7 @@ module font
 
 import sync
 import zig_fmt
+import fontstyle
 
 // This structure contains a set of SharedGrid structures keyed by
 // unique font configuration.
@@ -106,9 +107,9 @@ pub fn (mut self SharedGridSet) ref(config &GridSetDerivedConfig, font_size Desi
 
 	// Setup our enabled/disabled styles
 	mut styles := StyleStatus.init_fill(true)
-	styles.set(.bold, !config.font_style_bold.is_disabled())
-	styles.set(.italic, !config.font_style_italic.is_disabled())
-	styles.set(.bold_italic, !config.font_style_bold_italic.is_disabled())
+	styles.set(.bold, config.font_style_bold.kind != .false_)
+	styles.set(.italic, config.font_style_italic.kind != .false_)
+	styles.set(.bold_italic, config.font_style_bold_italic.kind != .false_)
 
 	// Init our resolver which just requires setting fields.
 	resolver := CodepointResolver{
@@ -347,10 +348,10 @@ pub mut:
 	font_family_bold               []string
 	font_family_italic             []string
 	font_family_bold_italic        []string
-	font_style                     GridSetFontStyleConfig
-	font_style_bold                GridSetFontStyleConfig
-	font_style_italic              GridSetFontStyleConfig
-	font_style_bold_italic         GridSetFontStyleConfig
+	font_style                     fontstyle.FontStyle
+	font_style_bold                fontstyle.FontStyle
+	font_style_italic              fontstyle.FontStyle
+	font_style_bold_italic         fontstyle.FontStyle
 	font_variation                 []Variation
 	font_variation_bold            []Variation
 	font_variation_italic          []Variation
@@ -376,30 +377,6 @@ pub mut:
 // deinit releases resources.
 pub fn (mut self GridSetDerivedConfig) deinit() {
 	// In V, garbage collection handles memory.
-}
-
-// GridSetFontStyleConfig mirrors the config FontStyle which can be
-// "default" (use the face's own style name) or "false" (disabled) or
-// a specific style name string.
-pub enum GridSetFontStyleKind as u8 {
-	default_
-	false_
-	name
-}
-
-pub struct GridSetFontStyleConfig {
-pub:
-	kind GridSetFontStyleKind
-	name string
-}
-
-// name_value returns the style name if configured, or none for default/false.
-pub fn (s GridSetFontStyleConfig) name_value() ?string {
-	return if s.kind == .name { s.name } else { none }
-}
-
-pub fn (s GridSetFontStyleConfig) is_disabled() bool {
-	return s.kind == .false_
 }
 
 // ============================================================

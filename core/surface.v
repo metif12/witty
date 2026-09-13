@@ -1858,17 +1858,6 @@ pub:
 	mods      input.Mods
 }
 
-fn grid_set_font_style(style configpkg.FontStyle) font.GridSetFontStyleConfig {
-	return font.GridSetFontStyleConfig{
-		kind: match style.kind {
-			.default_ { .default_ }
-			.false_ { .false_ }
-			.name { .name }
-		}
-		name: style.name
-	}
-}
-
 pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 	mut links := []DerivedConfigLink{cap: config.link.links.len}
 	for link in config.link.links {
@@ -1931,10 +1920,10 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 			font_family_bold: config.font_family_bold.clone()
 			font_family_italic: config.font_family_italic.clone()
 			font_family_bold_italic: config.font_family_bold_italic.clone()
-			font_style: grid_set_font_style(config.font_style)
-			font_style_bold: grid_set_font_style(config.font_style_bold)
-			font_style_italic: grid_set_font_style(config.font_style_italic)
-			font_style_bold_italic: grid_set_font_style(config.font_style_bold_italic)
+			font_style: config.font_style.clone()
+			font_style_bold: config.font_style_bold.clone()
+			font_style_italic: config.font_style_italic.clone()
+			font_style_bold_italic: config.font_style_bold_italic.clone()
 			font_variation: config.font_variation.list.clone()
 			font_variation_bold: config.font_variation_bold.list.clone()
 			font_variation_italic: config.font_variation_italic.list.clone()
