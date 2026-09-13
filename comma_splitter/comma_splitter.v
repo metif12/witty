@@ -17,7 +17,7 @@ module comma_splitter
 // separate step!
 
 // State of the state machine.
-enum State {
+enum State as u8 {
 	normal
 	quoted
 	escape
@@ -26,7 +26,7 @@ enum State {
 }
 
 // Sub-state for parsing unicode escapes.
-enum UnicodeEscapeState {
+enum UnicodeEscapeState as u8 {
 	start
 	digits
 }

@@ -12,7 +12,7 @@ const boo_frame_rate = 1000 / 30
 
 struct BooOptions {}
 
-enum BooParseState {
+enum BooParseState as u8 {
 	normal
 	span
 	in_tag

@@ -1,5 +1,15 @@
 module cli
 
+fn test_boo_parser_state_source_layout_and_ordinals() {
+	assert sizeof(BooParseState) == 1
+	assert [BooParseState.normal, .span, .in_tag, .in_closing_tag].map(u8(it)) == [
+		u8(0),
+		1,
+		2,
+		3,
+	]
+}
+
 fn test_boo_embeds_all_pinned_ghostty_frames() {
 	frames := decompress_boo_frames()!
 	assert frames.len == 235

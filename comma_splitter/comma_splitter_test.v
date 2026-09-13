@@ -1,5 +1,18 @@
 module comma_splitter
 
+fn test_parser_state_source_layouts_and_ordinals() {
+	assert sizeof(State) == 1
+	assert [State.normal, .quoted, .escape, .hexescape, .unicodeescape].map(u8(it)) == [
+		u8(0),
+		1,
+		2,
+		3,
+		4,
+	]
+	assert sizeof(UnicodeEscapeState) == 1
+	assert [UnicodeEscapeState.start, .digits].map(u8(it)) == [u8(0), 1]
+}
+
 fn test_splitter_simple() {
 	mut s := CommaSplitter.init('a,b,c')
 	assert s.next()? == 'a'
