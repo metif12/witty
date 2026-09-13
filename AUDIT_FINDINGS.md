@@ -198,6 +198,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | configuration local/quick-terminal tags | Flattened command-argument and replay union tags, optional-file action, the quick-terminal size union tag, and all five quick-terminal option enums used default 32-bit storage. The quick-terminal C projection also represented Ghostty's explicit `enum(c_int) { none, percentage, pixels }` as untyped integer literals. | Byte-back all nine inferred source tags, introduce the exact signed typed C discriminator, and exhaustively verify every ordinal while retaining the source's separate internal and external size tags. |
 | font collection/metrics tags | Collection size/presentation and face constraint tags used default 32-bit storage. The generated `Metrics.Key` translation omitted its final four source fields and hashing manually enumerated only the shortened list instead of inheriting source declaration order. | Byte-back all six inferred tags, restore the complete 17-case metrics key, iterate its values through compile-time reflection during hashing, and exhaustively verify the source ordinals. |
 | font-style configuration handoff | The font layer redeclared Config's flattened `FontStyle` union as `GridSetFontStyleConfig`, added an extra helper, and both core surface and show-face paths maintained handwritten tag-by-tag conversion switches. | Retain one cycle-free `FontStyle` value shared by config and font derived state, clone it directly at both source handoff sites, and remove the duplicate type, helper, and projections. |
+| font discovery backend selection | Ghostty aliases `Discover` and its iterator directly to the build-selected native implementation, while Witty stored both implementations behind a new runtime enum, dispatched every operation through handwritten switches, and made the infallible native initializers fallible. | Select CoreText or Fontconfig with platform-specific V type aliases, use each native API directly, remove both wrapper structs and their runtime tag, and restore infallible initialization at every call site. |
 
 ## Focused behavior reviewed
 
@@ -298,9 +299,10 @@ an item here does not mean its full module has been certified yet.
   source-external.
 - **Source placement:** V module-cycle constraints keep the translated shaper
   run algorithm in `font/font.v` while `font/shaper/run.v` exposes aliases, and
-  place `apprt.action.OpenUrl.Kind` in the cycle-free `openurl` leaf so both
-  `apprt` and `internal_os` can consume one canonical type. These are
-  behaviorally implemented but not file-for-file layout matches.
+  place the application URL kind, build release channel, and configuration font
+  style in cycle-free leaf modules so their otherwise-cyclic consumers can use
+  one canonical type. These are behaviorally implemented but not file-for-file
+  layout matches.
 - **Runtime bridge representation:** Ghostty selects the concrete apprt types at
   compile time. Witty's merged V module boundary instead adds callbacks to its
   runtime-neutral `apprt.RuntimeApp` and `apprt.RuntimeSurface` and uses a

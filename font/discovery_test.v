@@ -5,6 +5,24 @@ import os
 // Tests for font discovery.
 // Translated from ghostty/src/font/discovery.zig
 
+fn test_discover_uses_the_target_backend_directly() {
+	mut discover := Discover.init()
+	defer { discover.deinit() }
+	$if macos {
+		mut it := discover.discover(Descriptor{ family: 'Menlo', size: 12 })!
+		defer { it.deinit() }
+		mut face := it.next() or { panic('CoreText returned no Menlo face') }
+		defer { face.deinit() }
+		assert face.path.len > 0
+	} $else {
+		mut it := discover.discover(Descriptor{ family: 'monospace', size: 12 })!
+		defer { it.deinit() }
+		mut face := it.next() or { panic('fontconfig returned no monospace font') }
+		defer { face.deinit() }
+		assert face.path.len > 0
+	}
+}
+
 // test_descriptor_hash tests that a default descriptor produces
 // a non-zero hash.
 fn test_descriptor_hash() {

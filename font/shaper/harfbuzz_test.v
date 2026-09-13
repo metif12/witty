@@ -74,7 +74,7 @@ fn create_hb_shaper_with_discovered_font(font_req string) !HbTestShaper {
 		library: lib
 		size: font.DesiredSize{ points: 12, xdpi: 72, ydpi: 72 }
 	}
-	mut discovery := font.Discover.init()!
+	mut discovery := font.Discover.init()
 	defer { discovery.deinit() }
 	mut iterator := discovery.discover(font.Descriptor{
 		family: font_req

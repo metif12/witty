@@ -59,7 +59,7 @@ fn create_shaper_with_font(font_req TestFont) !TestShaper {
 
 	// CoreText cannot load the embedded Noto color font format, so use the
 	// platform emoji face exactly as Ghostty's CoreText test setup does.
-	mut discovery := font.Discover.init()!
+	mut discovery := font.Discover.init()
 	defer { discovery.deinit() }
 	mut iterator := discovery.discover(font.Descriptor{
 		family: 'Apple Color Emoji'
@@ -101,7 +101,7 @@ fn create_shaper_with_discovered_font(font_req string) !TestShaper {
 		library: lib
 		size: font.DesiredSize{ points: 12, xdpi: 72, ydpi: 72 }
 	}
-	mut discovery := font.Discover.init()!
+	mut discovery := font.Discover.init()
 	defer { discovery.deinit() }
 	mut iterator := discovery.discover(font.Descriptor{
 		family: font_req

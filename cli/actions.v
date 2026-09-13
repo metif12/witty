@@ -98,7 +98,7 @@ pub:
 // family query deliberately preserves discovery priority.
 pub fn list_fonts_output(args []string) !string {
 	opts := parse_list_fonts_options(args)!
-	mut discovery := font.Discover.init()!
+	mut discovery := font.Discover.init()
 	defer {
 		discovery.deinit()
 	}

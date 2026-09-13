@@ -269,7 +269,7 @@ fn (mut self SharedGridSet) collection(key &GridSetKey, size DesiredSize, config
 // particular is not safe to repeatedly tear down and initialize.
 fn (mut self SharedGridSet) discover() !&Discover {
 	if !self.font_discover_initialized {
-		self.font_discover = Discover.init()!
+		self.font_discover = Discover.init()
 		self.font_discover_initialized = true
 	}
 	return &self.font_discover
