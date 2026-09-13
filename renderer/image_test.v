@@ -345,12 +345,7 @@ fn test_image_draw_encodes_gpu_placement() ! {
 	state.kitty_bg_end = 1
 	assert state.upload(&api)
 
-	mut target := MetalTarget.init(MetalTargetOptions{
-		device: api.device
-		width: 4
-		height: 4
-		storage_mode: api.default_storage_mode
-	})!
+	mut target := api.init_target(4, 4)!
 	defer {
 		target.deinit()
 	}

@@ -309,13 +309,6 @@ pub:
 }
 
 pub fn MetalPipeline.init(opts MetalPipelineOptions) !MetalPipeline {
-	if opts.device == unsafe { nil } || opts.vertex_library == unsafe { nil }
-		|| opts.fragment_library == unsafe { nil } {
-		return error('Metal pipeline requires a device and shader libraries')
-	}
-	if opts.vertex_fn.len == 0 || opts.fragment_fn.len == 0 {
-		return error('Metal pipeline requires shader function names')
-	}
 	mut attributes := []macos.MetalVertexAttribute{cap: opts.attributes.len}
 	for attribute in opts.attributes {
 		attributes << macos.MetalVertexAttribute{
@@ -357,17 +350,15 @@ pub mut:
 // MetalSamplerOptions configures sampler creation.
 pub struct MetalSamplerOptions {
 pub:
-	device         voidptr = unsafe { nil }
-	min_filter     MetalSamplerFilter = .linear
-	mag_filter     MetalSamplerFilter = .linear
-	s_address_mode MetalSamplerAddressMode = .clamp_to_edge
-	t_address_mode MetalSamplerAddressMode = .clamp_to_edge
+	// MTLDevice
+	device         voidptr                 @[required]
+	min_filter     MetalSamplerFilter      @[required]
+	mag_filter     MetalSamplerFilter      @[required]
+	s_address_mode MetalSamplerAddressMode @[required]
+	t_address_mode MetalSamplerAddressMode @[required]
 }
 
 pub fn MetalSampler.init(opts MetalSamplerOptions) !MetalSampler {
-	if opts.device == unsafe { nil } {
-		return error('Metal sampler requires a device')
-	}
 	handle := macos.metal_new_sampler(opts.device, u64(opts.min_filter), u64(opts.mag_filter), u64(opts.s_address_mode), u64(opts.t_address_mode))
 	if handle == unsafe { nil } {
 		return error('Metal sampler allocation failed')
@@ -400,20 +391,19 @@ pub mut:
 
 pub struct MetalTargetOptions {
 pub:
-	device       voidptr = unsafe { nil }
-	width        usize
-	height       usize
-	pixel_format MetalPixelFormat = .bgra8unorm
-	storage_mode MetalStorageMode = .shared
+	// MTLDevice
+	device voidptr @[required]
+	// Desired width.
+	width usize @[required]
+	// Desired height.
+	height usize @[required]
+	// Pixel format for the MTLTexture.
+	pixel_format MetalPixelFormat @[required]
+	// Storage mode for the MTLTexture.
+	storage_mode MetalStorageMode @[required]
 }
 
 pub fn MetalTarget.init(opts MetalTargetOptions) !MetalTarget {
-	if opts.device == unsafe { nil } {
-		return error('Metal target requires a device')
-	}
-	if opts.width == 0 || opts.height == 0 {
-		return error('Metal target dimensions must be non-zero')
-	}
 	colorspace := macos.CGColorSpace.create_named(.display_p3)!
 	defer {
 		colorspace.release()
@@ -470,10 +460,11 @@ pub mut:
 // MetalTextureOptions configures texture creation.
 pub struct MetalTextureOptions {
 pub:
-	device           voidptr = unsafe { nil }
-	pixel_format     MetalPixelFormat = .bgra8unorm
-	resource_options MetalResourceOptions
-	usage            MetalTextureUsage
+	// MTLDevice
+	device           voidptr              @[required]
+	pixel_format     MetalPixelFormat     @[required]
+	resource_options MetalResourceOptions @[required]
+	usage            MetalTextureUsage    @[required]
 }
 
 // Initialize a texture. If data is provided, it is uploaded starting at the

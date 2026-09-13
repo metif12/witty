@@ -214,20 +214,13 @@ fn test_metal_sampler_target_and_empty_frame() ! {
 		api.deinit()
 	}
 
-	mut sampler := MetalSampler.init(MetalSamplerOptions{
-		device: api.device
-	})!
+	mut sampler := MetalSampler.init(api.custom_shader_sampler_options())!
 	defer {
 		sampler.deinit()
 	}
 	assert sampler.handle != unsafe { nil }
 
-	mut target := MetalTarget.init(MetalTargetOptions{
-		device: api.device
-		width: 8
-		height: 6
-		storage_mode: api.default_storage_mode
-	})!
+	mut target := api.init_target(8, 6)!
 	defer {
 		target.deinit()
 	}
@@ -258,12 +251,7 @@ fn test_metal_builtin_shader_pipelines_compile() ! {
 	assert shaders.bg_image.handle != unsafe { nil }
 	assert $sizeof(CellText) == 32
 
-	mut target := MetalTarget.init(MetalTargetOptions{
-		device: api.device
-		width: 4
-		height: 4
-		storage_mode: api.default_storage_mode
-	})!
+	mut target := api.init_target(4, 4)!
 	defer {
 		target.deinit()
 	}
