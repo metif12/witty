@@ -3,6 +3,12 @@ module cli
 import os
 import time
 
+fn test_ssh_cache_add_result_layout_matches_source() {
+	assert sizeof(SshCacheAddResult) == 1
+	assert int(SshCacheAddResult.added) == 0
+	assert int(SshCacheAddResult.updated) == 1
+}
+
 fn test_ssh_cache_entry_parsing_format_and_expiration() {
 	entry := SshCacheEntry.parse('example.com|1640995200|xterm-ghostty')?
 	assert entry.hostname == 'example.com'

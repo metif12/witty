@@ -48,7 +48,7 @@ pub fn (entry SshCacheEntry) is_expired(expire_days ?u32) bool {
 	return age_seconds / i64(24 * 60 * 60) > i64(days)
 }
 
-pub enum SshCacheAddResult {
+pub enum SshCacheAddResult as u8 {
 	added
 	updated
 }

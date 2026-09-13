@@ -11,6 +11,19 @@ fn preview_test_theme(name string) ThemeListElement {
 	}
 }
 
+fn test_list_themes_tag_layouts_match_source() {
+	assert sizeof(ColorScheme) == 1
+	assert int(ColorScheme.all) == 0
+	assert int(ColorScheme.dark) == 1
+	assert int(ColorScheme.light) == 2
+
+	assert sizeof(PreviewMode) == 1
+	assert int(PreviewMode.normal) == 0
+	assert int(PreviewMode.help) == 1
+	assert int(PreviewMode.search) == 2
+	assert int(PreviewMode.save) == 3
+}
+
 // Test should_include_theme with dark filter
 fn test_should_include_theme_dark_filter() {
 	mut cfg := configpkg.Config.default_config()

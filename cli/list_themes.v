@@ -19,7 +19,7 @@ import global_state
 const small_list_threshold = 10
 
 // ColorScheme filters which themes to show by color scheme.
-pub enum ColorScheme {
+pub enum ColorScheme as u8 {
 	all
 	dark
 	light
@@ -83,7 +83,7 @@ pub:
 }
 
 // PreviewMode tracks which mode the TUI preview is in.
-enum PreviewMode {
+enum PreviewMode as u8 {
 	normal
 	help
 	search
