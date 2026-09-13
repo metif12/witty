@@ -223,6 +223,10 @@ below exist. Earlier versions of this document overstated the completed review.
 | renderer frame health vs presentation | Both backends folded a failed present into the frame's health: OpenGL silently set `healthy = false`, Metal propagated the error out of `draw_frame`. The source presents only if the rendered health is good, logs a presentation failure, and reports the rendered health unchanged, so a frame that rendered correctly but could not reach the compositor was being fed to the renderer's health tracking and surface notifications as a failure. Metal also reported health before presenting, inverting the source order, and OpenGL's `complete()` had dropped the `sync` parameter both backends' frames take. | Report the rendered health, log presentation failures without changing it, restore the source ordering, and restore the `sync` parameter. |
 | lib_vt type exports | `lib_vt.zig` re-exports `terminal.MouseShape` alongside the other VT types; the translation had all 49 other aliases but not that one. `lib_vt_test.v` already asserted the export existed, but the file did not compile, so the assertion had never run. | Add the alias, and fix the unrelated compile error in `main_c_test.v` (a quick-terminal-size tag compared against an int literal) that kept that file from running too. |
 | production build | Three declarations were warnings in a debug build but errors under `-prod`, so the release binary could not be built at all: a keybind-table map read that V requires an or-block for, and two optional thread handles with a redundant explicit `none` default. | Fix all three; `v -prod` now builds. |
+| datastruct/SplitTree generic | `SplitTree.new` never compiled. Its array literal built the node list as `[Node[T](Leaf[T]{...})]`, which V rejects on instantiation ("invalid array element: expected `Node[View]`, not `Node[T]`"). Nothing on macOS instantiates `SplitTree` -- only the Linux-only GTK widget code does -- so the project still built and the defect stayed hidden, while `split_tree_test.v` reported "compilation failed" with no diagnostic because instantiating this generic inside its own module segfaults the V compiler. | Build the list and push the leaf. Convert the test to an external test, which avoids the compiler crash and runs its 18 tests / 245 assertions for the first time; the two that called the private `previous`/`next_node` now go through `goto_` with `GotoPrevious`/`GotoNext`, which dispatches straight to them, rather than widening visibility the source also keeps private. |
+| crash thread state | `crash_test.v` died with SIGSEGV on the first write to the per-thread crash state, before producing any output. tcc, V's default C backend for debug and test builds, miscompiles `_Thread_local` on macOS arm64: it emits a direct `TPIDR_EL0` plus static offset access, but Darwin resolves thread locals dynamically. Correct under clang, so `-prod` was unaffected and it only ever showed up in testing. | Hold the state in a pthread key, which every supported toolchain implements correctly. This was the only thread local in the project. |
+| renderer font grid handoff | A font grid handoff transfers ownership of the old grid's reference to the renderer thread, which must accept the new grid and dereference the old. The surface swaps to the new key as soon as it queues the message, so it derefs only the new key at teardown -- but the renderer loop breaks out of its wait on stop without draining, dropping any queued handoff along with the old grid's only remaining reference. `App.deinit` then asserted on a non-empty grid set, intermittently, depending on whether the thread got scheduled to drain first. | Release the font grid references still owned by undelivered mailbox messages before destroying the mailbox. |
+| macOS argument iterator test | The source reads arguments from NSProcessInfo on macOS, documenting that libc argc/argv are not valid under `NSApplicationMain`, and the translation does the same. The test then asserted the iterator equalled `os.args`, which V fills from argv -- asserting the two sources agree, which is the thing the source deliberately does not rely on. It failed because NSProcessInfo reports the path as invoked (`/tmp/...`) where V records the resolved path (`/private/tmp/...`). | Assert the same argument count, the same executable name, and identical arguments after it. |
 
 ## Focused behavior reviewed
 
@@ -388,12 +392,13 @@ Ghostty file and function has been translated, and no 100% claim is made.
 
 Repository-wide test state, for honesty about what the gates actually cover:
 
-- `v` and `v -prod` both build.
-- `internal_os.test_argument_iterator_uses_platform_arguments` fails, and
-  `core.test_embedded_bridge_uses_canonical_core_surface` fails
-  intermittently on a font-grid leak assertion in `App.deinit`. Both predate
-  this audit session and are not yet diagnosed.
-- Eight test files report "Cannot compile" under the parallel test runner but
-  compile and pass when run individually, so that appears to be a runner
-  artifact rather than a code defect. This is worth confirming before relying
-  on a full-suite run as a gate.
+- `v` and `v -prod` both build, and the full test suite passes.
+- One toolchain caveat: `cli/actions_test.v` needs `v -g test`. Without `-g`
+  the V compiler segfaults inside its own `transform.Transformer.merge_worker`
+  while compiling `Config.format_config`, which walks a very large struct at
+  comptime. The same code compiles in a full-project build, so this only
+  affects small compilation units. The 16 tests pass under `-g`.
+- Test files that report "compilation failed" with no diagnostic are worth
+  treating as suspicious rather than as runner noise: two such reports this
+  session turned out to be a V compiler segfault, one of them masking a real
+  generic-instantiation defect in `SplitTree.new`.
