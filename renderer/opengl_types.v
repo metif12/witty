@@ -13,11 +13,10 @@ import opengl
 
 pub struct GLBuffer {
 pub mut:
-	id       u32
-	len      u32
-	capacity u32
-	target   GLBufferTarget = .array
-	usage    GLBufferUsage = .dynamic_draw
+	id     u32
+	len    usize
+	target GLBufferTarget = .array
+	usage  GLBufferUsage = .dynamic_draw
 }
 
 pub struct GLBufferOptions {
@@ -42,17 +41,47 @@ fn gl_buffer_usage(usage GLBufferUsage) opengl.BufferUsage {
 	}
 }
 
-pub fn GLBuffer.init(opts GLBufferOptions, len u32) !GLBuffer {
+pub fn GLBuffer.init(opts GLBufferOptions, len usize) !GLBuffer {
 	buffer := opengl.Buffer.create()!
-	binding := buffer.bind(gl_buffer_target(opts.target))!
-	defer {
-		binding.unbind()
+	binding := buffer.bind(gl_buffer_target(opts.target)) or {
+		buffer.destroy()
+		return err
 	}
-	binding.set_data_null(usize(len), gl_buffer_usage(opts.usage))!
+	binding.set_data_null(len, gl_buffer_usage(opts.usage)) or {
+		binding.unbind()
+		buffer.destroy()
+		return err
+	}
+	binding.unbind()
 	return GLBuffer{
 		id: buffer.id
-		len: 0
-		capacity: len
+		len: len
+		target: opts.target
+		usage: opts.usage
+	}
+}
+
+pub fn GLBuffer.init_fill[T](opts GLBufferOptions, data []T) !GLBuffer {
+	buffer := opengl.Buffer.create()!
+	binding := buffer.bind(gl_buffer_target(opts.target)) or {
+		buffer.destroy()
+		return err
+	}
+	byte_len := data.len * int($sizeof(T))
+	bytes := if byte_len == 0 {
+		[]u8{}
+	} else {
+		unsafe { voidptr(data.data).vbytes(byte_len) }
+	}
+	binding.set_data(bytes, gl_buffer_usage(opts.usage)) or {
+		binding.unbind()
+		buffer.destroy()
+		return err
+	}
+	binding.unbind()
+	return GLBuffer{
+		id: buffer.id
+		len: usize(byte_len)
 		target: opts.target
 		usage: opts.usage
 	}
@@ -66,40 +95,32 @@ pub fn (mut self GLBuffer) deinit() {
 	}
 	self.id = 0
 	self.len = 0
-	self.capacity = 0
 }
 
-pub fn (mut self GLBuffer) sync(data []u8) {
-	if self.id == 0 {
-		return
-	}
+pub fn (mut self GLBuffer) sync(data []u8) ! {
 	buffer := opengl.Buffer{
 		id: self.id
 	}
-	binding := buffer.bind(gl_buffer_target(self.target)) or { return }
+	binding := buffer.bind(gl_buffer_target(self.target))!
 	defer {
 		binding.unbind()
 	}
-	if u32(data.len) > self.capacity {
-		mut next := u32(data.len * 2)
-		if next == 0 {
-			next = 1
-		}
-		binding.set_data_null(usize(next), gl_buffer_usage(self.usage)) or { return }
-		self.capacity = next
+	required := usize(data.len)
+	if required > self.len {
+		self.len = required * 2
+		binding.set_data_null(self.len, gl_buffer_usage(self.usage))!
 	}
-	binding.set_sub_data(0, data) or { return }
-	self.len = u32(data.len)
+	binding.set_sub_data(0, data)!
 }
 
-pub fn (mut self GLBuffer) sync_values[T](values []T) {
+pub fn (mut self GLBuffer) sync_values[T](values []T) ! {
 	if values.len == 0 {
-		self.sync([]u8{})
+		self.sync([]u8{})!
 		return
 	}
 	byte_len := values.len * int($sizeof(T))
 	bytes := unsafe { voidptr(values.data).vbytes(byte_len) }
-	self.sync(bytes)
+	self.sync(bytes)!
 }
 
 // ============================================================
@@ -717,17 +738,17 @@ pub mut:
 }
 
 pub fn GLFrameState.init(api &OpenGLAPI, custom_shaders bool) !GLFrameState {
-	mut uniforms := GLBuffer.init(api.uniform_buffer_options(), u32($sizeof(GLUniforms)))!
-	mut cells := GLBuffer.init(api.fg_buffer_options(), u32($sizeof(CellText))) or {
+	mut uniforms := GLBuffer.init(api.uniform_buffer_options(), usize($sizeof(GLUniforms)))!
+	mut cells := GLBuffer.init(api.fg_buffer_options(), usize($sizeof(CellText))) or {
 		uniforms.deinit()
 		return err
 	}
-	mut cells_bg := GLBuffer.init(api.bg_buffer_options(), u32($sizeof(CellBg))) or {
+	mut cells_bg := GLBuffer.init(api.bg_buffer_options(), usize($sizeof(CellBg))) or {
 		cells.deinit()
 		uniforms.deinit()
 		return err
 	}
-	mut bg_image_buffer := GLBuffer.init(api.bg_image_buffer_options(), u32($sizeof(BgImageBuffer))) or {
+	mut bg_image_buffer := GLBuffer.init(api.bg_image_buffer_options(), usize($sizeof(BgImageBuffer))) or {
 		cells_bg.deinit()
 		cells.deinit()
 		uniforms.deinit()
@@ -822,7 +843,7 @@ pub mut:
 }
 
 pub fn GLCustomShaderState.init(api &OpenGLAPI) !GLCustomShaderState {
-	mut uniforms := GLBuffer.init(api.uniform_buffer_options(), u32($sizeof(CustomShaderUniforms)))!
+	mut uniforms := GLBuffer.init(api.uniform_buffer_options(), usize($sizeof(CustomShaderUniforms)))!
 	mut front_texture := GLTexture.init(api.texture_options(), 1, 1, none) or {
 		uniforms.deinit()
 		return err

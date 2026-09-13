@@ -4,10 +4,14 @@ import macos
 
 fn test_metal_render_step_counts_retain_source_pointer_width() {
 	max_count := ~usize(0)
+	buffer := MetalBuffer{
+		len: max_count
+	}
 	step := MetalRenderStep{
 		vertex_count: max_count
 		instance_count: max_count
 	}
+	assert buffer.len == max_count
 	assert step.vertex_count == max_count
 	assert step.instance_count == max_count
 }
@@ -24,7 +28,9 @@ fn test_metal_buffer_sync_writes_native_buffer() {
 
 	buffer.sync([u8(1), 2, 3, 4])!
 
-	assert buffer.len == 8
+	// Metal queries the native allocation on every sync, so Ghostty retains
+	// the initialization length even when the underlying buffer grows.
+	assert buffer.len == 2
 	assert macos.metal_buffer_length(buffer.handle) == 8
 	assert read_metal_buffer(buffer, 4) == [u8(1), 2, 3, 4]
 }

@@ -1832,16 +1832,16 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 	self.update_custom_shader_uniforms_for_frame()!
 
 	gpu_uniforms := gl_uniforms(self.uniforms)
-	frame_state.uniforms.sync_values([gpu_uniforms])
-	frame_state.cells_bg.sync_values(self.cells.bg_cells)
+	frame_state.uniforms.sync_values([gpu_uniforms])!
+	frame_state.cells_bg.sync_values(self.cells.bg_cells)!
 	foreground := self.text_cells()
-	frame_state.cells.sync_values(foreground)
+	frame_state.cells.sync_values(foreground)!
 	if mut state := frame_state.custom_shader_state {
-		state.uniforms.sync_values([self.custom_shader_uniforms])
+		state.uniforms.sync_values([self.custom_shader_uniforms])!
 		frame_state.custom_shader_state = state
 	}
 	if frame_state.bg_image_buffer_modified != self.bg_image_buffer_modified {
-		frame_state.bg_image_buffer.sync_values([self.bg_image_buffer])
+		frame_state.bg_image_buffer.sync_values([self.bg_image_buffer])!
 		frame_state.bg_image_buffer_modified = self.bg_image_buffer_modified
 	}
 

@@ -21,7 +21,7 @@ pub mut:
 	// The options this buffer was initialized with.
 	opts MetalBufferOptions
 	// The number of elements currently stored in the buffer.
-	len u32
+	len usize
 }
 
 // MetalBufferOptions configures how a buffer is created.
@@ -33,11 +33,11 @@ pub:
 }
 
 // Initialize a buffer with the given length pre-allocated.
-pub fn MetalBuffer.init(opts MetalBufferOptions, len u32) !MetalBuffer {
+pub fn MetalBuffer.init(opts MetalBufferOptions, len usize) !MetalBuffer {
 	if opts.device == unsafe { nil } {
 		return error('Metal buffer requires a device')
 	}
-	handle := macos.metal_new_buffer_length(opts.device, usize(len), opts.resource_options.int_val())
+	handle := macos.metal_new_buffer_length(opts.device, len, opts.resource_options.int_val())
 	if handle == unsafe { nil } {
 		return error('Metal buffer allocation failed')
 	}
@@ -49,37 +49,23 @@ pub fn MetalBuffer.init(opts MetalBufferOptions, len u32) !MetalBuffer {
 }
 
 // Init the buffer filled with the given data.
-pub fn MetalBuffer.init_fill(opts MetalBufferOptions, data []u8) !MetalBuffer {
-	if data.len == 0 {
-		return MetalBuffer.init(opts, 0)
-	}
+pub fn MetalBuffer.init_fill[T](opts MetalBufferOptions, data []T) !MetalBuffer {
 	if opts.device == unsafe { nil } {
 		return error('Metal buffer requires a device')
 	}
-	handle := macos.metal_new_buffer_bytes(opts.device, data, opts.resource_options.int_val())
+	byte_len := usize(data.len) * usize($sizeof(T))
+	mut ptr := voidptr(unsafe { nil })
+	if data.len > 0 {
+		ptr = voidptr(data.data)
+	}
+	handle := macos.metal_new_buffer_raw(opts.device, ptr, byte_len, opts.resource_options.int_val())
 	if handle == unsafe { nil } {
 		return error('Metal buffer allocation failed')
 	}
 	return MetalBuffer{
 		handle: handle
 		opts: opts
-		len: u32(data.len)
-	}
-}
-
-pub fn MetalBuffer.init_value[T](opts MetalBufferOptions, value &T) !MetalBuffer {
-	if opts.device == unsafe { nil } {
-		return error('Metal buffer requires a device')
-	}
-	length := usize($sizeof(T))
-	handle := macos.metal_new_buffer_raw(opts.device, voidptr(value), length, opts.resource_options.int_val())
-	if handle == unsafe { nil } {
-		return error('Metal buffer allocation failed')
-	}
-	return MetalBuffer{
-		handle: handle
-		opts: opts
-		len: u32(length)
+		len: usize(data.len)
 	}
 }
 
@@ -116,10 +102,8 @@ fn (mut self MetalBuffer) sync_raw(data voidptr, req_bytes usize) ! {
 		new_len := req_bytes * 2
 		self.handle = macos.metal_new_buffer_length(self.opts.device, new_len, self.opts.resource_options.int_val())
 		if self.handle == unsafe { nil } {
-			self.len = 0
 			return error('Metal buffer reallocation failed')
 		}
-		self.len = u32(new_len)
 	}
 	if req_bytes == 0 {
 		return
@@ -678,17 +662,17 @@ pub mut:
 }
 
 pub fn MetalFrameState.init(api &MetalAPI, custom_shaders bool) !MetalFrameState {
-	mut uniforms := MetalBuffer.init(api.buffer_options(), u32($sizeof(MetalUniforms)))!
-	mut cells := MetalBuffer.init(api.buffer_options(), u32($sizeof(CellText))) or {
+	mut uniforms := MetalBuffer.init(api.buffer_options(), usize($sizeof(MetalUniforms)))!
+	mut cells := MetalBuffer.init(api.buffer_options(), usize($sizeof(CellText))) or {
 		uniforms.deinit()
 		return err
 	}
-	mut cells_bg := MetalBuffer.init(api.buffer_options(), u32($sizeof(CellBg))) or {
+	mut cells_bg := MetalBuffer.init(api.buffer_options(), usize($sizeof(CellBg))) or {
 		cells.deinit()
 		uniforms.deinit()
 		return err
 	}
-	mut bg_image_buffer := MetalBuffer.init(api.buffer_options(), u32($sizeof(BgImageBuffer))) or {
+	mut bg_image_buffer := MetalBuffer.init(api.buffer_options(), usize($sizeof(BgImageBuffer))) or {
 		cells_bg.deinit()
 		cells.deinit()
 		uniforms.deinit()
@@ -788,7 +772,7 @@ pub mut:
 }
 
 pub fn MetalCustomShaderState.init(api &MetalAPI) !MetalCustomShaderState {
-	mut uniforms := MetalBuffer.init(api.buffer_options(), u32($sizeof(CustomShaderUniforms)))!
+	mut uniforms := MetalBuffer.init(api.buffer_options(), usize($sizeof(CustomShaderUniforms)))!
 	mut front_texture := MetalTexture.init(api.custom_shader_texture_options(), 1, 1, none) or {
 		uniforms.deinit()
 		return err

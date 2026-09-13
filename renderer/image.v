@@ -1123,7 +1123,7 @@ pub fn (mut self ImageRenderState) draw(api &MetalAPI, pipeline MetalPipeline, m
 				f32(placement.source_width), f32(placement.source_height)]!
 			dest_size: [f32(placement.width), f32(placement.height)]!
 		}
-		mut buffer := MetalBuffer.init_value(api.buffer_options(), &vertex) or { continue }
+		mut buffer := MetalBuffer.init_fill(api.buffer_options(), [vertex]) or { continue }
 		pass.step(MetalRenderStep{
 			pipeline: pipeline
 			buffers: [buffer.handle]
@@ -1164,10 +1164,7 @@ pub fn (mut self ImageRenderState) draw_opengl(api &OpenGLAPI, pipeline GLPipeli
 				f32(placement.source_width), f32(placement.source_height)]!
 			dest_size: [f32(placement.width), f32(placement.height)]!
 		}
-		mut buffer := GLBuffer.init(api.image_buffer_options(), u32($sizeof(ImageVertex))) or {
-			continue
-		}
-		buffer.sync_values([vertex])
+		mut buffer := GLBuffer.init_fill(api.image_buffer_options(), [vertex]) or { continue }
 		pass.step(GLRenderStep{
 			pipeline: pipeline
 			buffers: [buffer]

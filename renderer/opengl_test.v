@@ -19,10 +19,14 @@ fn test_render_pass_tags_and_counts_match_source_contract() {
 	assert u8(GLVertexStepFunction.per_instance) == 2
 
 	max_count := ~usize(0)
+	buffer := GLBuffer{
+		len: max_count
+	}
 	draw := GLDraw{
 		vertex_count: max_count
 		instance_count: max_count
 	}
+	assert buffer.len == max_count
 	assert draw.vertex_count == max_count
 	assert draw.instance_count == max_count
 }
