@@ -218,6 +218,8 @@ below exist. Earlier versions of this document overstated the completed review.
 | renderer Metal API entry points | Five graphics-API methods the renderer calls on every backend were missing from Metal, so the renderer reached past the API and open-coded them. Most consequentially, nothing ever created the per-frame `NSAutoreleasePool` that the source brackets every `drawFrame` with, so autoreleased Objective-C objects accumulated for the lifetime of the renderer thread. | Add `draw_frame_start`/`draw_frame_end` backed by a new `macos.AutoreleasePool`, plus `loop_enter`, `init_shaders`, and the no-op `present_last_target` that marks the skipped-redraw path, and route the renderer through all five. |
 | renderer Metal drawable path | The Metal backend renders into an IOSurface-backed target and never acquires a `CAMetalDrawable`, but an earlier drawable-based presentation path survived beside it: `next_drawable`, `create_command_buffer`, and `present_and_commit` on the API, their Objective-C wrappers, and the single-attachment render-pass descriptor builder the multi-attachment one replaced. None had a caller; none exists in the source. | Remove the entire path, along with the load/store action constants it was the last user of. |
 | renderer buffer array-list sync | Both backends' buffer wrappers omitted `syncFromArrayLists`, which copies a set of per-row lists straight into the mapped GPU buffer and returns the item count. The renderer instead summed the row lengths, allocated a flat array, and copied every foreground text cell into it on every frame, in both draw paths. Metal's buffer options also carried defaults (the source requires them) and its constructors pre-checked a nil device. | Add the method to both buffer wrappers, call it directly on `cells.fg_rows.lists` from both draw paths and take the draw instance count from its result, and restore Metal's required options without the source-external pre-checks. OpenGL's options do default in the source and were left alone. |
+| renderer Metal layer wrapper | The translated `IOSurfaceLayer` wrapper was never used: the API kept the layer as a bare handle and called the four Objective-C layer functions directly, so the wrapper existed only as a type one test constructed. `present` also pre-checked a nil layer, which the source has no need for because its layer always exists. | Make `MetalAPI.layer` the wrapper (absent for the off-screen API), route init/deinit/`loop_enter`/`present`/`surface_size` through it, replace the `owns_layer` flag and the nil pre-check with the optional, and stop the wrapper's methods mutating their receiver. |
+| renderer Metal postprocess shader reporting | A custom shader that loaded but failed to compile was discarded silently; the source logs a warning before falling back to no postprocess shaders, so a broken shader gave the user no diagnostic at all. The shader set also pre-checked a nil device. | Restore the warning on postprocess initialization failure and remove the source-external pre-check. |
 
 ## Focused behavior reviewed
 
@@ -238,7 +240,10 @@ hyperlink, clipboard, change_window_*, report_pwd, rxvt, mouse_shape,
 kitty_text_sizing. input: kitty (80/80),
 keycodes (243/243), command, binding (83-tag order), key (logic), Link.
 kitty: graphics_command, graphics_unicode, graphics execution/storage. renderer:
-cell, cursor, size, row, Atlas, shader cell layouts. datastruct: CircBuf,
+cell, cursor, size, row, Atlas, shader cell layouts, and the Metal
+wrappers api/buffer/Pipeline/RenderPass/Sampler/Target/Texture/IOSurfaceLayer/
+shaders (pipeline table, vertex attributes, and the Uniforms/CellText/CellBg/
+Image/BgImage ABI structs). Metal `Frame` remains uncertified; see below. datastruct: CircBuf,
 ArrayListCollection. ssh: cache Entry/DiskCache. tmux: control, layout, output.
 termio: exec, shell_integration, stream_handler. simd: index_of, base64, vt.
 root: quirks, build_config,
@@ -332,6 +337,12 @@ an item here does not mean its full module has been certified yet.
   process-global table of opaque core callbacks. This bridge is source-external
   architecture, even where each callback delegates to the translated core
   implementation.
+- **Metal shader library build step:** Ghostty's build compiles the `.metal`
+  sources into a `ghostty_metallib` archive that `initLibrary` loads with
+  `newLibraryWithData:`. Witty embeds the `.metal` source and compiles it at
+  runtime with `newLibraryWithSource:`, so shader syntax errors surface at
+  startup rather than at build time, and every launch pays the compile cost.
+
 - **Metal buffer growth size:** Ghostty's `Buffer(T).sync` computes
   `req_bytes = len * @sizeOf(T)` and then reallocates `req_bytes * 2 *
   @sizeOf(T)` bytes, multiplying by the element size a second time. Witty
