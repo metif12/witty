@@ -381,7 +381,7 @@ pub fn (mut self GridSetDerivedConfig) deinit() {
 // GridSetFontStyleConfig mirrors the config FontStyle which can be
 // "default" (use the face's own style name) or "false" (disabled) or
 // a specific style name string.
-pub enum GridSetFontStyleKind {
+pub enum GridSetFontStyleKind as u8 {
 	default_
 	false_
 	name
@@ -604,10 +604,8 @@ pub fn (self &GridSetKey) hashcode() u64 {
 
 	// Hash metric modifier values
 	if self.metric_modifiers.count() > 0 {
-		for mk in [MetricsKey.cell_width, .cell_height, .cell_baseline, .underline_position,
-			.underline_thickness, .strikethrough_position, .strikethrough_thickness,
-			.overline_position, .overline_thickness, .box_thickness, .cursor_thickness,
-			.cursor_height, .icon_height] {
+		$for enum_value in MetricsKey.values {
+			mk := enum_value.value
 			if m := self.metric_modifiers.get(mk) {
 				hasher.put_u8(u8(mk))
 				m.hash_into(mut hasher)
@@ -624,7 +622,7 @@ pub fn (self &GridSetKey) hashcode() u64 {
 
 // MetricsKey is an enum of all the available metrics keys that
 // can be modified by metric modifiers.
-pub enum MetricsKey {
+pub enum MetricsKey as u8 {
 	cell_width
 	cell_height
 	cell_baseline
@@ -638,6 +636,10 @@ pub enum MetricsKey {
 	cursor_thickness
 	cursor_height
 	icon_height
+	icon_height_single
+	face_width
+	face_height
+	face_y
 }
 
 // ============================================================

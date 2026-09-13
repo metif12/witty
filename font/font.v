@@ -1288,7 +1288,7 @@ pub fn (c Constraint) does_anything() bool {
 }
 
 // ConstraintSize specifies how a glyph should be sized.
-pub enum ConstraintSize {
+pub enum ConstraintSize as u8 {
 	// Don't change the size of this glyph.
 	none_
 	// Scale the glyph down if needed to fit within the bounds,
@@ -1309,7 +1309,7 @@ pub enum ConstraintSize {
 }
 
 // ConstraintAlign specifies how a glyph should be aligned.
-pub enum ConstraintAlign {
+pub enum ConstraintAlign as u8 {
 	// Don't move the glyph on this axis.
 	none_
 	// Move the glyph so that its leading (bottom/left)
@@ -1327,7 +1327,7 @@ pub enum ConstraintAlign {
 }
 
 // ConstraintHeight specifies what height metric to use.
-pub enum ConstraintHeight {
+pub enum ConstraintHeight as u8 {
 	// Use the full line height of the primary face for
 	// constraining this glyph.
 	cell

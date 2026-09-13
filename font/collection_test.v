@@ -2,6 +2,15 @@ module font
 
 import math
 
+fn test_collection_tag_layouts_and_source_ordinals() {
+	assert sizeof(SizeAdjustment) == 1
+	assert [SizeAdjustment.none_, .ic_width, .ex_height, .cap_height, .line_height].map(u8(it)) == [u8(0),
+		1, 2, 3, 4]
+	assert sizeof(PresentationModeKind) == 1
+	assert [PresentationModeKind.explicit_, .default_, .any].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(PresentationMode) == 2
+}
+
 // Tests for Collection (translated from ghostty/src/font/Collection.zig).
 
 fn collection_test_options(lib Library, points f32) LoadOptions {

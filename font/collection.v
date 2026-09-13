@@ -357,7 +357,7 @@ module font
 
 // SizeAdjustment specifies how to adjust the size of a face relative
 // to the primary face. This functions like the CSS font-size-adjust property.
-pub enum SizeAdjustment {
+pub enum SizeAdjustment as u8 {
 	// Don't adjust the size for this face, use the original point size.
 	none_
 	// Match ideograph character width with the primary face.
@@ -375,7 +375,7 @@ pub enum SizeAdjustment {
 // ============================================================
 
 // PresentationModeKind identifies the type of presentation matching.
-pub enum PresentationModeKind {
+pub enum PresentationModeKind as u8 {
 	// The codepoint has an explicit presentation (VS15/VS16).
 	explicit_
 	// The codepoint has no explicit presentation; use UCD default.

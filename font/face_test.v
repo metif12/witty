@@ -1,5 +1,16 @@
 module font
 
+fn test_face_constraint_tag_layouts_and_source_ordinals() {
+	assert sizeof(ConstraintSize) == 1
+	assert [ConstraintSize.none_, .fit, .cover, .fit_cover1, .stretch].map(u8(it)) == [u8(0),
+		1, 2, 3, 4]
+	assert sizeof(ConstraintAlign) == 1
+	assert [ConstraintAlign.none_, .start, .end_, .center, .center1].map(u8(it)) == [u8(0),
+		1, 2, 3, 4]
+	assert sizeof(ConstraintHeight) == 1
+	assert [ConstraintHeight.cell, .icon].map(u8(it)) == [u8(0), 1]
+}
+
 fn test_freetype_load_flags_packed_layout_matches_ghostty() {
 	assert sizeof(FreetypeLoadFlags) == 1
 	assert FreetypeLoadFlags{}.int_val() == 0x19

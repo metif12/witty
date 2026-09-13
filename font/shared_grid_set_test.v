@@ -3,6 +3,22 @@ module font
 // Tests for SharedGridSet.
 // Translated from ghostty/src/font/SharedGridSet.zig tests.
 
+fn test_gridset_local_tag_layouts_and_source_ordinals() {
+	assert sizeof(GridSetFontStyleKind) == 1
+	assert [GridSetFontStyleKind.default_, .false_, .name].map(u8(it)) == [u8(0), 1, 2]
+
+	assert sizeof(MetricsKey) == 1
+	mut metric_count := 0
+	$for enum_value in MetricsKey.values {
+		assert u8(enum_value.value) == u8(metric_count)
+		metric_count++
+	}
+	assert metric_count == 17
+	assert u8(MetricsKey.cell_width) == 0
+	assert u8(MetricsKey.icon_height) == 12
+	assert u8(MetricsKey.face_y) == 16
+}
+
 fn test_gridset_key_init() {
 	cfg := GridSetDerivedConfig{}
 	mut k := GridSetKey.init(&cfg, DesiredSize{ points: 12 })
