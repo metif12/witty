@@ -348,6 +348,22 @@ an item here does not mean its full module has been certified yet.
   process-global table of opaque core callbacks. This bridge is source-external
   architecture, even where each callback delegates to the translated core
   implementation.
+- **GTK UI definition pipeline:** Ghostty defines its GTK widget trees in 21
+  Blueprint files (about 1,400 lines of `.blp`), which `build/blueprint.zig`
+  compiles to GTK `.ui` XML and `build/gresource.zig` embeds through
+  `glib-compile-resources`; the classes then call `gtk_widget_init_template`.
+  Witty has no `.blp` or `.ui` files and neither build helper, and instead
+  constructs every widget tree programmatically in V. The resulting widget
+  graphs are intended to match, but the UI is not a translation of the
+  Blueprint sources and cannot be diffed against them.
+
+- **GTK class Common mixin:** `class.zig` exposes a `Common(Self, Private)`
+  generic supplying each GObject class its upcast, ref/refSink/unref, and
+  private-data helpers from one place. Witty re-implements those helpers
+  per class, noting the correspondence in comments, because V has no
+  equivalent comptime type-returning mixin. Behaviour is intended to match
+  per class, but there is no single shared implementation to certify.
+
 - **Metal shader library build step:** Ghostty's build compiles the `.metal`
   sources into a `ghostty_metallib` archive that `initLibrary` loads with
   `newLibraryWithData:`. Witty embeds the `.metal` source and compiles it at
