@@ -101,9 +101,9 @@ pub mut:
 	// Thread-local data for the exec implementation.
 	thread_data ExecThreadData
 	// The read thread handle (V thread).
-	read_thread ?thread = none
+	read_thread ?thread
 	// The process-exit watcher thread handle (V thread).
-	exit_thread ?thread = none
+	exit_thread ?thread
 }
 
 // Initialize the exec state. This will NOT start it, this only sets

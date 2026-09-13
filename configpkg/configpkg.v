@@ -4480,8 +4480,9 @@ pub fn (mut k Keybinds) parse_cli(input_value string) ! {
 				return
 			}
 
-			// Parse and add the binding to the table.
-			mut t := k.tables[table_name]
+			// Parse and add the binding to the table. The get-or-create
+			// above guarantees the entry exists.
+			mut t := k.tables[table_name] or { inputpkg.Set{} }
 			t.parse_and_put(binding)!
 			k.tables[table_name] = t
 			return
