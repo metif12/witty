@@ -2,6 +2,7 @@ module renderer
 
 import sync
 import time
+import configpkg
 
 struct RedrawCapture {
 mut:
@@ -109,6 +110,15 @@ fn test_renderer_thread_flags_match_source_defaults() {
 	assert flags.visible()
 	assert flags.focused()
 	assert sizeof(ThreadFlags) == 1
+}
+
+fn test_renderer_thread_derived_config_retains_shader_animation_type() {
+	mut config := configpkg.Config.default_config()
+	for animation in [configpkg.CustomShaderAnimation.false_, .true_, .always] {
+		config.custom_shader_animation = animation
+		derived := ThreadDerivedConfig.init(&config)
+		assert derived.custom_shader_animation == animation
+	}
 }
 
 fn test_renderer_thread_disabled_draw_keeps_armed_completion() {

@@ -194,26 +194,12 @@ const renderer_mailbox_capacity = 64
 // that is needed by the renderer thread.
 pub struct ThreadDerivedConfig {
 pub mut:
-	custom_shader_animation CustomShaderAnimation
-}
-
-// Custom shader animation mode.
-pub enum CustomShaderAnimation {
-	// Always animate custom shaders.
-	always
-	// Animate only when focused.
-	true_
-	// Never animate custom shaders.
-	false_
+	custom_shader_animation configpkg.CustomShaderAnimation
 }
 
 pub fn ThreadDerivedConfig.init(config &configpkg.Config) ThreadDerivedConfig {
 	return ThreadDerivedConfig{
-		custom_shader_animation: match config.custom_shader_animation {
-			.false_ { CustomShaderAnimation.false_ }
-			.true_ { CustomShaderAnimation.true_ }
-			.always { CustomShaderAnimation.always }
-		}
+		custom_shader_animation: config.custom_shader_animation
 	}
 }
 
