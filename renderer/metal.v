@@ -333,19 +333,62 @@ pub enum MetalPrimitiveType as u64 {
 	triangle_strip = 4
 }
 
-// Metal vertex formats used by the renderer.
+// Metal vertex formats.
 pub enum MetalVertexFormat as u64 {
-	uchar4           = 3
-	uchar4normalized = 9
-	ushort2          = 13
-	short2           = 16
-	float            = 28
-	float2           = 29
-	float3           = 30
-	float4           = 31
-	uint             = 36
-	uint2            = 37
-	uchar            = 45
+	invalid               = 0
+	uchar2                = 1
+	uchar3                = 2
+	uchar4                = 3
+	char2                 = 4
+	char3                 = 5
+	char4                 = 6
+	uchar2normalized      = 7
+	uchar3normalized      = 8
+	uchar4normalized      = 9
+	char2normalized       = 10
+	char3normalized       = 11
+	char4normalized       = 12
+	ushort2               = 13
+	ushort3               = 14
+	ushort4               = 15
+	short2                = 16
+	short3                = 17
+	short4                = 18
+	ushort2normalized     = 19
+	ushort3normalized     = 20
+	ushort4normalized     = 21
+	short2normalized      = 22
+	short3normalized      = 23
+	short4normalized      = 24
+	half2                 = 25
+	half3                 = 26
+	half4                 = 27
+	float                 = 28
+	float2                = 29
+	float3                = 30
+	float4                = 31
+	int_                  = 32
+	int2                  = 33
+	int3                  = 34
+	int4                  = 35
+	uint                  = 36
+	uint2                 = 37
+	uint3                 = 38
+	uint4                 = 39
+	int1010102normalized  = 40
+	uint1010102normalized = 41
+	uchar4normalized_bgra = 42
+	uchar                 = 45
+	char_                 = 46
+	ucharnormalized       = 47
+	charnormalized        = 48
+	ushort                = 49
+	short                 = 50
+	ushortnormalized      = 51
+	shortnormalized       = 52
+	half                  = 53
+	floatrg11b10          = 54
+	floatrgb9e5           = 55
 }
 
 // Metal blend factor.
