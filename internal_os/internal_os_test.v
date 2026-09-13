@@ -2,6 +2,12 @@ module internal_os
 
 import os
 
+fn test_desktop_environment_tag_layout_matches_source() {
+	assert sizeof(DesktopEnvironment) == 1
+	assert [DesktopEnvironment.gnome, .macos, .other, .windows].map(u8(it)) == [u8(0), 1, 2,
+		3]
+}
+
 fn test_pipe_returns_distinct_fds() {
 	fds := pipe() or { panic(err) }
 	defer {

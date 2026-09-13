@@ -8,6 +8,7 @@ import renderer
 import configpkg
 import input
 import osc
+import openurl
 
 // Target is the target for an action. This is generally the thing that had
 // focus while the action was made but the concept of "focus" is not guaranteed
@@ -440,16 +441,7 @@ pub:
 
 // OpenUrlKind identifies the type of the data at the URL.
 // Sync with: ghostty_action_open_url_kind_e
-pub enum OpenUrlKind as i32 {
-	// The type is unknown. Apprts should open the URL in the most generic
-	// way possible (e.g., open on macOS, xdg-open on Linux).
-	unknown
-	// The URL is known to be a text file. The apprt should try to open
-	// the URL in a text editor or viewer.
-	text
-	// The URL is known to contain HTML content.
-	html
-}
+pub type OpenUrlKind = openurl.Kind
 
 // CloseTabMode controls which tab(s) to close.
 // Sync with ghostty_action_close_tab_mode_e in ghostty.h

@@ -188,6 +188,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | tmux viewer protocol state | Notifications for entering tmux control mode were converted from Ghostty's `unreachable` invariant into a graceful defunct transition in all three post-entry states; the four-state enum also used default-width storage. | Make an impossible repeated enter fail immediately in each source state and store the translated state tag in one byte. |
 | crash report iteration | `ReportIterator.next()` silently skipped metadata errors and returned the same optional absence as a clean end of iteration; its three-case crash-thread tag also used default-width storage. | Preserve Ghostty's fallible optional result with an explicit V wrapper, propagate the native metadata error, skip only confirmed non-files, and use byte-backed thread-kind values. |
 | standalone internal tags | Crash-envelope item type, detected file type, theme search location, and tripwire reset mode were source-inferred enums retained with V's default 32-bit storage. | Give all four values byte backing and verify their complete source declaration order. |
+| OS URL/desktop tags | The desktop-environment tag used default 32-bit storage. The OS URL opener also redeclared the C-backed application URL kind as an unrelated enum, forcing core and GTK to maintain handwritten three-way projection switches absent from Ghostty. | Byte-back the inferred desktop tag, retain one cycle-free signed 32-bit URL kind aliased at the application boundary, and pass it unchanged through both live opener paths. |
 
 ## Focused behavior reviewed
 
@@ -287,8 +288,10 @@ an item here does not mean its full module has been certified yet.
   `stop_requested` boolean, so its scheduling, failure, and drain behavior is
   source-external.
 - **Source placement:** V module-cycle constraints keep the translated shaper
-  run algorithm in `font/font.v` while `font/shaper/run.v` exposes aliases.
-  This is behaviorally implemented but not a file-for-file layout match.
+  run algorithm in `font/font.v` while `font/shaper/run.v` exposes aliases, and
+  place `apprt.action.OpenUrl.Kind` in the cycle-free `openurl` leaf so both
+  `apprt` and `internal_os` can consume one canonical type. These are
+  behaviorally implemented but not file-for-file layout matches.
 - **Runtime bridge representation:** Ghostty selects the concrete apprt types at
   compile time. Witty's merged V module boundary instead adds callbacks to its
   runtime-neutral `apprt.RuntimeApp` and `apprt.RuntimeSurface` and uses a

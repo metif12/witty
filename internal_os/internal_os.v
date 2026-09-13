@@ -5,6 +5,7 @@ import crypto.rand as crypto_rand
 import encoding.base64
 import log
 import zig_fmt
+import openurl
 
 // C interop declarations for pipes and resource limits.
 #include <unistd.h>
@@ -45,17 +46,10 @@ mut:
 	rlim_max u64
 }
 
-// OpenKind is the content hint supplied to the platform URL opener.
-pub enum OpenKind {
-	unknown
-	text
-	html
-}
-
 // open_command_for_os translates the platform switch in os/open.zig. Keeping
 // the selection separate also makes every target's exact argv testable on one
 // host.
-fn open_command_for_os(os_name string, kind OpenKind, url string) !(string, []string) {
+fn open_command_for_os(os_name string, kind openurl.Kind, url string) !(string, []string) {
 	return match os_name {
 		'linux', 'freebsd' { 'xdg-open', [url] }
 		'windows' { 'rundll32', ['url.dll,FileProtocolHandler', url] }
@@ -76,7 +70,7 @@ pub fn open(url string) ! {
 }
 
 // open_kind opens a URL or path with the source content-type hint.
-pub fn open_kind(kind OpenKind, url string) ! {
+pub fn open_kind(kind openurl.Kind, url string) ! {
 	os_name := $if macos { 'macos' } $else $if linux { 'linux' } $else $if freebsd { 'freebsd' } $else $if windows { 'windows' } $else { 'unsupported' }
 	executable, args := open_command_for_os(os_name, kind, url)!
 	mut process := os.new_process(executable)

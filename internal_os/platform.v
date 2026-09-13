@@ -4,7 +4,7 @@ import ascii
 import os
 
 // DesktopEnvironment is the set of desktop environments Ghostty distinguishes.
-pub enum DesktopEnvironment {
+pub enum DesktopEnvironment as u8 {
 	gnome
 	macos
 	other
