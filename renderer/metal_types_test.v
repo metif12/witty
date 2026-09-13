@@ -397,3 +397,25 @@ fn test_metal_atlas_texture_options_match_atlas_layout() ! {
 		assert err.msg().contains('unsupported')
 	}
 }
+
+fn test_metal_draw_frame_brackets_an_autorelease_pool() ! {
+	mut api := MetalAPI.init()!
+	defer {
+		api.deinit()
+	}
+
+	assert api.autorelease_pool == none
+	api.draw_frame_start()
+	assert api.autorelease_pool != none
+	api.draw_frame_end()
+	assert api.autorelease_pool == none
+
+	// Each frame gets its own pool.
+	api.draw_frame_start()
+	assert api.autorelease_pool != none
+	api.draw_frame_end()
+	assert api.autorelease_pool == none
+
+	// Metal has no last target to re-present.
+	api.present_last_target()!
+}

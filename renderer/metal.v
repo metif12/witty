@@ -27,6 +27,9 @@ pub mut:
 	// The maximum 2D texture width and height supported by the device.
 	max_texture_size u32
 
+	// The autorelease pool held for the duration of a frame draw.
+	autorelease_pool ?macos.AutoreleasePool
+
 	// True when this instance created and therefore owns device and queue.
 	owns_handles bool
 	// True when this instance owns its IOSurface presentation layer.
@@ -172,6 +175,47 @@ pub fn (mut self MetalAPI) deinit() {
 	self.layer = unsafe { nil }
 	self.owns_handles = false
 	self.owns_layer = false
+}
+
+// loop_enter installs the display callback the Metal layer invokes when the
+// compositor is ready for a new frame. Called by renderer.Thread when it
+// starts the main loop.
+pub fn (self &MetalAPI) loop_enter(r &Renderer) {
+	if self.layer == unsafe { nil } {
+		return
+	}
+	macos.metal_iosurface_layer_set_display_callback(self.layer, voidptr(renderer_metal_layer_display_callback),
+		voidptr(r))
+}
+
+// draw_frame_start performs the actions taken before doing anything in
+// `draw_frame`.
+//
+// Right now we use this to start an AutoreleasePool.
+pub fn (mut self MetalAPI) draw_frame_start() {
+	assert self.autorelease_pool == none
+	self.autorelease_pool = macos.AutoreleasePool.init()
+}
+
+// draw_frame_end performs the actions taken after `draw_frame` is done.
+//
+// Right now we use this to end our AutoreleasePool.
+pub fn (mut self MetalAPI) draw_frame_end() {
+	assert self.autorelease_pool != none
+	mut pool := self.autorelease_pool or { return }
+	pool.deinit()
+	self.autorelease_pool = none
+}
+
+// init_shaders initializes the built-in and optional post-process pipelines.
+pub fn (self &MetalAPI) init_shaders(custom_shaders []string) !MetalShaders {
+	return MetalShaders.init(self.device, custom_shaders, self.target_pixel_format())
+}
+
+// present_last_target presents the last presented target again. (noop for
+// Metal)
+pub fn (self &MetalAPI) present_last_target() ! {
+	_ = self
 }
 
 // next_drawable gets the next drawable from the Metal layer.

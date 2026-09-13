@@ -679,6 +679,29 @@ pub fn home_directory_for_current_user() ?string {
 	return objc_utf8_string(home_path)
 }
 
+// AutoreleasePool wraps an NSAutoreleasePool. Objects autoreleased while the
+// pool is alive are released when it is drained.
+pub struct AutoreleasePool {
+mut:
+	pool ObjId = unsafe { nil }
+}
+
+// AutoreleasePool.init pushes a new pool onto the current thread's stack.
+pub fn AutoreleasePool.init() AutoreleasePool {
+	return AutoreleasePool{
+		pool: msg_id(alloc('NSAutoreleasePool'), 'init')
+	}
+}
+
+// deinit drains the pool, releasing everything autoreleased into it.
+pub fn (mut self AutoreleasePool) deinit() {
+	if is_nil(self.pool) {
+		return
+	}
+	msg_void(self.pool, 'drain')
+	self.pool = unsafe { nil }
+}
+
 // process_arguments returns NSProcessInfo.processInfo.arguments. Cocoa owns
 // the array and NSString values, so clone each UTF-8 projection for the caller.
 pub fn process_arguments() []string {

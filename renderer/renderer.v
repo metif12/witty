@@ -964,7 +964,7 @@ fn Renderer.init_metal(opts RendererOpts) !Renderer {
 		eprintln('renderer: error loading custom shaders: ${err}')
 		[]string{}
 	}
-	mut shaders := MetalShaders.init(metal.device, post_shaders, metal.target_pixel_format()) or {
+	mut shaders := metal.init_shaders(post_shaders) or {
 		metal.deinit()
 		font_shaper.deinit()
 		return err
@@ -1542,6 +1542,11 @@ pub fn (mut self Renderer) draw_frame(sync_ bool) ! {
 }
 
 fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
+	self.metal.draw_frame_start()
+	defer {
+		self.metal.draw_frame_end()
+	}
+
 	mut surface_width, mut surface_height := self.metal.surface_size()
 	// A MetalAPI created without a view is useful for off-screen rendering and
 	// tests. In that case the configured screen size is the render-target size.
@@ -1563,6 +1568,10 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	needs_redraw := size_changed || self.cells_rebuilt || self.has_animations() || sync_
 
 	if !needs_redraw {
+		// We still need to present the last target again, because the apprt
+		// may be swapping buffers and display an outdated frame if we don't
+		// draw something new.
+		self.metal.present_last_target()!
 		return
 	}
 	self.cells_rebuilt = false
@@ -1576,7 +1585,7 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 			eprintln('renderer: error loading custom shaders: ${err}')
 			[]string{}
 		}
-		mut replacement := MetalShaders.init(self.metal.device, post_shaders, self.metal.target_pixel_format())!
+		mut replacement := self.metal.init_shaders(post_shaders)!
 		self.shaders.deinit()
 		self.shaders = replacement
 		self.has_custom_shaders = post_shaders.len > 0
@@ -3252,9 +3261,8 @@ pub fn (mut r Renderer) loop_enter(render_thread &RendererThread) ! {
 	if r.backend != .metal {
 		return
 	}
-	if r.metal.layer != unsafe { nil } {
-		macos.metal_iosurface_layer_set_display_callback(r.metal.layer, voidptr(renderer_metal_layer_display_callback), voidptr(&r))
-	}
+	// If our API has to do things on loop enter, let it.
+	r.metal.loop_enter(&r)
 	if r.display_link == unsafe { nil } {
 		return
 	}
