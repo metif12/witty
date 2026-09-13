@@ -33,18 +33,10 @@ pub const opengl_custom_shader_y_is_down = false
 
 // init constructs the API state without touching an OpenGL context. The
 // context belongs to the application runtime and may not be current when the
-// renderer itself is allocated. The optional argument preserves the old
-// zero-argument V API while accepting Ghostty's renderer options.
-pub fn OpenGLAPI.init(options ...RendererOptions) !OpenGLAPI {
-	if options.len > 1 {
-		return error('OpenGLAPI.init accepts at most one RendererOptions value')
-	}
-	mut blending := configpkg.AlphaBlending.native
-	if options.len == 1 {
-		blending = options[0].config.blending
-	}
+// renderer itself is allocated.
+pub fn OpenGLAPI.init(options RendererOptions) !OpenGLAPI {
 	return OpenGLAPI{
-		blending: blending
+		blending: options.config.blending
 	}
 }
 
@@ -164,7 +156,7 @@ pub fn (self &OpenGLAPI) surface_size() (u32, u32) {
 // init_shaders initializes the built-in and optional post-process pipelines.
 pub fn (self &OpenGLAPI) init_shaders(custom_shaders []string) !GLShaders {
 	_ = self
-	return GLShaders.init_with_sources(custom_shaders)
+	return GLShaders.init(custom_shaders)
 }
 
 // init_target creates an off-screen render target suitable for presentation.
@@ -296,33 +288,33 @@ pub fn (self &OpenGLAPI) image_texture_options(format ImageTextureFormat, srgb b
 // pixel layout. BGR is unsupported by the source backend.
 pub fn (self &OpenGLAPI) atlas_texture_options(format font.AtlasFormat) !GLTextureOptions {
 	_ = self
-	mut opts := GLTextureOptions{
-		target: .texture_rectangle
-		min_filter: .nearest
-		mag_filter: .nearest
-		wrap_s: .clamp_to_edge
-		wrap_t: .clamp_to_edge
-	}
-	match format {
+	return match format {
 		.grayscale {
-			opts = GLTextureOptions{
-				...opts
+			GLTextureOptions{
 				format: .red
 				internal_format: .red
+				target: .texture_rectangle
+				min_filter: .nearest
+				mag_filter: .nearest
+				wrap_s: .clamp_to_edge
+				wrap_t: .clamp_to_edge
 			}
 		}
 		.bgra {
-			opts = GLTextureOptions{
-				...opts
+			GLTextureOptions{
 				format: .bgra
 				internal_format: .srgba
+				target: .texture_rectangle
+				min_filter: .nearest
+				mag_filter: .nearest
+				wrap_s: .clamp_to_edge
+				wrap_t: .clamp_to_edge
 			}
 		}
 		.bgr {
 			return error('BGR font atlases are unsupported by OpenGL')
 		}
 	}
-	return opts
 }
 
 // init_atlas_texture initializes an empty texture matching the atlas. Atlas
@@ -333,7 +325,7 @@ pub fn (self &OpenGLAPI) init_atlas_texture(atlas &font.Atlas) !GLTexture {
 
 // begin_frame creates a frame that presents target on successful completion.
 pub fn (mut self OpenGLAPI) begin_frame(mut target GLTarget) !GLFrame {
-	return GLFrame.begin_for_target(mut self, mut target)
+	return GLFrame.begin(mut self, mut target)
 }
 
 // OpenGL texture target.

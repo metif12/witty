@@ -134,11 +134,7 @@ pub mut:
 	target  &GLTarget = unsafe { nil }
 }
 
-pub fn GLFrame.begin() !GLFrame {
-	return GLFrame{}
-}
-
-pub fn GLFrame.begin_for_target(mut api OpenGLAPI, mut target GLTarget) !GLFrame {
+pub fn GLFrame.begin(mut api OpenGLAPI, mut target GLTarget) !GLFrame {
 	return GLFrame{
 		api: unsafe { &api }
 		target: unsafe { &target }
@@ -166,7 +162,7 @@ pub enum GLRenderAttachmentKind as u8 {
 
 pub struct GLRenderAttachment {
 pub:
-	kind        GLRenderAttachmentKind
+	kind        GLRenderAttachmentKind @[required]
 	target      GLTarget
 	texture     GLTexture
 	clear_color ?[4]f32
@@ -180,19 +176,19 @@ pub mut:
 
 pub struct GLDraw {
 pub:
-	primitive      opengl.Primitive = .triangle_strip
-	vertex_count   usize = 4
+	primitive      opengl.Primitive @[required]
+	vertex_count   usize @[required]
 	instance_count usize = 1
 }
 
 pub struct GLRenderStep {
 pub:
-	pipeline GLPipeline
+	pipeline GLPipeline @[required]
 	uniforms ?GLBuffer
 	buffers  []GLBuffer
 	textures []GLTexture
 	samplers []GLSampler
-	draw     GLDraw
+	draw     GLDraw @[required]
 }
 
 pub fn GLRenderPass.begin(attachments []GLRenderAttachment) GLRenderPass {
@@ -339,8 +335,8 @@ pub mut:
 
 pub struct GLPipelineOptions {
 pub:
-	vertex_source    string
-	fragment_source  string
+	vertex_source    string @[required]
+	fragment_source  string @[required]
 	stride           usize
 	attributes       []GLVertexAttribute
 	step_function    GLVertexStepFunction = .per_vertex
@@ -371,16 +367,7 @@ pub:
 	offset      u32
 }
 
-pub fn GLPipeline.init() !GLPipeline {
-	vao := opengl.VertexArray.create()!
-	fbo := opengl.Framebuffer.create()!
-	return GLPipeline{
-		vao: vao.id
-		fbo: fbo.id
-	}
-}
-
-pub fn GLPipeline.init_with_sources(opts GLPipelineOptions) !GLPipeline {
+pub fn GLPipeline.init(opts GLPipelineOptions) !GLPipeline {
 	program := opengl.Program.create_vf(opts.vertex_source, opts.fragment_source)!
 	program_binding := program.use() or {
 		program.destroy()
@@ -502,10 +489,10 @@ pub mut:
 
 pub struct GLSamplerOptions {
 pub:
-	min_filter GLFilter = .linear
-	mag_filter GLFilter = .linear
-	wrap_s     GLWrapMode = .clamp_to_edge
-	wrap_t     GLWrapMode = .clamp_to_edge
+	min_filter GLFilter @[required]
+	mag_filter GLFilter @[required]
+	wrap_s     GLWrapMode @[required]
+	wrap_t     GLWrapMode @[required]
 }
 
 pub fn GLSampler.init(opts GLSamplerOptions) !GLSampler {
@@ -554,9 +541,9 @@ pub mut:
 
 pub struct GLTargetOptions {
 pub:
-	width           usize
-	height          usize
-	internal_format GLInternalFormat
+	width           usize @[required]
+	height          usize @[required]
+	internal_format GLInternalFormat @[required]
 }
 
 pub fn GLTarget.init(opts GLTargetOptions) !GLTarget {
@@ -612,13 +599,13 @@ pub mut:
 
 pub struct GLTextureOptions {
 pub:
-	format          GLTextureFormat = .rgba
-	internal_format GLInternalFormat = .rgba
-	target          GLTextureTarget = .texture_2d
-	min_filter      GLFilter = .nearest
-	mag_filter      GLFilter = .nearest
-	wrap_s          GLWrapMode = .clamp_to_edge
-	wrap_t          GLWrapMode = .clamp_to_edge
+	format          GLTextureFormat @[required]
+	internal_format GLInternalFormat @[required]
+	target          GLTextureTarget @[required]
+	min_filter      GLFilter @[required]
+	mag_filter      GLFilter @[required]
+	wrap_s          GLWrapMode @[required]
+	wrap_t          GLWrapMode @[required]
 }
 
 fn gl_texture_target(target GLTextureTarget) opengl.TextureTarget {
@@ -990,11 +977,7 @@ pub mut:
 	defunct        bool
 }
 
-pub fn GLShaders.init() !GLShaders {
-	return GLShaders.init_with_sources([])
-}
-
-pub fn GLShaders.init_with_sources(custom_shaders []string) !GLShaders {
+pub fn GLShaders.init(custom_shaders []string) !GLShaders {
 	mut shaders := GLShaders{}
 	shaders.bg_color = gl_builtin_pipeline(gl_full_screen_vertex_shader, gl_bg_color_fragment_shader_raw, [], 0, .per_vertex, false) or {
 		return err
@@ -1016,7 +999,7 @@ pub fn GLShaders.init_with_sources(custom_shaders []string) !GLShaders {
 		return err
 	}
 	for source in custom_shaders {
-		pipeline := GLPipeline.init_with_sources(GLPipelineOptions{
+		pipeline := GLPipeline.init(GLPipelineOptions{
 			vertex_source: gl_full_screen_vertex_shader
 			fragment_source: source
 		}) or {
@@ -1064,7 +1047,7 @@ fn expand_gl_shader(source string) string {
 }
 
 fn gl_builtin_pipeline(vertex_source string, fragment_source string, attributes []GLVertexAttribute, stride usize, step_function GLVertexStepFunction, blending_enabled bool) !GLPipeline {
-	return GLPipeline.init_with_sources(GLPipelineOptions{
+	return GLPipeline.init(GLPipelineOptions{
 		vertex_source: expand_gl_shader(vertex_source)
 		fragment_source: expand_gl_shader(fragment_source)
 		attributes: attributes

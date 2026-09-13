@@ -31,6 +31,7 @@ fn test_render_pass_tags_and_counts_match_source_contract() {
 		height: max_count
 	}
 	draw := GLDraw{
+		primitive: .triangle_strip
 		vertex_count: max_count
 		instance_count: max_count
 	}
@@ -44,7 +45,7 @@ fn test_render_pass_tags_and_counts_match_source_contract() {
 }
 
 fn test_opengl_init_does_not_require_a_current_context() {
-	default_api := OpenGLAPI.init()!
+	default_api := OpenGLAPI.init(RendererOptions{})!
 	assert default_api.blending == .native
 
 	linear_api := OpenGLAPI.init(RendererOptions{
