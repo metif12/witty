@@ -22,7 +22,7 @@ module gtk
 // user and closing windows/tabs/surfaces into one source of truth. Mirrors the
 // Zig `Target` enum (renamed `CloseTarget` here to avoid colliding with
 // apprt's target concept and to be self-documenting).
-pub enum CloseTarget {
+pub enum CloseTarget as i32 {
 	app
 	tab
 	window

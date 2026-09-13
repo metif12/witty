@@ -240,16 +240,9 @@ pub fn tab_get_type() GType {
 
 // --- CloseTabMode ---------------------------------------------------------
 
-// CloseTabMode mirrors `apprt.action.CloseTabMode`: which set of tabs the
-// tab.close action targets.
-pub enum CloseTabMode {
-	// Close only this tab.
-	this
-	// Close all tabs other than this one.
-	other
-	// Close all tabs to the right of this one.
-	right
-}
+// CloseTabMode is the canonical C-backed apprt action value consumed by the
+// source tab.close action.
+pub type CloseTabMode = apprt.CloseTabMode
 
 // --- Tab ------------------------------------------------------------------
 
@@ -575,6 +568,9 @@ pub fn (mut self Tab) action_close(mode CloseTabMode) {
 		.this { C.adw_tab_view_close_page(tab_view, page) }
 		.other { C.adw_tab_view_close_other_pages(tab_view, page) }
 		.right { C.adw_tab_view_close_pages_after(tab_view, page) }
+		else {
+			return
+		}
 	}
 }
 

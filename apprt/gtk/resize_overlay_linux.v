@@ -50,7 +50,7 @@ fn C.g_value_set_enum(value voidptr, v_enum int)
 
 // Align mirrors gtk.Align. Declared here (the first overlay file that needs
 // it); search_overlay_linux.v / key_state_overlay_linux.v reuse it.
-pub enum Align {
+pub enum Align as i32 {
 	fill
 	start
 	end

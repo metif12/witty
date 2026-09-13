@@ -93,7 +93,7 @@ const g_dbus_call_flags_none = 0
 
 // Method enumerates the two portal methods we invoke, in order. Mirrors the
 // Zig `Method` enum.
-pub enum Method {
+pub enum Method as u8 {
 	create_session
 	bind_shortcuts
 }

@@ -189,7 +189,7 @@ enum KdeSlideLocation as u32 {
 // KdeKwinServerDecorationMode mirrors
 // `org.KdeKwinServerDecorationManager.Mode`. Values match the KDE protocol:
 // None=0, Client=1, Server=2.
-pub enum KdeKwinServerDecorationMode {
+pub enum KdeKwinServerDecorationMode as u32 {
 	none_  = 0
 	client = 1
 	server = 2

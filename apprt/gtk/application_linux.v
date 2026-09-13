@@ -131,7 +131,7 @@ fn C.setenv(name &char, value &char, overwrite int) int
 // --- AdwColorScheme -------------------------------------------------------
 //
 // Mirrors `adw.ColorScheme`. Values match the AdwColorScheme C enum.
-pub enum AdwColorScheme {
+pub enum AdwColorScheme as i32 {
 	default_     = 0
 	force_light  = 1
 	prefer_light = 2
@@ -222,7 +222,7 @@ fn glib_log_writer_function(level u32, fields voidptr, n_fields usize, user_data
 // Mirrors the `quit_timer: union(enum) { off, active: c_uint, expired }` in the
 // Zig Private struct. We model the tagged union as a tag plus the active source
 // id.
-pub enum QuitTimerState {
+pub enum QuitTimerState as u8 {
 	off
 	active
 	expired
@@ -1526,12 +1526,7 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		.close_tab {
 			mut surface := surface_from_target(target) or { return false }
 			mut tab := tab_from_surface(surface) or { return false }
-			mode := match data.close_tab {
-				.this { CloseTabMode.this }
-				.other { CloseTabMode.other }
-				.right { CloseTabMode.right }
-			}
-			tab.action_close(mode)
+			tab.action_close(data.close_tab)
 			return true
 		}
 		.close_window {

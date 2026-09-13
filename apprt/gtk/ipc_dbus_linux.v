@@ -32,7 +32,7 @@ pub type GBytes = voidptr
 
 // GBusType enumerates the well-known message bus types. Mirrors GLib's
 // `GBusType`; we only use `.session`.
-pub enum GBusType {
+pub enum GBusType as i32 {
 	starter = -1
 	@none   = 0
 	system  = 1

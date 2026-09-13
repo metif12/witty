@@ -36,7 +36,7 @@ const g_binding_sync_create = int(1 << 1)
 // --- PolicyType -----------------------------------------------------------
 
 // PolicyType mirrors gtk.PolicyType (the scrollbar display policy).
-pub enum PolicyType {
+pub enum PolicyType as i32 {
 	always
 	automatic
 	never

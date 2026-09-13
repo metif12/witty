@@ -90,7 +90,7 @@ fn C.gtk_widget_get_realized(widget GtkWidget) bool
 
 // CommandDataKind mirrors the tag of the Zig `Private.CommandData` union
 // (regular vs jump).
-pub enum CommandDataKind {
+pub enum CommandDataKind as u8 {
 	regular
 	jump
 }
@@ -597,7 +597,7 @@ fn (self &CommandPalette) model_selected() u32 {
 fn (self &CommandPalette) emit_trigger(action input.Action) {
 	if !isnil(self.window) {
 		mut window := unsafe { self.window }
-		window.perform_input_action(action)
+		window.perform_binding_action(action)
 	}
 }
 

@@ -203,7 +203,7 @@ fn C.g_signal_handlers_disconnect_matched(instance voidptr, mask u32, signal_id 
 // --- Toolbar style ---------------------------------------------------------
 
 // AdwToolbarStyle mirrors `adw.ToolbarStyle`.
-pub enum AdwToolbarStyle {
+pub enum AdwToolbarStyle as i32 {
 	flat
 	raised
 	raised_border
@@ -420,7 +420,7 @@ pub fn window_get_type() GType {
 // --- SelectTab ------------------------------------------------------------
 
 // SelectTabKind mirrors the tag of the Zig `SelectTab` union.
-pub enum SelectTabKind {
+pub enum SelectTabKind as u8 {
 	previous
 	next
 	last
@@ -1021,7 +1021,7 @@ fn window_new_tab_button_cb(button GtkWidget, user_data voidptr) {
 	_ = button
 	if !isnil(user_data) {
 		mut self := unsafe { &Window(user_data) }
-		self.perform_binding_action(.new_tab)
+		self.perform_binding_action(input.Action.new(.new_tab))
 	}
 }
 
@@ -1127,13 +1127,13 @@ fn window_action_cb(action GSimpleAction, parameter GVariant, data voidptr) {
 			}
 			match unsafe { cstring_to_vstring(value) } {
 				'this' {
-					self.perform_input_action(input.Action.new_enum(.close_tab, i32(input.CloseTabMode.this)))
+					self.perform_binding_action(input.Action.new_enum(.close_tab, i32(input.CloseTabMode.this)))
 				}
 				'other' {
-					self.perform_input_action(input.Action.new_enum(.close_tab, i32(input.CloseTabMode.other)))
+					self.perform_binding_action(input.Action.new_enum(.close_tab, i32(input.CloseTabMode.other)))
 				}
 				'right' {
-					self.perform_input_action(input.Action.new_enum(.close_tab, i32(input.CloseTabMode.right)))
+					self.perform_binding_action(input.Action.new_enum(.close_tab, i32(input.CloseTabMode.right)))
 				}
 				else {}
 			}
@@ -1645,25 +1645,7 @@ fn (mut self Window) toggle_css_class(class string, value bool) {
 
 // perform_binding_action maps the window action helpers to the canonical input
 // actions and dispatches them to the active core surface.
-fn (mut self Window) perform_binding_action(action BindingActionTag) {
-	binding := match action {
-		.new_tab { input.Action.new(.new_tab) }
-		.new_window { input.Action.new(.new_window) }
-		.new_split_right { input.Action.new_enum(.new_split, i32(input.SplitDirection.right)) }
-		.new_split_left { input.Action.new_enum(.new_split, i32(input.SplitDirection.left)) }
-		.new_split_up { input.Action.new_enum(.new_split, i32(input.SplitDirection.up)) }
-		.new_split_down { input.Action.new_enum(.new_split, i32(input.SplitDirection.down)) }
-		.copy_to_clipboard {
-			input.Action.new_enum(.copy_to_clipboard, i32(input.CopyToClipboard.mixed))
-		}
-		.paste_from_clipboard { input.Action.new(.paste_from_clipboard) }
-		.reset { input.Action.new(.reset) }
-		.clear_screen { input.Action.new(.clear_screen) }
-	}
-	self.perform_input_action(binding)
-}
-
-fn (mut self Window) perform_input_action(action input.Action) {
+fn (mut self Window) perform_binding_action(action input.Action) {
 	mut surface := self.get_active_surface() or { return }
 	if !surface.has_core() {
 		return
@@ -2133,7 +2115,7 @@ pub fn (mut self Window) action_about() {
 }
 
 pub fn (mut self Window) toggle_inspector() {
-	self.perform_input_action(input.Action.new_enum(.inspector, i32(input.InspectorMode.toggle)))
+	self.perform_binding_action(input.Action.new_enum(.inspector, i32(input.InspectorMode.toggle)))
 }
 
 pub fn (mut self Window) action_close() {
@@ -2141,43 +2123,43 @@ pub fn (mut self Window) action_close() {
 }
 
 pub fn (mut self Window) action_new_tab() {
-	self.perform_binding_action(.new_tab)
+	self.perform_binding_action(input.Action.new(.new_tab))
 }
 
 pub fn (mut self Window) action_new_window() {
-	self.perform_binding_action(.new_window)
+	self.perform_binding_action(input.Action.new(.new_window))
 }
 
 pub fn (mut self Window) action_split_right() {
-	self.perform_binding_action(.new_split_right)
+	self.perform_binding_action(input.Action.new_enum(.new_split, i32(input.SplitDirection.right)))
 }
 
 pub fn (mut self Window) action_split_left() {
-	self.perform_binding_action(.new_split_left)
+	self.perform_binding_action(input.Action.new_enum(.new_split, i32(input.SplitDirection.left)))
 }
 
 pub fn (mut self Window) action_split_up() {
-	self.perform_binding_action(.new_split_up)
+	self.perform_binding_action(input.Action.new_enum(.new_split, i32(input.SplitDirection.up)))
 }
 
 pub fn (mut self Window) action_split_down() {
-	self.perform_binding_action(.new_split_down)
+	self.perform_binding_action(input.Action.new_enum(.new_split, i32(input.SplitDirection.down)))
 }
 
 pub fn (mut self Window) action_copy() {
-	self.perform_binding_action(.copy_to_clipboard)
+	self.perform_binding_action(input.Action.new_enum(.copy_to_clipboard, i32(input.CopyToClipboard.mixed)))
 }
 
 pub fn (mut self Window) action_paste() {
-	self.perform_binding_action(.paste_from_clipboard)
+	self.perform_binding_action(input.Action.new(.paste_from_clipboard))
 }
 
 pub fn (mut self Window) action_reset() {
-	self.perform_binding_action(.reset)
+	self.perform_binding_action(input.Action.new(.reset))
 }
 
 pub fn (mut self Window) action_clear() {
-	self.perform_binding_action(.clear_screen)
+	self.perform_binding_action(input.Action.new(.clear_screen))
 }
 
 pub fn (mut self Window) action_ring_bell() {
@@ -2202,21 +2184,6 @@ pub fn (mut self Window) action_ring_bell() {
 			eprintln('winproto failed to set urgency=${err}')
 		}
 	}
-}
-
-// BindingActionTag names the fixed actions exposed by Window's GTK action map;
-// perform_binding_action supplies their canonical payloads.
-pub enum BindingActionTag {
-	new_tab
-	new_window
-	new_split_right
-	new_split_left
-	new_split_up
-	new_split_down
-	copy_to_clipboard
-	paste_from_clipboard
-	reset
-	clear_screen
 }
 
 // --- dispose / finalize ---------------------------------------------------

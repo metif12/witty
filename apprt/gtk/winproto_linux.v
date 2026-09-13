@@ -21,7 +21,7 @@ import configpkg
 
 // Protocol enumerates the supported windowing protocols. Mirrors
 // `winproto.Protocol`.
-pub enum Protocol {
+pub enum Protocol as u8 {
 	none_
 	wayland
 	x11

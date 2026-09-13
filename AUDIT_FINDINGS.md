@@ -208,6 +208,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | renderer Metal vertex-format ABI | The translated native `MTLVertexFormat` exposed only 11 values from Ghostty's 54-case `enum(c_ulong)`, omitting formats handled by the source pipeline reflection function. | Restore all 54 numeric cases with unsigned-long-compatible backing and exhaustively verify their source declaration order and values, including Apple's gaps at 43 and 44. |
 | synthetic OSC tags | The public 13-case valid-kind and two-case invalid-kind source enums used V's implicit 32-bit storage. | Give both inferred tags byte backing and exhaustively verify their source declaration order. |
 | benchmark action and mode tags | The retained benchmark action and four implementation-mode source enums used V's implicit 32-bit storage. | Give all five inferred tags byte backing and exhaustively verify their source declaration order. |
+| GTK tag and action contracts | Six native GTK/GLib values, the app-defined close-dialog target, and the KDE decoration mode relied on V's implicit signed enum representation, while six retained internal/union tags were widened. The tab redeclared the canonical C-backed close-tab mode, and window callbacks passed through a source-external ten-case tag only to rebuild canonical input actions. | Give C values signed 32-bit and the protocol value `u32` backing, byte-back inferred tags, alias the apprt close-tab type, and pass `input.Action` directly through the window helper. |
 
 ## Focused behavior reviewed
 
@@ -274,6 +275,10 @@ an item here does not mean its full module has been certified yet.
 - **CLI TTY presentation:** `list-colors` and `list-keybinds` retain only their
   plain serialization in Witty. Ghostty selects large vaxis-based pretty
   renderers when stdout is a TTY and `--plain` is not set.
+- **Benchmark implementation coverage:** the `is-symbol` benchmark's
+  `uucode` and `table` modes both call Witty's generated symbol table. Their
+  truth values match, but unlike Ghostty they do not measure two distinct
+  lookup implementations.
 - **Version action metadata:** Witty now reports its real compiler version,
   application runtime, font engine, renderer, and GTK build/runtime features,
   but it does not link libxev and therefore reports that field as unavailable.

@@ -89,7 +89,7 @@ pub type GtkAdjustment = voidptr
 pub type GSignalGroup = voidptr
 
 // GtkScrollablePolicy mirrors GTK_SCROLL_MINIMUM / GTK_SCROLL_NATURAL.
-pub enum GtkScrollablePolicy {
+pub enum GtkScrollablePolicy as i32 {
 	minimum
 	natural
 }
@@ -921,7 +921,7 @@ pub fn terminal_surface_get_type() GType {
 
 // IMKeyEvent is the state of the key event while doing IM composition.
 // See key_event for detailed descriptions. Mirrors the Zig `IMKeyEvent`.
-pub enum IMKeyEvent {
+pub enum IMKeyEvent as u8 {
 	// Not in a key event.
 	false_
 	// In a key event but im_composing was either true or false prior to the
