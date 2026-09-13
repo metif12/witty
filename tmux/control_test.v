@@ -4,6 +4,11 @@ module tmux
 //
 // Source: terminal/tmux/control.zig (tests)
 
+fn test_control_parser_state_layout_matches_source() {
+	assert sizeof(ParserState) == 1
+	assert [ParserState.idle, .broken, .notification, .block].map(u8(it)) == [u8(0), 1, 2, 3]
+}
+
 // Feed a string into the parser byte by byte, returning the first
 // notification encountered (or none if no notification was produced).
 fn feed_string(mut c ControlParser, s string) ?Notification {

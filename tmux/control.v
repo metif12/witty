@@ -152,7 +152,7 @@ pub fn (self Notification) str() string {
 // ============================================================
 
 // Parser state.
-enum ParserState {
+enum ParserState as u8 {
 	// Outside of any active notifications. This should drop any output
 	// unless it is '%' on the first byte of a line. The buffer will be
 	// cleared when it sees '%', this is so that the previous notification

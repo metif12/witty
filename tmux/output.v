@@ -12,24 +12,6 @@ import zig_fmt
 // strings into typed structs.
 
 // ============================================================
-// ParseError
-// ============================================================
-
-pub enum ParseError {
-	missing_entry
-	extra_entry
-	format_error
-}
-
-fn (self ParseError) str() string {
-	return match self {
-		.missing_entry { 'MissingEntry' }
-		.extra_entry { 'ExtraEntry' }
-		.format_error { 'FormatError' }
-	}
-}
-
-// ============================================================
 // Variable - possible variables in a tmux format string
 // ============================================================
 
@@ -38,7 +20,7 @@ fn (self ParseError) str() string {
 // Tmux supports a large number of variables, but we only implement
 // a subset of them here that are relevant to the use case of implementing
 // control mode for terminal emulators.
-pub enum Variable {
+pub enum Variable as u8 {
 	// 1 if pane is in alternate screen.
 	alternate_on
 	// Saved cursor X in alternate screen.
@@ -151,7 +133,7 @@ pub fn (self Variable) name() string {
 // Parse an unsigned integer with Zig's `std.fmt.parseInt(usize, value, 10)`
 // semantics.
 pub fn parse_usize(value string) !usize {
-	result := zig_fmt.parse_int_unsigned(value, 64, 10) or {
+	result := zig_fmt.parse_int_unsigned(value, int(sizeof(usize) * 8), 10) or {
 		if err.msg() == 'overflow' {
 			return error('Overflow')
 		}

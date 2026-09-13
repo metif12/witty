@@ -4,6 +4,18 @@ module tmux
 //
 // Source: terminal/tmux/output.zig (tests)
 
+fn test_output_variable_layout_and_source_ordinals() {
+	assert sizeof(Variable) == 1
+	mut variable_count := 0
+	$for enum_value in Variable.values {
+		assert u8(enum_value.value) == u8(variable_count)
+		variable_count++
+	}
+	assert variable_count == 32
+	assert u8(Variable.alternate_on) == 0
+	assert u8(Variable.wrap_flag) == 31
+}
+
 fn test_parse_alternate_on() {
 	v := Variable.alternate_on.parse('1') or {
 		assert false, 'parse failed: ${err}'
@@ -599,6 +611,16 @@ fn test_parse_integer_preserves_values_above_i32() {
 		return
 	}
 	assert value as usize == usize(4294967295)
+}
+
+fn test_parse_usize_uses_platform_width() {
+	limit := ~usize(0)
+	assert parse_usize(limit.str())! == limit
+	if _ := parse_usize('18446744073709551616') {
+		assert false, 'one above u64 max must overflow on every supported usize width'
+	} else {
+		assert err.msg() == 'Overflow'
+	}
 }
 
 fn test_parse_integer_matches_zig_sign_and_separator_rules() {
