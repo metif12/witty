@@ -221,6 +221,8 @@ below exist. Earlier versions of this document overstated the completed review.
 | renderer Metal layer wrapper | The translated `IOSurfaceLayer` wrapper was never used: the API kept the layer as a bare handle and called the four Objective-C layer functions directly, so the wrapper existed only as a type one test constructed. `present` also pre-checked a nil layer, which the source has no need for because its layer always exists. | Make `MetalAPI.layer` the wrapper (absent for the off-screen API), route init/deinit/`loop_enter`/`present`/`surface_size` through it, replace the `owns_layer` flag and the nil pre-check with the optional, and stop the wrapper's methods mutating their receiver. |
 | renderer Metal postprocess shader reporting | A custom shader that loaded but failed to compile was discarded silently; the source logs a warning before falling back to no postprocess shaders, so a broken shader gave the user no diagnostic at all. The shader set also pre-checked a nil device. | Restore the warning on postprocess initialization failure and remove the source-external pre-check. |
 | renderer frame health vs presentation | Both backends folded a failed present into the frame's health: OpenGL silently set `healthy = false`, Metal propagated the error out of `draw_frame`. The source presents only if the rendered health is good, logs a presentation failure, and reports the rendered health unchanged, so a frame that rendered correctly but could not reach the compositor was being fed to the renderer's health tracking and surface notifications as a failure. Metal also reported health before presenting, inverting the source order, and OpenGL's `complete()` had dropped the `sync` parameter both backends' frames take. | Report the rendered health, log presentation failures without changing it, restore the source ordering, and restore the `sync` parameter. |
+| lib_vt type exports | `lib_vt.zig` re-exports `terminal.MouseShape` alongside the other VT types; the translation had all 49 other aliases but not that one. `lib_vt_test.v` already asserted the export existed, but the file did not compile, so the assertion had never run. | Add the alias, and fix the unrelated compile error in `main_c_test.v` (a quick-terminal-size tag compared against an int literal) that kept that file from running too. |
+| production build | Three declarations were warnings in a debug build but errors under `-prod`, so the release binary could not be built at all: a keybind-table map read that V requires an or-block for, and two optional thread handles with a redundant explicit `none` default. | Fix all three; `v -prod` now builds. |
 
 ## Focused behavior reviewed
 
@@ -380,3 +382,15 @@ an item here does not mean its full module has been certified yet.
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every
 Ghostty file and function has been translated, and no 100% claim is made.
+
+Repository-wide test state, for honesty about what the gates actually cover:
+
+- `v` and `v -prod` both build.
+- `internal_os.test_argument_iterator_uses_platform_arguments` fails, and
+  `core.test_embedded_bridge_uses_canonical_core_surface` fails
+  intermittently on a font-grid leak assertion in `App.deinit`. Both predate
+  this audit session and are not yet diagnosed.
+- Eight test files report "Cannot compile" under the parallel test runner but
+  compile and pass when run individually, so that appears to be a runner
+  artifact rather than a code defect. This is worth confirming before relying
+  on a full-suite run as a gate.
