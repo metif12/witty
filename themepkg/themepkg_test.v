@@ -3,6 +3,11 @@ module themepkg
 import os
 import diagnostics
 
+fn test_theme_location_source_layout_and_ordinals() {
+	assert sizeof(Location) == 1
+	assert [Location.user, .resources].map(u8(it)) == [u8(0), 1]
+}
+
 fn test_location_user_uses_translated_xdg_resolution() {
 	previous_xdg := os.getenv_opt('XDG_CONFIG_HOME')
 	previous_home := os.getenv_opt('HOME')
@@ -20,13 +25,11 @@ fn test_location_user_uses_translated_xdg_resolution() {
 	}
 
 	os.setenv('XDG_CONFIG_HOME', '/tmp/witty-theme-xdg', true)
-	assert Location.user.dir() or { '' } == os.join_path('/tmp/witty-theme-xdg', 'ghostty',
-		'themes')
+	assert Location.user.dir() or { '' } == os.join_path('/tmp/witty-theme-xdg', 'ghostty', 'themes')
 
 	os.unsetenv('XDG_CONFIG_HOME')
 	os.setenv('HOME', '/tmp/witty-theme-home/', true)
-	assert Location.user.dir() or { '' } == os.join_path('/tmp/witty-theme-home/', '.config',
-		'ghostty', 'themes')
+	assert Location.user.dir() or { '' } == os.join_path('/tmp/witty-theme-home/', '.config', 'ghostty', 'themes')
 }
 
 fn test_location_iterator_order_and_reset() {
@@ -66,8 +69,7 @@ fn test_open_absolute_theme_and_diagnostics() ! {
 
 	mut missing_diags := diagnostics.DiagnosticList{}
 	assert open(os.join_path(dir, 'missing'), mut missing_diags) == none
-	assert missing_diags.items()[0].message == 'failed to load theme from the path "${os.join_path(dir,
-		'missing')}"'
+	assert missing_diags.items()[0].message == 'failed to load theme from the path "${os.join_path(dir, 'missing')}"'
 
 	mut directory_diags := diagnostics.DiagnosticList{}
 	assert open(dir, mut directory_diags) == none
@@ -102,11 +104,9 @@ fn test_open_named_theme_uses_location_order_and_reports_attempts() ! {
 
 	mut separator_diags := diagnostics.DiagnosticList{}
 	assert open(os.join_path('nested', 'theme'), mut separator_diags) == none
-	assert separator_diags.items()[0].message == 'theme "${os.join_path('nested',
-		'theme')}" cannot include path separators unless it is an absolute path'
+	assert separator_diags.items()[0].message == 'theme "${os.join_path('nested', 'theme')}" cannot include path separators unless it is an absolute path'
 
 	mut missing_diags := diagnostics.DiagnosticList{}
 	assert open('missing', mut missing_diags) == none
-	assert missing_diags.items()[0].message == 'theme "missing" not found, tried path "${os.join_path(theme_dir,
-		'missing')}"'
+	assert missing_diags.items()[0].message == 'theme "missing" not found, tried path "${os.join_path(theme_dir, 'missing')}"'
 }

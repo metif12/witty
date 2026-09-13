@@ -182,6 +182,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | temporary-directory selection | `TempDir.init()` independently used V's `os.temp_dir()`, which ignores `TMPDIR` on macOS and has different Windows fallbacks, instead of Ghostty's shared `allocTmpDir()` policy. | Route `TempDir.init()` through the translated `alloc_tmp_dir()` helper and retain the source current-directory fallback when it returns absent. |
 | tmux viewer protocol state | Notifications for entering tmux control mode were converted from Ghostty's `unreachable` invariant into a graceful defunct transition in all three post-entry states; the four-state enum also used default-width storage. | Make an impossible repeated enter fail immediately in each source state and store the translated state tag in one byte. |
 | crash report iteration | `ReportIterator.next()` silently skipped metadata errors and returned the same optional absence as a clean end of iteration; its three-case crash-thread tag also used default-width storage. | Preserve Ghostty's fallible optional result with an explicit V wrapper, propagate the native metadata error, skip only confirmed non-files, and use byte-backed thread-kind values. |
+| standalone internal tags | Crash-envelope item type, detected file type, theme search location, and tripwire reset mode were source-inferred enums retained with V's default 32-bit storage. | Give all four values byte backing and verify their complete source declaration order. |
 
 ## Focused behavior reviewed
 

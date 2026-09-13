@@ -1,5 +1,17 @@
 module crash
 
+fn test_envelope_item_type_source_layout_and_ordinals() {
+	assert sizeof(ItemType) == 1
+	mut item_count := 0
+	$for enum_value in ItemType.values {
+		assert u8(enum_value.value) == u8(item_count)
+		item_count++
+	}
+	assert item_count == 14
+	assert u8(ItemType.unknown) == 0
+	assert u8(ItemType.check_in) == 13
+}
+
 fn test_envelope_parse_empty() {
 	mut envelope := Envelope.parse('{}'.bytes())!
 	defer { envelope.deinit() }

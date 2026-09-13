@@ -1,5 +1,18 @@
 module file_type
 
+fn test_file_type_source_layout_and_ordinals() {
+	assert sizeof(FileType) == 1
+	assert [FileType.jpeg, .png, .gif, .bmp, .qoi, .webp, .unknown].map(u8(it)) == [
+		u8(0),
+		1,
+		2,
+		3,
+		4,
+		5,
+		6,
+	]
+}
+
 fn test_detect() {
 	assert detect([u8(0xff), 0xd8, 0xff, 0xdb]) == .jpeg
 	assert detect([u8(0xff), 0xd8, 0xff, 0xe0, 0x00, 0x10, `J`, `F`, `I`, `F`, 0x00, 0x01]) == .jpeg

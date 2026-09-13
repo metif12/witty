@@ -7,7 +7,7 @@ import diagnostics
 
 // Location of possible themes. The order of this enum matters because it
 // defines the priority of theme search (from top to bottom).
-pub enum Location {
+pub enum Location as u8 {
 	user // XDG config dir
 	resources // Ghostty resources dir
 }

@@ -1,5 +1,10 @@
 module tripwire
 
+fn test_reset_mode_source_layout_and_ordinals() {
+	assert sizeof(ResetMode) == 1
+	assert [ResetMode.reset, .retain].map(u8(it)) == [u8(0), 1]
+}
+
 enum Point {
 	read
 	write

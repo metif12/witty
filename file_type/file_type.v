@@ -88,7 +88,7 @@ struct TypeDetail {
 // FileType is a helper for detecting file types based on magic bytes.
 //
 // Ref: https://en.wikipedia.org/wiki/List_of_file_signatures
-pub enum FileType {
+pub enum FileType as u8 {
 	// JPEG image file.
 	jpeg
 	// PNG image file.

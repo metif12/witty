@@ -3,7 +3,7 @@ module tripwire
 // enabled mirrors Ghostty's test-only tripwire specialization.
 pub const enabled = $if test { true } $else { false }
 
-pub enum ResetMode {
+pub enum ResetMode as u8 {
 	reset
 	retain
 }

@@ -102,7 +102,7 @@ pub mut:
 }
 
 // ItemType is the point-in-time set of documented Sentry envelope item types.
-pub enum ItemType {
+pub enum ItemType as u8 {
 	unknown
 	event
 	transaction
