@@ -11,6 +11,7 @@ import font
 import internal_os
 import zig_fmt
 import diagnostics as diagnosticspkg
+import buildcfg
 
 const default_gtk_opengl_debug = $if debug { true } $else { false }
 const default_quit_after_last_window_closed = $if linux { true } $else { false }
@@ -4111,7 +4112,7 @@ pub mut:
 	theme ?ThemePair
 	// The style of the cursor. A running program can request an explicit cursor
 	// style using escape sequences.
-	cursor_style CursorStyle = .block
+	cursor_style terminal.CursorStyle = .block
 	// The default blinking state of the cursor. null respects DEC Mode 12.
 	cursor_style_blink ?bool
 	// The opacity level of the unfocused split. 1 disables the fading.
@@ -4241,7 +4242,7 @@ pub mut:
 	async_backend AsyncBackend = .auto
 	// Sparkle update policy and release channel (macOS only).
 	auto_update         ?AutoUpdate
-	auto_update_channel ?ReleaseChannel
+	auto_update_channel ?buildcfg.ReleaseChannel
 	// Internal marker set when invoked through xdg-terminal-exec.
 	xdg_terminal_exec bool
 	// The current conditional state (e.g. light/dark theme). This is not a
@@ -6791,9 +6792,9 @@ pub fn (config AppNotifications) format_entry() string {
 	].join(',')
 }
 
-pub enum ShellIntegration {
-	detect
+pub enum ShellIntegration as u8 {
 	none_
+	detect
 	bash
 	elvish
 	fish
@@ -6801,35 +6802,35 @@ pub enum ShellIntegration {
 	zsh
 }
 
-pub enum LinkPreviews {
-	true_
+pub enum LinkPreviews as u8 {
 	false_
+	true_
 	osc8
 }
 
-pub enum ClipboardAccess {
+pub enum ClipboardAccess as u8 {
 	allow
-	ask
 	deny
+	ask
 }
 
-pub enum CopyOnSelect {
+pub enum CopyOnSelect as u8 {
 	false_
 	true_
 	clipboard
 }
 
-pub enum ConfirmCloseSurface {
-	always
+pub enum ConfirmCloseSurface as i32 {
 	false_
 	true_
+	always
 }
 
-pub enum MouseShiftCapture {
-	never
-	always
+pub enum MouseShiftCapture as u8 {
 	false_
 	true_
+	always
+	never
 }
 
 pub struct ConditionalState {
@@ -6838,14 +6839,14 @@ pub mut:
 	os    TargetOs = current_target_os()
 }
 
-pub enum Theme {
+pub enum Theme as u8 {
 	light
 	dark
 }
 
 // TargetOs is the translated Zig 0.15.2 std.Target.Os.Tag used by conditional
 // configuration state.
-pub enum TargetOs {
+pub enum TargetOs as u8 {
 	freestanding
 	other
 	contiki
@@ -6924,12 +6925,12 @@ fn current_target_os() TargetOs {
 	}
 }
 
-pub enum ConditionalKey {
+pub enum ConditionalKey as u8 {
 	theme
 	os
 }
 
-pub enum ConditionalOp {
+pub enum ConditionalOp as u8 {
 	eq
 	ne
 }
@@ -7033,7 +7034,7 @@ pub fn (d Duration) cval() usize {
 }
 
 // NotifyOnCommandFinish controls when command-finished notifications are sent.
-pub enum NotifyOnCommandFinish {
+pub enum NotifyOnCommandFinish as u8 {
 	never
 	unfocused
 	always
@@ -7067,27 +7068,19 @@ pub fn (config NotifyOnCommandFinishAction) format_entry() string {
 }
 
 // GraphemeWidthMethod for calculating the cell width of a grapheme cluster.
-pub enum GraphemeWidthMethod {
+pub enum GraphemeWidthMethod as u8 {
 	legacy
 	unicode
 }
 
 // Scrollbar controls when the scrollbar is shown.
-pub enum Scrollbar {
+pub enum Scrollbar as u8 {
 	system
 	never
 }
 
-// CursorStyle sets the default cursor style.
-pub enum CursorStyle {
-	block
-	bar
-	underline
-	block_hollow
-}
-
 // WindowDecoration controls window decorations.
-pub enum WindowDecoration {
+pub enum WindowDecoration as i32 {
 	auto
 	client
 	server
@@ -7095,7 +7088,7 @@ pub enum WindowDecoration {
 }
 
 // WindowTheme controls the theme used for the window.
-pub enum WindowTheme {
+pub enum WindowTheme as u8 {
 	auto
 	system
 	light
@@ -7104,7 +7097,7 @@ pub enum WindowTheme {
 }
 
 // RightClickAction controls the action taken on right-click.
-pub enum RightClickAction {
+pub enum RightClickAction as u8 {
 	ignore
 	paste
 	copy
@@ -7113,54 +7106,54 @@ pub enum RightClickAction {
 }
 
 // OSCColorReportFormat controls the reporting format for OSC color queries.
-pub enum OSCColorReportFormat {
+pub enum OSCColorReportFormat as u8 {
 	none_
 	format_8_bit
 	format_16_bit
 }
 
 // CustomShaderAnimation controls whether custom shaders animate.
-pub enum CustomShaderAnimation {
+pub enum CustomShaderAnimation as i32 {
 	false_
 	true_
 	always
 }
 
 // WindowSubtitle controls the window subtitle text.
-pub enum WindowSubtitle {
+pub enum WindowSubtitle as u8 {
 	false_
 	working_directory
 }
 
 // WindowSaveState controls whether window state is saved between runs.
-pub enum WindowSaveState {
+pub enum WindowSaveState as u8 {
 	default
 	never
 	always
 }
 
 // WindowNewTabPosition controls where new tabs are placed.
-pub enum WindowNewTabPosition {
+pub enum WindowNewTabPosition as u8 {
 	current
 	end
 }
 
 // WindowShowTabBar controls when the tab bar is shown.
-pub enum WindowShowTabBar {
+pub enum WindowShowTabBar as u8 {
 	always
 	auto
 	never
 }
 
 // ResizeOverlay controls when a resize overlay is shown.
-pub enum ResizeOverlay {
+pub enum ResizeOverlay as u8 {
 	always
 	never
 	after_first
 }
 
 // ResizeOverlayPosition controls where the resize overlay is drawn.
-pub enum ResizeOverlayPosition {
+pub enum ResizeOverlayPosition as u8 {
 	center
 	top_left
 	top_center
@@ -7171,7 +7164,7 @@ pub enum ResizeOverlayPosition {
 }
 
 // AsyncBackend selects the async event loop backend.
-pub enum AsyncBackend {
+pub enum AsyncBackend as u8 {
 	auto
 	epoll
 	io_uring
@@ -7183,16 +7176,10 @@ pub fn (a AsyncBackend) format_entry() string {
 }
 
 // AutoUpdate controls Sparkle's automatic update behavior on macOS.
-pub enum AutoUpdate {
+pub enum AutoUpdate as u8 {
 	off
 	check
 	download
-}
-
-// ReleaseChannel selects stable releases or per-commit tip builds.
-pub enum ReleaseChannel {
-	tip
-	stable
 }
 
 // ============================================================
@@ -8389,8 +8376,8 @@ fn (mut c Config) apply_kv(key string, value string) {
 				c.auto_update_channel = none
 			} else {
 				c.auto_update_channel = match value {
-					'tip' { ReleaseChannel.tip }
-					'stable' { ReleaseChannel.stable }
+					'tip' { buildcfg.ReleaseChannel.tip }
+					'stable' { buildcfg.ReleaseChannel.stable }
 					else {
 						c.invalid_config_value(key, value)
 						return

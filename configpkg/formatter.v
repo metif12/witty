@@ -1,6 +1,8 @@
 module configpkg
 
 import datastruct.comparison
+import buildcfg
+import terminal
 
 // Generated from the documentation comments in the pinned Ghostty
 // config/Config.zig. Records are separated by ASCII record separators so the
@@ -58,6 +60,11 @@ fn format_entry_values[T](value T) []string {
 		return [value.str()]
 	} $else $if T is $float {
 		return [value.str()]
+	} $else $if T is buildcfg.ReleaseChannel || T is terminal.CursorStyle {
+
+		// V's old compiler does not classify enums imported through another
+		// module as `$enum` in this generic. They use the same source enum path.
+		return [enum_config_string(value.str())]
 	} $else $if T is $enum {
 		$for method in T.methods {
 			$if method.name == 'format_entry' && method.return_type is string {

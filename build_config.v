@@ -8,17 +8,13 @@
 module main
 
 import build_meta
+import buildcfg
 
 // The semantic version of this build as a string.
 pub const version_string = build_meta.version_string
 
 // ReleaseChannel determines the release channel for this build.
-pub enum ReleaseChannel as u8 {
-	// Tip/nightly release (built from latest source)
-	tip
-	// Stable release
-	stable
-}
+pub type ReleaseChannel = buildcfg.ReleaseChannel
 
 // The release channel for this build.
 pub const release_channel = ReleaseChannel.tip

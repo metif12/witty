@@ -8,6 +8,7 @@ module configpkg
 import font as fontpkg
 import input as inputpkg
 import math
+import buildcfg
 
 // CConfigColor mirrors ghostty_config_color_s.
 pub struct CConfigColor {
@@ -157,7 +158,7 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 					}
 					c_write_cstring(ptr, c.cache_c_string(key, enum_c_name(c.$(field.name)?.str())))
 					return true
-				} $else $if field.unaliased_typ is ?ReleaseChannel {
+				} $else $if field.unaliased_typ is ?buildcfg.ReleaseChannel {
 					if c.$(field.name) == none {
 						return false
 					}

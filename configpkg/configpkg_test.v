@@ -4,6 +4,7 @@ import os
 import input
 import terminal
 import cli_args
+import buildcfg
 
 enum FormatterTestEnum {
 	one
@@ -87,6 +88,86 @@ fn test_config_value_tag_layouts_and_source_ordinals() {
 	assert [ReadableIOKind.raw, .path].map(u8(it)) == [u8(0), 1]
 	assert sizeof(FontStyleKind) == 1
 	assert [FontStyleKind.default_, .false_, .name].map(u8(it)) == [u8(0), 1, 2]
+}
+
+fn test_general_config_enum_layouts_and_source_ordinals() {
+	assert sizeof(ShellIntegration) == 1
+	assert [ShellIntegration.none_, .detect, .bash, .elvish, .fish, .nushell, .zsh].map(u8(it)) == [u8(0),
+		1, 2, 3, 4, 5, 6]
+	assert sizeof(LinkPreviews) == 1
+	assert [LinkPreviews.false_, .true_, .osc8].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(ClipboardAccess) == 1
+	assert [ClipboardAccess.allow, .deny, .ask].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(CopyOnSelect) == 1
+	assert [CopyOnSelect.false_, .true_, .clipboard].map(u8(it)) == [u8(0), 1, 2]
+
+	assert sizeof(ConfirmCloseSurface) == 4
+	assert [ConfirmCloseSurface.false_, .true_, .always].map(i32(it)) == [i32(0), 1, 2]
+	assert sizeof(CustomShaderAnimation) == 4
+	assert [CustomShaderAnimation.false_, .true_, .always].map(i32(it)) == [i32(0), 1, 2]
+	assert sizeof(WindowDecoration) == 4
+	assert [WindowDecoration.auto, .client, .server, .none_].map(i32(it)) == [i32(0), 1,
+		2, 3]
+
+	assert sizeof(MouseShiftCapture) == 1
+	assert [MouseShiftCapture.false_, .true_, .always, .never].map(u8(it)) == [u8(0), 1, 2,
+		3]
+	assert sizeof(Theme) == 1
+	assert [Theme.light, .dark].map(u8(it)) == [u8(0), 1]
+	assert sizeof(ConditionalKey) == 1
+	assert [ConditionalKey.theme, .os].map(u8(it)) == [u8(0), 1]
+	assert sizeof(ConditionalOp) == 1
+	assert [ConditionalOp.eq, .ne].map(u8(it)) == [u8(0), 1]
+
+	assert sizeof(TargetOs) == 1
+	assert [TargetOs.freestanding, .other, .contiki, .fuchsia, .hermit, .aix, .haiku, .hurd,
+		.linux, .plan9, .rtems, .serenity, .zos, .dragonfly, .freebsd, .netbsd, .openbsd,
+		.driverkit, .ios, .macos, .tvos, .visionos, .watchos, .illumos, .solaris, .windows,
+		.uefi, .ps3, .ps4, .ps5, .emscripten, .wasi, .amdhsa, .amdpal, .cuda, .mesa3d, .nvcl,
+		.opencl, .opengl, .vulkan].map(u8(it)) == [u8(0), 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+		11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+		31, 32, 33, 34, 35, 36, 37, 38, 39]
+
+	assert sizeof(NotifyOnCommandFinish) == 1
+	assert [NotifyOnCommandFinish.never, .unfocused, .always].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(GraphemeWidthMethod) == 1
+	assert [GraphemeWidthMethod.legacy, .unicode].map(u8(it)) == [u8(0), 1]
+	assert sizeof(Scrollbar) == 1
+	assert [Scrollbar.system, .never].map(u8(it)) == [u8(0), 1]
+	assert sizeof(terminal.CursorStyle) == 1
+	assert [terminal.CursorStyle.bar, .block, .underline, .block_hollow].map(u8(it)) == [u8(0),
+		1, 2, 3]
+}
+
+fn test_window_and_runtime_config_enum_layouts_and_source_ordinals() {
+	assert sizeof(WindowTheme) == 1
+	assert [WindowTheme.auto, .system, .light, .dark, .ghostty].map(u8(it)) == [u8(0), 1,
+		2, 3, 4]
+	assert sizeof(RightClickAction) == 1
+	assert [RightClickAction.ignore, .paste, .copy, .copy_or_paste, .context_menu].map(u8(it)) == [u8(0),
+		1, 2, 3, 4]
+	assert sizeof(OSCColorReportFormat) == 1
+	assert [OSCColorReportFormat.none_, .format_8_bit, .format_16_bit].map(u8(it)) == [u8(0),
+		1, 2]
+	assert sizeof(WindowSubtitle) == 1
+	assert [WindowSubtitle.false_, .working_directory].map(u8(it)) == [u8(0), 1]
+	assert sizeof(WindowSaveState) == 1
+	assert [WindowSaveState.default, .never, .always].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(WindowNewTabPosition) == 1
+	assert [WindowNewTabPosition.current, .end].map(u8(it)) == [u8(0), 1]
+	assert sizeof(WindowShowTabBar) == 1
+	assert [WindowShowTabBar.always, .auto, .never].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(ResizeOverlay) == 1
+	assert [ResizeOverlay.always, .never, .after_first].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(ResizeOverlayPosition) == 1
+	assert [ResizeOverlayPosition.center, .top_left, .top_center, .top_right, .bottom_left,
+		.bottom_center, .bottom_right].map(u8(it)) == [u8(0), 1, 2, 3, 4, 5, 6]
+	assert sizeof(AsyncBackend) == 1
+	assert [AsyncBackend.auto, .epoll, .io_uring].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(AutoUpdate) == 1
+	assert [AutoUpdate.off, .check, .download].map(u8(it)) == [u8(0), 1, 2]
+	assert sizeof(buildcfg.ReleaseChannel) == 1
+	assert [buildcfg.ReleaseChannel.tip, .stable].map(u8(it)) == [u8(0), 1]
 }
 
 fn test_load_file_applies_theme_colors() {

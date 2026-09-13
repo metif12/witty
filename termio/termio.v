@@ -400,12 +400,7 @@ pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
 			none
 		}
 		image_storage_limit: int(config.image_storage_limit)
-		cursor_style: match config.cursor_style {
-			.block { .block }
-			.bar { .bar }
-			.underline { .underline }
-			.block_hollow { .block_hollow }
-		}
+		cursor_style: config.cursor_style
 		cursor_blink: config.cursor_style_blink
 		osc_color_report_format: config.osc_color_report_format
 		clipboard_write: config.clipboard_write
