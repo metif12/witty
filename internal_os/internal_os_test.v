@@ -190,7 +190,16 @@ fn test_argument_iterator_uses_platform_arguments() {
 	for {
 		actual << iter.next() or { break }
 	}
-	assert actual == os.args
+
+	// On macOS the source reads arguments from NSProcessInfo rather than libc
+	// argc/argv, which it documents as not valid under NSApplicationMain.
+	// NSProcessInfo reports the executable path as it was invoked, which need
+	// not be the resolved path V records in os.args -- /tmp against
+	// /private/tmp, for one -- so only the arguments after it must match.
+	assert actual.len == os.args.len
+	assert actual.len > 0
+	assert os.file_name(actual[0]) == os.file_name(os.args[0])
+	assert actual[1..] == os.args[1..]
 }
 
 fn test_dbus_activation_requires_both_environment_variables() {
