@@ -220,6 +220,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | renderer buffer array-list sync | Both backends' buffer wrappers omitted `syncFromArrayLists`, which copies a set of per-row lists straight into the mapped GPU buffer and returns the item count. The renderer instead summed the row lengths, allocated a flat array, and copied every foreground text cell into it on every frame, in both draw paths. Metal's buffer options also carried defaults (the source requires them) and its constructors pre-checked a nil device. | Add the method to both buffer wrappers, call it directly on `cells.fg_rows.lists` from both draw paths and take the draw instance count from its result, and restore Metal's required options without the source-external pre-checks. OpenGL's options do default in the source and were left alone. |
 | renderer Metal layer wrapper | The translated `IOSurfaceLayer` wrapper was never used: the API kept the layer as a bare handle and called the four Objective-C layer functions directly, so the wrapper existed only as a type one test constructed. `present` also pre-checked a nil layer, which the source has no need for because its layer always exists. | Make `MetalAPI.layer` the wrapper (absent for the off-screen API), route init/deinit/`loop_enter`/`present`/`surface_size` through it, replace the `owns_layer` flag and the nil pre-check with the optional, and stop the wrapper's methods mutating their receiver. |
 | renderer Metal postprocess shader reporting | A custom shader that loaded but failed to compile was discarded silently; the source logs a warning before falling back to no postprocess shaders, so a broken shader gave the user no diagnostic at all. The shader set also pre-checked a nil device. | Restore the warning on postprocess initialization failure and remove the source-external pre-check. |
+| renderer frame health vs presentation | Both backends folded a failed present into the frame's health: OpenGL silently set `healthy = false`, Metal propagated the error out of `draw_frame`. The source presents only if the rendered health is good, logs a presentation failure, and reports the rendered health unchanged, so a frame that rendered correctly but could not reach the compositor was being fed to the renderer's health tracking and surface notifications as a failure. Metal also reported health before presenting, inverting the source order, and OpenGL's `complete()` had dropped the `sync` parameter both backends' frames take. | Report the rendered health, log presentation failures without changing it, restore the source ordering, and restore the `sync` parameter. |
 
 ## Focused behavior reviewed
 
@@ -351,17 +352,21 @@ an item here does not mean its full module has been certified yet.
   so this divergence is deliberate and is the one place the buffer wrapper
   does not match the source expression.
 
-- **Metal frame/pass representation:** Metal frame completion is synchronously
-  polled in Witty even for frames Ghostty completes through an Objective-C
-  completion block, so the translated renderer currently blocks before
-  presentation. Consequently `beginFrame` is still the one graphics-API entry
-  point the Metal backend does not expose: the source takes the renderer and
-  target so the frame can report health on completion, while Witty's frame is
-  begun from the queue alone and the renderer presents it itself. Render-pass
-  attachment targets and optional step resources are also retained as raw
-  native handles instead of Ghostty's typed texture/target union and wrapper
-  optionals, and `loop_enter` sets the layer display callback through the raw
-  handle rather than the `IOSurfaceLayer` wrapper.
+- **Metal frame completion block:** this is the one remaining Metal
+  divergence. Ghostty's `Frame` carries an Objective-C completion block
+  registered with `addCompletedHandler:`; for an async frame the GPU invokes
+  it, and it presents the target and reports health from there. Witty has no
+  block bridge, so `draw_frame_metal` always calls `complete(true)`, blocking
+  the renderer thread on `waitUntilCompleted` every frame, and then runs the
+  block's body inline. The body itself now matches the source (health from
+  buffer status, present only when healthy, log presentation failures, then
+  report health), but the blocking is real and is why `beginFrame` is also not
+  exposed: the source passes it the renderer and target so the block can close
+  over them. Closing this would require creating an Objective-C block that
+  calls back into V from a GPU completion thread, which the V GC does not
+  currently support for unregistered threads. Render-pass attachment targets
+  and optional step resources also remain raw native handles rather than
+  Ghostty's typed texture/target union and wrapper optionals.
 - **Native/platform coverage:** The complete FreeType/CoreText/web-canvas,
   discovery, Metal/OpenGL, shadertoy, regex,
   embedded-resource, locking, configuration, and platform application surfaces
