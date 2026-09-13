@@ -336,7 +336,7 @@ import simd
 // ActionKey identifies the type of stream action.
 // These correspond to the possible actions that can be emitted by the
 // stream for handling.
-pub enum ActionKey {
+pub enum ActionKey as i32 {
 	print
 	print_repeat
 	bell

@@ -2,6 +2,18 @@ module terminal
 
 import osc
 
+fn test_stream_action_key_c_abi_layout_and_ordinals() {
+	assert sizeof(ActionKey) == 4
+	mut action_count := 0
+	$for enum_value in ActionKey.values {
+		assert i32(enum_value.value) == i32(action_count)
+		action_count++
+	}
+	assert action_count == 93
+	assert i32(ActionKey.print) == 0
+	assert i32(ActionKey.semantic_prompt) == 92
+}
+
 // Tests for the Stream VT escape sequence processor.
 // Translated from Ghostty's stream.zig test suite.
 

@@ -1652,7 +1652,7 @@ pub fn (self &CellStyle) bg_cell() ?CellData {
 // SgrAttribute - SGR (Select Graphic Rendition) attribute
 // ============================================================
 
-pub enum SgrAttributeKind {
+pub enum SgrAttributeKind as i32 {
 	unset
 	unknown
 	bold

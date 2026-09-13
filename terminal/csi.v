@@ -28,7 +28,7 @@ pub enum TabClear as u8 {
 }
 
 // Style formats for terminal size reports.
-pub enum SizeReportStyle {
+pub enum SizeReportStyle as i32 {
 	// XTWINOPS
 	csi_14_t
 	csi_16_t

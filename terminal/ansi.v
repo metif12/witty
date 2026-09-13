@@ -45,14 +45,14 @@ pub enum RenditionAspect as u16 {
 }
 
 // The device attribute request type (ESC [ c).
-pub enum DeviceAttributeReq {
+pub enum DeviceAttributeReq as i32 {
 	primary // Blank
 	secondary // >
 	tertiary // =
 }
 
 // Possible cursor styles (ESC [ q)
-pub enum AnsiCursorStyle {
+pub enum AnsiCursorStyle as i32 {
 	default_
 	blinking_block
 	steady_block
@@ -70,14 +70,14 @@ pub enum StatusLineType as u16 {
 }
 
 // The display to target for status updates (DECSASD).
-pub enum StatusDisplay {
+pub enum StatusDisplay as i32 {
 	main
 	status_line
 }
 
 // The possible modify key formats to ESC[>{a};{b}m
 // Note: this is not complete, we should add more as we support more
-pub enum ModifyKeyFormat {
+pub enum ModifyKeyFormat as i32 {
 	legacy
 	cursor_keys
 	function_keys
