@@ -9,6 +9,24 @@ fn test_image_texture_format_source_layout_and_ordinals() {
 	assert u8(ImageTextureFormat.bgra) == 2
 }
 
+fn test_render_pass_tags_and_counts_match_source_contract() {
+	assert sizeof(GLRenderAttachmentKind) == 1
+	assert u8(GLRenderAttachmentKind.texture) == 0
+	assert u8(GLRenderAttachmentKind.target) == 1
+	assert sizeof(GLVertexStepFunction) == 1
+	assert u8(GLVertexStepFunction.constant) == 0
+	assert u8(GLVertexStepFunction.per_vertex) == 1
+	assert u8(GLVertexStepFunction.per_instance) == 2
+
+	max_count := ~usize(0)
+	draw := GLDraw{
+		vertex_count: max_count
+		instance_count: max_count
+	}
+	assert draw.vertex_count == max_count
+	assert draw.instance_count == max_count
+}
+
 fn test_opengl_init_does_not_require_a_current_context() {
 	default_api := OpenGLAPI.init()!
 	assert default_api.blending == .native

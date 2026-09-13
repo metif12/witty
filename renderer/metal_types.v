@@ -207,8 +207,8 @@ pub:
 	samplers []voidptr
 	// Draw call configuration.
 	draw_type      MetalPrimitiveType = .triangle_strip
-	vertex_count   u32 = 4
-	instance_count u32 = 1
+	vertex_count   usize = 4
+	instance_count usize = 1
 }
 
 pub struct MetalRenderPassAttachment {
@@ -264,7 +264,7 @@ pub fn (mut self MetalRenderPass) step(s MetalRenderStep) {
 	for index, sampler in s.samplers {
 		macos.metal_encoder_set_sampler(self.encoder, sampler, usize(index))
 	}
-	macos.metal_encoder_draw(self.encoder, u64(s.draw_type), usize(s.vertex_count), usize(s.instance_count))
+	macos.metal_encoder_draw(self.encoder, u64(s.draw_type), s.vertex_count, s.instance_count)
 }
 
 pub fn (mut self MetalRenderPass) complete() {

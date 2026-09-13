@@ -138,15 +138,14 @@ pub fn (mut self GLFrame) complete() {
 // OpenGL RenderPass
 // ============================================================
 
-pub enum GLRenderAttachmentKind {
-	default_target
-	target
+pub enum GLRenderAttachmentKind as u8 {
 	texture
+	target
 }
 
 pub struct GLRenderAttachment {
 pub:
-	kind        GLRenderAttachmentKind = .default_target
+	kind        GLRenderAttachmentKind
 	target      GLTarget
 	texture     GLTexture
 	clear_color ?[4]f32
@@ -155,32 +154,27 @@ pub:
 pub struct GLRenderPass {
 pub mut:
 	attachments []GLRenderAttachment
-	step_number int
+	step_number usize
 }
 
 pub struct GLDraw {
 pub:
 	primitive      opengl.Primitive = .triangle_strip
-	vertex_count   u32 = 4
-	instance_count u32 = 1
+	vertex_count   usize = 4
+	instance_count usize = 1
 }
 
 pub struct GLRenderStep {
 pub:
-	pipeline     GLPipeline
-	uniforms     ?GLBuffer
-	buffers      []GLBuffer
-	textures     []GLTexture
-	samplers     []GLSampler
-	draw         GLDraw = GLDraw{}
-	vertex_count u32 = 4
+	pipeline GLPipeline
+	uniforms ?GLBuffer
+	buffers  []GLBuffer
+	textures []GLTexture
+	samplers []GLSampler
+	draw     GLDraw
 }
 
-pub fn GLRenderPass.begin() !GLRenderPass {
-	return GLRenderPass{}
-}
-
-pub fn GLRenderPass.begin_with_attachments(attachments []GLRenderAttachment) !GLRenderPass {
+pub fn GLRenderPass.begin(attachments []GLRenderAttachment) GLRenderPass {
 	return GLRenderPass{
 		attachments: attachments
 	}
@@ -210,50 +204,42 @@ pub fn (mut self GLRenderPass) step(s GLRenderStep) {
 		vaobind.unbind()
 	}
 
-	mut has_fbo := false
 	mut fbobind := opengl.FramebufferBinding{
 		target: .framebuffer
 	}
-	if self.attachments.len > 0 {
-		attachment := self.attachments[0]
-		match attachment.kind {
-			.default_target {}
-			.target {
-				fbo := opengl.Framebuffer{
-					id: attachment.target.fbo
-				}
-				fbobind = fbo.bind(.framebuffer) or { return }
-				has_fbo = true
+	attachment := self.attachments[0]
+	match attachment.kind {
+		.target {
+			fbo := opengl.Framebuffer{
+				id: attachment.target.fbo
 			}
-			.texture {
-				if s.pipeline.fbo == 0 {
-					return
-				}
-				fbo := opengl.Framebuffer{
-					id: s.pipeline.fbo
-				}
-				fbobind = fbo.bind(.framebuffer) or { return }
-				fbobind.texture_2d(.color0, gl_texture_target(attachment.texture.target), opengl.Texture{
-					id: attachment.texture.id
-				}, 0) or {
-					fbobind.unbind()
-					return
-				}
-				has_fbo = true
-			}
+			fbobind = fbo.bind(.framebuffer) or { return }
 		}
-
-		if self.step_number == 0 {
-			if color := attachment.clear_color {
-				opengl.clear_color(color[0], color[1], color[2], color[3])
-				opengl.clear(opengl.gl_color_buffer_bit)
+		.texture {
+			if s.pipeline.fbo == 0 {
+				return
+			}
+			fbo := opengl.Framebuffer{
+				id: s.pipeline.fbo
+			}
+			fbobind = fbo.bind(.framebuffer) or { return }
+			fbobind.texture_2d(.color0, gl_texture_target(attachment.texture.target), opengl.Texture{
+				id: attachment.texture.id
+			}, 0) or {
+				fbobind.unbind()
+				return
 			}
 		}
 	}
-	defer {
-		if has_fbo {
-			fbobind.unbind()
+
+	if self.step_number == 0 {
+		if color := attachment.clear_color {
+			opengl.clear_color(color[0], color[1], color[2], color[3])
+			opengl.clear(opengl.gl_color_buffer_bit)
 		}
+	}
+	defer {
+		fbobind.unbind()
 	}
 
 	if uniforms := s.uniforms {
@@ -307,8 +293,7 @@ pub fn (mut self GLRenderPass) step(s GLRenderStep) {
 		opengl.disable(opengl.gl_blend) or { return }
 	}
 
-	vertex_count := if s.draw.vertex_count > 0 { s.draw.vertex_count } else { s.vertex_count }
-	opengl.draw_arrays_instanced(s.draw.primitive, 0, int(vertex_count), int(s.draw.instance_count)) or {
+	opengl.draw_arrays_instanced(s.draw.primitive, 0, int(s.draw.vertex_count), int(s.draw.instance_count)) or {
 		return
 	}
 	self.step_number++
@@ -327,7 +312,7 @@ pub mut:
 	program          u32
 	fbo              u32
 	vao              u32
-	stride           u32
+	stride           usize
 	blending_enabled bool = true
 }
 
@@ -335,13 +320,13 @@ pub struct GLPipelineOptions {
 pub:
 	vertex_source    string
 	fragment_source  string
-	stride           u32
+	stride           usize
 	attributes       []GLVertexAttribute
 	step_function    GLVertexStepFunction = .per_vertex
 	blending_enabled bool = true
 }
 
-pub enum GLVertexStepFunction {
+pub enum GLVertexStepFunction as u8 {
 	constant
 	per_vertex
 	per_instance
@@ -974,15 +959,15 @@ pub fn GLShaders.init_with_sources(custom_shaders []string) !GLShaders {
 		shaders.deinit()
 		return err
 	}
-	shaders.cell_text = gl_builtin_pipeline(gl_cell_text_vertex_shader_raw, gl_cell_text_fragment_shader_raw, gl_text_cell_attributes(), u32($sizeof(CellText)), .per_instance, true) or {
+	shaders.cell_text = gl_builtin_pipeline(gl_cell_text_vertex_shader_raw, gl_cell_text_fragment_shader_raw, gl_text_cell_attributes(), usize($sizeof(CellText)), .per_instance, true) or {
 		shaders.deinit()
 		return err
 	}
-	shaders.image = gl_builtin_pipeline(gl_image_vertex_shader_raw, gl_image_fragment_shader_raw, gl_image_attributes(), u32($sizeof(ImageVertex)), .per_instance, true) or {
+	shaders.image = gl_builtin_pipeline(gl_image_vertex_shader_raw, gl_image_fragment_shader_raw, gl_image_attributes(), usize($sizeof(ImageVertex)), .per_instance, true) or {
 		shaders.deinit()
 		return err
 	}
-	shaders.bg_image = gl_builtin_pipeline(gl_bg_image_vertex_shader_raw, gl_bg_image_fragment_shader_raw, gl_bg_image_attributes(), u32($sizeof(BgImageBuffer)), .per_instance, true) or {
+	shaders.bg_image = gl_builtin_pipeline(gl_bg_image_vertex_shader_raw, gl_bg_image_fragment_shader_raw, gl_bg_image_attributes(), usize($sizeof(BgImageBuffer)), .per_instance, true) or {
 		shaders.deinit()
 		return err
 	}
@@ -1034,7 +1019,7 @@ fn expand_gl_shader(source string) string {
 	return source.replace('#include "common.glsl"', gl_common_shader)
 }
 
-fn gl_builtin_pipeline(vertex_source string, fragment_source string, attributes []GLVertexAttribute, stride u32, step_function GLVertexStepFunction, blending_enabled bool) !GLPipeline {
+fn gl_builtin_pipeline(vertex_source string, fragment_source string, attributes []GLVertexAttribute, stride usize, step_function GLVertexStepFunction, blending_enabled bool) !GLPipeline {
 	return GLPipeline.init_with_sources(GLPipelineOptions{
 		vertex_source: expand_gl_shader(vertex_source)
 		fragment_source: expand_gl_shader(fragment_source)

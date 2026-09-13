@@ -2,6 +2,16 @@ module renderer
 
 import macos
 
+fn test_metal_render_step_counts_retain_source_pointer_width() {
+	max_count := ~usize(0)
+	step := MetalRenderStep{
+		vertex_count: max_count
+		instance_count: max_count
+	}
+	assert step.vertex_count == max_count
+	assert step.instance_count == max_count
+}
+
 fn test_metal_buffer_sync_writes_native_buffer() {
 	mut api := MetalAPI.init()!
 	defer {

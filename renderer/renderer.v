@@ -1694,7 +1694,7 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 		textures: [frame_state.grayscale.handle, frame_state.color.handle]
 		draw_type: .triangle_strip
 		vertex_count: 4
-		instance_count: u32(foreground.len)
+		instance_count: usize(foreground.len)
 	})
 	self.images.draw(&self.metal, self.shaders.image, mut pass, .kitty_above_text)
 	self.images.draw(&self.metal, self.shaders.image, mut pass, .overlay)
@@ -1869,7 +1869,7 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 			clear_color: [f32(0), 0, 0, 0]!
 		}
 	}
-	mut pass := GLRenderPass.begin_with_attachments([terminal_attachment])!
+	mut pass := GLRenderPass.begin([terminal_attachment])
 
 	if image := self.bg_image {
 		if image.state == .ready && image.texture_backend == .opengl
@@ -1907,7 +1907,7 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 		draw: GLDraw{
 			primitive: .triangle_strip
 			vertex_count: 4
-			instance_count: u32(foreground.len)
+			instance_count: usize(foreground.len)
 		}
 	})
 	self.images.draw_opengl(&self.opengl, self.gl_shaders.image, mut pass, .kitty_above_text)
@@ -1928,7 +1928,7 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 					clear_color: [f32(0), 0, 0, 0]!
 				}
 			}
-			mut post_pass := GLRenderPass.begin_with_attachments([attachment])!
+			mut post_pass := GLRenderPass.begin([attachment])
 			post_pass.step(GLRenderStep{
 				pipeline: pipeline
 				uniforms: state.uniforms
