@@ -13,6 +13,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | terminal (screen/types/style) | SGR 58 underline color written into the **foreground** fields (no dedicated storage); `underline_color_rgb` read from fg. | Added `underline_r/g/b/palette` to `CellStyle`; `set_attribute` and `underline_color_rgb` use them; `eql`/`hash` include them. |
 | terminal/terminal | `index()` didn't mark the new row `prompt_continuation` on a plain linefeed in prompt/**input** mode (logic was only in `print_wrap`, only for `.prompt`). | Added the `defer` marking for `semantic_content != .output` (prompt AND input). |
 | terminal renderer flags | Ghostty's 19-bit terminal flag pack, nested four-bit dirty value, and two-bit screen dirty value were expanded into ordinary V enums/booleans. The renderer also omitted Ghostty's assignment that marks `search_viewport_dirty` whenever its terminal snapshot is dirty, so the search thread could skip a required viewport refresh. | Store the terminal pack in one `u32` and both dirty values in one byte each with the exact source bit order/defaults, route every live consumer through typed accessors, and restore the renderer-to-search dirty notification. |
+| terminal search tags | Screen state/selection, sliding-window direction, thread message/event, and aggregate tick tags all used V's default 32-bit enum storage instead of Ghostty's source-inferred tags. | Restore byte backing for all six retained tags and verify every declaration-order ordinal. |
 | terminal formatter flags | Both formatter `Extra` values are packed in Ghostty, and the terminal value nests the six screen bits after its own six bits; Witty expanded them into twelve separately stored booleans. | Store `ScreenExtra` in one byte and `TerminalExtra` in one `u16`, preserve the source bit ordering and `none`/`styles`/`all` constants, and expose typed field mutation without widening the retained values. |
 | terminal style flags | Every `Style` retained Ghostty's packed `u16` as eight booleans plus an underline enum in a different declaration order, then rebuilt the canonical bits by hand only for hashing. | Store bold/italic/faint/blink/inverse/invisible/strikethrough/overline and the three-bit underline value directly in their source positions, mutate them through typed setters, and hash the retained word without reconstruction. |
 | terminal protocol tags | `device_status.Tag` was expanded from its packed `u16` into a separate integer and boolean, while `modes.ModeTag` was omitted entirely even though the generated enum values happened to encode its high ANSI bit. The formatter used parallel entry fields instead of decoding the canonical tag. | Restore byte-for-byte `u16` tag values for device-status requests and modes, retain the low 15-bit value/high flag layout, and make formatter serialization consume the translated mode tag. |
@@ -226,6 +227,11 @@ an item here does not mean its full module has been certified yet.
   corrected compact discriminant but stores every possible message payload in
   one flat `SurfaceMessage`, so its memory representation and invalid-state
   space are not a one-for-one translation.
+- **Search-thread transport:** Ghostty's search worker is driven by xev async
+  handles/timers and exchanges tagged `Message` and `Event` unions. Witty uses
+  V channels, a timed `select`, and flat payload records with corrected compact
+  tags, so scheduling, backpressure, representation, and invalid-state space
+  remain source-external.
 - **Generated feature wiring:** Ghostty's build synthesizes
   `kitty_graphics`/`tmux_control_mode` from the Oniguruma build option. Witty
   has a build-options carrier but does not yet generate or apply equivalent

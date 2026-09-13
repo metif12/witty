@@ -265,7 +265,7 @@ pub mut:
 // Source: Thread.Message (tagged union). V has no ergonomic payload-
 // carrying unions here, so we model the tag as an enum and carry the
 // payload alongside in Message.
-pub enum MessageType {
+pub enum MessageType as u8 {
 	// Change the search term. If no prior search term is given this
 	// will start a search. If an existing search term is given this will
 	// stop the prior search and start a new one.
@@ -295,7 +295,7 @@ pub fn Message.change_needle(data []u8) Message {
 // chooses to handle these as they see fit.
 //
 // Source: Thread.Event (tagged union), modeled as tag + payload.
-pub enum EventType {
+pub enum EventType as u8 {
 	// Search is quitting. The search thread is exiting.
 	quit
 	// Search is complete for the given needle on all screens.
@@ -336,7 +336,7 @@ pub mut:
 // Tick result for search progress.
 //
 // Source: Search.Tick
-pub enum Tick {
+pub enum Tick as u8 {
 	// All searches are complete.
 	complete
 	// Progress was made on at least one screen.

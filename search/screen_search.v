@@ -362,7 +362,7 @@ fn (mut self HistorySearch) deinit(mut list terminal.PageList) {
 // ============================================================
 
 // Search state machine.
-pub enum State {
+pub enum State as u8 {
 	// Currently searching the active area.
 	active
 	// Currently searching the history area.
@@ -392,7 +392,7 @@ pub fn (self State) needs_feed() bool {
 // Select direction
 // ============================================================
 
-pub enum Select {
+pub enum Select as u8 {
 	// Next selection, in reverse order (newest to oldest), non-wrapping.
 	next
 	// Prev selection, in forward order (oldest to newest), non-wrapping.

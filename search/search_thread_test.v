@@ -4,6 +4,28 @@ import sync
 import terminal
 import time
 
+fn test_search_source_tag_layouts_and_ordinals() {
+	assert sizeof(State) == 1
+	assert [State.active, .history, .history_feed, .complete].map(u8(it)) == [u8(0), 1, 2, 3]
+	assert sizeof(Select) == 1
+	assert [Select.next, .prev].map(u8(it)) == [u8(0), 1]
+	assert sizeof(Direction) == 1
+	assert [Direction.forward, .reverse].map(u8(it)) == [u8(0), 1]
+
+	assert sizeof(MessageType) == 1
+	assert [MessageType.change_needle, .select_result].map(u8(it)) == [u8(0), 1]
+	assert sizeof(EventType) == 1
+	assert [EventType.quit, .complete, .total_matches, .selected_match, .viewport_matches].map(u8(it)) == [
+		u8(0),
+		1,
+		2,
+		3,
+		4,
+	]
+	assert sizeof(Tick) == 1
+	assert [Tick.complete, .progress, .blocked].map(u8(it)) == [u8(0), 1, 2]
+}
+
 struct SearchThreadTestEvents {
 	events chan Event
 }

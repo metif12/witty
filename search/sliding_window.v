@@ -42,7 +42,7 @@ import highlight
 // trivial though and will let us do more complex optimizations in the
 // future (e.g. starting from the viewport and doing a forward/reverse
 // concurrently from that point).
-pub enum Direction {
+pub enum Direction as u8 {
 	forward
 	reverse
 }
