@@ -361,7 +361,8 @@ fn (mut self VTStream) draw_events(context cimgui.Context, palette [256]terminal
 	context.table_setup_column('Description', cimgui.table_column_width_stretch, 0)
 
 	if context.window_focused() {
-		if action := vt_key_action(context) {
+		action := vt_key_action(context)
+		if action != .none_ {
 			self.navigate(action)
 		}
 	}
@@ -401,19 +402,20 @@ fn (mut self VTStream) draw_events(context cimgui.Context, palette [256]terminal
 	}
 }
 
-enum VTKeyAction {
+enum VTKeyAction as u8 {
 	down
+	none_
 	up
 }
 
-fn vt_key_action(context cimgui.Context) ?VTKeyAction {
+fn vt_key_action(context cimgui.Context) VTKeyAction {
 	if context.key_pressed(.key_j) || context.key_pressed(.down_arrow) {
 		return .down
 	}
 	if context.key_pressed(.key_k) || context.key_pressed(.up_arrow) {
 		return .up
 	}
-	return none
+	return .none_
 }
 
 fn (mut self VTStream) navigate(action VTKeyAction) {
@@ -440,12 +442,14 @@ fn (mut self VTStream) navigate(action VTKeyAction) {
 						self.selected_event_seq = u32(self.events[index + 1].seq)
 					}
 				}
+				.none_ { panic('unreachable') }
 			}
 		}
 	} else {
 		self.selected_event_seq = match action {
 			.down { u32(self.events[self.events.len - 1].seq) }
 			.up { u32(self.events[0].seq) }
+			.none_ { panic('unreachable') }
 		}
 	}
 	self.need_scroll_to_selected = true

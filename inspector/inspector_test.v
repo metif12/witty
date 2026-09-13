@@ -339,6 +339,11 @@ fn test_vt_stream_is_bounded_and_navigation_matches_reverse_table() {
 	assert stream.current_seq == 1
 }
 
+fn test_vt_key_action_layout_matches_source() {
+	assert sizeof(VTKeyAction) == 1
+	assert [VTKeyAction.down, .none_, .up].map(u8(it)) == [u8(0), 1, 2]
+}
+
 fn test_imgui_text_filter_semantics() {
 	assert imgui_text_filter_pass('', 'anything')
 	assert imgui_text_filter_pass('abc,xyz', 'prefix XYZ suffix')

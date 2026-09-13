@@ -189,6 +189,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | crash report iteration | `ReportIterator.next()` silently skipped metadata errors and returned the same optional absence as a clean end of iteration; its three-case crash-thread tag also used default-width storage. | Preserve Ghostty's fallible optional result with an explicit V wrapper, propagate the native metadata error, skip only confirmed non-files, and use byte-backed thread-kind values. |
 | standalone internal tags | Crash-envelope item type, detected file type, theme search location, and tripwire reset mode were source-inferred enums retained with V's default 32-bit storage. | Give all four values byte backing and verify their complete source declaration order. |
 | OS URL/desktop tags | The desktop-environment tag used default 32-bit storage. The OS URL opener also redeclared the C-backed application URL kind as an unrelated enum, forcing core and GTK to maintain handwritten three-way projection switches absent from Ghostty. | Byte-back the inferred desktop tag, retain one cycle-free signed 32-bit URL kind aliased at the application boundary, and pass it unchanged through both live opener paths. |
+| inspector key-navigation tag | The inspector removed Ghostty's middle `.none` navigation case in favor of optional absence, widening the tag and renumbering `.up` from 2 to 1. | Restore the exact byte-backed `down, none, up` state and source-style no-action dispatch, and verify all three ordinals. |
 
 ## Focused behavior reviewed
 
