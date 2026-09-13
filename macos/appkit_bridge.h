@@ -36,6 +36,11 @@ typedef struct witty_metal_vertex_attribute {
 	size_t offset;
 } witty_metal_vertex_attribute;
 
+typedef struct witty_metal_pipeline_attachment {
+	unsigned long long pixel_format;
+	bool blending_enabled;
+} witty_metal_pipeline_attachment;
+
 typedef void (*witty_metal_layer_display_callback)(void*);
 
 typedef struct witty_ns_operating_system_version {
@@ -473,8 +478,8 @@ static inline void* witty_metal_new_pipeline(
 	size_t attribute_count,
 	size_t vertex_stride,
 	unsigned long long step_function,
-	unsigned long long pixel_format,
-	bool blending_enabled
+	const witty_metal_pipeline_attachment* pipeline_attachments,
+	size_t pipeline_attachment_count
 ) {
 	if (!device || !vertex_library || !fragment_library || !vertex_name || !fragment_name) return NULL;
 	void* vertex_string = witty_metal_nsstring(vertex_name, vertex_name_length);
@@ -520,16 +525,18 @@ static inline void* witty_metal_new_pipeline(
 	}
 
 	void* color_attachments = ((void* (*)(void*, SEL))objc_msgSend)(desc, sel_registerName("colorAttachments"));
-	void* attachment = ((void* (*)(void*, SEL, unsigned long))objc_msgSend)(color_attachments, sel_registerName("objectAtIndexedSubscript:"), 0);
-	((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setPixelFormat:"), pixel_format);
-	((void (*)(void*, SEL, bool))objc_msgSend)(attachment, sel_registerName("setBlendingEnabled:"), blending_enabled);
-	if (blending_enabled) {
-		((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setRgbBlendOperation:"), 0);
-		((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setAlphaBlendOperation:"), 0);
-		((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setSourceRGBBlendFactor:"), 1);
-		((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setSourceAlphaBlendFactor:"), 1);
-		((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setDestinationRGBBlendFactor:"), 5);
-		((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setDestinationAlphaBlendFactor:"), 5);
+	for (size_t i = 0; i < pipeline_attachment_count; ++i) {
+		void* attachment = ((void* (*)(void*, SEL, unsigned long))objc_msgSend)(color_attachments, sel_registerName("objectAtIndexedSubscript:"), (unsigned long)i);
+		((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setPixelFormat:"), pipeline_attachments[i].pixel_format);
+		((void (*)(void*, SEL, bool))objc_msgSend)(attachment, sel_registerName("setBlendingEnabled:"), pipeline_attachments[i].blending_enabled);
+		if (pipeline_attachments[i].blending_enabled) {
+			((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setRgbBlendOperation:"), 0);
+			((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setAlphaBlendOperation:"), 0);
+			((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setSourceRGBBlendFactor:"), 1);
+			((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setSourceAlphaBlendFactor:"), 1);
+			((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setDestinationRGBBlendFactor:"), 5);
+			((void (*)(void*, SEL, unsigned long long))objc_msgSend)(attachment, sel_registerName("setDestinationAlphaBlendFactor:"), 5);
+		}
 	}
 
 	void* error = NULL;

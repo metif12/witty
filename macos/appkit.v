@@ -233,7 +233,7 @@ fn C.witty_metal_new_iosurface_texture(device voidptr, surface voidptr, pixel_fo
 
 fn C.witty_metal_new_library_source(device voidptr, source &char, length usize) voidptr
 
-fn C.witty_metal_new_pipeline(device voidptr, vertex_library voidptr, fragment_library voidptr, vertex_name &char, vertex_name_length usize, fragment_name &char, fragment_name_length usize, attributes &C.witty_metal_vertex_attribute, attribute_count usize, vertex_stride usize, step_function u64, pixel_format u64, blending_enabled bool) voidptr
+fn C.witty_metal_new_pipeline(device voidptr, vertex_library voidptr, fragment_library voidptr, vertex_name &char, vertex_name_length usize, fragment_name &char, fragment_name_length usize, attributes &C.witty_metal_vertex_attribute, attribute_count usize, vertex_stride usize, step_function u64, attachments &C.witty_metal_pipeline_attachment, attachment_count usize) voidptr
 
 fn C.witty_metal_iosurface_layer_new() voidptr
 
@@ -266,10 +266,22 @@ pub mut:
 	offset usize
 }
 
+pub struct C.witty_metal_pipeline_attachment {
+pub mut:
+	pixel_format     u64
+	blending_enabled bool
+}
+
 pub struct MetalVertexAttribute {
 pub:
 	format u64
 	offset usize
+}
+
+pub struct MetalPipelineAttachment {
+pub:
+	pixel_format     u64
+	blending_enabled bool = true
 }
 
 fn C.MTLCreateSystemDefaultDevice() ObjId
@@ -2200,7 +2212,7 @@ pub fn metal_new_library_source(device voidptr, source string) voidptr {
 	return C.witty_metal_new_library_source(device, &char(source.str), usize(source.len))
 }
 
-pub fn metal_new_pipeline(device voidptr, vertex_library voidptr, fragment_library voidptr, vertex_name string, fragment_name string, attributes []MetalVertexAttribute, vertex_stride usize, step_function u64, pixel_format u64, blending_enabled bool) voidptr {
+pub fn metal_new_pipeline(device voidptr, vertex_library voidptr, fragment_library voidptr, vertex_name string, fragment_name string, attributes []MetalVertexAttribute, vertex_stride usize, step_function u64, attachments []MetalPipelineAttachment) voidptr {
 	mut c_attributes := []C.witty_metal_vertex_attribute{cap: attributes.len}
 	for attribute in attributes {
 		c_attributes << C.witty_metal_vertex_attribute{
@@ -2214,7 +2226,20 @@ pub fn metal_new_pipeline(device voidptr, vertex_library voidptr, fragment_libra
 			attrs = &c_attributes[0]
 		}
 	}
-	return C.witty_metal_new_pipeline(device, vertex_library, fragment_library, &char(vertex_name.str), usize(vertex_name.len), &char(fragment_name.str), usize(fragment_name.len), attrs, usize(attributes.len), vertex_stride, step_function, pixel_format, blending_enabled)
+	mut c_attachments := []C.witty_metal_pipeline_attachment{cap: attachments.len}
+	for attachment in attachments {
+		c_attachments << C.witty_metal_pipeline_attachment{
+			pixel_format: attachment.pixel_format
+			blending_enabled: attachment.blending_enabled
+		}
+	}
+	mut attachment_ptr := unsafe { &C.witty_metal_pipeline_attachment(nil) }
+	if attachments.len > 0 {
+		unsafe {
+			attachment_ptr = &c_attachments[0]
+		}
+	}
+	return C.witty_metal_new_pipeline(device, vertex_library, fragment_library, &char(vertex_name.str), usize(vertex_name.len), &char(fragment_name.str), usize(fragment_name.len), attrs, usize(attributes.len), vertex_stride, step_function, attachment_ptr, usize(attachments.len))
 }
 
 pub fn metal_iosurface_layer_new() voidptr {

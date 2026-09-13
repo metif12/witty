@@ -30,6 +30,23 @@ fn test_metal_render_step_counts_retain_source_pointer_width() {
 	assert step.instance_count == max_count
 }
 
+fn test_metal_pipeline_retains_every_source_attachment() {
+	attachments := [
+		MetalPipelineAttachment{
+			pixel_format: .rgba8unorm
+		},
+		MetalPipelineAttachment{
+			pixel_format: .bgra8unorm_srgb
+			blending_enabled: false
+		},
+	]
+	assert attachments.len == 2
+	assert attachments[0].blending_enabled
+	assert !attachments[1].blending_enabled
+	assert attachments[0].pixel_format == .rgba8unorm
+	assert attachments[1].pixel_format == .bgra8unorm_srgb
+}
+
 fn test_metal_buffer_sync_writes_native_buffer() {
 	mut api := MetalAPI.init()!
 	defer {

@@ -283,15 +283,20 @@ pub enum MetalVertexStepFunction as u64 {
 
 pub struct MetalPipelineOptions {
 pub:
-	device           voidptr = unsafe { nil }
-	vertex_fn        string
-	fragment_fn      string
-	vertex_library   voidptr = unsafe { nil }
-	fragment_library voidptr = unsafe { nil }
+	device           voidptr @[required]
+	vertex_fn        string @[required]
+	fragment_fn      string @[required]
+	vertex_library   voidptr @[required]
+	fragment_library voidptr @[required]
 	attributes       []MetalVertexAttribute
 	vertex_stride    usize
 	step_fn          MetalVertexStepFunction = .per_vertex
-	pixel_format     MetalPixelFormat = .bgra8unorm
+	attachments      []MetalPipelineAttachment @[required]
+}
+
+pub struct MetalPipelineAttachment {
+pub:
+	pixel_format     MetalPixelFormat @[required]
 	blending_enabled bool = true
 }
 
@@ -310,7 +315,14 @@ pub fn MetalPipeline.init(opts MetalPipelineOptions) !MetalPipeline {
 			offset: attribute.offset
 		}
 	}
-	handle := macos.metal_new_pipeline(opts.device, opts.vertex_library, opts.fragment_library, opts.vertex_fn, opts.fragment_fn, attributes, opts.vertex_stride, u64(opts.step_fn), u64(opts.pixel_format), opts.blending_enabled)
+	mut attachments := []macos.MetalPipelineAttachment{cap: opts.attachments.len}
+	for attachment in opts.attachments {
+		attachments << macos.MetalPipelineAttachment{
+			pixel_format: u64(attachment.pixel_format)
+			blending_enabled: attachment.blending_enabled
+		}
+	}
+	handle := macos.metal_new_pipeline(opts.device, opts.vertex_library, opts.fragment_library, opts.vertex_fn, opts.fragment_fn, attributes, opts.vertex_stride, u64(opts.step_fn), attachments)
 	if handle == unsafe { nil } {
 		return error('Metal render pipeline creation failed')
 	}
@@ -843,8 +855,10 @@ pub fn MetalShaders.init(device voidptr, post_shaders []string, pixel_format Met
 		fragment_fn: 'bg_color_fragment'
 		vertex_library: library
 		fragment_library: library
-		pixel_format: pixel_format
-		blending_enabled: false
+		attachments: [MetalPipelineAttachment{
+			pixel_format: pixel_format
+			blending_enabled: false
+		}]
 	}) or {
 		self.deinit()
 		return err
@@ -855,8 +869,9 @@ pub fn MetalShaders.init(device voidptr, post_shaders []string, pixel_format Met
 		fragment_fn: 'cell_bg_fragment'
 		vertex_library: library
 		fragment_library: library
-		pixel_format: pixel_format
-		blending_enabled: true
+		attachments: [MetalPipelineAttachment{
+			pixel_format: pixel_format
+		}]
 	}) or {
 		self.deinit()
 		return err
@@ -870,8 +885,9 @@ pub fn MetalShaders.init(device voidptr, post_shaders []string, pixel_format Met
 		attributes: metal_text_cell_attributes()
 		vertex_stride: $sizeof(CellText)
 		step_fn: .per_instance
-		pixel_format: pixel_format
-		blending_enabled: true
+		attachments: [MetalPipelineAttachment{
+			pixel_format: pixel_format
+		}]
 	}) or {
 		self.deinit()
 		return err
@@ -885,8 +901,9 @@ pub fn MetalShaders.init(device voidptr, post_shaders []string, pixel_format Met
 		attributes: metal_image_attributes()
 		vertex_stride: $sizeof(ImageVertex)
 		step_fn: .per_instance
-		pixel_format: pixel_format
-		blending_enabled: true
+		attachments: [MetalPipelineAttachment{
+			pixel_format: pixel_format
+		}]
 	}) or {
 		self.deinit()
 		return err
@@ -900,8 +917,9 @@ pub fn MetalShaders.init(device voidptr, post_shaders []string, pixel_format Met
 		attributes: metal_bg_image_attributes()
 		vertex_stride: $sizeof(BgImageBuffer)
 		step_fn: .per_instance
-		pixel_format: pixel_format
-		blending_enabled: true
+		attachments: [MetalPipelineAttachment{
+			pixel_format: pixel_format
+		}]
 	}) or {
 		self.deinit()
 		return err
@@ -920,8 +938,10 @@ pub fn MetalShaders.init(device voidptr, post_shaders []string, pixel_format Met
 			fragment_fn: 'main0'
 			vertex_library: library
 			fragment_library: post_library
-			pixel_format: pixel_format
-			blending_enabled: false
+			attachments: [MetalPipelineAttachment{
+				pixel_format: pixel_format
+				blending_enabled: false
+			}]
 		}) or {
 			macos.metal_release(post_library)
 			post_failed = true
