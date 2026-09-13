@@ -3,6 +3,24 @@ module synthetic
 import osc
 import rand
 
+fn test_osc_kind_layout_and_source_order() {
+	assert sizeof(OscValidKind) == 1
+	mut valid_index := 0
+	$for value in OscValidKind.values {
+		assert u8(value.value) == u8(valid_index)
+		valid_index++
+	}
+	assert valid_index == 13
+
+	assert sizeof(OscInvalidKind) == 1
+	mut invalid_index := 0
+	$for value in OscInvalidKind.values {
+		assert u8(value.value) == u8(invalid_index)
+		invalid_index++
+	}
+	assert invalid_index == 2
+}
+
 fn test_osc_generator_produces_wrapped_sequences() {
 	mut rng := rand.new_default(seed_: [u32(0xc0ffeeee), 0xeeeeeeee])
 	defer { rng.free() }

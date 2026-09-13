@@ -3,7 +3,7 @@ module synthetic
 import internal_os
 import rand
 
-pub enum OscValidKind {
+pub enum OscValidKind as u8 {
 	change_window_title
 	prompt_start
 	prompt_end
@@ -19,7 +19,7 @@ pub enum OscValidKind {
 	iterm2_notification
 }
 
-pub enum OscInvalidKind {
+pub enum OscInvalidKind as u8 {
 	random
 	good_prefix
 }
