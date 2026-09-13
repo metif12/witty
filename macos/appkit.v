@@ -324,8 +324,6 @@ const ns_alert_style_warning = u64(2)
 const ns_alert_first_button_return = i64(1000)
 const objc_assoc_copy_nonatomic = usize(3)
 const mtl_pixel_format_bgra8unorm = u64(80)
-const mtl_load_action_clear = u64(2)
-const mtl_store_action_store = u64(1)
 const mtl_gpu_family_apple3 = u64(1003)
 const mtl_gpu_family_apple10 = u64(1010)
 
@@ -2281,35 +2279,8 @@ pub fn metal_iosurface_layer_set_surface_sync(layer voidptr, surface voidptr) {
 	C.witty_metal_iosurface_layer_set_surface_sync(layer, surface)
 }
 
-pub fn metal_next_drawable(layer voidptr) voidptr {
-	return msg_id(ObjId(layer), 'nextDrawable')
-}
-
-pub fn metal_drawable_texture(drawable voidptr) voidptr {
-	return msg_id(ObjId(drawable), 'texture')
-}
-
 pub fn metal_create_command_buffer(queue voidptr) voidptr {
 	return msg_id(ObjId(queue), 'commandBuffer')
-}
-
-pub fn metal_create_render_pass(texture voidptr, r f64, g f64, b f64, a f64) voidptr {
-	if is_nil(texture) {
-		return unsafe { nil }
-	}
-	desc := msg_id(get_class('MTLRenderPassDescriptor'), 'renderPassDescriptor')
-	attachments := msg_id(desc, 'colorAttachments')
-	attachment := msg_id_u64(attachments, 'objectAtIndexedSubscript:', 0)
-	msg_void1(attachment, 'setTexture:', ObjId(texture))
-	msg_void_u64(attachment, 'setLoadAction:', mtl_load_action_clear)
-	msg_void_u64(attachment, 'setStoreAction:', mtl_store_action_store)
-	C.witty_macos_objc_msg_void_clear_color(attachment, sel('setClearColor:'), MetalClearColor{
-		red: r
-		green: g
-		blue: b
-		alpha: a
-	})
-	return desc
 }
 
 pub fn metal_create_encoder(cmd_buf voidptr, pass voidptr) voidptr {
@@ -2321,14 +2292,6 @@ pub fn metal_create_encoder(cmd_buf voidptr, pass voidptr) voidptr {
 
 pub fn metal_end_encoding(encoder voidptr) {
 	msg_void(ObjId(encoder), 'endEncoding')
-}
-
-pub fn metal_present_and_commit(cmd_buf voidptr, drawable voidptr) {
-	if is_nil(cmd_buf) || is_nil(drawable) {
-		return
-	}
-	msg_void1(ObjId(cmd_buf), 'presentDrawable:', ObjId(drawable))
-	msg_void(ObjId(cmd_buf), 'commit')
 }
 
 pub fn metal_release(ptr voidptr) {

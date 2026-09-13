@@ -218,16 +218,6 @@ pub fn (self &MetalAPI) present_last_target() ! {
 	_ = self
 }
 
-// next_drawable gets the next drawable from the Metal layer.
-pub fn (self &MetalAPI) next_drawable() voidptr {
-	return macos.metal_next_drawable(self.layer)
-}
-
-// create_command_buffer creates a new command buffer from the queue.
-pub fn (self &MetalAPI) create_command_buffer() voidptr {
-	return macos.metal_create_command_buffer(self.queue)
-}
-
 pub fn (self &MetalAPI) buffer_options() MetalBufferOptions {
 	return MetalBufferOptions{
 		device: self.device
@@ -335,11 +325,6 @@ pub fn (self &MetalAPI) init_target(width usize, height usize) !MetalTarget {
 		pixel_format: self.target_pixel_format()
 		storage_mode: self.default_storage_mode
 	})
-}
-
-// present_and_commit presents the drawable and commits the command buffer.
-pub fn (self &MetalAPI) present_and_commit(cmd_buf voidptr, drawable voidptr) {
-	macos.metal_present_and_commit(cmd_buf, drawable)
 }
 
 pub fn (self &MetalAPI) present(target &MetalTarget, sync_ bool) ! {
