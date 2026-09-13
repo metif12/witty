@@ -180,7 +180,7 @@ pub fn (self Terminator) cval() TerminatorC {
 }
 
 // ProgressState represents the state of a ConEmu progress report.
-pub enum ProgressState {
+pub enum ProgressState as i32 {
 	remove
 	set
 	err_state
@@ -239,7 +239,7 @@ pub:
 }
 
 // ConEmuTabTitle represents a ConEmu tab title value (reset or set to a string).
-pub enum ConEmuTabTitleKind {
+pub enum ConEmuTabTitleKind as u8 {
 	reset
 	value
 }
@@ -251,7 +251,7 @@ pub:
 }
 
 // CommandType identifies the type of OSC command.
-pub enum CommandType {
+pub enum CommandType as i32 {
 	invalid
 	change_window_title
 	change_window_icon
@@ -364,7 +364,7 @@ pub enum OscParserState as u8 {
 
 // OscWriter tracks the source writer selected for a payload. Normal OSCs use
 // the fixed 2 KiB buffer; OSC 52 and OSC 66 use the allocating writer.
-enum OscWriter {
+enum OscWriter as u8 {
 	none
 	fixed
 	allocating

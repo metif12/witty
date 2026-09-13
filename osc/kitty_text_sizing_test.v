@@ -1,5 +1,12 @@
 module osc
 
+fn test_kitty_text_sizing_c_enum_layouts_and_ordinals() {
+	assert sizeof(KittyTextSizingVAlign) == 4
+	assert [KittyTextSizingVAlign.top, .bottom, .center].map(i32(it)) == [i32(0), 1, 2]
+	assert sizeof(KittyTextSizingHAlign) == 4
+	assert [KittyTextSizingHAlign.left, .right, .center].map(i32(it)) == [i32(0), 1, 2]
+}
+
 fn test_osc66_empty_parameters() {
 	mut p := Parser.init(unsafe { nil })
 	input := '66;;bobr'

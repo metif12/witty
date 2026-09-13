@@ -6,14 +6,14 @@ module osc
 pub const max_payload_length = 4096
 
 // KittyTextSizingVAlign represents vertical alignment for text sizing.
-pub enum KittyTextSizingVAlign {
+pub enum KittyTextSizingVAlign as i32 {
 	top // 0
 	bottom // 1
 	center // 2
 }
 
 // KittyTextSizingHAlign represents horizontal alignment for text sizing.
-pub enum KittyTextSizingHAlign {
+pub enum KittyTextSizingHAlign as i32 {
 	left // 0
 	right // 1
 	center // 2

@@ -1,5 +1,31 @@
 module osc
 
+fn test_osc_source_tag_layouts_and_ordinals() {
+	assert sizeof(ProgressState) == 4
+	assert [ProgressState.remove, .set, .err_state, .indeterminate, .pause].map(i32(it)) == [
+		i32(0),
+		1,
+		2,
+		3,
+		4,
+	]
+
+	assert sizeof(CommandType) == 4
+	mut command_count := 0
+	$for enum_value in CommandType.values {
+		assert i32(enum_value.value) == i32(command_count)
+		command_count++
+	}
+	assert command_count == 23
+	assert i32(CommandType.invalid) == 0
+	assert i32(CommandType.kitty_text_sizing) == 22
+
+	assert sizeof(ConEmuTabTitleKind) == 1
+	assert [ConEmuTabTitleKind.reset, .value].map(u8(it)) == [u8(0), 1]
+	assert sizeof(OscWriter) == 1
+	assert [OscWriter.none, .fixed, .allocating].map(u8(it)) == [u8(0), 1, 2]
+}
+
 // Helper to feed input string to parser and return the command
 fn parse_osc_input(input string) Command {
 	mut p := Parser.init(unsafe { nil })
