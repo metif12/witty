@@ -1778,7 +1778,7 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		}
 		.show_child_exited {
 			mut surface := surface_from_target(target) or { return false }
-			return surface.child_exited_action(data.show_child_exited_)
+			return surface.child_exited(data.show_child_exited_)
 		}
 		.show_gtk_inspector {
 			C.gtk_window_set_interactive_debugging(true)

@@ -1278,13 +1278,15 @@ pub fn (mut self SurfaceWidget) prompt_title() {
 // Mirrors Surface.initActionMap.
 fn (mut self SurfaceWidget) init_action_map() {
 	actions := [
-		Action.init('prompt-title', GCallback(voidptr(surface_action_prompt_title_cb)), unsafe { nil }),
-		Action.init_stateful('notify-on-next-command-finish', GCallback(voidptr(surface_action_notify_on_next_command_finish_cb)), unsafe { nil }, C.g_variant_new_boolean(0)),
+		Action.init('prompt-title', GCallback(voidptr(action_prompt_title)), unsafe { nil }),
+		Action.init_stateful('notify-on-next-command-finish', GCallback(voidptr(action_notify_on_next_command_finish)), unsafe { nil }, C.g_variant_new_boolean(0)),
 	]
 	self.action_group = add_as_group(voidptr(self), self.widget, 'surface', actions)
 }
 
-fn surface_action_prompt_title_cb(action GSimpleAction, parameter GVariant, data voidptr) {
+// action_prompt_title is the source public action callback. V exposes the
+// surface through GLib's user-data slot instead of a third typed parameter.
+pub fn action_prompt_title(action GSimpleAction, parameter GVariant, data voidptr) {
 	_ = action
 	_ = parameter
 	if isnil(data) {
@@ -1300,7 +1302,9 @@ fn surface_action_prompt_title_cb(action GSimpleAction, parameter GVariant, data
 	}
 }
 
-fn surface_action_notify_on_next_command_finish_cb(action GSimpleAction, parameter GVariant, data voidptr) {
+// action_notify_on_next_command_finish is the source public stateful action
+// callback with the same GLib user-data adaptation as action_prompt_title.
+pub fn action_notify_on_next_command_finish(action GSimpleAction, parameter GVariant, data voidptr) {
 	_ = parameter
 	_ = data
 	if isnil(action) {
@@ -2904,7 +2908,7 @@ fn surface_core_action_cb(data voidptr, action apprt.RuntimeAction) !bool {
 			return true
 		}
 		.show_child_exited {
-			return self.child_exited_action(action.data.show_child_exited_)
+			return self.child_exited(action.data.show_child_exited_)
 		}
 		.key_sequence {
 			self.key_sequence_action(action.data.key_sequence_)
@@ -3442,9 +3446,9 @@ pub fn (mut self SurfaceWidget) key_table_action(value apprt.KeyTable) {
 	}
 }
 
-// child_exited_action mirrors Surface.childExited: keep the surface state in
-// sync and show the native banner with the full exit payload.
-pub fn (mut self SurfaceWidget) child_exited_action(data apprt.ChildExited) bool {
+// child_exited mirrors Surface.childExited: keep the surface state in sync and
+// show the native banner with the full exit payload.
+pub fn (mut self SurfaceWidget) child_exited(data apprt.ChildExited) bool {
 	self.child_exited = true
 	self.notify_property(g_surface_pspec_child_exited)
 	if !adw_supports_banner() || isnil(self.child_exited_overlay) {
