@@ -1010,7 +1010,7 @@ fn setup_shell_command(integration configpkg.ShellIntegration, resources_dir ?st
 		}
 	}
 
-	result := setup_shell_integration(dir, default_cmd, mut env, force)
+	result := setup(dir, default_cmd, mut env, force)
 	if r := result {
 		return r.command
 	}

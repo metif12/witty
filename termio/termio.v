@@ -426,7 +426,7 @@ pub fn (mut t Termio) thread_enter() ! {
 
 	// Open every configured path before starting the command. If any source is
 	// missing, no subprocess starts and therefore none of the input is sent.
-	mut inputs := t.prepare_initial_input()!
+	mut inputs := t.prepare_input()!
 	defer {
 		close_prepared_inputs(mut inputs)
 	}
@@ -464,7 +464,7 @@ enum PreparedInputTag as u8 {
 	file
 }
 
-fn (t &Termio) prepare_initial_input() ![]PreparedInput {
+fn (t &Termio) prepare_input() ![]PreparedInput {
 	mut result := []PreparedInput{cap: t.thread_enter_input.len}
 	for item in t.thread_enter_input {
 		match item.kind {

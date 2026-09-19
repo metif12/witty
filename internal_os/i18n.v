@@ -81,9 +81,9 @@ pub fn init_i18n(resources_dir string) ! {
 	}
 }
 
-// init_i18n_global_domain makes unqualified gettext calls use Ghostty's
+// init_global_domain makes unqualified gettext calls use Ghostty's
 // domain. Fully owning runtimes such as GTK call this during startup.
-pub fn init_i18n_global_domain() ! {
+pub fn init_global_domain() ! {
 	load_gettext() or { return }
 	state := get_i18n_state()
 	if isnil(state.domain_symbol) {

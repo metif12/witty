@@ -181,7 +181,7 @@ mut:
 	index usize
 }
 
-pub fn args_iterator() ArgIterator {
+pub fn iterator() ArgIterator {
 	return ArgIterator{
 		args: platform_args()
 	}

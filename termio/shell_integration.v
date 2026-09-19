@@ -14,7 +14,7 @@ pub enum Shell as u8 {
 }
 
 // The result of setting up a shell integration.
-pub struct ShellIntegrationResult {
+pub struct ShellIntegration {
 pub:
 	// The successfully-integrated shell.
 	shell Shell
@@ -25,10 +25,10 @@ pub:
 }
 
 // Set up the command execution environment for automatic
-// integrated shell integration and return a ShellIntegrationResult
+// integrated shell integration and return a ShellIntegration
 // describing the integration. If integration fails
 // (shell type couldn't be detected, etc.), this will return none.
-pub fn setup_shell_integration(resource_dir string, command configpkg.Command, mut env map[string]string, force_shell ?Shell) ?ShellIntegrationResult {
+pub fn setup(resource_dir string, command configpkg.Command, mut env map[string]string, force_shell ?Shell) ?ShellIntegration {
 	shell := force_shell or { detect_shell(command) or { return none } }
 
 	new_command := match shell {
@@ -49,7 +49,7 @@ pub fn setup_shell_integration(resource_dir string, command configpkg.Command, m
 		}
 	}
 
-	return ShellIntegrationResult{
+	return ShellIntegration{
 		shell: shell
 		command: new_command
 	}

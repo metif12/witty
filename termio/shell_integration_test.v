@@ -589,7 +589,7 @@ fn test_force_shell_bash() {
 	}
 
 	mut env := map[string]string{}
-	result := setup_shell_integration(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.bash)
+	result := setup(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.bash)
 	if r := result {
 		assert r.shell == .bash
 	} else {
@@ -604,7 +604,7 @@ fn test_force_shell_zsh() {
 	}
 
 	mut env := map[string]string{}
-	result := setup_shell_integration(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.zsh)
+	result := setup(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.zsh)
 	if r := result {
 		assert r.shell == .zsh
 	} else {
@@ -619,7 +619,7 @@ fn test_force_shell_fish() {
 	}
 
 	mut env := map[string]string{}
-	result := setup_shell_integration(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.fish)
+	result := setup(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.fish)
 	if r := result {
 		assert r.shell == .fish
 	} else {
@@ -634,7 +634,7 @@ fn test_force_shell_elvish() {
 	}
 
 	mut env := map[string]string{}
-	result := setup_shell_integration(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.elvish)
+	result := setup(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.elvish)
 	if r := result {
 		assert r.shell == .elvish
 	} else {
@@ -649,7 +649,7 @@ fn test_force_shell_nushell() {
 	}
 
 	mut env := map[string]string{}
-	result := setup_shell_integration(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.nushell)
+	result := setup(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.nushell)
 	if r := result {
 		assert r.shell == .nushell
 	} else {
@@ -659,7 +659,7 @@ fn test_force_shell_nushell() {
 
 fn test_shell_integration_failure() {
 	mut env := map[string]string{}
-	result := setup_shell_integration('/nonexistent', configpkg.ShellCmd{ shell: 'sh' }, mut env, none)
+	result := setup('/nonexistent', configpkg.ShellCmd{ shell: 'sh' }, mut env, none)
 	assert result == none
 	assert env.len == 0
 }

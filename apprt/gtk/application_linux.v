@@ -446,7 +446,7 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 	adw_log_version()
 
 	// Set the gettext global domain so unqualified translations resolve.
-	internal_os.init_i18n_global_domain() or {
+	internal_os.init_global_domain() or {
 		eprintln('i18n initialization failed error=${err}')
 	}
 
