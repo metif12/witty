@@ -47,7 +47,7 @@ pub fn GLBuffer.init(opts GLBufferOptions, len usize) !GLBuffer {
 		buffer.destroy()
 		return err
 	}
-	binding.set_data_null(len, gl_buffer_usage(opts.usage)) or {
+	binding.set_data_null_manual(len, gl_buffer_usage(opts.usage)) or {
 		binding.unbind()
 		buffer.destroy()
 		return err
@@ -108,7 +108,7 @@ pub fn (mut self GLBuffer) sync(data []u8) ! {
 	required := usize(data.len)
 	if required > self.len {
 		self.len = required * 2
-		binding.set_data_null(self.len, gl_buffer_usage(self.usage))!
+		binding.set_data_null_manual(self.len, gl_buffer_usage(self.usage))!
 	}
 	binding.set_sub_data(0, data)!
 }
@@ -145,7 +145,7 @@ pub fn (mut self GLBuffer) sync_from_array_lists[T](lists [][]T) !usize {
 	if req_bytes > self.len {
 		// Reallocate the buffer to hold double what we require.
 		self.len = req_bytes * 2
-		binding.set_data_null(self.len, gl_buffer_usage(self.usage))!
+		binding.set_data_null_manual(self.len, gl_buffer_usage(self.usage))!
 	}
 
 	// We can fit within the buffer so we can just replace bytes.

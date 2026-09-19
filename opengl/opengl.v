@@ -264,9 +264,6 @@ pub fn extensions_len() !u32 {
 	mut n := int(0)
 	C.glGetIntegerv(C.GL_NUM_EXTENSIONS, &n)
 	get_error()!
-	if n < 0 {
-		return 0
-	}
 	return u32(n)
 }
 
@@ -283,24 +280,31 @@ pub fn extensions_iterator() !ExtensionIterator {
 	}
 }
 
-pub fn (mut it ExtensionIterator) next() ?string {
+// ExtensionNextResult preserves Ghostty's `!?[]const u8` return contract. V
+// cannot combine an optional value with an error result directly, so
+// `value == none` represents the exhausted iterator.
+pub struct ExtensionNextResult {
+pub:
+	value ?string
+}
+
+pub fn (mut it ExtensionIterator) next() !ExtensionNextResult {
 	if it.i >= it.len {
-		return none
+		return ExtensionNextResult{}
 	}
 	ptr := C.glGetStringi(C.GL_EXTENSIONS, it.i)
-	get_error() or { return none }
+	get_error()!
 	it.i++
-	if isnil(ptr) {
-		return none
+	return ExtensionNextResult{
+		value: unsafe { cstring_to_vstring(&char(ptr)) }
 	}
-	return unsafe { cstring_to_vstring(&char(ptr)) }
 }
 
 // ============================================================
 // primitives.zig
 // ============================================================
 
-pub enum Primitive {
+pub enum Primitive as i32 {
 	point          = C.GL_POINTS
 	line           = C.GL_LINES
 	line_strip     = C.GL_LINE_STRIP
@@ -366,7 +370,6 @@ pub fn blend_func(sfactor u32, dfactor u32) ! {
 
 pub fn viewport(x int, y int, width int, height int) ! {
 	C.glViewport(x, y, width, height)
-	get_error()!
 }
 
 pub fn viewport_rect() ![4]int {
@@ -376,8 +379,12 @@ pub fn viewport_rect() ![4]int {
 	return values
 }
 
-pub fn pixel_store(mode u32, value int) ! {
-	C.glPixelStorei(mode, value)
+pub fn pixel_store[T](mode u32, value T) ! {
+	$if T is $int {
+		C.glPixelStorei(mode, int(value))
+	} $else {
+		$compile_error('pixel_store only supports integer values')
+	}
 	get_error()!
 }
 
@@ -443,14 +450,14 @@ pub:
 	id u32
 }
 
-pub enum BufferTarget {
+pub enum BufferTarget as u32 {
 	array         = C.GL_ARRAY_BUFFER
 	element_array = C.GL_ELEMENT_ARRAY_BUFFER
 	uniform       = C.GL_UNIFORM_BUFFER
 	storage       = C.GL_SHADER_STORAGE_BUFFER
 }
 
-pub enum BufferUsage {
+pub enum BufferUsage as u32 {
 	stream_draw  = C.GL_STREAM_DRAW
 	stream_read  = C.GL_STREAM_READ
 	stream_copy  = C.GL_STREAM_COPY
@@ -471,7 +478,6 @@ pub:
 pub fn Buffer.create() !Buffer {
 	mut id := u32(0)
 	C.glGenBuffers(1, &id)
-	get_error()!
 	return Buffer{
 		id: id
 	}
@@ -479,7 +485,6 @@ pub fn Buffer.create() !Buffer {
 
 pub fn (b Buffer) bind(target BufferTarget) !BufferBinding {
 	C.glBindBuffer(u32(target), b.id)
-	get_error()!
 	return BufferBinding{
 		id: b.id
 		target: target
@@ -500,25 +505,49 @@ pub fn (b BufferBinding) unbind() {
 	C.glBindBuffer(u32(b.target), 0)
 }
 
-pub fn (b BufferBinding) set_data(data []u8, usage BufferUsage) ! {
-	mut ptr := voidptr(unsafe { nil })
-	if data.len > 0 {
-		ptr = voidptr(data.data)
+struct BufferDataInfo {
+	size isize
+	ptr  voidptr
+}
+
+fn buffer_data_info[T](data T) BufferDataInfo {
+	$if T is $array {
+		mut ptr := voidptr(unsafe { nil })
+		if data.len > 0 {
+			ptr = voidptr(data.data)
+		}
+		return BufferDataInfo{
+			size: isize(usize(data.len) * usize(sizeof(data[0])))
+			ptr:  ptr
+		}
+	} $else $if T is $pointer {
+		return BufferDataInfo{
+			size: isize(sizeof(*data))
+			ptr:  voidptr(data)
+		}
+	} $else {
+		$compile_error('buffer data must be a slice or single-item pointer')
 	}
-	C.glBufferData(u32(b.target), isize(data.len), ptr, u32(usage))
+}
+
+pub fn (b BufferBinding) set_data[T](data T, usage BufferUsage) ! {
+	info := buffer_data_info(data)
+	C.glBufferData(u32(b.target), info.size, info.ptr, u32(usage))
 	get_error()!
 }
 
-pub fn (b BufferBinding) set_sub_data(offset usize, data []u8) ! {
-	mut ptr := voidptr(unsafe { nil })
-	if data.len > 0 {
-		ptr = voidptr(data.data)
-	}
-	C.glBufferSubData(u32(b.target), isize(offset), isize(data.len), ptr)
+pub fn (b BufferBinding) set_sub_data[T](offset usize, data T) ! {
+	info := buffer_data_info(data)
+	C.glBufferSubData(u32(b.target), isize(offset), info.size, info.ptr)
 	get_error()!
 }
 
-pub fn (b BufferBinding) set_data_null(size usize, usage BufferUsage) ! {
+pub fn (b BufferBinding) set_data_null[T](usage BufferUsage) ! {
+	C.glBufferData(u32(b.target), isize(sizeof(T)), unsafe { nil }, u32(usage))
+	get_error()!
+}
+
+pub fn (b BufferBinding) set_data_null_manual(size usize, usage BufferUsage) ! {
 	C.glBufferData(u32(b.target), isize(size), unsafe { nil }, u32(usage))
 	get_error()!
 }
@@ -526,6 +555,28 @@ pub fn (b BufferBinding) set_data_null(size usize, usage BufferUsage) ! {
 pub fn (b BufferBinding) enable_attrib_array(idx u32) ! {
 	C.glEnableVertexAttribArray(idx)
 	get_error()!
+}
+
+// attribute is the common homogeneous fixed-array shorthand from Buffer.zig.
+// The pinned Ghostty implementation only accepts fixed arrays of f32.
+pub fn (b BufferBinding) attribute[T](idx u32, size int, offset usize) ! {
+	$if T is $array_fixed {
+		value := T{}
+		component_size := buffer_attribute_component_size(value[0])
+		b.attribute_advanced(idx, size, gl_float, false, int(sizeof(T)), offset * component_size)!
+		b.enable_attrib_array(idx)!
+	} $else {
+		$compile_error('BufferBinding.attribute only supports fixed arrays')
+	}
+}
+
+fn buffer_attribute_component_size[T](value T) usize {
+	_ = value
+	$if T is f32 {
+		return usize(sizeof(T))
+	} $else {
+		$compile_error('BufferBinding.attribute only supports f32 array components')
+	}
 }
 
 pub fn (b BufferBinding) attribute_divisor(idx u32, divisor u32) ! {
@@ -555,7 +606,7 @@ pub:
 	id u32
 }
 
-pub enum TextureTarget {
+pub enum TextureTarget as u32 {
 	t1d                   = C.GL_TEXTURE_1D
 	t2d                   = C.GL_TEXTURE_2D
 	t3d                   = C.GL_TEXTURE_3D
@@ -568,7 +619,7 @@ pub enum TextureTarget {
 	t2d_multisample_array = 0x9102 // GL_TEXTURE_2D_MULTISAMPLE_ARRAY
 }
 
-pub enum TextureParameter {
+pub enum TextureParameter as u32 {
 	base_level   = C.GL_TEXTURE_BASE_LEVEL
 	compare_func = C.GL_TEXTURE_COMPARE_FUNC
 	compare_mode = C.GL_TEXTURE_COMPARE_MODE
@@ -587,7 +638,7 @@ pub enum TextureParameter {
 	wrap_r       = C.GL_TEXTURE_WRAP_R
 }
 
-pub enum TextureInternalFormat {
+pub enum TextureInternalFormat as i32 {
 	red              = C.GL_RED
 	rgb              = C.GL_RGB8
 	rgba             = C.GL_RGBA8
@@ -597,14 +648,14 @@ pub enum TextureInternalFormat {
 	srgba_compressed = 0x8e8d // GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM
 }
 
-pub enum TextureFormat {
+pub enum TextureFormat as u32 {
 	red  = C.GL_RED
 	rgb  = C.GL_RGB
 	rgba = C.GL_RGBA
 	bgra = C.GL_BGRA
 }
 
-pub enum TextureMinFilter {
+pub enum TextureMinFilter as i32 {
 	nearest                = C.GL_NEAREST
 	linear                 = C.GL_LINEAR
 	nearest_mipmap_nearest = C.GL_NEAREST_MIPMAP_NEAREST
@@ -613,19 +664,19 @@ pub enum TextureMinFilter {
 	linear_mipmap_linear   = C.GL_LINEAR_MIPMAP_LINEAR
 }
 
-pub enum TextureMagFilter {
+pub enum TextureMagFilter as i32 {
 	nearest = C.GL_NEAREST
 	linear  = C.GL_LINEAR
 }
 
-pub enum TextureWrap {
+pub enum TextureWrap as i32 {
 	clamp_to_edge   = C.GL_CLAMP_TO_EDGE
 	clamp_to_border = C.GL_CLAMP_TO_BORDER
 	mirrored_repeat = C.GL_MIRRORED_REPEAT
 	repeat          = C.GL_REPEAT
 }
 
-pub enum TextureDataType {
+pub enum TextureDataType as u32 {
 	unsigned_byte = C.GL_UNSIGNED_BYTE
 }
 
@@ -703,7 +754,6 @@ pub struct VertexArrayBinding {}
 pub fn VertexArray.create() !VertexArray {
 	mut id := u32(0)
 	C.glGenVertexArrays(1, &id)
-	get_error()!
 	return VertexArray{
 		id: id
 	}
@@ -814,17 +864,22 @@ pub fn (s Shader) set_source_and_compile(source string) ! {
 	mut success := int(0)
 	C.glGetShaderiv(s.id, C.GL_COMPILE_STATUS, &success)
 	if success != int(C.GL_TRUE) {
-		return error('CompileFailed: ${s.get_info_log()}')
+		msg := s.get_info_log()
+		eprintln('shader compilation failure id=${s.id} message=${unsafe {
+			cstring_to_vstring(&char(&msg[0]))
+		}}')
+		return error('CompileFailed')
 	}
 }
 
-pub fn (s Shader) get_info_log() string {
-	mut msg := []u8{len: 512, init: 0}
-	C.glGetShaderInfoLog(s.id, msg.len, unsafe { nil }, msg.data)
-	return unsafe { cstring_to_vstring(&char(msg.data)) }
+pub fn (s Shader) get_info_log() [512]u8 {
+	mut msg := [512]u8{}
+	C.glGetShaderInfoLog(s.id, msg.len, unsafe { nil }, &msg[0])
+	return msg
 }
 
 pub fn (s Shader) destroy() {
+	assert s.id != 0
 	C.glDeleteShader(s.id)
 }
 
@@ -871,6 +926,7 @@ pub fn Program.create_vf(vsrc string, fsrc string) !Program {
 }
 
 pub fn (p Program) destroy() {
+	assert p.id != 0
 	C.glDeleteProgram(p.id)
 }
 
@@ -884,7 +940,11 @@ pub fn (p Program) link() ! {
 	mut success := int(0)
 	C.glGetProgramiv(p.id, C.GL_LINK_STATUS, &success)
 	if success != int(C.GL_TRUE) {
-		return error('LinkFailed: ${p.get_info_log()}')
+		msg := p.get_info_log()
+		eprintln('program link failure id=${p.id} message=${unsafe {
+			cstring_to_vstring(&char(&msg[0]))
+		}}')
+		return error('CompileFailed')
 	}
 }
 
@@ -926,16 +986,16 @@ pub fn (p Program) set_uniform[T](name string, value T) ! {
 	} $else $if T is [16]f32 {
 		C.glUniformMatrix4fv(loc, 1, u8(C.GL_FALSE), &value[0])
 	} $else {
-		return error('unsupported uniform type')
+		$compile_error('unsupported uniform type')
 	}
 
 	get_error()!
 }
 
-pub fn (p Program) get_info_log() string {
-	mut msg := []u8{len: 512, init: 0}
-	C.glGetProgramInfoLog(p.id, msg.len, unsafe { nil }, msg.data)
-	return unsafe { cstring_to_vstring(&char(msg.data)) }
+pub fn (p Program) get_info_log() [512]u8 {
+	mut msg := [512]u8{}
+	C.glGetProgramInfoLog(p.id, msg.len, unsafe { nil }, &msg[0])
+	return msg
 }
 
 // ============================================================
@@ -955,7 +1015,6 @@ pub:
 pub fn Renderbuffer.create() !Renderbuffer {
 	mut id := u32(0)
 	C.glGenRenderbuffers(1, &id)
-	get_error()!
 	return Renderbuffer{
 		id: id
 	}
@@ -970,7 +1029,6 @@ pub fn (r Renderbuffer) bind() !RenderbufferBinding {
 	mut current := int(0)
 	C.glGetIntegerv(C.GL_RENDERBUFFER_BINDING, &current)
 	C.glBindRenderbuffer(C.GL_RENDERBUFFER, r.id)
-	get_error()!
 	return RenderbufferBinding{
 		previous: u32(current)
 	}
@@ -995,20 +1053,20 @@ pub:
 	id u32
 }
 
-pub enum FramebufferTarget {
+pub enum FramebufferTarget as u32 {
 	framebuffer = C.GL_FRAMEBUFFER
 	draw        = C.GL_DRAW_FRAMEBUFFER
 	read        = C.GL_READ_FRAMEBUFFER
 }
 
-pub enum FramebufferAttachment {
+pub enum FramebufferAttachment as u32 {
 	color0        = C.GL_COLOR_ATTACHMENT0
 	depth         = C.GL_DEPTH_ATTACHMENT
 	stencil       = C.GL_STENCIL_ATTACHMENT
 	depth_stencil = C.GL_DEPTH_STENCIL_ATTACHMENT
 }
 
-pub enum FramebufferStatus {
+pub enum FramebufferStatus as u32 {
 	complete                      = C.GL_FRAMEBUFFER_COMPLETE
 	undefined                     = C.GL_FRAMEBUFFER_UNDEFINED
 	incomplete_attachment         = C.GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT
@@ -1029,7 +1087,6 @@ pub:
 pub fn Framebuffer.create() !Framebuffer {
 	mut id := u32(0)
 	C.glGenFramebuffers(1, &id)
-	get_error()!
 	return Framebuffer{
 		id: id
 	}
@@ -1044,7 +1101,6 @@ pub fn (f Framebuffer) bind(target FramebufferTarget) !FramebufferBinding {
 	mut current := int(0)
 	C.glGetIntegerv(C.GL_FRAMEBUFFER_BINDING, &current)
 	C.glBindFramebuffer(u32(target), f.id)
-	get_error()!
 	return FramebufferBinding{
 		target: target
 		previous: u32(current)
@@ -1067,15 +1123,11 @@ pub fn (b FramebufferBinding) renderbuffer(attachment FramebufferAttachment, buf
 
 pub fn (b FramebufferBinding) draw_buffers(bufs []FramebufferAttachment) ! {
 	_ = b
-	mut raw := []u32{len: bufs.len}
-	for i, buf in bufs {
-		raw[i] = u32(buf)
-	}
 	mut ptr := &u32(unsafe { nil })
-	if raw.len > 0 {
-		ptr = raw.data
+	if bufs.len > 0 {
+		ptr = &u32(bufs.data)
 	}
-	C.glDrawBuffers(raw.len, ptr)
+	C.glDrawBuffers(bufs.len, ptr)
 	get_error()!
 }
 
