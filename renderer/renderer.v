@@ -834,6 +834,10 @@ pub mut:
 	frames      []MetalFrameState
 	gl_frames   []GLFrameState
 	frame_index int = -1
+	// Semaphore that prevents the CPU from reusing per-frame resources until
+	// the graphics backend reports that the frame has completed.
+	frame_sema         &sync.Semaphore = unsafe { nil }
+	swap_chain_defunct bool
 
 	// The configuration we need derived from the main config.
 	config DerivedConfig
@@ -1009,38 +1013,39 @@ fn Renderer.init_metal(opts RendererOpts) !Renderer {
 	}
 
 	mut result := Renderer{
-		backend: .metal
-		draw_mutex: sync.new_mutex()
-		surface_mailbox: opts.surface_mailbox
-		metal: metal
-		images: ImageRenderState.empty()
-		shaders: shaders
-		frames: frames
-		config: opts.config
-		grid_metrics: metrics
-		size: opts.size
-		focused: true
-		display_link: display_link
-		scrollbar: terminal.Scrollbar{}
-		scrollbar_dirty: false
-		search_matches_dirty: false
-		search_matches: []highlight.FlattenedHighlight{}
-		search_selected_match: none
+		backend:                .metal
+		draw_mutex:             sync.new_mutex()
+		surface_mailbox:        opts.surface_mailbox
+		metal:                  metal
+		images:                 ImageRenderState.empty()
+		shaders:                shaders
+		frames:                 frames
+		frame_sema:             sync.new_semaphore_init(u32(metal_swap_chain_count))
+		config:                 opts.config
+		grid_metrics:           metrics
+		size:                   opts.size
+		focused:                true
+		display_link:           display_link
+		scrollbar:              terminal.Scrollbar{}
+		scrollbar_dirty:        false
+		search_matches_dirty:   false
+		search_matches:         []highlight.FlattenedHighlight{}
+		search_selected_match:  none
 		// Render state
-		cells: CellContents{}
-		uniforms: Uniforms{
+		cells:                  CellContents{}
+		uniforms:               Uniforms{
 			min_contrast: opts.config.min_contrast
-			cursor_pos: [u16(0xFFFF), u16(0xFFFF)]!
-			bg_color: [
+			cursor_pos:   [u16(0xFFFF), u16(0xFFFF)]!
+			bg_color:     [
 				opts.config.background.r,
 				opts.config.background.g,
 				opts.config.background.b,
 				u8(opts.config.background_opacity * 255.0),
 			]!
-			bools: UniformBools{
-				cursor_wide: false
-				use_display_p3: opts.config.colorspace == .display_p3
-				use_linear_blending: opts.config.blending.is_linear()
+			bools:        UniformBools{
+				cursor_wide:           false
+				use_display_p3:        opts.config.colorspace == .display_p3
+				use_linear_blending:   opts.config.blending.is_linear()
 				use_linear_correction: opts.config.blending == .linear_corrected
 			}
 		}
@@ -1048,10 +1053,10 @@ fn Renderer.init_metal(opts RendererOpts) !Renderer {
 			focus: 1
 		}
 		// Fonts
-		font_grid: opts.font_grid
-		font_shaper: font_shaper
-		font_shaper_cache: font.ShaperCache.init()
-		has_custom_shaders: has_custom_shaders
+		font_grid:              opts.font_grid
+		font_shaper:            font_shaper
+		font_shaper_cache:      font.ShaperCache.init()
+		has_custom_shaders:     has_custom_shaders
 	}
 
 	// Ensure our undefined values above are correctly initialized
@@ -1069,9 +1074,9 @@ fn Renderer.init_metal(opts RendererOpts) !Renderer {
 fn Renderer.init_opengl(opts RendererOpts) !Renderer {
 	mut font_shaper := font.Shaper.init(font.ShaperOptions{})!
 	mut api := OpenGLAPI.init(RendererOptions{
-		config: opts.config
+		config:    opts.config
 		font_grid: opts.font_grid
-		size: opts.size
+		size:      opts.size
 	}) or {
 		font_shaper.deinit()
 		return err
@@ -1101,42 +1106,43 @@ fn Renderer.init_opengl(opts RendererOpts) !Renderer {
 
 	metrics := opts.font_grid.metrics
 	mut result := Renderer{
-		backend: .opengl
-		draw_mutex: sync.new_mutex()
-		surface_mailbox: opts.surface_mailbox
-		opengl: api
-		images: ImageRenderState.empty()
-		gl_shaders: shaders
-		gl_frames: frames
-		config: opts.config
-		grid_metrics: metrics
-		size: opts.size
-		focused: true
-		scrollbar: terminal.Scrollbar{}
-		search_matches: []highlight.FlattenedHighlight{}
-		cells: CellContents{}
-		uniforms: Uniforms{
+		backend:                .opengl
+		draw_mutex:             sync.new_mutex()
+		surface_mailbox:        opts.surface_mailbox
+		opengl:                 api
+		images:                 ImageRenderState.empty()
+		gl_shaders:             shaders
+		gl_frames:              frames
+		frame_sema:             sync.new_semaphore_init(u32(opengl_swap_chain_count))
+		config:                 opts.config
+		grid_metrics:           metrics
+		size:                   opts.size
+		focused:                true
+		scrollbar:              terminal.Scrollbar{}
+		search_matches:         []highlight.FlattenedHighlight{}
+		cells:                  CellContents{}
+		uniforms:               Uniforms{
 			min_contrast: opts.config.min_contrast
-			cursor_pos: [u16(0xFFFF), u16(0xFFFF)]!
-			bg_color: [
+			cursor_pos:   [u16(0xFFFF), u16(0xFFFF)]!
+			bg_color:     [
 				opts.config.background.r,
 				opts.config.background.g,
 				opts.config.background.b,
 				u8(opts.config.background_opacity * 255.0),
 			]!
-			bools: UniformBools{
-				use_display_p3: opts.config.colorspace == .display_p3
-				use_linear_blending: opts.config.blending.is_linear()
+			bools:        UniformBools{
+				use_display_p3:        opts.config.colorspace == .display_p3
+				use_linear_blending:   opts.config.blending.is_linear()
 				use_linear_correction: opts.config.blending == .linear_corrected
 			}
 		}
 		custom_shader_uniforms: CustomShaderUniforms{
 			focus: 1
 		}
-		font_grid: opts.font_grid
-		font_shaper: font_shaper
-		font_shaper_cache: font.ShaperCache.init()
-		has_custom_shaders: post_shaders.len > 0
+		font_grid:              opts.font_grid
+		font_shaper:            font_shaper
+		font_shaper_cache:      font.ShaperCache.init()
+		has_custom_shaders:     post_shaders.len > 0
 	}
 	result.update_font_grid_uniforms()
 	result.update_screen_size_uniforms()
@@ -1148,6 +1154,59 @@ fn Renderer.init_opengl(opts RendererOpts) !Renderer {
 	return result
 }
 
+// Wait for one swap-chain slot to become available. Every successful call
+// must be paired with release_frame, normally from frame_completed.
+fn (mut self Renderer) acquire_frame() ! {
+	if self.swap_chain_defunct || self.frame_sema == unsafe { nil } {
+		return error('renderer swap chain is defunct')
+	}
+	self.frame_sema.wait()
+}
+
+fn (mut self Renderer) release_frame() {
+	if self.frame_sema != unsafe { nil } {
+		self.frame_sema.post()
+	}
+}
+
+fn (mut self Renderer) drain_frame_semaphore(count int) {
+	if self.swap_chain_defunct {
+		return
+	}
+	self.swap_chain_defunct = true
+	if self.frame_sema == unsafe { nil } {
+		return
+	}
+	// Waiting for every permit also waits for every in-flight GPU frame.
+	for _ in 0 .. count {
+		self.frame_sema.wait()
+	}
+	self.frame_sema.destroy()
+	self.frame_sema = unsafe { nil }
+}
+
+fn (mut self Renderer) deinit_metal_swap_chain() {
+	if self.swap_chain_defunct {
+		return
+	}
+	self.drain_frame_semaphore(metal_swap_chain_count)
+	for mut frame in self.frames {
+		frame.deinit()
+	}
+	self.frames = []MetalFrameState{}
+}
+
+fn (mut self Renderer) deinit_opengl_swap_chain() {
+	if self.swap_chain_defunct {
+		return
+	}
+	self.drain_frame_semaphore(opengl_swap_chain_count)
+	for mut frame in self.gl_frames {
+		frame.deinit()
+	}
+	self.gl_frames = []GLFrameState{}
+}
+
 // Deinitialize the renderer and free all resources.
 pub fn (mut self Renderer) deinit() {
 	if self.display_link != unsafe { nil } {
@@ -1157,17 +1216,11 @@ pub fn (mut self Renderer) deinit() {
 	}
 	match self.backend {
 		.metal {
-			for mut frame in self.frames {
-				frame.deinit()
-			}
-			self.frames = []MetalFrameState{}
+			self.deinit_metal_swap_chain()
 			self.shaders.deinit()
 		}
 		.opengl {
-			for mut frame in self.gl_frames {
-				frame.deinit()
-			}
-			self.gl_frames = []GLFrameState{}
+			self.deinit_opengl_swap_chain()
 			self.gl_shaders.deinit()
 		}
 	}
@@ -1314,7 +1367,7 @@ pub fn (mut self Renderer) set_font_grid(grid &font.SharedGrid) {
 
 	// Update cell size
 	self.size.cell = CellSize{
-		width: metrics.cell_width
+		width:  metrics.cell_width
 		height: metrics.cell_height
 	}
 
@@ -1433,8 +1486,8 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 	// Build our GPU cells.
 	preedit := if value := state.preedit { value.clone() } else { none }
 	cs := style(&self.terminal_state, StyleOptions{
-		preedit: preedit != none
-		focused: self.focused
+		preedit:       preedit != none
+		focused:       self.focused
 		blink_visible: cursor_blink_visible
 	})
 	self.rebuild_cells(preedit, cs, &links) or {
@@ -1509,16 +1562,16 @@ fn render_flattened_highlight(src highlight.FlattenedHighlight) terminal.RenderF
 	mut chunks := []terminal.RenderHighlightChunk{cap: src.chunks.len}
 	for chunk in src.chunks {
 		chunks << terminal.RenderHighlightChunk{
-			node: chunk.node
+			node:   chunk.node
 			serial: chunk.serial
-			start: chunk.start
-			end: chunk.end
+			start:  chunk.start
+			end:    chunk.end
 		}
 	}
 	return terminal.RenderFlattenedHighlight{
 		chunks: chunks
-		top_x: src.top_x
-		bot_x: src.bot_x
+		top_x:  src.top_x
+		bot_x:  src.bot_x
 	}
 }
 
@@ -1585,6 +1638,14 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 		return error('Metal swap chain is unavailable')
 	}
 
+	self.acquire_frame()!
+	mut frame_submitted := false
+	defer {
+		if !frame_submitted {
+			self.release_frame()
+		}
+	}
+
 	if self.reinitialize_shaders {
 		self.reinitialize_shaders = false
 		post_shaders := load_shaders_from_files(self.config.custom_shaders, .msl) or {
@@ -1616,7 +1677,7 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 
 	if size_changed {
 		self.size.screen = ScreenSize{
-			width: surface_width
+			width:  surface_width
 			height: surface_height
 		}
 		self.update_screen_size_uniforms()
@@ -1666,7 +1727,7 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 		terminal_target = MetalRenderAttachmentTarget(state.back_texture)
 	}
 	mut pass := frame.render_pass([MetalRenderPassAttachment{
-		target: terminal_target
+		target:      terminal_target
 		clear_color: [f64(0), 0, 0, 0]!
 	}])
 
@@ -1676,10 +1737,10 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 			pass.step(MetalRenderStep{
 				pipeline: self.shaders.bg_image
 				uniforms: frame_state.uniforms
-				buffers: [?MetalBuffer(frame_state.bg_image_buffer)]
+				buffers:  [?MetalBuffer(frame_state.bg_image_buffer)]
 				textures: [?MetalTexture(texture)]
-				draw: MetalRenderDraw{
-					draw_type: .triangle
+				draw:     MetalRenderDraw{
+					draw_type:    .triangle
 					vertex_count: 3
 				}
 			})
@@ -1688,9 +1749,9 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 		pass.step(MetalRenderStep{
 			pipeline: self.shaders.bg_color
 			uniforms: frame_state.uniforms
-			buffers: [?MetalBuffer(none), ?MetalBuffer(frame_state.cells_bg)]
-			draw: MetalRenderDraw{
-				draw_type: .triangle
+			buffers:  [?MetalBuffer(none), ?MetalBuffer(frame_state.cells_bg)]
+			draw:     MetalRenderDraw{
+				draw_type:    .triangle
 				vertex_count: 3
 			}
 		})
@@ -1702,9 +1763,9 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 		pass.step(MetalRenderStep{
 			pipeline: self.shaders.cell_bg
 			uniforms: frame_state.uniforms
-			buffers: [?MetalBuffer(none), ?MetalBuffer(frame_state.cells_bg)]
-			draw: MetalRenderDraw{
-				draw_type: .triangle
+			buffers:  [?MetalBuffer(none), ?MetalBuffer(frame_state.cells_bg)]
+			draw:     MetalRenderDraw{
+				draw_type:    .triangle
 				vertex_count: 3
 			}
 		})
@@ -1713,11 +1774,11 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	pass.step(MetalRenderStep{
 		pipeline: self.shaders.cell_text
 		uniforms: frame_state.uniforms
-		buffers: [?MetalBuffer(frame_state.cells), ?MetalBuffer(frame_state.cells_bg)]
+		buffers:  [?MetalBuffer(frame_state.cells), ?MetalBuffer(frame_state.cells_bg)]
 		textures: [?MetalTexture(frame_state.grayscale), ?MetalTexture(frame_state.color)]
-		draw: MetalRenderDraw{
-			draw_type: .triangle_strip
-			vertex_count: 4
+		draw:     MetalRenderDraw{
+			draw_type:      .triangle_strip
+			vertex_count:   4
 			instance_count: fg_count
 		}
 	})
@@ -1732,7 +1793,7 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 				output_texture = MetalRenderAttachmentTarget(state.front_texture)
 			}
 			mut post_pass := frame.render_pass([MetalRenderPassAttachment{
-				target: output_texture
+				target:      output_texture
 				clear_color: [f64(0), 0, 0, 0]!
 			}])
 			post_pass.step(MetalRenderStep{
@@ -1740,8 +1801,8 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 				uniforms: state.uniforms
 				textures: [?MetalTexture(state.back_texture)]
 				samplers: [?MetalSampler(state.sampler)]
-				draw: MetalRenderDraw{
-					draw_type: .triangle
+				draw:     MetalRenderDraw{
+					draw_type:    .triangle
 					vertex_count: 3
 				}
 			})
@@ -1752,6 +1813,7 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	}
 
 	frame.complete(sync_)
+	frame_submitted = true
 }
 
 struct MetalCompletionStackBase {
@@ -1840,6 +1902,14 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 		return error('OpenGL swap chain is unavailable')
 	}
 
+	self.acquire_frame()!
+	mut frame_submitted := false
+	defer {
+		if !frame_submitted {
+			self.release_frame()
+		}
+	}
+
 	if self.reinitialize_shaders {
 		self.reinitialize_shaders = false
 		post_shaders := load_shaders_from_files(self.config.custom_shaders, .glsl) or {
@@ -1867,7 +1937,7 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 
 	if size_changed {
 		self.size.screen = ScreenSize{
-			width: surface_width
+			width:  surface_width
 			height: surface_height
 		}
 		self.update_screen_size_uniforms()
@@ -1911,14 +1981,14 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 
 	mut frame := self.opengl.begin_frame(mut frame_state.target)!
 	mut terminal_attachment := GLRenderAttachment{
-		kind: .target
-		target: frame_state.target
+		kind:        .target
+		target:      frame_state.target
 		clear_color: [f32(0), 0, 0, 0]!
 	}
 	if state := frame_state.custom_shader_state {
 		terminal_attachment = GLRenderAttachment{
-			kind: .texture
-			texture: state.back_texture
+			kind:        .texture
+			texture:     state.back_texture
 			clear_color: [f32(0), 0, 0, 0]!
 		}
 	}
@@ -1930,17 +2000,17 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 			pass.step(GLRenderStep{
 				pipeline: self.gl_shaders.bg_image
 				uniforms: frame_state.uniforms
-				buffers: [frame_state.bg_image_buffer]
+				buffers:  [frame_state.bg_image_buffer]
 				textures: [image.gl_texture]
-				draw: GLDraw{ primitive: .triangle, vertex_count: 3 }
+				draw:     GLDraw{ primitive: .triangle, vertex_count: 3 }
 			})
 		}
 	} else {
 		pass.step(GLRenderStep{
 			pipeline: self.gl_shaders.bg_color
 			uniforms: frame_state.uniforms
-			buffers: [GLBuffer{}, frame_state.cells_bg]
-			draw: GLDraw{ primitive: .triangle, vertex_count: 3 }
+			buffers:  [GLBuffer{}, frame_state.cells_bg]
+			draw:     GLDraw{ primitive: .triangle, vertex_count: 3 }
 		})
 	}
 
@@ -1948,18 +2018,18 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 	pass.step(GLRenderStep{
 		pipeline: self.gl_shaders.cell_bg
 		uniforms: frame_state.uniforms
-		buffers: [GLBuffer{}, frame_state.cells_bg]
-		draw: GLDraw{ primitive: .triangle, vertex_count: 3 }
+		buffers:  [GLBuffer{}, frame_state.cells_bg]
+		draw:     GLDraw{ primitive: .triangle, vertex_count: 3 }
 	})
 	self.images.draw_opengl(&self.opengl, self.gl_shaders.image, mut pass, .kitty_below_text)
 	pass.step(GLRenderStep{
 		pipeline: self.gl_shaders.cell_text
 		uniforms: frame_state.uniforms
-		buffers: [frame_state.cells, frame_state.cells_bg]
+		buffers:  [frame_state.cells, frame_state.cells_bg]
 		textures: [frame_state.grayscale, frame_state.color]
-		draw: GLDraw{
-			primitive: .triangle_strip
-			vertex_count: 4
+		draw:     GLDraw{
+			primitive:      .triangle_strip
+			vertex_count:   4
 			instance_count: fg_count
 		}
 	})
@@ -1970,14 +2040,14 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 	if mut state := frame_state.custom_shader_state {
 		for index, pipeline in self.gl_shaders.post_pipelines {
 			mut attachment := GLRenderAttachment{
-				kind: .target
-				target: frame_state.target
+				kind:        .target
+				target:      frame_state.target
 				clear_color: [f32(0), 0, 0, 0]!
 			}
 			if index < self.gl_shaders.post_pipelines.len - 1 {
 				attachment = GLRenderAttachment{
-					kind: .texture
-					texture: state.front_texture
+					kind:        .texture
+					texture:     state.front_texture
 					clear_color: [f32(0), 0, 0, 0]!
 				}
 			}
@@ -1987,7 +2057,7 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 				uniforms: state.uniforms
 				textures: [state.back_texture]
 				samplers: [state.sampler]
-				draw: GLDraw{ primitive: .triangle, vertex_count: 3 }
+				draw:     GLDraw{ primitive: .triangle, vertex_count: 3 }
 			})
 			post_pass.complete()
 			state.swap()
@@ -1997,6 +2067,7 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 
 	frame.complete(sync_)
 	self.frame_completed(if frame.healthy { .healthy } else { .unhealthy })
+	frame_submitted = true
 }
 
 fn (self &Renderer) sync_gl_atlas_texture(atlas &font.Atlas, mut texture GLTexture) ! {
@@ -2014,13 +2085,15 @@ fn (self &Renderer) sync_gl_atlas_texture(atlas &font.Atlas, mut texture GLTextu
 // Callback from the graphics API when a frame is completed.
 pub fn (mut self Renderer) frame_completed(health Health) {
 	// If our health value hasn't changed, then we do nothing.
-	if self.health == health {
-		return
+	if self.health != health {
+		self.health = health
+		self.surface_mailbox.push(SurfaceEvent(RendererHealthEvent{
+			health: health
+		}))
 	}
-	self.health = health
-	self.surface_mailbox.push(SurfaceEvent(RendererHealthEvent{
-		health: health
-	}))
+
+	// Always release our semaphore, including when health is unchanged.
+	self.release_frame()
 }
 
 // Call this any time the background image path changes.
@@ -2060,20 +2133,20 @@ fn (mut self Renderer) prep_background_image() ! {
 		byte_len := decoded.width * decoded.height * 4
 		data := unsafe { decoded.data.vbytes(byte_len).clone() }
 		pending := PendingImage{
-			width: u32(decoded.width)
-			height: u32(decoded.height)
+			width:        u32(decoded.width)
+			height:       u32(decoded.height)
 			pixel_format: .rgba
-			data: data
+			data:         data
 		}
 		if mut existing := self.bg_image {
 			existing.mark_for_replace(pending)
 			self.bg_image = existing
 		} else {
 			self.bg_image = Image{
-				state: .pending
+				state:   .pending
 				pending: pending
-				width: pending.width
-				height: pending.height
+				width:   pending.width
+				height:  pending.height
 			}
 		}
 	} else if mut existing := self.bg_image {
@@ -2219,7 +2292,7 @@ fn (mut self Renderer) update_screen_size_uniforms() {
 fn (mut self Renderer) update_bg_image_buffer() {
 	self.bg_image_buffer = BgImageBuffer{
 		opacity: self.config.bg_image_opacity
-		info: bg_image_info(match self.config.bg_image_position {
+		info:    bg_image_info(match self.config.bg_image_position {
 			.top_left { .tl }
 			.top_center { .tc }
 			.top_right { .tr }
@@ -2497,8 +2570,8 @@ fn (mut self Renderer) rebuild_cells(preedit ?RenderPreedit, cursor_style_ ?Styl
 		if cursor_vp := state.cursor.viewport {
 			r_start, r_end, cp_offset := p.range(cursor_vp.x, state.cols - 1)
 			preedit_range = PreeditRange{
-				y: cursor_vp.y
-				x: [u16(r_start), u16(r_end)]!
+				y:         cursor_vp.y
+				x:         [u16(r_start), u16(r_end)]!
 				cp_offset: cp_offset
 			}
 		}
@@ -2530,9 +2603,9 @@ fn (mut self Renderer) rebuild_cells(preedit ?RenderPreedit, cursor_style_ ?Styl
 			// For "extend" this may be disabled due to heuristics below.
 			.extend, .extend_always {
 				self.uniforms.padding_extend = PaddingExtend{
-					up: true
-					down: true
-					left: true
+					up:    true
+					down:  true
+					left:  true
 					right: true
 				}
 			}
@@ -2584,7 +2657,7 @@ fn (mut self Renderer) rebuild_cells(preedit ?RenderPreedit, cursor_style_ ?Styl
 				cp := p.codepoints[i]
 				self.add_preedit_cell(PreeditCodepoint{
 					codepoint: cp.codepoint
-					wide: cp.wide
+					wide:      cp.wide
 				}, terminal.ViewportPoint{
 					x: x
 					y: range.y
@@ -2678,8 +2751,8 @@ fn (self &Renderer) compute_cursor_color(cursor_style terminal.CellStyle) termin
 	if v := self.config.cursor_color {
 		fg_style := cursor_style.fg_rgb(terminal.FgOpts{
 			default_color: state.colors.foreground
-			palette: state.colors.palette
-			bold_color: self.config.bold_color
+			palette:       state.colors.palette
+			bold_color:    self.config.bold_color
 		})
 		bg_style := cursor_style.bg_rgb(&state.cursor.cell, state.colors.palette) or {
 			state.colors.background
@@ -2698,8 +2771,8 @@ fn (self &Renderer) compute_cursor_text_color(cursor_style terminal.CellStyle) t
 	if txt := self.config.cursor_text {
 		fg_style := cursor_style.fg_rgb(terminal.FgOpts{
 			default_color: state.colors.foreground
-			palette: state.colors.palette
-			bold_color: self.config.bold_color
+			palette:       state.colors.palette
+			bold_color:    self.config.bold_color
 		})
 		bg_style := cursor_style.bg_rgb(&state.cursor.cell, state.colors.palette) or {
 			state.colors.background
@@ -2758,10 +2831,10 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		?u16(none)
 	}
 	mut run_opts := font.RunOptions{
-		grid: self.font_grid
+		grid:         self.font_grid
 		render_cells: row.cells[..cells_len]
-		selection: row.selection
-		cursor_x: cursor_x
+		selection:    row.selection
+		cursor_x:     cursor_x
 	}
 	run_opts.apply_break_config(self.config.font_shaping_break.cursor())
 	mut run_iter := self.font_shaper.run_iterator(run_opts)
@@ -2848,8 +2921,8 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		bg_style_opt := cell_style.bg_rgb(cell, state.colors.palette)
 		fg_style := cell_style.fg_rgb(terminal.FgOpts{
 			default_color: state.colors.foreground
-			palette: state.colors.palette
-			bold_color: self.config.bold_color
+			palette:       state.colors.palette
+			bold_color:    self.config.bold_color
 		})
 
 		// The final background color for the cell.
@@ -3027,51 +3100,51 @@ fn (mut self Renderer) add_underline(x u16, y u16, style terminal.UnderlineStyle
 	}
 
 	render := self.font_grid.render_glyph(font.Index.init_special(.sprite), u32(sprite), font.RenderOptions{
-		cell_width: 1
+		cell_width:   1
 		grid_metrics: self.grid_metrics
 	})!
 
 	self.cells.add(.underline, CellText{
-		atlas: .grayscale
-		grid_pos: [x, y]!
-		color: [color.r, color.g, color.b, alpha]!
-		glyph_pos: [render.glyph.atlas_x, render.glyph.atlas_y]!
+		atlas:      .grayscale
+		grid_pos:   [x, y]!
+		color:      [color.r, color.g, color.b, alpha]!
+		glyph_pos:  [render.glyph.atlas_x, render.glyph.atlas_y]!
 		glyph_size: [render.glyph.width, render.glyph.height]!
-		bearings: [i16(render.glyph.offset_x), i16(render.glyph.offset_y)]!
+		bearings:   [i16(render.glyph.offset_x), i16(render.glyph.offset_y)]!
 	})!
 }
 
 // Add an overline decoration to the specified cell.
 fn (mut self Renderer) add_overline(x u16, y u16, color terminal.RGB, alpha u8) ! {
 	render := self.font_grid.render_glyph(font.Index.init_special(.sprite), u32(font.Sprite.overline), font.RenderOptions{
-		cell_width: 1
+		cell_width:   1
 		grid_metrics: self.grid_metrics
 	})!
 
 	self.cells.add(.overline, CellText{
-		atlas: .grayscale
-		grid_pos: [x, y]!
-		color: [color.r, color.g, color.b, alpha]!
-		glyph_pos: [render.glyph.atlas_x, render.glyph.atlas_y]!
+		atlas:      .grayscale
+		grid_pos:   [x, y]!
+		color:      [color.r, color.g, color.b, alpha]!
+		glyph_pos:  [render.glyph.atlas_x, render.glyph.atlas_y]!
 		glyph_size: [render.glyph.width, render.glyph.height]!
-		bearings: [i16(render.glyph.offset_x), i16(render.glyph.offset_y)]!
+		bearings:   [i16(render.glyph.offset_x), i16(render.glyph.offset_y)]!
 	})!
 }
 
 // Add a strikethrough decoration to the specified cell.
 fn (mut self Renderer) add_strikethrough(x u16, y u16, color terminal.RGB, alpha u8) ! {
 	render := self.font_grid.render_glyph(font.Index.init_special(.sprite), u32(font.Sprite.strikethrough), font.RenderOptions{
-		cell_width: 1
+		cell_width:   1
 		grid_metrics: self.grid_metrics
 	})!
 
 	self.cells.add(.strikethrough, CellText{
-		atlas: .grayscale
-		grid_pos: [x, y]!
-		color: [color.r, color.g, color.b, alpha]!
-		glyph_pos: [render.glyph.atlas_x, render.glyph.atlas_y]!
+		atlas:      .grayscale
+		grid_pos:   [x, y]!
+		color:      [color.r, color.g, color.b, alpha]!
+		glyph_pos:  [render.glyph.atlas_x, render.glyph.atlas_y]!
 		glyph_size: [render.glyph.width, render.glyph.height]!
-		bearings: [i16(render.glyph.offset_x), i16(render.glyph.offset_y)]!
+		bearings:   [i16(render.glyph.offset_x), i16(render.glyph.offset_y)]!
 	})!
 }
 
@@ -3082,11 +3155,11 @@ fn (mut self Renderer) add_glyph(x u16, y u16, color terminal.RGB, alpha u8, gly
 		if is_symbol(cp) { font.Constraint{ size: .fit } } else { font.Constraint{} }
 	}
 	render := self.font_grid.render_glyph(font_index, glyph_index, font.RenderOptions{
-		grid_metrics: self.grid_metrics
-		thicken: self.config.font_thicken
+		grid_metrics:     self.grid_metrics
+		thicken:          self.config.font_thicken
 		thicken_strength: self.config.font_thicken_strength
-		cell_width: cell_width
-		constraint: constraint
+		cell_width:       cell_width
+		constraint:       constraint
 		constraint_width: u32(constraint_width(raw_cells, raw_x, cols))
 	})!
 
@@ -3097,16 +3170,16 @@ fn (mut self Renderer) add_glyph(x u16, y u16, color terminal.RGB, alpha u8, gly
 	}
 
 	self.cells.add(.text, CellText{
-		atlas: match render.presentation {
+		atlas:      match render.presentation {
 			.emoji { .color }
 			.text { .grayscale }
 		}
-		grid_pos: [x, y]!
-		color: [color.r, color.g, color.b, alpha]!
-		bools: cell_text_bools(no_min_contrast(cp), false)
-		glyph_pos: [render.glyph.atlas_x, render.glyph.atlas_y]!
+		grid_pos:   [x, y]!
+		color:      [color.r, color.g, color.b, alpha]!
+		bools:      cell_text_bools(no_min_contrast(cp), false)
+		glyph_pos:  [render.glyph.atlas_x, render.glyph.atlas_y]!
 		glyph_size: [render.glyph.width, render.glyph.height]!
-		bearings: [
+		bearings:   [
 			i16(render.glyph.offset_x + x_offset),
 			i16(render.glyph.offset_y + y_offset),
 		]!
@@ -3148,7 +3221,7 @@ fn (mut self Renderer) add_cursor(cursor_state &terminal.RenderCursor, cursor_st
 		font.Index.init_special(.sprite),
 		u32(sprite),
 		font.RenderOptions{
-			cell_width: if wide { u32(2) } else { u32(1) }
+			cell_width:   if wide { u32(2) } else { u32(1) }
 			grid_metrics: self.grid_metrics
 		},
 	) or {
@@ -3156,13 +3229,13 @@ fn (mut self Renderer) add_cursor(cursor_state &terminal.RenderCursor, cursor_st
 	}
 
 	self.cells.set_cursor(CellText{
-		atlas: .grayscale
-		bools: cell_text_bools(false, true)
-		grid_pos: [x, cursor_vp.y]!
-		color: [cursor_color.r, cursor_color.g, cursor_color.b, alpha]!
-		glyph_pos: [render.glyph.atlas_x, render.glyph.atlas_y]!
+		atlas:      .grayscale
+		bools:      cell_text_bools(false, true)
+		grid_pos:   [x, cursor_vp.y]!
+		color:      [cursor_color.r, cursor_color.g, cursor_color.b, alpha]!
+		glyph_pos:  [render.glyph.atlas_x, render.glyph.atlas_y]!
 		glyph_size: [render.glyph.width, render.glyph.height]!
-		bearings: [i16(render.glyph.offset_x), i16(render.glyph.offset_y)]!
+		bearings:   [i16(render.glyph.offset_x), i16(render.glyph.offset_y)]!
 	}, cursor_style)
 }
 
@@ -3182,12 +3255,12 @@ fn (mut self Renderer) add_preedit_cell(cp PreeditCodepoint, coord terminal.View
 	}
 
 	self.cells.add(.text, CellText{
-		atlas: .grayscale
-		grid_pos: [coord.x, coord.y]!
-		color: [screen_fg.r, screen_fg.g, screen_fg.b, u8(255)]!
-		glyph_pos: [render.glyph.atlas_x, render.glyph.atlas_y]!
+		atlas:      .grayscale
+		grid_pos:   [coord.x, coord.y]!
+		color:      [screen_fg.r, screen_fg.g, screen_fg.b, u8(255)]!
+		glyph_pos:  [render.glyph.atlas_x, render.glyph.atlas_y]!
 		glyph_size: [render.glyph.width, render.glyph.height]!
-		bearings: [i16(render.glyph.offset_x), i16(render.glyph.offset_y)]!
+		bearings:   [i16(render.glyph.offset_x), i16(render.glyph.offset_y)]!
 	})!
 
 	// Add underline for preedit text
@@ -3243,8 +3316,8 @@ pub type WakeupFn = fn (voidptr)
 pub struct Wakeup {
 pub:
 	thread    &RendererThread = unsafe { nil }
-	user_data voidptr = unsafe { nil }
-	notify_fn WakeupFn = unsafe { nil }
+	user_data voidptr         = unsafe { nil }
+	notify_fn WakeupFn        = unsafe { nil }
 }
 
 pub fn (w Wakeup) notify() ! {
@@ -3342,6 +3415,9 @@ pub fn (mut r Renderer) display_realized() ! {
 	if r.gl_frames.len != 0 || !r.gl_shaders.defunct {
 		return error('OpenGL display resources are already initialized')
 	}
+	if !r.swap_chain_defunct {
+		return error('OpenGL swap chain is not defunct')
+	}
 	post_shaders := load_shaders_from_files(r.config.custom_shaders, .glsl) or {
 		eprintln('renderer: error loading custom shaders: ${err}')
 		[]string{}
@@ -3351,6 +3427,9 @@ pub fn (mut r Renderer) display_realized() ! {
 	for _ in 0 .. opengl_swap_chain_count {
 		r.gl_frames << GLFrameState.init(&r.opengl, r.has_custom_shaders)!
 	}
+	r.frame_sema = sync.new_semaphore_init(u32(opengl_swap_chain_count))
+	r.swap_chain_defunct = false
+	r.frame_index = -1
 	r.reinitialize_shaders = false
 	r.target_config_modified = 1
 }
@@ -3368,10 +3447,7 @@ pub fn (mut r Renderer) display_unrealized() {
 			r.draw_mutex.unlock()
 		}
 	}
-	for mut frame in r.gl_frames {
-		frame.deinit()
-	}
-	r.gl_frames = []GLFrameState{}
+	r.deinit_opengl_swap_chain()
 	r.gl_shaders.deinit()
 }
 

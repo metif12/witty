@@ -39,11 +39,11 @@ fn test_renderer_emits_health_transitions_and_dirty_scrollbar() {
 	mut capture := SurfaceEventCapture{}
 	mailbox := SurfaceMailbox{
 		user_data: voidptr(&capture)
-		push_fn: capture_surface_event
+		push_fn:   capture_surface_event
 	}
 	mut render := Renderer{
 		surface_mailbox: mailbox
-		scrollbar: terminal.Scrollbar{ total: 20, offset: 3, len: 5 }
+		scrollbar:       terminal.Scrollbar{ total: 20, offset: 3, len: 5 }
 		scrollbar_dirty: true
 	}
 	render.frame_completed(.unhealthy)
@@ -57,6 +57,36 @@ fn test_renderer_emits_health_transitions_and_dirty_scrollbar() {
 	assert capture.scrollbar_events.len == 1
 	assert capture.scrollbar_events[0].eql(render.scrollbar)
 	assert !render.scrollbar_dirty
+}
+
+fn test_frame_completion_always_releases_swap_chain_slot() {
+	mut render := Renderer{
+		frame_sema: sync.new_semaphore_init(0)
+		health:     .healthy
+	}
+
+	// An unchanged health value still completes a frame and must return its
+	// swap-chain permit. This wait would block forever if the early return from
+	// the old translation were reintroduced.
+	render.frame_completed(.healthy)
+	render.frame_sema.wait()
+	render.frame_sema.destroy()
+	render.frame_sema = unsafe { nil }
+}
+
+fn test_swap_chain_slot_can_be_acquired_again_after_release() ! {
+	mut render := Renderer{
+		frame_sema: sync.new_semaphore_init(1)
+	}
+	defer {
+		render.frame_sema.destroy()
+		render.frame_sema = unsafe { nil }
+	}
+
+	render.acquire_frame()!
+	render.release_frame()
+	render.acquire_frame()!
+	render.release_frame()
 }
 
 fn test_update_frame_marks_search_viewport_dirty() ! {
@@ -77,11 +107,11 @@ fn test_update_frame_marks_search_viewport_dirty() ! {
 // Test DerivedConfig init and deinit.
 fn test_derived_config_deinit() {
 	mut config := DerivedConfig{
-		font_features: ['liga', 'calt']
+		font_features:  ['liga', 'calt']
 		custom_shaders: configpkg.RepeatablePath{
 			items: [configpkg.Path{ path: '/tmp/shader.glsl' }]
 		}
-		bg_image: configpkg.Path{ path: '/tmp/background.png' }
+		bg_image:       configpkg.Path{ path: '/tmp/background.png' }
 	}
 	config.deinit()
 	assert config.font_features.len == 0
@@ -166,14 +196,14 @@ fn test_render_state_reads_features_from_opaque_inspector() {
 
 fn test_renderer_rebuilds_reuses_and_removes_inspector_overlay() ! {
 	mut render := Renderer{
-		size: Size{
+		size:           Size{
 			screen: ScreenSize{ width: 40, height: 10 }
-			cell: CellSize{ width: 10, height: 10 }
+			cell:   CellSize{ width: 10, height: 10 }
 		}
-		images: ImageRenderState.empty()
+		images:         ImageRenderState.empty()
 		terminal_state: terminal.RenderState{
 			row_data: [terminal.RenderRow{
-				raw: terminal.RowData{ hyperlink: true }
+				raw:   terminal.RowData{ hyperlink: true }
 				cells: [
 					terminal.RenderCell{},
 					terminal.RenderCell{ raw: terminal.CellData{ has_hyperlink: true } },
@@ -229,8 +259,8 @@ fn test_cell_contents_reset() ! {
 
 	// Add a fg cell
 	cells.add(.text, CellText{
-		grid_pos: [u16(0), u16(0)]!
-		color: [u8(255), 255, 255, 255]!
+		grid_pos:   [u16(0), u16(0)]!
+		color:      [u8(255), 255, 255, 255]!
 		glyph_size: [u32(10), u32(20)]!
 	})!
 
@@ -250,11 +280,11 @@ fn test_cell_contents_clear_row() ! {
 	// Add fg cells to rows 0 and 1
 	cells.add(.text, CellText{
 		grid_pos: [u16(0), u16(0)]!
-		color: [u8(255), 255, 255, 255]!
+		color:    [u8(255), 255, 255, 255]!
 	})!
 	cells.add(.text, CellText{
 		grid_pos: [u16(0), u16(1)]!
-		color: [u8(255), 255, 255, 255]!
+		color:    [u8(255), 255, 255, 255]!
 	})!
 
 	// Clear row 0 only
@@ -273,9 +303,9 @@ fn test_cell_contents_cursor() ! {
 
 	// Set a cursor
 	cursor_cell := CellText{
-		bools: cell_text_bools(false, true)
+		bools:    cell_text_bools(false, true)
 		grid_pos: [u16(5), u16(10)]!
-		color: [u8(255), 255, 255, 255]!
+		color:    [u8(255), 255, 255, 255]!
 	}
 	cells.set_cursor(cursor_cell, .block)
 	assert cells.fg_rows.lists[0] == [cursor_cell]
@@ -322,8 +352,8 @@ fn test_uniforms_defaults() {
 // Test Size.terminal.
 fn test_size_terminal() {
 	s := Size{
-		screen: ScreenSize{ width: 800, height: 600 }
-		cell: CellSize{ width: 10, height: 20 }
+		screen:  ScreenSize{ width: 800, height: 600 }
+		cell:    CellSize{ width: 10, height: 20 }
 		padding: Padding{ top: 5, bottom: 5, left: 5, right: 5 }
 	}
 	ts := s.terminal()
@@ -336,8 +366,8 @@ fn test_size_terminal() {
 // Test ScreenSize.blank_padding.
 fn test_screen_size_blank_padding() {
 	s := Size{
-		screen: ScreenSize{ width: 800, height: 600 }
-		cell: CellSize{ width: 10, height: 20 }
+		screen:  ScreenSize{ width: 800, height: 600 }
+		cell:    CellSize{ width: 10, height: 20 }
 		padding: Padding{ top: 0, bottom: 0, left: 0, right: 0 }
 	}
 	grid := GridSize{ columns: 80, rows: 30 }
@@ -351,8 +381,8 @@ fn test_screen_size_blank_padding() {
 
 fn test_screen_size_blank_padding_is_trailing_and_includes_explicit_padding() {
 	s := Size{
-		screen: ScreenSize{ width: 108, height: 112 }
-		cell: CellSize{ width: 10, height: 20 }
+		screen:  ScreenSize{ width: 108, height: 112 }
+		cell:    CellSize{ width: 10, height: 20 }
 		padding: Padding{ top: 2, bottom: 3, left: 1, right: 2 }
 	}
 	bp := s.screen.blank_padding(s.padding, GridSize{ columns: 10, rows: 5 }, s.cell).add(s.padding)
@@ -376,8 +406,8 @@ fn test_padding_add() {
 // Test GridSize.
 fn test_grid_size() {
 	mut s := Size{
-		screen: ScreenSize{ width: 800, height: 600 }
-		cell: CellSize{ width: 10, height: 20 }
+		screen:  ScreenSize{ width: 800, height: 600 }
+		cell:    CellSize{ width: 10, height: 20 }
 		padding: Padding{ top: 0, bottom: 0, left: 0, right: 0 }
 	}
 	g := s.grid()
@@ -492,13 +522,13 @@ fn test_preedit_range_keeps_trailing_codepoints_when_clipped() {
 // Test CellText initialization.
 fn test_cell_text_init() {
 	ct := CellText{
-		atlas: .grayscale
-		bools: cell_text_bools(true, false)
-		grid_pos: [u16(42), u16(7)]!
-		color: [u8(200), 100, 50, 255]!
-		glyph_pos: [u32(100), u32(200)]!
+		atlas:      .grayscale
+		bools:      cell_text_bools(true, false)
+		grid_pos:   [u16(42), u16(7)]!
+		color:      [u8(200), 100, 50, 255]!
+		glyph_pos:  [u32(100), u32(200)]!
 		glyph_size: [u32(8), u32(16)]!
-		bearings: [i16(1), i16(-2)]!
+		bearings:   [i16(1), i16(-2)]!
 	}
 	assert ct.atlas == .grayscale
 	assert ct.bools.no_min_contrast()
@@ -512,7 +542,7 @@ fn test_cell_text_init() {
 // Test UniformBools initialization.
 fn test_uniform_bools() {
 	b := UniformBools{
-		cursor_wide: true
+		cursor_wide:    true
 		use_display_p3: true
 	}
 	assert b.cursor_wide == true
@@ -523,9 +553,9 @@ fn test_uniform_bools() {
 // Test PaddingExtend.
 fn test_padding_extend() {
 	pe := PaddingExtend{
-		up: true
-		down: true
-		left: true
+		up:    true
+		down:  true
+		left:  true
 		right: true
 	}
 	assert pe.up == true
@@ -540,8 +570,8 @@ fn test_multiple_fg_cells_per_row() ! {
 	// Add multiple cells to the same row
 	for col in 0 .. 10 {
 		cells.add(.text, CellText{
-			grid_pos: [u16(col), u16(0)]!
-			color: [u8(255), 255, 255, 255]!
+			grid_pos:   [u16(col), u16(0)]!
+			color:      [u8(255), 255, 255, 255]!
 			glyph_size: [u32(8), u32(16)]!
 		})!
 	}
@@ -605,8 +635,8 @@ fn test_font_style_status() {
 // Test Size.balance_padding.
 fn test_balance_padding() {
 	mut s := Size{
-		screen: ScreenSize{ width: 810, height: 610 }
-		cell: CellSize{ width: 10, height: 20 }
+		screen:  ScreenSize{ width: 810, height: 610 }
+		cell:    CellSize{ width: 10, height: 20 }
 		padding: Padding{}
 	}
 	s.balance_padding(Padding{ top: 0, bottom: 0, left: 0, right: 0 })
@@ -618,8 +648,8 @@ fn test_balance_padding() {
 
 fn test_balance_padding_caps_top_and_moves_excess_to_bottom() {
 	mut s := Size{
-		screen: ScreenSize{ width: 805, height: 639 }
-		cell: CellSize{ width: 10, height: 20 }
+		screen:  ScreenSize{ width: 805, height: 639 }
+		cell:    CellSize{ width: 10, height: 20 }
 		padding: Padding{}
 	}
 	s.balance_padding(Padding{ top: 0, bottom: 0, left: 0, right: 0 })
@@ -638,16 +668,16 @@ fn test_rebuild_row_shapes_and_renders_text() ! {
 	mut collection := font.Collection.init()
 	collection.load_options = font.LoadOptions{
 		library: library
-		size: font.DesiredSize{
+		size:    font.DesiredSize{
 			points: 12
-			xdpi: 96
-			ydpi: 96
+			xdpi:   96
+			ydpi:   96
 		}
 	}
 	load_opts := collection.load_options or { return error('missing font load options') }
 	collection.add(font.Face.init_mem(library, font.embedded_regular, load_opts.face_options())!, font.AddOptions{
-		style: .regular
-		fallback: false
+		style:           .regular
+		fallback:        false
 		size_adjustment: .none_
 	})!
 
@@ -658,11 +688,11 @@ fn test_rebuild_row_shapes_and_renders_text() ! {
 
 	mut render := Renderer.init(RendererOpts{
 		font_grid: &grid
-		config: DerivedConfig{}
-		size: Size{
+		config:    DerivedConfig{}
+		size:      Size{
 			screen: ScreenSize{ width: 300, height: 100 }
-			cell: CellSize{
-				width: grid.metrics.cell_width
+			cell:   CellSize{
+				width:  grid.metrics.cell_width
 				height: grid.metrics.cell_height
 			}
 		}
@@ -673,7 +703,7 @@ fn test_rebuild_row_shapes_and_renders_text() ! {
 	// draw-now work onto the renderer thread; it never renders on CoreVideo's
 	// callback thread.
 	mut render_thread := RendererThread{
-		event: sync.new_semaphore()
+		event:       sync.new_semaphore()
 		event_mutex: sync.new_mutex()
 	}
 	defer {
