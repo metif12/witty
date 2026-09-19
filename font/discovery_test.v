@@ -24,7 +24,7 @@ fn test_discover_uses_the_target_backend_directly() {
 		assert value.has_value, 'fontconfig returned no monospace font'
 		mut face := value.face
 		defer { face.deinit() }
-		assert (face.fontconfig_pattern.file() or { '' }).len > 0
+		assert face.fontconfig_pattern.get(.file, 0)!.string.len > 0
 		assert face.has_codepoint(u32(`A`), none)
 	}
 }
@@ -84,7 +84,7 @@ fn test_fontconfig() {
 	assert !isnil(face.fontconfig_pattern)
 	assert !isnil(face.fontconfig_charset)
 	assert !isnil(face.fontconfig_langset)
-	path := face.fontconfig_pattern.file() or { '' }
+	path := face.fontconfig_pattern.get(.file, 0)!.string
 	assert path.len > 0
 	assert os.exists(path)
 }

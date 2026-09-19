@@ -860,8 +860,9 @@ pub fn (mut d DeferredFace) deinit() {
 // load fully loads this deferred face into a Face.
 pub fn (d DeferredFace) load(lib Library, opts FaceOptions) !Face {
 	if !isnil(d.fontconfig_pattern) {
-		path := d.fontconfig_pattern.file() or { return error('deferred face has no file path') }
-		mut face := Face.init_file(lib, path, i32(d.fontconfig_pattern.index()), opts)!
+		path := d.fontconfig_pattern.get(.file, 0)!.string
+		face_index := d.fontconfig_pattern.get(.index, 0)!.integer
+		mut face := Face.init_file(lib, path, face_index, opts)!
 		if d.variations.len > 0 {
 			face.set_variations(d.variations, opts) or {
 				face.deinit()

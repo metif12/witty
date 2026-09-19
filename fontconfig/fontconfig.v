@@ -27,6 +27,12 @@ module fontconfig
 
 fn C.FcInit() int
 
+fn C.FcFini()
+
+fn C.FcGetVersion() int
+
+fn C.FcInitLoadConfig() voidptr
+
 fn C.FcInitLoadConfigAndFonts() voidptr
 
 fn C.FcConfigDestroy(config voidptr)
@@ -35,29 +41,49 @@ fn C.FcConfigSubstitute(config voidptr, pat voidptr, kind int) int
 
 fn C.FcDefaultSubstitute(pat voidptr)
 
-fn C.FcFontSort(config voidptr, pat voidptr, trim int, csp &voidptr, result &int) voidptr
+fn C.FcFontSort(config voidptr, pat voidptr, trim int, csp voidptr, result &int) voidptr
 
 fn C.FcFontRenderPrepare(config voidptr, pat voidptr, font voidptr) voidptr
 
+fn C.FcFontList(config voidptr, pat voidptr, os voidptr) voidptr
+
 fn C.FcPatternCreate() voidptr
+
+fn C.FcNameParse(name &char) voidptr
 
 fn C.FcPatternDestroy(pat voidptr)
 
-fn C.FcPatternAddString(pat voidptr, object &char, s &char) int
+fn C.FcPatternDel(pat voidptr, object &char) int
 
-fn C.FcPatternAddInteger(pat voidptr, object &char, i int) int
+fn C.FcPatternFilter(pat voidptr, os voidptr) voidptr
 
-fn C.FcPatternAddCharSet(pat voidptr, object &char, cs voidptr) int
+fn C.FcPatternPrint(pat voidptr)
 
-fn C.FcPatternGetString(pat voidptr, object &char, n int, s &&char) int
+fn C.FcPatternObjectCount(pat voidptr) int
 
-fn C.FcPatternGetInteger(pat voidptr, object &char, n int, i &int) int
+fn C.FcPatternIterStart(pat voidptr, iter voidptr)
 
-fn C.FcPatternGetCharSet(pat voidptr, object &char, n int, cs &voidptr) int
+fn C.FcPatternIterNext(pat voidptr, iter voidptr) int
 
-fn C.FcPatternGetLangSet(pat voidptr, object &char, n int, ls &voidptr) int
+fn C.FcPatternIterIsValid(pat voidptr, iter voidptr) int
+
+fn C.FcPatternIterGetObject(pat voidptr, iter voidptr) &char
+
+fn C.FcPatternIterValueCount(pat voidptr, iter voidptr) int
+
+fn C.vt_fontconfig_pattern_add(pat voidptr, object &char, value voidptr, append int) int
+
+fn C.vt_fontconfig_pattern_get(pat voidptr, object &char, id int, value voidptr) int
+
+fn C.vt_fontconfig_pattern_iter_get_value(pat voidptr, iter voidptr, id int, value voidptr, binding &int) int
+
+fn C.FcFontSetCreate() voidptr
 
 fn C.FcFontSetDestroy(fs voidptr)
+
+fn C.FcFontSetAdd(fs voidptr, pat voidptr) int
+
+fn C.FcFontSetPrint(fs voidptr)
 
 fn C.FcCharSetCreate() voidptr
 
@@ -67,7 +93,21 @@ fn C.FcCharSetAddChar(cs voidptr, ucs4 u32) int
 
 fn C.FcCharSetHasChar(cs voidptr, ucs4 u32) int
 
+fn C.FcLangSetCreate() voidptr
+
+fn C.FcLangSetDestroy(ls voidptr)
+
+fn C.FcLangSetAdd(ls voidptr, lang &char) int
+
 fn C.FcLangSetHasLang(ls voidptr, lang &char) int
+
+fn C.FcObjectSetCreate() voidptr
+
+fn C.FcObjectSetDestroy(os voidptr)
+
+fn C.FcObjectSetAdd(os voidptr, object &char) int
+
+fn C.FcRangeDestroy(range voidptr)
 
 // vt_fontconfig_fontset_fonts and vt_fontconfig_fontset_nfont read the
 // `fonts`/`nfont` fields out of the opaque FcFontSet struct without us
@@ -82,6 +122,7 @@ const fc_result_match = 0
 // FcMatchKind values.
 const fc_match_pattern = 0
 const fc_match_font = 1
+const fc_match_scan = 2
 
 // ============================================================
 // Config
@@ -100,6 +141,14 @@ pub fn init_load_config_and_fonts() Config {
 	}
 }
 
+// init_load_config initializes fontconfig and loads its configuration without
+// loading the system font database.
+pub fn init_load_config() Config {
+	return Config{
+		handle: C.FcInitLoadConfig()
+	}
+}
+
 // destroy releases the fontconfig configuration.
 pub fn (c Config) destroy() {
 	if !isnil(c.handle) {
@@ -107,18 +156,27 @@ pub fn (c Config) destroy() {
 	}
 }
 
+pub fn (c Config) cval() voidptr {
+	return c.handle
+}
+
 // font_sort sorts fonts matching a pattern by closeness.
 pub fn (c Config) font_sort(pat &Pattern, trim bool, csp voidptr) FontSortResult {
 	mut result := int(0)
-	fs := C.FcFontSort(c.handle, pat.handle, if trim { 1 } else { 0 }, &voidptr(unsafe { nil }), &result)
+	fs := C.FcFontSort(c.handle, pat.handle, if trim { 1 } else { 0 }, csp, &result)
 	return FontSortResult{
-		result: match result {
-			fc_result_match { MatchResult.match_ }
-			else { MatchResult.no_match }
-		}
-		fs: &FontSet{
+		result: unsafe { MatchResult(result) }
+		fs:     &FontSet{
 			handle: fs
 		}
+	}
+}
+
+// font_list returns the fonts matching pat, restricted to the properties in
+// objects. The returned set owns its patterns and must be destroyed.
+pub fn (c Config) font_list(pat &Pattern, objects &ObjectSet) &FontSet {
+	return &FontSet{
+		handle: C.FcFontList(c.handle, pat.handle, objects.handle)
 	}
 }
 
@@ -127,6 +185,7 @@ pub fn (c Config) substitute_with_pat(pat &Pattern, kind SubstituteKind) bool {
 	fc_kind := match kind {
 		.pattern { fc_match_pattern }
 		.font { fc_match_font }
+		.scan { fc_match_scan }
 	}
 	return C.FcConfigSubstitute(c.handle, pat.handle, fc_kind) != 0
 }
@@ -159,6 +218,13 @@ pub fn Pattern.create() &Pattern {
 	}
 }
 
+// parse creates a pattern from fontconfig's textual name syntax.
+pub fn Pattern.parse(value string) &Pattern {
+	return &Pattern{
+		handle: C.FcNameParse(&char(value.str))
+	}
+}
+
 // destroy releases the pattern.
 pub fn (p &Pattern) destroy() {
 	if !isnil(p.handle) {
@@ -166,28 +232,19 @@ pub fn (p &Pattern) destroy() {
 	}
 }
 
-// add adds a property to the pattern. The `append` flag is accepted for API
-// compatibility; fontconfig's typed adders always append.
-pub fn (p &Pattern) add(prop Property, val PatternValue, append bool) bool {
+pub fn (p &Pattern) cval() voidptr {
+	return p.handle
+}
+
+// add adds a typed value to the pattern.
+pub fn (p &Pattern) add(prop Property, val Value, append bool) bool {
 	object := prop.cval()
-	return match prop {
-		.family, .style, .fullname {
-			C.FcPatternAddString(p.handle, &char(object.str), &char(val.string.str)) != 0
-		}
-		.charset {
-			mut cs_handle := voidptr(unsafe { nil })
-			if !isnil(val.char_set) {
-				cs_handle = val.char_set.handle
-			}
-			C.FcPatternAddCharSet(p.handle, &char(object.str), cs_handle) != 0
-		}
-		.size, .weight, .slant, .spacing {
-			C.FcPatternAddInteger(p.handle, &char(object.str), val.integer) != 0
-		}
-		.lang {
-			C.FcPatternAddString(p.handle, &char(object.str), &char(val.string.str)) != 0
-		}
-	}
+	raw := val.raw()
+	return C.vt_fontconfig_pattern_add(p.handle, &char(object.str), voidptr(&raw), if append {
+		1
+	} else {
+		0
+	}) != 0
 }
 
 // default_substitute fills in default values for the pattern.
@@ -196,73 +253,118 @@ pub fn (p &Pattern) default_substitute() {
 }
 
 // get retrieves a property value from the pattern at the given index.
-pub fn (p &Pattern) get(prop Property, idx int) !PatternValue {
+pub fn (p &Pattern) get(prop Property, idx int) !Value {
 	object := prop.cval()
-	return match prop {
-		.family, .style, .fullname {
-			mut sptr := &char(unsafe { nil })
-			if C.FcPatternGetString(p.handle, &char(object.str), idx, &sptr) != fc_result_match {
-				return error('FcPatternGetString(${object}) failed')
-			}
-			PatternValue{
-				string: unsafe { cstring_to_vstring(sptr) }
-			}
-		}
-		.size, .weight, .slant, .spacing {
-			mut ival := int(0)
-			if C.FcPatternGetInteger(p.handle, &char(object.str), idx, &ival) != fc_result_match {
-				return error('FcPatternGetInteger(${object}) failed')
-			}
-			PatternValue{
-				integer: ival
-			}
-		}
-		.charset {
-			mut charset := voidptr(unsafe { nil })
-			if C.FcPatternGetCharSet(p.handle, &char(object.str), idx, &charset) != fc_result_match
-				|| isnil(charset) {
-				return error('FcPatternGetCharSet(${object}) failed')
-			}
-			PatternValue{
-				char_set: &CharSet{
-					handle: charset
-				}
-			}
-		}
-		.lang {
-			mut langset := voidptr(unsafe { nil })
-			if C.FcPatternGetLangSet(p.handle, &char(object.str), idx, &langset) != fc_result_match
-				|| isnil(langset) {
-				return error('FcPatternGetLangSet(${object}) failed')
-			}
-			PatternValue{
-				lang_set: &LangSet{
-					handle: langset
-				}
-			}
-		}
+	mut raw := RawValue{}
+	result := C.vt_fontconfig_pattern_get(p.handle, &char(object.str), idx, voidptr(&raw))
+	if result != fc_result_match {
+		return result_error(result, 'FcPatternGet(${object})')
+	}
+	return value_from_raw(raw)
+}
+
+// delete removes every value for prop from the pattern.
+pub fn (p &Pattern) delete(prop Property) bool {
+	object := prop.cval()
+	return C.FcPatternDel(p.handle, &char(object.str)) != 0
+}
+
+// filter copies only properties listed in objects into a new pattern.
+pub fn (p &Pattern) filter(objects &ObjectSet) &Pattern {
+	return &Pattern{
+		handle: C.FcPatternFilter(p.handle, objects.handle)
 	}
 }
 
-// file returns the font file path stored in this pattern (FC_FILE), if any.
-pub fn (p &Pattern) file() ?string {
-	mut sptr := &char(unsafe { nil })
-	if C.FcPatternGetString(p.handle, c'file', 0, &sptr) != fc_result_match {
-		return none
-	}
-	if isnil(sptr) {
-		return none
-	}
-	return unsafe { cstring_to_vstring(sptr) }
+// print writes fontconfig's diagnostic representation of this pattern.
+pub fn (p &Pattern) print() {
+	C.FcPatternPrint(p.handle)
 }
 
-// index returns the face index stored in this pattern (FC_INDEX), or 0.
-pub fn (p &Pattern) index() int {
-	mut ival := int(0)
-	if C.FcPatternGetInteger(p.handle, c'index', 0, &ival) != fc_result_match {
-		return 0
+// object_iterator iterates over every object and value in this pattern.
+pub fn (p &Pattern) object_iterator() PatternObjectIterator {
+	return PatternObjectIterator{
+		pattern: p.handle
 	}
-	return ival
+}
+
+struct PatternIterStorage {
+mut:
+	dummy1 voidptr = unsafe { nil }
+	dummy2 voidptr = unsafe { nil }
+}
+
+pub struct PatternObjectIterator {
+	pattern voidptr = unsafe { nil }
+mut:
+	storage PatternIterStorage
+	started bool
+}
+
+// next moves to the next object. The first call selects the first object.
+pub fn (mut it PatternObjectIterator) next() bool {
+	if !it.started {
+		it.started = true
+		if C.FcPatternObjectCount(it.pattern) == 0 {
+			return false
+		}
+		C.FcPatternIterStart(it.pattern, voidptr(&it.storage))
+		return C.FcPatternIterIsValid(it.pattern, voidptr(&it.storage)) != 0
+	}
+	return C.FcPatternIterNext(it.pattern, voidptr(&it.storage)) != 0
+}
+
+// object returns the current object's fontconfig name.
+pub fn (it &PatternObjectIterator) object() string {
+	ptr := C.FcPatternIterGetObject(it.pattern, voidptr(&it.storage))
+	if isnil(ptr) {
+		return ''
+	}
+	return unsafe { cstring_to_vstring(ptr) }
+}
+
+// value_len returns the number of values for the current object.
+pub fn (it &PatternObjectIterator) value_len() int {
+	return C.FcPatternIterValueCount(it.pattern, voidptr(&it.storage))
+}
+
+pub fn (it &PatternObjectIterator) value_iterator() PatternValueIterator {
+	return PatternValueIterator{
+		pattern: it.pattern
+		storage: it.storage
+		max:     it.value_len()
+	}
+}
+
+pub struct PatternValueIterator {
+	pattern voidptr = unsafe { nil }
+	storage PatternIterStorage
+	max     int
+mut:
+	id int
+}
+
+pub struct PatternValueEntry {
+pub:
+	result  MatchResult
+	value   Value
+	binding ValueBinding
+}
+
+pub fn (mut it PatternValueIterator) next() ?PatternValueEntry {
+	if it.id >= it.max {
+		return none
+	}
+	mut raw := RawValue{}
+	mut binding := 0
+	result := C.vt_fontconfig_pattern_iter_get_value(it.pattern, voidptr(&it.storage),
+		it.id, voidptr(&raw), &binding)
+	it.id++
+	return PatternValueEntry{
+		result:  unsafe { MatchResult(result) }
+		value:   value_from_raw(raw)
+		binding: unsafe { ValueBinding(binding) }
+	}
 }
 
 // ============================================================
@@ -274,11 +376,31 @@ pub struct FontSet {
 	handle voidptr = unsafe { nil }
 }
 
+// create creates an empty font set.
+pub fn FontSet.create() &FontSet {
+	return &FontSet{
+		handle: C.FcFontSetCreate()
+	}
+}
+
 // destroy releases the font set.
 pub fn (fs &FontSet) destroy() {
 	if !isnil(fs.handle) {
 		C.FcFontSetDestroy(fs.handle)
 	}
+}
+
+pub fn (fs &FontSet) cval() voidptr {
+	return fs.handle
+}
+
+// add transfers a pattern into this font set.
+pub fn (fs &FontSet) add(pattern &Pattern) bool {
+	return C.FcFontSetAdd(fs.handle, pattern.handle) != 0
+}
+
+pub fn (fs &FontSet) print() {
+	C.FcFontSetPrint(fs.handle)
 }
 
 // fonts returns the font patterns in this set.
@@ -330,6 +452,14 @@ pub fn (cs &CharSet) has_char(cp u32) bool {
 	return !isnil(cs) && !isnil(cs.handle) && C.FcCharSetHasChar(cs.handle, cp) != 0
 }
 
+pub fn (cs &CharSet) cval() voidptr {
+	return cs.handle
+}
+
+pub fn (cs &CharSet) cval_const() voidptr {
+	return cs.handle
+}
+
 // ============================================================
 // LangSet
 // ============================================================
@@ -339,67 +469,353 @@ pub struct LangSet {
 	handle voidptr = unsafe { nil }
 }
 
-// has_lang reports Fontconfig's relationship to lang. Equal languages and
-// country variants are both matches, matching FcLangSetHasLang.
+pub fn LangSet.create() &LangSet {
+	return &LangSet{
+		handle: C.FcLangSetCreate()
+	}
+}
+
+pub fn (ls &LangSet) destroy() {
+	if !isnil(ls.handle) {
+		C.FcLangSetDestroy(ls.handle)
+	}
+}
+
+pub fn (ls &LangSet) add_lang(lang string) bool {
+	return C.FcLangSetAdd(ls.handle, &char(lang.str)) != 0
+}
+
+// has_lang reports whether lang is an exact match in this language set.
 pub fn (ls &LangSet) has_lang(lang string) bool {
-	return !isnil(ls) && !isnil(ls.handle) && C.FcLangSetHasLang(ls.handle, &char(lang.str)) < 2
+	return !isnil(ls) && !isnil(ls.handle) && C.FcLangSetHasLang(ls.handle, &char(lang.str)) == 0
+}
+
+pub fn (ls &LangSet) cval() voidptr {
+	return ls.handle
+}
+
+pub fn (ls &LangSet) cval_const() voidptr {
+	return ls.handle
+}
+
+// ============================================================
+// ObjectSet, Matrix, and Range
+// ============================================================
+
+pub struct ObjectSet {
+	handle voidptr = unsafe { nil }
+}
+
+pub fn ObjectSet.create() &ObjectSet {
+	return &ObjectSet{
+		handle: C.FcObjectSetCreate()
+	}
+}
+
+pub fn (os &ObjectSet) destroy() {
+	if !isnil(os.handle) {
+		C.FcObjectSetDestroy(os.handle)
+	}
+}
+
+pub fn (os &ObjectSet) add(prop Property) bool {
+	object := prop.cval()
+	return C.FcObjectSetAdd(os.handle, &char(object.str)) != 0
+}
+
+pub fn (os &ObjectSet) cval() voidptr {
+	return os.handle
+}
+
+pub struct Matrix {
+pub:
+	xx f64
+	xy f64
+	yx f64
+	yy f64
+}
+
+pub struct Range {
+	handle voidptr = unsafe { nil }
+}
+
+pub fn (r &Range) destroy() {
+	if !isnil(r.handle) {
+		C.FcRangeDestroy(r.handle)
+	}
+}
+
+pub fn (r &Range) cval() voidptr {
+	return r.handle
 }
 
 // ============================================================
 // Enums and types
 // ============================================================
 
-// Property identifies a fontconfig pattern property.
-pub enum Property {
+// Property identifies every fontconfig pattern property exported by Ghostty's
+// wrapper. cval removes underscores to produce Fontconfig's object names.
+pub enum Property as u8 {
 	family
 	style
-	fullname
-	charset
-	size
-	weight
 	slant
+	weight
+	size
+	aspect
+	pixel_size
 	spacing
+	foundry
+	antialias
+	hinting
+	hint_style
+	vertical_layout
+	autohint
+	global_advance
+	width
+	file
+	index
+	ft_face
+	rasterizer
+	outline
+	scalable
+	color
+	variable
+	scale
+	symbol
+	dpi
+	rgba
+	minspace
+	source
+	charset
 	lang
+	fontversion
+	fullname
+	familylang
+	stylelang
+	fullnamelang
+	capability
+	embolden
+	embedded_bitmap
+	decorative
+	lcd_filter
+	font_features
+	font_variations
+	namelang
+	prgname
+	hash
+	postscript_name
+	font_has_hint
+	order
 }
 
 // cval returns the fontconfig object string for this property.
 pub fn (p Property) cval() string {
-	return match p {
-		.family { 'family' }
-		.style { 'style' }
-		.fullname { 'fullname' }
-		.charset { 'charset' }
-		.size { 'size' }
-		.weight { 'weight' }
-		.slant { 'slant' }
-		.spacing { 'spacing' }
-		.lang { 'lang' }
+	return p.str().replace('_', '')
+}
+
+// Type is the tag of Fontconfig's FcValue union. V represents the union as the
+// flattened Value below.
+pub enum Type as i32 {
+	unknown = -1
+	void_
+	integer
+	double_
+	string_
+	bool_
+	matrix
+	char_set
+	ft_face
+	lang_set
+	range
+}
+
+// Value is the translated FcValue tagged union.
+pub struct Value {
+pub:
+	tag          Type @[required]
+	integer      i32
+	double_value f64
+	string       string
+	boolean      bool
+	matrix       &Matrix  = unsafe { nil }
+	char_set     &CharSet = unsafe { nil }
+	ft_face      voidptr  = unsafe { nil }
+	lang_set     &LangSet = unsafe { nil }
+	range        &Range   = unsafe { nil }
+}
+
+// PatternValue preserves the earlier Witty name while Value matches Ghostty.
+pub type PatternValue = Value
+
+pub fn Value.unknown() Value {
+	return Value{ tag: .unknown }
+}
+
+pub fn Value.void_value() Value {
+	return Value{ tag: .void_ }
+}
+
+pub fn Value.from_integer(value i32) Value {
+	return Value{
+		tag:     .integer
+		integer: value
 	}
 }
 
-// PatternValue holds a typed value from a fontconfig pattern.
-pub struct PatternValue {
-pub:
-	string   string
-	integer  int
-	char_set &CharSet = unsafe { nil }
-	lang_set &LangSet = unsafe { nil }
+pub fn Value.from_double(value f64) Value {
+	return Value{
+		tag:          .double_
+		double_value: value
+	}
 }
 
-// SubstituteKind identifies the type of substitution.
-pub enum SubstituteKind {
+pub fn Value.from_string(value string) Value {
+	return Value{
+		tag:    .string_
+		string: value
+	}
+}
+
+pub fn Value.from_bool(value bool) Value {
+	return Value{
+		tag:     .bool_
+		boolean: value
+	}
+}
+
+pub fn Value.from_matrix(value &Matrix) Value {
+	return Value{
+		tag:    .matrix
+		matrix: unsafe { value }
+	}
+}
+
+pub fn Value.from_char_set(value &CharSet) Value {
+	return Value{
+		tag:      .char_set
+		char_set: unsafe { value }
+	}
+}
+
+pub fn Value.from_ft_face(value voidptr) Value {
+	return Value{
+		tag:     .ft_face
+		ft_face: value
+	}
+}
+
+pub fn Value.from_lang_set(value &LangSet) Value {
+	return Value{
+		tag:      .lang_set
+		lang_set: unsafe { value }
+	}
+}
+
+pub fn Value.from_range(value &Range) Value {
+	return Value{
+		tag:   .range
+		range: unsafe { value }
+	}
+}
+
+struct RawValue {
+mut:
+	typ           int
+	integer_value int
+	double_value  f64
+	string_value  &char = unsafe { nil }
+	bool_value    int
+	pointer_value voidptr = unsafe { nil }
+}
+
+fn (value Value) raw() RawValue {
+	mut result := RawValue{
+		typ:           int(value.tag)
+		integer_value: int(value.integer)
+		double_value:  value.double_value
+		bool_value:    if value.boolean { 1 } else { 0 }
+	}
+	match value.tag {
+		.string_ { result.string_value = &char(value.string.str) }
+		.matrix { result.pointer_value = voidptr(value.matrix) }
+		.char_set {
+			if !isnil(value.char_set) {
+				result.pointer_value = value.char_set.handle
+			}
+		}
+		.ft_face { result.pointer_value = value.ft_face }
+		.lang_set {
+			if !isnil(value.lang_set) {
+				result.pointer_value = value.lang_set.handle
+			}
+		}
+		.range {
+			if !isnil(value.range) {
+				result.pointer_value = value.range.handle
+			}
+		}
+		else {}
+	}
+	return result
+}
+
+fn value_from_raw(raw RawValue) Value {
+	tag := unsafe { Type(raw.typ) }
+	return match tag {
+		.unknown { Value.unknown() }
+		.void_ { Value.void_value() }
+		.integer { Value.from_integer(i32(raw.integer_value)) }
+		.double_ { Value.from_double(raw.double_value) }
+		.string_ {
+			Value.from_string(if isnil(raw.string_value) {
+				''
+			} else {
+				unsafe { cstring_to_vstring(raw.string_value) }
+			})
+		}
+		.bool_ { Value.from_bool(raw.bool_value != 0) }
+		.matrix { Value.from_matrix(unsafe { &Matrix(raw.pointer_value) }) }
+		.char_set {
+			Value.from_char_set(&CharSet{
+				handle: raw.pointer_value
+			})
+		}
+		.ft_face { Value.from_ft_face(raw.pointer_value) }
+		.lang_set {
+			Value.from_lang_set(&LangSet{
+				handle: raw.pointer_value
+			})
+		}
+		.range {
+			Value.from_range(&Range{
+				handle: raw.pointer_value
+			})
+		}
+	}
+}
+
+pub enum SubstituteKind as i32 {
 	pattern
 	font
+	scan
 }
+
+pub type MatchKind = SubstituteKind
 
 // Weight constants for fontconfig (matching FC_WEIGHT_* values).
 pub enum Weight {
-	thin    = 0
-	light   = 50
-	regular = 80
-	medium  = 100
-	bold    = 200
-	black   = 215
+	thin       = 0
+	extralight = 40
+	light      = 50
+	demilight  = 55
+	book       = 75
+	regular    = 80
+	medium     = 100
+	demibold   = 180
+	bold       = 200
+	extrabold  = 205
+	black      = 210
+	extrablack = 215
 }
 
 // Slant constants for fontconfig (matching FC_SLANT_* values).
@@ -429,10 +845,50 @@ pub enum MatchResult {
 	match_
 	no_match
 	type_mismatch
+	no_id
+	out_of_memory
+}
+
+pub type Result = MatchResult
+
+pub fn (result MatchResult) to_error() ! {
+	match result {
+		.match_ {}
+		.no_match { return error('fontconfig: no match') }
+		.type_mismatch { return error('fontconfig: type mismatch') }
+		.no_id { return error('fontconfig: no id') }
+		.out_of_memory { return error('fontconfig: out of memory') }
+	}
+}
+
+pub enum ValueBinding as i32 {
+	weak
+	strong
+	same
+}
+
+fn result_error(result int, operation string) IError {
+	return match result {
+		1 { error('${operation}: no match') }
+		2 { error('${operation}: type mismatch') }
+		3 { error('${operation}: no id') }
+		4 { error('${operation}: out of memory') }
+		else { error('${operation}: unknown result ${result}') }
+	}
 }
 
 // fc_init initializes the fontconfig library.
 // Safe to call multiple times and concurrently.
 pub fn fc_init() bool {
 	return C.FcInit() != 0
+}
+
+// fini finalizes Fontconfig's process-wide state.
+pub fn fini() {
+	C.FcFini()
+}
+
+// version returns Fontconfig's compile-time-compatible runtime version.
+pub fn version() u32 {
+	return u32(C.FcGetVersion())
 }
