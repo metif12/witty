@@ -2124,9 +2124,9 @@ fn (mut self Renderer) prep_background_image() ! {
 			eprintln('renderer: error reading background image file "${path_config.path}": ${err}')
 			return
 		}
-		detected_type := file_type.detect(contents)
+		detected_type := file_type.FileType.detect(contents)
 		image_type := match detected_type {
-			.unknown { file_type.guess_from_extension(os.file_ext(path_config.path)) }
+			.unknown { file_type.FileType.guess_from_extension(os.file_ext(path_config.path)) }
 			else { detected_type }
 		}
 

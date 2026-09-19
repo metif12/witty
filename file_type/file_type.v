@@ -106,7 +106,7 @@ pub enum FileType as u8 {
 }
 
 // detect detects the file type from the magic bytes at the start of contents.
-pub fn detect(contents []u8) FileType {
+pub fn FileType.detect(contents []u8) FileType {
 	for detail in type_details {
 		for signature in detail.sigs {
 			if contents.len < signature.pattern.len {
@@ -128,7 +128,7 @@ pub fn detect(contents []u8) FileType {
 }
 
 // guess_from_extension guesses the file type from a case-insensitive extension.
-pub fn guess_from_extension(extension string) FileType {
+pub fn FileType.guess_from_extension(extension string) FileType {
 	for detail in type_details {
 		for ext in detail.exts {
 			if ascii.eql_ignore_case(extension, ext) {
