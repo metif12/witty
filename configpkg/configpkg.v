@@ -9540,7 +9540,7 @@ fn parse_freetype_load_flags(value string) ?font.FreetypeLoadFlags {
 }
 
 fn metric_modifier_parse_cli(value string) !font.MetricsModifier {
-	return font.MetricsModifier.parse(value) or { return perr(ParseError.invalid_value) }
+	return font.MetricsModifier.parse_cli(value) or { return perr(ParseError.invalid_value) }
 }
 
 fn parse_shell_integration_features(value string) ?ShellIntegrationFeatures {

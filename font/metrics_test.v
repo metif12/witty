@@ -189,6 +189,15 @@ fn test_modifier_parse_absolute() {
 	assert m2.absolute == i32(-100)
 }
 
+fn test_modifier_parse_cli() {
+	assert MetricsModifier.parse_cli('20%')!.percent == 1.2
+	MetricsModifier.parse_cli(none) or {
+		assert err.msg() == 'value required'
+		return
+	}
+	assert false, 'expected absent CLI value to fail'
+}
+
 fn test_modifier_parse_absolute_matches_zig_i32_boundaries() {
 	assert MetricsModifier.parse('+42')!.absolute == 42
 	assert MetricsModifier.parse('1__2')!.absolute == 12
@@ -234,6 +243,8 @@ fn test_modifier_percent() {
 		percent: 1.8
 	}
 	assert m2.apply(u32(100)) == u32(180)
+	assert m1.apply(i32(100)) == i32(80)
+	assert m1.apply(f64(100)) == f64(80)
 }
 
 // ghostty: test "Modifier: absolute"
@@ -255,4 +266,6 @@ fn test_modifier_absolute() {
 		absolute: 100
 	}
 	assert m3.apply(u32(100)) == u32(200)
+	assert MetricsModifier{ absolute: -1 }.apply(i32(-2147483647 - 1)) == i32(-2147483647)
+	assert MetricsModifier{ absolute: 1 }.apply(i32(2147483647)) == i32(2147483647)
 }

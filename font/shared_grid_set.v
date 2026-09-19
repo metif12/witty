@@ -700,15 +700,30 @@ pub fn MetricsModifier.parse(input string) !MetricsModifier {
 	}
 }
 
+// parse_cli is the optional-value adapter used by the configuration parser.
+pub fn MetricsModifier.parse_cli(input ?string) !MetricsModifier {
+	value := input or { return error('value required') }
+	return MetricsModifier.parse(value)
+}
+
 // Direct translation of `std.fmt.parseInt(i32, input, 10)`.
 fn parse_metrics_i32(input string) ?i32 {
 	return i32(zig_fmt.parse_int_signed(input, 32, 10) or { return none })
 }
 
-// apply applies this modifier to an unsigned integer value, matching the Zig
-// Modifier.apply semantics for unsigned integers.
-pub fn (m MetricsModifier) apply(v u32) u32 {
-	return metrics_modifier_apply_u32(m, v)
+// apply applies this modifier to the numeric field types retained by Metrics.
+// Zig expresses this with anytype; V specializes the same entry point at each
+// concrete call site.
+pub fn (m MetricsModifier) apply[T](v T) T {
+	$if T is u32 {
+		return metrics_modifier_apply_u32(m, v)
+	} $else $if T is i32 {
+		return metrics_modifier_apply_i32(m, v)
+	} $else $if T is f64 {
+		return metrics_modifier_apply_f64(m, v)
+	} $else {
+		panic('unsupported metrics modifier type')
+	}
 }
 
 // ============================================================

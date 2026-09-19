@@ -591,7 +591,7 @@ pub fn (mut m Metrics) apply(mods MetricsModifierSet) {
 		// We clamp these values to a minimum of 1 to prevent
 		// divide-by-zero in downstream operations.
 		original := m.cell_width
-		new := math_max_u32(metrics_modifier_apply_u32(mod, original), 1)
+		new := math_max_u32(mod.apply(original), 1)
 		if new != original {
 			m.cell_width = new
 		}
@@ -599,7 +599,7 @@ pub fn (mut m Metrics) apply(mods MetricsModifierSet) {
 
 	if mod := mods.get(.cell_height) {
 		original := m.cell_height
-		new := math_max_u32(metrics_modifier_apply_u32(mod, original), 1)
+		new := math_max_u32(mod.apply(original), 1)
 		if new != original {
 			// Set the new value.
 			m.cell_height = new
@@ -648,40 +648,40 @@ pub fn (mut m Metrics) apply(mods MetricsModifierSet) {
 
 	// icon_height modifies both icon_height and icon_height_single.
 	if mod := mods.get(.icon_height) {
-		m.icon_height = metrics_modifier_apply_f64(mod, m.icon_height)
-		m.icon_height_single = metrics_modifier_apply_f64(mod, m.icon_height_single)
+		m.icon_height = mod.apply(m.icon_height)
+		m.icon_height_single = mod.apply(m.icon_height_single)
 	}
 
 	// All remaining keys apply straightforwardly to their matching field.
 	if mod := mods.get(.cell_baseline) {
-		m.cell_baseline = metrics_modifier_apply_u32(mod, m.cell_baseline)
+		m.cell_baseline = mod.apply(m.cell_baseline)
 	}
 	if mod := mods.get(.underline_position) {
-		m.underline_position = metrics_modifier_apply_u32(mod, m.underline_position)
+		m.underline_position = mod.apply(m.underline_position)
 	}
 	if mod := mods.get(.underline_thickness) {
-		m.underline_thickness = metrics_modifier_apply_u32(mod, m.underline_thickness)
+		m.underline_thickness = mod.apply(m.underline_thickness)
 	}
 	if mod := mods.get(.strikethrough_position) {
-		m.strikethrough_position = metrics_modifier_apply_u32(mod, m.strikethrough_position)
+		m.strikethrough_position = mod.apply(m.strikethrough_position)
 	}
 	if mod := mods.get(.strikethrough_thickness) {
-		m.strikethrough_thickness = metrics_modifier_apply_u32(mod, m.strikethrough_thickness)
+		m.strikethrough_thickness = mod.apply(m.strikethrough_thickness)
 	}
 	if mod := mods.get(.overline_position) {
-		m.overline_position = metrics_modifier_apply_i32(mod, m.overline_position)
+		m.overline_position = mod.apply(m.overline_position)
 	}
 	if mod := mods.get(.overline_thickness) {
-		m.overline_thickness = metrics_modifier_apply_u32(mod, m.overline_thickness)
+		m.overline_thickness = mod.apply(m.overline_thickness)
 	}
 	if mod := mods.get(.box_thickness) {
-		m.box_thickness = metrics_modifier_apply_u32(mod, m.box_thickness)
+		m.box_thickness = mod.apply(m.box_thickness)
 	}
 	if mod := mods.get(.cursor_thickness) {
-		m.cursor_thickness = metrics_modifier_apply_u32(mod, m.cursor_thickness)
+		m.cursor_thickness = mod.apply(m.cursor_thickness)
 	}
 	if mod := mods.get(.cursor_height) {
-		m.cursor_height = metrics_modifier_apply_u32(mod, m.cursor_height)
+		m.cursor_height = mod.apply(m.cursor_height)
 	}
 
 	// Prevent modifiers from pushing metrics out of their allowable range.
@@ -762,8 +762,8 @@ fn metrics_modifier_apply_u32(mod MetricsModifier, v u32) u32 {
 		if applied <= 0 {
 			return 0
 		}
-		if applied >= f64(u32(0xFFFFFFFF)) {
-			return u32(0xFFFFFFFF)
+		if applied > f64(u32(0xFFFFFFFF)) {
+			panic('integer overflow applying metrics percentage')
 		}
 		return u32(applied)
 	}
@@ -784,14 +784,22 @@ fn metrics_modifier_apply_i32(mod MetricsModifier, v i32) i32 {
 		p := if mod.percent > 0 { mod.percent } else { f64(0) }
 		applied := math.round(f64(v) * p)
 		if applied > f64(i32(0x7FFFFFFF)) {
-			return i32(0x7FFFFFFF)
+			panic('integer overflow applying metrics percentage')
 		}
-		if applied < f64(i32(-0x80000000)) {
-			return i32(-0x80000000)
+		if applied < f64(min_i32) {
+			panic('integer overflow applying metrics percentage')
 		}
 		return i32(applied)
 	}
-	return saturating_add_i32(v, mod.absolute)
+	applied := i64(v) + i64(mod.absolute)
+	if applied > i64(max_i32) {
+		return max_i32
+	}
+	if applied < i64(min_i32) {
+		// Match `maxInt(T) * sign(clamped_i64)` in the source.
+		return -max_i32
+	}
+	return i32(applied)
 }
 
 // metrics_modifier_apply_f64 applies a modifier to an f64 value.
