@@ -812,13 +812,17 @@ pub mut:
 	variations []Variation
 }
 
-// family_name_value returns the family name advertised by discovery.
-pub fn (d DeferredFace) family_name_value() string {
+// family_name returns the family name advertised by discovery.
+// The V discovery layer already owns the copied string, so the caller buffer
+// is retained only to preserve the source API contract.
+pub fn (d DeferredFace) family_name(mut buf []u8) !string {
+	_ = buf
 	return d.family_name
 }
 
 // name returns the display/full name advertised by discovery.
-pub fn (d DeferredFace) deferred_name() string {
+pub fn (d DeferredFace) name(mut buf []u8) !string {
+	_ = buf
 	return d.full_name
 }
 

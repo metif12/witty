@@ -4,6 +4,7 @@ import ascii
 import configpkg
 import font
 import input
+import log
 import os
 import terminal
 import tui
@@ -174,16 +175,22 @@ pub fn list_fonts_output(args []string) !string {
 	}
 	mut entries := []FontListEntry{}
 	for {
-		mut face := iterator.next() or { break }
-		family := face.family_name_value()
-		name := face.deferred_name()
+		face := iterator.next() or { break }
+		mut buf := []u8{len: 1024}
+		family := face.family_name(mut buf) or {
+			log.error('failed to get font family name: ${err}')
+			continue
+		}
+		name := face.name(mut buf) or {
+			log.error('failed to get font name: ${err}')
+			continue
+		}
 		if family.len > 0 && name.len > 0 {
 			entries << FontListEntry{
 				family: family
 				name:   name
 			}
 		}
-		face.deinit()
 	}
 	return format_font_list(entries, opts.family == none)
 }

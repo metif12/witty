@@ -337,7 +337,9 @@ pub fn (mut self CodepointResolver) get_index(cp u32, style Style, p ?Presentati
 						deferred.deinit()
 						continue
 					}
-					log.info('found codepoint 0x${cp:X} in fallback face=${deferred.deferred_name()}')
+					mut name_buf := []u8{len: 256}
+					name := deferred.name(mut name_buf) or { '<error>' }
+					log.info('found codepoint 0x${cp:X} in fallback face=${name}')
 					idx := self.collection.add_deferred(deferred, AddOptions{
 						style: style
 						fallback: true

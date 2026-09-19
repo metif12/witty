@@ -58,6 +58,16 @@ fn test_face_name() {
 	inconsolata.deinit()
 }
 
+fn test_deferred_face_names() {
+	deferred := DeferredFace{
+		family_name: 'JetBrains Mono'
+		full_name: 'JetBrains Mono Regular'
+	}
+	mut buf := []u8{len: 64}
+	assert deferred.family_name(mut buf) or { panic(err) } == 'JetBrains Mono'
+	assert deferred.name(mut buf) or { panic(err) } == 'JetBrains Mono Regular'
+}
+
 fn test_render_all_ascii() {
 	mut lib := Library.init() or { panic(err) }
 	defer { lib.deinit() }
