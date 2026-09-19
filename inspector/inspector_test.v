@@ -7,6 +7,13 @@ import terminal
 
 const test_font = $embed_file('@VMODROOT/font/res/JetBrainsMono-Regular.ttf').to_bytes()
 
+fn test_to_kibi_bytes_matches_source_integer_conversion() {
+	assert to_kibi_bytes(0) == 0
+	assert to_kibi_bytes(1023) == 0
+	assert to_kibi_bytes(1024) == 1
+	assert to_kibi_bytes(usize(1024) * 17 + 999) == 17
+}
+
 fn test_key_event_owns_data_and_formats_details() {
 	mut source := input.KeyEvent{
 		action: .press

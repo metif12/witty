@@ -185,18 +185,29 @@ pub struct MetalFrame {
 pub mut:
 	// The command buffer handle.
 	command_buffer voidptr = unsafe { nil }
+	// Captures copied into the Objective-C completion block.
+	renderer            voidptr = unsafe { nil }
+	target              voidptr = unsafe { nil }
+	completion_callback voidptr = unsafe { nil }
 }
 
-pub fn MetalFrame.begin(queue voidptr) !MetalFrame {
+pub fn MetalFrame.begin(queue voidptr, renderer_ptr voidptr, target voidptr, completion_callback voidptr) !MetalFrame {
 	if queue == unsafe { nil } {
 		return error('Metal frame requires a command queue')
+	}
+	if renderer_ptr == unsafe { nil } || target == unsafe { nil }
+		|| completion_callback == unsafe { nil } {
+		return error('Metal frame requires completion captures')
 	}
 	buffer := macos.metal_create_command_buffer(queue)
 	if buffer == unsafe { nil } {
 		return error('Metal command buffer allocation failed')
 	}
 	return MetalFrame{
-		command_buffer: buffer
+		command_buffer:      buffer
+		renderer:            renderer_ptr
+		target:              target
+		completion_callback: completion_callback
 	}
 }
 
@@ -207,15 +218,19 @@ pub fn (self &MetalFrame) render_pass(attachments []MetalRenderPassAttachment) M
 	})
 }
 
-pub fn (mut self MetalFrame) complete(sync_ bool) MetalCommandBufferStatus {
-	if self.command_buffer == unsafe { nil } {
-		return .error
+pub fn (mut self MetalFrame) complete(sync_ bool) {
+	if !sync_ {
+		if !macos.metal_command_buffer_add_completed_handler(self.command_buffer,
+			self.completion_callback, self.renderer, self.target) {
+			panic('Metal completion handler registration failed')
+		}
 	}
 	macos.metal_command_buffer_commit(self.command_buffer)
 	if sync_ {
 		macos.metal_command_buffer_wait(self.command_buffer)
+		macos.metal_command_buffer_invoke_completion(self.command_buffer, self.completion_callback,
+			self.renderer, self.target, true)
 	}
-	return metal_command_buffer_status(macos.metal_command_buffer_status(self.command_buffer))
 }
 
 // ============================================================

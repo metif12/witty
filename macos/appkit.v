@@ -213,6 +213,10 @@ fn C.witty_metal_command_buffer_wait(command_buffer voidptr)
 
 fn C.witty_metal_command_buffer_status(command_buffer voidptr) u64
 
+fn C.witty_metal_command_buffer_add_completed_handler(command_buffer voidptr, callback voidptr, renderer voidptr, target voidptr) bool
+
+fn C.witty_metal_command_buffer_invoke_completion(command_buffer voidptr, callback voidptr, renderer voidptr, target voidptr, sync_ bool)
+
 fn C.witty_metal_render_pass_descriptor() voidptr
 
 fn C.witty_metal_render_pass_set_attachment(descriptor voidptr, index usize, texture voidptr, has_clear_color bool, color MetalClearColor)
@@ -2182,6 +2186,16 @@ pub fn metal_command_buffer_wait(command_buffer voidptr) {
 
 pub fn metal_command_buffer_status(command_buffer voidptr) u64 {
 	return C.witty_metal_command_buffer_status(command_buffer)
+}
+
+pub fn metal_command_buffer_add_completed_handler(command_buffer voidptr, callback voidptr, renderer voidptr, target voidptr) bool {
+	return C.witty_metal_command_buffer_add_completed_handler(command_buffer, callback, renderer,
+		target)
+}
+
+pub fn metal_command_buffer_invoke_completion(command_buffer voidptr, callback voidptr, renderer voidptr, target voidptr, sync_ bool) {
+	C.witty_metal_command_buffer_invoke_completion(command_buffer, callback, renderer, target,
+		sync_)
 }
 
 pub fn metal_render_pass_descriptor() voidptr {

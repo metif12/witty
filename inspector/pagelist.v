@@ -299,9 +299,9 @@ fn draw_pagelist_summary(context cimgui.Context, pages &terminal.Pages) {
 	draw_pagelist_info_row(context, 'Pages', 'Total number of pages in the linked list.', '1')
 	draw_pagelist_info_row(context, 'Total Rows', 'Total rows represented by scrollback + active area.', pages.screen_rows.len.str())
 	page_bytes := flat_page_bytes(pages)
-	draw_pagelist_info_row(context, 'Page Bytes', 'Total bytes allocated for active pages.', '${page_bytes / 1024} KiB')
+	draw_pagelist_info_row(context, 'Page Bytes', 'Total bytes allocated for active pages.', '${to_kibi_bytes(page_bytes)} KiB')
 	max_bytes := flat_page_max_bytes(pages)
-	draw_pagelist_info_row(context, 'Max Size', 'Maximum bytes before pages must be evicted. The next allocation that would exceed this limit evicts rows from the front to free space.', '${max_bytes / 1024} KiB')
+	draw_pagelist_info_row(context, 'Max Size', 'Maximum bytes before pages must be evicted. The next allocation that would exceed this limit evicts rows from the front to free space.', '${to_kibi_bytes(max_bytes)} KiB')
 	draw_pagelist_info_row(context, 'Viewport', 'Current viewport anchoring mode.', pages.viewport.str())
 	draw_pagelist_info_row(context, 'Tracked Pins', 'Number of pins tracked for automatic updates.', '0')
 }
@@ -402,7 +402,7 @@ fn draw_flat_page_inspector(context cimgui.Context, pages &terminal.Pages) {
 
 fn draw_flat_page_memory(context cimgui.Context, pages &terminal.Pages) {
 	if context.begin_table('##overview', 3, cimgui.table_flags_inner_v_row_bg_sizing_fixed_fit) {
-		draw_pagelist_info_row(context, 'Memory Size', 'Memory allocated for this page. Note the backing memory may be a larger allocation from which this page uses a portion.', '${flat_page_bytes(pages) / 1024} KiB')
+		draw_pagelist_info_row(context, 'Memory Size', 'Memory allocated for this page. Note the backing memory may be a larger allocation from which this page uses a portion.', '${to_kibi_bytes(flat_page_bytes(pages))} KiB')
 		context.end_table()
 	}
 	styles := flat_style_usages(pages)

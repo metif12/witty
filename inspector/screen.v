@@ -156,8 +156,8 @@ fn draw_screen_kitty_graphics(context cimgui.Context, screen &terminal.Screen) {
 	defer {
 		context.end_table()
 	}
-	draw_screen_row(context, 'Memory Usage', '${storage.total_bytes} bytes (${storage.total_bytes / 1024} KiB)')
-	draw_screen_row(context, 'Memory Limit', '${storage.total_limit} bytes (${storage.total_limit / 1024} KiB)')
+	draw_screen_row(context, 'Memory Usage', '${storage.total_bytes} bytes (${to_kibi_bytes(storage.total_bytes)} KiB)')
+	draw_screen_row(context, 'Memory Limit', '${storage.total_limit} bytes (${to_kibi_bytes(storage.total_limit)} KiB)')
 	draw_screen_row(context, 'Image Count', storage.images.len.str())
 	draw_screen_row(context, 'Placement Count', storage.placements.len.str())
 	draw_screen_row(context, 'Image Loading', (storage.loading != none).str())
@@ -172,8 +172,8 @@ fn draw_screen_internal_state(context cimgui.Context, screen &terminal.Screen) {
 	}
 	page_bytes := usize(screen.pages.screen_rows.len) * usize(screen.pages.cols) * sizeof(terminal.CellData)
 	max_bytes := usize(screen.pages.rows + screen.pages.max_scrollback) * usize(screen.pages.cols) * sizeof(terminal.CellData)
-	draw_screen_row(context, 'Memory Usage', '${page_bytes} bytes (${page_bytes / 1024} KiB)')
-	draw_screen_row(context, 'Memory Limit', '${max_bytes} bytes (${max_bytes / 1024} KiB)')
+	draw_screen_row(context, 'Memory Usage', '${page_bytes} bytes (${to_kibi_bytes(page_bytes)} KiB)')
+	draw_screen_row(context, 'Memory Limit', '${max_bytes} bytes (${to_kibi_bytes(max_bytes)} KiB)')
 	draw_screen_row(context, 'Viewport Location', screen.pages.viewport.str())
 }
 

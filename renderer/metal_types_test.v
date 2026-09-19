@@ -3,6 +3,32 @@ module renderer
 import font
 import macos
 
+struct MetalFrameTestCapture {
+mut:
+	calls  int
+	status u64
+	sync_  bool
+}
+
+fn metal_frame_test_completion(renderer_ptr voidptr, target_ptr voidptr, status u64, sync_ bool) {
+	mut capture := unsafe { &MetalFrameTestCapture(renderer_ptr) }
+	assert target_ptr != unsafe { nil }
+	capture.calls++
+	capture.status = status
+	capture.sync_ = sync_
+}
+
+fn test_renderer_metal_completion_callback_reports_buffer_health() {
+	mut render := Renderer{
+		health: .unhealthy
+	}
+	mut target := MetalTarget{}
+	renderer_metal_frame_completed_callback(voidptr(&render), voidptr(&target), 4, false)
+	assert render.health == .healthy
+	renderer_metal_frame_completed_callback(voidptr(&render), voidptr(&target), 5, true)
+	assert render.health == .unhealthy
+}
+
 fn test_metal_render_step_counts_retain_source_pointer_width() {
 	max_count := ~usize(0)
 	buffer := MetalBuffer{
@@ -233,13 +259,27 @@ fn test_metal_sampler_target_and_empty_frame() ! {
 	assert target.surface.get_height() == 6
 	assert target.texture != unsafe { nil }
 
-	mut frame := MetalFrame.begin(api.queue)!
+	mut capture := MetalFrameTestCapture{}
+	mut frame := MetalFrame.begin(api.queue, voidptr(&capture), voidptr(&target),
+		voidptr(metal_frame_test_completion))!
 	mut pass := frame.render_pass([MetalRenderPassAttachment{
 		target: target.texture
 		clear_color: [f64(0.25), 0.5, 0.75, 1.0]!
 	}])
 	pass.complete()
-	assert frame.complete(true) == .completed
+	frame.complete(true)
+	assert capture.calls == 1
+	assert metal_command_buffer_status(capture.status) == .completed
+	assert capture.sync_
+
+	mut async_capture := MetalFrameTestCapture{}
+	mut async_frame := MetalFrame.begin(api.queue, voidptr(&async_capture), voidptr(&target),
+		voidptr(metal_frame_test_completion))!
+	async_frame.complete(false)
+	macos.metal_command_buffer_wait(async_frame.command_buffer)
+	assert async_capture.calls == 1
+	assert metal_command_buffer_status(async_capture.status) == .completed
+	assert !async_capture.sync_
 }
 
 fn test_metal_builtin_shader_pipelines_compile() ! {
@@ -264,7 +304,9 @@ fn test_metal_builtin_shader_pipelines_compile() ! {
 	defer {
 		uniforms.deinit()
 	}
-	mut frame := MetalFrame.begin(api.queue)!
+	mut capture := MetalFrameTestCapture{}
+	mut frame := MetalFrame.begin(api.queue, voidptr(&capture), voidptr(&target),
+		voidptr(metal_frame_test_completion))!
 	mut pass := frame.render_pass([MetalRenderPassAttachment{
 		target: target.texture
 		clear_color: [f64(0), 0, 0, 1]!
@@ -278,7 +320,10 @@ fn test_metal_builtin_shader_pipelines_compile() ! {
 		}
 	})
 	pass.complete()
-	assert frame.complete(true) == .completed
+	frame.complete(true)
+	assert capture.calls == 1
+	assert metal_command_buffer_status(capture.status) == .completed
+	assert capture.sync_
 
 	mut layer := MetalIOSurfaceLayer.init()!
 	assert layer.layer != unsafe { nil }

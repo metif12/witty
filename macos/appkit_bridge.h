@@ -43,6 +43,42 @@ typedef struct witty_metal_pipeline_attachment {
 
 typedef void (*witty_metal_layer_display_callback)(void*);
 
+typedef void (*witty_metal_command_buffer_completion_callback)(
+	void*,
+	void*,
+	unsigned long long,
+	bool
+);
+
+/*
+ * Minimal Objective-C block ABI used by MTLCommandBuffer's
+ * addCompletedHandler:. The block captures only raw pointers, so it needs no
+ * copy/dispose helpers; Metal copies the stack block before this function
+ * returns and releases that copy after invocation.
+ */
+typedef struct witty_block_descriptor {
+	unsigned long reserved;
+	unsigned long size;
+} witty_block_descriptor;
+
+typedef struct witty_metal_completion_block {
+	void* isa;
+	int flags;
+	int reserved;
+	void (*invoke)(struct witty_metal_completion_block*, void*);
+	const witty_block_descriptor* descriptor;
+	witty_metal_command_buffer_completion_callback callback;
+	void* renderer;
+	void* target;
+} witty_metal_completion_block;
+
+extern void* _NSConcreteStackBlock[32];
+
+static const witty_block_descriptor witty_metal_completion_descriptor = {
+	0,
+	sizeof(witty_metal_completion_block),
+};
+
 typedef struct witty_ns_operating_system_version {
 	long long major;
 	long long minor;
@@ -329,6 +365,60 @@ static inline void witty_metal_command_buffer_wait(void* command_buffer) {
 static inline unsigned long long witty_metal_command_buffer_status(void* command_buffer) {
 	if (!command_buffer) return 5;
 	return ((unsigned long long (*)(void*, SEL))objc_msgSend)(command_buffer, sel_registerName("status"));
+}
+
+static inline void witty_metal_command_buffer_completion_invoke(
+	witty_metal_completion_block* block,
+	void* command_buffer
+) {
+	if (!block || !block->callback) return;
+	block->callback(
+		block->renderer,
+		block->target,
+		witty_metal_command_buffer_status(command_buffer),
+		false
+	);
+}
+
+static inline bool witty_metal_command_buffer_add_completed_handler(
+	void* command_buffer,
+	witty_metal_command_buffer_completion_callback callback,
+	void* renderer,
+	void* target
+) {
+	if (!command_buffer || !callback) return false;
+	witty_metal_completion_block block = {
+		_NSConcreteStackBlock,
+		0,
+		0,
+		witty_metal_command_buffer_completion_invoke,
+		&witty_metal_completion_descriptor,
+		callback,
+		renderer,
+		target,
+	};
+	((void (*)(void*, SEL, void*))objc_msgSend)(
+		command_buffer,
+		sel_registerName("addCompletedHandler:"),
+		&block
+	);
+	return true;
+}
+
+static inline void witty_metal_command_buffer_invoke_completion(
+	void* command_buffer,
+	witty_metal_command_buffer_completion_callback callback,
+	void* renderer,
+	void* target,
+	bool sync
+) {
+	if (!command_buffer || !callback) return;
+	callback(
+		renderer,
+		target,
+		witty_metal_command_buffer_status(command_buffer),
+		sync
+	);
 }
 
 static inline void* witty_metal_render_pass_descriptor(void) {

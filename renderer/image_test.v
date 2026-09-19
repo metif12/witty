@@ -4,6 +4,21 @@ import kitty
 import terminal
 import macos
 
+struct ImageMetalFrameCapture {
+mut:
+	calls  int
+	status u64
+	sync_  bool
+}
+
+fn image_metal_frame_completion(renderer_ptr voidptr, target_ptr voidptr, status u64, sync_ bool) {
+	mut capture := unsafe { &ImageMetalFrameCapture(renderer_ptr) }
+	assert target_ptr != unsafe { nil }
+	capture.calls++
+	capture.status = status
+	capture.sync_ = sync_
+}
+
 // ============================================================
 // Image tests
 // ============================================================
@@ -353,7 +368,9 @@ fn test_image_draw_encodes_gpu_placement() ! {
 	defer {
 		uniforms.deinit()
 	}
-	mut frame := MetalFrame.begin(api.queue)!
+	mut capture := ImageMetalFrameCapture{}
+	mut frame := MetalFrame.begin(api.queue, voidptr(&capture), voidptr(&target),
+		voidptr(image_metal_frame_completion))!
 	mut pass := frame.render_pass([MetalRenderPassAttachment{
 		target: target.texture
 		clear_color: [f64(0), 0, 0, 1]!
@@ -368,7 +385,10 @@ fn test_image_draw_encodes_gpu_placement() ! {
 	})
 	state.draw(&api, shaders.image, mut pass, .kitty_below_bg)
 	pass.complete()
-	assert frame.complete(true) == .completed
+	frame.complete(true)
+	assert capture.calls == 1
+	assert metal_command_buffer_status(capture.status) == .completed
+	assert capture.sync_
 }
 
 fn test_kitty_update_reads_terminal_storage() ! {

@@ -759,6 +759,12 @@ import mathutil
 import os
 import sync
 
+fn C.GC_get_stack_base(stack_base voidptr) int
+
+fn C.GC_register_my_thread(stack_base voidptr) int
+
+fn C.GC_unregister_my_thread() int
+
 // Create a renderer type with the provided graphics API wrapper.
 //
 // The graphics API wrapper must provide the interface outlined below.
@@ -1653,7 +1659,8 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 		frame_state.color_modified = self.font_grid.atlas_color.modified.load()
 	}
 
-	mut frame := MetalFrame.begin(self.metal.queue)!
+	mut frame := MetalFrame.begin(self.metal.queue, voidptr(self), voidptr(&frame_state.target),
+		voidptr(renderer_metal_frame_completed_callback))!
 	mut terminal_target := unsafe { voidptr(frame_state.target.texture) }
 	if state := frame_state.custom_shader_state {
 		terminal_target = unsafe { voidptr(state.back_texture.handle) }
@@ -1742,23 +1749,58 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 		frame_state.custom_shader_state = state
 	}
 
-	// Ghostty registers a completion handler on the command buffer and both
-	// presents and reports health from it. The V bridge instead waits for the
-	// buffer here and runs the same body inline; see the Metal frame/pass
-	// representation note in AUDIT_FINDINGS.md.
-	status := frame.complete(true)
+	frame.complete(sync_)
+}
 
-	// Get our command buffer status to pass back to the renderer.
-	health := if status == .error { Health.unhealthy } else { Health.healthy }
+struct MetalCompletionStackBase {
+mut:
+	mem_base voidptr
+}
 
-	// If the frame is healthy, present it. A presentation failure is reported
-	// but does not change the health we report for the frame itself.
+// Metal invokes asynchronous completion blocks on a framework-owned thread.
+// Register that stack while the callback touches V/GC-managed renderer state.
+fn metal_completion_register_thread() bool {
+	$if gcboehm ? {
+		mut stack_base := MetalCompletionStackBase{}
+		if C.GC_get_stack_base(voidptr(&stack_base)) != 0 {
+			return false
+		}
+		return C.GC_register_my_thread(voidptr(&stack_base)) == 0
+	} $else {
+		return false
+	}
+}
+
+fn metal_completion_unregister_thread(registered bool) {
+	$if gcboehm ? {
+		if registered {
+			C.GC_unregister_my_thread()
+		}
+	} $else {
+		_ = registered
+	}
+}
+
+fn renderer_metal_frame_completed_callback(renderer_ptr voidptr, target_ptr voidptr, raw_status u64, sync_ bool) {
+	registered := metal_completion_register_thread()
+	defer {
+		metal_completion_unregister_thread(registered)
+	}
+	if renderer_ptr == unsafe { nil } || target_ptr == unsafe { nil } {
+		return
+	}
+	mut self := unsafe { &Renderer(renderer_ptr) }
+	target := unsafe { &MetalTarget(target_ptr) }
+	health := if metal_command_buffer_status(raw_status) == .error {
+		Health.unhealthy
+	} else {
+		Health.healthy
+	}
 	if health == .healthy && self.metal.layer != none {
-		self.metal.present(&frame_state.target, sync_) or {
+		self.metal.present(target, sync_) or {
 			eprintln('renderer: failed to present render target: ${err}')
 		}
 	}
-
 	self.frame_completed(health)
 }
 

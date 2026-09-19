@@ -193,6 +193,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | standalone internal tags | Crash-envelope item type, detected file type, theme search location, and tripwire reset mode were source-inferred enums retained with V's default 32-bit storage. | Give all four values byte backing and verify their complete source declaration order. |
 | OS URL/desktop tags | The desktop-environment tag used default 32-bit storage. The OS URL opener also redeclared the C-backed application URL kind as an unrelated enum, forcing core and GTK to maintain handwritten three-way projection switches absent from Ghostty. | Byte-back the inferred desktop tag, retain one cycle-free signed 32-bit URL kind aliased at the application boundary, and pass it unchanged through both live opener paths. |
 | inspector key-navigation tag | The inspector removed Ghostty's middle `.none` navigation case in favor of optional absence, widening the tag and renumbering `.up` from 2 to 1. | Restore the exact byte-backed `down, none, up` state and source-style no-action dispatch, and verify all three ordinals. |
+| inspector display units | The standalone `inspector/units.zig` translation was missing and each screen/page-list widget open-coded its KiB division. | Restore `to_kibi_bytes(usize)` in its own module file and route every inspector memory display through that translated source function. |
 | tmux parser/output contracts | The control parser state and 32-case output-variable tag used V's default 32-bit storage. Integer parsing hardcoded 64 bits instead of Ghostty's platform-width `usize`, and output retained an unused enum pretending to translate the source error set. | Byte-back both inferred tags, derive parsing width from `sizeof(usize)`, verify every ordinal and the numeric boundary, and remove the dead error-enum stand-in while retaining actual V error results. |
 | root/terminal C enum backing | Build metadata mode and OSC command-data tags relied on V's implicit enum representation despite both being explicit Ghostty `enum(c_int)` ABI values. | Give both tags signed 32-bit backing and verify their complete numeric order together with the existing C result contract. |
 | platform configuration enum layouts | Twelve macOS/GTK/Linux option enums used V's default 32-bit storage instead of compact inferred source tags, while non-native fullscreen and GTK titlebar style only accidentally matched their explicit `c_int` contracts. `GtkSingleInstance` was also reordered from source `false, true, detect` to `detect, false, true`. | Restore byte backing for inferred options, signed 32-bit backing for both C-facing values, the exact single-instance order, and exhaustive ordinal checks for the complete cluster. |
@@ -213,6 +214,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | benchmark action and mode tags | The retained benchmark action and four implementation-mode source enums used V's implicit 32-bit storage. | Give all five inferred tags byte backing and exhaustively verify their source declaration order. |
 | benchmark symbol implementations | The `is-symbol` benchmark accepted the source's `uucode` and `table` modes but sent both through the same generated lookup table, so it did not benchmark two implementations. | Translate the pinned `computeIsSymbol` predicate (the `Co` category plus eight selected Unicode blocks) as the uucode path, retain the generated three-stage table as the table path, and exhaustively prove they agree over V's complete `u21` domain. |
 | Valgrind runtime behavior | The renderer always used a 600 ms cursor blink interval because V has no built-in equivalent of `std.valgrind.runningOnValgrind()`. | Translate Zig 0.15.2's architecture-specific Valgrind client request into the native interop layer and retain Ghostty's fivefold (3,000 ms) interval whenever the runtime probe is nonzero. |
+| Metal frame completion block | `draw_frame_metal` always waited for every command buffer, even when the caller requested an asynchronous frame, then ran the source completion body inline. | Translate the pinned zig-objc stack-block ABI, register it with `addCompletedHandler:`, capture the renderer/target like `Frame.zig`, register Metal's foreign callback thread with the V GC, and retain the source synchronous wait/direct-invoke path only when requested. |
 | GTK tag and action contracts | Six native GTK/GLib values, the app-defined close-dialog target, and the KDE decoration mode relied on V's implicit signed enum representation, while six retained internal/union tags were widened. The tab redeclared the canonical C-backed close-tab mode, and window callbacks passed through a source-external ten-case tag only to rebuild canonical input actions. | Give C values signed 32-bit and the protocol value `u32` backing, byte-back inferred tags, alias the apprt close-tab type, and pass `input.Action` directly through the window helper. |
 | renderer Metal pixel-format ABI | The translated native `MTLPixelFormat` exposed only the six formats currently selected by the renderer instead of Ghostty's complete 139-case `enum(c_ulong)`, and its bytes-per-pixel helper omitted every other source-supported value. | Restore all 139 values in exact declaration order with unsigned-long-compatible backing, restore every source-supported byte-size group and panic branch, and exhaustively verify the ABI values. |
 | renderer auxiliary Metal enums | The native GPU-family wrapper exposed only two of Ghostty's fifteen values, while index type, purgeable state, barrier scope, and render stage were omitted entirely from the translated Metal API surface. | Restore all five unsigned-/signed-long-compatible enums with their complete declaration order and raw values. |
@@ -265,8 +267,9 @@ wrappers api/buffer/Pipeline/RenderPass/Sampler/Target/Texture/IOSurfaceLayer/
 shaders (pipeline table, vertex attributes, and the Uniforms/CellText/CellBg/
 Image/BgImage ABI structs) and the OpenGL wrappers Frame/Pipeline/RenderPass/
 Sampler/Target/Texture/buffer/shaders, plus the `Metal.zig` and `OpenGL.zig`
-API surfaces. Only Metal's completion block remains; see below. datastruct: CircBuf,
-ArrayListCollection. ssh: cache Entry/DiskCache. tmux: control, layout, output.
+API surfaces, including Metal's asynchronous command-buffer completion block.
+datastruct: CircBuf, ArrayListCollection. ssh: cache Entry/DiskCache. tmux:
+control, layout, output.
 termio: exec, shell_integration, stream_handler. simd: index_of, base64, vt.
 root: quirks, build_config,
 opentype (all 6 tables), cli_args, split_tree, command (POSIX). apprt: structs,
@@ -388,21 +391,11 @@ an item here does not mean its full module has been certified yet.
   so this divergence is deliberate and is the one place the buffer wrapper
   does not match the source expression.
 
-- **Metal frame completion block:** this is the one remaining Metal
-  divergence. Ghostty's `Frame` carries an Objective-C completion block
-  registered with `addCompletedHandler:`; for an async frame the GPU invokes
-  it, and it presents the target and reports health from there. Witty has no
-  block bridge, so `draw_frame_metal` always calls `complete(true)`, blocking
-  the renderer thread on `waitUntilCompleted` every frame, and then runs the
-  block's body inline. The body itself now matches the source (health from
-  buffer status, present only when healthy, log presentation failures, then
-  report health), but the blocking is real and is why `beginFrame` is also not
-  exposed: the source passes it the renderer and target so the block can close
-  over them. Closing this would require creating an Objective-C block that
-  calls back into V from a GPU completion thread, which the V GC does not
-  currently support for unregistered threads. Render-pass attachment targets
-  and optional step resources also remain raw native handles rather than
-  Ghostty's typed texture/target union and wrapper optionals.
+- **Metal resource representation:** render-pass attachment targets and
+  optional step resources remain raw native handles rather than Ghostty's
+  typed texture/target union and wrapper optionals. Frame completion itself is
+  now asynchronous when requested and uses the translated Objective-C block
+  callback path.
 - **Native/platform coverage:** The complete FreeType/CoreText/web-canvas,
   discovery, Metal/OpenGL, shadertoy, regex,
   embedded-resource, locking, configuration, and platform application surfaces
