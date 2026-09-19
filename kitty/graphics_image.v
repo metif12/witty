@@ -115,8 +115,8 @@ module kitty
 import os
 import time
 import compress.zlib
-import stbi
 import terminal
+import wuffs.png as wuffs_png
 
 // POSIX shared-memory / mmap bindings, required for the shared_memory
 // medium (t=s). shm_open needs libc; these map directly to the Zig
@@ -526,40 +526,25 @@ fn (mut self LoadingImage) decompress_zlib() ! {
 
 // Decode the data as PNG. This will also update the image dimensions.
 //
-// In Zig this uses the `wuffs` PNG decoder. Here we use stb_image
-// (vlib/stbi), decoding to RGBA (4 channels), which is exactly what the
-// Zig code does after decode (it forces .rgba).
 fn (mut self LoadingImage) decode_png() ! {
+	assert self.image.format == .png
 	if self.data.len == 0 {
 		return error('invalid data: empty png')
 	}
 
-	// desired_channels = 4 forces RGBA output regardless of the source
-	// channel count, matching the Zig code's final format of .rgba.
-	img := stbi.load_from_memory(self.data.data, self.data.len, stbi.LoadParams{ desired_channels: 4 }) or {
-		return error('invalid data: png decode failed')
+	result := wuffs_png.decode(self.data) or {
+		return error('InvalidData')
 	}
-	defer {
-		img.free()
-	}
-
-	pixel_count := usize(img.width) * usize(img.height) * 4
-	if pixel_count > usize(max_image_size) {
-		return error('invalid data: png image too large size=${pixel_count} max_size=${max_image_size}')
+	if result.data.len > max_image_size {
+		eprintln('png image too large size=${result.data.len} max_size=${max_image_size}')
+		return error('InvalidData')
 	}
 
-	// Replace our data with the decoded RGBA pixels.
-	mut buf := []u8{len: int(pixel_count)}
-	if pixel_count > 0 {
-		unsafe {
-			C.memcpy(buf.data, img.data, pixel_count)
-		}
-	}
-	self.data = buf
+	self.data = result.data.clone()
 
 	// Store updated image dimensions.
-	self.image.width = u32(img.width)
-	self.image.height = u32(img.height)
+	self.image.width = result.width
+	self.image.height = result.height
 	self.image.format = .rgba
 }
 

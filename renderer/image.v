@@ -207,6 +207,7 @@ import terminal
 import kitty
 import math
 import time
+import wuffs.swizzle
 
 const overlay_image_key = u64(1) << 32
 
@@ -610,46 +611,14 @@ fn pending_to_rgba(pending PendingImage) ![]u8 {
 	if pending.pixel_format == .rgba {
 		return pending.data.clone()
 	}
-	pixels := int(usize(pending.width) * usize(pending.height))
-	mut rgba := []u8{len: pixels * 4}
-	for i in 0 .. pixels {
-		src := i * int(pending.pixel_format.bpp())
-		dst := i * 4
-		match pending.pixel_format {
-			.gray {
-				rgba[dst] = pending.data[src]
-				rgba[dst + 1] = pending.data[src]
-				rgba[dst + 2] = pending.data[src]
-				rgba[dst + 3] = 255
-			}
-			.gray_alpha {
-				rgba[dst] = pending.data[src]
-				rgba[dst + 1] = pending.data[src]
-				rgba[dst + 2] = pending.data[src]
-				rgba[dst + 3] = pending.data[src + 1]
-			}
-			.rgb {
-				rgba[dst] = pending.data[src]
-				rgba[dst + 1] = pending.data[src + 1]
-				rgba[dst + 2] = pending.data[src + 2]
-				rgba[dst + 3] = 255
-			}
-			.bgr {
-				rgba[dst] = pending.data[src + 2]
-				rgba[dst + 1] = pending.data[src + 1]
-				rgba[dst + 2] = pending.data[src]
-				rgba[dst + 3] = 255
-			}
-			.bgra {
-				rgba[dst] = pending.data[src + 2]
-				rgba[dst + 1] = pending.data[src + 1]
-				rgba[dst + 2] = pending.data[src]
-				rgba[dst + 3] = pending.data[src + 3]
-			}
-			.rgba {}
-		}
+	return match pending.pixel_format {
+		.gray { swizzle.g_to_rgba(pending.data)! }
+		.gray_alpha { swizzle.ga_to_rgba(pending.data)! }
+		.rgb { swizzle.rgb_to_rgba(pending.data)! }
+		.bgr { swizzle.bgr_to_rgba(pending.data)! }
+		.bgra { swizzle.bgra_to_rgba(pending.data)! }
+		.rgba { panic('unreachable') }
 	}
-	return rgba
 }
 
 // Returns true if the Kitty graphics state requires an update based

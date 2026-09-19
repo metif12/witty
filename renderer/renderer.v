@@ -752,13 +752,14 @@ import time
 import configpkg
 import file_type
 import highlight
-import stbi
 import macos
 import log
 import math
 import mathutil
 import os
 import sync
+import wuffs.jpeg as wuffs_jpeg
+import wuffs.png as wuffs_png
 
 fn C.GC_get_stack_base(stack_base voidptr) int
 
@@ -2144,22 +2145,16 @@ fn (mut self Renderer) prep_background_image() ! {
 			}
 		}
 
-		decoded := stbi.load_from_memory(contents.data, contents.len, stbi.LoadParams{
-			desired_channels: 4
-		}) or { return error('unable to decode background image "${path_config.path}": ${err}') }
-		defer {
-			decoded.free()
+		decoded := match image_type {
+			.png { wuffs_png.decode(contents)! }
+			.jpeg { wuffs_jpeg.decode(contents)! }
+			else { return }
 		}
-		if decoded.width <= 0 || decoded.height <= 0 {
-			return error('background image has invalid dimensions')
-		}
-		byte_len := decoded.width * decoded.height * 4
-		data := unsafe { decoded.data.vbytes(byte_len).clone() }
 		pending := PendingImage{
-			width:        u32(decoded.width)
-			height:       u32(decoded.height)
+			width:        decoded.width
+			height:       decoded.height
 			pixel_format: .rgba
-			data:         data
+			data:         decoded.data
 		}
 		if mut existing := self.bg_image {
 			existing.mark_for_replace(pending)

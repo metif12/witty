@@ -292,7 +292,7 @@ fn test_overlay_update_replaces_then_unloads_image() {
 	assert overlay_image_key !in state.images
 }
 
-fn test_image_upload_converts_to_rgba_texture() ! {
+fn test_image_upload_converts_bgr_to_rgba_texture() ! {
 	mut api := MetalAPI.init()!
 	defer {
 		api.deinit()
@@ -307,8 +307,8 @@ fn test_image_upload_converts_to_rgba_texture() ! {
 			pending: PendingImage{
 				width: 2
 				height: 1
-				pixel_format: .gray_alpha
-				data: [u8(20), 40, 60, 80]
+				pixel_format: .bgr
+				data: [u8(1), 2, 3, 4, 5, 6]
 			}
 			width: 2
 			height: 1
@@ -322,7 +322,7 @@ fn test_image_upload_converts_to_rgba_texture() ! {
 	assert texture.handle != unsafe { nil }
 	mut bytes := []u8{len: 8}
 	macos.metal_texture_get_bytes(texture.handle, mut bytes, 8, 0, 0, 2, 1)
-	assert bytes == [u8(20), 20, 20, 40, 60, 60, 60, 80]
+	assert bytes == [u8(3), 2, 1, 255, 6, 5, 4, 255]
 }
 
 fn test_image_draw_encodes_gpu_placement() ! {
