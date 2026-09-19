@@ -128,8 +128,8 @@ pub fn input_is_safe_paste(data string) bool {
 	return input.paste_is_safe(data)
 }
 
-pub fn input_encode_paste(data string, opts InputPasteOptions) [3]string {
-	return input.paste_encode(data, opts)
+pub fn input_encode_paste(data string, opts InputPasteOptions) ![3]string {
+	return input.paste_encode(data, opts)!.parts()
 }
 
 pub fn input_encode_key(event InputKeyEvent, opts InputKeyEncodeOptions) string {

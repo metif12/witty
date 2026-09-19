@@ -5844,15 +5844,7 @@ fn (mut self Surface) encode_key_opts() input.Options {
 		}
 	}
 	t := self.renderer_state.terminal_
-	flags := t.screens.active.kitty_keyboard.current()
-	mut opts := input.Options{
-		cursor_key_application: t.modes.get(.cursor_keys)
-		keypad_key_application: t.modes.get(.keypad_keys)
-		ignore_keypad_with_numlock: t.modes.get(.ignore_keypad_with_numlock)
-		alt_esc_prefix: t.modes.get(.alt_esc_prefix)
-		modify_other_keys_state_2: t.flags.modify_other_keys_2()
-		kitty_flags: flags
-	}
+	mut opts := input.Options.from_terminal(t)
 	$if macos {
 		opts.macos_option_as_alt = self.config.macos_option_as_alt or {
 			if !self.mouse.mods.alt() {
@@ -6062,9 +6054,9 @@ fn (mut self Surface) complete_clipboard_paste(data string, allow_unsafe bool) !
 	if locked {
 		self.renderer_state.mutex.lock()
 	}
-	bracketed := self.renderer_state.terminal_.modes.get(.bracketed_paste)
+	paste_opts := input.PasteOptions.from_terminal(self.renderer_state.terminal_)
 	if self.config.clipboard_paste_protection && !allow_unsafe {
-		unsafe_paste := if bracketed {
+		unsafe_paste := if paste_opts.bracketed {
 			data.contains('\x1b[201~')
 				|| (!self.config.clipboard_paste_bracketed_safe && !input.paste_is_safe(data))
 		} else {
@@ -6084,12 +6076,19 @@ fn (mut self Surface) complete_clipboard_paste(data string, allow_unsafe bool) !
 		self.renderer_state.mutex.unlock()
 	}
 
-	paste_opts := input.PasteOptions{
-		bracketed: bracketed
+	mut encoded := input.PasteEncodeResult{}
+	if result := input.paste_encode(data, paste_opts) {
+		encoded = result
+	} else {
+		if err.msg() != 'MutableRequired' {
+			return err
+		}
+		mut mutable_data := data.bytes()
+		encoded = input.paste_encode_mut(mut mutable_data, paste_opts)
 	}
-	for encoded in input.paste_encode(data, paste_opts) {
-		if encoded.len > 0 {
-			self.queue_io(termiopkg.Message.write_alloc_msg(encoded))
+	for part in encoded.parts() {
+		if part.len > 0 {
+			self.queue_io(termiopkg.Message.write_alloc_msg(part))
 		}
 	}
 }

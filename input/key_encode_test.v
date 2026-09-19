@@ -1,7 +1,32 @@
 module input
 
+import terminal
+
 // Tests for key encoding logic.
 // Translated from ghostty/src/input/key_encode.zig
+
+fn test_key_encode_options_from_terminal() ! {
+	mut term := terminal.Terminal.init(terminal.Options{ cols: 2, rows: 2 })!
+	defer {
+		term.deinit()
+	}
+	term.modes.set(.cursor_keys, true)
+	term.modes.set(.keypad_keys, true)
+	term.modes.set(.ignore_keypad_with_numlock, true)
+	term.modes.set(.alt_esc_prefix, true)
+	term.flags.set_modify_other_keys_2(true)
+	term.screens.active.kitty_keyboard.set(.set_, terminal.KeyFlags.init(true, false, false,
+		false, false))
+
+	opts := Options.from_terminal(&term)
+	assert opts.cursor_key_application
+	assert opts.keypad_key_application
+	assert opts.ignore_keypad_with_numlock
+	assert opts.alt_esc_prefix
+	assert opts.modify_other_keys_state_2
+	assert opts.kitty_flags.disambiguate()
+	assert opts.macos_option_as_alt == .false_
+}
 
 fn test_kitty_event_storage() {
 	assert $sizeof(KittyEvent) == 1

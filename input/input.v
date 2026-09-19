@@ -400,38 +400,6 @@ pub enum LinkHighlight as u8 {
 	hover_mods
 }
 
-// PasteOptions contains options that affect paste encoding.
-pub struct PasteOptions {
-pub:
-	// True if bracketed paste mode is on.
-	bracketed bool
-}
-
-// paste_encode encodes data for pasting into the terminal.
-// Returns an array of 3 string slices that, when concatenated, form the
-// complete paste sequence.
-pub fn paste_encode(data string, opts PasteOptions) [3]string {
-	// Bracketed paste mode wraps pasted data in fenceposts
-	if opts.bracketed {
-		return ['\x1b[200~', data, '\x1b[201~']!
-	}
-	// Non-bracketed: replace newlines with carriage returns
-	return ['', data.replace('\n', '\r'), '']!
-}
-
-// paste_is_safe returns true if data is safe to paste.
-// Data is considered unsafe if it contains newlines or the
-// bracketed paste end sequence.
-pub fn paste_is_safe(data string) bool {
-	if data.contains('\n') {
-		return false
-	}
-	if data.contains('\x1b[201~') {
-		return false
-	}
-	return true
-}
-
 // KeyboardLayout represents a detected keyboard layout.
 pub enum KeyboardLayout as u8 {
 	unknown

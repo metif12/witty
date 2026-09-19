@@ -32,6 +32,20 @@ pub mut:
 	macos_option_as_alt OptionAsAlt = .false_
 }
 
+// from_terminal initializes all encoding options available from terminal
+// state. macos_option_as_alt remains false because it depends on app config.
+pub fn Options.from_terminal(t &terminal.Terminal) Options {
+	return Options{
+		alt_esc_prefix: t.modes.get(.alt_esc_prefix)
+		cursor_key_application: t.modes.get(.cursor_keys)
+		keypad_key_application: t.modes.get(.keypad_keys)
+		ignore_keypad_with_numlock: t.modes.get(.ignore_keypad_with_numlock)
+		modify_other_keys_state_2: t.flags.modify_other_keys_2()
+		kitty_flags: t.screens.active.kitty_keyboard.current()
+		macos_option_as_alt: .false_
+	}
+}
+
 // encode encodes the key event in the proper format given the options.
 // For example, this will properly encode a key press such as "ctrl+A"
 // to Kitty format if Kitty encoding is enabled.

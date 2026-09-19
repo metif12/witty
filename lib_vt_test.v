@@ -1,12 +1,17 @@
 module main
 
-fn test_lib_vt_input_paste_api() {
+fn test_lib_vt_input_paste_api() ! {
 	assert input_is_safe_paste('echo hello')
 	assert !input_is_safe_paste('echo hello\n')
 	encoded := input_encode_paste('hello', InputPasteOptions{
 		bracketed: true
-	})
+	})!
 	assert encoded == ['\x1b[200~', 'hello', '\x1b[201~']!
+	input_encode_paste('hello\nworld', InputPasteOptions{}) or {
+		assert err.msg() == 'MutableRequired'
+		return
+	}
+	assert false, 'expected MutableRequired'
 }
 
 fn test_lib_vt_exports_complete_mouse_shapes() {
