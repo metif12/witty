@@ -1,5 +1,7 @@
 module terminal
 
+import strings
+
 // Tests for RenderState, translated from Ghostty's render.zig.
 //
 // The witty RenderState operates on the simplified Pages model (a flat
@@ -477,9 +479,43 @@ fn test_render_state_string() {
 	}
 	state.update(mut t)
 
-	result := state.to_string()
+	mut writer := strings.new_builder(10)
+	state.string(mut writer, none)
+	result := writer.str()
 	expected := 'AB\x00\x00\x00\n\x00\x00\x00\x00\x00\n'
 	assert result == expected
+}
+
+fn test_render_state_string_map() {
+	mut t := Terminal.init(Options{ cols: 2, rows: 1 })!
+	defer {
+		t.deinit()
+	}
+
+	mut s := t.vt_stream()
+	defer {
+		s.deinit()
+	}
+	s.next_slice('\u00e9')!
+
+	mut state := RenderState.empty()
+	defer {
+		state.deinit()
+	}
+	state.update(mut t)
+
+	mut writer := strings.new_builder(4)
+	mut string_map := RenderStringMap{}
+	state.string(mut writer, RenderStringOptions{
+		map: &string_map
+	})
+	result := writer.str()
+	assert result == '\u00e9\x00\n'
+	assert string_map.points.len == result.len
+	assert string_map.points[0].eql(Coordinate{ x: 0, y: 0 })
+	assert string_map.points[1].eql(Coordinate{ x: 0, y: 0 })
+	assert string_map.points[2].eql(Coordinate{ x: 1, y: 0 })
+	assert string_map.points[3].eql(Coordinate{ x: 2, y: 0 })
 }
 
 // ============================================================

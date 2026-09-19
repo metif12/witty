@@ -2,6 +2,7 @@ module renderer
 
 import input
 import oniguruma
+import strings
 import terminal
 
 // The link configuration needed for renderers.
@@ -68,7 +69,12 @@ pub fn (mut self LinkSet) render_cell_map(mut result terminal.CellSet, render_st
 		return
 	}
 
-	str, map_points := render_state.to_mapped_string()
+	mut builder := strings.new_builder(int(render_state.rows) * int(render_state.cols))
+	mut string_map := terminal.RenderStringMap{}
+	render_state.string(mut builder, terminal.RenderStringOptions{
+		map: &string_map
+	})
+	str := builder.str()
 	for mut link in self.links {
 		match link.highlight {
 			.always {}
@@ -110,7 +116,7 @@ pub fn (mut self LinkSet) render_cell_map(mut result terminal.CellSet, render_st
 						terminal.Coordinate{}
 					}
 					mut contains_mouse := false
-					for point in map_points[start..end] {
+					for point in string_map.points[start..end] {
 						if point.x == mouse.x && point.y == mouse.y {
 							contains_mouse = true
 							break
@@ -123,7 +129,7 @@ pub fn (mut self LinkSet) render_cell_map(mut result terminal.CellSet, render_st
 				.always, .always_mods {}
 			}
 			if record {
-				for point in map_points[start..end] {
+				for point in string_map.points[start..end] {
 					result[u64(point.y) << 32 | u64(point.x)] = true
 				}
 			}

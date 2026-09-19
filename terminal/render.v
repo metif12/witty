@@ -612,50 +612,64 @@ pub fn (self &RenderState) link_cells(viewport_point Pin) CellSet {
 	return result
 }
 
-// Convert the current render state contents to a UTF-8 encoded
-// string. This will unwrap all the wrapped rows. This is useful
+// RenderStringMap maps every byte written by RenderState.string to the
+// viewport coordinate that produced it. Ghostty declares this as the nested
+// RenderState.StringMap type; V does not support nested type declarations.
+pub struct RenderStringMap {
+pub mut:
+	points []Coordinate
+}
+
+// RenderStringOptions contains the optional byte map populated by string.
+// The struct preserves Ghostty's optional map argument while V's strings.Builder
+// replaces Zig's generic fallible writer.
+pub struct RenderStringOptions {
+pub:
+	map &RenderStringMap = unsafe { nil }
+}
+
+// Convert the current render state contents to a UTF-8 encoded string written
+// to the given builder. This will unwrap all the wrapped rows. This is useful
 // for a minimal viewport search.
 //
 // This currently writes empty cell contents as \x00 and writes all
 // blank lines. This is fine for our current usage (link search) but
 // we can adjust this later.
 //
-// NOTE: There is a limitation in that wrapped lines before/after
-// the the top/bottom line of the viewport are not included, since
-// the render state cuts them off.
-pub fn (self &RenderState) to_string() string {
-	result, _ := self.to_mapped_string()
-	return result
-}
-
-// to_mapped_string returns the rendered viewport text and, for every byte in
-// that UTF-8 text, the viewport cell that produced it. Regex consumers use the
-// byte map to turn match offsets back into terminal cells.
-pub fn (self &RenderState) to_mapped_string() (string, []ViewportPoint) {
-	mut sb := strings.new_builder(int(self.rows) * int(self.cols))
-	mut points := []ViewportPoint{cap: int(self.rows) * int(self.cols)}
+// NOTE: There is a limitation in that wrapped lines before/after the
+// top/bottom line of the viewport are not included, since the render state
+// cuts them off.
+pub fn (self &RenderState) string(mut writer strings.Builder, options ?RenderStringOptions) {
+	string_map := if opts := options { opts.map } else { &RenderStringMap(unsafe { nil }) }
 	for y, row in self.row_data {
 		for x, cell in row.cells {
 			cp := cell.raw.codepoint()
-			before := sb.len
+			before := writer.len
 			if cp == 0 {
-				sb.write_u8(0) // null byte for empty cells
+				writer.write_u8(0) // null byte for empty cells
 			} else {
-				write_utf8(mut sb, cp)
+				write_utf8(mut writer, cp)
 				if cell.raw.has_grapheme() {
 					for grapheme_cp in cell.grapheme {
-						write_utf8(mut sb, grapheme_cp)
+						write_utf8(mut writer, grapheme_cp)
 					}
 				}
 			}
-			for _ in before .. sb.len {
-				points << ViewportPoint{ x: u16(x), y: u16(y) }
+			if string_map != unsafe { nil } {
+				unsafe {
+					for _ in before .. writer.len {
+						string_map.points << Coordinate{ x: u16(x), y: u32(y) }
+					}
+				}
 			}
 		}
 		if !row.raw.wrap {
-			sb.write_u8(u8(`\n`))
-			points << ViewportPoint{ x: u16(row.cells.len), y: u16(y) }
+			writer.write_u8(u8(`\n`))
+			if string_map != unsafe { nil } {
+				unsafe {
+					string_map.points << Coordinate{ x: u16(row.cells.len), y: u32(y) }
+				}
+			}
 		}
 	}
-	return sb.str(), points
 }
