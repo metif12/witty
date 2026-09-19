@@ -282,24 +282,31 @@ pub fn (self &Command) is_jump() bool {
 	return self.kind == .jump
 }
 
-// present_jump_surface presents the jump target while holding the strong
-// GObject reference returned by the weak reference. Mirrors the caller-owned
-// reference returned by Ghostty's `getJumpSurface`.
-fn (mut self Command) present_jump_surface() bool {
+// get_jump_surface returns the jump target with a new strong reference. The
+// caller must call SurfaceWidget.unref when finished, matching getJumpSurface.
+pub fn (mut self Command) get_jump_surface() ?&SurfaceWidget {
 	if self.kind != .jump {
-		return false
+		return none
 	}
 	obj := self.jump_surface.get()
 	if isnil(obj) {
-		return false
-	}
-	defer {
-		object_unref(obj)
+		return none
 	}
 	if isnil(self.jump_surface_ptr) {
-		return false
+		object_unref(obj)
+		return none
 	}
-	self.jump_surface_ptr.present()
+	return self.jump_surface_ptr
+}
+
+// present_jump_surface presents the jump target while holding the strong
+// reference returned by get_jump_surface.
+fn (mut self Command) present_jump_surface() bool {
+	mut surface := self.get_jump_surface() or { return false }
+	defer {
+		surface.unref()
+	}
+	surface.present()
 	return true
 }
 

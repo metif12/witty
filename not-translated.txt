@@ -1,3 +1,7 @@
+HISTORICAL SNAPSHOT ONLY. This list predates the current translation and is
+not an inventory of remaining files. See AUDIT_FINDINGS.md for the current,
+explicitly non-100% status and known divergences.
+
   ---
   Summary: ~188 files not yet translated, with the largest gaps
   being:

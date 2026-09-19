@@ -234,6 +234,31 @@ fn test_feature_from_string_comma_only() {
 	assert result == none
 }
 
+fn test_feature_from_reader_advances_across_boundaries() {
+	mut reader := FeatureReader.init('+kern,aalt=2')
+	first := Feature.from_reader(mut reader) or { panic('expected first feature') }
+	assert check_tag(first.tag, 'kern')
+	assert first.value == 1
+	assert reader.pos == 6
+	assert !reader.done()
+
+	second := Feature.from_reader(mut reader) or { panic('expected second feature') }
+	assert check_tag(second.tag, 'aalt')
+	assert second.value == 2
+	assert reader.done()
+	assert Feature.from_reader(mut reader) == none
+}
+
+fn test_feature_from_reader_recovers_after_invalid_field() {
+	mut reader := FeatureReader.init('bad,+liga')
+	assert Feature.from_reader(mut reader) == none
+	assert reader.pos == 4
+	feature := Feature.from_reader(mut reader) or { panic('expected recovered feature') }
+	assert check_tag(feature.tag, 'liga')
+	assert feature.value == 1
+	assert reader.done()
+}
+
 // FeatureList tests
 
 fn test_feature_list_from_string() {

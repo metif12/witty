@@ -33,6 +33,19 @@ fn test_command_palette_action_without_keybind_is_none() {
 	cfg.unref()
 }
 
+fn test_regular_command_has_no_jump_surface() {
+	mut cfg := config_new(configpkg.Config{})
+	mut command := command_new(cfg, input.Command{
+		action: input.Action.new(.new_window)
+		title: 'New Window'
+	})
+
+	assert command.get_jump_surface() == none
+
+	command.dispose()
+	cfg.unref()
+}
+
 fn test_command_palette_action_key_uses_full_action_format() {
 	mut cfg := config_new(configpkg.Config{})
 	mut command := command_new(cfg, input.Command{

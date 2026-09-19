@@ -1,3 +1,7 @@
+HISTORICAL BOOTSTRAP PLAN ONLY. The application has long since moved beyond
+this temporary CoreGraphics/ReadonlyStream plan. See AUDIT_FINDINGS.md for the
+current translation audit and remaining divergences.
+
 Key Design Decisions
 
  1. Global state (__global g_state): V callbacks passed to C can't be closures. We use a global pointer to the terminal state. This matches how

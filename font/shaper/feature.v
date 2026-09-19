@@ -18,6 +18,42 @@ pub:
 	value u32
 }
 
+// FeatureReader retains the input position used by Feature.from_reader.
+// Ghostty accepts any std.io.Reader; V cannot express that comptime reader
+// contract while also returning the reader's updated state, so the translated
+// public reader owns the same fixed string view used by from_string and
+// FeatureList.
+pub struct FeatureReader {
+	data string
+pub mut:
+	pos int
+}
+
+pub fn FeatureReader.init(data string) FeatureReader {
+	return FeatureReader{
+		data: data
+	}
+}
+
+pub fn (self FeatureReader) done() bool {
+	return self.pos >= self.data.len
+}
+
+// from_reader parses one feature and advances to the byte after its comma
+// boundary (or to end of input). Invalid syntax consumes the same complete
+// field, allowing a caller to continue with the next feature.
+pub fn Feature.from_reader(mut reader FeatureReader) ?Feature {
+	if reader.done() {
+		return none
+	}
+	start := reader.pos
+	remaining := reader.data[start..]
+	comma_idx := remaining.index_u8(`,`)
+	end := if comma_idx >= 0 { start + comma_idx } else { reader.data.len }
+	reader.pos = if comma_idx >= 0 { end + 1 } else { end }
+	return Feature.from_string(reader.data[start..end])
+}
+
 // from_string parses a single font feature setting from a string, with a
 // version of the syntax of HarfBuzz's font feature strings.
 //
@@ -178,9 +214,9 @@ pub fn FeatureList.from_string(str string) FeatureList {
 // append_from_string appends features to this list from a string with a
 // comma separated list. See Feature.from_string for more docs.
 pub fn (mut self FeatureList) append_from_string(str string) {
-	parts := str.split(',')
-	for part in parts {
-		if feat := Feature.from_string(part) {
+	mut reader := FeatureReader.init(str)
+	for !reader.done() {
+		if feat := Feature.from_reader(mut reader) {
 			self.features << feat
 		}
 	}

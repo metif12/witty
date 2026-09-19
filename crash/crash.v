@@ -1,6 +1,8 @@
 module crash
 
 import os
+import rand
+import internal_os
 
 #include "@VMODROOT/crash/mtime.h"
 
@@ -55,6 +57,39 @@ pub fn initialize() ! {}
 
 pub fn shutdown() {}
 
+// persist_sentry_envelope is the translated local-only Sentry transport. It
+// discards envelopes without an event, and stores crash envelopes under a
+// random filename without sending any data over the network.
+struct PersistSentryEnvelopeResult {
+	path ?string
+}
+
+fn persist_sentry_envelope(data []u8, dir Dir) !PersistSentryEnvelopeResult {
+	mut envelope := Envelope.parse(data)!
+	defer {
+		envelope.deinit()
+	}
+	if sentry_envelope_should_discard(&envelope) {
+		return PersistSentryEnvelopeResult{}
+	}
+
+	os.mkdir_all(dir.path)!
+	path := os.join_path(dir.path, '${rand.uuid_v4()}.ghosttycrash')
+	os.write_file_array(path, data)!
+	return PersistSentryEnvelopeResult{
+		path: path
+	}
+}
+
+fn sentry_envelope_should_discard(envelope &Envelope) bool {
+	for item in envelope.items {
+		if item.item_type() == .event {
+			return false
+		}
+	}
+	return true
+}
+
 pub struct Dir {
 pub:
 	path string
@@ -83,9 +118,11 @@ pub:
 }
 
 // default_dir returns Ghostty's XDG state directory for crash reports.
-pub fn default_dir() Dir {
+pub fn default_dir() !Dir {
 	return Dir{
-		path: os.join_path(os.state_dir(), 'ghostty', 'crash')
+		path: internal_os.xdg_state(internal_os.XdgOptions{
+			subdir: 'ghostty/crash'
+		})!
 	}
 }
 

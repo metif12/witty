@@ -98,3 +98,38 @@ fn test_crash_report_iterator_propagates_metadata_errors() {
 fn test_crash_thread_type_uses_compact_storage() {
 	assert sizeof(ThreadType) == 1
 }
+
+fn test_sentry_transport_discards_non_crash_envelopes() {
+	root := os.join_path(os.temp_dir(), 'witty-sentry-discard-${os.getpid()}')
+	os.rmdir_all(root) or {}
+	defer {
+		os.rmdir_all(root) or {}
+	}
+
+	result := persist_sentry_envelope('{}\n{"type":"session"}\n{}'.bytes(), Dir{
+		path: root
+	})!
+	assert result.path == none
+	assert !os.exists(root)
+}
+
+fn test_sentry_transport_persists_event_envelopes_locally() {
+	root := os.join_path(os.temp_dir(), 'witty-sentry-event-${os.getpid()}')
+	os.rmdir_all(root) or {}
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	data := '{}\n{"type":"event"}\n{"message":"boom"}'.bytes()
+	result := persist_sentry_envelope(data, Dir{
+		path: root
+	}) or {
+		assert false, 'event envelope was discarded: ${err}'
+		return
+	}
+	stored := result.path or {
+		assert false, 'event envelope was discarded'
+		return
+	}
+	assert stored.ends_with('.ghosttycrash')
+	assert os.read_bytes(stored)! == data
+}

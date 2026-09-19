@@ -71,7 +71,9 @@ pub fn cgroup_configure_limit(cgroup string, limit CgroupLimit) ! {
 }
 
 fn cgroup_write_existing(path string, value string) ! {
-	fd := C.open(&char(path.str), C.O_WRONLY)
+	// V's C binding requires the variadic mode slot even when O_CREAT is not
+	// set; libc ignores this zero value for the source's write-only open.
+	fd := C.open(&char(path.str), C.O_WRONLY, 0)
 	if fd < 0 {
 		return os.error_posix()
 	}

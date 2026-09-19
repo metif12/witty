@@ -3147,9 +3147,9 @@ fn surface_clipboard_read_text_cb(source GObject, result GAsyncResult, data void
 	C.g_signal_emit_by_name(self.widget, c'clipboard-read')
 }
 
-// clipboard_paste pastes text into the surface, routing an unsafe or
+// paste pastes explicit text into the surface, routing an unsafe or
 // unauthorized paste to the confirmation dialog. Mirrors `Clipboard.paste`.
-fn (mut self SurfaceWidget) clipboard_paste(text string) {
+pub fn (mut self SurfaceWidget) paste(text string) {
 	if text.len == 0 {
 		return
 	}
@@ -3920,7 +3920,7 @@ fn (mut self SurfaceWidget) dt_drop(value GValue) int {
 		if !isnil(list) {
 			C.g_slist_free(list)
 		}
-		self.clipboard_paste(writer.string())
+		self.paste(writer.string())
 		return 1
 	}
 
@@ -3949,7 +3949,7 @@ fn (mut self SurfaceWidget) dt_drop(value GValue) int {
 	if g_value_holds(value, g_type_string) {
 		text_ptr := C.g_value_get_string(value)
 		if !isnil(text_ptr) {
-			self.clipboard_paste(unsafe { cstring_to_vstring(text_ptr) })
+			self.paste(unsafe { cstring_to_vstring(text_ptr) })
 		}
 		return 1
 	}
