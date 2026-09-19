@@ -50,6 +50,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | GTK surface public callbacks | `Surface.childExited`, `actionPromptTitle`, and `actionNotifyOnNextCommandFinish` were behaviorally translated but exposed only under adapter-specific private names. | Restore the source-shaped public names and route the application dispatcher, surface dispatcher, and GLib action table through them. The action callbacks retain V's required opaque GLib user-data parameter in place of Zig's typed third parameter. |
 | inspector widget entry points | Faithful terminal, screen, renderer, cell-chooser, VT-stream, and shared-style widget implementations were retained as private translation helpers, and the source screen table names were expanded to `draw_screen_*`. | Restore the public widget types, lifecycle/draw methods, VT batch-read method, five source-shaped screen table entry points, and shared `table`/`color` functions; route the live inspector and event details through them. Explicit `cimgui.Context` parameters remain a V binding adaptation. |
 | keybind help generator surface | The complete `input/helpgen_actions.zig` algorithm was exposed under source-external `HelpFormat` and `generate_help` names. | Restore public `Format` and `generate`, and route the CLI and direct tests through them. V returns the accumulated string instead of accepting Zig's allocator-backed writer. |
+| CLI action source mapping | The translated action enum retained its display-name mapping but omitted Ghostty's public compile-time `Action.file` helper. | Restore the runtime-equivalent `file` method and verify every action maps to its pinned `cli/<action>.zig` source path. |
 | C string slice contract | The translated `String` split `fromSlice` into string/byte constructors but left the ordinary byte form named `from_bytes`, omitted the source `deinit` method, and built `ghostty_config_open_path` through the sentinel string form. The returned C record therefore claimed its ordinary allocated path had a NUL sentinel. | Restore `from_slice` for non-sentinel bytes and `deinit`, route the exported free function through the method, and return the config path with `sentinel=false`; the V string constructor remains the explicit sentinel form because V types do not encode sentinel slices. |
 | SSH cache public lifecycle surface | Disk-cache `defaultPath` was a module-prefixed free function, `deinitEntries` was absent under GC ownership, and the action's public `runInner` entry point remained folded into a private cache-injection helper. | Restore type-scoped `default_path`/`deinit_entries` plus public `run_inner`, retain a private injected-cache helper for deterministic tests, and route the action through the public standard-path entry point. |
 | GTK command-palette jump accessor | `Command.getJumpSurface` was folded into a private presentation helper, removing the public caller-owned strong-reference API. | Restore `get_jump_surface`, including the weak-to-strong promotion and caller `unref` contract, and route presentation through it. |
@@ -400,6 +401,13 @@ an item here does not mean its full module has been certified yet.
   function as a private, infallible automatic initializer. V rejects a public
   or fallible `crash.init`, so Ghostty's exact public spelling cannot be
   represented without changing the module boundary.
+- **CLI action type placement:** `Action` currently lives in `global_state`
+  while its translated dispatcher lives in the root C entry module; the `cli`
+  package imports `global_state` for help enumeration and resource lookup.
+  Restoring `Action.run` as a method therefore requires breaking that module
+  cycle and moving the type back into `cli`. Ghostty's `Action.options` returns
+  a different type for each compile-time enum value, a dependent-type API V
+  cannot express directly.
 - **Runtime bridge representation:** Ghostty selects the concrete apprt types at
   compile time. Witty's merged V module boundary instead adds callbacks to its
   runtime-neutral `apprt.RuntimeApp` and `apprt.RuntimeSurface` and uses a

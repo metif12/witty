@@ -167,6 +167,11 @@ pub fn (action Action) cli_name() string {
 	return action.str().replace('_', '-')
 }
 
+// file returns the pinned source path associated with this CLI action.
+pub fn (action Action) file() string {
+	return 'cli/${action.str()}.zig'
+}
+
 pub fn actions() []Action {
 	return [.version, .help, .list_fonts, .list_keybinds, .list_themes, .list_colors, .list_actions,
 		.ssh_cache, .edit_config, .show_config, .validate_config, .show_face, .crash_report, .boo,

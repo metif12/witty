@@ -70,6 +70,14 @@ fn test_cli_action_layout_and_source_ordinals() {
 	assert u8(Action.new_window) == 14
 }
 
+fn test_cli_action_source_files() {
+	for action in actions() {
+		assert action.file() == 'cli/${action.cli_name().replace('-', '_')}.zig'
+	}
+	assert Action.list_themes.file() == 'cli/list_themes.zig'
+	assert Action.new_window.file() == 'cli/new_window.zig'
+}
+
 fn test_detect_action_rejects_invalid_and_multiple_actions() {
 	if _ := detect_action(['+invalid']) {
 		assert false, 'invalid action must fail'
