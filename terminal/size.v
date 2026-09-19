@@ -18,8 +18,7 @@ pub const max_page_size = u32(0xFFFFFFFF)
 // The int type that can contain the maximum memory offset in bytes,
 // derived from the maximum terminal page size.
 // In Zig this is OffsetInt = IntFittingRange(0, max_page_size - 1) = u32.
-// We represent this as a type alias concept via constants.
-pub const offset_int_max = u32(0xFFFFFFFF)
+pub type OffsetInt = u32
 
 // ============================================================
 // Int types for maximum values
@@ -28,8 +27,7 @@ pub const offset_int_max = u32(0xFFFFFFFF)
 // Total number of cells that are possible in each dimension (row/col).
 // Based on 2^16 being enough for any reasonable terminal size and allowing
 // IDs to remain 16-bit.
-// In Zig: CellCountInt = u16.
-pub const cell_count_int_max = u16(65535)
+pub type CellCountInt = u16
 
 // Total number of styles that are possible in a page.
 // We match CellCountInt here because each cell in a single row can have at
@@ -38,22 +36,18 @@ pub const cell_count_int_max = u16(65535)
 // Note due to the way RefCountedSet works, we are short one value, but
 // this is a theoretical limit we accept. A page with a single row max
 // columns wide would be one short of having every cell have a unique style.
-// In Zig: StyleCountInt = CellCountInt = u16.
-pub const style_count_int_max = u16(65535)
+pub type StyleCountInt = u16
 
 // Total number of hyperlinks that are possible in a page.
-// In Zig: HyperlinkCountInt = CellCountInt = u16.
-pub const hyperlink_count_int_max = u16(65535)
+pub type HyperlinkCountInt = u16
 
 // Total number of bytes that can be taken up by grapheme data.
 // Technically unlimited with malicious input, but we choose a
 // reasonable limit of 2^32 (4GB).
-// In Zig: GraphemeBytesInt = u32.
-pub const grapheme_bytes_int_max = u32(0xFFFFFFFF)
+pub type GraphemeBytesInt = u32
 
 // Total number of bytes that can be taken up by string data.
-// In Zig: StringBytesInt = u32.
-pub const string_bytes_int_max = u32(0xFFFFFFFF)
+pub type StringBytesInt = u32
 
 // ============================================================
 // Offset - typed offset from a base address
@@ -67,12 +61,12 @@ pub const string_bytes_int_max = u32(0xFFFFFFFF)
 // The offset is always in bytes from the "true base" of the allocation.
 pub struct Offset {
 pub mut:
-	offset u32
+	offset OffsetInt
 }
 
 // Resolve this byte offset against the true base allocation.
 pub fn (self Offset) ptr(base &u8) &u8 {
-	return unsafe { base + self.offset }
+	return unsafe { base + u32(self.offset) }
 }
 
 // OffsetSlice represents a slice of data stored via a base offset and
@@ -151,9 +145,9 @@ pub fn (self OffsetBuf) start() &u8 {
 // your struct. The offset is against the true base pointer
 // so that future callers can pass that in as the base.
 pub fn (self OffsetBuf) member(len usize) Offset {
-	assert self.offset + len <= usize(offset_int_max)
+	assert self.offset + len <= usize(max_page_size)
 	return Offset{
-		offset: u32(self.offset + len)
+		offset: OffsetInt(self.offset + len)
 	}
 }
 
@@ -185,8 +179,8 @@ pub fn get_offset(base &u8, ptr &u8) Offset {
 	base_int := u64(base)
 	ptr_int := u64(ptr)
 	assert ptr_int >= base_int
-	assert ptr_int - base_int <= u64(offset_int_max)
+	assert ptr_int - base_int <= u64(max_page_size)
 	return Offset{
-		offset: u32(ptr_int - base_int)
+		offset: OffsetInt(ptr_int - base_int)
 	}
 }
