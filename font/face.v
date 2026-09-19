@@ -1460,7 +1460,7 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 			mut scaled := []u8{len: int(pitch * h)}
 			if source.buffer == unsafe { nil }
 				|| !unsafe {
-					stb.stbir_resize_uint8(source.buffer, i32(source.width), i32(source.rows), source.pitch, &scaled[0], i32(w), i32(h), i32(pitch), atlas.format.depth())
+					stb.stbir_resize_uint8(source.buffer, int(source.width), int(source.rows), int(source.pitch), &scaled[0], int(w), int(h), int(pitch), int(atlas.format.depth())) != 0
 				} {
 				return error('glyph bitmap resize failed')
 			}
