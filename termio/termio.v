@@ -796,7 +796,7 @@ pub fn (mut t Termio) color_scheme_report(force bool) ! {
 	t.color_scheme_report_locked(force)!
 }
 
-fn (mut t Termio) color_scheme_report_locked(force bool) ! {
+pub fn (mut t Termio) color_scheme_report_locked(force bool) ! {
 	if !force && !t.terminal.modes.get(.report_color_scheme) {
 		return
 	}

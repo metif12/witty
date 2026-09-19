@@ -166,6 +166,17 @@ fn test_termio_queue_message_uses_mailbox() {
 	assert msg.flag_val
 }
 
+fn test_color_scheme_report_locked_honors_disabled_mode() {
+	mut tio := Termio{}
+	tio.init(make_termio_opts())!
+	defer {
+		tio.deinit()
+	}
+
+	assert !tio.terminal.modes.get(.report_color_scheme)
+	tio.color_scheme_report_locked(false)!
+}
+
 fn test_termio_clear_screen_preserves_and_moves_cursor_row() {
 	mut tio := Termio{}
 	tio.init(make_termio_opts())!
