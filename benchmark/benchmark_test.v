@@ -2,6 +2,100 @@ module benchmark
 
 import os
 
+struct BenchmarkTestState {
+mut:
+	setup_count    usize
+	step_count     usize
+	teardown_count usize
+	fail_setup     bool
+	fail_step      bool
+}
+
+fn benchmark_test_setup(ptr voidptr) ! {
+	mut state := unsafe { &BenchmarkTestState(ptr) }
+	state.setup_count++
+	if state.fail_setup {
+		return error('setup failure')
+	}
+}
+
+fn benchmark_test_step(ptr voidptr) ! {
+	mut state := unsafe { &BenchmarkTestState(ptr) }
+	state.step_count++
+	if state.fail_step {
+		return error('step failure')
+	}
+}
+
+fn benchmark_test_teardown(ptr voidptr) {
+	mut state := unsafe { &BenchmarkTestState(ptr) }
+	state.teardown_count++
+}
+
+fn test_benchmark_once_runs_lifecycle_and_reports_result() {
+	mut state := BenchmarkTestState{}
+	bench := Benchmark.init(voidptr(&state), VTable{
+		step_fn:     benchmark_test_step
+		setup_fn:    benchmark_test_setup
+		teardown_fn: benchmark_test_teardown
+	})
+	result := bench.run(RunMode.once())!
+	assert state.setup_count == 1
+	assert state.step_count == 1
+	assert state.teardown_count == 1
+	assert result.iterations == 1
+	assert result.duration > 0
+}
+
+fn test_benchmark_duration_repeats_until_deadline() {
+	mut state := BenchmarkTestState{}
+	bench := Benchmark.init(voidptr(&state), VTable{
+		step_fn: benchmark_test_step
+	})
+	result := bench.run(RunMode.duration(1_000_000))!
+	assert result.iterations > 1
+	assert result.duration >= 1_000_000
+	assert state.step_count == result.iterations
+}
+
+fn test_benchmark_setup_failure_skips_step_and_teardown() {
+	mut state := BenchmarkTestState{
+		fail_setup: true
+	}
+	bench := Benchmark.init(voidptr(&state), VTable{
+		step_fn:     benchmark_test_step
+		setup_fn:    benchmark_test_setup
+		teardown_fn: benchmark_test_teardown
+	})
+	bench.run(RunMode.once()) or {
+		assert err.msg() == 'benchmark failed'
+		assert state.setup_count == 1
+		assert state.step_count == 0
+		assert state.teardown_count == 0
+		return
+	}
+	assert false
+}
+
+fn test_benchmark_step_failure_still_tears_down() {
+	mut state := BenchmarkTestState{
+		fail_step: true
+	}
+	bench := Benchmark.init(voidptr(&state), VTable{
+		step_fn:     benchmark_test_step
+		setup_fn:    benchmark_test_setup
+		teardown_fn: benchmark_test_teardown
+	})
+	bench.run(RunMode.once()) or {
+		assert err.msg() == 'benchmark failed'
+		assert state.setup_count == 1
+		assert state.step_count == 1
+		assert state.teardown_count == 1
+		return
+	}
+	assert false
+}
+
 fn test_benchmark_enum_layouts_and_source_order() {
 	assert sizeof(Action) == 1
 	mut action_index := 0
@@ -112,10 +206,18 @@ fn test_osc_parser_benchmark_processes_length_prefixed_input() {
 
 fn test_invalid_benchmark_input_fails() {
 	mut failed := false
-	run_cli('unknown', '') or { failed = true }
+	run_cli('unknown', '') or {
+		assert err.msg() == 'unknown action=unknown'
+		failed = true
+	}
 	assert failed
 
 	failed = false
-	run_cli('codepoint-width', '--mode=unknown') or { failed = true }
+	run_cli('codepoint-width', '--mode=unknown') or {
+		// Option parsing happens before Benchmark.run, so it retains the CLI
+		// parser's error instead of being normalized to BenchmarkFailed.
+		assert err.msg() == 'invalid value'
+		failed = true
+	}
 	assert failed
 }

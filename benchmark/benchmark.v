@@ -18,9 +18,9 @@ fn C.witty_benchmark_do_not_optimize_u64(value u64)
 fn C.witty_benchmark_do_not_optimize_ptr(value voidptr)
 
 // This module translates src/benchmark from Ghostty commit
-// 6c0e02d1138d5376e4ac2f5e311b225494514a97. The C API always uses the
-// Benchmark.once run mode, so each action below performs its setup, one step,
-// and teardown in that order.
+// 6c0e02d1138d5376e4ac2f5e311b225494514a97. The reusable Benchmark control
+// layer is in benchmark_core.v. The C API uses its once mode; the action bodies
+// below retain their setup, one step, and teardown in that order.
 
 pub enum Action as u8 {
 	codepoint_width
@@ -32,64 +32,69 @@ pub enum Action as u8 {
 	osc_parser
 }
 
-enum CodepointWidthMode as u8 {
+pub enum CodepointWidthMode as u8 {
 	noop
 	wcwidth
 	simd
 	table
 }
 
-struct CodepointWidthOptions {
-mut:
+pub struct CodepointWidthOptions {
+pub mut:
 	mode CodepointWidthMode
 	data ?string
 }
 
-enum GraphemeBreakMode as u8 {
+pub enum GraphemeBreakMode as u8 {
 	noop
 	table
 }
 
-struct GraphemeBreakOptions {
-mut:
+pub struct GraphemeBreakOptions {
+pub mut:
 	mode GraphemeBreakMode = .table
 	data ?string
 }
 
-enum IsSymbolMode as u8 {
+pub enum IsSymbolMode as u8 {
 	uucode
 	table
 }
 
-struct IsSymbolOptions {
-mut:
+pub struct IsSymbolOptions {
+pub mut:
 	mode IsSymbolMode
 	data ?string
 }
 
-enum ScreenCloneMode as u8 {
+pub enum ScreenCloneMode as u8 {
 	noop
 	clone
 	render
 }
 
-struct ScreenCloneOptions {
-mut:
+pub struct ScreenCloneOptions {
+pub mut:
 	mode          ScreenCloneMode = .clone
 	terminal_rows u16             = 80
 	terminal_cols u16             = 120
 	data          ?string
 }
 
-struct TerminalStreamOptions {
-mut:
+pub struct TerminalStreamOptions {
+pub mut:
 	terminal_rows u16 = 80
 	terminal_cols u16 = 120
 	data          ?string
 }
 
-struct DataOptions {
-mut:
+pub struct TerminalParserOptions {
+pub mut:
+	data ?string
+}
+
+pub struct OscParserOptions {
+pub mut:
 	data ?string
 }
 
@@ -243,21 +248,71 @@ pub fn run_cli(action_name string, argument_string string) ! {
 	}
 }
 
+@[heap]
+pub struct CodepointWidth {
+pub:
+	opts CodepointWidthOptions
+mut:
+	data DataFile
+}
+
+pub fn CodepointWidth.create(opts CodepointWidthOptions) &CodepointWidth {
+	return &CodepointWidth{
+		opts: opts
+	}
+}
+
+pub fn (mut self CodepointWidth) destroy() {
+	self.data.close()
+}
+
+pub fn (mut self CodepointWidth) benchmark() Benchmark {
+	step_fn := match self.opts.mode {
+		.noop { codepoint_width_step_noop }
+		.wcwidth, .simd, .table { codepoint_width_step }
+	}
+
+	return Benchmark.init(voidptr(self), VTable{
+		step_fn:     step_fn
+		setup_fn:    codepoint_width_setup
+		teardown_fn: codepoint_width_teardown
+	})
+}
+
 fn run_codepoint_width(args []string) ! {
 	mut opts := CodepointWidthOptions{}
 	cli_args.parse(mut opts, args)!
-	mut data := data_file(opts.data)!
+	mut implementation := CodepointWidth.create(opts)
 	defer {
-		data.close()
+		implementation.destroy()
 	}
-	if opts.mode == .noop || !data.present {
+	implementation.benchmark().run(RunMode.once())!
+}
+
+fn codepoint_width_setup(ptr voidptr) ! {
+	mut self := unsafe { &CodepointWidth(ptr) }
+	self.data = data_file(self.opts.data)!
+}
+
+fn codepoint_width_teardown(ptr voidptr) {
+	mut self := unsafe { &CodepointWidth(ptr) }
+	self.data.close()
+}
+
+fn codepoint_width_step_noop(ptr voidptr) ! {
+	_ = ptr
+}
+
+fn codepoint_width_step(ptr voidptr) ! {
+	mut self := unsafe { &CodepointWidth(ptr) }
+	if !self.data.present {
 		return
 	}
 
 	mut decoder := terminal.UTF8Decoder{}
 	mut buf := []u8{len: 4096}
 	for {
-		n := data.read(mut buf)!
+		n := self.data.read(mut buf)!
 		if n == 0 {
 			break
 		}
@@ -267,7 +322,7 @@ fn run_codepoint_width(args []string) ! {
 				return error('invalid UTF-8 stream')
 			}
 			if cp := result.codepoint {
-				value := match opts.mode {
+				value := match self.opts.mode {
 					.wcwidth {
 						C.witty_benchmark_wcwidth(cp)
 					}
@@ -288,14 +343,78 @@ fn run_codepoint_width(args []string) ! {
 	}
 }
 
+@[heap]
+pub struct GraphemeBreak {
+pub:
+	opts GraphemeBreakOptions
+mut:
+	data DataFile
+}
+
+pub fn GraphemeBreak.create(opts GraphemeBreakOptions) &GraphemeBreak {
+	return &GraphemeBreak{
+		opts: opts
+	}
+}
+
+pub fn (mut self GraphemeBreak) destroy() {
+	self.data.close()
+}
+
+pub fn (mut self GraphemeBreak) benchmark() Benchmark {
+	step_fn := match self.opts.mode {
+		.noop { grapheme_break_step_noop }
+		.table { grapheme_break_step_table }
+	}
+
+	return Benchmark.init(voidptr(self), VTable{
+		step_fn:     step_fn
+		setup_fn:    grapheme_break_setup
+		teardown_fn: grapheme_break_teardown
+	})
+}
+
 fn run_grapheme_break(args []string) ! {
 	mut opts := GraphemeBreakOptions{}
 	cli_args.parse(mut opts, args)!
-	mut data := data_file(opts.data)!
+	mut implementation := GraphemeBreak.create(opts)
 	defer {
-		data.close()
+		implementation.destroy()
 	}
-	if !data.present {
+	implementation.benchmark().run(RunMode.once())!
+}
+
+fn grapheme_break_setup(ptr voidptr) ! {
+	mut self := unsafe { &GraphemeBreak(ptr) }
+	self.data = data_file(self.opts.data)!
+}
+
+fn grapheme_break_teardown(ptr voidptr) {
+	mut self := unsafe { &GraphemeBreak(ptr) }
+	self.data.close()
+}
+
+fn grapheme_break_step_noop(ptr voidptr) ! {
+	mut self := unsafe { &GraphemeBreak(ptr) }
+	if !self.data.present {
+		return
+	}
+	mut decoder := terminal.UTF8Decoder{}
+	mut buf := []u8{len: 4096}
+	for {
+		n := self.data.read(mut buf)!
+		if n == 0 {
+			return
+		}
+		for c in buf[..n] {
+			decoder.next(c)
+		}
+	}
+}
+
+fn grapheme_break_step_table(ptr voidptr) ! {
+	mut self := unsafe { &GraphemeBreak(ptr) }
+	if !self.data.present {
 		return
 	}
 
@@ -304,7 +423,7 @@ fn run_grapheme_break(args []string) ! {
 	mut cp1 := u32(0)
 	mut buf := []u8{len: 4096}
 	for {
-		n := data.read(mut buf)!
+		n := self.data.read(mut buf)!
 		if n == 0 {
 			break
 		}
@@ -314,9 +433,6 @@ fn run_grapheme_break(args []string) ! {
 				return error('invalid UTF-8 stream')
 			}
 			if cp2 := result.codepoint {
-				if opts.mode == .noop {
-					continue
-				}
 				is_break := unicode.grapheme_break(cp1, cp2, &state)
 				C.witty_benchmark_do_not_optimize_u64(u64(is_break))
 				cp1 = cp2
@@ -325,21 +441,62 @@ fn run_grapheme_break(args []string) ! {
 	}
 }
 
+@[heap]
+pub struct IsSymbol {
+pub:
+	opts IsSymbolOptions
+mut:
+	data DataFile
+}
+
+pub fn IsSymbol.create(opts IsSymbolOptions) &IsSymbol {
+	return &IsSymbol{
+		opts: opts
+	}
+}
+
+pub fn (mut self IsSymbol) destroy() {
+	self.data.close()
+}
+
+pub fn (mut self IsSymbol) benchmark() Benchmark {
+	return Benchmark.init(voidptr(self), VTable{
+		step_fn:     is_symbol_step
+		setup_fn:    is_symbol_setup
+		teardown_fn: is_symbol_teardown
+	})
+}
+
 fn run_is_symbol(args []string) ! {
 	mut opts := IsSymbolOptions{}
 	cli_args.parse(mut opts, args)!
-	mut data := data_file(opts.data)!
+	mut implementation := IsSymbol.create(opts)
 	defer {
-		data.close()
+		implementation.destroy()
 	}
-	if !data.present {
+	implementation.benchmark().run(RunMode.once())!
+}
+
+fn is_symbol_setup(ptr voidptr) ! {
+	mut self := unsafe { &IsSymbol(ptr) }
+	self.data = data_file(self.opts.data)!
+}
+
+fn is_symbol_teardown(ptr voidptr) {
+	mut self := unsafe { &IsSymbol(ptr) }
+	self.data.close()
+}
+
+fn is_symbol_step(ptr voidptr) ! {
+	mut self := unsafe { &IsSymbol(ptr) }
+	if !self.data.present {
 		return
 	}
 
 	mut decoder := terminal.UTF8Decoder{}
 	mut buf := []u8{len: 4096}
 	for {
-		n := data.read(mut buf)!
+		n := self.data.read(mut buf)!
 		if n == 0 {
 			break
 		}
@@ -349,7 +506,7 @@ fn run_is_symbol(args []string) ! {
 				return error('invalid UTF-8 stream')
 			}
 			if cp := result.codepoint {
-				value := match opts.mode {
+				value := match self.opts.mode {
 					.uucode { unicode.is_symbol_uucode(cp) }
 					.table { unicode.is_symbol(cp) }
 				}
@@ -360,14 +517,55 @@ fn run_is_symbol(args []string) ! {
 	}
 }
 
-fn run_terminal_parser(args []string) ! {
-	mut opts := DataOptions{}
-	cli_args.parse(mut opts, args)!
-	mut data := data_file(opts.data)!
-	defer {
-		data.close()
+@[heap]
+pub struct TerminalParser {
+pub:
+	opts TerminalParserOptions
+mut:
+	data DataFile
+}
+
+pub fn TerminalParser.create(opts TerminalParserOptions) &TerminalParser {
+	return &TerminalParser{
+		opts: opts
 	}
-	if !data.present {
+}
+
+pub fn (mut self TerminalParser) destroy() {
+	self.data.close()
+}
+
+pub fn (mut self TerminalParser) benchmark() Benchmark {
+	return Benchmark.init(voidptr(self), VTable{
+		step_fn:     terminal_parser_step
+		setup_fn:    terminal_parser_setup
+		teardown_fn: terminal_parser_teardown
+	})
+}
+
+fn run_terminal_parser(args []string) ! {
+	mut opts := TerminalParserOptions{}
+	cli_args.parse(mut opts, args)!
+	mut implementation := TerminalParser.create(opts)
+	defer {
+		implementation.destroy()
+	}
+	implementation.benchmark().run(RunMode.once())!
+}
+
+fn terminal_parser_setup(ptr voidptr) ! {
+	mut self := unsafe { &TerminalParser(ptr) }
+	self.data = data_file(self.opts.data)!
+}
+
+fn terminal_parser_teardown(ptr voidptr) {
+	mut self := unsafe { &TerminalParser(ptr) }
+	self.data.close()
+}
+
+fn terminal_parser_step(ptr voidptr) ! {
+	mut self := unsafe { &TerminalParser(ptr) }
+	if !self.data.present {
 		return
 	}
 
@@ -377,7 +575,7 @@ fn run_terminal_parser(args []string) ! {
 	}
 	mut buf := []u8{len: 4096}
 	for {
-		n := data.read(mut buf)!
+		n := self.data.read(mut buf)!
 		if n == 0 {
 			break
 		}
@@ -388,72 +586,148 @@ fn run_terminal_parser(args []string) ! {
 	}
 }
 
+@[heap]
+pub struct TerminalStream {
+pub:
+	opts TerminalStreamOptions
+mut:
+	terminal terminal.Terminal
+	stream   terminal.Stream
+	data     DataFile
+}
+
+pub fn TerminalStream.create(opts TerminalStreamOptions) !&TerminalStream {
+	return &TerminalStream{
+		opts:     opts
+		terminal: terminal.Terminal.init(terminal.Options{
+			rows: opts.terminal_rows
+			cols: opts.terminal_cols
+		})!
+		stream:   terminal.Stream.init()
+	}
+}
+
+pub fn (mut self TerminalStream) destroy() {
+	self.data.close()
+	self.stream.deinit()
+	self.terminal.deinit()
+}
+
+pub fn (mut self TerminalStream) benchmark() Benchmark {
+	return Benchmark.init(voidptr(self), VTable{
+		step_fn:     terminal_stream_step
+		setup_fn:    terminal_stream_setup
+		teardown_fn: terminal_stream_teardown
+	})
+}
+
 fn run_terminal_stream(args []string) ! {
 	mut opts := TerminalStreamOptions{}
 	cli_args.parse(mut opts, args)!
-	mut term := terminal.Terminal.init(terminal.Options{
-		rows: opts.terminal_rows
-		cols: opts.terminal_cols
-	})!
+	mut implementation := TerminalStream.create(opts)!
 	defer {
-		term.deinit()
+		implementation.destroy()
 	}
-	term.full_reset()
+	implementation.benchmark().run(RunMode.once())!
+}
 
-	mut data := data_file(opts.data)!
-	defer {
-		data.close()
-	}
-	if !data.present {
+fn terminal_stream_setup(ptr voidptr) ! {
+	mut self := unsafe { &TerminalStream(ptr) }
+	self.terminal.full_reset()
+	self.data = data_file(self.opts.data)!
+}
+
+fn terminal_stream_teardown(ptr voidptr) {
+	mut self := unsafe { &TerminalStream(ptr) }
+	self.data.close()
+}
+
+fn terminal_stream_step(ptr voidptr) ! {
+	mut self := unsafe { &TerminalStream(ptr) }
+	if !self.data.present {
 		return
 	}
 
-	mut stream := terminal.Stream.init()
-	defer {
-		stream.deinit()
-	}
 	mut buf := []u8{len: 4096}
 	for {
-		n := data.read(mut buf)!
+		n := self.data.read(mut buf)!
 		if n == 0 {
 			break
 		}
-		stream.next_slice(buf[..n])
-		for event in stream.events {
+		self.stream.next_slice(buf[..n])
+		for event in self.stream.events {
 			if event.key == .print {
-				term.print(event.payload.cp)!
+				self.terminal.print(event.payload.cp)!
 			}
 		}
-		stream.clear_events()
+		self.stream.clear_events()
 	}
+}
+
+@[heap]
+pub struct ScreenClone {
+pub:
+	opts ScreenCloneOptions
+mut:
+	terminal terminal.Terminal
+}
+
+pub fn ScreenClone.create(opts ScreenCloneOptions) !&ScreenClone {
+	return &ScreenClone{
+		opts:     opts
+		terminal: terminal.Terminal.init(terminal.Options{
+			rows: opts.terminal_rows
+			cols: opts.terminal_cols
+		})!
+	}
+}
+
+pub fn (mut self ScreenClone) destroy() {
+	self.terminal.deinit()
+}
+
+pub fn (mut self ScreenClone) benchmark() Benchmark {
+	step_fn := match self.opts.mode {
+		.noop { screen_clone_step_noop }
+		.clone { screen_clone_step_clone }
+		.render { screen_clone_step_render }
+	}
+
+	return Benchmark.init(voidptr(self), VTable{
+		step_fn:     step_fn
+		setup_fn:    screen_clone_setup
+		teardown_fn: screen_clone_teardown
+	})
 }
 
 fn run_screen_clone(args []string) ! {
 	mut opts := ScreenCloneOptions{}
 	cli_args.parse(mut opts, args)!
-	mut term := terminal.Terminal.init(terminal.Options{
-		rows: opts.terminal_rows
-		cols: opts.terminal_cols
-	})!
+	mut implementation := ScreenClone.create(opts)!
 	defer {
-		term.deinit()
+		implementation.destroy()
 	}
-	term.full_reset()
+	implementation.benchmark().run(RunMode.once())!
+}
 
-	mut setup_stream := term.vt_stream()
+fn screen_clone_setup(ptr voidptr) ! {
+	mut self := unsafe { &ScreenClone(ptr) }
+	self.terminal.full_reset()
+
+	mut setup_stream := self.terminal.vt_stream()
 	setup_stream.next_slice('\x1b[48;2;20;40;60m')!
-	for _ in 0 .. int(term.rows) - 1 {
+	for _ in 0 .. int(self.terminal.rows) - 1 {
 		setup_stream.next_slice('hello\r\n')!
 	}
 	setup_stream.next_slice('hello')!
 	setup_stream.deinit()
 
-	mut data := data_file(opts.data)!
+	mut data := data_file(self.opts.data)!
 	defer {
 		data.close()
 	}
 	if data.present {
-		mut stream := term.vt_stream()
+		mut stream := self.terminal.vt_stream()
 		defer {
 			stream.deinit()
 		}
@@ -466,33 +740,37 @@ fn run_screen_clone(args []string) ! {
 			stream.next_slice(buf[..n].bytestr())!
 		}
 	}
+}
 
-	match opts.mode {
-		.noop {
-			for _ in 0 .. 1000 {
-				screen := *term.screens.active
-				C.witty_benchmark_do_not_optimize_ptr(&screen)
-			}
-		}
-		.clone {
-			for _ in 0 .. 1000 {
-				copy := term.screens.active.clone(terminal.Point.new(.viewport, terminal.Coordinate{}),
-					?terminal.Point(none))!
-				C.witty_benchmark_do_not_optimize_ptr(&copy)
-			}
-		}
-		.render {
-			mut state := terminal.RenderState.empty()
-			defer {
-				state.deinit()
-			}
-			state.update(mut term)
-			for _ in 0 .. 1000 {
-				state.screen = .alternate
-				state.update(mut term)
-				C.witty_benchmark_do_not_optimize_ptr(&state)
-			}
-		}
+fn screen_clone_teardown(ptr voidptr) {
+	_ = ptr
+}
+
+fn screen_clone_step_noop(ptr voidptr) ! {
+	self := unsafe { &ScreenClone(ptr) }
+	for _ in 0 .. 1000 {
+		screen := *self.terminal.screens.active
+		C.witty_benchmark_do_not_optimize_ptr(&screen)
+	}
+}
+
+fn screen_clone_step_clone(ptr voidptr) ! {
+	self := unsafe { &ScreenClone(ptr) }
+	for _ in 0 .. 1000 {
+		copy := self.terminal.screens.active.clone(terminal.Point.new(.viewport, terminal.Coordinate{}),
+			?terminal.Point(none))!
+		C.witty_benchmark_do_not_optimize_ptr(&copy)
+	}
+}
+
+fn screen_clone_step_render(ptr voidptr) ! {
+	mut self := unsafe { &ScreenClone(ptr) }
+	mut state := terminal.RenderState.empty()
+	state.update(mut self.terminal)
+	for _ in 0 .. 1000 {
+		state.screen = .alternate
+		state.update(mut self.terminal)
+		C.witty_benchmark_do_not_optimize_ptr(&state)
 	}
 }
 
@@ -511,25 +789,66 @@ fn read_exact(mut data DataFile, mut buf []u8) !bool {
 	return true
 }
 
-fn run_osc_parser(args []string) ! {
-	mut opts := DataOptions{}
-	cli_args.parse(mut opts, args)!
-	mut data := data_file(opts.data)!
-	defer {
-		data.close()
+@[heap]
+pub struct OscParser {
+pub:
+	opts OscParserOptions
+mut:
+	data   DataFile
+	parser osc.Parser
+}
+
+pub fn OscParser.create(opts OscParserOptions) &OscParser {
+	return &OscParser{
+		opts:   opts
+		parser: osc.Parser.init(unsafe { nil })
 	}
-	if !data.present {
+}
+
+pub fn (mut self OscParser) destroy() {
+	self.data.close()
+	self.parser.deinit()
+}
+
+pub fn (mut self OscParser) benchmark() Benchmark {
+	return Benchmark.init(voidptr(self), VTable{
+		step_fn:     osc_parser_step
+		setup_fn:    osc_parser_setup
+		teardown_fn: osc_parser_teardown
+	})
+}
+
+fn run_osc_parser(args []string) ! {
+	mut opts := OscParserOptions{}
+	cli_args.parse(mut opts, args)!
+	mut implementation := OscParser.create(opts)
+	defer {
+		implementation.destroy()
+	}
+	implementation.benchmark().run(RunMode.once())!
+}
+
+fn osc_parser_setup(ptr voidptr) ! {
+	mut self := unsafe { &OscParser(ptr) }
+	self.data = data_file(self.opts.data)!
+	self.parser.reset()
+}
+
+fn osc_parser_teardown(ptr voidptr) {
+	mut self := unsafe { &OscParser(ptr) }
+	self.data.close()
+}
+
+fn osc_parser_step(ptr voidptr) ! {
+	mut self := unsafe { &OscParser(ptr) }
+	if !self.data.present {
 		return
 	}
 
-	mut parser := osc.Parser.init(unsafe { nil })
-	defer {
-		parser.deinit()
-	}
 	mut length_bytes := []u8{len: int(sizeof(usize))}
 	mut osc_buf := []u8{len: 4096}
 	for {
-		if !read_exact(mut data, mut length_bytes)! {
+		if !read_exact(mut self.data, mut length_bytes)! {
 			return
 		}
 		mut length := usize(0)
@@ -539,16 +858,16 @@ fn run_osc_parser(args []string) ! {
 		if length > usize(osc_buf.len) {
 			return error('OSC payload exceeds buffer')
 		}
-		if !read_exact(mut data, mut osc_buf[..int(length)])! {
+		if !read_exact(mut self.data, mut osc_buf[..int(length)])! {
 			return error('truncated OSC payload')
 		}
 		for value in osc_buf[..int(length)] {
-			parser.next(value)
+			self.parser.next(value)
 		}
-		command := parser.end(0x07)
+		command := self.parser.end(0x07)
 		if value := command {
 			C.witty_benchmark_do_not_optimize_ptr(&value)
 		}
-		parser.reset()
+		self.parser.reset()
 	}
 }
