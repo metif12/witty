@@ -4,9 +4,9 @@ module highlight
 //
 // Source: terminal/highlight.zig
 // This module provides three representations of highlights:
-// - FlattenedHighlight: pre-computed, efficient to render, no terminal lock needed
-// - UntrackedHighlight: simple start/end pins, may become invalid on page changes
-// - TrackedHighlight: tracked pins that auto-update on page modifications
+// - Flattened: pre-computed, efficient to render, no terminal lock needed
+// - Untracked: simple start/end pins, may become invalid on page changes
+// - Tracked: tracked pins that auto-update on page modifications
 
 import terminal
 
@@ -31,17 +31,17 @@ pub mut:
 }
 
 // ============================================================
-// FlattenedHighlight
+// Flattened
 // ============================================================
 
-// FlattenedHighlight is a pre-computed highlight that contains all
+// Flattened is a pre-computed highlight that contains all
 // information needed to render without requiring access to terminal
 // state (no pointer traversal into the page list).
 //
 // It is more expensive to create than a simple selection, but more
 // efficient to render since it has all information without having
 // to dereference pointers into the terminal state.
-pub struct FlattenedHighlight {
+pub struct Flattened {
 pub mut:
 	// The chunks that make up this highlight, one per page node.
 	chunks []Chunk
@@ -51,19 +51,19 @@ pub mut:
 	bot_x u16
 }
 
-// Create an empty FlattenedHighlight.
-pub fn FlattenedHighlight.empty() FlattenedHighlight {
-	return FlattenedHighlight{}
+// Create an empty Flattened.
+pub fn Flattened.empty() Flattened {
+	return Flattened{}
 }
 
 // Free resources held by this highlight.
-pub fn (mut self FlattenedHighlight) deinit() {
+pub fn (mut self Flattened) deinit() {
 	self.chunks = []
 }
 
 // Clone this highlight (deep copy of chunks).
-pub fn (self &FlattenedHighlight) clone() FlattenedHighlight {
-	return FlattenedHighlight{
+pub fn (self &Flattened) clone() Flattened {
+	return Flattened{
 		chunks: self.chunks.clone()
 		top_x: self.top_x
 		bot_x: self.bot_x
@@ -72,7 +72,7 @@ pub fn (self &FlattenedHighlight) clone() FlattenedHighlight {
 
 // Initialize a flattened highlight from start and end pins by collecting
 // every page chunk between them.
-pub fn FlattenedHighlight.init(start terminal.PagePin, end terminal.PagePin) FlattenedHighlight {
+pub fn Flattened.init(start terminal.PagePin, end terminal.PagePin) Flattened {
 	mut chunks := []Chunk{}
 	mut iterator := start.page_iterator(.right_down, end)
 	for {
@@ -84,7 +84,7 @@ pub fn FlattenedHighlight.init(start terminal.PagePin, end terminal.PagePin) Fla
 			end: chunk.end
 		}
 	}
-	return FlattenedHighlight{
+	return Flattened{
 		chunks: chunks
 		top_x: start.x
 		bot_x: end.x
@@ -92,7 +92,7 @@ pub fn FlattenedHighlight.init(start terminal.PagePin, end terminal.PagePin) Fla
 }
 
 // Get the start pin (top-left position) of this highlight.
-pub fn (self &FlattenedHighlight) start_pin() terminal.PagePin {
+pub fn (self &Flattened) start_pin() terminal.PagePin {
 	first := self.chunks[0]
 	return terminal.PagePin{
 		node: first.node
@@ -102,7 +102,7 @@ pub fn (self &FlattenedHighlight) start_pin() terminal.PagePin {
 }
 
 // Get the end pin (bottom-right position) of this highlight.
-pub fn (self &FlattenedHighlight) end_pin() terminal.PagePin {
+pub fn (self &Flattened) end_pin() terminal.PagePin {
 	last := self.chunks[self.chunks.len - 1]
 	return terminal.PagePin{
 		node: last.node
@@ -112,10 +112,10 @@ pub fn (self &FlattenedHighlight) end_pin() terminal.PagePin {
 }
 
 // Convert to an untracked highlight (just start/end pins).
-pub fn (self &FlattenedHighlight) untracked() UntrackedHighlight {
+pub fn (self &Flattened) untracked() Untracked {
 	first := self.chunks[0]
 	last := self.chunks[self.chunks.len - 1]
-	return UntrackedHighlight{
+	return Untracked{
 		start: terminal.PagePin{
 			node: first.node
 			x: self.top_x
@@ -130,32 +130,32 @@ pub fn (self &FlattenedHighlight) untracked() UntrackedHighlight {
 }
 
 // ============================================================
-// UntrackedHighlight
+// Untracked
 // ============================================================
 
-// UntrackedHighlight holds a start and end position that are not
+// Untracked holds a start and end position that are not
 // tracked by the page list. If pages are modified, these positions
 // may become invalid.
-pub struct UntrackedHighlight {
+pub struct Untracked {
 pub mut:
 	start terminal.PagePin
 	end   terminal.PagePin
 }
 
-pub fn (self UntrackedHighlight) eql(other UntrackedHighlight) bool {
+pub fn (self Untracked) eql(other Untracked) bool {
 	return self.start.eql(other.start) && self.end.eql(other.end)
 }
 
 // Track this highlight by creating tracked pins in its backing page list.
-pub fn (self &UntrackedHighlight) track(mut list terminal.PageList) TrackedHighlight {
-	return TrackedHighlight.init(mut list, self.start, self.end)
+pub fn (self &Untracked) track(mut list terminal.PageList) Tracked {
+	return Tracked.init(mut list, self.start, self.end)
 }
 
 // Initialize a tracked highlight by registering both pins with the page list.
-pub fn TrackedHighlight.init(mut list terminal.PageList, start terminal.PagePin, end terminal.PagePin) TrackedHighlight {
+pub fn Tracked.init(mut list terminal.PageList, start terminal.PagePin, end terminal.PagePin) Tracked {
 	start_pin := list.track_pin(start)
 	end_pin := list.track_pin(end)
-	return TrackedHighlight{
+	return Tracked{
 		start: start_pin
 		end: end_pin
 	}
@@ -163,21 +163,21 @@ pub fn TrackedHighlight.init(mut list terminal.PageList, start terminal.PagePin,
 
 // Initialize from pins that are already tracked.
 // Do not call deinit on highlights created with this function.
-pub fn TrackedHighlight.init_assume(start &terminal.PagePin, end &terminal.PagePin) TrackedHighlight {
-	return TrackedHighlight{
+pub fn Tracked.init_assume(start &terminal.PagePin, end &terminal.PagePin) Tracked {
+	return Tracked{
 		start: start
 		end: end
 	}
 }
 
 // ============================================================
-// TrackedHighlight
+// Tracked
 // ============================================================
 
-// TrackedHighlight holds tracked pins that are automatically updated
+// Tracked holds tracked pins that are automatically updated
 // when the page list is modified. The pins are owned by the page list
 // and must be untracked (deinit) when no longer needed.
-pub struct TrackedHighlight {
+pub struct Tracked {
 pub mut:
 	// Tracked start pin. Auto-updates on page modifications.
 	start &terminal.PagePin = unsafe { nil }
@@ -186,7 +186,7 @@ pub mut:
 }
 
 // Free tracked resources by untracking the pins.
-pub fn (self TrackedHighlight) deinit(mut list terminal.PageList) {
+pub fn (self Tracked) deinit(mut list terminal.PageList) {
 	list.untrack_pin(self.start)
 	list.untrack_pin(self.end)
 }

@@ -872,8 +872,8 @@ pub mut:
 	//
 	// Note that the selections MAY BE INVALID (point to PageList nodes
 	// that do not exist anymore). These must be validated prior to use.
-	search_matches        []highlight.FlattenedHighlight
-	search_selected_match ?highlight.FlattenedHighlight
+	search_matches        []highlight.Flattened
+	search_selected_match ?highlight.Flattened
 	search_matches_dirty  bool
 
 	// The current set of cells to render. This is rebuilt on every frame
@@ -1028,7 +1028,7 @@ fn Renderer.init_metal(opts RendererOpts) !Renderer {
 		scrollbar:             terminal.Scrollbar{}
 		scrollbar_dirty:       false
 		search_matches_dirty:  false
-		search_matches:        []highlight.FlattenedHighlight{}
+		search_matches:        []highlight.Flattened{}
 		search_selected_match: none
 		// Render state
 		cells:                  CellContents{}
@@ -1118,7 +1118,7 @@ fn Renderer.init_opengl(opts RendererOpts) !Renderer {
 		size:                   opts.size
 		focused:                true
 		scrollbar:              terminal.Scrollbar{}
-		search_matches:         []highlight.FlattenedHighlight{}
+		search_matches:         []highlight.Flattened{}
 		cells:                  CellContents{}
 		uniforms:               Uniforms{
 			min_contrast: opts.config.min_contrast
@@ -1561,7 +1561,7 @@ fn (mut self Renderer) rebuild_overlay(features []OverlayFeature) ! {
 	self.overlay = overlay
 }
 
-fn render_flattened_highlight(src highlight.FlattenedHighlight) terminal.RenderFlattenedHighlight {
+fn render_flattened_highlight(src highlight.Flattened) terminal.RenderFlattenedHighlight {
 	mut chunks := []terminal.RenderHighlightChunk{cap: src.chunks.len}
 	for chunk in src.chunks {
 		chunks << terminal.RenderHighlightChunk{

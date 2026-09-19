@@ -73,6 +73,6 @@ pub fn (mut self ActiveSearch) update(list &terminal.PageList) ?&terminal.PageNo
 }
 
 // Search for the next match in the active area.
-pub fn (mut self ActiveSearch) next() ?highlight.FlattenedHighlight {
+pub fn (mut self ActiveSearch) next() ?highlight.Flattened {
 	return self.window.next()
 }

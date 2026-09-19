@@ -16,7 +16,7 @@ fn clear_screen_search_row(mut screen terminal.Screen, absolute_y int) {
 	screen.pages.screen_rows[absolute_y] = terminal.RowData.init(screen.pages.cols)
 }
 
-fn screen_search_point(searcher &ScreenSearch, hl highlight.FlattenedHighlight) terminal.Pin {
+fn screen_search_point(searcher &ScreenSearch, hl highlight.Flattened) terminal.Pin {
 	point := searcher.pages.point_from_pin(.screen, hl.start_pin()) or {
 		assert false, 'search result pin is not in the snapshot'
 		return terminal.Pin{}

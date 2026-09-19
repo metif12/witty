@@ -1725,7 +1725,7 @@ fn surface_search_event(event searchpkg.Event, userdata voidptr) {
 	mut surface := unsafe { &Surface(userdata) }
 	match event.kind {
 		.viewport_matches {
-			mut matches := []highlight.FlattenedHighlight{cap: event.viewport_matches.len}
+			mut matches := []highlight.Flattened{cap: event.viewport_matches.len}
 			for match_ in event.viewport_matches {
 				matches << match_.clone()
 			}
@@ -1736,7 +1736,7 @@ fn surface_search_event(event searchpkg.Event, userdata voidptr) {
 		.selected_match {
 			selected := if value := event.selected { ?usize(value.idx) } else { none }
 			match_ := if value := event.selected {
-				?highlight.FlattenedHighlight(value.highlight.clone())
+				?highlight.Flattened(value.highlight.clone())
 			} else {
 				none
 			}
@@ -1759,7 +1759,7 @@ fn surface_search_event(event searchpkg.Event, userdata voidptr) {
 				match_: none
 			})) or {}
 			surface.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.SearchViewportMatchesMessage{
-				matches: []highlight.FlattenedHighlight{}
+				matches: []highlight.Flattened{}
 			})) or {}
 			mailbox := surface.surface_mailbox()
 			mailbox.push(apprt.SurfaceMessage{

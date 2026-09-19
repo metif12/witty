@@ -316,7 +316,7 @@ pub enum EventType as u8 {
 pub struct ThreadSelectedMatch {
 pub mut:
 	idx       usize
-	highlight highlight.FlattenedHighlight
+	highlight highlight.Flattened
 }
 
 // Event is an event emitted from the search thread. The active tag is
@@ -330,7 +330,7 @@ pub mut:
 	selected ?ThreadSelectedMatch
 	// viewport_matches payload. The memory is owned by the search thread
 	// and is only valid during the callback.
-	viewport_matches []highlight.FlattenedHighlight
+	viewport_matches []highlight.Flattened
 }
 
 // Tick result for search progress.
@@ -686,7 +686,7 @@ mut:
 struct ScreenStateSelectedMatch {
 mut:
 	idx       usize
-	highlight highlight.UntrackedHighlight
+	highlight highlight.Untracked
 }
 
 // Search state.
@@ -891,7 +891,7 @@ pub fn (mut self Search) notify(cb EventCallback, ud voidptr) {
 		// stale again.
 		self.stale_viewport_matches = false
 
-		mut results := []highlight.FlattenedHighlight{}
+		mut results := []highlight.Flattened{}
 		for {
 			hl := self.viewport.next() or { break }
 			results << hl.clone()

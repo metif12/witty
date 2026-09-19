@@ -70,14 +70,14 @@ pub mut:
 // viewport. The renderer must handle this gracefully.
 pub struct SearchViewportMatchesMessage {
 pub:
-	matches []highlight.FlattenedHighlight
+	matches []highlight.Flattened
 }
 
 // The selected match from the search thread. May be none to indicate
 // no match currently.
 pub struct SearchSelectedMatchMessage {
 pub:
-	match_ ?highlight.FlattenedHighlight
+	match_ ?highlight.Flattened
 }
 
 // Activate or deactivate the inspector.

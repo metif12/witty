@@ -19,7 +19,7 @@ fn test_flattened_highlight_init_spans_pages() {
 	}
 	assert voidptr(start_node) != voidptr(end_node)
 
-	result := FlattenedHighlight.init(terminal.PagePin{
+	result := Flattened.init(terminal.PagePin{
 		node: start_node
 		x: 3
 		y: 2
@@ -43,7 +43,7 @@ fn test_untracked_highlight_track_uses_tracked_init() {
 	start := list.get_top_left(.active)
 	end := list.get_bottom_right(.active) or { panic('missing active bottom-right pin') }
 	initial_tracked := list.count_tracked_pins()
-	mut tracked := (UntrackedHighlight{
+	mut tracked := (Untracked{
 		start: start
 		end: end
 	}).track(mut list)
@@ -57,7 +57,7 @@ fn test_tracked_highlight_init_assume_preserves_pins() {
 	defer { list.deinit() }
 	start := list.get_top_left(.active)
 	end := list.get_bottom_right(.active) or { panic('missing active bottom-right pin') }
-	tracked := TrackedHighlight.init_assume(&start, &end)
+	tracked := Tracked.init_assume(&start, &end)
 	assert voidptr(tracked.start) == voidptr(&start)
 	assert voidptr(tracked.end) == voidptr(&end)
 }

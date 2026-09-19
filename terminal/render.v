@@ -169,7 +169,7 @@ pub:
 }
 
 // Flattened highlight data accepted by RenderState. This mirrors
-// highlight.FlattenedHighlight without importing the highlight module back
+// highlight.Flattened without importing the highlight module back
 // into terminal (which would create a module cycle).
 pub struct RenderHighlightChunk {
 pub:

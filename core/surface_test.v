@@ -117,7 +117,7 @@ fn test_search_callback_routes_owned_results_and_ui_state() {
 
 	surface_search_event(searchpkg.Event{
 		kind: .viewport_matches
-		viewport_matches: [highlight.FlattenedHighlight.empty()]
+		viewport_matches: [highlight.Flattened.empty()]
 	}, voidptr(&surface))
 	assert app.mailbox.len() == 0
 
@@ -125,7 +125,7 @@ fn test_search_callback_routes_owned_results_and_ui_state() {
 		kind: .selected_match
 		selected: searchpkg.ThreadSelectedMatch{
 			idx: 4
-			highlight: highlight.FlattenedHighlight.empty()
+			highlight: highlight.Flattened.empty()
 		}
 	}, voidptr(&surface))
 	selected := pop_surface_core_message(mut app)

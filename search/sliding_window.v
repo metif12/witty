@@ -133,7 +133,7 @@ pub fn (mut self SlidingWindow) clear_and_retain_capacity() {
 // sliding window and are only valid until the next call to next()
 // or append(). If the caller wants to retain the flattened highlight
 // then they should clone it.
-pub fn (mut self SlidingWindow) next() ?highlight.FlattenedHighlight {
+pub fn (mut self SlidingWindow) next() ?highlight.Flattened {
 	// If we have less data than the needle then we can't possibly match.
 	data_len := self.data.len()
 	if data_len < self.needle.len {
@@ -238,7 +238,7 @@ pub fn (mut self SlidingWindow) next() ?highlight.FlattenedHighlight {
 // The start index is relative to the data_offset. i.e. index zero
 // is actually at self.data[self.data_offset]. The highlight accounts
 // for the offset internally.
-fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highlight.FlattenedHighlight {
+fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highlight.Flattened {
 	start := start_offset + self.data_offset
 	end_pos := start + length - 1
 	assert start < self.data.len(), 'highlight start out of bounds'
@@ -246,7 +246,7 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 
 	// Clear our previous chunk buffer to store this result.
 	self.chunk_buf.clear()
-	mut result := highlight.FlattenedHighlight.empty()
+	mut result := highlight.Flattened.empty()
 
 	// Go through the meta nodes to find our start and build chunks.
 	mut meta_consumed := 0

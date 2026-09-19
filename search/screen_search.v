@@ -268,20 +268,20 @@ module search
 // with alt screen.
 // Get all matches
 // This test verifies that when reloadActive fails at appendSlice (after
-// the loop), all FlattenedHighlight items are properly cleaned up.
+// the loop), all Flattened items are properly cleaned up.
 // Write multiple "Fizz" matches that will end up in history.
 // We need enough content to push "Fizz" entries into scrollback.
 // Complete initial search
 // Now trigger reloadActive by adding more content that changes the
 // active/history boundary. First add more "Fizz" entries to history.
 // Arm the tripwire to fail at appendSlice (after the loop completes).
-// At this point, there are FlattenedHighlight items in the results list
+// At this point, there are Flattened items in the results list
 // that need cleanup.
 // reloadActive is called by select(), which should trigger the error path.
 // If the bug exists, testing.allocator will report a memory leak
-// because FlattenedHighlight items weren't cleaned up.
+// because Flattened items weren't cleaned up.
 // This test verifies that when reloadActive fails inside the loop
-// (after some items have been appended), all FlattenedHighlight items
+// (after some items have been appended), all Flattened items
 // are properly cleaned up.
 // Write multiple "Fizz" matches that will end up in history.
 // We need enough content to push "Fizz" entries into scrollback.
@@ -289,11 +289,11 @@ module search
 // Now trigger reloadActive by adding more content that changes the
 // active/history boundary. First add more "Fizz" entries to history.
 // Arm the tripwire to fail after the first loop append succeeds.
-// This leaves at least one FlattenedHighlight in the results list
+// This leaves at least one Flattened in the results list
 // that needs cleanup.
 // reloadActive is called by select(), which should trigger the error path.
 // If the bug exists, testing.allocator will report a memory leak
-// because FlattenedHighlight items weren't cleaned up.
+// because Flattened items weren't cleaned up.
 //
 // --- Original Ghostty Comments End: src/terminal/search/screen.zig
 
@@ -328,7 +328,7 @@ pub mut:
 	idx usize
 
 	// Tracked highlight so we can detect movement.
-	highlight highlight.TrackedHighlight
+	highlight highlight.Tracked
 }
 
 pub fn (mut self SelectedMatch) deinit(mut list terminal.PageList) {
@@ -433,8 +433,8 @@ pub mut:
 	// is mostly immutable once found, while active area results may
 	// change. This lets us easily reset the active area results for a
 	// re-search scenario.
-	history_results []highlight.FlattenedHighlight
-	active_results  []highlight.FlattenedHighlight
+	history_results []highlight.Flattened
+	active_results  []highlight.Flattened
 
 	// The dimensions of the screen. When this changes we need to
 	// restart the whole search, currently.
@@ -502,11 +502,11 @@ pub fn (self &ScreenSearch) matches_len() usize {
 
 // Returns all matches as a slice. The matches are ordered from
 // most recent to oldest (bottom of screen to top of screen).
-pub fn (self &ScreenSearch) matches() []highlight.FlattenedHighlight {
+pub fn (self &ScreenSearch) matches() []highlight.Flattened {
 	active := self.active_results
 	hist := self.history_results
 
-	mut results := []highlight.FlattenedHighlight{cap: active.len + hist.len}
+	mut results := []highlight.Flattened{cap: active.len + hist.len}
 
 	// Active does a forward search, so we add the active results then
 	// reverse them. There are usually not many active results so this
@@ -1028,7 +1028,7 @@ fn (mut self ScreenSearch) reload_active_history(history_node &terminal.PageNode
 	}
 	assert voidptr(h.start_pin.node) == voidptr(history_node), 'history diff did not reach node'
 
-	mut results := []highlight.FlattenedHighlight{cap: self.history_results.len}
+	mut results := []highlight.Flattened{cap: self.history_results.len}
 	for {
 		hl := window.next() or { break }
 		if hl.chunks.len > 0 && voidptr(hl.chunks[0].node) == voidptr(history_node) {
@@ -1117,7 +1117,7 @@ fn (self &ScreenSearch) active_top_left() ?terminal.PagePin {
 // Return the selected match.
 //
 // This does not require read/write access to the underlying screen.
-pub fn (self &ScreenSearch) selected_match() ?highlight.FlattenedHighlight {
+pub fn (self &ScreenSearch) selected_match() ?highlight.Flattened {
 	sel := self.selected or { return none }
 	active_len := self.active_results.len
 	if sel.idx < usize(active_len) {
@@ -1251,9 +1251,9 @@ fn (mut self ScreenSearch) select_prev() bool {
 	}
 }
 
-// Reverse a slice of FlattenedHighlight in place (std.mem.reverse
+// Reverse a slice of Flattened in place (std.mem.reverse
 // equivalent used by reload_active when prepending newly-found history).
-fn reverse_flattened(mut arr []highlight.FlattenedHighlight) {
+fn reverse_flattened(mut arr []highlight.Flattened) {
 	mut i := 0
 	mut j := arr.len - 1
 	for i < j {

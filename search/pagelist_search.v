@@ -53,7 +53,7 @@ pub fn (mut self PageListSearch) deinit() {
 
 // Search for the next match in the loaded data.
 // This does not require any locks since it operates on already-loaded data.
-pub fn (mut self PageListSearch) next() ?highlight.FlattenedHighlight {
+pub fn (mut self PageListSearch) next() ?highlight.Flattened {
 	return self.window.next()
 }
 

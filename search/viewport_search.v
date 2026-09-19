@@ -169,7 +169,7 @@ pub fn (mut self ViewportSearch) update(list &terminal.PageList) bool {
 
 // Find the next match for the needle in the active area. This returns
 // none when there are no more matches.
-pub fn (mut self ViewportSearch) next() ?highlight.FlattenedHighlight {
+pub fn (mut self ViewportSearch) next() ?highlight.Flattened {
 	return self.window.next()
 }
 
