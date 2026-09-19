@@ -14,12 +14,14 @@ fn test_discover_uses_the_target_backend_directly() {
 		mut face := it.next() or { panic('CoreText returned no Menlo face') }
 		defer { face.deinit() }
 		assert face.path.len > 0
+		assert face.has_codepoint(u32(`A`), none)
 	} $else {
 		mut it := discover.discover(Descriptor{ family: 'monospace', size: 12 })!
 		defer { it.deinit() }
 		mut face := it.next() or { panic('fontconfig returned no monospace font') }
 		defer { face.deinit() }
 		assert face.path.len > 0
+		assert face.has_codepoint(u32(`A`), none)
 	}
 }
 

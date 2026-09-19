@@ -789,7 +789,10 @@ pub fn (self CoreTextDeferredFace) load(lib Library, opts FaceOptions) !CoreText
 	// 3. return face
 	_ = lib
 	mut face := CoreTextFace.init_font_copy(self.ct_font, opts)!
-	face.set_variations(self.variations, opts)!
+	face.set_variations(self.variations, opts) or {
+		face.deinit()
+		return err
+	}
 	return face
 }
 
@@ -819,6 +822,9 @@ pub fn (self CoreTextDeferredFace) load_freetype(lib Library, opts FaceOptions) 
 	}
 	path := unsafe { cstring_to_vstring(&char(path_buf.data)) }
 	mut face := Face.init_file(lib, path, 0, opts)!
-	face.set_variations(self.variations, opts)!
+	face.set_variations(self.variations, opts) or {
+		face.deinit()
+		return err
+	}
 	return face
 }

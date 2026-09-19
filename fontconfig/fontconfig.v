@@ -61,6 +61,8 @@ fn C.FcFontSetDestroy(fs voidptr)
 
 fn C.FcCharSetCreate() voidptr
 
+fn C.FcCharSetCopy(cs voidptr) voidptr
+
 fn C.FcCharSetDestroy(cs voidptr)
 
 fn C.FcCharSetAddChar(cs voidptr, ucs4 u32) int
@@ -251,6 +253,24 @@ pub fn (p &Pattern) has_char(cp u32) bool {
 	return C.FcCharSetHasChar(charset, cp) != 0
 }
 
+// charset_copy returns an owned copy of the pattern's character set. The
+// caller must destroy it. This lets deferred font faces retain discovery
+// coverage after the source pattern is released.
+pub fn (p &Pattern) charset_copy() &CharSet {
+	mut charset := voidptr(unsafe { nil })
+	if C.FcPatternGetCharSet(p.handle, c'charset', 0, &charset) != fc_result_match
+		|| isnil(charset) {
+		return unsafe { nil }
+	}
+	copy := C.FcCharSetCopy(charset)
+	if isnil(copy) {
+		return unsafe { nil }
+	}
+	return &CharSet{
+		handle: copy
+	}
+}
+
 // is_emoji reports whether Fontconfig marks this font with the emoji
 // presentation language (`und-zsye`).
 pub fn (p &Pattern) is_emoji() bool {
@@ -322,6 +342,11 @@ pub fn (cs &CharSet) destroy() {
 // add_char adds a codepoint to the character set.
 pub fn (cs &CharSet) add_char(cp u32) bool {
 	return C.FcCharSetAddChar(cs.handle, cp) != 0
+}
+
+// has_char reports whether this character set contains cp.
+pub fn (cs &CharSet) has_char(cp u32) bool {
+	return !isnil(cs) && !isnil(cs.handle) && C.FcCharSetHasChar(cs.handle, cp) != 0
 }
 
 // ============================================================

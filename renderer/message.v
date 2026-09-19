@@ -48,8 +48,8 @@ pub struct FontGridMessage {
 pub:
 	grid    &font.SharedGrid = unsafe { nil }
 	set     &font.SharedGridSet = unsafe { nil }
-	new_key font.GridSetKey
-	old_key font.GridSetKey
+	new_key font.Key
+	old_key font.Key
 }
 
 // Changes the size. The screen size might change, padding, grid, etc.

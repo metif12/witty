@@ -1605,7 +1605,7 @@ struct KeyTableEntry {
 // FontGridSet, FontGridKey, FontGrid are aliases to the real font module types.
 pub type FontGridSet = font.SharedGridSet
 
-pub type FontGridKey = font.GridSetKey
+pub type FontGridKey = font.Key
 
 pub type FontGrid = font.SharedGrid
 
@@ -1856,7 +1856,7 @@ pub mut:
 	font                             DerivedFontConfig
 }
 
-pub type DerivedFontConfig = font.GridSetDerivedConfig
+pub type DerivedFontConfig = font.DerivedConfig
 
 pub struct DerivedConfigLink {
 pub:
@@ -1923,36 +1923,7 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 		links: links
 		link_previews: config.link_previews
 		scroll_to_bottom_keystroke: config.scroll_to_bottom.keystroke()
-		font: font.GridSetDerivedConfig{
-			font_family: config.font_family.clone()
-			font_family_bold: config.font_family_bold.clone()
-			font_family_italic: config.font_family_italic.clone()
-			font_family_bold_italic: config.font_family_bold_italic.clone()
-			font_style: config.font_style.clone()
-			font_style_bold: config.font_style_bold.clone()
-			font_style_italic: config.font_style_italic.clone()
-			font_style_bold_italic: config.font_style_bold_italic.clone()
-			font_variation: config.font_variation.list.clone()
-			font_variation_bold: config.font_variation_bold.list.clone()
-			font_variation_italic: config.font_variation_italic.list.clone()
-			font_variation_bold_italic: config.font_variation_bold_italic.list.clone()
-			font_codepoint_map: config.font_codepoint_map.map.clone()
-			font_synthetic_style: config.font_synthetic_style
-			adjust_cell_width: config.adjust_cell_width
-			adjust_cell_height: config.adjust_cell_height
-			adjust_font_baseline: config.adjust_font_baseline
-			adjust_underline_position: config.adjust_underline_position
-			adjust_underline_thickness: config.adjust_underline_thickness
-			adjust_strikethrough_position: config.adjust_strikethrough_position
-			adjust_strikethrough_thickness: config.adjust_strikethrough_thickness
-			adjust_overline_position: config.adjust_overline_position
-			adjust_overline_thickness: config.adjust_overline_thickness
-			adjust_cursor_thickness: config.adjust_cursor_thickness
-			adjust_cursor_height: config.adjust_cursor_height
-			adjust_box_thickness: config.adjust_box_thickness
-			adjust_icon_height: config.adjust_icon_height
-			freetype_load_flags: config.freetype_load_flags
-		}
+		font: font.DerivedConfig.init(config)!
 	}
 }
 

@@ -16,12 +16,38 @@ fn test_gridset_local_tag_layouts_and_source_ordinals() {
 	assert u8(MetricsKey.face_y) == 16
 }
 
+fn test_gridset_derived_config_init_clones_owned_values() {
+	mut source := DerivedConfig{
+		font_family: ['Menlo']
+		font_variation: [Variation{
+			id: VariationId.init('wght')
+			value: 500
+		}]
+	}
+	source.font_codepoint_map.add(CodepointMapEntry{
+		range: [u32(`A`), u32(`Z`)]!
+		descriptor: Descriptor{ family: 'Menlo' }
+	})
+	mut cloned := DerivedConfig.init(&source)!
+	defer { cloned.deinit() }
+
+	source.font_family[0] = 'Changed'
+	source.font_variation[0] = Variation{
+		id: VariationId.init('wght')
+		value: 700
+	}
+	source.font_codepoint_map.entries[0].descriptor.family = 'Changed'
+	assert cloned.font_family == ['Menlo']
+	assert cloned.font_variation[0].value == 500
+	assert cloned.font_codepoint_map.entries[0].descriptor.family or { '' } == 'Menlo'
+}
+
 fn test_gridset_key_init() {
-	cfg := GridSetDerivedConfig{}
-	mut k := GridSetKey.init(&cfg, DesiredSize{ points: 12 })
+	cfg := DerivedConfig{}
+	mut k := Key.init(&cfg, DesiredSize{ points: 12 })!
 	defer { k.deinit() }
 
-	mut k2 := GridSetKey.init(&cfg, DesiredSize{ points: 12 })
+	mut k2 := Key.init(&cfg, DesiredSize{ points: 12 })!
 	defer { k2.deinit() }
 
 	assert k.hashcode() > 0
@@ -29,8 +55,8 @@ fn test_gridset_key_init() {
 }
 
 fn test_gridset_key_hash_matches_source() {
-	cfg := GridSetDerivedConfig{}
-	mut key := GridSetKey.init(&cfg, DesiredSize{ points: 12 })
+	cfg := DerivedConfig{}
+	mut key := Key.init(&cfg, DesiredSize{ points: 12 })!
 	defer { key.deinit() }
 
 	// Independently calculated with Zig 0.15.2 for the source's FreeType key
@@ -54,7 +80,7 @@ fn test_gridset_key_metric_key_tags_match_source() {
 	modifiers.put(.cursor_height, MetricsModifier{
 		absolute: -3
 	})
-	mut key := GridSetKey{
+	mut key := Key{
 		metric_modifiers: modifiers
 		font_size: DesiredSize{ points: 12 }
 	}
@@ -70,22 +96,22 @@ fn test_gridset_key_metric_key_tags_match_source() {
 }
 
 fn test_gridset_key_different_font_points() {
-	cfg := GridSetDerivedConfig{}
-	mut k := GridSetKey.init(&cfg, DesiredSize{ points: 12 })
+	cfg := DerivedConfig{}
+	mut k := Key.init(&cfg, DesiredSize{ points: 12 })!
 	defer { k.deinit() }
 
-	mut k2 := GridSetKey.init(&cfg, DesiredSize{ points: 16 })
+	mut k2 := Key.init(&cfg, DesiredSize{ points: 16 })!
 	defer { k2.deinit() }
 
 	assert k.hashcode() != k2.hashcode()
 }
 
 fn test_gridset_key_preserves_exact_font_point_bits() {
-	cfg := GridSetDerivedConfig{}
-	mut k := GridSetKey.init(&cfg, DesiredSize{ points: f32(12.000001) })
+	cfg := DerivedConfig{}
+	mut k := Key.init(&cfg, DesiredSize{ points: f32(12.000001) })!
 	defer { k.deinit() }
 
-	mut k2 := GridSetKey.init(&cfg, DesiredSize{ points: f32(12.000002) })
+	mut k2 := Key.init(&cfg, DesiredSize{ points: f32(12.000002) })!
 	defer { k2.deinit() }
 
 	assert k.font_size.points != k2.font_size.points
@@ -93,11 +119,11 @@ fn test_gridset_key_preserves_exact_font_point_bits() {
 }
 
 fn test_gridset_key_different_font_dpi() {
-	cfg := GridSetDerivedConfig{}
-	mut k := GridSetKey.init(&cfg, DesiredSize{ points: 12, xdpi: 1 })
+	cfg := DerivedConfig{}
+	mut k := Key.init(&cfg, DesiredSize{ points: 12, xdpi: 1 })!
 	defer { k.deinit() }
 
-	mut k2 := GridSetKey.init(&cfg, DesiredSize{ points: 12, xdpi: 2 })
+	mut k2 := Key.init(&cfg, DesiredSize{ points: 12, xdpi: 2 })!
 	defer { k2.deinit() }
 
 	assert k.hashcode() != k2.hashcode()
@@ -105,29 +131,29 @@ fn test_gridset_key_different_font_dpi() {
 
 fn test_gridset_key_with_families() {
 	// Test that keys with different font families produce different hashes.
-	mut cfg1 := GridSetDerivedConfig{
+	mut cfg1 := DerivedConfig{
 		font_family: ['Fira Code']
 	}
-	mut cfg2 := GridSetDerivedConfig{
+	mut cfg2 := DerivedConfig{
 		font_family: ['JetBrains Mono']
 	}
 
-	mut k1 := GridSetKey.init(&cfg1, DesiredSize{ points: 12 })
+	mut k1 := Key.init(&cfg1, DesiredSize{ points: 12 })!
 	defer { k1.deinit() }
-	mut k2 := GridSetKey.init(&cfg2, DesiredSize{ points: 12 })
+	mut k2 := Key.init(&cfg2, DesiredSize{ points: 12 })!
 	defer { k2.deinit() }
 
 	assert k1.hashcode() != k2.hashcode()
 }
 
 fn test_gridset_key_descriptors_for_style() {
-	cfg := GridSetDerivedConfig{
+	cfg := DerivedConfig{
 		font_family: ['Regular Font']
 		font_family_bold: ['Bold Font']
 		font_family_italic: ['Italic Font']
 		font_family_bold_italic: ['BoldItalic Font']
 	}
-	k := GridSetKey.init(&cfg, DesiredSize{ points: 12 })
+	k := Key.init(&cfg, DesiredSize{ points: 12 })!
 
 	regular := k.descriptors_for_style(.regular)
 	assert regular.len == 1
@@ -148,39 +174,39 @@ fn test_gridset_key_descriptors_for_style() {
 
 fn test_gridset_key_metric_modifiers() {
 	// Test that keys with different metric modifiers produce different hashes.
-	cfg1 := GridSetDerivedConfig{
+	cfg1 := DerivedConfig{
 		adjust_cell_width: MetricsModifier{
 			is_percent: true
 			percent: 1.2
 		}
 	}
-	cfg2 := GridSetDerivedConfig{}
+	cfg2 := DerivedConfig{}
 
-	mut k1 := GridSetKey.init(&cfg1, DesiredSize{ points: 12 })
+	mut k1 := Key.init(&cfg1, DesiredSize{ points: 12 })!
 	defer { k1.deinit() }
-	mut k2 := GridSetKey.init(&cfg2, DesiredSize{ points: 12 })
+	mut k2 := Key.init(&cfg2, DesiredSize{ points: 12 })!
 	defer { k2.deinit() }
 
 	assert k1.hashcode() != k2.hashcode()
 }
 
 fn test_gridset_key_preserves_exact_metric_modifier_bits() {
-	cfg1 := GridSetDerivedConfig{
+	cfg1 := DerivedConfig{
 		adjust_cell_width: MetricsModifier{
 			is_percent: true
 			percent: 1.200001
 		}
 	}
-	cfg2 := GridSetDerivedConfig{
+	cfg2 := DerivedConfig{
 		adjust_cell_width: MetricsModifier{
 			is_percent: true
 			percent: 1.200002
 		}
 	}
 
-	mut k1 := GridSetKey.init(&cfg1, DesiredSize{ points: 12 })
+	mut k1 := Key.init(&cfg1, DesiredSize{ points: 12 })!
 	defer { k1.deinit() }
-	mut k2 := GridSetKey.init(&cfg2, DesiredSize{ points: 12 })
+	mut k2 := Key.init(&cfg2, DesiredSize{ points: 12 })!
 	defer { k2.deinit() }
 
 	assert k1.hashcode() != k2.hashcode()
@@ -236,7 +262,7 @@ fn test_gridset_metrics_modifier_set() {
 }
 
 fn test_gridset_derived_config_defaults() {
-	cfg := GridSetDerivedConfig{}
+	cfg := DerivedConfig{}
 	assert cfg.font_family.len == 0
 	assert cfg.font_synthetic_style.bold() == true
 	assert cfg.font_synthetic_style.italic() == true
@@ -260,7 +286,7 @@ fn test_shared_grid_set_ref_deref() {
 	}
 	defer { set.deinit() }
 
-	cfg := GridSetDerivedConfig{}
+	cfg := DerivedConfig{}
 
 	key1, grid1 := set.ref(&cfg, DesiredSize{ points: 12 }) or {
 		assert false, err.msg()

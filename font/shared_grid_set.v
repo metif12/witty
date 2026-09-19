@@ -3,6 +3,7 @@ module font
 import sync
 import zig_fmt
 import fontstyle
+import log
 
 // This structure contains a set of SharedGrid structures keyed by
 // unique font configuration.
@@ -67,10 +68,10 @@ pub fn (mut self SharedGridSet) deinit() {
 }
 
 // Returns the number of cached grids.
-pub fn (self &SharedGridSet) count() int {
+pub fn (self &SharedGridSet) count() usize {
 	self.lock.lock()
 	defer { self.lock.unlock() }
-	return self.grids.len
+	return usize(self.grids.len)
 }
 
 // Initialize a SharedGrid for the given font configuration. If the
@@ -81,8 +82,8 @@ pub fn (self &SharedGridSet) count() int {
 //
 // The returned data (key and grid) should never be freed. The memory is
 // owned by the set and will be freed when the ref count reaches zero.
-pub fn (mut self SharedGridSet) ref(config &GridSetDerivedConfig, font_size DesiredSize) !(GridSetKey, &SharedGrid) {
-	mut key := GridSetKey.init(config, font_size)
+pub fn (mut self SharedGridSet) ref(config &DerivedConfig, font_size DesiredSize) !(Key, &SharedGrid) {
+	mut key := Key.init(config, font_size)!
 
 	self.lock.lock()
 	defer { self.lock.unlock() }
@@ -91,6 +92,8 @@ pub fn (mut self SharedGridSet) ref(config &GridSetDerivedConfig, font_size Desi
 	// Check if we already have a grid for this config
 	for mut entry in self.grids {
 		if entry.hashcode == hashcode {
+			log.debug('found cached grid for font config')
+
 			// We can deinit the key because we found a cached value.
 			key.deinit()
 
@@ -100,10 +103,15 @@ pub fn (mut self SharedGridSet) ref(config &GridSetDerivedConfig, font_size Desi
 		}
 	}
 
+	log.debug('initializing new grid for font config')
+
 	// A new font config, initialize the cache.
 
 	// Build our collection.
-	mut c := self.collection(&key, font_size, config)!
+	mut c := self.collection(&key, font_size, config) or {
+		key.deinit()
+		return err
+	}
 
 	// Setup our enabled/disabled styles
 	mut styles := StyleStatus.init_fill(true)
@@ -112,14 +120,23 @@ pub fn (mut self SharedGridSet) ref(config &GridSetDerivedConfig, font_size Desi
 	styles.set(.bold_italic, config.font_style_bold_italic.kind != .false_)
 
 	// Init our resolver which just requires setting fields.
-	resolver := CodepointResolver{
+	mut discover := self.discover() or {
+		c.deinit()
+		key.deinit()
+		return err
+	}
+	mut resolver := CodepointResolver{
 		collection: c
 		styles: styles
-		discover: self.discover()!
+		discover: discover
 		codepoint_map: key.codepoint_map
 	}
 
-	sg := SharedGrid.init(resolver)!
+	sg := SharedGrid.init(resolver) or {
+		resolver.deinit()
+		key.deinit()
+		return err
+	}
 	grid := &sg
 
 	self.grids << ReffedGridEntry{
@@ -134,7 +151,7 @@ pub fn (mut self SharedGridSet) ref(config &GridSetDerivedConfig, font_size Desi
 
 // Builds the Collection for the given configuration key and
 // initial font size.
-fn (mut self SharedGridSet) collection(key &GridSetKey, size DesiredSize, config &GridSetDerivedConfig) !Collection {
+fn (mut self SharedGridSet) collection(key &Key, size DesiredSize, config &DerivedConfig) !Collection {
 	// A quick note on memory management:
 	// - font_lib is owned by the SharedGridSet
 	// - metric_modifiers is owned by the key which is freed only when
@@ -146,6 +163,12 @@ fn (mut self SharedGridSet) collection(key &GridSetKey, size DesiredSize, config
 	}
 
 	mut c := Collection.init()
+	mut complete := false
+	defer {
+		if !complete {
+			c.deinit()
+		}
+	}
 	c.load_options = load_options
 	c.metric_modifiers = key.metric_modifiers
 
@@ -153,12 +176,11 @@ fn (mut self SharedGridSet) collection(key &GridSetKey, size DesiredSize, config
 	mut disco := self.discover()!
 	for style in [Style.regular, .bold, .italic, .bold_italic] {
 		for desc in key.descriptors_for_style(style) {
-			if face := discover_loaded_face(disco, desc, self.font_lib, load_options) {
-				c.add(face, AddOptions{
+			if add_discovered_face(mut c, disco, desc, AddOptions{
 					style: style
 					fallback: false
 					size_adjustment: .none_
-				})!
+				})! {
 				continue
 			}
 
@@ -169,14 +191,16 @@ fn (mut self SharedGridSet) collection(key &GridSetKey, size DesiredSize, config
 				mut retry := desc.clone()
 				retry.bold = false
 				retry.italic = false
-				if face := discover_loaded_face(disco, retry, self.font_lib, load_options) {
-					c.add(face, AddOptions{
+				if add_discovered_face(mut c, disco, retry, AddOptions{
 						style: style
 						fallback: false
 						size_adjustment: .none_
-					})!
+					})! {
+					continue
 				}
 			}
+
+			log.warn('font-family ${style} not found: ${desc.family or { '' }}')
 		}
 	}
 
@@ -239,15 +263,20 @@ fn (mut self SharedGridSet) collection(key &GridSetKey, size DesiredSize, config
 	// Prefer the platform emoji face on macOS. Other targets use the
 	// bundled color and text emoji faces.
 	$if macos {
-		if face := discover_loaded_face(disco, Descriptor{
+		mut emoji_it := disco.discover(Descriptor{
 			family: 'Apple Color Emoji'
 			size: size.points
-		}, self.font_lib, load_options) {
-			c.add(face, AddOptions{
+		})!
+		defer { emoji_it.deinit() }
+		if mut deferred := emoji_it.next() {
+			c.add_deferred(deferred, AddOptions{
 				style: .regular
 				fallback: true
 				size_adjustment: .none_
-			})!
+			}) or {
+				deferred.deinit()
+				return err
+			}
 		}
 	} $else {
 		_ = c.add(Face.init_mem(self.font_lib, embedded_emoji, load_options.face_options())!, AddOptions{
@@ -262,6 +291,7 @@ fn (mut self SharedGridSet) collection(key &GridSetKey, size DesiredSize, config
 		})!
 	}
 
+	complete = true
 	return c
 }
 
@@ -275,28 +305,28 @@ fn (mut self SharedGridSet) discover() !&Discover {
 	return &self.font_discover
 }
 
-// Resolve a descriptor and eagerly load the first usable result. Ghostty can
-// retain native discovery charset objects for deferred matching; Witty keeps
-// the same lookup order but loads here so the complete face charmap is
-// available on every backend.
-fn discover_loaded_face(disco &Discover, desc Descriptor, library Library, load_options LoadOptions) ?Face {
-	mut it := disco.discover(desc) or { return none }
+// Add the first discovery result as a deferred face. Ownership transfers to
+// the collection on success and remains local on error.
+fn add_discovered_face(mut collection Collection, disco &Discover, desc Descriptor, opts AddOptions) !bool {
+	mut it := disco.discover(desc)!
 	defer { it.deinit() }
-	for {
-		mut deferred := it.next() or { return none }
-		face := deferred.load(library, load_options.face_options()) or {
-			deferred.deinit()
-			continue
-		}
+	mut deferred := it.next() or { return false }
+	mut name_buf := []u8{len: 256}
+	name := deferred.name(mut name_buf) or {
 		deferred.deinit()
-		return face
+		return err
 	}
-	return none
+	log.info('font ${opts.style}: ${name}')
+	collection.add_deferred(deferred, opts) or {
+		deferred.deinit()
+		return err
+	}
+	return true
 }
 
 // Decrement the ref count for the given key. If the ref count is zero,
 // the grid will be deinitialized and removed from the map.
-pub fn (mut self SharedGridSet) deref(key GridSetKey) {
+pub fn (mut self SharedGridSet) deref(key Key) {
 	self.lock.lock()
 	defer { self.lock.unlock() }
 	hashcode := key.hashcode()
@@ -327,14 +357,14 @@ pub fn (mut self SharedGridSet) deref(key GridSetKey) {
 // Ref-counted SharedGrid entry in the map.
 struct ReffedGridEntry {
 mut:
-	key       GridSetKey
+	key       Key
 	hashcode  u64
 	grid      &SharedGrid = unsafe { nil }
 	ref_count u32
 }
 
 // ============================================================
-// GridSetDerivedConfig
+// DerivedConfig
 // ============================================================
 
 // This is the configuration required to create a key without having
@@ -342,7 +372,7 @@ mut:
 //
 // In the original Zig code, this uses Zig's arena allocator and
 // config-specific repeatable types. In V, we use simpler types.
-pub struct GridSetDerivedConfig {
+pub struct DerivedConfig {
 pub mut:
 	font_family                    []string
 	font_family_bold               []string
@@ -374,17 +404,95 @@ pub mut:
 	freetype_load_flags            FreetypeLoadFlags = freetype_load_flags_default
 }
 
+// init clones the font configuration needed by SharedGridSet. Ghostty accepts
+// either the full Config or another DerivedConfig through anytype; the generic
+// V entry point preserves the same two shapes without importing configpkg and
+// creating a module cycle.
+pub fn DerivedConfig.init[T](config &T) !DerivedConfig {
+	$if T is DerivedConfig {
+		return DerivedConfig{
+			font_family: config.font_family.clone()
+			font_family_bold: config.font_family_bold.clone()
+			font_family_italic: config.font_family_italic.clone()
+			font_family_bold_italic: config.font_family_bold_italic.clone()
+			font_style: config.font_style.clone()
+			font_style_bold: config.font_style_bold.clone()
+			font_style_italic: config.font_style_italic.clone()
+			font_style_bold_italic: config.font_style_bold_italic.clone()
+			font_variation: config.font_variation.clone()
+			font_variation_bold: config.font_variation_bold.clone()
+			font_variation_italic: config.font_variation_italic.clone()
+			font_variation_bold_italic: config.font_variation_bold_italic.clone()
+			font_codepoint_map: config.font_codepoint_map.clone()
+			font_synthetic_style: config.font_synthetic_style
+			adjust_cell_width: config.adjust_cell_width
+			adjust_cell_height: config.adjust_cell_height
+			adjust_font_baseline: config.adjust_font_baseline
+			adjust_underline_position: config.adjust_underline_position
+			adjust_underline_thickness: config.adjust_underline_thickness
+			adjust_strikethrough_position: config.adjust_strikethrough_position
+			adjust_strikethrough_thickness: config.adjust_strikethrough_thickness
+			adjust_overline_position: config.adjust_overline_position
+			adjust_overline_thickness: config.adjust_overline_thickness
+			adjust_cursor_thickness: config.adjust_cursor_thickness
+			adjust_cursor_height: config.adjust_cursor_height
+			adjust_box_thickness: config.adjust_box_thickness
+			adjust_icon_height: config.adjust_icon_height
+			freetype_load_flags: config.freetype_load_flags
+		}
+	} $else {
+		return DerivedConfig{
+			font_family: config.font_family.clone()
+			font_family_bold: config.font_family_bold.clone()
+			font_family_italic: config.font_family_italic.clone()
+			font_family_bold_italic: config.font_family_bold_italic.clone()
+			font_style: config.font_style.clone()
+			font_style_bold: config.font_style_bold.clone()
+			font_style_italic: config.font_style_italic.clone()
+			font_style_bold_italic: config.font_style_bold_italic.clone()
+			font_variation: config.font_variation.list.clone()
+			font_variation_bold: config.font_variation_bold.list.clone()
+			font_variation_italic: config.font_variation_italic.list.clone()
+			font_variation_bold_italic: config.font_variation_bold_italic.list.clone()
+			font_codepoint_map: config.font_codepoint_map.map.clone()
+			font_synthetic_style: config.font_synthetic_style
+			adjust_cell_width: config.adjust_cell_width
+			adjust_cell_height: config.adjust_cell_height
+			adjust_font_baseline: config.adjust_font_baseline
+			adjust_underline_position: config.adjust_underline_position
+			adjust_underline_thickness: config.adjust_underline_thickness
+			adjust_strikethrough_position: config.adjust_strikethrough_position
+			adjust_strikethrough_thickness: config.adjust_strikethrough_thickness
+			adjust_overline_position: config.adjust_overline_position
+			adjust_overline_thickness: config.adjust_overline_thickness
+			adjust_cursor_thickness: config.adjust_cursor_thickness
+			adjust_cursor_height: config.adjust_cursor_height
+			adjust_box_thickness: config.adjust_box_thickness
+			adjust_icon_height: config.adjust_icon_height
+			freetype_load_flags: config.freetype_load_flags
+		}
+	}
+}
+
 // deinit releases resources.
-pub fn (mut self GridSetDerivedConfig) deinit() {
-	// In V, garbage collection handles memory.
+pub fn (mut self DerivedConfig) deinit() {
+	self.font_family = []
+	self.font_family_bold = []
+	self.font_family_italic = []
+	self.font_family_bold_italic = []
+	self.font_variation = []
+	self.font_variation_bold = []
+	self.font_variation_italic = []
+	self.font_variation_bold_italic = []
+	self.font_codepoint_map.deinit()
 }
 
 // ============================================================
-// GridSetKey
+// Key
 // ============================================================
 
 // The key used to uniquely identify a font configuration.
-pub struct GridSetKey {
+pub struct Key {
 pub mut:
 	// The descriptors used for all the fonts added to the
 	// initial group, including all styles. This is hashed
@@ -396,7 +504,7 @@ pub mut:
 	// each style. For example, bold is from
 	// offsets[int(Style.bold) - 1] to
 	// offsets[int(Style.bold)].
-	style_offsets [4]int
+	style_offsets [4]usize
 
 	// The codepoint map configuration.
 	codepoint_map CodepointMap
@@ -416,8 +524,8 @@ pub mut:
 	freetype_load_flags FreetypeLoadFlags = freetype_load_flags_default
 }
 
-// init creates a GridSetKey from a DerivedConfig and font size.
-pub fn GridSetKey.init(config_src &GridSetDerivedConfig, font_size DesiredSize) GridSetKey {
+// init creates a Key from a DerivedConfig and font size.
+pub fn Key.init(config_src &DerivedConfig, font_size DesiredSize) !Key {
 	mut descriptors := []Descriptor{}
 
 	// Regular family descriptors
@@ -524,12 +632,12 @@ pub fn GridSetKey.init(config_src &GridSetDerivedConfig, font_size DesiredSize) 
 		metric_modifiers.put(.icon_height, m)
 	}
 
-	regular_offset := config_src.font_family.len
-	bold_offset := regular_offset + config_src.font_family_bold.len
-	italic_offset := bold_offset + config_src.font_family_italic.len
-	bold_italic_offset := italic_offset + config_src.font_family_bold_italic.len
+	regular_offset := usize(config_src.font_family.len)
+	bold_offset := regular_offset + usize(config_src.font_family_bold.len)
+	italic_offset := bold_offset + usize(config_src.font_family_italic.len)
+	bold_italic_offset := italic_offset + usize(config_src.font_family_bold_italic.len)
 
-	return GridSetKey{
+	return Key{
 		descriptors: descriptors
 		style_offsets: [regular_offset, bold_offset, italic_offset, bold_italic_offset]!
 		codepoint_map: codepoint_map
@@ -540,25 +648,24 @@ pub fn GridSetKey.init(config_src &GridSetDerivedConfig, font_size DesiredSize) 
 }
 
 // deinit releases resources.
-pub fn (mut self GridSetKey) deinit() {
-	// In V, garbage collection handles memory.
+pub fn (mut self Key) deinit() {
+	self.descriptors = []
+	self.codepoint_map.deinit()
+	self.metric_modifiers.deinit()
 }
 
 // Get the descriptors for the given font style that can be
 // used with discovery.
-pub fn (self &GridSetKey) descriptors_for_style(style Style) []Descriptor {
+pub fn (self &Key) descriptors_for_style(style Style) []Descriptor {
 	idx := int(style)
-	start := if idx == 0 { 0 } else { self.style_offsets[idx - 1] }
+	start := if idx == 0 { usize(0) } else { self.style_offsets[idx - 1] }
 	end := self.style_offsets[idx]
-	if start >= self.descriptors.len || end > self.descriptors.len || start > end {
-		return []
-	}
 	return self.descriptors[start..end]
 }
 
 // hashcode returns a hash code that can be used to uniquely identify
 // this font configuration.
-pub fn (self &GridSetKey) hashcode() u64 {
+pub fn (self &Key) hashcode() u64 {
 	mut hasher := SourceHash{}
 	self.hash(mut hasher)
 	return hasher.final()
@@ -566,7 +673,7 @@ pub fn (self &GridSetKey) hashcode() u64 {
 
 // hash writes this font configuration to the supplied source-compatible
 // hasher in Ghostty's field order.
-pub fn (self &GridSetKey) hash(mut hasher SourceHash) {
+pub fn (self &Key) hash(mut hasher SourceHash) {
 	// Hash font size using its exact source bit representation.
 	hasher.put_f32(self.font_size.points)
 	hasher.put_u16(self.font_size.xdpi)
@@ -750,6 +857,11 @@ pub fn (self &MetricsModifierSet) get(key MetricsKey) ?MetricsModifier {
 }
 
 // count returns the number of modifiers in the set.
-pub fn (self &MetricsModifierSet) count() int {
-	return self.entries.len
+pub fn (self &MetricsModifierSet) count() usize {
+	return usize(self.entries.len)
+}
+
+// deinit releases the modifier map.
+pub fn (mut self MetricsModifierSet) deinit() {
+	self.entries = map[int]MetricsModifier{}
 }

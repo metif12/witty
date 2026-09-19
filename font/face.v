@@ -491,6 +491,7 @@ import quirks
 // Translated from ghostty/src/font/face/freetype.zig
 
 import freetype
+import fontconfig
 import harfbuzz
 import macos
 import math
@@ -790,10 +791,14 @@ pub fn (m FaceMetrics) strikethrough_position() f64 {
 // to search for fallback fonts without the overhead of full loading.
 pub struct DeferredFace {
 pub mut:
-	// Names retained by the discovery backend. Ghostty keeps the native
-	// descriptor alive and reads these lazily; the V representation owns the
-	// copied strings because it intentionally reduces a deferred face to
-	// portable data.
+	// Native discovery state. Fontconfig retains a copied character set;
+	// CoreText retains the discovered CTFont. These preserve Ghostty's
+	// deferred coverage checks without loading the render face.
+	fontconfig_charset &fontconfig.CharSet = unsafe { nil }
+	coretext            CoreTextDeferredFace
+	// Names and file identity retained beside the native coverage state.
+	// Fontconfig exposes these as copied V values; CoreText naming reads the
+	// retained font through the source caller-buffer contract.
 	family_name string
 	full_name   string
 	// The path to the font file, if file-based.
@@ -813,27 +818,40 @@ pub mut:
 }
 
 // family_name returns the family name advertised by discovery.
-// The V discovery layer already owns the copied string, so the caller buffer
-// is retained only to preserve the source API contract.
+// Fontconfig already owns the copied string; CoreText uses the caller buffer.
 pub fn (d DeferredFace) family_name(mut buf []u8) !string {
+	if !isnil(d.coretext.ct_font) {
+		return d.coretext.family_name(mut buf)
+	}
 	_ = buf
 	return d.family_name
 }
 
 // name returns the display/full name advertised by discovery.
 pub fn (d DeferredFace) name(mut buf []u8) !string {
+	if !isnil(d.coretext.ct_font) {
+		return d.coretext.name(mut buf)
+	}
 	_ = buf
 	return d.full_name
 }
 
 // deinit releases deferred face resources.
 pub fn (mut d DeferredFace) deinit() {
+	if !isnil(d.fontconfig_charset) {
+		d.fontconfig_charset.destroy()
+		d.fontconfig_charset = unsafe { nil }
+	}
+	d.coretext.deinit()
 	d.codepoints = map[u32]bool{}
 	d.variations = []
 }
 
 // load fully loads this deferred face into a Face.
 pub fn (d DeferredFace) load(lib Library, opts FaceOptions) !Face {
+	if !isnil(d.coretext.ct_font) {
+		return d.coretext.load_freetype(lib, opts)
+	}
 	if d.path.len == 0 {
 		return error('deferred face has no file path')
 	}
@@ -857,6 +875,20 @@ pub fn (d DeferredFace) load(lib Library, opts FaceOptions) !Face {
 // coverage in this backend, matching the fact that our coverage map only
 // records presence.
 pub fn (d DeferredFace) has_codepoint(cp u32, presentation ?Presentation) bool {
+	if !isnil(d.coretext.ct_font) {
+		return d.coretext.has_codepoint(cp, presentation)
+	}
+	if !isnil(d.fontconfig_charset) {
+		if !d.fontconfig_charset.has_char(cp) {
+			return false
+		}
+		if expected := presentation {
+			if actual := d.presentation {
+				return expected == actual
+			}
+		}
+		return true
+	}
 	// If we have coverage data, consult it. A codepoint is covered only
 	// if it is present in the map with a true value.
 	if d.codepoints.len > 0 {
