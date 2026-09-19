@@ -901,6 +901,19 @@ fn test_screen_hyperlink_start_end() {
 	assert s.cursor.hyperlink_id == 0
 }
 
+fn test_cursor_deinit_releases_pending_hyperlink() {
+	mut cursor := Cursor{
+		hyperlink_id: 42
+		hyperlink_state: Hyperlink{
+			id: HyperlinkIdKind(HyperlinkExplicitId{ value: 'example' })
+			uri: 'https://example.com/'
+		}
+	}
+	cursor.deinit()
+	assert cursor.hyperlink_id == 0
+	assert cursor.hyperlink_state == none
+}
+
 fn test_screen_resize_no_reflow_more_rows() {
 	mut s := Screen.init(5, 3, 0)
 	defer { s.deinit() }

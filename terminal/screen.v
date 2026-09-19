@@ -1827,6 +1827,14 @@ pub mut:
 	semantic_content_clear_eol bool
 }
 
+// Release cursor-owned state. Ghostty frees the heap-allocated pending
+// hyperlink here; V owns that memory through GC, so dropping the retained
+// value is the equivalent lifecycle operation.
+pub fn (mut self Cursor) deinit() {
+	self.hyperlink_id = 0
+	self.hyperlink_state = none
+}
+
 // CursorCopyOptions controls which cursor-owned state is migrated when a
 // cursor is copied between screens.
 pub struct CursorCopyOptions {
@@ -2046,6 +2054,7 @@ pub fn (mut self Screen) deinit() {
 		deinit := self.kitty_images_deinit
 		deinit(self.kitty_images, self)
 	}
+	self.cursor.deinit()
 	self.pages.deinit()
 	self.kitty_images = unsafe { nil }
 	self.kitty_images_reset = unsafe { nil }
@@ -2075,6 +2084,7 @@ pub fn (mut self Screen) reset() {
 		reset := self.kitty_images_reset
 		reset(self.kitty_images, self)
 	}
+	self.cursor.deinit()
 	self.cursor = Cursor{
 		x: 0
 		y: 0
