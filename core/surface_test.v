@@ -8,6 +8,7 @@ import highlight
 import search as searchpkg
 import termio as termiopkg
 import time
+import sync
 import osc
 import crash
 import oniguruma
@@ -1288,6 +1289,29 @@ fn test_has_selection() {
 		end_pin: Pin{ x: 5, y: 0 }
 	}
 	assert surf.has_selection() == true
+}
+
+fn test_surface_dump_text_public_wrapper_and_text_lifecycle() {
+	mut runtime := apprt.RuntimeSurface{}
+	mut surf := make_test_surface()
+	surf.rt_surface = &runtime
+	surf.size = make_test_size()
+	surf.renderer_state.mutex = sync.new_mutex()
+	defer {
+		surf.renderer_state.mutex.destroy()
+		surf.renderer_state.mutex = unsafe { nil }
+	}
+
+	mut stream := surf.renderer_state.terminal_.vt_stream()
+	stream.next_slice('hello')!
+	mut dumped := surf.dump_text(TermSelection{
+		start_pin: Pin{ x: 0, y: 0 }
+		end_pin: Pin{ x: 4, y: 0 }
+	})!
+	assert dumped.text == 'hello'
+	dumped.deinit()
+	assert dumped.text == ''
+	assert dumped.viewport == none
 }
 
 fn test_mouse_selection_same_point() {

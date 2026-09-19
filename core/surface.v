@@ -1796,6 +1796,14 @@ pub:
 	offset_len   u32
 }
 
+// deinit releases the owned text returned by dump_text. V's GC owns the
+// allocation, so clearing the value is the lifecycle equivalent of Ghostty's
+// allocator-backed free.
+pub fn (mut self Text) deinit() {
+	self.text = ''
+	self.viewport = none
+}
+
 // Link represents a detected link at a position in the terminal.
 struct Link {
 	action    input.LinkAction
@@ -6426,11 +6434,20 @@ fn (self &Surface) resolve_path_for_opening(path string) ?string {
 	return none
 }
 
-fn (mut self Surface) dump_text(sel TermSelection) !Text {
+pub fn (mut self Surface) dump_text(sel TermSelection) !Text {
+	locked := self.renderer_state.mutex != unsafe { nil }
+	if locked {
+		self.renderer_state.mutex.lock()
+	}
+	defer {
+		if locked {
+			self.renderer_state.mutex.unlock()
+		}
+	}
 	return self.dump_text_locked(sel)
 }
 
-fn (mut self Surface) dump_text_locked(sel TermSelection) !Text {
+pub fn (mut self Surface) dump_text_locked(sel TermSelection) !Text {
 	text := self.renderer_state.terminal_.screens.active.selection_string(terminal.SelectionString{
 		sel: sel
 	})!
