@@ -1277,14 +1277,14 @@ pub fn (self &Face) is_color_glyph(glyph_id u32) bool {
 	// Load the glyph and see what pixel mode it renders with.
 	// All modes other than BGRA are non-color.
 	// If the glyph fails to load, just return false.
-	self.face.load_glyph(glyph_id, freetype.LoadFlags{
-		render: true
-		color: self.face.has_color()
-		// NO_SVG set to true because we don't currently support rendering
-		// SVG glyphs under FreeType, since that requires bundling another
-		// dependency to handle rendering the SVG.
-		no_svg: true
-	}) or { return false }
+	mut flags := freetype.LoadFlags{}
+	flags.set_render(true)
+	flags.set_color(self.face.has_color())
+	// NO_SVG set to true because we don't currently support rendering
+	// SVG glyphs under FreeType, since that requires bundling another
+	// dependency to handle rendering the SVG.
+	flags.set_no_svg(true)
+	self.face.load_glyph(glyph_id, flags) or { return false }
 
 	glyph := self.face.glyph() or { return false }
 	return glyph.bitmap.pixel_mode == freetype.pixel_mode_bgra
@@ -1300,33 +1300,26 @@ pub fn (self &Face) is_color_glyph(glyph_id u32) bool {
 fn (self Face) glyph_load_flags(constrained bool) freetype.LoadFlags {
 	do_hinting := self.load_flags.hinting() && !constrained
 
-	return freetype.LoadFlags{
-		// If our glyph has color, we want to render the color.
-		color: self.face.has_color()
-		// We don't render, because we'll invoke the render
-		// manually after applying constraints further down.
-		render: false
-		// Use options from config.
-		no_hinting: !do_hinting
-		force_autohint: self.load_flags.force_autohint()
-		no_autohint: !self.load_flags.autohint()
-		// If we're gonna be rendering this glyph in monochrome,
-		// then we should use the monochrome hinter as well, or
-		// else it won't look very good at all.
-		//
-		// Otherwise if the user asked for light hinting we
-		// use that, otherwise we just use the normal target.
-		target: if self.load_flags.monochrome() {
-			.mono
-		} else if self.load_flags.light() {
-			.light
-		} else {
-			.normal
-		}
-		// NO_SVG set to true because we don't currently support rendering
-		// SVG glyphs under FreeType.
-		no_svg: true
-	}
+	mut flags := freetype.LoadFlags{}
+	// If our glyph has color, we want to render the color.
+	flags.set_color(self.face.has_color())
+	// We don't render, because we'll invoke the render manually after applying
+	// constraints further down. Use options from config.
+	flags.set_render(false)
+	flags.set_no_hinting(!do_hinting)
+	flags.set_force_autohint(self.load_flags.force_autohint())
+	flags.set_no_autohint(!self.load_flags.autohint())
+	// Match the monochrome/light/normal hinter to the configured renderer.
+	flags.set_target(if self.load_flags.monochrome() {
+		.mono
+	} else if self.load_flags.light() {
+		.light
+	} else {
+		.normal
+	})
+	// SVG rendering requires a separate dependency that isn't enabled.
+	flags.set_no_svg(true)
+	return flags
 }
 
 // get_glyph_size returns a rect representing the position and size
@@ -1552,8 +1545,8 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 fn (self Face) units_to_px_y(units i32) i32 {
 	metrics := self.face.size_metrics() or { return 0 }
 	return i32(freetype.mul_fix(
-		i64(units),
-		metrics.y_scale,
+		units,
+		i32(metrics.y_scale),
 	) >> 6)
 }
 
@@ -1801,8 +1794,8 @@ fn (self &Face) measure_ic_width() ?f64 {
 	return advance
 }
 
-// copy_table copies the font table data for the given tag.
-pub fn (self Face) copy_table(tag string) ![]u8 {
+// copy_table copies the optional font table data for the given tag.
+pub fn (self Face) copy_table(tag string) !freetype.SfntTableValue {
 	return self.face.load_sfnt_table(freetype.Tag.init(tag))
 }
 

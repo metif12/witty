@@ -63,6 +63,9 @@ fn C.FT_Init_FreeType(alibrary &voidptr) int
 // FT_Done_FreeType destroys a FreeType library instance.
 fn C.FT_Done_FreeType(library voidptr) int
 
+// FT_Library_Version returns the runtime library version.
+fn C.FT_Library_Version(library voidptr, major &int, minor &int, patch &int)
+
 // FT_New_Face creates a face from a font file on disk.
 fn C.FT_New_Face(library voidptr, filepathname &char, face_index i64, aface &voidptr) int
 
@@ -118,6 +121,9 @@ fn C.FT_Set_Var_Design_Coordinates(face voidptr, num_coords u32, coords &i64) in
 
 // FT_Get_Var_Design_Coordinates reads the current variation coordinates.
 fn C.FT_Get_Var_Design_Coordinates(face voidptr, num_coords u32, coords &i64) int
+
+// FT_Set_Transform sets the transform applied while loading glyphs.
+fn C.FT_Set_Transform(face voidptr, matrix voidptr, delta voidptr)
 
 // FT_Outline_Get_BBox computes the exact bounding box of an outline.
 fn C.FT_Outline_Get_BBox(outline voidptr, abbox voidptr) int
@@ -271,25 +277,30 @@ fn C.witty_tt_hhea_descender(table voidptr) i16
 
 fn C.witty_tt_hhea_line_gap(table voidptr) i16
 
-// The FreeType Unicode charmap encoding tag ('unic' as a FourCC).
-pub const ft_encoding_unicode = u32(0x756E6963)
-
 // FT_Load_Glyph flag bits (from freetype.h). These are stable ABI values.
 const ft_load_default = i32(0x0)
-const ft_load_render = i32(1 << 2)
+const ft_load_no_scale = i32(1 << 0)
 const ft_load_no_hinting = i32(1 << 1)
+const ft_load_render = i32(1 << 2)
+const ft_load_no_bitmap = i32(1 << 3)
+const ft_load_vertical_layout = i32(1 << 4)
 const ft_load_force_autohint = i32(1 << 5)
+const ft_load_crop_bitmap = i32(1 << 6)
+const ft_load_pedantic = i32(1 << 7)
+const ft_load_advance_only = i32(1 << 8)
+const ft_load_ignore_global_advance_width = i32(1 << 9)
+const ft_load_no_recurse = i32(1 << 10)
+const ft_load_ignore_transform = i32(1 << 11)
+const ft_load_monochrome = i32(1 << 12)
+const ft_load_linear_design = i32(1 << 13)
+const ft_load_sbits_only = i32(1 << 14)
 const ft_load_no_autohint = i32(1 << 15)
+const ft_load_target_mask = i32(15 << 16)
 const ft_load_color = i32(1 << 20)
+const ft_load_compute_metrics = i32(1 << 21)
+const ft_load_bitmap_metrics_only = i32(1 << 22)
+const ft_load_svg_only = i32(1 << 23)
 const ft_load_no_svg = i32(1 << 24)
-const ft_load_target_light = i32((1 & 15) << 16)
-const ft_load_target_mono = i32((2 & 15) << 16)
-
-// FT_Get_Sfnt_Table selector values (FT_Sfnt_Tag enum, ABI-stable order).
-const ft_sfnt_head = int(0)
-const ft_sfnt_os2 = int(2)
-const ft_sfnt_hhea = int(3)
-const ft_sfnt_post = int(5)
 
 // ============================================================
 // Constants
@@ -323,23 +334,42 @@ pub const tt_ms_id_unicode_cs = u16(1)
 // ============================================================
 
 // Encoding specifies the character map encoding.
-pub enum Encoding {
-	unicode
+pub enum Encoding as u32 {
+	none           = 0x00000000
+	ms_symbol      = 0x73796d62
+	unicode        = 0x756e6963
+	sjis           = 0x736a6973
+	prc            = 0x67622020
+	big5           = 0x62696735
+	wansung        = 0x77616e73
+	johab          = 0x6a6f6861
+	adobe_standard = 0x41444f42
+	adobe_expert   = 0x41444245
+	adobe_custom   = 0x41444243
+	adobe_latin_1  = 0x6c617431
+	old_latin_2    = 0x6c617432
+	apple_roman    = 0x61726d6e
 }
 
 // RenderMode specifies the glyph rendering target.
-pub enum RenderMode {
+pub enum RenderMode as u32 {
 	normal
 	light
 	mono
+	lcd
+	lcd_v
+	sdf
 }
 
 // SfntTag identifies SFNT table types.
-pub enum SfntTag {
+pub enum SfntTag as i32 {
 	head
-	post
+	maxp
 	os2
 	hhea
+	vhea
+	post
+	pclt
 }
 
 // ============================================================
@@ -354,7 +384,7 @@ pub mut:
 	face_flags      i64
 	units_per_em    u16
 	glyph           &GlyphSlotRec = unsafe { nil }
-	size            &SizeRec = unsafe { nil }
+	size            &SizeRec      = unsafe { nil }
 }
 
 // BitmapSize describes a fixed bitmap strike size.
@@ -402,6 +432,15 @@ pub:
 	y i64
 }
 
+// Matrix is FreeType's 16.16 affine transform matrix.
+pub struct Matrix {
+pub:
+	xx i64
+	xy i64
+	yx i64
+	yy i64
+}
+
 // GlyphMetrics holds metrics for a loaded glyph.
 pub struct GlyphMetrics {
 pub:
@@ -439,8 +478,8 @@ pub mut:
 	n_contours i16
 	n_points   i16
 	points     &OutlinePoint = unsafe { nil }
-	tags       &char = unsafe { nil }
-	contours   &i16 = unsafe { nil }
+	tags       &char         = unsafe { nil }
+	contours   &i16          = unsafe { nil }
 	flags      i32
 	raw        voidptr = unsafe { nil }
 }
@@ -535,50 +574,219 @@ pub:
 // Utility types
 // ============================================================
 
-// LoadFlags controls FreeType glyph loading behavior.
-pub struct LoadFlags {
-pub:
-	render         bool
-	color          bool
-	no_hinting     bool
-	force_autohint bool
-	no_autohint    bool
-	no_svg         bool
-	target         RenderMode = .normal
+// LoadTarget is the four-bit target field in FreeType's load flags.
+pub enum LoadTarget as u8 {
+	normal
+	light
+	mono
+	lcd
+	lcd_v
 }
 
-// to_int converts the load flags into the packed FT_Load_Glyph flag bits.
-pub fn (f LoadFlags) to_int() i32 {
-	mut flags := ft_load_default
-	if f.render {
-		flags |= ft_load_render
+// LoadFlags is the exact 32-bit FT_Load_Glyph flag value. Ghostty represents
+// this as a packed struct; V accessors retain that layout without widening the
+// individual bits into booleans.
+pub struct LoadFlags {
+mut:
+	value i32 = ft_load_default
+}
+
+pub fn LoadFlags.from_int(value i32) LoadFlags {
+	return LoadFlags{
+		value: value
 	}
-	if f.color {
-		flags |= ft_load_color
+}
+
+pub fn (flags LoadFlags) to_int() i32 {
+	return flags.value
+}
+
+fn (flags LoadFlags) bit(mask i32) bool {
+	return flags.value & mask != 0
+}
+
+fn (mut flags LoadFlags) set_bit(mask i32, enabled bool) {
+	if enabled {
+		flags.value |= mask
+	} else {
+		flags.value &= ~mask
 	}
-	if f.no_hinting {
-		flags |= ft_load_no_hinting
-	}
-	if f.force_autohint {
-		flags |= ft_load_force_autohint
-	}
-	if f.no_autohint {
-		flags |= ft_load_no_autohint
-	}
-	if f.no_svg {
-		flags |= ft_load_no_svg
-	}
-	// The render target (light/mono) is encoded in bits 16..19.
-	match f.target {
-		.normal {}
-		.light {
-			flags |= ft_load_target_light
-		}
-		.mono {
-			flags |= ft_load_target_mono
-		}
-	}
-	return flags
+}
+
+pub fn (flags LoadFlags) no_scale() bool {
+	return flags.bit(ft_load_no_scale)
+}
+
+pub fn (mut flags LoadFlags) set_no_scale(enabled bool) {
+	flags.set_bit(ft_load_no_scale, enabled)
+}
+
+pub fn (flags LoadFlags) no_hinting() bool {
+	return flags.bit(ft_load_no_hinting)
+}
+
+pub fn (mut flags LoadFlags) set_no_hinting(enabled bool) {
+	flags.set_bit(ft_load_no_hinting, enabled)
+}
+
+pub fn (flags LoadFlags) render() bool {
+	return flags.bit(ft_load_render)
+}
+
+pub fn (mut flags LoadFlags) set_render(enabled bool) {
+	flags.set_bit(ft_load_render, enabled)
+}
+
+pub fn (flags LoadFlags) no_bitmap() bool {
+	return flags.bit(ft_load_no_bitmap)
+}
+
+pub fn (mut flags LoadFlags) set_no_bitmap(enabled bool) {
+	flags.set_bit(ft_load_no_bitmap, enabled)
+}
+
+pub fn (flags LoadFlags) vertical_layout() bool {
+	return flags.bit(ft_load_vertical_layout)
+}
+
+pub fn (mut flags LoadFlags) set_vertical_layout(enabled bool) {
+	flags.set_bit(ft_load_vertical_layout, enabled)
+}
+
+pub fn (flags LoadFlags) force_autohint() bool {
+	return flags.bit(ft_load_force_autohint)
+}
+
+pub fn (mut flags LoadFlags) set_force_autohint(enabled bool) {
+	flags.set_bit(ft_load_force_autohint, enabled)
+}
+
+pub fn (flags LoadFlags) crop_bitmap() bool {
+	return flags.bit(ft_load_crop_bitmap)
+}
+
+pub fn (mut flags LoadFlags) set_crop_bitmap(enabled bool) {
+	flags.set_bit(ft_load_crop_bitmap, enabled)
+}
+
+pub fn (flags LoadFlags) pedantic() bool {
+	return flags.bit(ft_load_pedantic)
+}
+
+pub fn (mut flags LoadFlags) set_pedantic(enabled bool) {
+	flags.set_bit(ft_load_pedantic, enabled)
+}
+
+pub fn (flags LoadFlags) advance_only() bool {
+	return flags.bit(ft_load_advance_only)
+}
+
+pub fn (mut flags LoadFlags) set_advance_only(enabled bool) {
+	flags.set_bit(ft_load_advance_only, enabled)
+}
+
+pub fn (flags LoadFlags) ignore_global_advance_width() bool {
+	return flags.bit(ft_load_ignore_global_advance_width)
+}
+
+pub fn (mut flags LoadFlags) set_ignore_global_advance_width(enabled bool) {
+	flags.set_bit(ft_load_ignore_global_advance_width, enabled)
+}
+
+pub fn (flags LoadFlags) no_recurse() bool {
+	return flags.bit(ft_load_no_recurse)
+}
+
+pub fn (mut flags LoadFlags) set_no_recurse(enabled bool) {
+	flags.set_bit(ft_load_no_recurse, enabled)
+}
+
+pub fn (flags LoadFlags) ignore_transform() bool {
+	return flags.bit(ft_load_ignore_transform)
+}
+
+pub fn (mut flags LoadFlags) set_ignore_transform(enabled bool) {
+	flags.set_bit(ft_load_ignore_transform, enabled)
+}
+
+pub fn (flags LoadFlags) monochrome() bool {
+	return flags.bit(ft_load_monochrome)
+}
+
+pub fn (mut flags LoadFlags) set_monochrome(enabled bool) {
+	flags.set_bit(ft_load_monochrome, enabled)
+}
+
+pub fn (flags LoadFlags) linear_design() bool {
+	return flags.bit(ft_load_linear_design)
+}
+
+pub fn (mut flags LoadFlags) set_linear_design(enabled bool) {
+	flags.set_bit(ft_load_linear_design, enabled)
+}
+
+pub fn (flags LoadFlags) sbits_only() bool {
+	return flags.bit(ft_load_sbits_only)
+}
+
+pub fn (mut flags LoadFlags) set_sbits_only(enabled bool) {
+	flags.set_bit(ft_load_sbits_only, enabled)
+}
+
+pub fn (flags LoadFlags) no_autohint() bool {
+	return flags.bit(ft_load_no_autohint)
+}
+
+pub fn (mut flags LoadFlags) set_no_autohint(enabled bool) {
+	flags.set_bit(ft_load_no_autohint, enabled)
+}
+
+pub fn (flags LoadFlags) target() LoadTarget {
+	return unsafe { LoadTarget((flags.value & ft_load_target_mask) >> 16) }
+}
+
+pub fn (mut flags LoadFlags) set_target(target LoadTarget) {
+	flags.value = (flags.value & ~ft_load_target_mask) | i32(u32(target) << 16)
+}
+
+pub fn (flags LoadFlags) color() bool {
+	return flags.bit(ft_load_color)
+}
+
+pub fn (mut flags LoadFlags) set_color(enabled bool) {
+	flags.set_bit(ft_load_color, enabled)
+}
+
+pub fn (flags LoadFlags) compute_metrics() bool {
+	return flags.bit(ft_load_compute_metrics)
+}
+
+pub fn (mut flags LoadFlags) set_compute_metrics(enabled bool) {
+	flags.set_bit(ft_load_compute_metrics, enabled)
+}
+
+pub fn (flags LoadFlags) bitmap_metrics_only() bool {
+	return flags.bit(ft_load_bitmap_metrics_only)
+}
+
+pub fn (mut flags LoadFlags) set_bitmap_metrics_only(enabled bool) {
+	flags.set_bit(ft_load_bitmap_metrics_only, enabled)
+}
+
+pub fn (flags LoadFlags) svg_only() bool {
+	return flags.bit(ft_load_svg_only)
+}
+
+pub fn (mut flags LoadFlags) set_svg_only(enabled bool) {
+	flags.set_bit(ft_load_svg_only, enabled)
+}
+
+pub fn (flags LoadFlags) no_svg() bool {
+	return flags.bit(ft_load_no_svg)
+}
+
+pub fn (mut flags LoadFlags) set_no_svg(enabled bool) {
+	flags.set_bit(ft_load_no_svg, enabled)
 }
 
 // Tag represents a 4-byte OpenType table tag.
@@ -589,12 +797,15 @@ pub:
 
 // init creates a Tag from a 4-byte string.
 pub fn Tag.init(s string) Tag {
-	if s.len < 4 {
-		return Tag{}
-	}
+	assert s.len == 4
 	return Tag{
 		value: (u32(s[0]) << 24) | (u32(s[1]) << 16) | (u32(s[2]) << 8) | u32(s[3])
 	}
+}
+
+pub fn (tag Tag) str() string {
+	value := [u8(tag.value >> 24), u8(tag.value >> 16), u8(tag.value >> 8), u8(tag.value)]!
+	return value[..].bytestr()
 }
 
 // F26Dot6 is a 26.6 fixed-point number used by FreeType.
@@ -626,6 +837,24 @@ pub mut:
 	handle voidptr
 }
 
+pub struct Version {
+pub:
+	major i32
+	minor i32
+	patch i32
+}
+
+pub fn (version Version) to_string(mut buf []u8) !string {
+	text := '${version.major}.${version.minor}.${version.patch}'
+	if text.len > buf.len {
+		return error('FreeType version buffer is too small')
+	}
+	for i, byte in text.bytes() {
+		buf[i] = byte
+	}
+	return buf[..text.len].bytestr()
+}
+
 // init creates a new FreeType library instance.
 pub fn Library.init() !Library {
 	mut lib := voidptr(unsafe { nil })
@@ -644,6 +873,13 @@ pub fn (mut l Library) deinit() {
 		C.FT_Done_FreeType(l.handle)
 		l.handle = unsafe { nil }
 	}
+}
+
+// version returns the version of the loaded FreeType library.
+pub fn (l Library) version() Version {
+	mut result := Version{}
+	C.FT_Library_Version(l.handle, &result.major, &result.minor, &result.patch)
+	return result
 }
 
 // init_face creates a new face from a file path.
@@ -674,7 +910,7 @@ pub fn (l Library) init_memory_face(data []u8, index i32) !Face {
 		return error('FT_New_Memory_Face failed (${err})')
 	}
 	return Face{
-		handle: ft_face
+		handle:      ft_face
 		memory_data: owned
 	}
 }
@@ -718,18 +954,15 @@ pub fn (f Face) ref() {
 
 // select_charmap selects a character map encoding.
 pub fn (f Face) select_charmap(encoding Encoding) ! {
-	tag := match encoding {
-		.unicode { ft_encoding_unicode }
-	}
-	err := C.FT_Select_Charmap(f.handle, tag)
+	err := C.FT_Select_Charmap(f.handle, u32(encoding))
 	if err != 0 {
 		return error('FT_Select_Charmap failed (${err})')
 	}
 }
 
 // set_char_size sets the character size in 26.6 fractional points.
-pub fn (f Face) set_char_size(width i32, height i32, h_res u32, v_res u32) ! {
-	err := C.FT_Set_Char_Size(f.handle, i64(width), i64(height), h_res, v_res)
+pub fn (f Face) set_char_size(width i32, height i32, h_res u16, v_res u16) ! {
+	err := C.FT_Set_Char_Size(f.handle, i64(width), i64(height), u32(h_res), u32(v_res))
 	if err != 0 {
 		return error('FT_Set_Char_Size failed (${err})')
 	}
@@ -749,12 +982,7 @@ pub fn (f Face) render_glyph(mode RenderMode) ! {
 		return error('freetype face not initialized')
 	}
 	slot := C.witty_ft_glyph(f.handle)
-	render_mode := match mode {
-		.normal { 0 }
-		.light { 1 }
-		.mono { 2 }
-	}
-	err := C.FT_Render_Glyph(slot, render_mode)
+	err := C.FT_Render_Glyph(slot, int(mode))
 	if err != 0 {
 		return error('FT_Render_Glyph failed (${err})')
 	}
@@ -808,14 +1036,14 @@ pub fn (f Face) get_mm_var() !MMVar {
 	for i in 0 .. num_axis {
 		name_ptr := C.witty_ft_mm_axis_name(raw, i)
 		axes << MMAxis{
-			tag: C.witty_ft_mm_axis_tag(raw, i)
-			name: if name_ptr == unsafe { nil } {
+			tag:     C.witty_ft_mm_axis_tag(raw, i)
+			name:    if name_ptr == unsafe { nil } {
 				''
 			} else {
 				unsafe { cstring_to_vstring(name_ptr) }
 			}
 			minimum: C.witty_ft_mm_axis_minimum(raw, i)
-			def: C.witty_ft_mm_axis_default(raw, i)
+			def:     C.witty_ft_mm_axis_default(raw, i)
 			maximum: C.witty_ft_mm_axis_maximum(raw, i)
 		}
 	}
@@ -844,19 +1072,33 @@ pub fn (f Face) get_var_design_coordinates(mut coords []i64) ! {
 	}
 }
 
+// set_transform sets the transform applied when glyphs are loaded.
+pub fn (f Face) set_transform(matrix ?&Matrix, delta ?&Vector) {
+	mut matrix_ptr := voidptr(unsafe { nil })
+	mut delta_ptr := voidptr(unsafe { nil })
+	if value := matrix {
+		matrix_ptr = voidptr(value)
+	}
+	if value := delta {
+		delta_ptr = voidptr(value)
+	}
+	C.FT_Set_Transform(f.handle, matrix_ptr, delta_ptr)
+}
+
 // get_sfnt_name_count returns the number of name table entries.
-pub fn (f Face) get_sfnt_name_count() u32 {
-	return C.FT_Get_Sfnt_Name_Count(f.handle)
+pub fn (f Face) get_sfnt_name_count() usize {
+	return usize(C.FT_Get_Sfnt_Name_Count(f.handle))
 }
 
 // get_sfnt_name returns the name table entry at the given index.
-pub fn (f Face) get_sfnt_name(index u32) !SfntName {
+pub fn (f Face) get_sfnt_name(index usize) !SfntName {
 	mut name_id := u16(0)
 	mut platform_id := u16(0)
 	mut encoding_id := u16(0)
 	mut bytes := &u8(unsafe { nil })
 	mut length := u32(0)
-	err := C.witty_ft_get_sfnt_name(f.handle, index, &name_id, &platform_id, &encoding_id, &bytes, &length)
+	err := C.witty_ft_get_sfnt_name(f.handle, u32(index), &name_id, &platform_id, &encoding_id,
+		&bytes, &length)
 	if err != 0 {
 		return error('FT_Get_Sfnt_Name failed (${err})')
 	}
@@ -865,11 +1107,11 @@ pub fn (f Face) get_sfnt_name(index u32) !SfntName {
 		data[i] = unsafe { bytes[i] }
 	}
 	return SfntName{
-		name_id: name_id
+		name_id:     name_id
 		platform_id: platform_id
 		encoding_id: encoding_id
 		string_data: data
-		string_len: length
+		string_len:  length
 	}
 }
 
@@ -880,7 +1122,7 @@ pub fn (f Face) get_sfnt_name(index u32) !SfntName {
 //   .os2  -> &TT_OS2
 //   .hhea -> &TT_HoriHeader
 pub fn (f Face) get_sfnt_table_head() ?&TT_Header {
-	table := C.FT_Get_Sfnt_Table(f.handle, ft_sfnt_head)
+	table := C.FT_Get_Sfnt_Table(f.handle, int(SfntTag.head))
 	if isnil(table) {
 		return none
 	}
@@ -888,45 +1130,45 @@ pub fn (f Face) get_sfnt_table_head() ?&TT_Header {
 }
 
 pub fn (f Face) get_sfnt_table_post() ?&TT_Postscript {
-	table := C.FT_Get_Sfnt_Table(f.handle, ft_sfnt_post)
+	table := C.FT_Get_Sfnt_Table(f.handle, int(SfntTag.post))
 	if isnil(table) {
 		return none
 	}
 	return &TT_Postscript{
-		underline_position: C.witty_tt_post_underline_position(table)
+		underline_position:  C.witty_tt_post_underline_position(table)
 		underline_thickness: C.witty_tt_post_underline_thickness(table)
 	}
 }
 
 pub fn (f Face) get_sfnt_table_os2() ?&TT_OS2 {
-	table := C.FT_Get_Sfnt_Table(f.handle, ft_sfnt_os2)
+	table := C.FT_Get_Sfnt_Table(f.handle, int(SfntTag.os2))
 	if isnil(table) {
 		return none
 	}
 	return &TT_OS2{
-		version: C.witty_tt_os2_version(table)
-		s_typo_ascender: C.witty_tt_os2_typo_ascender(table)
-		s_typo_descender: C.witty_tt_os2_typo_descender(table)
-		s_typo_line_gap: C.witty_tt_os2_typo_line_gap(table)
-		fs_selection: C.witty_tt_os2_selection(table)
-		us_win_ascent: C.witty_tt_os2_win_ascent(table)
-		us_win_descent: C.witty_tt_os2_win_descent(table)
-		s_cap_height: C.witty_tt_os2_cap_height(table)
-		sx_height: C.witty_tt_os2_x_height(table)
-		y_strikeout_size: C.witty_tt_os2_strikeout_size(table)
+		version:              C.witty_tt_os2_version(table)
+		s_typo_ascender:      C.witty_tt_os2_typo_ascender(table)
+		s_typo_descender:     C.witty_tt_os2_typo_descender(table)
+		s_typo_line_gap:      C.witty_tt_os2_typo_line_gap(table)
+		fs_selection:         C.witty_tt_os2_selection(table)
+		us_win_ascent:        C.witty_tt_os2_win_ascent(table)
+		us_win_descent:       C.witty_tt_os2_win_descent(table)
+		s_cap_height:         C.witty_tt_os2_cap_height(table)
+		sx_height:            C.witty_tt_os2_x_height(table)
+		y_strikeout_size:     C.witty_tt_os2_strikeout_size(table)
 		y_strikeout_position: C.witty_tt_os2_strikeout_position(table)
 	}
 }
 
 pub fn (f Face) get_sfnt_table_hhea() ?&TT_HoriHeader {
-	table := C.FT_Get_Sfnt_Table(f.handle, ft_sfnt_hhea)
+	table := C.FT_Get_Sfnt_Table(f.handle, int(SfntTag.hhea))
 	if isnil(table) {
 		return none
 	}
 	return &TT_HoriHeader{
-		ascender: C.witty_tt_hhea_ascender(table)
+		ascender:  C.witty_tt_hhea_ascender(table)
 		descender: C.witty_tt_hhea_descender(table)
-		line_gap: C.witty_tt_hhea_line_gap(table)
+		line_gap:  C.witty_tt_hhea_line_gap(table)
 	}
 }
 
@@ -952,13 +1194,13 @@ pub fn (f Face) size_metrics() ?SizeMetrics {
 		return none
 	}
 	return SizeMetrics{
-		x_ppem: C.witty_ft_size_x_ppem(size)
-		y_ppem: C.witty_ft_size_y_ppem(size)
-		x_scale: C.witty_ft_size_x_scale(size)
-		y_scale: C.witty_ft_size_y_scale(size)
-		ascender: C.witty_ft_size_ascender(size)
-		descender: C.witty_ft_size_descender(size)
-		height: C.witty_ft_size_height(size)
+		x_ppem:      C.witty_ft_size_x_ppem(size)
+		y_ppem:      C.witty_ft_size_y_ppem(size)
+		x_scale:     C.witty_ft_size_x_scale(size)
+		y_scale:     C.witty_ft_size_y_scale(size)
+		ascender:    C.witty_ft_size_ascender(size)
+		descender:   C.witty_ft_size_descender(size)
+		height:      C.witty_ft_size_height(size)
 		max_advance: C.witty_ft_size_max_advance(size)
 	}
 }
@@ -971,29 +1213,29 @@ pub fn (f Face) glyph() ?GlyphSlotRec {
 	bitmap_ptr := C.witty_ft_glyph_bitmap(slot)
 	outline_ptr := C.witty_ft_glyph_outline(slot)
 	return GlyphSlotRec{
-		raw: slot
-		advance: Vector{
+		raw:         slot
+		advance:     Vector{
 			x: C.witty_ft_glyph_advance_x(slot)
 			y: C.witty_ft_glyph_advance_y(slot)
 		}
-		metrics: GlyphMetrics{
-			width: C.witty_ft_glyph_width(slot)
-			height: C.witty_ft_glyph_height(slot)
+		metrics:     GlyphMetrics{
+			width:          C.witty_ft_glyph_width(slot)
+			height:         C.witty_ft_glyph_height(slot)
 			hori_bearing_x: C.witty_ft_glyph_bearing_x(slot)
 			hori_bearing_y: C.witty_ft_glyph_bearing_y(slot)
 		}
-		bitmap: Bitmap{
-			rows: C.witty_ft_bitmap_rows(bitmap_ptr)
-			width: C.witty_ft_bitmap_width(bitmap_ptr)
-			pitch: C.witty_ft_bitmap_pitch(bitmap_ptr)
-			buffer: C.witty_ft_bitmap_buffer(bitmap_ptr)
-			num_grays: C.witty_ft_bitmap_num_grays(bitmap_ptr)
+		bitmap:      Bitmap{
+			rows:       C.witty_ft_bitmap_rows(bitmap_ptr)
+			width:      C.witty_ft_bitmap_width(bitmap_ptr)
+			pitch:      C.witty_ft_bitmap_pitch(bitmap_ptr)
+			buffer:     C.witty_ft_bitmap_buffer(bitmap_ptr)
+			num_grays:  C.witty_ft_bitmap_num_grays(bitmap_ptr)
 			pixel_mode: C.witty_ft_bitmap_pixel_mode(bitmap_ptr)
 		}
 		bitmap_left: C.witty_ft_glyph_bitmap_left(slot)
-		bitmap_top: C.witty_ft_glyph_bitmap_top(slot)
-		outline: Outline{ raw: outline_ptr }
-		format: C.witty_ft_glyph_format(slot)
+		bitmap_top:  C.witty_ft_glyph_bitmap_top(slot)
+		outline:     Outline{ raw: outline_ptr }
+		format:      C.witty_ft_glyph_format(slot)
 	}
 }
 
@@ -1005,8 +1247,15 @@ pub fn (f Face) select_size(index i32) ! {
 	}
 }
 
+// SfntTableValue represents Ghostty's optional raw SFNT table slice.
+pub struct SfntTableValue {
+pub:
+	has_value bool
+	data      []u8
+}
+
 // load_sfnt_table loads raw SFNT table data by tag.
-pub fn (f Face) load_sfnt_table(tag Tag) ![]u8 {
+pub fn (f Face) load_sfnt_table(tag Tag) !SfntTableValue {
 	if isnil(f.handle) {
 		return error('freetype face not initialized')
 	}
@@ -1017,7 +1266,7 @@ pub fn (f Face) load_sfnt_table(tag Tag) ![]u8 {
 		return error('FT_Load_Sfnt_Table (length) failed (${err})')
 	}
 	if length == 0 {
-		return error('table not found')
+		return SfntTableValue{}
 	}
 	// Then read the table bytes into a freshly allocated buffer.
 	mut buf := []u8{len: int(length)}
@@ -1025,7 +1274,20 @@ pub fn (f Face) load_sfnt_table(tag Tag) ![]u8 {
 	if err2 != 0 {
 		return error('FT_Load_Sfnt_Table (read) failed (${err2})')
 	}
-	return buf
+	return SfntTableValue{
+		has_value: true
+		data:      buf
+	}
+}
+
+// has_sfnt_table reports whether a raw SFNT table exists and is non-empty.
+pub fn (f Face) has_sfnt_table(tag Tag) bool {
+	if isnil(f.handle) {
+		return false
+	}
+	mut length := u64(0)
+	err := C.FT_Load_Sfnt_Table(f.handle, u64(tag.value), 0, &u8(unsafe { nil }), &length)
+	return err == 0 && length != 0
 }
 
 // ============================================================
@@ -1120,8 +1382,8 @@ pub fn glyph_slot_own_bitmap(mut glyph GlyphSlotRec) ! {
 // ============================================================
 
 // mul_fix performs a 16.16 fixed-point multiply.
-pub fn mul_fix(a i64, b i64) i64 {
-	return C.FT_MulFix(a, b)
+pub fn mul_fix(a i32, b i32) i32 {
+	return i32(C.FT_MulFix(i64(a), i64(b)))
 }
 
 // f26dot6_to_f64 converts a raw 26.6 fixed-point i64 to f64.

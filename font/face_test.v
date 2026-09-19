@@ -142,7 +142,8 @@ fn test_svg_font_table() {
 	}) or { panic(err) }
 	defer { face.deinit() }
 	table := face.copy_table('SVG ') or { panic(err) }
-	assert table.len == 430
+	assert table.has_value
+	assert table.data.len == 430
 }
 
 fn test_bitmap_glyph() {
