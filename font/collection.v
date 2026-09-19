@@ -416,14 +416,6 @@ pub fn PresentationMode.any() PresentationMode {
 	}
 }
 
-// requested returns the presentation constraint represented by this mode.
-pub fn (p PresentationMode) requested() ?Presentation {
-	return match p.kind {
-		.explicit_, .default_ { p.presentation }
-		.any { none }
-	}
-}
-
 // ============================================================
 // Index
 // ============================================================

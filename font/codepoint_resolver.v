@@ -1,5 +1,7 @@
 module font
 
+import log
+
 // CodepointResolver maps a codepoint to a font. It is more dynamic
 // than "Collection" since it supports mapping codepoint ranges to
 // specific fonts, searching for fallback fonts, and more.
@@ -20,6 +22,7 @@ module font
 // Packed array of booleans to indicate if a style is enabled or not.
 pub struct StyleStatus {
 pub mut:
+	regular     bool = true
 	bold        bool = true
 	italic      bool = true
 	bold_italic bool = true
@@ -28,16 +31,17 @@ pub mut:
 // init_fill creates a StyleStatus with all styles set to the given value.
 pub fn StyleStatus.init_fill(val bool) StyleStatus {
 	return StyleStatus{
+		regular: val
 		bold: val
 		italic: val
 		bold_italic: val
 	}
 }
 
-// get returns whether the given style is enabled. Regular is always enabled.
+// get returns whether the given style is enabled.
 pub fn (s &StyleStatus) get(style Style) bool {
 	return match style {
-		.regular { true }
+		.regular { s.regular }
 		.bold { s.bold }
 		.italic { s.italic }
 		.bold_italic { s.bold_italic }
@@ -47,7 +51,9 @@ pub fn (s &StyleStatus) get(style Style) bool {
 // set enables or disables a specific style.
 pub fn (mut s StyleStatus) set(style Style, val bool) {
 	match style {
-		.regular {} // Regular cannot be disabled
+		.regular {
+			s.regular = val
+		}
 		.bold {
 			s.bold = val
 		}
@@ -267,8 +273,11 @@ pub fn (mut self CodepointResolver) get_index(cp u32, style Style, p ?Presentati
 	}
 
 	// Codepoint overrides.
-	override_result := self.get_index_codepoint_override(cp)
-	if idx := override_result {
+	override_result := self.get_index_codepoint_override(cp) or {
+		log.warn('codepoint override failed codepoint=${cp} err=${err}')
+		IndexOverrideResult{}
+	}
+	if idx := override_result.index {
 		return idx
 	}
 
@@ -307,31 +316,39 @@ pub fn (mut self CodepointResolver) get_index(cp u32, style Style, p ?Presentati
 
 	// If we are regular, try looking for a fallback using discovery.
 	if style == .regular && self.discover != unsafe { nil } {
+		log.debug('searching for a fallback font for cp=${cp:X}')
 		if load_opts := self.collection.load_options {
 			desc := Descriptor{
 				codepoint: cp
 				size: load_opts.size.points
+				bold: style == .bold || style == .bold_italic
+				italic: style == .italic || style == .bold_italic
 				monospace: false
 			}
-			mut it := self.discover.discover_fallback(mut self.collection, desc) or {
-				return self.collection.get_index(cp, .regular, PresentationMode.any())
-			}
-			defer { it.deinit() }
-			for {
-				mut deferred := it.next() or { break }
-				if !deferred.has_codepoint(cp, p_mode.requested()) {
-					deferred.deinit()
-					continue
+			if mut it := self.discover.discover_fallback(mut self.collection, desc) {
+				defer { it.deinit() }
+				for {
+					mut deferred := it.next() or { break }
+					face := Entry{
+						deferred_face: deferred
+						fallback: true
+					}
+					if !face.has_codepoint(cp, p_mode) {
+						deferred.deinit()
+						continue
+					}
+					log.info('found codepoint 0x${cp:X} in fallback face=${deferred.deferred_name()}')
+					idx := self.collection.add_deferred(deferred, AddOptions{
+						style: style
+						fallback: true
+						size_adjustment: default_fallback_adjustment
+					}) or {
+						deferred.deinit()
+						break
+					}
+					return idx
 				}
-				idx := self.collection.add_deferred(deferred, AddOptions{
-					style: style
-					fallback: true
-					size_adjustment: default_fallback_adjustment
-				}) or {
-					deferred.deinit()
-					break
-				}
-				return idx
+				log.debug('no fallback face found for cp=${cp:X}')
 			}
 		}
 	}
@@ -349,19 +366,27 @@ pub fn (mut self CodepointResolver) get_index(cp u32, style Style, p ?Presentati
 
 // get_index_codepoint_override checks if the codepoint is in the map of
 // codepoint overrides, finds the override font, and returns it.
-fn (mut self CodepointResolver) get_index_codepoint_override(cp u32) ?Index {
+struct IndexOverrideResult {
+	index ?Index
+}
+
+fn (mut self CodepointResolver) get_index_codepoint_override(cp u32) !IndexOverrideResult {
 	if self.discover == unsafe { nil } {
-		return none
+		return IndexOverrideResult{}
 	}
 
 	// Get our codepoint map. If we have no map set then we have no
 	// codepoint overrides and we're done.
-	cmap := self.codepoint_map or { return none }
+	cmap := self.codepoint_map or { return IndexOverrideResult{} }
 
-	// If the codepoint isn't in the map, then we don't have an override.
+	// If the codepoint doesn't fit the source u21 type or isn't in the map,
+	// then we don't have an override.
 	// The map returns a descriptor that can be used with font discovery
 	// to search for a matching font.
-	desc := cmap.get(cp) or { return none }
+	if cp > 0x1fffff {
+		return IndexOverrideResult{}
+	}
+	desc := cmap.get(cp) or { return IndexOverrideResult{} }
 
 	// Fast path: the descriptor is already loaded. This means that we
 	// already did the search before and we have an exact font for this
@@ -369,45 +394,39 @@ fn (mut self CodepointResolver) get_index_codepoint_override(cp u32) ?Index {
 	if cached := self.descriptor_cache.get(desc) {
 		if !cached.has_index {
 			// Negative cache entry: we searched but found nothing.
-			return none
+			return IndexOverrideResult{}
 		}
 		idx := cached.index
 
 		// We need to verify that this index has the codepoint we want.
 		if self.collection.has_codepoint(idx, cp, PresentationMode.any()) {
-			return idx
+			log.debug('codepoint override based on config codepoint=${cp} family=${desc.family or { '' }}')
+			return IndexOverrideResult{ index: idx }
 		}
-		return none
+		return IndexOverrideResult{}
 	}
 
-	// Slow path: discover the requested family and retain the first result
-	// that actually covers this codepoint.
-	mut query := desc.clone()
-	query.codepoint = cp
-	mut it := self.discover.discover(query) or {
-		self.descriptor_cache.put(desc, none)
-		return none
-	}
+	// Slow path: discover the requested descriptor and retain the first result.
+	mut it := self.discover.discover(desc)!
 	defer { it.deinit() }
-	for {
-		mut deferred := it.next() or { break }
-		if !deferred.has_codepoint(cp, none) {
-			deferred.deinit()
-			continue
-		}
-		idx := self.collection.add_deferred(deferred, AddOptions{
-			style: .regular
-			fallback: false
-			size_adjustment: default_fallback_adjustment
-		}) or {
-			deferred.deinit()
-			break
-		}
-		self.descriptor_cache.put(desc, idx)
-		return idx
+	deferred := it.next() or {
+		log.warn('font lookup for codepoint map failed codepoint=${cp} err=FontNotFound')
+		self.descriptor_cache.put(desc, none)
+		return IndexOverrideResult{}
 	}
-	self.descriptor_cache.put(desc, none)
-	return none
+
+	idx := self.collection.add_deferred(deferred, AddOptions{
+		style: .regular
+		fallback: false
+		size_adjustment: default_fallback_adjustment
+	})!
+	self.descriptor_cache.put(desc, idx)
+
+	if self.collection.has_codepoint(idx, cp, PresentationMode.any()) {
+		log.debug('codepoint override based on config codepoint=${cp} family=${desc.family or { '' }}')
+		return IndexOverrideResult{ index: idx }
+	}
+	return IndexOverrideResult{}
 }
 
 // get_presentation returns the presentation for a specific font index.
@@ -440,7 +459,7 @@ pub fn (mut self CodepointResolver) render_glyph(mut atlas Atlas, index Index, g
 		match sp {
 			.sprite {
 				mut sprite := self.sprite or {
-					return error('sprite face not set')
+					panic('sprite face not set')
 				}
 				return sprite.render_glyph(mut atlas, glyph_index, opts)!
 			}

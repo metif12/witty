@@ -30,8 +30,7 @@ fn test_style_status_defaults() {
 
 fn test_style_status_init_fill_false() {
 	s := StyleStatus.init_fill(false)
-	// Regular is always enabled regardless of init_fill.
-	assert s.get(.regular) == true
+	assert s.get(.regular) == false
 	assert s.get(.bold) == false
 	assert s.get(.italic) == false
 	assert s.get(.bold_italic) == false
@@ -46,9 +45,9 @@ fn test_style_status_set() {
 	s.set(.italic, false)
 	assert s.get(.italic) == false
 
-	// Setting regular is a no-op.
+	// Every source enum-array element, including regular, is mutable.
 	s.set(.regular, false)
-	assert s.get(.regular) == true
+	assert s.get(.regular) == false
 }
 
 fn test_descriptor_cache_basic() {
