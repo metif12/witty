@@ -308,10 +308,10 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) ! {
 			self.set_mode(event.payload.mode, v)!
 		}
 		.request_mode {
-			self.request_mode(event.payload.mode)
+			self.request_mode(event.payload.mode)!
 		}
 		.request_mode_unknown {
-			self.request_mode_unknown(event.payload.raw_mode, event.payload.raw_ansi)
+			self.request_mode_unknown(event.payload.raw_mode, event.payload.raw_ansi)!
 		}
 		.top_and_bottom_margin {
 			self.terminal.set_top_and_bottom_margin(event.payload.num, event.payload.num2)
@@ -387,11 +387,11 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) ! {
 		}
 		.kitty_color_report {
 			// Kitty color protocol: query/set/reset colors (OSC 21).
-			self.kitty_color_report(event.payload.kitty_color_items, event.payload.osc_terminator)
+			self.kitty_color_report(event.payload.kitty_color_items, event.payload.osc_terminator)!
 		}
 		.color_operation {
 			// OSC color operations: set/query/reset palette and dynamic colors.
-			self.color_operation(event.payload.color_op, event.payload.color_requests, event.payload.osc_terminator)
+			self.color_operation(event.payload.color_op, event.payload.color_requests, event.payload.osc_terminator)!
 		}
 		.end_hyperlink {
 			self.end_hyperlink()!
@@ -403,13 +403,13 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) ! {
 			self.decaln()!
 		}
 		.window_title {
-			self.window_title(event.payload.str1)
+			self.window_title(event.payload.str1)!
 		}
 		.report_pwd {
 			self.report_pwd(event.payload.str1)!
 		}
 		.show_desktop_notification {
-			self.show_desktop_notification(event.payload.desktop_notification)
+			self.show_desktop_notification(event.payload.desktop_notification)!
 		}
 		.progress_report {
 			self.progress_report(event.payload.progress_report)
@@ -418,13 +418,13 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) ! {
 			self.start_hyperlink(event.payload.hyperlink.uri, event.payload.hyperlink.id)!
 		}
 		.clipboard_contents {
-			self.clipboard_contents(event.payload.clipboard.kind, event.payload.clipboard.data)
+			self.clipboard_contents(event.payload.clipboard.kind, event.payload.clipboard.data)!
 		}
 		.semantic_prompt {
-			self.semantic_prompt(event.payload)
+			self.semantic_prompt(event.payload)!
 		}
 		.mouse_shape {
-			self.set_mouse_shape(event.payload.mouse_shape_val)
+			self.set_mouse_shape(event.payload.mouse_shape_val)!
 		}
 		.configure_charset {
 			self.terminal.configure_charset(event.payload.charset_slot, event.payload.charset_val)
@@ -707,14 +707,14 @@ pub fn (mut self StreamHandler) set_modify_key_format(format terminal.ModifyKeyF
 // Mode request/response
 // ============================================================
 
-fn (mut self StreamHandler) request_mode(mode terminal.Mode) {
+fn (mut self StreamHandler) request_mode(mode terminal.Mode) ! {
 	code := if self.terminal.modes.get(mode) { u8(1) } else { u8(2) }
 	prefix := if terminal.mode_is_ansi(mode) { '' } else { '?' }
 	resp := '\x1b[${prefix}${terminal.mode_value(mode)};${code}\$y'
 	self.message_writer(Message.write_req(resp))
 }
 
-fn (mut self StreamHandler) request_mode_unknown(mode_raw u16, ansi bool) {
+fn (mut self StreamHandler) request_mode_unknown(mode_raw u16, ansi bool) ! {
 	prefix := if ansi { '' } else { '?' }
 	resp := '\x1b[${prefix}${mode_raw};0\$y'
 	self.message_writer(Message.write_req(resp))
@@ -854,37 +854,37 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) ! {
 		.mouse_event_x10 {
 			if enabled {
 				self.terminal.flags.set_mouse_event(.x10)
-				self.set_mouse_shape(.default_)
+				self.set_mouse_shape(.default_)!
 			} else {
 				self.terminal.flags.set_mouse_event(.none)
-				self.set_mouse_shape(.text)
+				self.set_mouse_shape(.text)!
 			}
 		}
 		.mouse_event_normal {
 			if enabled {
 				self.terminal.flags.set_mouse_event(.normal)
-				self.set_mouse_shape(.default_)
+				self.set_mouse_shape(.default_)!
 			} else {
 				self.terminal.flags.set_mouse_event(.none)
-				self.set_mouse_shape(.text)
+				self.set_mouse_shape(.text)!
 			}
 		}
 		.mouse_event_button {
 			if enabled {
 				self.terminal.flags.set_mouse_event(.button)
-				self.set_mouse_shape(.default_)
+				self.set_mouse_shape(.default_)!
 			} else {
 				self.terminal.flags.set_mouse_event(.none)
-				self.set_mouse_shape(.text)
+				self.set_mouse_shape(.text)!
 			}
 		}
 		.mouse_event_any {
 			if enabled {
 				self.terminal.flags.set_mouse_event(.any)
-				self.set_mouse_shape(.default_)
+				self.set_mouse_shape(.default_)!
 			} else {
 				self.terminal.flags.set_mouse_event(.none)
-				self.set_mouse_shape(.text)
+				self.set_mouse_shape(.text)!
 			}
 		}
 		.mouse_format_utf8 {
@@ -1043,7 +1043,7 @@ fn (mut self StreamHandler) configure_charset(slot terminal.CharsetSlot, set ter
 
 pub fn (mut self StreamHandler) full_reset() ! {
 	self.terminal.full_reset()
-	self.set_mouse_shape(.text)
+	self.set_mouse_shape(.text)!
 
 	// Reset resets our palette so we report it for mode 2031.
 	self.message_writer(Message.color_scheme_report_msg(false))
@@ -1077,7 +1077,7 @@ pub fn (mut self StreamHandler) report_xtversion() ! {
 // OSC handlers
 // ============================================================
 
-fn (mut self StreamHandler) window_title(title string) {
+fn (mut self StreamHandler) window_title(title string) ! {
 	mut buf := [256]u8{}
 	if title.len >= buf.len {
 		// Title larger than our buffer, ignore
@@ -1120,7 +1120,7 @@ fn (mut self StreamHandler) window_title(title string) {
 	self.surface_message_writer(msg)
 }
 
-fn (mut self StreamHandler) set_mouse_shape(shape terminal.MouseShape) {
+fn (mut self StreamHandler) set_mouse_shape(shape terminal.MouseShape) ! {
 	// Avoid changing the shape if it is already set to avoid excess
 	// cross-thread messaging.
 	if self.terminal.mouse_shape == shape {
@@ -1134,7 +1134,7 @@ fn (mut self StreamHandler) set_mouse_shape(shape terminal.MouseShape) {
 	})
 }
 
-fn (mut self StreamHandler) clipboard_contents(kind u8, data string) {
+fn (mut self StreamHandler) clipboard_contents(kind u8, data string) ! {
 	// Note: we ignore the "kind" field and always use the standard clipboard.
 	// iTerm also appears to do this but other terminals seem to only allow
 	// certain. Let's investigate more.
@@ -1163,7 +1163,7 @@ fn (mut self StreamHandler) clipboard_contents(kind u8, data string) {
 	})
 }
 
-fn (mut self StreamHandler) semantic_prompt(payload terminal.ActionPayload) {
+fn (mut self StreamHandler) semantic_prompt(payload terminal.ActionPayload) ! {
 	match payload.semantic_prompt_action {
 		.end_input_start_output {
 			self.surface_message_writer(apprt.SurfaceMessage{ kind: .start_command })
@@ -1192,7 +1192,7 @@ fn (mut self StreamHandler) report_pwd(url string) ! {
 		// If we haven't seen a title, we're using the pwd as our title.
 		// Set it to blank which will reset our title behavior.
 		if !self.seen_title {
-			self.window_title('')
+			self.window_title('')!
 		}
 
 		// Report the change.
@@ -1240,7 +1240,7 @@ fn (mut self StreamHandler) report_pwd(url string) ! {
 
 	// If we haven't seen a title, use our pwd as the title.
 	if !self.seen_title {
-		self.window_title(uri.path)
+		self.window_title(uri.path)!
 		self.seen_title = false
 	}
 }
@@ -1251,7 +1251,7 @@ fn (mut self StreamHandler) report_pwd(url string) ! {
 
 // color_operation applies the already-parsed OSC color requests. Parsing is
 // performed once by osc.Parser, matching Ghostty's typed stream action.
-fn (mut self StreamHandler) color_operation(op osc.ColorOperation, requests []osc.ColorRequest, terminator osc.Terminator) {
+fn (mut self StreamHandler) color_operation(op osc.ColorOperation, requests []osc.ColorRequest, terminator osc.Terminator) ! {
 	_ = op
 	if requests.len == 0 {
 		return
@@ -1420,7 +1420,7 @@ fn (mut self StreamHandler) notify_color_change(target osc.ColorTarget, color te
 // ============================================================
 
 // kitty_color_report applies the parsed Kitty OSC 21 operations.
-fn (mut self StreamHandler) kitty_color_report(items []osc.KittyColorItem, terminator osc.Terminator) {
+fn (mut self StreamHandler) kitty_color_report(items []osc.KittyColorItem, terminator osc.Terminator) ! {
 	mut response := ''
 
 	for item in items {
@@ -1543,7 +1543,7 @@ fn hex4(v u8) string {
 	return '${digits[int((scaled >> 12) & 0x0F)]:c}${digits[int((scaled >> 8) & 0x0F)]:c}${digits[int((scaled >> 4) & 0x0F)]:c}${digits[int(scaled & 0x0F)]:c}'
 }
 
-fn (mut self StreamHandler) show_desktop_notification(notification osc.DesktopNotification) {
+fn (mut self StreamHandler) show_desktop_notification(notification osc.DesktopNotification) ! {
 	mut msg := apprt.SurfaceMessage{
 		kind: .desktop_notification
 	}

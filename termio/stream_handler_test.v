@@ -108,7 +108,7 @@ fn test_desktop_notification_forwards_typed_payload() ! {
 	handler.show_desktop_notification(osc.DesktopNotification{
 		title: 'Compiler'
 		body: 'Build failed'
-	})
+	})!
 	assert ctx.messages.len == 1
 	assert ctx.messages[0].kind == .desktop_notification
 	assert ctx.messages[0].notification_title[..8].bytestr() == 'Compiler'
@@ -125,7 +125,7 @@ fn test_desktop_notification_preserves_full_sentinel_array_payloads() ! {
 	handler.show_desktop_notification(osc.DesktopNotification{
 		title: title
 		body: body
-	})
+	})!
 
 	assert ctx.messages.len == 1
 	assert ctx.messages[0].notification_title[..63].bytestr() == title
@@ -238,7 +238,7 @@ fn test_stream_handler_request_mode_uses_dec_protocol_value() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
 
-	handler.request_mode(.cursor_visible)
+	handler.request_mode(.cursor_visible)!
 
 	msg := ctx.mailbox.pop() or { panic('expected DECRQM response') }
 	assert msg.kind == .write_small
@@ -249,7 +249,7 @@ fn test_stream_handler_request_mode_uses_ansi_protocol_value() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
 
-	handler.request_mode(.insert)
+	handler.request_mode(.insert)!
 
 	msg := ctx.mailbox.pop() or { panic('expected DECRQM response') }
 	assert msg.kind == .write_small
@@ -879,7 +879,7 @@ fn test_stream_handler_clipboard_read_forwards_clipboard_type() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
 
-	handler.clipboard_contents(`p`, '?')
+	handler.clipboard_contents(`p`, '?')!
 
 	assert ctx.messages.len == 1
 	assert ctx.messages[0].kind == .clipboard_read
@@ -890,7 +890,7 @@ fn test_stream_handler_clipboard_write_forwards_contents_and_type() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
 
-	handler.clipboard_contents(`s`, 'translated clipboard data')
+	handler.clipboard_contents(`s`, 'translated clipboard data')!
 
 	assert ctx.messages.len == 1
 	assert ctx.messages[0].kind == .clipboard_write
@@ -903,7 +903,7 @@ fn test_stream_handler_clipboard_write_owns_contents() ! {
 	defer { ctx.t.deinit() }
 
 	mut data := 'owned clipboard data'.bytes()
-	handler.clipboard_contents(`c`, data.bytestr())
+	handler.clipboard_contents(`c`, data.bytestr())!
 	data[0] = `X`
 
 	assert ctx.messages[0].clipboard_write_req.slice().bytestr() == 'owned clipboard data'
@@ -937,7 +937,7 @@ fn test_stream_handler_report_pwd_preserves_kitty_raw_path() ! {
 fn test_stream_handler_window_title_empty() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.window_title('')
+	handler.window_title('')!
 	assert !handler.seen_title
 }
 
@@ -945,6 +945,6 @@ fn test_stream_handler_window_title_empty() ! {
 fn test_stream_handler_window_title() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.window_title('My Terminal')
+	handler.window_title('My Terminal')!
 	assert handler.seen_title
 }
