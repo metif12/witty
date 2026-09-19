@@ -32,11 +32,11 @@ fn test_ghostty_string_owns_c_string() {
 
 fn test_ghostty_string_owns_byte_slice() {
 	mut source := 'hello'.bytes()
-	value := GhosttyString.from_bytes(source)
+	value := GhosttyString.from_slice(source)
 	source[0] = `j`
 	assert !value.sentinel
 	assert value.bytes().bytestr() == 'hello'
-	ghostty_string_free(value)
+	value.deinit()
 }
 
 fn test_ghostty_translate_falls_back_to_original_message() {

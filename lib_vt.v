@@ -125,7 +125,7 @@ pub type InputKeyMods = input.Mods
 pub type InputKeyEncodeOptions = input.Options
 
 pub fn input_is_safe_paste(data string) bool {
-	return input.paste_is_safe(data)
+	return input.is_safe(data)
 }
 
 pub fn input_encode_paste(data string, opts InputPasteOptions) ![3]string {

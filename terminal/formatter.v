@@ -2023,7 +2023,7 @@ fn format_style_vt_with_palette(style CellStyle, palette ?[]RGB) string {
 	}
 
 	// Underline color
-	match style.underline_color {
+	match style.underline_color_type {
 		.palette {
 			if pal := palette {
 				rgb := pal[int(style.underline_palette)]
@@ -2075,7 +2075,7 @@ fn format_style_html_with_palette(style CellStyle, palette ?[]RGB) string {
 		}
 		.none {}
 	}
-	match style.underline_color {
+	match style.underline_color_type {
 		.palette {
 			if pal := palette {
 				rgb := pal[int(style.underline_palette)]

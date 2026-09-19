@@ -363,7 +363,7 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 		.device_status {
 			// The stream dispatches with num=param and flag=question.
 			// Convert back to a DeviceStatusRequest and call device_status_report().
-			if req := terminal.DeviceStatusRequest.from_int(event.payload.num, event.payload.flag) {
+			if req := terminal.req_from_int(event.payload.num, event.payload.flag) {
 				self.device_status_report(req)
 			}
 		}

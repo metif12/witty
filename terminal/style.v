@@ -144,7 +144,7 @@ pub fn (self &CellStyle) eql(other &CellStyle) bool {
 	return self.flags.int() == other.flags.int()
 		&& style_color_eql(self.fg_color, self.fg_r, self.fg_g, self.fg_b, self.fg_palette, other.fg_color, other.fg_r, other.fg_g, other.fg_b, other.fg_palette)
 		&& style_color_eql(self.bg_color, self.bg_r, self.bg_g, self.bg_b, self.bg_palette, other.bg_color, other.bg_r, other.bg_g, other.bg_b, other.bg_palette)
-		&& style_color_eql(self.underline_color, self.underline_r, self.underline_g, self.underline_b, self.underline_palette, other.underline_color, other.underline_r, other.underline_g, other.underline_b, other.underline_palette)
+		&& style_color_eql(self.underline_color_type, self.underline_r, self.underline_g, self.underline_b, self.underline_palette, other.underline_color_type, other.underline_r, other.underline_g, other.underline_b, other.underline_palette)
 }
 
 fn style_color_eql(tag ColorType, r u8, g u8, b u8, palette u8, other_tag ColorType, other_r u8, other_g u8, other_b u8, other_palette u8) bool {
@@ -247,8 +247,8 @@ pub fn (self &CellStyle) fg(opts FgOpts) RGB {
 }
 
 // Returns the underline color for this style.
-pub fn (self &CellStyle) underline_color_rgb(palette [256]RGB) ?RGB {
-	return match self.underline_color {
+pub fn (self &CellStyle) underline_color(palette [256]RGB) ?RGB {
+	return match self.underline_color_type {
 		.none { none }
 		.palette { palette[int(self.underline_palette)] }
 		.rgb {
@@ -273,9 +273,9 @@ pub fn (self &CellStyle) underline_color_rgb(palette [256]RGB) ?RGB {
 pub fn (self &CellStyle) hash() u64 {
 	fg_data := style_color_data(self.fg_color, self.fg_r, self.fg_g, self.fg_b, self.fg_palette)
 	bg_data := style_color_data(self.bg_color, self.bg_r, self.bg_g, self.bg_b, self.bg_palette)
-	underline_data := style_color_data(self.underline_color, self.underline_r, self.underline_g, self.underline_b, self.underline_palette)
+	underline_data := style_color_data(self.underline_color_type, self.underline_r, self.underline_g, self.underline_b, self.underline_palette)
 
-	low := u64(int(self.fg_color)) | (u64(int(self.bg_color)) << 8) | (u64(int(self.underline_color)) << 16) | (fg_data << 24) | ((bg_data & 0xffff) << 48)
+	low := u64(int(self.fg_color)) | (u64(int(self.bg_color)) << 8) | (u64(int(self.underline_color_type)) << 16) | (fg_data << 24) | ((bg_data & 0xffff) << 48)
 	high := (bg_data >> 16) | (underline_data << 8) | (u64(self.flags.int()) << 32)
 	return internal_hash.int_u64(low ^ high)
 }

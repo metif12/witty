@@ -1401,7 +1401,7 @@ fn (mut self Stream) csi_dsr(input CSIAction) {
 		}
 		question := input.intermediates.len == 1 && input.intermediates[0] == u8(`?`)
 
-		if request := DeviceStatusRequest.from_int(input.params[0], question) {
+		if request := req_from_int(input.params[0], question) {
 			self.dispatch(.device_status, ActionPayload{
 				device_status: request
 			})

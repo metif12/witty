@@ -6058,9 +6058,9 @@ fn (mut self Surface) complete_clipboard_paste(data string, allow_unsafe bool) !
 	if self.config.clipboard_paste_protection && !allow_unsafe {
 		unsafe_paste := if paste_opts.bracketed {
 			data.contains('\x1b[201~')
-				|| (!self.config.clipboard_paste_bracketed_safe && !input.paste_is_safe(data))
+				|| (!self.config.clipboard_paste_bracketed_safe && !input.is_safe(data))
 		} else {
-			!input.paste_is_safe(data)
+			!input.is_safe(data)
 		}
 		if unsafe_paste {
 			if locked {

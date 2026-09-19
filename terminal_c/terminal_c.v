@@ -54,12 +54,12 @@ pub fn rgb_get(c RGB) (u8, u8, u8) {
 // Paste (from c/paste.zig)
 // ============================================================
 
-// Check if paste data is safe. Delegates to input.paste_is_safe.
+// Check if paste data is safe. Delegates to input.is_safe.
 //
 // Data is considered unsafe if it contains newlines (which can inject
 // commands) or the bracketed paste end sequence (\x1b[201~).
 pub fn paste_is_safe(data string) bool {
-	return input.paste_is_safe(data)
+	return input.is_safe(data)
 }
 
 // ============================================================

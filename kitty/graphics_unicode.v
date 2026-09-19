@@ -383,7 +383,7 @@ fn color_to_id(ct terminal.ColorType, palette u8, r u8, g u8, b u8) u32 {
 
 // Get placement ID from underline color (if set).
 fn fn_placement_id(style terminal.CellStyle) ?u32 {
-	id := color_to_id(style.underline_color, style.underline_palette, style.underline_r, style.underline_g, style.underline_b)
+	id := color_to_id(style.underline_color_type, style.underline_palette, style.underline_r, style.underline_g, style.underline_b)
 	if id != 0 {
 		return id
 	}

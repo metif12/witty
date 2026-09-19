@@ -3256,17 +3256,17 @@ pub fn (mut self Screen) set_attribute(attr SgrAttribute) ! {
 			self.cursor.style.bg_color = .none
 		}
 		.underline_color {
-			self.cursor.style.underline_color = .rgb
+			self.cursor.style.underline_color_type = .rgb
 			self.cursor.style.underline_r = attr.r
 			self.cursor.style.underline_g = attr.g
 			self.cursor.style.underline_b = attr.b
 		}
 		.underline_color_256 {
-			self.cursor.style.underline_color = .palette
+			self.cursor.style.underline_color_type = .palette
 			self.cursor.style.underline_palette = attr.index
 		}
 		.reset_underline_color {
-			self.cursor.style.underline_color = .none
+			self.cursor.style.underline_color_type = .none
 		}
 		.unknown {
 			return

@@ -223,7 +223,7 @@ fn test_screen_style_underline_color_independent_from_fg() {
 	assert s.cursor.style.fg_b == 0
 
 	// The underline color is stored in its own fields.
-	assert s.cursor.style.underline_color == .rgb
+	assert s.cursor.style.underline_color_type == .rgb
 	assert s.cursor.style.underline_r == 0
 	assert s.cursor.style.underline_g == 255
 	assert s.cursor.style.underline_b == 0
@@ -235,33 +235,33 @@ fn test_screen_style_underline_color_independent_from_fg() {
 		palette: palette
 	})
 	assert fg.r == 255 && fg.g == 0 && fg.b == 0
-	ul := s.cursor.style.underline_color_rgb(palette) or { panic('expected underline color') }
+	ul := s.cursor.style.underline_color(palette) or { panic('expected underline color') }
 	assert ul.r == 0 && ul.g == 255 && ul.b == 0
 
 	// Palette underline color must read from underline_palette, not fg_palette.
 	palette[7] = RGB{ r: 11, g: 22, b: 33 }
 	s.set_attribute(SgrAttribute{ kind: .underline_color_256, index: 7 }) or { assert false }
-	assert s.cursor.style.underline_color == .palette
+	assert s.cursor.style.underline_color_type == .palette
 	assert s.cursor.style.underline_palette == 7
 	// fg is still the RGB red we set earlier, untouched by the palette write.
 	assert s.cursor.style.fg_color == .rgb
 	assert s.cursor.style.fg_r == 255
-	ul2 := s.cursor.style.underline_color_rgb(palette) or { panic('expected underline color') }
+	ul2 := s.cursor.style.underline_color(palette) or { panic('expected underline color') }
 	assert ul2.r == 11 && ul2.g == 22 && ul2.b == 33
 
 	// Reset clears only the underline color.
 	s.set_attribute(SgrAttribute{ kind: .reset_underline_color }) or { assert false }
-	assert s.cursor.style.underline_color == .none
+	assert s.cursor.style.underline_color_type == .none
 	assert s.cursor.style.fg_color == .rgb
 	assert s.cursor.style.fg_r == 255
 
 	// Two styles differing only in underline color must be distinct.
 	a := CellStyle{
-		underline_color: .rgb
+		underline_color_type: .rgb
 		underline_r: 1
 	}
 	b := CellStyle{
-		underline_color: .rgb
+		underline_color_type: .rgb
 		underline_r: 2
 	}
 	assert !a.eql(&b)

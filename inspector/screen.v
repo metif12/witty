@@ -189,7 +189,7 @@ fn draw_style(context cimgui.Context, style terminal.CellStyle, palette [256]ter
 	draw_style_color(context, 'bg', style.bg_color, style.bg_palette, terminal.RGB{ r: style.bg_r, g: style.bg_g, b: style.bg_b }, palette, resolve_palette)
 	draw_terminal_label(context, 'Underline', 'The underline color, if underlines are enabled.')
 	context.table_set_column(1)
-	draw_style_color(context, 'underline', style.underline_color, style.underline_palette, terminal.RGB{ r: style.underline_r, g: style.underline_g, b: style.underline_b }, palette, resolve_palette)
+	draw_style_color(context, 'underline', style.underline_color_type, style.underline_palette, terminal.RGB{ r: style.underline_r, g: style.underline_g, b: style.underline_b }, palette, resolve_palette)
 
 	draw_style_flag(context, style.flags.bold(), 'bold', 'Text will be rendered with bold weight.')
 	draw_style_flag(context, style.flags.italic(), 'italic', 'Text will be rendered in italic style.')

@@ -1599,7 +1599,7 @@ pub mut:
 	flags           StyleFlags
 	fg_color        ColorType = .none
 	bg_color        ColorType = .none
-	underline_color ColorType = .none
+	underline_color_type ColorType = .none
 	fg_r            u8
 	fg_g            u8
 	fg_b            u8
@@ -1619,7 +1619,7 @@ pub mut:
 // Returns true if this is the default (empty) style.
 pub fn (self &CellStyle) default() bool {
 	return self.flags.int() == 0 && self.fg_color == .none && self.bg_color == .none
-		&& self.underline_color == .none
+		&& self.underline_color_type == .none
 }
 
 // Returns a blank cell with the background color of this style.

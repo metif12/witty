@@ -27,24 +27,24 @@ fn test_device_status_tag_no_question() {
 }
 
 fn test_device_status_req_from_int() {
-	r1 := DeviceStatusRequest.from_int(5, false) or { panic('expected value') }
+	r1 := req_from_int(5, false) or { panic('expected value') }
 	assert r1 == .operating_status
 
-	r2 := DeviceStatusRequest.from_int(6, false) or { panic('expected value') }
+	r2 := req_from_int(6, false) or { panic('expected value') }
 	assert r2 == .cursor_position
 
-	r3 := DeviceStatusRequest.from_int(996, true) or { panic('expected value') }
+	r3 := req_from_int(996, true) or { panic('expected value') }
 	assert r3 == .color_scheme
 }
 
 fn test_device_status_req_from_int_invalid() {
 	// Wrong question flag
-	assert DeviceStatusRequest.from_int(5, true) == none
-	assert DeviceStatusRequest.from_int(996, false) == none
+	assert req_from_int(5, true) == none
+	assert req_from_int(996, false) == none
 
 	// Unknown value
-	assert DeviceStatusRequest.from_int(999, false) == none
-	assert DeviceStatusRequest.from_int(0, false) == none
+	assert req_from_int(999, false) == none
+	assert req_from_int(0, false) == none
 }
 
 fn test_device_status_req_tag() {

@@ -281,7 +281,7 @@ fn test_unicode_placement_specifying_placement_id_as_palette() {
 	style := terminal.CellStyle{
 		fg_color: .palette
 		fg_palette: 42
-		underline_color: .palette
+		underline_color_type: .palette
 		underline_palette: 21
 	}
 	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305], style)
@@ -304,7 +304,7 @@ fn test_unicode_placement_specifying_placement_id_as_rgb() {
 	style := terminal.CellStyle{
 		fg_color: .palette
 		fg_palette: 42
-		underline_color: .rgb
+		underline_color_type: .rgb
 		underline_r: 0x12
 		underline_g: 0x34
 		underline_b: 0x56

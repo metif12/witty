@@ -75,8 +75,10 @@ pub fn GhosttyString.from_string(s string) GhosttyString {
 	}
 }
 
-// from_bytes creates a GhosttyString from a byte slice.
-pub fn GhosttyString.from_bytes(b []u8) GhosttyString {
+// from_slice creates a non-sentinel GhosttyString from a byte slice. V does
+// not encode sentinel slices in the type system, so sentinel-backed strings
+// use from_string while ordinary source slices use this entry point.
+pub fn GhosttyString.from_slice(b []u8) GhosttyString {
 	if b.len == 0 {
 		return GhosttyString.empty()
 	}
@@ -96,6 +98,15 @@ pub fn (str GhosttyString) bytes() []u8 {
 		return []u8{}
 	}
 	return unsafe { str.ptr.vbytes(int(str.len)) }
+}
+
+// deinit releases storage owned by this C-facing string.
+pub fn (str GhosttyString) deinit() {
+	if !isnil(str.ptr) {
+		unsafe {
+			free(str.ptr)
+		}
+	}
 }
 
 // ghostty_init initializes ghostty global state. In Ghostty's C API this
@@ -194,11 +205,7 @@ pub fn ghostty_translate(msgid string) string {
 
 // ghostty_string_free: Free a string allocated by Ghostty.
 pub fn ghostty_string_free(str GhosttyString) {
-	if !isnil(str.ptr) {
-		unsafe {
-			free(str.ptr)
-		}
-	}
+	str.deinit()
 }
 
 fn min_int(a int, b int) int {

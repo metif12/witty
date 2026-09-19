@@ -14,24 +14,24 @@ fn test_paste_options_from_terminal() ! {
 	assert PasteOptions.from_terminal(&term).bracketed
 }
 
-fn test_paste_is_safe_simple() {
-	assert paste_is_safe('hello') == true
+fn test_is_safe_simple() {
+	assert is_safe('hello') == true
 }
 
-fn test_paste_is_safe_newline() {
-	assert paste_is_safe('hello\n') == false
+fn test_is_safe_newline() {
+	assert is_safe('hello\n') == false
 }
 
-fn test_paste_is_safe_newline_middle() {
-	assert paste_is_safe('hello\nworld') == false
+fn test_is_safe_newline_middle() {
+	assert is_safe('hello\nworld') == false
 }
 
-fn test_paste_is_safe_bracketed_paste_end() {
-	assert paste_is_safe('he\x1b[201~llo') == false
+fn test_is_safe_bracketed_paste_end() {
+	assert is_safe('he\x1b[201~llo') == false
 }
 
-fn test_paste_is_safe_empty() {
-	assert paste_is_safe('') == true
+fn test_is_safe_empty() {
+	assert is_safe('') == true
 }
 
 fn test_paste_encode_bracketed() ! {

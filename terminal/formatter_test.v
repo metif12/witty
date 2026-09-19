@@ -621,7 +621,7 @@ fn test_page_vt_underline_color_change_emits_new_style() {
 		style_id: 1
 		style: CellStyle{
 			flags: StyleFlags.init(false, false, false, false, false, false, false, false, .single)
-			underline_color: .palette
+			underline_color_type: .palette
 			underline_palette: 1
 		}
 	}
@@ -630,7 +630,7 @@ fn test_page_vt_underline_color_change_emits_new_style() {
 		style_id: 1
 		style: CellStyle{
 			flags: StyleFlags.init(false, false, false, false, false, false, false, false, .single)
-			underline_color: .palette
+			underline_color_type: .palette
 			underline_palette: 2
 		}
 	}

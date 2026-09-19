@@ -2965,7 +2965,7 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 
 		// We draw underlines first so that they layer underneath text.
 		if underline != .none {
-			ul_color := cell_style.underline_color_rgb(state.colors.palette) or { fg }
+			ul_color := cell_style.underline_color(state.colors.palette) or { fg }
 			self.add_underline(u16(x), y, underline, ul_color, alpha) or {}
 		}
 

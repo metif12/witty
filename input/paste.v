@@ -66,8 +66,8 @@ pub fn paste_encode_mut(mut data []u8, opts PasteOptions) PasteEncodeResult {
 	}
 }
 
-// paste_is_safe returns true if data does not contain a newline or a
+// is_safe returns true if data does not contain a newline or a
 // bracketed-paste end fencepost.
-pub fn paste_is_safe(data string) bool {
+pub fn is_safe(data string) bool {
 	return !data.contains('\n') && !data.contains('\x1b[201~')
 }

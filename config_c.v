@@ -134,7 +134,7 @@ pub fn ghostty_config_open_path() GhosttyString {
 		eprintln('error opening config in editor: ${err}')
 		return GhosttyString.empty()
 	}
-	return GhosttyString.from_string(path)
+	return GhosttyString.from_slice(path.bytes())
 }
 
 @[export: 'ghostty_config_new']

@@ -61,7 +61,7 @@ pub fn DeviceStatusTag.from_u16(v u16) DeviceStatusTag {
 
 // Build a DeviceStatusRequest from a numeric value and question flag,
 // or return none if the combination is not recognized.
-pub fn DeviceStatusRequest.from_int(v u16, question bool) ?DeviceStatusRequest {
+pub fn req_from_int(v u16, question bool) ?DeviceStatusRequest {
 	if v == 5 && !question {
 		return .operating_status
 	}

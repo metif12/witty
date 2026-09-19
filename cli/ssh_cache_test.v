@@ -23,8 +23,19 @@ fn test_ssh_cache_default_path_is_fallible_and_side_effect_free() {
 	base := os.join_path(os.temp_dir(), 'witty-ssh-state-${os.getpid()}')
 	os.rmdir_all(base) or {}
 	os.setenv(key, base, true)
-	assert ssh_cache_default_path('ghostty')! == os.join_path(base, 'ghostty', 'ssh_cache')
+	assert SshDiskCache.default_path('ghostty')! == os.join_path(base, 'ghostty', 'ssh_cache')
+	assert run_inner(SshCacheOptions{})!.output == 'No hosts in cache.\n'
 	assert !os.exists(base)
+}
+
+fn test_ssh_cache_deinit_entries_releases_returned_container() {
+	mut entries := {
+		'example.com': SshCacheEntry{
+			hostname: 'example.com'
+		}
+	}
+	SshDiskCache.deinit_entries(mut entries)
+	assert entries.len == 0
 }
 
 fn test_ssh_cache_entry_parsing_format_and_expiration() {
@@ -98,16 +109,16 @@ fn test_ssh_cache_action_output_and_sorting() {
 		os.rmdir_all(dir) or {}
 	}
 	cache := SshDiskCache{ path: os.join_path(dir, 'ssh_cache') }
-	added := run_ssh_cache_with(cache, SshCacheOptions{ add: 'z.example' })!
+	added := run_inner_with_cache(cache, SshCacheOptions{ add: 'z.example' })!
 	assert added.output == "Added 'z.example' to cache.\n"
-	_ = run_ssh_cache_with(cache, SshCacheOptions{ add: 'a.example' })!
-	listed := run_ssh_cache_with(cache, SshCacheOptions{})!
+	_ = run_inner_with_cache(cache, SshCacheOptions{ add: 'a.example' })!
+	listed := run_inner_with_cache(cache, SshCacheOptions{})!
 	assert listed.output.index('a.example')? < listed.output.index('z.example')?
-	found := run_ssh_cache_with(cache, SshCacheOptions{ host: 'a.example' })!
+	found := run_inner_with_cache(cache, SshCacheOptions{ host: 'a.example' })!
 	assert found.code == 0
-	missing := run_ssh_cache_with(cache, SshCacheOptions{ host: 'missing.example' })!
+	missing := run_inner_with_cache(cache, SshCacheOptions{ host: 'missing.example' })!
 	assert missing.code == 1
-	invalid := run_ssh_cache_with(cache, SshCacheOptions{ add: '-bad' })!
+	invalid := run_inner_with_cache(cache, SshCacheOptions{ add: '-bad' })!
 	assert invalid.code == 1
 	assert invalid.errors.contains('Invalid hostname format')
 }

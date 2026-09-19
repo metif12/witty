@@ -58,9 +58,9 @@ pub:
 	path string
 }
 
-// ssh_cache_default_path resolves `${XDG_STATE_HOME}/<program>/ssh_cache`
+// default_path resolves `${XDG_STATE_HOME}/<program>/ssh_cache`
 // without creating the directory. Path creation belongs to cache mutation.
-pub fn ssh_cache_default_path(program string) !string {
+pub fn SshDiskCache.default_path(program string) !string {
 	state_dir := internal_os.xdg_state(internal_os.XdgOptions{ subdir: program })!
 	return os.join_path(state_dir, 'ssh_cache')
 }
@@ -144,6 +144,13 @@ pub fn (cache SshDiskCache) contains(hostname string) !bool {
 
 pub fn (cache SshDiskCache) list() !map[string]SshCacheEntry {
 	return cache.read_entries()
+}
+
+// deinit_entries releases a map returned by list. V's map keys and values are
+// garbage-collected, so clearing the container is the complete counterpart to
+// Ghostty's allocator-backed entry teardown.
+pub fn SshDiskCache.deinit_entries(mut entries map[string]SshCacheEntry) {
+	entries.clear()
 }
 
 fn (cache SshDiskCache) ensure_file() ! {
@@ -262,13 +269,18 @@ pub:
 
 pub fn ssh_cache(args []string) !SshCacheResult {
 	opts := parse_ssh_cache_options(args)!
-	cache := SshDiskCache{
-		path: ssh_cache_default_path('ghostty')!
-	}
-	return run_ssh_cache_with(cache, opts)
+	return run_inner(opts)
 }
 
-fn run_ssh_cache_with(cache SshDiskCache, opts SshCacheOptions) !SshCacheResult {
+// run_inner executes parsed SSH-cache options using the standard disk cache.
+pub fn run_inner(opts SshCacheOptions) !SshCacheResult {
+	cache := SshDiskCache{
+		path: SshDiskCache.default_path('ghostty')!
+	}
+	return run_inner_with_cache(cache, opts)
+}
+
+fn run_inner_with_cache(cache SshDiskCache, opts SshCacheOptions) !SshCacheResult {
 	// This is parsed by upstream but currently not forwarded to DiskCache.
 	_ = opts.expire_days
 	if opts.clear {

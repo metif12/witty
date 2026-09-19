@@ -36,21 +36,21 @@ fn test_style_equality_uses_only_active_color_payload() {
 	assert !palette_a.eql(&palette_c)
 
 	rgb_a := CellStyle{
-		underline_color: .rgb
+		underline_color_type: .rgb
 		underline_r: 1
 		underline_g: 2
 		underline_b: 3
 		underline_palette: 4
 	}
 	rgb_b := CellStyle{
-		underline_color: .rgb
+		underline_color_type: .rgb
 		underline_r: 1
 		underline_g: 2
 		underline_b: 3
 		underline_palette: 9
 	}
 	rgb_c := CellStyle{
-		underline_color: .rgb
+		underline_color_type: .rgb
 		underline_r: 1
 		underline_g: 2
 		underline_b: 4
@@ -73,7 +73,7 @@ fn test_style_hash_matches_zig_source() {
 		bg_r: 1
 		bg_g: 2
 		bg_b: 3
-		underline_color: .palette
+		underline_color_type: .palette
 		underline_palette: 9
 		flags: StyleFlags.init(true, true, false, false, false, false, false, false, .curly)
 	}.hash() == 0x50c324342b82c60f
@@ -252,7 +252,7 @@ fn test_style_vt_formatting_bg_rgb() {
 
 fn test_style_vt_formatting_underline_color_palette() {
 	style := CellStyle{
-		underline_color: .palette
+		underline_color_type: .palette
 		underline_palette: 15
 	}
 	assert style.format_vt() == '\x1b[0m\x1b[58;5;15m'
@@ -260,7 +260,7 @@ fn test_style_vt_formatting_underline_color_palette() {
 
 fn test_style_vt_formatting_underline_color_rgb() {
 	style := CellStyle{
-		underline_color: .rgb
+		underline_color_type: .rgb
 		underline_r: 200
 		underline_g: 100
 		underline_b: 50
@@ -292,7 +292,7 @@ fn test_style_vt_formatting_combined_colors_and_flags() {
 		fg_b: 0
 		bg_color: .palette
 		bg_palette: 8
-		underline_color: .rgb
+		underline_color_type: .rgb
 		underline_g: 255
 		flags: StyleFlags.init(true, true, false, false, false, false, false, false, .double)
 	}
@@ -310,7 +310,7 @@ fn test_style_vt_formatting_all_colors_rgb() {
 		bg_r: 40
 		bg_g: 50
 		bg_b: 60
-		underline_color: .rgb
+		underline_color_type: .rgb
 		underline_r: 70
 		underline_g: 80
 		underline_b: 90
@@ -325,7 +325,7 @@ fn test_style_vt_formatting_all_colors_palette() {
 		fg_palette: 1
 		bg_color: .palette
 		bg_palette: 2
-		underline_color: .palette
+		underline_color_type: .palette
 		underline_palette: 3
 	}
 	result := style.format_vt()
@@ -346,7 +346,7 @@ fn test_style_vt_formatting_all_palette_colors_with_palette_set() {
 		fg_palette: 1
 		bg_color: .palette
 		bg_palette: 2
-		underline_color: .palette
+		underline_color_type: .palette
 		underline_palette: 3
 	}
 	assert style.format_vt_with_palette(default_palette[..]) == '\x1b[0m\x1b[38;2;204;102;102m\x1b[48;2;181;189;104m\x1b[58;2;240;198;116m'
@@ -431,7 +431,7 @@ fn test_style_html_formatting_all_palette_colors_with_palette_set() {
 		fg_palette: 1
 		bg_color: .palette
 		bg_palette: 2
-		underline_color: .palette
+		underline_color_type: .palette
 		underline_palette: 3
 	}
 	assert style.format_html_with_palette(default_palette[..]) == 'color: rgb(204, 102, 102);background-color: rgb(181, 189, 104);text-decoration-color: rgb(240, 198, 116);'
