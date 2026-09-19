@@ -4037,7 +4037,7 @@ pub fn (mut self Terminal) switch_screen(key ScreenKey) !&Screen {
 
 	// Get or initialize the new screen.
 	mut new := self.screens.get(key) or {
-		self.screens.get_or_init(key, ScreenOptions{
+		self.screens.get_init(key, ScreenOptions{
 			cols: u32(self.cols)
 			rows: u32(self.rows)
 			max_scrollback: if key == .primary {

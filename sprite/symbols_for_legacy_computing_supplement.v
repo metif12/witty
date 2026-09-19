@@ -515,7 +515,7 @@ pub fn draw_1cc21_1cc2f(cp u32, mut canvas Canvas, width u32, height u32, metric
 	h := (i32(height) - gap * 2 - mid_gap_y) / 2
 
 	if quad.tl() {
-		canvas.draw_box(
+		canvas.box(
 			gap,
 			gap,
 			gap + w,
@@ -524,7 +524,7 @@ pub fn draw_1cc21_1cc2f(cp u32, mut canvas Canvas, width u32, height u32, metric
 		)
 	}
 	if quad.tr() {
-		canvas.draw_box(
+		canvas.box(
 			gap + w + mid_gap_x,
 			gap,
 			gap + w + mid_gap_x + w,
@@ -533,7 +533,7 @@ pub fn draw_1cc21_1cc2f(cp u32, mut canvas Canvas, width u32, height u32, metric
 		)
 	}
 	if quad.bl() {
-		canvas.draw_box(
+		canvas.box(
 			gap,
 			gap + h + mid_gap_y,
 			gap + w,
@@ -542,7 +542,7 @@ pub fn draw_1cc21_1cc2f(cp u32, mut canvas Canvas, width u32, height u32, metric
 		)
 	}
 	if quad.br() {
-		canvas.draw_box(
+		canvas.box(
 			gap + w + mid_gap_x,
 			gap + h + mid_gap_y,
 			gap + w + mid_gap_x + w,
@@ -616,25 +616,25 @@ pub fn draw_1cc1b_1cc1e(cp u32, mut canvas Canvas, width u32, height u32, metric
 		// BOX DRAWINGS LIGHT HORIZONTAL AND UPPER RIGHT
 		0x1cc1b {
 			lines_char(metrics, mut canvas, Lines.from_int(0x44))
-			canvas.draw_box(w - t, 0, w, h / 2, .on)
+			canvas.box(w - t, 0, w, h / 2, .on)
 		}
 
 		// BOX DRAWINGS LIGHT HORIZONTAL AND LOWER RIGHT
 		0x1cc1c {
 			lines_char(metrics, mut canvas, Lines.from_int(0x44))
-			canvas.draw_box(w - t, h / 2, w, h, .on)
+			canvas.box(w - t, h / 2, w, h, .on)
 		}
 
 		// BOX DRAWINGS LIGHT TOP AND UPPER LEFT
 		0x1cc1d {
-			canvas.draw_box(0, 0, w, t, .on)
-			canvas.draw_box(0, 0, t, h / 2, .on)
+			canvas.box(0, 0, w, t, .on)
+			canvas.box(0, 0, t, h / 2, .on)
 		}
 
 		// BOX DRAWINGS LIGHT BOTTOM AND LOWER LEFT
 		0x1cc1e {
-			canvas.draw_box(0, h - t, w, h, .on)
-			canvas.draw_box(0, h / 2, t, h, .on)
+			canvas.box(0, h - t, w, h, .on)
+			canvas.box(0, h / 2, t, h, .on)
 		}
 		else { panic('unreachable') }
 	}
@@ -689,25 +689,25 @@ pub fn draw_1ce16_1ce19(cp u32, mut canvas Canvas, width u32, height u32, metric
 		// BOX DRAWINGS LIGHT VERTICAL AND TOP RIGHT
 		0x1ce16 {
 			lines_char(metrics, mut canvas, Lines.from_int(0x11))
-			canvas.draw_box(w / 2, 0, w, t, .on)
+			canvas.box(w / 2, 0, w, t, .on)
 		}
 
 		// BOX DRAWINGS LIGHT VERTICAL AND BOTTOM RIGHT
 		0x1ce17 {
 			lines_char(metrics, mut canvas, Lines.from_int(0x11))
-			canvas.draw_box(w / 2, h - t, w, h, .on)
+			canvas.box(w / 2, h - t, w, h, .on)
 		}
 
 		// BOX DRAWINGS LIGHT VERTICAL AND TOP LEFT
 		0x1ce18 {
 			lines_char(metrics, mut canvas, Lines.from_int(0x11))
-			canvas.draw_box(0, 0, w / 2, t, .on)
+			canvas.box(0, 0, w / 2, t, .on)
 		}
 
 		// BOX DRAWINGS LIGHT VERTICAL AND BOTTOM LEFT
 		0x1ce19 {
 			lines_char(metrics, mut canvas, Lines.from_int(0x11))
-			canvas.draw_box(0, h - t, w / 2, h, .on)
+			canvas.box(0, h - t, w / 2, h, .on)
 		}
 		else { panic('unreachable') }
 	}
@@ -737,7 +737,7 @@ pub fn draw_1ce51_1ce8f(cp u32, mut canvas Canvas, width u32, height u32, metric
 	h_m := i32(height) - gap * 2 - mid_gap_y * 2 - h * 2
 
 	if sex.tl() {
-		canvas.draw_box(
+		canvas.box(
 			gap,
 			gap,
 			gap + w,
@@ -746,7 +746,7 @@ pub fn draw_1ce51_1ce8f(cp u32, mut canvas Canvas, width u32, height u32, metric
 		)
 	}
 	if sex.tr() {
-		canvas.draw_box(
+		canvas.box(
 			gap + w + mid_gap_x,
 			gap,
 			gap + w + mid_gap_x + w,
@@ -755,7 +755,7 @@ pub fn draw_1ce51_1ce8f(cp u32, mut canvas Canvas, width u32, height u32, metric
 		)
 	}
 	if sex.ml() {
-		canvas.draw_box(
+		canvas.box(
 			gap,
 			gap + h + mid_gap_y,
 			gap + w,
@@ -764,7 +764,7 @@ pub fn draw_1ce51_1ce8f(cp u32, mut canvas Canvas, width u32, height u32, metric
 		)
 	}
 	if sex.mr() {
-		canvas.draw_box(
+		canvas.box(
 			gap + w + mid_gap_x,
 			gap + h + mid_gap_y,
 			gap + w + mid_gap_x + w,
@@ -773,7 +773,7 @@ pub fn draw_1ce51_1ce8f(cp u32, mut canvas Canvas, width u32, height u32, metric
 		)
 	}
 	if sex.bl() {
-		canvas.draw_box(
+		canvas.box(
 			gap,
 			gap + h + mid_gap_y + h_m + mid_gap_y,
 			gap + w,
@@ -782,7 +782,7 @@ pub fn draw_1ce51_1ce8f(cp u32, mut canvas Canvas, width u32, height u32, metric
 		)
 	}
 	if sex.br() {
-		canvas.draw_box(
+		canvas.box(
 			gap + w + mid_gap_x,
 			gap + h + mid_gap_y + h_m + mid_gap_y,
 			gap + w + mid_gap_x + w,

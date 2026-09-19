@@ -970,7 +970,7 @@ fn Renderer.init_metal(opts RendererOpts) !Renderer {
 	}
 	metal.blending = opts.config.blending
 
-	post_shaders := load_shaders_from_files(opts.config.custom_shaders, .msl) or {
+	post_shaders := load_from_files(opts.config.custom_shaders, .msl) or {
 		eprintln('renderer: error loading custom shaders: ${err}')
 		[]string{}
 	}
@@ -1081,7 +1081,7 @@ fn Renderer.init_opengl(opts RendererOpts) !Renderer {
 		font_shaper.deinit()
 		return err
 	}
-	post_shaders := load_shaders_from_files(opts.config.custom_shaders, .glsl) or {
+	post_shaders := load_from_files(opts.config.custom_shaders, .glsl) or {
 		eprintln('renderer: error loading custom shaders: ${err}')
 		[]string{}
 	}
@@ -1648,7 +1648,7 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 
 	if self.reinitialize_shaders {
 		self.reinitialize_shaders = false
-		post_shaders := load_shaders_from_files(self.config.custom_shaders, .msl) or {
+		post_shaders := load_from_files(self.config.custom_shaders, .msl) or {
 			eprintln('renderer: error loading custom shaders: ${err}')
 			[]string{}
 		}
@@ -1912,7 +1912,7 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 
 	if self.reinitialize_shaders {
 		self.reinitialize_shaders = false
-		post_shaders := load_shaders_from_files(self.config.custom_shaders, .glsl) or {
+		post_shaders := load_from_files(self.config.custom_shaders, .glsl) or {
 			eprintln('renderer: error loading custom shaders: ${err}')
 			[]string{}
 		}
@@ -3418,7 +3418,7 @@ pub fn (mut r Renderer) display_realized() ! {
 	if !r.swap_chain_defunct {
 		return error('OpenGL swap chain is not defunct')
 	}
-	post_shaders := load_shaders_from_files(r.config.custom_shaders, .glsl) or {
+	post_shaders := load_from_files(r.config.custom_shaders, .glsl) or {
 		eprintln('renderer: error loading custom shaders: ${err}')
 		[]string{}
 	}

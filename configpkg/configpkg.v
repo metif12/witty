@@ -10103,11 +10103,11 @@ fn editable_config_path_candidates() []string {
 	return paths
 }
 
-// editable_config_path returns the main configuration path and ensures it can
-// be opened by an editor. It mirrors config/edit.zig openPath: choose the
-// preferred existing path, create its parent directory, and create a missing
-// file without changing the contents of an existing one.
-pub fn editable_config_path() !string {
+// open_path returns the main configuration path and ensures it can be opened
+// by an editor. It mirrors config/edit.zig openPath: choose the preferred
+// existing path, create its parent directory, and create a missing file
+// without changing the contents of an existing one.
+pub fn open_path() !string {
 	path := preferred_existing_config_path(editable_config_path_candidates())
 	ensure_editable_config_path(path)!
 	return path

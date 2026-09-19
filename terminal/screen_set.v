@@ -53,7 +53,7 @@ pub fn (self &ScreenSet) get(key ScreenKey) ?&Screen {
 // This is the V translation of ScreenSet.getInit from the Zig source.
 // The primary screen is always initialized, so this is mainly useful
 // for lazily initializing the alternate screen on first use.
-pub fn (mut self ScreenSet) get_or_init(key ScreenKey, opts ScreenOptions) !&Screen {
+pub fn (mut self ScreenSet) get_init(key ScreenKey, opts ScreenOptions) !&Screen {
 	// If already initialized, return it.
 	if existing := self.get(key) {
 		return existing

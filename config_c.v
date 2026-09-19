@@ -130,7 +130,7 @@ pub fn ghostty_config_get_diagnostic(mut config &configpkg.Config, idx u32) Conf
 }
 
 pub fn ghostty_config_open_path() GhosttyString {
-	path := configpkg.editable_config_path() or {
+	path := configpkg.open_path() or {
 		eprintln('error opening config in editor: ${err}')
 		return GhosttyString.empty()
 	}

@@ -44,6 +44,20 @@ pub:
 	y f64
 }
 
+// Transformation is the affine translation applied by Ghostty's z2d-backed
+// Canvas. Sprite paths only need the identity matrix plus the canvas padding,
+// but retaining the complete value preserves Canvas.transformation's public
+// source contract.
+pub struct Transformation {
+pub:
+	ax f64
+	by f64
+	cx f64
+	dy f64
+	tx f64
+	ty f64
+}
+
 pub struct LineSegment {
 pub:
 	p0 Point
@@ -103,6 +117,25 @@ pub fn Canvas.init(w u32, h u32, pad_x u32, pad_y u32) Canvas {
 	}
 }
 
+// deinit releases the canvas-owned raster. V's GC owns the backing storage,
+// so dropping the final slice reference is the counterpart to z2d's allocator
+// deinitialization.
+pub fn (mut c Canvas) deinit() {
+	c = Canvas{}
+}
+
+// transformation returns the padding translation used for every path.
+pub fn (c &Canvas) transformation() Transformation {
+	return Transformation{
+		ax: 1
+		by: 0
+		cx: 0
+		dy: 1
+		tx: f64(c.padding_x)
+		ty: f64(c.padding_y)
+	}
+}
+
 // Draw and fill a single pixel. The coordinate is cell-relative;
 // the padding offset is applied here. Out of bounds writes are
 // silently ignored, matching z2d's `putPixel` behavior.
@@ -136,7 +169,7 @@ pub fn (mut c Canvas) rect(v SpriteRect, color Color) {
 
 // Convenience wrapper for `Canvas.rect`, taking two corners.
 // The corners may be given in any order.
-pub fn (mut c Canvas) draw_box(x0 i32, y0 i32, x1 i32, y1 i32, color Color) {
+pub fn (mut c Canvas) box(x0 i32, y0 i32, x1 i32, y1 i32, color Color) {
 	tl_x := if x0 < x1 { x0 } else { x1 }
 	tl_y := if y0 < y1 { y0 } else { y1 }
 	br_x := if x0 > x1 { x0 } else { x1 }
@@ -447,11 +480,11 @@ fn clamp_i24(value f64) f64 {
 // px/py apply the padding transformation to a coordinate, matching
 // z2d's `wrapped_path.transformation` set in `Canvas.staticPath`.
 fn (p &StaticPath) tx(x f64) f64 {
-	return clamp_i24(x) + f64(p.canvas.padding_x)
+	return clamp_i24(x) + p.canvas.transformation().tx
 }
 
 fn (p &StaticPath) ty(y f64) f64 {
-	return clamp_i24(y) + f64(p.canvas.padding_y)
+	return clamp_i24(y) + p.canvas.transformation().ty
 }
 
 // move_to adds a move-to node.
@@ -1304,7 +1337,7 @@ pub const seven_eighths_f = f64(0.875)
 // Fill a section of the cell, specified by a
 // horizontal and vertical pair of fraction lines.
 pub fn fill(metrics font.Metrics, mut canvas Canvas, x0 Fraction, x1 Fraction, y0 Fraction, y1 Fraction) {
-	canvas.draw_box(x0.to_min(metrics.cell_width), y0.to_min(metrics.cell_height), x1.to_max(metrics.cell_width), y1.to_max(metrics.cell_height), .on)
+	canvas.box(x0.to_min(metrics.cell_width), y0.to_min(metrics.cell_height), x1.to_max(metrics.cell_width), y1.to_max(metrics.cell_height), .on)
 }
 
 // ============================================================
@@ -1325,12 +1358,12 @@ pub fn hline_middle(metrics font.Metrics, mut canvas Canvas, thickness Thickness
 
 // Vertical line with the left edge at x, between y1 and y2.
 pub fn vline(mut canvas Canvas, y1 i32, y2 i32, x i32, thickness_px u32) {
-	canvas.draw_box(x, y1, x + i32(thickness_px), y2, .on)
+	canvas.box(x, y1, x + i32(thickness_px), y2, .on)
 }
 
 // Horizontal line with the top edge at y, between x1 and x2.
 pub fn hline(mut canvas Canvas, x1 i32, x2 i32, y i32, thickness_px u32) {
-	canvas.draw_box(x1, y, x2, y + i32(thickness_px), .on)
+	canvas.box(x1, y, x2, y + i32(thickness_px), .on)
 }
 
 // ============================================================
@@ -1409,5 +1442,5 @@ pub fn block_shade(metrics font.Metrics, mut canvas Canvas, alignment Alignment,
 
 // full_block_shade fills the entire cell with a shade pattern.
 pub fn full_block_shade(metrics font.Metrics, mut canvas Canvas, shade Shade) {
-	canvas.draw_box(0, 0, i32(metrics.cell_width), i32(metrics.cell_height), unsafe { Color(u8(shade)) })
+	canvas.box(0, 0, i32(metrics.cell_width), i32(metrics.cell_height), unsafe { Color(u8(shade)) })
 }

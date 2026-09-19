@@ -17,7 +17,7 @@ fn test_screen_set() {
 	defer { set.deinit() }
 	assert set.active_key == .primary
 
-	_ = set.get_or_init(.alternate, ScreenOptions{
+	_ = set.get_init(.alternate, ScreenOptions{
 		cols: 80
 		rows: 24
 	}) or {

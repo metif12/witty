@@ -234,6 +234,26 @@ fn test_canvas_dimensions() {
 	}
 }
 
+fn test_canvas_transformation_matches_padding_translation() {
+	c := Canvas.init(10, 20, 2, 3)
+	t := c.transformation()
+	assert t.ax == 1
+	assert t.by == 0
+	assert t.cx == 0
+	assert t.dy == 1
+	assert t.tx == 2
+	assert t.ty == 3
+}
+
+fn test_canvas_deinit_releases_owned_raster() {
+	mut c := Canvas.init(10, 20, 2, 3)
+	assert c.data.len > 0
+	c.deinit()
+	assert c.data.len == 0
+	assert c.sfc_width() == 0
+	assert c.sfc_height() == 0
+}
+
 fn test_canvas_pixel() {
 	mut c := Canvas.init(4, 4, 0, 0)
 	c.pixel(1, 2, .on)
@@ -270,10 +290,10 @@ fn test_canvas_rect() {
 	assert data_at(&c, 1, 3) == 0
 }
 
-fn test_canvas_draw_box_orders_corners() {
+fn test_canvas_box_orders_corners() {
 	mut c := Canvas.init(6, 6, 0, 0)
 	// Pass the corners in reversed order; the box should normalize them.
-	c.draw_box(4, 3, 1, 1, .on)
+	c.box(4, 3, 1, 1, .on)
 	for y in 1 .. 3 {
 		for x in 1 .. 4 {
 			assert data_at(&c, x, y) == 255

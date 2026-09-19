@@ -1706,7 +1706,7 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			return true
 		}
 		.open_config {
-			path := configpkg.editable_config_path() or { return false }
+			path := configpkg.open_path() or { return false }
 			internal_os.open_kind(.text, path) or { return false }
 			return true
 		}

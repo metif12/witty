@@ -156,27 +156,27 @@ pub fn draw_2800_28ff(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 	p := braille_pattern_from(cp)
 
 	if p.tl() {
-		canvas.draw_box(x[0], y[0], x[0] + w, y[0] + w, .on)
+		canvas.box(x[0], y[0], x[0] + w, y[0] + w, .on)
 	}
 	if p.ul() {
-		canvas.draw_box(x[0], y[1], x[0] + w, y[1] + w, .on)
+		canvas.box(x[0], y[1], x[0] + w, y[1] + w, .on)
 	}
 	if p.ll() {
-		canvas.draw_box(x[0], y[2], x[0] + w, y[2] + w, .on)
+		canvas.box(x[0], y[2], x[0] + w, y[2] + w, .on)
 	}
 	if p.bl() {
-		canvas.draw_box(x[0], y[3], x[0] + w, y[3] + w, .on)
+		canvas.box(x[0], y[3], x[0] + w, y[3] + w, .on)
 	}
 	if p.tr() {
-		canvas.draw_box(x[1], y[0], x[1] + w, y[0] + w, .on)
+		canvas.box(x[1], y[0], x[1] + w, y[0] + w, .on)
 	}
 	if p.ur() {
-		canvas.draw_box(x[1], y[1], x[1] + w, y[1] + w, .on)
+		canvas.box(x[1], y[1], x[1] + w, y[1] + w, .on)
 	}
 	if p.lr() {
-		canvas.draw_box(x[1], y[2], x[1] + w, y[2] + w, .on)
+		canvas.box(x[1], y[2], x[1] + w, y[2] + w, .on)
 	}
 	if p.br() {
-		canvas.draw_box(x[1], y[3], x[1] + w, y[3] + w, .on)
+		canvas.box(x[1], y[3], x[1] + w, y[3] + w, .on)
 	}
 }

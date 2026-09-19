@@ -527,7 +527,7 @@ fn branch_node(metrics font.Metrics, mut canvas Canvas, node BranchNode, thickne
 	// be greater than cx or cy, so when subtracting it from them the
 	// result can never be negative.
 	if node.up() {
-		canvas.draw_box(
+		canvas.box(
 			i32(v_left),
 			0,
 			i32(v_right),
@@ -536,7 +536,7 @@ fn branch_node(metrics font.Metrics, mut canvas Canvas, node BranchNode, thickne
 		)
 	}
 	if node.right() {
-		canvas.draw_box(
+		canvas.box(
 			int(math.floor(cx + r - float_thick / 2)),
 			i32(h_top),
 			i32(metrics.cell_width),
@@ -545,7 +545,7 @@ fn branch_node(metrics font.Metrics, mut canvas Canvas, node BranchNode, thickne
 		)
 	}
 	if node.down() {
-		canvas.draw_box(
+		canvas.box(
 			i32(v_left),
 			int(math.floor(cy + r - float_thick / 2)),
 			i32(v_right),
@@ -554,7 +554,7 @@ fn branch_node(metrics font.Metrics, mut canvas Canvas, node BranchNode, thickne
 		)
 	}
 	if node.left() {
-		canvas.draw_box(
+		canvas.box(
 			0,
 			i32(h_top),
 			int(math.ceil(cx - r + float_thick / 2)),

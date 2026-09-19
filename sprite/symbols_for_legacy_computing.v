@@ -609,14 +609,14 @@ pub fn draw_1fb7c_1fb97(cp u32, mut canvas Canvas, width u32, height u32, metric
 
 		// '🮗'
 		0x1fb97 {
-			canvas.draw_box(
+			canvas.box(
 				0,
 				i32(height / 4),
 				i32(width),
 				i32(2 * height / 4),
 				.on,
 			)
-			canvas.draw_box(
+			canvas.box(
 				0,
 				i32(3 * height / 4),
 				i32(width),

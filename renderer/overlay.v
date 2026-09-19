@@ -40,6 +40,17 @@ pub:
 	b u8
 }
 
+// OverlayPixel is the premultiplied RGBA pixel value used by the source z2d
+// surface. Keeping the color conversion separate from compositing preserves
+// Overlay.Color's public helpers even though Witty owns its raster buffer.
+pub struct OverlayPixel {
+pub:
+	r u8
+	g u8
+	b u8
+	a u8
+}
+
 pub fn (c OverlayColor) rgb() OverlayRGB {
 	return match c {
 		.hyperlink {
@@ -66,14 +77,35 @@ pub fn (c OverlayColor) rgb() OverlayRGB {
 	}
 }
 
-// The fill alpha for rectangles.
-pub fn (c OverlayColor) fill_alpha() u8 {
-	return 96
+// The raw RGB as an opaque premultiplied pixel.
+pub fn (c OverlayColor) pixel() OverlayPixel {
+	rgb := c.rgb()
+	return OverlayPixel{
+		r: rgb.r
+		g: rgb.g
+		b: rgb.b
+		a: 255
+	}
 }
 
-// The border alpha for rectangles.
-pub fn (c OverlayColor) border_alpha() u8 {
-	return 200
+// The fill color for rectangles.
+pub fn (c OverlayColor) rect_fill() OverlayPixel {
+	return c.alpha_pixel(96)
+}
+
+// The border color for rectangles.
+pub fn (c OverlayColor) rect_border() OverlayPixel {
+	return c.alpha_pixel(200)
+}
+
+fn (c OverlayColor) alpha_pixel(alpha u8) OverlayPixel {
+	rgb := c.rgb()
+	return OverlayPixel{
+		r: u8((u32(rgb.r) * u32(alpha) + 127) / 255)
+		g: u8((u32(rgb.g) * u32(alpha) + 127) / 255)
+		b: u8((u32(rgb.b) * u32(alpha) + 127) / 255)
+		a: alpha
+	}
 }
 
 // The set of available features and their configuration.
@@ -225,9 +257,8 @@ fn (mut self Overlay) highlight_grid_rect(x usize, y usize, width usize, height 
 	px_w := overlay_mul_i32(width, self.cell_size.width)!
 	px_h := overlay_mul_i32(height, self.cell_size.height)!
 
-	col := color.rgb()
-	fill_a := color.fill_alpha()
-	border_a := color.border_alpha()
+	fill_color := color.rect_fill()
+	border_color := color.rect_border()
 
 	// Fill the rectangle
 	for row in px_y .. px_y + px_h {
@@ -241,10 +272,10 @@ fn (mut self Overlay) highlight_grid_rect(x usize, y usize, width usize, height 
 			// Check if this is a border pixel
 			is_border := row == px_y || row == px_y + px_h - 1
 				|| col_px == px_x || col_px == px_x + px_w - 1
-			a := if is_border { border_a } else { fill_a }
+			pixel := if is_border { border_color } else { fill_color }
 
 			idx := (row * int(self.width) + col_px) * 4
-			self.composite_pixel(idx, col, a)
+			self.composite_pixel(idx, pixel)
 		}
 	}
 }
@@ -260,9 +291,8 @@ fn (mut self Overlay) highlight_pixel_rect(x usize, y usize, width_px usize, hei
 	px_width := int(width_px)
 	px_h := overlay_mul_i32(height, self.cell_size.height)!
 
-	col := color.rgb()
-	fill_a := color.fill_alpha()
-	border_a := color.border_alpha()
+	fill_color := color.rect_fill()
+	border_color := color.rect_border()
 
 	for row in px_y .. px_y + px_h {
 		if row < 0 || row >= int(self.height) {
@@ -274,10 +304,10 @@ fn (mut self Overlay) highlight_pixel_rect(x usize, y usize, width_px usize, hei
 			}
 			is_border := row == px_y || row == px_y + px_h - 1
 				|| col_px == px_x || col_px == px_x + px_width - 1
-			a := if is_border { border_a } else { fill_a }
+			pixel := if is_border { border_color } else { fill_color }
 
 			idx := (row * int(self.width) + col_px) * 4
-			self.composite_pixel(idx, col, a)
+			self.composite_pixel(idx, pixel)
 		}
 	}
 }
@@ -292,15 +322,15 @@ fn overlay_mul_i32(value usize, scale u32) !int {
 }
 
 // z2d's RGBA surfaces store premultiplied colors and composite with src-over.
-fn (mut self Overlay) composite_pixel(idx int, color OverlayRGB, alpha u8) {
+fn (mut self Overlay) composite_pixel(idx int, pixel OverlayPixel) {
 	if idx < 0 || idx + 3 >= self.pixels.len {
 		return
 	}
-	src_a := u32(alpha)
+	src_a := u32(pixel.a)
 	inv_a := u32(255) - src_a
-	src_r := (u32(color.r) * src_a + 127) / 255
-	src_g := (u32(color.g) * src_a + 127) / 255
-	src_b := (u32(color.b) * src_a + 127) / 255
+	src_r := u32(pixel.r)
+	src_g := u32(pixel.g)
+	src_b := u32(pixel.b)
 	self.pixels[idx] = u8(src_r + (u32(self.pixels[idx]) * inv_a + 127) / 255)
 	self.pixels[idx + 1] = u8(src_g + (u32(self.pixels[idx + 1]) * inv_a + 127) / 255)
 	self.pixels[idx + 2] = u8(src_b + (u32(self.pixels[idx + 2]) * inv_a + 127) / 255)

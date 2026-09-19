@@ -359,7 +359,7 @@ pub fn block_with_shade(metrics font.Metrics, mut canvas Canvas, alignment Align
 
 // block_full_shade fills the entire cell with a shade pattern.
 pub fn block_full_shade(metrics font.Metrics, mut canvas Canvas, shade Shade) {
-	canvas.draw_box(
+	canvas.box(
 		0,
 		0,
 		i32(metrics.cell_width),
@@ -919,64 +919,64 @@ pub fn lines_char(metrics font.Metrics, mut canvas Canvas, lines Lines) {
 	match up {
 		.none_ {}
 		.light {
-			canvas.draw_box(i32(v_light_left), 0, i32(v_light_right), i32(up_bottom), .on)
+			canvas.box(i32(v_light_left), 0, i32(v_light_right), i32(up_bottom), .on)
 		}
 		.heavy {
-			canvas.draw_box(i32(v_heavy_left), 0, i32(v_heavy_right), i32(up_bottom), .on)
+			canvas.box(i32(v_heavy_left), 0, i32(v_heavy_right), i32(up_bottom), .on)
 		}
 		.double_ {
 			left_bottom := if left == .double_ { h_light_top } else { up_bottom }
 			right_bottom := if right == .double_ { h_light_top } else { up_bottom }
-			canvas.draw_box(i32(v_double_left), 0, i32(v_light_left), i32(left_bottom), .on)
-			canvas.draw_box(i32(v_light_right), 0, i32(v_double_right), i32(right_bottom), .on)
+			canvas.box(i32(v_double_left), 0, i32(v_light_left), i32(left_bottom), .on)
+			canvas.box(i32(v_light_right), 0, i32(v_double_right), i32(right_bottom), .on)
 		}
 	}
 
 	match right {
 		.none_ {}
 		.light {
-			canvas.draw_box(i32(right_left), i32(h_light_top), i32(metrics.cell_width), i32(h_light_bottom), .on)
+			canvas.box(i32(right_left), i32(h_light_top), i32(metrics.cell_width), i32(h_light_bottom), .on)
 		}
 		.heavy {
-			canvas.draw_box(i32(right_left), i32(h_heavy_top), i32(metrics.cell_width), i32(h_heavy_bottom), .on)
+			canvas.box(i32(right_left), i32(h_heavy_top), i32(metrics.cell_width), i32(h_heavy_bottom), .on)
 		}
 		.double_ {
 			top_left := if up == .double_ { v_light_right } else { right_left }
 			bottom_left := if down == .double_ { v_light_right } else { right_left }
-			canvas.draw_box(i32(top_left), i32(h_double_top), i32(metrics.cell_width), i32(h_light_top), .on)
-			canvas.draw_box(i32(bottom_left), i32(h_light_bottom), i32(metrics.cell_width), i32(h_double_bottom), .on)
+			canvas.box(i32(top_left), i32(h_double_top), i32(metrics.cell_width), i32(h_light_top), .on)
+			canvas.box(i32(bottom_left), i32(h_light_bottom), i32(metrics.cell_width), i32(h_double_bottom), .on)
 		}
 	}
 
 	match down {
 		.none_ {}
 		.light {
-			canvas.draw_box(i32(v_light_left), i32(down_top), i32(v_light_right), i32(metrics.cell_height), .on)
+			canvas.box(i32(v_light_left), i32(down_top), i32(v_light_right), i32(metrics.cell_height), .on)
 		}
 		.heavy {
-			canvas.draw_box(i32(v_heavy_left), i32(down_top), i32(v_heavy_right), i32(metrics.cell_height), .on)
+			canvas.box(i32(v_heavy_left), i32(down_top), i32(v_heavy_right), i32(metrics.cell_height), .on)
 		}
 		.double_ {
 			left_top := if left == .double_ { h_light_bottom } else { down_top }
 			right_top := if right == .double_ { h_light_bottom } else { down_top }
-			canvas.draw_box(i32(v_double_left), i32(left_top), i32(v_light_left), i32(metrics.cell_height), .on)
-			canvas.draw_box(i32(v_light_right), i32(right_top), i32(v_double_right), i32(metrics.cell_height), .on)
+			canvas.box(i32(v_double_left), i32(left_top), i32(v_light_left), i32(metrics.cell_height), .on)
+			canvas.box(i32(v_light_right), i32(right_top), i32(v_double_right), i32(metrics.cell_height), .on)
 		}
 	}
 
 	match left {
 		.none_ {}
 		.light {
-			canvas.draw_box(0, i32(h_light_top), i32(left_right), i32(h_light_bottom), .on)
+			canvas.box(0, i32(h_light_top), i32(left_right), i32(h_light_bottom), .on)
 		}
 		.heavy {
-			canvas.draw_box(0, i32(h_heavy_top), i32(left_right), i32(h_heavy_bottom), .on)
+			canvas.box(0, i32(h_heavy_top), i32(left_right), i32(h_heavy_bottom), .on)
 		}
 		.double_ {
 			top_right := if up == .double_ { v_light_left } else { left_right }
 			bottom_right := if down == .double_ { v_light_left } else { left_right }
-			canvas.draw_box(0, i32(h_double_top), i32(top_right), i32(h_light_top), .on)
-			canvas.draw_box(0, i32(h_light_bottom), i32(bottom_right), i32(h_double_bottom), .on)
+			canvas.box(0, i32(h_double_top), i32(top_right), i32(h_light_top), .on)
+			canvas.box(0, i32(h_light_bottom), i32(bottom_right), i32(h_double_bottom), .on)
 		}
 	}
 }

@@ -8,7 +8,7 @@ const shadertoy_prefix = $embed_file('shaders/shadertoy_prefix.glsl').to_string(
 const max_shader_size = 4 * 1024 * 1024
 
 // The target to load shaders for.
-pub enum ShaderTarget as u8 {
+pub enum Target as u8 {
 	glsl
 	msl
 }
@@ -28,10 +28,10 @@ pub fn (mut self SpirvLog) deinit() {
 // Load a set of shaders from files and convert them to the target
 // format. The shader order is preserved.
 //
-pub fn load_shaders_from_files(paths configpkg.RepeatablePath, target ShaderTarget) ![]string {
+pub fn load_from_files(paths configpkg.RepeatablePath, target Target) ![]string {
 	mut shaders := []string{cap: paths.items.len}
 	for item in paths.items {
-		shader := load_shader_from_file(item.path, target) or {
+		shader := load_from_file(item.path, target) or {
 			if item.optional && is_missing_file_error(err) {
 				continue
 			}
@@ -44,7 +44,7 @@ pub fn load_shaders_from_files(paths configpkg.RepeatablePath, target ShaderTarg
 
 // Load a single shader from a file and convert it to the target language
 // ready to be used with renderers.
-pub fn load_shader_from_file(path string, target ShaderTarget) !string {
+pub fn load_from_file(path string, target Target) !string {
 	if !os.exists(path) {
 		return error('shader file not found: ${path}')
 	}
@@ -104,7 +104,7 @@ pub fn glsl_from_spv(spv []u8) !string {
 	return source_from_spv(spv, .glsl)
 }
 
-fn source_from_spv(spv []u8, target ShaderTarget) !string {
+fn source_from_spv(spv []u8, target Target) !string {
 	if spv.len == 0 || spv.len % 4 != 0 {
 		return error('invalid SPIR-V byte length: ${spv.len}')
 	}

@@ -1547,7 +1547,7 @@ linux-cgroup-hard-fail = true')
 	assert cfg.diagnostics.len == 1
 }
 
-fn test_editable_config_path_creates_file_without_truncating() ! {
+fn test_open_path_helper_creates_file_without_truncating() ! {
 	dir := os.join_path(os.temp_dir(), 'witty-edit-config-${os.getpid()}')
 	os.rmdir_all(dir) or {}
 	defer {

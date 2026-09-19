@@ -4,9 +4,9 @@ import configpkg
 import os
 
 fn test_shader_target_source_layout_and_ordinals() {
-	assert sizeof(ShaderTarget) == 1
-	assert u8(ShaderTarget.glsl) == 0
-	assert u8(ShaderTarget.msl) == 1
+	assert sizeof(Target) == 1
+	assert u8(Target.glsl) == 0
+	assert u8(Target.msl) == 1
 }
 
 fn test_glsl_from_shader_uses_ghostty_prefix() {
@@ -24,12 +24,12 @@ fn test_load_shaders_skips_only_missing_optional_files() {
 	paths := configpkg.RepeatablePath{
 		items: [configpkg.Path{ path: missing, optional: true }]
 	}
-	assert load_shaders_from_files(paths, .glsl)! == []string{}
+	assert load_from_files(paths, .glsl)! == []string{}
 
 	required := configpkg.RepeatablePath{
 		items: [configpkg.Path{ path: missing }]
 	}
-	load_shaders_from_files(required, .glsl) or {
+	load_from_files(required, .glsl) or {
 		assert err.msg().starts_with('shader file not found:')
 		return
 	}

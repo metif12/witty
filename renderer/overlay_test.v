@@ -12,6 +12,33 @@ fn test_overlay_source_tag_layouts_and_ordinals() {
 	assert u8(OverlayFeature.semantic_prompts) == 1
 }
 
+fn test_overlay_color_source_pixel_helpers() {
+	assert OverlayColor.hyperlink.pixel() == OverlayPixel{
+		r: 180
+		g: 180
+		b: 255
+		a: 255
+	}
+	assert OverlayColor.hyperlink.rect_fill() == OverlayPixel{
+		r: 68
+		g: 68
+		b: 96
+		a: 96
+	}
+	assert OverlayColor.hyperlink.rect_border() == OverlayPixel{
+		r: 141
+		g: 141
+		b: 200
+		a: 200
+	}
+	assert OverlayColor.semantic_prompt.rect_fill() == OverlayPixel{
+		r: 96
+		g: 75
+		b: 24
+		a: 96
+	}
+}
+
 fn overlay_for_grid(cols u32, rows u32, cell_width u32, cell_height u32) Overlay {
 	return Overlay.init(Size{
 		screen: ScreenSize{
