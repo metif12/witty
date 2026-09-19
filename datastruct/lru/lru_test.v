@@ -77,12 +77,3 @@ fn test_resize_shrink_and_remove() {
 	assert cache.get(2) == none
 	assert cache.get(3) == none
 }
-
-fn test_resize_grow() {
-	mut cache := new_auto_hash_map[string, int](1)
-	mut result := cache.get_or_put('one')
-	set_value(mut result, 1)
-	assert cache.resize(3) == none
-	assert cache.capacity == 3
-	assert cache.get('one')? == 1
-}

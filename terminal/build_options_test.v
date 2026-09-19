@@ -31,3 +31,8 @@ fn test_artifact_values() {
 	assert u8(Artifact.ghostty) == 0
 	assert u8(Artifact.lib) == 1
 }
+
+fn test_synthesized_features_follow_oniguruma() {
+	assert kitty_graphics == oniguruma
+	assert tmux_control_mode == oniguruma
+}

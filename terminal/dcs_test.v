@@ -193,6 +193,9 @@ fn test_dcs_decrqss_invalid_command() {
 }
 
 fn test_dcs_tmux_enter_and_implicit_exit() {
+	if !tmux_control_mode {
+		return
+	}
 	mut h := DcsHandler{}
 	defer { h.deinit() }
 
@@ -229,6 +232,9 @@ fn test_dcs_tmux_enter_and_implicit_exit() {
 }
 
 fn test_dcs_tmux_buffer_limit_discards_without_exit_command() {
+	if !tmux_control_mode {
+		return
+	}
 	mut h := DcsHandler{
 		max_bytes: 1
 	}

@@ -173,6 +173,8 @@ below exist. Earlier versions of this document overstated the completed review.
 | resource directories | `ResourcesDir.app()`/`host()` collapsed absence into an empty string, and live surface initialization passed the application-visible path to the child PTY instead of Ghostty's host-visible path. | Restore both optional accessors and pass `host()` unchanged into `termio.Exec`, preserving Flatpak host-path semantics while application resource consumers continue to use `app()`. |
 | Flatpak child environment | The translated `internal_os.get_env_map()` always copied the sandbox environment, although Ghostty deliberately returns an empty environment map in Flatpak so the host command starts from its host environment. The runtime-neutral surface fallback bypassed the helper too. | Return an empty map under the canonical Flatpak predicate and route fallback surface environment construction through the same translated helper. |
 | Flatpak passwd lookup | `get_passwd()` always returned the sandbox passwd record, whose home and shell are not the corresponding host values. | On Flatpak, retain the sandbox username only long enough to run Ghostty's `/bin/sh -l -c "getent passwd …"` host command over a PTY, then derive home and shell from the last two returned fields. |
+| Linux package build flags and child environment | Witty had no importable `flatpak`/`snap` build options. Flatpak resource probing therefore ran in every sandbox regardless of how the binary was packaged, while Snap path filtering was absent. The GTK child environment also skipped the owning window-protocol hook and quick-terminal marker. | Add canonical `-d flatpak`/`-d snap` feature flags, gate Flatpak resource probing, translate `filterSnapPaths`, and complete `defaultTermioEnv` with `addSubprocessEnv` plus `GHOSTTY_QUICK_TERMINAL`. |
+| generated terminal feature wiring | The translated build options did not synthesize `kitty_graphics` and `tmux_control_mode` from Oniguruma. APC always entered the Kitty parser and DCS always entered tmux control mode, including the reduced library configuration where Ghostty compiles both features out. | Make Oniguruma the single canonical feature selection (`-d no_oniguruma` models the reduced build), expose both synthesized terminal options, and gate Kitty APC plus tmux DCS at their protocol entry points. |
 | system click interval | The Cocoa shim overloaded a valid zero-millisecond interval as its missing-class sentinel and its Darwin file selection also exposed the macOS-only implementation to iOS. | Return success separately from the `u32` value and select the AppKit implementation only for macOS, leaving every other target on Ghostty's absent-value branch. |
 | Linux cgroup controls | Cgroup moves, controller configuration, and limits used a create-and-truncate file helper instead of Ghostty's existing-file, write-only opens; the tagged limit payload was fixed at `u64` instead of `usize`. | Share a write-all helper that opens only existing control files with `O_WRONLY`, preserve write errors and short writes, and carry pointer-width limit values behind a compact tag. |
 | POSIX pipe setup | The `pipe2(.CLOEXEC)` adaptation ignored both `fcntl` results, so it could return descriptors without the mandatory close-on-exec flag and leaked both descriptors if setup needed to fail. | Propagate the platform errors from `pipe`/both `fcntl` calls, close the pair on either flag failure, and verify `FD_CLOEXEC` on both returned ends. |
@@ -294,11 +296,11 @@ an item here does not mean its full module has been certified yet.
   V channels, a timed `select`, and flat payload records with corrected compact
   tags, so scheduling, backpressure, representation, and invalid-state space
   remain source-external.
-- **Generated feature wiring:** Ghostty's build synthesizes
-  `kitty_graphics`/`tmux_control_mode` from the Oniguruma build option. Witty
-  has a build-options carrier but does not yet generate or apply equivalent
-  feature gating; APC handling is consequently unconditional and structurally
-  embedded in `termio/stream_handler.v` rather than the source tagged state.
+- **Reduced terminal feature structure:** Witty now synthesizes
+  `kitty_graphics`/`tmux_control_mode` from the Oniguruma selection and gates
+  both live protocol entry points. Unlike Zig, V cannot change a sum type's
+  variants or struct fields with a build option, so the disabled build still
+  compiles the unreachable Kitty/tmux parser types and storage.
 - **Help generation pipeline:** Witty embeds pinned generated Config, CLI-
   action, and keybind-action records and exposes the correct data through its
   translated helper, but its build does not yet regenerate those artifacts by
@@ -383,13 +385,6 @@ an item here does not mean its full module has been certified yet.
   Witty declares those types directly with explicit backing instead. The
   *output* of that layer is what many entries above verify; the layer itself
   is not translated and cannot be.
-
-- **Snap build variant:** Ghostty's build exposes a `snap` option, and when it
-  is set `Surface.filterSnapPaths` strips the `SNAP*` prefixes the Snap runtime
-  injects out of the child process environment. Witty has no `snap` build
-  option and no equivalent filtering, so a Snap-packaged build would leak those
-  paths into the shell. This is the only remaining `build_config.snap`
-  consumer in the source.
 
 - **GTK UI definition pipeline:** Ghostty defines its GTK widget trees in 21
   Blueprint files (about 1,400 lines of `.blp`), which `build/blueprint.zig`

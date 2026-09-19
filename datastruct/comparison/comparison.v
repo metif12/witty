@@ -31,6 +31,10 @@ pub fn deep_equal[T](old T, new T) bool {
 				if old.$(field.name) != new.$(field.name) {
 					return false
 				}
+			} $else $if field.is_option {
+				if !optional_deep_equal(old.$(field.name), new.$(field.name)) {
+					return false
+				}
 			} $else {
 				old_field := old.$(field.name)
 				new_field := new.$(field.name)
@@ -120,10 +124,11 @@ pub fn expect_approx_equal[T](expected T, actual T) ! {
 
 fn optional_expect_approx_equal[T](expected ?T, actual ?T) ! {
 	expected_value := expected or {
-		if actual == none {
+		if _actual := actual {
+			return error('TestExpectedApproxEqual')
+		} else {
 			return
 		}
-		return error('TestExpectedApproxEqual')
 	}
 	actual_value := actual or { return error('TestExpectedApproxEqual') }
 	expect_approx_equal(expected_value, actual_value)!

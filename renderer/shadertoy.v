@@ -143,14 +143,30 @@ fn run_shader_tool(name string, args []string) !string {
 	}
 	mut process := os.new_process(executable)
 	process.set_args(args)
-	process.set_redirect_stdio_merged()
+	process.set_redirect_stdio()
 	process.run()
-	output := process.stdout_slurp()
+	mut output := ''
+	mut diagnostics := ''
+	for process.is_alive() {
+		if process.is_pending(.stdout) {
+			output += process.stdout_read()
+		}
+		if process.is_pending(.stderr) {
+			diagnostics += process.stderr_read()
+		}
+		time.sleep(time.millisecond)
+	}
+	output += process.stdout_slurp()
+	diagnostics += process.stderr_slurp()
 	process.wait()
 	code := process.code
 	process.close()
 	if code != 0 {
-		message := output.trim_space()
+		mut message := output
+		if message.len > 0 && diagnostics.len > 0 {
+			message += '\n'
+		}
+		message = (message + diagnostics).trim_space()
 		if message.len > 0 {
 			return error('${name} failed (${code}): ${message}')
 		}

@@ -1,5 +1,7 @@
 module terminal
 
+import buildcfg
+
 // Translated from ghostty/src/terminal/build_options.zig
 
 // Options set by Zig build.zig and exposed via `terminal_options`.
@@ -34,3 +36,9 @@ pub enum Artifact as u8 {
 	// libghostty-vt, Zig module
 	lib
 }
+
+// Synthesized terminal module options for this build. Ghostty derives both
+// protocol features directly from its Oniguruma option.
+pub const oniguruma = buildcfg.oniguruma
+pub const kitty_graphics = buildcfg.kitty_graphics
+pub const tmux_control_mode = buildcfg.tmux_control_mode

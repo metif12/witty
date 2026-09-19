@@ -6,7 +6,7 @@ fn test_base64_max_len() {
 
 fn test_base64_decode() {
 	input := 'aGVsbG8gd29ybGQ='.bytes()
-	mut output := []u8{len: base64_max_len(input)}
+	mut output := []u8{len: int(base64_max_len(input))}
 	decoded := base64_decode(input, mut output)!
 	assert decoded.bytestr() == 'hello world'
 }

@@ -35,6 +35,7 @@ module gtk
 // translate_mods).
 
 import apprt
+import buildcfg
 import core
 import configpkg
 import input
@@ -4184,6 +4185,22 @@ pub fn (self &SurfaceWidget) default_termio_env() !map[string]string {
 		'GIO_LAUNCHED_DESKTOP_FILE_PID', 'DBUS_STARTER_ADDRESS', 'DBUS_STARTER_BUS_TYPE',
 		'INVOCATION_ID', 'JOURNAL_STREAM', 'NOTIFY_SOCKET'] {
 		env.delete(key)
+	}
+	// Unset environment variables set by snaps when this is a Snap build. This
+	// lets child processes launch other snaps without inheriting our paths.
+	if buildcfg.snap && 'SNAP' in env {
+		internal_os.filter_snap_paths(mut env)
+	}
+
+	// Let the owning window protocol add values such as X11's WINDOWID. The
+	// split tree is the translated owner path for the source's ancestor lookup.
+	if !isnil(self.split_tree) && !isnil(self.split_tree.window) {
+		mut window := unsafe { self.split_tree.window }
+		mut winproto := window.winproto()
+		winproto.add_subprocess_env(mut env)!
+		if window.is_quick_terminal() {
+			env['GHOSTTY_QUICK_TERMINAL'] = '1'
+		}
 	}
 	return env
 }

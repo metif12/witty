@@ -218,6 +218,11 @@ fn (self DcsHandler) try_hook(dcs DcsParams) !DcsHook {
 		match dcs.final_byte {
 			// Tmux control mode
 			`p` {
+				if !tmux_control_mode {
+					return DcsHook{
+						state: DcsStateIgnore{}
+					}
+				}
 				// Tmux control mode must start with ESC P 1000 p
 				if dcs.params.len != 1 || dcs.params[0] != 1000 {
 					return DcsHook{

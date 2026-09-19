@@ -12,6 +12,10 @@ import terminal
 import terminfo
 import tmux
 
+// Whether tmux control mode is present in this build. Ghostty exposes this on
+// StreamHandler from the synthesized terminal options.
+pub const tmux_enabled = terminal.tmux_control_mode
+
 // This is used as the handler for the terminal.Stream type. This is
 // stateful and is expected to live for the entire lifetime of the terminal.
 // It is NOT VALID to stop a stream handler, create a new one, and use that
@@ -492,6 +496,9 @@ fn (mut self StreamHandler) dcs_command(mut cmd terminal.DcsCommand) {
 			self.dcs_decrqss(cmd.decrqss)
 		}
 		terminal.DcsCommandTmux {
+			if !terminal.tmux_control_mode {
+				return
+			}
 			match cmd.notification {
 				tmux.NotifEnter {
 					if mut old := self.tmux_viewer {
@@ -1354,18 +1361,7 @@ fn (self &StreamHandler) color_query_response(target osc.ColorTarget, terminator
 		}
 		osc.ColorTargetDynamic {
 			prefix = '\x1b]${u8(target.color)};rgb:'
-			match target.color {
-				.foreground { self.terminal.colors.foreground.get() or { return none } }
-				.background { self.terminal.colors.background.get() or { return none } }
-				.cursor {
-					self.terminal.colors.cursor.get() or {
-						self.terminal.colors.foreground.get() or { return none }
-					}
-				}
-				else {
-					return none
-				}
-			}
+			self.dynamic_color_query_value(target.color) or { return none }
 		}
 		osc.ColorTargetSpecial {
 			return none
@@ -1380,6 +1376,21 @@ fn (self &StreamHandler) color_query_response(target osc.ColorTarget, terminator
 			'${prefix}${hex2(color.r)}/${hex2(color.g)}/${hex2(color.b)}${term}'
 		}
 		.none_ { '' }
+	}
+}
+
+fn (self &StreamHandler) dynamic_color_query_value(color osc.DynamicColor) ?terminal.RGB {
+	return match color {
+		.foreground { self.terminal.colors.foreground.get() }
+		.background { self.terminal.colors.background.get() }
+		.cursor {
+			if value := self.terminal.colors.cursor.get() {
+				value
+			} else {
+				self.terminal.colors.foreground.get()
+			}
+		}
+		else { none }
 	}
 }
 
@@ -1619,7 +1630,7 @@ pub fn (mut self ApcHandler) feed(byte_val u8) {
 		.inactive { panic('ApcHandler.feed called while inactive') }
 		.ignore {}
 		.identify {
-			self.state = if byte_val == `G` { .kitty } else { .ignore }
+			self.state = if byte_val == `G` && terminal.kitty_graphics { .kitty } else { .ignore }
 		}
 		.kitty {
 			self.parser.feed(byte_val) or {

@@ -142,6 +142,9 @@ fn test_stream_handler_init_deinit() {
 }
 
 fn test_stream_handler_tmux_viewer_lifecycle_and_commands() {
+	if !terminal.tmux_control_mode {
+		return
+	}
 	mut handler, mut ctx := make_test_handler()
 	defer {
 		handler.deinit()
@@ -734,6 +737,9 @@ fn test_apc_handler_state_values_match_source_order() {
 }
 
 fn test_apc_handler_parses_valid_kitty_command() {
+	if !terminal.kitty_graphics {
+		return
+	}
 	mut handler := ApcHandler{}
 	handler.start()
 	for byte_val in 'Gf=24,s=10,v=20,hello=world'.bytes() {
@@ -750,6 +756,16 @@ fn test_apc_handler_parses_valid_kitty_command() {
 	assert transmission.format_ == .rgb
 	assert transmission.width == 10
 	assert transmission.height == 20
+}
+
+fn test_apc_handler_obeys_synthesized_kitty_graphics_option() {
+	mut handler := ApcHandler{}
+	handler.start()
+	for byte_val in 'Gf=24,s=10,v=20,hello=world'.bytes() {
+		handler.feed(byte_val)
+	}
+	cmd := handler.end()
+	assert (cmd != none) == terminal.kitty_graphics
 }
 
 // Test change_config.

@@ -51,10 +51,7 @@ pub fn format_entry[T](name string, value T) string {
 
 fn format_entry_values[T](value T) []string {
 	$if T is $option {
-		if actual := value {
-			return format_entry_values(actual)
-		}
-		return ['']
+		return format_optional_entry_values(value)
 	} $else $if T is bool {
 		return [value.str()]
 	} $else $if T is $int {
@@ -130,6 +127,11 @@ fn format_entry_values[T](value T) []string {
 	} $else {
 		$compile_error('missing config formatter case for type')
 	}
+}
+
+fn format_optional_entry_values[T](value ?T) []string {
+	actual := value or { return [''] }
+	return format_entry_values(actual)
 }
 
 // format_config returns this configuration in Ghostty's file syntax. With

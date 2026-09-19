@@ -9,13 +9,7 @@ module gtk
 // whether it can derive the *host* resources path from `/.flatpak-info`.
 // Otherwise it falls back to the generic `internal_os.resourcesDir`.
 //
-// witty has no `flatpak` build option (build_config.v lives in `module main`,
-// which the gtk module cannot import), so we always perform the flatpak-info
-// probe when `internal_os.is_flatpak()` reports we're sandboxed. When not
-// sandboxed we fall back to the normal detection. This keeps the observable
-// behaviour identical on non-flatpak systems while remaining faithful to the
-// host-path derivation logic.
-
+import buildcfg
 import internal_os
 
 // --- GKeyFile C bindings --------------------------------------------------
@@ -36,7 +30,7 @@ fn C.g_key_file_get_string(key_file voidptr, group_name &char, key &char, error 
 // runtime data when running inside a sandbox. Mirrors `flatpak.resourcesDir`.
 pub fn resources_dir() internal_os.ResourcesDir {
 	// Only consult Flatpak runtime data for the host case.
-	if internal_os.is_flatpak() {
+	if buildcfg.flatpak && internal_os.is_flatpak() {
 		// Inside the sandbox the app resources live at a fixed path.
 		mut result := internal_os.ResourcesDir{
 			app_path: '/app/share/ghostty'

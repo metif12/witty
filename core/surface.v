@@ -4837,7 +4837,11 @@ fn split_dir_from_input(e i32, size rendererpkg.ScreenSize) apprt.SplitDirection
 		.left { .left }
 		.up { .up }
 		.auto_ {
-			if size.width > size.height { .right } else { .down }
+			if size.width > size.height {
+				apprt.SplitDirection.right
+			} else {
+				apprt.SplitDirection.down
+			}
 		}
 	}
 }
