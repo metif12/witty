@@ -1809,7 +1809,7 @@ fn (mut it RunIterator) next_render_cells() !TextRunValue {
 		if !has_font {
 			current_font = idx
 			has_font = true
-		} else if idx.int_val() != current_font.int_val() {
+		} else if idx.int() != current_font.int() {
 			break
 		}
 		cluster := u32(j - start)
@@ -1831,7 +1831,7 @@ fn (mut it RunIterator) next_render_cells() !TextRunValue {
 	}
 	it.finalize()
 	hasher.put_u64(u64(j - start))
-	hasher.put_u16(current_font.int_val())
+	hasher.put_u16(current_font.int())
 	it.i = j
 	return TextRunValue{
 		has_value: true

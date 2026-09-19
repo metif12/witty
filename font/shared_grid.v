@@ -439,7 +439,7 @@ fn (k GlyphKey) packed_key() u64 {
 	}
 	packed_opts |= u16(k.opts.thicken_strength) << 3
 	packed_opts |= u16(k.opts.constraint_width) << 11
-	return u64(k.index.int_val()) | (u64(k.glyph) << 16) | (u64(packed_opts) << 48)
+	return u64(k.index.int()) | (u64(k.glyph) << 16) | (u64(packed_opts) << 48)
 }
 
 fn glyph_key_equal(a GlyphKey, b GlyphKey) bool {

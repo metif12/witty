@@ -152,7 +152,7 @@ fn test_set_size() {
 	c.load_options = collection_test_options(lib, 12)
 	collection_test_add(mut c, embedded_regular, .regular, .none_)
 	assert (c.load_options or { panic('missing options') }).size.points == 12
-	c.set_collection_size(DesiredSize{ points: 24, xdpi: 96, ydpi: 96 }) or { panic(err) }
+	c.set_size(DesiredSize{ points: 24, xdpi: 96, ydpi: 96 }) or { panic(err) }
 	assert (c.load_options or { panic('missing options') }).size.points == 24
 }
 
@@ -195,7 +195,7 @@ fn test_metrics() {
 	assert_collection_close(16.784, metrics.icon_height, 0.001)
 	assert_collection_close(12.24, metrics.icon_height_single, 0.001)
 	assert_collection_close(-0.04, metrics.face_y, 0.001)
-	c.set_collection_size(DesiredSize{ points: 24, xdpi: 96, ydpi: 96 }) or { panic(err) }
+	c.set_size(DesiredSize{ points: 24, xdpi: 96, ydpi: 96 }) or { panic(err) }
 	resized := c.metrics or { panic('missing resized metrics') }
 	assert resized.cell_width == 16
 	assert resized.cell_height == 34
@@ -222,7 +222,7 @@ fn test_adjusted_sizes() {
 		} else {
 			assert_collection_close(primary.cap_height(), fallback.cap_height(), 0.5)
 		}
-		c.set_collection_size(DesiredSize{ points: 37, xdpi: 96, ydpi: 96 }) or { panic(err) }
+		c.set_size(DesiredSize{ points: 37, xdpi: 96, ydpi: 96 }) or { panic(err) }
 		primary_resized := collection_test_metrics(mut c, Index{})
 		fallback_resized := collection_test_metrics(mut c, idx)
 		if adjustment == .ex_height {
@@ -230,7 +230,7 @@ fn test_adjusted_sizes() {
 		} else {
 			assert_collection_close(primary_resized.cap_height(), fallback_resized.cap_height(), 0.5)
 		}
-		c.set_collection_size(DesiredSize{ points: 12, xdpi: 96, ydpi: 96 }) or { panic(err) }
+		c.set_size(DesiredSize{ points: 12, xdpi: 96, ydpi: 96 }) or { panic(err) }
 	}
 	none_idx := collection_test_add(mut c, embedded_monaspace_neon, .regular, .none_)
 	assert (c.get_face(Index{}) or { panic(err) }).size.points == (c.get_face(none_idx) or {
@@ -276,7 +276,7 @@ fn test_index_special() {
 
 	// Verify special index properties.
 	idx := Index.init_special(.sprite)
-	assert idx.int_val() == 0xfff8
+	assert idx.int() == 0xfff8
 	assert idx.special() != none
 	assert idx.special() or { Special.sprite } == .sprite
 
@@ -299,7 +299,7 @@ fn test_index_packed_layout_matches_ghostty() {
 	for style in [Style.regular, .bold, .italic, .bold_italic] {
 		for face_index in [u16(0), 1, 42, 0x1ffe, 0x1fff] {
 			idx := Index.init(style, face_index)
-			packed := idx.int_val()
+			packed := idx.int()
 			assert packed == (face_index << 3) | u16(style)
 			assert idx.style() == style
 			assert idx.idx() == face_index

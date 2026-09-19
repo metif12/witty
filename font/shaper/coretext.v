@@ -494,7 +494,7 @@ fn (mut self Shaper) get_font(run font.TextRun) !&macos.CFDictionary {
 		self.cached_font_grid = grid_id
 	}
 
-	index_int := int(run.font_index.int_val())
+	index_int := int(run.font_index.int())
 
 	// The cached fonts are indexed directly by the font index, since
 	// this number is usually low. Therefore, we set any index we haven't

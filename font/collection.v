@@ -470,8 +470,8 @@ pub fn (i Index) idx() u16 {
 	return i.value >> 3
 }
 
-// int_val returns the index as a packed integer.
-pub fn (i Index) int_val() u16 {
+// int returns the index as a packed integer.
+pub fn (i Index) int() u16 {
 	return i.value
 }
 
@@ -1012,7 +1012,7 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 		if !synthetic_config.italic() {
 			// italic style not available and synthetic italic disabled
 			self.italic_faces << EntryOrAlias.new_alias(regular_entry)
-		} else if synthetic := self.create_synthetic_italic(regular_entry) {
+		} else if synthetic := self.synthetic_italic(regular_entry) {
 			// synthetic italic face created
 			self.italic_faces << EntryOrAlias.new_entry(Entry{
 				is_loaded: true
@@ -1033,7 +1033,7 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 		if !synthetic_config.bold() {
 			// bold style not available and synthetic bold disabled
 			self.bold_faces << EntryOrAlias.new_alias(regular_entry)
-		} else if synthetic := self.create_synthetic_bold(regular_entry) {
+		} else if synthetic := self.synthetic_bold(regular_entry) {
 			// synthetic bold face created
 			self.bold_faces << EntryOrAlias.new_entry(Entry{
 				is_loaded: true
@@ -1061,7 +1061,7 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 		// bold then we try to synthesize italic on top of bold.
 		if have_bold {
 			mut bold_base := self.bold_faces[0].get_entry()
-			if synthetic := self.create_synthetic_italic(bold_base) {
+			if synthetic := self.synthetic_italic(bold_base) {
 				// synthetic bold italic face created from bold
 				self.bold_italic_faces << EntryOrAlias.new_entry(Entry{
 					is_loaded: true
@@ -1075,7 +1075,7 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 		}
 
 		mut italic_base := self.italic_faces[0].get_entry()
-		if synthetic := self.create_synthetic_bold(italic_base) {
+		if synthetic := self.synthetic_bold(italic_base) {
 			// synthetic bold italic face created from italic
 			self.bold_italic_faces << EntryOrAlias.new_entry(Entry{
 				is_loaded: true
@@ -1090,8 +1090,8 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 	}
 }
 
-// create_synthetic_bold creates a synthetic bold font face from the given entry.
-fn (mut self Collection) create_synthetic_bold(entry &Entry) !Face {
+// synthetic_bold creates a synthetic bold font face from the given entry.
+fn (mut self Collection) synthetic_bold(entry &Entry) !Face {
 	// We require loading options to create a synthetic bold face.
 	lo := self.load_options or {
 		return error('deferred loading unavailable')
@@ -1110,8 +1110,8 @@ fn (mut self Collection) create_synthetic_bold(entry &Entry) !Face {
 	return face
 }
 
-// create_synthetic_italic creates a synthetic italic font face from the given entry.
-fn (mut self Collection) create_synthetic_italic(entry &Entry) !Face {
+// synthetic_italic creates a synthetic italic font face from the given entry.
+fn (mut self Collection) synthetic_italic(entry &Entry) !Face {
 	// We require loading options to create a synthetic italic face.
 	lo := self.load_options or {
 		return error('deferred loading unavailable')
@@ -1130,12 +1130,12 @@ fn (mut self Collection) create_synthetic_italic(entry &Entry) !Face {
 	return face
 }
 
-// set_collection_size updates the size of all faces in the collection.
+// set_size updates the size of all faces in the collection.
 // This will also update the size in the load options for future
 // deferred face loading.
 //
 // This requires load options to be set.
-pub fn (mut self Collection) set_collection_size(size DesiredSize) ! {
+pub fn (mut self Collection) set_size(size DesiredSize) ! {
 	// Get a pointer to our options so we can modify the size.
 	mut lo := self.load_options or {
 		return error('deferred loading unavailable')
