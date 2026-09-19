@@ -7,19 +7,19 @@
 // system, so it follows the same convention as `helpgen.v`: the generators are
 // plain functions here, exercised by tests, for a build to call.
 //
-// The source's `Action` also has `bash`, `fish` and `zsh` for shell
-// completions. Those generators reflect over `Config`'s field types to pick a
-// completion strategy per field, and the V compiler miscompiles that
-// reflection over a struct of `Config`'s size, so they are absent rather than
-// stubbed. See AUDIT_FINDINGS.md for the specific failures.
 module main
 
 import extra
 import terminfo
 
-// BuildDataAction is the set of artifacts this can emit. It is
-// `main_build_data.Action` minus the three shell completions.
+// BuildDataAction is the complete set of artifacts emitted by the source
+// command, in source declaration order.
 pub enum BuildDataAction {
+	// Shell completions
+	bash
+	fish
+	zsh
+
 	// Editor syntax files
 	sublime
 	vim_syntax
@@ -35,6 +35,9 @@ pub enum BuildDataAction {
 // source's enum field names.
 pub fn (action BuildDataAction) name() string {
 	return match action {
+		.bash { 'bash' }
+		.fish { 'fish' }
+		.zsh { 'zsh' }
 		.sublime { 'sublime' }
 		.vim_syntax { 'vim-syntax' }
 		.vim_ftdetect { 'vim-ftdetect' }
@@ -47,8 +50,8 @@ pub fn (action BuildDataAction) name() string {
 // build_data_action parses a `+action` spelling, or none if unrecognized.
 pub fn build_data_action(name string) ?BuildDataAction {
 	trimmed := name.trim_string_left('+')
-	for action in [BuildDataAction.sublime, .vim_syntax, .vim_ftdetect, .vim_ftplugin,
-		.vim_compiler, .terminfo] {
+	for action in [BuildDataAction.bash, .fish, .zsh, .sublime, .vim_syntax, .vim_ftdetect,
+		.vim_ftplugin, .vim_compiler, .terminfo] {
 		if action.name() == trimmed {
 			return action
 		}
@@ -60,6 +63,9 @@ pub fn build_data_action(name string) ?BuildDataAction {
 // writes this to stdout.
 pub fn generate_build_data(action BuildDataAction) string {
 	return match action {
+		.bash { extra.bash_completions() }
+		.fish { extra.fish_completions() }
+		.zsh { extra.zsh_completions() }
 		.sublime { extra.sublime_syntax() }
 		.vim_syntax { extra.syntax() }
 		.vim_ftdetect { extra.ftdetect }
