@@ -19,13 +19,13 @@ fn test_coordinate_default() {
 fn test_point_new() {
 	p := Point.new(.active, Coordinate{ x: 5, y: 10 })
 	assert p.tag == .active
-	assert p.coord.x == 5
-	assert p.coord.y == 10
+	assert p.coord().x == 5
+	assert p.coord().y == 10
 }
 
-fn test_point_get_coord() {
+fn test_point_coord() {
 	p := Point.new(.viewport, Coordinate{ x: 42, y: 80 })
-	c := p.get_coord()
+	c := p.coord()
 	assert c.x == 42
 	assert c.y == 80
 }
@@ -51,6 +51,6 @@ fn test_point_tags() {
 fn test_point_default() {
 	p := Point{}
 	assert p.tag == .active
-	assert p.coord.x == 0
-	assert p.coord.y == 0
+	assert p.coord().x == 0
+	assert p.coord().y == 0
 }

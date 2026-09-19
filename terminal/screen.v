@@ -2132,8 +2132,7 @@ pub fn (self &Screen) clear_kitty_images() {
 pub fn (self &Screen) clone(top Point, bot ?Point) !Screen {
 	// Resolve the absolute row range [top_y, bot_y] we are cloning. Clone
 	// always copies whole rows, so the point x coordinates are ignored.
-	mut top_row := top
-	top_row.coord.x = 0
+	top_row := Point.new(top.tag, Coordinate{ y: top.coord().y })
 	tl := self.pages.pin_point(top_row) or { return error('UnknownPoint') }
 	top_y := int(tl.y)
 	mut bot_y := top_y - 1
@@ -2141,8 +2140,7 @@ pub fn (self &Screen) clone(top Point, bot ?Point) !Screen {
 		if bottom.tag != top.tag {
 			return error('Point tags must match')
 		}
-		mut bottom_row := bottom
-		bottom_row.coord.x = 0
+		bottom_row := Point.new(bottom.tag, Coordinate{ y: bottom.coord().y })
 		br := self.pages.pin_point(bottom_row) or { return error('UnknownPoint') }
 		bot_y = int(br.y)
 	} else if br := self.pages.get_bottom_right(top.tag) {

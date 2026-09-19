@@ -12,7 +12,7 @@ fn page_selection_pin(pages &PageList, x u16, y u16) PagePin {
 fn page_selection_point(pages &PageList, pin PagePin) Coordinate {
 	return (pages.point_from_pin(.screen, pin) or {
 		panic('page selection pin is outside the page list')
-	}).coord
+	}).coord()
 }
 
 fn page_selection_assert_point(pages &PageList, pin PagePin, x u16, y u16) {

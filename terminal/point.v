@@ -52,22 +52,22 @@ pub enum PointTag as u8 {
 // since V doesn't have tagged unions in the Zig sense.
 pub struct Point {
 pub mut:
-	tag   PointTag = .active
-	coord Coordinate
+	tag        PointTag = .active
+	coordinate Coordinate
 }
 
 // Create a Point for the given tag and coordinate.
 pub fn Point.new(tag PointTag, coord Coordinate) Point {
 	return Point{
-		tag: tag
-		coord: coord
+		tag:        tag
+		coordinate: coord
 	}
 }
 
 // Returns the coordinate regardless of tag (equivalent to Zig's
 // switch-on-all-variants returning the payload).
-pub fn (self &Point) get_coord() Coordinate {
-	return self.coord
+pub fn (self &Point) coord() Coordinate {
+	return self.coordinate
 }
 
 // Coordinate represents an x/y position within the terminal grid.

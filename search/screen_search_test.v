@@ -22,8 +22,8 @@ fn screen_search_point(searcher &ScreenSearch, hl highlight.Flattened) terminal.
 		return terminal.Pin{}
 	}
 	return terminal.Pin{
-		x: point.coord.x
-		y: point.coord.y
+		x: point.coord().x
+		y: point.coord().y
 	}
 }
 

@@ -1461,8 +1461,8 @@ pub fn (self &Pages) pin(opts PinOpts) ?Pin {
 pub fn (self &Pages) pin_point(point Point) ?Pin {
 	return self.pin(PinOpts{
 		tag: point.tag
-		x: u32(point.coord.x)
-		y: point.coord.y
+		x: u32(point.coord().x)
+		y: point.coord().y
 	})
 }
 

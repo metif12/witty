@@ -157,10 +157,10 @@ pub fn (self PageSelection) bottom_right(pages &PageList) PagePin {
 pub fn (self PageSelection) order(pages &PageList) SelectionOrder {
 	start_pt := (pages.point_from_pin(.screen, self.start()) or {
 		panic('selection start is outside the page list')
-	}).coord
+	}).coord()
 	end_pt := (pages.point_from_pin(.screen, self.end()) or {
 		panic('selection end is outside the page list')
-	}).coord
+	}).coord()
 
 	if self.rectangle {
 		if start_pt.y > end_pt.y && start_pt.x >= end_pt.x {
@@ -212,13 +212,13 @@ pub fn (self PageSelection) contains(pages &PageList, pin PagePin) bool {
 	br_pin := self.bottom_right(pages)
 	tl := (pages.point_from_pin(.screen, tl_pin) or {
 		panic('selection top-left is outside the page list')
-	}).coord
+	}).coord()
 	br := (pages.point_from_pin(.screen, br_pin) or {
 		panic('selection bottom-right is outside the page list')
-	}).coord
+	}).coord()
 	p := (pages.point_from_pin(.screen, pin) or {
 		panic('selection test pin is outside the page list')
-	}).coord
+	}).coord()
 
 	if self.rectangle {
 		return p.y >= tl.y && p.y <= br.y && p.x >= tl.x && p.x <= br.x
@@ -241,13 +241,13 @@ pub fn (self PageSelection) contained_row(pages &PageList, pin PagePin) ?PageSel
 	br_pin := self.bottom_right(pages)
 	tl := (pages.point_from_pin(.screen, tl_pin) or {
 		panic('selection top-left is outside the page list')
-	}).coord
+	}).coord()
 	br := (pages.point_from_pin(.screen, br_pin) or {
 		panic('selection bottom-right is outside the page list')
-	}).coord
+	}).coord()
 	p := (pages.point_from_pin(.screen, pin) or {
 		panic('selection row pin is outside the page list')
-	}).coord
+	}).coord()
 	return self.contained_row_cached(pages, tl_pin, br_pin, pin, tl, br, p)
 }
 
@@ -357,7 +357,7 @@ pub fn (mut self PageSelection) adjust(pages &PageList, adjustment SelectionAdju
 		.home {
 			new_end := pages.pin(Point{
 				tag: .screen
-				coord: Coordinate{}
+				coordinate: Coordinate{}
 			}) or { panic('page list has no home pin') }
 			unsafe { *end_pin = new_end }
 		}

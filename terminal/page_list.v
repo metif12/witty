@@ -2888,7 +2888,7 @@ pub fn (self &PageCell) screen_point() Point {
 
 	return Point{
 		tag: .screen
-		coord: Coordinate{
+		coordinate: Coordinate{
 			x: self.col_idx
 			y: u32(y)
 		}
@@ -4003,11 +4003,11 @@ pub fn (self &PageList) get_bottom_right(tag PointTag) ?PagePin {
 // Return the untracked page pin for a tagged point. The coordinate is
 // relative to the point's active, viewport, screen, or history origin.
 pub fn (self &PageList) pin(point Point) ?PagePin {
-	if u32(point.coord.x) >= u32(self.cols) {
+	if u32(point.coord().x) >= u32(self.cols) {
 		return none
 	}
-	mut result := self.get_top_left(point.tag).down(usize(point.coord.y)) or { return none }
-	result.x = point.coord.x
+	mut result := self.get_top_left(point.tag).down(usize(point.coord().y)) or { return none }
+	result.x = point.coord().x
 	return result
 }
 
@@ -4332,7 +4332,7 @@ pub fn (self &PageList) point_from_pin(tag PointTag, p PagePin) ?Point {
 		}
 		return Point{
 			tag: tag
-			coord: Coordinate{
+			coordinate: Coordinate{
 				x: p.x
 				y: u32(p.y - tl.y)
 			}
@@ -4347,7 +4347,7 @@ pub fn (self &PageList) point_from_pin(tag PointTag, p PagePin) ?Point {
 		if voidptr(node) == p_ptr {
 			return Point{
 				tag: tag
-				coord: Coordinate{
+				coordinate: Coordinate{
 					x: p.x
 					y: y + u32(p.y)
 				}
@@ -6332,7 +6332,7 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) ! {
 			}
 		}
 
-		current := usize(self.rows) - usize(active_pt.coord.y) - 1
+		current := usize(self.rows) - usize(active_pt.coord().y) - 1
 
 		mut req_rows := preserved_remaining
 		// req_rows -|= wrapped -| c.wrapped_rows  (saturating subtractions)

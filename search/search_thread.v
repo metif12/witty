@@ -594,11 +594,11 @@ fn (mut self SearchThread) do_select(sel Select) {
 		}
 		viewport_top := live_screen.pages.viewport_start
 		viewport_bot := viewport_top + int(live_screen.pages.rows) - 1
-		if int(end.coord.y) < viewport_top || int(start.coord.y) > viewport_bot {
-			target := if int(start.coord.y) > live_screen.pages.active_start {
+		if int(end.coord().y) < viewport_top || int(start.coord().y) > viewport_bot {
+			target := if int(start.coord().y) > live_screen.pages.active_start {
 				live_screen.pages.active_start
 			} else {
-				int(start.coord.y)
+				int(start.coord().y)
 			}
 			live_screen.pages.scroll_delta(target - viewport_top)
 		}
