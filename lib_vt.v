@@ -56,7 +56,7 @@ pub type CSI = terminal.CSIAction
 
 pub type DCS = terminal.DCSAction
 
-pub type Parser = terminal.VTParser
+pub type Parser = terminal.Parser
 
 pub type Pin = terminal.PagePin
 

@@ -323,7 +323,7 @@ import simd
 // Stream processes VT escape sequences and dispatches actions.
 //
 // This is a translation of Ghostty's stream.zig. It takes a byte stream,
-// parses escape sequences using VTParser, and produces a series of
+// parses escape sequences using Parser, and produces a series of
 // StreamEvents that represent terminal control actions.
 //
 // The stream collects events into an array. Callers process events after
@@ -528,7 +528,7 @@ pub:
 // Events are collected into the events array for processing.
 pub struct Stream {
 pub mut:
-	parser VTParser
+	parser Parser
 	utf8d  UTF8Decoder
 	// Collected stream events
 	events []StreamEvent
@@ -543,7 +543,7 @@ pub mut:
 // init creates a new stream.
 pub fn Stream.init() Stream {
 	return Stream{
-		parser: VTParser.init()
+		parser: Parser.init()
 	}
 }
 
@@ -552,7 +552,7 @@ pub fn Stream.init() Stream {
 // selection in the translated parser.
 pub fn Stream.init_alloc(allocator voidptr) Stream {
 	return Stream{
-		parser: VTParser{
+		parser: Parser{
 			osc_parser: osc.Parser.init(allocator)
 		}
 	}
@@ -780,11 +780,22 @@ fn (mut self Stream) next_non_utf8(c u8) {
 	// Normal path: call parser
 	actions := self.parser.next(c)
 
-	for action in actions {
-		if self.capture_raw && action.action_type !in [.print_action, .execute_action] {
+	if action := actions.exit_action {
+		self.handle_parser_action(action)
+	}
+	if action := actions.transition_action {
+		self.handle_parser_action(action)
+	}
+	if action := actions.entry_action {
+		self.handle_parser_action(action)
+	}
+}
+
+fn (mut self Stream) handle_parser_action(action ParserAction) {
+	if self.capture_raw && action.action_type !in [.print_action, .execute_action] {
 			self.raw_events << action.clone_for_retention()
-		}
-		match action.action_type {
+	}
+	match action.action_type {
 			.print_action {
 				self.print(action.char)
 			}
@@ -822,7 +833,6 @@ fn (mut self Stream) next_non_utf8(c u8) {
 			.apc_end_action {
 				self.dispatch(.apc_end, ActionPayload{})
 			}
-		}
 	}
 }
 

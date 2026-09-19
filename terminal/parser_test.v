@@ -1,18 +1,41 @@
 module terminal
 
-// Tests for the VT parser (VTParser.next) behavior.
+// Tests for the VT parser (Parser.next) behavior.
 //
 // Source: src/terminal/Parser.zig `test "..."` blocks.
 //
-// Ghostty's `next()` returns `[3]?Action` (exit, transition, entry actions,
-// each optionally null). Witty's `next()` returns a flat `[]ParserAction`
-// list that only contains the non-null actions produced for that byte.
-//
-// To translate faithfully we collapse the ghostty triple into "the single
-// meaningful action produced by this byte", and assert on its type/contents.
+// Flatten the three source positions for tests that only care about emitted
+// actions. Dedicated coverage below verifies the positional contract.
+fn dispatch_actions(actions ParserActions) []ParserAction {
+	mut result := []ParserAction{cap: 3}
+	if action := actions.exit_action {
+		result << action
+	}
+	if action := actions.transition_action {
+		result << action
+	}
+	if action := actions.entry_action {
+		result << action
+	}
+	return result
+}
 
-fn dispatch_actions(actions []ParserAction) []ParserAction {
-	return actions
+fn test_parser_next_preserves_exit_transition_entry_slots() {
+	mut p := Parser{}
+	p.state = .dcs_passthrough
+	actions := p.next(0x1b)
+	exit_action := actions.exit_action or { panic('missing exit action') }
+	assert exit_action.action_type == .dcs_unhook_action
+	assert actions.transition_action == none
+	assert actions.entry_action == none
+
+	p.state = .sos_pm_apc_string
+	actions_with_transition := p.next(0x18)
+	exit_with_transition := actions_with_transition.exit_action or { panic('missing exit action') }
+	transition := actions_with_transition.transition_action or { panic('missing transition action') }
+	assert exit_with_transition.action_type == .apc_end_action
+	assert transition.action_type == .execute_action
+	assert actions_with_transition.entry_action == none
 }
 
 fn test_parser_state_source_ordinals() {
@@ -64,7 +87,7 @@ fn test_parser_source_limits_and_separator_list() {
 }
 
 fn test_parser_init_and_collect_source_contract() {
-	mut p := VTParser.init()
+	mut p := Parser.init()
 	defer { p.deinit() }
 	assert p.state == .ground
 	for byte_val in 'abcde'.bytes() {
@@ -78,7 +101,7 @@ fn test_parser_init_and_collect_source_contract() {
 // test {} (unnamed): C1 8-bit controls + print + execute
 // ============================================================
 fn test_c1_sos_st_print_execute() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x9E) // PM (C1) -> sos_pm_apc_string
 	assert p.state == .sos_pm_apc_string
 	p.next(0x9C) // ST (C1) -> ground
@@ -105,7 +128,7 @@ fn test_c1_sos_st_print_execute() {
 // esc: ESC ( B
 // ============================================================
 fn test_esc_paren_b() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	p.next(u8(`(`))
 
@@ -123,7 +146,7 @@ fn test_esc_paren_b() {
 // csi: ESC [ H
 // ============================================================
 fn test_csi_esc_bracket_h() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	p.next(0x5B)
 
@@ -140,7 +163,7 @@ fn test_csi_esc_bracket_h() {
 // csi: ESC [ 1 ; 4 H
 // ============================================================
 fn test_csi_esc_bracket_1_4_h() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	p.next(0x5B)
 	p.next(0x31) // 1
@@ -163,7 +186,7 @@ fn test_csi_esc_bracket_1_4_h() {
 // csi: SGR ESC [ 38 : 2 m
 // ============================================================
 fn test_csi_sgr_38_colon_2_m() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	p.next(u8(`[`))
 	p.next(u8(`3`))
@@ -188,7 +211,7 @@ fn test_csi_sgr_38_colon_2_m() {
 // csi: SGR colon followed by semicolon
 // ============================================================
 fn test_csi_sgr_colon_then_semicolon() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	for c in '[48:2'.bytes() {
 		a := p.next(c)
@@ -216,7 +239,7 @@ fn test_csi_sgr_colon_then_semicolon() {
 // csi: SGR mixed colon and semicolon
 // ============================================================
 fn test_csi_sgr_mixed_colon_semicolon() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	for c in '[38:5:1;48:5:0'.bytes() {
 		a := p.next(c)
@@ -233,7 +256,7 @@ fn test_csi_sgr_mixed_colon_semicolon() {
 // csi: SGR ESC [ 48 : 2 m  (48:2:240:143:104)
 // ============================================================
 fn test_csi_sgr_48_colon_full() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	for c in '[48:2:240:143:104'.bytes() {
 		a := p.next(c)
@@ -263,7 +286,7 @@ fn test_csi_sgr_48_colon_full() {
 // csi: SGR ESC [4:3m colon
 // ============================================================
 fn test_csi_sgr_4_colon_3_m() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	p.next(u8(`[`))
 	p.next(u8(`4`))
@@ -287,7 +310,7 @@ fn test_csi_sgr_4_colon_3_m() {
 // csi: SGR with many blank and colon  (58:2::240:143:104)
 // ============================================================
 fn test_csi_sgr_many_blank_and_colon() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	for c in '[58:2::240:143:104'.bytes() {
 		a := p.next(c)
@@ -320,7 +343,7 @@ fn test_csi_sgr_many_blank_and_colon() {
 // [;4:3;38;2;175;175;215;58:2::190:80:70
 // ============================================================
 fn test_csi_sgr_mixed_with_blank() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	for c in '[;4:3;38;2;175;175;215;58:2::190:80:70'.bytes() {
 		a := p.next(c)
@@ -369,7 +392,7 @@ fn test_csi_sgr_mixed_with_blank() {
 // [4:3;38;2;51;51;51;48;2;170;170;170;58;2;255;97;136
 // ============================================================
 fn test_csi_sgr_mixed_underline_bg_fg() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	for c in '[4:3;38;2;51;51;51;48;2;170;170;170;58;2;255;97;136'.bytes() {
 		a := p.next(c)
@@ -423,7 +446,7 @@ fn test_csi_sgr_mixed_underline_bg_fg() {
 // csi: colon for non-m final -> sequence dropped, back to ground
 // ============================================================
 fn test_csi_colon_for_non_m_final() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	for c in '[38:2h'.bytes() {
 		a := dispatch_actions(p.next(c))
@@ -437,7 +460,7 @@ fn test_csi_colon_for_non_m_final() {
 // csi: request mode decrqm  ([?2026$p)
 // ============================================================
 fn test_csi_request_mode_decrqm() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	for c in '[?2026\$'.bytes() {
 		a := p.next(c)
@@ -461,7 +484,7 @@ fn test_csi_request_mode_decrqm() {
 // csi: change cursor ([3 q)
 // ============================================================
 fn test_csi_change_cursor() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	for c in '[3 '.bytes() {
 		a := p.next(c)
@@ -484,7 +507,7 @@ fn test_csi_change_cursor() {
 // osc: change window title (BEL terminated)
 // ============================================================
 fn test_osc_change_window_title() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	p.next(u8(`]`))
 	p.next(u8(`0`))
@@ -506,7 +529,7 @@ fn test_osc_change_window_title() {
 // osc: change window title (end in esc)
 // ============================================================
 fn test_osc_change_window_title_end_in_esc() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	p.next(u8(`]`))
 	p.next(u8(`0`))
@@ -526,7 +549,7 @@ fn test_osc_change_window_title_end_in_esc() {
 }
 
 fn test_osc_invalid_sequence_produces_no_action() {
-	mut p := VTParser.init()
+	mut p := Parser.init()
 	defer { p.deinit() }
 	for byte_val in '\x1b]6'.bytes() {
 		p.next(byte_val)
@@ -537,7 +560,7 @@ fn test_osc_invalid_sequence_produces_no_action() {
 }
 
 fn test_parser_param_digit_counter_matches_source_overflow() {
-	mut p := VTParser.init()
+	mut p := Parser.init()
 	p.next(0x1b)
 	p.next(u8(`[`))
 	for _ in 0 .. 256 {
@@ -550,7 +573,7 @@ fn test_parser_param_digit_counter_matches_source_overflow() {
 }
 
 fn test_osc_color_operation_preserves_bel_terminator() {
-	mut p := VTParser.init()
+	mut p := Parser.init()
 	p.osc_parser.has_allocator = true
 	for byte_val in '\x1b]10;?'.bytes() {
 		p.next(byte_val)
@@ -562,7 +585,7 @@ fn test_osc_color_operation_preserves_bel_terminator() {
 }
 
 fn test_osc_kitty_color_preserves_st_terminator() {
-	mut p := VTParser.init()
+	mut p := Parser.init()
 	p.osc_parser.has_allocator = true
 	for byte_val in '\x1b]21;foreground=?'.bytes() {
 		p.next(byte_val)
@@ -575,7 +598,7 @@ fn test_osc_kitty_color_preserves_st_terminator() {
 }
 
 fn test_osc_raw_action_preserves_ignored_typed_payload() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	for byte_val in '\x1b]66;s=2;hello'.bytes() {
 		p.next(byte_val)
 	}
@@ -590,7 +613,7 @@ fn test_osc_raw_action_preserves_ignored_typed_payload() {
 // csi: too many params -> dropped
 // ============================================================
 fn test_csi_too_many_params() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	p.next(u8(`[`))
 	for _ in 0 .. 100 {
@@ -609,7 +632,7 @@ fn test_csi_too_many_params() {
 // ============================================================
 fn test_csi_sgr_up_to_max_params() {
 	for max in 1 .. max_params + 1 {
-		mut p := VTParser{}
+		mut p := Parser{}
 		p.next(0x1B)
 		p.next(u8(`[`))
 
@@ -635,7 +658,7 @@ fn test_csi_sgr_up_to_max_params() {
 fn test_csi_sgr_beyond_max_drops() {
 	max := max_params + 2
 
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	p.next(u8(`[`))
 
@@ -654,7 +677,7 @@ fn test_csi_sgr_beyond_max_drops() {
 // dcs: XTGETTCAP  (P+q)
 // ============================================================
 fn test_dcs_xtgettcap() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	for c in 'P+'.bytes() {
 		a := p.next(c)
@@ -675,7 +698,7 @@ fn test_dcs_xtgettcap() {
 // dcs: params  (P1000p)
 // ============================================================
 fn test_dcs_params() {
-	mut p := VTParser{}
+	mut p := Parser{}
 	p.next(0x1B)
 	for c in 'P1000'.bytes() {
 		a := p.next(c)

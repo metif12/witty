@@ -41,7 +41,7 @@ module terminal
 //   RGB               - RGB color value
 //
 // == Parser (from parser.v) ==
-//   VTParser          - VT100/ANSI escape sequence parser
+//   Parser            - VT100/ANSI escape sequence parser
 //   ParserState       - Parser state machine states
 //   ParserAction      - Actions produced by the parser
 //   CSIAction         - CSI dispatch data

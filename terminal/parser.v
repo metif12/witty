@@ -238,13 +238,23 @@ pub:
 	dcs         DCSAction // for dcs_hook
 }
 
+// ParserActions preserves the three ordered action positions returned by
+// Parser.next. The pinned V compiler emits invalid C for a returned
+// `[3]?ParserAction`, so the source tuple is represented by named fields.
+pub struct ParserActions {
+pub mut:
+	exit_action       ?ParserAction
+	transition_action ?ParserAction
+	entry_action      ?ParserAction
+}
+
 // ============================================================
-// VTParser
+// Parser
 // ============================================================
 
-// VTParser processes a stream of bytes according to the VT parser
+// Parser processes a stream of bytes according to the VT parser
 // state machine and produces parser actions.
-pub struct VTParser {
+pub struct Parser {
 pub mut:
 	state ParserState = .ground
 
@@ -263,14 +273,14 @@ pub mut:
 }
 
 // init initializes a parser and its OSC sub-parser.
-pub fn VTParser.init() VTParser {
-	return VTParser{
+pub fn Parser.init() Parser {
+	return Parser{
 		osc_parser: osc.Parser.init(unsafe { nil })
 	}
 }
 
 // clear resets the parser's parameter accumulation state.
-pub fn (mut self VTParser) clear() {
+fn (mut self Parser) clear() {
 	self.intermediates_idx = 0
 	self.params_idx = 0
 	self.params_sep = SepList.init_empty()
@@ -279,7 +289,7 @@ pub fn (mut self VTParser) clear() {
 }
 
 // deinit frees any allocated resources.
-pub fn (mut self VTParser) deinit() {
+pub fn (mut self Parser) deinit() {
 	self.osc_parser.deinit()
 }
 
@@ -287,11 +297,10 @@ pub fn (mut self VTParser) deinit() {
 // Up to 3 actions may need to be executed -- in order -- representing the
 // state exit, transition, and entry actions.
 //
-// This is a faithful translation of Ghostty's Parser.next which is driven
-// by the DEC ANSI parse table (parse_table.v). The three ordered actions
-// are appended to the returned list (null actions are simply not appended).
-pub fn (mut self VTParser) next(c u8) []ParserAction {
-	mut actions := []ParserAction{}
+// This is driven by the DEC ANSI parse table (parse_table.v). Each optional
+// slot preserves Ghostty's exit, transition, and entry action positions.
+pub fn (mut self Parser) next(c u8) ParserActions {
+	mut actions := ParserActions{}
 
 	effect := table_lookup(c, self.state)
 	next_state := effect.state
@@ -308,19 +317,19 @@ pub fn (mut self VTParser) next(c u8) []ParserAction {
 		match self.state {
 			.osc_string {
 				if cmd := self.osc_parser.end(c) {
-					actions << ParserAction{
+					actions.exit_action = ParserAction{
 						action_type: .osc_dispatch_action
 						osc: cmd
 					}
 				}
 			}
 			.dcs_passthrough {
-				actions << ParserAction{
+				actions.exit_action = ParserAction{
 					action_type: .dcs_unhook_action
 				}
 			}
 			.sos_pm_apc_string {
-				actions << ParserAction{
+				actions.exit_action = ParserAction{
 					action_type: .apc_end_action
 				}
 			}
@@ -330,7 +339,7 @@ pub fn (mut self VTParser) next(c u8) []ParserAction {
 
 	// 2. Transition action.
 	if a := self.do_action(action, c) {
-		actions << a
+		actions.transition_action = a
 	}
 
 	// 3. Entry action to new state (only when the state changes).
@@ -345,10 +354,10 @@ pub fn (mut self VTParser) next(c u8) []ParserAction {
 			.dcs_passthrough {
 				// build_dcs_hook_action finalizes the pending parameter
 				// (mirrors Ghostty's inline dcs_hook entry action).
-				actions << self.build_dcs_hook_action(c)
+				actions.entry_action = self.build_dcs_hook_action(c)
 			}
 			.sos_pm_apc_string {
-				actions << ParserAction{
+				actions.entry_action = ParserAction{
 					action_type: .apc_start_action
 				}
 			}
@@ -362,7 +371,7 @@ pub fn (mut self VTParser) next(c u8) []ParserAction {
 
 // do_action performs a transition action, returning an action to append
 // (or none). This mirrors Ghostty's doAction.
-fn (mut self VTParser) do_action(action TransitionAction, c u8) ?ParserAction {
+fn (mut self Parser) do_action(action TransitionAction, c u8) ?ParserAction {
 	match action {
 		.ta_none, .ta_ignore {
 			return none
@@ -416,7 +425,7 @@ fn (mut self VTParser) do_action(action TransitionAction, c u8) ?ParserAction {
 // Helper methods
 // ============================================================
 
-pub fn (mut self VTParser) collect(c u8) {
+fn (mut self Parser) collect(c u8) {
 	if self.intermediates_idx >= max_intermediate {
 		return
 	}
@@ -426,7 +435,7 @@ pub fn (mut self VTParser) collect(c u8) {
 }
 
 // process_csi_param_byte handles a digit, semicolon, or colon in CSI param state.
-fn (mut self VTParser) process_csi_param_byte(c u8) {
+fn (mut self Parser) process_csi_param_byte(c u8) {
 	if c >= 0x30 && c <= 0x39 {
 		// Digit
 		// Saturating multiply and add.
@@ -450,7 +459,7 @@ fn (mut self VTParser) process_csi_param_byte(c u8) {
 }
 
 // build_csi_action creates a CSI dispatch action from the current parser state.
-fn (mut self VTParser) build_csi_action(final_byte u8) ?ParserAction {
+fn (mut self Parser) build_csi_action(final_byte u8) ?ParserAction {
 	// Ignore too many parameters: if we've hit the max, the whole sequence
 	// is dropped (matches Ghostty).
 	if self.params_idx >= max_params {
@@ -483,7 +492,7 @@ fn (mut self VTParser) build_csi_action(final_byte u8) ?ParserAction {
 }
 
 // build_esc_action creates an ESC dispatch action from the current parser state.
-fn (mut self VTParser) build_esc_action(final_byte u8) ParserAction {
+fn (mut self Parser) build_esc_action(final_byte u8) ParserAction {
 	return ParserAction{
 		action_type: .esc_dispatch_action
 		esc: ESCAction{
@@ -494,7 +503,7 @@ fn (mut self VTParser) build_esc_action(final_byte u8) ParserAction {
 }
 
 // build_dcs_hook_action creates a DCS hook action from the current parser state.
-fn (mut self VTParser) build_dcs_hook_action(final_byte u8) ParserAction {
+fn (mut self Parser) build_dcs_hook_action(final_byte u8) ParserAction {
 	if self.param_acc_idx > 0 {
 		self.params[self.params_idx] = self.param_acc
 		self.params_idx += 1

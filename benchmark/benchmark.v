@@ -522,7 +522,7 @@ fn terminal_parser_step(ptr voidptr) ! {
 		return
 	}
 
-	mut parser := terminal.VTParser{}
+	mut parser := terminal.Parser{}
 	defer {
 		parser.deinit()
 	}
@@ -534,7 +534,7 @@ fn terminal_parser_step(ptr voidptr) ! {
 		}
 		for c in buf[..n] {
 			actions := parser.next(c)
-			C.witty_benchmark_do_not_optimize_ptr(actions.data)
+			C.witty_benchmark_do_not_optimize_ptr(&actions)
 		}
 	}
 }
