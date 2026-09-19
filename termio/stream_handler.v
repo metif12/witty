@@ -154,13 +154,13 @@ fn (mut self StreamHandler) renderer_message_writer(msg renderer.RendererMessage
 
 // vt dispatches a single stream event from the VT parser to the
 // appropriate handler.
-pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
+pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) ! {
 	match event.key {
 		.print {
-			self.terminal.print(event.payload.cp) or {}
+			self.terminal.print(event.payload.cp)!
 		}
 		.print_repeat {
-			self.terminal.print_repeat(event.payload.count) or {}
+			self.terminal.print_repeat(event.payload.count)!
 		}
 		.bell {
 			self.bell()
@@ -175,13 +175,13 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.horizontal_tab_back(event.payload.num)
 		}
 		.linefeed {
-			self.linefeed()
+			self.linefeed()!
 		}
 		.carriage_return {
 			self.terminal.carriage_return()
 		}
 		.enquiry {
-			self.enquiry()
+			self.enquiry()!
 		}
 		.invoke_charset {
 			self.terminal.invoke_charset(event.payload.charset_bank, event.payload.charset_slot, event.payload.charset_locking)
@@ -216,7 +216,7 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.terminal.set_cursor_pos(row, usize(self.terminal.screens.active.cursor.x) + 1)
 		}
 		.cursor_style {
-			self.set_cursor_style(event.payload.cursor_style) or {}
+			self.set_cursor_style(event.payload.cursor_style)!
 		}
 		.erase_display_below {
 			self.terminal.erase_display(.below, event.payload.flag)
@@ -225,7 +225,7 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.terminal.erase_display(.above, event.payload.flag)
 		}
 		.erase_display_complete {
-			self.terminal.scroll_viewport(terminal.scroll_viewport_bottom) or {}
+			self.terminal.scroll_viewport(terminal.scroll_viewport_bottom)!
 			self.terminal.erase_display(.complete, event.payload.flag)
 		}
 		.erase_display_scrollback {
@@ -262,7 +262,7 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.terminal.delete_lines(event.payload.count)
 		}
 		.scroll_up {
-			self.terminal.scroll_up(event.payload.count) or {}
+			self.terminal.scroll_up(event.payload.count)!
 		}
 		.scroll_down {
 			self.terminal.scroll_down(event.payload.count)
@@ -280,22 +280,22 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.terminal.tab_reset()
 		}
 		.index {
-			self.do_index()
+			self.index()!
 		}
 		.next_line {
-			self.next_line()
+			self.next_line()!
 		}
 		.reverse_index {
-			self.terminal.reverse_index()
+			self.reverse_index()!
 		}
 		.full_reset {
-			self.full_reset()
+			self.full_reset()!
 		}
 		.set_mode {
-			self.set_mode(event.payload.mode, true)
+			self.set_mode(event.payload.mode, true)!
 		}
 		.reset_mode {
-			self.set_mode(event.payload.mode, false)
+			self.set_mode(event.payload.mode, false)!
 		}
 		.save_mode {
 			self.terminal.modes.save(event.payload.mode)
@@ -305,7 +305,7 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			// always have to call set_mode because setting some modes have
 			// side effects and we want to make sure we process those.
 			v := self.terminal.modes.restore(event.payload.mode)
-			self.set_mode(event.payload.mode, v)
+			self.set_mode(event.payload.mode, v)!
 		}
 		.request_mode {
 			self.request_mode(event.payload.mode)
@@ -327,13 +327,13 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			}
 		}
 		.save_cursor {
-			self.terminal.save_cursor()
+			self.save_cursor()!
 		}
 		.restore_cursor {
-			self.terminal.restore_cursor()
+			self.restore_cursor()!
 		}
 		.modify_key_format {
-			self.set_modify_key_format(event.payload.modify_key_format)
+			self.set_modify_key_format(event.payload.modify_key_format)!
 		}
 		.protected_mode_off {
 			self.terminal.set_protected_mode(.off)
@@ -355,20 +355,20 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.send_size_report(event.payload.size_report_style)
 		}
 		.xtversion {
-			self.report_xtversion()
+			self.report_xtversion()!
 		}
 		.device_attributes {
-			self.device_attributes(event.payload.device_attr)
+			self.device_attributes(event.payload.device_attr)!
 		}
 		.device_status {
 			// The stream dispatches with num=param and flag=question.
 			// Convert back to a DeviceStatusRequest and call device_status_report().
 			if req := terminal.req_from_int(event.payload.num, event.payload.flag) {
-				self.device_status_report(req)
+				self.device_status_report(req)!
 			}
 		}
 		.kitty_keyboard_query {
-			self.query_kitty_keyboard()
+			self.query_kitty_keyboard()!
 		}
 		.kitty_keyboard_push {
 			self.terminal.screens.active.kitty_keyboard.push(terminal.KeyFlags.from_int(event.payload.kitty_flags))
@@ -394,19 +394,19 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.color_operation(event.payload.color_op, event.payload.color_requests, event.payload.osc_terminator)
 		}
 		.end_hyperlink {
-			self.terminal.screens.active.end_hyperlink()
+			self.end_hyperlink()!
 		}
 		.active_status_display {
 			self.terminal.status_display = event.payload.status_display
 		}
 		.decaln {
-			self.terminal.decaln() or {}
+			self.decaln()!
 		}
 		.window_title {
 			self.window_title(event.payload.str1)
 		}
 		.report_pwd {
-			self.report_pwd(event.payload.str1)
+			self.report_pwd(event.payload.str1)!
 		}
 		.show_desktop_notification {
 			self.show_desktop_notification(event.payload.desktop_notification)
@@ -415,7 +415,7 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.progress_report(event.payload.progress_report)
 		}
 		.start_hyperlink {
-			self.start_hyperlink(event.payload.hyperlink.uri, event.payload.hyperlink.id)
+			self.start_hyperlink(event.payload.hyperlink.uri, event.payload.hyperlink.id)!
 		}
 		.clipboard_contents {
 			self.clipboard_contents(event.payload.clipboard.kind, event.payload.clipboard.data)
@@ -438,19 +438,19 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			}
 		}
 		.dcs_hook {
-			self.dcs_hook(event.payload)
+			self.dcs_hook(event.payload)!
 		}
 		.dcs_put {
-			self.dcs_put(event.payload.byte_val)
+			self.dcs_put(event.payload.byte_val)!
 		}
 		.dcs_unhook {
-			self.dcs_unhook()
+			self.dcs_unhook()!
 		}
 		.apc_start {
 			self.apc.start()
 		}
 		.apc_end {
-			self.apc_end()
+			self.apc_end()!
 		}
 		.apc_put {
 			self.apc.feed(event.payload.byte_val)
@@ -465,29 +465,29 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 // DCS handlers
 // ============================================================
 
-pub fn (mut self StreamHandler) dcs_hook(payload terminal.ActionPayload) {
+pub fn (mut self StreamHandler) dcs_hook(payload terminal.ActionPayload) ! {
 	mut cmd := self.dcs.hook(terminal.DcsParams{
 		intermediates: payload.dcs_intermediates.bytestr()
 		params: payload.dcs_params.clone()
 		final_byte: payload.dcs_final
 	}) or { return }
 	defer { cmd.deinit() }
-	self.dcs_command(mut cmd)
+	self.dcs_command(mut cmd)!
 }
 
-pub fn (mut self StreamHandler) dcs_put(byte_val u8) {
+pub fn (mut self StreamHandler) dcs_put(byte_val u8) ! {
 	mut cmd := self.dcs.put(byte_val) or { return }
 	defer { cmd.deinit() }
-	self.dcs_command(mut cmd)
+	self.dcs_command(mut cmd)!
 }
 
-pub fn (mut self StreamHandler) dcs_unhook() {
+pub fn (mut self StreamHandler) dcs_unhook() ! {
 	mut cmd := self.dcs.unhook() or { return }
 	defer { cmd.deinit() }
-	self.dcs_command(mut cmd)
+	self.dcs_command(mut cmd)!
 }
 
-fn (mut self StreamHandler) dcs_command(mut cmd terminal.DcsCommand) {
+fn (mut self StreamHandler) dcs_command(mut cmd terminal.DcsCommand) ! {
 	match mut cmd {
 		terminal.DcsCommandXtgettcap {
 			self.dcs_xtgettcap(mut cmd.xtgettcap)
@@ -504,7 +504,7 @@ fn (mut self StreamHandler) dcs_command(mut cmd terminal.DcsCommand) {
 					if mut old := self.tmux_viewer {
 						old.deinit()
 					}
-					viewer_value := terminal.TmuxViewer.init() or { return }
+					viewer_value := terminal.TmuxViewer.init()!
 					mut viewer := &terminal.TmuxViewer{}
 					unsafe {
 						*viewer = viewer_value
@@ -527,6 +527,8 @@ fn (mut self StreamHandler) dcs_command(mut cmd terminal.DcsCommand) {
 				match action {
 					terminal.TmuxViewerActionExit {}
 					terminal.TmuxViewerActionCommand {
+						assert action.command.len > 0
+						assert action.command.ends_with('\n')
 						self.message_writer(Message.write_req(action.command))
 					}
 					terminal.TmuxViewerActionWindows {
@@ -628,7 +630,7 @@ fn (self &StreamHandler) format_decscusr() int {
 // APC handler
 // ============================================================
 
-pub fn (mut self StreamHandler) apc_end() {
+pub fn (mut self StreamHandler) apc_end() ! {
 	cmd := self.apc.end() or { return }
 	if response := kitty.execute(mut self.terminal, &cmd) {
 		encoded := response.encode()
@@ -668,18 +670,22 @@ fn (mut self StreamHandler) horizontal_tab_back(count u16) {
 	}
 }
 
-fn (mut self StreamHandler) linefeed() {
+fn (mut self StreamHandler) linefeed() ! {
 	// Small optimization: call index instead of linefeed because they're
 	// identical and this avoids one layer of function call overhead.
-	self.terminal.index() or {}
+	self.terminal.index()!
 }
 
-pub fn (mut self StreamHandler) do_index() {
-	self.terminal.index() or {}
+pub fn (mut self StreamHandler) reverse_index() ! {
+	self.terminal.reverse_index()
 }
 
-pub fn (mut self StreamHandler) next_line() {
-	self.terminal.index() or {}
+pub fn (mut self StreamHandler) index() ! {
+	self.terminal.index()!
+}
+
+pub fn (mut self StreamHandler) next_line() ! {
+	self.terminal.index()!
 	self.terminal.carriage_return()
 }
 
@@ -687,7 +693,7 @@ pub fn (mut self StreamHandler) next_line() {
 // Modify key format
 // ============================================================
 
-pub fn (mut self StreamHandler) set_modify_key_format(format terminal.ModifyKeyFormat) {
+pub fn (mut self StreamHandler) set_modify_key_format(format terminal.ModifyKeyFormat) ! {
 	self.terminal.flags.set_modify_other_keys_2(false)
 	match format {
 		.other_keys_numeric {
@@ -718,7 +724,7 @@ fn (mut self StreamHandler) request_mode_unknown(mode_raw u16, ansi bool) {
 // Set mode (with side effects)
 // ============================================================
 
-pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) {
+pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) ! {
 	// Note: this function doesn't need to grab the render state or
 	// terminal locks because it is only called from process() which
 	// grabs the lock.
@@ -787,13 +793,13 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) {
 			}
 		}
 		.alt_screen_legacy {
-			self.terminal.switch_screen_mode(.mode_47, enabled) or {}
+			self.terminal.switch_screen_mode(.mode_47, enabled)!
 		}
 		.alt_screen {
-			self.terminal.switch_screen_mode(.mode_1047, enabled) or {}
+			self.terminal.switch_screen_mode(.mode_1047, enabled)!
 		}
 		.alt_screen_save_cursor_clear_enter {
-			self.terminal.switch_screen_mode(.mode_1049, enabled) or {}
+			self.terminal.switch_screen_mode(.mode_1049, enabled)!
 		}
 
 		// Mode 1048 is xterm's conditional save cursor depending
@@ -814,7 +820,7 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) {
 			self.terminal.resize(u16(grid_size.columns), u16(grid_size.rows)) or {}
 		}
 		.column_132 {
-			self.terminal.deccolm(if enabled { .cols_132 } else { .cols_80 }) or {}
+			self.terminal.deccolm(if enabled { .cols_132 } else { .cols_80 })!
 		}
 
 		// We need to start a timer to prevent the emulator being hung
@@ -901,11 +907,11 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) {
 // Hyperlinks
 // ============================================================
 
-fn (mut self StreamHandler) start_hyperlink(uri string, id_ ?string) {
-	self.terminal.screens.active.start_hyperlink(uri, id_) or {}
+fn (mut self StreamHandler) start_hyperlink(uri string, id_ ?string) ! {
+	self.terminal.screens.active.start_hyperlink(uri, id_)!
 }
 
-pub fn (mut self StreamHandler) end_hyperlink() {
+pub fn (mut self StreamHandler) end_hyperlink() ! {
 	self.terminal.screens.active.end_hyperlink()
 }
 
@@ -913,7 +919,7 @@ pub fn (mut self StreamHandler) end_hyperlink() {
 // Device attributes
 // ============================================================
 
-pub fn (mut self StreamHandler) device_attributes(req terminal.DeviceAttributeReq) {
+pub fn (mut self StreamHandler) device_attributes(req terminal.DeviceAttributeReq) ! {
 	// For the below, we quack as a VT220. We don't quack as
 	// a 420 because we don't support DCS sequences.
 	match req {
@@ -939,7 +945,7 @@ pub fn (mut self StreamHandler) device_attributes(req terminal.DeviceAttributeRe
 // Device status report
 // ============================================================
 
-pub fn (mut self StreamHandler) device_status_report(req terminal.DeviceStatusRequest) {
+pub fn (mut self StreamHandler) device_status_report(req terminal.DeviceStatusRequest) ! {
 	match req {
 		.operating_status {
 			self.message_writer(Message.write_stable_msg('\x1b[0n'))
@@ -1015,19 +1021,19 @@ pub fn (mut self StreamHandler) set_cursor_style(style terminal.AnsiCursorStyle)
 // Simple delegating methods
 // ============================================================
 
-pub fn (mut self StreamHandler) decaln() {
-	self.terminal.decaln() or {}
+pub fn (mut self StreamHandler) decaln() ! {
+	self.terminal.decaln()!
 }
 
-pub fn (mut self StreamHandler) save_cursor() {
+pub fn (mut self StreamHandler) save_cursor() ! {
 	self.terminal.save_cursor()
 }
 
-pub fn (mut self StreamHandler) restore_cursor() {
+pub fn (mut self StreamHandler) restore_cursor() ! {
 	self.terminal.restore_cursor()
 }
 
-pub fn (mut self StreamHandler) enquiry() {
+pub fn (mut self StreamHandler) enquiry() ! {
 	self.message_writer(Message.write_req(self.enquiry_response))
 }
 
@@ -1035,7 +1041,7 @@ fn (mut self StreamHandler) configure_charset(slot terminal.CharsetSlot, set ter
 	self.terminal.configure_charset(slot, set)
 }
 
-pub fn (mut self StreamHandler) full_reset() {
+pub fn (mut self StreamHandler) full_reset() ! {
 	self.terminal.full_reset()
 	self.set_mouse_shape(.text)
 
@@ -1052,7 +1058,7 @@ pub fn (mut self StreamHandler) full_reset() {
 // Kitty keyboard query
 // ============================================================
 
-pub fn (mut self StreamHandler) query_kitty_keyboard() {
+pub fn (mut self StreamHandler) query_kitty_keyboard() ! {
 	flags := self.terminal.screens.active.kitty_keyboard.current()
 	resp := '\x1b[?${flags.int()}u'
 	self.message_writer(Message.write_req(resp))
@@ -1062,7 +1068,7 @@ pub fn (mut self StreamHandler) query_kitty_keyboard() {
 // XTVERSION
 // ============================================================
 
-pub fn (mut self StreamHandler) report_xtversion() {
+pub fn (mut self StreamHandler) report_xtversion() ! {
 	resp := '\x1bP>|ghostty ${build_meta.version_string}\x1b\\'
 	self.message_writer(Message.write_req(resp))
 }
@@ -1176,12 +1182,12 @@ fn (mut self StreamHandler) semantic_prompt(payload terminal.ActionPayload) {
 	self.terminal.semantic_prompt_options(payload.semantic_prompt_action, payload.semantic_prompt_opts)
 }
 
-fn (mut self StreamHandler) report_pwd(url string) {
+fn (mut self StreamHandler) report_pwd(url string) ! {
 	// Special handling for the empty URL. We treat the empty URL
 	// as resetting the pwd as if we never saw a pwd.
 	if url.len == 0 {
 		// Blank value can never fail because no allocs happen.
-		self.terminal.set_pwd('') or {}
+		self.terminal.set_pwd('')!
 
 		// If we haven't seen a title, we're using the pwd as our title.
 		// Set it to blank which will reset our title behavior.
@@ -1224,7 +1230,7 @@ fn (mut self StreamHandler) report_pwd(url string) {
 		return
 	}
 
-	self.terminal.set_pwd(uri.path) or {}
+	self.terminal.set_pwd(uri.path)!
 
 	// Report it to the surface.
 	self.surface_message_writer(apprt.SurfaceMessage{

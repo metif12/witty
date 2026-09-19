@@ -766,14 +766,20 @@ fn (mut t Termio) process_output_locked(buf []u8) {
 			t.renderer_state.record_inspector_pty_byte(byte)
 			t.terminal_stream.next(byte)
 			for event in t.terminal_stream.events {
-				t.stream_handler.vt(event)
+				t.stream_handler.vt(event) or {
+					eprintln('error processing terminal data: ${err}')
+					break
+				}
 			}
 			t.terminal_stream.clear_events()
 		}
 	} else {
 		t.terminal_stream.next_slice(buf)
 		for event in t.terminal_stream.events {
-			t.stream_handler.vt(event)
+			t.stream_handler.vt(event) or {
+				eprintln('error processing terminal data: ${err}')
+				break
+			}
 		}
 		t.terminal_stream.clear_events()
 	}
