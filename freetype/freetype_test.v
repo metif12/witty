@@ -4,6 +4,22 @@ import os
 
 const test_font_path = os.join_path(@VMODROOT, 'font', 'res', 'JetBrainsMono-Regular.ttf')
 
+fn test_error_conversion() {
+	int_to_error(0)!
+	mut caught := false
+	int_to_error(0x40) or {
+		caught = true
+		assert error_kind_of(err) == .out_of_memory
+		assert err.code() == error_to_int(.out_of_memory)
+	}
+	assert caught
+	int_to_error(0x18) or {
+		assert error_kind_of(err) == .unknown_freetype_error
+		return
+	}
+	assert false
+}
+
 fn test_tag_roundtrip() {
 	tag := Tag.init('wght')
 	assert tag.value == 0x77676874

@@ -14,6 +14,132 @@ module freetype
 
 import math
 
+// ErrorKind is Ghostty's exhaustive FreeType error set. V error sets carry an
+// integer code at runtime, so the corresponding raw FreeType value is retained
+// in IError.code().
+pub enum ErrorKind as i32 {
+	unknown_freetype_error        = 0x100
+	cannot_open_resource          = 0x01
+	unknown_file_format           = 0x02
+	invalid_file_format           = 0x03
+	invalid_version               = 0x04
+	lower_module_version          = 0x05
+	invalid_argument              = 0x06
+	unimplemented_feature         = 0x07
+	invalid_table                 = 0x08
+	invalid_offset                = 0x09
+	array_too_large               = 0x0a
+	missing_module                = 0x0b
+	missing_property              = 0x0c
+	invalid_glyph_index           = 0x10
+	invalid_character_code        = 0x11
+	invalid_glyph_format          = 0x12
+	cannot_render_glyph           = 0x13
+	invalid_outline               = 0x14
+	invalid_composite             = 0x15
+	too_many_hints                = 0x16
+	invalid_pixel_size            = 0x17
+	invalid_handle                = 0x20
+	invalid_library_handle        = 0x21
+	invalid_driver_handle         = 0x22
+	invalid_face_handle           = 0x23
+	invalid_size_handle           = 0x24
+	invalid_slot_handle           = 0x25
+	invalid_char_map_handle       = 0x26
+	invalid_cache_handle          = 0x27
+	invalid_stream_handle         = 0x28
+	too_many_drivers              = 0x30
+	too_many_extensions           = 0x31
+	out_of_memory                 = 0x40
+	unlisted_object               = 0x41
+	cannot_open_stream            = 0x51
+	invalid_stream_seek           = 0x52
+	invalid_stream_skip           = 0x53
+	invalid_stream_read           = 0x54
+	invalid_stream_operation      = 0x55
+	invalid_frame_operation       = 0x56
+	nested_frame_access           = 0x57
+	invalid_frame_read            = 0x58
+	raster_uninitialized          = 0x60
+	raster_corrupted              = 0x61
+	raster_overflow               = 0x62
+	raster_negative_height        = 0x63
+	too_many_caches               = 0x70
+	invalid_opcode                = 0x80
+	too_few_arguments             = 0x81
+	stack_overflow                = 0x82
+	code_overflow                 = 0x83
+	bad_argument                  = 0x84
+	divide_by_zero                = 0x85
+	invalid_reference             = 0x86
+	debug_opcode                  = 0x87
+	endf_in_exec_stream           = 0x88
+	nested_defs                   = 0x89
+	invalid_code_range            = 0x8a
+	execution_too_long            = 0x8b
+	too_many_function_defs        = 0x8c
+	too_many_instruction_defs     = 0x8d
+	table_missing                 = 0x8e
+	horiz_header_missing          = 0x8f
+	locations_missing             = 0x90
+	name_table_missing            = 0x91
+	cmap_table_missing            = 0x92
+	hmtx_table_missing            = 0x93
+	post_table_missing            = 0x94
+	invalid_horiz_metrics         = 0x95
+	invalid_char_map_format       = 0x96
+	invalid_ppem                  = 0x97
+	invalid_vert_metrics          = 0x98
+	could_not_find_context        = 0x99
+	invalid_post_table_format     = 0x9a
+	invalid_post_table            = 0x9b
+	syntax                        = 0xa0
+	stack_underflow               = 0xa1
+	ignore                        = 0xa2
+	no_unicode_glyph_name         = 0xa3
+	missing_startfont_field       = 0xb0
+	missing_font_field            = 0xb1
+	missing_size_field            = 0xb2
+	missing_fontboundingbox_field = 0xb3
+	missing_chars_field           = 0xb4
+	missing_startchar_field       = 0xb5
+	missing_encoding_field        = 0xb6
+	missing_bbx_field             = 0xb7
+	bbx_too_big                   = 0xb8
+	corrupted_font_header         = 0xb9
+	corrupted_font_glyphs         = 0xba
+}
+
+fn error_kind_from_int(code int) ErrorKind {
+	if code in 0x01 .. 0x0d || code in 0x10 .. 0x18 || code in 0x20 .. 0x29
+		|| code in 0x30 .. 0x32 || code in 0x40 .. 0x42 || code in 0x51 .. 0x59
+		|| code in 0x60 .. 0x64 || code == 0x70 || code in 0x80 .. 0x9c
+		|| code in 0xa0 .. 0xa4 || code in 0xb0 .. 0xbb {
+		return unsafe { ErrorKind(code) }
+	}
+	return .unknown_freetype_error
+}
+
+// int_to_error converts FreeType's integer result into the pinned error set.
+pub fn int_to_error(code int) ! {
+	if code == 0 {
+		return
+	}
+	kind := error_kind_from_int(code)
+	return error_with_code(kind.str(), int(kind))
+}
+
+pub fn error_to_int(kind ErrorKind) int {
+	if kind == .unknown_freetype_error {
+		return -1
+	}
+	return int(kind)
+}
+
+pub fn error_kind_of(err IError) ErrorKind {
+	return error_kind_from_int(err.code())
+}
+
 // ============================================================
 // C library configuration and extern declarations
 // ============================================================
@@ -859,9 +985,7 @@ pub fn (version Version) to_string(mut buf []u8) !string {
 pub fn Library.init() !Library {
 	mut lib := voidptr(unsafe { nil })
 	err := C.FT_Init_FreeType(&lib)
-	if err != 0 {
-		return error('FT_Init_FreeType failed (${err})')
-	}
+	int_to_error(err)!
 	return Library{
 		handle: lib
 	}
@@ -889,9 +1013,7 @@ pub fn (l Library) init_face(path string, index i32) !Face {
 	}
 	mut ft_face := voidptr(unsafe { nil })
 	err := C.FT_New_Face(l.handle, &char(path.str), i64(index), &ft_face)
-	if err != 0 {
-		return error('FT_New_Face(${path}) failed (${err})')
-	}
+	int_to_error(err)!
 	return Face{
 		handle: ft_face
 	}
@@ -906,9 +1028,7 @@ pub fn (l Library) init_memory_face(data []u8, index i32) !Face {
 	mut ft_face := voidptr(unsafe { nil })
 	base := if owned.len > 0 { &u8(owned.data) } else { &u8(unsafe { nil }) }
 	err := C.FT_New_Memory_Face(l.handle, base, i64(owned.len), i64(index), &ft_face)
-	if err != 0 {
-		return error('FT_New_Memory_Face failed (${err})')
-	}
+	int_to_error(err)!
 	return Face{
 		handle:      ft_face
 		memory_data: owned
@@ -955,25 +1075,19 @@ pub fn (f Face) ref() {
 // select_charmap selects a character map encoding.
 pub fn (f Face) select_charmap(encoding Encoding) ! {
 	err := C.FT_Select_Charmap(f.handle, u32(encoding))
-	if err != 0 {
-		return error('FT_Select_Charmap failed (${err})')
-	}
+	int_to_error(err)!
 }
 
 // set_char_size sets the character size in 26.6 fractional points.
 pub fn (f Face) set_char_size(width i32, height i32, h_res u16, v_res u16) ! {
 	err := C.FT_Set_Char_Size(f.handle, i64(width), i64(height), u32(h_res), u32(v_res))
-	if err != 0 {
-		return error('FT_Set_Char_Size failed (${err})')
-	}
+	int_to_error(err)!
 }
 
 // load_glyph loads a glyph into the glyph slot.
 pub fn (f Face) load_glyph(glyph_index u32, flags LoadFlags) ! {
 	err := C.FT_Load_Glyph(f.handle, glyph_index, flags.to_int())
-	if err != 0 {
-		return error('FT_Load_Glyph failed (${err})')
-	}
+	int_to_error(err)!
 }
 
 // render_glyph renders a loaded glyph to a bitmap.
@@ -983,9 +1097,7 @@ pub fn (f Face) render_glyph(mode RenderMode) ! {
 	}
 	slot := C.witty_ft_glyph(f.handle)
 	err := C.FT_Render_Glyph(slot, int(mode))
-	if err != 0 {
-		return error('FT_Render_Glyph failed (${err})')
-	}
+	int_to_error(err)!
 }
 
 // get_char_index returns the glyph index for a Unicode codepoint.
@@ -1028,9 +1140,7 @@ pub fn (f Face) has_multiple_masters() bool {
 pub fn (f Face) get_mm_var() !MMVar {
 	mut raw := voidptr(unsafe { nil })
 	err := C.FT_Get_MM_Var(f.handle, &raw)
-	if err != 0 {
-		return error('FT_Get_MM_Var failed (${err})')
-	}
+	int_to_error(err)!
 	num_axis := C.witty_ft_mm_num_axis(raw)
 	mut axes := []MMAxis{cap: int(num_axis)}
 	for i in 0 .. num_axis {
@@ -1056,9 +1166,7 @@ pub fn (f Face) set_var_design_coordinates(coords []i64) ! {
 		return
 	}
 	err := C.FT_Set_Var_Design_Coordinates(f.handle, u32(coords.len), unsafe { &coords[0] })
-	if err != 0 {
-		return error('FT_Set_Var_Design_Coordinates failed (${err})')
-	}
+	int_to_error(err)!
 }
 
 // get_var_design_coordinates gets current variation axis coordinates.
@@ -1067,9 +1175,7 @@ pub fn (f Face) get_var_design_coordinates(mut coords []i64) ! {
 		return
 	}
 	err := C.FT_Get_Var_Design_Coordinates(f.handle, u32(coords.len), unsafe { &coords[0] })
-	if err != 0 {
-		return error('FT_Get_Var_Design_Coordinates failed (${err})')
-	}
+	int_to_error(err)!
 }
 
 // set_transform sets the transform applied when glyphs are loaded.
@@ -1099,9 +1205,7 @@ pub fn (f Face) get_sfnt_name(index usize) !SfntName {
 	mut length := u32(0)
 	err := C.witty_ft_get_sfnt_name(f.handle, u32(index), &name_id, &platform_id, &encoding_id,
 		&bytes, &length)
-	if err != 0 {
-		return error('FT_Get_Sfnt_Name failed (${err})')
-	}
+	int_to_error(err)!
 	mut data := []u8{len: int(length)}
 	for i in 0 .. int(length) {
 		data[i] = unsafe { bytes[i] }
@@ -1242,9 +1346,7 @@ pub fn (f Face) glyph() ?GlyphSlotRec {
 // select_size selects a fixed bitmap strike by index.
 pub fn (f Face) select_size(index i32) ! {
 	err := C.FT_Select_Size(f.handle, index)
-	if err != 0 {
-		return error('FT_Select_Size failed (${err})')
-	}
+	int_to_error(err)!
 }
 
 // SfntTableValue represents Ghostty's optional raw SFNT table slice.
@@ -1262,18 +1364,14 @@ pub fn (f Face) load_sfnt_table(tag Tag) !SfntTableValue {
 	// First query the length by passing a null buffer.
 	mut length := u64(0)
 	err := C.FT_Load_Sfnt_Table(f.handle, u64(tag.value), 0, &u8(unsafe { nil }), &length)
-	if err != 0 {
-		return error('FT_Load_Sfnt_Table (length) failed (${err})')
-	}
+	int_to_error(err)!
 	if length == 0 {
 		return SfntTableValue{}
 	}
 	// Then read the table bytes into a freshly allocated buffer.
 	mut buf := []u8{len: int(length)}
 	err2 := C.FT_Load_Sfnt_Table(f.handle, u64(tag.value), 0, &u8(buf.data), &length)
-	if err2 != 0 {
-		return error('FT_Load_Sfnt_Table (read) failed (${err2})')
-	}
+	int_to_error(err2)!
 	return SfntTableValue{
 		has_value: true
 		data:      buf
@@ -1310,17 +1408,13 @@ pub fn bitmap_done(lib Library, mut bm Bitmap) {
 // bitmap_convert converts a bitmap to a different format.
 pub fn bitmap_convert(lib Library, source &Bitmap, mut target Bitmap, alignment i32) ! {
 	err := C.FT_Bitmap_Convert(lib.handle, voidptr(source), voidptr(&target), alignment)
-	if err != 0 {
-		return error('FT_Bitmap_Convert failed (${err})')
-	}
+	int_to_error(err)!
 }
 
 // bitmap_copy copies a bitmap.
 pub fn bitmap_copy(lib Library, source &Bitmap, mut target Bitmap) ! {
 	err := C.FT_Bitmap_Copy(lib.handle, voidptr(source), voidptr(&target))
-	if err != 0 {
-		return error('FT_Bitmap_Copy failed (${err})')
-	}
+	int_to_error(err)!
 }
 
 // ============================================================
@@ -1372,9 +1466,7 @@ pub fn glyph_slot_own_bitmap(mut glyph GlyphSlotRec) ! {
 		return error('glyph slot is not backed by FreeType')
 	}
 	err := C.FT_GlyphSlot_Own_Bitmap(glyph.raw)
-	if err != 0 {
-		return error('FT_GlyphSlot_Own_Bitmap failed (${err})')
-	}
+	int_to_error(err)!
 }
 
 // ============================================================
