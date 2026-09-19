@@ -48,6 +48,20 @@ fn test_collection_init() {
 	c.deinit()
 }
 
+fn test_entry_or_alias_const_entry_resolves_both_arms() {
+	entry_value := EntryOrAlias{
+		entry: Entry{ fallback: true }
+	}
+	assert entry_value.get_const_entry().fallback
+
+	target := Entry{ fallback: true }
+	alias_value := EntryOrAlias{
+		is_alias: true
+		alias_entry: &target
+	}
+	assert alias_value.get_const_entry() == &target
+}
+
 fn test_collection_add_full() {
 	mut lib := Library.init() or { panic(err) }
 	defer { lib.deinit() }

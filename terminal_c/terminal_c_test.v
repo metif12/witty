@@ -232,3 +232,10 @@ fn test_sgr_parser_rejects_invalid_separator_length() {
 	defer { sgr_free(mut parser) }
 	assert parser.set_params([u16(1), 2], [u8(`;`)]) == .invalid_value
 }
+
+fn test_sgr_wasm_attribute_allocation_helpers() {
+	attr := sgr_wasm_alloc_attribute()
+	assert attr != unsafe { nil }
+	assert attr.kind == .unset
+	sgr_wasm_free_attribute(attr)
+}

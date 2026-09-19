@@ -354,3 +354,26 @@ pub fn sgr_attribute_tag(attr terminal.SgrAttribute) terminal.SgrAttributeKind {
 pub fn sgr_attribute_value(attr terminal.SgrAttribute) terminal.SgrAttribute {
 	return attr
 }
+
+// WebAssembly bindings cannot place an aggregate return value on their own
+// stack, so the source exposes matching allocation helpers for SGR attributes.
+pub fn sgr_wasm_alloc_attribute() &terminal.SgrAttribute {
+	raw := unsafe { malloc(sizeof(terminal.SgrAttribute)) }
+	if isnil(raw) {
+		panic('out of memory')
+	}
+	mut attr := unsafe { &terminal.SgrAttribute(raw) }
+	unsafe {
+		*attr = terminal.SgrAttribute{}
+	}
+	return attr
+}
+
+pub fn sgr_wasm_free_attribute(attr &terminal.SgrAttribute) {
+	if isnil(attr) {
+		return
+	}
+	unsafe {
+		free(attr)
+	}
+}

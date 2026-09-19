@@ -46,6 +46,12 @@ pub fn (mut self TripwireModule[P]) check(point P) ! {
 	}
 }
 
+// check_constrained is Ghostty's narrowed-error-set check. V errors are
+// already untyped, so this has the same runtime contract as check.
+pub fn (mut self TripwireModule[P]) check_constrained(point P) ! {
+	self.check(point)!
+}
+
 // error_always marks point to fail every time it is checked.
 pub fn (mut self TripwireModule[P]) error_always(point P, err IError) {
 	self.error_after(point, err, 0)

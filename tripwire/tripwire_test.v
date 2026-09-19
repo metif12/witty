@@ -41,6 +41,17 @@ fn test_error_after() {
 	io.end(.reset)!
 }
 
+fn test_check_constrained_uses_configured_error() {
+	mut io := new[Point]()
+	io.error_always(.write, error('WriteFailed'))
+	if _ := io.check_constrained(.write) {
+		assert false
+	} else {
+		assert err.msg() == 'WriteFailed'
+	}
+	io.end(.reset)!
+}
+
 fn test_untripped_expectation() {
 	mut io := new[Point]()
 	io.error_after(.read, error('OutOfMemory'), 2)

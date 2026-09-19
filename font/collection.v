@@ -624,6 +624,16 @@ pub fn (eoa &EntryOrAlias) get_entry() &Entry {
 	return unsafe { &eoa.entry }
 }
 
+// get_const_entry is the read-only counterpart to get_entry in the source.
+// V does not encode constness in pointer types, but retaining this entry point
+// keeps read-only call sites explicit and preserves the source API surface.
+pub fn (eoa &EntryOrAlias) get_const_entry() &Entry {
+	if eoa.is_alias {
+		return eoa.alias_entry
+	}
+	return unsafe { &eoa.entry }
+}
+
 // ============================================================
 // LoadOptions
 // ============================================================
