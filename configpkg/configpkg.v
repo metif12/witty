@@ -7467,7 +7467,7 @@ fn (mut c Config) load_iter_internal[T](mut iter T, overwrite_font_families bool
 		if !c.parse_manually_hook(arg, mut iter) {
 			return
 		}
-		location := config_iterator_location(iter)
+		location := diagnosticspkg.Location.from_iter(iter)
 		if !arg.starts_with('--') {
 			c.diagnostics << Diagnostic{
 				location: location
@@ -7522,7 +7522,7 @@ pub fn (mut c Config) parse_manually_hook[T](arg string, mut iter T) bool {
 		}
 		command_args << param
 	}
-	c.apply_command_tail(command_args, config_iterator_location(iter))
+	c.apply_command_tail(command_args, diagnosticspkg.Location.from_iter(iter))
 	return false
 }
 
@@ -7541,16 +7541,6 @@ fn (mut c Config) apply_command_tail(command_args []string, location diagnostics
 	if c.shell_integration != .none_ {
 		c.shell_integration = .detect
 	}
-}
-
-fn config_iterator_location[T](iter T) diagnosticspkg.Location {
-	mut result := diagnosticspkg.Location(diagnosticspkg.NoneLocation{})
-	$for method in T.methods {
-		$if method.name == 'location' {
-			result = iter.$method()
-		}
-	}
-	return result
 }
 
 // load_xdg_terminal_exec_args applies the special xdg-terminal-exec command

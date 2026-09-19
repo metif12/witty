@@ -35,7 +35,7 @@ fn make_termio_opts() TermioOpts {
 }
 
 fn test_mailbox_push_pop_fifo() {
-	mut mailbox := Mailbox.init()!
+	mut mailbox := Mailbox.init_spsc()!
 	defer {
 		mailbox.deinit()
 	}
@@ -253,7 +253,7 @@ fn test_stopwatch_notify_records_signal() {
 // The Mailbox wraps a bounded ring buffer (BlockingQueue(Message, 64)); this
 // exercises filling to capacity, the full-queue drop, FIFO drain, and reuse.
 fn test_mailbox_fill_drain_reuse() {
-	mut mailbox := Mailbox.init()!
+	mut mailbox := Mailbox.init_spsc()!
 	defer {
 		mailbox.deinit()
 	}
@@ -290,7 +290,7 @@ fn test_mailbox_fill_drain_reuse() {
 // send() enqueues into the same underlying queue as push(). When no mutex is
 // supplied (unlocked), it simply pushes without unlocking anything.
 fn test_mailbox_send_enqueues() {
-	mut mailbox := Mailbox.init()!
+	mut mailbox := Mailbox.init_spsc()!
 	defer {
 		mailbox.deinit()
 	}
@@ -308,7 +308,7 @@ fn test_mailbox_send_enqueues() {
 
 // notify() records that a wakeup signal was raised for the consuming thread.
 fn test_mailbox_notify_sets_flag() {
-	mut mailbox := Mailbox.init()!
+	mut mailbox := Mailbox.init_spsc()!
 	defer {
 		mailbox.deinit()
 	}
@@ -319,7 +319,7 @@ fn test_mailbox_notify_sets_flag() {
 }
 
 fn test_mailbox_send_waits_for_space_without_dropping_message() {
-	mut mailbox := Mailbox.init()!
+	mut mailbox := Mailbox.init_spsc()!
 	defer {
 		mailbox.deinit()
 	}

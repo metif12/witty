@@ -230,7 +230,7 @@ fn test_screen_style_underline_color_independent_from_fg() {
 
 	// Resolution reads back the correct, independent colors.
 	mut palette := [256]RGB{}
-	fg := s.cursor.style.fg_rgb(FgOpts{
+	fg := s.cursor.style.fg(FgOpts{
 		default_color: RGB{}
 		palette: palette
 	})

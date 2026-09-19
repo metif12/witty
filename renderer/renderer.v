@@ -2749,12 +2749,12 @@ fn (self &Renderer) compute_cursor_color(cursor_style terminal.CellStyle) termin
 
 	// Use our configured color if specified.
 	if v := self.config.cursor_color {
-		fg_style := cursor_style.fg_rgb(terminal.FgOpts{
+		fg_style := cursor_style.fg(terminal.FgOpts{
 			default_color: state.colors.foreground
 			palette:       state.colors.palette
 			bold_color:    self.config.bold_color
 		})
-		bg_style := cursor_style.bg_rgb(&state.cursor.cell, state.colors.palette) or {
+		bg_style := cursor_style.bg(&state.cursor.cell, state.colors.palette) or {
 			state.colors.background
 		}
 		return resolve_terminal_color(v, cursor_style.flags.inverse(), fg_style, bg_style)
@@ -2769,12 +2769,12 @@ fn (self &Renderer) compute_cursor_text_color(cursor_style terminal.CellStyle) t
 
 	// If cursor-text is set, compute the correct color; else use bg color.
 	if txt := self.config.cursor_text {
-		fg_style := cursor_style.fg_rgb(terminal.FgOpts{
+		fg_style := cursor_style.fg(terminal.FgOpts{
 			default_color: state.colors.foreground
 			palette:       state.colors.palette
 			bold_color:    self.config.bold_color
 		})
-		bg_style := cursor_style.bg_rgb(&state.cursor.cell, state.colors.palette) or {
+		bg_style := cursor_style.bg(&state.cursor.cell, state.colors.palette) or {
 			state.colors.background
 		}
 		return resolve_terminal_color(txt, cursor_style.flags.inverse(), fg_style, bg_style)
@@ -2918,8 +2918,8 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		// The `_style` suffixed values are the colors based on the cell
 		// style (SGR), before applying any additional configuration,
 		// inversions, selections, etc.
-		bg_style_opt := cell_style.bg_rgb(cell, state.colors.palette)
-		fg_style := cell_style.fg_rgb(terminal.FgOpts{
+		bg_style_opt := cell_style.bg(cell, state.colors.palette)
+		fg_style := cell_style.fg(terminal.FgOpts{
 			default_color: state.colors.foreground
 			palette:       state.colors.palette
 			bold_color:    self.config.bold_color

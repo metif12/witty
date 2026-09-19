@@ -146,6 +146,23 @@ pub:
 	action ?Action
 }
 
+// SpecialCaseKind tags the three overrides an action enum can request while
+// command-line action detection is in progress.
+pub enum SpecialCaseKind as u8 {
+	action
+	fallback
+	abort_if_no_action
+}
+
+// SpecialCase is the translated cli.action.SpecialCase tagged union. V has no
+// comptime type-returning functions, so this is specialized to Ghostty's sole
+// CLI action enum. The value is ignored for abort_if_no_action.
+pub struct SpecialCase {
+pub:
+	kind  SpecialCaseKind
+	value Action
+}
+
 pub fn (action Action) cli_name() string {
 	return action.str().replace('_', '-')
 }
@@ -156,28 +173,73 @@ pub fn actions() []Action {
 		.new_window]
 }
 
-// detect_action translates cli/action.zig's generic action detector and
-// cli/ghostty.zig's special-case handling.
-pub fn detect_action(args []string) !DetectActionResult {
+// detect_special_case preserves Ghostty's Action.detectSpecialCase hook.
+pub fn Action.detect_special_case(arg string) ?SpecialCase {
+	if arg == '-e' {
+		return SpecialCase{
+			kind: .abort_if_no_action
+		}
+	}
+	if arg == '--version' {
+		return SpecialCase{
+			kind: .action
+			value: .version
+		}
+	}
+	if arg == '--help' || arg == '-h' {
+		return SpecialCase{
+			kind: .fallback
+			value: .help
+		}
+	}
+	return none
+}
+
+// detect_args detects an action from the process argument iterator. V strings
+// are garbage-collected, so the source allocator parameter is absent.
+pub fn detect_args() !DetectActionResult {
+	mut iter := cli_args.SliceIterator.new(os.args)
+	return detect_iter[cli_args.SliceIterator](mut iter)
+}
+
+// detect_iter detects a Ghostty action from any iterator yielding CLI argument
+// strings. The source's comptime enum parameter is specialized to Action
+// because V cannot construct a generic tagged union type at compile time.
+pub fn detect_iter[T](mut iter T) !DetectActionResult {
 	mut fallback := ?Action(none)
 	mut pending := ?Action(none)
-	for arg in args {
-		if arg == '--version' {
-			return DetectActionResult{ action: .version }
-		}
-		if arg == '--help' || arg == '-h' {
-			fallback = .help
-		}
-		if arg == '-e' && pending == none {
-			return DetectActionResult{}
+	for {
+		arg := iter.next() or { break }
+		if special := Action.detect_special_case(arg) {
+			match special.kind {
+				.action { return DetectActionResult{ action: special.value } }
+				.fallback { fallback = special.value }
+				.abort_if_no_action {
+					if _ := pending {
+					} else {
+						return DetectActionResult{}
+					}
+				}
+			}
 		}
 		if !arg.starts_with('+') {
 			continue
 		}
-		if pending != none {
+		if _ := pending {
 			return error('multiple actions')
 		}
-		pending = action_from_name(arg[1..]) or { return error('invalid action: ${arg[1..]}') }
+		mut matched := Action.version
+		mut found := false
+		$for enum_value in Action.values {
+			if enum_value.name.replace('_', '-') == arg[1..] {
+				matched = enum_value.value
+				found = true
+			}
+		}
+		if !found {
+			return error('invalid action: ${arg[1..]}')
+		}
+		pending = matched
 	}
 	if action := pending {
 		return DetectActionResult{ action: action }
@@ -185,13 +247,10 @@ pub fn detect_action(args []string) !DetectActionResult {
 	return DetectActionResult{ action: fallback }
 }
 
-fn action_from_name(name string) ?Action {
-	for action in actions() {
-		if action.cli_name() == name {
-			return action
-		}
-	}
-	return none
+// detect_action is the explicit-slice convenience used by embedders and tests.
+pub fn detect_action(args []string) !DetectActionResult {
+	mut iter := cli_args.SliceIterator.new(args)
+	return detect_iter[cli_args.SliceIterator](mut iter)
 }
 
 // Initialize the global state.

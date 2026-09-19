@@ -73,6 +73,19 @@ pub enum LocationKind as u8 {
 	file
 }
 
+// from_iter returns the current diagnostic location for iterators that expose
+// a location() method. Other iterator types produce the location-less value.
+// V strings are garbage-collected, so the source allocator argument is absent.
+pub fn Location.from_iter[T](iter T) Location {
+	mut result := Location(NoneLocation{})
+	$for method in T.methods {
+		$if method.name == 'location' {
+			result = iter.$method()
+		}
+	}
+	return result
+}
+
 // Clone the location.
 pub fn (self Location) clone() Location {
 	match self {

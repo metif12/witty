@@ -9,6 +9,24 @@ fn test_ssh_cache_add_result_layout_matches_source() {
 	assert int(SshCacheAddResult.updated) == 1
 }
 
+fn test_ssh_cache_default_path_is_fallible_and_side_effect_free() {
+	key := 'XDG_STATE_HOME'
+	previous := os.getenv_opt(key)
+	defer {
+		if value := previous {
+			os.setenv(key, value, true)
+		} else {
+			os.unsetenv(key)
+		}
+	}
+
+	base := os.join_path(os.temp_dir(), 'witty-ssh-state-${os.getpid()}')
+	os.rmdir_all(base) or {}
+	os.setenv(key, base, true)
+	assert ssh_cache_default_path('ghostty')! == os.join_path(base, 'ghostty', 'ssh_cache')
+	assert !os.exists(base)
+}
+
 fn test_ssh_cache_entry_parsing_format_and_expiration() {
 	entry := SshCacheEntry.parse('example.com|1640995200|xterm-ghostty')?
 	assert entry.hostname == 'example.com'

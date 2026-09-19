@@ -164,7 +164,7 @@ fn style_color_eql(tag ColorType, r u8, g u8, b u8, palette u8, other_tag ColorT
 // Note that generally if a cell is a color-only cell, it SHOULD
 // only have the default style, but this is meant to work with the
 // default style as well.
-pub fn (self &CellStyle) bg_rgb(cell &CellData, palette [256]RGB) ?RGB {
+pub fn (self &CellStyle) bg(cell &CellData, palette [256]RGB) ?RGB {
 	return match cell.content_tag {
 		.bg_color_palette {
 			palette[int(cell.color_palette)]
@@ -194,7 +194,7 @@ pub fn (self &CellStyle) bg_rgb(cell &CellData, palette [256]RGB) ?RGB {
 
 // Returns the fg color for a cell with this style given the palette
 // and various configuration options.
-pub fn (self &CellStyle) fg_rgb(opts FgOpts) RGB {
+pub fn (self &CellStyle) fg(opts FgOpts) RGB {
 	// Note we don't pull the bold check to the top-level here because
 	// we don't want to duplicate the conditional multiple times since
 	// certain colors require more checks (e.g. `bold_is_bright`).
@@ -292,6 +292,45 @@ fn style_color_data(tag ColorType, r u8, g u8, b u8, palette u8) u64 {
 // Style VT formatting
 // ============================================================
 
+// VTFormatter is the source formatter value specialized to V's string-returning
+// formatting convention.
+pub struct VTFormatter {
+pub mut:
+	palette ?[]RGB
+pub:
+	style &CellStyle = unsafe { nil }
+}
+
+// HtmlFormatter is the HTML counterpart to VTFormatter.
+pub struct HtmlFormatter {
+pub mut:
+	palette ?[]RGB
+pub:
+	style &CellStyle = unsafe { nil }
+}
+
+// formatter_vt returns a formatter for this style's VT sequences.
+pub fn (self &CellStyle) formatter_vt() VTFormatter {
+	return VTFormatter{
+		style: unsafe { self }
+	}
+}
+
+// formatter_html returns a formatter for this style's inline CSS.
+pub fn (self &CellStyle) formatter_html() HtmlFormatter {
+	return HtmlFormatter{
+		style: unsafe { self }
+	}
+}
+
+pub fn (self VTFormatter) format() string {
+	return format_style_vt_with_palette(*self.style, self.palette)
+}
+
+pub fn (self HtmlFormatter) format() string {
+	return format_style_html_with_palette(*self.style, self.palette)
+}
+
 // Returns the VT (SGR) sequence string for this style.
 // This always resets the style first with \x1b[0m since a style
 // is meant to be fully self-contained.
@@ -302,12 +341,14 @@ fn style_color_data(tag ColorType, r u8, g u8, b u8, palette u8) u64 {
 // terminals have varying levels of support for combined sequences
 // especially with mixed separators (e.g. : vs ;).
 pub fn (self &CellStyle) format_vt() string {
-	return format_style_vt(*self)
+	return self.formatter_vt().format()
 }
 
 // Returns the VT sequence string with palette resolution.
 pub fn (self &CellStyle) format_vt_with_palette(palette []RGB) string {
-	return format_style_vt_with_palette(*self, palette)
+	mut formatter := self.formatter_vt()
+	formatter.palette = palette
+	return formatter.format()
 }
 
 // Returns the inline CSS properties string for this style.
@@ -316,12 +357,14 @@ pub fn (self &CellStyle) format_vt_with_palette(palette []RGB) string {
 //
 // Palette colors are emitted as CSS variables like var(--vt-palette-N).
 pub fn (self &CellStyle) format_html() string {
-	return format_style_html_with_palette(*self, none)
+	return self.formatter_html().format()
 }
 
 // Returns the inline CSS with palette resolution.
 pub fn (self &CellStyle) format_html_with_palette(palette []RGB) string {
-	return format_style_html_with_palette(*self, palette)
+	mut formatter := self.formatter_html()
+	formatter.palette = palette
+	return formatter.format()
 }
 
 // ============================================================

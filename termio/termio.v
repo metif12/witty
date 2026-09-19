@@ -289,7 +289,7 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 	t.renderer_mailbox = renderer_mailbox
 	t.surface_mailbox = opts.surface_mailbox
 	t.size = size
-	t.mailbox = Mailbox.init()!
+	t.mailbox = Mailbox.init_spsc()!
 	t.terminal_stream = terminal.Stream.init_alloc(voidptr(1))
 	t.backend = backend
 	if opts.full_config != unsafe { nil } && opts.full_config.input.items.len > 0 {
@@ -1414,8 +1414,9 @@ mut:
 	notified bool
 }
 
-// init creates a mailbox. The underlying mutex is allocated here.
-pub fn Mailbox.init() !Mailbox {
+// init_spsc creates the bounded single-producer/single-consumer mailbox.
+// The underlying mutex is allocated here.
+pub fn Mailbox.init_spsc() !Mailbox {
 	return Mailbox{
 		queue: datastruct.BlockingQueue.create[Message](mailbox_capacity)!
 	}
@@ -1429,7 +1430,7 @@ pub fn (mut m Mailbox) deinit() {
 }
 
 // ensure_queue lazily allocates the queue so a zero-valued Mailbox{}
-// (e.g. an embedded field that wasn't built via Mailbox.init) is usable.
+// (e.g. an embedded field that wasn't built via Mailbox.init_spsc) is usable.
 fn (mut m Mailbox) ensure_queue() &datastruct.BlockingQueue[Message] {
 	if m.queue == unsafe { nil } {
 		m.queue = datastruct.BlockingQueue.create[Message](mailbox_capacity) or {

@@ -1931,10 +1931,14 @@ fn (self PageFormatter) format_style_open(style CellStyle) string {
 			panic('unreachable')
 		}
 		.vt {
-			return format_style_vt_with_palette(style, self.opts.palette)
+			mut formatter := style.formatter_vt()
+			formatter.palette = self.opts.palette
+			return formatter.format()
 		}
 		.html {
-			return '<div style="display: inline;${format_style_html_with_palette(style, self.opts.palette)}">'
+			mut formatter := style.formatter_html()
+			formatter.palette = self.opts.palette
+			return '<div style="display: inline;${formatter.format()}">'
 		}
 	}
 }
@@ -1945,7 +1949,7 @@ fn (self PageFormatter) format_style_open(style CellStyle) string {
 
 // Format a style as a VT (SGR) sequence.
 pub fn format_style_vt(style CellStyle) string {
-	return format_style_vt_with_palette(style, none)
+	return style.formatter_vt().format()
 }
 
 // Format a style as a VT (SGR) sequence, optionally resolving palette colors.

@@ -341,7 +341,7 @@ fn test_app_focus_core_surface_resolves_runtime_wrapper() {
 	app.surfaces = SurfaceList([first, second])
 
 	app.focus_core_surface(&second_core)
-	focused := app.focused_surface_valid() or {
+	focused := app.focused_surface() or {
 		assert false, 'expected a focused surface'
 		return
 	}
@@ -349,5 +349,5 @@ fn test_app_focus_core_surface_resolves_runtime_wrapper() {
 
 	mut unknown := Surface{}
 	app.focus_core_surface(&unknown)
-	assert voidptr(app.focused_surface_valid()?) == voidptr(second)
+	assert voidptr(app.focused_surface()?) == voidptr(second)
 }

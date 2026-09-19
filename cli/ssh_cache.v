@@ -58,8 +58,11 @@ pub:
 	path string
 }
 
-pub fn ssh_cache_default_path(program string) string {
-	return os.join_path(os.state_dir(), program, 'ssh_cache')
+// ssh_cache_default_path resolves `${XDG_STATE_HOME}/<program>/ssh_cache`
+// without creating the directory. Path creation belongs to cache mutation.
+pub fn ssh_cache_default_path(program string) !string {
+	state_dir := internal_os.xdg_state(internal_os.XdgOptions{ subdir: program })!
+	return os.join_path(state_dir, 'ssh_cache')
 }
 
 pub fn (cache SshDiskCache) clear() ! {
@@ -260,7 +263,7 @@ pub:
 pub fn ssh_cache(args []string) !SshCacheResult {
 	opts := parse_ssh_cache_options(args)!
 	cache := SshDiskCache{
-		path: ssh_cache_default_path('ghostty')
+		path: ssh_cache_default_path('ghostty')!
 	}
 	return run_ssh_cache_with(cache, opts)
 }

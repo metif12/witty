@@ -312,7 +312,7 @@ pub mut:
 
 	// The last focused surface. This surface may not be valid;
 	// you must always call has_surface to validate it.
-	focused_surface ?&SurfaceRef
+	last_focused_surface ?&SurfaceRef
 
 	// The mailbox that can be used to send this thread messages. Note
 	// this is a blocking queue so if it is full you will get errors (or block).
@@ -459,9 +459,9 @@ pub fn (mut self App) delete_surface(surface &SurfaceRef) {
 	// There was a bug where we relied on has_surface to return false and
 	// just let focused surface be but the allocator was reusing addresses
 	// after free and giving false positives, so we must clear it.
-	if focused := self.focused_surface {
+	if focused := self.last_focused_surface {
 		if voidptr(focused) == voidptr(surface) {
-			self.focused_surface = none
+			self.last_focused_surface = none
 		}
 	}
 
@@ -486,11 +486,11 @@ pub fn (mut self App) delete_surface(surface &SurfaceRef) {
 	}
 }
 
-// focused_surface_valid returns the last focused surface if it is still
+// focused_surface returns the last focused surface if it is still
 // a valid (known) surface. Returns none if no valid focused surface exists.
 // This is only valid while on the main thread before tick is called.
-pub fn (self &App) focused_surface_valid() ?&SurfaceRef {
-	surface := self.focused_surface or { return none }
+pub fn (self &App) focused_surface() ?&SurfaceRef {
+	surface := self.last_focused_surface or { return none }
 	if !self.has_surface(surface) {
 		return none
 	}
@@ -587,7 +587,7 @@ pub fn (mut self App) focus_surface(surface &SurfaceRef) {
 	if !self.has_surface(surface) {
 		return
 	}
-	self.focused_surface = surface
+	self.last_focused_surface = surface
 }
 
 // focus_core_surface records focus for the runtime wrapper that owns a core

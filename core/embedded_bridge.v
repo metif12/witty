@@ -232,7 +232,7 @@ fn bridge_app_update_config(ptr voidptr, app &apprt.App, config &configpkg.Confi
 
 fn bridge_app_focused_pwd(ptr voidptr) ?string {
 	self := unsafe { &EmbeddedAppCore(ptr) }
-	surface := self.app.focused_surface_valid() or { return none }
+	surface := self.app.focused_surface() or { return none }
 	return surface.core().pwd()
 }
 

@@ -2,6 +2,21 @@ module global_state
 
 import os
 
+struct GenericDetectIterator {
+	values []string
+mut:
+	index int
+}
+
+fn (mut self GenericDetectIterator) next() ?string {
+	if self.index >= self.values.len {
+		return none
+	}
+	value := self.values[self.index]
+	self.index++
+	return value
+}
+
 fn test_logging_defaults_follow_runtime_and_darwin_target() {
 	logging := Logging{}
 	$if linux || freebsd {
@@ -20,6 +35,13 @@ fn test_logging_defaults_follow_runtime_and_darwin_target() {
 
 fn test_detect_action_direct_match() {
 	assert detect_action(['--font-size=12', '+list-themes'])!.action? == .list_themes
+}
+
+fn test_detect_iter_accepts_any_iterator_and_translates_enum_names() {
+	mut iter := GenericDetectIterator{
+		values: ['--ignored', '+list-themes']
+	}
+	assert detect_iter[GenericDetectIterator](mut iter)!.action? == .list_themes
 }
 
 fn test_detect_action_version_is_immediate() {

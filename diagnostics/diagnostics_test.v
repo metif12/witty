@@ -1,5 +1,22 @@
 module diagnostics
 
+struct IteratorWithoutLocation {}
+
+struct IteratorWithLocation {}
+
+fn (_ IteratorWithLocation) location() Location {
+	return CliLocation{
+		index: 7
+	}
+}
+
+fn test_location_from_iter_uses_optional_location_contract() {
+	assert Location.from_iter(IteratorWithoutLocation{}) is NoneLocation
+	location := Location.from_iter(IteratorWithLocation{})
+	assert location is CliLocation
+	assert location.index == 7
+}
+
 fn test_diagnostic_location_width_and_format() {
 	large := usize(usize(-1) >> 1) + 1
 	cli := Diagnostic{
