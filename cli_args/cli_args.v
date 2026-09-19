@@ -10,6 +10,86 @@ import zig_fmt
 // For trimming
 pub const whitespace = ' \t'
 
+// parse_argument_string translates std.process.ArgIteratorGeneral(.{}), used
+// by the benchmark and synthetic C/string entry points. Single quotes are
+// ordinary characters; double quotes and backslash parity follow Zig's
+// general process-argument iterator.
+pub fn parse_argument_string(input string) []string {
+	mut args := []string{}
+	mut index := 0
+	for {
+		for index < input.len && input[index] in [` `, `\t`, `\r`, `\n`] {
+			index++
+		}
+		if index >= input.len {
+			break
+		}
+
+		mut token := []u8{}
+		mut backslash_count := 0
+		mut in_quote := false
+		for {
+			character := if index < input.len { input[index] } else { u8(0) }
+			if character == 0 {
+				for _ in 0 .. backslash_count {
+					token << `\\`
+				}
+				args << token.bytestr()
+				return args
+			}
+			if character == `'` {
+				for _ in 0 .. backslash_count {
+					token << `\\`
+				}
+				backslash_count = 0
+				token << character
+				index++
+				continue
+			}
+			if character == `"` {
+				quote_is_real := backslash_count % 2 == 0
+				for _ in 0 .. backslash_count / 2 {
+					token << `\\`
+				}
+				backslash_count = 0
+				if quote_is_real {
+					in_quote = !in_quote
+				} else {
+					token << `"`
+				}
+				index++
+				continue
+			}
+			if character == `\\` {
+				backslash_count++
+				index++
+				continue
+			}
+			if character in [` `, `\t`, `\r`, `\n`] {
+				for _ in 0 .. backslash_count {
+					token << `\\`
+				}
+				backslash_count = 0
+				if in_quote {
+					token << character
+					index++
+					continue
+				}
+				args << token.bytestr()
+				index++
+				break
+			}
+			for _ in 0 .. backslash_count {
+				token << `\\`
+			}
+			backslash_count = 0
+			token << character
+			index++
+		}
+	}
+	return args
+}
+
 // The function type for a compatibility handler. The compatibility
 // handler is documented in the `parse` function documentation.
 //
@@ -88,7 +168,8 @@ pub fn parse[T](mut dst T, args []string) ! {
 		if !arg.starts_with('--') {
 			if append_diagnostic[T](mut dst, arg, 'invalid field', diagnostics.CliLocation{
 				index: usize(arg_index + 1)
-			}) {
+			})
+			{
 				continue
 			}
 			return error('invalid field')
@@ -127,7 +208,8 @@ pub fn parse[T](mut dst T, args []string) ! {
 			}
 			if append_diagnostic[T](mut dst, key, message, diagnostics.CliLocation{
 				index: usize(arg_index + 1)
-			}) {
+			})
+			{
 				continue
 			}
 			return err
@@ -289,9 +371,7 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 				if !has_value {
 					return error('value required')
 				}
-				dst.$(field.name) = parse_unsigned_int(raw, 64) or {
-					return error('invalid value')
-				}
+				dst.$(field.name) = parse_unsigned_int(raw, 64) or { return error('invalid value') }
 				return
 			} $else $if field.unaliased_typ is usize || field.unaliased_typ is ?usize {
 				if !has_value {
@@ -313,9 +393,7 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 				if !has_value {
 					return error('value required')
 				}
-				dst.$(field.name) = i8(parse_signed_int(raw, 8) or {
-					return error('invalid value')
-				})
+				dst.$(field.name) = i8(parse_signed_int(raw, 8) or { return error('invalid value') })
 				return
 			} $else $if field.unaliased_typ is i16 || field.unaliased_typ is ?i16 {
 				if !has_value {
@@ -337,9 +415,7 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 				if !has_value {
 					return error('value required')
 				}
-				dst.$(field.name) = parse_signed_int(raw, 64) or {
-					return error('invalid value')
-				}
+				dst.$(field.name) = parse_signed_int(raw, 64) or { return error('invalid value') }
 				return
 			} $else $if field.unaliased_typ is isize || field.unaliased_typ is ?isize {
 				if !has_value {
@@ -359,9 +435,7 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 				if !has_value {
 					return error('value required')
 				}
-				dst.$(field.name) = zig_fmt.parse_f64(raw) or {
-					return error('invalid value')
-				}
+				dst.$(field.name) = zig_fmt.parse_f64(raw) or { return error('invalid value') }
 				return
 			} $else $if field.unaliased_typ is $enum {
 				if !has_value {
@@ -446,8 +520,7 @@ pub fn parse_auto_struct[T](value string, default_value T) !T {
 		}
 		key := entry[..colon].trim(whitespace)
 		mut field_value := entry[colon + 1..].trim(whitespace)
-		if field_value.len >= 2 && field_value[0] == `"`
-			&& field_value[field_value.len - 1] == `"` {
+		if field_value.len >= 2 && field_value[0] == `"` && field_value[field_value.len - 1] == `"` {
 			field_value = decode_quoted_value(field_value) or { return error('invalid value') }
 		}
 		parse_into_field[T](mut result, key, field_value) or { return error('invalid value') }
@@ -562,12 +635,24 @@ pub fn decode_quoted_value(value string) !string {
 			return error('invalid value')
 		}
 		match value[i] {
-			`n` { result << `\n` }
-			`r` { result << `\r` }
-			`t` { result << `\t` }
-			`\\` { result << `\\` }
-			`'` { result << `'` }
-			`"` { result << `"` }
+			`n` {
+				result << `\n`
+			}
+			`r` {
+				result << `\r`
+			}
+			`t` {
+				result << `\t`
+			}
+			`\\` {
+				result << `\\`
+			}
+			`'` {
+				result << `'`
+			}
+			`"` {
+				result << `"`
+			}
 			`x` {
 				if i + 2 >= value.len - 1 {
 					return error('invalid value')
@@ -599,6 +684,7 @@ pub fn decode_quoted_value(value string) !string {
 				return error('invalid value')
 			}
 		}
+
 		i++
 	}
 	return result.bytestr()
@@ -614,8 +700,8 @@ fn append_diagnostic[T](mut dst T, key string, message string, location diagnost
 			if field.name == 'diagnostics' {
 				dst.$(field.name).append(diagnostics.Diagnostic{
 					location: location
-					key: key
-					message: message
+					key:      key
+					message:  message
 				})
 				appended = true
 			}
@@ -715,7 +801,7 @@ pub fn LineIterator.new(data string) LineIterator {
 
 pub fn LineIterator.new_with_path(data string, filepath string) LineIterator {
 	return LineIterator{
-		lines: data.split_into_lines()
+		lines:    data.split_into_lines()
 		filepath: filepath
 	}
 }

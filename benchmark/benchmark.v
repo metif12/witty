@@ -139,84 +139,11 @@ fn (mut self DataFile) read(mut buf []u8) !int {
 	}
 }
 
-// parse_argument_string is std.process.ArgIteratorGeneral(.{}), which is what
-// Ghostty's benchmark C API uses for its single argument string. Single quotes
-// are ordinary characters in this mode; double quotes and backslash parity
-// follow the Zig standard-library iterator exactly.
+// parse_argument_string retains the benchmark module's public helper while the
+// shared CLI translation owns the iterator implementation used here and by the
+// synthetic generator CLI.
 pub fn parse_argument_string(input string) []string {
-	mut args := []string{}
-	mut index := 0
-	for {
-		for index < input.len && input[index] in [` `, `\t`, `\r`, `\n`] {
-			index++
-		}
-		if index >= input.len {
-			break
-		}
-
-		mut token := []u8{}
-		mut backslash_count := 0
-		mut in_quote := false
-		for {
-			character := if index < input.len { input[index] } else { u8(0) }
-			if character == 0 {
-				for _ in 0 .. backslash_count {
-					token << `\\`
-				}
-				args << token.bytestr()
-				return args
-			}
-			if character == `'` {
-				for _ in 0 .. backslash_count {
-					token << `\\`
-				}
-				backslash_count = 0
-				token << character
-				index++
-				continue
-			}
-			if character == `"` {
-				quote_is_real := backslash_count % 2 == 0
-				for _ in 0 .. backslash_count / 2 {
-					token << `\\`
-				}
-				backslash_count = 0
-				if quote_is_real {
-					in_quote = !in_quote
-				} else {
-					token << `"`
-				}
-				index++
-				continue
-			}
-			if character == `\\` {
-				backslash_count++
-				index++
-				continue
-			}
-			if character in [` `, `\t`, `\r`, `\n`] {
-				for _ in 0 .. backslash_count {
-					token << `\\`
-				}
-				backslash_count = 0
-				if in_quote {
-					token << character
-					index++
-					continue
-				}
-				args << token.bytestr()
-				index++
-				break
-			}
-			for _ in 0 .. backslash_count {
-				token << `\\`
-			}
-			backslash_count = 0
-			token << character
-			index++
-		}
-	}
-	return args
+	return cli_args.parse_argument_string(input)
 }
 
 pub fn parse_action(name string) ?Action {
