@@ -171,6 +171,15 @@ fn test_no_data_benchmarks_run_once() {
 	run_cli('osc-parser', '')!
 }
 
+fn test_main_action_accepts_both_argument_sources() {
+	main_action(.codepoint_width, BenchmarkSliceArgs{
+		values: ['--mode=noop']
+	})!
+	main_action(.codepoint_width, BenchmarkStringArgs{
+		value: '--mode=noop'
+	})!
+}
+
 fn test_data_benchmarks_process_input() {
 	path := os.join_path(os.temp_dir(), 'witty-benchmark-${os.getpid()}')
 	os.write_file(path, 'hello 👩‍👩')!

@@ -10,7 +10,6 @@ module gtk
 // compile to when their build option is disabled in ghostty; in witty we
 // always compile all three and select at runtime via the `WinProto` union in
 // winproto_linux.v.
-
 import input
 import configpkg
 
@@ -68,6 +67,16 @@ pub fn NoopWindow.init(app &NoopApp, apprt_window &ApprtWindow) !NoopWindow {
 
 // deinit mirrors `noop.Window.deinit`.
 pub fn (self NoopWindow) deinit() {}
+
+// update_config_event mirrors the orphan `noop.Window.updateConfigEvent`
+// declaration in the pinned source. That declaration refers to
+// `ApprtWindow.DerivedConfig`, a type that is not declared anywhere in the
+// pinned GTK window implementation, and the WinProtoWindow union never
+// dispatches this method. Keep its unused argument opaque so the source entry
+// point remains callable without inventing a configuration representation.
+pub fn (mut self NoopWindow) update_config_event(derived_config voidptr) ! {
+	_ = derived_config
+}
 
 // resize_event mirrors `noop.Window.resizeEvent`.
 pub fn (mut self NoopWindow) resize_event() ! {}

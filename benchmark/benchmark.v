@@ -232,11 +232,37 @@ pub fn parse_action(name string) ?Action {
 	}
 }
 
+// BenchmarkSliceArgs and BenchmarkStringArgs translate cli.Args. The slice
+// form is the already-tokenized equivalent of the source's process iterator.
+pub struct BenchmarkSliceArgs {
+pub:
+	values []string
+}
+
+pub struct BenchmarkStringArgs {
+pub:
+	value string
+}
+
+pub type Args = BenchmarkSliceArgs | BenchmarkStringArgs
+
 // run_cli parses the action options, constructs its implementation, and runs
 // it once, matching benchmark.cli.mainAction as invoked by CApi.zig.
 pub fn run_cli(action_name string, argument_string string) ! {
 	action := parse_action(action_name) or { return error('unknown action=${action_name}') }
-	args := parse_argument_string(argument_string)
+	main_action(action, BenchmarkStringArgs{
+		value: argument_string
+	})!
+}
+
+// main_action parses action-specific options, constructs the corresponding
+// implementation, and runs its benchmark once. Mirrors benchmark.cli.mainAction.
+pub fn main_action(action Action, args_source Args) ! {
+	args := match args_source {
+		BenchmarkSliceArgs { args_source.values }
+		BenchmarkStringArgs { parse_argument_string(args_source.value) }
+	}
+
 	match action {
 		.codepoint_width { run_codepoint_width(args)! }
 		.grapheme_break { run_grapheme_break(args)! }
