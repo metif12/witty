@@ -3479,7 +3479,7 @@ pub mut:
 	total_rows usize
 
 	// Tracked pins that auto-update during modifications.
-	tracked_pins []&PagePin
+	tracked_pins_storage []&PagePin
 
 	// Viewport state.
 	viewport                PageViewport = .active
@@ -3541,7 +3541,7 @@ pub fn PageList.init(cols u16, rows u16, max_size ?usize) PageList {
 		explicit_max_size: max_size or { max_usize }
 		min_max_size: mms
 		total_rows: total_rows
-		tracked_pins: [viewport_pin]
+		tracked_pins_storage: [viewport_pin]
 		viewport: .active
 		viewport_pin: viewport_pin
 		viewport_pin_row_offset: none
@@ -3699,7 +3699,7 @@ pub fn (mut self PageList) deinit() {
 		node = n.next
 		self.destroy_node(n)
 	}
-	self.tracked_pins = []
+	self.tracked_pins_storage = []
 	self.pages = PageNodeList{}
 }
 
@@ -3744,7 +3744,7 @@ pub fn (mut self PageList) reset() {
 
 	// Update all tracked pins to point to first page top-left
 	first := self.pages.first or { panic('reset page list is empty') }
-	for mut p in self.tracked_pins {
+	for mut p in self.tracked_pins_storage {
 		p.node = first
 		p.y = 0
 		p.x = 0
@@ -3874,7 +3874,7 @@ pub fn (mut self PageList) grow() ?&PageNode {
 
 			// Update tracked pins pointing to pruned page
 			new_first := self.pages.first or { panic('pruning left the page list empty') }
-			for mut p in self.tracked_pins {
+			for mut p in self.tracked_pins_storage {
 				if voidptr(p.node) == voidptr(pruned) {
 					p.node = new_first
 					p.y = 0
@@ -4090,7 +4090,7 @@ pub fn (self &PageList) diagram() !string {
 			out.write_u8(u8(`\n`))
 
 			mut pins := []&PagePin{}
-			for pin in self.tracked_pins {
+			for pin in self.tracked_pins_storage {
 				if voidptr(pin.node) == voidptr(node) && pin.y == u16(y) {
 					pins << pin
 					if pins.len >= 16 {
@@ -4280,7 +4280,7 @@ pub fn (mut self PageList) track_pin(p PagePin) &PagePin {
 		x: p.x
 		garbage: p.garbage
 	}
-	self.tracked_pins << tracked
+	self.tracked_pins_storage << tracked
 	return tracked
 }
 
@@ -4289,21 +4289,21 @@ pub fn (mut self PageList) untrack_pin(p &PagePin) {
 	pp := voidptr(p)
 	vp := voidptr(self.viewport_pin)
 	assert pp != vp, 'cannot untrack viewport pin'
-	for i, tp in self.tracked_pins {
+	for i, tp in self.tracked_pins_storage {
 		if voidptr(tp) == pp {
-			self.tracked_pins.delete(i)
+			self.tracked_pins_storage.delete(i)
 			return
 		}
 	}
 }
 
 pub fn (self &PageList) count_tracked_pins() usize {
-	return usize(self.tracked_pins.len)
+	return usize(self.tracked_pins_storage.len)
 }
 
 // Returns a borrowed view that remains valid only until the PageList changes.
-pub fn (self &PageList) tracked_pins_view() []&PagePin {
-	return self.tracked_pins
+pub fn (self &PageList) tracked_pins() []&PagePin {
+	return self.tracked_pins_storage
 }
 
 // Returns true if pin points to a valid page in the list.
@@ -4794,7 +4794,7 @@ pub fn (mut self PageList) erase_row(point Point) ! {
 	}
 
 	// Pins below the erased row in the first page move up one row.
-	for mut tp in self.tracked_pins {
+	for mut tp in self.tracked_pins_storage {
 		if voidptr(tp.node) == voidptr(node) && tp.y > p.y {
 			tp.y -= 1
 		}
@@ -4819,7 +4819,7 @@ pub fn (mut self PageList) erase_row(point Point) ! {
 		}
 		page.dirty = true
 
-		for mut tp in self.tracked_pins {
+		for mut tp in self.tracked_pins_storage {
 			if voidptr(tp.node) != voidptr(node) {
 				continue
 			}
@@ -4896,7 +4896,7 @@ pub fn (mut self PageList) erase_rows(tl Point, bl ?Point) {
 
 		// Update any tracked pins to shift their y. If it was in the erased
 		// row then we move it to the top of this page.
-		for mut tp in self.tracked_pins {
+		for mut tp in self.tracked_pins_storage {
 			if voidptr(tp.node) == voidptr(chunk.node) {
 				if tp.y >= u16(end) {
 					tp.y -= u16(end)
@@ -4964,7 +4964,7 @@ pub fn (mut self PageList) split(p PagePin) ! {
 	}
 
 	// Update tracked pins
-	for mut tp in self.tracked_pins {
+	for mut tp in self.tracked_pins_storage {
 		if voidptr(tp.node) == voidptr(original_node) && tp.y >= p.y {
 			tp.node = new_node
 			tp.y -= p.y
@@ -4999,7 +4999,7 @@ pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 		explicit_max_size: self.explicit_max_size
 		min_max_size: self.min_max_size
 		total_rows: 0
-		tracked_pins: [viewport_pin]
+		tracked_pins_storage: [viewport_pin]
 		viewport: .active
 		viewport_pin: viewport_pin
 		viewport_pin_row_offset: none
@@ -5030,7 +5030,7 @@ pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 
 		// Recreate every tracked pin that falls within this cloned chunk.
 		if opts.tracked_pins != unsafe { nil } {
-			for old_pin in self.tracked_pins {
+			for old_pin in self.tracked_pins_storage {
 				if voidptr(old_pin.node) != voidptr(chunk.node) || old_pin.y < chunk.start
 					|| old_pin.y >= chunk.end {
 					continue
@@ -5041,7 +5041,7 @@ pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 					x: old_pin.x
 					garbage: old_pin.garbage
 				}
-				result.tracked_pins << new_pin
+				result.tracked_pins_storage << new_pin
 				unsafe {
 					mut remap := opts.tracked_pins
 					remap.put_no_clobber(old_pin, new_pin)
@@ -5266,7 +5266,7 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) ! {
 	}
 
 	// Handle tracked pin adjustments.
-	for mut p in list.tracked_pins {
+	for mut p in list.tracked_pins_storage {
 		if voidptr(p.node) != voidptr(row.node) || p.y != src_y {
 			continue
 		}
@@ -5327,7 +5327,7 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) ! {
 		}
 
 		// Move any tracked pins from the source.
-		for mut p in list.tracked_pins {
+		for mut p in list.tracked_pins_storage {
 			if voidptr(p.node) != voidptr(row.node) || p.y != src_y || int(p.x) != x {
 				continue
 			}
@@ -5361,7 +5361,7 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) ! {
 			.skip_next {
 				// Wrote the cell but request to skip the next so skip it.
 				// Remap any tracked pins at the skipped position (x+1).
-				for mut p in list.tracked_pins {
+				for mut p in list.tracked_pins_storage {
 					if voidptr(p.node) != voidptr(row.node) || p.y != src_y
 						|| int(p.x) != x + 1 {
 						continue
@@ -5629,7 +5629,7 @@ fn (mut self ReflowCursor) move_last_row_to_new_page(mut list PageList, cap Page
 	}
 
 	// Move any tracked pins from that last row into this new node.
-	for mut p in list.tracked_pins {
+	for mut p in list.tracked_pins_storage {
 		if voidptr(p.node) != voidptr(old_node) || p.y != old_page.size.rows - 1 {
 			continue
 		}
@@ -5703,7 +5703,7 @@ fn (mut self PageList) trim_trailing_blank_rows(max u16) u16 {
 
 		// If our tracked pins are in this row then we cannot trim it because
 		// it implies some sort of importance.
-		for p in self.tracked_pins {
+		for p in self.tracked_pins_storage {
 			if voidptr(p.node) == voidptr(row_pin.node) && p.y == row_pin.y {
 				return trimmed
 			}
@@ -5740,7 +5740,7 @@ fn (mut self PageList) erase_page(node &PageNode) {
 	assert node.next != none || node.prev != none
 	// Update any tracked pins to move to the previous or next page.
 	next := node.prev or { node.next or { panic('cannot erase the final page') } }
-	for mut p in self.tracked_pins {
+	for mut p in self.tracked_pins_storage {
 		if voidptr(p.node) == voidptr(node) {
 			p.node = next
 			p.y = 0
@@ -5855,7 +5855,7 @@ pub fn (mut self PageList) increase_capacity(node &PageNode, adjustment ?PageCap
 	}
 	new_page.dirty = page.dirty
 
-	for mut pin in self.tracked_pins {
+	for mut pin in self.tracked_pins_storage {
 		if voidptr(pin.node) == voidptr(node) {
 			pin.node = new_node
 		}
@@ -5909,7 +5909,7 @@ pub fn (mut self PageList) compact(node &PageNode) ?&PageNode {
 	}
 
 	// Fix up all tracked pins to point to the new page.
-	for mut p in self.tracked_pins {
+	for mut p in self.tracked_pins_storage {
 		if voidptr(p.node) == voidptr(node) {
 			p.node = new_node
 		}
@@ -5965,7 +5965,7 @@ pub fn (mut self PageList) erase_row_bounded(point Point, limit usize) ! {
 		}
 
 		// Update pins in the shifted region.
-		for mut tp in self.tracked_pins {
+		for mut tp in self.tracked_pins_storage {
 			if voidptr(tp.node) == voidptr(node) && tp.y >= p.y
 				&& int(tp.y) <= y + int(limit) {
 				if tp.y == 0 {
@@ -5999,7 +5999,7 @@ pub fn (mut self PageList) erase_row_bounded(point Point, limit usize) ! {
 		}
 	}
 
-	for mut tp in self.tracked_pins {
+	for mut tp in self.tracked_pins_storage {
 		if voidptr(tp.node) == voidptr(node) && tp.y >= p.y {
 			if tp.y == 0 {
 				tp.x = 0
@@ -6053,7 +6053,7 @@ pub fn (mut self PageList) erase_row_bounded(point Point, limit usize) ! {
 			}
 
 			// Update pins in the shifted region.
-			for mut tp in self.tracked_pins {
+			for mut tp in self.tracked_pins_storage {
 				if voidptr(tp.node) != voidptr(node) || usize(tp.y) > shifted_limit {
 					continue
 				}
@@ -6081,7 +6081,7 @@ pub fn (mut self PageList) erase_row_bounded(point Point, limit usize) ! {
 		}
 
 		// Update tracked pins for the full-page shift.
-		for mut tp in self.tracked_pins {
+		for mut tp in self.tracked_pins_storage {
 			if voidptr(tp.node) != voidptr(node) {
 				continue
 			}
@@ -6384,7 +6384,7 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) ! {
 
 			// Update all our tracked pins. If they have an X
 			// beyond the edge, clamp it.
-			for mut p in self.tracked_pins {
+			for mut p in self.tracked_pins_storage {
 				if p.x >= cols {
 					p.x = cols - 1
 				}
@@ -6569,7 +6569,7 @@ fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk
 				assert prev_page.size.rows <= prev_page.capacity.rows
 
 				// Remap any tracked pins that pointed to rows we just copied.
-				for mut p in self.tracked_pins {
+				for mut p in self.tracked_pins_storage {
 					if voidptr(p.node) == voidptr(chunk.node) && p.y < len {
 						p.node = prev_node
 						p.y += prev_page.size.rows - len
@@ -6610,7 +6610,7 @@ fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk
 		self.pages.insert_before(chunk.node, new_node)
 
 		// Update our tracked pins that pointed to this previous page.
-		for mut p in self.tracked_pins {
+		for mut p in self.tracked_pins_storage {
 			if voidptr(p.node) == voidptr(chunk.node) && p.y >= y_start && p.y < y_end {
 				p.node = new_node
 				p.y -= y_start
@@ -6779,7 +6779,7 @@ pub fn (self &PageList) verify_integrity() ?PageListIntegrityError {
 	}
 
 	// Verify every tracked pin still points into a live page.
-	for p in self.tracked_pins {
+	for p in self.tracked_pins_storage {
 		if !self.pin_is_valid(PagePin{
 			node: p.node
 			y: p.y

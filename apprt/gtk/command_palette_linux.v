@@ -128,9 +128,8 @@ pub mut:
 	sort_key usize
 }
 
-// command_new creates a new regular command wrapping an input.Command. Mirrors
-// `Command.new`.
-pub fn command_new(config &Config, command input.Command) &Command {
+// new creates a regular command wrapping an input.Command.
+pub fn Command.new(config &Config, command input.Command) &Command {
 	mut self := &Command{
 		config: unsafe { nil }
 		kind: .regular
@@ -142,9 +141,8 @@ pub fn command_new(config &Config, command input.Command) &Command {
 	return self
 }
 
-// command_new_jump creates a new jump command focusing a specific surface.
-// Mirrors `Command.newJump`.
-pub fn command_new_jump(config &Config, surface &SurfaceWidget) &Command {
+// new_jump creates a jump command focusing a specific surface.
+pub fn Command.new_jump(config &Config, surface &SurfaceWidget) &Command {
 	mut self := &Command{
 		config: unsafe { nil }
 		kind: .jump
@@ -438,7 +436,7 @@ fn (mut self CommandPalette) collect_regular_commands() {
 		if !is_action_supported_on_gtk(command.action) {
 			continue
 		}
-		self.commands << command_new(self.config, command)
+		self.commands << Command.new(self.config, command)
 	}
 }
 
@@ -451,7 +449,7 @@ fn (mut self CommandPalette) collect_jump_commands() {
 	for window in self.app.windows {
 		for tab in window.tabs {
 			for surface in tab.split_tree.surfaces {
-				self.commands << command_new_jump(self.config, surface)
+				self.commands << Command.new_jump(self.config, surface)
 			}
 		}
 	}

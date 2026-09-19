@@ -7,7 +7,7 @@ fn test_command_palette_action_accelerator_from_config_keybind() {
 	mut inner := configpkg.Config{}
 	inner.keybind.parse_cli('ctrl+shift+a=new_window')!
 	mut cfg := config_new(inner)
-	mut command := command_new(cfg, input.Command{
+	mut command := Command.new(cfg, input.Command{
 		action: input.Action.new(.new_window)
 		title: 'New Window'
 	})
@@ -22,7 +22,7 @@ fn test_command_palette_action_accelerator_from_config_keybind() {
 
 fn test_command_palette_action_without_keybind_is_none() {
 	mut cfg := config_new(configpkg.Config{})
-	mut command := command_new(cfg, input.Command{
+	mut command := Command.new(cfg, input.Command{
 		action: input.Action.new(.new_window)
 		title: 'New Window'
 	})
@@ -35,7 +35,7 @@ fn test_command_palette_action_without_keybind_is_none() {
 
 fn test_regular_command_has_no_jump_surface() {
 	mut cfg := config_new(configpkg.Config{})
-	mut command := command_new(cfg, input.Command{
+	mut command := Command.new(cfg, input.Command{
 		action: input.Action.new(.new_window)
 		title: 'New Window'
 	})
@@ -48,7 +48,7 @@ fn test_regular_command_has_no_jump_surface() {
 
 fn test_command_palette_action_key_uses_full_action_format() {
 	mut cfg := config_new(configpkg.Config{})
-	mut command := command_new(cfg, input.Command{
+	mut command := Command.new(cfg, input.Command{
 		action: input.Action.new_str(.text, 'hello world')
 		title: 'Type Text'
 	})

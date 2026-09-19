@@ -627,7 +627,7 @@ fn test_page_list_tracked_pin_accessors_and_diagram() {
 	}
 	tracked := s.track_pin(pin)
 	assert s.count_tracked_pins() == 2
-	view := s.tracked_pins_view()
+	view := s.tracked_pins()
 	assert view.len == 2
 	assert voidptr(view[1]) == voidptr(tracked)
 
