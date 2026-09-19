@@ -3353,7 +3353,7 @@ pub fn (mut self PromptIterator) next() ?PagePin {
 	}
 }
 
-fn (mut self PromptIterator) next_right_down() ?PagePin {
+pub fn (mut self PromptIterator) next_right_down() ?PagePin {
 	start := self.current or { return none }
 	mut current := ?PagePin(start)
 	for {
@@ -3400,7 +3400,7 @@ fn (mut self PromptIterator) next_right_down() ?PagePin {
 	return none
 }
 
-fn (mut self PromptIterator) next_left_up() ?PagePin {
+pub fn (mut self PromptIterator) next_left_up() ?PagePin {
 	start := self.current or { return none }
 	mut current := ?PagePin(start)
 	for {
