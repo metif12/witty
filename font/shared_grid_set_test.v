@@ -40,6 +40,9 @@ fn test_gridset_key_hash_matches_source() {
 	} $else {
 		assert key.hashcode() == u64(0xc78b44b38c1a7e47)
 	}
+	mut hasher := SourceHash{}
+	key.hash(mut hasher)
+	assert hasher.final() == key.hashcode()
 }
 
 fn test_gridset_key_metric_key_tags_match_source() {
@@ -194,7 +197,11 @@ fn test_metrics_modifier_hash_ignores_inactive_payload() {
 		percent: 1.25
 		absolute: 999
 	}
-	assert percent1.hash() == percent2.hash()
+	mut percent1_hash := SourceHash{}
+	percent1.hash(mut percent1_hash)
+	mut percent2_hash := SourceHash{}
+	percent2.hash(mut percent2_hash)
+	assert percent1_hash.final() == percent2_hash.final()
 
 	absolute1 := MetricsModifier{
 		absolute: 3
@@ -204,7 +211,11 @@ fn test_metrics_modifier_hash_ignores_inactive_payload() {
 		absolute: 3
 		percent: 9.9
 	}
-	assert absolute1.hash() == absolute2.hash()
+	mut absolute1_hash := SourceHash{}
+	absolute1.hash(mut absolute1_hash)
+	mut absolute2_hash := SourceHash{}
+	absolute2.hash(mut absolute2_hash)
+	assert absolute1_hash.final() == absolute2_hash.final()
 }
 
 fn test_gridset_metrics_modifier_set() {

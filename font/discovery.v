@@ -313,12 +313,12 @@ pub mut:
 // this descriptor.
 pub fn (d &Descriptor) hashcode() u64 {
 	mut hasher := SourceHash{}
-	d.hash_into(mut hasher)
+	d.hash(mut hasher)
 	return hasher.final()
 }
 
-// hash_into hashes every field in Ghostty's Descriptor.hash order.
-fn (d &Descriptor) hash_into(mut hasher SourceHash) {
+// hash hashes every field in Ghostty's Descriptor.hash order.
+pub fn (d &Descriptor) hash(mut hasher SourceHash) {
 	hasher.put_optional_string(d.family)
 	hasher.put_optional_string(d.style)
 	hasher.put_u32(d.codepoint)

@@ -173,4 +173,8 @@ fn test_codepointmap_hashcode_matches_source_u21_layout() {
 	// Reference value from CodepointMap.hash under Zig 0.15.2. In
 	// particular, each u21 range endpoint occupies three bytes.
 	assert m.hashcode() == u64(0xcf23075fb01be901)
+	mut hasher := SourceHash{}
+	m.hash(mut hasher)
+	assert hasher.final() == m.hashcode()
+	assert m.get(0x200000) == none
 }

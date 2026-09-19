@@ -560,7 +560,13 @@ pub fn (self &GridSetKey) descriptors_for_style(style Style) []Descriptor {
 // this font configuration.
 pub fn (self &GridSetKey) hashcode() u64 {
 	mut hasher := SourceHash{}
+	self.hash(mut hasher)
+	return hasher.final()
+}
 
+// hash writes this font configuration to the supplied source-compatible
+// hasher in Ghostty's field order.
+pub fn (self &GridSetKey) hash(mut hasher SourceHash) {
 	// Hash font size using its exact source bit representation.
 	hasher.put_f32(self.font_size.points)
 	hasher.put_u16(self.font_size.xdpi)
@@ -569,10 +575,10 @@ pub fn (self &GridSetKey) hashcode() u64 {
 	// Hash descriptors directly into the same stream.
 	hasher.put_u64(u64(self.descriptors.len))
 	for d in self.descriptors {
-		d.hash_into(mut hasher)
+		d.hash(mut hasher)
 	}
 
-	self.codepoint_map.hash_into(mut hasher)
+	self.codepoint_map.hash(mut hasher)
 
 	hasher.put_u64(u64(self.metric_modifiers.count()))
 
@@ -585,12 +591,10 @@ pub fn (self &GridSetKey) hashcode() u64 {
 			mk := enum_value.value
 			if m := self.metric_modifiers.get(mk) {
 				hasher.put_u8(u8(mk))
-				m.hash_into(mut hasher)
+				m.hash(mut hasher)
 			}
 		}
 	}
-
-	return hasher.final()
 }
 
 // ============================================================
@@ -650,15 +654,8 @@ pub fn (m MetricsModifier) format_entry() string {
 	return m.absolute.str()
 }
 
-// hash returns a hash value for this modifier.
-pub fn (m MetricsModifier) hash() u64 {
-	mut hasher := SourceHash{}
-	m.hash_into(mut hasher)
-	return hasher.final()
-}
-
-// hash_into hashes the active tagged-union payload exactly as Ghostty does.
-fn (m MetricsModifier) hash_into(mut hasher SourceHash) {
+// hash writes the active tagged-union payload exactly as Ghostty does.
+pub fn (m MetricsModifier) hash(mut hasher SourceHash) {
 	if m.is_percent {
 		hasher.put_u8(0)
 		hasher.put_f64(m.percent)

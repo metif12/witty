@@ -61,12 +61,16 @@ pub fn (self &CodepointMap) clone() CodepointMap {
 // entries added earlier.
 pub fn (mut self CodepointMap) add(entry CodepointMapEntry) {
 	assert entry.range[0] <= entry.range[1]
+	assert entry.range[1] <= 0x1fffff
 	self.entries << entry
 }
 
 // get returns the descriptor for a codepoint, or none if no entry
 // matches. Entries added later take priority (searched in reverse).
 pub fn (self &CodepointMap) get(cp u32) ?Descriptor {
+	if cp > 0x1fffff {
+		return none
+	}
 	// Search in reverse order so that later entries take priority.
 	for forward_i in 0 .. self.entries.len {
 		i := self.entries.len - forward_i - 1
@@ -82,16 +86,16 @@ pub fn (self &CodepointMap) get(cp u32) ?Descriptor {
 // this CodepointMap.
 pub fn (self &CodepointMap) hashcode() u64 {
 	mut hasher := SourceHash{}
-	self.hash_into(mut hasher)
+	self.hash(mut hasher)
 	return hasher.final()
 }
 
-// hash_into hashes entries in Ghostty's CodepointMap.hash order.
-fn (self &CodepointMap) hash_into(mut hasher SourceHash) {
+// hash hashes entries in Ghostty's CodepointMap.hash order.
+pub fn (self &CodepointMap) hash(mut hasher SourceHash) {
 	hasher.put_u64(u64(self.entries.len))
 	for entry in self.entries {
 		hasher.put_u21(entry.range[0])
 		hasher.put_u21(entry.range[1])
-		entry.descriptor.hash_into(mut hasher)
+		entry.descriptor.hash(mut hasher)
 	}
 }

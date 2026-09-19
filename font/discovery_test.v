@@ -29,6 +29,9 @@ fn test_descriptor_hash() {
 	d := Descriptor{}
 	// Reference value from Descriptor.hash under Zig 0.15.2.
 	assert d.hashcode() == u64(0x96ab7b8f4eaa5424)
+	mut hasher := SourceHash{}
+	d.hash(mut hasher)
+	assert hasher.final() == d.hashcode()
 }
 
 // test_descriptor_hash_family_names tests that descriptors with
