@@ -207,7 +207,6 @@ import terminal
 import kitty
 import math
 import time
-import macos
 
 const overlay_image_key = u64(1) << 32
 
@@ -355,10 +354,8 @@ pub mut:
 	state ImageUploadState = .pending
 	// Pending data for upload.
 	pending ?PendingImage
-	// GPU texture handle (opaque, backend-specific).
-	texture_handle voidptr = unsafe { nil }
-	// OpenGL textures are integer object names rather than pointers, so they
-	// retain their typed wrapper alongside the Metal handle.
+	// API-specific texture wrappers. Only the selected backend is present.
+	metal_texture ?MetalTexture
 	gl_texture      GLTexture
 	texture_backend ImageTextureBackend
 	// Width/height of the image.
@@ -409,11 +406,15 @@ pub fn (mut self Image) deinit() {
 
 fn (mut self Image) release_texture() {
 	match self.texture_backend {
-		.metal { macos.metal_release(self.texture_handle) }
+		.metal {
+			if mut texture := self.metal_texture {
+				texture.deinit()
+			}
+		}
 		.opengl { self.gl_texture.deinit() }
 		.none_ {}
 	}
-	self.texture_handle = unsafe { nil }
+	self.metal_texture = none
 	self.gl_texture = GLTexture{}
 	self.texture_backend = .none_
 }
@@ -532,11 +533,11 @@ pub fn (mut self ImageRenderState) upload(api &MetalAPI) bool {
 fn (mut self Image) upload(api &MetalAPI) ! {
 	self.prep_for_upload()!
 	pending := self.pending or { return error('image has no pending data') }
-	mut texture := MetalTexture.init(api.image_texture_options(.rgba, true), pending.width, pending.height, pending.data_slice())!
+	texture := MetalTexture.init(api.image_texture_options(.rgba, true), pending.width,
+		pending.height, pending.data_slice())!
 	self.release_texture()
-	self.texture_handle = texture.handle
+	self.metal_texture = texture
 	self.texture_backend = .metal
-	texture.handle = unsafe { nil }
 	self.pending = none
 	self.width = pending.width
 	self.height = pending.height
@@ -1113,9 +1114,10 @@ pub fn (mut self ImageRenderState) draw(api &MetalAPI, pipeline MetalPipeline, m
 	}
 	for placement in placements {
 		entry := self.images[image_key(placement.image_id)] or { continue }
-		if entry.image.state !in [.ready, .unload_ready] || entry.image.texture_handle == unsafe { nil } {
+		if entry.image.state !in [.ready, .unload_ready] {
 			continue
 		}
+		texture := entry.image.metal_texture or { continue }
 		vertex := ImageVertex{
 			grid_pos: [f32(placement.x), f32(placement.y)]!
 			cell_offset: [f32(placement.cell_offset_x), f32(placement.cell_offset_y)]!
@@ -1126,8 +1128,8 @@ pub fn (mut self ImageRenderState) draw(api &MetalAPI, pipeline MetalPipeline, m
 		mut buffer := MetalBuffer.init_fill(api.buffer_options(), [vertex]) or { continue }
 		pass.step(MetalRenderStep{
 			pipeline: pipeline
-			buffers: [buffer.handle]
-			textures: [entry.image.texture_handle]
+			buffers: [?MetalBuffer(buffer)]
+			textures: [?MetalTexture(texture)]
 			draw: MetalRenderDraw{
 				draw_type: .triangle_strip
 				vertex_count: 4

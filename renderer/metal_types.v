@@ -250,14 +250,14 @@ pub:
 	// The pipeline to use.
 	pipeline MetalPipeline @[required]
 	// Uniform buffer, bound at index 1 for both shader stages.
-	uniforms voidptr = unsafe { nil }
+	uniforms ?MetalBuffer
 	// Vertex and fragment buffers. Entry zero uses index zero; later entries
 	// start at index two so uniforms can remain at index one.
-	buffers []voidptr = []
+	buffers []?MetalBuffer
 	// Textures bound to both stages by slice index.
-	textures []voidptr = []
+	textures []?MetalTexture
 	// Fragment samplers bound by slice index.
-	samplers []voidptr = []
+	samplers []?MetalSampler
 	// Draw call configuration.
 	draw MetalRenderDraw @[required]
 }
@@ -269,9 +269,11 @@ pub:
 	instance_count usize = 1
 }
 
+pub type MetalRenderAttachmentTarget = MetalTarget | MetalTexture
+
 pub struct MetalRenderPassAttachment {
 pub:
-	target      voidptr @[required]
+	target      MetalRenderAttachmentTarget @[required]
 	clear_color ?[4]f64
 }
 
@@ -284,7 +286,12 @@ pub:
 pub fn MetalRenderPass.begin(opts MetalRenderPassOptions) MetalRenderPass {
 	descriptor := macos.metal_render_pass_descriptor()
 	for index, attachment in opts.attachments {
-		macos.metal_render_pass_set_attachment(descriptor, usize(index), attachment.target, attachment.clear_color)
+		target := match attachment.target {
+			MetalTarget { attachment.target.texture }
+			MetalTexture { attachment.target.handle }
+		}
+		macos.metal_render_pass_set_attachment(descriptor, usize(index), target,
+			attachment.clear_color)
 	}
 	return MetalRenderPass{
 		encoder: macos.metal_create_encoder(opts.command_buffer, descriptor)
@@ -297,26 +304,26 @@ pub fn (self &MetalRenderPass) step(s MetalRenderStep) {
 	}
 	macos.metal_encoder_set_pipeline(self.encoder, s.pipeline.handle)
 	if s.buffers.len > 0 {
-		if s.buffers[0] != unsafe { nil } {
-			macos.metal_encoder_set_buffer(self.encoder, s.buffers[0], 0)
+		if buffer := s.buffers[0] {
+			macos.metal_encoder_set_buffer(self.encoder, buffer.handle, 0)
 		}
 		for index in 1 .. s.buffers.len {
-			if s.buffers[index] != unsafe { nil } {
-				macos.metal_encoder_set_buffer(self.encoder, s.buffers[index], usize(index + 1))
+			if buffer := s.buffers[index] {
+				macos.metal_encoder_set_buffer(self.encoder, buffer.handle, usize(index + 1))
 			}
 		}
 	}
-	if s.uniforms != unsafe { nil } {
-		macos.metal_encoder_set_buffer(self.encoder, s.uniforms, 1)
+	if uniforms := s.uniforms {
+		macos.metal_encoder_set_buffer(self.encoder, uniforms.handle, 1)
 	}
 	for index, texture in s.textures {
-		if texture != unsafe { nil } {
-			macos.metal_encoder_set_texture(self.encoder, texture, usize(index))
+		if value := texture {
+			macos.metal_encoder_set_texture(self.encoder, value.handle, usize(index))
 		}
 	}
 	for index, sampler in s.samplers {
-		if sampler != unsafe { nil } {
-			macos.metal_encoder_set_sampler(self.encoder, sampler, usize(index))
+		if value := sampler {
+			macos.metal_encoder_set_sampler(self.encoder, value.handle, usize(index))
 		}
 	}
 	macos.metal_encoder_draw(self.encoder, u64(s.draw.draw_type), s.draw.vertex_count, s.draw.instance_count)

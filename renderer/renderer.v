@@ -1661,9 +1661,9 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 
 	mut frame := MetalFrame.begin(self.metal.queue, voidptr(self), voidptr(&frame_state.target),
 		voidptr(renderer_metal_frame_completed_callback))!
-	mut terminal_target := unsafe { voidptr(frame_state.target.texture) }
+	mut terminal_target := MetalRenderAttachmentTarget(frame_state.target)
 	if state := frame_state.custom_shader_state {
-		terminal_target = unsafe { voidptr(state.back_texture.handle) }
+		terminal_target = MetalRenderAttachmentTarget(state.back_texture)
 	}
 	mut pass := frame.render_pass([MetalRenderPassAttachment{
 		target: terminal_target
@@ -1671,12 +1671,13 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	}])
 
 	if image := self.bg_image {
-		if image.state == .ready && image.texture_handle != unsafe { nil } {
+		if image.state == .ready {
+			texture := image.metal_texture or { return error('ready Metal background image has no texture') }
 			pass.step(MetalRenderStep{
 				pipeline: self.shaders.bg_image
-				uniforms: frame_state.uniforms.handle
-				buffers: [frame_state.bg_image_buffer.handle]
-				textures: [image.texture_handle]
+				uniforms: frame_state.uniforms
+				buffers: [?MetalBuffer(frame_state.bg_image_buffer)]
+				textures: [?MetalTexture(texture)]
 				draw: MetalRenderDraw{
 					draw_type: .triangle
 					vertex_count: 3
@@ -1686,7 +1687,8 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	} else {
 		pass.step(MetalRenderStep{
 			pipeline: self.shaders.bg_color
-			uniforms: frame_state.uniforms.handle
+			uniforms: frame_state.uniforms
+			buffers: [?MetalBuffer(none), ?MetalBuffer(frame_state.cells_bg)]
 			draw: MetalRenderDraw{
 				draw_type: .triangle
 				vertex_count: 3
@@ -1699,8 +1701,8 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 		&& self.uniforms.grid_size[1] > 0 {
 		pass.step(MetalRenderStep{
 			pipeline: self.shaders.cell_bg
-			uniforms: frame_state.uniforms.handle
-			buffers: [voidptr(unsafe { nil }), frame_state.cells_bg.handle]
+			uniforms: frame_state.uniforms
+			buffers: [?MetalBuffer(none), ?MetalBuffer(frame_state.cells_bg)]
 			draw: MetalRenderDraw{
 				draw_type: .triangle
 				vertex_count: 3
@@ -1710,9 +1712,9 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	self.images.draw(&self.metal, self.shaders.image, mut pass, .kitty_below_text)
 	pass.step(MetalRenderStep{
 		pipeline: self.shaders.cell_text
-		uniforms: frame_state.uniforms.handle
-		buffers: [frame_state.cells.handle, frame_state.cells_bg.handle]
-		textures: [frame_state.grayscale.handle, frame_state.color.handle]
+		uniforms: frame_state.uniforms
+		buffers: [?MetalBuffer(frame_state.cells), ?MetalBuffer(frame_state.cells_bg)]
+		textures: [?MetalTexture(frame_state.grayscale), ?MetalTexture(frame_state.color)]
 		draw: MetalRenderDraw{
 			draw_type: .triangle_strip
 			vertex_count: 4
@@ -1725,9 +1727,9 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 
 	if mut state := frame_state.custom_shader_state {
 		for index, pipeline in self.shaders.post_pipelines {
-			mut output_texture := unsafe { voidptr(frame_state.target.texture) }
+			mut output_texture := MetalRenderAttachmentTarget(frame_state.target)
 			if index < self.shaders.post_pipelines.len - 1 {
-				output_texture = unsafe { voidptr(state.front_texture.handle) }
+				output_texture = MetalRenderAttachmentTarget(state.front_texture)
 			}
 			mut post_pass := frame.render_pass([MetalRenderPassAttachment{
 				target: output_texture
@@ -1735,9 +1737,9 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 			}])
 			post_pass.step(MetalRenderStep{
 				pipeline: pipeline
-				uniforms: state.uniforms.handle
-				textures: [state.back_texture.handle]
-				samplers: [state.sampler.handle]
+				uniforms: state.uniforms
+				textures: [?MetalTexture(state.back_texture)]
+				samplers: [?MetalSampler(state.sampler)]
 				draw: MetalRenderDraw{
 					draw_type: .triangle
 					vertex_count: 3

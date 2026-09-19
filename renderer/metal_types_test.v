@@ -263,10 +263,19 @@ fn test_metal_sampler_target_and_empty_frame() ! {
 	mut frame := MetalFrame.begin(api.queue, voidptr(&capture), voidptr(&target),
 		voidptr(metal_frame_test_completion))!
 	mut pass := frame.render_pass([MetalRenderPassAttachment{
-		target: target.texture
+		target: MetalRenderAttachmentTarget(target)
 		clear_color: [f64(0.25), 0.5, 0.75, 1.0]!
 	}])
 	pass.complete()
+	mut texture := MetalTexture.init(api.texture_options(), 8, 6, none)!
+	defer {
+		texture.deinit()
+	}
+	mut texture_pass := frame.render_pass([MetalRenderPassAttachment{
+		target: MetalRenderAttachmentTarget(texture)
+		clear_color: [f64(0), 0, 0, 0]!
+	}])
+	texture_pass.complete()
 	frame.complete(true)
 	assert capture.calls == 1
 	assert metal_command_buffer_status(capture.status) == .completed
@@ -308,12 +317,12 @@ fn test_metal_builtin_shader_pipelines_compile() ! {
 	mut frame := MetalFrame.begin(api.queue, voidptr(&capture), voidptr(&target),
 		voidptr(metal_frame_test_completion))!
 	mut pass := frame.render_pass([MetalRenderPassAttachment{
-		target: target.texture
+		target: MetalRenderAttachmentTarget(target)
 		clear_color: [f64(0), 0, 0, 1]!
 	}])
 	pass.step(MetalRenderStep{
 		pipeline: shaders.bg_color
-		uniforms: uniforms.handle
+		uniforms: uniforms
 		draw: MetalRenderDraw{
 			draw_type: .triangle
 			vertex_count: 3

@@ -318,9 +318,10 @@ fn test_image_upload_converts_to_rgba_texture() ! {
 	entry := state.images[3] or { return error('missing uploaded image') }
 	assert entry.image.state == .ready
 	assert entry.image.pending == none
-	assert entry.image.texture_handle != unsafe { nil }
+	texture := entry.image.metal_texture or { return error('missing uploaded Metal texture') }
+	assert texture.handle != unsafe { nil }
 	mut bytes := []u8{len: 8}
-	macos.metal_texture_get_bytes(entry.image.texture_handle, mut bytes, 8, 0, 0, 2, 1)
+	macos.metal_texture_get_bytes(texture.handle, mut bytes, 8, 0, 0, 2, 1)
 	assert bytes == [u8(20), 20, 20, 40, 60, 60, 60, 80]
 }
 
@@ -372,12 +373,12 @@ fn test_image_draw_encodes_gpu_placement() ! {
 	mut frame := MetalFrame.begin(api.queue, voidptr(&capture), voidptr(&target),
 		voidptr(image_metal_frame_completion))!
 	mut pass := frame.render_pass([MetalRenderPassAttachment{
-		target: target.texture
+		target: MetalRenderAttachmentTarget(target)
 		clear_color: [f64(0), 0, 0, 1]!
 	}])
 	pass.step(MetalRenderStep{
 		pipeline: shaders.bg_color
-		uniforms: uniforms.handle
+		uniforms: uniforms
 		draw: MetalRenderDraw{
 			draw_type: .triangle
 			vertex_count: 3
