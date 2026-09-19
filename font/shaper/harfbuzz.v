@@ -48,10 +48,6 @@ mut:
 	x       i32
 }
 
-// Default feature strings for HarfBuzz shaping.
-// The HarfBuzz shaper enables standard ligatures by default.
-const hb_default_feature_strings = ['liga']
-
 // is_special_font checks if the font index refers to a built-in sprite font.
 // Special fonts (sprites for cursors, underlines, etc.) don't need shaping
 // because their codepoint == glyph_index.
@@ -64,20 +60,22 @@ fn is_special_font(font_index font.Index) bool {
 // The cell_buf argument is the buffer to use for storing shaped results.
 // This should be at least the number of columns in the terminal.
 pub fn HbShaper.init(opts font.ShaperOptions) !HbShaper {
-	// Parse all the features we want to use.
-	// Start with the hardcoded default features, then append user features.
-	// Uses HarfBuzz's built-in feature string parser (hb_feature_from_string).
-	mut feat_list := []harfbuzz.Feature{cap: hb_default_feature_strings.len + opts.features.len}
-
-	for s in hb_default_feature_strings {
-		if feat := harfbuzz.feature_from_string(s) {
-			feat_list << feat
-		}
+	mut feature_list := FeatureList{
+		features: default_features.clone()
 	}
-
 	for feature_str in opts.features {
-		if feat := harfbuzz.feature_from_string(feature_str) {
-			feat_list << feat
+		feature_list.append_from_string(feature_str)
+	}
+	mut feat_list := []harfbuzz.Feature{cap: feature_list.features.len}
+	for feature in feature_list.features {
+		feat_list << harfbuzz.Feature{
+			tag: u32(feature.tag[0]) << 24 |
+				u32(feature.tag[1]) << 16 |
+				u32(feature.tag[2]) << 8 |
+				u32(feature.tag[3])
+			value: feature.value
+			start: harfbuzz.feature_global_start
+			end: harfbuzz.feature_global_end
 		}
 	}
 
@@ -153,40 +151,25 @@ pub fn (mut self HbShaper) shape(run font.TextRun) ![]font.ShapeCell {
 	// We only do shaping if the font is not a special-case. For special-case
 	// fonts, the codepoint == glyph_index so we don't need to run any shaping.
 	if !is_special_font(run.font_index) {
-		if self.grid != unsafe { nil } {
-			mut grid := unsafe { self.grid }
-			face := grid.resolver.collection.get_face(run.font_index)!
-			feature_start := if face.quirks_disable_default_font_features {
-				hb_default_feature_strings.len
-			} else {
-				0
-			}
-			face.ft_mutex.lock()
-			harfbuzz.shape(face.hb_font, self.hb_buf, self.hb_feats[feature_start..])
-			face.ft_mutex.unlock()
-		} else {
-			// Tests and callers may shape a manually assembled run without a
-			// grid. Preserve the unshaped fallback for that invalid context.
-			harfbuzz.shape(harfbuzz.Font{}, self.hb_buf, self.hb_feats)
+		if self.grid == unsafe { nil } {
+			return error('HarfBuzz shaping requires a run iterator grid')
 		}
+		mut grid := unsafe { self.grid }
+		face := grid.resolver.collection.get_face(run.font_index)!
+		feature_start := if face.quirks_disable_default_font_features {
+			default_features.len
+		} else {
+			0
+		}
+		face.ft_mutex.lock()
+		harfbuzz.shape(face.hb_font, self.hb_buf, self.hb_feats[feature_start..])
+		face.ft_mutex.unlock()
 	}
 
 	// If our buffer is empty, we short-circuit the rest of the work
 	// return nothing.
 	if self.hb_buf.get_length() == 0 {
 		return []font.ShapeCell{}
-	}
-
-	// If no font context was supplied, fall back to returning codepoints.
-	if !self.hb_buf.has_positions() {
-		self.cell_buf.clear()
-		for cp in self.codepoints {
-			self.cell_buf << font.ShapeCell{
-				x: cp.cluster
-				glyph_index: cp.codepoint
-			}
-		}
-		return self.cell_buf
 	}
 
 	info := self.hb_buf.get_glyph_infos()

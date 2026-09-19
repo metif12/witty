@@ -585,6 +585,16 @@ fn test_hb_shaper_init_deinit() {
 	shp.deinit()
 }
 
+fn test_hb_shaper_init_parses_feature_lists() {
+	mut shp := HbShaper.init(font.ShaperOptions{
+		features: ['dlig,calt']
+	}) or { return }
+	defer { shp.deinit() }
+	assert shp.hb_feats.len == default_features.len + 2
+	assert shp.hb_feats[1].tag == u32(0x646c6967)
+	assert shp.hb_feats[2].tag == u32(0x63616c74)
+}
+
 // test "hb shaper init with disable feature"
 // Verify that -liga disables a feature.
 fn test_hb_shaper_init_disable_feature() {
@@ -615,32 +625,32 @@ fn test_hb_end_frame() {
 	shp.end_frame()
 }
 
-// test "harfbuzz.feature_from_string"
+// test "harfbuzz.Feature.from_string"
 // Tests HarfBuzz's built-in feature string parser via our binding.
 fn test_hb_feature_from_string() {
 	// Basic feature
-	if feat := harfbuzz.feature_from_string('liga') {
+	if feat := harfbuzz.Feature.from_string('liga') {
 		assert feat.value == 1
 	} else {
 		assert false
 	}
 
 	// Enable prefix
-	if feat := harfbuzz.feature_from_string('+dlig') {
+	if feat := harfbuzz.Feature.from_string('+dlig') {
 		assert feat.value == 1
 	} else {
 		assert false
 	}
 
 	// Disable prefix
-	if feat := harfbuzz.feature_from_string('-liga') {
+	if feat := harfbuzz.Feature.from_string('-liga') {
 		assert feat.value == 0
 	} else {
 		assert false
 	}
 
 	// Empty string
-	assert harfbuzz.feature_from_string('') == none
+	assert harfbuzz.Feature.from_string('') == none
 }
 
 // test "harfbuzz buffer create and destroy"
@@ -747,13 +757,25 @@ fn test_hb_shape_empty_buffer() {
 		shp.deinit()
 	}
 
-	// Shape with empty buffer - should return empty
+	// Special fonts bypass shaping, so an empty buffer returns empty without a grid.
 	cells := shp.shape(font.TextRun{
-		font_index: font.Index.init(.regular, 1) // non-special font
+		font_index: font.sprite_index
 		offset: 0
 		cells: 0
 	}) or { return }
 	assert cells.len == 0
+}
+
+fn test_hb_shape_rejects_non_special_run_without_grid() {
+	mut shp := HbShaper.init(font.ShaperOptions{}) or { return }
+	defer { shp.deinit() }
+	shp.shape(font.TextRun{
+		font_index: font.Index.init(.regular, 1)
+	}) or {
+		assert err.msg().contains('requires a run iterator grid')
+		return
+	}
+	assert false
 }
 
 // test "is_special_font"

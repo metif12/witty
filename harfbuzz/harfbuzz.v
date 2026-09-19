@@ -39,7 +39,10 @@ struct C.hb_blob_t {}
 
 struct C.hb_glyph_info_t {
 	codepoint u32
+	mask      u32
 	cluster   u32
+	var1      u32
+	var2      u32
 }
 
 struct C.hb_glyph_position_t {
@@ -47,6 +50,7 @@ struct C.hb_glyph_position_t {
 	y_advance i32
 	x_offset  i32
 	y_offset  i32
+	var       u32
 }
 
 struct C.hb_feature_t {
@@ -87,7 +91,6 @@ fn C.hb_buffer_guess_segment_properties(buffer &C.hb_buffer_t)
 fn C.hb_buffer_get_length(buffer &C.hb_buffer_t) u32
 fn C.hb_buffer_get_glyph_infos(buffer &C.hb_buffer_t, length &u32) &C.hb_glyph_info_t
 fn C.hb_buffer_get_glyph_positions(buffer &C.hb_buffer_t, length &u32) &C.hb_glyph_position_t
-fn C.hb_buffer_has_positions(buffer &C.hb_buffer_t) int
 
 // Shaping
 fn C.hb_shape(font &C.hb_font_t, buffer &C.hb_buffer_t, features &C.hb_feature_t, num_features u32)
@@ -106,16 +109,20 @@ fn C.hb_version_string() &char
 
 // Font
 fn C.hb_font_create(face &C.hb_face_t) &C.hb_font_t
+fn C.hb_font_set_scale(font &C.hb_font_t, x_scale int, y_scale int)
+fn C.hb_ft_face_create_referenced(ft_face voidptr) &C.hb_face_t
 fn C.hb_ft_font_create_referenced(ft_face voidptr) &C.hb_font_t
+fn C.hb_ft_font_set_funcs(font &C.hb_font_t)
 fn C.hb_font_destroy(font &C.hb_font_t)
 
 // Face
-fn C.hb_face_create(blob &C.hb_blob_t, index u32) &C.hb_face_t
 fn C.hb_face_destroy(face &C.hb_face_t)
 
 // Blob
-fn C.hb_blob_create_from_file_or_fail(file_name &u8) &C.hb_blob_t
+fn C.hb_blob_create_or_fail(data &u8, length u32, mode u32, user_data voidptr, destroy fn (voidptr)) &C.hb_blob_t
 fn C.hb_blob_destroy(blob &C.hb_blob_t)
+fn C.hb_blob_set_user_data(blob &C.hb_blob_t, key voidptr, data voidptr, destroy fn (voidptr), replace int) int
+fn C.hb_blob_get_user_data(blob &C.hb_blob_t, key voidptr) voidptr
 
 // === V enums matching HarfBuzz C enum values ===
 
@@ -152,6 +159,14 @@ pub enum Direction as u8 {
 	ttb     = 6
 	// Bottom to top.
 	bit     = 7
+}
+
+// MemoryMode controls whether HarfBuzz borrows, copies, or may mutate blob data.
+pub enum MemoryMode as u8 {
+	duplicate                  = 0
+	readonly                   = 1
+	writable                   = 2
+	readonly_may_make_writable = 3
 }
 
 // Script is the complete ISO 15924 tag set exposed by the pinned wrapper.
@@ -368,29 +383,24 @@ pub fn version_string() string {
 	return if isnil(ptr) { '' } else { unsafe { cstring_to_vstring(ptr) } }
 }
 
-// GlyphInfo contains information about a glyph in the buffer.
-// Before shaping, codepoint holds the Unicode codepoint.
-// After shaping, codepoint holds the glyph index.
+// GlyphInfo matches the complete native hb_glyph_info_t layout.
 pub struct GlyphInfo {
 pub:
-	// Before shaping: Unicode codepoint. After shaping: glyph index.
 	codepoint u32
-	// Cluster value - used to map back to original codepoints.
-	cluster u32
+	mask      u32
+	cluster   u32
+	var1      u32
+	var2      u32
 }
 
-// GlyphPosition contains the positioning of a glyph in the buffer after shaping.
-// All values are in font units (26.6 fixed point for FreeType/CoreText).
+// GlyphPosition matches the complete native hb_glyph_position_t layout.
 pub struct GlyphPosition {
 pub:
-	// How much the line advances after drawing this glyph (x direction).
 	x_advance i32
-	// How much the line advances after drawing this glyph (y direction).
 	y_advance i32
-	// How much the glyph moves on the x-axis before drawing.
-	x_offset i32
-	// How much the glyph moves on the y-axis before drawing.
-	y_offset i32
+	x_offset  i32
+	y_offset  i32
+	var       u32
 }
 
 // Feature represents a single OpenType font feature setting for shaping.
@@ -407,7 +417,16 @@ pub mut:
 }
 
 pub fn Feature.from_string(value string) ?Feature {
-	return feature_from_string(value)
+	mut c_feature := C.hb_feature_t{}
+	if C.hb_feature_from_string(value.str, value.len, &c_feature) == 0 {
+		return none
+	}
+	return Feature{
+		tag:   c_feature.tag
+		value: c_feature.value
+		start: c_feature.start
+		end:   c_feature.end
+	}
 }
 
 pub fn (feature &Feature) to_string(mut buf []u8) {
@@ -446,7 +465,9 @@ pub fn Buffer.create() !Buffer {
 	if p == unsafe { nil } {
 		return error('failed to create HarfBuzz buffer')
 	}
-	return Buffer{ ptr: p }
+	return Buffer{
+		ptr: p
+	}
 }
 
 // destroy releases the buffer and all associated resources.
@@ -555,13 +576,12 @@ pub fn (b &Buffer) get_glyph_infos() []GlyphInfo {
 	if ptr == unsafe { nil } || length == 0 {
 		return []
 	}
-	mut result := []GlyphInfo{cap: int(length)}
-	for i in 0 .. int(length) {
-		ci := unsafe { ptr[i] }
-		result << GlyphInfo{
-			codepoint: ci.codepoint
-			cluster:   ci.cluster
-		}
+	mut result := []GlyphInfo{}
+	unsafe {
+		result.data = voidptr(ptr)
+		result.len = int(length)
+		result.cap = int(length)
+		result.flags = .nogrow | .noshrink | .nofree
 	}
 	return result
 }
@@ -574,23 +594,65 @@ pub fn (b &Buffer) get_glyph_positions() ?[]GlyphPosition {
 	if ptr == unsafe { nil } {
 		return none
 	}
-	mut result := []GlyphPosition{cap: int(length)}
-	for i in 0 .. int(length) {
-		cp := unsafe { ptr[i] }
-		result << GlyphPosition{
-			x_advance: cp.x_advance
-			y_advance: cp.y_advance
-			x_offset:  cp.x_offset
-			y_offset:  cp.y_offset
-		}
+	if length == 0 {
+		return []
+	}
+	mut result := []GlyphPosition{}
+	unsafe {
+		result.data = voidptr(ptr)
+		result.len = int(length)
+		result.cap = int(length)
+		result.flags = .nogrow | .noshrink | .nofree
 	}
 	return result
 }
 
-// has_positions returns true if glyph positions are available in the buffer.
-// Positions become available after a successful shape() call.
-pub fn (b &Buffer) has_positions() bool {
-	return C.hb_buffer_has_positions(b.ptr) != 0
+// === Blob ===
+
+// Blob wraps binary data with HarfBuzz reference-counted lifetime management.
+pub struct Blob {
+pub mut:
+	ptr &C.hb_blob_t = unsafe { nil }
+}
+
+// create wraps data according to mode. Callers must retain borrowed data for
+// readonly modes; duplicate copies it immediately.
+pub fn Blob.create(data []u8, mode MemoryMode) !Blob {
+	if u64(data.len) > u64(0xffffffff) {
+		return error('HarfBuzz blob data exceeds the u32 length limit')
+	}
+	data_ptr := if data.len == 0 { &u8(unsafe { nil }) } else { unsafe { &data[0] } }
+	blob := C.hb_blob_create_or_fail(data_ptr, u32(data.len), u32(mode), unsafe { nil },
+		unsafe { nil })
+	if blob == unsafe { nil } {
+		return error('failed to create HarfBuzz blob')
+	}
+	return Blob{
+		ptr: blob
+	}
+}
+
+// destroy releases the blob and any user data owned by it.
+pub fn (mut b Blob) destroy() {
+	if b.ptr != unsafe { nil } {
+		C.hb_blob_destroy(b.ptr)
+		b.ptr = unsafe { nil }
+	}
+}
+
+// set_user_data attaches data to a caller-owned key. The optional callback is
+// invoked by HarfBuzz when the value is replaced or the blob is destroyed.
+pub fn (b Blob) set_user_data(key voidptr, data voidptr, destroy ?fn (voidptr), replace bool) bool {
+	replace_int := if replace { 1 } else { 0 }
+	if destroy_fn := destroy {
+		return C.hb_blob_set_user_data(b.ptr, key, data, destroy_fn, replace_int) > 0
+	}
+	return C.hb_blob_set_user_data(b.ptr, key, data, unsafe { nil }, replace_int) > 0
+}
+
+// get_user_data returns the value associated with key, if any.
+pub fn (b Blob) get_user_data(key voidptr) voidptr {
+	return C.hb_blob_get_user_data(b.ptr, key)
 }
 
 // === Font ===
@@ -608,7 +670,9 @@ pub fn Font.create(face &Face) !Font {
 	if fnt == unsafe { nil } {
 		return error('failed to create HarfBuzz font')
 	}
-	return Font{ ptr: fnt }
+	return Font{
+		ptr: fnt
+	}
 }
 
 // create_freetype creates a HarfBuzz font which references an FT_Face.
@@ -622,7 +686,22 @@ pub fn Font.create_freetype(ft_face voidptr) !Font {
 	if fnt == unsafe { nil } {
 		return error('failed to create HarfBuzz FreeType font')
 	}
-	return Font{ ptr: fnt }
+	return Font{
+		ptr: fnt
+	}
+}
+
+// set_scale sets the font's horizontal and vertical scale.
+pub fn (f Font) set_scale(x u32, y u32) {
+	if x > u32(0x7fffffff) || y > u32(0x7fffffff) {
+		panic('HarfBuzz font scale exceeds the signed 32-bit limit')
+	}
+	C.hb_font_set_scale(f.ptr, int(x), int(y))
+}
+
+// set_freetype_funcs installs HarfBuzz's FreeType font callbacks.
+pub fn (f Font) set_freetype_funcs() {
+	C.hb_ft_font_set_funcs(f.ptr)
 }
 
 // destroy releases the font object.
@@ -641,19 +720,18 @@ pub mut:
 	ptr &C.hb_face_t = unsafe { nil }
 }
 
-// create_from_file creates a HarfBuzz face from a font file path.
-// Uses the first face in the file (index 0).
-pub fn Face.create_from_file(path string) !Face {
-	blob := C.hb_blob_create_from_file_or_fail(path.str)
-	if blob == unsafe { nil } {
-		return error('failed to load font file: ${path}')
+// create_freetype creates a HarfBuzz face which retains the FT_Face.
+pub fn Face.create_freetype(ft_face voidptr) !Face {
+	if isnil(ft_face) {
+		return error('cannot create HarfBuzz face from a null FreeType face')
 	}
-	face := C.hb_face_create(blob, 0)
-	C.hb_blob_destroy(blob)
+	face := C.hb_ft_face_create_referenced(ft_face)
 	if face == unsafe { nil } {
-		return error('failed to create face from: ${path}')
+		return error('failed to create HarfBuzz FreeType face')
 	}
-	return Face{ ptr: face }
+	return Face{
+		ptr: face
+	}
 }
 
 // destroy releases the face object.
@@ -669,11 +747,7 @@ pub fn (mut f Face) destroy() {
 // shape performs text shaping on the buffer using the given font and features.
 // After this call, the buffer's codepoints are replaced with glyph indices
 // and positions become available via get_glyph_positions().
-// If the font pointer is nil, the function is a no-op.
 pub fn shape(fnt Font, buf Buffer, features []Feature) {
-	if fnt.ptr == unsafe { nil } {
-		return
-	}
 	if features.len == 0 {
 		C.hb_shape(fnt.ptr, buf.ptr, unsafe { nil }, 0)
 	} else {
@@ -688,22 +762,4 @@ pub fn shape(fnt Font, buf Buffer, features []Feature) {
 		}
 		unsafe { C.hb_shape(fnt.ptr, buf.ptr, &c_feats[0], u32(features.len)) }
 	}
-}
-
-// === Feature parsing ===
-
-// feature_from_string parses a feature string using HarfBuzz's built-in parser.
-// Supported formats include: "liga", "+liga", "-liga", "kern=0", "aalt[3:5]=2".
-// Returns none if the string cannot be parsed.
-pub fn feature_from_string(s string) ?Feature {
-	mut cf := C.hb_feature_t{}
-	if C.hb_feature_from_string(s.str, int(s.len), &cf) != 0 {
-		return Feature{
-			tag:   cf.tag
-			value: cf.value
-			start: cf.start
-			end:   cf.end
-		}
-	}
-	return none
 }

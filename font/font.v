@@ -1400,7 +1400,7 @@ pub fn Shaper.init(opts ShaperOptions) !Shaper {
 	mut feature_names := ['liga']
 	feature_names << opts.features
 	for feature in feature_names {
-		if parsed := harfbuzz.feature_from_string(feature) {
+		if parsed := harfbuzz.Feature.from_string(feature) {
 			feats << parsed
 		}
 	}
