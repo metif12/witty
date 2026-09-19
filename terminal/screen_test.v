@@ -349,7 +349,6 @@ fn test_screen_clear_cells_updates_managed_row_flags() {
 		row.cells[x] = CellData{
 			content_tag: .codepoint_grapheme
 			codepoint: u32(`x`)
-			has_grapheme: true
 			graphemes: [u32(0x0301)]
 			style_id: 1
 			has_hyperlink: true
@@ -384,7 +383,6 @@ fn test_screen_clear_rows_protected_preserves_managed_flags() {
 	row.cells[0] = CellData{
 		content_tag: .codepoint_grapheme
 		codepoint: u32(`u`)
-		has_grapheme: true
 		graphemes: [u32(0x0301)]
 		style_id: 1
 		has_hyperlink: true
@@ -393,7 +391,6 @@ fn test_screen_clear_rows_protected_preserves_managed_flags() {
 		content_tag: .codepoint_grapheme
 		codepoint: u32(`p`)
 		is_protected: true
-		has_grapheme: true
 		graphemes: [u32(0x0301)]
 		style_id: 1
 		has_hyperlink: true
@@ -1344,7 +1341,6 @@ fn test_screen_clone_deep_copies_managed_cells_and_resets_cursor_state() {
 	s.pages.screen_rows[0].cells[0] = CellData{
 		content_tag: .codepoint_grapheme
 		codepoint: u32(`x`)
-		has_grapheme: true
 		graphemes: [u32(0x0301)]
 		style_id: 1
 		style: style
@@ -1621,7 +1617,7 @@ fn test_screen_append_grapheme_updates_cursor_row_cell() {
 	row := s.pages.get_active_row(1)
 	assert row.grapheme
 	assert row.cells[2].content_tag == .codepoint_grapheme
-	assert row.cells[2].has_grapheme
+	assert row.cells[2].has_grapheme()
 	assert row.cells[2].graphemes == [u32(0x0301)]
 }
 

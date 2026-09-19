@@ -44,8 +44,7 @@ fn test_unicode_diacritic() {
 fn placeholder_cell(diacritics []u32, style terminal.CellStyle) terminal.CellData {
 	return terminal.CellData{
 		codepoint: placeholder
-		content_tag: .codepoint_grapheme
-		has_grapheme: diacritics.len > 0
+		content_tag: if diacritics.len > 0 { .codepoint_grapheme } else { .codepoint }
 		graphemes: diacritics
 		style: style
 	}

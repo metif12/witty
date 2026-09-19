@@ -3658,7 +3658,6 @@ fn clone_row_for_page_list(mut dst Page, dst_y int, src &RowData, cols u32) {
 		src_cell := &src.cells[x]
 		mut cell := *src_cell
 		cell.graphemes = []
-		cell.has_grapheme = false
 		if cell.content_tag == .codepoint_grapheme {
 			cell.content_tag = .codepoint
 		}
@@ -3675,7 +3674,7 @@ fn clone_row_for_page_list(mut dst Page, dst_y int, src &RowData, cols u32) {
 		// set_hyperlink installs the page mapping after the base cell is copied.
 		cell.has_hyperlink = false
 		dst.rows[dst_y].cells[x] = cell
-		if src_cell.has_grapheme {
+		if src_cell.has_grapheme() {
 			dst.set_graphemes(usize(dst_y), usize(x), src_cell.graphemes) or {
 				panic('PageList snapshot grapheme capacity was undersized: ${err}')
 			}
@@ -3761,7 +3760,7 @@ pub fn (mut self PageList) reset() {
 const max_usize = ~usize(0)
 
 fn initial_capacity(cols u16) PageCapacity {
-	return std_capacity.adjust_checked(cols) or {
+	return std_capacity.adjust(cols) or {
 		mut cap := std_capacity
 		cap.cols = cols
 		cap
@@ -4069,7 +4068,7 @@ pub fn (self &PageList) diagram() !string {
 						out.write_u8('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[int(cell.codepoint)])
 					} else {
 						out.write_rune(rune(cell.codepoint))
-						if cell.has_grapheme {
+						if cell.has_grapheme() {
 							graphemes := node.data.lookup_grapheme_at(usize(y), usize(x)) or {
 								panic('grapheme cell is missing its page mapping')
 							}
@@ -5296,7 +5295,7 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) ! {
 
 	// Inherit increased styles or grapheme bytes from the src page we're
 	// reflowing from for new pages.
-	cap := src_page.capacity.adjust_checked(self.node.data.size.cols) or {
+	cap := src_page.capacity.adjust(self.node.data.size.cols) or {
 		mut c2 := src_page.capacity
 		c2.cols = self.node.data.size.cols
 		// We're already a non-standard page. We don't want to inherit a
@@ -5461,12 +5460,11 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 	mut dst := &page.rows[int(self.y)].cells[int(self.x)]
 	dst.content_tag = .codepoint
 	dst.has_hyperlink = false
-	dst.has_grapheme = false
 	dst.graphemes = []
 	dst.style_id = default_style_id
 
 	// Copy Kitty virtual placeholder status.
-	if cell.codepoint_val() == kitty_unicode_placeholder {
+	if cell.codepoint() == kitty_unicode_placeholder {
 		page.rows[int(self.y)].kitty_virtual_placeholder = true
 	}
 
@@ -5497,7 +5495,6 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 				mut current_cell := &page.rows[int(self.y)].cells[int(self.x)]
 				current_cell.content_tag = .codepoint
 				current_cell.codepoint = 0xFFFD
-				current_cell.has_grapheme = false
 				current_cell.graphemes = []
 			}
 		}
@@ -6234,7 +6231,7 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) ! {
 
 	// Create the first node that contains our reflow.
 	first_page := &(self.pages.first or { panic('page list has no first page') }).data
-	first_cap := first_page.capacity.adjust_checked(cols) or {
+	first_cap := first_page.capacity.adjust(cols) or {
 		// We verify all maxed out page layouts work. We're growing columns so
 		// we can only get less rows so use the lesser of our capacity and size
 		// so we minimize wasted rows.
@@ -6522,7 +6519,7 @@ fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk
 	// Try to fit our new column size into our existing page capacity.
 	// If that doesn't work then use a non-standard page with the
 	// given columns.
-	cap := page.capacity.adjust_checked(cols) or {
+	cap := page.capacity.adjust(cols) or {
 		mut c2 := page.capacity
 		c2.cols = cols
 		// We're growing columns so we can only get less rows so use

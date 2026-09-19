@@ -591,7 +591,7 @@ pub fn is_symbol(cp u32) bool {
 // cell index, and cols is the number of columns in the screen.
 pub fn constraint_width(raw_slice []terminal.CellData, x int, cols int) u8 {
 	cell := raw_slice[x]
-	cp := cell.codepoint_val()
+	cp := cell.codepoint()
 
 	grid_width := u8(cell.grid_width())
 
@@ -618,7 +618,7 @@ pub fn constraint_width(raw_slice []terminal.CellData, x int, cols int) u8 {
 	// This does not apply if the previous symbol is a graphics
 	// element such as a block element or Powerline glyph.
 	if x > 0 {
-		prev_cp := raw_slice[x - 1].codepoint_val()
+		prev_cp := raw_slice[x - 1].codepoint()
 		if is_symbol(prev_cp) && !is_graphics_element(prev_cp) {
 			return 1
 		}
@@ -626,7 +626,7 @@ pub fn constraint_width(raw_slice []terminal.CellData, x int, cols int) u8 {
 
 	// If the next cell is whitespace, then we
 	// allow the glyph to be up to two cells wide.
-	next_cp := raw_slice[x + 1].codepoint_val()
+	next_cp := raw_slice[x + 1].codepoint()
 	if next_cp == 0 || is_space(next_cp) {
 		return 2
 	}

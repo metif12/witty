@@ -87,7 +87,7 @@ pub fn (mut self CellChooser) draw(context cimgui.Context, pages &terminal.Pages
 		context.separator_text('Hyperlink')
 		draw_cell_hyperlink(context, cell, pages)
 	}
-	if cell.has_grapheme {
+	if cell.has_grapheme() {
 		context.separator_text('Grapheme')
 		draw_cell_grapheme(context, cell.graphemes)
 	}
@@ -123,14 +123,14 @@ fn draw_cell_info(context cimgui.Context, cell terminal.CellData, row terminal.R
 	context.table_set_column(1)
 	context.help_marker('Primary Unicode codepoint for the cell.')
 	context.table_set_column(2)
-	codepoint := cell.codepoint_val()
+	codepoint := cell.codepoint()
 	if codepoint == 0 {
 		context.text_disabled('(empty)')
 	} else {
 		context.text('U+${codepoint:04X}')
 	}
 
-	if cell.has_grapheme {
+	if cell.has_grapheme() {
 		context.table_next_row()
 		context.table_set_column(0)
 		context.text('Grapheme')

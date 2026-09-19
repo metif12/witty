@@ -636,13 +636,13 @@ pub fn (self &RenderState) to_mapped_string() (string, []ViewportPoint) {
 	mut points := []ViewportPoint{cap: int(self.rows) * int(self.cols)}
 	for y, row in self.row_data {
 		for x, cell in row.cells {
-			cp := cell.raw.codepoint_val()
+			cp := cell.raw.codepoint()
 			before := sb.len
 			if cp == 0 {
 				sb.write_u8(0) // null byte for empty cells
 			} else {
 				write_utf8(mut sb, cp)
-				if cell.raw.has_grapheme {
+				if cell.raw.has_grapheme() {
 					for grapheme_cp in cell.grapheme {
 						write_utf8(mut sb, grapheme_cp)
 					}

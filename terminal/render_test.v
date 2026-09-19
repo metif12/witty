@@ -69,11 +69,11 @@ fn test_render_state_basic_text() {
 	assert state.row_data[2].cells.len == 10
 
 	// Row zero should contain our text
-	assert state.row_data[0].cells[0].raw.codepoint_val() == u32(`A`)
-	assert state.row_data[0].cells[1].raw.codepoint_val() == u32(`B`)
-	assert state.row_data[0].cells[2].raw.codepoint_val() == u32(`C`)
-	assert state.row_data[0].cells[3].raw.codepoint_val() == u32(`D`)
-	assert state.row_data[0].cells[4].raw.codepoint_val() == 0
+	assert state.row_data[0].cells[0].raw.codepoint() == u32(`A`)
+	assert state.row_data[0].cells[1].raw.codepoint() == u32(`B`)
+	assert state.row_data[0].cells[2].raw.codepoint() == u32(`C`)
+	assert state.row_data[0].cells[3].raw.codepoint() == u32(`D`)
+	assert state.row_data[0].cells[4].raw.codepoint() == 0
 }
 
 // ============================================================
@@ -107,16 +107,16 @@ fn test_render_state_styled_text() {
 
 	// Row zero should contain our styled text
 	c0 := state.row_data[0].cells[0]
-	assert c0.raw.codepoint_val() == u32(`A`)
+	assert c0.raw.codepoint() == u32(`A`)
 	assert c0.style.flags.bold()
 
 	c1 := state.row_data[0].cells[1]
-	assert c1.raw.codepoint_val() == u32(`B`)
+	assert c1.raw.codepoint() == u32(`B`)
 	assert !c1.style.flags.bold()
 	assert c1.style.flags.italic()
 
-	assert state.row_data[0].cells[2].raw.codepoint_val() == u32(`C`)
-	assert state.row_data[0].cells[3].raw.codepoint_val() == 0
+	assert state.row_data[0].cells[2].raw.codepoint() == u32(`C`)
+	assert state.row_data[0].cells[3].raw.codepoint() == 0
 }
 
 // ============================================================
@@ -146,15 +146,15 @@ fn test_render_state_grapheme() {
 	assert state.row_data[0].cells.len == 10
 
 	// Row zero should contain our text
-	assert state.row_data[0].cells[0].raw.codepoint_val() == u32(`A`)
+	assert state.row_data[0].cells[0].raw.codepoint() == u32(`A`)
 
 	c1 := state.row_data[0].cells[1]
-	assert c1.raw.codepoint_val() == 0x1F468
+	assert c1.raw.codepoint() == 0x1F468
 	assert c1.raw.wide == .wide
 	assert c1.grapheme == [u32(0x200D)]
 
 	c2 := state.row_data[0].cells[2]
-	assert c2.raw.codepoint_val() == 0
+	assert c2.raw.codepoint() == 0
 	assert c2.raw.wide == .spacer_tail
 }
 
@@ -185,7 +185,7 @@ fn test_render_state_cursor_in_viewport() {
 	assert state.cursor.active.y == 0
 	assert (state.cursor.viewport or { panic('nil') }).x == 0
 	assert (state.cursor.viewport or { panic('nil') }).y == 0
-	assert state.cursor.cell.codepoint_val() == u32(`A`)
+	assert state.cursor.cell.codepoint() == u32(`A`)
 	assert state.cursor.style.default()
 
 	// Set a style on the cursor
@@ -246,7 +246,7 @@ fn test_render_state_cursor_out_of_viewport() {
 	s.next_slice('Z\r')!
 	state.update(mut t)
 	assert state.cursor.viewport == none
-	assert state.cursor.cell.codepoint_val() == u32(`Z`)
+	assert state.cursor.cell.codepoint() == u32(`Z`)
 }
 
 // ============================================================

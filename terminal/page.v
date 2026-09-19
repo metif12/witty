@@ -1221,7 +1221,7 @@ pub fn (self PageCapacity) max_cols() ?u16 {
 // Adjustments always happen by limiting the rows in the page. Everything
 // else can grow. If it is impossible to achieve the desired adjustment
 // (rows would go to zero), an error is returned.
-pub fn (self PageCapacity) adjust_checked(cols_ ?u16) !PageCapacity {
+pub fn (self PageCapacity) adjust(cols_ ?u16) !PageCapacity {
 	mut adjusted := self
 	if cols := cols_ {
 		available_bits := self.available_bits_for_grid()
@@ -1406,7 +1406,7 @@ pub fn (self &Page) verify_integrity() ?IntegrityError {
 			}
 			cell := row.cells[x]
 
-			if cell.has_grapheme {
+			if cell.has_grapheme() {
 				key := cell_key(usize(y), usize(x), usize(self.capacity.cols))
 				// If a cell has grapheme data, it must have both the page map
 				// entry and the translated codepoint slice.
@@ -1538,7 +1538,6 @@ pub fn (self &Page) clone() Page {
 				style_id: cell.style_id
 				wide: cell.wide
 				is_protected: cell.is_protected
-				has_grapheme: cell.has_grapheme
 				has_hyperlink: cell.has_hyperlink
 				semantic_content: cell.semantic_content
 				color_palette: cell.color_palette
@@ -1627,7 +1626,7 @@ pub fn (self &Page) exact_row_capacity(y_start usize, y_end usize) PageCapacity 
 			if cell.style_id != default_style_id {
 				style_ids[cell.style_id] = true
 			}
-			if cell.has_grapheme {
+			if cell.has_grapheme() {
 				if cps := self.lookup_grapheme_at(y, usize(x)) {
 					grapheme_bytes += self.grapheme_alloc.bytes_required(usize(sizeof(u32)), usize(cps.len))
 				}
@@ -1805,7 +1804,7 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx usize, sr
 		}
 
 		// Copy graphemes.
-		if src_cell.has_grapheme {
+		if src_cell.has_grapheme() {
 			cps := other.lookup_grapheme_at(src_row_idx, xi) or {
 				panic('grapheme source cell is missing its page mapping')
 			}
@@ -1822,7 +1821,6 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx usize, sr
 				len: usize(cps.len)
 			}
 			dst_row.cells[xi].graphemes = cps.clone()
-			dst_row.cells[xi].has_grapheme = true
 			dst_row.cells[xi].content_tag = .codepoint_grapheme
 			dst_row.grapheme = true
 		}
@@ -1890,7 +1888,7 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx usize, sr
 		}
 
 		// Copy Kitty virtual placeholder status.
-		if src_cell.codepoint_val() == kitty_unicode_placeholder {
+		if src_cell.codepoint() == kitty_unicode_placeholder {
 			dst_row.kitty_virtual_placeholder = true
 		}
 	}
@@ -1972,14 +1970,11 @@ pub fn (mut self Page) move_cells(src_row_idx usize, src_left usize, dst_row_idx
 			src_cell := src_row.cells[si]
 			dst_row.cells[di] = src_cell
 
-			if src_cell.has_grapheme {
+			if src_cell.has_grapheme() {
 				dst_row.cells[di].content_tag = .codepoint
-				dst_row.cells[di].has_grapheme = false
 				self.move_grapheme(src_row_idx, si, dst_row_idx, di)
 				src_row.cells[si].content_tag = .codepoint
-				src_row.cells[si].has_grapheme = false
 				dst_row.cells[di].content_tag = .codepoint_grapheme
-				dst_row.cells[di].has_grapheme = true
 				dst_row.grapheme = true
 			}
 			if src_cell.has_hyperlink {
@@ -1989,7 +1984,7 @@ pub fn (mut self Page) move_cells(src_row_idx usize, src_left usize, dst_row_idx
 				dst_row.cells[di].has_hyperlink = true
 				dst_row.hyperlink = true
 			}
-			if src_cell.codepoint_val() == kitty_unicode_placeholder {
+			if src_cell.codepoint() == kitty_unicode_placeholder {
 				dst_row.kitty_virtual_placeholder = true
 			}
 		}
@@ -2028,8 +2023,8 @@ pub fn (mut self Page) swap_cells(row_idx usize, src_x usize, dst_x usize) {
 	mut row := &self.rows[row_idx]
 
 	// Graphemes are keyed by cell, so we do have to move them.
-	src_has_grapheme := row.cells[src_x].has_grapheme
-	dst_has_grapheme := row.cells[dst_x].has_grapheme
+	src_has_grapheme := row.cells[src_x].has_grapheme()
+	dst_has_grapheme := row.cells[dst_x].has_grapheme()
 	if src_has_grapheme || dst_has_grapheme {
 		src_key := cell_key(row_idx, src_x, usize(self.capacity.cols))
 		dst_key := cell_key(row_idx, dst_x, usize(self.capacity.cols))
@@ -2094,7 +2089,7 @@ pub fn (mut self Page) clear_cells(row_idx usize, left usize, end usize) {
 	// in this row then we go cell by cell and clear them if present.
 	if row.grapheme {
 		for x in left .. end {
-			if row.cells[x].has_grapheme {
+			if row.cells[x].has_grapheme() {
 				self.clear_grapheme(row_idx, x)
 			}
 		}
@@ -2143,7 +2138,7 @@ pub fn (mut self Page) clear_cells(row_idx usize, left usize, end usize) {
 	if row.kitty_virtual_placeholder && end - left >= cols {
 		mut has_placeholder := false
 		for x in left .. end {
-			if row.cells[x].codepoint_val() == kitty_unicode_placeholder {
+			if row.cells[x].codepoint() == kitty_unicode_placeholder {
 				has_placeholder = true
 				break
 			}
@@ -2316,7 +2311,6 @@ pub fn (mut self Page) set_graphemes(row_idx usize, col_idx usize, cps []u32) ! 
 
 	cell.graphemes = cps.clone()
 	cell.content_tag = .codepoint_grapheme
-	cell.has_grapheme = true
 	row.grapheme = true
 }
 
@@ -2344,7 +2338,6 @@ pub fn (mut self Page) append_grapheme(row_idx usize, col_idx usize, cp u32) ! {
 		}
 		cell.graphemes << cp
 		cell.content_tag = .codepoint_grapheme
-		cell.has_grapheme = true
 		row.grapheme = true
 		return
 	}
@@ -2405,8 +2398,8 @@ pub fn (self &Page) lookup_grapheme_at(row_idx usize, col_idx usize) ?[]u32 {
 // there are scenarios where we want to move graphemes without changing
 // the content tag. Callers beware but assert_integrity should catch this.
 fn (mut self Page) move_grapheme(src_row usize, src_col usize, dst_row usize, dst_col usize) {
-	assert self.rows[src_row].cells[src_col].has_grapheme
-	assert !self.rows[dst_row].cells[dst_col].has_grapheme
+	assert self.rows[src_row].cells[src_col].has_grapheme()
+	assert !self.rows[dst_row].cells[dst_col].has_grapheme()
 	src_key := cell_key(src_row, src_col, usize(self.capacity.cols))
 	dst_key := cell_key(dst_row, dst_col, usize(self.capacity.cols))
 	allocation := self.grapheme_map[src_key] or {
@@ -2425,7 +2418,7 @@ pub fn (mut self Page) clear_grapheme(row_idx usize, col_idx usize) {
 	defer { self.assert_integrity() }
 	assert row_idx < usize(self.size.rows)
 	assert col_idx < usize(self.size.cols)
-	assert self.rows[row_idx].cells[col_idx].has_grapheme
+	assert self.rows[row_idx].cells[col_idx].has_grapheme()
 	key := cell_key(row_idx, col_idx, usize(self.capacity.cols))
 	allocation := self.grapheme_map[key] or {
 		panic('cleared grapheme cell is missing its page mapping')
@@ -2433,7 +2426,6 @@ pub fn (mut self Page) clear_grapheme(row_idx usize, col_idx usize) {
 	self.grapheme_alloc.release(allocation.offset, allocation.len * usize(sizeof(u32)))
 	self.grapheme_map.delete(key)
 	self.rows[row_idx].cells[col_idx].graphemes = []
-	self.rows[row_idx].cells[col_idx].has_grapheme = false
 	// Mark that we no longer have graphemes by changing the content tag.
 	self.rows[row_idx].cells[col_idx].content_tag = .codepoint
 }
@@ -2444,7 +2436,7 @@ pub fn (mut self Page) clear_grapheme(row_idx usize, col_idx usize) {
 // Call after removing graphemes in a row.
 pub fn (mut self Page) update_row_grapheme_flag(row &RowData) {
 	for cell in row.cells[..int(self.size.cols)] {
-		if cell.has_grapheme {
+		if cell.has_grapheme() {
 			return
 		}
 	}

@@ -2021,7 +2021,7 @@ pub fn (mut self Terminal) print(c u32) ! {
 		// figure out if we're attaching to the prev or current.
 		if !self.modes.get(.wraparound) && self.screens.active.cursor.x == right_limit - 1 {
 			cur := self.cursor_cell_ref(0)
-			left = if cur.codepoint_val() == 0 { u32(1) } else { u32(0) }
+			left = if cur.codepoint() == 0 { u32(1) } else { u32(0) }
 		}
 
 		// If the previous cell is a wide spacer tail, then we actually
@@ -2042,7 +2042,7 @@ pub fn (mut self Terminal) print(c u32) ! {
 
 		// If our cell has no content, then this is a new cell and
 		// necessarily a grapheme break.
-		if prev.codepoint_val() == 0 {
+		if prev.codepoint() == 0 {
 			// break out of grapheme handling; fall through to width path
 		} else {
 			brk := grapheme_break_cell(prev, c)
@@ -2301,13 +2301,13 @@ fn (mut self Terminal) print_cell(unmapped_c u32, wide CellWide) {
 		}
 
 		// If the prior value had graphemes, clear those
-		if old_cell.has_grapheme {
+		if old_cell.has_grapheme() {
 			row.cells[cell_x].graphemes = []
-			row.cells[cell_x].has_grapheme = false
+			row.cells[cell_x].content_tag = .codepoint
 			// Update row grapheme flag
 			mut has_any := false
 			for cell in row.cells {
-				if cell.has_grapheme {
+				if cell.has_grapheme() {
 					has_any = true
 					break
 				}
@@ -3197,9 +3197,8 @@ fn (mut self Terminal) row_will_be_shifted(row_idx int) {
 		if left_i < row.cells.len && row.cells[left_i].wide == .spacer_tail {
 			wide_i := left_i - 1
 			if wide_i >= 0 && wide_i < row.cells.len {
-				cleared_grapheme = row.cells[wide_i].has_grapheme
+				cleared_grapheme = row.cells[wide_i].has_grapheme()
 				row.cells[wide_i].graphemes = []
-				row.cells[wide_i].has_grapheme = false
 				row.cells[wide_i].content_tag = .codepoint
 				row.cells[wide_i].codepoint = 0
 				row.cells[wide_i].wide = .narrow
@@ -3209,9 +3208,8 @@ fn (mut self Terminal) row_will_be_shifted(row_idx int) {
 
 		if right_i < row.cells.len && row.cells[right_i].wide == .wide {
 			tail_i := right_i + 1
-			cleared_grapheme = cleared_grapheme || row.cells[right_i].has_grapheme
+			cleared_grapheme = cleared_grapheme || row.cells[right_i].has_grapheme()
 			row.cells[right_i].graphemes = []
-			row.cells[right_i].has_grapheme = false
 			row.cells[right_i].content_tag = .codepoint
 			row.cells[right_i].codepoint = 0
 			row.cells[right_i].wide = .narrow
@@ -3225,7 +3223,7 @@ fn (mut self Terminal) row_will_be_shifted(row_idx int) {
 		if cleared_grapheme {
 			row.grapheme = false
 			for cell in row.cells {
-				if cell.has_grapheme {
+				if cell.has_grapheme() {
 					row.grapheme = true
 					break
 				}
@@ -3307,7 +3305,7 @@ pub fn (mut self Terminal) insert_lines(count usize) {
 					for x in int(self.scrolling_region.left) .. int(self.scrolling_region.right) + 1 {
 						if x < src_row.cells.len && x < dst_row.cells.len {
 							dst_row.cells[x] = src_row.cells[x]
-							if src_row.cells[x].has_grapheme {
+							if src_row.cells[x].has_grapheme() {
 								dst_row.grapheme = true
 							}
 							if src_row.cells[x].has_hyperlink {
@@ -3316,7 +3314,7 @@ pub fn (mut self Terminal) insert_lines(count usize) {
 							if src_row.cells[x].style_id != default_style_id {
 								dst_row.styled = true
 							}
-							if src_row.cells[x].codepoint_val() == kitty_unicode_placeholder {
+							if src_row.cells[x].codepoint() == kitty_unicode_placeholder {
 								dst_row.kitty_virtual_placeholder = true
 							}
 						}
@@ -3413,7 +3411,7 @@ pub fn (mut self Terminal) delete_lines(count usize) {
 					for x in int(self.scrolling_region.left) .. int(self.scrolling_region.right) + 1 {
 						if x < src_row.cells.len && x < dst_row.cells.len {
 							dst_row.cells[x] = src_row.cells[x]
-							if src_row.cells[x].has_grapheme {
+							if src_row.cells[x].has_grapheme() {
 								dst_row.grapheme = true
 							}
 							if src_row.cells[x].has_hyperlink {
@@ -3422,7 +3420,7 @@ pub fn (mut self Terminal) delete_lines(count usize) {
 							if src_row.cells[x].style_id != default_style_id {
 								dst_row.styled = true
 							}
-							if src_row.cells[x].codepoint_val() == kitty_unicode_placeholder {
+							if src_row.cells[x].codepoint() == kitty_unicode_placeholder {
 								dst_row.kitty_virtual_placeholder = true
 							}
 						}

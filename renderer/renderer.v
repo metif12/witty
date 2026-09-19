@@ -3053,7 +3053,7 @@ fn (self &Renderer) compute_cell_bg(selected CellSelected, style terminal.CellSt
 			// - The "inverse" style flag.
 			// - A "covering" glyph.
 			// If exactly one is true then we use fg for bg; else bg_style.
-			if inverse != is_covering(cell.codepoint_val()) {
+			if inverse != is_covering(cell.codepoint()) {
 				?terminal.RGB(fg_style)
 			} else {
 				bg_style_opt
@@ -3197,7 +3197,7 @@ fn (mut self Renderer) add_strikethrough(x u16, y u16, color terminal.RGB, alpha
 
 // Add a glyph to the specified cell.
 fn (mut self Renderer) add_glyph(x u16, y u16, color terminal.RGB, alpha u8, glyph_index u32, font_index font.Index, x_offset i32, y_offset i32, cell_width u32, raw_cells []terminal.CellData, raw_x int, cols int) ! {
-	cp := raw_cells[raw_x].codepoint_val()
+	cp := raw_cells[raw_x].codepoint()
 	constraint := font.get_constraint(cp) or {
 		if is_symbol(cp) {
 			font.Constraint{

@@ -1710,7 +1710,7 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 			} else if !cell.has_text() {
 				blank_cells += 1
 				continue
-			} else if cell.codepoint_val() == u32(` `) && self.opts.trim {
+			} else if cell.codepoint() == u32(` `) && self.opts.trim {
 				blank_cells += 1
 				continue
 			}

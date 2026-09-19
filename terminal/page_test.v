@@ -106,7 +106,7 @@ fn test_page_append_grapheme_small() {
 	page.append_grapheme(0, 0, 0x0A) or { panic(err) }
 	row0 := page.get_row(0)
 	assert row0.grapheme
-	assert page.rows[0].cells[0].has_grapheme
+	assert page.rows[0].cells[0].has_grapheme()
 	assert page.grapheme_alloc.used_bytes() == grapheme_chunk
 	cps1 := page.lookup_grapheme_at(0, 0) or {
 		assert false, 'expected grapheme data'
@@ -127,7 +127,7 @@ fn test_page_append_grapheme_small() {
 	page.clear_grapheme(0, 0)
 	page.update_row_grapheme_flag(page.get_row(0))
 	assert !page.rows[0].grapheme
-	assert !page.rows[0].cells[0].has_grapheme
+	assert !page.rows[0].cells[0].has_grapheme()
 	assert page.grapheme_alloc.used_bytes() == 0
 }
 
@@ -198,8 +198,8 @@ fn test_page_clear_grapheme_not_all_cells() {
 	page.update_row_grapheme_flag(page.get_row(0))
 	// Row should still be marked as having graphemes (second cell has one).
 	assert page.rows[0].grapheme
-	assert !page.rows[0].cells[0].has_grapheme
-	assert page.rows[0].cells[1].has_grapheme
+	assert !page.rows[0].cells[0].has_grapheme()
+	assert page.rows[0].cells[1].has_grapheme()
 }
 
 // Test cloning a page.
@@ -289,7 +289,7 @@ fn test_page_clone_graphemes() {
 	}
 	{
 		assert page2.rows[0].grapheme
-		assert page2.rows[0].cells[0].has_grapheme
+		assert page2.rows[0].cells[0].has_grapheme()
 		cps := page2.lookup_grapheme_at(0, 0) or {
 			assert false, 'expected grapheme data'
 			return
@@ -582,7 +582,7 @@ fn test_page_clone_from_graphemes() {
 		rac := page2.get_row_and_cell(1, y)
 		assert rac.cell.codepoint == u32(y + 1)
 		assert page2.rows[y].grapheme
-		assert page2.rows[y].cells[1].has_grapheme
+		assert page2.rows[y].cells[1].has_grapheme()
 		cps := page2.lookup_grapheme_at(y, 1) or {
 			assert false, 'expected grapheme data'
 			return
@@ -606,7 +606,7 @@ fn test_page_clone_from_graphemes() {
 		rac := page2.get_row_and_cell(1, y)
 		assert rac.cell.codepoint == u32(y + 1)
 		assert page2.rows[y].grapheme
-		assert page2.rows[y].cells[1].has_grapheme
+		assert page2.rows[y].cells[1].has_grapheme()
 		cps := page2.lookup_grapheme_at(y, 1) or {
 			assert false, 'expected grapheme data'
 			return
@@ -667,7 +667,7 @@ fn test_page_clone_from_frees_dst_graphemes() {
 		rac := page2.get_row_and_cell(1, y)
 		assert rac.cell.codepoint == u32(y + 1)
 		assert !page2.rows[y].grapheme
-		assert !page2.rows[y].cells[1].has_grapheme
+		assert !page2.rows[y].cells[1].has_grapheme()
 	}
 	assert page2.grapheme_count() == 0
 }
@@ -762,7 +762,7 @@ fn test_page_clone_row_from_partial_grapheme_in_non_copied_source_region() {
 			expected := if x >= 2 && x < 8 { u32(x + 1) } else { u32(0) }
 			rac := page2.get_row_and_cell(x, 0)
 			assert rac.cell.codepoint == expected
-			assert !rac.cell.has_grapheme
+			assert !rac.cell.has_grapheme()
 		}
 		assert !page2.rows[0].grapheme
 	}
@@ -1532,12 +1532,12 @@ fn test_standard_page_layout_and_capacity_adjust_reference() {
 	}
 	assert max_cols == u16(47219)
 
-	cap80 := std_capacity.adjust_checked(80) or {
+	cap80 := std_capacity.adjust(80) or {
 		assert false, 'capacity adjustment failed'
 		return
 	}
 	assert cap80.rows == 582
-	cap500 := std_capacity.adjust_checked(500) or {
+	cap500 := std_capacity.adjust(500) or {
 		assert false, 'capacity adjustment failed'
 		return
 	}
@@ -1589,7 +1589,7 @@ fn test_page_set_graphemes_enforces_map_capacity_and_rolls_back_allocation() {
 	assert error_message == 'GraphemeMapOutOfMemory'
 	assert page.grapheme_count() == 1
 	assert page.grapheme_alloc.used_bytes() == grapheme_chunk
-	assert !page.rows[0].cells[1].has_grapheme
+	assert !page.rows[0].cells[1].has_grapheme()
 }
 
 fn test_page_set_graphemes_enforces_allocator_capacity() {
@@ -1616,7 +1616,7 @@ fn test_page_set_graphemes_enforces_allocator_capacity() {
 	page.append_grapheme(0, 1, 0x0301) or { error_message = err.msg() }
 	assert error_message == 'GraphemeAllocOutOfMemory'
 	assert page.grapheme_count() == 1
-	assert !page.rows[0].cells[1].has_grapheme
+	assert !page.rows[0].cells[1].has_grapheme()
 }
 
 fn test_page_set_hyperlink_reports_full_map_without_mutating_cell() {
@@ -1719,13 +1719,13 @@ fn test_page_insert_hyperlink_enforces_string_allocator_capacity() {
 
 fn test_page_capacity_adjust_no_columns_request() {
 	original := std_capacity
-	adjusted := original.adjust_checked(none)!
+	adjusted := original.adjust(none)!
 	assert adjusted == original
 }
 
 fn test_page_capacity_adjust_zero_columns_is_not_noop() {
 	original := std_capacity
-	adjusted := original.adjust_checked(u16(0))!
+	adjusted := original.adjust(u16(0))!
 	assert adjusted.cols == 0
 	assert adjusted.rows == u16(original.available_bits_for_grid() / row_bit_size)
 	assert Page.layout(adjusted).total_size == Page.layout(original).total_size
@@ -1736,7 +1736,7 @@ fn test_page_capacity_adjust_cols_sweep_preserves_total_size() {
 	original_cols := cap.cols
 	original_size := Page.layout(cap).total_size
 	for c in 1 .. int(original_cols) * 2 {
-		cap = cap.adjust_checked(u16(c))!
+		cap = cap.adjust(u16(c))!
 		assert Page.layout(cap).total_size == original_size
 
 		mut bigger := cap
@@ -1748,7 +1748,7 @@ fn test_page_capacity_adjust_cols_sweep_preserves_total_size() {
 fn test_page_capacity_max_cols_preserves_size_and_uses_one_row() {
 	cap := std_capacity
 	max := cap.max_cols() or { panic('maxCols returned none') }
-	adjusted := cap.adjust_checked(max)!
+	adjusted := cap.adjust(max)!
 	assert Page.layout(adjusted).total_size == Page.layout(cap).total_size
 	assert adjusted.rows == 1
 }
@@ -1759,7 +1759,7 @@ fn test_page_capacity_adjust_cols_down() {
 		cols: 80
 		rows: 128
 	}
-	adjusted := original.adjust_checked(original.cols / 2) or {
+	adjusted := original.adjust(original.cols / 2) or {
 		assert false, 'capacity adjustment failed'
 		return
 	}
@@ -1780,7 +1780,7 @@ fn test_page_capacity_adjust_cols_down_to_1() {
 		cols: 80
 		rows: 128
 	}
-	adjusted := original.adjust_checked(1) or {
+	adjusted := original.adjust(1) or {
 		assert false, 'capacity adjustment failed'
 		return
 	}
@@ -1795,7 +1795,7 @@ fn test_page_capacity_adjust_cols_up() {
 		cols: 80
 		rows: 128
 	}
-	adjusted := original.adjust_checked(original.cols * 2) or {
+	adjusted := original.adjust(original.cols * 2) or {
 		assert false, 'capacity adjustment failed'
 		return
 	}
@@ -1816,7 +1816,7 @@ fn test_page_capacity_adjust_cols_too_high() {
 	}
 	assert max < max_u16
 	mut failed := false
-	original.adjust_checked(max + 1) or { failed = true }
+	original.adjust(max + 1) or { failed = true }
 	assert failed
 }
 
@@ -1835,7 +1835,7 @@ fn test_capacity_max_cols_basic() {
 	assert max >= cap.cols
 
 	// Adjusting to maxCols should succeed with at least 1 row.
-	adjusted := cap.adjust_checked(max) or {
+	adjusted := cap.adjust(max) or {
 		assert false, 'maxCols adjustment failed'
 		return
 	}
@@ -1943,7 +1943,7 @@ fn test_page_clear_cells() {
 	for x in 0 .. int(page.size.cols) {
 		rac := page.get_row_and_cell(x, 0)
 		assert rac.cell.codepoint == 0
-		assert !rac.cell.has_grapheme
+		assert !rac.cell.has_grapheme()
 	}
 	assert page.grapheme_count() == 0
 }
@@ -2105,7 +2105,7 @@ fn test_page_capacity_adjust() {
 	}
 
 	// The page-alignment slack may fit additional rows even at the same width.
-	adj := cap.adjust_checked(80) or {
+	adj := cap.adjust(80) or {
 		assert false, 'capacity adjustment failed'
 		return
 	}
@@ -2115,7 +2115,7 @@ fn test_page_capacity_adjust() {
 	assert used <= cap.available_bits_for_grid()
 
 	// Very large cols - rows should reduce
-	adj2 := cap.adjust_checked(512) or {
+	adj2 := cap.adjust(512) or {
 		assert false, 'capacity adjustment failed'
 		return
 	}
@@ -2342,7 +2342,7 @@ fn test_page_clone_row_preserves_integrity_after_late_managed_memory_failure() {
 
 	assert error_message == PageCloneError.string_alloc_out_of_memory.str()
 	assert dst.rows[0].cells[0].codepoint == u32(`a`)
-	assert dst.rows[0].cells[0].has_grapheme
+	assert dst.rows[0].cells[0].has_grapheme()
 	assert dst.rows[0].cells[0].graphemes == [u32(0x0301)]
 	assert !dst.rows[0].cells[0].has_hyperlink
 	assert dst.lookup_hyperlink(0, 0) == none
@@ -2414,7 +2414,7 @@ fn test_page_clone_reports_grapheme_allocator_failure_before_map_failure() {
 	mut error_message := ''
 	dst.clone_row_from(&src, 0, 0) or { error_message = err.msg() }
 	assert error_message == PageCloneError.grapheme_alloc_out_of_memory.str()
-	assert !dst.rows[0].cells[0].has_grapheme
+	assert !dst.rows[0].cells[0].has_grapheme()
 	assert dst.grapheme_count() == 1
 	assert dst.verify_integrity() == none
 }

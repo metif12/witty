@@ -1758,8 +1758,8 @@ fn (mut it RunIterator) next_render_cells() !TextRunValue {
 		if j > start {
 			prev := cells[j - 1]
 			if prev.raw.content_tag == .codepoint && cell.raw.content_tag == .codepoint {
-				prev_cp := prev.raw.codepoint_val()
-				cp := cell.raw.codepoint_val()
+				prev_cp := prev.raw.codepoint()
+				cp := cell.raw.codepoint()
 				if (prev_cp == `f` && (cp == `l` || cp == `i`))
 					|| (prev_cp == `s` && cp == `t`) {
 					break
@@ -1790,7 +1790,7 @@ fn (mut it RunIterator) next_render_cells() !TextRunValue {
 				presentation = Presentation.emoji
 			}
 		}
-		mut resolved_cp := cell.raw.codepoint_val()
+		mut resolved_cp := cell.raw.codepoint()
 		mut index_value := index_for_render_cell(it.opts.grid, &cell, font_style, presentation)!
 		if !index_value.has_value {
 			mut grid := unsafe { it.opts.grid }
@@ -1817,7 +1817,7 @@ fn (mut it RunIterator) next_render_cells() !TextRunValue {
 			resolved_cp = u32(` `)
 		}
 		it.add_codepoint(mut hasher, resolved_cp, cluster)!
-		if resolved_cp == cell.raw.codepoint_val() && cell.raw.content_tag == .codepoint_grapheme {
+		if resolved_cp == cell.raw.codepoint() && cell.raw.content_tag == .codepoint_grapheme {
 			for cp in cell.grapheme {
 				if cp != 0xfe0e && cp != 0xfe0f {
 					it.add_codepoint(mut hasher, cp, cluster)!
@@ -1874,7 +1874,7 @@ fn index_for_render_cell(grid_ptr &SharedGrid, cell &terminal.RenderCell, style 
 		return CodepointValue{}
 	}
 	mut grid := unsafe { grid_ptr }
-	primary_cp := cell.raw.codepoint_val()
+	primary_cp := cell.raw.codepoint()
 	if cell.raw.is_empty() || primary_cp == 0 || primary_cp == 0x10eeee {
 		return grid.get_index(u32(` `), style, presentation)!
 	}

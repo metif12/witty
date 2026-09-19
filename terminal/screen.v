@@ -2902,7 +2902,7 @@ pub fn (mut self Screen) clear_cells(row_idx int, start int, end int) {
 		if row.kitty_virtual_placeholder && hi - lo == int(self.pages.cols) {
 			mut has_placeholder := false
 			for cell in row.cells[lo..hi] {
-				if cell.codepoint_val() == kitty_unicode_placeholder {
+				if cell.codepoint() == kitty_unicode_placeholder {
 					has_placeholder = true
 					break
 				}
@@ -2922,7 +2922,7 @@ pub fn (mut self Screen) clear_cells(row_idx int, start int, end int) {
 		if had_grapheme {
 			row.grapheme = false
 			for cell in row.cells {
-				if cell.has_grapheme {
+				if cell.has_grapheme() {
 					row.grapheme = true
 					break
 				}
@@ -3578,7 +3578,7 @@ pub fn (self &Screen) select_line(opts SelectLine) ?Selection {
 		for {
 			pin := start_it.next() or { break }
 			cell := self.pages.screen_rows[int(pin.y)].cells[int(pin.x)]
-			if cell.has_text() && !is_codepoint_in(cell.codepoint_val(), ws) {
+			if cell.has_text() && !is_codepoint_in(cell.codepoint(), ws) {
 				trimmed_start = pin
 				break
 			}
@@ -3589,7 +3589,7 @@ pub fn (self &Screen) select_line(opts SelectLine) ?Selection {
 		for {
 			pin := end_it.next() or { break }
 			cell := self.pages.screen_rows[int(pin.y)].cells[int(pin.x)]
-			if cell.has_text() && !is_codepoint_in(cell.codepoint_val(), ws) {
+			if cell.has_text() && !is_codepoint_in(cell.codepoint(), ws) {
 				trimmed_end = pin
 				break
 			}
@@ -4038,7 +4038,6 @@ pub fn (mut self Screen) append_grapheme(cell_x u32, cp u32) ! {
 		mut row := &self.pages.screen_rows[idx]
 		mut cell := &row.cells[int(cell_x)]
 		cell.graphemes << cp
-		cell.has_grapheme = true
 		cell.content_tag = .codepoint_grapheme
 		row.grapheme = true
 	}

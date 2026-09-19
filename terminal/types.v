@@ -52,9 +52,9 @@ pub enum SemanticContent as u8 {
 // since we zero initialize cells by default.
 pub struct CellData {
 pub mut:
-	// The codepoint that this cell contains. If has_grapheme is false,
-	// then this is the only codepoint in the cell. If has_grapheme is
-	// true, then this is the first codepoint in the grapheme cluster.
+	// The codepoint that this cell contains. If content_tag is codepoint,
+	// then this is the only codepoint in the cell. If content_tag is
+	// codepoint_grapheme, then this is the first codepoint in the cluster.
 	codepoint u32
 	// The content tag dictates what kind of content this cell holds.
 	content_tag ContentTag = .codepoint
@@ -65,8 +65,6 @@ pub mut:
 	wide CellWide = .narrow
 	// Whether this was written with the protection flag set.
 	is_protected bool
-	// Whether this cell has grapheme cluster data.
-	has_grapheme bool
 	// Whether this cell is a hyperlink.
 	has_hyperlink bool
 	// The resolved OSC 8 hyperlink. The Zig page stores this indirectly in a
@@ -100,7 +98,7 @@ pub fn CellData.init(cp u32) CellData {
 // Returns true if this cell represents all zeroes.
 pub fn (self &CellData) is_zero() bool {
 	return self.codepoint == 0 && self.content_tag == .codepoint && self.style_id == 0
-		&& self.wide == .narrow && !self.is_protected && !self.has_grapheme
+		&& self.wide == .narrow && !self.is_protected
 		&& !self.has_hyperlink && self.semantic_content == .output
 		&& self.graphemes.len == 0
 }
@@ -118,11 +116,16 @@ pub fn (self &CellData) has_text() bool {
 }
 
 // Returns the codepoint for this cell, or 0 for bg-only cells.
-pub fn (self &CellData) codepoint_val() u32 {
+pub fn (self &CellData) codepoint() u32 {
 	return match self.content_tag {
 		.codepoint, .codepoint_grapheme { self.codepoint }
 		.bg_color_palette, .bg_color_rgb { 0 }
 	}
+}
+
+// Returns true if this cell has multi-codepoint grapheme data.
+pub fn (self &CellData) has_grapheme() bool {
+	return self.content_tag == .codepoint_grapheme
 }
 
 // The width in grid cells that this cell takes up.
@@ -1211,7 +1214,7 @@ fn (mut c FlatReflowCursor) write_cell(cell CellData) ReflowWriteResult {
 
 	// Propagate row-level flags for managed content on the copied cell.
 	mut row := &c.out[c.y()]
-	if cell.has_grapheme {
+	if cell.has_grapheme() {
 		row.grapheme = true
 	}
 	if cell.has_hyperlink {
@@ -1220,7 +1223,7 @@ fn (mut c FlatReflowCursor) write_cell(cell CellData) ReflowWriteResult {
 	if cell.style_id != default_style_id {
 		row.styled = true
 	}
-	if cell.codepoint_val() == kitty_unicode_placeholder {
+	if cell.codepoint() == kitty_unicode_placeholder {
 		row.kitty_virtual_placeholder = true
 	}
 	c.cursor_forward()

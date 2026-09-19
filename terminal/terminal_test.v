@@ -1166,7 +1166,6 @@ fn test_protected_erases_update_managed_row_flags() {
 		row.cells[0] = CellData{
 			content_tag: .codepoint_grapheme
 			codepoint: u32(`x`)
-			has_grapheme: true
 			graphemes: [u32(0x0301)]
 			style_id: 1
 			has_hyperlink: true
@@ -1769,8 +1768,8 @@ fn test_decaln_resets_graphemes_with_protected_mode() {
 		assert row.dirty
 		assert !row.grapheme
 		for cell in row.cells {
-			assert cell.codepoint_val() == u32(`E`)
-			assert !cell.has_grapheme
+			assert cell.codepoint() == u32(`E`)
+			assert !cell.has_grapheme()
 			assert !cell.is_protected
 		}
 	}
@@ -3128,7 +3127,7 @@ fn active_grapheme_count(t &Terminal) int {
 	for y in start .. t.screens.active.pages.screen_rows.len {
 		row := t.screens.active.pages.screen_rows[y]
 		for cell in row.cells {
-			if cell.has_grapheme {
+			if cell.has_grapheme() {
 				n++
 			}
 		}
@@ -3219,29 +3218,29 @@ fn test_print_multicodepoint_grapheme_disabled_mode_2027() {
 	// separate wide cells (no cluster merging).
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x1F468
-	assert c0.has_grapheme
+	assert c0.has_grapheme()
 	assert c0.wide == .wide
 	assert c0.graphemes.len == 1
 	c1 := cell_at(&t, 1, 0)
 	assert c1.codepoint == 0
-	assert !c1.has_grapheme
+	assert !c1.has_grapheme()
 	assert c1.wide == .spacer_tail
 	c2 := cell_at(&t, 2, 0)
 	assert c2.codepoint == 0x1F469
-	assert c2.has_grapheme
+	assert c2.has_grapheme()
 	assert c2.wide == .wide
 	assert c2.graphemes.len == 1
 	c3 := cell_at(&t, 3, 0)
 	assert c3.codepoint == 0
-	assert !c3.has_grapheme
+	assert !c3.has_grapheme()
 	assert c3.wide == .spacer_tail
 	c4 := cell_at(&t, 4, 0)
 	assert c4.codepoint == 0x1F467
-	assert !c4.has_grapheme
+	assert !c4.has_grapheme()
 	assert c4.wide == .wide
 	c5 := cell_at(&t, 5, 0)
 	assert c5.codepoint == 0
-	assert !c5.has_grapheme
+	assert !c5.has_grapheme()
 	assert c5.wide == .spacer_tail
 
 	assert t.is_dirty(0, 0)
@@ -3260,7 +3259,7 @@ fn test_vs16_doesnt_make_character_with_2027_disabled() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x2764
-	assert c0.has_grapheme
+	assert c0.has_grapheme()
 	assert c0.wide == .narrow
 	assert c0.graphemes.len == 1
 	assert c0.graphemes[0] == 0xFE0F
@@ -3298,7 +3297,7 @@ fn test_print_invalid_vs16_non_grapheme() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == u32(`x`)
-	assert !c0.has_grapheme
+	assert !c0.has_grapheme()
 	assert c0.wide == .narrow
 	c1 := cell_at(&t, 1, 0)
 	assert c1.codepoint == 0
@@ -3343,7 +3342,7 @@ fn test_print_multicodepoint_grapheme_mode_2027() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x1F468
-	assert c0.has_grapheme
+	assert c0.has_grapheme()
 	assert c0.wide == .wide
 	// The other 4 codepoints (ZWJ, 👩, ZWJ, 👧) are stored as graphemes.
 	assert c0.graphemes.len == 4
@@ -3354,7 +3353,7 @@ fn test_print_multicodepoint_grapheme_mode_2027() {
 
 	c1 := cell_at(&t, 1, 0)
 	assert c1.codepoint == 0
-	assert !c1.has_grapheme
+	assert !c1.has_grapheme()
 	assert c1.wide == .spacer_tail
 }
 
@@ -3379,7 +3378,7 @@ fn test_keypad_sequence_vs15() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x23
-	assert c0.has_grapheme
+	assert c0.has_grapheme()
 	assert c0.wide == .narrow
 }
 
@@ -3404,7 +3403,7 @@ fn test_keypad_sequence_vs16() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x23
-	assert c0.has_grapheme
+	assert c0.has_grapheme()
 	assert c0.wide == .wide
 	c1 := cell_at(&t, 1, 0)
 	assert c1.wide == .spacer_tail
@@ -3431,7 +3430,7 @@ fn test_fitzpatrick_skin_tone_next_valid_base() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x1F44B
-	assert c0.has_grapheme
+	assert c0.has_grapheme()
 	assert c0.wide == .wide
 }
 
@@ -3457,15 +3456,15 @@ fn test_fitzpatrick_skin_tone_next_to_non_base() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x22
-	assert !c0.has_grapheme
+	assert !c0.has_grapheme()
 	assert c0.wide == .narrow
 	c1 := cell_at(&t, 1, 0)
 	assert c1.codepoint == 0x1F3FF
-	assert !c1.has_grapheme
+	assert !c1.has_grapheme()
 	assert c1.wide == .wide
 	c3 := cell_at(&t, 3, 0)
 	assert c3.codepoint == 0x22
-	assert !c3.has_grapheme
+	assert !c3.has_grapheme()
 	assert c3.wide == .narrow
 }
 
@@ -3524,7 +3523,7 @@ fn test_vs15_to_make_narrow_character() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x2614
-	assert c0.has_grapheme
+	assert c0.has_grapheme()
 	assert c0.wide == .narrow
 	assert c0.graphemes.len == 1
 	// The wide spacer tail must have been reverted to narrow.
@@ -3554,7 +3553,7 @@ fn test_vs15_on_already_narrow_emoji() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x26C8
-	assert c0.has_grapheme
+	assert c0.has_grapheme()
 	assert c0.wide == .narrow
 	assert c0.graphemes.len == 1
 }
@@ -3577,7 +3576,7 @@ fn test_print_invalid_vs15_following_emoji_is_wide() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x1F9E0
-	assert !c0.has_grapheme
+	assert !c0.has_grapheme()
 	assert c0.wide == .wide
 	c1 := cell_at(&t, 1, 0)
 	assert c1.codepoint == 0
@@ -3604,7 +3603,7 @@ fn test_print_invalid_vs15_in_emoji_zwj_sequence() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x1F469
-	assert c0.has_grapheme
+	assert c0.has_grapheme()
 	// The invalid VS15 is dropped; only ZWJ + 👦 attach.
 	assert c0.graphemes.len == 2
 	assert c0.graphemes[0] == 0x200D
@@ -3644,7 +3643,7 @@ fn test_vs15_to_make_narrow_character_with_pending_wrap() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x2614
-	assert c0.has_grapheme
+	assert c0.has_grapheme()
 	assert c0.wide == .narrow
 	assert c0.graphemes.len == 1
 }
@@ -3667,7 +3666,7 @@ fn test_vs16_to_make_wide_character_with_mode_2027() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x2764
-	assert c0.has_grapheme
+	assert c0.has_grapheme()
 	assert c0.wide == .wide
 	assert c0.graphemes.len == 1
 	c1 := cell_at(&t, 1, 0)
@@ -3692,12 +3691,12 @@ fn test_vs16_repeated_with_mode_2027() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x2764
-	assert c0.has_grapheme
+	assert c0.has_grapheme()
 	assert c0.wide == .wide
 	assert c0.graphemes.len == 1
 	c2 := cell_at(&t, 2, 0)
 	assert c2.codepoint == 0x2764
-	assert c2.has_grapheme
+	assert c2.has_grapheme()
 	assert c2.wide == .wide
 	assert c2.graphemes.len == 1
 }
@@ -3721,7 +3720,7 @@ fn test_print_invalid_vs16_grapheme() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == u32(`x`)
-	assert !c0.has_grapheme
+	assert !c0.has_grapheme()
 	assert c0.wide == .narrow
 	c1 := cell_at(&t, 1, 0)
 	assert c1.codepoint == 0
@@ -3747,11 +3746,11 @@ fn test_print_invalid_vs16_with_second_char() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == u32(`x`)
-	assert !c0.has_grapheme
+	assert !c0.has_grapheme()
 	assert c0.wide == .narrow
 	c1 := cell_at(&t, 1, 0)
 	assert c1.codepoint == u32(`y`)
-	assert !c1.has_grapheme
+	assert !c1.has_grapheme()
 	assert c1.wide == .narrow
 }
 
@@ -3774,7 +3773,7 @@ fn test_print_invalid_vs16_with_second_char_combining() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == u32(`n`)
-	assert c0.has_grapheme
+	assert c0.has_grapheme()
 	// The invalid VS16 is dropped; only the combining tilde attaches.
 	assert c0.graphemes.len == 1
 	assert c0.graphemes[0] == 0x0303
@@ -3810,7 +3809,7 @@ fn test_overwrite_grapheme_should_clear_grapheme_data() {
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == u32(`A`)
-	assert !c0.has_grapheme
+	assert !c0.has_grapheme()
 	assert c0.wide == .narrow
 }
 
@@ -3913,11 +3912,11 @@ fn test_print_breaks_valid_grapheme_cluster_with_prepend_ascii_for_speed() {
 
 	c1 := cell_at(&t, 1, 0)
 	assert c1.codepoint == 0x0600
-	assert !c1.has_grapheme
+	assert !c1.has_grapheme()
 	assert c1.wide == .narrow
 	c2 := cell_at(&t, 2, 0)
 	assert c2.codepoint == u32(`1`)
-	assert !c2.has_grapheme
+	assert !c2.has_grapheme()
 	assert c2.wide == .narrow
 }
 
@@ -5263,7 +5262,7 @@ fn test_line_shift_recomputes_grapheme_flag_after_wide_boundary_split() {
 	t.print(0x1f469) or { assert false }
 	row_before := t.screens.active.pages.get_active_row(0)
 	assert row_before.cells[2].wide == .wide
-	assert row_before.cells[2].has_grapheme
+	assert row_before.cells[2].has_grapheme()
 	assert row_before.cells[3].wide == .spacer_tail
 	assert row_before.grapheme
 
@@ -5274,7 +5273,7 @@ fn test_line_shift_recomputes_grapheme_flag_after_wide_boundary_split() {
 	t.delete_lines(1)
 
 	row_after := t.screens.active.pages.get_active_row(0)
-	assert !row_after.cells[2].has_grapheme
+	assert !row_after.cells[2].has_grapheme()
 	assert row_after.cells[2].wide == .narrow
 	assert row_after.cells[3].wide == .narrow
 	assert !row_after.grapheme
@@ -6392,7 +6391,7 @@ fn test_insert_blanks_deleting_graphemes() {
 	row := t.screens.active.pages.get_active_row(0)
 	assert !row.grapheme
 	for cell in row.cells {
-		assert !cell.has_grapheme
+		assert !cell.has_grapheme()
 	}
 }
 
@@ -6414,7 +6413,7 @@ fn test_insert_blanks_shifts_graphemes() {
 	assert t.plain_string() or { '' } == ' A👨‍👩‍👧'
 	row := t.screens.active.pages.get_active_row(0)
 	assert row.grapheme
-	assert row.cells[2].has_grapheme
+	assert row.cells[2].has_grapheme()
 }
 
 fn test_insert_blanks_split_multi_cell_character_from_tail() {

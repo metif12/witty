@@ -678,7 +678,6 @@ fn test_page_pin_row_cell_grapheme_and_style_accessors() {
 	foreign := CellData{
 		content_tag: .codepoint_grapheme
 		codepoint: u32(`z`)
-		has_grapheme: true
 		graphemes: [u32(0x0302)]
 	}
 	assert pin.grapheme(&foreign) == none
@@ -792,7 +791,6 @@ fn test_page_list_from_pages_translates_managed_cells() {
 	src.screen_rows[0].cells[0] = CellData{
 		content_tag: .codepoint_grapheme
 		codepoint: u32(`a`)
-		has_grapheme: true
 		graphemes: [u32(0x0301)]
 		style_id: 1
 		style: style_a
@@ -2037,7 +2035,7 @@ fn test_page_list_erase_row_preserves_managed_cell_data() {
 
 	cell := page.rows[0].cells[2]
 	assert cell.codepoint == u32(`M`)
-	assert cell.has_grapheme
+	assert cell.has_grapheme()
 	assert cell.graphemes == [u32(0x0301)]
 	assert cell.style_id == style_id
 	assert page.styles.get(cell.style_id).flags.bold()
@@ -2893,7 +2891,7 @@ fn test_page_list_resize_more_rows_and_cols_large() {
 
 	new_cols := u16(600)
 	new_rows := u16(600)
-	cap := std_capacity.adjust_checked(new_cols) or { panic(err) }
+	cap := std_capacity.adjust(new_cols) or { panic(err) }
 	assert cap.rows < new_rows
 
 	s.resize(PageResizeOpts{
@@ -5234,17 +5232,17 @@ fn test_page_list_resize_no_reflow_more_cols_forces_smaller_cap() {
 fn test_page_list_resize_no_reflow_more_cols_forces_less_rows_per_page() {
 	cols := u16(5)
 	rows := u16(150)
-	initial := std_capacity.adjust_checked(cols) or { panic(err) }
+	initial := std_capacity.adjust(cols) or { panic(err) }
 	assert initial.rows >= rows
 
 	mut s := PageList.init(cols, rows, usize(0))
 	defer { s.deinit() }
 
 	mut new_cols := u16(50)
-	mut adjusted := std_capacity.adjust_checked(new_cols) or { panic(err) }
+	mut adjusted := std_capacity.adjust(new_cols) or { panic(err) }
 	for adjusted.rows >= rows {
 		new_cols += 50
-		adjusted = std_capacity.adjust_checked(new_cols) or { panic(err) }
+		adjusted = std_capacity.adjust(new_cols) or { panic(err) }
 	}
 	s.resize(PageResizeOpts{ cols: new_cols, reflow: false }) or { panic(err) }
 	assert s.cols == new_cols
@@ -5254,10 +5252,10 @@ fn test_page_list_resize_no_reflow_more_cols_forces_less_rows_per_page() {
 	first := s.pages.first or { return }
 	assert first.data.size.rows == first.data.capacity.rows
 	new_cols = first.data.size.cols + 50
-	adjusted = std_capacity.adjust_checked(new_cols) or { panic(err) }
+	adjusted = std_capacity.adjust(new_cols) or { panic(err) }
 	for adjusted.rows >= first.data.size.rows {
 		new_cols += 50
-		adjusted = std_capacity.adjust_checked(new_cols) or { panic(err) }
+		adjusted = std_capacity.adjust(new_cols) or { panic(err) }
 	}
 	s.resize(PageResizeOpts{ cols: new_cols, reflow: false }) or { panic(err) }
 	assert s.cols == new_cols
@@ -5298,7 +5296,7 @@ fn test_page_list_resize_no_reflow_more_cols_remaps_pins_in_backfill_path() {
 
 	// Ensure the resize takes the slow path (new capacity > current capacity).
 	new_cols := cols + 1
-	adjusted := second_page.data.capacity.adjust_checked(new_cols) or { panic(err) }
+	adjusted := second_page.data.capacity.adjust(new_cols) or { panic(err) }
 	assert second_page.data.capacity.cols < adjusted.cols
 
 	// Track row zero of the second page. Backfill copies this row into the
