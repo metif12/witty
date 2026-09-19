@@ -42,19 +42,19 @@ pub type PageList = terminal.PageList
 // Cell and style types
 pub type CellData = terminal.CellData
 
-pub type Cell = terminal.CellData
+pub type Cell = terminal.Cell
 
 pub type Charset = terminal.Charset
 
 pub type CharsetSlot = terminal.CharsetSlot
 
-pub type CharsetActiveSlot = terminal.ActiveSlot
+pub type CharsetActiveSlot = terminal.CharsetActiveSlot
 
 pub type Coordinate = terminal.Coordinate
 
-pub type CSI = terminal.CSIAction
+pub type CSI = terminal.CSI
 
-pub type DCS = terminal.DCSAction
+pub type DCS = terminal.DCS
 
 pub type Parser = terminal.Parser
 
@@ -68,17 +68,17 @@ pub type SizeReportStyle = terminal.SizeReportStyle
 
 pub type StringMap = terminal.StringMap
 
-pub type Style = terminal.CellStyle
+pub type Style = terminal.Style
 
 pub type Stream = terminal.Stream
 
-pub type StreamAction = terminal.StreamEvent
+pub type StreamAction = terminal.StreamAction
 
 pub type Cursor = terminal.Cursor
 
 pub type CursorStyle = terminal.CursorStyle
 
-pub type CursorStyleReq = terminal.AnsiCursorStyle
+pub type CursorStyleReq = terminal.CursorStyleReq
 
 pub type DeviceAttributeReq = terminal.DeviceAttributeReq
 
@@ -102,7 +102,7 @@ pub type EraseLine = terminal.EraseLine
 
 pub type TabClear = terminal.TabClear
 
-pub type Attribute = terminal.SgrAttribute
+pub type Attribute = terminal.Attribute
 
 pub type ReadonlyHandler = terminal.ReadonlyHandler
 

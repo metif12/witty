@@ -120,3 +120,21 @@ module terminal
 // Other Zig namespaces are V modules imported directly by consumers:
 // `kitty`, `search`, and `tmux`. Character sets, X11 colors, string interning,
 // and the primary/alternate ScreenSet are implemented in this module.
+
+// Source-shaped aliases exported by terminal/main.zig. Their implementation
+// names remain available because V flattens all files in this module.
+pub type Cell = CellData
+
+pub type CharsetActiveSlot = ActiveSlot
+
+pub type CSI = CSIAction
+
+pub type DCS = DCSAction
+
+pub type Style = CellStyle
+
+pub type StreamAction = StreamEvent
+
+pub type CursorStyleReq = AnsiCursorStyle
+
+pub type Attribute = SgrAttribute
