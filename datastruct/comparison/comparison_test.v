@@ -37,6 +37,8 @@ struct ApproxMetrics {
 
 type TestValue = f32 | int | string
 
+type TestNestedValue = ApproxMetrics | []f32
+
 type TestEqualValue = int | string
 
 fn (self TestEqualValue) equal(other TestEqualValue) bool {
@@ -75,12 +77,12 @@ fn test_deep_equal_options_arrays_and_structs() {
 	assert !deep_equal([TestPoint{ x: 1, y: 2 }], [TestPoint{ x: 1, y: 3 }])
 	assert deep_equal(TestOuter{
 		point: TestPoint{ x: 1, y: 2 }
-		name: 'app'
-		port: 8080
+		name:  'app'
+		port:  8080
 	}, TestOuter{
 		point: TestPoint{ x: 1, y: 2 }
-		name: 'app'
-		port: 8080
+		name:  'app'
+		port:  8080
 	})
 }
 
@@ -108,13 +110,13 @@ fn test_expect_approx_equal_floats_arrays_and_structs() ! {
 	expect_approx_equal(f64(10.0), f64(10.00000001))!
 	expect_approx_equal([f32(1.0), 0.0], [f32(1.000001), 0.0])!
 	expect_approx_equal(ApproxMetrics{
-		width: 1.0
+		width:  1.0
 		height: 2.0
-		count: 3
+		count:  3
 	}, ApproxMetrics{
-		width: 0.999999
+		width:  0.999999
 		height: 2.000000001
-		count: 3
+		count:  3
 	})!
 }
 
@@ -122,6 +124,34 @@ fn test_expect_approx_equal_options_and_sumtypes() ! {
 	expect_approx_equal(?f32(1.0), ?f32(1.000001))!
 	expect_approx_equal(?f32(none), ?f32(none))!
 	expect_approx_equal(TestValue(f32(10.0)), TestValue(f32(10.000001)))!
+	expect_approx_equal(TestValue(int(10)), TestValue(int(10)))!
+	expect_approx_equal(TestValue('same'), TestValue('same'))!
+	expect_approx_equal(TestNestedValue(ApproxMetrics{
+		width:  1.0
+		height: 2.0
+		count:  3
+	}), TestNestedValue(ApproxMetrics{
+		width:  1.000001
+		height: 1.999999999
+		count:  3
+	}))!
+	expect_approx_equal(TestNestedValue([f32(1.0), 2.0]), TestNestedValue([
+		f32(1.000001),
+		1.999999,
+	]))!
+}
+
+fn test_expect_approx_equal_reports_sumtype_tag_and_payload_differences() {
+	expect_approx_equal(TestValue(int(10)), TestValue('10')) or {
+		assert err.msg() == 'TestExpectedApproxEqual'
+		expect_approx_equal(TestNestedValue([f32(1.0)]), TestNestedValue([f32(2.0)])) or {
+			assert err.msg() == 'TestExpectedApproxEqual'
+			return
+		}
+		assert false, 'expected recursive sumtype payload comparison to fail'
+		return
+	}
+	assert false, 'expected sumtype tag comparison to fail'
 }
 
 fn test_expect_approx_equal_reports_difference() {

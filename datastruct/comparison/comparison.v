@@ -96,22 +96,15 @@ pub fn expect_approx_equal[T](expected T, actual T) ! {
 			expect_approx_equal(expected_field, actual_field)!
 		}
 	} $else $if T is $sumtype {
-		if expected == actual {
-			return
-		}
-		$for variant in expected.variants {
+		$for variant in T.variants {
 			if expected is variant {
-				if !(actual is variant) {
-					return error('TestExpectedApproxEqual')
+				if actual is variant {
+					expected_value := expected
+					actual_value := actual
+					expect_approx_equal(expected_value, actual_value)!
+					return
 				}
-				$if variant.typ is f32 {
-					expect_approx_equal(expected as f32, actual as f32)!
-				} $else $if variant.typ is f64 {
-					expect_approx_equal(expected as f64, actual as f64)!
-				} $else {
-					return error('TestExpectedApproxEqual')
-				}
-				return
+				return error('TestExpectedApproxEqual')
 			}
 		}
 		return error('TestExpectedApproxEqual')
