@@ -4037,14 +4037,22 @@ pub fn (self &Terminal) get_pwd() ?string {
 // Screen switching
 // ============================================================
 
+// SwitchScreenResult preserves Ghostty's !?*Screen return contract. V cannot
+// directly nest a fallible result and an optional, so the optional previous
+// screen is carried in an explicit result value.
+pub struct SwitchScreenResult {
+pub:
+	previous ?&Screen
+}
+
 // Switch to the given screen type (alternate or primary).
 //
 // This does NOT handle behaviors such as clearing the screen,
 // copying the cursor, etc.
-pub fn (mut self Terminal) switch_screen(key ScreenKey) !&Screen {
+pub fn (mut self Terminal) switch_screen(key ScreenKey) !SwitchScreenResult {
 	// If we're already on the requested screen we do nothing.
 	if self.screens.active_key == key {
-		return unsafe { &Screen(nil) }
+		return SwitchScreenResult{}
 	}
 	mut old := self.screens.active
 
@@ -4083,7 +4091,7 @@ pub fn (mut self Terminal) switch_screen(key ScreenKey) !&Screen {
 	// Finalize the switch.
 	self.screens.switch_to(key)
 
-	return old
+	return SwitchScreenResult{ previous: old }
 }
 
 // Switch screen via a mode switch (e.g. mode 47, 1047, 1049).
@@ -4114,11 +4122,10 @@ pub fn (mut self Terminal) switch_screen_mode(mode SwitchScreenMode, enabled boo
 		// For these modes, we need to copy the cursor. We only copy the
 		// cursor if the screen actually changed, otherwise the cursor is
 		// already copied. The cursor is copied regardless of destination
-		// screen. switch_screen returns a nil pointer when the screen
-		// didn't change.
+		// screen.
 		.mode_47, .mode_1047 {
-			if old_ != unsafe { nil } {
-				old_cursor := old_.cursor
+			if old := old_.previous {
+				old_cursor := old.cursor
 				self.screens.active.cursor_copy(old_cursor, CursorCopyOptions{
 					hyperlink: false
 				}) or {
@@ -4135,8 +4142,8 @@ pub fn (mut self Terminal) switch_screen_mode(mode SwitchScreenMode, enabled boo
 				// When we enter alt screen with 1049, we always copy the
 				// cursor from the primary screen (if we weren't already
 				// on it).
-				if old_ != unsafe { nil } {
-					old_cursor := old_.cursor
+				if old := old_.previous {
+					old_cursor := old.cursor
 					self.screens.active.cursor_copy(old_cursor, CursorCopyOptions{
 						hyperlink: false
 					}) or {

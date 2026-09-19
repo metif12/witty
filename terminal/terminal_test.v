@@ -2426,6 +2426,30 @@ fn test_resize_with_reflow_and_saved_cursor_pending_wrap() {
 // Screen switching
 // ============================================================
 
+fn test_switch_screen_returns_optional_previous_screen() {
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	unchanged := t.switch_screen(.primary) or { panic(err) }
+	assert unchanged.previous == none
+
+	switched := t.switch_screen(.alternate) or { panic(err) }
+	previous := switched.previous or {
+		assert false, 'switch must return the primary screen'
+		return
+	}
+	primary := t.screens.get(.primary) or { panic('missing primary screen') }
+	assert voidptr(previous) == voidptr(primary)
+	assert t.screens.active_key == .alternate
+
+	unchanged_alt := t.switch_screen(.alternate) or { panic(err) }
+	assert unchanged_alt.previous == none
+	_ = t.switch_screen(.primary) or { panic(err) }
+}
+
 fn test_mode_47_alt_screen_plain() {
 	mut t := create_test_terminal(5, 5) or {
 		assert false
