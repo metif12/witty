@@ -2,10 +2,10 @@ module internal_os
 
 import os
 
-// hostname_is_valid validates a hostname according to RFC 1123. This is
+// is_valid validates a hostname according to RFC 1123. This is
 // stricter than many platform helpers: empty labels and labels beginning or
 // ending with a hyphen are rejected.
-pub fn hostname_is_valid(hostname string) bool {
+pub fn is_valid(hostname string) bool {
 	if hostname.len == 0 || hostname[0] == `.` {
 		return false
 	}
@@ -51,12 +51,24 @@ pub fn hostname_is_valid(hostname string) bool {
 	return true
 }
 
-// hostname_is_local recognizes localhost and the hostname returned by the
+// Compatibility alias retained for callers written against the earlier
+// flattened translation.
+pub fn hostname_is_valid(hostname string) bool {
+	return is_valid(hostname)
+}
+
+// is_local recognizes localhost and the hostname returned by the
 // operating system.
-pub fn hostname_is_local(hostname string) !bool {
+pub fn is_local(hostname string) !bool {
 	if hostname == 'localhost' {
 		return true
 	}
 	our_hostname := os.hostname()!
 	return hostname == our_hostname
+}
+
+// Compatibility alias retained for callers written against the earlier
+// flattened translation.
+pub fn hostname_is_local(hostname string) !bool {
+	return is_local(hostname)
 }

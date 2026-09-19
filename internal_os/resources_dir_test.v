@@ -57,7 +57,7 @@ fn test_resources_dir_returns_empty_when_not_found() {
 }
 
 fn test_resources_dir_host_falls_back_to_app() {
-	result := ResourcesDir{
+	mut result := ResourcesDir{
 		app_path: '/some/app/path'
 	}
 	assert result.host()? == '/some/app/path'
@@ -68,6 +68,10 @@ fn test_resources_dir_host_falls_back_to_app() {
 	}
 	assert result_with_host.host()? == '/some/host/path'
 	assert result_with_host.app()? == '/some/app/path'
+
+	result.deinit()
+	assert result.app() == none
+	assert result.host() == none
 
 	empty := ResourcesDir{}
 	assert empty.app() == none

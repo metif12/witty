@@ -404,18 +404,18 @@ fn test_hostname_validation() {
 	for hostname in ['example', 'example.com', 'www.example.com', 'example.com.',
 		'host-name.example.com.', '123.example.com.', 'a-b.com', '127.0.0.1',
 		'a'.repeat(63) + '.com', 'a.'.repeat(126) + 'a'] {
-		assert hostname_is_valid(hostname), hostname
+		assert is_valid(hostname), hostname
 	}
 	for hostname in ['', '.example.com', 'example.com..', 'host..domain', '-hostname', 'hostname-',
 		'a.-.b', 'host_name.com', '.', '..', 'a'.repeat(64) + '.com', 'a.'.repeat(126) + 'ab'] {
-		assert !hostname_is_valid(hostname), hostname
+		assert !is_valid(hostname), hostname
 	}
 }
 
 fn test_hostname_is_local() {
-	assert hostname_is_local('localhost')!
-	assert hostname_is_local(os.hostname()!)!
-	assert !hostname_is_local('not-the-local-hostname')!
+	assert is_local('localhost')!
+	assert is_local(os.hostname()!)!
+	assert !is_local('not-the-local-hostname')!
 }
 
 fn test_desktop_environment_matches_platform() {

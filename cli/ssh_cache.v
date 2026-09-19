@@ -222,7 +222,7 @@ pub fn valid_ssh_cache_key(key string) bool {
 }
 
 fn valid_ssh_host(host string) bool {
-	if internal_os.hostname_is_valid(host) {
+	if internal_os.is_valid(host) {
 		return true
 	}
 	_ := net.canonical_ipv6(host) or { return false }

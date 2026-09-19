@@ -11,6 +11,14 @@ pub mut:
 	host_path ?string
 }
 
+// deinit releases the owned paths. V's strings are garbage-collected, so
+// clearing the references is the ownership-equivalent operation and no
+// allocator parameter is required.
+pub fn (mut r ResourcesDir) deinit() {
+	r.app_path = none
+	r.host_path = none
+}
+
 // app returns the directory to the bundled resources directory accessible
 // by the application.
 pub fn (r ResourcesDir) app() ?string {

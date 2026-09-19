@@ -1219,7 +1219,7 @@ fn (mut self StreamHandler) report_pwd(url string) {
 		// OSC 7 uri must contain a hostname.
 		return
 	}
-	if !(internal_os.hostname_is_local(uri.host) or { false }) {
+	if !(internal_os.is_local(uri.host) or { false }) {
 		// OSC 7 host must be local.
 		return
 	}
