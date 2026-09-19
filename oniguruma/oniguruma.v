@@ -19,56 +19,243 @@ fn C.witty_onig_new(out &voidptr, pattern &u8, pattern_len usize, options u32, e
 
 fn C.onig_free(regex voidptr)
 
-fn C.onig_region_new() voidptr
-
 fn C.onig_region_free(region voidptr, free_self int)
 
 fn C.witty_onig_error_string(error_message &u8, code int) int
 
 fn C.witty_onig_search(regex voidptr, string &u8, string_len usize, start usize, end usize, region voidptr, options u32) int
 
-fn C.witty_onig_region_count(region voidptr) int
-
-fn C.witty_onig_region_start(region voidptr, index int) int
-
-fn C.witty_onig_region_end(region voidptr, index int) int
-
 pub const max_error_len = 90
 pub const mismatch_error = 'oniguruma mismatch'
 
-// Options is Oniguruma's packed OnigOptionType. Field order and bit positions
-// match pkg/oniguruma/types.zig.
+// Options is Oniguruma's canonical packed OnigOptionType word.
 pub struct Options {
-pub:
-	ignorecase                             bool
-	extend                                 bool
-	multiline                              bool
-	singleline                             bool
-	find_longest                           bool
-	find_not_empty                         bool
-	negate_singleline                      bool
-	dont_capture_group                     bool
-	capture_group                          bool
-	notbol                                 bool
-	noteol                                 bool
-	posix_region                           bool
-	check_validity_of_string               bool
-	ignorecase_is_ascii                    bool
-	word_is_ascii                          bool
-	digit_is_ascii                         bool
-	space_is_ascii                         bool
-	posix_is_ascii                         bool
-	text_segment_extended_grapheme_cluster bool
-	text_segment_word                      bool
-	not_begin_string                       bool
-	not_end_string                         bool
-	not_begin_position                     bool
-	callback_each_match                    bool
-	match_whole_string                     bool
+mut:
+	value u32
 }
 
+// Option is the source-shaped name; Options remains for existing V callers.
+pub type Option = Options
+
 pub fn (o Options) int() u32 {
-	return u32(o.ignorecase) | (u32(o.extend) << 1) | (u32(o.multiline) << 2) | (u32(o.singleline) << 3) | (u32(o.find_longest) << 4) | (u32(o.find_not_empty) << 5) | (u32(o.negate_singleline) << 6) | (u32(o.dont_capture_group) << 7) | (u32(o.capture_group) << 8) | (u32(o.notbol) << 9) | (u32(o.noteol) << 10) | (u32(o.posix_region) << 11) | (u32(o.check_validity_of_string) << 12) | (u32(o.ignorecase_is_ascii) << 13) | (u32(o.word_is_ascii) << 14) | (u32(o.digit_is_ascii) << 15) | (u32(o.space_is_ascii) << 16) | (u32(o.posix_is_ascii) << 17) | (u32(o.text_segment_extended_grapheme_cluster) << 18) | (u32(o.text_segment_word) << 19) | (u32(o.not_begin_string) << 20) | (u32(o.not_end_string) << 21) | (u32(o.not_begin_position) << 22) | (u32(o.callback_each_match) << 23) | (u32(o.match_whole_string) << 24)
+	return o.value
+}
+
+pub fn Options.from_int(value u32) Options {
+	return Options{ value: value }
+}
+
+fn (o Options) bit(index u32) bool {
+	return o.value & (u32(1) << index) != 0
+}
+
+fn (mut o Options) set_bit(index u32, enabled bool) {
+	mask := u32(1) << index
+	if enabled {
+		o.value |= mask
+	} else {
+		o.value &= ~mask
+	}
+}
+
+pub fn (o Options) ignorecase() bool {
+	return o.bit(0)
+}
+
+pub fn (mut o Options) set_ignorecase(value bool) {
+	o.set_bit(0, value)
+}
+
+pub fn (o Options) extend() bool {
+	return o.bit(1)
+}
+
+pub fn (mut o Options) set_extend(value bool) {
+	o.set_bit(1, value)
+}
+
+pub fn (o Options) multiline() bool {
+	return o.bit(2)
+}
+
+pub fn (mut o Options) set_multiline(value bool) {
+	o.set_bit(2, value)
+}
+
+pub fn (o Options) singleline() bool {
+	return o.bit(3)
+}
+
+pub fn (mut o Options) set_singleline(value bool) {
+	o.set_bit(3, value)
+}
+
+pub fn (o Options) find_longest() bool {
+	return o.bit(4)
+}
+
+pub fn (mut o Options) set_find_longest(value bool) {
+	o.set_bit(4, value)
+}
+
+pub fn (o Options) find_not_empty() bool {
+	return o.bit(5)
+}
+
+pub fn (mut o Options) set_find_not_empty(value bool) {
+	o.set_bit(5, value)
+}
+
+pub fn (o Options) negate_singleline() bool {
+	return o.bit(6)
+}
+
+pub fn (mut o Options) set_negate_singleline(value bool) {
+	o.set_bit(6, value)
+}
+
+pub fn (o Options) dont_capture_group() bool {
+	return o.bit(7)
+}
+
+pub fn (mut o Options) set_dont_capture_group(value bool) {
+	o.set_bit(7, value)
+}
+
+pub fn (o Options) capture_group() bool {
+	return o.bit(8)
+}
+
+pub fn (mut o Options) set_capture_group(value bool) {
+	o.set_bit(8, value)
+}
+
+pub fn (o Options) notbol() bool {
+	return o.bit(9)
+}
+
+pub fn (mut o Options) set_notbol(value bool) {
+	o.set_bit(9, value)
+}
+
+pub fn (o Options) noteol() bool {
+	return o.bit(10)
+}
+
+pub fn (mut o Options) set_noteol(value bool) {
+	o.set_bit(10, value)
+}
+
+pub fn (o Options) posix_region() bool {
+	return o.bit(11)
+}
+
+pub fn (mut o Options) set_posix_region(value bool) {
+	o.set_bit(11, value)
+}
+
+pub fn (o Options) check_validity_of_string() bool {
+	return o.bit(12)
+}
+
+pub fn (mut o Options) set_check_validity_of_string(value bool) {
+	o.set_bit(12, value)
+}
+
+pub fn (o Options) ignorecase_is_ascii() bool {
+	return o.bit(13)
+}
+
+pub fn (mut o Options) set_ignorecase_is_ascii(value bool) {
+	o.set_bit(13, value)
+}
+
+pub fn (o Options) word_is_ascii() bool {
+	return o.bit(14)
+}
+
+pub fn (mut o Options) set_word_is_ascii(value bool) {
+	o.set_bit(14, value)
+}
+
+pub fn (o Options) digit_is_ascii() bool {
+	return o.bit(15)
+}
+
+pub fn (mut o Options) set_digit_is_ascii(value bool) {
+	o.set_bit(15, value)
+}
+
+pub fn (o Options) space_is_ascii() bool {
+	return o.bit(16)
+}
+
+pub fn (mut o Options) set_space_is_ascii(value bool) {
+	o.set_bit(16, value)
+}
+
+pub fn (o Options) posix_is_ascii() bool {
+	return o.bit(17)
+}
+
+pub fn (mut o Options) set_posix_is_ascii(value bool) {
+	o.set_bit(17, value)
+}
+
+pub fn (o Options) text_segment_extended_grapheme_cluster() bool {
+	return o.bit(18)
+}
+
+pub fn (mut o Options) set_text_segment_extended_grapheme_cluster(value bool) {
+	o.set_bit(18, value)
+}
+
+pub fn (o Options) text_segment_word() bool {
+	return o.bit(19)
+}
+
+pub fn (mut o Options) set_text_segment_word(value bool) {
+	o.set_bit(19, value)
+}
+
+pub fn (o Options) not_begin_string() bool {
+	return o.bit(20)
+}
+
+pub fn (mut o Options) set_not_begin_string(value bool) {
+	o.set_bit(20, value)
+}
+
+pub fn (o Options) not_end_string() bool {
+	return o.bit(21)
+}
+
+pub fn (mut o Options) set_not_end_string(value bool) {
+	o.set_bit(21, value)
+}
+
+pub fn (o Options) not_begin_position() bool {
+	return o.bit(22)
+}
+
+pub fn (mut o Options) set_not_begin_position(value bool) {
+	o.set_bit(22, value)
+}
+
+pub fn (o Options) callback_each_match() bool {
+	return o.bit(23)
+}
+
+pub fn (mut o Options) set_callback_each_match(value bool) {
+	o.set_bit(23, value)
+}
+
+pub fn (o Options) match_whole_string() bool {
+	return o.bit(24)
+}
+
+pub fn (mut o Options) set_match_whole_string(value bool) {
+	o.set_bit(24, value)
 }
 
 pub enum Encoding {
@@ -145,13 +332,12 @@ pub fn deinit() {
 	_ = C.onig_end()
 }
 
-pub fn error_string(code int) !string {
-	mut buffer := []u8{len: max_error_len}
+pub fn error_string(mut buffer []u8, code int) ![]u8 {
 	length := unsafe { C.witty_onig_error_string(&u8(buffer.data), code) }
 	if length <= 0 {
-		return 'Oniguruma error: ${code}'
+		return buffer[..0]
 	}
-	return buffer[..length].bytestr()
+	return buffer[..length]
 }
 
 pub struct Regex {
@@ -182,14 +368,11 @@ pub fn Regex.init(pattern string, options Options, encoding Encoding, syntax Syn
 }
 
 pub fn (mut r Regex) deinit() {
-	if r.value != unsafe { nil } {
-		C.onig_free(r.value)
-		r.value = unsafe { nil }
-	}
+	C.onig_free(r.value)
 }
 
 pub fn (r &Regex) search(str string, options Options) !Region {
-	mut region := Region.new()!
+	mut region := Region{}
 	r.search_advanced(str, 0, usize(str.len), mut region, options) or {
 		region.deinit()
 		return err
@@ -198,66 +381,59 @@ pub fn (r &Regex) search(str string, options Options) !Region {
 }
 
 pub fn (r &Regex) search_advanced(str string, start usize, end usize, mut region Region, options Options) !usize {
-	if r.value == unsafe { nil } {
-		return error('Oniguruma regex is deinitialized')
-	}
-	if start > end || end > usize(str.len) {
-		return error('invalid Oniguruma search range')
-	}
-	result := C.witty_onig_search(r.value, str.str, usize(str.len), start, end, region.value, options.int())
+	result := C.witty_onig_search(r.value, str.str, usize(str.len), start, end, voidptr(&region),
+		options.int())
 	return usize(convert_error(result)!)
 }
 
-@[heap]
 pub struct Region {
 mut:
-	value voidptr
-}
-
-pub fn Region.new() !Region {
-	value := C.onig_region_new()
-	if value == unsafe { nil } {
-		return error('Oniguruma region allocation failed')
-	}
-	return Region{
-		value: value
-	}
+	allocated    int
+	num_regs     int
+	beg          &int = unsafe { nil }
+	end          &int = unsafe { nil }
+	history_root voidptr
 }
 
 pub fn (mut r Region) deinit() {
-	if r.value != unsafe { nil } {
-		C.onig_region_free(r.value, 1)
-		r.value = unsafe { nil }
-	}
+	C.onig_region_free(voidptr(&r), 0)
 }
 
 pub fn (r &Region) count() usize {
-	return if r.value == unsafe { nil } {
-		usize(0)
-	} else {
-		usize(C.witty_onig_region_count(r.value))
-	}
+	return usize(r.num_regs)
 }
 
 pub fn (r &Region) starts() []int {
-	mut result := []int{cap: int(r.count())}
-	for i in 0 .. int(r.count()) {
-		result << C.witty_onig_region_start(r.value, i)
+	if r.num_regs == 0 {
+		return []
+	}
+	mut result := []int{}
+	unsafe {
+		result.data = voidptr(r.beg)
+		result.len = r.num_regs
+		result.cap = r.num_regs
+		result.flags = .nogrow | .noshrink | .nofree
 	}
 	return result
 }
 
 pub fn (r &Region) ends() []int {
-	mut result := []int{cap: int(r.count())}
-	for i in 0 .. int(r.count()) {
-		result << C.witty_onig_region_end(r.value, i)
+	if r.num_regs == 0 {
+		return []
+	}
+	mut result := []int{}
+	unsafe {
+		result.data = voidptr(r.end)
+		result.len = r.num_regs
+		result.cap = r.num_regs
+		result.flags = .nogrow | .noshrink | .nofree
 	}
 	return result
 }
 
 pub fn (r &Region) iterator() RegionIterator {
 	return RegionIterator{
-		region: r
+		region: unsafe { r }
 	}
 }
 
@@ -271,8 +447,12 @@ pub fn (mut it RegionIterator) next() ?[2]usize {
 	if it.index >= int(it.region.count()) {
 		return none
 	}
-	result := [usize(C.witty_onig_region_start(it.region.value, it.index)),
-		usize(C.witty_onig_region_end(it.region.value, it.index))]!
+	start := unsafe { it.region.beg[it.index] }
+	end := unsafe { it.region.end[it.index] }
+	if start < 0 || end < 0 {
+		panic('negative Oniguruma capture boundary')
+	}
+	result := [usize(start), usize(end)]!
 	it.index++
 	return result
 }

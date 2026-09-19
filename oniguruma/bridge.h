@@ -219,16 +219,4 @@ static inline int witty_onig_search(
     );
 }
 
-static inline int witty_onig_region_count(const void *region) {
-    return ((const OnigRegion *)region)->num_regs;
-}
-
-static inline int witty_onig_region_start(const void *region, int index) {
-    return ((const OnigRegion *)region)->beg[index];
-}
-
-static inline int witty_onig_region_end(const void *region, int index) {
-    return ((const OnigRegion *)region)->end[index];
-}
-
 #endif
