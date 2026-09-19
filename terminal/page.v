@@ -1009,6 +1009,13 @@ pub mut:
 	string_bytes u32 = string_bytes_default
 }
 
+// Requested changes to a page capacity. Capacity.adjust preserves the
+// original backing size and derives all dependent fields from this request.
+pub struct PageCapacityAdjustment {
+pub:
+	cols ?u16
+}
+
 // Bit sizes of the packed Row and Cell structs in Ghostty's page.zig.
 // Both are `packed struct(u64)`, so they are exactly 64 bits each. We
 // model our grid "budget" using these to faithfully reproduce the
@@ -1221,9 +1228,9 @@ pub fn (self PageCapacity) max_cols() ?u16 {
 // Adjustments always happen by limiting the rows in the page. Everything
 // else can grow. If it is impossible to achieve the desired adjustment
 // (rows would go to zero), an error is returned.
-pub fn (self PageCapacity) adjust(cols_ ?u16) !PageCapacity {
+pub fn (self PageCapacity) adjust(req PageCapacityAdjustment) !PageCapacity {
 	mut adjusted := self
-	if cols := cols_ {
+	if cols := req.cols {
 		available_bits := self.available_bits_for_grid()
 
 		// Each packed row consists of its metadata and n packed cells.
@@ -1344,9 +1351,9 @@ pub fn (mut self Page) deinit() {
 }
 
 // Reinitialize the page with the same capacity.
-pub fn (mut self Page) reinit(cap PageCapacity) {
+pub fn (mut self Page) reinit() {
+	cap := self.capacity
 	layout := Page.layout(cap)
-	self.capacity = cap
 	self.size = PageSize{
 		cols: cap.cols
 		rows: cap.rows
@@ -1649,7 +1656,7 @@ pub fn (self &Page) exact_row_capacity(y_start usize, y_end usize) PageCapacity 
 			}
 
 			hyperlink_cells++
-			id := self.lookup_hyperlink(y, usize(x)) or { continue }
+			id := self.lookup_hyperlink(&row.cells[x]) or { continue }
 			if id in hyperlink_ids {
 				continue
 			}
@@ -2177,7 +2184,7 @@ fn (self &Page) key_for_cell(cell &CellData) ?u64 {
 }
 
 // Returns the hyperlink ID for the given page-owned cell.
-pub fn (self &Page) lookup_hyperlink_cell(cell &CellData) ?HyperlinkId {
+pub fn (self &Page) lookup_hyperlink(cell &CellData) ?HyperlinkId {
 	key := self.key_for_cell(cell) or { return none }
 	if key in self.hyperlink_map {
 		return self.hyperlink_map[key]
@@ -2186,7 +2193,7 @@ pub fn (self &Page) lookup_hyperlink_cell(cell &CellData) ?HyperlinkId {
 }
 
 // Index-addressed helper for code that already has a page row and column.
-pub fn (self &Page) lookup_hyperlink(row_idx usize, col_idx usize) ?HyperlinkId {
+fn (self &Page) lookup_hyperlink_at(row_idx usize, col_idx usize) ?HyperlinkId {
 	key := cell_key(row_idx, col_idx, usize(self.capacity.cols))
 	if key in self.hyperlink_map {
 		return self.hyperlink_map[key]

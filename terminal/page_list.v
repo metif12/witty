@@ -3760,7 +3760,7 @@ pub fn (mut self PageList) reset() {
 const max_usize = ~usize(0)
 
 fn initial_capacity(cols u16) PageCapacity {
-	return std_capacity.adjust(cols) or {
+	return std_capacity.adjust(PageCapacityAdjustment{ cols: cols }) or {
 		mut cap := std_capacity
 		cap.cols = cols
 		cap
@@ -3888,7 +3888,8 @@ pub fn (mut self PageList) grow() ?&PageNode {
 				// Standard pages reuse the fixed-size pooled allocation.
 				unsafe {
 					mut mp := pruned
-					mp.data.reinit(cap)
+					mp.data.capacity = cap
+					mp.data.reinit()
 					mp.data.size.rows = 1
 					self.page_serial_min = mp.serial + 1
 					mp.serial = self.page_serial
@@ -4861,7 +4862,7 @@ pub fn (mut self PageList) erase_rows(tl Point, bl ?Point) {
 			if chunk.node.next == none && chunk.node.prev == none {
 				mut page := &chunk.node.data
 				erased += usize(page.size.rows)
-				page.reinit(page.capacity)
+				page.reinit()
 				page.size.rows = 0
 				break
 			}
@@ -5187,7 +5188,7 @@ fn (mut self ReflowCursor) cursor_absolute(x u16, y u16) {
 
 // Increase the capacity of the cursor's page and reload cursor state after
 // PageList replaces the underlying node.
-fn (mut self ReflowCursor) increase_capacity(mut list PageList, adjustment ?PageCapacityAdjustment) ! {
+fn (mut self ReflowCursor) increase_capacity(mut list PageList, adjustment ?IncreaseCapacity) ! {
 	old_x := self.x
 	old_y := self.y
 	old_total_rows := self.total_rows
@@ -5295,7 +5296,9 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) ! {
 
 	// Inherit increased styles or grapheme bytes from the src page we're
 	// reflowing from for new pages.
-	cap := src_page.capacity.adjust(self.node.data.size.cols) or {
+	cap := src_page.capacity.adjust(PageCapacityAdjustment{
+		cols: self.node.data.size.cols
+	}) or {
 		mut c2 := src_page.capacity
 		c2.cols = self.node.data.size.cols
 		// We're already a non-standard page. We don't want to inherit a
@@ -5335,7 +5338,7 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) ! {
 			p.y = self.y
 		}
 
-		result := self.write_cell(mut list, &cells[x], src_page, int(src_y), x) or {
+		result := self.write_cell(mut list, &cells[x], src_page) or {
 			if err.msg() != 'OutOfSpace' {
 				return err
 			}
@@ -5386,7 +5389,7 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row PagePin) ! {
 // Write a cell. On error, this will not unwrite the cell but the cell may
 // be incomplete (but valid). This guarantees the page is in a coherent
 // state even on error.
-fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_page &Page, src_y int, src_x int) !PageReflowWriteResult {
+fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_page &Page) !PageReflowWriteResult {
 	mut page := &self.node.data
 	dst_cols := page.size.cols
 
@@ -5502,7 +5505,7 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 
 	// Copy hyperlink data.
 	if cell.has_hyperlink {
-		src_id := src_page.lookup_hyperlink(usize(src_y), usize(src_x)) or {
+		src_id := src_page.lookup_hyperlink(cell) or {
 			panic('hyperlinked source cell is missing its page mapping')
 		}
 		src_link := src_page.hyperlink_set.get(src_id)
@@ -5532,9 +5535,9 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 				}
 			} else {
 				adjustment := if err.msg() == 'set needs rehash' {
-					?PageCapacityAdjustment(none)
+					?IncreaseCapacity(none)
 				} else {
-					?PageCapacityAdjustment(.hyperlink_bytes)
+					?IncreaseCapacity(.hyperlink_bytes)
 				}
 				self.increase_capacity(mut list, adjustment)!
 				page = &self.node.data
@@ -5568,7 +5571,7 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 		if initial_id := page.styles.add_with_id(style, cell.style_id) {
 			id = initial_id
 		} else {
-			mut adjustment := ?PageCapacityAdjustment(none)
+			mut adjustment := ?IncreaseCapacity(none)
 			if err.msg() != 'needs rehash' {
 				adjustment = .styles
 			}
@@ -5780,7 +5783,7 @@ fn (mut self PageList) fixup_viewport(removed usize) {
 	}
 }
 
-pub enum PageCapacityAdjustment as u8 {
+pub enum IncreaseCapacity as u8 {
 	styles
 	grapheme_bytes
 	hyperlink_bytes
@@ -5790,7 +5793,7 @@ pub enum PageCapacityAdjustment as u8 {
 // Increase one bounded capacity dimension by replacing and recloning the
 // page. The node replacement, pin fixup, and serial change mirror Ghostty's
 // increaseCapacity.
-pub fn (mut self PageList) increase_capacity(node &PageNode, adjustment ?PageCapacityAdjustment) !&PageNode {
+pub fn (mut self PageList) increase_capacity(node &PageNode, adjustment ?IncreaseCapacity) !&PageNode {
 	defer { self.assert_integrity() }
 	page := &node.data
 	mut cap := page.capacity
@@ -6231,7 +6234,7 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) ! {
 
 	// Create the first node that contains our reflow.
 	first_page := &(self.pages.first or { panic('page list has no first page') }).data
-	first_cap := first_page.capacity.adjust(cols) or {
+	first_cap := first_page.capacity.adjust(PageCapacityAdjustment{ cols: cols }) or {
 		// We verify all maxed out page layouts work. We're growing columns so
 		// we can only get less rows so use the lesser of our capacity and size
 		// so we minimize wasted rows.
@@ -6519,7 +6522,7 @@ fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk
 	// Try to fit our new column size into our existing page capacity.
 	// If that doesn't work then use a non-standard page with the
 	// given columns.
-	cap := page.capacity.adjust(cols) or {
+	cap := page.capacity.adjust(PageCapacityAdjustment{ cols: cols }) or {
 		mut c2 := page.capacity
 		c2.cols = cols
 		// We're growing columns so we can only get less rows so use

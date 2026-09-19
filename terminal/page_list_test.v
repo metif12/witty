@@ -19,11 +19,11 @@ fn test_page_list_internal_tag_layouts_match_source() {
 	assert u8(PageReflowWriteResult.success) == 0
 	assert u8(PageReflowWriteResult.repeat) == 1
 	assert u8(PageReflowWriteResult.skip_next) == 2
-	assert sizeof(PageCapacityAdjustment) == 1
-	assert u8(PageCapacityAdjustment.styles) == 0
-	assert u8(PageCapacityAdjustment.grapheme_bytes) == 1
-	assert u8(PageCapacityAdjustment.hyperlink_bytes) == 2
-	assert u8(PageCapacityAdjustment.string_bytes) == 3
+	assert sizeof(IncreaseCapacity) == 1
+	assert u8(IncreaseCapacity.styles) == 0
+	assert u8(IncreaseCapacity.grapheme_bytes) == 1
+	assert u8(IncreaseCapacity.hyperlink_bytes) == 2
+	assert u8(IncreaseCapacity.string_bytes) == 3
 }
 
 // Tests translated from Ghostty's PageList.zig
@@ -830,11 +830,11 @@ fn test_page_list_from_pages_translates_managed_cells() {
 	assert page.styles.ref_count(row.cells[0].style_id) == 2
 	assert page.styles.ref_count(row.cells[2].style_id) == 1
 
-	first_link_id := page.lookup_hyperlink(0, 0) or {
+	first_link_id := page.lookup_hyperlink_at(0, 0) or {
 		assert false, 'first snapshot hyperlink has no mapping'
 		return
 	}
-	second_link_id := page.lookup_hyperlink(0, 1) or {
+	second_link_id := page.lookup_hyperlink_at(0, 1) or {
 		assert false, 'second snapshot hyperlink has no mapping'
 		return
 	}
@@ -1928,13 +1928,13 @@ fn test_page_list_erase_history_preserves_managed_survivor() {
 	assert cell.graphemes == [u32(0x0302)]
 	assert page.styles.get(cell.style_id).flags.bold()
 	assert page.styles.ref_count(cell.style_id) == 1
-	moved_link_id := page.lookup_hyperlink(0, 3) or {
+	moved_link_id := page.lookup_hyperlink_at(0, 3) or {
 		assert false, 'survivor hyperlink mapping missing'
 		return
 	}
 	assert page.hyperlink_set.get(moved_link_id).uri == 'https://example.com/survivor'
 	assert page.hyperlink_set.ref_count(moved_link_id) == 1
-	assert page.lookup_hyperlink(2, 3) == none
+	assert page.lookup_hyperlink_at(2, 3) == none
 	page.assert_integrity()
 }
 
@@ -2041,14 +2041,14 @@ fn test_page_list_erase_row_preserves_managed_cell_data() {
 	assert page.styles.get(cell.style_id).flags.bold()
 	assert page.styles.ref_count(cell.style_id) == 1
 	assert cell.has_hyperlink
-	moved_link_id := page.lookup_hyperlink(0, 2) or {
+	moved_link_id := page.lookup_hyperlink_at(0, 2) or {
 		assert false, 'moved hyperlink mapping missing'
 		return
 	}
 	assert moved_link_id == hyperlink_id
 	assert page.hyperlink_set.get(moved_link_id).uri == 'https://example.com/managed'
 	assert page.hyperlink_set.ref_count(moved_link_id) == 1
-	assert page.lookup_hyperlink(1, 2) == none
+	assert page.lookup_hyperlink_at(1, 2) == none
 	page.assert_integrity()
 }
 
@@ -2088,13 +2088,13 @@ fn test_page_list_erase_row_moves_managed_cell_and_pin_across_page_boundary() {
 	assert tracked.x == 1
 	mut first_page := &first.data
 	assert first_page.rows[1].cells[1].codepoint == u32(`B`)
-	moved_link_id := first_page.lookup_hyperlink(1, 1) or {
+	moved_link_id := first_page.lookup_hyperlink_at(1, 1) or {
 		assert false, 'cross-page hyperlink mapping missing'
 		return
 	}
 	assert first_page.hyperlink_set.get(moved_link_id).uri == 'https://example.com/boundary'
 	assert first_page.hyperlink_set.ref_count(moved_link_id) == 1
-	assert second_page.lookup_hyperlink(0, 1) == none
+	assert second_page.lookup_hyperlink_at(0, 1) == none
 	first_page.assert_integrity()
 	second_page.assert_integrity()
 	s.untrack_pin(tracked)
@@ -2891,7 +2891,7 @@ fn test_page_list_resize_more_rows_and_cols_large() {
 
 	new_cols := u16(600)
 	new_rows := u16(600)
-	cap := std_capacity.adjust(new_cols) or { panic(err) }
+	cap := std_capacity.adjust(PageCapacityAdjustment{ cols: new_cols }) or { panic(err) }
 	assert cap.rows < new_rows
 
 	s.resize(PageResizeOpts{
@@ -4550,7 +4550,7 @@ fn test_page_list_erase_row_bounded_preserves_managed_cell_data() {
 	assert cell.graphemes == [u32(0x0308)]
 	assert page.styles.get(cell.style_id).flags.italic()
 	assert page.styles.ref_count(cell.style_id) == 1
-	moved_link_id := page.lookup_hyperlink(0, 1) or {
+	moved_link_id := page.lookup_hyperlink_at(0, 1) or {
 		assert false, 'bounded hyperlink mapping missing'
 		return
 	}
@@ -4598,14 +4598,14 @@ fn test_page_list_erase_row_bounded_exact_page_boundary() {
 	assert tracked.x == 2
 	mut first_page := &first.data
 	assert first_page.rows[1].cells[2].codepoint == u32(`B`)
-	moved_link_id := first_page.lookup_hyperlink(1, 2) or {
+	moved_link_id := first_page.lookup_hyperlink_at(1, 2) or {
 		assert false, 'exact-boundary hyperlink mapping missing'
 		return
 	}
 	assert first_page.hyperlink_set.get(moved_link_id).uri == 'https://example.com/exact-boundary'
 	assert first_page.hyperlink_set.ref_count(moved_link_id) == 1
 	assert second_page.rows[0].cells[2].is_zero()
-	assert second_page.lookup_hyperlink(0, 2) == none
+	assert second_page.lookup_hyperlink_at(0, 2) == none
 	first_page.assert_integrity()
 	second_page.assert_integrity()
 	s.untrack_pin(tracked)
@@ -5045,7 +5045,7 @@ fn test_page_list_resize_no_reflow_preserves_hyperlink_key_stride() {
 	shrunk := &shrunk_node.data
 	assert shrunk.size.cols == 2
 	assert shrunk.capacity.cols == 4
-	shrunk_link_id := shrunk.lookup_hyperlink(1, 1) or {
+	shrunk_link_id := shrunk.lookup_hyperlink_at(1, 1) or {
 		assert false, 'retained hyperlink mapping was lost on shrink'
 		return
 	}
@@ -5056,12 +5056,12 @@ fn test_page_list_resize_no_reflow_preserves_hyperlink_key_stride() {
 	s.resize(PageResizeOpts{ cols: 4, reflow: false }) or { panic(err) }
 	regrown_node := s.pages.first or { return }
 	regrown := &regrown_node.data
-	regrown_link_id := regrown.lookup_hyperlink(1, 1) or {
+	regrown_link_id := regrown.lookup_hyperlink_at(1, 1) or {
 		assert false, 'retained hyperlink mapping was lost on regrow'
 		return
 	}
 	assert regrown_link_id == link_id
-	assert regrown.lookup_hyperlink(1, 3) == none
+	assert regrown.lookup_hyperlink_at(1, 3) == none
 	assert regrown.rows[1].cells[3].is_zero()
 	if integrity_error := regrown.verify_integrity() {
 		assert false, 'resized page failed integrity: ${integrity_error}'
@@ -5232,17 +5232,17 @@ fn test_page_list_resize_no_reflow_more_cols_forces_smaller_cap() {
 fn test_page_list_resize_no_reflow_more_cols_forces_less_rows_per_page() {
 	cols := u16(5)
 	rows := u16(150)
-	initial := std_capacity.adjust(cols) or { panic(err) }
+	initial := std_capacity.adjust(PageCapacityAdjustment{ cols: cols }) or { panic(err) }
 	assert initial.rows >= rows
 
 	mut s := PageList.init(cols, rows, usize(0))
 	defer { s.deinit() }
 
 	mut new_cols := u16(50)
-	mut adjusted := std_capacity.adjust(new_cols) or { panic(err) }
+	mut adjusted := std_capacity.adjust(PageCapacityAdjustment{ cols: new_cols }) or { panic(err) }
 	for adjusted.rows >= rows {
 		new_cols += 50
-		adjusted = std_capacity.adjust(new_cols) or { panic(err) }
+		adjusted = std_capacity.adjust(PageCapacityAdjustment{ cols: new_cols }) or { panic(err) }
 	}
 	s.resize(PageResizeOpts{ cols: new_cols, reflow: false }) or { panic(err) }
 	assert s.cols == new_cols
@@ -5252,10 +5252,10 @@ fn test_page_list_resize_no_reflow_more_cols_forces_less_rows_per_page() {
 	first := s.pages.first or { return }
 	assert first.data.size.rows == first.data.capacity.rows
 	new_cols = first.data.size.cols + 50
-	adjusted = std_capacity.adjust(new_cols) or { panic(err) }
+	adjusted = std_capacity.adjust(PageCapacityAdjustment{ cols: new_cols }) or { panic(err) }
 	for adjusted.rows >= first.data.size.rows {
 		new_cols += 50
-		adjusted = std_capacity.adjust(new_cols) or { panic(err) }
+		adjusted = std_capacity.adjust(PageCapacityAdjustment{ cols: new_cols }) or { panic(err) }
 	}
 	s.resize(PageResizeOpts{ cols: new_cols, reflow: false }) or { panic(err) }
 	assert s.cols == new_cols
@@ -5296,7 +5296,9 @@ fn test_page_list_resize_no_reflow_more_cols_remaps_pins_in_backfill_path() {
 
 	// Ensure the resize takes the slow path (new capacity > current capacity).
 	new_cols := cols + 1
-	adjusted := second_page.data.capacity.adjust(new_cols) or { panic(err) }
+	adjusted := second_page.data.capacity.adjust(PageCapacityAdjustment{ cols: new_cols }) or {
+		panic(err)
+	}
 	assert second_page.data.capacity.cols < adjusted.cols
 
 	// Track row zero of the second page. Backfill copies this row into the
@@ -6156,7 +6158,7 @@ fn test_page_list_resize_reflow_preserves_hyperlink_mapping() {
 				continue
 			}
 			assert cell.has_hyperlink
-			id := reflowed.lookup_hyperlink(usize(pin.y), usize(x)) or {
+			id := reflowed.lookup_hyperlink_at(usize(pin.y), usize(x)) or {
 				assert false, 'reflowed hyperlink mapping missing'
 				return
 			}
@@ -6234,7 +6236,7 @@ fn test_page_list_resize_reflow_preserves_hyperlinks_across_source_pages() {
 			if cell.codepoint != u32(`A`) && cell.codepoint != u32(`B`) {
 				continue
 			}
-			id := reflowed.lookup_hyperlink(usize(pin.y), usize(x)) or {
+			id := reflowed.lookup_hyperlink_at(usize(pin.y), usize(x)) or {
 				assert false, 'reflowed hyperlink mapping missing'
 				return
 			}
@@ -8002,7 +8004,7 @@ fn test_page_list_split_preserves_hyperlinks() {
 	assert c.codepoint == u32(`L`)
 	assert c.has_hyperlink
 
-	link_id := second_page.lookup_hyperlink(2, 0) or {
+	link_id := second_page.lookup_hyperlink_at(2, 0) or {
 		assert false, 'lookup_hyperlink failed'
 		return
 	}

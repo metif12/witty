@@ -389,7 +389,7 @@ fn test_page_clone_preserves_inline_managed_values() {
 	assert cell.style.eql(&style)
 	assert cell.hyperlink.eql(&link)
 	assert cloned.styles.get(cell.style_id).eql(&style)
-	cloned_link_id := cloned.lookup_hyperlink(0, 0) or {
+	cloned_link_id := cloned.lookup_hyperlink_at(0, 0) or {
 		assert false, 'cloned hyperlink has no mapping'
 		return
 	}
@@ -1532,12 +1532,12 @@ fn test_standard_page_layout_and_capacity_adjust_reference() {
 	}
 	assert max_cols == u16(47219)
 
-	cap80 := std_capacity.adjust(80) or {
+	cap80 := std_capacity.adjust(PageCapacityAdjustment{ cols: 80 }) or {
 		assert false, 'capacity adjustment failed'
 		return
 	}
 	assert cap80.rows == 582
-	cap500 := std_capacity.adjust(500) or {
+	cap500 := std_capacity.adjust(PageCapacityAdjustment{ cols: 500 }) or {
 		assert false, 'capacity adjustment failed'
 		return
 	}
@@ -1719,13 +1719,13 @@ fn test_page_insert_hyperlink_enforces_string_allocator_capacity() {
 
 fn test_page_capacity_adjust_no_columns_request() {
 	original := std_capacity
-	adjusted := original.adjust(none)!
+	adjusted := original.adjust(PageCapacityAdjustment{})!
 	assert adjusted == original
 }
 
 fn test_page_capacity_adjust_zero_columns_is_not_noop() {
 	original := std_capacity
-	adjusted := original.adjust(u16(0))!
+	adjusted := original.adjust(PageCapacityAdjustment{ cols: u16(0) })!
 	assert adjusted.cols == 0
 	assert adjusted.rows == u16(original.available_bits_for_grid() / row_bit_size)
 	assert Page.layout(adjusted).total_size == Page.layout(original).total_size
@@ -1736,7 +1736,7 @@ fn test_page_capacity_adjust_cols_sweep_preserves_total_size() {
 	original_cols := cap.cols
 	original_size := Page.layout(cap).total_size
 	for c in 1 .. int(original_cols) * 2 {
-		cap = cap.adjust(u16(c))!
+		cap = cap.adjust(PageCapacityAdjustment{ cols: u16(c) })!
 		assert Page.layout(cap).total_size == original_size
 
 		mut bigger := cap
@@ -1748,7 +1748,7 @@ fn test_page_capacity_adjust_cols_sweep_preserves_total_size() {
 fn test_page_capacity_max_cols_preserves_size_and_uses_one_row() {
 	cap := std_capacity
 	max := cap.max_cols() or { panic('maxCols returned none') }
-	adjusted := cap.adjust(max)!
+	adjusted := cap.adjust(PageCapacityAdjustment{ cols: max })!
 	assert Page.layout(adjusted).total_size == Page.layout(cap).total_size
 	assert adjusted.rows == 1
 }
@@ -1759,7 +1759,7 @@ fn test_page_capacity_adjust_cols_down() {
 		cols: 80
 		rows: 128
 	}
-	adjusted := original.adjust(original.cols / 2) or {
+	adjusted := original.adjust(PageCapacityAdjustment{ cols: original.cols / 2 }) or {
 		assert false, 'capacity adjustment failed'
 		return
 	}
@@ -1780,7 +1780,7 @@ fn test_page_capacity_adjust_cols_down_to_1() {
 		cols: 80
 		rows: 128
 	}
-	adjusted := original.adjust(1) or {
+	adjusted := original.adjust(PageCapacityAdjustment{ cols: 1 }) or {
 		assert false, 'capacity adjustment failed'
 		return
 	}
@@ -1795,7 +1795,7 @@ fn test_page_capacity_adjust_cols_up() {
 		cols: 80
 		rows: 128
 	}
-	adjusted := original.adjust(original.cols * 2) or {
+	adjusted := original.adjust(PageCapacityAdjustment{ cols: original.cols * 2 }) or {
 		assert false, 'capacity adjustment failed'
 		return
 	}
@@ -1816,7 +1816,7 @@ fn test_page_capacity_adjust_cols_too_high() {
 	}
 	assert max < max_u16
 	mut failed := false
-	original.adjust(max + 1) or { failed = true }
+	original.adjust(PageCapacityAdjustment{ cols: max + 1 }) or { failed = true }
 	assert failed
 }
 
@@ -1835,7 +1835,7 @@ fn test_capacity_max_cols_basic() {
 	assert max >= cap.cols
 
 	// Adjusting to maxCols should succeed with at least 1 row.
-	adjusted := cap.adjust(max) or {
+	adjusted := cap.adjust(PageCapacityAdjustment{ cols: max }) or {
 		assert false, 'maxCols adjustment failed'
 		return
 	}
@@ -1889,16 +1889,20 @@ fn test_page_hyperlink_basic() {
 	assert page.rows[0].hyperlink
 
 	// Lookup.
-	found_id := page.lookup_hyperlink(0, 0) or {
+	found_id := page.lookup_hyperlink_at(0, 0) or {
 		assert false, 'expected hyperlink'
 		return
 	}
 	assert found_id == hl_id
+	assert page.lookup_hyperlink(&page.rows[0].cells[0]) or {
+		assert false, 'expected cell hyperlink'
+		return
+	} == hl_id
 
 	// Clear it.
 	page.clear_hyperlink(0, 0)
 	assert !page.rows[0].cells[0].has_hyperlink
-	assert page.lookup_hyperlink(0, 0) == none
+	assert page.lookup_hyperlink_at(0, 0) == none
 }
 
 // Test clear_cells clears graphemes and styles.
@@ -2056,8 +2060,8 @@ fn test_page_swap_cells_swaps_grapheme_and_hyperlink_mappings() {
 	assert page.lookup_grapheme_at(0, 1) or { panic('missing grapheme') } == [
 		u32(0x0301),
 	]
-	assert page.lookup_hyperlink(0, 0) or { panic('missing hyperlink') } == id_b
-	assert page.lookup_hyperlink(0, 1) or { panic('missing hyperlink') } == id_a
+	assert page.lookup_hyperlink_at(0, 0) or { panic('missing hyperlink') } == id_b
+	assert page.lookup_hyperlink_at(0, 1) or { panic('missing hyperlink') } == id_a
 	assert page.hyperlink_set.ref_count(id_a) == 1
 	assert page.hyperlink_set.ref_count(id_b) == 1
 	assert page.verify_integrity() == none
@@ -2081,10 +2085,7 @@ fn test_page_reinit() {
 	}
 
 	// Reinit with same capacity.
-	page.reinit(PageCapacity{
-		cols: 10
-		rows: 10
-	})
+	page.reinit()
 	assert page.size == PageSize{
 		cols: 10
 		rows: 10
@@ -2105,7 +2106,7 @@ fn test_page_capacity_adjust() {
 	}
 
 	// The page-alignment slack may fit additional rows even at the same width.
-	adj := cap.adjust(80) or {
+	adj := cap.adjust(PageCapacityAdjustment{ cols: 80 }) or {
 		assert false, 'capacity adjustment failed'
 		return
 	}
@@ -2115,7 +2116,7 @@ fn test_page_capacity_adjust() {
 	assert used <= cap.available_bits_for_grid()
 
 	// Very large cols - rows should reduce
-	adj2 := cap.adjust(512) or {
+	adj2 := cap.adjust(PageCapacityAdjustment{ cols: 512 }) or {
 		assert false, 'capacity adjustment failed'
 		return
 	}
@@ -2345,7 +2346,7 @@ fn test_page_clone_row_preserves_integrity_after_late_managed_memory_failure() {
 	assert dst.rows[0].cells[0].has_grapheme()
 	assert dst.rows[0].cells[0].graphemes == [u32(0x0301)]
 	assert !dst.rows[0].cells[0].has_hyperlink
-	assert dst.lookup_hyperlink(0, 0) == none
+	assert dst.lookup_hyperlink_at(0, 0) == none
 	assert dst.verify_integrity() == none
 }
 
@@ -2381,7 +2382,7 @@ fn test_page_clone_partial_row_deduplicates_hyperlink_before_allocating_strings(
 
 	dst.clone_partial_row_from(&src, 0, 0, 1, 2) or { panic(err) }
 
-	cloned_id := dst.lookup_hyperlink(0, 1) or { panic('cloned hyperlink missing') }
+	cloned_id := dst.lookup_hyperlink_at(0, 1) or { panic('cloned hyperlink missing') }
 	assert cloned_id == dst_id
 	assert dst.hyperlink_set.ref_count(dst_id) == 2
 	assert dst.hyperlink_set.string_used() == 64
