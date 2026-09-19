@@ -91,7 +91,7 @@ enum PreviewMode as u8 {
 }
 
 // Preview is the TUI preview state for interactively browsing themes.
-struct Preview {
+pub struct Preview {
 mut:
 	should_quit  bool
 	themes       []ThemeListElement
@@ -107,8 +107,10 @@ mut:
 	theme_filter ColorScheme
 }
 
-// Preview.new creates a new Preview with the given themes and filter.
-fn Preview.new(themes []ThemeListElement, theme_filter ColorScheme) !Preview {
+// Preview.init creates a new Preview with the given themes and filter. The
+// source's allocator and terminal scratch-buffer arguments are omitted because
+// V owns both resources.
+pub fn Preview.init(themes []ThemeListElement, theme_filter ColorScheme) !Preview {
 	mut p := Preview{
 		themes: themes
 		theme_filter: theme_filter
@@ -118,6 +120,13 @@ fn Preview.new(themes []ThemeListElement, theme_filter ColorScheme) !Preview {
 	}
 	p.update_filtered()!
 	return p
+}
+
+// deinit releases the preview-owned filtering and text-input state.
+pub fn (mut self Preview) deinit() {
+	self.filtered.clear()
+	self.search_text = ''
+	self.text_input.deinit()
 }
 
 // update_filtered rebuilds the filtered index list based on search text and theme filter.
@@ -217,7 +226,7 @@ fn (mut self Preview) down(count int) {
 }
 
 // update processes a single input event.
-fn (mut self Preview) update(event Event) ! {
+pub fn (mut self Preview) update(event Event) ! {
 	match event {
 		KeyPressEvent {
 			key := event.key
@@ -357,7 +366,7 @@ fn (mut self Preview) update(event Event) ! {
 }
 
 // ui_fg returns the foreground color for the UI based on color scheme.
-fn (self &Preview) ui_fg() vaxis.Color {
+pub fn (self &Preview) ui_fg() vaxis.Color {
 	return match self.color_scheme {
 		.light { vaxis.Color{ rgb: [u8(0x00), 0x00, 0x00]! } }
 		.dark { vaxis.Color{ rgb: [u8(0xff), 0xff, 0xff]! } }
@@ -365,7 +374,7 @@ fn (self &Preview) ui_fg() vaxis.Color {
 }
 
 // ui_bg returns the background color for the UI based on color scheme.
-fn (self &Preview) ui_bg() vaxis.Color {
+pub fn (self &Preview) ui_bg() vaxis.Color {
 	return match self.color_scheme {
 		.light { vaxis.Color{ rgb: [u8(0xff), 0xff, 0xff]! } }
 		.dark { vaxis.Color{ rgb: [u8(0x00), 0x00, 0x00]! } }
@@ -373,7 +382,7 @@ fn (self &Preview) ui_bg() vaxis.Color {
 }
 
 // ui_standard returns a standard style with UI fg/bg.
-fn (self &Preview) ui_standard() vaxis.Style {
+pub fn (self &Preview) ui_standard() vaxis.Style {
 	return vaxis.Style{
 		fg: self.ui_fg()
 		bg: self.ui_bg()
@@ -381,7 +390,7 @@ fn (self &Preview) ui_standard() vaxis.Style {
 }
 
 // ui_hover_bg returns the hover background color.
-fn (self &Preview) ui_hover_bg() vaxis.Color {
+pub fn (self &Preview) ui_hover_bg() vaxis.Color {
 	return match self.color_scheme {
 		.light { vaxis.Color{ rgb: [u8(0xbb), 0xbb, 0xbb]! } }
 		.dark { vaxis.Color{ rgb: [u8(0x22), 0x22, 0x22]! } }
@@ -389,7 +398,7 @@ fn (self &Preview) ui_hover_bg() vaxis.Color {
 }
 
 // ui_highlighted returns a style for hovered items.
-fn (self &Preview) ui_highlighted() vaxis.Style {
+pub fn (self &Preview) ui_highlighted() vaxis.Style {
 	return vaxis.Style{
 		fg: self.ui_fg()
 		bg: self.ui_hover_bg()
@@ -397,7 +406,7 @@ fn (self &Preview) ui_highlighted() vaxis.Style {
 }
 
 // ui_selected_fg returns the foreground color for selected items.
-fn (self &Preview) ui_selected_fg() vaxis.Color {
+pub fn (self &Preview) ui_selected_fg() vaxis.Color {
 	return match self.color_scheme {
 		.light { vaxis.Color{ rgb: [u8(0x00), 0xaa, 0x00]! } }
 		.dark { vaxis.Color{ rgb: [u8(0x00), 0xaa, 0x00]! } }
@@ -405,7 +414,7 @@ fn (self &Preview) ui_selected_fg() vaxis.Color {
 }
 
 // ui_selected_bg returns the background color for selected items.
-fn (self &Preview) ui_selected_bg() vaxis.Color {
+pub fn (self &Preview) ui_selected_bg() vaxis.Color {
 	return match self.color_scheme {
 		.light { vaxis.Color{ rgb: [u8(0xaa), 0xaa, 0xaa]! } }
 		.dark { vaxis.Color{ rgb: [u8(0x33), 0x33, 0x33]! } }
@@ -413,7 +422,7 @@ fn (self &Preview) ui_selected_bg() vaxis.Color {
 }
 
 // ui_selected returns a style for selected items.
-fn (self &Preview) ui_selected() vaxis.Style {
+pub fn (self &Preview) ui_selected() vaxis.Style {
 	return vaxis.Style{
 		fg: self.ui_selected_fg()
 		bg: self.ui_selected_bg()
@@ -421,7 +430,7 @@ fn (self &Preview) ui_selected() vaxis.Style {
 }
 
 // ui_err_fg returns the foreground color for error messages.
-fn (self &Preview) ui_err_fg() vaxis.Color {
+pub fn (self &Preview) ui_err_fg() vaxis.Color {
 	return match self.color_scheme {
 		.light { vaxis.Color{ rgb: [u8(0xff), 0x00, 0x00]! } }
 		.dark { vaxis.Color{ rgb: [u8(0xff), 0x00, 0x00]! } }
@@ -429,7 +438,7 @@ fn (self &Preview) ui_err_fg() vaxis.Color {
 }
 
 // ui_err returns a style for error messages.
-fn (self &Preview) ui_err() vaxis.Style {
+pub fn (self &Preview) ui_err() vaxis.Style {
 	return vaxis.Style{
 		fg: self.ui_err_fg()
 		bg: self.ui_bg()
@@ -437,13 +446,12 @@ fn (self &Preview) ui_err() vaxis.Style {
 }
 
 // run is the TUI preview event loop.
-fn (mut self Preview) run() ! {
+pub fn (mut self Preview) run() ! {
 	mut tty := vaxis.Tty.new()
 	self.winsize = vaxis.terminal_size()
 	self.color_scheme = vaxis.detect_color_scheme()
 	vaxis.begin_session('👻 Ghostty Theme Preview 👻')
 	defer {
-		self.text_input.deinit()
 		vaxis.end_session()
 	}
 
@@ -488,7 +496,7 @@ fn (mut self Preview) run() ! {
 }
 
 // draw renders the full TUI interface.
-fn (mut self Preview) draw() string {
+pub fn (mut self Preview) draw() string {
 	width := max_int(int(self.winsize.cols), 1)
 	height := max_int(int(self.winsize.rows), 1)
 	list_width := min_int(32, width)
@@ -568,7 +576,7 @@ fn (mut self Preview) draw() string {
 }
 
 // draw_preview renders the theme color preview pane.
-fn (mut self Preview) draw_preview(x_off int, width int, height int) string {
+pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string {
 	mut out := strings.new_builder(width * height)
 	if self.filtered.len == 0 {
 		text := 'No theme found!'
@@ -875,7 +883,10 @@ fn color_from_palette(cfg configpkg.Config, palette int) vaxis.Color {
 
 // preview launches the TUI preview for the given themes.
 fn preview(themes []ThemeListElement, theme_filter ColorScheme) ! {
-	mut app := Preview.new(themes, theme_filter)!
+	mut app := Preview.init(themes, theme_filter)!
+	defer {
+		app.deinit()
+	}
 	app.run()!
 }
 

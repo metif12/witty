@@ -105,7 +105,7 @@ fn test_theme_list_element_to_uri() {
 
 // Test Preview up/down navigation
 fn test_preview_up() {
-	mut p := Preview.new([], .all)!
+	mut p := Preview.init([], .all)!
 	// Empty list: up does nothing
 	p.up(1)
 	assert p.current == 0
@@ -115,7 +115,7 @@ fn test_preview_up() {
 	for i in 0 .. 5 {
 		themes << preview_test_theme('${i}')
 	}
-	p = Preview.new(themes, .all)!
+	p = Preview.init(themes, .all)!
 	p.current = 3
 	p.up(1)
 	assert p.current == 2
@@ -124,7 +124,7 @@ fn test_preview_up() {
 }
 
 fn test_preview_down() {
-	mut p := Preview.new([], .all)!
+	mut p := Preview.init([], .all)!
 	// Empty list: down does nothing
 	p.down(1)
 	assert p.current == 0
@@ -134,7 +134,7 @@ fn test_preview_down() {
 	for i in 0 .. 5 {
 		themes << preview_test_theme('${i}')
 	}
-	p = Preview.new(themes, .all)!
+	p = Preview.init(themes, .all)!
 	p.down(1)
 	assert p.current == 1
 	p.down(100) // clamps to last
@@ -146,7 +146,7 @@ fn test_preview_filter_cycling() {
 	mut themes := [
 		preview_test_theme('Test'),
 	]
-	mut p := Preview.new(themes, .all)!
+	mut p := Preview.init(themes, .all)!
 	assert p.theme_filter == .all
 
 	// Simulate pressing 'f' to cycle
@@ -176,6 +176,21 @@ fn test_options_defaults() {
 	assert opts.color == .all
 }
 
+fn test_preview_public_lifecycle_and_styles() {
+	mut preview := Preview.init([], .all)!
+	preview.color_scheme = .light
+	assert preview.ui_fg().rgb == [u8(0), 0, 0]!
+	assert preview.ui_bg().rgb == [u8(0xff), 0xff, 0xff]!
+	assert preview.ui_standard().fg == preview.ui_fg()
+	assert preview.ui_highlighted().bg == preview.ui_hover_bg()
+	assert preview.ui_selected().fg == preview.ui_selected_fg()
+	assert preview.ui_selected().bg == preview.ui_selected_bg()
+	assert preview.ui_err().fg == preview.ui_err_fg()
+	preview.deinit()
+	assert preview.filtered.len == 0
+	assert preview.text_input.get_text() == ''
+}
+
 fn test_parse_list_themes_options_uses_shared_cli_parser() {
 	opts := parse_list_themes_options(['--path', '--plain=false', '--color=dark'])!
 	assert opts.path
@@ -190,7 +205,7 @@ fn test_parse_list_themes_options_uses_shared_cli_parser() {
 fn test_preview_new_propagates_theme_load_failure() {
 	missing := os.join_path(os.temp_dir(), 'witty-missing-theme-${os.getpid()}')
 	os.rm(missing) or {}
-	if _ := Preview.new([ThemeListElement{
+	if _ := Preview.init([ThemeListElement{
 		theme: 'Missing'
 		path: missing
 	}], .all) {
@@ -199,7 +214,7 @@ fn test_preview_new_propagates_theme_load_failure() {
 }
 
 fn test_preview_search_uses_text_input() {
-	mut p := Preview.new([
+	mut p := Preview.init([
 		preview_test_theme('Dracula'),
 		preview_test_theme('Gruvbox'),
 	], .all)!
@@ -219,7 +234,7 @@ fn test_preview_search_uses_text_input() {
 }
 
 fn test_preview_ascii_lowercases_search_tokens_for_zf() {
-	mut p := Preview.new([
+	mut p := Preview.init([
 		preview_test_theme('Dracula'),
 		preview_test_theme('ivory'),
 	], .all)!
@@ -236,7 +251,7 @@ fn test_preview_ascii_lowercases_search_tokens_for_zf() {
 }
 
 fn test_preview_mouse_selects_visible_theme() {
-	mut p := Preview.new([
+	mut p := Preview.init([
 		preview_test_theme('One'),
 		preview_test_theme('Two'),
 		preview_test_theme('Three'),
@@ -254,7 +269,7 @@ fn test_preview_mouse_selects_visible_theme() {
 }
 
 fn test_preview_draws_empty_state() {
-	mut p := Preview.new([], .all)!
+	mut p := Preview.init([], .all)!
 	p.winsize = vaxis.Winsize{ rows: 12, cols: 80 }
 	output := p.draw()
 	assert output.contains('No theme found!')
