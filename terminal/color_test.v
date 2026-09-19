@@ -15,8 +15,8 @@ fn palettes_equal(a [256]RGB, b [256]RGB) bool {
 	return true
 }
 
-fn color_name_from_u8(value u8) ColorName {
-	return unsafe { ColorName(value) }
+fn color_name_from_u8(value u8) Name {
+	return unsafe { Name(value) }
 }
 
 // ============================================================
@@ -26,7 +26,7 @@ fn color_name_from_u8(value u8) ColorName {
 fn test_palette_default() {
 	// Safety check: first 16 entries should match named color defaults.
 	for i in 0 .. 16 {
-		expected := color_name_default(unsafe { ColorName(u8(i)) }) or {
+		expected := unsafe { Name(u8(i)) }.default() or {
 			assert false, 'expected default for index ${i}'
 			return
 		}
@@ -37,8 +37,12 @@ fn test_palette_default() {
 }
 
 fn test_color_name_unnamed_has_no_default() {
-	assert color_name_default(color_name_from_u8(16)) == none
-	assert color_name_default(color_name_from_u8(255)) == none
+	if _ := color_name_from_u8(16).default() {
+		assert false, 'unnamed color unexpectedly had a default'
+	}
+	if _ := color_name_from_u8(255).default() {
+		assert false, 'unnamed color unexpectedly had a default'
+	}
 }
 
 // ============================================================

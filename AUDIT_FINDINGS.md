@@ -65,6 +65,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | terminal screen-switch result | `Terminal.switchScreen` represented Ghostty's `!?*Screen` contract as a non-optional V reference and returned an unsafe nil reference when the requested screen was already active. Mode switching then compared and dereferenced that invalid reference manually. | Carry the optional previous screen in an explicit fallible-result value (V cannot directly nest result and option), return true absence for a no-op switch, and consume it with option binding in all three legacy screen modes. |
 | terminal render-state string API | `RenderState.string` was split into source-external `to_string` and `to_mapped_string` return-value helpers, so callers could not write into an existing destination and the source's optional byte-to-coordinate map contract was absent. The replacement map also used the render cursor's narrower viewport-point value instead of the source coordinate type. | Restore one writer-based `string` operation, represent its optional map argument explicitly, populate one canonical coordinate per emitted UTF-8 byte and newline, and route renderer link matching plus direct tests through it. V's concrete `strings.Builder` replaces Zig's generic fallible writer, and the nested source map type is module-level because V has no nested declarations. |
 | terminal cursor lifecycle | `Screen.Cursor.deinit` was omitted and both screen teardown and reset discarded the cursor value directly, bypassing the source lifecycle boundary for its owned pending hyperlink. | Restore `Cursor.deinit`, clear the GC-owned hyperlink value and active ID there, and route both `Screen.deinit` and `Screen.reset` through it before discarding cursor state. |
+| terminal color-name surface | Ghostty's public `color.Name` enum was renamed to the translation-only `ColorName`, and `Name.default` was flattened into an optional free function, erasing its invalid-value error contract. | Restore the exact flattened-module `Name` type and fallible `Name.default` method, then route default-palette generation and direct tests through them. |
 | C string slice contract | The translated `String` split `fromSlice` into string/byte constructors but left the ordinary byte form named `from_bytes`, omitted the source `deinit` method, and built `ghostty_config_open_path` through the sentinel string form. The returned C record therefore claimed its ordinary allocated path had a NUL sentinel. | Restore `from_slice` for non-sentinel bytes and `deinit`, route the exported free function through the method, and return the config path with `sentinel=false`; the V string constructor remains the explicit sentinel form because V types do not encode sentinel slices. |
 | SSH cache public lifecycle surface | Disk-cache `defaultPath` was a module-prefixed free function, `deinitEntries` was absent under GC ownership, and the action's public `runInner` entry point remained folded into a private cache-injection helper. | Restore type-scoped `default_path`/`deinit_entries` plus public `run_inner`, retain a private injected-cache helper for deterministic tests, and route the action through the public standard-path entry point. |
 | GTK command-palette jump accessor | `Command.getJumpSurface` was folded into a private presentation helper, removing the public caller-owned strong-reference API. | Restore `get_jump_surface`, including the weak-to-strong promotion and caller `unref` contract, and route presentation through it. |
@@ -334,7 +335,16 @@ an item here does not mean its full module has been certified yet.
 
 - **Architectural:** `Screen`/`Terminal` use the flat `Pages` model, not the
   faithful `PageList` linked-list (which is exercised only by its own tests +
-  the PageList formatter). Both exist; they are parallel.
+  the PageList formatter). Both exist; they are parallel. The corresponding
+  faithful tracked/untracked selection implementation likewise exists as
+  `PageSelection`, while the live flat screen retains coordinate selections
+  and manually remaps them during mutations; migrating `Screen` is required
+  before `Selection.track` can have its source lifetime contract.
+- **Fixed-array type aliases:** the pinned V compiler accepts a public alias
+  declaration for Ghostty's `[256]RGB` `color.Palette` but emits invalid C as
+  soon as that alias is used as a field or parameter type. Witty therefore
+  keeps the exact fixed array directly in color APIs rather than exposing a
+  nominal alias that cannot be consumed.
 - **OSC representation:** Ghostty's tagged `Command` union, sentinel slices,
   allocator/writer objects, and nested parser types are represented by a flat
   V command struct and GC-backed arrays. Observable parser boundaries are now

@@ -32,7 +32,7 @@ fn init_default_palette() [256]RGB {
 
 	// Named values (0..15)
 	for i in 0 .. 16 {
-		result[i] = color_name_default(unsafe { ColorName(u8(i)) }) or {
+		result[i] = unsafe { Name(u8(i)) }.default() or {
 			panic('unreachable: named palette color has no default')
 		}
 	}
@@ -217,12 +217,12 @@ pub fn (mut self DynamicRGB) reset() {
 }
 
 // ============================================================
-// ColorName - color names in the standard 8 or 16 color palette.
+// Name - color names in the standard 8 or 16 color palette.
 // ============================================================
 
-// ColorName represents the 16 named ANSI colors plus unnamed
+// Name represents the 16 named ANSI colors plus unnamed
 // values in the 256-color palette.
-pub enum ColorName as u8 {
+pub enum Name as u8 {
 	black          = 0
 	red            = 1
 	green          = 2
@@ -242,17 +242,16 @@ pub enum ColorName as u8 {
 }
 
 // cval returns the underlying u8 value.
-pub fn (self ColorName) cval() u8 {
+pub fn (self Name) cval() u8 {
 	return u8(self)
 }
 
-// color_name_default returns the default RGB value for a named color.
-// Returns none for unnamed values (indices >= 16).
-pub fn color_name_default(name ColorName) ?RGB {
-	if u8(name) >= 16 {
-		return none
+// default returns the default RGB value for a named color.
+pub fn (self Name) default() !RGB {
+	if u8(self) >= 16 {
+		return error('no default value')
 	}
-	return match name {
+	return match self {
 		.black { RGB{ r: 0x1d, g: 0x1f, b: 0x21 } }
 		.red { RGB{ r: 0xcc, g: 0x66, b: 0x66 } }
 		.green { RGB{ r: 0xb5, g: 0xbd, b: 0x68 } }
