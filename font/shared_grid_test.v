@@ -133,8 +133,8 @@ fn test_glyph_key_hash_matches_zig_source() {
 fn test_glyph_cache_handles_hash_collisions() {
 	first_key := GlyphKey{Index.init(.regular, 0), 1, RenderOptions{}}
 	second_key := GlyphKey{Index.init(.bold, 2), 42, RenderOptions{ cell_width: 2 }}
-	first_value := RenderResult{GlyphInfo{ atlas_x: 1 }, .text}
-	second_value := RenderResult{GlyphInfo{ atlas_x: 2 }, .emoji}
+	first_value := RenderResult{Glyph{ atlas_x: 1 }, .text}
+	second_value := RenderResult{Glyph{ atlas_x: 2 }, .emoji}
 	mut cache := map[u64][]GlyphCacheEntry{}
 	collision := u64(9)
 	glyph_cache_put(mut cache, collision, first_key, first_value)

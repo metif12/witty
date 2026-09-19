@@ -146,7 +146,7 @@ pub fn (sf &SpriteFace) has_codepoint(cp u32, p ?Presentation) bool {
 //
 // Faithful to Ghostty's sprite Face.renderGlyph. The dependency-neutral
 // raster result is inserted into the font-owned atlas by the implementation.
-pub fn (sf &SpriteFace) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !GlyphInfo {
+pub fn (sf &SpriteFace) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !Glyph {
 	return sprite_face_render_glyph(mut atlas, glyph_index, sf.metrics, opts)
 }
 
@@ -434,7 +434,7 @@ pub fn (mut self CodepointResolver) get_presentation(index Index, glyph_index u3
 // trivial way to do this is to get the Face and call glyph_index. If you're
 // doing text shaping, the text shaping library (i.e. HarfBuzz) will automatically
 // determine glyph indexes for a text run.
-pub fn (mut self CodepointResolver) render_glyph(mut atlas Atlas, index Index, glyph_index u32, opts RenderOptions) !GlyphInfo {
+pub fn (mut self CodepointResolver) render_glyph(mut atlas Atlas, index Index, glyph_index u32, opts RenderOptions) !Glyph {
 	// Special-case fonts are rendered directly.
 	if sp := index.special() {
 		match sp {

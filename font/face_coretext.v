@@ -422,7 +422,7 @@ fn coretext_glyph_layout(bounds GlyphSize, sbix bool, synthetic_bold ?f64, opts 
 
 // Render a glyph using the glyph index. The rendered glyph is stored
 // in the given texture atlas.
-pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !GlyphInfo {
+pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !Glyph {
 	mut bounds := GlyphSize{}
 	if C.witty_coretext_glyph_bounds(self.ct_font, glyph_index, &bounds.x, &bounds.y, &bounds.width, &bounds.height) == 0 {
 		return error('CoreText: failed to get glyph bounds')
@@ -430,7 +430,7 @@ pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts R
 	is_color := self.is_color_glyph(glyph_index)
 	sbix := if color := self.color { is_color && color.sbix } else { false }
 	layout := coretext_glyph_layout(bounds, sbix, self.synthetic_bold, opts) or {
-		return GlyphInfo{}
+		return Glyph{}
 	}
 	depth := if is_color { u32(4) } else { u32(1) }
 	if atlas.format.depth() != depth {
@@ -446,7 +446,7 @@ pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts R
 	atlas.set(region, unsafe {
 		pixels.vbytes(int(layout.px_width * layout.px_height * depth))
 	})
-	return GlyphInfo{
+	return Glyph{
 		width: layout.px_width
 		height: layout.px_height
 		offset_x: layout.offset_x

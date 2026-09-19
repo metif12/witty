@@ -87,7 +87,7 @@ fn reserve_growing(mut atlas Atlas, width u32, height u32) !AtlasRegion {
 
 // render_builtin_cell_glyph renders a built-in sprite glyph into the atlas.
 // Unsupported codepoints produce the empty glyph returned by SpriteFace.
-pub fn render_builtin_cell_glyph(mut atlas Atlas, cp u32, metrics Metrics) !GlyphInfo {
+pub fn render_builtin_cell_glyph(mut atlas Atlas, cp u32, metrics Metrics) !Glyph {
 	return sprite_face_render_glyph(mut atlas, cp, metrics, RenderOptions{})
 }
 
@@ -99,7 +99,7 @@ pub fn sprite_face_has_codepoint(cp u32) bool {
 	return spritepkg.has_codepoint(cp)
 }
 
-pub fn sprite_face_render_glyph(mut atlas Atlas, cp u32, metrics Metrics, opts RenderOptions) !GlyphInfo {
+pub fn sprite_face_render_glyph(mut atlas Atlas, cp u32, metrics Metrics, opts RenderOptions) !Glyph {
 	face := spritepkg.SpriteFace{
 		metrics: sprite_metrics(metrics)
 	}
@@ -112,7 +112,7 @@ pub fn sprite_face_render_glyph(mut atlas Atlas, cp u32, metrics Metrics, opts R
 		atlas.set_from_larger(region, raster.data, raster.data_width, raster.source_x, raster.source_y)
 	}
 
-	return GlyphInfo{
+	return Glyph{
 		width: region.width
 		height: region.height
 		offset_x: rendered.offset_x

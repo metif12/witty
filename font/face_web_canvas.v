@@ -144,7 +144,7 @@ pub fn (mut self WebCanvasFace) grapheme_glyph_index(cluster []u8) !u32 {
 
 // Render a glyph using the glyph index. The rendered glyph is stored
 // in the given texture atlas.
-pub fn (self WebCanvasFace) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !GlyphInfo {
+pub fn (self WebCanvasFace) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !Glyph {
 	_ = opts
 	mut render := self.render_glyph_internal(glyph_index)!
 	defer { render.deinit() }
@@ -174,7 +174,7 @@ pub fn (self WebCanvasFace) render_glyph(mut atlas Atlas, glyph_index u32, opts 
 	if region.width > 0 && region.height > 0 {
 		atlas.set(region, bitmap)
 	}
-	return GlyphInfo{
+	return Glyph{
 		width: render.width
 		height: render.height
 		offset_x: 0
@@ -346,9 +346,9 @@ pub fn wasm_face_free(face ?&WebCanvasFace) {
 
 // wasm_face_render_glyph renders a glyph and returns the result.
 // Resulting pointer must be freed using the global "free".
-pub fn wasm_face_render_glyph(face &WebCanvasFace, mut atlas Atlas, codepoint u32) ?&GlyphInfo {
+pub fn wasm_face_render_glyph(face &WebCanvasFace, mut atlas Atlas, codepoint u32) ?&Glyph {
 	glyph := face.render_glyph(mut atlas, codepoint, RenderOptions{}) or { return none }
-	mut result := &GlyphInfo{}
+	mut result := &Glyph{}
 	unsafe { *result = glyph }
 	return result
 }

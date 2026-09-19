@@ -1298,7 +1298,7 @@ fn get_glyph_size(glyph &freetype.GlyphSlotRec) GlyphSize {
 
 // render_glyph renders a glyph using the glyph index. The rendered glyph
 // is stored in the given texture atlas.
-pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !GlyphInfo {
+pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !Glyph {
 	if isnil(self.ft_mutex) {
 		return error('font face is not initialized')
 	}
@@ -1319,7 +1319,7 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 
 	rect := get_glyph_size(&glyph)
 	if rect.width < 0.25 || rect.height < 0.25 {
-		return GlyphInfo{}
+		return Glyph{}
 	}
 
 	metrics := opts.grid_metrics
@@ -1347,7 +1347,7 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 		y = math.round(y)
 	}
 	if width <= 0.0 || height <= 0.0 {
-		return GlyphInfo{}
+		return Glyph{}
 	}
 
 	mut bitmap := freetype.Bitmap{}
@@ -1445,7 +1445,7 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 	px_width := bitmap.width
 	px_height := bitmap.rows
 	if px_width == 0 || px_height == 0 || bitmap.buffer == unsafe { nil } {
-		return GlyphInfo{}
+		return Glyph{}
 	}
 	row_bytes := u32(if bitmap.pitch < 0 { -bitmap.pitch } else { bitmap.pitch })
 	len := int(row_bytes * px_height)
@@ -1475,7 +1475,7 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 	region := atlas.reserve(px_width, px_height)!
 	atlas.set(region, pixels)
 	px_y := bitmap_top + i32(metrics.cell_baseline) - i32(px_height)
-	return GlyphInfo{
+	return Glyph{
 		width: px_width
 		height: px_height
 		offset_x: bitmap_left

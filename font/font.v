@@ -1208,25 +1208,10 @@ fn atlas_write_all(mut writer io.Writer, data []u8) ! {
 	}
 }
 
-// ============================================================
-// Glyph / Render types
-// ============================================================
-
-// GlyphInfo holds information about a rendered glyph in the atlas.
-pub struct GlyphInfo {
-pub mut:
-	atlas_x  u32
-	atlas_y  u32
-	width    u32
-	height   u32
-	offset_x i32
-	offset_y i32
-}
-
 // RenderResult holds the result of rendering a glyph.
 pub struct RenderResult {
 pub:
-	glyph        GlyphInfo
+	glyph        Glyph
 	presentation Presentation
 }
 
