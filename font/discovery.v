@@ -403,13 +403,13 @@ pub fn (d &Descriptor) to_fc_pattern() &fontconfig.Pattern {
 	return pat
 }
 
-// to_coretext_descriptor converts the descriptor to a CoreText font
+// to_core_text_descriptor converts the descriptor to a CoreText font
 // descriptor for font lookup or conversion to a specific font.
 //
 // Builds a CTFontDescriptor from our fields (family, style, codepoint
 // character set, size and symbolic traits) via the C shim. The returned
 // descriptor is retained; callers must release it with macos.cf_release.
-pub fn (d &Descriptor) to_coretext_descriptor() !&macos.CTFontDescriptor {
+pub fn (d &Descriptor) to_core_text_descriptor() !&macos.CTFontDescriptor {
 	family := d.family or { '' }
 	style := d.style or { '' }
 	ptr := C.witty_ct_build_descriptor(&char(family.str), &char(style.str), d.codepoint, f64(d.size), b2i(d.bold), b2i(d.italic), b2i(d.monospace))
@@ -560,7 +560,7 @@ pub fn (mut ct CoreTextDiscovery) deinit() {
 // that can be used to build up the deferred fonts.
 pub fn (ct &CoreTextDiscovery) discover(desc Descriptor) !CtDiscoverIterator {
 	// Build the CoreText descriptor we'll search for.
-	ct_desc := desc.to_coretext_descriptor()!
+	ct_desc := desc.to_core_text_descriptor()!
 	defer {
 		macos.cf_release(voidptr(ct_desc))
 	}

@@ -18,7 +18,7 @@ fn base64_scalar_input(input []u8) []u8 {
 // input length.
 pub fn base64_max_len(input []u8) usize {
 	scalar := base64_scalar_input(input)
-	return scalar_base64_calc_size(scalar) or { 0 }
+	return base64_scalar_calc_size_for_slice(scalar) or { 0 }
 }
 
 // base64_decode decodes input into caller-owned storage and returns the used

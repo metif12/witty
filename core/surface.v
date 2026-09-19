@@ -2055,7 +2055,7 @@ pub type KeyEvent = input.KeyEvent
 pub type KeyAction = input.KeyAction
 
 fn key_is_modifier(k input.Key) bool {
-	return k.is_modifier()
+	return k.modifier()
 }
 
 // closing_action returns true if performing the given action results in

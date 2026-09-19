@@ -1429,7 +1429,7 @@ pub fn Trigger.parse(input_str string) !Trigger {
 		}
 
 		// Look for a matching W3C name
-		if w3c_key := key_from_w3c(part) {
+		if w3c_key := Key.from_w3c(part) {
 			result = Trigger{
 				...result
 				key: TriggerKey.new_physical(w3c_key)

@@ -60,11 +60,20 @@ fn test_key_ctrl_or_super_uses_platform_primary_modifier() {
 fn test_w3c() {
 	for _, key in key_name_map {
 		w3c_name := key.w3c()
-		assert key_from_w3c(w3c_name) or { panic('no w3c mapping for ${w3c_name}') } == key
+		assert Key.from_w3c(w3c_name) or { panic('no w3c mapping for ${w3c_name}') } == key
 	}
 }
 
 fn test_w3c_case_folding_is_ascii_only() {
-	assert key_from_w3c('INSERT')? == .insert
-	assert key_from_w3c('İnsert') == none
+	assert Key.from_w3c('INSERT')? == .insert
+	assert Key.from_w3c('İnsert') == none
+}
+
+fn test_key_source_predicates() {
+	assert Key.space.printable()
+	assert !Key.f1.printable()
+	assert Key.control_left.modifier()
+	assert !Key.key_a.modifier()
+	assert Key.numpad_0.keypad()
+	assert !Key.digit_0.keypad()
 }

@@ -549,9 +549,9 @@ pub fn key_from_name(name string) ?Key {
 	return none
 }
 
-// key_from_w3c converts a W3C key code (e.g. "KeyA", "ArrowUp") to a Key.
+// from_w3c converts a W3C key code (e.g. "KeyA", "ArrowUp") to a Key.
 // Supports both exact lower-case match and CamelCase to snake_case conversion.
-pub fn key_from_w3c(code string) ?Key {
+pub fn Key.from_w3c(code string) ?Key {
 	// First try exact lowercase match
 	lower := ascii.lower_string(code)
 	if lower in key_name_map {
@@ -758,20 +758,20 @@ pub fn (k Key) imgui_key() ?cimgui.Key {
 	}
 }
 
-// True if this key is a modifier.
-pub fn (k Key) is_modifier() bool {
+// modifier returns true if this key is a modifier.
+pub fn (k Key) modifier() bool {
 	return k in [.shift_left, .control_left, .alt_left, .meta_left, .shift_right, .control_right,
 		.alt_right, .meta_right]
 }
 
-// is_printable returns true if this key represents a printable character
+// printable returns true if this key represents a printable character
 // (i.e. it has a codepoint).
-pub fn (k Key) is_printable() bool {
+pub fn (k Key) printable() bool {
 	return k.codepoint() != none
 }
 
-// is_keypad returns true if this is a keypad (numpad) key.
-pub fn (k Key) is_keypad() bool {
+// keypad returns true if this is a keypad (numpad) key.
+pub fn (k Key) keypad() bool {
 	return k in [
 		.numpad_0,
 		.numpad_1,
@@ -856,7 +856,7 @@ pub fn (k Key) left_or_right_alt() bool {
 pub fn Key.from_ascii(ch u8) ?Key {
 	for entry in codepoint_map {
 		// No ASCII characters should map to a keypad key
-		if entry.key.is_keypad() {
+		if entry.key.keypad() {
 			continue
 		}
 		if entry.cp == u32(ch) {

@@ -4,6 +4,19 @@ fn test_base64_max_len() {
 	assert base64_max_len('aGVsbG8gd29ybGQ='.bytes()) == 11
 }
 
+fn test_base64_scalar_source_size_entry_points() {
+	assert base64_scalar_calc_size_upper_bound(0)! == 0
+	assert base64_scalar_calc_size_upper_bound(2)! == 1
+	assert base64_scalar_calc_size_upper_bound(3)! == 2
+	assert base64_scalar_calc_size_upper_bound(4)! == 3
+	assert base64_scalar_calc_size_for_slice('aGVsbG8gd29ybGQ'.bytes())! == 11
+	base64_scalar_calc_size_upper_bound(1) or {
+		assert err.msg() == 'InvalidPadding'
+		return
+	}
+	assert false, 'one trailing Base64 byte must be rejected'
+}
+
 fn test_base64_decode() {
 	input := 'aGVsbG8gd29ybGQ='.bytes()
 	mut output := []u8{len: int(base64_max_len(input))}
