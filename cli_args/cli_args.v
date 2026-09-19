@@ -1,5 +1,6 @@
 module cli_args
 
+import comma_splitter
 import diagnostics
 import zig_fmt
 
@@ -513,9 +514,14 @@ fn parse_enum_value[T](mut out T, raw string) ! {
 pub fn parse_auto_struct[T](value string, default_value T) !T {
 	mut result := default_value
 	mut fields_set := map[string]bool{}
-	mut splitter := CommaSplitter.init(value)
-	for splitter.has_next() {
-		entry := splitter.next() or { return error('invalid value') }
+	mut splitter := comma_splitter.CommaSplitter.init(value)
+	for {
+		entry := splitter.next() or {
+			if splitter.last_error.len > 0 {
+				return error('invalid value')
+			}
+			break
+		}
 		colon := entry.index_u8(`:`)
 		if colon < 0 {
 			return error('invalid value')
@@ -690,6 +696,19 @@ pub fn decode_quoted_value(value string) !string {
 		i++
 	}
 	return result.bytestr()
+}
+
+fn hex_value(ch u8) ?u32 {
+	if ch >= `0` && ch <= `9` {
+		return u32(ch - `0`)
+	}
+	if ch >= `a` && ch <= `f` {
+		return u32(ch - `a` + 10)
+	}
+	if ch >= `A` && ch <= `F` {
+		return u32(ch - `A` + 10)
+	}
+	return none
 }
 
 // append_diagnostic returns true when T exposes a DiagnosticList field named

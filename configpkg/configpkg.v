@@ -12,6 +12,7 @@ import internal_os
 import zig_fmt
 import diagnostics as diagnosticspkg
 import buildcfg
+import comma_splitter
 import fontstyle
 
 const default_gtk_opengl_debug = $if debug { true } $else { false }
@@ -5630,9 +5631,14 @@ pub fn (mut r RepeatableCommand) parse_cli(input ?string) ! {
 	mut action_text := ''
 	mut has_title := false
 	mut has_action := false
-	mut splitter := cli_args.CommaSplitter.init(input_value)
-	for splitter.has_next() {
-		entry := splitter.next() or { return error('invalid value') }
+	mut splitter := comma_splitter.CommaSplitter.init(input_value)
+	for {
+		entry := splitter.next() or {
+			if splitter.last_error.len > 0 {
+				return error('invalid value')
+			}
+			break
+		}
 		colon := entry.index_u8(`:`)
 		if colon < 0 {
 			return error('invalid value')
